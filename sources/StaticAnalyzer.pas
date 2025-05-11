@@ -65,19 +65,24 @@ var
   i: Integer;
   methodInfos: TObjectList<TMethodInfo>;
   methodInfo: TMethodInfo;
-  vaiableNames: TStringList;
+  VaiableNames: TStringList;
   messageMissing: TStringList;
   onceFileName: boolean;
 begin
   messageMissing := TStringList.Create;
-  vaiableNames := TStringList.Create;
+  VaiableNames := TStringList.Create;
 
   methodInfos := TObjectList<TMethodInfo>.Create;
   for i := 0 to FileList.Count - 1 do
   begin
     methodInfos.Clear;
     filename := FileList[i];
-    TParser.ParseFile(filename, methodInfos);
+    try
+      TParser.ParseFile(filename, methodInfos);
+    except
+      results.Add('ERROR parse file failed: ' + filename);
+      Continue;
+    end;
 
     if methodInfos.Count <> 0 then
     begin
@@ -85,15 +90,15 @@ begin
 
       for methodInfo in methodInfos do
       begin
-        vaiableNames.Clear;
-        methodInfo.GetVarNamesByFilter(myClazz, vaiableNames);
+        VaiableNames.Clear;
+        methodInfo.GetVarNamesByFilter(myClazz, VaiableNames);
 
-        messageMissing.Add('line:' + methodInfo.LineNumber + ':' +
+        messageMissing.Add('method; line:' + methodInfo.LineNumber + ':' +
           methodInfo.Name);
 
         // results.Add(Vaiable);
         // suche string var.free
-        if TrySearchMissingFreeds(vaiableNames, methodInfo.SourceBody,
+        if TrySearchMissingFreeds(VaiableNames, methodInfo.SourceBody,
           messageMissing) then
         begin
           if not onceFileName then
@@ -108,7 +113,7 @@ begin
 
   end;
 
-  freeAndNil(vaiableNames);
+  freeAndNil(VaiableNames);
   freeAndNil(messageMissing);
   freeAndNil(methodInfos);
 
@@ -125,7 +130,7 @@ var
 begin
   Result := false;
 
-  myMessage := 'missing:';
+  myMessage := 'missing freeds: ';
   for myVar in VaiableNames do
   begin
 

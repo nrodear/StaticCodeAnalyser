@@ -3,7 +3,7 @@ object Form2: TForm2
   Top = 0
   Caption = 'Form2'
   ClientHeight = 441
-  ClientWidth = 624
+  ClientWidth = 541
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -15,108 +15,117 @@ object Form2: TForm2
   object Panel1: TPanel
     Left = 0
     Top = 0
-    Width = 624
+    Width = 541
     Height = 145
     Align = alTop
     TabOrder = 0
+    ExplicitWidth = 624
     object Label1: TLabel
       Left = 40
       Top = 19
-      Width = 34
+      Width = 64
       Height = 15
-      Caption = 'Label1'
-    end
-    object Label2: TLabel
-      Left = 40
-      Top = 48
-      Width = 34
-      Height = 15
-      Caption = 'Label1'
-    end
-    object StartPrjButton: TButton
-      Left = 31
-      Top = 104
-      Width = 75
-      Height = 25
-      Caption = 'Start'
-      TabOrder = 0
-      OnClick = StartPrjButtonClick
+      Caption = 'ProjectPath:'
     end
     object Projectpath: TEdit
       Left = 112
       Top = 16
       Width = 369
       Height = 23
-      TabOrder = 1
-      Text = 'D:\git-demos\delphi\analyser.d12\resources'
+      TabOrder = 0
+      Text = '.\sources'
     end
-    object Edit2: TEdit
+    object Savetofile: TEdit
       Left = 112
       Top = 74
       Width = 369
       Height = 23
-      TabOrder = 2
-      Text = 'D:\git-demos\delphi\analyser.d12\logResults.log'
+      TabOrder = 1
+      Text = '.\logResults.log'
     end
     object leakyClazzes: TComboBox
-      Left = 208
-      Top = 104
+      Left = 336
+      Top = 45
       Width = 145
       Height = 23
-      TabOrder = 3
+      TabOrder = 2
       Text = 'leakyClazzes'
     end
-    object TestButton: TButton
-      Left = 112
-      Top = 103
-      Width = 75
+    object Button2: TButton
+      Left = 487
+      Top = 14
+      Width = 27
       Height = 25
-      Caption = 'Test'
-      TabOrder = 4
-      OnClick = TestButtonClick
+      Caption = '...'
+      TabOrder = 3
+      OnClick = Button2Click
     end
-    object TestPath: TEdit
-      Left = 112
-      Top = 45
-      Width = 369
-      Height = 23
-      TabOrder = 5
-      Text = 'D:\git-demos\delphi\analyser.d12\resources'
+    object Button3: TButton
+      Left = 487
+      Top = 74
+      Width = 27
+      Height = 25
+      Caption = '...'
+      TabOrder = 4
+      OnClick = Button3Click
     end
   end
   object Panel2: TPanel
     Left = 0
     Top = 145
-    Width = 624
+    Width = 541
     Height = 255
     Align = alClient
     TabOrder = 1
+    ExplicitWidth = 624
     object resultsInfo: TListBox
       Left = 1
       Top = 1
-      Width = 622
+      Width = 539
       Height = 253
       Align = alClient
       ItemHeight = 15
       TabOrder = 0
       OnClick = resultsInfoClick
+      ExplicitWidth = 622
     end
   end
   object Panel3: TPanel
     Left = 0
     Top = 400
-    Width = 624
+    Width = 541
     Height = 41
     Align = alBottom
     TabOrder = 2
+    ExplicitLeft = -1
+    ExplicitTop = 405
+    ExplicitWidth = 624
     object Button1: TButton
-      Left = 520
-      Top = 6
+      Left = 439
+      Top = 5
       Width = 75
       Height = 25
       Caption = 'Close'
       TabOrder = 0
       OnClick = Button1Click
+    end
+    object StartPrjButton: TButton
+      Left = 255
+      Top = 6
+      Width = 75
+      Height = 25
+      Caption = 'Analyse...'
+      TabOrder = 1
+      OnClick = StartPrjButtonClick
+    end
+    object Button4: TButton
+      Left = 336
+      Top = 6
+      Width = 75
+      Height = 25
+      Caption = 'Save'
+      TabOrder = 2
+      OnClick = Button4Click
     end
   end
 end

@@ -20,6 +20,7 @@ type
     class function GetCodeOnly(const line: string): string;
     class procedure ParseFile(const FileName: string;
       out methodsList: TObjectList<TMethodInfo>); static;
+
   end;
 
 implementation
@@ -73,7 +74,7 @@ begin
       if IsCommentOf(line) then
       begin
         if (Pos('//', line) = 1) then
-           Continue;
+          Continue;
         // comment only or (code + comment)
         // comment only
         if GetCodeOnly(line) = line then
@@ -145,14 +146,24 @@ begin
       /// rest body section
       ///
       if isSectionMethod then
-        CurrentMethod.SourceBody.Add(line.ToLower);
+        try
+          CurrentMethod.SourceBody.Add(line.ToLower);
+        except
+          on E: Exception do
+            raise;
+        end;
 
       // neue Funktionen braucht das Land
       J := I;
       nextLine := '';
-      while (J < Lines.Count) and (nextLine = '') do
+      while (J < Lines.Count) and ((nextLine = '') or (nextLine = 'end.')) do
       begin
-        nextLine := IfThen(J + 1 < Lines.Count, Trim(Lines[J + 1]), '');
+
+        if (J + 1 < Lines.Count) then
+          nextLine := Trim(Lines[J + 1])
+        else
+          nextLine := '';
+
         Inc(J);
       end;
 
