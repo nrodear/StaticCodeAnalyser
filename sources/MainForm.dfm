@@ -1,7 +1,7 @@
 object Form2: TForm2
   Left = 0
   Top = 0
-  Caption = 'Form2'
+  Caption = 'CodeAnalyser.d12'
   ClientHeight = 441
   ClientWidth = 541
   Color = clBtnFace
@@ -19,7 +19,6 @@ object Form2: TForm2
     Height = 145
     Align = alTop
     TabOrder = 0
-    ExplicitWidth = 624
     object Label1: TLabel
       Left = 40
       Top = 19
@@ -77,7 +76,6 @@ object Form2: TForm2
     Height = 255
     Align = alClient
     TabOrder = 1
-    ExplicitWidth = 624
     object resultsInfo: TListBox
       Left = 1
       Top = 1
@@ -87,7 +85,6 @@ object Form2: TForm2
       ItemHeight = 15
       TabOrder = 0
       OnClick = resultsInfoClick
-      ExplicitWidth = 622
     end
   end
   object Panel3: TPanel
@@ -97,9 +94,6 @@ object Form2: TForm2
     Height = 41
     Align = alBottom
     TabOrder = 2
-    ExplicitLeft = -1
-    ExplicitTop = 405
-    ExplicitWidth = 624
     object Button1: TButton
       Left = 439
       Top = 5
