@@ -1,0 +1,45 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<BorlandProject>
+	<Transactions>
+    <Transaction>1899.12.30 00:00:00.000.077,D:\git-demos\delphi\analyser.d12\sources\AllFiles.pas=D:\git-demos\delphi\analyser.d12\Unit1.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.988,D:\git-demos\delphi\analyser.d12\sources\MainForm.pas=D:\git-demos\delphi\analyser.d12\sources\Unit2.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.988,D:\git-demos\delphi\analyser.d12\sources\MainForm.dfm=D:\git-demos\delphi\analyser.d12\sources\Unit2.dfm</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.203,D:\git-demos\delphi\analyser.d12\sources\freeing.pas=</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.823,D:\git-demos\delphi\analyser.d12\sources\freeing.pas=D:\git-demos\delphi\analyser.d12\Unit1.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.979,=D:\git-demos\delphi\analyser.d12\Unit1.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.925,=D:\git-demos\delphi\analyser.d12\resources\OracleQueryUnit.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.780,D:\git-demos\delphi\analyser.d12\resources\OracleQueryUnit.pas=D:\git-demos\delphi\analyser.d12\resources\HelperTest.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.227,D:\git-demos\delphi\analyser.d12\resources\OracleQueryUnit.pas=D:\git-demos\delphi\analyser.d12\resources\Unit1.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.178,D:\git-demos\delphi\analyser.d12\sources\AllFiles.pas=</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.523,D:\git-demos\delphi\analyser.d12\resources\HelperTest.pas_=</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.180,D:\git-demos\delphi\analyser.d12\sources\uMethod.pas=D:\git-demos\delphi\analyser.d12\sources\uMethodd12.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.873,D:\git-demos\delphi\analyser.d12\resources\HelperTest.pas=D:\git-demos\delphi\analyser.d12\resources\HelperTest.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.312,D:\git-demos\delphi\analyser.d12\sources\uConsts.pas=D:\git-demos\delphi\analyser.d12\Unit1.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.749,D:\git-demos\delphi\analyser.d12\sources\StaticFileAnalyzer.pas=D:\git-demos\delphi\analyser.d12\Unit1.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.435,D:\git-demos\delphi\analyser.d12\sources\Unit2.dfm=C:\Users\ngerlach\Documents\Embarcadero\Studio\Projekte\Unit2.dfm</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.531,D:\git-demos\delphi\analyser.d12\sources\MainController.pas=D:\git-demos\delphi\analyser.d12\Unit1.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.286,D:\git-demos\delphi\analyser.d12\sources\StaticFiles.pas=D:\git-demos\delphi\analyser.d12\sources\StaticFileAnalyzer.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.125,D:\git-demos\delphi\analyser.d12\sources\parser.pas=D:\git-demos\delphi\analyser.d12\sources\uParser.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.435,D:\git-demos\delphi\analyser.d12\sources\Unit2.pas=C:\Users\ngerlach\Documents\Embarcadero\Studio\Projekte\Unit2.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.440,=C:\Users\ngerlach\Documents\Embarcadero\Studio\Projekte\Unit2.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.387,D:\git-demos\delphi\analyser.d12\sources\StaticAnalyzer.pas=D:\git-demos\delphi\analyser.d12\Unit1.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.622,D:\git-demos\delphi\analyser.d12\sources\MainFormController.pas=</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.899,D:\git-demos\delphi\analyser.d12\sources\MainFormController.pas=D:\git-demos\delphi\analyser.d12\sources\MainController.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.851,=D:\git-demos\delphi\analyser.d12\Unit1.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.350,=D:\git-demos\delphi\analyser.d12\resources\DelphiZXIngQRCode.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.597,D:\git-demos\delphi\analyser.d12\resources\DelphiZXIngQRCode.pas=</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.145,=D:\git-demos\delphi\analyser.d12\resources\Unit1.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.300,D:\git-demos\delphi\analyser.d12\resources\Unit1.pas=D:\git-demos\delphi\analyser.d12\Unit1.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.201,D:\git-demos\delphi\analyser.d12\analyser.d12.dproj=C:\Users\ngerlach\Documents\Embarcadero\Studio\Projekte\Project2.dproj</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.771,=D:\git-demos\delphi\analyser.d12\Unit1.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.577,=D:\git-demos\delphi\analyser.d12\Unit1.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.292,=D:\git-demos\delphi\analyser.d12\Unit1.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.362,=D:\git-demos\delphi\analyser.d12\Unit1.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.768,=D:\git-demos\delphi\analyser.d12\Unit1.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.797,=D:\git-demos\delphi\analyser.d12\Unit1.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.121,=D:\git-demos\delphi\analyser.d12\Unit1.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.569,=D:\git-demos\delphi\analyser.d12\Unit1.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.528,D:\git-demos\delphi\analyser.d12\Unit1.pas=D:\git-demos\delphi\analyser.d12\sources\uMethod.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.006,D:\git-demos\delphi\analyser.d12\Unit1.pas=D:\git-demos\delphi\analyser.d12\sources\parser.pas</Transaction>
+  </Transactions>
+</BorlandProject>
