@@ -588,11 +588,11 @@ begin
   FPanelStats := TPanel.Create(Self);
   FPanelStats.Parent      := Self;
   FPanelStats.Align       := alTop;
-  FPanelStats.Height      := 60; // 1 Tile-Reihe (Top-Row 28 + Caption ~16 + Padding)
+  FPanelStats.Height      := 45; // 1 Tile-Reihe ~25% kleiner: TopRow 20 + Caption ~12 + Padding
   FPanelStats.BevelOuter  := bvNone;
   FPanelStats.Color       := TColor($00282828); // Dunkles Anthrazit (BGR)
   FPanelStats.ParentBackground := False;
-  FPanelStats.Padding.SetBounds(6, 6, 6, 6);
+  FPanelStats.Padding.SetBounds(4, 4, 4, 4);
 
   BuildStatsTiles(FPanelStats);
 
@@ -845,7 +845,7 @@ begin
   Tile.Align       := alLeft;
   Tile.Width       := AWidth;
   Tile.AlignWithMargins := True;
-  Tile.Margins.SetBounds(0, 0, 4, 0);
+  Tile.Margins.SetBounds(0, 0, 3, 0);
   Tile.BevelOuter  := bvNone;
   Tile.BorderStyle := bsNone;
   Tile.ParentBackground := False;
@@ -860,7 +860,7 @@ begin
   TopRow.Align       := alTop;
   TopRow.AlignWithMargins := True;
   TopRow.Margins.SetBounds(1, 1, 1, 0); // 1px Abstand zum Tile-Rahmen
-  TopRow.Height      := 26;
+  TopRow.Height      := 20;
   TopRow.BevelOuter  := bvNone;
   TopRow.ParentBackground := False;
   TopRow.Color       := CL_TILE_BG;
@@ -868,13 +868,13 @@ begin
   IconLbl := TLabel.Create(Self);
   IconLbl.Parent      := TopRow;
   IconLbl.Align       := alLeft;
-  IconLbl.Width       := 26;
+  IconLbl.Width       := 20;
   IconLbl.Caption     := Glyph;
   IconLbl.Alignment   := taCenter;
   IconLbl.Layout      := tlCenter;
   IconLbl.Transparent := True;
   IconLbl.Font.Name   := 'Segoe Fluent Icons';
-  IconLbl.Font.Size   := 14;
+  IconLbl.Font.Size   := 11;
   IconLbl.Font.Color  := IconColor;
 
   CountLbl := TLabel.Create(Self);
@@ -885,7 +885,7 @@ begin
   CountLbl.Layout      := tlCenter;
   CountLbl.Transparent := True;
   CountLbl.Font.Name   := 'Segoe UI';
-  CountLbl.Font.Size   := 14;
+  CountLbl.Font.Size   := 11;
   CountLbl.Font.Style  := [fsBold];
   CountLbl.Font.Color  := CL_FG_TXT;
 
@@ -901,7 +901,7 @@ begin
   CapLbl.Layout      := tlTop;
   CapLbl.Transparent := True;
   CapLbl.Font.Name   := 'Segoe UI';
-  CapLbl.Font.Size   := 8;
+  CapLbl.Font.Size   := 6;
   CapLbl.Font.Color  := CL_FG_DIM;
 
   Result := CountLbl;
@@ -934,8 +934,8 @@ const
   GLYPH_DUP      = #$E8C8; // Copy - "Duplikate"
   GLYPH_SCORE    = #$EB91; // Flame - "Codequalitaet"
 
-  TILE_W       = 86;
-  TILE_W_SCORE = 96; // letzter Tile etwas breiter (laengeres Wort)
+  TILE_W       = 65;
+  TILE_W_SCORE = 72; // letzter Tile etwas breiter (laengeres Wort)
 begin
   // Container leeren falls bereits aufgebaut.
   while Parent.ControlCount > 0 do
