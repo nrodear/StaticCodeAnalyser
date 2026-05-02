@@ -1,0 +1,81 @@
+package StaticCodeAnalyserIDE;
+
+{$R *.res}
+{$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
+{$ALIGN 8}
+{$ASSERTIONS ON}
+{$BOOLEVAL OFF}
+{$DEBUGINFO OFF}
+{$EXTENDEDSYNTAX ON}
+{$IMPORTEDDATA ON}
+{$IOCHECKS ON}
+{$LOCALSYMBOLS ON}
+{$LONGSTRINGS ON}
+{$OPENSTRINGS ON}
+{$OPTIMIZATION OFF}
+{$OVERFLOWCHECKS ON}
+{$RANGECHECKS ON}
+{$REFERENCEINFO ON}
+{$SAFEDIVIDE OFF}
+{$STACKFRAMES ON}
+{$TYPEDADDRESS OFF}
+{$VARSTRINGCHECKS ON}
+{$WRITEABLECONST OFF}
+{$MINENUMSIZE 1}
+{$IMAGEBASE $400000}
+{$DEFINE DEBUG}
+{$ENDIF IMPLICITBUILDING}
+{$IMPLICITBUILD ON}
+
+requires
+  rtl,
+  vcl,
+  vclwinx,
+  designide;
+
+contains
+  uIDEExpert in 'uIDEExpert.pas',
+  uIDEAnalyserForm in 'uIDEAnalyserForm.pas',
+  uSCAConsts in '..\StaticCodeAnalyserForm\sources\uSCAConsts.pas',
+  uMethodd12 in '..\StaticCodeAnalyserForm\sources\uMethodd12.pas',
+  uRegExMatches in '..\StaticCodeAnalyserForm\sources\uRegExMatches.pas',
+  uStaticFiles in '..\StaticCodeAnalyserForm\sources\uStaticFiles.pas',
+  uParser in '..\StaticCodeAnalyserForm\sources\uParser.pas',
+  uLeakDetector in '..\StaticCodeAnalyserForm\sources\uLeakDetector.pas',
+  uCodeSmells in '..\StaticCodeAnalyserForm\sources\uCodeSmells.pas',
+  uStaticAnalyzer in '..\StaticCodeAnalyserForm\sources\uStaticAnalyzer.pas',
+  uAstNode in '..\StaticCodeAnalyserForm\sources\uAstNode.pas',
+  uLexer in '..\StaticCodeAnalyserForm\sources\uLexer.pas',
+  uParser2 in '..\StaticCodeAnalyserForm\sources\uParser2.pas',
+  uLeakDetector2 in '..\StaticCodeAnalyserForm\sources\uLeakDetector2.pas',
+  uCodeSmells2 in '..\StaticCodeAnalyserForm\sources\uCodeSmells2.pas',
+  uSQLInjectionScore in '..\StaticCodeAnalyserForm\sources\uSQLInjectionScore.pas',
+  uSQLInjection in '..\StaticCodeAnalyserForm\sources\uSQLInjection.pas',
+  uHardcodedSecret in '..\StaticCodeAnalyserForm\sources\uHardcodedSecret.pas',
+  uFormatMismatch in '..\StaticCodeAnalyserForm\sources\uFormatMismatch.pas',
+  uUnusedUses in '..\StaticCodeAnalyserForm\sources\uUnusedUses.pas',
+  uNilDeref in '..\StaticCodeAnalyserForm\sources\uNilDeref.pas',
+  uMissingFinally in '..\StaticCodeAnalyserForm\sources\uMissingFinally.pas',
+  uDivByZero in '..\StaticCodeAnalyserForm\sources\uDivByZero.pas',
+  uDeadCode in '..\StaticCodeAnalyserForm\sources\uDeadCode.pas',
+  uSuppression in '..\StaticCodeAnalyserForm\sources\uSuppression.pas',
+  uExport in '..\StaticCodeAnalyserForm\sources\uExport.pas',
+  uLongMethod in '..\StaticCodeAnalyserForm\sources\uLongMethod.pas',
+  uLongParamList in '..\StaticCodeAnalyserForm\sources\uLongParamList.pas',
+  uMagicNumbers in '..\StaticCodeAnalyserForm\sources\uMagicNumbers.pas',
+  uDuplicateString in '..\StaticCodeAnalyserForm\sources\uDuplicateString.pas',
+  uHardcodedPath in '..\StaticCodeAnalyserForm\sources\uHardcodedPath.pas',
+  uDebugOutput in '..\StaticCodeAnalyserForm\sources\uDebugOutput.pas',
+  uDeepNesting in '..\StaticCodeAnalyserForm\sources\uDeepNesting.pas',
+  uTodoComment in '..\StaticCodeAnalyserForm\sources\uTodoComment.pas',
+  uEmptyMethod in '..\StaticCodeAnalyserForm\sources\uEmptyMethod.pas',
+  uFixHint in '..\StaticCodeAnalyserForm\sources\uFixHint.pas',
+  uIgnoreList in '..\StaticCodeAnalyserForm\sources\uIgnoreList.pas',
+  uFieldLeak in '..\StaticCodeAnalyserForm\sources\uFieldLeak.pas',
+  uDuplicateBlock in '..\StaticCodeAnalyserForm\sources\uDuplicateBlock.pas',
+  uCollectValues in '..\StaticCodeAnalyserForm\sources\uCollectValues.pas',
+  uStaticAnalyzer2 in '..\StaticCodeAnalyserForm\sources\uStaticAnalyzer2.pas',
+  uVcsChanges in '..\StaticCodeAnalyserForm\sources\uVcsChanges.pas',
+  uRepoSettings in '..\StaticCodeAnalyserForm\sources\uRepoSettings.pas';
+
+end.

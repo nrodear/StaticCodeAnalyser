@@ -5,7 +5,7 @@
         <FrameworkType>VCL</FrameworkType>
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Debug</Config>
-        <Platform Condition="'$(Platform)'==''">Win64</Platform>
+        <Platform Condition="'$(Platform)'==''">Win32</Platform>
         <ProjectName Condition="'$(ProjectName)'==''">analyser.d12</ProjectName>
         <TargetedPlatforms>3</TargetedPlatforms>
         <AppType>Application</AppType>
@@ -61,6 +61,7 @@
     <PropertyGroup Condition="'$(Base)'!=''">
         <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
         <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
+        <DCC_UnitSearchPath>$(PROJECTDIR)\sources;$(PROJECTDIR)\resources;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_E>false</DCC_E>
         <DCC_N>false</DCC_N>
         <DCC_S>false</DCC_S>
@@ -71,6 +72,10 @@
         <UWP_DelphiLogo44>$(BDS)\bin\Artwork\Windows\UWP\delphi_UwpDefault_44.png</UWP_DelphiLogo44>
         <UWP_DelphiLogo150>$(BDS)\bin\Artwork\Windows\UWP\delphi_UwpDefault_150.png</UWP_DelphiLogo150>
         <SanitizedProjectName>analyser_d12</SanitizedProjectName>
+        <DCC_DebugDCUs>true</DCC_DebugDCUs>
+        <DCC_Optimize>false</DCC_Optimize>
+        <VerInfo_Locale>1031</VerInfo_Locale>
+        <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProgramID=com.embarcadero.$(MSBuildProjectName);ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
         <DCC_UsePackage>vclwinx;fmx;vclie;DbxCommonDriver;bindengine;IndyIPCommon;VCLRESTComponents;FireDACCommonODBC;FireDACCommonDriver;appanalytics;IndyProtocols;vclx;Skia.Package.RTL;IndyIPClient;dbxcds;vcledge;bindcompvclwinx;bindcompfmx;inetdb;FireDACSqliteDriver;DbxClientDriver;soapmidas;vclactnband;fmxFireDAC;dbexpress;DBXMySQLDriver;VclSmp;inet;vcltouch;fmxase;dbrtl;Skia.Package.FMX;fmxdae;FireDACMSAccDriver;CustomIPTransport;vcldsnap;DBXInterBaseDriver;IndySystem;Skia.Package.VCL;vcldb;vclFireDAC;bindcomp;FireDACCommon;IndyCore;RESTBackendComponents;bindcompdbx;rtl;FireDACMySQLDriver;FireDACADSDriver;RESTComponents;DBXSqliteDriver;vcl;IndyIPServer;dsnapxml;dsnapcon;adortl;FixInsight_12;vclimg;FireDACPgDriver;FireDAC;inetdbxpress;xmlrtl;tethering;bindcompvcl;dsnap;CloudService;fmxobj;bindcompvclsmp;soaprtl;soapserver;FireDACIBDriver;$(DCC_UsePackage)</DCC_UsePackage>
@@ -103,6 +108,8 @@
     <PropertyGroup Condition="'$(Cfg_1_Win32)'!=''">
         <DCC_RemoteDebug>false</DCC_RemoteDebug>
         <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
+        <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
+        <VerInfo_Locale>1033</VerInfo_Locale>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1_Win64)'!=''">
         <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
@@ -123,15 +130,50 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="sources\MainForm.pas">
+        <DCCReference Include="sources\uMainForm.pas">
             <Form>Form2</Form>
             <FormType>dfm</FormType>
         </DCCReference>
-        <DCCReference Include="sources\StaticFiles.pas"/>
-        <DCCReference Include="sources\uParser.pas"/>
+        <DCCReference Include="sources\uStaticFiles.pas"/>
+        <DCCReference Include="sources\uSCAConsts.pas"/>
         <DCCReference Include="sources\uMethodd12.pas"/>
-        <DCCReference Include="sources\StaticAnalyzer.pas"/>
-        <DCCReference Include="sources\uConsts.pas"/>
+        <DCCReference Include="sources\uRegExMatches.pas"/>
+        <DCCReference Include="sources\uParser.pas"/>
+        <DCCReference Include="sources\uLeakDetector.pas"/>
+        <DCCReference Include="sources\uCodeSmells.pas"/>
+        <DCCReference Include="sources\uStaticAnalyzer.pas"/>
+        <DCCReference Include="sources\uAstNode.pas"/>
+        <DCCReference Include="sources\uLexer.pas"/>
+        <DCCReference Include="sources\uParser2.pas"/>
+        <DCCReference Include="sources\uLeakDetector2.pas"/>
+        <DCCReference Include="sources\uCodeSmells2.pas"/>
+        <DCCReference Include="sources\uSQLInjectionScore.pas"/>
+        <DCCReference Include="sources\uSQLInjection.pas"/>
+        <DCCReference Include="sources\uHardcodedSecret.pas"/>
+        <DCCReference Include="sources\uFormatMismatch.pas"/>
+        <DCCReference Include="sources\uUnusedUses.pas"/>
+        <DCCReference Include="sources\uNilDeref.pas"/>
+        <DCCReference Include="sources\uMissingFinally.pas"/>
+        <DCCReference Include="sources\uDivByZero.pas"/>
+        <DCCReference Include="sources\uDeadCode.pas"/>
+        <DCCReference Include="sources\uSuppression.pas"/>
+        <DCCReference Include="sources\uExport.pas"/>
+        <DCCReference Include="sources\uLongMethod.pas"/>
+        <DCCReference Include="sources\uLongParamList.pas"/>
+        <DCCReference Include="sources\uMagicNumbers.pas"/>
+        <DCCReference Include="sources\uDuplicateString.pas"/>
+        <DCCReference Include="sources\uHardcodedPath.pas"/>
+        <DCCReference Include="sources\uDebugOutput.pas"/>
+        <DCCReference Include="sources\uDeepNesting.pas"/>
+        <DCCReference Include="sources\uTodoComment.pas"/>
+        <DCCReference Include="sources\uEmptyMethod.pas"/>
+        <DCCReference Include="sources\uFixHint.pas"/>
+        <DCCReference Include="sources\uIgnoreList.pas"/>
+        <DCCReference Include="sources\uFieldLeak.pas"/>
+        <DCCReference Include="sources\uDuplicateBlock.pas"/>
+        <DCCReference Include="sources\uCollectValues.pas"/>
+        <DCCReference Include="sources\uStaticAnalyzer2.pas"/>
+        <DCCReference Include="resources\MeineUnit.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
@@ -152,6 +194,11 @@
                 <Source>
                     <Source Name="MainSource">analyser.d12.dpr</Source>
                 </Source>
+                <Excluded_Packages>
+                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\StaticCodeAnalyserIDE.bpl">(Unbenannt)</Excluded_Packages>
+                    <Excluded_Packages Name="$(BDSBIN)\dcloffice2k290.bpl">Microsoft Office 2000 Beispiele für gekapselte Komponenten für Automatisierungsserver</Excluded_Packages>
+                    <Excluded_Packages Name="$(BDSBIN)\dclofficexp290.bpl">Microsoft Office XP Beispiele für gekapselte Komponenten für Automation Server</Excluded_Packages>
+                </Excluded_Packages>
             </Delphi.Personality>
             <Deployment Version="4">
                 <DeployFile LocalName="Win32\Debug\analyser.d12.exe" Configuration="Debug" Class="ProjectOutput">
@@ -163,12 +210,6 @@
                 <DeployFile LocalName="Win64\Debug\analyser.d12.exe" Configuration="Debug" Class="ProjectOutput">
                     <Platform Name="Win64">
                         <RemoteName>analyser.d12.exe</RemoteName>
-                        <Overwrite>true</Overwrite>
-                    </Platform>
-                </DeployFile>
-                <DeployFile LocalName="Win64\Debug\analyser.d12.rsm" Configuration="Debug" Class="DebugSymbols">
-                    <Platform Name="Win64">
-                        <RemoteName>analyser.d12.rsm</RemoteName>
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>

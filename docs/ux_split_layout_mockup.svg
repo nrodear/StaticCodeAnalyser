@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <linearGradient id="header" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f4f4f4"/>
+      <stop offset="100%" stop-color="#e4e4e4"/>
+    </linearGradient>
+    <linearGradient id="detail" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fafbfc"/>
+      <stop offset="100%" stop-color="#eef1f4"/>
+    </linearGradient>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+      <path d="M0,0 L12,7 L0,14 Z" fill="#0a66c2"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="600" y="36" text-anchor="middle" font-size="22" font-weight="700" fill="#222">
+    Befund-Detail-Panel: Split-Layout statt Help-Panel unten
+  </text>
+  <text x="600" y="58" text-anchor="middle" font-size="13" fill="#666">
+    Aktuell: Wechsel zwischen Grid und Help-Panel &#8211; Vorschlag: Grid links, Detail rechts (resizable Splitter)
+  </text>
+
+  <!-- ====================== VORHER ====================== -->
+  <g transform="translate(40, 100)">
+    <text x="0" y="-12" font-size="14" font-weight="700" fill="#b04141">VORHER &#8211; Befund unten / separat</text>
+
+    <!-- Window frame -->
+    <rect x="0" y="0" width="520" height="560" rx="6" fill="#ffffff" stroke="#bbb" stroke-width="1.5"/>
+
+    <!-- Title bar -->
+    <rect x="0" y="0" width="520" height="26" rx="6" fill="url(#header)"/>
+    <text x="10" y="18" font-size="12" fill="#333">Static Code Analyser</text>
+    <circle cx="490" cy="13" r="5" fill="#e2c244"/>
+    <circle cx="505" cy="13" r="5" fill="#d35454"/>
+
+    <!-- Toolbar -->
+    <rect x="0" y="26" width="520" height="60" fill="#fafafa" stroke="#ddd"/>
+    <text x="14" y="46" font-size="11" fill="#444">Projektpfad:</text>
+    <rect x="90" y="34" width="380" height="18" fill="#fff" stroke="#ccc"/>
+    <text x="14" y="72" font-size="11" fill="#444">Speicherpfad:</text>
+    <rect x="90" y="60" width="380" height="18" fill="#fff" stroke="#ccc"/>
+
+    <!-- Buttons -->
+    <rect x="14" y="94" width="120" height="22" rx="2" fill="#eee" stroke="#bbb"/>
+    <text x="74" y="109" text-anchor="middle" font-size="11" fill="#333">Datei analysieren</text>
+    <rect x="142" y="94" width="140" height="22" rx="2" fill="#eee" stroke="#bbb"/>
+    <text x="212" y="109" text-anchor="middle" font-size="11" fill="#333">Verzeichnis analysieren</text>
+
+    <!-- Result Grid (full width) -->
+    <rect x="10" y="128" width="500" height="240" fill="#ffffff" stroke="#999"/>
+    <!-- header row -->
+    <rect x="10" y="128" width="500" height="22" fill="#f0f0f0" stroke="#999"/>
+    <text x="22" y="143" font-size="11" fill="#333" font-weight="600">Datei</text>
+    <text x="180" y="143" font-size="11" fill="#333" font-weight="600">Methode</text>
+    <text x="290" y="143" font-size="11" fill="#333" font-weight="600">Zeile</text>
+    <text x="340" y="143" font-size="11" fill="#333" font-weight="600">Regel</text>
+    <!-- rows -->
+    <g font-size="11" fill="#222">
+      <line x1="10" y1="172" x2="510" y2="172" stroke="#e6e6e6"/>
+      <line x1="10" y1="194" x2="510" y2="194" stroke="#e6e6e6"/>
+      <line x1="10" y1="216" x2="510" y2="216" stroke="#e6e6e6"/>
+      <line x1="10" y1="238" x2="510" y2="238" stroke="#e6e6e6"/>
+      <line x1="10" y1="260" x2="510" y2="260" stroke="#e6e6e6"/>
+      <line x1="10" y1="282" x2="510" y2="282" stroke="#e6e6e6"/>
+      <line x1="10" y1="304" x2="510" y2="304" stroke="#e6e6e6"/>
+      <text x="22" y="166">uParser.pas</text><text x="180" y="166">ParseUnit</text><text x="290" y="166">142</text><text x="340" y="166">LongMethod</text>
+      <!-- selected row -->
+      <rect x="10" y="172" width="500" height="22" fill="#cfe2f7" stroke="#7aa6da"/>
+      <text x="22" y="188">uLeakDetector2.pas</text><text x="180" y="188">DetectLeak</text><text x="290" y="188">87</text><text x="340" y="188">MemoryLeak</text>
+
+      <text x="22" y="210">uMainForm.pas</text><text x="180" y="210">FormCreate</text><text x="290" y="210">23</text><text x="340" y="210">EmptyExcept</text>
+      <text x="22" y="232">uSQLInjection.pas</text><text x="180" y="232">BuildQuery</text><text x="290" y="232">55</text><text x="340" y="232">SQLInjection</text>
+      <text x="22" y="254">uDivByZero.pas</text><text x="180" y="254">Calc</text><text x="290" y="254">31</text><text x="340" y="254">DivByZero</text>
+      <text x="22" y="276">uMagicNumbers.pas</text><text x="180" y="276">Limit</text><text x="290" y="276">12</text><text x="340" y="276">MagicNumber</text>
+      <text x="22" y="298">uTodoComment.pas</text><text x="180" y="298">Process</text><text x="290" y="298">9</text><text x="340" y="298">TodoComment</text>
+    </g>
+
+    <!-- Help panel below (separate / Tab) -->
+    <rect x="10" y="378" width="500" height="160" fill="#fff8e1" stroke="#d8b85a"/>
+    <rect x="10" y="378" width="500" height="22" fill="#f3e2a3" stroke="#d8b85a"/>
+    <text x="20" y="393" font-size="11" font-weight="600" fill="#5a4810">Hilfe / Beschreibung</text>
+    <text x="20" y="418" font-size="11" fill="#444">(Anwender muss Blick zwischen Grid und Panel hin- und</text>
+    <text x="20" y="434" font-size="11" fill="#444">herwandern bzw. Tab umschalten, um Befund zu lesen)</text>
+    <text x="20" y="466" font-size="10.5" fill="#777" font-style="italic">MemoryLeak &#8211; Objekt nie freigegeben...</text>
+
+    <!-- Annotations -->
+    <g font-size="11" fill="#b04141">
+      <text x="180" y="184" text-anchor="start" fill="#0a66c2" font-weight="600">&#x2190; Klick</text>
+    </g>
+
+    <!-- Eye-movement arrow -->
+    <path d="M 260,200 Q 380,310 260,400" fill="none" stroke="#b04141" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arrow)"/>
+    <text x="300" y="320" font-size="11" fill="#b04141" font-weight="600">Blickwechsel</text>
+    <text x="300" y="334" font-size="11" fill="#b04141">&amp; Scrollen</text>
+  </g>
+
+  <!-- ====================== NACHHER ====================== -->
+  <g transform="translate(640, 100)">
+    <text x="0" y="-12" font-size="14" font-weight="700" fill="#1f7a1f">NACHHER &#8211; Split-Layout (Grid links, Detail rechts)</text>
+
+    <!-- Window frame -->
+    <rect x="0" y="0" width="520" height="560" rx="6" fill="#ffffff" stroke="#bbb" stroke-width="1.5"/>
+
+    <!-- Title bar -->
+    <rect x="0" y="0" width="520" height="26" rx="6" fill="url(#header)"/>
+    <text x="10" y="18" font-size="12" fill="#333">Static Code Analyser</text>
+    <circle cx="490" cy="13" r="5" fill="#e2c244"/>
+    <circle cx="505" cy="13" r="5" fill="#d35454"/>
+
+    <!-- Toolbar -->
+    <rect x="0" y="26" width="520" height="60" fill="#fafafa" stroke="#ddd"/>
+    <text x="14" y="46" font-size="11" fill="#444">Projektpfad:</text>
+    <rect x="90" y="34" width="380" height="18" fill="#fff" stroke="#ccc"/>
+    <text x="14" y="72" font-size="11" fill="#444">Speicherpfad:</text>
+    <rect x="90" y="60" width="380" height="18" fill="#fff" stroke="#ccc"/>
+
+    <!-- Buttons -->
+    <rect x="14" y="94" width="120" height="22" rx="2" fill="#eee" stroke="#bbb"/>
+    <text x="74" y="109" text-anchor="middle" font-size="11" fill="#333">Datei analysieren</text>
+    <rect x="142" y="94" width="140" height="22" rx="2" fill="#eee" stroke="#bbb"/>
+    <text x="212" y="109" text-anchor="middle" font-size="11" fill="#333">Verzeichnis analysieren</text>
+
+    <!-- Grid (left half) -->
+    <rect x="10" y="128" width="295" height="410" fill="#ffffff" stroke="#999"/>
+    <rect x="10" y="128" width="295" height="22" fill="#f0f0f0" stroke="#999"/>
+    <text x="20" y="143" font-size="11" fill="#333" font-weight="600">Datei</text>
+    <text x="135" y="143" font-size="11" fill="#333" font-weight="600">Regel</text>
+    <text x="245" y="143" font-size="11" fill="#333" font-weight="600">Zeile</text>
+
+    <g font-size="11" fill="#222">
+      <line x1="10" y1="172" x2="305" y2="172" stroke="#e6e6e6"/>
+      <line x1="10" y1="194" x2="305" y2="194" stroke="#e6e6e6"/>
+      <line x1="10" y1="216" x2="305" y2="216" stroke="#e6e6e6"/>
+      <line x1="10" y1="238" x2="305" y2="238" stroke="#e6e6e6"/>
+      <line x1="10" y1="260" x2="305" y2="260" stroke="#e6e6e6"/>
+      <line x1="10" y1="282" x2="305" y2="282" stroke="#e6e6e6"/>
+      <line x1="10" y1="304" x2="305" y2="304" stroke="#e6e6e6"/>
+      <line x1="10" y1="326" x2="305" y2="326" stroke="#e6e6e6"/>
+      <line x1="10" y1="348" x2="305" y2="348" stroke="#e6e6e6"/>
+      <line x1="10" y1="370" x2="305" y2="370" stroke="#e6e6e6"/>
+      <line x1="10" y1="392" x2="305" y2="392" stroke="#e6e6e6"/>
+
+      <text x="20" y="166">uParser.pas</text><text x="135" y="166">LongMethod</text><text x="250" y="166">142</text>
+
+      <!-- selected row -->
+      <rect x="10" y="172" width="295" height="22" fill="#cfe2f7" stroke="#7aa6da"/>
+      <text x="20" y="188">uLeakDetector2.pas</text><text x="135" y="188" font-weight="600">MemoryLeak</text><text x="250" y="188">87</text>
+
+      <text x="20" y="210">uMainForm.pas</text><text x="135" y="210">EmptyExcept</text><text x="250" y="210">23</text>
+      <text x="20" y="232">uSQLInjection.pas</text><text x="135" y="232">SQLInjection</text><text x="250" y="232">55</text>
+      <text x="20" y="254">uDivByZero.pas</text><text x="135" y="254">DivByZero</text><text x="250" y="254">31</text>
+      <text x="20" y="276">uMagicNumbers.pas</text><text x="135" y="276">MagicNumber</text><text x="250" y="276">12</text>
+      <text x="20" y="298">uTodoComment.pas</text><text x="135" y="298">TodoComment</text><text x="250" y="298">9</text>
+      <text x="20" y="320">uHardcodedSecret.pas</text><text x="135" y="320">HardcodedSecret</text><text x="250" y="320">44</text>
+      <text x="20" y="342">uNilDeref.pas</text><text x="135" y="342">NilDeref</text><text x="250" y="342">62</text>
+      <text x="20" y="364">uDeadCode.pas</text><text x="135" y="364">DeadCode</text><text x="250" y="364">17</text>
+      <text x="20" y="386">uDeepNesting.pas</text><text x="135" y="386">DeepNesting</text><text x="250" y="386">28</text>
+    </g>
+
+    <!-- Splitter -->
+    <rect x="305" y="128" width="6" height="410" fill="#dcdcdc"/>
+    <line x1="308" y1="320" x2="308" y2="346" stroke="#888" stroke-width="1.5"/>
+    <line x1="305" y1="333" x2="311" y2="333" stroke="#888" stroke-width="1"/>
+
+    <!-- Detail panel (right half) -->
+    <rect x="311" y="128" width="199" height="410" fill="url(#detail)" stroke="#999"/>
+
+    <!-- Severity badge -->
+    <rect x="320" y="138" width="60" height="18" rx="9" fill="#d35454"/>
+    <text x="350" y="151" text-anchor="middle" font-size="10" font-weight="700" fill="#fff">BLOCKER</text>
+
+    <text x="320" y="178" font-size="13" font-weight="700" fill="#222">MemoryLeak</text>
+    <text x="320" y="195" font-size="10.5" fill="#666">uLeakDetector2.pas : 87</text>
+
+    <line x1="320" y1="206" x2="500" y2="206" stroke="#d8d8d8"/>
+
+    <text x="320" y="224" font-size="11" font-weight="600" fill="#333">Beschreibung</text>
+    <text x="320" y="242" font-size="10.5" fill="#444">Objekt per .Create erzeugt, kein</text>
+    <text x="320" y="256" font-size="10.5" fill="#444">Free / FreeAndNil / Destroy im</text>
+    <text x="320" y="270" font-size="10.5" fill="#444">gesamten Methodenrumpf.</text>
+
+    <text x="320" y="296" font-size="11" font-weight="600" fill="#333">Code-Snippet</text>
+    <rect x="320" y="304" width="180" height="78" fill="#1e1e1e"/>
+    <g font-family="Consolas, monospace" font-size="10" fill="#dcdcdc">
+      <text x="328" y="318">var L: TList;</text>
+      <text x="328" y="332">begin</text>
+      <text x="328" y="346">  L := TList.Create;</text>
+      <text x="328" y="360" fill="#f48771">  // kein Free!</text>
+      <text x="328" y="374">end;</text>
+    </g>
+
+    <text x="320" y="402" font-size="11" font-weight="600" fill="#333">Empfehlung</text>
+    <text x="320" y="420" font-size="10.5" fill="#444">try ... finally L.Free; end;</text>
+
+    <text x="320" y="446" font-size="11" font-weight="600" fill="#333">Regel-Quelle</text>
+    <text x="320" y="464" font-size="10.5" fill="#0a66c2" text-decoration="underline">uLeakDetector2</text>
+
+    <rect x="320" y="490" width="80" height="22" rx="2" fill="#0a66c2"/>
+    <text x="360" y="505" text-anchor="middle" font-size="11" fill="#fff">Springen</text>
+    <rect x="408" y="490" width="80" height="22" rx="2" fill="#fff" stroke="#0a66c2"/>
+    <text x="448" y="505" text-anchor="middle" font-size="11" fill="#0a66c2">Ignorieren</text>
+
+    <!-- Annotation arrow: selection drives detail -->
+    <path d="M 200,184 Q 280,184 320,184" fill="none" stroke="#1f7a1f" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="215" y="172" font-size="10.5" fill="#1f7a1f" font-weight="600">Auswahl &#8594; Detail</text>
+  </g>
+
+  <!-- Footer notes -->
+  <g transform="translate(40, 680)">
+    <text x="0" y="0" font-size="11.5" fill="#444">
+      <tspan font-weight="700">Umsetzung:</tspan>
+      Panel2 (alClient) horizontal teilen &#8594; ResultGrid alLeft (Width ~60%) + TSplitter alLeft + DetailPanel alClient.
+      Detail-Inhalte werden in OnSelectCell aus der gewählten Befundzeile aktualisiert.
+    </text>
+  </g>
+</svg>
