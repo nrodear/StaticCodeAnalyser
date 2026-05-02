@@ -1,4 +1,4 @@
-﻿unit uMainForm;
+unit uMainForm;
 
 interface
 
@@ -348,10 +348,10 @@ begin
   ShellExecute(Handle, 'open', PChar(absPath), nil, nil, SW_SHOWNORMAL);
   if lineNo > 0 then
   begin
-    Sleep(800); // Delphi IDE Zeit geben, die Datei zu öffnen
+    Sleep(800); // Delphi IDE Zeit geben, die Datei zu oeffnen
     NavigateDelphiToLine(lineNo);
   end;
-  StatusBar1.SimpleText := Format('Geöffnet: %s  Zeile: %d', [relPath, lineNo]);
+  StatusBar1.SimpleText := Format('Geoeffnet: %s  Zeile: %d', [relPath, lineNo]);
 end;
 
 procedure TForm2.NavigateDelphiToLine(LineNo: Integer);
@@ -660,7 +660,7 @@ begin
   while Projectpath.Items.Count >= MAX_RECENT do
     Projectpath.Items.Delete(Projectpath.Items.Count - 1);
   Projectpath.Items.Add(appPath);
-  // Text explizit wiederherstellen, da Items-Manipulation ihn zurücksetzt
+  // Text explizit wiederherstellen, da Items-Manipulation ihn zuruecksetzt
   Projectpath.Text := APath;
 
   Ini := TIniFile.Create(ChangeFileExt(Application.ExeName, '.ini'));

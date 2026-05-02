@@ -1,8 +1,8 @@
 unit uIDEAnalyserForm;
 
-// Delphi IDE Expert – Analyser als dockbares IDE-Fenster.
-// TAnalyserFrame enthält die gesamte UI; TAnalyserDockableForm
-// registriert es über INTACustomDockableForm (wie der Projektmanager).
+// Delphi IDE Expert - Analyser als dockbares IDE-Fenster.
+// TAnalyserFrame enthaelt die gesamte UI; TAnalyserDockableForm
+// registriert es ueber INTACustomDockableForm (wie der Projektmanager).
 
 interface
 
@@ -52,38 +52,15 @@ type
     FDisplayedFindings : TList<TLeakFinding>;
 
     FPanelStats        : TPanel;
-    FCardSeverity      : TPanel;
-    FCardType          : TPanel;
-    FGapStats          : TPanel;
-    FCardsSwapped      : Boolean;
+    // Eine horizontale Tile-Reihe: 4 Severity-Tiles + 3 Type-Tiles + Score.
+    // Layout pro Tile: Glyph-Icon links + Count rechts (Top-Row), Caption
+    // unten zentriert. Glyphs aus Segoe Fluent Icons (vektor, kein SVG-Lib).
+    // Code Smell und Hotspot werden NICHT angezeigt (zaehlen aber in den Score).
+    FTileError, FTileWarn, FTileHint, FTileFileSev : TLabel; // Severity
+    FTileBug, FTileVuln, FTileDup                  : TLabel; // Type
+    FTileScore                                     : TLabel; // Codequalitaet
     // Export-Dropdown: ein Button "Export ▾" mit Popup statt 5 Einzel-Buttons.
     FExportMenu        : TPopupMenu;
-    // ---- Schweregrad-Panel (links) ---------------------------------------
-    //   "Probleme nach Schweregrad" - Count + Prozent pro Severity-Stufe
-    FLblSevErrCount    : TLabel;
-    FLblSevErrPct      : TLabel;
-    FLblSevWarnCount   : TLabel;
-    FLblSevWarnPct     : TLabel;
-    FLblSevHintCount   : TLabel;
-    FLblSevHintPct     : TLabel;
-    FLblSevSecCount    : TLabel;     // Sicherheitsrisiken (Vuln + Hotspot)
-    FLblSevSecPct      : TLabel;
-    FLblSevFileCount   : TLabel;     // Lesefehler (Parser konnte Datei nicht lesen)
-    FLblSevFilePct     : TLabel;
-    // ---- Typ-Panel (rechts) ----------------------------------------------
-    //   "Probleme nach Typ" - Count + Balken pro Typ-Kategorie
-    FLblTypeBugCount   : TLabel;
-    FLblTypeSmellCount : TLabel;
-    FLblTypeVulnCount  : TLabel;
-    FLblTypeHotCount   : TLabel;
-    FLblTypeDupCount   : TLabel;
-    FLblTypeFileCount  : TLabel;     // Lesefehler-Zaehler in der Typ-Card
-    FBarBug            : TPanel;
-    FBarSmell          : TPanel;
-    FBarVuln           : TPanel;
-    FBarHot            : TPanel;
-    FBarDup            : TPanel;
-    FBarFile           : TPanel;
     // ---- Zweiter Filter --------------------------------------------------
     FTypeFilter        : TTypeFilter;
     FTypeCombo         : TComboBox;
@@ -134,11 +111,12 @@ type
     procedure ExportMenuButtonClick(Sender: TObject);
     function  CurrentFocusFile: string;
 
-    procedure BuildSeverityCard(Parent: TPanel);
-    procedure BuildTypeCard(Parent: TPanel);
-    // Tauscht die linke (alLeft, 260) und rechte (alClient) Position
-    // der beiden Stat-Cards. Trigger: Klick auf den Card-Titel.
-    procedure ToggleStatsCardsClick(Sender: TObject);
+    // Erstellt die Sonar-Style Tile-Reihe (alle 10 Tiles in einer Zeile).
+    procedure BuildStatsTiles(Parent: TPanel);
+    // Flache Kachel: Icon-Glyph (akzentfarbig) + Count rechts oben,
+    // Caption unten zentriert. Hintergrund einheitlich (kein Box).
+    function  MakeTile(Parent: TWinControl; const Caption, Glyph: string;
+      IconColor: TColor; AWidth: Integer): TLabel;
     // Statusbar-Helpers (3 Panels: Befunde-Count, Datei-Progress, Mode)
     procedure StatusFindings(const T: string);
     procedure StatusProgress(const T: string);
@@ -210,11 +188,11 @@ const
   COLOR_ERROR      = TColor($00C0C0FF); // Hellrot - Fehler
   COLOR_WARNING    = TColor($00C0FFFF); // Hellgelb - Warnung
   COLOR_HINT       = TColor($00E8F0E0); // Hellgruen - Hinweis (Code-Smell)
-  COLOR_FILEERROR  = TColor($008080FF); // Orange – Lesefehler
-  COLOR_UNUSEDUSES = TColor($00F0D8FF); // Lavendel – ungenutzte Uses
-  COLOR_NILDEREF   = TColor($0080A0FF); // Hellrot-Orange – NilDeref
-  COLOR_DIVZERO    = TColor($008080FF); // Orange – DivByZero (gleich FileError)
-  COLOR_DEADCODE   = TColor($00E8E8E8); // Grau – toter Code
+  COLOR_FILEERROR  = TColor($008080FF); // Orange - Lesefehler
+  COLOR_UNUSEDUSES = TColor($00F0D8FF); // Lavendel - ungenutzte Uses
+  COLOR_NILDEREF   = TColor($0080A0FF); // Hellrot-Orange - NilDeref
+  COLOR_DIVZERO    = TColor($008080FF); // Orange - DivByZero (gleich FileError)
+  COLOR_DEADCODE   = TColor($00E8E8E8); // Grau - toter Code
 
 // Einfacher Verlauf von AFrom (oben) nach ATo (unten)
 procedure GradientFillRect(Canvas: TCanvas; R: TRect; AFrom, ATo: TColor;
@@ -391,7 +369,7 @@ begin
   LblFilter.Layout  := tlCenter;
   LblFilter.Width   := 76;
 
-  // Filter-Dropdown – nach Schweregrad gruppiert.
+  // Filter-Dropdown - nach Schweregrad gruppiert.
   // Items.Objects haelt den Ord(TFilterMode) als Tag; Separatoren haben Tag = -1
   // und werden in FilterChange auf "Alle" zurueckgesetzt.
   FFilterCombo := TComboBox.Create(Self);
@@ -410,14 +388,14 @@ begin
   FFilterCombo.Items.AddObject('Warnungen (alle)',      TObject(Ord(fmWarnings)));
   FFilterCombo.Items.AddObject('Hinweise (alle)',       TObject(Ord(fmHints)));
 
-  FFilterCombo.Items.AddObject('─── Fehler ───',        TObject(-1));
+  FFilterCombo.Items.AddObject('--- Fehler ---',        TObject(-1));
   FFilterCombo.Items.AddObject('SQL Injection',         TObject(Ord(fmSQLInjection)));
   FFilterCombo.Items.AddObject('Hardcoded Secrets',     TObject(Ord(fmHardcodedSecret)));
   FFilterCombo.Items.AddObject('Format()',              TObject(Ord(fmFormatMismatch)));
   FFilterCombo.Items.AddObject('Nil-Deref',             TObject(Ord(fmNilDeref)));
   FFilterCombo.Items.AddObject('Div by Zero',           TObject(Ord(fmDivByZero)));
 
-  FFilterCombo.Items.AddObject('─── Warnungen ───',     TObject(-1));
+  FFilterCombo.Items.AddObject('--- Warnungen ---',     TObject(-1));
   FFilterCombo.Items.AddObject('Leere Exceptions',      TObject(Ord(fmEmptyExcept)));
   FFilterCombo.Items.AddObject('Missing Finally',       TObject(Ord(fmMissingFinally)));
   FFilterCombo.Items.AddObject('Toter Code',            TObject(Ord(fmDeadCode)));
@@ -426,7 +404,7 @@ begin
   FFilterCombo.Items.AddObject('Hardkodierter Pfad',    TObject(Ord(fmHardcodedPath)));
   FFilterCombo.Items.AddObject('Lesefehler',            TObject(Ord(fmFileReadError)));
 
-  FFilterCombo.Items.AddObject('─── Hinweise ───',      TObject(-1));
+  FFilterCombo.Items.AddObject('--- Hinweise ---',      TObject(-1));
   FFilterCombo.Items.AddObject('Lange Methode',         TObject(Ord(fmLongMethod)));
   FFilterCombo.Items.AddObject('Viele Parameter',       TObject(Ord(fmLongParamList)));
   FFilterCombo.Items.AddObject('Magic Number',          TObject(Ord(fmMagicNumber)));
@@ -606,21 +584,17 @@ begin
   FSearchEdit.Font.Name   := 'Segoe UI';
   FSearchEdit.Font.Size   := 6;
 
-  // ---- Statistik-Leiste: zwei Cards (Schweregrad / Typ) ----
+  // ---- Statistik-Leiste: eine Reihe Sonar-Style Tiles (dunkler Hintergrund) ---
   FPanelStats := TPanel.Create(Self);
   FPanelStats.Parent      := Self;
   FPanelStats.Align       := alTop;
-  FPanelStats.Height      := 130; // Platz fuer 6 Type-Zeilen (incl. Lesefehler)
+  FPanelStats.Height      := 60; // 1 Tile-Reihe (Top-Row 28 + Caption ~16 + Padding)
   FPanelStats.BevelOuter  := bvNone;
-  FPanelStats.Color       := $00FAFAFA;
-  FPanelStats.Padding.SetBounds(8, 8, 8, 8);
+  FPanelStats.Color       := TColor($00282828); // Dunkles Anthrazit (BGR)
+  FPanelStats.ParentBackground := False;
+  FPanelStats.Padding.SetBounds(6, 6, 6, 6);
 
-  BuildSeverityCard(FPanelStats);
-  BuildTypeCard(FPanelStats);
-
-  // Initiale Card-Position: Type links, Severity rechts.
-  // (Klick auf einen Card-Titel toggelt zurueck.)
-  ToggleStatsCardsClick(nil);
+  BuildStatsTiles(FPanelStats);
 
   // alTop-Reihenfolge explizit setzen (gewuenschte Top-zu-Bottom-Reihenfolge:
   //   FPanelStats -> PanelPath -> PanelButtons -> PanelSearch).
@@ -638,24 +612,23 @@ begin
   PanelClient.Align      := alClient;
   PanelClient.BevelOuter := bvNone;
 
-  // Hilfe-Panel direkt über dem Grid (alTop innerhalb PanelClient)
+  // Hilfe-Panel rechts neben dem Grid (alRight innerhalb PanelClient).
+  // Splitter-bedienbar - User kann Breite per Drag anpassen.
   var HelpPanel := TPanel.Create(Self);
   HelpPanel.Parent              := PanelClient;
-  HelpPanel.Align               := alTop;
-  // Hoehe so dimensioniert, dass die Vorher/Nachher-Memos genau 7 Textzeilen
-  // zeigen: Memo-Inhalt 7 * 12 = 84 px + 14 px Header-Label + 16 px Desc-Label
-  // + 2 px Trenner = 116 px (auf 120 aufgerundet fuer Atemluft).
-  HelpPanel.Height              := 120;
-  HelpPanel.Constraints.MinHeight := 60; // verhindert komplettes Zusammenfalten
+  HelpPanel.Align               := alRight;
+  HelpPanel.Width               := 360;
+  HelpPanel.Constraints.MinWidth := 220; // sonst werden Code-Memos zu schmal
   HelpPanel.BevelOuter          := bvNone;
   HelpPanel.Color               := $00F4F4F4;
 
-  var HelpTopSep := TPanel.Create(Self);
-  HelpTopSep.Parent     := HelpPanel;
-  HelpTopSep.Align      := alTop;
-  HelpTopSep.Height     := 1;
-  HelpTopSep.BevelOuter := bvNone;
-  HelpTopSep.Color      := $00BBBBBB;
+  // 1px linke Trennlinie - optisches Limit zwischen Grid und Help-Panel.
+  var HelpLeftSep := TPanel.Create(Self);
+  HelpLeftSep.Parent     := HelpPanel;
+  HelpLeftSep.Align      := alLeft;
+  HelpLeftSep.Width      := 1;
+  HelpLeftSep.BevelOuter := bvNone;
+  HelpLeftSep.Color      := $00BBBBBB;
 
   FHelpDescLabel := TLabel.Create(Self);
   FHelpDescLabel.Parent      := HelpPanel;
@@ -668,7 +641,7 @@ begin
   FHelpDescLabel.Font.Color  := $00303030;
   FHelpDescLabel.Color       := $00E8E8E8;
   FHelpDescLabel.ParentColor := False;
-  FHelpDescLabel.Caption     := '  Zeile auswählen für Lösungshinweis';
+  FHelpDescLabel.Caption     := '  Zeile auswaehlen fuer Loesungshinweis';
 
   var HelpCode := TPanel.Create(Self);
   HelpCode.Parent      := HelpPanel;
@@ -676,10 +649,13 @@ begin
   HelpCode.BevelOuter  := bvNone;
   HelpCode.Color       := $00F4F4F4;
 
+  // Vorher/Nachher vertikal gestapelt (vorher: nebeneinander).
+  // Bei einem rechts-angedockten Help-Panel passt die Hoehe besser zu den
+  // typischen Code-Snippet-Laengen als die Breite.
   FHelpBeforePanel := TPanel.Create(Self);
   FHelpBeforePanel.Parent      := HelpCode;
-  FHelpBeforePanel.Align       := alLeft;
-  FHelpBeforePanel.Width       := 300;
+  FHelpBeforePanel.Align       := alTop;
+  FHelpBeforePanel.Height      := 150;
   FHelpBeforePanel.BevelOuter  := bvNone;
   FHelpBeforePanel.Color       := $00F0E8E8;
 
@@ -707,12 +683,13 @@ begin
   FHelpBefore.Font.Size   := 6;
   FHelpBefore.Font.Color  := $00400000;
 
-  var VSep := TPanel.Create(Self);
-  VSep.Parent      := HelpCode;
-  VSep.Align       := alLeft;
-  VSep.Width       := 1;
-  VSep.BevelOuter  := bvNone;
-  VSep.Color       := $00BBBBBB;
+  // Splitter zwischen Vorher und Nachher (drag um die Verhaeltnisse anzupassen)
+  var BeforeAfterSplitter := TSplitter.Create(Self);
+  BeforeAfterSplitter.Parent      := HelpCode;
+  BeforeAfterSplitter.Align       := alTop;
+  BeforeAfterSplitter.Height      := 4;
+  BeforeAfterSplitter.Color       := $00BBBBBB;
+  BeforeAfterSplitter.ResizeStyle := rsUpdate;
 
   var HelpAfterPanel := TPanel.Create(Self);
   HelpAfterPanel.Parent      := HelpCode;
@@ -725,7 +702,7 @@ begin
   LblAfter.Align       := alTop;
   LblAfter.Height      := 14;
   LblAfter.Layout      := tlCenter;
-  LblAfter.Caption     := '  Nachher (Lösung)';
+  LblAfter.Caption     := '  Nachher (Loesung)';
   LblAfter.Font.Name   := 'Segoe UI';
   LblAfter.Font.Size   := 6;
   LblAfter.Font.Style  := [fsBold];
@@ -744,21 +721,22 @@ begin
   FHelpAfter.Font.Size   := 6;
   FHelpAfter.Font.Color  := $00004000;
 
-  // Splitter zwischen Hints-Panel und Grid – ermöglicht Größenänderung
+  // Splitter zwischen Grid (links) und Help-Panel (rechts) - User kann
+  // die Help-Panel-Breite per Drag anpassen.
   var HelpSplitter := TSplitter.Create(Self);
   HelpSplitter.Parent     := PanelClient;
-  HelpSplitter.Align      := alTop;
-  HelpSplitter.Height     := 4;
+  HelpSplitter.Align      := alRight;
+  HelpSplitter.Width      := 4;
   HelpSplitter.Color      := $00BBBBBB;
   HelpSplitter.ResizeStyle := rsUpdate;
 
   FResultGrid := TStringGrid.Create(Self);
   FResultGrid.Parent           := PanelClient;
   FResultGrid.Align            := alClient;
-  // Grid soll immer mindestens 120 px hoch sein - bei zu kleinem Fenster wird
-  // dadurch das alClient-Resize gegen die Constraint gedrueckt und der
-  // Help-Bereich darueber bekommt den ersten Druck ab.
+  // MinWidth=300 verhindert dass der Help-Splitter den Grid-Bereich
+  // praktisch auf Null zieht. MinHeight=120 weiterhin gegen Mini-Hoehe.
   FResultGrid.Constraints.MinHeight := 120;
+  FResultGrid.Constraints.MinWidth  := 300;
   FResultGrid.FixedCols        := 0;
   FResultGrid.ColCount         := 6;
   FResultGrid.RowCount         := 2;
@@ -772,13 +750,13 @@ begin
   FResultGrid.Options          := [goFixedVertLine, goFixedHorzLine,
                                    goVertLine, goHorzLine,
                                    goColSizing, goRowSelect, goThumbTracking];
-  // Spaltenbreiten für 600px: 130+85+38+90+Scrollbar(17) = 360px fest
-  // → Befund-Spalte füllt ~240px
+  // Spaltenbreiten fuer 600px: 130+85+38+90+Scrollbar(17) = 360px fest
+  // -> Befund-Spalte fuellt ~240px
   FResultGrid.ColWidths[0] := 130;  // Datei
   FResultGrid.ColWidths[1] :=  85;  // Methode
   FResultGrid.ColWidths[2] :=  38;  // Zeile
   FResultGrid.ColWidths[3] := 110;  // Typ (fix)
-  FResultGrid.ColWidths[4] := 240;  // Regel/Befund (füllt Rest per GridResize)
+  FResultGrid.ColWidths[4] := 240;  // Regel/Befund (fuellt Rest per GridResize)
   FResultGrid.ColWidths[5] :=  90;  // Schweregrad (fix)
   FResultGrid.Cells[0, 0] := 'Datei';
   FResultGrid.Cells[1, 0] := 'Methode';
@@ -808,201 +786,174 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// Statistik-Badge erstellen
+// Sonar-Style Tile-Reihe - 10 Tiles horizontal, einheitlicher Hintergrund.
+//
+//   [Fehler] [Warnungen] [Hinweise] [Lesefehler] [Code Smell]
+//   [Bugs] [Sicherheit] [Hotspot] [Duplikate] [Codequalitaet]
+//
+// Pro Tile: Akzentfarbiges Glyph-Icon links + Count rechts (Top-Row), darunter
+// Caption zentriert. 1px duenner Rahmen ueber TTilePanel-Subklasse (Paint
+// override). Glyphs aus Segoe Fluent Icons / Segoe MDL2 Assets - vektor,
+// auf jedem Win10/11 nativ verfuegbar (kein SVG-Library-Dependency).
+//
+// Mapping zu unserem Datenmodell:
+//   Fehler/Warnungen/Hinweise/Lesefehler -> Severity-Buckets (Err/Warn/Hint/FileErr)
+//   Code Smell                           -> ftCodeSmell-Count
+//   Bugs/Sicherheit/Hotspot/Duplikate    -> Type-Buckets (Bug/Vuln/Hotspot/Dup)
+//   Codequalitaet                        -> gewichteter Quality-Score
 // ---------------------------------------------------------------------------
-// Helper: erzeugt eine Severity-Zeile mit Farbpunkt + Caption + Count + Prozent.
-// CountLbl und PctLbl werden zurueckgegeben, damit UpdateStats sie befuellen kann.
-procedure CreateSeverityRow(Parent: TWinControl; Y: Integer;
-  const Caption: string; DotColor: TColor; FontColor: TColor;
-  out CountLbl, PctLbl: TLabel);
-const
-  ROW_H = 14;
-var
-  Dot       : TPanel;
-  CapLbl    : TLabel;
+
+type
+  // Lokale TPanel-Subklasse fuer Tiles mit duennem benutzerdefinierten
+  // Rahmen. TPanel.BorderStyle=bsSingle waere 2px schwarz - wir wollen
+  // einen 1px-Rahmen in einer dezenten Akzentfarbe, sichtbar auf dem
+  // dunklen Stats-Hintergrund.
+  TTilePanel = class(TPanel)
+  private
+    FBorderColor: TColor;
+  protected
+    procedure Paint; override;
+  public
+    property BorderColor: TColor read FBorderColor write FBorderColor;
+  end;
+
+procedure TTilePanel.Paint;
 begin
-  // Farbpunkt links als kleines Quadrat
-  Dot            := TPanel.Create(Parent);
-  Dot.Parent     := Parent;
-  Dot.SetBounds(0, Y + 3, 8, 8);
-  Dot.BevelOuter := bvNone;
-  Dot.Color      := DotColor;
-
-  CapLbl            := TLabel.Create(Parent);
-  CapLbl.Parent     := Parent;
-  CapLbl.SetBounds(14, Y, 110, ROW_H);
-  CapLbl.Caption    := Caption;
-  CapLbl.Layout     := tlCenter;
-  CapLbl.Font.Name  := 'Segoe UI';
-  CapLbl.Font.Size  := 6;
-  CapLbl.Font.Color := FontColor;
-  CapLbl.ParentFont := False;
-
-  CountLbl            := TLabel.Create(Parent);
-  CountLbl.Parent     := Parent;
-  CountLbl.SetBounds(130, Y, 40, ROW_H);
-  CountLbl.Caption    := '0';
-  CountLbl.Layout     := tlCenter;
-  CountLbl.Alignment  := taRightJustify;
-  CountLbl.Font.Name  := 'Segoe UI';
-  CountLbl.Font.Size  := 6;
-  CountLbl.Font.Style := [fsBold];
-  CountLbl.Font.Color := FontColor;
-  CountLbl.ParentFont := False;
-
-  PctLbl            := TLabel.Create(Parent);
-  PctLbl.Parent     := Parent;
-  PctLbl.SetBounds(180, Y, 60, ROW_H);
-  PctLbl.Caption    := '(0,0%)';
-  PctLbl.Layout     := tlCenter;
-  PctLbl.Font.Name  := 'Segoe UI';
-  PctLbl.Font.Size  := 6;
-  PctLbl.Font.Color := $00808080;
-  PctLbl.ParentFont := False;
+  inherited; // zeichnet Hintergrund (Color) und Bevel
+  Canvas.Brush.Style := bsClear;
+  Canvas.Pen.Color   := FBorderColor;
+  Canvas.Pen.Width   := 1;
+  Canvas.Rectangle(ClientRect);
 end;
 
-// Helper: Typ-Zeile mit Caption, horizontalem Balken und Count.
-// Die Balken-Komponente wird in UpdateStats per Width skaliert.
-procedure CreateTypeRow(Parent: TWinControl; Y: Integer;
-  const Caption: string; BarColor: TColor;
-  out Bar: TPanel; out CountLbl: TLabel);
+function TAnalyserFrame.MakeTile(Parent: TWinControl; const Caption, Glyph: string;
+  IconColor: TColor; AWidth: Integer): TLabel;
 const
-  ROW_H = 14;
+  CL_FG_TXT     = TColor($00E8E8E8); // Off-white fuer Count
+  CL_FG_DIM     = TColor($00B0B0B0); // Dimmer Caption
+  CL_TILE_BG    = TColor($00282828); // Tile-Hintergrund (= Stats-Panel)
+  CL_BORDER     = TColor($00505050); // Duenner Rahmen (etwas heller als BG)
 var
+  Tile     : TTilePanel;
+  TopRow   : TPanel;
+  IconLbl  : TLabel;
+  CountLbl : TLabel;
   CapLbl   : TLabel;
-  Track    : TPanel;
 begin
-  CapLbl            := TLabel.Create(Parent);
-  CapLbl.Parent     := Parent;
-  CapLbl.SetBounds(0, Y, 90, ROW_H);
-  CapLbl.Caption    := Caption;
-  CapLbl.Layout     := tlCenter;
-  CapLbl.Font.Name  := 'Segoe UI';
-  CapLbl.Font.Size  := 6;
-  CapLbl.Font.Color := $00404040;
-  CapLbl.ParentFont := False;
+  Tile := TTilePanel.Create(Self);
+  Tile.Parent      := Parent;
+  Tile.Align       := alLeft;
+  Tile.Width       := AWidth;
+  Tile.AlignWithMargins := True;
+  Tile.Margins.SetBounds(0, 0, 4, 0);
+  Tile.BevelOuter  := bvNone;
+  Tile.BorderStyle := bsNone;
+  Tile.ParentBackground := False;
+  Tile.Color       := CL_TILE_BG;
+  Tile.BorderColor := CL_BORDER;
+  Tile.ShowHint    := True;
+  Tile.Hint        := Caption;
 
-  // CountLbl ZUERST anlegen damit's im z-order UNTER Track sitzt -
-  // brauchen wir nicht, aber stellen wir Reihenfolge bewusst sicher.
-  // Position und Breite: 60 px reichen fuer 4-stellige Zahlen mit fsBold.
-  // Stand am Ende der Zeile (x=200..260). Track wird kuerzer.
-  CountLbl            := TLabel.Create(Parent);
-  CountLbl.Parent     := Parent;
-  CountLbl.SetBounds(200, Y, 60, ROW_H);
-  CountLbl.Caption    := '0';
-  CountLbl.Layout     := tlCenter;
-  CountLbl.Alignment  := taRightJustify;
-  CountLbl.Font.Name  := 'Segoe UI';
-  CountLbl.Font.Size  := 6;
-  CountLbl.Font.Style := [fsBold];
-  CountLbl.Font.Color := $00404040;
-  CountLbl.ParentFont := False;
-  CountLbl.AutoSize   := False;
+  // Top-Row: Icon links + Zahl direkt daneben
+  TopRow := TPanel.Create(Self);
+  TopRow.Parent      := Tile;
+  TopRow.Align       := alTop;
+  TopRow.AlignWithMargins := True;
+  TopRow.Margins.SetBounds(1, 1, 1, 0); // 1px Abstand zum Tile-Rahmen
+  TopRow.Height      := 26;
+  TopRow.BevelOuter  := bvNone;
+  TopRow.ParentBackground := False;
+  TopRow.Color       := CL_TILE_BG;
+
+  IconLbl := TLabel.Create(Self);
+  IconLbl.Parent      := TopRow;
+  IconLbl.Align       := alLeft;
+  IconLbl.Width       := 26;
+  IconLbl.Caption     := Glyph;
+  IconLbl.Alignment   := taCenter;
+  IconLbl.Layout      := tlCenter;
+  IconLbl.Transparent := True;
+  IconLbl.Font.Name   := 'Segoe Fluent Icons';
+  IconLbl.Font.Size   := 14;
+  IconLbl.Font.Color  := IconColor;
+
+  CountLbl := TLabel.Create(Self);
+  CountLbl.Parent      := TopRow;
+  CountLbl.Align       := alClient;
+  CountLbl.Caption     := '0';
+  CountLbl.Alignment   := taLeftJustify;
+  CountLbl.Layout      := tlCenter;
   CountLbl.Transparent := True;
+  CountLbl.Font.Name   := 'Segoe UI';
+  CountLbl.Font.Size   := 14;
+  CountLbl.Font.Style  := [fsBold];
+  CountLbl.Font.Color  := CL_FG_TXT;
 
-  // Track ist die graue Hintergrund-Schiene des Balkens.
-  // Endet bei x=190 (95+95) - 10 px Lucke zum CountLbl bei x=200.
-  Track            := TPanel.Create(Parent);
-  Track.Parent     := Parent;
-  Track.SetBounds(95, Y + 4, 95, 6);
-  Track.BevelOuter := bvNone;
-  Track.Color      := $00ECECEC;
+  // Caption unten, ueber volle Tile-Breite zentriert.
+  // AlignWithMargins/Margins(1,0,1,1) damit der Tile-Rahmen sichtbar bleibt.
+  CapLbl := TLabel.Create(Self);
+  CapLbl.Parent      := Tile;
+  CapLbl.Align       := alClient;
+  CapLbl.AlignWithMargins := True;
+  CapLbl.Margins.SetBounds(1, 0, 1, 1);
+  CapLbl.Caption     := Caption;
+  CapLbl.Alignment   := taCenter;
+  CapLbl.Layout      := tlTop;
+  CapLbl.Transparent := True;
+  CapLbl.Font.Name   := 'Segoe UI';
+  CapLbl.Font.Size   := 8;
+  CapLbl.Font.Color  := CL_FG_DIM;
 
-  // Bar ist der gefuellte Anteil (Width wird in UpdateStats angepasst).
-  Bar            := TPanel.Create(Parent);
-  Bar.Parent     := Track;
-  Bar.SetBounds(0, 0, 0, 6);
-  Bar.BevelOuter := bvNone;
-  Bar.Color      := BarColor;
-  Bar.Align      := alLeft;
-
-  // CountLbl an die Spitze des z-Orders, damit kein anderes Sibling-Panel
-  // (z.B. ein versehentlich ueberlappender Bar) ihn verdecken kann.
-  CountLbl.BringToFront;
+  Result := CountLbl;
 end;
 
-procedure TAnalyserFrame.BuildSeverityCard(Parent: TPanel);
-var
-  Title : TLabel;
+procedure TAnalyserFrame.BuildStatsTiles(Parent: TPanel);
+const
+  // Akzentfarben fuer Glyph-Icons (BGR-Hex). Inspiriert vom Screenshot:
+  // jedes Icon eine eigene farbliche Identitaet, Zahl/Text einheitlich hell.
+  ICON_ERROR    = TColor($002030E0); // Rot-Orange
+  ICON_WARN     = TColor($002090F0); // Orange
+  ICON_INFO     = TColor($00F09020); // Hellblau
+  ICON_FILEERR  = TColor($00A0A0A0); // Hellgrau
+  ICON_SMELL    = TColor($00B040A0); // Magenta (Komplexitaet)
+  ICON_BUG      = TColor($002030E0); // Rot
+  ICON_VULN     = TColor($0080C040); // Gruen (Sicherheit)
+  ICON_HOT      = TColor($0040D0E0); // Gelb (Performance)
+  ICON_DUP      = TColor($00F0A040); // Cyan-Blau
+  ICON_SCORE    = TColor($002080F0); // Orange (Codequalitaet/Flamme)
+
+  // Segoe Fluent Icons / Segoe MDL2 Assets Codepoints (vektor).
+  GLYPH_ERROR    = #$E783; // ErrorBadge (i im Kreis hier wirkt wie Stop)
+  GLYPH_WARN     = #$E7BA; // Warning (Dreieck mit !)
+  GLYPH_INFO     = #$E946; // Info (i im Kreis)
+  GLYPH_FILEERR  = #$E711; // Cancel (X) - "Ausnahmen"
+  GLYPH_SMELL    = #$E950; // CommandPrompt - "Komplexitaet" (geschweifte Klammern)
+  GLYPH_BUG      = #$EBE8; // Bug
+  GLYPH_VULN     = #$E72E; // Lock - "Sicherheit"
+  GLYPH_HOT      = #$E945; // Lightning - "Performance"
+  GLYPH_DUP      = #$E8C8; // Copy - "Duplikate"
+  GLYPH_SCORE    = #$EB91; // Flame - "Codequalitaet"
+
+  TILE_W       = 86;
+  TILE_W_SCORE = 96; // letzter Tile etwas breiter (laengeres Wort)
 begin
-  FCardSeverity             := TPanel.Create(Self);
-  FCardSeverity.Parent      := Parent;
-  FCardSeverity.Align       := alLeft;
-  FCardSeverity.Width       := 260;
-  FCardSeverity.BevelOuter  := bvNone;
-  FCardSeverity.Color       := clWhite;
-  FCardSeverity.Padding.SetBounds(8, 4, 8, 4);
+  // Container leeren falls bereits aufgebaut.
+  while Parent.ControlCount > 0 do
+    Parent.Controls[0].Free;
 
-  Title            := TLabel.Create(Self);
-  Title.Parent     := FCardSeverity;
-  Title.SetBounds(0, 0, 240, 14);
-  Title.Caption    := 'Probleme nach Schweregrad';
-  Title.Font.Name  := 'Segoe UI';
-  Title.Font.Size  := 7;
-  Title.Font.Style := [fsBold];
-  Title.Font.Color := $00303030;
-  Title.ParentFont := False;
-  Title.Cursor     := crHandPoint;
-  Title.OnClick    := ToggleStatsCardsClick;
-  Title.Hint       := 'Klick: Cards-Position tauschen (links/rechts)';
-  Title.ShowHint   := True;
-
-  // 5 Zeilen mit 14px-Abstand, beginnend ab Y=18 (kompakter als 16
-  // damit alle Zeilen in die Card-Hoehe passen).
-  CreateSeverityRow(FCardSeverity, 18, 'Fehler',
-    $000000C0, $00202020, FLblSevErrCount,  FLblSevErrPct);
-  CreateSeverityRow(FCardSeverity, 32, 'Warnungen',
-    $0000A0E0, $00202020, FLblSevWarnCount, FLblSevWarnPct);
-  CreateSeverityRow(FCardSeverity, 46, 'Hinweise',
-    $00C08020, $00202020, FLblSevHintCount, FLblSevHintPct);
-  CreateSeverityRow(FCardSeverity, 60, 'Sicherheitsrisiken',
-    $008000C0, $00202020, FLblSevSecCount,  FLblSevSecPct);
-  CreateSeverityRow(FCardSeverity, 74, 'Lesefehler',
-    $00808080, $00202020, FLblSevFileCount, FLblSevFilePct);
-
-  // Spacer zwischen den beiden Cards (als Field damit beim Tauschen
-  // die Reihenfolge mit-arrangiert werden kann)
-  FGapStats             := TPanel.Create(Self);
-  FGapStats.Parent      := Parent;
-  FGapStats.Align       := alLeft;
-  FGapStats.Width       := 8;
-  FGapStats.BevelOuter  := bvNone;
-  FGapStats.Color       := $00FAFAFA;
-end;
-
-procedure TAnalyserFrame.BuildTypeCard(Parent: TPanel);
-var
-  Title : TLabel;
-begin
-  FCardType            := TPanel.Create(Self);
-  FCardType.Parent     := Parent;
-  FCardType.Align      := alClient;
-  FCardType.BevelOuter := bvNone;
-  FCardType.Color      := clWhite;
-  FCardType.Padding.SetBounds(8, 4, 8, 4);
-
-  Title            := TLabel.Create(Self);
-  Title.Parent     := FCardType;
-  Title.SetBounds(0, 0, 240, 14);
-  Title.Caption    := 'Probleme nach Typ';
-  Title.Font.Name  := 'Segoe UI';
-  Title.Font.Size  := 7;
-  Title.Font.Style := [fsBold];
-  Title.Font.Color := $00303030;
-  Title.ParentFont := False;
-  Title.Cursor     := crHandPoint;
-  Title.OnClick    := ToggleStatsCardsClick;
-  Title.Hint       := 'Klick: Cards-Position tauschen (links/rechts)';
-  Title.ShowHint   := True;
-
-  // 6 Zeilen mit 14px-Abstand. Lesefehler als letzte Kategorie damit
-  // die Severity-Card und Type-Card in den Totalen wieder uebereinstimmen.
-  CreateTypeRow(FCardType, 18, 'Code Smell',       $00D08040, FBarSmell, FLblTypeSmellCount);
-  CreateTypeRow(FCardType, 32, 'Bug',              $002020D0, FBarBug,   FLblTypeBugCount);
-  CreateTypeRow(FCardType, 46, 'Vulnerability',    $00B040A0, FBarVuln,  FLblTypeVulnCount);
-  CreateTypeRow(FCardType, 60, 'Security Hotspot', $0020A0E0, FBarHot,   FLblTypeHotCount);
-  CreateTypeRow(FCardType, 74, 'Code Duplication', $00C08020, FBarDup,   FLblTypeDupCount);
-  CreateTypeRow(FCardType, 88, 'Lesefehler',       $00808080, FBarFile,  FLblTypeFileCount);
+  // Reihenfolge: alLeft = das zuerst erstellte landet ganz links.
+  // Captions matchen unser echtes Datenmodell (TFindingType, TLeakSeverity).
+  // Code Smell und Hotspot bewusst weggelassen - die zaehlen weiterhin in den
+  // Quality-Score (siehe UpdateStats), bekommen aber keine eigene Kachel.
+  // Umlaute via Codepoint, da .pas-Datei kein UTF-8-BOM hat (#$00E4 = ae).
+  FTileError    := MakeTile(Parent, 'Fehler',                       GLYPH_ERROR,   ICON_ERROR,   TILE_W);
+  FTileWarn     := MakeTile(Parent, 'Warnungen',                    GLYPH_WARN,    ICON_WARN,    TILE_W);
+  FTileHint     := MakeTile(Parent, 'Hinweise',                     GLYPH_INFO,    ICON_INFO,    TILE_W);
+  FTileFileSev  := MakeTile(Parent, 'Lesefehler',                   GLYPH_FILEERR, ICON_FILEERR, TILE_W);
+  FTileBug      := MakeTile(Parent, 'Bugs',                         GLYPH_BUG,     ICON_BUG,     TILE_W);
+  FTileVuln     := MakeTile(Parent, 'Sicherheit',                   GLYPH_VULN,    ICON_VULN,    TILE_W);
+  FTileDup      := MakeTile(Parent, 'Duplikate',                    GLYPH_DUP,     ICON_DUP,     TILE_W);
+  FTileScore    := MakeTile(Parent, 'Codequalit'#$00E4't',          GLYPH_SCORE,   ICON_SCORE,   TILE_W_SCORE);
 end;
 
 procedure TAnalyserFrame.StatusFindings(const T: string);
@@ -1023,52 +974,6 @@ begin
     FStatusBar.Panels[2].Text := T;
 end;
 
-procedure TAnalyserFrame.ToggleStatsCardsClick(Sender: TObject);
-// Vertauscht die alLeft/alClient-Position der beiden Stat-Cards.
-// Trigger: Klick auf den Card-Titel.
-//
-// Da TWinControl.SetChildOrder protected ist, sortieren wir per
-// Re-Parent-Trick um: kurzes Detach + Re-Attach in gewuenschter Reihenfolge.
-var
-  LeftCard, RightCard: TPanel;
-  Host : TWinControl;
-begin
-  if (FCardSeverity = nil) or (FCardType = nil) or
-     (FGapStats = nil) or (FPanelStats = nil) then Exit;
-
-  FCardsSwapped := not FCardsSwapped;
-  if FCardsSwapped then
-  begin
-    LeftCard  := FCardType;
-    RightCard := FCardSeverity;
-  end
-  else
-  begin
-    LeftCard  := FCardSeverity;
-    RightCard := FCardType;
-  end;
-
-  Host := FPanelStats;
-
-  // Detach alle drei
-  LeftCard.Parent  := nil;
-  FGapStats.Parent := nil;
-  RightCard.Parent := nil;
-
-  // Aligns + Width neu setzen
-  RightCard.Align := alClient;
-  LeftCard.Align  := alLeft;
-  LeftCard.Width  := 260;
-  FGapStats.Align := alLeft;
-
-  // Re-Attach in gewuenschter Layout-Reihenfolge:
-  //   LinkeCard (alLeft)
-  //   Gap       (alLeft)
-  //   RechteCard (alClient)
-  LeftCard.Parent  := Host;
-  FGapStats.Parent := Host;
-  RightCard.Parent := Host;
-end;
 
 // ---------------------------------------------------------------------------
 // Filter
@@ -1102,11 +1007,9 @@ procedure TAnalyserFrame.ApplyFilter;
 
   function DisplayName(const FullPath: string): string;
   begin
-    if FCurrentBaseDir <> '' then
-      Result := ExtractRelativePath(
-        IncludeTrailingPathDelimiter(FCurrentBaseDir), FullPath)
-    else
-      Result := ExtractFileName(FullPath);
+    // Im Grid steht nur der Dateiname - der volle Pfad kommt als Tooltip
+    // ueber den GridMouseMove-Handler aus FDisplayedFindings.
+    Result := ExtractFileName(FullPath);
   end;
 
 var
@@ -1256,7 +1159,7 @@ begin
     if FDisplayedFindings.Count = 0 then
     begin
       FResultGrid.Rows[1].Clear;
-      FResultGrid.Cells[0, 1] := 'Keine Einträge für diesen Filter.';
+      FResultGrid.Cells[0, 1] := 'Keine Eintraege fuer diesen Filter.';
     end;
   finally
     SendMessage(FResultGrid.Handle, WM_SETREDRAW, 1, 0);
@@ -1339,7 +1242,7 @@ var
 begin
   if FDisplayedFindings.Count = 0 then
   begin
-    StatusMode('Nichts zu exportieren – Filter liefert 0 Einträge.');
+    StatusMode('Nichts zu exportieren - Filter liefert 0 Eintraege.');
     Exit;
   end;
 
@@ -1356,7 +1259,7 @@ begin
       for var F in FDisplayedFindings do Lst.Add(F);
       try
         TExporter.ExportCsv(Lst, Dlg.FileName);
-        StatusMode(Format('CSV gespeichert: %s (%d Einträge)',
+        StatusMode(Format('CSV gespeichert: %s (%d Eintraege)',
           [ExtractFileName(Dlg.FileName), Lst.Count]));
       except
         on E: Exception do
@@ -1377,7 +1280,7 @@ var
 begin
   if FDisplayedFindings.Count = 0 then
   begin
-    StatusMode('Nichts zu exportieren – Filter liefert 0 Einträge.');
+    StatusMode('Nichts zu exportieren - Filter liefert 0 Eintraege.');
     Exit;
   end;
 
@@ -1394,7 +1297,7 @@ begin
       for var F in FDisplayedFindings do Lst.Add(F);
       try
         TExporter.ExportJson(Lst, Dlg.FileName);
-        StatusMode(Format('JSON gespeichert: %s (%d Einträge)',
+        StatusMode(Format('JSON gespeichert: %s (%d Eintraege)',
           [ExtractFileName(Dlg.FileName), Lst.Count]));
       except
         on E: Exception do
@@ -1450,7 +1353,7 @@ begin
   src := CurrentFocusFile;
   if src = '' then
   begin
-    StatusMode('Jira-Export: bitte zuerst eine Zeile auswählen (Datei nicht eindeutig).');
+    StatusMode('Jira-Export: bitte zuerst eine Zeile auswaehlen (Datei nicht eindeutig).');
     Exit;
   end;
   // Standard: Fehler + Warnungen. Hinweise sind oft zu viel fuer ein Ticket.
@@ -1458,7 +1361,7 @@ begin
   jiraText := TExporter.BuildJiraText(FAllFindings, src, filterSet);
   Clipboard.AsText := jiraText;
   StatusMode(Format(
-    'Jira-Wiki-Markup für %s in Zwischenablage kopiert (Fehler+Warnungen).',
+    'Jira-Wiki-Markup fuer %s in Zwischenablage kopiert (Fehler+Warnungen).',
     [ExtractFileName(src)]));
 end;
 
@@ -1473,14 +1376,14 @@ begin
   src := CurrentFocusFile;
   if src = '' then
   begin
-    StatusMode('Clipboard: bitte zuerst eine Zeile auswählen (Datei nicht eindeutig).');
+    StatusMode('Clipboard: bitte zuerst eine Zeile auswaehlen (Datei nicht eindeutig).');
     Exit;
   end;
   text := TExporter.BuildClipboardText(FAllFindings, src,
     [lsError, lsWarning]);
   Clipboard.AsText := text;
   StatusMode(Format(
-    'Fehler+Warnungen für %s in Zwischenablage kopiert.',
+    'Fehler+Warnungen fuer %s in Zwischenablage kopiert.',
     [ExtractFileName(src)]));
 end;
 
@@ -1555,46 +1458,34 @@ begin
 end;
 
 procedure TAnalyserFrame.UpdateStats;
-// Befuellt die beiden Cards (Schweregrad / Typ) mit aktuellen Zaehlerstaenden.
-// "Sicherheitsrisiken" fasst Vulnerability + SecurityHotspot zusammen.
+// Befuellt die Sonar-Style Tiles mit Severity-, Typ-Aufteilung und
+// Quality-Score. Jede Kachel hat ihr eigenes Count-Label - keine
+// Indirektion, keine Truncation, keine OnDraw-Logik.
+//
+// Quality-Score-Gewichte (gewichtete Summe, niedriger = besser):
+//   Vulnerability=10, Error=7, Hotspot=5, Warning=3, Hint=1, FileErr=2
 const
-  BAR_TRACK_W = 95; // muss mit CreateTypeRow uebereinstimmen
+  W_VULN     = 10;
+  W_ERROR    = 7;
+  W_HOTSPOT  = 5;
+  W_WARNING  = 3;
+  W_HINT     = 1;
+  W_FILEERR  = 2;
 var
   f                 : TLeakFinding;
-  nErr, nWarn       : Integer;
-  nHint, nSec       : Integer;
-  nFileErr, total   : Integer;
-  nBug, nSmell      : Integer;
-  nVuln, nHot, nDup : Integer;
-  maxType           : Integer;
-
-  function Pct(part, all: Integer): string;
-  begin
-    if all = 0 then Result := '(0,0%)'
-    else
-      Result := Format('(%.1f%%)', [part * 100.0 / all]);
-  end;
-
-  function BarWidth(value, max: Integer): Integer;
-  begin
-    if max = 0 then Result := 0
-    else
-      Result := Round(BAR_TRACK_W * (value / max));
-  end;
-
+  nErr, nWarn, nHint, nFileErr : Integer;
+  nBug, nSmell, nVuln, nHot, nDup : Integer;
+  score      : Integer;
 begin
-  nErr  := 0; nWarn := 0; nHint := 0; nSec := 0; nFileErr := 0;
+  nErr  := 0; nWarn := 0; nHint := 0; nFileErr := 0;
   nBug  := 0; nSmell := 0; nVuln := 0; nHot := 0; nDup := 0;
 
-  // Pro Befund werden BEIDE Dimensionen aktualisiert (Schweregrad UND Typ).
-  // Severity-Total und Type-Total muessen am Ende identisch sein.
+  // Severity- und Typ-Aufteilung sind UNABHAENGIG: jeder Befund zaehlt
+  // in genau einer Severity-Bucket UND in genau einer Type-Bucket.
   for f in FAllFindings do
   begin
-    // ---- Schweregrad-Aufteilung ----
     if f.FindingType = ftFileError then
       Inc(nFileErr)
-    else if f.FindingType in [ftVulnerability, ftSecurityHotspot] then
-      Inc(nSec)
     else
       case f.Severity of
         lsError   : Inc(nErr);
@@ -1602,52 +1493,38 @@ begin
         lsHint    : Inc(nHint);
       end;
 
-    // ---- Typ-Aufteilung ----
     case f.FindingType of
       ftBug             : Inc(nBug);
       ftCodeSmell       : Inc(nSmell);
       ftVulnerability   : Inc(nVuln);
       ftSecurityHotspot : Inc(nHot);
       ftCodeDuplication : Inc(nDup);
-      // ftFileError wird oben bereits in nFileErr gezaehlt - hier nichts tun.
     end;
   end;
 
-  // Schweregrad-Gesamtsumme inkl. Lesefehler fuer Prozentangaben.
-  total := nErr + nWarn + nHint + nSec + nFileErr;
+  score := nVuln    * W_VULN     +
+           nErr     * W_ERROR    +
+           nHot     * W_HOTSPOT  +
+           nWarn    * W_WARNING  +
+           nHint    * W_HINT     +
+           nFileErr * W_FILEERR;
 
-  FLblSevErrCount.Caption   := IntToStr(nErr);
-  FLblSevErrPct.Caption     := Pct(nErr, total);
-  FLblSevWarnCount.Caption  := IntToStr(nWarn);
-  FLblSevWarnPct.Caption    := Pct(nWarn, total);
-  FLblSevHintCount.Caption  := IntToStr(nHint);
-  FLblSevHintPct.Caption    := Pct(nHint, total);
-  FLblSevSecCount.Caption   := IntToStr(nSec);
-  FLblSevSecPct.Caption     := Pct(nSec, total);
-  FLblSevFileCount.Caption  := IntToStr(nFileErr);
-  FLblSevFilePct.Caption    := Pct(nFileErr, total);
+  if not Assigned(FTileError) then Exit;
 
-  // Typ-Card: Balken werden auf den Maximalwert skaliert (incl. Lesefehler).
-  maxType := nSmell;
-  if nBug      > maxType then maxType := nBug;
-  if nVuln     > maxType then maxType := nVuln;
-  if nHot      > maxType then maxType := nHot;
-  if nDup      > maxType then maxType := nDup;
-  if nFileErr  > maxType then maxType := nFileErr;
+  // Severity-Buckets: Fehler / Warnungen / Hinweise / Ausnahmen
+  FTileError.Caption    := IntToStr(nErr);
+  FTileWarn.Caption     := IntToStr(nWarn);
+  FTileHint.Caption     := IntToStr(nHint);
+  FTileFileSev.Caption  := IntToStr(nFileErr);
 
-  FLblTypeSmellCount.Caption := IntToStr(nSmell);
-  FLblTypeBugCount.Caption   := IntToStr(nBug);
-  FLblTypeVulnCount.Caption  := IntToStr(nVuln);
-  FLblTypeHotCount.Caption   := IntToStr(nHot);
-  FLblTypeDupCount.Caption   := IntToStr(nDup);
-  FLblTypeFileCount.Caption  := IntToStr(nFileErr);
+  // Type-Buckets: Bugs / Sicherheit / Duplikate (Smell + Hotspot ohne Kachel,
+  // zaehlen aber weiterhin in den Quality-Score)
+  FTileBug.Caption      := IntToStr(nBug);
+  FTileVuln.Caption     := IntToStr(nVuln);
+  FTileDup.Caption      := IntToStr(nDup);
 
-  FBarSmell.Width := BarWidth(nSmell,   maxType);
-  FBarBug.Width   := BarWidth(nBug,     maxType);
-  FBarVuln.Width  := BarWidth(nVuln,    maxType);
-  FBarHot.Width   := BarWidth(nHot,     maxType);
-  FBarDup.Width   := BarWidth(nDup,     maxType);
-  FBarFile.Width  := BarWidth(nFileErr, maxType);
+  // Codequalitaet (gewichteter Score - Smell und Hotspot eingerechnet)
+  FTileScore.Caption    := IntToStr(score);
 end;
 
 // ---------------------------------------------------------------------------
@@ -1669,7 +1546,7 @@ begin
           'list := TStringList.Create;'#13#10 +
           'list.Add(''Eintrag'');'#13#10 +
           '// list.Free fehlt!'#13#10 +
-          '// → Speicherleck';
+          '// -> Speicherleck';
         Result.After :=
           'list := TStringList.Create;'#13#10 +
           'try'#13#10 +
@@ -1700,14 +1577,14 @@ begin
       end
       else
       begin
-        Result.Description := 'Free liegt außerhalb des finally-Blocks';
+        Result.Description := 'Free liegt ausserhalb des finally-Blocks';
         Result.Before :=
           'try'#13#10 +
           '  ...code...'#13#10 +
           'finally'#13#10 +
           '  other.Free;'#13#10 +
           'end;'#13#10 +
-          'list.Free; // ← zu spät!'#13#10 +
+          'list.Free; // ← zu spaet!'#13#10 +
           '// Exception vor Free = Leck';
         Result.After :=
           'try'#13#10 +
@@ -1740,7 +1617,7 @@ begin
 
     fkSQLInjection:
     begin
-      Result.Description := 'SQL-Befehl per "+" aufgebaut — SQL-Injection-Risiko';
+      Result.Description := 'SQL-Befehl per "+" aufgebaut - SQL-Injection-Risiko';
       Result.Before :=
         'Query.SQL.Text :='#13#10 +
         '  ''SELECT * FROM t'''#13#10 +
@@ -1789,24 +1666,24 @@ begin
         '  ''%s ist %d Jahre alt'','#13#10 +
         '  [Name, Age]); // ← korrekt'#13#10 +
         ''#13#10 +
-        '// Tipp: %% für ein echtes %-Zeichen';
+        '// Tipp: %% fuer ein echtes %-Zeichen';
     end;
 
     fkFileReadError:
     begin
       Result.Description := 'Datei konnte nicht gelesen oder geparst werden';
       Result.Before :=
-        '// Mögliche Ursachen:'#13#10 +
-        '// – Unbekannte Datei-Kodierung'#13#10 +
-        '// – Datei gesperrt / kein Lesezugriff'#13#10 +
-        '// – Datei größer als 5 MB'#13#10 +
-        '// – Syntaxfehler beim Parsen';
+        '// Moegliche Ursachen:'#13#10 +
+        '// - Unbekannte Datei-Kodierung'#13#10 +
+        '// - Datei gesperrt / kein Lesezugriff'#13#10 +
+        '// - Datei groesser als 5 MB'#13#10 +
+        '// - Syntaxfehler beim Parsen';
       Result.After :=
-        '// Lösungsansätze:'#13#10 +
-        '// – Datei in UTF-8 oder UTF-16 speichern'#13#10 +
-        '// – Dateizugriff und Berechtigungen prüfen'#13#10 +
-        '// – Sehr große oder generierte Dateien'#13#10 +
-        '//   aus dem Projektpfad ausschließen';
+        '// Loesungsansaetze:'#13#10 +
+        '// - Datei in UTF-8 oder UTF-16 speichern'#13#10 +
+        '// - Dateizugriff und Berechtigungen pruefen'#13#10 +
+        '// - Sehr grosse oder generierte Dateien'#13#10 +
+        '//   aus dem Projektpfad ausschliessen';
     end;
 
     fkNilDeref:
@@ -1849,7 +1726,7 @@ begin
       Result.Before :=
         'function Avg(Sum, Count: Integer): Double;'#13#10 +
         'begin'#13#10 +
-        '  Result := Sum div Count; // Count=0 → EZeroDivide'#13#10 +
+        '  Result := Sum div Count; // Count=0 -> EZeroDivide'#13#10 +
         'end;';
       Result.After :=
         'function Avg(Sum, Count: Integer): Double;'#13#10 +
@@ -1880,7 +1757,7 @@ begin
 
     fkLongMethod:
     begin
-      Result.Description := 'Methode zu lang – aufteilen erh'#$F6'ht Lesbarkeit';
+      Result.Description := 'Methode zu lang - aufteilen erh'#$F6'ht Lesbarkeit';
       Result.Before :=
         'procedure TFoo.DoEverything;'#13#10 +
         'begin'#13#10 +
@@ -1900,7 +1777,7 @@ begin
 
     fkLongParamList:
     begin
-      Result.Description := 'Zu viele Parameter – Parameter-Object verwenden';
+      Result.Description := 'Zu viele Parameter - Parameter-Object verwenden';
       Result.Before :=
         'procedure CreateUser(AName, AEmail,'#13#10 +
         '  APhone, AAddress, ACity,'#13#10 +
@@ -1918,7 +1795,7 @@ begin
 
     fkMagicNumber:
     begin
-      Result.Description := 'Magic Number – durch benannte Konstante ersetzen';
+      Result.Description := 'Magic Number - durch benannte Konstante ersetzen';
       Result.Before :=
         'if RetryCount > 100 then'#13#10 +
         '  raise Exception.Create(''Zu viele Versuche'');';
@@ -1932,7 +1809,7 @@ begin
 
     fkDuplicateString:
     begin
-      Result.Description := 'String-Literal mehrfach – als Konstante extrahieren';
+      Result.Description := 'String-Literal mehrfach - als Konstante extrahieren';
       Result.Before :=
         'Logger.Warn(''Datenbank-Verbindung verloren'');'#13#10 +
         '// ... 30 Zeilen sp'#$E4'ter ...'#13#10 +
@@ -1947,7 +1824,7 @@ begin
 
     fkHardcodedPath:
     begin
-      Result.Description := 'Hardkodierter Pfad – aus Konfiguration laden';
+      Result.Description := 'Hardkodierter Pfad - aus Konfiguration laden';
       Result.Before :=
         'LogFile := ''C:\Logs\app.log'';'#13#10 +
         '// L'#$E4'uft nur auf einem Rechner!';
@@ -1978,7 +1855,7 @@ begin
 
     fkDeepNesting:
     begin
-      Result.Description := 'Zu tiefe Verschachtelung – Early-Exit oder Methoden-Extraktion';
+      Result.Description := 'Zu tiefe Verschachtelung - Early-Exit oder Methoden-Extraktion';
       Result.Before :=
         'if A then'#13#10 +
         '  if B then'#13#10 +
@@ -2072,7 +1949,7 @@ begin
   Idx := Row - 1;
   if (Idx < 0) or (Idx >= FDisplayedFindings.Count) then
   begin
-    FHelpDescLabel.Caption    := '  Zeile auswählen für Lösungshinweis';
+    FHelpDescLabel.Caption    := '  Zeile auswaehlen fuer Loesungshinweis';
     FHelpDescLabel.Color      := COLOR_DESC_DEFAULT;
     FHelpBefore.Lines.Text    := '';
     FHelpAfter.Lines.Text     := '';
@@ -2084,7 +1961,7 @@ begin
 
   if Hint.Description = '' then
   begin
-    FHelpDescLabel.Caption := '  Kein Lösungshinweis verfügbar.';
+    FHelpDescLabel.Caption := '  Kein Loesungshinweis verfuegbar.';
     FHelpDescLabel.Color   := COLOR_DESC_DEFAULT;
     FHelpBefore.Lines.Text := '';
     FHelpAfter.Lines.Text  := '';
@@ -2284,7 +2161,7 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// Ordner auswählen
+// Ordner auswaehlen
 // ---------------------------------------------------------------------------
 procedure TAnalyserFrame.BrowseClick(Sender: TObject);
 var
@@ -2293,7 +2170,7 @@ begin
   Dlg := TFileOpenDialog.Create(nil);
   try
     Dlg.Options := [fdoPickFolders, fdoPathMustExist, fdoForceFileSystem];
-    Dlg.Title   := 'Projektordner auswählen';
+    Dlg.Title   := 'Projektordner auswaehlen';
     if Dlg.Execute then
       FProjectPath.Text := Dlg.FileName;
   finally
@@ -2308,7 +2185,7 @@ procedure TAnalyserFrame.AnalyseClick(Sender: TObject);
 begin
   if not TStaticFiles.ValidatePath(FProjectPath.Text) then
   begin
-    ShowMessage('Bitte einen gültigen Projektpfad angeben.');
+    ShowMessage('Bitte einen gueltigen Projektpfad angeben.');
     Exit;
   end;
   SaveRecentPath(FProjectPath.Text);
@@ -2332,7 +2209,7 @@ begin
     EditView := EditorSvc.TopView;
     if not Assigned(EditView) then
     begin
-      StatusMode('Keine Datei geöffnet.');
+      StatusMode('Keine Datei geoeffnet.');
       Exit;
     end;
 
@@ -2685,24 +2562,31 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// Doppelklick → Datei in IDE öffnen, direkt zur gefundenen Zeile springen
+// Doppelklick -> Datei in IDE oeffnen, direkt zur gefundenen Zeile springen
 // ---------------------------------------------------------------------------
 procedure TAnalyserFrame.GridMouseMove(Sender: TObject; Shift: TShiftState;
   X, Y: Integer);
+// Tooltip in der Datei-Spalte: voller Pfad aus FDisplayedFindings.
+// Sonst: nur Cell-Text (z.B. fuer abgeschnittene Detail-Texte).
 var
   grid    : TStringGrid;
-  ACol, ARow: Integer;
-  cellText: string;
+  ACol, ARow, idx: Integer;
+  hintText: string;
 begin
   grid := TStringGrid(Sender);
   grid.MouseToCell(X, Y, ACol, ARow);
-  if (ARow >= 1) and (ACol = 0) then
-    cellText := grid.Cells[0, ARow]
-  else
-    cellText := '';
-  if grid.Hint <> cellText then
+  hintText := '';
+  if ARow >= 1 then
   begin
-    grid.Hint := cellText;
+    idx := ARow - 1;
+    if (ACol = 0) and (idx >= 0) and (idx < FDisplayedFindings.Count) then
+      hintText := FDisplayedFindings[idx].FileName
+    else
+      hintText := grid.Cells[ACol, ARow];
+  end;
+  if grid.Hint <> hintText then
+  begin
+    grid.Hint := hintText;
     Application.HintPause := 300;
     Application.ActivateHint(grid.ClientToScreen(Point(X, Y)));
   end;
@@ -2710,20 +2594,20 @@ end;
 
 procedure TAnalyserFrame.GridDblClick(Sender: TObject);
 var
-  row: Integer;
-  relPath, absPath: string;
-  lineNo: Integer;
+  row, idx: Integer;
+  absPath : string;
+  lineNo  : Integer;
+  F       : TLeakFinding;
 begin
   row := FResultGrid.Row;
   if row < 1 then Exit;
-  relPath := FResultGrid.Cells[0, row];
-  if relPath = '' then Exit;
+  idx := row - 1;
+  if (idx < 0) or (idx >= FDisplayedFindings.Count) then Exit;
 
-  lineNo  := StrToIntDef(FResultGrid.Cells[2, row], 0);
-  if FCurrentBaseDir <> '' then
-    absPath := IncludeTrailingPathDelimiter(FCurrentBaseDir) + relPath
-  else
-    absPath := IncludeTrailingPathDelimiter(FProjectPath.Text) + relPath;
+  F       := FDisplayedFindings[idx];
+  absPath := F.FileName;
+  lineNo  := StrToIntDef(F.LineNumber, 0);
+  if absPath = '' then Exit;
 
   if not FileExists(absPath) then
   begin
@@ -2732,7 +2616,8 @@ begin
   end;
 
   OpenFileAtLine(absPath, lineNo);
-  StatusMode(Format('Geöffnet: %s  Zeile: %d', [relPath, lineNo]));
+  StatusMode(Format('Geoeffnet: %s  Zeile: %d',
+    [ExtractFileName(absPath), lineNo]));
 end;
 
 procedure TAnalyserFrame.OpenFileAtLine(const AbsPath: string;
@@ -2749,7 +2634,7 @@ begin
   ModuleSvc := BorlandIDEServices as IOTAModuleServices;
   if not Assigned(ModuleSvc) then Exit;
 
-  // Modul suchen (bereits geöffnet oder erst öffnen)
+  // Modul suchen (bereits geoeffnet oder erst oeffnen)
   Module := ModuleSvc.FindModule(AbsPath);
   if not Assigned(Module) then
   begin
@@ -2770,7 +2655,7 @@ begin
 
   if not Assigned(SrcEditor) then Exit;
 
-  // Editor-Tab in den Vordergrund bringen (wichtig wenn Datei bereits geöffnet)
+  // Editor-Tab in den Vordergrund bringen (wichtig wenn Datei bereits geoeffnet)
   SrcEditor.Show;
 
   // View holen und Cursor setzen
@@ -2792,12 +2677,13 @@ begin
   inherited;
   if Assigned(FResultGrid) then
     GridResize(FResultGrid);
-  // Vorher/Nachher-Hälften gleichmäßig aufteilen
+  // Vorher/Nachher-Haelften gleichmaessig vertikal aufteilen
+  // (Vorher ist alTop, FHelpBeforePanel.Height steuert die Aufteilung).
   if Assigned(FHelpBeforePanel) and Assigned(FHelpBeforePanel.Parent) then
   begin
-    HalfW := (FHelpBeforePanel.Parent.Width - 1) div 2;
-    if HalfW > 50 then
-      FHelpBeforePanel.Width := HalfW;
+    HalfW := (FHelpBeforePanel.Parent.Height - 5) div 2;  // -5 fuer Splitter
+    if HalfW > 40 then
+      FHelpBeforePanel.Height := HalfW;
   end;
 end;
 
@@ -2841,7 +2727,7 @@ begin
   // ---- Header-Zeile ----
   if ARow = 0 then
   begin
-    // Verlauf oben → unten
+    // Verlauf oben -> unten
     GradientFillRect(grid.Canvas, Rect, HEADER_TOP, HEADER_BOTTOM, True);
     // Trennlinie unten
     grid.Canvas.Pen.Color := SEP_LINE;
@@ -2926,7 +2812,7 @@ var
 begin
   FProjectPath.Items.Clear;
 
-  // Aktuell geöffnetes IDE-Projekt als ersten Eintrag
+  // Aktuell geoeffnetes IDE-Projekt als ersten Eintrag
   ideProject := GetCurrentIDEProjectDir;
   if ideProject <> '' then
     FProjectPath.Items.Add(ideProject);
@@ -2957,14 +2843,14 @@ var
   i   : Integer;
   idx : Integer;
 begin
-  // Aus der Liste entfernen falls bereits vorhanden, dann vorne einfügen
+  // Aus der Liste entfernen falls bereits vorhanden, dann vorne einfuegen
   idx := FProjectPath.Items.IndexOf(APath);
   if idx >= 0 then
     FProjectPath.Items.Delete(idx);
   FProjectPath.Items.Insert(0, APath);
   FProjectPath.Text := APath;
 
-  // Auf MAX_RECENT begrenzen (IDE-Projekt nicht mitzählen)
+  // Auf MAX_RECENT begrenzen (IDE-Projekt nicht mitzaehlen)
   while FProjectPath.Items.Count > MAX_RECENT + 1 do
     FProjectPath.Items.Delete(FProjectPath.Items.Count - 1);
 
@@ -3011,7 +2897,7 @@ var
 begin
   FFrame := AFrame as TAnalyserFrame;
   F := FFrame;
-  // IDE kann die Schrift des Frames beim Einbetten überschreiben →
+  // IDE kann die Schrift des Frames beim Einbetten ueberschreiben ->
   // hier explizit nach dem Hosting nochmal setzen.
   F.Font.Name := 'Segoe UI';
   F.Font.Size := 6;
@@ -3097,10 +2983,10 @@ begin
 
   NTASvc := BorlandIDEServices as INTAServices;
 
-  // Dockable Form registrieren (für Desktop-State-Persistenz)
+  // Dockable Form registrieren (fuer Desktop-State-Persistenz)
   NTASvc.RegisterDockableForm(GDockableForm);
 
-  // Eintrag im Ansicht-Menü hinzufügen
+  // Eintrag im Ansicht-Menue hinzufuegen
   MainMenu := NTASvc.GetMainMenu;
   ViewMenu := nil;
   for i := 0 to MainMenu.Items.Count - 1 do

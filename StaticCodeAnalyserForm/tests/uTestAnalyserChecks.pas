@@ -115,6 +115,8 @@ type
     [Test] procedure SQL_AddCall_WithConcat_ReportsError;
     [Test] procedure SQL_ParametrizedQuery_NoFinding;
     [Test] procedure SQL_DocStringWithSQLKeyword_NoFinding;
+    [Test] procedure SQL_LiteralOnlyConcat_NoFinding;
+    [Test] procedure SQL_CreateTableMultilineLiteral_NoFinding;
   end;
 
   // ---- HardcodedSecret (THardcodedSecretDetector) ------------------------------------
@@ -1107,6 +1109,44 @@ begin
   try
     Assert.AreEqual(0, TFindingHelper.Count(F, fkSQLInjection),
       'Doku-String mit SQL-Keyword – kein Befund (H2 nur bei Position 1)');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjection.SQL_LiteralOnlyConcat_NoFinding;
+// Zwei oder mehr Stringliterale per '+' verkettet sind reine Multi-Line-
+// Literale, kein SQL-Injection-Risiko - es gibt keine Variable die ein
+// Angreifer manipulieren koennte.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'begin'#13#10+
+  '  Query.SQL.Text := ''SELECT a FROM t'' + '' WHERE x=1'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual(0, TFindingHelper.Count(F, fkSQLInjection),
+      'Pure Literal-Konkatenation darf kein SQL-Injection-Befund sein');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjection.SQL_CreateTableMultilineLiteral_NoFinding;
+// Konkretes Beispiel aus Unit1.pas (sample-dunitx-belege_ui):
+// CREATE TABLE - mehrzeilige Stringliteral-Konkatenation, KEIN Risiko.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.CreateTable;'#13#10+
+  'begin'#13#10+
+  '  SQLQuery.SQL.Text := ''CREATE TABLE IF NOT EXISTS Kommentare '' +'#13#10+
+  '    ''(id TEXT PRIMARY KEY NOT NULL, Teaser TEXT, Info TEXT)'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual(0, TFindingHelper.Count(F, fkSQLInjection),
+      'Mehrzeiliges CREATE TABLE-Literal darf kein SQL-Injection-Befund sein');
   finally F.Free; end;
 end;
 

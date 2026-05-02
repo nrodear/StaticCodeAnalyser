@@ -36,6 +36,10 @@ type
   private
     class function IsAssignRisk(const Name, RHS: string): Boolean; static;
     class function IsCallRisk(const CallName: string): Boolean; static;
+    // True wenn der String '+' AUSSERHALB von Stringliteralen enthaelt
+    // (also echte Konkatenation mit Bezeichner/Variable). 'x'+'y' allein
+    // ist kein Risiko, das ist nur Multi-Line-Stringliteral-Aufbau.
+    class function HasNonLiteralPlus(const S: string): Boolean; static;
   end;
 
 implementation
@@ -61,6 +65,60 @@ const
 
 { ---- Heuristiken ---- }
 
+class function TSQLInjectionDetector.HasNonLiteralPlus(
+  const S: string): Boolean;
+// Findet ein '+' welches NICHT zwischen zwei Stringliteralen steht.
+//
+//   'a'+'b'    -> reine Literal-Konkat, kein Risiko (False)
+//   'a'+x      -> Variable-Konkat, Risiko (True)
+//   x+'a'      -> Variable-Konkat, Risiko (True)
+//   'a'+f()    -> Funktionsaufruf-Konkat, Risiko (True)
+//
+// Algorithmus: zeichenweise durch S, '+' nur ausserhalb von Stringliteralen
+// melden, und dabei pruefen ob unmittelbar davor UND danach (ignorierend
+// Whitespace) ein "'" steht. Wenn beide Seiten Quote -> reine Literal-Konkat
+// (kein Risiko). Sonst Variable-Konkat -> Risiko.
+var
+  i, j     : Integer;
+  inStr    : Boolean;
+  c        : Char;
+  prev, nxt: Char;
+begin
+  Result := False;
+  inStr  := False;
+  i := 1;
+  while i <= Length(S) do
+  begin
+    c := S[i];
+    if c = '''' then
+    begin
+      // Doppeltes '' innerhalb eines Strings = escaped Quote, weiter im String
+      if inStr and (i < Length(S)) and (S[i + 1] = '''') then
+      begin
+        Inc(i, 2);
+        Continue;
+      end;
+      inStr := not inStr;
+    end
+    else if (not inStr) and (c = '+') then
+    begin
+      // Pruefe Nachbarn (Whitespace ueberspringen)
+      prev := #0;
+      for j := i - 1 downto 1 do
+        if S[j] > ' ' then begin prev := S[j]; Break; end;
+      nxt := #0;
+      for j := i + 1 to Length(S) do
+        if S[j] > ' ' then begin nxt := S[j]; Break; end;
+
+      // Beide Seiten Quote -> Literal-Konkat ueberspringen.
+      // Sonst -> Variable-Konkat erkannt.
+      if (prev <> '''') or (nxt <> '''') then
+        Exit(True);
+    end;
+    Inc(i);
+  end;
+end;
+
 class function TSQLInjectionDetector.IsAssignRisk(
   const Name, RHS: string): Boolean;
 var
@@ -71,8 +129,9 @@ begin
   NameLow := Name.ToLower;
   RHSLow  := RHS.ToLower;
 
-  // Konkatenation ist Pflicht
-  if Pos('+', RHSLow) = 0 then Exit;
+  // Konkatenation ist Pflicht - aber NUR ausserhalb von Stringliteralen.
+  // 'CREATE TABLE...'+'(...)' ist reine Literal-Konkatenation, kein Risiko.
+  if not HasNonLiteralPlus(RHS) then Exit;
 
   // H1: bekannte SQL-Property im Ziel-Namen
   for Kw in SQL_PROPS do
@@ -94,8 +153,8 @@ begin
   Result := False;
   Low    := CallName.ToLower;
 
-  // Keine Konkatenation → kein Risiko
-  if Pos('+', Low) = 0 then Exit;
+  // Konkatenation muss ausserhalb Literalen sein (s. IsAssignRisk).
+  if not HasNonLiteralPlus(CallName) then Exit;
 
   // SQL-Aufruf-Methode im Call-Namen
   for Kw in SQL_CALL_METHODS do

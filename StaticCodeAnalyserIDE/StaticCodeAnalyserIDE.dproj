@@ -196,6 +196,8 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\uDuplicateBlock.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\uCollectValues.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\uStaticAnalyzer2.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\uVcsChanges.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\uRepoSettings.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
