@@ -1,12 +1,35 @@
 # StaticCodeAnalyser
 
 Statischer Code-Analyser für Delphi 12 als IDE-Expert (dockbares Tool-Fenster).
-Erkennt Speicherlecks, Code-Smells und Sicherheitsrisiken in `.pas`-Dateien
-direkt in der IDE.
+Erkennt Speicherlecks, Code-Smells, Sicherheitsrisiken und UI-Smells direkt
+in der IDE — mit AI-gestützter Fix-Hilfe per Knopfdruck.
+
+![Static Code Analyser im Delphi-IDE-Dock](docs/APP.png)
 
 ---
 
-## Drei Hauptfeatures
+## Was dieses Plugin kann
+
+In einem Satz: **Sonar-Funktionalität für Delphi-Projekte ohne Sonar-Setup,
+direkt in der IDE, mit Claude-AI-Anbindung.**
+
+| Fähigkeit | Wie genutzt |
+|-----------|-------------|
+| 🐛 **Bugs finden** | 21 Detektoren laufen über jede `.pas`-Datei (MemoryLeak, NilDeref, DivByZero, FormatMismatch, …) |
+| 🔐 **Sicherheitslücken** | SQLInjection (Score-basiert), HardcodedSecret, HardcodedPath |
+| 🧹 **Code-Smells** | LongMethod, MagicNumber, EmptyExcept, MissingFinally, DeadCode, DuplicateString/Block |
+| ⚡ **Inkrementell analysieren** | „Branch-Changes"-Button: nur die im Git-/SVN-Branch geänderten Dateien — 200 ms statt 60 s |
+| 🤖 **Claude-AI-Prompt** | Klick auf Befund → vollständiger Markdown-Block mit Code-Kontext + Vorher/Nachher in der Zwischenablage |
+| 📊 **Sonar-Style-Dashboard** | Stat-Tiles über dem Grid: Fehler / Warnungen / Hinweise / Bugs / Vulnerabilities / Codequalität-Score |
+| 🎯 **Filtern & Sortieren** | Severity-Combo, Type-Combo, Live-Such-Edit, klickbare Spalten-Header |
+| 📤 **Exportieren** | CSV, JSON, HTML-Report, Jira-Wiki-Markup, Clipboard mit Vorher/Nachher |
+| 🔇 **Suppression** | `// noinspection MemoryLeak` pro Zeile + `ignore.txt` für ganze Dateien |
+| 🌓 **Theme-aware** | Folgt automatisch dem aktiven IDE-Theme (Light/Dark/Mountain Mist/Carbon) |
+| 💡 **Vorher/Nachher-Hilfe** | Pro Detektor ein Code-Beispiel "wie es falsch aussieht" + "wie es richtig aussieht" im Help-Panel |
+
+---
+
+## Hauptfeatures
 
 ### 1. Statische Code-Analyse (21 Detektoren, Sonar-Taxonomie)
 
@@ -23,7 +46,7 @@ Statt das ganze Projekt zu scannen genügt **ein Klick auf `Branch-Changes`**:
 der Analyser holt sich via `git diff` bzw. `svn status` die im Branch
 geänderten `.pas`-Dateien und analysiert nur diese. **~200 ms statt 60 s**
 bei einem typischen Feature-Branch — ideal als Pre-Commit-Check.
-Konfigurierbar via `repo.ini`. Details: [readme_repo.md](readme_repo.md).
+Konfigurierbar via `repo.ini`. Details: [BRANCH_CHANGES.md](BRANCH_CHANGES.md).
 
 ### 3. AI-Integration (Claude-Prompt per Klick)
 
@@ -37,12 +60,16 @@ vorzuschlagen.
 
 ## Quick-Start
 
-1. Plugin bauen: `StaticCodeAnalyserIDE\StaticCodeAnalyserIDE.dpk` öffnen → **Build**
+1. Plugin bauen **und installieren**: `StaticCodeAnalyserIDE\StaticCodeAnalyserIDE.dpk`
+   öffnen → **Build** → anschließend **Install** (Rechtsklick auf das Paket
+   im Project Manager → **Install**, oder Menü **Component → Install Packages**
+   → Paket auswählen). Ohne den Install-Schritt bleibt das Plugin nur
+   kompiliert, taucht aber nicht im Menü der IDE auf.
 2. In Delphi: **Ansicht → Static Code Analyser** → dockbares Fenster erscheint
 3. Projektpfad wählen → **Analyse starten**
 
 Für inkrementelle Analyse nur der im Branch geänderten Dateien siehe
-[readme_repo.md](readme_repo.md).
+[BRANCH_CHANGES.md](BRANCH_CHANGES.md).
 
 ---
 
@@ -73,9 +100,11 @@ Alle Befunde landen in einer der **5 Sonar-Kategorien**:
 | | `DuplicateBlock` (≥8 Zeilen identischer Code) | Hinweis |
 | **Lesefehler** | `FileReadError` (Parser hängt / Datei zu groß) | Fehler |
 
-Pro Detektor gibt es eine **Vorher/Nachher-Code-Beispiel** im Hilfe-Panel.
+Pro Detektor gibt es ein **Vorher/Nachher-Code-Beispiel** im Hilfe-Panel.
 Per Klick auf einen Befund landet ein **Markdown-Block für Claude AI** in
 der Zwischenablage.
+
+Vollständiger Status der 50-Sonar-Pruefregeln: siehe [DETECTORS.md](DETECTORS.md).
 
 ---
 
@@ -86,12 +115,12 @@ der Zwischenablage.
 | Button | Funktion |
 |--------|----------|
 | **Verzeichnis-Auswahl** (`...`) | Projektordner wählen |
-| **Repo...** | `repo.ini` öffnen — VCS-Settings (siehe [readme_repo.md](readme_repo.md)) |
+| **Repo...** | `repo.ini` öffnen — VCS-Settings (siehe [BRANCH_CHANGES.md](BRANCH_CHANGES.md)) |
 | **Ignore...** | `ignore.txt` öffnen — Datei-/Verzeichnis-Filter |
 | **Analyse starten** | Rekursiver Verzeichnis-Scan |
 | **Aktuelle Datei** | Nur die im Editor offene `.pas` |
-| **Branch-Changes** | Nur via Git/SVN geänderte Dateien (siehe [readme_repo.md](readme_repo.md)) |
-| **Abbrechen** | Bricht laufende Analyse ab (sichtbar während Analyse) |
+| **Branch-Changes** | Nur via Git/SVN geänderte Dateien (siehe [BRANCH_CHANGES.md](BRANCH_CHANGES.md)) |
+| **Abbrechen** | Bricht laufende Analyse ab |
 
 ### Checkboxen
 
@@ -122,6 +151,7 @@ Beide Totals stimmen mathematisch überein.
 | **Doppelklick** | Datei in IDE öffnen + zur Befund-Zeile springen |
 | **Hover** | Tooltip mit vollem Datei-Pfad |
 | **Klick auf Spalten-Header** | Sortierung |
+| **3-px-Indikatorleiste links** | Severity-Akzent (rot/orange/grün/blau) |
 
 ### Export
 
@@ -135,6 +165,28 @@ Beide Totals stimmen mathematisch überein.
 
 ---
 
+## Theme-Integration
+
+Das Plugin folgt automatisch dem aktiven Delphi-IDE-Theme:
+
+- **`StyleServices.GetSystemColor`** in Custom-Drawing (OnDrawCell, TTilePanel.Paint)
+- **`clBtnFace`/`clWindow`/`clBtnText`** als Property-Werte (auto-themed via VCL Style)
+- **`IOTAIDEThemingServices.ApplyTheme`** beim Frame-Hosting
+- **`INTAIDEThemingServicesNotifier`** für Live-Theme-Wechsel
+- **`CM_STYLECHANGED`** + **`SetParent`-Override** als zusätzliche Trigger
+
+Severity-Hintergrundfarben werden zur Paint-Zeit aus der themed
+`clWindow`-Basis + saturierten Akzentfarben gemischt — funktioniert in
+jedem Theme ohne separate Light-/Dark-Tabellen.
+
+**Bekannte Limitation**: Im Floating-Modus übernimmt das Plugin-Fenster
+IDE-Theme-Wechsel zur Laufzeit nicht zuverlässig (kein offizieller Hook
+in `INTACustomDockableForm` für Live-Reapply der Wrapper-Form). Workaround:
+Plugin im Dock-Modus betreiben oder Fenster nach Theme-Wechsel schließen
+und erneut öffnen.
+
+---
+
 ## Konfigurations-Dateien
 
 Alle in `%APPDATA%\StaticCodeAnalyser\`:
@@ -142,7 +194,7 @@ Alle in `%APPDATA%\StaticCodeAnalyser\`:
 | Datei | Inhalt |
 |-------|--------|
 | `ignore.txt` | Datei-/Verzeichnis-Patterns die NICHT analysiert werden |
-| `repo.ini` | VCS-Settings (BaseBranch, git/svn-Pfade) — siehe [readme_repo.md](readme_repo.md) |
+| `repo.ini` | VCS-Settings (BaseBranch, git/svn-Pfade) — siehe [BRANCH_CHANGES.md](BRANCH_CHANGES.md) |
 | `recent.ini` | Zuletzt verwendete Projektpfade |
 | `StaticCodeAnalyser_scan.log` | Diagnose-Log: welche Datei wie lange gebraucht hat |
 
@@ -196,9 +248,13 @@ StaticCodeAnalyserIDE/                 IDE-Expert Paket (.dpk)
   uIDEExpert.pas                       Wizard-Registrierung (IOTAMenuWizard)
   uIDEAnalyserForm.pas                 Dockbares Fenster (TFrame)
                                        Filter, Stats, Export, Branch-Changes,
-                                       Claude-Prompt-Generator
+                                       Claude-Prompt-Generator, Theme-Notifier
 
-StaticCodeAnalyserForm/sources/        Analyse-Engine (shared)
+StaticCodeAnalyserForm/sources/        Analyse-Engine (shared zwischen Standalone + IDE-Plugin)
+  uAnalyserPalette.pas                 Zentrale Farb-Konstanten (Severity, Akzente, Icons)
+  uAnalyserTypes.pas                   TFindingSeverity-Enum + Konversion
+  uAnalyserTheme.pas                   SeverityBg, SeverityAccent, BlendColor
+
   uLexer.pas, uParser2.pas             Tokenizer + Recursive-Descent-Parser
                                        mit Watchdog (200k Token-Limit) und
                                        Forward-Progress-Garantien
@@ -212,6 +268,7 @@ StaticCodeAnalyserForm/sources/        Analyse-Engine (shared)
   uSuppression.pas                     // noinspection-Marker
   uExport.pas                          JSON/CSV/HTML/Jira/Clipboard
   uFixHint.pas                         Vorher/Nachher pro Befund-Typ
+  uClaudePrompt.pas                    Markdown-Prompt-Generator
 
   uLeakDetector2.pas                   MemoryLeak (AST-basiert)
   uFieldLeak.pas                       Class-Field-Leak (Create/Destroy)
@@ -260,7 +317,7 @@ Bei einem typischen 1000-Unit-Repo:
 | **Gesamt** | **~30-100 ms** | **~60-90 s** |
 
 **Für inkrementelle Re-Scans nur Branch-Änderungen** statt Voll-Scan
-benutzen — typisch 200 ms bis 3 s. Siehe [readme_repo.md](readme_repo.md).
+benutzen — typisch 200 ms bis 3 s. Siehe [BRANCH_CHANGES.md](BRANCH_CHANGES.md).
 
 ### Robustheit
 
@@ -297,3 +354,32 @@ NUnit-XML-Report — CI-tauglich.
 - Delphi 12 (Alexandria)
 - DUnitX (für Tests, nicht für Plugin)
 - Optional: Git for Windows oder TortoiseSVN MIT CLI-Tools für Branch-Changes
+
+---
+
+## Komponenten-Übersicht
+
+| Komponente | Pfad | Zweck |
+|------------|------|-------|
+| **Standalone-EXE** | `StaticCodeAnalyserForm/analyser.d12.dproj` | Verzeichnis-/Datei-Scan außerhalb der IDE |
+| **IDE-Plugin** | `StaticCodeAnalyserIDE/StaticCodeAnalyserIDE.dpk` | Hauptfeature: dockbares Tool-Fenster mit allen Funktionen |
+
+Beide nutzen die gemeinsame Analyse-Engine in `StaticCodeAnalyserForm/sources/`.
+
+---
+
+## Dokumentation
+
+Das Repository enthält drei Markdown-Dokumente. Sie ergänzen sich
+inhaltlich, sodass jedes für sich gelesen werden kann:
+
+| Datei | Inhalt | Wann nachschlagen |
+|-------|--------|-------------------|
+| [README.md](README.md) | **Übersichts-Doku** — was das Plugin kann, wie es bedient wird, Architektur, Performance, Suppression, Theme-Integration | Erste Anlaufstelle für alle Themen außer den zwei Spezial-Bereichen unten |
+| [DETECTORS.md](DETECTORS.md) | **Kanonische Detektor-Liste** — alle 50 Sonar-Prüfregeln plus 3 Bonus-Detektoren mit Status (✅ implementiert / 🟡 teilweise / 🔲 offen), Beschreibung und zuständiger Unit | Wenn du wissen willst welche Regel implementiert ist, was sie genau prüft, oder welcher Detektor als nächstes drankommt |
+| [BRANCH_CHANGES.md](BRANCH_CHANGES.md) | **VCS-/Branch-Changes-Feature** — wie der `Branch-Changes`-Button funktioniert, Git/SVN-Setup, Tortoise-Kompatibilität, `repo.ini`-Konfiguration, Troubleshooting für Repo-Erkennung | Wenn der Branch-Changes-Button nicht macht was er soll, oder du das VCS-Setup feinjustieren willst |
+
+Konvention: `README.md` ist breit, die anderen zwei sind tief und auf
+einen Aspekt fokussiert. Wenn du eine bestehende Section in `README.md`
+zu groß findest, wird sie typischerweise in eine eigene Spezial-Datei
+ausgelagert (so wie es mit dem Branch-Changes-Teil passiert ist).

@@ -1,6 +1,9 @@
-# TODO – Sonar-Prüfkatalog für den Static Code Analyser
+# Detektoren – Sonar-Prüfkatalog für den Static Code Analyser
 
-50 Prüfregeln, geordnet nach Schweregrad (Blocker → Critical → Major → Minor → Info).
+Kanonische Liste der unterstützten und geplanten Code-Analyse-Regeln,
+geordnet nach Schweregrad (Blocker → Critical → Major → Minor → Info).
+Orientiert sich am Sonar-50er-Katalog plus eigene Bonus-Detektoren.
+
 Status: ✅ implementiert | 🟡 teilweise | 🔲 offen
 
 **Zusammenfassung:** 17 / 50 vollständig + 1 teilweise + 3 Bonus-Detektoren = 21 Detektoren.
