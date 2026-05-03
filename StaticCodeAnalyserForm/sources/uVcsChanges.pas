@@ -199,22 +199,78 @@ begin
       CloseHandle(WritePipe);
       WritePipe := 0;
 
+      // Polling-Loop mit Gesamt-Timeout. Vorher: blockierendes ReadFile ohne
+      // Timeout - haengender Prozess (z.B. git wartet auf Credentials) liess
+      // den Caller ewig warten. Jetzt: PeekNamedPipe-Polling mit
+      // GetTickCount-Watchdog; bei Timeout wird der Prozess geKILLT.
+      const TOTAL_TIMEOUT_MS = 60 * 1000; // 60s harter Cap
+      var StartTick : Cardinal := GetTickCount;
+      var Available : Cardinal := 0;
+      var Done      : Boolean  := False;
+      var ProcStat  : Cardinal;
+      var ToRead    : Cardinal;
+
       SB := TStringBuilder.Create;
       try
-        while ReadFile(ReadPipe, Buf[0], SizeOf(Buf), BytesRead, nil) and
-              (BytesRead > 0) do
+        while not Done do
         begin
-          // Nullterminierung an gelesener Stelle, Default-CP zu string
-          Buf[BytesRead] := #0;
-          SB.Append(string(System.AnsiStrings.StrPas(@Buf[0])));
+          // Wieviel Bytes liegen abrufbar im Pipe-Buffer?
+          if not PeekNamedPipe(ReadPipe, nil, 0, nil, @Available, nil) then
+            Available := 0;
+
+          if Available > 0 then
+          begin
+            ToRead := Available;
+            if ToRead > SizeOf(Buf) - 1 then ToRead := SizeOf(Buf) - 1;
+            if not ReadFile(ReadPipe, Buf[0], ToRead, BytesRead, nil) then
+              Break;
+            if BytesRead = 0 then Break;
+            Buf[BytesRead] := #0;
+            SB.Append(string(System.AnsiStrings.StrPas(@Buf[0])));
+            // Tick zuruecksetzen: solange Daten fliessen, ist Prozess "lebendig"
+            StartTick := GetTickCount;
+          end
+          else
+          begin
+            // Keine Daten verfuegbar: ist der Prozess noch am Leben?
+            ProcStat := WaitForSingleObject(ProcInfo.hProcess, 0);
+            if ProcStat = WAIT_OBJECT_0 then
+            begin
+              // Prozess fertig - finalen Pipe-Rest noch leeren
+              if PeekNamedPipe(ReadPipe, nil, 0, nil, @Available, nil)
+                 and (Available > 0) then
+              begin
+                ToRead := Available;
+                if ToRead > SizeOf(Buf) - 1 then ToRead := SizeOf(Buf) - 1;
+                if ReadFile(ReadPipe, Buf[0], ToRead, BytesRead, nil)
+                   and (BytesRead > 0) then
+                begin
+                  Buf[BytesRead] := #0;
+                  SB.Append(string(System.AnsiStrings.StrPas(@Buf[0])));
+                end;
+              end;
+              Done := True;
+            end
+            else if GetTickCount - StartTick > TOTAL_TIMEOUT_MS then
+            begin
+              // Prozess haengt - hart killen, Sentinel ExitCode
+              TerminateProcess(ProcInfo.hProcess, 1);
+              WaitForSingleObject(ProcInfo.hProcess, 1000);
+              AExitCode := Cardinal(-2); // Sentinel: Timeout
+              Done      := True;
+            end
+            else
+              Sleep(50);
+          end;
         end;
         AStdOut := SB.ToString;
       finally
         SB.Free;
       end;
 
-      WaitForSingleObject(ProcInfo.hProcess, 30000); // 30s Timeout
-      GetExitCodeProcess(ProcInfo.hProcess, AExitCode);
+      // ExitCode nur dann frisch lesen wenn nicht durch Timeout vorgemerkt
+      if AExitCode <> Cardinal(-2) then
+        GetExitCodeProcess(ProcInfo.hProcess, AExitCode);
       Result := AExitCode = 0;
     finally
       CloseHandle(ProcInfo.hProcess);

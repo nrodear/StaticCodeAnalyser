@@ -147,6 +147,8 @@
         <DCCReference Include="sources\uParser2.pas"/>
         <DCCReference Include="sources\uLeakDetector2.pas"/>
         <DCCReference Include="sources\uCodeSmells2.pas"/>
+        <DCCReference Include="sources\uDetectorUtils.pas"/>
+        <DCCReference Include="sources\uClaudePrompt.pas"/>
         <DCCReference Include="sources\uSQLInjectionScore.pas"/>
         <DCCReference Include="sources\uSQLInjection.pas"/>
         <DCCReference Include="sources\uHardcodedSecret.pas"/>

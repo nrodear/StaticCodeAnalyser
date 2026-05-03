@@ -24,7 +24,7 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12, uSQLInjectionScore;
+  uAstNode, uSCAConsts, uMethodd12, uSQLInjectionScore, uDetectorUtils;
 
 type
   TSQLInjectionDetector = class
@@ -133,9 +133,12 @@ begin
   // 'CREATE TABLE...'+'(...)' ist reine Literal-Konkatenation, kein Risiko.
   if not HasNonLiteralPlus(RHS) then Exit;
 
-  // H1: bekannte SQL-Property im Ziel-Namen
+  // H1: bekannte SQL-Property im Ziel-Namen.
+  // Wortgrenzen-Pruefung: 'commandtext' soll nicht 'mycommandtextra' matchen.
+  // Patterns mit '.'/':' enthalten haben durch die Trennzeichen schon natuerliche
+  // Grenzen, fuer die anderen brauchen wir den WholeWord-Helper.
   for Kw in SQL_PROPS do
-    if Pos(Kw, NameLow) > 0 then Exit(True);
+    if TDetectorUtils.ContainsWholeWordLower(Kw, NameLow) then Exit(True);
 
   // H2: SQL-Schlüsselwort als ERSTES Literal im RHS (Position 1).
   // Nur wenn der RHS direkt mit dem SQL-Keyword beginnt – verhindert
@@ -156,11 +159,14 @@ begin
   // Konkatenation muss ausserhalb Literalen sein (s. IsAssignRisk).
   if not HasNonLiteralPlus(CallName) then Exit;
 
-  // SQL-Aufruf-Methode im Call-Namen
+  // SQL-Aufruf-Methode im Call-Namen. Patterns enden auf '(' was natuerliche
+  // rechte Grenze ist; links muss aber Wortgrenze her - 'open(' soll nicht
+  // 'reopen(' matchen.
   for Kw in SQL_CALL_METHODS do
-    if Pos(Kw, Low) > 0 then Exit(True);
+    if TDetectorUtils.ContainsWholeWordLower(Kw, Low) then Exit(True);
 
-  // SQL-Schlüsselwort als Stringliteral im Argument
+  // SQL-Schlüsselwort als Stringliteral im Argument (Patterns mit fuehrendem '
+  // sind selbst-abgrenzend, brauchen kein WholeWord)
   for Kw in SQL_KW do
     if Pos(Kw, Low) > 0 then Exit(True);
 end;

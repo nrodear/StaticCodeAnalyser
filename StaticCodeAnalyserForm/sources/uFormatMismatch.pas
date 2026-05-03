@@ -22,7 +22,7 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uDetectorUtils;
 
 type
   TFormatMismatchDetector = class
@@ -65,14 +65,17 @@ begin
   Pos_ := Pos('format(', Low);
   if Pos_ = 0 then Exit;
 
-  // Format( muss der eigentliche Aufruf sein, kein verschachteltes Argument.
-  // Gültig:  Format(...)           → Pos_ = 1
-  //          SysUtils.Format(...)  → preceded by '.'
-  // Ungültig: Results.Add(Format(...)) → preceded by '(' → überspringen
+  // Vorgaenger-Pruefung: Format( darf nicht Teil eines laengeren Bezeichners
+  // sein (z.B. 'MyFormat(' oder 'StringFormat('). Alles was KEIN Identifier-
+  // Char ist, ist erlaubt - das deckt sowohl 'SysUtils.Format' (Punkt davor)
+  // als auch ' Format' (nach Whitespace / := / +) und 'Result(Format(...))'
+  // (verschachtelt, klamerumgeben).
+  // Vorher: Filter erlaubte NUR '.' als Vorgaenger - 'Result := Format(...)'
+  // wurde uebersehen.
+  // IsIdentChar via TDetectorUtils ist case-insensitive - sollte das Original
+  // mal nicht mehr per ToLower normalisiert werden, bleibt der Filter korrekt.
   if Pos_ > 1 then
-  begin
-    if Low[Pos_ - 1] <> '.' then Exit;
-  end;
+    if TDetectorUtils.IsIdentChar(Low[Pos_ - 1]) then Exit;
 
   i := Pos_ + 7; // direkt nach 'format('
   while (i <= Length(CallName)) and (CallName[i] = ' ') do Inc(i);

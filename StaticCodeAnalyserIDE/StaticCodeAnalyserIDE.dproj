@@ -157,6 +157,9 @@
         <DCCReference Include="designide.dcp"/>
         <DCCReference Include="uIDEExpert.pas"/>
         <DCCReference Include="uIDEAnalyserForm.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\uAnalyserPalette.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\uAnalyserTypes.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\uAnalyserTheme.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\uSCAConsts.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\uMethodd12.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\uRegExMatches.pas"/>
@@ -170,6 +173,8 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\uParser2.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\uLeakDetector2.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\uCodeSmells2.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\uDetectorUtils.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\uClaudePrompt.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\uSQLInjectionScore.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\uSQLInjection.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\uHardcodedSecret.pas"/>

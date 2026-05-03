@@ -13,10 +13,11 @@ uses
   System.Generics.Collections, System.Generics.Defaults, System.IniFiles,
   Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls,
   Vcl.ExtCtrls, Vcl.ComCtrls, Vcl.Grids, Vcl.ActnList, Vcl.ImgList, Vcl.Menus,
-  Vcl.Clipbrd,
+  Vcl.Clipbrd, Vcl.Themes,
   DesignIntf, ToolsAPI,
   uStaticAnalyzer2, uStaticFiles, uMethodd12, uSCAConsts, uExport,
-  uFixHint, uIgnoreList, uVcsChanges, uRepoSettings;
+  uFixHint, uIgnoreList, uVcsChanges, uRepoSettings, uClaudePrompt,
+  uAnalyserPalette, uAnalyserTypes, uAnalyserTheme;
 
 type
   TFilterMode = (fmAll,
@@ -49,6 +50,7 @@ type
     FHelpBeforePanel   : TPanel;
     FHelpBefore        : TMemo;
     FHelpAfter         : TMemo;
+    FHelpPanel         : TPanel; // rechtes Hint-Panel (1/3 von PanelClient)
     FDisplayedFindings : TList<TLeakFinding>;
 
     FPanelStats        : TPanel;
@@ -140,12 +142,53 @@ type
     procedure OpenFileAtLine(const AbsPath: string; LineNumber: Integer);
     procedure LoadRecentPaths;
     procedure SaveRecentPath(const APath: string);
+  protected
+    FThemeNotifierIdx : Integer;
+    // Klassenreferenz auf den Notifier - wird gebraucht um DetachFrame
+    // aufzurufen, bevor der IDE-Service ihn loslaesst. Lifetime ist
+    // ueber den Interface-Refcount gekoppelt (FThemeNotifierIfc), damit
+    // dieser Pointer nie dangling ist.
+    FThemeNotifierObj : TObject; // forward-deklariert (TFrameThemeNotifier)
+    FThemeNotifierIfc : IInterface;
+    // Reagiert auf VCL-Style-Wechsel (= IDE-Theme-Wechsel). Erzwingt
+    // Re-Paint, damit die ueber clBtnFace/clWindow/StyleServices spaet
+    // aufgeloesten Farben mit dem neuen Theme neu gezeichnet werden.
+    procedure CMStyleChanged(var Message: TMessage); message CM_STYLECHANGED;
+    // SetParent override - feuert beim Dock <-> Float-Wechsel oder beim
+    // ersten Hosting des Frames. Style-Hooks ueberleben den Wechsel oft
+    // nicht (neuer Top-Level-Window-Kontext), daher Theme erneut
+    // applizieren. CMParentChanged gibt es in der VCL nicht, deshalb
+    // ueber den virtuellen SetParent-Hook.
+    procedure SetParent(AParent: TWinControl); override;
+    procedure ApplyThemeRecursive(AControl: TControl);
   public
     FProjectPath : TComboBox;
     FResultGrid  : TStringGrid;
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     procedure Resize; override;
+    // Wird vom IDE-Theme-Notifier nach einem Theme-Wechsel aufgerufen.
+    // Public, damit der Notifier das Frame-Refresh triggern kann ohne
+    // tiefer in den Frame eingreifen zu muessen.
+    procedure RefreshFromIDETheme;
+  end;
+
+  // Notifier-Klasse, die der IDE-Theming-Service nach jedem Theme-Wechsel
+  // aufruft. Implementiert INTAIDEThemingServicesNotifier (Name kann je
+  // Delphi-Version leicht variieren - hier gemaess Delphi 12 Athens).
+  // Haelt Frame als schwache Referenz: bei Frame-Free wird der Notifier
+  // explizit abgemeldet, sodass die Reference hier nie dangling ist.
+  TFrameThemeNotifier = class(TNotifierObject, INTAIDEThemingServicesNotifier)
+  private
+    FFrame: TAnalyserFrame;
+  public
+    constructor Create(AFrame: TAnalyserFrame);
+    procedure ChangingTheme;
+    procedure ChangedTheme;
+    // Wird vom Frame.Destroy aufgerufen bevor er sich abmeldet - schuetzt
+    // gegen Aufrufe in einen freed Pointer falls die IDE den Notifier
+    // nach Frame-Free noch einmal triggert.
+    procedure DetachFrame;
   end;
 
   TAnalyserDockableForm = class(TInterfacedObject, INTACustomDockableForm)
@@ -184,15 +227,10 @@ implementation
 
 
 const
-  MAX_RECENT    = 3;
-  COLOR_ERROR      = TColor($00C0C0FF); // Hellrot - Fehler
-  COLOR_WARNING    = TColor($00C0FFFF); // Hellgelb - Warnung
-  COLOR_HINT       = TColor($00E8F0E0); // Hellgruen - Hinweis (Code-Smell)
-  COLOR_FILEERROR  = TColor($008080FF); // Orange - Lesefehler
-  COLOR_UNUSEDUSES = TColor($00F0D8FF); // Lavendel - ungenutzte Uses
-  COLOR_NILDEREF   = TColor($0080A0FF); // Hellrot-Orange - NilDeref
-  COLOR_DIVZERO    = TColor($008080FF); // Orange - DivByZero (gleich FileError)
-  COLOR_DEADCODE   = TColor($00E8E8E8); // Grau - toter Code
+  MAX_RECENT = 3;
+  // Severity- und Akzentfarben sind in uAnalyserPalette zentral definiert
+  // und werden ueber uAnalyserTheme.SeverityBg / SeverityAccent (mit
+  // TFindingSeverity-Enum) abgerufen.
 
 // Einfacher Verlauf von AFrom (oben) nach ATo (unten)
 procedure GradientFillRect(Canvas: TCanvas; R: TRect; AFrom, ATo: TColor;
@@ -245,11 +283,18 @@ end;
 constructor TAnalyserFrame.Create(AOwner: TComponent);
 var
   PanelPath, PanelButtons, PanelClient: TPanel;
+  // Theming-Service-Vars werden in FrameCreated genutzt; hier nur Default fuer
+  // den Notifier-Index setzen, damit Destroy nicht versucht, einen ungueltigen
+  // Index abzumelden falls der Service nie verfuegbar war.
   LblPath: TLabel;
   BtnBrowse, BtnAnalyse: TButton;
 begin
   inherited Create(AOwner);
-  Color         := clWhite;
+  FThemeNotifierIdx := -1;
+  // Frame folgt dem aktiven IDE-Theme: clBtnFace ist der Standard-Chrome-
+  // Hintergrund (hell im Light-Theme, dunkel im Dark-Theme, korrekt in
+  // Mountain Mist/Carbon/Custom-Themes).
+  Color         := clBtnFace;
   ParentFont    := False;
   Font.Name     := 'Segoe UI';
   Font.Size     := 6;
@@ -294,7 +339,9 @@ begin
   FProgressBar.Min     := 0;
   FProgressBar.Max     := 100;
   FProgressBar.Smooth  := True;
-  FProgressBar.Visible := False;
+  // Immer sichtbar, damit das Grid bei Start/Ende der Analyse nicht um
+  // 14 px springt. Im Idle-Zustand bleibt der Balken einfach leer (Pos 0).
+  FProgressBar.Visible := True;
 
   // ---- Zeile: Projektpfad ----
   PanelPath := TPanel.Create(Self);
@@ -302,7 +349,7 @@ begin
   PanelPath.Align       := alTop;
   PanelPath.Height      := 22;
   PanelPath.BevelOuter  := bvNone;
-  PanelPath.Color       := clWhite;
+  PanelPath.Color       := clBtnFace;
   PanelPath.Padding.SetBounds(6, 2, 6, 2);
 
   LblPath := TLabel.Create(Self);
@@ -354,7 +401,7 @@ begin
   PanelButtons.Align       := alTop;
   PanelButtons.Height      := 22;
   PanelButtons.BevelOuter  := bvNone;
-  PanelButtons.Color       := clWhite;
+  PanelButtons.Color       := clBtnFace;
   PanelButtons.Padding.SetBounds(6, 2, 6, 2);
 
   // Aktions-Buttons (Analyse starten / Aktuelle Datei) liegen nicht hier,
@@ -422,7 +469,7 @@ begin
   SepF1.Align      := alLeft;
   SepF1.Width      := 8;
   SepF1.BevelOuter := bvNone;
-  SepF1.Color      := clWhite;
+  SepF1.Color      := clBtnFace;
 
   // ---- Zweiter Filter: Typ (Sonar-Kategorie) ----
   var LblType := TLabel.Create(Self);
@@ -456,7 +503,7 @@ begin
   Sep2.Align      := alLeft;
   Sep2.Width      := 8;
   Sep2.BevelOuter := bvNone;
-  Sep2.Color      := clWhite;
+  Sep2.Color      := clBtnFace;
 
   // Checkbox: Uses-Check optional aktivieren (default: aus)
   FChkUsesCheck := TCheckBox.Create(Self);
@@ -495,7 +542,7 @@ begin
   PanelSearch.Align       := alTop;
   PanelSearch.Height      := 22;
   PanelSearch.BevelOuter  := bvNone;
-  PanelSearch.Color       := clWhite;
+  PanelSearch.Color       := clBtnFace;
   PanelSearch.Padding.SetBounds(6, 2, 6, 2);
 
   // Action-Buttons links - "Analyse starten" zuerst (links), dann "Aktuelle Datei"
@@ -526,13 +573,19 @@ begin
     '(Git: Branch-Diff vs main + Working Tree; SVN: Working Copy)';
   FBtnAnalyseChanged.ShowHint := True;
 
-  // Cancel-Button - waehrend der Analyse sichtbar, sonst ausgeblendet
+  // Cancel-Button - immer sichtbar (verhindert Layout-Sprung beim
+  // Start/Ende der Analyse), nur Enabled wird getoggelt. Sitzt fix am
+  // rechten Toolbar-Rand (alRight) und ist von den Analyse-Buttons
+  // links optisch entkoppelt.
   FBtnCancel := TButton.Create(Self);
   FBtnCancel.Parent   := PanelSearch;
   FBtnCancel.Caption  := 'Abbrechen';
   FBtnCancel.Width    := 80;
-  FBtnCancel.Align    := alLeft;
-  FBtnCancel.Visible  := False;
+  FBtnCancel.Align    := alRight;
+  FBtnCancel.AlignWithMargins := True;
+  FBtnCancel.Margins.SetBounds(8, 0, 0, 0);
+  FBtnCancel.Visible  := True;
+  FBtnCancel.Enabled  := False;
   FBtnCancel.OnClick  := CancelAnalyseClick;
 
   // Trennabstand
@@ -541,7 +594,7 @@ begin
   SepActions.Align      := alLeft;
   SepActions.Width      := 8;
   SepActions.BevelOuter := bvNone;
-  SepActions.Color      := clWhite;
+  SepActions.Color      := clBtnFace;
 
   var LblSearch := TLabel.Create(Self);
   LblSearch.Parent  := PanelSearch;
@@ -590,7 +643,7 @@ begin
   FPanelStats.Align       := alTop;
   FPanelStats.Height      := 45; // 1 Tile-Reihe ~25% kleiner: TopRow 20 + Caption ~12 + Padding
   FPanelStats.BevelOuter  := bvNone;
-  FPanelStats.Color       := TColor($00282828); // Dunkles Anthrazit (BGR)
+  FPanelStats.Color       := clBtnFace; // folgt IDE-Theme statt fest dunkel
   FPanelStats.ParentBackground := False;
   FPanelStats.Padding.SetBounds(4, 4, 4, 4);
 
@@ -613,41 +666,42 @@ begin
   PanelClient.BevelOuter := bvNone;
 
   // Hilfe-Panel rechts neben dem Grid (alRight innerhalb PanelClient).
-  // Splitter-bedienbar - User kann Breite per Drag anpassen.
-  var HelpPanel := TPanel.Create(Self);
-  HelpPanel.Parent              := PanelClient;
-  HelpPanel.Align               := alRight;
-  HelpPanel.Width               := 360;
-  HelpPanel.Constraints.MinWidth := 220; // sonst werden Code-Memos zu schmal
-  HelpPanel.BevelOuter          := bvNone;
-  HelpPanel.Color               := $00F4F4F4;
+  // Soll-Verhaeltnis: Grid 2/3, Hilfe 1/3 - wird in Resize berechnet.
+  // Splitter-bedienbar - User kann Breite per Drag anpassen (overrides 1/3).
+  FHelpPanel := TPanel.Create(Self);
+  FHelpPanel.Parent              := PanelClient;
+  FHelpPanel.Align               := alRight;
+  FHelpPanel.Width               := 360; // Initialwert, wird in Resize ueberschrieben
+  FHelpPanel.Constraints.MinWidth := 180; // unteres Limit fuer Drag/1/3
+  FHelpPanel.BevelOuter          := bvNone;
+  FHelpPanel.Color               := clBtnFace;
 
   // 1px linke Trennlinie - optisches Limit zwischen Grid und Help-Panel.
   var HelpLeftSep := TPanel.Create(Self);
-  HelpLeftSep.Parent     := HelpPanel;
+  HelpLeftSep.Parent     := FHelpPanel;
   HelpLeftSep.Align      := alLeft;
   HelpLeftSep.Width      := 1;
   HelpLeftSep.BevelOuter := bvNone;
-  HelpLeftSep.Color      := $00BBBBBB;
+  HelpLeftSep.Color      := cl3DDkShadow;
 
   FHelpDescLabel := TLabel.Create(Self);
-  FHelpDescLabel.Parent      := HelpPanel;
+  FHelpDescLabel.Parent      := FHelpPanel;
   FHelpDescLabel.Align       := alTop;
   FHelpDescLabel.Height      := 16;
   FHelpDescLabel.Layout      := tlCenter;
   FHelpDescLabel.Font.Name   := 'Segoe UI';
   FHelpDescLabel.Font.Size   := 7;
   FHelpDescLabel.Font.Style  := [fsBold];
-  FHelpDescLabel.Font.Color  := $00303030;
-  FHelpDescLabel.Color       := $00E8E8E8;
+  FHelpDescLabel.Font.Color  := clBtnText;
+  FHelpDescLabel.Color       := clBtnFace;
   FHelpDescLabel.ParentColor := False;
   FHelpDescLabel.Caption     := '  Zeile auswaehlen fuer Loesungshinweis';
 
   var HelpCode := TPanel.Create(Self);
-  HelpCode.Parent      := HelpPanel;
+  HelpCode.Parent      := FHelpPanel;
   HelpCode.Align       := alClient;
   HelpCode.BevelOuter  := bvNone;
-  HelpCode.Color       := $00F4F4F4;
+  HelpCode.Color       := clBtnFace;
 
   // Vorher/Nachher vertikal gestapelt (vorher: nebeneinander).
   // Bei einem rechts-angedockten Help-Panel passt die Hoehe besser zu den
@@ -657,7 +711,7 @@ begin
   FHelpBeforePanel.Align       := alTop;
   FHelpBeforePanel.Height      := 150;
   FHelpBeforePanel.BevelOuter  := bvNone;
-  FHelpBeforePanel.Color       := $00F0E8E8;
+  FHelpBeforePanel.Color       := clWindow; // Code-Bereich folgt clWindow-Theme
 
   var LblBefore := TLabel.Create(Self);
   LblBefore.Parent      := FHelpBeforePanel;
@@ -668,9 +722,11 @@ begin
   LblBefore.Font.Name   := 'Segoe UI';
   LblBefore.Font.Size   := 6;
   LblBefore.Font.Style  := [fsBold];
-  LblBefore.Font.Color  := $00000080;
-  LblBefore.Color       := $00DCC8C8;
-  LblBefore.ParentColor := False;
+  // SeverityAccent-Rot ist in beiden Themes lesbar (weder zu hell auf weiss
+  // noch zu dunkel auf schwarz). Das Label sitzt auf clWindow und vererbt
+  // dessen Hintergrund - bleibt damit theme-konform.
+  LblBefore.Font.Color  := SeverityAccent(fsError);
+  LblBefore.ParentColor := True;
 
   FHelpBefore := TMemo.Create(Self);
   FHelpBefore.Parent      := FHelpBeforePanel;
@@ -678,24 +734,24 @@ begin
   FHelpBefore.ReadOnly    := True;
   FHelpBefore.BorderStyle := bsNone;
   FHelpBefore.ScrollBars  := ssBoth;
-  FHelpBefore.Color       := $00F0E8E8;
+  FHelpBefore.Color       := clWindow;  // theme-konformer Editor-Hintergrund
   FHelpBefore.Font.Name   := 'Consolas';
   FHelpBefore.Font.Size   := 6;
-  FHelpBefore.Font.Color  := $00400000;
+  FHelpBefore.Font.Color  := clWindowText; // theme-konformer Text
 
   // Splitter zwischen Vorher und Nachher (drag um die Verhaeltnisse anzupassen)
   var BeforeAfterSplitter := TSplitter.Create(Self);
   BeforeAfterSplitter.Parent      := HelpCode;
   BeforeAfterSplitter.Align       := alTop;
   BeforeAfterSplitter.Height      := 4;
-  BeforeAfterSplitter.Color       := $00BBBBBB;
+  BeforeAfterSplitter.Color       := cl3DDkShadow;
   BeforeAfterSplitter.ResizeStyle := rsUpdate;
 
   var HelpAfterPanel := TPanel.Create(Self);
   HelpAfterPanel.Parent      := HelpCode;
   HelpAfterPanel.Align       := alClient;
   HelpAfterPanel.BevelOuter  := bvNone;
-  HelpAfterPanel.Color       := $00E8F0E8;
+  HelpAfterPanel.Color       := clWindow; // Code-Bereich folgt clWindow-Theme
 
   var LblAfter := TLabel.Create(Self);
   LblAfter.Parent      := HelpAfterPanel;
@@ -706,9 +762,10 @@ begin
   LblAfter.Font.Name   := 'Segoe UI';
   LblAfter.Font.Size   := 6;
   LblAfter.Font.Style  := [fsBold];
-  LblAfter.Font.Color  := $00006000;
-  LblAfter.Color       := $00C8DCC8;
-  LblAfter.ParentColor := False;
+  // Analog zum Vorher-Label: SeverityAccent(fsHint) ist saturiertes Gruen,
+  // auf hellem und dunklem Hintergrund lesbar.
+  LblAfter.Font.Color  := SeverityAccent(fsHint);
+  LblAfter.ParentColor := True;
 
   FHelpAfter := TMemo.Create(Self);
   FHelpAfter.Parent      := HelpAfterPanel;
@@ -716,10 +773,10 @@ begin
   FHelpAfter.ReadOnly    := True;
   FHelpAfter.BorderStyle := bsNone;
   FHelpAfter.ScrollBars  := ssBoth;
-  FHelpAfter.Color       := $00E8F0E8;
+  FHelpAfter.Color       := clWindow;
   FHelpAfter.Font.Name   := 'Consolas';
   FHelpAfter.Font.Size   := 6;
-  FHelpAfter.Font.Color  := $00004000;
+  FHelpAfter.Font.Color  := clWindowText;
 
   // Splitter zwischen Grid (links) und Help-Panel (rechts) - User kann
   // die Help-Panel-Breite per Drag anpassen.
@@ -727,7 +784,7 @@ begin
   HelpSplitter.Parent     := PanelClient;
   HelpSplitter.Align      := alRight;
   HelpSplitter.Width      := 4;
-  HelpSplitter.Color      := $00BBBBBB;
+  HelpSplitter.Color      := cl3DDkShadow;
   HelpSplitter.ResizeStyle := rsUpdate;
 
   FResultGrid := TStringGrid.Create(Self);
@@ -777,12 +834,91 @@ begin
 end;
 
 destructor TAnalyserFrame.Destroy;
+var
+  Theming: IOTAIDEThemingServices;
 begin
+  // Reihenfolge ist wichtig:
+  //   1. DetachFrame: nimmt dem Notifier den Frame-Zeiger
+  //   2. RemoveNotifier: IDE-Service gibt seinen Refcount frei
+  //   3. Frame-Refcount loslassen: Notifier wird freigegeben
+  if Assigned(FThemeNotifierObj) then
+    TFrameThemeNotifier(FThemeNotifierObj).DetachFrame;
+  if FThemeNotifierIdx <> -1 then
+  begin
+    if Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) then
+      Theming.RemoveNotifier(FThemeNotifierIdx);
+    FThemeNotifierIdx := -1;
+  end;
+  FThemeNotifierIfc := nil;
+  FThemeNotifierObj := nil;
+
   FreeAndNil(FAllFindings);
   FreeAndNil(FDisplayedFindings);
   FreeAndNil(FIgnoreList);
   FreeAndNil(FRepoSettings);
   inherited;
+end;
+
+procedure TAnalyserFrame.RefreshFromIDETheme;
+var
+  Theming  : IOTAIDEThemingServices;
+  TopForm  : TCustomForm;
+begin
+  // Wird vom Notifier nach einem Theme-Wechsel aufgerufen. Reihenfolge:
+  //   1. Top-Level-Form finden (im Floating-Modus ist das nicht der Frame
+  //      selbst, sondern die Hosting-TForm der IDE) und ApplyTheme dort
+  //      ansetzen - sonst bleibt die Floating-Title-Bar im alten Theme.
+  //   2. ApplyTheme(Self) zusaetzlich, damit auch die Frame-internen
+  //      Controls ihre Hooks neu registriert bekommen.
+  //   3. ApplyThemeRecursive: Invalidate auf allen Kindcontrols
+  //   4. Grid-spezifisch nochmal: TStringGrid hat einen besonders starren
+  //      Paint-Cache der unbedingt einen Repaint braucht
+  if Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) then
+    if Theming.IDEThemingEnabled then
+    begin
+      // ApplyTheme auf TopForm deckt rekursiv alle Kindcontrols ab -
+      // inklusive unserem Frame. Self-ApplyTheme nur als Fallback wenn
+      // (noch) kein Parent vorhanden ist.
+      TopForm := GetParentForm(Self);
+      if Assigned(TopForm) then
+      begin
+        Theming.ApplyTheme(TopForm);
+        TopForm.Invalidate;
+      end
+      else
+        Theming.ApplyTheme(Self);
+    end;
+  ApplyThemeRecursive(Self);
+  if Assigned(FResultGrid) then
+  begin
+    FResultGrid.Invalidate;
+    FResultGrid.Repaint;
+  end;
+end;
+
+{ TFrameThemeNotifier }
+
+constructor TFrameThemeNotifier.Create(AFrame: TAnalyserFrame);
+begin
+  inherited Create;
+  FFrame := AFrame;
+end;
+
+procedure TFrameThemeNotifier.ChangingTheme;
+begin
+  // Vor dem Wechsel: nichts zu tun. Der IDE-Service feuert das Event
+  // bevor der neue Style aktiv ist, deshalb ist Repaint hier sinnlos.
+end;
+
+procedure TFrameThemeNotifier.ChangedTheme;
+begin
+  if Assigned(FFrame) then
+    FFrame.RefreshFromIDETheme;
+end;
+
+procedure TFrameThemeNotifier.DetachFrame;
+begin
+  FFrame := nil;
 end;
 
 // ---------------------------------------------------------------------------
@@ -821,18 +957,22 @@ procedure TTilePanel.Paint;
 begin
   inherited; // zeichnet Hintergrund (Color) und Bevel
   Canvas.Brush.Style := bsClear;
-  Canvas.Pen.Color   := FBorderColor;
+  // BorderColor ist ein System-Color-Index (z. B. cl3DDkShadow). Canvas.Pen
+  // resolved nur ueber GetSysColor (Windows nativ), nicht ueber den aktiven
+  // VCL-Style. Daher hier explizit ueber StyleServices aufloesen.
+  Canvas.Pen.Color   := StyleServices.GetSystemColor(FBorderColor);
   Canvas.Pen.Width   := 1;
   Canvas.Rectangle(ClientRect);
 end;
 
 function TAnalyserFrame.MakeTile(Parent: TWinControl; const Caption, Glyph: string;
   IconColor: TColor; AWidth: Integer): TLabel;
-const
-  CL_FG_TXT     = TColor($00E8E8E8); // Off-white fuer Count
-  CL_FG_DIM     = TColor($00B0B0B0); // Dimmer Caption
-  CL_TILE_BG    = TColor($00282828); // Tile-Hintergrund (= Stats-Panel)
-  CL_BORDER     = TColor($00505050); // Duenner Rahmen (etwas heller als BG)
+// Tile-Farben sind komplett ueber System-Color-Konstanten gefuehrt - der
+// VCL-Style mappt sie zur Paint-Zeit auf das aktive IDE-Theme:
+//   clBtnFace    = Tile-Hintergrund (Chrome)
+//   cl3DDkShadow = duenner Rahmen
+//   clBtnText    = Count-Zahl (kraeftig)
+//   clGrayText   = Caption darunter (dezenter)
 var
   Tile     : TTilePanel;
   TopRow   : TPanel;
@@ -849,8 +989,8 @@ begin
   Tile.BevelOuter  := bvNone;
   Tile.BorderStyle := bsNone;
   Tile.ParentBackground := False;
-  Tile.Color       := CL_TILE_BG;
-  Tile.BorderColor := CL_BORDER;
+  Tile.Color       := clBtnFace;
+  Tile.BorderColor := cl3DDkShadow;
   Tile.ShowHint    := True;
   Tile.Hint        := Caption;
 
@@ -863,7 +1003,7 @@ begin
   TopRow.Height      := 20;
   TopRow.BevelOuter  := bvNone;
   TopRow.ParentBackground := False;
-  TopRow.Color       := CL_TILE_BG;
+  TopRow.Color       := clBtnFace;
 
   IconLbl := TLabel.Create(Self);
   IconLbl.Parent      := TopRow;
@@ -887,7 +1027,7 @@ begin
   CountLbl.Font.Name   := 'Segoe UI';
   CountLbl.Font.Size   := 11;
   CountLbl.Font.Style  := [fsBold];
-  CountLbl.Font.Color  := CL_FG_TXT;
+  CountLbl.Font.Color  := clBtnText; // theme-konformer Vordergrund
 
   // Caption unten, ueber volle Tile-Breite zentriert.
   // AlignWithMargins/Margins(1,0,1,1) damit der Tile-Rahmen sichtbar bleibt.
@@ -902,27 +1042,15 @@ begin
   CapLbl.Transparent := True;
   CapLbl.Font.Name   := 'Segoe UI';
   CapLbl.Font.Size   := 6;
-  CapLbl.Font.Color  := CL_FG_DIM;
+  CapLbl.Font.Color  := clGrayText; // gedaempfter Themed-Caption-Ton
 
   Result := CountLbl;
 end;
 
 procedure TAnalyserFrame.BuildStatsTiles(Parent: TPanel);
 const
-  // Akzentfarben fuer Glyph-Icons (BGR-Hex). Inspiriert vom Screenshot:
-  // jedes Icon eine eigene farbliche Identitaet, Zahl/Text einheitlich hell.
-  ICON_ERROR    = TColor($002030E0); // Rot-Orange
-  ICON_WARN     = TColor($002090F0); // Orange
-  ICON_INFO     = TColor($00F09020); // Hellblau
-  ICON_FILEERR  = TColor($00A0A0A0); // Hellgrau
-  ICON_SMELL    = TColor($00B040A0); // Magenta (Komplexitaet)
-  ICON_BUG      = TColor($002030E0); // Rot
-  ICON_VULN     = TColor($0080C040); // Gruen (Sicherheit)
-  ICON_HOT      = TColor($0040D0E0); // Gelb (Performance)
-  ICON_DUP      = TColor($00F0A040); // Cyan-Blau
-  ICON_SCORE    = TColor($002080F0); // Orange (Codequalitaet/Flamme)
-
-  // Segoe Fluent Icons / Segoe MDL2 Assets Codepoints (vektor).
+  // Glyph-Akzentfarben kommen aus uAnalyserPalette (ICON_ERROR, ICON_WARN ...).
+  // Hier nur die Glyph-Codepoints aus Segoe Fluent Icons / MDL2 Assets.
   GLYPH_ERROR    = #$E783; // ErrorBadge (i im Kreis hier wirkt wie Stop)
   GLYPH_WARN     = #$E7BA; // Warning (Dreieck mit !)
   GLYPH_INFO     = #$E946; // Info (i im Kreis)
@@ -1031,10 +1159,12 @@ begin
     begin
       f           := FAllFindings[i];
       severityTxt := f.SeverityText;
+      // Severity-Compare laeuft ueber Enum - i18n-fest und Refactoring-fest.
+      var sev := SeverityFromText(severityTxt);
       case FFilterMode of
-        fmErrors:          keep := severityTxt = 'Fehler';
-        fmWarnings:        keep := severityTxt = 'Warnung';
-        fmHints:           keep := severityTxt = 'Hinweis';
+        fmErrors:          keep := sev = fsError;
+        fmWarnings:        keep := sev = fsWarning;
+        fmHints:           keep := sev = fsHint;
         fmEmptyExcept:     keep := f.Kind = fkEmptyExcept;
         fmSQLInjection:    keep := f.Kind = fkSQLInjection;
         fmHardcodedSecret: keep := f.Kind = fkHardcodedSecret;
@@ -1100,11 +1230,15 @@ begin
 
           function SeverityRank(const Sev: string): Integer;
           begin
-            if      Sev = 'Fehler'     then Result := 0
-            else if Sev = 'Warnung'    then Result := 1
-            else if Sev = 'Hinweis'    then Result := 2
-            else if Sev = 'Lesefehler' then Result := 3
-            else                            Result := 4;
+            // Sortier-Reihenfolge: Error < Warning < Hint < FileError < Unknown
+            case SeverityFromText(Sev) of
+              fsError:     Result := 0;
+              fsWarning:   Result := 1;
+              fsHint:      Result := 2;
+              fsFileError: Result := 3;
+            else
+              Result := 4;
+            end;
           end;
 
           function FileKey(const F: TLeakFinding): string;
@@ -1531,426 +1665,31 @@ end;
 // Hilfe-Hinweis
 // ---------------------------------------------------------------------------
 class function TAnalyserFrame.FixHint(const Finding: TLeakFinding): TFixHint;
+// Thin-Wrapper - delegiert an den zentralen Resolver in uFixHint.
+// Vorher: ~400 Zeilen redundanter case-Block, der zudem fkDuplicateBlock
+// nicht abdeckte (kein Hinweistext fuer dupliziete Bloecke). Jetzt:
+// alle 21 Finding-Kinds via uFixHint.TFixHintResolver garantiert abgedeckt.
 begin
-  Result.Description := '';
-  Result.Before      := '';
-  Result.After       := '';
-
-  case Finding.Kind of
-
-    fkMemoryLeak:
-      if Finding.Severity = lsError then
-      begin
-        Result.Description := 'Objekt erstellt, aber nie freigegeben (Speicherleck)';
-        Result.Before :=
-          'list := TStringList.Create;'#13#10 +
-          'list.Add(''Eintrag'');'#13#10 +
-          '// list.Free fehlt!'#13#10 +
-          '// -> Speicherleck';
-        Result.After :=
-          'list := TStringList.Create;'#13#10 +
-          'try'#13#10 +
-          '  list.Add(''Eintrag'');'#13#10 +
-          'finally'#13#10 +
-          '  FreeAndNil(list);'#13#10 +
-          'end;';
-      end
-      else if Pos(' - R'#$FC'ckgabewert', Finding.MissingVar) > 0 then
-      begin
-        Result.Description := 'Funktionsr'#$FC'ckgabe wird nicht freigegeben';
-        Result.Before :=
-          '// Funktion gibt ein neues Objekt zur'#$FC'ck -'#13#10 +
-          '// Aufrufer ist f'#$FC'r die Freigabe zust'#$E4'ndig.'#13#10 +
-          ''#13#10 +
-          'list := BuildList();'#13#10 +
-          'list.Add(''x'');'#13#10 +
-          '// list.Free fehlt!';
-        Result.After :=
-          'list := BuildList();'#13#10 +
-          'try'#13#10 +
-          '  list.Add(''x'');'#13#10 +
-          'finally'#13#10 +
-          '  FreeAndNil(list);'#13#10 +
-          'end;'#13#10 +
-          ''#13#10 +
-          '// Oder: Result := list;  (Ownership weitergeben)';
-      end
-      else
-      begin
-        Result.Description := 'Free liegt ausserhalb des finally-Blocks';
-        Result.Before :=
-          'try'#13#10 +
-          '  ...code...'#13#10 +
-          'finally'#13#10 +
-          '  other.Free;'#13#10 +
-          'end;'#13#10 +
-          'list.Free; // ← zu spaet!'#13#10 +
-          '// Exception vor Free = Leck';
-        Result.After :=
-          'try'#13#10 +
-          '  ...code...'#13#10 +
-          'finally'#13#10 +
-          '  FreeAndNil(list); // ← hier'#13#10 +
-          '  other.Free;'#13#10 +
-          'end;';
-      end;
-
-    fkEmptyExcept:
-    begin
-      Result.Description := 'Leerer except-Block verschluckt Exceptions';
-      Result.Before :=
-        'try'#13#10 +
-        '  DoSomething;'#13#10 +
-        'except'#13#10 +
-        '  // leer'#13#10 +
-        'end;'#13#10 +
-        '// Fehler bleibt unsichtbar!';
-      Result.After :=
-        'try'#13#10 +
-        '  DoSomething;'#13#10 +
-        'except'#13#10 +
-        '  on E: Exception do'#13#10 +
-        '    LogError(E.Message);'#13#10 +
-        '  // oder: raise;'#13#10 +
-        'end;';
-    end;
-
-    fkSQLInjection:
-    begin
-      Result.Description := 'SQL-Befehl per "+" aufgebaut - SQL-Injection-Risiko';
-      Result.Before :=
-        'Query.SQL.Text :='#13#10 +
-        '  ''SELECT * FROM t'''#13#10 +
-        '  + '' WHERE id = '' + Id;'#13#10 +
-        ''#13#10 +
-        '// Angreifer kann Id manipulieren!';
-      Result.After :=
-        'Query.SQL.Text :='#13#10 +
-        '  ''SELECT * FROM t'''#13#10 +
-        '  + '' WHERE id = :Id'';'#13#10 +
-        'Query.ParamByName(''Id'')'#13#10 +
-        '  .AsString := Id;';
-    end;
-
-    fkHardcodedSecret:
-    begin
-      Result.Description := 'Passwort / Token als Literal im Quellcode';
-      Result.Before :=
-        'FPassword := ''geheim123'';'#13#10 +
-        'FToken    := ''sk-abc-xyz'';'#13#10 +
-        ''#13#10 +
-        '// Sichtbar im Quellcode,'#13#10 +
-        '// Repository und Build-Logs!';
-      Result.After :=
-        '// Aus Konfigurationsdatei:'#13#10 +
-        'FPassword := Ini.ReadString('#13#10 +
-        '  ''Auth'', ''Password'', '''');'#13#10 +
-        ''#13#10 +
-        '// Oder Umgebungsvariable:'#13#10 +
-        'FPassword := GetEnvironmentVariable(''APP_PWD'');';
-    end;
-
-    fkFormatMismatch:
-    begin
-      Result.Description := 'Format()-Platzhalter-Anzahl ≠ Argument-Anzahl';
-      Result.Before :=
-        '// 2 Platzhalter, 1 Argument'#13#10 +
-        's := Format('#13#10 +
-        '  ''%s ist %d Jahre alt'','#13#10 +
-        '  [Name]); // ← Age fehlt!'#13#10 +
-        ''#13#10 +
-        '// Laufzeitfehler: EConvertError';
-      Result.After :=
-        '// 2 Platzhalter, 2 Argumente'#13#10 +
-        's := Format('#13#10 +
-        '  ''%s ist %d Jahre alt'','#13#10 +
-        '  [Name, Age]); // ← korrekt'#13#10 +
-        ''#13#10 +
-        '// Tipp: %% fuer ein echtes %-Zeichen';
-    end;
-
-    fkFileReadError:
-    begin
-      Result.Description := 'Datei konnte nicht gelesen oder geparst werden';
-      Result.Before :=
-        '// Moegliche Ursachen:'#13#10 +
-        '// - Unbekannte Datei-Kodierung'#13#10 +
-        '// - Datei gesperrt / kein Lesezugriff'#13#10 +
-        '// - Datei groesser als 5 MB'#13#10 +
-        '// - Syntaxfehler beim Parsen';
-      Result.After :=
-        '// Loesungsansaetze:'#13#10 +
-        '// - Datei in UTF-8 oder UTF-16 speichern'#13#10 +
-        '// - Dateizugriff und Berechtigungen pruefen'#13#10 +
-        '// - Sehr grosse oder generierte Dateien'#13#10 +
-        '//   aus dem Projektpfad ausschliessen';
-    end;
-
-    fkNilDeref:
-    begin
-      Result.Description := 'Nil-Dereferenzierung: Zugriff auf m'#$F6'glicherweise nil-Variable';
-      Result.Before :=
-        'obj := nil;'#13#10 +
-        '// ... kein Create ...'#13#10 +
-        'obj.DoSomething;  // EAccessViolation!';
-      Result.After :=
-        'obj := TFoo.Create;'#13#10 +
-        'try'#13#10 +
-        '  obj.DoSomething;'#13#10 +
-        'finally'#13#10 +
-        '  FreeAndNil(obj);'#13#10 +
-        'end;'#13#10 +
-        ''#13#10 +
-        '// Oder: if Assigned(obj) then obj.DoSomething;';
-    end;
-
-    fkMissingFinally:
-    begin
-      Result.Description := 'Create ohne try/finally: Exception kann Free verhindern';
-      Result.Before :=
-        'list := TStringList.Create;'#13#10 +
-        'DoWork(list);   // Exception hier'#13#10 +
-        'list.Free;      // wird nie erreicht!';
-      Result.After :=
-        'list := TStringList.Create;'#13#10 +
-        'try'#13#10 +
-        '  DoWork(list);'#13#10 +
-        'finally'#13#10 +
-        '  FreeAndNil(list); // immer ausgef'#$FC'hrt'#13#10 +
-        'end;';
-    end;
-
-    fkDivByZero:
-    begin
-      Result.Description := 'Division durch Null: EZeroDivide m'#$F6'glich';
-      Result.Before :=
-        'function Avg(Sum, Count: Integer): Double;'#13#10 +
-        'begin'#13#10 +
-        '  Result := Sum div Count; // Count=0 -> EZeroDivide'#13#10 +
-        'end;';
-      Result.After :=
-        'function Avg(Sum, Count: Integer): Double;'#13#10 +
-        'begin'#13#10 +
-        '  if Count = 0 then Exit(0);'#13#10 +
-        '  Result := Sum div Count;'#13#10 +
-        'end;';
-    end;
-
-    fkDeadCode:
-    begin
-      Result.Description := 'Toter Code: Anweisungen nach Exit/raise nie erreichbar';
-      Result.Before :=
-        'if Error then'#13#10 +
-        'begin'#13#10 +
-        '  raise Exception.Create(''Fehler'');'#13#10 +
-        '  Cleanup;  // wird nie ausgef'#$FC'hrt!'#13#10 +
-        'end;';
-      Result.After :=
-        'if Error then'#13#10 +
-        'begin'#13#10 +
-        '  Cleanup;  // vor dem raise'#13#10 +
-        '  raise Exception.Create(''Fehler'');'#13#10 +
-        'end;'#13#10 +
-        ''#13#10 +
-        '// Oder Cleanup in finally-Block auslagern';
-    end;
-
-    fkLongMethod:
-    begin
-      Result.Description := 'Methode zu lang - aufteilen erh'#$F6'ht Lesbarkeit';
-      Result.Before :=
-        'procedure TFoo.DoEverything;'#13#10 +
-        'begin'#13#10 +
-        '  // 100+ Zeilen Logik...'#13#10 +
-        '  // Validierung, Daten holen,'#13#10 +
-        '  // verarbeiten, speichern, loggen'#13#10 +
-        'end;';
-      Result.After :=
-        'procedure TFoo.DoEverything;'#13#10 +
-        'begin'#13#10 +
-        '  if not Validate then Exit;'#13#10 +
-        '  ProcessData;'#13#10 +
-        '  Persist;'#13#10 +
-        '  LogResult;'#13#10 +
-        'end;';
-    end;
-
-    fkLongParamList:
-    begin
-      Result.Description := 'Zu viele Parameter - Parameter-Object verwenden';
-      Result.Before :=
-        'procedure CreateUser(AName, AEmail,'#13#10 +
-        '  APhone, AAddress, ACity,'#13#10 +
-        '  ACountry: string;'#13#10 +
-        '  AAge: Integer);';
-      Result.After :=
-        'type'#13#10 +
-        '  TUserData = record'#13#10 +
-        '    Name, Email, Phone: string;'#13#10 +
-        '    Age: Integer;'#13#10 +
-        '  end;'#13#10 +
-        ''#13#10 +
-        'procedure CreateUser(const Data: TUserData);';
-    end;
-
-    fkMagicNumber:
-    begin
-      Result.Description := 'Magic Number - durch benannte Konstante ersetzen';
-      Result.Before :=
-        'if RetryCount > 100 then'#13#10 +
-        '  raise Exception.Create(''Zu viele Versuche'');';
-      Result.After :=
-        'const'#13#10 +
-        '  MAX_RETRIES = 100;'#13#10 +
-        ''#13#10 +
-        'if RetryCount > MAX_RETRIES then'#13#10 +
-        '  raise Exception.Create(''Zu viele Versuche'');';
-    end;
-
-    fkDuplicateString:
-    begin
-      Result.Description := 'String-Literal mehrfach - als Konstante extrahieren';
-      Result.Before :=
-        'Logger.Warn(''Datenbank-Verbindung verloren'');'#13#10 +
-        '// ... 30 Zeilen sp'#$E4'ter ...'#13#10 +
-        'Logger.Error(''Datenbank-Verbindung verloren'');';
-      Result.After :=
-        'const'#13#10 +
-        '  MSG_DB_LOST = ''Datenbank-Verbindung verloren'';'#13#10 +
-        ''#13#10 +
-        'Logger.Warn(MSG_DB_LOST);'#13#10 +
-        'Logger.Error(MSG_DB_LOST);';
-    end;
-
-    fkHardcodedPath:
-    begin
-      Result.Description := 'Hardkodierter Pfad - aus Konfiguration laden';
-      Result.Before :=
-        'LogFile := ''C:\Logs\app.log'';'#13#10 +
-        '// L'#$E4'uft nur auf einem Rechner!';
-      Result.After :=
-        'LogFile := IncludeTrailingPathDelimiter('#13#10 +
-        '  TPath.GetDocumentsPath) + ''app.log'';'#13#10 +
-        ''#13#10 +
-        '// Oder aus Ini/Umgebungsvariable laden';
-    end;
-
-    fkDebugOutput:
-    begin
-      Result.Description := 'Debug-Ausgabe in Produktionscode';
-      Result.Before :=
-        'procedure TFoo.Bar;'#13#10 +
-        'begin'#13#10 +
-        '  ShowMessage(''Wert: '' + IntToStr(X));'#13#10 +
-        '  // wahrscheinlich vergessen!'#13#10 +
-        'end;';
-      Result.After :=
-        'procedure TFoo.Bar;'#13#10 +
-        'begin'#13#10 +
-        '  Logger.Debug(''Wert: %d'', [X]);'#13#10 +
-        '  // bzw. ganz entfernen wenn'#13#10 +
-        '  // nicht mehr ben'#$F6'tigt'#13#10 +
-        'end;';
-    end;
-
-    fkDeepNesting:
-    begin
-      Result.Description := 'Zu tiefe Verschachtelung - Early-Exit oder Methoden-Extraktion';
-      Result.Before :=
-        'if A then'#13#10 +
-        '  if B then'#13#10 +
-        '    if C then'#13#10 +
-        '      if D then'#13#10 +
-        '        if E then'#13#10 +
-        '          DoIt;';
-      Result.After :=
-        'if not A then Exit;'#13#10 +
-        'if not B then Exit;'#13#10 +
-        'if not C then Exit;'#13#10 +
-        'if not D then Exit;'#13#10 +
-        'if not E then Exit;'#13#10 +
-        'DoIt;';
-    end;
-
-    fkUnusedUses:
-    begin
-      Result.Description := 'Uses-Eintrag wird m'#$F6'glicherweise nicht ben'#$F6'tigt';
-      Result.Before :=
-        'uses'#13#10 +
-        '  System.SysUtils,'#13#10 +
-        '  System.IniFiles,   // <- kein TIniFile im Code?'#13#10 +
-        '  System.Classes;'#13#10 +
-        ''#13#10 +
-        '// Kompilierzeit + Laufzeit-Overhead'#13#10 +
-        '// durch ungenutzte Abh'#$E4'ngigkeiten';
-      Result.After :=
-        'uses'#13#10 +
-        '  System.SysUtils,'#13#10 +
-        '  System.Classes;    // nur ben'#$F6'tigte Units'#13#10 +
-        ''#13#10 +
-        '// Tipp: Compiler-Hint [H2189]'#13#10 +
-        '// "Unit X implicitly uses Y"'#13#10 +
-        '// zeigt echte Abh'#$E4'ngigkeiten';
-    end;
-
-    fkTodoComment:
-    begin
-      Result.Description := 'Offener Marker im Kommentar - vor Release abarbeiten';
-      Result.Before :=
-        '// TODO: Tabelle persistieren'#13#10 +
-        '// FIXME: race condition bei parallelem Save'#13#10 +
-        '// HACK: workaround fuer Bug #4711'#13#10 +
-        ''#13#10 +
-        '// Marker bleiben sonst Jahre stehen';
-      Result.After :=
-        '// Variante 1: Aufgabe erledigen und Marker entfernen'#13#10 +
-        ''#13#10 +
-        '// Variante 2: in Issue-Tracker uebernehmen,'#13#10 +
-        '// im Code referenzieren:'#13#10 +
-        '// see JIRA-1234';
-    end;
-
-    fkEmptyMethod:
-    begin
-      Result.Description := 'Methodenrumpf ist leer - vergessener Stub oder unbeabsichtigt?';
-      Result.Before :=
-        'procedure TFoo.DoStuff;'#13#10 +
-        'begin'#13#10 +
-        'end;'#13#10 +
-        ''#13#10 +
-        '// Aufrufer denkt es passiert was -'#13#10 +
-        '// passiert aber nichts.';
-      Result.After :=
-        '// Variante 1: Implementieren'#13#10 +
-        'procedure TFoo.DoStuff;'#13#10 +
-        'begin'#13#10 +
-        '  FList.Sort;'#13#10 +
-        'end;'#13#10 +
-        ''#13#10 +
-        '// Variante 2: Wenn als Hook gedacht,'#13#10 +
-        '// virtual deklarieren:'#13#10 +
-        '// procedure DoStuff; virtual;';
-    end;
-
-  end;
+  Result := TFixHintResolver.FixHint(Finding);
 end;
 
 procedure TAnalyserFrame.UpdateHelp(Row: Integer);
-const
-  COLOR_DESC_DEFAULT = TColor($00E8E8E8);
-  COLOR_DESC_ERROR   = TColor($00C8C8FF);  // hellrot
-  COLOR_DESC_WARN    = TColor($00C0ECFF);  // hellgelb
-  COLOR_DESC_HINT    = TColor($00D8E8C8);  // hellgruen
+// Beschriftungsleiste oben im Help-Panel: Hintergrundfarbe je Severity
+// abgeleitet aus dem aktiven Theme (clBtnFace + Severity-Akzent gemischt).
+// Default = clBtnFace (Theme-konformer neutraler Hintergrund).
 var
-  Idx  : Integer;
-  F    : TLeakFinding;
-  Hint : TFixHint;
+  Idx          : Integer;
+  F            : TLeakFinding;
+  Hint         : TFixHint;
+  ColorDefault : TColor;
 begin
+  ColorDefault := StyleServices.GetSystemColor(clBtnFace);
+
   Idx := Row - 1;
   if (Idx < 0) or (Idx >= FDisplayedFindings.Count) then
   begin
     FHelpDescLabel.Caption    := '  Zeile auswaehlen fuer Loesungshinweis';
-    FHelpDescLabel.Color      := COLOR_DESC_DEFAULT;
+    FHelpDescLabel.Color      := ColorDefault;
     FHelpBefore.Lines.Text    := '';
     FHelpAfter.Lines.Text     := '';
     Exit;
@@ -1962,19 +1701,18 @@ begin
   if Hint.Description = '' then
   begin
     FHelpDescLabel.Caption := '  Kein Loesungshinweis verfuegbar.';
-    FHelpDescLabel.Color   := COLOR_DESC_DEFAULT;
+    FHelpDescLabel.Color   := ColorDefault;
     FHelpBefore.Lines.Text := '';
     FHelpAfter.Lines.Text  := '';
     Exit;
   end;
 
-  // Farbe der Beschriftungsleiste je Schweregrad
-  if F.SeverityText = 'Fehler' then
-    FHelpDescLabel.Color := COLOR_DESC_ERROR
-  else if F.SeverityText = 'Hinweis' then
-    FHelpDescLabel.Color := COLOR_DESC_HINT
-  else
-    FHelpDescLabel.Color := COLOR_DESC_WARN;
+  // Beschriftungsleiste sitzt auf einem clBtnFace-Panel - dorthin tinten.
+  // Damit ist die Severity-Faerbung optisch homogen mit der direkten
+  // Umgebung des Labels in jedem Theme.
+  FHelpDescLabel.Color := SeverityBg(SeverityFromText(F.SeverityText), clBtnFace);
+  if FHelpDescLabel.Color = clNone then
+    FHelpDescLabel.Color := ColorDefault;
 
   FHelpDescLabel.Caption := '  ' + Hint.Description;
   FHelpBefore.Lines.Text := Hint.Before;
@@ -2016,148 +1754,11 @@ end;
 function TAnalyserFrame.BuildClaudePrompt(F: TLeakFinding): string;
 // Markdown-Block fuer Claude-AI-Chat: Befund-Tabelle + Beschreibung +
 // Code-Kontext (+/-5 Zeilen mit '>' Marker) + Vorher/Nachher.
-const
-  CONTEXT_LINES = 5;
-
-  function KindToName(K: TFindingKind): string;
-  begin
-    case K of
-      fkMemoryLeak      : Result := 'MemoryLeak';
-      fkEmptyExcept     : Result := 'EmptyExcept';
-      fkSQLInjection    : Result := 'SQLInjection';
-      fkHardcodedSecret : Result := 'HardcodedSecret';
-      fkFormatMismatch  : Result := 'FormatMismatch';
-      fkFileReadError   : Result := 'FileReadError';
-      fkUnusedUses      : Result := 'UnusedUses';
-      fkNilDeref        : Result := 'NilDeref';
-      fkMissingFinally  : Result := 'MissingFinally';
-      fkDivByZero       : Result := 'DivByZero';
-      fkDeadCode        : Result := 'DeadCode';
-      fkLongMethod      : Result := 'LongMethod';
-      fkLongParamList   : Result := 'LongParamList';
-      fkMagicNumber     : Result := 'MagicNumber';
-      fkDuplicateString : Result := 'DuplicateString';
-      fkHardcodedPath   : Result := 'HardcodedPath';
-      fkDebugOutput     : Result := 'DebugOutput';
-      fkDeepNesting     : Result := 'DeepNesting';
-      fkTodoComment     : Result := 'TodoComment';
-      fkEmptyMethod     : Result := 'EmptyMethod';
-      fkDuplicateBlock  : Result := 'DuplicateBlock';
-    else
-      Result := '?';
-    end;
-  end;
-
-  function LoadSnippet(const APath: string; ALine: Integer): string;
-  var
-    SL                : TStringList;
-    SB                : TStringBuilder;
-    i, FromIdx, ToIdx : Integer;
-    Marker            : string;
-  begin
-    Result := '';
-    if (APath = '') or (ALine <= 0) or not FileExists(APath) then Exit;
-
-    SL := TStringList.Create;
-    try
-      try
-        SL.LoadFromFile(APath, TEncoding.UTF8);
-      except
-        try SL.LoadFromFile(APath); except Exit; end;
-      end;
-
-      FromIdx := ALine - 1 - CONTEXT_LINES;
-      ToIdx   := ALine - 1 + CONTEXT_LINES;
-      if FromIdx < 0 then FromIdx := 0;
-      if ToIdx > SL.Count - 1 then ToIdx := SL.Count - 1;
-      if FromIdx > ToIdx then Exit;
-
-      SB := TStringBuilder.Create;
-      try
-        for i := FromIdx to ToIdx do
-        begin
-          if (i + 1) = ALine then Marker := '> ' else Marker := '  ';
-          SB.Append(Marker);
-          SB.Append(Format('%4d  ', [i + 1]));
-          SB.AppendLine(SL[i]);
-        end;
-        Result := SB.ToString;
-      finally
-        SB.Free;
-      end;
-    finally
-      SL.Free;
-    end;
-  end;
-
-var
-  SB      : TStringBuilder;
-  Hint    : TFixHint;
-  Line    : Integer;
-  Snippet : string;
+// Thin-Wrapper - die Logik ist in uClaudePrompt zentralisiert (war
+// zuvor 1:1 mit uMainForm dupliziert). Das Plugin uebergibt explizit
+// seine eigene FixHint-Methode, da dort die Hint-Logik im Frame liegt.
 begin
-  Hint    := FixHint(F); // bestehende class-Helper-Methode des Frames
-  Line    := StrToIntDef(F.LineNumber, 0);
-  Snippet := LoadSnippet(F.FileName, Line);
-
-  SB := TStringBuilder.Create;
-  try
-    SB.AppendLine('# Code-Analyse Befund');
-    SB.AppendLine('');
-    SB.AppendLine('| Feld | Wert |');
-    SB.AppendLine('|------|------|');
-    SB.AppendLine('| Datei | `' + F.FileName + '` |');
-    SB.AppendLine('| Zeile | ' + F.LineNumber + ' |');
-    if F.MethodName <> '' then
-      SB.AppendLine('| Methode | `' + F.MethodName + '` |');
-    SB.AppendLine('| Schweregrad | ' + F.SeverityText + ' |');
-    SB.AppendLine('| Typ | ' + F.TypeText + ' |');
-    SB.AppendLine('| Regel | ' + KindToName(F.Kind) + ' |');
-    SB.AppendLine('| Detail | ' + F.MissingVar + ' |');
-    SB.AppendLine('');
-
-    if Hint.Description <> '' then
-    begin
-      SB.AppendLine('## Beschreibung');
-      SB.AppendLine(Hint.Description);
-      SB.AppendLine('');
-    end;
-
-    if Snippet <> '' then
-    begin
-      SB.AppendLine('## Code-Kontext');
-      SB.AppendLine('```pascal');
-      SB.Append(Snippet);
-      SB.AppendLine('```');
-      SB.AppendLine('');
-    end;
-
-    if Hint.Before <> '' then
-    begin
-      SB.AppendLine('## Vorher (Problem)');
-      SB.AppendLine('```pascal');
-      SB.AppendLine(Hint.Before);
-      SB.AppendLine('```');
-      SB.AppendLine('');
-    end;
-
-    if Hint.After <> '' then
-    begin
-      SB.AppendLine('## Nachher (Loesung)');
-      SB.AppendLine('```pascal');
-      SB.AppendLine(Hint.After);
-      SB.AppendLine('```');
-      SB.AppendLine('');
-    end;
-
-    SB.AppendLine('---');
-    SB.AppendLine('Bitte schlage einen konkreten Fix fuer die markierte ' +
-      'Code-Stelle vor. Erklaere kurz die Ursache und liefere den ' +
-      'angepassten Code-Block.');
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
+  Result := TClaudePrompt.Build(F, FixHint(F));
 end;
 
 // ---------------------------------------------------------------------------
@@ -2361,15 +1962,14 @@ begin
   if Assigned(FBtnAnalyseCurrent) then FBtnAnalyseCurrent.Enabled := not ABusy;
   if Assigned(FBtnAnalyseChanged) then FBtnAnalyseChanged.Enabled := not ABusy;
 
+  // Layout-stabil: weder Cancel-Button noch ProgressBar werden
+  // ein-/ausgeblendet (Visible=True konstant). Stattdessen nur
+  // Enabled/Position-Toggle - die UI bleibt waehrend der Analyse ruhig.
   if Assigned(FBtnCancel) then
-  begin
-    FBtnCancel.Visible := ABusy;
     FBtnCancel.Enabled := ABusy;
-  end;
 
   if Assigned(FProgressBar) then
   begin
-    FProgressBar.Visible  := ABusy;
     FProgressBar.Position := 0;
     if ATotal > 0 then
       FProgressBar.Max := ATotal
@@ -2550,7 +2150,10 @@ begin
         if wasCancelled then
           StatusMode('Analyse abgebrochen - keine neuen Befunde geladen');
       finally
-        findings.Free;
+        // FreeAndNil statt Free: bei EAbort hat AnalyzeLeaksRecursive die
+        // Liste ggf. schon selbst freigegeben (findings = nil). Free auf nil
+        // ist zwar safe, FreeAndNil ist aber semantisch klarer.
+        FreeAndNil(findings);
       end;
     except
       on E: Exception do
@@ -2670,13 +2273,62 @@ begin
   end;
 end;
 
-procedure TAnalyserFrame.Resize;
+procedure TAnalyserFrame.ApplyThemeRecursive(AControl: TControl);
 var
-  HalfW: Integer;
+  i       : Integer;
+  WC      : TWinControl;
+begin
+  // Erzwingt Repaint und triggert TStringGrid-/TMemo-/TPanel-Caches dazu,
+  // ihren neu gemappten clWindow/clBtnFace abzurufen. Wird rekursiv ueber
+  // den gesamten Frame angewendet.
+  AControl.Invalidate;
+  if AControl is TWinControl then
+  begin
+    WC := TWinControl(AControl);
+    for i := 0 to WC.ControlCount - 1 do
+      ApplyThemeRecursive(WC.Controls[i]);
+  end;
+end;
+
+procedure TAnalyserFrame.CMStyleChanged(var Message: TMessage);
 begin
   inherited;
+  // VCL-Style-Wechsel und IDE-Theme-Wechsel laufen am Ende durch denselben
+  // Refresh-Pfad. Verhindert dass der Code in zwei Routinen synchron
+  // gehalten werden muss.
+  RefreshFromIDETheme;
+end;
+
+procedure TAnalyserFrame.SetParent(AParent: TWinControl);
+begin
+  inherited SetParent(AParent);
+  if (AParent <> nil) and not (csDestroying in ComponentState) then
+    RefreshFromIDETheme;
+end;
+
+procedure TAnalyserFrame.Resize;
+var
+  HalfW    : Integer;
+  ThirdW   : Integer;
+  ParentW  : Integer;
+begin
+  inherited;
+
+  // Hilfe-Panel auf 1/3 der PanelClient-Breite halten (Grid bekommt 2/3).
+  // FHelpPanel.Parent = PanelClient. MinWidth-Constraint verhindert dass
+  // die Hilfe zu schmal wird; das Splitter-Drag des Users wird respektiert
+  // bis zum naechsten Resize.
+  if Assigned(FHelpPanel) and Assigned(FHelpPanel.Parent) then
+  begin
+    ParentW := FHelpPanel.Parent.ClientWidth;
+    ThirdW  := ParentW div 3;
+    if ThirdW > FHelpPanel.Constraints.MinWidth then
+      FHelpPanel.Width := ThirdW;
+  end;
+
   if Assigned(FResultGrid) then
     GridResize(FResultGrid);
+
   // Vorher/Nachher-Haelften gleichmaessig vertikal aufteilen
   // (Vorher ist alTop, FHelpBeforePanel.Height steuert die Aufteilung).
   if Assigned(FHelpBeforePanel) and Assigned(FHelpBeforePanel.Parent) then
@@ -2709,28 +2361,35 @@ end;
 
 procedure TAnalyserFrame.GridDrawCell(Sender: TObject; ACol, ARow: Integer;
   Rect: TRect; State: TGridDrawState);
-const
-  HEADER_TOP    = TColor($00E8E8E8);
-  HEADER_BOTTOM = TColor($00C8C8C8);
-  ZEBRA         = TColor($00F5F5F5);
-  SEP_LINE      = TColor($00AAAAAA);
+// ZEBRA-Konstante kommt aus uAnalyserPalette.
 var
-  grid    : TStringGrid;
-  severity: string;
-  bgColor : TColor;
-  txtRect : TRect;
+  grid        : TStringGrid;
+  severity    : string;
+  bgColor     : TColor;
+  txtRect     : TRect;
+  HeaderBg    : TColor;
+  HeaderFg    : TColor;
+  SepLine     : TColor;
 begin
   grid := TStringGrid(Sender);
   txtRect := Rect;
   InflateRect(txtRect, -4, 0);
 
+  // Header-Farben aus dem aktuellen IDE-Style ziehen, damit der Header
+  // im Dock-Dark-Theme dunkel und im Standalone hell wirkt - beides
+  // aus derselben Code-Stelle.
+  HeaderBg := StyleServices.GetSystemColor(clBtnFace);
+  HeaderFg := StyleServices.GetSystemColor(clBtnText);
+  SepLine  := StyleServices.GetSystemColor(cl3DDkShadow);
+
   // ---- Header-Zeile ----
   if ARow = 0 then
   begin
-    // Verlauf oben -> unten
-    GradientFillRect(grid.Canvas, Rect, HEADER_TOP, HEADER_BOTTOM, True);
+    // Flacher Hintergrund in IDE-Theme-Farbe (kein Verlauf - moderner Look)
+    grid.Canvas.Brush.Color := HeaderBg;
+    grid.Canvas.FillRect(Rect);
     // Trennlinie unten
-    grid.Canvas.Pen.Color := SEP_LINE;
+    grid.Canvas.Pen.Color := SepLine;
     grid.Canvas.MoveTo(Rect.Left,  Rect.Bottom - 1);
     grid.Canvas.LineTo(Rect.Right, Rect.Bottom - 1);
     // Text mit Sort-Indikator
@@ -2738,7 +2397,7 @@ begin
     grid.Canvas.Font.Name   := 'Segoe UI';
     grid.Canvas.Font.Size   := 8;
     grid.Canvas.Font.Style  := [fsBold];
-    grid.Canvas.Font.Color  := clBlack;
+    grid.Canvas.Font.Color  := HeaderFg;
     var HeaderText := grid.Cells[ACol, ARow];
     if ACol = FSortColumn then
     begin
@@ -2754,41 +2413,49 @@ begin
 
   // ---- Datenzeilen ----
   severity := grid.Cells[5, ARow];
-  if severity = 'Lesefehler' then
-    bgColor := COLOR_FILEERROR
-  else if (ARow >= 1) and (ARow - 1 < FDisplayedFindings.Count) and
-          (FDisplayedFindings[ARow - 1].Kind = fkUnusedUses) then
-    bgColor := COLOR_UNUSEDUSES
-  else if (ARow >= 1) and (ARow - 1 < FDisplayedFindings.Count) and
-          (FDisplayedFindings[ARow - 1].Kind in [fkNilDeref, fkDivByZero]) then
-    bgColor := COLOR_NILDEREF
-  else if (ARow >= 1) and (ARow - 1 < FDisplayedFindings.Count) and
-          (FDisplayedFindings[ARow - 1].Kind = fkDeadCode) then
-    bgColor := COLOR_DEADCODE
-  else if severity = 'Fehler' then
-    bgColor := COLOR_ERROR
-  else if severity = 'Warnung' then
-    bgColor := COLOR_WARNING
-  else if severity = 'Hinweis' then
-    bgColor := COLOR_HINT
+
+  // String -> Enum an der UI-Grenze, danach laeuft alles enum-basiert.
+  var SevEnum := SeverityFromText(severity);
+  var SevBg   := SeverityBg(SevEnum); // theme-bewusst (clWindow + Akzent-Tint)
+
+  if SevBg <> clNone then
+    bgColor := SevBg
   else if Odd(ARow) then
-    bgColor := ZEBRA
+    bgColor := StyleServices.GetSystemColor(clBtnFace) // theme-konformes Zebra
   else
-    bgColor := clWindow;
+    bgColor := StyleServices.GetSystemColor(clWindow);
 
   if gdSelected in State then
-    bgColor := clHighlight;
+    bgColor := StyleServices.GetSystemColor(clHighlight);
 
   grid.Canvas.Brush.Color := bgColor;
   grid.Canvas.FillRect(Rect);
   grid.Canvas.Brush.Style := bsClear;
 
+  // 3 px Severity-Indikatorleiste am linken Rand der ersten Spalte.
+  // Saettigte Akzentfarbe - in jedem Theme klar erkennbar.
+  if (ACol = 0) and (SevEnum <> fsUnknown) then
+  begin
+    var Accent := SeverityAccent(SevEnum);
+    if Accent <> clNone then
+    begin
+      var IndR: TRect;
+      IndR.Left   := Rect.Left;
+      IndR.Top    := Rect.Top;
+      IndR.Right  := Rect.Left + 4; // 4 px - bei DPI 100% gut sichtbar
+      IndR.Bottom := Rect.Bottom;
+      grid.Canvas.Brush.Color := Accent;
+      grid.Canvas.FillRect(IndR);
+      grid.Canvas.Brush.Style := bsClear;
+    end;
+  end;
+
   grid.Canvas.Font.Name := 'Segoe UI';
   grid.Canvas.Font.Size := 8;
   if gdSelected in State then
-    grid.Canvas.Font.Color := clHighlightText
+    grid.Canvas.Font.Color := StyleServices.GetSystemColor(clHighlightText)
   else
-    grid.Canvas.Font.Color := clWindowText;
+    grid.Canvas.Font.Color := StyleServices.GetSystemColor(clWindowText);
 
   // Datei-Spalte fett
   if (ACol = 0) and (not (gdSelected in State)) then
@@ -2893,7 +2560,8 @@ end;
 
 procedure TAnalyserDockableForm.FrameCreated(AFrame: TCustomFrame);
 var
-  F: TAnalyserFrame;
+  F        : TAnalyserFrame;
+  Theming  : IOTAIDEThemingServices;
 begin
   FFrame := AFrame as TAnalyserFrame;
   F := FFrame;
@@ -2905,6 +2573,24 @@ begin
   F.FResultGrid.Font.Size := 8;
   F.FProjectPath.Font.Name := 'Segoe UI';
   F.FProjectPath.Font.Size := 6;
+
+  // IDE-Theme einmalig auf den frisch erstellten Frame anwenden.
+  // ApplyTheme registriert die IDE-spezifischen Style-Hooks und
+  // invalidiert rekursiv - im Floating-Modus essentiell.
+  if Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) then
+  begin
+    if Theming.IDEThemingEnabled then
+      Theming.ApplyTheme(F);
+
+    // Notifier registrieren - haelt sowohl Klassenreferenz (fuer
+    // DetachFrame) als auch Interface (fuer Refcount) am Frame, plus
+    // gibt eine zweite Interface-Referenz an die IDE.
+    var Notifier := TFrameThemeNotifier.Create(F);
+    F.FThemeNotifierObj := Notifier;
+    F.FThemeNotifierIfc := Notifier as INTAIDEThemingServicesNotifier;
+    F.FThemeNotifierIdx := Theming.AddNotifier(
+      F.FThemeNotifierIfc as INTAIDEThemingServicesNotifier);
+  end;
 end;
 
 function TAnalyserDockableForm.GetMenuActionList: TCustomActionList;

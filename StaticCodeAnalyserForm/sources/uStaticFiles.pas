@@ -213,7 +213,10 @@ begin
       Log('=== Scan gestartet: ' + FormatDateTime('yyyy-mm-dd hh:nn:ss', Now)
           + ' Pfad: ' + Path + ' ===');
     except
-      LogStream := nil; // Log-Datei optional - kein Hard-Fail
+      // Log-Datei optional - kein Hard-Fail. FreeAndNil statt nil-Zuweisung,
+      // sonst leakt der StreamWriter falls Create klappt aber das erste Log()
+      // wirft (z.B. disk full).
+      FreeAndNil(LogStream);
     end;
 
     if Path = '' then

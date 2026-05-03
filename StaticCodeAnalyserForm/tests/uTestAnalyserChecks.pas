@@ -117,6 +117,8 @@ type
     [Test] procedure SQL_DocStringWithSQLKeyword_NoFinding;
     [Test] procedure SQL_LiteralOnlyConcat_NoFinding;
     [Test] procedure SQL_CreateTableMultilineLiteral_NoFinding;
+    // Wortgrenze: 'commandtext' darf nicht 'mycommandtextra' matchen
+    [Test] procedure SQL_CommandTextSubstring_NoFalsePositive;
   end;
 
   // ---- HardcodedSecret (THardcodedSecretDetector) ------------------------------------
@@ -129,6 +131,9 @@ type
     [Test] procedure Secret_AssignFromFunction_NoFinding;
     [Test] procedure Secret_AssignFromVariable_NoFinding;
     [Test] procedure Secret_NonSecretVarWithLiteral_NoFinding;
+    // CamelCase/Snake-Case-Wortgrenzen (IsSecretName-Refactor)
+    [Test] procedure Secret_SecretarySubstring_NoFinding;
+    [Test] procedure Secret_UserTokenSnakeCase_ReportsError;
   end;
 
   // ---- NilDeref / MissingFinally / DivByZero / DeadCode -------------------------------
@@ -179,6 +184,10 @@ type
     [Test] procedure Suppression_NoinspectionAll_FiltersAllFindings;
     [Test] procedure Suppression_WrongKind_DoesNotFilter;
     [Test] procedure Suppression_MultipleKinds_FiltersAll;
+    // KindFromName-Erweiterung: 3 zuvor stumm ignorierte Kinds
+    [Test] procedure Suppression_NoinspectionTodoComment_FiltersFinding;
+    [Test] procedure Suppression_NoinspectionEmptyMethod_FiltersFinding;
+    [Test] procedure Suppression_NoinspectionDuplicateBlock_FiltersFinding;
   end;
 
   // ---- UnusedUses (TUnusedUsesDetector) -----------------------------------------------
@@ -274,6 +283,8 @@ type
     [Test] procedure Magic_TrivialHundred_NoFinding;
     [Test] procedure Magic_NoIfStatement_NoFinding;
     [Test] procedure Magic_TwoIfsBothMagic_BothReported;
+    // Linke Boundary akzeptiert auch '(', ',', '[': '(Count>100)' wird erkannt
+    [Test] procedure Magic_ParenthesisLeftBoundary_ReportsHint;
   end;
 
   // ---- DuplicateString (TDuplicateStringDetector) ------------------------------------
@@ -424,6 +435,8 @@ type
   TTestFormatMismatchExt = class
   public
     [Test] procedure Format_OnePlaceholderTwoArgs_ReportsError;
+    // Vorgaenger-Filter erlaubt nicht nur '.' - 'Result := Format(...)' wird erkannt
+    [Test] procedure Format_AssignmentWithoutDot_ReportsError;
   end;
 
   // ---- NilDeref Erweiterungen --------------------------------------------------------
@@ -434,6 +447,8 @@ type
     [Test] procedure NilDeref_TwoNilsBothReported;
     [Test] procedure NilDeref_AssignedFromCreate_NoFinding;
     [Test] procedure NilDeref_NilGuardWithBegin_NoFinding;
+    // Wortgrenze: 'assigned(objOld)' darf 'obj' nicht schuetzen
+    [Test] procedure NilDeref_AssignedGuardVarSubstring_StillReports;
   end;
 
   // ---- MissingFinally Erweiterungen --------------------------------------------------
@@ -1150,6 +1165,26 @@ begin
   finally F.Free; end;
 end;
 
+procedure TTestSQLInjection.SQL_CommandTextSubstring_NoFalsePositive;
+// Wortgrenze-Test: 'mycommandtextra' enthaelt 'commandtext' als Substring,
+// darf aber NICHT als SQL-Property erkannt werden. Vor dem WholeWord-Fix
+// in IsAssignRisk haette die naive Pos()-Suche hier einen Treffer geliefert.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var dummy: string;'#13#10+
+  'begin'#13#10+
+  '  mycommandtextra := dummy + ''abc'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual(0, TFindingHelper.Count(F, fkSQLInjection),
+      '"mycommandtextra" darf nicht als SQL-Property-Match gelten');
+  finally F.Free; end;
+end;
+
 { ---- HardcodedSecret ---- }
 
 procedure TTestHardcodedSecret.Secret_PasswordAssignedLiteral_ReportsError;
@@ -1244,7 +1279,44 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try
     Assert.AreEqual(0, TFindingHelper.Count(F, fkHardcodedSecret),
-      'Normaler String-Literal – kein Befund');
+      'Normaler String-Literal - kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecret.Secret_SecretarySubstring_NoFinding;
+// 'secretary' enthaelt 'secret' als Substring, ist aber semantisch nichts
+// Sicherheitskritisches. Vor dem CamelCase/Snake-Boundary-Refactor in
+// IsSecretName haette die naive Pos-Suche faelschlich getriggert.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Init;'#13#10+
+  'begin'#13#10+
+  '  secretary := ''Frau Mueller'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual(0, TFindingHelper.Count(F, fkHardcodedSecret),
+      '"secretary" darf nicht als Secret-Pattern matchen');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecret.Secret_UserTokenSnakeCase_ReportsError;
+// Snake-Case-Boundary: 'user_token' enthaelt 'token' nach Underscore -
+// gilt als Wortgrenze und MUSS gemeldet werden.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Init;'#13#10+
+  'begin'#13#10+
+  '  user_token := ''sk-abcdef'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkHardcodedSecret) >= 1,
+      '"user_token" muss als Secret-Variable erkannt werden');
   finally F.Free; end;
 end;
 
@@ -3151,6 +3223,105 @@ begin
   end;
 end;
 
+procedure TTestNewChecks.Suppression_NoinspectionTodoComment_FiltersFinding;
+// KindFromName wurde um 'todocomment' erweitert (vorher Silent-Bypass).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'begin'#13#10+
+  '  // noinspection TodoComment'#13#10+
+  '  // TODO: implementieren'#13#10+
+  'end;';
+var
+  FName: string;
+  F: TObjectList<TLeakFinding>;
+begin
+  WriteTempPas(SRC, FName);
+  try
+    F := TStaticAnalyzer2.AnalyzeLeaks(FName);
+    try
+      Assert.AreEqual(0, TFindingHelper.Count(F, fkTodoComment),
+        '// noinspection TodoComment unterdrueckt den TODO-Befund');
+    finally F.Free; end;
+  finally
+    if FileExists(FName) then DeleteFile(FName);
+  end;
+end;
+
+procedure TTestNewChecks.Suppression_NoinspectionEmptyMethod_FiltersFinding;
+// KindFromName um 'emptymethod' erweitert.
+const SRC =
+  'unit t; implementation'#13#10+
+  '// noinspection EmptyMethod'#13#10+
+  'procedure TFoo.NothingHere;'#13#10+
+  'begin'#13#10+
+  'end;';
+var
+  FName: string;
+  F: TObjectList<TLeakFinding>;
+begin
+  WriteTempPas(SRC, FName);
+  try
+    F := TStaticAnalyzer2.AnalyzeLeaks(FName);
+    try
+      Assert.AreEqual(0, TFindingHelper.Count(F, fkEmptyMethod),
+        '// noinspection EmptyMethod unterdrueckt leere Methode');
+    finally F.Free; end;
+  finally
+    if FileExists(FName) then DeleteFile(FName);
+  end;
+end;
+
+procedure TTestNewChecks.Suppression_NoinspectionDuplicateBlock_FiltersFinding;
+// KindFromName um 'duplicateblock' erweitert.
+// Hinweis: DuplicateBlock braucht >=8 identische Zeilen. Test deckt einen
+// minimalen Block ab und prueft: Suppression-Comment auf der ZWEITEN
+// Wiederholung unterdrueckt den Befund (oder mindestens nicht alle).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure A;'#13#10+
+  'begin'#13#10+
+  '  Logger.Info(''start a'');'#13#10+
+  '  Conn.Open;'#13#10+
+  '  Q.SQL.Text := ''select 1'';'#13#10+
+  '  Q.Open;'#13#10+
+  '  Q.First;'#13#10+
+  '  Q.Close;'#13#10+
+  '  Conn.Close;'#13#10+
+  '  Logger.Info(''end a'');'#13#10+
+  'end;'#13#10+
+  '// noinspection DuplicateBlock'#13#10+
+  'procedure B;'#13#10+
+  'begin'#13#10+
+  '  Logger.Info(''start a'');'#13#10+
+  '  Conn.Open;'#13#10+
+  '  Q.SQL.Text := ''select 1'';'#13#10+
+  '  Q.Open;'#13#10+
+  '  Q.First;'#13#10+
+  '  Q.Close;'#13#10+
+  '  Conn.Close;'#13#10+
+  '  Logger.Info(''end a'');'#13#10+
+  'end;';
+var
+  FName: string;
+  F: TObjectList<TLeakFinding>;
+  CountWithSuppress: Integer;
+begin
+  WriteTempPas(SRC, FName);
+  try
+    F := TStaticAnalyzer2.AnalyzeLeaks(FName);
+    try
+      // Mindestens ein Befund muss durch die Suppression unterdrueckt sein -
+      // ohne Suppression haetten wir 2 Treffer (beide Bloecke).
+      CountWithSuppress := TFindingHelper.Count(F, fkDuplicateBlock);
+      Assert.IsTrue(CountWithSuppress < 2,
+        '// noinspection DuplicateBlock muss mind. einen Befund unterdruecken');
+    finally F.Free; end;
+  finally
+    if FileExists(FName) then DeleteFile(FName);
+  end;
+end;
+
 procedure TTestNewChecks.DeadCode_ExitBeforeExceptBlock_NoFinding;
 // exit als letzte Anweisung im try-Body, danach except-Block – KEIN toter Code
 const SRC =
@@ -3992,6 +4163,26 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual(2, TFindingHelper.Count(F, fkMagicNumber));
+  finally F.Free; end;
+end;
+
+procedure TTestMagicNumbers.Magic_ParenthesisLeftBoundary_ReportsHint;
+// '(Count>250)' ohne Whitespace zwischen '(' und Operator. Vor dem Fix
+// in ExtractMagicNumber wurde nur ' >' als Vorgaenger akzeptiert -
+// dieser Case wurde uebersehen.
+// Achtung: 100 ist in IsTrivial-Liste (uMagicNumbers.pas) -> 250 verwenden
+// damit der Detektor wirklich anschlaegt.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(Count: Integer);'#13#10+
+  'begin'#13#10+
+  '  if (Count>250) then Exit;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(1, TFindingHelper.Count(F, fkMagicNumber),
+    '(Count>250) ohne Spaces muss erkannt werden');
   finally F.Free; end;
 end;
 
@@ -4916,6 +5107,25 @@ begin
   finally F.Free; end;
 end;
 
+procedure TTestFormatMismatchExt.Format_AssignmentWithoutDot_ReportsError;
+// Vor dem Fix in TryExtractFormatString akzeptierte der Vorgaenger-Filter
+// nur '.' - 'Result := Format(...)' (Whitespace davor) wurde uebersehen.
+// Jetzt: alles was kein Identifier-Char ist, ist erlaubt.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Foo(v: Integer): string;'#13#10+
+  'begin'#13#10+
+  '  Result := Format(''%d %s'', [v]);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkFormatMismatch) >= 1,
+      'Format() direkt nach := muss als Mismatch erkannt werden');
+  finally F.Free; end;
+end;
+
 // =============================================================================
 // NilDeref-Erweiterungen
 // =============================================================================
@@ -4984,6 +5194,29 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual(0, TFindingHelper.Count(F, fkNilDeref));
+  finally F.Free; end;
+end;
+
+procedure TTestNilDerefExt.NilDeref_AssignedGuardVarSubstring_StillReports;
+// Wortgrenze: 'assigned(objOld)' darf 'obj' NICHT als geguarded gelten.
+// Vor dem WholeWord-Fix in CondHasGuard wuerde der Substring-Match
+// 'assigned(obj' (in 'assigned(objOld)') faelschlicherweise als Guard
+// fuer 'obj' anerkannt - der NilDeref-Befund bliebe damit aus.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var obj, objOld: TStringList;'#13#10+
+  'begin'#13#10+
+  '  obj := nil;'#13#10+
+  '  if assigned(objOld) then'#13#10+
+  '    obj.Add(''x'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+      'assigned(objOld) darf nicht als Guard fuer obj gelten');
   finally F.Free; end;
 end;
 

@@ -1,0 +1,87 @@
+unit uAnalyserTheme;
+
+// Theme-Helper fuer den Static Code Analyser.
+// Aufgabe: Severity-bezogene Farben aus dem aktiven IDE-/VCL-Theme ableiten.
+//
+// Das Modul kennt KEINE Strings - es operiert ausschliesslich auf dem
+// TFindingSeverity-Enum aus uAnalyserTypes. Konvertierung von/zum String
+// findet nur an der UI-Grenze statt.
+//
+// Ergebnis-Farben werden ueber StyleServices.GetSystemColor zur Aufruf-
+// Zeit bestimmt - der aktive VCL-Style/IDE-Theme bestimmt die Basis,
+// auf die der Severity-Akzent gemischt wird. Damit gleicher Code in
+// Light-, Dark- und Custom-Themes konsistent aussieht.
+
+interface
+
+uses
+  Vcl.Graphics, Vcl.Themes,
+  uAnalyserTypes;
+
+// Saturierte Akzentfarbe fuer eine Severity. Wird verwendet:
+//   * 3px-Indikatorleiste am linken Zellenrand
+//   * Akzent-Schriftfarben fuer "Vorher"/"Nachher"-Labels
+//   * Mix-Quelle in SeverityBg
+function SeverityAccent(Severity: TFindingSeverity): TColor;
+
+// Themed Severity-Hintergrundfarbe. Mischt einen kleinen Anteil
+// (TINT_RATIO) der Akzentfarbe in die theme-aufgeloeste Basisfarbe.
+//   ABase = clWindow  -> Default fuer Datentabellen
+//   ABase = clBtnFace -> fuer Chrome-Elemente (z. B. Help-Desc-Label)
+function SeverityBg(Severity: TFindingSeverity;
+  ABase: TColor = clWindow): TColor;
+
+// Lineare Farbmischung. Ratio=0 -> Base, Ratio=1 -> Accent.
+// Loest System-Color-Indices vorher per ColorToRGB auf.
+function BlendColor(Base, Accent: TColor; Ratio: Single): TColor;
+
+implementation
+
+uses
+  Winapi.Windows,
+  uAnalyserPalette;
+
+function SeverityAccent(Severity: TFindingSeverity): TColor;
+begin
+  case Severity of
+    fsError:     Result := ACCENT_ERROR;
+    fsWarning:   Result := ACCENT_WARNING;
+    fsHint:      Result := ACCENT_HINT;
+    fsFileError: Result := ACCENT_FILEERROR;
+  else
+    Result := clNone;
+  end;
+end;
+
+function BlendColor(Base, Accent: TColor; Ratio: Single): TColor;
+var
+  rgbB, rgbA : Cardinal;
+  rB, gB, bB : Integer;
+  rA, gA, bA : Integer;
+  Inv        : Single;
+begin
+  rgbB := ColorToRGB(Base);
+  rgbA := ColorToRGB(Accent);
+  rB := GetRValue(rgbB); gB := GetGValue(rgbB); bB := GetBValue(rgbB);
+  rA := GetRValue(rgbA); gA := GetGValue(rgbA); bA := GetBValue(rgbA);
+  Inv := 1 - Ratio;
+  Result := Winapi.Windows.RGB(
+    Round(rB * Inv + rA * Ratio),
+    Round(gB * Inv + gA * Ratio),
+    Round(bB * Inv + bA * Ratio));
+end;
+
+function SeverityBg(Severity: TFindingSeverity;
+  ABase: TColor): TColor;
+const
+  TINT_RATIO = 0.22; // 22% Akzent eingemischt - sichtbar, nicht aggressiv
+var
+  Base, Accent: TColor;
+begin
+  Accent := SeverityAccent(Severity);
+  if Accent = clNone then Exit(clNone);
+  Base := StyleServices.GetSystemColor(ABase);
+  Result := BlendColor(Base, Accent, TINT_RATIO);
+end;
+
+end.

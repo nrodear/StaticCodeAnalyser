@@ -155,6 +155,8 @@
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
         <DCCReference Include="uTestTAstNode.pas"/>
+        <DCCReference Include="uTestAnalyserChecks.pas"/>
+        <DCCReference Include="uTestPerformance.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

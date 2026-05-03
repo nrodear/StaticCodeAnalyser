@@ -26,7 +26,7 @@ interface
 
 uses
   System.SysUtils, System.StrUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uDetectorUtils;
 
 type
   TLeakDetector2 = class
@@ -61,7 +61,9 @@ implementation
 
 class function TLeakDetector2.IsIdentChar(C: Char): Boolean;
 begin
-  Result := CharInSet(C, ['a'..'z', '0'..'9', '_']);
+  // Delegation auf zentralen Helper. Klassen-Wrapper bleibt erhalten, damit
+  // bestehende Aufrufer in dieser Unit unveraendert bleiben.
+  Result := TDetectorUtils.IsIdentChar(C);
 end;
 
 class function TLeakDetector2.IsWholeWord(const Str, Pattern: string;

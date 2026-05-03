@@ -48,6 +48,81 @@ uses
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
   uSuppression;
 
+type
+  // Run-Methode pro Detektor: einheitliche Signatur, damit alle in einem
+  // Array iteriert werden koennen.
+  TDetectorRun = reference to procedure(Root: TAstNode; const FileName: string;
+    Results: TObjectList<TLeakFinding>);
+  TDetectorEntry = record
+    Name : string;
+    Run  : TDetectorRun;
+    Skip : Boolean;
+  end;
+  // Callbacks fuer den Aufrufer (Logging / Fehler-Reporting), damit
+  // RunAllDetectors selbst kein Wissen ueber LogStream/FileError-Liste hat.
+  TDetectorTimeProc  = reference to procedure(const Name: string; ElapsedMs: Int64);
+  TDetectorErrorProc = reference to procedure(const Name, ErrMsg: string);
+
+procedure RunAllDetectors(Root: TAstNode; const FileName: string;
+  Results: TObjectList<TLeakFinding>; AIncludeUsesCheck: Boolean;
+  AOnTime: TDetectorTimeProc; AOnError: TDetectorErrorProc);
+var
+  Detectors : array of TDetectorEntry;
+  i         : Integer;
+  Watch     : TStopwatch;
+
+  procedure Add(const AName: string; ARun: TDetectorRun);
+  begin
+    SetLength(Detectors, Length(Detectors) + 1);
+    Detectors[High(Detectors)].Name := AName;
+    Detectors[High(Detectors)].Run  := ARun;
+    Detectors[High(Detectors)].Skip := False;
+  end;
+
+begin
+  Add('Leak',            procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLeakDetector2.AnalyzeUnit(R, F, L); end);
+  Add('EmptyExcept',     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TEmptyExceptDetector2.AnalyzeUnit(R, F, L); end);
+  Add('SQLInjection',    procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TSQLInjectionDetector.AnalyzeUnit(R, F, L); end);
+  Add('HardcodedSecret', procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin THardcodedSecretDetector.AnalyzeUnit(R, F, L); end);
+  Add('FormatMismatch',  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TFormatMismatchDetector.AnalyzeUnit(R, F, L); end);
+  Add('UnusedUses',      procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUnusedUsesDetector.AnalyzeUnit(R, F, L); end);
+  Detectors[High(Detectors)].Skip := not AIncludeUsesCheck;
+  Add('NilDeref',        procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TNilDerefDetector.AnalyzeUnit(R, F, L); end);
+  Add('MissingFinally',  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TMissingFinallyDetector.AnalyzeUnit(R, F, L); end);
+  Add('DivByZero',       procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDivByZeroDetector.AnalyzeUnit(R, F, L); end);
+  Add('DeadCode',        procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDeadCodeDetector.AnalyzeUnit(R, F, L); end);
+  Add('LongMethod',      procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLongMethodDetector.AnalyzeUnit(R, F, L); end);
+  Add('LongParamList',   procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLongParamListDetector.AnalyzeUnit(R, F, L); end);
+  Add('MagicNumber',     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TMagicNumberDetector.AnalyzeUnit(R, F, L); end);
+  Add('DuplicateString', procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDuplicateStringDetector.AnalyzeUnit(R, F, L); end);
+  Add('HardcodedPath',   procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin THardcodedPathDetector.AnalyzeUnit(R, F, L); end);
+  Add('DebugOutput',     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDebugOutputDetector.AnalyzeUnit(R, F, L); end);
+  Add('DeepNesting',     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDeepNestingDetector.AnalyzeUnit(R, F, L); end);
+  Add('TodoComment',     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TTodoCommentDetector.AnalyzeUnit(R, F, L); end);
+  Add('EmptyMethod',     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TEmptyMethodDetector.AnalyzeUnit(R, F, L); end);
+  Add('FieldLeak',       procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TFieldLeakDetector.AnalyzeUnit(R, F, L); end);
+  Add('DuplicateBlock',  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDuplicateBlockDetector.AnalyzeUnit(R, F, L); end);
+
+  for i := 0 to High(Detectors) do
+  begin
+    if Detectors[i].Skip then Continue;
+    Watch := TStopwatch.StartNew;
+    try
+      Detectors[i].Run(Root, FileName, Results);
+    except
+      // User-Cancel (EAbort) muss durchgereicht werden, damit die
+      // Schleife in AnalyzeLeaksRecursive abbricht. Ein generischer
+      // Detektor-Fehler hingegen blockiert die anderen Detektoren nicht.
+      on EAbort do raise;
+      on E: Exception do
+        if Assigned(AOnError) then
+          AOnError(Detectors[i].Name, E.Message);
+    end;
+    if Assigned(AOnTime) then
+      AOnTime(Detectors[i].Name, Watch.ElapsedMilliseconds);
+  end;
+end;
+
 { Zählt uses-Items über alle Dateien und liefert Top-N sortiert. }
 
 class procedure TStaticAnalyzer2.ParseFiles(FileList: TStringList;
@@ -274,48 +349,45 @@ begin
         else if Assigned(LogStream) then
           LogLine(Format('  Parse: %d ms', [ElapsedMs]));
 
-        // Detektoren ausfuehren – jeder einzeln geschuetzt, damit ein
+        // Detektoren ausfuehren - jeder einzeln geschuetzt, damit ein
         // fehlerhafter Detektor nicht alle anderen blockiert.
-        for var DetectorIdx := 0 to 20 do
-        begin
-          if (DetectorIdx = 5) and not AIncludeUsesCheck then Continue;
-          Watch := TStopwatch.StartNew;
-          try
-            case DetectorIdx of
-               0: TLeakDetector2.AnalyzeUnit(Root, FileName, Results);
-               1: TEmptyExceptDetector2.AnalyzeUnit(Root, FileName, Results);
-               2: TSQLInjectionDetector.AnalyzeUnit(Root, FileName, Results);
-               3: THardcodedSecretDetector.AnalyzeUnit(Root, FileName, Results);
-               4: TFormatMismatchDetector.AnalyzeUnit(Root, FileName, Results);
-               5: TUnusedUsesDetector.AnalyzeUnit(Root, FileName, Results);
-               6: TNilDerefDetector.AnalyzeUnit(Root, FileName, Results);
-               7: TMissingFinallyDetector.AnalyzeUnit(Root, FileName, Results);
-               8: TDivByZeroDetector.AnalyzeUnit(Root, FileName, Results);
-               9: TDeadCodeDetector.AnalyzeUnit(Root, FileName, Results);
-              10: TLongMethodDetector.AnalyzeUnit(Root, FileName, Results);
-              11: TLongParamListDetector.AnalyzeUnit(Root, FileName, Results);
-              12: TMagicNumberDetector.AnalyzeUnit(Root, FileName, Results);
-              13: TDuplicateStringDetector.AnalyzeUnit(Root, FileName, Results);
-              14: THardcodedPathDetector.AnalyzeUnit(Root, FileName, Results);
-              15: TDebugOutputDetector.AnalyzeUnit(Root, FileName, Results);
-              16: TDeepNestingDetector.AnalyzeUnit(Root, FileName, Results);
-              17: TTodoCommentDetector.AnalyzeUnit(Root, FileName, Results);
-              18: TEmptyMethodDetector.AnalyzeUnit(Root, FileName, Results);
-              19: TFieldLeakDetector.AnalyzeUnit(Root, FileName, Results);
-              20: TDuplicateBlockDetector.AnalyzeUnit(Root, FileName, Results);
-            end;
-          except
-            on E: Exception do
-            begin
-              LogLine(Format('  DETEKTOR %d FEHLER: %s', [DetectorIdx, E.Message]));
-              AddFileError(FileName,
-                Format('Detektor %d fehlgeschlagen: %s', [DetectorIdx, E.Message]));
-            end;
-          end;
-          ElapsedMs := Watch.ElapsedMilliseconds;
-          if ElapsedMs > 500 then
-            LogLine(Format('  Detektor %d: %d ms (langsam!)', [DetectorIdx, ElapsedMs]));
-        end;
+        // Vorher hardcoded 'for DetectorIdx := 0 to 20' + grosse case-Anweisung -
+        // jetzt iterativ ueber RunAllDetectors-Helper. Hinzufuegen eines
+        // Detektors -> nur ein Eintrag in der Helper-Funktion.
+        // Closures captern LogStream/Results/FileName direkt, da nested procs
+        // (LogLine/AddFileError) von anonymen Methoden nicht referenziert
+        // werden duerfen (E2555).
+        var CaptLogStream := LogStream;
+        var CaptResults   := Results;
+        var CaptFileName  := FileName;
+        RunAllDetectors(Root, FileName, Results, AIncludeUsesCheck,
+          procedure(const Name: string; ElapsedMs: Int64) begin
+            if (ElapsedMs > 500) and Assigned(CaptLogStream) then
+              try
+                CaptLogStream.WriteLine(Format('  Detektor %s: %d ms (langsam!)',
+                  [Name, ElapsedMs]));
+                CaptLogStream.Flush;
+              except end;
+          end,
+          procedure(const Name, ErrMsg: string)
+          begin
+            if Assigned(CaptLogStream) then
+              try
+                CaptLogStream.WriteLine(Format('  DETEKTOR %s FEHLER: %s',
+                  [Name, ErrMsg]));
+                CaptLogStream.Flush;
+              except end;
+            // entspricht AddFileError - inlined wegen Capture-Limits
+            var F := TLeakFinding.Create;
+            F.FileName   := CaptFileName;
+            F.MethodName := '';
+            F.LineNumber := '0';
+            F.MissingVar := Format('Detektor %s fehlgeschlagen: %s',
+                                   [Name, ErrMsg]);
+            F.Severity   := lsError;
+            F.Kind       := fkFileReadError;
+            CaptResults.Add(F);
+          end);
       finally
         Root.Free;
       end;

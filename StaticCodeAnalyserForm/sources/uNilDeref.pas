@@ -21,7 +21,7 @@ interface
 
 uses
   System.SysUtils, System.StrUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uDetectorUtils;
 
 type
   TNilDerefDetector = class
@@ -41,22 +41,34 @@ type
 
 implementation
 
-{ Hilfsfunktion: prueft ob in der Bedingung ein Guard fuer varname steht }
+{ Hilfsfunktion: prueft ob in der Bedingung ein Guard fuer varname steht.
+  Verwendet TDetectorUtils.ContainsWholeWordLower fuer korrekte Wortgrenzen -
+  vorher matchten 'assigned MyVar' faelschlich auch 'assigned MyVarOld'. }
 function CondHasGuard(const CondLow, VarLow: string): Boolean;
+const
+  PATTERNS: array[0..7] of string = (
+    // Assigned-Varianten
+    'assigned(%s)',
+    'assigned( %s )',
+    'assigned (%s)',
+    'assigned ( %s )',
+    'assigned %s',
+    // Vergleich mit nil (links und rechts)
+    '%s <> nil',
+    '%s<>nil',
+    'nil <> %s'
+  );
+var
+  Pat: string;
 begin
-  Result :=
-    // Assigned(varname) oder Assigned ( varname )
-    (Pos('assigned ( ' + VarLow + ' )', CondLow) > 0) or
-    (Pos('assigned(' + VarLow + ')', CondLow) > 0) or
-    (Pos('assigned( ' + VarLow + ' )', CondLow) > 0) or
-    (Pos('assigned (' + VarLow + ')', CondLow) > 0) or
-    (Pos('assigned ' + VarLow, CondLow) > 0) or
-    // varname <> nil
-    (Pos(VarLow + ' <> nil', CondLow) > 0) or
-    (Pos(VarLow + '<>nil', CondLow) > 0) or
-    // nil <> varname
-    (Pos('nil <> ' + VarLow, CondLow) > 0) or
-    (Pos('nil<>' + VarLow, CondLow) > 0);
+  Result := False;
+  for Pat in PATTERNS do
+    if TDetectorUtils.ContainsWholeWordLower(Format(Pat, [VarLow]), CondLow) then
+      Exit(True);
+  // Sonderfall ohne Whitespaces - 'nil<>' braucht keine eigene Wortgrenze rechts
+  // weil VarLow direkt folgt; ContainsWholeWord prueft trotzdem den Rand am Ende.
+  if TDetectorUtils.ContainsWholeWordLower('nil<>' + VarLow, CondLow) then
+    Result := True;
 end;
 
 class function TNilDerefDetector.HasGuardingIf(MethodNode: TAstNode;
@@ -86,13 +98,14 @@ end;
 class function TNilDerefDetector.IsNilSafeCall(
   const CallNameLow, VarLow: string): Boolean;
 // .Free und .Destroy sind nil-sicher (TObject.Free prueft Self <> nil)
-// FreeAndNil(varname) ist ebenfalls nil-sicher
+// FreeAndNil(varname) ist ebenfalls nil-sicher.
+// Wortgrenzen wichtig: 'x.free' soll NICHT 'x.freedom' matchen.
 begin
   Result :=
-    (Pos(VarLow + '.free', CallNameLow) > 0) or
-    (Pos(VarLow + '.destroy', CallNameLow) > 0) or
-    (Pos('freeandnil(' + VarLow, CallNameLow) > 0) or
-    (Pos('freeandnil( ' + VarLow, CallNameLow) > 0);
+    TDetectorUtils.ContainsWholeWordLower(VarLow + '.free',         CallNameLow) or
+    TDetectorUtils.ContainsWholeWordLower(VarLow + '.destroy',      CallNameLow) or
+    TDetectorUtils.ContainsWholeWordLower('freeandnil(' + VarLow,   CallNameLow) or
+    TDetectorUtils.ContainsWholeWordLower('freeandnil( ' + VarLow,  CallNameLow);
 end;
 
 class procedure TNilDerefDetector.AnalyzeMethod(MethodNode: TAstNode;

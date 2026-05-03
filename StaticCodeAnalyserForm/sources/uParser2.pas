@@ -382,7 +382,11 @@ begin
   begin
     StartCount := FNextCount;
     T := Tok;
-    if T.Kind in [tkKwType, tkKwVar, tkKwConst,
+    // tkKwType bewusst NICHT in Exit-Liste: lokale/wiederholte 'type'-Keywords
+    // sollen die Section nicht beenden (sonst markiert der Watchdog die Datei
+    // als unvollstaendig). Wird durch den 'not tkIdent' Continue-Branch unten
+    // konsumiert; GuardAdvance garantiert Forward-Progress.
+    if T.Kind in [tkKwVar, tkKwConst,
                   tkKwProcedure, tkKwFunction, tkKwConstructor, tkKwDestructor,
                   tkKwImplementation, tkKwInitialization, tkKwEnd, tkEof] then
       Exit;
@@ -729,8 +733,16 @@ begin
 
       if SecKind = tkKwType then
       begin
-        while not (Tok.Kind in [tkKwVar, tkKwConst, tkKwBegin, tkKwAsm, tkKwEnd, tkEof]) do
+        // Skip-Loop bis zum naechsten Section/Body. Next garantiert
+        // normalerweise Forward-Progress; GuardAdvance ist defensiv falls
+        // Lexer in einem korrupten Zustand stecken bleibt.
+        while not (Tok.Kind in [tkKwVar, tkKwConst, tkKwBegin, tkKwAsm,
+                                 tkKwEnd, tkEof]) do
+        begin
+          var SkipStart := FNextCount;
           Next;
+          GuardAdvance(SkipStart);
+        end;
         Continue;
       end;
 
@@ -1058,10 +1070,21 @@ begin
     if Tok.Kind = tkKwExcept then
     begin
       TryNode := Parent.Add(nkTryExcept, 'try', T.Line, T.Col);
-      // Try-Body-Kinder auf TryNode übertragen
+      // Try-Body-Kinder auf TryNode uebertragen.
+      // Atomar: Liste leeren, OwnsObjects bei Fehler restoren - sonst koennte
+      // ein Crash mitten im Transfer Children weder in TmpBlk noch TryNode
+      // hinterlassen (Leak) oder doppelt-frees verursachen.
       TmpBlk.Children.OwnsObjects := False;
-      for var Ch in TmpBlk.Children do
-        TryNode.AddChild(Ch);
+      try
+        while TmpBlk.Children.Count > 0 do
+        begin
+          TryNode.AddChild(TmpBlk.Children[0]);
+          TmpBlk.Children.Delete(0);
+        end;
+      except
+        TmpBlk.Children.OwnsObjects := True;
+        raise;
+      end;
 
       var ExTok  := Next; // 'except' – Zeile des except-Schlüsselworts
       var ExNode := TryNode.Add(nkExceptBlock, 'except', ExTok.Line, ExTok.Col);
@@ -1100,9 +1123,18 @@ begin
     else if Tok.Kind = tkKwFinally then
     begin
       TryNode := Parent.Add(nkTryFinally, 'try', T.Line, T.Col);
+      // Atomare Children-Uebertragung wie oben (siehe Kommentar TryExcept).
       TmpBlk.Children.OwnsObjects := False;
-      for var Ch in TmpBlk.Children do
-        TryNode.AddChild(Ch);
+      try
+        while TmpBlk.Children.Count > 0 do
+        begin
+          TryNode.AddChild(TmpBlk.Children[0]);
+          TmpBlk.Children.Delete(0);
+        end;
+      except
+        TmpBlk.Children.OwnsObjects := True;
+        raise;
+      end;
 
       var FinTok  := Next; // 'finally' – Zeile des finally-Schlüsselworts
       var FinNode := TryNode.Add(nkFinallyBlock, 'finally', FinTok.Line, FinTok.Col);

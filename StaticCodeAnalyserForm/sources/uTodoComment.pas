@@ -17,7 +17,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uDetectorUtils;
 
 type
   TTodoCommentDetector = class
@@ -33,10 +33,8 @@ implementation
 const
   MARKERS : array[0..3] of string = ('TODO', 'FIXME', 'HACK', 'XXX');
 
-function IsIdentChar(C: Char): Boolean; inline;
-begin
-  Result := CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_']);
-end;
+// IsIdentChar siehe uDetectorUtils.TDetectorUtils.IsIdentChar - lokal entfernt
+// (Duplikat). Aufrufer unten verwenden den Klassen-Helfer direkt.
 
 function FindMarkerInComment(const Line: string;
   CommentStart: Integer; out Marker: string;
@@ -55,14 +53,14 @@ begin
       if SameText(Copy(Line, p, Length(M)), M) then
       begin
         // Wortgrenze links
-        if (p > 1) and IsIdentChar(Line[p - 1]) then
+        if (p > 1) and TDetectorUtils.IsIdentChar(Line[p - 1]) then
         begin
           Inc(p);
           Continue;
         end;
         // Wortgrenze rechts
         pEnd := p + Length(M);
-        if (pEnd <= Length(Line)) and IsIdentChar(Line[pEnd]) then
+        if (pEnd <= Length(Line)) and TDetectorUtils.IsIdentChar(Line[pEnd]) then
         begin
           Inc(p);
           Continue;

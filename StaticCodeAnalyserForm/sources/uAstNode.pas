@@ -139,14 +139,31 @@ begin
 end;
 
 procedure TAstNode.CollectAll(AKind: TNodeKind; const AList: TList<TAstNode>);
+// Iterative Pre-Order-Traversierung mit eigenem Work-Stack.
+// Vorher rekursiv -> Stack-Overflow bei sehr tiefen ASTs (verschachtelte
+// Try/Expression-Baeume in pathologischen Eingaben).
 var
-  Child: TAstNode;
+  Stack : TList<TAstNode>;
+  Cur   : TAstNode;
+  i     : Integer;
 begin
-  for Child in Children do
-  begin
-    if Child.Kind = AKind then
-      AList.Add(Child);
-    Child.CollectAll(AKind, AList);
+  Stack := TList<TAstNode>.Create;
+  try
+    Stack.Add(Self);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack[Stack.Count - 1];
+      Stack.Delete(Stack.Count - 1);
+      // Self ueberspringen, nur Children inspizieren wie zuvor
+      if Cur <> Self then
+        if Cur.Kind = AKind then
+          AList.Add(Cur);
+      // Children in umgekehrter Reihenfolge auf Stack -> Pre-Order links->rechts
+      for i := Cur.Children.Count - 1 downto 0 do
+        Stack.Add(Cur.Children[i]);
+    end;
+  finally
+    Stack.Free;
   end;
 end;
 
@@ -157,18 +174,28 @@ begin
 end;
 
 function TAstNode.FindFirst(AKind: TNodeKind): TAstNode;
+// Iterative Variante - kein Stack-Overflow auf tiefen Baeumen.
 var
-  Child: TAstNode;
+  Stack : TList<TAstNode>;
+  Cur   : TAstNode;
+  i     : Integer;
 begin
-  for Child in Children do
-  begin
-    if Child.Kind = AKind then
-      Exit(Child);
-    Result := Child.FindFirst(AKind);
-    if Assigned(Result) then
-      Exit;
-  end;
   Result := nil;
+  Stack  := TList<TAstNode>.Create;
+  try
+    Stack.Add(Self);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack[Stack.Count - 1];
+      Stack.Delete(Stack.Count - 1);
+      if (Cur <> Self) and (Cur.Kind = AKind) then
+        Exit(Cur);
+      for i := Cur.Children.Count - 1 downto 0 do
+        Stack.Add(Cur.Children[i]);
+    end;
+  finally
+    Stack.Free;
+  end;
 end;
 
 function TAstNode.HasChild(AKind: TNodeKind): Boolean;

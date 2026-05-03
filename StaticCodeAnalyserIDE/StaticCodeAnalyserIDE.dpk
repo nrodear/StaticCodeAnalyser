@@ -36,6 +36,9 @@ requires
 contains
   uIDEExpert in 'uIDEExpert.pas',
   uIDEAnalyserForm in 'uIDEAnalyserForm.pas',
+  uAnalyserPalette in '..\StaticCodeAnalyserForm\sources\uAnalyserPalette.pas',
+  uAnalyserTypes in '..\StaticCodeAnalyserForm\sources\uAnalyserTypes.pas',
+  uAnalyserTheme in '..\StaticCodeAnalyserForm\sources\uAnalyserTheme.pas',
   uSCAConsts in '..\StaticCodeAnalyserForm\sources\uSCAConsts.pas',
   uMethodd12 in '..\StaticCodeAnalyserForm\sources\uMethodd12.pas',
   uRegExMatches in '..\StaticCodeAnalyserForm\sources\uRegExMatches.pas',
@@ -49,6 +52,8 @@ contains
   uParser2 in '..\StaticCodeAnalyserForm\sources\uParser2.pas',
   uLeakDetector2 in '..\StaticCodeAnalyserForm\sources\uLeakDetector2.pas',
   uCodeSmells2 in '..\StaticCodeAnalyserForm\sources\uCodeSmells2.pas',
+  uDetectorUtils in '..\StaticCodeAnalyserForm\sources\uDetectorUtils.pas',
+  uClaudePrompt in '..\StaticCodeAnalyserForm\sources\uClaudePrompt.pas',
   uSQLInjectionScore in '..\StaticCodeAnalyserForm\sources\uSQLInjectionScore.pas',
   uSQLInjection in '..\StaticCodeAnalyserForm\sources\uSQLInjection.pas',
   uHardcodedSecret in '..\StaticCodeAnalyserForm\sources\uHardcodedSecret.pas',

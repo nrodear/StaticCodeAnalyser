@@ -31,7 +31,7 @@ interface
 uses
   System.SysUtils, System.StrUtils, System.Classes,
   System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uDetectorUtils;
 
 type
   TDivByZeroDetector = class
@@ -117,13 +117,18 @@ begin
       if IfN.Line >= BeforeLine then Continue;
       Low := IfN.TypeRef.ToLower;
       if Low = '' then Continue;
-      // Schutz erkannt?
-      if (Pos(VarLow + ' > 0', Low) > 0) or (Pos(VarLow + '>0', Low) > 0) or
-         (Pos(VarLow + ' >= 1', Low) > 0) or
-         (Pos(VarLow + ' <> 0', Low) > 0) or (Pos(VarLow + '<>0', Low) > 0) or
-         (Pos('0 < ' + VarLow, Low) > 0) or (Pos('0<' + VarLow, Low) > 0) or
-         (Pos('0 <> ' + VarLow, Low) > 0) or
-         (Pos(VarLow + ' = 0', Low) > 0) or (Pos(VarLow + '=0', Low) > 0) then
+      // Schutz erkannt? Wortgrenzen-Pruefung verhindert dass z.B. 'myvar > 0'
+      // faelschlich auch 'myvariant' schuetzt.
+      if TDetectorUtils.ContainsWholeWordLower(VarLow + ' > 0',  Low)  or
+         TDetectorUtils.ContainsWholeWordLower(VarLow + '>0',    Low)  or
+         TDetectorUtils.ContainsWholeWordLower(VarLow + ' >= 1', Low)  or
+         TDetectorUtils.ContainsWholeWordLower(VarLow + ' <> 0', Low)  or
+         TDetectorUtils.ContainsWholeWordLower(VarLow + '<>0',   Low)  or
+         TDetectorUtils.ContainsWholeWordLower('0 < '  + VarLow, Low)  or
+         TDetectorUtils.ContainsWholeWordLower('0<'    + VarLow, Low)  or
+         TDetectorUtils.ContainsWholeWordLower('0 <> ' + VarLow, Low)  or
+         TDetectorUtils.ContainsWholeWordLower(VarLow + ' = 0',  Low)  or
+         TDetectorUtils.ContainsWholeWordLower(VarLow + '=0',    Low)  then
         Exit(True);
     end;
   finally

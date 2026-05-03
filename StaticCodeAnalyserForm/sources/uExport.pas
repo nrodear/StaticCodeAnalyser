@@ -111,15 +111,23 @@ begin
 end;
 
 class function TExporter.JsonEscape(const S: string): string;
-// JSON-Escaping: \", \\, \b, \f, \n, \r, \t und \uXXXX fuer Steuerzeichen
+// JSON-Escaping per RFC 8259:
+//   - \", \\, \/, \b, \f, \n, \r, \t spezielle Sequenzen
+//   - U+0000..U+001F UND U+007F (DEL) als \uXXXX
+//   - lone surrogates (U+D800..U+DFFF ohne Pair) als \uXXXX (sonst kein
+//     valides UTF-16 in JSON-Strings)
+//   - alle anderen BMP- und Surrogate-Pair-Codepoints unveraendert
 var
-  Ch: Char;
-  SB: TStringBuilder;
+  i  : Integer;
+  Ch : Char;
+  SB : TStringBuilder;
 begin
   SB := TStringBuilder.Create;
   try
-    for Ch in S do
+    i := 1;
+    while i <= Length(S) do
     begin
+      Ch := S[i];
       case Ch of
         '"' : SB.Append('\"');
         '\' : SB.Append('\\');
@@ -129,11 +137,25 @@ begin
         #12 : SB.Append('\f');
         #13 : SB.Append('\r');
       else
-        if Ord(Ch) < 32 then
+        if (Ord(Ch) < 32) or (Ord(Ch) = 127) then
+          SB.Append(Format('\u%.4x', [Ord(Ch)]))
+        else if (Ord(Ch) >= $D800) and (Ord(Ch) <= $DBFF)
+                and (i < Length(S))
+                and (Ord(S[i + 1]) >= $DC00) and (Ord(S[i + 1]) <= $DFFF) then
+        begin
+          // Gueltiges High/Low-Surrogate-Pair - beide unveraendert ausgeben
+          SB.Append(Ch);
+          SB.Append(S[i + 1]);
+          Inc(i, 2);
+          Continue;
+        end
+        else if (Ord(Ch) >= $D800) and (Ord(Ch) <= $DFFF) then
+          // Lone surrogate - escapen, sonst ungueltiges JSON
           SB.Append(Format('\u%.4x', [Ord(Ch)]))
         else
           SB.Append(Ch);
       end;
+      Inc(i);
     end;
     Result := SB.ToString;
   finally
@@ -235,23 +257,52 @@ begin
 end;
 
 class function TExporter.HtmlEscape(const S: string): string;
+// HTML-Escaping mit Robustheit gegen Steuerzeichen und Lone-Surrogates:
+//   - &, <, >, ", ' (apos auch escapen, sonst gefaehrlich in attribute-Kontext)
+//   - Newline -> <br>, CR ueberspringen
+//   - Tab beibehalten
+//   - andere Steuerzeichen (U+0000..U+001F, U+007F) als &#xx;-NCR
+//   - lone surrogates ersetzen durch U+FFFD (REPLACEMENT CHARACTER)
 var
-  Ch: Char;
-  SB: TStringBuilder;
+  i  : Integer;
+  Ch : Char;
+  SB : TStringBuilder;
 begin
   SB := TStringBuilder.Create;
   try
-    for Ch in S do
+    i := 1;
+    while i <= Length(S) do
+    begin
+      Ch := S[i];
       case Ch of
-        '&' : SB.Append('&amp;');
-        '<' : SB.Append('&lt;');
-        '>' : SB.Append('&gt;');
-        '"' : SB.Append('&quot;');
-        #10 : SB.Append('<br>');
-        #13 : ; // ueberspringen
+        '&'  : SB.Append('&amp;');
+        '<'  : SB.Append('&lt;');
+        '>'  : SB.Append('&gt;');
+        '"'  : SB.Append('&quot;');
+        '''' : SB.Append('&#39;');
+        #9   : SB.Append(#9); // Tab beibehalten
+        #10  : SB.Append('<br>');
+        #13  : ;              // CR ueberspringen
       else
-        SB.Append(Ch);
+        if (Ord(Ch) < 32) or (Ord(Ch) = 127) then
+          SB.Append(Format('&#%d;', [Ord(Ch)]))
+        else if (Ord(Ch) >= $D800) and (Ord(Ch) <= $DBFF)
+                and (i < Length(S))
+                and (Ord(S[i + 1]) >= $DC00) and (Ord(S[i + 1]) <= $DFFF) then
+        begin
+          // Gueltiges Surrogate-Pair - beide unveraendert ausgeben
+          SB.Append(Ch);
+          SB.Append(S[i + 1]);
+          Inc(i, 2);
+          Continue;
+        end
+        else if (Ord(Ch) >= $D800) and (Ord(Ch) <= $DFFF) then
+          SB.Append(#$FFFD) // Lone Surrogate -> Replacement
+        else
+          SB.Append(Ch);
       end;
+      Inc(i);
+    end;
     Result := SB.ToString;
   finally
     SB.Free;
@@ -585,19 +636,15 @@ var
     end;
     Result := TStringList.Create;
     try
-      try
-        Result.LoadFromFile(APath, TEncoding.UTF8);
-      except
-        // Bei Encoding-Fehler ohne Vorgabe versuchen
-        Result.Clear;
-        try
-          Result.LoadFromFile(APath);
-        except
-          FreeAndNil(Result);
-        end;
-      end;
+      Result.LoadFromFile(APath, TEncoding.UTF8);
     except
-      FreeAndNil(Result);
+      // UTF-8 fehlgeschlagen - mit System-Default (ANSI) versuchen
+      Result.Clear;
+      try
+        Result.LoadFromFile(APath);
+      except
+        FreeAndNil(Result);
+      end;
     end;
     // Auch nil ablegen, damit wir nicht jedes Mal neu probieren
     SourceCache.Add(APath, Result);

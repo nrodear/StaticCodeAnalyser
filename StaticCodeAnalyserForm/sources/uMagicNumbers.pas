@@ -10,7 +10,7 @@ unit uMagicNumbers;
 interface
 
 uses
-  System.SysUtils, System.Generics.Collections,
+  System.SysUtils, System.StrUtils, System.Generics.Collections,
   uAstNode, uSCAConsts, uMethodd12;
 
 type
@@ -34,26 +34,65 @@ end;
 
 class function TMagicNumberDetector.ExtractMagicNumber(
   const CondLow: string; out NumStr: string): Boolean;
-// Sucht Vergleichsoperator gefolgt von Zahl: '> 100', '< 50', '>= 5', '<> 42'
+// Sucht Vergleichsoperator gefolgt von Zahl: '> 100', '<50', '(Count>=5)', etc.
+//
+// Vorher: Pos(' ' + Op, CondLow) verlangte ein Leerzeichen vor dem Operator -
+// damit wurde '(Count>100)' uebersehen. Jetzt: explizite Boundary-Pruefung
+// (Whitespace, '(', ',', '[' oder String-Anfang sind erlaubte Vorgaenger).
+//
+// Reihenfolge wichtig: 2-Zeichen-Operatoren (>=, <=, <>) VOR den 1-Zeichen-
+// Operatoren, sonst wird '>=' faelschlich als '>' erkannt.
 const
-  OPS : array[0..7] of string = (
-    '> ', '>= ', '< ', '<= ', '<> ', '= ', '>=', '<='
+  OPS : array[0..5] of string = (
+    '>=', '<=', '<>', '>', '<', '='
   );
+  PRECEDER_CHARS = [' ', #9, '(', ',', '[', #0];
+
+  function IsValidLeftBoundary(P: Integer): Boolean;
+  begin
+    if P <= 1 then Exit(True); // String-Anfang
+    Result := CharInSet(CondLow[P - 1], PRECEDER_CHARS);
+  end;
+
 var
-  Op   : string;
-  p, i : Integer;
+  Op            : string;
+  p, OpEnd, i   : Integer;
+  Digits        : string;
 begin
   Result := False;
   NumStr := '';
 
   for Op in OPS do
   begin
-    p := Pos(' ' + Op, CondLow);
+    p := PosEx(Op, CondLow, 1);
     while p > 0 do
     begin
-      i := p + Length(Op) + 1; // nach " > "
+      // Linke Wortgrenze: vor dem Op darf nichts sein, das den Op zu Teil
+      // eines Bezeichners macht oder zu einem laengeren Op (z.B. '<' in '<>').
+      if not IsValidLeftBoundary(p) then
+      begin
+        p := PosEx(Op, CondLow, p + 1);
+        Continue;
+      end;
+
+      // Wenn 1-Zeichen-Op und das Folgezeichen erweitert ihn zu 2-Zeichen-Op
+      // -> ueberspringen (wird vom anderen Pattern erfasst).
+      OpEnd := p + Length(Op);
+      if (Length(Op) = 1)
+         and (OpEnd <= Length(CondLow))
+         and CharInSet(CondLow[OpEnd], ['=', '>']) then
+      begin
+        p := PosEx(Op, CondLow, p + 1);
+        Continue;
+      end;
+
+      // Optional Whitespace zwischen Op und Zahl ueberspringen
+      i := OpEnd;
+      while (i <= Length(CondLow)) and CharInSet(CondLow[i], [' ', #9]) do
+        Inc(i);
+
       // Optional negatives Vorzeichen
-      var Digits := '';
+      Digits := '';
       if (i <= Length(CondLow)) and (CondLow[i] = '-') then
       begin
         Digits := '-';
@@ -64,15 +103,14 @@ begin
         Digits := Digits + CondLow[i];
         Inc(i);
       end;
+
       // Nur Integer-Zahl, kein Float / Hex
       if (Digits <> '') and (Digits <> '-') and not IsTrivial(Digits) then
       begin
-        // Pruefen ob es nicht Teil eines Bezeichners ist (z.B. > maxInt)
-        // Die Position davor muss ein Leerzeichen sein
         NumStr := Digits;
         Exit(True);
       end;
-      p := Pos(' ' + Op, CondLow, p + 1);
+      p := PosEx(Op, CondLow, p + 1);
     end;
   end;
 end;

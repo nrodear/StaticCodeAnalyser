@@ -44,13 +44,32 @@ const
   );
 
 class function THardcodedSecretDetector.IsSecretName(const Name: string): Boolean;
+// Match nur an "Wortgrenzen" innerhalb des Identifiers - sonst False-Positives
+// wie 'secretary' (enthaelt 'secret') oder 'tokenize' (enthaelt 'token').
+// Erlaubt sind weiterhin:
+//   - Anfang des Identifiers ('password', 'token')
+//   - CamelCase-Boundary ('FPassword' - Match startet bei grossem 'P')
+//   - Snake-Case-Boundary ('user_token' - Match nach '_')
 var
   NameLow : string;
   Kw      : string;
+  p       : Integer;
+  AtBoundary : Boolean;
 begin
   NameLow := Name.ToLower;
   for Kw in SECRET_KW do
-    if Pos(Kw, NameLow) > 0 then Exit(True);
+  begin
+    p := Pos(Kw, NameLow);
+    if p = 0 then Continue;
+    // p ist 1-basiert. Original-Name fuer CamelCase-Detection nutzen.
+    AtBoundary :=
+      (p = 1) or                                     // Identifier-Anfang
+      (Name[p - 1] = '_') or                         // nach Underscore
+      (CharInSet(Name[p], ['A'..'Z'])) or            // CamelCase
+      (not CharInSet(Name[p - 1],                    // sonstige Nicht-Buchstaben
+                     ['A'..'Z', 'a'..'z', '0'..'9']));
+    if AtBoundary then Exit(True);
+  end;
   Result := False;
 end;
 

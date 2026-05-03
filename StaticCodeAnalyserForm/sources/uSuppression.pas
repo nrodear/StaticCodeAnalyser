@@ -70,6 +70,11 @@ begin
   else if Low = 'hardcodedpath'   then Kind := fkHardcodedPath
   else if Low = 'debugoutput'     then Kind := fkDebugOutput
   else if Low = 'deepnesting'     then Kind := fkDeepNesting
+  // Vorher fehlend - dadurch wurden Suppression-Comments fuer diese
+  // 3 Detektoren stumm ignoriert (KindFromName lieferte False).
+  else if Low = 'todocomment'     then Kind := fkTodoComment
+  else if Low = 'emptymethod'     then Kind := fkEmptyMethod
+  else if Low = 'duplicateblock'  then Kind := fkDuplicateBlock
   else Result := False;
 end;
 

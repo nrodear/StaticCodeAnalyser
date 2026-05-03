@@ -16,6 +16,8 @@ uses
   uParser2 in 'sources\uParser2.pas',
   uLeakDetector2 in 'sources\uLeakDetector2.pas',
   uCodeSmells2 in 'sources\uCodeSmells2.pas',
+  uDetectorUtils in 'sources\uDetectorUtils.pas',
+  uClaudePrompt in 'sources\uClaudePrompt.pas',
   uSQLInjectionScore in 'sources\uSQLInjectionScore.pas',
   uSQLInjection in 'sources\uSQLInjection.pas',
   uHardcodedSecret in 'sources\uHardcodedSecret.pas',

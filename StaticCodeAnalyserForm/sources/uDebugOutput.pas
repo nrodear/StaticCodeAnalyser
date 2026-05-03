@@ -51,19 +51,25 @@ begin
       begin
         var p := Pos(Kw, NameLow);
         if p = 0 then Continue;
-        // Wortgrenze pruefen: davor darf kein Bezeichner-Zeichen stehen
-        // (sonst matcht 'WriteLn' auch 'MyWriteLn')
+        // Wortgrenze LINKS pruefen: davor darf kein Bezeichner-Zeichen
+        // stehen (sonst matcht 'WriteLn' auch 'MyWriteLn').
+        // Wortgrenze RECHTS ist implizit: alle DEBUG_CALLS-Patterns enden
+        // auf '(' oder ' ' - beides Nicht-Identifier-Chars. Daher kann
+        // 'writeln(' nicht in 'writeln_debug()' matchen (das '_' nach
+        // 'writeln' verhindert den Pos-Match an 'writeln(' bereits).
         if p > 1 then
         begin
           var Prev := NameLow[p - 1];
           if CharInSet(Prev, ['a'..'z', '0'..'9', '_']) then Continue;
         end;
-        // Name extrahieren bis zur Klammer
+        // Name aus dem TATSAECHLICHEN Source extrahieren (vorher: Found
+        // kopierte aus dem Pattern Kw, EndPos wurde gegen Length(Kw)
+        // gemessen statt Length(NameLow) - beides falsch).
         var EndPos := p;
-        while (EndPos <= Length(Kw)) and
-              CharInSet(Kw[EndPos], ['a'..'z']) do
+        while (EndPos <= Length(NameLow)) and
+              CharInSet(NameLow[EndPos], ['a'..'z']) do
           Inc(EndPos);
-        Found := Copy(Kw, 1, Length(Kw) - 1); // ohne '('
+        Found := Copy(NameLow, p, EndPos - p);
         Break;
       end;
 
