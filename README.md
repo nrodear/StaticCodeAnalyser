@@ -383,3 +383,13 @@ Konvention: `README.md` ist breit, die anderen zwei sind tief und auf
 einen Aspekt fokussiert. Wenn du eine bestehende Section in `README.md`
 zu groß findest, wird sie typischerweise in eine eigene Spezial-Datei
 ausgelagert (so wie es mit dem Branch-Changes-Teil passiert ist).
+
+---
+
+## Unterstützen
+
+Wenn dir das Plugin Zeit spart, freue ich mich über einen Kaffee:
+
+[![Donate via PayPal](https://img.shields.io/badge/PayPal-Donate-blue?logo=paypal&style=flat-square)](https://paypal.me/nrodear)
+
+Direktlink: <https://paypal.me/nrodear>
