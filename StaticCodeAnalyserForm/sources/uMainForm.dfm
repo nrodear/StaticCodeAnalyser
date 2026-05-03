@@ -44,7 +44,7 @@ object Form2: TForm2
         616
         41)
       object Button6: TButton
-        Left = 287
+        Left = 283
         Top = 6
         Width = 130
         Height = 25
@@ -55,7 +55,7 @@ object Form2: TForm2
         ExplicitLeft = 289
       end
       object Button7: TButton
-        Left = 151
+        Left = 147
         Top = 6
         Width = 130
         Height = 25
@@ -63,9 +63,10 @@ object Form2: TForm2
         Caption = 'Analyse file'
         TabOrder = 3
         OnClick = Button7Click
+        ExplicitLeft = 151
       end
       object Button4: TButton
-        Left = 423
+        Left = 419
         Top = 6
         Width = 75
         Height = 25
@@ -76,7 +77,7 @@ object Form2: TForm2
         ExplicitLeft = 425
       end
       object Button1: TButton
-        Left = 518
+        Left = 514
         Top = 6
         Width = 83
         Height = 25
@@ -102,14 +103,14 @@ object Form2: TForm2
       object Label1: TLabel
         Left = 16
         Top = 20
-        Width = 64
+        Width = 67
         Height = 15
         Caption = 'Project path:'
       end
       object Label3: TLabel
         Left = 16
         Top = 52
-        Width = 72
+        Width = 54
         Height = 15
         Caption = 'Save path:'
       end
