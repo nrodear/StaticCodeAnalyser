@@ -8,6 +8,8 @@ Status: ✅ implementiert | 🟡 teilweise | 🔲 offen
 
 **Zusammenfassung:** 17 / 50 vollständig + 1 teilweise + 3 Bonus-Detektoren = 21 Detektoren.
 
+🇬🇧 [English version](DETECTORS.md)
+
 ---
 
 ## 🔴 Blocker (5)

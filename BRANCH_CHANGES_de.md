@@ -3,6 +3,8 @@
 Sonar-inspirierter statischer Code-Analyser fuer Delphi/Object-Pascal-Code.
 Findet Memory-Leaks, Code-Smells, Sicherheitsluecken und Wartbarkeits-Probleme.
 
+🇬🇧 [English version](BRANCH_CHANGES.md)
+
 Das Repository enthaelt zwei Komponenten:
 
 | Komponente | Zweck | Pfad |
@@ -14,7 +16,7 @@ Das Repository enthaelt zwei Komponenten:
 
 ## Features auf einen Blick
 
-- **21 implementierte Detektoren** aus dem Sonar-Pruefkatalog (siehe [`DETECTORS.md`](DETECTORS.md))
+- **21 implementierte Detektoren** aus dem Sonar-Pruefkatalog (siehe [`DETECTORS_de.md`](DETECTORS_de.md))
 - **Sonar-Style Stat-Tiles** ueber dem Grid: Fehler / Warnungen / Hinweise / Bugs / Code-Duplikate / Code-Quality-Score
 - **Severity-Filter** + **Typ-Filter** (Bug, Code Smell, Vulnerability, Security Hotspot, Code Duplication)
 - **Help-Panel rechts** mit "Vorher/Nachher"-Code-Beispielen je Befund
@@ -66,7 +68,7 @@ Open StaticCodeAnalyserIDE.dproj -> Project -> Install
 ## Detektoren
 
 Vollstaendige Liste mit Status (✅ implementiert / 🟡 teilweise / 🔲 offen)
-in [`DETECTORS.md`](DETECTORS.md).
+in [`DETECTORS_de.md`](DETECTORS_de.md).
 
 Aktueller Stand: **18 vollstaendig + 1 teilweise + 3 Bonus-Detektoren = 21 Detektoren**.
 
@@ -288,5 +290,5 @@ StaticCodeAnalyser/
 │   ├── uIDEAnalyserForm.pas        # Frame + Dockable-Form-Wrapper
 │   └── StaticCodeAnalyserIDE.dpk   # Designtime-Paket
 ├── docs/                           # Mockups, Skizzen
-└── DETECTORS.md                    # Vollstaendiger Detektor-Katalog mit Status
+└── DETECTORS_de.md                 # Vollstaendiger Detektor-Katalog mit Status
 ```

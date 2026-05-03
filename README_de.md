@@ -4,6 +4,8 @@ Statischer Code-Analyser für Delphi 12 als IDE-Expert (dockbares Tool-Fenster).
 Erkennt Speicherlecks, Code-Smells, Sicherheitsrisiken und UI-Smells direkt
 in der IDE — mit AI-gestützter Fix-Hilfe per Knopfdruck.
 
+🇬🇧 [English version](README.md)
+
 ![Static Code Analysis Tool for Delphi im Delphi-IDE-Dock](docs/APP.png)
 
 ---
@@ -46,7 +48,7 @@ Statt das ganze Projekt zu scannen genügt **ein Klick auf `Branch-Changes`**:
 der Analyser holt sich via `git diff` bzw. `svn status` die im Branch
 geänderten `.pas`-Dateien und analysiert nur diese. **~200 ms statt 60 s**
 bei einem typischen Feature-Branch — ideal als Pre-Commit-Check.
-Konfigurierbar via `repo.ini`. Details: [BRANCH_CHANGES.md](BRANCH_CHANGES.md).
+Konfigurierbar via `repo.ini`. Details: [BRANCH_CHANGES_de.md](BRANCH_CHANGES_de.md).
 
 ### 3. AI-Integration (Claude-Prompt per Klick)
 
@@ -69,7 +71,7 @@ vorzuschlagen.
 3. Projektpfad wählen → **Analyse starten**
 
 Für inkrementelle Analyse nur der im Branch geänderten Dateien siehe
-[BRANCH_CHANGES.md](BRANCH_CHANGES.md).
+[BRANCH_CHANGES_de.md](BRANCH_CHANGES_de.md).
 
 ---
 
@@ -104,7 +106,7 @@ Pro Detektor gibt es ein **Vorher/Nachher-Code-Beispiel** im Hilfe-Panel.
 Per Klick auf einen Befund landet ein **Markdown-Block für Claude AI** in
 der Zwischenablage.
 
-Vollständiger Status der 50-Sonar-Pruefregeln: siehe [DETECTORS.md](DETECTORS.md).
+Vollständiger Status der 50-Sonar-Pruefregeln: siehe [DETECTORS_de.md](DETECTORS_de.md).
 
 ---
 
@@ -115,11 +117,11 @@ Vollständiger Status der 50-Sonar-Pruefregeln: siehe [DETECTORS.md](DETECTORS.m
 | Button | Funktion |
 |--------|----------|
 | **Verzeichnis-Auswahl** (`...`) | Projektordner wählen |
-| **Repo...** | `repo.ini` öffnen — VCS-Settings (siehe [BRANCH_CHANGES.md](BRANCH_CHANGES.md)) |
+| **Repo...** | `repo.ini` öffnen — VCS-Settings (siehe [BRANCH_CHANGES_de.md](BRANCH_CHANGES_de.md)) |
 | **Ignore...** | `ignore.txt` öffnen — Datei-/Verzeichnis-Filter |
 | **Analyse starten** | Rekursiver Verzeichnis-Scan |
 | **Aktuelle Datei** | Nur die im Editor offene `.pas` |
-| **Branch-Changes** | Nur via Git/SVN geänderte Dateien (siehe [BRANCH_CHANGES.md](BRANCH_CHANGES.md)) |
+| **Branch-Changes** | Nur via Git/SVN geänderte Dateien (siehe [BRANCH_CHANGES_de.md](BRANCH_CHANGES_de.md)) |
 | **Abbrechen** | Bricht laufende Analyse ab |
 
 ### Checkboxen
@@ -194,7 +196,7 @@ Alle in `%APPDATA%\StaticCodeAnalyser\`:
 | Datei | Inhalt |
 |-------|--------|
 | `ignore.txt` | Datei-/Verzeichnis-Patterns die NICHT analysiert werden |
-| `repo.ini` | VCS-Settings (BaseBranch, git/svn-Pfade) — siehe [BRANCH_CHANGES.md](BRANCH_CHANGES.md) |
+| `repo.ini` | VCS-Settings (BaseBranch, git/svn-Pfade) — siehe [BRANCH_CHANGES_de.md](BRANCH_CHANGES_de.md) |
 | `recent.ini` | Zuletzt verwendete Projektpfade |
 | `StaticCodeAnalyser_scan.log` | Diagnose-Log: welche Datei wie lange gebraucht hat |
 
@@ -317,7 +319,7 @@ Bei einem typischen 1000-Unit-Repo:
 | **Gesamt** | **~30-100 ms** | **~60-90 s** |
 
 **Für inkrementelle Re-Scans nur Branch-Änderungen** statt Voll-Scan
-benutzen — typisch 200 ms bis 3 s. Siehe [BRANCH_CHANGES.md](BRANCH_CHANGES.md).
+benutzen — typisch 200 ms bis 3 s. Siehe [BRANCH_CHANGES_de.md](BRANCH_CHANGES_de.md).
 
 ### Robustheit
 
@@ -375,12 +377,12 @@ inhaltlich, sodass jedes für sich gelesen werden kann:
 
 | Datei | Inhalt | Wann nachschlagen |
 |-------|--------|-------------------|
-| [README.md](README.md) | **Übersichts-Doku** — was das Plugin kann, wie es bedient wird, Architektur, Performance, Suppression, Theme-Integration | Erste Anlaufstelle für alle Themen außer den zwei Spezial-Bereichen unten |
-| [DETECTORS.md](DETECTORS.md) | **Kanonische Detektor-Liste** — alle 50 Sonar-Prüfregeln plus 3 Bonus-Detektoren mit Status (✅ implementiert / 🟡 teilweise / 🔲 offen), Beschreibung und zuständiger Unit | Wenn du wissen willst welche Regel implementiert ist, was sie genau prüft, oder welcher Detektor als nächstes drankommt |
-| [BRANCH_CHANGES.md](BRANCH_CHANGES.md) | **VCS-/Branch-Changes-Feature** — wie der `Branch-Changes`-Button funktioniert, Git/SVN-Setup, Tortoise-Kompatibilität, `repo.ini`-Konfiguration, Troubleshooting für Repo-Erkennung | Wenn der Branch-Changes-Button nicht macht was er soll, oder du das VCS-Setup feinjustieren willst |
+| [README_de.md](README_de.md) | **Übersichts-Doku** — was das Plugin kann, wie es bedient wird, Architektur, Performance, Suppression, Theme-Integration | Erste Anlaufstelle für alle Themen außer den zwei Spezial-Bereichen unten |
+| [DETECTORS_de.md](DETECTORS_de.md) | **Kanonische Detektor-Liste** — alle 50 Sonar-Prüfregeln plus 3 Bonus-Detektoren mit Status (✅ implementiert / 🟡 teilweise / 🔲 offen), Beschreibung und zuständiger Unit | Wenn du wissen willst welche Regel implementiert ist, was sie genau prüft, oder welcher Detektor als nächstes drankommt |
+| [BRANCH_CHANGES_de.md](BRANCH_CHANGES_de.md) | **VCS-/Branch-Changes-Feature** — wie der `Branch-Changes`-Button funktioniert, Git/SVN-Setup, Tortoise-Kompatibilität, `repo.ini`-Konfiguration, Troubleshooting für Repo-Erkennung | Wenn der Branch-Changes-Button nicht macht was er soll, oder du das VCS-Setup feinjustieren willst |
 
-Konvention: `README.md` ist breit, die anderen zwei sind tief und auf
-einen Aspekt fokussiert. Wenn du eine bestehende Section in `README.md`
+Konvention: `README_de.md` ist breit, die anderen zwei sind tief und auf
+einen Aspekt fokussiert. Wenn du eine bestehende Section in `README_de.md`
 zu groß findest, wird sie typischerweise in eine eigene Spezial-Datei
 ausgelagert (so wie es mit dem Branch-Changes-Teil passiert ist).
 
