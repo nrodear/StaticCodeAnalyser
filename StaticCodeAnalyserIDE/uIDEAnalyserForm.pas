@@ -17,7 +17,7 @@ uses
   DesignIntf, ToolsAPI,
   uStaticAnalyzer2, uStaticFiles, uMethodd12, uSCAConsts, uExport,
   uFixHint, uIgnoreList, uVcsChanges, uRepoSettings, uClaudePrompt,
-  uAnalyserPalette, uAnalyserTypes, uAnalyserTheme;
+  uAnalyserPalette, uAnalyserTypes, uAnalyserTheme, uLocalization;
 
 type
   TFilterMode = (fmAll,
@@ -328,7 +328,7 @@ begin
   with FStatusBar.Panels.Add do begin Width := 220; Text := ''; end;            // Progress
   // Letztes Panel - Width = Rest. TStatusBar streckt das letzte Panel
   // automatisch auf alle uebrige Breite wenn Width gross genug ist.
-  with FStatusBar.Panels.Add do begin Width := 5000; Text := 'Bereit.'; end;
+  with FStatusBar.Panels.Add do begin Width := 5000; Text := _('Ready.'); end;
 
   // ---- Fortschrittsbalken (nur waehrend Analyse sichtbar) -----------------
   // Liegt zwischen Top-Panels und Statusbar - alBottom oberhalb der Statusbar.
@@ -354,7 +354,7 @@ begin
 
   LblPath := TLabel.Create(Self);
   LblPath.Parent    := PanelPath;
-  LblPath.Caption   := 'Projektpfad:';
+  LblPath.Caption   := _('Project path:');
   LblPath.Align     := alLeft;
   LblPath.Layout    := tlCenter;
   LblPath.Width     := 78;
@@ -369,7 +369,7 @@ begin
   // Ignore-Liste editieren - oeffnet ignore.txt im Notepad/Default-Editor
   var BtnIgnore := TButton.Create(Self);
   BtnIgnore.Parent  := PanelPath;
-  BtnIgnore.Caption := 'Ignore...';
+  BtnIgnore.Caption := _('Ignore...');
   BtnIgnore.Width   := 60;
   BtnIgnore.Align   := alRight;
   BtnIgnore.Hint    := 'Ignore-Liste oeffnen (welche Dateien NICHT analysiert werden)';
@@ -379,7 +379,7 @@ begin
   // Repo-Settings (BaseBranch, Tortoise-Pfade etc. fuer Branch-Changes)
   var BtnRepo := TButton.Create(Self);
   BtnRepo.Parent  := PanelPath;
-  BtnRepo.Caption := 'Repo...';
+  BtnRepo.Caption := _('Repo...');
   BtnRepo.Width   := 60;
   BtnRepo.Align   := alRight;
   BtnRepo.Hint    := 'Repo-Settings oeffnen (BaseBranch, git/svn-Pfad fuer ' +
@@ -411,7 +411,7 @@ begin
   // Filter-Label
   var LblFilter := TLabel.Create(Self);
   LblFilter.Parent  := PanelButtons;
-  LblFilter.Caption := 'Schweregrad:';
+  LblFilter.Caption := _('Severity:');
   LblFilter.Align   := alLeft;
   LblFilter.Layout  := tlCenter;
   LblFilter.Width   := 76;
@@ -430,38 +430,38 @@ begin
   FFilterCombo.OnChange    := FilterChange;
 
   // Hilfsmethode-Inline ueber Lambdas geht in Delphi nicht - direkt schreiben.
-  FFilterCombo.Items.AddObject('Alle',                  TObject(Ord(fmAll)));
-  FFilterCombo.Items.AddObject('Fehler (alle)',         TObject(Ord(fmErrors)));
-  FFilterCombo.Items.AddObject('Warnungen (alle)',      TObject(Ord(fmWarnings)));
-  FFilterCombo.Items.AddObject('Hinweise (alle)',       TObject(Ord(fmHints)));
+  FFilterCombo.Items.AddObject(_('All'),                    TObject(Ord(fmAll)));
+  FFilterCombo.Items.AddObject(_('Errors (all)'),           TObject(Ord(fmErrors)));
+  FFilterCombo.Items.AddObject(_('Warnings (all)'),         TObject(Ord(fmWarnings)));
+  FFilterCombo.Items.AddObject(_('Hints (all)'),            TObject(Ord(fmHints)));
 
-  FFilterCombo.Items.AddObject('--- Fehler ---',        TObject(-1));
-  FFilterCombo.Items.AddObject('SQL Injection',         TObject(Ord(fmSQLInjection)));
-  FFilterCombo.Items.AddObject('Hardcoded Secrets',     TObject(Ord(fmHardcodedSecret)));
-  FFilterCombo.Items.AddObject('Format()',              TObject(Ord(fmFormatMismatch)));
-  FFilterCombo.Items.AddObject('Nil-Deref',             TObject(Ord(fmNilDeref)));
-  FFilterCombo.Items.AddObject('Div by Zero',           TObject(Ord(fmDivByZero)));
+  FFilterCombo.Items.AddObject(_('--- Errors ---'),         TObject(-1));
+  FFilterCombo.Items.AddObject(_('SQL Injection'),          TObject(Ord(fmSQLInjection)));
+  FFilterCombo.Items.AddObject(_('Hardcoded Secrets'),      TObject(Ord(fmHardcodedSecret)));
+  FFilterCombo.Items.AddObject(_('Format()'),               TObject(Ord(fmFormatMismatch)));
+  FFilterCombo.Items.AddObject(_('Nil-Deref'),              TObject(Ord(fmNilDeref)));
+  FFilterCombo.Items.AddObject(_('Div by Zero'),            TObject(Ord(fmDivByZero)));
 
-  FFilterCombo.Items.AddObject('--- Warnungen ---',     TObject(-1));
-  FFilterCombo.Items.AddObject('Leere Exceptions',      TObject(Ord(fmEmptyExcept)));
-  FFilterCombo.Items.AddObject('Missing Finally',       TObject(Ord(fmMissingFinally)));
-  FFilterCombo.Items.AddObject('Toter Code',            TObject(Ord(fmDeadCode)));
-  FFilterCombo.Items.AddObject('Ungenutzte Uses',       TObject(Ord(fmUnusedUses)));
-  FFilterCombo.Items.AddObject('Debug-Ausgabe',         TObject(Ord(fmDebugOutput)));
-  FFilterCombo.Items.AddObject('Hardkodierter Pfad',    TObject(Ord(fmHardcodedPath)));
-  FFilterCombo.Items.AddObject('Lesefehler',            TObject(Ord(fmFileReadError)));
+  FFilterCombo.Items.AddObject(_('--- Warnings ---'),       TObject(-1));
+  FFilterCombo.Items.AddObject(_('Empty Except'),           TObject(Ord(fmEmptyExcept)));
+  FFilterCombo.Items.AddObject(_('Missing Finally'),        TObject(Ord(fmMissingFinally)));
+  FFilterCombo.Items.AddObject(_('Dead Code'),              TObject(Ord(fmDeadCode)));
+  FFilterCombo.Items.AddObject(_('Unused Uses'),            TObject(Ord(fmUnusedUses)));
+  FFilterCombo.Items.AddObject(_('Debug Output'),           TObject(Ord(fmDebugOutput)));
+  FFilterCombo.Items.AddObject(_('Hardcoded Path'),         TObject(Ord(fmHardcodedPath)));
+  FFilterCombo.Items.AddObject(_('Read Error'),             TObject(Ord(fmFileReadError)));
 
-  FFilterCombo.Items.AddObject('--- Hinweise ---',      TObject(-1));
-  FFilterCombo.Items.AddObject('Lange Methode',         TObject(Ord(fmLongMethod)));
-  FFilterCombo.Items.AddObject('Viele Parameter',       TObject(Ord(fmLongParamList)));
-  FFilterCombo.Items.AddObject('Magic Number',          TObject(Ord(fmMagicNumber)));
-  FFilterCombo.Items.AddObject('Doppelte Strings',      TObject(Ord(fmDuplicateString)));
-  FFilterCombo.Items.AddObject('Doppelte Code-Bloecke', TObject(Ord(fmDuplicateBlock)));
-  FFilterCombo.Items.AddObject('Tiefe Verschachtelung', TObject(Ord(fmDeepNesting)));
-  FFilterCombo.Items.AddObject('TODO/FIXME',            TObject(Ord(fmTodoComment)));
-  FFilterCombo.Items.AddObject('Leere Methoden',        TObject(Ord(fmEmptyMethod)));
+  FFilterCombo.Items.AddObject(_('--- Hints ---'),          TObject(-1));
+  FFilterCombo.Items.AddObject(_('Long Method'),            TObject(Ord(fmLongMethod)));
+  FFilterCombo.Items.AddObject(_('Many Parameters'),        TObject(Ord(fmLongParamList)));
+  FFilterCombo.Items.AddObject(_('Magic Number'),           TObject(Ord(fmMagicNumber)));
+  FFilterCombo.Items.AddObject(_('Duplicate Strings'),      TObject(Ord(fmDuplicateString)));
+  FFilterCombo.Items.AddObject(_('Duplicate Code Blocks'),  TObject(Ord(fmDuplicateBlock)));
+  FFilterCombo.Items.AddObject(_('Deep Nesting'),           TObject(Ord(fmDeepNesting)));
+  FFilterCombo.Items.AddObject(_('TODO/FIXME'),             TObject(Ord(fmTodoComment)));
+  FFilterCombo.Items.AddObject(_('Empty Methods'),          TObject(Ord(fmEmptyMethod)));
 
-  FFilterCombo.ItemIndex := 0; // "Alle"
+  FFilterCombo.ItemIndex := 0; // "All"
 
   // Trennabstand
   var SepF1 := TPanel.Create(Self);
@@ -474,7 +474,7 @@ begin
   // ---- Zweiter Filter: Typ (Sonar-Kategorie) ----
   var LblType := TLabel.Create(Self);
   LblType.Parent  := PanelButtons;
-  LblType.Caption := 'Typ:';
+  LblType.Caption := _('Type:');
   LblType.Align   := alLeft;
   LblType.Layout  := tlCenter;
   LblType.Width   := 28;
@@ -488,7 +488,7 @@ begin
   FTypeCombo.Font.Size   := 6;
   FTypeCombo.ParentFont  := False;
   FTypeCombo.OnChange    := TypeFilterChange;
-  FTypeCombo.Items.Add('Alle');
+  FTypeCombo.Items.Add(_('All'));
   FTypeCombo.Items.Add('Bug');
   FTypeCombo.Items.Add('Code Smell');
   FTypeCombo.Items.Add('Vulnerability');
@@ -508,32 +508,32 @@ begin
   // Checkbox: Uses-Check optional aktivieren (default: aus)
   FChkUsesCheck := TCheckBox.Create(Self);
   FChkUsesCheck.Parent      := PanelButtons;
-  FChkUsesCheck.Caption     := 'mit uses check';
+  FChkUsesCheck.Caption     := _('with uses check');
   FChkUsesCheck.Width       := 110;
   FChkUsesCheck.Align       := alLeft;
   FChkUsesCheck.Checked     := False;
   FChkUsesCheck.ParentFont  := False;
   FChkUsesCheck.Font.Name   := 'Segoe UI';
   FChkUsesCheck.Font.Size   := 6;
-  FChkUsesCheck.Hint        := 'Aktiviert die Pruefung auf ungenutzte uses-Eintraege ' +
-                               '(kann false positives produzieren)';
+  FChkUsesCheck.Hint        := _('Enables the check for unused uses entries ' +
+                                 '(can produce false positives)');
   FChkUsesCheck.ShowHint    := True;
 
   // Checkbox: Tests einbeziehen (default: aus - Tests werden ausgeschlossen)
   FChkIncludeTests := TCheckBox.Create(Self);
   FChkIncludeTests.Parent      := PanelButtons;
-  FChkIncludeTests.Caption     := 'Tests einschliessen';
+  FChkIncludeTests.Caption     := _('Include tests');
   FChkIncludeTests.Width       := 130;
   FChkIncludeTests.Align       := alLeft;
   FChkIncludeTests.Checked     := False;
   FChkIncludeTests.ParentFont  := False;
   FChkIncludeTests.Font.Name   := 'Segoe UI';
   FChkIncludeTests.Font.Size   := 6;
-  FChkIncludeTests.Hint        :=
-    'Wenn aktiviert: DUnit/DUnitX-Tests (uTest*.pas, *_Tests.pas, ' +
-    'TestProject*.dpr, /tests/-Verzeichnisse) werden mit-analysiert. ' +
-    'Default aus - Tests sind selten "schlechter Code", produzieren aber ' +
-    'oft Befunde (LongMethod, MagicNumber).';
+  FChkIncludeTests.Hint        := _(
+    'When enabled: DUnit/DUnitX tests (uTest*.pas, *_Tests.pas, ' +
+    'TestProject*.dpr, /tests/ folders) are also analysed. ' +
+    'Off by default - tests are rarely "bad code" but often produce ' +
+    'noisy findings (LongMethod, MagicNumber).');
   FChkIncludeTests.ShowHint    := True;
 
   // ---- Zeile: Aktionen + Suche + Export ----
@@ -548,7 +548,7 @@ begin
   // Action-Buttons links - "Analyse starten" zuerst (links), dann "Aktuelle Datei"
   BtnAnalyse := TButton.Create(Self);
   BtnAnalyse.Parent   := PanelSearch;
-  BtnAnalyse.Caption  := 'Analyse starten';
+  BtnAnalyse.Caption  := _('Start analysis');
   BtnAnalyse.Width    := 100;
   BtnAnalyse.Align    := alLeft;
   BtnAnalyse.OnClick  := AnalyseClick;
@@ -556,7 +556,7 @@ begin
 
   FBtnAnalyseCurrent := TButton.Create(Self);
   FBtnAnalyseCurrent.Parent   := PanelSearch;
-  FBtnAnalyseCurrent.Caption  := 'Aktuelle Datei';
+  FBtnAnalyseCurrent.Caption  := _('Current file');
   FBtnAnalyseCurrent.Width    := 90;
   FBtnAnalyseCurrent.Align    := alLeft;
   FBtnAnalyseCurrent.OnClick  := AnalyseCurrentFileClick;
@@ -564,13 +564,13 @@ begin
   // Branch-Aenderungen via Git/SVN: nur die im Branch geaenderten .pas-Files
   FBtnAnalyseChanged := TButton.Create(Self);
   FBtnAnalyseChanged.Parent   := PanelSearch;
-  FBtnAnalyseChanged.Caption  := 'Branch-Changes';
+  FBtnAnalyseChanged.Caption  := _('Branch-Changes');
   FBtnAnalyseChanged.Width    := 120;
   FBtnAnalyseChanged.Align    := alLeft;
   FBtnAnalyseChanged.OnClick  := AnalyseChangedFilesClick;
-  FBtnAnalyseChanged.Hint     :=
-    'Analysiert nur Dateien die im aktuellen Branch geaendert wurden ' +
-    '(Git: Branch-Diff vs main + Working Tree; SVN: Working Copy)';
+  FBtnAnalyseChanged.Hint     := _(
+    'Analyses only files changed in the current branch ' +
+    '(Git: branch diff vs main + working tree; SVN: working copy)');
   FBtnAnalyseChanged.ShowHint := True;
 
   // Cancel-Button - immer sichtbar (verhindert Layout-Sprung beim
@@ -579,7 +579,7 @@ begin
   // links optisch entkoppelt.
   FBtnCancel := TButton.Create(Self);
   FBtnCancel.Parent   := PanelSearch;
-  FBtnCancel.Caption  := 'Abbrechen';
+  FBtnCancel.Caption  := _('Cancel');
   FBtnCancel.Width    := 80;
   FBtnCancel.Align    := alRight;
   FBtnCancel.AlignWithMargins := True;
@@ -598,7 +598,7 @@ begin
 
   var LblSearch := TLabel.Create(Self);
   LblSearch.Parent  := PanelSearch;
-  LblSearch.Caption := 'Suche:';
+  LblSearch.Caption := _('Search:');
   LblSearch.Align   := alLeft;
   LblSearch.Layout  := tlCenter;
   LblSearch.Width   := 32;
@@ -619,7 +619,7 @@ begin
 
   var BtnExport := TButton.Create(Self);
   BtnExport.Parent     := PanelSearch;
-  BtnExport.Caption    := 'Export ' + #$25BC; // schwarzes Dreieck nach unten
+  BtnExport.Caption    := _('Export') + ' ' + #$25BC; // schwarzes Dreieck nach unten
   BtnExport.Width      := 80;
   BtnExport.Align      := alRight;
   BtnExport.PopupMenu  := FExportMenu;
@@ -631,7 +631,7 @@ begin
   FSearchEdit := TEdit.Create(Self);
   FSearchEdit.Parent      := PanelSearch;
   FSearchEdit.Align       := alClient;
-  FSearchEdit.TextHint    := 'Datei / Methode / Befund filtern...';
+  FSearchEdit.TextHint    := _('Filter file / method / finding...');
   FSearchEdit.OnChange    := SearchChange;
   FSearchEdit.ParentFont  := False;
   FSearchEdit.Font.Name   := 'Segoe UI';
@@ -695,7 +695,7 @@ begin
   FHelpDescLabel.Font.Color  := clBtnText;
   FHelpDescLabel.Color       := clBtnFace;
   FHelpDescLabel.ParentColor := False;
-  FHelpDescLabel.Caption     := '  Zeile auswaehlen fuer Loesungshinweis';
+  FHelpDescLabel.Caption     := '  ' + _('Select a row to see the fix hint');
 
   var HelpCode := TPanel.Create(Self);
   HelpCode.Parent      := FHelpPanel;
@@ -718,7 +718,7 @@ begin
   LblBefore.Align       := alTop;
   LblBefore.Height      := 14;
   LblBefore.Layout      := tlCenter;
-  LblBefore.Caption     := '  Vorher (Problem)';
+  LblBefore.Caption     := '  ' + _('Before (problem)');
   LblBefore.Font.Name   := 'Segoe UI';
   LblBefore.Font.Size   := 6;
   LblBefore.Font.Style  := [fsBold];
@@ -758,7 +758,7 @@ begin
   LblAfter.Align       := alTop;
   LblAfter.Height      := 14;
   LblAfter.Layout      := tlCenter;
-  LblAfter.Caption     := '  Nachher (Loesung)';
+  LblAfter.Caption     := '  ' + _('After (solution)');
   LblAfter.Font.Name   := 'Segoe UI';
   LblAfter.Font.Size   := 6;
   LblAfter.Font.Style  := [fsBold];
@@ -815,12 +815,12 @@ begin
   FResultGrid.ColWidths[3] := 110;  // Typ (fix)
   FResultGrid.ColWidths[4] := 240;  // Regel/Befund (fuellt Rest per GridResize)
   FResultGrid.ColWidths[5] :=  90;  // Schweregrad (fix)
-  FResultGrid.Cells[0, 0] := 'Datei';
-  FResultGrid.Cells[1, 0] := 'Methode';
-  FResultGrid.Cells[2, 0] := 'Zeile';
-  FResultGrid.Cells[3, 0] := 'Typ';
-  FResultGrid.Cells[4, 0] := 'Regel';
-  FResultGrid.Cells[5, 0] := 'Schweregrad';
+  FResultGrid.Cells[0, 0] := _('File');
+  FResultGrid.Cells[1, 0] := _('Method');
+  FResultGrid.Cells[2, 0] := _('Line');
+  FResultGrid.Cells[3, 0] := _('Type');
+  FResultGrid.Cells[4, 0] := _('Rule');
+  FResultGrid.Cells[5, 0] := _('Severity');
   FResultGrid.OnDrawCell   := GridDrawCell;
   FResultGrid.OnDblClick    := GridDblClick;
   FResultGrid.OnSelectCell  := GridSelectCell;
@@ -1074,14 +1074,16 @@ begin
   // Code Smell und Hotspot bewusst weggelassen - die zaehlen weiterhin in den
   // Quality-Score (siehe UpdateStats), bekommen aber keine eigene Kachel.
   // Umlaute via Codepoint, da .pas-Datei kein UTF-8-BOM hat (#$00E4 = ae).
-  FTileError    := MakeTile(Parent, 'Fehler',                       GLYPH_ERROR,   ICON_ERROR,   TILE_W);
-  FTileWarn     := MakeTile(Parent, 'Warnungen',                    GLYPH_WARN,    ICON_WARN,    TILE_W);
-  FTileHint     := MakeTile(Parent, 'Hinweise',                     GLYPH_INFO,    ICON_INFO,    TILE_W);
-  FTileFileSev  := MakeTile(Parent, 'Lesefehler',                   GLYPH_FILEERR, ICON_FILEERR, TILE_W);
-  FTileBug      := MakeTile(Parent, 'Bugs',                         GLYPH_BUG,     ICON_BUG,     TILE_W);
-  FTileVuln     := MakeTile(Parent, 'Sicherheit',                   GLYPH_VULN,    ICON_VULN,    TILE_W);
-  FTileDup      := MakeTile(Parent, 'Duplikate',                    GLYPH_DUP,     ICON_DUP,     TILE_W);
-  FTileScore    := MakeTile(Parent, 'Codequalit'#$00E4't',          GLYPH_SCORE,   ICON_SCORE,   TILE_W_SCORE);
+  // Tile-Captions ueber _() lokalisierbar. Source-Strings sind Englisch,
+  // dxgettext mappt sie zur Laufzeit auf die aktive Sprache (siehe i18n/).
+  FTileError    := MakeTile(Parent, _('Errors'),       GLYPH_ERROR,   ICON_ERROR,   TILE_W);
+  FTileWarn     := MakeTile(Parent, _('Warnings'),     GLYPH_WARN,    ICON_WARN,    TILE_W);
+  FTileHint     := MakeTile(Parent, _('Hints'),        GLYPH_INFO,    ICON_INFO,    TILE_W);
+  FTileFileSev  := MakeTile(Parent, _('Read errors'),  GLYPH_FILEERR, ICON_FILEERR, TILE_W);
+  FTileBug      := MakeTile(Parent, _('Bugs'),         GLYPH_BUG,     ICON_BUG,     TILE_W);
+  FTileVuln     := MakeTile(Parent, _('Security'),     GLYPH_VULN,    ICON_VULN,    TILE_W);
+  FTileDup      := MakeTile(Parent, _('Duplicates'),   GLYPH_DUP,     ICON_DUP,     TILE_W);
+  FTileScore    := MakeTile(Parent, _('Code Quality'), GLYPH_SCORE,   ICON_SCORE,   TILE_W_SCORE);
 end;
 
 procedure TAnalyserFrame.StatusFindings(const T: string);
@@ -1688,7 +1690,7 @@ begin
   Idx := Row - 1;
   if (Idx < 0) or (Idx >= FDisplayedFindings.Count) then
   begin
-    FHelpDescLabel.Caption    := '  Zeile auswaehlen fuer Loesungshinweis';
+    FHelpDescLabel.Caption    := '  ' + _('Select a row to see the fix hint');
     FHelpDescLabel.Color      := ColorDefault;
     FHelpBefore.Lines.Text    := '';
     FHelpAfter.Lines.Text     := '';
@@ -1700,7 +1702,7 @@ begin
 
   if Hint.Description = '' then
   begin
-    FHelpDescLabel.Caption := '  Kein Loesungshinweis verfuegbar.';
+    FHelpDescLabel.Caption := '  ' + _('No fix hint available.');
     FHelpDescLabel.Color   := ColorDefault;
     FHelpBefore.Lines.Text := '';
     FHelpAfter.Lines.Text  := '';
@@ -1786,7 +1788,7 @@ procedure TAnalyserFrame.AnalyseClick(Sender: TObject);
 begin
   if not TStaticFiles.ValidatePath(FProjectPath.Text) then
   begin
-    ShowMessage('Bitte einen gueltigen Projektpfad angeben.');
+    ShowMessage(_('Please provide a valid project path.'));
     Exit;
   end;
   SaveRecentPath(FProjectPath.Text);
@@ -1938,7 +1940,7 @@ begin
         if Assigned(findings) then
           PopulateFindings(findings, startPath);
         if wasCanc then
-          StatusMode('Analyse abgebrochen');
+          StatusMode(_('Analysis cancelled'));
       finally
         findings.Free;
       end;
@@ -2057,7 +2059,7 @@ begin
     FIgnoreList.SkipTests := not FChkIncludeTests.Checked;
   try
     try
-      StatusMode('Analyse laeuft - Dateien werden gesucht...');
+      StatusMode(_('Analysis running - searching for files...'));
       Application.ProcessMessages;
 
       findings := nil;
@@ -2214,12 +2216,12 @@ begin
 
   if not FileExists(absPath) then
   begin
-    StatusMode('Datei nicht gefunden: ' + absPath);
+    StatusMode(_('File not found: ') + absPath);
     Exit;
   end;
 
   OpenFileAtLine(absPath, lineNo);
-  StatusMode(Format('Geoeffnet: %s  Zeile: %d',
+  StatusMode(Format(_('Opened: %s  Line: %d'),
     [ExtractFileName(absPath), lineNo]));
 end;
 

@@ -219,7 +219,7 @@ begin
       F.MethodName := '';
       F.LineNumber := IntToStr(FirstLine);
       F.MissingVar := Format(
-        'Code-Block (%d Zeilen) %dx im File - Methoden-Extraktion erwaegen',
+        'Code block (%d lines) appears %dx in file - consider extracting a method',
         [MIN_BLOCK_LINES, Pair.Value.Count]);
       F.Severity   := lsHint;
       F.Kind       := fkDuplicateBlock;

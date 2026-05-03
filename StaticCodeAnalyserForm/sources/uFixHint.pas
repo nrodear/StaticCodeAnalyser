@@ -37,7 +37,7 @@ begin
     fkMemoryLeak:
       if Finding.Severity = lsError then
       begin
-        Result.Description := 'Objekt erstellt, aber nie freigegeben (Speicherleck)';
+        Result.Description := 'Object created but never freed (memory leak)';
         Result.Before :=
           'list := TStringList.Create;'#13#10 +
           'list.Add(''Eintrag'');'#13#10 +
@@ -53,7 +53,7 @@ begin
       end
       else if Pos(' - R'#$FC'ckgabewert', Finding.MissingVar) > 0 then
       begin
-        Result.Description := 'Funktionsr'#$FC'ckgabe wird nicht freigegeben';
+        Result.Description := 'Function return value is not freed';
         Result.Before :=
           '// Funktion gibt ein neues Objekt zur'#$FC'ck -'#13#10 +
           '// Aufrufer ist f'#$FC'r die Freigabe zust'#$E4'ndig.'#13#10 +
@@ -73,7 +73,7 @@ begin
       end
       else
       begin
-        Result.Description := 'Free liegt ausserhalb des finally-Blocks';
+        Result.Description := 'Free is outside the finally block';
         Result.Before :=
           'try'#13#10 +
           '  ...code...'#13#10 +
@@ -93,7 +93,7 @@ begin
 
     fkEmptyExcept:
     begin
-      Result.Description := 'Leerer except-Block verschluckt Exceptions';
+      Result.Description := 'Empty except block silently swallows exceptions';
       Result.Before :=
         'try'#13#10 +
         '  DoSomething;'#13#10 +
@@ -113,7 +113,7 @@ begin
 
     fkSQLInjection:
     begin
-      Result.Description := 'SQL-Befehl per "+" aufgebaut - SQL-Injection-Risiko';
+      Result.Description := 'SQL command built with "+" - SQL injection risk';
       Result.Before :=
         'Query.SQL.Text :='#13#10 +
         '  ''SELECT * FROM t'''#13#10 +
@@ -130,7 +130,7 @@ begin
 
     fkHardcodedSecret:
     begin
-      Result.Description := 'Passwort / Token als Literal im Quellcode';
+      Result.Description := 'Password / token as literal in source code';
       Result.Before :=
         'FPassword := ''geheim123'';'#13#10 +
         'FToken    := ''sk-abc-xyz'';'#13#10 +
@@ -148,7 +148,7 @@ begin
 
     fkFormatMismatch:
     begin
-      Result.Description := 'Format()-Platzhalter-Anzahl <> Argument-Anzahl';
+      Result.Description := 'Format() placeholder count <> argument count';
       Result.Before :=
         '// 2 Platzhalter, 1 Argument'#13#10 +
         's := Format('#13#10 +
@@ -167,7 +167,7 @@ begin
 
     fkFileReadError:
     begin
-      Result.Description := 'Datei konnte nicht gelesen oder geparst werden';
+      Result.Description := 'File could not be read or parsed';
       Result.Before :=
         '// Moegliche Ursachen:'#13#10 +
         '// - Unbekannte Datei-Kodierung'#13#10 +
@@ -184,7 +184,7 @@ begin
 
     fkNilDeref:
     begin
-      Result.Description := 'Nil-Dereferenzierung: Zugriff auf moeglicherweise nil-Variable';
+      Result.Description := 'Nil dereference: access to a possibly nil variable';
       Result.Before :=
         'obj := nil;'#13#10 +
         '// ... kein Create ...'#13#10 +
@@ -202,7 +202,7 @@ begin
 
     fkMissingFinally:
     begin
-      Result.Description := 'Create ohne try/finally: Exception kann Free verhindern';
+      Result.Description := 'Create without try/finally: an exception may prevent Free';
       Result.Before :=
         'list := TStringList.Create;'#13#10 +
         'DoWork(list);   // Exception hier'#13#10 +
@@ -218,7 +218,7 @@ begin
 
     fkDivByZero:
     begin
-      Result.Description := 'Division durch Null: EZeroDivide moeglich';
+      Result.Description := 'Division by zero: EZeroDivide possible';
       Result.Before :=
         'function Avg(Sum, Count: Integer): Double;'#13#10 +
         'begin'#13#10 +
@@ -234,7 +234,7 @@ begin
 
     fkDeadCode:
     begin
-      Result.Description := 'Toter Code: Anweisungen nach Exit/raise nie erreichbar';
+      Result.Description := 'Dead code: statements after Exit/raise are unreachable';
       Result.Before :=
         'if Error then'#13#10 +
         'begin'#13#10 +
@@ -253,7 +253,7 @@ begin
 
     fkLongMethod:
     begin
-      Result.Description := 'Methode zu lang - aufteilen erhoeht Lesbarkeit';
+      Result.Description := 'Method too long - splitting improves readability';
       Result.Before :=
         'procedure TFoo.DoEverything;'#13#10 +
         'begin'#13#10 +
@@ -273,7 +273,7 @@ begin
 
     fkLongParamList:
     begin
-      Result.Description := 'Zu viele Parameter - Parameter-Object verwenden';
+      Result.Description := 'Too many parameters - use a parameter object';
       Result.Before :=
         'procedure CreateUser(AName, AEmail,'#13#10 +
         '  APhone, AAddress, ACity,'#13#10 +
@@ -291,7 +291,7 @@ begin
 
     fkMagicNumber:
     begin
-      Result.Description := 'Magic Number - durch benannte Konstante ersetzen';
+      Result.Description := 'Magic number - replace with a named constant';
       Result.Before :=
         'if RetryCount > 100 then'#13#10 +
         '  raise Exception.Create(''Zu viele Versuche'');';
@@ -305,7 +305,7 @@ begin
 
     fkDuplicateString:
     begin
-      Result.Description := 'String-Literal mehrfach - als Konstante extrahieren';
+      Result.Description := 'String literal repeated - extract as a constant';
       Result.Before :=
         'Logger.Warn(''Datenbank-Verbindung verloren'');'#13#10 +
         '// ... 30 Zeilen spaeter ...'#13#10 +
@@ -320,7 +320,7 @@ begin
 
     fkDuplicateBlock:
     begin
-      Result.Description := 'Mehrere identische Code-Bloecke - in Methode extrahieren';
+      Result.Description := 'Multiple identical code blocks - extract to a method';
       Result.Before :=
         '// in TFoo.LoadCustomer:'#13#10 +
         'try Conn.Open;'#13#10 +
@@ -342,7 +342,7 @@ begin
 
     fkHardcodedPath:
     begin
-      Result.Description := 'Hardkodierter Pfad - aus Konfiguration laden';
+      Result.Description := 'Hardcoded path - load from configuration instead';
       Result.Before :=
         'LogFile := ''C:\Logs\app.log'';'#13#10 +
         '// Laeuft nur auf einem Rechner!';
@@ -355,7 +355,7 @@ begin
 
     fkDebugOutput:
     begin
-      Result.Description := 'Debug-Ausgabe in Produktionscode';
+      Result.Description := 'Debug output in production code';
       Result.Before :=
         'procedure TFoo.Bar;'#13#10 +
         'begin'#13#10 +
@@ -373,7 +373,7 @@ begin
 
     fkDeepNesting:
     begin
-      Result.Description := 'Zu tiefe Verschachtelung - Early-Exit oder Methoden-Extraktion';
+      Result.Description := 'Nesting too deep - use early exit or extract a method';
       Result.Before :=
         'if A then'#13#10 +
         '  if B then'#13#10 +
@@ -392,7 +392,7 @@ begin
 
     fkUnusedUses:
     begin
-      Result.Description := 'Uses-Eintrag wird moeglicherweise nicht benoetigt';
+      Result.Description := 'Uses entry may not be needed';
       Result.Before :=
         'uses'#13#10 +
         '  System.SysUtils,'#13#10 +
@@ -413,7 +413,7 @@ begin
 
     fkTodoComment:
     begin
-      Result.Description := 'Offener Marker im Kommentar - vor Release abarbeiten';
+      Result.Description := 'Open marker in comment - resolve before release';
       Result.Before :=
         '// TODO: Tabelle persistieren'#13#10 +
         '// FIXME: race condition bei parallelem Save'#13#10 +
@@ -430,7 +430,7 @@ begin
 
     fkEmptyMethod:
     begin
-      Result.Description := 'Methodenrumpf ist leer - vergessener Stub oder unbeabsichtigt?';
+      Result.Description := 'Method body is empty - forgotten stub or unintentional?';
       Result.Before :=
         'procedure TFoo.DoStuff;'#13#10 +
         'begin'#13#10 +

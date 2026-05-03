@@ -7,7 +7,7 @@ uses
   System.Classes, Vcl.Graphics, System.Generics.Collections,
    Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls,
   Vcl.ComCtrls, Vcl.Grids, System.IniFiles, uStaticAnalyzer, uStaticAnalyzer2,
-  uMethodd12, uSCAConsts, uFixHint, uClaudePrompt,
+  uMethodd12, uSCAConsts, uFixHint, uClaudePrompt, uLocalization,
   Vcl.Controls
  ;
 
@@ -74,11 +74,11 @@ uses
 
 procedure TForm2.FormCreate(Sender: TObject);
 begin
-  ResultGrid.Cells[0, 0] := 'Datei';
-  ResultGrid.Cells[1, 0] := 'Methode';
-  ResultGrid.Cells[2, 0] := 'Zeile';
-  ResultGrid.Cells[3, 0] := 'Detail';
-  ResultGrid.Cells[4, 0] := 'Schweregrad';
+  ResultGrid.Cells[0, 0] := _('File');
+  ResultGrid.Cells[1, 0] := _('Method');
+  ResultGrid.Cells[2, 0] := _('Line');
+  ResultGrid.Cells[3, 0] := _('Detail');
+  ResultGrid.Cells[4, 0] := _('Severity');
   ResultGrid.OnDrawCell := ResultGridDrawCell;
   ResultGrid.OnDblClick := ResultGridDblClick;
   // Owner-list - der Lifetime der TLeakFinding-Instanzen ist an die Form gekoppelt.
@@ -173,7 +173,7 @@ begin
           ResultGrid.Cells[4, i]
         );
     lines.SaveToFile(GetAbsolutePath(Savetofile.Text));
-    StatusBar1.SimpleText := 'Gespeichert: ' + GetAbsolutePath(Savetofile.Text);
+    StatusBar1.SimpleText := _('Saved: ') + GetAbsolutePath(Savetofile.Text);
   finally
     lines.Free;
   end;
@@ -183,7 +183,7 @@ procedure TForm2.Button6Click(Sender: TObject);
 begin
   if not TStaticFiles.ValidatePath(Projectpath.Text) then
   begin
-    ShowMessage('Bitte einen gueltigen Projektpfad angeben.');
+    ShowMessage(_('Please provide a valid project path.'));
     Exit;
   end;
   SaveRecentPath(Projectpath.Text);
@@ -207,8 +207,8 @@ begin
   Result := '';
   Dlg := TOpenDialog.Create(nil);
   try
-    Dlg.Title  := 'Pascal-Datei zur Analyse waehlen';
-    Dlg.Filter := 'Pascal-Datei (*.pas)|*.pas|Alle Dateien|*.*';
+    Dlg.Title  := _('Select Pascal file to analyse');
+    Dlg.Filter := _('Pascal file (*.pas)|*.pas|All files|*.*');
     Dlg.DefaultExt := 'pas';
     // Startverzeichnis aus aktuellem Projektpfad
     if (Projectpath.Text <> '') and DirectoryExists(Projectpath.Text) then
@@ -226,7 +226,7 @@ var
 begin
   Screen.Cursor := crHourglass;
   try
-    StatusBar1.SimpleText := 'Alle Klassen werden geprueft...';
+    StatusBar1.SimpleText := _('Checking all classes...');
     Application.ProcessMessages;
 
     findings := TStaticAnalyzer.AnalyzeAllClassesRecursive(path);
@@ -249,7 +249,7 @@ var
 begin
   if not FileExists(AFilePath) then
   begin
-    ShowMessage('Datei nicht gefunden: ' + AFilePath);
+    ShowMessage(_('File not found: ') + AFilePath);
     Exit;
   end;
 
@@ -258,7 +258,7 @@ begin
   findings := nil;
   Screen.Cursor := crHourglass;
   try
-    StatusBar1.SimpleText := 'Analysiere: ' + ExtractFileName(AFilePath);
+    StatusBar1.SimpleText := _('Analysing: ') + ExtractFileName(AFilePath);
     Application.ProcessMessages;
 
     try
@@ -267,7 +267,7 @@ begin
       except
         on E: Exception do
         begin
-          ShowMessage('Analysefehler: ' + E.Message);
+          ShowMessage(_('Analysis error: ') + E.Message);
           Exit;
         end;
       end;
@@ -308,8 +308,8 @@ begin
 
   if FAllFindings.Count = 0 then
   begin
-    ResultGrid.Cells[0, 1] := 'Keine Befunde.';
-    StatusBar1.SimpleText  := 'Fertig. Keine Befunde gefunden.';
+    ResultGrid.Cells[0, 1] := _('No findings.');
+    StatusBar1.SimpleText  := _('Done. No findings.');
     Exit;
   end;
 
@@ -324,8 +324,8 @@ begin
     ResultGrid.Cells[3, i + 1] := f.MissingVar;
     ResultGrid.Cells[4, i + 1] := f.SeverityText;
   end;
-  StatusBar1.SimpleText := Format('Fertig. %d Befunde. Klick auf Zeile -> ' +
-    'Claude-AI-Prompt in Zwischenablage.', [FAllFindings.Count]);
+  StatusBar1.SimpleText := Format(_('Done. %d findings. Click a row -> ' +
+    'Claude AI prompt on clipboard.'), [FAllFindings.Count]);
 end;
 
 procedure TForm2.ResultGridDblClick(Sender: TObject);
@@ -342,7 +342,7 @@ begin
   absPath := IncludeTrailingPathDelimiter(Projectpath.Text) + relPath;
   if not FileExists(absPath) then
   begin
-    StatusBar1.SimpleText := 'Datei nicht gefunden: ' + absPath;
+    StatusBar1.SimpleText := _('File not found: ') + absPath;
     Exit;
   end;
   ShellExecute(Handle, 'open', PChar(absPath), nil, nil, SW_SHOWNORMAL);
@@ -351,7 +351,7 @@ begin
     Sleep(800); // Delphi IDE Zeit geben, die Datei zu oeffnen
     NavigateDelphiToLine(lineNo);
   end;
-  StatusBar1.SimpleText := Format('Geoeffnet: %s  Zeile: %d', [relPath, lineNo]);
+  StatusBar1.SimpleText := Format(_('Opened: %s  Line: %d'), [relPath, lineNo]);
 end;
 
 procedure TForm2.NavigateDelphiToLine(LineNo: Integer);
@@ -431,7 +431,7 @@ begin
   OpenDialog := TFileOpenDialog.Create(nil);
   try
     OpenDialog.Options := [fdoPickFolders, fdoPathMustExist, fdoForceFileSystem];
-    OpenDialog.Title := 'Ordner auswaehlen';
+    OpenDialog.Title := _('Choose folder');
     if OpenDialog.Execute then
       Result := OpenDialog.FileName;
   finally
@@ -454,7 +454,7 @@ begin
   Result := '';
   OpenDialog := TOpenDialog.Create(nil);
   try
-    OpenDialog.Title := 'Ergebnisse speichern';
+    OpenDialog.Title := _('Save results');
     OpenDialog.Filter := 'CSV Dateien|*.csv|Log Dateien|*.log';
     OpenDialog.FileName := 'analyse_all.csv';
     if OpenDialog.Execute then

@@ -50,7 +50,7 @@ begin
       F.FileName   := FileName;
       F.MethodName := M.Name;
       F.LineNumber := IntToStr(M.Line);
-      F.MissingVar := Format('%d Parameter (Limit: %d)', [ParamCount, MAX_PARAMS]);
+      F.MissingVar := Format('%d parameters (limit: %d)', [ParamCount, MAX_PARAMS]);
       F.Severity   := lsHint;
       F.Kind       := fkLongParamList;
       Results.Add(F);

@@ -47,7 +47,7 @@ begin
       F.FileName   := FileName;
       F.MethodName := MethodNode.Name;
       F.LineNumber := IntToStr(EB.Line);
-      F.MissingVar := 'Leerer except-Block';
+      F.MissingVar := 'Empty except block';
       F.Severity   := lsWarning;
       F.Kind       := fkEmptyExcept;
       Results.Add(F);

@@ -64,7 +64,7 @@ begin
       F.FileName   := FileName;
       F.MethodName := M.Name;
       F.LineNumber := IntToStr(M.Line);
-      F.MissingVar := 'Methodenrumpf ist leer';
+      F.MissingVar := 'Method body is empty';
       F.Severity   := lsHint;
       F.Kind       := fkEmptyMethod;
       Results.Add(F);

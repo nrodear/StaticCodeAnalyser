@@ -125,7 +125,7 @@ begin
     begin
       sf             := TSmellFinding.Create;
       sf.LineNumber  := i + 1;  // 1-basiert
-      sf.Description := 'Leerer except-Block (Exception wird verschluckt)';
+      sf.Description := 'Empty except block (exception is silently swallowed)';
       sf.Severity    := lsWarning;
       results.Add(sf);
     end;

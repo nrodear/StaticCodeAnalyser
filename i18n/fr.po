@@ -1,0 +1,156 @@
+# French translation for Static Code Analysis Tool for Delphi.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Static Code Analysis Tool for Delphi 1.0\n"
+"PO-Revision-Date: 2026-05-03 00:00+0000\n"
+"Language-Team: French <fr@example.org>\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Static Code Analysis Tool for Delphi"
+msgstr "Outil d'analyse de code statique pour Delphi"
+
+# ---- Stat tiles ------------------------------------------------------------
+msgid "Errors"
+msgstr "Erreurs"
+
+msgid "Warnings"
+msgstr "Avertissements"
+
+msgid "Hints"
+msgstr "Conseils"
+
+msgid "Read errors"
+msgstr "Erreurs de lecture"
+
+msgid "Bugs"
+msgstr "Bogues"
+
+msgid "Security"
+msgstr "Sécurité"
+
+msgid "Duplicates"
+msgstr "Doublons"
+
+msgid "Code Quality"
+msgstr "Qualité du code"
+
+# ---- Toolbar ---------------------------------------------------------------
+msgid "Search:"
+msgstr "Recherche :"
+
+msgid "Start analysis"
+msgstr "Démarrer l'analyse"
+
+msgid "Current file"
+msgstr "Fichier courant"
+
+msgid "Branch-Changes"
+msgstr "Modifications de branche"
+
+msgid "Cancel"
+msgstr "Annuler"
+
+msgid "Export"
+msgstr "Exporter"
+
+msgid "Project path:"
+msgstr "Chemin du projet :"
+
+msgid "Save path:"
+msgstr "Chemin de sauvegarde :"
+
+msgid "Repo..."
+msgstr "Dépôt..."
+
+msgid "Ignore..."
+msgstr "Ignorer..."
+
+msgid "Filter file / method / finding..."
+msgstr "Filtrer fichier / méthode / résultat..."
+
+msgid "Include tests"
+msgstr "Inclure les tests"
+
+msgid "with uses check"
+msgstr "avec contrôle des uses"
+
+msgid "Type:"
+msgstr "Type :"
+
+msgid "Severity:"
+msgstr "Sévérité :"
+
+msgid "All"
+msgstr "Tous"
+
+# ---- Grid headers ----------------------------------------------------------
+msgid "File"
+msgstr "Fichier"
+
+msgid "Method"
+msgstr "Méthode"
+
+msgid "Line"
+msgstr "Ligne"
+
+msgid "Rule"
+msgstr "Règle"
+
+# ---- Help panel ------------------------------------------------------------
+msgid "Before (problem)"
+msgstr "Avant (problème)"
+
+msgid "After (solution)"
+msgstr "Après (solution)"
+
+msgid "Select a row to see the fix hint"
+msgstr "Sélectionner une ligne pour voir l'astuce de correction"
+
+msgid "No fix hint available."
+msgstr "Aucune astuce de correction disponible."
+
+# ---- Status bar ------------------------------------------------------------
+msgid "Ready."
+msgstr "Prêt."
+
+msgid "%d / %d findings"
+msgstr "%d / %d résultats"
+
+msgid "Analysis running..."
+msgstr "Analyse en cours..."
+
+msgid "Analysis cancelled"
+msgstr "Analyse annulée"
+
+msgid "Filter: %s"
+msgstr "Filtre : %s"
+
+# ---- Severity labels (UI display) -----------------------------------------
+msgid "Error"
+msgstr "Erreur"
+
+msgid "Warning"
+msgstr "Avertissement"
+
+msgid "Hint"
+msgstr "Conseil"
+
+msgid "Read error"
+msgstr "Erreur de lecture"
+
+# ---- VCS / Branch-Changes messages ----------------------------------------
+msgid "no Git/SVN repository in or above %s"
+msgstr "aucun dépôt Git/SVN dans ou au-dessus de %s"
+
+msgid "no base branch (main/master) found - working tree only"
+msgstr "aucune branche de base (main/master) trouvée - copie de travail uniquement"
+
+msgid "git not found. Install Git for Windows."
+msgstr "git introuvable. Installez Git pour Windows."
+
+msgid "svn not found. Install TortoiseSVN with command line tools."
+msgstr "svn introuvable. Installez TortoiseSVN avec les outils en ligne de commande."

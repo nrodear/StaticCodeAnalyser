@@ -39,6 +39,7 @@ uses
   uTodoComment in 'sources\uTodoComment.pas',
   uEmptyMethod in 'sources\uEmptyMethod.pas',
   uFixHint in 'sources\uFixHint.pas',
+  uLocalization in 'sources\uLocalization.pas',
   uIgnoreList in 'sources\uIgnoreList.pas',
   uFieldLeak in 'sources\uFieldLeak.pas',
   uDuplicateBlock in 'sources\uDuplicateBlock.pas',

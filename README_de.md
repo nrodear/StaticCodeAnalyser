@@ -167,6 +167,68 @@ Beide Totals stimmen mathematisch überein.
 
 ---
 
+## Sprache / Lokalisierung
+
+Die UI-Quellsprache ist **Englisch**. UI-Strings sind mit dem `_('…')`-
+Makro aus `uLocalization.pas` gewrappt, das bei aktivem dxgettext
+(GNU gettext für Delphi) zur Übersetzung weiterleitet.
+
+### Sprache umschalten
+
+| Zustand | Effekt |
+|---------|--------|
+| **Default (kein dxgettext)** | UI zeigt die Quellstrings direkt — Englisch |
+| **dxgettext aktiv, kein `SetLanguage` aufgerufen** | UI folgt System-Locale via `gnugettext.UseLanguageFromSysLocale` |
+| **`uLocalization.SetLanguage('de')`** | UI wechselt auf Deutsch via `i18n/de.po` |
+| **`uLocalization.SetLanguage('fr')`** | UI wechselt auf Französisch via `i18n/fr.po` |
+| **`uLocalization.SetLanguage('en')`** | UI auf Englisch erzwingen |
+
+Sprache beim Start setzen — in `TAnalyserDockableForm.FrameCreated`
+(IDE-Plugin) oder im Standalone-`TForm2.FormCreate` aufrufen:
+
+```pascal
+uses uLocalization;
+
+SetLanguage('de');   // 'de' / 'en' / 'fr' / '' (= System-Default)
+```
+
+### Wo die Übersetzungen liegen
+
+| Pfad | Zweck |
+|------|-------|
+| `i18n/template.pot` | Quell-Template (Englisch) |
+| `i18n/de.po` | Deutsche Übersetzung |
+| `i18n/fr.po` | Französische Übersetzung |
+| `i18n/en.po` | Englischer Identity-Baseline |
+| `locale/<lang>/LC_MESSAGES/default.mo` | Compiled Binary, zur Laufzeit geladen |
+
+Die `.po`-Dateien sind Klartext und Git-freundlich; mit
+[poEdit](https://poedit.net/) oder einem normalen Editor bearbeiten.
+
+### dxgettext aktivieren (einmalig)
+
+Ohne installiertes dxgettext ist der Wrapper Passthrough — jeder `_()`-
+Aufruf gibt den Quellstring unverändert zurück. Die UI bleibt Englisch,
+egal mit welchem Argument `SetLanguage` gerufen wird.
+
+Um echte Übersetzungen zu bekommen:
+
+1. <https://github.com/sjrd/dxgettext> klonen
+2. Den `dxgettext/Source/`-Ordner zu `DCC_UnitSearchPath` von IDE-Plugin
+   und Standalone-EXE hinzufügen
+3. `{$DEFINE USE_GETTEXT}` in der `.dpk` setzen (oder via **Project
+   Options → Conditional Defines**)
+4. Jede `.po` zu `.mo` kompilieren:
+   ```
+   msgfmt i18n/de.po -o locale/de/LC_MESSAGES/default.mo
+   msgfmt i18n/fr.po -o locale/fr/LC_MESSAGES/default.mo
+   ```
+5. Den `locale/`-Ordner neben die BPL/EXE legen
+
+Komplette Schritt-für-Schritt-Anleitung: [I18N.md](I18N.md).
+
+---
+
 ## Theme-Integration
 
 Das Plugin folgt automatisch dem aktiven Delphi-IDE-Theme:

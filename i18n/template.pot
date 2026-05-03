@@ -1,0 +1,172 @@
+# Translation template for Static Code Analysis Tool for Delphi
+# Copyright (C) Static Code Analysis Tool authors
+# This file is distributed under the same license as the project.
+#
+# Generated from source via dxgettext (or compatible xgettext tool):
+#   ggdxgettext -d default ../StaticCodeAnalyserForm/sources/*.pas \
+#                          ../StaticCodeAnalyserIDE/*.pas
+#
+# After regeneration, merge new strings into existing locale files:
+#   msgmerge -U de.po template.pot
+#   msgmerge -U fr.po template.pot
+#
+# Compile to .mo for runtime use:
+#   msgfmt de.po -o ../locale/de/LC_MESSAGES/default.mo
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Static Code Analysis Tool for Delphi 1.0\n"
+"POT-Creation-Date: 2026-05-03 00:00+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+# ---- Window / dock caption -------------------------------------------------
+msgid "Static Code Analysis Tool for Delphi"
+msgstr ""
+
+# ---- Stat tiles ------------------------------------------------------------
+msgid "Errors"
+msgstr ""
+
+msgid "Warnings"
+msgstr ""
+
+msgid "Hints"
+msgstr ""
+
+msgid "Read errors"
+msgstr ""
+
+msgid "Bugs"
+msgstr ""
+
+msgid "Security"
+msgstr ""
+
+msgid "Duplicates"
+msgstr ""
+
+msgid "Code Quality"
+msgstr ""
+
+# ---- Toolbar ---------------------------------------------------------------
+msgid "Search:"
+msgstr ""
+
+msgid "Start analysis"
+msgstr ""
+
+msgid "Current file"
+msgstr ""
+
+msgid "Branch-Changes"
+msgstr ""
+
+msgid "Cancel"
+msgstr ""
+
+msgid "Export"
+msgstr ""
+
+msgid "Project path:"
+msgstr ""
+
+msgid "Save path:"
+msgstr ""
+
+msgid "Repo..."
+msgstr ""
+
+msgid "Ignore..."
+msgstr ""
+
+msgid "Filter file / method / finding..."
+msgstr ""
+
+msgid "Include tests"
+msgstr ""
+
+msgid "with uses check"
+msgstr ""
+
+msgid "Type:"
+msgstr ""
+
+msgid "Severity:"
+msgstr ""
+
+msgid "All"
+msgstr ""
+
+# ---- Grid headers ----------------------------------------------------------
+msgid "File"
+msgstr ""
+
+msgid "Method"
+msgstr ""
+
+msgid "Line"
+msgstr ""
+
+msgid "Rule"
+msgstr ""
+
+# ---- Help panel ------------------------------------------------------------
+msgid "Before (problem)"
+msgstr ""
+
+msgid "After (solution)"
+msgstr ""
+
+msgid "Select a row to see the fix hint"
+msgstr ""
+
+msgid "No fix hint available."
+msgstr ""
+
+# ---- Status bar ------------------------------------------------------------
+msgid "Ready."
+msgstr ""
+
+msgid "%d / %d findings"
+msgstr ""
+
+msgid "Analysis running..."
+msgstr ""
+
+msgid "Analysis cancelled"
+msgstr ""
+
+msgid "Filter: %s"
+msgstr ""
+
+# ---- Severity labels (UI display) -----------------------------------------
+# IMPORTANT: internal logic uses TFindingSeverity enum, not these strings.
+msgid "Error"
+msgstr ""
+
+msgid "Warning"
+msgstr ""
+
+msgid "Hint"
+msgstr ""
+
+msgid "Read error"
+msgstr ""
+
+# ---- VCS / Branch-Changes messages ----------------------------------------
+msgid "no Git/SVN repository in or above %s"
+msgstr ""
+
+msgid "no base branch (main/master) found - working tree only"
+msgstr ""
+
+msgid "git not found. Install Git for Windows."
+msgstr ""
+
+msgid "svn not found. Install TortoiseSVN with command line tools."
+msgstr ""

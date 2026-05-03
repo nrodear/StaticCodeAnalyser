@@ -160,6 +160,7 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\uAnalyserPalette.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\uAnalyserTypes.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\uAnalyserTheme.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\uLocalization.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\uSCAConsts.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\uMethodd12.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\uRegExMatches.pas"/>

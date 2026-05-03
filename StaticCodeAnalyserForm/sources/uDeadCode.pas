@@ -92,7 +92,7 @@ begin
         F.FileName   := FileName;
         F.MethodName := MethodName;
         F.LineNumber := IntToStr(Nxt.Line);
-        F.MissingVar := 'Toter Code nach ' + TermName;
+        F.MissingVar := 'Dead code after ' + TermName;
         F.Severity   := lsWarning;
         F.Kind       := fkDeadCode;
         Results.Add(F);

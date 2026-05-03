@@ -159,11 +159,11 @@ begin
             F.LineNumber := IntToStr(Field.Line);
             if Dtor = nil then
               F.MissingVar := Format(
-                '%s: erzeugt im Konstruktor, aber kein Destruktor vorhanden',
+                '%s: created in constructor but no destructor exists',
                 [Field.Name])
             else
               F.MissingVar := Format(
-                '%s: erzeugt in %s.Create, aber nicht in Destroy freigegeben',
+                '%s: created in %s.Create but not freed in Destroy',
                 [Field.Name, ClassNode.Name]);
             F.Severity   := lsError;
             F.Kind       := fkMemoryLeak;

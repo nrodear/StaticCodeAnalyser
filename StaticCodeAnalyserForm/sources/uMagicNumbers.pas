@@ -137,7 +137,7 @@ begin
         F.FileName   := FileName;
         F.MethodName := '';
         F.LineNumber := IntToStr(IfN.Line);
-        F.MissingVar := Format('Magic Number "%s" in if-Bedingung - Konstante verwenden',
+        F.MissingVar := Format('Magic number "%s" in if condition - use a constant',
                                [NumStr]);
         F.Severity   := lsHint;
         F.Kind       := fkMagicNumber;

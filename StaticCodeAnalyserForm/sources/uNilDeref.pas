@@ -176,7 +176,7 @@ begin
         F.FileName   := FileName;
         F.MethodName := MethodNode.Name;
         F.LineNumber := IntToStr(C.Line);
-        F.MissingVar := NA.Name + ' := nil (Zeile ' + IntToStr(NA.Line) + ')';
+        F.MissingVar := NA.Name + ' := nil (line ' + IntToStr(NA.Line) + ')';
         F.Severity   := lsError;
         F.Kind       := fkNilDeref;
         Results.Add(F);

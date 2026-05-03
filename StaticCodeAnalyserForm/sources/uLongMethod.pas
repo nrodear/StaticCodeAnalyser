@@ -102,7 +102,7 @@ begin
         F.MethodName := M.Name;
         F.LineNumber := IntToStr(M.Line);
         F.MissingVar := Format(
-          '%d Body-Zeilen, %d Anweisungen (Limit: %d / %d)',
+          '%d body lines, %d statements (limit: %d / %d)',
           [Lines, Stmts, MAX_BODY_LINES, MAX_STATEMENTS]);
         F.Severity   := lsHint;
         F.Kind       := fkLongMethod;

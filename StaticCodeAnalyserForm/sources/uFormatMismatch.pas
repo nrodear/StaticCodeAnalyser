@@ -217,7 +217,7 @@ begin
       F.FileName   := FileName;
       F.MethodName := MethodNode.Name;
       F.LineNumber := IntToStr(N.Line);
-      F.MissingVar := Format('Format: %d Platzhalter, %d Argumente',
+      F.MissingVar := Format('Format: %d placeholders, %d arguments',
                              [PlaceCount, ArgCount]);
       F.Severity   := lsError;
       F.Kind       := fkFormatMismatch;

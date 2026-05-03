@@ -110,7 +110,7 @@ begin
         F.MethodName := M.Name;
         F.LineNumber := IntToStr(DeepestLine);
         F.MissingVar := Format(
-          'Tiefe %d (%s ab Zeile %d, Limit: %d)',
+          'Depth %d (%s from line %d, limit: %d)',
           [DeepestDepth, KindName(DeepestKind),
            DeepestLine, MAX_DEPTH]);
         F.Severity   := lsHint;

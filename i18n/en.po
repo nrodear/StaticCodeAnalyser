@@ -1,0 +1,20 @@
+# English translation (source language identity) for Static Code Analysis Tool for Delphi.
+# This file is mostly redundant since the source strings are already in English -
+# kept for consistency and as a "neutral" fallback baseline.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Static Code Analysis Tool for Delphi 1.0\n"
+"PO-Revision-Date: 2026-05-03 00:00+0000\n"
+"Language-Team: English <en@example.org>\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+# Source strings already in English - no translation needed.
+# This file exists so dxgettext can switch to "en" explicitly,
+# bypassing any system-default translations.
+
+msgid "Static Code Analysis Tool for Delphi"
+msgstr "Static Code Analysis Tool for Delphi"

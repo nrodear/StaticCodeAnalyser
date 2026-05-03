@@ -146,7 +146,7 @@ begin
       F.FileName   := FileName;
       F.MethodName := '';
       F.LineNumber := IntToStr(FirstLine[Pair.Key]);
-      F.MissingVar := Format('"%s" %dx - Konstante extrahieren',
+      F.MissingVar := Format('"%s" %dx - extract as a constant',
                              [Display, Cnt]);
       F.Severity   := lsHint;
       F.Kind       := fkDuplicateString;

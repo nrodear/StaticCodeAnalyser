@@ -39,6 +39,7 @@ contains
   uAnalyserPalette in '..\StaticCodeAnalyserForm\sources\uAnalyserPalette.pas',
   uAnalyserTypes in '..\StaticCodeAnalyserForm\sources\uAnalyserTypes.pas',
   uAnalyserTheme in '..\StaticCodeAnalyserForm\sources\uAnalyserTheme.pas',
+  uLocalization in '..\StaticCodeAnalyserForm\sources\uLocalization.pas',
   uSCAConsts in '..\StaticCodeAnalyserForm\sources\uSCAConsts.pas',
   uMethodd12 in '..\StaticCodeAnalyserForm\sources\uMethodd12.pas',
   uRegExMatches in '..\StaticCodeAnalyserForm\sources\uRegExMatches.pas',

@@ -79,7 +79,7 @@ begin
       F.FileName   := FileName;
       F.MethodName := '';
       F.LineNumber := IntToStr(N.Line);
-      F.MissingVar := 'Debug-Ausgabe: ' + Found.Trim;
+      F.MissingVar := 'Debug output: ' + Found.Trim;
       F.Severity   := lsWarning;
       F.Kind       := fkDebugOutput;
       Results.Add(F);

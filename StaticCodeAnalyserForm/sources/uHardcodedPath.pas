@@ -136,7 +136,7 @@ begin
             F.FileName   := FileName;
             F.MethodName := '';
             F.LineNumber := IntToStr(N.Line);
-            F.MissingVar := 'Hardkodierter Pfad: "' + Display + '"';
+            F.MissingVar := 'Hardcoded path: "' + Display + '"';
             F.Severity   := lsWarning;
             F.Kind       := fkHardcodedPath;
             Results.Add(F);

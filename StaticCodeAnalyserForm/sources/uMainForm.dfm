@@ -20,7 +20,7 @@ object Form2: TForm2
     Height = 19
     Panels = <>
     SimplePanel = True
-    SimpleText = 'Bereit.'
+    SimpleText = 'Ready.'
     ExplicitTop = 501
     ExplicitWidth = 620
   end
@@ -49,7 +49,7 @@ object Form2: TForm2
         Width = 130
         Height = 25
         Anchors = [akTop, akRight]
-        Caption = 'Verzeichnis analysieren'
+        Caption = 'Analyse directory'
         TabOrder = 0
         OnClick = Button6Click
         ExplicitLeft = 289
@@ -60,7 +60,7 @@ object Form2: TForm2
         Width = 130
         Height = 25
         Anchors = [akTop, akRight]
-        Caption = 'Datei analysieren'
+        Caption = 'Analyse file'
         TabOrder = 3
         OnClick = Button7Click
       end
@@ -70,7 +70,7 @@ object Form2: TForm2
         Width = 75
         Height = 25
         Anchors = [akTop, akRight]
-        Caption = 'Speichern'
+        Caption = 'Save'
         TabOrder = 1
         OnClick = Button4Click
         ExplicitLeft = 425
@@ -81,7 +81,7 @@ object Form2: TForm2
         Width = 83
         Height = 25
         Anchors = [akTop, akRight]
-        Caption = 'Beenden'
+        Caption = 'Quit'
         TabOrder = 2
         OnClick = Button1Click
         ExplicitLeft = 520
@@ -104,14 +104,14 @@ object Form2: TForm2
         Top = 20
         Width = 64
         Height = 15
-        Caption = 'Projektpfad:'
+        Caption = 'Project path:'
       end
       object Label3: TLabel
         Left = 16
         Top = 52
         Width = 72
         Height = 15
-        Caption = 'Speicherpfad:'
+        Caption = 'Save path:'
       end
       object Projectpath: TComboBox
         Left = 112

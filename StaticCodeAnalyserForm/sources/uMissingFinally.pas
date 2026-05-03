@@ -85,7 +85,7 @@ begin
       F.MethodName := MethodNode.Name;
       F.LineNumber := IntToStr(V.Line);
       if HasExcept then
-        F.MissingVar := V.Name + ' (try/except statt try/finally)'
+        F.MissingVar := V.Name + ' (try/except instead of try/finally)'
       else
         F.MissingVar := V.Name;
       F.Severity   := lsWarning;

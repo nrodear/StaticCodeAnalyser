@@ -382,7 +382,7 @@ begin
             F.FileName   := CaptFileName;
             F.MethodName := '';
             F.LineNumber := '0';
-            F.MissingVar := Format('Detektor %s fehlgeschlagen: %s',
+            F.MissingVar := Format('Detector %s failed: %s',
                                    [Name, ErrMsg]);
             F.Severity   := lsError;
             F.Kind       := fkFileReadError;

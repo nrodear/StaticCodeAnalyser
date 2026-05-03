@@ -170,6 +170,7 @@
         <DCCReference Include="sources\uTodoComment.pas"/>
         <DCCReference Include="sources\uEmptyMethod.pas"/>
         <DCCReference Include="sources\uFixHint.pas"/>
+        <DCCReference Include="sources\uLocalization.pas"/>
         <DCCReference Include="sources\uIgnoreList.pas"/>
         <DCCReference Include="sources\uFieldLeak.pas"/>
         <DCCReference Include="sources\uDuplicateBlock.pas"/>
