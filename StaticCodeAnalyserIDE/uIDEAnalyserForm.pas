@@ -290,6 +290,10 @@ var
   BtnBrowse, BtnAnalyse: TButton;
 begin
   inherited Create(AOwner);
+  // UI auf Deutsch setzen (eingebautes DE-Dictionary in uLocalization).
+  // Englische Source-Strings (mit _() instrumentiert) werden ab jetzt
+  // in der UI auf Deutsch angezeigt.
+  SetLanguage('');
   FThemeNotifierIdx := -1;
   // Frame folgt dem aktiven IDE-Theme: clBtnFace ist der Standard-Chrome-
   // Hintergrund (hell im Light-Theme, dunkel im Dark-Theme, korrekt in

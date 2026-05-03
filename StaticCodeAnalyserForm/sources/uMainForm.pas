@@ -74,6 +74,8 @@ uses
 
 procedure TForm2.FormCreate(Sender: TObject);
 begin
+  // UI auf Deutsch setzen MUSS vor den ersten _()-Aufrufen passieren.
+  SetLanguage('');
   ResultGrid.Cells[0, 0] := _('File');
   ResultGrid.Cells[1, 0] := _('Method');
   ResultGrid.Cells[2, 0] := _('Line');
