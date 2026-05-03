@@ -1,9 +1,11 @@
 # Static Code Analysis Tool for Delphi
 
-A static code analyser for Delphi 12, packaged as an IDE expert with a
-dockable tool window. It catches memory leaks, code smells, security
-risks, and UI smells right inside the IDE — and produces an AI-ready
-fix prompt at the click of a row.
+**Delphi static code analysis tool** and **linter** for **RAD Studio 12 (Athens)** —
+ships as an **IDE plugin** with a dockable tool window plus a **standalone Windows app**.
+AST-based analysis with **21 detectors** for memory leaks, SQL injection, code smells,
+security vulnerabilities and code duplication. Sonar-style classification with a
+Quality Score. One click on a finding copies an AI-ready Markdown fix prompt to the
+clipboard. Open source, MIT-licensed.
 
 🇩🇪 [Deutsche Version](README_de.md)
 

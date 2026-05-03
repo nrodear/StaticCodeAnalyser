@@ -1,8 +1,11 @@
 # Static Code Analysis Tool for Delphi
 
-Statischer Code-Analyser für Delphi 12 als IDE-Expert (dockbares Tool-Fenster).
-Erkennt Speicherlecks, Code-Smells, Sicherheitsrisiken und UI-Smells direkt
-in der IDE — mit AI-gestützter Fix-Hilfe per Knopfdruck.
+**Statisches Code-Analyse-Tool** und **Linter** für **Delphi 12 / RAD Studio (Athens)** —
+als **IDE-Plugin** mit dockbarem Tool-Fenster plus **eigenständige Windows-Anwendung**.
+AST-basierte Analyse mit **21 Detektoren** für Speicherlecks, SQL-Injection,
+Code-Smells, Sicherheitslücken und Code-Duplikate. Sonar-Style-Klassifikation mit
+Quality Score. Ein Klick auf einen Befund kopiert einen AI-fertigen Markdown-Fix-Prompt
+in die Zwischenablage. Open Source, MIT-lizenziert.
 
 🇬🇧 [English version](README.md)
 
