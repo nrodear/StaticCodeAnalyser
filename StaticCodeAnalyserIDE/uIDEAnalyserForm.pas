@@ -1,4 +1,4 @@
-unit uIDEAnalyserForm;
+﻿unit uIDEAnalyserForm;
 
 // Delphi IDE Expert - Analyser als dockbares IDE-Fenster.
 // TAnalyserFrame enthaelt die gesamte UI; TAnalyserDockableForm
@@ -2551,7 +2551,7 @@ end;
 
 function TAnalyserDockableForm.GetCaption: string;
 begin
-  Result := 'Static Code Analysis Tool for Delphi';
+  Result := 'Static Code Analysis';
 end;
 
 function TAnalyserDockableForm.GetIdentifier: string;
@@ -2695,7 +2695,7 @@ begin
   if Assigned(ViewMenu) then
   begin
     Item := TMenuItem.Create(nil);
-    Item.Caption := 'Static Code Analysis Tool for Delphi';
+    Item.Caption := 'Static Code Analysis';
     Item.OnClick := GDockableForm.ViewMenuClick;
     ViewMenu.Add(Item);
     GViewMenuItem := Item;

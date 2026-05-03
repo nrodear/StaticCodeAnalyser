@@ -48,7 +48,7 @@ end;
 
 function TStaticCodeAnalyserExpert.GetName: string;
 begin
-  Result := 'Static Code Analysis Tool for Delphi';
+  Result := 'Static Code Analysis';
 end;
 
 function TStaticCodeAnalyserExpert.GetState: TWizardState;
@@ -63,7 +63,7 @@ end;
 
 function TStaticCodeAnalyserExpert.GetMenuText: string;
 begin
-  Result := 'Static Code Analysis Tool for Delphi';
+  Result := 'Static Code Analysis';
 end;
 
 end.
