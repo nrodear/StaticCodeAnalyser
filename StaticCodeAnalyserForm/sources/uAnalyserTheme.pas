@@ -1,6 +1,6 @@
 unit uAnalyserTheme;
 
-// Theme-Helper fuer den Static Code Analyser.
+// Theme-Helper fuer das Static Code Analysis Tool for Delphi.
 // Aufgabe: Severity-bezogene Farben aus dem aktiven IDE-/VCL-Theme ableiten.
 //
 // Das Modul kennt KEINE Strings - es operiert ausschliesslich auf dem

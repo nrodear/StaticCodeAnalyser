@@ -1,6 +1,6 @@
 unit uAnalyserPalette;
 
-// Zentrale Farbpalette des Static Code Analyser. Alle hartcodierten RGB-
+// Zentrale Farbpalette des Static Code Analysis Tool for Delphi. Alle hartcodierten RGB-
 // Werte aus den Detector-/UI-Units sammeln sich hier.
 //
 // Konventionen:

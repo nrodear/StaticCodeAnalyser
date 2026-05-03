@@ -1,6 +1,6 @@
 ﻿unit uIDEExpert;
 
-// Delphi IDE Expert: registriert "Static Code Analyser" im Tools-Menü
+// Delphi IDE Expert: registriert "Static Code Analysis Tool for Delphi" im Tools-Menü
 
 interface
 
@@ -48,7 +48,7 @@ end;
 
 function TStaticCodeAnalyserExpert.GetName: string;
 begin
-  Result := 'Static Code Analyser';
+  Result := 'Static Code Analysis Tool for Delphi';
 end;
 
 function TStaticCodeAnalyserExpert.GetState: TWizardState;
@@ -63,7 +63,7 @@ end;
 
 function TStaticCodeAnalyserExpert.GetMenuText: string;
 begin
-  Result := 'Static Code Analyser';
+  Result := 'Static Code Analysis Tool for Delphi';
 end;
 
 end.

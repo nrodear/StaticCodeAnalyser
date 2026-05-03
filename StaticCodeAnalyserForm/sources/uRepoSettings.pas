@@ -57,7 +57,7 @@ uses
 
 const
   DEFAULT_INI_CONTENT =
-    '; Static Code Analyser - Repo-Settings'#13#10 +
+    '; Static Code Analysis Tool for Delphi - Repo-Settings'#13#10 +
     '; Wirkt auf den "Branch-Changes"-Button.'#13#10 +
     ''#13#10 +
     '[Repo]'#13#10 +

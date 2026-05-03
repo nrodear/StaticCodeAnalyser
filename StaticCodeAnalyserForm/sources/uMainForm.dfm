@@ -1,7 +1,7 @@
 object Form2: TForm2
   Left = 0
   Top = 0
-  Caption = 'Static Code Analyser'
+  Caption = 'Static Code Analysis Tool for Delphi'
   ClientHeight = 512
   ClientWidth = 618
   Color = clWhite

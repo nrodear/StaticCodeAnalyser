@@ -62,7 +62,7 @@ implementation
 const
   // Default-Inhalt der Ignore-Datei beim ersten Aufruf
   DEFAULT_FILE_CONTENT =
-    '# Static Code Analyser - Ignore-Liste'#13#10 +
+    '# Static Code Analysis Tool for Delphi - Ignore-Liste'#13#10 +
     '# Eine Zeile pro Muster. # am Anfang = Kommentar, leere Zeilen erlaubt.'#13#10 +
     '#'#13#10 +
     '# Beispiele:'#13#10 +

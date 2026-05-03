@@ -1,4 +1,4 @@
-# Detektoren – Sonar-Prüfkatalog für den Static Code Analyser
+# Detektoren – Sonar-Prüfkatalog für das Static Code Analysis Tool for Delphi
 
 Kanonische Liste der unterstützten und geplanten Code-Analyse-Regeln,
 geordnet nach Schweregrad (Blocker → Critical → Major → Minor → Info).

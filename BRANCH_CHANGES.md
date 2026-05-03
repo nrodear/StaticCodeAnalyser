@@ -1,4 +1,4 @@
-# Static Code Analyser
+# Static Code Analysis Tool for Delphi
 
 Sonar-inspirierter statischer Code-Analyser fuer Delphi/Object-Pascal-Code.
 Findet Memory-Leaks, Code-Smells, Sicherheitsluecken und Wartbarkeits-Probleme.
@@ -46,7 +46,7 @@ Open analyser.d12.dproj in Delphi 12 -> Project -> Build
 ### 2. IDE-Plugin — `StaticCodeAnalyserIDE.dpk`
 
 Designtime-Paket mit dockbarem Tool-Fenster. Wird ueber das Menue
-**Tools / Static Code Analyser** oder **Ansicht / Static Code Analyser**
+**Tools / Static Code Analysis Tool for Delphi** oder **Ansicht / Static Code Analysis Tool for Delphi**
 aufgerufen.
 
 Zusaetzliche Funktionen gegenueber Standalone:

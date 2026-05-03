@@ -2545,7 +2545,7 @@ end;
 
 function TAnalyserDockableForm.GetCaption: string;
 begin
-  Result := 'Static Code Analyser';
+  Result := 'Static Code Analysis Tool for Delphi';
 end;
 
 function TAnalyserDockableForm.GetIdentifier: string;
@@ -2689,7 +2689,7 @@ begin
   if Assigned(ViewMenu) then
   begin
     Item := TMenuItem.Create(nil);
-    Item.Caption := 'Static Code Analyser';
+    Item.Caption := 'Static Code Analysis Tool for Delphi';
     Item.OnClick := GDockableForm.ViewMenuClick;
     ViewMenu.Add(Item);
     GViewMenuItem := Item;

@@ -1,10 +1,10 @@
-# StaticCodeAnalyser
+# Static Code Analysis Tool for Delphi
 
 Statischer Code-Analyser für Delphi 12 als IDE-Expert (dockbares Tool-Fenster).
 Erkennt Speicherlecks, Code-Smells, Sicherheitsrisiken und UI-Smells direkt
 in der IDE — mit AI-gestützter Fix-Hilfe per Knopfdruck.
 
-![Static Code Analyser im Delphi-IDE-Dock](docs/APP.png)
+![Static Code Analysis Tool for Delphi im Delphi-IDE-Dock](docs/APP.png)
 
 ---
 
@@ -65,7 +65,7 @@ vorzuschlagen.
    im Project Manager → **Install**, oder Menü **Component → Install Packages**
    → Paket auswählen). Ohne den Install-Schritt bleibt das Plugin nur
    kompiliert, taucht aber nicht im Menü der IDE auf.
-2. In Delphi: **Ansicht → Static Code Analyser** → dockbares Fenster erscheint
+2. In Delphi: **Ansicht → Static Code Analysis Tool for Delphi** → dockbares Fenster erscheint
 3. Projektpfad wählen → **Analyse starten**
 
 Für inkrementelle Analyse nur der im Branch geänderten Dateien siehe
