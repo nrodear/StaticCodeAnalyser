@@ -17,7 +17,8 @@ uses
   DesignIntf, ToolsAPI,
   uStaticAnalyzer2, uStaticFiles, uMethodd12, uSCAConsts, uExport,
   uFixHint, uIgnoreList, uVcsChanges, uRepoSettings, uClaudePrompt,
-  uAnalyserPalette, uAnalyserTypes, uAnalyserTheme, uLocalization;
+  uAnalyserPalette, uAnalyserTypes, uAnalyserTheme, uLocalization,
+  uIDELineHighlighter, uIDEMessages, uIDEEditSubclass;
 
 type
   TFilterMode = (fmAll,
@@ -1310,6 +1311,11 @@ begin
     [FDisplayedFindings.Count, FAllFindings.Count]));
   StatusMode(Format('Filter: %s%s', [FFilterCombo.Text,
     IfThen(searchLow <> '', ', Suche: ' + searchLow, '')]));
+
+  // Messages-Toolbar synchron zum Grid: nur die aktuell gefilterten Befunde
+  // anzeigen. Bei jedem Filter-Change (FilterChange / SearchChange /
+  // TypeFilterChange) landen wir hier - die Pane bleibt damit konsistent.
+  TIDEMessages.ReportFindings(FDisplayedFindings);
 end;
 
 // ---------------------------------------------------------------------------
@@ -1595,6 +1601,23 @@ begin
     FAllFindings.Add(findings[i]);
   UpdateStats;
   ApplyFilter;
+  // Editor-Line-Highlights aktualisieren (aktuell Stub, kein Editor-Painting).
+  if Assigned(GHighlighter) then
+    GHighlighter.SetFindings(FAllFindings);
+  // Hinweis: TIDEMessages.ReportFindings wird in ApplyFilter aufgerufen,
+  // damit nur die GEFILTERTEN Befunde in der Messages-Toolbar landen.
+
+  // Editor-Subclass-Highlighter (Variante 6 - Win32-WindowProc-Hook).
+  // Lazy-Init beim ersten Aufruf, defensiv via try-except umschlossen
+  // damit ein fehlgeschlagener Hook (z.B. Edit-Control nicht gefunden in
+  // einer anderen Delphi-Version) das Plugin nicht zerlegt.
+  try
+    if GEditSubclassMgr = nil then
+      RegisterEditSubclass;
+    GEditSubclassMgr.SetFindings(FAllFindings);
+  except
+    // Subclass-Highlights sind ein "best effort"-Feature.
+  end;
 end;
 
 procedure TAnalyserFrame.UpdateStats;
@@ -2678,6 +2701,12 @@ begin
   // Dockable Form registrieren (fuer Desktop-State-Persistenz)
   NTASvc.RegisterDockableForm(GDockableForm);
 
+  // Custom-Line-Highlighter: erzeugt nur das Singleton, registriert aber
+  // KEINEN IDE-Notifier (das passiert lazy beim ersten SetFindings).
+  // Sofortige Notifier-Registrierung beim Plugin-Load verursacht in
+  // manchen Delphi-12-Builds AV in coreide290.bpl.
+  RegisterLineHighlighter;
+
   // Eintrag im Ansicht-Menue hinzufuegen
   MainMenu := NTASvc.GetMainMenu;
   ViewMenu := nil;
@@ -2720,6 +2749,8 @@ begin
     (BorlandIDEServices as INTAServices).UnregisterDockableForm(GDockableForm);
     GDockableForm := nil;
   end;
+  UnregisterLineHighlighter;
+  UnregisterEditSubclass;
 end;
 
 end.
