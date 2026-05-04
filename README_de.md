@@ -51,7 +51,7 @@ Statt das ganze Projekt zu scannen genügt **ein Klick auf `Branch-Changes`**:
 der Analyser holt sich via `git diff` bzw. `svn status` die im Branch
 geänderten `.pas`-Dateien und analysiert nur diese. **~200 ms statt 60 s**
 bei einem typischen Feature-Branch — ideal als Pre-Commit-Check.
-Konfigurierbar via `repo.ini`. Details: [BRANCH_CHANGES_de.md](BRANCH_CHANGES_de.md).
+Konfigurierbar via `analyser.ini`. Details: [BRANCH_CHANGES_de.md](BRANCH_CHANGES_de.md).
 
 ### 3. AI-Integration (Claude-Prompt per Klick)
 
@@ -102,7 +102,7 @@ Alle Befunde landen in einer der **5 Sonar-Kategorien**:
 | | `TodoComment` (TODO/FIXME/HACK) | Hinweis |
 | | `EmptyMethod` | Hinweis |
 | **Code Duplication** | `DuplicateString` (≥3 mal gleicher Literal) | Hinweis |
-| | `DuplicateBlock` (≥8 Zeilen identischer Code) | Hinweis |
+| | `DuplicateBlock` (≥ `DuplicateBlockMinLines`, default 8 Zeilen identischer Code) | Hinweis |
 | **Lesefehler** | `FileReadError` (Parser hängt / Datei zu groß) | Fehler |
 
 Pro Detektor gibt es ein **Vorher/Nachher-Code-Beispiel** im Hilfe-Panel.
@@ -120,19 +120,20 @@ Vollständiger Status der 50-Sonar-Pruefregeln: siehe [DETECTORS_de.md](DETECTOR
 | Button | Funktion |
 |--------|----------|
 | **Verzeichnis-Auswahl** (`...`) | Projektordner wählen |
-| **Repo...** | `repo.ini` öffnen — VCS-Settings (siehe [BRANCH_CHANGES_de.md](BRANCH_CHANGES_de.md)) |
+| **Einstellungen...** | `analyser.ini` öffnen — VCS-Settings, Custom-LeakyClasses (siehe [BRANCH_CHANGES_de.md](BRANCH_CHANGES_de.md)) |
 | **Ignore...** | `ignore.txt` öffnen — Datei-/Verzeichnis-Filter |
 | **Analyse starten** | Rekursiver Verzeichnis-Scan |
 | **Aktuelle Datei** | Nur die im Editor offene `.pas` |
 | **Branch-Changes** | Nur via Git/SVN geänderte Dateien (siehe [BRANCH_CHANGES_de.md](BRANCH_CHANGES_de.md)) |
 | **Abbrechen** | Bricht laufende Analyse ab |
 
-### Checkboxen
+### Detektor-Konfiguration
 
-| Checkbox | Wirkung |
-|----------|---------|
-| `mit uses check` | Aktiviert `UnusedUses`-Detektor (false-positives möglich, default off) |
-| `Tests einschliessen` | Schließt `uTest*.pas`, `*_Tests.pas`, `TestProject.dpr`, `/tests/`-Verzeichnisse mit ein (default off) |
+In der Toolbar gibt es keine Toggle-Checkboxen mehr — alles optionale
+Detektor-Verhalten wird über `analyser.ini` konfiguriert (siehe
+_Konfigurations-Dateien_ unten). Datei via **Einstellungen…**-Button
+öffnen, anpassen, speichern, **Analyse starten** klicken. Settings
+werden bei jedem Lauf neu geladen, kein IDE-Neustart nötig.
 
 ### Stat-Cards
 
@@ -152,11 +153,11 @@ Beide Totals stimmen mathematisch überein.
 
 | Aktion | Wirkung |
 |--------|---------|
-| **Klick auf Zeile** | Befund als Markdown-Prompt in Zwischenablage (für Claude AI) |
-| **Doppelklick** | Datei in IDE öffnen + zur Befund-Zeile springen |
-| **Hover** | Tooltip mit vollem Datei-Pfad |
+| **Klick auf Zeile** | Befund als Markdown-Prompt in Zwischenablage (für Claude AI) **und** — wenn die Datei in der IDE offen ist — wird ein 3-px-roter Streifen am linken Rand der zugehörigen Zeile im Editor gezeichnet |
+| **Doppelklick** | Datei in IDE öffnen, zur Befund-Zeile springen, Zeilen-Marker setzen |
+| **Hover (Datei-Spalte)** | Tooltip mit vollem Datei-Pfad (100 ms Delay) |
 | **Klick auf Spalten-Header** | Sortierung |
-| **3-px-Indikatorleiste links** | Severity-Akzent (rot/orange/grün/blau) |
+| **3-px-Indikatorleiste links** der Grid-Zeile | Severity-Akzent (rot/orange/grün/blau) |
 
 ### Export
 
@@ -260,10 +261,29 @@ Alle in `%APPDATA%\StaticCodeAnalyser\`:
 
 | Datei | Inhalt |
 |-------|--------|
+| `analyser.ini` | Alle Settings — VCS (BaseBranch, git/svn-Pfade), Detektor-Toggles (`UsesCheck`, `IncludeTests`, `AutoDiscoverClasses`), Custom-`LeakyClasses` / `ExcludeLeakyClasses`, Detektor-Schwellwerte, UI-Sprache. Wird beim ersten Start mit selbst-dokumentierten Kommentaren neben jeder Option angelegt |
 | `ignore.txt` | Datei-/Verzeichnis-Patterns die NICHT analysiert werden |
-| `repo.ini` | VCS-Settings (BaseBranch, git/svn-Pfade) — siehe [BRANCH_CHANGES_de.md](BRANCH_CHANGES_de.md) |
 | `recent.ini` | Zuletzt verwendete Projektpfade |
+| `LeakyClassesDiscover.log` | Output von `AutoDiscoverClasses=1` — gefundene Klassen aufgeteilt in _instantiable_ (haben ctor/dtor oder `Create()`-Aufruf) und _static-only candidates_. Relevante manuell in `LeakyClasses=` von `analyser.ini` übernehmen |
 | `StaticCodeAnalyser_scan.log` | Diagnose-Log: welche Datei wie lange gebraucht hat |
+
+### Detektor-Schwellwerte (alle optional, in `[Detectors]`)
+
+| Key | Default | Wirkung |
+|-----|---------|---------|
+| `LongMethodMaxBodyLines` | 50 | `LongMethod` greift wenn Body-Zeilen UND Statement-Anzahl beide über den Schwellen liegen |
+| `LongMethodMaxStatements` | 30 | (sekundäre Schwelle für `LongMethod`) |
+| `LongParamListMaxParams` | 5 | `> N` Parameter → Refactoring-Hinweis |
+| `DeepNestingMaxDepth` | 4 | `> N` verschachtelte Kontroll-Strukturen |
+| `DuplicateBlockMinLines` | 8 | minimale normalisierte Zeilen-Anzahl für Duplikat-Erkennung |
+| `MaxFileMB` | 5 | größere Dateien werden übersprungen (OOM-Schutz bei generiertem Code) |
+| `MagicNumberTrivials` | `0,1,2,-1,10,100` | Zahlen die NICHT als Magic-Number gemeldet werden |
+| `UsesCheck` | 0 | `UnusedUses`-Detektor (default off — produziert ggf. false positives) |
+| `IncludeTests` | 0 | `uTest*.pas`, `*_Tests.pas`, `TestProject*.dpr`, `/tests/`-Ordner mit-analysieren |
+| `WatchMode` | 0 | **nur IDE-Plugin** — Live-Analyse beim Speichern. Pro offener `.pas`-Datei haengt das Plugin einen `IOTAModuleNotifier`; nach jedem `Strg+S` wird die Datei im Hintergrund-Thread re-analysiert und das Grid aktualisiert sich innerhalb ~50–100 ms. 300 ms Debounce glaettet Save-on-Build-Stuerme. **Wird automatisch aktiviert** (egal was diese INI-Option sagt) wenn Du auf **Aktuelle Datei** klickst — das ist der natural fit fuer Live-Editing |
+| `AutoDiscoverClasses` | 0 | Projekt-AST nach Custom-Klassen scannen die `Free` brauchen, automatisch zu `LeakyClasses` ergänzen |
+| `LeakyClasses` | _(leer)_ | kommagetrennt — zusätzliche Klassen die getrackt werden sollen |
+| `ExcludeLeakyClasses` | _(leer)_ | kommagetrennt — Klassen die NICHT getrackt werden sollen, auch wenn sie in den Defaults stehen |
 
 ---
 
@@ -331,7 +351,7 @@ StaticCodeAnalyserForm/sources/        Analyse-Engine (shared zwischen Standalon
                                        Cancel-Support, Symlink-Schutz
   uIgnoreList.pas                      ignore.txt + Test-Filter
   uVcsChanges.pas                      Git/SVN-Diff via CreateProcess+Pipe
-  uRepoSettings.pas                    repo.ini (BaseBranch etc.)
+  uRepoSettings.pas                    analyser.ini (BaseBranch etc.)
   uSuppression.pas                     // noinspection-Marker
   uExport.pas                          JSON/CSV/HTML/Jira/Clipboard
   uFixHint.pas                         Vorher/Nachher pro Befund-Typ
@@ -391,7 +411,8 @@ benutzen — typisch 200 ms bis 3 s. Siehe [BRANCH_CHANGES_de.md](BRANCH_CHANGES
 - **Watchdog**: 200k Token-Limit pro Datei → pathologische Inputs werden
   nach <1 s abgebrochen (statt zu hängen)
 - **GuardAdvance**: Forward-Progress-Garantie in allen Outer-Parser-Loops
-- **MAX_FILE_BYTES = 5 MB**: größere Files sofort als FileError gemeldet
+- **`MaxFileMB` (default 5 MB)**: größere Files sofort als `FileError`
+  gemeldet. Konfigurierbar in `analyser.ini`.
 - **MAX_DEPTH = 32**: Symlink-Endlosschleifen-Schutz
 - **Cancel jederzeit**: EAbort propagiert sauber durch alle Schichten
 - **Pro-Detektor try/except**: ein crashing Detektor blockiert nicht die
@@ -444,7 +465,7 @@ inhaltlich, sodass jedes für sich gelesen werden kann:
 |-------|--------|-------------------|
 | [README_de.md](README_de.md) | **Übersichts-Doku** — was das Plugin kann, wie es bedient wird, Architektur, Performance, Suppression, Theme-Integration | Erste Anlaufstelle für alle Themen außer den zwei Spezial-Bereichen unten |
 | [DETECTORS_de.md](DETECTORS_de.md) | **Kanonische Detektor-Liste** — alle 50 Sonar-Prüfregeln plus 3 Bonus-Detektoren mit Status (✅ implementiert / 🟡 teilweise / 🔲 offen), Beschreibung und zuständiger Unit | Wenn du wissen willst welche Regel implementiert ist, was sie genau prüft, oder welcher Detektor als nächstes drankommt |
-| [BRANCH_CHANGES_de.md](BRANCH_CHANGES_de.md) | **VCS-/Branch-Changes-Feature** — wie der `Branch-Changes`-Button funktioniert, Git/SVN-Setup, Tortoise-Kompatibilität, `repo.ini`-Konfiguration, Troubleshooting für Repo-Erkennung | Wenn der Branch-Changes-Button nicht macht was er soll, oder du das VCS-Setup feinjustieren willst |
+| [BRANCH_CHANGES_de.md](BRANCH_CHANGES_de.md) | **VCS-/Branch-Changes-Feature** — wie der `Branch-Changes`-Button funktioniert, Git/SVN-Setup, Tortoise-Kompatibilität, `analyser.ini`-Konfiguration, Troubleshooting für Repo-Erkennung | Wenn der Branch-Changes-Button nicht macht was er soll, oder du das VCS-Setup feinjustieren willst |
 
 Konvention: `README_de.md` ist breit, die anderen zwei sind tief und auf
 einen Aspekt fokussiert. Wenn du eine bestehende Section in `README_de.md`

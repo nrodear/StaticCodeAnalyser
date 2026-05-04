@@ -15,7 +15,7 @@ Erste oeffentliche Version des **Static Code Analysis Tool for Delphi**.
 - **Suppression** via `// noinspection <Kind>`-Kommentaren
 - **Export**: HTML / JSON / CSV / Jira-Markup / Plain-Text
 - **DE-Lokalisierung** der UI (eingebautes Dictionary)
-- **Repo-Settings** ueber `repo.ini` (BaseBranch, IncludeWorkingTree, Tortoise-Pfade)
+- **Repo-Settings** ueber `analyser.ini` (BaseBranch, IncludeWorkingTree, Tortoise-Pfade)
 - **Ignore-Liste** ueber `ignore.txt` (Glob-Patterns)
 - **Tortoise-Git/SVN-Kompatibilitaet** (PATH-Suche + Standard-Installpfade)
 

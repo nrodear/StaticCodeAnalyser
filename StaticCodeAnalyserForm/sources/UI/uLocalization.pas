@@ -74,7 +74,8 @@ begin
   GDeMap.Add('Save results',             'Ergebnisse speichern');
   GDeMap.Add('Export',                   'Export');
   GDeMap.Add('Ignore...',                'Ignorieren...');
-  GDeMap.Add('Repo...',                  'Repo...');
+  GDeMap.Add('Repo...',                  'Repo...');         // Legacy
+  GDeMap.Add('Settings...',              'Einstellungen...');
   GDeMap.Add('Include tests',            'Tests einschlie'#$DF'en');
   GDeMap.Add('with uses check',          'mit uses-Pr'#$FC'fung');
 

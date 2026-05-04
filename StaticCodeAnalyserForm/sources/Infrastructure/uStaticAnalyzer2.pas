@@ -46,7 +46,7 @@ uses
   uLongMethod, uLongParamList, uMagicNumbers, uDuplicateString,
   uHardcodedPath, uDebugOutput, uDeepNesting,
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
-  uSuppression;
+  uSuppression, uCustomClassDiscovery;
 
 type
   // Run-Methode pro Detektor: einheitliche Signatur, damit alle in einem
@@ -196,8 +196,8 @@ end;
 class procedure TStaticAnalyzer2.ParseLeaks(FileList: TStringList;
   Results: TObjectList<TLeakFinding>; AProgress: TProc<Integer, Integer>;
   AIncludeUsesCheck: Boolean);
-const
-  MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB – größere Dateien überspringen
+// MAX_FILE_BYTES kommt aus uSCAConsts.DetectorMaxFileBytes (analyser.ini ->
+// MaxFileMB * 1024 * 1024). Default 5 MB.
 
   procedure AddFileError(const AFileName, AMsg: string);
   var F: TLeakFinding;
@@ -308,7 +308,7 @@ begin
         end;
       end;
 
-      if FileSize > MAX_FILE_BYTES then
+      if FileSize > DetectorMaxFileBytes then
       begin
         AddFileError(FileName, Format('Datei zu groß (%.1f MB) – Analyse übersprungen',
                                      [FileSize / (1024 * 1024)]));
@@ -360,6 +360,53 @@ begin
         var CaptLogStream := LogStream;
         var CaptResults   := Results;
         var CaptFileName  := FileName;
+
+        // Auto-Discovery: wenn aktiviert, vor dem MemoryLeak-Detektor das AST
+        // nach Custom-Klassen scannen und LeakyClasses ergaenzen. Wirkt fuer
+        // alle nachfolgenden Files in DIESEM Lauf - kumulativ, weil
+        // Sorted+dupIgnore.
+        // ExcludeLeakyClasses werden hier respektiert - sonst koennte
+        // Discovery eine vom User explizit ausgeschlossene Klasse wieder
+        // einschleusen.
+        // Auto-Discovery: TCustomClassDiscovery teilt die gefundenen Klassen
+        // in zwei Gruppen auf - "instantiable" (Konstruktor/Destruktor oder
+        // Create-Aufruf in der Unit) und "static-only" (keine Instanziierungs-
+        // Hinweise gefunden, vermutlich Utility-Klassen).
+        //
+        //  * Instantiable -> Runtime-LeakyClasses (Detektion in diesem Lauf)
+        //                    + DiscoveredClasses (fuer .log)
+        //  * StaticOnly   -> nur DiscoveredStaticClasses (.log, auskommentiert)
+        //
+        // Beide Gruppen respektieren LeakyClassExcludes. Die INI bleibt
+        // unangetastet; der User entscheidet handisch welche Klasse er in
+        // [Detectors] LeakyClasses uebernimmt.
+        if AutoDiscoverCustomClasses then
+        begin
+          var Instantiable : TArray<string>;
+          var StaticOnly   : TArray<string>;
+          TCustomClassDiscovery.DiscoverInUnit(Root, Instantiable, StaticOnly);
+
+          for var Cls in Instantiable do
+          begin
+            if Assigned(LeakyClassExcludes) and
+               (LeakyClassExcludes.IndexOf(Cls) >= 0) then Continue;
+            if Assigned(LeakyClasses) then
+              LeakyClasses.Add(Cls);
+            if Assigned(DiscoveredClasses) then
+              DiscoveredClasses.Add(Cls);
+          end;
+
+          for var Cls in StaticOnly do
+          begin
+            if Assigned(LeakyClassExcludes) and
+               (LeakyClassExcludes.IndexOf(Cls) >= 0) then Continue;
+            // Bewusst NICHT in LeakyClasses - static-only Klassen haben
+            // keine Instanzen und brauchen keine Leak-Detektion.
+            if Assigned(DiscoveredStaticClasses) then
+              DiscoveredStaticClasses.Add(Cls);
+          end;
+        end;
+
         RunAllDetectors(Root, FileName, Results, AIncludeUsesCheck,
           procedure(const Name: string; ElapsedMs: Int64) begin
             if (ElapsedMs > 500) and Assigned(CaptLogStream) then

@@ -28,9 +28,9 @@ type
 
 implementation
 
-const
-  MAX_BODY_LINES = 50;
-  MAX_STATEMENTS = 30; // sekundaere Schwelle
+// Schwellwerte werden ueber uSCAConsts.DetectorMaxBodyLines /
+// DetectorMaxStatements aus analyser.ini bezogen (Defaults 50/30 wie
+// die fruheren hardcoded Konstanten).
 
 class function TLongMethodDetector.FindBodyBlock(MethodNode: TAstNode): TAstNode;
 var Child: TAstNode;
@@ -95,7 +95,7 @@ begin
       // Nur melden wenn BEIDE Schwellen ueberschritten:
       // verhindert false positives bei langen Datentabellen oder
       // case-Statements mit vielen kurzen Armen.
-      if (Lines > MAX_BODY_LINES) and (Stmts > MAX_STATEMENTS) then
+      if (Lines > DetectorMaxBodyLines) and (Stmts > DetectorMaxStatements) then
       begin
         F            := TLeakFinding.Create;
         F.FileName   := FileName;
@@ -103,7 +103,7 @@ begin
         F.LineNumber := IntToStr(M.Line);
         F.MissingVar := Format(
           '%d body lines, %d statements (limit: %d / %d)',
-          [Lines, Stmts, MAX_BODY_LINES, MAX_STATEMENTS]);
+          [Lines, Stmts, DetectorMaxBodyLines, DetectorMaxStatements]);
         F.Severity   := lsHint;
         F.Kind       := fkLongMethod;
         Results.Add(F);

@@ -8,6 +8,7 @@ uses
    Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls,
   Vcl.ComCtrls, Vcl.Grids, System.IniFiles, uStaticAnalyzer, uStaticAnalyzer2,
   uMethodd12, uSCAConsts, uFixHint, uClaudePrompt, uLocalization,
+  uRepoSettings,
   Vcl.Controls
  ;
 
@@ -41,12 +42,19 @@ type
     procedure FormDestroy(Sender: TObject);
     procedure ResultGridDrawCell(Sender: TObject; ACol, ARow: Integer;
       Rect: TRect; State: TGridDrawState);
+    procedure AppShowHint(var HintStr: string; var CanShow: Boolean;
+      var HintInfo: THintInfo);
 
   private
     // Aktuell angezeigte Befunde - in der Form gehalten, damit ResultGridClick
     // den vollen TLeakFinding (inkl. Kind/Severity-Details) zur ausgewaehlten
     // Zeile findet und einen kompletten Claude-AI-Prompt erzeugen kann.
     FAllFindings : TObjectList<TLeakFinding>;
+    // Liest analyser.ini neu, registriert Custom-LeakyClasses/Excludes und
+    // setzt das globale AutoDiscoverCustomClasses-Flag. Wird vor jedem Analyse-
+    // Lauf aufgerufen, damit INI-Aenderungen ohne App-Neustart wirken (gleiches
+    // Pattern wie das IDE-Plugin in TAnalyserFrame.AnalyseClick).
+    procedure ApplyIniSettings;
     procedure AnalyseAllClasses(Sender: TObject; const path: string);
     procedure AnalyseSingleFile(const AFilePath: string);
     procedure FillGridFromFindings(Findings: TObjectList<TLeakFinding>;
@@ -73,9 +81,19 @@ uses
 {$R *.dfm}
 
 procedure TForm2.FormCreate(Sender: TObject);
+var
+  Settings: TRepoSettings;
 begin
-  // UI auf Deutsch setzen MUSS vor den ersten _()-Aufrufen passieren.
-  SetLanguage('');
+  // UI-Sprache aus analyser.ini [UI]/Language - MUSS vor den ersten
+  // _()-Aufrufen passieren. Kurzlebige Settings-Instanz nur fuer den
+  // Language-Read; volle Settings sind im Standalone nicht noetig.
+  Settings := TRepoSettings.Create;
+  try
+    try Settings.Load; except end;
+    SetLanguage(Settings.Language);
+  finally
+    Settings.Free;
+  end;
   ResultGrid.Cells[0, 0] := _('File');
   ResultGrid.Cells[1, 0] := _('Method');
   ResultGrid.Cells[2, 0] := _('Line');
@@ -83,6 +101,15 @@ begin
   ResultGrid.Cells[4, 0] := _('Severity');
   ResultGrid.OnDrawCell := ResultGridDrawCell;
   ResultGrid.OnDblClick := ResultGridDblClick;
+  // Tooltip nur fuer Datei-Spalte, dynamisch ueber Application.OnShowHint.
+  // Hint muss != '' sein damit VCL das Event ueberhaupt feuert -
+  // AppShowHint setzt dann den echten Text aus der Zelle (oder canceled).
+  ResultGrid.ParentShowHint := False;
+  ResultGrid.ShowHint := True;
+  ResultGrid.Hint := ' ';
+  Application.HintPause      := 100;
+  Application.HintShortPause := 100;
+  Application.OnShowHint     := AppShowHint;
   // Owner-list - der Lifetime der TLeakFinding-Instanzen ist an die Form gekoppelt.
   FAllFindings := TObjectList<TLeakFinding>.Create(True);
   LoadRecentPaths;
@@ -90,7 +117,36 @@ end;
 
 procedure TForm2.FormDestroy(Sender: TObject);
 begin
+  // Globalen Application.OnShowHint loesen damit kein dangling Methodenzeiger
+  // ueberlebt wenn das Form zerstoert wird (relevant beim IDE-Plugin-Hosting).
+  if TMethod(Application.OnShowHint).Data = Self then
+    Application.OnShowHint := nil;
   FreeAndNil(FAllFindings);
+end;
+
+procedure TForm2.AppShowHint(var HintStr: string; var CanShow: Boolean;
+  var HintInfo: THintInfo);
+// Globaler Hint-Filter - feuert vor jedem Tooltip im Application-Scope.
+// Wir lassen den Hint nur fuer Spalte 0 des ResultGrid durch und setzen
+// CursorRect auf die aktuelle Zelle, damit VCL das Event neu feuert sobald
+// die Maus die Zelle verlaesst (sonst bleibt der alte Tooltip kleben).
+var
+  ACol, ARow : Integer;
+begin
+  if HintInfo.HintControl <> ResultGrid then Exit;
+
+  ResultGrid.MouseToCell(HintInfo.CursorPos.X, HintInfo.CursorPos.Y,
+    ACol, ARow);
+  if (ACol = 0) and (ARow >= 1) and (ARow < ResultGrid.RowCount) and
+     (ResultGrid.Cells[0, ARow] <> '') then
+  begin
+    HintStr               := ResultGrid.Cells[0, ARow];
+    HintInfo.CursorRect   := ResultGrid.CellRect(ACol, ARow);
+    HintInfo.HintMaxWidth := 600;
+    CanShow               := True;
+  end
+  else
+    CanShow := False;
 end;
 
 procedure TForm2.ResultGridDrawCell(Sender: TObject; ACol, ARow: Integer;
@@ -222,12 +278,51 @@ begin
   end;
 end;
 
+procedure TForm2.ApplyIniSettings;
+// Helper fuer Aufrufer die Settings nicht selbst persistieren wollen
+// (z.B. wenn keine Discovery laeuft). Liefert eine kurzlebige Instanz mit
+// bereits ausgefuehrtem RegisterToLeakyClasses + globalem AutoDiscover-Flag.
+var
+  Settings: TRepoSettings;
+begin
+  Settings := TRepoSettings.Create;
+  try
+    try Settings.Load; except end;
+    try
+      Settings.RegisterToLeakyClasses;
+      Settings.ApplyDetectorThresholds;
+      AutoDiscoverCustomClasses := Settings.AutoDiscoverClasses;
+    except end;
+  finally
+    Settings.Free;
+  end;
+end;
+
 procedure TForm2.AnalyseAllClasses(Sender: TObject; const path: string);
 var
+  Settings: TRepoSettings;
   findings: TObjectList<TLeakFinding>;
 begin
   Screen.Cursor := crHourglass;
+  Settings := TRepoSettings.Create;
   try
+    try Settings.Load; except end;
+    // Custom-LeakyClasses + Excludes in die globalen Listen ziehen,
+    // AutoDiscover-Flag durchreichen. MUSS vor dem Analyzer-Aufruf
+    // passieren, sonst landet TMeineKlasse & Co. nie in LeakyClasses.
+    try
+      Settings.RegisterToLeakyClasses;
+      Settings.ApplyDetectorThresholds;
+      AutoDiscoverCustomClasses := Settings.AutoDiscoverClasses;
+      // DiscoveredClasses zuruecksetzen damit jeder Lauf eine frische
+      // Liste produziert (sonst wuerden Treffer aus vorherigen Projekten
+      // mit-persistiert).
+      if Assigned(uSCAConsts.DiscoveredClasses) then
+        uSCAConsts.DiscoveredClasses.Clear;
+      if Assigned(uSCAConsts.DiscoveredStaticClasses) then
+        uSCAConsts.DiscoveredStaticClasses.Clear;
+    except end;
+
     StatusBar1.SimpleText := _('Checking all classes...');
     Application.ProcessMessages;
 
@@ -237,7 +332,12 @@ begin
     finally
       findings.Free;
     end;
+
+    // Discovery-Treffer in INI persistieren (nur wenn aktiviert).
+    if Settings.AutoDiscoverClasses then
+      try Settings.PersistDiscoveredClasses; except end;
   finally
+    Settings.Free;
     Screen.Cursor := crDefault;
   end;
 end;
@@ -247,6 +347,7 @@ procedure TForm2.AnalyseSingleFile(const AFilePath: string);
 // Analyzers (TStaticAnalyzer2) - ergibt zusaetzlich zu Memory-Leaks auch
 // Code-Smells, NilDeref, MagicNumber, DuplicateBlock etc.
 var
+  Settings: TRepoSettings;
   findings: TObjectList<TLeakFinding>;
 begin
   if not FileExists(AFilePath) then
@@ -259,13 +360,26 @@ begin
   // zugewiesen wird, sehen wir ungueltigen Speicher im finally.
   findings := nil;
   Screen.Cursor := crHourglass;
+  Settings := TRepoSettings.Create;
   try
+    try Settings.Load; except end;
+    try
+      Settings.RegisterToLeakyClasses;
+      Settings.ApplyDetectorThresholds;
+      AutoDiscoverCustomClasses := Settings.AutoDiscoverClasses;
+      if Assigned(uSCAConsts.DiscoveredClasses) then
+        uSCAConsts.DiscoveredClasses.Clear;
+      if Assigned(uSCAConsts.DiscoveredStaticClasses) then
+        uSCAConsts.DiscoveredStaticClasses.Clear;
+    except end;
+
     StatusBar1.SimpleText := _('Analysing: ') + ExtractFileName(AFilePath);
     Application.ProcessMessages;
 
     try
       try
-        findings := TStaticAnalyzer2.AnalyzeLeaks(AFilePath, False);
+        findings := TStaticAnalyzer2.AnalyzeLeaks(AFilePath,
+          Settings.UsesCheck);
       except
         on E: Exception do
         begin
@@ -279,7 +393,11 @@ begin
     finally
       findings.Free;
     end;
+
+    if Settings.AutoDiscoverClasses then
+      try Settings.PersistDiscoveredClasses; except end;
   finally
+    Settings.Free;
     Screen.Cursor := crDefault;
   end;
 end;

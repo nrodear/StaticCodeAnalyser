@@ -19,8 +19,8 @@ type
 
 implementation
 
-const
-  MAX_PARAMS = 5;
+// Schwellwert kommt aus uSCAConsts.DetectorMaxParams (analyser.ini ->
+// LongParamListMaxParams). Default 5.
 
 class procedure TLongParamListDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
@@ -40,7 +40,7 @@ begin
     for M in Methods do
     begin
       ParamCount := M.ChildCount(nkParam);
-      if ParamCount <= MAX_PARAMS then Continue;
+      if ParamCount <= DetectorMaxParams then Continue;
 
       Key := M.Name + ':' + IntToStr(ParamCount);
       if Reported.ContainsKey(Key) then Continue;
@@ -50,7 +50,8 @@ begin
       F.FileName   := FileName;
       F.MethodName := M.Name;
       F.LineNumber := IntToStr(M.Line);
-      F.MissingVar := Format('%d parameters (limit: %d)', [ParamCount, MAX_PARAMS]);
+      F.MissingVar := Format('%d parameters (limit: %d)',
+        [ParamCount, DetectorMaxParams]);
       F.Severity   := lsHint;
       F.Kind       := fkLongParamList;
       Results.Add(F);

@@ -6,7 +6,12 @@ unit uExport;
 //   - Jira  (Wiki-Markup, fuer Tickets)
 //   - HTML  (Self-contained Code-Review-Report)
 //
-// CSV/JSON werden als UTF-8 mit BOM gespeichert.
+// CSV/JSON/HTML werden als UTF-8 mit BOM gespeichert. WICHTIG: in Delphi 12
+// ist die Singleton TEncoding.UTF8 mit FUseBOM=False konfiguriert -
+// SaveToFile mit dieser schreibt KEIN BOM. Wir verwenden deshalb den
+// SaveUtf8WithBom-Helper der ein TUTF8Encoding(UseBOM:=True) erzeugt.
+// BOM ist erforderlich damit deutsches Excel CSVs als UTF-8 erkennt
+// (sonst werden Umlaute/Sonderzeichen falsch dargestellt).
 
 interface
 
@@ -48,6 +53,12 @@ type
       const TargetDir: string): string; static;
 
   private
+    // Speichert eine TStringList als UTF-8 MIT BOM. TEncoding.UTF8
+    // (Singleton) hat in Delphi 12 FUseBOM=False -> kein BOM via
+    // SaveToFile. Wir erzeugen daher eine eigene TUTF8Encoding-Instanz
+    // mit UseBOM=True, geben sie nach dem Save wieder frei.
+    class procedure SaveUtf8WithBom(SL: TStringList;
+      const FileName: string); static;
     class function KindToName(Kind: TFindingKind): string; static;
     class function CsvEscape(const S: string): string; static;
     class function JsonEscape(const S: string): string; static;
@@ -62,6 +73,22 @@ type
   end;
 
 implementation
+
+class procedure TExporter.SaveUtf8WithBom(SL: TStringList;
+  const FileName: string);
+var
+  Enc: TUTF8Encoding;
+begin
+  // UseBOM=True erzwingt EF BB BF Preamble in SaveToFile/SaveToStream.
+  // Die Standard-Singleton TEncoding.UTF8 hat FUseBOM=False (Boolean-
+  // Default) und wuerde keinen BOM schreiben.
+  Enc := TUTF8Encoding.Create(True);
+  try
+    SL.SaveToFile(FileName, Enc);
+  finally
+    Enc.Free;
+  end;
+end;
 
 class function TExporter.KindToName(Kind: TFindingKind): string;
 begin
@@ -181,7 +208,7 @@ begin
           CsvEscape(KindToName(F.Kind)) + ';' +
           CsvEscape(F.SeverityText)     + ';' +
           CsvEscape(F.MissingVar));
-    SL.SaveToFile(FileName, TEncoding.UTF8);
+    SaveUtf8WithBom(SL, FileName);
   finally
     SL.Free;
   end;
@@ -221,7 +248,7 @@ begin
     SL := TStringList.Create;
     try
       SL.Text := SB.ToString;
-      SL.SaveToFile(FileName, TEncoding.UTF8);
+      SaveUtf8WithBom(SL, FileName);
     finally
       SL.Free;
     end;
@@ -1110,7 +1137,7 @@ begin
     SL := TStringList.Create;
     try
       SL.Text := SB.ToString;
-      SL.SaveToFile(FileName, TEncoding.UTF8);
+      SaveUtf8WithBom(SL, FileName);
     finally
       SL.Free;
     end;

@@ -8,7 +8,7 @@ unit uDuplicateBlock;
 //      auf ein Leerzeichen reduzieren
 //   3. Triviale Zeilen ueberspringen: leer, 'begin', 'end', 'end;', 'else',
 //      'try', 'finally', 'except', reine //- oder { }-Kommentare
-//   4. Sliding-Window von MIN_BLOCK_LINES Zeilen, jedes Fenster als
+//   4. Sliding-Window von DetectorMinBlockLines Zeilen, jedes Fenster als
 //      Schluessel in einer Hash-Map sammeln
 //   5. Schluessel mit >= 2 Vorkommen sind Duplikate -> melden
 //
@@ -16,7 +16,7 @@ unit uDuplicateBlock;
 // Folge-Fenster). Suppression via // noinspection wird vom uSuppression-
 // Modul automatisch nachgelagert.
 //
-// Schwelle: MIN_BLOCK_LINES = 8 normalisierte Zeilen. Das filtert Standard-
+// Schwelle: DetectorMinBlockLines = 8 normalisierte Zeilen. Das filtert Standard-
 // Boilerplate (Property-Getter o.ae.) zuverlaessig aus.
 
 interface
@@ -42,8 +42,10 @@ type
 
 implementation
 
+// Min-Block-Lines kommt aus uSCAConsts.DetectorMinBlockLines
+// (analyser.ini -> DuplicateBlockMinLines). Default 8.
+
 const
-  MIN_BLOCK_LINES = 8;
   TRIVIAL_LINES : array[0..11] of string = (
     '', 'begin', 'end', 'end;', 'else', 'then', 'do',
     'try', 'finally', 'except', 'repeat', 'until'
@@ -164,7 +166,7 @@ begin
       try Lines.LoadFromFile(FileName); except Exit; end;
     end;
 
-    if Lines.Count < MIN_BLOCK_LINES * 2 then Exit;
+    if Lines.Count < DetectorMinBlockLines * 2 then Exit;
 
     // Pass 1: Normalisieren + triviale Zeilen rausfiltern
     SetLength(Normalized, Lines.Count);
@@ -179,13 +181,13 @@ begin
       Inc(NCount);
     end;
 
-    if NCount < MIN_BLOCK_LINES * 2 then Exit;
+    if NCount < DetectorMinBlockLines * 2 then Exit;
 
-    // Pass 2: Sliding window, Hash je MIN_BLOCK_LINES-Tupel
-    for i := 0 to NCount - MIN_BLOCK_LINES do
+    // Pass 2: Sliding window, Hash je DetectorMinBlockLines-Tupel
+    for i := 0 to NCount - DetectorMinBlockLines do
     begin
       Window := '';
-      for var j := 0 to MIN_BLOCK_LINES - 1 do
+      for var j := 0 to DetectorMinBlockLines - 1 do
         Window := Window + Normalized[i + j] + #10;
 
       if not Hashes.TryGetValue(Window, Indices) then
@@ -209,7 +211,7 @@ begin
 
       // Original-Zeilenbereich des Erst-Vorkommens ermitteln und auf
       // if/end-Anteil pruefen. Bei zu viel Boilerplate skippen.
-      var EndIdx := Pair.Value[0] + MIN_BLOCK_LINES - 1;
+      var EndIdx := Pair.Value[0] + DetectorMinBlockLines - 1;
       if EndIdx >= NCount then EndIdx := NCount - 1;
       var OrigEndLine := LineIndex[EndIdx];
       if IsBranchingBoilerplate(Lines, FirstLine, OrigEndLine) then Continue;
@@ -220,7 +222,7 @@ begin
       F.LineNumber := IntToStr(FirstLine);
       F.MissingVar := Format(
         'Code block (%d lines) appears %dx in file - consider extracting a method',
-        [MIN_BLOCK_LINES, Pair.Value.Count]);
+        [DetectorMinBlockLines, Pair.Value.Count]);
       F.Severity   := lsHint;
       F.Kind       := fkDuplicateBlock;
       Results.Add(F);

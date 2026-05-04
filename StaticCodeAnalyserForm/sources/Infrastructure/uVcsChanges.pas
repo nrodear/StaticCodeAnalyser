@@ -321,7 +321,7 @@ begin
   if not RunCmd(GitExe, '--version', ARepoRoot, Output, ExitCode) then
   begin
     AInfo := 'git nicht gefunden. Installiere Git for Windows ' +
-             '(git-scm.com) oder setze in repo.ini den Pfad zu git.exe.';
+             '(git-scm.com) oder setze in analyser.ini den Pfad zu git.exe.';
     Exit;
   end;
 
@@ -453,7 +453,7 @@ begin
   if not RunCmd(SvnExe, '--version --quiet', ARepoRoot, Output, ExitCode) then
   begin
     AInfo := 'svn nicht gefunden. Installiere TortoiseSVN MIT der Option ' +
-             '"command line client tools" oder setze in repo.ini den Pfad zu svn.exe.';
+             '"command line client tools" oder setze in analyser.ini den Pfad zu svn.exe.';
     Exit;
   end;
 

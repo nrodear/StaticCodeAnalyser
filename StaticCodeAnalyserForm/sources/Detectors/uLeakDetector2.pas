@@ -84,22 +84,29 @@ end;
 { ---- Typ-Check ---- }
 
 class function TLeakDetector2.IsLeakyType(const TypeRef: string): Boolean;
+// LeakyClasses ist seit der Konvertierung auf TStringList eine sortierte,
+// case-insensitive Liste -> IndexOf liefert >= 0 wenn die Klasse bekannt ist.
+// Plus: LeakyClassExcludes-Check als zweites Sicherheitsnetz - falls eine
+// Klasse trotz Exclude in LeakyClasses gelandet ist (z.B. durch Discovery
+// in einer alten Plugin-Version), wird sie hier nochmal gefiltert.
 var
-  Clean     : string;
-  LeakyClass: string;
-  lt        : Integer;
+  Clean : string;
+  lt    : Integer;
 begin
+  Result := False;
+  if not Assigned(LeakyClasses) then Exit;
+
   Clean := Trim(TypeRef);
   lt    := Pos('<', Clean);
   if lt > 0 then
     Clean := Trim(Copy(Clean, 1, lt - 1));
-  Clean := Clean.ToLower;
+  if Clean = '' then Exit;
 
-  for LeakyClass in LeakyClasses do
-    if Clean = LeakyClass.ToLower then
-      Exit(True);
+  // Erst Exclude-Check, dann Match-Check
+  if Assigned(LeakyClassExcludes) and
+     (LeakyClassExcludes.IndexOf(Clean) >= 0) then Exit;
 
-  Result := False;
+  Result := LeakyClasses.IndexOf(Clean) >= 0;
 end;
 
 { ---- Create-Erkennung ---- }

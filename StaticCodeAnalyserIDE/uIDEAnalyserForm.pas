@@ -18,7 +18,7 @@ uses
   uStaticAnalyzer2, uStaticFiles, uMethodd12, uSCAConsts, uExport,
   uFixHint, uIgnoreList, uVcsChanges, uRepoSettings, uClaudePrompt,
   uAnalyserPalette, uAnalyserTypes, uAnalyserTheme, uLocalization,
-  uIDELineHighlighter, uIDEMessages, uIDEEditSubclass;
+  uIDELineHighlighter, uIDEMessages, uIDEWatchMode;
 
 type
   TFilterMode = (fmAll,
@@ -71,8 +71,9 @@ type
     FSearchEdit        : TEdit;
     FSortColumn        : Integer;     // -1 = unsortiert
     FSortDescending    : Boolean;
-    FChkUsesCheck      : TCheckBox;
-    FChkIncludeTests   : TCheckBox; // Default: aus (Tests werden ausgeschlossen)
+    // UsesCheck und IncludeTests sind aus der UI rausgewandert -
+    // werden jetzt aus analyser.ini [Detectors] gelesen
+    // (FRepoSettings.UsesCheck / .IncludeTests).
     // ---- Analyse-Fortschritt --------------------------------------------
     FProgressBar       : TProgressBar; // sichtbar nur waehrend Analyse
     FBtnCancel         : TButton;      // sichtbar nur waehrend Analyse
@@ -86,8 +87,35 @@ type
     // Wird beim Frame-Start aus %APPDATA%\StaticCodeAnalyser\ignore.txt geladen.
     FIgnoreList        : TIgnoreList;
     // Repo-/VCS-Settings (BaseBranch, IncludeWorkingTree, exe-Pfade).
-    // Wird aus %APPDATA%\StaticCodeAnalyser\repo.ini geladen.
+    // Wird aus %APPDATA%\StaticCodeAnalyser\analyser.ini geladen.
     FRepoSettings      : TRepoSettings;
+
+    // Grid-Tooltip-Subclass: nur Datei-Spalte zeigt Tooltip, mit 100ms-
+    // Pause beschraenkt auf "Maus ueber Grid" damit der globale State der
+    // Delphi-IDE (sonst alles 100ms) nur kurzzeitig betroffen ist.
+    FOldGridWndProc       : TWndMethod;
+    FSavedHintPause       : Integer;
+    FSavedHintShortPause  : Integer;
+    FHintPauseOverridden  : Boolean;
+
+    procedure GridWndProc(var Msg: TMessage);
+
+    // Vor jeder Analyse: INI neu laden, Custom-LeakyClasses + Excludes
+    // registrieren, AutoDiscover-Flag setzen, DiscoveredClasses-Liste leeren.
+    // ForceWatchMode=True: WatchMode IMMER aktivieren (egal was INI sagt) -
+    // wird vom "Aktuelle Datei"-Pfad gesetzt, weil Live-Update beim
+    // Editieren/Speichern dort der natural fit ist.
+    procedure PrepareAnalysis(ForceWatchMode: Boolean = False);
+    // Nach jeder Analyse: wenn AutoDiscoverClasses=1 die Treffer in die
+    // INI persistieren (die unter [Detectors] LeakyClasses= landen).
+    procedure FinishAnalysis;
+
+    // Callbacks fuer den WatchMode-Manager (Live-Analyse beim Speichern).
+    // OnWatchFindings ersetzt die Befunde fuer EINE Datei in FAllFindings,
+    // ohne den Rest zu loeschen. OnWatchStatus aktualisiert die Statusbar.
+    procedure OnWatchFindings(const FileName: string;
+      Findings: TObjectList<TLeakFinding>);
+    procedure OnWatchStatus(const Status: string);
 
     procedure BrowseClick(Sender: TObject);
     procedure AnalyseClick(Sender: TObject);
@@ -99,7 +127,6 @@ type
       var CanSelect: Boolean);
     procedure GridDrawCell(Sender: TObject; ACol, ARow: Integer;
       Rect: TRect; State: TGridDrawState);
-    procedure GridMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
     procedure GridMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
     procedure GridKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
@@ -233,6 +260,23 @@ const
   // und werden ueber uAnalyserTheme.SeverityBg / SeverityAccent (mit
   // TFindingSeverity-Enum) abgerufen.
 
+// Sentinel fuer Frame-Lifecycle-Race in der Worker-Anonymous-Method:
+// AnalyseAllClasses uebergibt eine Closure die FProgressBar/FStatusBar/
+// FAnalyseCancelled etc. ueber Self captured. Wenn der User waehrend der
+// Analyse das IDE-Dock-Fenster schliesst, wird das Frame-Objekt zerstoert -
+// die Closure haelt aber noch eine ungueltige Self-Referenz und greift bei
+// Application.ProcessMessages-Reentry darauf zu (AV in ein freies Heap-Block).
+//
+// Schutzmassnahme: globaler Pointer der genau auf den aktuell lebenden Frame
+// zeigt. Constructor setzt ihn auf Self, Destructor auf nil. Closure prueft
+// als allererstes "ist der globale Pointer noch == Self?" - bei Mismatch
+// (Frame zerstoert oder anderer Frame aktiv) sofort Exit ohne Field-Zugriff.
+//
+// Funktioniert weil der Pointer-VERGLEICH safe ist auch wenn Self auf
+// invaliden Speicher zeigt - es wird kein Feld dereferenziert.
+var
+  GLiveAnalyserFrame: Pointer = nil;
+
 // Einfacher Verlauf von AFrom (oben) nach ATo (unten)
 procedure GradientFillRect(Canvas: TCanvas; R: TRect; AFrom, ATo: TColor;
   Vertical: Boolean);
@@ -291,10 +335,22 @@ var
   BtnBrowse, BtnAnalyse: TButton;
 begin
   inherited Create(AOwner);
-  // UI auf Deutsch setzen (eingebautes DE-Dictionary in uLocalization).
-  // Englische Source-Strings (mit _() instrumentiert) werden ab jetzt
-  // in der UI auf Deutsch angezeigt.
-  SetLanguage('');
+  // Lifecycle-Sentinel registrieren: ab jetzt darf der Worker-Callback
+  // auf Self-Felder zugreifen (siehe GLiveAnalyserFrame oben).
+  GLiveAnalyserFrame := Pointer(Self);
+
+  // Settings VOR dem ersten _()-UI-Aufruf laden, damit die UI-Sprache aus
+  // analyser.ini [UI]/Language gleich beim ersten Caption-Build gilt.
+  // Bei Fehlern: Fallback auf 'de' aus dem Default-Constructor.
+  FRepoSettings := TRepoSettings.Create;
+  try FRepoSettings.Load; except end;
+  SetLanguage(FRepoSettings.Language);
+  // Custom-LeakyClasses + Excludes + AutoDiscover-Flag durchreichen
+  try
+    FRepoSettings.RegisterToLeakyClasses;
+    AutoDiscoverCustomClasses := FRepoSettings.AutoDiscoverClasses;
+  except end;
+
   FThemeNotifierIdx := -1;
   // Frame folgt dem aktiven IDE-Theme: clBtnFace ist der Standard-Chrome-
   // Hintergrund (hell im Light-Theme, dunkel im Dark-Theme, korrekt in
@@ -313,8 +369,7 @@ begin
   // Ignore-Liste laden / Default-Datei anlegen falls nicht vorhanden
   FIgnoreList        := TIgnoreList.Create;
   try FIgnoreList.LoadDefault; except end;
-  FRepoSettings      := TRepoSettings.Create;
-  try FRepoSettings.Load; except end;
+  // FRepoSettings wurde bereits oben (vor SetLanguage) initialisiert.
   FFilterMode        := fmAll;
   // Default-Sort: Severity-Spalte (5) aufsteigend - Fehler oben, Hinweise unten.
   FSortColumn        := 5;
@@ -381,14 +436,15 @@ begin
   BtnIgnore.ShowHint := True;
   BtnIgnore.OnClick := EditIgnoreListClick;
 
-  // Repo-Settings (BaseBranch, Tortoise-Pfade etc. fuer Branch-Changes)
+  // Settings-Datei analyser.ini (BaseBranch + Tortoise-Pfade fuer
+  // Branch-Changes, Custom-LeakyClasses fuer den MemoryLeak-Detektor).
   var BtnRepo := TButton.Create(Self);
   BtnRepo.Parent  := PanelPath;
-  BtnRepo.Caption := _('Repo...');
-  BtnRepo.Width   := 60;
+  BtnRepo.Caption := _('Settings...');
+  BtnRepo.Width   := 70;
   BtnRepo.Align   := alRight;
-  BtnRepo.Hint    := 'Repo-Settings oeffnen (BaseBranch, git/svn-Pfad fuer ' +
-                     'den "Branch-Changes"-Button)';
+  BtnRepo.Hint    := 'analyser.ini oeffnen (BaseBranch, git/svn-Pfad, ' +
+                     'Custom-LeakyClasses)';
   BtnRepo.ShowHint := True;
   BtnRepo.OnClick := EditRepoSettingsClick;
 
@@ -413,22 +469,33 @@ begin
   // sondern in PanelSearch zusammen mit den Export-Buttons. Damit bleibt
   // diese Filter-Zeile uebersichtlich.
 
-  // Filter-Label
+  // Severity-Filter: Label + Combo in einem eigenen Panel-Container.
+  // Mit losem alLeft auf PanelButtons direkt verschoben sich Label und
+  // Combo gegeneinander (TLabel ist TGraphicControl, TComboBox ist
+  // TWinControl - VCL aligned die in unterschiedlichen Passes); im
+  // Sub-Panel laufen sie strikt von links nach rechts.
+  var PanelSev := TPanel.Create(Self);
+  PanelSev.Parent     := PanelButtons;
+  PanelSev.Align      := alLeft;
+  PanelSev.BevelOuter := bvNone;
+  PanelSev.Color      := clBtnFace;
+  PanelSev.Width      := 76 + 160;
+
   var LblFilter := TLabel.Create(Self);
-  LblFilter.Parent  := PanelButtons;
-  LblFilter.Caption := _('Severity:');
-  LblFilter.Align   := alLeft;
-  LblFilter.Layout  := tlCenter;
-  LblFilter.Width   := 76;
+  LblFilter.Parent   := PanelSev;
+  LblFilter.Caption  := _('Severity:');
+  LblFilter.Align    := alLeft;
+  LblFilter.AutoSize := False;
+  LblFilter.Width    := 76;
+  LblFilter.Layout   := tlCenter;
 
   // Filter-Dropdown - nach Schweregrad gruppiert.
   // Items.Objects haelt den Ord(TFilterMode) als Tag; Separatoren haben Tag = -1
   // und werden in FilterChange auf "Alle" zurueckgesetzt.
   FFilterCombo := TComboBox.Create(Self);
-  FFilterCombo.Parent      := PanelButtons;
+  FFilterCombo.Parent      := PanelSev;
   FFilterCombo.Style       := csDropDownList;
-  FFilterCombo.Align       := alLeft;
-  FFilterCombo.Width       := 160;
+  FFilterCombo.Align       := alClient;
   FFilterCombo.Font.Name   := 'Segoe UI';
   FFilterCombo.Font.Size   := 6;
   FFilterCombo.ParentFont  := False;
@@ -476,19 +543,26 @@ begin
   SepF1.BevelOuter := bvNone;
   SepF1.Color      := clBtnFace;
 
-  // ---- Zweiter Filter: Typ (Sonar-Kategorie) ----
+  // ---- Zweiter Filter: Typ (Sonar-Kategorie) - gleicher Container-Trick ----
+  var PanelType := TPanel.Create(Self);
+  PanelType.Parent     := PanelButtons;
+  PanelType.Align      := alLeft;
+  PanelType.BevelOuter := bvNone;
+  PanelType.Color      := clBtnFace;
+  PanelType.Width      := 36 + 130;
+
   var LblType := TLabel.Create(Self);
-  LblType.Parent  := PanelButtons;
-  LblType.Caption := _('Type:');
-  LblType.Align   := alLeft;
-  LblType.Layout  := tlCenter;
-  LblType.Width   := 28;
+  LblType.Parent   := PanelType;
+  LblType.Caption  := _('Type:');
+  LblType.Align    := alLeft;
+  LblType.AutoSize := False;
+  LblType.Width    := 36;
+  LblType.Layout   := tlCenter;
 
   FTypeCombo := TComboBox.Create(Self);
-  FTypeCombo.Parent      := PanelButtons;
+  FTypeCombo.Parent      := PanelType;
   FTypeCombo.Style       := csDropDownList;
-  FTypeCombo.Align       := alLeft;
-  FTypeCombo.Width       := 130;
+  FTypeCombo.Align       := alClient;
   FTypeCombo.Font.Name   := 'Segoe UI';
   FTypeCombo.Font.Size   := 6;
   FTypeCombo.ParentFont  := False;
@@ -510,36 +584,8 @@ begin
   Sep2.BevelOuter := bvNone;
   Sep2.Color      := clBtnFace;
 
-  // Checkbox: Uses-Check optional aktivieren (default: aus)
-  FChkUsesCheck := TCheckBox.Create(Self);
-  FChkUsesCheck.Parent      := PanelButtons;
-  FChkUsesCheck.Caption     := _('with uses check');
-  FChkUsesCheck.Width       := 110;
-  FChkUsesCheck.Align       := alLeft;
-  FChkUsesCheck.Checked     := False;
-  FChkUsesCheck.ParentFont  := False;
-  FChkUsesCheck.Font.Name   := 'Segoe UI';
-  FChkUsesCheck.Font.Size   := 6;
-  FChkUsesCheck.Hint        := _('Enables the check for unused uses entries ' +
-                                 '(can produce false positives)');
-  FChkUsesCheck.ShowHint    := True;
-
-  // Checkbox: Tests einbeziehen (default: aus - Tests werden ausgeschlossen)
-  FChkIncludeTests := TCheckBox.Create(Self);
-  FChkIncludeTests.Parent      := PanelButtons;
-  FChkIncludeTests.Caption     := _('Include tests');
-  FChkIncludeTests.Width       := 130;
-  FChkIncludeTests.Align       := alLeft;
-  FChkIncludeTests.Checked     := False;
-  FChkIncludeTests.ParentFont  := False;
-  FChkIncludeTests.Font.Name   := 'Segoe UI';
-  FChkIncludeTests.Font.Size   := 6;
-  FChkIncludeTests.Hint        := _(
-    'When enabled: DUnit/DUnitX tests (uTest*.pas, *_Tests.pas, ' +
-    'TestProject*.dpr, /tests/ folders) are also analysed. ' +
-    'Off by default - tests are rarely "bad code" but often produce ' +
-    'noisy findings (LongMethod, MagicNumber).');
-  FChkIncludeTests.ShowHint    := True;
+  // UsesCheck und IncludeTests werden jetzt aus analyser.ini [Detectors]
+  // gelesen - keine Checkboxen mehr in der Toolbar (siehe FRepoSettings).
 
   // ---- Zeile: Aktionen + Suche + Export ----
   var PanelSearch := TPanel.Create(Self);
@@ -829,11 +875,17 @@ begin
   FResultGrid.OnDrawCell   := GridDrawCell;
   FResultGrid.OnDblClick    := GridDblClick;
   FResultGrid.OnSelectCell  := GridSelectCell;
-  FResultGrid.OnMouseMove   := GridMouseMove;
   FResultGrid.OnMouseDown   := GridMouseDown;
   FResultGrid.OnKeyDown     := GridKeyDown;
-  FResultGrid.ShowHint     := True;
-  FResultGrid.Hint         := '';
+  // Tooltip-Setup: Hint != '' (Placeholder) damit VCL CM_HINTSHOW feuert,
+  // ParentShowHint=False weil die IDE den Default haeufig auf False zieht,
+  // GridWndProc setzt den echten Hinttext pro Zelle und unterdrueckt ihn
+  // ausserhalb der Datei-Spalte.
+  FResultGrid.ParentShowHint := False;
+  FResultGrid.ShowHint       := True;
+  FResultGrid.Hint           := ' ';
+  FOldGridWndProc       := FResultGrid.WindowProc;
+  FResultGrid.WindowProc := GridWndProc;
 
   LoadRecentPaths;
 end;
@@ -842,6 +894,34 @@ destructor TAnalyserFrame.Destroy;
 var
   Theming: IOTAIDEThemingServices;
 begin
+  // ALLERERSTES: Lifecycle-Sentinel zuruecksetzen. Falls ein laufender
+  // Worker-Callback waehrend dieses Destructors via Application.ProcessMessages
+  // antriggert wird, sieht er den nil-Pointer und exit'd - kein Zugriff auf
+  // bereits halb-zerstoerte Frame-Felder.
+  if GLiveAnalyserFrame = Pointer(Self) then
+    GLiveAnalyserFrame := nil;
+
+  // Watch-Mode deaktivieren BEVOR FAllFindings & Co. weg sind -
+  // laufende Background-Worker-Synchronize-Calls duerfen jetzt droppen
+  // statt in die OnWatchFindings-Callback zu laufen (die zugriffe Frame-
+  // Felder die gleich freigegeben werden).
+  if Assigned(GWatchMode) and GWatchMode.Active then
+    GWatchMode.Deactivate;
+
+  // Tooltip-Subclass aufloesen bevor das Grid stirbt - sonst feuert
+  // ein letzter CM_*-Wisch in unsere ungueltige WndProc.
+  if Assigned(FResultGrid) and Assigned(FOldGridWndProc) then
+  begin
+    FResultGrid.WindowProc := FOldGridWndProc;
+    FOldGridWndProc := nil;
+  end;
+  if FHintPauseOverridden then
+  begin
+    Application.HintPause      := FSavedHintPause;
+    Application.HintShortPause := FSavedHintShortPause;
+    FHintPauseOverridden := False;
+  end;
+
   // Reihenfolge ist wichtig:
   //   1. DetachFrame: nimmt dem Notifier den Frame-Zeiger
   //   2. RemoveNotifier: IDE-Service gibt seinen Refcount frei
@@ -1116,14 +1196,28 @@ end;
 procedure TAnalyserFrame.FilterChange(Sender: TObject);
 var
   idx, tag: Integer;
+  OldOnChange: TNotifyEvent;
 begin
+  // Defensive Bound-Checks: ItemIndex kann -1 sein (nichts ausgewaehlt) oder
+  // bei einer leeren Combo theoretisch ungueltig. Items.Objects[-1] waere AV.
+  if FFilterCombo.Items.Count = 0 then Exit;
   idx := FFilterCombo.ItemIndex;
-  if idx < 0 then Exit;
+  if (idx < 0) or (idx >= FFilterCombo.Items.Count) then Exit;
+
   tag := Integer(FFilterCombo.Items.Objects[idx]);
   if tag < 0 then
   begin
     // Separator-Eintrag - keine Filter-Aktion, Auswahl auf "Alle" zuruecksetzen.
-    FFilterCombo.ItemIndex := 0;
+    // Re-Entry-Schutz: das ItemIndex-Setzen feuert OnChange erneut. Wir
+    // entkoppeln den Handler temporaer, sonst wuerde FilterChange rekursiv
+    // aufgerufen.
+    OldOnChange := FFilterCombo.OnChange;
+    FFilterCombo.OnChange := nil;
+    try
+      FFilterCombo.ItemIndex := 0;
+    finally
+      FFilterCombo.OnChange := OldOnChange;
+    end;
     FFilterMode := fmAll;
   end
   else
@@ -1132,9 +1226,13 @@ begin
 end;
 
 procedure TAnalyserFrame.TypeFilterChange(Sender: TObject);
+var
+  idx: Integer;
 begin
-  if FTypeCombo.ItemIndex < 0 then Exit;
-  FTypeFilter := TTypeFilter(FTypeCombo.ItemIndex);
+  if FTypeCombo.Items.Count = 0 then Exit;
+  idx := FTypeCombo.ItemIndex;
+  if (idx < 0) or (idx >= FTypeCombo.Items.Count) then Exit;
+  FTypeFilter := TTypeFilter(idx);
   ApplyFilter;
 end;
 
@@ -1143,7 +1241,7 @@ procedure TAnalyserFrame.ApplyFilter;
   function DisplayName(const FullPath: string): string;
   begin
     // Im Grid steht nur der Dateiname - der volle Pfad kommt als Tooltip
-    // ueber den GridMouseMove-Handler aus FDisplayedFindings.
+    // ueber GridWndProc/CM_HINTSHOW aus FDisplayedFindings.
     Result := ExtractFileName(FullPath);
   end;
 
@@ -1312,10 +1410,11 @@ begin
   StatusMode(Format('Filter: %s%s', [FFilterCombo.Text,
     IfThen(searchLow <> '', ', Suche: ' + searchLow, '')]));
 
-  // Messages-Toolbar synchron zum Grid: nur die aktuell gefilterten Befunde
-  // anzeigen. Bei jedem Filter-Change (FilterChange / SearchChange /
-  // TypeFilterChange) landen wir hier - die Pane bleibt damit konsistent.
-  TIDEMessages.ReportFindings(FDisplayedFindings);
+  // Befunde werden bewusst NICHT mehr in die IDE-Messages-Toolbar
+  // gespiegelt - das eigene Grid + Statusbar reicht und vermeidet,
+  // dass Compiler-Output beim Scan ueberschrieben wird. uIDEMessages
+  // bleibt fuer den Fall stehen dass die Funktion wieder gewuenscht
+  // wird (TIDEMessages.ReportFindings(FDisplayedFindings)).
 end;
 
 // ---------------------------------------------------------------------------
@@ -1589,6 +1688,58 @@ begin
   end;
 end;
 
+procedure TAnalyserFrame.OnWatchStatus(const Status: string);
+// Vom WatchMode-Manager via TThread.Synchronize / Timer-OnTimer auf dem
+// UI-Thread. Aktualisiert das Mode-Panel der Statusbar wenn moeglich.
+begin
+  // Lifecycle-Race: Frame koennte zerstoert worden sein waehrend ein
+  // letzter Status-Push noch in der Queue lag.
+  if GLiveAnalyserFrame <> Pointer(Self) then Exit;
+  if Status = '' then
+    StatusMode('')
+  else
+    StatusMode('[watch] ' + Status);
+end;
+
+procedure TAnalyserFrame.OnWatchFindings(const FileName: string;
+  Findings: TObjectList<TLeakFinding>);
+// Wird auf UI-Thread aufgerufen wenn ein Watch-Worker fertig analysiert hat.
+// Ersetzt die Befunde fuer EINE Datei in FAllFindings, ohne den Rest des
+// Scans zu verlieren. Findings.OwnsObjects := False damit die TLeakFinding-
+// Instanzen an FAllFindings (hat eigene Ownership=True) wandern.
+var
+  i: Integer;
+begin
+  if GLiveAnalyserFrame <> Pointer(Self) then
+  begin
+    // Frame zerstoert - Liste freigeben, sonst Memory-Leak.
+    if Assigned(Findings) then
+      Findings.Free;
+    Exit;
+  end;
+  if not Assigned(Findings) then Exit;
+
+  try
+    // 1) Alte Findings fuer DIESE Datei aus FAllFindings entfernen.
+    for i := FAllFindings.Count - 1 downto 0 do
+      if SameText(FAllFindings[i].FileName, FileName) then
+        FAllFindings.Delete(i);
+
+    // 2) Neue Findings einhaengen (Ownership-Transfer).
+    Findings.OwnsObjects := False;
+    for i := 0 to Findings.Count - 1 do
+      FAllFindings.Add(Findings[i]);
+
+    // 3) UI auffrischen
+    UpdateStats;
+    ApplyFilter;
+    StatusMode(Format('[watch] updated %s (%d findings)',
+      [ExtractFileName(FileName), Findings.Count]));
+  finally
+    Findings.Free;
+  end;
+end;
+
 procedure TAnalyserFrame.PopulateFindings(
   const findings: TObjectList<TLeakFinding>; const BaseDir: string);
 var
@@ -1601,23 +1752,14 @@ begin
     FAllFindings.Add(findings[i]);
   UpdateStats;
   ApplyFilter;
-  // Editor-Line-Highlights aktualisieren (aktuell Stub, kein Editor-Painting).
+  // Editor-Line-Highlight ist click-getrieben (siehe GridSelectCell ->
+  // GHighlighter.SetSelected). Beim Abschluss eines neuen Scans loeschen
+  // wir die alte Markierung, damit kein Befund aus dem letzten Scan im
+  // Editor stehen bleibt.
   if Assigned(GHighlighter) then
-    GHighlighter.SetFindings(FAllFindings);
-  // Hinweis: TIDEMessages.ReportFindings wird in ApplyFilter aufgerufen,
-  // damit nur die GEFILTERTEN Befunde in der Messages-Toolbar landen.
-
-  // Editor-Subclass-Highlighter (Variante 6 - Win32-WindowProc-Hook).
-  // Lazy-Init beim ersten Aufruf, defensiv via try-except umschlossen
-  // damit ein fehlgeschlagener Hook (z.B. Edit-Control nicht gefunden in
-  // einer anderen Delphi-Version) das Plugin nicht zerlegt.
-  try
-    if GEditSubclassMgr = nil then
-      RegisterEditSubclass;
-    GEditSubclassMgr.SetFindings(FAllFindings);
-  except
-    // Subclass-Highlights sind ein "best effort"-Feature.
-  end;
+    GHighlighter.Clear;
+  // (Befund-Spiegelung in IDE-Messages-Toolbar ist deaktiviert -
+  //  siehe Kommentar am Ende von ApplyFilter.)
 end;
 
 procedure TAnalyserFrame.UpdateStats;
@@ -1750,17 +1892,30 @@ end;
 
 procedure TAnalyserFrame.GridSelectCell(Sender: TObject; ACol, ARow: Integer;
   var CanSelect: Boolean);
-// Klick auf Zeile: Hilfetext aktualisieren UND Befund als Claude-AI-Prompt
-// in die Zwischenablage legen, damit der User nur noch Strg+V im Chat machen muss.
+// Klick auf Zeile: Hilfetext aktualisieren, Befund als Claude-AI-Prompt
+// in die Zwischenablage legen UND - falls die Datei in der IDE offen ist -
+// die Befund-Zeile rot markieren (PaintLine via INTAEditViewNotifier).
 var
-  idx: Integer;
+  idx     : Integer;
+  Finding : TLeakFinding;
+  LineNo  : Integer;
 begin
   CanSelect := True;
   UpdateHelp(ARow);
 
   idx := ARow - 1; // Zeile 0 = Header
-  if (idx >= 0) and (idx < FDisplayedFindings.Count) then
-    CopyFindingToClipboard(FDisplayedFindings[idx]);
+  if (idx < 0) or (idx >= FDisplayedFindings.Count) then Exit;
+
+  Finding := FDisplayedFindings[idx];
+  CopyFindingToClipboard(Finding);
+
+  // Editor-Line-Highlight setzen. Wenn die Datei nicht offen ist, malt
+  // GHighlighter beim naechsten Oeffnen (PaintLine prueft jeden Repaint).
+  if Assigned(GHighlighter) then
+  begin
+    LineNo := StrToIntDef(Finding.LineNumber, 0);
+    GHighlighter.SetSelected(Finding.FileName, LineNo);
+  end;
 end;
 
 procedure TAnalyserFrame.CopyFindingToClipboard(F: TLeakFinding);
@@ -1811,6 +1966,54 @@ end;
 // ---------------------------------------------------------------------------
 // Analyse starten
 // ---------------------------------------------------------------------------
+procedure TAnalyserFrame.PrepareAnalysis(ForceWatchMode: Boolean);
+var
+  WantWatch: Boolean;
+begin
+  if not Assigned(FRepoSettings) then Exit;
+  try
+    FRepoSettings.Load;
+    FRepoSettings.RegisterToLeakyClasses;
+    FRepoSettings.ApplyDetectorThresholds;
+    AutoDiscoverCustomClasses := FRepoSettings.AutoDiscoverClasses;
+    // Frische Discovery-Liste pro Run, sonst wandern Treffer aus
+    // vorherigen Projekten in die INI mit.
+    if Assigned(uSCAConsts.DiscoveredClasses) then
+      uSCAConsts.DiscoveredClasses.Clear;
+    if Assigned(uSCAConsts.DiscoveredStaticClasses) then
+      uSCAConsts.DiscoveredStaticClasses.Clear;
+
+    // WatchMode-Aktivierung:
+    //   - Im "Aktuelle Datei"-Pfad (ForceWatchMode=True) IMMER an, egal
+    //     was die INI sagt - weil der User offensichtlich an genau dieser
+    //     Datei arbeitet und Live-Updates beim Save erwartet.
+    //   - In den Bulk-Pfaden (Full-Project, Branch-Changes) folgen wir
+    //     der INI-Einstellung [Detectors] WatchMode (Default: 0).
+    // Bei aktivem Watch: Generation bumpen damit laufende Worker (vom
+    // letzten Save) ihre Ergebnisse droppen - wir schreiben gleich
+    // PopulateFindings und wollen keinen Late-Hit.
+    if Assigned(GWatchMode) then
+    begin
+      GWatchMode.BumpGeneration;
+      WantWatch := ForceWatchMode or FRepoSettings.WatchMode;
+      if WantWatch then
+      begin
+        if not GWatchMode.Active then
+          GWatchMode.Activate(OnWatchFindings, OnWatchStatus);
+        GWatchMode.RescanOpenModules;
+      end
+      else if GWatchMode.Active then
+        GWatchMode.Deactivate;
+    end;
+  except end;
+end;
+
+procedure TAnalyserFrame.FinishAnalysis;
+begin
+  if Assigned(FRepoSettings) and FRepoSettings.AutoDiscoverClasses then
+    try FRepoSettings.PersistDiscoveredClasses; except end;
+end;
+
 procedure TAnalyserFrame.AnalyseClick(Sender: TObject);
 begin
   if not TStaticFiles.ValidatePath(FProjectPath.Text) then
@@ -1819,7 +2022,12 @@ begin
     Exit;
   end;
   SaveRecentPath(FProjectPath.Text);
-  AnalyseAllClasses(FProjectPath.Text);
+  PrepareAnalysis;
+  try
+    AnalyseAllClasses(FProjectPath.Text);
+  finally
+    FinishAnalysis;
+  end;
 end;
 
 procedure TAnalyserFrame.AnalyseCurrentFileClick(Sender: TObject);
@@ -1851,6 +2059,9 @@ begin
     end;
 
     Screen.Cursor := crHourglass;
+    // ForceWatchMode=True: bei "Aktuelle Datei" immer Live-Update beim
+    // Save aktivieren, egal was [Detectors] WatchMode in der INI sagt.
+    PrepareAnalysis(True);
     try
       StatusProgress('Analysiere: ' + ExtractFileName(FilePath));
       Application.ProcessMessages;
@@ -1859,7 +2070,7 @@ begin
       try
         try
           findings := TStaticAnalyzer2.AnalyzeLeaks(FilePath,
-            FChkUsesCheck.Checked);
+            FRepoSettings.UsesCheck);
         except
           on E: Exception do
           begin
@@ -1874,6 +2085,7 @@ begin
         findings.Free;
       end;
     finally
+      FinishAnalysis;
       Screen.Cursor := crDefault;
     end;
   except
@@ -1902,10 +2114,16 @@ begin
     Exit;
   end;
 
-  // ---- Settings frisch laden (User koennte repo.ini in der Zwischenzeit
+  // ---- Settings frisch laden (User koennte analyser.ini in der Zwischenzeit
   //      ueber den "Repo-Settings"-Button editiert haben) ----
+  PrepareAnalysis;
   if Assigned(FRepoSettings) then
-    try FRepoSettings.Load; except end;
+    try
+      // Sprach-Aenderung wirkt erst beim naechsten UI-Aufbau (alle bereits
+      // gesetzten Captions bleiben auf der bisherigen Sprache). User-Hinweis:
+      // Plugin-Reload fuer vollen Sprachwechsel.
+      SetLanguage(FRepoSettings.Language);
+    except end;
 
   // ---- VCS-Diff einholen ----
   files := TVcsChanges.GetChangedPasFilesAuto(startPath, info, FRepoSettings);
@@ -1951,7 +2169,7 @@ begin
                 on EAbort do raise;
               end;
             end,
-            FChkUsesCheck.Checked);
+            FRepoSettings.UsesCheck);
         except
           on EAbort do
           begin
@@ -1976,6 +2194,7 @@ begin
     end;
   finally
     files.Free;
+    FinishAnalysis;
   end;
 end;
 
@@ -2050,7 +2269,7 @@ begin
 end;
 
 procedure TAnalyserFrame.EditRepoSettingsClick(Sender: TObject);
-// Oeffnet repo.ini im Default-Editor. Beim naechsten Klick auf
+// Oeffnet analyser.ini im Default-Editor. Beim naechsten Klick auf
 // "Branch-Changes" werden die Settings automatisch neu geladen.
 var
   Path: string;
@@ -2079,11 +2298,11 @@ begin
   SetAnalyseUiBusy(True, 0);
   FLastProgressTick := 0;
   wasCancelled := False;
-  // Test-Filter aus UI-Checkbox uebernehmen: Checked=true -> Tests einschliessen,
-  // also SkipTests=false. IgnoreList wird waehrend des Verzeichnis-Scans
-  // konsultiert.
+  // Test-Filter aus analyser.ini [Detectors] IncludeTests uebernehmen:
+  // IncludeTests=1 -> Tests einschliessen -> SkipTests=False.
+  // IgnoreList wird waehrend des Verzeichnis-Scans konsultiert.
   if Assigned(FIgnoreList) then
-    FIgnoreList.SkipTests := not FChkIncludeTests.Checked;
+    FIgnoreList.SkipTests := not FRepoSettings.IncludeTests;
   try
     try
       StatusMode(_('Analysis running - searching for files...'));
@@ -2102,6 +2321,16 @@ begin
               tick     : Cardinal;
               doUpdate : Boolean;
             begin
+              // ALLERERSTES: Lifecycle-Race-Schutz. Falls der User waehrend
+              // der Analyse das IDE-Dock-Fenster schliesst, wurde Self bereits
+              // freigegeben - GLiveAnalyserFrame ist dann nil oder zeigt auf
+              // einen anderen Frame. Pointer-Vergleich ist safe auch bei
+              // dangling Self, weil keine Felder dereferenziert werden.
+              if GLiveAnalyserFrame <> Pointer(Self) then
+              begin
+                // Frame ist weg -> Analyse abbrechen via EAbort
+                Abort;
+              end;
               try
                 // Defensive: Frame koennte vom IDE-Host zerstoert werden
                 if (not Assigned(FProgressBar)) or (not Assigned(FStatusBar)) then
@@ -2157,7 +2386,7 @@ begin
                 // andere UI-Update-Fehler schlucken, Analyse weiterlaufen lassen
               end;
             end,
-            FChkUsesCheck.Checked,
+            FRepoSettings.UsesCheck,
             FIgnoreList);
         except
           on EAbort do
@@ -2173,6 +2402,17 @@ begin
           end;
         end;
 
+        // Lifecycle-Check: Frame koennte waehrend ProcessMessages-Reentries
+        // im Worker zerstoert worden sein. Self ist dann dangling - alle
+        // weiteren Self-Accesses (PopulateFindings, StatusMode etc.) wuerden
+        // crashen. Bei Mismatch: Cleanup ueberspringen, findings explizit
+        // freigeben.
+        if GLiveAnalyserFrame <> Pointer(Self) then
+        begin
+          FreeAndNil(findings);
+          Exit;
+        end;
+
         if Assigned(findings) then
           PopulateFindings(findings, APath);
 
@@ -2186,42 +2426,76 @@ begin
       end;
     except
       on E: Exception do
-        StatusMode('Unerwarteter Fehler: ' + E.Message);
+        if GLiveAnalyserFrame = Pointer(Self) then
+          StatusMode('Unerwarteter Fehler: ' + E.Message);
+        // Bei zerstoertem Frame: Exception still verschlucken - kein
+        // StatusMode-Aufruf weil das auf FStatusBar.Panels zugreifen wuerde.
     end;
   finally
-    SetAnalyseUiBusy(False);
+    if GLiveAnalyserFrame = Pointer(Self) then
+      SetAnalyseUiBusy(False);
   end;
 end;
 
 // ---------------------------------------------------------------------------
 // Doppelklick -> Datei in IDE oeffnen, direkt zur gefundenen Zeile springen
 // ---------------------------------------------------------------------------
-procedure TAnalyserFrame.GridMouseMove(Sender: TObject; Shift: TShiftState;
-  X, Y: Integer);
-// Tooltip in der Datei-Spalte: voller Pfad aus FDisplayedFindings.
-// Sonst: nur Cell-Text (z.B. fuer abgeschnittene Detail-Texte).
+procedure TAnalyserFrame.GridWndProc(var Msg: TMessage);
+// Per-Control Tooltip-Logik via CM_HINTSHOW (kein globaler OnShowHint -
+// die IDE wuerde sonst alle Tooltips von Toolbars/Editor mitfiltern).
+//
+// CM_MOUSEENTER / CM_MOUSELEAVE: Application.HintPause / HintShortPause
+// nur waehrend "Maus ueber Grid" auf 100ms gedrueckt, danach Original
+// wieder hergestellt. Damit greift der 100ms-Delay, ohne den Rest der
+// IDE dauerhaft zu beschleunigen.
 var
-  grid    : TStringGrid;
-  ACol, ARow, idx: Integer;
-  hintText: string;
+  HI         : PHintInfo;
+  ACol, ARow : Integer;
+  idx        : Integer;
 begin
-  grid := TStringGrid(Sender);
-  grid.MouseToCell(X, Y, ACol, ARow);
-  hintText := '';
-  if ARow >= 1 then
-  begin
-    idx := ARow - 1;
-    if (ACol = 0) and (idx >= 0) and (idx < FDisplayedFindings.Count) then
-      hintText := FDisplayedFindings[idx].FileName
-    else
-      hintText := grid.Cells[ACol, ARow];
+  case Msg.Msg of
+    CM_HINTSHOW:
+      begin
+        HI := PHintInfo(Msg.LParam);
+        FResultGrid.MouseToCell(HI.CursorPos.X, HI.CursorPos.Y, ACol, ARow);
+        idx := ARow - 1;
+        if (ACol = 0) and (idx >= 0) and (idx < FDisplayedFindings.Count) then
+        begin
+          // Voller Pfad aus FDisplayedFindings, nicht der gekuerzte
+          // DisplayName aus der Cell - der Tooltip soll Mehrwert liefern.
+          HI.HintStr      := FDisplayedFindings[idx].FileName;
+          HI.CursorRect   := FResultGrid.CellRect(ACol, ARow);
+          HI.HintMaxWidth := 600;
+          Msg.Result := 0;     // 0 = anzeigen
+        end
+        else
+          Msg.Result := 1;     // 1 = unterdruecken
+        Exit;
+      end;
+
+    CM_MOUSEENTER:
+      begin
+        if not FHintPauseOverridden then
+        begin
+          FSavedHintPause      := Application.HintPause;
+          FSavedHintShortPause := Application.HintShortPause;
+          Application.HintPause      := 100;
+          Application.HintShortPause := 100;
+          FHintPauseOverridden := True;
+        end;
+      end;
+
+    CM_MOUSELEAVE:
+      begin
+        if FHintPauseOverridden then
+        begin
+          Application.HintPause      := FSavedHintPause;
+          Application.HintShortPause := FSavedHintShortPause;
+          FHintPauseOverridden := False;
+        end;
+      end;
   end;
-  if grid.Hint <> hintText then
-  begin
-    grid.Hint := hintText;
-    Application.HintPause := 300;
-    Application.ActivateHint(grid.ClientToScreen(Point(X, Y)));
-  end;
+  FOldGridWndProc(Msg);
 end;
 
 procedure TAnalyserFrame.GridDblClick(Sender: TObject);
@@ -2248,6 +2522,10 @@ begin
   end;
 
   OpenFileAtLine(absPath, lineNo);
+  // Editor-Line-Highlight setzen - die Datei ist jetzt sicher offen,
+  // also wird PaintLine den Marker malen.
+  if Assigned(GHighlighter) then
+    GHighlighter.SetSelected(absPath, lineNo);
   StatusMode(Format(_('Opened: %s  Line: %d'),
     [ExtractFileName(absPath), lineNo]));
 end;
@@ -2701,11 +2979,14 @@ begin
   // Dockable Form registrieren (fuer Desktop-State-Persistenz)
   NTASvc.RegisterDockableForm(GDockableForm);
 
-  // Custom-Line-Highlighter: erzeugt nur das Singleton, registriert aber
-  // KEINEN IDE-Notifier (das passiert lazy beim ersten SetFindings).
-  // Sofortige Notifier-Registrierung beim Plugin-Load verursacht in
-  // manchen Delphi-12-Builds AV in coreide290.bpl.
+  // Custom-Line-Highlighter: Manager + INTAEditServicesNotifier sofort
+  // registrieren. Per-View-Notifier werden ueber EditorViewActivated
+  // angehaengt; AV-sicher dank ref-counting (siehe uIDELineHighlighter).
   RegisterLineHighlighter;
+  // Watch-Mode: Manager-Singleton anlegen. KEINE ToolsAPI-Calls hier -
+  // Module-Notifier werden erst beim Activate() aus PrepareAnalysis
+  // angehaengt (= nur wenn INI WatchMode=1).
+  RegisterWatchMode;
 
   // Eintrag im Ansicht-Menue hinzufuegen
   MainMenu := NTASvc.GetMainMenu;
@@ -2750,7 +3031,7 @@ begin
     GDockableForm := nil;
   end;
   UnregisterLineHighlighter;
-  UnregisterEditSubclass;
+  UnregisterWatchMode;
 end;
 
 end.

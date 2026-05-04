@@ -180,12 +180,12 @@ close and re-open the window after switching themes.
 
 ---
 
-## Settings — `repo.ini`
+## Settings — `analyser.ini`
 
 Click the **`Repo...`** button to open:
 
 ```
-%APPDATA%\StaticCodeAnalyser\repo.ini
+%APPDATA%\StaticCodeAnalyser\analyser.ini
 ```
 
 The file is created with default content on first launch. Changes are
@@ -245,7 +245,7 @@ accidentally pick a sub-path outside the repo root.
 ### "no base branch (main/master) found — working tree only"
 
 Your repository has no default branch under the usual names. Set
-`BaseBranch=` explicitly in `repo.ini` (e.g. `develop`).
+`BaseBranch=` explicitly in `analyser.ini` (e.g. `develop`).
 
 ### Findings you expected aren't there
 

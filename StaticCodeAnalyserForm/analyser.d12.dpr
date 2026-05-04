@@ -56,7 +56,8 @@ uses
   uSQLInjection in 'sources\Detectors\uSQLInjection.pas',
   uSQLInjectionScore in 'sources\Detectors\uSQLInjectionScore.pas',
   uTodoComment in 'sources\Detectors\uTodoComment.pas',
-  uUnusedUses in 'sources\Detectors\uUnusedUses.pas';
+  uUnusedUses in 'sources\Detectors\uUnusedUses.pas',
+  uCustomClassDiscovery in 'sources\Detectors\uCustomClassDiscovery.pas';
 
 {$R *.res}
 

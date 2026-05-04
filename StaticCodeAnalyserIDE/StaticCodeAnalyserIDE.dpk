@@ -38,7 +38,7 @@ contains
   uIDEAnalyserForm in 'uIDEAnalyserForm.pas',
   uIDELineHighlighter in 'uIDELineHighlighter.pas',
   uIDEMessages in 'uIDEMessages.pas',
-  uIDEEditSubclass in 'uIDEEditSubclass.pas',
+  uIDEWatchMode in 'uIDEWatchMode.pas',
   // ---- UI ----
   uAnalyserPalette in '..\StaticCodeAnalyserForm\sources\UI\uAnalyserPalette.pas',
   uAnalyserTypes in '..\StaticCodeAnalyserForm\sources\UI\uAnalyserTypes.pas',
@@ -91,6 +91,7 @@ contains
   uTodoComment in '..\StaticCodeAnalyserForm\sources\Detectors\uTodoComment.pas',
   uEmptyMethod in '..\StaticCodeAnalyserForm\sources\Detectors\uEmptyMethod.pas',
   uFieldLeak in '..\StaticCodeAnalyserForm\sources\Detectors\uFieldLeak.pas',
-  uDuplicateBlock in '..\StaticCodeAnalyserForm\sources\Detectors\uDuplicateBlock.pas';
+  uDuplicateBlock in '..\StaticCodeAnalyserForm\sources\Detectors\uDuplicateBlock.pas',
+  uCustomClassDiscovery in '..\StaticCodeAnalyserForm\sources\Detectors\uCustomClassDiscovery.pas';
 
 end.

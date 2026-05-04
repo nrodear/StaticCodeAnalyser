@@ -41,8 +41,11 @@ type
 
 implementation
 
+// Schwellwert kommt aus uSCAConsts.DetectorMaxNesting (analyser.ini ->
+// DeepNestingMaxDepth). Default 4 (also wird ab 5 verschachtelten
+// Ebenen gemeldet).
+
 const
-  MAX_DEPTH = 4;
   // Nur logische Verschachtelung – keine Exception-Handler
   COUNTING_KINDS : set of TNodeKind =
     [nkIfStmt, nkForStmt, nkWhileStmt, nkRepeatStmt, nkCaseStmt];
@@ -103,7 +106,7 @@ begin
       DeepestKind  := nkUnknown;
       Walk(M, 0, DeepestLine, DeepestDepth, DeepestKind);
 
-      if DeepestDepth > MAX_DEPTH then
+      if DeepestDepth > DetectorMaxNesting then
       begin
         F            := TLeakFinding.Create;
         F.FileName   := FileName;
@@ -112,7 +115,7 @@ begin
         F.MissingVar := Format(
           'Depth %d (%s from line %d, limit: %d)',
           [DeepestDepth, KindName(DeepestKind),
-           DeepestLine, MAX_DEPTH]);
+           DeepestLine, DetectorMaxNesting]);
         F.Severity   := lsHint;
         F.Kind       := fkDeepNesting;
         Results.Add(F);

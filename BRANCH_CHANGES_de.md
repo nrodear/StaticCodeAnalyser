@@ -173,12 +173,12 @@ oeffnen.
 
 ---
 
-## Settings — `repo.ini`
+## Settings — `analyser.ini`
 
 Per Klick auf den Button **`Repo...`** oeffnet sich:
 
 ```
-%APPDATA%\StaticCodeAnalyser\repo.ini
+%APPDATA%\StaticCodeAnalyser\analyser.ini
 ```
 
 Die Datei wird beim ersten Aufruf mit Default-Inhalt angelegt. Aenderungen
@@ -238,7 +238,7 @@ Sub-Pfad ausserhalb des Repo-Roots gewaehlt hast.
 ### "kein Base-Branch (main/master) gefunden - nur Working Tree"
 
 Dein Repo hat keinen Default-Branch unter dem ueblichen Namen. Setze in
-`repo.ini` den `BaseBranch=` Eintrag explizit (z. B. `develop`).
+`analyser.ini` den `BaseBranch=` Eintrag explizit (z. B. `develop`).
 
 ### Befunde fehlen die du erwartest
 

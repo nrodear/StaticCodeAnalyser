@@ -30,6 +30,8 @@ type
     procedure LeererExceptBlockMitKommentar;
   end;
 
+procedure GetMeineKlasseUseSample;
+
 implementation
 
 function TMeineKlasse.MethodeMitSpeicherleck: string;
@@ -68,18 +70,16 @@ begin
   // Fehler: list1.Free und list2.Free fehlen -> zwei Speicherlecks
 end;
 
-
 function TMeineKlasse.MethodeMethodeMitSpeicherleck: TStringList;
 begin
-  result:= TStringList.Create;
+  Result := TStringList.Create;
 end;
-
 
 function TMeineKlasse.MethodeMethodeTStringListNotFree: TStringList;
 var
   list1: TStringList;
 begin
-  list1:= MethodeMethodeMitSpeicherleck;
+  list1 := MethodeMethodeMitSpeicherleck;
 end;
 
 procedure TMeineKlasse.LeererExceptBlock;
@@ -99,6 +99,16 @@ begin
     i := 1 div 2;
   except
   end;
+end;
+
+procedure GetMeineKlasseUseSample;
+var
+  meine: TMeineKlasse;
+
+begin
+
+  meine := TMeineKlasse.Create;
+
 end;
 
 end.

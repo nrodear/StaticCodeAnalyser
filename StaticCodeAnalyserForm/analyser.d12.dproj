@@ -182,6 +182,7 @@
         <DCCReference Include="sources\Infrastructure\uSuppression.pas"/>
         <DCCReference Include="sources\Detectors\uTodoComment.pas"/>
         <DCCReference Include="sources\Detectors\uUnusedUses.pas"/>
+        <DCCReference Include="sources\Detectors\uCustomClassDiscovery.pas"/>
         <DCCReference Include="sources\Infrastructure\uVcsChanges.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

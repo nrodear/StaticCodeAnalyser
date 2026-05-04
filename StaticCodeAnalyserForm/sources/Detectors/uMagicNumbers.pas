@@ -27,9 +27,16 @@ type
 implementation
 
 class function TMagicNumberDetector.IsTrivial(const NumStr: string): Boolean;
+// Trivial-Liste kommt aus uSCAConsts.DetectorMagicTrivials (analyser.ini ->
+// MagicNumberTrivials). Defaults 0,1,2,-1,10,100. Wenn die globale Liste
+// nil sein sollte (Initialisierungs-Race), fallen wir auf die historischen
+// Defaults zurueck damit der Detektor immer funktioniert.
 begin
-  Result := (NumStr = '0') or (NumStr = '1') or (NumStr = '2') or
-            (NumStr = '-1') or (NumStr = '10') or (NumStr = '100');
+  if Assigned(DetectorMagicTrivials) and (DetectorMagicTrivials.Count > 0) then
+    Result := DetectorMagicTrivials.IndexOf(NumStr) >= 0
+  else
+    Result := (NumStr = '0') or (NumStr = '1') or (NumStr = '2') or
+              (NumStr = '-1') or (NumStr = '10') or (NumStr = '100');
 end;
 
 class function TMagicNumberDetector.ExtractMagicNumber(

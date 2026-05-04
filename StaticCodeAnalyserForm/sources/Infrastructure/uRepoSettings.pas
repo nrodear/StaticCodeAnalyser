@@ -1,8 +1,11 @@
 unit uRepoSettings;
 
-// Persistente Repo-Settings fuer die Branch-Changes-Analyse.
+// Persistente Settings fuer das Static Code Analysis Tool.
 //
-// Datei: %APPDATA%\StaticCodeAnalyser\repo.ini
+// Datei: %APPDATA%\StaticCodeAnalyser\analyser.ini
+//
+// Vorgaenger-Datei: repo.ini - wird beim ersten Start automatisch zu
+// analyser.ini umbenannt, damit existierende User-Settings erhalten bleiben.
 //
 // [Repo]
 // BaseBranch=develop          ; leer = auto (origin/HEAD -> main -> master)
@@ -12,7 +15,19 @@ unit uRepoSettings;
 // GitExe=C:\custom\git.exe    ; leer = auto (PATH + Tortoise-Hints)
 // SvnExe=C:\custom\svn.exe
 //
-// Aenderungen wirken beim naechsten Klick auf "Branch-Changes".
+// [Detectors]
+// LeakyClasses=TFDQuery,TIBQuery,TZipMaster
+//                          ; zusaetzliche Klassen die der MemoryLeak-Detektor
+//                          ; trackt - kommagetrennt. Werden zu den Default-
+//                          ; Klassen (TStringList, TList, TFileStream, ...)
+//                          ; aus uSCAConsts.LeakyClasses HINZUGEFUEGT.
+// ExcludeLeakyClasses=TComponent,TThread
+//                          ; Klassen die NICHT getrackt werden - werden aus
+//                          ; der Default-Liste entfernt (False-Positive-
+//                          ; Reduktion bei strikt Owner-basierten Projekten).
+//
+// Aenderungen wirken beim naechsten Klick auf "Branch-Changes" bzw.
+// "Analyse starten".
 
 interface
 
@@ -27,13 +42,29 @@ type
     FGitExePath        : string;
     FSvnExePath        : string;
     FConfigPath        : string;
+    FLeakyClasses      : TStringList; // Custom-Eintraege aus [Detectors]
+    FExcludeLeaky      : TStringList; // [Detectors] ExcludeLeakyClasses
+    FAutoDiscover      : Boolean;     // [Detectors] AutoDiscoverClasses
+    FUsesCheck         : Boolean;     // [Detectors] UsesCheck
+    FIncludeTests      : Boolean;     // [Detectors] IncludeTests
+    FWatchMode         : Boolean;     // [Detectors] WatchMode
+    // Detektor-Schwellwerte (alle [Detectors]-Sektion).
+    FMaxBodyLines      : Integer;     // LongMethodMaxBodyLines
+    FMaxStatements     : Integer;     // LongMethodMaxStatements
+    FMaxParams         : Integer;     // LongParamListMaxParams
+    FMaxNesting        : Integer;     // DeepNestingMaxDepth
+    FMinBlockLines     : Integer;     // DuplicateBlockMinLines
+    FMaxFileMB         : Integer;     // MaxFileMB (5 Default)
+    FMagicTrivials     : TStringList; // MagicNumberTrivials (CSV)
+    FLanguage          : string;      // [UI] Language ('de', 'en', '')
   public
     constructor Create;
+    destructor Destroy; override;
 
-    // Laedt aus repo.ini. Wenn die Datei nicht existiert, wird sie mit
+    // Laedt aus analyser.ini. Wenn die Datei nicht existiert, wird sie mit
     // einem dokumentierten Default-Inhalt angelegt.
     procedure Load;
-    // Speichert aktuelle Werte in repo.ini (legt Verzeichnis bei Bedarf an).
+    // Speichert aktuelle Werte in analyser.ini (legt Verzeichnis bei Bedarf an).
     procedure Save;
     procedure EnsureConfigExists;
 
@@ -48,34 +79,268 @@ type
     // '' bedeutet auto-detect via PATH/Tortoise-Hints.
     property GitExePath: string read FGitExePath write FGitExePath;
     property SvnExePath: string read FSvnExePath write FSvnExePath;
+
+    // Zusaetzliche Klassen die der MemoryLeak-Detektor tracken soll.
+    // Aus [Detectors] LeakyClasses (kommagetrennt) gelesen. Aufrufer
+    // ruft RegisterToLeakyClasses() um sie an uSCAConsts.LeakyClasses
+    // anzuhaengen, bevor die Analyse startet.
+    property LeakyClasses: TStringList read FLeakyClasses;
+
+    // Klassen die NICHT getrackt werden sollen (z.B. TComponent wenn das
+    // Projekt durchgaengig auf Owner-Pattern setzt). Aus [Detectors]
+    // ExcludeLeakyClasses (kommagetrennt). Werden in RegisterToLeakyClasses
+    // aus der globalen Liste entfernt.
+    property ExcludeLeakyClasses: TStringList read FExcludeLeaky;
+
+    // Wenn True: vor dem MemoryLeak-Detektor scannt der Analyzer das AST
+    // auf 'class(...)' Deklarationen und ergaenzt die LeakyClasses-Liste
+    // automatisch um Custom-Klassen die NICHT von TForm/TFrame/TComponent/
+    // TInterfacedObject erben (siehe uCustomClassDiscovery).
+    property AutoDiscoverClasses: Boolean read FAutoDiscover write FAutoDiscover;
+
+    // Wenn True: zusaetzlicher Detektor laeuft, der ungenutzte Eintraege in
+    // der uses-Klausel meldet. Default False weil er bei Property/Operator-
+    // /Generics-Code False-Positives produziert. Aus [Detectors] UsesCheck.
+    property UsesCheck: Boolean read FUsesCheck write FUsesCheck;
+
+    // Wenn True: DUnit/DUnitX-Tests (uTest*.pas, *_Tests.pas, /tests/-Ordner)
+    // werden mit-analysiert. Default False - Test-Code produziert ueber-
+    // proportional viele Code-Smell-Befunde (LongMethod, MagicNumber) die
+    // den Hauptbefund ueberlagern. Aus [Detectors] IncludeTests.
+    property IncludeTests: Boolean read FIncludeTests write FIncludeTests;
+
+    // Wenn True: das IDE-Plugin attached pro offener Source-Datei einen
+    // IOTAModuleNotifier; nach jedem Strg+S laeuft die Analyse fuer genau
+    // diese Datei automatisch im Hintergrund-Thread und das Befund-Grid
+    // aktualisiert sich live (~50-100ms Latenz). Default off; wenn an,
+    // wird die UI nicht blockiert weil der Worker-Thread sich auf den
+    // UI-Thread synchronisiert. Aus [Detectors] WatchMode.
+    property WatchMode: Boolean read FWatchMode write FWatchMode;
+
+    // ---- Detektor-Schwellwerte (alle [Detectors]). Werden via
+    // ApplyDetectorThresholds in die globalen Variablen in uSCAConsts
+    // gespiegelt. Defaults entsprechen den fruheren hardcoded Konstanten,
+    // also bleibt das Verhalten ohne INI-Eintraege unveraendert. ----
+
+    // uLongMethod: Methode wird als "lang" markiert wenn Body-Lines UND
+    // Statement-Count beide ueber den Schwellwerten liegen.
+    property LongMethodMaxBodyLines:  Integer read FMaxBodyLines  write FMaxBodyLines;
+    property LongMethodMaxStatements: Integer read FMaxStatements write FMaxStatements;
+
+    // uLongParamList: Methoden mit > MaxParams Parametern werden gemeldet.
+    property LongParamListMaxParams:  Integer read FMaxParams     write FMaxParams;
+
+    // uDeepNesting: Verschachtelung > MaxDepth Ebenen.
+    property DeepNestingMaxDepth:     Integer read FMaxNesting    write FMaxNesting;
+
+    // uDuplicateBlock: Block muss min. MinBlockLines (normalisierte Zeilen)
+    // lang sein um als Duplikat zu zaehlen.
+    property DuplicateBlockMinLines:  Integer read FMinBlockLines write FMinBlockLines;
+
+    // uStaticAnalyzer2: Dateien groesser als MaxFileMB werden uebersprungen
+    // (Schutz vor Out-of-Memory bei generiertem Code). In MB statt Bytes
+    // weil's INI-freundlicher ist.
+    property MaxFileMB:               Integer read FMaxFileMB     write FMaxFileMB;
+
+    // uMagicNumbers: Liste der Zahlen die NICHT als Magic-Number gemeldet
+    // werden. Aus INI als CSV gelesen, im Detektor als StringList verfuegbar.
+    property MagicNumberTrivials:     TStringList read FMagicTrivials;
+
+    // UI-Sprache. '' bedeutet "use Default" (= deutsch beim aktuellen Build,
+    // falls dxgettext jemals aktiviert wird, wuerde es OS-Locale nutzen).
+    // Aus [UI] Language gelesen. Erlaubte Werte: 'de', 'en', ''.
+    property Language: string read FLanguage write FLanguage;
+
+    // Customs an uSCAConsts.LeakyClasses anhaengen + Excludes daraus
+    // entfernen. Reihenfolge: Adds zuerst, Excludes danach (User koennte
+    // theoretisch eine Klasse adden UND excluden - dann Wins exclude).
+    procedure RegisterToLeakyClasses;
+
+    // Spiegelt die Schwellwerte in die globalen Variablen in uSCAConsts.
+    // Wird vor jedem Analyse-Lauf aus der UI heraus aufgerufen, damit
+    // INI-Aenderungen ohne App-Neustart wirken.
+    procedure ApplyDetectorThresholds;
+
+    // Schreibt die im aktuellen Lauf gefundenen Discovery-Treffer
+    // (uSCAConsts.DiscoveredClasses) in eine LeakyClassesDiscover.log
+    // neben der analyser.ini. Reine Uebersicht/Kuratierungs-Hilfe -
+    // die LeakyClasses-Konfiguration in der INI wird NICHT angefasst.
+    // Der User entscheidet handisch welche Eintraege er in [Detectors]
+    // LeakyClasses= uebernimmt. Bestehende Eintraege im .log werden
+    // gemerged (sortiert + dedupliziert), ExcludeLeakyClasses werden
+    // uebersprungen.
+    procedure PersistDiscoveredClasses;
   end;
 
 implementation
 
 uses
-  uIgnoreList;
+  uIgnoreList, uSCAConsts;
 
 const
   DEFAULT_INI_CONTENT =
-    '; Static Code Analysis Tool for Delphi - Repo-Settings'#13#10 +
-    '; Wirkt auf den "Branch-Changes"-Button.'#13#10 +
+    '; ============================================================'#13#10 +
+    ';  Static Code Analysis Tool for Delphi - analyser.ini'#13#10 +
+    '; ============================================================'#13#10 +
+    ';'#13#10 +
+    '; Diese Datei listet ALLE verfuegbaren Optionen mit Default-Werten.'#13#10 +
+    '; Format pro Option:'#13#10 +
+    ';   Kommentar erklaert was die Option macht.'#13#10 +
+    ';   OPTION=<default>           <- aktiv mit Default-Wert'#13#10 +
+    ';   ;OPTION=<beispiel>         <- auskommentierte Beispiel-Variante'#13#10 +
+    ';'#13#10 +
+    '; Aenderungen wirken beim naechsten Klick auf "Analyse starten" /'#13#10 +
+    '; "Branch-Changes" / "Aktuelle Datei". Kein Plugin-Reload noetig.'#13#10 +
+    ';'#13#10 +
+    ';'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ';  [Repo] - VCS-Settings fuer den "Branch-Changes"-Button'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
     ''#13#10 +
     '[Repo]'#13#10 +
-    '; Vergleichs-Branch fuer "git diff <base>...HEAD".'#13#10 +
-    '; Leer lassen fuer Auto-Detect (origin/HEAD -> main -> master).'#13#10 +
-    '; Beispiele: develop, release/2024.1, origin/main'#13#10 +
-    'BaseBranch='#13#10 +
     ''#13#10 +
-    '; Uncommitted Working-Tree-Aenderungen einbeziehen?'#13#10 +
-    '; 1 = ja (Default - typisch fuer Pre-Commit-Check)'#13#10 +
-    '; 0 = nur committed Aenderungen'#13#10 +
+    '; BaseBranch (string, default: leer = auto-detect)'#13#10 +
+    '; Vergleichs-Branch fuer "git diff <base>...HEAD".'#13#10 +
+    '; Leer = Auto-Detect: origin/HEAD -> main -> master.'#13#10 +
+    'BaseBranch='#13#10 +
+    ';BaseBranch=develop'#13#10 +
+    ';BaseBranch=release/2024.1'#13#10 +
+    ';BaseBranch=origin/main'#13#10 +
+    ''#13#10 +
+    '; IncludeWorkingTree (bool, default: 1)'#13#10 +
+    '; Uncommitted Aenderungen mit einbeziehen?'#13#10 +
+    ';   1 = ja  (Default - typisch fuer Pre-Commit-Check)'#13#10 +
+    ';   0 = nein (nur committed Branch-Diff)'#13#10 +
     'IncludeWorkingTree=1'#13#10 +
+    ';IncludeWorkingTree=0'#13#10 +
+    ''#13#10 +
+    ';'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ';  [Paths] - Tool-Pfade (falls nicht in PATH gefunden)'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
     ''#13#10 +
     '[Paths]'#13#10 +
-    '; Vollstaendige Pfade falls git/svn nicht im PATH und nicht im'#13#10 +
-    '; Standard-Tortoise-Pfad liegen. Sonst leer lassen.'#13#10 +
+    ''#13#10 +
+    '; GitExe (string, default: leer = auto via PATH+Tortoise)'#13#10 +
+    '; Voller Pfad zu git.exe wenn weder PATH noch typische'#13#10 +
+    '; Tortoise-Installation greifen.'#13#10 +
     'GitExe='#13#10 +
-    'SvnExe='#13#10;
+    ';GitExe=C:\Program Files\Git\bin\git.exe'#13#10 +
+    ';GitExe=C:\Program Files\TortoiseGit\bin\git.exe'#13#10 +
+    ''#13#10 +
+    '; SvnExe (string, default: leer = auto via PATH+Tortoise)'#13#10 +
+    'SvnExe='#13#10 +
+    ';SvnExe=C:\Program Files\TortoiseSVN\bin\svn.exe'#13#10 +
+    ';SvnExe=C:\Program Files\Subversion\bin\svn.exe'#13#10 +
+    ''#13#10 +
+    ';'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ';  [Detectors] - Detektor-spezifische Tuning-Optionen'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ''#13#10 +
+    '[Detectors]'#13#10 +
+    ''#13#10 +
+    '; LeakyClasses (kommagetrennt, default: leer)'#13#10 +
+    '; Zusaetzliche Klassen die der MemoryLeak-Detektor tracken soll.'#13#10 +
+    '; Werden zu den 30 Default-Klassen (TStringList, TList, TDictionary,'#13#10 +
+    '; TFileStream, TBitmap, ...) hinzugefuegt.'#13#10 +
+    'LeakyClasses='#13#10 +
+    ';LeakyClasses=TFDQuery,TIBQuery,TZipMaster'#13#10 +
+    ';LeakyClasses=TIdHTTP,TIdSMTP,TIdFTP'#13#10 +
+    ''#13#10 +
+    '; ExcludeLeakyClasses (kommagetrennt, default: leer)'#13#10 +
+    '; Klassen die aus der Default-Liste ENTFERNT werden.'#13#10 +
+    '; Sinnvoll wenn dein Projekt konsequent auf Owner-Pattern setzt -'#13#10 +
+    '; z.B. TComponent wird normalerweise vom Parent-Owner freigegeben.'#13#10 +
+    'ExcludeLeakyClasses='#13#10 +
+    ';ExcludeLeakyClasses=TComponent'#13#10 +
+    ';ExcludeLeakyClasses=TComponent,TThread'#13#10 +
+    ''#13#10 +
+    '; AutoDiscoverClasses (bool, default: 0)'#13#10 +
+    '; Wenn 1: scannt das Projekt nach Klassen-Deklarationen und'#13#10 +
+    '; ergaenzt LeakyClasses um alle Custom-Klassen die NICHT von'#13#10 +
+    '; TForm/TFrame/TComponent/TInterfacedObject erben.'#13#10 +
+    '; Mehr Befunde, ggf. mehr False-Positives -> per ExcludeLeakyClasses'#13#10 +
+    '; gezielt ausschliessen.'#13#10 +
+    'AutoDiscoverClasses=0'#13#10 +
+    ';AutoDiscoverClasses=1'#13#10 +
+    ''#13#10 +
+    '; UsesCheck (bool, default: 0)'#13#10 +
+    '; Wenn 1: zusaetzlicher Detektor meldet ungenutzte Eintraege in der'#13#10 +
+    '; uses-Klausel. Standardmaessig aus, weil bei Property/Operator-/'#13#10 +
+    '; Generics-Code False-Positives auftreten koennen.'#13#10 +
+    'UsesCheck=0'#13#10 +
+    ';UsesCheck=1'#13#10 +
+    ''#13#10 +
+    '; IncludeTests (bool, default: 0)'#13#10 +
+    '; Wenn 1: DUnit/DUnitX-Tests (uTest*.pas, *_Tests.pas, /tests/-Ordner,'#13#10 +
+    '; TestProject*.dpr) werden mit-analysiert. Default aus, weil Test-Code'#13#10 +
+    '; ueberproportional viele Code-Smell-Befunde produziert (LongMethod,'#13#10 +
+    '; MagicNumber) die den eigentlichen Hauptbefund ueberlagern.'#13#10 +
+    'IncludeTests=0'#13#10 +
+    ';IncludeTests=1'#13#10 +
+    ''#13#10 +
+    '; WatchMode (bool, default: 0) - nur IDE-Plugin'#13#10 +
+    '; Wenn 1: Live-Analyse beim Speichern. Pro offener Source-Datei'#13#10 +
+    '; haengt das Plugin einen IOTAModuleNotifier; nach jedem Strg+S'#13#10 +
+    '; laeuft die Analyse fuer genau diese Datei im Hintergrund und das'#13#10 +
+    '; Befund-Grid aktualisiert sich live (~50-100ms Latenz pro Datei).'#13#10 +
+    '; Debounce: 300ms - haeufiges Save-on-Build wird zusammengefasst.'#13#10 +
+    ';'#13#10 +
+    '; Hinweis: bei "Aktuelle Datei" wird WatchMode AUTOMATISCH aktiviert,'#13#10 +
+    '; egal was hier steht (Live-Update beim Editieren ist der natural'#13#10 +
+    '; fit). Diese Option steuert nur das Verhalten bei "Analyse starten"'#13#10 +
+    '; (volles Projekt) und "Branch-Changes".'#13#10 +
+    'WatchMode=0'#13#10 +
+    ';WatchMode=1'#13#10 +
+    ''#13#10 +
+    ';'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ';  Detektor-Schwellwerte. Werte spiegeln die Defaults wider -'#13#10 +
+    ';  einfach raus-kommentieren oder anpassen wenn Du es anders'#13#10 +
+    ';  brauchst.'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ''#13#10 +
+    '; LongMethod: Methode wird gemeldet wenn beide Schwellen ueber-'#13#10 +
+    '; schritten sind (Body-Zeilen UND Statements). So entgehen wir'#13#10 +
+    '; FPs bei lang-aber-flachen Massendaten-Initialisierungen.'#13#10 +
+    ';LongMethodMaxBodyLines=50'#13#10 +
+    ';LongMethodMaxStatements=30'#13#10 +
+    ''#13#10 +
+    '; LongParamList: > MaxParams Parameter -> Refactoring-Hinweis.'#13#10 +
+    ';LongParamListMaxParams=5'#13#10 +
+    ''#13#10 +
+    '; DeepNesting: > MaxDepth verschachtelte Ebenen (if/while/for/'#13#10 +
+    '; case/try) -> Refactoring-Hinweis.'#13#10 +
+    ';DeepNestingMaxDepth=4'#13#10 +
+    ''#13#10 +
+    '; DuplicateBlock: minimale Blockgroesse fuer Duplikat-Erkennung.'#13#10 +
+    '; Hoeher = weniger FPs (Boilerplate), niedriger = mehr Treffer.'#13#10 +
+    ';DuplicateBlockMinLines=8'#13#10 +
+    ''#13#10 +
+    '; MaxFileMB: Dateien groesser als das werden uebersprungen'#13#10 +
+    '; (Schutz vor OOM bei generiertem Code, .dfm-Dumps etc.).'#13#10 +
+    ';MaxFileMB=5'#13#10 +
+    ''#13#10 +
+    '; MagicNumberTrivials: kommagetrennt, Zahlen die nicht als'#13#10 +
+    '; Magic-Number gemeldet werden (Defaults: 0,1,2,-1,10,100).'#13#10 +
+    ';MagicNumberTrivials=0,1,2,-1,10,100'#13#10 +
+    ';MagicNumberTrivials=0,1,2,-1,10,100,1000,1024'#13#10 +
+    ''#13#10 +
+    ';'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ';  [UI] - Oberflaechen-Einstellungen'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ''#13#10 +
+    '[UI]'#13#10 +
+    ''#13#10 +
+    '; Language (string, default: en)'#13#10 +
+    '; UI-Sprache. Aktuell unterstuetzt:'#13#10 +
+    ';   en = English (Default - Source-Sprache, kein Dictionary-Lookup)'#13#10 +
+    ';   de = Deutsch (eingebautes Dictionary in uLocalization)'#13#10 +
+    ';   '''' (leer) = wie ''en'''#13#10 +
+    'Language=en'#13#10 +
+    ';Language=de'#13#10;
 
 constructor TRepoSettings.Create;
 begin
@@ -85,13 +350,55 @@ begin
   FGitExePath         := '';
   FSvnExePath         := '';
   FConfigPath         := '';
+  FLeakyClasses       := TStringList.Create;
+  FLeakyClasses.CaseSensitive := False;
+  FExcludeLeaky       := TStringList.Create;
+  FExcludeLeaky.CaseSensitive := False;
+  FAutoDiscover       := False;
+  FUsesCheck          := False;
+  FIncludeTests       := False;
+  FWatchMode          := False;
+  // Detektor-Schwellwerte: Defaults entsprechen den alten hardcoded Werten.
+  FMaxBodyLines  := 50;
+  FMaxStatements := 30;
+  FMaxParams     := 5;
+  FMaxNesting    := 4;
+  FMinBlockLines := 8;
+  FMaxFileMB     := 5;
+  FMagicTrivials := TStringList.Create;
+  FMagicTrivials.CaseSensitive := False;
+  FMagicTrivials.Sorted        := True;
+  FMagicTrivials.Duplicates    := dupIgnore;
+  FMagicTrivials.AddStrings(['0', '1', '2', '-1', '10', '100']);
+  FLanguage           := 'en';        // Default: englische UI (Source-Sprache)
+end;
+
+destructor TRepoSettings.Destroy;
+begin
+  FLeakyClasses.Free;
+  FExcludeLeaky.Free;
+  FMagicTrivials.Free;
+  inherited;
 end;
 
 function TRepoSettings.ConfigFilePath: string;
+var
+  OldPath: string;
 begin
   if FConfigPath <> '' then Exit(FConfigPath);
   // Liegt im selben Verzeichnis wie ignore.txt (= %APPDATA%\StaticCodeAnalyser\).
-  FConfigPath := TIgnoreList.ConfigDir + 'repo.ini';
+  FConfigPath := TIgnoreList.ConfigDir + 'analyser.ini';
+
+  // Auto-Migration: wenn die alte repo.ini noch existiert und es noch keine
+  // analyser.ini gibt, einfach umbenennen. So bleiben User-Settings
+  // (BaseBranch, Tortoise-Pfade, Custom-LeakyClasses) erhalten.
+  if not FileExists(FConfigPath) then
+  begin
+    OldPath := TIgnoreList.ConfigDir + 'repo.ini';
+    if FileExists(OldPath) then
+      try RenameFile(OldPath, FConfigPath); except end;
+  end;
+
   Result := FConfigPath;
 end;
 
@@ -116,7 +423,11 @@ end;
 
 procedure TRepoSettings.Load;
 var
-  Ini: TIniFile;
+  Ini       : TIniFile;
+  RawList   : string;
+  Items     : TArray<string>;
+  Item      : string;
+  Trimmed   : string;
 begin
   EnsureConfigExists;
   Ini := TIniFile.Create(ConfigFilePath);
@@ -125,8 +436,99 @@ begin
     FIncludeWorkingTree :=      Ini.ReadBool  ('Repo',  'IncludeWorkingTree', True);
     FGitExePath         := Trim(Ini.ReadString('Paths', 'GitExe',             ''));
     FSvnExePath         := Trim(Ini.ReadString('Paths', 'SvnExe',             ''));
+
+    // [Detectors] LeakyClasses=Klasse1,Klasse2,... -> FLeakyClasses
+    RawList := Trim(Ini.ReadString('Detectors', 'LeakyClasses', ''));
+    FLeakyClasses.Clear;
+    if RawList <> '' then
+    begin
+      Items := RawList.Split([',', ';']);
+      for Item in Items do
+      begin
+        Trimmed := Trim(Item);
+        if Trimmed <> '' then FLeakyClasses.Add(Trimmed);
+      end;
+    end;
+
+    // [Detectors] ExcludeLeakyClasses=Klasse1,... -> FExcludeLeaky
+    RawList := Trim(Ini.ReadString('Detectors', 'ExcludeLeakyClasses', ''));
+    FExcludeLeaky.Clear;
+    if RawList <> '' then
+    begin
+      Items := RawList.Split([',', ';']);
+      for Item in Items do
+      begin
+        Trimmed := Trim(Item);
+        if Trimmed <> '' then FExcludeLeaky.Add(Trimmed);
+      end;
+    end;
+
+    // [Detectors] AutoDiscoverClasses=1 -> FAutoDiscover
+    FAutoDiscover := Ini.ReadBool('Detectors', 'AutoDiscoverClasses', False);
+
+    // [Detectors] UsesCheck=1   -> FUsesCheck    (Default aus, oft FP)
+    // [Detectors] IncludeTests=1 -> FIncludeTests (Default aus, Test-Code-Noise)
+    FUsesCheck    := Ini.ReadBool('Detectors', 'UsesCheck',    False);
+    FIncludeTests := Ini.ReadBool('Detectors', 'IncludeTests', False);
+    FWatchMode    := Ini.ReadBool('Detectors', 'WatchMode',    False);
+
+    // Detektor-Schwellwerte (alle [Detectors]). Defaults = alte hardcoded
+    // Werte, also bleibt das Verhalten ohne explizite INI-Eintraege gleich.
+    FMaxBodyLines  := Ini.ReadInteger('Detectors', 'LongMethodMaxBodyLines',  50);
+    FMaxStatements := Ini.ReadInteger('Detectors', 'LongMethodMaxStatements', 30);
+    FMaxParams     := Ini.ReadInteger('Detectors', 'LongParamListMaxParams',  5);
+    FMaxNesting    := Ini.ReadInteger('Detectors', 'DeepNestingMaxDepth',     4);
+    FMinBlockLines := Ini.ReadInteger('Detectors', 'DuplicateBlockMinLines',  8);
+    FMaxFileMB     := Ini.ReadInteger('Detectors', 'MaxFileMB',               5);
+
+    RawList := Trim(Ini.ReadString('Detectors', 'MagicNumberTrivials', ''));
+    if RawList <> '' then
+    begin
+      FMagicTrivials.Clear;
+      Items := RawList.Split([',', ';']);
+      for Item in Items do
+      begin
+        Trimmed := Trim(Item);
+        if Trimmed <> '' then FMagicTrivials.Add(Trimmed);
+      end;
+    end;
+    // Wenn der Eintrag leer ist, behalten wir die Default-Liste aus dem
+    // Constructor (0,1,2,-1,10,100) - das spiegelt das alte Verhalten.
+
+    // [UI] Language=de|en|'' -> FLanguage. Default 'en' (Source-Sprache).
+    FLanguage := Trim(Ini.ReadString('UI', 'Language', 'en')).ToLower;
   finally
     Ini.Free;
+  end;
+end;
+
+procedure TRepoSettings.RegisterToLeakyClasses;
+var
+  i, k: Integer;
+begin
+  // uSCAConsts.LeakyClasses ist die globale Live-Liste (TStringList),
+  // NICHT meine Property mit gleichem Namen.
+  if not Assigned(uSCAConsts.LeakyClasses) then Exit;
+
+  // 1) Customs hinzufuegen (Sorted+dupIgnore -> idempotent)
+  for i := 0 to FLeakyClasses.Count - 1 do
+    uSCAConsts.LeakyClasses.Add(FLeakyClasses[i]);
+
+  // 2) Excludes in die globale Exclude-Liste schreiben. Auto-Discovery
+  //    konsultiert sie pro File-Pass, sonst wuerden Discovered-Classes
+  //    die Excludes ueberschreiben.
+  if Assigned(uSCAConsts.LeakyClassExcludes) then
+  begin
+    uSCAConsts.LeakyClassExcludes.Clear;
+    for i := 0 to FExcludeLeaky.Count - 1 do
+      uSCAConsts.LeakyClassExcludes.Add(FExcludeLeaky[i]);
+  end;
+
+  // 3) Excludes aus der LeakyClasses-Liste entfernen (gewinnt ueber Adds).
+  for i := 0 to FExcludeLeaky.Count - 1 do
+  begin
+    k := uSCAConsts.LeakyClasses.IndexOf(FExcludeLeaky[i]);
+    if k >= 0 then uSCAConsts.LeakyClasses.Delete(k);
   end;
 end;
 
@@ -141,8 +543,185 @@ begin
     Ini.WriteBool  ('Repo',  'IncludeWorkingTree', FIncludeWorkingTree);
     Ini.WriteString('Paths', 'GitExe',             FGitExePath);
     Ini.WriteString('Paths', 'SvnExe',             FSvnExePath);
+    Ini.WriteString('UI',    'Language',           FLanguage);
   finally
     Ini.Free;
+  end;
+end;
+
+procedure TRepoSettings.ApplyDetectorThresholds;
+var
+  i : Integer;
+begin
+  // Skalare Schwellwerte direkt in die Globals spiegeln. Detektoren lesen
+  // beim naechsten Lauf von dort.
+  uSCAConsts.DetectorMaxBodyLines  := FMaxBodyLines;
+  uSCAConsts.DetectorMaxStatements := FMaxStatements;
+  uSCAConsts.DetectorMaxParams     := FMaxParams;
+  uSCAConsts.DetectorMaxNesting    := FMaxNesting;
+  uSCAConsts.DetectorMinBlockLines := FMinBlockLines;
+  uSCAConsts.DetectorMaxFileBytes  := FMaxFileMB * 1024 * 1024;
+
+  // Trivial-Liste: globale Liste mit unseren INI-Eintraegen ueberschreiben.
+  if Assigned(uSCAConsts.DetectorMagicTrivials) then
+  begin
+    uSCAConsts.DetectorMagicTrivials.Clear;
+    for i := 0 to FMagicTrivials.Count - 1 do
+      uSCAConsts.DetectorMagicTrivials.Add(FMagicTrivials[i]);
+  end;
+end;
+
+procedure TRepoSettings.PersistDiscoveredClasses;
+// Schreibt die im aktuellen Lauf gefundenen Klassen in
+// LeakyClassesDiscover.log neben analyser.ini. Zwei Sektionen:
+//   [Instantiable]  - Klassen mit ctor/dtor oder Create-Aufruf
+//   [Static-only]   - keine Instanziierungs-Hinweise (auskommentiert)
+//
+// Bestehende Eintraege werden gemerged (Cumulative Log ueber alle
+// bisherigen Laeufe), Duplikate via case-insensitive IndexOf entfernt.
+// Wenn bei einer Sektion nichts neues hinzukam wird das File nicht
+// angefasst (mtime/git-diff schonen).
+const
+  LOG_FILE      = 'LeakyClassesDiscover.log';
+  HEADER_INST   = '; --- Instantiable (ctor/dtor declared or Create() call found) ---';
+  HEADER_STATIC = '; --- Static-only candidates (no instantiation evidence) ---';
+  FILE_INTRO =
+    '; LeakyClassesDiscover.log - Auto-Discovery output'#13#10 +
+    '; Manually copy the names you want into [Detectors] LeakyClasses='#13#10 +
+    '; in analyser.ini. The static-only block is commented out as a hint.'#13#10;
+
+  procedure ReadOldList(const Lines: TStringList; const Header: string;
+    Target: TStringList);
+  // Liest Klassennamen unter einem Section-Header bis zum naechsten
+  // Header oder Dateiende. Auskommentierte Eintraege ('; TFoo') werden
+  // entfettet und mit aufgenommen, damit der Static-Only-Block bei
+  // Reload nicht verloren geht.
+  var
+    InSection : Boolean;
+    i         : Integer;
+    Line      : string;
+  begin
+    InSection := False;
+    for i := 0 to Lines.Count - 1 do
+    begin
+      Line := Trim(Lines[i]);
+      if Line = '' then Continue;
+      if SameText(Line, Header) then
+      begin
+        InSection := True;
+        Continue;
+      end;
+      // Anderer Section-Header beendet den aktuellen Block
+      if Line.StartsWith('; ---') and not SameText(Line, Header) then
+      begin
+        InSection := False;
+        Continue;
+      end;
+      if not InSection then Continue;
+      // Bisherige Klassennamen koennen mit ';' oder '; ' praefixiert sein
+      // (Static-Only-Block) - praefix abschneiden bevor wir den Namen
+      // wieder als Klassennamen behandeln.
+      while Line.StartsWith(';') or Line.StartsWith('#') do
+      begin
+        Delete(Line, 1, 1);
+        Line := TrimLeft(Line);
+      end;
+      if Line = '' then Continue;
+      Target.Add(Line);
+    end;
+  end;
+
+var
+  LogPath           : string;
+  Inst, Stat        : TStringList;   // finale Listen (gemerged)
+  Raw               : TStringList;
+  i                 : Integer;
+  Cls               : string;
+  Output            : TStringList;
+  ChangedInst       : Boolean;
+  ChangedStat       : Boolean;
+begin
+  // Wenn beide Discovery-Listen leer sind: nichts zu tun
+  if (not Assigned(uSCAConsts.DiscoveredClasses) or
+      (uSCAConsts.DiscoveredClasses.Count = 0)) and
+     (not Assigned(uSCAConsts.DiscoveredStaticClasses) or
+      (uSCAConsts.DiscoveredStaticClasses.Count = 0)) then Exit;
+
+  EnsureConfigExists;
+  LogPath := ExtractFilePath(ConfigFilePath) + LOG_FILE;
+
+  Inst := TStringList.Create;
+  Stat := TStringList.Create;
+  try
+    Inst.CaseSensitive := False;
+    Inst.Sorted        := True;
+    Inst.Duplicates    := dupIgnore;
+    Stat.CaseSensitive := False;
+    Stat.Sorted        := True;
+    Stat.Duplicates    := dupIgnore;
+
+    // 1) bestehendes .log einlesen
+    if FileExists(LogPath) then
+    begin
+      Raw := TStringList.Create;
+      try
+        try Raw.LoadFromFile(LogPath); except end;
+        ReadOldList(Raw, HEADER_INST,   Inst);
+        ReadOldList(Raw, HEADER_STATIC, Stat);
+      finally
+        Raw.Free;
+      end;
+    end;
+
+    // 2) neue Treffer mergen, Excludes ueberspringen
+    ChangedInst := False;
+    if Assigned(uSCAConsts.DiscoveredClasses) then
+      for i := 0 to uSCAConsts.DiscoveredClasses.Count - 1 do
+      begin
+        Cls := uSCAConsts.DiscoveredClasses[i];
+        if FExcludeLeaky.IndexOf(Cls) >= 0 then Continue;
+        if Inst.IndexOf(Cls) < 0 then
+        begin
+          Inst.Add(Cls);
+          ChangedInst := True;
+        end;
+      end;
+
+    ChangedStat := False;
+    if Assigned(uSCAConsts.DiscoveredStaticClasses) then
+      for i := 0 to uSCAConsts.DiscoveredStaticClasses.Count - 1 do
+      begin
+        Cls := uSCAConsts.DiscoveredStaticClasses[i];
+        if FExcludeLeaky.IndexOf(Cls) >= 0 then Continue;
+        if Stat.IndexOf(Cls) < 0 then
+        begin
+          Stat.Add(Cls);
+          ChangedStat := True;
+        end;
+      end;
+
+    if not (ChangedInst or ChangedStat) then Exit;
+
+    // 3) zusammenbauen und schreiben
+    Output := TStringList.Create;
+    try
+      Output.Text := FILE_INTRO;
+      Output.Add('');
+      Output.Add(HEADER_INST);
+      for i := 0 to Inst.Count - 1 do
+        Output.Add(Inst[i]);
+      Output.Add('');
+      Output.Add(HEADER_STATIC);
+      for i := 0 to Stat.Count - 1 do
+        Output.Add('; ' + Stat[i]);
+
+      try Output.SaveToFile(LogPath); except end;
+    finally
+      Output.Free;
+    end;
+  finally
+    Inst.Free;
+    Stat.Free;
   end;
 end;
 
