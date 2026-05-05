@@ -63,6 +63,12 @@ type
       ALine: Integer = 0; ACol: Integer = 0): TAstNode;
     function AddChild(ANode: TAstNode): TAstNode;
 
+    // Uebernimmt alle Kinder von Source in Self (in Original-Reihenfolge)
+    // und leert Source.Children. O(n) statt O(n²) bei naivem Delete(0)-
+    // Loop - relevant fuer grosse try-Bodies (1000+ Statements).
+    // Atomar bei Exception: keine Doppel-Frees, keine Leaks.
+    procedure AdoptChildrenFrom(Source: TAstNode);
+
     // Suche – gibt Liste ohne Ownership zurück (Caller muss Free aufrufen)
     function FindAll(AKind: TNodeKind): TList<TAstNode>;
     function FindFirst(AKind: TNodeKind): TAstNode;
@@ -136,6 +142,43 @@ function TAstNode.AddChild(ANode: TAstNode): TAstNode;
 begin
   Children.Add(ANode);
   Result := ANode;
+end;
+
+procedure TAstNode.AdoptChildrenFrom(Source: TAstNode);
+// O(n) Transfer: zuerst alle Refs uebernehmen, dann Source bulk-clearen.
+// Vorher: while Count > 0 do begin Add; Delete(0); end - Delete(0) ist
+// O(n) (shift), bei n Items also O(n²). Bei mORMot2-typischen >1000-
+// Statement try-Bodies messbar (Sekunden statt Millisekunden).
+//
+// Exception-Sicherheit: Wenn AddChild mitten im Loop OOM wirft, gehoeren
+// die schon uebertragenen Items Self (Self.OwnsObjects=True per default).
+// Die Source-Slots referenzieren sie immer noch - wir nullen sie, damit
+// das anschliessende Source.OwnsObjects:=True die noch-nicht-uebertragenen
+// Items richtig freigibt, ohne die schon uebertragenen doppelt zu freen.
+var
+  Transferred : Integer;
+  i           : Integer;
+begin
+  if (Source = nil) or (Source = Self) then Exit;
+
+  Source.Children.OwnsObjects := False;
+  Transferred := 0;
+  try
+    while Transferred < Source.Children.Count do
+    begin
+      Children.Add(Source.Children[Transferred]);
+      Inc(Transferred);
+    end;
+    Source.Children.Clear; // einmaliger O(n), kein Free (OwnsObjects=False)
+  except
+    // Schon uebertragene Items aus Source-Slots rauswerfen, damit das
+    // Restore von OwnsObjects=True nicht doppelt freigibt. nil-Slots sind
+    // beim spaeteren Free safe (TObject.Free check'd nil).
+    for i := 0 to Transferred - 1 do
+      Source.Children[i] := nil;
+    Source.Children.OwnsObjects := True;
+    raise;
+  end;
 end;
 
 procedure TAstNode.CollectAll(AKind: TNodeKind; const AList: TList<TAstNode>);

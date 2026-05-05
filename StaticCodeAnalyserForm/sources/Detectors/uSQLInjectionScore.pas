@@ -115,6 +115,15 @@ var
   Reason      : string;
   Suggestion  : string;
 begin
+  // Defensive Defaults - sonst bleiben Reason/Suggestion uninitialisiert
+  // wenn der einzige Code-Pfad der TotalPlus=0 / nicht-strukturell /
+  // kein-FuncCall-Branch ist (`case TotalPlus of 0: Score := 1`). Folge
+  // war ein leerer Detail-Text in der Befund-Anzeige.
+  Score      := 1;
+  Difficulty := fdTrivial;
+  Reason     := '';
+  Suggestion := '';
+
   Low         := RHS.ToLower;
   TotalPlus   := CountPlus(Low);
   IsStructural := HasStructuralConcat(Low);
@@ -142,7 +151,14 @@ begin
   begin
     // Nur Wert-Verkettungen
     case TotalPlus of
-      0: Score := 1; // sollte nicht vorkommen, aber sicher ist sicher
+      0:
+        begin
+          // Sollte nicht vorkommen (Detektor wuerde nicht triggern ohne '+'),
+          // aber falls doch: defensive Defaults beschreiben den Zustand.
+          Score      := 1;
+          Reason     := 'Keine erkennbare Konkatenation';
+          Suggestion := 'Pr'#$FC'fen ob hier wirklich ein SQL-Injection-Risiko vorliegt.';
+        end;
       1:
         begin
           Score      := 1;

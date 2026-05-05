@@ -167,6 +167,7 @@
             <FormType>dfm</FormType>
         </DCCReference>
         <DCCReference Include="sources\Common\uMethodd12.pas"/>
+        <DCCReference Include="sources\Common\uRecentPaths.pas"/>
         <DCCReference Include="sources\Detectors\uMissingFinally.pas"/>
         <DCCReference Include="sources\Detectors\uNilDeref.pas"/>
         <DCCReference Include="sources\Parsing\uParser.pas"/>

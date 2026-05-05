@@ -173,6 +173,16 @@ begin
   for i := 0 to FAttachedClassRefs.Count - 1 do
     if Assigned(FAttachedClassRefs[i]) then
       FAttachedClassRefs[i].DetachIfNeeded;
+
+  // Listen leeren: nach DetachAll halten wir bewusst KEIN Tracking mehr.
+  // Vorher blieben die Eintraege drin -> EnsureViewNotifier sah den Key
+  // weiter in FAttachedFiles, skipte den Re-Attach, und ein folgendes
+  // SetSelected war silent kaputt. Das Pattern tritt z.B. beim Plugin-
+  // Reload auf, wenn der Manager am Leben bleibt aber alle Notifier
+  // bereits entkoppelt wurden.
+  if Assigned(FAttachedIntfRefs)  then FAttachedIntfRefs.Clear;
+  if Assigned(FAttachedClassRefs) then FAttachedClassRefs.Clear;
+  if Assigned(FAttachedFiles)     then FAttachedFiles.Clear;
 end;
 
 function TFindingHighlighter.NormalizePath(const APath: string): string;

@@ -17,7 +17,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uSCAConsts, uMethodd12, uFixHint;
+  uSCAConsts, uMethodd12, uFixHint, uLocalization;
 
 type
   // Bitset zur Severity-Auswahl beim Jira-/Clipboard-Export.
@@ -409,13 +409,14 @@ begin
   try
     nErr := 0; nWrn := 0; nHnt := 0;
 
-    SB.Append('h2. Code-Analyse: ');
+    SB.Append(_('h2. Code analysis: '));
     SB.AppendLine(JiraEscape(ExtractFileName(SourceFile)));
-    SB.Append('Stand: ');
+    SB.Append(_('As of: '));
     SB.AppendLine(FormatDateTime('yyyy-mm-dd hh:nn', Now));
     SB.AppendLine('');
 
-    SB.AppendLine('|| Severity || Zeile || Methode || Regel || Detail ||');
+    SB.AppendLine(Format('|| %s || %s || %s || %s || %s ||',
+      [_('Severity'), _('Line'), _('Method'), _('Rule'), _('Detail')]));
 
     rowCount := 0;
     if Assigned(Findings) then
@@ -427,15 +428,15 @@ begin
 
         case F.Severity of
           lsError   : begin
-                        SB.Append('| {color:red}*Fehler*{color}');
+                        SB.Append(Format('| {color:red}*%s*{color}', [_('Error')]));
                         Inc(nErr);
                       end;
           lsWarning : begin
-                        SB.Append('| {color:#b07000}Warnung{color}');
+                        SB.Append(Format('| {color:#b07000}%s{color}', [_('Warning')]));
                         Inc(nWrn);
                       end;
           lsHint    : begin
-                        SB.Append('| {color:#5a8000}Hinweis{color}');
+                        SB.Append(Format('| {color:#5a8000}%s{color}', [_('Hint')]));
                         Inc(nHnt);
                       end;
         end;
@@ -449,22 +450,23 @@ begin
 
     if rowCount = 0 then
     begin
-      SB.AppendLine('| _keine Befunde_ | | | | |');
+      SB.AppendLine(Format('| _%s_ | | | | |', [_('no findings')]));
     end;
 
     SB.AppendLine('');
-    SB.AppendLine('{panel:title=Zusammenfassung|borderColor=#ccc|bgColor=#f8f8f8}');
-    SB.AppendLine('* Fehler: ' + IntToStr(nErr));
-    SB.AppendLine('* Warnungen: ' + IntToStr(nWrn));
+    SB.AppendLine(Format('{panel:title=%s|borderColor=#ccc|bgColor=#f8f8f8}',
+      [_('Summary')]));
+    SB.AppendLine(Format('* %s: %d', [_('Errors'),   nErr]));
+    SB.AppendLine(Format('* %s: %d', [_('Warnings'), nWrn]));
     if lsHint in SeverityFilter then
-      SB.AppendLine('* Hinweise: ' + IntToStr(nHnt));
+      SB.AppendLine(Format('* %s: %d', [_('Hints'),  nHnt]));
     SB.AppendLine('{panel}');
 
     // ---- Befunde im Detail mit Loesungs-Hinweisen ----
     if rowCount > 0 then
     begin
       SB.AppendLine('');
-      SB.AppendLine('h3. Befunde im Detail');
+      SB.AppendLine('h3. ' + _('Findings in detail'));
       SB.AppendLine('');
 
       for F in Findings do
@@ -560,7 +562,7 @@ var
 begin
   SB := TStringBuilder.Create;
   try
-    SB.Append('Code-Analyse: ');
+    SB.Append(_('Code analysis: '));
     SB.AppendLine(ExtractFileName(SourceFile));
     SB.AppendLine(StringOfChar('-', 60));
 
@@ -572,19 +574,19 @@ begin
           Continue;
 
         case F.Severity of
-          lsError   : Sev := '[FEHLER]  ';
-          lsWarning : Sev := '[WARNUNG] ';
-          lsHint    : Sev := '[HINWEIS] ';
+          lsError   : Sev := Format('[%-7s] ', [_('ERROR')]);
+          lsWarning : Sev := Format('[%-7s] ', [_('WARNING')]);
+          lsHint    : Sev := Format('[%-7s] ', [_('HINT')]);
         else
           Sev := '          ';
         end;
 
         SB.Append(Sev);
-        SB.Append('Z. ');
+        SB.Append(_('L. '));
         SB.Append(F.LineNumber);
         if F.MethodName <> '' then
         begin
-          SB.Append(' in ');
+          SB.Append(' ' + _('in') + ' ');
           SB.Append(F.MethodName);
         end;
         SB.Append('  ');
@@ -595,17 +597,17 @@ begin
         Hint := TFixHintResolver.FixHint(F);
         if Hint.Description <> '' then
         begin
-          SB.Append('  Hinweis: ');
+          SB.Append('  ' + _('Hint: '));
           SB.AppendLine(Hint.Description);
         end;
         if Hint.Before <> '' then
         begin
-          SB.AppendLine('  Vorher:');
+          SB.AppendLine('  ' + _('Before:'));
           AppendIndented(SB, Hint.Before, '    ');
         end;
         if Hint.After <> '' then
         begin
-          SB.AppendLine('  Nachher:');
+          SB.AppendLine('  ' + _('After:'));
           AppendIndented(SB, Hint.After, '    ');
         end;
         SB.AppendLine('');

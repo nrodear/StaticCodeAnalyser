@@ -64,6 +64,7 @@ contains
   // ---- Common ----
   uSCAConsts in '..\StaticCodeAnalyserForm\sources\Common\uSCAConsts.pas',
   uMethodd12 in '..\StaticCodeAnalyserForm\sources\Common\uMethodd12.pas',
+  uRecentPaths in '..\StaticCodeAnalyserForm\sources\Common\uRecentPaths.pas',
   uRegExMatches in '..\StaticCodeAnalyserForm\sources\Common\uRegExMatches.pas',
   uDetectorUtils in '..\StaticCodeAnalyserForm\sources\Common\uDetectorUtils.pas',
   uCollectValues in '..\StaticCodeAnalyserForm\sources\Common\uCollectValues.pas',

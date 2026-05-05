@@ -30,15 +30,23 @@ implementation
 // ---------------------------------------------------------------------------
 // Regex-Cache: kompilierte TRegEx-Objekte werden einmalig erstellt und
 // wiederverwendet. Spart ~90% der Kompilierzeit bei grossen Projekten.
+//
+// Thread-safety: Die Lazy-Init-Variante (`if not Assigned(FCache) then ...`)
+// war race-anfaellig, sobald WatchMode-Worker und Main-Analyzer parallel
+// laufen. Jetzt wird FCache schon im `initialization`-Block angelegt, und
+// TryGetValue+Add sind durch TMonitor auf FCache serialisiert.
 // ---------------------------------------------------------------------------
 class function TRegExMatches.Cached(const pattern: string): TRegEx;
 begin
-  if not Assigned(FCache) then
-    FCache := TDictionary<string, TRegEx>.Create;
-  if not FCache.TryGetValue(pattern, Result) then
-  begin
-    Result := TRegEx.Create(pattern, [roIgnoreCase]);
-    FCache.Add(pattern, Result);
+  TMonitor.Enter(FCache);
+  try
+    if not FCache.TryGetValue(pattern, Result) then
+    begin
+      Result := TRegEx.Create(pattern, [roIgnoreCase]);
+      FCache.Add(pattern, Result);
+    end;
+  finally
+    TMonitor.Exit(FCache);
   end;
 end;
 
@@ -79,8 +87,12 @@ end;
 
 class function TRegExMatches.GetName(const line: string): string;
 const
+  // Vorher: '[procedure|function|...]' war eine Character-Class und matchte
+  // nur ein einzelnes Zeichen aus dem Set (p/r/o/...). Die '|'-Zeichen waren
+  // bedeutungslos. -> Method-Names wurden falsch extrahiert. Jetzt Non-Capture-
+  // Group mit echter Alternation.
   NamePattern =
-    '[procedure|function|constructor|destructor|operator]\s+(?:\w+\.)?(\w+)\s*';
+    '(?:procedure|function|constructor|destructor|operator)\s+(?:\w+\.)?(\w+)\s*';
 var
   match: TMatch;
 begin
@@ -105,6 +117,9 @@ begin
 end;
 
 initialization
+  // Pre-Init des Caches: vermeidet Lazy-Init-Race wenn WatchMode-Worker
+  // und Main-Analyzer parallel den ersten Cached(...) aufrufen.
+  TRegExMatches.FCache := TDictionary<string, TRegEx>.Create;
 
 finalization
   FreeAndNil(TRegExMatches.FCache);

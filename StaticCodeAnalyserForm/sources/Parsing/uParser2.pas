@@ -33,6 +33,15 @@ type
     // StartCount keine Bewegung war. Schuetzt Outer-Loops vor Endlos-Loops
     // wenn ein Sub-Parser keinen Token konsumiert hat.
     procedure GuardAdvance(StartCount: Integer);
+    // Konsumiert optionale Generic-Parameter `<...>` einschliesslich nested
+    // Klammern (z.B. `<TList<TFoo>>`). Falls Tok nicht `<` ist: no-op.
+    // Wird nach Typname (in ParseTypeSection) und nach Methodenname (in
+    // ParseMethodSignature) gerufen, sodass Generics nicht den
+    // nachfolgenden `=` bzw. `(` verschlucken.
+    procedure SkipGenericParams;
+    // Konsumiert die optionale Praeambel `helper for <type>` nach
+    // `record` oder `class` in einer Typ-Deklaration.
+    procedure SkipHelperFor;
 
     // ---- Grammatik-Regeln ----
     procedure ParseUnit(Root: TAstNode);
@@ -161,6 +170,65 @@ procedure TParser2.GuardAdvance(StartCount: Integer);
 // In Outer-Loops einsetzen, deren Sub-Parser theoretisch nicht advancen koennten.
 begin
   if (FNextCount = StartCount) and not FLex.AtEnd then
+    Next;
+end;
+
+procedure TParser2.SkipGenericParams;
+// Konsumiert `<...>` mit Depth-Tracking fuer Nested-Generics (`<TList<T>>`).
+// Wenn aktueller Token nicht `<` ist: no-op.
+//
+// Achtung: nur in TYPE-Kontext aufrufen (nach Typname / nach Methodenname),
+// NICHT in Expression-Kontext - dort kann `<` ein Vergleichsoperator sein.
+//
+// EOF und Watchdog-Limit beenden den Loop garantiert; ein unbalanciertes `<`
+// wuerde sonst bis EOF schlucken, das ist akzeptabel als Recovery.
+var
+  Depth: Integer;
+begin
+  if Tok.Kind <> tkLt then Exit;
+  Next; // '<'
+  Depth := 1;
+  while (Depth > 0) and (Tok.Kind <> tkEof) do
+  begin
+    case Tok.Kind of
+      tkLt   : Inc(Depth);
+      tkGt   : Dec(Depth);
+      tkGtEq :
+        begin
+          // `>=` taucht in Generic-Closures nicht legal auf - aber falls
+          // ein Lexer-Edgecase das produziert (z.B. `T<U>=value`), brechen
+          // wir kontrolliert ab statt endlos zu laufen.
+          Dec(Depth);
+        end;
+    end;
+    Next;
+  end;
+end;
+
+procedure TParser2.SkipHelperFor;
+// Konsumiert die optionale Praeambel `helper for <typename>` direkt nach
+// `record` oder `class` (Aufrufer hat `record`/`class` schon konsumiert).
+//
+// Beispiele:
+//   record helper for string         -> consume 'helper', 'for', 'string'
+//   class helper for TFoo            -> consume 'helper', 'for', 'TFoo'
+//   record helper for TUnit.TInner   -> consume 'helper', 'for',
+//                                       'TUnit', '.', 'TInner'
+//   record helper for array of Byte  -> consume 'helper', 'for',
+//                                       'array', 'of', 'Byte'
+//
+// Wenn Tok nicht der `helper`-Ident ist: no-op (= normale class/record).
+// Hinweis: `helper` ist in Delphi ein contextual keyword (Ident, kein Keyword).
+begin
+  if (Tok.Kind <> tkIdent) or not SameText(Tok.Value, 'helper') then Exit;
+  Next; // 'helper'
+  if not Eat(tkKwFor) then Exit; // syntax-Fehler -> Recovery, normal weitermachen
+
+  // Target-Typname tokenweise konsumieren bis ein Token kommt das den
+  // Class-Body einleitet (oder Forward-Decl beendet).
+  while Tok.Kind in [tkIdent, tkKwString, tkDot,
+                     tkKwArray, tkKwOf,
+                     tkLBracket, tkRBracket, tkLt, tkGt, tkComma] do
     Next;
 end;
 
@@ -394,7 +462,14 @@ begin
     if T.Kind <> tkIdent then begin Next; Continue; end;
 
     Name := Next.Value;
+    // Generic-Parameter direkt nach dem Typnamen konsumieren:
+    //   TFoo<T> = class                  -> SkipGenericParams frisst <T>
+    //   TFoo<K, V: class> = TObjectDictionary<K, V>
+    SkipGenericParams;
     if not Eat(tkEq) then begin SkipToSemicolon; Eat(tkSemicolon); Continue; end;
+
+    // Optionales `packed` vor record/class konsumieren
+    Eat(tkKwPacked);
 
     T := Tok;
     case T.Kind of
@@ -409,6 +484,8 @@ begin
           end
           else
           begin
+            // class helper for TFoo - die Praeambel ueberspringen
+            SkipHelperFor;
             var CNode := SecNode.Add(nkClass, Name, T.Line, T.Col);
             ParseClassBody(CNode);
             Eat(tkSemicolon);
@@ -417,9 +494,31 @@ begin
       tkKwRecord:
         begin
           Next;
+          // record helper for string - Praeambel ueberspringen
+          SkipHelperFor;
           var RNode := SecNode.Add(nkRecord, Name, T.Line, T.Col);
           ParseClassBody(RNode);
           Eat(tkSemicolon);
+        end;
+      tkKwInterface:
+        begin
+          Next;
+          if Tok.Kind = tkSemicolon then
+          begin
+            // Forward-Decl: IFoo = interface;
+            Eat(tkSemicolon);
+          end
+          else
+          begin
+            // Interface-Typ wird als nkClass im AST gefuehrt - Detektoren
+            // arbeiten auf Members (Methoden, Properties), kein
+            // Spezial-Handling noetig. Die optionale GUID `['{...}']` und
+            // die optionale Parent-Liste werden in ParseClassBody durch
+            // den Else-Next-Pfad benignly geskippt.
+            var INode := SecNode.Add(nkClass, Name, T.Line, T.Col);
+            ParseClassBody(INode);
+            Eat(tkSemicolon);
+          end;
         end;
     else
       begin
@@ -603,13 +702,23 @@ begin
   if Tok.Kind = tkIdent then
   begin
     MethName := Next.Value;
+    // Klassen-Generic-Param zwischen Klassen-Name und Methoden-Name:
+    //   procedure TFoo<T>.Bar;     <- nach 'TFoo' kommt '<T>' vor '.'
+    SkipGenericParams;
     if Tok.Kind = tkDot then
     begin
       Next;
       if Tok.Kind = tkIdent then
         MethName := MethName + '.' + Next.Value;
+      // Methoden-Generic-Param nach qualifiziertem Namen:
+      //   procedure TFoo<T>.Bar<U>: U;
+      SkipGenericParams;
     end;
   end;
+
+  // Generic-Param nach unqualifiziertem Methoden-Name:
+  //   function Get<T>: T;
+  SkipGenericParams;
 
   MNode         := Parent.Add(nkMethod, MethName, T.Line, T.Col);
   MNode.TypeRef := MethKind;
@@ -712,6 +821,24 @@ begin
     SkipTo([tkKwEnd, tkEof]);
     Eat(tkKwEnd);
     Eat(tkSemicolon);
+  end
+  else if Tok.Kind in [tkKwProcedure, tkKwFunction,
+                       tkKwConstructor, tkKwDestructor,
+                       tkKwOperator] then
+  begin
+    // Headless-Method ohne begin/asm direkt vor naechstem Method-Header:
+    // klassischer IFDEF-Konditional-Pattern wie
+    //   {$IFDEF FPC} function F: integer;
+    //   {$ELSE}      function F: string;
+    //   {$ENDIF}
+    //   begin
+    //     ...
+    //   end;
+    // Der Parser sieht beide Header (Lexer skippt nur Comments). Den
+    // ersten Headless-Knoten entfernen, sonst erscheint die Methode
+    // doppelt im AST und Detektoren melden Phantom-Duplikate.
+    var Idx := Parent.Children.IndexOf(MNode);
+    if Idx >= 0 then Parent.Children.Delete(Idx);
   end;
 end;
 
@@ -726,10 +853,22 @@ var
 begin
   VarNames := TStringList.Create;
   try
-    while Tok.Kind in [tkKwVar, tkKwConst, tkKwType] do
+    while Tok.Kind in [tkKwVar, tkKwConst, tkKwType, tkKwLabel] do
     begin
       var SecKind := Tok.Kind;
       Next;
+
+      if SecKind = tkKwLabel then
+      begin
+        // `label x, y, z;` - bis zum naechsten Semikolon skippen.
+        // Wir tracken Goto-Labels nicht im AST, sie sind fuer Detektoren
+        // unsichtbar. Wichtig: ohne diesen Branch endet die Outer-Loop
+        // beim ersten `tkKwLabel` und ParseMethodImpl verliert den Body
+        // (siehe TODO-Eintrag mORMot2-Performance-Pfade).
+        SkipToSemicolon;
+        Eat(tkSemicolon);
+        Continue;
+      end;
 
       if SecKind = tkKwType then
       begin
@@ -749,6 +888,11 @@ begin
       while not (Tok.Kind in [tkKwVar, tkKwConst, tkKwType,
                               tkKwBegin, tkKwAsm, tkKwEnd, tkEof]) do
       begin
+        // GuardAdvance schuetzt vor Endlos-Loop: SkipToSemicolon + Eat
+        // koennen beide no-ops sein (z.B. wenn der nachfolgende Token ein
+        // unerwartetes Schluesselwort ist), waehrend die Outer-Bedingung
+        // diesen Token nicht als Section-Grenze akzeptiert.
+        var SkipStart := FNextCount;
         T := Tok;
         if T.Kind <> tkIdent then begin Next; Continue; end;
 
@@ -772,6 +916,7 @@ begin
 
         SkipToSemicolon;
         Eat(tkSemicolon);
+        GuardAdvance(SkipStart);
       end;
     end;
   finally
@@ -890,7 +1035,15 @@ begin
     tkKwAsm:
       begin
         Next;
-        while not (Tok.Kind in [tkKwEnd, tkEof]) do Next;
+        // Defensiv analog zur Z. 736-Korrektur: Next advanct hier
+        // theoretisch immer, GuardAdvance ist Versicherung falls der
+        // Lexer in einem korrupten Zustand stecken bleibt.
+        while not (Tok.Kind in [tkKwEnd, tkEof]) do
+        begin
+          var SkipStart := FNextCount;
+          Next;
+          GuardAdvance(SkipStart);
+        end;
         Eat(tkKwEnd);
         Eat(tkSemicolon);
       end;
@@ -1070,21 +1223,7 @@ begin
     if Tok.Kind = tkKwExcept then
     begin
       TryNode := Parent.Add(nkTryExcept, 'try', T.Line, T.Col);
-      // Try-Body-Kinder auf TryNode uebertragen.
-      // Atomar: Liste leeren, OwnsObjects bei Fehler restoren - sonst koennte
-      // ein Crash mitten im Transfer Children weder in TmpBlk noch TryNode
-      // hinterlassen (Leak) oder doppelt-frees verursachen.
-      TmpBlk.Children.OwnsObjects := False;
-      try
-        while TmpBlk.Children.Count > 0 do
-        begin
-          TryNode.AddChild(TmpBlk.Children[0]);
-          TmpBlk.Children.Delete(0);
-        end;
-      except
-        TmpBlk.Children.OwnsObjects := True;
-        raise;
-      end;
+      TryNode.AdoptChildrenFrom(TmpBlk);
 
       var ExTok  := Next; // 'except' – Zeile des except-Schlüsselworts
       var ExNode := TryNode.Add(nkExceptBlock, 'except', ExTok.Line, ExTok.Col);
@@ -1123,18 +1262,7 @@ begin
     else if Tok.Kind = tkKwFinally then
     begin
       TryNode := Parent.Add(nkTryFinally, 'try', T.Line, T.Col);
-      // Atomare Children-Uebertragung wie oben (siehe Kommentar TryExcept).
-      TmpBlk.Children.OwnsObjects := False;
-      try
-        while TmpBlk.Children.Count > 0 do
-        begin
-          TryNode.AddChild(TmpBlk.Children[0]);
-          TmpBlk.Children.Delete(0);
-        end;
-      except
-        TmpBlk.Children.OwnsObjects := True;
-        raise;
-      end;
+      TryNode.AdoptChildrenFrom(TmpBlk);
 
       var FinTok  := Next; // 'finally' – Zeile des finally-Schlüsselworts
       var FinNode := TryNode.Add(nkFinallyBlock, 'finally', FinTok.Line, FinTok.Col);

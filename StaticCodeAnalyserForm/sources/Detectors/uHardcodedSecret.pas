@@ -98,6 +98,8 @@ begin
     begin
       if not IsSecretName(A.Name)       then Continue;
       if not IsStringLiteral(A.TypeRef) then Continue;
+      // Leeres Literal '' ist Initialisierung, kein hartcodiertes Secret.
+      if A.TypeRef = '''''' then Continue;
 
       // Literal-Wert auf MAX_VAL_LEN Zeichen kürzen
       if Length(A.TypeRef) > MAX_VAL_LEN then

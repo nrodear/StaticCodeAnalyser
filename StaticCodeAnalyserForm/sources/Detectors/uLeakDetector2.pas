@@ -159,13 +159,13 @@ begin
       if (RHS = 'nil') or (RHS = '') then Continue;
       // Expliziter Aufruf mit Klammern: GetList()
       if Pos('(', RHS) > 0 then Exit(True);
-      // Parameterloser Factory-Aufruf: SomeClass.GetInstance (kein '(', aber '.'-Kette)
-      // Nur wenn die RHS ein einfacher Bezeichner-Pfad ist (keine Leerzeichen, Operatoren).
-      if (Pos('.', RHS) > 0) and
-         (Pos(' ', RHS) = 0) and
-         (Pos(',', RHS) = 0) and
-         (Pos('[', RHS) = 0) then
-        Exit(True);
+      // Ohne '(' KEINE Factory-Detection: 'list := obj.FList' oder
+      // 'list := SomeProperty' sind geliehene Referenzen, kein Ownership-
+      // Transfer. Vorher wurde jeder dotted Bezeichner-Pfad als Factory-
+      // Aufruf gewertet -> False-Positives auf jeder Field-/Property-
+      // Zuweisung. Lieber False-Negative auf seltene parameterlose
+      // Factory-Methoden (TFoo.Singleton) als False-Positive auf Standard-
+      // Field-Access.
     end;
   finally
     Assigns.Free;

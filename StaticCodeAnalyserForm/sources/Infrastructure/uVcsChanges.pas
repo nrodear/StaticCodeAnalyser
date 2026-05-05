@@ -65,7 +65,8 @@ type
 implementation
 
 uses
-  Winapi.Windows, System.AnsiStrings, System.IOUtils;
+  Winapi.Windows, System.IOUtils,
+  uLocalization;
 
 { ----------------------------------------------------------------- }
 
@@ -156,10 +157,9 @@ var
   WritePipe : THandle;
   StartInfo : TStartupInfo;
   ProcInfo  : TProcessInformation;
-  Buf       : array[0..4095] of AnsiChar;
+  Buf       : array[0..4095] of Byte;
   BytesRead : Cardinal;
   Cmd       : string;
-  SB        : TStringBuilder;
 begin
   Result    := False;
   AStdOut   := '';
@@ -203,14 +203,22 @@ begin
       // Timeout - haengender Prozess (z.B. git wartet auf Credentials) liess
       // den Caller ewig warten. Jetzt: PeekNamedPipe-Polling mit
       // GetTickCount-Watchdog; bei Timeout wird der Prozess geKILLT.
-      const TOTAL_TIMEOUT_MS = 60 * 1000; // 60s harter Cap
+      // Cardinal-Typ explizit, sonst W1023 beim Vergleich mit
+      // GetTickCount-StartTick (beide Cardinal).
+      const TOTAL_TIMEOUT_MS : Cardinal = 60 * 1000; // 60s harter Cap
       var StartTick : Cardinal := GetTickCount;
       var Available : Cardinal := 0;
       var Done      : Boolean  := False;
       var ProcStat  : Cardinal;
       var ToRead    : Cardinal;
 
-      SB := TStringBuilder.Create;
+      // Rohe Bytes sammeln und am Ende EINMAL als UTF-8 dekodieren.
+      // Vorher: pro ReadFile-Chunk via StrPas in ANSI dekodiert -> Umlaute
+      // in Pfaden (git status --porcelain) zerstoert; zusaetzlich Korruption
+      // wenn ein UTF-8 Multi-Byte-Sequence ueber zwei ReadFile-Aufrufe
+      // gesplittet wird (Chunk-Boundary). git/svn liefern UTF-8-Output unter
+      // Windows -> einmaliges Decode am EOF ist die saubere Loesung.
+      var RawBytes := TBytesStream.Create;
       try
         while not Done do
         begin
@@ -221,12 +229,11 @@ begin
           if Available > 0 then
           begin
             ToRead := Available;
-            if ToRead > SizeOf(Buf) - 1 then ToRead := SizeOf(Buf) - 1;
+            if ToRead > SizeOf(Buf) then ToRead := SizeOf(Buf);
             if not ReadFile(ReadPipe, Buf[0], ToRead, BytesRead, nil) then
               Break;
             if BytesRead = 0 then Break;
-            Buf[BytesRead] := #0;
-            SB.Append(string(System.AnsiStrings.StrPas(@Buf[0])));
+            RawBytes.WriteBuffer(Buf[0], BytesRead);
             // Tick zuruecksetzen: solange Daten fliessen, ist Prozess "lebendig"
             StartTick := GetTickCount;
           end
@@ -241,13 +248,10 @@ begin
                  and (Available > 0) then
               begin
                 ToRead := Available;
-                if ToRead > SizeOf(Buf) - 1 then ToRead := SizeOf(Buf) - 1;
+                if ToRead > SizeOf(Buf) then ToRead := SizeOf(Buf);
                 if ReadFile(ReadPipe, Buf[0], ToRead, BytesRead, nil)
                    and (BytesRead > 0) then
-                begin
-                  Buf[BytesRead] := #0;
-                  SB.Append(string(System.AnsiStrings.StrPas(@Buf[0])));
-                end;
+                  RawBytes.WriteBuffer(Buf[0], BytesRead);
               end;
               Done := True;
             end
@@ -263,9 +267,9 @@ begin
               Sleep(50);
           end;
         end;
-        AStdOut := SB.ToString;
+        AStdOut := TEncoding.UTF8.GetString(RawBytes.Bytes, 0, RawBytes.Size);
       finally
-        SB.Free;
+        RawBytes.Free;
       end;
 
       // ExitCode nur dann frisch lesen wenn nicht durch Timeout vorgemerkt
@@ -320,8 +324,8 @@ begin
   // ---- Sanity-Check: ist git ueberhaupt aufrufbar? ----
   if not RunCmd(GitExe, '--version', ARepoRoot, Output, ExitCode) then
   begin
-    AInfo := 'git nicht gefunden. Installiere Git for Windows ' +
-             '(git-scm.com) oder setze in analyser.ini den Pfad zu git.exe.';
+    AInfo := _('git not found. Install Git for Windows (git-scm.com) ' +
+               'or set the path to git.exe in analyser.ini.');
     Exit;
   end;
 
@@ -355,10 +359,10 @@ begin
         SL.Free;
       end;
     end;
-    AInfo := 'Git: Branch vs ' + Base;
+    AInfo := _('Git: branch vs ') + Base;
   end
   else
-    AInfo := 'Git: kein Base-Branch - nur Working Tree';
+    AInfo := _('Git: no base branch - working tree only');
 
   // ---- 2) Working Tree - nur wenn Settings es zulassen ----
   var IncludeWT := True;
@@ -452,14 +456,14 @@ begin
   // TortoiseSVN braucht die Option "command line client tools" beim Install.
   if not RunCmd(SvnExe, '--version --quiet', ARepoRoot, Output, ExitCode) then
   begin
-    AInfo := 'svn nicht gefunden. Installiere TortoiseSVN MIT der Option ' +
-             '"command line client tools" oder setze in analyser.ini den Pfad zu svn.exe.';
+    AInfo := _('svn not found. Install TortoiseSVN WITH the option ' +
+               '"command line client tools" or set the path to svn.exe in analyser.ini.');
     Exit;
   end;
 
   if not RunCmd(SvnExe, 'status', ARepoRoot, Output, ExitCode) then
   begin
-    AInfo := 'SVN-Aufruf fehlgeschlagen (ExitCode=' + IntToStr(ExitCode) + ')';
+    AInfo := Format(_('SVN call failed (exit code = %d)'), [ExitCode]);
     Exit;
   end;
 

@@ -119,9 +119,16 @@ begin
     then
     begin
       isSectionSignatur := false;
-      CurrentMethod.signatur := signatur;
-      CurrentMethod.Name := TRegExMatches.GetName(signatur);
-      // LineNumber wurde bereits bei der Signatur gesetzt -- nicht überschreiben
+      // Defensiv: isSectionSignatur wird zwar mit CurrentMethod-Create
+      // gemeinsam in Z. 110-115 gesetzt - aber ein Lookahead-Pfad weiter
+      // unten kann CurrentMethod nillen ohne dass isSectionSignatur mit
+      // ihn synchron geht. Crash-frei statt halb-konsistente Methode.
+      if Assigned(CurrentMethod) then
+      begin
+        CurrentMethod.signatur := signatur;
+        CurrentMethod.Name := TRegExMatches.GetName(signatur);
+        // LineNumber wurde bereits bei der Signatur gesetzt -- nicht überschreiben
+      end;
       signatur := '';
       isSectionMethod := false;
     end;
@@ -156,10 +163,19 @@ begin
     ///
     /// rest body section
     ///
-    if isSectionMethod then
+    // Defensiver Assigned-Check: isSectionMethod wird in Z. 144-148 alleine
+    // gesetzt (`if isSectionVar and ... begin ... isSectionMethod:=true`),
+    // ohne dass CurrentMethod gleichzeitig (re-)assigned wird. Wenn der
+    // vorherige Lookahead-Pfad CurrentMethod genullt hat (Z. 178), kann
+    // isSectionMethod=true mit CurrentMethod=nil zusammentreffen
+    // (Trigger z.B. globaler `var`-Block in implementation gefolgt von
+    // `begin`-Initialization-Block, oder weiter geistert isSectionVar
+    // ueber Method-Boundary hinweg). Vorher: AV bei realen mORMot-Files
+    // (z.B. mormot.crypt.x509.pas).
+    if isSectionMethod and Assigned(CurrentMethod) then
       CurrentMethod.SourceBody.Add(line.ToLower);
 
-    // neue Funktionen braucht das Land
+    // Lookahead: naechste nicht-leere/nicht-`end.`-Zeile inspizieren.
     J := I;
     nextLine := '';
     while (J < Lines.Count) and ((nextLine = '') or (nextLine = 'end.')) do
@@ -175,7 +191,10 @@ begin
       nextLine) then
     begin
       isSectionMethod := false;
-      CurrentMethod := nil;
+      isSectionVar    := false; // mit zuruecksetzen, sonst kann ein
+                                // spaeteres `begin` isSectionMethod auf
+                                // einem nilligen CurrentMethod re-aktivieren.
+      CurrentMethod   := nil;
     end;
 
   end;

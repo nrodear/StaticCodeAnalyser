@@ -180,6 +180,7 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Output\uFixHint.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uSCAConsts.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uMethodd12.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uRecentPaths.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uRegExMatches.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uDetectorUtils.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uCollectValues.pas"/>

@@ -6,9 +6,9 @@ uses
   Winapi.Windows, Winapi.Messages, Winapi.ShellAPI, System.SysUtils,
   System.Classes, Vcl.Graphics, System.Generics.Collections,
    Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls,
-  Vcl.ComCtrls, Vcl.Grids, System.IniFiles, uStaticAnalyzer, uStaticAnalyzer2,
+  Vcl.ComCtrls, Vcl.Grids, uStaticAnalyzer, uStaticAnalyzer2,
   uMethodd12, uSCAConsts, uFixHint, uClaudePrompt, uLocalization,
-  uRepoSettings,
+  uRepoSettings, uRecentPaths,
   Vcl.Controls
  ;
 
@@ -66,6 +66,8 @@ type
     function SelectFile: string;
     procedure LoadRecentPaths;
     procedure SaveRecentPath(const APath: string);
+    function  AppPath: string;
+    function  RecentIniPath: string;
     procedure NavigateDelphiToLine(LineNo: Integer);
   public
   end;
@@ -445,7 +447,7 @@ begin
     ResultGrid.Cells[4, i + 1] := f.SeverityText;
   end;
   StatusBar1.SimpleText := Format(_('Done. %d findings. Click a row -> ' +
-    'Claude AI prompt on clipboard.'), [FAllFindings.Count]);
+    'AI prompt on clipboard.'), [FAllFindings.Count]);
 end;
 
 procedure TForm2.ResultGridDblClick(Sender: TObject);
@@ -532,7 +534,7 @@ begin
   F := FAllFindings[idx];
   Clipboard.AsText := BuildClaudePrompt(F);
   StatusBar1.SimpleText := Format(
-    'Claude-AI-Prompt in Zwischenablage: %s, Zeile %s (%s)',
+    _('AI prompt copied to clipboard: %s, line %s (%s)'),
     [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText]);
 end;
 
@@ -575,7 +577,7 @@ begin
   OpenDialog := TOpenDialog.Create(nil);
   try
     OpenDialog.Title := _('Save results');
-    OpenDialog.Filter := 'CSV Dateien|*.csv|Log Dateien|*.log';
+    OpenDialog.Filter := _('CSV files|*.csv|Log files|*.log');
     OpenDialog.FileName := 'analyse_all.csv';
     if OpenDialog.Execute then
       Result := OpenDialog.FileName;
@@ -584,71 +586,32 @@ begin
   end;
 end;
 
-procedure TForm2.LoadRecentPaths;
-const
-  MAX_RECENT = 4;
-var
-  Ini: TIniFile;
-  i: Integer;
-  path: string;
-  appPath: string;
+// Recent Paths -- duenne Wrapper um TRecentPaths (Common/uRecentPaths.pas).
+// Pinned-Eintrag = App-Pfad neben der EXE, Position end.
+function TForm2.AppPath: string;
 begin
-  appPath := ExcludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName));
-  Ini := TIniFile.Create(ChangeFileExt(Application.ExeName, '.ini'));
-  try
-    Projectpath.Items.Clear;
-    for i := 1 to MAX_RECENT - 1 do
-    begin
-      path := Ini.ReadString('Recent', 'Path' + IntToStr(i), '');
-      if (path <> '') and (path <> appPath) then
-        Projectpath.Items.Add(path);
-    end;
-    // App-Pfad ist immer der letzte feste Eintrag
-    Projectpath.Items.Add(appPath);
-    if Projectpath.Items.Count > 0 then
-      Projectpath.Text := Projectpath.Items[0]
-    else
-      Projectpath.Text := appPath;
-  finally
-    Ini.Free;
-  end;
+  Result := ExcludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName));
+end;
+
+function TForm2.RecentIniPath: string;
+begin
+  Result := ChangeFileExt(Application.ExeName, '.ini');
+end;
+
+procedure TForm2.LoadRecentPaths;
+begin
+  TRecentPaths.Load(
+    Projectpath, RecentIniPath,
+    DEFAULT_MAX_RECENT,
+    AppPath, ppLast);
 end;
 
 procedure TForm2.SaveRecentPath(const APath: string);
-const
-  MAX_RECENT = 4;
-var
-  Ini: TIniFile;
-  idx, i: Integer;
-  appPath: string;
 begin
-  appPath := ExcludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName));
-  // App-Pfad nicht als gespeicherten Recent-Eintrag ablegen
-  if SameText(APath, appPath) then
-    Exit;
-  idx := Projectpath.Items.IndexOf(APath);
-  if idx >= 0 then
-    Projectpath.Items.Delete(idx);
-  Projectpath.Items.Insert(0, APath);
-  // App-Pfad am Ende sicherstellen, max. MAX_RECENT gesamt
-  idx := Projectpath.Items.IndexOf(appPath);
-  if idx >= 0 then
-    Projectpath.Items.Delete(idx);
-  while Projectpath.Items.Count >= MAX_RECENT do
-    Projectpath.Items.Delete(Projectpath.Items.Count - 1);
-  Projectpath.Items.Add(appPath);
-  // Text explizit wiederherstellen, da Items-Manipulation ihn zuruecksetzt
-  Projectpath.Text := APath;
-
-  Ini := TIniFile.Create(ChangeFileExt(Application.ExeName, '.ini'));
-  try
-    for i := 0 to Projectpath.Items.Count - 2 do  // App-Pfad nicht in INI
-      Ini.WriteString('Recent', 'Path' + IntToStr(i + 1), Projectpath.Items[i]);
-    for i := Projectpath.Items.Count to MAX_RECENT - 1 do
-      Ini.DeleteKey('Recent', 'Path' + IntToStr(i));
-  finally
-    Ini.Free;
-  end;
+  TRecentPaths.Save(
+    Projectpath, RecentIniPath, APath,
+    DEFAULT_MAX_RECENT,
+    AppPath, ppLast);
 end;
 
 end.

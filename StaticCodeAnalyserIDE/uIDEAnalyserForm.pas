@@ -18,6 +18,7 @@ uses
   uStaticAnalyzer2, uStaticFiles, uMethodd12, uSCAConsts, uExport,
   uFixHint, uIgnoreList, uVcsChanges, uRepoSettings, uClaudePrompt,
   uAnalyserPalette, uAnalyserTypes, uAnalyserTheme, uLocalization,
+  uRecentPaths,
   uIDELineHighlighter, uIDEMessages, uIDEWatchMode;
 
 type
@@ -252,13 +253,11 @@ implementation
 
 {$R *.dfm}
 
-
-
-const
-  MAX_RECENT = 3;
-  // Severity- und Akzentfarben sind in uAnalyserPalette zentral definiert
-  // und werden ueber uAnalyserTheme.SeverityBg / SeverityAccent (mit
-  // TFindingSeverity-Enum) abgerufen.
+// MAX_RECENT lebt in uRecentPaths (DEFAULT_MAX_RECENT = 3); konsistent
+// zwischen IDE und Standalone, kein Drift mehr.
+// Severity- und Akzentfarben sind in uAnalyserPalette zentral definiert
+// und werden ueber uAnalyserTheme.SeverityBg / SeverityAccent (mit
+// TFindingSeverity-Enum) abgerufen.
 
 // Sentinel fuer Frame-Lifecycle-Race in der Worker-Anonymous-Method:
 // AnalyseAllClasses uebergibt eine Closure die FProgressBar/FStatusBar/
@@ -358,7 +357,7 @@ begin
   Color         := clBtnFace;
   ParentFont    := False;
   Font.Name     := 'Segoe UI';
-  Font.Size     := 6;
+  Font.Size     := 8;
   // Default-Groesse: muss alle Top-Panels + Help-Panel + 120 px Grid + Statusbar
   // aufnehmen. Status 22 + Stats 120 + Path 22 + Buttons 22 + Search 22 + Help
   // 120 + Splitter 4 + Grid 120 = 452. Mit etwas Reserve auf 500.
@@ -432,7 +431,7 @@ begin
   BtnIgnore.Caption := _('Ignore...');
   BtnIgnore.Width   := 60;
   BtnIgnore.Align   := alRight;
-  BtnIgnore.Hint    := 'Ignore-Liste oeffnen (welche Dateien NICHT analysiert werden)';
+  BtnIgnore.Hint    := _('Open ignore list (which files are NOT analysed)');
   BtnIgnore.ShowHint := True;
   BtnIgnore.OnClick := EditIgnoreListClick;
 
@@ -443,8 +442,7 @@ begin
   BtnRepo.Caption := _('Settings...');
   BtnRepo.Width   := 70;
   BtnRepo.Align   := alRight;
-  BtnRepo.Hint    := 'analyser.ini oeffnen (BaseBranch, git/svn-Pfad, ' +
-                     'Custom-LeakyClasses)';
+  BtnRepo.Hint    := _('Open analyser.ini (BaseBranch, git/svn paths, custom LeakyClasses)');
   BtnRepo.ShowHint := True;
   BtnRepo.OnClick := EditRepoSettingsClick;
 
@@ -454,7 +452,7 @@ begin
   FProjectPath.Style       := csDropDown;
   FProjectPath.ParentFont  := False;
   FProjectPath.Font.Name   := 'Segoe UI';
-  FProjectPath.Font.Size   := 6;
+  FProjectPath.Font.Size   := 8;
 
   // ---- Zeile: Buttons ----
   PanelButtons := TPanel.Create(Self);
@@ -497,7 +495,7 @@ begin
   FFilterCombo.Style       := csDropDownList;
   FFilterCombo.Align       := alClient;
   FFilterCombo.Font.Name   := 'Segoe UI';
-  FFilterCombo.Font.Size   := 6;
+  FFilterCombo.Font.Size   := 8;
   FFilterCombo.ParentFont  := False;
   FFilterCombo.OnChange    := FilterChange;
 
@@ -564,7 +562,7 @@ begin
   FTypeCombo.Style       := csDropDownList;
   FTypeCombo.Align       := alClient;
   FTypeCombo.Font.Name   := 'Segoe UI';
-  FTypeCombo.Font.Size   := 6;
+  FTypeCombo.Font.Size   := 8;
   FTypeCombo.ParentFont  := False;
   FTypeCombo.OnChange    := TypeFilterChange;
   FTypeCombo.Items.Add(_('All'));
@@ -661,12 +659,12 @@ begin
   // Spart ~250 px Toolbar-Platz. Klick zeigt PopupMenu mit allen Varianten.
   FExportMenu := TPopupMenu.Create(Self);
   var Mi: TMenuItem;
-  Mi := TMenuItem.Create(FExportMenu); Mi.Caption := 'HTML-Report (alle Befunde)...'; Mi.OnClick := ExportHtmlClick;     FExportMenu.Items.Add(Mi);
-  Mi := TMenuItem.Create(FExportMenu); Mi.Caption := 'JSON...';                       Mi.OnClick := ExportJsonClick;     FExportMenu.Items.Add(Mi);
-  Mi := TMenuItem.Create(FExportMenu); Mi.Caption := 'CSV...';                        Mi.OnClick := ExportCsvClick;      FExportMenu.Items.Add(Mi);
-  Mi := TMenuItem.Create(FExportMenu); Mi.Caption := '-';                                                                  FExportMenu.Items.Add(Mi);
-  Mi := TMenuItem.Create(FExportMenu); Mi.Caption := 'Jira-Markup -> Clipboard';      Mi.OnClick := ExportJiraClick;     FExportMenu.Items.Add(Mi);
-  Mi := TMenuItem.Create(FExportMenu); Mi.Caption := 'Plain-Text -> Clipboard';       Mi.OnClick := CopyClipboardClick;  FExportMenu.Items.Add(Mi);
+  Mi := TMenuItem.Create(FExportMenu); Mi.Caption := _('HTML report (all findings)...'); Mi.OnClick := ExportHtmlClick;     FExportMenu.Items.Add(Mi);
+  Mi := TMenuItem.Create(FExportMenu); Mi.Caption := 'JSON...';                           Mi.OnClick := ExportJsonClick;     FExportMenu.Items.Add(Mi);
+  Mi := TMenuItem.Create(FExportMenu); Mi.Caption := 'CSV...';                            Mi.OnClick := ExportCsvClick;      FExportMenu.Items.Add(Mi);
+  Mi := TMenuItem.Create(FExportMenu); Mi.Caption := '-';                                                                      FExportMenu.Items.Add(Mi);
+  Mi := TMenuItem.Create(FExportMenu); Mi.Caption := _('Jira markup -> Clipboard');       Mi.OnClick := ExportJiraClick;     FExportMenu.Items.Add(Mi);
+  Mi := TMenuItem.Create(FExportMenu); Mi.Caption := _('Plain text -> Clipboard');        Mi.OnClick := CopyClipboardClick;  FExportMenu.Items.Add(Mi);
 
   var BtnExport := TButton.Create(Self);
   BtnExport.Parent     := PanelSearch;
@@ -675,7 +673,7 @@ begin
   BtnExport.Align      := alRight;
   BtnExport.PopupMenu  := FExportMenu;
   BtnExport.OnClick    := ExportMenuButtonClick;
-  BtnExport.Hint       := 'Export: HTML, JSON, CSV, Jira-Markup, Plain-Text';
+  BtnExport.Hint       := _('Export: HTML, JSON, CSV, Jira markup, plain text');
   BtnExport.ShowHint   := True;
 
   // Sucheingabe fuellt den Rest in der Mitte
@@ -686,7 +684,7 @@ begin
   FSearchEdit.OnChange    := SearchChange;
   FSearchEdit.ParentFont  := False;
   FSearchEdit.Font.Name   := 'Segoe UI';
-  FSearchEdit.Font.Size   := 6;
+  FSearchEdit.Font.Size   := 8;
 
   // ---- Statistik-Leiste: eine Reihe Sonar-Style Tiles (dunkler Hintergrund) ---
   FPanelStats := TPanel.Create(Self);
@@ -741,7 +739,7 @@ begin
   FHelpDescLabel.Height      := 16;
   FHelpDescLabel.Layout      := tlCenter;
   FHelpDescLabel.Font.Name   := 'Segoe UI';
-  FHelpDescLabel.Font.Size   := 7;
+  FHelpDescLabel.Font.Size   := 8;
   FHelpDescLabel.Font.Style  := [fsBold];
   FHelpDescLabel.Font.Color  := clBtnText;
   FHelpDescLabel.Color       := clBtnFace;
@@ -771,7 +769,7 @@ begin
   LblBefore.Layout      := tlCenter;
   LblBefore.Caption     := '  ' + _('Before (problem)');
   LblBefore.Font.Name   := 'Segoe UI';
-  LblBefore.Font.Size   := 6;
+  LblBefore.Font.Size   := 8;
   LblBefore.Font.Style  := [fsBold];
   // SeverityAccent-Rot ist in beiden Themes lesbar (weder zu hell auf weiss
   // noch zu dunkel auf schwarz). Das Label sitzt auf clWindow und vererbt
@@ -787,7 +785,7 @@ begin
   FHelpBefore.ScrollBars  := ssBoth;
   FHelpBefore.Color       := clWindow;  // theme-konformer Editor-Hintergrund
   FHelpBefore.Font.Name   := 'Consolas';
-  FHelpBefore.Font.Size   := 6;
+  FHelpBefore.Font.Size   := 8;
   FHelpBefore.Font.Color  := clWindowText; // theme-konformer Text
 
   // Splitter zwischen Vorher und Nachher (drag um die Verhaeltnisse anzupassen)
@@ -811,7 +809,7 @@ begin
   LblAfter.Layout      := tlCenter;
   LblAfter.Caption     := '  ' + _('After (solution)');
   LblAfter.Font.Name   := 'Segoe UI';
-  LblAfter.Font.Size   := 6;
+  LblAfter.Font.Size   := 8;
   LblAfter.Font.Style  := [fsBold];
   // Analog zum Vorher-Label: SeverityAccent(fsHint) ist saturiertes Gruen,
   // auf hellem und dunklem Hintergrund lesbar.
@@ -826,7 +824,7 @@ begin
   FHelpAfter.ScrollBars  := ssBoth;
   FHelpAfter.Color       := clWindow;
   FHelpAfter.Font.Name   := 'Consolas';
-  FHelpAfter.Font.Size   := 6;
+  FHelpAfter.Font.Size   := 8;
   FHelpAfter.Font.Color  := clWindowText;
 
   // Splitter zwischen Grid (links) und Help-Panel (rechts) - User kann
@@ -1405,10 +1403,10 @@ begin
     FResultGrid.Invalidate;
   end;
 
-  StatusFindings(Format('%d / %d Befunde',
+  StatusFindings(Format(_('%d / %d findings'),
     [FDisplayedFindings.Count, FAllFindings.Count]));
-  StatusMode(Format('Filter: %s%s', [FFilterCombo.Text,
-    IfThen(searchLow <> '', ', Suche: ' + searchLow, '')]));
+  StatusMode(Format(_('Filter: %s%s'), [FFilterCombo.Text,
+    IfThen(searchLow <> '', ', ' + _('Search: ') + searchLow, '')]));
 
   // Befunde werden bewusst NICHT mehr in die IDE-Messages-Toolbar
   // gespiegelt - das eigene Grid + Statusbar reicht und vermeidet,
@@ -1487,14 +1485,14 @@ var
 begin
   if FDisplayedFindings.Count = 0 then
   begin
-    StatusMode('Nichts zu exportieren - Filter liefert 0 Eintraege.');
+    StatusMode(_('Nothing to export - filter returns 0 entries.'));
     Exit;
   end;
 
   Dlg := TSaveDialog.Create(nil);
   try
-    Dlg.Title    := 'CSV-Export';
-    Dlg.Filter   := 'CSV-Datei (*.csv)|*.csv';
+    Dlg.Title    := _('CSV export');
+    Dlg.Filter   := _('CSV file (*.csv)|*.csv');
     Dlg.DefaultExt := 'csv';
     Dlg.FileName := 'analyse-befunde.csv';
     if not Dlg.Execute then Exit;
@@ -1504,11 +1502,11 @@ begin
       for var F in FDisplayedFindings do Lst.Add(F);
       try
         TExporter.ExportCsv(Lst, Dlg.FileName);
-        StatusMode(Format('CSV gespeichert: %s (%d Eintraege)',
+        StatusMode(Format(_('CSV saved: %s (%d entries)'),
           [ExtractFileName(Dlg.FileName), Lst.Count]));
       except
         on E: Exception do
-          StatusMode('CSV-Export fehlgeschlagen: ' + E.Message);
+          StatusMode(_('CSV export failed: ') + E.Message);
       end;
     finally
       Lst.Free;
@@ -1525,14 +1523,14 @@ var
 begin
   if FDisplayedFindings.Count = 0 then
   begin
-    StatusMode('Nichts zu exportieren - Filter liefert 0 Eintraege.');
+    StatusMode(_('Nothing to export - filter returns 0 entries.'));
     Exit;
   end;
 
   Dlg := TSaveDialog.Create(nil);
   try
-    Dlg.Title    := 'JSON-Export';
-    Dlg.Filter   := 'JSON-Datei (*.json)|*.json';
+    Dlg.Title    := _('JSON export');
+    Dlg.Filter   := _('JSON file (*.json)|*.json');
     Dlg.DefaultExt := 'json';
     Dlg.FileName := 'analyse-befunde.json';
     if not Dlg.Execute then Exit;
@@ -1542,11 +1540,11 @@ begin
       for var F in FDisplayedFindings do Lst.Add(F);
       try
         TExporter.ExportJson(Lst, Dlg.FileName);
-        StatusMode(Format('JSON gespeichert: %s (%d Eintraege)',
+        StatusMode(Format(_('JSON saved: %s (%d entries)'),
           [ExtractFileName(Dlg.FileName), Lst.Count]));
       except
         on E: Exception do
-          StatusMode('JSON-Export fehlgeschlagen: ' + E.Message);
+          StatusMode(_('JSON export failed: ') + E.Message);
       end;
     finally
       Lst.Free;
@@ -1598,7 +1596,7 @@ begin
   src := CurrentFocusFile;
   if src = '' then
   begin
-    StatusMode('Jira-Export: bitte zuerst eine Zeile auswaehlen (Datei nicht eindeutig).');
+    StatusMode(_('Jira export: please select a row first (file not unambiguous).'));
     Exit;
   end;
   // Standard: Fehler + Warnungen. Hinweise sind oft zu viel fuer ein Ticket.
@@ -1606,7 +1604,7 @@ begin
   jiraText := TExporter.BuildJiraText(FAllFindings, src, filterSet);
   Clipboard.AsText := jiraText;
   StatusMode(Format(
-    'Jira-Wiki-Markup fuer %s in Zwischenablage kopiert (Fehler+Warnungen).',
+    _('Jira wiki markup for %s copied to clipboard (errors+warnings).'),
     [ExtractFileName(src)]));
 end;
 
@@ -1621,14 +1619,14 @@ begin
   src := CurrentFocusFile;
   if src = '' then
   begin
-    StatusMode('Clipboard: bitte zuerst eine Zeile auswaehlen (Datei nicht eindeutig).');
+    StatusMode(_('Clipboard: please select a row first (file not unambiguous).'));
     Exit;
   end;
   text := TExporter.BuildClipboardText(FAllFindings, src,
     [lsError, lsWarning]);
   Clipboard.AsText := text;
   StatusMode(Format(
-    'Fehler+Warnungen fuer %s in Zwischenablage kopiert.',
+    _('Errors+warnings for %s copied to clipboard.'),
     [ExtractFileName(src)]));
 end;
 
@@ -1666,7 +1664,7 @@ begin
 
   Dlg := TSaveDialog.Create(nil);
   try
-    Dlg.Filter      := 'HTML-Datei (*.html)|*.html';
+    Dlg.Filter      := _('HTML file (*.html)|*.html');
     Dlg.DefaultExt  := 'html';
     Dlg.FileName    := ExtractFileName(defName);
     if baseDir <> '' then
@@ -1677,11 +1675,11 @@ begin
     try
       // SourceFile = '' -> alle Befunde im Report
       TExporter.ExportHtml(FAllFindings, '', Dlg.FileName);
-      StatusMode(Format('HTML-Report gespeichert: %s',
+      StatusMode(Format(_('HTML report saved: %s'),
         [ExtractFileName(Dlg.FileName)]));
     except
       on E: Exception do
-        StatusMode('HTML-Export fehlgeschlagen: ' + E.Message);
+        StatusMode(_('HTML export failed: ') + E.Message);
     end;
   finally
     Dlg.Free;
@@ -1779,11 +1777,11 @@ const
 var
   f                 : TLeakFinding;
   nErr, nWarn, nHint, nFileErr : Integer;
-  nBug, nSmell, nVuln, nHot, nDup : Integer;
-  score      : Integer;
+  nBug, nVuln, nHot, nDup      : Integer;
+  score                        : Integer;
 begin
   nErr  := 0; nWarn := 0; nHint := 0; nFileErr := 0;
-  nBug  := 0; nSmell := 0; nVuln := 0; nHot := 0; nDup := 0;
+  nBug  := 0; nVuln := 0; nHot  := 0; nDup := 0;
 
   // Severity- und Typ-Aufteilung sind UNABHAENGIG: jeder Befund zaehlt
   // in genau einer Severity-Bucket UND in genau einer Type-Bucket.
@@ -1800,10 +1798,12 @@ begin
 
     case f.FindingType of
       ftBug             : Inc(nBug);
-      ftCodeSmell       : Inc(nSmell);
       ftVulnerability   : Inc(nVuln);
       ftSecurityHotspot : Inc(nHot);
       ftCodeDuplication : Inc(nDup);
+      // ftCodeSmell zaehlt nur via Severity (nHint/nWarn) - keine eigene
+      // Tile, kein eigener Score-Faktor (Smell-Gewicht steckt in der
+      // Severity-Tabelle).
     end;
   end;
 
@@ -1928,7 +1928,7 @@ begin
     Clipboard.AsText := prompt;
     if Assigned(FStatusBar) then
       StatusMode(Format(
-        'Claude-AI-Prompt in Zwischenablage: %s, Zeile %s (%s)',
+        _('AI prompt copied to clipboard: %s, line %s (%s)'),
         [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText]));
   except
     // Clipboard kann unter bestimmten IDE-Modi blockiert sein - silent skip
@@ -1955,7 +1955,7 @@ begin
   Dlg := TFileOpenDialog.Create(nil);
   try
     Dlg.Options := [fdoPickFolders, fdoPathMustExist, fdoForceFileSystem];
-    Dlg.Title   := 'Projektordner auswaehlen';
+    Dlg.Title   := _('Select project folder');
     if Dlg.Execute then
       FProjectPath.Text := Dlg.FileName;
   finally
@@ -2041,20 +2041,20 @@ begin
     EditorSvc := BorlandIDEServices as IOTAEditorServices;
     if not Assigned(EditorSvc) then
     begin
-      StatusMode('IDE-Editor-Service nicht verfuegbar.');
+      StatusMode(_('IDE editor service not available.'));
       Exit;
     end;
     EditView := EditorSvc.TopView;
     if not Assigned(EditView) then
     begin
-      StatusMode('Keine Datei geoeffnet.');
+      StatusMode(_('No file opened.'));
       Exit;
     end;
 
     FilePath := EditView.Buffer.FileName;
     if (FilePath = '') or not FilePath.EndsWith('.pas', True) then
     begin
-      StatusMode('Aktuelle Datei ist keine Pascal-Datei.');
+      StatusMode(_('Current file is not a Pascal file.'));
       Exit;
     end;
 
@@ -2074,7 +2074,7 @@ begin
         except
           on E: Exception do
           begin
-            StatusMode('Analysefehler: ' + E.Message);
+            StatusMode(_('Analysis error: ') + E.Message);
             Exit;
           end;
         end;
@@ -2092,7 +2092,7 @@ begin
     on E: Exception do
     begin
       Screen.Cursor := crDefault;
-      StatusMode('Unerwarteter Fehler: ' + E.Message);
+      StatusMode(_('Unexpected error: ') + E.Message);
     end;
   end;
 end;
@@ -2110,7 +2110,7 @@ begin
   startPath := Trim(FProjectPath.Text);
   if (startPath = '') or not DirectoryExists(startPath) then
   begin
-    StatusMode('Branch-Changes: bitte einen gueltigen Projektpfad angeben (zur Repo-Erkennung).');
+    StatusMode(_('Branch changes: please provide a valid project path (for repo detection).'));
     Exit;
   end;
 
@@ -2130,7 +2130,7 @@ begin
   try
     if files.Count = 0 then
     begin
-      StatusMode(info + ' - keine geaenderten .pas-Dateien');
+      StatusMode(info + _(' - no changed .pas files'));
       Exit;
     end;
 
@@ -2140,7 +2140,7 @@ begin
     wasCanc := False;
     try
       StatusMode(info);
-      StatusProgress(Format('%d Datei(en) - laeuft...', [files.Count]));
+      StatusProgress(Format(_('%d file(s) - running...'), [files.Count]));
       Application.ProcessMessages;
 
       findings := nil;
@@ -2161,7 +2161,7 @@ begin
                   if (FProgressBar.Max <> Total) and (Total > 0) then
                     FProgressBar.Max := Total;
                   FProgressBar.Position := Current;
-                  StatusProgress(Format('Datei %d / %d', [Current, Total]));
+                  StatusProgress(Format(_('File %d / %d'), [Current, Total]));
                   Application.ProcessMessages;
                 end;
                 if FAnalyseCancelled then Abort;
@@ -2177,7 +2177,7 @@ begin
           end;
           on E: Exception do
           begin
-            StatusMode('Analysefehler: ' + E.Message);
+            StatusMode(_('Analysis error: ') + E.Message);
             Exit;
           end;
         end;
@@ -2238,7 +2238,7 @@ begin
   if not FAnalyseRunning then Exit;
   FAnalyseCancelled := True;
   FBtnCancel.Enabled := False; // Doppelklick verhindern
-  StatusMode('Analyse wird abgebrochen...');
+  StatusMode(_('Cancelling analysis...'));
 end;
 
 procedure TAnalyserFrame.EditIgnoreListClick(Sender: TObject);
@@ -2257,7 +2257,7 @@ begin
   try
     ShellExecute(0, 'open', PChar(Path), nil, nil, SW_SHOWNORMAL);
   except
-    StatusMode('Konnte Editor nicht oeffnen. Datei: ' + Path);
+    StatusMode(_('Could not open editor. File: ') + Path);
     Exit;
   end;
 
@@ -2281,11 +2281,12 @@ begin
   try
     ShellExecute(0, 'open', PChar(Path), nil, nil, SW_SHOWNORMAL);
   except
-    StatusMode('Konnte Editor nicht oeffnen. Datei: ' + Path);
+    StatusMode(_('Could not open editor. File: ') + Path);
     Exit;
   end;
 
-  StatusMode('Repo-Settings: ' + Path + ' - Aenderungen wirken beim naechsten Klick auf Branch-Changes.');
+  StatusMode(Format(_('Settings: %s - changes take effect on next click of Branch-Changes.'),
+    [Path]));
 end;
 
 procedure TAnalyserFrame.AnalyseAllClasses(const APath: string);
@@ -2348,7 +2349,7 @@ begin
                   if Current > MAX_SCAN_FILES then
                   begin
                     StatusMode(Format(
-                      'Mehr als %d Dateien gefunden - Scan abgebrochen.',
+                      _('More than %d files found - scan cancelled.'),
                       [MAX_SCAN_FILES]));
                     Abort;
                   end;
@@ -2359,7 +2360,7 @@ begin
                     // Marquee-Pseudo: Position pendelt mit gefundenen Dateien
                     FProgressBar.Max := 100;
                     FProgressBar.Position := Current mod 100;
-                    StatusProgress(Format('Scanne... %d gefunden', [Current]));
+                    StatusProgress(Format(_('Scanning... %d found'), [Current]));
                     Application.ProcessMessages;
                   end;
                 end
@@ -2372,7 +2373,7 @@ begin
                     if (FProgressBar.Max <> Total) and (Total > 0) then
                       FProgressBar.Max := Total;
                     FProgressBar.Position := Current;
-                    StatusProgress(Format('Datei %d / %d (%d%%)',
+                    StatusProgress(Format(_('File %d / %d (%d%%)'),
                       [Current, Total,
                        IfThen(Total > 0, Round(Current * 100 / Total), 0)]));
                     Application.ProcessMessages;
@@ -2397,7 +2398,7 @@ begin
           end;
           on E: Exception do
           begin
-            StatusMode('Analysefehler: ' + E.Message);
+            StatusMode(_('Analysis error: ') + E.Message);
             Exit;
           end;
         end;
@@ -2417,7 +2418,7 @@ begin
           PopulateFindings(findings, APath);
 
         if wasCancelled then
-          StatusMode('Analyse abgebrochen - keine neuen Befunde geladen');
+          StatusMode(_('Analysis cancelled - no new findings loaded'));
       finally
         // FreeAndNil statt Free: bei EAbort hat AnalyzeLeaksRecursive die
         // Liste ggf. schon selbst freigegeben (findings = nil). Free auf nil
@@ -2427,7 +2428,7 @@ begin
     except
       on E: Exception do
         if GLiveAnalyserFrame = Pointer(Self) then
-          StatusMode('Unerwarteter Fehler: ' + E.Message);
+          StatusMode(_('Unexpected error: ') + E.Message);
         // Bei zerstoertem Frame: Exception still verschlucken - kein
         // StatusMode-Aufruf weil das auf FStatusBar.Panels zugreifen wuerde.
     end;
@@ -2449,14 +2450,14 @@ procedure TAnalyserFrame.GridWndProc(var Msg: TMessage);
 // wieder hergestellt. Damit greift der 100ms-Delay, ohne den Rest der
 // IDE dauerhaft zu beschleunigen.
 var
-  HI         : PHintInfo;
+  HI         : Vcl.Controls.PHintInfo;
   ACol, ARow : Integer;
   idx        : Integer;
 begin
   case Msg.Msg of
     CM_HINTSHOW:
       begin
-        HI := PHintInfo(Msg.LParam);
+        HI := Vcl.Controls.PHintInfo(Msg.LParam);
         FResultGrid.MouseToCell(HI.CursorPos.X, HI.CursorPos.Y, ACol, ARow);
         idx := ARow - 1;
         if (ACol = 0) and (idx >= 0) and (idx < FDisplayedFindings.Count) then
@@ -2775,75 +2776,23 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// Recent Paths
+// Recent Paths -- duenne Wrapper um TRecentPaths (Common/uRecentPaths.pas).
+// Pinned-Eintrag = aktuell geoeffnetes IDE-Projekt, Position 0.
 // ---------------------------------------------------------------------------
 procedure TAnalyserFrame.LoadRecentPaths;
-var
-  Ini        : TIniFile;
-  i          : Integer;
-  path       : string;
-  ideProject : string;
 begin
-  FProjectPath.Items.Clear;
-
-  // Aktuell geoeffnetes IDE-Projekt als ersten Eintrag
-  ideProject := GetCurrentIDEProjectDir;
-  if ideProject <> '' then
-    FProjectPath.Items.Add(ideProject);
-
-  // Letzte 3 Pfade aus INI
-  ForceDirectories(ExtractFilePath(GetIniPath));
-  Ini := TIniFile.Create(GetIniPath);
-  try
-    for i := 1 to MAX_RECENT do
-    begin
-      path := Ini.ReadString('Recent', 'Path' + IntToStr(i), '');
-      if (path <> '') and (FProjectPath.Items.IndexOf(path) < 0) then
-        FProjectPath.Items.Add(path);
-    end;
-  finally
-    Ini.Free;
-  end;
-
-  if FProjectPath.Items.Count > 0 then
-    FProjectPath.Text := FProjectPath.Items[0]
-  else
-    FProjectPath.Text := '';
+  TRecentPaths.Load(
+    FProjectPath, GetIniPath,
+    DEFAULT_MAX_RECENT,
+    GetCurrentIDEProjectDir, ppFirst);
 end;
 
 procedure TAnalyserFrame.SaveRecentPath(const APath: string);
-var
-  Ini : TIniFile;
-  i   : Integer;
-  idx : Integer;
 begin
-  // Aus der Liste entfernen falls bereits vorhanden, dann vorne einfuegen
-  idx := FProjectPath.Items.IndexOf(APath);
-  if idx >= 0 then
-    FProjectPath.Items.Delete(idx);
-  FProjectPath.Items.Insert(0, APath);
-  FProjectPath.Text := APath;
-
-  // Auf MAX_RECENT begrenzen (IDE-Projekt nicht mitzaehlen)
-  while FProjectPath.Items.Count > MAX_RECENT + 1 do
-    FProjectPath.Items.Delete(FProjectPath.Items.Count - 1);
-
-  // In INI speichern (ohne IDE-Projekt-Eintrag)
-  ForceDirectories(ExtractFilePath(GetIniPath));
-  Ini := TIniFile.Create(GetIniPath);
-  try
-    i := 1;
-    for var j := 0 to FProjectPath.Items.Count - 1 do
-    begin
-      if i > MAX_RECENT then Break;
-      Ini.WriteString('Recent', 'Path' + IntToStr(i), FProjectPath.Items[j]);
-      Inc(i);
-    end;
-    for i := i to MAX_RECENT do
-      Ini.DeleteKey('Recent', 'Path' + IntToStr(i));
-  finally
-    Ini.Free;
-  end;
+  TRecentPaths.Save(
+    FProjectPath, GetIniPath, APath,
+    DEFAULT_MAX_RECENT,
+    GetCurrentIDEProjectDir, ppFirst);
 end;
 
 // ---------------------------------------------------------------------------
@@ -2875,11 +2824,11 @@ begin
   // IDE kann die Schrift des Frames beim Einbetten ueberschreiben ->
   // hier explizit nach dem Hosting nochmal setzen.
   F.Font.Name := 'Segoe UI';
-  F.Font.Size := 6;
+  F.Font.Size := 8;
   F.FResultGrid.Font.Name := 'Segoe UI';
   F.FResultGrid.Font.Size := 8;
   F.FProjectPath.Font.Name := 'Segoe UI';
-  F.FProjectPath.Font.Size := 6;
+  F.FProjectPath.Font.Size := 8;
 
   // IDE-Theme einmalig auf den frisch erstellten Frame anwenden.
   // ApplyTheme registriert die IDE-spezifischen Style-Hooks und

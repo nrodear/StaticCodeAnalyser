@@ -30,6 +30,7 @@ uses
   uCollectValues in 'sources\Common\uCollectValues.pas',
   uDetectorUtils in 'sources\Common\uDetectorUtils.pas',
   uMethodd12 in 'sources\Common\uMethodd12.pas',
+  uRecentPaths in 'sources\Common\uRecentPaths.pas',
   uRegExMatches in 'sources\Common\uRegExMatches.pas',
   uSCAConsts in 'sources\Common\uSCAConsts.pas',
   // ---- Detectors ----
