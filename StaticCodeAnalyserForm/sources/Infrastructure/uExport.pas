@@ -645,6 +645,12 @@ var
   F         : TLeakFinding;
   SL        : TStringList;
   Files     : TStringList;
+  // Bitmask je Datei: 1=Error, 2=Warning, 4=Hint. Gefuettert in der ersten
+  // Schleife unten, ausgewertet beim <option data-sev="...">-Emit, sodass
+  // der JS-Severity-Filter passende Files im Dropdown verstecken kann.
+  FilesSev  : TDictionary<string, Cardinal>;
+  SevMask   : Cardinal;
+  DataSev   : string;
   SourceCache : TObjectDictionary<string, TStringList>;
   SevCl     : string;
   Title     : string;
@@ -685,16 +691,19 @@ begin
   else
     Title := 'Code Review - ' + ExtractFileName(SourceFile);
 
-  // Erste Schleife: Zaehler + eindeutige Dateinamen fuer den Filter sammeln.
+  // Erste Schleife: Zaehler + eindeutige Dateinamen + pro Datei das Set
+  // der vorkommenden Severities (fuer den dropdown-internen Severity-Filter).
   // SourceCache haelt geladene Quelldatei-Inhalte (TStringList je Pfad), wird
   // beim Cleanup automatisch alle TStringLists freigeben (doOwnsValues).
   Files       := nil;
+  FilesSev    := nil;
   SourceCache := nil;
   try
     Files := TStringList.Create;
     Files.Duplicates := dupIgnore;
     Files.Sorted := True;
     Files.CaseSensitive := False;
+    FilesSev := TDictionary<string, Cardinal>.Create;
     SourceCache := TObjectDictionary<string, TStringList>.Create([doOwnsValues]);
     nTotal := 0; nErr := 0; nWarn := 0; nHint := 0;
     if Assigned(Findings) then
@@ -709,7 +718,18 @@ begin
           lsHint    : Inc(nHint);
         end;
         if F.FileName <> '' then
-          Files.Add(ExtractFileName(F.FileName));
+        begin
+          fnDisp := ExtractFileName(F.FileName);
+          Files.Add(fnDisp);
+          // Severity-Bit pro Datei akkumulieren.
+          if not FilesSev.TryGetValue(fnDisp, SevMask) then SevMask := 0;
+          case F.Severity of
+            lsError   : SevMask := SevMask or 1;
+            lsWarning : SevMask := SevMask or 2;
+            lsHint    : SevMask := SevMask or 4;
+          end;
+          FilesSev.AddOrSetValue(fnDisp, SevMask);
+        end;
       end;
 
   SB := TStringBuilder.Create;
@@ -822,8 +842,23 @@ begin
     SB.AppendLine(' Dateien)</option>');
     for fnDisp in Files do
     begin
+      // data-sev = Komma-Liste der Severities die in DIESER Datei
+      // vorkommen ('err'/'warn'/'hint'). Leer wenn die Datei nur
+      // Read-Errors o.ae. enthaelt - der JS-Filter versteckt sie dann
+      // sobald ein Severity-Filter aktiv ist.
+      SevMask := 0;
+      FilesSev.TryGetValue(fnDisp, SevMask);
+      DataSev := '';
+      if (SevMask and 1) <> 0 then DataSev := DataSev + 'err,';
+      if (SevMask and 2) <> 0 then DataSev := DataSev + 'warn,';
+      if (SevMask and 4) <> 0 then DataSev := DataSev + 'hint,';
+      if DataSev <> '' then
+        SetLength(DataSev, Length(DataSev) - 1);
+
       SB.Append('      <option value="');
       SB.Append(HtmlEscape(fnDisp));
+      SB.Append('" data-sev="');
+      SB.Append(DataSev);
       SB.Append('">');
       SB.Append(HtmlEscape(fnDisp));
       SB.AppendLine('</option>');
@@ -1113,6 +1148,47 @@ begin
     SB.AppendLine('      applyFilter();');
     SB.AppendLine('    });');
     SB.AppendLine('');
+    SB.AppendLine('    // ---- Datei-Dropdown auf Severity-Filter abstimmen ----');
+    SB.AppendLine('    // Wenn ein Severity-Filter aktiv ist, blendet diese Funktion alle');
+    SB.AppendLine('    // <option>-Eintraege aus, deren data-sev den activeSev nicht enthaelt.');
+    SB.AppendLine('    // Die "Alle"-Option (value="") bleibt immer sichtbar. Wenn das aktuell');
+    SB.AppendLine('    // gewaehlte File durch den Filter verschwindet, wird auf "Alle"');
+    SB.AppendLine('    // zurueckgesetzt - das verhindert verwirrende leere Tabellen-Ansichten.');
+    SB.AppendLine('    function applyFileDropdownVisibility() {');
+    SB.AppendLine('      if (!fileSel) return;');
+    SB.AppendLine('      var opts = fileSel.querySelectorAll(''option'');');
+    SB.AppendLine('      var visible = 0;');
+    SB.AppendLine('      for (var i = 0; i < opts.length; i++) {');
+    SB.AppendLine('        var opt = opts[i];');
+    SB.AppendLine('        if (!opt.value) {');
+    SB.AppendLine('          // "Alle"-Option immer sichtbar lassen');
+    SB.AppendLine('          opt.hidden = false;');
+    SB.AppendLine('          continue;');
+    SB.AppendLine('        }');
+    SB.AppendLine('        if (!activeSev) {');
+    SB.AppendLine('          opt.hidden = false;');
+    SB.AppendLine('          visible++;');
+    SB.AppendLine('          continue;');
+    SB.AppendLine('        }');
+    SB.AppendLine('        var ds = opt.getAttribute(''data-sev'') || '''';');
+    SB.AppendLine('        var sevList = (ds.length > 0) ? ds.split('','') : [];');
+    SB.AppendLine('        var match = sevList.indexOf(activeSev) !== -1;');
+    SB.AppendLine('        opt.hidden = !match;');
+    SB.AppendLine('        if (match) visible++;');
+    SB.AppendLine('      }');
+    SB.AppendLine('      // "Alle (N Dateien)" - Counter aktualisieren');
+    SB.AppendLine('      var allOpt = fileSel.querySelector(''option[value=""]'');');
+    SB.AppendLine('      if (allOpt) {');
+    SB.AppendLine('        if (activeSev)');
+    SB.AppendLine('          allOpt.textContent = ''Alle ('' + visible + '' Dateien)'';');
+    SB.AppendLine('        else');
+    SB.AppendLine('          allOpt.textContent = ''Alle ('' + (opts.length - 1) + '' Dateien)'';');
+    SB.AppendLine('      }');
+    SB.AppendLine('      // Aktuelle Auswahl unsichtbar geworden -> auf "Alle" zuruecksetzen');
+    SB.AppendLine('      var sel = fileSel.selectedOptions && fileSel.selectedOptions[0];');
+    SB.AppendLine('      if (sel && sel.hidden) fileSel.value = '''';');
+    SB.AppendLine('    }');
+    SB.AppendLine('');
     SB.AppendLine('    // Klick auf Severity-Badge filtert die Tabelle. Erneuter Klick auf');
     SB.AppendLine('    // bereits aktive Badge schaltet zurueck auf Gesamt.');
     SB.AppendLine('    document.querySelectorAll(''.sev-filter'').forEach(function(badge) {');
@@ -1128,6 +1204,7 @@ begin
     SB.AppendLine('          b.classList.toggle(''sev-active'', bSev === activeSev);');
     SB.AppendLine('        });');
     SB.AppendLine('        collapseAll();');
+    SB.AppendLine('        applyFileDropdownVisibility();');
     SB.AppendLine('        applyFilter();');
     SB.AppendLine('      });');
     SB.AppendLine('    });');
@@ -1148,6 +1225,7 @@ begin
   end;
   finally
     Files.Free;
+    FilesSev.Free;
     SourceCache.Free;
   end;
 end;
