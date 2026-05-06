@@ -6,9 +6,9 @@ uses
   Winapi.Windows, Winapi.Messages, Winapi.ShellAPI, System.SysUtils,
   System.Classes, Vcl.Graphics, System.Generics.Collections,
    Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls,
-  Vcl.ComCtrls, Vcl.Grids, uStaticAnalyzer, uStaticAnalyzer2,
+  Vcl.ComCtrls, Vcl.Grids, uStaticAnalyzer2,
   uMethodd12, uSCAConsts, uFixHint, uClaudePrompt, uLocalization,
-  uRepoSettings, uRecentPaths,
+  uRepoSettings, uRecentPaths, uFindingGridRenderer,
   Vcl.Controls
  ;
 
@@ -55,6 +55,11 @@ type
     // Lauf aufgerufen, damit INI-Aenderungen ohne App-Neustart wirken (gleiches
     // Pattern wie das IDE-Plugin in TAnalyserFrame.AnalyseClick).
     procedure ApplyIniSettings;
+    // Inner helper: registriert eine bereits geladene Settings-Instanz und
+    // setzt optional die Discovery-Listen zurueck. Wird vom Analyse-Pfad
+    // direkt benutzt (der die Settings noch fuer UsesCheck/AutoDiscover braucht).
+    procedure ApplyDetectorConfig(Settings: TRepoSettings;
+      AClearDiscovery: Boolean);
     procedure AnalyseAllClasses(Sender: TObject; const path: string);
     procedure AnalyseSingleFile(const AFilePath: string);
     procedure FillGridFromFindings(Findings: TObjectList<TLeakFinding>;
@@ -153,51 +158,12 @@ end;
 
 procedure TForm2.ResultGridDrawCell(Sender: TObject; ACol, ARow: Integer;
   Rect: TRect; State: TGridDrawState);
-const
-  COLOR_ERROR   = $00C0C0FF; // hellrot   (BGR: R=FF, G=C0, B=C0)
-  COLOR_WARNING = $00C0FFFF; // hellgelb  (BGR: R=FF, G=FF, B=C0)
-var
-  grid: TStringGrid;
-  severity: string;
-  bgColor: TColor;
+// Implementation in UI/uFindingGridRenderer.pas - hier nur die Standalone-
+// Konfiguration: Severity-Spalte 4, kein Theme/Zebra/Sort/Accent-Bar
+// (Standalone-Look ist bewusst einfach, hardcoded Pastell-Pasteltoene).
 begin
-  grid := TStringGrid(Sender);
-
-  // Kopfzeile fett
-  if ARow = 0 then
-  begin
-    grid.Canvas.Brush.Color := clBtnFace;
-    grid.Canvas.Font.Style  := [fsBold];
-    grid.Canvas.FillRect(Rect);
-    InflateRect(Rect, -2, 0);
-    DrawText(grid.Canvas.Handle, PChar(grid.Cells[ACol, ARow]),
-      -1, Rect, DT_SINGLELINE or DT_VCENTER or DT_LEFT or DT_NOPREFIX);
-    Exit;
-  end;
-
-  severity := grid.Cells[4, ARow];
-  if severity = 'Fehler' then
-    bgColor := COLOR_ERROR
-  else if severity = 'Warnung' then
-    bgColor := COLOR_WARNING
-  else
-    bgColor := clWindow;
-
-  if gdSelected in State then
-    bgColor := clHighlight;
-
-  grid.Canvas.Brush.Color := bgColor;
-  grid.Canvas.FillRect(Rect);
-
-  if gdSelected in State then
-    grid.Canvas.Font.Color := clHighlightText
-  else
-    grid.Canvas.Font.Color := clWindowText;
-  grid.Canvas.Font.Style := [];
-
-  InflateRect(Rect, -2, 0);
-  DrawText(grid.Canvas.Handle, PChar(grid.Cells[ACol, ARow]),
-    -1, Rect, DT_SINGLELINE or DT_VCENTER or DT_LEFT or DT_NOPREFIX);
+  TFindingGridRenderer.DrawCell(Sender, ACol, ARow, Rect, State,
+    TFindingGridRenderer.StandaloneConfig);
 end;
 
 procedure TForm2.Button1Click(Sender: TObject);
@@ -280,6 +246,27 @@ begin
   end;
 end;
 
+procedure TForm2.ApplyDetectorConfig(Settings: TRepoSettings;
+  AClearDiscovery: Boolean);
+begin
+  try
+    Settings.RegisterToLeakyClasses;
+    Settings.ApplyDetectorThresholds;
+    AutoDiscoverCustomClasses := Settings.AutoDiscoverClasses;
+    if AClearDiscovery then
+    begin
+      // Discovery-Treffer aus vorherigen Laeufen verwerfen, sonst landen
+      // sie mit-persistiert in LeakyClassesDiscover.log.
+      if Assigned(uSCAConsts.DiscoveredClasses) then
+        uSCAConsts.DiscoveredClasses.Clear;
+      if Assigned(uSCAConsts.DiscoveredStaticClasses) then
+        uSCAConsts.DiscoveredStaticClasses.Clear;
+    end;
+  except
+    // INI-Wert defekt darf den Lauf nicht abbrechen.
+  end;
+end;
+
 procedure TForm2.ApplyIniSettings;
 // Helper fuer Aufrufer die Settings nicht selbst persistieren wollen
 // (z.B. wenn keine Discovery laeuft). Liefert eine kurzlebige Instanz mit
@@ -290,11 +277,7 @@ begin
   Settings := TRepoSettings.Create;
   try
     try Settings.Load; except end;
-    try
-      Settings.RegisterToLeakyClasses;
-      Settings.ApplyDetectorThresholds;
-      AutoDiscoverCustomClasses := Settings.AutoDiscoverClasses;
-    except end;
+    ApplyDetectorConfig(Settings, False);
   finally
     Settings.Free;
   end;
@@ -312,23 +295,16 @@ begin
     // Custom-LeakyClasses + Excludes in die globalen Listen ziehen,
     // AutoDiscover-Flag durchreichen. MUSS vor dem Analyzer-Aufruf
     // passieren, sonst landet TMeineKlasse & Co. nie in LeakyClasses.
-    try
-      Settings.RegisterToLeakyClasses;
-      Settings.ApplyDetectorThresholds;
-      AutoDiscoverCustomClasses := Settings.AutoDiscoverClasses;
-      // DiscoveredClasses zuruecksetzen damit jeder Lauf eine frische
-      // Liste produziert (sonst wuerden Treffer aus vorherigen Projekten
-      // mit-persistiert).
-      if Assigned(uSCAConsts.DiscoveredClasses) then
-        uSCAConsts.DiscoveredClasses.Clear;
-      if Assigned(uSCAConsts.DiscoveredStaticClasses) then
-        uSCAConsts.DiscoveredStaticClasses.Clear;
-    except end;
+    ApplyDetectorConfig(Settings, True);
 
     StatusBar1.SimpleText := _('Checking all classes...');
     Application.ProcessMessages;
 
-    findings := TStaticAnalyzer.AnalyzeAllClassesRecursive(path);
+    // Frueher: TStaticAnalyzer.AnalyzeAllClassesRecursive (uParser-basiert,
+    // nur MemoryLeak + EmptyExcept). Jetzt: TStaticAnalyzer2 ueber alle 21
+    // Detektoren - dieselbe Pipeline wie "Aktuelle Datei" und das IDE-Plugin.
+    findings := TStaticAnalyzer2.AnalyzeLeaksRecursive(path,
+      nil, Settings.UsesCheck);
     try
       FillGridFromFindings(findings, path);
     finally
@@ -365,15 +341,7 @@ begin
   Settings := TRepoSettings.Create;
   try
     try Settings.Load; except end;
-    try
-      Settings.RegisterToLeakyClasses;
-      Settings.ApplyDetectorThresholds;
-      AutoDiscoverCustomClasses := Settings.AutoDiscoverClasses;
-      if Assigned(uSCAConsts.DiscoveredClasses) then
-        uSCAConsts.DiscoveredClasses.Clear;
-      if Assigned(uSCAConsts.DiscoveredStaticClasses) then
-        uSCAConsts.DiscoveredStaticClasses.Clear;
-    except end;
+    ApplyDetectorConfig(Settings, True);
 
     StatusBar1.SimpleText := _('Analysing: ') + ExtractFileName(AFilePath);
     Application.ProcessMessages;
@@ -484,6 +452,9 @@ var
   inp: TInput;
   vk: Word;
 begin
+  // Belt-and-suspenders: ohne Ziel-Zeile wuerde ein Ctrl+G Dialog leer
+  // bestaetigt und die IDE haengt mit einem offenen Dialog herum.
+  if LineNo <= 0 then Exit;
   BDSWnd := FindWindow('TAppBuilder', nil);
   if BDSWnd = 0 then Exit;
   SetForegroundWindow(BDSWnd);
@@ -600,10 +571,17 @@ end;
 
 procedure TForm2.LoadRecentPaths;
 begin
-  TRecentPaths.Load(
-    Projectpath, RecentIniPath,
-    DEFAULT_MAX_RECENT,
-    AppPath, ppLast);
+  // Wenn die INI defekt ist (Disk-Voll, ACL, manuelles Editieren) darf
+  // der FormCreate nicht crashen - dann startet die App ohne MRU.
+  try
+    TRecentPaths.Load(
+      Projectpath, RecentIniPath,
+      DEFAULT_MAX_RECENT,
+      AppPath, ppLast);
+  except
+    Projectpath.Items.Clear;
+    Projectpath.Text := '';
+  end;
 end;
 
 procedure TForm2.SaveRecentPath(const APath: string);

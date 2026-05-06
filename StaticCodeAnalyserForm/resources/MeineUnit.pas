@@ -1,6 +1,6 @@
 unit MeineUnit;
 
-// Testklasse fuer den statischen Speicherleck-Analyser (TStaticAnalyzer).
+// Testklasse fuer den statischen Speicherleck-Analyser (TStaticAnalyzer2).
 // Enthaelt absichtliche Speicherlecks fuer Testzwecke.
 
 interface

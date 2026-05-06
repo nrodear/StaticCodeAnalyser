@@ -77,7 +77,7 @@ type
 
   // Art des Befundes
   TFindingKind = (
-    fkMemoryLeak,       // Speicherleck (TLeakDetector)
+    fkMemoryLeak,       // Speicherleck (uLeakDetector2)
     fkEmptyExcept,      // Leerer except-Block (verschluckt Exceptions)
     fkSQLInjection,     // SQL-String per '+' konkateniert (Injection-Risiko)
     fkHardcodedSecret,  // Passwort/Token als Stringliteral im Code

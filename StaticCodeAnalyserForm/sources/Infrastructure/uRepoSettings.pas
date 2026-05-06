@@ -590,6 +590,28 @@ const
     '; Manually copy the names you want into [Detectors] LeakyClasses='#13#10 +
     '; in analyser.ini. The static-only block is commented out as a hint.'#13#10;
 
+  procedure MergeNewHits(Source, Target: TStringList;
+    Excludes: TStringList; out Changed: Boolean);
+  // Mergt Discovery-Treffer in eine sortierte Target-Liste, ueberspringt
+  // Excludes und meldet via Changed ob es etwas neues gab.
+  var
+    j   : Integer;
+    Cls : string;
+  begin
+    Changed := False;
+    if not Assigned(Source) then Exit;
+    for j := 0 to Source.Count - 1 do
+    begin
+      Cls := Source[j];
+      if Excludes.IndexOf(Cls) >= 0 then Continue;
+      if Target.IndexOf(Cls) < 0 then
+      begin
+        Target.Add(Cls);
+        Changed := True;
+      end;
+    end;
+  end;
+
   procedure ReadOldList(const Lines: TStringList; const Header: string;
     Target: TStringList);
   // Liest Klassennamen unter einem Section-Header bis zum naechsten
@@ -636,7 +658,6 @@ var
   Inst, Stat        : TStringList;   // finale Listen (gemerged)
   Raw               : TStringList;
   i                 : Integer;
-  Cls               : string;
   Output            : TStringList;
   ChangedInst       : Boolean;
   ChangedStat       : Boolean;
@@ -674,31 +695,8 @@ begin
     end;
 
     // 2) neue Treffer mergen, Excludes ueberspringen
-    ChangedInst := False;
-    if Assigned(uSCAConsts.DiscoveredClasses) then
-      for i := 0 to uSCAConsts.DiscoveredClasses.Count - 1 do
-      begin
-        Cls := uSCAConsts.DiscoveredClasses[i];
-        if FExcludeLeaky.IndexOf(Cls) >= 0 then Continue;
-        if Inst.IndexOf(Cls) < 0 then
-        begin
-          Inst.Add(Cls);
-          ChangedInst := True;
-        end;
-      end;
-
-    ChangedStat := False;
-    if Assigned(uSCAConsts.DiscoveredStaticClasses) then
-      for i := 0 to uSCAConsts.DiscoveredStaticClasses.Count - 1 do
-      begin
-        Cls := uSCAConsts.DiscoveredStaticClasses[i];
-        if FExcludeLeaky.IndexOf(Cls) >= 0 then Continue;
-        if Stat.IndexOf(Cls) < 0 then
-        begin
-          Stat.Add(Cls);
-          ChangedStat := True;
-        end;
-      end;
+    MergeNewHits(uSCAConsts.DiscoveredClasses,       Inst, FExcludeLeaky, ChangedInst);
+    MergeNewHits(uSCAConsts.DiscoveredStaticClasses, Stat, FExcludeLeaky, ChangedStat);
 
     if not (ChangedInst or ChangedStat) then Exit;
 

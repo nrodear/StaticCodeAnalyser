@@ -39,21 +39,22 @@ contains
   uIDELineHighlighter in 'uIDELineHighlighter.pas',
   uIDEMessages in 'uIDEMessages.pas',
   uIDEWatchMode in 'uIDEWatchMode.pas',
+  uIDEStatsTiles in 'uIDEStatsTiles.pas',
   // ---- UI ----
   uAnalyserPalette in '..\StaticCodeAnalyserForm\sources\UI\uAnalyserPalette.pas',
   uAnalyserTypes in '..\StaticCodeAnalyserForm\sources\UI\uAnalyserTypes.pas',
   uAnalyserTheme in '..\StaticCodeAnalyserForm\sources\UI\uAnalyserTheme.pas',
+  uFindingGridRenderer in '..\StaticCodeAnalyserForm\sources\UI\uFindingGridRenderer.pas',
   uLocalization in '..\StaticCodeAnalyserForm\sources\UI\uLocalization.pas',
   // ---- Parsing ----
-  uParser in '..\StaticCodeAnalyserForm\sources\Parsing\uParser.pas',
   uAstNode in '..\StaticCodeAnalyserForm\sources\Parsing\uAstNode.pas',
   uLexer in '..\StaticCodeAnalyserForm\sources\Parsing\uLexer.pas',
   uParser2 in '..\StaticCodeAnalyserForm\sources\Parsing\uParser2.pas',
   // ---- Infrastructure ----
   uStaticFiles in '..\StaticCodeAnalyserForm\sources\Infrastructure\uStaticFiles.pas',
-  uStaticAnalyzer in '..\StaticCodeAnalyserForm\sources\Infrastructure\uStaticAnalyzer.pas',
   uSuppression in '..\StaticCodeAnalyserForm\sources\Infrastructure\uSuppression.pas',
   uExport in '..\StaticCodeAnalyserForm\sources\Infrastructure\uExport.pas',
+  uExportHtml in '..\StaticCodeAnalyserForm\sources\Infrastructure\uExportHtml.pas',
   uIgnoreList in '..\StaticCodeAnalyserForm\sources\Infrastructure\uIgnoreList.pas',
   uStaticAnalyzer2 in '..\StaticCodeAnalyserForm\sources\Infrastructure\uStaticAnalyzer2.pas',
   uVcsChanges in '..\StaticCodeAnalyserForm\sources\Infrastructure\uVcsChanges.pas',
@@ -69,7 +70,6 @@ contains
   uDetectorUtils in '..\StaticCodeAnalyserForm\sources\Common\uDetectorUtils.pas',
   uCollectValues in '..\StaticCodeAnalyserForm\sources\Common\uCollectValues.pas',
   // ---- Detectors ----
-  uLeakDetector in '..\StaticCodeAnalyserForm\sources\Detectors\uLeakDetector.pas',
   uCodeSmells in '..\StaticCodeAnalyserForm\sources\Detectors\uCodeSmells.pas',
   uLeakDetector2 in '..\StaticCodeAnalyserForm\sources\Detectors\uLeakDetector2.pas',
   uCodeSmells2 in '..\StaticCodeAnalyserForm\sources\Detectors\uCodeSmells2.pas',

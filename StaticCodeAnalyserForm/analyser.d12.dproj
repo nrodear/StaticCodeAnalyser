@@ -149,19 +149,20 @@
         <DCCReference Include="sources\Detectors\uDuplicateString.pas"/>
         <DCCReference Include="sources\Detectors\uEmptyMethod.pas"/>
         <DCCReference Include="sources\Infrastructure\uExport.pas"/>
+        <DCCReference Include="sources\Infrastructure\uExportHtml.pas"/>
         <DCCReference Include="sources\Detectors\uFieldLeak.pas"/>
         <DCCReference Include="sources\Output\uFixHint.pas"/>
         <DCCReference Include="sources\Detectors\uFormatMismatch.pas"/>
         <DCCReference Include="sources\Detectors\uHardcodedPath.pas"/>
         <DCCReference Include="sources\Detectors\uHardcodedSecret.pas"/>
         <DCCReference Include="sources\Infrastructure\uIgnoreList.pas"/>
-        <DCCReference Include="sources\Detectors\uLeakDetector.pas"/>
         <DCCReference Include="sources\Detectors\uLeakDetector2.pas"/>
         <DCCReference Include="sources\Parsing\uLexer.pas"/>
         <DCCReference Include="sources\UI\uLocalization.pas"/>
         <DCCReference Include="sources\Detectors\uLongMethod.pas"/>
         <DCCReference Include="sources\Detectors\uLongParamList.pas"/>
         <DCCReference Include="sources\Detectors\uMagicNumbers.pas"/>
+        <DCCReference Include="sources\UI\uFindingGridRenderer.pas"/>
         <DCCReference Include="sources\UI\uMainForm.pas">
             <Form>Form2</Form>
             <FormType>dfm</FormType>
@@ -170,14 +171,12 @@
         <DCCReference Include="sources\Common\uRecentPaths.pas"/>
         <DCCReference Include="sources\Detectors\uMissingFinally.pas"/>
         <DCCReference Include="sources\Detectors\uNilDeref.pas"/>
-        <DCCReference Include="sources\Parsing\uParser.pas"/>
         <DCCReference Include="sources\Parsing\uParser2.pas"/>
         <DCCReference Include="sources\Common\uRegExMatches.pas"/>
         <DCCReference Include="sources\Infrastructure\uRepoSettings.pas"/>
         <DCCReference Include="sources\Common\uSCAConsts.pas"/>
         <DCCReference Include="sources\Detectors\uSQLInjection.pas"/>
         <DCCReference Include="sources\Detectors\uSQLInjectionScore.pas"/>
-        <DCCReference Include="sources\Infrastructure\uStaticAnalyzer.pas"/>
         <DCCReference Include="sources\Infrastructure\uStaticAnalyzer2.pas"/>
         <DCCReference Include="sources\Infrastructure\uStaticFiles.pas"/>
         <DCCReference Include="sources\Infrastructure\uSuppression.pas"/>

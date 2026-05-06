@@ -115,12 +115,12 @@ var
   Reason      : string;
   Suggestion  : string;
 begin
-  // Defensive Defaults - sonst bleiben Reason/Suggestion uninitialisiert
-  // wenn der einzige Code-Pfad der TotalPlus=0 / nicht-strukturell /
-  // kein-FuncCall-Branch ist (`case TotalPlus of 0: Score := 1`). Folge
-  // war ein leerer Detail-Text in der Befund-Anzeige.
-  Score      := 1;
-  Difficulty := fdTrivial;
+  // Reason/Suggestion default leer - die unten folgenden Branches setzen
+  // sie alle, aber so ist der Out-Pfad bei spaeterem Code-Refactor
+  // (neuer Branch ohne explizites Reason) defensiv abgedeckt.
+  // Score/Difficulty werden in jedem Branch ueberschrieben + von der
+  // case Score-Klausel am Ende abgeleitet, daher hier KEIN Default
+  // (vermeidet H2077 "value never used").
   Reason     := '';
   Suggestion := '';
 

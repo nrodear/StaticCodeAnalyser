@@ -36,6 +36,68 @@ const
 // IsIdentChar siehe uDetectorUtils.TDetectorUtils.IsIdentChar - lokal entfernt
 // (Duplikat). Aufrufer unten verwenden den Klassen-Helfer direkt.
 
+function ScanLineCommentStart(const Line: string;
+  var InBlockComm: Boolean): Integer;
+// Liefert die 1-basierte Spalte ab der ein Kommentar beginnt (inkl. der
+// Marker '//' oder '{'). 0 falls kein Kommentar in dieser Zeile startet.
+// Ueberspringt Pascal-String-Literale ('...' inkl. doppelter '' Escapes)
+// damit ''// in einem String'' nicht faelschlich als Kommentar gilt.
+var
+  i, n   : Integer;
+  InStr  : Boolean;
+  pClose : Integer;
+begin
+  Result := 0;
+  InStr  := False;
+  i := 1;
+  n := Length(Line);
+  while i <= n do
+  begin
+    if InStr then
+    begin
+      if Line[i] = '''' then
+      begin
+        if (i < n) and (Line[i+1] = '''') then
+          Inc(i, 2)              // doppelter Apostroph = escape
+        else
+        begin
+          InStr := False;
+          Inc(i);
+        end;
+      end
+      else
+        Inc(i);
+      Continue;
+    end;
+    case Line[i] of
+      '''':
+        begin
+          InStr := True;
+          Inc(i);
+        end;
+      '/':
+        begin
+          if (i < n) and (Line[i+1] = '/') then
+          begin
+            Result := i;
+            Exit;
+          end;
+          Inc(i);
+        end;
+      '{':
+        begin
+          Result := i;
+          pClose := Pos('}', Line, i + 1);
+          if pClose = 0 then
+            InBlockComm := True;
+          Exit;
+        end;
+    else
+      Inc(i);
+    end;
+  end;
+end;
+
 function FindMarkerInComment(const Line: string;
   CommentStart: Integer; out Marker: string;
   out MarkerPos: Integer): Boolean;
@@ -120,21 +182,9 @@ begin
       end
       else
       begin
-        // Erstes Vorkommen von '//' oder '{' suchen das nicht in einem
-        // String-Literal steht. Vereinfacht: '//' und '{' werden
-        // jeweils gesucht, kleinere Position gewinnt.
-        var pSlash := Pos('//', Line);
-        var pBrace := Pos('{', Line);
-        if (pBrace > 0) and ((pSlash = 0) or (pBrace < pSlash)) then
-        begin
-          CommentAt := pBrace;
-          // Endet der Block-Kommentar in derselben Zeile?
-          var pClose := Pos('}', Line, pBrace + 1);
-          if pClose = 0 then
-            InBlockComm := True;
-        end
-        else if pSlash > 0 then
-          CommentAt := pSlash;
+        // String-aware Scan: ueberspringt Apostroph-Literale damit
+        // 'foo // bar' den '// bar' nicht als Kommentar ansieht.
+        CommentAt := ScanLineCommentStart(Line, InBlockComm);
       end;
 
       if CommentAt = 0 then Continue;

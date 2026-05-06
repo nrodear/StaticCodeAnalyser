@@ -1107,29 +1107,45 @@ end;
 { ---- case ... of ---- }
 
 procedure TParser2.ParseCaseStmt(Parent: TAstNode);
+// Hang-Schutz: alle inneren Loops mit GuardAdvance UND vollstaendigen
+// Block-Boundary-Stop-Sets. ParseStatement.Forward-Progress fasst tkKwEnd/
+// tkKwElse/tkKwExcept/tkKwFinally/tkKwUntil/tkEof als "Block-Boundary" auf
+// und verzichtet dort auf den forced Next - wenn die umgebende Schleife
+// diese Boundaries nicht alle als Exit-Bedingung listet, spint sie ohne
+// Next-Call (Watchdog feuert nicht). Fuer mORMot's geschachtelte
+// case/if-else-Bloeke real reproduzierbar.
 var
   T        : TToken;
   CaseNode : TAstNode;
   ArmNode  : TAstNode;
+  ArmStart : Integer;
 begin
   T        := Next; // 'case'
   CaseNode := Parent.Add(nkCaseStmt, 'case', T.Line, T.Col);
   SkipTo([tkKwOf, tkEof]);
   Eat(tkKwOf);
 
-  while not (Tok.Kind in [tkKwEnd, tkKwElse, tkEof]) do
+  while not (Tok.Kind in [tkKwEnd, tkKwElse, tkKwExcept, tkKwFinally,
+                          tkKwUntil, tkEof]) do
   begin
+    ArmStart := FNextCount;
     ArmNode := CaseNode.Add(nkCaseArm, '', Tok.Line, Tok.Col);
-    SkipTo([tkColon, tkKwEnd, tkEof]);
+    SkipTo([tkColon, tkKwEnd, tkKwElse, tkEof]);
     Eat(tkColon);
     ParseStatement(ArmNode);
+    GuardAdvance(ArmStart);
   end;
 
   if Eat(tkKwElse) then
   begin
     var ElseArm := CaseNode.Add(nkCaseArm, 'else', Tok.Line, Tok.Col);
-    while not (Tok.Kind in [tkKwEnd, tkEof]) do
+    while not (Tok.Kind in [tkKwEnd, tkKwExcept, tkKwFinally,
+                            tkKwUntil, tkEof]) do
+    begin
+      var ElseStart := FNextCount;
       ParseStatement(ElseArm);
+      GuardAdvance(ElseStart);
+    end;
   end;
 
   Eat(tkKwEnd);
@@ -1192,12 +1208,17 @@ procedure TParser2.ParseRepeatStmt(Parent: TAstNode);
 var
   T          : TToken;
   RepeatNode : TAstNode;
+  BodyStart  : Integer;
 begin
   T          := Next; // 'repeat'
   RepeatNode := Parent.Add(nkRepeatStmt, 'repeat', T.Line, T.Col);
   while not (Tok.Kind in [tkKwUntil, tkKwEnd, tkKwElse,
                            tkKwExcept, tkKwFinally, tkEof]) do
+  begin
+    BodyStart := FNextCount;
     ParseStatement(RepeatNode);
+    GuardAdvance(BodyStart);
+  end;
   Eat(tkKwUntil);
   SkipToSemicolon;
   Eat(tkSemicolon);
@@ -1217,8 +1238,12 @@ begin
   TmpBlk := TAstNode.Create(nkBlock, '__try_body__', T.Line, T.Col);
   try
     while not (Tok.Kind in [tkKwExcept, tkKwFinally,
-                             tkKwEnd, tkKwElse, tkEof]) do
+                             tkKwEnd, tkKwElse, tkKwUntil, tkEof]) do
+    begin
+      var TryBodyStart := FNextCount;
       ParseStatement(TmpBlk);
+      GuardAdvance(TryBodyStart);
+    end;
 
     if Tok.Kind = tkKwExcept then
     begin
@@ -1231,6 +1256,7 @@ begin
       while not (Tok.Kind in [tkKwEnd, tkKwElse, tkKwFinally,
                                tkKwUntil, tkEof]) do
       begin
+        var ExceptStart := FNextCount;
         if Tok.Kind = tkKwOn then
         begin
           var OnT    := Next;
@@ -1257,6 +1283,7 @@ begin
         end
         else
           ParseStatement(ExNode);
+        GuardAdvance(ExceptStart);
       end;
     end
     else if Tok.Kind = tkKwFinally then
@@ -1268,7 +1295,11 @@ begin
       var FinNode := TryNode.Add(nkFinallyBlock, 'finally', FinTok.Line, FinTok.Col);
       while not (Tok.Kind in [tkKwEnd, tkKwElse, tkKwExcept,
                                tkKwUntil, tkEof]) do
+      begin
+        var FinStart := FNextCount;
         ParseStatement(FinNode);
+        GuardAdvance(FinStart);
+      end;
     end;
   finally
     TmpBlk.Free;

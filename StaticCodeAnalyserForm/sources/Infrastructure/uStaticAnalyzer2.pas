@@ -253,6 +253,7 @@ begin
     if not DirectoryExists(TIgnoreList.ConfigDir) then
       ForceDirectories(TIgnoreList.ConfigDir);
   except
+    // Best-effort: kein ConfigDir = kein Log, der Scan laeuft trotzdem.
   end;
   Parser := nil;
   // Eine gemeinsame try-finally klammer fuer LogStream UND Parser - so leakt

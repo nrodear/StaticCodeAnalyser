@@ -19,7 +19,8 @@ uses
   uFixHint, uIgnoreList, uVcsChanges, uRepoSettings, uClaudePrompt,
   uAnalyserPalette, uAnalyserTypes, uAnalyserTheme, uLocalization,
   uRecentPaths,
-  uIDELineHighlighter, uIDEMessages, uIDEWatchMode;
+  uIDELineHighlighter, uIDEMessages, uIDEWatchMode, uIDEStatsTiles,
+  uFindingGridRenderer;
 
 type
   TFilterMode = (fmAll,
@@ -144,10 +145,7 @@ type
 
     // Erstellt die Sonar-Style Tile-Reihe (alle 10 Tiles in einer Zeile).
     procedure BuildStatsTiles(Parent: TPanel);
-    // Flache Kachel: Icon-Glyph (akzentfarbig) + Count rechts oben,
-    // Caption unten zentriert. Hintergrund einheitlich (kein Box).
-    function  MakeTile(Parent: TWinControl; const Caption, Glyph: string;
-      IconColor: TColor; AWidth: Integer): TLabel;
+    // (MakeTile + Tile-Layout sind nach uIDEStatsTiles ausgelagert.)
     // Statusbar-Helpers (3 Panels: Befunde-Count, Datei-Progress, Mode)
     procedure StatusFindings(const T: string);
     procedure StatusProgress(const T: string);
@@ -1022,151 +1020,16 @@ end;
 //   Codequalitaet                        -> gewichteter Quality-Score
 // ---------------------------------------------------------------------------
 
-type
-  // Lokale TPanel-Subklasse fuer Tiles mit duennem benutzerdefinierten
-  // Rahmen. TPanel.BorderStyle=bsSingle waere 2px schwarz - wir wollen
-  // einen 1px-Rahmen in einer dezenten Akzentfarbe, sichtbar auf dem
-  // dunklen Stats-Hintergrund.
-  TTilePanel = class(TPanel)
-  private
-    FBorderColor: TColor;
-  protected
-    procedure Paint; override;
-  public
-    property BorderColor: TColor read FBorderColor write FBorderColor;
-  end;
-
-procedure TTilePanel.Paint;
-begin
-  inherited; // zeichnet Hintergrund (Color) und Bevel
-  Canvas.Brush.Style := bsClear;
-  // BorderColor ist ein System-Color-Index (z. B. cl3DDkShadow). Canvas.Pen
-  // resolved nur ueber GetSysColor (Windows nativ), nicht ueber den aktiven
-  // VCL-Style. Daher hier explizit ueber StyleServices aufloesen.
-  Canvas.Pen.Color   := StyleServices.GetSystemColor(FBorderColor);
-  Canvas.Pen.Width   := 1;
-  Canvas.Rectangle(ClientRect);
-end;
-
-function TAnalyserFrame.MakeTile(Parent: TWinControl; const Caption, Glyph: string;
-  IconColor: TColor; AWidth: Integer): TLabel;
-// Tile-Farben sind komplett ueber System-Color-Konstanten gefuehrt - der
-// VCL-Style mappt sie zur Paint-Zeit auf das aktive IDE-Theme:
-//   clBtnFace    = Tile-Hintergrund (Chrome)
-//   cl3DDkShadow = duenner Rahmen
-//   clBtnText    = Count-Zahl (kraeftig)
-//   clGrayText   = Caption darunter (dezenter)
-var
-  Tile     : TTilePanel;
-  TopRow   : TPanel;
-  IconLbl  : TLabel;
-  CountLbl : TLabel;
-  CapLbl   : TLabel;
-begin
-  Tile := TTilePanel.Create(Self);
-  Tile.Parent      := Parent;
-  Tile.Align       := alLeft;
-  Tile.Width       := AWidth;
-  Tile.AlignWithMargins := True;
-  Tile.Margins.SetBounds(0, 0, 3, 0);
-  Tile.BevelOuter  := bvNone;
-  Tile.BorderStyle := bsNone;
-  Tile.ParentBackground := False;
-  Tile.Color       := clBtnFace;
-  Tile.BorderColor := cl3DDkShadow;
-  Tile.ShowHint    := True;
-  Tile.Hint        := Caption;
-
-  // Top-Row: Icon links + Zahl direkt daneben
-  TopRow := TPanel.Create(Self);
-  TopRow.Parent      := Tile;
-  TopRow.Align       := alTop;
-  TopRow.AlignWithMargins := True;
-  TopRow.Margins.SetBounds(1, 1, 1, 0); // 1px Abstand zum Tile-Rahmen
-  TopRow.Height      := 20;
-  TopRow.BevelOuter  := bvNone;
-  TopRow.ParentBackground := False;
-  TopRow.Color       := clBtnFace;
-
-  IconLbl := TLabel.Create(Self);
-  IconLbl.Parent      := TopRow;
-  IconLbl.Align       := alLeft;
-  IconLbl.Width       := 20;
-  IconLbl.Caption     := Glyph;
-  IconLbl.Alignment   := taCenter;
-  IconLbl.Layout      := tlCenter;
-  IconLbl.Transparent := True;
-  IconLbl.Font.Name   := 'Segoe Fluent Icons';
-  IconLbl.Font.Size   := 11;
-  IconLbl.Font.Color  := IconColor;
-
-  CountLbl := TLabel.Create(Self);
-  CountLbl.Parent      := TopRow;
-  CountLbl.Align       := alClient;
-  CountLbl.Caption     := '0';
-  CountLbl.Alignment   := taLeftJustify;
-  CountLbl.Layout      := tlCenter;
-  CountLbl.Transparent := True;
-  CountLbl.Font.Name   := 'Segoe UI';
-  CountLbl.Font.Size   := 11;
-  CountLbl.Font.Style  := [fsBold];
-  CountLbl.Font.Color  := clBtnText; // theme-konformer Vordergrund
-
-  // Caption unten, ueber volle Tile-Breite zentriert.
-  // AlignWithMargins/Margins(1,0,1,1) damit der Tile-Rahmen sichtbar bleibt.
-  CapLbl := TLabel.Create(Self);
-  CapLbl.Parent      := Tile;
-  CapLbl.Align       := alClient;
-  CapLbl.AlignWithMargins := True;
-  CapLbl.Margins.SetBounds(1, 0, 1, 1);
-  CapLbl.Caption     := Caption;
-  CapLbl.Alignment   := taCenter;
-  CapLbl.Layout      := tlTop;
-  CapLbl.Transparent := True;
-  CapLbl.Font.Name   := 'Segoe UI';
-  CapLbl.Font.Size   := 6;
-  CapLbl.Font.Color  := clGrayText; // gedaempfter Themed-Caption-Ton
-
-  Result := CountLbl;
-end;
+// TTilePanel + MakeTile + BuildStatsTiles wurden nach uIDEStatsTiles
+// extrahiert. Hier nur noch die Frame-seitige Brücke, die die OUT-Params
+// in die Frame-Felder schreibt - UpdateStats greift weiterhin direkt auf
+// FTileError/FTileWarn/... zu, daher bleibt die Feld-Struktur unveraendert.
 
 procedure TAnalyserFrame.BuildStatsTiles(Parent: TPanel);
-const
-  // Glyph-Akzentfarben kommen aus uAnalyserPalette (ICON_ERROR, ICON_WARN ...).
-  // Hier nur die Glyph-Codepoints aus Segoe Fluent Icons / MDL2 Assets.
-  GLYPH_ERROR    = #$E783; // ErrorBadge (i im Kreis hier wirkt wie Stop)
-  GLYPH_WARN     = #$E7BA; // Warning (Dreieck mit !)
-  GLYPH_INFO     = #$E946; // Info (i im Kreis)
-  GLYPH_FILEERR  = #$E711; // Cancel (X) - "Ausnahmen"
-  GLYPH_SMELL    = #$E950; // CommandPrompt - "Komplexitaet" (geschweifte Klammern)
-  GLYPH_BUG      = #$EBE8; // Bug
-  GLYPH_VULN     = #$E72E; // Lock - "Sicherheit"
-  GLYPH_HOT      = #$E945; // Lightning - "Performance"
-  GLYPH_DUP      = #$E8C8; // Copy - "Duplikate"
-  GLYPH_SCORE    = #$EB91; // Flame - "Codequalitaet"
-
-  TILE_W       = 65;
-  TILE_W_SCORE = 72; // letzter Tile etwas breiter (laengeres Wort)
 begin
-  // Container leeren falls bereits aufgebaut.
-  while Parent.ControlCount > 0 do
-    Parent.Controls[0].Free;
-
-  // Reihenfolge: alLeft = das zuerst erstellte landet ganz links.
-  // Captions matchen unser echtes Datenmodell (TFindingType, TLeakSeverity).
-  // Code Smell und Hotspot bewusst weggelassen - die zaehlen weiterhin in den
-  // Quality-Score (siehe UpdateStats), bekommen aber keine eigene Kachel.
-  // Umlaute via Codepoint, da .pas-Datei kein UTF-8-BOM hat (#$00E4 = ae).
-  // Tile-Captions ueber _() lokalisierbar. Source-Strings sind Englisch,
-  // dxgettext mappt sie zur Laufzeit auf die aktive Sprache (siehe i18n/).
-  FTileError    := MakeTile(Parent, _('Errors'),       GLYPH_ERROR,   ICON_ERROR,   TILE_W);
-  FTileWarn     := MakeTile(Parent, _('Warnings'),     GLYPH_WARN,    ICON_WARN,    TILE_W);
-  FTileHint     := MakeTile(Parent, _('Hints'),        GLYPH_INFO,    ICON_INFO,    TILE_W);
-  FTileFileSev  := MakeTile(Parent, _('Read errors'),  GLYPH_FILEERR, ICON_FILEERR, TILE_W);
-  FTileBug      := MakeTile(Parent, _('Bugs'),         GLYPH_BUG,     ICON_BUG,     TILE_W);
-  FTileVuln     := MakeTile(Parent, _('Security'),     GLYPH_VULN,    ICON_VULN,    TILE_W);
-  FTileDup      := MakeTile(Parent, _('Duplicates'),   GLYPH_DUP,     ICON_DUP,     TILE_W);
-  FTileScore    := MakeTile(Parent, _('Code Quality'), GLYPH_SCORE,   ICON_SCORE,   TILE_W_SCORE);
+  TStatsTilesBuilder.Build(Self, Parent,
+    FTileError, FTileWarn, FTileHint, FTileFileSev,
+    FTileBug, FTileVuln, FTileDup, FTileScore);
 end;
 
 procedure TAnalyserFrame.StatusFindings(const T: string);
@@ -2669,110 +2532,12 @@ end;
 
 procedure TAnalyserFrame.GridDrawCell(Sender: TObject; ACol, ARow: Integer;
   Rect: TRect; State: TGridDrawState);
-// ZEBRA-Konstante kommt aus uAnalyserPalette.
-var
-  grid        : TStringGrid;
-  severity    : string;
-  bgColor     : TColor;
-  txtRect     : TRect;
-  HeaderBg    : TColor;
-  HeaderFg    : TColor;
-  SepLine     : TColor;
+// Implementation in UI/uFindingGridRenderer.pas - hier nur die Frame-
+// spezifische Konfiguration uebergeben (Severity-Spalte 5, Theme an,
+// Sort-Indicator mit unserem aktuellen Sort-State).
 begin
-  grid := TStringGrid(Sender);
-  txtRect := Rect;
-  InflateRect(txtRect, -4, 0);
-
-  // Header-Farben aus dem aktuellen IDE-Style ziehen, damit der Header
-  // im Dock-Dark-Theme dunkel und im Standalone hell wirkt - beides
-  // aus derselben Code-Stelle.
-  HeaderBg := StyleServices.GetSystemColor(clBtnFace);
-  HeaderFg := StyleServices.GetSystemColor(clBtnText);
-  SepLine  := StyleServices.GetSystemColor(cl3DDkShadow);
-
-  // ---- Header-Zeile ----
-  if ARow = 0 then
-  begin
-    // Flacher Hintergrund in IDE-Theme-Farbe (kein Verlauf - moderner Look)
-    grid.Canvas.Brush.Color := HeaderBg;
-    grid.Canvas.FillRect(Rect);
-    // Trennlinie unten
-    grid.Canvas.Pen.Color := SepLine;
-    grid.Canvas.MoveTo(Rect.Left,  Rect.Bottom - 1);
-    grid.Canvas.LineTo(Rect.Right, Rect.Bottom - 1);
-    // Text mit Sort-Indikator
-    grid.Canvas.Brush.Style := bsClear;
-    grid.Canvas.Font.Name   := 'Segoe UI';
-    grid.Canvas.Font.Size   := 8;
-    grid.Canvas.Font.Style  := [fsBold];
-    grid.Canvas.Font.Color  := HeaderFg;
-    var HeaderText := grid.Cells[ACol, ARow];
-    if ACol = FSortColumn then
-    begin
-      if FSortDescending then
-        HeaderText := HeaderText + ' v'
-      else
-        HeaderText := HeaderText + ' ^';
-    end;
-    DrawText(grid.Canvas.Handle, PChar(HeaderText),
-      -1, txtRect, DT_SINGLELINE or DT_VCENTER or DT_LEFT or DT_NOPREFIX);
-    Exit;
-  end;
-
-  // ---- Datenzeilen ----
-  severity := grid.Cells[5, ARow];
-
-  // String -> Enum an der UI-Grenze, danach laeuft alles enum-basiert.
-  var SevEnum := SeverityFromText(severity);
-  var SevBg   := SeverityBg(SevEnum); // theme-bewusst (clWindow + Akzent-Tint)
-
-  if SevBg <> clNone then
-    bgColor := SevBg
-  else if Odd(ARow) then
-    bgColor := StyleServices.GetSystemColor(clBtnFace) // theme-konformes Zebra
-  else
-    bgColor := StyleServices.GetSystemColor(clWindow);
-
-  if gdSelected in State then
-    bgColor := StyleServices.GetSystemColor(clHighlight);
-
-  grid.Canvas.Brush.Color := bgColor;
-  grid.Canvas.FillRect(Rect);
-  grid.Canvas.Brush.Style := bsClear;
-
-  // 3 px Severity-Indikatorleiste am linken Rand der ersten Spalte.
-  // Saettigte Akzentfarbe - in jedem Theme klar erkennbar.
-  if (ACol = 0) and (SevEnum <> fsUnknown) then
-  begin
-    var Accent := SeverityAccent(SevEnum);
-    if Accent <> clNone then
-    begin
-      var IndR: TRect;
-      IndR.Left   := Rect.Left;
-      IndR.Top    := Rect.Top;
-      IndR.Right  := Rect.Left + 4; // 4 px - bei DPI 100% gut sichtbar
-      IndR.Bottom := Rect.Bottom;
-      grid.Canvas.Brush.Color := Accent;
-      grid.Canvas.FillRect(IndR);
-      grid.Canvas.Brush.Style := bsClear;
-    end;
-  end;
-
-  grid.Canvas.Font.Name := 'Segoe UI';
-  grid.Canvas.Font.Size := 8;
-  if gdSelected in State then
-    grid.Canvas.Font.Color := StyleServices.GetSystemColor(clHighlightText)
-  else
-    grid.Canvas.Font.Color := StyleServices.GetSystemColor(clWindowText);
-
-  // Datei-Spalte fett
-  if (ACol = 0) and (not (gdSelected in State)) then
-    grid.Canvas.Font.Style := [fsBold]
-  else
-    grid.Canvas.Font.Style := [];
-
-  DrawText(grid.Canvas.Handle, PChar(grid.Cells[ACol, ARow]),
-    -1, txtRect, DT_SINGLELINE or DT_VCENTER or DT_LEFT or DT_NOPREFIX or DT_END_ELLIPSIS);
+  TFindingGridRenderer.DrawCell(Sender, ACol, ARow, Rect, State,
+    TFindingGridRenderer.IDEConfig(FSortColumn, FSortDescending));
 end;
 
 // ---------------------------------------------------------------------------
@@ -2781,10 +2546,17 @@ end;
 // ---------------------------------------------------------------------------
 procedure TAnalyserFrame.LoadRecentPaths;
 begin
-  TRecentPaths.Load(
-    FProjectPath, GetIniPath,
-    DEFAULT_MAX_RECENT,
-    GetCurrentIDEProjectDir, ppFirst);
+  // Defekte INI darf das Frame nicht reissen - die IDE wuerde sonst
+  // mit einem Plugin-Lade-Fehler hochkommen.
+  try
+    TRecentPaths.Load(
+      FProjectPath, GetIniPath,
+      DEFAULT_MAX_RECENT,
+      GetCurrentIDEProjectDir, ppFirst);
+  except
+    FProjectPath.Items.Clear;
+    FProjectPath.Text := '';
+  end;
 end;
 
 procedure TAnalyserFrame.SaveRecentPath(const APath: string);
