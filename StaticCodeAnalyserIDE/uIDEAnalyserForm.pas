@@ -20,28 +20,9 @@ uses
   uAnalyserPalette, uAnalyserTypes, uAnalyserTheme, uLocalization,
   uRecentPaths,
   uIDELineHighlighter, uIDEMessages, uIDEWatchMode, uIDEStatsTiles,
-  uFindingGridRenderer;
+  uFindingGridRenderer, uFindingFilter;
 
 type
-  TFilterMode = (fmAll,
-                 // Schweregrad-Gruppen
-                 fmErrors, fmWarnings, fmHints,
-                 // Fehler-Detektoren
-                 fmSQLInjection, fmHardcodedSecret, fmFormatMismatch,
-                 fmNilDeref, fmDivByZero,
-                 // Warnungs-Detektoren
-                 fmEmptyExcept, fmMissingFinally, fmDeadCode,
-                 fmUnusedUses, fmDebugOutput, fmHardcodedPath,
-                 fmFileReadError,
-                 // Hinweis-Detektoren
-                 fmLongMethod, fmLongParamList, fmMagicNumber,
-                 fmDuplicateString, fmDeepNesting,
-                 fmTodoComment, fmEmptyMethod, fmDuplicateBlock);
-
-  // Zweiter Filter (orthogonal zu Schweregrad): Sonar-Typ-Kategorie
-  TTypeFilter = (tfAll, tfBug, tfCodeSmell, tfVulnerability,
-                 tfSecurityHotspot, tfCodeDuplication);
-
   TAnalyserFrame = class(TFrame)
   private
     FStatusBar      : TStatusBar;
@@ -54,6 +35,10 @@ type
     FHelpBefore        : TMemo;
     FHelpAfter         : TMemo;
     FHelpPanel         : TPanel; // rechtes Hint-Panel (1/3 von PanelClient)
+    FHelpSplitter      : TSplitter; // Drag-Trenner Grid|Help, Visible folgt FHelpPanel
+    FDockStateTimer    : TTimer; // pollt Floating-Status (Resize feuert
+                                 // beim Re-Dock zu frueh - Floating ist
+                                 // dann noch der alte Wert)
     FDisplayedFindings : TList<TLeakFinding>;
 
     FPanelStats        : TPanel;
@@ -160,6 +145,11 @@ type
       const BaseDir: string);
     procedure UpdateStats;
     procedure ApplyFilter;
+    // Schreibt FDisplayedFindings ins Grid (6 Spalten pro Zeile). Bei
+    // leerer Liste erscheint ein Platzhalter-Text in Zeile 1.
+    procedure PopulateGridFromDisplayed;
+    // Statusbar-Update nach ApplyFilter: zeigt n/m findings + Filter-Text.
+    procedure UpdateFilterStatus(const Criteria: TFindingFilterCriteria);
     // Erzeugt einen vollstaendigen Markdown-Prompt fuer Claude AI: Befund-
     // Metadaten, FixHint (Vorher/Nachher) und Code-Auszug aus der Quelldatei.
     function  BuildClaudePrompt(F: TLeakFinding): string;
@@ -188,6 +178,14 @@ type
     // ueber den virtuellen SetParent-Hook.
     procedure SetParent(AParent: TWinControl); override;
     procedure ApplyThemeRecursive(AControl: TControl);
+
+    // Floating/docked-Status der Host-Form (TCustomForm hochlaufen).
+    function  HostIsFloating: Boolean;
+    // Hilfe-Panel + Splitter Visible an HostIsFloating angleichen.
+    // Idempotent - kein Aufruf wenn Status unveraendert.
+    procedure SyncHelpVisibility;
+    // Timer-Tick: ruft SyncHelpVisibility. Begruendung als Field-Kommentar.
+    procedure DockStateTimerTick(Sender: TObject);
   public
     FProjectPath : TComboBox;
     FResultGrid  : TStringGrid;
@@ -826,13 +824,14 @@ begin
   FHelpAfter.Font.Color  := clWindowText;
 
   // Splitter zwischen Grid (links) und Help-Panel (rechts) - User kann
-  // die Help-Panel-Breite per Drag anpassen.
-  var HelpSplitter := TSplitter.Create(Self);
-  HelpSplitter.Parent     := PanelClient;
-  HelpSplitter.Align      := alRight;
-  HelpSplitter.Width      := 4;
-  HelpSplitter.Color      := cl3DDkShadow;
-  HelpSplitter.ResizeStyle := rsUpdate;
+  // die Help-Panel-Breite per Drag anpassen. Visible wird in Resize an
+  // FHelpPanel.Visible gekoppelt (im docked-Modus beides aus).
+  FHelpSplitter := TSplitter.Create(Self);
+  FHelpSplitter.Parent      := PanelClient;
+  FHelpSplitter.Align       := alRight;
+  FHelpSplitter.Width       := 4;
+  FHelpSplitter.Color       := cl3DDkShadow;
+  FHelpSplitter.ResizeStyle := rsUpdate;
 
   FResultGrid := TStringGrid.Create(Self);
   FResultGrid.Parent           := PanelClient;
@@ -883,6 +882,14 @@ begin
   FOldGridWndProc       := FResultGrid.WindowProc;
   FResultGrid.WindowProc := GridWndProc;
 
+  // Polling-Timer fuer Floating/Docked-Detection. 250 ms ist die obere
+  // sichtbare Verzoegerung beim Re-Float. Ownership = Self -> auto-Free
+  // im Destructor, kein extra Cleanup noetig.
+  FDockStateTimer := TTimer.Create(Self);
+  FDockStateTimer.Interval := 250;
+  FDockStateTimer.OnTimer  := DockStateTimerTick;
+  FDockStateTimer.Enabled  := True;
+
   LoadRecentPaths;
 end;
 
@@ -896,6 +903,12 @@ begin
   // bereits halb-zerstoerte Frame-Felder.
   if GLiveAnalyserFrame = Pointer(Self) then
     GLiveAnalyserFrame := nil;
+
+  // Dock-State-Polling-Timer sofort stoppen (Free passiert via Owner=Self).
+  // Sonst koennte ein letzter Tick auf bereits genullte FHelpPanel/Splitter
+  // zugreifen wenn Application.ProcessMessages mitten im Destruktor laeuft.
+  if Assigned(FDockStateTimer) then
+    FDockStateTimer.Enabled := False;
 
   // Watch-Mode deaktivieren BEVOR FAllFindings & Co. weg sind -
   // laufende Background-Worker-Synchronize-Calls duerfen jetzt droppen
@@ -1097,185 +1110,84 @@ begin
   ApplyFilter;
 end;
 
-procedure TAnalyserFrame.ApplyFilter;
-
-  function DisplayName(const FullPath: string): string;
+procedure TAnalyserFrame.PopulateGridFromDisplayed;
+var
+  f   : TLeakFinding;
+  row : Integer;
+begin
+  FResultGrid.RowCount := Max(FDisplayedFindings.Count + 1, 2);
+  row := 1;
+  for f in FDisplayedFindings do
   begin
     // Im Grid steht nur der Dateiname - der volle Pfad kommt als Tooltip
     // ueber GridWndProc/CM_HINTSHOW aus FDisplayedFindings.
-    Result := ExtractFileName(FullPath);
+    FResultGrid.Cells[0, row] := ExtractFileName(f.FileName);
+    FResultGrid.Cells[1, row] := f.MethodName;
+    FResultGrid.Cells[2, row] := f.LineNumber;
+    FResultGrid.Cells[3, row] := f.TypeText;
+    FResultGrid.Cells[4, row] := f.MissingVar;
+    FResultGrid.Cells[5, row] := f.SeverityText;
+    Inc(row);
   end;
 
-var
-  f           : TLeakFinding;
-  i, row      : Integer;
-  keep        : Boolean;
-  severityTxt : string;
-  searchLow   : string;
-  fileNameLow : string;
+  if FDisplayedFindings.Count = 0 then
+  begin
+    FResultGrid.Rows[1].Clear;
+    FResultGrid.Cells[0, 1] := 'Keine Eintraege fuer diesen Filter.';
+  end;
+end;
+
+procedure TAnalyserFrame.UpdateFilterStatus(
+  const Criteria: TFindingFilterCriteria);
 begin
-  searchLow := Trim(FSearchEdit.Text).ToLower;
-
-  SendMessage(FResultGrid.Handle, WM_SETREDRAW, 0, 0);
-  try
-    FDisplayedFindings.Clear;
-
-    // ---- Filter ----
-    for i := 0 to FAllFindings.Count - 1 do
-    begin
-      f           := FAllFindings[i];
-      severityTxt := f.SeverityText;
-      // Severity-Compare laeuft ueber Enum - i18n-fest und Refactoring-fest.
-      var sev := SeverityFromText(severityTxt);
-      case FFilterMode of
-        fmErrors:          keep := sev = fsError;
-        fmWarnings:        keep := sev = fsWarning;
-        fmHints:           keep := sev = fsHint;
-        fmEmptyExcept:     keep := f.Kind = fkEmptyExcept;
-        fmSQLInjection:    keep := f.Kind = fkSQLInjection;
-        fmHardcodedSecret: keep := f.Kind = fkHardcodedSecret;
-        fmFormatMismatch:  keep := f.Kind = fkFormatMismatch;
-        fmFileReadError:   keep := f.Kind = fkFileReadError;
-        fmUnusedUses:      keep := f.Kind = fkUnusedUses;
-        fmNilDeref:        keep := f.Kind = fkNilDeref;
-        fmMissingFinally:  keep := f.Kind = fkMissingFinally;
-        fmDivByZero:       keep := f.Kind = fkDivByZero;
-        fmDeadCode:        keep := f.Kind = fkDeadCode;
-        fmLongMethod:      keep := f.Kind = fkLongMethod;
-        fmLongParamList:   keep := f.Kind = fkLongParamList;
-        fmMagicNumber:     keep := f.Kind = fkMagicNumber;
-        fmDuplicateString: keep := f.Kind = fkDuplicateString;
-        fmDuplicateBlock:  keep := f.Kind = fkDuplicateBlock;
-        fmHardcodedPath:   keep := f.Kind = fkHardcodedPath;
-        fmDebugOutput:     keep := f.Kind = fkDebugOutput;
-        fmDeepNesting:     keep := f.Kind = fkDeepNesting;
-        fmTodoComment:     keep := f.Kind = fkTodoComment;
-        fmEmptyMethod:     keep := f.Kind = fkEmptyMethod;
-      else
-        keep := True;
-      end;
-      if not keep then Continue;
-
-      // ---- Typ-Filter (zusaetzliche Einschraenkung) ----
-      case FTypeFilter of
-        tfBug             : if f.FindingType <> ftBug             then Continue;
-        tfCodeSmell       : if f.FindingType <> ftCodeSmell       then Continue;
-        tfVulnerability   : if f.FindingType <> ftVulnerability   then Continue;
-        tfSecurityHotspot : if f.FindingType <> ftSecurityHotspot then Continue;
-        tfCodeDuplication : if f.FindingType <> ftCodeDuplication then Continue;
-        tfAll             : ; // alle Typen durchlassen
-      end;
-
-      // ---- Suche (Datei / Methode / Befund) ----
-      if searchLow <> '' then
-      begin
-        fileNameLow := DisplayName(f.FileName).ToLower;
-        if (Pos(searchLow, fileNameLow) = 0) and
-           (Pos(searchLow, f.MethodName.ToLower) = 0) and
-           (Pos(searchLow, f.MissingVar.ToLower) = 0) then
-          Continue;
-      end;
-
-      FDisplayedFindings.Add(f);
-    end;
-
-    // ---- Sortierung (Vergleichslogik direkt inline,
-    //      da anonyme Methoden in Delphi keine lokalen Funktionen erfassen koennen) ----
-    //
-    // Severity-Rang: Lesefehler kommt unten (parser-Fehler, kein Code-Problem),
-    // sonst Fehler -> Warnung -> Hinweis. Innerhalb gleicher Severity wird
-    // nach Datei und Zeile stabilisiert, damit die Liste nicht jedes Mal anders
-    // gemischt aussieht.
-    if FSortColumn >= 0 then
-    begin
-      var SortCol  := FSortColumn;
-      var SortDesc := FSortDescending;
-      var BaseDir  := FCurrentBaseDir;
-      FDisplayedFindings.Sort(TComparer<TLeakFinding>.Construct(
-        function(const A, B: TLeakFinding): Integer
-
-          function SeverityRank(const Sev: string): Integer;
-          begin
-            // Sortier-Reihenfolge: Error < Warning < Hint < FileError < Unknown
-            case SeverityFromText(Sev) of
-              fsError:     Result := 0;
-              fsWarning:   Result := 1;
-              fsHint:      Result := 2;
-              fsFileError: Result := 3;
-            else
-              Result := 4;
-            end;
-          end;
-
-          function FileKey(const F: TLeakFinding): string;
-          begin
-            if BaseDir <> '' then
-              Result := ExtractRelativePath(IncludeTrailingPathDelimiter(BaseDir), F.FileName)
-            else
-              Result := ExtractFileName(F.FileName);
-          end;
-
-        var SA, SB: string;
-        begin
-          case SortCol of
-            0: Result := CompareText(FileKey(A), FileKey(B));
-            1: Result := CompareText(A.MethodName, B.MethodName);
-            2: Result := StrToIntDef(A.LineNumber, 0) - StrToIntDef(B.LineNumber, 0);
-            3: Result := CompareText(A.TypeText, B.TypeText);
-            4: Result := CompareText(A.MissingVar, B.MissingVar);
-            5: Result := SeverityRank(A.SeverityText) - SeverityRank(B.SeverityText);
-          else
-            Result := 0;
-          end;
-          if SortDesc then Result := -Result;
-
-          // Sekundaer-Sortierung (immer aufsteigend), damit Reihenfolge
-          // bei gleichem Primaerschluessel deterministisch ist.
-          if Result = 0 then
-          begin
-            SA := FileKey(A);
-            SB := FileKey(B);
-            Result := CompareText(SA, SB);
-            if Result = 0 then
-              Result := StrToIntDef(A.LineNumber, 0) - StrToIntDef(B.LineNumber, 0);
-          end;
-        end));
-    end;
-
-    // ---- Grid befuellen ----
-    FResultGrid.RowCount := Max(FDisplayedFindings.Count + 1, 2);
-    row := 1;
-    for f in FDisplayedFindings do
-    begin
-      FResultGrid.Cells[0, row] := DisplayName(f.FileName);
-      FResultGrid.Cells[1, row] := f.MethodName;
-      FResultGrid.Cells[2, row] := f.LineNumber;
-      FResultGrid.Cells[3, row] := f.TypeText;
-      FResultGrid.Cells[4, row] := f.MissingVar;
-      FResultGrid.Cells[5, row] := f.SeverityText;
-      Inc(row);
-    end;
-
-    if FDisplayedFindings.Count = 0 then
-    begin
-      FResultGrid.Rows[1].Clear;
-      FResultGrid.Cells[0, 1] := 'Keine Eintraege fuer diesen Filter.';
-    end;
-  finally
-    SendMessage(FResultGrid.Handle, WM_SETREDRAW, 1, 0);
-    FResultGrid.Invalidate;
-  end;
-
   StatusFindings(Format(_('%d / %d findings'),
     [FDisplayedFindings.Count, FAllFindings.Count]));
   StatusMode(Format(_('Filter: %s%s'), [FFilterCombo.Text,
-    IfThen(searchLow <> '', ', ' + _('Search: ') + searchLow, '')]));
+    IfThen(Criteria.SearchLow <> '',
+           ', ' + _('Search: ') + Criteria.SearchLow, '')]));
 
   // Befunde werden bewusst NICHT mehr in die IDE-Messages-Toolbar
   // gespiegelt - das eigene Grid + Statusbar reicht und vermeidet,
   // dass Compiler-Output beim Scan ueberschrieben wird. uIDEMessages
   // bleibt fuer den Fall stehen dass die Funktion wieder gewuenscht
   // wird (TIDEMessages.ReportFindings(FDisplayedFindings)).
+end;
+
+procedure TAnalyserFrame.ApplyFilter;
+var
+  i        : Integer;
+  Criteria : TFindingFilterCriteria;
+  SortCfg  : TFindingSortConfig;
+begin
+  Criteria.Mode       := FFilterMode;
+  Criteria.TypeFilter := FTypeFilter;
+  Criteria.SearchLow  := Trim(FSearchEdit.Text).ToLower;
+
+  SendMessage(FResultGrid.Handle, WM_SETREDRAW, 0, 0);
+  try
+    FDisplayedFindings.Clear;
+
+    // ---- Filter (Logik in uFindingFilter.TFindingFilter.Matches) ----
+    for i := 0 to FAllFindings.Count - 1 do
+      if TFindingFilter.Matches(FAllFindings[i], Criteria) then
+        FDisplayedFindings.Add(FAllFindings[i]);
+
+    // ---- Sortierung (Logik in uFindingFilter.TFindingSorter.Sort) ----
+    if FSortColumn >= 0 then
+    begin
+      SortCfg.Column     := FSortColumn;
+      SortCfg.Descending := FSortDescending;
+      SortCfg.BaseDir    := FCurrentBaseDir;
+      TFindingSorter.Sort(FDisplayedFindings, SortCfg);
+    end;
+
+    PopulateGridFromDisplayed;
+  finally
+    SendMessage(FResultGrid.Handle, WM_SETREDRAW, 1, 0);
+    FResultGrid.Invalidate;
+  end;
+
+  UpdateFilterStatus(Criteria);
 end;
 
 // ---------------------------------------------------------------------------
@@ -2477,19 +2389,67 @@ begin
     RefreshFromIDETheme;
 end;
 
+function TAnalyserFrame.HostIsFloating: Boolean;
+// Sucht im Parent-Chain die hostende TCustomForm und liefert deren
+// Floating-Status. Im IDE-Plugin ist das die INTACustomDockableForm-
+// Wrapper-Form: Floating=True wenn der Tool-Window geloest steht,
+// False wenn er an einer Dock-Site (Tab, Side-Bar) angedockt ist.
+var P: TWinControl;
+begin
+  Result := False;
+  P := Self.Parent;
+  while Assigned(P) do
+  begin
+    if P is TCustomForm then
+      Exit(TCustomForm(P).Floating);
+    P := P.Parent;
+  end;
+end;
+
+procedure TAnalyserFrame.SyncHelpVisibility;
+// Setzt FHelpPanel + FHelpSplitter sichtbar/unsichtbar passend zum
+// Floating-Status. Wird aus Resize UND aus dem Polling-Timer gerufen -
+// idempotent, no-op wenn Status sich nicht geaendert hat.
+var ShowHelp: Boolean;
+begin
+  ShowHelp := HostIsFloating;
+  if Assigned(FHelpPanel)    and (FHelpPanel.Visible    <> ShowHelp) then
+    FHelpPanel.Visible    := ShowHelp;
+  if Assigned(FHelpSplitter) and (FHelpSplitter.Visible <> ShowHelp) then
+    FHelpSplitter.Visible := ShowHelp;
+end;
+
+procedure TAnalyserFrame.DockStateTimerTick(Sender: TObject);
+// Pollt Floating-Status alle 250 ms. Notwendig weil Resize beim
+// Re-Dock zu frueh feuert - die Host-Form-Floating-Property ist zum
+// Resize-Zeitpunkt noch der alte Wert. Der naechste Timer-Tick (max
+// 250 ms spaeter) sieht den korrekten Wert und blendet das Hilfe-
+// Panel ein/aus.
+begin
+  SyncHelpVisibility;
+end;
+
 procedure TAnalyserFrame.Resize;
 var
   HalfW    : Integer;
   ThirdW   : Integer;
   ParentW  : Integer;
+  ShowHelp : Boolean;
 begin
   inherited;
 
+  // Im docked-Modus ist die Tool-Window-Breite typisch 200-400 px. Das
+  // Hilfe-Panel mit den Vorher/Nachher-Code-Bloecken ist dort nicht
+  // sinnvoll lesbar -> ausblenden, das Grid bekommt die volle Breite.
+  // Im Floating-Modus haben wir typisch 800+ px und zeigen das Hilfe-
+  // Panel auf 1/3 wie bisher.
+  SyncHelpVisibility;
+  ShowHelp := HostIsFloating;
+
   // Hilfe-Panel auf 1/3 der PanelClient-Breite halten (Grid bekommt 2/3).
-  // FHelpPanel.Parent = PanelClient. MinWidth-Constraint verhindert dass
-  // die Hilfe zu schmal wird; das Splitter-Drag des Users wird respektiert
-  // bis zum naechsten Resize.
-  if Assigned(FHelpPanel) and Assigned(FHelpPanel.Parent) then
+  // Nur sinnvoll wenn das Panel ueberhaupt sichtbar ist - sonst wuerde
+  // wir die Width auf einer ausgeblendeten Komponente setzen.
+  if ShowHelp and Assigned(FHelpPanel) and Assigned(FHelpPanel.Parent) then
   begin
     ParentW := FHelpPanel.Parent.ClientWidth;
     ThirdW  := ParentW div 3;
@@ -2502,7 +2462,8 @@ begin
 
   // Vorher/Nachher-Haelften gleichmaessig vertikal aufteilen
   // (Vorher ist alTop, FHelpBeforePanel.Height steuert die Aufteilung).
-  if Assigned(FHelpBeforePanel) and Assigned(FHelpBeforePanel.Parent) then
+  // Auch nur sinnvoll im Floating-Modus.
+  if ShowHelp and Assigned(FHelpBeforePanel) and Assigned(FHelpBeforePanel.Parent) then
   begin
     HalfW := (FHelpBeforePanel.Parent.Height - 5) div 2;  // -5 fuer Splitter
     if HalfW > 40 then

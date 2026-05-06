@@ -165,6 +165,7 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uAnalyserTypes.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uAnalyserTheme.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uFindingGridRenderer.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uFindingFilter.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uLocalization.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Parsing\uAstNode.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Parsing\uLexer.pas"/>

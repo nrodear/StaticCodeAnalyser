@@ -45,6 +45,7 @@ contains
   uAnalyserTypes in '..\StaticCodeAnalyserForm\sources\UI\uAnalyserTypes.pas',
   uAnalyserTheme in '..\StaticCodeAnalyserForm\sources\UI\uAnalyserTheme.pas',
   uFindingGridRenderer in '..\StaticCodeAnalyserForm\sources\UI\uFindingGridRenderer.pas',
+  uFindingFilter in '..\StaticCodeAnalyserForm\sources\UI\uFindingFilter.pas',
   uLocalization in '..\StaticCodeAnalyserForm\sources\UI\uLocalization.pas',
   // ---- Parsing ----
   uAstNode in '..\StaticCodeAnalyserForm\sources\Parsing\uAstNode.pas',

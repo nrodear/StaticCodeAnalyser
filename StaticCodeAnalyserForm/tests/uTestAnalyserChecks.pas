@@ -255,6 +255,9 @@ type
     [Test] procedure Format_NestedInsideAdd_NoFinding;
     [Test] procedure Format_StringContentParsed_CorrectCount;
     [Test] procedure Format_EscapedQuoteInString_CorrectCount;
+    // Real-world Pattern aus mORMot-artigen deutschen Meldungen mit
+    // mehreren eingebetteten Apostrophen
+    [Test] procedure Format_MultipleEscapedQuotes_CorrectCount;
   end;
 
   // ---- LongParamList (TLongParamListDetector) ----------------------------------------
@@ -1615,6 +1618,28 @@ begin
   try
     Assert.AreEqual(0, TFindingHelper.Count(F, fkFormatMismatch),
       'Maskiertes '' im Format-String: 1 Platzhalter, 1 Argument');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatch.Format_MultipleEscapedQuotes_CorrectCount;
+// Real-world mORMot-Pattern: deutsche Meldung mit zwei `'`-eingerahmten
+// Bezeichnern UND einem `%s` am Ende. Der Lexer resolved `''` -> `'` und
+// vor dem QuoteStrLit-Fix verlor die Stringserialisierung die Boundaries
+// -> der Detektor zaehlte 0 Platzhalter statt 1 -> False-Positive
+// "Format: 0 placeholders, 1 arguments".
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TPmtInf_CCT.plausiOK;'#13#10+
+  'begin'#13#10+
+  '  Self.addMessage(Format(''Eintrag ''''BIC des Zahlers'''' fehlt: '+
+                            '<DbtrAgt><FinInstnId><BIC>%s'', [Self.FBIC]));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual(0, TFindingHelper.Count(F, fkFormatMismatch),
+      'Zwei eingebettete '' + %s am Ende: 1 Platzhalter, 1 Argument');
   finally F.Free; end;
 end;
 

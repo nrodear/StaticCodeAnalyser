@@ -1,5 +1,12 @@
 # Static Code Analysis Tool for Delphi
 
+[![Spendier mir einen Kaffee](https://img.shields.io/badge/%E2%98%95_Spendier_mir_einen_Kaffee-paypal.me%2Fnrodear-0070BA?style=for-the-badge&logo=paypal&logoColor=white)](https://paypal.me/nrodear)
+
+
+> Wenn dir das Plugin bei deiner Delphi-Arbeit Zeit spart, freue ich mich über einen Kaffee. 🙏
+
+---
+
 **Statisches Code-Analyse-Tool** und **Linter** für **Delphi 12 / RAD Studio (Athens)** —
 als **IDE-Plugin** mit dockbarem Tool-Fenster plus **eigenständige Windows-Anwendung**.
 AST-basierte Analyse mit **21 Detektoren** für Speicherlecks, SQL-Injection,
@@ -159,13 +166,19 @@ Beide Totals stimmen mathematisch überein.
 | **Klick auf Spalten-Header** | Sortierung |
 | **3-px-Indikatorleiste links** der Grid-Zeile | Severity-Akzent (rot/orange/grün/blau) |
 
+Das **Hilfe-Panel** rechts mit den Vorher/Nachher-Code-Blöcken wird nur
+im **Floating-Modus** angezeigt — wenn das IDE-Plugin-Fenster in eine
+Side-Bar oder einen Tab gedockt ist, blendet sich das Panel aus und
+das Grid bekommt die volle Breite (kommt innerhalb von ~250 ms nach
+dem Loslösen wieder zurück).
+
 ### Export
 
 | Button | Format | Inhalt |
 |--------|--------|--------|
 | **JSON** | `.json` | Alle Befunde als Array |
 | **CSV** | `.csv` | Excel-tauglich (Semikolon-getrennt) |
-| **HTML-Report** | `.html` | Self-contained Report mit Sortierung, Filter, Code-Snippets, Vorher/Nachher |
+| **HTML-Report** | `.html` | Self-contained Report mit Sortierung, Filter, Code-Snippets, Vorher/Nachher. Klick auf eine Severity-Kachel filtert — und blendet zusätzlich Dateien im Dropdown aus, die keine Befunde dieser Severity haben (mit dem Datei-Filter UND-verknüpft) |
 | **Jira** | Clipboard | Wiki-Markup für Jira-Tickets (gefiltert auf Datei) |
 | **Clipboard** | Clipboard | Plain-Text mit Vorher/Nachher (gefiltert auf Datei) |
 
@@ -411,6 +424,12 @@ benutzen — typisch 200 ms bis 3 s. Siehe [BRANCH_CHANGES_de.md](BRANCH_CHANGES
 - **Watchdog**: 200k Token-Limit pro Datei → pathologische Inputs werden
   nach <1 s abgebrochen (statt zu hängen)
 - **GuardAdvance**: Forward-Progress-Garantie in allen Outer-Parser-Loops
+- **Real-world Delphi-Syntax-Abdeckung**: der Parser handhabt
+  `interface`-Typdeklarationen, Generics (`TFoo<T>`, `function Get<T>: T;`),
+  `packed record` / `packed class`, lokale `label`-Sektionen,
+  `record helper for X` / `class helper for X` und IFDEF-konditionale
+  Method-Header, ohne dabei Methodenrümpfe zu verlieren — wichtig für
+  real-world Codebases (mORMot2 usw.).
 - **`MaxFileMB` (default 5 MB)**: größere Files sofort als `FileError`
   gemeldet. Konfigurierbar in `analyser.ini`.
 - **MAX_DEPTH = 32**: Symlink-Endlosschleifen-Schutz
@@ -476,8 +495,4 @@ ausgelagert (so wie es mit dem Branch-Changes-Teil passiert ist).
 
 ## Unterstützen
 
-Wenn dir das Plugin Zeit spart, freue ich mich über einen Kaffee:
-
-[![Donate via PayPal](https://img.shields.io/badge/PayPal-Donate-blue?logo=paypal&style=flat-square)](https://paypal.me/nrodear)
-
-Direktlink: <https://paypal.me/nrodear>
+Spenden-Link steht oben am Anfang der README — danke!

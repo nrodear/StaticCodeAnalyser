@@ -1,5 +1,12 @@
 # Static Code Analysis Tool for Delphi
 
+[![Buy me a coffee](https://img.shields.io/badge/%E2%98%95_Buy_me_a_coffee-paypal.me%2Fnrodear-0070BA?style=for-the-badge&logo=paypal&logoColor=white)](https://paypal.me/nrodear)
+
+
+> If this plugin saves you time in your Delphi work, a coffee is appreciated. 🙏
+
+---
+
 **Delphi static code analysis tool** and **linter** for **RAD Studio 12 (Athens)** —
 ships as an **IDE plugin** with a dockable tool window plus a **standalone Windows app**.
 AST-based analysis with **21 detectors** for memory leaks, SQL injection, code smells,
@@ -162,13 +169,18 @@ Both rows are guaranteed to add up to the same total.
 | **Click a column header** | Sort by that column |
 | **3 px stripe on the left edge** of the grid row | Severity accent (red / orange / green / blue) |
 
+The right-side **help panel** with before/after code blocks is shown only
+when the IDE plugin window is **floating** — when docked into a side
+bar / tab the panel auto-hides and the grid takes the full width
+(re-appears within ~250 ms after un-docking).
+
 ### Export
 
 | Button | Format | Content |
 |--------|--------|---------|
 | **JSON** | `.json` | All findings as an array |
 | **CSV** | `.csv` | Excel-friendly (semicolon-separated) |
-| **HTML report** | `.html` | Self-contained report with sort, filter, code snippets, before/after |
+| **HTML report** | `.html` | Self-contained report with sort, filter, code snippets, before/after. Click a severity badge to filter — also hides files in the dropdown that have no findings of that severity (combinable with the file dropdown filter, AND-linked) |
 | **Jira** | Clipboard | Wiki markup ready to paste into a Jira ticket (filtered to one file) |
 | **Clipboard** | Clipboard | Plain text with before/after (filtered to one file) |
 
@@ -417,6 +429,11 @@ For incremental re-scans, **use Branch-Changes instead of a full scan**
 - **Watchdog**: 200k-token limit per file — pathological inputs are
   aborted in under a second instead of hanging.
 - **GuardAdvance**: forward-progress guarantee in every outer parser loop.
+- **Real-world Delphi syntax coverage**: the parser handles `interface`
+  type declarations, generic types/methods (`TFoo<T>`, `function Get<T>: T;`),
+  `packed record` / `packed class`, local `label` sections, `record helper for X`
+  / `class helper for X`, and IFDEF-conditional method headers without
+  losing method bodies — important for real-world codebases (mORMot2, etc.).
 - **`MaxFileMB` (default 5 MB)**: oversized files are reported immediately
   as `FileError`. Configurable in `analyser.ini`.
 - **MAX_DEPTH = 32**: protection against symlink loops.
@@ -485,8 +502,4 @@ the Branch-Changes content).
 
 ## Support
 
-If the plugin saves you time, a coffee is appreciated:
-
-[![Donate via PayPal](https://img.shields.io/badge/PayPal-Donate-blue?logo=paypal&style=flat-square)](https://paypal.me/nrodear)
-
-Direct link: <https://paypal.me/nrodear>
+Donate link is at the top of this README — thanks!

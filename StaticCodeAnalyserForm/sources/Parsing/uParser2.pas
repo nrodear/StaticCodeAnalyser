@@ -79,6 +79,25 @@ begin
                   tkKwInline, tkKwExternal, tkKwRead, tkKwWrite];
 end;
 
+function QuoteStrLit(const Value: string): string;
+// Re-konstruiert die Pascal-Source-Form eines Stringliterals:
+// outer '...' plus internal ' wieder verdoppelt.
+//
+// Hintergrund: TLexer.ReadString resolved schon waehrend des Lexings
+// das `''`-Escape zu einem einzelnen `'` im Token-Value (Z. 329-330 in
+// uLexer.pas). Wenn wir den Wert jetzt nur mit '...' umwickeln, wird
+// jeder eingebettete `'` von Detektoren als Stringende interpretiert
+// (z.B. uFormatMismatch verlor den `%s`-Platzhalter in
+// `Format('foo ''bar'' baz: %s', [x])` weil das `'` direkt nach `foo `
+// als closing quote gewertet wurde -> 0 Platzhalter, 1 Argument =
+// False-Positive).
+begin
+  if Pos('''', Value) = 0 then
+    Result := '''' + Value + ''''
+  else
+    Result := '''' + StringReplace(Value, '''', '''''', [rfReplaceAll]) + '''';
+end;
+
 constructor TParser2.Create;
 begin
   inherited;
@@ -1380,7 +1399,7 @@ begin
             if NestDepth = 0 then Break;
         end;
         if Tok.Kind = tkStrLit then
-          FullRHS := FullRHS + '''' + Tok.Value + ''''
+          FullRHS := FullRHS + QuoteStrLit(Tok.Value)
         else
           FullRHS := FullRHS + Tok.Value;
         Next;
@@ -1435,7 +1454,7 @@ begin
           if NestDepth = 0 then Break;
       end;
       if Tok.Kind = tkStrLit then
-        FullRHS := FullRHS + '''' + Tok.Value + ''''
+        FullRHS := FullRHS + QuoteStrLit(Tok.Value)
       else
         FullRHS := FullRHS + Tok.Value;
       Next;
@@ -1464,7 +1483,7 @@ begin
   else if Tok.Kind in [tkIntLit, tkFloatLit] then
     S := Next.Value
   else if Tok.Kind = tkStrLit then
-    S := '''' + Next.Value + ''''
+    S := QuoteStrLit(Next.Value)
   else
   begin
     Result := '';
@@ -1514,7 +1533,7 @@ begin
             else
             begin
               if ArgTok.Kind = tkStrLit then
-                Args := Args + '''' + ArgTok.Value + ''''
+                Args := Args + QuoteStrLit(ArgTok.Value)
               else
                 Args := Args + ArgTok.Value;
               Next;
