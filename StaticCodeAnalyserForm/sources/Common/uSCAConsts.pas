@@ -64,6 +64,14 @@ var
   // Konversion klappt.
   DetectorMagicTrivials    : TStringList = nil;
 
+  // Format-Funktionen die der uFormatMismatch-Detektor pruefen soll.
+  // Default: Format, FormatUtf8, FormatString. Alle drei haben dieselbe
+  // %-Platzhalter-Semantik wie Delphi-Format - typisch in mORMot2-Code
+  // wo FormatUtf8 als RawUtf8-Variante haeufig vorkommt. INI-Override:
+  // [Detectors] FormatFunctions=Format,FormatUtf8,FormatString,_fmt
+  // Lowercase-normalisiert beim Match.
+  DetectorFormatFunctions  : TStringList = nil;
+
 type
   // Schweregrad eines Befundes - drei Stufen:
   //   lsError   - sichere Bugs / Sicherheitsluecken (Crash, Datenleak)
@@ -267,6 +275,15 @@ begin
   DetectorMagicTrivials.Sorted        := True;
   DetectorMagicTrivials.Duplicates    := dupIgnore;
   DetectorMagicTrivials.AddStrings(['0', '1', '2', '-1', '10', '100']);
+
+  // Default-Liste der Format-aehnlichen Funktionen fuer uFormatMismatch.
+  // Lower-case (CaseSensitive=False), damit die Detector-Match-Logik
+  // direkt darauf operieren kann.
+  DetectorFormatFunctions := TStringList.Create;
+  DetectorFormatFunctions.CaseSensitive := False;
+  DetectorFormatFunctions.Sorted        := True;
+  DetectorFormatFunctions.Duplicates    := dupIgnore;
+  DetectorFormatFunctions.AddStrings(['format', 'formatutf8', 'formatstring']);
 end;
 
 initialization
@@ -283,5 +300,7 @@ finalization
     FreeAndNil(DiscoveredStaticClasses);
   if Assigned(DetectorMagicTrivials) then
     FreeAndNil(DetectorMagicTrivials);
+  if Assigned(DetectorFormatFunctions) then
+    FreeAndNil(DetectorFormatFunctions);
 
 end.

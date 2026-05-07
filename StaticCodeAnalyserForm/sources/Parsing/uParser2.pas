@@ -567,11 +567,13 @@ end;
 
 procedure TParser2.ParseVarLikeSection(Parent: TAstNode; AKind: TNodeKind);
 var
-  SecNode  : TAstNode;
-  Names    : TStringList;
-  TypeName : string;
-  N, VN    : string;
-  T        : TToken;
+  SecNode    : TAstNode;
+  Names      : TStringList;
+  TypeName   : string;
+  ConstValue : string;
+  FullRef    : string;
+  N, VN      : string;
+  T          : TToken;
 begin
   SecNode := Parent.Add(AKind, '', Tok.Line, Tok.Col);
   Names   := TStringList.Create;
@@ -601,10 +603,35 @@ begin
           Next;
         end;
 
+      // Const-Initializer mitnehmen: 'const NAME = ...;' oder
+      // 'const NAME: Type = ...;'. Wert wird in TypeRef nach dem Type-
+      // Namen mit '=' separiert abgelegt (Format: 'Type=value' bzw.
+      // '=value' wenn untypisiert). Brauchen wir z.B. fuer den
+      // FormatMismatch-Detektor der Konstanten-basierte Format-Strings
+      // aufloesen muss. Var-Sections lassen den Initializer wie bisher
+      // unter den Tisch fallen - der Wert hat dort keinen Detector-
+      // Mehrwert.
+      ConstValue := '';
+      if (AKind = nkConstSection) and Eat(tkEq) then
+      begin
+        while not (Tok.Kind in [tkSemicolon, tkKwEnd, tkEof]) do
+        begin
+          if Tok.Kind = tkStrLit then
+            ConstValue := ConstValue + QuoteStrLit(Tok.Value)
+          else
+            ConstValue := ConstValue + Tok.Value;
+          Next;
+        end;
+      end;
+
+      FullRef := TypeName;
+      if ConstValue <> '' then
+        FullRef := FullRef + '=' + ConstValue;
+
       for N in Names do
       begin
         VN := N;
-        SecNode.Add(nkField, VN, T.Line, T.Col).TypeRef := TypeName;
+        SecNode.Add(nkField, VN, T.Line, T.Col).TypeRef := FullRef;
       end;
 
       SkipToSemicolon;

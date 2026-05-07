@@ -56,6 +56,7 @@ type
     FMinBlockLines     : Integer;     // DuplicateBlockMinLines
     FMaxFileMB         : Integer;     // MaxFileMB (5 Default)
     FMagicTrivials     : TStringList; // MagicNumberTrivials (CSV)
+    FFormatFunctions   : TStringList; // FormatFunctions (CSV)
     FLanguage          : string;      // [UI] Language ('de', 'en', '')
   public
     constructor Create;
@@ -145,6 +146,11 @@ type
     // uMagicNumbers: Liste der Zahlen die NICHT als Magic-Number gemeldet
     // werden. Aus INI als CSV gelesen, im Detektor als StringList verfuegbar.
     property MagicNumberTrivials:     TStringList read FMagicTrivials;
+
+    // uFormatMismatch: Liste der Funktionsnamen die als Format-aequivalent
+    // behandelt werden (gleiche %-Platzhalter-Semantik). Defaults: Format,
+    // FormatUtf8, FormatString. Aus [Detectors] FormatFunctions=... als CSV.
+    property FormatFunctions:         TStringList read FFormatFunctions;
 
     // UI-Sprache. '' bedeutet "use Default" (= deutsch beim aktuellen Build,
     // falls dxgettext jemals aktiviert wird, wuerde es OS-Locale nutzen).
@@ -327,6 +333,14 @@ const
     ';MagicNumberTrivials=0,1,2,-1,10,100'#13#10 +
     ';MagicNumberTrivials=0,1,2,-1,10,100,1000,1024'#13#10 +
     ''#13#10 +
+    '; FormatFunctions: kommagetrennt, Funktionsnamen mit Format()-'#13#10 +
+    '; aequivalenter %-Platzhalter-Semantik. Defaults: Format,'#13#10 +
+    '; FormatUtf8, FormatString. Erweiterbar um projekt-spezifische'#13#10 +
+    '; Helper (z.B. _fmt, FmtUtf8) - der Detektor zaehlt Platzhalter'#13#10 +
+    '; vs. Argumente fuer alle gelisteten Funktionen.'#13#10 +
+    ';FormatFunctions=Format,FormatUtf8,FormatString'#13#10 +
+    ';FormatFunctions=Format,FormatUtf8,FormatString,_fmt'#13#10 +
+    ''#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
     ';  [UI] - Oberflaechen-Einstellungen'#13#10 +
@@ -370,6 +384,11 @@ begin
   FMagicTrivials.Sorted        := True;
   FMagicTrivials.Duplicates    := dupIgnore;
   FMagicTrivials.AddStrings(['0', '1', '2', '-1', '10', '100']);
+  FFormatFunctions := TStringList.Create;
+  FFormatFunctions.CaseSensitive := False;
+  FFormatFunctions.Sorted        := True;
+  FFormatFunctions.Duplicates    := dupIgnore;
+  FFormatFunctions.AddStrings(['format', 'formatutf8', 'formatstring']);
   FLanguage           := 'en';        // Default: englische UI (Source-Sprache)
 end;
 
@@ -378,6 +397,7 @@ begin
   FLeakyClasses.Free;
   FExcludeLeaky.Free;
   FMagicTrivials.Free;
+  FFormatFunctions.Free;
   inherited;
 end;
 
@@ -495,6 +515,21 @@ begin
     // Wenn der Eintrag leer ist, behalten wir die Default-Liste aus dem
     // Constructor (0,1,2,-1,10,100) - das spiegelt das alte Verhalten.
 
+    // [Detectors] FormatFunctions=Format,FormatUtf8,... (CSV) ->
+    // FFormatFunctions. Wenn leer behalten wir den Default aus dem
+    // Constructor (format,formatutf8,formatstring).
+    RawList := Trim(Ini.ReadString('Detectors', 'FormatFunctions', ''));
+    if RawList <> '' then
+    begin
+      FFormatFunctions.Clear;
+      Items := RawList.Split([',', ';']);
+      for Item in Items do
+      begin
+        Trimmed := Trim(Item);
+        if Trimmed <> '' then FFormatFunctions.Add(Trimmed);
+      end;
+    end;
+
     // [UI] Language=de|en|'' -> FLanguage. Default 'en' (Source-Sprache).
     FLanguage := Trim(Ini.ReadString('UI', 'Language', 'en')).ToLower;
   finally
@@ -568,6 +603,14 @@ begin
     uSCAConsts.DetectorMagicTrivials.Clear;
     for i := 0 to FMagicTrivials.Count - 1 do
       uSCAConsts.DetectorMagicTrivials.Add(FMagicTrivials[i]);
+  end;
+
+  // Format-Funktions-Liste analog spiegeln.
+  if Assigned(uSCAConsts.DetectorFormatFunctions) then
+  begin
+    uSCAConsts.DetectorFormatFunctions.Clear;
+    for i := 0 to FFormatFunctions.Count - 1 do
+      uSCAConsts.DetectorFormatFunctions.Add(FFormatFunctions[i]);
   end;
 end;
 

@@ -275,20 +275,26 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
   Datei: `Detectors/uDivByZero.pas`
   Lösung: AST-strukturierte Operator-Erkennung statt TypeRef-String-Pos.
 
-- [ ] **FormatMismatch: nur Literal-Format-Strings, nicht Konstanten**
-  `Format(MSG_INVALID, [a,b,c])` mit `MSG_INVALID = 'invalid %s'` wird
-  ignoriert weil `TryExtractFormatString` Stringliteral als 1. Arg
-  verlangt.
-  Datei: `Detectors/uFormatMismatch.pas:84`
-  Lösung: bei Identifier-Argument auf Konstanten-Tabelle
-  (UnitNode-`nkConst`) auflösen.
+- [x] **FormatMismatch: Konstanten-basierte Format-Strings aufloesen** — _erledigt_
+  Parser `ParseVarLikeSection` erweitert um Const-Initializer (Wert
+  wird nach `=` an die TypeRef angehaengt). Detektor sammelt pro Unit
+  alle untyped String-Const-Literale in eine `TDictionary<name, value>`
+  via neue `CollectStringConstants`. `ResolveFormatString` schlaegt
+  Identifier-Argumente in dieser Tabelle nach. `Format(MSG_INVALID, [a])`
+  mit `const MSG_INVALID = 'invalid %s'` wird jetzt geprueft.
+  Dateien: `Parsing/uParser2.pas:568-636`,
+  `Detectors/uFormatMismatch.pas:CollectStringConstants/ResolveFormatString`
 
-- [ ] **FormatMismatch: nur `Format(`, nicht `FormatUtf8`/`FormatString`**
-  mORMot-Idioms `FormatUtf8`/`FormatString`/`_fmt` werden gar nicht
-  geprueft, obwohl sie identische `%`-Platzhalter-Semantik haben.
-  Datei: `Detectors/uFormatMismatch.pas:65`
-  Lösung: konfigurierbare Format-Funktionsliste in INI
-  `[Detectors] FormatFunctions=Format,FormatUtf8,FormatString`.
+- [x] **FormatMismatch: konfigurierbare Format-Funktionsliste** — _erledigt_
+  Neue globale `DetectorFormatFunctions: TStringList` in `uSCAConsts`
+  (Defaults: `Format`, `FormatUtf8`, `FormatString`). `TRepoSettings`
+  laedt `[Detectors] FormatFunctions=...` als CSV und spiegelt die
+  Liste in `ApplyDetectorThresholds`. Detektor iteriert ueber alle
+  konfigurierten Namen mit Wortgrenzen-Check. mORMot2-Idioms
+  `FormatUtf8(...)` werden out-of-the-box geprueft; Projekt-Helpers
+  (`_fmt`, `FmtUtf8`) per INI ergaenzbar.
+  Dateien: `Common/uSCAConsts.pas`, `Infrastructure/uRepoSettings.pas`,
+  `Detectors/uFormatMismatch.pas:FormatFunctionList/TryExtractCall`
 
 - [ ] **MagicNumber: typische Bit-Width-Werte fehlen in Trivials**
   `8`, `16`, `24`, `31`, `32`, `63`, `64`, `128`, `255`, `256` werden
