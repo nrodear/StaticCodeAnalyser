@@ -106,34 +106,11 @@ begin
 end;
 
 function TLeakFinding.FindingType: TFindingType;
-// Mapping nach SonarQube-Konvention:
-//   - Bugs sind Defekte die Programm-Verhalten brechen
-//   - Code Smells sind Wartbarkeitsprobleme
-//   - Vulnerabilities sind aktiv ausnutzbare Luecken
-//   - Security Hotspots sind verdaechtige Stellen, im Einzelfall zu pruefen
-//   - Code Duplication ist eine eigene Klasse weil sie quer zu allem liegt
+// Delegiert an KIND_META in uSCAConsts (single source of truth fuer
+// Kind -> Sonar-Type-Mapping). Vorher: case-Statement das gegen die
+// Mappings in uExport/uClaudePrompt/uSuppression driften konnte.
 begin
-  case Kind of
-    fkMemoryLeak,
-    fkNilDeref,
-    fkDivByZero,
-    fkFormatMismatch    : Result := ftBug;
-
-    fkSQLInjection,
-    fkHardcodedSecret   : Result := ftVulnerability;
-
-    fkHardcodedPath     : Result := ftSecurityHotspot;
-
-    fkDuplicateString,
-    fkDuplicateBlock    : Result := ftCodeDuplication;
-
-    fkFileReadError     : Result := ftFileError;
-  else
-    // EmptyExcept, UnusedUses, MissingFinally, DeadCode, LongMethod,
-    // LongParamList, MagicNumber, DebugOutput, DeepNesting, TodoComment,
-    // EmptyMethod
-    Result := ftCodeSmell;
-  end;
+  Result := KindFindingType(Kind);
 end;
 
 function TLeakFinding.TypeText: string;

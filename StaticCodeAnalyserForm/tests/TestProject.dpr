@@ -14,6 +14,7 @@ uses
   DUnitX.Loggers.Xml.NUnit,
 {$ENDIF }
   DUnitX.TestFramework,
+  uTestSrcBuilder     in 'uTestSrcBuilder.pas',
   uTestTAstNode       in 'uTestTAstNode.pas',
   uTestAnalyserChecks in 'uTestAnalyserChecks.pas',
   uTestPerformance    in 'uTestPerformance.pas';

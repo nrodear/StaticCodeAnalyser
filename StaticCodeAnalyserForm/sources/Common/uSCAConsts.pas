@@ -116,10 +116,58 @@ type
     ftFileError
   );
 
+  // Pro-Kind-Metadaten: Name-Token (fuer Export, Suppression-Marker,
+  // Claude-Prompt) plus die SonarQube-Kategorisierung. Single source
+  // of truth - vorher waren diese Mappings in 4 Units (uMethodd12,
+  // uExport, uClaudePrompt, uSuppression) als case-Statements
+  // dupliziert und konnten gegeneinander driften.
+  // Index = TFindingKind ordinal -> O(1)-Lookup.
+  TFindingKindMeta = record
+    Name        : string;       // 'MemoryLeak' (canonical token)
+    FindingType : TFindingType; // Sonar-Kategorie
+  end;
+
   TConsts = record
     class function GetLeakyClasses: TStringList; static;
   end;
 
+const
+  // Reihenfolge MUSS exakt mit TFindingKind uebereinstimmen.
+  // Beim Hinzufuegen eines neuen TFindingKind: hier nachpflegen, dann
+  // den eigentlichen Detektor in TStaticAnalyzer2.RunAllDetectors
+  // registrieren - das sind die einzigen zwei Stellen.
+  KIND_META: array[TFindingKind] of TFindingKindMeta = (
+    (Name: 'MemoryLeak';      FindingType: ftBug),              // fkMemoryLeak
+    (Name: 'EmptyExcept';     FindingType: ftCodeSmell),        // fkEmptyExcept
+    (Name: 'SQLInjection';    FindingType: ftVulnerability),    // fkSQLInjection
+    (Name: 'HardcodedSecret'; FindingType: ftVulnerability),    // fkHardcodedSecret
+    (Name: 'FormatMismatch';  FindingType: ftBug),              // fkFormatMismatch
+    (Name: 'FileReadError';   FindingType: ftFileError),        // fkFileReadError
+    (Name: 'UnusedUses';      FindingType: ftCodeSmell),        // fkUnusedUses
+    (Name: 'NilDeref';        FindingType: ftBug),              // fkNilDeref
+    (Name: 'MissingFinally';  FindingType: ftCodeSmell),        // fkMissingFinally
+    (Name: 'DivByZero';       FindingType: ftBug),              // fkDivByZero
+    (Name: 'DeadCode';        FindingType: ftCodeSmell),        // fkDeadCode
+    (Name: 'LongMethod';      FindingType: ftCodeSmell),        // fkLongMethod
+    (Name: 'LongParamList';   FindingType: ftCodeSmell),        // fkLongParamList
+    (Name: 'MagicNumber';     FindingType: ftCodeSmell),        // fkMagicNumber
+    (Name: 'DuplicateString'; FindingType: ftCodeDuplication),  // fkDuplicateString
+    (Name: 'HardcodedPath';   FindingType: ftSecurityHotspot),  // fkHardcodedPath
+    (Name: 'DebugOutput';     FindingType: ftCodeSmell),        // fkDebugOutput
+    (Name: 'DeepNesting';     FindingType: ftCodeSmell),        // fkDeepNesting
+    (Name: 'TodoComment';     FindingType: ftCodeSmell),        // fkTodoComment
+    (Name: 'EmptyMethod';     FindingType: ftCodeSmell),        // fkEmptyMethod
+    (Name: 'DuplicateBlock';  FindingType: ftCodeDuplication)   // fkDuplicateBlock
+  );
+
+// Convenience-Wrapper - delegieren auf KIND_META.
+function KindName(K: TFindingKind): string;
+function KindFindingType(K: TFindingKind): TFindingType;
+// Reverse-Lookup ueber Name (case-insensitive). Liefert False bei
+// unbekanntem Namen; Kind ist dann undefiniert.
+function KindFromName(const Name: string; out K: TFindingKind): Boolean;
+
+type
   TSectionFlag = record
   const
     FLAG_NONE = $00;     // 00000000
@@ -135,6 +183,33 @@ type
   end;
 
 implementation
+
+{ ---- KIND_META Helpers ---- }
+
+function KindName(K: TFindingKind): string;
+begin
+  Result := KIND_META[K].Name;
+end;
+
+function KindFindingType(K: TFindingKind): TFindingType;
+begin
+  Result := KIND_META[K].FindingType;
+end;
+
+function KindFromName(const Name: string; out K: TFindingKind): Boolean;
+var
+  Trimmed : string;
+  Kk      : TFindingKind;
+begin
+  Trimmed := Trim(Name);
+  for Kk := Low(TFindingKind) to High(TFindingKind) do
+    if SameText(Trimmed, KIND_META[Kk].Name) then
+    begin
+      K := Kk;
+      Exit(True);
+    end;
+  Result := False;
+end;
 
 { TConsts }
 

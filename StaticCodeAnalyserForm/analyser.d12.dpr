@@ -34,7 +34,6 @@ uses
   uRegExMatches in 'sources\Common\uRegExMatches.pas',
   uSCAConsts in 'sources\Common\uSCAConsts.pas',
   // ---- Detectors ----
-  uCodeSmells in 'sources\Detectors\uCodeSmells.pas',
   uCodeSmells2 in 'sources\Detectors\uCodeSmells2.pas',
   uDeadCode in 'sources\Detectors\uDeadCode.pas',
   uDebugOutput in 'sources\Detectors\uDebugOutput.pas',

@@ -20,25 +20,26 @@ uses
   uAnalyserPalette, uAnalyserTypes, uAnalyserTheme, uLocalization,
   uRecentPaths,
   uIDELineHighlighter, uIDEMessages, uIDEWatchMode, uIDEStatsTiles,
+  uIDEHelpPanel, uIDEExportMenu, uIDEEditorIntegration, uIDEStatusBar,
+  uIDEThemeIntegration, uIDEAnalyseProgress,
   uFindingGridRenderer, uFindingFilter;
 
 type
   TAnalyserFrame = class(TFrame)
   private
-    FStatusBar      : TStatusBar;
+    // Drei-Panel-StatusBar (Findings/Progress/Mode) inklusive Setup
+    // ist nach uIDEStatusBar.TAnalyserStatusBar ausgelagert. Frame
+    // delegiert die Status-Pushes via StatusFindings/Progress/Mode.
+    FStatusBar      : TAnalyserStatusBar;
     FAllFindings    : TObjectList<TLeakFinding>;
     FFilterMode     : TFilterMode;
     FCurrentBaseDir : string;
     FFilterCombo       : TComboBox;
-    FHelpDescLabel     : TLabel;
-    FHelpBeforePanel   : TPanel;
-    FHelpBefore        : TMemo;
-    FHelpAfter         : TMemo;
-    FHelpPanel         : TPanel; // rechtes Hint-Panel (1/3 von PanelClient)
-    FHelpSplitter      : TSplitter; // Drag-Trenner Grid|Help, Visible folgt FHelpPanel
-    FDockStateTimer    : TTimer; // pollt Floating-Status (Resize feuert
-                                 // beim Re-Dock zu frueh - Floating ist
-                                 // dann noch der alte Wert)
+    // Hilfe-Panel rechts (Vorher/Nachher-Code-Beispiele) inklusive
+    // dessen Splitter, Dock-State-Timer und Layout-Logik. Ehemals 7
+    // Felder + 4 Methoden direkt im Frame - jetzt ausgelagert in
+    // uIDEHelpPanel.TFindingHintPanel.
+    FHintPanel         : TFindingHintPanel;
     FDisplayedFindings : TList<TLeakFinding>;
 
     FPanelStats        : TPanel;
@@ -50,7 +51,10 @@ type
     FTileBug, FTileVuln, FTileDup                  : TLabel; // Type
     FTileScore                                     : TLabel; // Codequalitaet
     // Export-Dropdown: ein Button "Export ▾" mit Popup statt 5 Einzel-Buttons.
-    FExportMenu        : TPopupMenu;
+    // Export-Popup ist komplett gekapselt in uIDEExportMenu.
+    // Hier nur das Field-Reference, Frame ruft AttachToButton beim
+    // BtnExport-Setup.
+    FExportMenu        : TFindingExportMenu;
     // ---- Zweiter Filter --------------------------------------------------
     FTypeFilter        : TTypeFilter;
     FTypeCombo         : TComboBox;
@@ -67,8 +71,10 @@ type
     FBtnAnalyse        : TButton;      // gemerkt fuer Enable/Disable
     FBtnAnalyseCurrent : TButton;
     FBtnAnalyseChanged : TButton; // Branch-Aenderungen via Git/SVN
-    FAnalyseRunning    : Boolean;
-    FAnalyseCancelled  : Boolean;
+    // Running/Cancelled-Flags + UI-Toggle (Buttons enable/disable,
+    // Progressbar reset, Cursor) sind nach uIDEAnalyseProgress.
+    // TAnalyseProgressController ausgelagert. Frame ruft BeginRun/EndRun.
+    FAnalyseProgress   : TAnalyseProgressController;
     FLastProgressTick  : Cardinal;     // GetTickCount, drosselt UI-Updates
     // Ignore-Liste fuer Dateien, die NICHT analysiert werden sollen.
     // Wird beim Frame-Start aus %APPDATA%\StaticCodeAnalyser\ignore.txt geladen.
@@ -119,14 +125,14 @@ type
     procedure GridKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure GridResize(Sender: TObject);
     procedure SearchChange(Sender: TObject);
-    procedure ExportCsvClick(Sender: TObject);
-    procedure ExportJsonClick(Sender: TObject);
-    procedure ExportJiraClick(Sender: TObject);
-    procedure CopyClipboardClick(Sender: TObject);
-    procedure ExportHtmlClick(Sender: TObject);
+    // Export-Click-Handler sind nach uIDEExportMenu ausgelagert.
+    // Diese zwei Getter werden vom Helper aufgerufen (Live-Werte statt
+    // Snapshots, weil Grid spaeter gebaut wird und BaseDir sich pro
+    // Run aendert).
+    function  GetCurrentBaseDir: string;
+    function  GetResultGrid: TStringGrid;
     // Klappt das PopupMenu unter dem Export-Button auf.
-    procedure ExportMenuButtonClick(Sender: TObject);
-    function  CurrentFocusFile: string;
+    // Popup-Show + CurrentFocusFile sind nach uIDEExportMenu ausgelagert.
 
     // Erstellt die Sonar-Style Tile-Reihe (alle 10 Tiles in einer Zeile).
     procedure BuildStatsTiles(Parent: TPanel);
@@ -160,13 +166,12 @@ type
     procedure LoadRecentPaths;
     procedure SaveRecentPath(const APath: string);
   protected
-    FThemeNotifierIdx : Integer;
-    // Klassenreferenz auf den Notifier - wird gebraucht um DetachFrame
-    // aufzurufen, bevor der IDE-Service ihn loslaesst. Lifetime ist
-    // ueber den Interface-Refcount gekoppelt (FThemeNotifierIfc), damit
-    // dieser Pointer nie dangling ist.
-    FThemeNotifierObj : TObject; // forward-deklariert (TFrameThemeNotifier)
-    FThemeNotifierIfc : IInterface;
+    // IDE-Theme-Integration (Notifier + Refresh-Pfade) ist nach
+    // uIDEThemeIntegration.TIDEThemeIntegration ausgelagert. Frame
+    // haelt nur noch die Helper-Instanz und die zwei Hooks die
+    // klassen-gebunden bleiben muessen (CMStyleChanged-Message-
+    // Handler + SetParent-Override).
+    FThemeIntegration : TIDEThemeIntegration;
     // Reagiert auf VCL-Style-Wechsel (= IDE-Theme-Wechsel). Erzwingt
     // Re-Paint, damit die ueber clBtnFace/clWindow/StyleServices spaet
     // aufgeloesten Farben mit dem neuen Theme neu gezeichnet werden.
@@ -177,43 +182,20 @@ type
     // applizieren. CMParentChanged gibt es in der VCL nicht, deshalb
     // ueber den virtuellen SetParent-Hook.
     procedure SetParent(AParent: TWinControl); override;
-    procedure ApplyThemeRecursive(AControl: TControl);
-
-    // Floating/docked-Status der Host-Form (TCustomForm hochlaufen).
-    function  HostIsFloating: Boolean;
-    // Hilfe-Panel + Splitter Visible an HostIsFloating angleichen.
-    // Idempotent - kein Aufruf wenn Status unveraendert.
-    procedure SyncHelpVisibility;
-    // Timer-Tick: ruft SyncHelpVisibility. Begruendung als Field-Kommentar.
-    procedure DockStateTimerTick(Sender: TObject);
+    // Wird nach jedem Theme-Refresh als Callback vom Helper aufgerufen.
+    // Triggert den TStringGrid-Repaint, der ueber die rekursive
+    // Invalidate nicht zuverlaessig vom Paint-Cache abgeholt wird.
+    procedure RepaintGridAfterTheme;
   public
     FProjectPath : TComboBox;
     FResultGrid  : TStringGrid;
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     procedure Resize; override;
-    // Wird vom IDE-Theme-Notifier nach einem Theme-Wechsel aufgerufen.
-    // Public, damit der Notifier das Frame-Refresh triggern kann ohne
-    // tiefer in den Frame eingreifen zu muessen.
+    // Delegiert auf FThemeIntegration.RefreshFromIDETheme. Public,
+    // damit auch externer Code (oder Tests) einen Theme-Refresh
+    // erzwingen kann, ohne den Helper direkt anzufassen.
     procedure RefreshFromIDETheme;
-  end;
-
-  // Notifier-Klasse, die der IDE-Theming-Service nach jedem Theme-Wechsel
-  // aufruft. Implementiert INTAIDEThemingServicesNotifier (Name kann je
-  // Delphi-Version leicht variieren - hier gemaess Delphi 12 Athens).
-  // Haelt Frame als schwache Referenz: bei Frame-Free wird der Notifier
-  // explizit abgemeldet, sodass die Reference hier nie dangling ist.
-  TFrameThemeNotifier = class(TNotifierObject, INTAIDEThemingServicesNotifier)
-  private
-    FFrame: TAnalyserFrame;
-  public
-    constructor Create(AFrame: TAnalyserFrame);
-    procedure ChangingTheme;
-    procedure ChangedTheme;
-    // Wird vom Frame.Destroy aufgerufen bevor er sich abmeldet - schuetzt
-    // gegen Aufrufe in einen freed Pointer falls die IDE den Notifier
-    // nach Frame-Free noch einmal triggert.
-    procedure DetachFrame;
   end;
 
   TAnalyserDockableForm = class(TInterfacedObject, INTACustomDockableForm)
@@ -257,7 +239,7 @@ implementation
 
 // Sentinel fuer Frame-Lifecycle-Race in der Worker-Anonymous-Method:
 // AnalyseAllClasses uebergibt eine Closure die FProgressBar/FStatusBar/
-// FAnalyseCancelled etc. ueber Self captured. Wenn der User waehrend der
+// FAnalyseProgress etc. ueber Self captured. Wenn der User waehrend der
 // Analyse das IDE-Dock-Fenster schliesst, wird das Frame-Objekt zerstoert -
 // die Closure haelt aber noch eine ungueltige Self-Referenz und greift bei
 // Application.ProcessMessages-Reentry darauf zu (AV in ein freies Heap-Block).
@@ -306,16 +288,12 @@ begin
     'StaticCodeAnalyser\recent.ini';
 end;
 
+// Backward-compat-Wrapper - liefert das aktive IDE-Projekt-Verzeichnis.
+// Logik liegt jetzt in uIDEEditorIntegration.TIDEEditor (saubere
+// Supports-Casts statt as-Cast der bei nil-Service AV werfen wuerde).
 function GetCurrentIDEProjectDir: string;
-var
-  ProjGroup : IOTAProjectGroup;
 begin
-  Result := '';
-  if not Assigned(BorlandIDEServices) then Exit;
-  ProjGroup := (BorlandIDEServices as IOTAModuleServices).MainProjectGroup;
-  if Assigned(ProjGroup) then
-    Result := ExcludeTrailingPathDelimiter(
-      ExtractFilePath(ProjGroup.FileName));
+  Result := TIDEEditor.GetCurrentProjectDir;
 end;
 
 { TIDEAnalyserForm }
@@ -346,7 +324,11 @@ begin
     AutoDiscoverCustomClasses := FRepoSettings.AutoDiscoverClasses;
   except end;
 
-  FThemeNotifierIdx := -1;
+  // IDE-Theme-Helper: registriert sich spaeter via Attach (in
+  // TAnalyserDockableForm.FrameCreated). RepaintGridAfterTheme wird
+  // nach jedem Refresh vom Helper zurueckgerufen.
+  FThemeIntegration := TIDEThemeIntegration.Create(Self, Self, RepaintGridAfterTheme);
+
   // Frame folgt dem aktiven IDE-Theme: clBtnFace ist der Standard-Chrome-
   // Hintergrund (hell im Light-Theme, dunkel im Dark-Theme, korrekt in
   // Mountain Mist/Carbon/Custom-Themes).
@@ -370,20 +352,10 @@ begin
   FSortColumn        := 5;
   FSortDescending    := False;
 
-  // ---- Statusleiste mit 3 Panels ----
-  // Panel 0 (links, fix):    Befund-Anzahl ("X / Y Befunde")
-  // Panel 1 (mitte, fix):    Datei-Progress / aktuelle Datei
-  // Panel 2 (rechts, fill):  VCS-Modus, Status-Meldungen, Fehlertexte
-  FStatusBar := TStatusBar.Create(Self);
-  FStatusBar.Parent      := Self;
-  FStatusBar.Align       := alBottom;
-  FStatusBar.SimplePanel := False;
-
-  with FStatusBar.Panels.Add do begin Width := 160; Text := ''; end;            // Findings
-  with FStatusBar.Panels.Add do begin Width := 220; Text := ''; end;            // Progress
-  // Letztes Panel - Width = Rest. TStatusBar streckt das letzte Panel
-  // automatisch auf alle uebrige Breite wenn Width gross genug ist.
-  with FStatusBar.Panels.Add do begin Width := 5000; Text := _('Ready.'); end;
+  // ---- Statusleiste mit 3 Panels (Findings / Progress / Mode) ----
+  // Setup + Push-Methoden in uIDEStatusBar.TAnalyserStatusBar gekapselt.
+  FStatusBar := TAnalyserStatusBar.Create(Self, Self);
+  FStatusBar.Mode(_('Ready.'));
 
   // ---- Fortschrittsbalken (nur waehrend Analyse sichtbar) -----------------
   // Liegt zwischen Top-Panels und Statusbar - alBottom oberhalb der Statusbar.
@@ -633,6 +605,13 @@ begin
   FBtnCancel.Enabled  := False;
   FBtnCancel.OnClick  := CancelAnalyseClick;
 
+  // Analyse-Busy-Controller jetzt erstellen - Buttons + Progressbar
+  // existieren alle. Owner=Self -> Auto-Free im Frame-Destroy
+  // (wird zusaetzlich explizit FreeAndNil'd vor anderen Feldern).
+  FAnalyseProgress := TAnalyseProgressController.Create(Self,
+    FProgressBar, FBtnCancel,
+    [FBtnAnalyse, FBtnAnalyseCurrent, FBtnAnalyseChanged]);
+
   // Trennabstand
   var SepActions := TPanel.Create(Self);
   SepActions.Parent     := PanelSearch;
@@ -648,29 +627,24 @@ begin
   LblSearch.Layout  := tlCenter;
   LblSearch.Width   := 32;
 
-  // Export-Buttons rechts (alRight: zuletzt erstelltes Element ist am
-  // weitesten links - daher die optisch gewuenschte Reihenfolge umgekehrt
-  // erstellen).
-  // ---- Export-Dropdown statt 5 Einzel-Buttons ----------------------------
-  // Spart ~250 px Toolbar-Platz. Klick zeigt PopupMenu mit allen Varianten.
-  FExportMenu := TPopupMenu.Create(Self);
-  var Mi: TMenuItem;
-  Mi := TMenuItem.Create(FExportMenu); Mi.Caption := _('HTML report (all findings)...'); Mi.OnClick := ExportHtmlClick;     FExportMenu.Items.Add(Mi);
-  Mi := TMenuItem.Create(FExportMenu); Mi.Caption := 'JSON...';                           Mi.OnClick := ExportJsonClick;     FExportMenu.Items.Add(Mi);
-  Mi := TMenuItem.Create(FExportMenu); Mi.Caption := 'CSV...';                            Mi.OnClick := ExportCsvClick;      FExportMenu.Items.Add(Mi);
-  Mi := TMenuItem.Create(FExportMenu); Mi.Caption := '-';                                                                      FExportMenu.Items.Add(Mi);
-  Mi := TMenuItem.Create(FExportMenu); Mi.Caption := _('Jira markup -> Clipboard');       Mi.OnClick := ExportJiraClick;     FExportMenu.Items.Add(Mi);
-  Mi := TMenuItem.Create(FExportMenu); Mi.Caption := _('Plain text -> Clipboard');        Mi.OnClick := CopyClipboardClick;  FExportMenu.Items.Add(Mi);
+  // Export-Dropdown statt 5 Einzel-Buttons - spart ~250 px Toolbar-Platz.
+  // Komplettes Menu + Click-Handler + CurrentFocusFile-Logik in
+  // uIDEExportMenu.TFindingExportMenu gekapselt.
+  // FResultGrid existiert hier noch NICHT (wird weiter unten erzeugt) -
+  // daher Getter-Methode statt Direkt-Reference.
+  FExportMenu := TFindingExportMenu.Create(Self,
+    FAllFindings, FDisplayedFindings, GetResultGrid,
+    StatusMode, GetCurrentBaseDir);
 
   var BtnExport := TButton.Create(Self);
   BtnExport.Parent     := PanelSearch;
   BtnExport.Caption    := _('Export') + ' ' + #$25BC; // schwarzes Dreieck nach unten
   BtnExport.Width      := 80;
   BtnExport.Align      := alRight;
-  BtnExport.PopupMenu  := FExportMenu;
-  BtnExport.OnClick    := ExportMenuButtonClick;
   BtnExport.Hint       := _('Export: HTML, JSON, CSV, Jira markup, plain text');
   BtnExport.ShowHint   := True;
+  // PopupMenu + OnClick wirft der Helper auf den Button.
+  FExportMenu.AttachToButton(BtnExport);
 
   // Sucheingabe fuellt den Rest in der Mitte
   FSearchEdit := TEdit.Create(Self);
@@ -710,128 +684,10 @@ begin
   PanelClient.Align      := alClient;
   PanelClient.BevelOuter := bvNone;
 
-  // Hilfe-Panel rechts neben dem Grid (alRight innerhalb PanelClient).
-  // Soll-Verhaeltnis: Grid 2/3, Hilfe 1/3 - wird in Resize berechnet.
-  // Splitter-bedienbar - User kann Breite per Drag anpassen (overrides 1/3).
-  FHelpPanel := TPanel.Create(Self);
-  FHelpPanel.Parent              := PanelClient;
-  FHelpPanel.Align               := alRight;
-  FHelpPanel.Width               := 360; // Initialwert, wird in Resize ueberschrieben
-  FHelpPanel.Constraints.MinWidth := 180; // unteres Limit fuer Drag/1/3
-  FHelpPanel.BevelOuter          := bvNone;
-  FHelpPanel.Color               := clBtnFace;
-
-  // 1px linke Trennlinie - optisches Limit zwischen Grid und Help-Panel.
-  var HelpLeftSep := TPanel.Create(Self);
-  HelpLeftSep.Parent     := FHelpPanel;
-  HelpLeftSep.Align      := alLeft;
-  HelpLeftSep.Width      := 1;
-  HelpLeftSep.BevelOuter := bvNone;
-  HelpLeftSep.Color      := cl3DDkShadow;
-
-  FHelpDescLabel := TLabel.Create(Self);
-  FHelpDescLabel.Parent      := FHelpPanel;
-  FHelpDescLabel.Align       := alTop;
-  FHelpDescLabel.Height      := 16;
-  FHelpDescLabel.Layout      := tlCenter;
-  FHelpDescLabel.Font.Name   := 'Segoe UI';
-  FHelpDescLabel.Font.Size   := 8;
-  FHelpDescLabel.Font.Style  := [fsBold];
-  FHelpDescLabel.Font.Color  := clBtnText;
-  FHelpDescLabel.Color       := clBtnFace;
-  FHelpDescLabel.ParentColor := False;
-  FHelpDescLabel.Caption     := '  ' + _('Select a row to see the fix hint');
-
-  var HelpCode := TPanel.Create(Self);
-  HelpCode.Parent      := FHelpPanel;
-  HelpCode.Align       := alClient;
-  HelpCode.BevelOuter  := bvNone;
-  HelpCode.Color       := clBtnFace;
-
-  // Vorher/Nachher vertikal gestapelt (vorher: nebeneinander).
-  // Bei einem rechts-angedockten Help-Panel passt die Hoehe besser zu den
-  // typischen Code-Snippet-Laengen als die Breite.
-  FHelpBeforePanel := TPanel.Create(Self);
-  FHelpBeforePanel.Parent      := HelpCode;
-  FHelpBeforePanel.Align       := alTop;
-  FHelpBeforePanel.Height      := 150;
-  FHelpBeforePanel.BevelOuter  := bvNone;
-  FHelpBeforePanel.Color       := clWindow; // Code-Bereich folgt clWindow-Theme
-
-  var LblBefore := TLabel.Create(Self);
-  LblBefore.Parent      := FHelpBeforePanel;
-  LblBefore.Align       := alTop;
-  LblBefore.Height      := 14;
-  LblBefore.Layout      := tlCenter;
-  LblBefore.Caption     := '  ' + _('Before (problem)');
-  LblBefore.Font.Name   := 'Segoe UI';
-  LblBefore.Font.Size   := 8;
-  LblBefore.Font.Style  := [fsBold];
-  // SeverityAccent-Rot ist in beiden Themes lesbar (weder zu hell auf weiss
-  // noch zu dunkel auf schwarz). Das Label sitzt auf clWindow und vererbt
-  // dessen Hintergrund - bleibt damit theme-konform.
-  LblBefore.Font.Color  := SeverityAccent(fsError);
-  LblBefore.ParentColor := True;
-
-  FHelpBefore := TMemo.Create(Self);
-  FHelpBefore.Parent      := FHelpBeforePanel;
-  FHelpBefore.Align       := alClient;
-  FHelpBefore.ReadOnly    := True;
-  FHelpBefore.BorderStyle := bsNone;
-  FHelpBefore.ScrollBars  := ssBoth;
-  FHelpBefore.Color       := clWindow;  // theme-konformer Editor-Hintergrund
-  FHelpBefore.Font.Name   := 'Consolas';
-  FHelpBefore.Font.Size   := 8;
-  FHelpBefore.Font.Color  := clWindowText; // theme-konformer Text
-
-  // Splitter zwischen Vorher und Nachher (drag um die Verhaeltnisse anzupassen)
-  var BeforeAfterSplitter := TSplitter.Create(Self);
-  BeforeAfterSplitter.Parent      := HelpCode;
-  BeforeAfterSplitter.Align       := alTop;
-  BeforeAfterSplitter.Height      := 4;
-  BeforeAfterSplitter.Color       := cl3DDkShadow;
-  BeforeAfterSplitter.ResizeStyle := rsUpdate;
-
-  var HelpAfterPanel := TPanel.Create(Self);
-  HelpAfterPanel.Parent      := HelpCode;
-  HelpAfterPanel.Align       := alClient;
-  HelpAfterPanel.BevelOuter  := bvNone;
-  HelpAfterPanel.Color       := clWindow; // Code-Bereich folgt clWindow-Theme
-
-  var LblAfter := TLabel.Create(Self);
-  LblAfter.Parent      := HelpAfterPanel;
-  LblAfter.Align       := alTop;
-  LblAfter.Height      := 14;
-  LblAfter.Layout      := tlCenter;
-  LblAfter.Caption     := '  ' + _('After (solution)');
-  LblAfter.Font.Name   := 'Segoe UI';
-  LblAfter.Font.Size   := 8;
-  LblAfter.Font.Style  := [fsBold];
-  // Analog zum Vorher-Label: SeverityAccent(fsHint) ist saturiertes Gruen,
-  // auf hellem und dunklem Hintergrund lesbar.
-  LblAfter.Font.Color  := SeverityAccent(fsHint);
-  LblAfter.ParentColor := True;
-
-  FHelpAfter := TMemo.Create(Self);
-  FHelpAfter.Parent      := HelpAfterPanel;
-  FHelpAfter.Align       := alClient;
-  FHelpAfter.ReadOnly    := True;
-  FHelpAfter.BorderStyle := bsNone;
-  FHelpAfter.ScrollBars  := ssBoth;
-  FHelpAfter.Color       := clWindow;
-  FHelpAfter.Font.Name   := 'Consolas';
-  FHelpAfter.Font.Size   := 8;
-  FHelpAfter.Font.Color  := clWindowText;
-
-  // Splitter zwischen Grid (links) und Help-Panel (rechts) - User kann
-  // die Help-Panel-Breite per Drag anpassen. Visible wird in Resize an
-  // FHelpPanel.Visible gekoppelt (im docked-Modus beides aus).
-  FHelpSplitter := TSplitter.Create(Self);
-  FHelpSplitter.Parent      := PanelClient;
-  FHelpSplitter.Align       := alRight;
-  FHelpSplitter.Width       := 4;
-  FHelpSplitter.Color       := cl3DDkShadow;
-  FHelpSplitter.ResizeStyle := rsUpdate;
+  // Hilfe-Panel + Splitter + Dock-State-Logik komplett gekapselt in
+  // uIDEHelpPanel. Anchor = Self damit HostIsFloating den Form-Chain
+  // hochlaufen kann. Ownership via Self -> auto-Free.
+  FHintPanel := TFindingHintPanel.Create(Self, PanelClient, Self);
 
   FResultGrid := TStringGrid.Create(Self);
   FResultGrid.Parent           := PanelClient;
@@ -882,20 +738,10 @@ begin
   FOldGridWndProc       := FResultGrid.WindowProc;
   FResultGrid.WindowProc := GridWndProc;
 
-  // Polling-Timer fuer Floating/Docked-Detection. 250 ms ist die obere
-  // sichtbare Verzoegerung beim Re-Float. Ownership = Self -> auto-Free
-  // im Destructor, kein extra Cleanup noetig.
-  FDockStateTimer := TTimer.Create(Self);
-  FDockStateTimer.Interval := 250;
-  FDockStateTimer.OnTimer  := DockStateTimerTick;
-  FDockStateTimer.Enabled  := True;
-
   LoadRecentPaths;
 end;
 
 destructor TAnalyserFrame.Destroy;
-var
-  Theming: IOTAIDEThemingServices;
 begin
   // ALLERERSTES: Lifecycle-Sentinel zuruecksetzen. Falls ein laufender
   // Worker-Callback waehrend dieses Destructors via Application.ProcessMessages
@@ -904,11 +750,8 @@ begin
   if GLiveAnalyserFrame = Pointer(Self) then
     GLiveAnalyserFrame := nil;
 
-  // Dock-State-Polling-Timer sofort stoppen (Free passiert via Owner=Self).
-  // Sonst koennte ein letzter Tick auf bereits genullte FHelpPanel/Splitter
-  // zugreifen wenn Application.ProcessMessages mitten im Destruktor laeuft.
-  if Assigned(FDockStateTimer) then
-    FDockStateTimer.Enabled := False;
+  // Help-Panel-Timer ist jetzt in TFindingHintPanel.Destroy gekapselt
+  // (wird auto-gestoppt wenn Owner=Self den Helper freigibt).
 
   // Watch-Mode deaktivieren BEVOR FAllFindings & Co. weg sind -
   // laufende Background-Worker-Synchronize-Calls duerfen jetzt droppen
@@ -931,20 +774,17 @@ begin
     FHintPauseOverridden := False;
   end;
 
-  // Reihenfolge ist wichtig:
-  //   1. DetachFrame: nimmt dem Notifier den Frame-Zeiger
-  //   2. RemoveNotifier: IDE-Service gibt seinen Refcount frei
-  //   3. Frame-Refcount loslassen: Notifier wird freigegeben
-  if Assigned(FThemeNotifierObj) then
-    TFrameThemeNotifier(FThemeNotifierObj).DetachFrame;
-  if FThemeNotifierIdx <> -1 then
-  begin
-    if Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) then
-      Theming.RemoveNotifier(FThemeNotifierIdx);
-    FThemeNotifierIdx := -1;
-  end;
-  FThemeNotifierIfc := nil;
-  FThemeNotifierObj := nil;
+  // Theme-Helper FRUEH freigeben: meldet den IDE-Notifier ab, sodass
+  // ein noch schwebender Theme-Wechsel-Callback nicht in halb-zerlegte
+  // Frame-Felder laeuft. Owner=Self wuerde das auch erledigen, aber
+  // erst NACH inherited Destroy - zu spaet.
+  FreeAndNil(FThemeIntegration);
+
+  // Analyse-Progress-Controller halt nur Widget-Referenzen (kein
+  // Ownership). Wir nilen das Feld trotzdem fruehzeitig, damit ein
+  // verspaetet-feuernder Worker-Callback ein Assigned-Check sauber
+  // false zurueckliefert.
+  FreeAndNil(FAnalyseProgress);
 
   FreeAndNil(FAllFindings);
   FreeAndNil(FDisplayedFindings);
@@ -954,65 +794,26 @@ begin
 end;
 
 procedure TAnalyserFrame.RefreshFromIDETheme;
-var
-  Theming  : IOTAIDEThemingServices;
-  TopForm  : TCustomForm;
 begin
-  // Wird vom Notifier nach einem Theme-Wechsel aufgerufen. Reihenfolge:
-  //   1. Top-Level-Form finden (im Floating-Modus ist das nicht der Frame
-  //      selbst, sondern die Hosting-TForm der IDE) und ApplyTheme dort
-  //      ansetzen - sonst bleibt die Floating-Title-Bar im alten Theme.
-  //   2. ApplyTheme(Self) zusaetzlich, damit auch die Frame-internen
-  //      Controls ihre Hooks neu registriert bekommen.
-  //   3. ApplyThemeRecursive: Invalidate auf allen Kindcontrols
-  //   4. Grid-spezifisch nochmal: TStringGrid hat einen besonders starren
-  //      Paint-Cache der unbedingt einen Repaint braucht
-  if Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) then
-    if Theming.IDEThemingEnabled then
-    begin
-      // ApplyTheme auf TopForm deckt rekursiv alle Kindcontrols ab -
-      // inklusive unserem Frame. Self-ApplyTheme nur als Fallback wenn
-      // (noch) kein Parent vorhanden ist.
-      TopForm := GetParentForm(Self);
-      if Assigned(TopForm) then
-      begin
-        Theming.ApplyTheme(TopForm);
-        TopForm.Invalidate;
-      end
-      else
-        Theming.ApplyTheme(Self);
-    end;
-  ApplyThemeRecursive(Self);
+  // Reine Delegation - die ganze Refresh-Logik (TopForm-ApplyTheme,
+  // ApplyThemeRecursive, Grid-Repaint via Callback) lebt jetzt im
+  // Helper. Nil-safe weil der Frame waehrend Destroy hier nicht
+  // mehr ankommen sollte, aber defensiv fuer den Fall dass ein
+  // verspaeteter SetParent waehrend Teardown feuert.
+  if Assigned(FThemeIntegration) then
+    FThemeIntegration.RefreshFromIDETheme;
+end;
+
+procedure TAnalyserFrame.RepaintGridAfterTheme;
+begin
+  // Wird vom Helper nach jedem Theme-Refresh als Callback aufgerufen.
+  // TStringGrid hat einen besonders starren Paint-Cache der nicht von
+  // der rekursiven Invalidate abgeholt wird - hier explizit forcieren.
   if Assigned(FResultGrid) then
   begin
     FResultGrid.Invalidate;
     FResultGrid.Repaint;
   end;
-end;
-
-{ TFrameThemeNotifier }
-
-constructor TFrameThemeNotifier.Create(AFrame: TAnalyserFrame);
-begin
-  inherited Create;
-  FFrame := AFrame;
-end;
-
-procedure TFrameThemeNotifier.ChangingTheme;
-begin
-  // Vor dem Wechsel: nichts zu tun. Der IDE-Service feuert das Event
-  // bevor der neue Style aktiv ist, deshalb ist Repaint hier sinnlos.
-end;
-
-procedure TFrameThemeNotifier.ChangedTheme;
-begin
-  if Assigned(FFrame) then
-    FFrame.RefreshFromIDETheme;
-end;
-
-procedure TFrameThemeNotifier.DetachFrame;
-begin
-  FFrame := nil;
 end;
 
 // ---------------------------------------------------------------------------
@@ -1045,22 +846,23 @@ begin
     FTileBug, FTileVuln, FTileDup, FTileScore);
 end;
 
+// Status-Bar-Push-Methoden delegieren an uIDEStatusBar.TAnalyserStatusBar.
+// Die Existenz-Pruefung auf FStatusBar bleibt hier - die drei Methoden
+// werden von Closures im Analyse-Worker auch waehrend Constructor- und
+// Destructor-Pfaden aufgerufen, wenn FStatusBar evtl. noch nil ist.
 procedure TAnalyserFrame.StatusFindings(const T: string);
 begin
-  if Assigned(FStatusBar) and (FStatusBar.Panels.Count > 0) then
-    FStatusBar.Panels[0].Text := T;
+  if Assigned(FStatusBar) then FStatusBar.Findings(T);
 end;
 
 procedure TAnalyserFrame.StatusProgress(const T: string);
 begin
-  if Assigned(FStatusBar) and (FStatusBar.Panels.Count > 1) then
-    FStatusBar.Panels[1].Text := T;
+  if Assigned(FStatusBar) then FStatusBar.Progress(T);
 end;
 
 procedure TAnalyserFrame.StatusMode(const T: string);
 begin
-  if Assigned(FStatusBar) and (FStatusBar.Panels.Count > 2) then
-    FStatusBar.Panels[2].Text := T;
+  if Assigned(FStatusBar) then FStatusBar.Mode(T);
 end;
 
 
@@ -1253,212 +1055,15 @@ end;
 // ---------------------------------------------------------------------------
 // Export-Buttons
 // ---------------------------------------------------------------------------
-procedure TAnalyserFrame.ExportCsvClick(Sender: TObject);
-var
-  Dlg : TSaveDialog;
-  Lst : TObjectList<TLeakFinding>;
+// ---- Getter fuer den Export-Menu-Helper (uIDEExportMenu) ----
+function TAnalyserFrame.GetCurrentBaseDir: string;
 begin
-  if FDisplayedFindings.Count = 0 then
-  begin
-    StatusMode(_('Nothing to export - filter returns 0 entries.'));
-    Exit;
-  end;
-
-  Dlg := TSaveDialog.Create(nil);
-  try
-    Dlg.Title    := _('CSV export');
-    Dlg.Filter   := _('CSV file (*.csv)|*.csv');
-    Dlg.DefaultExt := 'csv';
-    Dlg.FileName := 'analyse-befunde.csv';
-    if not Dlg.Execute then Exit;
-
-    Lst := TObjectList<TLeakFinding>.Create(False);
-    try
-      for var F in FDisplayedFindings do Lst.Add(F);
-      try
-        TExporter.ExportCsv(Lst, Dlg.FileName);
-        StatusMode(Format(_('CSV saved: %s (%d entries)'),
-          [ExtractFileName(Dlg.FileName), Lst.Count]));
-      except
-        on E: Exception do
-          StatusMode(_('CSV export failed: ') + E.Message);
-      end;
-    finally
-      Lst.Free;
-    end;
-  finally
-    Dlg.Free;
-  end;
+  Result := FCurrentBaseDir;
 end;
 
-procedure TAnalyserFrame.ExportJsonClick(Sender: TObject);
-var
-  Dlg : TSaveDialog;
-  Lst : TObjectList<TLeakFinding>;
+function TAnalyserFrame.GetResultGrid: TStringGrid;
 begin
-  if FDisplayedFindings.Count = 0 then
-  begin
-    StatusMode(_('Nothing to export - filter returns 0 entries.'));
-    Exit;
-  end;
-
-  Dlg := TSaveDialog.Create(nil);
-  try
-    Dlg.Title    := _('JSON export');
-    Dlg.Filter   := _('JSON file (*.json)|*.json');
-    Dlg.DefaultExt := 'json';
-    Dlg.FileName := 'analyse-befunde.json';
-    if not Dlg.Execute then Exit;
-
-    Lst := TObjectList<TLeakFinding>.Create(False);
-    try
-      for var F in FDisplayedFindings do Lst.Add(F);
-      try
-        TExporter.ExportJson(Lst, Dlg.FileName);
-        StatusMode(Format(_('JSON saved: %s (%d entries)'),
-          [ExtractFileName(Dlg.FileName), Lst.Count]));
-      except
-        on E: Exception do
-          StatusMode(_('JSON export failed: ') + E.Message);
-      end;
-    finally
-      Lst.Free;
-    end;
-  finally
-    Dlg.Free;
-  end;
-end;
-
-// ---------------------------------------------------------------------------
-// Datei-Fokus fuer Jira-/Clipboard-Export bestimmen
-// ---------------------------------------------------------------------------
-function TAnalyserFrame.CurrentFocusFile: string;
-// Welche Datei ist aktuell "im Fokus"? Bevorzugt der ausgewaehlte Grid-Eintrag,
-// sonst wenn alle sichtbaren Befunde aus derselben Datei stammen, diese - sonst
-// leer (= Aufrufer muss Datei abfragen).
-var
-  row, idx : Integer;
-  refFile  : string;
-  F        : TLeakFinding;
-begin
-  Result := '';
-  // 1) Aktive Auswahlzeile
-  row := FResultGrid.Row;
-  idx := row - 1;
-  if (idx >= 0) and (idx < FDisplayedFindings.Count) then
-    Exit(FDisplayedFindings[idx].FileName);
-  // 2) Alle sichtbaren Befunde gehoeren zur selben Datei
-  refFile := '';
-  for F in FDisplayedFindings do
-  begin
-    if refFile = '' then
-      refFile := F.FileName
-    else if not SameText(F.FileName, refFile) then
-      Exit('');
-  end;
-  Result := refFile;
-end;
-
-// ---------------------------------------------------------------------------
-// Jira-Export der aktuellen Datei in die Zwischenablage
-// ---------------------------------------------------------------------------
-procedure TAnalyserFrame.ExportJiraClick(Sender: TObject);
-var
-  src       : string;
-  jiraText  : string;
-  filterSet : TSeverityFilter;
-begin
-  src := CurrentFocusFile;
-  if src = '' then
-  begin
-    StatusMode(_('Jira export: please select a row first (file not unambiguous).'));
-    Exit;
-  end;
-  // Standard: Fehler + Warnungen. Hinweise sind oft zu viel fuer ein Ticket.
-  filterSet := [lsError, lsWarning];
-  jiraText := TExporter.BuildJiraText(FAllFindings, src, filterSet);
-  Clipboard.AsText := jiraText;
-  StatusMode(Format(
-    _('Jira wiki markup for %s copied to clipboard (errors+warnings).'),
-    [ExtractFileName(src)]));
-end;
-
-// ---------------------------------------------------------------------------
-// Clipboard: Plain-Text der Fehler+Warnungen einer Datei
-// ---------------------------------------------------------------------------
-procedure TAnalyserFrame.CopyClipboardClick(Sender: TObject);
-var
-  src  : string;
-  text : string;
-begin
-  src := CurrentFocusFile;
-  if src = '' then
-  begin
-    StatusMode(_('Clipboard: please select a row first (file not unambiguous).'));
-    Exit;
-  end;
-  text := TExporter.BuildClipboardText(FAllFindings, src,
-    [lsError, lsWarning]);
-  Clipboard.AsText := text;
-  StatusMode(Format(
-    _('Errors+warnings for %s copied to clipboard.'),
-    [ExtractFileName(src)]));
-end;
-
-// ---------------------------------------------------------------------------
-// HTML-Report fuer alle Befunde (oder nur die aktuelle Datei)
-// ---------------------------------------------------------------------------
-procedure TAnalyserFrame.ExportMenuButtonClick(Sender: TObject);
-// Klappt das Popup-Menu direkt unterhalb des Buttons auf, sodass es
-// auch ohne Rechtsklick aktiviert wird.
-var
-  Btn   : TControl;
-  Pt    : TPoint;
-begin
-  if (Sender is TControl) and Assigned(FExportMenu) then
-  begin
-    Btn := TControl(Sender);
-    Pt  := Btn.ClientToScreen(Point(0, Btn.Height));
-    FExportMenu.Popup(Pt.X, Pt.Y);
-  end;
-end;
-
-procedure TAnalyserFrame.ExportHtmlClick(Sender: TObject);
-// HTML-Report enthaelt IMMER alle Befunde - sortiert und gefiltert wird im
-// erzeugten HTML per JS (Header-Klick + Datei-Dropdown).
-var
-  Dlg     : TSaveDialog;
-  defName : string;
-  baseDir : string;
-begin
-  if (FCurrentBaseDir <> '') then
-    baseDir := FCurrentBaseDir
-  else
-    baseDir := '';
-  defName := TExporter.DefaultHtmlFileName('', baseDir);
-
-  Dlg := TSaveDialog.Create(nil);
-  try
-    Dlg.Filter      := _('HTML file (*.html)|*.html');
-    Dlg.DefaultExt  := 'html';
-    Dlg.FileName    := ExtractFileName(defName);
-    if baseDir <> '' then
-      Dlg.InitialDir := baseDir;
-    Dlg.Options     := Dlg.Options + [ofOverwritePrompt];
-    if not Dlg.Execute then Exit;
-
-    try
-      // SourceFile = '' -> alle Befunde im Report
-      TExporter.ExportHtml(FAllFindings, '', Dlg.FileName);
-      StatusMode(Format(_('HTML report saved: %s'),
-        [ExtractFileName(Dlg.FileName)]));
-    except
-      on E: Exception do
-        StatusMode(_('HTML export failed: ') + E.Message);
-    end;
-  finally
-    Dlg.Free;
-  end;
+  Result := FResultGrid;
 end;
 
 procedure TAnalyserFrame.OnWatchStatus(const Status: string);
@@ -1620,49 +1225,17 @@ begin
 end;
 
 procedure TAnalyserFrame.UpdateHelp(Row: Integer);
-// Beschriftungsleiste oben im Help-Panel: Hintergrundfarbe je Severity
-// abgeleitet aus dem aktiven Theme (clBtnFace + Severity-Akzent gemischt).
-// Default = clBtnFace (Theme-konformer neutraler Hintergrund).
+// Thin wrapper - die ganze Display-Logik ist in TFindingHintPanel
+// gekapselt. Wir verwalten hier nur den Row-zu-Finding-Lookup.
 var
-  Idx          : Integer;
-  F            : TLeakFinding;
-  Hint         : TFixHint;
-  ColorDefault : TColor;
+  Idx : Integer;
 begin
-  ColorDefault := StyleServices.GetSystemColor(clBtnFace);
-
+  if not Assigned(FHintPanel) then Exit;
   Idx := Row - 1;
   if (Idx < 0) or (Idx >= FDisplayedFindings.Count) then
-  begin
-    FHelpDescLabel.Caption    := '  ' + _('Select a row to see the fix hint');
-    FHelpDescLabel.Color      := ColorDefault;
-    FHelpBefore.Lines.Text    := '';
-    FHelpAfter.Lines.Text     := '';
-    Exit;
-  end;
-
-  F    := FDisplayedFindings[Idx];
-  Hint := FixHint(F);
-
-  if Hint.Description = '' then
-  begin
-    FHelpDescLabel.Caption := '  ' + _('No fix hint available.');
-    FHelpDescLabel.Color   := ColorDefault;
-    FHelpBefore.Lines.Text := '';
-    FHelpAfter.Lines.Text  := '';
-    Exit;
-  end;
-
-  // Beschriftungsleiste sitzt auf einem clBtnFace-Panel - dorthin tinten.
-  // Damit ist die Severity-Faerbung optisch homogen mit der direkten
-  // Umgebung des Labels in jedem Theme.
-  FHelpDescLabel.Color := SeverityBg(SeverityFromText(F.SeverityText), clBtnFace);
-  if FHelpDescLabel.Color = clNone then
-    FHelpDescLabel.Color := ColorDefault;
-
-  FHelpDescLabel.Caption := '  ' + Hint.Description;
-  FHelpBefore.Lines.Text := Hint.Before;
-  FHelpAfter.Lines.Text  := Hint.After;
+    FHintPanel.ShowPlaceholder
+  else
+    FHintPanel.ShowFinding(FDisplayedFindings[Idx]);
 end;
 
 procedure TAnalyserFrame.GridSelectCell(Sender: TObject; ACol, ARow: Integer;
@@ -1807,30 +1380,20 @@ end;
 
 procedure TAnalyserFrame.AnalyseCurrentFileClick(Sender: TObject);
 var
-  EditorSvc : IOTAEditorServices;
-  EditView  : IOTAEditView;
   FilePath  : string;
   findings  : TObjectList<TLeakFinding>;
 begin
   try
-    EditorSvc := BorlandIDEServices as IOTAEditorServices;
-    if not Assigned(EditorSvc) then
-    begin
-      StatusMode(_('IDE editor service not available.'));
-      Exit;
-    end;
-    EditView := EditorSvc.TopView;
-    if not Assigned(EditView) then
-    begin
-      StatusMode(_('No file opened.'));
-      Exit;
-    end;
-
-    FilePath := EditView.Buffer.FileName;
-    if (FilePath = '') or not FilePath.EndsWith('.pas', True) then
-    begin
-      StatusMode(_('Current file is not a Pascal file.'));
-      Exit;
+    // IDE-Editor-Detection in uIDEEditorIntegration ausgelagert (saubere
+    // Supports-Casts + Buffer-nil-Check, behebt die im TODO gelisteten
+    // AV-Pfade beim Plugin-Reload).
+    case TIDEEditor.TryGetCurrentPasFile(FilePath) of
+      cfrNoEditorService:
+        begin StatusMode(_('IDE editor service not available.')); Exit; end;
+      cfrNoOpenView:
+        begin StatusMode(_('No file opened.'));                   Exit; end;
+      cfrNotPascalFile:
+        begin StatusMode(_('Current file is not a Pascal file.')); Exit; end;
     end;
 
     Screen.Cursor := crHourglass;
@@ -1939,7 +1502,7 @@ begin
                   StatusProgress(Format(_('File %d / %d'), [Current, Total]));
                   Application.ProcessMessages;
                 end;
-                if FAnalyseCancelled then Abort;
+                if Assigned(FAnalyseProgress) and FAnalyseProgress.Cancelled then Abort;
               except
                 on EAbort do raise;
               end;
@@ -1974,45 +1537,24 @@ begin
 end;
 
 procedure TAnalyserFrame.SetAnalyseUiBusy(ABusy: Boolean; ATotal: Integer);
-// Toggelt UI in den "Analyse-laeuft"-Modus.
-// Busy=True: Buttons aus, ProgressBar ein, Cancel sichtbar.
-// Busy=False: alles zurueck, ProgressBar verschwunden.
+// Thin Delegate - die ganze UI-Toggle-Logik (Buttons, Progressbar,
+// Cursor, Running/Cancelled-Flags) ist in TAnalyseProgressController
+// gekapselt. Wrapper bleibt bestehen damit die Call-Sites nicht
+// alle umgeschrieben werden muessen.
 begin
-  FAnalyseRunning := ABusy;
-  FAnalyseCancelled := False;
-
-  if Assigned(FBtnAnalyse)        then FBtnAnalyse.Enabled        := not ABusy;
-  if Assigned(FBtnAnalyseCurrent) then FBtnAnalyseCurrent.Enabled := not ABusy;
-  if Assigned(FBtnAnalyseChanged) then FBtnAnalyseChanged.Enabled := not ABusy;
-
-  // Layout-stabil: weder Cancel-Button noch ProgressBar werden
-  // ein-/ausgeblendet (Visible=True konstant). Stattdessen nur
-  // Enabled/Position-Toggle - die UI bleibt waehrend der Analyse ruhig.
-  if Assigned(FBtnCancel) then
-    FBtnCancel.Enabled := ABusy;
-
-  if Assigned(FProgressBar) then
-  begin
-    FProgressBar.Position := 0;
-    if ATotal > 0 then
-      FProgressBar.Max := ATotal
-    else
-      FProgressBar.Max := 100;
-  end;
-
+  if not Assigned(FAnalyseProgress) then Exit;
   if ABusy then
-    Screen.Cursor := crAppStart
+    FAnalyseProgress.BeginRun(ATotal)
   else
-    Screen.Cursor := crDefault;
+    FAnalyseProgress.EndRun;
 end;
 
 procedure TAnalyserFrame.CancelAnalyseClick(Sender: TObject);
 // Markiert die Analyse als abzubrechen; der Progress-Callback raised EAbort
 // beim naechsten Update und unwindet so aus AnalyzeLeaksRecursive heraus.
 begin
-  if not FAnalyseRunning then Exit;
-  FAnalyseCancelled := True;
-  FBtnCancel.Enabled := False; // Doppelklick verhindern
+  if not Assigned(FAnalyseProgress) or not FAnalyseProgress.Running then Exit;
+  FAnalyseProgress.RequestCancel;
   StatusMode(_('Cancelling analysis...'));
 end;
 
@@ -2155,7 +1697,7 @@ begin
                   end;
                 end;
 
-                if FAnalyseCancelled then
+                if Assigned(FAnalyseProgress) and FAnalyseProgress.Cancelled then
                   Abort; // raised EAbort - silent
               except
                 on EAbort do raise;
@@ -2308,69 +1850,14 @@ end;
 
 procedure TAnalyserFrame.OpenFileAtLine(const AbsPath: string;
   LineNumber: Integer);
-var
-  ModuleSvc : IOTAModuleServices;
-  Module    : IOTAModule;
-  SrcEditor : IOTASourceEditor;
-  EditView  : IOTAEditView;
-  EditPos   : TOTAEditPos;
-  ActionSvc : IOTAActionServices;
-  i         : Integer;
+// Thin-Wrapper - Logik in uIDEEditorIntegration.TIDEEditor (mit
+// Supports-Casts statt as-Cast). Behalten als Frame-Methode weil
+// GridDblClick es aufruft und der Lifecycle-Sentinel-Schutz weiter
+// ueber den Frame laufen soll (Defensive: kein OpenFile wenn der
+// Frame gerade zerstoert wird).
 begin
-  ModuleSvc := BorlandIDEServices as IOTAModuleServices;
-  if not Assigned(ModuleSvc) then Exit;
-
-  // Modul suchen (bereits geoeffnet oder erst oeffnen)
-  Module := ModuleSvc.FindModule(AbsPath);
-  if not Assigned(Module) then
-  begin
-    ActionSvc := BorlandIDEServices as IOTAActionServices;
-    if Assigned(ActionSvc) then
-      ActionSvc.OpenFile(AbsPath);
-    Module := ModuleSvc.FindModule(AbsPath);
-  end;
-
-  if not Assigned(Module) then Exit;
-  if LineNumber <= 0 then Exit;
-
-  // IOTASourceEditor aus dem Modul holen
-  SrcEditor := nil;
-  for i := 0 to Module.ModuleFileCount - 1 do
-    if Supports(Module.ModuleFileEditors[i], IOTASourceEditor, SrcEditor) then
-      Break;
-
-  if not Assigned(SrcEditor) then Exit;
-
-  // Editor-Tab in den Vordergrund bringen (wichtig wenn Datei bereits geoeffnet)
-  SrcEditor.Show;
-
-  // View holen und Cursor setzen
-  EditView := SrcEditor.GetEditView(0);
-  if Assigned(EditView) then
-  begin
-    EditPos.Col  := 1;
-    EditPos.Line := LineNumber;
-    EditView.CursorPos := EditPos;
-    EditView.MoveViewToCursor;
-    EditView.Paint;
-  end;
-end;
-
-procedure TAnalyserFrame.ApplyThemeRecursive(AControl: TControl);
-var
-  i       : Integer;
-  WC      : TWinControl;
-begin
-  // Erzwingt Repaint und triggert TStringGrid-/TMemo-/TPanel-Caches dazu,
-  // ihren neu gemappten clWindow/clBtnFace abzurufen. Wird rekursiv ueber
-  // den gesamten Frame angewendet.
-  AControl.Invalidate;
-  if AControl is TWinControl then
-  begin
-    WC := TWinControl(AControl);
-    for i := 0 to WC.ControlCount - 1 do
-      ApplyThemeRecursive(WC.Controls[i]);
-  end;
+  if GLiveAnalyserFrame <> Pointer(Self) then Exit;
+  TIDEEditor.OpenFileAtLine(AbsPath, LineNumber);
 end;
 
 procedure TAnalyserFrame.CMStyleChanged(var Message: TMessage);
@@ -2378,7 +1865,8 @@ begin
   inherited;
   // VCL-Style-Wechsel und IDE-Theme-Wechsel laufen am Ende durch denselben
   // Refresh-Pfad. Verhindert dass der Code in zwei Routinen synchron
-  // gehalten werden muss.
+  // gehalten werden muss. Message-Handler bleibt klassen-gebunden, der
+  // Body delegiert nur.
   RefreshFromIDETheme;
 end;
 
@@ -2389,86 +1877,15 @@ begin
     RefreshFromIDETheme;
 end;
 
-function TAnalyserFrame.HostIsFloating: Boolean;
-// Sucht im Parent-Chain die hostende TCustomForm und liefert deren
-// Floating-Status. Im IDE-Plugin ist das die INTACustomDockableForm-
-// Wrapper-Form: Floating=True wenn der Tool-Window geloest steht,
-// False wenn er an einer Dock-Site (Tab, Side-Bar) angedockt ist.
-var P: TWinControl;
-begin
-  Result := False;
-  P := Self.Parent;
-  while Assigned(P) do
-  begin
-    if P is TCustomForm then
-      Exit(TCustomForm(P).Floating);
-    P := P.Parent;
-  end;
-end;
-
-procedure TAnalyserFrame.SyncHelpVisibility;
-// Setzt FHelpPanel + FHelpSplitter sichtbar/unsichtbar passend zum
-// Floating-Status. Wird aus Resize UND aus dem Polling-Timer gerufen -
-// idempotent, no-op wenn Status sich nicht geaendert hat.
-var ShowHelp: Boolean;
-begin
-  ShowHelp := HostIsFloating;
-  if Assigned(FHelpPanel)    and (FHelpPanel.Visible    <> ShowHelp) then
-    FHelpPanel.Visible    := ShowHelp;
-  if Assigned(FHelpSplitter) and (FHelpSplitter.Visible <> ShowHelp) then
-    FHelpSplitter.Visible := ShowHelp;
-end;
-
-procedure TAnalyserFrame.DockStateTimerTick(Sender: TObject);
-// Pollt Floating-Status alle 250 ms. Notwendig weil Resize beim
-// Re-Dock zu frueh feuert - die Host-Form-Floating-Property ist zum
-// Resize-Zeitpunkt noch der alte Wert. Der naechste Timer-Tick (max
-// 250 ms spaeter) sieht den korrekten Wert und blendet das Hilfe-
-// Panel ein/aus.
-begin
-  SyncHelpVisibility;
-end;
-
 procedure TAnalyserFrame.Resize;
-var
-  HalfW    : Integer;
-  ThirdW   : Integer;
-  ParentW  : Integer;
-  ShowHelp : Boolean;
 begin
   inherited;
-
-  // Im docked-Modus ist die Tool-Window-Breite typisch 200-400 px. Das
-  // Hilfe-Panel mit den Vorher/Nachher-Code-Bloecken ist dort nicht
-  // sinnvoll lesbar -> ausblenden, das Grid bekommt die volle Breite.
-  // Im Floating-Modus haben wir typisch 800+ px und zeigen das Hilfe-
-  // Panel auf 1/3 wie bisher.
-  SyncHelpVisibility;
-  ShowHelp := HostIsFloating;
-
-  // Hilfe-Panel auf 1/3 der PanelClient-Breite halten (Grid bekommt 2/3).
-  // Nur sinnvoll wenn das Panel ueberhaupt sichtbar ist - sonst wuerde
-  // wir die Width auf einer ausgeblendeten Komponente setzen.
-  if ShowHelp and Assigned(FHelpPanel) and Assigned(FHelpPanel.Parent) then
-  begin
-    ParentW := FHelpPanel.Parent.ClientWidth;
-    ThirdW  := ParentW div 3;
-    if ThirdW > FHelpPanel.Constraints.MinWidth then
-      FHelpPanel.Width := ThirdW;
-  end;
-
+  // Hilfe-Panel-Layout (Dock-Sync + 1/3-Breite + Vorher/Nachher-Haelften)
+  // ist nach uIDEHelpPanel.TFindingHintPanel.ApplyLayout ausgelagert.
+  if Assigned(FHintPanel) then
+    FHintPanel.ApplyLayout;
   if Assigned(FResultGrid) then
     GridResize(FResultGrid);
-
-  // Vorher/Nachher-Haelften gleichmaessig vertikal aufteilen
-  // (Vorher ist alTop, FHelpBeforePanel.Height steuert die Aufteilung).
-  // Auch nur sinnvoll im Floating-Modus.
-  if ShowHelp and Assigned(FHelpBeforePanel) and Assigned(FHelpBeforePanel.Parent) then
-  begin
-    HalfW := (FHelpBeforePanel.Parent.Height - 5) div 2;  // -5 fuer Splitter
-    if HalfW > 40 then
-      FHelpBeforePanel.Height := HalfW;
-  end;
 end;
 
 // ---------------------------------------------------------------------------
@@ -2549,8 +1966,7 @@ end;
 
 procedure TAnalyserDockableForm.FrameCreated(AFrame: TCustomFrame);
 var
-  F        : TAnalyserFrame;
-  Theming  : IOTAIDEThemingServices;
+  F : TAnalyserFrame;
 begin
   FFrame := AFrame as TAnalyserFrame;
   F := FFrame;
@@ -2563,23 +1979,13 @@ begin
   F.FProjectPath.Font.Name := 'Segoe UI';
   F.FProjectPath.Font.Size := 8;
 
-  // IDE-Theme einmalig auf den frisch erstellten Frame anwenden.
-  // ApplyTheme registriert die IDE-spezifischen Style-Hooks und
-  // invalidiert rekursiv - im Floating-Modus essentiell.
-  if Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) then
-  begin
-    if Theming.IDEThemingEnabled then
-      Theming.ApplyTheme(F);
-
-    // Notifier registrieren - haelt sowohl Klassenreferenz (fuer
-    // DetachFrame) als auch Interface (fuer Refcount) am Frame, plus
-    // gibt eine zweite Interface-Referenz an die IDE.
-    var Notifier := TFrameThemeNotifier.Create(F);
-    F.FThemeNotifierObj := Notifier;
-    F.FThemeNotifierIfc := Notifier as INTAIDEThemingServicesNotifier;
-    F.FThemeNotifierIdx := Theming.AddNotifier(
-      F.FThemeNotifierIfc as INTAIDEThemingServicesNotifier);
-  end;
+  // IDE-Theme einmalig anwenden + Notifier registrieren. Logik
+  // ist nach uIDEThemeIntegration.TIDEThemeIntegration.Attach
+  // ausgelagert - der Helper wurde im Frame-Ctor erstellt und
+  // wartet bis hier auf seinen ersten "es gibt einen Hosting-
+  // Kontext"-Trigger.
+  if Assigned(F.FThemeIntegration) then
+    F.FThemeIntegration.Attach;
 end;
 
 function TAnalyserDockableForm.GetMenuActionList: TCustomActionList;

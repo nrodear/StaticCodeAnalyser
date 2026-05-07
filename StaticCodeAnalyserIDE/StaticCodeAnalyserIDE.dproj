@@ -161,6 +161,12 @@
         <DCCReference Include="uIDEMessages.pas"/>
         <DCCReference Include="uIDEWatchMode.pas"/>
         <DCCReference Include="uIDEStatsTiles.pas"/>
+        <DCCReference Include="uIDEHelpPanel.pas"/>
+        <DCCReference Include="uIDEExportMenu.pas"/>
+        <DCCReference Include="uIDEEditorIntegration.pas"/>
+        <DCCReference Include="uIDEStatusBar.pas"/>
+        <DCCReference Include="uIDEThemeIntegration.pas"/>
+        <DCCReference Include="uIDEAnalyseProgress.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uAnalyserPalette.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uAnalyserTypes.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uAnalyserTheme.pas"/>
@@ -186,7 +192,6 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uRegExMatches.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uDetectorUtils.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uCollectValues.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCodeSmells.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLeakDetector2.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCodeSmells2.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSQLInjectionScore.pas"/>

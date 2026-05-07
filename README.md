@@ -2,6 +2,8 @@
 
 [![Buy me a coffee](https://img.shields.io/badge/%E2%98%95_Buy_me_a_coffee-paypal.me%2Fnrodear-0070BA?style=for-the-badge&logo=paypal&logoColor=white)](https://paypal.me/nrodear)
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat)](LICENSE)
+[![PayPal](https://img.shields.io/badge/PayPal-paypal.me%2Fnrodear-0070BA?style=flat&logo=paypal&logoColor=white)](https://paypal.me/nrodear)
 
 > If this plugin saves you time in your Delphi work, a coffee is appreciated. 🙏
 
@@ -497,6 +499,25 @@ moved into its own dedicated file (which is exactly what happened with
 the Branch-Changes content).
 
 🇩🇪 German versions: [README_de.md](README_de.md), [DETECTORS_de.md](DETECTORS_de.md), [BRANCH_CHANGES_de.md](BRANCH_CHANGES_de.md)
+
+---
+
+## License
+
+This project is released under the **MIT License** — see [LICENSE](LICENSE)
+for the full text.
+
+```
+Copyright (c) 2026 Nicolas Gerlach
+```
+
+In short:
+
+- ✅ Free to use, copy, modify, merge, publish, distribute and sublicense
+- ✅ Free for commercial use
+- ✅ No warranty — the software is provided "as is"
+- ℹ️ The copyright notice and the license text must be kept in copies or
+  substantial portions of the software
 
 ---
 

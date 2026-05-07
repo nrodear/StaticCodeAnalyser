@@ -96,32 +96,9 @@ begin
 end;
 
 class function TExporter.KindToName(Kind: TFindingKind): string;
+// Delegiert an KIND_META in uSCAConsts (single source of truth).
 begin
-  case Kind of
-    fkMemoryLeak      : Result := 'MemoryLeak';
-    fkEmptyExcept     : Result := 'EmptyExcept';
-    fkSQLInjection    : Result := 'SQLInjection';
-    fkHardcodedSecret : Result := 'HardcodedSecret';
-    fkFormatMismatch  : Result := 'FormatMismatch';
-    fkFileReadError   : Result := 'FileReadError';
-    fkUnusedUses      : Result := 'UnusedUses';
-    fkNilDeref        : Result := 'NilDeref';
-    fkMissingFinally  : Result := 'MissingFinally';
-    fkDivByZero       : Result := 'DivByZero';
-    fkDeadCode        : Result := 'DeadCode';
-    fkLongMethod      : Result := 'LongMethod';
-    fkLongParamList   : Result := 'LongParamList';
-    fkMagicNumber     : Result := 'MagicNumber';
-    fkDuplicateString : Result := 'DuplicateString';
-    fkHardcodedPath   : Result := 'HardcodedPath';
-    fkDebugOutput     : Result := 'DebugOutput';
-    fkDeepNesting     : Result := 'DeepNesting';
-    fkTodoComment     : Result := 'TodoComment';
-    fkEmptyMethod     : Result := 'EmptyMethod';
-    fkDuplicateBlock  : Result := 'DuplicateBlock';
-  else
-    Result := '?';
-  end;
+  Result := KindName(Kind);
 end;
 
 class function TExporter.CsvEscape(const S: string): string;

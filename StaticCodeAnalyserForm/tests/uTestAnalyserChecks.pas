@@ -16,6 +16,7 @@ uses
   uHardcodedPath, uDebugOutput, uDeepNesting,
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
   uStaticAnalyzer2,
+  uTestSrcBuilder,
   System.IOUtils;
 
 type
@@ -1805,18 +1806,21 @@ procedure TTestMemoryLeak.Leak_AssignFromFieldDottedNoParens_NoFinding;
 // existierendes Feld - kein Ownership-Transfer, also kein Leak.
 // Vorher hat HasFunctionCallAssign jeden dotted Bezeichner ohne '(' als
 // Factory-Call interpretiert -> false-positive Memory-Leak-Warnung.
-const SRC =
-  'unit t; implementation'#13#10+
-  'procedure TFoo.Bar;'#13#10+
-  'var list: TStringList;'#13#10+
-  'begin'#13#10+
-  '  list := Self.FList;'#13#10+
-  '  list.Add(''x'');'#13#10+
-  '  // kein Free - list ist nur eine Referenz auf FList,'#13#10+
-  '  // nicht der Owner.'#13#10+
-  'end;';
-var F: TObjectList<TLeakFinding>;
+//
+// Pattern-Demo: einer der ersten Tests, der den uTestSrcBuilder-Helper
+// nutzt. Statt `const SRC = '...'#13#10+...'` (Apostroph-Hoelle) wird
+// der Quelltext per Builder konstruiert. Delphi-Constraint: `const`
+// erlaubt keinen Funktionscall, daher `var SRC: string := ...`.
+var
+  SRC: string;
+  F  : TObjectList<TLeakFinding>;
 begin
+  SRC := ProcInUnit('TFoo.Bar', 'list: TStringList', [
+    'list := Self.FList;',
+    'list.Add(''x'');',
+    '// kein Free - list ist nur eine Referenz auf FList,',
+    '// nicht der Owner.'
+  ]);
   F := TFindingHelper.FindingsOf(SRC);
   try
     Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),

@@ -48,34 +48,12 @@ implementation
 
 class function TSuppression.KindFromName(const Name: string;
   out Kind: TFindingKind): Boolean;
-var Low: string;
+// Delegiert an KIND_META-Reverse-Lookup in uSCAConsts (single source
+// of truth). Vorher: 21-Eintrag if-elseif-Kette die zweimal in der
+// Vergangenheit unsynchron geworden ist (zuletzt: TodoComment,
+// EmptyMethod, DuplicateBlock fehlten).
 begin
-  Low := Trim(Name).ToLower;
-  Result := True;
-  if      Low = 'memoryleak'      then Kind := fkMemoryLeak
-  else if Low = 'emptyexcept'     then Kind := fkEmptyExcept
-  else if Low = 'sqlinjection'    then Kind := fkSQLInjection
-  else if Low = 'hardcodedsecret' then Kind := fkHardcodedSecret
-  else if Low = 'formatmismatch'  then Kind := fkFormatMismatch
-  else if Low = 'filereaderror'   then Kind := fkFileReadError
-  else if Low = 'unuseduses'      then Kind := fkUnusedUses
-  else if Low = 'nilderef'        then Kind := fkNilDeref
-  else if Low = 'missingfinally'  then Kind := fkMissingFinally
-  else if Low = 'divbyzero'       then Kind := fkDivByZero
-  else if Low = 'deadcode'        then Kind := fkDeadCode
-  else if Low = 'longmethod'      then Kind := fkLongMethod
-  else if Low = 'longparamlist'   then Kind := fkLongParamList
-  else if Low = 'magicnumber'     then Kind := fkMagicNumber
-  else if Low = 'duplicatestring' then Kind := fkDuplicateString
-  else if Low = 'hardcodedpath'   then Kind := fkHardcodedPath
-  else if Low = 'debugoutput'     then Kind := fkDebugOutput
-  else if Low = 'deepnesting'     then Kind := fkDeepNesting
-  // Vorher fehlend - dadurch wurden Suppression-Comments fuer diese
-  // 3 Detektoren stumm ignoriert (KindFromName lieferte False).
-  else if Low = 'todocomment'     then Kind := fkTodoComment
-  else if Low = 'emptymethod'     then Kind := fkEmptyMethod
-  else if Low = 'duplicateblock'  then Kind := fkDuplicateBlock
-  else Result := False;
+  Result := uSCAConsts.KindFromName(Name, Kind);
 end;
 
 class function TSuppression.ParseComment(const Line: string;

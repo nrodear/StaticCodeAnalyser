@@ -137,7 +137,6 @@
         <DCCReference Include="sources\UI\uAnalyserTypes.pas"/>
         <DCCReference Include="sources\Parsing\uAstNode.pas"/>
         <DCCReference Include="sources\Output\uClaudePrompt.pas"/>
-        <DCCReference Include="sources\Detectors\uCodeSmells.pas"/>
         <DCCReference Include="sources\Detectors\uCodeSmells2.pas"/>
         <DCCReference Include="sources\Common\uCollectValues.pas"/>
         <DCCReference Include="sources\Detectors\uDeadCode.pas"/>

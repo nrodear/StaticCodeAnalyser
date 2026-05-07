@@ -108,7 +108,7 @@ var
 begin
 
   meine := TMeineKlasse.Create;
-
+ meine.free;
 end;
 
 end.

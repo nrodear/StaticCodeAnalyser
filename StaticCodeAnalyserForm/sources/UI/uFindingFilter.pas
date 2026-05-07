@@ -125,8 +125,8 @@ var
   Sev         : TFindingSeverity;
   fileNameLow : string;
 begin
-  // 1) Schweregrad-/Kind-Filter
-  Sev := SeverityFromText(F.SeverityText);
+  // 1) Schweregrad-/Kind-Filter - direkter Enum-Pfad, kein String-Roundtrip
+  Sev := SeverityFromKindLevel(F.Kind, F.Severity);
   case C.Mode of
     fmErrors:          Result := Sev = fsError;
     fmWarnings:        Result := Sev = fsWarning;

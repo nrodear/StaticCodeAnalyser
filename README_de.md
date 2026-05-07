@@ -2,6 +2,8 @@
 
 [![Spendier mir einen Kaffee](https://img.shields.io/badge/%E2%98%95_Spendier_mir_einen_Kaffee-paypal.me%2Fnrodear-0070BA?style=for-the-badge&logo=paypal&logoColor=white)](https://paypal.me/nrodear)
 
+[![Lizenz: MIT](https://img.shields.io/badge/Lizenz-MIT-green.svg?style=flat)](LICENSE)
+[![PayPal](https://img.shields.io/badge/PayPal-paypal.me%2Fnrodear-0070BA?style=flat&logo=paypal&logoColor=white)](https://paypal.me/nrodear)
 
 > Wenn dir das Plugin bei deiner Delphi-Arbeit Zeit spart, freue ich mich über einen Kaffee. 🙏
 
@@ -490,6 +492,25 @@ Konvention: `README_de.md` ist breit, die anderen zwei sind tief und auf
 einen Aspekt fokussiert. Wenn du eine bestehende Section in `README_de.md`
 zu groß findest, wird sie typischerweise in eine eigene Spezial-Datei
 ausgelagert (so wie es mit dem Branch-Changes-Teil passiert ist).
+
+---
+
+## Lizenz
+
+Dieses Projekt steht unter der **MIT-Lizenz** — vollständiger Text in
+[LICENSE](LICENSE).
+
+```
+Copyright (c) 2026 Nicolas Gerlach
+```
+
+Kurz zusammengefasst:
+
+- ✅ Frei nutzbar, kopierbar, modifizierbar, mergen, weiterverteilen und sublizenzieren
+- ✅ Auch für kommerzielle Nutzung freigegeben
+- ✅ Keine Gewährleistung — Software wird „as is" bereitgestellt
+- ℹ️ Copyright-Vermerk und Lizenztext müssen in Kopien oder wesentlichen
+  Teilen der Software erhalten bleiben
 
 ---
 

@@ -154,6 +154,7 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
+        <DCCReference Include="uTestSrcBuilder.pas"/>
         <DCCReference Include="uTestTAstNode.pas"/>
         <DCCReference Include="uTestAnalyserChecks.pas"/>
         <DCCReference Include="uTestPerformance.pas"/>
