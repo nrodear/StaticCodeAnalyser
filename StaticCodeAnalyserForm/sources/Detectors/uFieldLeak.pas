@@ -29,6 +29,13 @@ unit uFieldLeak;
 //   - Wird das Feld an einen ObjectList-Owner uebergeben, koennen wir das
 //     nicht erkennen (-> potenziell False-Positive). Per // noinspection
 //     unterdrueckbar.
+//
+// Ownership-Transfer (kein Befund):
+//   FField := X.Create(Self|AOwner|Owner)
+//     -> TComponent-Tree: Owner.DestroyComponents gibt das Feld frei.
+//        Standard-VCL-Pattern (TTimer, TAction, TPanel, TButton, etc.
+//        die im Konstruktor erstellt und dem Owning-Component zugeordnet
+//        werden). Free im Destruktor waere redundant.
 
 interface
 
@@ -45,6 +52,15 @@ type
     class function FindMethod(UnitNode: TAstNode; const Kind: string;
       const ClassName: string): TAstNode; static;
     class function HasFieldCreate(MethodNode: TAstNode;
+      const FieldNameLow: string): Boolean; static;
+    // True wenn das Feld via TComponent-Owner-Pattern erzeugt wird:
+    //   FField := SomeClass.Create(Self)
+    //   FField := SomeClass.Create(AOwner)
+    //   FField := SomeClass.Create(Owner)
+    // In allen Faellen registriert SomeClass.Create() das neue Objekt in der
+    // FComponents-Liste des Owners; inherited Destroy => DestroyComponents
+    // gibt es automatisch frei. Free im Destruktor waere redundant.
+    class function IsCreatedWithComponentOwner(MethodNode: TAstNode;
       const FieldNameLow: string): Boolean; static;
   end;
 
@@ -69,6 +85,42 @@ begin
         Exit(M);
   finally
     Methods.Free;
+  end;
+end;
+
+class function TFieldLeakDetector.IsCreatedWithComponentOwner(
+  MethodNode: TAstNode; const FieldNameLow: string): Boolean;
+// Sucht im Konstruktor 'FField := X.Create(Self|AOwner|Owner[, ...])'.
+// Whitespace-tolerant - der Lexer normalisiert ohnehin Whitespace, aber
+// die Pattern-Pruefung schaut auf das exakte Token nach '.create('.
+const
+  OWNER_PATS : array[0..5] of string = (
+    '.create(self)',   '.create(self,',
+    '.create(aowner)', '.create(aowner,',
+    '.create(owner)',  '.create(owner,'
+  );
+var
+  Assigns : TList<TAstNode>;
+  A       : TAstNode;
+  LHSLow  : string;
+  TypeLow : string;
+  i       : Integer;
+begin
+  Result := False;
+  Assigns := MethodNode.FindAll(nkAssign);
+  try
+    for A in Assigns do
+    begin
+      LHSLow := A.Name.ToLower;
+      if (LHSLow <> FieldNameLow) and
+         (LHSLow <> 'self.' + FieldNameLow) then Continue;
+      TypeLow := A.TypeRef.ToLower;
+      for i := Low(OWNER_PATS) to High(OWNER_PATS) do
+        if Pos(OWNER_PATS[i], TypeLow) > 0 then
+          Exit(True);
+    end;
+  finally
+    Assigns.Free;
   end;
 end;
 
@@ -143,6 +195,13 @@ begin
           // Feld muss im Konstruktor per .Create zugewiesen werden,
           // sonst ist es kein Konstruktor-erzeugtes Feld.
           if not HasFieldCreate(Ctor, FieldNameLow) then Continue;
+
+          // TComponent-Ownership-Pattern: FField := X.Create(Self) etc.
+          // Owner gibt das Feld via DestroyComponents automatisch frei -
+          // explicit Free im Destruktor waere redundant. Beispiele:
+          //   FTimer  := TTimer.Create(Self);    -- VCL TComponent-Tree
+          //   FAction := TAction.Create(AOwner); -- weitergereichter Owner
+          if IsCreatedWithComponentOwner(Ctor, FieldNameLow) then Continue;
 
           // Pruefen ob im Destruktor ein .Free / .Destroy / FreeAndNil
           // fuer das Feld vorkommt. Reuse von SearchFree aus uLeakDetector2.

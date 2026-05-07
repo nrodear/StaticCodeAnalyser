@@ -9,6 +9,13 @@ unit uLeakDetector2;
 //
 // Ownership-Transfer (kein Befund):
 //   Result := var                Funktion gibt Ownership ab
+//   var.Parent := winControl     VCL: Parent gibt Children frei (Controls[])
+//   var := X.Add(...)            Borrowed-Return aus Tree-/Container-API
+//   var := X.AddChild(...)        (AST/XML/DOM/TreeView - Item lebt in
+//   var := X.AddNode(...)         Container.OwnsObjects-Liste)
+//   var := X.AppendChild(...)
+//   FField := var                Var-zu-Feld: Method-Scope abgegeben
+//   FField := var as ISomething   (Interface-Refcount uebernimmt Lifetime)
 //   inherited Create(var, …)    Elternkonstruktor übernimmt
 //   AnyClass.Create(var, …)     anderer Konstruktor übernimmt
 //   Container.Add(...var...)     TObjectList/TObjectDictionary/...
@@ -202,11 +209,13 @@ end;
 class function TLeakDetector2.IsPassedToOwner(MethodNode: TAstNode;
   const VarNameLow: string): Boolean;
 var
+  Assigns : TList<TAstNode>;
   Calls   : TList<TAstNode>;
   Inh     : TList<TAstNode>;
   N       : TAstNode;
   NameLow : string;
   pCreate : Integer;
+  ParentLHS : string;
 
   function VarInArgs(const CallName: string; AfterPos: Integer): Boolean;
   // Prüft ob VarNameLow als Wort nach Position AfterPos in CallName vorkommt
@@ -221,6 +230,71 @@ var
 
 begin
   Result := False;
+
+  // VCL-Parent-Zuweisung: varName.Parent := WinControl
+  // Wer als Child eines TWinControl angemeldet wird, wird beim Destroy
+  // des Parents automatisch freigegeben (Controls[]-Liste). Ownership
+  // ist damit ans Parent abgegeben - kein Free im Caller noetig.
+  // Standard-Pattern in jedem TFrame-/TForm-Konstruktor:
+  //   Btn := TButton.Create(Self);
+  //   Btn.Parent := PanelTop;       // <- DIESE Zeile gibt Ownership ab
+  // Vorher: jede solche Zeile -> False-Positive "MemoryLeak".
+  //
+  // Plus: Borrowed-Return aus Tree-/Container-API:
+  //   var := someContainer.Add(...)         TObjectList<T>(True)-basiert
+  //   var := someParent.AddChild(...)       AST-/DOM-Trees
+  //   var := someTree.AddNode(...)          TTreeView etc.
+  //   var := someParent.AppendChild(...)    XML-DOM
+  // In allen Faellen registriert die Add/AddChild/AddNode/AppendChild-Methode
+  // das neue Item intern in einer OwnsObjects-Liste des Containers - das
+  // Result ist eine geliehene Referenz, kein Ownership-Transfer. Ein Free
+  // durch den Caller wuerde Double-Free im Container-Destroy verursachen.
+  // Beispiel: ENode := Parent.Add(nkX, ...) im AST-Builder.
+  ParentLHS := VarNameLow + '.parent';
+  Assigns := MethodNode.FindAll(nkAssign);
+  try
+    for N in Assigns do
+    begin
+      // Parent-Assign: LHS-Match
+      if N.Name.ToLower = ParentLHS then
+        Exit(True);
+      // Borrowed-Return: LHS == VarName, RHS enthaelt eine der Tree-API-
+      // Patterns. Pattern endet auf '(' damit '.add(' nicht in '.address('
+      // o.ae. matched (rechte Wortgrenze ist garantiert).
+      if N.Name.ToLower = VarNameLow then
+      begin
+        var TypeLow := N.TypeRef.ToLower;
+        if (Pos('.add(',         TypeLow) > 0) or
+           (Pos('.addchild(',    TypeLow) > 0) or
+           (Pos('.addnode(',     TypeLow) > 0) or
+           (Pos('.appendchild(', TypeLow) > 0) then
+          Exit(True);
+      end;
+      // Var-zu-Field-Transfer:
+      //   FField := varName              -> Klassen-Feld haelt jetzt Ownership
+      //   FField := varName as ISome     -> Interface-Refcount haelt Lifetime
+      //   Self.FField := varName         -> mit explizitem Self-Praefix
+      // In allen Faellen verlaesst die Ownership den Method-Scope. Ob das
+      // Feld spaeter freigegeben wird, ist Aufgabe des FieldLeakDetectors.
+      // Heuristik fuer "ist LHS ein Feld": Delphi-Konvention F<Grossbuchstabe>
+      // oder explizites 'self.'-Praefix. Lokale Variablen heissen klein/
+      // camelCase, daher kein Match.
+      var RHSLow := Trim(N.TypeRef.ToLower);
+      var IsTransferShape := (RHSLow = VarNameLow) or
+                             (Pos(VarNameLow + ' as ', RHSLow) = 1);
+      if IsTransferShape then
+      begin
+        var LHSOrig := N.Name;
+        if SameText(Copy(LHSOrig, 1, 5), 'self.') then
+          Exit(True);
+        if (Length(LHSOrig) >= 2) and (LHSOrig[1] = 'F') and
+           (LHSOrig[2] >= 'A') and (LHSOrig[2] <= 'Z') then
+          Exit(True);
+      end;
+    end;
+  finally
+    Assigns.Free;
+  end;
 
   // inherited Create(varName, …) — Elternkonstruktor übernimmt Ownership
   Inh := MethodNode.FindAll(nkInherited);
