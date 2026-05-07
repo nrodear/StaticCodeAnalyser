@@ -342,7 +342,11 @@ begin
     end
     else if CurChar = '#' then
     begin
-      // Zeichencode #nn
+      // Zeichencode #nn: BMP-Bereich (0..65535). Hoehere Codepoints
+      // (Astral-Plane) brauchen Surrogate-Paare und werden im Lexer
+      // durch U+FFFD (REPLACEMENT CHARACTER) ersetzt - der Source-Text
+      // ist dann technisch falsch, aber der Lexer crasht nicht und der
+      // Parser sieht weiter ein gueltiges StrLit-Token.
       Advance;
       var Num := '';
       while (FPos <= FLen) and CharInSet(CurChar, ['0'..'9']) do
@@ -350,7 +354,11 @@ begin
         Num := Num + CurChar;
         Advance;
       end;
-      S := S + Chr(StrToIntDef(Num, 0));
+      var CodePoint := StrToIntDef(Num, 0);
+      if (CodePoint < 0) or (CodePoint > $FFFF) then
+        S := S + #$FFFD
+      else
+        S := S + Chr(CodePoint);
     end
     else
       Break; // kein weiteres String-Segment
@@ -521,8 +529,12 @@ begin
              Exit(MakeTok(tkGt, '>', L, C));
            end;
     else
+      // Token-Wert MUSS vor Advance gelesen werden - sonst zeigt CurChar
+      // schon auf das NAECHSTE Zeichen und wir taggen das falsche Zeichen
+      // als Unknown. Lokale Variable als Snapshot.
+      var UnknownCh := CurChar;
       Advance;
-      Result := MakeTok(tkUnknown, CurChar, L, C);
+      Result := MakeTok(tkUnknown, UnknownCh, L, C);
       Exit;
     end;
   end;

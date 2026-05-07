@@ -40,9 +40,10 @@ begin
      (S[2] = ':') and CharInSet(S[3], ['\', '/']) then
     Exit(True);
 
-  // UNC-Pfad: '\\server\share'
+  // UNC-Pfad: '\\server\share' - Servername darf zusaetzlich '_' und '-'
+  // enthalten (RFC 952/1123, gaengige interne Hostnamen).
   if (Length(S) >= 4) and (S[1] = '\') and (S[2] = '\') and
-     CharInSet(S[3], ['A'..'Z', 'a'..'z', '0'..'9']) then
+     CharInSet(S[3], ['A'..'Z', 'a'..'z', '0'..'9', '_', '-']) then
     Exit(True);
 
   // Unix-Pfade: '/usr/...', '/etc/...', etc.

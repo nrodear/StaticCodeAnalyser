@@ -6,8 +6,9 @@ unit uIDEMessages;
 //   * Pro Befund eine Zeile in der Messages-Toolbar (Tool-Message).
 //   * Doppelklick im Messages-Pane springt zur Datei + Zeile (das macht
 //     die IDE selbst, sobald wir Datei + Zeilennummer mitgeben).
-//   * Severity wird als Prefix-String mitgegeben ("Fehler", "Warnung",
-//     "Hinweis") - zeigt sich in der Anzeige vor der Datei.
+//   * Severity wird als Prefix-String mitgegeben ("Error", "Warning",
+//     "Hint") - zeigt sich in der Anzeige vor der Datei. Strings via
+//     _() lokalisiert (dxgettext / SetLanguage).
 //   * Pro Lauf wird ein Title-Message-Trenner mit Zeitstempel gesetzt
 //     ("=== Static Code Analysis (hh:mm:ss) ==="). Vorherige Befunde
 //     bleiben oberhalb des neuen Trenners stehen - so kann man auch
@@ -39,16 +40,20 @@ type
 implementation
 
 uses
-  System.SysUtils, ToolsAPI;
+  System.SysUtils, ToolsAPI,
+  uLocalization;  // _() Macro - sonst englische Default-Strings
 
 function SeverityPrefix(S: TLeakSeverity): string;
 begin
+  // Strings durch _() leiten, damit sie ueber dxgettext / die zentrale
+  // SetLanguage-Settings lokalisierbar sind. Ohne dxgettext bleibt es bei
+  // der englischen Source-Form.
   case S of
-    lsError   : Result := 'Fehler';
-    lsWarning : Result := 'Warnung';
-    lsHint    : Result := 'Hinweis';
+    lsError   : Result := _('Error');
+    lsWarning : Result := _('Warning');
+    lsHint    : Result := _('Hint');
   else
-    Result := 'Info';
+    Result := _('Info');
   end;
 end;
 

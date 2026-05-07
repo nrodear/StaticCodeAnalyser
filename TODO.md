@@ -52,12 +52,14 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
   `System.AnsiStrings` und unbenutztes `SB`-Local mit entfernt.
   Datei: `Infrastructure/uVcsChanges.pas:215-273`
 
-- [ ] **`uDivByZero` `varname = 0` als Guard fehl-interpretiert**
-  Akzeptiert _jede_ if-Condition mit `varname = 0` als Schutz, aber nur
-  `if x = 0 then Exit/raise` ist ein echter Guard;
-  `if x = 0 then DoOther` ist das Gegenteil → False-Negatives.
-  Datei: `Detectors/uDivByZero.pas:130-131`
-  Lösung: `then exit/raise` nach der Equality verlangen.
+- [x] **`uDivByZero` `varname = 0` als Guard fehl-interpretiert** — _erledigt_
+  Equality-Branch in `HasGuardingIf` separiert: `varname = 0` schuetzt
+  jetzt nur dann, wenn der THEN-Zweig direkt mit `Exit` oder `raise`
+  endet (auch via `begin..end`). `if x=0 then DoOther` triggert die
+  Warnung jetzt wieder. Neuer Helper `ThenBranchExitsOrRaises` walkt
+  IfNode.Children, ueberspringt nkElseBranch, akzeptiert nkExit/nkRaise
+  direkt oder als erstes Statement im nkBlock.
+  Datei: `Detectors/uDivByZero.pas:118-156`
 
 - [ ] **`uDeadCode.CheckBlock` rekursiv ohne Bound**
   Rekursiert in `nkBlock`/`nkIfStmt`/...-Children — gleiches Stack-
@@ -76,12 +78,13 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
   `Leak_AssignFromFieldDottedNoParens_NoFinding`.
   Datei: `Detectors/uLeakDetector2.pas:160-170`
 
-- [ ] **WatchMode `FResults` Double-Free wenn `Synchronize` raised**
-  Wenn `Synchronize(DeliverResults)` mid-Callback eine Exception wirft
-  (Thread-Terminate während Free), greifen Worker-`finally` und Callback-
-  `finally` (Frame Z. 1738) beide auf `FResults` zu → Double-Free.
-  Datei: `StaticCodeAnalyserIDE/uIDEWatchMode.pas:266`
-  Lösung: `FResults := nil` in `DeliverResults` _vor_ dem Übergeben.
+- [x] **WatchMode `FResults` Double-Free wenn `Synchronize` raised** — _erledigt_
+  `DeliverResults` snapshotet `FResults` in eine lokale Variable und
+  setzt das Field SOFORT auf nil, bevor der Callback aufgerufen wird.
+  Bei einer Exception mid-Callback sieht der Worker-`finally`
+  FResults=nil und gibt nicht doppelt frei. Lokale Snapshot-Ref
+  bleibt im Callback-Ownership.
+  Datei: `StaticCodeAnalyserIDE/uIDEWatchMode.pas:274-294`
 
 - [x] **IDE `OpenFileAtLine` / `AnalyseCurrentFileClick` AV-Pfade** — _erledigt_
   Komplette IDE-Editor-API-Aufrufe nach `uIDEEditorIntegration.TIDEEditor`
@@ -101,12 +104,13 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
   `EnsureViewNotifier` den Re-Attach permanent.
   Datei: `StaticCodeAnalyserIDE/uIDELineHighlighter.pas:168-185`
 
-- [ ] **`RegisterDockableForm` `as`-Cast kann BPL-Load crashen**
-  `BorlandIDEServices as INTAServices` — schlägt der Cast fehl, bricht
-  der BPL-Load mid-state ab (`GDockableForm` erzeugt, nicht registriert;
-  `GViewMenuItem` nil). Der nachfolgende `Unregister` riskiert Double-Free.
-  Datei: `StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2979`
-  Lösung: `Supports(...)` statt `as`.
+- [x] **`RegisterDockableForm` `as`-Cast kann BPL-Load crashen** — _erledigt_
+  Alle drei `BorlandIDEServices as INTAServices`-Casts in `Register-`,
+  `Show-` und `UnregisterAnalyserDockableForm` durch `Supports(...)`
+  ersetzt. RegisterAnalyserDockableForm bricht jetzt sauber ab BEVOR
+  GDockableForm erzeugt wird, falls der Service nicht verfuegbar ist -
+  damit kein halbinitialisierter State mehr.
+  Datei: `StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1746-1815`
 
 ### Aus mORMot2-Real-World-Review (4-Agenten-Crosscheck)
 
@@ -196,14 +200,19 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
   `From`, `AfterAttach`, ...) zulassen, oder Right-Boundary auf
   CamelCase prüfen statt non-Ident.
 
-- [ ] **Memory-Detektor: `IsPassedToOwner` "any .Add" zu breit**
-  Heuristik silenced jeden Leak wenn der lokale `var` als Argument an
-  irgendeine `.Add()`-Methode geht. Bei `TSynList.Add` /
-  `TRawUtf8List.Add` ist das fachlich falsch — diese Listen
-  uebernehmen kein Ownership. False-Negative auf legitime Leaks.
-  Datei: `Detectors/uLeakDetector2.pas:256-258`
-  Lösung: nur `TObjectList.Add` o.ae. ownership-aware Add-Methoden
-  whitelisten.
+- [x] **Memory-Detektor: `IsPassedToOwner` "any .Add" zu breit** — _erledigt_
+  Neuer Helper `AddReceiverOwnsItems` schaut den Receiver-Typ in den
+  Local-Var-/Param-Deklarationen nach. Wenn der Typ aufloesbar ist UND
+  einer ownership-bewussten Whitelist (`TObjectList`,
+  `TObjectDictionary`, `TObjectQueue/Stack`, `TComponentList`,
+  `TOwnedCollection`, `TInterfaceList`) entspricht -> ownership.
+  Bei nicht-aufloesbarem Typ (Field `FList`, dotted `obj.Items`)
+  bleibt das alte permissive Verhalten als Fallback - vermeidet
+  Regression in haeufigen FList.Add-Mustern. `TSynList.Add` /
+  `TRawUtf8List.Add` werden jetzt korrekt als nicht-ownership
+  erkannt wenn der Typ in der Methode bekannt ist.
+  Datei: `Detectors/uLeakDetector2.pas:299-365` (Helper),
+  `:367-391` (.add-Branch in IsPassedToOwner)
 
 - [ ] **SQL-Detektor: `Format`/`FormatUtf8`-basierter SQL ungeprueft**
   `ExecuteFmt('SELECT * FROM % WHERE Id=%', [tbl, id])` ist klassisch
@@ -215,17 +224,17 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
   `FormatUtf8`/`FormatSQL`/`ExecuteFmt`-Calls mit SQL-Keyword im
   Format-String.
 
-- [ ] **SQL-Detektor: `IntToStr`/`Int64ToStr` als injection-safe nicht whitelisted**
-  `Sql.Add(' WHERE ID=' + Int64ToStr(aID))` ist faktisch sicher
-  (numerischer Cast), wird aber als SQL-Injection gemeldet. Bei mORMot2
-  produziert das hunderte False-Positives.
-  Datei: `Detectors/uSQLInjection.pas:122-148`
-  Lösung: RHS-Whitelist fuer `IntToStr|Int64ToStr|FormatInt|GetEnumName`.
-
-- [ ] **SQL-Detektor: `QuotedStr(...)` als sicher nicht whitelisted**
-  `' WHERE Name=' + QuotedStr(Value)` ist escape'd → safe. Wird gemeldet.
-  Datei: `Detectors/uSQLInjection.pas:122-148`
-  Lösung: Whitelist `QuotedStr|QuotedSQL|QuotedStrJSON|SQLVarToText`.
+- [x] **SQL-Detektor: safe-cast-Whitelist fuer `IntToStr` / `QuotedStr` / ...** — _erledigt_
+  Neuer Helper `AllConcatTermsSafe` strippt String-Literale aus dem
+  RHS und pruefte an jedem `+`-Operator den nachfolgenden Token. Wenn
+  alle non-Literal-Terme Aufrufe einer safe-cast-Funktion sind
+  (numerisch: `IntToStr`, `Int64ToStr`, `FormatInt`, `GetEnumName`;
+  escape'd: `QuotedStr`, `QuotedSQL`, `QuotedStrJSON`, `SQLVarToText`),
+  wird die Risiko-Heuristik vor H1/H2 unterdrueckt. Greift sowohl in
+  `IsAssignRisk` als auch in `IsCallRisk`. Reduziert mORMot2-typische
+  False-Positives auf `Sql.Add(' WHERE ID=' + Int64ToStr(id))`-Mustern.
+  Datei: `Detectors/uSQLInjection.pas:131-220` (Helper),
+  `:240-242, :271-273` (Wiring)
 
 - [ ] **HardcodedSecret: Public-Crypto-Konstanten False-Positives**
   `crypt/mormot.crypt.core.pas` und Co. deklarieren `const X_TOKEN`,
@@ -251,11 +260,11 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
   (`/etc/`, `/var/`, `/tmp/`, `/usr/`, `/proc/`, `/sys/`).
   Datei: `Detectors/uHardcodedPath.pas:50-52`
 
-- [ ] **HardcodedPath: UNC mit `_`/`-` im Servernamen verworfen**
-  `LooksLikePath` prueft `S[3]` per `CharInSet(['A'..'Z','a'..'z','0'..'9'])`
-  → `\\my-srv\share`, `\\_internal\share` werden uebersehen.
+- [x] **HardcodedPath: UNC mit `_`/`-` im Servernamen verworfen** — _erledigt_
+  CharSet im UNC-Servername-Branch um `'_'` und `'-'` erweitert
+  (RFC 952/1123, gaengige interne Hostnamen). `\\my-srv\share` und
+  `\\_internal\share` werden jetzt erkannt.
   Datei: `Detectors/uHardcodedPath.pas:43-46`
-  Lösung: `'_'`, `'-'` zum Set hinzufuegen.
 
 - [ ] **DivByZero: `mod`-Pattern via TypeRef nicht zuverlässig**
   Detektor sucht `' mod '` in `nkAssign.TypeRef`, aber die String-Form
@@ -417,24 +426,26 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
   Datei: `Infrastructure/uStaticAnalyzer2.pas:383-407`
   Lösung: Snapshot vor `ParseLeaks`, Restore in finally.
 
-- [ ] **`uSuppression.BuildMap` TargetLine bei EOF**
-  Wenn `// noinspection ...` auf der letzten Code-Zeile steht und keine
-  weitere Non-Comment-Zeile folgt, suppressed der Default-Eintrag eine
-  Zeile, die nicht existiert.
-  Datei: `Infrastructure/uSuppression.pas:159`
-  Lösung: nur emit'en wenn die Inner-Loop eine echte Target-Line gefunden
-  hat.
+- [x] **`uSuppression.BuildMap` TargetLine bei EOF** — _erledigt_
+  Default `TargetLine := i+2` auf `-1` geaendert; Map-Eintrag wird nur
+  noch emittiert wenn die Inner-Loop eine echte Code-Zeile findet
+  (`if TargetLine > 0 then ...`). Suppression-Marker am Datei-Ende
+  ohne folgende Code-Zeile produzieren keine geistige Map-Eintraege
+  mehr.
+  Datei: `Infrastructure/uSuppression.pas:134-152`
 
-- [ ] **`uLexer.ScanNext` falsches Zeichen im Unknown-Branch**
-  `Advance; Result := MakeTok(tkUnknown, CurChar, ...)` — `Advance` hat
-  schon weitergeschoben, `CurChar` ist das _nächste_ Zeichen.
-  Datei: `Parsing/uLexer.pas:523-526`
-  Lösung: `CurChar` vor `Advance` lesen.
+- [x] **`uLexer.ScanNext` falsches Zeichen im Unknown-Branch** — _erledigt_
+  `var UnknownCh := CurChar` Snapshot VOR Advance; danach
+  `MakeTok(tkUnknown, UnknownCh, ...)`. Token enthaelt jetzt das
+  korrekte (unbekannte) Zeichen statt das nachfolgende.
+  Datei: `Parsing/uLexer.pas:523-530`
 
-- [ ] **`uLexer.ReadString` `#nn`-Range-Overflow**
-  `StrToIntDef(Num, 0); Chr(...)` overflowed für `#65536+`.
-  Datei: `Parsing/uLexer.pas:347-353`
-  Lösung: Range vor `Chr` validieren oder U+FFFD emittieren.
+- [x] **`uLexer.ReadString` `#nn`-Range-Overflow** — _erledigt_
+  Range-Validierung [0..$FFFF] vor `Chr`-Aufruf. Ausserhalb-Bereich
+  (Astral-Plane, ueberlanges Numeral) -> U+FFFD (REPLACEMENT
+  CHARACTER) statt RangeError-Crash. Lexer bleibt stabil bei
+  pathologischen Inputs wie `#1000000`.
+  Datei: `Parsing/uLexer.pas:343-362`
 
 - [ ] **Detektoren mit rekursiver AST-Traversal (Stack-Overflow-Risiko)**
   `uLongMethod.FindLastLine` (Z. 44-56) und `uUnusedUses.CollectText`
@@ -599,14 +610,15 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
   Beim i18n-Sweep übersehen:
   - `uIDEAnalyserForm.pas:1400` — `'Keine Eintraege fuer diesen Filter.'`
   - `uIDEAnalyserForm.pas:1735` — `'[watch] updated %s (%d findings)'`
-  - `uIDEAnalyserForm.pas:2067` — `'Analysiere: '`
+  - ~~`uIDEAnalyserForm.pas:2067` — `'Analysiere: '`~~ → erledigt: jetzt
+    in `uIDEAnalyseRunner.RunCurrent` als `_('Analyzing: ')`.
   - `uIDEAnalyserForm.pas:2268` — `'Ignore-Liste neu geladen ...'`
 
-- [ ] **`uIDEMessages.SeverityPrefix` hardcoded deutsch**
-  Z. 46-52: `'Fehler' / 'Warnung' / 'Hinweis'` — gleiche i18n-Boundary-
-  Falle wie in `uAnalyserTypes` _war_ (das ist jetzt direkt-Enum-
-  basiert, siehe nachfolgenden erledigten Eintrag). Hier noch offen.
-  Datei: `StaticCodeAnalyserIDE/uIDEMessages.pas:46-52`
+- [x] **`uIDEMessages.SeverityPrefix` hardcoded deutsch** — _erledigt_
+  Strings durch `_()` geleitet (Source-Form jetzt englisch:
+  `Error / Warning / Hint / Info`). Lokalisierbar via dxgettext +
+  zentralem `SetLanguage`. Header-Doku entsprechend angepasst.
+  Datei: `StaticCodeAnalyserIDE/uIDEMessages.pas:44-58`
 
 - [x] **`uAnalyserTypes` String-Discriminator-Boundary entkoppelt** — _erledigt_
   Neuer Pfad `SeverityFromKindLevel(Kind, Severity): TFindingSeverity`

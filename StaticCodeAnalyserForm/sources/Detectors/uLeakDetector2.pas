@@ -60,6 +60,14 @@ type
     class function SearchFree(Node: TAstNode; const VarNameLow: string;
       InFinally: Boolean; out FoundInFinally: Boolean): Boolean; static;
     class function HasTryFinallyBlock(MethodNode: TAstNode): Boolean; static;
+    // True wenn der Receiver eines '.Add(item)'-Aufrufs ein ownership-
+    // bewusster Container ist (TObjectList, TObjectDictionary, ...) -
+    // ODER wenn der Typ unbekannt ist (Default permissiv, vermeidet
+    // Regression bei FList.Add-Mustern). False nur wenn der Typ
+    // aufloesbar ist UND nicht zur Whitelist passt (TList, TStringList,
+    // TSynList etc. haben kein OwnsObjects).
+    class function AddReceiverOwnsItems(MethodNode: TAstNode;
+      const ReceiverNameLow: string): Boolean; static;
   end;
 
 implementation
@@ -206,6 +214,77 @@ begin
   end;
 end;
 
+class function TLeakDetector2.AddReceiverOwnsItems(MethodNode: TAstNode;
+  const ReceiverNameLow: string): Boolean;
+// Pflicht-Whitelist: Receiver-Typ matched einen ownership-bewussten
+// Container. Liste praktisch begrenzt - die Default-RTL-Container
+// die wirklich Free auf Items rufen.
+const
+  OWNING_PREFIXES : array[0..6] of string = (
+    'tobjectlist',         // TObjectList<T>(True), TObjectList(True)
+    'tobjectdictionary',   // TObjectDictionary
+    'tobjectqueue',
+    'tobjectstack',
+    'tcomponentlist',      // VCL
+    'townedcollection',    // VCL
+    'tinterfacelist'       // refcount-managed - effektiv ownership-aequiv
+  );
+
+  function TypeMatches(const TypeLow: string): Boolean;
+  var prefix : string;
+  begin
+    Result := False;
+    for prefix in OWNING_PREFIXES do
+      if Pos(prefix, TypeLow) = 1 then Exit(True);
+  end;
+
+  function FindReceiverType(Kind: TNodeKind; out TypeLow: string): Boolean;
+  var
+    Lst : TList<TAstNode>;
+    N   : TAstNode;
+    NameLow, NameRaw : string;
+  begin
+    Result := False;
+    TypeLow := '';
+    Lst := MethodNode.FindAll(Kind);
+    try
+      for N in Lst do
+      begin
+        NameRaw := N.Name;
+        // Param-Knoten koennen 'var x'/'const x'/'out x' als Name haben.
+        // Wir wollen den nackten Identifier vergleichen.
+        for var Mod_ in ['var ', 'const ', 'out '] do
+          if NameRaw.ToLower.StartsWith(Mod_) then
+            NameRaw := Copy(NameRaw, Length(Mod_) + 1, MaxInt);
+        NameLow := NameRaw.ToLower;
+        if NameLow = ReceiverNameLow then
+        begin
+          TypeLow := N.TypeRef.ToLower;
+          Exit(True);
+        end;
+      end;
+    finally
+      Lst.Free;
+    end;
+  end;
+
+var
+  TypeLow : string;
+begin
+  // Default permissiv: Typ unbekannt -> alte Behavior beibehalten
+  // (Add gilt als ownership-Transfer). Verhindert Regression bei
+  // FList.Add-Mustern wo der Field-Typ nicht in MethodNode steht.
+  Result := True;
+
+  // Typ aus Local-Var oder Parameter aufloesen.
+  if FindReceiverType(nkLocalVar, TypeLow) or
+     FindReceiverType(nkParam, TypeLow) then
+  begin
+    if TypeLow = '' then Exit;       // sollte nicht passieren, defensiv
+    Result := TypeMatches(TypeLow);  // strikte Pruefung gegen Whitelist
+  end;
+end;
+
 class function TLeakDetector2.IsPassedToOwner(MethodNode: TAstNode;
   const VarNameLow: string): Boolean;
 var
@@ -322,14 +401,32 @@ begin
         Exit(True);
 
       // Container.Add(varName) bzw. Container.Add(key, varName)
-      // - TObjectList.Add(item)
-      // - TObjectDictionary.Add(key, value)
-      // - TObjectQueue/Stack.Push/Add
-      // Heuristik: jede Methode namens 'Add' nimmt typischerweise Ownership.
-      // Wer Reference-Liste will nutzt explizit OwnsObjects=False.
+      // Vorher: jede '.add('-Methode wurde als ownership-uebernehmend
+      // gewertet. Das produzierte False-Negatives auf legitime Leaks
+      // bei TList.Add / TStringList.Add / TSynList.Add (mORMot) -
+      // diese Listen uebernehmen KEIN Ownership.
+      //
+      // Jetzt: nur dann ownership annehmen, wenn entweder
+      //   (a) der Receiver-Typ aus Local-Var/Parameter-Deklaration
+      //       bekannt ist und auf ein ownership-bewusstes Container-
+      //       Pattern matched (TObjectList, TObjectDictionary, ...),
+      //   (b) der Typ NICHT aufloesbar ist (Field, dotted access,
+      //       inferred var) - hier bleibt das alte permissive
+      //       Verhalten als Default, damit keine Regression in den
+      //       haeufigen Frame-FList.Add(item)-Mustern entsteht.
       var pAdd := Pos('.add(', NameLow);
       if (pAdd > 0) and VarInArgs(NameLow, pAdd + 5) then
-        Exit(True);
+      begin
+        var receiverLow := Copy(NameLow, 1, pAdd - 1);
+        // 'self.flist' -> 'flist': Self-Praefix abstreifen, sonst matched
+        // der Receiver-Name nie ein Local-Var/Param. Nur das Praefix
+        // entfernen, dotted Sub-Expressions ('foo.bar.add') bleiben
+        // intentional unaufloesbar (Default permissiv).
+        if receiverLow.StartsWith('self.') then
+          receiverLow := Copy(receiverLow, 6, MaxInt);
+        if AddReceiverOwnsItems(MethodNode, receiverLow) then
+          Exit(True);
+      end;
 
       // TStringList.AddObject(text, obj) - klassisches Object-Owner-Pattern
       pAdd := Pos('.addobject(', NameLow);

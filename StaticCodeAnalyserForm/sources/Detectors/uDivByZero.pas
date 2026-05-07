@@ -45,6 +45,10 @@ type
     class function IsIntegerType(const TypeLow: string): Boolean; static;
     class function HasGuardingIf(MethodNode: TAstNode;
       const VarLow: string; BeforeLine: Integer): Boolean; static;
+    // True wenn der THEN-Zweig des if direkt mit Exit oder Raise endet
+    // (ggf. via begin..end-Block). Wird gebraucht um 'if x = 0 then Exit'
+    // (echter Guard) von 'if x = 0 then DoOther' (kein Guard) zu trennen.
+    class function ThenBranchExitsOrRaises(IfN: TAstNode): Boolean; static;
     class procedure CollectIntegerVars(MethodNode: TAstNode;
       Names: TStringList); static;
   end;
@@ -117,8 +121,9 @@ begin
       if IfN.Line >= BeforeLine then Continue;
       Low := IfN.TypeRef.ToLower;
       if Low = '' then Continue;
-      // Schutz erkannt? Wortgrenzen-Pruefung verhindert dass z.B. 'myvar > 0'
-      // faelschlich auch 'myvariant' schuetzt.
+      // Strikte Guards: die Bedingung selbst schuetzt direkt vor 0.
+      // Wortgrenzen-Pruefung verhindert dass z.B. 'myvar > 0' faelschlich
+      // auch 'myvariant' schuetzt.
       if TDetectorUtils.ContainsWholeWordLower(VarLow + ' > 0',  Low)  or
          TDetectorUtils.ContainsWholeWordLower(VarLow + '>0',    Low)  or
          TDetectorUtils.ContainsWholeWordLower(VarLow + ' >= 1', Low)  or
@@ -126,13 +131,64 @@ begin
          TDetectorUtils.ContainsWholeWordLower(VarLow + '<>0',   Low)  or
          TDetectorUtils.ContainsWholeWordLower('0 < '  + VarLow, Low)  or
          TDetectorUtils.ContainsWholeWordLower('0<'    + VarLow, Low)  or
-         TDetectorUtils.ContainsWholeWordLower('0 <> ' + VarLow, Low)  or
-         TDetectorUtils.ContainsWholeWordLower(VarLow + ' = 0',  Low)  or
-         TDetectorUtils.ContainsWholeWordLower(VarLow + '=0',    Low)  then
+         TDetectorUtils.ContainsWholeWordLower('0 <> ' + VarLow, Low)  then
         Exit(True);
+      // Equality-Guard: 'if x = 0 then ...' schuetzt nur wenn der
+      // THEN-Zweig den Code-Pfad verlaesst (Exit oder Raise).
+      // 'if x = 0 then DoOther' ist KEIN Guard - x kann danach noch 0
+      // sein und im Divisor crashen.
+      if TDetectorUtils.ContainsWholeWordLower(VarLow + ' = 0',  Low)  or
+         TDetectorUtils.ContainsWholeWordLower(VarLow + '=0',    Low)  then
+        if ThenBranchExitsOrRaises(IfN) then
+          Exit(True);
     end;
   finally
     Ifs.Free;
+  end;
+end;
+
+class function TDivByZeroDetector.ThenBranchExitsOrRaises(
+  IfN: TAstNode): Boolean;
+// Pruefung: enthaelt der THEN-Zweig ein Exit oder Raise?
+// Akzeptierte Formen:
+//   if x = 0 then Exit;
+//   if x = 0 then raise EFoo.Create(...);
+//   if x = 0 then begin LogIt; Exit; end;          (Block-Walk!)
+//   if x = 0 then begin Cleanup; raise EFoo; end;
+// Else-Zweig wird ignoriert (nkElseBranch).
+//
+// Hinweis: in einem Block reicht IRGENDEIN Exit/Raise auf erster Ebene -
+// alle Statements davor sind unconditional und werden vor dem Exit/Raise
+// ausgefuehrt. Wir pruefen damit "kann der Code-Pfad nach dem if noch
+// erreicht werden wenn x=0 war?"
+var
+  i, j   : Integer;
+  Branch : TAstNode;
+  Stmt   : TAstNode;
+begin
+  Result := False;
+  if IfN = nil then Exit;
+  for i := 0 to IfN.Children.Count - 1 do
+  begin
+    Branch := IfN.Children[i];
+    if Branch.Kind = nkElseBranch then Continue;
+    // Direkter Exit/Raise ohne Block-Wrap.
+    if (Branch.Kind = nkExit) or (Branch.Kind = nkRaise) then
+      Exit(True);
+    // begin..end-Block: jedes direkte Kind pruefen. Wenn IRGENDEIN
+    // Statement Exit/Raise ist, verlaesst der Pfad den Code.
+    if Branch.Kind = nkBlock then
+    begin
+      for j := 0 to Branch.Children.Count - 1 do
+      begin
+        Stmt := Branch.Children[j];
+        if (Stmt.Kind = nkExit) or (Stmt.Kind = nkRaise) then
+          Exit(True);
+      end;
+    end;
+    // Nur das erste Then-Statement betrachten (kein Fall-Through
+    // ueber Else-Branch hinaus).
+    Break;
   end;
 end;
 

@@ -1751,9 +1751,13 @@ var
   ViewMenu : TMenuItem;
   Item     : TMenuItem;
 begin
-  GDockableForm := TAnalyserDockableForm.Create;
+  // Defensive: Supports() statt as-Cast - schlaegt Cast fehl, brechen
+  // wir den BPL-Load *vor* Erzeugen von GDockableForm ab. Sonst
+  // (alte as-Variante) wuerden GDockableForm bleiben + GViewMenuItem nil
+  // und der nachfolgende Unregister-Pfad doppel-frees riskieren.
+  if not Supports(BorlandIDEServices, INTAServices, NTASvc) then Exit;
 
-  NTASvc := BorlandIDEServices as INTAServices;
+  GDockableForm := TAnalyserDockableForm.Create;
 
   // Dockable Form registrieren (fuer Desktop-State-Persistenz)
   NTASvc.RegisterDockableForm(GDockableForm);
@@ -1792,12 +1796,17 @@ begin
 end;
 
 procedure ShowAnalyserDockableForm;
+var
+  NTASvc : INTAServices;
 begin
-  if Assigned(GDockableForm) then
-    (BorlandIDEServices as INTAServices).CreateDockableForm(GDockableForm);
+  if not Assigned(GDockableForm) then Exit;
+  if Supports(BorlandIDEServices, INTAServices, NTASvc) then
+    NTASvc.CreateDockableForm(GDockableForm);
 end;
 
 procedure UnregisterAnalyserDockableForm;
+var
+  NTASvc : INTAServices;
 begin
   if Assigned(GViewMenuItem) then
   begin
@@ -1806,7 +1815,15 @@ begin
   end;
   if Assigned(GDockableForm) then
   begin
-    (BorlandIDEServices as INTAServices).UnregisterDockableForm(GDockableForm);
+    // GDockableForm ist ein TInterfacedObject -> wird ueber den
+    // Refcount der globalen Variable freigegeben (Setzen auf nil
+    // released die Reference). Der UnregisterDockableForm-Call
+    // gibt zusaetzlich die IDE-interne Reference frei.
+    // Falls Supports() fehlschlaegt: nur die globale Reference auf
+    // nil setzen reicht - die IDE haelt dann die letzte und gibt
+    // beim Plugin-Unload selbst frei. Nichts wird hier geleakt.
+    if Supports(BorlandIDEServices, INTAServices, NTASvc) then
+      NTASvc.UnregisterDockableForm(GDockableForm);
     GDockableForm := nil;
   end;
   UnregisterLineHighlighter;

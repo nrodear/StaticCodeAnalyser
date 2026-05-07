@@ -275,15 +275,24 @@ procedure TWatchAnalyzer.DeliverResults;
 // Auf UI-Thread. Pruefen ob unser Ergebnis noch aktuell ist (Manager
 // koennte zwischenzeitlich Generation gebumpt haben - z.B. weil
 // manuelle Analyse die Liste ohnehin neu fuellt).
+var
+  Local : TObjectList<TLeakFinding>;
 begin
   if not Assigned(GWatchMode) then Exit;
   if not GWatchMode.IsCurrentGeneration(FStartGen) then Exit;
   if not Assigned(GWatchMode.FOnFindings) then Exit;
 
-  // Ownership: callback uebernimmt die Liste (= sezt OwnsObjects:=False
+  // ALLERERSTES: Field-Ref auf nil bevor wir die Liste an den Callback
+  // weiterreichen. Falls Synchronize mid-Callback eine Exception wirft
+  // (Thread-Terminate o.ae.), sieht der Worker-finally FResults=nil und
+  // gibt nicht doppelt frei. Der Callback uebernimmt die Liste via
+  // Local-Snapshot - er ist verantwortlich fuer Free / Re-Parenting.
+  Local := FResults;
+  FResults := nil;
+
+  // Ownership: callback uebernimmt die Liste (sezt OwnsObjects:=False
   // und freed sie nach dem Reinkopieren in Frame.FAllFindings).
-  GWatchMode.FOnFindings(FFileName, FResults);
-  FResults := nil;  // wir geben die Verantwortung ab
+  GWatchMode.FOnFindings(FFileName, Local);
 end;
 
 { ---- TWatchModeManager ---- }

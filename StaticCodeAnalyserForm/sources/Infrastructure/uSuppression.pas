@@ -134,17 +134,22 @@ begin
     for i := 0 to Lines.Count - 1 do
     begin
       if not ParseComment(Lines[i], Kinds) then Continue;
-      // Naechste echte Code-Zeile finden (nicht leer, nicht Kommentar)
-      TargetLine := i + 2; // 1-basiert; default = direkte naechste Zeile
+      // Naechste echte Code-Zeile finden (nicht leer, nicht Kommentar).
+      // Wenn keine folgt (Marker auf letzter Zeile vor EOF), KEINEN
+      // Map-Eintrag emittieren - sonst suppressen wir eine Zeile die
+      // gar nicht existiert (verschwendete Map-Eintraege, harmlos aber
+      // muellt das Dict zu).
+      TargetLine := -1;
       for j := i + 1 to Lines.Count - 1 do
       begin
         L := TrimLeft(Lines[j]);
         if L = '' then Continue;
         if L.StartsWith('//') then Continue;
-        TargetLine := j + 1;
+        TargetLine := j + 1; // 1-basiert
         Break;
       end;
-      Result.AddOrSetValue(TargetLine, Kinds);
+      if TargetLine > 0 then
+        Result.AddOrSetValue(TargetLine, Kinds);
     end;
   finally
     Lines.Free;

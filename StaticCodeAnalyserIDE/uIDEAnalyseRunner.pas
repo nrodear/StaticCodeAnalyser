@@ -118,10 +118,6 @@ var
   FrameSnap    : Pointer;
 begin
   FrameSnap := FFramePtr;
-
-  // ProgressBar.Max kennen wir erst nach dem ersten Callback - bis dahin
-  // zeigen wir einen "Marquee"-aehnlichen Stand (Max=100, Position=0).
-  if Assigned(FProgress) then FProgress.BeginRun(0);
   FLastTick := 0;
   wasCancelled := False;
   // Test-Filter aus analyser.ini [Detectors] IncludeTests uebernehmen:
@@ -129,6 +125,12 @@ begin
   if Assigned(FIgnoreList) and Assigned(FRepoSettings) then
     FIgnoreList.SkipTests := not FRepoSettings.IncludeTests;
   try
+    // ProgressBar.Max kennen wir erst nach dem ersten Callback - bis dahin
+    // zeigen wir einen "Marquee"-aehnlichen Stand (Max=100, Position=0).
+    // BeginRun INSIDE try damit EndRun im finally garantiert laeuft auch
+    // wenn BeginRun selbst raised (sehr unwahrscheinlich, aber EndRun
+    // ist idempotent - setzt UI sicher in Ruhe-Zustand zurueck).
+    if Assigned(FProgress) then FProgress.BeginRun(0);
     try
       FOnStatusMode(_('Analysis running - searching for files...'));
       Application.ProcessMessages;
@@ -168,9 +170,13 @@ begin
                   if doUpdate then
                   begin
                     FLastTick := tick;
-                    // Marquee-Pseudo: Position pendelt mit gefundenen Dateien
-                    FProgressBar.Max := 100;
-                    FProgressBar.Position := Current mod 100;
+                    // pbstMarquee = echte indeterminate-Animation
+                    // (ComCtl32-Marquee, Style-Switch atomic, kein
+                    // Position-Sliding). Position bleibt auf 0 - so
+                    // gibt's beim Uebergang zur Datei-Phase keinen
+                    // Clamp-Flash mehr.
+                    if FProgressBar.Style <> pbstMarquee then
+                      FProgressBar.Style := pbstMarquee;
                     FOnStatusProgress(Format(_('Scanning... %d found'), [Current]));
                     Application.ProcessMessages;
                   end;
@@ -181,6 +187,11 @@ begin
                   if doUpdate or (Current = Total) then
                   begin
                     FLastTick := tick;
+                    // Zurueck auf normale Bar. Position ist seit
+                    // BeginRun unveraendert auf 0 (Scan-Phase touched
+                    // sie nicht), daher kein Clamp beim Max-Wechsel.
+                    if FProgressBar.Style <> pbstNormal then
+                      FProgressBar.Style := pbstNormal;
                     if (FProgressBar.Max <> Total) and (Total > 0) then
                       FProgressBar.Max := Total;
                     FProgressBar.Position := Current;
@@ -261,7 +272,7 @@ begin
   Screen.Cursor := crHourglass;
   try
     try
-      FOnStatusProgress('Analysiere: ' + ExtractFileName(AFilePath));
+      FOnStatusProgress(_('Analyzing: ') + ExtractFileName(AFilePath));
       Application.ProcessMessages;
 
       findings := nil;
@@ -316,10 +327,13 @@ begin
     end;
 
     // ---- Analyse starten ----
-    if Assigned(FProgress) then FProgress.BeginRun(files.Count);
     FLastTick := 0;
     wasCanc := False;
     try
+      // BeginRun INSIDE try damit EndRun im finally garantiert laeuft
+      // auch wenn BeginRun selbst raised. EndRun ist idempotent.
+      if Assigned(FProgress) then FProgress.BeginRun(files.Count);
+
       FOnStatusMode(info);
       FOnStatusProgress(Format(_('%d file(s) - running...'), [files.Count]));
       Application.ProcessMessages;
@@ -340,8 +354,10 @@ begin
                 if (tick - FLastTick > 100) or (Current = Total) then
                 begin
                   FLastTick := tick;
-                  if (FProgressBar.Max <> Total) and (Total > 0) then
-                    FProgressBar.Max := Total;
+                  // RunChanged hat keine Scan-Phase - Files-Liste ist
+                  // schon vor BeginRun bekannt. BeginRun(files.Count)
+                  // setzt Style := pbstNormal und Max := files.Count.
+                  // Daher kein Style-/Max-Wechsel mehr noetig.
                   FProgressBar.Position := Current;
                   FOnStatusProgress(Format(_('File %d / %d'), [Current, Total]));
                   Application.ProcessMessages;

@@ -40,6 +40,12 @@ type
     // (also echte Konkatenation mit Bezeichner/Variable). 'x'+'y' allein
     // ist kein Risiko, das ist nur Multi-Line-Stringliteral-Aufbau.
     class function HasNonLiteralPlus(const S: string): Boolean; static;
+    // True wenn JEDES '+' im RHS unmittelbar auf ein String-Literal oder
+    // einen Aufruf einer safe-cast-Funktion folgt. Whitelist:
+    //   IntToStr, Int64ToStr, FormatInt, GetEnumName  (numerisch)
+    //   QuotedStr, QuotedSQL, QuotedStrJSON, SQLVarToText  (escape'd)
+    // Dann ist die Konkatenation injection-sicher trotz '+'-Operator.
+    class function AllConcatTermsSafe(const RHS: string): Boolean; static;
   end;
 
 implementation
@@ -119,6 +125,97 @@ begin
   end;
 end;
 
+class function TSQLInjectionDetector.AllConcatTermsSafe(
+  const RHS: string): Boolean;
+// Strippt alle String-Literale (mit ''-Escape-Handling) raus, dann an
+// jedem '+' den nachfolgenden Token (Identifier/Whitespace) extrahieren.
+// Wenn der Token entweder leer (Literal-Position) oder Aufruf einer
+// safe-cast-Funktion ist -> sicher. Sonst (bare Identifier oder anderer
+// Funktionsaufruf) -> unsicher.
+//
+// Beispiele:
+//   ' WHERE ID=' + IntToStr(aID)            -> True
+//   ' WHERE NAME=' + QuotedStr(s) + ' OR'   -> True
+//   ' WHERE NAME=' + name                   -> False (bare Identifier)
+//   ' WHERE NAME=' + Format('%s',[name])    -> False (kein safe-cast)
+const
+  SAFE_CASTS : array[0..7] of string = (
+    'inttostr', 'int64tostr', 'formatint', 'getenumname',
+    'quotedstr', 'quotedsql', 'quotedstrjson', 'sqlvartotext'
+  );
+var
+  Stripped : string;
+  i, j, p  : Integer;
+  inStr    : Boolean;
+  c        : Char;
+  ident    : string;
+  s        : string;
+  isSafe   : Boolean;
+begin
+  Result := False;
+
+  // 1) String-Literale durch Leerzeichen ersetzen (Position erhalten).
+  //    '' innerhalb eines Strings ist Escape-Quote, weiter im String.
+  Stripped := RHS;
+  inStr := False;
+  i := 1;
+  while i <= Length(Stripped) do
+  begin
+    c := Stripped[i];
+    if c = '''' then
+    begin
+      if inStr and (i < Length(Stripped)) and (Stripped[i + 1] = '''') then
+      begin
+        Stripped[i] := ' ';
+        Stripped[i + 1] := ' ';
+        Inc(i, 2);
+        Continue;
+      end;
+      Stripped[i] := ' ';
+      inStr := not inStr;
+    end
+    else if inStr then
+      Stripped[i] := ' ';
+    Inc(i);
+  end;
+  Stripped := Stripped.ToLower;
+
+  // 2) An jedem '+' den nachfolgenden Token extrahieren und pruefen.
+  i := 1;
+  while i <= Length(Stripped) do
+  begin
+    if Stripped[i] = '+' then
+    begin
+      // Whitespace nach '+' skippen.
+      j := i + 1;
+      while (j <= Length(Stripped)) and (Stripped[j] <= ' ') do Inc(j);
+      // Identifier extrahieren.
+      p := j;
+      while (j <= Length(Stripped)) and
+            CharInSet(Stripped[j], ['a'..'z', '_', '0'..'9']) do
+        Inc(j);
+      ident := Copy(Stripped, p, j - p);
+      if ident = '' then
+      begin
+        // Position war ein gestripptes Literal -> ok.
+        Inc(i);
+        Continue;
+      end;
+      // Identifier vorhanden - muss safe-cast-Funktionsaufruf sein.
+      // Pflicht: '(' direkt nach (ggf. Whitespace) dem Identifier.
+      while (j <= Length(Stripped)) and (Stripped[j] <= ' ') do Inc(j);
+      if (j > Length(Stripped)) or (Stripped[j] <> '(') then
+        Exit(False); // bare Identifier -> Variable, unsicher
+      isSafe := False;
+      for s in SAFE_CASTS do
+        if ident = s then begin isSafe := True; Break; end;
+      if not isSafe then Exit(False); // andere Funktion -> unsicher
+    end;
+    Inc(i);
+  end;
+  Result := True;
+end;
+
 class function TSQLInjectionDetector.IsAssignRisk(
   const Name, RHS: string): Boolean;
 var
@@ -132,6 +229,10 @@ begin
   // Konkatenation ist Pflicht - aber NUR ausserhalb von Stringliteralen.
   // 'CREATE TABLE...'+'(...)' ist reine Literal-Konkatenation, kein Risiko.
   if not HasNonLiteralPlus(RHS) then Exit;
+
+  // Whitelist: alle Konkat-Terme sind String-Literale oder safe-cast-Calls
+  // (IntToStr, QuotedStr, ...) -> injection-sicher trotz '+'.
+  if AllConcatTermsSafe(RHS) then Exit;
 
   // H1: bekannte SQL-Property im Ziel-Namen.
   // Wortgrenzen-Pruefung: 'commandtext' soll nicht 'mycommandtextra' matchen.
@@ -158,6 +259,10 @@ begin
 
   // Konkatenation muss ausserhalb Literalen sein (s. IsAssignRisk).
   if not HasNonLiteralPlus(CallName) then Exit;
+
+  // Whitelist: alle Konkat-Terme sind String-Literale oder safe-cast-Calls
+  // (IntToStr, QuotedStr, ...) -> injection-sicher trotz '+'.
+  if AllConcatTermsSafe(CallName) then Exit;
 
   // SQL-Aufruf-Methode im Call-Namen. Patterns enden auf '(' was natuerliche
   // rechte Grenze ist; links muss aber Wortgrenze her - 'open(' soll nicht

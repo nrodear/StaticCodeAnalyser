@@ -101,8 +101,14 @@ begin
   // Layout-stabil: Cancel-Button + Progressbar werden NICHT ein-/
   // ausgeblendet (Visible bleibt konstant True). Nur Enabled/Position
   // wechseln - die UI bleibt waehrend der Analyse ruhig.
+  // Style := pbstNormal als sicherer Default - Worker wechselt fuer
+  // die Scan-Phase (RunAll, Total noch unbekannt) zu pbstMarquee und
+  // beim Uebergang in die Datei-Phase wieder zurueck auf pbstNormal.
+  // Wenn der vorige Run mid-Scan abgebrochen wurde steckt Style sonst
+  // noch auf Marquee und der naechste Run startet mit animierter Bar.
   if Assigned(FProgress) then
   begin
+    FProgress.Style := pbstNormal;
     FProgress.Position := 0;
     if ATotal > 0 then
       FProgress.Max := ATotal
@@ -126,7 +132,13 @@ begin
     FBtnCancel.Enabled := False;
 
   if Assigned(FProgress) then
+  begin
+    // Defensive Style-Reset: bei Cancel mid-Scan-Phase steckt Style
+    // noch auf pbstMarquee. Naechster BeginRun macht das auch nochmal,
+    // aber hier ist's schon clean fuer "Bar zeigt Ruhe-Zustand".
+    FProgress.Style := pbstNormal;
     FProgress.Position := 0;
+  end;
 
   Screen.Cursor := crDefault;
 end;
