@@ -16,10 +16,11 @@ unit uSuppression;
 // Die Suppression gilt fuer die naechste nicht-leere, nicht-Kommentar-Zeile.
 // Mehrere Kategorien koennen mit Komma oder Leerzeichen getrennt werden.
 //
-// Erkannte Kategorien (case-insensitive):
-//   MemoryLeak, EmptyExcept, SQLInjection, HardcodedSecret, FormatMismatch,
-//   FileReadError, UnusedUses, NilDeref, MissingFinally, DivByZero, DeadCode,
-//   All
+// Erkannte Kategorien (case-insensitive): jeder Eintrag in KIND_META
+// (uSCAConsts.pas) plus 'All' / '*'. Die Liste wird ueber KindFromName-
+// Reverse-Lookup aufgeloest - Single source of truth ist KIND_META,
+// damit hier kein Drift mehr entsteht (frueher: statische Liste, hat
+// dreimal Detektoren verpasst: TodoComment, EmptyMethod, DuplicateBlock).
 
 interface
 

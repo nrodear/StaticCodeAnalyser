@@ -56,6 +56,15 @@ type
       ASortDescending: Boolean): TFindingGridConfig; static;
   end;
 
+  // Resize-Layout fuer das Befund-Grid: Severity- und Typ-Spalten haben
+  // fixe Breite, "Regel"-Spalte fuellt den Rest minus Scrollbar. Wird
+  // vom Frame.GridResize-Event-Handler aufgerufen (event-Binding muss
+  // method-of-object bleiben, daher Wrapper im Frame).
+  TFindingGridLayout = class
+  public
+    class procedure SetColumnWidths(AGrid: TStringGrid); static;
+  end;
+
 implementation
 
 uses
@@ -248,6 +257,26 @@ begin
 
   DrawText(grid.Canvas.Handle, PChar(grid.Cells[ACol, ARow]),
     -1, txtRect, DtFlags);
+end;
+
+{ TFindingGridLayout }
+
+class procedure TFindingGridLayout.SetColumnWidths(AGrid: TStringGrid);
+const
+  COL_SEV_W  = 90;  // Schweregrad-Spalte fix
+  COL_TYPE_W = 110; // Typ-Spalte fix
+var
+  used, regelW: Integer;
+begin
+  if not Assigned(AGrid) then Exit;
+  AGrid.ColWidths[3] := COL_TYPE_W;
+  AGrid.ColWidths[5] := COL_SEV_W;
+  used := AGrid.ColWidths[0] + AGrid.ColWidths[1] +
+          AGrid.ColWidths[2] + COL_TYPE_W + COL_SEV_W +
+          GetSystemMetrics(SM_CXVSCROLL);
+  regelW := AGrid.ClientWidth - used;
+  if regelW > 80 then
+    AGrid.ColWidths[4] := regelW;
 end;
 
 end.

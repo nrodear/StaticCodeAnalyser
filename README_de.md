@@ -317,11 +317,14 @@ DoSomethingRisky;
 // alle Pruefungen fuer die naechste Zeile
 ```
 
-Erkannte Kategorien: `MemoryLeak`, `EmptyExcept`, `SQLInjection`,
-`HardcodedSecret`, `FormatMismatch`, `UnusedUses`, `NilDeref`,
+Erkannte Kategorien (eine pro registriertem Detektor — Single source of
+truth ist `KIND_META` in `uSCAConsts.pas`):
+
+`MemoryLeak`, `EmptyExcept`, `SQLInjection`, `HardcodedSecret`,
+`FormatMismatch`, `FileReadError`, `UnusedUses`, `NilDeref`,
 `MissingFinally`, `DivByZero`, `DeadCode`, `LongMethod`, `LongParamList`,
 `MagicNumber`, `DuplicateString`, `HardcodedPath`, `DebugOutput`,
-`DeepNesting`, `All`.
+`DeepNesting`, `TodoComment`, `EmptyMethod`, `DuplicateBlock`, `All`.
 
 ---
 
@@ -329,9 +332,16 @@ Erkannte Kategorien: `MemoryLeak`, `EmptyExcept`, `SQLInjection`,
 
 Folgende Muster werden als Ownership-Übergabe erkannt:
 
-| Muster | Beispiel |
-|--------|----------|
-| `Result := varName` | Funktion gibt Ownership ab |
+| Muster | Bedeutung |
+|--------|-----------|
+| `Result := varName` | Funktion gibt Ownership an Aufrufer ab |
+| `varName.Parent := winControl` | VCL: TWinControl gibt seine `Controls[]` frei |
+| `varName := X.Add(...)` | Borrowed-Return — Item lebt in der `OwnsObjects`-Liste |
+| `varName := X.AddChild(...)` | AST-/DOM-Tree: Child gehört dem Parent |
+| `varName := X.AddNode(...)` | TTreeView etc. |
+| `varName := X.AppendChild(...)` | XML-DOM / IXMLNode |
+| `FField := varName` | Var-zu-Feld: Ownership verlässt Method-Scope |
+| `FField := varName as ISomething` | Interface-Refcount hält das Objekt am Leben |
 | `inherited Create(varName, …)` | Elternkonstruktor übernimmt |
 | `TAnyClass.Create(varName, …)` | Anderer Konstruktor übernimmt |
 | `Container.Add(varName)` | TObjectList o.ä. übernimmt |
@@ -341,6 +351,15 @@ Folgende Muster werden als Ownership-Übergabe erkannt:
 | `Container.Push(varName)` | TStack.Push |
 | `Container.Enqueue(varName)` | TQueue.Enqueue |
 
+Für **Klassen-Felder** kennt der FieldLeak-Detektor zusätzlich das
+Standard-TComponent-Owner-Pattern als kein-Leak:
+
+| Muster | Bedeutung |
+|--------|-----------|
+| `FField := X.Create(Self)` | TComponent-Owner: `inherited Destroy` ruft `DestroyComponents` |
+| `FField := X.Create(AOwner)` | Owner aus Konstruktor-Parameter weitergereicht |
+| `FField := X.Create(Owner)` | Owner aus existierendem Feld/Property |
+
 ---
 
 ## Architektur
@@ -348,43 +367,81 @@ Folgende Muster werden als Ownership-Übergabe erkannt:
 ```
 StaticCodeAnalyserIDE/                 IDE-Expert Paket (.dpk)
   uIDEExpert.pas                       Wizard-Registrierung (IOTAMenuWizard)
-  uIDEAnalyserForm.pas                 Dockbares Fenster (TFrame)
-                                       Filter, Stats, Export, Branch-Changes,
-                                       Claude-Prompt-Generator, Theme-Notifier
+  uIDEAnalyserForm.pas                 Dockbares Fenster (TFrame) - Hauptshell:
+                                       Filter, Stats-Grid, Sort, Export,
+                                       Claude-Prompt-Copy, Lifecycle-Sentinel
+  uIDELineHighlighter.pas              3 px roter Streifen im IDE-Editor-
+                                       Gutter auf der Befund-Zeile
+  uIDEMessages.pas                     Hand-off in den IDE-Messages-Tab
+  uIDEWatchMode.pas                    Live-Reanalyse bei Ctrl+S
+                                       (IOTAModuleNotifier + 300 ms Debounce)
+  uIDEStatsTiles.pas                   Sonar-Style Tile-Reihe Builder
+  uIDEHelpPanel.pas                    Rechtes Help-Panel mit Vorher/Nachher,
+                                       auto-hide im Docked-Modus
+  uIDEExportMenu.pas                   Export-Dropdown (JSON/CSV/HTML/Jira)
+  uIDEEditorIntegration.pas            ToolsAPI-Wrapper: aktuelle .pas-Datei,
+                                       Project-Dir, OpenFileAtLine
+  uIDEStatusBar.pas                    Drei-Panel-Statusleiste
+                                       (Findings / Progress / Mode)
+  uIDEThemeIntegration.pas             IDE-Theme-Notifier + ApplyTheme-Refresh
+  uIDEAnalyseProgress.pas              Busy-State-Controller
+                                       (Begin/EndRun, Cancel-Flag)
 
 StaticCodeAnalyserForm/sources/        Analyse-Engine (shared zwischen Standalone + IDE-Plugin)
-  uAnalyserPalette.pas                 Zentrale Farb-Konstanten (Severity, Akzente, Icons)
-  uAnalyserTypes.pas                   TFindingSeverity-Enum + Konversion
-  uAnalyserTheme.pas                   SeverityBg, SeverityAccent, BlendColor
+  Common/
+    uSCAConsts.pas                     TFindingKind + KIND_META Single source
+                                       of truth (Sonar-Kategorie-Mapping)
+    uMethodd12.pas                     TLeakFinding-Record + Helpers
+    uRecentPaths.pas                   recent.ini-Verwaltung
+    uRegExMatches.pas                  Geteilte RegEx-Helpers
+    uDetectorUtils.pas                 IsIdentChar, IsWholeWord-Helpers
+    uCollectValues.pas                 AST-Literal-Wert-Sammlung
 
-  uLexer.pas, uParser2.pas             Tokenizer + Recursive-Descent-Parser
-                                       mit Watchdog (200k Token-Limit) und
-                                       Forward-Progress-Garantien
-  uAstNode.pas                         AST mit FindAll/FindFirst-Suche
-  uStaticAnalyzer2.pas                 Orchestriert 21 Detektoren pro Datei
-  uStaticFiles.pas                     Rekursiver Datei-Scan mit Tick-Callback,
+  UI/
+    uAnalyserPalette.pas               Zentrale Farb-Konstanten
+    uAnalyserTypes.pas                 TFindingSeverity-Enum + Konversion
+    uAnalyserTheme.pas                 SeverityBg, SeverityAccent, BlendColor
+    uFindingGridRenderer.pas           StringGrid-OnDrawCell-Logik
+    uFindingFilter.pas                 Severity/Type/Search-Filter-Pipeline
+    uLocalization.pas                  dxgettext-Wrapper (_('…')-Makro)
+
+  Parsing/
+    uLexer.pas                         Tokenizer, Watchdog (200k Token)
+    uParser2.pas                       Recursive-Descent-Parser mit
+                                       Forward-Progress-Garantie
+    uAstNode.pas                       AST mit FindAll/FindFirst-Suche
+
+  Infrastructure/
+    uStaticAnalyzer2.pas               Orchestriert 21 Detektoren pro Datei
+    uStaticFiles.pas                   Rekursiver Datei-Scan, Tick-Callback,
                                        Cancel-Support, Symlink-Schutz
-  uIgnoreList.pas                      ignore.txt + Test-Filter
-  uVcsChanges.pas                      Git/SVN-Diff via CreateProcess+Pipe
-  uRepoSettings.pas                    analyser.ini (BaseBranch etc.)
-  uSuppression.pas                     // noinspection-Marker
-  uExport.pas                          JSON/CSV/HTML/Jira/Clipboard
-  uFixHint.pas                         Vorher/Nachher pro Befund-Typ
-  uClaudePrompt.pas                    Markdown-Prompt-Generator
+    uIgnoreList.pas                    ignore.txt + Test-Filter
+    uVcsChanges.pas                    Git/SVN-Diff via CreateProcess+Pipe
+    uRepoSettings.pas                  analyser.ini (BaseBranch etc.)
+    uSuppression.pas                   // noinspection-Marker
+    uExport.pas                        JSON / CSV / Jira / Clipboard
+    uExportHtml.pas                    Self-contained HTML-Report
 
-  uLeakDetector2.pas                   MemoryLeak (AST-basiert)
-  uFieldLeak.pas                       Class-Field-Leak (Create/Destroy)
-  uCodeSmells2.pas                     EmptyExcept
-  uSQLInjection.pas, uSQLInjectionScore.pas
-  uHardcodedSecret.pas, uHardcodedPath.pas
-  uFormatMismatch.pas, uUnusedUses.pas
-  uNilDeref.pas, uMissingFinally.pas
-  uDivByZero.pas, uDeadCode.pas
-  uLongMethod.pas, uLongParamList.pas
-  uMagicNumbers.pas, uDuplicateString.pas
-  uDuplicateBlock.pas
-  uDebugOutput.pas, uDeepNesting.pas
-  uTodoComment.pas, uEmptyMethod.pas
+  Output/
+    uClaudePrompt.pas                  AI-Markdown-Prompt-Generator
+    uFixHint.pas                       Vorher/Nachher pro Befund-Typ
+
+  Detectors/
+    uLeakDetector2.pas                 MemoryLeak (Local-Var, AST-basiert)
+    uFieldLeak.pas                     Class-Field-Leak (Create/Destroy)
+    uCodeSmells2.pas                   EmptyExcept
+    uSQLInjection.pas                  + uSQLInjectionScore.pas (Scoring)
+    uHardcodedSecret.pas, uHardcodedPath.pas
+    uFormatMismatch.pas, uUnusedUses.pas
+    uNilDeref.pas, uMissingFinally.pas
+    uDivByZero.pas, uDeadCode.pas
+    uLongMethod.pas, uLongParamList.pas
+    uMagicNumbers.pas, uDuplicateString.pas
+    uDuplicateBlock.pas
+    uDebugOutput.pas, uDeepNesting.pas
+    uTodoComment.pas, uEmptyMethod.pas
+    uCustomClassDiscovery.pas          AutoDiscoverClasses-Helper
+                                       (kein Detektor - speist LeakyClasses)
 ```
 
 ### Datenfluss

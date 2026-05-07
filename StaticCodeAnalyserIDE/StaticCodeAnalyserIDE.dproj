@@ -167,6 +167,9 @@
         <DCCReference Include="uIDEStatusBar.pas"/>
         <DCCReference Include="uIDEThemeIntegration.pas"/>
         <DCCReference Include="uIDEAnalyseProgress.pas"/>
+        <DCCReference Include="uIDEGridTooltip.pas"/>
+        <DCCReference Include="uIDELifecycle.pas"/>
+        <DCCReference Include="uIDEAnalyseRunner.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uAnalyserPalette.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uAnalyserTypes.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uAnalyserTheme.pas"/>

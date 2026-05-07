@@ -46,6 +46,9 @@ contains
   uIDEStatusBar in 'uIDEStatusBar.pas',
   uIDEThemeIntegration in 'uIDEThemeIntegration.pas',
   uIDEAnalyseProgress in 'uIDEAnalyseProgress.pas',
+  uIDEGridTooltip in 'uIDEGridTooltip.pas',
+  uIDELifecycle in 'uIDELifecycle.pas',
+  uIDEAnalyseRunner in 'uIDEAnalyseRunner.pas',
   // ---- UI ----
   uAnalyserPalette in '..\StaticCodeAnalyserForm\sources\UI\uAnalyserPalette.pas',
   uAnalyserTypes in '..\StaticCodeAnalyserForm\sources\UI\uAnalyserTypes.pas',
