@@ -175,6 +175,9 @@ type
     // ruft uns als FOriginalOnResize NACH dem Label-Toggle), so dass die
     // Width-Anpassung den frischen Visible-Zustand sieht.
     procedure AdjustFilterSubPanels(Sender: TObject);
+    // Setzt FSearchEdit.Constraints.MinWidth abhaengig von der PanelSearch-
+    // Breite: docked = 60 (lasst SearchEdit weiter schrumpfen), floated = 120.
+    procedure AdjustSearchMinWidth(Sender: TObject);
     // Frame.OnResize: forwarded explizit an alle Panel-OnResize-Handler.
     // Die TResponsiveVisibilityController hooken die Panel-OnResizes; in
     // manchen Dock-Szenarien (IDE setzt Frame.Width direkt, ohne dass das
@@ -182,13 +185,6 @@ type
     // im Construction-Zustand "haengen bleiben". Frame.OnResize feuert
     // garantiert.
     procedure FrameResize(Sender: TObject);
-  protected
-    // VCL ruft Resize bei JEDEM Bounds-Change (Dock, Undock, Manual-Resize,
-    // Parent-Re-Layout). Sicherer als OnResize-Event, weil das Event von
-    // der IDE-Dock-Logik teilweise nicht zuverlaessig getriggert wird.
-    // Override forwarded an FrameResize -> alle Panel-OnResizes.
-    procedure Resize; override;
-  private
     // Klick auf Stat-Kachel: setzt Severity-/Type-Filter passend (z.B.
     // Errors-Kachel -> FFilterCombo zeigt nur Errors). Sender.Tag traegt
     // den TFilterMode bzw. TTypeFilter-Ordinal.
@@ -328,7 +324,11 @@ const
   PROGRESS_HEIGHT    = 14;
   GRID_MIN_HEIGHT    = 120;
   GRID_MIN_WIDTH     = 300;
-  SEARCH_MIN_WIDTH   = 120;    // verhindert Kollaps des SearchEdit bei narrow
+  // Floated: SearchEdit hat genug Platz, MinWidth grosszuegig.
+  // Docked: nur Cancel + Export + SearchEdit + Hamburger sichtbar -
+  // SearchEdit darf weiter schrumpfen damit auch 300-px-Docks passen.
+  SEARCH_MIN_WIDTH_FLOATED = 120;
+  SEARCH_MIN_WIDTH_DOCKED  =  60;
 
 // MAX_RECENT lebt in uRecentPaths (DEFAULT_MAX_RECENT = 3); konsistent
 // zwischen IDE und Standalone, kein Drift mehr.
@@ -785,7 +785,10 @@ begin
   FSearchEdit := TEdit.Create(Self);
   FSearchEdit.Parent      := PanelSearch;
   FSearchEdit.Align       := alClient;
-  FSearchEdit.Constraints.MinWidth := ScaleW(SEARCH_MIN_WIDTH);
+  // MinWidth wird per AdjustSearchMinWidth dynamisch gesetzt (docked vs
+  // floated). Hier nur den Floated-Default als sichere Initial-Annahme,
+  // bis der erste Resize-Pass laeuft.
+  FSearchEdit.Constraints.MinWidth := ScaleW(SEARCH_MIN_WIDTH_FLOATED);
   FSearchEdit.TextHint    := _('Filter file / method / finding...');
   FSearchEdit.OnChange    := SearchChange;
   FSearchEdit.ParentFont  := False;
@@ -825,9 +828,17 @@ begin
     [FLblFilter, FLblType], ScaleW(BREAKPOINT_DOCKED));
   AdjustFilterSubPanels(FPanelButtons); // initial pass
 
-  // PanelSearch: Branch-Changes-Button + Search-Label weg im Docked.
+  // PanelSearch: Aktions-Buttons + Search-Label weg im Docked. Start/
+  // Current/Branch sind alle im Hamburger-Menu erreichbar - PanelSearch
+  // zeigt im Docked nur noch SearchEdit + Export + Cancel (~250 px).
+  // Plus: SearchEdit MinWidth schrumpft mit (60 statt 120 docked) damit
+  // auch sehr enge Docks (300 px) noch funktionieren.
+  // Hook AdjustSearchMinWidth VOR dem Controller (chain-Pattern).
+  FPanelSearch.OnResize := AdjustSearchMinWidth;
   TResponsiveVisibilityController.Create(Self, FPanelSearch,
-    [FBtnAnalyseChanged, FLblSearch], ScaleW(BREAKPOINT_DOCKED));
+    [FBtnAnalyse, FBtnAnalyseCurrent, FBtnAnalyseChanged, FLblSearch],
+    ScaleW(BREAKPOINT_DOCKED));
+  AdjustSearchMinWidth(FPanelSearch); // initial pass
 
   // ---- Statistik-Leiste: eine Reihe Sonar-Style Tiles (dunkler Hintergrund) ---
   FPanelStats := TPanel.Create(Self);
@@ -909,12 +920,9 @@ begin
 
   LoadRecentPaths;
 
-  // ---- Frame-OnResize: forwarded an alle Panel-OnResize-Handler -----
-  // Garantiert dass die TResponsiveVisibilityController auch dann triggern,
-  // wenn die IDE-Dock-Logik die Panel-OnResizes nicht sauber durchreicht.
-  // Initial-Trigger danach, damit der Hamburger-Button beim Plugin-Init
-  // schon im richtigen Visible-State sitzt (nicht erst beim ersten Resize).
-  Self.OnResize := FrameResize;
+  // Initial Layout-Pass: Responsive-Controller-Visibility-Status setzen,
+  // ohne auf den ersten Resize-Event zu warten. Resize-Override (s.u.)
+  // uebernimmt alle weiteren Bounds-Changes inklusive Float->Dock.
   FrameResize(Self);
 end;
 
@@ -1801,13 +1809,19 @@ begin
     then FPanelStats.OnResize(FPanelStats);
 end;
 
-procedure TAnalyserFrame.Resize;
-// VCL-Override: feuert bei JEDEM Bounds-Change. Robuster als der
-// OnResize-Event - der IDE-Dock-Manager triggert OnResize teilweise
-// nicht (Float->Dock-Transition), Resize() wird aber immer gerufen.
+procedure TAnalyserFrame.AdjustSearchMinWidth(Sender: TObject);
+// MinWidth auf den passenden Wert setzen, ohne TResponsiveVisibilityController
+// dafuer zu erweitern (waere overkill - hier wechselt nur ein einzelner
+// Constraint-Wert, kein Visible-Flag).
+var
+  Threshold : Integer;
 begin
-  inherited;
-  FrameResize(Self);
+  if not Assigned(FSearchEdit) or not Assigned(FPanelSearch) then Exit;
+  Threshold := ScaleW(BREAKPOINT_DOCKED);
+  if FPanelSearch.ClientWidth >= Threshold then
+    FSearchEdit.Constraints.MinWidth := ScaleW(SEARCH_MIN_WIDTH_FLOATED)
+  else
+    FSearchEdit.Constraints.MinWidth := ScaleW(SEARCH_MIN_WIDTH_DOCKED);
 end;
 
 procedure TAnalyserFrame.AdjustFilterSubPanels(Sender: TObject);
@@ -1835,12 +1849,34 @@ end;
 procedure TAnalyserFrame.BuildHamburgerMenu;
 // Popup-Menu fuer den Hamburger-Button. Items entsprechen den Toolbar-
 // Aktionen, die im gedockten/schmalen Modus ausgeblendet werden -
-// hier bleiben sie auch im Narrow-Modus erreichbar.
+// hier bleiben sie auch im Docked-Modus erreichbar. Reihenfolge:
+// Aktionen (Start/Current/Branch) zuerst, dann Konfig (Settings/Ignore).
 var
   MI : TMenuItem;
 begin
   FHamburgerMenu := TPopupMenu.Create(Self);
 
+  // Aktions-Block: alles was eine Analyse anstoesst
+  MI := TMenuItem.Create(FHamburgerMenu);
+  MI.Caption := _('Start analysis');
+  MI.OnClick := AnalyseClick;
+  FHamburgerMenu.Items.Add(MI);
+
+  MI := TMenuItem.Create(FHamburgerMenu);
+  MI.Caption := _('Current file');
+  MI.OnClick := AnalyseCurrentFileClick;
+  FHamburgerMenu.Items.Add(MI);
+
+  MI := TMenuItem.Create(FHamburgerMenu);
+  MI.Caption := _('Analyse Branch-Changes');
+  MI.OnClick := AnalyseChangedFilesClick;
+  FHamburgerMenu.Items.Add(MI);
+
+  MI := TMenuItem.Create(FHamburgerMenu);
+  MI.Caption := '-';
+  FHamburgerMenu.Items.Add(MI);
+
+  // Konfig-Block: oeffnet externe Editoren, kein Analyse-Trigger
   MI := TMenuItem.Create(FHamburgerMenu);
   MI.Caption := _('Settings...');
   MI.OnClick := EditRepoSettingsClick;
@@ -1849,15 +1885,6 @@ begin
   MI := TMenuItem.Create(FHamburgerMenu);
   MI.Caption := _('Ignore list...');
   MI.OnClick := EditIgnoreListClick;
-  FHamburgerMenu.Items.Add(MI);
-
-  MI := TMenuItem.Create(FHamburgerMenu);
-  MI.Caption := '-';
-  FHamburgerMenu.Items.Add(MI);
-
-  MI := TMenuItem.Create(FHamburgerMenu);
-  MI.Caption := _('Analyse Branch-Changes');
-  MI.OnClick := AnalyseChangedFilesClick;
   FHamburgerMenu.Items.Add(MI);
 
   FBtnHamburger.PopupMenu := FHamburgerMenu;
@@ -2001,6 +2028,9 @@ begin
 end;
 
 procedure TAnalyserFrame.Resize;
+// VCL-Override: feuert bei JEDEM Bounds-Change (Dock, Undock, Manual-
+// Resize, Parent-Re-Layout). Robuster als das OnResize-Event, das die
+// IDE-Dock-Logik bei Float->Dock-Transitions teilweise verschluckt.
 begin
   inherited;
   // Hilfe-Panel-Layout (Dock-Sync + 1/3-Breite + Vorher/Nachher-Haelften)
@@ -2009,6 +2039,10 @@ begin
     FHintPanel.ApplyLayout;
   if Assigned(FResultGrid) then
     GridResize(FResultGrid);
+  // Responsive Visibility (Hamburger, Tiles, Filter-Labels) - forwarded
+  // an alle Panel-OnResizes garantiert, dass die Controller bei
+  // Float->Dock triggern.
+  FrameResize(Self);
 end;
 
 // ---------------------------------------------------------------------------
