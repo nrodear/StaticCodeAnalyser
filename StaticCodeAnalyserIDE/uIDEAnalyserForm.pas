@@ -182,6 +182,13 @@ type
     // im Construction-Zustand "haengen bleiben". Frame.OnResize feuert
     // garantiert.
     procedure FrameResize(Sender: TObject);
+  protected
+    // VCL ruft Resize bei JEDEM Bounds-Change (Dock, Undock, Manual-Resize,
+    // Parent-Re-Layout). Sicherer als OnResize-Event, weil das Event von
+    // der IDE-Dock-Logik teilweise nicht zuverlaessig getriggert wird.
+    // Override forwarded an FrameResize -> alle Panel-OnResizes.
+    procedure Resize; override;
+  private
     // Klick auf Stat-Kachel: setzt Severity-/Type-Filter passend (z.B.
     // Errors-Kachel -> FFilterCombo zeigt nur Errors). Sender.Tag traegt
     // den TFilterMode bzw. TTypeFilter-Ordinal.
@@ -278,22 +285,14 @@ type
   TControlAccess = class(TControl);
 
 const
-  // Zwei-Stufen-Breakpoints fuer Responsive Layout. Werte sind 96-DPI-
-  // logisch und werden in CreateUI via ScaleW skaliert.
-  //
-  // BREAKPOINT_MEDIUM (700 px): erste Stufe. Below this:
-  //   - Stats-Tiles Read errors / Bugs / Security / Duplicates / Cyclomatic aus
-  //   - Branch-Changes-Button aus
-  //   - Hamburger-Button an (Backup-Pfad fuer alle ausgeblendeten Aktionen)
-  //
-  // BREAKPOINT_NARROW (400 px): zweite Stufe (zusaetzlich zu MEDIUM).
-  //   - Settings/Ignore-Buttons aus
-  //   - Severity:/Type:/Search:-Labels aus (Combos selbsterklaerend)
-  //
-  // Hamburger triggert auf MEDIUM, weil bereits zwischen 400 und 700 die
-  // Branch-Changes-Aktion ueber das Menu erreichbar sein muss.
-  BREAKPOINT_MEDIUM = 700;
-  BREAKPOINT_NARROW = 400;
+  // Single Breakpoint fuer Docked-vs-Floated. 96-DPI-logisch, in CreateUI
+  // via ScaleW skaliert.
+  // Below: docked-Mode = nur 4 essential Stats-Tiles + Hamburger sichtbar.
+  // Alle Toolbar-Buttons (Settings/Ignore/Branch-Changes) und Labels
+  // (Severity/Type/Search) verschwinden - Aktionen ueber das Hamburger-
+  // Menu erreichbar.
+  // Above: floated-Mode = volle UI inkl. aller 9 Tiles, Hamburger weg.
+  BREAKPOINT_DOCKED = 700;
 
   // ---- Toolbar-Layout (alle Werte werden via ScaleW DPI-skaliert) -------
   TB_ROW_HEIGHT      = 22;     // alle Toolbar-Zeilen
@@ -799,28 +798,23 @@ begin
   // Setup in BuildHamburgerMenu (referenziert bestehende Click-Handler).
   BuildHamburgerMenu;
 
-  // ---- Responsive Visibility: zwei Stufen (siehe BREAKPOINT_*-Const) -----
-  // MEDIUM (< 700): Branch-Changes-Button + Hamburger-Toggle.
-  //                 Stats-Tiles werden in BuildStatsTiles gehandelt.
-  // NARROW (< 400): Settings/Ignore-Buttons + alle drei Labels.
+  // ---- Responsive Visibility: Single Threshold (Docked vs Floated) -----
+  // < BREAKPOINT_DOCKED (700): docked-Mode. Hamburger ersetzt alle
+  // versteckten Buttons (Settings/Ignore/Branch-Changes); Filter-Labels
+  // verschwinden (Combos selbsterklaerend); Stats-Tiles werden in
+  // BuildStatsTiles gehandelt (4 essential + Hamburger).
   // Threshold wird DPI-skaliert: ClientWidth ist physisch, Konstante
-  // logisch (96 DPI). Ohne Scale-Faktor wuerde Narrow auf 200% DPI bei
+  // logisch (96 DPI). Ohne Scale-Faktor wuerde Docked auf 200% DPI bei
   // bereits halber physischer Breite triggern.
-  // Hamburger ist invers: nur bei < MEDIUM sichtbar (sonst stehen die
-  // Buttons direkt zur Verfuegung). Beide PanelPath-Controller hooken
-  // denselben OnResize chained, kein Konflikt.
 
-  // PanelPath: NARROW-Trigger fuer Settings/Ignore (laesst sie bis 400 px
-  // sichtbar - die nutzt der User selten und nur kurz).
+  // PanelPath: Settings + Ignore weg im Docked
   TResponsiveVisibilityController.Create(Self, FPanelPath,
-    [FBtnRepo, FBtnIgnore], ScaleW(BREAKPOINT_NARROW));
-  // PanelPath: MEDIUM-Trigger fuer Hamburger (zeigt sich frueh, weil
-  // unter 700 px bereits Branch-Changes verschwindet und im Menu landet).
+    [FBtnRepo, FBtnIgnore], ScaleW(BREAKPOINT_DOCKED));
+  // PanelPath: Hamburger INVERS - nur im Docked sichtbar
   TResponsiveVisibilityController.Create(Self, FPanelPath,
-    [FBtnHamburger], ScaleW(BREAKPOINT_MEDIUM), True {Inverse});
+    [FBtnHamburger], ScaleW(BREAKPOINT_DOCKED), True {Inverse});
 
-  // PanelButtons: NARROW-Trigger fuer die Filter-Labels (Combos bleiben
-  // sichtbar, Labels sind redundant - Combos haben Caption-Hints).
+  // PanelButtons: Filter-Labels weg, Sub-Panels schrumpfen (Combos bleiben).
   // WICHTIG: AdjustFilterSubPanels VOR dem Controller hooken. Der
   // Controller speichert OnResize als FOriginalOnResize und ruft es NACH
   // dem Visibility-Toggle - so sieht AdjustFilterSubPanels den frischen
@@ -828,17 +822,12 @@ begin
   // bleiben FPanelSev/FPanelType in voller Breite und PanelButtons platzt.
   FPanelButtons.OnResize := AdjustFilterSubPanels;
   TResponsiveVisibilityController.Create(Self, FPanelButtons,
-    [FLblFilter, FLblType], ScaleW(BREAKPOINT_NARROW));
-  // Initial einmal ausfuehren - sonst greift die Anpassung erst beim
-  // ersten echten Resize nach dem Layout-Build.
-  AdjustFilterSubPanels(FPanelButtons);
+    [FLblFilter, FLblType], ScaleW(BREAKPOINT_DOCKED));
+  AdjustFilterSubPanels(FPanelButtons); // initial pass
 
-  // PanelSearch: MEDIUM fuer Branch-Changes (breitester Button - faellt
-  // zuerst weg). NARROW fuer das Search-Label.
+  // PanelSearch: Branch-Changes-Button + Search-Label weg im Docked.
   TResponsiveVisibilityController.Create(Self, FPanelSearch,
-    [FBtnAnalyseChanged], ScaleW(BREAKPOINT_MEDIUM));
-  TResponsiveVisibilityController.Create(Self, FPanelSearch,
-    [FLblSearch], ScaleW(BREAKPOINT_NARROW));
+    [FBtnAnalyseChanged, FLblSearch], ScaleW(BREAKPOINT_DOCKED));
 
   // ---- Statistik-Leiste: eine Reihe Sonar-Style Tiles (dunkler Hintergrund) ---
   FPanelStats := TPanel.Create(Self);
@@ -1027,8 +1016,8 @@ end;
 // FTileError/FTileWarn/... zu, daher bleibt die Feld-Struktur unveraendert.
 
 procedure TAnalyserFrame.BuildStatsTiles(Parent: TPanel);
-// Thresholds: BREAKPOINT_MEDIUM/_NARROW aus implementation-const-Block
-// (gemeinsam mit den Toolbar-Controllern in CreateUI).
+// Threshold: BREAKPOINT_DOCKED aus implementation-const (gemeinsam mit
+// den Toolbar-Controllern in CreateUI).
 
   procedure WireTile(CountLbl: TLabel; const AHint: string; ATag: Integer;
     OnClickHandler: TNotifyEvent);
@@ -1122,7 +1111,7 @@ begin
   // Responsive Layout-Controller. Owner=Self -> wird beim Frame-Destroy
   // mit freigegeben; Parent.OnResize wird vom Controller selbst gehookt.
   // Tile-Labels -> Parent.Parent ist die TilePanel (TopRow zwischen).
-  // Threshold MEDIUM (700 px DPI-skaliert): bei < 700 nur die 4 essentiellen
+  // Threshold DOCKED (700 px DPI-skaliert): bei < 700 nur die 4 essentiellen
   // Tiles (Errors/Warnings/Hints/Code Quality) sichtbar, der Rest hide.
   TResponsiveVisibilityController.Create(Self, Parent,
     [FTileFileSev.Parent.Parent,
@@ -1130,7 +1119,7 @@ begin
      FTileVuln.Parent.Parent,
      FTileDup.Parent.Parent,
      FTileCyclomatic.Parent.Parent],
-    ScaleW(BREAKPOINT_MEDIUM));
+    ScaleW(BREAKPOINT_DOCKED));
 end;
 
 // Status-Bar-Push-Methoden delegieren an uIDEStatusBar.TAnalyserStatusBar.
@@ -1810,6 +1799,15 @@ begin
     then FPanelSearch.OnResize(FPanelSearch);
   if Assigned(FPanelStats)   and Assigned(FPanelStats.OnResize)
     then FPanelStats.OnResize(FPanelStats);
+end;
+
+procedure TAnalyserFrame.Resize;
+// VCL-Override: feuert bei JEDEM Bounds-Change. Robuster als der
+// OnResize-Event - der IDE-Dock-Manager triggert OnResize teilweise
+// nicht (Float->Dock-Transition), Resize() wird aber immer gerufen.
+begin
+  inherited;
+  FrameResize(Self);
 end;
 
 procedure TAnalyserFrame.AdjustFilterSubPanels(Sender: TObject);
