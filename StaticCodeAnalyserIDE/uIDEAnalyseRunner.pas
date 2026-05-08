@@ -272,7 +272,7 @@ begin
   Screen.Cursor := crHourglass;
   try
     try
-      FOnStatusProgress(_('Analyzing: ') + ExtractFileName(AFilePath));
+      FOnStatusProgress(_('Analysing: ') + ExtractFileName(AFilePath));
       Application.ProcessMessages;
 
       findings := nil;

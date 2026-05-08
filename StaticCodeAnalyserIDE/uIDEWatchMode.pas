@@ -222,7 +222,7 @@ procedure UnregisterWatchMode;
 implementation
 
 uses
-  System.StrUtils, Vcl.Forms, uStaticAnalyzer2;
+  System.StrUtils, Vcl.Forms, uStaticAnalyzer2, uLocalization;
 
 const
   DEBOUNCE_MS      = 300;   // Save-Trigger: schnelle Reaktion erwuenscht
@@ -519,7 +519,8 @@ begin
 
   if not AttachToWatchedFile(NewWatched) then
   begin
-    DoStatus('watch: could not attach to ' + ExtractFileName(NewWatched));
+    DoStatus(Format(_('Watch: could not attach to %s'),
+      [ExtractFileName(NewWatched)]));
     FActive := False;
     FWatchedFile := '';
     Exit;
@@ -529,7 +530,7 @@ begin
   // (EditorViewModified). Immer registriert wenn aktiv.
   RegisterEditServicesNotifier;
 
-  DoStatus('watching: ' + ExtractFileName(NewWatched));
+  DoStatus(Format(_('Watching: %s'), [ExtractFileName(NewWatched)]));
 end;
 
 procedure TWatchModeManager.Deactivate;
@@ -601,7 +602,7 @@ begin
   FPendingFileName := Norm;
   FDebounceTimer.Enabled := False; // Reset
   FDebounceTimer.Enabled := True;  // 300 ms warten dann feuern
-  DoStatus('saved, queueing analysis: ' + ExtractFileName(Norm));
+  DoStatus(Format(_('Saved, queueing analysis: %s'), [ExtractFileName(Norm)]));
 end;
 
 procedure TWatchModeManager.NotifyFileEdited(const AFileName: string);
@@ -691,7 +692,7 @@ begin
   UsesCheck := False; // V1: konservativer Default. Worker schaltet UsesCheck
                       // explizit aus, damit der Live-Pfad immer schnell bleibt.
 
-  DoStatus('analysing: ' + ExtractFileName(AFileName));
+  DoStatus(Format(_('Analysing: %s'), [ExtractFileName(AFileName)]));
   TWatchAnalyzer.Create(AFileName, UsesCheck, FGeneration);
 end;
 

@@ -106,6 +106,8 @@ begin
   GDeMap.Add('Duplicates',               'Duplikate');
   GDeMap.Add('Read errors',              'Lesefehler');
   GDeMap.Add('Read Error',               'Lesefehler');
+  GDeMap.Add('Cyclomatic',               'Komplexit'#$E4't');
+  GDeMap.Add('Cyclomatic Complexity',    'Cyclomatic Complexity');
 
   // ---- Detektor-Namen ----
   GDeMap.Add('SQL Injection',            'SQL Injection');
@@ -134,6 +136,12 @@ begin
   GDeMap.Add('No findings.',             'Keine Befunde.');
   GDeMap.Add('Analysis cancelled',       'Analyse abgebrochen');
   GDeMap.Add('Analysing: ',              'Analysiere: ');
+  GDeMap.Add('Analysing: %s',            'Analysiere: %s');
+  GDeMap.Add('Watching: %s',             'Beobachte: %s');
+  GDeMap.Add('Watch: could not attach to %s',
+                                         'Watch: konnte nicht an %s angeh'#$E4'ngt werden');
+  GDeMap.Add('Saved, queueing analysis: %s',
+                                         'Gespeichert, Analyse wird angesto'#$DF'en: %s');
   GDeMap.Add('Analysis error: ',         'Analysefehler: ');
   GDeMap.Add('Analysis running - searching for files...',
                                          'Analyse l'#$E4'uft - Dateien werden gesucht...');
@@ -172,6 +180,56 @@ begin
                                          'analyser.ini '#$F6'ffnen (BaseBranch, git/svn-Pfad, Custom-LeakyClasses)');
   GDeMap.Add('Export: HTML, JSON, CSV, Jira markup, plain text',
                                          'Export: HTML, JSON, CSV, Jira-Markup, Plain-Text');
+  GDeMap.Add('More actions (Settings, Ignore list, Branch-Changes)',
+                                         'Weitere Aktionen (Einstellungen, Ignore-Liste, Branch-'#$C4'nderungen)');
+
+  // ---- Hamburger-Menu ----
+  GDeMap.Add('Ignore list...',           'Ignore-Liste...');
+  GDeMap.Add('Analyse Branch-Changes',   'Branch-'#$C4'nderungen analysieren');
+
+  // ---- Stat-Tile-Hints (Multi-Line via sLineBreak) ----
+  GDeMap.Add('Real bugs / security holes (severity Error). Fix immediately.',
+                                         'Sichere Bugs / Sicherheitsl'#$FC'cken (Severity Error). Sofort fixen.');
+  GDeMap.Add('Click: filter grid to Errors',
+                                         'Klick: Grid auf Fehler filtern');
+  GDeMap.Add('Likely bugs / risky patterns. Review before merge.',
+                                         'Wahrscheinliche Bugs / riskante Muster. Pr'#$FC'fen vor Merge.');
+  GDeMap.Add('Click: filter grid to Warnings',
+                                         'Klick: Grid auf Warnungen filtern');
+  GDeMap.Add('Code smells / style. Refactoring candidates.',
+                                         'Code-Smells / Stilfragen. Refactoring-Kandidaten.');
+  GDeMap.Add('Click: filter grid to Hints',
+                                         'Klick: Grid auf Hinweise filtern');
+  GDeMap.Add('File could not be read / parsed. Check path/encoding.',
+                                         'Datei konnte nicht gelesen / geparst werden. Pfad/Encoding pr'#$FC'fen.');
+  GDeMap.Add('Click: filter grid to read errors',
+                                         'Klick: Grid auf Lesefehler filtern');
+  GDeMap.Add('Methods with McCabe complexity > threshold (default 10).',
+                                         'Methoden mit McCabe-Komplexit'#$E4't > Schwellwert (Default 10).');
+  GDeMap.Add('Hard to test - refactor into smaller methods.',
+                                         'Schwer zu testen - in kleinere Methoden refactoren.');
+  GDeMap.Add('Click: filter grid to Cyclomatic',
+                                         'Klick: Grid auf Cyclomatic filtern');
+  GDeMap.Add('Findings of type Bug (wrong behaviour, crash, wrong result).',
+                                         'Findings vom Typ Bug (falsches Verhalten, Crash, falsches Ergebnis).');
+  GDeMap.Add('Crosses severities - Bugs can be Errors OR Warnings.',
+                                         'Severity-'#$FC'bergreifend - Bugs k'#$F6'nnen Errors ODER Warnings sein.');
+  GDeMap.Add('Click: filter grid to Bug type',
+                                         'Klick: Grid auf Bug-Type filtern');
+  GDeMap.Add('Security holes (SQL injection, hardcoded secrets ...).',
+                                         'Sicherheitsl'#$FC'cken (SQL-Injection, hartcodierte Secrets ...).');
+  GDeMap.Add('Click: filter grid to Vulnerability type',
+                                         'Klick: Grid auf Vulnerability-Type filtern');
+  GDeMap.Add('Copied code (strings, blocks). Extract Method/Constant candidates.',
+                                         'Kopierter Code (Strings, Bl'#$F6'cke). Extract Method/Constant Kandidaten.');
+  GDeMap.Add('Click: filter grid to Duplicate type',
+                                         'Klick: Grid auf Duplicate-Type filtern');
+  GDeMap.Add('Weighted quality score (lower = better).',
+                                         'Gewichteter Quality-Score (niedriger = besser).');
+  GDeMap.Add('Weights: Vulnerability 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2.',
+                                         'Gewichte: Vulnerability 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2.');
+  GDeMap.Add('Click: reset filters (show everything)',
+                                         'Klick: Filter zur'#$FC'cksetzen (alles anzeigen)');
 
   // ---- Export-Menue ----
   GDeMap.Add('HTML report (all findings)...',
@@ -221,8 +279,8 @@ begin
   GDeMap.Add('Cancelling analysis...',   'Analyse wird abgebrochen...');
   GDeMap.Add('Could not open editor. File: ',
                                          'Konnte Editor nicht '#$F6'ffnen. Datei: ');
-  GDeMap.Add('Settings: %s - changes take effect on next click of Branch-Changes.',
-                                         'Einstellungen: %s - '#$C4'nderungen wirken beim n'#$E4'chsten Klick auf Branch-Changes.');
+  GDeMap.Add('Settings: %s - changes take effect on the next analysis run.',
+                                         'Einstellungen: %s - '#$C4'nderungen wirken beim n'#$E4'chsten Analyse-Lauf.');
   GDeMap.Add('More than %d files found - scan cancelled.',
                                          'Mehr als %d Dateien gefunden - Scan abgebrochen.');
   GDeMap.Add('Scanning... %d found',     'Scanne... %d gefunden');
@@ -261,11 +319,48 @@ begin
   GDeMap.Add('ERROR',                    'FEHLER');
   GDeMap.Add('WARNING',                  'WARNUNG');
   GDeMap.Add('HINT',                     'HINWEIS');
+  GDeMap.Add('Info',                     'Info');
   GDeMap.Add('Hint: ',                   'Hinweis: ');
   GDeMap.Add('Before:',                  'Vorher:');
   GDeMap.Add('After:',                   'Nachher:');
   GDeMap.Add('L. ',                      'Z. ');
   // 'in' ist in beiden Sprachen identisch - Identity-Fallback reicht.
+
+  // ---- AI/Claude-Prompt (uClaudePrompt) ----
+  GDeMap.Add('Code review request - Delphi static analysis finding',
+                                         'Code-Review-Anfrage - Delphi Static-Analysis-Befund');
+  GDeMap.Add('You are a senior Delphi developer reviewing the output ' +
+             'of a static code analyser. Target version: Delphi 12 Athens (RTL/VCL). ' +
+             'Suggest minimal, idiomatic fixes - no sweeping refactors, no style ' +
+             'overhauls, no new dependencies unless strictly required.',
+                                         'Du bist ein erfahrener Delphi-Entwickler und reviewst die Ausgabe ' +
+                                         'eines statischen Code-Analyzers. Zielversion: Delphi 12 Athens (RTL/VCL). ' +
+                                         'Schlage minimal-invasive, idiomatische Fixes vor - keine Refactor-Sprees, ' +
+                                         'keine Stil-'#$DC'berarbeitungen, keine neuen Abh'#$E4'ngigkeiten ohne ' +
+                                         'zwingenden Grund.');
+  GDeMap.Add('Finding',                  'Befund');
+  GDeMap.Add('Field',                    'Feld');
+  GDeMap.Add('Value',                    'Wert');
+  GDeMap.Add('Rule description',         'Regel-Beschreibung');
+  GDeMap.Add('Code (>>> marks the line that triggered the rule)',
+                                         'Code (>>> markiert die Zeile, die die Regel ausgel'#$F6'st hat)');
+  GDeMap.Add('Reference pattern (generic example for this rule, NOT the user''s code)',
+                                         'Referenz-Pattern (generisches Beispiel f'#$FC'r diese Regel, NICHT der User-Code)');
+  GDeMap.Add('Anti-pattern',             'Anti-Pattern');
+  GDeMap.Add('Recommended fix',          'Empfohlener Fix');
+  GDeMap.Add('Please respond with three sections',
+                                         'Bitte antworte in drei Abschnitten');
+  GDeMap.Add('Cause',                    'Ursache');
+  GDeMap.Add('1-2 sentences why the rule fires on THIS specific code (not the generic explanation above).',
+                                         '1-2 S'#$E4'tze, warum die Regel bei DIESEM konkreten Code feuert (nicht die generische Erkl'#$E4'rung oben).');
+  GDeMap.Add('Fix',                      'Fix');
+  GDeMap.Add('the modified code as a Pascal block. Keep diff minimal: only the lines that need to change. Match surrounding indentation and naming style.',
+                                         'der ge'#$E4'nderte Code als Pascal-Block. Diff minimal halten: nur die Zeilen, die sich '#$E4'ndern m'#$FC'ssen. Indent und Namensstil anpassen.');
+  GDeMap.Add('Verify',                   'Verifikation');
+  GDeMap.Add('what to test or check after the fix to confirm the issue is gone (and no regressions).',
+                                         'was nach dem Fix zu testen ist um zu best'#$E4'tigen dass der Befund weg ist (und keine Regressionen entstanden).');
+  GDeMap.Add('If the finding is a false positive, say so and explain why - then suggest a `// noinspection %s` suppression marker on the affected line.',
+                                         'Falls False Positive: sag das und erkl'#$E4're warum - schlage dann einen `// noinspection %s` Suppression-Marker auf der betroffenen Zeile vor.');
 end;
 
 function _(const S: string): string;
