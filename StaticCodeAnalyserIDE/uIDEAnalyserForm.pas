@@ -49,6 +49,12 @@ type
     FPanelPath         : TPanel;
     FPanelButtons      : TPanel;
     FPanelSearch       : TPanel;
+    // Sub-Panel-Container fuer Severity- und Type-Combo (Label + Combo
+    // gemeinsam in einem alLeft-Block). Refs werden gebraucht damit der
+    // Resize-Handler die Width an die Label-Visibility anpassen kann -
+    // sonst bleibt das Sub-Panel breit obwohl das Label drinnen hidden ist.
+    FPanelSev          : TPanel;
+    FPanelType         : TPanel;
     // Toolbar-Controls die im gedockten/schmalen Modus ausgeblendet werden -
     // ihre Aktionen bleiben ueber das Hamburger-Menu erreichbar (FHamburgerMenu).
     FBtnRepo, FBtnIgnore                           : TButton;
@@ -164,6 +170,11 @@ type
     // 0/uninit, fallback auf 96. Beispiel: ScaleW(28) liefert 28 bei 100%
     // DPI, 56 bei 200%.
     function  ScaleW(AValue: Integer): Integer;
+    // OnResize-Handler fuer PanelButtons: passt FPanelSev/FPanelType-Width
+    // an die Label-Visibility an. Wird CHAINED (TResponsiveVisibilityController
+    // ruft uns als FOriginalOnResize NACH dem Label-Toggle), so dass die
+    // Width-Anpassung den frischen Visible-Zustand sieht.
+    procedure AdjustFilterSubPanels(Sender: TObject);
     // Klick auf Stat-Kachel: setzt Severity-/Type-Filter passend (z.B.
     // Errors-Kachel -> FFilterCombo zeigt nur Errors). Sender.Tag traegt
     // den TFilterMode bzw. TTypeFilter-Ordinal.
@@ -260,12 +271,22 @@ type
   TControlAccess = class(TControl);
 
 const
-  // Schwellwert fuer Responsive Layout: unterhalb dieser Container-Breite
-  // werden alle "optionalen" Toolbar-Controls und Tile-Kacheln ausgeblendet.
-  // Die Aktionen bleiben weiterhin ueber das Hamburger-Menu bzw. den
-  // Filter-Combo erreichbar. 700 px ist empirisch (passt fuer typisch
-  // schmal gedockte IDE-Tool-Panels).
-  TILE_DOCK_THRESHOLD = 700;
+  // Zwei-Stufen-Breakpoints fuer Responsive Layout. Werte sind 96-DPI-
+  // logisch und werden in CreateUI via ScaleW skaliert.
+  //
+  // BREAKPOINT_MEDIUM (700 px): erste Stufe. Below this:
+  //   - Stats-Tiles Read errors / Bugs / Security / Duplicates / Cyclomatic aus
+  //   - Branch-Changes-Button aus
+  //   - Hamburger-Button an (Backup-Pfad fuer alle ausgeblendeten Aktionen)
+  //
+  // BREAKPOINT_NARROW (400 px): zweite Stufe (zusaetzlich zu MEDIUM).
+  //   - Settings/Ignore-Buttons aus
+  //   - Severity:/Type:/Search:-Labels aus (Combos selbsterklaerend)
+  //
+  // Hamburger triggert auf MEDIUM, weil bereits zwischen 400 und 700 die
+  // Branch-Changes-Aktion ueber das Menu erreichbar sein muss.
+  BREAKPOINT_MEDIUM = 700;
+  BREAKPOINT_NARROW = 400;
 
   // ---- Toolbar-Layout (alle Werte werden via ScaleW DPI-skaliert) -------
   TB_ROW_HEIGHT      = 22;     // alle Toolbar-Zeilen
@@ -534,15 +555,15 @@ begin
   // Combo gegeneinander (TLabel ist TGraphicControl, TComboBox ist
   // TWinControl - VCL aligned die in unterschiedlichen Passes); im
   // Sub-Panel laufen sie strikt von links nach rechts.
-  var PanelSev := TPanel.Create(Self);
-  PanelSev.Parent     := PanelButtons;
-  PanelSev.Align      := alLeft;
-  PanelSev.BevelOuter := bvNone;
-  PanelSev.Color      := clBtnFace;
-  PanelSev.Width      := ScaleW(LBL_W_FILTER + CMB_W_FILTER);
+  FPanelSev := TPanel.Create(Self);
+  FPanelSev.Parent     := PanelButtons;
+  FPanelSev.Align      := alLeft;
+  FPanelSev.BevelOuter := bvNone;
+  FPanelSev.Color      := clBtnFace;
+  FPanelSev.Width      := ScaleW(LBL_W_FILTER + CMB_W_FILTER);
 
   FLblFilter := TLabel.Create(Self);
-  FLblFilter.Parent   := PanelSev;
+  FLblFilter.Parent   := FPanelSev;
   FLblFilter.Caption  := _('Severity:');
   FLblFilter.Align    := alLeft;
   FLblFilter.AutoSize := False;
@@ -553,7 +574,7 @@ begin
   // Items.Objects haelt den Ord(TFilterMode) als Tag; Separatoren haben Tag = -1
   // und werden in FilterChange auf "Alle" zurueckgesetzt.
   FFilterCombo := TComboBox.Create(Self);
-  FFilterCombo.Parent      := PanelSev;
+  FFilterCombo.Parent      := FPanelSev;
   FFilterCombo.Style       := csDropDownList;
   FFilterCombo.Align       := alClient;
   FFilterCombo.Font.Name   := 'Segoe UI';
@@ -605,15 +626,15 @@ begin
   SepF1.Color      := clBtnFace;
 
   // ---- Zweiter Filter: Typ (Sonar-Kategorie) - gleicher Container-Trick ----
-  var PanelType := TPanel.Create(Self);
-  PanelType.Parent     := PanelButtons;
-  PanelType.Align      := alLeft;
-  PanelType.BevelOuter := bvNone;
-  PanelType.Color      := clBtnFace;
-  PanelType.Width      := ScaleW(LBL_W_TYPE + CMB_W_TYPE);
+  FPanelType := TPanel.Create(Self);
+  FPanelType.Parent     := PanelButtons;
+  FPanelType.Align      := alLeft;
+  FPanelType.BevelOuter := bvNone;
+  FPanelType.Color      := clBtnFace;
+  FPanelType.Width      := ScaleW(LBL_W_TYPE + CMB_W_TYPE);
 
   FLblType := TLabel.Create(Self);
-  FLblType.Parent   := PanelType;
+  FLblType.Parent   := FPanelType;
   FLblType.Caption  := _('Type:');
   FLblType.Align    := alLeft;
   FLblType.AutoSize := False;
@@ -621,7 +642,7 @@ begin
   FLblType.Layout   := tlCenter;
 
   FTypeCombo := TComboBox.Create(Self);
-  FTypeCombo.Parent      := PanelType;
+  FTypeCombo.Parent      := FPanelType;
   FTypeCombo.Style       := csDropDownList;
   FTypeCombo.Align       := alClient;
   FTypeCombo.Font.Name   := 'Segoe UI';
@@ -771,24 +792,46 @@ begin
   // Setup in BuildHamburgerMenu (referenziert bestehende Click-Handler).
   BuildHamburgerMenu;
 
-  // ---- Responsive Visibility: blende optionale Toolbar-Controls bei
-  //      schmalem Frame (gedockt) aus. Aktionen bleiben im Hamburger-Menu
-  //      erreichbar.
-  // Hamburger ist invers: nur bei narrow sichtbar (sonst stehen die
-  // Buttons direkt zur Verfuegung). Beide Controller hooken denselben
-  // PanelPath.OnResize - chained ohne Konflikt (siehe Controller-
-  // Implementation).
+  // ---- Responsive Visibility: zwei Stufen (siehe BREAKPOINT_*-Const) -----
+  // MEDIUM (< 700): Branch-Changes-Button + Hamburger-Toggle.
+  //                 Stats-Tiles werden in BuildStatsTiles gehandelt.
+  // NARROW (< 400): Settings/Ignore-Buttons + alle drei Labels.
   // Threshold wird DPI-skaliert: ClientWidth ist physisch, Konstante
-  // logisch (96 DPI). Ohne Scale-Faktor wuerde Narrow-Modus auf 200%
-  // DPI bereits bei halber physischer Breite triggern.
+  // logisch (96 DPI). Ohne Scale-Faktor wuerde Narrow auf 200% DPI bei
+  // bereits halber physischer Breite triggern.
+  // Hamburger ist invers: nur bei < MEDIUM sichtbar (sonst stehen die
+  // Buttons direkt zur Verfuegung). Beide PanelPath-Controller hooken
+  // denselben OnResize chained, kein Konflikt.
+
+  // PanelPath: NARROW-Trigger fuer Settings/Ignore (laesst sie bis 400 px
+  // sichtbar - die nutzt der User selten und nur kurz).
   TResponsiveVisibilityController.Create(Self, FPanelPath,
-    [FBtnRepo, FBtnIgnore], ScaleW(TILE_DOCK_THRESHOLD));
+    [FBtnRepo, FBtnIgnore], ScaleW(BREAKPOINT_NARROW));
+  // PanelPath: MEDIUM-Trigger fuer Hamburger (zeigt sich frueh, weil
+  // unter 700 px bereits Branch-Changes verschwindet und im Menu landet).
   TResponsiveVisibilityController.Create(Self, FPanelPath,
-    [FBtnHamburger], ScaleW(TILE_DOCK_THRESHOLD), True {Inverse});
+    [FBtnHamburger], ScaleW(BREAKPOINT_MEDIUM), True {Inverse});
+
+  // PanelButtons: NARROW-Trigger fuer die Filter-Labels (Combos bleiben
+  // sichtbar, Labels sind redundant - Combos haben Caption-Hints).
+  // WICHTIG: AdjustFilterSubPanels VOR dem Controller hooken. Der
+  // Controller speichert OnResize als FOriginalOnResize und ruft es NACH
+  // dem Visibility-Toggle - so sieht AdjustFilterSubPanels den frischen
+  // FLbl*-Visible-Zustand und passt die Sub-Panel-Width an. Sonst
+  // bleiben FPanelSev/FPanelType in voller Breite und PanelButtons platzt.
+  FPanelButtons.OnResize := AdjustFilterSubPanels;
   TResponsiveVisibilityController.Create(Self, FPanelButtons,
-    [FLblFilter, FLblType], ScaleW(TILE_DOCK_THRESHOLD));
+    [FLblFilter, FLblType], ScaleW(BREAKPOINT_NARROW));
+  // Initial einmal ausfuehren - sonst greift die Anpassung erst beim
+  // ersten echten Resize nach dem Layout-Build.
+  AdjustFilterSubPanels(FPanelButtons);
+
+  // PanelSearch: MEDIUM fuer Branch-Changes (breitester Button - faellt
+  // zuerst weg). NARROW fuer das Search-Label.
   TResponsiveVisibilityController.Create(Self, FPanelSearch,
-    [FBtnAnalyseChanged, FLblSearch], ScaleW(TILE_DOCK_THRESHOLD));
+    [FBtnAnalyseChanged], ScaleW(BREAKPOINT_MEDIUM));
+  TResponsiveVisibilityController.Create(Self, FPanelSearch,
+    [FLblSearch], ScaleW(BREAKPOINT_NARROW));
 
   // ---- Statistik-Leiste: eine Reihe Sonar-Style Tiles (dunkler Hintergrund) ---
   FPanelStats := TPanel.Create(Self);
@@ -969,8 +1012,8 @@ end;
 // FTileError/FTileWarn/... zu, daher bleibt die Feld-Struktur unveraendert.
 
 procedure TAnalyserFrame.BuildStatsTiles(Parent: TPanel);
-// Threshold: TILE_DOCK_THRESHOLD aus implementation-const (gemeinsam
-// mit den Toolbar-Controllern in CreateUI).
+// Thresholds: BREAKPOINT_MEDIUM/_NARROW aus implementation-const-Block
+// (gemeinsam mit den Toolbar-Controllern in CreateUI).
 
   procedure WireTile(CountLbl: TLabel; const AHint: string; ATag: Integer;
     OnClickHandler: TNotifyEvent);
@@ -1064,14 +1107,15 @@ begin
   // Responsive Layout-Controller. Owner=Self -> wird beim Frame-Destroy
   // mit freigegeben; Parent.OnResize wird vom Controller selbst gehookt.
   // Tile-Labels -> Parent.Parent ist die TilePanel (TopRow zwischen).
-  // Threshold DPI-skaliert (siehe CreateUI-Kommentar).
+  // Threshold MEDIUM (700 px DPI-skaliert): bei < 700 nur die 4 essentiellen
+  // Tiles (Errors/Warnings/Hints/Code Quality) sichtbar, der Rest hide.
   TResponsiveVisibilityController.Create(Self, Parent,
     [FTileFileSev.Parent.Parent,
      FTileBug.Parent.Parent,
      FTileVuln.Parent.Parent,
      FTileDup.Parent.Parent,
      FTileCyclomatic.Parent.Parent],
-    ScaleW(TILE_DOCK_THRESHOLD));
+    ScaleW(BREAKPOINT_MEDIUM));
 end;
 
 // Status-Bar-Push-Methoden delegieren an uIDEStatusBar.TAnalyserStatusBar.
@@ -1736,6 +1780,28 @@ begin
   PPI := CurrentPPI;
   if PPI <= 0 then PPI := 96;
   Result := MulDiv(AValue, PPI, 96);
+end;
+
+procedure TAnalyserFrame.AdjustFilterSubPanels(Sender: TObject);
+// Sub-Panel-Width = Label-Anteil (nur wenn Label sichtbar) + Combo-Anteil.
+// Im NARROW-Modus sind die Labels hidden -> Sub-Panels schrumpfen entsprechend.
+// Sonst wuerden FPanelSev/FPanelType weiterhin die volle Label+Combo-Breite
+// belegen und PanelButtons platzen.
+begin
+  if Assigned(FPanelSev) and Assigned(FLblFilter) then
+  begin
+    if FLblFilter.Visible then
+      FPanelSev.Width := ScaleW(LBL_W_FILTER + CMB_W_FILTER)
+    else
+      FPanelSev.Width := ScaleW(CMB_W_FILTER);
+  end;
+  if Assigned(FPanelType) and Assigned(FLblType) then
+  begin
+    if FLblType.Visible then
+      FPanelType.Width := ScaleW(LBL_W_TYPE + CMB_W_TYPE)
+    else
+      FPanelType.Width := ScaleW(CMB_W_TYPE);
+  end;
 end;
 
 procedure TAnalyserFrame.BuildHamburgerMenu;
