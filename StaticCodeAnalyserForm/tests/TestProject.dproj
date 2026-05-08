@@ -157,7 +157,22 @@
         </DelphiCompile>
         <DCCReference Include="uTestSrcBuilder.pas"/>
         <DCCReference Include="uTestTAstNode.pas"/>
-        <DCCReference Include="uTestAnalyserChecks.pas"/>
+        <DCCReference Include="uTestFindingHelper.pas"/>
+        <DCCReference Include="uTestLeakDetector.pas"/>
+        <DCCReference Include="uTestSQLInjection.pas"/>
+        <DCCReference Include="uTestHardcodedSecret.pas"/>
+        <DCCReference Include="uTestHardcodedPath.pas"/>
+        <DCCReference Include="uTestFormatMismatch.pas"/>
+        <DCCReference Include="uTestUnusedUses.pas"/>
+        <DCCReference Include="uTestEmptyExcept.pas"/>
+        <DCCReference Include="uTestEmptyMethod.pas"/>
+        <DCCReference Include="uTestDuplicate.pas"/>
+        <DCCReference Include="uTestDebugOutput.pas"/>
+        <DCCReference Include="uTestTodoComment.pas"/>
+        <DCCReference Include="uTestCodeMetrics.pas"/>
+        <DCCReference Include="uTestSafetyChecks.pas"/>
+        <DCCReference Include="uTestComboChecks.pas"/>
+        <DCCReference Include="uTestParserRobustness.pas"/>
         <DCCReference Include="uTestPerformance.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

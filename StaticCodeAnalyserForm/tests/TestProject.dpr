@@ -14,10 +14,25 @@ uses
   DUnitX.Loggers.Xml.NUnit,
 {$ENDIF }
   DUnitX.TestFramework,
-  uTestSrcBuilder     in 'uTestSrcBuilder.pas',
-  uTestTAstNode       in 'uTestTAstNode.pas',
-  uTestAnalyserChecks in 'uTestAnalyserChecks.pas',
-  uTestPerformance    in 'uTestPerformance.pas';
+  uTestSrcBuilder       in 'uTestSrcBuilder.pas',
+  uTestTAstNode         in 'uTestTAstNode.pas',
+  uTestFindingHelper    in 'uTestFindingHelper.pas',
+  uTestLeakDetector     in 'uTestLeakDetector.pas',
+  uTestSQLInjection     in 'uTestSQLInjection.pas',
+  uTestHardcodedSecret  in 'uTestHardcodedSecret.pas',
+  uTestHardcodedPath    in 'uTestHardcodedPath.pas',
+  uTestFormatMismatch   in 'uTestFormatMismatch.pas',
+  uTestUnusedUses       in 'uTestUnusedUses.pas',
+  uTestEmptyExcept      in 'uTestEmptyExcept.pas',
+  uTestEmptyMethod      in 'uTestEmptyMethod.pas',
+  uTestDuplicate        in 'uTestDuplicate.pas',
+  uTestDebugOutput      in 'uTestDebugOutput.pas',
+  uTestTodoComment      in 'uTestTodoComment.pas',
+  uTestCodeMetrics      in 'uTestCodeMetrics.pas',
+  uTestSafetyChecks     in 'uTestSafetyChecks.pas',
+  uTestComboChecks      in 'uTestComboChecks.pas',
+  uTestParserRobustness in 'uTestParserRobustness.pas',
+  uTestPerformance      in 'uTestPerformance.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}

@@ -808,6 +808,59 @@ hängt zusammen (CLI-Mode ist die Voraussetzung für CI-Integration).
   Niedrige Priorität — Mercurial-Anteil im Delphi-Umfeld klein, aber
   technisch trivial.
 
+- [ ] **Code-Metriken — allgemein + im Speziellen**
+
+  **Allgemein (Framework):**
+  Heute laufen die metrik-artigen Detektoren (LongMethod, LongParamList,
+  DeepNesting, MagicNumbers, DuplicateBlock, DuplicateString) als
+  isolierte AST-Detektoren mit eigener Severity-Logik und melden ihre
+  Treffer einzeln ins Befund-Grid. Das erzeugt Rauschen und macht
+  Trends über Files/Methoden hinweg unsichtbar. Vorschlag:
+  - **Metric-Layer** unterhalb der Detektoren: Pro `TMethodNode` /
+    `TClassNode` / `Unit` werden Roh-Werte einmal akkumuliert
+    (Lines, Statements, Params, MaxNestingDepth, Branches, Operators…)
+    und als Properties am AST-Knoten oder in einer parallelen Map
+    gehalten. Detektoren konsumieren die Map, statt das AST je nochmal
+    selbst zu durchwandern.
+  - **Metrics-View im IDE-Plugin** — analog zu `uIDEStatsTiles`: eine
+    Tabelle "Top 10 Methoden nach Cyclomatic / Length / Nesting" je
+    Aktuelle-Datei oder Branch-Diff. Ohne Severity, rein informativ
+    (ergänzt das Befund-Grid, ersetzt es nicht).
+  - **Einheitliche Threshold-Schema** in `[Metrics]` (statt verstreut
+    in `[Detectors]`): `LongMethodMaxBodyLines`, `CyclomaticMax`, etc.
+    plus pro-Methode-Override per Suppression-Marker
+    (`// metrics: cyclomatic=15`).
+
+  **Im Speziellen (neue Detektoren / Metriken):**
+  - **Cyclomatic Complexity (McCabe)** — `if`/`while`/`for`/`case`/`and`/`or`/
+    `except on` zählen +1 pro Methode. Schwelle z.B. 10. Heute über
+    `DeepNesting` nur grob abgedeckt.
+  - **Cognitive Complexity** (Sonar-Style) — wie Cyclomatic, aber
+    Verschachtelung gewichtet (innere `if` zählen mehr als äußere).
+    Korreliert besser mit "schwer zu lesen" als reine McCabe-Zahl.
+  - **God-Class** — Klasse mit > N Methoden ODER > N Fields ODER
+    Methoden/Fields-Verhältnis < 0.5 (Datenklasse). Heute kein
+    Class-Level-Detektor.
+  - **Boolean-Expression-Complexity** — `and`/`or`/`not`-Anzahl in
+    einer einzelnen Condition. `if (a or b) and (c or d) and not e`
+    = 5. Schwelle ~4. Hilft `if`-Statements zu vereinfachen.
+  - **Comment-Density** — Kommentar-Zeilen / Code-Zeilen pro Unit.
+    Sowohl Untergrenze (zu wenig docs) als auch Obergrenze
+    (auskommentierter Code). Konfigurierbar per `[Metrics]`.
+  - **Method-Count-per-Class** — separate Metrik für die God-Class-
+    Diagnose, kann auch ohne Class-Smell-Verdacht informativ sein.
+  - **Inheritance-Depth (DIT)** — Klassen-Hierarchie-Tiefe; tief
+    verschachtelte Hierarchien sind Refactoring-Kandidaten. Braucht
+    Cross-File-Auflösung (heute nicht da — Detektoren laufen pro Unit
+    isoliert).
+  - **Halstead-Metriken** (n1/n2/N1/N2 → Volume, Difficulty, Effort) —
+    eher "nice to have", akademisch. Niedrige Priorität.
+
+  **Reihenfolge-Vorschlag:** erst Metric-Layer + Cyclomatic
+  (höchster Praxisnutzen, AST schon da), dann God-Class + Boolean-
+  Expression (mittlerer Aufwand), dann Cognitive/DIT/Halstead
+  (separater Pass).
+
 ---
 
 ## 🧪 Tests
