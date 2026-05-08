@@ -44,12 +44,24 @@ type
     FDisplayedFindings : TList<TLeakFinding>;
 
     FPanelStats        : TPanel;
+    // Toolbar-Panels - werden in CreateUI als alTop angelegt. Refs gehalten,
+    // damit der Responsive-Controller pro Reihe den Resize hooken kann.
+    FPanelPath         : TPanel;
+    FPanelButtons      : TPanel;
+    FPanelSearch       : TPanel;
+    // Toolbar-Controls die im gedockten/schmalen Modus ausgeblendet werden -
+    // ihre Aktionen bleiben ueber das Hamburger-Menu erreichbar (FHamburgerMenu).
+    FBtnRepo, FBtnIgnore                           : TButton;
+    FBtnHamburger                                  : TButton;
+    FHamburgerMenu                                 : TPopupMenu;
+    FLblFilter, FLblType, FLblSearch               : TLabel;
     // Eine horizontale Tile-Reihe: 4 Severity-Tiles + 3 Type-Tiles + Score.
     // Layout pro Tile: Glyph-Icon links + Count rechts (Top-Row), Caption
     // unten zentriert. Glyphs aus Segoe Fluent Icons (vektor, kein SVG-Lib).
     // Code Smell und Hotspot werden NICHT angezeigt (zaehlen aber in den Score).
     FTileError, FTileWarn, FTileHint, FTileFileSev : TLabel; // Severity
     FTileBug, FTileVuln, FTileDup                  : TLabel; // Type
+    FTileCyclomatic                                : TLabel; // Detector-spez.
     FTileScore                                     : TLabel; // Codequalitaet
     // Export-Dropdown: ein Button "Export ▾" mit Popup statt 5 Einzel-Buttons.
     // Export-Popup ist komplett gekapselt in uIDEExportMenu.
@@ -146,6 +158,13 @@ type
     procedure CancelAnalyseClick(Sender: TObject);
     procedure EditIgnoreListClick(Sender: TObject);
     procedure EditRepoSettingsClick(Sender: TObject);
+    procedure HamburgerClick(Sender: TObject);
+    // Klick auf Stat-Kachel: setzt Severity-/Type-Filter passend (z.B.
+    // Errors-Kachel -> FFilterCombo zeigt nur Errors). Sender.Tag traegt
+    // den TFilterMode bzw. TTypeFilter-Ordinal.
+    procedure TileClickSeverity(Sender: TObject);
+    procedure TileClickType(Sender: TObject);
+    procedure TileClickClear(Sender: TObject);
     procedure PopulateFindings(const findings: TObjectList<TLeakFinding>;
       const BaseDir: string);
     procedure UpdateStats;
@@ -229,6 +248,19 @@ procedure ShowAnalyserDockableForm;
 implementation
 
 {$R *.dfm}
+
+type
+  // Access-Class zum Setzen protected-deklarierter Properties (TControl.OnClick).
+  // Lokal in der Unit gehalten - kein public API. Standard-VCL-Pattern.
+  TControlAccess = class(TControl);
+
+const
+  // Schwellwert fuer Responsive Layout: unterhalb dieser Container-Breite
+  // werden alle "optionalen" Toolbar-Controls und Tile-Kacheln ausgeblendet.
+  // Die Aktionen bleiben weiterhin ueber das Hamburger-Menu bzw. den
+  // Filter-Combo erreichbar. 700 px ist empirisch (passt fuer typisch
+  // schmal gedockte IDE-Tool-Panels).
+  TILE_DOCK_THRESHOLD = 700;
 
 // MAX_RECENT lebt in uRecentPaths (DEFAULT_MAX_RECENT = 3); konsistent
 // zwischen IDE und Standalone, kein Drift mehr.
@@ -381,6 +413,7 @@ begin
   PanelPath.BevelOuter  := bvNone;
   PanelPath.Color       := clBtnFace;
   PanelPath.Padding.SetBounds(6, 2, 6, 2);
+  FPanelPath := PanelPath;
 
   LblPath := TLabel.Create(Self);
   LblPath.Parent    := PanelPath;
@@ -397,25 +430,38 @@ begin
   BtnBrowse.OnClick := BrowseClick;
 
   // Ignore-Liste editieren - oeffnet ignore.txt im Notepad/Default-Editor
-  var BtnIgnore := TButton.Create(Self);
-  BtnIgnore.Parent  := PanelPath;
-  BtnIgnore.Caption := _('Ignore...');
-  BtnIgnore.Width   := 60;
-  BtnIgnore.Align   := alRight;
-  BtnIgnore.Hint    := _('Open ignore list (which files are NOT analysed)');
-  BtnIgnore.ShowHint := True;
-  BtnIgnore.OnClick := EditIgnoreListClick;
+  FBtnIgnore := TButton.Create(Self);
+  FBtnIgnore.Parent  := PanelPath;
+  FBtnIgnore.Caption := _('Ignore...');
+  FBtnIgnore.Width   := 60;
+  FBtnIgnore.Align   := alRight;
+  FBtnIgnore.Hint    := _('Open ignore list (which files are NOT analysed)');
+  FBtnIgnore.ShowHint := True;
+  FBtnIgnore.OnClick := EditIgnoreListClick;
 
   // Settings-Datei analyser.ini (BaseBranch + Tortoise-Pfade fuer
   // Branch-Changes, Custom-LeakyClasses fuer den MemoryLeak-Detektor).
-  var BtnRepo := TButton.Create(Self);
-  BtnRepo.Parent  := PanelPath;
-  BtnRepo.Caption := _('Settings...');
-  BtnRepo.Width   := 70;
-  BtnRepo.Align   := alRight;
-  BtnRepo.Hint    := _('Open analyser.ini (BaseBranch, git/svn paths, custom LeakyClasses)');
-  BtnRepo.ShowHint := True;
-  BtnRepo.OnClick := EditRepoSettingsClick;
+  FBtnRepo := TButton.Create(Self);
+  FBtnRepo.Parent  := PanelPath;
+  FBtnRepo.Caption := _('Settings...');
+  FBtnRepo.Width   := 70;
+  FBtnRepo.Align   := alRight;
+  FBtnRepo.Hint    := _('Open analyser.ini (BaseBranch, git/svn paths, custom LeakyClasses)');
+  FBtnRepo.ShowHint := True;
+  FBtnRepo.OnClick := EditRepoSettingsClick;
+
+  // Hamburger-Button: ersatz-Zugang zu allen Aktionen, die im gedockten
+  // (schmalen) Modus ausgeblendet werden. Items werden weiter unten in
+  // BuildHamburgerMenu befuellt (nach AnalyseChanged-Button-Setup).
+  // alRight + zuletzt zugewiesen -> landet ganz links der alRight-Gruppe;
+  // bleibt damit auch sichtbar wenn FBtnRepo/FBtnIgnore versteckt sind.
+  FBtnHamburger := TButton.Create(Self);
+  FBtnHamburger.Parent  := PanelPath;
+  FBtnHamburger.Caption := #$2630; // Trigram for Heaven (Hamburger-Glyph)
+  FBtnHamburger.Width   := 28;
+  FBtnHamburger.Align   := alRight;
+  FBtnHamburger.Hint    := _('More actions (Settings, Ignore list, Branch-Changes)');
+  FBtnHamburger.ShowHint := True;
 
   FProjectPath := TComboBox.Create(Self);
   FProjectPath.Parent      := PanelPath;
@@ -433,6 +479,7 @@ begin
   PanelButtons.BevelOuter  := bvNone;
   PanelButtons.Color       := clBtnFace;
   PanelButtons.Padding.SetBounds(6, 2, 6, 2);
+  FPanelButtons := PanelButtons;
 
   // Aktions-Buttons (Analyse starten / Aktuelle Datei) liegen nicht hier,
   // sondern in PanelSearch zusammen mit den Export-Buttons. Damit bleibt
@@ -450,13 +497,13 @@ begin
   PanelSev.Color      := clBtnFace;
   PanelSev.Width      := 76 + 160;
 
-  var LblFilter := TLabel.Create(Self);
-  LblFilter.Parent   := PanelSev;
-  LblFilter.Caption  := _('Severity:');
-  LblFilter.Align    := alLeft;
-  LblFilter.AutoSize := False;
-  LblFilter.Width    := 76;
-  LblFilter.Layout   := tlCenter;
+  FLblFilter := TLabel.Create(Self);
+  FLblFilter.Parent   := PanelSev;
+  FLblFilter.Caption  := _('Severity:');
+  FLblFilter.Align    := alLeft;
+  FLblFilter.AutoSize := False;
+  FLblFilter.Width    := 76;
+  FLblFilter.Layout   := tlCenter;
 
   // Filter-Dropdown - nach Schweregrad gruppiert.
   // Items.Objects haelt den Ord(TFilterMode) als Tag; Separatoren haben Tag = -1
@@ -499,6 +546,7 @@ begin
   FFilterCombo.Items.AddObject(_('Duplicate Strings'),      TObject(Ord(fmDuplicateString)));
   FFilterCombo.Items.AddObject(_('Duplicate Code Blocks'),  TObject(Ord(fmDuplicateBlock)));
   FFilterCombo.Items.AddObject(_('Deep Nesting'),           TObject(Ord(fmDeepNesting)));
+  FFilterCombo.Items.AddObject(_('Cyclomatic Complexity'),  TObject(Ord(fmCyclomaticComplexity)));
   FFilterCombo.Items.AddObject(_('TODO/FIXME'),             TObject(Ord(fmTodoComment)));
   FFilterCombo.Items.AddObject(_('Empty Methods'),          TObject(Ord(fmEmptyMethod)));
 
@@ -520,13 +568,13 @@ begin
   PanelType.Color      := clBtnFace;
   PanelType.Width      := 36 + 130;
 
-  var LblType := TLabel.Create(Self);
-  LblType.Parent   := PanelType;
-  LblType.Caption  := _('Type:');
-  LblType.Align    := alLeft;
-  LblType.AutoSize := False;
-  LblType.Width    := 36;
-  LblType.Layout   := tlCenter;
+  FLblType := TLabel.Create(Self);
+  FLblType.Parent   := PanelType;
+  FLblType.Caption  := _('Type:');
+  FLblType.Align    := alLeft;
+  FLblType.AutoSize := False;
+  FLblType.Width    := 36;
+  FLblType.Layout   := tlCenter;
 
   FTypeCombo := TComboBox.Create(Self);
   FTypeCombo.Parent      := PanelType;
@@ -564,6 +612,7 @@ begin
   PanelSearch.BevelOuter  := bvNone;
   PanelSearch.Color       := clBtnFace;
   PanelSearch.Padding.SetBounds(6, 2, 6, 2);
+  FPanelSearch := PanelSearch;
 
   // Action-Buttons links - "Analyse starten" zuerst (links), dann "Aktuelle Datei"
   BtnAnalyse := TButton.Create(Self);
@@ -632,12 +681,12 @@ begin
   SepActions.BevelOuter := bvNone;
   SepActions.Color      := clBtnFace;
 
-  var LblSearch := TLabel.Create(Self);
-  LblSearch.Parent  := PanelSearch;
-  LblSearch.Caption := _('Search:');
-  LblSearch.Align   := alLeft;
-  LblSearch.Layout  := tlCenter;
-  LblSearch.Width   := 32;
+  FLblSearch := TLabel.Create(Self);
+  FLblSearch.Parent  := PanelSearch;
+  FLblSearch.Caption := _('Search:');
+  FLblSearch.Align   := alLeft;
+  FLblSearch.Layout  := tlCenter;
+  FLblSearch.Width   := 32;
 
   // Export-Dropdown statt 5 Einzel-Buttons - spart ~250 px Toolbar-Platz.
   // Komplettes Menu + Click-Handler + CurrentFocusFile-Logik in
@@ -667,6 +716,48 @@ begin
   FSearchEdit.ParentFont  := False;
   FSearchEdit.Font.Name   := 'Segoe UI';
   FSearchEdit.Font.Size   := 8;
+
+  // ---- Hamburger-Menu (alle "optionalen" Actions als Backup-Pfad) ----
+  // Wird gebraucht wenn der Frame schmal gedockt ist und die zugehoerigen
+  // Buttons via TResponsiveVisibilityController ausgeblendet werden.
+  FHamburgerMenu := TPopupMenu.Create(Self);
+  var MIRepo := TMenuItem.Create(FHamburgerMenu);
+  MIRepo.Caption := _('Settings...');
+  MIRepo.OnClick := EditRepoSettingsClick;
+  FHamburgerMenu.Items.Add(MIRepo);
+  var MIIgnore := TMenuItem.Create(FHamburgerMenu);
+  MIIgnore.Caption := _('Ignore list...');
+  MIIgnore.OnClick := EditIgnoreListClick;
+  FHamburgerMenu.Items.Add(MIIgnore);
+  var MISep := TMenuItem.Create(FHamburgerMenu);
+  MISep.Caption := '-';
+  FHamburgerMenu.Items.Add(MISep);
+  var MIBranch := TMenuItem.Create(FHamburgerMenu);
+  MIBranch.Caption := _('Analyse Branch-Changes');
+  MIBranch.OnClick := AnalyseChangedFilesClick;
+  FHamburgerMenu.Items.Add(MIBranch);
+  FBtnHamburger.PopupMenu := FHamburgerMenu;
+  // Standard-Behavior: Klick zeigt das PopupMenu beim Cursor. Damit der
+  // User auf den Button klicken kann (nicht Rechtsklick), wirft OnClick
+  // das Popup unter dem Button manuell auf - gleicher Pattern wie der
+  // Export-Button.
+  FBtnHamburger.OnClick := HamburgerClick;
+
+  // ---- Responsive Visibility: blende optionale Toolbar-Controls bei
+  //      schmalem Frame (gedockt) aus. Aktionen bleiben im Hamburger-Menu
+  //      erreichbar.
+  // Hamburger ist invers: nur bei narrow sichtbar (sonst stehen die
+  // Buttons direkt zur Verfuegung). Beide Controller hooken denselben
+  // PanelPath.OnResize - chained ohne Konflikt (siehe Controller-
+  // Implementation).
+  TResponsiveVisibilityController.Create(Self, FPanelPath,
+    [FBtnRepo, FBtnIgnore], TILE_DOCK_THRESHOLD);
+  TResponsiveVisibilityController.Create(Self, FPanelPath,
+    [FBtnHamburger], TILE_DOCK_THRESHOLD, True {Inverse});
+  TResponsiveVisibilityController.Create(Self, FPanelButtons,
+    [FLblFilter, FLblType], TILE_DOCK_THRESHOLD);
+  TResponsiveVisibilityController.Create(Self, FPanelSearch,
+    [FBtnAnalyseChanged, FLblSearch], TILE_DOCK_THRESHOLD);
 
   // ---- Statistik-Leiste: eine Reihe Sonar-Style Tiles (dunkler Hintergrund) ---
   FPanelStats := TPanel.Create(Self);
@@ -846,10 +937,108 @@ end;
 // FTileError/FTileWarn/... zu, daher bleibt die Feld-Struktur unveraendert.
 
 procedure TAnalyserFrame.BuildStatsTiles(Parent: TPanel);
+// Threshold: TILE_DOCK_THRESHOLD aus implementation-const (gemeinsam
+// mit den Toolbar-Controllern in CreateUI).
+
+  procedure WireTile(CountLbl: TLabel; const AHint: string; ATag: Integer;
+    OnClickHandler: TNotifyEvent);
+  // CountLbl.Parent.Parent = TilePanel. Wir setzen Hint + Tag + OnClick
+  // sowohl auf den TilePanel-Container als auch rekursiv auf alle TControl-
+  // Children (TopRow + IconLbl + CountLbl + CapLbl) - sonst wuerde ein
+  // Klick auf das Glyph oder die Caption nichts triggern.
+  //
+  // TControlAccess (oben in implementation-type) durchbricht die protected-
+  // Sichtbarkeit von TControl.OnClick.
+    procedure ApplyTo(C: TControl; const H: string; T: Integer; H2: TNotifyEvent);
+    var i: Integer;
+    begin
+      C.Hint     := H;
+      C.ShowHint := True;
+      C.Tag      := T;
+      TControlAccess(C).OnClick := H2;
+      C.Cursor   := crHandPoint; // signalisiert Klickbarkeit
+      if C is TWinControl then
+        for i := 0 to TWinControl(C).ControlCount - 1 do
+          ApplyTo(TWinControl(C).Controls[i], H, T, H2);
+    end;
+
+  var
+    Tile : TControl;
+  begin
+    if not Assigned(CountLbl) or not Assigned(CountLbl.Parent)
+       or not Assigned(CountLbl.Parent.Parent) then Exit;
+    Tile := CountLbl.Parent.Parent;
+    ApplyTo(Tile, AHint, ATag, OnClickHandler);
+  end;
+
 begin
   TStatsTilesBuilder.Build(Self, Parent,
     FTileError, FTileWarn, FTileHint, FTileFileSev,
-    FTileBug, FTileVuln, FTileDup, FTileScore);
+    FTileBug, FTileVuln, FTileDup, FTileCyclomatic, FTileScore);
+
+  // Severity-Bucket-Kacheln -> klick filtert FilterCombo
+  WireTile(FTileError,    _('Errors')   + sLineBreak +
+           _('Real bugs / security holes (severity Error). Fix immediately.')
+           + sLineBreak + _('Click: filter grid to Errors'),
+           Ord(fmErrors), TileClickSeverity);
+
+  WireTile(FTileWarn,     _('Warnings') + sLineBreak +
+           _('Likely bugs / risky patterns. Review before merge.')
+           + sLineBreak + _('Click: filter grid to Warnings'),
+           Ord(fmWarnings), TileClickSeverity);
+
+  WireTile(FTileHint,     _('Hints') + sLineBreak +
+           _('Code smells / style. Refactoring candidates.')
+           + sLineBreak + _('Click: filter grid to Hints'),
+           Ord(fmHints), TileClickSeverity);
+
+  WireTile(FTileFileSev,  _('Read errors') + sLineBreak +
+           _('File could not be read / parsed. Check path/encoding.')
+           + sLineBreak + _('Click: filter grid to read errors'),
+           Ord(fmFileReadError), TileClickSeverity);
+
+  // Detector-spezifische Kachel
+  WireTile(FTileCyclomatic, _('Cyclomatic Complexity') + sLineBreak +
+           _('Methods with McCabe complexity > threshold (default 10).')
+           + sLineBreak + _('Hard to test - refactor into smaller methods.')
+           + sLineBreak + _('Click: filter grid to Cyclomatic'),
+           Ord(fmCyclomaticComplexity), TileClickSeverity);
+
+  // Type-Bucket-Kacheln -> klick filtert TypeCombo
+  WireTile(FTileBug,      _('Bugs') + sLineBreak +
+           _('Findings of type Bug (wrong behaviour, crash, wrong result).')
+           + sLineBreak + _('Crosses severities - Bugs can be Errors OR Warnings.')
+           + sLineBreak + _('Click: filter grid to Bug type'),
+           Ord(tfBug), TileClickType);
+
+  WireTile(FTileVuln,     _('Security') + sLineBreak +
+           _('Security holes (SQL injection, hardcoded secrets ...).')
+           + sLineBreak + _('Click: filter grid to Vulnerability type'),
+           Ord(tfVulnerability), TileClickType);
+
+  WireTile(FTileDup,      _('Duplicates') + sLineBreak +
+           _('Copied code (strings, blocks). Extract Method/Constant candidates.')
+           + sLineBreak + _('Click: filter grid to Duplicate type'),
+           Ord(tfCodeDuplication), TileClickType);
+
+  // Code-Quality-Score: kein semantischer Filter (Score ist Aggregation),
+  // Klick wirkt als Reset-Button auf alle Filter.
+  WireTile(FTileScore,    _('Code Quality') + sLineBreak +
+           _('Weighted quality score (lower = better).')
+           + sLineBreak + _('Weights: Vulnerability 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2.')
+           + sLineBreak + _('Click: reset filters (show everything)'),
+           0, TileClickClear);
+
+  // Responsive Layout-Controller. Owner=Self -> wird beim Frame-Destroy
+  // mit freigegeben; Parent.OnResize wird vom Controller selbst gehookt.
+  // Tile-Labels -> Parent.Parent ist die TilePanel (TopRow zwischen).
+  TResponsiveVisibilityController.Create(Self, Parent,
+    [FTileFileSev.Parent.Parent,
+     FTileBug.Parent.Parent,
+     FTileVuln.Parent.Parent,
+     FTileDup.Parent.Parent,
+     FTileCyclomatic.Parent.Parent],
+    TILE_DOCK_THRESHOLD);
 end;
 
 // Status-Bar-Push-Methoden delegieren an uIDEStatusBar.TAnalyserStatusBar.
@@ -1164,10 +1353,12 @@ var
   f                 : TLeakFinding;
   nErr, nWarn, nHint, nFileErr : Integer;
   nBug, nVuln, nHot, nDup      : Integer;
+  nCyclo                       : Integer;
   score                        : Integer;
 begin
   nErr  := 0; nWarn := 0; nHint := 0; nFileErr := 0;
   nBug  := 0; nVuln := 0; nHot  := 0; nDup := 0;
+  nCyclo := 0;
 
   // Severity- und Typ-Aufteilung sind UNABHAENGIG: jeder Befund zaehlt
   // in genau einer Severity-Bucket UND in genau einer Type-Bucket.
@@ -1191,6 +1382,12 @@ begin
       // Tile, kein eigener Score-Faktor (Smell-Gewicht steckt in der
       // Severity-Tabelle).
     end;
+
+    // Detector-spezifischer Bucket: Cyclomatic Complexity. Zaehlt
+    // ZUSAETZLICH zur Hint-Severity und CodeSmell-Type, gibt aber eine
+    // eigene Kachel - macht das Refactoring-Ziel auf einen Blick sichtbar.
+    if f.Kind = fkCyclomaticComplexity then
+      Inc(nCyclo);
   end;
 
   score := nVuln    * W_VULN     +
@@ -1213,6 +1410,10 @@ begin
   FTileBug.Caption      := IntToStr(nBug);
   FTileVuln.Caption     := IntToStr(nVuln);
   FTileDup.Caption      := IntToStr(nDup);
+
+  // Detector-spezifisch
+  if Assigned(FTileCyclomatic) then
+    FTileCyclomatic.Caption := IntToStr(nCyclo);
 
   // Codequalitaet (gewichteter Score - Smell und Hotspot eingerechnet)
   FTileScore.Caption    := IntToStr(score);
@@ -1490,6 +1691,77 @@ begin
 
   StatusMode(Format(_('Settings: %s - changes take effect on the next analysis run.'),
     [Path]));
+end;
+
+procedure TAnalyserFrame.HamburgerClick(Sender: TObject);
+// Klick auf den Hamburger-Button -> Popup-Menu unter dem Button anzeigen.
+// Standard-Verhalten von TButton.PopupMenu ist Rechtsklick - hier wollen
+// wir Linksklick. Position: linke untere Ecke des Buttons (in Screen-
+// Koordinaten).
+var
+  P : TPoint;
+begin
+  if not Assigned(FBtnHamburger) or not Assigned(FHamburgerMenu) then Exit;
+  P := FBtnHamburger.ClientToScreen(Point(0, FBtnHamburger.Height));
+  FHamburgerMenu.Popup(P.X, P.Y);
+end;
+
+// ---------------------------------------------------------------------------
+// Stat-Tile Klick-Handler: setzen Severity- bzw. Type-Filter.
+// Sender.Tag = Ord(TFilterMode) bzw. Ord(TTypeFilter).
+// FilterCombo.OnChange feuert -> ApplyFilter laeuft automatisch.
+// ---------------------------------------------------------------------------
+procedure TAnalyserFrame.TileClickSeverity(Sender: TObject);
+// WICHTIG: TComboBox.ItemIndex-Setter feuert OnChange NICHT (nur User-
+// Interaktion tut das). Wir muessen FilterChange/TypeFilterChange explizit
+// aufrufen, sonst aktualisiert sich das Grid nicht.
+var
+  Target  : TFilterMode;
+  i, OrdT : Integer;
+begin
+  if not Assigned(FFilterCombo) or not (Sender is TComponent) then Exit;
+  Target := TFilterMode(TComponent(Sender).Tag);
+  if Assigned(FTypeCombo) and (FTypeCombo.ItemIndex <> 0) then
+    FTypeCombo.ItemIndex := 0;
+  OrdT := Ord(Target);
+  for i := 0 to FFilterCombo.Items.Count - 1 do
+    if Integer(FFilterCombo.Items.Objects[i]) = OrdT then
+    begin
+      FFilterCombo.ItemIndex := i;
+      // Erst Type-Filter-Change (Type wurde reset, damit der Severity-
+      // Filter sicher greift), dann Filter-Change (eigentlicher Klick-
+      // Effekt). Beide Handler rufen letztlich ApplyFilter -> Grid
+      // wird einmal redrawn (kein Doppel-Repaint, ApplyFilter selbst
+      // ist idempotent gegen denselben Stand).
+      TypeFilterChange(FTypeCombo);
+      FilterChange(FFilterCombo);
+      Exit;
+    end;
+end;
+
+procedure TAnalyserFrame.TileClickType(Sender: TObject);
+var
+  Target : TTypeFilter;
+begin
+  if not Assigned(FTypeCombo) or not (Sender is TComponent) then Exit;
+  Target := TTypeFilter(TComponent(Sender).Tag);
+  if Assigned(FFilterCombo) and (FFilterCombo.ItemIndex <> 0) then
+    FFilterCombo.ItemIndex := 0;
+  FTypeCombo.ItemIndex := Ord(Target);
+  // ItemIndex-Setter feuert KEIN OnChange - explizit triggern.
+  FilterChange(FFilterCombo);
+  TypeFilterChange(FTypeCombo);
+end;
+
+procedure TAnalyserFrame.TileClickClear(Sender: TObject);
+// Codequalitaet-Kachel: kein semantischer Filter (Score ist eine Aggregation).
+// Klick setzt beide Filter auf "Alle" zurueck - praktisch als Reset-Button.
+begin
+  if Assigned(FFilterCombo) then FFilterCombo.ItemIndex := 0;
+  if Assigned(FTypeCombo)   then FTypeCombo.ItemIndex   := 0;
+  // ItemIndex-Setter feuert KEIN OnChange - explizit triggern.
+  if Assigned(FFilterCombo) then FilterChange(FFilterCombo);
+  if Assigned(FTypeCombo)   then TypeFilterChange(FTypeCombo);
 end;
 
 // ---------------------------------------------------------------------------
