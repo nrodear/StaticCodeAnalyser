@@ -88,7 +88,20 @@ type
 implementation
 
 uses
-  uAnalyserPalette, uLocalization;
+  Winapi.Windows, uAnalyserPalette, uLocalization;
+
+function ScaleByPPI(C: TControl; AValue: Integer): Integer;
+// Lokaler DPI-Helper: skaliert 96-DPI-Designwerte zur Container-PPI.
+// CurrentPPI auf TControl ist ab Delphi 10.3 verfuegbar; falls 0 ->
+// fallback 96.
+var
+  PPI : Integer;
+begin
+  if not Assigned(C) then Exit(AValue);
+  PPI := C.CurrentPPI;
+  if PPI <= 0 then PPI := 96;
+  Result := MulDiv(AValue, PPI, 96);
+end;
 
 { TTilePanel }
 
@@ -125,9 +138,9 @@ begin
   Tile := TTilePanel.Create(AOwner);
   Tile.Parent      := Parent;
   Tile.Align       := alLeft;
-  Tile.Width       := AWidth;
+  Tile.Width       := ScaleByPPI(Parent, AWidth);
   Tile.AlignWithMargins := True;
-  Tile.Margins.SetBounds(0, 0, 3, 0);
+  Tile.Margins.SetBounds(0, 0, ScaleByPPI(Parent, 3), 0);
   Tile.BevelOuter  := bvNone;
   Tile.BorderStyle := bsNone;
   Tile.ParentBackground := False;
@@ -141,8 +154,10 @@ begin
   TopRow.Parent      := Tile;
   TopRow.Align       := alTop;
   TopRow.AlignWithMargins := True;
-  TopRow.Margins.SetBounds(1, 1, 1, 0); // 1px Abstand zum Tile-Rahmen
-  TopRow.Height      := 20;
+  // 1px Abstand zum Tile-Rahmen - bewusst NICHT skaliert (1 px sieht
+  // auch bei 200% DPI noch als duennes Inset OK aus, 2 px waere zu fett).
+  TopRow.Margins.SetBounds(1, 1, 1, 0);
+  TopRow.Height      := ScaleByPPI(Parent, 20);
   TopRow.BevelOuter  := bvNone;
   TopRow.ParentBackground := False;
   TopRow.Color       := clBtnFace;
@@ -150,7 +165,7 @@ begin
   IconLbl := TLabel.Create(AOwner);
   IconLbl.Parent      := TopRow;
   IconLbl.Align       := alLeft;
-  IconLbl.Width       := 20;
+  IconLbl.Width       := ScaleByPPI(Parent, 20);
   IconLbl.Caption     := Glyph;
   IconLbl.Alignment   := taCenter;
   IconLbl.Layout      := tlCenter;

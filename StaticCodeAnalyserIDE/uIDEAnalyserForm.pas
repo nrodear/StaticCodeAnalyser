@@ -159,6 +159,11 @@ type
     procedure EditIgnoreListClick(Sender: TObject);
     procedure EditRepoSettingsClick(Sender: TObject);
     procedure HamburgerClick(Sender: TObject);
+    procedure BuildHamburgerMenu;
+    // DPI-Scaling fuer Layout-Konstanten. Liest TControl.CurrentPPI - falls
+    // 0/uninit, fallback auf 96. Beispiel: ScaleW(28) liefert 28 bei 100%
+    // DPI, 56 bei 200%.
+    function  ScaleW(AValue: Integer): Integer;
     // Klick auf Stat-Kachel: setzt Severity-/Type-Filter passend (z.B.
     // Errors-Kachel -> FFilterCombo zeigt nur Errors). Sender.Tag traegt
     // den TFilterMode bzw. TTypeFilter-Ordinal.
@@ -261,6 +266,42 @@ const
   // Filter-Combo erreichbar. 700 px ist empirisch (passt fuer typisch
   // schmal gedockte IDE-Tool-Panels).
   TILE_DOCK_THRESHOLD = 700;
+
+  // ---- Toolbar-Layout (alle Werte werden via ScaleW DPI-skaliert) -------
+  TB_ROW_HEIGHT      = 22;     // alle Toolbar-Zeilen
+  TB_PADDING_LR      = 6;      // Padding links/rechts in Toolbar-Panels
+  TB_PADDING_TB      = 2;      // Padding oben/unten in Toolbar-Panels
+  TB_SPACER_WIDTH    = 8;      // Trennabstand zwischen Bereichen
+  TB_CANCEL_MARGIN   = 8;      // Margin links vom Cancel-Button
+
+  // ---- Button-Widths ----------------------------------------------------
+  BTN_W_ICON         = 28;     // Icon-only (Browse "...", Hamburger)
+  BTN_W_SHORT        = 60;     // "Ignore..."
+  BTN_W_MED_SHORT    = 70;     // "Settings..."
+  BTN_W_MED          = 80;     // "Cancel", "Export"
+  BTN_W_MED_LONG     = 90;     // "Current file"
+  BTN_W_LONG         = 100;    // "Start analysis"
+  BTN_W_XLONG        = 120;    // "Branch-Changes"
+
+  // ---- Label-Widths -----------------------------------------------------
+  LBL_W_PATH         = 78;     // "Project path:"
+  LBL_W_FILTER       = 76;     // "Severity:"
+  LBL_W_TYPE         = 36;     // "Type:"
+  LBL_W_SEARCH       = 32;     // "Search:"
+
+  // ---- Combo-Widths (innerhalb der Sub-Panel-Container) -----------------
+  CMB_W_FILTER       = 160;    // Severity-Combo
+  CMB_W_TYPE         = 130;    // Type-Combo
+
+  // ---- Stats-Panel ------------------------------------------------------
+  STATS_PANEL_HEIGHT = 45;     // 1 Tile-Reihe (TopRow 20 + Caption 12 + Padding)
+  STATS_PADDING      = 4;
+
+  // ---- Misc -------------------------------------------------------------
+  PROGRESS_HEIGHT    = 14;
+  GRID_MIN_HEIGHT    = 120;
+  GRID_MIN_WIDTH     = 300;
+  SEARCH_MIN_WIDTH   = 120;    // verhindert Kollaps des SearchEdit bei narrow
 
 // MAX_RECENT lebt in uRecentPaths (DEFAULT_MAX_RECENT = 3); konsistent
 // zwischen IDE und Standalone, kein Drift mehr.
@@ -397,22 +438,23 @@ begin
   FProgressBar := TProgressBar.Create(Self);
   FProgressBar.Parent  := Self;
   FProgressBar.Align   := alBottom;
-  FProgressBar.Height  := 14;
+  FProgressBar.Height  := ScaleW(PROGRESS_HEIGHT);
   FProgressBar.Min     := 0;
   FProgressBar.Max     := 100;
   FProgressBar.Smooth  := True;
-  // Immer sichtbar, damit das Grid bei Start/Ende der Analyse nicht um
-  // 14 px springt. Im Idle-Zustand bleibt der Balken einfach leer (Pos 0).
+  // Immer sichtbar, damit das Grid bei Start/Ende der Analyse nicht
+  // springt. Im Idle-Zustand bleibt der Balken einfach leer (Pos 0).
   FProgressBar.Visible := True;
 
   // ---- Zeile: Projektpfad ----
   PanelPath := TPanel.Create(Self);
   PanelPath.Parent      := Self;
   PanelPath.Align       := alTop;
-  PanelPath.Height      := 22;
+  PanelPath.Height      := ScaleW(TB_ROW_HEIGHT);
   PanelPath.BevelOuter  := bvNone;
   PanelPath.Color       := clBtnFace;
-  PanelPath.Padding.SetBounds(6, 2, 6, 2);
+  PanelPath.Padding.SetBounds(ScaleW(TB_PADDING_LR), ScaleW(TB_PADDING_TB),
+                              ScaleW(TB_PADDING_LR), ScaleW(TB_PADDING_TB));
   FPanelPath := PanelPath;
 
   LblPath := TLabel.Create(Self);
@@ -420,12 +462,12 @@ begin
   LblPath.Caption   := _('Project path:');
   LblPath.Align     := alLeft;
   LblPath.Layout    := tlCenter;
-  LblPath.Width     := 78;
+  LblPath.Width     := ScaleW(LBL_W_PATH);
 
   BtnBrowse := TButton.Create(Self);
   BtnBrowse.Parent  := PanelPath;
   BtnBrowse.Caption := '...';
-  BtnBrowse.Width   := 28;
+  BtnBrowse.Width   := ScaleW(BTN_W_ICON);
   BtnBrowse.Align   := alRight;
   BtnBrowse.OnClick := BrowseClick;
 
@@ -433,7 +475,7 @@ begin
   FBtnIgnore := TButton.Create(Self);
   FBtnIgnore.Parent  := PanelPath;
   FBtnIgnore.Caption := _('Ignore...');
-  FBtnIgnore.Width   := 60;
+  FBtnIgnore.Width   := ScaleW(BTN_W_SHORT);
   FBtnIgnore.Align   := alRight;
   FBtnIgnore.Hint    := _('Open ignore list (which files are NOT analysed)');
   FBtnIgnore.ShowHint := True;
@@ -444,21 +486,22 @@ begin
   FBtnRepo := TButton.Create(Self);
   FBtnRepo.Parent  := PanelPath;
   FBtnRepo.Caption := _('Settings...');
-  FBtnRepo.Width   := 70;
+  FBtnRepo.Width   := ScaleW(BTN_W_MED_SHORT);
   FBtnRepo.Align   := alRight;
   FBtnRepo.Hint    := _('Open analyser.ini (BaseBranch, git/svn paths, custom LeakyClasses)');
   FBtnRepo.ShowHint := True;
   FBtnRepo.OnClick := EditRepoSettingsClick;
 
-  // Hamburger-Button: ersatz-Zugang zu allen Aktionen, die im gedockten
-  // (schmalen) Modus ausgeblendet werden. Items werden weiter unten in
-  // BuildHamburgerMenu befuellt (nach AnalyseChanged-Button-Setup).
+  // Hamburger-Button: ersatz-Zugang zu den Aktionen, die im gedockten
+  // (schmalen) Modus ausgeblendet werden. PopupMenu + OnClick werden
+  // weiter unten via BuildHamburgerMenu verkabelt (nachdem auch
+  // FBtnAnalyseChanged existiert - das Menu referenziert dessen Handler).
   // alRight + zuletzt zugewiesen -> landet ganz links der alRight-Gruppe;
   // bleibt damit auch sichtbar wenn FBtnRepo/FBtnIgnore versteckt sind.
   FBtnHamburger := TButton.Create(Self);
   FBtnHamburger.Parent  := PanelPath;
   FBtnHamburger.Caption := #$2630; // Trigram for Heaven (Hamburger-Glyph)
-  FBtnHamburger.Width   := 28;
+  FBtnHamburger.Width   := ScaleW(BTN_W_ICON);
   FBtnHamburger.Align   := alRight;
   FBtnHamburger.Hint    := _('More actions (Settings, Ignore list, Branch-Changes)');
   FBtnHamburger.ShowHint := True;
@@ -475,10 +518,11 @@ begin
   PanelButtons := TPanel.Create(Self);
   PanelButtons.Parent      := Self;
   PanelButtons.Align       := alTop;
-  PanelButtons.Height      := 22;
+  PanelButtons.Height      := ScaleW(TB_ROW_HEIGHT);
   PanelButtons.BevelOuter  := bvNone;
   PanelButtons.Color       := clBtnFace;
-  PanelButtons.Padding.SetBounds(6, 2, 6, 2);
+  PanelButtons.Padding.SetBounds(ScaleW(TB_PADDING_LR), ScaleW(TB_PADDING_TB),
+                                 ScaleW(TB_PADDING_LR), ScaleW(TB_PADDING_TB));
   FPanelButtons := PanelButtons;
 
   // Aktions-Buttons (Analyse starten / Aktuelle Datei) liegen nicht hier,
@@ -495,14 +539,14 @@ begin
   PanelSev.Align      := alLeft;
   PanelSev.BevelOuter := bvNone;
   PanelSev.Color      := clBtnFace;
-  PanelSev.Width      := 76 + 160;
+  PanelSev.Width      := ScaleW(LBL_W_FILTER + CMB_W_FILTER);
 
   FLblFilter := TLabel.Create(Self);
   FLblFilter.Parent   := PanelSev;
   FLblFilter.Caption  := _('Severity:');
   FLblFilter.Align    := alLeft;
   FLblFilter.AutoSize := False;
-  FLblFilter.Width    := 76;
+  FLblFilter.Width    := ScaleW(LBL_W_FILTER);
   FLblFilter.Layout   := tlCenter;
 
   // Filter-Dropdown - nach Schweregrad gruppiert.
@@ -556,7 +600,7 @@ begin
   var SepF1 := TPanel.Create(Self);
   SepF1.Parent     := PanelButtons;
   SepF1.Align      := alLeft;
-  SepF1.Width      := 8;
+  SepF1.Width      := ScaleW(TB_SPACER_WIDTH);
   SepF1.BevelOuter := bvNone;
   SepF1.Color      := clBtnFace;
 
@@ -566,14 +610,14 @@ begin
   PanelType.Align      := alLeft;
   PanelType.BevelOuter := bvNone;
   PanelType.Color      := clBtnFace;
-  PanelType.Width      := 36 + 130;
+  PanelType.Width      := ScaleW(LBL_W_TYPE + CMB_W_TYPE);
 
   FLblType := TLabel.Create(Self);
   FLblType.Parent   := PanelType;
   FLblType.Caption  := _('Type:');
   FLblType.Align    := alLeft;
   FLblType.AutoSize := False;
-  FLblType.Width    := 36;
+  FLblType.Width    := ScaleW(LBL_W_TYPE);
   FLblType.Layout   := tlCenter;
 
   FTypeCombo := TComboBox.Create(Self);
@@ -597,7 +641,7 @@ begin
   var Sep2 := TPanel.Create(Self);
   Sep2.Parent     := PanelButtons;
   Sep2.Align      := alLeft;
-  Sep2.Width      := 8;
+  Sep2.Width      := ScaleW(TB_SPACER_WIDTH);
   Sep2.BevelOuter := bvNone;
   Sep2.Color      := clBtnFace;
 
@@ -608,17 +652,18 @@ begin
   var PanelSearch := TPanel.Create(Self);
   PanelSearch.Parent      := Self;
   PanelSearch.Align       := alTop;
-  PanelSearch.Height      := 22;
+  PanelSearch.Height      := ScaleW(TB_ROW_HEIGHT);
   PanelSearch.BevelOuter  := bvNone;
   PanelSearch.Color       := clBtnFace;
-  PanelSearch.Padding.SetBounds(6, 2, 6, 2);
+  PanelSearch.Padding.SetBounds(ScaleW(TB_PADDING_LR), ScaleW(TB_PADDING_TB),
+                                ScaleW(TB_PADDING_LR), ScaleW(TB_PADDING_TB));
   FPanelSearch := PanelSearch;
 
   // Action-Buttons links - "Analyse starten" zuerst (links), dann "Aktuelle Datei"
   BtnAnalyse := TButton.Create(Self);
   BtnAnalyse.Parent   := PanelSearch;
   BtnAnalyse.Caption  := _('Start analysis');
-  BtnAnalyse.Width    := 100;
+  BtnAnalyse.Width    := ScaleW(BTN_W_LONG);
   BtnAnalyse.Align    := alLeft;
   BtnAnalyse.OnClick  := AnalyseClick;
   FBtnAnalyse := BtnAnalyse;
@@ -626,7 +671,7 @@ begin
   FBtnAnalyseCurrent := TButton.Create(Self);
   FBtnAnalyseCurrent.Parent   := PanelSearch;
   FBtnAnalyseCurrent.Caption  := _('Current file');
-  FBtnAnalyseCurrent.Width    := 90;
+  FBtnAnalyseCurrent.Width    := ScaleW(BTN_W_MED_LONG);
   FBtnAnalyseCurrent.Align    := alLeft;
   FBtnAnalyseCurrent.OnClick  := AnalyseCurrentFileClick;
 
@@ -634,7 +679,7 @@ begin
   FBtnAnalyseChanged := TButton.Create(Self);
   FBtnAnalyseChanged.Parent   := PanelSearch;
   FBtnAnalyseChanged.Caption  := _('Branch-Changes');
-  FBtnAnalyseChanged.Width    := 120;
+  FBtnAnalyseChanged.Width    := ScaleW(BTN_W_XLONG);
   FBtnAnalyseChanged.Align    := alLeft;
   FBtnAnalyseChanged.OnClick  := AnalyseChangedFilesClick;
   FBtnAnalyseChanged.Hint     := _(
@@ -649,10 +694,10 @@ begin
   FBtnCancel := TButton.Create(Self);
   FBtnCancel.Parent   := PanelSearch;
   FBtnCancel.Caption  := _('Cancel');
-  FBtnCancel.Width    := 80;
+  FBtnCancel.Width    := ScaleW(BTN_W_MED);
   FBtnCancel.Align    := alRight;
   FBtnCancel.AlignWithMargins := True;
-  FBtnCancel.Margins.SetBounds(8, 0, 0, 0);
+  FBtnCancel.Margins.SetBounds(ScaleW(TB_CANCEL_MARGIN), 0, 0, 0);
   FBtnCancel.Visible  := True;
   FBtnCancel.Enabled  := False;
   FBtnCancel.OnClick  := CancelAnalyseClick;
@@ -677,7 +722,7 @@ begin
   var SepActions := TPanel.Create(Self);
   SepActions.Parent     := PanelSearch;
   SepActions.Align      := alLeft;
-  SepActions.Width      := 8;
+  SepActions.Width      := ScaleW(TB_SPACER_WIDTH);
   SepActions.BevelOuter := bvNone;
   SepActions.Color      := clBtnFace;
 
@@ -686,7 +731,7 @@ begin
   FLblSearch.Caption := _('Search:');
   FLblSearch.Align   := alLeft;
   FLblSearch.Layout  := tlCenter;
-  FLblSearch.Width   := 32;
+  FLblSearch.Width   := ScaleW(LBL_W_SEARCH);
 
   // Export-Dropdown statt 5 Einzel-Buttons - spart ~250 px Toolbar-Platz.
   // Komplettes Menu + Click-Handler + CurrentFocusFile-Logik in
@@ -700,17 +745,20 @@ begin
   var BtnExport := TButton.Create(Self);
   BtnExport.Parent     := PanelSearch;
   BtnExport.Caption    := _('Export') + ' ' + #$25BC; // schwarzes Dreieck nach unten
-  BtnExport.Width      := 80;
+  BtnExport.Width      := ScaleW(BTN_W_MED);
   BtnExport.Align      := alRight;
   BtnExport.Hint       := _('Export: HTML, JSON, CSV, Jira markup, plain text');
   BtnExport.ShowHint   := True;
   // PopupMenu + OnClick wirft der Helper auf den Button.
   FExportMenu.AttachToButton(BtnExport);
 
-  // Sucheingabe fuellt den Rest in der Mitte
+  // Sucheingabe fuellt den Rest in der Mitte. MinWidth verhindert Kollaps
+  // bei sehr schmal gedocktem Frame - sonst frisst Search-Edit als
+  // alClient zwischen den alLeft/alRight-Buttons gerne 0 px.
   FSearchEdit := TEdit.Create(Self);
   FSearchEdit.Parent      := PanelSearch;
   FSearchEdit.Align       := alClient;
+  FSearchEdit.Constraints.MinWidth := ScaleW(SEARCH_MIN_WIDTH);
   FSearchEdit.TextHint    := _('Filter file / method / finding...');
   FSearchEdit.OnChange    := SearchChange;
   FSearchEdit.ParentFont  := False;
@@ -720,28 +768,8 @@ begin
   // ---- Hamburger-Menu (alle "optionalen" Actions als Backup-Pfad) ----
   // Wird gebraucht wenn der Frame schmal gedockt ist und die zugehoerigen
   // Buttons via TResponsiveVisibilityController ausgeblendet werden.
-  FHamburgerMenu := TPopupMenu.Create(Self);
-  var MIRepo := TMenuItem.Create(FHamburgerMenu);
-  MIRepo.Caption := _('Settings...');
-  MIRepo.OnClick := EditRepoSettingsClick;
-  FHamburgerMenu.Items.Add(MIRepo);
-  var MIIgnore := TMenuItem.Create(FHamburgerMenu);
-  MIIgnore.Caption := _('Ignore list...');
-  MIIgnore.OnClick := EditIgnoreListClick;
-  FHamburgerMenu.Items.Add(MIIgnore);
-  var MISep := TMenuItem.Create(FHamburgerMenu);
-  MISep.Caption := '-';
-  FHamburgerMenu.Items.Add(MISep);
-  var MIBranch := TMenuItem.Create(FHamburgerMenu);
-  MIBranch.Caption := _('Analyse Branch-Changes');
-  MIBranch.OnClick := AnalyseChangedFilesClick;
-  FHamburgerMenu.Items.Add(MIBranch);
-  FBtnHamburger.PopupMenu := FHamburgerMenu;
-  // Standard-Behavior: Klick zeigt das PopupMenu beim Cursor. Damit der
-  // User auf den Button klicken kann (nicht Rechtsklick), wirft OnClick
-  // das Popup unter dem Button manuell auf - gleicher Pattern wie der
-  // Export-Button.
-  FBtnHamburger.OnClick := HamburgerClick;
+  // Setup in BuildHamburgerMenu (referenziert bestehende Click-Handler).
+  BuildHamburgerMenu;
 
   // ---- Responsive Visibility: blende optionale Toolbar-Controls bei
   //      schmalem Frame (gedockt) aus. Aktionen bleiben im Hamburger-Menu
@@ -750,24 +778,28 @@ begin
   // Buttons direkt zur Verfuegung). Beide Controller hooken denselben
   // PanelPath.OnResize - chained ohne Konflikt (siehe Controller-
   // Implementation).
+  // Threshold wird DPI-skaliert: ClientWidth ist physisch, Konstante
+  // logisch (96 DPI). Ohne Scale-Faktor wuerde Narrow-Modus auf 200%
+  // DPI bereits bei halber physischer Breite triggern.
   TResponsiveVisibilityController.Create(Self, FPanelPath,
-    [FBtnRepo, FBtnIgnore], TILE_DOCK_THRESHOLD);
+    [FBtnRepo, FBtnIgnore], ScaleW(TILE_DOCK_THRESHOLD));
   TResponsiveVisibilityController.Create(Self, FPanelPath,
-    [FBtnHamburger], TILE_DOCK_THRESHOLD, True {Inverse});
+    [FBtnHamburger], ScaleW(TILE_DOCK_THRESHOLD), True {Inverse});
   TResponsiveVisibilityController.Create(Self, FPanelButtons,
-    [FLblFilter, FLblType], TILE_DOCK_THRESHOLD);
+    [FLblFilter, FLblType], ScaleW(TILE_DOCK_THRESHOLD));
   TResponsiveVisibilityController.Create(Self, FPanelSearch,
-    [FBtnAnalyseChanged, FLblSearch], TILE_DOCK_THRESHOLD);
+    [FBtnAnalyseChanged, FLblSearch], ScaleW(TILE_DOCK_THRESHOLD));
 
   // ---- Statistik-Leiste: eine Reihe Sonar-Style Tiles (dunkler Hintergrund) ---
   FPanelStats := TPanel.Create(Self);
   FPanelStats.Parent      := Self;
   FPanelStats.Align       := alTop;
-  FPanelStats.Height      := 45; // 1 Tile-Reihe ~25% kleiner: TopRow 20 + Caption ~12 + Padding
+  FPanelStats.Height      := ScaleW(STATS_PANEL_HEIGHT);
   FPanelStats.BevelOuter  := bvNone;
   FPanelStats.Color       := clBtnFace; // folgt IDE-Theme statt fest dunkel
   FPanelStats.ParentBackground := False;
-  FPanelStats.Padding.SetBounds(4, 4, 4, 4);
+  FPanelStats.Padding.SetBounds(ScaleW(STATS_PADDING), ScaleW(STATS_PADDING),
+                                ScaleW(STATS_PADDING), ScaleW(STATS_PADDING));
 
   BuildStatsTiles(FPanelStats);
 
@@ -797,13 +829,13 @@ begin
   FResultGrid.Align            := alClient;
   // MinWidth=300 verhindert dass der Help-Splitter den Grid-Bereich
   // praktisch auf Null zieht. MinHeight=120 weiterhin gegen Mini-Hoehe.
-  FResultGrid.Constraints.MinHeight := 120;
-  FResultGrid.Constraints.MinWidth  := 300;
+  FResultGrid.Constraints.MinHeight := ScaleW(GRID_MIN_HEIGHT);
+  FResultGrid.Constraints.MinWidth  := ScaleW(GRID_MIN_WIDTH);
   FResultGrid.FixedCols        := 0;
   FResultGrid.ColCount         := 6;
   FResultGrid.RowCount         := 2;
-  FResultGrid.DefaultColWidth  := 100;
-  FResultGrid.DefaultRowHeight := 20;
+  FResultGrid.DefaultColWidth  := ScaleW(100);
+  FResultGrid.DefaultRowHeight := ScaleW(20);
   FResultGrid.FixedRows        := 1;
   FResultGrid.ParentFont       := False;
   FResultGrid.Font.Name        := 'Segoe UI';
@@ -812,14 +844,14 @@ begin
   FResultGrid.Options          := [goFixedVertLine, goFixedHorzLine,
                                    goVertLine, goHorzLine,
                                    goColSizing, goRowSelect, goThumbTracking];
-  // Spaltenbreiten fuer 600px: 130+85+38+90+Scrollbar(17) = 360px fest
-  // -> Befund-Spalte fuellt ~240px
-  FResultGrid.ColWidths[0] := 130;  // Datei
-  FResultGrid.ColWidths[1] :=  85;  // Methode
-  FResultGrid.ColWidths[2] :=  38;  // Zeile
-  FResultGrid.ColWidths[3] := 110;  // Typ (fix)
-  FResultGrid.ColWidths[4] := 240;  // Regel/Befund (fuellt Rest per GridResize)
-  FResultGrid.ColWidths[5] :=  90;  // Schweregrad (fix)
+  // Spaltenbreiten (DPI-skaliert): 130+85+38+110+240+90 = 693 px @ 100% DPI.
+  // Befund-Spalte (4) faellt der GridResize-Handler den Rest zu.
+  FResultGrid.ColWidths[0] := ScaleW(130);  // Datei
+  FResultGrid.ColWidths[1] := ScaleW( 85);  // Methode
+  FResultGrid.ColWidths[2] := ScaleW( 38);  // Zeile
+  FResultGrid.ColWidths[3] := ScaleW(110);  // Typ (fix)
+  FResultGrid.ColWidths[4] := ScaleW(240);  // Regel/Befund (fuellt Rest per GridResize)
+  FResultGrid.ColWidths[5] := ScaleW( 90);  // Schweregrad (fix)
   FResultGrid.Cells[0, 0] := _('File');
   FResultGrid.Cells[1, 0] := _('Method');
   FResultGrid.Cells[2, 0] := _('Line');
@@ -1032,13 +1064,14 @@ begin
   // Responsive Layout-Controller. Owner=Self -> wird beim Frame-Destroy
   // mit freigegeben; Parent.OnResize wird vom Controller selbst gehookt.
   // Tile-Labels -> Parent.Parent ist die TilePanel (TopRow zwischen).
+  // Threshold DPI-skaliert (siehe CreateUI-Kommentar).
   TResponsiveVisibilityController.Create(Self, Parent,
     [FTileFileSev.Parent.Parent,
      FTileBug.Parent.Parent,
      FTileVuln.Parent.Parent,
      FTileDup.Parent.Parent,
      FTileCyclomatic.Parent.Parent],
-    TILE_DOCK_THRESHOLD);
+    ScaleW(TILE_DOCK_THRESHOLD));
 end;
 
 // Status-Bar-Push-Methoden delegieren an uIDEStatusBar.TAnalyserStatusBar.
@@ -1693,11 +1726,56 @@ begin
     [Path]));
 end;
 
+function TAnalyserFrame.ScaleW(AValue: Integer): Integer;
+// DPI-Skalierung: konvertiert 96-DPI-Designwerte zur aktuellen Container-
+// PPI. Wird aus CreateUI fuer JEDE Width/Height-Zuweisung gerufen, damit
+// das Plugin auf High-DPI-Displays nicht winzig wirkt.
+var
+  PPI : Integer;
+begin
+  PPI := CurrentPPI;
+  if PPI <= 0 then PPI := 96;
+  Result := MulDiv(AValue, PPI, 96);
+end;
+
+procedure TAnalyserFrame.BuildHamburgerMenu;
+// Popup-Menu fuer den Hamburger-Button. Items entsprechen den Toolbar-
+// Aktionen, die im gedockten/schmalen Modus ausgeblendet werden -
+// hier bleiben sie auch im Narrow-Modus erreichbar.
+var
+  MI : TMenuItem;
+begin
+  FHamburgerMenu := TPopupMenu.Create(Self);
+
+  MI := TMenuItem.Create(FHamburgerMenu);
+  MI.Caption := _('Settings...');
+  MI.OnClick := EditRepoSettingsClick;
+  FHamburgerMenu.Items.Add(MI);
+
+  MI := TMenuItem.Create(FHamburgerMenu);
+  MI.Caption := _('Ignore list...');
+  MI.OnClick := EditIgnoreListClick;
+  FHamburgerMenu.Items.Add(MI);
+
+  MI := TMenuItem.Create(FHamburgerMenu);
+  MI.Caption := '-';
+  FHamburgerMenu.Items.Add(MI);
+
+  MI := TMenuItem.Create(FHamburgerMenu);
+  MI.Caption := _('Analyse Branch-Changes');
+  MI.OnClick := AnalyseChangedFilesClick;
+  FHamburgerMenu.Items.Add(MI);
+
+  FBtnHamburger.PopupMenu := FHamburgerMenu;
+  // Standard-Behavior von TButton.PopupMenu ist Rechtsklick - hier wollen
+  // wir Linksklick. HamburgerClick wirft das Popup unter dem Button auf
+  // (gleicher Pattern wie der Export-Button).
+  FBtnHamburger.OnClick := HamburgerClick;
+end;
+
 procedure TAnalyserFrame.HamburgerClick(Sender: TObject);
 // Klick auf den Hamburger-Button -> Popup-Menu unter dem Button anzeigen.
-// Standard-Verhalten von TButton.PopupMenu ist Rechtsklick - hier wollen
-// wir Linksklick. Position: linke untere Ecke des Buttons (in Screen-
-// Koordinaten).
+// Position: linke untere Ecke des Buttons (in Screen-Koordinaten).
 var
   P : TPoint;
 begin
