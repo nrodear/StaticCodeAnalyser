@@ -65,7 +65,7 @@ Status legend: ✅ implemented · 🟡 partial · 🔲 open
 |---|------|-------------|--------|------|
 | 26 | **LongMethod — method too long** | Method body exceeds 50 executable lines | ✅ | `uLongMethod` |
 | 27 | **TooManyParams — too many parameters** | Method has more than 5 parameters | ✅ | `uLongParamList` |
-| 28 | **HighComplexity — cyclomatic complexity > 10** | Number of branching paths (`if`, `case`, `for`, `while`, `and`, `or`) exceeds 10 | 🔲 | |
+| 28 | **CyclomaticComplexity — McCabe complexity > 10** | Number of branching paths (`if`, `case` arm, `for`, `while`, `repeat`, `on` handler, `and`/`or`/`xor`) exceeds 10 | ✅ | `uCyclomaticComplexity` |
 | 29 | **DeepNesting — nesting depth > 4** | Code block indented more than four levels deep | ✅ | `uDeepNesting` |
 | 30 | **DuplicateBlock — duplicated code block** | Identical block (>10 lines) appears more than once | 🟡 | `uDuplicateString` (strings only, not blocks) |
 | 31 | **GodClass — god class** | Class has more than 20 methods or more than 15 instance fields | 🔲 | |

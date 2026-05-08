@@ -52,6 +52,7 @@ type
     FMaxStatements     : Integer;     // LongMethodMaxStatements
     FMaxParams         : Integer;     // LongParamListMaxParams
     FMaxNesting        : Integer;     // DeepNestingMaxDepth
+    FMaxCyclomatic     : Integer;     // CyclomaticMax
     FMinBlockLines     : Integer;     // DuplicateBlockMinLines
     FMaxFileMB         : Integer;     // MaxFileMB (5 Default)
     FMagicTrivials     : TStringList; // MagicNumberTrivials (CSV)
@@ -124,6 +125,12 @@ type
 
     // uDeepNesting: Verschachtelung > MaxDepth Ebenen.
     property DeepNestingMaxDepth:     Integer read FMaxNesting    write FMaxNesting;
+
+    // uCyclomaticComplexity: McCabe-Komplexitaet > MaxCyclomatic.
+    // Default 10 (industry standard - Sonar/Checkstyle/PMD).
+    // Zaehlt: 1 base + if + case-arm + for/while/repeat + on-handler +
+    // and/or/xor BinaryOps. else zaehlt nicht (binary branch).
+    property CyclomaticMax:           Integer read FMaxCyclomatic write FMaxCyclomatic;
 
     // uDuplicateBlock: Block muss min. MinBlockLines (normalisierte Zeilen)
     // lang sein um als Duplikat zu zaehlen.
@@ -304,6 +311,12 @@ const
     '; case/try) -> Refactoring-Hinweis.'#13#10 +
     ';DeepNestingMaxDepth=4'#13#10 +
     ''#13#10 +
+    '; CyclomaticComplexity (McCabe): > Schwelle -> Refactoring-Hinweis.'#13#10 +
+    '; Zaehlt: 1 base + if + case-arm + for/while/repeat + on-handler +'#13#10 +
+    '; and/or/xor BinaryOps. else zaehlt nicht (binary branch).'#13#10 +
+    '; Industry-Standard 10 (Sonar/Checkstyle/PMD).'#13#10 +
+    ';CyclomaticMax=10'#13#10 +
+    ''#13#10 +
     '; DuplicateBlock: minimale Blockgroesse fuer Duplikat-Erkennung.'#13#10 +
     '; Hoeher = weniger FPs (Boilerplate), niedriger = mehr Treffer.'#13#10 +
     ';DuplicateBlockMinLines=8'#13#10 +
@@ -360,6 +373,7 @@ begin
   FMaxStatements := 30;
   FMaxParams     := 5;
   FMaxNesting    := 4;
+  FMaxCyclomatic := 10;
   FMinBlockLines := 8;
   FMaxFileMB     := 5;
   FMagicTrivials := TStringList.Create;
@@ -480,6 +494,7 @@ begin
     FMaxStatements := Ini.ReadInteger('Detectors', 'LongMethodMaxStatements', 30);
     FMaxParams     := Ini.ReadInteger('Detectors', 'LongParamListMaxParams',  5);
     FMaxNesting    := Ini.ReadInteger('Detectors', 'DeepNestingMaxDepth',     4);
+    FMaxCyclomatic := Ini.ReadInteger('Detectors', 'CyclomaticMax',          10);
     FMinBlockLines := Ini.ReadInteger('Detectors', 'DuplicateBlockMinLines',  8);
     FMaxFileMB     := Ini.ReadInteger('Detectors', 'MaxFileMB',               5);
 
@@ -576,6 +591,7 @@ begin
   uSCAConsts.DetectorMaxStatements := FMaxStatements;
   uSCAConsts.DetectorMaxParams     := FMaxParams;
   uSCAConsts.DetectorMaxNesting    := FMaxNesting;
+  uSCAConsts.DetectorMaxCyclomatic := FMaxCyclomatic;
   uSCAConsts.DetectorMinBlockLines := FMinBlockLines;
   uSCAConsts.DetectorMaxFileBytes  := FMaxFileMB * 1024 * 1024;
 

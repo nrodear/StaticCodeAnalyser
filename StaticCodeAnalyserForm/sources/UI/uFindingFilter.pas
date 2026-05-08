@@ -38,7 +38,8 @@ type
                  // Hinweis-Detektoren
                  fmLongMethod, fmLongParamList, fmMagicNumber,
                  fmDuplicateString, fmDeepNesting,
-                 fmTodoComment, fmEmptyMethod, fmDuplicateBlock);
+                 fmTodoComment, fmEmptyMethod, fmDuplicateBlock,
+                 fmCyclomaticComplexity);
 
   // Zweiter Filter (orthogonal zu Schweregrad): Sonar-Typ-Kategorie.
   TTypeFilter = (tfAll, tfBug, tfCodeSmell, tfVulnerability,
@@ -108,6 +109,7 @@ begin
     fkHardcodedPath    : Result := 'hardcoded path pfad';
     fkDebugOutput      : Result := 'debug output writeln showmessage ausgabe';
     fkDeepNesting      : Result := 'deep nesting tiefe verschachtelung';
+    fkCyclomaticComplexity : Result := 'cyclomatic complexity mccabe komplexitaet verzweigung';
     fkTodoComment      : Result := 'todo fixme hack xxx kommentar comment';
     fkEmptyMethod      : Result := 'empty method leere methode';
     fkDuplicateBlock   : Result := 'duplicate block doppelter';
@@ -149,6 +151,7 @@ begin
     fmHardcodedPath:   Result := F.Kind = fkHardcodedPath;
     fmDebugOutput:     Result := F.Kind = fkDebugOutput;
     fmDeepNesting:     Result := F.Kind = fkDeepNesting;
+    fmCyclomaticComplexity: Result := F.Kind = fkCyclomaticComplexity;
     fmTodoComment:     Result := F.Kind = fkTodoComment;
     fmEmptyMethod:     Result := F.Kind = fkEmptyMethod;
   else

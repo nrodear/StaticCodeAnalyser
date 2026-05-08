@@ -573,6 +573,53 @@ begin
         '// into a method and call it once.';
     end;
 
+    fkCyclomaticComplexity:
+    begin
+      Result.Description := 'Cyclomatic complexity too high - too many branches; extract methods or simplify conditions';
+      Result.Before :=
+        'function ProcessOrder(const O: TOrder): Boolean;'#13#10 +
+        'begin'#13#10 +
+        '  if (O.Status = osNew) and (O.Items.Count > 0)'#13#10 +
+        '     and (O.Customer <> nil) and O.Customer.Active then'#13#10 +
+        '  begin'#13#10 +
+        '    case O.Type_ of'#13#10 +
+        '      otStandard: ...;'#13#10 +
+        '      otRush:     ...;'#13#10 +
+        '      otBulk:     ...;'#13#10 +
+        '      otGift:     ...;'#13#10 +
+        '    end;'#13#10 +
+        '    if O.Discount > 0 then ApplyDiscount(O);'#13#10 +
+        '    if O.NeedsShipping then CalcShipping(O);'#13#10 +
+        '    while O.PaymentRetries < 3 do TryPay(O);'#13#10 +
+        '  end;'#13#10 +
+        '  Result := True;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Cyclomatic ~ 12: viele Pfade, schwer zu testen.';
+      Result.After :=
+        '// Pattern: zerlege in kleinere Methoden mit klar'#13#10 +
+        '// abgegrenzten Verantwortlichkeiten.'#13#10 +
+        ''#13#10 +
+        'function CanProcess(const O: TOrder): Boolean;'#13#10 +
+        'begin'#13#10 +
+        '  Result := (O.Status = osNew)'#13#10 +
+        '        and (O.Items.Count > 0)'#13#10 +
+        '        and (O.Customer <> nil)'#13#10 +
+        '        and O.Customer.Active;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        'function ProcessOrder(const O: TOrder): Boolean;'#13#10 +
+        'begin'#13#10 +
+        '  if not CanProcess(O) then Exit(False);'#13#10 +
+        '  ProcessByType(O);'#13#10 +
+        '  ApplyAdjustments(O);'#13#10 +
+        '  Result := PayWithRetry(O);'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// jede Sub-Methode hat CC ~3, viel besser testbar.'#13#10 +
+        '// Threshold via [Detectors] CyclomaticMax in analyser.ini.';
+    end;
+
     fkUnusedUses:
     begin
       Result.Description := 'Uses entry may be unused - remove to reduce coupling';

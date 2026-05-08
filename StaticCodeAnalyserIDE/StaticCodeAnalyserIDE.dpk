@@ -98,6 +98,7 @@ contains
   uHardcodedPath in '..\StaticCodeAnalyserForm\sources\Detectors\uHardcodedPath.pas',
   uDebugOutput in '..\StaticCodeAnalyserForm\sources\Detectors\uDebugOutput.pas',
   uDeepNesting in '..\StaticCodeAnalyserForm\sources\Detectors\uDeepNesting.pas',
+  uCyclomaticComplexity in '..\StaticCodeAnalyserForm\sources\Detectors\uCyclomaticComplexity.pas',
   uTodoComment in '..\StaticCodeAnalyserForm\sources\Detectors\uTodoComment.pas',
   uEmptyMethod in '..\StaticCodeAnalyserForm\sources\Detectors\uEmptyMethod.pas',
   uFieldLeak in '..\StaticCodeAnalyserForm\sources\Detectors\uFieldLeak.pas',

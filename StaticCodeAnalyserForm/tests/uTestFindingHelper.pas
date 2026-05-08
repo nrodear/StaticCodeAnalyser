@@ -15,6 +15,7 @@ uses
   uLongMethod, uLongParamList, uMagicNumbers, uDuplicateString,
   uHardcodedPath, uDebugOutput, uDeepNesting,
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
+  uCyclomaticComplexity,
   uStaticAnalyzer2,
   uTestSrcBuilder,
   System.IOUtils;
@@ -64,6 +65,7 @@ begin
       THardcodedPathDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TDebugOutputDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TDeepNestingDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TCyclomaticComplexityDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TEmptyMethodDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TFieldLeakDetector.AnalyzeUnit(Root, 'test.pas', Result);
       // TTodoCommentDetector liest die Datei selbst und braucht eine echte

@@ -55,6 +55,7 @@ var
   DetectorMaxStatements    : Integer = 30;     // uLongMethod sek. Schwelle
   DetectorMaxParams        : Integer = 5;      // uLongParamList
   DetectorMaxNesting       : Integer = 4;      // uDeepNesting (>4 = Fund)
+  DetectorMaxCyclomatic    : Integer = 10;     // uCyclomaticComplexity (>10 = Fund)
   DetectorMinBlockLines    : Integer = 8;      // uDuplicateBlock
   DetectorMaxFileBytes     : Integer = 5 * 1024 * 1024;  // uStaticAnalyzer2
 
@@ -105,7 +106,8 @@ type
     fkDeepNesting,      // Zu tiefe Verschachtelung
     fkTodoComment,      // TODO/FIXME/HACK/XXX im Kommentar
     fkEmptyMethod,      // Methodenrumpf ohne Anweisungen
-    fkDuplicateBlock    // mehrere identische Code-Blocks (>=8 Zeilen)
+    fkDuplicateBlock,   // mehrere identische Code-Blocks (>=8 Zeilen)
+    fkCyclomaticComplexity // McCabe-Komplexitaet > Schwellwert
   );
 
   // SonarQube-aehnliche Kategorisierung der Befunde:
@@ -165,7 +167,8 @@ const
     (Name: 'DeepNesting';     FindingType: ftCodeSmell),        // fkDeepNesting
     (Name: 'TodoComment';     FindingType: ftCodeSmell),        // fkTodoComment
     (Name: 'EmptyMethod';     FindingType: ftCodeSmell),        // fkEmptyMethod
-    (Name: 'DuplicateBlock';  FindingType: ftCodeDuplication)   // fkDuplicateBlock
+    (Name: 'DuplicateBlock';  FindingType: ftCodeDuplication),  // fkDuplicateBlock
+    (Name: 'CyclomaticComplexity'; FindingType: ftCodeSmell)    // fkCyclomaticComplexity
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

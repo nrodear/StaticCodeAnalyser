@@ -808,7 +808,7 @@ hängt zusammen (CLI-Mode ist die Voraussetzung für CI-Integration).
   Niedrige Priorität — Mercurial-Anteil im Delphi-Umfeld klein, aber
   technisch trivial.
 
-- [ ] **Code-Metriken — allgemein + im Speziellen**
+- [ ] **Code-Metriken — allgemein + im Speziellen** _(Phase 1: Cyclomatic erledigt)_
 
   **Allgemein (Framework):**
   Heute laufen die metrik-artigen Detektoren (LongMethod, LongParamList,
@@ -832,9 +832,11 @@ hängt zusammen (CLI-Mode ist die Voraussetzung für CI-Integration).
     (`// metrics: cyclomatic=15`).
 
   **Im Speziellen (neue Detektoren / Metriken):**
-  - **Cyclomatic Complexity (McCabe)** — `if`/`while`/`for`/`case`/`and`/`or`/
-    `except on` zählen +1 pro Methode. Schwelle z.B. 10. Heute über
-    `DeepNesting` nur grob abgedeckt.
+  - [x] **Cyclomatic Complexity (McCabe)** — _erledigt (Phase 1)_
+    `if`/`for`/`while`/`repeat`/`case`-Arm/`on`-Handler/`and`/`or`/`xor`
+    zählen +1 pro Methode, Base 1, `else` zählt nicht (binary branch).
+    Schwelle 10 (Sonar/Checkstyle/PMD-Standard) via `[Detectors]
+    CyclomaticMax`. Datei: `Detectors/uCyclomaticComplexity.pas`.
   - **Cognitive Complexity** (Sonar-Style) — wie Cyclomatic, aber
     Verschachtelung gewichtet (innere `if` zählen mehr als äußere).
     Korreliert besser mit "schwer zu lesen" als reine McCabe-Zahl.

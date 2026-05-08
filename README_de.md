@@ -290,6 +290,7 @@ Alle in `%APPDATA%\StaticCodeAnalyser\`:
 | `LongMethodMaxStatements` | 30 | (sekundäre Schwelle für `LongMethod`) |
 | `LongParamListMaxParams` | 5 | `> N` Parameter → Refactoring-Hinweis |
 | `DeepNestingMaxDepth` | 4 | `> N` verschachtelte Kontroll-Strukturen |
+| `CyclomaticMax` | 10 | McCabe-Komplexität `> N` pro Methode (zählt `if`, `case`-Arm, `for`/`while`/`repeat`, `on`-Handler, `and`/`or`/`xor`) |
 | `DuplicateBlockMinLines` | 8 | minimale normalisierte Zeilen-Anzahl für Duplikat-Erkennung |
 | `MaxFileMB` | 5 | größere Dateien werden übersprungen (OOM-Schutz bei generiertem Code) |
 | `MagicNumberTrivials` | `0,1,2,-1,10,100` | Zahlen die NICHT als Magic-Number gemeldet werden |

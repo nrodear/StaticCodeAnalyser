@@ -213,6 +213,7 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uHardcodedPath.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDebugOutput.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDeepNesting.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCyclomaticComplexity.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTodoComment.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyMethod.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uFieldLeak.pas"/>

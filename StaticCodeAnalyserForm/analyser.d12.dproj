@@ -142,6 +142,7 @@
         <DCCReference Include="sources\Detectors\uDeadCode.pas"/>
         <DCCReference Include="sources\Detectors\uDebugOutput.pas"/>
         <DCCReference Include="sources\Detectors\uDeepNesting.pas"/>
+        <DCCReference Include="sources\Detectors\uCyclomaticComplexity.pas"/>
         <DCCReference Include="sources\Common\uDetectorUtils.pas"/>
         <DCCReference Include="sources\Detectors\uDivByZero.pas"/>
         <DCCReference Include="sources\Detectors\uDuplicateBlock.pas"/>

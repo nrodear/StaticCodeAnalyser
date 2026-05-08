@@ -294,6 +294,7 @@ All under `%APPDATA%\StaticCodeAnalyser\`:
 | `LongMethodMaxStatements` | 30 | (secondary threshold for `LongMethod`) |
 | `LongParamListMaxParams` | 5 | `> N` parameters → refactoring hint |
 | `DeepNestingMaxDepth` | 4 | `> N` nested control structures |
+| `CyclomaticMax` | 10 | McCabe complexity `> N` per method (counts `if`, `case` arm, `for`/`while`/`repeat`, `on` handler, `and`/`or`/`xor`) |
 | `DuplicateBlockMinLines` | 8 | minimum normalised line count for duplicate-block detection |
 | `MaxFileMB` | 5 | files larger than that are skipped (OOM guard for generated code) |
 | `MagicNumberTrivials` | `0,1,2,-1,10,100` | numbers exempt from `MagicNumber` detection |

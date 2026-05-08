@@ -73,6 +73,22 @@ type
     [Test] procedure DeepNesting_TwoMethodsOneDeep_OnlyDeepReported;
   end;
 
+  // ---- CyclomaticComplexity (TCyclomaticComplexityDetector) --------------------------
+  [TestFixture]
+  TTestCyclomaticComplexity = class
+  public
+    [Test] procedure Cyclomatic_TrivialMethod_NoFinding;
+    [Test] procedure Cyclomatic_SingleIf_NoFinding;
+    [Test] procedure Cyclomatic_ElseDoesNotCount_NoFinding;
+    [Test] procedure Cyclomatic_BooleanAndOrInCondition_Counted;
+    [Test] procedure Cyclomatic_ManyIfs_OverLimit_ReportsHint;
+    [Test] procedure Cyclomatic_CaseArmsCounted_OverLimit_ReportsHint;
+    [Test] procedure Cyclomatic_ForWhileRepeat_Counted;
+    [Test] procedure Cyclomatic_OnHandlerCounted_OverLimit_ReportsHint;
+    [Test] procedure Cyclomatic_TryFinally_NotCounted_NoFinding;
+    [Test] procedure Cyclomatic_TwoMethodsOneOver_OneFinding;
+  end;
+
 implementation
 
 // =============================================================================
@@ -622,6 +638,212 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual(1, TFindingHelper.Count(F, fkDeepNesting));
+  finally F.Free; end;
+end;
+
+// =============================================================================
+// CyclomaticComplexity-Tests
+// =============================================================================
+// Default-Schwelle ist 10 (Sonar/Checkstyle/PMD-Standard). Base = 1, jede
+// Verzweigung +1. Tests sind so dimensioniert, dass sie deutlich UEBER bzw.
+// UNTER der Schwelle liegen - so bleiben sie auch dann aussagekraeftig wenn
+// jemand die Default-Schwelle in uSCAConsts veraendert.
+
+procedure TTestCyclomaticComplexity.Cyclomatic_TrivialMethod_NoFinding;
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'begin'#13#10+
+  '  WriteLn(''hi'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkCyclomaticComplexity));
+  finally F.Free; end;
+end;
+
+procedure TTestCyclomaticComplexity.Cyclomatic_SingleIf_NoFinding;
+// Base 1 + if 1 = 2, weit unter Schwelle 10
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'begin'#13#10+
+  '  if a then b;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkCyclomaticComplexity));
+  finally F.Free; end;
+end;
+
+procedure TTestCyclomaticComplexity.Cyclomatic_ElseDoesNotCount_NoFinding;
+// 5 if/else = base 1 + 5 if = 6, NICHT 11. else darf nicht zaehlen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'begin'#13#10+
+  '  if a then b else c;'#13#10+
+  '  if d then e else f;'#13#10+
+  '  if g then h else i;'#13#10+
+  '  if j then k else l;'#13#10+
+  '  if m then n else o;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkCyclomaticComplexity),
+    '5x if/else = CC 6, soll nicht melden');
+  finally F.Free; end;
+end;
+
+procedure TTestCyclomaticComplexity.Cyclomatic_BooleanAndOrInCondition_Counted;
+// Base 1 + 1 if + 5 and/or = 7. Mit weiteren if's deutlich ueber 10.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'begin'#13#10+
+  '  if (a and b) or (c and d) and (e or f) then x;'#13#10+
+  '  if y then z;'#13#10+
+  '  if y then z;'#13#10+
+  '  if y then z;'#13#10+
+  '  if y then z;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(1, TFindingHelper.Count(F, fkCyclomaticComplexity),
+    'Boolean-Operatoren muessen mitzaehlen');
+  finally F.Free; end;
+end;
+
+procedure TTestCyclomaticComplexity.Cyclomatic_ManyIfs_OverLimit_ReportsHint;
+// 11 if = base 1 + 11 = 12, ueber Schwelle 10
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'begin'#13#10+
+  '  if a1 then x; if a2 then x; if a3 then x; if a4 then x;'#13#10+
+  '  if a5 then x; if a6 then x; if a7 then x; if a8 then x;'#13#10+
+  '  if a9 then x; if a10 then x; if a11 then x;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(1, TFindingHelper.Count(F, fkCyclomaticComplexity));
+  finally F.Free; end;
+end;
+
+procedure TTestCyclomaticComplexity.Cyclomatic_CaseArmsCounted_OverLimit_ReportsHint;
+// 11 case-arme = base 1 + 11 = 12
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'begin'#13#10+
+  '  case x of'#13#10+
+  '    1: a; 2: a; 3: a; 4: a; 5: a; 6: a;'#13#10+
+  '    7: a; 8: a; 9: a; 10: a; 11: a;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(1, TFindingHelper.Count(F, fkCyclomaticComplexity),
+    'Jeder case-arm zaehlt +1');
+  finally F.Free; end;
+end;
+
+procedure TTestCyclomaticComplexity.Cyclomatic_ForWhileRepeat_Counted;
+// Base 1 + for + while + repeat + 8x if = 12
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'begin'#13#10+
+  '  for i := 1 to 10 do x;'#13#10+
+  '  while a do x;'#13#10+
+  '  repeat x until b;'#13#10+
+  '  if c1 then x; if c2 then x; if c3 then x; if c4 then x;'#13#10+
+  '  if c5 then x; if c6 then x; if c7 then x; if c8 then x;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(1, TFindingHelper.Count(F, fkCyclomaticComplexity));
+  finally F.Free; end;
+end;
+
+procedure TTestCyclomaticComplexity.Cyclomatic_OnHandlerCounted_OverLimit_ReportsHint;
+// Base 1 + 11 on-Handler = 12
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'begin'#13#10+
+  '  try x'#13#10+
+  '  except'#13#10+
+  '    on E1: Exception do x;'#13#10+
+  '    on E2: Exception do x;'#13#10+
+  '    on E3: Exception do x;'#13#10+
+  '    on E4: Exception do x;'#13#10+
+  '    on E5: Exception do x;'#13#10+
+  '    on E6: Exception do x;'#13#10+
+  '    on E7: Exception do x;'#13#10+
+  '    on E8: Exception do x;'#13#10+
+  '    on E9: Exception do x;'#13#10+
+  '    on E10: Exception do x;'#13#10+
+  '    on E11: Exception do x;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(1, TFindingHelper.Count(F, fkCyclomaticComplexity),
+    'on-Handler zaehlen +1 wie if/case-arm');
+  finally F.Free; end;
+end;
+
+procedure TTestCyclomaticComplexity.Cyclomatic_TryFinally_NotCounted_NoFinding;
+// 12 try/finally schachteln = base 1 + 0 = 1. try selbst zaehlt nicht.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'begin'#13#10+
+  '  try try try try try try try try try try try try'#13#10+
+  '    x'#13#10+
+  '  finally a; end; finally a; end; finally a; end; finally a; end;'#13#10+
+  '  finally a; end; finally a; end; finally a; end; finally a; end;'#13#10+
+  '  finally a; end; finally a; end; finally a; end; finally a; end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkCyclomaticComplexity),
+    'try/finally selbst zaehlt nicht (Resource-Handling, kein Branch)');
+  finally F.Free; end;
+end;
+
+procedure TTestCyclomaticComplexity.Cyclomatic_TwoMethodsOneOver_OneFinding;
+// Eine triviale Methode + eine komplexe -> nur die komplexe wird gemeldet
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Trivial;'#13#10+
+  'begin'#13#10+
+  '  x;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Complex;'#13#10+
+  'begin'#13#10+
+  '  if a1 then x; if a2 then x; if a3 then x; if a4 then x;'#13#10+
+  '  if a5 then x; if a6 then x; if a7 then x; if a8 then x;'#13#10+
+  '  if a9 then x; if a10 then x; if a11 then x;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual(1, TFindingHelper.Count(F, fkCyclomaticComplexity),
+      'nur die komplexe Methode wird gemeldet');
+    Assert.IsTrue(F[0].MethodName.EndsWith('Complex'),
+      'gemeldete Methode endet auf Complex (nicht Trivial)');
   finally F.Free; end;
 end;
 

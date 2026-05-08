@@ -64,7 +64,7 @@ Status: ✅ implementiert | 🟡 teilweise | 🔲 offen
 |---|-------|-------------|--------|------|
 | 26 | **LongMethod: Methode zu lang** | Methoden-Rumpf überschreitet 50 ausführbare Zeilen | ✅ | `uLongMethod` |
 | 27 | **TooManyParams: Zu viele Parameter** | Methode hat mehr als 5 Parameter | ✅ | `uLongParamList` |
-| 28 | **HighComplexity: Zyklomatische Komplexität > 10** | Anzahl der Verzweigungspfade (`if`, `case`, `for`, `while`, `and`, `or`) überschreitet 10 | 🔲 | |
+| 28 | **CyclomaticComplexity: McCabe-Komplexität > 10** | Anzahl der Verzweigungspfade (`if`, `case`-Arm, `for`, `while`, `repeat`, `on`-Handler, `and`/`or`/`xor`) überschreitet 10 | ✅ | `uCyclomaticComplexity` |
 | 29 | **DeepNesting: Verschachtelungstiefe > 4** | Code-Block ist mehr als 4 Ebenen tief eingerückt | ✅ | `uDeepNesting` |
 | 30 | **DuplicateBlock: Duplizierter Code-Block** | Identischer Block (>10 Zeilen) erscheint mehrfach | 🟡 | `uDuplicateString` (nur Strings, nicht Blöcke) |
 | 31 | **GodClass: Gottklasse** | Klasse hat mehr als 20 Methoden oder mehr als 15 Instanzfelder | 🔲 | |

@@ -38,6 +38,7 @@ uses
   uDeadCode in 'sources\Detectors\uDeadCode.pas',
   uDebugOutput in 'sources\Detectors\uDebugOutput.pas',
   uDeepNesting in 'sources\Detectors\uDeepNesting.pas',
+  uCyclomaticComplexity in 'sources\Detectors\uCyclomaticComplexity.pas',
   uDivByZero in 'sources\Detectors\uDivByZero.pas',
   uDuplicateBlock in 'sources\Detectors\uDuplicateBlock.pas',
   uDuplicateString in 'sources\Detectors\uDuplicateString.pas',
