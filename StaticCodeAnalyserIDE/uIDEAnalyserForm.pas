@@ -175,6 +175,13 @@ type
     // ruft uns als FOriginalOnResize NACH dem Label-Toggle), so dass die
     // Width-Anpassung den frischen Visible-Zustand sieht.
     procedure AdjustFilterSubPanels(Sender: TObject);
+    // Frame.OnResize: forwarded explizit an alle Panel-OnResize-Handler.
+    // Die TResponsiveVisibilityController hooken die Panel-OnResizes; in
+    // manchen Dock-Szenarien (IDE setzt Frame.Width direkt, ohne dass das
+    // sauber an alle Children durchgereicht wird) wuerde Hamburger sonst
+    // im Construction-Zustand "haengen bleiben". Frame.OnResize feuert
+    // garantiert.
+    procedure FrameResize(Sender: TObject);
     // Klick auf Stat-Kachel: setzt Severity-/Type-Filter passend (z.B.
     // Errors-Kachel -> FFilterCombo zeigt nur Errors). Sender.Tag traegt
     // den TFilterMode bzw. TTypeFilter-Ordinal.
@@ -912,6 +919,14 @@ begin
   FGridTooltip := TFindingGridTooltip.Create(Self, FResultGrid, FDisplayedFindings);
 
   LoadRecentPaths;
+
+  // ---- Frame-OnResize: forwarded an alle Panel-OnResize-Handler -----
+  // Garantiert dass die TResponsiveVisibilityController auch dann triggern,
+  // wenn die IDE-Dock-Logik die Panel-OnResizes nicht sauber durchreicht.
+  // Initial-Trigger danach, damit der Hamburger-Button beim Plugin-Init
+  // schon im richtigen Visible-State sitzt (nicht erst beim ersten Resize).
+  Self.OnResize := FrameResize;
+  FrameResize(Self);
 end;
 
 destructor TAnalyserFrame.Destroy;
@@ -1780,6 +1795,21 @@ begin
   PPI := CurrentPPI;
   if PPI <= 0 then PPI := 96;
   Result := MulDiv(AValue, PPI, 96);
+end;
+
+procedure TAnalyserFrame.FrameResize(Sender: TObject);
+// Forwarded an alle vier Panel-OnResize-Handler. Damit die Responsive-
+// Controller (gehookt auf Panel.OnResize) garantiert feuern, auch wenn
+// die IDE-Dock-Logik die Children nicht sauber benachrichtigt.
+begin
+  if Assigned(FPanelPath)    and Assigned(FPanelPath.OnResize)
+    then FPanelPath.OnResize(FPanelPath);
+  if Assigned(FPanelButtons) and Assigned(FPanelButtons.OnResize)
+    then FPanelButtons.OnResize(FPanelButtons);
+  if Assigned(FPanelSearch)  and Assigned(FPanelSearch.OnResize)
+    then FPanelSearch.OnResize(FPanelSearch);
+  if Assigned(FPanelStats)   and Assigned(FPanelStats.OnResize)
+    then FPanelStats.OnResize(FPanelStats);
 end;
 
 procedure TAnalyserFrame.AdjustFilterSubPanels(Sender: TObject);
