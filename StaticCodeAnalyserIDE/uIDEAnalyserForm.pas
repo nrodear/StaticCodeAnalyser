@@ -95,10 +95,11 @@ type
 
     // Vor jeder Analyse: INI neu laden, Custom-LeakyClasses + Excludes
     // registrieren, AutoDiscover-Flag setzen, DiscoveredClasses-Liste leeren.
-    // ForceWatchMode=True: WatchMode IMMER aktivieren (egal was INI sagt) -
-    // wird vom "Aktuelle Datei"-Pfad gesetzt, weil Live-Update beim
-    // Editieren/Speichern dort der natural fit ist.
-    procedure PrepareAnalysis(ForceWatchMode: Boolean = False);
+    // AWatchedFile != '' aktiviert Single-File-Live-Watch auf diese Datei
+    // (Save+Edit-Trigger). Im Bulk-Pfad ('' uebergeben) wird der Watch
+    // explizit deaktiviert - laufende Watcher vom letzten "Aktuelle Datei"-
+    // Klick werden also abgemeldet.
+    procedure PrepareAnalysis(const AWatchedFile: string = '');
     // Nach jeder Analyse: wenn AutoDiscoverClasses=1 die Treffer in die
     // INI persistieren (die unter [Detectors] LeakyClasses= landen).
     procedure FinishAnalysis;
@@ -143,7 +144,6 @@ type
     procedure StatusMode(const T: string);
     procedure TypeFilterChange(Sender: TObject);
     procedure CancelAnalyseClick(Sender: TObject);
-    procedure SetAnalyseUiBusy(ABusy: Boolean; ATotal: Integer = 0);
     procedure EditIgnoreListClick(Sender: TObject);
     procedure EditRepoSettingsClick(Sender: TObject);
     procedure PopulateFindings(const findings: TObjectList<TLeakFinding>;
@@ -1320,9 +1320,7 @@ end;
 // ---------------------------------------------------------------------------
 // Analyse starten
 // ---------------------------------------------------------------------------
-procedure TAnalyserFrame.PrepareAnalysis(ForceWatchMode: Boolean);
-var
-  WantWatch: Boolean;
+procedure TAnalyserFrame.PrepareAnalysis(const AWatchedFile: string);
 begin
   if not Assigned(FRepoSettings) then Exit;
   try
@@ -1337,25 +1335,17 @@ begin
     if Assigned(uSCAConsts.DiscoveredStaticClasses) then
       uSCAConsts.DiscoveredStaticClasses.Clear;
 
-    // WatchMode-Aktivierung:
-    //   - Im "Aktuelle Datei"-Pfad (ForceWatchMode=True) IMMER an, egal
-    //     was die INI sagt - weil der User offensichtlich an genau dieser
-    //     Datei arbeitet und Live-Updates beim Save erwartet.
-    //   - In den Bulk-Pfaden (Full-Project, Branch-Changes) folgen wir
-    //     der INI-Einstellung [Detectors] WatchMode (Default: 0).
-    // Bei aktivem Watch: Generation bumpen damit laufende Worker (vom
-    // letzten Save) ihre Ergebnisse droppen - wir schreiben gleich
-    // PopulateFindings und wollen keinen Late-Hit.
+    // Live-Watch nur im "Aktuelle Datei"-Pfad (AWatchedFile != '').
+    // Bulk-Pfade (Full-Project, Branch-Changes) deaktivieren explizit -
+    // sonst bleibt ein vom letzten "Aktuelle Datei"-Klick aktiver Watcher
+    // haengen. Generation bumpen damit laufende Worker ihre Ergebnisse
+    // droppen (sonst ueberschreiben sie die gleich geschriebenen
+    // FAllFindings).
     if Assigned(GWatchMode) then
     begin
       GWatchMode.BumpGeneration;
-      WantWatch := ForceWatchMode or FRepoSettings.WatchMode;
-      if WantWatch then
-      begin
-        if not GWatchMode.Active then
-          GWatchMode.Activate(OnWatchFindings, OnWatchStatus);
-        GWatchMode.RescanOpenModules;
-      end
+      if AWatchedFile <> '' then
+        GWatchMode.Activate(OnWatchFindings, OnWatchStatus, AWatchedFile)
       else if GWatchMode.Active then
         GWatchMode.Deactivate;
     end;
@@ -1401,9 +1391,9 @@ begin
       begin StatusMode(_('Current file is not a Pascal file.')); Exit; end;
   end;
 
-  // ForceWatchMode=True: bei "Aktuelle Datei" immer Live-Update beim
-  // Save aktivieren, egal was [Detectors] WatchMode in der INI sagt.
-  PrepareAnalysis(True);
+  // "Aktuelle Datei" -> Single-File-Live-Watch auf genau diese Datei
+  // (Save+Edit-Trigger). Andere offene Dateien werden NICHT mit-beobachtet.
+  PrepareAnalysis(FilePath);
   try
     if Assigned(FAnalyseRunner) then
       FAnalyseRunner.RunCurrent(FilePath);
@@ -1443,19 +1433,6 @@ begin
   end;
 end;
 
-procedure TAnalyserFrame.SetAnalyseUiBusy(ABusy: Boolean; ATotal: Integer);
-// Thin Delegate - die ganze UI-Toggle-Logik (Buttons, Progressbar,
-// Cursor, Running/Cancelled-Flags) ist in TAnalyseProgressController
-// gekapselt. Wrapper bleibt bestehen damit die Call-Sites nicht
-// alle umgeschrieben werden muessen.
-begin
-  if not Assigned(FAnalyseProgress) then Exit;
-  if ABusy then
-    FAnalyseProgress.BeginRun(ATotal)
-  else
-    FAnalyseProgress.EndRun;
-end;
-
 procedure TAnalyserFrame.CancelAnalyseClick(Sender: TObject);
 // Markiert die Analyse als abzubrechen; der Progress-Callback raised EAbort
 // beim naechsten Update und unwindet so aus AnalyzeLeaksRecursive heraus.
@@ -1493,8 +1470,10 @@ begin
 end;
 
 procedure TAnalyserFrame.EditRepoSettingsClick(Sender: TObject);
-// Oeffnet analyser.ini im Default-Editor. Beim naechsten Klick auf
-// "Branch-Changes" werden die Settings automatisch neu geladen.
+// Oeffnet analyser.ini im Default-Editor. PrepareAnalysis (vor jedem
+// Analyse-Lauf) ruft FRepoSettings.Load - damit greifen Aenderungen beim
+// naechsten Klick auf "Start analysis", "Current file" ODER "Branch-
+// Changes" gleichermassen.
 var
   Path: string;
 begin
@@ -1509,7 +1488,7 @@ begin
     Exit;
   end;
 
-  StatusMode(Format(_('Settings: %s - changes take effect on next click of Branch-Changes.'),
+  StatusMode(Format(_('Settings: %s - changes take effect on the next analysis run.'),
     [Path]));
 end;
 
@@ -1767,8 +1746,8 @@ begin
   // angehaengt; AV-sicher dank ref-counting (siehe uIDELineHighlighter).
   RegisterLineHighlighter;
   // Watch-Mode: Manager-Singleton anlegen. KEINE ToolsAPI-Calls hier -
-  // Module-Notifier werden erst beim Activate() aus PrepareAnalysis
-  // angehaengt (= nur wenn INI WatchMode=1).
+  // der Module-Notifier wird erst beim Activate() aus PrepareAnalysis
+  // angehaengt (nur im "Aktuelle Datei"-Pfad, Single-File-Watch).
   RegisterWatchMode;
 
   // Eintrag im Ansicht-Menue hinzufuegen

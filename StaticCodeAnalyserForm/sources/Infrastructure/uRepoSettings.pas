@@ -47,7 +47,6 @@ type
     FAutoDiscover      : Boolean;     // [Detectors] AutoDiscoverClasses
     FUsesCheck         : Boolean;     // [Detectors] UsesCheck
     FIncludeTests      : Boolean;     // [Detectors] IncludeTests
-    FWatchMode         : Boolean;     // [Detectors] WatchMode
     // Detektor-Schwellwerte (alle [Detectors]-Sektion).
     FMaxBodyLines      : Integer;     // LongMethodMaxBodyLines
     FMaxStatements     : Integer;     // LongMethodMaxStatements
@@ -109,14 +108,6 @@ type
     // proportional viele Code-Smell-Befunde (LongMethod, MagicNumber) die
     // den Hauptbefund ueberlagern. Aus [Detectors] IncludeTests.
     property IncludeTests: Boolean read FIncludeTests write FIncludeTests;
-
-    // Wenn True: das IDE-Plugin attached pro offener Source-Datei einen
-    // IOTAModuleNotifier; nach jedem Strg+S laeuft die Analyse fuer genau
-    // diese Datei automatisch im Hintergrund-Thread und das Befund-Grid
-    // aktualisiert sich live (~50-100ms Latenz). Default off; wenn an,
-    // wird die UI nicht blockiert weil der Worker-Thread sich auf den
-    // UI-Thread synchronisiert. Aus [Detectors] WatchMode.
-    property WatchMode: Boolean read FWatchMode write FWatchMode;
 
     // ---- Detektor-Schwellwerte (alle [Detectors]). Werden via
     // ApplyDetectorThresholds in die globalen Variablen in uSCAConsts
@@ -181,7 +172,7 @@ type
 implementation
 
 uses
-  uIgnoreList, uSCAConsts;
+  Winapi.Windows, uIgnoreList, uSCAConsts;
 
 const
   DEFAULT_INI_CONTENT =
@@ -286,19 +277,12 @@ const
     'IncludeTests=0'#13#10 +
     ';IncludeTests=1'#13#10 +
     ''#13#10 +
-    '; WatchMode (bool, default: 0) - nur IDE-Plugin'#13#10 +
-    '; Wenn 1: Live-Analyse beim Speichern. Pro offener Source-Datei'#13#10 +
-    '; haengt das Plugin einen IOTAModuleNotifier; nach jedem Strg+S'#13#10 +
-    '; laeuft die Analyse fuer genau diese Datei im Hintergrund und das'#13#10 +
-    '; Befund-Grid aktualisiert sich live (~50-100ms Latenz pro Datei).'#13#10 +
-    '; Debounce: 300ms - haeufiges Save-on-Build wird zusammengefasst.'#13#10 +
-    ';'#13#10 +
-    '; Hinweis: bei "Aktuelle Datei" wird WatchMode AUTOMATISCH aktiviert,'#13#10 +
-    '; egal was hier steht (Live-Update beim Editieren ist der natural'#13#10 +
-    '; fit). Diese Option steuert nur das Verhalten bei "Analyse starten"'#13#10 +
-    '; (volles Projekt) und "Branch-Changes".'#13#10 +
-    'WatchMode=0'#13#10 +
-    ';WatchMode=1'#13#10 +
+    '; Live-Analyse: nur IDE-Plugin, nicht konfigurierbar.'#13#10 +
+    '; Beim Klick auf "Aktuelle Datei" haengt das Plugin einen'#13#10 +
+    '; IOTAModuleNotifier an genau diese Datei und scannt sie bei'#13#10 +
+    '; jedem Save (Debounce 300 ms) und jedem Edit (Debounce 1000 ms)'#13#10 +
+    '; im Hintergrund-Thread. "Analyse starten" und "Branch-Changes"'#13#10 +
+    '; sind reine One-Shot-Laeufe ohne Live-Mode.'#13#10 +
     ''#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
@@ -371,7 +355,6 @@ begin
   FAutoDiscover       := False;
   FUsesCheck          := False;
   FIncludeTests       := False;
-  FWatchMode          := False;
   // Detektor-Schwellwerte: Defaults entsprechen den alten hardcoded Werten.
   FMaxBodyLines  := 50;
   FMaxStatements := 30;
@@ -490,7 +473,6 @@ begin
     // [Detectors] IncludeTests=1 -> FIncludeTests (Default aus, Test-Code-Noise)
     FUsesCheck    := Ini.ReadBool('Detectors', 'UsesCheck',    False);
     FIncludeTests := Ini.ReadBool('Detectors', 'IncludeTests', False);
-    FWatchMode    := Ini.ReadBool('Detectors', 'WatchMode',    False);
 
     // Detektor-Schwellwerte (alle [Detectors]). Defaults = alte hardcoded
     // Werte, also bleibt das Verhalten ohne explizite INI-Eintraege gleich.

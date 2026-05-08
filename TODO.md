@@ -402,13 +402,37 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
   abgedeckt). Fehlend: `tokenize`, `passport`, `keyboard` (alle sollten
   KEIN Match sein).
 
-- [ ] **WatchMode dynamic module attach**
-  `RescanOpenModules` läuft nur in `PrepareAnalysis`. Module die der User
-  NACH Watch-Aktivierung neu öffnet bekommen keinen `IOTAModuleNotifier`,
-  ihre Saves triggern keine Live-Analyse.
-  Lösung: `INTAEditServicesNotifier` registrieren, in
-  `EditorViewActivated` per `TryAttach` ergänzen.
-  Datei: `StaticCodeAnalyserIDE/uIDEWatchMode.pas`
+- [x] **WatchMode dynamic module attach** — _erledigt, dann verworfen_
+  War: `TFindingEditSvcNotifier.EditorViewActivated` -> `RescanOpenModules`
+  fuer Auto-Attach an neu geoeffnete Dateien. Mit dem Single-File-Watch-
+  Refactor (s.u.) entfallen, weil Watch nur noch eine Datei beobachtet.
+
+- [x] **Auto-Single-File-Scan beim Editieren** — _erledigt, dann konsolidiert_
+  War: separater INI-Key `[Detectors] AutoScanOnEdit=0/1`. Mit dem
+  Single-File-Watch-Refactor (s.u.) entfallen - Live-Watch ist jetzt
+  immer Save+Edit, ohne INI-Flag.
+
+- [x] **Single-File-Live-Watch (Konsolidierung)** — _erledigt, RISKY_
+  WatchMode + AutoScanOnEdit INI-Flags komplett entfernt. Live-Watch
+  ist jetzt implizit an "Aktuelle Datei" gekoppelt: Klick aktiviert
+  einen Single-Slot-Notifier auf genau diese Datei (Save 300 ms +
+  Edit 1000 ms debounced). Tab-Wechsel auf andere Datei aendert nichts;
+  erneuter "Aktuelle Datei"-Klick haengt den Notifier um. Bulk-Pfade
+  (Full-Project, Branch-Changes) deaktivieren den Watch explizit.
+  Dateien: `Infrastructure/uRepoSettings.pas` (Flags + INI-Doc raus),
+  `StaticCodeAnalyserIDE/uIDEWatchMode.pas` (Single-Slot statt Listen,
+  AttachToWatchedFile/DetachWatched, EditorViewActivated -> No-op),
+  `uIDEAnalyserForm.pas` (`PrepareAnalysis(const AWatchedFile: string)`).
+  **!!! RISIKO Endlosschleife !!!** Heute kein Re-Entrancy-Guard fuer
+  ueberlappende Spawns. Bei langsamen Workers / aktivem Tippen kann
+  der Worker-Backlog wachsen, oder Editor-Repaint nach Findings-Update
+  triggert (Delphi-version-abhaengig) wieder Modified. Vor breitem
+  Default-On unbedingt erst:
+    - Re-Entrancy-Guard (kein Spawn solange Worker laeuft)
+    - Hard-Cap (max 1 Spawn / N Sekunden)
+    - oder echten Cancel-Token (siehe Eintrag "WatchMode echtes
+      Cancel-Token")
+  Header in `uIDEWatchMode.pas` traegt warning-Block.
 
 - [ ] **WatchMode echtes Cancel-Token**
   Heute droppen wir nur _späte_ Worker-Ergebnisse via Generation-Counter.
