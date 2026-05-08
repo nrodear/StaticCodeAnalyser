@@ -50,11 +50,6 @@ type
     // den vollen TLeakFinding (inkl. Kind/Severity-Details) zur ausgewaehlten
     // Zeile findet und einen kompletten Claude-AI-Prompt erzeugen kann.
     FAllFindings : TObjectList<TLeakFinding>;
-    // Liest analyser.ini neu, registriert Custom-LeakyClasses/Excludes und
-    // setzt das globale AutoDiscoverCustomClasses-Flag. Wird vor jedem Analyse-
-    // Lauf aufgerufen, damit INI-Aenderungen ohne App-Neustart wirken (gleiches
-    // Pattern wie das IDE-Plugin in TAnalyserFrame.AnalyseClick).
-    procedure ApplyIniSettings;
     // Inner helper: registriert eine bereits geladene Settings-Instanz und
     // setzt optional die Discovery-Listen zurueck. Wird vom Analyse-Pfad
     // direkt benutzt (der die Settings noch fuer UsesCheck/AutoDiscover braucht).
@@ -264,22 +259,6 @@ begin
     end;
   except
     // INI-Wert defekt darf den Lauf nicht abbrechen.
-  end;
-end;
-
-procedure TForm2.ApplyIniSettings;
-// Helper fuer Aufrufer die Settings nicht selbst persistieren wollen
-// (z.B. wenn keine Discovery laeuft). Liefert eine kurzlebige Instanz mit
-// bereits ausgefuehrtem RegisterToLeakyClasses + globalem AutoDiscover-Flag.
-var
-  Settings: TRepoSettings;
-begin
-  Settings := TRepoSettings.Create;
-  try
-    try Settings.Load; except end;
-    ApplyDetectorConfig(Settings, False);
-  finally
-    Settings.Free;
   end;
 end;
 

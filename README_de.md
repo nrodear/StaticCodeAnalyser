@@ -295,10 +295,29 @@ Alle in `%APPDATA%\StaticCodeAnalyser\`:
 | `MagicNumberTrivials` | `0,1,2,-1,10,100` | Zahlen die NICHT als Magic-Number gemeldet werden |
 | `UsesCheck` | 0 | `UnusedUses`-Detektor (default off — produziert ggf. false positives) |
 | `IncludeTests` | 0 | `uTest*.pas`, `*_Tests.pas`, `TestProject*.dpr`, `/tests/`-Ordner mit-analysieren |
-| `WatchMode` | 0 | **nur IDE-Plugin** — Live-Analyse beim Speichern. Pro offener `.pas`-Datei haengt das Plugin einen `IOTAModuleNotifier`; nach jedem `Strg+S` wird die Datei im Hintergrund-Thread re-analysiert und das Grid aktualisiert sich innerhalb ~50–100 ms. 300 ms Debounce glaettet Save-on-Build-Stuerme. **Wird automatisch aktiviert** (egal was diese INI-Option sagt) wenn Du auf **Aktuelle Datei** klickst — das ist der natural fit fuer Live-Editing |
 | `AutoDiscoverClasses` | 0 | Projekt-AST nach Custom-Klassen scannen die `Free` brauchen, automatisch zu `LeakyClasses` ergänzen |
 | `LeakyClasses` | _(leer)_ | kommagetrennt — zusätzliche Klassen die getrackt werden sollen |
 | `ExcludeLeakyClasses` | _(leer)_ | kommagetrennt — Klassen die NICHT getrackt werden sollen, auch wenn sie in den Defaults stehen |
+
+### Live-Watch (nur IDE-Plugin) — ⚠️ RISKY
+
+Klick auf **Aktuelle Datei** im IDE-Plugin aktiviert einen Single-File-Live-Watch
+auf genau diese Datei: bei jedem Save (300 ms debounced) und Edit (1000 ms
+debounced) laeuft die Analyse fuer DIESE Datei automatisch im Hintergrund-Thread.
+Tab-Wechsel auf eine andere Datei aendert nichts; erneuter Klick auf
+**Aktuelle Datei** haengt den Watch um. Bulk-Pfade (**Analyse starten**,
+**Branch-Changes**) deaktivieren den Watch explizit. Es gibt kein INI-Flag dafuer.
+
+> ⚠️ **Risiko Endlosschleife.** Es existiert heute **kein Re-Entrancy-Guard**
+> fuer ueberlappende Worker-Spawns. Wenn der Worker laenger als der Edit-
+> Debounce (1000 ms) braucht und der User waehrenddessen weiter tippt, wachst
+> der Worker-Backlog statt zu schrumpfen. Zusaetzlich kann (Delphi-version-
+> abhaengig) ein Editor-Repaint nach Findings-Update wieder als `Modified`
+> interpretiert werden — Edit-/Save-Pfad koennen sich dann gegenseitig
+> nachtriggern. Heute geschuetzt nur durch den Generation-Counter (verwirft
+> _spaete_ Ergebnisse, verhindert aber keinen ueberlappenden Spawn). Vor
+> breitem Einsatz unbedingt erst Re-Entrancy-Guard + Hard-Cap einbauen
+> (`TODO.md` -> _Single-File-Live-Watch_).
 
 ---
 
@@ -373,8 +392,9 @@ StaticCodeAnalyserIDE/                 IDE-Expert Paket (.dpk)
   uIDELineHighlighter.pas              3 px roter Streifen im IDE-Editor-
                                        Gutter auf der Befund-Zeile
   uIDEMessages.pas                     Hand-off in den IDE-Messages-Tab
-  uIDEWatchMode.pas                    Live-Reanalyse bei Ctrl+S
-                                       (IOTAModuleNotifier + 300 ms Debounce)
+  uIDEWatchMode.pas                    Single-File-Live-Watch (Aktuelle Datei)
+                                       Save 300 ms / Edit 1000 ms debounced
+                                       ⚠️ kein Re-Entrancy-Guard - s. README
   uIDEStatsTiles.pas                   Sonar-Style Tile-Reihe Builder
   uIDEHelpPanel.pas                    Rechtes Help-Panel mit Vorher/Nachher,
                                        auto-hide im Docked-Modus

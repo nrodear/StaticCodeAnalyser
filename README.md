@@ -299,10 +299,28 @@ All under `%APPDATA%\StaticCodeAnalyser\`:
 | `MagicNumberTrivials` | `0,1,2,-1,10,100` | numbers exempt from `MagicNumber` detection |
 | `UsesCheck` | 0 | `UnusedUses` detector (off by default — can produce false positives) |
 | `IncludeTests` | 0 | include `uTest*.pas`, `*_Tests.pas`, `TestProject*.dpr`, `/tests/` directories |
-| `WatchMode` | 0 | **IDE plugin only** — live analysis on save. Per open `.pas` file the plugin attaches an `IOTAModuleNotifier`; after each `Ctrl+S` the file is re-analysed in a background thread and the grid updates within ~50–100 ms. 300 ms debounce smooths out save-on-build storms. **Auto-enabled** (regardless of this INI setting) when you click **Current file** — that's the natural fit for live editing |
 | `AutoDiscoverClasses` | 0 | scan project AST for custom classes that need `Free` and add them to `LeakyClasses` |
 | `LeakyClasses` | _(empty)_ | comma-separated list of additional classes to track |
 | `ExcludeLeakyClasses` | _(empty)_ | comma-separated list of classes to NOT track even if they're in the defaults |
+
+### Live-Watch (IDE plugin only) — ⚠️ RISKY
+
+Clicking **Current file** in the IDE plugin activates a single-file live watch
+on exactly that file: every save (300 ms debounced) and every edit (1000 ms
+debounced) re-runs the analysis for THIS file in a background thread. Switching
+tabs to another file changes nothing; clicking **Current file** again moves the
+watch to the new file. Bulk paths (**Run analysis**, **Branch changes**)
+explicitly deactivate the watch. There is no INI flag for this.
+
+> ⚠️ **Infinite-loop risk.** There is currently **no re-entrancy guard** for
+> overlapping worker spawns. If the worker takes longer than the edit debounce
+> (1000 ms) and the user keeps typing, the worker backlog will grow rather
+> than shrink. Additionally (Delphi-version dependent), an editor repaint
+> following a findings update can be re-interpreted as `Modified` — edit/save
+> paths can then re-trigger each other. The only safety today is the
+> generation counter (drops _late_ results, but does not prevent overlapping
+> spawns). Add a re-entrancy guard + hard cap before broader use
+> (`TODO.md` -> _Single-File-Live-Watch_).
 
 ---
 
@@ -378,8 +396,9 @@ StaticCodeAnalyserIDE/                 IDE expert package (.dpk)
   uIDELineHighlighter.pas              3 px red stripe in the IDE editor
                                        gutter on the offending line
   uIDEMessages.pas                     Hand-off into the IDE Messages tab
-  uIDEWatchMode.pas                    Live re-analysis on Ctrl+S
-                                       (IOTAModuleNotifier + 300 ms debounce)
+  uIDEWatchMode.pas                    Single-file live watch (Current file)
+                                       save 300 ms / edit 1000 ms debounced
+                                       ⚠️ no re-entrancy guard - see README
   uIDEStatsTiles.pas                   Sonar-style tile row builder
   uIDEHelpPanel.pas                    Right-side help panel with before/after,
                                        auto-hide when docked
