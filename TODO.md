@@ -402,6 +402,78 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
   abgedeckt). Fehlend: `tokenize`, `passport`, `keyboard` (alle sollten
   KEIN Match sein).
 
+- [ ] **Docked-Mode UI: zuverlässige Anzeige notwendiger Bedienelemente**
+
+  **Status quo (aktuell, fragil):**
+  - `TResponsiveVisibilityController` hookt `Panel.OnResize`, toggelt
+    `Visible` basierend auf Width-Schwelle (BREAKPOINT_DOCKED=700)
+  - 4 Controller-Instanzen über 3 Panels + 1 Stats-Panel
+  - `TAnalyserFrame.Resize` (override) forwarded an alle Panel-OnResizes,
+    weil OnResize aus IDE-Dock-Logik teilweise verschluckt wird
+  - `AdjustFilterSubPanels` hängt parallel an `PanelButtons.OnResize`
+    und passt Sub-Panel-Widths an Label-Visibility an
+  - Action-Buttons in `PanelSearch` summieren sich auf ~486 px im docked,
+    überlaufen bei typischen 350-400 px Dock weiterhin
+  - **Bekannte Schwachstellen:** mehrere Race-Conditions zwischen
+    Dock-Resize und Controller-Init; chained OnResize fragil/debug-unfriendly;
+    Hamburger-Visibility hat schon 3× Hin und Her gemacht
+
+  **Phase 1: Stabilisieren (kurzfristig, Mini-Risk)**
+  - Dock-State direkt erkennen (statt Width-Heuristik): `HostDockSite <> nil`
+    oder `INTAEditWindow.IsFloating` aus ToolsAPI. Width bleibt Fallback.
+  - PanelSearch im Docked: `BtnAnalyse` + `FBtnAnalyseCurrent` kollabieren
+    auf Icon-Buttons (28 px, "▶"/"📄") oder wandern ins Hamburger-Menü.
+    Ergibt PanelSearch-Belegung ~250 px - passt unter 350.
+  - `FSearchEdit.Constraints.MinWidth` im Docked auf 60 px (statt 120).
+  - Initial-State garantiert deterministisch: `inherited Create` -> komplett
+    fertige UI -> EINMAL `RecomputeResponsiveLayout` am Ende statt mehrere
+    `ApplyVisibility`-Calls aus Controller-Constructors.
+  - Datei: `uIDEAnalyserForm.pas` + `uIDEStatsTiles.pas`
+
+  **Phase 2: Layout-Architektur sauberer (mittel)**
+  - Inline `TPanel`-Ketten mit hardcoded Widths ersetzen durch
+    `TFlowPanel` oder eigene `TToolbarLayout`-Komponente die natives
+    Overflow-Handling kennt (Controls wrappen oder kollabieren in
+    Dropdown/More-Button).
+  - Deklarative Layout-Config statt 4 Controller-Instanzen pro Panel:
+    ```
+    FToolbar.AddButton(BTN_ANALYSE, _('Start analysis'),     prAlways);
+    FToolbar.AddButton(BTN_CURRENT, _('Current file'),       prAlways);
+    FToolbar.AddButton(BTN_BRANCH,  _('Branch-Changes'),     prFloated);
+    FToolbar.AddSeparator;
+    ...
+    ```
+    `prFloated` heißt: nur sichtbar wenn floated, sonst im Hamburger.
+  - Sub-Panel-Container-Trick (PanelSev/PanelType für Label+Combo)
+    weg - Margin/Padding statt Wrapper-Panel.
+
+  **Phase 3: Two-Mode-UI (groß)**
+  - Statt Visibility-Toggle: zwei komplett verschiedene Toolbar-Aufbauten.
+    Bei Dock-State-Change wird die ALTE Toolbar zerstört + die NEUE
+    aufgebaut.
+    - **Floated-Mode:** aktuelle volle Toolbar (3 Reihen)
+    - **Docked-Mode:** EINE schmale Toolbar mit
+      `[▶ Analyse ▾] [🔍 Search] [≡ Menu] [✕ Cancel]`
+  - Eliminiert die ganze responsive-controller-Komplexität.
+    Trade-off: Code-Duplikat zwischen den beiden Modi.
+
+  **Phase 4: Polish (Nice-to-have)**
+  - User-Pref persistieren (z.B. "Tile-Reihe immer aus", "Toolbar
+    minimal") in `analyser.ini`.
+  - Smooth Transition beim Dock-State-Change (`FlickerFree` flag).
+  - Theme-Variante speziell für Compact-Mode (Tile-Glyphs kleiner,
+    weniger Padding).
+
+  **Reihenfolge-Vorschlag:** Phase 1 zuerst - der eigentliche Bug
+  (PanelSearch zu breit + Initial-State-Race) wird gefixt ohne
+  Architektur umzubauen. Phase 2 ist ein größerer Refactor (lohnt sich
+  wenn weitere Detector-Filter-Buttons dazukommen). Phase 3 ist nur
+  sinnvoll wenn der responsive-Ansatz sich als grundsätzlich
+  unbeherrschbar erweist.
+
+  Datei: `StaticCodeAnalyserIDE/uIDEAnalyserForm.pas` (+ neue Layout-
+  Komponente in Phase 2)
+
 - [x] **WatchMode dynamic module attach** — _erledigt, dann verworfen_
   War: `TFindingEditSvcNotifier.EditorViewActivated` -> `RescanOpenModules`
   fuer Auto-Attach an neu geoeffnete Dateien. Mit dem Single-File-Watch-
