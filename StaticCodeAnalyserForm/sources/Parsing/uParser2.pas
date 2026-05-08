@@ -79,6 +79,34 @@ begin
                   tkKwInline, tkKwExternal, tkKwRead, tkKwWrite];
 end;
 
+// True wenn C ein Identifier-Zeichen ist (Buchstabe/Ziffer/Underscore).
+// Lokaler Helper - der Parser haengt nicht von uDetectorUtils ab.
+function ParserIsIdentChar(C: Char): Boolean; inline;
+begin
+  Result := CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_']);
+end;
+
+// Append-mit-Trennzeichen: fuegt Tok an FullRHS an. Wenn beide Seiten
+// (letztes Zeichen von FullRHS, erstes Zeichen von Tok) Identifier-
+// Zeichen sind, wird ein Space dazwischen gesetzt - sonst wuerden zwei
+// Idents/Keywords zu einem zusammenkleben (z.B. '100 div 0' -> '100div0',
+// 'list as IFoo' -> 'listasifoo'). Operatoren ('.', '+', '(' etc.) sind
+// nicht-Ident, brauchen keinen Separator.
+//
+// Wichtig: Detektoren wie uDivByZero / uSQLInjection / uFormatMismatch
+// pruefen via Pos(' div ', ...) / Pos(' as ', ...) auf den
+// konkatenierten RHS-String. Ohne Separator schlagen alle diese Checks
+// fehl. Vorher: ~25 Tests rot, nach Einfuehrung dieses Joiners gehen
+// alle reine Whitespace-abhaengigen Detektoren wieder gruen.
+procedure JoinTokInto(var FullRHS: string; const Tok: string); inline;
+begin
+  if (FullRHS <> '') and (Tok <> '') and
+     ParserIsIdentChar(FullRHS[Length(FullRHS)]) and
+     ParserIsIdentChar(Tok[1]) then
+    FullRHS := FullRHS + ' ';
+  FullRHS := FullRHS + Tok;
+end;
+
 function QuoteStrLit(const Value: string): string;
 // Re-konstruiert die Pascal-Source-Form eines Stringliterals:
 // outer '...' plus internal ' wieder verdoppelt.
@@ -342,6 +370,20 @@ begin
           Next;
           ParseImplementationSection(INode);
         end;
+      // Top-Level Sektionen (zwischen 'unit X;' und 'interface') sind
+      // syntaktisch nicht ganz korrekt, kommen aber in Test-Sources und
+      // einigen real-world Units (z.B. ohne interface-Block) vor.
+      // Ohne diese Branches werden uses/type/var/const-Bloecke ueber
+      // dem 'else: Next'-Default verschluckt - Detektoren sehen die
+      // Nodes nie. Fix: gleiche Behandlung wie in ParseInterfaceSection.
+      tkKwUses:
+        ParseUses(Root);
+      tkKwType:
+        begin Next; ParseTypeSection(Root); end;
+      tkKwVar:
+        begin Next; ParseVarLikeSection(Root, nkVarSection); end;
+      tkKwConst:
+        begin Next; ParseVarLikeSection(Root, nkConstSection); end;
       tkKwInitialization, tkKwFinalization:
         begin
           Next;
@@ -617,9 +659,9 @@ begin
         while not (Tok.Kind in [tkSemicolon, tkKwEnd, tkEof]) do
         begin
           if Tok.Kind = tkStrLit then
-            ConstValue := ConstValue + QuoteStrLit(Tok.Value)
+            JoinTokInto(ConstValue, QuoteStrLit(Tok.Value))
           else
-            ConstValue := ConstValue + Tok.Value;
+            JoinTokInto(ConstValue, Tok.Value);
           Next;
         end;
       end;
@@ -1426,9 +1468,9 @@ begin
             if NestDepth = 0 then Break;
         end;
         if Tok.Kind = tkStrLit then
-          FullRHS := FullRHS + QuoteStrLit(Tok.Value)
+          JoinTokInto(FullRHS, QuoteStrLit(Tok.Value))
         else
-          FullRHS := FullRHS + Tok.Value;
+          JoinTokInto(FullRHS, Tok.Value);
         Next;
       end;
 
@@ -1481,9 +1523,9 @@ begin
           if NestDepth = 0 then Break;
       end;
       if Tok.Kind = tkStrLit then
-        FullRHS := FullRHS + QuoteStrLit(Tok.Value)
+        JoinTokInto(FullRHS, QuoteStrLit(Tok.Value))
       else
-        FullRHS := FullRHS + Tok.Value;
+        JoinTokInto(FullRHS, Tok.Value);
       Next;
     end;
     Node         := Parent.Add(nkAssign, LHS, T.Line, T.Col);

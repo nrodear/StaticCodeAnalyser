@@ -110,9 +110,25 @@ class function TSuppression.BuildMap(const FileName: string):
 var
   Lines      : TStringList;
   Kinds      : TSuppressedKinds;
-  TargetLine : Integer;
   i, j       : Integer;
   L          : string;
+
+  // Existing Suppressions auf der Ziel-Zeile bewahren UND neue Kinds dazu
+  // mergen. Vermeidet dass mehrere `// noinspection X`-Marker, die
+  // gestapelt aufs selbe Code-Statement zielen, sich gegenseitig
+  // ueberschreiben.
+  procedure MergeKindsAt(Map: TDictionary<Integer, TSuppressedKinds>;
+                         Line: Integer; const NewKinds: TSuppressedKinds);
+  var
+    Existing: TSuppressedKinds;
+  begin
+    if Line <= 0 then Exit;
+    if Map.TryGetValue(Line, Existing) then
+      Map[Line] := Existing + NewKinds
+    else
+      Map.Add(Line, NewKinds);
+  end;
+
 begin
   Result := TDictionary<Integer, TSuppressedKinds>.Create;
   if not FileExists(FileName) then Exit;
@@ -134,22 +150,41 @@ begin
     for i := 0 to Lines.Count - 1 do
     begin
       if not ParseComment(Lines[i], Kinds) then Continue;
-      // Naechste echte Code-Zeile finden (nicht leer, nicht Kommentar).
-      // Wenn keine folgt (Marker auf letzter Zeile vor EOF), KEINEN
-      // Map-Eintrag emittieren - sonst suppressen wir eine Zeile die
-      // gar nicht existiert (verschwendete Map-Eintraege, harmlos aber
-      // muellt das Dict zu).
-      TargetLine := -1;
+      // Wir emittieren Suppression-Eintraege fuer ZWEI moegliche Targets:
+      //   * NextNonEmpty: erste folgende non-empty Zeile - kann auch ein
+      //     Kommentar sein (Target eines TodoComment-Suppressors etc.).
+      //   * NextCode:     erste folgende non-empty + non-comment Zeile -
+      //     Target eines normalen Suppressors (// noinspection MemoryLeak
+      //     gefolgt von ggf. dokumentierendem Kommentar gefolgt vom Code).
+      // Beide werden gemappt damit Pfade wie
+      //   // noinspection TodoComment\n// TODO: implementieren
+      // genauso funktionieren wie
+      //   // noinspection MemoryLeak\nlist := Create;
+      // Wenn weder NonEmpty noch Code folgt (Marker am EOF) - keine
+      // Map-Eintraege.
+      var NextNonEmpty: Integer := -1;
+      var NextCode    : Integer := -1;
       for j := i + 1 to Lines.Count - 1 do
       begin
         L := TrimLeft(Lines[j]);
         if L = '' then Continue;
-        if L.StartsWith('//') then Continue;
-        TargetLine := j + 1; // 1-basiert
-        Break;
+        if NextNonEmpty < 0 then NextNonEmpty := j + 1;
+        if not L.StartsWith('//') then
+        begin
+          NextCode := j + 1;
+          Break;
+        end;
       end;
-      if TargetLine > 0 then
-        Result.AddOrSetValue(TargetLine, Kinds);
+      // UNION-Merge statt overwrite: bei gestapelten Markern
+      //   // noinspection MemoryLeak
+      //   // noinspection FormatMismatch
+      //   list := Create;
+      // zielen beide Marker auf die Code-Zeile. Mit AddOrSetValue wuerde
+      // nur die zuletzt gefundene Kind-Set die Map-Entry behalten -
+      // MemoryLeak-Suppression ginge verloren. Vereinen statt ersetzen.
+      MergeKindsAt(Result, NextNonEmpty, Kinds);
+      if NextCode <> NextNonEmpty then
+        MergeKindsAt(Result, NextCode, Kinds);
     end;
   finally
     Lines.Free;

@@ -152,8 +152,6 @@ var
   s        : string;
   isSafe   : Boolean;
 begin
-  Result := False;
-
   // 1) String-Literale durch Leerzeichen ersetzen (Position erhalten).
   //    '' innerhalb eines Strings ist Escape-Quote, weiter im String.
   Stripped := RHS;

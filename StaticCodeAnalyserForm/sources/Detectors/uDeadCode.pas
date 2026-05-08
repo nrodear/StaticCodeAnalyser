@@ -107,16 +107,19 @@ end;
 class procedure TDeadCodeDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
-  Blocks : TList<TAstNode>;
-  B      : TAstNode;
+  i : Integer;
 begin
-  Blocks := MethodNode.FindAll(nkBlock);
-  try
-    for B in Blocks do
-      CheckBlock(B, MethodNode.Name, FileName, Results);
-  finally
-    Blocks.Free;
-  end;
+  // NUR direkte nkBlock-Kinder dieser Methode verarbeiten. CheckBlock
+  // selbst recurses durch alle nested Bloecke (inkl. nkForStmt-/nkWhile-
+  // Bodies). Wenn wir hier FindAll(nkBlock) nutzen wuerden, bekaemen wir
+  // alle nested Bloecke - die werden dann pro Block einmal besucht UND
+  // zusaetzlich via CheckBlock-Recursion vom Parent aus -> doppelte
+  // Findings (z.B. 'for begin Break; DoOther; end' meldet Dead-Code
+  // doppelt: einmal beim direkten Visit des inner-blocks, einmal bei
+  // der Recursion vom outer-block durch nkForStmt).
+  for i := 0 to MethodNode.Children.Count - 1 do
+    if MethodNode.Children[i].Kind = nkBlock then
+      CheckBlock(MethodNode.Children[i], MethodNode.Name, FileName, Results);
 end;
 
 class procedure TDeadCodeDetector.AnalyzeUnit(UnitNode: TAstNode;

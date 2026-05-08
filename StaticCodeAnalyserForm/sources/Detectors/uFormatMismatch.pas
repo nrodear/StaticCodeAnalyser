@@ -141,7 +141,7 @@ begin
     FuncEnd := pCall + Length(FuncName) + 1; // direkt nach '('
     i := FuncEnd;
     // fuehrenden Whitespace ueberspringen
-    while (i <= Length(CallName)) and (CallName[i] in [' ', #9]) do Inc(i);
+    while (i <= Length(CallName)) and CharInSet(CallName[i], [' ', #9]) do Inc(i);
     if i > Length(CallName) then Exit;
 
     if CallName[i] = '''' then
@@ -379,42 +379,71 @@ class procedure TFormatMismatchDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>;
   ConstTable: TDictionary<string, string>);
 var
-  Calls       : TList<TAstNode>;
-  N           : TAstNode;
-  FirstArg    : string;
-  FuncEnd     : Integer;
-  ArgsStart   : Integer;
-  FmtStr      : string;
-  PlaceCount  : Integer;
-  ArgCount    : Integer;
-  F           : TLeakFinding;
+  Reported : TDictionary<string, Boolean>;
+
+  procedure CheckCallText(const CallText: string; Line: Integer);
+  var
+    FirstArg   : string;
+    FuncEnd    : Integer;
+    ArgsStart  : Integer;
+    FmtStr     : string;
+    PlaceCount : Integer;
+    ArgCount   : Integer;
+    F          : TLeakFinding;
+    Key        : string;
+  begin
+    if not TryExtractCall(CallText, FirstArg, FuncEnd, ArgsStart) then Exit;
+    if not ResolveFormatString(FirstArg, ConstTable, FmtStr) then Exit;
+    PlaceCount := CountPlaceholders(FmtStr);
+    ArgCount   := CountArrayArgs(CallText, ArgsStart);
+    if PlaceCount = ArgCount then Exit;
+    // Dedup: nkCall + nkAssign-Walk koennen denselben Format-Call doppelt
+    // sehen (z.B. 'Result := someFunc(Format(...))' - nkAssign hat den
+    // ganzen RHS, ein evtl. emittierter nkCall fuer someFunc enthaelt
+    // ebenfalls 'format(' im Namen). Key = Line + Format-String:
+    Key := IntToStr(Line) + ':' + FmtStr;
+    if Reported.ContainsKey(Key) then Exit;
+    Reported.Add(Key, True);
+
+    F            := TLeakFinding.Create;
+    F.FileName   := FileName;
+    F.MethodName := MethodNode.Name;
+    F.LineNumber := IntToStr(Line);
+    F.MissingVar := Format('Format: %d placeholders, %d arguments',
+                           [PlaceCount, ArgCount]);
+    F.Severity   := lsError;
+    F.Kind       := fkFormatMismatch;
+    Results.Add(F);
+  end;
+
+var
+  Calls   : TList<TAstNode>;
+  Assigns : TList<TAstNode>;
+  N       : TAstNode;
 begin
-  Calls := MethodNode.FindAll(nkCall);
+  Reported := TDictionary<string, Boolean>.Create;
   try
-    for N in Calls do
-    begin
-      if not TryExtractCall(N.Name, FirstArg, FuncEnd, ArgsStart) then
-        Continue;
-      if not ResolveFormatString(FirstArg, ConstTable, FmtStr) then
-        Continue;
+    // Walk nkCall (eigenstaendige Format-Aufrufe wie 'Format(...)').
+    Calls := MethodNode.FindAll(nkCall);
+    try
+      for N in Calls do
+        CheckCallText(N.Name, N.Line);
+    finally
+      Calls.Free;
+    end;
 
-      PlaceCount := CountPlaceholders(FmtStr);
-      ArgCount   := CountArrayArgs(N.Name, ArgsStart);
-
-      if PlaceCount = ArgCount then Continue;
-
-      F            := TLeakFinding.Create;
-      F.FileName   := FileName;
-      F.MethodName := MethodNode.Name;
-      F.LineNumber := IntToStr(N.Line);
-      F.MissingVar := Format('Format: %d placeholders, %d arguments',
-                             [PlaceCount, ArgCount]);
-      F.Severity   := lsError;
-      F.Kind       := fkFormatMismatch;
-      Results.Add(F);
+    // Walk nkAssign (Format inside Zuweisung wie 's := Format(''%s'', [a, b])'
+    // oder 'Result := FormatUtf8(...)'). Der Format-Call lebt da im
+    // TypeRef (RHS-String), nicht als eigene nkCall-Node.
+    Assigns := MethodNode.FindAll(nkAssign);
+    try
+      for N in Assigns do
+        CheckCallText(N.TypeRef, N.Line);
+    finally
+      Assigns.Free;
     end;
   finally
-    Calls.Free;
+    Reported.Free;
   end;
 end;
 

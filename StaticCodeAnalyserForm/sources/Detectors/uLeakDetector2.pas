@@ -53,6 +53,17 @@ type
       const VarNameLow: string): Boolean; static;
     class function HasFunctionCallAssign(MethodNode: TAstNode;
       const VarNameLow: string): Boolean; static;
+    // Liefert die Quell-Zeile des ERSTEN `var := X.Create(...)`. Wird
+    // genutzt um die Befund-Position auf die echte Create-Zeile zu legen
+    // statt auf die var-Deklaration - bessere UX (Klick im Grid springt
+    // zur Allokation), und macht inline `// noinspection`-Marker ueber
+    // dem Create-Aufruf wirksam (Suppression-Map vergleicht 1:1 die
+    // Finding-Line gegen die Marker-Target-Line). 0 wenn kein passender
+    // Assign gefunden - Caller faellt dann auf die var-Decl-Line zurueck.
+    class function FindCreateLine(MethodNode: TAstNode;
+      const VarNameLow: string): Integer; static;
+    class function FindFuncCallAssignLine(MethodNode: TAstNode;
+      const VarNameLow: string): Integer; static;
     class function IsReturnedAsResult(MethodNode: TAstNode;
       const VarNameLow: string): Boolean; static;
     class function IsPassedToOwner(MethodNode: TAstNode;
@@ -156,6 +167,63 @@ begin
   end;
 end;
 
+class function TLeakDetector2.FindCreateLine(MethodNode: TAstNode;
+  const VarNameLow: string): Integer;
+var
+  Assigns : TList<TAstNode>;
+  A       : TAstNode;
+  TypeLow : string;
+begin
+  Result  := 0;
+  Assigns := MethodNode.FindAll(nkAssign);
+  try
+    for A in Assigns do
+    begin
+      if A.Name.ToLower <> VarNameLow then Continue;
+      TypeLow := A.TypeRef.ToLower;
+      var p := Pos('.create', TypeLow);
+      if p > 0 then
+      begin
+        var pRight := p + 7;
+        if (pRight > Length(TypeLow)) or not IsIdentChar(TypeLow[pRight]) then
+        begin
+          Result := A.Line;
+          Exit;
+        end;
+      end;
+    end;
+  finally
+    Assigns.Free;
+  end;
+end;
+
+class function TLeakDetector2.FindFuncCallAssignLine(MethodNode: TAstNode;
+  const VarNameLow: string): Integer;
+var
+  Assigns : TList<TAstNode>;
+  A       : TAstNode;
+  RHS     : string;
+begin
+  Result  := 0;
+  Assigns := MethodNode.FindAll(nkAssign);
+  try
+    for A in Assigns do
+    begin
+      if A.Name.ToLower <> VarNameLow then Continue;
+      RHS := A.TypeRef.ToLower;
+      if Pos('.create', RHS) > 0 then Continue;
+      if (RHS = 'nil') or (RHS = '') then Continue;
+      if Pos('(', RHS) > 0 then
+      begin
+        Result := A.Line;
+        Exit;
+      end;
+    end;
+  finally
+    Assigns.Free;
+  end;
+end;
+
 class function TLeakDetector2.HasFunctionCallAssign(MethodNode: TAstNode;
   const VarNameLow: string): Boolean;
 var
@@ -191,11 +259,17 @@ end;
 
 class function TLeakDetector2.IsReturnedAsResult(MethodNode: TAstNode;
   const VarNameLow: string): Boolean;
+// Akzeptiert nur 'Result := varname' oder 'Result := varname as ITyp'.
+// Vorher: Wortgrenzen-Substring-Check matched auch 'Result := L.Count'
+// (L ist drin, aber als Receiver, NICHT als Result-Wert) und unterdrueckte
+// damit echte Leaks (Parser_IfdefDuplicatedHeaders / Real-World-Code).
+// Falls jemand 'Result := SomeWrapper(L)' nutzt: das matched nicht mehr,
+// L wird als Leak gemeldet - bewusster Tradeoff (besser ein False-Positive
+// auf wrap-then-return als ein verstecktes Leak).
 var
   Assigns : TList<TAstNode>;
   A       : TAstNode;
-  TypeLow : string;
-  p       : Integer;
+  Trimmed : string;
 begin
   Result  := False;
   Assigns := MethodNode.FindAll(nkAssign);
@@ -203,10 +277,18 @@ begin
     for A in Assigns do
     begin
       if A.Name.ToLower <> 'result' then Continue;
-      TypeLow := A.TypeRef.ToLower;
-      p       := Pos(VarNameLow, TypeLow);
-      // Wortgrenze auf beiden Seiten prüfen
-      if (p > 0) and IsWholeWord(TypeLow, VarNameLow, p) then
+      Trimmed := Trim(A.TypeRef.ToLower);
+      // Exakter Match: 'Result := varname'
+      if Trimmed = VarNameLow then Exit(True);
+      // Explicit cast: 'Result := varname as IFoo' (mit/ohne Whitespace
+      // - JoinTokInto produziert ' as ', aber legacy-Parser-Output kann
+      // weiterhin 'asIFoo' liefern - beide tolerieren).
+      if Trimmed.StartsWith(VarNameLow + ' as ') then Exit(True);
+      if Trimmed.StartsWith(VarNameLow) and
+         (Length(Trimmed) >= Length(VarNameLow) + 3) and
+         (Trimmed[Length(VarNameLow) + 1] = 'a') and
+         (Trimmed[Length(VarNameLow) + 2] = 's') and
+         CharInSet(Trimmed[Length(VarNameLow) + 3], ['a'..'z', '_']) then
         Exit(True);
     end;
   finally
@@ -231,11 +313,29 @@ const
   );
 
   function TypeMatches(const TypeLow: string): Boolean;
-  var prefix : string;
+  // Strenge Word-Boundary-Pruefung: 'tobjectlist' matched 'tobjectlist',
+  // 'tobjectlist<tfoo>' und 'tobjectlist(true)' aber NICHT 'tobjectlistview'
+  // oder 'tobjectlisthelper' (gibt es z.B. in Spring4D / mORMot Erweiterungen).
+  // Vorher Pos-Match-am-Anfang ohne Boundary -> false-positive Ownership-
+  // Annahme bei jeder Klasse die mit Prefix anfaengt.
+  var
+    prefix : string;
+    pLen   : Integer;
+    NextCh : Char;
   begin
     Result := False;
     for prefix in OWNING_PREFIXES do
-      if Pos(prefix, TypeLow) = 1 then Exit(True);
+    begin
+      if Pos(prefix, TypeLow) <> 1 then Continue;
+      pLen := Length(prefix);
+      if Length(TypeLow) = pLen then Exit(True); // exakter Match
+      NextCh := TypeLow[pLen + 1];
+      // Nach dem Prefix muss ein Nicht-Identifier-Char stehen (Generic-
+      // Bracket, Klammer, Whitespace, etc.) - sonst ist's ein laengerer
+      // Klassenname.
+      if not CharInSet(NextCh, ['a'..'z', '0'..'9', '_']) then
+        Exit(True);
+    end;
   end;
 
   function FindReceiverType(Kind: TNodeKind; out TypeLow: string): Boolean;
@@ -358,9 +458,25 @@ begin
       // Heuristik fuer "ist LHS ein Feld": Delphi-Konvention F<Grossbuchstabe>
       // oder explizites 'self.'-Praefix. Lokale Variablen heissen klein/
       // camelCase, daher kein Match.
+      //
+      // Parser inseriert seit JoinTokInto Spaces zwischen Identifier-
+      // Tokens, daher 'notifier as IInterface' -> 'notifier as iinterface'.
+      // Wir akzeptieren beide Varianten (mit/ohne Whitespace) damit der
+      // Detektor robust gegen Parser-Aenderungen bleibt.
       var RHSLow := Trim(N.TypeRef.ToLower);
-      var IsTransferShape := (RHSLow = VarNameLow) or
-                             (Pos(VarNameLow + ' as ', RHSLow) = 1);
+      var IsTransferShape := False;
+      if RHSLow = VarNameLow then
+        IsTransferShape := True
+      else if RHSLow.StartsWith(VarNameLow) then
+      begin
+        var Rest := Trim(Copy(RHSLow, Length(VarNameLow) + 1, MaxInt));
+        // 'as <typename>' ODER 'as<typename>' (legacy Parser-Output).
+        if Rest.StartsWith('as ') then
+          IsTransferShape := True
+        else if (Length(Rest) >= 3) and (Rest[1] = 'a') and (Rest[2] = 's') and
+                CharInSet(Rest[3], ['a'..'z', '_']) then
+          IsTransferShape := True;
+      end;
       if IsTransferShape then
       begin
         var LHSOrig := N.Name;
@@ -566,10 +682,16 @@ begin
 
         FreeFound := SearchFree(MethodNode, VarNameLow, False, FreeInFin);
 
+        // Befund auf der Create-Zeile melden statt auf der var-Decl-Zeile.
+        // Bessere UX (Klick im Grid -> Allokation), und macht inline
+        // // noinspection-Marker direkt ueber dem Create wirksam.
+        var ReportLine := FindCreateLine(MethodNode, VarNameLow);
+        if ReportLine = 0 then ReportLine := V.Line;
+
         if not FreeFound then
-          AddFinding(V.Name, lsError, V.Line)
+          AddFinding(V.Name, lsError, ReportLine)
         else if not FreeInFin and HasFinally then
-          AddFinding(V.Name, lsWarning, V.Line);
+          AddFinding(V.Name, lsWarning, ReportLine);
 
         Continue;
       end;
@@ -583,7 +705,11 @@ begin
       FreeFound := SearchFree(MethodNode, VarNameLow, False, FreeInFin);
 
       if not FreeFound then
-        AddFinding(V.Name + ' - R'#$FC'ckgabewert', lsWarning, V.Line);
+      begin
+        var ReportLine := FindFuncCallAssignLine(MethodNode, VarNameLow);
+        if ReportLine = 0 then ReportLine := V.Line;
+        AddFinding(V.Name + ' - R'#$FC'ckgabewert', lsWarning, ReportLine);
+      end;
     end;
   finally
     LocalVars.Free;

@@ -36,39 +36,61 @@ type
 implementation
 
 const
-  SECRET_KW: array[0..10] of string = (
+  SECRET_KW: array[0..11] of string = (
     'password', 'passwd', 'passwort',
+    'pwd',                                  // gaengige Abkuerzung
     'secret',   'token',  'apikey',
     'api_key',  'privatekey', 'private_key',
     'connectionstring', 'credentials'
   );
 
 class function THardcodedSecretDetector.IsSecretName(const Name: string): Boolean;
-// Match nur an "Wortgrenzen" innerhalb des Identifiers - sonst False-Positives
-// wie 'secretary' (enthaelt 'secret') oder 'tokenize' (enthaelt 'token').
-// Erlaubt sind weiterhin:
+// Match an WORTGRENZEN beidseitig - sonst False-Positives:
+//   * 'secretary' (links Boundary '-1', rechts 'a' = ident -> KEIN Match)
+//   * 'tokenize'  (links Boundary '-1', rechts 'i' = ident -> KEIN Match)
+//   * 'passwordless' wuerde noch matchen (rechts 'l' ist ident, linker
+//     ist Anfang). Aber 'passwordless' ist semantisch trotzdem secret-
+//     bezogen (Auth-Kontext) - akzeptabel.
+//
+// Erlaubte Linksseite (Match-Beginn):
 //   - Anfang des Identifiers ('password', 'token')
 //   - CamelCase-Boundary ('FPassword' - Match startet bei grossem 'P')
 //   - Snake-Case-Boundary ('user_token' - Match nach '_')
+//
+// Erlaubte Rechtsseite (Match-Ende):
+//   - Ende des Identifiers ('password', 'fpassword', 'user_token')
+//   - CamelCase-Boundary ('PasswordHash' - 'H' nach 'd')
+//   - Snake-Case-Boundary ('password_hash' - '_' nach 'd')
 var
-  NameLow : string;
-  Kw      : string;
-  p       : Integer;
-  AtBoundary : Boolean;
+  NameLow    : string;
+  Kw         : string;
+  p, pRight  : Integer;
+  LeftOK, RightOK : Boolean;
 begin
   NameLow := Name.ToLower;
   for Kw in SECRET_KW do
   begin
     p := Pos(Kw, NameLow);
     if p = 0 then Continue;
-    // p ist 1-basiert. Original-Name fuer CamelCase-Detection nutzen.
-    AtBoundary :=
+
+    // LEFT boundary
+    LeftOK :=
       (p = 1) or                                     // Identifier-Anfang
       (Name[p - 1] = '_') or                         // nach Underscore
       (CharInSet(Name[p], ['A'..'Z'])) or            // CamelCase
       (not CharInSet(Name[p - 1],                    // sonstige Nicht-Buchstaben
                      ['A'..'Z', 'a'..'z', '0'..'9']));
-    if AtBoundary then Exit(True);
+    if not LeftOK then Continue;
+
+    // RIGHT boundary - Position direkt nach dem Match.
+    pRight := p + Length(Kw);
+    RightOK :=
+      (pRight > Length(Name)) or                     // Identifier-Ende
+      (Name[pRight] = '_') or                        // vor Underscore
+      (CharInSet(Name[pRight], ['A'..'Z'])) or       // CamelCase-Beginn
+      (not CharInSet(Name[pRight],                   // Nicht-Buchstaben
+                     ['A'..'Z', 'a'..'z', '0'..'9']));
+    if RightOK then Exit(True);
   end;
   Result := False;
 end;

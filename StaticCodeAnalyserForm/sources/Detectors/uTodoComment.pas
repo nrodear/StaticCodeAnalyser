@@ -169,8 +169,7 @@ begin
 
     for i := 0 to Lines.Count - 1 do
     begin
-      Line      := Lines[i];
-      CommentAt := 0;
+      Line := Lines[i];
 
       if InBlockComm then
       begin

@@ -55,6 +55,38 @@ type
 
 implementation
 
+// Ersetzt jeden Char zwischen single-quotes (inkl. ''-Escape-Handling)
+// durch Leerzeichen. Quotes selbst bleiben stehen, damit String-Positionen
+// 1:1 bleiben. Brauchen wir damit Pseudo-Code in String-Literalen (z.B.
+// ''10 div 0'' als Konstanten-Init oder Doku-String) nicht als echte
+// Division gewertet wird.
+function StripStringLiterals(const S: string): string;
+var
+  i     : Integer;
+  inStr : Boolean;
+begin
+  Result := S;
+  inStr  := False;
+  i := 1;
+  while i <= Length(Result) do
+  begin
+    if Result[i] = '''' then
+    begin
+      if inStr and (i < Length(Result)) and (Result[i + 1] = '''') then
+      begin
+        Result[i]     := ' ';
+        Result[i + 1] := ' ';
+        Inc(i, 2);
+        Continue;
+      end;
+      inStr := not inStr;
+    end
+    else if inStr then
+      Result[i] := ' ';
+    Inc(i);
+  end;
+end;
+
 class function TDivByZeroDetector.IsIntegerType(const TypeLow: string): Boolean;
 begin
   Result :=
@@ -262,6 +294,12 @@ begin
       for var N in Nodes do
       begin
         ExprLow := N.TypeRef.ToLower;
+        // String-Literale strippen vor den Pos-Checks - 's := ''10 div 0'''
+        // soll keinen H1-Treffer geben (Inhalt ist Text, nicht Code).
+        // QuoteStrLit klammert Literale mit '...' - der Stripper ersetzt
+        // alles zwischen Quotes durch Spaces (laesst die Quotes als
+        // Marker, damit der Index-Pos stimmt).
+        ExprLow := StripStringLiterals(ExprLow);
 
         // H1: Literal 0
         if (Pos(' div 0', ExprLow) > 0) or (Pos(' mod 0', ExprLow) > 0) then
@@ -297,7 +335,7 @@ begin
     try
       for var N in Nodes do
       begin
-        ExprLow := N.Name.ToLower;
+        ExprLow := StripStringLiterals(N.Name.ToLower);
         if (Pos(' div 0', ExprLow) > 0) or (Pos(' mod 0', ExprLow) > 0) then
         begin
           var Key := IntToStr(N.Line) + ':lit';

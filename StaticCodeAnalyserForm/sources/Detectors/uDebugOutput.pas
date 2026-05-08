@@ -34,58 +34,66 @@ const
 class procedure TDebugOutputDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
-  Calls   : TList<TAstNode>;
-  N       : TAstNode;
-  NameLow : string;
-  Found   : string;
-  F       : TLeakFinding;
+  Calls : TList<TAstNode>;
+  N     : TAstNode;
+
+  // Helper - prueft einen Call-/RHS-String gegen die DEBUG_CALLS-Liste
+  // und emittiert ggf. einen Befund. Wird sowohl fuer nkCall.Name als
+  // auch nkAssign.TypeRef aufgerufen (z.B. 's := InputBox(...)' hat
+  // den InputBox-Aufruf in nkAssign.TypeRef, nicht als eigene nkCall).
+  procedure CheckCallText(const CallText: string; Line: Integer);
+  var
+    NameLow : string;
+    Found   : string;
+    F       : TLeakFinding;
+  begin
+    NameLow := CallText.ToLower;
+    Found   := '';
+    for var Kw in DEBUG_CALLS do
+    begin
+      var p := Pos(Kw, NameLow);
+      if p = 0 then Continue;
+      if p > 1 then
+      begin
+        var Prev := NameLow[p - 1];
+        if CharInSet(Prev, ['a'..'z', '0'..'9', '_']) then Continue;
+      end;
+      var EndPos := p;
+      while (EndPos <= Length(NameLow)) and
+            CharInSet(NameLow[EndPos], ['a'..'z']) do
+        Inc(EndPos);
+      Found := Copy(NameLow, p, EndPos - p);
+      Break;
+    end;
+    if Found = '' then Exit;
+    F            := TLeakFinding.Create;
+    F.FileName   := FileName;
+    F.MethodName := '';
+    F.LineNumber := IntToStr(Line);
+    F.MissingVar := 'Debug output: ' + Found.Trim;
+    F.Severity   := lsWarning;
+    F.Kind       := fkDebugOutput;
+    Results.Add(F);
+  end;
+
+var
+  Assigns : TList<TAstNode>;
 begin
   Calls := UnitNode.FindAll(nkCall);
   try
     for N in Calls do
-    begin
-      NameLow := N.Name.ToLower;
-      Found   := '';
-
-      for var Kw in DEBUG_CALLS do
-      begin
-        var p := Pos(Kw, NameLow);
-        if p = 0 then Continue;
-        // Wortgrenze LINKS pruefen: davor darf kein Bezeichner-Zeichen
-        // stehen (sonst matcht 'WriteLn' auch 'MyWriteLn').
-        // Wortgrenze RECHTS ist implizit: alle DEBUG_CALLS-Patterns enden
-        // auf '(' oder ' ' - beides Nicht-Identifier-Chars. Daher kann
-        // 'writeln(' nicht in 'writeln_debug()' matchen (das '_' nach
-        // 'writeln' verhindert den Pos-Match an 'writeln(' bereits).
-        if p > 1 then
-        begin
-          var Prev := NameLow[p - 1];
-          if CharInSet(Prev, ['a'..'z', '0'..'9', '_']) then Continue;
-        end;
-        // Name aus dem TATSAECHLICHEN Source extrahieren (vorher: Found
-        // kopierte aus dem Pattern Kw, EndPos wurde gegen Length(Kw)
-        // gemessen statt Length(NameLow) - beides falsch).
-        var EndPos := p;
-        while (EndPos <= Length(NameLow)) and
-              CharInSet(NameLow[EndPos], ['a'..'z']) do
-          Inc(EndPos);
-        Found := Copy(NameLow, p, EndPos - p);
-        Break;
-      end;
-
-      if Found = '' then Continue;
-
-      F            := TLeakFinding.Create;
-      F.FileName   := FileName;
-      F.MethodName := '';
-      F.LineNumber := IntToStr(N.Line);
-      F.MissingVar := 'Debug output: ' + Found.Trim;
-      F.Severity   := lsWarning;
-      F.Kind       := fkDebugOutput;
-      Results.Add(F);
-    end;
+      CheckCallText(N.Name, N.Line);
   finally
     Calls.Free;
+  end;
+  // Auch nkAssign-RHS pruefen - Aufrufe wie 's := InputBox(...)' oder
+  // 'Result := WriteLnHelper(...)' leben im TypeRef der Zuweisung.
+  Assigns := UnitNode.FindAll(nkAssign);
+  try
+    for N in Assigns do
+      CheckCallText(N.TypeRef, N.Line);
+  finally
+    Assigns.Free;
   end;
 end;
 

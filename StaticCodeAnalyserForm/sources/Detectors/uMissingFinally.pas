@@ -51,16 +51,20 @@ var
   VarNameLow : string;
   FreeFound  : Boolean;
   FreeInFin  : Boolean;
-  HasFinally : Boolean;
   HasExcept  : Boolean;
   F          : TLeakFinding;
 begin
-  HasFinally := TLeakDetector2.HasTryFinallyBlock(MethodNode);
   HasExcept  := MethodNode.HasChild(nkTryExcept);
 
-  // Hat die Methode bereits try/finally, deckt TLeakDetector2 den Fall
-  // 'Free ausserhalb finally' bereits ab → hier nichts melden.
-  if HasFinally then Exit;
+  // PER-VAR-Pruefung: Methode kann durchaus try/finally haben, aber
+  // nicht jede leaky var ist auch IM finally freigegeben. Z.B.:
+  //   lst := TStringList.Create;
+  //   lst.Free;
+  //   try DoStuff finally Cleanup; end;  // try/finally aber NICHT um lst
+  // Hier soll MissingFinally feuern. Vorher: method-wide HasFinally->
+  // Exit hat das verschluckt. Pro-var FreeInFin-Check erkennt es jetzt.
+  // (Fuer den Fall "method hat NULL try/finally" wird HasExcept-Hinweis
+  // nur dann beigegeben wenn mindestens try/except existiert.)
 
   LocalVars := MethodNode.FindAll(nkLocalVar);
   try
@@ -78,12 +82,19 @@ begin
       FreeFound := TLeakDetector2.SearchFree(MethodNode, VarNameLow,
                                              False, FreeInFin);
       if not FreeFound then Continue;
+      // Free liegt bereits IM finally - alles gut, kein MissingFinally.
+      if FreeInFin then Continue;
 
-      // Create + Free vorhanden, aber kein try/finally
+      // Create + Free vorhanden, aber kein try/finally.
+      // Emit auf der Create-Zeile (statt var-decl): bessere UX und
+      // // noinspection-Marker direkt ueber dem Create greifen jetzt.
+      var ReportLine := TLeakDetector2.FindCreateLine(MethodNode, VarNameLow);
+      if ReportLine = 0 then ReportLine := V.Line;
+
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
       F.MethodName := MethodNode.Name;
-      F.LineNumber := IntToStr(V.Line);
+      F.LineNumber := IntToStr(ReportLine);
       if HasExcept then
         F.MissingVar := V.Name + ' (try/except instead of try/finally)'
       else
