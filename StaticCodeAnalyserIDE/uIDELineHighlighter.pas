@@ -145,45 +145,6 @@ const
   CL_HIGHLIGHT_BAR = TColor($000020D0);  // #D02000 – kraeftiges Rot
   STRIPE_WIDTH_PX  = 3;
 
-// Diagnose-Schalter: True schreibt Hover-Trace nach %TEMP%\sca-hover.log.
-// File statt OutputDebugString weil Letzteres bei manchen IDE-Konfigurationen
-// (Debugger angehaengt, kein DebugView mit Admin) verschluckt wird.
-// Doppelt: zusaetzlich OutputDebugString fuer Live-Tracing in DebugView.
-// Vor Release auf False stellen.
-const
-  HOVER_DEBUG = True;
-
-var
-  GLogFileName : string = '';
-
-procedure DbgLog(const Msg: string);
-var
-  F        : TextFile;
-  FullMsg  : string;
-begin
-  if not HOVER_DEBUG then Exit;
-  FullMsg := FormatDateTime('hh:nn:ss.zzz', Now) + ' [SCA-Hover] ' + Msg;
-  // Live-Tracing parallel via OutputDebugString — schadet nicht.
-  OutputDebugString(PChar(FullMsg));
-  // Robuster: Append in eine Datei, die garantiert lesbar bleibt.
-  try
-    if GLogFileName = '' then
-      GLogFileName := GetEnvironmentVariable('TEMP') + '\sca-hover.log';
-    AssignFile(F, GLogFileName);
-    if FileExists(GLogFileName) then
-      Append(F)
-    else
-      Rewrite(F);
-    try
-      WriteLn(F, FullMsg);
-    finally
-      CloseFile(F);
-    end;
-  except
-    // Logging darf nie crashen.
-  end;
-end;
-
 { ---- TFindingHighlighter ---- }
 
 constructor TFindingHighlighter.Create;
@@ -239,9 +200,6 @@ begin
   FAnnotationTitle := ATitle;
   FAnnotationDesc  := ADesc;
   FAnnotationBadge := ABadge;
-  DbgLog(Format('SetSelected file=%s line=%d title="%s" desc="%s" badge="%s"',
-    [FSelectedFile, FSelectedLine, FAnnotationTitle,
-     FAnnotationDesc, FAnnotationBadge]));
   // Alte Zeile repainten (entfernt den Stripe), dann neue Zeile (zeigt Stripe + Overlay).
   if (OldLine > 0) and (OldLine <> ALine) then
     InvalidateLine(OldLine);
@@ -396,15 +354,6 @@ var
   AWidth, LineH : Integer;
   Hit           : Boolean;
 begin
-  // Diagnose: jeden MouseMove nur loggen wenn ein Befund selektiert ist
-  // (sonst flutet das Log).
-  if Assigned(GHighlighter) and GHighlighter.HasSelection then
-    DbgLog(Format('MouseMove Editor=%p Saved=%p Visible=%s X=%d Y=%d Rect=(L=%d T=%d R=%d B=%d)',
-      [Pointer(Editor), Pointer(FSavedEditor),
-       BoolToStr(FSelectedVisible, True), X, Y,
-       FSavedCodeRect.Left, FSavedCodeRect.Top,
-       FSavedCodeRect.Right, FSavedCodeRect.Bottom]));
-
   // Hot path: erst die billigsten Bailouts, dann Hit-Test, dann Show/Hide.
   if not Assigned(GAnnotationOverlay) or not Assigned(GHighlighter) then Exit;
   if not FSelectedVisible then Exit;          // Markierte Zeile aktuell nicht gemalt
@@ -416,23 +365,17 @@ begin
 
   // X/Y sind Editor-Client-Koordinaten – gleiche Basis wie FSavedCodeRect.
   Hit := PtInRect(FSavedCodeRect, Point(X, Y));
-  DbgLog(Format('  -> Hit=%s', [BoolToStr(Hit, True)]));
   if Hit then
   begin
     // WS_CHILD-Modus: das Overlay erwartet Editor-Client-Koordinaten,
     // KEIN ClientToScreen mehr. Position = direkt unter der markierten
-    // Zeile, X = Code-Bereich-Left, Y = Code-Bereich-Bottom (= unter der
-    // Zeile).
+    // Zeile, X = Code-Bereich-Left, Y = Code-Bereich-Bottom.
     P.X := FSavedCodeRect.Left;
     P.Y := FSavedCodeRect.Bottom;
     AWidth := FSavedCodeRect.Right - FSavedCodeRect.Left;
     if AWidth < 200 then AWidth := 200;
     LineH := FSavedCharHeight;
     if LineH < 16 then LineH := 20;  // Fallback wenn CharHeight nicht gesetzt
-    DbgLog(Format('  ShowAt clientPos=(%d,%d) W=%d LineH=%d title="%s" desc="%s" badge="%s"',
-      [P.X, P.Y, AWidth, LineH,
-       GHighlighter.AnnotationTitle, GHighlighter.AnnotationDesc,
-       GHighlighter.AnnotationBadge]));
     try
       GAnnotationOverlay.ShowAt(FSavedEditor, P.X, P.Y, AWidth, LineH,
         GHighlighter.AnnotationTitle,
@@ -443,8 +386,6 @@ begin
       // nicht mehr feuert, weil Maus ausserhalb des Editors).
       FHoverWatch.Enabled := True;
     except
-      on E: Exception do
-        DbgLog(Format('  ShowAt EXCEPTION: %s: %s', [E.ClassName, E.Message]));
     end;
   end
   else
@@ -491,10 +432,6 @@ begin
   FSavedCodeRect   := Context.LineState.CodeRect;
   // CharHeight fuer DPI-bewusstes Overlay-Sizing in EditorMouseMove verwenden.
   FSavedCharHeight := Context.EditorState.CharHeight;
-  DbgLog(Format('PaintLine HIT line=%d Editor=%p Rect=(L=%d T=%d R=%d B=%d) CharH=%d',
-    [Context.LogicalLineNum, Pointer(FSavedEditor),
-     FSavedCodeRect.Left, FSavedCodeRect.Top, FSavedCodeRect.Right, FSavedCodeRect.Bottom,
-     FSavedCharHeight]));
 
   // 3px roter Stripe am linken Rand des Code-Bereichs.
   // Hinweis: Parameter 'Rect' verdeckt Winapi.Windows.Rect, deshalb SR direkt nutzen.
@@ -524,26 +461,13 @@ procedure RegisterLineHighlighter;
 var
   Svc: INTACodeEditorServices;
 begin
-  DbgLog('===== RegisterLineHighlighter ENTER =====');
-  if Assigned(GHighlighter) then
-  begin
-    DbgLog('  already registered, exit');
-    Exit;
-  end;
+  if Assigned(GHighlighter) then Exit;
   GHighlighter := TFindingHighlighter.Create;
   try
     if Supports(BorlandIDEServices, INTACodeEditorServices, Svc) then
-    begin
       GHighlighter.FEditorEventsIdx :=
         Svc.AddEditorEventsNotifier(GHighlighter.FEditorEvents);
-      DbgLog(Format('  AddEditorEventsNotifier OK idx=%d',
-        [GHighlighter.FEditorEventsIdx]));
-    end
-    else
-      DbgLog('  ERROR: INTACodeEditorServices NOT supported');
   except
-    on E: Exception do
-      DbgLog(Format('  EXCEPTION: %s: %s', [E.ClassName, E.Message]));
   end;
 end;
 

@@ -14,8 +14,7 @@ unit uIDEAnnotationOverlay;
 //     - wandert es korrekt mit dem Editor mit (Scroll, Resize, Move)
 //   Trade-off: das Overlay ist hart am Editor-Rand abgeschnitten — wenn
 //   die Befund-Zeile am unteren Editor-Rand liegt, ragt der Hint nicht
-//   nach unten heraus. Workaround in ShowAt: bei wenig Platz unten oberhalb
-//   der Zeile rendern.
+//   nach unten heraus.
 //
 // Hide-on-mouse-leave (siehe TFindingEditorEvents.HoverWatch in
 // uIDELineHighlighter.pas) sorgt dafuer, dass das Overlay verschwindet
