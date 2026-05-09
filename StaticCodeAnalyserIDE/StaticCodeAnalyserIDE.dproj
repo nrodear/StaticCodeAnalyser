@@ -158,6 +158,7 @@
         <DCCReference Include="uIDEExpert.pas"/>
         <DCCReference Include="uIDEAnalyserForm.pas"/>
         <DCCReference Include="uIDELineHighlighter.pas"/>
+        <DCCReference Include="uIDEAnnotationOverlay.pas"/>
         <DCCReference Include="uIDEMessages.pas"/>
         <DCCReference Include="uIDEWatchMode.pas"/>
         <DCCReference Include="uIDEStatsTiles.pas"/>

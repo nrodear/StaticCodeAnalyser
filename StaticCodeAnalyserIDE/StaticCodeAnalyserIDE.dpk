@@ -37,6 +37,7 @@ contains
   uIDEExpert in 'uIDEExpert.pas',
   uIDEAnalyserForm in 'uIDEAnalyserForm.pas',
   uIDELineHighlighter in 'uIDELineHighlighter.pas',
+  uIDEAnnotationOverlay in 'uIDEAnnotationOverlay.pas',
   uIDEMessages in 'uIDEMessages.pas',
   uIDEWatchMode in 'uIDEWatchMode.pas',
   uIDEStatsTiles in 'uIDEStatsTiles.pas',

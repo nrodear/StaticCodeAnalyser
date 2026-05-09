@@ -23,6 +23,7 @@ uses
   uIDEHelpPanel, uIDEExportMenu, uIDEEditorIntegration, uIDEStatusBar,
   uIDEThemeIntegration, uIDEAnalyseProgress, uIDEGridTooltip,
   uIDELifecycle, uIDEAnalyseRunner,
+  uIDEAnnotationOverlay,
   uFindingGridRenderer, uFindingFilter;
 
 const
@@ -1579,7 +1580,10 @@ begin
   if Assigned(GHighlighter) then
   begin
     LineNo := StrToIntDef(Finding.LineNumber, 0);
-    GHighlighter.SetSelected(Finding.FileName, LineNo);
+    GHighlighter.SetSelected(Finding.FileName, LineNo,
+      Finding.MissingVar,
+      FixHint(Finding).Description,
+      Finding.TypeText + ' · ' + Finding.SeverityText);
   end;
 end;
 
@@ -2022,9 +2026,14 @@ begin
 
   OpenFileAtLine(absPath, lineNo);
   // Editor-Line-Highlight setzen - die Datei ist jetzt sicher offen,
-  // also wird PaintLine den Marker malen.
+  // also wird PaintLine den Marker malen. Annotation-Texte mitgeben,
+  // damit das Hover-Overlay die Befund-Details anzeigen kann (sonst
+  // wuerde dieser Aufruf die in GridSelectCell gesetzten Texte loeschen).
   if Assigned(GHighlighter) then
-    GHighlighter.SetSelected(absPath, lineNo);
+    GHighlighter.SetSelected(absPath, lineNo,
+      F.MissingVar,
+      FixHint(F).Description,
+      F.TypeText + ' · ' + F.SeverityText);
   StatusMode(Format(_('Opened: %s  Line: %d'),
     [ExtractFileName(absPath), lineNo]));
 end;
@@ -2320,6 +2329,7 @@ begin
   // registrieren. Per-View-Notifier werden ueber EditorViewActivated
   // angehaengt; AV-sicher dank ref-counting (siehe uIDELineHighlighter).
   RegisterLineHighlighter;
+  RegisterAnnotationOverlay;
   // Watch-Mode: Manager-Singleton anlegen. KEINE ToolsAPI-Calls hier -
   // der Module-Notifier wird erst beim Activate() aus PrepareAnalysis
   // angehaengt (nur im "Aktuelle Datei"-Pfad, Single-File-Watch).
@@ -2381,6 +2391,7 @@ begin
     GDockableForm := nil;
   end;
   UnregisterLineHighlighter;
+  UnregisterAnnotationOverlay;
   UnregisterWatchMode;
 end;
 
