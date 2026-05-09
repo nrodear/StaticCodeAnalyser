@@ -67,6 +67,7 @@ type
     FBtnRepo, FBtnIgnore                           : TButton;
     FBtnHamburger                                  : TButton;
     FHamburgerMenu                                 : TPopupMenu;
+    FMICancel                                      : TMenuItem;
     FLblFilter, FLblType, FLblSearch               : TLabel;
     // Eine horizontale Tile-Reihe: 4 Severity-Tiles + 3 Type-Tiles + Score.
     // Layout pro Tile: Glyph-Icon links + Count rechts (Top-Row), Caption
@@ -179,6 +180,7 @@ type
     procedure EditIgnoreListClick(Sender: TObject);
     procedure EditRepoSettingsClick(Sender: TObject);
     procedure HamburgerClick(Sender: TObject);
+    procedure HamburgerMenuPopup(Sender: TObject);
     procedure BuildHamburgerMenu;
     // DPI-Scaling fuer Layout-Konstanten. Liest TControl.CurrentPPI - falls
     // 0/uninit, fallback auf 96. Beispiel: ScaleW(28) liefert 28 bei 100%
@@ -538,19 +540,6 @@ begin
   FBtnRepo.ShowHint := True;
   FBtnRepo.OnClick := EditRepoSettingsClick;
 
-  // Hamburger-Button: ersatz-Zugang zu den Aktionen, die im gedockten
-  // (schmalen) Modus ausgeblendet werden. PopupMenu + OnClick werden
-  // weiter unten via BuildHamburgerMenu verkabelt (nachdem auch
-  // FBtnAnalyseChanged existiert - das Menu referenziert dessen Handler).
-  // alRight + zuletzt zugewiesen -> landet ganz links der alRight-Gruppe;
-  // bleibt damit auch sichtbar wenn FBtnRepo/FBtnIgnore versteckt sind.
-  FBtnHamburger := TButton.Create(Self);
-  FBtnHamburger.Parent  := PanelPath;
-  FBtnHamburger.Caption := #$2630; // Trigram for Heaven (Hamburger-Glyph)
-  FBtnHamburger.Width   := ScaleW(BTN_W_ICON);
-  FBtnHamburger.Align   := alRight;
-  FBtnHamburger.Hint    := _('More actions (Settings, Ignore list, Branch-Changes)');
-  FBtnHamburger.ShowHint := True;
 
   FProjectPath := TComboBox.Create(Self);
   FProjectPath.Parent      := PanelPath;
@@ -733,6 +722,18 @@ begin
     '(Git: branch diff vs main + working tree; SVN: working copy)');
   FBtnAnalyseChanged.ShowHint := True;
 
+  // Hamburger-Button: ganz rechts in PanelSearch. Als erstes alRight-
+  // Control hinzugefuegt -> VCL platziert es am rechten Rand; Cancel und
+  // Export landen links davon. Nur im Docked-Modus sichtbar (Inverse-
+  // Controller weiter unten). PopupMenu + OnClick via BuildHamburgerMenu.
+  FBtnHamburger := TButton.Create(Self);
+  FBtnHamburger.Parent   := PanelSearch;
+  FBtnHamburger.Caption  := #$2630; // Trigram for Heaven (Hamburger-Glyph)
+  FBtnHamburger.Width    := ScaleW(BTN_W_ICON);
+  FBtnHamburger.Align    := alRight;
+  FBtnHamburger.Hint     := _('More actions (Settings, Ignore list, Branch-Changes)');
+  FBtnHamburger.ShowHint := True;
+
   // Cancel-Button - immer sichtbar (verhindert Layout-Sprung beim
   // Start/Ende der Analyse), nur Enabled wird getoggelt. Sitzt fix am
   // rechten Toolbar-Rand (alRight) und ist von den Analyse-Buttons
@@ -832,9 +833,6 @@ begin
   // PanelPath: Settings + Ignore weg im Docked
   TResponsiveVisibilityController.Create(Self, FPanelPath,
     [FBtnRepo, FBtnIgnore], ScaleW(BREAKPOINT_DOCKED));
-  // PanelPath: Hamburger INVERS - nur im Docked sichtbar
-  TResponsiveVisibilityController.Create(Self, FPanelPath,
-    [FBtnHamburger], ScaleW(BREAKPOINT_DOCKED), True {Inverse});
 
   // PanelButtons: Filter-Labels weg, Sub-Panels schrumpfen (Combos bleiben).
   // WICHTIG: AdjustFilterSubPanels VOR dem Controller hooken. Der
@@ -855,8 +853,12 @@ begin
   // Hook AdjustSearchMinWidth VOR dem Controller (chain-Pattern).
   FPanelSearch.OnResize := AdjustSearchMinWidth;
   TResponsiveVisibilityController.Create(Self, FPanelSearch,
-    [FBtnAnalyseChanged, FLblSearch],
+    [FBtnAnalyseChanged, FLblSearch, FBtnCancel],
     ScaleW(BREAKPOINT_DOCKED));
+  // PanelSearch: Hamburger INVERS - nur im Docked sichtbar (ganz rechts).
+  // SearchEdit (alClient) passt sich automatisch an die verfuegbare Breite an.
+  TResponsiveVisibilityController.Create(Self, FPanelSearch,
+    [FBtnHamburger], ScaleW(BREAKPOINT_DOCKED), True {Inverse});
   AdjustSearchMinWidth(FPanelSearch); // initial pass
 
   // ---- Statistik-Leiste: eine Reihe Sonar-Style Tiles (dunkler Hintergrund) ---
@@ -1869,11 +1871,23 @@ procedure TAnalyserFrame.BuildHamburgerMenu;
 // Popup-Menu fuer den Hamburger-Button. Items entsprechen den Toolbar-
 // Aktionen, die im gedockten/schmalen Modus ausgeblendet werden -
 // hier bleiben sie auch im Docked-Modus erreichbar. Reihenfolge:
-// Branch-Changes zuerst (Aktion), dann Konfig (Settings/Ignore).
+// Cancel zuerst (laufende Analyse abbrechen), dann Branch-Changes,
+// dann Konfig (Settings/Ignore).
 var
   MI : TMenuItem;
 begin
   FHamburgerMenu := TPopupMenu.Create(Self);
+  FHamburgerMenu.OnPopup := HamburgerMenuPopup;
+
+  // Laufende Analyse abbrechen - Enabled wird in HamburgerMenuPopup gesynct
+  FMICancel := TMenuItem.Create(FHamburgerMenu);
+  FMICancel.Caption := _('Cancel Analysis');
+  FMICancel.OnClick := CancelAnalyseClick;
+  FHamburgerMenu.Items.Add(FMICancel);
+
+  MI := TMenuItem.Create(FHamburgerMenu);
+  MI.Caption := '-';
+  FHamburgerMenu.Items.Add(MI);
 
   // Aktions-Block: Branch-Analyse (▶ Analyse und 📄 File sind im
   // Toolbar immer sichtbar und deshalb nicht im Hamburger-Menu)
@@ -1902,6 +1916,13 @@ begin
   // wir Linksklick. HamburgerClick wirft das Popup unter dem Button auf
   // (gleicher Pattern wie der Export-Button).
   FBtnHamburger.OnClick := HamburgerClick;
+end;
+
+procedure TAnalyserFrame.HamburgerMenuPopup(Sender: TObject);
+// Enabled-Zustand von "Cancel Analysis" vor dem Oeffnen des Menus synctronisieren.
+begin
+  if Assigned(FMICancel) and Assigned(FBtnCancel) then
+    FMICancel.Enabled := FBtnCancel.Enabled;
 end;
 
 procedure TAnalyserFrame.HamburgerClick(Sender: TObject);
