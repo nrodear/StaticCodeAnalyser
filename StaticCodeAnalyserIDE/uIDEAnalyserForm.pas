@@ -25,6 +25,13 @@ uses
   uIDELifecycle, uIDEAnalyseRunner,
   uFindingGridRenderer, uFindingFilter;
 
+const
+  // Deferred-Layout-Recompute nach IDE-Dock-Vorgang: SetParent posted diese
+  // Message; der Handler ruft FrameResize nachdem die IDE Bounds und
+  // Parent vollstaendig gesetzt hat. WM_APP-Range ($8000-$BFFF) ist fuer
+  // Application-Private-Use reserviert.
+  WM_SCA_REFIT = WM_APP + 100;
+
 type
   TAnalyserFrame = class(TFrame)
   private
@@ -110,6 +117,13 @@ type
     // Override "Maus ueber Grid") ist nach uIDEGridTooltip.
     // TFindingGridTooltip ausgelagert. Frame haelt nur noch die Instanz.
     FGridTooltip : TFindingGridTooltip;
+    // One-Shot-Timer: feuert 150 ms nach SetParent und ruft FrameResize
+    // nochmals. Sichert den Fall, dass ProcessMessages waehrend des IDE-
+    // Drag-and-Dock den sofort geposteten WM_SCA_REFIT noch vor dem
+    // finalen Dock-Bounds-Set leert und danach kein weiterer Resize-Event
+    // eintrifft (z.B. weil csLoading in WMSize AdjustSize+Resize blockiert).
+    FDockRefitTimer : TTimer;
+    procedure DockRefitTimerFired(Sender: TObject);
 
     // Vor jeder Analyse: INI neu laden, Custom-LeakyClasses + Excludes
     // registrieren, AutoDiscover-Flag setzen, DiscoveredClasses-Liste leeren.
@@ -223,9 +237,14 @@ type
     // SetParent override - feuert beim Dock <-> Float-Wechsel oder beim
     // ersten Hosting des Frames. Style-Hooks ueberleben den Wechsel oft
     // nicht (neuer Top-Level-Window-Kontext), daher Theme erneut
-    // applizieren. CMParentChanged gibt es in der VCL nicht, deshalb
-    // ueber den virtuellen SetParent-Hook.
+    // applizieren. Postet ausserdem WM_SCA_REFIT fuer deferred FrameResize
+    // (IDE setzt Bounds NACH SetParent; csLoading kann VCL.Resize-Override
+    // ueberspringen).
     procedure SetParent(AParent: TWinControl); override;
+    // Deferred FrameResize nach abgeschlossenem IDE-Dock-Vorgang.
+    // SetParent postet WM_SCA_REFIT; zu diesem Zeitpunkt sind Bounds
+    // korrekt gesetzt und csLoading ist geloescht.
+    procedure WMScaRefit(var Message: TMessage); message WM_SCA_REFIT;
     // Wird nach jedem Theme-Refresh als Callback vom Helper aufgerufen.
     // Triggert den TStringGrid-Repaint, der ueber die rekursive
     // Invalidate nicht zuverlaessig vom Paint-Cache abgeholt wird.
@@ -302,8 +321,8 @@ const
   BTN_W_SHORT        = 60;     // "Ignore..."
   BTN_W_MED_SHORT    = 70;     // "Settings..."
   BTN_W_MED          = 80;     // "Cancel", "Export"
-  BTN_W_MED_LONG     = 90;     // "Current file"
-  BTN_W_LONG         = 100;    // "Start analysis"
+  BTN_W_MED_LONG     = 52;     // "📄 File"
+  BTN_W_LONG         = 70;     // "▶ Analyse"
   BTN_W_XLONG        = 120;    // "Branch-Changes"
 
   // ---- Label-Widths -----------------------------------------------------
@@ -686,10 +705,10 @@ begin
                                 ScaleW(TB_PADDING_LR), ScaleW(TB_PADDING_TB));
   FPanelSearch := PanelSearch;
 
-  // Action-Buttons links - "Analyse starten" zuerst (links), dann "Aktuelle Datei"
+  // Action-Buttons links - "▶ Analyse" zuerst (links), dann "📄 File"
   BtnAnalyse := TButton.Create(Self);
   BtnAnalyse.Parent   := PanelSearch;
-  BtnAnalyse.Caption  := _('Start analysis');
+  BtnAnalyse.Caption  := _('▶ Analyse');
   BtnAnalyse.Width    := ScaleW(BTN_W_LONG);
   BtnAnalyse.Align    := alLeft;
   BtnAnalyse.OnClick  := AnalyseClick;
@@ -697,7 +716,7 @@ begin
 
   FBtnAnalyseCurrent := TButton.Create(Self);
   FBtnAnalyseCurrent.Parent   := PanelSearch;
-  FBtnAnalyseCurrent.Caption  := _('Current file');
+  FBtnAnalyseCurrent.Caption  := _('📄 File');
   FBtnAnalyseCurrent.Width    := ScaleW(BTN_W_MED_LONG);
   FBtnAnalyseCurrent.Align    := alLeft;
   FBtnAnalyseCurrent.OnClick  := AnalyseCurrentFileClick;
@@ -828,15 +847,15 @@ begin
     [FLblFilter, FLblType], ScaleW(BREAKPOINT_DOCKED));
   AdjustFilterSubPanels(FPanelButtons); // initial pass
 
-  // PanelSearch: Aktions-Buttons + Search-Label weg im Docked. Start/
-  // Current/Branch sind alle im Hamburger-Menu erreichbar - PanelSearch
-  // zeigt im Docked nur noch SearchEdit + Export + Cancel (~250 px).
+  // PanelSearch: Branch-Changes + Search-Label weg im Docked. Branch-
+  // Changes ist im Hamburger-Menu erreichbar. "▶ Analyse" und "📄 File"
+  // bleiben im Docked sichtbar (vor dem Suchfeld), Breite schrumpft mit.
   // Plus: SearchEdit MinWidth schrumpft mit (60 statt 120 docked) damit
   // auch sehr enge Docks (300 px) noch funktionieren.
   // Hook AdjustSearchMinWidth VOR dem Controller (chain-Pattern).
   FPanelSearch.OnResize := AdjustSearchMinWidth;
   TResponsiveVisibilityController.Create(Self, FPanelSearch,
-    [FBtnAnalyse, FBtnAnalyseCurrent, FBtnAnalyseChanged, FLblSearch],
+    [FBtnAnalyseChanged, FLblSearch],
     ScaleW(BREAKPOINT_DOCKED));
   AdjustSearchMinWidth(FPanelSearch); // initial pass
 
@@ -1850,23 +1869,14 @@ procedure TAnalyserFrame.BuildHamburgerMenu;
 // Popup-Menu fuer den Hamburger-Button. Items entsprechen den Toolbar-
 // Aktionen, die im gedockten/schmalen Modus ausgeblendet werden -
 // hier bleiben sie auch im Docked-Modus erreichbar. Reihenfolge:
-// Aktionen (Start/Current/Branch) zuerst, dann Konfig (Settings/Ignore).
+// Branch-Changes zuerst (Aktion), dann Konfig (Settings/Ignore).
 var
   MI : TMenuItem;
 begin
   FHamburgerMenu := TPopupMenu.Create(Self);
 
-  // Aktions-Block: alles was eine Analyse anstoesst
-  MI := TMenuItem.Create(FHamburgerMenu);
-  MI.Caption := _('Start analysis');
-  MI.OnClick := AnalyseClick;
-  FHamburgerMenu.Items.Add(MI);
-
-  MI := TMenuItem.Create(FHamburgerMenu);
-  MI.Caption := _('Current file');
-  MI.OnClick := AnalyseCurrentFileClick;
-  FHamburgerMenu.Items.Add(MI);
-
+  // Aktions-Block: Branch-Analyse (▶ Analyse und 📄 File sind im
+  // Toolbar immer sichtbar und deshalb nicht im Hamburger-Menu)
   MI := TMenuItem.Create(FHamburgerMenu);
   MI.Caption := _('Analyse Branch-Changes');
   MI.OnClick := AnalyseChangedFilesClick;
@@ -2024,7 +2034,68 @@ procedure TAnalyserFrame.SetParent(AParent: TWinControl);
 begin
   inherited SetParent(AParent);
   if (AParent <> nil) and not (csDestroying in ComponentState) then
+  begin
     RefreshFromIDETheme;
+    if HandleAllocated then
+    begin
+      // Sofortiger deferred Pass: IDE setzt Dock-Bounds NACH SetParent.
+      PostMessage(Handle, WM_SCA_REFIT, 0, 0);
+      // Timer-gesicherter zweiter Pass (300 ms): ProcessMessages waehrend
+      // der IDE-Drag-Animation kann den PostMessage oben zu frueh leeren
+      // (noch vor dem finalen Bounds-Set). 300 ms > HintPanel-Polling-
+      // Intervall (250 ms) - damit sind Dock-Animation und Floating-Property
+      // sicher stabil. Timer laeuft unabhaengig vom Message-Queue-Timing.
+      if not Assigned(FDockRefitTimer) then
+      begin
+        FDockRefitTimer          := TTimer.Create(Self);
+        FDockRefitTimer.Interval := 300;
+        FDockRefitTimer.OnTimer  := DockRefitTimerFired;
+      end;
+      FDockRefitTimer.Enabled := False;
+      FDockRefitTimer.Enabled := True;
+    end;
+  end;
+end;
+
+procedure TAnalyserFrame.WMScaRefit(var Message: TMessage);
+var
+  W: Integer;
+begin
+  // AlignControls ist durch csLoading blockiert (IDE-Dock-Restore via DFM).
+  // Panels sind dynamisch erstellt (kein csLoading) - direktes Width-Setzen
+  // umgeht den Block; Panel.OnResize faellt aus -> Controller reagiert.
+  // Self.ClientWidth via Win32 GetClientRect - immer korrekt, auch bei
+  // blockiertem AlignControls.
+  W := ClientWidth;
+  if (W > 0) and Assigned(FPanelPath) then
+  begin
+    if FPanelPath.Width    <> W then FPanelPath.Width    := W;
+    if FPanelButtons.Width <> W then FPanelButtons.Width := W;
+    if FPanelSearch.Width  <> W then FPanelSearch.Width  := W;
+    if FPanelStats.Width   <> W then FPanelStats.Width   := W;
+  end;
+  FrameResize(Self);
+end;
+
+procedure TAnalyserFrame.DockRefitTimerFired(Sender: TObject);
+// One-Shot (300 ms nach SetParent): garantiert FrameResize NACH dem
+// vollstaendigen Dock-Vorgang. 300 ms > HintPanel-Polling (250 ms),
+// sodass IDE-Dock-Animation und DFM-Restore sicher abgeschlossen sind.
+// Bypassed AlignControls (csLoading-Block) durch direktes Panel-Width-Setzen.
+var
+  W: Integer;
+begin
+  FDockRefitTimer.Enabled := False;
+  if not HandleAllocated then Exit;
+  W := ClientWidth;
+  if (W > 0) and Assigned(FPanelPath) then
+  begin
+    if FPanelPath.Width    <> W then FPanelPath.Width    := W;
+    if FPanelButtons.Width <> W then FPanelButtons.Width := W;
+    if FPanelSearch.Width  <> W then FPanelSearch.Width  := W;
+    if FPanelStats.Width   <> W then FPanelStats.Width   := W;
+  end;
+  FrameResize(Self);
 end;
 
 procedure TAnalyserFrame.Resize;
@@ -2039,10 +2110,15 @@ begin
     FHintPanel.ApplyLayout;
   if Assigned(FResultGrid) then
     GridResize(FResultGrid);
-  // Responsive Visibility (Hamburger, Tiles, Filter-Labels) - forwarded
-  // an alle Panel-OnResizes garantiert, dass die Controller bei
-  // Float->Dock triggern.
+  // Sofortiger Pass - kann stale Panel-Breiten sehen falls VCL-AlignControls
+  // fuer die Child-Panels noch nicht propagiert hat (RequestAlign/CM_ALIGN
+  // laeuft manchmal versetzt gegenueber Frame.Resize).
   FrameResize(Self);
+  // Deferred zweiter Pass: korrekte Panel-Breiten nach abgeschlossener
+  // VCL-Alignment-Kaskade. Zusammen mit dem PostMessage in SetParent
+  // deckt das beide Dock-Races ab.
+  if HandleAllocated then
+    PostMessage(Handle, WM_SCA_REFIT, 0, 0);
 end;
 
 // ---------------------------------------------------------------------------
