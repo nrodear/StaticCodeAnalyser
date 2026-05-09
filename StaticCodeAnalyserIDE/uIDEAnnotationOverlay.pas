@@ -94,6 +94,12 @@ const
   // Mindesthoehen in Pixeln (96 DPI-Baseline); ShowAt skaliert dynamisch.
   MIN_TITLE_H    = 20;
   MIN_DESC_H     = 18;
+  // Maximale Description-Hoehe in Pixeln — verhindert dass das Overlay
+  // halb-bildschirmgross wird bei sehr langen Texten. ~120px deckt
+  // ca. 6-7 Zeilen Segoe UI 8pt ab.
+  MAX_DESC_H     = 120;
+  // Vertikales Padding der Description (oben + unten) in Pixeln.
+  DESC_PAD_V     = 8;
 
 constructor TAnnotationOverlay.Create(AOwner: TComponent);
 begin
@@ -183,11 +189,12 @@ begin
   FLblDesc.Font.Style         := [fsItalic];
   FLblDesc.Font.Name          := 'Segoe UI';
   FLblDesc.Font.Size          := 8;
-  FLblDesc.Layout             := tlCenter;
+  FLblDesc.Layout             := tlTop;          // mehrzeilig: oben anliegend
   FLblDesc.Alignment          := taLeftJustify;
   FLblDesc.AlignWithMargins   := True;
-  FLblDesc.Margins.SetBounds(8, 1, 4, 1);
-  FLblDesc.EllipsisPosition   := epEndEllipsis;
+  FLblDesc.Margins.SetBounds(8, 4, 8, 4);        // mehr Padding fuer Wrap-Text
+  FLblDesc.WordWrap           := True;           // mehrzeilig statt Ellipsis
+  FLblDesc.EllipsisPosition   := epNone;
 end;
 
 procedure TAnnotationOverlay.CreateParams(var Params: TCreateParams);
@@ -244,13 +251,38 @@ var
   TitleH, DescH, TotalH : Integer;
   BadgeCaption          : string;
   WasVisible            : Boolean;
+  DC                    : HDC;
+  OldFont               : HFONT;
+  CalcRect              : TRect;
 begin
   // Editor muss da sein — sonst keine Sinn das Overlay zu zeigen.
   if not Assigned(AEditor) or not AEditor.HandleAllocated then Exit;
 
   // Hoehen DPI-bewusst aus der Editor-Zeilenhoehe ableiten.
   TitleH := Max(MIN_TITLE_H, ALineH);
-  DescH  := Max(MIN_DESC_H, ALineH - 2);
+
+  // Description-Hoehe dynamisch via DrawText DT_CALCRECT messen — Wrap-Text
+  // mit der tatsaechlichen Schriftmetrik. Nutzt FLblDesc.Font auf einem
+  // temporaeren DC; CalcRect.Bottom liefert die exakt benoetigte Pixelhoehe.
+  DC := GetDC(0);
+  try
+    OldFont := SelectObject(DC, FLblDesc.Font.Handle);
+    try
+      // Verfuegbare Breite: Form-Breite minus Stripe minus Label-Margins.
+      CalcRect := Rect(0, 0,
+        AWidth - STRIPE_W - FLblDesc.Margins.Left - FLblDesc.Margins.Right, 0);
+      Winapi.Windows.DrawText(DC, PChar(ADesc), Length(ADesc), CalcRect,
+        DT_CALCRECT or DT_WORDBREAK or DT_NOPREFIX);
+      DescH := (CalcRect.Bottom - CalcRect.Top) + 2 * DESC_PAD_V;
+    finally
+      SelectObject(DC, OldFont);
+    end;
+  finally
+    ReleaseDC(0, DC);
+  end;
+  // Auf Min/Max clampen: mind. 1 Zeile, max. MAX_DESC_H Pixel.
+  DescH := Max(MIN_DESC_H, Min(DescH, MAX_DESC_H));
+
   TotalH := TitleH + DescH;
 
   BadgeCaption := '  ' + ABadge + '  ';
