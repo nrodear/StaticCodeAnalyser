@@ -277,7 +277,9 @@ begin
   DetectorMagicTrivials.CaseSensitive := False;
   DetectorMagicTrivials.Sorted        := True;
   DetectorMagicTrivials.Duplicates    := dupIgnore;
-  DetectorMagicTrivials.AddStrings(['0', '1', '2', '-1', '10', '100']);
+  DetectorMagicTrivials.AddStrings(['0', '1', '2', '3', '4', '5', '6', '7', '-1',
+    '8', '10', '16', '24', '31', '32', '63', '64', '100', '128', '255', '256',
+    '512', '1024']);
 
   // Default-Liste der Format-aehnlichen Funktionen fuer uFormatMismatch.
   // Lower-case (CaseSensitive=False), damit die Detector-Match-Logik

@@ -4,9 +4,12 @@ unit uHardcodedPath;
 // Erkannte Muster:
 //   'C:\...'    Windows-Laufwerksbuchstabe
 //   '\\\\...'   UNC-Pfad
-//   '/usr/...'  Unix-System-Pfad
-//   '/etc/...', '/opt/...', '/home/...', '/var/...'
+//   '/opt/...'  Unix-Applikations-Pfad
+//   '/home/...' Unix-User-Verzeichnis
 //   '~/...'     Unix-Home
+//
+// Nicht gemeldet (kanonische System-Pfade, erwartet in OS-nahem cross-platform Code):
+//   /etc/, /var/, /tmp/, /usr/, /proc/, /sys/, /bin/, /sbin/
 //
 // Hardkodierte Pfade verhindern Portabilitaet und sind oft umgebungsabhaengig.
 
@@ -46,11 +49,16 @@ begin
      CharInSet(S[3], ['A'..'Z', 'a'..'z', '0'..'9', '_', '-']) then
     Exit(True);
 
-  // Unix-Pfade: '/usr/...', '/etc/...', etc.
   Low := S.ToLower;
-  for var Prefix in ['/usr/', '/etc/', '/opt/', '/home/', '/var/',
-                     '/tmp/', '/sys/', '/proc/', '/bin/', '/sbin/'] do
-    if Low.StartsWith(Prefix) then Exit(True);
+  // Kanonische Linux-System-Pfade: erwartet in cross-platform OS-Code,
+  // kein False-Positive bei '/etc/ssl/certs', '/var/run/...', etc.
+  for var SysPrefix in ['/etc/', '/var/', '/tmp/', '/usr/', '/proc/', '/sys/',
+                        '/bin/', '/sbin/'] do
+    if Low.StartsWith(SysPrefix) then Exit(False);
+
+  // Applikations-/User-spezifische Unix-Pfade sind echte Hardcodes.
+  for var AppPrefix in ['/opt/', '/home/'] do
+    if Low.StartsWith(AppPrefix) then Exit(True);
 
   // Unix Home: '~/...'
   if Low.StartsWith('~/') then Exit(True);

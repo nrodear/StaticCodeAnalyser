@@ -31,6 +31,7 @@ type
   private
     class function IsSecretName(const Name: string): Boolean; static;
     class function IsStringLiteral(const TypeRef: string): Boolean; static;
+    class function ConnectionStringHasPassword(const Literal: string): Boolean; static;
   end;
 
 implementation
@@ -104,6 +105,16 @@ begin
             (Pos('+', TypeRef) = 0);
 end;
 
+class function THardcodedSecretDetector.ConnectionStringHasPassword(
+  const Literal: string): Boolean;
+var
+  Low: string;
+begin
+  Low := Literal.ToLower;
+  Result := (Pos('password=', Low) > 0) or (Pos('pwd=', Low) > 0) or
+            (Pos('passwd=', Low) > 0);
+end;
+
 class procedure THardcodedSecretDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 const
@@ -122,6 +133,9 @@ begin
       if not IsStringLiteral(A.TypeRef) then Continue;
       // Leeres Literal '' ist Initialisierung, kein hartcodiertes Secret.
       if A.TypeRef = '''''' then Continue;
+      // ConnectionString ohne Passwort-Anteil ist ein Template, kein Secret.
+      if (Pos('connectionstring', A.Name.ToLower) > 0) and
+         not ConnectionStringHasPassword(A.TypeRef) then Continue;
 
       // Literal-Wert auf MAX_VAL_LEN Zeichen kürzen
       if Length(A.TypeRef) > MAX_VAL_LEN then

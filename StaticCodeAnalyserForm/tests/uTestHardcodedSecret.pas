@@ -27,6 +27,9 @@ type
     [Test] procedure Secret_UserTokenSnakeCase_ReportsError;
     // Leeres Literal ist Initialisierung, kein Secret
     [Test] procedure Secret_EmptyLiteral_NoFinding;
+    // ConnectionString ohne Password-Anteil ist kein Secret
+    [Test] procedure Secret_ConnStringNoPassword_NoFinding;
+    [Test] procedure Secret_ConnStringWithPassword_ReportsError;
   end;
 
   // ---- HardcodedSecret Erweiterungen -------------------------------------------------
@@ -192,6 +195,38 @@ begin
   try
     Assert.IsTrue(TFindingHelper.Count(F, fkHardcodedSecret) >= 1,
       '"user_token" muss als Secret-Variable erkannt werden');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecret.Secret_ConnStringNoPassword_NoFinding;
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Init;'#13#10+
+  'begin'#13#10+
+  '  FConnectionString := ''Server=localhost;Database=test;'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual(0, TFindingHelper.Count(F, fkHardcodedSecret),
+      'ConnectionString ohne Passwort-Anteil darf nicht gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecret.Secret_ConnStringWithPassword_ReportsError;
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Init;'#13#10+
+  'begin'#13#10+
+  '  FConnectionString := ''Server=localhost;Database=test;Password=secret123;'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual(1, TFindingHelper.Count(F, fkHardcodedSecret),
+      'ConnectionString mit Password= muss als Secret gemeldet werden');
   finally F.Free; end;
 end;
 

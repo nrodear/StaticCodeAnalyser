@@ -28,15 +28,22 @@ implementation
 
 class function TMagicNumberDetector.IsTrivial(const NumStr: string): Boolean;
 // Trivial-Liste kommt aus uSCAConsts.DetectorMagicTrivials (analyser.ini ->
-// MagicNumberTrivials). Defaults 0,1,2,-1,10,100. Wenn die globale Liste
-// nil sein sollte (Initialisierungs-Race), fallen wir auf die historischen
-// Defaults zurueck damit der Detektor immer funktioniert.
+// MagicNumberTrivials). Wenn die globale Liste nil ist, fallen wir auf die
+// historischen Defaults zurueck. Zusaetzlich: Powers of 2 bis 1024 werden
+// immer als trivial betrachtet (Bit-/Byte-/Buffer-Konstanten).
+var
+  N: Integer;
 begin
   if Assigned(DetectorMagicTrivials) and (DetectorMagicTrivials.Count > 0) then
-    Result := DetectorMagicTrivials.IndexOf(NumStr) >= 0
-  else
-    Result := (NumStr = '0') or (NumStr = '1') or (NumStr = '2') or
-              (NumStr = '-1') or (NumStr = '10') or (NumStr = '100');
+  begin
+    if DetectorMagicTrivials.IndexOf(NumStr) >= 0 then Exit(True);
+  end
+  else if (NumStr = '0') or (NumStr = '1') or (NumStr = '2') or
+          (NumStr = '-1') or (NumStr = '10') or (NumStr = '100') then
+    Exit(True);
+  // Powers of 2 bis 1024 sind idiomatische Bit-/Byte-Konstanten.
+  Result := TryStrToInt(NumStr, N) and (N > 0) and (N <= 1024) and
+            ((N and (N - 1)) = 0);
 end;
 
 class function TMagicNumberDetector.ExtractMagicNumber(

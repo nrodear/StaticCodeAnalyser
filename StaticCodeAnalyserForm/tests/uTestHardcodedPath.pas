@@ -19,8 +19,10 @@ type
     [Test] procedure Path_WindowsDriveBackslash_ReportsWarning;
     [Test] procedure Path_WindowsDriveForwardslash_ReportsWarning;
     [Test] procedure Path_UNCPath_ReportsWarning;
-    [Test] procedure Path_UnixUsr_ReportsWarning;
-    [Test] procedure Path_UnixEtc_ReportsWarning;
+    [Test] procedure Path_UnixUsr_SystemPath_NoFinding;
+    [Test] procedure Path_UnixEtc_SystemPath_NoFinding;
+    [Test] procedure Path_UnixTmp_SystemPath_NoFinding;
+    [Test] procedure Path_UnixOpt_ReportsWarning;
     [Test] procedure Path_UnixHome_ReportsWarning;
     [Test] procedure Path_UnixHomeShort_ReportsWarning;
     [Test] procedure Path_RegularString_NoFinding;
@@ -76,7 +78,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestHardcodedPath.Path_UnixUsr_ReportsWarning;
+procedure TTestHardcodedPath.Path_UnixUsr_SystemPath_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure Foo;'#13#10+
@@ -86,16 +88,44 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkHardcodedPath));
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkHardcodedPath));
   finally F.Free; end;
 end;
 
-procedure TTestHardcodedPath.Path_UnixEtc_ReportsWarning;
+procedure TTestHardcodedPath.Path_UnixEtc_SystemPath_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure Foo;'#13#10+
   'var p: string;'#13#10+
   'begin p := ''/etc/hosts'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkHardcodedPath));
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedPath.Path_UnixTmp_SystemPath_NoFinding;
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var p: string;'#13#10+
+  'begin p := ''/tmp/sca_test_file.tmp'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkHardcodedPath));
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedPath.Path_UnixOpt_ReportsWarning;
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var p: string;'#13#10+
+  'begin p := ''/opt/myapp/config'';'#13#10+
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin
