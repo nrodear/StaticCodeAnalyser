@@ -274,6 +274,134 @@ switching themes.
 
 ---
 
+## Using the analyser with Git and SVN
+
+The analyser **auto-detects** the VCS system based on the project
+directory (looks for `.git/` or `.svn/` markers). Custom rules and
+all detector configuration are **VCS-agnostic** — the same workflow
+works with both systems.
+
+### Auto-detection
+
+| Marker in project path | Detected as | Backend CLI |
+|---|---|---|
+| `.git/` (or any parent contains `.git/`) | Git | `git diff` + `git status` |
+| `.svn/` | SVN | `svn status` + `svn diff` |
+| neither | None | `--branch` disabled, `--full` works |
+
+The VCS executable is located via `PATH`, then typical install paths
+(TortoiseGit, TortoiseSVN, Git for Windows, ...). Override via
+`analyser.ini` (see below).
+
+### Using with Git
+
+**Plugin/GUI**: point the project path at the Git working tree, then
+click **Branch-Changes**. The analyser determines:
+- Modified `.pas` files between `BaseBranch` and `HEAD` (committed)
+- Plus uncommitted working-tree modifications (when `IncludeWorkingTree=1`)
+
+**CLI**:
+```powershell
+analyser.d12.exe --path D:\my-git-repo --branch --report-sarif sca.sarif
+```
+
+**`analyser.ini` settings for Git**:
+```ini
+[Repo]
+BaseBranch=develop          ; empty = auto: origin/HEAD -> main -> master
+IncludeWorkingTree=1        ; 1 = include uncommitted changes, 0 = committed only
+
+[Paths]
+GitExe=C:\custom\git\bin\git.exe   ; empty = auto-detection
+```
+
+### Using with SVN
+
+**Plugin/GUI**: identical to Git — pick the working-copy path, click
+**Branch-Changes**. Since SVN has no real "branch" concept in a
+working copy, branch mode here returns:
+- All uncommitted changes (`svn status` output: M/A/R/D/?)
+- Optionally extended with committed differences since BASE revision
+
+Ideal as a **pre-commit hook**: it checks exactly what would go into
+the next `svn commit`.
+
+**CLI**:
+```powershell
+analyser.d12.exe --path D:\my-svn-wc --branch --report-sarif sca.sarif
+```
+
+**`analyser.ini` settings for SVN**:
+```ini
+[Repo]
+BaseBranch=trunk            ; SVN: typically trunk (informational, no real diff)
+IncludeWorkingTree=1        ; include uncommitted changes
+
+[Paths]
+SvnExe=C:\custom\svn\bin\svn.exe   ; empty = auto: PATH + TortoiseSVN
+```
+
+**Auto-detected SVN paths**:
+1. `svn.exe` in PATH
+2. `C:\Program Files\TortoiseSVN\bin\svn.exe`
+3. `C:\Program Files (x86)\TortoiseSVN\bin\svn.exe`
+4. `C:\Program Files\Subversion\bin\svn.exe`
+
+### Custom rules with both VCS
+
+The [custom-rule engine](examples/README.md) (YAML profiles) is
+VCS-independent — it just reads files. Recommended workflow for
+**both** VCS systems:
+
+1. Place `analyser-rules.yml` (or one of the profiles from
+   `examples/`) in the **project root** — Git/SVN version it along
+   with the source
+2. Reference it in `analyser.ini`:
+   ```ini
+   [Detectors]
+   CustomRulesFile=analyser-rules.yml   ; relative to project root
+   ```
+3. Plugin/GUI loads it automatically on the next analysis run
+
+This way each project carries **its own ruleset in the repo** —
+team-shared, versioned, reviewable in PR/MR diffs.
+
+### CI/CD integration
+
+**GitHub Actions** (Git): see template [`.github/workflows/sca.yml`](.github/workflows/sca.yml).
+SARIF upload appears as inline annotations in PRs.
+
+**GitLab CI / Jenkins / TeamCity / Azure DevOps**: same pattern —
+make the tool available in the pipeline image, run `analyser.exe
+--path . --branch --report-sarif sca.sarif`, attach the artifact or
+process further (SARIF plugins available for most CI systems).
+
+**SVN pre-commit hook** (server-side, Linux):
+```bash
+#!/bin/sh
+# /path/to/svn-repo/hooks/pre-commit
+REPOS="$1"
+TXN="$2"
+
+# Adjust tool path and working-copy mirror
+ANALYSER=/opt/sca/analyser.d12.exe
+WC=/tmp/sca-precommit-$TXN
+
+svn export "$REPOS" "$WC" -r "$TXN" --quiet
+"$ANALYSER" --path "$WC" --full --quiet
+EXIT=$?
+rm -rf "$WC"
+exit $EXIT
+```
+
+Exit code mapping:
+- 0 = clean → commit allowed
+- 1 = hints only → commit allowed
+- 2 = warnings → commit allowed (or block via hook logic)
+- 3 = errors → **commit blocked**
+
+---
+
 ## Configuration files
 
 All under `%APPDATA%\StaticCodeAnalyser\`:

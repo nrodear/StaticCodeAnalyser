@@ -270,6 +270,133 @@ und erneut öffnen.
 
 ---
 
+## Verwendung unter Git und SVN
+
+Der Analyser erkennt das VCS-System **automatisch** anhand des Projekt-
+Verzeichnisses (sucht nach `.git/` oder `.svn/`-Marker). Custom-Rules
+und alle Detektor-Konfigurationen sind **VCS-agnostisch** — derselbe
+Workflow funktioniert mit beiden Systemen.
+
+### Auto-Detection
+
+| Marker im Projekt-Pfad | Erkannt als | Genutzte CLI |
+|---|---|---|
+| `.git/` (oder Eltern-Pfad enthält `.git/`) | Git | `git diff` + `git status` |
+| `.svn/` | SVN | `svn status` + `svn diff` |
+| keiner | None | `--branch` deaktiviert, `--full` funktioniert |
+
+Ausführbare CLI wird automatisch gesucht in: `PATH`, dann typische
+Installations-Pfade (TortoiseGit, TortoiseSVN, Git for Windows, ...).
+Override via `analyser.ini` möglich (siehe unten).
+
+### Verwendung mit Git
+
+**Plugin/GUI**: Projekt-Pfad auf den Git-Working-Tree zeigen, dann
+**Branch-Changes**-Button. Der Analyser ermittelt:
+- Geänderte `.pas`-Dateien zwischen `BaseBranch` und `HEAD` (committed)
+- Plus uncommitted Working-Tree-Modifikationen (wenn `IncludeWorkingTree=1`)
+
+**CLI**:
+```powershell
+analyser.d12.exe --path D:\meinGitRepo --branch --report-sarif sca.sarif
+```
+
+**`analyser.ini`-Settings für Git**:
+```ini
+[Repo]
+BaseBranch=develop          ; leer = auto: origin/HEAD -> main -> master
+IncludeWorkingTree=1        ; 1 = uncommitted Aenderungen mit, 0 = nur committed
+
+[Paths]
+GitExe=C:\custom\git\bin\git.exe   ; leer = auto-Detection
+```
+
+### Verwendung mit SVN
+
+**Plugin/GUI**: identisch zu Git — Working-Copy-Pfad wählen, **Branch-
+Changes**-Button. Da SVN kein "echtes" Branch-Konzept im Working-Copy
+hat, liefert der Branch-Mode hier:
+- Alle uncommitted Änderungen (`svn status`-Output: M/A/R/D/?)
+- Auf Wunsch erweitert um committed Differenzen seit BASE-Revision
+
+Ideal als **Pre-Commit-Hook**: prüft genau das, was beim nächsten
+`svn commit` ginge.
+
+**CLI**:
+```powershell
+analyser.d12.exe --path D:\meinSvnWC --branch --report-sarif sca.sarif
+```
+
+**`analyser.ini`-Settings für SVN**:
+```ini
+[Repo]
+BaseBranch=trunk            ; SVN: typisch trunk (informativ, da kein echter Diff)
+IncludeWorkingTree=1        ; uncommitted Aenderungen mit
+
+[Paths]
+SvnExe=C:\custom\svn\bin\svn.exe   ; leer = auto: PATH + TortoiseSVN
+```
+
+**Auto-Detection-Pfade für SVN**:
+1. `svn.exe` im PATH
+2. `C:\Program Files\TortoiseSVN\bin\svn.exe`
+3. `C:\Program Files (x86)\TortoiseSVN\bin\svn.exe`
+4. `C:\Program Files\Subversion\bin\svn.exe`
+
+### Custom-Rules unter beiden VCS
+
+Die [Custom-Rule-Engine](examples/README.md) (YAML-Profile) ist
+unabhängig vom VCS — sie liest nur Dateien. Empfohlener Workflow für
+**beide** VCS-Systeme:
+
+1. `analyser-rules.yml` (oder eines der Profile aus `examples/`) ins
+   **Projekt-Wurzelverzeichnis** legen — Git/SVN versionieren die Datei mit
+2. In `analyser.ini` referenzieren:
+   ```ini
+   [Detectors]
+   CustomRulesFile=analyser-rules.yml   ; relativ zum Projekt-Root
+   ```
+3. Plugin/GUI lädt automatisch beim nächsten Analyse-Lauf
+
+So pflegt jedes Projekt **sein eigenes Ruleset im Repo** — Team-shared,
+versioniert, in Code-Reviews mitchangbar.
+
+### CI/CD-Integration
+
+**GitHub Actions** (Git): siehe Vorlage [`.github/workflows/sca.yml`](.github/workflows/sca.yml).
+SARIF-Upload erscheint als Inline-Annotations im PR.
+
+**GitLab CI / Jenkins / TeamCity / Azure DevOps**: identisches Muster —
+Tool im Pipeline-Image bereitstellen, `analyser.exe --path . --branch
+--report-sarif sca.sarif` aufrufen, Artefakt anhängen oder weiterver-
+arbeiten (SARIF-Plugins für die meisten CI-Systeme verfügbar).
+
+**SVN-Pre-Commit-Hook** (Server-side, Linux):
+```bash
+#!/bin/sh
+# /path/to/svn-repo/hooks/pre-commit
+REPOS="$1"
+TXN="$2"
+
+# Tool-Pfad und Working-Copy-Mirror anpassen
+ANALYSER=/opt/sca/analyser.d12.exe
+WC=/tmp/sca-precommit-$TXN
+
+svn export "$REPOS" "$WC" -r "$TXN" --quiet
+"$ANALYSER" --path "$WC" --full --quiet
+EXIT=$?
+rm -rf "$WC"
+exit $EXIT
+```
+
+Exit-Code-Mapping (siehe [Headless CLI](#headless-cli-mode)):
+- 0 = clean → commit erlaubt
+- 1 = nur Hints → commit erlaubt
+- 2 = Warnings → commit erlaubt (oder blockieren via Hook-Logik)
+- 3 = Errors → **commit blockiert**
+
+---
+
 ## Konfigurations-Dateien
 
 Alle in `%APPDATA%\StaticCodeAnalyser\`:
