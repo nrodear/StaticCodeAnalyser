@@ -57,6 +57,7 @@ type
     FMaxFileMB         : Integer;     // MaxFileMB (5 Default)
     FMagicTrivials     : TStringList; // MagicNumberTrivials (CSV)
     FFormatFunctions   : TStringList; // FormatFunctions (CSV)
+    FCustomRulesFile   : string;      // CustomRulesFile (Pfad zur YAML)
     FLanguage          : string;      // [UI] Language ('de', 'en', '')
   public
     constructor Create;
@@ -150,6 +151,13 @@ type
     // FormatUtf8, FormatString. Aus [Detectors] FormatFunctions=... als CSV.
     property FormatFunctions:         TStringList read FFormatFunctions;
 
+    // uCustomRuleDetector: Pfad zur YAML-Datei mit projekt-spezifischen
+    // Regeln (siehe examples/analyser-rules.yml). Leer = keine Custom-
+    // Rules. Relative Pfade sind relativ zum Projekt-Root oder absolut.
+    // Aus [Detectors] CustomRulesFile=... gelesen.
+    property CustomRulesFile:         string      read FCustomRulesFile
+                                                  write FCustomRulesFile;
+
     // UI-Sprache. '' bedeutet "use Default" (= deutsch beim aktuellen Build,
     // falls dxgettext jemals aktiviert wird, wuerde es OS-Locale nutzen).
     // Aus [UI] Language gelesen. Erlaubte Werte: 'de', 'en', ''.
@@ -163,7 +171,16 @@ type
     // Spiegelt die Schwellwerte in die globalen Variablen in uSCAConsts.
     // Wird vor jedem Analyse-Lauf aus der UI heraus aufgerufen, damit
     // INI-Aenderungen ohne App-Neustart wirken.
-    procedure ApplyDetectorThresholds;
+    //
+    // AProjectRoot (optional): wird genutzt um relative CustomRulesFile-
+    // Pfade aufzuloesen. Reihenfolge:
+    //   1. Absoluter Pfad aus INI                       (wenn TPath.IsPathRooted)
+    //   2. <AProjectRoot>\<filename>                    (typisch: meine-rules.yml im Repo)
+    //   3. <ConfigDir>\<filename>                       (= AppData-INI-Verzeichnis)
+    //   4. <ExeDir>\<filename>                          (Standalone-Default-Lookup)
+    // Erste existierende Datei gewinnt. Wenn nichts gefunden -> ClearRules
+    // (kein Crash, OutputDebugString-Hinweis).
+    procedure ApplyDetectorThresholds(const AProjectRoot: string = '');
 
     // Schreibt die im aktuellen Lauf gefundenen Discovery-Treffer
     // (uSCAConsts.DiscoveredClasses) in eine LeakyClassesDiscover.log
@@ -179,7 +196,8 @@ type
 implementation
 
 uses
-  Winapi.Windows, uIgnoreList, uSCAConsts;
+  Winapi.Windows, System.IOUtils,
+  uIgnoreList, uSCAConsts, uCustomRuleDetector;
 
 const
   DEFAULT_INI_CONTENT =
@@ -338,6 +356,26 @@ const
     ';FormatFunctions=Format,FormatUtf8,FormatString'#13#10 +
     ';FormatFunctions=Format,FormatUtf8,FormatString,_fmt'#13#10 +
     ''#13#10 +
+    '; CustomRulesFile: Pfad zur YAML-Datei mit projekt-spezifischen'#13#10 +
+    '; Regeln (siehe examples/analyser-rules.yml + examples/profile-*.yml).'#13#10 +
+    '; Pattern-Typen: substring | regex | word, mit optionalen file-include'#13#10 +
+    '; und file-exclude Glob-Filtern. Findings erscheinen mit der Custom-'#13#10 +
+    '; Rule-ID (z.B. PROJ001) im Grid und in SARIF.'#13#10 +
+    ';'#13#10 +
+    '; Pfad-Aufloesung (in Reihenfolge):'#13#10 +
+    ';   1. Absoluter Pfad     -> direkt verwenden'#13#10 +
+    ';   2. Relativ + Projekt   -> <Projekt-Root>\<wert>     <- typisch'#13#10 +
+    ';   3. Relativ + AppData   -> %APPDATA%\StaticCodeAnalyser\<wert>'#13#10 +
+    ';   4. Relativ + ExeDir    -> <Tool-Verz.>\<wert>'#13#10 +
+    ';'#13#10 +
+    '; Empfohlen: Datei "analyser-rules.yml" ins Projekt-Root legen und'#13#10 +
+    '; nur den Dateinamen (ohne Pfad) hier eintragen. So pflegt jedes'#13#10 +
+    '; Projekt sein eigenes Ruleset im Repo (Team-shared, versioniert).'#13#10 +
+    ';CustomRulesFile='#13#10 +
+    ';CustomRulesFile=analyser-rules.yml'#13#10 +
+    ';CustomRulesFile=profile-strict.yml'#13#10 +
+    ';CustomRulesFile=C:\Team\shared-sca-rules.yml'#13#10 +
+    ''#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
     ';  [UI] - Oberflaechen-Einstellungen'#13#10 +
@@ -386,6 +424,8 @@ begin
   FFormatFunctions.Sorted        := True;
   FFormatFunctions.Duplicates    := dupIgnore;
   FFormatFunctions.AddStrings(['format', 'formatutf8', 'formatstring']);
+
+  FCustomRulesFile := '';
   FLanguage           := 'en';        // Default: englische UI (Source-Sprache)
 end;
 
@@ -527,6 +567,10 @@ begin
       end;
     end;
 
+    // [Detectors] CustomRulesFile=path/to/analyser-rules.yml -> Custom-
+    // Rule-Detector laed sie beim naechsten Analyse-Start. Leer = aus.
+    FCustomRulesFile := Trim(Ini.ReadString('Detectors', 'CustomRulesFile', ''));
+
     // [UI] Language=de|en|'' -> FLanguage. Default 'en' (Source-Sprache).
     FLanguage := Trim(Ini.ReadString('UI', 'Language', 'en')).ToLower;
   finally
@@ -581,9 +625,49 @@ begin
   end;
 end;
 
-procedure TRepoSettings.ApplyDetectorThresholds;
+function ResolveCustomRulesPath(const AConfigured, AProjectRoot,
+  AConfigDir, AExeDir: string): string;
+// Liefert den ersten existierenden Pfad aus den Lookup-Locations,
+// '' wenn keine Datei gefunden. AConfigured kann absolut oder relativ sein.
 var
-  i : Integer;
+  Cands : array of string;
+  C     : string;
+begin
+  Result := '';
+  if AConfigured = '' then Exit;
+
+  // Absoluter Pfad? -> direkt verwenden
+  if TPath.IsPathRooted(AConfigured) then
+  begin
+    if TFile.Exists(AConfigured) then Result := AConfigured;
+    Exit;
+  end;
+
+  // Relativ: in 3 Locations suchen, in dieser Reihenfolge
+  SetLength(Cands, 0);
+  if AProjectRoot <> '' then
+  begin
+    SetLength(Cands, Length(Cands) + 1);
+    Cands[High(Cands)] := TPath.Combine(AProjectRoot, AConfigured);
+  end;
+  if AConfigDir <> '' then
+  begin
+    SetLength(Cands, Length(Cands) + 1);
+    Cands[High(Cands)] := TPath.Combine(AConfigDir, AConfigured);
+  end;
+  if AExeDir <> '' then
+  begin
+    SetLength(Cands, Length(Cands) + 1);
+    Cands[High(Cands)] := TPath.Combine(AExeDir, AConfigured);
+  end;
+  for C in Cands do
+    if TFile.Exists(C) then Exit(C);
+end;
+
+procedure TRepoSettings.ApplyDetectorThresholds(const AProjectRoot: string = '');
+var
+  i           : Integer;
+  ResolvedPath: string;
 begin
   // Skalare Schwellwerte direkt in die Globals spiegeln. Detektoren lesen
   // beim naechsten Lauf von dort.
@@ -610,6 +694,46 @@ begin
     for i := 0 to FFormatFunctions.Count - 1 do
       uSCAConsts.DetectorFormatFunctions.Add(FFormatFunctions[i]);
   end;
+
+  // Custom-Rules: YAML laden wenn Pfad gesetzt. Path-Resolver probiert
+  // ProjectRoot, ConfigDir, ExeDir der Reihe nach. Bei Fehlern (kaputte
+  // YAML, ungueltiger Regex) Rules verwerfen statt Crash - der Haupt-
+  // analyzer laeuft dann eben ohne Custom-Rules weiter. ClearRules ist
+  // Pflicht wenn der Pfad leer wird (Settings-Update).
+  if FCustomRulesFile <> '' then
+  begin
+    ResolvedPath := ResolveCustomRulesPath(
+      FCustomRulesFile,
+      AProjectRoot,
+      ExtractFilePath(ConfigFilePath),
+      ExtractFilePath(ParamStr(0)));
+    if ResolvedPath <> '' then
+    begin
+      try
+        uCustomRuleDetector.TCustomRuleDetector.LoadFromYaml(ResolvedPath);
+      except
+        on E: Exception do
+        begin
+          // Konsolen-Output fuer Standalone, IDE-Plugin sieht das im
+          // OutputDebugString-Stream. Kein Crash, kein Modal-Dialog.
+          OutputDebugString(PChar(Format(
+            'StaticCodeAnalyser: Custom-Rules-Datei nicht ladbar (%s): %s',
+            [ResolvedPath, E.Message])));
+          uCustomRuleDetector.TCustomRuleDetector.ClearRules;
+        end;
+      end;
+    end
+    else
+    begin
+      OutputDebugString(PChar(Format(
+        'StaticCodeAnalyser: CustomRulesFile nicht gefunden: "%s" '+
+        '(gesucht in ProjectRoot="%s", ConfigDir, ExeDir)',
+        [FCustomRulesFile, AProjectRoot])));
+      uCustomRuleDetector.TCustomRuleDetector.ClearRules;
+    end;
+  end
+  else
+    uCustomRuleDetector.TCustomRuleDetector.ClearRules;
 end;
 
 procedure TRepoSettings.PersistDiscoveredClasses;

@@ -32,7 +32,11 @@ uses
   uTestSafetyChecks     in 'uTestSafetyChecks.pas',
   uTestComboChecks      in 'uTestComboChecks.pas',
   uTestParserRobustness in 'uTestParserRobustness.pas',
-  uTestPerformance      in 'uTestPerformance.pas';
+  uTestPerformance      in 'uTestPerformance.pas',
+  uTestRuleCatalog      in 'uTestRuleCatalog.pas',
+  uTestExportSARIF      in 'uTestExportSARIF.pas',
+  uTestYamlSubsetParser in 'uTestYamlSubsetParser.pas',
+  uTestCustomRuleDetector in 'uTestCustomRuleDetector.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}

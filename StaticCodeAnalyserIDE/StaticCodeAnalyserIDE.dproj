@@ -196,6 +196,7 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uRegExMatches.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uDetectorUtils.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uCollectValues.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uYamlSubsetParser.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLeakDetector2.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCodeSmells2.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSQLInjectionScore.pas"/>
@@ -220,6 +221,7 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uFieldLeak.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDuplicateBlock.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCustomClassDiscovery.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCustomRuleDetector.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

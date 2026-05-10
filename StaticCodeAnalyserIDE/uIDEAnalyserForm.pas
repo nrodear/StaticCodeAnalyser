@@ -1726,7 +1726,9 @@ begin
   try
     FRepoSettings.Load;
     FRepoSettings.RegisterToLeakyClasses;
-    FRepoSettings.ApplyDetectorThresholds;
+    // ProjectRoot durchreichen damit relative CustomRulesFile-Pfade
+    // (z.B. 'analyser-rules.yml' im Projekt-Wurzelverzeichnis) gefunden werden.
+    FRepoSettings.ApplyDetectorThresholds(Trim(FProjectPath.Text));
     AutoDiscoverCustomClasses := FRepoSettings.AutoDiscoverClasses;
     // Frische Discovery-Liste pro Run, sonst wandern Treffer aus
     // vorherigen Projekten in die INI mit.

@@ -1,0 +1,69 @@
+# StaticCodeAnalyser - Custom Rules
+#
+# Project- and team-specific rules in addition to the 22 hardcoded
+# detectors. Pattern-based (regex / substring / word) - no AST analysis.
+#
+# Activation: --custom-rules examples/analyser-rules.yml
+#
+# Each rule needs:
+#   id           - stable identifier shown in reports (e.g. PROJ001)
+#   pattern      - the actual pattern text
+#
+# Optional fields:
+#   name         - short human-readable title
+#   description  - longer explanation (used as message if message: missing)
+#   severity     - error | warning | hint   (default: warning)
+#   type         - bug | code-smell | vulnerability | security-hotspot |
+#                  code-duplication            (informational only)
+#   pattern-type - substring (default) | regex | word
+#   target       - any (default) | identifier | comment | string-literal
+#                  NOTE: in v0.9.0 still treated as 'any' - target-filtering
+#                  is roadmap for v0.9.x
+#   message      - shown in finding output (default: name or description)
+#   fix-hint     - shown in HTML/Plugin-Tooltip
+#   file-include - list of glob patterns; rule only fires for matching files
+#   file-exclude - list of glob patterns; rule skips matching files
+
+version: 1
+rules:
+
+  # Example 1: Forbid an old VCL component in new code.
+  - id: PROJ001
+    name: "kein TADOQuery erlaubt"
+    description: "Wir nutzen FireDAC - kein TADOQuery in Neucode"
+    severity: error
+    type: code-smell
+    pattern: "TADOQuery"
+    pattern-type: word
+    message: "Use TFDQuery from FireDAC instead of TADOQuery"
+    fix-hint: "Ersetze TADOQuery durch TFDQuery + 'FireDAC.Comp.Client' im uses-Block."
+
+  # Example 2: Catch raw Sleep() calls outside test code.
+  - id: PROJ002
+    name: "kein Sleep() in Production-Units"
+    severity: warning
+    type: code-smell
+    pattern: "\\bSleep\\("
+    pattern-type: regex
+    message: "Sleep() blocks the thread - use TTimer or async pattern instead"
+    file-include:
+      - "src/production/**/*.pas"
+    file-exclude:
+      - "**/*Test*.pas"
+      - "**/*Tests*.pas"
+
+  # Example 3: Spot deprecated logging call.
+  - id: PROJ003
+    name: "OldLogger.Log() ist deprecated"
+    severity: hint
+    pattern: "OldLogger.Log("
+    pattern-type: substring
+    message: "Use Logger.Info / Logger.Error from new logging framework"
+
+  # Example 4: Catch obsolete unit imports.
+  - id: PROJ004
+    name: "veraltete LegacyHelper-Unit"
+    severity: warning
+    pattern: "\\buses\\b[^;]*\\bLegacyHelper\\b"
+    pattern-type: regex
+    message: "LegacyHelper wurde nach NewHelper umbenannt - bitte uses-Eintrag korrigieren"

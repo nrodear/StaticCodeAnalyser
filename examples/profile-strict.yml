@@ -1,0 +1,112 @@
+# StaticCodeAnalyser - Profil "Strict"
+#
+# Strenge Projekt-Konventionen, die typische Delphi-Anti-Patterns
+# blockieren. Geeignet fuer Greenfield-Projekte oder Codebases mit
+# konsistenter Coding-Style-Guideline.
+#
+# Verwendung:
+#   - In analyser.ini:  [Detectors] CustomRulesFile=profile-strict.yml
+#   - Datei ins Projekt-Root legen (wird relativ zum Projekt aufgeloest)
+#   - Plugin neu starten oder erneut "Analyse starten" klicken
+#
+# Anpassung: Regeln einzeln auskommentieren wenn dein Projekt eine
+# spezifische Ausnahme braucht (z.B. ProcessMessages in einer dedizier-
+# ten Worker-Loop).
+
+version: 1
+rules:
+
+  # --- Thread-Blocker im UI-Thread -----------------------------------
+  - id: STRICT001
+    name: "Sleep() im UI-Thread"
+    severity: error
+    type: bug
+    pattern: "\\bSleep\\("
+    pattern-type: regex
+    message: "Sleep() blockt den Aufrufer-Thread - TTimer/TTask/async nutzen"
+    file-exclude:
+      - "**/*Test*.pas"
+      - "**/*Tests*.pas"
+
+  - id: STRICT002
+    name: "Application.ProcessMessages"
+    severity: warning
+    type: code-smell
+    pattern: "Application.ProcessMessages"
+    pattern-type: substring
+    message: "ProcessMessages produziert subtile Reentrancy-Bugs - nutze TTask oder Timer-Callbacks"
+
+  # --- Exception-Handling -------------------------------------------
+  - id: STRICT003
+    name: "try ... except end (leer)"
+    severity: error
+    type: bug
+    pattern: "except\\s+end"
+    pattern-type: regex
+    message: "Leerer except-Block schluckt jede Exception. Mindestens loggen oder reraisen"
+    # Wird auch vom Built-in EmptyExcept-Detektor erkannt (SCA002, Warning)
+    # - hier als ERROR upgegradet, weil im Strict-Profil zero-tolerance gilt.
+
+  - id: STRICT004
+    name: "raise Exception.Create('...')"
+    severity: hint
+    type: code-smell
+    pattern: "raise Exception\\.Create"
+    pattern-type: regex
+    message: "Generische Exception-Klasse - eigene Klasse (z.B. EBusinessRule) erlaubt typed-catch"
+
+  # --- Veraltete Sprach-Konstrukte ----------------------------------
+  - id: STRICT005
+    name: "with ... do"
+    severity: warning
+    type: code-smell
+    pattern: "\\bwith\\s+\\w"
+    pattern-type: regex
+    message: "with-Block: Identifier-Aufloesung ist mehrdeutig, schwer zu lesen, fehlertraechtig"
+
+  - id: STRICT006
+    name: "goto-Statement"
+    severity: error
+    type: code-smell
+    pattern: "\\bgoto\\s+\\w"
+    pattern-type: regex
+    message: "goto wurde 1968 von Dijkstra zu Recht beerdigt"
+
+  # --- Veraltete Typen ----------------------------------------------
+  - id: STRICT007
+    name: "Real-Typ statt Double"
+    severity: hint
+    type: code-smell
+    pattern: ":\\s*Real\\b"
+    pattern-type: regex
+    message: "Real ist Compiler-abhaengig (Real48 vs Double). Explizit Double oder Single nutzen"
+
+  - id: STRICT008
+    name: "ShortString-Typ"
+    severity: hint
+    type: code-smell
+    pattern: ":\\s*ShortString\\b"
+    pattern-type: regex
+    message: "ShortString hat 255-Zeichen-Limit + ANSI-Encoding. UnicodeString (string) nutzen"
+
+  # --- Debug-Reste --------------------------------------------------
+  - id: STRICT009
+    name: "OutputDebugString in Production"
+    severity: warning
+    type: code-smell
+    pattern: "OutputDebugString"
+    pattern-type: substring
+    message: "OutputDebugString ist Debug-Werkzeug - in Production durch Logger.Debug ersetzen"
+    file-exclude:
+      - "**/*Debug*.pas"
+
+  - id: STRICT010
+    name: "Console-Output (Write/WriteLn) im VCL-Code"
+    severity: warning
+    type: code-smell
+    pattern: "\\b(Write|WriteLn)\\s*\\("
+    pattern-type: regex
+    message: "Write/WriteLn ist Console-API - in VCL-Code via Logger oder TMemo loggen"
+    file-include:
+      - "**/forms/**/*.pas"
+      - "**/UI/**/*.pas"

@@ -184,6 +184,11 @@
         <DCCReference Include="sources\Detectors\uUnusedUses.pas"/>
         <DCCReference Include="sources\Detectors\uCustomClassDiscovery.pas"/>
         <DCCReference Include="sources\Infrastructure\uVcsChanges.pas"/>
+        <DCCReference Include="sources\Common\uRuleCatalog.pas"/>
+        <DCCReference Include="sources\Common\uYamlSubsetParser.pas"/>
+        <DCCReference Include="sources\Output\uExportSARIF.pas"/>
+        <DCCReference Include="sources\Console\uConsoleRunner.pas"/>
+        <DCCReference Include="sources\Detectors\uCustomRuleDetector.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

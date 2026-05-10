@@ -246,7 +246,9 @@ procedure TForm2.ApplyDetectorConfig(Settings: TRepoSettings;
 begin
   try
     Settings.RegisterToLeakyClasses;
-    Settings.ApplyDetectorThresholds;
+    // ProjectRoot durchreichen damit relative CustomRulesFile-Pfade
+    // (z.B. 'analyser-rules.yml' im Projekt-Wurzelverzeichnis) gefunden werden.
+    Settings.ApplyDetectorThresholds(Trim(Projectpath.Text));
     AutoDiscoverCustomClasses := Settings.AutoDiscoverClasses;
     if AClearDiscovery then
     begin

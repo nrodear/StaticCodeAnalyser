@@ -1,0 +1,136 @@
+# StaticCodeAnalyser - Profil "Legacy-Migration"
+#
+# Findet Code-Patterns die zu modernen Aequivalenten migriert werden
+# sollten. Severity = "hint", weil das alte Pattern oft noch funktio-
+# niert - der Befund ist eine Migration-Roadmap, kein Bug-Report.
+#
+# Verwendung:
+#   - In analyser.ini:  [Detectors] CustomRulesFile=profile-legacy-migration.yml
+#   - Idealer Einsatz: ein Migrations-Sprint pro Quartal, fix N Hits
+#     ab und tracke den Fortschritt im SARIF/HTML-Report.
+#
+# Anpassung: pro Treffer in deinem Code entweder migrieren ODER die
+# Rule mit file-exclude fuer Legacy-Module rausnehmen die nie migriert
+# werden.
+
+version: 1
+rules:
+
+  # --- Datenzugriff: ADO -> FireDAC ---------------------------------
+  - id: MIG001
+    name: "TADOConnection -> TFDConnection"
+    severity: hint
+    type: code-smell
+    pattern: "\\bTADOConnection\\b"
+    pattern-type: word
+    message: "ADO-Komponenten werden von Embarcadero nicht mehr aktiv gewartet. FireDAC bietet besseres Connection-Pooling, Mac/Linux-Support, Async"
+    fix-hint: "Replace TADOConnection with TFDConnection (FireDAC.Comp.Client)"
+
+  - id: MIG002
+    name: "TADOQuery -> TFDQuery"
+    severity: hint
+    type: code-smell
+    pattern: "\\bTADOQuery\\b"
+    pattern-type: word
+    message: "Siehe MIG001"
+    fix-hint: "Replace TADOQuery with TFDQuery"
+
+  - id: MIG003
+    name: "TADOTable -> TFDTable"
+    severity: hint
+    type: code-smell
+    pattern: "\\bTADOTable\\b"
+    pattern-type: word
+    message: "Siehe MIG001"
+    fix-hint: "Replace TADOTable with TFDTable"
+
+  - id: MIG004
+    name: "TADOStoredProc -> TFDStoredProc"
+    severity: hint
+    type: code-smell
+    pattern: "\\bTADOStoredProc\\b"
+    pattern-type: word
+    message: "Siehe MIG001"
+    fix-hint: "Replace TADOStoredProc with TFDStoredProc"
+
+  # --- IBExpress -> FireDAC -----------------------------------------
+  - id: MIG005
+    name: "TIBQuery / TIBTable / TIBDatabase -> FireDAC"
+    severity: hint
+    type: code-smell
+    pattern: "\\bTIB(Query|Table|Database|StoredProc|Transaction)\\b"
+    pattern-type: regex
+    message: "IBExpress wird seit 2018 nicht mehr aktiv weiterentwickelt. FireDAC unterstuetzt Firebird/Interbase nativ"
+
+  # --- HTTP: Indy 10 -> System.Net oder THTTPClient -----------------
+  - id: MIG006
+    name: "TIdHTTP -> THTTPClient (System.Net.HttpClient)"
+    severity: hint
+    type: code-smell
+    pattern: "\\bTIdHTTP\\b"
+    pattern-type: word
+    message: "TIdHTTP ist Indy-Komponente mit eigener Threading-Architektur. THTTPClient (RTL) ist async, plattform-agnostisch und wird mit Delphi mitgewartet"
+
+  - id: MIG007
+    name: "TIdHTTPServer -> Embedded HTTP-Lib"
+    severity: hint
+    type: code-smell
+    pattern: "\\bTIdHTTPServer\\b"
+    pattern-type: word
+    message: "Fuer neue REST-APIs: mORMot 2 Web-Server, Horse, Bromine oder DMVCFramework - alle moderner als Indy"
+
+  # --- JSON: SuperObject -> System.JSON ------------------------------
+  - id: MIG008
+    name: "SuperObject (TSuperObject)"
+    severity: hint
+    type: code-smell
+    pattern: "\\bTSuperObject\\b"
+    pattern-type: word
+    message: "SuperObject hat seit Jahren keine Updates. System.JSON (RTL) deckt 95% der Use-Cases ab"
+
+  # --- INI -> JSON / Cloud-Config -----------------------------------
+  - id: MIG009
+    name: "TIniFile fuer User-Settings"
+    severity: hint
+    type: code-smell
+    pattern: "\\bTIniFile\\.Create\\b"
+    pattern-type: regex
+    message: "INI ist fuer dauerhaft kuratierte Configs OK; fuer User-Settings (HiDPI-State, Window-Position, Recent-Files) lieber TJSONObject + TPath.Combine(GetEnvironmentVariable('APPDATA'), 'app.json')"
+    file-exclude:
+      - "**/*Test*.pas"
+
+  # --- Logging ------------------------------------------------------
+  - id: MIG010
+    name: "WriteLn fuer Logging"
+    severity: hint
+    type: code-smell
+    pattern: "\\bWriteLn\\s*\\("
+    pattern-type: regex
+    message: "WriteLn = Console-Output, nicht strukturiertes Logging. Logger-Library mit Levels (Debug/Info/Warn/Error) und Sinks (File/Console/EventLog) verwenden"
+    file-include:
+      - "src/**/*.pas"
+    file-exclude:
+      - "**/*Test*.pas"
+      - "**/*ConsoleApp*.pas"
+
+  # --- VCL-Komponenten in Form-Code zentralisieren ------------------
+  - id: MIG011
+    name: "MessageDlg / ShowMessage in Business-Logik"
+    severity: hint
+    type: code-smell
+    pattern: "\\b(MessageDlg|ShowMessage)\\s*\\("
+    pattern-type: regex
+    message: "UI-Code in Domain-Layer = enge Form-Kopplung. Exception throwen lassen + zentral in der Form anzeigen, oder Result-Records zurueckgeben"
+    file-exclude:
+      - "**/UI/**/*.pas"
+      - "**/forms/**/*.pas"
+      - "**/*Form*.pas"
+
+  # --- Streams: Old-Style -> TStream-Patterns -----------------------
+  - id: MIG012
+    name: "AssignFile / Reset / Rewrite (alte File-API)"
+    severity: hint
+    type: code-smell
+    pattern: "\\b(AssignFile|Reset|Rewrite|CloseFile)\\b"
+    pattern-type: word
+    message: "Pre-Delphi-2 File-Handling. TFileStream / TStreamReader / TFile.ReadAllText nutzen - exception-safe, encoding-aware, plattformagnostisch"

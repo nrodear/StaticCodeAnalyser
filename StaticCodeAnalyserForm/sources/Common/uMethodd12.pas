@@ -29,6 +29,10 @@ type
     MissingVar: string;
     Severity:   TLeakSeverity;
     Kind:       TFindingKind;
+    // Optionale Custom-Rule-ID (z.B. 'PROJ001'). Bei built-in-Rules leer
+    // gelassen - SARIF-Export holt dann die ID aus TRuleCatalog via Kind.
+    // Wenn gesetzt, gewinnt RuleID gegen den Catalog-Lookup.
+    RuleID:     string;
     function SeverityText: string;
     function FindingType: TFindingType;
     function TypeText: string;

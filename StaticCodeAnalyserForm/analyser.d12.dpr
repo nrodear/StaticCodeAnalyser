@@ -1,7 +1,15 @@
 program analyser.d12;
 
+{$APPTYPE CONSOLE}
+// CONSOLE-AppType: ermoeglicht stdout/stderr-IO und korrekte Exit-Codes.
+// Die VCL-Form startet trotzdem - im GUI-Mode ist das Console-Window nur
+// ein zusaetzliches Fenster (nicht stoerend bei Plugin-Builds).
+// Im CLI-Mode (siehe TConsoleRunner.RunFromCmdLine in main-Block unten)
+// kein Application.Run -> kein Form-Spawn -> reine CLI-Output.
+
 uses
   Vcl.Forms,
+  System.SysUtils,
   MeineUnit in 'resources\MeineUnit.pas',
   MainController in 'sources\MainController.pas',
   uAnalyserPalette in 'sources\UI\uAnalyserPalette.pas',
@@ -25,19 +33,25 @@ uses
   uVcsChanges in 'sources\Infrastructure\uVcsChanges.pas',
   // ---- Output ----
   uClaudePrompt in 'sources\Output\uClaudePrompt.pas',
+  uExportSARIF in 'sources\Output\uExportSARIF.pas',
   uFixHint in 'sources\Output\uFixHint.pas',
+  // ---- Console (CLI-Mode) ----
+  uConsoleRunner in 'sources\Console\uConsoleRunner.pas',
   // ---- Common ----
   uCollectValues in 'sources\Common\uCollectValues.pas',
   uDetectorUtils in 'sources\Common\uDetectorUtils.pas',
   uMethodd12 in 'sources\Common\uMethodd12.pas',
   uRecentPaths in 'sources\Common\uRecentPaths.pas',
   uRegExMatches in 'sources\Common\uRegExMatches.pas',
+  uRuleCatalog in 'sources\Common\uRuleCatalog.pas',
   uSCAConsts in 'sources\Common\uSCAConsts.pas',
+  uYamlSubsetParser in 'sources\Common\uYamlSubsetParser.pas',
   // ---- Detectors ----
   uCodeSmells2 in 'sources\Detectors\uCodeSmells2.pas',
   uDeadCode in 'sources\Detectors\uDeadCode.pas',
   uDebugOutput in 'sources\Detectors\uDebugOutput.pas',
   uDeepNesting in 'sources\Detectors\uDeepNesting.pas',
+  uCustomRuleDetector in 'sources\Detectors\uCustomRuleDetector.pas',
   uCyclomaticComplexity in 'sources\Detectors\uCyclomaticComplexity.pas',
   uDivByZero in 'sources\Detectors\uDivByZero.pas',
   uDuplicateBlock in 'sources\Detectors\uDuplicateBlock.pas',
@@ -61,11 +75,41 @@ uses
 
 {$R *.res}
 
+// Erkennung CLI- vs GUI-Mode: jeder Argument der mit '-' oder '/' anfaengt
+// (typische Switch-Praefixe) -> CLI. Sonst -> GUI starten.
+function IsCliMode: Boolean;
+var
+  i  : Integer;
+  A  : string;
 begin
-  Application.Initialize;
-  Application.MainFormOnTaskbar := True;
-  Application.CreateForm(TForm2, Form2);
-  Application.CreateForm(TForm2, Form2);
-  Application.Run;
+  Result := False;
+  for i := 1 to ParamCount do
+  begin
+    A := ParamStr(i);
+    if (A <> '') and ((A[1] = '-') or (A[1] = '/')) then
+      Exit(True);
+  end;
+end;
 
+begin
+  if IsCliMode then
+  begin
+    // Headless-Pfad - keine VCL-Form, exit code via Halt.
+    try
+      Halt(uConsoleRunner.TConsoleRunner.RunFromCmdLine);
+    except
+      on E: Exception do
+      begin
+        WriteLn(ErrOutput, 'Fatal: ', E.ClassName, ': ', E.Message);
+        Halt(99);
+      end;
+    end;
+  end
+  else
+  begin
+    Application.Initialize;
+    Application.MainFormOnTaskbar := True;
+    Application.CreateForm(TForm2, Form2);
+    Application.Run;
+  end;
 end.

@@ -107,7 +107,10 @@ type
     fkTodoComment,      // TODO/FIXME/HACK/XXX im Kommentar
     fkEmptyMethod,      // Methodenrumpf ohne Anweisungen
     fkDuplicateBlock,   // mehrere identische Code-Blocks (>=8 Zeilen)
-    fkCyclomaticComplexity // McCabe-Komplexitaet > Schwellwert
+    fkCyclomaticComplexity, // McCabe-Komplexitaet > Schwellwert
+    fkCustomRule           // Custom-Rule aus analyser-rules.yml (siehe
+                           // uCustomRuleDetector). Spezifische Rule-ID
+                           // steht in TLeakFinding.RuleID.
   );
 
   // SonarQube-aehnliche Kategorisierung der Befunde:
@@ -168,7 +171,8 @@ const
     (Name: 'TodoComment';     FindingType: ftCodeSmell),        // fkTodoComment
     (Name: 'EmptyMethod';     FindingType: ftCodeSmell),        // fkEmptyMethod
     (Name: 'DuplicateBlock';  FindingType: ftCodeDuplication),  // fkDuplicateBlock
-    (Name: 'CyclomaticComplexity'; FindingType: ftCodeSmell)    // fkCyclomaticComplexity
+    (Name: 'CyclomaticComplexity'; FindingType: ftCodeSmell),   // fkCyclomaticComplexity
+    (Name: 'CustomRule';      FindingType: ftCodeSmell)         // fkCustomRule
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

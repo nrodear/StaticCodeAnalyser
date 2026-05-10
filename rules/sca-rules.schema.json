@@ -1,0 +1,114 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/nrodear/StaticCodeAnalyser/rules/sca-rules.schema.json",
+  "title": "StaticCodeAnalyser Rule Catalog",
+  "description": "Single source of truth for all SCA detector rule metadata. Consumed by uRuleCatalog.pas (Delphi) and tools/gen-rules-docs.py (Markdown generator).",
+  "type": "object",
+  "required": ["version", "tool", "rules"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema":  { "type": "string" },
+    "version":  { "type": "string", "pattern": "^\\d+\\.\\d+$" },
+    "tool": {
+      "type": "object",
+      "required": ["name", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "name":           { "type": "string", "minLength": 1 },
+        "version":        { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+" },
+        "informationUri": { "type": "string", "format": "uri" }
+      }
+    },
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/rule" }
+    }
+  },
+  "definitions": {
+    "rule": {
+      "type": "object",
+      "required": [
+        "id", "kind", "name", "shortDescription",
+        "defaultSeverity", "type", "detectorUnit"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^SCA\\d{3}$",
+          "description": "Stable rule ID (SCA001..SCA999). Append-only - never recycle."
+        },
+        "kind": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z0-9]+$",
+          "description": "Pascal TFindingKind name without 'fk' prefix (e.g. 'MemoryLeak'). Must match KIND_META in uSCAConsts.pas."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Short human-readable rule title shown in IDEs / dashboards."
+        },
+        "shortDescription": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "One-line summary (used in SARIF tool.driver.rules[].shortDescription)."
+        },
+        "fullDescription": {
+          "type": "string",
+          "description": "Longer explanation - what triggers the rule, what the consequence is, how to fix."
+        },
+        "defaultSeverity": {
+          "type": "string",
+          "enum": ["Error", "Warning", "Hint"]
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "Bug", "Code Smell", "Vulnerability",
+            "Security Hotspot", "Code Duplication", "File Error"
+          ],
+          "description": "SonarQube-aligned category."
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true,
+          "description": "Free-form tags for filtering (e.g. 'memory', 'security', 'maintainability')."
+        },
+        "cwe": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^CWE-\\d+$" },
+          "uniqueItems": true,
+          "description": "MITRE Common Weakness Enumeration IDs (https://cwe.mitre.org/)."
+        },
+        "owasp": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true,
+          "description": "OWASP Top-10 references (e.g. 'A03:2021-Injection')."
+        },
+        "configKey": {
+          "type": "string",
+          "description": "INI section/key that tunes this rule (e.g. '[Detectors] CyclomaticMax')."
+        },
+        "detectorUnit": {
+          "type": "string",
+          "pattern": "^([uU]\\w+\\.pas|\\(\\w+\\))$",
+          "description": "Source file implementing the detector (e.g. 'uLeakDetector2.pas') or '(parser)' for non-detector findings."
+        },
+        "examples": {
+          "type": "object",
+          "required": ["bad", "good"],
+          "additionalProperties": false,
+          "properties": {
+            "bad":  { "type": "string", "minLength": 1, "description": "Anti-pattern code snippet that triggers the rule." },
+            "good": { "type": "string", "minLength": 1, "description": "Idiomatic fix snippet." }
+          }
+        }
+      }
+    }
+  }
+}

@@ -80,6 +80,7 @@ contains
   uRegExMatches in '..\StaticCodeAnalyserForm\sources\Common\uRegExMatches.pas',
   uDetectorUtils in '..\StaticCodeAnalyserForm\sources\Common\uDetectorUtils.pas',
   uCollectValues in '..\StaticCodeAnalyserForm\sources\Common\uCollectValues.pas',
+  uYamlSubsetParser in '..\StaticCodeAnalyserForm\sources\Common\uYamlSubsetParser.pas',
   // ---- Detectors ----
   uLeakDetector2 in '..\StaticCodeAnalyserForm\sources\Detectors\uLeakDetector2.pas',
   uCodeSmells2 in '..\StaticCodeAnalyserForm\sources\Detectors\uCodeSmells2.pas',
@@ -104,6 +105,7 @@ contains
   uEmptyMethod in '..\StaticCodeAnalyserForm\sources\Detectors\uEmptyMethod.pas',
   uFieldLeak in '..\StaticCodeAnalyserForm\sources\Detectors\uFieldLeak.pas',
   uDuplicateBlock in '..\StaticCodeAnalyserForm\sources\Detectors\uDuplicateBlock.pas',
-  uCustomClassDiscovery in '..\StaticCodeAnalyserForm\sources\Detectors\uCustomClassDiscovery.pas';
+  uCustomClassDiscovery in '..\StaticCodeAnalyserForm\sources\Detectors\uCustomClassDiscovery.pas',
+  uCustomRuleDetector in '..\StaticCodeAnalyserForm\sources\Detectors\uCustomRuleDetector.pas';
 
 end.

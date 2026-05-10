@@ -46,7 +46,7 @@ uses
   uLongMethod, uLongParamList, uMagicNumbers, uDuplicateString,
   uHardcodedPath, uDebugOutput, uDeepNesting,
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
-  uCyclomaticComplexity,
+  uCyclomaticComplexity, uCustomRuleDetector,
   uSuppression, uCustomClassDiscovery;
 
 type
@@ -409,6 +409,13 @@ begin
               DiscoveredStaticClasses.Add(Cls);
           end;
         end;
+
+        // Custom-Rules (aus analyser-rules.yml) NACH den built-in
+        // Detektoren - so liegen sie im Output sortierbar zusammen.
+        // No-op wenn TCustomRuleDetector.LoadFromYaml nicht aufgerufen
+        // wurde (HasRules = False).
+        if TCustomRuleDetector.HasRules then
+          TCustomRuleDetector.AnalyzeFile(FileName, Results);
 
         RunAllDetectors(Root, FileName, Results, AIncludeUsesCheck,
           procedure(const Name: string; ElapsedMs: Int64) begin

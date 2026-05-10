@@ -734,7 +734,7 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
 Großer separater Block — nichts von dem hier ist trivial, aber alles
 hängt zusammen (CLI-Mode ist die Voraussetzung für CI-Integration).
 
-- [ ] **Headless-CLI-Mode für `analyser.d12.exe`**
+- [x] **Headless-CLI-Mode für `analyser.d12.exe`** — _erledigt in v0.8.0_
   Aktuell GUI-only. Für CI-Pipelines: nicht-interaktiver Modus mit
   Exit-Code, Report-Output und Branch-Mode.
 
@@ -779,6 +779,244 @@ hängt zusammen (CLI-Mode ist die Voraussetzung für CI-Integration).
 - [ ] **GitHub-Action / GitLab-CI Beispielworkflows**
   `.github/workflows/sca.yml` und `examples/.gitlab-ci.yml` —
   copy-paste-fertig, nutzt CLI + SARIF/JUnit-Output.
+
+- [x] **Detector-Rule-Catalog (`rules.json` als Single Source of Truth)** — _erledigt in v0.8.0_
+
+  Foundation für SARIF-Export, GitHub Code-Scanning, externe Reporter
+  und Doku-Generierung. Pro Detektor ein strukturierter Eintrag mit
+  vollständiger Metadata - vorher liegt alles verstreut über
+  `uSCAConsts.KIND_META`, `uFixHint`, `uLocalization` und Detector-
+  Source-Comments.
+
+  Schema (JSON):
+  ```json
+  {
+    "rules": [
+      {
+        "id": "SCA001",
+        "kind": "MemoryLeak",
+        "name": "TObject created without try/finally",
+        "shortDescription": "Object created but never freed",
+        "fullDescription": "TObject.Create without protective try/finally...",
+        "defaultSeverity": "Error",
+        "type": "Bug",
+        "tags": ["memory", "resource-leak"],
+        "cwe": ["CWE-401"],
+        "owasp": [],
+        "configKey": "[Detectors] LeakyClasses",
+        "fixHintRef": "uFixHint.MakeMemoryLeakHint",
+        "detectorUnit": "uLeakDetector2.pas",
+        "examples": {
+          "bad":  "list := TStringList.Create; DoStuff(list); // no Free!",
+          "good": "list := TStringList.Create; try DoStuff(list); finally list.Free; end;"
+        },
+        "addedInVersion": "0.1.0",
+        "i18nKey": "rule.memoryleak.description"
+      }
+    ]
+  }
+  ```
+
+  Pro Detektor abgedeckt (24 Regeln nach v0.7.2):
+  | ID | Kind | Detector-Unit | Severity-Default |
+  |---|---|---|---|
+  | SCA001 | MemoryLeak | `uLeakDetector2.pas` | Error |
+  | SCA002 | EmptyExcept | `uCodeSmells2.pas` | Warning |
+  | SCA003 | SQLInjection | `uSQLInjection.pas` | Error |
+  | SCA004 | HardcodedSecret | `uHardcodedSecret.pas` | Error |
+  | SCA005 | FormatMismatch | `uFormatMismatch.pas` | Error |
+  | SCA006 | FileReadError | (Parser-Error) | Error |
+  | SCA007 | UnusedUses | `uUnusedUses.pas` | Hint |
+  | SCA008 | NilDeref | `uNilDeref.pas` | Warning |
+  | SCA009 | MissingFinally | `uMissingFinally.pas` | Warning |
+  | SCA010 | DivByZero | `uDivByZero.pas` | Warning |
+  | SCA011 | DeadCode | `uDeadCode.pas` | Warning |
+  | SCA012 | LongMethod | `uLongMethod.pas` | Hint |
+  | SCA013 | LongParamList | `uLongParamList.pas` | Hint |
+  | SCA014 | MagicNumber | `uMagicNumbers.pas` | Hint |
+  | SCA015 | DuplicateString | `uDuplicateString.pas` | Hint |
+  | SCA016 | HardcodedPath | `uHardcodedPath.pas` | Warning |
+  | SCA017 | DebugOutput | `uDebugOutput.pas` | Warning |
+  | SCA018 | DeepNesting | `uDeepNesting.pas` | Hint |
+  | SCA019 | TodoComment | `uTodoComment.pas` | Hint |
+  | SCA020 | EmptyMethod | `uEmptyMethod.pas` | Hint |
+  | SCA021 | DuplicateBlock | `uDuplicateBlock.pas` | Hint |
+  | SCA022 | CyclomaticComplexity | `uCyclomaticComplexity.pas` | Hint |
+  | SCA023 | FieldLeak | `uFieldLeak.pas` | Warning |
+  | SCA024 | SQLInjectionScore | `uSQLInjectionScore.pas` | (Score) |
+
+  Neue Datei: `rules/sca-rules.json` (im Repo). Validiert via JSON-
+  Schema. Generator-Tool `tools/gen-rules-md.py` erzeugt daraus
+  Doku-Pages (`docs/rules/SCA001.md`, ...). Detector-Code referenziert
+  Rule-ID konsistent (statt nur fkXxx-Enum).
+
+- [x] **SARIF v2.1.0 Export-Format** — _erledigt in v0.8.0_
+
+  GitHub Code-Scanning + Azure DevOps + Visual Studio Code lesen SARIF
+  nativ. Findings erscheinen direkt im PR (Inline-Annotations) und in
+  GitHub Security-Tab. Voraussetzung: Rule-Catalog (s.o.) damit
+  `runs[0].tool.driver.rules[]` befüllbar ist.
+
+  Aufruf: `analyser.exe --path . --branch --report-sarif sca.sarif`
+
+  Output-Schema (Auszug):
+  ```json
+  {
+    "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+    "version": "2.1.0",
+    "runs": [{
+      "tool": {
+        "driver": {
+          "name": "StaticCodeAnalyser",
+          "version": "0.7.2",
+          "informationUri": "https://github.com/nrodear/StaticCodeAnalyser",
+          "rules": [
+            { "id": "SCA001", "name": "MemoryLeak",
+              "shortDescription": { "text": "Object created without Free" },
+              "defaultConfiguration": { "level": "error" },
+              "properties": { "tags": ["memory"] } }
+          ]
+        }
+      },
+      "results": [{
+        "ruleId": "SCA001",
+        "level": "error",
+        "message": { "text": "list2 created but never freed" },
+        "locations": [{
+          "physicalLocation": {
+            "artifactLocation": { "uri": "src/MyUnit.pas" },
+            "region": { "startLine": 42 }
+          }
+        }],
+        "partialFingerprints": {
+          "primaryLocationLineHash": "<sha256 of file+line+rule>"
+        }
+      }]
+    }]
+  }
+  ```
+
+  Implementation:
+  - Datei: `Output/uExportSARIF.pas` (neu, nutzt `System.JSON`).
+  - `partialFingerprints` damit GitHub Findings über Commits hinweg
+    deduplicated (Baseline-File-aequivalent built-in in GitHub).
+  - Repo-relative Pfade (Dateipfade ggue base-dir machen, sonst greift
+    GitHub's File-Annotation nicht).
+  - Tests: `uTestExportSARIF` mit JSON-Schema-Validation gegen die
+    offizielle SARIF-2.1.0-Schema-Datei.
+
+  GitHub-Workflow-Beispiel:
+  ```yaml
+  - name: Static Code Analysis
+    run: ./analyser.exe --path . --branch --report-sarif sca.sarif
+  - uses: github/codeql-action/upload-sarif@v3
+    with:
+      sarif_file: sca.sarif
+      category: delphi-sca
+  ```
+
+- [x] **YAML-Ruleset für Custom Rules (External-Rule-Engine)** — _erledigt in v0.9.0_
+
+  Power-User-Feature: Regex- oder Pattern-basierte Custom-Rules ohne
+  Recompile des Analyzers definieren. Ergaenzt die hardcoded Detector-
+  Liste um Projekt-/Team-spezifische Konventionen.
+
+  Format: `analyser-rules.yml` im Projekt-Root oder via
+  `--custom-rules path/rules.yml`-Flag.
+
+  **Implementiert**:
+  - `Common/uYamlSubsetParser.pas` (statt geplantem `uCustomRuleParser`):
+    YAML-Subset-Parser fuer Block-Mappings, Block-Sequences, Quoting
+    (single + double mit Escapes), Line-Comments. Kein Flow-Style,
+    keine Anchors - reicht fuer Rule-Files.
+  - `Detectors/uCustomRuleDetector.pas`: Pattern-Engine mit substring/
+    regex/word Matching, Glob-basiertes file-include/file-exclude
+    (eigener Glob-zu-Regex-Konverter mit `**`-Support, weil
+    `System.Masks.MatchesMask` nur `*` kennt).
+  - `examples/analyser-rules.yml`: Vorlage mit 4 dokumentierten Beispielen.
+  - `examples/profile-strict.yml` (10 Regeln): Coding-Style-Konventionen.
+  - `examples/profile-security.yml` (11 Regeln): CWE-Refs, Web/Crypto/IO.
+  - `examples/profile-legacy-migration.yml` (12 Regeln, alle hint):
+    ADO->FireDAC, Indy->THTTPClient, alte File-API ablösen.
+  - `examples/README.md`: Profile-Uebersicht + How-To.
+  - Tests `uTestYamlSubsetParser` (13 Cases) + `uTestCustomRuleDetector`
+    (11 Cases inkl. Glob-Pattern-Edge-Cases).
+  - `TLeakFinding.RuleID` neues Feld + neuer `fkCustomRule`-Kind.
+  - SARIF-Export bevorzugt `F.RuleID` ueber Catalog-Lookup -
+    Custom-IDs (PROJ001, STRICT001, ...) erscheinen 1:1 in
+    GitHub Code-Scanning.
+  - CLI: `--custom-rules <yml>`-Flag in `uConsoleRunner`.
+  - Plugin/GUI: `[Detectors] CustomRulesFile=...` in `analyser.ini`,
+    relative Pfade werden 4-stufig aufgeloest (Absolut -> ProjectRoot
+    -> ConfigDir -> ExeDir).
+
+  **NICHT implementiert** (fuer v0.9.x):
+  - Target-Filtering (`identifier` / `comment` / `string-literal`):
+    aktuell wird jedes Pattern auf den vollen Zeileninhalt angewandt.
+    Echte Target-Filterung braucht AST-Integration, ist nicht trivial.
+    Workaround: User nutzt `pattern-type: word` fuer Identifier-Match
+    und schreibt Comment-/String-Patterns explizit (z.B. `'^//'`).
+
+  ```yaml
+  version: 1
+  rules:
+    - id: PROJ001
+      name: "kein TADOQuery erlaubt"
+      description: "Wir nutzen FireDAC - kein TADOQuery in Neucode"
+      severity: error
+      type: code-smell
+      pattern: "\\bTADOQuery\\b"
+      pattern-type: regex                # regex | substring | word
+      target: identifier                  # identifier | comment | string-literal | any
+      message: "Use TFDQuery from FireDAC instead of TADOQuery"
+      fix-hint: |
+        Replace 'TADOQuery' with 'TFDQuery' and add FireDAC.Comp.Client to uses.
+
+    - id: PROJ002
+      name: "deutsche Umlaute in Bezeichnern"
+      description: "Identifier müssen ASCII-only sein (CI-Convention)"
+      severity: warning
+      type: code-smell
+      pattern: '[a-zA-Z_]\w*[äöüÄÖÜß]\w*'
+      pattern-type: regex
+      target: identifier
+      message: "Identifier contains non-ASCII characters"
+
+    - id: PROJ003
+      name: "kein Sleep() in Production-Units"
+      severity: warning
+      type: bug
+      pattern: "Sleep("
+      pattern-type: substring
+      target: any
+      file-include:
+        - "src/production/**/*.pas"
+      file-exclude:
+        - "src/production/**/*Test*.pas"
+      message: "Sleep() blocks the thread - use TTimer or async instead"
+  ```
+
+  Engine: Python wäre overkill - lieber **integriert in den Delphi-
+  Analyzer**, parsed YAML via z.B. `mORMot YAML` oder einen schlanken
+  eigenen Parser (YAML-Subset reicht). Detector-Klasse
+  `TCustomRuleDetector.AnalyzeUnit` läuft die Regeln gegen die UnitNode.
+
+  Output identisch zu hardcoded Rules (gleiche `TLeakFinding`-Struktur,
+  gleicher SARIF-Export). Custom-Rule-IDs (`PROJ001`...) erscheinen in
+  SARIF/HTML/JSON-Output 1:1.
+
+  Datei-Inventar:
+  - `Detectors/uCustomRuleDetector.pas` (neu)
+  - `Common/uCustomRuleParser.pas` (neu, YAML-Subset-Parser)
+  - `examples/analyser-rules.yml` (Vorlage mit kommentierten Beispielen)
+  - Tests: `uTestCustomRuleDetector` mit 8-10 Cases (regex/substring/
+    word, target-Selectors, file-include/exclude, Edge-Cases).
+
+  Vorteil: Teams können in 5 Minuten eine Code-Convention durchsetzen
+  ohne den Analyzer-Code anzufassen. Pattern-basiert ist schwächer als
+  AST-basiert (False-Positive-Risiko bei Regex), reicht aber fuer
+  ~80% der Team-Conventions (Verbotene Imports, Naming-Patterns,
+  deprecated APIs).
 
 - [ ] **Pre-Commit-Hook-Script**
   `examples/pre-commit-sca.sh` (bash) und `pre-commit-sca.ps1`

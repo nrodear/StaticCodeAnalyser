@@ -1,0 +1,358 @@
+{
+  "$schema": "./sca-rules.schema.json",
+  "version": "1.0",
+  "tool": {
+    "name": "StaticCodeAnalyser",
+    "version": "0.8.0",
+    "informationUri": "https://github.com/nrodear/StaticCodeAnalyser"
+  },
+  "rules": [
+    {
+      "id": "SCA001",
+      "kind": "MemoryLeak",
+      "name": "Object created without try/finally",
+      "shortDescription": "Object created but never freed (potential memory leak)",
+      "fullDescription": "TObject.Create (or LeakyClass.Create) without a protective try/finally block leaks the instance when subsequent code raises an exception. The Free call must run regardless of how the protected block exits.",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["memory", "resource-leak"],
+      "cwe": ["CWE-401"],
+      "configKey": "[Detectors] LeakyClasses",
+      "detectorUnit": "uLeakDetector2.pas",
+      "examples": {
+        "bad":  "list := TStringList.Create;\nDoStuff(list);   // <-- exception here leaks list",
+        "good": "list := TStringList.Create;\ntry\n  DoStuff(list);\nfinally\n  list.Free;\nend;"
+      }
+    },
+    {
+      "id": "SCA002",
+      "kind": "EmptyExcept",
+      "name": "Empty except block",
+      "shortDescription": "Empty except block silently swallows every exception",
+      "fullDescription": "An except-block with no statements catches every exception including unexpected ones (EAccessViolation, EOutOfMemory). Bugs become invisible. At minimum log the exception or re-raise.",
+      "defaultSeverity": "Warning",
+      "type": "Code Smell",
+      "tags": ["error-handling"],
+      "cwe": ["CWE-390"],
+      "detectorUnit": "uCodeSmells2.pas",
+      "examples": {
+        "bad":  "try DoStuff except end;",
+        "good": "try DoStuff except on E: Exception do LogError(E.Message); end;"
+      }
+    },
+    {
+      "id": "SCA003",
+      "kind": "SQLInjection",
+      "name": "SQL string built via concatenation",
+      "shortDescription": "SQL string concatenated with '+' from user-controllable input (injection risk)",
+      "fullDescription": "Building SQL via 'WHERE x=' + user_input enables SQL injection if the input is untrusted. Use parameterized queries (Params.ParamByName(...).Value := ...) instead.",
+      "defaultSeverity": "Error",
+      "type": "Vulnerability",
+      "tags": ["sql", "injection", "security"],
+      "cwe": ["CWE-89"],
+      "owasp": ["A03:2021-Injection"],
+      "detectorUnit": "uSQLInjection.pas",
+      "examples": {
+        "bad":  "Query.SQL.Text := 'SELECT * FROM Users WHERE Name=''' + UserName + '''';",
+        "good": "Query.SQL.Text := 'SELECT * FROM Users WHERE Name=:n';\nQuery.ParamByName('n').AsString := UserName;"
+      }
+    },
+    {
+      "id": "SCA004",
+      "kind": "HardcodedSecret",
+      "name": "Hardcoded credential / API token",
+      "shortDescription": "Password / API key / token as string literal in source code",
+      "fullDescription": "Credentials in source code end up in version control, build artifacts, decompilers, and stack traces. Move secrets to environment variables, OS credential store, or encrypted configuration.",
+      "defaultSeverity": "Error",
+      "type": "Vulnerability",
+      "tags": ["credentials", "security"],
+      "cwe": ["CWE-798"],
+      "owasp": ["A07:2021-Identification-and-Authentication-Failures"],
+      "detectorUnit": "uHardcodedSecret.pas",
+      "examples": {
+        "bad":  "Password := 'admin123';",
+        "good": "Password := GetEnvironmentVariable('DB_PASSWORD');"
+      }
+    },
+    {
+      "id": "SCA005",
+      "kind": "FormatMismatch",
+      "name": "Format() placeholder count mismatch",
+      "shortDescription": "Format() / FormatUtf8() placeholder count does not match argument count",
+      "fullDescription": "Mismatched placeholders cause EConvertError at runtime. Detector handles RTL Format (%s/%d/...) and mORMot bare-% style (FormatUtf8/FormatString).",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["string-formatting"],
+      "configKey": "[Detectors] FormatFunctions",
+      "detectorUnit": "uFormatMismatch.pas",
+      "examples": {
+        "bad":  "Format('%s is %d', [Name]);   // <-- Age missing",
+        "good": "Format('%s is %d', [Name, Age]);"
+      }
+    },
+    {
+      "id": "SCA006",
+      "kind": "FileReadError",
+      "name": "File could not be read or parsed",
+      "shortDescription": "Parser/IO error - source file unreadable or syntactically broken",
+      "fullDescription": "Special-case finding (no code defect): the file could not be loaded or the lexer/parser failed. Often indicates encoding issues, includes that don't resolve, or genuine syntax errors.",
+      "defaultSeverity": "Error",
+      "type": "File Error",
+      "tags": ["parser", "io"],
+      "detectorUnit": "(parser)",
+      "examples": {
+        "bad":  "(file is not valid UTF-8 or has lexer-breaking content)",
+        "good": "(check encoding, fix syntax)"
+      }
+    },
+    {
+      "id": "SCA007",
+      "kind": "UnusedUses",
+      "name": "Unused unit in uses clause",
+      "shortDescription": "Uses-entry possibly unused (no identifier from it referenced)",
+      "fullDescription": "Heuristic: scans for any identifier from the used unit. False positives possible for units that only register classes / initialize global state via initialization sections.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["dead-code", "uses-cleanup"],
+      "detectorUnit": "uUnusedUses.pas",
+      "examples": {
+        "bad":  "uses ..., MyUnusedHelper, ...;",
+        "good": "(remove if truly unused; otherwise add a comment why it stays)"
+      }
+    },
+    {
+      "id": "SCA008",
+      "kind": "NilDeref",
+      "name": "Possible nil-dereference",
+      "shortDescription": "Access to a variable that may be nil at this point",
+      "fullDescription": "Variable was assigned a value that could be nil (e.g. Find...-method returning nil) and is dereferenced without prior nil-check. Crashes with EAccessViolation at runtime.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["nil-safety"],
+      "cwe": ["CWE-476"],
+      "detectorUnit": "uNilDeref.pas",
+      "examples": {
+        "bad":  "obj := FindObject(id);\nobj.DoStuff;   // <-- AV if FindObject returns nil",
+        "good": "obj := FindObject(id);\nif Assigned(obj) then obj.DoStuff;"
+      }
+    },
+    {
+      "id": "SCA009",
+      "kind": "MissingFinally",
+      "name": "Object created without protective try/finally",
+      "shortDescription": ".Create call without surrounding try/finally - leak risk on exception",
+      "fullDescription": "Similar to MemoryLeak but checked structurally: any .Create followed by code without an enclosing try/finally is flagged regardless of whether Free is called eventually.",
+      "defaultSeverity": "Warning",
+      "type": "Code Smell",
+      "tags": ["memory", "exception-safety"],
+      "detectorUnit": "uMissingFinally.pas",
+      "examples": {
+        "bad":  "obj := TFoo.Create;\nobj.DoStuff;\nobj.Free;",
+        "good": "obj := TFoo.Create;\ntry obj.DoStuff finally obj.Free end;"
+      }
+    },
+    {
+      "id": "SCA010",
+      "kind": "DivByZero",
+      "name": "Possible division by zero",
+      "shortDescription": "Division by a variable / expression that may be zero",
+      "fullDescription": "Right-hand side of div, mod, or / is a variable without prior guard against zero. Integer division crashes with EDivByZero, float division silently produces Inf/NaN.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["arithmetic"],
+      "cwe": ["CWE-369"],
+      "detectorUnit": "uDivByZero.pas",
+      "examples": {
+        "bad":  "result := total / count;",
+        "good": "if count <> 0 then result := total / count;"
+      }
+    },
+    {
+      "id": "SCA011",
+      "kind": "DeadCode",
+      "name": "Code after Exit/Raise is unreachable",
+      "shortDescription": "Statement after Exit, raise, or Halt is dead code",
+      "fullDescription": "Anything after an unconditional terminator (Exit, raise, Halt, Continue, Break) in the same block is never executed. Usually leftover code from refactoring.",
+      "defaultSeverity": "Warning",
+      "type": "Code Smell",
+      "tags": ["dead-code"],
+      "cwe": ["CWE-561"],
+      "detectorUnit": "uDeadCode.pas",
+      "examples": {
+        "bad":  "Exit;\nWriteLn('never reached');",
+        "good": "(remove the unreachable line)"
+      }
+    },
+    {
+      "id": "SCA012",
+      "kind": "LongMethod",
+      "name": "Method exceeds line-count threshold",
+      "shortDescription": "Method longer than configured maximum (default 80 lines)",
+      "fullDescription": "Long methods are hard to test and understand. Threshold configurable; consider extracting helper methods or splitting responsibilities.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["maintainability", "complexity"],
+      "configKey": "[Detectors] LongMethodMax",
+      "detectorUnit": "uLongMethod.pas",
+      "examples": {
+        "bad":  "(150-line procedure doing parsing + validation + persistence)",
+        "good": "(extract into ParseInput, Validate, Persist helper methods)"
+      }
+    },
+    {
+      "id": "SCA013",
+      "kind": "LongParamList",
+      "name": "Too many parameters",
+      "shortDescription": "Method has more parameters than configured maximum (default 7)",
+      "fullDescription": "High parameter counts indicate the method is doing too much. Consider grouping related parameters into a record or class.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["api-design"],
+      "configKey": "[Detectors] LongParamMax",
+      "detectorUnit": "uLongParamList.pas",
+      "examples": {
+        "bad":  "procedure SaveOrder(id, customer, address, city, zip, country, total, tax, shipping: ...);",
+        "good": "procedure SaveOrder(const Order: TOrder);"
+      }
+    },
+    {
+      "id": "SCA014",
+      "kind": "MagicNumber",
+      "name": "Numeric literal without named constant",
+      "shortDescription": "Numeric literal in expression - extract to a named constant",
+      "fullDescription": "Numeric literals in business logic are unexplained. Use named constants for readability and single-point-of-change.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["maintainability"],
+      "detectorUnit": "uMagicNumbers.pas",
+      "examples": {
+        "bad":  "if RetryCount > 3 then ...",
+        "good": "const MAX_RETRIES = 3;\nif RetryCount > MAX_RETRIES then ..."
+      }
+    },
+    {
+      "id": "SCA015",
+      "kind": "DuplicateString",
+      "name": "String literal repeated across multiple sites",
+      "shortDescription": "Same string literal appears N+ times - extract to constant",
+      "fullDescription": "Repeated strings are change-coupling hazards (typo in one place silently diverges from the others). Extract to a const, especially for user-facing messages.",
+      "defaultSeverity": "Hint",
+      "type": "Code Duplication",
+      "tags": ["maintainability"],
+      "configKey": "[Detectors] DuplicateStringMin",
+      "detectorUnit": "uDuplicateString.pas",
+      "examples": {
+        "bad":  "ShowMessage('File not found');\n... \nLogError('File not found');",
+        "good": "const MSG_FILE_NOT_FOUND = 'File not found';\nShowMessage(MSG_FILE_NOT_FOUND);"
+      }
+    },
+    {
+      "id": "SCA016",
+      "kind": "HardcodedPath",
+      "name": "Filesystem path as string literal",
+      "shortDescription": "Hardcoded C:\\ / UNC / Linux path in source",
+      "fullDescription": "Hardcoded paths break portability and CI deployment. Use config files, environment variables, or platform-aware path helpers (TPath.Combine, etc).",
+      "defaultSeverity": "Warning",
+      "type": "Security Hotspot",
+      "tags": ["portability", "configuration"],
+      "detectorUnit": "uHardcodedPath.pas",
+      "examples": {
+        "bad":  "LogFile := 'C:\\Logs\\app.log';",
+        "good": "LogFile := TPath.Combine(GetEnvironmentVariable('LOGDIR'), 'app.log');"
+      }
+    },
+    {
+      "id": "SCA017",
+      "kind": "DebugOutput",
+      "name": "WriteLn/ShowMessage in production code",
+      "shortDescription": "Debug output statement found in production unit",
+      "fullDescription": "WriteLn / ShowMessage / OutputDebugString usually indicate forgotten debug code. Use a proper logging framework with configurable levels.",
+      "defaultSeverity": "Warning",
+      "type": "Code Smell",
+      "tags": ["debug-code"],
+      "detectorUnit": "uDebugOutput.pas",
+      "examples": {
+        "bad":  "WriteLn('here #3');",
+        "good": "Logger.Debug('reached step 3');"
+      }
+    },
+    {
+      "id": "SCA018",
+      "kind": "DeepNesting",
+      "name": "Block nesting exceeds threshold",
+      "shortDescription": "Nested if/for/while depth higher than configured maximum (default 4)",
+      "fullDescription": "Deep nesting hurts readability and indicates the method is doing too much. Use guard clauses (early Exit) or extract inner blocks into helper methods.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["complexity"],
+      "configKey": "[Detectors] DeepNestingMax",
+      "detectorUnit": "uDeepNesting.pas",
+      "examples": {
+        "bad":  "if a then\n  if b then\n    if c then\n      if d then DoStuff;",
+        "good": "if not a then Exit;\nif not b then Exit;\nif not c then Exit;\nif d then DoStuff;"
+      }
+    },
+    {
+      "id": "SCA019",
+      "kind": "TodoComment",
+      "name": "TODO/FIXME marker in comment",
+      "shortDescription": "Open TODO / FIXME / HACK / XXX marker - resolve before release",
+      "fullDescription": "Tracks open work items embedded in source. CI can enforce zero TODOs in release branches.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["work-tracking"],
+      "detectorUnit": "uTodoComment.pas",
+      "examples": {
+        "bad":  "// TODO: handle the case where input is empty",
+        "good": "(implement the case OR file an issue and reference it)"
+      }
+    },
+    {
+      "id": "SCA020",
+      "kind": "EmptyMethod",
+      "name": "Empty method body",
+      "shortDescription": "Method body has no statements",
+      "fullDescription": "Empty method may indicate a forgotten implementation, a TODO that was never followed up, or an interface stub. Make intent explicit (assert, exception, or comment).",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["maintainability"],
+      "detectorUnit": "uEmptyMethod.pas",
+      "examples": {
+        "bad":  "procedure DoStuff;\nbegin\nend;",
+        "good": "procedure DoStuff;\nbegin\n  raise ENotImplemented.Create('...');\nend;"
+      }
+    },
+    {
+      "id": "SCA021",
+      "kind": "DuplicateBlock",
+      "name": "Duplicated code block",
+      "shortDescription": "Multiple identical code blocks (>= configured minimum lines)",
+      "fullDescription": "Detects copy-paste blocks with at least N consecutive identical lines. Extract into a helper method or shared constant.",
+      "defaultSeverity": "Hint",
+      "type": "Code Duplication",
+      "tags": ["dry"],
+      "configKey": "[Detectors] DuplicateBlockMinLines",
+      "detectorUnit": "uDuplicateBlock.pas",
+      "examples": {
+        "bad":  "(20 lines of validation code copy-pasted across 3 methods)",
+        "good": "(extract into a single ValidateXxx procedure)"
+      }
+    },
+    {
+      "id": "SCA022",
+      "kind": "CyclomaticComplexity",
+      "name": "Method exceeds McCabe complexity threshold",
+      "shortDescription": "Cyclomatic Complexity > configured threshold (default 10)",
+      "fullDescription": "McCabe complexity counts decision points (1 base + if + case-arm + for/while/repeat + on-handler + and/or/xor). High complexity is hard to test and understand.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["complexity", "maintainability", "metrics"],
+      "configKey": "[Detectors] CyclomaticMax",
+      "detectorUnit": "uCyclomaticComplexity.pas",
+      "examples": {
+        "bad":  "(method with 15+ if/case/for branches in one body)",
+        "good": "(extract decision groups into named helper methods)"
+      }
+    }
+  ]
+}

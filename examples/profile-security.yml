@@ -1,0 +1,112 @@
+# StaticCodeAnalyser - Profil "Security"
+#
+# Ergaenzt die eingebauten Security-Detektoren (SQLInjection,
+# HardcodedSecret, HardcodedPath) um typische Web-/IO-/Crypto-Anti-
+# Patterns die der AST-basierte Engine nicht abdeckt.
+#
+# Verwendung:
+#   - In analyser.ini:  [Detectors] CustomRulesFile=profile-security.yml
+#   - Oder additiv mit profile-strict: zwei Files mergen oder eines davon
+#     auswaehlen.
+#
+# Regeln referenzieren CWE/OWASP-IDs in den Messages, damit der Befund-
+# Text sofort den Kontext fuer Code-Reviewer hat.
+
+version: 1
+rules:
+
+  # --- Command-Injection --------------------------------------------
+  - id: SEC001
+    name: "ShellExecute mit Konkatenation"
+    severity: error
+    type: vulnerability
+    pattern: "ShellExecute[^(]*\\([^)]*\\+"
+    pattern-type: regex
+    message: "CWE-78: Command-Injection moeglich. Argumente einzeln uebergeben oder mit ParamStr-Whitelist sanitizen"
+
+  - id: SEC002
+    name: "WinExec / CreateProcess mit Konkatenation"
+    severity: error
+    type: vulnerability
+    pattern: "(WinExec|CreateProcess)[^(]*\\([^)]*\\+"
+    pattern-type: regex
+    message: "CWE-78: Command-Injection-Risiko bei dynamisch zusammengesetzter Command-Line"
+
+  # --- Insecure Web ------------------------------------------------
+  - id: SEC003
+    name: "Hardcoded http:// statt https://"
+    severity: warning
+    type: security-hotspot
+    pattern: "['\"]http://[^l].*['\"]"
+    pattern-type: regex
+    message: "Plain-HTTP transportiert Credentials/Daten unverschluesselt. https:// nutzen oder TLS upgraden"
+    file-exclude:
+      - "**/*Test*.pas"
+      - "**/*Mock*.pas"
+
+  - id: SEC004
+    name: "TIdSSLIOHandler ohne Verify"
+    severity: warning
+    type: security-hotspot
+    pattern: "VerifyMode\\s*:=\\s*\\[\\]"
+    pattern-type: regex
+    message: "CWE-295: SSL-Verify deaktiviert -> Man-in-the-Middle moeglich. VerifyMode := [sslvrfPeer] setzen"
+
+  - id: SEC005
+    name: "TNetHTTPClient ohne ValidateServerCertificate-Override"
+    severity: hint
+    type: security-hotspot
+    pattern: "OnValidateServerCertificate\\s*:=\\s*nil"
+    pattern-type: regex
+    message: "Cert-Validation explizit auf nil gesetzt - im Produktionsbetrieb gefaehrlich"
+
+  # --- Crypto-Anti-Patterns ----------------------------------------
+  - id: SEC006
+    name: "MD5/SHA1 fuer Crypto"
+    severity: warning
+    type: vulnerability
+    pattern: "\\b(THashMD5|THashSHA1|MD5|SHA1)\\b"
+    pattern-type: regex
+    message: "CWE-327: MD5/SHA1 sind kryptografisch broken. Fuer Hashing/Signaturen SHA-256+ nutzen (THashSHA2)"
+
+  - id: SEC007
+    name: "Random/Randomize fuer Security-Tokens"
+    severity: warning
+    type: vulnerability
+    pattern: "\\b(Token|Secret|ApiKey|Password)\\s*:?=.*\\bRandom\\b"
+    pattern-type: regex
+    message: "CWE-338: Random/Randomize ist nicht kryptografisch sicher. TCryptographicRandom oder TRandom32 nutzen"
+
+  # --- Connection-String-Defaults ----------------------------------
+  - id: SEC008
+    name: "Default-DB-Password 'admin'/'password'/'sa'"
+    severity: error
+    type: vulnerability
+    pattern: "(Password|PWD)\\s*=\\s*['\"](admin|password|sa|root|test|123)['\"]"
+    pattern-type: regex
+    message: "CWE-521: Triviales Default-Password im Code. Aus ENV/Vault holen"
+
+  - id: SEC009
+    name: "ConnectionString mit Klar-Password"
+    severity: warning
+    type: security-hotspot
+    pattern: "(ConnectionString|ConnectStr)\\s*:?=\\s*['\"][^'\"]*Password\\s*="
+    pattern-type: regex
+    message: "Password im ConnectionString-Literal. Connection-Settings ausserhalb Code halten (INI/Vault)"
+
+  # --- File-System --------------------------------------------------
+  - id: SEC010
+    name: "TFileStream ohne fmShareDeny..."
+    severity: hint
+    type: security-hotspot
+    pattern: "TFileStream\\.Create\\([^,]*,\\s*fm(OpenRead|OpenWrite|Create)\\s*\\)"
+    pattern-type: regex
+    message: "TFileStream ohne Share-Mode - andere Prozesse koennen lesen/schreiben. fmShareExclusive oder fmShareDenyWrite ergaenzen"
+
+  - id: SEC011
+    name: "Pfad mit Userinput konkateniert (Path-Traversal)"
+    severity: warning
+    type: vulnerability
+    pattern: "(LoadFromFile|SaveToFile|TFile\\.(Open|Read|Write))\\s*\\([^)]*\\+"
+    pattern-type: regex
+    message: "CWE-22: Path-Traversal moeglich wenn der konkatenierte Teil Userinput ist. TPath.Combine + Whitelist"
