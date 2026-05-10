@@ -1180,7 +1180,7 @@ hängt zusammen (CLI-Mode ist die Voraussetzung für CI-Integration).
   neue `TFindingKind`-Werte + `KIND_META`-Einträge, Severity pro
   Detektor wie heute.
 
-  **Phase 1 — MVP (Single-Unit, Text-DFM, 5 Detektoren):**
+  **Phase 1 — MVP (Single-Unit, Text-DFM, 8 Detektoren):**
   - [ ] **DFM-Lexer + -Parser** — `Parsing/uDfmLexer.pas` +
     `Parsing/uDfmParser.pas`. Tokens: `object`, `inherited`, `end`, `=`,
     `<`, `>`, `(`, `)`, Identifier, Literal, Set `[…]`, Binär-Blob
@@ -1206,8 +1206,14 @@ hängt zusammen (CLI-Mode ist die Voraussetzung für CI-Integration).
     Log-Hinweis, kein Befund.
   - [ ] **Neue `TFindingKind`-Werte** in `Common/uSCAConsts.pas`:
     `fkDfmDeadEvent`, `fkDfmOrphanHandler`, `fkDfmSchemaMismatch`,
-    `fkDfmHardcodedCaption`, `fkDfmDefaultName`. Mapping in
-    `KIND_META`: erste drei → `ftBug`, letzte zwei → `ftCodeSmell`.
+    `fkDfmHardcodedCaption`, `fkDfmDefaultName`, `fkDfmHardcodedDbCreds`,
+    `fkDfmDuplicateBinding`, `fkDfmEmptyBoundEvent`. Mapping in
+    `KIND_META`:
+      - `fkDfmDeadEvent`, `fkDfmSchemaMismatch`, `fkDfmDuplicateBinding`
+        → `ftBug`
+      - `fkDfmHardcodedDbCreds` → `ftVulnerability`
+      - `fkDfmOrphanHandler`, `fkDfmHardcodedCaption`,
+        `fkDfmDefaultName`, `fkDfmEmptyBoundEvent` → `ftCodeSmell`
     FixHint-Templates in `Output/uFixHint.pas` + Lokalisierung in
     `UI/uLocalization.pas`.
   - [ ] **Detektor: Toter Event-Handler im DFM**
@@ -1230,6 +1236,27 @@ hängt zusammen (CLI-Mode ist die Voraussetzung für CI-Integration).
     (`fkDfmDefaultName`, `lsHint`) — `Button1`, `Edit3`, `Panel2`
     (Regex `^[A-Z][a-z]+\d+$`). Refactoring-Killer; Whitelist
     konfigurierbar.
+  - [ ] **Detektor: Hardcoded DB-Credentials im DFM** _(DB-aware)_
+    (`fkDfmHardcodedDbCreds`, `lsError`, `ftVulnerability`) —
+    Klartext-Credentials in DFM-Properties: `Password=…`,
+    `ConnectionString` mit `User ID=…;Password=…`, `Connected=True`
+    per Design, `LoginPrompt=False` mit hinterlegten Login-Daten.
+    Greift auf `TADOConnection`/`TFDConnection`/`TIBDatabase`/
+    `TSQLConnection` und ähnliche; Klassen-Liste in `analyser.ini`
+    (`[Components] CredentialBearers=…`) konfigurierbar.
+  - [ ] **Detektor: Doppelt gebundene DB-Felder** _(DB-aware)_
+    (`fkDfmDuplicateBinding`, `lsWarning`, `ftBug`) — zwei oder
+    mehr Komponenten mit identischem `DataSource`+`DataField` →
+    Update-Konflikt bei `Post`. Trivial im `TComponentGraph` per
+    Hash-Map `(DataSource,DataField) → [Components]`. False-Positive-
+    Ausnahme: `TDBText` (rein lesend) standardmäßig ignoriert,
+    konfigurierbar.
+  - [ ] **Detektor: Leerer gebundener Event-Handler** _(Cross-Check)_
+    (`fkDfmEmptyBoundEvent`, `lsHint`, `ftCodeSmell`) — DFM-Event-
+    Bindung zeigt auf existierende, aber **leere** Methode. Anders
+    als der globale `fkEmptyMethod`-Pascal-Detektor: hier ist die
+    Methode bewusst als Handler verdrahtet, also höchstwahrscheinlich
+    „vergessen zu implementieren" statt absichtlich leer.
   - [ ] **IDE-Anzeige** — Befunde mit DFM-Quelle markieren die `.pas`
     auf der Zeile der Form-Klasse oder bei
     `DeadEvent`/`OrphanHandler` direkt am Methoden-Stub. Phase 1
@@ -1273,6 +1300,22 @@ hängt zusammen (CLI-Mode ist die Voraussetzung für CI-Integration).
   - [ ] **Detektor: DB-Komponente in UI-Form**
     (`fkDfmDbInUiForm`, `lsHint`) — `TADOConnection`/`TFDConnection`/
     `TQuery` direkt auf einer `TForm` statt im DataModule.
+  - [ ] **Detektor: Zirkuläre Datenquellen-Verkettung** _(DB-aware)_
+    (`fkDfmCircularDataSource`, `lsError`, `ftBug`) — Zyklus in der
+    Kette `DataSource.DataSet`/`DataSet.MasterSource` (direkt:
+    `DS1.DataSet=Q1` + `Q1.MasterSource=DS1`; transitiv über mehrere
+    Hops). Endlos-Loop bei `BeforeOpen`/Master-Detail-Refresh.
+    Algorithmus: Tarjan/DFS auf dem Edge-Set, melde jeden gefundenen
+    Strongly-Connected-Component mit > 1 Knoten.
+  - [ ] **Detektor: SQL-Injection durch VCL-Komponenten** _(DB-aware)_
+    (`fkDfmSqlFromUserInput`, `lsError`, `ftVulnerability`) — Pascal-
+    Code konkateniert UI-Komponenten-Werte in eine DB-Query-Property:
+    `Q1.SQL.Text := 'SELECT * FROM x WHERE name='''+Edit1.Text+''''`.
+    Heutiger Pascal-`fkSQLInjection` sieht nur die String-Konkat,
+    nicht den Komponenten-Kontext. Mit Graph-Wissen: Quelle ist
+    UI-Input-Komponente (Edit/Memo/ComboBox), Ziel ist DB-Query-
+    Property (`SQL`, `CommandText`, `Macros`). Höhere Confidence
+    als der reine Pascal-Detektor.
   - [ ] **Property-Typisierung** — Set-/Enum-Werte typisiert statt
     Strings. Voraussetzung für robustere Property-basierte Detektoren.
   - [ ] **Live-Refresh im IDE-Plugin** — DFM-Editor-Save-Hook
@@ -1282,6 +1325,52 @@ hängt zusammen (CLI-Mode ist die Voraussetzung für CI-Integration).
     standalone OK, im IDE-Plugin aber Borland-Service-abhängig.
     Eigener Reader macht das Modul portabel und liefert exakte
     Component-Positionen auch ohne Roundtrip.
+
+  **Phase 3 — DB-aware Field-Analyse (TField-Subgraph):**
+
+  Voraussetzung: `TComponentGraph` muss `TField`-Subkomponenten unter
+  `TDataSet`-Knoten als typisierte Children halten (`object Q1ID:
+  TIntegerField FieldName='ID' Required=True end`). Property-Lookup
+  für `FieldName`, `DataType`, `Required`, `Size` typisiert (Bool/Enum/
+  Int statt String). Baut auf der Phase-2-Property-Typisierung auf.
+
+  - [ ] **`TField`-Subgraph im ComponentGraph** — Erweiterung von
+    `TComponentNode` um `Fields: TList<TFieldNode>` für DataSet-
+    Knoten. `TFieldNode { Name; FieldName; DataType: TFieldDataType;
+    Required: Boolean; Size: Integer; LineCol }`. Aufgesammelt
+    beim DFM-Parsen, wenn ein Child-`object` von einer DataSet-Klasse
+    abgeleitet ist (Whitelist `TADOQuery`, `TFDQuery`, `TIBQuery`,
+    `TClientDataSet`, `TSQLDataSet`, …).
+  - [ ] **Bindung Field → UI-Komponente** — Cross-Index
+    `(DataSource→DataSet, DataField) → TFieldNode`, damit Detektoren
+    auf einen Blick wissen, welche UI-Komponenten auf welches Field
+    binden (und welche nicht).
+  - [ ] **Detektor: Unsichtbare Pflichtfelder**
+    (`fkDfmRequiredFieldNotVisible`, `lsWarning`, `ftBug`) —
+    `TField.Required=True`, aber das einzige bindende UI-Control hat
+    `Visible=False` oder ist nicht auf einem sichtbaren Parent
+    (`TTabSheet` mit `TabVisible=False`, geblendeter `TPanel`).
+    User kann das Pflichtfeld nicht ausfüllen → Post-Fehler zur
+    Laufzeit.
+  - [ ] **Detektor: Pflichtfeld ohne UI-Bindung**
+    (`fkDfmRequiredFieldUnbound`, `lsWarning`, `ftBug`) —
+    `TField.Required=True`, aber keine UI-Komponente bindet
+    `(DataSource→DataSet, DataField=Field.FieldName)`. Variante des
+    obigen, aber für komplett fehlende Bindung statt unsichtbare.
+  - [ ] **Detektor: Falscher Komponententyp für Datentyp**
+    (`fkDfmFieldTypeMismatch`, `lsHint`, `ftCodeSmell`) —
+    UI-Komponenten-Klasse passt nicht zum `TField.DataType`. Mapping-
+    Tabelle als Default (überschreibbar via `analyser.ini`):
+
+    | DataType | erlaubt | Smell wenn |
+    |---|---|---|
+    | `ftBoolean` | `TDBCheckBox` | `TDBEdit`, `TDBComboBox` |
+    | `ftBlob`, `ftMemo` | `TDBMemo`, `TDBImage`, `TDBRichEdit` | `TDBEdit`, `TDBText` |
+    | `ftDate`, `ftDateTime` | `TDBDateTimePicker`, spezialisierte Controls | `TDBEdit` (FP-anfällig) |
+    | `ftInteger`, `ftFloat` | `TDBEdit` mit Numeric-Maske, `TDBNumberEdit` | `TDBCheckBox`, `TDBMemo` |
+
+    Konservativ defaulten — viele False Positives sonst, da generische
+    `TDBEdit` historisch für alles benutzt wird.
 
 ---
 
