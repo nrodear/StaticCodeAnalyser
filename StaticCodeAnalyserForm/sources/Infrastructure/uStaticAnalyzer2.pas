@@ -47,6 +47,7 @@ uses
   uHardcodedPath, uDebugOutput, uDeepNesting,
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
   uCyclomaticComplexity, uCustomRuleDetector,
+  uDfmAnalysisRunner, uDfmRepoIndex,
   uSuppression, uCustomClassDiscovery;
 
 type
@@ -104,6 +105,11 @@ begin
   Add('FieldLeak',       procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TFieldLeakDetector.AnalyzeUnit(R, F, L); end);
   Add('DuplicateBlock',  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDuplicateBlockDetector.AnalyzeUnit(R, F, L); end);
   Add('CyclomaticComplexity', procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TCyclomaticComplexityDetector.AnalyzeUnit(R, F, L); end);
+  // DFM-basierte Analyse: ignoriert den Pascal-AST und sucht zur uebergebenen
+  // .pas die zugehoerige .dfm. Adapter-Pattern, damit kein zweiter Loop und
+  // keine Pipeline-Aenderung notwendig ist. Bei fehlender .dfm ist der Lauf
+  // ein No-Op (siehe TDfmAnalysisRunner.AnalyzePasFile).
+  Add('DfmAnalysis',     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDfmAnalysisRunner.AnalyzePasFile(F, L); end);
 
   for i := 0 to High(Detectors) do
   begin
@@ -268,6 +274,17 @@ begin
               + ' (' + IntToStr(FileList.Count) + ' Dateien) ===');
     except
       LogStream := nil;
+    end;
+
+    // Repo-weiten Index fuer Cross-Unit-Detektoren einmal pro Scan
+    // aufbauen. Wenn das Build crasht (defekte .pas), schluckt der
+    // Index das selbst - der Hauptanalyse-Pfad laeuft auch ohne Index
+    // weiter, Cross-Unit-Detektoren schweigen dann mangels Daten.
+    gDfmRepoIndex := TDfmRepoIndex.Create;
+    try
+      gDfmRepoIndex.Build(FileList);
+    except
+      FreeAndNil(gDfmRepoIndex);
     end;
 
     Parser := TParser2.Create;
@@ -457,6 +474,10 @@ begin
     if Assigned(LogStream) then
       FreeAndNil(LogStream);
     Parser.Free;
+    // Repo-Index nach dem Scan wieder freigeben - Cross-Unit-Detektoren
+    // ausserhalb dieses Scans sollen nicht versehentlich stale Daten sehen.
+    if Assigned(gDfmRepoIndex) then
+      FreeAndNil(gDfmRepoIndex);
   end;
 
   // Suppression-Kommentare auswerten und Befunde filtern
