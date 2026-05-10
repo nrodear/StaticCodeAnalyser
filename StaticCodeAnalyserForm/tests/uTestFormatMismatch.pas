@@ -39,6 +39,28 @@ type
     [Test] procedure Format_AssignmentWithoutDot_ReportsError;
   end;
 
+  // ---- Bare-Style (mORMot FormatUtf8/FormatString) -----------------------------------
+  // Diese Funktionen nutzen '%' allein als Platzhalter (kein Type-Letter).
+  // Detektor muss die Counting-Strategie pro Funktionsname umschalten.
+  [TestFixture]
+  TTestFormatMismatchBareStyle = class
+  public
+    [Test] procedure FormatUtf8_TwoBarePercents_TwoArgs_NoFinding;
+    [Test] procedure FormatUtf8_OneBarePercent_TwoArgs_ReportsError;
+    [Test] procedure FormatString_BarePercentSeparator_NoFinding;
+    // mORMot's TFormatUtf8.Parse macht KEIN '%%'-Escape - jedes '%'
+    // konsumiert ein Argument. '%%' = zwei aufeinanderfolgende Args.
+    [Test] procedure FormatUtf8_DoublePercent_ConsumesTwoArgs;
+    // Standard-Format() bleibt unveraendert: '%_%' ist KEIN gueltiger
+    // Spezifier (kein Type-Letter), zaehlt als 1 Platzhalter -> Mismatch.
+    [Test] procedure StandardFormat_PercentUnderscore_StillReportsMismatch;
+    // String-Literal-Konkatenation: 'a' + 'b' wird zusammengefuehrt bevor
+    // gezaehlt wird. Ohne den Merge wuerde nur 'a' analysiert -> False
+    // Positive (typisch fuer mehrzeilige SQL-Strings).
+    [Test] procedure FormatUtf8_ConcatenatedLiteral_AllPlaceholdersCounted;
+    [Test] procedure FormatUtf8_ConcatenatedLiteral_MismatchAcrossSplit_ReportsError;
+  end;
+
 implementation
 
 { ---- FormatMismatch ---- }
@@ -248,6 +270,148 @@ begin
   try
     Assert.IsTrue(TFindingHelper.Count(F, fkFormatMismatch) >= 1,
       'Format() direkt nach := muss als Mismatch erkannt werden');
+  finally F.Free; end;
+end;
+
+// =============================================================================
+// Bare-Style (mORMot FormatUtf8/FormatString)
+// =============================================================================
+
+procedure TTestFormatMismatchBareStyle.FormatUtf8_TwoBarePercents_TwoArgs_NoFinding;
+// Real-world Pattern aus mORMot: '%_%' = 2 Platzhalter, durch literales '_'
+// getrennt. Mit Standard-Format()-Counting waere '%' ohne Type-Letter
+// uebersprungen worden -> 1 Platzhalter -> False-Positive.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(name: string);'#13#10+
+  'var s: string;'#13#10+
+  'begin'#13#10+
+  '  s := FormatUtf8(''%_%'', [NowUtc, name]);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual(0, TFindingHelper.Count(F, fkFormatMismatch),
+      'FormatUtf8 Bare-%: 2 Platzhalter, 2 Argumente - kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchBareStyle.FormatUtf8_OneBarePercent_TwoArgs_ReportsError;
+// Echter Mismatch: 1 Bare-% vs 2 Argumente.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(a, b: string);'#13#10+
+  'var s: string;'#13#10+
+  'begin'#13#10+
+  '  s := FormatUtf8(''only %'', [a, b]);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual(1, TFindingHelper.Count(F, fkFormatMismatch),
+      'FormatUtf8 Bare-%: 1 Platzhalter, 2 Argumente - Error');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchBareStyle.FormatString_BarePercentSeparator_NoFinding;
+// FormatString akzeptiert dasselbe Bare-%-Pattern.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(a, b: string);'#13#10+
+  'var s: string;'#13#10+
+  'begin'#13#10+
+  '  s := FormatString(''% + %'', [a, b]);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual(0, TFindingHelper.Count(F, fkFormatMismatch),
+      'FormatString Bare-%: 2 Platzhalter, 2 Argumente - kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchBareStyle.FormatUtf8_DoublePercent_ConsumesTwoArgs;
+// mORMot's TFormatUtf8.Parse macht KEIN '%%'-Escape: jedes '%' konsumiert
+// das naechste Argument. '%%' = 2 Platzhalter, nicht 1 Escape.
+// Real-world Pattern aus mORMot: FormatUtf8('%%>=:(%):...', [Where, FieldName, ...])
+// haengt Where und FieldName ohne Trenner aneinander.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(prev, field: string);'#13#10+
+  'var s: string;'#13#10+
+  'begin'#13#10+
+  '  s := FormatUtf8(''%%>='', [prev, field]);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual(0, TFindingHelper.Count(F, fkFormatMismatch),
+      'mORMot: %% = 2 Platzhalter, 2 Argumente - kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchBareStyle.StandardFormat_PercentUnderscore_StillReportsMismatch;
+// Wichtige Nicht-Regression: Standard-Format() darf NICHT als Bare-Style
+// behandelt werden. '%_%' im normalen Format() = 1 unvollstaendiger
+// Spezifier (verschluckt das _ und das nachfolgende %), 0 oder 1 Platzhalter
+// vs 2 Argumente -> Mismatch erwartet.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(a, b: string);'#13#10+
+  'var s: string;'#13#10+
+  'begin'#13#10+
+  '  s := Format(''%_%'', [a, b]);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkFormatMismatch) >= 1,
+      'Standard-Format() bleibt streng - %_% ohne Type-Letter ist Mismatch');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchBareStyle.FormatUtf8_ConcatenatedLiteral_AllPlaceholdersCounted;
+// Real-world Pattern aus mORMot-Demos: SQL-String aufgeteilt ueber mehrere
+// Zeilen via 'SELECT...' + 'WHERE %=...'. Beide Teile muessen zusammen-
+// gefuehrt werden bevor Platzhalter gezaehlt werden.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(id: Integer);'#13#10+
+  'var s: string;'#13#10+
+  'begin'#13#10+
+  '  s := FormatUtf8(''SELECT * FROM Customer '' +'#13#10+
+  '         ''WHERE Id=%'', [id]);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual(0, TFindingHelper.Count(F, fkFormatMismatch),
+      'String-Konkatenation: 1 Bare-% im 2. Literal-Teil, 1 Argument - kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchBareStyle.FormatUtf8_ConcatenatedLiteral_MismatchAcrossSplit_ReportsError;
+// Detector muss auch echte Mismatches in zusammengesetzten Literalen finden.
+// 'a%' + '%b' = 2 Platzhalter, 1 Argument -> Befund.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(x: string);'#13#10+
+  'var s: string;'#13#10+
+  'begin'#13#10+
+  '  s := FormatUtf8(''SELECT % '' + ''WHERE %=1'', [x]);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual(1, TFindingHelper.Count(F, fkFormatMismatch),
+      'Konkatenation mit echtem Mismatch: 2 Platzhalter, 1 Argument - Befund');
   finally F.Free; end;
 end;
 

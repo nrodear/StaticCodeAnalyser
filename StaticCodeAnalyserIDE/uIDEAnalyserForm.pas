@@ -66,9 +66,16 @@ type
     // Toolbar-Controls die im gedockten/schmalen Modus ausgeblendet werden -
     // ihre Aktionen bleiben ueber das Hamburger-Menu erreichbar (FHamburgerMenu).
     FBtnRepo, FBtnIgnore                           : TButton;
+    // Im NARROW/MEDIUM-Mode hidden, FULL-only - via Hamburger-Menu erreichbar.
+    FBtnExport                                     : TButton;
     FBtnHamburger                                  : TButton;
     FHamburgerMenu                                 : TPopupMenu;
-    FMICancel                                      : TMenuItem;
+    // Hamburger-Menu-Items deren Enabled-Zustand sich zur Laufzeit aendert
+    // (Cancel: nur waehrend laufender Analyse aktiv; Branch-Changes: waehrend
+    // Analyse deaktiviert). HamburgerMenuPopup synct mit den zugehoerigen
+    // Buttons. ▶ Analyse + 📄 File sind keine Menu-Items - die Buttons sind
+    // immer im Toolbar sichtbar.
+    FMICancel, FMIAnalyseChanged                   : TMenuItem;
     FLblFilter, FLblType, FLblSearch               : TLabel;
     // Eine horizontale Tile-Reihe: 4 Severity-Tiles + 3 Type-Tiles + Score.
     // Layout pro Tile: Glyph-Icon links + Count rechts (Top-Row), Caption
@@ -83,6 +90,9 @@ type
     // Hier nur das Field-Reference, Frame ruft AttachToButton beim
     // BtnExport-Setup.
     FExportMenu        : TFindingExportMenu;
+    // Zentraler 3-Stufen-Responsive-Controller. Single source of truth fuer
+    // alle Visibility-Regeln (siehe RegisterCtrl-Block in CreateUI).
+    FResponsive        : TResponsiveLayoutController;
     // ---- Zweiter Filter --------------------------------------------------
     FTypeFilter        : TTypeFilter;
     FTypeCombo         : TComboBox;
@@ -180,27 +190,32 @@ type
     procedure CancelAnalyseClick(Sender: TObject);
     procedure EditIgnoreListClick(Sender: TObject);
     procedure EditRepoSettingsClick(Sender: TObject);
+    // Folge-Anpassungen die FResponsive nach jedem Resize triggert:
+    // 1) Sub-Panel-Width an Label-Visibility anpassen (FilterSubPanels)
+    // 2) SearchEdit MinWidth dynamisch je nach freiem Platz (SearchMinWidth)
+    procedure ResponsiveAfterApply(Sender: TObject);
     procedure HamburgerClick(Sender: TObject);
     procedure HamburgerMenuPopup(Sender: TObject);
+    // Hamburger-Menu-Item "Export...": oeffnet das Export-Popup an der
+    // Hamburger-Button-Position (statt am hidden BtnExport).
+    procedure HamburgerExportClick(Sender: TObject);
     procedure BuildHamburgerMenu;
     // DPI-Scaling fuer Layout-Konstanten. Liest TControl.CurrentPPI - falls
     // 0/uninit, fallback auf 96. Beispiel: ScaleW(28) liefert 28 bei 100%
     // DPI, 56 bei 200%.
     function  ScaleW(AValue: Integer): Integer;
-    // OnResize-Handler fuer PanelButtons: passt FPanelSev/FPanelType-Width
-    // an die Label-Visibility an. Wird CHAINED (TResponsiveVisibilityController
-    // ruft uns als FOriginalOnResize NACH dem Label-Toggle), so dass die
-    // Width-Anpassung den frischen Visible-Zustand sieht.
+    // Passt FPanelSev/FPanelType-Width an die Label-Visibility an.
+    // Wird vom FResponsive.AfterApply-Callback gerufen NACHDEM die Label-
+    // Visibility durchgesetzt wurde -> Width-Anpassung sieht frischen Zustand.
     procedure AdjustFilterSubPanels(Sender: TObject);
     // Setzt FSearchEdit.Constraints.MinWidth abhaengig von der PanelSearch-
-    // Breite: docked = 60 (lasst SearchEdit weiter schrumpfen), floated = 120.
+    // Breite: narrow = 60 (lasst SearchEdit weiter schrumpfen), >=medium = 120.
     procedure AdjustSearchMinWidth(Sender: TObject);
-    // Frame.OnResize: forwarded explizit an alle Panel-OnResize-Handler.
-    // Die TResponsiveVisibilityController hooken die Panel-OnResizes; in
-    // manchen Dock-Szenarien (IDE setzt Frame.Width direkt, ohne dass das
-    // sauber an alle Children durchgereicht wird) wuerde Hamburger sonst
-    // im Construction-Zustand "haengen bleiben". Frame.OnResize feuert
-    // garantiert.
+    // Frame.OnResize-Trigger: ruft FResponsive.ForceUpdate. Brauchen wir weil
+    // die IDE-Dock-Logik in manchen Szenarien Frame.OnResize selbst nicht
+    // sauber feuert (Width direkt gesetzt ohne Resize-Event). FrameResize
+    // wird daher zusaetzlich explizit aus FrameCreated / SetParent / Dock-
+    // Refit-Timer aufgerufen, um die Stage-Anwendung zu garantieren.
     procedure FrameResize(Sender: TObject);
     // Klick auf Stat-Kachel: setzt Severity-/Type-Filter passend (z.B.
     // Errors-Kachel -> FFilterCombo zeigt nur Errors). Sender.Tag traegt
@@ -222,6 +237,11 @@ type
     function  BuildClaudePrompt(F: TLeakFinding): string;
     procedure CopyFindingToClipboard(F: TLeakFinding);
     procedure UpdateHelp(Row: Integer);
+    // Sammelt alle Befunde aus FDisplayedFindings die zur gleichen Datei
+    // gehoeren und uebergibt sie als komplette Marker-Liste an den
+    // GHighlighter (Multi-Marker-Modell). Wird bei Klick/Doppelklick auf
+    // einen Befund gerufen.
+    procedure HighlightAllFindingsInFile(const AFileName: string);
     class function FixHint(const Finding: TLeakFinding): TFixHint; static;
     procedure OpenFileAtLine(const AbsPath: string; LineNumber: Integer);
     procedure LoadRecentPaths;
@@ -303,30 +323,59 @@ type
   TControlAccess = class(TControl);
 
 const
-  // Single Breakpoint fuer Docked-vs-Floated. 96-DPI-logisch, in CreateUI
-  // via ScaleW skaliert.
-  // Below: docked-Mode = nur 4 essential Stats-Tiles + Hamburger sichtbar.
-  // Alle Toolbar-Buttons (Settings/Ignore/Branch-Changes) und Labels
-  // (Severity/Type/Search) verschwinden - Aktionen ueber das Hamburger-
-  // Menu erreichbar.
-  // Above: floated-Mode = volle UI inkl. aller 9 Tiles, Hamburger weg.
-  BREAKPOINT_DOCKED = 700;
+  // ---- 3-Stufen-Responsive-Layout (96-DPI-logisch, via ScaleW skaliert) -
+  //
+  // Stufe 1 (NARROW, < BREAKPOINT_MEDIUM = 500):
+  //   Nur die 4 essential Stats-Tiles (Errors/Warnings/Hints/Code Quality).
+  //   Hamburger sichtbar (Aktionen via Menu). Filter-Labels weg.
+  //   Settings/Ignore/Cancel/Branch-Changes/Search-Lbl alle hidden.
+  //   Typisch: schmal gedockt im IDE-Tool-Window.
+  //
+  // Stufe 2 (MEDIUM, >= 500 .. < BREAKPOINT_FULL = 850):
+  //   Komplette Tile-Reihe (alle 9 Tiles) sichtbar. Filter-/Type-Labels
+  //   sichtbar. Settings/Ignore/Cancel/Export/Branch-Changes/Search-Label
+  //   bleiben hidden -> Hamburger bleibt sichtbar fuer diese Aktionen.
+  //   Tile-Reihe braucht abhaengig von TILE_W in uIDEStatsTiles entsprechend
+  //   Platz; ueberzaehlige werden vom alLeft-Layout ggf. beschnitten
+  //   (akzeptabel).
+  //
+  // Stufe 3 (FULL, >= BREAKPOINT_FULL = 850):
+  //   Volle UI: alle 9 Tiles + komplette Toolbar. Hamburger weg
+  //   (alle Aktionen direkt erreichbar). Branch-Changes + Search-Lbl sichtbar.
+  //
+  // BREAKPOINT_MEDIUM dient gleichzeitig als FLOAT_MIN_WIDTH: das floated
+  // Fenster wird via Constraints.MinWidth auf 500 px begrenzt - schmaler
+  // ergibt im Float-Mode visuell keinen Sinn (zu wenig fuer einen Toolbar).
+  BREAKPOINT_MEDIUM = 500;
+  BREAKPOINT_FULL   = 850;
+  // Backward-compat-Alias: alter Code referenziert BREAKPOINT_DOCKED.
+  // Semantisch = BREAKPOINT_FULL (oberhalb keine docked-style Elemente).
+  BREAKPOINT_DOCKED = BREAKPOINT_FULL;
+  // Floated-Form Mindestbreite (= MEDIUM-Schwelle): unter 500 px ergibt
+  // floated keinen Sinn (Stufe-1-Layout ist nur fuer enge Docks gedacht).
+  FLOAT_MIN_WIDTH   = BREAKPOINT_MEDIUM;
 
   // ---- Toolbar-Layout (alle Werte werden via ScaleW DPI-skaliert) -------
-  TB_ROW_HEIGHT      = 22;     // alle Toolbar-Zeilen
+  // Strategie: Control-Hoehe wird zur Laufzeit aus Self.Font abgeleitet
+  // (TToolbarSizing.HeightForFont) - so passt sich die Toolbar automatisch
+  // an Font-Size-Aenderungen an (8pt -> 22 px, 9pt -> 23 px, 10pt -> 24 px).
+  // Panel-Hoehe = Ctrl-Hoehe + 2*Padding; lokale Variable im Constructor
+  // verteilt diese beiden Werte (UnifCtrlH, ToolbarRowH) an die Panel-Setup-
+  // und TToolbarSizing.Apply-Aufrufstellen.
   TB_PADDING_LR      = 6;      // Padding links/rechts in Toolbar-Panels
-  TB_PADDING_TB      = 2;      // Padding oben/unten in Toolbar-Panels
+  TB_PADDING_TB      = 1;      // Padding oben/unten in Toolbar-Panels
   TB_SPACER_WIDTH    = 8;      // Trennabstand zwischen Bereichen
-  TB_CANCEL_MARGIN   = 8;      // Margin links vom Cancel-Button
+  TB_CANCEL_MARGIN   = 12;     // Margin links vom Cancel-Button (visuell vom Edit absetzen)
 
   // ---- Button-Widths ----------------------------------------------------
-  BTN_W_ICON         = 28;     // Icon-only (Browse "...", Hamburger)
-  BTN_W_SHORT        = 60;     // "Ignore..."
-  BTN_W_MED_SHORT    = 70;     // "Settings..."
-  BTN_W_MED          = 80;     // "Cancel", "Export"
-  BTN_W_MED_LONG     = 52;     // "📄 File"
-  BTN_W_LONG         = 70;     // "▶ Analyse"
-  BTN_W_XLONG        = 120;    // "Branch-Changes"
+  // Captions passen mit Segoe UI 8pt + ~4-6 px Innenpadding. Im NARROW/MEDIUM
+  // ist ein Teil ueber FResponsive ausgeblendet - siehe RegisterCtrl-Block.
+  BTN_W_ICON         = 32;     // Icon-only (Browse "...", Hamburger ☰, Branch-Changes ⎇)
+  BTN_W_SHORT        = 56;     // "Ignore..."
+  BTN_W_MED_SHORT    = 64;     // "Settings..."
+  BTN_W_MED          = 68;     // "Cancel", "Export"
+  BTN_W_MED_LONG     = 48;     // "📄 File"
+  BTN_W_LONG         = 64;     // "▶ Analyse"
 
   // ---- Label-Widths -----------------------------------------------------
   LBL_W_PATH         = 78;     // "Project path:"
@@ -431,6 +480,10 @@ var
   // Index abzumelden falls der Service nie verfuegbar war.
   LblPath: TLabel;
   BtnBrowse, BtnAnalyse: TButton;
+  // Aus Font abgeleitete Hoehen, einmalig nach Font-Setup berechnet:
+  //   UnifCtrlH   - Soll-Hoehe fuer alle Toolbar-Controls (Button/Edit/Combo)
+  //   ToolbarRowH - Panel-Hoehe = UnifCtrlH + 2*TB_PADDING_TB
+  UnifCtrlH, ToolbarRowH: Integer;
 begin
   inherited Create(AOwner);
   // Lifecycle-Sentinel registrieren: ab jetzt darf der Worker-Callback
@@ -461,11 +514,24 @@ begin
   ParentFont    := False;
   Font.Name     := 'Segoe UI';
   Font.Size     := 8;
-  // Default-Groesse: muss alle Top-Panels + Help-Panel + 120 px Grid + Statusbar
-  // aufnehmen. Status 22 + Stats 120 + Path 22 + Buttons 22 + Search 22 + Help
-  // 120 + Splitter 4 + Grid 120 = 452. Mit etwas Reserve auf 500.
+
+  // Toolbar-Hoehen aus Font ableiten. Font.Height ist negativ in Pixel und
+  // bereits DPI-aware (=  -PointSize * CurrentPPI / 72) - kein extra ScaleW.
+  // ToolbarRowH = UnifCtrlH + 2*Padding (mit ScaleW da TB_PADDING_TB
+  // ein 96-DPI-logischer Wert ist).
+  UnifCtrlH   := TToolbarSizing.HeightForFont(Font);
+  ToolbarRowH := UnifCtrlH + 2 * ScaleW(TB_PADDING_TB);
+  // Default-Groesse: muss alle Top-Panels + Help-Panel + 120 px Grid +
+  // Statusbar aufnehmen. Status 22 + Stats 45 + 3*Toolbar 24 + Help 120 +
+  // Splitter 4 + Grid 120 = ~383 minimum. Mit Reserve auf 470/500.
   Height                  := 500;
   Constraints.MinHeight   := 470;
+  // Floated-Mindestbreite: unter 500 px ergibt der Toolbar visuell keinen
+  // Sinn (auch der MEDIUM-Tier des Responsive-Layouts startet bei 500 px).
+  // Die Constraint wird in TAnalyserDockableForm.FrameCreated zusaetzlich
+  // auf das Host-Form propagiert, damit der IDE-Floating-Container die
+  // Mindestbreite ebenfalls respektiert.
+  Constraints.MinWidth    := ScaleW(FLOAT_MIN_WIDTH);
   FAllFindings       := TObjectList<TLeakFinding>.Create(True);
   FDisplayedFindings := TList<TLeakFinding>.Create;
   // Ignore-Liste laden / Default-Datei anlegen falls nicht vorhanden
@@ -499,7 +565,7 @@ begin
   PanelPath := TPanel.Create(Self);
   PanelPath.Parent      := Self;
   PanelPath.Align       := alTop;
-  PanelPath.Height      := ScaleW(TB_ROW_HEIGHT);
+  PanelPath.Height      := ToolbarRowH;
   PanelPath.BevelOuter  := bvNone;
   PanelPath.Color       := clBtnFace;
   PanelPath.Padding.SetBounds(ScaleW(TB_PADDING_LR), ScaleW(TB_PADDING_TB),
@@ -554,7 +620,7 @@ begin
   PanelButtons := TPanel.Create(Self);
   PanelButtons.Parent      := Self;
   PanelButtons.Align       := alTop;
-  PanelButtons.Height      := ScaleW(TB_ROW_HEIGHT);
+  PanelButtons.Height      := ToolbarRowH;
   PanelButtons.BevelOuter  := bvNone;
   PanelButtons.Color       := clBtnFace;
   PanelButtons.Padding.SetBounds(ScaleW(TB_PADDING_LR), ScaleW(TB_PADDING_TB),
@@ -688,7 +754,7 @@ begin
   var PanelSearch := TPanel.Create(Self);
   PanelSearch.Parent      := Self;
   PanelSearch.Align       := alTop;
-  PanelSearch.Height      := ScaleW(TB_ROW_HEIGHT);
+  PanelSearch.Height      := ToolbarRowH;
   PanelSearch.BevelOuter  := bvNone;
   PanelSearch.Color       := clBtnFace;
   PanelSearch.Padding.SetBounds(ScaleW(TB_PADDING_LR), ScaleW(TB_PADDING_TB),
@@ -711,14 +777,17 @@ begin
   FBtnAnalyseCurrent.Align    := alLeft;
   FBtnAnalyseCurrent.OnClick  := AnalyseCurrentFileClick;
 
-  // Branch-Aenderungen via Git/SVN: nur die im Branch geaenderten .pas-Files
+  // Branch-Aenderungen via Git/SVN: nur die im Branch geaenderten .pas-Files.
+  // Icon-only (Glyph ⎇ U+2387 "alternative"-Symbol, sieht wie Branch-Fork aus),
+  // matcht visuell die anderen Icon-Buttons (Browse "...", Hamburger ☰).
+  // Caption-Text "Branch-Changes" ist im Hint und im Hamburger-Menu.
   FBtnAnalyseChanged := TButton.Create(Self);
   FBtnAnalyseChanged.Parent   := PanelSearch;
-  FBtnAnalyseChanged.Caption  := _('Branch-Changes');
-  FBtnAnalyseChanged.Width    := ScaleW(BTN_W_XLONG);
+  FBtnAnalyseChanged.Caption  := #$2387; // ⎇
+  FBtnAnalyseChanged.Width    := ScaleW(BTN_W_ICON);
   FBtnAnalyseChanged.Align    := alLeft;
   FBtnAnalyseChanged.OnClick  := AnalyseChangedFilesClick;
-  FBtnAnalyseChanged.Hint     := _(
+  FBtnAnalyseChanged.Hint     := _('Branch-Changes') + ': ' + _(
     'Analyses only files changed in the current branch ' +
     '(Git: branch diff vs main + working tree; SVN: working copy)');
   FBtnAnalyseChanged.ShowHint := True;
@@ -732,7 +801,7 @@ begin
   FBtnHamburger.Caption  := #$2630; // Trigram for Heaven (Hamburger-Glyph)
   FBtnHamburger.Width    := ScaleW(BTN_W_ICON);
   FBtnHamburger.Align    := alRight;
-  FBtnHamburger.Hint     := _('More actions (Settings, Ignore list, Branch-Changes)');
+  FBtnHamburger.Hint     := _('All toolbar actions (Analyse, Browse, Export, Settings, ...)');
   FBtnHamburger.ShowHint := True;
 
   // Cancel-Button - immer sichtbar (verhindert Layout-Sprung beim
@@ -791,6 +860,7 @@ begin
     StatusMode, GetCurrentBaseDir);
 
   var BtnExport := TButton.Create(Self);
+  FBtnExport := BtnExport;
   BtnExport.Parent     := PanelSearch;
   BtnExport.Caption    := _('Export') + ' ' + #$25BC; // schwarzes Dreieck nach unten
   BtnExport.Width      := ScaleW(BTN_W_MED);
@@ -816,51 +886,70 @@ begin
   FSearchEdit.Font.Name   := 'Segoe UI';
   FSearchEdit.Font.Size   := 8;
 
+  // ---- Toolbar-Controls einheitliche Hoehe (siehe TToolbarSizing) -------
+  // Loest die VCL-Quirk dass TComboBox die Align.Height ignoriert. Buttons
+  // und Edits respektieren Align von Hause aus, der Helper-Aufruf ist hier
+  // redundant aber konsistent: jede Toolbar-Component geht durch denselben
+  // Sizing-Pfad. ScaleW skaliert den 96-DPI-Wert auf die Container-PPI.
+  // Icon-Buttons mit erzwungener Width+Height-Constraints damit sie pixel-
+  // genau identisch rendern (Browse + Hamburger + Branch-Changes).
+  TToolbarSizing.ApplyIconButton(BtnBrowse,          ScaleW(BTN_W_ICON), UnifCtrlH);
+  TToolbarSizing.ApplyIconButton(FBtnHamburger,      ScaleW(BTN_W_ICON), UnifCtrlH);
+  TToolbarSizing.ApplyIconButton(FBtnAnalyseChanged, ScaleW(BTN_W_ICON), UnifCtrlH);
+  // Restliche Components nur Hoehe vereinheitlichen.
+  TToolbarSizing.Apply(FBtnIgnore,          UnifCtrlH);
+  TToolbarSizing.Apply(FBtnRepo,            UnifCtrlH);
+  TToolbarSizing.Apply(FProjectPath,        UnifCtrlH);
+  TToolbarSizing.Apply(FFilterCombo,        UnifCtrlH);
+  TToolbarSizing.Apply(FTypeCombo,          UnifCtrlH);
+  TToolbarSizing.Apply(FBtnAnalyse,         UnifCtrlH);
+  TToolbarSizing.Apply(FBtnAnalyseCurrent,  UnifCtrlH);
+  TToolbarSizing.Apply(FBtnCancel,          UnifCtrlH);
+  TToolbarSizing.Apply(FBtnExport,          UnifCtrlH);
+  TToolbarSizing.Apply(FSearchEdit,         UnifCtrlH);
+
   // ---- Hamburger-Menu (alle "optionalen" Actions als Backup-Pfad) ----
   // Wird gebraucht wenn der Frame schmal gedockt ist und die zugehoerigen
-  // Buttons via TResponsiveVisibilityController ausgeblendet werden.
+  // Buttons via FResponsive ausgeblendet werden.
   // Setup in BuildHamburgerMenu (referenziert bestehende Click-Handler).
   BuildHamburgerMenu;
 
-  // ---- Responsive Visibility: Single Threshold (Docked vs Floated) -----
-  // < BREAKPOINT_DOCKED (700): docked-Mode. Hamburger ersetzt alle
-  // versteckten Buttons (Settings/Ignore/Branch-Changes); Filter-Labels
-  // verschwinden (Combos selbsterklaerend); Stats-Tiles werden in
-  // BuildStatsTiles gehandelt (4 essential + Hamburger).
-  // Threshold wird DPI-skaliert: ClientWidth ist physisch, Konstante
-  // logisch (96 DPI). Ohne Scale-Faktor wuerde Docked auf 200% DPI bei
-  // bereits halber physischer Breite triggern.
+  // ---- Zentraler Responsive-Layout-Controller (3 Stufen) ----------------
+  // Eine Klasse, eine ClientWidth-Quelle (= Frame.ClientWidth), eine
+  // Sichtbarkeitstabelle. Stage-Bestimmung + DPI-Skalierung intern.
+  // Alle Sichtbarkeitsregeln stehen direkt unter dieser Stelle - kein
+  // Verstreut-Sein ueber 3 Panels und 5 Controller mehr.
+  // AfterApply-Callback fired nach JEDEM Resize -> dynamische Folge-Anpassungen
+  // (FilterSubPanels-Width, SearchEdit-MinWidth) bleiben aktuell.
+  // FResponsive selbst wird Self-owned -> Auto-Free im Frame-Destroy.
+  FResponsive := TResponsiveLayoutController.Create(Self, Self,
+    BREAKPOINT_MEDIUM, BREAKPOINT_FULL);
 
-  // PanelPath: Settings + Ignore weg im Docked
-  TResponsiveVisibilityController.Create(Self, FPanelPath,
-    [FBtnRepo, FBtnIgnore], ScaleW(BREAKPOINT_DOCKED));
+  // PanelPath
+  FResponsive.RegisterCtrl(FBtnRepo,           usFull);
+  FResponsive.RegisterCtrl(FBtnIgnore,         usFull);
+  // (BtnBrowse, LblPath, FProjectPath: immer sichtbar - keine Registrierung noetig)
 
-  // PanelButtons: Filter-Labels weg, Sub-Panels schrumpfen (Combos bleiben).
-  // WICHTIG: AdjustFilterSubPanels VOR dem Controller hooken. Der
-  // Controller speichert OnResize als FOriginalOnResize und ruft es NACH
-  // dem Visibility-Toggle - so sieht AdjustFilterSubPanels den frischen
-  // FLbl*-Visible-Zustand und passt die Sub-Panel-Width an. Sonst
-  // bleiben FPanelSev/FPanelType in voller Breite und PanelButtons platzt.
-  FPanelButtons.OnResize := AdjustFilterSubPanels;
-  TResponsiveVisibilityController.Create(Self, FPanelButtons,
-    [FLblFilter, FLblType], ScaleW(BREAKPOINT_DOCKED));
-  AdjustFilterSubPanels(FPanelButtons); // initial pass
+  // PanelButtons
+  FResponsive.RegisterCtrl(FLblFilter,         usMedium);
+  FResponsive.RegisterCtrl(FLblType,           usMedium);
+  // (FFilterCombo, FTypeCombo, FPanelSev, FPanelType: immer sichtbar)
 
-  // PanelSearch: Branch-Changes + Search-Label weg im Docked. Branch-
-  // Changes ist im Hamburger-Menu erreichbar. "▶ Analyse" und "📄 File"
-  // bleiben im Docked sichtbar (vor dem Suchfeld), Breite schrumpft mit.
-  // Plus: SearchEdit MinWidth schrumpft mit (60 statt 120 docked) damit
-  // auch sehr enge Docks (300 px) noch funktionieren.
-  // Hook AdjustSearchMinWidth VOR dem Controller (chain-Pattern).
-  FPanelSearch.OnResize := AdjustSearchMinWidth;
-  TResponsiveVisibilityController.Create(Self, FPanelSearch,
-    [FBtnAnalyseChanged, FLblSearch, FBtnCancel],
-    ScaleW(BREAKPOINT_DOCKED));
-  // PanelSearch: Hamburger INVERS - nur im Docked sichtbar (ganz rechts).
-  // SearchEdit (alClient) passt sich automatisch an die verfuegbare Breite an.
-  TResponsiveVisibilityController.Create(Self, FPanelSearch,
-    [FBtnHamburger], ScaleW(BREAKPOINT_DOCKED), True {Inverse});
-  AdjustSearchMinWidth(FPanelSearch); // initial pass
+  // PanelSearch
+  FResponsive.RegisterCtrl(FBtnCancel,         usFull);
+  FResponsive.RegisterCtrl(FBtnExport,         usFull);
+  FResponsive.RegisterCtrl(FBtnAnalyseChanged, usFull);
+  FResponsive.RegisterCtrl(FLblSearch,         usFull);
+  FResponsive.RegisterCtrl(FBtnHamburger,      usNarrow, usMedium);  // inverse
+  // (FBtnAnalyse, FBtnAnalyseCurrent, FSearchEdit: immer sichtbar)
+
+  // Stats-Tiles werden in BuildStatsTiles registriert (FResponsive ist
+  // dort verfuegbar, Owner-Reference ueber Self-Field).
+
+  // Folge-Anpassungen nach jedem Resize (Sub-Panel-Width-Sync,
+  // SearchEdit-MinWidth-Sync). Beide sind idempotent, koennen mehrfach
+  // pro Resize laufen.
+  FResponsive.AfterApply := ResponsiveAfterApply;
 
   // ---- Statistik-Leiste: eine Reihe Sonar-Style Tiles (dunkler Hintergrund) ---
   FPanelStats := TPanel.Create(Self);
@@ -1046,8 +1135,8 @@ end;
 // FTileError/FTileWarn/... zu, daher bleibt die Feld-Struktur unveraendert.
 
 procedure TAnalyserFrame.BuildStatsTiles(Parent: TPanel);
-// Threshold: BREAKPOINT_DOCKED aus implementation-const (gemeinsam mit
-// den Toolbar-Controllern in CreateUI).
+// Thresholds: BREAKPOINT_MEDIUM (500) + BREAKPOINT_FULL (850) aus
+// implementation-const (gemeinsam mit den Toolbar-Controllern in CreateUI).
 
   procedure WireTile(CountLbl: TLabel; const AHint: string; ATag: Integer;
     OnClickHandler: TNotifyEvent);
@@ -1138,18 +1227,21 @@ begin
            + sLineBreak + _('Click: reset filters (show everything)'),
            0, TileClickClear);
 
-  // Responsive Layout-Controller. Owner=Self -> wird beim Frame-Destroy
-  // mit freigegeben; Parent.OnResize wird vom Controller selbst gehookt.
-  // Tile-Labels -> Parent.Parent ist die TilePanel (TopRow zwischen).
-  // Threshold DOCKED (700 px DPI-skaliert): bei < 700 nur die 4 essentiellen
-  // Tiles (Errors/Warnings/Hints/Code Quality) sichtbar, der Rest hide.
-  TResponsiveVisibilityController.Create(Self, Parent,
-    [FTileFileSev.Parent.Parent,
-     FTileBug.Parent.Parent,
-     FTileVuln.Parent.Parent,
-     FTileDup.Parent.Parent,
-     FTileCyclomatic.Parent.Parent],
-    ScaleW(BREAKPOINT_DOCKED));
+  // Tile-Visibility wird ueber den zentralen FResponsive registriert.
+  // Tile-Labels -> Parent.Parent ist die TilePanel (TopRow dazwischen).
+  //
+  // Tier-Aufteilung:
+  //   essential (immer):     Errors, Warnings, Hints, Code Quality      (4)
+  //   MEDIUM+ (>= 500):      Read errors, Bugs, Security, Duplicates,
+  //                          Cyclomatic                                 (+5 -> 9)
+  if Assigned(FResponsive) then
+  begin
+    FResponsive.RegisterCtrl(FTileFileSev.Parent.Parent,    usMedium);
+    FResponsive.RegisterCtrl(FTileBug.Parent.Parent,        usMedium);
+    FResponsive.RegisterCtrl(FTileVuln.Parent.Parent,       usMedium);
+    FResponsive.RegisterCtrl(FTileDup.Parent.Parent,        usMedium);
+    FResponsive.RegisterCtrl(FTileCyclomatic.Parent.Parent, usMedium);
+  end;
 end;
 
 // Status-Bar-Push-Methoden delegieren an uIDEStatusBar.TAnalyserStatusBar.
@@ -1436,10 +1528,10 @@ begin
     FAllFindings.Add(findings[i]);
   UpdateStats;
   ApplyFilter;
-  // Editor-Line-Highlight ist click-getrieben (siehe GridSelectCell ->
-  // GHighlighter.SetSelected). Beim Abschluss eines neuen Scans loeschen
-  // wir die alte Markierung, damit kein Befund aus dem letzten Scan im
-  // Editor stehen bleibt.
+  // Editor-Line-Highlights sind click-getrieben (siehe GridSelectCell ->
+  // HighlightAllFindingsInFile). Beim Abschluss eines neuen Scans loeschen
+  // wir alle alten Markierungen, damit keine Befunde aus dem letzten Scan
+  // im Editor stehen bleiben.
   if Assigned(GHighlighter) then
     GHighlighter.Clear;
   // (Befund-Spiegelung in IDE-Messages-Toolbar ist deaktiviert -
@@ -1560,11 +1652,10 @@ procedure TAnalyserFrame.GridSelectCell(Sender: TObject; ACol, ARow: Integer;
   var CanSelect: Boolean);
 // Klick auf Zeile: Hilfetext aktualisieren, Befund als Claude-AI-Prompt
 // in die Zwischenablage legen UND - falls die Datei in der IDE offen ist -
-// die Befund-Zeile rot markieren (PaintLine via INTAEditViewNotifier).
+// alle Befund-Zeilen der gleichen Datei rot markieren (Multi-Marker-Modell).
 var
   idx     : Integer;
   Finding : TLeakFinding;
-  LineNo  : Integer;
 begin
   CanSelect := True;
   UpdateHelp(ARow);
@@ -1575,16 +1666,10 @@ begin
   Finding := FDisplayedFindings[idx];
   CopyFindingToClipboard(Finding);
 
-  // Editor-Line-Highlight setzen. Wenn die Datei nicht offen ist, malt
-  // GHighlighter beim naechsten Oeffnen (PaintLine prueft jeden Repaint).
-  if Assigned(GHighlighter) then
-  begin
-    LineNo := StrToIntDef(Finding.LineNumber, 0);
-    GHighlighter.SetSelected(Finding.FileName, LineNo,
-      Finding.MissingVar,
-      FixHint(Finding).Description,
-      Finding.TypeText + ' · ' + Finding.SeverityText);
-  end;
+  // Editor-Line-Highlights: alle Befunde der gleichen Datei mit Stripe
+  // markieren. Wenn die Datei nicht offen ist, malt GHighlighter beim
+  // naechsten Oeffnen.
+  HighlightAllFindingsInFile(Finding.FileName);
 end;
 
 procedure TAnalyserFrame.CopyFindingToClipboard(F: TLeakFinding);
@@ -1820,33 +1905,81 @@ begin
 end;
 
 procedure TAnalyserFrame.FrameResize(Sender: TObject);
-// Forwarded an alle vier Panel-OnResize-Handler. Damit die Responsive-
-// Controller (gehookt auf Panel.OnResize) garantiert feuern, auch wenn
-// die IDE-Dock-Logik die Children nicht sauber benachrichtigt.
+// Triggert den zentralen Responsive-Controller. Frueher 4 Panel-OnResize-
+// Forwards; nicht mehr noetig - FResponsive ist auf Self.OnResize gehookt
+// und ApplyVisibility deckt alle Stufen + AfterApply-Callbacks ab.
+// Wir rufen ForceUpdate explizit damit die IDE-Dock-Logik (die OnResize
+// nicht immer feuert) sicher abgedeckt ist.
 begin
-  if Assigned(FPanelPath)    and Assigned(FPanelPath.OnResize)
-    then FPanelPath.OnResize(FPanelPath);
-  if Assigned(FPanelButtons) and Assigned(FPanelButtons.OnResize)
-    then FPanelButtons.OnResize(FPanelButtons);
-  if Assigned(FPanelSearch)  and Assigned(FPanelSearch.OnResize)
-    then FPanelSearch.OnResize(FPanelSearch);
-  if Assigned(FPanelStats)   and Assigned(FPanelStats.OnResize)
-    then FPanelStats.OnResize(FPanelStats);
+  if Assigned(FResponsive) then
+    FResponsive.ForceUpdate;
+end;
+
+procedure TAnalyserFrame.ResponsiveAfterApply(Sender: TObject);
+// Wird nach jedem Resize von FResponsive aufgerufen. Sammelt die zwei
+// dynamischen Anpassungen die nicht pure on/off sind:
+//   1) FilterSubPanels-Width (haengt an Label-Visibility)
+//   2) SearchEdit-MinWidth (haengt an freier Toolbar-Restbreite)
+begin
+  if Assigned(FPanelButtons) then AdjustFilterSubPanels(FPanelButtons);
+  if Assigned(FPanelSearch)  then AdjustSearchMinWidth(FPanelSearch);
 end;
 
 procedure TAnalyserFrame.AdjustSearchMinWidth(Sender: TObject);
-// MinWidth auf den passenden Wert setzen, ohne TResponsiveVisibilityController
-// dafuer zu erweitern (waere overkill - hier wechselt nur ein einzelner
-// Constraint-Wert, kein Visible-Flag).
+// MinWidth dynamisch berechnen: Wunsch-Wert cappen auf den tatsaechlich
+// freien Platz zwischen alLeft + alRight Buttons. Sonst kann das alClient-
+// Edit die rechten Buttons (Cancel/Export) ueberlagern wenn die Toolbar-
+// Breite zwar > Threshold ist, aber die Buttons-Summe + Wunsch-MinWidth
+// trotzdem nicht reinpasst.
+//
+// 3-Tier-Logik:
+//   NARROW (< 500): kleiner MinWidth (60) - in Stufe 1 muss SearchEdit
+//                   sich auch in 300-400 px breiten Docks behaupten.
+//   MEDIUM/FULL (>= 500): grosser MinWidth (120) - genug Toolbar-Breite
+//                         da, das Edit darf nicht zur Reststreifen werden.
+// Die ClientWidth-Schwelle ist BREAKPOINT_MEDIUM, weil schon ab Stufe 2
+// die optionalen Buttons (Settings/Ignore/Cancel) zurueckkommen und das
+// Edit nicht mehr alleine die Toolbar dominiert.
 var
-  Threshold : Integer;
+  i        : Integer;
+  C        : TControl;
+  ButtonsW : Integer;
+  Avail    : Integer;
+  Wanted   : Integer;
 begin
   if not Assigned(FSearchEdit) or not Assigned(FPanelSearch) then Exit;
-  Threshold := ScaleW(BREAKPOINT_DOCKED);
-  if FPanelSearch.ClientWidth >= Threshold then
-    FSearchEdit.Constraints.MinWidth := ScaleW(SEARCH_MIN_WIDTH_FLOATED)
+
+  // Summe aller sichtbaren alLeft + alRight Children (inkl. Margins).
+  ButtonsW := 0;
+  for i := 0 to FPanelSearch.ControlCount - 1 do
+  begin
+    C := FPanelSearch.Controls[i];
+    if (C = FSearchEdit) or not C.Visible then Continue;
+    if C.Align in [alLeft, alRight] then
+    begin
+      ButtonsW := ButtonsW + C.Width;
+      if C.AlignWithMargins then
+        ButtonsW := ButtonsW + C.Margins.Left + C.Margins.Right;
+    end;
+  end;
+
+  // Freier Platz fuer alClient (Search-Edit).
+  Avail := FPanelSearch.ClientWidth - ButtonsW
+         - FPanelSearch.Padding.Left - FPanelSearch.Padding.Right;
+
+  // Wunsch: FLOATED-Width ab MEDIUM-Tier (>=500 px), DOCKED-Width im
+  // NARROW-Tier (<500 px). Bei knappem Platz auf Avail cappen, damit
+  // das Edit nicht die alRight-Buttons ueberlagert. Fallback auf 0 wenn
+  // wirklich kein Platz uebrig (Responsive-Controller blendet dann sowieso
+  // bei den Breakpoints ueberzaehlige Buttons aus).
+  if FPanelSearch.ClientWidth >= ScaleW(BREAKPOINT_MEDIUM) then
+    Wanted := ScaleW(SEARCH_MIN_WIDTH_FLOATED)
   else
-    FSearchEdit.Constraints.MinWidth := ScaleW(SEARCH_MIN_WIDTH_DOCKED);
+    Wanted := ScaleW(SEARCH_MIN_WIDTH_DOCKED);
+  if Wanted > Avail then
+    Wanted := Max(0, Avail);
+
+  FSearchEdit.Constraints.MinWidth := Wanted;
 end;
 
 procedure TAnalyserFrame.AdjustFilterSubPanels(Sender: TObject);
@@ -1872,18 +2005,34 @@ begin
 end;
 
 procedure TAnalyserFrame.BuildHamburgerMenu;
-// Popup-Menu fuer den Hamburger-Button. Items entsprechen den Toolbar-
-// Aktionen, die im gedockten/schmalen Modus ausgeblendet werden -
-// hier bleiben sie auch im Docked-Modus erreichbar. Reihenfolge:
-// Cancel zuerst (laufende Analyse abbrechen), dann Branch-Changes,
-// dann Konfig (Settings/Ignore).
+// Popup-Menu fuer den Hamburger-Button. Im NARROW-Modus (<500 px) sind
+// ALLE Toolbar-Tasten ausgeblendet - das Hamburger-Menu ist die einzige
+// Aktions-Quelle. Im MEDIUM-Modus (500-849) sind die meisten Tasten wieder
+// da, das Menu bleibt aber redundant erreichbar (kein Schaden).
+//
+// Reihenfolge (logische Gruppen, jeweils durch Separator getrennt):
+//   1. Analyse-Aktionen: Voll, Aktuelle Datei, Branch-Changes
+//   2. Cancel (laufende Analyse abbrechen)
+//   3. Ressourcen: Browse (Projekt-Pfad), Export
+//   4. Konfig: Settings, Ignore-Liste
 var
   MI : TMenuItem;
 begin
   FHamburgerMenu := TPopupMenu.Create(Self);
   FHamburgerMenu.OnPopup := HamburgerMenuPopup;
 
-  // Laufende Analyse abbrechen - Enabled wird in HamburgerMenuPopup gesynct
+  // ---- Aktions-Block (nur Branch-Changes; Analyse + File sind im
+  // Toolbar IMMER sichtbar und brauchen daher keinen Menu-Eintrag) -------
+  FMIAnalyseChanged := TMenuItem.Create(FHamburgerMenu);
+  FMIAnalyseChanged.Caption := _('Analyse Branch-Changes');
+  FMIAnalyseChanged.OnClick := AnalyseChangedFilesClick;
+  FHamburgerMenu.Items.Add(FMIAnalyseChanged);
+
+  MI := TMenuItem.Create(FHamburgerMenu);
+  MI.Caption := '-';
+  FHamburgerMenu.Items.Add(MI);
+
+  // ---- Cancel (Enabled wird in HamburgerMenuPopup gesynct) -------------
   FMICancel := TMenuItem.Create(FHamburgerMenu);
   FMICancel.Caption := _('Cancel Analysis');
   FMICancel.OnClick := CancelAnalyseClick;
@@ -1893,18 +2042,18 @@ begin
   MI.Caption := '-';
   FHamburgerMenu.Items.Add(MI);
 
-  // Aktions-Block: Branch-Analyse (▶ Analyse und 📄 File sind im
-  // Toolbar immer sichtbar und deshalb nicht im Hamburger-Menu)
+  // ---- Ressourcen-Block: Export ----------------------------------------
+  // (Browse ist nicht im Menu - der "..."-Button ist immer im Toolbar sichtbar)
   MI := TMenuItem.Create(FHamburgerMenu);
-  MI.Caption := _('Analyse Branch-Changes');
-  MI.OnClick := AnalyseChangedFilesClick;
+  MI.Caption := _('Export') + '...';
+  MI.OnClick := HamburgerExportClick;
   FHamburgerMenu.Items.Add(MI);
 
   MI := TMenuItem.Create(FHamburgerMenu);
   MI.Caption := '-';
   FHamburgerMenu.Items.Add(MI);
 
-  // Konfig-Block: oeffnet externe Editoren, kein Analyse-Trigger
+  // ---- Konfig-Block: oeffnet externe Editoren, kein Analyse-Trigger ----
   MI := TMenuItem.Create(FHamburgerMenu);
   MI.Caption := _('Settings...');
   MI.OnClick := EditRepoSettingsClick;
@@ -1923,10 +2072,15 @@ begin
 end;
 
 procedure TAnalyserFrame.HamburgerMenuPopup(Sender: TObject);
-// Enabled-Zustand von "Cancel Analysis" vor dem Oeffnen des Menus synctronisieren.
+// Enabled-Zustand der Live-Items vor dem Oeffnen des Menus synchronisieren -
+// die zugehoerigen Buttons werden vom TAnalyseProgressController waehrend
+// einer laufenden Analyse toggled. Cancel ist umgekehrt: nur waehrend
+// Analyse aktiv.
 begin
   if Assigned(FMICancel) and Assigned(FBtnCancel) then
     FMICancel.Enabled := FBtnCancel.Enabled;
+  if Assigned(FMIAnalyseChanged) and Assigned(FBtnAnalyseChanged) then
+    FMIAnalyseChanged.Enabled := FBtnAnalyseChanged.Enabled;
 end;
 
 procedure TAnalyserFrame.HamburgerClick(Sender: TObject);
@@ -1938,6 +2092,18 @@ begin
   if not Assigned(FBtnHamburger) or not Assigned(FHamburgerMenu) then Exit;
   P := FBtnHamburger.ClientToScreen(Point(0, FBtnHamburger.Height));
   FHamburgerMenu.Popup(P.X, P.Y);
+end;
+
+procedure TAnalyserFrame.HamburgerExportClick(Sender: TObject);
+// Hamburger-Menu-Item "Export...": oeffnet dasselbe Popup wie der
+// BtnExport, aber an der Hamburger-Button-Position. Im NARROW-Modus
+// ist BtnExport hidden - das Hamburger-Item ist die einzige Quelle.
+var
+  P : TPoint;
+begin
+  if not Assigned(FBtnHamburger) or not Assigned(FExportMenu) then Exit;
+  P := FBtnHamburger.ClientToScreen(Point(0, FBtnHamburger.Height));
+  FExportMenu.PopupAt(P.X, P.Y);
 end;
 
 // ---------------------------------------------------------------------------
@@ -2025,17 +2191,53 @@ begin
   end;
 
   OpenFileAtLine(absPath, lineNo);
-  // Editor-Line-Highlight setzen - die Datei ist jetzt sicher offen,
-  // also wird PaintLine den Marker malen. Annotation-Texte mitgeben,
-  // damit das Hover-Overlay die Befund-Details anzeigen kann (sonst
-  // wuerde dieser Aufruf die in GridSelectCell gesetzten Texte loeschen).
-  if Assigned(GHighlighter) then
-    GHighlighter.SetSelected(absPath, lineNo,
-      F.MissingVar,
-      FixHint(F).Description,
-      F.TypeText + ' · ' + F.SeverityText);
+  // Editor-Line-Highlights setzen — Datei ist jetzt offen, alle Befunde
+  // der Datei werden mit Stripe markiert (Multi-Marker-Modell).
+  HighlightAllFindingsInFile(absPath);
   StatusMode(Format(_('Opened: %s  Line: %d'),
     [ExtractFileName(absPath), lineNo]));
+end;
+
+procedure TAnalyserFrame.HighlightAllFindingsInFile(const AFileName: string);
+// Sammelt alle Befunde aus FDisplayedFindings die zur gleichen Datei wie
+// AFileName gehoeren und uebergibt sie als komplette Marker-Liste an den
+// GHighlighter. Pro Marker:
+//   - Title/Desc/Badge fuer das Hover-Overlay
+//   - Color via SeverityAccent (Severity-abhaengige Stripe-Farbe wie im Grid)
+// Multi-Marker-Modell: alle Befunde einer Datei werden gleichzeitig markiert,
+// jeder mit eigenem Hover-Text und farblich nach Severity unterschieden.
+var
+  i       : Integer;
+  F       : TLeakFinding;
+  Entries : TArray<TFindingMarkEntry>;
+  Count   : Integer;
+  LineNo  : Integer;
+  DispSev : TFindingSeverity;
+begin
+  if not Assigned(GHighlighter) or not Assigned(FDisplayedFindings) then Exit;
+  if AFileName = '' then Exit;
+
+  // Capacity vorab anschaetzen, am Ende mit Count getrimmt.
+  SetLength(Entries, FDisplayedFindings.Count);
+  Count := 0;
+  for i := 0 to FDisplayedFindings.Count - 1 do
+  begin
+    F := FDisplayedFindings[i];
+    if not Assigned(F) then Continue;
+    if not SameText(F.FileName, AFileName) then Continue;
+    LineNo := StrToIntDef(F.LineNumber, 0);
+    if LineNo <= 0 then Continue;
+    DispSev := SeverityFromKindLevel(F.Kind, F.Severity);
+    Entries[Count].Line  := LineNo;
+    Entries[Count].Title := F.MissingVar;
+    Entries[Count].Desc  := FixHint(F).Description;
+    Entries[Count].Badge := F.TypeText + _(' · ') + F.SeverityText;
+    Entries[Count].Color := SeverityAccent(DispSev);
+    Inc(Count);
+  end;
+  SetLength(Entries, Count);
+
+  GHighlighter.SetActiveFile(AFileName, Entries);
 end;
 
 procedure TAnalyserFrame.OpenFileAtLine(const AbsPath: string;
@@ -2220,7 +2422,8 @@ end;
 
 procedure TAnalyserDockableForm.FrameCreated(AFrame: TCustomFrame);
 var
-  F : TAnalyserFrame;
+  F        : TAnalyserFrame;
+  HostForm : TCustomForm;
 begin
   FFrame := AFrame as TAnalyserFrame;
   F := FFrame;
@@ -2232,6 +2435,19 @@ begin
   F.FResultGrid.Font.Size := 8;
   F.FProjectPath.Font.Name := 'Segoe UI';
   F.FProjectPath.Font.Size := 8;
+
+  // Floated-Mindestbreite/-hoehe auf das IDE-Host-Form propagieren.
+  // Frame.Constraints schuetzt nur den Frame selbst - im undocked Zustand
+  // bestimmt das Host-Form die tatsaechliche Fensterbreite. GetParentForm
+  // walks die Parent-Kette hoch bis zum naechsten TCustomForm.
+  HostForm := GetParentForm(F);
+  if Assigned(HostForm) then
+  begin
+    if HostForm.Constraints.MinWidth < F.Constraints.MinWidth then
+      HostForm.Constraints.MinWidth := F.Constraints.MinWidth;
+    if HostForm.Constraints.MinHeight < F.Constraints.MinHeight then
+      HostForm.Constraints.MinHeight := F.Constraints.MinHeight;
+  end;
 
   // IDE-Theme einmalig anwenden + Notifier registrieren. Logik
   // ist nach uIDEThemeIntegration.TIDEThemeIntegration.Attach

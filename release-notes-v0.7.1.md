@@ -29,7 +29,7 @@ Verbesserungen und durchgaengiger DPI-Skalierung.
     Label-Visibility an
   - **Floated**: alles wie gewohnt - voller Funktionsumfang sichtbar
 - **AI-Prompt-Rewrite** (`uClaudePrompt`) — Role-Priming am Anfang
-  ("senior Delphi developer reviewing static-analysis output"),
+  ("senior Delphi developer revie1lwing static-analysis output"),
   strukturierte Antwort-Vorgabe (Cause / Fix / Verify), Vorher/Nachher
   als "Reference pattern (NOT the user's code)" markiert, Source-
   Marker `>>> ` deutlich auffaelliger, False-Positive-Pfad mit

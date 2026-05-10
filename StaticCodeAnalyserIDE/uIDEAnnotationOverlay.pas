@@ -20,11 +20,13 @@ unit uIDEAnnotationOverlay;
 // uIDELineHighlighter.pas) sorgt dafuer, dass das Overlay verschwindet
 // sobald die Maus den Editor verlaesst.
 //
-// Design exakt nach Mockup:
-//   Titelzeile: dunkelroter Hintergrund (#2A1A1A), helles Rosa-Text (#E8A0A0),
-//               fett, Warning-Glyph links, Badge ("BUG · ERROR") rechts.
-//   Beschreibungszeile: sehr dunkles Grau (#222), mittelgrau kursiv (#888).
-//   Linker Rand: 3px rot (#D02000) — korrespondiert zum PaintLine-Stripe.
+// Design (theme-adaptiv via StyleServices):
+//   Titelzeile: BlendColor(clWindow, Severity-Akzent, 50%) — Light: pastell,
+//               Dark: mid-akzent. Text = clWindowText (Theme-adaptiv).
+//   Badge:      BlendColor(clWindow, Severity-Akzent, 85%) — staerker farbig.
+//   Beschreibungszeile: clWindow + clGrayText (neutraler Bereich).
+//   Linker Rand: voller Severity-Akzent — korrespondiert zum PaintLine-Stripe
+//                (gleiche Farbe wie der Editor-Stripe und der Grid-4px-Stripe).
 //
 // ShowAt empfaengt ALineH (Zeilen-Pixelhoehe aus Context.EditorState.CharHeight)
 // fuer DPI-bewusstes Sizing. Position + Inhalt werden gecacht: bei identischen
@@ -35,7 +37,10 @@ interface
 
 uses
   Winapi.Windows, System.SysUtils, System.Classes, System.Math,
-  Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls;
+  Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Themes,
+  ToolsAPI, ToolsAPI.Editor,  // INTACodeEditorServices.Options.BackgroundColor[atWhiteSpace]
+  uAnalyserTheme,    // BlendColor + theme-adaptive Severity-Farben
+  uLocalization;     // _() — Symbol/Trennzeichen via dxgettext lokalisierbar
 
 type
   TAnnotationOverlay = class(TForm)
@@ -50,6 +55,8 @@ type
     // Cache: letzter ShowAt-Aufruf – verhindert redundante Win32-Aufrufe.
     FLastX, FLastY, FLastW, FLastLineH : Integer;
     FLastTitle, FLastDesc, FLastBadge  : string;
+    FLastAccent                        : TColor;  // Severity-Akzent
+    FLastWindowBase                    : TColor;  // Editor-Theme-BG (Cache-Invalidator!)
     // Editor in den wir aktuell als WS_CHILD eingebettet sind. 0 = noch
     // nicht eingebettet (initialer WS_POPUP-Zustand).
     FCurrentParent : HWND;
@@ -67,9 +74,13 @@ type
     //   mehr ClientToScreen rufen).
     // ALineH = Context.EditorState.CharHeight (DPI-skalierte Zeilenhoehe).
     // ABadge z.B. "BUG · ERROR" oder "CODE SMELL · WARNING".
+    // AAccentColor: Severity-Akzentfarbe (gleiche Quelle wie der Editor-Stripe).
+    //   Wird zum Theming der Title-Bar, Badge und linken Stripe genutzt — so
+    //   bekommt jeder Befund-Typ ein passendes Farbschema. clNone -> Default-Rot.
     procedure ShowAt(AEditor: TWinControl;
       AClientX, AClientY, AWidth, ALineH: Integer;
-      const ATitle, ADesc, ABadge: string);
+      const ATitle, ADesc, ABadge: string;
+      AAccentColor: TColor = clNone);
     procedure HideOverlay;
   end;
 
@@ -101,6 +112,42 @@ const
   // Vertikales Padding der Description (oben + unten) in Pixeln.
   DESC_PAD_V     = 8;
 
+// Liefert den Source-Editor-Hintergrund via offizieller ToolsAPI.
+// INTACodeEditorServices.Options.BackgroundColor[atWhiteSpace] ist die
+// kanonische Quelle (siehe DX.Blame und ToolsAPI.Editor.pas:685) — reflektiert
+// die Editor-Color-Speed-Setting, NICHT die IDE-Frame-Theme-Farbe (das ist
+// der Unterschied: IDE kann dunkel sein bei hellem Editor und umgekehrt).
+// Liefert clNone wenn die Service-Instanz nicht erreichbar ist.
+function GetEditorThemeBgColor: TColor;
+var
+  Svc : INTACodeEditorServices;
+begin
+  Result := clNone;
+  try
+    if Supports(BorlandIDEServices, INTACodeEditorServices, Svc) then
+      Result := Svc.Options.BackgroundColor[atWhiteSpace];
+  except
+    // Service kann ggf. nicht initialisiert sein — clNone als Fallback OK.
+  end;
+end;
+
+// True wenn Farbe "hell" wirkt (Luminanz > 50%). Fuer Auto-Kontrast-
+// Wahl der Textfarbe (clBlack auf hell, clWhite auf dunkel).
+function IsLightColor(AColor: TColor): Boolean;
+var
+  rgb : Cardinal;
+  R, G, B : Integer;
+  Lum : Integer;
+begin
+  rgb := ColorToRGB(AColor);
+  R := GetRValue(rgb);
+  G := GetGValue(rgb);
+  B := GetBValue(rgb);
+  // Perzeptuelle Luminanz: ITU-R BT.601 (gewichtetes Mittel).
+  Lum := (R * 299 + G * 587 + B * 114) div 1000;
+  Result := Lum > 127;
+end;
+
 constructor TAnnotationOverlay.Create(AOwner: TComponent);
 begin
   inherited CreateNew(AOwner);
@@ -123,28 +170,41 @@ begin
   Position := poDesigned;
   DefaultMonitor := dmDesktop;
 
+  // KRITISCH (VCL-Themes): StyleElements := [] auf dem Form, sonst greift
+  // der StyleHook und uebermalt unsere Panel-Color durch die VCL-Style-
+  // Backgroundfarbe (Vcl.ExtCtrls.pas:3411-3424 — TCustomPanel.Paint
+  // ueberschreibt Color wenn seClient in StyleElements). Gleiches gilt
+  // fuer alle Panels und das Badge-Label unten.
+  StyleElements := [];
+
   // ---- 3px linker Rand (Farb-Stripe) ----
-  FBorderPanel            := TPanel.Create(Self);
-  FBorderPanel.Parent     := Self;
-  FBorderPanel.Align      := alLeft;
-  FBorderPanel.Width      := STRIPE_W;
-  FBorderPanel.BevelOuter := bvNone;
-  FBorderPanel.Color      := CL_STRIPE;
+  FBorderPanel                := TPanel.Create(Self);
+  FBorderPanel.Parent         := Self;
+  FBorderPanel.Align          := alLeft;
+  FBorderPanel.Width          := STRIPE_W;
+  FBorderPanel.BevelOuter     := bvNone;
+  FBorderPanel.StyleElements  := [];     // VCL-Theme nicht ueberschreiben
+  FBorderPanel.ParentBackground := False; // sonst flaecht clBtnFace durch
+  FBorderPanel.Color          := CL_STRIPE;
 
   // ---- rechter Bereich: Titel + Beschreibung ----
-  FContentArea            := TPanel.Create(Self);
-  FContentArea.Parent     := Self;
-  FContentArea.Align      := alClient;
-  FContentArea.BevelOuter := bvNone;
-  FContentArea.Color      := CL_TITLE_BG;
+  FContentArea                := TPanel.Create(Self);
+  FContentArea.Parent         := Self;
+  FContentArea.Align          := alClient;
+  FContentArea.BevelOuter     := bvNone;
+  FContentArea.StyleElements  := [];
+  FContentArea.ParentBackground := False;
+  FContentArea.Color          := CL_TITLE_BG;
 
   // ---- Titelzeile ----
-  FPanelTitle            := TPanel.Create(Self);
-  FPanelTitle.Parent     := FContentArea;
-  FPanelTitle.Align      := alTop;
-  FPanelTitle.Height     := MIN_TITLE_H;
-  FPanelTitle.BevelOuter := bvNone;
-  FPanelTitle.Color      := CL_TITLE_BG;
+  FPanelTitle                := TPanel.Create(Self);
+  FPanelTitle.Parent         := FContentArea;
+  FPanelTitle.Align          := alTop;
+  FPanelTitle.Height         := MIN_TITLE_H;
+  FPanelTitle.BevelOuter     := bvNone;
+  FPanelTitle.StyleElements  := [];
+  FPanelTitle.ParentBackground := False;
+  FPanelTitle.Color          := CL_TITLE_BG;
 
   // Badge (alRight, wird vor FLblTitle angelegt -> VCL platziert es rechts)
   FLblBadge                    := TLabel.Create(Self);
@@ -158,6 +218,8 @@ begin
   FLblBadge.Layout             := tlCenter;
   FLblBadge.Color              := CL_BADGE_BG;
   FLblBadge.Transparent        := False;
+  FLblBadge.ParentColor        := False;  // KRITISCH: erbt sonst Parent-Color
+  FLblBadge.StyleElements      := [];     // VCL-Theme nicht ueberschreiben
   FLblBadge.AlignWithMargins   := True;
   FLblBadge.Margins.SetBounds(4, 3, 6, 3);
 
@@ -171,16 +233,20 @@ begin
   FLblTitle.Font.Size          := 8;
   FLblTitle.Layout             := tlCenter;
   FLblTitle.Alignment          := taLeftJustify;
+  FLblTitle.ParentColor        := False;  // erbt sonst Parent-Color zur Render-Zeit
+  FLblTitle.StyleElements      := [];     // VCL-Theme nicht ueberschreiben Font.Color
   FLblTitle.AlignWithMargins   := True;
   FLblTitle.Margins.SetBounds(8, 0, 4, 0);
   FLblTitle.EllipsisPosition   := epEndEllipsis;
 
   // ---- Beschreibungszeile ----
-  FPanelDesc            := TPanel.Create(Self);
-  FPanelDesc.Parent     := FContentArea;
-  FPanelDesc.Align      := alClient;
-  FPanelDesc.BevelOuter := bvNone;
-  FPanelDesc.Color      := CL_DESC_BG;
+  FPanelDesc                := TPanel.Create(Self);
+  FPanelDesc.Parent         := FContentArea;
+  FPanelDesc.Align          := alClient;
+  FPanelDesc.BevelOuter     := bvNone;
+  FPanelDesc.StyleElements  := [];
+  FPanelDesc.ParentBackground := False;
+  FPanelDesc.Color          := CL_DESC_BG;
 
   FLblDesc                    := TLabel.Create(Self);
   FLblDesc.Parent             := FPanelDesc;
@@ -191,6 +257,8 @@ begin
   FLblDesc.Font.Size          := 8;
   FLblDesc.Layout             := tlTop;          // mehrzeilig: oben anliegend
   FLblDesc.Alignment          := taLeftJustify;
+  FLblDesc.ParentColor        := False;
+  FLblDesc.StyleElements      := [];
   FLblDesc.AlignWithMargins   := True;
   FLblDesc.Margins.SetBounds(8, 4, 8, 4);        // mehr Padding fuer Wrap-Text
   FLblDesc.WordWrap           := True;           // mehrzeilig statt Ellipsis
@@ -246,14 +314,18 @@ end;
 
 procedure TAnnotationOverlay.ShowAt(AEditor: TWinControl;
   AClientX, AClientY, AWidth, ALineH: Integer;
-  const ATitle, ADesc, ABadge: string);
+  const ATitle, ADesc, ABadge: string;
+  AAccentColor: TColor);
 var
-  TitleH, DescH, TotalH : Integer;
-  BadgeCaption          : string;
-  WasVisible            : Boolean;
-  DC                    : HDC;
-  OldFont               : HFONT;
-  CalcRect              : TRect;
+  TitleH, DescH, TotalH    : Integer;
+  BadgeCaption             : string;
+  WasVisible               : Boolean;
+  DC                       : HDC;
+  OldFont                  : HFONT;
+  CalcRect                 : TRect;
+  EffAccent                : TColor;
+  TitleBg, BadgeBg         : TColor;
+  WindowBase               : TColor;
 begin
   // Editor muss da sein — sonst keine Sinn das Overlay zu zeigen.
   if not Assigned(AEditor) or not AEditor.HandleAllocated then Exit;
@@ -292,33 +364,71 @@ begin
   // und unsere editor-client-Koordinaten als Screen-Koordinaten missdeuten.
   EmbedIntoEditor(AEditor.Handle);
 
+  // Editor-Theme-Farbe via offizielle ToolsAPI (nicht StyleServices, das
+  // wuerde die IDE-Frame-Theme-Farbe liefern). DX.Blame nutzt das gleiche
+  // Pattern fuer themed Editor-Overlays.
+  WindowBase := GetEditorThemeBgColor;
+  if WindowBase = clNone then
+    WindowBase := StyleServices.GetSystemColor(clWindow);  // Fallback
+
   WasVisible := Visible and IsWindowVisible(Handle);
 
-  // Cache-Pruefung: Nur greift wenn Form bereits sichtbar UND alle Werte
-  // identisch sind.
+  // Cache-Pruefung: Nur greift wenn alle Parameter UND der Editor-Theme-
+  // Hintergrund unveraendert sind. WindowBase im Cache ist der Trigger fuer
+  // automatische Re-Berechnung nach Theme-Wechsel.
   if WasVisible
     and (AClientX = FLastX) and (AClientY = FLastY)
     and (AWidth   = FLastW) and (ALineH   = FLastLineH)
     and (ATitle   = FLastTitle) and (ADesc = FLastDesc)
-    and (ABadge   = FLastBadge)
+    and (ABadge   = FLastBadge) and (AAccentColor = FLastAccent)
+    and (WindowBase = FLastWindowBase)
   then
     Exit;
 
+  // Title-BG ~ 70% Akzent + 30% Editor-BG = saturierte Severity-Farbe in
+  //           der Editor-Theme-Helligkeit, weisser Text gut kontrastiert.
+  // Badge-BG ~ 90% Akzent + 10% Editor-BG = fast voller Akzent.
+  // Title/Badge-FG = clWhite fix — auf saturiertem Akzent in jeder Severity
+  //                  zuverlaessig lesbar (User-Wunsch: Warn-Text soll weiss sein).
+  EffAccent := AAccentColor;
+  if EffAccent = clNone then
+    EffAccent := CL_STRIPE;
+  TitleBg := BlendColor(WindowBase, EffAccent, 0.70);
+  BadgeBg := BlendColor(WindowBase, EffAccent, 0.90);
+  FBorderPanel.Color   := EffAccent;
+  FPanelTitle.Color    := TitleBg;
+  FContentArea.Color   := TitleBg;
+  FLblBadge.Color      := BadgeBg;
+  FLblTitle.Font.Color := clWhite;
+  FLblBadge.Font.Color := clWhite;
+  // Description-Bereich: Editor-Hintergrund + dezent abgeschwaechter Text
+  // (auto-kontrast — neutraler Bereich der dem Editor-Theme folgt).
+  // Im Dark-Theme bewusst heller (0.75) als im Light-Theme (0.55), weil
+  // Helligkeitswahrnehmung auf dunklem Hintergrund schneller "verschwindet".
+  FPanelDesc.Color     := WindowBase;
+  if IsLightColor(WindowBase) then
+    FLblDesc.Font.Color := BlendColor(WindowBase, clBlack, 0.55)  // mittelgrau auf hell
+  else
+    FLblDesc.Font.Color := BlendColor(WindowBase, clWhite, 0.75); // hellgrau auf dunkel
+
   // Inhalt setzen — VCL invalidiert die Labels automatisch beim Caption-Set.
-  FLblTitle.Caption    := #$26A0 + '  ' + ATitle;  // U+26A0 = ⚠
+  // Symbol ueber _() durch dxgettext lokalisierbar (Default U+26A0 = ⚠).
+  FLblTitle.Caption    := _(#$26A0) + '  ' + ATitle;
   FLblDesc.Caption     := ADesc;
   FLblBadge.Caption    := BadgeCaption;
   FLblBadge.Visible    := ABadge <> '';
   FPanelTitle.Height   := TitleH;  // dynamisches DPI-Sizing
 
   // Cache aktualisieren
-  FLastX      := AClientX;
-  FLastY      := AClientY;
-  FLastW      := AWidth;
-  FLastLineH  := ALineH;
-  FLastTitle  := ATitle;
-  FLastDesc   := ADesc;
-  FLastBadge  := ABadge;
+  FLastX          := AClientX;
+  FLastY          := AClientY;
+  FLastW          := AWidth;
+  FLastLineH      := ALineH;
+  FLastTitle      := ATitle;
+  FLastDesc       := ADesc;
+  FLastBadge      := ABadge;
+  FLastAccent     := AAccentColor;
+  FLastWindowBase := WindowBase;
 
   // Position via raw Win32 — SetBounds wuerde VCL-Logik triggern die
   // fuer ein WS_CHILD-zwangs-eingebettetes-Form unzuverlaessig ist.

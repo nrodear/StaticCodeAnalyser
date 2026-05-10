@@ -109,6 +109,13 @@ begin
   GDeMap.Add('Cyclomatic',               'Komplexit'#$E4't');
   GDeMap.Add('Cyclomatic Complexity',    'Cyclomatic Complexity');
 
+  // ---- TypeText / SonarQube-Kategorien (Hover-Overlay Badge, Grid Spalte 'Type') ----
+  GDeMap.Add('Bug',                      'Bug');               // intl. etabliert
+  GDeMap.Add('Code Smell',               'Code Smell');        // intl. etabliert
+  GDeMap.Add('Vulnerability',            'Sicherheitsl'#$FC'cke');
+  GDeMap.Add('Security Hotspot',         'Sicherheits-Hotspot');
+  GDeMap.Add('Code Duplication',         'Code-Duplikat');
+
   // ---- Detektor-Namen ----
   GDeMap.Add('SQL Injection',            'SQL Injection');
   GDeMap.Add('Hardcoded Secrets',        'Hartcodierte Secrets');

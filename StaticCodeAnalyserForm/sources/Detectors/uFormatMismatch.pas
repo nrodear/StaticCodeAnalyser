@@ -7,8 +7,15 @@ unit uFormatMismatch;
 // FormatFunctions) bei denen die Anzahl der Platzhalter im Format-
 // String nicht mit der Anzahl der Array-Argumente uebereinstimmt.
 //
-// Erkannte Platzhalter: %s %d %i %u %e %f %g %n %m %p %c %x
-//   %% wird als Escape behandelt (zaehlt NICHT als Argument)
+// Zwei Placeholder-Stile werden unterschieden (per Funktionsname):
+//   * Standard (RTL Format): %s %d %i %u %e %f %g %n %m %p %c %x
+//     %% wird als Escape behandelt (zaehlt NICHT als Argument).
+//   * Bare-% (mORMot FormatUtf8/FormatString/StringFormatUtf8): nur '%'
+//     allein - Typ wird zur Laufzeit aus dem Variant-Argument abgeleitet.
+//     %% bleibt Escape. Kollidiert NICHT mit Standard-Style weil Bare-%
+//     Funktionen keinen Type-Letter erwarten.
+// Liste der Bare-%-Funktionen: BARE_STYLE_FUNCS (hardcoded, mORMot-
+// spezifisch). Falls weitere Bare-Style-Funktionen auftauchen, dort ergaenzen.
 //
 // Format-String-Quellen:
 //   1. Direktes Stringliteral als 1. Argument:
@@ -51,7 +58,11 @@ type
     // (Stringliteral inklusive Anfuehrungszeichen, oder Identifier).
     class function TryExtractCall(const CallName: string;
       out FirstArg: string; out FuncEnd: Integer;
-      out ArgsStart: Integer): Boolean; static;
+      out ArgsStart: Integer; out MatchedFunc: string): Boolean; static;
+
+    // True wenn der Funktionsname zur mORMot-Familie gehoert die '%' allein
+    // als Platzhalter nutzt (kein Type-Letter wie %s/%d).
+    class function IsBareStyle(const FuncName: string): Boolean; static;
 
     // Versucht aus dem ersten Argument den Format-String zu rekonstruieren.
     // FirstArg kann sein:
@@ -65,8 +76,11 @@ type
       ConstTable: TDictionary<string, string>;
       out FmtStr: string): Boolean; static;
 
-    // Zaehlt Platzhalter im Format-String (%s, %d, ... aber nicht %%).
-    class function CountPlaceholders(const FmtStr: string): Integer; static;
+    // Zaehlt Platzhalter im Format-String. ABareStyle=False -> RTL-Style
+    // (%s/%d/... mit Type-Letter, %% Escape). ABareStyle=True -> mORMot-
+    // Style (jedes nicht-escape '%' ist ein Platzhalter, %% bleibt Escape).
+    class function CountPlaceholders(const FmtStr: string;
+      ABareStyle: Boolean): Integer; static;
 
     // Zaehlt die Argumente im Delphi-Open-Array ab Position StartPos.
     // Erwartet '[arg1,arg2,...]' im Text.
@@ -88,7 +102,69 @@ type
 
 implementation
 
+const
+  // mORMot-Familie: Funktionen die '%' allein als Platzhalter nutzen
+  // (Typ wird zur Laufzeit aus dem Variant-Argument abgeleitet, kein
+  // Type-Letter wie %s/%d). Lower-Case fuer case-insensitive Vergleich.
+  // Erweitern wenn weitere Bare-Style-Funktionen auftauchen (z.B.
+  // mORMot's StringFormatBuffer, FormatShort, FormatToShort, ...).
+  BARE_STYLE_FUNCS : array[0..2] of string =
+    ('formatutf8', 'formatstring', 'stringformatutf8');
+
 { ---- Hilfsfunktionen ---- }
+
+class function TFormatMismatchDetector.IsBareStyle(
+  const FuncName: string): Boolean;
+var
+  Low : string;
+  Name : string;
+begin
+  Low := FuncName.ToLower;
+  for Name in BARE_STYLE_FUNCS do
+    if Name = Low then Exit(True);
+  Result := False;
+end;
+
+procedure SkipSpaces(const S: string; var I: Integer);
+begin
+  while (I <= Length(S)) and CharInSet(S[I], [' ', #9, #13, #10]) do
+    Inc(I);
+end;
+
+function ReadStringLiteral(const S: string; var I: Integer;
+  var Inner: string): Boolean;
+// Liest ab S[I] (muss '' sein) ein Pascal-String-Literal '...' und haengt
+// den Inhalt (mit ''-Escape-Sequenzen erhalten) an Inner an. Advanced I
+// auf die Position direkt NACH dem schliessenden '. Liefert False bei
+// nicht-terminiertem Literal oder falschem Startzeichen.
+begin
+  if (I > Length(S)) or (S[I] <> '''') then Exit(False);
+  Inc(I); // opening '
+  while I <= Length(S) do
+  begin
+    if S[I] = '''' then
+    begin
+      if (I < Length(S)) and (S[I + 1] = '''') then
+      begin
+        // ''-Escape: doppeltes '' im String. Beide ans Inner haengen damit
+        // ResolveFormatString sie spaeter zu einem ' decoded.
+        Inner := Inner + '''''';
+        Inc(I, 2);
+      end
+      else
+      begin
+        Inc(I); // closing '
+        Exit(True);
+      end;
+    end
+    else
+    begin
+      Inner := Inner + S[I];
+      Inc(I);
+    end;
+  end;
+  Exit(False); // nicht-terminiert
+end;
 
 class function TFormatMismatchDetector.FormatFunctionList: TArray<string>;
 var
@@ -110,24 +186,29 @@ end;
 
 class function TFormatMismatchDetector.TryExtractCall(
   const CallName: string; out FirstArg: string; out FuncEnd: Integer;
-  out ArgsStart: Integer): Boolean;
+  out ArgsStart: Integer; out MatchedFunc: string): Boolean;
 // Sucht den groessten Match unter allen FormatFunctionList-Eintraegen mit
 // nachfolgendem '('. Pflicht-Pruefung links: vor dem Funktionsnamen darf
 // kein Identifier-Char stehen (sonst wuerde 'MyFormat(' false-positiv
 // matchen). Punkt davor (z.B. SysUtils.Format) ist erlaubt.
 //
 // Returns True wenn ein Match gefunden + erstes Argument extrahiert
-// (Stringliteral mit Quotes ODER Identifier-Token).
+// (Stringliteral mit Quotes ODER Identifier-Token). MatchedFunc liefert
+// den Lower-Case-Namen zurueck damit Caller den Placeholder-Stil
+// (Standard vs Bare-%) bestimmen kann.
 var
   Low      : string;
   FuncName : string;
   pCall    : Integer;
   i, j     : Integer;
+  savedI   : Integer;
+  Inner    : string;
 begin
-  Result    := False;
-  FirstArg  := '';
-  FuncEnd   := 0;
-  ArgsStart := 0;
+  Result      := False;
+  FirstArg    := '';
+  FuncEnd     := 0;
+  ArgsStart   := 0;
+  MatchedFunc := '';
   Low := CallName.ToLower;
 
   for FuncName in FormatFunctionList do
@@ -138,6 +219,7 @@ begin
     if (pCall > 1) and TDetectorUtils.IsIdentChar(Low[pCall - 1]) then
       Continue;
 
+    MatchedFunc := FuncName;
     FuncEnd := pCall + Length(FuncName) + 1; // direkt nach '('
     i := FuncEnd;
     // fuehrenden Whitespace ueberspringen
@@ -146,34 +228,41 @@ begin
 
     if CallName[i] = '''' then
     begin
-      // Stringliteral - bis schliessenden Quote sammeln (incl. ''-Escape)
-      FirstArg := '''';
-      Inc(i);
-      while i <= Length(CallName) do
+      // Stringliteral - bis schliessenden Quote sammeln. Anschliessend
+      // pruefen ob ' + ''-fortgesetzte Konkatenation folgt (typisch fuer
+      // mehrzeilige SQL-Strings: 'SELECT...' + 'WHERE %=...').
+      // Inner = der ZUSAMMENGESETZTE Inhalt (ohne aeussere Quotes); FirstArg
+      // wird am Ende einmalig mit Quotes gerahmt damit ResolveFormatString
+      // weiterhin damit umgehen kann.
+      Inner := '';
+      if not ReadStringLiteral(CallName, i, Inner) then Exit(False);
+      // Konkatenation 'a' + 'b' + ... mergen.
+      while True do
       begin
-        if CallName[i] = '''' then
+        // Position vor dem '+' merken um bei Fehlversuch zurueckzuspringen.
+        savedI := i;
+        SkipSpaces(CallName, i);
+        if (i > Length(CallName)) or (CallName[i] <> '+') then
         begin
-          if (i < Length(CallName)) and (CallName[i + 1] = '''') then
-          begin
-            FirstArg := FirstArg + ''''''; // escaped quote
-            Inc(i, 2);
-          end
-          else
-          begin
-            FirstArg := FirstArg + '''';
-            Inc(i);
-            ArgsStart := i;
-            Exit(True);
-          end;
-        end
-        else
-        begin
-          FirstArg := FirstArg + CallName[i];
-          Inc(i);
+          i := savedI; // kein '+', ArgsStart soll direkt nach Literal stehen
+          Break;
         end;
+        Inc(i); // '+' ueberspringen
+        SkipSpaces(CallName, i);
+        if (i > Length(CallName)) or (CallName[i] <> '''') then
+        begin
+          // '+' aber kein weiteres Literal (z.B. + Ident, + IntToStr(x))
+          // -> Format-String nicht vollstaendig statisch aufloesbar.
+          // Wir liefern was wir haben, der Detector macht keinen Befund
+          // wenn ResolveFormatString unsicher ist.
+          i := savedI;
+          Break;
+        end;
+        if not ReadStringLiteral(CallName, i, Inner) then Exit(False);
       end;
-      // kein schliessendes ' - Fehler.
-      Exit(False);
+      FirstArg := '''' + Inner + '''';
+      ArgsStart := i;
+      Exit(True);
     end
     else if TDetectorUtils.IsIdentChar(CallName[i]) and
             not CharInSet(CallName[i], ['0'..'9']) then
@@ -234,7 +323,14 @@ begin
 end;
 
 class function TFormatMismatchDetector.CountPlaceholders(
-  const FmtStr: string): Integer;
+  const FmtStr: string; ABareStyle: Boolean): Integer;
+// WICHTIG (Bare-Style/mORMot): TFormatUtf8.Parse in mormot.core.text macht
+// KEIN '%%'-Escape. Jedes '%' konsumiert ein Argument. '%%' = zwei aufein-
+// anderfolgende Args ohne Trenner. Das ist absichtlich (mORMot-Code nutzt
+// das z.B. um Where-Clauses zu kettenkonkatenieren: FormatUtf8('%%>=:(%):...
+// , [Where, FieldName, ...]) - Where + FieldName ohne Trenner).
+//
+// Standard-Style (RTL Format): '%%' IST Escape (literales '%').
 var
   i: Integer;
 begin
@@ -244,8 +340,14 @@ begin
   begin
     if FmtStr[i] = '%' then
     begin
-      if (i < Length(FmtStr)) and (FmtStr[i + 1] = '%') then
-        Inc(i, 2) // %% = kein Platzhalter
+      if ABareStyle then
+      begin
+        // mORMot: jedes '%' = ein Argument, KEIN Escape, kein Type-Letter.
+        Inc(Result);
+        Inc(i);
+      end
+      else if (i < Length(FmtStr)) and (FmtStr[i + 1] = '%') then
+        Inc(i, 2) // RTL-Format: %% = literales '%' (Escape)
       else
       begin
         Inc(Result); // %X = ein Argument
@@ -383,18 +485,19 @@ var
 
   procedure CheckCallText(const CallText: string; Line: Integer);
   var
-    FirstArg   : string;
-    FuncEnd    : Integer;
-    ArgsStart  : Integer;
-    FmtStr     : string;
-    PlaceCount : Integer;
-    ArgCount   : Integer;
-    F          : TLeakFinding;
-    Key        : string;
+    FirstArg    : string;
+    FuncEnd     : Integer;
+    ArgsStart   : Integer;
+    MatchedFunc : string;
+    FmtStr      : string;
+    PlaceCount  : Integer;
+    ArgCount    : Integer;
+    F           : TLeakFinding;
+    Key         : string;
   begin
-    if not TryExtractCall(CallText, FirstArg, FuncEnd, ArgsStart) then Exit;
+    if not TryExtractCall(CallText, FirstArg, FuncEnd, ArgsStart, MatchedFunc) then Exit;
     if not ResolveFormatString(FirstArg, ConstTable, FmtStr) then Exit;
-    PlaceCount := CountPlaceholders(FmtStr);
+    PlaceCount := CountPlaceholders(FmtStr, IsBareStyle(MatchedFunc));
     ArgCount   := CountArrayArgs(CallText, ArgsStart);
     if PlaceCount = ArgCount then Exit;
     // Dedup: nkCall + nkAssign-Walk koennen denselben Format-Call doppelt

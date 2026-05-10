@@ -69,6 +69,10 @@ type
     // OnClick-Handler an, der das Popup direkt unterhalb des Buttons
     // aufklappt (statt nur per Rechtsklick).
     procedure AttachToButton(Btn: TButton);
+    // Oeffnet das Export-Popup an einer beliebigen Bildschirm-Koordinate.
+    // Wird vom Hamburger-Menu genutzt, wenn der Export-Button im NARROW-
+    // Layout hidden ist - das Item triggert weiterhin denselben Popup.
+    procedure PopupAt(X, Y: Integer);
   end;
 
 implementation
@@ -123,6 +127,11 @@ procedure TFindingExportMenu.AttachToButton(Btn: TButton);
 begin
   Btn.PopupMenu := FPopup;
   Btn.OnClick   := DoButtonClick;
+end;
+
+procedure TFindingExportMenu.PopupAt(X, Y: Integer);
+begin
+  FPopup.Popup(X, Y);
 end;
 
 function TFindingExportMenu.CurrentFocusFile: string;

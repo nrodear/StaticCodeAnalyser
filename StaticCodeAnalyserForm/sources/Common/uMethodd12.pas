@@ -3,7 +3,8 @@ unit uMethodd12;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.Generics.Collections, uSCAConsts;
+  System.SysUtils, System.Classes, System.Generics.Collections,
+  uSCAConsts, uLocalization;  // _() — SeverityText/TypeText lokalisierbar
 
 type
   TMethodInfo = class
@@ -91,15 +92,20 @@ begin
 end;
 
 function TLeakFinding.SeverityText: string;
+// Liefert lokalisierten Severity-Text fuer UI-Anzeige (Grid, Hover-Overlay,
+// Export). Source-Strings sind ENGLISCH (Konvention von uLocalization),
+// uLocalization._() mappt bei aktiver DE-Sprache auf 'Fehler'/'Warnung'/etc.
+// uAnalyserTypes.SeverityFromText akzeptiert beide Sprachen parallel,
+// daher bleiben Sort + Grid-Filter intakt.
 begin
-  // Lesefehler ist ein Sonderfall: kein Code-Befund sondern Parser-Fehler.
+  // FileReadError ist ein Sonderfall: kein Code-Befund sondern Parser-Fehler.
   if Kind = fkFileReadError then
-    Exit('Lesefehler');
+    Exit(_('Read Error'));
 
   case Severity of
-    lsError   : Result := 'Fehler';
-    lsWarning : Result := 'Warnung';
-    lsHint    : Result := 'Hinweis';
+    lsError   : Result := _('Error');
+    lsWarning : Result := _('Warning');
+    lsHint    : Result := _('Hint');
   else
     Result := '';
   end;
@@ -114,14 +120,17 @@ begin
 end;
 
 function TLeakFinding.TypeText: string;
+// SonarQube-typische Type-Bezeichnungen — Source-Strings englisch (etabliert),
+// fuer DE-UI via _() uebersetzbar (default Pass-Through bleibt englisch
+// solange kein DE-Mapping fuer 'Bug'/'Code Smell' im Dictionary steht).
 begin
   case FindingType of
-    ftBug             : Result := 'Bug';
-    ftCodeSmell       : Result := 'Code Smell';
-    ftVulnerability   : Result := 'Vulnerability';
-    ftSecurityHotspot : Result := 'Security Hotspot';
-    ftCodeDuplication : Result := 'Code Duplication';
-    ftFileError       : Result := 'Lesefehler';
+    ftBug             : Result := _('Bug');
+    ftCodeSmell       : Result := _('Code Smell');
+    ftVulnerability   : Result := _('Vulnerability');
+    ftSecurityHotspot : Result := _('Security Hotspot');
+    ftCodeDuplication : Result := _('Code Duplication');
+    ftFileError       : Result := _('Read Error');
   else
     Result := '';
   end;

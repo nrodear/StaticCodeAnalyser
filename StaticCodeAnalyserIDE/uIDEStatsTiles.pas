@@ -38,6 +38,37 @@ type
     property BorderColor: TColor read FBorderColor write FBorderColor;
   end;
 
+  // Vereinheitlicht die Hoehe von Toolbar-Controls. Loest die VCL-Quirk
+  // dass TComboBox die Align.Height ignoriert und stattdessen aus
+  // ItemHeight + Frame-Padding eine eigene Hoehe berechnet. Buttons/Edits
+  // respektieren Height direkt - Apply() setzt fuer beide das Richtige.
+  //
+  // Verwendung im Constructor (UnifCtrlH einmalig aus Self.Font ableiten):
+  //   UnifCtrlH := TToolbarSizing.HeightForFont(Self.Font);
+  //   TToolbarSizing.Apply(BtnAnalyse,    UnifCtrlH);
+  //   TToolbarSizing.Apply(FFilterCombo,  UnifCtrlH);
+  //   TToolbarSizing.ApplyIconButton(FBtnHamburger, ScaleW(BTN_W_ICON), UnifCtrlH);
+  TToolbarSizing = class
+  public
+    // Berechnet eine fuer den Font passende Toolbar-Control-Hoehe.
+    // Formel: Abs(Font.Height) + 11. Font.Height ist negativ in Pixel
+    // (= -PointSize * CurrentPPI / 72), enthaelt also schon DPI-Scaling.
+    // +11 = Border 1+1 + Inset 2+2 + Edit-Padding 2+1.
+    // Beispiele bei 96 DPI:
+    //   Font.Size=8  -> Font.Height=-11 -> Hoehe 22 px
+    //   Font.Size=9  -> Font.Height=-12 -> Hoehe 23 px
+    //   Font.Size=10 -> Font.Height=-13 -> Hoehe 24 px
+    class function HeightForFont(Font: TFont): Integer; static;
+    class procedure Apply(Ctrl: TControl; AHeight: Integer); static;
+    // Erzwingt eine quadratische / fix-grosse Icon-Button-Geometrie via
+    // Constraints fuer Width UND Height. Garantiert dass Icon-Buttons
+    // (Browse "...", Hamburger ☰, Branch-Changes ⎇) im VCL-Theme
+    // identisch rendern - die Width-Property alleine kann durch Align,
+    // ParentLayout oder Theme-Quirks 1-2 px abweichen.
+    class procedure ApplyIconButton(Ctrl: TControl;
+      AWidth, AHeight: Integer); static;
+  end;
+
   TStatsTilesBuilder = class
   public
     // Erzeugt einen einzelnen Tile (Icon-Glyph + Count + Caption) im
@@ -55,40 +86,134 @@ type
       out TileBug, TileVuln, TileDup, TileCyclomatic, TileScore: TLabel); static;
   end;
 
-  // Responsive Layout: blendet "optionale" Controls aus wenn der Parent-
-  // Container schmal wird (typisch: Plugin gedockt in einem schmalen
-  // Tool-Panel statt im Hauptfenster). Visible:=False entfernt das Control
-  // aus der alLeft/alRight-Anordnung; die verbleibenden ruecken automatisch
-  // nach. TComponent-Ownership: lebt mit dem Frame, wird beim Frame-Destroy
-  // mit freigegeben.
+  // 3-Stufen-Responsive-Layout: Stage haengt von der ClientWidth des Root-
+  // Containers (typisch: Frame) ab. Jede Stufe zeigt eine Untermenge von
+  // Controls; Stage-Wechsel toggled Visible an allen registrierten Controls.
   //
-  // Universell: nimmt alle TControl-Subclasses an (Buttons, Labels,
-  // Tile-Panels, ComboBoxen ...). Im Aufrufer ggf. Tile-Labels via
-  // Label.Parent.Parent zu ihren TilePanels aufloesen.
+  //   usNarrow  - Frame schmal gedockt (Plugin im IDE-Tool-Window)
+  //   usMedium  - kleines floated Window
+  //   usFull    - normales floated Window mit voller UI
   //
-  // AInverse=False (Default): Controls hide bei narrow, show bei wide.
-  // AInverse=True: Controls hide bei wide, show bei narrow (z.B. Hamburger-
-  // Button der nur im gedockten Modus auftaucht).
-  TResponsiveVisibilityController = class(TComponent)
+  // Verwendung:
+  //   FResp := TResponsiveLayoutController.Create(Self, Self,
+  //              BREAKPOINT_MEDIUM, BREAKPOINT_FULL);
+  //   FResp.RegisterCtrl(BtnAlways);                    // immer sichtbar
+  //   FResp.RegisterCtrl(LblFilter, usMedium);          // ab MEDIUM
+  //   FResp.RegisterCtrl(BtnCancel, usFull);            // nur FULL
+  //   FResp.RegisterCtrl(BtnHamburger, usNarrow, usMedium); // <FULL only
+  TUiStage = (usNarrow, usMedium, usFull);
+
+  TResponsiveLayoutController = class(TComponent)
   private
-    FParent             : TPanel;
-    FOptional           : TList<TControl>;
-    FThresholdWidth     : Integer;
-    FInverse            : Boolean;
-    FOriginalOnResize   : TNotifyEvent;
+    type
+      TEntry = record
+        Control  : TControl;
+        MinStage : TUiStage;
+        MaxStage : TUiStage;
+      end;
+    var
+      FRoot              : TWinControl;
+      FEntries           : TList<TEntry>;
+      FMediumThresholdPx : Integer;     // 96-DPI logisch
+      FFullThresholdPx   : Integer;     // 96-DPI logisch
+      FOriginalOnResize  : TNotifyEvent;
+      FAfterApply  : TNotifyEvent;
+      FLastStage         : TUiStage;
+      FFirstApply        : Boolean;
     procedure HandleResize(Sender: TObject);
     procedure ApplyVisibility;
+    function CurrentStage: TUiStage;
+    function ScaleByPPI(AValue: Integer): Integer;
   public
-    constructor Create(AOwner: TComponent; AParent: TPanel;
-      AOptional: array of TControl; AThresholdWidth: Integer;
-      AInverse: Boolean = False); reintroduce;
+    constructor Create(AOwner: TComponent; ARoot: TWinControl;
+      AMediumPx, AFullPx: Integer); reintroduce;
     destructor Destroy; override;
+
+    // Registriert ein Control mit seinem Sichtbarkeitsbereich.
+    // Default (kein Min/Max): immer sichtbar in allen Stufen.
+    procedure RegisterCtrl(AControl: TControl;
+      AMinStage: TUiStage = usNarrow;
+      AMaxStage: TUiStage = usFull);
+
+    // Optional: Callback nach JEDEM Resize (nicht nur bei Stage-Wechsel).
+    // Ideal fuer Folge-Anpassungen wie AdjustFilterSubPanels / AdjustSearchMinWidth -
+    // letzteres haengt von ClientWidth innerhalb einer Stufe ab und muss
+    // auch bei Float-Resize ohne Stage-Wechsel feuern.
+    property AfterApply: TNotifyEvent
+      read FAfterApply write FAfterApply;
+
+    // Manuell triggern (z.B. von FrameResize aus).
+    procedure ForceUpdate;
   end;
+
 
 implementation
 
 uses
   Winapi.Windows, uAnalyserPalette, uLocalization;
+
+type
+  // Access-Class zum Lesen/Schreiben von TControl.OnResize (protected).
+  // TPanel publishet das selbst, aber TWinControl/TFrame nicht direkt -
+  // wir wollen den Controller universell auf jedem TWinControl-Root nutzen,
+  // also brechen wir die Sichtbarkeit lokal. Standard-VCL-Pattern.
+  TControlAccess = class(TControl);
+
+{ TToolbarSizing }
+
+const
+  // Padding fuer Buttons/Edits oben+unten (Border + Inset + Edit-Innenabstand).
+  // Empirisch kalibriert fuer Segoe UI 8-10pt mit Win11-Theme. Aenderungen
+  // sind theme-abhaengig.
+  CTRL_VPADDING_PX  = 11;
+  // Frame-Padding einer TComboBox: ItemHeight + diese Konstante = Combo.Height.
+  COMBO_FRAME_PX    =  6;
+  // Fallback-Hoehe wenn Font nicht verfuegbar (entspricht Segoe UI 8pt @ 96 DPI).
+  FALLBACK_CTRL_PX  = 22;
+
+class function TToolbarSizing.HeightForFont(Font: TFont): Integer;
+// Font.Height kann positiv oder negativ sein. Negativ = nur Glyph-Hoehe
+// (Standard fuer Segoe UI in VCL); positiv = inkl. internes Leading.
+// Wir wollen die "Cell-Height" -> Abs() ist sicher.
+begin
+  if not Assigned(Font) then Exit(FALLBACK_CTRL_PX);
+  Result := Abs(Font.Height) + CTRL_VPADDING_PX;
+end;
+
+class procedure TToolbarSizing.ApplyIconButton(Ctrl: TControl;
+  AWidth, AHeight: Integer);
+// Vier-Hebel-Strategie: Width-Constraints, Height-Constraints, Width-Property,
+// Height-Property. Garantiert dass die Buttons im VCL-Align-Pass nicht durch
+// Padding/Theme/Parent-Layout um 1-2 px verschoben werden.
+begin
+  if not Assigned(Ctrl) then Exit;
+  Ctrl.Constraints.MinWidth  := AWidth;
+  Ctrl.Constraints.MaxWidth  := AWidth;
+  Ctrl.Constraints.MinHeight := AHeight;
+  Ctrl.Constraints.MaxHeight := AHeight;
+  Ctrl.Width  := AWidth;
+  Ctrl.Height := AHeight;
+end;
+
+class procedure TToolbarSizing.Apply(Ctrl: TControl; AHeight: Integer);
+// Setzt eine einheitliche Hoehe ueber drei Mechanismen:
+//   1) Constraints.MinHeight = MaxHeight = AHeight - VCL respektiert das
+//      auch bei aktivem Align (alLeft/alClient/alRight). Ohne Constraints
+//      wuerden die Children auf Container.ClientHeight gestreckt und das
+//      Toolbar-Layout drift bei Font/DPI-Aenderungen.
+//   2) Bei TComboBox zusaetzlich ItemHeight - die Combo-Renderhoehe ist
+//      ItemHeight + COMBO_FRAME_PX. Constraints alleine genuegt nicht
+//      weil VCL die Combo trotzdem auf Font-Naturhoehe zurueck-setzen kann.
+//   3) Height redundant setzen damit der initial-Wert direkt stimmt
+//      (vor dem ersten Align-Pass).
+begin
+  if not Assigned(Ctrl) then Exit;
+  Ctrl.Constraints.MinHeight := AHeight;
+  Ctrl.Constraints.MaxHeight := AHeight;
+  if Ctrl is TComboBox then
+    TComboBox(Ctrl).ItemHeight := AHeight - COMBO_FRAME_PX;
+  Ctrl.Height := AHeight;
+end;
 
 function ScaleByPPI(C: TControl; AValue: Integer): Integer;
 // Lokaler DPI-Helper: skaliert 96-DPI-Designwerte zur Container-PPI.
@@ -220,9 +345,16 @@ const
   GLYPH_CYCLO    = #$EBE7; // Diagnostic / Branch - "Komplexitaet"
   GLYPH_SCORE    = #$EB91; // Flame - "Codequalitaet"
 
-  TILE_W       = 65;
-  TILE_W_CYCLO = 72; // "Cyclomatic" ist breiter als die Standard-Kacheln
-  TILE_W_SCORE = 72; // letzter Tile etwas breiter (laengeres Wort)
+  // Tile-Breite passend zum 3-Stufen-Layout in uIDEAnalyserForm:
+  // 9 Tiles + 8 Margins (je 3 px) = 9 * 55 + 24 = 519 px Gesamt-Reihe.
+  // Tier-Verteilung:
+  //   NARROW (<500): 4 Tiles = 4*55 + 3*3 = 229 px
+  //   MEDIUM (500-849): 6 Tiles = 6*55 + 5*3 = 345 px
+  //   FULL (>=850): 9 Tiles = 519 px (passt in 842 px ClientWidth bei 850 px Frame)
+  // Alle Tiles gleich breit -> visuelle Gleichmaessigkeit der Sonar-Reihe.
+  TILE_W       = 55;
+  TILE_W_CYCLO = 55;
+  TILE_W_SCORE = 55;
 begin
   // Container leeren falls bereits aufgebaut.
   while Parent.ControlCount > 0 do
@@ -246,73 +378,107 @@ begin
   TileScore      := MakeTile(AOwner, Parent, _('Code Quality'), GLYPH_SCORE,   ICON_SCORE,   TILE_W_SCORE);
 end;
 
-{ TResponsiveVisibilityController }
+{ TResponsiveLayoutController }
 
-constructor TResponsiveVisibilityController.Create(AOwner: TComponent;
-  AParent: TPanel; AOptional: array of TControl; AThresholdWidth: Integer;
-  AInverse: Boolean = False);
-// AOptional = die OPTIONALEN Controls (Buttons, Labels, Panels), die im
-// schmalen Modus ausgeblendet werden duerfen (AInverse=False, Default).
-// Bei AInverse=True umgekehrt: nur im schmalen Modus sichtbar (z.B.
-// Hamburger-Button der die ausgeblendeten Aktionen ersetzt).
-var
-  i : Integer;
+constructor TResponsiveLayoutController.Create(AOwner: TComponent;
+  ARoot: TWinControl; AMediumPx, AFullPx: Integer);
 begin
   inherited Create(AOwner);
-  FParent         := AParent;
-  FOptional       := TList<TControl>.Create;
-  FThresholdWidth := AThresholdWidth;
-  FInverse        := AInverse;
+  FRoot              := ARoot;
+  FEntries           := TList<TEntry>.Create;
+  FMediumThresholdPx := AMediumPx;
+  FFullThresholdPx   := AFullPx;
+  FFirstApply        := True;
 
-  for i := Low(AOptional) to High(AOptional) do
-    if Assigned(AOptional[i]) then
-      FOptional.Add(AOptional[i]);
+  // OnResize-Hook chainen: bestehenden Handler nicht ueberschreiben.
+  // Cast ueber TControlAccess weil TWinControl.OnResize protected ist.
+  FOriginalOnResize  := TControlAccess(ARoot).OnResize;
+  TControlAccess(ARoot).OnResize := HandleResize;
 
-  // OnResize-Hook: bestehenden Handler chainen, sodass wir niemanden
-  // ueberschreiben (Frame koennte selbst etwas hooken).
-  FOriginalOnResize := AParent.OnResize;
-  AParent.OnResize  := HandleResize;
-
-  // Erste Anwendung beim Konstruieren - damit die Controls nicht erst beim
-  // ersten Resize-Event sichtbar/unsichtbar werden.
-  ApplyVisibility;
+  // Erstanwendung erfolgt NICHT hier - die Caller registriert noch alle
+  // Controls. Nach dem letzten RegisterCtrl: ForceUpdate aufrufen.
 end;
 
-destructor TResponsiveVisibilityController.Destroy;
+destructor TResponsiveLayoutController.Destroy;
 begin
-  // OnResize wieder herstellen falls Parent noch lebt - sonst zeigt der
-  // Hook ggf. auf einen freed Self.
-  if Assigned(FParent) then
-    FParent.OnResize := FOriginalOnResize;
-  FOptional.Free;
+  if Assigned(FRoot) then
+    TControlAccess(FRoot).OnResize := FOriginalOnResize;
+  FEntries.Free;
   inherited;
 end;
 
-procedure TResponsiveVisibilityController.HandleResize(Sender: TObject);
+procedure TResponsiveLayoutController.RegisterCtrl(AControl: TControl;
+  AMinStage: TUiStage = usNarrow; AMaxStage: TUiStage = usFull);
+var
+  E : TEntry;
+begin
+  if not Assigned(AControl) then Exit;
+  E.Control  := AControl;
+  E.MinStage := AMinStage;
+  E.MaxStage := AMaxStage;
+  FEntries.Add(E);
+end;
+
+function TResponsiveLayoutController.ScaleByPPI(AValue: Integer): Integer;
+var
+  PPI : Integer;
+begin
+  if not Assigned(FRoot) then Exit(AValue);
+  PPI := FRoot.CurrentPPI;
+  if PPI <= 0 then PPI := 96;
+  Result := MulDiv(AValue, PPI, 96);
+end;
+
+function TResponsiveLayoutController.CurrentStage: TUiStage;
+var
+  W : Integer;
+begin
+  W := FRoot.ClientWidth;
+  if W >= ScaleByPPI(FFullThresholdPx)   then Exit(usFull);
+  if W >= ScaleByPPI(FMediumThresholdPx) then Exit(usMedium);
+  Result := usNarrow;
+end;
+
+procedure TResponsiveLayoutController.HandleResize(Sender: TObject);
 begin
   ApplyVisibility;
   if Assigned(FOriginalOnResize) then
     FOriginalOnResize(Sender);
 end;
 
-procedure TResponsiveVisibilityController.ApplyVisibility;
+procedure TResponsiveLayoutController.ApplyVisibility;
 var
-  Ctrl    : TControl;
-  IsWide  : Boolean;
-  Target  : Boolean;
+  Stage  : TUiStage;
+  E      : TEntry;
+  Target : Boolean;
 begin
-  if not Assigned(FParent) then Exit;
-  // ClientWidth (nicht Width) - schliesst Border/Scrollbars aus, zeigt
-  // den tatsaechlich nutzbaren Innenraum.
-  IsWide := FParent.ClientWidth >= FThresholdWidth;
-  // Default: zeige bei wide. AInverse=True: zeige bei narrow.
-  if FInverse then
-    Target := not IsWide
-  else
-    Target := IsWide;
-  for Ctrl in FOptional do
-    if Assigned(Ctrl) and (Ctrl.Visible <> Target) then
-      Ctrl.Visible := Target;
+  if not Assigned(FRoot) then Exit;
+  Stage := CurrentStage;
+  // Visibility nur toggeln wenn sich die Stage geaendert hat oder beim
+  // ersten Apply (Initial-Visibility setzen). Spart unnoetige Repaints.
+  if FFirstApply or (Stage <> FLastStage) then
+  begin
+    FFirstApply := False;
+    FLastStage  := Stage;
+    for E in FEntries do
+    begin
+      Target := (Stage >= E.MinStage) and (Stage <= E.MaxStage);
+      if E.Control.Visible <> Target then
+        E.Control.Visible := Target;
+    end;
+  end;
+
+  // AfterApply IMMER feuern (auch ohne Stage-Wechsel) - Subpanel-Width-
+  // Anpassungen oder dynamische MinWidth-Berechnungen haengen an der
+  // tatsaechlichen ClientWidth, nicht nur am Stage-Wechsel.
+  if Assigned(FAfterApply) then
+    FAfterApply(Self);
+end;
+
+procedure TResponsiveLayoutController.ForceUpdate;
+begin
+  FFirstApply := True; // erzwingt vollen Apply auch wenn Stage gleich
+  ApplyVisibility;
 end;
 
 end.

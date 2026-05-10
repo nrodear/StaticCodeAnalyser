@@ -296,6 +296,30 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
   Dateien: `Common/uSCAConsts.pas`, `Infrastructure/uRepoSettings.pas`,
   `Detectors/uFormatMismatch.pas:FormatFunctionList/TryExtractCall`
 
+- [x] **FormatMismatch: mORMot Bare-`%` + String-Konkatenation** — _erledigt_
+  Drei zusammenhaengende False-Positive-Fixes nach Code-Reviews realer
+  mORMot-2.4-Befunde:
+  1. **Bare-`%`-Counting** fuer `FormatUtf8`/`FormatString`/`StringFormatUtf8`:
+     diese Funktionen haben kein Type-Letter (kein `%s`/`%d`), nur `%`
+     allein als Platzhalter. Neue `IsBareStyle`-Check + zweite Counting-
+     Strategie in `CountPlaceholders(ABareStyle)`.
+  2. **`%%` ist KEIN Escape im Bare-Style**: verifiziert via mORMot-Source
+     (`mormot.core.text.pas:9616 TFormatUtf8.Parse`) - jedes `%` konsumiert
+     ein Argument, `%%` = zwei aufeinanderfolgende Args ohne Trenner. Das
+     ist absichtlich (mORMot-Code nutzt es z.B. um Where-Clauses zu
+     kettenkonkatenieren). Standard-Style (RTL `Format`) bleibt unveraendert
+     - dort ist `%%` weiterhin Escape.
+  3. **String-Literal-Konkatenation `'a' + 'b'`**: Detector mergte vorher
+     nur das ERSTE Literal -> mehrzeilige SQL-Strings wurden nur teilweise
+     gepruft (False Positive). Neue Helper `ReadStringLiteral`/`SkipSpaces`
+     loopen `+ '...'`-Fortsetzungen und akkumulieren in `Inner`.
+  Effekt: 3 mORMot-Demo-Findings (`api.impl.pas:62/71/126`) verschwinden;
+  ein echter Bug in `mormot.orm.rest.pas:1780` (9 Platzhalter vs 8 Args)
+  wird jetzt korrekt gemeldet.
+  Tests: `TTestFormatMismatchBareStyle` mit 5 neuen Cases (DoublePercent,
+  ConcatenatedLiteral *2, StandardFormat-Regression, ...).
+  Dateien: `Detectors/uFormatMismatch.pas`, `tests/uTestFormatMismatch.pas`
+
 - [ ] **MagicNumber: typische Bit-Width-Werte fehlen in Trivials**
   `8`, `16`, `24`, `31`, `32`, `63`, `64`, `128`, `255`, `256` werden
   als Magic Numbers gemeldet — sind aber idiomatische Bit-/Byte-
@@ -402,77 +426,45 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
   abgedeckt). Fehlend: `tokenize`, `passport`, `keyboard` (alle sollten
   KEIN Match sein).
 
-- [ ] **Docked-Mode UI: zuverlässige Anzeige notwendiger Bedienelemente**
+- [x] **Docked-Mode UI: zuverlässige Anzeige notwendiger Bedienelemente** — _erledigt (Phase 1+2)_
 
-  **Status quo (aktuell, fragil):**
-  - `TResponsiveVisibilityController` hookt `Panel.OnResize`, toggelt
-    `Visible` basierend auf Width-Schwelle (BREAKPOINT_DOCKED=700)
-  - 4 Controller-Instanzen über 3 Panels + 1 Stats-Panel
-  - `TAnalyserFrame.Resize` (override) forwarded an alle Panel-OnResizes,
-    weil OnResize aus IDE-Dock-Logik teilweise verschluckt wird
-  - `AdjustFilterSubPanels` hängt parallel an `PanelButtons.OnResize`
-    und passt Sub-Panel-Widths an Label-Visibility an
-  - Action-Buttons in `PanelSearch` summieren sich auf ~486 px im docked,
-    überlaufen bei typischen 350-400 px Dock weiterhin
-  - **Bekannte Schwachstellen:** mehrere Race-Conditions zwischen
-    Dock-Resize und Controller-Init; chained OnResize fragil/debug-unfriendly;
-    Hamburger-Visibility hat schon 3× Hin und Her gemacht
+  **Phase 1 (Stabilisieren) erledigt:**
+  - Initial-State deterministisch via `FrameResize(Self)` am Constructor-
+    Ende → `FResponsive.ForceUpdate` mit `FFirstApply=True` setzt
+    Visibility EINMAL nach voll fertiger UI.
+  - `FSearchEdit.Constraints.MinWidth` im Narrow auf 60 px (statt 120).
+  - Branch-Changes als ⎇-Glyph-Button (32 px) statt Caption-Button
+    (104 px) — PanelSearch passt jetzt in jede Stufe.
+  - Frame.Constraints.MinWidth=500 + Propagation auf IDE-Host-Form
+    (`GetParentForm` in `FrameCreated`) — schützt vor pathologisch
+    schmalen Floats.
 
-  **Phase 1: Stabilisieren (kurzfristig, Mini-Risk)**
-  - Dock-State direkt erkennen (statt Width-Heuristik): `HostDockSite <> nil`
-    oder `INTAEditWindow.IsFloating` aus ToolsAPI. Width bleibt Fallback.
-  - PanelSearch im Docked: `BtnAnalyse` + `FBtnAnalyseCurrent` kollabieren
-    auf Icon-Buttons (28 px, "▶"/"📄") oder wandern ins Hamburger-Menü.
-    Ergibt PanelSearch-Belegung ~250 px - passt unter 350.
-  - `FSearchEdit.Constraints.MinWidth` im Docked auf 60 px (statt 120).
-  - Initial-State garantiert deterministisch: `inherited Create` -> komplett
-    fertige UI -> EINMAL `RecomputeResponsiveLayout` am Ende statt mehrere
-    `ApplyVisibility`-Calls aus Controller-Constructors.
-  - Datei: `uIDEAnalyserForm.pas` + `uIDEStatsTiles.pas`
-
-  **Phase 2: Layout-Architektur sauberer (mittel)**
-  - Inline `TPanel`-Ketten mit hardcoded Widths ersetzen durch
-    `TFlowPanel` oder eigene `TToolbarLayout`-Komponente die natives
-    Overflow-Handling kennt (Controls wrappen oder kollabieren in
-    Dropdown/More-Button).
-  - Deklarative Layout-Config statt 4 Controller-Instanzen pro Panel:
+  **Phase 2 (Architektur) erledigt:**
+  - `TResponsiveVisibilityController` (5 verteilte Instanzen über 4
+    Panels) entfernt → ersetzt durch zentralen `TResponsiveLayoutController`
+    in `uIDEStatsTiles.pas`. Eine Instanz pro Frame, hookt Frame.OnResize.
+  - Deklarative Stage-Registrierung (vgl. ursprünglicher Phase-2-Vorschlag):
     ```
-    FToolbar.AddButton(BTN_ANALYSE, _('Start analysis'),     prAlways);
-    FToolbar.AddButton(BTN_CURRENT, _('Current file'),       prAlways);
-    FToolbar.AddButton(BTN_BRANCH,  _('Branch-Changes'),     prFloated);
-    FToolbar.AddSeparator;
-    ...
+    FResp.RegisterCtrl(FBtnCancel,    usFull);            // nur FULL
+    FResp.RegisterCtrl(FLblFilter,    usMedium);          // ab MEDIUM
+    FResp.RegisterCtrl(FBtnHamburger, usNarrow, usMedium); // inverse
     ```
-    `prFloated` heißt: nur sichtbar wenn floated, sonst im Hamburger.
-  - Sub-Panel-Container-Trick (PanelSev/PanelType für Label+Combo)
-    weg - Margin/Padding statt Wrapper-Panel.
+  - 3-Stufen-Layout (NARROW <500, MEDIUM 500-849, FULL ≥850 px) statt
+    bisher 2-Stufen — Übergang vom Hamburger-Pattern zum vollen UI ist
+    dadurch smoother.
+  - `AfterApply`-Callback ersetzt das chained `OnResize`-Forwarding —
+    Folge-Anpassungen (Sub-Panel-Widths, SearchEdit-MinWidth) laufen
+    deterministisch nach jedem Apply.
+  - `TToolbarSizing.Apply`/`ApplyIconButton`/`HeightForFont` löst die
+    VCL-Quirk dass TComboBox `Align.Height` ignoriert — alle Toolbar-
+    Components rendern jetzt uniform.
+  - Sub-Panel-Container (PanelSev/PanelType) bleiben bewusst — `TFlowPanel`-
+    Refactor war nicht nötig, der zentrale Controller war ausreichend.
 
-  **Phase 3: Two-Mode-UI (groß)**
-  - Statt Visibility-Toggle: zwei komplett verschiedene Toolbar-Aufbauten.
-    Bei Dock-State-Change wird die ALTE Toolbar zerstört + die NEUE
-    aufgebaut.
-    - **Floated-Mode:** aktuelle volle Toolbar (3 Reihen)
-    - **Docked-Mode:** EINE schmale Toolbar mit
-      `[▶ Analyse ▾] [🔍 Search] [≡ Menu] [✕ Cancel]`
-  - Eliminiert die ganze responsive-controller-Komplexität.
-    Trade-off: Code-Duplikat zwischen den beiden Modi.
+  **Phase 3 + 4 nicht umgesetzt** — Two-Mode-UI und User-Prefs nicht
+  notwendig, der responsive-Ansatz hat sich als beherrschbar erwiesen.
 
-  **Phase 4: Polish (Nice-to-have)**
-  - User-Pref persistieren (z.B. "Tile-Reihe immer aus", "Toolbar
-    minimal") in `analyser.ini`.
-  - Smooth Transition beim Dock-State-Change (`FlickerFree` flag).
-  - Theme-Variante speziell für Compact-Mode (Tile-Glyphs kleiner,
-    weniger Padding).
-
-  **Reihenfolge-Vorschlag:** Phase 1 zuerst - der eigentliche Bug
-  (PanelSearch zu breit + Initial-State-Race) wird gefixt ohne
-  Architektur umzubauen. Phase 2 ist ein größerer Refactor (lohnt sich
-  wenn weitere Detector-Filter-Buttons dazukommen). Phase 3 ist nur
-  sinnvoll wenn der responsive-Ansatz sich als grundsätzlich
-  unbeherrschbar erweist.
-
-  Datei: `StaticCodeAnalyserIDE/uIDEAnalyserForm.pas` (+ neue Layout-
-  Komponente in Phase 2)
+  Dateien: `uIDEAnalyserForm.pas`, `uIDEStatsTiles.pas`
 
 - [x] **WatchMode dynamic module attach** — _erledigt, dann verworfen_
   War: `TFindingEditSvcNotifier.EditorViewActivated` -> `RescanOpenModules`
@@ -934,6 +926,124 @@ hängt zusammen (CLI-Mode ist die Voraussetzung für CI-Integration).
   (höchster Praxisnutzen, AST schon da), dann God-Class + Boolean-
   Expression (mittlerer Aufwand), dann Cognitive/DIT/Halstead
   (separater Pass).
+
+- [ ] **DFM + Komponentengraph** _(Phase 1: MVP / Phase 2: Cross-Unit + IDE-Live)_
+
+  Heute parst der Analyzer ausschließlich `.pas`. `.dfm` wird nicht
+  gelesen, der AST hat keine Parent-Zeiger, Komponenten-Hierarchien und
+  Event-Bindungen sind den Detektoren nicht zugänglich. Damit fallen
+  Bug-Klassen durchs Raster: tote Event-Handler, DFM↔published-Mismatch,
+  hardcodierte Captions trotz aktiver Lokalisierung, Default-Namen
+  (`Button1`, `Edit3`).
+
+  Ziel: zweites Parsing-Frontend (`uDfmLexer`/`uDfmParser`) + paralleler
+  `TComponentGraph`, per `TFormBinder` mit dem Pascal-AST der Form-Klasse
+  verknüpft. Befunde fließen in das bestehende `TLeakFinding`-Modell —
+  neue `TFindingKind`-Werte + `KIND_META`-Einträge, Severity pro
+  Detektor wie heute.
+
+  **Phase 1 — MVP (Single-Unit, Text-DFM, 5 Detektoren):**
+  - [ ] **DFM-Lexer + -Parser** — `Parsing/uDfmLexer.pas` +
+    `Parsing/uDfmParser.pas`. Tokens: `object`, `inherited`, `end`, `=`,
+    `<`, `>`, `(`, `)`, Identifier, Literal, Set `[…]`, Binär-Blob
+    `{…}`, String-Concat `+`. Grammatik:
+    `ObjectDecl := ('object'|'inherited') Name ':' ClassName Property*
+    ChildObject* 'end'`. Robustheit-Vorbild wie `uParser2.SkipTo`.
+  - [ ] **Binär-DFM via RTL** — vor dem Parsen `ObjectBinaryToText`
+    rufen wenn die Datei mit `$FF $0A $00 …` beginnt. Kein eigener
+    Binär-Reader (→ Phase 2).
+  - [ ] **`TComponentGraph`-Datenmodell** —
+    `Parsing/uComponentGraph.pas`. `TComponentNode { Name; ClassName;
+    Parent; Owner; Props: TDict<string,TPropValue>; Events:
+    TDict<string,string>; LineCol; }` + `ByName`-Lookup.
+  - [ ] **`TFormBinder`** — `Infrastructure/uFormBinder.pas`. Pairing
+    `Form.dfm` ↔ Form-Klasse via Filename-Konvention (`uMainForm.dfm`
+    ↔ `TMainForm = class(TForm)` in `uMainForm.pas`). Löst pro
+    Component-Event den Methoden-Knoten in derselben Unit auf.
+    Markiert published Fields mit DFM-Pendant.
+  - [ ] **Pipeline-Erweiterung** in
+    `Infrastructure/uStaticAnalyzer2.RunAllDetectors`: pro `.pas` mit
+    zugehöriger `.dfm` einmal Graph bauen, Binder rufen,
+    `RunComponentDetectors` ergänzen. `.dfm` ohne `.pas`-Pendant nur
+    Log-Hinweis, kein Befund.
+  - [ ] **Neue `TFindingKind`-Werte** in `Common/uSCAConsts.pas`:
+    `fkDfmDeadEvent`, `fkDfmOrphanHandler`, `fkDfmSchemaMismatch`,
+    `fkDfmHardcodedCaption`, `fkDfmDefaultName`. Mapping in
+    `KIND_META`: erste drei → `ftBug`, letzte zwei → `ftCodeSmell`.
+    FixHint-Templates in `Output/uFixHint.pas` + Lokalisierung in
+    `UI/uLocalization.pas`.
+  - [ ] **Detektor: Toter Event-Handler im DFM**
+    (`fkDfmDeadEvent`, `lsError`) — `OnClick='Btn1Click'`, Methode
+    in der Form-Klasse fehlt → Streaming-Crash zur Laufzeit.
+  - [ ] **Detektor: Verwaister Pascal-Handler**
+    (`fkDfmOrphanHandler`, `lsHint`) — `published`-Methode mit
+    `(Sender: TObject)`-Signatur ist an keine Komponente gebunden.
+    Dead Code, den der Pascal-Detektor nicht erkennt.
+  - [ ] **Detektor: DFM↔published-Mismatch**
+    (`fkDfmSchemaMismatch`, `lsError`) — Komponente in `.dfm`, aber
+    nicht im `published`-Block der Klasse (oder umgekehrt) →
+    Streaming-Fehler.
+  - [ ] **Detektor: Hardcoded UI-Strings**
+    (`fkDfmHardcodedCaption`, `lsHint`) — `Caption`, `Hint`, `Text`,
+    `Lines` im DFM mit Literal-String, obwohl dxgettext im Projekt
+    aktiv ist. Erkennung über Vorhandensein von `uLocalization` in
+    den Form-Uses.
+  - [ ] **Detektor: Default-Komponentennamen**
+    (`fkDfmDefaultName`, `lsHint`) — `Button1`, `Edit3`, `Panel2`
+    (Regex `^[A-Z][a-z]+\d+$`). Refactoring-Killer; Whitelist
+    konfigurierbar.
+  - [ ] **IDE-Anzeige** — Befunde mit DFM-Quelle markieren die `.pas`
+    auf der Zeile der Form-Klasse oder bei
+    `DeadEvent`/`OrphanHandler` direkt am Methoden-Stub. Phase 1
+    noch keine Marker im DFM-Editor.
+  - [ ] **Tests** pro Detektor: positiver + negativer Fall +
+    Kantenfall (z.B. `Action` statt `OnClick`, vererbtes Event aus
+    `inherited`). `tests/uTestDfm*.pas`.
+
+  **Phase 2 — Erweiterung (Cross-Unit, IDE-Live, weitere Smells):**
+  - [ ] **`inherited`-Form-Auflösung** — `object inherited Edit1:
+    TEdit` korrekt gegen das Parent-DFM in einer anderen Unit
+    auflösen. Braucht Form-Vererbungs-Kette.
+  - [ ] **Frame-Composition über Units** — `TFrame1` als ChildObject
+    in `Form2.dfm` referenziert die Komponentenliste aus
+    `uFrame1.dfm`. Voraussetzung für korrekte Layer- und
+    Event-Analysen über Frames.
+  - [ ] **DataModule-übergreifender Resolver** — Form referenziert
+    `dm.Query1` (TADOQuery aus DataModule). Repo-weiter Graph mit
+    Lookup über DataModule-Var.
+  - [ ] **Detektor: Cross-Form-Coupling**
+    (`fkDfmCrossFormCoupling`, `lsWarning`) — `Form1` greift via
+    `Form2.InternesEdit.Text` auf interne Komponenten einer anderen
+    Form zu. Braucht Cross-Unit-Resolver.
+  - [ ] **Detektor: Layer-Verstoß**
+    (`fkDfmLayerViolation`, `lsHint`) — Eingabe-Komponenten direkt
+    auf `TForm` statt in `TPanel`/`TGroupBox`. Konfigurierbar
+    (viele False Positives erwartet).
+  - [ ] **Detektor: God-Handler**
+    (`fkDfmGodHandler`, `lsHint`) — eine Methode hängt an ≥ N
+    (Default 5) Events verschiedener Komponenten.
+  - [ ] **Detektor: TAction halb verkabelt**
+    (`fkDfmActionMismatch`, `lsWarning`) — `Button.Action=Act1`,
+    aber `Act1.OnExecute` leer; oder `OnClick` + `Action` gleichzeitig
+    gesetzt (Action gewinnt → toter Click-Code).
+  - [ ] **Detektor: Tab-Order-Konflikte**
+    (`fkDfmTabOrderConflict`, `lsHint`) — gleicher `TabOrder`-Wert
+    bei Geschwistern im selben Parent.
+  - [ ] **Detektor: Verbotene Komponentenklassen**
+    (`fkDfmForbiddenClass`, `lsWarning`) — Style-Guide-Liste in
+    `analyser.ini` (`[Components] Forbidden=TLabel,TQuery`).
+  - [ ] **Detektor: DB-Komponente in UI-Form**
+    (`fkDfmDbInUiForm`, `lsHint`) — `TADOConnection`/`TFDConnection`/
+    `TQuery` direkt auf einer `TForm` statt im DataModule.
+  - [ ] **Property-Typisierung** — Set-/Enum-Werte typisiert statt
+    Strings. Voraussetzung für robustere Property-basierte Detektoren.
+  - [ ] **Live-Refresh im IDE-Plugin** — DFM-Editor-Save-Hook
+    triggert Re-Analyse der zugehörigen Form-Unit. Heute nur
+    `.pas`-Save löst Re-Analyse aus.
+  - [ ] **Eigener Binär-DFM-Reader** — `ObjectBinaryToText` ist
+    standalone OK, im IDE-Plugin aber Borland-Service-abhängig.
+    Eigener Reader macht das Modul portabel und liefert exakte
+    Component-Positionen auch ohne Roundtrip.
 
 ---
 
