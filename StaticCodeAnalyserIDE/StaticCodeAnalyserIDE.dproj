@@ -180,6 +180,9 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Parsing\uAstNode.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Parsing\uLexer.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Parsing\uParser2.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Parsing\uComponentGraph.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Parsing\uDfmLexer.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Parsing\uDfmParser.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uStaticFiles.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uSuppression.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uExport.pas"/>
@@ -188,6 +191,10 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uStaticAnalyzer2.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uVcsChanges.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uRepoSettings.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uDfmAnalysisRunner.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uFormBinder.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uDfmDbFieldAnalysis.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uDfmRepoIndex.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Output\uClaudePrompt.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Output\uFixHint.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uSCAConsts.pas"/>
@@ -222,6 +229,25 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDuplicateBlock.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCustomClassDiscovery.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCustomRuleDetector.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmDefaultName.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmHardcodedCaption.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmHardcodedDbCreds.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmDuplicateBinding.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmDeadEvent.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmOrphanHandler.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmEmptyBoundEvent.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmSchemaMismatch.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmCircularDataSource.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmSqlFromUserInput.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmRequiredField.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmFieldTypeMismatch.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmTabOrderConflict.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmForbiddenClass.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmDbInUiForm.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmCrossFormCoupling.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmLayerViolation.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmGodHandler.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmActionMismatch.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

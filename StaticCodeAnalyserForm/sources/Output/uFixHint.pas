@@ -707,6 +707,599 @@ begin
         '// so callers fail loudly instead of silently.';
     end;
 
+    fkDfmOrphanHandler:
+    begin
+      Result.Description := _('Published method looks like an event handler but no component binds it');
+      Result.Before :=
+        '// uMainForm.pas'#13#10 +
+        'type'#13#10 +
+        '  TMainForm = class(TForm)'#13#10 +
+        '    procedure btnOldFeatureClick(Sender: TObject);'#13#10 +
+        '  end;'#13#10 +
+        ''#13#10 +
+        '// The component btnOldFeature was removed from the .dfm but the'#13#10 +
+        '// handler stayed - dead code that drags in dependencies and'#13#10 +
+        '// confuses readers searching for callers.';
+      Result.After :=
+        '// Option 1: if the feature is really gone, delete the method.'#13#10 +
+        '// Option 2: if a component should still call it, wire it up'#13#10 +
+        '//           via the form designer (OnClick = btnOldFeatureClick)'#13#10 +
+        '//           or assign at runtime in FormCreate.'#13#10 +
+        ''#13#10 +
+        '// Tip: methods that are intentional hooks (e.g. for descendant'#13#10 +
+        '// classes) should be marked virtual and named clearly so they'#13#10 +
+        '// do not pattern-match as Sender-handlers.';
+    end;
+
+    fkDfmEmptyBoundEvent:
+    begin
+      Result.Description := _('Component event is wired but the handler body is empty');
+      Result.Before :=
+        '// uMainForm.dfm'#13#10 +
+        'object btnSave: TButton'#13#10 +
+        '  OnClick = btnSaveClick'#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// uMainForm.pas'#13#10 +
+        'procedure TMainForm.btnSaveClick(Sender: TObject);'#13#10 +
+        'begin'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// User clicks Save and... nothing happens. A bound handler with'#13#10 +
+        '// an empty body is almost always a forgotten implementation.';
+      Result.After :=
+        '// Option 1: implement the action.'#13#10 +
+        'procedure TMainForm.btnSaveClick(Sender: TObject);'#13#10 +
+        'begin'#13#10 +
+        '  SaveDocument(FActiveFile);'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Option 2: if the click should genuinely do nothing today,'#13#10 +
+        '//           remove the OnClick line from the .dfm so the form'#13#10 +
+        '//           does not pretend to be interactive.';
+    end;
+
+    fkDfmSchemaMismatch:
+    begin
+      Result.Description := _('DFM declares a component but the form class has no published field for it');
+      Result.Before :=
+        '// uMainForm.dfm'#13#10 +
+        'object MainForm: TMainForm'#13#10 +
+        '  object btnLegacy: TButton'#13#10 +
+        '    Caption = ''Old'''#13#10 +
+        '  end'#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// uMainForm.pas - btnLegacy was removed from the class decl'#13#10 +
+        'type'#13#10 +
+        '  TMainForm = class(TForm)'#13#10 +
+        '    // btnLegacy: TButton;  <- deleted'#13#10 +
+        '  end;'#13#10 +
+        ''#13#10 +
+        '// Streamer creates the button at form-load but it has no Pascal'#13#10 +
+        '// reference. Memory is owned by the form, but the code cannot'#13#10 +
+        '// see or modify the button. Usually a half-finished cleanup.';
+      Result.After :=
+        '// Pick a side based on intent:'#13#10 +
+        '//   * if btnLegacy is no longer needed -> delete it from the .dfm'#13#10 +
+        '//   * if you still need it -> restore the field in the class decl'#13#10 +
+        ''#13#10 +
+        '// Use the IDE form designer to make changes - it keeps .dfm and'#13#10 +
+        '// .pas in sync automatically.';
+    end;
+
+    fkDfmDeadEvent:
+    begin
+      Result.Description := _('Event handler in DFM points to a method that no longer exists');
+      Result.Before :=
+        '// uMainForm.dfm'#13#10 +
+        'object btnSave: TButton'#13#10 +
+        '  OnClick = btnSaveClick'#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// uMainForm.pas - method was renamed to SaveClick'#13#10 +
+        'type'#13#10 +
+        '  TMainForm = class(TForm)'#13#10 +
+        '    procedure SaveClick(Sender: TObject);'#13#10 +
+        '  end;'#13#10 +
+        ''#13#10 +
+        '// DFM still references btnSaveClick - streaming crashes at'#13#10 +
+        '// form-create with "is not a method" - and the compiler never'#13#10 +
+        '// saw the mismatch.';
+      Result.After :=
+        '// Pick one side as the source of truth.'#13#10 +
+        '// Option 1: keep the new method name, fix the DFM.'#13#10 +
+        '// uMainForm.dfm'#13#10 +
+        'object btnSave: TButton'#13#10 +
+        '  OnClick = SaveClick'#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// Option 2: keep the old DFM reference, restore the method.'#13#10 +
+        'procedure TMainForm.btnSaveClick(Sender: TObject);'#13#10 +
+        'begin'#13#10 +
+        '  Save;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Tip: rename through the IDE refactor (F2) -> both .dfm and'#13#10 +
+        '// .pas get updated atomically.';
+    end;
+
+    fkDfmHardcodedDbCreds:
+    begin
+      Result.Description := _('Database credentials sit in the form file - move them out');
+      Result.Before :=
+        '// uDataModule.dfm'#13#10 +
+        'object dmMain: TDataModule'#13#10 +
+        '  object Conn: TADOConnection'#13#10 +
+        '    ConnectionString = '#13#10 +
+        '      ''Provider=SQLOLEDB.1;User ID=admin;Password=s3cret;Data Source=db1'''#13#10 +
+        '    LoginPrompt = False'#13#10 +
+        '    Connected = True'#13#10 +
+        '  end'#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// The password is in the .dfm -> in version control,'#13#10 +
+        '// in the compiled binary, visible to anyone with read access.';
+      Result.After :=
+        '// uDataModule.dfm: keep the property empty in the form file.'#13#10 +
+        'object Conn: TADOConnection'#13#10 +
+        '  LoginPrompt = False'#13#10 +
+        '  Connected = False'#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// uDataModule.pas: build the string at runtime from a secret store.'#13#10 +
+        'procedure TdmMain.DataModuleCreate(Sender: TObject);'#13#10 +
+        'begin'#13#10 +
+        '  Conn.ConnectionString := BuildConnectionString('#13#10 +
+        '    GetSecret(''db.user''), GetSecret(''db.password''));'#13#10 +
+        '  Conn.Connected := True;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Sources for secrets (in increasing order of safety):'#13#10 +
+        '//   .env / config file outside the repo'#13#10 +
+        '//   OS keyring / Windows Credential Manager'#13#10 +
+        '//   HashiCorp Vault / Azure Key Vault / AWS Secrets Manager';
+    end;
+
+    fkDfmLayerViolation:
+    begin
+      Result.Description := _('Input control sits directly on the form - wrap it in a panel');
+      Result.Before :=
+        '// uOrderForm.dfm'#13#10 +
+        'object frmOrder: TOrderForm'#13#10 +
+        '  object edName  : TEdit ... end'#13#10 +
+        '  object edEmail : TEdit ... end'#13#10 +
+        '  object btnSave : TButton ... end'#13#10 +
+        '  object btnCancel : TButton ... end'#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// Flat layout - hard to reorganize, hard to reuse,'#13#10 +
+        '// align/anchors become awkward as the form grows.';
+      Result.After :=
+        'object frmOrder: TOrderForm'#13#10 +
+        '  object pnlInputs: TPanel'#13#10 +
+        '    object edName: TEdit ... end'#13#10 +
+        '    object edEmail: TEdit ... end'#13#10 +
+        '  end'#13#10 +
+        '  object pnlButtons: TPanel'#13#10 +
+        '    object btnSave   : TButton ... end'#13#10 +
+        '    object btnCancel : TButton ... end'#13#10 +
+        '  end'#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// Grouping by purpose makes Align/Anchor straightforward'#13#10 +
+        '// and lets you swap whole sections without re-layouting all'#13#10 +
+        '// children individually.';
+    end;
+
+    fkDfmGodHandler:
+    begin
+      Result.Description := _('A single method handles too many component events - split it up');
+      Result.Before :=
+        '// uMainForm.dfm'#13#10 +
+        'object btnSave   : TButton OnClick = MainClick end'#13#10 +
+        'object btnLoad   : TButton OnClick = MainClick end'#13#10 +
+        'object btnDelete : TButton OnClick = MainClick end'#13#10 +
+        'object btnExport : TButton OnClick = MainClick end'#13#10 +
+        'object btnImport : TButton OnClick = MainClick end'#13#10 +
+        ''#13#10 +
+        '// uMainForm.pas'#13#10 +
+        'procedure TMainForm.MainClick(Sender: TObject);'#13#10 +
+        'begin'#13#10 +
+        '  if Sender = btnSave   then ...'#13#10 +
+        '  else if Sender = btnLoad   then ...'#13#10 +
+        '  else if Sender = btnDelete then ...'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// One method that dispatches on Sender is a manual switch'#13#10 +
+        '// statement that grows linearly with every new button.';
+      Result.After :=
+        '// Give each button its own handler.'#13#10 +
+        'procedure TMainForm.btnSaveClick  (Sender: TObject); begin ... end;'#13#10 +
+        'procedure TMainForm.btnLoadClick  (Sender: TObject); begin ... end;'#13#10 +
+        'procedure TMainForm.btnDeleteClick(Sender: TObject); begin ... end;'#13#10 +
+        ''#13#10 +
+        '// Refactor toward TAction: the Action describes WHAT happens'#13#10 +
+        '// (caption, hint, enabled state), the button just triggers it.'#13#10 +
+        '// IDE: drop a TActionList, define actions, assign Button.Action.';
+    end;
+
+    fkDfmActionMismatch:
+    begin
+      Result.Description := _('Component has both Action and OnClick - the OnClick handler is dead code');
+      Result.Before :=
+        '// uMainForm.dfm'#13#10 +
+        'object btnSave: TButton'#13#10 +
+        '  Action  = ActSave'#13#10 +
+        '  OnClick = btnSaveClick      // <- never called'#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// When Action is set, the VCL routes the click through'#13#10 +
+        '// ActSave.OnExecute. btnSaveClick stays in the code but'#13#10 +
+        '// is never reached - silently rotting dead code.';
+      Result.After :=
+        '// Pick exactly one driver:'#13#10 +
+        ''#13#10 +
+        '// Option 1: keep the Action, drop OnClick (and the orphan method).'#13#10 +
+        'object btnSave: TButton'#13#10 +
+        '  Action = ActSave'#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// Option 2: keep OnClick, drop the Action.'#13#10 +
+        'object btnSave: TButton'#13#10 +
+        '  OnClick = btnSaveClick'#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// Tip: Actions are usually the right answer because they'#13#10 +
+        '// centralize enabled/caption/hint state across multiple'#13#10 +
+        '// triggers (button + menu + shortcut).';
+    end;
+
+    fkDfmCrossFormCoupling:
+    begin
+      Result.Description := _('Code reaches into another form''s published fields - tight coupling');
+      Result.Before :=
+        '// uMainForm.pas'#13#10 +
+        'procedure TMainForm.SyncOrder;'#13#10 +
+        'begin'#13#10 +
+        '  Form2.edTotal.Text := FormatFloat(''0.00'', FTotal);'#13#10 +
+        '  Form2.qOrder.Refresh;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// edTotal/qOrder are published on Form2 only so the DFM streamer'#13#10 +
+        '// can find them. Form1 reaching across breaks that encapsulation:'#13#10 +
+        '// a rename inside Form2 silently breaks Form1, and Form2 cannot'#13#10 +
+        '// reorganize its UI without breaking remote callers.';
+      Result.After :=
+        '// Option 1: give Form2 a public API for the operation.'#13#10 +
+        '// uForm2.pas'#13#10 +
+        'public'#13#10 +
+        '  procedure SetTotal(const AValue: Currency);'#13#10 +
+        '  procedure RefreshOrder;'#13#10 +
+        ''#13#10 +
+        '// uMainForm.pas'#13#10 +
+        'procedure TMainForm.SyncOrder;'#13#10 +
+        'begin'#13#10 +
+        '  Form2.SetTotal(FTotal);'#13#10 +
+        '  Form2.RefreshOrder;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Option 2: lift the dataset out of Form2 into a DataModule so'#13#10 +
+        '//           both forms share it without form-to-form references.';
+    end;
+
+    fkDfmTabOrderConflict:
+    begin
+      Result.Description := _('Two sibling controls share the same TabOrder - tab navigation is undefined');
+      Result.Before :=
+        '// uMainForm.dfm'#13#10 +
+        'object pnlInput: TPanel'#13#10 +
+        '  object edName: TEdit'#13#10 +
+        '    TabOrder = 0'#13#10 +
+        '  end'#13#10 +
+        '  object edEmail: TEdit'#13#10 +
+        '    TabOrder = 0          // <- same!'#13#10 +
+        '  end'#13#10 +
+        '  object edPhone: TEdit'#13#10 +
+        '    TabOrder = 1'#13#10 +
+        '  end'#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// Tab from Name goes to ... maybe Email, maybe Phone. The VCL'#13#10 +
+        '// uses creation order as tie-breaker, which is unstable across'#13#10 +
+        '// designer edits.';
+      Result.After :=
+        '// Renumber so every sibling has a unique TabOrder.'#13#10 +
+        'object edName  : TEdit TabOrder = 0 end'#13#10 +
+        'object edEmail : TEdit TabOrder = 1 end'#13#10 +
+        'object edPhone : TEdit TabOrder = 2 end'#13#10 +
+        ''#13#10 +
+        '// IDE designer can do this for you: select the controls,'#13#10 +
+        '// right-click -> Tab Order, drag into the desired sequence.';
+    end;
+
+    fkDfmForbiddenClass:
+    begin
+      Result.Description := _('Component class is on the project-defined forbidden list');
+      Result.Before :=
+        '// analyser.ini'#13#10 +
+        '[Components]'#13#10 +
+        'ForbiddenClasses=TLabel,TQuery'#13#10 +
+        ''#13#10 +
+        '// uMainForm.dfm'#13#10 +
+        'object lblTitle: TLabel'#13#10 +
+        '  Caption = ''Hello'''#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// Project policy says use TcxLabel for themed labels;'#13#10 +
+        '// plain TLabel is reserved for legacy forms only.';
+      Result.After :=
+        '// Switch to the approved replacement.'#13#10 +
+        'object lblTitle: TcxLabel'#13#10 +
+        '  Caption = ''Hello'''#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// If the rule was added too late and you need to keep this'#13#10 +
+        '// occurrence, suppress it via the project ignore file rather'#13#10 +
+        '// than weakening the rule for everyone.';
+    end;
+
+    fkDfmDbInUiForm:
+    begin
+      Result.Description := _('Database component sits on a Form/Frame - move to a TDataModule');
+      Result.Before :=
+        '// uOrderForm.dfm'#13#10 +
+        'object frmOrder: TOrderForm'#13#10 +
+        '  object conn: TADOConnection ... end'#13#10 +
+        '  object qOrders: TADOQuery ... end'#13#10 +
+        '  object pnlList: TPanel ... end'#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// Closing the form takes down the database connection.'#13#10 +
+        '// Two forms accessing the same data each open their own'#13#10 +
+        '// connection -> no pool, slow startup, two transactions.';
+      Result.After :=
+        '// uOrderDM.dfm'#13#10 +
+        'object dmOrder: TOrderDataModule'#13#10 +
+        '  object conn: TADOConnection ... end'#13#10 +
+        '  object qOrders: TADOQuery ... end'#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// uOrderForm.dfm - keep only UI components.'#13#10 +
+        'object frmOrder: TOrderForm'#13#10 +
+        '  object pnlList: TPanel ... end'#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// In code: Order.qOrders.SQL.Text := ''SELECT ...'';'#13#10 +
+        '// The DataModule lives for the whole app, connections are'#13#10 +
+        '// shared, forms become testable without a DB at compile time.';
+    end;
+
+    fkDfmRequiredFieldUnbound:
+    begin
+      Result.Description := _('Required dataset field has no DB-control binding it');
+      Result.Before :=
+        '// uOrderForm.dfm'#13#10 +
+        'object qOrder: TADOQuery'#13#10 +
+        '  object qOrderTotal: TFloatField'#13#10 +
+        '    FieldName = ''Total'''#13#10 +
+        '    Required = True'#13#10 +
+        '  end'#13#10 +
+        'end'#13#10 +
+        'object dsOrder: TDataSource DataSet = qOrder end'#13#10 +
+        '// no TDBEdit ever references dsOrder + Total'#13#10 +
+        ''#13#10 +
+        '// The user has no way to enter Total - Post raises'#13#10 +
+        '// EDatabaseError (Field "Total" must have a value).';
+      Result.After :=
+        '// Bind a control to the field via the form designer:'#13#10 +
+        'object edTotal: TDBEdit'#13#10 +
+        '  DataSource = dsOrder'#13#10 +
+        '  DataField = ''Total'''#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// Or, if the field is meant to be filled in code,'#13#10 +
+        '// remove Required=True so the dataset accepts NULL'#13#10 +
+        '// (and document why the field is invisible-by-design).';
+    end;
+
+    fkDfmRequiredFieldNotVisible:
+    begin
+      Result.Description := _('Required field is bound only to invisible controls');
+      Result.Before :=
+        '// uOrderForm.dfm'#13#10 +
+        'object qOrderTotal: TFloatField'#13#10 +
+        '  FieldName = ''Total'''#13#10 +
+        '  Required = True'#13#10 +
+        'end'#13#10 +
+        'object edTotal: TDBEdit'#13#10 +
+        '  DataSource = dsOrder'#13#10 +
+        '  DataField = ''Total'''#13#10 +
+        '  Visible = False             // <- only binding, hidden'#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// User cannot see or fill the field, but Post enforces it.'#13#10 +
+        '// Usually a leftover from a layout refactor.';
+      Result.After :=
+        '// Pick one:'#13#10 +
+        '//   * Show the control (Visible = True)'#13#10 +
+        '//   * Set the value in code (FormCreate, AfterInsert, ...)'#13#10 +
+        '//   * Drop Required=True if NULL is genuinely OK'#13#10 +
+        ''#13#10 +
+        '// Tip: Phase 1 only checks Visible on the control itself;'#13#10 +
+        '// a control on a hidden TTabSheet/TPanel is NOT yet flagged.';
+    end;
+
+    fkDfmFieldTypeMismatch:
+    begin
+      Result.Description := _('DB-control class does not fit the field data type');
+      Result.Before :=
+        '// uOrderForm.dfm'#13#10 +
+        'object qOrderIsPaid: TBooleanField'#13#10 +
+        '  FieldName = ''IsPaid'''#13#10 +
+        'end'#13#10 +
+        'object edIsPaid: TDBEdit'#13#10 +
+        '  DataSource = dsOrder'#13#10 +
+        '  DataField = ''IsPaid'''#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// TDBEdit on a boolean field shows "True" / "False" as text -'#13#10 +
+        '// users type random strings, Post crashes.';
+      Result.After :=
+        'object cbIsPaid: TDBCheckBox'#13#10 +
+        '  DataSource = dsOrder'#13#10 +
+        '  DataField = ''IsPaid'''#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// Rule of thumb:'#13#10 +
+        '//   Boolean      -> TDBCheckBox'#13#10 +
+        '//   Memo / Blob  -> TDBMemo / TDBRichEdit / TDBImage'#13#10 +
+        '//   Date / Time  -> TDBDateTimePicker';
+    end;
+
+    fkDfmSqlFromUserInput:
+    begin
+      Result.Description := _('SQL query is built from a UI input field - parameterize instead of concatenating');
+      Result.Before :=
+        '// uSearch.pas'#13#10 +
+        'procedure TSearchForm.btnFindClick(Sender: TObject);'#13#10 +
+        'begin'#13#10 +
+        '  qFind.SQL.Text :='#13#10 +
+        '    ''SELECT * FROM users WHERE name='''''' +'#13#10 +
+        '    edName.Text + '''''''';'#13#10 +
+        '  qFind.Open;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// edName.Text comes straight from the user. Any quote, semicolon'#13#10 +
+        '// or DROP statement entered into the edit will be executed as SQL.'#13#10 +
+        '// This is the textbook SQL-injection setup.';
+      Result.After :=
+        '// Parameterize the query - placeholders are escaped by the driver.'#13#10 +
+        'qFind.SQL.Text := ''SELECT * FROM users WHERE name = :n'';'#13#10 +
+        'qFind.Parameters.ParamByName(''n'').Value := edName.Text;'#13#10 +
+        '// (FireDAC: qFind.Params.ParamByName(''n'').AsString := edName.Text;)'#13#10 +
+        'qFind.Open;'#13#10 +
+        ''#13#10 +
+        '// Rule of thumb: every value that depends on user input becomes a'#13#10 +
+        '// parameter. Static literals (column names, ORDER BY direction)'#13#10 +
+        '// stay inline - but never concatenate user-controlled text.';
+    end;
+
+    fkDfmCircularDataSource:
+    begin
+      Result.Description := _('Master-detail wiring forms a cycle - opening the dataset will loop endlessly');
+      Result.Before :=
+        '// uOrderForm.dfm'#13#10 +
+        'object dsOrder: TDataSource'#13#10 +
+        '  DataSet = qOrder'#13#10 +
+        'end'#13#10 +
+        'object qOrder: TADOQuery'#13#10 +
+        '  MasterSource = dsOrder      // points right back -> cycle'#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// On qOrder.Open, the master-detail refresh re-evaluates'#13#10 +
+        '// dsOrder, which re-evaluates qOrder, ... UI hangs at startup,'#13#10 +
+        '// usually with no exception (just a frozen window).';
+      Result.After :=
+        '// MasterSource is meant for SUB-dataset binding only:'#13#10 +
+        '//   qDetail.MasterSource = dsMaster'#13#10 +
+        '// The "master" side is a different dataset than the dataset'#13#10 +
+        '// that the DataSource points at.'#13#10 +
+        ''#13#10 +
+        '// Fix: clear MasterSource on the self-referencing dataset, or'#13#10 +
+        '//      wire it to a different (parent) dataset.'#13#10 +
+        'object qOrder: TADOQuery'#13#10 +
+        '  // MasterSource removed - qOrder is the master.'#13#10 +
+        'end';
+    end;
+
+    fkDfmDuplicateBinding:
+    begin
+      Result.Description := _('Multiple components bind the same DataSource and DataField');
+      Result.Before :=
+        '// uOrderForm.dfm'#13#10 +
+        'object dsOrder: TDataSource end'#13#10 +
+        'object edTotal: TDBEdit'#13#10 +
+        '  DataSource = dsOrder'#13#10 +
+        '  DataField = ''Total'''#13#10 +
+        'end'#13#10 +
+        'object edTotalCopy: TDBEdit'#13#10 +
+        '  DataSource = dsOrder'#13#10 +
+        '  DataField = ''Total'''#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// Two editors writing to the same dataset field.'#13#10 +
+        '// Last writer wins on Post; values can diverge on screen.';
+      Result.After :=
+        '// Option 1: drop one of the duplicates (most common cause is'#13#10 +
+        '//           a copy-pasted editor that was never finished).'#13#10 +
+        ''#13#10 +
+        '// Option 2: if both views are needed, make one read-only.'#13#10 +
+        'object edTotalDisplay: TDBText'#13#10 +
+        '  DataSource = dsOrder'#13#10 +
+        '  DataField = ''Total'''#13#10 +
+        'end'#13#10 +
+        '// TDBText is read-only and cannot cause an update conflict.';
+    end;
+
+    fkDfmHardcodedCaption:
+    begin
+      Result.Description := _('UI text in DFM is a literal string - route it through the localization layer');
+      Result.Before :=
+        '// uMainForm.dfm'#13#10 +
+        'object btnSave: TButton'#13#10 +
+        '  Caption = ''Save'''#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// The text "Save" sits in the form file. dxgettext / gnugettext'#13#10 +
+        '// will not pick it up - the button stays English in every language.';
+      Result.After :=
+        '// Option 1: leave the .dfm empty and assign at runtime via _()'#13#10 +
+        '// uMainForm.pas'#13#10 +
+        'procedure TMainForm.FormCreate(Sender: TObject);'#13#10 +
+        'begin'#13#10 +
+        '  btnSave.Caption := _(''Save'');'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Option 2: keep DFM caption but translate it on form create'#13#10 +
+        'procedure TMainForm.FormCreate(Sender: TObject);'#13#10 +
+        'begin'#13#10 +
+        '  TranslateComponent(Self);'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Tip: covers Caption, Hint, Text (and Lines/Items where used).'#13#10 +
+        '// Empty captions in the DFM are not flagged.';
+    end;
+
+    fkDfmDefaultName:
+    begin
+      Result.Description := _('Component uses the IDE default name - rename for clarity');
+      Result.Before :=
+        '// uMainForm.dfm'#13#10 +
+        'object Button1: TButton'#13#10 +
+        '  Caption = ''Save'''#13#10 +
+        '  OnClick = Button1Click'#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// uMainForm.pas'#13#10 +
+        'procedure TMainForm.Button1Click(Sender: TObject);'#13#10 +
+        '// Reader has no clue what Button1 does without scrolling'#13#10 +
+        '// to the form. Refactoring "rename Button1 -> btnSave"'#13#10 +
+        '// touches both .dfm and .pas - easy to miss one side.';
+      Result.After :=
+        '// uMainForm.dfm'#13#10 +
+        'object btnSave: TButton'#13#10 +
+        '  Caption = ''Save'''#13#10 +
+        '  OnClick = btnSaveClick'#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// uMainForm.pas'#13#10 +
+        'procedure TMainForm.btnSaveClick(Sender: TObject);'#13#10 +
+        ''#13#10 +
+        '// Common prefixes by component class:'#13#10 +
+        '//   btn, edt, lbl, pnl, mem, cbo, lst, grd, tab, img';
+    end;
+
   end;
 end;
 

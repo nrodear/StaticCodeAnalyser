@@ -58,6 +58,7 @@ var
   DetectorMaxCyclomatic    : Integer = 10;     // uCyclomaticComplexity (>10 = Fund)
   DetectorMinBlockLines    : Integer = 8;      // uDuplicateBlock
   DetectorMaxFileBytes     : Integer = 5 * 1024 * 1024;  // uStaticAnalyzer2
+  DetectorMaxGodHandlerEvents : Integer = 5;             // uDfmGodHandler
 
   // Trivial-Liste fuer uMagicNumbers - Zahlen die NICHT als Magic-Number
   // gemeldet werden. Default: 0,1,2,-1,10,100. INI-Override moeglich.
@@ -72,6 +73,13 @@ var
   // [Detectors] FormatFunctions=Format,FormatUtf8,FormatString,_fmt
   // Lowercase-normalisiert beim Match.
   DetectorFormatFunctions  : TStringList = nil;
+
+  // Verbotene Komponentenklassen fuer den uDfmForbiddenClass-Detektor.
+  // Default leer - der Detektor schweigt, bis das Projekt Klassen via
+  // analyser.ini eintraegt:
+  //   [Components] ForbiddenClasses=TLabel,TQuery
+  // Case-insensitiver Match auf TComponentNode.ClassRef.
+  DfmForbiddenClasses      : TStringList = nil;
 
 type
   // Schweregrad eines Befundes - drei Stufen:
@@ -108,9 +116,53 @@ type
     fkEmptyMethod,      // Methodenrumpf ohne Anweisungen
     fkDuplicateBlock,   // mehrere identische Code-Blocks (>=8 Zeilen)
     fkCyclomaticComplexity, // McCabe-Komplexitaet > Schwellwert
-    fkCustomRule           // Custom-Rule aus analyser-rules.yml (siehe
+    fkCustomRule,          // Custom-Rule aus analyser-rules.yml (siehe
                            // uCustomRuleDetector). Spezifische Rule-ID
                            // steht in TLeakFinding.RuleID.
+    fkDfmDefaultName,      // Komponente im DFM mit Default-Name
+                           // (Button1, Edit3, Panel2 ...) - Refactoring-Killer
+    fkDfmHardcodedCaption, // UI-Text-Property (Caption/Hint/...) als String-
+                           // Literal im DFM, statt ueber Lokalisierungs-Layer
+    fkDfmHardcodedDbCreds, // Klartext-Credentials auf einer DB-Verbindungs-
+                           // Komponente (Password / ConnectionString mit Pwd=)
+    fkDfmDuplicateBinding, // Mehrere Komponenten binden gleichen
+                           // (DataSource, DataField) -> Update-Konflikt
+    fkDfmDeadEvent,        // OnClick zeigt auf Methode, die in der Form-
+                           // Klasse nicht (mehr) existiert -> Streaming-Crash
+    fkDfmOrphanHandler,    // Published Methode mit Sender-Signatur, aber
+                           // keine Komponente bindet sie -> Dead Code
+    fkDfmEmptyBoundEvent,  // Event ist gebunden, Methode existiert, aber
+                           // Body leer -> wahrscheinlich vergessener Stub
+    fkDfmSchemaMismatch,   // DFM-Komponente hat kein published Field in
+                           // der Form-Klasse -> Streaming-Fehler/Smell
+    fkDfmCircularDataSource, // Zyklus in DataSource.DataSet /
+                           // DataSet.MasterSource Kanten -> Endlos-Loop
+                           // bei BeforeOpen / Master-Detail-Refresh
+    fkDfmSqlFromUserInput, // SQL-Property einer DB-Query wird mit Text-
+                           // Property einer UI-Input-Komponente konkateniert
+                           // -> SQL-Injection ueber Form-Field
+    fkDfmRequiredFieldUnbound,   // TField mit Required=True hat keine UI-
+                                 // Bindung -> Pflichtfeld nicht eingebbar
+    fkDfmRequiredFieldNotVisible,// TField mit Required=True nur an
+                                 // Visible=False UI-Controls gebunden ->
+                                 // User kann das Pflichtfeld nicht erreichen
+    fkDfmFieldTypeMismatch,      // UI-DB-Control-Klasse passt nicht zum
+                                 // TField.DataType (TDBEdit fuer TBooleanField)
+    fkDfmTabOrderConflict,       // Zwei Geschwister-Komponenten im selben
+                                 // Parent haben den gleichen TabOrder-Wert
+    fkDfmForbiddenClass,         // Komponente nutzt eine via analyser.ini
+                                 // verbotene Klasse (Style-Guide)
+    fkDfmDbInUiForm,             // DB-Komponente (Connection/Query) direkt
+                                 // auf einer TForm/TFrame statt im DataModule
+    fkDfmCrossFormCoupling,      // Code in Form1 greift via Form2.<field>
+                                 // auf published Felder einer anderen Form
+                                 // zu (Kapselungsbruch)
+    fkDfmLayerViolation,         // Eingabe-Control direkt auf TForm statt
+                                 // im TPanel/TGroupBox eingebettet
+    fkDfmGodHandler,             // Eine Methode haengt an >=N Komponenten-
+                                 // Events (Spaghetti-Indikator)
+    fkDfmActionMismatch          // Komponente hat Action UND OnClick gesetzt
+                                 // -> Action gewinnt, OnClick ist toter Code
   );
 
   // SonarQube-aehnliche Kategorisierung der Befunde:
@@ -172,7 +224,27 @@ const
     (Name: 'EmptyMethod';     FindingType: ftCodeSmell),        // fkEmptyMethod
     (Name: 'DuplicateBlock';  FindingType: ftCodeDuplication),  // fkDuplicateBlock
     (Name: 'CyclomaticComplexity'; FindingType: ftCodeSmell),   // fkCyclomaticComplexity
-    (Name: 'CustomRule';      FindingType: ftCodeSmell)         // fkCustomRule
+    (Name: 'CustomRule';      FindingType: ftCodeSmell),        // fkCustomRule
+    (Name: 'DfmDefaultName';      FindingType: ftCodeSmell),     // fkDfmDefaultName
+    (Name: 'DfmHardcodedCaption'; FindingType: ftCodeSmell),     // fkDfmHardcodedCaption
+    (Name: 'DfmHardcodedDbCreds'; FindingType: ftVulnerability), // fkDfmHardcodedDbCreds
+    (Name: 'DfmDuplicateBinding'; FindingType: ftBug),           // fkDfmDuplicateBinding
+    (Name: 'DfmDeadEvent';        FindingType: ftBug),           // fkDfmDeadEvent
+    (Name: 'DfmOrphanHandler';    FindingType: ftCodeSmell),     // fkDfmOrphanHandler
+    (Name: 'DfmEmptyBoundEvent';  FindingType: ftCodeSmell),     // fkDfmEmptyBoundEvent
+    (Name: 'DfmSchemaMismatch';      FindingType: ftBug),         // fkDfmSchemaMismatch
+    (Name: 'DfmCircularDataSource';  FindingType: ftBug),         // fkDfmCircularDataSource
+    (Name: 'DfmSqlFromUserInput';        FindingType: ftVulnerability), // fkDfmSqlFromUserInput
+    (Name: 'DfmRequiredFieldUnbound';    FindingType: ftBug),            // fkDfmRequiredFieldUnbound
+    (Name: 'DfmRequiredFieldNotVisible'; FindingType: ftBug),            // fkDfmRequiredFieldNotVisible
+    (Name: 'DfmFieldTypeMismatch';       FindingType: ftCodeSmell),      // fkDfmFieldTypeMismatch
+    (Name: 'DfmTabOrderConflict';        FindingType: ftCodeSmell),      // fkDfmTabOrderConflict
+    (Name: 'DfmForbiddenClass';          FindingType: ftCodeSmell),      // fkDfmForbiddenClass
+    (Name: 'DfmDbInUiForm';              FindingType: ftCodeSmell),      // fkDfmDbInUiForm
+    (Name: 'DfmCrossFormCoupling';       FindingType: ftBug),            // fkDfmCrossFormCoupling
+    (Name: 'DfmLayerViolation';          FindingType: ftCodeSmell),      // fkDfmLayerViolation
+    (Name: 'DfmGodHandler';              FindingType: ftCodeSmell),      // fkDfmGodHandler
+    (Name: 'DfmActionMismatch';          FindingType: ftBug)             // fkDfmActionMismatch
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.
@@ -293,6 +365,13 @@ begin
   DetectorFormatFunctions.Sorted        := True;
   DetectorFormatFunctions.Duplicates    := dupIgnore;
   DetectorFormatFunctions.AddStrings(['format', 'formatutf8', 'formatstring']);
+
+  // DfmForbiddenClasses bleibt leer per Default - der Detektor schweigt,
+  // bis das Projekt eigene Klassen via analyser.ini eintraegt.
+  DfmForbiddenClasses := TStringList.Create;
+  DfmForbiddenClasses.CaseSensitive := False;
+  DfmForbiddenClasses.Sorted        := True;
+  DfmForbiddenClasses.Duplicates    := dupIgnore;
 end;
 
 initialization
@@ -311,5 +390,7 @@ finalization
     FreeAndNil(DetectorMagicTrivials);
   if Assigned(DetectorFormatFunctions) then
     FreeAndNil(DetectorFormatFunctions);
+  if Assigned(DfmForbiddenClasses) then
+    FreeAndNil(DfmForbiddenClasses);
 
 end.

@@ -22,6 +22,9 @@ uses
   uAstNode in 'sources\Parsing\uAstNode.pas',
   uLexer in 'sources\Parsing\uLexer.pas',
   uParser2 in 'sources\Parsing\uParser2.pas',
+  uComponentGraph in 'sources\Parsing\uComponentGraph.pas',
+  uDfmLexer in 'sources\Parsing\uDfmLexer.pas',
+  uDfmParser in 'sources\Parsing\uDfmParser.pas',
   // ---- Infrastructure ----
   uExport in 'sources\Infrastructure\uExport.pas',
   uExportHtml in 'sources\Infrastructure\uExportHtml.pas',
@@ -31,6 +34,10 @@ uses
   uStaticFiles in 'sources\Infrastructure\uStaticFiles.pas',
   uSuppression in 'sources\Infrastructure\uSuppression.pas',
   uVcsChanges in 'sources\Infrastructure\uVcsChanges.pas',
+  uDfmAnalysisRunner in 'sources\Infrastructure\uDfmAnalysisRunner.pas',
+  uFormBinder in 'sources\Infrastructure\uFormBinder.pas',
+  uDfmDbFieldAnalysis in 'sources\Infrastructure\uDfmDbFieldAnalysis.pas',
+  uDfmRepoIndex in 'sources\Infrastructure\uDfmRepoIndex.pas',
   // ---- Output ----
   uClaudePrompt in 'sources\Output\uClaudePrompt.pas',
   uExportSARIF in 'sources\Output\uExportSARIF.pas',
@@ -71,7 +78,26 @@ uses
   uSQLInjectionScore in 'sources\Detectors\uSQLInjectionScore.pas',
   uTodoComment in 'sources\Detectors\uTodoComment.pas',
   uUnusedUses in 'sources\Detectors\uUnusedUses.pas',
-  uCustomClassDiscovery in 'sources\Detectors\uCustomClassDiscovery.pas';
+  uCustomClassDiscovery in 'sources\Detectors\uCustomClassDiscovery.pas',
+  uDfmDefaultName in 'sources\Detectors\uDfmDefaultName.pas',
+  uDfmHardcodedCaption in 'sources\Detectors\uDfmHardcodedCaption.pas',
+  uDfmHardcodedDbCreds in 'sources\Detectors\uDfmHardcodedDbCreds.pas',
+  uDfmDuplicateBinding in 'sources\Detectors\uDfmDuplicateBinding.pas',
+  uDfmDeadEvent in 'sources\Detectors\uDfmDeadEvent.pas',
+  uDfmOrphanHandler in 'sources\Detectors\uDfmOrphanHandler.pas',
+  uDfmEmptyBoundEvent in 'sources\Detectors\uDfmEmptyBoundEvent.pas',
+  uDfmSchemaMismatch in 'sources\Detectors\uDfmSchemaMismatch.pas',
+  uDfmCircularDataSource in 'sources\Detectors\uDfmCircularDataSource.pas',
+  uDfmSqlFromUserInput in 'sources\Detectors\uDfmSqlFromUserInput.pas',
+  uDfmRequiredField in 'sources\Detectors\uDfmRequiredField.pas',
+  uDfmFieldTypeMismatch in 'sources\Detectors\uDfmFieldTypeMismatch.pas',
+  uDfmTabOrderConflict in 'sources\Detectors\uDfmTabOrderConflict.pas',
+  uDfmForbiddenClass in 'sources\Detectors\uDfmForbiddenClass.pas',
+  uDfmDbInUiForm in 'sources\Detectors\uDfmDbInUiForm.pas',
+  uDfmCrossFormCoupling in 'sources\Detectors\uDfmCrossFormCoupling.pas',
+  uDfmLayerViolation in 'sources\Detectors\uDfmLayerViolation.pas',
+  uDfmGodHandler in 'sources\Detectors\uDfmGodHandler.pas',
+  uDfmActionMismatch in 'sources\Detectors\uDfmActionMismatch.pas';
 
 {$R *.res}
 

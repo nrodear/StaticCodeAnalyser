@@ -157,6 +157,27 @@
         </DelphiCompile>
         <DCCReference Include="uTestSrcBuilder.pas"/>
         <DCCReference Include="uTestTAstNode.pas"/>
+        <DCCReference Include="uTestDfmLexer.pas"/>
+        <DCCReference Include="uTestDfmParser.pas"/>
+        <DCCReference Include="uTestDfmDefaultName.pas"/>
+        <DCCReference Include="uTestDfmHardcodedCaption.pas"/>
+        <DCCReference Include="uTestDfmHardcodedDbCreds.pas"/>
+        <DCCReference Include="uTestDfmDuplicateBinding.pas"/>
+        <DCCReference Include="uTestDfmDeadEvent.pas"/>
+        <DCCReference Include="uTestDfmOrphanHandler.pas"/>
+        <DCCReference Include="uTestDfmEmptyBoundEvent.pas"/>
+        <DCCReference Include="uTestDfmSchemaMismatch.pas"/>
+        <DCCReference Include="uTestDfmCircularDataSource.pas"/>
+        <DCCReference Include="uTestDfmSqlFromUserInput.pas"/>
+        <DCCReference Include="uTestDfmRequiredField.pas"/>
+        <DCCReference Include="uTestDfmFieldTypeMismatch.pas"/>
+        <DCCReference Include="uTestDfmTabOrderConflict.pas"/>
+        <DCCReference Include="uTestDfmForbiddenClass.pas"/>
+        <DCCReference Include="uTestDfmDbInUiForm.pas"/>
+        <DCCReference Include="uTestDfmCrossFormCoupling.pas"/>
+        <DCCReference Include="uTestDfmLayerViolation.pas"/>
+        <DCCReference Include="uTestDfmGodHandler.pas"/>
+        <DCCReference Include="uTestDfmActionMismatch.pas"/>
         <DCCReference Include="uTestFindingHelper.pas"/>
         <DCCReference Include="uTestLeakDetector.pas"/>
         <DCCReference Include="uTestSQLInjection.pas"/>

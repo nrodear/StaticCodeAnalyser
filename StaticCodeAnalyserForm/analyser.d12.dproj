@@ -61,7 +61,7 @@
     <PropertyGroup Condition="'$(Base)'!=''">
         <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
         <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
-        <DCC_UnitSearchPath>$(PROJECTDIR)\sources;$(PROJECTDIR)\resources;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>$(PROJECTDIR)\sources;$(PROJECTDIR)\sources\Common;$(PROJECTDIR)\sources\Detectors;$(PROJECTDIR)\sources\Infrastructure;$(PROJECTDIR)\sources\Output;$(PROJECTDIR)\sources\Parsing;$(PROJECTDIR)\sources\UI;$(PROJECTDIR)\resources;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_E>false</DCC_E>
         <DCC_N>false</DCC_N>
         <DCC_S>false</DCC_S>
@@ -136,6 +136,32 @@
         <DCCReference Include="sources\UI\uAnalyserTheme.pas"/>
         <DCCReference Include="sources\UI\uAnalyserTypes.pas"/>
         <DCCReference Include="sources\Parsing\uAstNode.pas"/>
+        <DCCReference Include="sources\Parsing\uComponentGraph.pas"/>
+        <DCCReference Include="sources\Parsing\uDfmLexer.pas"/>
+        <DCCReference Include="sources\Parsing\uDfmParser.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmDefaultName.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmHardcodedCaption.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmHardcodedDbCreds.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmDuplicateBinding.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmDeadEvent.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmOrphanHandler.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmEmptyBoundEvent.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmSchemaMismatch.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmCircularDataSource.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmSqlFromUserInput.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmRequiredField.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmFieldTypeMismatch.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmTabOrderConflict.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmForbiddenClass.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmDbInUiForm.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmCrossFormCoupling.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmLayerViolation.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmGodHandler.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmActionMismatch.pas"/>
+        <DCCReference Include="sources\Infrastructure\uDfmAnalysisRunner.pas"/>
+        <DCCReference Include="sources\Infrastructure\uFormBinder.pas"/>
+        <DCCReference Include="sources\Infrastructure\uDfmDbFieldAnalysis.pas"/>
+        <DCCReference Include="sources\Infrastructure\uDfmRepoIndex.pas"/>
         <DCCReference Include="sources\Output\uClaudePrompt.pas"/>
         <DCCReference Include="sources\Detectors\uCodeSmells2.pas"/>
         <DCCReference Include="sources\Common\uCollectValues.pas"/>

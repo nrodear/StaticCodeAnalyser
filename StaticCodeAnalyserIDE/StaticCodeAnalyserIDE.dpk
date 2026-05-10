@@ -61,6 +61,9 @@ contains
   uAstNode in '..\StaticCodeAnalyserForm\sources\Parsing\uAstNode.pas',
   uLexer in '..\StaticCodeAnalyserForm\sources\Parsing\uLexer.pas',
   uParser2 in '..\StaticCodeAnalyserForm\sources\Parsing\uParser2.pas',
+  uComponentGraph in '..\StaticCodeAnalyserForm\sources\Parsing\uComponentGraph.pas',
+  uDfmLexer in '..\StaticCodeAnalyserForm\sources\Parsing\uDfmLexer.pas',
+  uDfmParser in '..\StaticCodeAnalyserForm\sources\Parsing\uDfmParser.pas',
   // ---- Infrastructure ----
   uStaticFiles in '..\StaticCodeAnalyserForm\sources\Infrastructure\uStaticFiles.pas',
   uSuppression in '..\StaticCodeAnalyserForm\sources\Infrastructure\uSuppression.pas',
@@ -70,6 +73,10 @@ contains
   uStaticAnalyzer2 in '..\StaticCodeAnalyserForm\sources\Infrastructure\uStaticAnalyzer2.pas',
   uVcsChanges in '..\StaticCodeAnalyserForm\sources\Infrastructure\uVcsChanges.pas',
   uRepoSettings in '..\StaticCodeAnalyserForm\sources\Infrastructure\uRepoSettings.pas',
+  uDfmAnalysisRunner in '..\StaticCodeAnalyserForm\sources\Infrastructure\uDfmAnalysisRunner.pas',
+  uFormBinder in '..\StaticCodeAnalyserForm\sources\Infrastructure\uFormBinder.pas',
+  uDfmDbFieldAnalysis in '..\StaticCodeAnalyserForm\sources\Infrastructure\uDfmDbFieldAnalysis.pas',
+  uDfmRepoIndex in '..\StaticCodeAnalyserForm\sources\Infrastructure\uDfmRepoIndex.pas',
   // ---- Output ----
   uClaudePrompt in '..\StaticCodeAnalyserForm\sources\Output\uClaudePrompt.pas',
   uFixHint in '..\StaticCodeAnalyserForm\sources\Output\uFixHint.pas',
@@ -106,6 +113,25 @@ contains
   uFieldLeak in '..\StaticCodeAnalyserForm\sources\Detectors\uFieldLeak.pas',
   uDuplicateBlock in '..\StaticCodeAnalyserForm\sources\Detectors\uDuplicateBlock.pas',
   uCustomClassDiscovery in '..\StaticCodeAnalyserForm\sources\Detectors\uCustomClassDiscovery.pas',
-  uCustomRuleDetector in '..\StaticCodeAnalyserForm\sources\Detectors\uCustomRuleDetector.pas';
+  uCustomRuleDetector in '..\StaticCodeAnalyserForm\sources\Detectors\uCustomRuleDetector.pas',
+  uDfmDefaultName in '..\StaticCodeAnalyserForm\sources\Detectors\uDfmDefaultName.pas',
+  uDfmHardcodedCaption in '..\StaticCodeAnalyserForm\sources\Detectors\uDfmHardcodedCaption.pas',
+  uDfmHardcodedDbCreds in '..\StaticCodeAnalyserForm\sources\Detectors\uDfmHardcodedDbCreds.pas',
+  uDfmDuplicateBinding in '..\StaticCodeAnalyserForm\sources\Detectors\uDfmDuplicateBinding.pas',
+  uDfmDeadEvent in '..\StaticCodeAnalyserForm\sources\Detectors\uDfmDeadEvent.pas',
+  uDfmOrphanHandler in '..\StaticCodeAnalyserForm\sources\Detectors\uDfmOrphanHandler.pas',
+  uDfmEmptyBoundEvent in '..\StaticCodeAnalyserForm\sources\Detectors\uDfmEmptyBoundEvent.pas',
+  uDfmSchemaMismatch in '..\StaticCodeAnalyserForm\sources\Detectors\uDfmSchemaMismatch.pas',
+  uDfmCircularDataSource in '..\StaticCodeAnalyserForm\sources\Detectors\uDfmCircularDataSource.pas',
+  uDfmSqlFromUserInput in '..\StaticCodeAnalyserForm\sources\Detectors\uDfmSqlFromUserInput.pas',
+  uDfmRequiredField in '..\StaticCodeAnalyserForm\sources\Detectors\uDfmRequiredField.pas',
+  uDfmFieldTypeMismatch in '..\StaticCodeAnalyserForm\sources\Detectors\uDfmFieldTypeMismatch.pas',
+  uDfmTabOrderConflict in '..\StaticCodeAnalyserForm\sources\Detectors\uDfmTabOrderConflict.pas',
+  uDfmForbiddenClass in '..\StaticCodeAnalyserForm\sources\Detectors\uDfmForbiddenClass.pas',
+  uDfmDbInUiForm in '..\StaticCodeAnalyserForm\sources\Detectors\uDfmDbInUiForm.pas',
+  uDfmCrossFormCoupling in '..\StaticCodeAnalyserForm\sources\Detectors\uDfmCrossFormCoupling.pas',
+  uDfmLayerViolation in '..\StaticCodeAnalyserForm\sources\Detectors\uDfmLayerViolation.pas',
+  uDfmGodHandler in '..\StaticCodeAnalyserForm\sources\Detectors\uDfmGodHandler.pas',
+  uDfmActionMismatch in '..\StaticCodeAnalyserForm\sources\Detectors\uDfmActionMismatch.pas';
 
 end.
