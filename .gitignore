@@ -80,3 +80,6 @@ Desktop.ini
 .vscode/
 *.suo
 node_modules/
+
+# ---- Claude Code workspace ----
+.claude/
