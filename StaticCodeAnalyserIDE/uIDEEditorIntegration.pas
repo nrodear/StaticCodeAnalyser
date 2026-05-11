@@ -28,14 +28,17 @@ type
     cfrOK,                 // .pas-Datei erfolgreich detektiert
     cfrNoEditorService,    // BorlandIDEServices ohne IOTAEditorServices
     cfrNoOpenView,         // kein offener Editor-View / Buffer
-    cfrNotPascalFile       // Datei offen, aber kein .pas
+    cfrNotPascalFile       // Datei offen, aber kein .pas / .dfm
   );
 
   TIDEEditor = class
   public
-    // Versucht den Pfad der aktuell im Editor offenen .pas-Datei zu
-    // liefern. Bei OK enthaelt APath einen absoluten Pfad mit `.pas`-
-    // Endung; bei jedem anderen Result ist APath leer.
+    // Versucht den Pfad der aktuell im Editor offenen .pas- oder .dfm-Datei
+    // zu liefern. Bei OK enthaelt APath einen absoluten Pfad.
+    // Bei einer .dfm wird automatisch auf die zugehoerige .pas umgeleitet
+    // (gleicher Basename im gleichen Ordner), damit der DFM-Analyse-Runner
+    // sie sauber als Pas-Input bekommt - er sucht intern selbst nach
+    // der .dfm dazu.
     class function TryGetCurrentPasFile(out APath: string): TCurrentFileResult; static;
 
     // Liefert das Verzeichnis des aktiven IDE-Projekts (ohne Trailing
@@ -53,13 +56,14 @@ type
 implementation
 
 uses
-  System.SysUtils;
+  System.SysUtils, System.IOUtils;
 
 class function TIDEEditor.TryGetCurrentPasFile(out APath: string): TCurrentFileResult;
 var
   EditorSvc : IOTAEditorServices;
   EditView  : IOTAEditView;
   Path      : string;
+  AsPas     : string;
 begin
   APath := '';
   if not Supports(BorlandIDEServices, IOTAEditorServices, EditorSvc) then
@@ -68,10 +72,30 @@ begin
   if not Assigned(EditView) or not Assigned(EditView.Buffer) then
     Exit(cfrNoOpenView);
   Path := EditView.Buffer.FileName;
-  if (Path = '') or not Path.EndsWith('.pas', True) then
-    Exit(cfrNotPascalFile);
-  APath  := Path;
-  Result := cfrOK;
+  if Path = '' then Exit(cfrNotPascalFile);
+
+  if Path.EndsWith('.pas', True) then
+  begin
+    APath  := Path;
+    Result := cfrOK;
+    Exit;
+  end;
+
+  // Bei einer .dfm-Datei auf die zugehoerige .pas umleiten, falls sie im
+  // gleichen Ordner existiert. Der Analyse-Runner sucht die .dfm dann
+  // selbst wieder ueber TPath.ChangeExtension.
+  if Path.EndsWith('.dfm', True) then
+  begin
+    AsPas := TPath.ChangeExtension(Path, '.pas');
+    if TFile.Exists(AsPas) then
+    begin
+      APath  := AsPas;
+      Result := cfrOK;
+      Exit;
+    end;
+  end;
+
+  Result := cfrNotPascalFile;
 end;
 
 class function TIDEEditor.GetCurrentProjectDir: string;
