@@ -296,7 +296,7 @@ begin
   IconLbl.Layout      := tlCenter;
   IconLbl.Transparent := True;
   IconLbl.Font.Name   := 'Segoe Fluent Icons';
-  IconLbl.Font.Size   := 11;
+  IconLbl.Font.Size   := 12;
   IconLbl.Font.Color  := IconColor;
 
   CountLbl := TLabel.Create(AOwner);
@@ -307,7 +307,7 @@ begin
   CountLbl.Layout      := tlCenter;
   CountLbl.Transparent := True;
   CountLbl.Font.Name   := 'Segoe UI';
-  CountLbl.Font.Size   := 11;
+  CountLbl.Font.Size   := 12;
   CountLbl.Font.Style  := [fsBold];
   CountLbl.Font.Color  := clBtnText; // theme-konformer Vordergrund
 
@@ -323,7 +323,7 @@ begin
   CapLbl.Layout      := tlTop;
   CapLbl.Transparent := True;
   CapLbl.Font.Name   := 'Segoe UI';
-  CapLbl.Font.Size   := 6;
+  CapLbl.Font.Size   := 7;
   CapLbl.Font.Color  := clGrayText; // gedaempfter Themed-Caption-Ton
 
   Result := CountLbl;
