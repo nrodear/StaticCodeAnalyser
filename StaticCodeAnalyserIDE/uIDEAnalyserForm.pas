@@ -243,7 +243,8 @@ type
     // einen Befund gerufen.
     procedure HighlightAllFindingsInFile(const AFileName: string);
     class function FixHint(const Finding: TLeakFinding): TFixHint; static;
-    procedure OpenFileAtLine(const AbsPath: string; LineNumber: Integer);
+    function OpenFileAtLine(const AbsPath: string;
+                            LineNumber: Integer): TOpenFileMode;
     procedure LoadRecentPaths;
     procedure SaveRecentPath(const APath: string);
   protected
@@ -1779,18 +1780,61 @@ end;
 
 procedure TAnalyserFrame.AnalyseCurrentFileClick(Sender: TObject);
 var
-  FilePath  : string;
+  FilePath : string;
+  AsPas    : string;
+  Idx      : Integer;
 begin
-  // IDE-Editor-Detection in uIDEEditorIntegration ausgelagert (saubere
-  // Supports-Casts + Buffer-nil-Check, behebt die im TODO gelisteten
-  // AV-Pfade beim Plugin-Reload).
-  case TIDEEditor.TryGetCurrentPasFile(FilePath) of
-    cfrNoEditorService:
-      begin StatusMode(_('IDE editor service not available.')); Exit; end;
-    cfrNoOpenView:
-      begin StatusMode(_('No file opened.'));                   Exit; end;
-    cfrNotPascalFile:
-      begin StatusMode(_('Current file is not a Pascal file.')); Exit; end;
+  // Quelle der "aktuellen Datei" in dieser Reihenfolge:
+  //   1) Selektierte Zeile im Befund-Grid (User klickt einen Befund an und
+  //      will GENAU diese Datei erneut scannen). Der IDE-Editor-Tab kann
+  //      veraltet sein - er folgt nur dem letzten Doppelklick, einfache
+  //      Selektion oeffnet die Datei nicht. Ohne diesen Schritt landet der
+  //      Button auf der zuletzt doppelt-geklickten Datei statt auf der
+  //      aktuell ausgewaehlten.
+  //   2) Aktuelle Editor-Tab im IDE (TryGetCurrentPasFile, alter Default).
+  //      Behaelt die Original-Pfade fuer "kein Befund-Grid geoeffnet",
+  //      "Plugin gerade gestartet", "kein Lauf gemacht".
+  FilePath := '';
+
+  if Assigned(FDisplayedFindings) and Assigned(FResultGrid)
+     and (FResultGrid.Row >= 1) then
+  begin
+    Idx := FResultGrid.Row - 1;
+    if (Idx >= 0) and (Idx < FDisplayedFindings.Count) then
+    begin
+      FilePath := FDisplayedFindings[Idx].FileName;
+      // .dfm-Befund: AnalyzeLeaks erwartet eine .pas - der DfmAnalysisRunner
+      // liest das companion .dfm selbst nach. Selber Pfad wie in
+      // TryGetCurrentPasFile fuer .dfm-Editor-Tabs.
+      if EndsText('.dfm', FilePath) then
+      begin
+        AsPas := ChangeFileExt(FilePath, '.pas');
+        if FileExists(AsPas) then
+          FilePath := AsPas
+        else
+          FilePath := ''; // keine companion .pas -> Fallback auf IDE-Editor
+      end;
+    end;
+  end;
+
+  // Fallback: IDE-Editor-Detection in uIDEEditorIntegration ausgelagert
+  // (saubere Supports-Casts + Buffer-nil-Check).
+  if FilePath = '' then
+  begin
+    case TIDEEditor.TryGetCurrentPasFile(FilePath) of
+      cfrNoEditorService:
+        begin StatusMode(_('IDE editor service not available.')); Exit; end;
+      cfrNoOpenView:
+        begin StatusMode(_('No file opened.'));                   Exit; end;
+      cfrNotPascalFile:
+        begin StatusMode(_('Current file is not a Pascal file.')); Exit; end;
+    end;
+  end;
+
+  if not FileExists(FilePath) then
+  begin
+    StatusMode(_('File not found: ') + FilePath);
+    Exit;
   end;
 
   // "Aktuelle Datei" -> Single-File-Live-Watch auf genau diese Datei
@@ -2192,12 +2236,32 @@ begin
     Exit;
   end;
 
-  OpenFileAtLine(absPath, lineNo);
+  // Bei .dfm-Befund hat OpenFileAtLine drei moegliche Auspraegungen:
+  //   ofmRegular         -> .pas-Befund, ganz normal
+  //   ofmDfmAsText       -> .pas war zu (oder nicht modifiziert) -> die
+  //                         DFM wurde geschlossen und als Text wieder
+  //                         geoeffnet. CursorPos zeigt direkt auf die
+  //                         Befund-Zeile in der DFM.
+  //   ofmDfmFallbackPas  -> .pas war modifiziert; statt sie zu zerstoeren
+  //                         oeffnen wir die .pas, Cursor auf Zeile 1. User
+  //                         schaltet bei Bedarf via Alt+F12 zur DFM-Text-
+  //                         Sicht und kennt die DFM-Zeile aus dem Hint.
+  var Mode: TOpenFileMode := OpenFileAtLine(absPath, lineNo);
   // Editor-Line-Highlights setzen — Datei ist jetzt offen, alle Befunde
   // der Datei werden mit Stripe markiert (Multi-Marker-Modell).
   HighlightAllFindingsInFile(absPath);
-  StatusMode(Format(_('Opened: %s  Line: %d'),
-    [ExtractFileName(absPath), lineNo]));
+  case Mode of
+    ofmDfmAsText:
+      StatusMode(Format(_('DFM as text: %s  Line: %d'),
+        [ExtractFileName(absPath), lineNo]));
+    ofmDfmFallbackPas:
+      StatusMode(Format(
+        _('DFM finding at line %d - .pas is modified, press Alt+F12 to view DFM as text'),
+        [lineNo]));
+  else
+    StatusMode(Format(_('Opened: %s  Line: %d'),
+      [ExtractFileName(absPath), lineNo]));
+  end;
 end;
 
 procedure TAnalyserFrame.HighlightAllFindingsInFile(const AFileName: string);
@@ -2242,16 +2306,17 @@ begin
   GHighlighter.SetActiveFile(AFileName, Entries);
 end;
 
-procedure TAnalyserFrame.OpenFileAtLine(const AbsPath: string;
-  LineNumber: Integer);
+function TAnalyserFrame.OpenFileAtLine(const AbsPath: string;
+  LineNumber: Integer): TOpenFileMode;
 // Thin-Wrapper - Logik in uIDEEditorIntegration.TIDEEditor (mit
 // Supports-Casts statt as-Cast). Behalten als Frame-Methode weil
 // GridDblClick es aufruft und der Lifecycle-Sentinel-Schutz weiter
 // ueber den Frame laufen soll (Defensive: kein OpenFile wenn der
 // Frame gerade zerstoert wird).
 begin
+  Result := ofmRegular;
   if GLiveAnalyserFrame <> Pointer(Self) then Exit;
-  TIDEEditor.OpenFileAtLine(AbsPath, LineNumber);
+  Result := TIDEEditor.OpenFileAtLine(AbsPath, LineNumber);
 end;
 
 procedure TAnalyserFrame.CMStyleChanged(var Message: TMessage);

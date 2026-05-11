@@ -83,7 +83,7 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Math,
+  System.SysUtils, System.IOUtils, System.Math,
   Winapi.Windows,                    // GetTickCount
   Vcl.Forms,                         // Application.ProcessMessages, Screen
   Vcl.Controls,                      // crHourglass, crDefault
@@ -264,15 +264,25 @@ procedure TAnalyseRunner.RunCurrent(const AFilePath: string);
 // ist kurz, Cancel waere Overkill). Lifecycle-Race-Schutz analog
 // RunAll - aber hier reicht der finally-Cleanup, weil keine
 // ProcessMessages mid-flight stehen.
+//
+// Status-Anzeige: "Analysing: Foo.pas + Foo.dfm" wenn die companion .dfm
+// existiert. Die DFM-Detektoren laufen ohnehin via TDfmAnalysisRunner.
+// AnalyzePasFile - der User sieht damit, dass beide Dateien abgedeckt sind.
 var
-  findings  : TObjectList<TLeakFinding>;
-  FrameSnap : Pointer;
+  findings    : TObjectList<TLeakFinding>;
+  FrameSnap   : Pointer;
+  DfmPath     : string;
+  DisplayName : string;
 begin
   FrameSnap := FFramePtr;
   Screen.Cursor := crHourglass;
   try
     try
-      FOnStatusProgress(_('Analysing: ') + ExtractFileName(AFilePath));
+      DisplayName := ExtractFileName(AFilePath);
+      DfmPath := TPath.ChangeExtension(AFilePath, '.dfm');
+      if TFile.Exists(DfmPath) then
+        DisplayName := DisplayName + ' + ' + ExtractFileName(DfmPath);
+      FOnStatusProgress(_('Analysing: ') + DisplayName);
       Application.ProcessMessages;
 
       findings := nil;
