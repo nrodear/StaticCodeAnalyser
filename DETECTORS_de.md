@@ -6,7 +6,13 @@ Orientiert sich am Sonar-50er-Katalog plus eigene Bonus-Detektoren.
 
 Status: ✅ implementiert | 🟡 teilweise | 🔲 offen
 
-**Zusammenfassung:** 17 / 50 vollständig + 1 teilweise + 3 Bonus-Detektoren = 21 Detektoren.
+**Zusammenfassung:** 17 / 50 vollständig + 1 teilweise + 3 Bonus + **20 DFM-Detektoren** = **insgesamt 41 aktive Detektoren**.
+
+Die 21 Pascal-AST-Detektoren unten folgen der Sonar-50-Taxonomie.
+Die **20 DFM-Detektoren** am Ende dieser Datei sind formdatei-
+spezifisch und gehören nicht in den Sonar-Katalog — sie arbeiten
+auf dem DFM-Lexer + Parser + Komponentengraph (sowie FormBinder
+für die Pascal-AST-Kopplung), eingeführt mit v0.10.0.
 
 🇬🇧 [English version](DETECTORS.md)
 
@@ -123,8 +129,73 @@ Status: ✅ implementiert | 🟡 teilweise | 🔲 offen
 🎁 Bonus:         3  (HardcodedPath, DebugOutput, DuplicateString)
 🔲 Offen:        32
 
-→ 21 von 50 als Detektor-Code vorhanden, davon 18 vollständig.
+→ 21 von 50 Sonar-Regeln als Pascal-AST-Detektor-Code vorhanden,
+  davon 18 vollständig.
+
+📐 DFM-Detektoren: 20 (alle vollständig) — siehe Abschnitt unten.
+
+🎯 Gesamt: 41 aktive Detektoren.
 ```
+
+---
+
+## 📐 DFM-Detektoren — formdatei-spezifisch (nicht im 50er-Sonar-Katalog)
+
+Diese laufen über `.dfm`-Dateien mit eigenem DFM-Lexer + Parser
++ Komponentengraph. `TFormBinder` koppelt die Form an den
+zugehörigen `.pas`-AST, `TDfmRepoIndex` stellt Repo-weite
+Cross-Form-Lookups bereit. Alle Detektoren liefern Vorher/Nachher-
+Fix-Hints im Hilfe-Panel und haben DUnitX-Tests.
+
+### Cluster Dead-Wiring (3) — Events / Handler / Form↔Code-Kopplung
+
+| # | Regel (`fk…`-ID) | Beschreibung | Typ | Unit |
+|---|------------------|--------------|-----|------|
+| D1 | **DfmDeadEvent** | `OnClick` im DFM verweist auf Methodennamen, der im published-Abschnitt der Form nicht existiert | Bug | `uDfmDeadEvent` |
+| D2 | **DfmOrphanHandler** | Published Methode mit `Sender: TObject`-Signatur, an die keine DFM-Komponente bindet | Code Smell | `uDfmOrphanHandler` |
+| D3 | **DfmEmptyBoundEvent** | Event ist gebunden, Methode existiert, Rumpf aber leer / nur `inherited` | Code Smell | `uDfmEmptyBoundEvent` |
+
+### Cluster Data-Access (4) — Datasets, Felder, Master-Detail
+
+| # | Regel (`fk…`-ID) | Beschreibung | Typ | Unit |
+|---|------------------|--------------|-----|------|
+| D4 | **DfmSchemaMismatch** | DFM-`TField`/`TDataSource` hat kein passendes published-Field in der Form-Klasse | Bug | `uDfmSchemaMismatch` |
+| D5 | **DfmCircularDataSource** | Zyklus in `DataSource.DataSet` / `MasterSource` — Endlosschleife / Stack-Overflow zur Laufzeit | Bug | `uDfmCircularDataSource` |
+| D6 | **DfmFieldTypeMismatch** | UI-Control-Klasse passt nicht zum `TField`-Datentyp (z.B. `TDBEdit` auf `ftBlob`) | Code Smell | `uDfmFieldTypeMismatch` |
+| D7 | **DfmRequiredFieldUnbound / NotVisible** | `TField` mit `Required=True` hat keine UI-Bindung (Unbound) — oder nur auf einem versteckten Tab (NotVisible) | Bug | `uDfmRequiredField` |
+
+### Cluster Security (2) — Credentials & SQL-Injection in DFMs
+
+| # | Regel (`fk…`-ID) | Beschreibung | Typ | Unit |
+|---|------------------|--------------|-----|------|
+| D8 | **DfmHardcodedDbCreds** | Klartext-Credentials auf einer `TADOConnection`/`TFDConnection`-`ConnectionString`/`Params`-Property | Vulnerability | `uDfmHardcodedDbCreds` |
+| D9 | **DfmSqlFromUserInput** | SQL-Property einer DB-Query wird (im Pascal-Code) durch `+`-Verkettung mit `TEdit.Text` / anderer UI-Eingabe gebaut — DFM-Smell, der den Analyser zurück in den Pascal-AST zieht | Vulnerability | `uDfmSqlFromUserInput` |
+
+### Cluster Layering / Architektur (4) — Trennung der Belange
+
+| # | Regel (`fk…`-ID) | Beschreibung | Typ | Unit |
+|---|------------------|--------------|-----|------|
+| D10 | **DfmDbInUiForm** | DB-Komponente (`TADOConnection`, `TFDQuery`, `TClientDataSet`, …) sitzt direkt auf einem UI-Form statt in einem Data-Modul | Code Smell | `uDfmDbInUiForm` |
+| D11 | **DfmCrossFormCoupling** | Code in `Form1` greift via globaler Form-Variable auf `Form2.<field>` zu | Bug | `uDfmCrossFormCoupling` |
+| D12 | **DfmLayerViolation** | Eingabe-Control sitzt direkt auf `TForm` statt in Panel / `TFrame` / `TGroupBox` | Code Smell | `uDfmLayerViolation` |
+| D13 | **DfmForbiddenClass** | Komponente nutzt eine via `analyser.ini → [DfmDetectors] ForbiddenClasses=` gesperrte Klasse | Code Smell | `uDfmForbiddenClass` |
+
+### Cluster UI/UX (4) — Interaktions-Smells in der Form-Definition
+
+| # | Regel (`fk…`-ID) | Beschreibung | Typ | Unit |
+|---|------------------|--------------|-----|------|
+| D14 | **DfmDuplicateBinding** | Mehrere Komponenten binden denselben `OnClick` / dasselbe `DataField` etc. — typischer Copy-Paste-Bug | Bug | `uDfmDuplicateBinding` |
+| D15 | **DfmTabOrderConflict** | Zwei Geschwister-Controls auf demselben Parent haben denselben `TabOrder`-Wert | Code Smell | `uDfmTabOrderConflict` |
+| D16 | **DfmGodHandler** | Eine Methode hängt an ≥ N Komponenten-Events — God-Handler, der pro Belang aufgeteilt werden sollte | Code Smell | `uDfmGodHandler` |
+| D17 | **DfmActionMismatch** | Komponente hat `Action=` UND `OnClick=` gesetzt — der explizite `OnClick` gewinnt still, die `TAction`-Verklebung läuft ins Leere | Bug | `uDfmActionMismatch` |
+
+### Cluster Naming / Lokalisierung (3) — Hygiene
+
+| # | Regel (`fk…`-ID) | Beschreibung | Typ | Unit |
+|---|------------------|--------------|-----|------|
+| D18 | **DfmDefaultName** | Komponente hat noch ihren Default-Namen (`Button1`, `Edit2`, …) | Code Smell | `uDfmDefaultName` |
+| D19 | **DfmHardcodedCaption** | UI-sichtbarer String (`Caption`, `Hint`, `Text`, …) als Literal im DFM statt via `resourcestring` / dxgettext | Code Smell | `uDfmHardcodedCaption` |
+| D20 | **DfmHardcodedDbCreds — Param-Variante** | _(siehe D8 — selbe Unit, separate Finding-Kind für Param-Values vs. ConnectionString)_ | Vulnerability | `uDfmHardcodedDbCreds` |
 
 ---
 
@@ -136,4 +207,9 @@ Phase 2 – Major Zuverl.:              #16 UninitVar, #20 ResultNotChecked, #25
 Phase 3 – Major Wartb.:               #28 HighComplexity, #34 MultipleExit, #31 GodClass
 Phase 4 – Minor:                      #36 UnusedVar, #39 CommentedCode, #44 LongLine
 Phase 5 – Info:                       #47 UnsortedUses, #49 DeprecatedAPI, #50 CanBeClassMethod
+
+DFM Phase 1 (erledigt) : Dead-Wiring + Data-Access + Security
+DFM Phase 2 (erledigt) : Layering / UI-UX / Naming
+DFM Phase 3 (offen)    : Data-Modul-Split-Vorschlag, DesignTime-Property-Drift,
+                         Master-Detail-ohne-LinkField, Frame-Instance-Property-Overrides
 ```

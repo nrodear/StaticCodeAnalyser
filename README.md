@@ -11,9 +11,16 @@
 
 **Delphi static code analysis tool** and **linter** for **RAD Studio 12 (Athens)** —
 ships as an **IDE plugin** with a dockable tool window plus a **standalone Windows app**.
-AST-based analysis with **21 detectors** for memory leaks, SQL injection, code smells,
-security vulnerabilities and code duplication. Sonar-style classification with a
-Quality Score. One click on a finding copies an AI-ready Markdown fix prompt to the
+AST-based analysis with **41 detectors total**: 21 Pascal checks for memory leaks,
+SQL injection, code smells, security vulnerabilities and code duplication, **plus a
+dedicated DFM scanner with 20 checks** built on its own DFM lexer + parser + component
+graph paired with the Pascal AST — dead event handlers, hard-coded DB credentials in
+form files, circular master-detail wiring, required dataset fields without UI binding,
+SQL built from `TEdit.Text`, cross-form coupling, and more. Sonar-style classification
+with a Quality Score. Repo-wide form index for cross-unit analysis. VCS-diff mode
+treats `.dfm` changes as triggers for the companion `.pas`. HTML report with grouped
+`.pas`+`.dfm` filter. IDE plugin opens DFM findings as text directly in the Code
+Editor. One click on a finding copies an AI-ready Markdown fix prompt to the
 clipboard. Open source, MIT-licensed.
 
 🇩🇪 [Deutsche Version](README_de.md)
@@ -29,7 +36,7 @@ Sonar setup required, running inside the IDE, with a Claude AI hand-off.**
 
 | Capability | Details |
 |------------|---------|
-| 🐛 **Bug detection** | 21 detectors run against every `.pas` file (MemoryLeak, NilDeref, DivByZero, FormatMismatch, …) |
+| 🐛 **Bug detection** | 21 Pascal detectors run against every `.pas` file (MemoryLeak, NilDeref, DivByZero, FormatMismatch, …) plus 20 DFM detectors against every `.dfm` (dead event handlers, hard-coded DB credentials, circular master-detail, …) — **41 total** |
 | 🔐 **Security checks** | SQLInjection (score-based), HardcodedSecret, HardcodedPath |
 | 🧹 **Code smells** | LongMethod, MagicNumber, EmptyExcept, MissingFinally, DeadCode, DuplicateString/Block |
 | ⚡ **Incremental analysis** | "Branch-Changes" button: only the files modified in the Git/SVN branch — 200 ms instead of 60 s |
@@ -45,14 +52,23 @@ Sonar setup required, running inside the IDE, with a Claude AI hand-off.**
 
 ## Main features
 
-### 1. Static code analysis (21 detectors, Sonar taxonomy)
+### 1. Static code analysis (41 detectors total — 21 Pascal + 20 DFM, Sonar taxonomy)
 
-Catches **bugs** (MemoryLeak, NilDeref, DivByZero, FormatMismatch),
-**vulnerabilities** (SQLInjection, HardcodedSecret), **security hotspots**
-(HardcodedPath), **code smells** (LongMethod, MagicNumber, DeadCode,
-EmptyExcept, MissingFinally, …), and **code duplication** (DuplicateString,
-DuplicateBlock). Every finding ships with a before/after fix in the help
-panel.
+**Pascal AST checks (21)**: **bugs** (MemoryLeak, NilDeref, DivByZero,
+FormatMismatch), **vulnerabilities** (SQLInjection, HardcodedSecret),
+**security hotspots** (HardcodedPath), **code smells** (LongMethod,
+MagicNumber, DeadCode, EmptyExcept, MissingFinally, …), and **code
+duplication** (DuplicateString, DuplicateBlock).
+
+**DFM checks (20)** on the dedicated form-file lexer + parser +
+component graph, paired with the Pascal AST via the FormBinder: dead
+event handlers, hard-coded DB credentials in form files, circular
+master-detail wiring, required dataset fields without UI binding, SQL
+built from `TEdit.Text`, cross-form coupling, duplicate-control
+hot-keys, untranslated Caption strings, and more. Repo-wide form
+index for cross-unit analysis.
+
+Every finding ships with a before/after fix in the help panel.
 
 ### 2. Incremental VCS-aware analysis (Git + SVN)
 
@@ -89,7 +105,7 @@ For incremental scans of branch-changed files only, see
 
 ---
 
-## What is detected (21 detectors)
+## What is detected (41 detectors — 21 Pascal + 20 DFM)
 
 Findings fall into one of **five Sonar categories**:
 
@@ -119,6 +135,11 @@ Findings fall into one of **five Sonar categories**:
 Every detector comes with a **before/after code example** in the help
 panel. Clicking a finding copies a **Markdown block ready for Claude AI**
 to the clipboard.
+
+For the **20 DFM-specific detectors** (DFM-DeadEventHandler,
+DFM-HardcodedDBCredentials, DFM-CircularMasterDetail,
+DFM-MissingRequiredFieldBinding, DFM-SQLFromTEditText, …) and their
+fix hints: see [DETECTORS.md](DETECTORS.md).
 
 Full status of all 50 Sonar rules: see [DETECTORS.md](DETECTORS.md).
 
@@ -565,7 +586,7 @@ StaticCodeAnalyserForm/sources/        Analysis engine (shared by standalone + I
     uAstNode.pas                       AST with FindAll / FindFirst lookup
 
   Infrastructure/
-    uStaticAnalyzer2.pas               Orchestrates the 21 detectors per file
+    uStaticAnalyzer2.pas               Orchestrates the 21 Pascal detectors per file
     uStaticFiles.pas                   Recursive file scan, tick callback,
                                        cancel support, symlink protection
     uIgnoreList.pas                    ignore.txt + test filter
@@ -624,7 +645,8 @@ For a typical 1 000-unit repository:
 | Folder scan | — | 1–3 s |
 | Lexer | ~5–15 ms | ~10 s |
 | Parser2 | ~10–50 ms | ~30 s |
-| 21 detectors | ~5–30 ms | ~20 s |
+| 21 Pascal detectors | ~5–30 ms | ~20 s |
+| DFM parser + 20 DFM detectors (per `.dfm`) | ~5–20 ms | ~5–10 s |
 | Suppression sweep | — | <1 s |
 | **Total** | **~30–100 ms** | **~60–90 s** |
 
@@ -645,8 +667,8 @@ For incremental re-scans, **use Branch-Changes instead of a full scan**
   as `FileError`. Configurable in `analyser.ini`.
 - **MAX_DEPTH = 32**: protection against symlink loops.
 - **Cancel any time**: `EAbort` propagates cleanly through every layer.
-- **Per-detector try/except**: a crashing detector never blocks the
-  other twenty.
+- **Per-detector try/except**: a crashing detector never blocks any of
+  the other forty.
 
 ---
 
@@ -704,6 +726,47 @@ moved into its own dedicated file (which is exactly what happened with
 the Branch-Changes content).
 
 🇩🇪 German versions: [README_de.md](README_de.md), [DETECTORS_de.md](DETECTORS_de.md), [BRANCH_CHANGES_de.md](BRANCH_CHANGES_de.md)
+
+---
+
+## Related projects and alternatives
+
+If you are evaluating this project, you may also be looking at:
+
+- **SonarQube / SonarLint** — language coverage is broad but **Delphi /
+  Object Pascal is not supported out of the box**. This project is the
+  closest "Sonar feel" you can get for Delphi without writing a Sonar
+  plugin yourself. Same five categories (Bug / Vulnerability / Security
+  Hotspot / Code Smell / Code Duplication), same quality-score idea,
+  SARIF export for GitHub Code Scanning.
+- **FixInsight** (CodeHealer) — commercial, IDE-integrated. This project
+  is a **free, open-source FixInsight alternative** with comparable
+  detector coverage on Pascal plus a dedicated DFM scanner that
+  FixInsight does not ship.
+- **Pascal Analyzer (PAL)** — commercial. Overlapping detector set,
+  but no DFM-aware checks, no Claude AI hand-off, no SARIF.
+- **DFMCheck / GExperts DFM-Check** — single-purpose DFM linters. The
+  20 DFM detectors in this project are a superset (graph-based
+  cross-form analysis, repo-wide form index, Pascal-AST coupling).
+- **DCC32 hints / warnings** — built-in compiler diagnostics. Useful
+  but limited to syntactic and trivially-semantic checks; no
+  taxonomy, no AST queries, no security category.
+
+## Keywords
+
+Delphi static code analysis, Object Pascal linter, RAD Studio plugin,
+Delphi 12 Athens, Delphi IDE plugin, ToolsAPI, DFM analyzer, form file
+linter, Pascal AST, SonarQube alternative for Delphi, FixInsight
+alternative, Pascal Analyzer alternative, Delphi memory-leak detector,
+SQL injection detector for Delphi, hardcoded secret scanner, Delphi
+code smell, Delphi code duplication, McCabe complexity Delphi,
+SARIF Delphi, Branch-Changes incremental scan, Git diff Delphi,
+SVN diff Delphi, Claude AI prompt, Delphi code review automation,
+TADOQuery security, TFDQuery security, TClientDataSet provider chain,
+TDataSetProvider audit, master-detail circular detection, dead event
+handler detection, untranslated Caption detector, dxgettext audit,
+TEdit.Text SQL injection, hardcoded DB credentials in DFM, Pascal lint
+CI/CD, GitHub Actions Delphi SARIF, pre-commit hook Delphi.
 
 ---
 

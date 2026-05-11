@@ -11,10 +11,18 @@
 
 **Statisches Code-Analyse-Tool** und **Linter** für **Delphi 12 / RAD Studio (Athens)** —
 als **IDE-Plugin** mit dockbarem Tool-Fenster plus **eigenständige Windows-Anwendung**.
-AST-basierte Analyse mit **21 Detektoren** für Speicherlecks, SQL-Injection,
-Code-Smells, Sicherheitslücken und Code-Duplikate. Sonar-Style-Klassifikation mit
-Quality Score. Ein Klick auf einen Befund kopiert einen AI-fertigen Markdown-Fix-Prompt
-in die Zwischenablage. Open Source, MIT-lizenziert.
+AST-basierte Analyse mit **insgesamt 41 Detektoren**: 21 Pascal-Checks für
+Speicherlecks, SQL-Injection, Code-Smells, Sicherheitslücken und Code-Duplikate,
+**plus ein dedizierter DFM-Scanner mit 20 Checks** auf Basis eines eigenen DFM-Lexers
++ Parsers + Komponentengraph, verheiratet mit dem Pascal-AST — tote Event-Handler,
+Klartext-DB-Credentials in Form-Dateien, zirkuläre Master-Detail-Verkettung,
+Required-Felder ohne UI-Bindung, SQL aus `TEdit.Text`, Cross-Form-Kopplung und mehr.
+Sonar-Style-Klassifikation mit Quality Score. Repo-weiter Form-Index für Cross-Unit-
+Analyse. VCS-Diff-Modus behandelt `.dfm`-Änderungen als Trigger für die zugehörige
+`.pas`. HTML-Report mit gruppiertem `.pas`+`.dfm`-Filter. IDE-Plugin öffnet
+DFM-Befunde direkt als Text im Code-Editor. Ein Klick auf einen Befund kopiert
+einen AI-fertigen Markdown-Fix-Prompt in die Zwischenablage. Open Source,
+MIT-lizenziert.
 
 🇬🇧 [English version](README.md)
 
@@ -29,7 +37,7 @@ direkt in der IDE, mit Claude-AI-Anbindung.**
 
 | Fähigkeit | Wie genutzt |
 |-----------|-------------|
-| 🐛 **Bugs finden** | 21 Detektoren laufen über jede `.pas`-Datei (MemoryLeak, NilDeref, DivByZero, FormatMismatch, …) |
+| 🐛 **Bugs finden** | 21 Pascal-Detektoren laufen über jede `.pas`-Datei (MemoryLeak, NilDeref, DivByZero, FormatMismatch, …) plus 20 DFM-Detektoren über jede `.dfm` (tote Event-Handler, Klartext-DB-Credentials, zirkuläre Master-Detail-Verkettung, …) — **insgesamt 41** |
 | 🔐 **Sicherheitslücken** | SQLInjection (Score-basiert), HardcodedSecret, HardcodedPath |
 | 🧹 **Code-Smells** | LongMethod, MagicNumber, EmptyExcept, MissingFinally, DeadCode, DuplicateString/Block |
 | ⚡ **Inkrementell analysieren** | „Branch-Changes"-Button: nur die im Git-/SVN-Branch geänderten Dateien — 200 ms statt 60 s |
@@ -45,14 +53,23 @@ direkt in der IDE, mit Claude-AI-Anbindung.**
 
 ## Hauptfeatures
 
-### 1. Statische Code-Analyse (21 Detektoren, Sonar-Taxonomie)
+### 1. Statische Code-Analyse (insgesamt 41 Detektoren — 21 Pascal + 20 DFM, Sonar-Taxonomie)
 
-Findet **Bugs** (MemoryLeak, NilDeref, DivByZero, FormatMismatch),
-**Vulnerabilities** (SQLInjection, HardcodedSecret), **Security Hotspots**
-(HardcodedPath), **Code Smells** (LongMethod, MagicNumber, DeadCode,
-EmptyExcept, MissingFinally, …) und **Code Duplication** (DuplicateString,
-DuplicateBlock). Jeder Befund kommt mit einer Vorher/Nachher-Lösung im
-Hilfe-Panel.
+**Pascal-AST-Checks (21)**: **Bugs** (MemoryLeak, NilDeref, DivByZero,
+FormatMismatch), **Vulnerabilities** (SQLInjection, HardcodedSecret),
+**Security Hotspots** (HardcodedPath), **Code Smells** (LongMethod,
+MagicNumber, DeadCode, EmptyExcept, MissingFinally, …) und **Code
+Duplication** (DuplicateString, DuplicateBlock).
+
+**DFM-Checks (20)** auf Basis eines eigenen Form-Datei-Lexers +
+Parsers + Komponentengraph, gekoppelt mit dem Pascal-AST via FormBinder:
+tote Event-Handler, Klartext-DB-Credentials in Form-Dateien, zirkuläre
+Master-Detail-Verkettung, Required-Felder ohne UI-Bindung, SQL aus
+`TEdit.Text`, Cross-Form-Kopplung, doppelte Steuer-Hotkeys, nicht
+übersetzte Caption-Strings und mehr. Repo-weiter Form-Index für
+Cross-Unit-Analyse.
+
+Jeder Befund kommt mit einer Vorher/Nachher-Lösung im Hilfe-Panel.
 
 ### 2. Inkrementelle VCS-basierte Analyse (Git + SVN)
 
@@ -87,7 +104,7 @@ Für inkrementelle Analyse nur der im Branch geänderten Dateien siehe
 
 ---
 
-## Was wird erkannt (21 Detektoren)
+## Was wird erkannt (41 Detektoren — 21 Pascal + 20 DFM)
 
 Alle Befunde landen in einer der **5 Sonar-Kategorien**:
 
@@ -117,6 +134,11 @@ Alle Befunde landen in einer der **5 Sonar-Kategorien**:
 Pro Detektor gibt es ein **Vorher/Nachher-Code-Beispiel** im Hilfe-Panel.
 Per Klick auf einen Befund landet ein **Markdown-Block für Claude AI** in
 der Zwischenablage.
+
+Die **20 DFM-spezifischen Detektoren** (DFM-DeadEventHandler,
+DFM-HardcodedDBCredentials, DFM-CircularMasterDetail,
+DFM-MissingRequiredFieldBinding, DFM-SQLFromTEditText …) und ihre
+Fix-Hints: siehe [DETECTORS_de.md](DETECTORS_de.md).
 
 Vollständiger Status der 50-Sonar-Pruefregeln: siehe [DETECTORS_de.md](DETECTORS_de.md).
 
@@ -560,7 +582,7 @@ StaticCodeAnalyserForm/sources/        Analyse-Engine (shared zwischen Standalon
     uAstNode.pas                       AST mit FindAll/FindFirst-Suche
 
   Infrastructure/
-    uStaticAnalyzer2.pas               Orchestriert 21 Detektoren pro Datei
+    uStaticAnalyzer2.pas               Orchestriert 21 Pascal-Detektoren pro Datei
     uStaticFiles.pas                   Rekursiver Datei-Scan, Tick-Callback,
                                        Cancel-Support, Symlink-Schutz
     uIgnoreList.pas                    ignore.txt + Test-Filter
@@ -619,7 +641,8 @@ Bei einem typischen 1000-Unit-Repo:
 | Verzeichnis-Scan | — | 1-3 s |
 | Lexer | ~5-15 ms | ~10 s |
 | Parser2 | ~10-50 ms | ~30 s |
-| 21 Detektoren | ~5-30 ms | ~20 s |
+| 21 Pascal-Detektoren | ~5-30 ms | ~20 s |
+| DFM-Parser + 20 DFM-Detektoren (pro `.dfm`) | ~5-20 ms | ~5-10 s |
 | Suppression-Sweep | — | <1 s |
 | **Gesamt** | **~30-100 ms** | **~60-90 s** |
 
@@ -641,8 +664,8 @@ benutzen — typisch 200 ms bis 3 s. Siehe [BRANCH_CHANGES_de.md](BRANCH_CHANGES
   gemeldet. Konfigurierbar in `analyser.ini`.
 - **MAX_DEPTH = 32**: Symlink-Endlosschleifen-Schutz
 - **Cancel jederzeit**: EAbort propagiert sauber durch alle Schichten
-- **Pro-Detektor try/except**: ein crashing Detektor blockiert nicht die
-  anderen 20
+- **Pro-Detektor try/except**: ein abstürzender Detektor blockiert
+  nicht die anderen 40
 
 ---
 
@@ -697,6 +720,49 @@ Konvention: `README_de.md` ist breit, die anderen zwei sind tief und auf
 einen Aspekt fokussiert. Wenn du eine bestehende Section in `README_de.md`
 zu groß findest, wird sie typischerweise in eine eigene Spezial-Datei
 ausgelagert (so wie es mit dem Branch-Changes-Teil passiert ist).
+
+---
+
+## Verwandte Projekte & Alternativen
+
+Wer dieses Projekt evaluiert, schaut häufig parallel auf:
+
+- **SonarQube / SonarLint** — breite Sprach-Abdeckung, aber
+  **Delphi / Object Pascal wird nicht out-of-the-box unterstützt**.
+  Dieses Projekt ist der naheliegendste "Sonar-Feel" für Delphi, ohne
+  selbst ein Sonar-Plugin schreiben zu müssen. Gleiche fünf Kategorien
+  (Bug / Vulnerability / Security Hotspot / Code Smell / Code
+  Duplication), gleiche Quality-Score-Idee, SARIF-Export für GitHub
+  Code Scanning.
+- **FixInsight** (CodeHealer) — kommerziell, IDE-integriert. Dieses
+  Projekt ist eine **freie, Open-Source-FixInsight-Alternative** mit
+  vergleichbarer Pascal-Detektor-Abdeckung plus dediziertem DFM-Scanner,
+  den FixInsight nicht mitliefert.
+- **Pascal Analyzer (PAL)** — kommerziell. Überlappendes Detektor-Set,
+  aber keine DFM-aware Checks, kein Claude-AI-Hand-off, kein SARIF.
+- **DFMCheck / GExperts DFM-Check** — Single-Purpose-DFM-Linter. Die
+  20 DFM-Detektoren in diesem Projekt sind eine Obermenge
+  (graph-basierte Cross-Form-Analyse, Repo-weiter Form-Index,
+  Pascal-AST-Kopplung).
+- **DCC32-Hints/Warnings** — eingebaute Compiler-Diagnostik. Nützlich
+  aber begrenzt auf syntaktische und trivial-semantische Checks; keine
+  Taxonomie, keine AST-Queries, keine Security-Kategorie.
+
+## Schlagwörter
+
+Delphi statische Code-Analyse, Object Pascal Linter, RAD-Studio-Plugin,
+Delphi 12 Athens, Delphi-IDE-Plugin, ToolsAPI, DFM-Analyzer,
+Formular-Datei-Linter, Pascal AST, SonarQube-Alternative für Delphi,
+FixInsight-Alternative, Pascal-Analyzer-Alternative, Delphi
+Speicherleck-Detektor, SQL-Injection-Detektor für Delphi, Hardcoded-
+Secret-Scanner, Delphi Code-Smell, Delphi Code-Duplication, McCabe-
+Komplexität Delphi, SARIF Delphi, Branch-Changes inkrementeller Scan,
+Git-Diff Delphi, SVN-Diff Delphi, Claude-AI-Prompt, Delphi-Code-Review-
+Automation, TADOQuery-Security, TFDQuery-Security, TClientDataSet-
+Provider-Chain, TDataSetProvider-Audit, Master-Detail-Zirkel-Erkennung,
+tote Event-Handler erkennen, untranslated Caption Detektor, dxgettext-
+Audit, TEdit.Text-SQL-Injection, hardcoded DB-Credentials in DFM,
+Pascal Lint CI/CD, GitHub-Actions Delphi SARIF, Pre-Commit-Hook Delphi.
 
 ---
 

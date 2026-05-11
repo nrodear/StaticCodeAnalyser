@@ -7,7 +7,13 @@ specific to this tool.
 
 Status legend: ✅ implemented · 🟡 partial · 🔲 open
 
-**Summary:** 17 / 50 complete + 1 partial + 3 bonus detectors = **21 active detectors**.
+**Summary:** 17 / 50 complete + 1 partial + 3 bonus + **20 DFM** detectors = **41 active detectors total**.
+
+The 21 Pascal-AST detectors below follow the Sonar 50-rule taxonomy.
+The **20 DFM detectors** at the end of this file are form-file
+specific and do not appear in the Sonar catalogue — they operate on
+the DFM lexer + parser + component graph (and FormBinder for
+Pascal-AST coupling) introduced with v0.10.0.
 
 🇩🇪 [Deutsche Version](DETECTORS_de.md)
 
@@ -124,8 +130,73 @@ Status legend: ✅ implemented · 🟡 partial · 🔲 open
 🎁 Bonus:      3  (HardcodedPath, DebugOutput, DuplicateString)
 🔲 Open:      32
 
-→ 21 of 50 rules backed by detector code, 18 of those fully complete.
+→ 21 of 50 Sonar rules backed by Pascal-AST detector code,
+  18 of those fully complete.
+
+📐 DFM detectors: 20 (all complete) — see next section.
+
+🎯 Grand total: 41 active detectors.
 ```
+
+---
+
+## 📐 DFM detectors — form-file specific (not in 50-rule Sonar catalogue)
+
+These run against `.dfm` files using a dedicated DFM lexer + parser
++ component graph, with `TFormBinder` coupling the form to its
+companion `.pas` AST and `TDfmRepoIndex` providing repo-wide
+cross-form lookups. All ship with before/after fix hints in the
+help panel and DUnitX tests.
+
+### Dead-Wiring cluster (3) — events / handlers / form↔code coupling
+
+| # | Rule (`fk…` id) | Description | Type | Unit |
+|---|-----------------|-------------|------|------|
+| D1 | **DfmDeadEvent** | `OnClick` in the DFM points to a method name that doesn't exist in the form's published section | Bug | `uDfmDeadEvent` |
+| D2 | **DfmOrphanHandler** | Published method with `Sender: TObject` signature that no DFM component binds to | Code Smell | `uDfmOrphanHandler` |
+| D3 | **DfmEmptyBoundEvent** | Event is bound, target method exists, but the body is empty / `inherited`-only | Code Smell | `uDfmEmptyBoundEvent` |
+
+### Data-Access cluster (4) — datasets, fields, master-detail
+
+| # | Rule (`fk…` id) | Description | Type | Unit |
+|---|-----------------|-------------|------|------|
+| D4 | **DfmSchemaMismatch** | DFM `TField`/`TDataSource` has no matching published field in the form class | Bug | `uDfmSchemaMismatch` |
+| D5 | **DfmCircularDataSource** | Cycle in `DataSource.DataSet` / `MasterSource` graph — runtime infinite loop / stack overflow | Bug | `uDfmCircularDataSource` |
+| D6 | **DfmFieldTypeMismatch** | UI control class doesn't match the `TField` data type (e.g. `TDBEdit` bound to `ftBlob`) | Code Smell | `uDfmFieldTypeMismatch` |
+| D7 | **DfmRequiredFieldUnbound / NotVisible** | `TField` with `Required=True` has no UI binding at all (Unbound) — or only on a hidden tab (NotVisible) | Bug | `uDfmRequiredField` |
+
+### Security cluster (2) — credentials and SQL injection in DFMs
+
+| # | Rule (`fk…` id) | Description | Type | Unit |
+|---|-----------------|-------------|------|------|
+| D8 | **DfmHardcodedDbCreds** | Plaintext credentials on a `TADOConnection` / `TFDConnection` `ConnectionString` / `Params` property | Vulnerability | `uDfmHardcodedDbCreds` |
+| D9 | **DfmSqlFromUserInput** | SQL property of a DB-query is built (in `Pascal`) by concatenating `TEdit.Text` or other UI input — DFM smell that pulls the analyser back into Pascal AST | Vulnerability | `uDfmSqlFromUserInput` |
+
+### Layering / Architecture cluster (4) — separation of concerns
+
+| # | Rule (`fk…` id) | Description | Type | Unit |
+|---|-----------------|-------------|------|------|
+| D10 | **DfmDbInUiForm** | DB component (`TADOConnection`, `TFDQuery`, `TClientDataSet`, …) sits directly on a UI form instead of a data-module | Code Smell | `uDfmDbInUiForm` |
+| D11 | **DfmCrossFormCoupling** | Code in `Form1` reaches into `Form2.<field>` via the global form variable | Bug | `uDfmCrossFormCoupling` |
+| D12 | **DfmLayerViolation** | Input control sits directly on `TForm` instead of a Panel / `TFrame` / `TGroupBox` container | Code Smell | `uDfmLayerViolation` |
+| D13 | **DfmForbiddenClass** | Component class listed in `analyser.ini → [DfmDetectors] ForbiddenClasses=` is used in a DFM | Code Smell | `uDfmForbiddenClass` |
+
+### UI/UX cluster (4) — interaction smells in the form definition
+
+| # | Rule (`fk…` id) | Description | Type | Unit |
+|---|-----------------|-------------|------|------|
+| D14 | **DfmDuplicateBinding** | Multiple components bind the same `OnClick` / same `DataField` etc. — usually a copy-paste bug | Bug | `uDfmDuplicateBinding` |
+| D15 | **DfmTabOrderConflict** | Two sibling controls on the same parent share the same `TabOrder` value | Code Smell | `uDfmTabOrderConflict` |
+| D16 | **DfmGodHandler** | One method bound to ≥ N components' events — a god-handler that should be split per concern | Code Smell | `uDfmGodHandler` |
+| D17 | **DfmActionMismatch** | Component has both `Action=` and `OnClick=` set — the explicit `OnClick` silently wins and the `TAction` glue is wasted | Bug | `uDfmActionMismatch` |
+
+### Naming / Localisation cluster (3) — hygiene
+
+| # | Rule (`fk…` id) | Description | Type | Unit |
+|---|-----------------|-------------|------|------|
+| D18 | **DfmDefaultName** | Component still has its default name (`Button1`, `Edit2`, …) | Code Smell | `uDfmDefaultName` |
+| D19 | **DfmHardcodedCaption** | UI-visible string (`Caption`, `Hint`, `Text`, …) is a literal in the DFM instead of going through `resourcestring` / dxgettext | Code Smell | `uDfmHardcodedCaption` |
+| D20 | **DfmHardcodedDbCreds extras** | _(see D8 — same detector, separate finding kind for parameter values vs. ConnectionString)_ | Vulnerability | `uDfmHardcodedDbCreds` |
 
 ---
 
@@ -137,4 +208,9 @@ Phase 2 — Major reliability          : #16 UninitVar, #20 ResultNotChecked, #2
 Phase 3 — Major maintainability      : #28 HighComplexity, #34 MultipleExit, #31 GodClass
 Phase 4 — Minor                      : #36 UnusedVar, #39 CommentedCode, #44 LongLine
 Phase 5 — Info                       : #47 UnsortedUses, #49 DeprecatedAPI, #50 CanBeClassMethod
+
+DFM Phase 1 (done)  : Dead-Wiring + Data-Access + Security clusters
+DFM Phase 2 (done)  : Layering / UI-UX / Naming clusters
+DFM Phase 3 (open)  : data-module split suggestion, designtime-prop drift,
+                      master-detail-without-LinkField, frame-instance prop overrides
 ```
