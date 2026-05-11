@@ -18,14 +18,13 @@ uses
   uLocalization in 'sources\UI\uLocalization.pas',
   uFindingGridRenderer in 'sources\UI\uFindingGridRenderer.pas',
   uMainForm in 'sources\UI\uMainForm.pas' {Form2},
-  // ---- Parsing ----
+  uDfmTextViewer in 'sources\UI\uDfmTextViewer.pas',
   uAstNode in 'sources\Parsing\uAstNode.pas',
   uLexer in 'sources\Parsing\uLexer.pas',
   uParser2 in 'sources\Parsing\uParser2.pas',
   uComponentGraph in 'sources\Parsing\uComponentGraph.pas',
   uDfmLexer in 'sources\Parsing\uDfmLexer.pas',
   uDfmParser in 'sources\Parsing\uDfmParser.pas',
-  // ---- Infrastructure ----
   uExport in 'sources\Infrastructure\uExport.pas',
   uExportHtml in 'sources\Infrastructure\uExportHtml.pas',
   uIgnoreList in 'sources\Infrastructure\uIgnoreList.pas',
@@ -38,13 +37,10 @@ uses
   uFormBinder in 'sources\Infrastructure\uFormBinder.pas',
   uDfmDbFieldAnalysis in 'sources\Infrastructure\uDfmDbFieldAnalysis.pas',
   uDfmRepoIndex in 'sources\Infrastructure\uDfmRepoIndex.pas',
-  // ---- Output ----
   uClaudePrompt in 'sources\Output\uClaudePrompt.pas',
   uExportSARIF in 'sources\Output\uExportSARIF.pas',
   uFixHint in 'sources\Output\uFixHint.pas',
-  // ---- Console (CLI-Mode) ----
   uConsoleRunner in 'sources\Console\uConsoleRunner.pas',
-  // ---- Common ----
   uCollectValues in 'sources\Common\uCollectValues.pas',
   uDetectorUtils in 'sources\Common\uDetectorUtils.pas',
   uMethodd12 in 'sources\Common\uMethodd12.pas',
@@ -53,7 +49,6 @@ uses
   uRuleCatalog in 'sources\Common\uRuleCatalog.pas',
   uSCAConsts in 'sources\Common\uSCAConsts.pas',
   uYamlSubsetParser in 'sources\Common\uYamlSubsetParser.pas',
-  // ---- Detectors ----
   uCodeSmells2 in 'sources\Detectors\uCodeSmells2.pas',
   uDeadCode in 'sources\Detectors\uDeadCode.pas',
   uDebugOutput in 'sources\Detectors\uDebugOutput.pas',
@@ -97,7 +92,9 @@ uses
   uDfmCrossFormCoupling in 'sources\Detectors\uDfmCrossFormCoupling.pas',
   uDfmLayerViolation in 'sources\Detectors\uDfmLayerViolation.pas',
   uDfmGodHandler in 'sources\Detectors\uDfmGodHandler.pas',
-  uDfmActionMismatch in 'sources\Detectors\uDfmActionMismatch.pas';
+  uDfmActionMismatch in 'sources\Detectors\uDfmActionMismatch.pas',
+  uCustomerForm in 'resources\uCustomerForm.pas' {CustomerForm},
+  uOrderForm in 'resources\uOrderForm.pas' {OrderForm};
 
 {$R *.res}
 
@@ -136,6 +133,8 @@ begin
     Application.Initialize;
     Application.MainFormOnTaskbar := True;
     Application.CreateForm(TForm2, Form2);
-    Application.Run;
+  Application.CreateForm(TCustomerForm, CustomerForm);
+  Application.CreateForm(TOrderForm, OrderForm);
+  Application.Run;
   end;
 end.

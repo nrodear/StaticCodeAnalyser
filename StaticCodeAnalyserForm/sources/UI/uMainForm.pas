@@ -9,7 +9,7 @@ uses
    Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls,
   Vcl.ComCtrls, Vcl.Grids, uStaticAnalyzer2,
   uMethodd12, uSCAConsts, uFixHint, uClaudePrompt, uLocalization,
-  uRepoSettings, uRecentPaths, uFindingGridRenderer,
+  uRepoSettings, uRecentPaths, uFindingGridRenderer, uDfmTextViewer,
   Vcl.Controls
  ;
 
@@ -401,16 +401,14 @@ begin
 end;
 
 procedure TForm2.ResultGridDblClick(Sender: TObject);
-// Bei .dfm-Befunden oeffnen wir stattdessen die zugehoerige .pas und
-// springen NICHT zur Befund-Zeile (die Zeile bezieht sich auf die .dfm,
-// und NavigateDelphiToLine arbeitet im Code-Editor, nicht im Form-
-// Designer). Die Status-Bar zeigt die DFM-Zeile als Info, damit der
-// User im Form-Designer (Alt+F12 -> View as Text) gezielt suchen kann.
+// Bei .dfm-Befunden oeffnen wir den eingebauten DFM-Text-Viewer mit Goto-
+// Zeile - kein externer ShellExecute, weil der Standard-Handler die DFM
+// im Form-Designer aufmacht (Goto-Line funktioniert dort nicht).
+// Bei .pas-Befunden weiter ShellExecute + Delphi-IDE-Sprung wie bisher.
 var
   row: Integer;
-  relPath, absPath, openPath: string;
+  relPath, absPath: string;
   lineNo: Integer;
-  isDfm: Boolean;
 begin
   row := ResultGrid.Row;
   if row < 1 then Exit;
@@ -424,30 +422,27 @@ begin
     Exit;
   end;
 
-  isDfm   := EndsText('.dfm', absPath);
-  openPath := absPath;
-  if isDfm then
+  if EndsText('.dfm', absPath) then
   begin
-    // Bei DFM-Befund: zugehoerige .pas oeffnen (im Code-Editor), wenn
-    // vorhanden. Fallback auf die .dfm.
-    var asPas := TPath.ChangeExtension(absPath, '.pas');
-    if FileExists(asPas) then
-      openPath := asPas;
+    ShowDfmAsText(absPath, lineNo);
+    StatusBar1.SimpleText := Format(_('DFM viewer: %s  Line: %d'),
+                                     [relPath, lineNo]);
+    Exit;
   end;
 
-  ShellExecute(Handle, 'open', PChar(openPath), nil, nil, SW_SHOWNORMAL);
-  if (not isDfm) and (lineNo > 0) then
+  // ProcessMessages flushed Pending-Events (z.B. den Repaint nach Modal-
+  // Close des DFM-Viewers). Ohne das Flush kann der direkt folgende
+  // ShellExecute-Aufruf beim Delphi-IDE-DDE-Handler "verloren gehen" -
+  // die IDE bekommt Focus, oeffnet die Datei aber nicht.
+  Application.ProcessMessages;
+  ShellExecute(Handle, 'open', PChar(absPath), nil, nil, SW_SHOWNORMAL);
+  if lineNo > 0 then
   begin
-    Sleep(800); // Delphi IDE Zeit geben, die Datei zu oeffnen
+    Sleep(1200); // Delphi IDE Zeit geben, die Datei zu oeffnen
+    Application.ProcessMessages;
     NavigateDelphiToLine(lineNo);
   end;
-
-  if isDfm then
-    StatusBar1.SimpleText := Format(
-      _('DFM finding at line %d - opened %s (use Alt+F12 to view DFM as text)'),
-      [lineNo, ExtractFileName(openPath)])
-  else
-    StatusBar1.SimpleText := Format(_('Opened: %s  Line: %d'), [relPath, lineNo]);
+  StatusBar1.SimpleText := Format(_('Opened: %s  Line: %d'), [relPath, lineNo]);
 end;
 
 procedure TForm2.NavigateDelphiToLine(LineNo: Integer);

@@ -135,10 +135,68 @@
         <DCCReference Include="sources\UI\uAnalyserPalette.pas"/>
         <DCCReference Include="sources\UI\uAnalyserTheme.pas"/>
         <DCCReference Include="sources\UI\uAnalyserTypes.pas"/>
+        <DCCReference Include="sources\UI\uLocalization.pas"/>
+        <DCCReference Include="sources\UI\uFindingGridRenderer.pas"/>
+        <DCCReference Include="sources\UI\uDfmTextViewer.pas"/>
+        <DCCReference Include="sources\UI\uMainForm.pas">
+            <Form>Form2</Form>
+            <FormType>dfm</FormType>
+        </DCCReference>
         <DCCReference Include="sources\Parsing\uAstNode.pas"/>
+        <DCCReference Include="sources\Parsing\uLexer.pas"/>
+        <DCCReference Include="sources\Parsing\uParser2.pas"/>
         <DCCReference Include="sources\Parsing\uComponentGraph.pas"/>
         <DCCReference Include="sources\Parsing\uDfmLexer.pas"/>
         <DCCReference Include="sources\Parsing\uDfmParser.pas"/>
+        <DCCReference Include="sources\Infrastructure\uExport.pas"/>
+        <DCCReference Include="sources\Infrastructure\uExportHtml.pas"/>
+        <DCCReference Include="sources\Infrastructure\uIgnoreList.pas"/>
+        <DCCReference Include="sources\Infrastructure\uRepoSettings.pas"/>
+        <DCCReference Include="sources\Infrastructure\uStaticAnalyzer2.pas"/>
+        <DCCReference Include="sources\Infrastructure\uStaticFiles.pas"/>
+        <DCCReference Include="sources\Infrastructure\uSuppression.pas"/>
+        <DCCReference Include="sources\Infrastructure\uVcsChanges.pas"/>
+        <DCCReference Include="sources\Infrastructure\uDfmAnalysisRunner.pas"/>
+        <DCCReference Include="sources\Infrastructure\uFormBinder.pas"/>
+        <DCCReference Include="sources\Infrastructure\uDfmDbFieldAnalysis.pas"/>
+        <DCCReference Include="sources\Infrastructure\uDfmRepoIndex.pas"/>
+        <DCCReference Include="sources\Output\uClaudePrompt.pas"/>
+        <DCCReference Include="sources\Output\uExportSARIF.pas"/>
+        <DCCReference Include="sources\Output\uFixHint.pas"/>
+        <DCCReference Include="sources\Console\uConsoleRunner.pas"/>
+        <DCCReference Include="sources\Common\uCollectValues.pas"/>
+        <DCCReference Include="sources\Common\uDetectorUtils.pas"/>
+        <DCCReference Include="sources\Common\uMethodd12.pas"/>
+        <DCCReference Include="sources\Common\uRecentPaths.pas"/>
+        <DCCReference Include="sources\Common\uRegExMatches.pas"/>
+        <DCCReference Include="sources\Common\uRuleCatalog.pas"/>
+        <DCCReference Include="sources\Common\uSCAConsts.pas"/>
+        <DCCReference Include="sources\Common\uYamlSubsetParser.pas"/>
+        <DCCReference Include="sources\Detectors\uCodeSmells2.pas"/>
+        <DCCReference Include="sources\Detectors\uDeadCode.pas"/>
+        <DCCReference Include="sources\Detectors\uDebugOutput.pas"/>
+        <DCCReference Include="sources\Detectors\uDeepNesting.pas"/>
+        <DCCReference Include="sources\Detectors\uCustomRuleDetector.pas"/>
+        <DCCReference Include="sources\Detectors\uCyclomaticComplexity.pas"/>
+        <DCCReference Include="sources\Detectors\uDivByZero.pas"/>
+        <DCCReference Include="sources\Detectors\uDuplicateBlock.pas"/>
+        <DCCReference Include="sources\Detectors\uDuplicateString.pas"/>
+        <DCCReference Include="sources\Detectors\uEmptyMethod.pas"/>
+        <DCCReference Include="sources\Detectors\uFieldLeak.pas"/>
+        <DCCReference Include="sources\Detectors\uFormatMismatch.pas"/>
+        <DCCReference Include="sources\Detectors\uHardcodedPath.pas"/>
+        <DCCReference Include="sources\Detectors\uHardcodedSecret.pas"/>
+        <DCCReference Include="sources\Detectors\uLeakDetector2.pas"/>
+        <DCCReference Include="sources\Detectors\uLongMethod.pas"/>
+        <DCCReference Include="sources\Detectors\uLongParamList.pas"/>
+        <DCCReference Include="sources\Detectors\uMagicNumbers.pas"/>
+        <DCCReference Include="sources\Detectors\uMissingFinally.pas"/>
+        <DCCReference Include="sources\Detectors\uNilDeref.pas"/>
+        <DCCReference Include="sources\Detectors\uSQLInjection.pas"/>
+        <DCCReference Include="sources\Detectors\uSQLInjectionScore.pas"/>
+        <DCCReference Include="sources\Detectors\uTodoComment.pas"/>
+        <DCCReference Include="sources\Detectors\uUnusedUses.pas"/>
+        <DCCReference Include="sources\Detectors\uCustomClassDiscovery.pas"/>
         <DCCReference Include="sources\Detectors\uDfmDefaultName.pas"/>
         <DCCReference Include="sources\Detectors\uDfmHardcodedCaption.pas"/>
         <DCCReference Include="sources\Detectors\uDfmHardcodedDbCreds.pas"/>
@@ -158,63 +216,14 @@
         <DCCReference Include="sources\Detectors\uDfmLayerViolation.pas"/>
         <DCCReference Include="sources\Detectors\uDfmGodHandler.pas"/>
         <DCCReference Include="sources\Detectors\uDfmActionMismatch.pas"/>
-        <DCCReference Include="sources\Infrastructure\uDfmAnalysisRunner.pas"/>
-        <DCCReference Include="sources\Infrastructure\uFormBinder.pas"/>
-        <DCCReference Include="sources\Infrastructure\uDfmDbFieldAnalysis.pas"/>
-        <DCCReference Include="sources\Infrastructure\uDfmRepoIndex.pas"/>
-        <DCCReference Include="sources\Output\uClaudePrompt.pas"/>
-        <DCCReference Include="sources\Detectors\uCodeSmells2.pas"/>
-        <DCCReference Include="sources\Common\uCollectValues.pas"/>
-        <DCCReference Include="sources\Detectors\uDeadCode.pas"/>
-        <DCCReference Include="sources\Detectors\uDebugOutput.pas"/>
-        <DCCReference Include="sources\Detectors\uDeepNesting.pas"/>
-        <DCCReference Include="sources\Detectors\uCyclomaticComplexity.pas"/>
-        <DCCReference Include="sources\Common\uDetectorUtils.pas"/>
-        <DCCReference Include="sources\Detectors\uDivByZero.pas"/>
-        <DCCReference Include="sources\Detectors\uDuplicateBlock.pas"/>
-        <DCCReference Include="sources\Detectors\uDuplicateString.pas"/>
-        <DCCReference Include="sources\Detectors\uEmptyMethod.pas"/>
-        <DCCReference Include="sources\Infrastructure\uExport.pas"/>
-        <DCCReference Include="sources\Infrastructure\uExportHtml.pas"/>
-        <DCCReference Include="sources\Detectors\uFieldLeak.pas"/>
-        <DCCReference Include="sources\Output\uFixHint.pas"/>
-        <DCCReference Include="sources\Detectors\uFormatMismatch.pas"/>
-        <DCCReference Include="sources\Detectors\uHardcodedPath.pas"/>
-        <DCCReference Include="sources\Detectors\uHardcodedSecret.pas"/>
-        <DCCReference Include="sources\Infrastructure\uIgnoreList.pas"/>
-        <DCCReference Include="sources\Detectors\uLeakDetector2.pas"/>
-        <DCCReference Include="sources\Parsing\uLexer.pas"/>
-        <DCCReference Include="sources\UI\uLocalization.pas"/>
-        <DCCReference Include="sources\Detectors\uLongMethod.pas"/>
-        <DCCReference Include="sources\Detectors\uLongParamList.pas"/>
-        <DCCReference Include="sources\Detectors\uMagicNumbers.pas"/>
-        <DCCReference Include="sources\UI\uFindingGridRenderer.pas"/>
-        <DCCReference Include="sources\UI\uMainForm.pas">
-            <Form>Form2</Form>
+        <DCCReference Include="resources\uCustomerForm.pas">
+            <Form>CustomerForm</Form>
             <FormType>dfm</FormType>
         </DCCReference>
-        <DCCReference Include="sources\Common\uMethodd12.pas"/>
-        <DCCReference Include="sources\Common\uRecentPaths.pas"/>
-        <DCCReference Include="sources\Detectors\uMissingFinally.pas"/>
-        <DCCReference Include="sources\Detectors\uNilDeref.pas"/>
-        <DCCReference Include="sources\Parsing\uParser2.pas"/>
-        <DCCReference Include="sources\Common\uRegExMatches.pas"/>
-        <DCCReference Include="sources\Infrastructure\uRepoSettings.pas"/>
-        <DCCReference Include="sources\Common\uSCAConsts.pas"/>
-        <DCCReference Include="sources\Detectors\uSQLInjection.pas"/>
-        <DCCReference Include="sources\Detectors\uSQLInjectionScore.pas"/>
-        <DCCReference Include="sources\Infrastructure\uStaticAnalyzer2.pas"/>
-        <DCCReference Include="sources\Infrastructure\uStaticFiles.pas"/>
-        <DCCReference Include="sources\Infrastructure\uSuppression.pas"/>
-        <DCCReference Include="sources\Detectors\uTodoComment.pas"/>
-        <DCCReference Include="sources\Detectors\uUnusedUses.pas"/>
-        <DCCReference Include="sources\Detectors\uCustomClassDiscovery.pas"/>
-        <DCCReference Include="sources\Infrastructure\uVcsChanges.pas"/>
-        <DCCReference Include="sources\Common\uRuleCatalog.pas"/>
-        <DCCReference Include="sources\Common\uYamlSubsetParser.pas"/>
-        <DCCReference Include="sources\Output\uExportSARIF.pas"/>
-        <DCCReference Include="sources\Console\uConsoleRunner.pas"/>
-        <DCCReference Include="sources\Detectors\uCustomRuleDetector.pas"/>
+        <DCCReference Include="resources\uOrderForm.pas">
+            <Form>OrderForm</Form>
+            <FormType>dfm</FormType>
+        </DCCReference>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
