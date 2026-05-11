@@ -367,6 +367,49 @@ begin
     SB.Append    ('      <option value="">Alle (');
     SB.Append    (IntToStr(Files.Count));
     SB.AppendLine(' Dateien)</option>');
+
+    // Basename-Gruppen aufbauen: wenn 'uMainForm.dfm' UND 'uMainForm.pas'
+    // beide existieren, emittieren wir zusaetzlich eine Gruppen-Option
+    // 'base:uMainForm' obendrueber. Der JS-Filter erkennt den 'base:'-
+    // Praefix und matcht dann gegen das data-base-Attribut jeder Zeile.
+    var Bases    := TDictionary<string, Integer>.Create;       // base -> count
+    var BasesSev := TDictionary<string, Integer>.Create;       // base -> sev mask
+    try
+      for fnDisp in Files do
+      begin
+        var BaseName := ChangeFileExt(fnDisp, '');
+        var Cur := 0; Bases.TryGetValue(BaseName, Cur);
+        Bases.AddOrSetValue(BaseName, Cur + 1);
+        var Sev := 0; FilesSev.TryGetValue(fnDisp, Sev);
+        var Acc := 0; BasesSev.TryGetValue(BaseName, Acc);
+        BasesSev.AddOrSetValue(BaseName, Acc or Sev);
+      end;
+
+      // Gruppen-Optionen zuerst (nur wenn mind. 2 Files mit gleichem Base)
+      for var BasePair in Bases do
+        if BasePair.Value >= 2 then
+        begin
+          var GAcc := 0; BasesSev.TryGetValue(BasePair.Key, GAcc);
+          DataSev := '';
+          if (GAcc and 1) <> 0 then DataSev := DataSev + 'err,';
+          if (GAcc and 2) <> 0 then DataSev := DataSev + 'warn,';
+          if (GAcc and 4) <> 0 then DataSev := DataSev + 'hint,';
+          if DataSev <> '' then
+            SetLength(DataSev, Length(DataSev) - 1);
+
+          SB.Append('      <option value="base:');
+          SB.Append(HtmlEscape(BasePair.Key));
+          SB.Append('" data-sev="');
+          SB.Append(DataSev);
+          SB.Append('">[+] ');
+          SB.Append(HtmlEscape(BasePair.Key));
+          SB.Append(' (.pas + .dfm)</option>'#13#10);
+        end;
+    finally
+      BasesSev.Free;
+      Bases.Free;
+    end;
+
     for fnDisp in Files do
     begin
       // data-sev = Komma-Liste der Severities die in DIESER Datei
@@ -452,10 +495,16 @@ begin
                        (Hint.Before <> '') or (Hint.After <> '') or
                        (Snippet <> '');
         var FileShort := ExtractFileName(F.FileName);
+        // data-base = Basename ohne Extension. Dient dem Gruppen-Filter
+        // ('base:uMainForm') im Datei-Dropdown, der .pas und .dfm mit
+        // gleichem Basename gemeinsam ein-/ausblenden soll.
+        var FileBase := ChangeFileExt(FileShort, '');
 
         // Sichtbare Befund-Zeile - data-file fuer Filter, ganze Zeile klickbar
         SB.Append('      <tr class="finding ' + SevCl + '" data-file="');
         SB.Append(HtmlEscape(FileShort));
+        SB.Append('" data-base="');
+        SB.Append(HtmlEscape(FileBase));
         SB.Append('">');
         // Toggle-Indikator: Pfeil rechts (oder leer wenn kein Hint)
         if HasHint then
@@ -650,9 +699,16 @@ begin
     SB.AppendLine('');
     SB.AppendLine('    function applyFilter() {');
     SB.AppendLine('      var fileVal = fileSel ? fileSel.value : '''';');
+    SB.AppendLine('      // Gruppen-Filter: "base:<Basename>" matcht alle Files mit gleichem');
+    SB.AppendLine('      // Basename (z.B. uMainForm.pas + uMainForm.dfm). Sonst exact match.');
+    SB.AppendLine('      var isGroup = fileVal && fileVal.indexOf(''base:'') === 0;');
+    SB.AppendLine('      var groupVal = isGroup ? fileVal.substring(5) : '''';');
     SB.AppendLine('      var visible = 0;');
     SB.AppendLine('      document.querySelectorAll(''tr.finding'').forEach(function(row) {');
-    SB.AppendLine('        var fileOk = !fileVal || row.getAttribute(''data-file'') === fileVal;');
+    SB.AppendLine('        var fileOk;');
+    SB.AppendLine('        if (!fileVal) fileOk = true;');
+    SB.AppendLine('        else if (isGroup) fileOk = row.getAttribute(''data-base'') === groupVal;');
+    SB.AppendLine('        else fileOk = row.getAttribute(''data-file'') === fileVal;');
     SB.AppendLine('        var sevOk  = !activeSev || row.classList.contains(activeSev);');
     SB.AppendLine('        var match  = fileOk && sevOk;');
     SB.AppendLine('        row.style.display = match ? '''' : ''none'';');
