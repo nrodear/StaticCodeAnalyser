@@ -569,8 +569,11 @@ begin
   PanelPath.Height      := ToolbarRowH;
   PanelPath.BevelOuter  := bvNone;
   PanelPath.Color       := clBtnFace;
+  // Right padding=0: alRight-Button (Browse "...") sitzt buendig am rechten
+  // Panel-Rand statt mit 6 px Inset - matched optisch mit dem Hamburger auf
+  // PanelSearch und mit der Combo-rechts-Kante.
   PanelPath.Padding.SetBounds(ScaleW(TB_PADDING_LR), ScaleW(TB_PADDING_TB),
-                              ScaleW(TB_PADDING_LR), ScaleW(TB_PADDING_TB));
+                              0, ScaleW(TB_PADDING_TB));
   FPanelPath := PanelPath;
 
   LblPath := TLabel.Create(Self);
@@ -624,8 +627,11 @@ begin
   PanelButtons.Height      := ToolbarRowH;
   PanelButtons.BevelOuter  := bvNone;
   PanelButtons.Color       := clBtnFace;
+  // Right padding=0: konsistente rechte Kante mit PanelPath/PanelSearch,
+  // auch wenn diese Zeile selbst keine alRight-Buttons hat - Comboboxen
+  // schliessen optisch in derselben rechten Spalte ab.
   PanelButtons.Padding.SetBounds(ScaleW(TB_PADDING_LR), ScaleW(TB_PADDING_TB),
-                                 ScaleW(TB_PADDING_LR), ScaleW(TB_PADDING_TB));
+                                 0, ScaleW(TB_PADDING_TB));
   FPanelButtons := PanelButtons;
 
   // Aktions-Buttons (Analyse starten / Aktuelle Datei) liegen nicht hier,
@@ -758,8 +764,10 @@ begin
   PanelSearch.Height      := ToolbarRowH;
   PanelSearch.BevelOuter  := bvNone;
   PanelSearch.Color       := clBtnFace;
+  // Right padding=0: Hamburger sitzt buendig am rechten Panel-Rand statt
+  // mit 6 px Inset. Matched optisch mit Browse "..." auf PanelPath.
   PanelSearch.Padding.SetBounds(ScaleW(TB_PADDING_LR), ScaleW(TB_PADDING_TB),
-                                ScaleW(TB_PADDING_LR), ScaleW(TB_PADDING_TB));
+                                0, ScaleW(TB_PADDING_TB));
   FPanelSearch := PanelSearch;
 
   // Action-Buttons links - "▶ Analyse" zuerst (links), dann "📄 File"
