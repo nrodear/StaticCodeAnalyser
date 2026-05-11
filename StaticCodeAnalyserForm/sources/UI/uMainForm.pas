@@ -4,6 +4,7 @@ interface
 
 uses
   Winapi.Windows, Winapi.Messages, Winapi.ShellAPI, System.SysUtils,
+  System.IOUtils, System.StrUtils,
   System.Classes, Vcl.Graphics, System.Generics.Collections,
    Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls,
   Vcl.ComCtrls, Vcl.Grids, uStaticAnalyzer2,
@@ -400,10 +401,16 @@ begin
 end;
 
 procedure TForm2.ResultGridDblClick(Sender: TObject);
+// Bei .dfm-Befunden oeffnen wir stattdessen die zugehoerige .pas und
+// springen NICHT zur Befund-Zeile (die Zeile bezieht sich auf die .dfm,
+// und NavigateDelphiToLine arbeitet im Code-Editor, nicht im Form-
+// Designer). Die Status-Bar zeigt die DFM-Zeile als Info, damit der
+// User im Form-Designer (Alt+F12 -> View as Text) gezielt suchen kann.
 var
   row: Integer;
-  relPath, absPath: string;
+  relPath, absPath, openPath: string;
   lineNo: Integer;
+  isDfm: Boolean;
 begin
   row := ResultGrid.Row;
   if row < 1 then Exit;
@@ -416,13 +423,31 @@ begin
     StatusBar1.SimpleText := _('File not found: ') + absPath;
     Exit;
   end;
-  ShellExecute(Handle, 'open', PChar(absPath), nil, nil, SW_SHOWNORMAL);
-  if lineNo > 0 then
+
+  isDfm   := EndsText('.dfm', absPath);
+  openPath := absPath;
+  if isDfm then
+  begin
+    // Bei DFM-Befund: zugehoerige .pas oeffnen (im Code-Editor), wenn
+    // vorhanden. Fallback auf die .dfm.
+    var asPas := TPath.ChangeExtension(absPath, '.pas');
+    if FileExists(asPas) then
+      openPath := asPas;
+  end;
+
+  ShellExecute(Handle, 'open', PChar(openPath), nil, nil, SW_SHOWNORMAL);
+  if (not isDfm) and (lineNo > 0) then
   begin
     Sleep(800); // Delphi IDE Zeit geben, die Datei zu oeffnen
     NavigateDelphiToLine(lineNo);
   end;
-  StatusBar1.SimpleText := Format(_('Opened: %s  Line: %d'), [relPath, lineNo]);
+
+  if isDfm then
+    StatusBar1.SimpleText := Format(
+      _('DFM finding at line %d - opened %s (use Alt+F12 to view DFM as text)'),
+      [lineNo, ExtractFileName(openPath)])
+  else
+    StatusBar1.SimpleText := Format(_('Opened: %s  Line: %d'), [relPath, lineNo]);
 end;
 
 procedure TForm2.NavigateDelphiToLine(LineNo: Integer);
