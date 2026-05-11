@@ -127,7 +127,7 @@ function IsEventPropertyName(const PropName: string): Boolean;
 implementation
 
 uses
-  System.SysUtils, System.IOUtils, System.StrUtils,
+  System.IOUtils, System.StrUtils,
   uDfmParser, uDfmBinaryReader, uParser2;
 
 function IsEventPropertyName(const PropName: string): Boolean;
