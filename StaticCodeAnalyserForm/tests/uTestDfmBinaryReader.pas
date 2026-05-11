@@ -108,7 +108,7 @@ begin
     BinDst := TBytesStream.Create;
     try
       TextSrc.Position := 0;
-      Classes.ObjectTextToBinary(TextSrc, BinDst);
+      ObjectTextToBinary(TextSrc, BinDst);
       BinDst.Position := 0;
       SetLength(Bytes, BinDst.Size);
       if BinDst.Size > 0 then

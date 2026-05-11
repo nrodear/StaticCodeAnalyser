@@ -128,7 +128,11 @@ begin
     TxtDst := TStringStream.Create('', TEncoding.UTF8);
     try
       try
-        Classes.ObjectBinaryToText(BinSrc, TxtDst);
+        // Unqualifizierter Aufruf: ObjectBinaryToText lebt in
+        // System.Classes (siehe uses oben). Eine Qualifizierung mit
+        // 'Classes.' funktioniert nur mit Unit-Alias auf 'Classes',
+        // den Delphi 12 ohne Compat-Alias nicht setzt - daher E2003.
+        ObjectBinaryToText(BinSrc, TxtDst);
       except
         on E: Exception do
           raise EDfmBinaryReaderError.CreateFmt(
