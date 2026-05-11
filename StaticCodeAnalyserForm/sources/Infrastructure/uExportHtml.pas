@@ -373,15 +373,15 @@ begin
     // 'base:uMainForm' obendrueber. Der JS-Filter erkennt den 'base:'-
     // Praefix und matcht dann gegen das data-base-Attribut jeder Zeile.
     var Bases    := TDictionary<string, Integer>.Create;       // base -> count
-    var BasesSev := TDictionary<string, Integer>.Create;       // base -> sev mask
+    var BasesSev := TDictionary<string, Cardinal>.Create;      // base -> sev mask
     try
       for fnDisp in Files do
       begin
         var BaseName := ChangeFileExt(fnDisp, '');
-        var Cur := 0; Bases.TryGetValue(BaseName, Cur);
+        var Cur : Integer  := 0; Bases.TryGetValue(BaseName, Cur);
         Bases.AddOrSetValue(BaseName, Cur + 1);
-        var Sev := 0; FilesSev.TryGetValue(fnDisp, Sev);
-        var Acc := 0; BasesSev.TryGetValue(BaseName, Acc);
+        var Sev : Cardinal := 0; FilesSev.TryGetValue(fnDisp, Sev);
+        var Acc : Cardinal := 0; BasesSev.TryGetValue(BaseName, Acc);
         BasesSev.AddOrSetValue(BaseName, Acc or Sev);
       end;
 
@@ -389,7 +389,7 @@ begin
       for var BasePair in Bases do
         if BasePair.Value >= 2 then
         begin
-          var GAcc := 0; BasesSev.TryGetValue(BasePair.Key, GAcc);
+          var GAcc : Cardinal := 0; BasesSev.TryGetValue(BasePair.Key, GAcc);
           DataSev := '';
           if (GAcc and 1) <> 0 then DataSev := DataSev + 'err,';
           if (GAcc and 2) <> 0 then DataSev := DataSev + 'warn,';
