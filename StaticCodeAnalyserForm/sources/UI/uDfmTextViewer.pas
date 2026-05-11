@@ -26,7 +26,12 @@ var
   Dlg      : TForm;
   Memo     : TMemo;
   Lines    : TStringList;
-  StartPos : Integer;
+  // LRESULT, nicht Integer: SendMessage liefert NativeInt - auf Win64
+  // 8 Byte. Mit 'Integer' (immer 4 Byte) wirft der Compiler W1057
+  // Truncation. EM_LINEINDEX-Werte passen praktisch immer in 4 Byte,
+  // aber typisch korrekt deklarieren ist sauberer als die Warning zu
+  // unterdruecken.
+  StartPos : LRESULT;
 begin
   if not TFile.Exists(FileName) then
   begin
@@ -80,7 +85,10 @@ begin
       StartPos := SendMessage(Memo.Handle, EM_LINEINDEX, HighlightLine - 1, 0);
       if StartPos >= 0 then
       begin
-        Memo.SelStart  := StartPos;
+        // Cast auf Integer: Memo.SelStart ist Integer, StartPos ist
+        // LRESULT (NativeInt). Auf Win64 ohne Cast W1057. EM_LINEINDEX-
+        // Werte passen sicher in Integer.
+        Memo.SelStart  := Integer(StartPos);
         Memo.SelLength := Length(Memo.Lines[HighlightLine - 1]);
         SendMessage(Memo.Handle, EM_SCROLLCARET, 0, 0);
       end;
