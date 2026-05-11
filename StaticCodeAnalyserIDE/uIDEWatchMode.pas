@@ -142,6 +142,20 @@ type
     FAttachedModule     : IOTAModule;            // strong ref
     FAttachedNotifier   : IOTAModuleNotifier;    // strong ref
     FAttachedNotifIdx   : Integer;
+    // Optionaler Companion-Slot: wenn FWatchedFile eine .pas ist und das
+    // zugehoerige .dfm als EIGENES IOTAModule offen ist (Close-and-Reopen-
+    // Pattern: User hat das DFM "as Text" im Code-Editor), attachen wir
+    // einen zweiten Notifier. Im normalen Form-Designer-Fall existiert
+    // KEIN separates DFM-Modul - die .dfm liegt als ModuleFile am selben
+    // .pas-Modul; der Primary-Notifier deckt Designer-Saves automatisch
+    // ab. FCompanionFile ist immer der absolute, normalisierte Pfad des
+    // Companion-Pendants (.dfm wenn watched=.pas, .pas wenn watched=.dfm)
+    // - auch wenn der Companion NICHT im IDE offen ist; das EditServices-
+    // Notifier-EditorViewModified-Hook nutzt ihn fuer den Path-Gate.
+    FCompanionFile      : string;
+    FCompanionModule    : IOTAModule;            // strong ref
+    FCompanionNotifier  : IOTAModuleNotifier;    // strong ref
+    FCompanionNotifIdx  : Integer;
     // Save-Debounce-Timer: bei rascher Save-Folge nur letzten Stand analysieren.
     FDebounceTimer      : TTimer;
     FPendingFileName    : string;
@@ -165,6 +179,8 @@ type
     procedure SpawnAnalyzer(const AFileName: string);
     procedure DoStatus(const S: string);
     function  AttachToWatchedFile(const AFileName: string): Boolean;
+    function  FindModuleByPath(const APath: string;
+                               out SrcEditor: IOTASourceEditor): IOTAModule;
     procedure DetachWatched;
     procedure RegisterEditServicesNotifier;
     procedure UnregisterEditServicesNotifier;
@@ -174,6 +190,16 @@ type
     // Whitespace unterscheiden. Case ist auf Windows egal (SameText), aber
     // '/' vs '\' nicht.
     class function NormalizePath(const APath: string): string; static;
+    // Liefert das .dfm-Pendant zu einer .pas (oder das .pas-Pendant zu
+    // einer .dfm). Leer wenn die Extension keine von beiden ist. Nimmt
+    // KEINEN Existenz-Check vor - der Aufrufer entscheidet, ob ein
+    // nicht-existierender Pfad ein Problem ist.
+    class function CompanionOf(const APath: string): string; static;
+    // Map: liefert FWatchedFile zurueck wenn APath FWatchedFile oder
+    // FCompanionFile ist (case- und slash-tolerant); leer wenn APath
+    // weder noch ist. Save-/Edit-Notifications nutzen das, um eine
+    // .dfm-Aenderung auf die .pas-Analyse umzuleiten (oder umgekehrt).
+    function MapToWatchedFile(const APath: string): string;
   public
     constructor Create;
     destructor Destroy; override;
@@ -460,6 +486,7 @@ begin
   FActive             := False;
   FGeneration         := 0;
   FAttachedNotifIdx   := -1;
+  FCompanionNotifIdx  := -1;
   FAnalyzeLock        := TCriticalSection.Create;
   FEditSvcNotifierIdx := -1;
 
@@ -513,8 +540,16 @@ begin
     FEditDebounceTimer.Enabled := False;
   end;
 
-  FActive       := True;
-  FWatchedFile  := NewWatched;
+  FActive        := True;
+  FWatchedFile   := NewWatched;
+  // Companion-Pfad bereits jetzt vorberechnen - er gilt auch dann, wenn
+  // die Companion-Datei zum Activate-Zeitpunkt nicht im IDE offen ist.
+  // EditorViewModified-Hook nutzt FCompanionFile direkt fuer Path-Gate;
+  // ein spaeter im Workflow per Close-and-Reopen geoeffnetes DFM matched
+  // damit ohne weiteren Activate-Aufruf.
+  FCompanionFile := '';
+  if CompanionOf(NewWatched) <> '' then
+    FCompanionFile := NormalizePath(CompanionOf(NewWatched));
   Inc(FGeneration);
 
   if not AttachToWatchedFile(NewWatched) then
@@ -522,7 +557,8 @@ begin
     DoStatus(Format(_('Watch: could not attach to %s'),
       [ExtractFileName(NewWatched)]));
     FActive := False;
-    FWatchedFile := '';
+    FWatchedFile   := '';
+    FCompanionFile := '';
     Exit;
   end;
 
@@ -544,7 +580,8 @@ begin
   FEditPendingFileName := '';
   UnregisterEditServicesNotifier;
   DetachWatched;
-  FWatchedFile := '';
+  FWatchedFile   := '';
+  FCompanionFile := '';
   DoStatus('');
   FOnFindings := nil;
   FOnStatus   := nil;
@@ -581,17 +618,49 @@ begin
   Result := StringReplace(APath, '/', '\', [rfReplaceAll]).Trim;
 end;
 
-procedure TWatchModeManager.NotifyFileSaved(const AFileName: string);
-// Wird auf UI-Thread aus AfterSave gerufen. Debounce fuer den Fall dass
-// Save mehrfach hintereinander feuert (z.B. Save-on-Build).
+class function TWatchModeManager.CompanionOf(const APath: string): string;
+var
+  Ext: string;
+begin
+  Result := '';
+  if APath = '' then Exit;
+  Ext := LowerCase(ExtractFileExt(APath));
+  if Ext = '.pas' then
+    Result := ChangeFileExt(APath, '.dfm')
+  else if Ext = '.dfm' then
+    Result := ChangeFileExt(APath, '.pas');
+end;
+
+function TWatchModeManager.MapToWatchedFile(const APath: string): string;
 var
   Norm: string;
 begin
+  Result := '';
   if not FActive then Exit;
-  if AFileName = '' then Exit;
-  Norm := NormalizePath(AFileName);
-  // Single-File-Watch: nur das beobachtete File triggert.
-  if not SameText(Norm, FWatchedFile) then Exit;
+  if APath = '' then Exit;
+  Norm := NormalizePath(APath);
+  if SameText(Norm, FWatchedFile) then
+    Result := FWatchedFile
+  else if (FCompanionFile <> '') and SameText(Norm, FCompanionFile) then
+    // .dfm-Save/Edit auf .pas-Analyse umleiten - die DFM-Detektoren laufen
+    // ueber TStaticAnalyzer2 als Teil der Pas-Analyse, also kommen DFM-
+    // Aenderungen in den Befunden mit hoch sobald die .pas re-analysiert
+    // wird.
+    Result := FWatchedFile;
+end;
+
+procedure TWatchModeManager.NotifyFileSaved(const AFileName: string);
+// Wird auf UI-Thread aus AfterSave gerufen. Debounce fuer den Fall dass
+// Save mehrfach hintereinander feuert (z.B. Save-on-Build).
+//
+// Akzeptiert ausser FWatchedFile auch das .dfm-Pendant: ein DFM-Save
+// (Form-Designer oder DFM-as-Text-Editor) leitet auf die .pas-Analyse
+// um, weil die DFM-Detektoren ohnehin als Teil der Pas-Analyse laufen.
+var
+  Watched: string;
+begin
+  Watched := MapToWatchedFile(AFileName);
+  if Watched = '' then Exit;
 
   // Save hat Vorrang ueber Edit-Pending: wenn fuer dieselbe Datei bereits
   // ein Edit-Trigger pending ist, verwerfen wir den - sonst feuert 700 ms
@@ -599,30 +668,33 @@ begin
   FEditPendingFileName := '';
   FEditDebounceTimer.Enabled := False;
 
-  FPendingFileName := Norm;
+  FPendingFileName := Watched;
   FDebounceTimer.Enabled := False; // Reset
   FDebounceTimer.Enabled := True;  // 300 ms warten dann feuern
-  DoStatus(Format(_('Saved, queueing analysis: %s'), [ExtractFileName(Norm)]));
+  // ExtractFileName auf die EINGEHENDE Datei (kann .dfm sein), damit der
+  // User in der Statusbar sieht welche Datei den Trigger ausgeloest hat.
+  DoStatus(Format(_('Saved, queueing analysis: %s'),
+    [ExtractFileName(AFileName)]));
 end;
 
 procedure TWatchModeManager.NotifyFileEdited(const AFileName: string);
 // Wird aus Modified-Hook bzw. EditorViewModified gerufen (per Edit).
 // Edit-Debounce ist 1000 ms - schont CPU bei normalem Tippen.
+//
+// Akzeptiert auch das .dfm-Pendant zu FWatchedFile (DFM-as-Text-Edit im
+// Code-Editor) und leitet auf die .pas um.
 var
-  Norm: string;
+  Watched: string;
 begin
-  if not FActive then Exit;
-  if AFileName = '' then Exit;
-  Norm := NormalizePath(AFileName);
-  // Single-File-Watch: nur das beobachtete File triggert.
-  if not SameText(Norm, FWatchedFile) then Exit;
+  Watched := MapToWatchedFile(AFileName);
+  if Watched = '' then Exit;
 
   // Wenn fuer dieselbe Datei bereits ein Save-Trigger pending ist, kein
   // separater Edit-Trigger noetig - der Save-Pfad analysiert sowieso in
   // <=300 ms.
-  if SameText(FPendingFileName, Norm) then Exit;
+  if SameText(FPendingFileName, Watched) then Exit;
 
-  FEditPendingFileName := Norm;
+  FEditPendingFileName := Watched;
   FEditDebounceTimer.Enabled := False; // Reset bei jedem Tastenanschlag
   FEditDebounceTimer.Enabled := True;
   // KEIN DoStatus pro Tastenanschlag - die Statusbar wuerde flackern.
@@ -702,51 +774,137 @@ begin
     try FOnStatus(S); except end;
 end;
 
-function TWatchModeManager.AttachToWatchedFile(
-  const AFileName: string): Boolean;
-// Sucht das IOTAModule zu AFileName und haengt einen TFindingModuleNotifier
-// dran. Liefert False wenn die Datei nicht offen ist oder kein Source-
-// Editor existiert (z.B. .dfm-only).
+function TWatchModeManager.FindModuleByPath(const APath: string;
+  out SrcEditor: IOTASourceEditor): IOTAModule;
+// Scanned IOTAModuleServices.Modules nach einem Modul mit IOTASourceEditor
+// dessen FileName (normalisiert) APath entspricht. Liefert nil wenn nicht
+// offen oder kein Source-Editor vorhanden (z.B. nur Form-Designer).
+//
+// Hinweis: Das funktioniert sowohl fuer .pas (Source-Editor des Form-
+// Moduls) als auch fuer .dfm-im-Code-Editor (eigenes Modul nach Close-
+// and-Reopen). Im normalen Designer-Fall hat die DFM keinen Source-Editor
+// und FindModuleByPath fuer den .dfm-Pfad liefert nil - das ist OK, denn
+// der Primary-Notifier am .pas-Modul deckt Designer-Saves bereits ab.
 var
   ModSvc : IOTAModuleServices;
-  i      : Integer;
+  i, j   : Integer;
   M      : IOTAModule;
   SE     : IOTASourceEditor;
-  Notif  : IOTAModuleNotifier;
-
-  function FindSourceEditor: IOTASourceEditor;
-  var j: Integer;
-  begin
-    Result := nil;
-    for j := 0 to M.ModuleFileCount - 1 do
-      if Supports(M.ModuleFileEditors[j], IOTASourceEditor, Result) then
-        Exit;
-  end;
 begin
-  Result := False;
+  Result    := nil;
+  SrcEditor := nil;
   if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
   for i := 0 to ModSvc.ModuleCount - 1 do
   begin
     M := ModSvc.Modules[i];
     if not Assigned(M) then Continue;
-    SE := FindSourceEditor;
-    if not Assigned(SE) then Continue; // kein Source-Editor (DFM only o.ae.)
-    if not SameText(NormalizePath(SE.FileName), AFileName) then Continue;
-    try
-      Notif := TFindingModuleNotifier.Create(SE.FileName);
-      FAttachedNotifIdx := M.AddNotifier(Notif);
-      FAttachedModule   := M;
-      FAttachedNotifier := Notif;
-      Exit(True);
-    except
-      // Defensive: AddNotifier-Fehler -> Watch ist effektiv aus.
-      Exit(False);
+    SE := nil;
+    for j := 0 to M.ModuleFileCount - 1 do
+      if Supports(M.ModuleFileEditors[j], IOTASourceEditor, SE) then
+        Break;
+    if not Assigned(SE) then Continue;
+    if not SameText(NormalizePath(SE.FileName), APath) then Continue;
+    SrcEditor := SE;
+    Result    := M;
+    Exit;
+  end;
+end;
+
+function TWatchModeManager.AttachToWatchedFile(
+  const AFileName: string): Boolean;
+// Haengt den Primary-Notifier an das Modul zu AFileName und versucht
+// zusaetzlich einen Companion-Notifier an das .dfm-Pendant zu haengen,
+// wenn dieses als eigenes Modul offen ist (Close-and-Reopen-DFM-as-Text).
+//
+// Result=False nur wenn der Primary nicht attached werden konnte
+// (Datei nicht im IDE offen). Fehlender Companion ist KEIN Fehler -
+// .dfm-only-Module sind der Sonderfall, nicht die Norm.
+var
+  M, MComp     : IOTAModule;
+  SE, SEComp   : IOTASourceEditor;
+  Notif, NComp : IOTAModuleNotifier;
+begin
+  Result := False;
+  M := FindModuleByPath(AFileName, SE);
+  if not Assigned(M) then
+  begin
+    // Fallback: Primary (.pas) nicht offen, aber das Companion-DFM
+    // koennte als DFM-as-Text-Modul vorhanden sein (typischer Workflow
+    // nach Close-and-Reopen). Wir attachen dann am DFM-Modul und mapen
+    // Saves/Edits trotzdem auf die .pas - die Pas-Datei muss nicht im
+    // IDE-Editor offen sein, der Analyzer liest sie von Disk.
+    if FCompanionFile <> '' then
+    begin
+      MComp := FindModuleByPath(FCompanionFile, SEComp);
+      if Assigned(MComp) then
+      begin
+        try
+          Notif := TFindingModuleNotifier.Create(SEComp.FileName);
+          FAttachedNotifIdx := MComp.AddNotifier(Notif);
+          FAttachedModule   := MComp;
+          FAttachedNotifier := Notif;
+          Exit(True);
+        except
+          Exit(False);
+        end;
+      end;
+    end;
+    Exit;
+  end;
+
+  try
+    Notif := TFindingModuleNotifier.Create(SE.FileName);
+    FAttachedNotifIdx := M.AddNotifier(Notif);
+    FAttachedModule   := M;
+    FAttachedNotifier := Notif;
+    Result := True;
+  except
+    Exit(False);
+  end;
+
+  // Best-effort Companion-Attach. Wenn das .dfm als EIGENES Modul offen
+  // ist (DFM-as-Text nach Close-and-Reopen), bekommen wir damit AfterSave-
+  // Calls auf .dfm-Saves auch ohne Umweg ueber EditorViewModified-Edit-
+  // Hook. Im Form-Designer-Fall ist das DFM ein ModuleFile des .pas-
+  // Moduls und FindModuleByPath fuer den DFM-Pfad liefert nil - dann
+  // gibt es nichts zu tun, der Primary-Notifier am .pas-Modul feuert
+  // AfterSave fuer Designer-Saves bereits mit.
+  if FCompanionFile <> '' then
+  begin
+    MComp := FindModuleByPath(FCompanionFile, SEComp);
+    if Assigned(MComp) and (MComp <> M) then
+    begin
+      try
+        NComp := TFindingModuleNotifier.Create(SEComp.FileName);
+        FCompanionNotifIdx := MComp.AddNotifier(NComp);
+        FCompanionModule   := MComp;
+        FCompanionNotifier := NComp;
+      except
+        FCompanionNotifIdx := -1;
+        FCompanionNotifier := nil;
+        FCompanionModule   := nil;
+      end;
     end;
   end;
 end;
 
 procedure TWatchModeManager.DetachWatched;
 begin
+  // Companion zuerst loesen - falls Primary und Companion vom gleichen IDE-
+  // Save-Lifecycle abhaengen, ist Companion typischerweise der kuerzer-
+  // lebige (DFM-as-Text-Modul) und sollte zuerst abgemeldet werden.
+  if Assigned(FCompanionModule) and (FCompanionNotifIdx <> -1) then
+  begin
+    try
+      FCompanionModule.RemoveNotifier(FCompanionNotifIdx);
+    except
+      // Modul evtl. schon zerstoert.
+    end;
+  end;
+  FCompanionNotifIdx := -1;
+  FCompanionNotifier := nil;
+  FCompanionModule   := nil;
+
   if Assigned(FAttachedModule) and (FAttachedNotifIdx <> -1) then
   begin
     try
