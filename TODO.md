@@ -760,25 +760,25 @@ hängt zusammen (CLI-Mode ist die Voraussetzung für CI-Integration).
   - Datei: neue `Console/uConsoleRunner.pas` + Anpassung in
     `analyser.d12.dpr` (Args parsen, keine Form wenn CLI-Modus aktiv).
 
-- [ ] **Report-Formate für CI-Tools**
+- [ ] **Report-Formate für CI-Tools** _(SARIF erledigt in v0.8.0; JUnit / Sonar / Checkstyle / CodeClimate offen)_
   Mehrere Standard-Formate, je ein Output-Switch:
-  - `--report-junit sca.xml` — JUnit-XML, GitLab-CI / GitHub Actions /
+  - [x] `--report-sarif sca.sarif` — [SARIF v2.1.0](https://docs.github.com/en/code-security/code-scanning/integrating-with-code-scanning/sarif-support-for-code-scanning),
+    GitHub Code-Scanning-fähig (Findings im PR sichtbar) — `uExportSARIF`
+  - [ ] `--report-junit sca.xml` — JUnit-XML, GitLab-CI / GitHub Actions /
     Jenkins kompatibel
-  - `--report-sarif sca.sarif` — [SARIF v2](https://docs.github.com/en/code-security/code-scanning/integrating-with-code-scanning/sarif-support-for-code-scanning),
-    GitHub Code-Scanning-fähig (Findings im PR sichtbar)
-  - `--report-sonar sca-sonar.json` — SonarQube Generic Issues
-  - `--report-checkstyle sca-checkstyle.xml` — breitester Tool-Support
+  - [ ] `--report-sonar sca-sonar.json` — SonarQube Generic Issues
+  - [ ] `--report-checkstyle sca-checkstyle.xml` — breitester Tool-Support
     (BitBucket, Phabricator, GitLab)
-  - `--report-codeclimate sca-cc.json` — GitLab Code-Quality Widget
-  - `--report-html sca.html` — bestehender Report aus `uExport`,
+  - [ ] `--report-codeclimate sca-cc.json` — GitLab Code-Quality Widget
+  - [x] `--report-html sca.html` — bestehender Report aus `uExport`,
     self-contained, fürs Build-Artefakt
 
   Datei: `Output/uReportFormats.pas` (neu), nutzt vorhandene
   Finding-Liste, getrennt von der UI-orientierten `uExport.pas`.
 
-- [ ] **GitHub-Action / GitLab-CI Beispielworkflows**
-  `.github/workflows/sca.yml` und `examples/.gitlab-ci.yml` —
-  copy-paste-fertig, nutzt CLI + SARIF/JUnit-Output.
+- [x] **GitHub-Action / GitLab-CI Beispielworkflows** — _erledigt in v0.8.0_
+  `.github/workflows/sca.yml` ist im Repo; nutzt CLI + SARIF-Upload via
+  `github/codeql-action/upload-sarif@v3`. GitLab-CI-Template noch offen.
 
 - [x] **Detector-Rule-Catalog (`rules.json` als Single Source of Truth)** — _erledigt in v0.8.0_
 

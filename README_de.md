@@ -688,9 +688,24 @@ NUnit-XML-Report — CI-tauglich.
 
 ## Voraussetzungen
 
-- Delphi 12 (Alexandria)
-- DUnitX (für Tests, nicht für Plugin)
-- Optional: Git for Windows oder TortoiseSVN MIT CLI-Tools für Branch-Changes
+- Delphi 12 (Athens)
+- DUnitX (nur fuer die Testsuite, nicht fuer das Plugin selbst)
+- Optional: Git for Windows oder TortoiseSVN **mit** CLI-Tools fuer das
+  Branch-Changes-Feature
+
+### Build-Ziele
+
+| Ziel | Win32 | Win64 |
+|------|-------|-------|
+| **IDE-Plugin** (`StaticCodeAnalyserIDE.dpk`) | ✅ Pflicht | ❌ — muss 32-Bit bleiben, weil die RAD-Studio-12-IDE selbst 32-Bit ist und Plugins die Bitness erben |
+| **Standalone-EXE / CLI** (`analyser.d12.dproj`) | ✅ | ✅ |
+| **Test-Suite** (`TestProject.dproj`) | ✅ | _Plattform bei Bedarf hinzufuegen_ |
+
+Die Standalone-EXE kompiliert sauber sowohl fuer `Win32` als auch
+`Win64` — beide Ziele laufen durch dieselbe Detektor-Engine und
+liefern dieselben SARIF-/JSON-/CSV-/HTML-Reports. `Win64` waehlst du,
+wenn du einen groesseren Heap brauchst (relevant nur bei
+Multi-GB-Scans).
 
 ---
 

@@ -696,6 +696,19 @@ XML report — ready to wire into CI.
 - Optional: Git for Windows or TortoiseSVN **with** CLI tools for the
   Branch-Changes feature
 
+### Build targets
+
+| Target | Win32 | Win64 |
+|--------|-------|-------|
+| **IDE plugin** (`StaticCodeAnalyserIDE.dpk`) | ✅ required | ❌ — must stay 32-bit because RAD Studio 12 IDE itself is 32-bit and plugins inherit |
+| **Standalone EXE / CLI** (`analyser.d12.dproj`) | ✅ | ✅ |
+| **Test suite** (`TestProject.dproj`) | ✅ | _add platform if needed_ |
+
+The standalone EXE compiles cleanly for both `Win32` and `Win64` —
+both targets pass through the same detector engine and emit the
+same SARIF/JSON/CSV/HTML reports. Choose `Win64` if you want a
+larger heap (relevant only on multi-GB scans).
+
 ---
 
 ## Component overview
