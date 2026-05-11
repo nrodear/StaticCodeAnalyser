@@ -20,8 +20,6 @@ object CustomerForm: TCustomerForm
     Align = alClient
     BevelOuter = bvNone
     TabOrder = 0
-    ExplicitWidth = 698
-    ExplicitHeight = 393
     object lblName: TLabel
       Left = 24
       Top = 24
@@ -95,8 +93,6 @@ object CustomerForm: TCustomerForm
     Align = alBottom
     BevelOuter = bvNone
     TabOrder = 1
-    ExplicitTop = 393
-    ExplicitWidth = 698
     object btnSave: TButton
       Left = 16
       Top = 12
