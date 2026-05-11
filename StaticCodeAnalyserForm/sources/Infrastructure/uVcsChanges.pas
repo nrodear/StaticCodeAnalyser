@@ -299,11 +299,22 @@ var
   pArrow       : Integer;
 
   procedure AddIfPas(const ARelPath: string);
-  var P, T: string;
+  // Akzeptiert .pas direkt und .dfm via Umleitung auf die zugehoerige .pas.
+  // Hintergrund: eine reine DFM-Aenderung (z.B. Komponente entfernt) muss
+  // ebenfalls die DFM-Detektoren triggern - die laufen aber ueber den
+  // .pas-Pfad als Eingang (TDfmAnalysisRunner.AnalyzePasFile).
+  var P, T, AsPas: string;
   begin
     T := Trim(ARelPath);
-    if not T.ToLower.EndsWith('.pas') then Exit;
-    P := IncludeTrailingPathDelimiter(ARepoRoot) + T.Replace('/', '\');
+    if T.ToLower.EndsWith('.pas') then
+      P := IncludeTrailingPathDelimiter(ARepoRoot) + T.Replace('/', '\')
+    else if T.ToLower.EndsWith('.dfm') then
+    begin
+      AsPas := TPath.ChangeExtension(T, '.pas');
+      P := IncludeTrailingPathDelimiter(ARepoRoot) + AsPas.Replace('/', '\');
+    end
+    else
+      Exit;
     if FileExists(P) then
       Result.Add(P);
   end;
@@ -426,15 +437,30 @@ var
   StatChar   : Char;
 
   procedure AddIfPas(const ARelPath: string);
-  var P, T: string;
+  // Wie in der Git-Variante: .pas direkt, .dfm via Umleitung auf die
+  // gleichnamige .pas damit DFM-Detektoren bei reinen DFM-Aenderungen
+  // angetriggert werden.
+  var P, T, AsPas: string;
   begin
     T := Trim(ARelPath);
-    if not T.ToLower.EndsWith('.pas') then Exit;
-    // svn liefert i.d.R. relative Pfade mit Backslash unter Windows
-    if TPath.IsPathRooted(T) then
-      P := T
+    if T.ToLower.EndsWith('.pas') then
+    begin
+      // svn liefert i.d.R. relative Pfade mit Backslash unter Windows
+      if TPath.IsPathRooted(T) then
+        P := T
+      else
+        P := IncludeTrailingPathDelimiter(ARepoRoot) + T.Replace('/', '\');
+    end
+    else if T.ToLower.EndsWith('.dfm') then
+    begin
+      AsPas := TPath.ChangeExtension(T, '.pas');
+      if TPath.IsPathRooted(AsPas) then
+        P := AsPas
+      else
+        P := IncludeTrailingPathDelimiter(ARepoRoot) + AsPas.Replace('/', '\');
+    end
     else
-      P := IncludeTrailingPathDelimiter(ARepoRoot) + T.Replace('/', '\');
+      Exit;
     if FileExists(P) then
       Result.Add(P);
   end;
