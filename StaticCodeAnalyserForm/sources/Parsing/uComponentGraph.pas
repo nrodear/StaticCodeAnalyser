@@ -38,6 +38,23 @@ type
     RawValue : string;   // Lexer-Token-Wert (bei String: ohne '', mit Escape-Aufloesung)
     Line     : Integer;
     Col      : Integer;
+
+    // Typisierte Convenience-Accessors. Liefern ADefault wenn Kind
+    // nicht zum erwarteten Typ passt oder RawValue nicht parsbar ist -
+    // Detektoren bekommen so eine garantiert sinnvolle Antwort und
+    // muessen sich nicht selbst um Casing / Whitespace / Klammerung
+    // kuemmern. Wichtig: DFMs schreiben nur Properties, deren Wert vom
+    // VCL-Default abweicht. Wenn TryGetProperty('Visible', V) False
+    // liefert, ist die Komponente effektiv sichtbar. Deshalb haben die
+    // ADefault-Parameter Bedeutung - Aufrufer setzt den VCL-Default.
+    function AsBoolean(ADefault: Boolean = False): Boolean;
+    function AsInteger(ADefault: Integer = 0): Integer;
+    function AsString(const ADefault: string = ''): string;
+    function AsIdent(const ADefault: string = ''): string;
+    // SetContains: prueft case-insensitiv, ob das Set 'AMember' enthaelt.
+    // RawValue hat hier die Form '[fsBold, fsItalic]'. Robust gegen
+    // Whitespace, Tabs und beliebige Reihenfolge.
+    function SetContains(const AMember: string): Boolean;
   end;
 
   TComponentNode = class
@@ -68,6 +85,19 @@ type
     // Boolesche Bequemlichkeit fuer "hat Property X ueberhaupt einen Wert"
     function  HasProperty(const APath: string): Boolean; inline;
 
+    // Typisierte Property-Reads mit VCL-Default-Verhalten: Wenn die
+    // Property im DFM nicht steht (DFM serialisiert nur Abweichungen
+    // vom Default), bekommt der Aufrufer ADefault zurueck. Damit muss
+    // ein Detektor weder TryGetProperty/Kind/Cast selber bauen noch
+    // auf "Property fehlt -> nehme implizit VCL-Default" raten.
+    function GetBoolean(const APath: string; ADefault: Boolean = False): Boolean;
+    function GetInteger(const APath: string; ADefault: Integer = 0): Integer;
+    function GetString (const APath: string; const ADefault: string = ''): string;
+    function GetIdent  (const APath: string; const ADefault: string = ''): string;
+    // Set-Property enthaelt Member? Praktisch fuer Style-Sets
+    // (Font.Style=[fsBold,fsItalic]), Anchors, BorderStyle-Optionen.
+    function SetPropertyContains(const APath, AMember: string): Boolean;
+
     property Children:   TObjectList<TComponentNode>     read FChildren;
     property Properties: TDictionary<string, TPropValue> read FProperties;
   end;
@@ -96,7 +126,70 @@ type
 implementation
 
 uses
-  System.SysUtils;
+  System.SysUtils, System.StrUtils;
+
+{ TPropValue }
+
+function TPropValue.AsBoolean(ADefault: Boolean): Boolean;
+begin
+  // RawValue ist hier 'True' oder 'False' (Lexer-Keyword-Casing).
+  // SameText macht uns case-insensitive falls jemand das Format
+  // upstream veraendert.
+  if Kind <> pvkBool then Exit(ADefault);
+  if SameText(RawValue, 'True')  then Exit(True);
+  if SameText(RawValue, 'False') then Exit(False);
+  Result := ADefault;
+end;
+
+function TPropValue.AsInteger(ADefault: Integer): Integer;
+begin
+  // pvkInteger: RawValue ist '42', '-1', '$00FF00FF'. Delphis
+  // StrToIntDef behandelt das '$'-Hex-Praefix korrekt.
+  // Auch pvkFloat erlauben fuer Integer-getaggte Werte, die im DFM
+  // aus historischen Gruenden als Float landen koennen (selten).
+  if (Kind <> pvkInteger) and (Kind <> pvkFloat) then Exit(ADefault);
+  Result := StrToIntDef(RawValue, ADefault);
+end;
+
+function TPropValue.AsString(const ADefault: string): string;
+begin
+  if Kind = pvkString then
+    Result := RawValue
+  else
+    Result := ADefault;
+end;
+
+function TPropValue.AsIdent(const ADefault: string): string;
+begin
+  // Trim raeumt Whitespace weg, der durch Parser-Sonderfaelle (Sign-
+  // Combine etc.) am Anfang/Ende landen koennte - in der Praxis sollte
+  // RawValue hier sauber sein.
+  if Kind = pvkIdent then
+    Result := Trim(RawValue)
+  else
+    Result := ADefault;
+end;
+
+function TPropValue.SetContains(const AMember: string): Boolean;
+var
+  Inner : string;
+  Items : TArray<string>;
+  i     : Integer;
+begin
+  Result := False;
+  if Kind <> pvkSet then Exit;
+  if AMember = '' then Exit;
+  // RawValue: '[fsBold, fsItalic]' oder '[ ]' oder '[fsBold]'
+  Inner := Trim(RawValue);
+  if (Length(Inner) >= 2) and (Inner[1] = '[') and
+     (Inner[High(Inner)] = ']') then
+    Inner := Copy(Inner, 2, Length(Inner) - 2);
+  Inner := Trim(Inner);
+  if Inner = '' then Exit;
+  Items := SplitString(Inner, ',');
+  for i := 0 to High(Items) do
+    if SameText(Trim(Items[i]), AMember) then Exit(True);
+end;
 
 { TComponentNode }
 
@@ -148,6 +241,60 @@ end;
 function TComponentNode.HasProperty(const APath: string): Boolean;
 begin
   Result := FProperties.ContainsKey(APath);
+end;
+
+function TComponentNode.GetBoolean(const APath: string;
+  ADefault: Boolean): Boolean;
+var
+  V: TPropValue;
+begin
+  if TryGetProperty(APath, V) then
+    Result := V.AsBoolean(ADefault)
+  else
+    Result := ADefault;
+end;
+
+function TComponentNode.GetInteger(const APath: string;
+  ADefault: Integer): Integer;
+var
+  V: TPropValue;
+begin
+  if TryGetProperty(APath, V) then
+    Result := V.AsInteger(ADefault)
+  else
+    Result := ADefault;
+end;
+
+function TComponentNode.GetString(const APath: string;
+  const ADefault: string): string;
+var
+  V: TPropValue;
+begin
+  if TryGetProperty(APath, V) then
+    Result := V.AsString(ADefault)
+  else
+    Result := ADefault;
+end;
+
+function TComponentNode.GetIdent(const APath: string;
+  const ADefault: string): string;
+var
+  V: TPropValue;
+begin
+  if TryGetProperty(APath, V) then
+    Result := V.AsIdent(ADefault)
+  else
+    Result := ADefault;
+end;
+
+function TComponentNode.SetPropertyContains(const APath, AMember: string): Boolean;
+var
+  V: TPropValue;
+begin
+  if TryGetProperty(APath, V) then
+    Result := V.SetContains(AMember)
+  else
+    Result := False;
 end;
 
 { TComponentGraph }

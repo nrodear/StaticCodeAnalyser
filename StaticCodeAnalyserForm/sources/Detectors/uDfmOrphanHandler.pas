@@ -73,6 +73,7 @@ var
   Pair          : TPair<string, TAstNode>;
   M             : TAstNode;
   F             : TLeakFinding;
+  Walker        : TFormBinding;
 begin
   if Binding = nil then Exit;
   if Binding.FormClass = nil then Exit;
@@ -80,8 +81,17 @@ begin
 
   BoundHandlers := TDictionary<string, Boolean>.Create;
   try
-    for Ev in Binding.Events do
-      BoundHandlers.AddOrSetValue(LowerCase(Ev.HandlerName), True);
+    // Lokale Events erst. Anschliessend Events aller Parent-Bindings,
+    // sodass eine Methode in TForm2.published, die von einem Button im
+    // _Parent_-DFM (TForm1.dfm) per OnClick gebunden ist, nicht
+    // false-positiv als Orphan gemeldet wird.
+    Walker := Binding;
+    while Walker <> nil do
+    begin
+      for Ev in Walker.Events do
+        BoundHandlers.AddOrSetValue(LowerCase(Ev.HandlerName), True);
+      Walker := Walker.Parent;
+    end;
 
     for Pair in Binding.PublishedMethods do
     begin

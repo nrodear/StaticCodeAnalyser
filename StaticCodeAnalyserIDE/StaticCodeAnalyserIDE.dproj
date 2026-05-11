@@ -183,6 +183,7 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Parsing\uComponentGraph.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Parsing\uDfmLexer.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Parsing\uDfmParser.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Parsing\uDfmBinaryReader.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uStaticFiles.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uSuppression.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uExport.pas"/>
@@ -192,6 +193,7 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uVcsChanges.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uRepoSettings.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uDfmAnalysisRunner.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uDfmFrameResolver.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uFormBinder.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uDfmDbFieldAnalysis.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uDfmRepoIndex.pas"/>

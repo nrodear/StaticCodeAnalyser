@@ -41,29 +41,23 @@ type
 implementation
 
 function IsRequired(Field: TComponentNode): Boolean;
-var V: TPropValue;
 begin
-  Result := Field.TryGetProperty('Required', V)
-        and (V.Kind = pvkBool)
-        and SameText(V.RawValue, 'True');
+  // TField.Required: VCL-Default ist False - 'Required = True' wird also
+  // explizit serialisiert. Default-Argument an GetBoolean spiegelt das,
+  // damit "Property fehlt" sauber zu False kollabiert.
+  Result := Field.GetBoolean('Required', False);
 end;
 
 function IsExplicitlyInvisible(Ctrl: TComponentNode): Boolean;
 // Visible-Default in der VCL ist True - der DFM-Streamer speichert nur,
 // wenn der Default verlassen wird. 'Visible = False' ist also explizit.
-var V: TPropValue;
 begin
-  Result := Ctrl.TryGetProperty('Visible', V)
-        and (V.Kind = pvkBool)
-        and SameText(V.RawValue, 'False');
+  Result := not Ctrl.GetBoolean('Visible', True);
 end;
 
 function FieldName(Field: TComponentNode): string;
-var V: TPropValue;
 begin
-  Result := '';
-  if Field.TryGetProperty('FieldName', V) and (V.Kind = pvkString) then
-    Result := Trim(V.RawValue);
+  Result := Trim(Field.GetString('FieldName', ''));
   if Result = '' then
     Result := Field.Name;       // Fallback: Komponentenname als Field-Hint
 end;
@@ -76,14 +70,11 @@ function FindDataSourceForDataSet(All: TList<TComponentNode>;
 // pro DataSet).
 var
   N: TComponentNode;
-  V: TPropValue;
 begin
   Result := nil;
   for N in All do
     if IsDataSourceClass(N.ClassRef)
-       and N.TryGetProperty('DataSet', V)
-       and (V.Kind = pvkIdent)
-       and SameText(Trim(V.RawValue), DataSet.Name) then
+       and SameText(N.GetIdent('DataSet', ''), DataSet.Name) then
       Exit(N);
 end;
 

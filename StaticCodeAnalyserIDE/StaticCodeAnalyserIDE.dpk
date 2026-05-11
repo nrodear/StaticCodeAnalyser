@@ -64,6 +64,7 @@ contains
   uComponentGraph in '..\StaticCodeAnalyserForm\sources\Parsing\uComponentGraph.pas',
   uDfmLexer in '..\StaticCodeAnalyserForm\sources\Parsing\uDfmLexer.pas',
   uDfmParser in '..\StaticCodeAnalyserForm\sources\Parsing\uDfmParser.pas',
+  uDfmBinaryReader in '..\StaticCodeAnalyserForm\sources\Parsing\uDfmBinaryReader.pas',
   // ---- Infrastructure ----
   uStaticFiles in '..\StaticCodeAnalyserForm\sources\Infrastructure\uStaticFiles.pas',
   uSuppression in '..\StaticCodeAnalyserForm\sources\Infrastructure\uSuppression.pas',
@@ -74,6 +75,7 @@ contains
   uVcsChanges in '..\StaticCodeAnalyserForm\sources\Infrastructure\uVcsChanges.pas',
   uRepoSettings in '..\StaticCodeAnalyserForm\sources\Infrastructure\uRepoSettings.pas',
   uDfmAnalysisRunner in '..\StaticCodeAnalyserForm\sources\Infrastructure\uDfmAnalysisRunner.pas',
+  uDfmFrameResolver in '..\StaticCodeAnalyserForm\sources\Infrastructure\uDfmFrameResolver.pas',
   uFormBinder in '..\StaticCodeAnalyserForm\sources\Infrastructure\uFormBinder.pas',
   uDfmDbFieldAnalysis in '..\StaticCodeAnalyserForm\sources\Infrastructure\uDfmDbFieldAnalysis.pas',
   uDfmRepoIndex in '..\StaticCodeAnalyserForm\sources\Infrastructure\uDfmRepoIndex.pas',

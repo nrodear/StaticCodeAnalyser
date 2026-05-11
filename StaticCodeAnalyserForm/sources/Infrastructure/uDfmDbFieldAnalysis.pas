@@ -166,21 +166,26 @@ function BuildBindingIndex(All: TList<TComponentNode>): TBindingIndex;
 // (typische DB-Aware-Controls). Liefert pro Schluessel eine Liste der
 // gebundenen Controls. Aufrufer hat Ownership (.Free), die inner Lists
 // werden bei doOwnsValues mit freigegeben.
+//
+// DataSource ist ein Identifier (Komponenten-Name), DataField ein
+// String. Die typisierten Accessors GetIdent / GetString filtern
+// gleich Falsch-Typ-Werte und Whitespace weg.
 var
   N      : TComponentNode;
-  Ds, Df : TPropValue;
+  DsName : string;
+  DfName : string;
   Key    : string;
   Bucket : TList<TComponentNode>;
 begin
   Result := TBindingIndex.Create([doOwnsValues]);
   for N in All do
   begin
-    if not N.TryGetProperty('DataSource', Ds) then Continue;
-    if not N.TryGetProperty('DataField', Df)  then Continue;
-    if Trim(Ds.RawValue) = '' then Continue;
-    if Trim(Df.RawValue) = '' then Continue;
+    DsName := N.GetIdent('DataSource', '');
+    if DsName = '' then Continue;
+    DfName := Trim(N.GetString('DataField', ''));
+    if DfName = '' then Continue;
 
-    Key := BindingKey(Trim(Ds.RawValue), Trim(Df.RawValue));
+    Key := BindingKey(DsName, DfName);
     if not Result.TryGetValue(Key, Bucket) then
     begin
       Bucket := TList<TComponentNode>.Create;
@@ -198,7 +203,6 @@ function ResolveDataSetForDataSource(All: TList<TComponentNode>;
 // nicht aufloesbar ist.
 var
   N, Hit : TComponentNode;
-  V      : TPropValue;
   Target : string;
 begin
   Result := nil;
@@ -212,9 +216,7 @@ begin
       Break;
     end;
   if Hit = nil then Exit;
-  if not Hit.TryGetProperty('DataSet', V) then Exit;
-  if V.Kind <> pvkIdent then Exit;
-  Target := Trim(V.RawValue);
+  Target := Hit.GetIdent('DataSet', '');
   if Target = '' then Exit;
 
   for N in All do

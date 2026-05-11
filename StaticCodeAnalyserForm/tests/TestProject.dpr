@@ -18,6 +18,8 @@ uses
   uTestTAstNode         in 'uTestTAstNode.pas',
   uTestDfmLexer         in 'uTestDfmLexer.pas',
   uTestDfmParser        in 'uTestDfmParser.pas',
+  uTestDfmBinaryReader  in 'uTestDfmBinaryReader.pas',
+  uTestDfmPropValue     in 'uTestDfmPropValue.pas',
   uTestDfmDefaultName   in 'uTestDfmDefaultName.pas',
   uTestDfmHardcodedCaption in 'uTestDfmHardcodedCaption.pas',
   uTestDfmHardcodedDbCreds in 'uTestDfmHardcodedDbCreds.pas',

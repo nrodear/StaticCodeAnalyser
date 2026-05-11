@@ -148,6 +148,7 @@
         <DCCReference Include="sources\Parsing\uComponentGraph.pas"/>
         <DCCReference Include="sources\Parsing\uDfmLexer.pas"/>
         <DCCReference Include="sources\Parsing\uDfmParser.pas"/>
+        <DCCReference Include="sources\Parsing\uDfmBinaryReader.pas"/>
         <DCCReference Include="sources\Infrastructure\uExport.pas"/>
         <DCCReference Include="sources\Infrastructure\uExportHtml.pas"/>
         <DCCReference Include="sources\Infrastructure\uIgnoreList.pas"/>
@@ -157,6 +158,7 @@
         <DCCReference Include="sources\Infrastructure\uSuppression.pas"/>
         <DCCReference Include="sources\Infrastructure\uVcsChanges.pas"/>
         <DCCReference Include="sources\Infrastructure\uDfmAnalysisRunner.pas"/>
+        <DCCReference Include="sources\Infrastructure\uDfmFrameResolver.pas"/>
         <DCCReference Include="sources\Infrastructure\uFormBinder.pas"/>
         <DCCReference Include="sources\Infrastructure\uDfmDbFieldAnalysis.pas"/>
         <DCCReference Include="sources\Infrastructure\uDfmRepoIndex.pas"/>

@@ -1165,212 +1165,108 @@ hängt zusammen (CLI-Mode ist die Voraussetzung für CI-Integration).
   Expression (mittlerer Aufwand), dann Cognitive/DIT/Halstead
   (separater Pass).
 
-- [ ] **DFM + Komponentengraph** _(Phase 1: MVP / Phase 2: Cross-Unit + IDE-Live)_
+- [x] **DFM + Komponentengraph** — _Phase 1+2+3 Detektoren erledigt (v0.10.0)_
 
-  Heute parst der Analyzer ausschließlich `.pas`. `.dfm` wird nicht
-  gelesen, der AST hat keine Parent-Zeiger, Komponenten-Hierarchien und
-  Event-Bindungen sind den Detektoren nicht zugänglich. Damit fallen
-  Bug-Klassen durchs Raster: tote Event-Handler, DFM↔published-Mismatch,
-  hardcodierte Captions trotz aktiver Lokalisierung, Default-Namen
-  (`Button1`, `Edit3`).
+  20 DFM-Detektoren produktiv: dedizierter DFM-Lexer/-Parser,
+  `TComponentGraph`, `TFormBinder` (Pascal-AST ↔ DFM-Graph),
+  `TDfmRepoIndex` (Repo-weiter Cross-Form-Lookup). Pipeline in
+  `uDfmAnalysisRunner` integriert; `.dfm`-Aenderungen im VCS-Diff
+  triggern die zugehoerige `.pas`. IDE-Plugin oeffnet DFM-Befunde via
+  Close-and-Reopen als Text im Code-Editor. Standalone-EXE hat einen
+  Modal-DFM-Text-Viewer. HTML-Report gruppiert `.pas`+`.dfm` pro
+  Basename.
 
-  Ziel: zweites Parsing-Frontend (`uDfmLexer`/`uDfmParser`) + paralleler
-  `TComponentGraph`, per `TFormBinder` mit dem Pascal-AST der Form-Klasse
-  verknüpft. Befunde fließen in das bestehende `TLeakFinding`-Modell —
-  neue `TFindingKind`-Werte + `KIND_META`-Einträge, Severity pro
-  Detektor wie heute.
-
-  **Phase 1 — MVP (Single-Unit, Text-DFM, 8 Detektoren):**
-  - [ ] **DFM-Lexer + -Parser** — `Parsing/uDfmLexer.pas` +
-    `Parsing/uDfmParser.pas`. Tokens: `object`, `inherited`, `end`, `=`,
-    `<`, `>`, `(`, `)`, Identifier, Literal, Set `[…]`, Binär-Blob
-    `{…}`, String-Concat `+`. Grammatik:
-    `ObjectDecl := ('object'|'inherited') Name ':' ClassName Property*
-    ChildObject* 'end'`. Robustheit-Vorbild wie `uParser2.SkipTo`.
-  - [ ] **Binär-DFM via RTL** — vor dem Parsen `ObjectBinaryToText`
-    rufen wenn die Datei mit `$FF $0A $00 …` beginnt. Kein eigener
-    Binär-Reader (→ Phase 2).
-  - [ ] **`TComponentGraph`-Datenmodell** —
-    `Parsing/uComponentGraph.pas`. `TComponentNode { Name; ClassName;
-    Parent; Owner; Props: TDict<string,TPropValue>; Events:
-    TDict<string,string>; LineCol; }` + `ByName`-Lookup.
-  - [ ] **`TFormBinder`** — `Infrastructure/uFormBinder.pas`. Pairing
-    `Form.dfm` ↔ Form-Klasse via Filename-Konvention (`uMainForm.dfm`
-    ↔ `TMainForm = class(TForm)` in `uMainForm.pas`). Löst pro
-    Component-Event den Methoden-Knoten in derselben Unit auf.
-    Markiert published Fields mit DFM-Pendant.
-  - [ ] **Pipeline-Erweiterung** in
-    `Infrastructure/uStaticAnalyzer2.RunAllDetectors`: pro `.pas` mit
-    zugehöriger `.dfm` einmal Graph bauen, Binder rufen,
-    `RunComponentDetectors` ergänzen. `.dfm` ohne `.pas`-Pendant nur
-    Log-Hinweis, kein Befund.
-  - [ ] **Neue `TFindingKind`-Werte** in `Common/uSCAConsts.pas`:
+  **Phase 1 — MVP (erledigt):**
+  - [x] DFM-Lexer + -Parser (`uDfmLexer`, `uDfmParser`)
+  - [x] Binaer-DFM via RTL `ObjectBinaryToText`
+  - [x] `TComponentGraph`-Datenmodell (`uDfmComponentGraph`)
+  - [x] `TFormBinder` (`Infrastructure/uFormBinder`)
+  - [x] Pipeline-Erweiterung (`uDfmAnalysisRunner` +
+    `RunComponentDetectors`)
+  - [x] Detektoren der Cluster Dead-Wiring, Naming, Security,
+    UI/UX:
     `fkDfmDeadEvent`, `fkDfmOrphanHandler`, `fkDfmSchemaMismatch`,
-    `fkDfmHardcodedCaption`, `fkDfmDefaultName`, `fkDfmHardcodedDbCreds`,
-    `fkDfmDuplicateBinding`, `fkDfmEmptyBoundEvent`. Mapping in
-    `KIND_META`:
-      - `fkDfmDeadEvent`, `fkDfmSchemaMismatch`, `fkDfmDuplicateBinding`
-        → `ftBug`
-      - `fkDfmHardcodedDbCreds` → `ftVulnerability`
-      - `fkDfmOrphanHandler`, `fkDfmHardcodedCaption`,
-        `fkDfmDefaultName`, `fkDfmEmptyBoundEvent` → `ftCodeSmell`
-    FixHint-Templates in `Output/uFixHint.pas` + Lokalisierung in
-    `UI/uLocalization.pas`.
-  - [ ] **Detektor: Toter Event-Handler im DFM**
-    (`fkDfmDeadEvent`, `lsError`) — `OnClick='Btn1Click'`, Methode
-    in der Form-Klasse fehlt → Streaming-Crash zur Laufzeit.
-  - [ ] **Detektor: Verwaister Pascal-Handler**
-    (`fkDfmOrphanHandler`, `lsHint`) — `published`-Methode mit
-    `(Sender: TObject)`-Signatur ist an keine Komponente gebunden.
-    Dead Code, den der Pascal-Detektor nicht erkennt.
-  - [ ] **Detektor: DFM↔published-Mismatch**
-    (`fkDfmSchemaMismatch`, `lsError`) — Komponente in `.dfm`, aber
-    nicht im `published`-Block der Klasse (oder umgekehrt) →
-    Streaming-Fehler.
-  - [ ] **Detektor: Hardcoded UI-Strings**
-    (`fkDfmHardcodedCaption`, `lsHint`) — `Caption`, `Hint`, `Text`,
-    `Lines` im DFM mit Literal-String, obwohl dxgettext im Projekt
-    aktiv ist. Erkennung über Vorhandensein von `uLocalization` in
-    den Form-Uses.
-  - [ ] **Detektor: Default-Komponentennamen**
-    (`fkDfmDefaultName`, `lsHint`) — `Button1`, `Edit3`, `Panel2`
-    (Regex `^[A-Z][a-z]+\d+$`). Refactoring-Killer; Whitelist
-    konfigurierbar.
-  - [ ] **Detektor: Hardcoded DB-Credentials im DFM** _(DB-aware)_
-    (`fkDfmHardcodedDbCreds`, `lsError`, `ftVulnerability`) —
-    Klartext-Credentials in DFM-Properties: `Password=…`,
-    `ConnectionString` mit `User ID=…;Password=…`, `Connected=True`
-    per Design, `LoginPrompt=False` mit hinterlegten Login-Daten.
-    Greift auf `TADOConnection`/`TFDConnection`/`TIBDatabase`/
-    `TSQLConnection` und ähnliche; Klassen-Liste in `analyser.ini`
-    (`[Components] CredentialBearers=…`) konfigurierbar.
-  - [ ] **Detektor: Doppelt gebundene DB-Felder** _(DB-aware)_
-    (`fkDfmDuplicateBinding`, `lsWarning`, `ftBug`) — zwei oder
-    mehr Komponenten mit identischem `DataSource`+`DataField` →
-    Update-Konflikt bei `Post`. Trivial im `TComponentGraph` per
-    Hash-Map `(DataSource,DataField) → [Components]`. False-Positive-
-    Ausnahme: `TDBText` (rein lesend) standardmäßig ignoriert,
-    konfigurierbar.
-  - [ ] **Detektor: Leerer gebundener Event-Handler** _(Cross-Check)_
-    (`fkDfmEmptyBoundEvent`, `lsHint`, `ftCodeSmell`) — DFM-Event-
-    Bindung zeigt auf existierende, aber **leere** Methode. Anders
-    als der globale `fkEmptyMethod`-Pascal-Detektor: hier ist die
-    Methode bewusst als Handler verdrahtet, also höchstwahrscheinlich
-    „vergessen zu implementieren" statt absichtlich leer.
-  - [ ] **IDE-Anzeige** — Befunde mit DFM-Quelle markieren die `.pas`
-    auf der Zeile der Form-Klasse oder bei
-    `DeadEvent`/`OrphanHandler` direkt am Methoden-Stub. Phase 1
-    noch keine Marker im DFM-Editor.
-  - [ ] **Tests** pro Detektor: positiver + negativer Fall +
-    Kantenfall (z.B. `Action` statt `OnClick`, vererbtes Event aus
-    `inherited`). `tests/uTestDfm*.pas`.
+    `fkDfmHardcodedCaption`, `fkDfmDefaultName`,
+    `fkDfmHardcodedDbCreds`, `fkDfmDuplicateBinding`,
+    `fkDfmEmptyBoundEvent`
+  - [x] DUnitX-Tests pro Detektor (positiv/negativ/Kantenfall)
 
-  **Phase 2 — Erweiterung (Cross-Unit, IDE-Live, weitere Smells):**
-  - [ ] **`inherited`-Form-Auflösung** — `object inherited Edit1:
-    TEdit` korrekt gegen das Parent-DFM in einer anderen Unit
-    auflösen. Braucht Form-Vererbungs-Kette.
-  - [ ] **Frame-Composition über Units** — `TFrame1` als ChildObject
-    in `Form2.dfm` referenziert die Komponentenliste aus
-    `uFrame1.dfm`. Voraussetzung für korrekte Layer- und
-    Event-Analysen über Frames.
-  - [ ] **DataModule-übergreifender Resolver** — Form referenziert
-    `dm.Query1` (TADOQuery aus DataModule). Repo-weiter Graph mit
-    Lookup über DataModule-Var.
-  - [ ] **Detektor: Cross-Form-Coupling**
-    (`fkDfmCrossFormCoupling`, `lsWarning`) — `Form1` greift via
-    `Form2.InternesEdit.Text` auf interne Komponenten einer anderen
-    Form zu. Braucht Cross-Unit-Resolver.
-  - [ ] **Detektor: Layer-Verstoß**
-    (`fkDfmLayerViolation`, `lsHint`) — Eingabe-Komponenten direkt
-    auf `TForm` statt in `TPanel`/`TGroupBox`. Konfigurierbar
-    (viele False Positives erwartet).
-  - [ ] **Detektor: God-Handler**
-    (`fkDfmGodHandler`, `lsHint`) — eine Methode hängt an ≥ N
-    (Default 5) Events verschiedener Komponenten.
-  - [ ] **Detektor: TAction halb verkabelt**
-    (`fkDfmActionMismatch`, `lsWarning`) — `Button.Action=Act1`,
-    aber `Act1.OnExecute` leer; oder `OnClick` + `Action` gleichzeitig
-    gesetzt (Action gewinnt → toter Click-Code).
-  - [ ] **Detektor: Tab-Order-Konflikte**
-    (`fkDfmTabOrderConflict`, `lsHint`) — gleicher `TabOrder`-Wert
-    bei Geschwistern im selben Parent.
-  - [ ] **Detektor: Verbotene Komponentenklassen**
-    (`fkDfmForbiddenClass`, `lsWarning`) — Style-Guide-Liste in
-    `analyser.ini` (`[Components] Forbidden=TLabel,TQuery`).
-  - [ ] **Detektor: DB-Komponente in UI-Form**
-    (`fkDfmDbInUiForm`, `lsHint`) — `TADOConnection`/`TFDConnection`/
-    `TQuery` direkt auf einer `TForm` statt im DataModule.
-  - [ ] **Detektor: Zirkuläre Datenquellen-Verkettung** _(DB-aware)_
-    (`fkDfmCircularDataSource`, `lsError`, `ftBug`) — Zyklus in der
-    Kette `DataSource.DataSet`/`DataSet.MasterSource` (direkt:
-    `DS1.DataSet=Q1` + `Q1.MasterSource=DS1`; transitiv über mehrere
-    Hops). Endlos-Loop bei `BeforeOpen`/Master-Detail-Refresh.
-    Algorithmus: Tarjan/DFS auf dem Edge-Set, melde jeden gefundenen
-    Strongly-Connected-Component mit > 1 Knoten.
-  - [ ] **Detektor: SQL-Injection durch VCL-Komponenten** _(DB-aware)_
-    (`fkDfmSqlFromUserInput`, `lsError`, `ftVulnerability`) — Pascal-
-    Code konkateniert UI-Komponenten-Werte in eine DB-Query-Property:
-    `Q1.SQL.Text := 'SELECT * FROM x WHERE name='''+Edit1.Text+''''`.
-    Heutiger Pascal-`fkSQLInjection` sieht nur die String-Konkat,
-    nicht den Komponenten-Kontext. Mit Graph-Wissen: Quelle ist
-    UI-Input-Komponente (Edit/Memo/ComboBox), Ziel ist DB-Query-
-    Property (`SQL`, `CommandText`, `Macros`). Höhere Confidence
-    als der reine Pascal-Detektor.
-  - [ ] **Property-Typisierung** — Set-/Enum-Werte typisiert statt
-    Strings. Voraussetzung für robustere Property-basierte Detektoren.
-  - [ ] **Live-Refresh im IDE-Plugin** — DFM-Editor-Save-Hook
-    triggert Re-Analyse der zugehörigen Form-Unit. Heute nur
-    `.pas`-Save löst Re-Analyse aus.
-  - [ ] **Eigener Binär-DFM-Reader** — `ObjectBinaryToText` ist
-    standalone OK, im IDE-Plugin aber Borland-Service-abhängig.
-    Eigener Reader macht das Modul portabel und liefert exakte
-    Component-Positionen auch ohne Roundtrip.
+  **Phase 2 — Erweiterungs-Detektoren (erledigt):**
+  - [x] DataModule-uebergreifender Resolver (`TDfmRepoIndex`)
+  - [x] Cross-Form-Coupling (`fkDfmCrossFormCoupling`)
+  - [x] Layer-Verstoss (`fkDfmLayerViolation`)
+  - [x] God-Handler (`fkDfmGodHandler`)
+  - [x] TAction halb verkabelt (`fkDfmActionMismatch`)
+  - [x] Tab-Order-Konflikte (`fkDfmTabOrderConflict`)
+  - [x] Verbotene Komponentenklassen (`fkDfmForbiddenClass`)
+  - [x] DB-Komponente in UI-Form (`fkDfmDbInUiForm`)
+  - [x] Zirkulaere Datenquellen-Verkettung
+    (`fkDfmCircularDataSource`)
+  - [x] SQL-Injection durch VCL-Komponenten
+    (`fkDfmSqlFromUserInput`)
 
-  **Phase 3 — DB-aware Field-Analyse (TField-Subgraph):**
+  **Phase 3 — DB-aware Field-Analyse (erledigt):**
+  - [x] `TField`-Subgraph im ComponentGraph
+  - [x] Bindung Field → UI-Komponente (Cross-Index)
+  - [x] Unsichtbare Pflichtfelder (`fkDfmRequiredFieldNotVisible`)
+  - [x] Pflichtfeld ohne UI-Bindung (`fkDfmRequiredFieldUnbound`)
+  - [x] Falscher Komponententyp fuer Datentyp
+    (`fkDfmFieldTypeMismatch`)
 
-  Voraussetzung: `TComponentGraph` muss `TField`-Subkomponenten unter
-  `TDataSet`-Knoten als typisierte Children halten (`object Q1ID:
-  TIntegerField FieldName='ID' Required=True end`). Property-Lookup
-  für `FieldName`, `DataType`, `Required`, `Size` typisiert (Bool/Enum/
-  Int statt String). Baut auf der Phase-2-Property-Typisierung auf.
+- [x] **DFM — Restposten Infrastruktur** _(erledigt - foundation
+  steht; Folge-Refactor von Detektoren laeuft inkrementell weiter)_
 
-  - [ ] **`TField`-Subgraph im ComponentGraph** — Erweiterung von
-    `TComponentNode` um `Fields: TList<TFieldNode>` für DataSet-
-    Knoten. `TFieldNode { Name; FieldName; DataType: TFieldDataType;
-    Required: Boolean; Size: Integer; LineCol }`. Aufgesammelt
-    beim DFM-Parsen, wenn ein Child-`object` von einer DataSet-Klasse
-    abgeleitet ist (Whitelist `TADOQuery`, `TFDQuery`, `TIBQuery`,
-    `TClientDataSet`, `TSQLDataSet`, …).
-  - [ ] **Bindung Field → UI-Komponente** — Cross-Index
-    `(DataSource→DataSet, DataField) → TFieldNode`, damit Detektoren
-    auf einen Blick wissen, welche UI-Komponenten auf welches Field
-    binden (und welche nicht).
-  - [ ] **Detektor: Unsichtbare Pflichtfelder**
-    (`fkDfmRequiredFieldNotVisible`, `lsWarning`, `ftBug`) —
-    `TField.Required=True`, aber das einzige bindende UI-Control hat
-    `Visible=False` oder ist nicht auf einem sichtbaren Parent
-    (`TTabSheet` mit `TabVisible=False`, geblendeter `TPanel`).
-    User kann das Pflichtfeld nicht ausfüllen → Post-Fehler zur
-    Laufzeit.
-  - [ ] **Detektor: Pflichtfeld ohne UI-Bindung**
-    (`fkDfmRequiredFieldUnbound`, `lsWarning`, `ftBug`) —
-    `TField.Required=True`, aber keine UI-Komponente bindet
-    `(DataSource→DataSet, DataField=Field.FieldName)`. Variante des
-    obigen, aber für komplett fehlende Bindung statt unsichtbare.
-  - [ ] **Detektor: Falscher Komponententyp für Datentyp**
-    (`fkDfmFieldTypeMismatch`, `lsHint`, `ftCodeSmell`) —
-    UI-Komponenten-Klasse passt nicht zum `TField.DataType`. Mapping-
-    Tabelle als Default (überschreibbar via `analyser.ini`):
+  - [x] **`inherited`-Form-Aufloesung** — `TFormBinder.BindWithParents`
+    + `TFormBinding.Parent` walken die Klassen-Hierarchie via
+    `TDfmRepoIndex`. `HasHandler`/`HasPublishedField`/
+    `HasPublishedMethod` schauen die Parent-Kette durch. Detektoren
+    `DeadEvent`, `OrphanHandler`, `SchemaMismatch` profitieren
+    automatisch (sie nutzen die Walk-Up-Resolver).
+  - [x] **Frame-Composition ueber Units** — `TFrameResolver` in
+    `Infrastructure/uDfmFrameResolver.pas`. `ResolveFrameGraph` +
+    `EnumerateFrameComponents` laden auf Bedarf die Frame-DFM via
+    RepoIndex. Detektor-Refactor (LayerViolation, GodHandler,
+    TabOrderConflict) zur opportunistischen Nutzung folgt sobald
+    konkrete False-Negative-Faelle aufschlagen.
+  - [x] **Property-Typisierung** — `TPropValue.AsBoolean`,
+    `AsInteger`, `AsString`, `AsIdent`, `SetContains` +
+    `TComponentNode.GetBoolean/GetInteger/GetString/GetIdent/
+    SetPropertyContains`. Default-Aware: gibt VCL-Default zurueck,
+    wenn die Property im DFM nicht serialisiert ist. Detektoren
+    `RequiredField`, `DbFieldAnalysis-Helper` umgestellt; weitere
+    Detektoren ziehen opportunistisch nach.
+  - [x] **Live-Refresh im IDE-Plugin auf `.dfm`-Save** — IDE-Plugin
+    haengt jetzt einen zweiten `IOTAModuleNotifier` an das
+    Companion-DFM-Modul (sofern als eigenes Modul offen, z.B.
+    DFM-as-Text nach Close-and-Reopen). `EditorViewModified` mapped
+    `.dfm`-Edits zusaetzlich auf die Watched-`.pas`. Sowohl Save als
+    auch Edit fuehren zur Re-Analyse - manueller "Aktuelle Datei"-
+    Klick nach DFM-Save ist nicht mehr noetig.
+  - [x] **Eigener Binaer-DFM-Reader** — `uDfmBinaryReader` mit
+    `IsBinary` (TPF0-Praefix-Check) + `ToText` (delegiert intern auf
+    `Classes.ObjectBinaryToText`). Schnittstelle ist abstrakt
+    gehalten, sodass ein voller TWriter-Eigen-Parser ohne Caller-
+    Aenderung hineingetauscht werden kann. Sofort-Effekt: binaer-
+    gespeicherte DFMs werden nicht mehr stumm uebersprungen.
 
-    | DataType | erlaubt | Smell wenn |
-    |---|---|---|
-    | `ftBoolean` | `TDBCheckBox` | `TDBEdit`, `TDBComboBox` |
-    | `ftBlob`, `ftMemo` | `TDBMemo`, `TDBImage`, `TDBRichEdit` | `TDBEdit`, `TDBText` |
-    | `ftDate`, `ftDateTime` | `TDBDateTimePicker`, spezialisierte Controls | `TDBEdit` (FP-anfällig) |
-    | `ftInteger`, `ftFloat` | `TDBEdit` mit Numeric-Maske, `TDBNumberEdit` | `TDBCheckBox`, `TDBMemo` |
+- [ ] **DFM — Restposten Detektoren Phase 4**
+  (Detektor-Backlog jenseits der heutigen 20)
 
-    Konservativ defaulten — viele False Positives sonst, da generische
-    `TDBEdit` historisch für alles benutzt wird.
+  - [ ] **Master-Detail ohne `MasterFields`/`IndexFieldNames`** —
+    `MasterSource` gesetzt, aber `MasterFields` leer → silent
+    Cross-Join zur Laufzeit. Komplementaer zu
+    `fkDfmCircularDataSource` (das Zyklen findet, aber nicht
+    "kein Link").
+  - [ ] **DesignTime-Property-Drift** — `DesignSize.X` !=
+    `Width`/`Height`. Kommt typischerweise von High-DPI-Roundtrips
+    und macht Anchors/Constraints brueschig.
+  - [ ] **Frame-Instance-Property-Overrides erkennen** — Override
+    einer geerbten Property auf einer Frame-Instance ohne
+    `inherited`-Marker. Voraussetzung: Frame-Composition-Resolver
+    (siehe oben).
+  - [ ] **DataModule-Split-Vorschlag** — wenn `fkDfmDbInUiForm` >= N
+    Befunde auf derselben Form, einen aggregierten "extract to data
+    module"-Hint emittieren statt N einzelner.
 
 ---
 

@@ -40,7 +40,7 @@ implementation
 
 uses
   System.SysUtils, System.IOUtils,
-  uDfmParser, uComponentGraph,
+  uDfmParser, uComponentGraph, uDfmBinaryReader,
   uParser2, uAstNode, uFormBinder,
   uDfmDefaultName,
   uDfmHardcodedCaption,
@@ -80,10 +80,14 @@ begin
   if not TFile.Exists(DfmFileName) then Exit;
 
   try
-    // DFM ist im Repo standardmaessig ASCII-Text - explizit als UTF-8 mit
-    // ASCII-Fallback. Binaer-DFM laesst den Parser unten knallen; das
-    // faengt der aeussere try/except ab.
-    Source := TFile.ReadAllText(DfmFileName, TEncoding.UTF8);
+    // TDfmBinaryReader transparent: liefert Text-DFMs unveraendert
+    // zurueck, konvertiert binaere DFMs (TPF0-Praefix) via
+    // Classes.ObjectBinaryToText. Vor v0.10.x hat hier ein
+    // TFile.ReadAllText(.., UTF8) auf binaere DFMs einen
+    // Decode-Fehler geworfen, der vom aeusseren try/except STUMM
+    // verschluckt wurde -> binaer-gespeicherte Forms hatten gar
+    // keine DFM-Befunde.
+    Source := TDfmBinaryReader.ReadFile(DfmFileName);
   except
     Exit;
   end;
@@ -137,8 +141,15 @@ begin
       end;
     end;
 
-    // 4) Bindung zwischen Graph und Pascal-Klasse aufbauen
-    Binding := TFormBinder.Bind(Graph, UnitNode);
+    // 4) Bindung zwischen Graph und Pascal-Klasse aufbauen. Wenn der
+    //    Repo-Index gefuellt ist (Multi-File-Scan), versuchen wir die
+    //    Klassen-Vererbungs-Kette aufzubauen, damit DeadEvent /
+    //    OrphanHandler / SchemaMismatch bei inherited Forms nicht
+    //    falsch-positiv ueber geerbte Member feuern.
+    if gDfmRepoIndex <> nil then
+      Binding := TFormBinder.BindWithParents(Graph, UnitNode, gDfmRepoIndex)
+    else
+      Binding := TFormBinder.Bind(Graph, UnitNode);
 
     // 5) Binder-basierte Detektoren (Iteration 3+)
     TDfmDeadEventDetector.Analyze(Binding, DfmFileName, Results);

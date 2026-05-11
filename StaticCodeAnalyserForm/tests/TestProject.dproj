@@ -159,6 +159,8 @@
         <DCCReference Include="uTestTAstNode.pas"/>
         <DCCReference Include="uTestDfmLexer.pas"/>
         <DCCReference Include="uTestDfmParser.pas"/>
+        <DCCReference Include="uTestDfmBinaryReader.pas"/>
+        <DCCReference Include="uTestDfmPropValue.pas"/>
         <DCCReference Include="uTestDfmDefaultName.pas"/>
         <DCCReference Include="uTestDfmHardcodedCaption.pas"/>
         <DCCReference Include="uTestDfmHardcodedDbCreds.pas"/>

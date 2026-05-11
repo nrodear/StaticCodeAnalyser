@@ -65,7 +65,10 @@ begin
         Stack.Push(Cur.Children[I]);
 
       if Cur.Name = '' then Continue;
-      if Binding.PublishedFields.ContainsKey(LowerCase(Cur.Name)) then Continue;
+      // HasPublishedField walked die Parent-Kette mit, damit geerbte
+      // Komponenten aus inherited-Forms (Klassen-Vererbung via
+      // TFormBinder.BindWithParents) nicht false-positiv flaggen.
+      if Binding.HasPublishedField(Cur.Name) then Continue;
 
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
