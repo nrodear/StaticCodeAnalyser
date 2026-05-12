@@ -1048,6 +1048,46 @@ hängt zusammen (CLI-Mode ist die Voraussetzung für CI-Integration).
 
 ## 💡 Features / Erweiterungen
 
+- [x] **Standalone-Form an IDE-Plugin-UI angeglichen** — _erledigt_
+  Standalone-Form hostet jetzt die gleichen geteilten UI-Helfer wie das
+  Plugin-Frame:
+  - **Toolbar**: 3 Panel-Rows (Path / Filter / Action). Filter-Row mit
+    Severity-Combo (Display-Filter), Type-Combo, Profile-Combo, Min-
+    Severity-Combo, Search-Edit. Action-Row mit Analyse file / directory /
+    Branch / Save / Quit.
+  - **Stats-Tile-Reihe** oberhalb der Form ueber `TStatsTilesBuilder.Build`
+    aus `uIDEStatsTiles` - die gleichen 9 Sonar-Style Tiles wie im Plugin,
+    1:1 Quality-Score-Gewichte.
+  - **Hint-Panel** rechts vom Grid via `TFindingHintPanel` (`uIDEHelpPanel`)
+    mit Before/After-Code-Beispielen. Neuer `AAlwaysVisible`-Ctor-Parameter
+    deaktiviert die IDE-Plugin-Auto-Hide-Logik (Standalone-Form hat keinen
+    Dock-Container).
+  - **3-Panel-StatusBar** (Findings / Progress / Mode) - SimplePanel=False,
+    `SimpleText`-Writes umgeleitet auf `Panels[2].Text` (Mode-Panel).
+  - **Display-Filter**: `ApplyFilter` via `uFindingFilter.TFindingFilter.Matches`
+    schreibt `FDisplayedFindings`-Subset; ResultGridClick mappt jetzt auf
+    `FDisplayedFindings[row-1]` damit Filter-Auswahl konsistent ist.
+  - **Branch-Changes-Button**: `TVcsChanges.GetChangedPasFilesAuto` analog
+    zum IDE-Plugin (Git/SVN-Auto-Detect, nur geaenderte .pas analysiert).
+  - **CLI**: `--profile <name>` + `--min-severity <level>` via
+    `uConsoleRunner`. Apply ueber `ApplyDetectorThresholds` jetzt fuer
+    ALLE Modi (vorher nur Branch). `[Rules] Profile/MinSeverity` aus INI
+    plus CLI-Overrides.
+  - **GUI-Konsole-Fix**: `{$APPTYPE CONSOLE}` raus, `AttachConsole(
+    ATTACH_PARENT_PROCESS)` im CLI-Pfad. Doppelklick zeigt KEINE schwarze
+    Konsole mehr, CLI-Pfad hat trotzdem stdout/stderr/Exit-Codes.
+
+  Projekt-Setup: `..\StaticCodeAnalyserIDE` als `DCC_UnitSearchPath`-Eintrag
+  + DCCReferences fuer die importierten IOTA-freien Plugin-Units
+  (`uIDEStatsTiles`, `uIDEHelpPanel`, `uFindingFilter`). DPR analog
+  ergaenzt mit `unit in '...'`-Pfaden, damit der Compiler die Units auch
+  ohne Search-Path-Refresh findet.
+
+  Dateien: `analyser.d12.dpr/.dproj`, `UI/uMainForm.{pas,dfm}`,
+  `Console/uConsoleRunner.pas`, `Infrastructure/uRepoSettings.pas`,
+  `Common/uRuleCatalog.pas` (FindValue-Crash-Fix bei fehlendem owasp-Feld),
+  `StaticCodeAnalyserIDE/uIDEHelpPanel.pas` (AlwaysVisible-Ctor-Param).
+
 - [x] **Rule-Set-Profile + Min-Severity-Filter** — _erledigt_
   Detector-Subset jetzt steuerbar ueber `[Rules] Profile=...` + `MinSeverity=...`
   in `analyser.ini`. Bundled-Profile in `rules/sca-rules.json` unter `profiles`:

@@ -18,17 +18,36 @@ object Form2: TForm2
     Top = 493
     Width = 850
     Height = 19
-    Panels = <>
-    SimplePanel = True
+    Panels = <
+      item
+        Width = 160
+      end
+      item
+        Width = 220
+      end
+      item
+        Width = 50
+      end>
+    SimplePanel = False
     SimpleText = 'Ready.'
     ExplicitTop = 485
     ExplicitWidth = 616
   end
-  object Panel4: TPanel
+  object PanelStats: TPanel
     Left = 0
     Top = 0
     Width = 850
-    Height = 129
+    Height = 45
+    Align = alTop
+    BevelOuter = bvNone
+    TabOrder = 3
+    ExplicitWidth = 616
+  end
+  object Panel4: TPanel
+    Left = 0
+    Top = 45
+    Width = 850
+    Height = 165
     Align = alTop
     TabOrder = 1
     ExplicitWidth = 616
@@ -44,27 +63,131 @@ object Form2: TForm2
       DesignSize = (
         848
         41)
-      object Button6: TButton
-        Left = 513
-        Top = 6
-        Width = 130
-        Height = 25
-        Anchors = [akTop, akRight]
-        Caption = 'Analyse directory'
-        TabOrder = 0
-        OnClick = Button6Click
-        ExplicitLeft = 279
+      object LblFilter: TLabel
+        Left = 10
+        Top = 12
+        Width = 50
+        Height = 15
+        Caption = 'Severity:'
       end
-      object Button7: TButton
+      object SeverityFilterCombo: TComboBox
+        Left = 64
+        Top = 8
+        Width = 110
+        Height = 23
+        Style = csDropDownList
+        TabOrder = 0
+        OnChange = SeverityFilterComboChange
+      end
+      object LblType: TLabel
+        Left = 184
+        Top = 12
+        Width = 30
+        Height = 15
+        Caption = 'Type:'
+      end
+      object TypeFilterCombo: TComboBox
+        Left = 218
+        Top = 8
+        Width = 105
+        Height = 23
+        Style = csDropDownList
+        TabOrder = 1
+        OnChange = TypeFilterComboChange
+      end
+      object LblProfile: TLabel
+        Left = 333
+        Top = 12
+        Width = 40
+        Height = 15
+        Caption = 'Profile:'
+      end
+      object ProfileCombo: TComboBox
         Left = 377
+        Top = 8
+        Width = 110
+        Height = 23
+        Style = csDropDownList
+        TabOrder = 2
+        OnChange = ProfileComboChange
+      end
+      object LblMinSev: TLabel
+        Left = 497
+        Top = 12
+        Width = 25
+        Height = 15
+        Caption = 'Min:'
+      end
+      object MinSevCombo: TComboBox
+        Left = 526
+        Top = 8
+        Width = 85
+        Height = 23
+        Style = csDropDownList
+        TabOrder = 3
+        OnChange = MinSevComboChange
+      end
+      object LblSearch: TLabel
+        Left = 621
+        Top = 12
+        Width = 38
+        Height = 15
+        Caption = 'Search:'
+      end
+      object SearchEdit: TEdit
+        Left = 665
+        Top = 8
+        Width = 175
+        Height = 23
+        Anchors = [akLeft, akTop, akRight]
+        TabOrder = 4
+        OnChange = SearchEditChange
+        ExplicitWidth = 175
+      end
+    end
+    object PanelActions: TPanel
+      Left = 1
+      Top = 123
+      Width = 848
+      Height = 41
+      Align = alTop
+      BevelOuter = bvNone
+      TabOrder = 2
+      ExplicitWidth = 614
+      DesignSize = (
+        848
+        41)
+      object Button7: TButton
+        Left = 10
+        Top = 6
+        Width = 110
+        Height = 25
+        Anchors = [akLeft, akTop]
+        Caption = 'Analyse file'
+        TabOrder = 0
+        OnClick = Button7Click
+      end
+      object Button6: TButton
+        Left = 126
         Top = 6
         Width = 130
         Height = 25
-        Anchors = [akTop, akRight]
-        Caption = 'Analyse file'
-        TabOrder = 3
-        OnClick = Button7Click
-        ExplicitLeft = 143
+        Anchors = [akLeft, akTop]
+        Caption = 'Analyse directory'
+        TabOrder = 1
+        OnClick = Button6Click
+      end
+      object BtnBranch: TButton
+        Left = 262
+        Top = 6
+        Width = 36
+        Height = 25
+        Anchors = [akLeft, akTop]
+        Caption = #9095
+        Hint = 'Branch-Changes: analyse only files changed in current branch'
+        ShowHint = True
+        TabOrder = 2
+        OnClick = BtnBranchClick
       end
       object Button4: TButton
         Left = 649
@@ -73,9 +196,8 @@ object Form2: TForm2
         Height = 25
         Anchors = [akTop, akRight]
         Caption = 'Save'
-        TabOrder = 1
+        TabOrder = 3
         OnClick = Button4Click
-        ExplicitLeft = 415
       end
       object Button1: TButton
         Left = 744
@@ -84,9 +206,8 @@ object Form2: TForm2
         Height = 25
         Anchors = [akTop, akRight]
         Caption = 'Quit'
-        TabOrder = 2
+        TabOrder = 4
         OnClick = Button1Click
-        ExplicitLeft = 510
       end
     end
     object Panel1: TPanel
@@ -161,14 +282,14 @@ object Form2: TForm2
   end
   object Panel2: TPanel
     Left = 0
-    Top = 129
+    Top = 210
     Width = 850
-    Height = 364
+    Height = 283
     Align = alClient
     BevelOuter = bvNone
     TabOrder = 2
     ExplicitWidth = 616
-    ExplicitHeight = 356
+    ExplicitHeight = 275
     object ResultGrid: TStringGrid
       Left = 0
       Top = 0

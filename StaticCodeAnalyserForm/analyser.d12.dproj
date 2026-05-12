@@ -61,7 +61,7 @@
     <PropertyGroup Condition="'$(Base)'!=''">
         <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
         <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
-        <DCC_UnitSearchPath>$(PROJECTDIR)\sources;$(PROJECTDIR)\sources\Common;$(PROJECTDIR)\sources\Detectors;$(PROJECTDIR)\sources\Infrastructure;$(PROJECTDIR)\sources\Output;$(PROJECTDIR)\sources\Parsing;$(PROJECTDIR)\sources\UI;$(PROJECTDIR)\resources;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>$(PROJECTDIR)\sources;$(PROJECTDIR)\sources\Common;$(PROJECTDIR)\sources\Detectors;$(PROJECTDIR)\sources\Infrastructure;$(PROJECTDIR)\sources\Output;$(PROJECTDIR)\sources\Parsing;$(PROJECTDIR)\sources\UI;$(PROJECTDIR)\resources;$(PROJECTDIR)\..\StaticCodeAnalyserIDE;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_E>false</DCC_E>
         <DCC_N>false</DCC_N>
         <DCC_S>false</DCC_S>
@@ -137,6 +137,7 @@
         <DCCReference Include="sources\UI\uAnalyserTypes.pas"/>
         <DCCReference Include="sources\UI\uLocalization.pas"/>
         <DCCReference Include="sources\UI\uFindingGridRenderer.pas"/>
+        <DCCReference Include="sources\UI\uFindingFilter.pas"/>
         <DCCReference Include="sources\UI\uDfmTextViewer.pas"/>
         <DCCReference Include="sources\UI\uMainForm.pas">
             <Form>Form2</Form>
@@ -218,6 +219,8 @@
         <DCCReference Include="sources\Detectors\uDfmLayerViolation.pas"/>
         <DCCReference Include="sources\Detectors\uDfmGodHandler.pas"/>
         <DCCReference Include="sources\Detectors\uDfmActionMismatch.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserIDE\uIDEStatsTiles.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserIDE\uIDEHelpPanel.pas"/>
         <DCCReference Include="resources\uCustomerForm.pas">
             <Form>CustomerForm</Form>
             <FormType>dfm</FormType>

@@ -723,12 +723,14 @@ begin
     Ini.WriteBool  ('Repo',  'IncludeWorkingTree', FIncludeWorkingTree);
     Ini.WriteString('Paths', 'GitExe',             FGitExePath);
     Ini.WriteString('Paths', 'SvnExe',             FSvnExePath);
-    // Profile + IdeProfile werden auch persistiert, damit die letzte
-    // UI-Auswahl beim naechsten Frame-Start als Default-Selektion zurueck-
-    // kommt. Other [Rules]-Settings (MinSeverity, IdeMinSeverity) bleiben
-    // INI-only - nur das was die UI direkt veraendert wird mitgeschrieben.
+    // Profile + MinSeverity (+ IDE-Pendants) werden persistiert, damit
+    // die letzte UI-Auswahl ueber Restarts erhalten bleibt. Standalone-
+    // Form hat alle vier potentiell veraendert, IDE-Plugin nur IdeProfile -
+    // ueberfluessige Writes schaden nicht (Wert = INI-Lade-Wert).
     Ini.WriteString('Rules', 'Profile',            FProfile);
+    Ini.WriteString('Rules', 'MinSeverity',        FMinSeverity);
     Ini.WriteString('Rules', 'IdeProfile',         FIdeProfile);
+    Ini.WriteString('Rules', 'IdeMinSeverity',     FIdeMinSeverity);
     Ini.WriteString('UI',    'Language',           FLanguage);
   finally
     Ini.Free;

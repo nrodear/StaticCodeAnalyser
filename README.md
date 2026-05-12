@@ -332,7 +332,16 @@ click **Branch-Changes**. The analyser determines:
 **CLI**:
 ```powershell
 analyser.d12.exe --path D:\my-git-repo --branch --report-sarif sca.sarif
+
+# Optional: narrow the rule-set via profile + minimum severity
+analyser.d12.exe --path . --profile security --report-sarif sec.sarif
+analyser.d12.exe --path . --profile bugs-only --min-severity warning
 ```
+
+`--profile <name>` accepts any profile from `rules/sca-rules.json`
+(bundled: `default`, `ide-fast`, `strict`, `security`, `bugs-only`,
+`code-quality`, `dfm-only`). `--min-severity hint|warning|error` skips
+detectors below the threshold. Both flags override `[Rules]` in `analyser.ini`.
 
 **`analyser.ini` settings for Git**:
 ```ini

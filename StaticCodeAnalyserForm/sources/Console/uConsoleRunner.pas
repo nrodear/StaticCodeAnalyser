@@ -53,6 +53,8 @@ type
     BaseDir       : string;         // --base-dir <dir>  (fuer relative Pfade
                                     //   im SARIF; default = Path)
     CustomRules   : string;         // --custom-rules <analyser-rules.yml>
+    Profile       : string;         // --profile <name>         (siehe sca-rules.json)
+    MinSeverity   : string;         // --min-severity hint|warning|error
     ParseError    : string;         // nicht-leer wenn Args invalid
   end;
 
@@ -128,6 +130,9 @@ begin
   Result.ReportSarif := '';
   Result.Quiet       := False;
   Result.BaseDir     := '';
+  Result.CustomRules := '';
+  Result.Profile     := '';
+  Result.MinSeverity := '';
   Result.ParseError  := '';
   Errored            := False;
 
@@ -168,6 +173,10 @@ begin
       GetValue(Result.BaseDir, '--base-dir')
     else if A = '--custom-rules' then
       GetValue(Result.CustomRules, '--custom-rules')
+    else if A = '--profile' then
+      GetValue(Result.Profile, '--profile')
+    else if A = '--min-severity' then
+      GetValue(Result.MinSeverity, '--min-severity')
     else
     begin
       Result.ParseError := Format('Unbekannter Switch: %s', [A]);
@@ -257,6 +266,15 @@ begin
   WriteLn('                        (regex/substring/word patterns, see');
   WriteLn('                         examples/analyser-rules.yml)');
   WriteLn('');
+  WriteLn('Rule-set:');
+  WriteLn('  --profile <name>      Bundled or custom profile from rules/sca-rules.json');
+  WriteLn('                        (default, ide-fast, strict, security,');
+  WriteLn('                         bugs-only, code-quality, dfm-only)');
+  WriteLn('                        Overrides [Rules] Profile in analyser.ini.');
+  WriteLn('  --min-severity <lvl>  hint|warning|error - skip detectors below');
+  WriteLn('                        this severity threshold.');
+  WriteLn('                        Overrides [Rules] MinSeverity in analyser.ini.');
+  WriteLn('');
   WriteLn('Other:');
   WriteLn('  --help, -h, -?, /?    Show this help');
   WriteLn('  --version             Print version and exit');
@@ -342,12 +360,23 @@ begin
       // aufrufen).
       TCustomRuleDetector.ClearRules;
 
+    // Settings BEVOR jeder Analyse laden + anwenden, damit [Rules]
+    // Profile/MinSeverity aus der INI greifen UND --profile / --min-severity
+    // sie ueberschreiben koennen. Vor V0.9.0 lief CLI komplett ohne
+    // INI-Anwendung - daher liefen immer alle Detektoren.
+    Settings := TRepoSettings.Create;
+    try Settings.Load; except end;
+    if Args.Profile     <> '' then Settings.Profile     := Args.Profile;
+    if Args.MinSeverity <> '' then Settings.MinSeverity := Args.MinSeverity;
+    Settings.ApplyDetectorThresholds(Args.Path);
+    if not Args.Quiet and ((Args.Profile <> '') or (Args.MinSeverity <> '')) then
+      WriteLn(Format('Rule-set: Profile=%s, MinSeverity=%s',
+        [Settings.Profile, Settings.MinSeverity]));
+
     try
       // Branch-Mode: VCS-geaenderte Dateien ermitteln, dann analysieren
       if Args.Branch then
       begin
-        Settings := TRepoSettings.Create;
-        try Settings.Load; except end;
         Files := TVcsChanges.GetChangedPasFilesAuto(Args.Path, RepoInfo, Settings);
         if (Files = nil) or (Files.Count = 0) then
         begin

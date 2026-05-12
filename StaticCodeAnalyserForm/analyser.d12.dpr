@@ -1,13 +1,21 @@
 program analyser.d12;
 
-{$APPTYPE CONSOLE}
-// CONSOLE-AppType: ermoeglicht stdout/stderr-IO und korrekte Exit-Codes.
-// Die VCL-Form startet trotzdem - im GUI-Mode ist das Console-Window nur
-// ein zusaetzliches Fenster (nicht stoerend bei Plugin-Builds).
-// Im CLI-Mode (siehe TConsoleRunner.RunFromCmdLine in main-Block unten)
-// kein Application.Run -> kein Form-Spawn -> reine CLI-Output.
+// GUI-AppType (kein {$APPTYPE CONSOLE}): Windows allokiert KEINE Konsole
+// beim Start. Damit kein schwarzes cmd-Fenster beim Doppelklick.
+//
+// Im CLI-Mode haengen wir uns ueber AttachConsole(ATTACH_PARENT_PROCESS)
+// an die schon offene Konsole des Aufrufers an (typisch: cmd.exe oder ein
+// CI-Runner). stdout/stderr werden danach auf CONOUT$ umgebogen, damit
+// WriteLn / Output / ErrOutput am erwarteten Ziel landen.
+//
+// Bekannter Schoenheitsfehler: der cmd-Prompt kommt sofort zurueck bevor
+// die letzte Output-Zeile sichtbar ist (Windows-Quirk fuer GUI-Subsystem-
+// Programme die nachtraeglich AttachConsole rufen). Wer es absolut blockend
+// braucht, ruft 'start /wait analyser.exe ...' oder pipt nach 'more'.
+// CI-Runner (PowerShell, GH Actions) sehen das nicht - die loggen synchron.
 
 uses
+  Winapi.Windows,
   Vcl.Forms,
   System.SysUtils,
   MeineUnit in 'resources\MeineUnit.pas',
@@ -17,6 +25,7 @@ uses
   uAnalyserTypes in 'sources\UI\uAnalyserTypes.pas',
   uLocalization in 'sources\UI\uLocalization.pas',
   uFindingGridRenderer in 'sources\UI\uFindingGridRenderer.pas',
+  uFindingFilter in 'sources\UI\uFindingFilter.pas',
   uMainForm in 'sources\UI\uMainForm.pas' {Form2},
   uDfmTextViewer in 'sources\UI\uDfmTextViewer.pas',
   uAstNode in 'sources\Parsing\uAstNode.pas',
@@ -96,7 +105,9 @@ uses
   uDfmGodHandler in 'sources\Detectors\uDfmGodHandler.pas',
   uDfmActionMismatch in 'sources\Detectors\uDfmActionMismatch.pas',
   uCustomerForm in 'resources\uCustomerForm.pas' {CustomerForm},
-  uOrderForm in 'resources\uOrderForm.pas' {OrderForm};
+  uOrderForm in 'resources\uOrderForm.pas' {OrderForm},
+  uIDEStatsTiles in '..\StaticCodeAnalyserIDE\uIDEStatsTiles.pas',
+  uIDEHelpPanel in '..\StaticCodeAnalyserIDE\uIDEHelpPanel.pas';
 
 {$R *.res}
 
@@ -116,27 +127,65 @@ begin
   end;
 end;
 
+// Hangt sich an die Konsole des Aufrufer-Prozesses (typisch cmd.exe / pwsh)
+// und biegt die Pascal-RTL-TextFiles Output/ErrOutput dorthin um.
+// Liefert True wenn eine Konsole verfuegbar war (auch wenn sie bereits
+// zuvor existierte, z.B. CI-Runner). False wenn der Aufrufer keine Konsole
+// hatte (Doppelklick aus Explorer) - in dem Fall gehen WriteLns ins Leere,
+// was im CLI-Mode unueblich aber nicht crash-relevant ist.
+function AttachToParentConsole: Boolean;
+const
+  ATTACH_PARENT_PROCESS_FLAG = DWORD(-1);
+begin
+  Result := AttachConsole(ATTACH_PARENT_PROCESS_FLAG);
+  if not Result then Exit;
+  // System.Output / System.ErrOutput wurden vom RTL-Startup auf die (nicht
+  // existente) Default-Konsole gemappt. Nach AttachConsole zeigen die alten
+  // Handles ins Leere - daher TextFiles neu auf CONOUT$ binden. CONOUT$ ist
+  // ein Windows-Special-File das auf die aktive Konsole verweist und immer
+  // schreibbar ist solange eine Konsole attached ist.
+  try
+    AssignFile(Output,    'CONOUT$');
+    Rewrite(Output);
+    AssignFile(ErrOutput, 'CONOUT$');
+    Rewrite(ErrOutput);
+  except
+    // Bei IO-Errors stillschweigend zurueck - der CLI-Lauf laeuft weiter,
+    // nur ohne Output. Exit-Codes funktionieren unabhaengig davon.
+  end;
+end;
+
 begin
   if IsCliMode then
   begin
     // Headless-Pfad - keine VCL-Form, exit code via Halt.
+    AttachToParentConsole;
+    var CliExitCode: Integer;
+    CliExitCode := 99;
     try
-      Halt(uConsoleRunner.TConsoleRunner.RunFromCmdLine);
+      CliExitCode := uConsoleRunner.TConsoleRunner.RunFromCmdLine;
     except
       on E: Exception do
       begin
         WriteLn(ErrOutput, 'Fatal: ', E.ClassName, ': ', E.Message);
-        Halt(99);
+        CliExitCode := 99;
       end;
     end;
+    // FreeConsole VOR Halt - Halt umgeht try/finally, also nicht
+    // dorthinein. Sonst bleibt der cmd-Prompt-Cursor haengen.
+    FreeConsole;
+    Halt(CliExitCode);
   end
   else
   begin
     Application.Initialize;
     Application.MainFormOnTaskbar := True;
     Application.CreateForm(TForm2, Form2);
-  Application.CreateForm(TCustomerForm, CustomerForm);
-  Application.CreateForm(TOrderForm, OrderForm);
-  Application.Run;
+    // uCustomerForm + uOrderForm sind Test-Fixtures fuer die DFM-Detektoren
+    // (qCustomers: TFDQuery, dsOrders: TDataSetProvider, ...). Sie bleiben
+    // im Projekt fuer die Kompilierung, werden aber NICHT als Runtime-Form
+    // instanziiert - sonst wirft das DFM-Streaming FireDAC-512 (keine
+    // Connection auf qCustomers). Bei Bedarf manuell als TForm.Create.
+    Application.Run;
   end;
 end.

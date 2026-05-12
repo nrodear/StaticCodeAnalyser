@@ -42,6 +42,9 @@ type
     FHelpAfter       : TMemo;
     FDockStateTimer  : TTimer;
     FAnchor          : TWinControl;
+    // Standalone-Modus: Auto-Hide aus, Panel immer sichtbar. Default False
+    // (IDE-Plugin verhaelt sich wie zuvor: blendet sich beim Docken aus).
+    FAlwaysVisible   : Boolean;
 
     function  HostIsFloating: Boolean;
     procedure SyncHelpVisibility;
@@ -52,9 +55,12 @@ type
     // AAnchor   - irgendein Control das im selben Form-Chain wie der Frame
     //             liegt; HostIsFloating laeuft den Parent-Chain hoch zur
     //             ersten TCustomForm. Typisch der Frame selbst.
+    // AAlwaysVisible=True deaktiviert die Auto-Hide-Logik (sinnvoll fuer
+    // Standalone-Form-Hosts, die immer im Floating-Sinn sichtbar bleiben).
     constructor Create(AOwner: TComponent;
                        AParent: TWinControl;
-                       AAnchor: TWinControl); reintroduce;
+                       AAnchor: TWinControl;
+                       AAlwaysVisible: Boolean = False); reintroduce;
     destructor Destroy; override;
 
     // Befund-Details setzen. Wenn der Detektor keinen Hint liefert,
@@ -87,7 +93,8 @@ const
   HELP_PANEL_MIN_WIDTH  = 180;
 
 constructor TFindingHintPanel.Create(AOwner: TComponent;
-  AParent: TWinControl; AAnchor: TWinControl);
+  AParent: TWinControl; AAnchor: TWinControl;
+  AAlwaysVisible: Boolean);
 var
   HelpLeftSep         : TPanel;
   HelpCode            : TPanel;
@@ -97,7 +104,8 @@ var
   LblAfter            : TLabel;
 begin
   inherited Create(AOwner);
-  FAnchor := AAnchor;
+  FAnchor         := AAnchor;
+  FAlwaysVisible  := AAlwaysVisible;
 
   // ---- Outer panel: rechts an PanelClient angedockt ----
   FHelpPanel := TPanel.Create(Self);
@@ -235,8 +243,10 @@ function TFindingHintPanel.HostIsFloating: Boolean;
 // Floating-Status. Im IDE-Plugin ist das die INTACustomDockableForm-
 // Wrapper-Form: Floating=True wenn der Tool-Window geloest steht,
 // False wenn er an einer Dock-Site (Tab, Side-Bar) angedockt ist.
+// AlwaysVisible-Mode (Standalone-Host): konstant True, kein Walk.
 var P: TWinControl;
 begin
+  if FAlwaysVisible then Exit(True);
   Result := False;
   if not Assigned(FAnchor) then Exit;
   P := FAnchor.Parent;

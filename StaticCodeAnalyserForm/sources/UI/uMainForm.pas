@@ -10,6 +10,7 @@ uses
   Vcl.ComCtrls, Vcl.Grids, uStaticAnalyzer2,
   uMethodd12, uSCAConsts, uFixHint, uClaudePrompt, uLocalization,
   uRepoSettings, uRecentPaths, uFindingGridRenderer, uDfmTextViewer,
+  uIDEHelpPanel,                  // TFindingHintPanel (im class-Feld referenziert)
   Vcl.Controls
  ;
 
@@ -17,7 +18,8 @@ type
   TForm2 = class(TForm)
     Panel1: TPanel;
     Panel2: TPanel;
-    Panel3: TPanel;
+    Panel3: TPanel;             // jetzt: Filter-Row (Severity/Type/Profile/Min/Search)
+    PanelActions: TPanel;       // neu: Action-Row (Analyse/Branch/Save/Quit)
     Button1: TButton;
     Projectpath: TComboBox;
     Savetofile: TEdit;
@@ -31,6 +33,23 @@ type
     StatusBar1: TStatusBar;
     Label3: TLabel;
     Panel4: TPanel;
+    PanelStats: TPanel;       // Sonar-Style Stats-Tile-Reihe (uIDEStatsTiles)
+    // ---- Display-Filter (filtern ANGEZEIGTE Findings, kein Re-Run) ----
+    LblFilter: TLabel;
+    SeverityFilterCombo: TComboBox;
+    LblType: TLabel;
+    TypeFilterCombo: TComboBox;
+    LblSearch: TLabel;
+    SearchEdit: TEdit;
+    // ---- Rule-Set-Filter (Profile + Min-Severity) ----
+    // Combos schreiben transient in TRepoSettings.Profile/MinSeverity
+    // und persistieren ueber Save. Wirken erst beim NAECHSTEN Analyse-Klick.
+    LblProfile: TLabel;
+    ProfileCombo: TComboBox;
+    LblMinSev: TLabel;
+    MinSevCombo: TComboBox;
+    // Branch-Changes Button (VCS-Diff)
+    BtnBranch: TButton;
     procedure Button1Click(Sender: TObject);
     procedure ResultGridClick(Sender: TObject);
     procedure ResultGridDblClick(Sender: TObject);
@@ -45,12 +64,40 @@ type
       Rect: TRect; State: TGridDrawState);
     procedure AppShowHint(var HintStr: string; var CanShow: Boolean;
       var HintInfo: THintInfo);
+    procedure ProfileComboChange(Sender: TObject);
+    procedure MinSevComboChange(Sender: TObject);
+    procedure SeverityFilterComboChange(Sender: TObject);
+    procedure TypeFilterComboChange(Sender: TObject);
+    procedure SearchEditChange(Sender: TObject);
+    procedure BtnBranchClick(Sender: TObject);
+    // Wird per OnResize gehookt - aktualisiert die 1/3-Breite des Hint-
+    // Panels + die Vorher/Nachher-Aufteilung.
+    procedure FormResizeHandler(Sender: TObject);
 
   private
     // Aktuell angezeigte Befunde - in der Form gehalten, damit ResultGridClick
     // den vollen TLeakFinding (inkl. Kind/Severity-Details) zur ausgewaehlten
     // Zeile findet und einen kompletten Claude-AI-Prompt erzeugen kann.
-    FAllFindings : TObjectList<TLeakFinding>;
+    FAllFindings       : TObjectList<TLeakFinding>;
+    // Gefilterte Untermenge (Display-Filter via Severity/Type/Search).
+    // Owned=False - die Findings gehoeren FAllFindings.
+    FDisplayedFindings : TList<TLeakFinding>;
+    // Aktueller BaseDir des letzten Analyse-Laufs - fuer Re-Filter im
+    // Grid-Refresh (FillGridFromFindings braucht ihn).
+    FCurrentBaseDir    : string;
+    // Stats-Tile Count-Labels (uIDEStatsTiles befuellt sie, UpdateStats
+    // schreibt pro Lauf in Caption).
+    FTileError, FTileWarn, FTileHint, FTileFileSev : TLabel;
+    FTileBug, FTileVuln, FTileDup                  : TLabel;
+    FTileCyclomatic, FTileScore                    : TLabel;
+    // Hint-Panel rechts vom Grid (Before/After-Code-Beispiele).
+    // Standalone-Modus: AlwaysVisible=True (kein Auto-Hide).
+    FHintPanel : TFindingHintPanel;
+    // Wendet die Display-Filter (Severity-Combo / Type-Combo / Search)
+    // auf FAllFindings an und fuellt FDisplayedFindings + Grid neu.
+    procedure ApplyFilter;
+    // Aktualisiert die Stats-Tile-Captions aus FAllFindings.
+    procedure UpdateStats;
     // Inner helper: registriert eine bereits geladene Settings-Instanz und
     // setzt optional die Discovery-Listen zurueck. Wird vom Analyse-Pfad
     // direkt benutzt (der die Settings noch fuer UsesCheck/AutoDiscover braucht).
@@ -79,21 +126,52 @@ var
 implementation
 
 uses
-  clipbrd, uStaticFiles;
+  clipbrd,
+  uStaticFiles, uRuleCatalog,
+  uFindingFilter,                 // TFilterMode, TTypeFilter, TFindingFilter, TFindingFilterCriteria
+  uVcsChanges,                    // BranchClick
+  uIDEStatsTiles;                 // TStatsTilesBuilder.Build (Sonar-Style Tiles)
+  // uIDEHelpPanel ist im interface-uses (TFindingHintPanel ist class-Feld)
 
 {$R *.dfm}
 
 procedure TForm2.FormCreate(Sender: TObject);
 var
-  Settings: TRepoSettings;
+  Settings    : TRepoSettings;
+  ProfileList : TArray<string>;
+  Name        : string;
+  Idx         : Integer;
 begin
-  // UI-Sprache aus analyser.ini [UI]/Language - MUSS vor den ersten
-  // _()-Aufrufen passieren. Kurzlebige Settings-Instanz nur fuer den
-  // Language-Read; volle Settings sind im Standalone nicht noetig.
+  // UI-Sprache + Profile/MinSeverity-Combo-Inhalte aus analyser.ini lesen.
+  // Settings hier kurzlebig - der Analyse-Pfad (ApplyDetectorConfig) baut
+  // sich eine eigene frische Instanz, damit Edits an analyser.ini zwischen
+  // den Runs ohne Form-Neustart greifen.
   Settings := TRepoSettings.Create;
   try
     try Settings.Load; except end;
     SetLanguage(Settings.Language);
+
+    // ---- Profile-Combo befuellen aus TRuleCatalog.ProfileNames ----
+    ProfileList := TRuleCatalog.ProfileNames;
+    if Length(ProfileList) = 0 then
+      ProfileCombo.Items.Add('default')
+    else
+      for Name in ProfileList do ProfileCombo.Items.Add(Name);
+    // Default-Selektion = [Rules] Profile aus INI (leer = default).
+    if Settings.Profile <> '' then
+      Idx := ProfileCombo.Items.IndexOf(Settings.Profile)
+    else
+      Idx := ProfileCombo.Items.IndexOf('default');
+    if Idx < 0 then Idx := 0;
+    ProfileCombo.ItemIndex := Idx;
+
+    // ---- Min-Severity-Combo befuellen: 3 fixe Stufen ----
+    MinSevCombo.Items.Add('hint');
+    MinSevCombo.Items.Add('warning');
+    MinSevCombo.Items.Add('error');
+    Idx := MinSevCombo.Items.IndexOf(LowerCase(Settings.MinSeverity));
+    if Idx < 0 then Idx := MinSevCombo.Items.IndexOf('hint');
+    MinSevCombo.ItemIndex := Idx;
   finally
     Settings.Free;
   end;
@@ -114,8 +192,53 @@ begin
   Application.HintShortPause := 100;
   Application.OnShowHint     := AppShowHint;
   // Owner-list - der Lifetime der TLeakFinding-Instanzen ist an die Form gekoppelt.
-  FAllFindings := TObjectList<TLeakFinding>.Create(True);
+  FAllFindings       := TObjectList<TLeakFinding>.Create(True);
+  // OwnsObjects=False - referenziert nur Items aus FAllFindings, kein Free.
+  FDisplayedFindings := TList<TLeakFinding>.Create;
+
+  // ---- Display-Filter-Combos befuellen (Severity / Type) ----
+  // Tag-Objects halten Ord(TFilterMode/TTypeFilter); ApplyFilter liest sie
+  // wieder raus. Liste analog zum IDE-Plugin (uIDEAnalyserForm.CreateUI).
+  SeverityFilterCombo.Items.AddObject(_('All'),                    TObject(Ord(fmAll)));
+  SeverityFilterCombo.Items.AddObject(_('Errors (all)'),           TObject(Ord(fmErrors)));
+  SeverityFilterCombo.Items.AddObject(_('Warnings (all)'),         TObject(Ord(fmWarnings)));
+  SeverityFilterCombo.Items.AddObject(_('Hints (all)'),            TObject(Ord(fmHints)));
+  SeverityFilterCombo.ItemIndex := 0;
+
+  TypeFilterCombo.Items.Add(_('All'));
+  TypeFilterCombo.Items.Add('Bug');
+  TypeFilterCombo.Items.Add('Code Smell');
+  TypeFilterCombo.Items.Add('Vulnerability');
+  TypeFilterCombo.Items.Add('Security Hotspot');
+  TypeFilterCombo.Items.Add('Code Duplication');
+  TypeFilterCombo.ItemIndex := 0;
+
+  // ---- Sonar-Style Stats-Tile-Reihe oberhalb des Grids -----------------
+  // PanelStats kommt aus dem DFM (alTop, Height=45). Tiles werden als
+  // alLeft-Reihe gebaut. OUT-Params landen in den Frame-Feldern damit
+  // UpdateStats sie spaeter befuellen kann.
+  TStatsTilesBuilder.Build(Self, PanelStats,
+    FTileError, FTileWarn, FTileHint, FTileFileSev,
+    FTileBug, FTileVuln, FTileDup, FTileCyclomatic, FTileScore);
+
+  // ---- Hint-Panel rechts vom Grid (Before/After-Code-Beispiele) ----
+  // AlwaysVisible=True - Standalone hat keinen Dock-Container, der
+  // IDE-Plugin-Auto-Hide-Mechanismus wuerde sonst das Panel verstecken.
+  // Parent=Panel2 (Grid-Container), Anchor=ResultGrid - so docked sich
+  // das HelpPanel alRight zum Grid und kriegt initial 1/3 der Breite.
+  FHintPanel := TFindingHintPanel.Create(Self, Panel2, ResultGrid, True);
+  FHintPanel.ShowPlaceholder;
+  FHintPanel.ApplyLayout;
+  // OnResize hooken damit das HintPanel sich bei Form-Resize an die
+  // 1/3-Breite anpasst (und die Vorher/Nachher-Aufteilung neu rechnet).
+  Self.OnResize := FormResizeHandler;
+
   LoadRecentPaths;
+end;
+
+procedure TForm2.FormResizeHandler(Sender: TObject);
+begin
+  if Assigned(FHintPanel) then FHintPanel.ApplyLayout;
 end;
 
 procedure TForm2.FormDestroy(Sender: TObject);
@@ -124,6 +247,7 @@ begin
   // ueberlebt wenn das Form zerstoert wird (relevant beim IDE-Plugin-Hosting).
   if TMethod(Application.OnShowHint).Data = Self then
     Application.OnShowHint := nil;
+  FreeAndNil(FDisplayedFindings);
   FreeAndNil(FAllFindings);
 end;
 
@@ -195,7 +319,7 @@ begin
           ResultGrid.Cells[4, i]
         );
     lines.SaveToFile(GetAbsolutePath(Savetofile.Text));
-    StatusBar1.SimpleText := _('Saved: ') + GetAbsolutePath(Savetofile.Text);
+    StatusBar1.Panels[2].Text := _('Saved: ') + GetAbsolutePath(Savetofile.Text);
   finally
     lines.Free;
   end;
@@ -247,6 +371,13 @@ procedure TForm2.ApplyDetectorConfig(Settings: TRepoSettings;
 begin
   try
     Settings.RegisterToLeakyClasses;
+    // UI-Combos gewinnen ueber die INI (analog zum IDE-Plugin). Settings.Load
+    // hat gerade die INI-Werte gesetzt - die Combos schreiben jetzt drueber.
+    // Leerer Combo-Index lassen wir unangetastet (= INI-Wert bleibt aktiv).
+    if Assigned(ProfileCombo) and (ProfileCombo.ItemIndex >= 0) then
+      Settings.Profile := ProfileCombo.Items[ProfileCombo.ItemIndex];
+    if Assigned(MinSevCombo) and (MinSevCombo.ItemIndex >= 0) then
+      Settings.MinSeverity := MinSevCombo.Items[MinSevCombo.ItemIndex];
     // ProjectRoot durchreichen damit relative CustomRulesFile-Pfade
     // (z.B. 'analyser-rules.yml' im Projekt-Wurzelverzeichnis) gefunden werden.
     Settings.ApplyDetectorThresholds(Trim(Projectpath.Text));
@@ -260,6 +391,11 @@ begin
       if Assigned(uSCAConsts.DiscoveredStaticClasses) then
         uSCAConsts.DiscoveredStaticClasses.Clear;
     end;
+    // StatusBar-Indikator: User sieht welches Rule-Set gerade aktiv ist.
+    // Format kompakt; bei MaxLen-Ueberlauf truncated VCL automatisch.
+    StatusBar1.Panels[2].Text :=
+      Format(_('Rule-set: Profile=%s, MinSeverity=%s'),
+        [Settings.Profile, Settings.MinSeverity]);
   except
     // INI-Wert defekt darf den Lauf nicht abbrechen.
   end;
@@ -279,7 +415,7 @@ begin
     // passieren, sonst landet TMeineKlasse & Co. nie in LeakyClasses.
     ApplyDetectorConfig(Settings, True);
 
-    StatusBar1.SimpleText := _('Checking all classes...');
+    StatusBar1.Panels[2].Text := _('Checking all classes...');
     Application.ProcessMessages;
 
     // Frueher: TStaticAnalyzer.AnalyzeAllClassesRecursive (uParser-basiert,
@@ -325,7 +461,7 @@ begin
     try Settings.Load; except end;
     ApplyDetectorConfig(Settings, True);
 
-    StatusBar1.SimpleText := _('Analysing: ') + ExtractFileName(AFilePath);
+    StatusBar1.Panels[2].Text := _('Analysing: ') + ExtractFileName(AFilePath);
     Application.ProcessMessages;
 
     try
@@ -356,20 +492,12 @@ end;
 
 procedure TForm2.FillGridFromFindings(Findings: TObjectList<TLeakFinding>;
   const ABaseDir: string);
-// Gemeinsame Befuell-Logik fuer Single-File- und Recursive-Analyse.
-// Uebernimmt die Findings ins FAllFindings-Feld (damit ResultGridClick
-// per row-Index den vollen Befund findet). ABaseDir steuert den
-// relativ angezeigten Datei-Pfad in Spalte 0.
+// Uebernimmt die Findings ins FAllFindings-Feld + BaseDir + delegiert das
+// Grid-Befuellen an ApplyFilter. Damit greift Severity/Type/Search-Filter
+// auch beim ersten Befuellen.
 var
-  f       : TLeakFinding;
-  i       : Integer;
-  baseDir : string;
+  i : Integer;
 begin
-  ResultGrid.RowCount := 2;
-  ResultGrid.Rows[1].Clear;
-
-  // Alte Befunde entsorgen, neue uebernehmen. OwnsObjects=False auf der
-  // Eingangsliste verhindert dass deren Free die Items mit-freigibt.
   FAllFindings.Clear;
   if Assigned(Findings) then
   begin
@@ -377,27 +505,146 @@ begin
     for i := 0 to Findings.Count - 1 do
       FAllFindings.Add(Findings[i]);
   end;
+  FCurrentBaseDir := ABaseDir;
+  // Stats spiegeln immer die GESAMTE Befund-Menge, nicht das gefilterte
+  // Subset - User sieht "1 von 234 Bugs gefiltert" auf der Tile-Leiste.
+  UpdateStats;
+  ApplyFilter;
+end;
 
-  if FAllFindings.Count = 0 then
+procedure TForm2.UpdateStats;
+// Befuellt die 9 Stats-Tiles aus FAllFindings. Quality-Score = gewichtete
+// Summe (niedriger = besser); Gewichte 1:1 vom IDE-Plugin uebernommen
+// damit die Werte zwischen Standalone und Plugin vergleichbar sind.
+const
+  W_VULN     = 10;
+  W_ERROR    = 7;
+  W_HOTSPOT  = 5;
+  W_WARNING  = 3;
+  W_HINT     = 1;
+  W_FILEERR  = 2;
+var
+  f                            : TLeakFinding;
+  nErr, nWarn, nHint, nFileErr : Integer;
+  nBug, nVuln, nHot, nDup      : Integer;
+  nCyclo                       : Integer;
+  score                        : Integer;
+begin
+  if not Assigned(FTileError) then Exit;
+
+  nErr  := 0; nWarn := 0; nHint := 0; nFileErr := 0;
+  nBug  := 0; nVuln := 0; nHot  := 0; nDup  := 0;
+  nCyclo := 0;
+
+  for f in FAllFindings do
   begin
-    ResultGrid.Cells[0, 1] := _('No findings.');
-    StatusBar1.SimpleText  := _('Done. No findings.');
-    Exit;
+    if f.FindingType = ftFileError then
+      Inc(nFileErr)
+    else
+      case f.Severity of
+        lsError   : Inc(nErr);
+        lsWarning : Inc(nWarn);
+        lsHint    : Inc(nHint);
+      end;
+
+    case f.FindingType of
+      ftBug             : Inc(nBug);
+      ftVulnerability   : Inc(nVuln);
+      ftSecurityHotspot : Inc(nHot);
+      ftCodeDuplication : Inc(nDup);
+    end;
+
+    if f.Kind = fkCyclomaticComplexity then
+      Inc(nCyclo);
   end;
 
-  baseDir := IncludeTrailingPathDelimiter(ABaseDir);
-  ResultGrid.RowCount := FAllFindings.Count + 1;
+  score := nVuln    * W_VULN     +
+           nErr     * W_ERROR    +
+           nHot     * W_HOTSPOT  +
+           nWarn    * W_WARNING  +
+           nHint    * W_HINT     +
+           nFileErr * W_FILEERR;
+
+  FTileError.Caption      := IntToStr(nErr);
+  FTileWarn.Caption       := IntToStr(nWarn);
+  FTileHint.Caption       := IntToStr(nHint);
+  FTileFileSev.Caption    := IntToStr(nFileErr);
+  FTileBug.Caption        := IntToStr(nBug);
+  FTileVuln.Caption       := IntToStr(nVuln);
+  FTileDup.Caption        := IntToStr(nDup);
+  FTileCyclomatic.Caption := IntToStr(nCyclo);
+  FTileScore.Caption      := IntToStr(score);
+end;
+
+procedure TForm2.ApplyFilter;
+// Wendet Severity-Combo / Type-Combo / Search-Edit auf FAllFindings an,
+// schreibt das Ergebnis in FDisplayedFindings und befuellt das Grid.
+// ResultGridClick mappt Grid-Row -> FDisplayedFindings[row-1] (nicht
+// FAllFindings!), siehe ResultGridClick.
+var
+  Criteria : TFindingFilterCriteria;
+  f        : TLeakFinding;
+  i        : Integer;
+  baseDir  : string;
+begin
+  Criteria.Mode       := fmAll;
+  Criteria.TypeFilter := tfAll;
+  Criteria.SearchLow  := '';
+  if Assigned(SeverityFilterCombo) and (SeverityFilterCombo.ItemIndex >= 0)
+     and Assigned(SeverityFilterCombo.Items.Objects[SeverityFilterCombo.ItemIndex]) then
+  begin
+    var Tag := Integer(SeverityFilterCombo.Items.Objects[SeverityFilterCombo.ItemIndex]);
+    if Tag >= 0 then Criteria.Mode := TFilterMode(Tag);
+  end;
+  if Assigned(TypeFilterCombo) and (TypeFilterCombo.ItemIndex >= 0) then
+    Criteria.TypeFilter := TTypeFilter(TypeFilterCombo.ItemIndex);
+  if Assigned(SearchEdit) then
+    Criteria.SearchLow := LowerCase(Trim(SearchEdit.Text));
+
+  FDisplayedFindings.Clear;
   for i := 0 to FAllFindings.Count - 1 do
   begin
     f := FAllFindings[i];
+    if TFindingFilter.Matches(f, Criteria) then
+      FDisplayedFindings.Add(f);
+  end;
+
+  ResultGrid.RowCount := 2;
+  ResultGrid.Rows[1].Clear;
+
+  if FDisplayedFindings.Count = 0 then
+  begin
+    if FAllFindings.Count = 0 then
+    begin
+      ResultGrid.Cells[0, 1] := _('No findings.');
+      StatusBar1.Panels[2].Text  := _('Done. No findings.');
+    end
+    else
+    begin
+      ResultGrid.Cells[0, 1] := _('No matches.');
+      StatusBar1.Panels[2].Text  := Format(_('Filtered: 0 of %d findings'),
+        [FAllFindings.Count]);
+    end;
+    Exit;
+  end;
+
+  baseDir := IncludeTrailingPathDelimiter(FCurrentBaseDir);
+  ResultGrid.RowCount := FDisplayedFindings.Count + 1;
+  for i := 0 to FDisplayedFindings.Count - 1 do
+  begin
+    f := FDisplayedFindings[i];
     ResultGrid.Cells[0, i + 1] := ExtractRelativePath(baseDir, f.FileName);
     ResultGrid.Cells[1, i + 1] := f.MethodName;
     ResultGrid.Cells[2, i + 1] := f.LineNumber;
     ResultGrid.Cells[3, i + 1] := f.MissingVar;
     ResultGrid.Cells[4, i + 1] := f.SeverityText;
   end;
-  StatusBar1.SimpleText := Format(_('Done. %d findings. Click a row -> ' +
-    'AI prompt on clipboard.'), [FAllFindings.Count]);
+  if FDisplayedFindings.Count = FAllFindings.Count then
+    StatusBar1.Panels[2].Text := Format(_('Done. %d findings. Click a row -> ' +
+      'AI prompt on clipboard.'), [FAllFindings.Count])
+  else
+    StatusBar1.Panels[2].Text := Format(_('Filtered: %d of %d findings'),
+      [FDisplayedFindings.Count, FAllFindings.Count]);
 end;
 
 procedure TForm2.ResultGridDblClick(Sender: TObject);
@@ -418,14 +665,14 @@ begin
   absPath := IncludeTrailingPathDelimiter(Projectpath.Text) + relPath;
   if not FileExists(absPath) then
   begin
-    StatusBar1.SimpleText := _('File not found: ') + absPath;
+    StatusBar1.Panels[2].Text := _('File not found: ') + absPath;
     Exit;
   end;
 
   if EndsText('.dfm', absPath) then
   begin
     ShowDfmAsText(absPath, lineNo);
-    StatusBar1.SimpleText := Format(_('DFM viewer: %s  Line: %d'),
+    StatusBar1.Panels[2].Text := Format(_('DFM viewer: %s  Line: %d'),
                                      [relPath, lineNo]);
     Exit;
   end;
@@ -442,7 +689,7 @@ begin
     Application.ProcessMessages;
     NavigateDelphiToLine(lineNo);
   end;
-  StatusBar1.SimpleText := Format(_('Opened: %s  Line: %d'), [relPath, lineNo]);
+  StatusBar1.Panels[2].Text := Format(_('Opened: %s  Line: %d'), [relPath, lineNo]);
 end;
 
 procedure TForm2.NavigateDelphiToLine(LineNo: Integer);
@@ -494,18 +741,22 @@ begin
 end;
 
 procedure TForm2.ResultGridClick(Sender: TObject);
-// Bei Klick auf eine Befund-Zeile: kompletten Markdown-Block fuer Claude AI
-// in die Zwischenablage schreiben. Enthaelt Befund-Metadaten, Loesungs-Hinweis
-// (Vorher/Nachher) und Code-Kontext aus der Quelldatei.
+// Bei Klick auf eine Befund-Zeile:
+//   1) kompletten Markdown-Block fuer Claude AI in die Zwischenablage
+//   2) Hint-Panel rechts mit Before/After-Code-Beispielen aktualisieren
+// Index bezieht sich auf FDisplayedFindings, NICHT FAllFindings - der
+// Filter hat moeglicherweise Eintraege entfernt.
 var
   idx : Integer;
   F   : TLeakFinding;
 begin
   idx := ResultGrid.Row - 1; // 0-basiert: Zeile 0 ist Header
-  if (idx < 0) or (idx >= FAllFindings.Count) then Exit;
-  F := FAllFindings[idx];
+  if (idx < 0) or (idx >= FDisplayedFindings.Count) then Exit;
+  F := FDisplayedFindings[idx];
   Clipboard.AsText := BuildClaudePrompt(F);
-  StatusBar1.SimpleText := Format(
+  if Assigned(FHintPanel) then
+    FHintPanel.ShowFinding(F);
+  StatusBar1.Panels[2].Text := Format(
     _('AI prompt copied to clipboard: %s, line %s (%s)'),
     [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText]);
 end;
@@ -591,6 +842,114 @@ begin
     Projectpath, RecentIniPath, APath,
     DEFAULT_MAX_RECENT,
     AppPath, ppLast);
+end;
+
+procedure TForm2.ProfileComboChange(Sender: TObject);
+// Aktuelle Combo-Auswahl direkt in analyser.ini [Rules] Profile persistieren.
+// Wirkt erst beim naechsten Analyse-Klick (ApplyDetectorConfig liest sie),
+// aber bleibt ueber Form-Restarts erhalten. Save-Fehler still schlucken -
+// Read-Only-INI oder Berechtigungsproblem soll den Lauf nicht crashen.
+var
+  Settings: TRepoSettings;
+begin
+  if (ProfileCombo = nil) or (ProfileCombo.ItemIndex < 0) then Exit;
+  Settings := TRepoSettings.Create;
+  try
+    try Settings.Load; except end;
+    Settings.Profile := ProfileCombo.Items[ProfileCombo.ItemIndex];
+    try Settings.Save; except end;
+  finally
+    Settings.Free;
+  end;
+  StatusBar1.Panels[2].Text :=
+    Format(_('Profile "%s" - active on next analysis run'),
+      [ProfileCombo.Items[ProfileCombo.ItemIndex]]);
+end;
+
+procedure TForm2.MinSevComboChange(Sender: TObject);
+// Analog zu ProfileComboChange. Schreibt in [Rules] MinSeverity.
+var
+  Settings: TRepoSettings;
+begin
+  if (MinSevCombo = nil) or (MinSevCombo.ItemIndex < 0) then Exit;
+  Settings := TRepoSettings.Create;
+  try
+    try Settings.Load; except end;
+    Settings.MinSeverity := MinSevCombo.Items[MinSevCombo.ItemIndex];
+    try Settings.Save; except end;
+  finally
+    Settings.Free;
+  end;
+  StatusBar1.Panels[2].Text :=
+    Format(_('MinSeverity "%s" - active on next analysis run'),
+      [MinSevCombo.Items[MinSevCombo.ItemIndex]]);
+end;
+
+procedure TForm2.SeverityFilterComboChange(Sender: TObject);
+begin
+  ApplyFilter;
+end;
+
+procedure TForm2.TypeFilterComboChange(Sender: TObject);
+begin
+  ApplyFilter;
+end;
+
+procedure TForm2.SearchEditChange(Sender: TObject);
+begin
+  ApplyFilter;
+end;
+
+procedure TForm2.BtnBranchClick(Sender: TObject);
+// Branch-Changes: nur die im aktuellen Git/SVN-Branch geaenderten .pas-Files
+// analysieren. Pendant zum Branch-Button im IDE-Plugin.
+var
+  Settings : TRepoSettings;
+  Files    : TStringList;
+  Findings : TObjectList<TLeakFinding>;
+  Info     : string;
+  StartDir : string;
+begin
+  StartDir := Trim(Projectpath.Text);
+  if StartDir = '' then
+  begin
+    StatusBar1.Panels[2].Text := _('Project path is empty.');
+    Exit;
+  end;
+
+  Screen.Cursor := crHourglass;
+  Settings := TRepoSettings.Create;
+  Files    := nil;
+  Findings := nil;
+  try
+    try Settings.Load; except end;
+    ApplyDetectorConfig(Settings, True);
+
+    Files := TVcsChanges.GetChangedPasFilesAuto(StartDir, Info, Settings);
+    if (Files = nil) or (Files.Count = 0) then
+    begin
+      StatusBar1.Panels[2].Text := Info + _(' - no changed .pas files');
+      Exit;
+    end;
+
+    StatusBar1.Panels[2].Text := Format(_('Analysing %d changed file(s). %s'),
+      [Files.Count, Info]);
+    Application.ProcessMessages;
+
+    try
+      Findings := TStaticAnalyzer2.AnalyzeLeaksFromList(Files, nil,
+        Settings.UsesCheck);
+      FillGridFromFindings(Findings, StartDir);
+    except
+      on E: Exception do
+        StatusBar1.Panels[2].Text := _('Analysis error: ') + E.Message;
+    end;
+  finally
+    Findings.Free;
+    Files.Free;
+    Settings.Free;
+    Screen.Cursor := crDefault;
+  end;
 end;
 
 end.

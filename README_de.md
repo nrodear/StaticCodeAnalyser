@@ -329,7 +329,17 @@ Override via `analyser.ini` möglich (siehe unten).
 **CLI**:
 ```powershell
 analyser.d12.exe --path D:\meinGitRepo --branch --report-sarif sca.sarif
+
+# Optional: Rule-Set ueber Profile + Min-Severity einengen
+analyser.d12.exe --path . --profile security --report-sarif sec.sarif
+analyser.d12.exe --path . --profile bugs-only --min-severity warning
 ```
+
+`--profile <name>` akzeptiert jedes Profile aus `rules/sca-rules.json`
+(mitgeliefert: `default`, `ide-fast`, `strict`, `security`, `bugs-only`,
+`code-quality`, `dfm-only`). `--min-severity hint|warning|error` skippt
+Detektoren unterhalb der Schwelle. Beide Flags ueberschreiben `[Rules]`
+in `analyser.ini`.
 
 **`analyser.ini`-Settings für Git**:
 ```ini

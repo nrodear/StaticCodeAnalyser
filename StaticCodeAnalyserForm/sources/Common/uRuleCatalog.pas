@@ -234,6 +234,26 @@ begin
 end;
 
 class procedure TRuleCatalog.LoadFromJsonFile(const FileName: string);
+
+  // Safe-Lookups: FindValue liefert nil bei fehlendem Key, GetValue<T>
+  // wirft EJSONPathException. Letzteres hat den 'owasp not found'-Crash
+  // produziert, weil die meisten Rules kein owasp-Feld haben.
+  function FindObject(O: TJSONObject; const Name: string): TJSONObject;
+  var V: TJSONValue;
+  begin
+    if O = nil then Exit(nil);
+    V := O.FindValue(Name);
+    if V is TJSONObject then Result := TJSONObject(V) else Result := nil;
+  end;
+
+  function FindArray(O: TJSONObject; const Name: string): TJSONArray;
+  var V: TJSONValue;
+  begin
+    if O = nil then Exit(nil);
+    V := O.FindValue(Name);
+    if V is TJSONArray then Result := TJSONArray(V) else Result := nil;
+  end;
+
 var
   Json     : TJSONValue;
   Root     : TJSONObject;
@@ -265,7 +285,7 @@ begin
     Root := Json as TJSONObject;
 
     // Tool-Block
-    Tool := Root.GetValue<TJSONObject>('tool');
+    Tool := FindObject(Root, 'tool');
     if Tool <> nil then
     begin
       FToolName    := Tool.GetValue<string>('name', 'StaticCodeAnalyser');
@@ -273,7 +293,7 @@ begin
       FToolUri     := Tool.GetValue<string>('informationUri', '');
     end;
 
-    Rules := Root.GetValue<TJSONArray>('rules');
+    Rules := FindArray(Root, 'rules');
     if Rules = nil then begin LoadFallback; Exit; end;
 
     for i := 0 to Rules.Count - 1 do
@@ -296,22 +316,24 @@ begin
       Meta.ConfigKey        := RObj.GetValue<string>('configKey', '');
       Meta.DetectorUnit     := RObj.GetValue<string>('detectorUnit', '');
 
-      // Arrays (tags / cwe / owasp)
+      // Arrays (tags / cwe / owasp) - FindArray ist nil-safe, GetValue<T>
+      // wuerde EJSONPathException werfen wenn der Key fehlt (z.B. die
+      // meisten Rules haben kein owasp-Feld).
       Tags := TList<string>.Create;
       try
-        ArrVal := RObj.GetValue<TJSONArray>('tags');
+        ArrVal := FindArray(RObj, 'tags');
         if ArrVal <> nil then
           for var T in ArrVal do Tags.Add(T.Value);
         Meta.Tags := Tags.ToArray;
 
         Tags.Clear;
-        ArrVal := RObj.GetValue<TJSONArray>('cwe');
+        ArrVal := FindArray(RObj, 'cwe');
         if ArrVal <> nil then
           for var T in ArrVal do Tags.Add(T.Value);
         Meta.CWE := Tags.ToArray;
 
         Tags.Clear;
-        ArrVal := RObj.GetValue<TJSONArray>('owasp');
+        ArrVal := FindArray(RObj, 'owasp');
         if ArrVal <> nil then
           for var T in ArrVal do Tags.Add(T.Value);
         Meta.OWASP := Tags.ToArray;
@@ -319,8 +341,8 @@ begin
         Tags.Free;
       end;
 
-      // Examples
-      Examples := RObj.GetValue<TJSONObject>('examples');
+      // Examples (optional - Rules ohne examples haben kein 'examples'-Feld)
+      Examples := FindObject(RObj, 'examples');
       if Examples <> nil then
       begin
         Meta.BadExample  := Examples.GetValue<string>('bad', '');
@@ -338,7 +360,7 @@ begin
     // additiv hinzugefuegt (z.B. "strict": ["*","UnusedUses"]).
     // Unbekannte Kind-Tokens werden still ignoriert - kein Crash, der
     // Rest des Profils greift weiter. (Aelteres Tool, neueres JSON.)
-    Profiles := Root.GetValue<TJSONObject>('profiles');
+    Profiles := FindObject(Root, 'profiles');
     if Profiles <> nil then
     begin
       for i := 0 to Profiles.Count - 1 do
