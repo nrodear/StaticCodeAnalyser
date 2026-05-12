@@ -294,7 +294,12 @@ begin
   FLblFixHeader              := TLabel.Create(Self);
   FLblFixHeader.Parent       := FPanelFix;
   FLblFixHeader.Align        := alTop;
-  FLblFixHeader.Caption      := _('✓ After');
+  // Wichtig: das ✓ als #$2713 (Unicode-Code-Point) statt als Literal-
+  // Char in der Source. Sonst kommt es zu Mojibake wenn die Source als
+  // ANSI/CP-1252 statt UTF-8 gespeichert wurde - die UTF-8-Byte-Sequence
+  // E2 9C 93 wird sonst als 'âœ"'/'ãeˆ' o.ae. interpretiert. Bei dem ⚠
+  // im Title-Label wurde derselbe Trick verwendet (siehe ShowAt: _(#$26A0)).
+  FLblFixHeader.Caption      := #$2713 + ' ' + _('After');
   FLblFixHeader.Font.Color   := TColor($0080E080); // weiches Gruen
   FLblFixHeader.Font.Style   := [fsBold];
   FLblFixHeader.Font.Name    := 'Segoe UI';
