@@ -49,6 +49,7 @@ type
   strict private
     class var FRules        : TDictionary<TFindingKind, TRuleMeta>;
     class var FRulesByID    : TDictionary<string, TRuleMeta>;
+    class var FProfiles     : TDictionary<string, TFindingKinds>;
     class var FLoaded       : Boolean;
     class var FJsonFilePath : string;
     class var FToolName     : string;
@@ -60,6 +61,7 @@ type
     class function FindJsonFile: string; static;
     class function ParseSeverity(const S: string): TLeakSeverity; static;
     class function ParseFindingType(const S: string): TFindingType; static;
+    class function AllKinds: TFindingKinds; static;
   public
     // Optional: Caller-seitig den Pfad ueberschreiben (z.B. Tests).
     // Muss VOR dem ersten GetRule-Call gesetzt werden.
@@ -82,6 +84,16 @@ type
     class procedure ForEach(AProc: TProc<TRuleMeta>); static;
     class function Count: Integer; static;
 
+    // Liefert die Kind-Menge fuer ein Profile aus profiles.<Name> in der
+    // JSON. '*' im Array expandiert zu allen TFindingKind-Werten, weitere
+    // Eintraege nach '*' werden additiv hinzugefuegt. Unbekanntes Profile
+    // -> liefert AllKinds (kein Filter) + OutputDebugString-Warnung.
+    // 'default' liefert immer AllKinds, auch wenn nicht im JSON definiert.
+    class function GetProfile(const Name: string): TFindingKinds; static;
+
+    // Liste aller bekannten Profile-Namen (fuer UI-Dropdowns, Tests).
+    class function ProfileNames: TArray<string>; static;
+
     // Manuell triggern (z.B. nach JsonFilePath-Aenderung). Ueblicherweise
     // nicht noetig - der erste GetRule-Call laed lazy.
     class procedure Reload; static;
@@ -94,6 +106,7 @@ type
 implementation
 
 uses
+  Winapi.Windows,                  // OutputDebugString
   System.IOUtils, System.JSON;
 
 { ---- Setup ---- }
@@ -102,6 +115,7 @@ class procedure TRuleCatalog.Init;
 begin
   FRules     := TDictionary<TFindingKind, TRuleMeta>.Create;
   FRulesByID := TDictionary<string, TRuleMeta>.Create;
+  FProfiles  := TDictionary<string, TFindingKinds>.Create;
   FLoaded    := False;
 end;
 
@@ -109,37 +123,100 @@ class procedure TRuleCatalog.Done;
 begin
   FreeAndNil(FRules);
   FreeAndNil(FRulesByID);
+  FreeAndNil(FProfiles);
 end;
 
 class procedure TRuleCatalog.Reload;
 begin
   if Assigned(FRules)     then FRules.Clear;
   if Assigned(FRulesByID) then FRulesByID.Clear;
+  if Assigned(FProfiles)  then FProfiles.Clear;
   FLoaded := False;
   EnsureLoaded;
+end;
+
+class function TRuleCatalog.AllKinds: TFindingKinds;
+var
+  K : TFindingKind;
+begin
+  Result := [];
+  for K := Low(TFindingKind) to High(TFindingKind) do
+    Include(Result, K);
 end;
 
 { ---- Loader ---- }
 
 class function TRuleCatalog.FindJsonFile: string;
+// Sucht in dieser Reihenfolge nach rules\sca-rules.json:
+//   1. FJsonFilePath        (Caller-Override - hat Vorrang)
+//   2. <Exe-Dir>             - ParamStr(0); im Standalone der Tool-Pfad,
+//                              im IDE-Plugin aber bds.exe (greift selten).
+//   3. <HInstance-Dir>       - GetModuleFileName(HInstance) liefert die
+//                              PFADE DER LADENDEN DLL/BPL. Im IDE-Plugin
+//                              ist das das Plugin-Verzeichnis - genau wo
+//                              der User typischerweise rules\ daneben legt.
+//   4. %APPDATA%\StaticCodeAnalyser\rules\sca-rules.json
+//                            - portable + benutzerspezifisch, ueblicher
+//                              Speicherort fuer das IDE-Plugin.
+// Jede Variante wird zusaetzlich um '..' / '..\..' / '..\..\..' erweitert,
+// damit Build-Layouts (sources\\..\\rules) und Release-Layouts (bin\\..\\rules)
+// gleichermassen greifen.
 var
-  ExeDir : string;
-  Cands  : TArray<string>;
-  C      : string;
+  Cands : TList<string>;
+
+  procedure AddRoots(const BaseDir: string);
+  begin
+    if BaseDir = '' then Exit;
+    Cands.Add(TPath.Combine(BaseDir, 'rules\sca-rules.json'));
+    Cands.Add(TPath.Combine(TPath.Combine(BaseDir, '..'), 'rules\sca-rules.json'));
+    Cands.Add(TPath.Combine(TPath.Combine(BaseDir, '..\..'), 'rules\sca-rules.json'));
+    Cands.Add(TPath.Combine(TPath.Combine(BaseDir, '..\..\..'), 'rules\sca-rules.json'));
+  end;
+
+  function ModuleDir: string;
+  // Liefert das Verzeichnis der ladenden BPL/EXE. Im Standalone identisch
+  // zu ParamStr(0); im IDE-Plugin abweichend (= Plugin-Pfad, nicht bds.exe).
+  var
+    Buf : array[0..MAX_PATH] of Char;
+  begin
+    if GetModuleFileName(HInstance, Buf, Length(Buf)) > 0 then
+      Result := ExtractFilePath(Buf)
+    else
+      Result := '';
+  end;
+
+  function AppDataDir: string;
+  // %APPDATA%\StaticCodeAnalyser\rules\ - duplizierbarer Pfad statt
+  // uIgnoreList.ConfigDir Import (das wuerde Common-Cycle einfuehren).
+  var
+    AppData : array[0..MAX_PATH] of Char;
+  begin
+    if GetEnvironmentVariable('APPDATA', AppData, Length(AppData)) > 0 then
+      Result := IncludeTrailingPathDelimiter(AppData) +
+                'StaticCodeAnalyser\rules\sca-rules.json'
+    else
+      Result := '';
+  end;
+
+var
+  C : string;
 begin
   if (FJsonFilePath <> '') and TFile.Exists(FJsonFilePath) then
     Exit(FJsonFilePath);
 
-  ExeDir := ExtractFilePath(ParamStr(0));
-  Cands := [
-    TPath.Combine(ExeDir, 'rules\sca-rules.json'),
-    TPath.Combine(TPath.Combine(ExeDir, '..'), 'rules\sca-rules.json'),
-    TPath.Combine(TPath.Combine(ExeDir, '..\..'), 'rules\sca-rules.json'),
-    TPath.Combine(TPath.Combine(ExeDir, '..\..\..'), 'rules\sca-rules.json')
-  ];
-  for C in Cands do
-    if TFile.Exists(C) then
-      Exit(TPath.GetFullPath(C));
+  Cands := TList<string>.Create;
+  try
+    AddRoots(ExtractFilePath(ParamStr(0)));
+    AddRoots(ModuleDir);
+    C := AppDataDir;
+    if C <> '' then Cands.Add(C);
+
+    for C in Cands do
+      if (C <> '') and TFile.Exists(C) then
+        Exit(TPath.GetFullPath(C));
+  finally
+    Cands.Free;
+  end;
   Result := '';
 end;
 
@@ -171,6 +248,12 @@ var
   Examples : TJSONObject;
   i        : Integer;
   Tags     : TList<string>;
+  Profiles : TJSONObject;
+  ProfPair : TJSONPair;
+  ProfArr  : TJSONArray;
+  ProfSet  : TFindingKinds;
+  KK       : TFindingKind;
+  Token    : string;
 begin
   Json := TJSONObject.ParseJSONValue(TFile.ReadAllText(FileName));
   if not (Json is TJSONObject) then
@@ -248,6 +331,38 @@ begin
       if Meta.ID <> '' then
         FRulesByID.AddOrSetValue(Meta.ID, Meta);
     end;
+
+    // ---- Profile-Block (optional) ----
+    // Format: "profiles": { "<name>": ["Kind1","Kind2","*", ...], ... }
+    // '*' expandiert zu allen Kinds; weitere Eintraege nach '*' werden
+    // additiv hinzugefuegt (z.B. "strict": ["*","UnusedUses"]).
+    // Unbekannte Kind-Tokens werden still ignoriert - kein Crash, der
+    // Rest des Profils greift weiter. (Aelteres Tool, neueres JSON.)
+    Profiles := Root.GetValue<TJSONObject>('profiles');
+    if Profiles <> nil then
+    begin
+      for i := 0 to Profiles.Count - 1 do
+      begin
+        ProfPair := Profiles.Pairs[i];
+        if not (ProfPair.JsonValue is TJSONArray) then Continue;
+        ProfArr := ProfPair.JsonValue as TJSONArray;
+        ProfSet := [];
+        for var j := 0 to ProfArr.Count - 1 do
+        begin
+          Token := ProfArr.Items[j].Value;
+          if Token = '*' then
+            ProfSet := ProfSet + AllKinds
+          else if KindFromName(Token, KK) then
+            Include(ProfSet, KK);
+          // unbekannte Tokens: still ignorieren - JSON kann Detector-Namen
+          // enthalten die in einer aelteren Tool-Version noch fehlen.
+        end;
+        FProfiles.AddOrSetValue(ProfPair.JsonString.Value, ProfSet);
+      end;
+    end;
+    // 'default' garantieren - falls die JSON ihn nicht hat, immer AllKinds.
+    if not FProfiles.ContainsKey('default') then
+      FProfiles.AddOrSetValue('default', AllKinds);
   finally
     Json.Free;
   end;
@@ -278,6 +393,50 @@ begin
     FRules.AddOrSetValue(K, Meta);
     FRulesByID.AddOrSetValue(Meta.ID, Meta);
   end;
+
+  // Bundled-Profile auch im Fallback-Mode anbieten - sonst zeigt der
+  // Combo im IDE-Plugin nur "default" wenn die JSON nicht ladbar war.
+  // Inhalte muessen mit rules/sca-rules.json profiles-Block synchron
+  // bleiben - bei Aenderungen DORT auch hier nachziehen (der Test
+  // ProfileNamesIncludesBundled deckt nur Namen, nicht Mengen ab).
+  FProfiles.AddOrSetValue('default', AllKinds);
+  FProfiles.AddOrSetValue('strict',  AllKinds);
+  FProfiles.AddOrSetValue('ide-fast',
+    [fkMemoryLeak, fkSQLInjection, fkHardcodedSecret, fkFormatMismatch,
+     fkNilDeref, fkMissingFinally, fkDivByZero, fkDeadCode,
+     fkDebugOutput, fkFileReadError,
+     fkDfmHardcodedDbCreds, fkDfmDeadEvent, fkDfmDuplicateBinding,
+     fkDfmSchemaMismatch, fkDfmCircularDataSource, fkDfmSqlFromUserInput,
+     fkDfmRequiredFieldUnbound, fkDfmRequiredFieldNotVisible,
+     fkDfmCrossFormCoupling, fkDfmActionMismatch]);
+  FProfiles.AddOrSetValue('security',
+    [fkSQLInjection, fkHardcodedSecret, fkHardcodedPath,
+     fkDfmHardcodedDbCreds, fkDfmSqlFromUserInput]);
+  FProfiles.AddOrSetValue('bugs-only',
+    [fkMemoryLeak, fkFormatMismatch, fkNilDeref, fkDivByZero,
+     fkSQLInjection, fkHardcodedSecret, fkFileReadError,
+     fkDfmDuplicateBinding, fkDfmDeadEvent, fkDfmSchemaMismatch,
+     fkDfmCircularDataSource, fkDfmRequiredFieldUnbound,
+     fkDfmRequiredFieldNotVisible, fkDfmCrossFormCoupling,
+     fkDfmActionMismatch]);
+  FProfiles.AddOrSetValue('code-quality',
+    [fkEmptyExcept, fkUnusedUses, fkMissingFinally, fkDeadCode,
+     fkLongMethod, fkLongParamList, fkMagicNumber, fkDebugOutput,
+     fkDeepNesting, fkTodoComment, fkEmptyMethod, fkCyclomaticComplexity,
+     fkDuplicateString, fkDuplicateBlock,
+     fkDfmDefaultName, fkDfmHardcodedCaption, fkDfmOrphanHandler,
+     fkDfmEmptyBoundEvent, fkDfmFieldTypeMismatch, fkDfmTabOrderConflict,
+     fkDfmForbiddenClass, fkDfmDbInUiForm, fkDfmLayerViolation,
+     fkDfmGodHandler]);
+  FProfiles.AddOrSetValue('dfm-only',
+    [fkDfmDefaultName, fkDfmHardcodedCaption, fkDfmHardcodedDbCreds,
+     fkDfmDuplicateBinding, fkDfmDeadEvent, fkDfmOrphanHandler,
+     fkDfmEmptyBoundEvent, fkDfmSchemaMismatch, fkDfmCircularDataSource,
+     fkDfmSqlFromUserInput, fkDfmRequiredFieldUnbound,
+     fkDfmRequiredFieldNotVisible, fkDfmFieldTypeMismatch,
+     fkDfmTabOrderConflict, fkDfmForbiddenClass, fkDfmDbInUiForm,
+     fkDfmCrossFormCoupling, fkDfmLayerViolation, fkDfmGodHandler,
+     fkDfmActionMismatch]);
 end;
 
 class function TRuleCatalog.ParseSeverity(const S: string): TLeakSeverity;
@@ -352,6 +511,39 @@ begin EnsureLoaded; Result := FToolVersion; end;
 
 class function TRuleCatalog.ToolUri: string;
 begin EnsureLoaded; Result := FToolUri; end;
+
+class function TRuleCatalog.GetProfile(const Name: string): TFindingKinds;
+// Unbekannte oder leere Namen liefern AllKinds (= kein Filter). 'default'
+// ist garantiert vorhanden (siehe LoadFromJsonFile / LoadFallback).
+var
+  Lookup : string;
+begin
+  EnsureLoaded;
+  Lookup := Trim(Name);
+  if Lookup = '' then Exit(AllKinds);
+  if not FProfiles.TryGetValue(Lookup, Result) then
+  begin
+    OutputDebugString(PChar(Format(
+      'TRuleCatalog: profile "%s" nicht gefunden, fallback auf AllKinds',
+      [Lookup])));
+    Result := AllKinds;
+  end;
+end;
+
+class function TRuleCatalog.ProfileNames: TArray<string>;
+var
+  K : string;
+  L : TList<string>;
+begin
+  EnsureLoaded;
+  L := TList<string>.Create;
+  try
+    for K in FProfiles.Keys do L.Add(K);
+    Result := L.ToArray;
+  finally
+    L.Free;
+  end;
+end;
 
 initialization
   TRuleCatalog.Init;

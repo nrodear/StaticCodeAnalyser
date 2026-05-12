@@ -58,6 +58,10 @@ type
     FMagicTrivials     : TStringList; // MagicNumberTrivials (CSV)
     FFormatFunctions   : TStringList; // FormatFunctions (CSV)
     FCustomRulesFile   : string;      // CustomRulesFile (Pfad zur YAML)
+    FProfile           : string;      // [Rules] Profile = ide-fast|default|strict
+    FMinSeverity       : string;      // [Rules] MinSeverity = error|warning|hint
+    FIdeProfile        : string;      // [Rules] IdeProfile (Default: ide-fast)
+    FIdeMinSeverity    : string;      // [Rules] IdeMinSeverity (Default: hint)
     FLanguage          : string;      // [UI] Language ('de', 'en', '')
   public
     constructor Create;
@@ -158,6 +162,35 @@ type
     property CustomRulesFile:         string      read FCustomRulesFile
                                                   write FCustomRulesFile;
 
+    // Profile-Name aus [Rules] Profile. Bekannte Werte (Catalog-definiert):
+    //   '' / 'default' -> alle Detektoren laufen
+    //   'ide-fast'     -> nur Bugs/Vulnerabilities (Live-Analyse im IDE)
+    //   'strict'       -> alle + opt-in Detektoren (UsesCheck)
+    // ApplyDetectorThresholds loest den Namen via TRuleCatalog.GetProfile
+    // in uSCAConsts.DetectorEnabledKinds auf. Unbekannte Namen fallen
+    // auf AllKinds zurueck (kein Crash, OutputDebugString-Warnung).
+    property Profile:                 string      read FProfile
+                                                  write FProfile;
+
+    // Min-Severity aus [Rules] MinSeverity. Werte (case-insensitive):
+    //   'hint' / '' -> alles laeuft (Default)
+    //   'warning'   -> nur Warning + Error (Hint-Detektoren werden geskippt)
+    //   'error'     -> nur Error
+    // Orthogonal zu Profile - beide Filter werden ODER-verknuepft skippen.
+    property MinSeverity:             string      read FMinSeverity
+                                                  write FMinSeverity;
+
+    // Wie Profile / MinSeverity, aber separat fuer das IDE-Plugin. Der
+    // Form-Frame ruft UseIdeRuleSet vor ApplyDetectorThresholds; daraufhin
+    // werden FProfile/FMinSeverity transient mit den IDE-Werten ueber-
+    // schrieben. Damit kann das gleiche analyser.ini-File standalone das
+    // volle Rule-Set fahren und im IDE-Live-Mode ein schlankes Subset.
+    // Defaults: IdeProfile=ide-fast, IdeMinSeverity=hint.
+    property IdeProfile:              string      read FIdeProfile
+                                                  write FIdeProfile;
+    property IdeMinSeverity:          string      read FIdeMinSeverity
+                                                  write FIdeMinSeverity;
+
     // UI-Sprache. '' bedeutet "use Default" (= deutsch beim aktuellen Build,
     // falls dxgettext jemals aktiviert wird, wuerde es OS-Locale nutzen).
     // Aus [UI] Language gelesen. Erlaubte Werte: 'de', 'en', ''.
@@ -182,6 +215,13 @@ type
     // (kein Crash, OutputDebugString-Hinweis).
     procedure ApplyDetectorThresholds(const AProjectRoot: string = '');
 
+    // Vor ApplyDetectorThresholds vom IDE-Plugin gerufen. Transient
+    // (in-memory) - speichert NICHT zurueck in die INI. Bewirkt, dass der
+    // anschliessende ApplyDetectorThresholds-Call die IDE-Werte spiegelt.
+    // Standalone-Pfad ruft nicht und behaelt die [Rules] Profile/MinSeverity
+    // unveraendert.
+    procedure UseIdeRuleSet;
+
     // Schreibt die im aktuellen Lauf gefundenen Discovery-Treffer
     // (uSCAConsts.DiscoveredClasses) in eine LeakyClassesDiscover.log
     // neben der analyser.ini. Reine Uebersicht/Kuratierungs-Hilfe -
@@ -197,7 +237,7 @@ implementation
 
 uses
   Winapi.Windows, System.IOUtils,
-  uIgnoreList, uSCAConsts, uCustomRuleDetector;
+  uIgnoreList, uSCAConsts, uCustomRuleDetector, uRuleCatalog;
 
 const
   DEFAULT_INI_CONTENT =
@@ -378,6 +418,55 @@ const
     ''#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
+    ';  [Rules] - Rule-Set-Filter (Profile + Severity-Threshold)'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ''#13#10 +
+    '[Rules]'#13#10 +
+    ''#13#10 +
+    '; Profile (string, default: default / im IDE-Plugin: ide-fast)'#13#10 +
+    '; Vordefinierte Rule-Auswahl aus rules/sca-rules.json -> "profiles".'#13#10 +
+    '; Werkseitig vorhanden:'#13#10 +
+    ';   ide-fast      - schnelle Live-Analyse, nur Bugs+Vulnerabilities'#13#10 +
+    ';                   (Speicherleck, SQL-Injection, NilDeref, ...)'#13#10 +
+    ';   default       - alle Regeln aktiv (Standalone-Default)'#13#10 +
+    ';   strict        - alle + opt-in (UsesCheck)'#13#10 +
+    ';   security      - nur Vulnerabilities + Security Hotspots'#13#10 +
+    ';                   (Pre-Merge-Security-Review)'#13#10 +
+    ';   bugs-only     - nur "falsches Verhalten"-Detektoren (CI-Gate)'#13#10 +
+    ';   code-quality  - nur Code Smells + Duplikate (Refactoring)'#13#10 +
+    ';   dfm-only      - nur DFM-Detektoren (Form-/UI-Reviews)'#13#10 +
+    '; Eigene Profile kannst Du in sca-rules.json unter "profiles" pflegen.'#13#10 +
+    'Profile=default'#13#10 +
+    ';Profile=ide-fast'#13#10 +
+    ';Profile=strict'#13#10 +
+    ';Profile=security'#13#10 +
+    ';Profile=bugs-only'#13#10 +
+    ';Profile=code-quality'#13#10 +
+    ';Profile=dfm-only'#13#10 +
+    ''#13#10 +
+    '; MinSeverity (string, default: hint)'#13#10 +
+    '; Skippt alle Detektoren mit Default-Severity unterhalb dieser Schwelle.'#13#10 +
+    ';   hint    - alles laeuft (Default)'#13#10 +
+    ';   warning - nur Warning + Error, Hints (Long Method, MagicNumber, ...) raus'#13#10 +
+    ';   error   - nur sichere Bugs / Vulnerabilities'#13#10 +
+    '; Wirkt orthogonal zu Profile: beide Filter werden geODERt.'#13#10 +
+    'MinSeverity=hint'#13#10 +
+    ';MinSeverity=warning'#13#10 +
+    ';MinSeverity=error'#13#10 +
+    ''#13#10 +
+    '; IdeProfile / IdeMinSeverity (Default: ide-fast / hint)'#13#10 +
+    '; Wie Profile / MinSeverity, aber nur fuer das IDE-Plugin (Live-Mode).'#13#10 +
+    '; Standalone (Form, CLI) nutzt Profile / MinSeverity. So kann die'#13#10 +
+    '; Live-Analyse im IDE ein schlankes Subset fahren, waehrend der Full-'#13#10 +
+    '; Run im Standalone das komplette Rule-Set anwendet.'#13#10 +
+    'IdeProfile=ide-fast'#13#10 +
+    ';IdeProfile=default'#13#10 +
+    ';IdeProfile=strict'#13#10 +
+    'IdeMinSeverity=hint'#13#10 +
+    ';IdeMinSeverity=warning'#13#10 +
+    ''#13#10 +
+    ';'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
     ';  [UI] - Oberflaechen-Einstellungen'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
     ''#13#10 +
@@ -426,6 +515,10 @@ begin
   FFormatFunctions.AddStrings(['format', 'formatutf8', 'formatstring']);
 
   FCustomRulesFile := '';
+  FProfile        := '';              // '' = default (= AllKinds, kein Filter)
+  FMinSeverity    := 'hint';          // 'hint' = alles laeuft
+  FIdeProfile     := 'ide-fast';      // IDE-Plugin Default: schnelles Subset
+  FIdeMinSeverity := 'hint';          // IDE-Plugin: alle Severities (Subset deckt schon)
   FLanguage           := 'en';        // Default: englische UI (Source-Sprache)
 end;
 
@@ -571,6 +664,17 @@ begin
     // Rule-Detector laed sie beim naechsten Analyse-Start. Leer = aus.
     FCustomRulesFile := Trim(Ini.ReadString('Detectors', 'CustomRulesFile', ''));
 
+    // [Rules] Profile=...     -> FProfile (default leer = AllKinds-Filter)
+    // [Rules] MinSeverity=... -> FMinSeverity (default 'hint' = alles).
+    // Beide werden in ApplyDetectorThresholds in die uSCAConsts-Globals
+    // gespiegelt; Default-Werte erhalten alte Semantik (kein Skip).
+    FProfile     := Trim(Ini.ReadString('Rules', 'Profile',     ''));
+    FMinSeverity := Trim(Ini.ReadString('Rules', 'MinSeverity', 'hint')).ToLower;
+    // IDE-Plugin-spezifische Overrides. Werden via UseIdeRuleSet transient
+    // in FProfile/FMinSeverity gespiegelt - die INI bleibt unveraendert.
+    FIdeProfile     := Trim(Ini.ReadString('Rules', 'IdeProfile',     'ide-fast'));
+    FIdeMinSeverity := Trim(Ini.ReadString('Rules', 'IdeMinSeverity', 'hint')).ToLower;
+
     // [UI] Language=de|en|'' -> FLanguage. Default 'en' (Source-Sprache).
     FLanguage := Trim(Ini.ReadString('UI', 'Language', 'en')).ToLower;
   finally
@@ -619,6 +723,12 @@ begin
     Ini.WriteBool  ('Repo',  'IncludeWorkingTree', FIncludeWorkingTree);
     Ini.WriteString('Paths', 'GitExe',             FGitExePath);
     Ini.WriteString('Paths', 'SvnExe',             FSvnExePath);
+    // Profile + IdeProfile werden auch persistiert, damit die letzte
+    // UI-Auswahl beim naechsten Frame-Start als Default-Selektion zurueck-
+    // kommt. Other [Rules]-Settings (MinSeverity, IdeMinSeverity) bleiben
+    // INI-only - nur das was die UI direkt veraendert wird mitgeschrieben.
+    Ini.WriteString('Rules', 'Profile',            FProfile);
+    Ini.WriteString('Rules', 'IdeProfile',         FIdeProfile);
     Ini.WriteString('UI',    'Language',           FLanguage);
   finally
     Ini.Free;
@@ -664,7 +774,29 @@ begin
     if TFile.Exists(C) then Exit(C);
 end;
 
+procedure TRepoSettings.UseIdeRuleSet;
+// Transient override: das IDE-Plugin ruft das vor jedem
+// ApplyDetectorThresholds-Call. Spiegelt IdeProfile/IdeMinSeverity in
+// die normalen Profile/MinSeverity-Felder, damit ApplyDetectorThresholds
+// nichts ueber das aufrufende Binary wissen muss.
+begin
+  if FIdeProfile     <> '' then FProfile     := FIdeProfile;
+  if FIdeMinSeverity <> '' then FMinSeverity := FIdeMinSeverity;
+end;
+
 procedure TRepoSettings.ApplyDetectorThresholds(const AProjectRoot: string = '');
+
+  function ParseMinSev(const S: string): TLeakSeverity;
+  // Default lsHint = nichts wird wegen Severity geskippt. Andere Werte
+  // (case-insensitive) wirken als Whitelist nach oben.
+  var L: string;
+  begin
+    L := LowerCase(Trim(S));
+    if L = 'error'   then Exit(lsError);
+    if L = 'warning' then Exit(lsWarning);
+    Result := lsHint;
+  end;
+
 var
   i           : Integer;
   ResolvedPath: string;
@@ -678,6 +810,17 @@ begin
   uSCAConsts.DetectorMaxCyclomatic := FMaxCyclomatic;
   uSCAConsts.DetectorMinBlockLines := FMinBlockLines;
   uSCAConsts.DetectorMaxFileBytes  := FMaxFileMB * 1024 * 1024;
+
+  // [Rules] Profile -> EnabledKinds Whitelist. Leer = AllKinds = kein
+  // Filter (alte Semantik). Unbekannter Name faellt im Catalog auf
+  // AllKinds zurueck (kein Crash).
+  if FProfile = '' then
+    uSCAConsts.DetectorEnabledKinds := TRuleCatalog.GetProfile('default')
+  else
+    uSCAConsts.DetectorEnabledKinds := TRuleCatalog.GetProfile(FProfile);
+
+  // [Rules] MinSeverity -> globaler Severity-Schwellwert.
+  uSCAConsts.DetectorMinSeverity := ParseMinSev(FMinSeverity);
 
   // Trivial-Liste: globale Liste mit unseren INI-Eintraegen ueberschreiben.
   if Assigned(uSCAConsts.DetectorMagicTrivials) then

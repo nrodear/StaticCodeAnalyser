@@ -16,7 +16,7 @@ uses
   Vcl.Clipbrd, Vcl.Themes,
   DesignIntf, ToolsAPI,
   uStaticAnalyzer2, uStaticFiles, uMethodd12, uSCAConsts, uExport,
-  uFixHint, uIgnoreList, uRepoSettings, uClaudePrompt,
+  uFixHint, uIgnoreList, uRepoSettings, uRuleCatalog, uClaudePrompt,
   uAnalyserPalette, uAnalyserTypes, uAnalyserTheme, uLocalization,
   uRecentPaths,
   uIDELineHighlighter, uIDEMessages, uIDEWatchMode, uIDEStatsTiles,
@@ -63,6 +63,13 @@ type
     // sonst bleibt das Sub-Panel breit obwohl das Label drinnen hidden ist.
     FPanelSev          : TPanel;
     FPanelType         : TPanel;
+    // Drittes Filter-Sub-Panel: Profile-Combo (ide-fast / default / strict).
+    // Schreibt transient in FRepoSettings.IdeProfile (kein INI-Save) - wirkt
+    // beim NAECHSTEN Analyse-Klick. Items werden aus TRuleCatalog.ProfileNames
+    // gefuellt; unbekannte JSON-Profile sind automatisch dabei.
+    FPanelProfile      : TPanel;
+    FLblProfile        : TLabel;
+    FProfileCombo      : TComboBox;
     // Toolbar-Controls die im gedockten/schmalen Modus ausgeblendet werden -
     // ihre Aktionen bleiben ueber das Hamburger-Menu erreichbar (FHamburgerMenu).
     FBtnRepo, FBtnIgnore                           : TButton;
@@ -187,6 +194,10 @@ type
     procedure StatusProgress(const T: string);
     procedure StatusMode(const T: string);
     procedure TypeFilterChange(Sender: TObject);
+    // Profile-Combo OnChange: aktualisiert FRepoSettings.IdeProfile in-memory.
+    // Wirkt beim naechsten Klick auf Analyse / Aktuelle Datei / Branch-Changes,
+    // weil PrepareAnalysis dann UseIdeRuleSet + ApplyDetectorThresholds ruft.
+    procedure ProfileChange(Sender: TObject);
     procedure CancelAnalyseClick(Sender: TObject);
     procedure EditIgnoreListClick(Sender: TObject);
     procedure EditRepoSettingsClick(Sender: TObject);
@@ -382,11 +393,13 @@ const
   LBL_W_PATH         = 78;     // "Project path:"
   LBL_W_FILTER       = 76;     // "Severity:"
   LBL_W_TYPE         = 36;     // "Type:"
+  LBL_W_PROFILE      = 48;     // "Profile:"
   LBL_W_SEARCH       = 32;     // "Search:"
 
   // ---- Combo-Widths (innerhalb der Sub-Panel-Container) -----------------
   CMB_W_FILTER       = 160;    // Severity-Combo
   CMB_W_TYPE         = 130;    // Type-Combo
+  CMB_W_PROFILE      = 110;    // Profile-Combo (ide-fast, default, strict)
 
   // ---- Stats-Panel ------------------------------------------------------
   STATS_PANEL_HEIGHT = 45;     // 1 Tile-Reihe (TopRow 20 + Caption 12 + Padding)
@@ -746,6 +759,66 @@ begin
   FTypeCombo.ItemIndex := 0;
   FTypeFilter := tfAll;
 
+  // Trennabstand vor Profile-Combo
+  var SepProfile := TPanel.Create(Self);
+  SepProfile.Parent     := PanelButtons;
+  SepProfile.Align      := alLeft;
+  SepProfile.Width      := ScaleW(TB_SPACER_WIDTH);
+  SepProfile.BevelOuter := bvNone;
+  SepProfile.Color      := clBtnFace;
+
+  // ---- Dritter Filter: Profile (rule-set scope) ----------------------------
+  // Schreibt FRepoSettings.IdeProfile (transient, kein INI-Save). Items werden
+  // aus rules/sca-rules.json -> profiles geholt; default-Selektion ist der
+  // INI-Wert (typisch 'ide-fast' im IDE, 'default' im Standalone). Wirkt erst
+  // beim naechsten Analyse-Run (PrepareAnalysis ruft UseIdeRuleSet +
+  // ApplyDetectorThresholds).
+  FPanelProfile := TPanel.Create(Self);
+  FPanelProfile.Parent     := PanelButtons;
+  FPanelProfile.Align      := alLeft;
+  FPanelProfile.BevelOuter := bvNone;
+  FPanelProfile.Color      := clBtnFace;
+  FPanelProfile.Width      := ScaleW(LBL_W_PROFILE + CMB_W_PROFILE);
+
+  FLblProfile := TLabel.Create(Self);
+  FLblProfile.Parent   := FPanelProfile;
+  FLblProfile.Caption  := _('Profile:');
+  FLblProfile.Align    := alLeft;
+  FLblProfile.AutoSize := False;
+  FLblProfile.Width    := ScaleW(LBL_W_PROFILE);
+  FLblProfile.Layout   := tlCenter;
+
+  FProfileCombo := TComboBox.Create(Self);
+  FProfileCombo.Parent      := FPanelProfile;
+  FProfileCombo.Style       := csDropDownList;
+  FProfileCombo.Align       := alClient;
+  FProfileCombo.Font.Name   := 'Segoe UI';
+  FProfileCombo.Font.Size   := 8;
+  FProfileCombo.ParentFont  := False;
+  FProfileCombo.OnChange    := ProfileChange;
+  FProfileCombo.Hint        := _('Rule-set profile (ide-fast / default / strict). ' +
+                                 'Takes effect at the next analysis run.');
+  FProfileCombo.ShowHint    := True;
+  // Items aus TRuleCatalog.ProfileNames (rules/sca-rules.json -> profiles).
+  // FRepoSettings.Load lief schon in FrameCreate (siehe oben), daher koennen
+  // wir die Default-Selektion direkt setzen. Fallback wenn der Catalog leer
+  // ist (z.B. JSON fehlt): ein 'default'-Eintrag, damit die UI nicht crashed.
+  begin
+    var ProfileList := TRuleCatalog.ProfileNames;
+    if Length(ProfileList) = 0 then
+      FProfileCombo.Items.Add(_('default'))
+    else
+      for var ProfileName in ProfileList do
+        FProfileCombo.Items.Add(ProfileName);
+
+    // Default = IdeProfile aus der INI (Frame laeuft im IDE-Plugin).
+    // Wenn der INI-Wert nicht im Catalog ist: erste verfuegbare Option.
+    var Idx := FProfileCombo.Items.IndexOf(FRepoSettings.IdeProfile);
+    if Idx < 0 then Idx := FProfileCombo.Items.IndexOf('ide-fast');
+    if Idx < 0 then Idx := 0;
+    FProfileCombo.ItemIndex := Idx;
+  end;
+
   // Trennabstand zur Checkbox
   var Sep2 := TPanel.Create(Self);
   Sep2.Parent     := PanelButtons;
@@ -942,7 +1015,9 @@ begin
   // PanelButtons
   FResponsive.RegisterCtrl(FLblFilter,         usMedium);
   FResponsive.RegisterCtrl(FLblType,           usMedium);
-  // (FFilterCombo, FTypeCombo, FPanelSev, FPanelType: immer sichtbar)
+  FResponsive.RegisterCtrl(FLblProfile,        usMedium);
+  // (FFilterCombo, FTypeCombo, FProfileCombo, FPanelSev, FPanelType,
+  //  FPanelProfile: immer sichtbar)
 
   // PanelSearch
   FResponsive.RegisterCtrl(FBtnCancel,         usFull);
@@ -1317,6 +1392,35 @@ begin
   if (idx < 0) or (idx >= FTypeCombo.Items.Count) then Exit;
   FTypeFilter := TTypeFilter(idx);
   ApplyFilter;
+end;
+
+procedure TAnalyserFrame.ProfileChange(Sender: TObject);
+// Re-Filter macht hier KEINEN Sinn - das Profile beeinflusst, welche
+// Detektoren beim NAECHSTEN Run laufen, nicht die Anzeige der schon
+// gefundenen Befunde. Nur ein Status-Hint, damit der User Feedback sieht.
+// Die eigentliche Anwendung passiert in PrepareAnalysis (liest die
+// aktuelle Combo-Selektion + ueberschreibt FRepoSettings.Profile).
+//
+// Persistenz: die UI-Auswahl wird in [Rules] IdeProfile persistiert,
+// damit sie beim naechsten Frame-Start als Default zurueckkommt.
+// Save-Fehler schlucken wir still (Read-Only-INI, fehlende Berechtigung):
+// in dem Fall wirkt die Selektion nur fuer die aktuelle Session.
+var
+  Selected : string;
+begin
+  if not Assigned(FProfileCombo) or (FProfileCombo.ItemIndex < 0) then Exit;
+  Selected := FProfileCombo.Items[FProfileCombo.ItemIndex];
+  StatusMode(Format(_('Profile "%s" - active on next analysis run'),
+    [Selected]));
+
+  if Assigned(FRepoSettings) then
+  try
+    FRepoSettings.IdeProfile := Selected;
+    FRepoSettings.Save;
+  except
+    // Keine Modal-Dialoge im OnChange - persistente Fehler sehen wir
+    // beim naechsten Save (Repo-Settings-Dialog) wieder.
+  end;
 end;
 
 procedure TAnalyserFrame.PopulateGridFromDisplayed;
@@ -1740,6 +1844,17 @@ begin
   try
     FRepoSettings.Load;
     FRepoSettings.RegisterToLeakyClasses;
+    // IDE-Plugin: vor ApplyDetectorThresholds das IDE-spezifische
+    // Profile/MinSeverity transient aktivieren (IdeProfile=ide-fast als
+    // Default). Standalone-Pfad ruft das NICHT und nutzt [Rules] Profile.
+    FRepoSettings.UseIdeRuleSet;
+    // UI-Override: Profile-Combo gewinnt ueber die INI. So kann der User
+    // im laufenden Frame zwischen ide-fast / default / strict umschalten
+    // ohne die INI zu editieren. Load hat FRepoSettings.Profile gerade
+    // erst aus der INI ueberschrieben - die Combo-Auswahl muss DANACH
+    // gewinnen, sonst wuerde der INI-Wert die UI-Aktion verschlucken.
+    if Assigned(FProfileCombo) and (FProfileCombo.ItemIndex >= 0) then
+      FRepoSettings.Profile := FProfileCombo.Items[FProfileCombo.ItemIndex];
     // ProjectRoot durchreichen damit relative CustomRulesFile-Pfade
     // (z.B. 'analyser-rules.yml' im Projekt-Wurzelverzeichnis) gefunden werden.
     FRepoSettings.ApplyDetectorThresholds(Trim(FProjectPath.Text));
@@ -2060,6 +2175,13 @@ begin
       FPanelType.Width := ScaleW(LBL_W_TYPE + CMB_W_TYPE)
     else
       FPanelType.Width := ScaleW(CMB_W_TYPE);
+  end;
+  if Assigned(FPanelProfile) and Assigned(FLblProfile) then
+  begin
+    if FLblProfile.Visible then
+      FPanelProfile.Width := ScaleW(LBL_W_PROFILE + CMB_W_PROFILE)
+    else
+      FPanelProfile.Width := ScaleW(CMB_W_PROFILE);
   end;
 end;
 

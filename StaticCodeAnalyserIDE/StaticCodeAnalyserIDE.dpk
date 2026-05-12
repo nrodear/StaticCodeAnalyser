@@ -90,6 +90,7 @@ contains
   uDetectorUtils in '..\StaticCodeAnalyserForm\sources\Common\uDetectorUtils.pas',
   uCollectValues in '..\StaticCodeAnalyserForm\sources\Common\uCollectValues.pas',
   uYamlSubsetParser in '..\StaticCodeAnalyserForm\sources\Common\uYamlSubsetParser.pas',
+  uRuleCatalog in '..\StaticCodeAnalyserForm\sources\Common\uRuleCatalog.pas',
   // ---- Detectors ----
   uLeakDetector2 in '..\StaticCodeAnalyserForm\sources\Detectors\uLeakDetector2.pas',
   uCodeSmells2 in '..\StaticCodeAnalyserForm\sources\Detectors\uCodeSmells2.pas',

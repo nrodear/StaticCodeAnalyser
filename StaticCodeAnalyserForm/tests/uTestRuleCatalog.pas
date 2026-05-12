@@ -30,6 +30,31 @@ type
     [Test] procedure ToolInfoIsPopulated;
     // Lookup ueber ID muss alle Kinds zurueckliefern koennen.
     [Test] procedure GetRuleByIDRoundtrip;
+
+    // Profile-Loader (sca-rules.json -> profiles.*):
+    // 'default' ist immer vorhanden und enthaelt alle Kinds.
+    [Test] procedure ProfileDefaultContainsAllKinds;
+    // Unbekanntes Profile faellt auf AllKinds zurueck (kein Crash).
+    [Test] procedure ProfileUnknownFallsBackToAll;
+    // Leerer Profile-Name liefert AllKinds (Sentinel fuer "Profile nicht gesetzt").
+    [Test] procedure ProfileEmptyNameReturnsAll;
+    // ide-fast schliesst alle Hint-Detektoren (LongMethod, MagicNumber, ...) aus
+    // und enthaelt mindestens die kern-sicherheitsrelevanten Kinds.
+    [Test] procedure ProfileIdeFastExcludesHintsIncludesSecurity;
+    // ProfileNames listet alle Profile aus der JSON (mindestens
+    // default, ide-fast, strict).
+    [Test] procedure ProfileNamesIncludesBundled;
+    // security-Profile enthaelt NUR Vulnerability/Hotspot-Kinds, keine
+    // Pascal-Bugs wie MemoryLeak oder Smells wie LongMethod.
+    [Test] procedure ProfileSecurityIsTightlyScoped;
+    // bugs-only-Profile enthaelt MemoryLeak/NilDeref/... aber KEINE Smells
+    // wie LongMethod/TodoComment.
+    [Test] procedure ProfileBugsOnlyExcludesSmells;
+    // code-quality-Profile ist das Gegenstueck zu bugs-only: nur Smells +
+    // Duplikate, keine Bugs / Vulnerabilities.
+    [Test] procedure ProfileCodeQualityExcludesBugs;
+    // dfm-only enthaelt ausschliesslich Dfm*-Kinds.
+    [Test] procedure ProfileDfmOnlyContainsOnlyDfmKinds;
   end;
 
 implementation
@@ -132,6 +157,166 @@ begin
       Format('GetRuleByID("%s") nicht gefunden', [M1.ID]));
     Assert.AreEqual(M1.Kind, M2.Kind,
       Format('Roundtrip Kind-Mismatch fuer %s', [M1.ID]));
+  end;
+end;
+
+procedure TTestRuleCatalog.ProfileDefaultContainsAllKinds;
+var
+  P : TFindingKinds;
+  K : TFindingKind;
+begin
+  P := TRuleCatalog.GetProfile('default');
+  for K := Low(TFindingKind) to High(TFindingKind) do
+    Assert.IsTrue(K in P,
+      Format('default-Profile enthaelt %s nicht', [KindName(K)]));
+end;
+
+procedure TTestRuleCatalog.ProfileUnknownFallsBackToAll;
+var
+  P : TFindingKinds;
+  K : TFindingKind;
+begin
+  // unbekannter Name -> AllKinds + OutputDebugString-Warnung; kein Crash.
+  P := TRuleCatalog.GetProfile('does-not-exist-xyz');
+  for K := Low(TFindingKind) to High(TFindingKind) do
+    Assert.IsTrue(K in P,
+      Format('Fallback fehlt %s', [KindName(K)]));
+end;
+
+procedure TTestRuleCatalog.ProfileEmptyNameReturnsAll;
+var
+  P : TFindingKinds;
+  K : TFindingKind;
+begin
+  // Leerer Name = "Profile nicht gesetzt" Sentinel -> AllKinds.
+  P := TRuleCatalog.GetProfile('');
+  for K := Low(TFindingKind) to High(TFindingKind) do
+    Assert.IsTrue(K in P,
+      Format('Empty-Profile fehlt %s', [KindName(K)]));
+end;
+
+procedure TTestRuleCatalog.ProfileIdeFastExcludesHintsIncludesSecurity;
+var
+  P : TFindingKinds;
+begin
+  P := TRuleCatalog.GetProfile('ide-fast');
+  // Security/Bug-Kinds muessen drin sein (sonst macht das Profile keinen Sinn).
+  Assert.IsTrue(fkSQLInjection    in P, 'ide-fast: SQLInjection fehlt');
+  Assert.IsTrue(fkMemoryLeak      in P, 'ide-fast: MemoryLeak fehlt');
+  Assert.IsTrue(fkHardcodedSecret in P, 'ide-fast: HardcodedSecret fehlt');
+  Assert.IsTrue(fkNilDeref        in P, 'ide-fast: NilDeref fehlt');
+  Assert.IsTrue(fkMissingFinally  in P, 'ide-fast: MissingFinally fehlt');
+  // Hint-Detektoren (Code-Smell-Rauschen) muessen draussen sein.
+  Assert.IsFalse(fkLongMethod      in P, 'ide-fast: LongMethod sollte raus sein');
+  Assert.IsFalse(fkMagicNumber     in P, 'ide-fast: MagicNumber sollte raus sein');
+  Assert.IsFalse(fkTodoComment     in P, 'ide-fast: TodoComment sollte raus sein');
+  Assert.IsFalse(fkDuplicateBlock  in P, 'ide-fast: DuplicateBlock sollte raus sein');
+  Assert.IsFalse(fkEmptyMethod     in P, 'ide-fast: EmptyMethod sollte raus sein');
+end;
+
+procedure TTestRuleCatalog.ProfileNamesIncludesBundled;
+var
+  Names : TArray<string>;
+  N     : string;
+  Seen  : TDictionary<string, Boolean>;
+
+  procedure Require(const ProfileName: string);
+  begin
+    Assert.IsTrue(Seen.ContainsKey(LowerCase(ProfileName)),
+      Format('ProfileNames: "%s" fehlt', [ProfileName]));
+  end;
+
+begin
+  Names := TRuleCatalog.ProfileNames;
+  Seen  := TDictionary<string, Boolean>.Create;
+  try
+    for N in Names do Seen.AddOrSetValue(LowerCase(N), True);
+    Require('default');
+    Require('ide-fast');
+    Require('strict');
+    Require('security');
+    Require('bugs-only');
+    Require('code-quality');
+    Require('dfm-only');
+  finally
+    Seen.Free;
+  end;
+end;
+
+procedure TTestRuleCatalog.ProfileSecurityIsTightlyScoped;
+var
+  P : TFindingKinds;
+begin
+  P := TRuleCatalog.GetProfile('security');
+  // Drin: nur Security-Kinds.
+  Assert.IsTrue(fkSQLInjection      in P, 'security: SQLInjection fehlt');
+  Assert.IsTrue(fkHardcodedSecret   in P, 'security: HardcodedSecret fehlt');
+  Assert.IsTrue(fkHardcodedPath     in P, 'security: HardcodedPath fehlt');
+  Assert.IsTrue(fkDfmHardcodedDbCreds in P, 'security: DfmHardcodedDbCreds fehlt');
+  Assert.IsTrue(fkDfmSqlFromUserInput in P, 'security: DfmSqlFromUserInput fehlt');
+  // Draussen: alles andere.
+  Assert.IsFalse(fkMemoryLeak  in P, 'security: MemoryLeak sollte raus');
+  Assert.IsFalse(fkLongMethod  in P, 'security: LongMethod sollte raus');
+  Assert.IsFalse(fkTodoComment in P, 'security: TodoComment sollte raus');
+  Assert.IsFalse(fkNilDeref    in P, 'security: NilDeref sollte raus (kein Vuln)');
+end;
+
+procedure TTestRuleCatalog.ProfileBugsOnlyExcludesSmells;
+var
+  P : TFindingKinds;
+begin
+  P := TRuleCatalog.GetProfile('bugs-only');
+  // Drin: Bugs + Security (zaehlen als "echtes Problem").
+  Assert.IsTrue(fkMemoryLeak    in P, 'bugs-only: MemoryLeak fehlt');
+  Assert.IsTrue(fkNilDeref      in P, 'bugs-only: NilDeref fehlt');
+  Assert.IsTrue(fkFormatMismatch in P, 'bugs-only: FormatMismatch fehlt');
+  Assert.IsTrue(fkDivByZero     in P, 'bugs-only: DivByZero fehlt');
+  Assert.IsTrue(fkSQLInjection  in P, 'bugs-only: SQLInjection fehlt');
+  Assert.IsTrue(fkDfmDeadEvent  in P, 'bugs-only: DfmDeadEvent fehlt');
+  // Draussen: Code Smells und Duplikate.
+  Assert.IsFalse(fkLongMethod      in P, 'bugs-only: LongMethod sollte raus');
+  Assert.IsFalse(fkMagicNumber     in P, 'bugs-only: MagicNumber sollte raus');
+  Assert.IsFalse(fkTodoComment     in P, 'bugs-only: TodoComment sollte raus');
+  Assert.IsFalse(fkDuplicateString in P, 'bugs-only: DuplicateString sollte raus');
+  Assert.IsFalse(fkDuplicateBlock  in P, 'bugs-only: DuplicateBlock sollte raus');
+end;
+
+procedure TTestRuleCatalog.ProfileCodeQualityExcludesBugs;
+var
+  P : TFindingKinds;
+begin
+  P := TRuleCatalog.GetProfile('code-quality');
+  // Drin: Smells + Duplikate.
+  Assert.IsTrue(fkLongMethod      in P, 'code-quality: LongMethod fehlt');
+  Assert.IsTrue(fkMagicNumber     in P, 'code-quality: MagicNumber fehlt');
+  Assert.IsTrue(fkTodoComment     in P, 'code-quality: TodoComment fehlt');
+  Assert.IsTrue(fkDuplicateBlock  in P, 'code-quality: DuplicateBlock fehlt');
+  Assert.IsTrue(fkUnusedUses      in P, 'code-quality: UnusedUses fehlt');
+  // Draussen: Bugs + Security.
+  Assert.IsFalse(fkMemoryLeak     in P, 'code-quality: MemoryLeak sollte raus');
+  Assert.IsFalse(fkNilDeref       in P, 'code-quality: NilDeref sollte raus');
+  Assert.IsFalse(fkSQLInjection   in P, 'code-quality: SQLInjection sollte raus');
+  Assert.IsFalse(fkHardcodedSecret in P, 'code-quality: HardcodedSecret sollte raus');
+end;
+
+procedure TTestRuleCatalog.ProfileDfmOnlyContainsOnlyDfmKinds;
+var
+  P     : TFindingKinds;
+  K     : TFindingKind;
+  IsDfm : Boolean;
+begin
+  P := TRuleCatalog.GetProfile('dfm-only');
+  // Mindestens ein DFM-Kind muss drin sein.
+  Assert.IsTrue(fkDfmDefaultName in P, 'dfm-only: DfmDefaultName fehlt');
+  Assert.IsTrue(fkDfmActionMismatch in P, 'dfm-only: DfmActionMismatch fehlt');
+  // ALLE Member von P muessen DFM-Kinds sein. KindName-Praefix-Test ist
+  // billiger und stabiler als jeden Kind einzeln zu listen.
+  for K := Low(TFindingKind) to High(TFindingKind) do
+  begin
+    if not (K in P) then Continue;
+    IsDfm := KindName(K).StartsWith('Dfm');
+    Assert.IsTrue(IsDfm,
+      Format('dfm-only enthaelt Nicht-DFM-Kind "%s"', [KindName(K)]));
   end;
 end;
 

@@ -178,6 +178,14 @@ Beide Totals stimmen mathematisch überein.
 ### Filter
 
 - **Severity-/Type-Combo**: filtert das Grid auf eine Kategorie
+- **Profile-Combo**: schaltet das aktive Rule-Set live um. Mitgeliefert:
+  `ide-fast` (Plugin-Default — nur Bugs + Vulns), `default` (alle
+  Detektoren), `strict` (alle + `UnusedUses`), `security` (Vulns +
+  Hotspots), `bugs-only`, `code-quality`, `dfm-only`. Profile leben in
+  `rules/sca-rules.json` unter `profiles` und die Combo wird daraus
+  gefüllt — eigene Profile dort eintragen, erscheinen automatisch.
+  Auswahl wird in `[Rules] IdeProfile` persistiert und greift beim
+  nächsten Analyse-Lauf.
 - **Such-Edit** (`Datei / Methode / Befund filtern`): live-Filter über alle Spalten
 
 ### Grid-Interaktion

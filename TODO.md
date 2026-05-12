@@ -1048,6 +1048,43 @@ hängt zusammen (CLI-Mode ist die Voraussetzung für CI-Integration).
 
 ## 💡 Features / Erweiterungen
 
+- [x] **Rule-Set-Profile + Min-Severity-Filter** — _erledigt_
+  Detector-Subset jetzt steuerbar ueber `[Rules] Profile=...` + `MinSeverity=...`
+  in `analyser.ini`. Bundled-Profile in `rules/sca-rules.json` unter `profiles`:
+  - `ide-fast` (~20 Kinds, Default fuer IDE-Plugin) — nur Bugs+Vulns
+  - `default` (alle Detektoren, Standalone-Default)
+  - `strict` (alle + opt-in UsesCheck)
+  - `security` (5 Kinds: SQLInjection, HardcodedSecret, HardcodedPath +
+    DFM-Security)
+  - `bugs-only` (~14 Kinds — fuer CI-Gate ohne Style-Rauschen)
+  - `code-quality` (~24 Smells + Duplikate — Refactoring-Session)
+  - `dfm-only` (20 Kinds — Form-/UI-Review)
+
+  Eigene Profile koennen in `sca-rules.json` per Hand ergaenzt werden;
+  `*` expandiert zu allen Kinds, weitere Tokens werden additiv hinzugefuegt.
+  IDE-Plugin hat zusaetzlich eine Profile-Dropdown rechts neben Severity/Type
+  in der Toolbar — Auswahl wird in `[Rules] IdeProfile` persistiert und ueber-
+  schreibt die INI-Voreinstellung fuer die naechsten Runs.
+
+  Implementierung:
+  - Catalog-Lookup `TRuleCatalog.GetProfile(Name): TFindingKinds`
+    + Profile-Block-Parser in `LoadFromJsonFile` (`*`-Expansion).
+  - `LoadFallback` enthaelt alle bundled Profile als Pascal-Konstanten -
+    Dropdown ist vollstaendig auch ohne erreichbare JSON-Datei.
+  - `FindJsonFile` sucht jetzt zusaetzlich via `GetModuleFileName(HInstance)`
+    (=BPL-Verzeichnis im IDE-Plugin) und in
+    `%APPDATA%\StaticCodeAnalyser\rules\`.
+  - `RunAllDetectors` skipt Detektoren ueber Set-Membership + Severity-
+    Schwelle; Post-Filter auf `Results` faengt Adapter-Findings (DFM)
+    deren Kind nicht im Profile ist.
+  - `TRepoSettings.UseIdeRuleSet` spiegelt `IdeProfile/IdeMinSeverity`
+    transient in `Profile/MinSeverity`, damit Standalone und IDE-Plugin
+    unterschiedliche Default-Profile fahren koennen ohne separate INIs.
+  Dateien: `Common/uRuleCatalog.pas`, `Common/uSCAConsts.pas`,
+  `Infrastructure/uStaticAnalyzer2.pas`, `Infrastructure/uRepoSettings.pas`,
+  `rules/sca-rules.json`, `StaticCodeAnalyserIDE/uIDEAnalyserForm.pas`,
+  `tests/uTestRuleCatalog.pas`.
+
 - [x] **HTML-Report: Severity-Filter + Datei-Dropdown mit Filter** — _erledigt_
   Severity-Badges (Error/Warning/Hint) und Datei-Dropdown waren bereits
   als unabhaengige Filter implementiert; jetzt wirkt der Severity-Filter

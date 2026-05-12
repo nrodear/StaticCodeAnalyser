@@ -165,6 +165,10 @@ type
                                  // -> Action gewinnt, OnClick ist toter Code
   );
 
+  // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
+  // weit unter dem 256-Element-Limit eines Delphi-Sets.
+  TFindingKinds = set of TFindingKind;
+
   // SonarQube-aehnliche Kategorisierung der Befunde:
   //   ftBug             - falsches Verhalten (Crash, falsches Ergebnis)
   //   ftCodeSmell       - Wartbarkeit / Lesbarkeit, kein Bug
@@ -253,6 +257,25 @@ function KindFindingType(K: TFindingKind): TFindingType;
 // Reverse-Lookup ueber Name (case-insensitive). Liefert False bei
 // unbekanntem Namen; Kind ist dann undefiniert.
 function KindFromName(const Name: string; out K: TFindingKind): Boolean;
+
+var
+  // Whitelist erlaubter Kinds fuer den Detector-Loop. Wird von
+  // TRepoSettings.ApplyDetectorThresholds aus dem Profile (rules/
+  // sca-rules.json -> profiles.<name>) gesetzt.
+  //   Empty ([])         = kein Filter, alle Detektoren laufen
+  //                        (Backwards-Compat-Default fuer Code, der
+  //                        ApplyDetectorThresholds nicht ruft).
+  //   Non-Empty Subset   = Whitelist, andere Detektoren werden geskippt.
+  DetectorEnabledKinds : TFindingKinds = [];
+
+  // Severity-Schwellwert. Detektoren deren DefaultSeverity (laut Catalog)
+  // strenger ist als dieser Wert werden geskippt.
+  //   lsHint    (Default) = alles laeuft (Ordinal 2, nichts ist strenger)
+  //   lsWarning           = Hints raus, Warnings + Errors laufen
+  //   lsError             = nur sichere Bugs / Vulnerabilities
+  // Severity-Ordering: lsError=0 < lsWarning=1 < lsHint=2 -> ein
+  // Detector wird geskippt wenn Ord(DetectorSev) > Ord(MinSeverity).
+  DetectorMinSeverity  : TLeakSeverity = lsHint;
 
 type
   TSectionFlag = record

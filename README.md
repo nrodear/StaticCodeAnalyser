@@ -179,6 +179,14 @@ Both rows are guaranteed to add up to the same total.
 ### Filter
 
 - **Severity / type dropdowns**: narrow the grid down to a single category.
+- **Profile dropdown**: switch the active rule-set on the fly. Bundled
+  profiles: `ide-fast` (IDE default — bugs + vulns only), `default` (every
+  detector), `strict` (default + `UnusedUses`), `security` (vulns +
+  hotspots only), `bugs-only`, `code-quality`, `dfm-only`. Profiles
+  live in `rules/sca-rules.json` under `profiles` and the dropdown is
+  populated from there — drop your own profile in the JSON and it
+  shows up. Selection is persisted to `[Rules] IdeProfile` and takes
+  effect at the next analysis run.
 - **Search box** (`Filter file / method / finding`): live filter across
   every column.
 

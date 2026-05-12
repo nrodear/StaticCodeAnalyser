@@ -1,10 +1,55 @@
 {
   "$schema": "./sca-rules.schema.json",
-  "version": "1.0",
+  "version": "1.1",
   "tool": {
     "name": "StaticCodeAnalyser",
     "version": "0.8.0",
     "informationUri": "https://github.com/nrodear/StaticCodeAnalyser"
+  },
+  "profiles": {
+    "ide-fast": [
+      "MemoryLeak", "SQLInjection", "HardcodedSecret", "FormatMismatch",
+      "NilDeref", "MissingFinally", "DivByZero", "DeadCode",
+      "DebugOutput", "FileReadError",
+      "DfmHardcodedDbCreds", "DfmDeadEvent", "DfmDuplicateBinding",
+      "DfmSchemaMismatch", "DfmCircularDataSource", "DfmSqlFromUserInput",
+      "DfmRequiredFieldUnbound", "DfmRequiredFieldNotVisible",
+      "DfmCrossFormCoupling", "DfmActionMismatch"
+    ],
+    "security": [
+      "SQLInjection", "HardcodedSecret", "HardcodedPath",
+      "DfmHardcodedDbCreds", "DfmSqlFromUserInput"
+    ],
+    "bugs-only": [
+      "MemoryLeak", "FormatMismatch", "NilDeref", "DivByZero",
+      "SQLInjection", "HardcodedSecret", "FileReadError",
+      "DfmDuplicateBinding", "DfmDeadEvent", "DfmSchemaMismatch",
+      "DfmCircularDataSource", "DfmRequiredFieldUnbound",
+      "DfmRequiredFieldNotVisible", "DfmCrossFormCoupling",
+      "DfmActionMismatch"
+    ],
+    "code-quality": [
+      "EmptyExcept", "UnusedUses", "MissingFinally", "DeadCode",
+      "LongMethod", "LongParamList", "MagicNumber", "DebugOutput",
+      "DeepNesting", "TodoComment", "EmptyMethod", "CyclomaticComplexity",
+      "DuplicateString", "DuplicateBlock",
+      "DfmDefaultName", "DfmHardcodedCaption", "DfmOrphanHandler",
+      "DfmEmptyBoundEvent", "DfmFieldTypeMismatch", "DfmTabOrderConflict",
+      "DfmForbiddenClass", "DfmDbInUiForm", "DfmLayerViolation",
+      "DfmGodHandler"
+    ],
+    "dfm-only": [
+      "DfmDefaultName", "DfmHardcodedCaption", "DfmHardcodedDbCreds",
+      "DfmDuplicateBinding", "DfmDeadEvent", "DfmOrphanHandler",
+      "DfmEmptyBoundEvent", "DfmSchemaMismatch", "DfmCircularDataSource",
+      "DfmSqlFromUserInput", "DfmRequiredFieldUnbound",
+      "DfmRequiredFieldNotVisible", "DfmFieldTypeMismatch",
+      "DfmTabOrderConflict", "DfmForbiddenClass", "DfmDbInUiForm",
+      "DfmCrossFormCoupling", "DfmLayerViolation", "DfmGodHandler",
+      "DfmActionMismatch"
+    ],
+    "default": ["*"],
+    "strict":  ["*", "UnusedUses"]
   },
   "rules": [
     {

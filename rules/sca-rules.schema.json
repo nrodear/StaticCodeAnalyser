@@ -19,6 +19,14 @@
         "informationUri": { "type": "string", "format": "uri" }
       }
     },
+    "profiles": {
+      "type": "object",
+      "description": "Named rule subsets. '*' expands to all kinds; additional names after '*' are additive.",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string", "minLength": 1 }
+      }
+    },
     "rules": {
       "type": "array",
       "minItems": 1,

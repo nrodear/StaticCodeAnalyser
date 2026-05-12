@@ -48,7 +48,8 @@ uses
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
   uCyclomaticComplexity, uCustomRuleDetector,
   uDfmAnalysisRunner, uDfmRepoIndex,
-  uSuppression, uCustomClassDiscovery;
+  uSuppression, uCustomClassDiscovery,
+  uRuleCatalog;
 
 type
   // Run-Methode pro Detektor: einheitliche Signatur, damit alle in einem
@@ -57,6 +58,7 @@ type
     Results: TObjectList<TLeakFinding>);
   TDetectorEntry = record
     Name : string;
+    Kind : TFindingKind;  // fuer Profile-/Severity-Filter (uSCAConsts globals)
     Run  : TDetectorRun;
     Skip : Boolean;
   end;
@@ -73,43 +75,81 @@ var
   i         : Integer;
   Watch     : TStopwatch;
 
-  procedure Add(const AName: string; ARun: TDetectorRun);
+  procedure Add(const AName: string; AKind: TFindingKind; ARun: TDetectorRun);
+  // Skip-Check pro Detektor zentralisiert:
+  //   1. Profile-Whitelist (DetectorEnabledKinds): leere Menge = kein
+  //      Filter, sonst Whitelist.
+  //   2. Severity-Schwellwert (DetectorMinSeverity): Detector wird
+  //      geskippt wenn seine Default-Severity strenger ist
+  //      (ord(sev) > ord(MinSeverity), da lsError=0 < lsWarning=1 < lsHint=2).
+  // Beide Kriterien sind ODER-verknuepft - einer von beiden reicht.
+  // Mehrere Detektoren teilen sich einen Kind (z.B. mehrere DFM-Detektoren
+  // sind alle ueber DfmAnalysisRunner gebuendelt unter ihren eigenen Kinds);
+  // pro Add() greift trotzdem nur EIN Kind als Filter-Schluessel.
+  var
+    Sev : TLeakSeverity;
   begin
     SetLength(Detectors, Length(Detectors) + 1);
-    Detectors[High(Detectors)].Name := AName;
-    Detectors[High(Detectors)].Run  := ARun;
-    Detectors[High(Detectors)].Skip := False;
+    with Detectors[High(Detectors)] do
+    begin
+      Name := AName;
+      Kind := AKind;
+      Run  := ARun;
+      Skip := False;
+
+      // (1) Profile-Whitelist. Leere Menge = "kein Filter".
+      if (uSCAConsts.DetectorEnabledKinds <> []) and
+         not (AKind in uSCAConsts.DetectorEnabledKinds) then
+        Skip := True;
+
+      // (2) Severity-Schwellwert. Catalog-Lookup ist O(1) (Dictionary).
+      if not Skip then
+      begin
+        Sev := TRuleCatalog.GetRule(AKind).DefaultSeverity;
+        if Ord(Sev) > Ord(uSCAConsts.DetectorMinSeverity) then
+          Skip := True;
+      end;
+    end;
   end;
 
 begin
-  Add('Leak',            procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLeakDetector2.AnalyzeUnit(R, F, L); end);
-  Add('EmptyExcept',     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TEmptyExceptDetector2.AnalyzeUnit(R, F, L); end);
-  Add('SQLInjection',    procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TSQLInjectionDetector.AnalyzeUnit(R, F, L); end);
-  Add('HardcodedSecret', procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin THardcodedSecretDetector.AnalyzeUnit(R, F, L); end);
-  Add('FormatMismatch',  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TFormatMismatchDetector.AnalyzeUnit(R, F, L); end);
-  Add('UnusedUses',      procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUnusedUsesDetector.AnalyzeUnit(R, F, L); end);
-  Detectors[High(Detectors)].Skip := not AIncludeUsesCheck;
-  Add('NilDeref',        procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TNilDerefDetector.AnalyzeUnit(R, F, L); end);
-  Add('MissingFinally',  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TMissingFinallyDetector.AnalyzeUnit(R, F, L); end);
-  Add('DivByZero',       procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDivByZeroDetector.AnalyzeUnit(R, F, L); end);
-  Add('DeadCode',        procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDeadCodeDetector.AnalyzeUnit(R, F, L); end);
-  Add('LongMethod',      procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLongMethodDetector.AnalyzeUnit(R, F, L); end);
-  Add('LongParamList',   procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLongParamListDetector.AnalyzeUnit(R, F, L); end);
-  Add('MagicNumber',     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TMagicNumberDetector.AnalyzeUnit(R, F, L); end);
-  Add('DuplicateString', procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDuplicateStringDetector.AnalyzeUnit(R, F, L); end);
-  Add('HardcodedPath',   procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin THardcodedPathDetector.AnalyzeUnit(R, F, L); end);
-  Add('DebugOutput',     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDebugOutputDetector.AnalyzeUnit(R, F, L); end);
-  Add('DeepNesting',     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDeepNestingDetector.AnalyzeUnit(R, F, L); end);
-  Add('TodoComment',     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TTodoCommentDetector.AnalyzeUnit(R, F, L); end);
-  Add('EmptyMethod',     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TEmptyMethodDetector.AnalyzeUnit(R, F, L); end);
-  Add('FieldLeak',       procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TFieldLeakDetector.AnalyzeUnit(R, F, L); end);
-  Add('DuplicateBlock',  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDuplicateBlockDetector.AnalyzeUnit(R, F, L); end);
-  Add('CyclomaticComplexity', procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TCyclomaticComplexityDetector.AnalyzeUnit(R, F, L); end);
-  // DFM-basierte Analyse: ignoriert den Pascal-AST und sucht zur uebergebenen
-  // .pas die zugehoerige .dfm. Adapter-Pattern, damit kein zweiter Loop und
-  // keine Pipeline-Aenderung notwendig ist. Bei fehlender .dfm ist der Lauf
-  // ein No-Op (siehe TDfmAnalysisRunner.AnalyzePasFile).
-  Add('DfmAnalysis',     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDfmAnalysisRunner.AnalyzePasFile(F, L); end);
+  Add('Leak',            fkMemoryLeak,      procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLeakDetector2.AnalyzeUnit(R, F, L); end);
+  Add('EmptyExcept',     fkEmptyExcept,     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TEmptyExceptDetector2.AnalyzeUnit(R, F, L); end);
+  Add('SQLInjection',    fkSQLInjection,    procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TSQLInjectionDetector.AnalyzeUnit(R, F, L); end);
+  Add('HardcodedSecret', fkHardcodedSecret, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin THardcodedSecretDetector.AnalyzeUnit(R, F, L); end);
+  Add('FormatMismatch',  fkFormatMismatch,  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TFormatMismatchDetector.AnalyzeUnit(R, F, L); end);
+  Add('UnusedUses',      fkUnusedUses,      procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUnusedUsesDetector.AnalyzeUnit(R, F, L); end);
+  // UsesCheck zusaetzlich zum Profile-/Severity-Filter: bleibt Skip-Wahr
+  // wenn der Caller AIncludeUsesCheck=False uebergibt - auch bei strict
+  // profile, damit der "AIncludeUsesCheck=False" Standard nicht umgangen
+  // wird. (strict profile zaehlt UnusedUses zur Whitelist; der Boolean ist
+  // der Pre-Existing-Opt-out, der haerter wirkt.)
+  if not AIncludeUsesCheck then Detectors[High(Detectors)].Skip := True;
+  Add('NilDeref',        fkNilDeref,        procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TNilDerefDetector.AnalyzeUnit(R, F, L); end);
+  Add('MissingFinally',  fkMissingFinally,  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TMissingFinallyDetector.AnalyzeUnit(R, F, L); end);
+  Add('DivByZero',       fkDivByZero,       procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDivByZeroDetector.AnalyzeUnit(R, F, L); end);
+  Add('DeadCode',        fkDeadCode,        procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDeadCodeDetector.AnalyzeUnit(R, F, L); end);
+  Add('LongMethod',      fkLongMethod,      procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLongMethodDetector.AnalyzeUnit(R, F, L); end);
+  Add('LongParamList',   fkLongParamList,   procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLongParamListDetector.AnalyzeUnit(R, F, L); end);
+  Add('MagicNumber',     fkMagicNumber,     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TMagicNumberDetector.AnalyzeUnit(R, F, L); end);
+  Add('DuplicateString', fkDuplicateString, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDuplicateStringDetector.AnalyzeUnit(R, F, L); end);
+  Add('HardcodedPath',   fkHardcodedPath,   procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin THardcodedPathDetector.AnalyzeUnit(R, F, L); end);
+  Add('DebugOutput',     fkDebugOutput,     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDebugOutputDetector.AnalyzeUnit(R, F, L); end);
+  Add('DeepNesting',     fkDeepNesting,     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDeepNestingDetector.AnalyzeUnit(R, F, L); end);
+  Add('TodoComment',     fkTodoComment,     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TTodoCommentDetector.AnalyzeUnit(R, F, L); end);
+  Add('EmptyMethod',     fkEmptyMethod,     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TEmptyMethodDetector.AnalyzeUnit(R, F, L); end);
+  // FieldLeak: gleicher Kind wie LeakDetector (fkMemoryLeak) - Profile-
+  // Filter behandelt beide identisch.
+  Add('FieldLeak',       fkMemoryLeak,      procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TFieldLeakDetector.AnalyzeUnit(R, F, L); end);
+  Add('DuplicateBlock',  fkDuplicateBlock,  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDuplicateBlockDetector.AnalyzeUnit(R, F, L); end);
+  Add('CyclomaticComplexity', fkCyclomaticComplexity, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TCyclomaticComplexityDetector.AnalyzeUnit(R, F, L); end);
+  // DFM-Adapter: ruft intern ~20 DFM-Detektoren, jeder produziert seinen
+  // eigenen Kind. Wir wuerden hier zu Unrecht alles skippen, wenn der
+  // einzelne Repraesentant-Kind nicht im Profile waere. Daher laeuft der
+  // Adapter immer (ist No-Op fuer .pas ohne companion .dfm) - die Filterung
+  // findet auf Finding-Ebene weiter unten statt. Skip := False explizit.
+  Add('DfmAnalysis',     fkDfmDefaultName,  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDfmAnalysisRunner.AnalyzePasFile(F, L); end);
+  Detectors[High(Detectors)].Skip := False;
 
   for i := 0 to High(Detectors) do
   begin
@@ -128,6 +168,33 @@ begin
     end;
     if Assigned(AOnTime) then
       AOnTime(Detectors[i].Name, Watch.ElapsedMilliseconds);
+  end;
+
+  // ---- Post-Filter ----
+  // Detector-Level-Skip ist nicht fein genug fuer Adapter, die intern
+  // mehrere Kinds produzieren (DfmAnalysisRunner). Daher Findings noch
+  // einmal durchgehen:
+  //   * Kind nicht im Profile -> raus
+  //   * Severity strenger als MinSeverity -> raus (Detector koennte ein
+  //     Finding mit haerterer Severity erzeugen als KIND_META erlaubt;
+  //     auch CustomRules tragen variable Severity).
+  // fkFileReadError ist immer durchgelassen (Diagnose-Befund), unabhaengig
+  // vom Profile.
+  if (uSCAConsts.DetectorEnabledKinds <> []) or
+     (uSCAConsts.DetectorMinSeverity <> lsHint) then
+  begin
+    for i := Results.Count - 1 downto 0 do
+    begin
+      if Results[i].Kind = fkFileReadError then Continue;
+      if (uSCAConsts.DetectorEnabledKinds <> []) and
+         not (Results[i].Kind in uSCAConsts.DetectorEnabledKinds) then
+      begin
+        Results.Delete(i);
+        Continue;
+      end;
+      if Ord(Results[i].Severity) > Ord(uSCAConsts.DetectorMinSeverity) then
+        Results.Delete(i);
+    end;
   end;
 end;
 
