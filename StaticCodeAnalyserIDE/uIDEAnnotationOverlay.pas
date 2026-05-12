@@ -45,16 +45,23 @@ uses
 type
   TAnnotationOverlay = class(TForm)
   private
-    FBorderPanel : TPanel;   // 3px linker Rand (Rot)
-    FContentArea : TPanel;   // rechts davon: Titel + Desc
-    FPanelTitle  : TPanel;
-    FLblTitle    : TLabel;   // "⚠  Memory Leak – ..."
-    FLblBadge    : TLabel;   // "BUG · ERROR" rechts
-    FPanelDesc   : TPanel;
-    FLblDesc     : TLabel;
+    FBorderPanel    : TPanel;   // 3px linker Rand (Rot)
+    FContentArea    : TPanel;   // rechts davon: Titel + Desc + Fix
+    FPanelTitle     : TPanel;
+    FLblTitle       : TLabel;   // "⚠  Memory Leak – ..."
+    FLblBadge       : TLabel;   // "BUG · ERROR" rechts
+    FPanelDesc      : TPanel;
+    FLblDesc        : TLabel;
+    // "Nachher / After"-Hinweis-Block (Fix-Hint aus uFixHint.After).
+    // Eigenes Panel mit eigenem Header-Label und monospace-Body, damit
+    // Code-Snippets visuell sauber vom Beschreibungstext getrennt sind.
+    // Nicht-sichtbar wenn der Detektor keinen After-Code liefert.
+    FPanelFix       : TPanel;
+    FLblFixHeader   : TLabel;   // "✓ Nachher" / "✓ After"
+    FLblFix         : TLabel;   // After-Code, Consolas-monospace
     // Cache: letzter ShowAt-Aufruf – verhindert redundante Win32-Aufrufe.
     FLastX, FLastY, FLastW, FLastLineH : Integer;
-    FLastTitle, FLastDesc, FLastBadge  : string;
+    FLastTitle, FLastDesc, FLastBadge, FLastFix : string;
     FLastAccent                        : TColor;  // Severity-Akzent
     FLastWindowBase                    : TColor;  // Editor-Theme-BG (Cache-Invalidator!)
     // Editor in den wir aktuell als WS_CHILD eingebettet sind. 0 = noch
@@ -77,10 +84,14 @@ type
     // AAccentColor: Severity-Akzentfarbe (gleiche Quelle wie der Editor-Stripe).
     //   Wird zum Theming der Title-Bar, Badge und linken Stripe genutzt — so
     //   bekommt jeder Befund-Typ ein passendes Farbschema. clNone -> Default-Rot.
+    // AFix: zusaetzlich der "Nachher"-Code-Block aus uFixHint.After.
+    // Leer-String -> Fix-Block wird unsichtbar, Overlay-Hoehe entsprechend
+    // kuerzer. Multiline OK (sLineBreak intern); WordWrap an, Monospace.
     procedure ShowAt(AEditor: TWinControl;
       AClientX, AClientY, AWidth, ALineH: Integer;
       const ATitle, ADesc, ABadge: string;
-      AAccentColor: TColor = clNone);
+      AAccentColor: TColor = clNone;
+      const AFix: string = '');
     procedure HideOverlay;
   end;
 
@@ -214,7 +225,7 @@ begin
   FLblBadge.Font.Color         := CL_BADGE_FG;
   FLblBadge.Font.Style         := [];
   FLblBadge.Font.Name          := 'Segoe UI';
-  FLblBadge.Font.Size          := 8;
+  FLblBadge.Font.Size          := 9;  // +1pt fuer bessere Lesbarkeit
   FLblBadge.Layout             := tlCenter;
   FLblBadge.Color              := CL_BADGE_BG;
   FLblBadge.Transparent        := False;
@@ -230,7 +241,7 @@ begin
   FLblTitle.Font.Color         := CL_TITLE_FG;
   FLblTitle.Font.Style         := [fsBold];
   FLblTitle.Font.Name          := 'Segoe UI';
-  FLblTitle.Font.Size          := 8;
+  FLblTitle.Font.Size          := 9;  // +1pt fuer bessere Lesbarkeit
   FLblTitle.Layout             := tlCenter;
   FLblTitle.Alignment          := taLeftJustify;
   FLblTitle.ParentColor        := False;  // erbt sonst Parent-Color zur Render-Zeit
@@ -240,9 +251,11 @@ begin
   FLblTitle.EllipsisPosition   := epEndEllipsis;
 
   // ---- Beschreibungszeile ----
+  // Vorher alClient; jetzt alTop mit dynamischer Hoehe (ShowAt setzt die
+  // exakte Pixel-Hoehe), damit darunter Platz fuer das Fix-Panel bleibt.
   FPanelDesc                := TPanel.Create(Self);
   FPanelDesc.Parent         := FContentArea;
-  FPanelDesc.Align          := alClient;
+  FPanelDesc.Align          := alTop;
   FPanelDesc.BevelOuter     := bvNone;
   FPanelDesc.StyleElements  := [];
   FPanelDesc.ParentBackground := False;
@@ -254,7 +267,7 @@ begin
   FLblDesc.Font.Color         := CL_DESC_FG;
   FLblDesc.Font.Style         := [fsItalic];
   FLblDesc.Font.Name          := 'Segoe UI';
-  FLblDesc.Font.Size          := 8;
+  FLblDesc.Font.Size          := 9;  // +1pt fuer bessere Lesbarkeit
   FLblDesc.Layout             := tlTop;          // mehrzeilig: oben anliegend
   FLblDesc.Alignment          := taLeftJustify;
   FLblDesc.ParentColor        := False;
@@ -263,6 +276,51 @@ begin
   FLblDesc.Margins.SetBounds(8, 4, 8, 4);        // mehr Padding fuer Wrap-Text
   FLblDesc.WordWrap           := True;           // mehrzeilig statt Ellipsis
   FLblDesc.EllipsisPosition   := epNone;
+
+  // ---- Fix-Hinweis ("Nachher") ----
+  // Eigenes Panel unter der Beschreibung mit kleiner gruener Header-Zeile
+  // ("✓ Nachher") und dem After-Code in Monospace. Nicht sichtbar wenn
+  // der Detektor keinen After-Code liefert; ShowAt setzt Visible je nach
+  // AFix-Parameter.
+  FPanelFix                := TPanel.Create(Self);
+  FPanelFix.Parent         := FContentArea;
+  FPanelFix.Align          := alClient;
+  FPanelFix.BevelOuter     := bvNone;
+  FPanelFix.StyleElements  := [];
+  FPanelFix.ParentBackground := False;
+  FPanelFix.Color          := CL_DESC_BG;
+  FPanelFix.Visible        := False;            // bis ShowAt setzt
+
+  FLblFixHeader              := TLabel.Create(Self);
+  FLblFixHeader.Parent       := FPanelFix;
+  FLblFixHeader.Align        := alTop;
+  FLblFixHeader.Caption      := _('✓ After');
+  FLblFixHeader.Font.Color   := TColor($0080E080); // weiches Gruen
+  FLblFixHeader.Font.Style   := [fsBold];
+  FLblFixHeader.Font.Name    := 'Segoe UI';
+  FLblFixHeader.Font.Size    := 9;
+  FLblFixHeader.Layout       := tlCenter;
+  FLblFixHeader.Alignment    := taLeftJustify;
+  FLblFixHeader.ParentColor  := False;
+  FLblFixHeader.StyleElements := [];
+  FLblFixHeader.AlignWithMargins := True;
+  FLblFixHeader.Margins.SetBounds(8, 4, 8, 2);
+
+  FLblFix                    := TLabel.Create(Self);
+  FLblFix.Parent             := FPanelFix;
+  FLblFix.Align              := alClient;
+  FLblFix.Font.Color         := CL_DESC_FG;
+  FLblFix.Font.Style         := [];
+  FLblFix.Font.Name          := 'Consolas';     // Monospace fuer Code
+  FLblFix.Font.Size          := 9;
+  FLblFix.Layout             := tlTop;
+  FLblFix.Alignment          := taLeftJustify;
+  FLblFix.ParentColor        := False;
+  FLblFix.StyleElements      := [];
+  FLblFix.AlignWithMargins   := True;
+  FLblFix.Margins.SetBounds(8, 0, 8, 6);
+  FLblFix.WordWrap           := True;
+  FLblFix.EllipsisPosition   := epNone;
 end;
 
 procedure TAnnotationOverlay.CreateParams(var Params: TCreateParams);
@@ -315,47 +373,69 @@ end;
 procedure TAnnotationOverlay.ShowAt(AEditor: TWinControl;
   AClientX, AClientY, AWidth, ALineH: Integer;
   const ATitle, ADesc, ABadge: string;
-  AAccentColor: TColor);
+  AAccentColor: TColor;
+  const AFix: string);
+const
+  FIX_HEADER_H = 22;  // kleine "✓ After"-Header-Zeile
+  MAX_FIX_H    = 200; // ~10 Zeilen Consolas 9pt
 var
-  TitleH, DescH, TotalH    : Integer;
+  TitleH, DescH, FixH, TotalH : Integer;
   BadgeCaption             : string;
   WasVisible               : Boolean;
   DC                       : HDC;
-  OldFont                  : HFONT;
-  CalcRect                 : TRect;
   EffAccent                : TColor;
   TitleBg, BadgeBg         : TColor;
   WindowBase               : TColor;
+  HasFix                   : Boolean;
+
+  function MeasureWrapped(const AText: string; AFont: TFont): Integer;
+  // DT_CALCRECT mit der gegebenen Font-Metrik; verfuegbare Breite ist die
+  // Form-Breite minus Stripe minus Default-Margins (8 + 8). Liefert die
+  // exakt benoetigte Pixel-Hoehe fuer Wrap-Text.
+  var
+    Inner  : TRect;
+    PrevFn : HFONT;
+  begin
+    Result := 0;
+    if AText = '' then Exit;
+    Inner := Rect(0, 0, AWidth - STRIPE_W - 16, 0);
+    PrevFn := SelectObject(DC, AFont.Handle);
+    try
+      Winapi.Windows.DrawText(DC, PChar(AText), Length(AText), Inner,
+        DT_CALCRECT or DT_WORDBREAK or DT_NOPREFIX);
+      Result := Inner.Bottom - Inner.Top;
+    finally
+      SelectObject(DC, PrevFn);
+    end;
+  end;
+
 begin
   // Editor muss da sein — sonst keine Sinn das Overlay zu zeigen.
   if not Assigned(AEditor) or not AEditor.HandleAllocated then Exit;
 
+  HasFix := Trim(AFix) <> '';
+
   // Hoehen DPI-bewusst aus der Editor-Zeilenhoehe ableiten.
   TitleH := Max(MIN_TITLE_H, ALineH);
 
-  // Description-Hoehe dynamisch via DrawText DT_CALCRECT messen — Wrap-Text
-  // mit der tatsaechlichen Schriftmetrik. Nutzt FLblDesc.Font auf einem
-  // temporaeren DC; CalcRect.Bottom liefert die exakt benoetigte Pixelhoehe.
+  // Description- und Fix-Hoehe dynamisch via DT_CALCRECT auf einem
+  // temporaeren Screen-DC messen.
   DC := GetDC(0);
   try
-    OldFont := SelectObject(DC, FLblDesc.Font.Handle);
-    try
-      // Verfuegbare Breite: Form-Breite minus Stripe minus Label-Margins.
-      CalcRect := Rect(0, 0,
-        AWidth - STRIPE_W - FLblDesc.Margins.Left - FLblDesc.Margins.Right, 0);
-      Winapi.Windows.DrawText(DC, PChar(ADesc), Length(ADesc), CalcRect,
-        DT_CALCRECT or DT_WORDBREAK or DT_NOPREFIX);
-      DescH := (CalcRect.Bottom - CalcRect.Top) + 2 * DESC_PAD_V;
-    finally
-      SelectObject(DC, OldFont);
-    end;
+    DescH := MeasureWrapped(ADesc, FLblDesc.Font) + 2 * DESC_PAD_V;
+    if HasFix then
+      FixH := FIX_HEADER_H + MeasureWrapped(AFix, FLblFix.Font) + DESC_PAD_V
+    else
+      FixH := 0;
   finally
     ReleaseDC(0, DC);
   end;
-  // Auf Min/Max clampen: mind. 1 Zeile, max. MAX_DESC_H Pixel.
+  // Auf Min/Max clampen.
   DescH := Max(MIN_DESC_H, Min(DescH, MAX_DESC_H));
+  if HasFix then
+    FixH := Max(FIX_HEADER_H + MIN_DESC_H, Min(FixH, MAX_FIX_H));
 
-  TotalH := TitleH + DescH;
+  TotalH := TitleH + DescH + FixH;
 
   BadgeCaption := '  ' + ABadge + '  ';
 
@@ -381,6 +461,7 @@ begin
     and (AWidth   = FLastW) and (ALineH   = FLastLineH)
     and (ATitle   = FLastTitle) and (ADesc = FLastDesc)
     and (ABadge   = FLastBadge) and (AAccentColor = FLastAccent)
+    and (AFix     = FLastFix)
     and (WindowBase = FLastWindowBase)
   then
     Exit;
@@ -418,6 +499,22 @@ begin
   FLblBadge.Caption    := BadgeCaption;
   FLblBadge.Visible    := ABadge <> '';
   FPanelTitle.Height   := TitleH;  // dynamisches DPI-Sizing
+  FPanelDesc.Height    := DescH;   // explizite Hoehe seit alTop
+
+  // Fix-Block nur wenn AFix nicht-leer; Panel-Visible setzt VCL um, das
+  // alClient-Layout kollabiert automatisch wenn das Panel unsichtbar ist.
+  if HasFix then
+  begin
+    FLblFix.Caption    := AFix;
+    FPanelFix.Color    := WindowBase;     // gleiche Basis wie Description
+    FLblFix.Font.Color := FLblDesc.Font.Color;
+    FPanelFix.Visible  := True;
+  end
+  else
+  begin
+    FLblFix.Caption    := '';
+    FPanelFix.Visible  := False;
+  end;
 
   // Cache aktualisieren
   FLastX          := AClientX;
@@ -427,6 +524,7 @@ begin
   FLastTitle      := ATitle;
   FLastDesc       := ADesc;
   FLastBadge      := ABadge;
+  FLastFix        := AFix;
   FLastAccent     := AAccentColor;
   FLastWindowBase := WindowBase;
 

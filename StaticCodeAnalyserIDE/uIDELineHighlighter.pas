@@ -69,6 +69,7 @@ type
     Desc  : string;
     Badge : string;
     Color : TColor;   // Stripe-Farbe (Severity-abhaengig)
+    Fix   : string;   // After-Code aus uFixHint.After (Multiline OK)
   end;
   // Eintrag fuer SetActiveFile — kombiniert Zeilennummer + Mark-Daten.
   TFindingMarkEntry = record
@@ -77,6 +78,7 @@ type
     Desc  : string;
     Badge : string;
     Color : TColor;
+    Fix   : string;
   end;
 
   // WICHTIG: Basisklasse TNotifierObject, NUR INTACodeEditorEvents listen.
@@ -98,6 +100,14 @@ type
     // Aktuell im Overlay angezeigte Zeile, um redundante ShowAt-Calls zu
     // vermeiden wenn die Maus innerhalb derselben Zeile bewegt wird.
     FHoveredLine   : Integer;
+    // Pfad der zuletzt von PaintLine gemalten Datei. Notwendig fuer den
+    // Tab-Switch-Detection-Pfad: wenn der User auf einen anderen Editor-Tab
+    // wechselt, feuert PaintLine fuer den neuen Pfad. Differenz zu
+    // FLastPaintedFile -> FRenderedRects (Hit-Test-Daten der alten Datei)
+    // sind stale und muessen vor dem ersten Mouse-Move geleert werden,
+    // sonst zeigt das Hover-Overlay den Befund der vorigen Datei auf einer
+    // unrelated Zeile der neuen Datei.
+    FLastPaintedFile : string;
     // Throttle fuer den HitMiss-Refresh (siehe EditorMouseMove). Verhindert
     // dass jeder MouseMove ein InvalidateAllLines triggert wenn die Maus
     // im Editor aber NICHT auf einer markierten Zeile ist.
@@ -250,6 +260,7 @@ begin
     Mark.Desc  := AEntries[i].Desc;
     Mark.Badge := AEntries[i].Badge;
     Mark.Color := AEntries[i].Color;
+    Mark.Fix   := AEntries[i].Fix;
     // Bei doppelten Zeilen: spaeterer Eintrag gewinnt (AddOrSetValue).
     FMarks.AddOrSetValue(AEntries[i].Line, Mark);
   end;
@@ -442,6 +453,18 @@ begin
     FHoveredLine := -1;
     Exit;
   end;
+  // Defense-in-Depth: Tab-Switch ohne PaintLine-Trigger (rare, aber kommt
+  // beim Show-without-Repaint vor). Wenn die zuletzt gemalte Datei nicht
+  // dieselbe ist, die der GHighlighter aktiv haelt, sind FRenderedRects
+  // stale - kein Overlay.
+  if not GHighlighter.IsActiveFile(FLastPaintedFile) then
+  begin
+    GAnnotationOverlay.HideOverlay;
+    FHoveredLine := -1;
+    FRenderedRects.Clear;
+    FHoverWatch.Enabled := False;
+    Exit;
+  end;
 
   // Hit-Test gegen alle gerenderten Marker-Rects.
   HitLine := HitTestLine(X, Y);
@@ -490,7 +513,7 @@ begin
   if LineH < 16 then LineH := 20;  // Fallback wenn CharHeight nicht gesetzt
   try
     GAnnotationOverlay.ShowAt(FSavedEditor, P.X, P.Y, AWidth, LineH,
-      Mark.Title, Mark.Desc, Mark.Badge, Mark.Color);
+      Mark.Title, Mark.Desc, Mark.Badge, Mark.Color, Mark.Fix);
     FHoveredLine := HitLine;
     // Hide-on-mouse-leave Timer aktivieren.
     FHoverWatch.Enabled := True;
@@ -531,6 +554,25 @@ begin
   // AllowedLineStages = [plsBackground] -> Stage ist immer plsBackground hier.
   // BeforeEvent=False: Default-Hintergrund bereits gemalt, Stripe drueber legen.
   if BeforeEvent then Exit;
+
+  // Tab-Switch-Detection: wenn die jetzt gemalte Datei nicht dieselbe ist
+  // wie die letzte, sind die in FRenderedRects gespeicherten Hit-Test-
+  // Rechtecke der alten Datei stale. Beim ersten MouseMove auf der neuen
+  // Datei wuerde das Hover-Overlay sonst eine Stripe-Zeile der alten
+  // Datei anhand der Y-Koordinate falsch matchen und einen unrelated
+  // Befund anzeigen. Vor dem Befuellen der Rects fuer die neue Datei
+  // einmalig den Stale-Cache leeren.
+  if not SameText(Context.FileName, FLastPaintedFile) then
+  begin
+    FRenderedRects.Clear;
+    FHoveredLine := -1;
+    FLastPaintedFile := Context.FileName;
+    if Assigned(GAnnotationOverlay) then
+      GAnnotationOverlay.HideOverlay;
+    if Assigned(FHoverWatch) then
+      FHoverWatch.Enabled := False;
+  end;
+
   Line := Context.LogicalLineNum;
   if not GHighlighter.ShouldHighlight(Context.FileName, Line) then Exit;
 

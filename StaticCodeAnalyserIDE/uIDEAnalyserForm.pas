@@ -2302,11 +2302,13 @@ begin
     LineNo := StrToIntDef(F.LineNumber, 0);
     if LineNo <= 0 then Continue;
     DispSev := SeverityFromKindLevel(F.Kind, F.Severity);
+    var FH := FixHint(F);
     Entries[Count].Line  := LineNo;
     Entries[Count].Title := F.MissingVar;
-    Entries[Count].Desc  := FixHint(F).Description;
+    Entries[Count].Desc  := FH.Description;
     Entries[Count].Badge := F.TypeText + _(' · ') + F.SeverityText;
     Entries[Count].Color := SeverityAccent(DispSev);
+    Entries[Count].Fix   := FH.After;   // Nachher-Code im Hover-Overlay
     Inc(Count);
   end;
   SetLength(Entries, Count);
