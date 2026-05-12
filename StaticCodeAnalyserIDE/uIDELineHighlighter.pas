@@ -18,11 +18,16 @@ unit uIDELineHighlighter;
 //                           Haelt FRenderedRects (Line -> CodeRect) als
 //                           Hit-Test-Cache fuer Hover.
 //
-//   TFindingHighlighter   – Singleton (GHighlighter). Haelt die aktive Datei
-//                           und FMarks (TDictionary<Line, TFindingMark>).
-//                           SetActiveFile aktualisiert den Zustand und loest
-//                           per InvalidateTopEditorLogicalLine einen gezielten
-//                           Repaint aller markierten Zeilen aus.
+//   TFindingHighlighter   – Singleton (GHighlighter). Haelt die Marker
+//                           ALLER Dateien gleichzeitig in einem
+//                           FMarksByFile: TObjectDictionary<NormalizedPath,
+//                           TDictionary<Line, TFindingMark>>. SetAllFindings
+//                           ersetzt den gesamten Zustand atomar und loest
+//                           per InvalidateTopEditorLogicalLine einen
+//                           gezielten Repaint aller markierten Zeilen aus.
+//                           PaintLine dispatcht ueber Context.FileName,
+//                           damit der User beim Tab-Wechsel die Befunde
+//                           der neuen Datei sieht ohne weiteren API-Call.
 //
 // PAINT-ZYKLUS (pro Editor):
 //   BeginPaint  -> FRenderedRects leeren NUR bei ForceFullRepaint
@@ -36,7 +41,7 @@ unit uIDELineHighlighter;
 //                  gescrollt). Zeigt das Overlay NICHT proaktiv.
 //
 // HOVER-MODUS:
-//   SetActiveFile setzt nur den Markierungszustand (rote Stripes). Die
+//   SetAllFindings setzt nur den Markierungszustand (rote Stripes). Die
 //   Overlays erscheinen erst wenn die Maus ueber EINE der markierten
 //   Zeilen schwebt. EditorMouseMove macht Hit-Test gegen alle Eintraege
 //   in FRenderedRects und zeigt den Hint fuer die getroffene Zeile.
@@ -71,14 +76,18 @@ type
     Color : TColor;   // Stripe-Farbe (Severity-abhaengig)
     Fix   : string;   // After-Code aus uFixHint.After (Multiline OK)
   end;
-  // Eintrag fuer SetActiveFile — kombiniert Zeilennummer + Mark-Daten.
+  // Eintrag fuer SetAllFindings — die FileName-Property machte den
+  // vorher impliziten "alle Eintraege gehoeren zur gleichen Datei"-
+  // Vertrag explizit. Damit kann ein einziger SetAllFindings-Call
+  // Marker fuer beliebig viele Dateien gleichzeitig setzen.
   TFindingMarkEntry = record
-    Line  : Integer;
-    Title : string;
-    Desc  : string;
-    Badge : string;
-    Color : TColor;
-    Fix   : string;
+    FileName : string;
+    Line     : Integer;
+    Title    : string;
+    Desc     : string;
+    Badge    : string;
+    Color    : TColor;
+    Fix      : string;
   end;
 
   // WICHTIG: Basisklasse TNotifierObject, NUR INTACodeEditorEvents listen.
@@ -146,14 +155,17 @@ type
     procedure ResetState;  // Zustand leeren wenn Selektion aufgehoben wird
   end;
 
+  // Marker einer einzelnen Datei: Line -> Mark-Daten.
+  TFileMarks = TDictionary<Integer, TFindingMark>;
+
   TFindingHighlighter = class
   private
-    // Aktive Datei: alle Markierungen beziehen sich auf diese Datei.
-    // Pfad ist normalisiert (lower-case, '/' -> '\').
-    FActiveFile      : string;
-    // Alle Markierungen der aktiven Datei: Line -> Annotation-Texte.
-    // Lookup ist O(1), erlaubt beliebig viele Markierungen pro Datei.
-    FMarks           : TDictionary<Integer, TFindingMark>;
+    // Multi-File-Marker-Storage: normalisierter Pfad -> TFileMarks.
+    // Vorher: FActiveFile + FMarks (genau eine Datei). Jetzt traegt der
+    // Highlighter Markierungen fuer beliebig viele Dateien gleichzeitig,
+    // so dass der User beim Tab-Wechsel sofort die Befunde der neuen
+    // Datei sieht ohne dass irgendwer SetActiveFile aufrufen muss.
+    FMarksByFile     : TObjectDictionary<string, TFileMarks>;
     FEditorEvents    : INTACodeEditorEvents;  // haelt Refcount am Leben
     FEditorEventsObj : TFindingEditorEvents;
     FEditorEventsIdx : Integer;               // Index aus AddEditorEventsNotifier; -1 = nicht registriert
@@ -166,18 +178,24 @@ type
     constructor Create;
     destructor Destroy; override;
 
-    // Setzt die Liste aller Markierungen fuer eine Datei. Vorheriger Zustand
-    // (ggf. andere Datei mit anderen Marks) wird komplett ersetzt.
-    procedure SetActiveFile(const AFilePath: string;
-      const AEntries: array of TFindingMarkEntry);
+    // Setzt die komplette Marker-Liste fuer ALLE Dateien atomar. Eintraege
+    // werden intern nach FileName gruppiert; ein einziger Aufruf reicht
+    // pro Analyse-Run / Filter-Wechsel. AEntries[i].FileName muss gesetzt
+    // sein (leerer FileName -> Eintrag wird geskippt).
+    procedure SetAllFindings(const AEntries: array of TFindingMarkEntry);
     procedure Clear;
 
+    // True wenn IRGENDEINE Datei Marker hat.
     function HasMarks: Boolean;
-    function IsActiveFile(const AFileName: string): Boolean;
+    // True wenn die spezifische Datei (normalisierter Pfad-Vergleich)
+    // mindestens einen Marker hat.
+    function HasMarksForFile(const AFileName: string): Boolean;
     function ShouldHighlight(const AFilePath: string; ALine: Integer): Boolean;
-    // Liefert die Annotation-Texte fuer eine markierte Zeile. False wenn Zeile
-    // nicht markiert ist.
-    function TryGetMark(ALine: Integer; out AMark: TFindingMark): Boolean;
+    // Liefert die Annotation-Texte fuer eine markierte Zeile in einer
+    // bestimmten Datei. False wenn die Datei keine Marks hat oder die
+    // Zeile nicht markiert ist.
+    function TryGetMark(const AFile: string; ALine: Integer;
+                        out AMark: TFindingMark): Boolean;
   end;
 
 var
@@ -197,7 +215,9 @@ const
 constructor TFindingHighlighter.Create;
 begin
   inherited;
-  FMarks           := TDictionary<Integer, TFindingMark>.Create;
+  // doOwnsValues: die inneren TFileMarks-Dictionaries werden bei Remove
+  // / Clear / Destroy automatisch freigegeben.
+  FMarksByFile     := TObjectDictionary<string, TFileMarks>.Create([doOwnsValues]);
   FEditorEventsIdx := -1;
   FEditorEventsObj := TFindingEditorEvents.Create;
   FEditorEvents    := FEditorEventsObj as INTACodeEditorEvents;
@@ -206,7 +226,7 @@ end;
 destructor TFindingHighlighter.Destroy;
 begin
   FEditorEvents := nil;  // Refcount sinkt; nach RemoveEditorEventsNotifier (in UnregisterLineHighlighter) -> 0 -> Objekt freigegeben
-  FreeAndNil(FMarks);
+  FreeAndNil(FMarksByFile);
   inherited;
 end;
 
@@ -217,31 +237,34 @@ end;
 
 procedure TFindingHighlighter.InvalidateAllLines;
 var
-  Svc : INTACodeEditorServices;
-  Ln  : Integer;
+  Svc      : INTACodeEditorServices;
+  Bucket   : TFileMarks;
+  Ln       : Integer;
 begin
-  // Forciert Repaint aller markierten Zeilen — wird beim Datei-Wechsel oder
-  // Clear gerufen damit die alten Stripes verschwinden.
-  if FMarks.Count = 0 then Exit;
+  // Forciert Repaint aller markierten Zeilen quer ueber alle Dateien.
+  // InvalidateTopEditorLogicalLine triggert den Repaint im aktuell
+  // sichtbaren Editor - der Filename-Filter passiert dann in PaintLine
+  // ueber ShouldHighlight. Wir muessen daher nicht wissen, welche Datei
+  // gerade vor dem User liegt, sondern nur welche Line-Nummern ueberhaupt
+  // irgendwo gemerkt sind.
+  if FMarksByFile.Count = 0 then Exit;
   try
-    if Supports(BorlandIDEServices, INTACodeEditorServices, Svc) then
-      for Ln in FMarks.Keys do
+    if not Supports(BorlandIDEServices, INTACodeEditorServices, Svc) then Exit;
+    for Bucket in FMarksByFile.Values do
+      for Ln in Bucket.Keys do
         Svc.InvalidateTopEditorLogicalLine(Ln);
   except
   end;
 end;
 
-procedure TFindingHighlighter.SetActiveFile(const AFilePath: string;
+procedure TFindingHighlighter.SetAllFindings(
   const AEntries: array of TFindingMarkEntry);
 var
-  i    : Integer;
-  Mark : TFindingMark;
+  i       : Integer;
+  Mark    : TFindingMark;
+  FileKey : string;
+  Bucket  : TFileMarks;
 begin
-  if (AFilePath = '') or (Length(AEntries) = 0) then
-  begin
-    Clear;
-    Exit;
-  end;
   // Overlay sofort verbergen — im Hover-Modus erscheint es erst wieder,
   // wenn die Maus eine markierte Zeile beruehrt.
   if Assigned(GAnnotationOverlay) then
@@ -251,24 +274,36 @@ begin
   // damit die alten Stripes weggemalt werden.
   InvalidateAllLines;
 
-  FActiveFile := NormalizePath(AFilePath);
-  FMarks.Clear;
+  // Kompletter Reset: alle bestehenden Pro-Datei-Buckets weg.
+  // doOwnsValues -> innere Dictionaries werden hier freigegeben.
+  FMarksByFile.Clear;
+
   for i := 0 to High(AEntries) do
   begin
     if AEntries[i].Line <= 0 then Continue;
+    FileKey := NormalizePath(AEntries[i].FileName);
+    if FileKey = '' then Continue;
+
+    if not FMarksByFile.TryGetValue(FileKey, Bucket) then
+    begin
+      Bucket := TFileMarks.Create;
+      FMarksByFile.Add(FileKey, Bucket);
+    end;
+
     Mark.Title := AEntries[i].Title;
     Mark.Desc  := AEntries[i].Desc;
     Mark.Badge := AEntries[i].Badge;
     Mark.Color := AEntries[i].Color;
     Mark.Fix   := AEntries[i].Fix;
     // Bei doppelten Zeilen: spaeterer Eintrag gewinnt (AddOrSetValue).
-    FMarks.AddOrSetValue(AEntries[i].Line, Mark);
+    Bucket.AddOrSetValue(AEntries[i].Line, Mark);
   end;
 
   if Assigned(FEditorEventsObj) then
     FEditorEventsObj.ResetState;
 
-  // Neue Markierungen einmal repainten damit Stripes erscheinen.
+  // Neue Markierungen einmal repainten damit Stripes in allen sichtbaren
+  // Editoren erscheinen.
   InvalidateAllLines;
 end;
 
@@ -279,31 +314,38 @@ begin
   if Assigned(FEditorEventsObj) then
     FEditorEventsObj.ResetState;
   InvalidateAllLines;
-  FActiveFile := '';
-  FMarks.Clear;
+  FMarksByFile.Clear;
 end;
 
 function TFindingHighlighter.HasMarks: Boolean;
 begin
-  Result := FMarks.Count > 0;
+  Result := FMarksByFile.Count > 0;
 end;
 
-function TFindingHighlighter.IsActiveFile(const AFileName: string): Boolean;
+function TFindingHighlighter.HasMarksForFile(const AFileName: string): Boolean;
+var
+  Bucket: TFileMarks;
 begin
-  Result := HasMarks and (NormalizePath(AFileName) = FActiveFile);
+  Result := FMarksByFile.TryGetValue(NormalizePath(AFileName), Bucket)
+        and (Bucket.Count > 0);
 end;
 
 function TFindingHighlighter.ShouldHighlight(const AFilePath: string;
   ALine: Integer): Boolean;
+var
+  Bucket: TFileMarks;
 begin
-  Result := HasMarks and FMarks.ContainsKey(ALine) and
-            (NormalizePath(AFilePath) = FActiveFile);
+  Result := FMarksByFile.TryGetValue(NormalizePath(AFilePath), Bucket)
+        and Bucket.ContainsKey(ALine);
 end;
 
-function TFindingHighlighter.TryGetMark(ALine: Integer;
+function TFindingHighlighter.TryGetMark(const AFile: string; ALine: Integer;
   out AMark: TFindingMark): Boolean;
+var
+  Bucket: TFileMarks;
 begin
-  Result := FMarks.TryGetValue(ALine, AMark);
+  Result := FMarksByFile.TryGetValue(NormalizePath(AFile), Bucket)
+        and Bucket.TryGetValue(ALine, AMark);
 end;
 
 { ---- TFindingEditorEvents ---- }
@@ -331,6 +373,10 @@ begin
   FSavedEditor     := nil;
   FSavedCharHeight := 0;
   FHoveredLine     := -1;
+  // FLastPaintedFile leeren, damit der naechste PaintLine-Tick als
+  // "neue Datei" detektiert wird und sauber neu startet. Sonst koennten
+  // alte Hit-Test-Rects einer vorherigen Datei kurzzeitig matchen.
+  FLastPaintedFile := '';
   if Assigned(FRenderedRects) then
     FRenderedRects.Clear;
   if Assigned(FHoverWatch) then
@@ -457,7 +503,7 @@ begin
   // beim Show-without-Repaint vor). Wenn die zuletzt gemalte Datei nicht
   // dieselbe ist, die der GHighlighter aktiv haelt, sind FRenderedRects
   // stale - kein Overlay.
-  if not GHighlighter.IsActiveFile(FLastPaintedFile) then
+  if not GHighlighter.HasMarksForFile(FLastPaintedFile) then
   begin
     GAnnotationOverlay.HideOverlay;
     FHoveredLine := -1;
@@ -500,7 +546,7 @@ begin
   end;
 
   // Annotation-Texte fuer die getroffene Zeile holen.
-  if not GHighlighter.TryGetMark(HitLine, Mark) then Exit;
+  if not GHighlighter.TryGetMark(FLastPaintedFile, HitLine, Mark) then Exit;
   if not FRenderedRects.TryGetValue(HitLine, HitRect) then Exit;
 
   // WS_CHILD-Modus: Position = Editor-Client-Koordinaten direkt unter
@@ -586,7 +632,8 @@ begin
   // Stripe-Farbe aus dem Mark holen (Severity-abhaengig: Error/Warning/Hint).
   // Fallback auf Default-Rot falls clNone uebergeben wurde.
   StripeCol := CL_HIGHLIGHT_BAR;
-  if GHighlighter.TryGetMark(Line, Mark) and (Mark.Color <> clNone) then
+  if GHighlighter.TryGetMark(Context.FileName, Line, Mark)
+     and (Mark.Color <> clNone) then
     StripeCol := Mark.Color;
 
   // 3px Stripe am linken Rand des Code-Bereichs.

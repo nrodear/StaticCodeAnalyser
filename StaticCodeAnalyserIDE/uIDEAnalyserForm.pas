@@ -1397,6 +1397,13 @@ begin
   end;
 
   UpdateFilterStatus(Criteria);
+
+  // Multi-File-Marker-Refresh: nach jedem Filter-Wechsel oder
+  // Analyse-Lauf zeigt der Highlighter ab sofort Stripes + Hover-
+  // Overlays auf JEDEM Editor-Tab dessen Datei in der gefilterten
+  // Liste vertreten ist. Vorher: erst nach Grid-Klick. Damit ist der
+  // Tab-Switch-Use-Case ohne Click erreichbar.
+  HighlightAllFindingsInFile('');
 end;
 
 // ---------------------------------------------------------------------------
@@ -1537,12 +1544,10 @@ begin
     FAllFindings.Add(findings[i]);
   UpdateStats;
   ApplyFilter;
-  // Editor-Line-Highlights sind click-getrieben (siehe GridSelectCell ->
-  // HighlightAllFindingsInFile). Beim Abschluss eines neuen Scans loeschen
-  // wir alle alten Markierungen, damit keine Befunde aus dem letzten Scan
-  // im Editor stehen bleiben.
-  if Assigned(GHighlighter) then
-    GHighlighter.Clear;
+  // ApplyFilter -> HighlightAllFindingsInFile baut die Multi-File-Marker
+  // bereits sauber neu auf (SetAllFindings ersetzt den gesamten internen
+  // State). Ein zusaetzlicher GHighlighter.Clear ist nicht mehr noetig -
+  // er wuerde die gerade gesetzten Marker sofort wieder loeschen.
   // (Befund-Spiegelung in IDE-Messages-Toolbar ist deaktiviert -
   //  siehe Kommentar am Ende von ApplyFilter.)
 end;
@@ -2273,13 +2278,22 @@ begin
 end;
 
 procedure TAnalyserFrame.HighlightAllFindingsInFile(const AFileName: string);
-// Sammelt alle Befunde aus FDisplayedFindings die zur gleichen Datei wie
-// AFileName gehoeren und uebergibt sie als komplette Marker-Liste an den
-// GHighlighter. Pro Marker:
-//   - Title/Desc/Badge fuer das Hover-Overlay
+// Multi-File-Marker-Refresh: bauen Eintraege fuer ALLE Dateien der
+// aktuellen FDisplayedFindings-Liste und uebergeben sie an den
+// GHighlighter. Der AFileName-Parameter ist nur noch ein Vermerk
+// "welche Datei hat den Refresh angefordert" - das Ergebnis ist
+// dasselbe, egal wer ihn ausloest. Der Highlighter zeigt die
+// Marker auf JEDEM Editor-Tab dessen Datei in FDisplayedFindings
+// vertreten ist; Tab-Wechsel funktioniert ohne weiteren Refresh.
+//
+// Pro Marker:
+//   - FileName  -> Bucket-Schluessel im Multi-File-Marker-Dictionary
+//   - Title/Desc/Badge/Fix -> Hover-Overlay-Inhalt
 //   - Color via SeverityAccent (Severity-abhaengige Stripe-Farbe wie im Grid)
-// Multi-Marker-Modell: alle Befunde einer Datei werden gleichzeitig markiert,
-// jeder mit eigenem Hover-Text und farblich nach Severity unterschieden.
+//
+// Marker-Anzahl ist <= FDisplayedFindings.Count; bei 5000+ Findings
+// kostet die Liste etwa 2-3 MB Heap - akzeptabel, Lookup ist O(1)
+// per Datei.
 var
   i       : Integer;
   F       : TLeakFinding;
@@ -2289,31 +2303,30 @@ var
   DispSev : TFindingSeverity;
 begin
   if not Assigned(GHighlighter) or not Assigned(FDisplayedFindings) then Exit;
-  if AFileName = '' then Exit;
 
-  // Capacity vorab anschaetzen, am Ende mit Count getrimmt.
   SetLength(Entries, FDisplayedFindings.Count);
   Count := 0;
   for i := 0 to FDisplayedFindings.Count - 1 do
   begin
     F := FDisplayedFindings[i];
     if not Assigned(F) then Continue;
-    if not SameText(F.FileName, AFileName) then Continue;
+    if F.FileName = '' then Continue;
     LineNo := StrToIntDef(F.LineNumber, 0);
     if LineNo <= 0 then Continue;
     DispSev := SeverityFromKindLevel(F.Kind, F.Severity);
     var FH := FixHint(F);
-    Entries[Count].Line  := LineNo;
-    Entries[Count].Title := F.MissingVar;
-    Entries[Count].Desc  := FH.Description;
-    Entries[Count].Badge := F.TypeText + _(' · ') + F.SeverityText;
-    Entries[Count].Color := SeverityAccent(DispSev);
-    Entries[Count].Fix   := FH.After;   // Nachher-Code im Hover-Overlay
+    Entries[Count].FileName := F.FileName;
+    Entries[Count].Line     := LineNo;
+    Entries[Count].Title    := F.MissingVar;
+    Entries[Count].Desc     := FH.Description;
+    Entries[Count].Badge    := F.TypeText + _(' · ') + F.SeverityText;
+    Entries[Count].Color    := SeverityAccent(DispSev);
+    Entries[Count].Fix      := FH.After;   // Nachher-Code im Hover-Overlay
     Inc(Count);
   end;
   SetLength(Entries, Count);
 
-  GHighlighter.SetActiveFile(AFileName, Entries);
+  GHighlighter.SetAllFindings(Entries);
 end;
 
 function TAnalyserFrame.OpenFileAtLine(const AbsPath: string;
