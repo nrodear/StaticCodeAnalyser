@@ -1,13 +1,13 @@
 ﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
         <ProjectGuid>{DF951A63-B210-4FCD-BD58-B2FE5479D511}</ProjectGuid>
-        <MainSource>StaticCodeAnalyserIDE.dpk</MainSource>
+        <MainSource>StaticCodeAnalyser.IDE.d12.dpk</MainSource>
         <ProjectVersion>20.1</ProjectVersion>
         <FrameworkType>None</FrameworkType>
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Debug</Config>
         <Platform Condition="'$(Platform)'==''">Win32</Platform>
-        <ProjectName Condition="'$(ProjectName)'==''">StaticCodeAnalyserIDE</ProjectName>
+        <ProjectName Condition="'$(ProjectName)'==''">StaticCodeAnalyser.IDE.d12</ProjectName>
         <TargetedPlatforms>1</TargetedPlatforms>
         <AppType>Package</AppType>
     </PropertyGroup>
@@ -88,7 +88,7 @@
         <GenPackage>true</GenPackage>
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;$(DCC_Namespace)</DCC_Namespace>
         <DCC_CBuilderOutput>All</DCC_CBuilderOutput>
-        <SanitizedProjectName>StaticCodeAnalyserIDE</SanitizedProjectName>
+        <SanitizedProjectName>StaticCodeAnalyser_IDE_d12</SanitizedProjectName>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Android)'!=''">
         <DCC_CBuilderOutput>None</DCC_CBuilderOutput>
@@ -161,8 +161,8 @@
         <DCCReference Include="uIDEAnnotationOverlay.pas"/>
         <DCCReference Include="uIDEMessages.pas"/>
         <DCCReference Include="uIDEWatchMode.pas"/>
-        <DCCReference Include="uIDEStatsTiles.pas"/>
-        <DCCReference Include="uIDEHelpPanel.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uIDEStatsTiles.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uIDEHelpPanel.pas"/>
         <DCCReference Include="uIDEExportMenu.pas"/>
         <DCCReference Include="uIDEEditorIntegration.pas"/>
         <DCCReference Include="uIDEStatusBar.pas"/>
@@ -170,6 +170,10 @@
         <DCCReference Include="uIDEAnalyseProgress.pas"/>
         <DCCReference Include="uIDEGridTooltip.pas"/>
         <DCCReference Include="uIDELifecycle.pas"/>
+        <DCCReference Include="uIDESCAOptions.pas">
+            <Form>SCAOptionsFrame</Form>
+            <DesignClass>TFrame</DesignClass>
+        </DCCReference>
         <DCCReference Include="uIDEAnalyseRunner.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uAnalyserPalette.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uAnalyserTypes.pas"/>
@@ -269,7 +273,7 @@
         <BorlandProject>
             <Delphi.Personality>
                 <Source>
-                    <Source Name="MainSource">StaticCodeAnalyserIDE.dpk</Source>
+                    <Source Name="MainSource">StaticCodeAnalyser.IDE.d12.dpk</Source>
                 </Source>
             </Delphi.Personality>
             <Deployment Version="4"/>

@@ -62,6 +62,7 @@ type
     FMinSeverity       : string;      // [Rules] MinSeverity = error|warning|hint
     FIdeProfile        : string;      // [Rules] IdeProfile (Default: ide-fast)
     FIdeMinSeverity    : string;      // [Rules] IdeMinSeverity (Default: hint)
+    FSilentEnabled     : Boolean;     // [Silent] Enabled (Default: True)
     FLanguage          : string;      // [UI] Language ('de', 'en', '')
   public
     constructor Create;
@@ -190,6 +191,14 @@ type
                                                   write FIdeProfile;
     property IdeMinSeverity:          string      read FIdeMinSeverity
                                                   write FIdeMinSeverity;
+
+    // [Silent] Enabled - schaltet das Editor-Rechtsklick-Item + Ctrl+Alt+A
+    // an/aus. Default True. Wenn False feuert der Silent-Mode-Entrypoint
+    // sofort einen Early-Exit, kein Analyse-Lauf, keine Marker.
+    // Konfigurierbar ueber Tools > Options > Third Party > Static Code Analyser
+    // (siehe uIDESCAOptions) oder per Hand in analyser.ini.
+    property SilentEnabled:           Boolean     read FSilentEnabled
+                                                  write FSilentEnabled;
 
     // UI-Sprache. '' bedeutet "use Default" (= deutsch beim aktuellen Build,
     // falls dxgettext jemals aktiviert wird, wuerde es OS-Locale nutzen).
@@ -467,6 +476,21 @@ const
     ''#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
+    ';  [Silent] - Silent-Mode Editor-Kontextmenu + Hotkey'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ''#13#10 +
+    '[Silent]'#13#10 +
+    ''#13#10 +
+    '; Enabled (bool, default: 1)'#13#10 +
+    '; Schaltet den "Analyse current file (silent)"-Eintrag im Editor-'#13#10 +
+    '; Rechtsklick-Menue + den Hotkey Ctrl+Alt+A an/aus.'#13#10 +
+    '; Auch konfigurierbar via Tools > Options > Third Party >'#13#10 +
+    '; Static Code Analyser.'#13#10 +
+    'Enabled=1'#13#10 +
+    ';Enabled=0'#13#10 +
+    ''#13#10 +
+    ';'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
     ';  [UI] - Oberflaechen-Einstellungen'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
     ''#13#10 +
@@ -519,6 +543,7 @@ begin
   FMinSeverity    := 'hint';          // 'hint' = alles laeuft
   FIdeProfile     := 'ide-fast';      // IDE-Plugin Default: schnelles Subset
   FIdeMinSeverity := 'hint';          // IDE-Plugin: alle Severities (Subset deckt schon)
+  FSilentEnabled  := True;            // Silent-Mode standardmaessig an
   FLanguage           := 'en';        // Default: englische UI (Source-Sprache)
 end;
 
@@ -572,15 +597,19 @@ begin
 end;
 
 procedure TRepoSettings.Load;
+// TMemIniFile statt TIniFile: liest die ganze Datei EINMAL im Ctor ein,
+// alle ReadString/ReadBool-Aufrufe danach sind In-Memory-Lookups.
+// Macht den Plugin-Optionen-Open spuerbar schneller (~25 Reads ohne
+// 25 separate Datei-Open/Close-Syscalls).
 var
-  Ini       : TIniFile;
+  Ini       : TMemIniFile;
   RawList   : string;
   Items     : TArray<string>;
   Item      : string;
   Trimmed   : string;
 begin
   EnsureConfigExists;
-  Ini := TIniFile.Create(ConfigFilePath);
+  Ini := TMemIniFile.Create(ConfigFilePath);
   try
     FBaseBranch         := Trim(Ini.ReadString('Repo',  'BaseBranch',         ''));
     FIncludeWorkingTree :=      Ini.ReadBool  ('Repo',  'IncludeWorkingTree', True);
@@ -675,6 +704,11 @@ begin
     FIdeProfile     := Trim(Ini.ReadString('Rules', 'IdeProfile',     'ide-fast'));
     FIdeMinSeverity := Trim(Ini.ReadString('Rules', 'IdeMinSeverity', 'hint')).ToLower;
 
+    // [Silent] Enabled (bool, Default True) - schaltet Editor-Rechtsklick +
+    // Hotkey fuer den Silent-Mode an/aus. Konfigurierbar via Tools > Options
+    // > Third Party > Static Code Analyser.
+    FSilentEnabled := Ini.ReadBool('Silent', 'Enabled', True);
+
     // [UI] Language=de|en|'' -> FLanguage. Default 'en' (Source-Sprache).
     FLanguage := Trim(Ini.ReadString('UI', 'Language', 'en')).ToLower;
   finally
@@ -713,11 +747,13 @@ begin
 end;
 
 procedure TRepoSettings.Save;
+// TMemIniFile: alle Writes batch'en in den Speicher, EIN UpdateFile am Ende
+// schreibt das ganze File raus. Vorher 11 Open/Write/Close-Zyklen.
 var
-  Ini: TIniFile;
+  Ini: TMemIniFile;
 begin
   EnsureConfigExists;
-  Ini := TIniFile.Create(ConfigFilePath);
+  Ini := TMemIniFile.Create(ConfigFilePath);
   try
     Ini.WriteString('Repo',  'BaseBranch',         FBaseBranch);
     Ini.WriteBool  ('Repo',  'IncludeWorkingTree', FIncludeWorkingTree);
@@ -731,7 +767,15 @@ begin
     Ini.WriteString('Rules', 'MinSeverity',        FMinSeverity);
     Ini.WriteString('Rules', 'IdeProfile',         FIdeProfile);
     Ini.WriteString('Rules', 'IdeMinSeverity',     FIdeMinSeverity);
+    Ini.WriteBool  ('Silent', 'Enabled',           FSilentEnabled);
+    // [Detectors]-Toggles: jetzt UI-aenderbar via Tools > Options.
+    Ini.WriteBool  ('Detectors', 'UsesCheck',           FUsesCheck);
+    Ini.WriteBool  ('Detectors', 'IncludeTests',        FIncludeTests);
+    Ini.WriteBool  ('Detectors', 'AutoDiscoverClasses', FAutoDiscover);
     Ini.WriteString('UI',    'Language',           FLanguage);
+    // Pflicht bei TMemIniFile: ohne UpdateFile bleiben alle Writes nur
+    // im Speicher (TIniFile dagegen schreibt pro Write sofort).
+    Ini.UpdateFile;
   finally
     Ini.Free;
   end;

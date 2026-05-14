@@ -14,7 +14,7 @@ uses
   Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls,
   Vcl.ExtCtrls, Vcl.ComCtrls, Vcl.Grids, Vcl.ActnList, Vcl.ImgList, Vcl.Menus,
   Vcl.Clipbrd, Vcl.Themes,
-  DesignIntf, ToolsAPI,
+  DesignIntf, ToolsAPI, DockForm,    // DockForm: TDockableForm (Editor-Service-Notifier-Signatur)
   uStaticAnalyzer2, uStaticFiles, uMethodd12, uSCAConsts, uExport,
   uFixHint, uIgnoreList, uRepoSettings, uRuleCatalog, uClaudePrompt,
   uAnalyserPalette, uAnalyserTypes, uAnalyserTheme, uLocalization,
@@ -24,6 +24,7 @@ uses
   uIDEThemeIntegration, uIDEAnalyseProgress, uIDEGridTooltip,
   uIDELifecycle, uIDEAnalyseRunner,
   uIDEAnnotationOverlay,
+  uIDESCAOptions,                          // Tools > Options > SCA Page
   uFindingGridRenderer, uFindingFilter;
 
 const
@@ -294,6 +295,11 @@ type
     // damit auch externer Code (oder Tests) einen Theme-Refresh
     // erzwingen kann, ohne den Helper direkt anzufassen.
     procedure RefreshFromIDETheme;
+    // Liefert die aktuelle Profile-Combo-Auswahl als String, oder leer
+    // wenn der Frame keinen Override hat. Der Silent-Mode-Entrypoint
+    // ruft das so dass eine im Dock geaenderte Profile-Wahl auch ohne
+    // INI-Save fuer Silent-Runs gilt (analog Dock-PrepareAnalysis).
+    function CurrentProfileOverride: string;
   end;
 
   TAnalyserDockableForm = class(TInterfacedObject, INTACustomDockableForm)
@@ -315,6 +321,11 @@ type
     function GetEditState: TEditState;
     function EditAction(Action: TEditAction): Boolean;
     procedure ViewMenuClick(Sender: TObject);
+    // Klickhandler des "Analyse current file (silent)"-Eintrags im
+    // View > Static Code Analysis-Submenu (+ Hotkey Ctrl+Alt+A).
+    // Triggert Silent-Mode: aktuelle Editor-Datei analysieren + Marker
+    // direkt setzen, OHNE Dock-Fenster zu oeffnen.
+    procedure AnalyseCurrentFromEditorMenuClick(Sender: TObject);
     property Frame: TAnalyserFrame read FFrame;
   end;
 
@@ -1584,6 +1595,16 @@ begin
   Result := FResultGrid;
 end;
 
+function TAnalyserFrame.CurrentProfileOverride: string;
+// Spiegelt den im Dock-Frame gewaehlten Profile-Eintrag wider. Wird vom
+// Silent-Mode konsultiert damit eine im Dock geaenderte Combo-Auswahl auch
+// ohne INI-Save fuer Silent-Runs gilt.
+begin
+  Result := '';
+  if Assigned(FProfileCombo) and (FProfileCombo.ItemIndex >= 0) then
+    Result := FProfileCombo.Items[FProfileCombo.ItemIndex];
+end;
+
 procedure TAnalyserFrame.OnWatchStatus(const Status: string);
 // Vom WatchMode-Manager via TThread.Synchronize / Timer-OnTimer auf dem
 // UI-Thread. Aktualisiert das Mode-Panel der Statusbar wenn moeglich.
@@ -2727,12 +2748,616 @@ begin
   ShowAnalyserDockableForm;
 end;
 
+// Forward-Deklaration: die Silent-Mode-Procedures sind weiter unten in
+// dieser Unit definiert (nahe dem Editor-Kontext-Menu-Hook), aber der
+// AnalyseCurrentFromEditorMenuClick-Handler oben braucht sie.
+procedure RunSilentAnalysisForCurrentEditorFile; forward;
+
+procedure TAnalyserDockableForm.AnalyseCurrentFromEditorMenuClick(
+  Sender: TObject);
+// Silent-Mode: aktive Editor-Datei analysieren + Marker direkt setzen.
+// Dock-Fenster bleibt geschlossen, kein Frame, kein Befund-Grid - nur
+// die Annotation-Overlays (3 px Stripe + Hover-Popup) im Editor.
+//
+// Wenn der User das Grid sehen will: ueber das View-Menue 'Static Code
+// Analysis' das Dock oeffnen + dort die Buttons benutzen.
+begin
+  RunSilentAnalysisForCurrentEditorFile;
+end;
+
 // ---------------------------------------------------------------------------
 // Registrierung und Anzeige
 // ---------------------------------------------------------------------------
 
 var
-  GViewMenuItem: TMenuItem = nil;
+  GViewMenuItem        : TMenuItem = nil;
+
+// ----------------------------------------------------------------------------
+// Silent-Mode (Editor-Kontextmenu -> direkter Annotation-Overlay, kein Dock)
+// ----------------------------------------------------------------------------
+//
+// Frame-freie Pipeline: aktuelle Datei -> AnalyzeLeaks -> Mark-Entries ->
+// GHighlighter.SetAllFindings. Marker (Stripe + Hover-Overlay) erscheinen im
+// Editor; das Dock-Fenster wird NICHT geoeffnet, kein Befund-Grid.
+//
+// Fehler werden an OutputDebugString geleitet (keine Frame-StatusBar im
+// Silent-Mode verfuegbar).
+//
+// Threading: laeuft synchron im UI-Thread. AnalyzeLeaks fuer eine einzelne
+// .pas-Datei ist typischerweise <200 ms - akzeptabel. Wenn das pro Datei
+// zu langsam wird, kann der Aufruf in einen TThread.Queue-Worker umziehen
+// (analog uIDEWatchMode.TWatchAnalyzer).
+
+function BuildMarkEntries(Findings: TObjectList<TLeakFinding>): TArray<TFindingMarkEntry>;
+// Konvertiert eine Liste von TLeakFinding zu TFindingMarkEntry[]. Logik
+// dupliziert aus Frame.HighlightAllFindingsInFile, jetzt Frame-frei damit
+// auch der Silent-Mode sie nutzen kann.
+var
+  i, Count : Integer;
+  F        : TLeakFinding;
+  LineNo   : Integer;
+  DispSev  : TFindingSeverity;
+begin
+  if not Assigned(Findings) then Exit(nil);
+  SetLength(Result, Findings.Count);
+  Count := 0;
+  for i := 0 to Findings.Count - 1 do
+  begin
+    F := Findings[i];
+    if not Assigned(F) then Continue;
+    if F.FileName = '' then Continue;
+    LineNo := StrToIntDef(F.LineNumber, 0);
+    if LineNo <= 0 then Continue;
+    DispSev := SeverityFromKindLevel(F.Kind, F.Severity);
+    // TFixHintResolver.FixHint statt bare FixHint: hier sind wir NICHT in
+    // einer TAnalyserFrame-Methode (wo der Klassen-Wrapper Self.FixHint
+    // greift), sondern in einer Top-Level-Procedure - direkter Resolver-Call.
+    var FH := TFixHintResolver.FixHint(F);
+    Result[Count].FileName := F.FileName;
+    Result[Count].Line     := LineNo;
+    Result[Count].Title    := F.MissingVar;
+    Result[Count].Desc     := FH.Description;
+    Result[Count].Badge    := F.TypeText + _(' · ') + F.SeverityText;
+    Result[Count].Color    := SeverityAccent(DispSev);
+    Result[Count].Fix      := FH.After;
+    Inc(Count);
+  end;
+  SetLength(Result, Count);
+end;
+
+procedure RunSilentAnalysisForFile(const AFileName: string);
+// Silent-Mode-Entrypoint: analysiert AFileName + setzt Marker direkt am
+// GHighlighter. Kein Frame, kein Dock-Open. Fehler still an
+// OutputDebugString. Settings + Profile werden frisch geladen (analog zu
+// WatchMode-Worker).
+var
+  Settings : TRepoSettings;
+  Findings : TObjectList<TLeakFinding>;
+  Entries  : TArray<TFindingMarkEntry>;
+begin
+  if AFileName = '' then Exit;
+  if not Assigned(GHighlighter) then Exit;
+  if not FileExists(AFileName) then
+  begin
+    OutputDebugString(PChar(Format(
+      'SCA Silent: file not found: %s', [AFileName])));
+    Exit;
+  end;
+
+  Settings := TRepoSettings.Create;
+  Findings := nil;
+  try
+    try Settings.Load; except end;
+    // IDE-Profile (Default 'ide-fast') aktivieren - sonst laeuft im Silent-
+    // Mode der volle Standalone-Default-Lauf, was bei Live-Klicks zu lang
+    // dauern wuerde.
+    Settings.UseIdeRuleSet;
+    // Dock-Combo gewinnt ueber INI - so wirkt eine Profile-Auswahl im Dock
+    // auch im Silent-Run, ohne dass der User vorher Save druecken muss.
+    // Wenn das Dock nie geoeffnet wurde, ist Frame=nil -> Override=leer ->
+    // INI-Wert aus UseIdeRuleSet greift.
+    if Assigned(GDockableForm) and Assigned(GDockableForm.Frame) then
+    begin
+      var DockOverride := GDockableForm.Frame.CurrentProfileOverride;
+      if DockOverride <> '' then Settings.Profile := DockOverride;
+    end;
+    Settings.ApplyDetectorThresholds(ExtractFilePath(AFileName));
+    Settings.RegisterToLeakyClasses;
+
+    // Analog Dock-Plugin PrepareAnalysis: das AutoDiscover-
+    // Global muss VOR AnalyzeLeaks aus den Settings gespiegelt werden -
+    // uStaticAnalyzer2 prueft AutoDiscoverCustomClasses, nicht
+    // Settings.AutoDiscoverClasses. Ohne diesen Zuweis bleibt das Flag auf
+    // dem Wert vom letzten Dock-Run haengen (oder False beim Kalt-Start).
+    AutoDiscoverCustomClasses := Settings.AutoDiscoverClasses;
+    // Frische Discovery-Liste pro Silent-Run, sonst schleichen Treffer
+    // vom letzten Dock-/Silent-Run in die Detection mit.
+    if Assigned(uSCAConsts.DiscoveredClasses) then
+      uSCAConsts.DiscoveredClasses.Clear;
+    if Assigned(uSCAConsts.DiscoveredStaticClasses) then
+      uSCAConsts.DiscoveredStaticClasses.Clear;
+
+    try
+      Findings := TStaticAnalyzer2.AnalyzeLeaks(AFileName, Settings.UsesCheck);
+    except
+      on E: Exception do
+      begin
+        OutputDebugString(PChar(Format(
+          'SCA Silent: analyse error %s: %s: %s',
+          [AFileName, E.ClassName, E.Message])));
+        Exit;
+      end;
+    end;
+
+    Entries := BuildMarkEntries(Findings);
+    // SetAllFindings ersetzt komplett - bei Bedarf koennte man stattdessen
+    // ReplaceMarksForFile nutzen damit Marker anderer Dateien erhalten
+    // bleiben. SetAllFindings ist hier OK weil der Silent-Mode pro Klick
+    // einen Snapshot setzt, der nur die geklickte Datei zeigt.
+    GHighlighter.SetAllFindings(Entries);
+  finally
+    Findings.Free;
+    Settings.Free;
+  end;
+end;
+
+function IsSilentEnabled: Boolean;
+// Liest [Silent] Enabled aus analyser.ini - True wenn das User-Flag den
+// Silent-Mode (Rechtsklick + Hotkey) aktiviert. Default True.
+// Wird vor JEDEM Silent-Trigger gefragt damit die User-Konfig sofort wirkt -
+// kein Plugin-Reload noetig.
+var
+  Settings : TRepoSettings;
+begin
+  Settings := TRepoSettings.Create;
+  try
+    try Settings.Load; except end;
+    Result := Settings.SilentEnabled;
+  finally
+    Settings.Free;
+  end;
+end;
+
+procedure RunSilentAnalysisForCurrentEditorFile;
+// Holt die aktuell aktive Editor-Datei via TIDEEditor + ruft den Silent-
+// Analyzer. Vorher Settings-Flag pruefen - User kann das Feature ueber
+// Tools > Options ausschalten.
+var
+  FilePath : string;
+begin
+  if not IsSilentEnabled then Exit;
+  case TIDEEditor.TryGetCurrentPasFile(FilePath) of
+    cfrNoEditorService:
+      OutputDebugString('SCA Silent: IDE editor service not available');
+    cfrNoOpenView:
+      OutputDebugString('SCA Silent: no file opened');
+    cfrNotPascalFile:
+      OutputDebugString('SCA Silent: current file is not a Pascal file');
+  else
+    RunSilentAnalysisForFile(FilePath);
+  end;
+end;
+
+// ----------------------------------------------------------------------------
+// Editor-Kontext-Menu-Hook via OnPopup-Chain
+// ----------------------------------------------------------------------------
+//
+// Delphi 12 baut das Editor-Rechtsklick-Menue bei JEDEM Klick neu auf. Items
+// die wir permanent in Popup.Items haengen, ueberleben den Rebuild nicht -
+// und ein zweiter Permanent-Insert kollidiert mit IDE-Internals
+// ('ecSwapCppHdrFiles existiert bereits').
+//
+// Saubere Loesung (GExperts/CnPack-Pattern, Quellen: dummzeuch.de blog,
+// davidghoyle.co.uk):
+//   1) Per INTAEditServicesNotifier auf WindowShow lauschen
+//   2) Editor-Form-Components nach TPopupMenu durchsuchen
+//   3) Pop's vorhandenes OnPopup-Event aufheben + eigenes Handler installieren
+//   4) Unser Handler:
+//      a) Alten SCA-Item raus + freigeben (vor IDE-Rebuild)
+//      b) Original-OnPopup rufen -> IDE rebuilt komplett
+//      c) Frisches Item am ENDE des Popups einhaengen
+//   5) Beim Unload: Original-OnPopup wiederherstellen, Items freigeben
+//
+// Wichtig laut Recherche:
+//   * Item AM ENDE des Popups einhaengen (sonst Action-Manager-Konflikt)
+//   * NIEMALS Action zuweisen - nur OnClick (sonst ecSwapCppHdrFiles-Konflikt)
+//   * OnPopup-Chain, nicht Overwrite (sonst broken bei mehreren Plugins)
+
+type
+  TPopupHookSlot = class
+  public
+    Popup       : TPopupMenu;
+    OrigOnPopup : TNotifyEvent;
+    OurItem     : TMenuItem;     // aktuelles Item; nil zwischen Popup-Shows
+    constructor Create(APopup: TPopupMenu; AOrig: TNotifyEvent);
+  end;
+
+  TEditorContextMenuHook = class(TNotifierObject, INTAEditServicesNotifier)
+  private
+    // Pro gehooktem Popup ein Slot mit Original-Handler + aktuellem Item.
+    // doOwnsValues: bei Remove/Clear/Destroy werden Slot-Objekte freigegeben.
+    FSlots : TObjectDictionary<TPopupMenu, TPopupHookSlot>;
+    procedure HookEditorForm(AForm: TCustomForm);
+    function  FindEditorPopup(AForm: TCustomForm): TPopupMenu;
+    procedure OnPopupHandler(Sender: TObject);
+    procedure ItemClick(Sender: TObject);
+  protected
+    // INTAEditServicesNotifier
+    procedure WindowShow(const EditWindow: INTAEditWindow;
+      Show, LoadedFromDesktop: Boolean);
+    procedure WindowNotification(const EditWindow: INTAEditWindow;
+      Operation: TOperation);
+    procedure WindowActivated(const EditWindow: INTAEditWindow);
+    procedure WindowCommand(const EditWindow: INTAEditWindow;
+      Command, Param: Integer; var Handled: Boolean);
+    procedure EditorViewActivated(const EditWindow: INTAEditWindow;
+      const EditView: IOTAEditView);
+    procedure EditorViewModified(const EditWindow: INTAEditWindow;
+      const EditView: IOTAEditView);
+    procedure DockFormVisibleChanged(const EditWindow: INTAEditWindow;
+      DockForm: TDockableForm);
+    procedure DockFormUpdated(const EditWindow: INTAEditWindow;
+      DockForm: TDockableForm);
+    procedure DockFormRefresh(const EditWindow: INTAEditWindow;
+      DockForm: TDockableForm);
+  public
+    constructor Create;
+    destructor Destroy; override;
+  end;
+
+  // IOTAKeyboardBinding fuer Ctrl+Alt+A (Silent-Mode globaler Hotkey).
+  // Wird via IOTAKeyboardServices.AddKeyboardBinding registriert und feuert
+  // editor-weit - unabhaengig davon ob das Editor-Popup gerade konstruiert
+  // wurde. Ersetzt das frueher genutzte TMenuItem.ShortCut, das nur nach
+  // dem ersten Rechtsklick funktionierte.
+  TSCAKeyboardBinding = class(TNotifierObject, IOTAKeyboardBinding)
+  protected
+    procedure BindKeyboard(const BindingServices: IOTAKeyBindingServices);
+    function GetBindingType: TBindingType;
+    function GetDisplayName: string;
+    function GetName: string;
+  private
+    procedure SilentAnalyseKeyProc(const Context: IOTAKeyContext;
+      KeyCode: TShortcut; var BindingResult: TKeyBindingResult);
+  end;
+
+var
+  GCtxMenuHook    : TEditorContextMenuHook = nil;
+  GCtxMenuHookIfc : INTAEditServicesNotifier = nil;
+  GCtxMenuHookIdx : Integer = -1;
+  GKeyBinding     : TSCAKeyboardBinding = nil;
+  GKeyBindingIfc  : IOTAKeyboardBinding = nil;
+  GKeyBindingIdx  : Integer = -1;
+
+{ TPopupHookSlot }
+
+constructor TPopupHookSlot.Create(APopup: TPopupMenu; AOrig: TNotifyEvent);
+begin
+  inherited Create;
+  Popup       := APopup;
+  OrigOnPopup := AOrig;
+  OurItem     := nil;
+end;
+
+{ TEditorContextMenuHook }
+
+constructor TEditorContextMenuHook.Create;
+begin
+  inherited;
+  FSlots := TObjectDictionary<TPopupMenu, TPopupHookSlot>.Create([doOwnsValues]);
+end;
+
+destructor TEditorContextMenuHook.Destroy;
+var
+  Slot : TPopupHookSlot;
+begin
+  // Hooks loesen: pro Slot Original-OnPopup wiederherstellen (nur wenn unser
+  // Handler noch dranhaengt) und unser Item freigeben. Try/except defensive
+  // weil das Popup zwischenzeitlich vom IDE freigegeben sein koennte.
+  if Assigned(FSlots) then
+  begin
+    for Slot in FSlots.Values do
+    try
+      if Assigned(Slot.Popup) then
+      begin
+        // Nur restoren wenn unser Handler noch installiert ist; sonst hat
+        // ein anderes Plugin nach uns gehookt - dessen Chain wuerde brechen
+        // wenn wir blind ueberschreiben. Vergleich via .Data (= Self) ist
+        // robuster als .Code (vermeidet Method-vs-Class-Pointer-Syntax).
+        if TMethod(Slot.Popup.OnPopup).Data = Pointer(Self) then
+          Slot.Popup.OnPopup := Slot.OrigOnPopup;
+      end;
+      if Assigned(Slot.OurItem) then
+      begin
+        if Assigned(Slot.Popup) and (Slot.Popup.Items.IndexOf(Slot.OurItem) >= 0) then
+          Slot.Popup.Items.Remove(Slot.OurItem);
+        Slot.OurItem.Free;
+        Slot.OurItem := nil;
+      end;
+    except
+    end;
+    FreeAndNil(FSlots);
+  end;
+  inherited;
+end;
+
+function TEditorContextMenuHook.FindEditorPopup(AForm: TCustomForm): TPopupMenu;
+// Editor-Window-Form hat (typisch) ein TPopupMenu-Component fuer das Code-
+// Editor-Rechtsklick-Menue. Bei mehreren Kandidaten wird der genommen mit
+// den meisten Items (heuristik: Code-Editor-Menue ist umfangreichste).
+var
+  i : Integer;
+begin
+  Result := nil;
+  if not Assigned(AForm) then Exit;
+  for i := 0 to AForm.ComponentCount - 1 do
+    if AForm.Components[i] is TPopupMenu then
+    begin
+      if (Result = nil) or
+         (TPopupMenu(AForm.Components[i]).Items.Count > Result.Items.Count) then
+        Result := TPopupMenu(AForm.Components[i]);
+    end;
+end;
+
+procedure TEditorContextMenuHook.HookEditorForm(AForm: TCustomForm);
+// Sucht Popup im Form. Wenn noch nicht gehookt: OnPopup aufheben + eigenes
+// installieren. Idempotent (zweiter Aufruf auf gleichem Popup = no-op).
+var
+  Popup : TPopupMenu;
+  Slot  : TPopupHookSlot;
+begin
+  Popup := FindEditorPopup(AForm);
+  if not Assigned(Popup) then Exit;
+  if FSlots.ContainsKey(Popup) then Exit;   // bereits gehookt
+
+  Slot := TPopupHookSlot.Create(Popup, Popup.OnPopup);
+  FSlots.Add(Popup, Slot);
+  Popup.OnPopup := OnPopupHandler;
+end;
+
+procedure TEditorContextMenuHook.OnPopupHandler(Sender: TObject);
+// Wird vor jedem Popup-Show gefeuert. Reihenfolge KRITISCH:
+//   1) Eigener alter Item raus + freigeben - VOR IDE-Rebuild, damit der
+//      Rebuild keine Inkonsistenzen sieht
+//   2) Original-OnPopup rufen - IDE baut Menue komplett neu auf
+//   3) Frisches Item ans ENDE - nach IDE-Rebuild, damit wir nicht
+//      "wegrebuilt" werden
+//
+// Item hat Owner=nil + nur OnClick (kein Action) - vermeidet die
+// IDE-Action-Manager-Kollisionen.
+var
+  Popup   : TPopupMenu;
+  Slot    : TPopupHookSlot;
+  NewItem : TMenuItem;
+begin
+  Popup := Sender as TPopupMenu;
+  if not FSlots.TryGetValue(Popup, Slot) then Exit;
+
+  // (1) Alten SCA-Eintrag vom letzten Show raus + freigeben
+  if Assigned(Slot.OurItem) then
+  begin
+    try
+      if Popup.Items.IndexOf(Slot.OurItem) >= 0 then
+        Popup.Items.Remove(Slot.OurItem);
+      Slot.OurItem.Free;
+    except
+    end;
+    Slot.OurItem := nil;
+  end;
+
+  // (2) IDE-Rebuild via Original-Handler
+  if Assigned(Slot.OrigOnPopup) then
+    try Slot.OrigOnPopup(Sender); except end;
+
+  // (3) Frischen SCA-Item ans Ende - nur wenn Silent-Mode aktiviert ist.
+  // User-Setting (Tools > Options) wird bei jedem Popup-Show frisch
+  // ausgewertet, damit Aenderungen sofort wirken.
+  if not IsSilentEnabled then Exit;
+
+  NewItem := TMenuItem.Create(nil);
+  NewItem.Caption  := _('Analyse current file (silent)');
+  NewItem.Hint     := _('Static Code Analyser: analyse this file, no dock opens');
+  // ShortCut hier dient NUR der visuellen Anzeige im Popup ("Ctrl+Alt+A"
+  // rechts neben Caption). Die echte Hotkey-Verarbeitung laeuft ueber
+  // IOTAKeyboardBinding (TSCAKeyboardBinding), das den Key krHandled-marked
+  // VOR VCL ihn sieht - kein Doppel-Trigger. Lifecycle der beiden Mechanismen
+  // ist symmetrisch in Register/UnregisterAnalyserDockableForm gepaart.
+  NewItem.ShortCut := ShortCut(Ord('A'), [ssCtrl, ssAlt]);
+  NewItem.OnClick  := ItemClick;
+  Popup.Items.Add(NewItem);
+  Slot.OurItem := NewItem;
+end;
+
+procedure TEditorContextMenuHook.ItemClick(Sender: TObject);
+// Delegiert an den Silent-Mode-Entrypoint. Kein Dock, kein Frame.
+begin
+  RunSilentAnalysisForCurrentEditorFile;
+end;
+
+// INTAEditServicesNotifier
+procedure TEditorContextMenuHook.WindowShow(const EditWindow: INTAEditWindow;
+  Show, LoadedFromDesktop: Boolean);
+begin
+  // Feuert vor allem fuer NEU erscheinende Editor-Windows. Bei Plugin-
+  // Install nach IDE-Start sind die Fenster oft schon da -> WindowShow
+  // verpasst sie. Defense-in-depth in WindowActivated + EditorViewActivated.
+  if Show and Assigned(EditWindow) then
+    HookEditorForm(EditWindow.Form);
+end;
+
+procedure TEditorContextMenuHook.WindowActivated(
+  const EditWindow: INTAEditWindow);
+begin
+  // Feuert wenn der User in ein Editor-Window klickt / es fokussiert.
+  // Bis dahin ist das TPopupMenu garantiert erzeugt (das ist normalerweise
+  // lazy bei ersten Rechtsklick - aber WindowActivated kommt vor dem 1.
+  // Rechtsklick). HookEditorForm ist idempotent.
+  if Assigned(EditWindow) then
+    HookEditorForm(EditWindow.Form);
+end;
+
+procedure TEditorContextMenuHook.EditorViewActivated(
+  const EditWindow: INTAEditWindow; const EditView: IOTAEditView);
+begin
+  // Feuert bei jedem Tab-Wechsel. Triple-safety damit auch fuer Windows
+  // die wir zum Plugin-Install-Zeitpunkt nicht gesehen haben (Desktop-
+  // Restore, Plugin-Load-after-IDE-Start) der Hook spaetestens beim ersten
+  // Tab-Klick installiert wird.
+  if Assigned(EditWindow) then
+    HookEditorForm(EditWindow.Form);
+end;
+
+procedure TEditorContextMenuHook.WindowNotification(
+  const EditWindow: INTAEditWindow; Operation: TOperation);
+var
+  Popup : TPopupMenu;
+begin
+  // Editor-Window wird zerstoert -> Slot-Eintrag entfernen damit Destroy
+  // nicht auf einen freigegebenen Popup zugreift.
+  if (Operation = opRemove) and Assigned(EditWindow) then
+  begin
+    Popup := FindEditorPopup(EditWindow.Form);
+    if Assigned(Popup) and FSlots.ContainsKey(Popup) then
+      FSlots.Remove(Popup);   // doOwnsValues -> Slot wird gefreut
+  end;
+end;
+
+procedure TEditorContextMenuHook.WindowCommand(const EditWindow: INTAEditWindow; Command, Param: Integer; var Handled: Boolean); begin end;
+procedure TEditorContextMenuHook.EditorViewModified(const EditWindow: INTAEditWindow; const EditView: IOTAEditView); begin end;
+procedure TEditorContextMenuHook.DockFormVisibleChanged(const EditWindow: INTAEditWindow; DockForm: TDockableForm); begin end;
+procedure TEditorContextMenuHook.DockFormUpdated(const EditWindow: INTAEditWindow; DockForm: TDockableForm); begin end;
+procedure TEditorContextMenuHook.DockFormRefresh(const EditWindow: INTAEditWindow; DockForm: TDockableForm); begin end;
+
+procedure RegisterEditorContextMenuHook;
+var
+  EdSvc : IOTAEditorServices;
+  NtSvc : INTAEditorServices;
+  i     : Integer;
+begin
+  if Assigned(GCtxMenuHook) then Exit;
+  if not Supports(BorlandIDEServices, IOTAEditorServices, EdSvc) then Exit;
+
+  GCtxMenuHook    := TEditorContextMenuHook.Create;
+  GCtxMenuHookIfc := GCtxMenuHook as INTAEditServicesNotifier;
+  GCtxMenuHookIdx := EdSvc.AddNotifier(GCtxMenuHookIfc);
+
+  // Schon-offene Editor-Windows sofort versorgen
+  if Supports(BorlandIDEServices, INTAEditorServices, NtSvc) then
+    for i := 0 to NtSvc.EditWindowCount - 1 do
+      if Assigned(NtSvc.EditWindow[i]) then
+        GCtxMenuHook.HookEditorForm(NtSvc.EditWindow[i].Form);
+end;
+
+procedure UnregisterEditorContextMenuHook;
+var
+  Svc : IOTAEditorServices;
+begin
+  if GCtxMenuHookIdx >= 0 then
+  begin
+    try
+      if Supports(BorlandIDEServices, IOTAEditorServices, Svc) then
+        Svc.RemoveNotifier(GCtxMenuHookIdx);
+    except
+    end;
+    GCtxMenuHookIdx := -1;
+  end;
+  GCtxMenuHookIfc := nil;  // Refcount sinkt -> Destroy faehrt Slot-Cleanup
+  GCtxMenuHook    := nil;
+end;
+
+{ TSCAKeyboardBinding }
+
+procedure TSCAKeyboardBinding.BindKeyboard(
+  const BindingServices: IOTAKeyBindingServices);
+// Bindet Ctrl+Alt+A an SilentAnalyseKeyProc. AddKeyBinding nimmt ein Array
+// von TShortcut entgegen - hier nur ein Wert.
+begin
+  BindingServices.AddKeyBinding(
+    [ShortCut(Ord('A'), [ssCtrl, ssAlt])],
+    SilentAnalyseKeyProc);
+end;
+
+function TSCAKeyboardBinding.GetBindingType: TBindingType;
+begin
+  // btPartial = wir fuegen Bindings zur bestehenden IDE-Keymap hinzu.
+  // btComplete waere "wir ersetzen die komplette Keymap" (z.B. Vim-Mode).
+  Result := btPartial;
+end;
+
+function TSCAKeyboardBinding.GetDisplayName: string;
+begin
+  // Sichtbar unter Tools > Options > Keyboard Mappings (falls IDE das listet).
+  Result := 'Static Code Analyser: Silent-Mode Hotkey';
+end;
+
+function TSCAKeyboardBinding.GetName: string;
+begin
+  // Eindeutiger interner Identifier - sollte keinen Clash mit anderen
+  // Plugins haben.
+  Result := 'SCA.SilentAnalysisBinding';
+end;
+
+procedure TSCAKeyboardBinding.SilentAnalyseKeyProc(const Context: IOTAKeyContext;
+  KeyCode: TShortcut; var BindingResult: TKeyBindingResult);
+// Wird bei Ctrl+Alt+A im Editor gerufen. Triggert Silent-Analyse fuer die
+// aktuelle Datei und meldet krHandled - dann reicht die IDE den Key nicht
+// weiter an andere Handler oder den Default-Editor.
+begin
+  RunSilentAnalysisForCurrentEditorFile;
+  BindingResult := krHandled;
+end;
+
+procedure RegisterKeyboardBinding;
+// Registriert die Ctrl+Alt+A-Bindung in der IDE. AddKeyboardBinding liefert
+// einen Index >= 0 fuer Erfolg. Ein negativer Wert (oder eine Exception)
+// deutet auf einen Konflikt mit einem anderen Plugin/Keymap hin -
+// loggen wir nach OutputDebugString damit der User im Event-Log nachsehen
+// kann (kein UI-Crash - Silent-Mode laeuft dann nur ueber Editor-Rechtsklick).
+var
+  KBSvc : IOTAKeyboardServices;
+begin
+  if Assigned(GKeyBinding) then Exit;
+  if not Supports(BorlandIDEServices, IOTAKeyboardServices, KBSvc) then
+  begin
+    OutputDebugString('SCA: IOTAKeyboardServices not available - Ctrl+Alt+A hotkey disabled');
+    Exit;
+  end;
+  GKeyBinding    := TSCAKeyboardBinding.Create;
+  GKeyBindingIfc := GKeyBinding as IOTAKeyboardBinding;
+  try
+    GKeyBindingIdx := KBSvc.AddKeyboardBinding(GKeyBindingIfc);
+    if GKeyBindingIdx < 0 then
+      OutputDebugString('SCA: AddKeyboardBinding returned negative index - Ctrl+Alt+A may conflict with another plugin');
+  except
+    on E: Exception do
+    begin
+      OutputDebugString(PChar(Format(
+        'SCA: AddKeyboardBinding failed: %s: %s', [E.ClassName, E.Message])));
+      // Refcount sauber abbauen - Interface bleibt sonst auf einer
+      // halb-registrierten Bindung haengen.
+      GKeyBindingIfc := nil;
+      GKeyBinding    := nil;
+      GKeyBindingIdx := -1;
+    end;
+  end;
+end;
+
+procedure UnregisterKeyboardBinding;
+var
+  KBSvc : IOTAKeyboardServices;
+begin
+  if GKeyBindingIdx >= 0 then
+  begin
+    try
+      if Supports(BorlandIDEServices, IOTAKeyboardServices, KBSvc) then
+        KBSvc.RemoveKeyboardBinding(GKeyBindingIdx);
+    except
+    end;
+    GKeyBindingIdx := -1;
+  end;
+  GKeyBindingIfc := nil;  // Refcount sinkt -> Destroy
+  GKeyBinding    := nil;
+end;
 
 procedure RegisterAnalyserDockableForm;
 var
@@ -2763,6 +3388,11 @@ begin
   // angehaengt (nur im "Aktuelle Datei"-Pfad, Single-File-Watch).
   RegisterWatchMode;
 
+  // RuleCatalog warm laden - sonst wuerde der erste Open der Tools-
+  // Options-Page das JSON synchron parsen (~20-50 ms). Hier ist der
+  // Aufruf im BPL-Load-Pfad versteckt und faellt nicht auf.
+  TRuleCatalog.ProfileNames;   // triggert EnsureLoaded
+
   // Eintrag im Ansicht-Menue hinzufuegen
   MainMenu := NTASvc.GetMainMenu;
   ViewMenu := nil;
@@ -2779,12 +3409,27 @@ begin
 
   if Assigned(ViewMenu) then
   begin
+    // View-Menu: nur ein flacher Eintrag "Static Code Analysis" der das
+    // Dock-Fenster oeffnet. Silent-Mode (aktuelle Datei analysieren)
+    // wird ueber das Editor-Rechtsklick-Menue gestartet, nicht hier.
     Item := TMenuItem.Create(nil);
-    Item.Caption := 'Static Code Analysis';
+    Item.Caption := _('Static Code Analysis');
     Item.OnClick := GDockableForm.ViewMenuClick;
     ViewMenu.Add(Item);
     GViewMenuItem := Item;
   end;
+
+  // Editor-Rechtsklick-Menue: dynamischer OnPopup-Hook fuer den
+  // Silent-Mode-Eintrag. Der Shortcut auf dem Menue-Item ist nur noch
+  // Visual-Hint - die echte Hotkey-Verarbeitung laeuft ueber
+  // IOTAKeyboardBinding (siehe RegisterKeyboardBinding) und feuert
+  // editor-weit, auch ohne dass das Popup je geoeffnet wurde.
+  RegisterEditorContextMenuHook;
+  RegisterKeyboardBinding;
+
+  // Tools > Options > Third Party > Static Code Analyser
+  // (Checkbox um den Silent-Mode aus-/anzuschalten).
+  RegisterSCAAddInOptions;
 end;
 
 procedure ShowAnalyserDockableForm;
@@ -2805,6 +3450,9 @@ begin
     GViewMenuItem.Parent.Remove(GViewMenuItem);
     FreeAndNil(GViewMenuItem);
   end;
+  UnregisterEditorContextMenuHook;
+  UnregisterKeyboardBinding;
+  UnregisterSCAAddInOptions;
   if Assigned(GDockableForm) then
   begin
     // GDockableForm ist ein TInterfacedObject -> wird ueber den

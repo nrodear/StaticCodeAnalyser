@@ -6,10 +6,10 @@
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Debug</Config>
         <Platform Condition="'$(Platform)'==''">Win32</Platform>
-        <ProjectName Condition="'$(ProjectName)'==''">analyser.d12</ProjectName>
+        <ProjectName Condition="'$(ProjectName)'==''">StaticCodeAnalyser.d12</ProjectName>
         <TargetedPlatforms>3</TargetedPlatforms>
         <AppType>Application</AppType>
-        <MainSource>analyser.d12.dpr</MainSource>
+        <MainSource>StaticCodeAnalyser.d12.dpr</MainSource>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Base' or '$(Base)'!=''">
         <Base>true</Base>
@@ -61,7 +61,7 @@
     <PropertyGroup Condition="'$(Base)'!=''">
         <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
         <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
-        <DCC_UnitSearchPath>$(PROJECTDIR)\sources;$(PROJECTDIR)\sources\Common;$(PROJECTDIR)\sources\Detectors;$(PROJECTDIR)\sources\Infrastructure;$(PROJECTDIR)\sources\Output;$(PROJECTDIR)\sources\Parsing;$(PROJECTDIR)\sources\UI;$(PROJECTDIR)\resources;$(PROJECTDIR)\..\StaticCodeAnalyserIDE;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>$(PROJECTDIR)\sources;$(PROJECTDIR)\sources\Common;$(PROJECTDIR)\sources\Console;$(PROJECTDIR)\sources\Detectors;$(PROJECTDIR)\sources\Infrastructure;$(PROJECTDIR)\sources\Output;$(PROJECTDIR)\sources\Parsing;$(PROJECTDIR)\sources\UI;$(PROJECTDIR)\resources;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_E>false</DCC_E>
         <DCC_N>false</DCC_N>
         <DCC_S>false</DCC_S>
@@ -71,7 +71,7 @@
         <Icon_MainIcon>$(BDS)\bin\delphi_PROJECTICON.ico</Icon_MainIcon>
         <UWP_DelphiLogo44>$(BDS)\bin\Artwork\Windows\UWP\delphi_UwpDefault_44.png</UWP_DelphiLogo44>
         <UWP_DelphiLogo150>$(BDS)\bin\Artwork\Windows\UWP\delphi_UwpDefault_150.png</UWP_DelphiLogo150>
-        <SanitizedProjectName>analyser_d12</SanitizedProjectName>
+        <SanitizedProjectName>StaticCodeAnalyser_d12</SanitizedProjectName>
         <DCC_DebugDCUs>true</DCC_DebugDCUs>
         <DCC_Optimize>false</DCC_Optimize>
         <VerInfo_Locale>1031</VerInfo_Locale>
@@ -138,11 +138,11 @@
         <DCCReference Include="sources\UI\uLocalization.pas"/>
         <DCCReference Include="sources\UI\uFindingGridRenderer.pas"/>
         <DCCReference Include="sources\UI\uFindingFilter.pas"/>
-        <DCCReference Include="sources\UI\uDfmTextViewer.pas"/>
         <DCCReference Include="sources\UI\uMainForm.pas">
             <Form>Form2</Form>
             <FormType>dfm</FormType>
         </DCCReference>
+        <DCCReference Include="sources\UI\uDfmTextViewer.pas"/>
         <DCCReference Include="sources\Parsing\uAstNode.pas"/>
         <DCCReference Include="sources\Parsing\uLexer.pas"/>
         <DCCReference Include="sources\Parsing\uParser2.pas"/>
@@ -219,8 +219,6 @@
         <DCCReference Include="sources\Detectors\uDfmLayerViolation.pas"/>
         <DCCReference Include="sources\Detectors\uDfmGodHandler.pas"/>
         <DCCReference Include="sources\Detectors\uDfmActionMismatch.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserIDE\uIDEStatsTiles.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserIDE\uIDEHelpPanel.pas"/>
         <DCCReference Include="resources\uCustomerForm.pas">
             <Form>CustomerForm</Form>
             <FormType>dfm</FormType>
@@ -229,6 +227,8 @@
             <Form>OrderForm</Form>
             <FormType>dfm</FormType>
         </DCCReference>
+        <DCCReference Include="sources\UI\uIDEStatsTiles.pas"/>
+        <DCCReference Include="sources\UI\uIDEHelpPanel.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
@@ -247,24 +247,24 @@
         <BorlandProject>
             <Delphi.Personality>
                 <Source>
-                    <Source Name="MainSource">analyser.d12.dpr</Source>
+                    <Source Name="MainSource">StaticCodeAnalyser.d12.dpr</Source>
                 </Source>
                 <Excluded_Packages>
-                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\StaticCodeAnalyserIDE.bpl">(Unbenannt)</Excluded_Packages>
+                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\StaticCodeAnalyser.IDE.d12.bpl">(Unbenannt)</Excluded_Packages>
                     <Excluded_Packages Name="$(BDSBIN)\dcloffice2k290.bpl">Microsoft Office 2000 Beispiele für gekapselte Komponenten für Automatisierungsserver</Excluded_Packages>
                     <Excluded_Packages Name="$(BDSBIN)\dclofficexp290.bpl">Microsoft Office XP Beispiele für gekapselte Komponenten für Automation Server</Excluded_Packages>
                 </Excluded_Packages>
             </Delphi.Personality>
             <Deployment Version="4">
-                <DeployFile LocalName="Win32\Debug\analyser.d12.exe" Configuration="Debug" Class="ProjectOutput">
+                <DeployFile LocalName="Win32\Debug\StaticCodeAnalyser.d12.exe" Configuration="Debug" Class="ProjectOutput">
                     <Platform Name="Win32">
-                        <RemoteName>analyser.d12.exe</RemoteName>
+                        <RemoteName>StaticCodeAnalyser.d12.exe</RemoteName>
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>
-                <DeployFile LocalName="Win64\Debug\analyser.d12.exe" Configuration="Debug" Class="ProjectOutput">
+                <DeployFile LocalName="Win64\Debug\StaticCodeAnalyser.d12.exe" Configuration="Debug" Class="ProjectOutput">
                     <Platform Name="Win64">
-                        <RemoteName>analyser.d12.exe</RemoteName>
+                        <RemoteName>StaticCodeAnalyser.d12.exe</RemoteName>
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>

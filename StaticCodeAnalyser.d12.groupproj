@@ -1,12 +1,12 @@
-﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
         <ProjectGuid>{7012BB59-6051-481D-B373-92ECC22F6CE1}</ProjectGuid>
     </PropertyGroup>
     <ItemGroup>
-        <Projects Include="StaticCodeAnalyserForm\analyser.d12.dproj">
+        <Projects Include="StaticCodeAnalyserForm\StaticCodeAnalyser.d12.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="StaticCodeAnalyserIDE\StaticCodeAnalyserIDE.dproj">
+        <Projects Include="StaticCodeAnalyserIDE\StaticCodeAnalyser.IDE.d12.dproj">
             <Dependencies/>
         </Projects>
         <Projects Include="StaticCodeAnalyserForm\tests\TestProject.dproj">
@@ -20,23 +20,23 @@
             <Default.Personality/>
         </BorlandProject>
     </ProjectExtensions>
-    <Target Name="analyser_d12">
-        <MSBuild Projects="StaticCodeAnalyserForm\analyser.d12.dproj"/>
+    <Target Name="StaticCodeAnalyser_d12">
+        <MSBuild Projects="StaticCodeAnalyserForm\StaticCodeAnalyser.d12.dproj"/>
     </Target>
-    <Target Name="analyser_d12:Clean">
-        <MSBuild Projects="StaticCodeAnalyserForm\analyser.d12.dproj" Targets="Clean"/>
+    <Target Name="StaticCodeAnalyser_d12:Clean">
+        <MSBuild Projects="StaticCodeAnalyserForm\StaticCodeAnalyser.d12.dproj" Targets="Clean"/>
     </Target>
-    <Target Name="analyser_d12:Make">
-        <MSBuild Projects="StaticCodeAnalyserForm\analyser.d12.dproj" Targets="Make"/>
+    <Target Name="StaticCodeAnalyser_d12:Make">
+        <MSBuild Projects="StaticCodeAnalyserForm\StaticCodeAnalyser.d12.dproj" Targets="Make"/>
     </Target>
-    <Target Name="StaticCodeAnalyserIDE">
-        <MSBuild Projects="StaticCodeAnalyserIDE\StaticCodeAnalyserIDE.dproj"/>
+    <Target Name="StaticCodeAnalyser_IDE_d12">
+        <MSBuild Projects="StaticCodeAnalyserIDE\StaticCodeAnalyser.IDE.d12.dproj"/>
     </Target>
-    <Target Name="StaticCodeAnalyserIDE:Clean">
-        <MSBuild Projects="StaticCodeAnalyserIDE\StaticCodeAnalyserIDE.dproj" Targets="Clean"/>
+    <Target Name="StaticCodeAnalyser_IDE_d12:Clean">
+        <MSBuild Projects="StaticCodeAnalyserIDE\StaticCodeAnalyser.IDE.d12.dproj" Targets="Clean"/>
     </Target>
-    <Target Name="StaticCodeAnalyserIDE:Make">
-        <MSBuild Projects="StaticCodeAnalyserIDE\StaticCodeAnalyserIDE.dproj" Targets="Make"/>
+    <Target Name="StaticCodeAnalyser_IDE_d12:Make">
+        <MSBuild Projects="StaticCodeAnalyserIDE\StaticCodeAnalyser.IDE.d12.dproj" Targets="Make"/>
     </Target>
     <Target Name="TestProject">
         <MSBuild Projects="StaticCodeAnalyserForm\tests\TestProject.dproj"/>
@@ -48,13 +48,13 @@
         <MSBuild Projects="StaticCodeAnalyserForm\tests\TestProject.dproj" Targets="Make"/>
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="analyser_d12;StaticCodeAnalyserIDE;TestProject"/>
+        <CallTarget Targets="StaticCodeAnalyser_d12;StaticCodeAnalyser_IDE_d12;TestProject"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="analyser_d12:Clean;StaticCodeAnalyserIDE:Clean;TestProject:Clean"/>
+        <CallTarget Targets="StaticCodeAnalyser_d12:Clean;StaticCodeAnalyser_IDE_d12:Clean;TestProject:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="analyser_d12:Make;StaticCodeAnalyserIDE:Make;TestProject:Make"/>
+        <CallTarget Targets="StaticCodeAnalyser_d12:Make;StaticCodeAnalyser_IDE_d12:Make;TestProject:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

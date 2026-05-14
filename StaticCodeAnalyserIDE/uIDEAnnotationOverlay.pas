@@ -50,6 +50,14 @@ type
     FPanelTitle     : TPanel;
     FLblTitle       : TLabel;   // "⚠  Memory Leak – ..."
     FLblBadge       : TLabel;   // "BUG · ERROR" rechts
+    // Schliessen-Glyph oben rechts ("✕"). Klick entfernt die aktuell
+    // angezeigte Markierung aus GHighlighter (User dismissed false-positive
+    // oder "schon manuell gefixed"). Liegt rechts vom Badge.
+    FLblClose       : TLabel;
+    // Aktuell angezeigte Datei + Zeile - werden in ShowAt gesetzt und vom
+    // Close-Klick gebraucht um die richtige Markierung zu loeschen.
+    FCurrentFile    : string;
+    FCurrentLine    : Integer;
     FPanelDesc      : TPanel;
     FLblDesc        : TLabel;
     // "Nachher / After"-Hinweis-Block (Fix-Hint aus uFixHint.After).
@@ -68,6 +76,7 @@ type
     // nicht eingebettet (initialer WS_POPUP-Zustand).
     FCurrentParent : HWND;
     procedure EmbedIntoEditor(AEditorHandle: HWND);
+    procedure CloseLblClick(Sender: TObject);
   protected
     procedure CreateParams(var Params: TCreateParams); override;
   public
@@ -87,12 +96,23 @@ type
     // AFix: zusaetzlich der "Nachher"-Code-Block aus uFixHint.After.
     // Leer-String -> Fix-Block wird unsichtbar, Overlay-Hoehe entsprechend
     // kuerzer. Multiline OK (sLineBreak intern); WordWrap an, Monospace.
+    // AFileName + ALineNo identifizieren die aktuell gezeigte Markierung -
+    // werden vom Close-Glyph-Klick gebraucht um genau diese eine Markierung
+    // aus GHighlighter zu entfernen. Beide leer = Close-Glyph hidden.
     procedure ShowAt(AEditor: TWinControl;
       AClientX, AClientY, AWidth, ALineH: Integer;
       const ATitle, ADesc, ABadge: string;
       AAccentColor: TColor = clNone;
-      const AFix: string = '');
+      const AFix: string = '';
+      const AFileName: string = '';
+      ALineNo: Integer = 0);
     procedure HideOverlay;
+    // True wenn AScreenPos in einem AZonePx x AZonePx grossen Quadrat um den
+    // Close-[x]-Button (Mittelpunkt) liegt. Wird von uIDELineHighlighter
+    // genutzt um zu entscheiden ob das Overlay sichtbar bleiben soll wenn
+    // die Maus die Code-Zeile verlassen hat. Default-Zone 50 px.
+    function IsCursorNearClose(const AScreenPos: TPoint;
+      AZonePx: Integer = 50): Boolean;
   end;
 
 var
@@ -102,6 +122,10 @@ procedure RegisterAnnotationOverlay;
 procedure UnregisterAnnotationOverlay;
 
 implementation
+
+uses
+  uIDELineHighlighter;   // GHighlighter (implementation-only - vermeidet
+                         // den Zyklus mit dem interface-uses dort).
 
 const
   // Exakte Farben aus dem Mockup (Delphi TColor = $00BBGGRR)
@@ -216,6 +240,30 @@ begin
   FPanelTitle.StyleElements  := [];
   FPanelTitle.ParentBackground := False;
   FPanelTitle.Color          := CL_TITLE_BG;
+
+  // Close-Glyph "✕" ganz links. alLeft + erste Insertion -> liegt am
+  // linkesten Rand des Title-Panels. Titel + Badge ruecken um die Close-
+  // Button-Breite nach rechts ein.
+  // Klick entfernt die aktuell angezeigte Markierung aus GHighlighter.
+  FLblClose                    := TLabel.Create(Self);
+  FLblClose.Parent             := FPanelTitle;
+  FLblClose.Align              := alLeft;
+  FLblClose.AutoSize           := False;
+  FLblClose.Width              := 22;
+  FLblClose.Caption            := #$2715;  // ✕
+  FLblClose.Alignment          := taCenter;
+  FLblClose.Layout             := tlCenter;
+  FLblClose.Font.Color         := CL_TITLE_FG;
+  FLblClose.Font.Name          := 'Segoe UI';
+  FLblClose.Font.Size          := 11;
+  FLblClose.Font.Style         := [fsBold];
+  FLblClose.Color              := CL_TITLE_BG;
+  FLblClose.ParentColor        := False;
+  FLblClose.StyleElements      := [];
+  FLblClose.Cursor             := crHandPoint;
+  FLblClose.ShowHint           := True;
+  FLblClose.Hint               := _('Dismiss this finding (remove marker)');
+  FLblClose.OnClick            := CloseLblClick;
 
   // Badge (alRight, wird vor FLblTitle angelegt -> VCL platziert es rechts)
   FLblBadge                    := TLabel.Create(Self);
@@ -379,7 +427,9 @@ procedure TAnnotationOverlay.ShowAt(AEditor: TWinControl;
   AClientX, AClientY, AWidth, ALineH: Integer;
   const ATitle, ADesc, ABadge: string;
   AAccentColor: TColor;
-  const AFix: string);
+  const AFix: string;
+  const AFileName: string;
+  ALineNo: Integer);
 const
   FIX_HEADER_H = 22;  // kleine "✓ After"-Header-Zeile
   MAX_FIX_H    = 200; // ~10 Zeilen Consolas 9pt
@@ -545,6 +595,28 @@ begin
   else
     RedrawWindow(Handle, nil, 0,
       RDW_INVALIDATE or RDW_ALLCHILDREN or RDW_UPDATENOW or RDW_ERASE);
+
+  // Identitaet der gerade angezeigten Markierung fuer Close-Klick speichern.
+  // Leerer File-Name -> Close-Glyph ausblenden (Caller hat keine Datei
+  // mitgegeben, z.B. Test-Fixtures).
+  FCurrentFile := AFileName;
+  FCurrentLine := ALineNo;
+  if Assigned(FLblClose) then
+    FLblClose.Visible := (AFileName <> '') and (ALineNo > 0);
+end;
+
+procedure TAnnotationOverlay.CloseLblClick(Sender: TObject);
+// Entfernt die aktuell angezeigte Markierung aus GHighlighter und versteckt
+// das Overlay. Greift direkt auf den globalen Highlighter zu - der lebt
+// per Definition laenger als das Overlay (beide werden in
+// UnregisterAnalyserDockableForm aufgeraeumt). Frame-Grid bleibt unsynced
+// (Befund ist dort noch in der Liste); das ist OK als MVP - User kann
+// "Analyse starten" klicken um die Liste zu refreshen.
+begin
+  if (FCurrentFile <> '') and (FCurrentLine > 0)
+     and Assigned(GHighlighter) then
+    GHighlighter.RemoveMark(FCurrentFile, FCurrentLine);
+  HideOverlay;
 end;
 
 procedure TAnnotationOverlay.HideOverlay;
@@ -553,6 +625,33 @@ begin
   FLastX := -1; FLastY := -1;
   if Visible then
     Visible := False;
+end;
+
+function TAnnotationOverlay.IsCursorNearClose(const AScreenPos: TPoint;
+  AZonePx: Integer): Boolean;
+// Screen-Koordinaten des Close-Buttons holen + Quadrat AZonePx x AZonePx
+// um seinen Mittelpunkt aufspannen + PtInRect-Test. Bewusst um den
+// MITTELPUNKT zentriert (nicht den Button-Rand erweitert) - sonst wird die
+// Hot-Zone bei groesserem Button asymmetrisch.
+var
+  BtnTL, BtnBR : TPoint;
+  Center       : TPoint;
+  HalfZone     : Integer;
+  Zone         : TRect;
+begin
+  Result := False;
+  if not Assigned(FLblClose) or not FLblClose.Visible then Exit;
+  // ClientToScreen auf Top-Left + Bottom-Right - liefert das Button-Rect
+  // in Screen-Koordinaten ohne auf BoundsRect/ScreenRect-Properties
+  // angewiesen zu sein (manche VCL-Versionen liefern dort den Parent-Rect).
+  BtnTL := FLblClose.ClientToScreen(Point(0, 0));
+  BtnBR := FLblClose.ClientToScreen(Point(FLblClose.Width, FLblClose.Height));
+  Center.X := (BtnTL.X + BtnBR.X) div 2;
+  Center.Y := (BtnTL.Y + BtnBR.Y) div 2;
+  HalfZone := AZonePx div 2;
+  Zone := Rect(Center.X - HalfZone, Center.Y - HalfZone,
+               Center.X + HalfZone, Center.Y + HalfZone);
+  Result := PtInRect(Zone, AScreenPos);
 end;
 
 { ---- Lifecycle ---- }

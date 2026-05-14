@@ -1,4 +1,4 @@
-package StaticCodeAnalyserIDE;
+package StaticCodeAnalyser.IDE.d12;
 
 {$R *.res}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
@@ -40,8 +40,8 @@ contains
   uIDEAnnotationOverlay in 'uIDEAnnotationOverlay.pas',
   uIDEMessages in 'uIDEMessages.pas',
   uIDEWatchMode in 'uIDEWatchMode.pas',
-  uIDEStatsTiles in 'uIDEStatsTiles.pas',
-  uIDEHelpPanel in 'uIDEHelpPanel.pas',
+  uIDEStatsTiles in '..\StaticCodeAnalyserForm\sources\UI\uIDEStatsTiles.pas',
+  uIDEHelpPanel in '..\StaticCodeAnalyserForm\sources\UI\uIDEHelpPanel.pas',
   uIDEExportMenu in 'uIDEExportMenu.pas',
   uIDEEditorIntegration in 'uIDEEditorIntegration.pas',
   uIDEStatusBar in 'uIDEStatusBar.pas',
@@ -49,6 +49,7 @@ contains
   uIDEAnalyseProgress in 'uIDEAnalyseProgress.pas',
   uIDEGridTooltip in 'uIDEGridTooltip.pas',
   uIDELifecycle in 'uIDELifecycle.pas',
+  uIDESCAOptions in 'uIDESCAOptions.pas' {SCAOptionsFrame: TFrame},
   uIDEAnalyseRunner in 'uIDEAnalyseRunner.pas',
   // ---- UI ----
   uAnalyserPalette in '..\StaticCodeAnalyserForm\sources\UI\uAnalyserPalette.pas',

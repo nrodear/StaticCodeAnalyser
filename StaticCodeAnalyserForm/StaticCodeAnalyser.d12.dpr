@@ -1,4 +1,4 @@
-program analyser.d12;
+program StaticCodeAnalyser.d12;
 
 // GUI-AppType (kein {$APPTYPE CONSOLE}): Windows allokiert KEINE Konsole
 // beim Start. Damit kein schwarzes cmd-Fenster beim Doppelklick.
@@ -106,8 +106,8 @@ uses
   uDfmActionMismatch in 'sources\Detectors\uDfmActionMismatch.pas',
   uCustomerForm in 'resources\uCustomerForm.pas' {CustomerForm},
   uOrderForm in 'resources\uOrderForm.pas' {OrderForm},
-  uIDEStatsTiles in '..\StaticCodeAnalyserIDE\uIDEStatsTiles.pas',
-  uIDEHelpPanel in '..\StaticCodeAnalyserIDE\uIDEHelpPanel.pas';
+  uIDEStatsTiles in 'sources\UI\uIDEStatsTiles.pas',
+  uIDEHelpPanel in 'sources\UI\uIDEHelpPanel.pas';
 
 {$R *.res}
 

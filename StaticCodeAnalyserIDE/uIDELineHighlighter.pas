@@ -125,6 +125,12 @@ type
     // Findet welche markierte Zeile die Maus aktuell trifft. Liefert -1
     // wenn keine Zeile getroffen wird.
     function HitTestLine(X, Y: Integer): Integer;
+    // True wenn der Cursor (Screen-Koordinaten) gerade ueber dem
+    // GAnnotationOverlay-Fenster steht. Wird vor jedem HideOverlay-Aufruf
+    // gefragt - sonst koennte der User den Close-[x]-Button nicht klicken,
+    // weil das Overlay beim Mouse-Leave der Codezeile sofort verschwindet,
+    // BEVOR die Maus den Overlay-Bereich erreicht.
+    function IsCursorOverOverlay: Boolean;
   protected
     // INTACodeEditorEvents — nur BeginPaint/EndPaint/PaintLine relevant.
     procedure EditorScrolled(const Editor: TWinControl; const Direction: TCodeEditorScrollDirection);
@@ -158,6 +164,16 @@ type
   // Marker einer einzelnen Datei: Line -> Mark-Daten.
   TFileMarks = TDictionary<Integer, TFindingMark>;
 
+  // Per-File-Slot fuer den Save-Auto-Clear-Notifier. IOTAModule + Cookie
+  // werden beim Detach gebraucht; den Notifier selbst halten wir als
+  // strong ref am Leben (der Cookie alleine reicht nicht, ohne ref wuerde
+  // der TNotifierObject-Refcount auf 0 sinken und das Objekt freigegeben).
+  TSaveNotifierSlot = record
+    Module    : IOTAModule;
+    Notifier  : IOTAModuleNotifier;
+    Cookie    : Integer;
+  end;
+
   TFindingHighlighter = class
   private
     // Multi-File-Marker-Storage: normalisierter Pfad -> TFileMarks.
@@ -166,10 +182,22 @@ type
     // so dass der User beim Tab-Wechsel sofort die Befunde der neuen
     // Datei sieht ohne dass irgendwer SetActiveFile aufrufen muss.
     FMarksByFile     : TObjectDictionary<string, TFileMarks>;
+    // Save-Auto-Clear: pro markierter Datei wird ein IOTAModuleNotifier
+    // angehaengt der bei AfterSave die Marker dieser Datei loescht
+    // (User hat editiert -> Zeilen-Nummern stimmen nicht mehr).
+    // Key ist NormalizePath(filename); leerer Slot = keine Datei dieses
+    // Namens aktuell im Editor offen (Attach scheitert dann still).
+    FSaveNotifiers   : TDictionary<string, TSaveNotifierSlot>;
     FEditorEvents    : INTACodeEditorEvents;  // haelt Refcount am Leben
-    FEditorEventsObj : TFindingEditorEvents;
+    FEditorEventsObj : TFindingEditorEvents;   // Refcount via FEditorEvents (siehe Create)
     FEditorEventsIdx : Integer;               // Index aus AddEditorEventsNotifier; -1 = nicht registriert
     function NormalizePath(const APath: string): string;
+    // Save-Notifier-Verwaltung. Attach scheitert still wenn die Datei
+    // (noch) nicht als IOTAModule offen ist - das ist OK, beim naechsten
+    // Editor-Open kommt SetAllFindings ja sowieso erneut.
+    procedure AttachSaveNotifier(const AKey: string);
+    procedure DetachSaveNotifier(const AKey: string);
+    procedure DetachAllSaveNotifiers;
   public
     // PUBLIC fuer TFindingEditorEvents — forciert Repaint aller markierten
     // Zeilen via InvalidateTopEditorLogicalLine. Wird in EditorScrolled
@@ -184,6 +212,16 @@ type
     // sein (leerer FileName -> Eintrag wird geskippt).
     procedure SetAllFindings(const AEntries: array of TFindingMarkEntry);
     procedure Clear;
+
+    // Loescht alle Marker fuer EINE Datei. Wird vom Save-Auto-Clear
+    // gerufen (Edit+Save invalidiert Zeilen-Nummern). Idempotent;
+    // unbekannte Datei = no-op. Triggert Repaint im sichtbaren Editor.
+    procedure ClearFile(const AFileName: string);
+
+    // Loescht einen einzelnen Marker (Datei + Zeile). Wird vom [x]-Button
+    // im Hover-Overlay gerufen (User dismissed eine spezifische Markierung).
+    // Idempotent; unbekannte Datei/Zeile = no-op. Triggert Repaint.
+    procedure RemoveMark(const AFileName: string; ALineNo: Integer);
 
     // True wenn IRGENDEINE Datei Marker hat.
     function HasMarks: Boolean;
@@ -210,6 +248,73 @@ const
   CL_HIGHLIGHT_BAR = TColor($000020D0);  // #D02000 – kraeftiges Rot
   STRIPE_WIDTH_PX  = 3;
 
+type
+  // Wird beim Save (durch den IDE-Kern) gerufen. Wir delegieren an
+  // GHighlighter.ClearFile damit die Marker dieser Datei verschwinden -
+  // sie sind potenziell veraltet weil der User Zeilen verschoben hat.
+  //
+  // KRITISCH: alle 3 IOTAModuleNotifier-Versionen explizit listen +
+  // implementieren (siehe ausfuehrlicher Kommentar in uIDEWatchMode -
+  // Delphi 12 fragt via QueryInterface den neusten verfuegbaren Typ ab,
+  // sonst AV in coreide290.bpl).
+  TSaveAutoClearNotifier = class(TNotifierObject, IInterface,
+    IOTANotifier, IOTAModuleNotifier80, IOTAModuleNotifier90,
+    IOTAModuleNotifier)
+  private
+    FFileName : string;   // normalisiert (gleiche Form wie GHighlighter-Keys)
+  protected
+    // IOTANotifier
+    procedure AfterSave;
+    procedure BeforeSave;
+    procedure Destroyed;
+    procedure Modified;
+    // IOTAModuleNotifier
+    function CheckOverwrite: Boolean;
+    procedure ModuleRenamed(const NewName: string); overload;
+    // IOTAModuleNotifier80
+    function AllowSave: Boolean;
+    function GetOverwriteFileNameCount: Integer;
+    function GetOverwriteFileName(Index: Integer): string;
+    procedure SetSaveFileName(const FileName: string);
+    // IOTAModuleNotifier90
+    procedure BeforeRename(const OldFileName, NewFileName: string);
+    procedure AfterRename(const OldFileName, NewFileName: string);
+  public
+    constructor Create(const ANormalizedFileName: string);
+  end;
+
+{ ---- TSaveAutoClearNotifier ---- }
+
+constructor TSaveAutoClearNotifier.Create(const ANormalizedFileName: string);
+begin
+  inherited Create;
+  FFileName := ANormalizedFileName;
+end;
+
+procedure TSaveAutoClearNotifier.AfterSave;
+begin
+  // GHighlighter koennte zwischenzeitlich freigegeben sein (Plugin-Unload-
+  // Race). Defensiv pruefen, dann nur die EINE Datei loeschen.
+  if Assigned(GHighlighter) then
+    GHighlighter.ClearFile(FFileName);
+end;
+
+// IOTANotifier
+procedure TSaveAutoClearNotifier.BeforeSave; begin end;
+procedure TSaveAutoClearNotifier.Destroyed;  begin end;
+procedure TSaveAutoClearNotifier.Modified;   begin end;
+// IOTAModuleNotifier
+function  TSaveAutoClearNotifier.CheckOverwrite: Boolean; begin Result := True; end;
+procedure TSaveAutoClearNotifier.ModuleRenamed(const NewName: string); begin end;
+// IOTAModuleNotifier80
+function  TSaveAutoClearNotifier.AllowSave: Boolean;            begin Result := True; end;
+function  TSaveAutoClearNotifier.GetOverwriteFileNameCount: Integer; begin Result := 0; end;
+function  TSaveAutoClearNotifier.GetOverwriteFileName(Index: Integer): string; begin Result := ''; end;
+procedure TSaveAutoClearNotifier.SetSaveFileName(const FileName: string); begin end;
+// IOTAModuleNotifier90
+procedure TSaveAutoClearNotifier.BeforeRename(const OldFileName, NewFileName: string); begin end;
+procedure TSaveAutoClearNotifier.AfterRename (const OldFileName, NewFileName: string); begin end;
+
 { ---- TFindingHighlighter ---- }
 
 constructor TFindingHighlighter.Create;
@@ -218,7 +323,13 @@ begin
   // doOwnsValues: die inneren TFileMarks-Dictionaries werden bei Remove
   // / Clear / Destroy automatisch freigegeben.
   FMarksByFile     := TObjectDictionary<string, TFileMarks>.Create([doOwnsValues]);
+  FSaveNotifiers   := TDictionary<string, TSaveNotifierSlot>.Create;
   FEditorEventsIdx := -1;
+  // SCA-Detektor flaggt das Create-ohne-Free als MemoryLeak. False-Positive:
+  // TFindingEditorEvents erbt TInterfacedObject - der Refcount wird ueber
+  // FEditorEvents (INTACodeEditorEvents) gehalten, und das Nil-Setzen in
+  // Destroy released das Objekt. Kein expliziter Free noetig.
+  // noinspection MemoryLeak
   FEditorEventsObj := TFindingEditorEvents.Create;
   FEditorEvents    := FEditorEventsObj as INTACodeEditorEvents;
 end;
@@ -226,6 +337,10 @@ end;
 destructor TFindingHighlighter.Destroy;
 begin
   FEditorEvents := nil;  // Refcount sinkt; nach RemoveEditorEventsNotifier (in UnregisterLineHighlighter) -> 0 -> Objekt freigegeben
+  // ALLE Save-Notifier abmelden BEVOR FMarksByFile weg ist, sonst koennte
+  // ein verspaeteter AfterSave-Callback in einen freed Dictionary greifen.
+  DetachAllSaveNotifiers;
+  FreeAndNil(FSaveNotifiers);
   FreeAndNil(FMarksByFile);
   inherited;
 end;
@@ -233,6 +348,64 @@ end;
 function TFindingHighlighter.NormalizePath(const APath: string): string;
 begin
   Result := APath.ToLower.Replace('/', '\');
+end;
+
+procedure TFindingHighlighter.AttachSaveNotifier(const AKey: string);
+// AKey ist bereits normalisiert (NormalizePath). Sucht das IOTAModule
+// dazu - wenn die Datei nicht im IDE-Editor offen ist, bleibt der Slot
+// leer und wir attachen nichts (das ist OK; sobald SetAllFindings das
+// naechste mal laeuft - z.B. nach Filter-Wechsel - versuchen wir erneut).
+var
+  Slot      : TSaveNotifierSlot;
+  ModSvc    : IOTAModuleServices;
+  Module    : IOTAModule;
+  i         : Integer;
+  ModFile   : string;
+begin
+  if FSaveNotifiers.ContainsKey(AKey) then Exit; // schon attached
+  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
+
+  Module := nil;
+  for i := 0 to ModSvc.ModuleCount - 1 do
+  begin
+    ModFile := NormalizePath(ModSvc.Modules[i].FileName);
+    if ModFile = AKey then
+    begin
+      Module := ModSvc.Modules[i];
+      Break;
+    end;
+  end;
+  if not Assigned(Module) then Exit;
+
+  Slot.Module    := Module;
+  Slot.Notifier  := TSaveAutoClearNotifier.Create(AKey);
+  Slot.Cookie    := Module.AddNotifier(Slot.Notifier);
+  FSaveNotifiers.Add(AKey, Slot);
+end;
+
+procedure TFindingHighlighter.DetachSaveNotifier(const AKey: string);
+var
+  Slot : TSaveNotifierSlot;
+begin
+  if not FSaveNotifiers.TryGetValue(AKey, Slot) then Exit;
+  try
+    if Assigned(Slot.Module) and (Slot.Cookie >= 0) then
+      Slot.Module.RemoveNotifier(Slot.Cookie);
+  except
+    // Module evtl. schon geschlossen; Slot trotzdem entfernen.
+  end;
+  FSaveNotifiers.Remove(AKey);  // strong refs (Module, Notifier) sinken
+end;
+
+procedure TFindingHighlighter.DetachAllSaveNotifiers;
+var
+  Keys : TArray<string>;
+  K    : string;
+begin
+  if not Assigned(FSaveNotifiers) or (FSaveNotifiers.Count = 0) then Exit;
+  Keys := FSaveNotifiers.Keys.ToArray;  // Kopie, damit wir waehrend
+                                        // des Loops modifizieren duerfen
+  for K in Keys do DetachSaveNotifier(K);
 end;
 
 procedure TFindingHighlighter.InvalidateAllLines;
@@ -302,6 +475,21 @@ begin
   if Assigned(FEditorEventsObj) then
     FEditorEventsObj.ResetState;
 
+  // Save-Notifier sync: alte abmelden die nicht mehr in FMarksByFile sind,
+  // neue attachen fuer Dateien die jetzt erstmals Marker haben. Wird beim
+  // Frame-First-Run leer (FSaveNotifiers ist leer); beim Filter-Wechsel /
+  // Re-Analyse adjustiert es delta-basiert ohne unnoetige IDE-Calls.
+  var ExistingKeys : TArray<string>;
+  ExistingKeys := FSaveNotifiers.Keys.ToArray;
+  // 1) Abmelden was nicht mehr Marker hat
+  for var K in ExistingKeys do
+    if not FMarksByFile.ContainsKey(K) then
+      DetachSaveNotifier(K);
+  // 2) Anmelden was neu hinzugekommen ist
+  for var K in FMarksByFile.Keys do
+    if not FSaveNotifiers.ContainsKey(K) then
+      AttachSaveNotifier(K);
+
   // Neue Markierungen einmal repainten damit Stripes in allen sichtbaren
   // Editoren erscheinen.
   InvalidateAllLines;
@@ -315,6 +503,67 @@ begin
     FEditorEventsObj.ResetState;
   InvalidateAllLines;
   FMarksByFile.Clear;
+  // Save-Notifiers fuer alle Dateien abmelden (kein Auto-Clear mehr).
+  DetachAllSaveNotifiers;
+end;
+
+procedure TFindingHighlighter.ClearFile(const AFileName: string);
+// Wird vom Auto-Save-Pfad gerufen: Datei wurde editiert + gespeichert,
+// die Zeilen-Nummern der Marker sind potenziell veraltet -> komplett raus.
+// Auch vom [x]-Button im Overlay wenn der User die letzte Markierung
+// einer Datei dismissed.
+var
+  Key : string;
+begin
+  if AFileName = '' then Exit;
+  Key := NormalizePath(AFileName);
+
+  // Overlay sofort verbergen falls es gerade diese Datei zeigt.
+  if Assigned(GAnnotationOverlay) then
+    GAnnotationOverlay.HideOverlay;
+
+  // Bestehende Stripes invalidieren BEVOR die Daten weg sind, sonst
+  // bleibt der alte Stripe sichtbar bis zum naechsten Repaint-Trigger.
+  if FMarksByFile.ContainsKey(Key) then
+  begin
+    InvalidateAllLines;
+    FMarksByFile.Remove(Key);  // doOwnsValues -> inner Dictionary auto-free
+    DetachSaveNotifier(Key);
+  end;
+
+  if Assigned(FEditorEventsObj) then
+    FEditorEventsObj.ResetState;
+end;
+
+procedure TFindingHighlighter.RemoveMark(const AFileName: string;
+  ALineNo: Integer);
+// Loescht EINEN Marker. Wenn das die letzte Markierung der Datei war,
+// wird auch der Save-Notifier abgemeldet (via ClearFile-Fallback).
+var
+  Key    : string;
+  Bucket : TFileMarks;
+begin
+  if (AFileName = '') or (ALineNo <= 0) then Exit;
+  Key := NormalizePath(AFileName);
+
+  if not FMarksByFile.TryGetValue(Key, Bucket) then Exit;
+  if not Bucket.ContainsKey(ALineNo) then Exit;
+
+  if Assigned(GAnnotationOverlay) then
+    GAnnotationOverlay.HideOverlay;
+
+  InvalidateAllLines;
+  Bucket.Remove(ALineNo);
+
+  // Letzte Markierung der Datei? Dann Bucket + Notifier komplett weg.
+  if Bucket.Count = 0 then
+  begin
+    FMarksByFile.Remove(Key);
+    DetachSaveNotifier(Key);
+  end;
+
+  if Assigned(FEditorEventsObj) then
+    FEditorEventsObj.ResetState;
 end;
 
 function TFindingHighlighter.HasMarks: Boolean;
@@ -383,6 +632,28 @@ begin
     FHoverWatch.Enabled := False;
 end;
 
+function TFindingEditorEvents.IsCursorOverOverlay: Boolean;
+// Pruefung wurde verengt: Overlay bleibt nur sichtbar wenn die Maus in
+// einem 50x50-Quadrat um den Close-[x]-Button steht (nicht mehr ueber
+// dem GANZEN Overlay). Hintergrund: User soll dem Close-Button zielsicher
+// nachfahren koennen, aber nicht versehentlich auf dem Overlay "haengen
+// bleiben" wenn er eigentlich anderswo klicken wollte.
+//
+// Funktionsname bleibt aus Backwards-Kompat (die zwei Aufrufer
+// EditorMouseMove + DoHoverWatch fragen damit "soll ich noch sichtbar
+// halten?" - die genaue Geometrie ist eine Implementierungs-Detail).
+const
+  HOVER_ZONE_PX = 50;
+var
+  CursorScr : TPoint;
+begin
+  Result := False;
+  if not Assigned(GAnnotationOverlay) then Exit;
+  if not GAnnotationOverlay.Visible then Exit;
+  if not Winapi.Windows.GetCursorPos(CursorScr) then Exit;
+  Result := GAnnotationOverlay.IsCursorNearClose(CursorScr, HOVER_ZONE_PX);
+end;
+
 function TFindingEditorEvents.HitTestLine(X, Y: Integer): Integer;
 var
   Pair : TPair<Integer, TRect>;
@@ -417,6 +688,10 @@ begin
   Winapi.Windows.ScreenToClient(FSavedEditor.Handle, EditorPt);
   if HitTestLine(EditorPt.X, EditorPt.Y) < 0 then
   begin
+    // Cursor verlaesst die markierte Zeile - aber NICHT verstecken wenn er
+    // gerade ueber dem Overlay schwebt (User will den Close-[x]-Button
+    // klicken). Timer laeuft weiter, beim naechsten Tick re-prueft er.
+    if IsCursorOverOverlay then Exit;
     if Assigned(GAnnotationOverlay) then
       GAnnotationOverlay.HideOverlay;
     FHoveredLine := -1;
@@ -516,6 +791,11 @@ begin
   HitLine := HitTestLine(X, Y);
   if HitLine < 0 then
   begin
+    // Maus hat die markierte Zeile verlassen - aber wenn sie gerade ueber
+    // dem Overlay schwebt, NICHT verstecken (sonst kann der Close-[x]-
+    // Button nie erreicht werden). HoverWatch-Timer laeuft weiter; sobald
+    // der User Editor + Overlay verlaesst, kicked DoHoverWatch das Hide.
+    if IsCursorOverOverlay then Exit;
     GAnnotationOverlay.HideOverlay;
     FHoveredLine := -1;
     FHoverWatch.Enabled := False;
@@ -559,7 +839,8 @@ begin
   if LineH < 16 then LineH := 20;  // Fallback wenn CharHeight nicht gesetzt
   try
     GAnnotationOverlay.ShowAt(FSavedEditor, P.X, P.Y, AWidth, LineH,
-      Mark.Title, Mark.Desc, Mark.Badge, Mark.Color, Mark.Fix);
+      Mark.Title, Mark.Desc, Mark.Badge, Mark.Color, Mark.Fix,
+      FLastPaintedFile, HitLine);
     FHoveredLine := HitLine;
     // Hide-on-mouse-leave Timer aktivieren.
     FHoverWatch.Enabled := True;
