@@ -61,13 +61,17 @@ function TMeineKlasse.MehrereSpeicherlecks: string;
 var
   list1: TStringList;
   list2: TStringList;
+
 begin
   list1 := TStringList.Create;
+
   list2 := TStringList.Create;
   list1.Add('A');
   list2.Add('B');
   Result := list1.Text + list2.Text;
   // Fehler: list1.Free und list2.Free fehlen -> zwei Speicherlecks
+  list1.free;
+  list2.free;
 end;
 
 function TMeineKlasse.MethodeMethodeMitSpeicherleck: TStringList;
@@ -104,7 +108,6 @@ end;
 procedure GetMeineKlasseUseSample;
 var
   meine: TMeineKlasse;
-
 begin
   meine := TMeineKlasse.Create;
 end;

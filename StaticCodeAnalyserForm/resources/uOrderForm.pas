@@ -66,6 +66,7 @@ begin
   // edOrderNo.Text wird direkt in den SQL-Text konkateniert. Wenn der
   // User '''; DROP TABLE Orders; --' eingibt, fuehrt der DB-Server das
   // aus. Der fkDfmSqlFromUserInput-Detektor erkennt das Pattern.
+
   qOrders.SQL.Text :=
     'SELECT * FROM Orders WHERE CustomerName=''' + edOrderNo.Text + '''';
   qOrders.Open;

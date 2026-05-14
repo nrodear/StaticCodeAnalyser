@@ -420,8 +420,7 @@ class function TFormBinder.BindWithParents(Graph: TComponentGraph;
 
     // .pas einlesen (RepoIndex hat sie bereits einmal geparst, aber der
     // AST wurde nicht gecacht - hier nochmal). Parse-Fehler werden
-    // geschluckt, Parent-Binding bleibt nil.
-    ParentUnitNode := nil;
+    // geschluckt, ParentUnitNode bleibt nil (im except-Handler gesetzt).
     try
       PasParser := TParser2.Create;
       try

@@ -2,8 +2,8 @@ object OrderForm: TOrderForm
   Left = 0
   Top = 0
   Caption = 'Bestelluebersicht'
-  ClientHeight = 392
-  ClientWidth = 598
+  ClientHeight = 384
+  ClientWidth = 596
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -14,7 +14,7 @@ object OrderForm: TOrderForm
   object pnlInputs: TPanel
     Left = 0
     Top = 0
-    Width = 598
+    Width = 596
     Height = 200
     Align = alTop
     BevelOuter = bvNone
@@ -70,8 +70,8 @@ object OrderForm: TOrderForm
   end
   object pnlButtons: TPanel
     Left = 0
-    Top = 343
-    Width = 598
+    Top = 335
+    Width = 596
     Height = 49
     Align = alBottom
     BevelOuter = bvNone

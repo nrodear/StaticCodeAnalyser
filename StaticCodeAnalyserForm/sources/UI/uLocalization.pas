@@ -158,6 +158,13 @@ begin
   GDeMap.Add('Please provide a valid project path.',
                                          'Bitte gib einen g'#$FC'ltigen Projektpfad an.');
   GDeMap.Add('Opened: %s  Line: %d',     'Ge'#$F6'ffnet: %s  Zeile: %d');
+  GDeMap.Add('DFM as text: %s  Line: %d',
+                                         'DFM als Text: %s  Zeile: %d');
+  GDeMap.Add('DFM finding at line %d - .pas is modified, press Alt+F12 to view DFM as text',
+                                         'DFM-Befund in Zeile %d - .pas wurde ge'#$E4'ndert, Alt+F12 zeigt die DFM als Text');
+  GDeMap.Add('DFM viewer: %s  Line: %d', 'DFM-Viewer: %s  Zeile: %d');
+  GDeMap.Add('Cancel Analysis',          'Analyse abbrechen');
+  GDeMap.Add('File not found:',          'Datei nicht gefunden:');
 
   // ---- Hilfe-Panel ----
   GDeMap.Add('Select a row to see the fix hint',
@@ -165,6 +172,9 @@ begin
   GDeMap.Add('No fix hint available.',   'Kein L'#$F6'sungshinweis verf'#$FC'gbar.');
   GDeMap.Add('Before (problem)',         'Vorher (Problem)');
   GDeMap.Add('After (solution)',         'Nachher (L'#$F6'sung)');
+  // Standalone-Kurzform "After" als eigene Caption (Annotation-Overlay
+  // im IDE-Plugin nutzt den Begriff ohne den Klammer-Zusatz).
+  GDeMap.Add('After',                    'Nachher');
 
   // ---- Datei-Dialoge / Hints ----
   GDeMap.Add('Select Pascal file to analyse',
@@ -368,6 +378,43 @@ begin
                                          'was nach dem Fix zu testen ist um zu best'#$E4'tigen dass der Befund weg ist (und keine Regressionen entstanden).');
   GDeMap.Add('If the finding is a false positive, say so and explain why - then suggest a `// noinspection %s` suppression marker on the affected line.',
                                          'Falls False Positive: sag das und erkl'#$E4're warum - schlage dann einen `// noinspection %s` Suppression-Marker auf der betroffenen Zeile vor.');
+
+  // ---- IDE-Plugin Tools-Options-Page (uIDESCAOptions) ----
+  GDeMap.Add('Silent Mode',              'Silent-Modus');
+  GDeMap.Add('Enable silent analysis (editor right-click + Ctrl+Alt+A)',
+                                         'Silent-Analyse aktivieren (Editor-Rechtsklick + Strg+Alt+A)');
+  GDeMap.Add('Editor right-click + Ctrl+Alt+A trigger a single-file analysis; ' +
+             'findings appear as stripes + hover overlays in the editor (no dock).',
+                                         'Editor-Rechtsklick + Strg+Alt+A starten eine Einzeldatei-Analyse; ' +
+                                         'Befunde erscheinen als Markierungen + Hover-Overlays im Editor (kein Dock-Fenster).');
+  GDeMap.Add('Rule-Set (analyser.ini [Rules])',
+                                         'Regelsatz (analyser.ini [Rules])');
+  GDeMap.Add('Profile (CLI/Form):',      'Profil (CLI/Form):');
+  GDeMap.Add('Min-Severity:',            'Min-Schweregrad:');
+  GDeMap.Add('IDE Profile:',             'IDE-Profil:');
+  GDeMap.Add('Detectors (analyser.ini [Detectors])',
+                                         'Detektoren (analyser.ini [Detectors])');
+  GDeMap.Add('UsesCheck - report unused entries in uses clause ' +
+             '(may produce false positives)',
+                                         'UsesCheck - ungenutzte Eintr'#$E4'ge in uses-Klausel melden ' +
+                                         '(kann False-Positives erzeugen)');
+  GDeMap.Add('IncludeTests - analyse DUnit/DUnitX test units too',
+                                         'IncludeTests - auch DUnit/DUnitX-Test-Units analysieren');
+  GDeMap.Add('AutoDiscoverClasses - extend LeakyClasses with ' +
+             'project-specific classes',
+                                         'AutoDiscoverClasses - LeakyClasses um ' +
+                                         'projektspezifische Klassen erweitern');
+
+  // ---- IDE-Plugin Editor-Popup + View-Menue (uIDEAnalyserForm) ----
+  GDeMap.Add('Analyse current file (silent)',
+                                         'Aktuelle Datei analysieren (Silent)');
+  GDeMap.Add('Static Code Analyser: analyse this file, no dock opens',
+                                         'Static Code Analyser: diese Datei analysieren, kein Dock-Fenster wird ge'#$F6'ffnet');
+  GDeMap.Add('Static Code Analysis',     'Statische Code-Analyse');
+
+  // ---- Standalone Form: BtnBranch.Hint (uMainForm) ----
+  GDeMap.Add('analyse only files changed in current branch',
+                                         'nur Dateien analysieren, die im aktuellen Branch ge'#$E4'ndert wurden');
 end;
 
 function _(const S: string): string;

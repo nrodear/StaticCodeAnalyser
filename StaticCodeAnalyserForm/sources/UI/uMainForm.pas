@@ -180,6 +180,11 @@ begin
   ResultGrid.Cells[2, 0] := _('Line');
   ResultGrid.Cells[3, 0] := _('Detail');
   ResultGrid.Cells[4, 0] := _('Severity');
+
+  // Branch-Button-Hint zur Laufzeit setzen (DFM-Hint waere hardcoded
+  // Englisch). Pattern analog zum IDE-Plugin (FBtnAnalyseChanged.Hint).
+  BtnBranch.Hint := _('Branch-Changes') + ': ' +
+    _('analyse only files changed in current branch');
   ResultGrid.OnDrawCell := ResultGridDrawCell;
   ResultGrid.OnDblClick := ResultGridDblClick;
   // Tooltip nur fuer Datei-Spalte, dynamisch ueber Application.OnShowHint.

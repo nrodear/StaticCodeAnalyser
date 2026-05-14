@@ -110,7 +110,8 @@ var
   Root   : TAstNode;
   IFace  : TAstNode;
 begin
-  Root := nil;
+  // Root wird in den 'try'-Bloecken gesetzt oder per Exit umgangen -
+  // kein Pre-Init noetig (Compiler-Hint H2077 vermieden).
   try
     Parser := TParser2.Create;
     try
