@@ -3272,9 +3272,11 @@ procedure TSCAKeyboardBinding.BindKeyboard(
 // Bindet Ctrl+Alt+A an SilentAnalyseKeyProc. AddKeyBinding nimmt ein Array
 // von TShortcut entgegen - hier nur ein Wert.
 begin
+  // AKeyProcData (3. Param) hat in dieser ToolsAPI-Version keinen Default -
+  // nil explizit uebergeben (wir nutzen keine Per-Binding-Daten).
   BindingServices.AddKeyBinding(
     [ShortCut(Ord('A'), [ssCtrl, ssAlt])],
-    SilentAnalyseKeyProc);
+    SilentAnalyseKeyProc, nil);
 end;
 
 function TSCAKeyboardBinding.GetBindingType: TBindingType;
