@@ -25,7 +25,7 @@ clipboard. Open source, MIT-licensed.
 
 🇩🇪 [Deutsche Version](README_de.md)
 
-![Static Code Analysis Tool for Delphi inside the Delphi IDE dock](docs/APP.png)
+![SCA in action — analysis, findings, hover-overlays inside the Delphi IDE](docs/sca-demo.gif)
 
 ---
 

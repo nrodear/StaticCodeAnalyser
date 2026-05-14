@@ -26,7 +26,7 @@ MIT-lizenziert.
 
 🇬🇧 [English version](README.md)
 
-![Static Code Analysis Tool for Delphi im Delphi-IDE-Dock](docs/APP.png)
+![SCA in Aktion — Analyse, Befunde und Hover-Overlays direkt in der Delphi-IDE](docs/sca-demo.gif)
 
 ---
 
