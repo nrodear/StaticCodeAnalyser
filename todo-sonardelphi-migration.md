@@ -7,6 +7,9 @@ SCA-unique detectors (DFM, security, SQL).
 > - SonarDelphi v1.18.3 (IntegraDev fork): **144 Rules** (25 BUG + 119 CODE_SMELL, 0 Vulnerability/Hotspot)
 > - SCA v0.9.1: **59 Rules**, davon ~22 mit SonarDelphi-Overlap, ~37 unique (20 DFM-Rules + SQL/Security/Format-Locale)
 > - Coverage-Gap zum 110 %-Ziel: **~119 Rules** zu portieren, **~25 Rules** schon vorhanden
+>
+> **Fortschritt 2026-05-16 (gleicher Tag)**: Phase 1 zu **31/50** abgeschlossen
+> (SCA060-090). Katalog von 59 → 90 Rules. Siehe "Phase 1 Status" unten.
 
 ---
 
@@ -86,6 +89,70 @@ Triviale Detektoren — Pattern matched 1:1 unsere bestehenden.
 **Acceptance Phase 1**:
 - [ ] DUnitX-Tests pro Rule mit SonarDelphi-Fixture-Files als Truth (aus `delphi-checks/src/test/resources/au/com/integradev/delphi/checks/<RuleName>/`)
 - [ ] Shadow-Run: 50 Rules sollten matching Findings produzieren
+
+#### Phase 1 Status (2026-05-16, **31/50 done**)
+
+| ID    | Rule                          | Status | Batch |
+|-------|-------------------------------|--------|-------|
+| SCA060 | GotoStatement                | done   | #1 (`86db37b`) |
+| SCA061 | TabulationCharacter          | done   | #2 (`2ec3620`) |
+| SCA062 | TooLongLine                  | done   | #2 |
+| SCA063 | TrailingWhitespace           | done   | #2 |
+| SCA064 | LowercaseKeyword             | done   | #3 (`c6b2254`) |
+| SCA065 | NoSonarMarker                | done   | #3 |
+| SCA066 | EmptyArgumentList            | done   | #3 |
+| SCA067 | InlineAssembly               | done   | #4 (`e4e783f`) |
+| SCA068 | TrailingCommaArgList         | done   | #4 |
+| SCA069 | DigitGrouping                | done   | #4 |
+| SCA070 | CommentedOutCode             | done   | #5 (`11c75bd`) |
+| SCA071 | UnitLevelKeywordIndent       | done   | #5 |
+| SCA072 | RedundantBoolean             | done   | #5 |
+| SCA073 | EmptyInterface               | done   | #6 (`1f70495`) |
+| SCA074 | AssertMessage                | done   | #6 |
+| SCA075 | ExplicitTObjectInheritance   | done   | #6 |
+| SCA076 | GroupedDeclaration           | done   | #7 (`b6301e4`) (unifies Grouped Field/Var/Param) |
+| SCA077 | EmptyBlock                   | done   | #7 |
+| SCA078 | ExceptOnException            | done   | #7 |
+| SCA079 | ConsecutiveSection           | done   | #8 (`1088e1f`) (unifies Const/Type/Var) |
+| SCA080 | RedundantJump                | done   | #8 |
+| SCA081 | ClassPerFile                 | done   | #8 |
+| SCA082 | SuperfluousSemicolon         | done   | #9 (`21f12f7`) |
+| SCA083 | EmptyFinallyBlock            | done   | #9 |
+| SCA084 | AssignedAndAssignedNil       | done   | #9 |
+| SCA085 | FreeAndNilHint               | done   | #10 (`a160d7d`) |
+| SCA086 | AvoidOut                     | done   | #10 |
+| SCA087 | EmptyVisibilitySection       | done   | #10 |
+| SCA088 | LegacyInitializationSection  | done   | #11 (`0f18ca7`, fix `ad0632b`) |
+| SCA089 | PublicField                  | done   | #11 |
+| SCA090 | NestedTry                    | done   | #11 |
+
+**Remaining Phase 1 candidates** (~19, with notes on difficulty):
+
+Lexical / lower-risk:
+- `MissingSemicolon` (hard - needs AST for statement-end detection)
+- `RedundantParentheses` (lex-tricky - distinguish `((X))` from `Foo((X+Y))`)
+- `MixedNames` (configurable - belongs to Phase 2 Framework)
+- `CommentRegularExpression`, `StringLiteralRegularExpression` (configurable - Phase 2)
+- `VisibilityKeywordIndentation` (needs class-body context)
+- `PascalStyleResult` (`Result := X` vs `Foo := X` style - hard)
+- `DigitSeparator` (relative of SCA069; same code path with different threshold)
+
+AST single-node / Kat B:
+- `EmptyFile` (file with only header + implementation/end.)
+- `EmptyFieldSection` (similar to EmptyVisibilitySection but for fields)
+- `ConsecutiveVisibilitySection` (already partially covered by ConsecutiveSection)
+- `MemberDeclarationOrder` (needs class-body parse)
+- `VisibilitySectionOrder` (needs class-body parse)
+- `BeginEndRequired` (`if X then Y;` should be `begin Y end;` - style debated)
+- `CaseStatementSize` (count `of`-branches)
+- `ExplicitBitwiseNot` (needs type info to distinguish boolean vs numeric `not`)
+- `ProjectFileRoutine`, `ProjectFileVariable` (only in `.dpr` context)
+- `TwiceInheritedCalls` (count `inherited;` in method - state-machine)
+- `IfElseBegin` (style for nested if/else with begin)
+
+**Open**: write tests for SCA088-090, then continue with the easier remaining
+candidates. The configurable rules (MixedNames, *RegularExpression*) move to
+Phase 2.
 
 ### Phase 2 — Configurable Forbidden + Naming-Conventions (Framework, ~25 Rules, 1 Woche) 🅒
 
