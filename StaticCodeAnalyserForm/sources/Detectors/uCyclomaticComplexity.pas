@@ -1,4 +1,4 @@
-unit uCyclomaticComplexity;
+﻿unit uCyclomaticComplexity;
 
 // Detektor fuer McCabe Cyclomatic Complexity pro Methode.
 //
@@ -142,8 +142,7 @@ begin
           'Cyclomatic complexity %d (limit: %d) - viele Verzweigungen, '+
           'schwer zu testen',
           [CC, DetectorMaxCyclomatic]);
-        F.Severity   := lsHint;
-        F.Kind       := fkCyclomaticComplexity;
+        F.SetKind(fkCyclomaticComplexity);
         Results.Add(F);
       end;
     end;

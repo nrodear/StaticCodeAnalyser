@@ -1,4 +1,4 @@
-unit uDfmMasterDetailUnlinked;
+﻿unit uDfmMasterDetailUnlinked;
 
 // Detektor: TDataSet hat `MasterSource` gesetzt, aber weder
 // `MasterFields` noch `IndexFieldNames` -> silent Cross-Join zur Laufzeit.
@@ -107,8 +107,7 @@ begin
         '%s.MasterSource=%s without MasterFields/IndexFieldNames - '
         + 'silent cross-join at runtime',
         [N.Name, MasterSrc]);
-      F.Severity   := EMIT_SEVERITY;
-      F.Kind       := fkDfmMasterDetailUnlinked;
+      F.SetKind(fkDfmMasterDetailUnlinked);
       Results.Add(F);
     end;
   finally

@@ -236,9 +236,15 @@ type
   // uExport, uClaudePrompt, uSuppression) als case-Statements
   // dupliziert und konnten gegeneinander driften.
   // Index = TFindingKind ordinal -> O(1)-Lookup.
+  //
+  // DefaultSeverity muss bit-exakt zu rules/sca-rules.json
+  // defaultSeverity passen - der Konsistenz-Test in
+  // uTestRuleCatalog (JsonSeverityMatchesKindMeta) faellt sofort,
+  // wenn die beiden divergieren.
   TFindingKindMeta = record
-    Name        : string;       // 'MemoryLeak' (canonical token)
-    FindingType : TFindingType; // Sonar-Kategorie
+    Name            : string;       // 'MemoryLeak' (canonical token)
+    FindingType     : TFindingType; // Sonar-Kategorie
+    DefaultSeverity : TLeakSeverity;// Standard-Severity beim Emit
   end;
 
   TConsts = record
@@ -251,70 +257,75 @@ const
   // den eigentlichen Detektor in TStaticAnalyzer2.RunAllDetectors
   // registrieren - das sind die einzigen zwei Stellen.
   KIND_META: array[TFindingKind] of TFindingKindMeta = (
-    (Name: 'MemoryLeak';      FindingType: ftBug),              // fkMemoryLeak
-    (Name: 'EmptyExcept';     FindingType: ftCodeSmell),        // fkEmptyExcept
-    (Name: 'SQLInjection';    FindingType: ftVulnerability),    // fkSQLInjection
-    (Name: 'HardcodedSecret'; FindingType: ftVulnerability),    // fkHardcodedSecret
-    (Name: 'FormatMismatch';  FindingType: ftBug),              // fkFormatMismatch
-    (Name: 'FileReadError';   FindingType: ftFileError),        // fkFileReadError
-    (Name: 'UnusedUses';      FindingType: ftCodeSmell),        // fkUnusedUses
-    (Name: 'NilDeref';        FindingType: ftBug),              // fkNilDeref
-    (Name: 'MissingFinally';  FindingType: ftCodeSmell),        // fkMissingFinally
-    (Name: 'DivByZero';       FindingType: ftBug),              // fkDivByZero
-    (Name: 'DeadCode';        FindingType: ftCodeSmell),        // fkDeadCode
-    (Name: 'LongMethod';      FindingType: ftCodeSmell),        // fkLongMethod
-    (Name: 'LongParamList';   FindingType: ftCodeSmell),        // fkLongParamList
-    (Name: 'MagicNumber';     FindingType: ftCodeSmell),        // fkMagicNumber
-    (Name: 'DuplicateString'; FindingType: ftCodeDuplication),  // fkDuplicateString
-    (Name: 'HardcodedPath';   FindingType: ftSecurityHotspot),  // fkHardcodedPath
-    (Name: 'DebugOutput';     FindingType: ftCodeSmell),        // fkDebugOutput
-    (Name: 'DeepNesting';     FindingType: ftCodeSmell),        // fkDeepNesting
-    (Name: 'TodoComment';     FindingType: ftCodeSmell),        // fkTodoComment
-    (Name: 'EmptyMethod';     FindingType: ftCodeSmell),        // fkEmptyMethod
-    (Name: 'DuplicateBlock';  FindingType: ftCodeDuplication),  // fkDuplicateBlock
-    (Name: 'CyclomaticComplexity'; FindingType: ftCodeSmell),   // fkCyclomaticComplexity
-    (Name: 'CustomRule';      FindingType: ftCodeSmell),        // fkCustomRule
-    (Name: 'DfmDefaultName';      FindingType: ftCodeSmell),     // fkDfmDefaultName
-    (Name: 'DfmHardcodedCaption'; FindingType: ftCodeSmell),     // fkDfmHardcodedCaption
-    (Name: 'DfmHardcodedDbCreds'; FindingType: ftVulnerability), // fkDfmHardcodedDbCreds
-    (Name: 'DfmDuplicateBinding'; FindingType: ftBug),           // fkDfmDuplicateBinding
-    (Name: 'DfmDeadEvent';        FindingType: ftBug),           // fkDfmDeadEvent
-    (Name: 'DfmOrphanHandler';    FindingType: ftCodeSmell),     // fkDfmOrphanHandler
-    (Name: 'DfmEmptyBoundEvent';  FindingType: ftCodeSmell),     // fkDfmEmptyBoundEvent
-    (Name: 'DfmSchemaMismatch';      FindingType: ftBug),         // fkDfmSchemaMismatch
-    (Name: 'DfmCircularDataSource';  FindingType: ftBug),         // fkDfmCircularDataSource
-    (Name: 'DfmSqlFromUserInput';        FindingType: ftVulnerability), // fkDfmSqlFromUserInput
-    (Name: 'DfmRequiredFieldUnbound';    FindingType: ftBug),            // fkDfmRequiredFieldUnbound
-    (Name: 'DfmRequiredFieldNotVisible'; FindingType: ftBug),            // fkDfmRequiredFieldNotVisible
-    (Name: 'DfmFieldTypeMismatch';       FindingType: ftCodeSmell),      // fkDfmFieldTypeMismatch
-    (Name: 'DfmTabOrderConflict';        FindingType: ftCodeSmell),      // fkDfmTabOrderConflict
-    (Name: 'DfmForbiddenClass';          FindingType: ftCodeSmell),      // fkDfmForbiddenClass
-    (Name: 'DfmDbInUiForm';              FindingType: ftCodeSmell),      // fkDfmDbInUiForm
-    (Name: 'DfmCrossFormCoupling';       FindingType: ftBug),            // fkDfmCrossFormCoupling
-    (Name: 'DfmLayerViolation';          FindingType: ftCodeSmell),      // fkDfmLayerViolation
-    (Name: 'DfmGodHandler';              FindingType: ftCodeSmell),      // fkDfmGodHandler
-    (Name: 'DfmActionMismatch';          FindingType: ftBug),            // fkDfmActionMismatch
-    (Name: 'ConcatToFormat';             FindingType: ftCodeSmell),      // fkConcatToFormat
-    (Name: 'WithStatement';              FindingType: ftCodeSmell),      // fkWithStatement
-    (Name: 'ReversedForRange';           FindingType: ftBug),            // fkReversedForRange
-    (Name: 'SelfAssignment';             FindingType: ftBug),            // fkSelfAssignment
-    (Name: 'VirtualCallInCtor';          FindingType: ftBug),            // fkVirtualCallInCtor
-    (Name: 'LengthUnderflow';            FindingType: ftBug),            // fkLengthUnderflow
-    (Name: 'CanBePrivate';               FindingType: ftCodeSmell),      // fkCanBePrivate
-    (Name: 'CanBeProtected';             FindingType: ftCodeSmell),      // fkCanBeProtected
-    (Name: 'UnusedPublicMember';         FindingType: ftCodeSmell),      // fkUnusedPublicMember
-    (Name: 'UnusedLocalVar';             FindingType: ftCodeSmell),      // fkUnusedLocalVar
-    (Name: 'UnusedParameter';            FindingType: ftCodeSmell),      // fkUnusedParameter
-    (Name: 'TautologicalBoolExpr';       FindingType: ftBug),            // fkTautologicalBoolExpr
-    (Name: 'DfmMasterDetailUnlinked';    FindingType: ftBug),            // fkDfmMasterDetailUnlinked
-    (Name: 'DfmDataModuleSplitHint';     FindingType: ftCodeSmell),      // fkDfmDataModuleSplitHint
-    (Name: 'SqlDangerousStatement';      FindingType: ftBug),            // fkSqlDangerousStatement
-    (Name: 'FormatLocaleHint';           FindingType: ftBug)             // fkFormatLocaleHint
+    (Name: 'MemoryLeak';      FindingType: ftBug;             DefaultSeverity: lsError),   // fkMemoryLeak
+    (Name: 'EmptyExcept';     FindingType: ftCodeSmell;       DefaultSeverity: lsWarning), // fkEmptyExcept
+    (Name: 'SQLInjection';    FindingType: ftVulnerability;   DefaultSeverity: lsError),   // fkSQLInjection
+    (Name: 'HardcodedSecret'; FindingType: ftVulnerability;   DefaultSeverity: lsError),   // fkHardcodedSecret
+    (Name: 'FormatMismatch';  FindingType: ftBug;             DefaultSeverity: lsError),   // fkFormatMismatch
+    (Name: 'FileReadError';   FindingType: ftFileError;       DefaultSeverity: lsError),   // fkFileReadError
+    (Name: 'UnusedUses';      FindingType: ftCodeSmell;       DefaultSeverity: lsHint),    // fkUnusedUses
+    (Name: 'NilDeref';        FindingType: ftBug;             DefaultSeverity: lsWarning), // fkNilDeref
+    (Name: 'MissingFinally';  FindingType: ftCodeSmell;       DefaultSeverity: lsWarning), // fkMissingFinally
+    (Name: 'DivByZero';       FindingType: ftBug;             DefaultSeverity: lsWarning), // fkDivByZero
+    (Name: 'DeadCode';        FindingType: ftCodeSmell;       DefaultSeverity: lsWarning), // fkDeadCode
+    (Name: 'LongMethod';      FindingType: ftCodeSmell;       DefaultSeverity: lsHint),    // fkLongMethod
+    (Name: 'LongParamList';   FindingType: ftCodeSmell;       DefaultSeverity: lsHint),    // fkLongParamList
+    (Name: 'MagicNumber';     FindingType: ftCodeSmell;       DefaultSeverity: lsHint),    // fkMagicNumber
+    (Name: 'DuplicateString'; FindingType: ftCodeDuplication; DefaultSeverity: lsHint),    // fkDuplicateString
+    (Name: 'HardcodedPath';   FindingType: ftSecurityHotspot; DefaultSeverity: lsWarning), // fkHardcodedPath
+    (Name: 'DebugOutput';     FindingType: ftCodeSmell;       DefaultSeverity: lsWarning), // fkDebugOutput
+    (Name: 'DeepNesting';     FindingType: ftCodeSmell;       DefaultSeverity: lsHint),    // fkDeepNesting
+    (Name: 'TodoComment';     FindingType: ftCodeSmell;       DefaultSeverity: lsHint),    // fkTodoComment
+    (Name: 'EmptyMethod';     FindingType: ftCodeSmell;       DefaultSeverity: lsHint),    // fkEmptyMethod
+    (Name: 'DuplicateBlock';  FindingType: ftCodeDuplication; DefaultSeverity: lsHint),    // fkDuplicateBlock
+    (Name: 'CyclomaticComplexity'; FindingType: ftCodeSmell;  DefaultSeverity: lsHint),    // fkCyclomaticComplexity
+    (Name: 'CustomRule';      FindingType: ftCodeSmell;       DefaultSeverity: lsWarning), // fkCustomRule
+    (Name: 'DfmDefaultName';      FindingType: ftCodeSmell;       DefaultSeverity: lsHint),    // fkDfmDefaultName
+    (Name: 'DfmHardcodedCaption'; FindingType: ftCodeSmell;       DefaultSeverity: lsHint),    // fkDfmHardcodedCaption
+    (Name: 'DfmHardcodedDbCreds'; FindingType: ftVulnerability;   DefaultSeverity: lsError),   // fkDfmHardcodedDbCreds
+    (Name: 'DfmDuplicateBinding'; FindingType: ftBug;             DefaultSeverity: lsWarning), // fkDfmDuplicateBinding
+    (Name: 'DfmDeadEvent';        FindingType: ftBug;             DefaultSeverity: lsError),   // fkDfmDeadEvent
+    (Name: 'DfmOrphanHandler';    FindingType: ftCodeSmell;       DefaultSeverity: lsHint),    // fkDfmOrphanHandler
+    (Name: 'DfmEmptyBoundEvent';  FindingType: ftCodeSmell;       DefaultSeverity: lsHint),    // fkDfmEmptyBoundEvent
+    (Name: 'DfmSchemaMismatch';      FindingType: ftBug;          DefaultSeverity: lsError),   // fkDfmSchemaMismatch
+    (Name: 'DfmCircularDataSource';  FindingType: ftBug;          DefaultSeverity: lsError),   // fkDfmCircularDataSource
+    (Name: 'DfmSqlFromUserInput';        FindingType: ftVulnerability; DefaultSeverity: lsError),   // fkDfmSqlFromUserInput
+    (Name: 'DfmRequiredFieldUnbound';    FindingType: ftBug;          DefaultSeverity: lsWarning), // fkDfmRequiredFieldUnbound
+    (Name: 'DfmRequiredFieldNotVisible'; FindingType: ftBug;          DefaultSeverity: lsWarning), // fkDfmRequiredFieldNotVisible
+    (Name: 'DfmFieldTypeMismatch';       FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkDfmFieldTypeMismatch
+    (Name: 'DfmTabOrderConflict';        FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkDfmTabOrderConflict
+    (Name: 'DfmForbiddenClass';          FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkDfmForbiddenClass
+    (Name: 'DfmDbInUiForm';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkDfmDbInUiForm
+    (Name: 'DfmCrossFormCoupling';       FindingType: ftBug;          DefaultSeverity: lsWarning), // fkDfmCrossFormCoupling
+    (Name: 'DfmLayerViolation';          FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkDfmLayerViolation
+    (Name: 'DfmGodHandler';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkDfmGodHandler
+    (Name: 'DfmActionMismatch';          FindingType: ftBug;          DefaultSeverity: lsWarning), // fkDfmActionMismatch
+    (Name: 'ConcatToFormat';             FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkConcatToFormat
+    (Name: 'WithStatement';              FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkWithStatement
+    (Name: 'ReversedForRange';           FindingType: ftBug;          DefaultSeverity: lsError),   // fkReversedForRange
+    (Name: 'SelfAssignment';             FindingType: ftBug;          DefaultSeverity: lsWarning), // fkSelfAssignment
+    (Name: 'VirtualCallInCtor';          FindingType: ftBug;          DefaultSeverity: lsError),   // fkVirtualCallInCtor
+    (Name: 'LengthUnderflow';            FindingType: ftBug;          DefaultSeverity: lsHint),    // fkLengthUnderflow
+    (Name: 'CanBePrivate';               FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkCanBePrivate
+    (Name: 'CanBeProtected';             FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkCanBeProtected
+    (Name: 'UnusedPublicMember';         FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkUnusedPublicMember
+    (Name: 'UnusedLocalVar';             FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkUnusedLocalVar
+    (Name: 'UnusedParameter';            FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkUnusedParameter
+    (Name: 'TautologicalBoolExpr';       FindingType: ftBug;          DefaultSeverity: lsError),   // fkTautologicalBoolExpr
+    (Name: 'DfmMasterDetailUnlinked';    FindingType: ftBug;          DefaultSeverity: lsError),   // fkDfmMasterDetailUnlinked
+    (Name: 'DfmDataModuleSplitHint';     FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkDfmDataModuleSplitHint
+    (Name: 'SqlDangerousStatement';      FindingType: ftBug;          DefaultSeverity: lsError),   // fkSqlDangerousStatement
+    (Name: 'FormatLocaleHint';           FindingType: ftBug;          DefaultSeverity: lsHint)     // fkFormatLocaleHint
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.
 function KindName(K: TFindingKind): string;
 function KindFindingType(K: TFindingKind): TFindingType;
+// Default-Severity fuer ein TFindingKind. Wird von TLeakFinding.SetKind
+// genutzt um Severity konsistent aus dem Catalog zu ziehen statt sie
+// in jedem Detector hardzucoden. Wert MUSS zu rules/sca-rules.json
+// defaultSeverity passen - Test in uTestRuleCatalog enforced das.
+function KindDefaultSeverity(K: TFindingKind): TLeakSeverity;
 // Reverse-Lookup ueber Name (case-insensitive). Liefert False bei
 // unbekanntem Namen; Kind ist dann undefiniert.
 function KindFromName(const Name: string; out K: TFindingKind): Boolean;
@@ -365,6 +376,11 @@ end;
 function KindFindingType(K: TFindingKind): TFindingType;
 begin
   Result := KIND_META[K].FindingType;
+end;
+
+function KindDefaultSeverity(K: TFindingKind): TLeakSeverity;
+begin
+  Result := KIND_META[K].DefaultSeverity;
 end;
 
 function KindFromName(const Name: string; out K: TFindingKind): Boolean;

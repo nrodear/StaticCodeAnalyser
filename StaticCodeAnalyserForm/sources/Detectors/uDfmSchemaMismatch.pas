@@ -1,4 +1,4 @@
-unit uDfmSchemaMismatch;
+﻿unit uDfmSchemaMismatch;
 
 // Detektor: DFM-Komponente ohne published Field in der Form-Klasse.
 //
@@ -77,8 +77,7 @@ begin
       F.MissingVar := Format(
         '%s: %s exists in DFM but %s has no published field for it',
         [Cur.Name, Cur.ClassRef, Binding.FormClass.Name]);
-      F.Severity   := lsError;
-      F.Kind       := fkDfmSchemaMismatch;
+      F.SetKind(fkDfmSchemaMismatch);
       Results.Add(F);
     end;
   finally

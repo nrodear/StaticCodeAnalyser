@@ -1,4 +1,4 @@
-unit uDfmOrphanHandler;
+﻿unit uDfmOrphanHandler;
 
 // Detektor: Verwaister Event-Handler.
 //
@@ -106,8 +106,7 @@ begin
       F.MissingVar := Format(
         '%s.%s has a (Sender: TObject) signature but no component binds it',
         [Binding.FormClass.Name, M.Name]);
-      F.Severity   := lsHint;
-      F.Kind       := fkDfmOrphanHandler;
+      F.SetKind(fkDfmOrphanHandler);
       Results.Add(F);
     end;
   finally

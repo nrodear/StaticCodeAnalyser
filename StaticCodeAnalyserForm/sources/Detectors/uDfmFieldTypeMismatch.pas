@@ -1,4 +1,4 @@
-unit uDfmFieldTypeMismatch;
+﻿unit uDfmFieldTypeMismatch;
 
 // Detektor: UI-DB-Control-Klasse passt nicht zum TField-Datentyp.
 //
@@ -93,8 +93,7 @@ class procedure TDfmFieldTypeMismatchDetector.Analyze(Graph: TComponentGraph;
     F.MethodName := '';
     F.LineNumber := IntToStr(Ctrl.Line);
     F.MissingVar := Why;
-    F.Severity   := lsHint;
-    F.Kind       := fkDfmFieldTypeMismatch;
+    F.SetKind(fkDfmFieldTypeMismatch);
     Results.Add(F);
   end;
 

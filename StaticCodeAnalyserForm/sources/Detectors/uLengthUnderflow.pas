@@ -1,4 +1,4 @@
-unit uLengthUnderflow;
+﻿unit uLengthUnderflow;
 
 // Detektor: `Length(s) - X` / `.Count - X` ohne vorausgehenden Guard.
 //
@@ -205,8 +205,7 @@ begin
         F.MissingVar := Format(
           'Possible underflow: %s (no guard for empty string/list?)',
           [Detail]);
-        F.Severity   := EMIT_SEVERITY;
-        F.Kind       := fkLengthUnderflow;
+        F.SetKind(fkLengthUnderflow);
         Results.Add(F);
 
         LinePos := LinePos + MatchCol + Length(Detail);

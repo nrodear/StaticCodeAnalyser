@@ -1,4 +1,4 @@
-unit uSqlDangerousStatement;
+﻿unit uSqlDangerousStatement;
 
 // Detektor: UPDATE-/DELETE-/TRUNCATE-Statement OHNE WHERE-Klausel.
 //
@@ -92,8 +92,7 @@ class procedure TSqlDangerousStatementDetector.AnalyzeMethod(MethodNode: TAstNod
     F.MissingVar := Format(
       'Dangerous SQL: %s without WHERE - affects ALL rows. Context: %s',
       [Verb, Context]);
-    F.Severity   := EMIT_SEVERITY;
-    F.Kind       := fkSqlDangerousStatement;
+    F.SetKind(fkSqlDangerousStatement);
     Results.Add(F);
   end;
 

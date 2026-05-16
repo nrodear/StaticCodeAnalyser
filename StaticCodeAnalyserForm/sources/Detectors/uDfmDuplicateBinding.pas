@@ -1,4 +1,4 @@
-unit uDfmDuplicateBinding;
+﻿unit uDfmDuplicateBinding;
 
 // Detektor: Mehrfach gebundene DB-Felder.
 //
@@ -72,8 +72,7 @@ class procedure TDfmDuplicateBindingDetector.Analyze(Graph: TComponentGraph;
     F.LineNumber := IntToStr(Line);
     F.MissingVar := Format('%s (%s) shares DataSource=%s, DataField=%s',
                             [N.Name, N.ClassRef, DataSourceName, DataFieldName]);
-    F.Severity   := lsWarning;
-    F.Kind       := fkDfmDuplicateBinding;
+    F.SetKind(fkDfmDuplicateBinding);
     Results.Add(F);
   end;
 

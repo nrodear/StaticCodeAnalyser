@@ -1,4 +1,4 @@
-unit uDfmForbiddenClass;
+﻿unit uDfmForbiddenClass;
 
 // Detektor: Komponente nutzt eine via analyser.ini verbotene Klasse.
 //
@@ -53,8 +53,7 @@ begin
       F.LineNumber := IntToStr(N.Line);
       F.MissingVar := Format('%s uses forbidden class %s',
                               [N.Name, N.ClassRef]);
-      F.Severity   := lsHint;
-      F.Kind       := fkDfmForbiddenClass;
+      F.SetKind(fkDfmForbiddenClass);
       Results.Add(F);
     end;
   finally

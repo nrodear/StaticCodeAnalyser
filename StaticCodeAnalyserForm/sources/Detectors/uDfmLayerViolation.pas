@@ -1,4 +1,4 @@
-unit uDfmLayerViolation;
+﻿unit uDfmLayerViolation;
 
 // Detektor: Eingabe-Control liegt direkt auf einer TForm statt eingebettet
 // in einem TPanel / TGroupBox / TPageControl.
@@ -93,8 +93,7 @@ begin
     F.LineNumber := IntToStr(Child.Line);
     F.MissingVar := Format('%s (%s) sits directly on %s - wrap inputs in a TPanel/TGroupBox',
                             [Child.Name, Child.ClassRef, Root.Name]);
-    F.Severity   := lsHint;
-    F.Kind       := fkDfmLayerViolation;
+    F.SetKind(fkDfmLayerViolation);
     Results.Add(F);
   end;
 end;

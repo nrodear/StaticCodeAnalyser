@@ -1,4 +1,4 @@
-unit uTodoComment;
+﻿unit uTodoComment;
 
 // Detektor fuer TODO / FIXME / HACK / XXX-Marker in Kommentaren.
 //
@@ -191,8 +191,7 @@ begin
         F.MethodName := '';
         F.LineNumber := IntToStr(i + 1);
         F.MissingVar := Snippet;
-        F.Severity   := lsHint;
-        F.Kind       := fkTodoComment;
+        F.SetKind(fkTodoComment);
         Results.Add(F);
       end;
     end;

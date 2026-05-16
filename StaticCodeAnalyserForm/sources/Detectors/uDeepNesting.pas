@@ -1,4 +1,4 @@
-unit uDeepNesting;
+﻿unit uDeepNesting;
 
 // Detektor fuer zu tiefe Verschachtelung von Kontrollstrukturen.
 //
@@ -116,8 +116,7 @@ begin
           'Depth %d (%s from line %d, limit: %d)',
           [DeepestDepth, KindName(DeepestKind),
            DeepestLine, DetectorMaxNesting]);
-        F.Severity   := lsHint;
-        F.Kind       := fkDeepNesting;
+        F.SetKind(fkDeepNesting);
         Results.Add(F);
       end;
     end;

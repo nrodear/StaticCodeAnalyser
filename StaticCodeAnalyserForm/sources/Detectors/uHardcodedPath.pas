@@ -1,4 +1,4 @@
-unit uHardcodedPath;
+﻿unit uHardcodedPath;
 
 // Detektor fuer hardkodierte Datei-/Verzeichnispfade im Code.
 // Erkannte Muster:
@@ -146,8 +146,7 @@ begin
             F.MethodName := '';
             F.LineNumber := IntToStr(N.Line);
             F.MissingVar := 'Hardcoded path: "' + Display + '"';
-            F.Severity   := lsWarning;
-            F.Kind       := fkHardcodedPath;
+            F.SetKind(fkHardcodedPath);
             Results.Add(F);
           end;
         end;

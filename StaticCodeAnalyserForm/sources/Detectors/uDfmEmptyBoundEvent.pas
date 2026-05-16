@@ -1,4 +1,4 @@
-unit uDfmEmptyBoundEvent;
+﻿unit uDfmEmptyBoundEvent;
 
 // Detektor: Leerer gebundener Event-Handler.
 //
@@ -71,8 +71,7 @@ begin
     F.MissingVar := Format(
       '%s.%s is wired to %s but the method body is empty',
       [Ev.Component.Name, Ev.EventName, Ev.HandlerName]);
-    F.Severity   := lsHint;
-    F.Kind       := fkDfmEmptyBoundEvent;
+    F.SetKind(fkDfmEmptyBoundEvent);
     Results.Add(F);
   end;
 end;

@@ -1,4 +1,4 @@
-unit uLongParamList;
+﻿unit uLongParamList;
 
 // Detektor fuer Methoden mit zu vielen Parametern.
 // Mehr als MAX_PARAMS Parameter deuten auf einen Refactoring-Bedarf hin
@@ -52,8 +52,7 @@ begin
       F.LineNumber := IntToStr(M.Line);
       F.MissingVar := Format('%d parameters (limit: %d)',
         [ParamCount, DetectorMaxParams]);
-      F.Severity   := lsHint;
-      F.Kind       := fkLongParamList;
+      F.SetKind(fkLongParamList);
       Results.Add(F);
     end;
   finally

@@ -1,4 +1,4 @@
-unit uDfmGodHandler;
+﻿unit uDfmGodHandler;
 
 // Detektor: Eine einzige Methode haengt an Events vieler verschiedener
 // Komponenten. Klassischer Spaghetti-Indikator nach 'OnClick = same
@@ -72,8 +72,7 @@ begin
       F.MissingVar := Format(
         '%s is wired to %d component events (>= %d) - consider splitting',
         [Samples[Pair.Key], Cnt, Threshold]);
-      F.Severity   := lsHint;
-      F.Kind       := fkDfmGodHandler;
+      F.SetKind(fkDfmGodHandler);
       Results.Add(F);
     end;
   finally

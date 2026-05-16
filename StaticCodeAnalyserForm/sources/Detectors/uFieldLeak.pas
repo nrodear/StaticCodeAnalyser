@@ -1,4 +1,4 @@
-unit uFieldLeak;
+﻿unit uFieldLeak;
 
 // Detektor fuer Klassen-Feld-Leaks im Create/Destroy-Pattern.
 //
@@ -224,8 +224,7 @@ begin
               F.MissingVar := Format(
                 '%s: created in %s.Create but not freed in Destroy',
                 [Field.Name, ClassNode.Name]);
-            F.Severity   := lsError;
-            F.Kind       := fkMemoryLeak;
+            F.SetKind(fkMemoryLeak);
             Results.Add(F);
           end;
         end;

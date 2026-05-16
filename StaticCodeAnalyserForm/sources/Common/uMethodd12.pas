@@ -33,6 +33,11 @@ type
     // gelassen - SARIF-Export holt dann die ID aus TRuleCatalog via Kind.
     // Wenn gesetzt, gewinnt RuleID gegen den Catalog-Lookup.
     RuleID:     string;
+    // Setzt Kind UND Severity in einem Schritt - Severity wird aus
+    // KIND_META.DefaultSeverity gezogen (single source of truth). Detektoren
+    // die einen kontext-abhaengigen Severity brauchen (z.B. uLeakDetector2,
+    // uDivByZero - Confidence-basiert) setzen .Severity weiterhin manuell.
+    procedure SetKind(K: TFindingKind);
     function SeverityText: string;
     function FindingType: TFindingType;
     function TypeText: string;
@@ -93,6 +98,12 @@ var
 begin
   for clazz in classes do
     GetVarNamesByFilter(clazz, vars);
+end;
+
+procedure TLeakFinding.SetKind(K: TFindingKind);
+begin
+  Kind     := K;
+  Severity := KindDefaultSeverity(K);
 end;
 
 function TLeakFinding.SeverityText: string;

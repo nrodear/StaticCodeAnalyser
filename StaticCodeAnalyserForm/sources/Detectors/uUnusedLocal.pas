@@ -1,4 +1,4 @@
-unit uUnusedLocal;
+﻿unit uUnusedLocal;
 
 // Detector: lokale `var X: T;` die im Methoden-Body nie referenziert wird.
 //
@@ -150,8 +150,7 @@ begin
         F.MissingVar := Format(
           'Unused local variable: %s (declared but never read or written)',
           [Name]);
-        F.Severity   := EMIT_SEVERITY;
-        F.Kind       := fkUnusedLocalVar;
+        F.SetKind(fkUnusedLocalVar);
         Results.Add(F);
       end;
     end;

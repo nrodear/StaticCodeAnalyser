@@ -1,4 +1,4 @@
-unit uDfmActionMismatch;
+﻿unit uDfmActionMismatch;
 
 // Detektor: Komponente hat sowohl Action- als auch OnClick-Property
 // gesetzt. Wenn Action gesetzt ist, gewinnt das ueber OnClick - der
@@ -58,8 +58,7 @@ begin
       F.MissingVar := Format(
         '%s has Action=%s AND OnClick=%s - Action wins, OnClick handler is dead',
         [N.Name, Act.RawValue, Clk.RawValue]);
-      F.Severity   := lsWarning;
-      F.Kind       := fkDfmActionMismatch;
+      F.SetKind(fkDfmActionMismatch);
       Results.Add(F);
     end;
   finally

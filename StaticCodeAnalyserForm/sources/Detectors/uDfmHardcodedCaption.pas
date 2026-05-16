@@ -1,4 +1,4 @@
-unit uDfmHardcodedCaption;
+﻿unit uDfmHardcodedCaption;
 
 // Detektor: Hardcodierte UI-Strings im DFM.
 //
@@ -71,8 +71,7 @@ begin
         F.MethodName := '';
         F.LineNumber := IntToStr(V.Line);
         F.MissingVar := Format('%s.%s = ''%s''', [N.Name, P, V.RawValue]);
-        F.Severity   := lsHint;
-        F.Kind       := fkDfmHardcodedCaption;
+        F.SetKind(fkDfmHardcodedCaption);
         Results.Add(F);
       end;
     end;

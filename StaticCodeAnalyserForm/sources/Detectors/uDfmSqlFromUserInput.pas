@@ -1,4 +1,4 @@
-unit uDfmSqlFromUserInput;
+﻿unit uDfmSqlFromUserInput;
 
 // Detektor: SQL-Property einer DB-Query wird aus einer UI-Input-Komponente
 // konkateniert. Klassische SQL-Injection ueber Form-Field.
@@ -115,8 +115,7 @@ class procedure TDfmSqlFromUserInputDetector.Analyze(Binding: TFormBinding;
     F.LineNumber := IntToStr(Node.Line);
     F.MissingVar := Format('%s (%s): %s built from %s.Text - parameterize instead',
                             [DbName, Why, DbName, UiName]);
-    F.Severity   := lsError;
-    F.Kind       := fkDfmSqlFromUserInput;
+    F.SetKind(fkDfmSqlFromUserInput);
     Results.Add(F);
   end;
 

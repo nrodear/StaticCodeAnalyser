@@ -1,4 +1,4 @@
-unit uUnusedParameter;
+﻿unit uUnusedParameter;
 
 // Detector: Method-Parameter, der im Body nirgendwo referenziert wird.
 //
@@ -240,8 +240,7 @@ begin
         F.LineNumber := IntToStr(P.Line);
         F.MissingVar := Format(
           'Unused parameter: %s (never read in method body)', [Name]);
-        F.Severity   := EMIT_SEVERITY;
-        F.Kind       := fkUnusedParameter;
+        F.SetKind(fkUnusedParameter);
         Results.Add(F);
       end;
     end;

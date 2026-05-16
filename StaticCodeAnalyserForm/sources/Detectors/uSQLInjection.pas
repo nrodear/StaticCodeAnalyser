@@ -1,4 +1,4 @@
-unit uSQLInjection;
+﻿unit uSQLInjection;
 
 // AST-basierter SQL-Injection-Detektor (Sonar-Regel #4).
 //
@@ -343,8 +343,7 @@ class procedure TSQLInjectionDetector.AnalyzeMethod(MethodNode: TAstNode;
     F.MethodName := MethodNode.Name;
     F.LineNumber := IntToStr(Line);
     F.MissingVar := DisplayTarget + '  [' + TSQLFixScorer.FormatShort(Estimate) + ']';
-    F.Severity   := lsError;
-    F.Kind       := fkSQLInjection;
+    F.SetKind(fkSQLInjection);
     Results.Add(F);
   end;
 

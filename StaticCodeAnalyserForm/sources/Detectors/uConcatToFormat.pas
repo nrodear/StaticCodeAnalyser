@@ -1,4 +1,4 @@
-unit uConcatToFormat;
+﻿unit uConcatToFormat;
 
 // AST-basierter Refactoring-Hint: "Convert concatenation -> Format()".
 //
@@ -188,8 +188,7 @@ class procedure TConcatToFormatDetector.AnalyzeMethod(MethodNode: TAstNode;
     F.LineNumber := IntToStr(Line);
     F.MissingVar := Format('Concat (%d x ''+'') -> Format(...) %s',
                            [PlusCount, Target]);
-    F.Severity   := EMIT_SEVERITY;
-    F.Kind       := fkConcatToFormat;
+    F.SetKind(fkConcatToFormat);
     Results.Add(F);
   end;
 

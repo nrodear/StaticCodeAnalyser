@@ -1,4 +1,4 @@
-unit uDuplicateBlock;
+﻿unit uDuplicateBlock;
 
 // Detektor fuer duplizierte Code-Bloecke innerhalb einer Datei.
 //
@@ -220,8 +220,7 @@ begin
       F.MissingVar := Format(
         'Code block (%d lines) appears %dx in file - consider extracting a method',
         [DetectorMinBlockLines, Pair.Value.Count]);
-      F.Severity   := lsHint;
-      F.Kind       := fkDuplicateBlock;
+      F.SetKind(fkDuplicateBlock);
       Results.Add(F);
     end;
   finally

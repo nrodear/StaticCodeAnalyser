@@ -1,4 +1,4 @@
-unit uDfmHardcodedDbCreds;
+﻿unit uDfmHardcodedDbCreds;
 
 // Detektor: Klartext-Credentials auf DB-Verbindungs-Komponenten im DFM.
 //
@@ -82,8 +82,7 @@ class procedure TDfmHardcodedDbCredsDetector.Analyze(Graph: TComponentGraph;
     F.LineNumber := IntToStr(Line);
     F.MissingVar := Format('%s (%s).%s: %s',
                             [N.Name, N.ClassRef, PropName, Why]);
-    F.Severity   := lsError;
-    F.Kind       := fkDfmHardcodedDbCreds;
+    F.SetKind(fkDfmHardcodedDbCreds);
     Results.Add(F);
   end;
 

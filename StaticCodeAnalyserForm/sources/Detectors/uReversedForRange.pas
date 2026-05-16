@@ -1,4 +1,4 @@
-unit uReversedForRange;
+﻿unit uReversedForRange;
 
 // Detektor fuer `for i := A to B do` mit numerischen Literalen, A > B.
 // Klassischer `downto`-vergessen-Tippfehler: Schleife hat 0 Iterationen,
@@ -265,8 +265,7 @@ begin
         F.MissingVar := Format(
           'Reversed for-range: %d > %d (use `downto`?) - %s',
           [FromVal, ToVal, Snippet]);
-        F.Severity   := EMIT_SEVERITY;
-        F.Kind       := fkReversedForRange;
+        F.SetKind(fkReversedForRange);
         Results.Add(F);
       end;
     end;

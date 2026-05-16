@@ -1,4 +1,4 @@
-unit uSelfAssignment;
+﻿unit uSelfAssignment;
 
 // Detektor: `x := x;` - LHS textuell identisch zur RHS.
 //
@@ -75,8 +75,7 @@ begin
       F.LineNumber := IntToStr(N.Line);
       F.MissingVar := Format('Self-assignment: %s := %s (no-op or copy-paste)',
                               [N.Name, N.TypeRef]);
-      F.Severity   := EMIT_SEVERITY;
-      F.Kind       := fkSelfAssignment;
+      F.SetKind(fkSelfAssignment);
       Results.Add(F);
     end;
   finally

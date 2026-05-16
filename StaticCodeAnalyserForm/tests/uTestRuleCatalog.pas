@@ -20,6 +20,15 @@ type
 
     // Pro TFindingKind muss eine Rule existieren mit nicht-leerer ID.
     [Test] procedure EveryFindingKindHasRule;
+    // Strengere Variante: pro Kind muessen Name + ShortDescription gesetzt
+    // sein (faengt den Fallback-Pfad ab, der ID befuellt aber Beschreibung
+    // leer laesst -> SARIF/Docs unvollstaendig ohne dass Test schreit).
+    [Test] procedure EveryFindingKindHasRichMetadata;
+    // KIND_META.DefaultSeverity muss zu rules/sca-rules.json
+    // defaultSeverity passen - verhindert dass Pascal-Detektoren und
+    // JSON-Catalog gegeneinander driften (Catalog ist single source of
+    // truth fuer Severity nach Refactor in uMethodd12.TLeakFinding.SetKind).
+    [Test] procedure JsonSeverityMatchesKindMeta;
     // ID-Konvention: 'SCA' + 3-stellige Nummer.
     [Test] procedure RuleIDsFollowConvention;
     // IDs muessen unique sein.
@@ -79,6 +88,53 @@ begin
       Format('Kind %s hat keine Rule-ID im Catalog', [KindName(K)]));
     Assert.AreEqual(K, Meta.Kind,
       Format('Kind-Mismatch fuer %s', [KindName(K)]));
+  end;
+end;
+
+procedure TTestRuleCatalog.EveryFindingKindHasRichMetadata;
+// Strenger als EveryFindingKindHasRule: ShortDescription + Name muessen
+// non-empty sein. Faengt den Fall ab, dass TRuleCatalog.LoadFallback
+// einspringt - der fuellt ID + Kind, laesst aber Beschreibungen leer ->
+// SARIF-Reports und docs/rules.md fehlt Content ohne dass irgendein Test
+// das sichtbar macht.
+var
+  K    : TFindingKind;
+  Meta : TRuleMeta;
+begin
+  for K := Low(TFindingKind) to High(TFindingKind) do
+  begin
+    Meta := TRuleCatalog.GetRule(K);
+    Assert.IsNotEmpty(Meta.Name,
+      Format('Kind %s hat keinen Catalog-Eintrag mit Name (Fallback aktiv?)',
+        [KindName(K)]));
+    Assert.IsNotEmpty(Meta.ShortDescription,
+      Format('Kind %s hat keine shortDescription in rules/sca-rules.json',
+        [KindName(K)]));
+    Assert.IsNotEmpty(Meta.DetectorUnit,
+      Format('Kind %s hat keinen detectorUnit-Eintrag', [KindName(K)]));
+  end;
+end;
+
+procedure TTestRuleCatalog.JsonSeverityMatchesKindMeta;
+// Konsistenz-Check: JSON-defaultSeverity == KIND_META.DefaultSeverity.
+// Nach dem SetKind-Refactor zieht jeder Detector die Severity aus
+// KIND_META; SARIF-Export holt sie aus dem JSON-Catalog. Wenn die
+// beiden divergieren, sehen User unterschiedliche Severities in IDE
+// (KIND_META) vs. Sonar/CI-Report (JSON). Single source of truth ist
+// per Definition die JSON - dieser Test enforced dass KIND_META synct.
+var
+  K    : TFindingKind;
+  Meta : TRuleMeta;
+begin
+  for K := Low(TFindingKind) to High(TFindingKind) do
+  begin
+    Meta := TRuleCatalog.GetRule(K);
+    Assert.AreEqual<TLeakSeverity>(
+      Meta.DefaultSeverity,
+      KindDefaultSeverity(K),
+      Format('Severity-Drift fuer %s: JSON=%d, KIND_META=%d - ' +
+             'rules/sca-rules.json oder uSCAConsts.KIND_META anpassen',
+        [KindName(K), Ord(Meta.DefaultSeverity), Ord(KindDefaultSeverity(K))]));
   end;
 end;
 

@@ -1,4 +1,4 @@
-unit uEmptyMethod;
+﻿unit uEmptyMethod;
 
 // Detektor fuer Methoden ohne Anweisungen.
 // Erkennt Implementations-Methoden mit leerem begin..end-Rumpf:
@@ -65,8 +65,7 @@ begin
       F.MethodName := M.Name;
       F.LineNumber := IntToStr(M.Line);
       F.MissingVar := 'Method body is empty';
-      F.Severity   := lsHint;
-      F.Kind       := fkEmptyMethod;
+      F.SetKind(fkEmptyMethod);
       Results.Add(F);
     end;
   finally

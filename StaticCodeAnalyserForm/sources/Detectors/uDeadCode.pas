@@ -1,4 +1,4 @@
-unit uDeadCode;
+﻿unit uDeadCode;
 
 // Detektor fuer toten Code (Sonar-Regel #10).
 //
@@ -106,8 +106,7 @@ begin
             F.MethodName := MethodName;
             F.LineNumber := IntToStr(Nxt.Line);
             F.MissingVar := 'Dead code after ' + TermName;
-            F.Severity   := lsWarning;
-            F.Kind       := fkDeadCode;
+            F.SetKind(fkDeadCode);
             Results.Add(F);
             Break; // Pro Block nur einmal melden
           end;

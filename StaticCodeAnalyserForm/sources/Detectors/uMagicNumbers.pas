@@ -1,4 +1,4 @@
-unit uMagicNumbers;
+﻿unit uMagicNumbers;
 
 // Detektor fuer Magic Numbers in if-Bedingungen.
 // Erkennt Zahlenliterale > 1 in Vergleichen, die nicht via Konstante
@@ -153,8 +153,7 @@ begin
         F.LineNumber := IntToStr(IfN.Line);
         F.MissingVar := Format('Magic number "%s" in if condition - use a constant',
                                [NumStr]);
-        F.Severity   := lsHint;
-        F.Kind       := fkMagicNumber;
+        F.SetKind(fkMagicNumber);
         Results.Add(F);
       end;
     end;

@@ -1,4 +1,4 @@
-unit uMissingFinally;
+﻿unit uMissingFinally;
 
 // Detektor fuer fehlenden try/finally-Schutz (Sonar-Regel #8).
 //
@@ -99,8 +99,7 @@ begin
         F.MissingVar := V.Name + ' (try/except instead of try/finally)'
       else
         F.MissingVar := V.Name;
-      F.Severity   := lsWarning;
-      F.Kind       := fkMissingFinally;
+      F.SetKind(fkMissingFinally);
       Results.Add(F);
     end;
   finally

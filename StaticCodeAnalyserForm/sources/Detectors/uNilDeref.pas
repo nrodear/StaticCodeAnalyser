@@ -1,4 +1,4 @@
-unit uNilDeref;
+﻿unit uNilDeref;
 
 // Detektor fuer potentielle Nil-Dereferenzierungen (Sonar-Regel #3).
 //
@@ -177,8 +177,7 @@ begin
         F.MethodName := MethodNode.Name;
         F.LineNumber := IntToStr(C.Line);
         F.MissingVar := NA.Name + ' := nil (line ' + IntToStr(NA.Line) + ')';
-        F.Severity   := lsError;
-        F.Kind       := fkNilDeref;
+        F.SetKind(fkNilDeref);
         Results.Add(F);
         Break; // Pro nil-Zuweisung nur einmal melden
       end;

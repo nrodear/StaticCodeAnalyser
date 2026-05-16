@@ -1,4 +1,4 @@
-unit uDfmDeadEvent;
+﻿unit uDfmDeadEvent;
 
 // Detektor: Toter Event-Handler im DFM.
 //
@@ -54,8 +54,7 @@ begin
     F.MissingVar := Format('%s.%s = %s (handler missing in %s)',
                             [Ev.Component.Name, Ev.EventName,
                              Ev.HandlerName, Binding.FormClass.Name]);
-    F.Severity   := lsError;
-    F.Kind       := fkDfmDeadEvent;
+    F.SetKind(fkDfmDeadEvent);
     Results.Add(F);
   end;
 end;

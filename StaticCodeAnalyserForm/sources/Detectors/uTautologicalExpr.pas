@@ -1,4 +1,4 @@
-unit uTautologicalExpr;
+﻿unit uTautologicalExpr;
 
 // Detector: tautologische binaere Ausdruecke wie `x = x`, `a and a`,
 // `(b or b)`, `(p <> p)`. Klassischer Copy-Paste-Bug oder vergessener
@@ -326,8 +326,7 @@ begin
         F.MissingVar := Format(
           'Tautological expression: %s (LHS == RHS - copy-paste bug?)',
           [Detail]);
-        F.Severity   := EMIT_SEVERITY;
-        F.Kind       := fkTautologicalBoolExpr;
+        F.SetKind(fkTautologicalBoolExpr);
         Results.Add(F);
       end;
     end;

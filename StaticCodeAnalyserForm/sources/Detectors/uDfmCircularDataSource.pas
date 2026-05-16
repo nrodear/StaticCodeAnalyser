@@ -1,4 +1,4 @@
-unit uDfmCircularDataSource;
+﻿unit uDfmCircularDataSource;
 
 // Detektor: Zyklus in DataSource <-> DataSet / MasterSource-Verkettung.
 //
@@ -118,8 +118,7 @@ class procedure TDfmCircularDataSourceDetector.Analyze(Graph: TComponentGraph;
       F.LineNumber := IntToStr(Found.Line);
       F.MissingVar := Format('%s is part of a master-detail cycle: %s',
                               [Found.Name, Joined]);
-      F.Severity   := lsError;
-      F.Kind       := fkDfmCircularDataSource;
+      F.SetKind(fkDfmCircularDataSource);
       Results.Add(F);
     end;
   end;

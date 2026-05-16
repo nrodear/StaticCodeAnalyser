@@ -1,4 +1,4 @@
-unit uDuplicateString;
+﻿unit uDuplicateString;
 
 // Detektor fuer mehrfach vorkommende String-Literale.
 // Strings die >= MIN_OCCURRENCES Mal im Quelltext auftauchen, sollten
@@ -148,8 +148,7 @@ begin
       F.LineNumber := IntToStr(FirstLine[Pair.Key]);
       F.MissingVar := Format('"%s" %dx - extract as a constant',
                              [Display, Cnt]);
-      F.Severity   := lsHint;
-      F.Kind       := fkDuplicateString;
+      F.SetKind(fkDuplicateString);
       Results.Add(F);
     end;
   finally

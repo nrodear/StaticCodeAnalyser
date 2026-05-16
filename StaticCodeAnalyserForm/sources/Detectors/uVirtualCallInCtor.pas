@@ -1,4 +1,4 @@
-unit uVirtualCallInCtor;
+﻿unit uVirtualCallInCtor;
 
 // Detektor: Aufruf einer `virtual`-Methode im Constructor.
 //
@@ -193,8 +193,7 @@ begin
                     'Virtual method "%s" called from constructor "%s" - '
                     + 'override runs on half-initialized Self',
                     [VMethod.Name, Ctor.Name]);
-                  F.Severity   := EMIT_SEVERITY;
-                  F.Kind       := fkVirtualCallInCtor;
+                  F.SetKind(fkVirtualCallInCtor);
                   Results.Add(F);
                 end;
               finally

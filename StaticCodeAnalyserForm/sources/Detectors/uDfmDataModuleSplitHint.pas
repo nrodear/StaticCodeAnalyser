@@ -1,4 +1,4 @@
-unit uDfmDataModuleSplitHint;
+﻿unit uDfmDataModuleSplitHint;
 
 // Detektor: aggregiert mehrere fkDfmDbInUiForm-Befunde auf derselben Form
 // zu einem einzigen "extract to data module"-Refactor-Hint, sobald die
@@ -107,8 +107,7 @@ begin
       '%d DB components on this form (%s) - extract them into a TDataModule '
       + '(e.g., T%sDataModule). Aggregate hint, single instances reported separately.',
       [Count, DisplayList, ExtractName]);
-    F.Severity   := lsHint;
-    F.Kind       := fkDfmDataModuleSplitHint;
+    F.SetKind(fkDfmDataModuleSplitHint);
     Results.Add(F);
   finally
     Names.Free;

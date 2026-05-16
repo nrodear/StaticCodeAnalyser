@@ -1,4 +1,4 @@
-unit uDfmDbInUiForm;
+﻿unit uDfmDbInUiForm;
 
 // Detektor: DB-Komponente liegt direkt auf einer TForm/TFrame statt im
 // dafuer vorgesehenen TDataModule.
@@ -100,8 +100,7 @@ begin
       F.LineNumber := IntToStr(N.Line);
       F.MissingVar := Format('%s (%s) lives on %s (%s) - move to a TDataModule',
                               [N.Name, N.ClassRef, Root.Name, Root.ClassRef]);
-      F.Severity   := lsHint;
-      F.Kind       := fkDfmDbInUiForm;
+      F.SetKind(fkDfmDbInUiForm);
       Results.Add(F);
     end;
   finally

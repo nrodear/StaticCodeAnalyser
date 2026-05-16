@@ -1,4 +1,4 @@
-unit uDfmDefaultName;
+﻿unit uDfmDefaultName;
 
 // Detektor: Default-Komponentennamen im DFM.
 //
@@ -92,8 +92,7 @@ begin
         F.MethodName := '';
         F.LineNumber := IntToStr(N.Line);
         F.MissingVar := Format('%s: %s', [N.Name, N.ClassRef]);
-        F.Severity   := lsHint;
-        F.Kind       := fkDfmDefaultName;
+        F.SetKind(fkDfmDefaultName);
         Results.Add(F);
       end;
     end;

@@ -1,4 +1,4 @@
-unit uDfmRequiredField;
+﻿unit uDfmRequiredField;
 
 // Detektoren fuer Pflichtfeld-Probleme im DFM (Phase 3).
 //
@@ -90,8 +90,7 @@ class procedure TDfmRequiredFieldDetector.Analyze(Graph: TComponentGraph;
     F.MethodName := '';
     F.LineNumber := IntToStr(Field.Line);
     F.MissingVar := Why;
-    F.Severity   := lsWarning;
-    F.Kind       := Kind;
+    F.SetKind(Kind);
     Results.Add(F);
   end;
 

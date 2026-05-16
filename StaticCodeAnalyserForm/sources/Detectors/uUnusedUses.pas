@@ -1,4 +1,4 @@
-unit uUnusedUses;
+﻿unit uUnusedUses;
 
 // AST-basierter Detektor fuer moeglicherweise ungenutzte uses-Eintraege.
 //
@@ -791,8 +791,7 @@ begin
       F.MethodName := '';
       F.LineNumber := IntToStr(Item.Line);
       F.MissingVar := Item.Name;
-      F.Severity   := lsWarning;
-      F.Kind       := fkUnusedUses;
+      F.SetKind(fkUnusedUses);
       Results.Add(F);
     end;
   finally

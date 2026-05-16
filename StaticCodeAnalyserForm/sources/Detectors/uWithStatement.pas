@@ -1,4 +1,4 @@
-unit uWithStatement;
+﻿unit uWithStatement;
 
 // Detektor fuer das `with X do ...` Statement.
 //
@@ -218,8 +218,7 @@ begin
       F.MethodName := '';
       F.LineNumber := IntToStr(i + 1);
       F.MissingVar := 'with-Statement (Scope-Shadowing): ' + Snippet;
-      F.Severity   := EMIT_SEVERITY;
-      F.Kind       := fkWithStatement;
+      F.SetKind(fkWithStatement);
       Results.Add(F);
     end;
   finally

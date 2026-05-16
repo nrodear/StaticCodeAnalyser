@@ -1,4 +1,4 @@
-unit uDebugOutput;
+﻿unit uDebugOutput;
 
 // Detektor fuer Debug-Ausgaben in Produktionscode.
 // Erkennt Aufrufe von:
@@ -71,8 +71,7 @@ var
     F.MethodName := '';
     F.LineNumber := IntToStr(Line);
     F.MissingVar := 'Debug output: ' + Found.Trim;
-    F.Severity   := lsWarning;
-    F.Kind       := fkDebugOutput;
+    F.SetKind(fkDebugOutput);
     Results.Add(F);
   end;
 

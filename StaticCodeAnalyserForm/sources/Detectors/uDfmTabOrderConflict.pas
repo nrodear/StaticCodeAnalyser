@@ -1,4 +1,4 @@
-unit uDfmTabOrderConflict;
+﻿unit uDfmTabOrderConflict;
 
 // Detektor: Zwei oder mehr Geschwister-Komponenten im selben Parent haben
 // den gleichen TabOrder-Wert.
@@ -67,8 +67,7 @@ begin
           F.LineNumber := IntToStr(Child.Line);
           F.MissingVar := Format('%s shares TabOrder=%s with sibling(s) in %s',
                                   [Child.Name, Pair.Key, Parent.Name]);
-          F.Severity   := lsHint;
-          F.Kind       := fkDfmTabOrderConflict;
+          F.SetKind(fkDfmTabOrderConflict);
           Results.Add(F);
         end;
   finally

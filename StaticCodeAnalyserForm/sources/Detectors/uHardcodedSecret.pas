@@ -188,8 +188,7 @@ begin
       F.MethodName := MethodNode.Name;
       F.LineNumber := IntToStr(A.Line);
       F.MissingVar := A.Name + ' = ' + LitShort;
-      F.Severity   := lsError;
-      F.Kind       := fkHardcodedSecret;
+      F.SetKind(fkHardcodedSecret);
       Results.Add(F);
     end;
   finally

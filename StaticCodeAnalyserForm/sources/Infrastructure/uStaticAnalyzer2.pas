@@ -1,4 +1,4 @@
-unit uStaticAnalyzer2;
+﻿unit uStaticAnalyzer2;
 
 interface
 
@@ -301,8 +301,7 @@ class procedure TStaticAnalyzer2.ParseLeaks(FileList: TStringList;
     F.MethodName := '';
     F.LineNumber := '0';
     F.MissingVar := AMsg;
-    F.Severity   := lsError;
-    F.Kind       := fkFileReadError;
+    F.SetKind(fkFileReadError);
     Results.Add(F);
   end;
 
@@ -592,8 +591,7 @@ begin
             F.LineNumber := '0';
             F.MissingVar := Format('Detector %s failed: %s',
                                    [Name, ErrMsg]);
-            F.Severity   := lsError;
-            F.Kind       := fkFileReadError;
+            F.SetKind(fkFileReadError);
             CaptResults.Add(F);
           end);
       finally
@@ -646,8 +644,7 @@ class function TStaticAnalyzer2.AnalyzeLeaks(const FileName: string;
     F.MethodName := '';
     F.LineNumber := '0';
     F.MissingVar := Msg;
-    F.Severity   := lsError;
-    F.Kind       := fkFileReadError;
+    F.SetKind(fkFileReadError);
     Result.Add(F);
   end;
 
@@ -688,8 +685,7 @@ class function TStaticAnalyzer2.AnalyzeLeaksRecursive(const Path: string;
     F.MethodName := '';
     F.LineNumber := '0';
     F.MissingVar := Msg;
-    F.Severity   := lsError;
-    F.Kind       := fkFileReadError;
+    F.SetKind(fkFileReadError);
     Result.Add(F);
   end;
 
@@ -776,8 +772,7 @@ class function TStaticAnalyzer2.AnalyzeLeaksFromList(AFiles: TStringList;
     F.MethodName := '';
     F.LineNumber := '0';
     F.MissingVar := Msg;
-    F.Severity   := lsError;
-    F.Kind       := fkFileReadError;
+    F.SetKind(fkFileReadError);
     Result.Add(F);
   end;
 

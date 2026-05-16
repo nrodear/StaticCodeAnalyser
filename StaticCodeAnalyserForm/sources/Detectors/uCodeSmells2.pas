@@ -1,4 +1,4 @@
-unit uCodeSmells2;
+﻿unit uCodeSmells2;
 
 // AST-basierter Code-Smell-Detektor (Sonar-Regel #2).
 //
@@ -48,8 +48,7 @@ begin
       F.MethodName := MethodNode.Name;
       F.LineNumber := IntToStr(EB.Line);
       F.MissingVar := 'Empty except block';
-      F.Severity   := lsWarning;
-      F.Kind       := fkEmptyExcept;
+      F.SetKind(fkEmptyExcept);
       Results.Add(F);
     end;
   finally

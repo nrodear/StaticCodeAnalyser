@@ -1,4 +1,4 @@
-unit uFormatMismatch;
+﻿unit uFormatMismatch;
 
 // AST-basierter Detektor für Format()-Argument-Fehler (Sonar-Regel #9).
 //
@@ -575,8 +575,7 @@ var
         F.MissingVar := Format(
           'Format: float spec %s without TFormatSettings - locale-dependent '
           + '(comma vs. dot decimal separator)', [FmtStr]);
-        F.Severity   := lsHint;
-        F.Kind       := fkFormatLocaleHint;
+        F.SetKind(fkFormatLocaleHint);
         Results.Add(F);
       end;
     end;
@@ -596,8 +595,7 @@ var
     F.LineNumber := IntToStr(Line);
     F.MissingVar := Format('Format: %d placeholders, %d arguments',
                            [PlaceCount, ArgCount]);
-    F.Severity   := lsError;
-    F.Kind       := fkFormatMismatch;
+    F.SetKind(fkFormatMismatch);
     Results.Add(F);
   end;
 

@@ -1,4 +1,4 @@
-unit uLongMethod;
+﻿unit uLongMethod;
 
 // Detektor fuer zu lange Methoden.
 //
@@ -104,8 +104,7 @@ begin
         F.MissingVar := Format(
           '%d body lines, %d statements (limit: %d / %d)',
           [Lines, Stmts, DetectorMaxBodyLines, DetectorMaxStatements]);
-        F.Severity   := lsHint;
-        F.Kind       := fkLongMethod;
+        F.SetKind(fkLongMethod);
         Results.Add(F);
       end;
     end;

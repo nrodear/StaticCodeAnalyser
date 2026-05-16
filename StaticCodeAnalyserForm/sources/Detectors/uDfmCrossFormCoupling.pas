@@ -1,4 +1,4 @@
-unit uDfmCrossFormCoupling;
+﻿unit uDfmCrossFormCoupling;
 
 // Detektor: Code in einer Form referenziert published Felder einer ANDEREN
 // Form ueber deren globalen Form-Singleton.
@@ -113,8 +113,7 @@ class procedure TDfmCrossFormCouplingDetector.Analyze(Binding: TFormBinding;
     F.MissingVar := Format(
       'cross-form access: %s (%s, declared in %s) referenced as "%s"',
       [Info.VarName, Info.ClassRef, ExtractFileName(Info.Unitname), Expr]);
-    F.Severity   := lsWarning;
-    F.Kind       := fkDfmCrossFormCoupling;
+    F.SetKind(fkDfmCrossFormCoupling);
     Results.Add(F);
   end;
 

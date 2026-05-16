@@ -1,4 +1,4 @@
-unit uVisibilityCheck;
+﻿unit uVisibilityCheck;
 
 // Detektoren: fkCanBePrivate / fkCanBeProtected / fkUnusedPublicMember.
 //
@@ -351,8 +351,7 @@ var
     F.MethodName := Member.Name;
     F.LineNumber := IntToStr(Member.Line);
     F.MissingVar := Msg;
-    F.Severity   := EMIT_SEVERITY;
-    F.Kind       := K;
+    F.SetKind(K);
     Results.Add(F);
   end;
 
