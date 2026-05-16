@@ -150,17 +150,18 @@ begin
                 Exit;
               end;
             end;
-            // Reset
+            // Reset; aktuelles `:` ist konsumiert.
             State := skScan;
             Inc(i);
             FirstCol := 0; IdCount := 0;
             Continue;
           end;
-          // Anderes Zeichen (z.B. `(` als Funktionscall, `:=` als Assign)
-          // -> Reset.
+          // Anderes Zeichen (z.B. `;`, `(`, Identifier-Start) -> Reset.
+          // KEIN Inc(i): das aktuelle Zeichen soll im skScan-State neu
+          // betrachtet werden, sonst werden Identifier wie `Foo` in
+          // `procedure Foo; var A, B: Type` uebersprungen.
           State := skScan;
           FirstCol := 0; IdCount := 0;
-          Inc(i);
         end;
       skExpectId2:
         begin
@@ -173,10 +174,11 @@ begin
             State := skAfterIdent;
             Continue;
           end;
-          // Komma war doch nicht Teil einer Gruppen-Deklaration
+          // Komma war doch nicht Teil einer Gruppen-Deklaration.
+          // Wie oben: kein Inc, damit das aktuelle Zeichen erneut im
+          // skScan-State verarbeitet wird.
           State := skScan;
           FirstCol := 0; IdCount := 0;
-          Inc(i);
         end;
     end;
   end;

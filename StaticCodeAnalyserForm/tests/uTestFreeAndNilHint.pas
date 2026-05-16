@@ -67,8 +67,10 @@ end;
 procedure TTestFreeAndNilHint.FreeAndNilHint_KindAndSeverity;
 const SRC =
   'unit t; implementation'#13#10 +
-  'procedure Foo; Obj.Free;'#13#10 +
-  '  Obj := nil; end;';
+  'procedure Foo;'#13#10 +
+  '  Obj.Free;'#13#10 +
+  '  Obj := nil;'#13#10 +
+  'end;';
 var
   F   : TObjectList<TLeakFinding>;
   Fnd : TLeakFinding;
