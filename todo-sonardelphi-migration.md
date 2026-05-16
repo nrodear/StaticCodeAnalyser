@@ -8,8 +8,8 @@ SCA-unique detectors (DFM, security, SQL).
 > - SCA v0.9.1: **59 Rules**, davon ~22 mit SonarDelphi-Overlap, ~37 unique (20 DFM-Rules + SQL/Security/Format-Locale)
 > - Coverage-Gap zum 110 %-Ziel: **~119 Rules** zu portieren, **~25 Rules** schon vorhanden
 >
-> **Fortschritt 2026-05-16 (gleicher Tag)**: Phase 1 zu **34/50** abgeschlossen
-> (SCA060-093). Katalog von 59 → 93 Rules. Siehe "Phase 1 Status" unten.
+> **Fortschritt 2026-05-16 (gleicher Tag)**: Phase 1 zu **36/50** abgeschlossen
+> (SCA060-095). Katalog von 59 → 95 Rules. Siehe "Phase 1 Status" unten.
 
 ---
 
@@ -128,6 +128,8 @@ Triviale Detektoren — Pattern matched 1:1 unsere bestehenden.
 | SCA091 | CaseStatementSize            | done   | #12 (`9c95e5c`) |
 | SCA092 | EmptyFile                    | done   | #12 |
 | SCA093 | TwiceInheritedCalls          | done   | #12 (AST-based) |
+| SCA094 | RedundantParentheses         | done   | #13 (`69df56d`) |
+| SCA095 | ConsecutiveVisibility        | done   | #13 |
 
 **Overlap-Audit (2026-05-16)**: `uEmptyBlock` (SCA077) ueberlappte initial mit
 `uEmptyMethod` (existing) auf leeren Methoden-Bodies. Fix in `690d883` -
@@ -141,7 +143,6 @@ SonarDelphi trennt das auch (EmptyRoutineImplementation vs EmptyBlock).
 
 Lexical / lower-risk:
 - `MissingSemicolon` (hard - needs AST for statement-end detection)
-- `RedundantParentheses` (lex-tricky - distinguish `((X))` from `Foo((X+Y))`)
 - `MixedNames` (configurable - belongs to Phase 2 Framework)
 - `CommentRegularExpression`, `StringLiteralRegularExpression` (configurable - Phase 2)
 - `VisibilityKeywordIndentation` (needs class-body context)
@@ -150,7 +151,6 @@ Lexical / lower-risk:
 
 AST single-node / Kat B:
 - `EmptyFieldSection` (similar to EmptyVisibilitySection but only for fields)
-- `ConsecutiveVisibilitySection` (already partially covered by ConsecutiveSection)
 - `MemberDeclarationOrder` (needs class-body parse)
 - `VisibilitySectionOrder` (needs class-body parse)
 - `BeginEndRequired` (`if X then Y;` should be `begin Y end;` - style debated)
@@ -159,7 +159,7 @@ AST single-node / Kat B:
 - `IfElseBegin` (style for nested if/else with begin)
 - `RaiseExceptionType` (needs flow context)
 
-**Open**: 16 candidates remaining. Configurable rules (MixedNames,
+**Open**: 14 candidates remaining. Configurable rules (MixedNames,
 *RegularExpression*) move to Phase 2 Framework. The deeper AST-context
 rules (MemberDeclarationOrder, VisibilitySectionOrder, ExplicitBitwiseNot)
 move to Phase 3 (multi-node + cross-unit).
