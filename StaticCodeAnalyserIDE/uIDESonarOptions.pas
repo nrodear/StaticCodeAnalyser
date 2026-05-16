@@ -201,11 +201,15 @@ begin
   lblTokenInfo := TLabel.Create(Self); lblTokenInfo.Parent := grpAuth;
   lblTokenInfo.AutoSize := False;
   lblTokenInfo.Left := INNER_LEFT + LBL_W;
-  lblTokenInfo.Top := edToken.Top + 28;
+  lblTokenInfo.Top := edToken.Top + 26;
   lblTokenInfo.Width := EDIT_W;
-  lblTokenInfo.Height := 32;
+  lblTokenInfo.Height := 26;
   lblTokenInfo.WordWrap := True;
   lblTokenInfo.Font.Color := clGrayText;
+  // 8pt statt Default 9pt - Hilfe-Text soll subtler als die Field-Labels
+  // wirken. ParentFont OFF, damit Theme-Wechsel das nicht zurueckschiebt.
+  lblTokenInfo.ParentFont := False;
+  lblTokenInfo.Font.Size := 8;
   lblTokenInfo.Caption :=
     'Token is stored DPAPI-encrypted in analyser.ini [SonarTokens]. ' +
     'Only this Windows user on this machine can decrypt it.';
