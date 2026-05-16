@@ -36,6 +36,11 @@ type
   private
     class function IsAssignRisk(const Name, RHS: string): Boolean; static;
     class function IsCallRisk(const CallName: string): Boolean; static;
+    // H3: Format-Familie mit SQL-Keyword im Format-String + %-Placeholder.
+    // mORMot-Pattern: ExecuteFmt('SELECT * FROM % WHERE id=%', [tbl, id]) -
+    // strukturelle Injection ueber Tabellenname, kein '+' im Code -> H1/H2
+    // uebersehen das. Severity = lsError, gleiche Kind wie sonstige SQL-Risks.
+    class function IsFormatSqlRisk(const CallName: string): Boolean; static;
     // True wenn der String '+' AUSSERHALB von Stringliteralen enthaelt
     // (also echte Konkatenation mit Bezeichner/Variable). 'x'+'y' allein
     // ist kein Risiko, das ist nur Multi-Line-Stringliteral-Aufbau.
@@ -274,6 +279,45 @@ begin
     if Pos(Kw, Low) > 0 then Exit(True);
 end;
 
+class function TSQLInjectionDetector.IsFormatSqlRisk(
+  const CallName: string): Boolean;
+// Pattern: <FormatFn>(<SqlKeyword-Literal mit %>, [args])
+// FormatFn ist eine der bekannten Format-/Exec-Familien (Format, FormatUtf8,
+// FormatSQL, ExecuteFmt, RunSQL, QuerySingle, QueryInt). SQL_KW (', select,
+// 'insert, ...) muss im Call-Name vorkommen UND mindestens ein '%' (Format-
+// Placeholder) - reiner statischer SQL-String ohne Placeholder waere safe.
+const
+  FORMAT_FNS: array[0..6] of string = (
+    'format(', 'formatutf8(', 'formatsql(', 'executefmt(',
+    'runsql(', 'querysingle(', 'queryint('
+  );
+var
+  Low : string;
+  Fn  : string;
+  Kw  : string;
+  FnIdx, KwIdx, PctIdx : Integer;
+begin
+  Result := False;
+  Low := CallName.ToLower;
+  for Fn in FORMAT_FNS do
+  begin
+    FnIdx := Pos(Fn, Low);
+    if FnIdx <= 0 then Continue;
+    // Argument-Bereich = alles nach dem '(' der Format-Funktion
+    var ArgsLow := Copy(Low, FnIdx + Length(Fn), MaxInt);
+    // Mindestens ein SQL-Keyword als Literal im Format-String
+    for Kw in SQL_KW do
+    begin
+      KwIdx := Pos(Kw, ArgsLow);
+      if KwIdx <= 0 then Continue;
+      // Plus mindestens ein '%' im Argument-Bereich. Wenn keiner ->
+      // statischer SQL-String ohne Substitution -> kein Risiko.
+      PctIdx := Pos('%', ArgsLow);
+      if PctIdx > 0 then Exit(True);
+    end;
+  end;
+end;
+
 { ---- Öffentliche API ---- }
 
 class procedure TSQLInjectionDetector.AnalyzeMethod(MethodNode: TAstNode;
@@ -309,21 +353,23 @@ var
   Calls   : TList<TAstNode>;
   N       : TAstNode;
 begin
-  // nkAssign: SQL.Text := 'SELECT * FROM ' + VarName
+  // nkAssign: SQL.Text := 'SELECT * FROM ' + VarName ODER
+  //           s := FormatUtf8('SELECT * FROM %', [tbl])  (H3 / mORMot-Style)
   Assigns := MethodNode.FindAll(nkAssign);
   try
     for N in Assigns do
-      if IsAssignRisk(N.Name, N.TypeRef) then
+      if IsAssignRisk(N.Name, N.TypeRef) or IsFormatSqlRisk(N.TypeRef) then
         Report(N.Name, N.TypeRef, N.Line);
   finally
     Assigns.Free;
   end;
 
-  // nkCall: Query.SQL.Add('SELECT ' + VarName)
+  // nkCall: Query.SQL.Add('SELECT ' + VarName) ODER
+  //         ExecuteFmt('SELECT * FROM %', [tbl])  (H3 / mORMot-Style)
   Calls := MethodNode.FindAll(nkCall);
   try
     for N in Calls do
-      if IsCallRisk(N.Name) then
+      if IsCallRisk(N.Name) or IsFormatSqlRisk(N.Name) then
         Report(N.Name, N.Name, N.Line);
   finally
     Calls.Free;

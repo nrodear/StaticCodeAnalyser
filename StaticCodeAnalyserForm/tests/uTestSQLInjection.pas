@@ -36,6 +36,14 @@ type
     [Test] procedure SQL_AssignSelectStarConcat_IntToStrSafe_NoFinding;
     [Test] procedure SQL_DeleteWithVarConcat_ReportsError;
     [Test] procedure SQL_AssignWithoutSQLKeyword_NoFinding;
+    // ---- Severity / Finding-Inhalt / Multi-Hit ------------------------------
+    [Test] procedure SQL_Finding_KindAndSeverity;
+    [Test] procedure SQL_Finding_MissingVarMentionsTargetAndFixScore;
+    [Test] procedure SQL_MultipleHitsInSameMethod_AllReported;
+    // ---- Format-Family (mORMot-Pattern) -------------------------------------
+    [Test] procedure SQL_FormatUtf8_WithSqlKeyword_Reported;
+    [Test] procedure SQL_ExecuteFmt_TablenamePlaceholder_Reported;
+    [Test] procedure SQL_FormatWithoutSql_NoFinding;
   end;
 
 implementation
@@ -271,6 +279,117 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual(0, TFindingHelper.Count(F, fkSQLInjection));
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_Finding_KindAndSeverity;
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var q: TFDQuery; UserId: string;'#13#10+
+  'begin q.SQL.Text := ''SELECT * FROM users WHERE id='' + UserId; end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := nil;
+    for Fnd in F do
+      if Fnd.Kind = fkSQLInjection then
+      begin
+        Hit := Fnd;
+        Break;
+      end;
+    Assert.IsNotNull(Hit, 'fkSQLInjection finding expected');
+    Assert.AreEqual(fkSQLInjection, Hit.Kind);
+    Assert.AreEqual(lsError, Hit.Severity);
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_Finding_MissingVarMentionsTargetAndFixScore;
+// MissingVar enthaelt: LHS-Target + FormatShort-Estimate (Score X/5 ...).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var q: TFDQuery; UserId: string;'#13#10+
+  'begin q.SQL.Text := ''SELECT * FROM users WHERE id='' + UserId; end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := nil;
+    for Fnd in F do
+      if Fnd.Kind = fkSQLInjection then
+      begin
+        Hit := Fnd;
+        Break;
+      end;
+    Assert.IsNotNull(Hit);
+    // Target + Fix-Score-Hinweis
+    Assert.Contains(LowerCase(Hit.MissingVar), 'sql');
+    Assert.Contains(Hit.MissingVar, '/5');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_FormatUtf8_WithSqlKeyword_Reported;
+// mORMot-Idiom: FormatUtf8('SELECT * FROM % WHERE id=%', [tbl, id])
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string; tbl, id: string;'#13#10+
+  'begin s := FormatUtf8(''SELECT * FROM % WHERE id=%'', [tbl, id]); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1);
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_ExecuteFmt_TablenamePlaceholder_Reported;
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var DB: TRestServerDB; tbl: string;'#13#10+
+  'begin DB.ExecuteFmt(''DROP TABLE %'', [tbl]); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1);
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_FormatWithoutSql_NoFinding;
+// Format ohne SQL-Keyword - kein Risiko
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string; n: Integer;'#13#10+
+  'begin s := Format(''Count: %d'', [n]); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkSQLInjection));
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_MultipleHitsInSameMethod_AllReported;
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var q1, q2: TFDQuery; UserId, ProdId: string;'#13#10+
+  'begin'#13#10+
+  '  q1.SQL.Text := ''SELECT * FROM users WHERE id='' + UserId;'#13#10+
+  '  q2.SQL.Text := ''SELECT * FROM products WHERE id='' + ProdId;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(2, TFindingHelper.Count(F, fkSQLInjection));
   finally F.Free; end;
 end;
 
