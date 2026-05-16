@@ -428,24 +428,33 @@ begin
 end;
 
 procedure RegisterSonarAddInOptions;
+// Reihenfolge wie in uIDESCAOptions.RegisterSCAAddInOptions: erst Service
+// abfragen, erst dann Object/Interface erzeugen. Wenn die IDE keinen
+// EnvironmentOptionsServices anbietet (sollte nie - aber sicher ist sicher),
+// lassen wir das Object gar nicht entstehen und vermeiden eine Leak-Spur.
 var
-  Svc : INTAEnvironmentOptionsServices;
+  EnvSvc : INTAEnvironmentOptionsServices;
 begin
-  if GSonarOptionsObj <> nil then Exit;
+  if Assigned(GSonarOptionsObj) then Exit;
+  if not Supports(BorlandIDEServices, INTAEnvironmentOptionsServices, EnvSvc) then
+    Exit;
+
   GSonarOptionsObj := TSonarAddInOptions.Create;
-  GSonarOptionsIfc := GSonarOptionsObj;
-  if Supports(BorlandIDEServices, INTAEnvironmentOptionsServices, Svc) then
-    Svc.RegisterAddInOptions(GSonarOptionsIfc);
+  GSonarOptionsIfc := GSonarOptionsObj as INTAAddInOptions;
+  EnvSvc.RegisterAddInOptions(GSonarOptionsIfc);
 end;
 
 procedure UnregisterSonarAddInOptions;
 var
-  Svc : INTAEnvironmentOptionsServices;
+  EnvSvc : INTAEnvironmentOptionsServices;
 begin
-  if GSonarOptionsIfc = nil then Exit;
-  if Supports(BorlandIDEServices, INTAEnvironmentOptionsServices, Svc) then
-    Svc.UnregisterAddInOptions(GSonarOptionsIfc);
-  GSonarOptionsIfc := nil;
+  if not Assigned(GSonarOptionsIfc) then Exit;
+  try
+    if Supports(BorlandIDEServices, INTAEnvironmentOptionsServices, EnvSvc) then
+      EnvSvc.UnregisterAddInOptions(GSonarOptionsIfc);
+  except
+  end;
+  GSonarOptionsIfc := nil;   // Refcount sinkt -> Object freigegeben
   GSonarOptionsObj := nil;
 end;
 

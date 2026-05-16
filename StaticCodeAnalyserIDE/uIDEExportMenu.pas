@@ -81,7 +81,7 @@ implementation
 
 uses
   System.SysUtils, System.Types, Vcl.Dialogs, Vcl.Clipbrd,
-  uExport, uSCAConsts, uLocalization, uSonarPush, Vcl.Dialogs;
+  uExport, uSCAConsts, uLocalization, uSonarPush;
 
 constructor TFindingExportMenu.Create(AOwner: TComponent;
   AAllFindings: TObjectList<TLeakFinding>;

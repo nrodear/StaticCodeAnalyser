@@ -178,10 +178,6 @@
             <Form>SonarOptionsFrame</Form>
             <DesignClass>TFrame</DesignClass>
         </DCCReference>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uSonarConfig.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uSonarPull.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Output\uExportSonarGeneric.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Output\uSonarPush.pas"/>
         <DCCReference Include="uIDEAnalyseRunner.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uAnalyserPalette.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uAnalyserTypes.pas"/>
@@ -200,6 +196,9 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uSuppression.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uExport.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uExportHtml.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Output\uExportSonarGeneric.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Output\uSonarPush.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uSonarPull.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uIgnoreList.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uStaticAnalyzer2.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uSymbolReferenceIndex.pas"/>
@@ -207,6 +206,7 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uFileTextCache.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uVcsChanges.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uRepoSettings.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uSonarConfig.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uDfmAnalysisRunner.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uDfmFrameResolver.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uFormBinder.pas"/>
