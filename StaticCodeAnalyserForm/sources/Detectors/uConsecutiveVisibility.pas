@@ -1,18 +1,24 @@
 unit uConsecutiveVisibility;
 
 // Detektor fuer konsekutive Visibility-Sections mit DERSELBEN Sichtbarkeit:
-//   public ... members ... public ... members ...
+//   private FX ...
+//   public  procedure Bar ...
+//   private FY ...
 //
 // SonarDelphi-Aequivalent: communitydelphi:ConsecutiveVisibilitySection.
-// Anders als `EmptyVisibilitySection` (zwei Visibility-Header ohne
-// Member dazwischen): hier sind durchaus Member zwischen den beiden
-// Headern, aber beide Header haben dieselbe Sichtbarkeit. Der zweite
-// ist also redundant - die Member sollten in einen Block.
+// Sobald innerhalb einer Klasse derselbe Visibility-Header EIN ZWEITES
+// MAL auftritt (egal ob direkt benachbart oder durch andere Sections
+// getrennt), gilt es als redundant - die Member sollten konsolidiert
+// werden.
 //
-// Erkennung: zeilenweiser First-Word-Scan ueber die Datei. Stack-frei
-// genuegt: pro Klassen-Block (zwischen `class`/`record` und `end`)
-// tracken wir die letzte gesehene Visibility. Wenn dieselbe nochmal
-// (mit Member dazwischen) auftaucht, melden wir.
+// Abgrenzung zu uEmptyVisibilitySection (SCA087): jenes feuert wenn der
+// erste Header gar keine Member hat (`private\nprivate\n...`). Hier feuert
+// es nur wenn dieselbe Visibility nach Membern ZURUECK kommt.
+//
+// Erkennung: zeilenweiser First-Word-Scan. Pro Klassen-Block (zwischen
+// `class`/`record` und `end`) tracken wir eine Liste der Visibilities,
+// die bereits "Member gesehen haben". Sobald dieselbe wieder auftritt:
+// melden.
 //
 // Schweregrad: lsHint.
 
@@ -71,59 +77,62 @@ var
   Cached      : Boolean;
   i           : Integer;
   Word, L     : string;
-  LastVis     : string;
-  HadMembers  : Boolean;
+  SeenVis     : TStringList;
+  CurrentVis  : string;
+  CurHasMembs : Boolean;
   F           : TLeakFinding;
 begin
   Lines := AcquireLines(FileName, Cached);
   if Lines = nil then Exit;
+  SeenVis := TStringList.Create;
   try
-    LastVis := '';
-    HadMembers := False;
+    SeenVis.CaseSensitive := False;
+    CurrentVis := '';
+    CurHasMembs := False;
     for i := 0 to Lines.Count - 1 do
     begin
       Word := ExtractFirstWord(Lines[i]);
       if Word = '' then Continue;
       L := LowerCase(Word);
-      // `end` beendet Klassen-Block - State zuruecksetzen
+      // `end` schliesst Klassen-Block (oder andere) - State zuruecksetzen
       if L = 'end' then
       begin
-        LastVis := '';
-        HadMembers := False;
-        Continue;
-      end;
-      // `class`/`record` startet einen neuen Block
-      if (L = 'class') or (L = 'record') then
-      begin
-        LastVis := '';
-        HadMembers := False;
+        SeenVis.Clear;
+        CurrentVis := '';
+        CurHasMembs := False;
         Continue;
       end;
       if IsVisibilityKw(L) then
       begin
-        if (LastVis = L) and HadMembers then
+        // Dieselbe Visibility schon mit Membern gesehen?
+        if SeenVis.IndexOf(L) >= 0 then
         begin
           F            := TLeakFinding.Create;
           F.FileName   := FileName;
           F.MethodName := '';
           F.LineNumber := IntToStr(i + 1);
           F.MissingVar := Format(
-            'Consecutive `%s` section - merge with the previous %s ' +
-            'block (one section header should declare all members).',
-            [L, L]);
+            'Visibility section `%s` already appeared earlier in this ' +
+            'class - merge the members into a single %s block.', [L, L]);
           F.SetKind(fkConsecutiveVisibility);
           Results.Add(F);
         end;
-        LastVis := L;
-        HadMembers := False;
+        CurrentVis  := L;
+        CurHasMembs := False;
       end
       else
       begin
-        // Member-Zeile
-        if LastVis <> '' then HadMembers := True;
+        // Member-Zeile (oder andere Inhaltszeile innerhalb einer Section)
+        if (CurrentVis <> '') and not CurHasMembs then
+        begin
+          if SeenVis.IndexOf(CurrentVis) < 0 then
+            SeenVis.Add(CurrentVis);
+          CurHasMembs := True;
+        end;
       end;
     end;
   finally
+    SeenVis.Free;
     ReleaseLines(Lines, Cached);
   end;
 end;

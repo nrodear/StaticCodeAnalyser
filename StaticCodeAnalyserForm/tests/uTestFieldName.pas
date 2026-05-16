@@ -95,8 +95,10 @@ procedure TTestFieldName.FieldName_KindAndSeverity;
 const SRC =
   'unit t;'#13#10 +
   'interface'#13#10 +
-  'type TFoo = class'#13#10 +
-  '  private Counter: Integer;'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  private'#13#10 +
+  '    Counter: Integer;'#13#10 +
   '  end;'#13#10 +
   'implementation end.';
 var

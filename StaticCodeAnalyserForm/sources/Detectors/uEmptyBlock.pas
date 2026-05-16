@@ -179,9 +179,6 @@ var
   LineFor    : TArray<Integer>;
   pBeg, pEnd : Integer;
   j          : Integer;
-  Between    : string;
-  IsEmpty    : Boolean;
-  c          : Char;
   LineNumber : Integer;
   F          : TLeakFinding;
   IsInitSec  : Boolean;
@@ -206,23 +203,17 @@ begin
       j := pBeg + 5;
       while (j <= Length(Code)) and CharInSet(Code[j], [' ', #9, #10, #13]) do
         Inc(j);
-      // `end` Wort suchen ab j
-      pEnd := PosEx('end', Lwr, j);
-      while pEnd > 0 do
+      // Pruefe ob das DIREKT FOLGENDE Wort `end` ist. Wenn ja: leerer
+      // Block. Wenn nein: dieser `begin` hat Inhalt, skippen. (Wir
+      // muessen NICHT zum matching `end` springen - PosEx wuerde sonst
+      // die erste `end` finden, die zu einem inneren Block gehoert.)
+      if (j + 2 > Length(Code)) or not SameText(Copy(Code, j, 3), 'end') or
+         ((j + 3 <= Length(Code)) and IsIdent(Code[j + 3])) then
       begin
-        if ((pEnd = 1) or not IsIdent(Code[pEnd - 1])) and
-           ((pEnd + 3 > Length(Code)) or not IsIdent(Code[pEnd + 3])) then
-          Break;
-        pEnd := PosEx('end', Lwr, pEnd + 1);
+        Inc(pBeg, 5);
+        Continue;
       end;
-      if pEnd = 0 then begin Inc(pBeg, 5); Continue; end;
-      // Inhalt zwischen begin und end: nur Whitespace?
-      Between := Copy(Code, pBeg + 5, pEnd - pBeg - 5);
-      IsEmpty := True;
-      for c in Between do
-        if not CharInSet(c, [' ', #9, #10, #13]) then
-        begin IsEmpty := False; Break; end;
-      if IsEmpty then
+      pEnd := j;
       begin
         // Top-Level Initialization-Section ausschliessen: `end.` direkt
         // nach diesem `end` waere die Unit-Terminierung.
