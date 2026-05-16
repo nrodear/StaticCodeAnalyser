@@ -227,7 +227,6 @@ begin
   SetLength(Result, Length(S) div 2);
   for i := 0 to High(Result) do
   begin
-    V := 0;
     C := S[1 + i * 2];
     if (C >= '0') and (C <= '9') then V := Ord(C) - Ord('0')
     else if (C >= 'A') and (C <= 'F') then V := Ord(C) - Ord('A') + 10

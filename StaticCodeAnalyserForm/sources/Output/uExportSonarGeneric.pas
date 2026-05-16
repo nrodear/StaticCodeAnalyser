@@ -173,7 +173,7 @@ end;
 function BuildIssueObject(const F: TLeakFinding; const ABaseDir: string;
   const M: TRuleMeta): TJSONObject;
 var
-  Loc, Range, ResultObj : TJSONObject;
+  Loc, Range : TJSONObject;
   RuleID : string;
   LineNo : Integer;
   Msg    : string;
