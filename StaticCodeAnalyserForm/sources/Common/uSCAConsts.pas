@@ -276,8 +276,14 @@ type
                                  // (SonarDelphi:LegacyInitializationSection).
     fkPublicField,               // Oeffentliches Klassen-Feld
                                  // (SonarDelphi:PublicField).
-    fkNestedTry                  // Verschachtelter `try`-Block
+    fkNestedTry,                 // Verschachtelter `try`-Block
                                  // (SonarDelphi:NestedTry).
+    fkCaseStatementSize,         // `case` mit >= 10 Branches
+                                 // (SonarDelphi:CaseStatementSize).
+    fkEmptyFile,                 // Unit ohne jegliche Deklarationen
+                                 // (SonarDelphi:EmptyFile).
+    fkTwiceInheritedCalls        // Mehrere `inherited` in derselben Methode
+                                 // (SonarDelphi:TwiceInheritedCalls).
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -416,7 +422,10 @@ const
     (Name: 'EmptyVisibilitySection';     FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkEmptyVisibilitySection
     (Name: 'LegacyInitializationSection';FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkLegacyInitializationSection
     (Name: 'PublicField';                FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkPublicField
-    (Name: 'NestedTry';                  FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkNestedTry
+    (Name: 'NestedTry';                  FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkNestedTry
+    (Name: 'CaseStatementSize';          FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkCaseStatementSize
+    (Name: 'EmptyFile';                  FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkEmptyFile
+    (Name: 'TwiceInheritedCalls';        FindingType: ftBug;          DefaultSeverity: lsWarning)  // fkTwiceInheritedCalls
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

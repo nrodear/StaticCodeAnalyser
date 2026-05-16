@@ -262,6 +262,9 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLegacyInitializationSection.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uPublicField.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uNestedTry.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCaseStatementSize.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyFile.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTwiceInheritedCalls.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uReversedForRange.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSelfAssignment.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uVirtualCallInCtor.pas"/>

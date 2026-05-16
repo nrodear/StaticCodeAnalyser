@@ -52,6 +52,7 @@ uses
   uSuperfluousSemicolon, uEmptyFinallyBlock, uAssignedAndAssignedNil,
   uFreeAndNilHint, uAvoidOut, uEmptyVisibilitySection,
   uLegacyInitializationSection, uPublicField, uNestedTry,
+  uCaseStatementSize, uEmptyFile, uTwiceInheritedCalls,
   uReversedForRange, uSelfAssignment, uVirtualCallInCtor, uLengthUnderflow,
   uVisibilityCheck,
   uUnusedLocal, uUnusedParameter, uTautologicalExpr,
@@ -166,6 +167,9 @@ begin
   Add('LegacyInitializationSection',fkLegacyInitializationSection,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLegacyInitializationSectionDetector.AnalyzeUnit(R, F, L); end);
   Add('PublicField',     fkPublicField,     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TPublicFieldDetector.AnalyzeUnit(R, F, L); end);
   Add('NestedTry',       fkNestedTry,       procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TNestedTryDetector.AnalyzeUnit(R, F, L); end);
+  Add('CaseStatementSize',fkCaseStatementSize,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TCaseStatementSizeDetector.AnalyzeUnit(R, F, L); end);
+  Add('EmptyFile',       fkEmptyFile,       procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TEmptyFileDetector.AnalyzeUnit(R, F, L); end);
+  Add('TwiceInheritedCalls',fkTwiceInheritedCalls,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TTwiceInheritedCallsDetector.AnalyzeUnit(R, F, L); end);
   Add('ReversedForRange',fkReversedForRange,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TReversedForRangeDetector.AnalyzeUnit(R, F, L); end);
   Add('SelfAssignment',  fkSelfAssignment,  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TSelfAssignmentDetector.AnalyzeUnit(R, F, L); end);
   Add('VirtualCallInCtor',fkVirtualCallInCtor,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TVirtualCallInCtorDetector.AnalyzeUnit(R, F, L); end);

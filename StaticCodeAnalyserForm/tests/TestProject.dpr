@@ -113,7 +113,10 @@ uses
   uTestEmptyVisibilitySection in 'uTestEmptyVisibilitySection.pas',
   uTestLegacyInitializationSection in 'uTestLegacyInitializationSection.pas',
   uTestPublicField in 'uTestPublicField.pas',
-  uTestNestedTry in 'uTestNestedTry.pas';
+  uTestNestedTry in 'uTestNestedTry.pas',
+  uTestCaseStatementSize in 'uTestCaseStatementSize.pas',
+  uTestEmptyFile in 'uTestEmptyFile.pas',
+  uTestTwiceInheritedCalls in 'uTestTwiceInheritedCalls.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}

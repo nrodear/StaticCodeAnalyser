@@ -1788,6 +1788,63 @@
       "impacts": [
         { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
       ]
+    },
+    {
+      "id": "SCA091",
+      "kind": "CaseStatementSize",
+      "name": "Large case statement",
+      "shortDescription": "`case` with >= 10 branches - consider polymorphism / dispatch table",
+      "fullDescription": "A `case` with many branches usually hides a polymorphism or strategy pattern. The code would be more open/closed (new behavior = new class, not new branch) and the file shorter when each branch becomes its own class method or a `TDictionary<Key, TProc>` entry. Matches SonarDelphi communitydelphi:CaseStatementSize. Threshold currently hardcoded; `[Detectors] MaxCaseBranches` is planned.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["complexity", "open-closed"],
+      "detectorUnit": "uCaseStatementSize.pas",
+      "examples": {
+        "bad":  "case Op of\n  opA: ...; opB: ...; opC: ...; opD: ...; opE: ...;\n  opF: ...; opG: ...; opH: ...; opI: ...; opJ: ...;\nend;",
+        "good": "FOperations[Op].Execute;  // dispatch table"
+      },
+      "cleanCodeAttribute": "FOCUSED",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA092",
+      "kind": "EmptyFile",
+      "name": "Unit contains no declarations",
+      "shortDescription": "Unit has no type/const/var/procedure/function - delete or fill in",
+      "fullDescription": "A `.pas` file with a unit header but no declarations is dead weight. Either delete the file or fill in the placeholder. Matches SonarDelphi communitydelphi:EmptyFile.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["dead-code", "cleanup"],
+      "detectorUnit": "uEmptyFile.pas",
+      "examples": {
+        "bad":  "unit X;\ninterface\nimplementation\nend.",
+        "good": "// delete the file"
+      },
+      "cleanCodeAttribute": "COMPLETE",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA093",
+      "kind": "TwiceInheritedCalls",
+      "name": "Multiple inherited calls in one method",
+      "shortDescription": "Two or more `inherited;` in the same method - parent side-effects run twice",
+      "fullDescription": "Each `inherited` invocation runs the parent implementation. Two calls fire side-effects (event notifications, refcount updates, log lines) twice. Almost always a copy-paste bug. Matches SonarDelphi communitydelphi:TwiceInheritedCalls.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["inheritance", "bug-risk"],
+      "detectorUnit": "uTwiceInheritedCalls.pas",
+      "examples": {
+        "bad":  "procedure Foo;\nbegin\n  inherited;\n  DoStuff;\n  inherited;\nend;",
+        "good": "procedure Foo;\nbegin\n  inherited;\n  DoStuff;\nend;"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
     }
   ]
 }

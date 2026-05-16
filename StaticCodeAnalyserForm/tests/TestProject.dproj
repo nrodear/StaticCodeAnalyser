@@ -250,6 +250,9 @@
         <DCCReference Include="uTestLegacyInitializationSection.pas"/>
         <DCCReference Include="uTestPublicField.pas"/>
         <DCCReference Include="uTestNestedTry.pas"/>
+        <DCCReference Include="uTestCaseStatementSize.pas"/>
+        <DCCReference Include="uTestEmptyFile.pas"/>
+        <DCCReference Include="uTestTwiceInheritedCalls.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
