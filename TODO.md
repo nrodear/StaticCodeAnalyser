@@ -1,65 +1,76 @@
 # TODO
 
 Offene Aufgaben für **Static Code Analysis Tool for Delphi**.
-Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 CI-Mode / 💡 Feature / 🧪 Tests / 📋 Akzeptiert / 📝 Erledigt-History.
+Sortiert nach Priorität: 🚨 Urgent / 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 CI-Mode / 💡 Feature / 🧪 Tests / 📋 Akzeptiert.
+
+Erledigte Punkte siehe [docs/done.md](docs/done.md).
+
+---
+
+## 🚨 Urgent — Next-Up
+
+Kuratierte Liste der höchst-prioritären offenen Punkte. Querverweise
+zur ausführlichen Beschreibung im jeweiligen Abschnitt unten.
+
+### Korrektheits-Bugs zuerst (real-world-Fundstellen aus mORMot2-Crosscheck)
+
+- [ ] **🅰 Parser: Anonymer inline-`record`-Typ als Var-Typ → Body verloren**
+  Höchste Schweregrad-Stufe: ganze Methoden-Rümpfe gehen verloren,
+  weil der TypeName-Loop in `ParseLocalVarSection` (Z. 768-773) am
+  ersten `;` _innerhalb_ des inline-records abbricht. Betrifft FFI-/
+  OS-Code (mormot.core.os, mormot.db.raw.*). Lösung: Mini-Parser für
+  inline-record bis matching `end`. Details → 🔴 Bugs.
+
+- [ ] **🅱 DeadCode: `CheckBlock` rekursiv ohne Bound → Stack-Overflow**
+  Einziger offener Bug der einen Crash auslösen kann. Pathologisch
+  tiefe ASTs lassen den Detektor crashen. Lösung: iterativer
+  Work-Stack analog `uAstNode.CollectAll`. Details → 🔴 Bugs.
+
+- [ ] **🅲 Memory-Detektor: `LeakyClasses` deckt mORMot-Idiomatik nicht ab**
+  Volumen-Bug: `TJsonWriter`, `TRawUtf8List`, `TSynList`,
+  `TBufferWriter` etc. werden nicht getrackt → False-Negatives in
+  jedem mORMot-Projekt. Lösung: `MORMOT_LEAKY`-Default-Liste oder
+  INI-Eintrag. Details → 🔴 Bugs.
+
+### Neue Detektoren mit höchstem real-world Win
+
+- [ ] **🅳 `fkVirtualCallInCtor`** — Virtual-Methoden-Call im Constructor
+  Klassisches Subtle-Bug-Pattern (abgeleitete Override läuft mit
+  halb-initialisiertem Self). Single-Unit-Analyse, AST-Pattern
+  überschaubar. Details → 💡 Features → Neue Detektor-Ideen.
+
+- [ ] **🅴 `fkSelfAssignment`** — `x := x;` als No-Op / Copy-Paste-Bug
+  Einfach zu implementieren, klarer Wert. Property-Setter mit
+  Side-Effects als Skip-Liste. Details → 💡 Features.
+
+- [ ] **🅵 `fkReversedForRange`** — `for i := 10 to 1 do` (0 Iterationen)
+  Findet echte Tippfehler (`downto` vergessen). Trivial via AST.
+  Details → 💡 Features.
+
+- [ ] **🅶 `fkLengthUnderflow`** — `Length(s) - X` ohne Guard
+  Native-UInt-Underflow → Riesenwert. Häufig in String-Slicing.
+  AST: Subtraktion mit `Length(...)`/`.Count` ohne preceding Guard.
+  Details → 💡 Features.
+
+### Architektur (eigenes Cross-Unit-Pass-Modell)
+
+- [ ] **🅷 `fkCanBePrivate`** + `fkCanBeProtected` + `fkUnusedPublicMember`
+  Cross-Unit-Visibility-Check. Einziger Punkt mit signifikantem
+  Infrastructure-Aufbau (neuer `uSymbolReferenceIndex`, 3-Pass-
+  Modell). Liefert dafür drei Detektoren auf einmal und öffnet
+  die Tür für weitere Cross-Unit-Inspections. Details → 💡 Features.
+
+### Empfohlene Reihenfolge
+
+1. **🅱 + 🅵 + 🅴 + 🅳** zuerst (Single-Unit, je <½ Tag, hoher Wert)
+2. **🅰 + 🅲** danach (Parser-Tiefenarbeit, je ~Tag)
+3. **🅶** als eigenes Refactor-Inkrement
+4. **🅷** als Architektur-Increment (~2-3 Tage Infrastructure +
+   Detektor + Quick-Fix)
 
 ---
 
 ## 🔴 Bugs / Korrektheit
-
-- [x] **`LoadRecentPaths` ohne `try…except` gegen korrupte INI** — _erledigt_
-  `TForm2.LoadRecentPaths` und `TAnalyserFrame.LoadRecentPaths` umschließen
-  jetzt den `TRecentPaths.Load`-Aufruf in try/except und leeren bei Fehler
-  Items + Text. Defekte INI killt damit weder Plugin-Init noch Form-Create.
-  Dateien: `UI/uMainForm.pas`, `StaticCodeAnalyserIDE/uIDEAnalyserForm.pas`.
-
-- [x] **`uTodoComment.FindMarkerInComment` matcht in String-Literalen** — _erledigt_
-  Neuer `ScanLineCommentStart`-Helper geht zeichenweise vor und überspringt
-  `'…'`-Literale (inkl. doppelter `''`-Escape-Sequenzen). `var s := '// no
-  comment'` triggert den Detektor jetzt nicht mehr.
-  Datei: `Detectors/uTodoComment.pas:39-95`
-
-- [x] **`uMainForm.NavigateDelphiToLine(0)` bei invalidem Input** — _erledigt_
-  Pre-Check `if LineNo <= 0 then Exit;` direkt am Methodenanfang ergänzt
-  (Belt-and-suspenders zur bestehenden Caller-Guard).
-  Datei: `UI/uMainForm.pas:447`
-
-- [x] **`uRegExMatches.GetName` Regex falsch (Char-Class statt Alternation)** — _erledigt_
-  `[procedure|function|...]` war eine Character-Class (matchte ein
-  einzelnes Zeichen aus dem Set, `|` bedeutungslos). Jetzt
-  `(?:procedure|function|constructor|destructor|operator)` als echte
-  Non-Capture-Alternation.
-  Datei: `Common/uRegExMatches.pas:83`
-
-- [x] **`uRegExMatches.FCache` Thread-Race** — _erledigt_
-  `FCache` wird jetzt im `initialization`-Block angelegt (kein Lazy-Init-
-  Race mehr); `Cached(...)` serialisiert TryGetValue+Add via
-  `TMonitor.Enter(FCache)/Exit`. Damit ist der Cache safe unter parallelem
-  WatchMode-Worker + Main-Analyzer.
-  Datei: `Common/uRegExMatches.pas:34-50`
-
-- [x] **`uSQLInjectionScore.Estimate` uninitialisierte Result-Felder** — _erledigt_
-  Score / Difficulty / Reason / Suggestion werden jetzt am Funktionsanfang
-  defensiv mit Defaults initialisiert; der `case TotalPlus of 0`-Branch
-  setzt zusätzlich beschreibende Reason/Suggestion-Texte. Damit kein
-  leerer Detail-Text mehr in der Befund-Anzeige.
-  Datei: `Detectors/uSQLInjectionScore.pas:117-160`
-
-- [x] **`uVcsChanges` Stdout als ANSI dekodiert** — _erledigt_
-  `StringBuilder` + per-Chunk-`StrPas` ersetzt durch `TBytesStream` +
-  einmaliges `TEncoding.UTF8.GetString` am EOF. Damit weder ANSI-Mangling
-  noch Chunk-Boundary-Korruption bei UTF-8-Multi-Byte-Sequenzen.
-  `System.AnsiStrings` und unbenutztes `SB`-Local mit entfernt.
-  Datei: `Infrastructure/uVcsChanges.pas:215-273`
-
-- [x] **`uDivByZero` `varname = 0` als Guard fehl-interpretiert** — _erledigt_
-  Equality-Branch in `HasGuardingIf` separiert: `varname = 0` schuetzt
-  jetzt nur dann, wenn der THEN-Zweig direkt mit `Exit` oder `raise`
-  endet (auch via `begin..end`). `if x=0 then DoOther` triggert die
-  Warnung jetzt wieder. Neuer Helper `ThenBranchExitsOrRaises` walkt
-  IfNode.Children, ueberspringt nkElseBranch, akzeptiert nkExit/nkRaise
-  direkt oder als erstes Statement im nkBlock.
-  Datei: `Detectors/uDivByZero.pas:118-156`
 
 - [ ] **`uDeadCode.CheckBlock` rekursiv ohne Bound**
   Rekursiert in `nkBlock`/`nkIfStmt`/...-Children — gleiches Stack-
@@ -68,82 +79,7 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
   Datei: `Detectors/uDeadCode.pas:54-61`
   Lösung: iterativer Work-Stack analog zu `uAstNode.CollectAll`.
 
-- [x] **`uLeakDetector2` Borrowed-Reference als Factory-Call** — _erledigt_
-  Dotted-Pfad ohne `(` wird nicht mehr als Factory-Call gewertet:
-  `list := obj.FList` / `list := SomeProperty` produzieren keine Leak-
-  Warnung mehr. Trade-off: parameterlose Factory-Methoden
-  (`TFoo.Singleton`) werden dadurch nicht mehr erkannt — False-Negative
-  ist hier billiger als die alten False-Positives auf jeder Field-/
-  Property-Zuweisung. Regressionstest:
-  `Leak_AssignFromFieldDottedNoParens_NoFinding`.
-  Datei: `Detectors/uLeakDetector2.pas:160-170`
-
-- [x] **WatchMode `FResults` Double-Free wenn `Synchronize` raised** — _erledigt_
-  `DeliverResults` snapshotet `FResults` in eine lokale Variable und
-  setzt das Field SOFORT auf nil, bevor der Callback aufgerufen wird.
-  Bei einer Exception mid-Callback sieht der Worker-`finally`
-  FResults=nil und gibt nicht doppelt frei. Lokale Snapshot-Ref
-  bleibt im Callback-Ownership.
-  Datei: `StaticCodeAnalyserIDE/uIDEWatchMode.pas:274-294`
-
-- [x] **IDE `OpenFileAtLine` / `AnalyseCurrentFileClick` AV-Pfade** — _erledigt_
-  Komplette IDE-Editor-API-Aufrufe nach `uIDEEditorIntegration.TIDEEditor`
-  ausgelagert. Alle drei `as`-Casts (`IOTAEditorServices`,
-  `IOTAModuleServices`, `IOTAActionServices`) sind jetzt durch
-  `Supports(...)` ersetzt; zusätzlich nil-Check auf `EditView.Buffer`
-  vor dem Zugriff auf `Buffer.FileName`.
-  `AnalyseCurrentFileClick` verwendet `TIDEEditor.TryGetCurrentPasFile`
-  mit Status-Code-Result (cfrNoEditorService / cfrNoOpenView /
-  cfrNotPascalFile) und ruft pro Status die passende Status-Bar-Meldung.
-  Datei: `StaticCodeAnalyserIDE/uIDEEditorIntegration.pas`
-
-- [x] **`TFindingHighlighter.DetachAll` löscht Tracking-Listen nicht** — _erledigt_
-  Listen werden jetzt am Ende von `DetachAll` gecleart (alle drei:
-  `FAttachedIntfRefs`, `FAttachedClassRefs`, `FAttachedFiles`). Damit
-  ist ein Re-Attach nach Plugin-Reload möglich; vorher skipte
-  `EnsureViewNotifier` den Re-Attach permanent.
-  Datei: `StaticCodeAnalyserIDE/uIDELineHighlighter.pas:168-185`
-
-- [x] **`RegisterDockableForm` `as`-Cast kann BPL-Load crashen** — _erledigt_
-  Alle drei `BorlandIDEServices as INTAServices`-Casts in `Register-`,
-  `Show-` und `UnregisterAnalyserDockableForm` durch `Supports(...)`
-  ersetzt. RegisterAnalyserDockableForm bricht jetzt sauber ab BEVOR
-  GDockableForm erzeugt wird, falls der Service nicht verfuegbar ist -
-  damit kein halbinitialisierter State mehr.
-  Datei: `StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1746-1815`
-
 ### Aus mORMot2-Real-World-Review (4-Agenten-Crosscheck)
-
-- [x] **Parser: Interface-Deklarationen verloren** — _erledigt_
-  `tkKwInterface`-Case in `ParseTypeSection` ergänzt; ruft
-  `ParseClassBody` analog zu tkKwClass. Forward-Decl `IFoo = interface;`
-  wird als Spezialfall behandelt. Die optionale GUID `['{...}']` und
-  Parent-Liste werden im else-Next-Pfad benignly geskippt.
-  Regressionstest: `Parser_InterfaceDecl_FollowingMethodLeakDetected`.
-  Datei: `Parsing/uParser2.pas:475-525` (neue Cases)
-
-- [x] **Parser: Generic-Typdeklarationen `TFoo<T> = class` verloren** — _erledigt_
-  Neuer Helper `SkipGenericParams` mit Depth-Tracking (für nested
-  `TList<TFoo>`); wird in `ParseTypeSection` direkt nach Typname
-  eingefügt sowie an drei Stellen in `ParseMethodSignature` (vor Dot,
-  nach qualifiziertem Namen, nach unqualifiziertem Methodennamen).
-  Regressionstests: `Parser_GenericTypeDecl_MethodLeakDetected` +
-  `Parser_GenericMethodSig_LeakDetected`.
-  Datei: `Parsing/uParser2.pas:159-188` (Helper), `:466-468` (TypeSection),
-  `:606-624` (MethodSignature)
-
-- [x] **Parser: `packed record` / `packed class` verloren** — _erledigt_
-  `Eat(tkKwPacked)` direkt vor dem class/record-Case in
-  `ParseTypeSection` — eine Zeile reicht.
-  Regressionstest: `Parser_PackedRecord_FollowingMethodLeakDetected`.
-  Datei: `Parsing/uParser2.pas:471-472`
-
-- [x] **Parser: `label`-Sektion vor `begin`** — _erledigt_
-  `ParseLocalVarSection`-Outer-Loop akzeptiert jetzt zusätzlich
-  `tkKwLabel` und skippt bis zum nächsten `;`. Goto-Labels werden nicht
-  im AST getrackt — wir wollen nur den Body retten.
-  Regressionstest: `Parser_LabelSection_BodyLeakDetected`.
-  Datei: `Parsing/uParser2.pas:744-755`
 
 - [ ] **Parser: Anonymer inline-`record`-Typ als Var-Typ -> Body verloren**
   `var R: record A: Integer; end;` in FFI-/OS-Code:
@@ -155,24 +91,6 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
   Datei: `Parsing/uParser2.pas:768-773`
   Lösung: bei `record` im TypeName-Branch einen Mini-Parser fuer
   inline-record bis matching `end` einsetzen.
-
-- [x] **Parser: `record helper for X` / `class helper for X`** — _erledigt_
-  Neuer Helper `SkipHelperFor` konsumiert die optionale Präambel
-  `helper for <typename>` direkt nach `record` oder `class`, bevor
-  `ParseClassBody` den Member-Block liest. Target-Typname kann
-  Bezeichner, dotted (`Unit.Type`), `string`, oder `array of X` sein.
-  Regressionstest: `Parser_ClassHelperFor_FollowingMethodLeakDetected`.
-  Datei: `Parsing/uParser2.pas:190-216` (Helper),
-  `:480, :493` (Aufrufe in tkKwClass und tkKwRecord)
-
-- [x] **Parser: Conditional-Compilation duplizierte Method-Header** — _erledigt_
-  In `ParseMethodImpl`: wenn nach Signature kein `begin`/`asm` folgt,
-  sondern direkt das nächste Method-Keyword (procedure/function/
-  constructor/destructor/operator), wird der just-added headless
-  Knoten aus dem AST entfernt. Damit erscheint die Methode bei
-  IFDEF-konditionalen Headers nicht mehr doppelt.
-  Regressionstest: `Parser_IfdefDuplicatedHeaders_NoPhantomDuplicate`.
-  Datei: `Parsing/uParser2.pas:737-756`
 
 - [ ] **Memory-Detektor: `LeakyClasses` deckt mORMot-Idiomatik nicht ab**
   `Common/uSCAConsts.pas:153-166` listet nur RTL/VCL-Klassen
@@ -186,34 +104,6 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
   AutoDiscoverClasses (=1 in INI) wuerde es fangen, ist aber per
   Default off.
 
-- [ ] **Memory-Detektor: `CreateUtf8`/`CreateFmt`/`CreateAfterAttach` nicht erkannt**
-  `HasCreateAssign` sucht `.create` und prueft Right-Boundary auf
-  Non-Ident — `createu`/`createf`/`creater` schlagen fehl. Effekt:
-  `E := EOrmException.CreateUtf8('%', [...])` und alle anderen
-  mORMot-typischen Konstruktoren werden NICHT als Create-Assignment
-  erkannt → kein Leak-Tracking.
-  Beispiel-Volumen: 75+ `CreateUtf8`/`CreateFmt`-Vorkommen in mORMot2
-  (`orm/mormot.orm.rest.pas:2139` etc.). Seltener bei Free-relevant
-  (Exceptions reraised), aber Pattern ist universell.
-  Datei: `Detectors/uLeakDetector2.pas:130-137`
-  Lösung: explizite Whitelist von Konstruktor-Suffixen (`Utf8`, `Fmt`,
-  `From`, `AfterAttach`, ...) zulassen, oder Right-Boundary auf
-  CamelCase prüfen statt non-Ident.
-
-- [x] **Memory-Detektor: `IsPassedToOwner` "any .Add" zu breit** — _erledigt_
-  Neuer Helper `AddReceiverOwnsItems` schaut den Receiver-Typ in den
-  Local-Var-/Param-Deklarationen nach. Wenn der Typ aufloesbar ist UND
-  einer ownership-bewussten Whitelist (`TObjectList`,
-  `TObjectDictionary`, `TObjectQueue/Stack`, `TComponentList`,
-  `TOwnedCollection`, `TInterfaceList`) entspricht -> ownership.
-  Bei nicht-aufloesbarem Typ (Field `FList`, dotted `obj.Items`)
-  bleibt das alte permissive Verhalten als Fallback - vermeidet
-  Regression in haeufigen FList.Add-Mustern. `TSynList.Add` /
-  `TRawUtf8List.Add` werden jetzt korrekt als nicht-ownership
-  erkannt wenn der Typ in der Methode bekannt ist.
-  Datei: `Detectors/uLeakDetector2.pas:299-365` (Helper),
-  `:367-391` (.add-Branch in IsPassedToOwner)
-
 - [ ] **SQL-Detektor: `Format`/`FormatUtf8`-basierter SQL ungeprueft**
   `ExecuteFmt('SELECT * FROM % WHERE Id=%', [tbl, id])` ist klassisch
   mORMot. Kein `+` im Code → `HasNonLiteralPlus` matcht nicht →
@@ -224,17 +114,33 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
   `FormatUtf8`/`FormatSQL`/`ExecuteFmt`-Calls mit SQL-Keyword im
   Format-String.
 
-- [x] **SQL-Detektor: safe-cast-Whitelist fuer `IntToStr` / `QuotedStr` / ...** — _erledigt_
-  Neuer Helper `AllConcatTermsSafe` strippt String-Literale aus dem
-  RHS und pruefte an jedem `+`-Operator den nachfolgenden Token. Wenn
-  alle non-Literal-Terme Aufrufe einer safe-cast-Funktion sind
-  (numerisch: `IntToStr`, `Int64ToStr`, `FormatInt`, `GetEnumName`;
-  escape'd: `QuotedStr`, `QuotedSQL`, `QuotedStrJSON`, `SQLVarToText`),
-  wird die Risiko-Heuristik vor H1/H2 unterdrueckt. Greift sowohl in
-  `IsAssignRisk` als auch in `IsCallRisk`. Reduziert mORMot2-typische
-  False-Positives auf `Sql.Add(' WHERE ID=' + Int64ToStr(id))`-Mustern.
-  Datei: `Detectors/uSQLInjection.pas:131-220` (Helper),
-  `:240-242, :271-273` (Wiring)
+- [ ] **SQL-Detektor: String-Konkatenation statt Parameter (Quick-Fix)**
+  Heute meldet `uSQLInjection.pas` die Konkat-Risiken, bietet aber keine
+  Auto-Korrektur. ReSharper-Pendant: `'... ' + IntToStr(x) + ' ...'` in
+  `:param` umwandeln und `Params.ParamByName(...).AsInteger := x` einfügen.
+  Lösung: Quick-Fix-Hook auf bestehenden H1/H2-Findings; AST-Pattern
+  `+`-Kette + `IntToStr`/`FloatToStr` als Trigger.
+  Datei: `Detectors/uSQLInjection.pas`, `StaticCodeAnalyserIDE/uIDEQuickFix.*`
+  (neu, falls Quick-Fix-Framework noch fehlt).
+
+- [ ] **SQL-Detektor: Fehlende `WHERE`-Klausel bei `UPDATE`/`DELETE`**
+  Statement-Level-Inspection: `UPDATE t SET ... ;` oder `DELETE FROM t;`
+  ohne `WHERE` → Warning (Risiko: ganze Tabelle betroffen). Regex-Pre-
+  Filter + AST-Validierung nach Statement-Boundary.
+  Datei: `Detectors/uSQLInjection.pas` oder neuer Detektor
+  `Detectors/uSQLDangerousStatement.pas`.
+
+- [ ] **SQL-Detektor: Datentyp-Mismatch Parameter ↔ Spalte**
+  `Params.ParamByName('age').AsString := s;` gegen `age INTEGER` in der
+  DDL → Warning. Setzt Schema-Anbindung voraus (siehe 💡 Features-Block
+  „SQL Schema-aware Inspections").
+  Datei: `Detectors/uSQLParamTypeMatch.pas` (neu).
+
+- [ ] **FormatMismatch: Lokalisierungs-Falle bei `%.2f`-ohne `TFormatSettings`**
+  `Format('%.2f', [x])` ohne expliziten `TFormatSettings`-Parameter ist
+  Locale-abhängig (Komma vs. Punkt). Hint statt Warning. Quick-Fix:
+  Aufruf in `Format('%.2f', [x], InvariantFormatSettings)` umwandeln.
+  Datei: `Detectors/uFormatMismatch.pas`.
 
 - [ ] **HardcodedSecret: Public-Crypto-Konstanten False-Positives**
   `crypt/mormot.crypt.core.pas` und Co. deklarieren `const X_TOKEN`,
@@ -260,12 +166,6 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
   (`/etc/`, `/var/`, `/tmp/`, `/usr/`, `/proc/`, `/sys/`).
   Datei: `Detectors/uHardcodedPath.pas:50-52`
 
-- [x] **HardcodedPath: UNC mit `_`/`-` im Servernamen verworfen** — _erledigt_
-  CharSet im UNC-Servername-Branch um `'_'` und `'-'` erweitert
-  (RFC 952/1123, gaengige interne Hostnamen). `\\my-srv\share` und
-  `\\_internal\share` werden jetzt erkannt.
-  Datei: `Detectors/uHardcodedPath.pas:43-46`
-
 - [ ] **DivByZero: `mod`-Pattern via TypeRef nicht zuverlässig**
   Detektor sucht `' mod '` in `nkAssign.TypeRef`, aber die String-Form
   in TypeRef ist je nach Parser-Pfad nicht garantiert. Beispiel:
@@ -274,51 +174,6 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
   Expression-Capture moeglicherweise nicht.
   Datei: `Detectors/uDivByZero.pas`
   Lösung: AST-strukturierte Operator-Erkennung statt TypeRef-String-Pos.
-
-- [x] **FormatMismatch: Konstanten-basierte Format-Strings aufloesen** — _erledigt_
-  Parser `ParseVarLikeSection` erweitert um Const-Initializer (Wert
-  wird nach `=` an die TypeRef angehaengt). Detektor sammelt pro Unit
-  alle untyped String-Const-Literale in eine `TDictionary<name, value>`
-  via neue `CollectStringConstants`. `ResolveFormatString` schlaegt
-  Identifier-Argumente in dieser Tabelle nach. `Format(MSG_INVALID, [a])`
-  mit `const MSG_INVALID = 'invalid %s'` wird jetzt geprueft.
-  Dateien: `Parsing/uParser2.pas:568-636`,
-  `Detectors/uFormatMismatch.pas:CollectStringConstants/ResolveFormatString`
-
-- [x] **FormatMismatch: konfigurierbare Format-Funktionsliste** — _erledigt_
-  Neue globale `DetectorFormatFunctions: TStringList` in `uSCAConsts`
-  (Defaults: `Format`, `FormatUtf8`, `FormatString`). `TRepoSettings`
-  laedt `[Detectors] FormatFunctions=...` als CSV und spiegelt die
-  Liste in `ApplyDetectorThresholds`. Detektor iteriert ueber alle
-  konfigurierten Namen mit Wortgrenzen-Check. mORMot2-Idioms
-  `FormatUtf8(...)` werden out-of-the-box geprueft; Projekt-Helpers
-  (`_fmt`, `FmtUtf8`) per INI ergaenzbar.
-  Dateien: `Common/uSCAConsts.pas`, `Infrastructure/uRepoSettings.pas`,
-  `Detectors/uFormatMismatch.pas:FormatFunctionList/TryExtractCall`
-
-- [x] **FormatMismatch: mORMot Bare-`%` + String-Konkatenation** — _erledigt_
-  Drei zusammenhaengende False-Positive-Fixes nach Code-Reviews realer
-  mORMot-2.4-Befunde:
-  1. **Bare-`%`-Counting** fuer `FormatUtf8`/`FormatString`/`StringFormatUtf8`:
-     diese Funktionen haben kein Type-Letter (kein `%s`/`%d`), nur `%`
-     allein als Platzhalter. Neue `IsBareStyle`-Check + zweite Counting-
-     Strategie in `CountPlaceholders(ABareStyle)`.
-  2. **`%%` ist KEIN Escape im Bare-Style**: verifiziert via mORMot-Source
-     (`mormot.core.text.pas:9616 TFormatUtf8.Parse`) - jedes `%` konsumiert
-     ein Argument, `%%` = zwei aufeinanderfolgende Args ohne Trenner. Das
-     ist absichtlich (mORMot-Code nutzt es z.B. um Where-Clauses zu
-     kettenkonkatenieren). Standard-Style (RTL `Format`) bleibt unveraendert
-     - dort ist `%%` weiterhin Escape.
-  3. **String-Literal-Konkatenation `'a' + 'b'`**: Detector mergte vorher
-     nur das ERSTE Literal -> mehrzeilige SQL-Strings wurden nur teilweise
-     gepruft (False Positive). Neue Helper `ReadStringLiteral`/`SkipSpaces`
-     loopen `+ '...'`-Fortsetzungen und akkumulieren in `Inner`.
-  Effekt: 3 mORMot-Demo-Findings (`api.impl.pas:62/71/126`) verschwinden;
-  ein echter Bug in `mormot.orm.rest.pas:1780` (9 Platzhalter vs 8 Args)
-  wird jetzt korrekt gemeldet.
-  Tests: `TTestFormatMismatchBareStyle` mit 5 neuen Cases (DoublePercent,
-  ConcatenatedLiteral *2, StandardFormat-Regression, ...).
-  Dateien: `Detectors/uFormatMismatch.pas`, `tests/uTestFormatMismatch.pas`
 
 - [ ] **MagicNumber: typische Bit-Width-Werte fehlen in Trivials**
   `8`, `16`, `24`, `31`, `32`, `63`, `64`, `128`, `255`, `256` werden
@@ -409,94 +264,10 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
 
 ## 🟡 Robustheit
 
-- [x] **`uParser2` Skip-Loops ohne GuardAdvance** — _erledigt_
-  Z. 749 (lokaler var-Block-Skip) und Z. 893 (asm-Block-Skip) jetzt
-  analog zur Z. 736-Korrektur mit `var SkipStart := FNextCount; …
-  GuardAdvance(SkipStart);` umschlossen.
-
-- [x] **`ParseTryStmt` O(n²) `Children.Delete(0)`** — _erledigt_
-  Logik in `TAstNode.AdoptChildrenFrom` extrahiert: erst alle Refs in den
-  Ziel-Knoten kopieren, dann den Source bulk-clearen → einmaliger O(n)
-  statt n × O(n). Exception-sicher (keine Doppel-Frees, keine Leaks).
-  Beide try-Transfer-Stellen in `ParseTryStmt` rufen jetzt nur noch
-  `TryNode.AdoptChildrenFrom(TmpBlk)`.
-
 - [ ] **`uHardcodedSecret.IsSecretName` Coverage erweitern**
   Aktuelle Tests prüfen Defaults (`secretary` als false-positive bereits
   abgedeckt). Fehlend: `tokenize`, `passport`, `keyboard` (alle sollten
   KEIN Match sein).
-
-- [x] **Docked-Mode UI: zuverlässige Anzeige notwendiger Bedienelemente** — _erledigt (Phase 1+2)_
-
-  **Phase 1 (Stabilisieren) erledigt:**
-  - Initial-State deterministisch via `FrameResize(Self)` am Constructor-
-    Ende → `FResponsive.ForceUpdate` mit `FFirstApply=True` setzt
-    Visibility EINMAL nach voll fertiger UI.
-  - `FSearchEdit.Constraints.MinWidth` im Narrow auf 60 px (statt 120).
-  - Branch-Changes als ⎇-Glyph-Button (32 px) statt Caption-Button
-    (104 px) — PanelSearch passt jetzt in jede Stufe.
-  - Frame.Constraints.MinWidth=500 + Propagation auf IDE-Host-Form
-    (`GetParentForm` in `FrameCreated`) — schützt vor pathologisch
-    schmalen Floats.
-
-  **Phase 2 (Architektur) erledigt:**
-  - `TResponsiveVisibilityController` (5 verteilte Instanzen über 4
-    Panels) entfernt → ersetzt durch zentralen `TResponsiveLayoutController`
-    in `uIDEStatsTiles.pas`. Eine Instanz pro Frame, hookt Frame.OnResize.
-  - Deklarative Stage-Registrierung (vgl. ursprünglicher Phase-2-Vorschlag):
-    ```
-    FResp.RegisterCtrl(FBtnCancel,    usFull);            // nur FULL
-    FResp.RegisterCtrl(FLblFilter,    usMedium);          // ab MEDIUM
-    FResp.RegisterCtrl(FBtnHamburger, usNarrow, usMedium); // inverse
-    ```
-  - 3-Stufen-Layout (NARROW <500, MEDIUM 500-849, FULL ≥850 px) statt
-    bisher 2-Stufen — Übergang vom Hamburger-Pattern zum vollen UI ist
-    dadurch smoother.
-  - `AfterApply`-Callback ersetzt das chained `OnResize`-Forwarding —
-    Folge-Anpassungen (Sub-Panel-Widths, SearchEdit-MinWidth) laufen
-    deterministisch nach jedem Apply.
-  - `TToolbarSizing.Apply`/`ApplyIconButton`/`HeightForFont` löst die
-    VCL-Quirk dass TComboBox `Align.Height` ignoriert — alle Toolbar-
-    Components rendern jetzt uniform.
-  - Sub-Panel-Container (PanelSev/PanelType) bleiben bewusst — `TFlowPanel`-
-    Refactor war nicht nötig, der zentrale Controller war ausreichend.
-
-  **Phase 3 + 4 nicht umgesetzt** — Two-Mode-UI und User-Prefs nicht
-  notwendig, der responsive-Ansatz hat sich als beherrschbar erwiesen.
-
-  Dateien: `uIDEAnalyserForm.pas`, `uIDEStatsTiles.pas`
-
-- [x] **WatchMode dynamic module attach** — _erledigt, dann verworfen_
-  War: `TFindingEditSvcNotifier.EditorViewActivated` -> `RescanOpenModules`
-  fuer Auto-Attach an neu geoeffnete Dateien. Mit dem Single-File-Watch-
-  Refactor (s.u.) entfallen, weil Watch nur noch eine Datei beobachtet.
-
-- [x] **Auto-Single-File-Scan beim Editieren** — _erledigt, dann konsolidiert_
-  War: separater INI-Key `[Detectors] AutoScanOnEdit=0/1`. Mit dem
-  Single-File-Watch-Refactor (s.u.) entfallen - Live-Watch ist jetzt
-  immer Save+Edit, ohne INI-Flag.
-
-- [x] **Single-File-Live-Watch (Konsolidierung)** — _erledigt, RISKY_
-  WatchMode + AutoScanOnEdit INI-Flags komplett entfernt. Live-Watch
-  ist jetzt implizit an "Aktuelle Datei" gekoppelt: Klick aktiviert
-  einen Single-Slot-Notifier auf genau diese Datei (Save 300 ms +
-  Edit 1000 ms debounced). Tab-Wechsel auf andere Datei aendert nichts;
-  erneuter "Aktuelle Datei"-Klick haengt den Notifier um. Bulk-Pfade
-  (Full-Project, Branch-Changes) deaktivieren den Watch explizit.
-  Dateien: `Infrastructure/uRepoSettings.pas` (Flags + INI-Doc raus),
-  `StaticCodeAnalyserIDE/uIDEWatchMode.pas` (Single-Slot statt Listen,
-  AttachToWatchedFile/DetachWatched, EditorViewActivated -> No-op),
-  `uIDEAnalyserForm.pas` (`PrepareAnalysis(const AWatchedFile: string)`).
-  **!!! RISIKO Endlosschleife !!!** Heute kein Re-Entrancy-Guard fuer
-  ueberlappende Spawns. Bei langsamen Workers / aktivem Tippen kann
-  der Worker-Backlog wachsen, oder Editor-Repaint nach Findings-Update
-  triggert (Delphi-version-abhaengig) wieder Modified. Vor breitem
-  Default-On unbedingt erst:
-    - Re-Entrancy-Guard (kein Spawn solange Worker laeuft)
-    - Hard-Cap (max 1 Spawn / N Sekunden)
-    - oder echten Cancel-Token (siehe Eintrag "WatchMode echtes
-      Cancel-Token")
-  Header in `uIDEWatchMode.pas` traegt warning-Block.
 
 - [ ] **WatchMode echtes Cancel-Token**
   Heute droppen wir nur _späte_ Worker-Ergebnisse via Generation-Counter.
@@ -519,27 +290,6 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
   nach `EAbort`.
   Datei: `Infrastructure/uStaticAnalyzer2.pas:383-407`
   Lösung: Snapshot vor `ParseLeaks`, Restore in finally.
-
-- [x] **`uSuppression.BuildMap` TargetLine bei EOF** — _erledigt_
-  Default `TargetLine := i+2` auf `-1` geaendert; Map-Eintrag wird nur
-  noch emittiert wenn die Inner-Loop eine echte Code-Zeile findet
-  (`if TargetLine > 0 then ...`). Suppression-Marker am Datei-Ende
-  ohne folgende Code-Zeile produzieren keine geistige Map-Eintraege
-  mehr.
-  Datei: `Infrastructure/uSuppression.pas:134-152`
-
-- [x] **`uLexer.ScanNext` falsches Zeichen im Unknown-Branch** — _erledigt_
-  `var UnknownCh := CurChar` Snapshot VOR Advance; danach
-  `MakeTok(tkUnknown, UnknownCh, ...)`. Token enthaelt jetzt das
-  korrekte (unbekannte) Zeichen statt das nachfolgende.
-  Datei: `Parsing/uLexer.pas:523-530`
-
-- [x] **`uLexer.ReadString` `#nn`-Range-Overflow** — _erledigt_
-  Range-Validierung [0..$FFFF] vor `Chr`-Aufruf. Ausserhalb-Bereich
-  (Astral-Plane, ueberlanges Numeral) -> U+FFFD (REPLACEMENT
-  CHARACTER) statt RangeError-Crash. Lexer bleibt stabil bei
-  pathologischen Inputs wie `#1000000`.
-  Datei: `Parsing/uLexer.pas:343-362`
 
 - [ ] **Detektoren mit rekursiver AST-Traversal (Stack-Overflow-Risiko)**
   `uLongMethod.FindLastLine` (Z. 44-56) und `uUnusedUses.CollectText`
@@ -592,6 +342,14 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
   Lösung: bei `IndexOf >= 0` zusätzlich prüfen ob Notifier alive ist,
   sonst Slot freigeben + neu attachen.
 
+- [ ] **Inkrementelle Analyse für sehr große Projekte (>500k LOC)**
+  ReDelphi-Vision: Inspections müssen auch in großen DPRs flüssig laufen.
+  Heutige Scan-Architektur ist Per-Run-Vollscan. Vorschlag: AST-Cache
+  pro Unit (Hash-keyed), Re-Analyse nur bei Hash-Diff. Watch-Mode
+  liefert bereits Event-Trigger.
+  Datei: `Infrastructure/uStaticAnalyzer2.pas`, neuer
+  `Infrastructure/uIncrementalCache.pas`.
+
 ---
 
 ## 🟢 Wartbarkeit / Refactoring
@@ -609,20 +367,6 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
     reicht — nicht-trivial.
   Ziel weiterhin: Reduktion auf <1500 Zeilen (offen: ~1200 Z.).
 
-- [x] **`uMainForm` Code-Duplikation mit IDE-Plugin** — _erledigt_
-  - [x] `LoadRecentPaths`/`SaveRecentPath` extrahiert in
-    `Common/uRecentPaths.pas` (TRecentPaths). Beide Forms rufen jetzt
-    `TRecentPaths.Load`/`TRecentPaths.Save` mit konfigurierbarem Pinned-
-    Eintrag (IDE-Projekt vs. App-Pfad, Position konfigurierbar).
-    Behebt nebenbei `MAX_RECENT`-Drift und den `SaveRecentPath`-IDE-Bug
-    (IDE-Projekt wurde in INI geschrieben).
-  - [x] `ResultGridDrawCell` extrahiert in `UI/uFindingGridRenderer.pas`
-    als gemeinsamer Renderer mit Config-Record (`StandaloneConfig` /
-    `IDEConfig`). IDE und Standalone delegieren beide auf
-    `TFindingGridRenderer.DrawCell`. Spaltenpositionen, Theme-Modus,
-    Sort-Indicator, Zebra, Accent-Bar, Bold-File-Spalte, Ellipsis sind
-    alle pro-Aufrufer konfigurierbar.
-
 - [ ] **Severity-Tiles im Standalone-`Form2`**
   IDE-Plugin hat die 8-Tile-Reihe (Errors / Warnings / Hints / Bugs /
   Security / Duplicates / Code-Quality), Standalone nicht. Feature-
@@ -635,28 +379,6 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
     `uParser2`, ist aber leer — Konflikt mit dem echten `uParser2.pas`
     in `Parsing/`)
   Beide ersatzlos löschen + Build-Pakete prüfen.
-
-- [x] **Legacy-Parser-Pipeline entfernt** _(erledigt, finalisiert)_
-  Standalone-„Analyse starten" rief frueher `TStaticAnalyzer.AnalyzeAllClasses
-  Recursive` auf (Line-Scanner via `uParser`, nur MemoryLeak + EmptyExcept).
-  Jetzt: ruft `TStaticAnalyzer2.AnalyzeLeaksRecursive` — dieselbe AST-Pipeline
-  wie „Aktuelle Datei" und das IDE-Plugin, alle 21 Detektoren.
-  Geloeschte Files: `uParser.pas`, `uStaticAnalyzer.pas`,
-  `uLeakDetector.pas`, `uCodeSmells.pas` (TEmptyExceptDetector legacy
-  - Ersatz ist `uCodeSmells2.TEmptyExceptDetector2`). Build-Files
-  (DPR/DPK + beide DPROJ) komplett aufgeraeumt.
-
-- [x] **`uParser.AV` bei `CurrentMethod = nil`** — _erledigt_
-  Reproduzierbar in `mormot.crypt.x509.pas` (~152 KB, viele Methoden mit
-  var-Sektionen, globale `var`-Bloecke in implementation): `isSectionMethod`
-  konnte `True` werden, waehrend `CurrentMethod` durch den Lookahead-Pfad
-  bereits genullt war. Z. 160 `CurrentMethod.SourceBody.Add(...)` -> AV
-  $C0000005 mit Read of Address $14 (Field-Offset von SourceBody).
-  Fix: `Assigned(CurrentMethod)`-Guard an Z. 122-123 und Z. 160 (analog
-  Z. 150). Zusaetzlich `isSectionVar := false` im Lookahead-Reset, damit
-  ein spaeteres `begin` nicht `isSectionMethod` auf einem nilligen
-  `CurrentMethod` re-aktiviert.
-  Datei: `Parsing/uParser.pas:118-132,159-188`
 
 - [ ] **Encoding-Konvention für `.pas`-Files**
   Inkonsistent: einige Files UTF-8 ohne BOM mit rohen Umlauten, andere
@@ -676,30 +398,6 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
   Geplant: `[SeverityOverrides]`-Sektion in `analyser.ini` mit
   `LongMethod=hint` etc. + Read-In in `TRepoSettings`.
 
-- [x] **`KindToName`/`KindFromName` Drift über vier Files** — _erledigt_
-  Single source of truth: `KIND_META: array[TFindingKind] of
-  TFindingKindMeta` in `uSCAConsts` (Record mit Name + FindingType).
-  Plus drei convenience-Wrapper (`KindName`, `KindFindingType`,
-  `KindFromName`). Die vorherigen 4 case-Switches sind jetzt thin
-  delegates:
-  - `uMethodd12.TLeakFinding.FindingType` → `KindFindingType(Kind)`
-  - `uClaudePrompt.KindToName` → `KindName(K)`
-  - `uExport.KindToName` → `KindName(Kind)`
-  - `uSuppression.KindFromName` → `uSCAConsts.KindFromName(...)`
-  Neuer `TFindingKind` braucht jetzt nur noch zwei Edits: Enum-Eintrag
-  in `uSCAConsts` plus eine Zeile in `KIND_META` (gleiche Datei).
-
-- [x] **`MAX_RECENT` doppelt definiert mit unterschiedlichen Werten** — _erledigt_
-  Konsolidiert via `uRecentPaths.DEFAULT_MAX_RECENT = 3`. Beide Forms
-  geben den Wert beim `TRecentPaths.Load/Save`-Aufruf mit; effektive
-  Anzahl user-recent Pfade ist jetzt konsistent IDE = Standalone = 3.
-
-- [x] **`SaveRecentPath` schreibt IDE-Projekt-Eintrag in INI** — _erledigt_
-  Behoben durch den Umzug nach `uRecentPaths`: `TRecentPaths.Save`
-  ueberspringt den `PinnedPath` beim INI-Write per `SameText`-Check.
-  Damit landet das aktuelle IDE-Projekt nicht mehr in der INI -> beim
-  naechsten Start kein Duplikat mehr in der MRU-Liste.
-
 - [ ] **Hardcoded deutsche Strings in IDE-Form außerhalb `_()`**
   Beim i18n-Sweep übersehen:
   - `uIDEAnalyserForm.pas:1400` — `'Keine Eintraege fuer diesen Filter.'`
@@ -708,57 +406,12 @@ Sortiert nach Priorität: 🔴 Bug / 🟡 Robustheit / 🟢 Wartbarkeit / 🚀 C
     in `uIDEAnalyseRunner.RunCurrent` als `_('Analyzing: ')`.
   - `uIDEAnalyserForm.pas:2268` — `'Ignore-Liste neu geladen ...'`
 
-- [x] **`uIDEMessages.SeverityPrefix` hardcoded deutsch** — _erledigt_
-  Strings durch `_()` geleitet (Source-Form jetzt englisch:
-  `Error / Warning / Hint / Info`). Lokalisierbar via dxgettext +
-  zentralem `SetLanguage`. Header-Doku entsprechend angepasst.
-  Datei: `StaticCodeAnalyserIDE/uIDEMessages.pas:44-58`
-
-- [x] **`uAnalyserTypes` String-Discriminator-Boundary entkoppelt** — _erledigt_
-  Neuer Pfad `SeverityFromKindLevel(Kind, Severity): TFindingSeverity`
-  mappt direkt vom internen Enum aufs Display-Enum, ohne String-
-  Roundtrip. Die zwei high-volume Call-Sites
-  (`uIDEAnalyserForm.UpdateHelp` + `TFindingFilter.Matches`) nutzen
-  jetzt den enum-direkten Pfad.
-  Restliche `SeverityFromText`-Aufrufer (Grid-Renderer + Sort-Comparer)
-  brauchen den String-Pfad weil sie Cell-Inhalte zurueckparsen — der
-  ist jetzt **locale-tolerant**: erkennt sowohl deutsche (`Fehler`)
-  als auch englische (`Error`) Schreibweise. Damit ist der latente
-  i18n-Bug ("Filter brechen wenn UI englisch") strukturell gefixt.
-  Datei: `UI/uAnalyserTypes.pas`
-
 ---
 
 ## 🚀 Console-Mode / CI-Integration
 
 Großer separater Block — nichts von dem hier ist trivial, aber alles
 hängt zusammen (CLI-Mode ist die Voraussetzung für CI-Integration).
-
-- [x] **Headless-CLI-Mode für `analyser.d12.exe`** — _erledigt in v0.8.0_
-  Aktuell GUI-only. Für CI-Pipelines: nicht-interaktiver Modus mit
-  Exit-Code, Report-Output und Branch-Mode.
-
-  Geplante Aufrufe:
-  ```
-  analyser.exe --path D:\repo --branch              # Branch-Diff (Git/SVN)
-  analyser.exe --path D:\repo --full                # rekursiv
-  analyser.exe --file MeineUnit.pas                 # Einzeldatei
-  analyser.exe --path . --branch --report sca.json  # Report-Output
-  ```
-
-  Eigenschaften:
-  - **Exit-Code-Konvention**: 0 = clean, 1 = Hints, 2 = Warnings, 3 =
-    Errors, 4 = Read-Errors, 99 = Tool-Fehler. `--exit-on error|warn|hint`
-    konfigurierbar.
-  - **Quality-Gate-Flag**: `--max-errors 0 --max-warnings 5` →
-    Pipeline-Fail wenn überschritten.
-  - **VCS-Auto-Detect**: nutzt bestehenden `uVcsChanges`-Code für
-    `--branch`. Setting für `--base-branch develop` durchreichbar.
-  - **Stdout / `--quiet`**: tabellarische Befund-Liste auf stdout,
-    `--quiet` unterdrückt alles außer Exit-Code.
-  - **Locale**: `--lang en` / `--lang de` für Report-Sprache.
-  - Datei: neue `Console/uConsoleRunner.pas` + Anpassung in
-    `analyser.d12.dpr` (Args parsen, keine Form wenn CLI-Modus aktiv).
 
 - [ ] **Report-Formate für CI-Tools** _(SARIF erledigt in v0.8.0; JUnit / Sonar / Checkstyle / CodeClimate offen)_
   Mehrere Standard-Formate, je ein Output-Switch:
@@ -775,248 +428,6 @@ hängt zusammen (CLI-Mode ist die Voraussetzung für CI-Integration).
 
   Datei: `Output/uReportFormats.pas` (neu), nutzt vorhandene
   Finding-Liste, getrennt von der UI-orientierten `uExport.pas`.
-
-- [x] **GitHub-Action / GitLab-CI Beispielworkflows** — _erledigt in v0.8.0_
-  `.github/workflows/sca.yml` ist im Repo; nutzt CLI + SARIF-Upload via
-  `github/codeql-action/upload-sarif@v3`. GitLab-CI-Template noch offen.
-
-- [x] **Detector-Rule-Catalog (`rules.json` als Single Source of Truth)** — _erledigt in v0.8.0_
-
-  Foundation für SARIF-Export, GitHub Code-Scanning, externe Reporter
-  und Doku-Generierung. Pro Detektor ein strukturierter Eintrag mit
-  vollständiger Metadata - vorher liegt alles verstreut über
-  `uSCAConsts.KIND_META`, `uFixHint`, `uLocalization` und Detector-
-  Source-Comments.
-
-  Schema (JSON):
-  ```json
-  {
-    "rules": [
-      {
-        "id": "SCA001",
-        "kind": "MemoryLeak",
-        "name": "TObject created without try/finally",
-        "shortDescription": "Object created but never freed",
-        "fullDescription": "TObject.Create without protective try/finally...",
-        "defaultSeverity": "Error",
-        "type": "Bug",
-        "tags": ["memory", "resource-leak"],
-        "cwe": ["CWE-401"],
-        "owasp": [],
-        "configKey": "[Detectors] LeakyClasses",
-        "fixHintRef": "uFixHint.MakeMemoryLeakHint",
-        "detectorUnit": "uLeakDetector2.pas",
-        "examples": {
-          "bad":  "list := TStringList.Create; DoStuff(list); // no Free!",
-          "good": "list := TStringList.Create; try DoStuff(list); finally list.Free; end;"
-        },
-        "addedInVersion": "0.1.0",
-        "i18nKey": "rule.memoryleak.description"
-      }
-    ]
-  }
-  ```
-
-  Pro Detektor abgedeckt (24 Regeln nach v0.7.2):
-  | ID | Kind | Detector-Unit | Severity-Default |
-  |---|---|---|---|
-  | SCA001 | MemoryLeak | `uLeakDetector2.pas` | Error |
-  | SCA002 | EmptyExcept | `uCodeSmells2.pas` | Warning |
-  | SCA003 | SQLInjection | `uSQLInjection.pas` | Error |
-  | SCA004 | HardcodedSecret | `uHardcodedSecret.pas` | Error |
-  | SCA005 | FormatMismatch | `uFormatMismatch.pas` | Error |
-  | SCA006 | FileReadError | (Parser-Error) | Error |
-  | SCA007 | UnusedUses | `uUnusedUses.pas` | Hint |
-  | SCA008 | NilDeref | `uNilDeref.pas` | Warning |
-  | SCA009 | MissingFinally | `uMissingFinally.pas` | Warning |
-  | SCA010 | DivByZero | `uDivByZero.pas` | Warning |
-  | SCA011 | DeadCode | `uDeadCode.pas` | Warning |
-  | SCA012 | LongMethod | `uLongMethod.pas` | Hint |
-  | SCA013 | LongParamList | `uLongParamList.pas` | Hint |
-  | SCA014 | MagicNumber | `uMagicNumbers.pas` | Hint |
-  | SCA015 | DuplicateString | `uDuplicateString.pas` | Hint |
-  | SCA016 | HardcodedPath | `uHardcodedPath.pas` | Warning |
-  | SCA017 | DebugOutput | `uDebugOutput.pas` | Warning |
-  | SCA018 | DeepNesting | `uDeepNesting.pas` | Hint |
-  | SCA019 | TodoComment | `uTodoComment.pas` | Hint |
-  | SCA020 | EmptyMethod | `uEmptyMethod.pas` | Hint |
-  | SCA021 | DuplicateBlock | `uDuplicateBlock.pas` | Hint |
-  | SCA022 | CyclomaticComplexity | `uCyclomaticComplexity.pas` | Hint |
-  | SCA023 | FieldLeak | `uFieldLeak.pas` | Warning |
-  | SCA024 | SQLInjectionScore | `uSQLInjectionScore.pas` | (Score) |
-
-  Neue Datei: `rules/sca-rules.json` (im Repo). Validiert via JSON-
-  Schema. Generator-Tool `tools/gen-rules-md.py` erzeugt daraus
-  Doku-Pages (`docs/rules/SCA001.md`, ...). Detector-Code referenziert
-  Rule-ID konsistent (statt nur fkXxx-Enum).
-
-- [x] **SARIF v2.1.0 Export-Format** — _erledigt in v0.8.0_
-
-  GitHub Code-Scanning + Azure DevOps + Visual Studio Code lesen SARIF
-  nativ. Findings erscheinen direkt im PR (Inline-Annotations) und in
-  GitHub Security-Tab. Voraussetzung: Rule-Catalog (s.o.) damit
-  `runs[0].tool.driver.rules[]` befüllbar ist.
-
-  Aufruf: `analyser.exe --path . --branch --report-sarif sca.sarif`
-
-  Output-Schema (Auszug):
-  ```json
-  {
-    "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
-    "version": "2.1.0",
-    "runs": [{
-      "tool": {
-        "driver": {
-          "name": "StaticCodeAnalyser",
-          "version": "0.7.2",
-          "informationUri": "https://github.com/nrodear/StaticCodeAnalyser",
-          "rules": [
-            { "id": "SCA001", "name": "MemoryLeak",
-              "shortDescription": { "text": "Object created without Free" },
-              "defaultConfiguration": { "level": "error" },
-              "properties": { "tags": ["memory"] } }
-          ]
-        }
-      },
-      "results": [{
-        "ruleId": "SCA001",
-        "level": "error",
-        "message": { "text": "list2 created but never freed" },
-        "locations": [{
-          "physicalLocation": {
-            "artifactLocation": { "uri": "src/MyUnit.pas" },
-            "region": { "startLine": 42 }
-          }
-        }],
-        "partialFingerprints": {
-          "primaryLocationLineHash": "<sha256 of file+line+rule>"
-        }
-      }]
-    }]
-  }
-  ```
-
-  Implementation:
-  - Datei: `Output/uExportSARIF.pas` (neu, nutzt `System.JSON`).
-  - `partialFingerprints` damit GitHub Findings über Commits hinweg
-    deduplicated (Baseline-File-aequivalent built-in in GitHub).
-  - Repo-relative Pfade (Dateipfade ggue base-dir machen, sonst greift
-    GitHub's File-Annotation nicht).
-  - Tests: `uTestExportSARIF` mit JSON-Schema-Validation gegen die
-    offizielle SARIF-2.1.0-Schema-Datei.
-
-  GitHub-Workflow-Beispiel:
-  ```yaml
-  - name: Static Code Analysis
-    run: ./analyser.exe --path . --branch --report-sarif sca.sarif
-  - uses: github/codeql-action/upload-sarif@v3
-    with:
-      sarif_file: sca.sarif
-      category: delphi-sca
-  ```
-
-- [x] **YAML-Ruleset für Custom Rules (External-Rule-Engine)** — _erledigt in v0.9.0_
-
-  Power-User-Feature: Regex- oder Pattern-basierte Custom-Rules ohne
-  Recompile des Analyzers definieren. Ergaenzt die hardcoded Detector-
-  Liste um Projekt-/Team-spezifische Konventionen.
-
-  Format: `analyser-rules.yml` im Projekt-Root oder via
-  `--custom-rules path/rules.yml`-Flag.
-
-  **Implementiert**:
-  - `Common/uYamlSubsetParser.pas` (statt geplantem `uCustomRuleParser`):
-    YAML-Subset-Parser fuer Block-Mappings, Block-Sequences, Quoting
-    (single + double mit Escapes), Line-Comments. Kein Flow-Style,
-    keine Anchors - reicht fuer Rule-Files.
-  - `Detectors/uCustomRuleDetector.pas`: Pattern-Engine mit substring/
-    regex/word Matching, Glob-basiertes file-include/file-exclude
-    (eigener Glob-zu-Regex-Konverter mit `**`-Support, weil
-    `System.Masks.MatchesMask` nur `*` kennt).
-  - `examples/analyser-rules.yml`: Vorlage mit 4 dokumentierten Beispielen.
-  - `examples/profile-strict.yml` (10 Regeln): Coding-Style-Konventionen.
-  - `examples/profile-security.yml` (11 Regeln): CWE-Refs, Web/Crypto/IO.
-  - `examples/profile-legacy-migration.yml` (12 Regeln, alle hint):
-    ADO->FireDAC, Indy->THTTPClient, alte File-API ablösen.
-  - `examples/README.md`: Profile-Uebersicht + How-To.
-  - Tests `uTestYamlSubsetParser` (13 Cases) + `uTestCustomRuleDetector`
-    (11 Cases inkl. Glob-Pattern-Edge-Cases).
-  - `TLeakFinding.RuleID` neues Feld + neuer `fkCustomRule`-Kind.
-  - SARIF-Export bevorzugt `F.RuleID` ueber Catalog-Lookup -
-    Custom-IDs (PROJ001, STRICT001, ...) erscheinen 1:1 in
-    GitHub Code-Scanning.
-  - CLI: `--custom-rules <yml>`-Flag in `uConsoleRunner`.
-  - Plugin/GUI: `[Detectors] CustomRulesFile=...` in `analyser.ini`,
-    relative Pfade werden 4-stufig aufgeloest (Absolut -> ProjectRoot
-    -> ConfigDir -> ExeDir).
-
-  **NICHT implementiert** (fuer v0.9.x):
-  - Target-Filtering (`identifier` / `comment` / `string-literal`):
-    aktuell wird jedes Pattern auf den vollen Zeileninhalt angewandt.
-    Echte Target-Filterung braucht AST-Integration, ist nicht trivial.
-    Workaround: User nutzt `pattern-type: word` fuer Identifier-Match
-    und schreibt Comment-/String-Patterns explizit (z.B. `'^//'`).
-
-  ```yaml
-  version: 1
-  rules:
-    - id: PROJ001
-      name: "kein TADOQuery erlaubt"
-      description: "Wir nutzen FireDAC - kein TADOQuery in Neucode"
-      severity: error
-      type: code-smell
-      pattern: "\\bTADOQuery\\b"
-      pattern-type: regex                # regex | substring | word
-      target: identifier                  # identifier | comment | string-literal | any
-      message: "Use TFDQuery from FireDAC instead of TADOQuery"
-      fix-hint: |
-        Replace 'TADOQuery' with 'TFDQuery' and add FireDAC.Comp.Client to uses.
-
-    - id: PROJ002
-      name: "deutsche Umlaute in Bezeichnern"
-      description: "Identifier müssen ASCII-only sein (CI-Convention)"
-      severity: warning
-      type: code-smell
-      pattern: '[a-zA-Z_]\w*[äöüÄÖÜß]\w*'
-      pattern-type: regex
-      target: identifier
-      message: "Identifier contains non-ASCII characters"
-
-    - id: PROJ003
-      name: "kein Sleep() in Production-Units"
-      severity: warning
-      type: bug
-      pattern: "Sleep("
-      pattern-type: substring
-      target: any
-      file-include:
-        - "src/production/**/*.pas"
-      file-exclude:
-        - "src/production/**/*Test*.pas"
-      message: "Sleep() blocks the thread - use TTimer or async instead"
-  ```
-
-  Engine: Python wäre overkill - lieber **integriert in den Delphi-
-  Analyzer**, parsed YAML via z.B. `mORMot YAML` oder einen schlanken
-  eigenen Parser (YAML-Subset reicht). Detector-Klasse
-  `TCustomRuleDetector.AnalyzeUnit` läuft die Regeln gegen die UnitNode.
-
-  Output identisch zu hardcoded Rules (gleiche `TLeakFinding`-Struktur,
-  gleicher SARIF-Export). Custom-Rule-IDs (`PROJ001`...) erscheinen in
-  SARIF/HTML/JSON-Output 1:1.
-
-  Datei-Inventar:
-  - `Detectors/uCustomRuleDetector.pas` (neu)
-  - `Common/uCustomRuleParser.pas` (neu, YAML-Subset-Parser)
-  - `examples/analyser-rules.yml` (Vorlage mit kommentierten Beispielen)
-  - Tests: `uTestCustomRuleDetector` mit 8-10 Cases (regex/substring/
-    word, target-Selectors, file-include/exclude, Edge-Cases).
-
-  Vorteil: Teams können in 5 Minuten eine Code-Convention durchsetzen
-  ohne den Analyzer-Code anzufassen. Pattern-basiert ist schwächer als
-  AST-basiert (False-Positive-Risiko bei Regex), reicht aber fuer
-  ~80% der Team-Conventions (Verbotene Imports, Naming-Patterns,
-  deprecated APIs).
 
 - [ ] **Pre-Commit-Hook-Script**
   `examples/pre-commit-sca.sh` (bash) und `pre-commit-sca.ps1`
@@ -1048,101 +459,88 @@ hängt zusammen (CLI-Mode ist die Voraussetzung für CI-Integration).
 
 ## 💡 Features / Erweiterungen
 
-- [x] **Standalone-Form an IDE-Plugin-UI angeglichen** — _erledigt_
-  Standalone-Form hostet jetzt die gleichen geteilten UI-Helfer wie das
-  Plugin-Frame:
-  - **Toolbar**: 3 Panel-Rows (Path / Filter / Action). Filter-Row mit
-    Severity-Combo (Display-Filter), Type-Combo, Profile-Combo, Min-
-    Severity-Combo, Search-Edit. Action-Row mit Analyse file / directory /
-    Branch / Save / Quit.
-  - **Stats-Tile-Reihe** oberhalb der Form ueber `TStatsTilesBuilder.Build`
-    aus `uIDEStatsTiles` - die gleichen 9 Sonar-Style Tiles wie im Plugin,
-    1:1 Quality-Score-Gewichte.
-  - **Hint-Panel** rechts vom Grid via `TFindingHintPanel` (`uIDEHelpPanel`)
-    mit Before/After-Code-Beispielen. Neuer `AAlwaysVisible`-Ctor-Parameter
-    deaktiviert die IDE-Plugin-Auto-Hide-Logik (Standalone-Form hat keinen
-    Dock-Container).
-  - **3-Panel-StatusBar** (Findings / Progress / Mode) - SimplePanel=False,
-    `SimpleText`-Writes umgeleitet auf `Panels[2].Text` (Mode-Panel).
-  - **Display-Filter**: `ApplyFilter` via `uFindingFilter.TFindingFilter.Matches`
-    schreibt `FDisplayedFindings`-Subset; ResultGridClick mappt jetzt auf
-    `FDisplayedFindings[row-1]` damit Filter-Auswahl konsistent ist.
-  - **Branch-Changes-Button**: `TVcsChanges.GetChangedPasFilesAuto` analog
-    zum IDE-Plugin (Git/SVN-Auto-Detect, nur geaenderte .pas analysiert).
-  - **CLI**: `--profile <name>` + `--min-severity <level>` via
-    `uConsoleRunner`. Apply ueber `ApplyDetectorThresholds` jetzt fuer
-    ALLE Modi (vorher nur Branch). `[Rules] Profile/MinSeverity` aus INI
-    plus CLI-Overrides.
-  - **GUI-Konsole-Fix**: `{$APPTYPE CONSOLE}` raus, `AttachConsole(
-    ATTACH_PARENT_PROCESS)` im CLI-Pfad. Doppelklick zeigt KEINE schwarze
-    Konsole mehr, CLI-Pfad hat trotzdem stdout/stderr/Exit-Codes.
+- [ ] **FormatMismatch: zusätzliche Sub-Inspections (ReSharper-Vorbild)**
+  Erweitert den bestehenden Detektor um Diagnosen, die heute nicht
+  abgedeckt sind. Argumentanzahl, Typ-Mismatch und Konstanten-Auflösung
+  sind bereits implementiert (siehe 🔴 Bugs, FormatMismatch-Block).
+  Offen:
+  - [ ] **Index-Lücken** in `%0:s %2:s` erkennen (Index 1 fehlt →
+    `EConvertError` zur Laufzeit).
+  - [ ] **Ungültiger Spezifizierer** (`%q`, kaputte Breite/Präzision) —
+    Whitelist `[-+ #0]*\d*(\.\d+)?[dxefgsmpunc...]` als Validator.
+  - [ ] **Redundante `Format`-Aufrufe ohne Platzhalter**
+    (`Format('hello', [])`) → Quick-Fix: durch String-Literal ersetzen.
+  - [ ] **Verschachtelte `Format`-Aufrufe**
+    (`Format('%s', [Format(...)])`) → Quick-Fix: zusammenführen.
+  - [ ] **`IntToStr(x)`/`FloatToStr(x)` als `Format`-Argument** → Hint:
+    redundant, `%d`/`%f` mit Roh-Wert verwenden.
+  Datei: `Detectors/uFormatMismatch.pas`.
 
-  Projekt-Setup: `..\StaticCodeAnalyserIDE` als `DCC_UnitSearchPath`-Eintrag
-  + DCCReferences fuer die importierten IOTA-freien Plugin-Units
-  (`uIDEStatsTiles`, `uIDEHelpPanel`, `uFindingFilter`). DPR analog
-  ergaenzt mit `unit in '...'`-Pfaden, damit der Compiler die Units auch
-  ohne Search-Path-Refresh findet.
+- [ ] **Format-Quick-Fixes (Alt+Enter)**
+  - [ ] **Fehlendes Argument einfügen** am korrekten Index.
+  - [ ] **Überzähligen Platzhalter entfernen** (samt Argument).
+  - [ ] **Argument entfernen** (samt Platzhalter).
+  - [ ] **Insert format argument**: in vorhandenem `Format(...)` nächsten
+    Index berechnen + `%s` einfügen + `[]` erweitern; in einfachem
+    String-Literal automatisch in `Format('...', [...])` umwandeln.
+  - [ ] **Spezifizierer wechseln** (`%d` ↔ `%x` ↔ `%.2f`) per Menü.
+  Datei: `StaticCodeAnalyserIDE/uIDEQuickFix.*` (neues Quick-Fix-Framework).
 
-  Dateien: `analyser.d12.dpr/.dproj`, `UI/uMainForm.{pas,dfm}`,
-  `Console/uConsoleRunner.pas`, `Infrastructure/uRepoSettings.pas`,
-  `Common/uRuleCatalog.pas` (FindValue-Crash-Fix bei fehlendem owasp-Feld),
-  `StaticCodeAnalyserIDE/uIDEHelpPanel.pas` (AlwaysVisible-Ctor-Param).
+- [ ] **Format-Refactorings**
+  - [ ] **Convert Konkatenation → `Format`**: `'Hallo ' + Name + ', du bist '
+    + IntToStr(Age)` → `Format('Hallo %s, du bist %d', [Name, Age])`.
+  - [ ] **Convert `Format` → Konkatenation** (umgekehrt).
+  - [ ] **Convert `Format` → `FormatUtf8`** (mORMot-Idiom).
+  - [ ] **Extract Format-String zu `resourcestring`** für Lokalisierung.
+  - [ ] **Inline `resourcestring`**.
+  - [ ] **Reorder arguments** — passt indizierte Platzhalter
+    (`%0:s %1:d`) mit an.
+  - [ ] **Switch zu `FormatSettings`-Variante** (Quick-Fix bei
+    Locale-Falle, siehe 🔴 Bugs).
+  Datei: `Detectors/uFormatMismatch.pas`, IDE-Quick-Fix-Framework.
 
-- [x] **Rule-Set-Profile + Min-Severity-Filter** — _erledigt_
-  Detector-Subset jetzt steuerbar ueber `[Rules] Profile=...` + `MinSeverity=...`
-  in `analyser.ini`. Bundled-Profile in `rules/sca-rules.json` unter `profiles`:
-  - `ide-fast` (~20 Kinds, Default fuer IDE-Plugin) — nur Bugs+Vulns
-  - `default` (alle Detektoren, Standalone-Default)
-  - `strict` (alle + opt-in UsesCheck)
-  - `security` (5 Kinds: SQLInjection, HardcodedSecret, HardcodedPath +
-    DFM-Security)
-  - `bugs-only` (~14 Kinds — fuer CI-Gate ohne Style-Rauschen)
-  - `code-quality` (~24 Smells + Duplikate — Refactoring-Session)
-  - `dfm-only` (20 Kinds — Form-/UI-Review)
+- [ ] **SQL-Inspections (ReSharper-Vorbild, kein Schema nötig)**
+  Reine Pattern-/AST-basierte Checks am SQL-Fragment, ohne DDL-Anbindung.
+  - [ ] **`SELECT *`-Inspection** + Quick-Fix „Expand `*` to column list"
+    (Quick-Fix nur mit Schema möglich; Warning auch ohne).
+  - [ ] **Implizite Cross-Joins** (Komma-Joins) → Vorschlag `JOIN ... ON`.
+  - [ ] **Redundante Klammern / Aliase** entfernen.
+  - [ ] **Reservierte Wörter quoten** je nach Dialekt
+    (`[order]` SQL-Server, `"order"` PostgreSQL).
+  Setzt einen leichtgewichtigen SQL-Tokenizer/Statement-Splitter voraus,
+  der noch nicht existiert.
+  Datei: `Detectors/uSQLLint.pas` (neu) — eigenständiger Detektor, damit
+  `uSQLInjection.pas` auf Sicherheit fokussiert bleibt.
 
-  Eigene Profile koennen in `sca-rules.json` per Hand ergaenzt werden;
-  `*` expandiert zu allen Kinds, weitere Tokens werden additiv hinzugefuegt.
-  IDE-Plugin hat zusaetzlich eine Profile-Dropdown rechts neben Severity/Type
-  in der Toolbar — Auswahl wird in `[Rules] IdeProfile` persistiert und ueber-
-  schreibt die INI-Voreinstellung fuer die naechsten Runs.
+- [ ] **SQL-Inspections mit Schema-Anbindung**
+  Optional aktivierbar — braucht DDL-Connection (Config-Pfad / DSN).
+  - [ ] **Unbekannte Tabelle/Spalte** → Quick-Fix: nächstgelegener Name
+    (Levenshtein-Match), „Create column"-Vorschlag.
+  - [ ] **Mehrdeutige Spalten** (`name` ohne Tabellenpräfix) →
+    Quick-Fix: mit Alias qualifizieren.
+  - [ ] **Datentyp-Mismatch zwischen Parameter und Spalte**
+    (siehe 🔴 Bugs).
+  Datei: `Detectors/uSQLSchemaAware.pas` (neu), neuer Config-Block
+  `[Sql] SchemaDsn=...` in `analyser.ini`.
 
-  Implementierung:
-  - Catalog-Lookup `TRuleCatalog.GetProfile(Name): TFindingKinds`
-    + Profile-Block-Parser in `LoadFromJsonFile` (`*`-Expansion).
-  - `LoadFallback` enthaelt alle bundled Profile als Pascal-Konstanten -
-    Dropdown ist vollstaendig auch ohne erreichbare JSON-Datei.
-  - `FindJsonFile` sucht jetzt zusaetzlich via `GetModuleFileName(HInstance)`
-    (=BPL-Verzeichnis im IDE-Plugin) und in
-    `%APPDATA%\StaticCodeAnalyser\rules\`.
-  - `RunAllDetectors` skipt Detektoren ueber Set-Membership + Severity-
-    Schwelle; Post-Filter auf `Results` faengt Adapter-Findings (DFM)
-    deren Kind nicht im Profile ist.
-  - `TRepoSettings.UseIdeRuleSet` spiegelt `IdeProfile/IdeMinSeverity`
-    transient in `Profile/MinSeverity`, damit Standalone und IDE-Plugin
-    unterschiedliche Default-Profile fahren koennen ohne separate INIs.
-  Dateien: `Common/uRuleCatalog.pas`, `Common/uSCAConsts.pas`,
-  `Infrastructure/uStaticAnalyzer2.pas`, `Infrastructure/uRepoSettings.pas`,
-  `rules/sca-rules.json`, `StaticCodeAnalyserIDE/uIDEAnalyserForm.pas`,
-  `tests/uTestRuleCatalog.pas`.
+- [ ] **SQL-Refactorings**
+  - [ ] **Rename**: Tabellen-/Spalten-Rename, das SQL-Strings UND Pascal-
+    Code (`FieldByName('...')`, `ParamByName('...')`, ORM-Klassen)
+    synchron anpasst. Cross-File, braucht Solution-Scan.
+  - [ ] **Extract Query** — markiertes SQL in benannte Konstante /
+    `resourcestring` / Query-Objekt extrahieren.
+  - [ ] **Inline Query**.
+  - [ ] **Convert `SQL.Add(...)`-Kette ↔ Multiline-String-Literal**.
+  - [ ] **Move SQL to .sql-Resource** / `TStringList.LoadFromFile`.
+  Datei: IDE-Refactoring-Framework (neu, ggf. analog zu Quick-Fix-Hook).
 
-- [x] **HTML-Report: Severity-Filter + Datei-Dropdown mit Filter** — _erledigt_
-  Severity-Badges (Error/Warning/Hint) und Datei-Dropdown waren bereits
-  als unabhaengige Filter implementiert; jetzt wirkt der Severity-Filter
-  zusaetzlich AUF die Dropdown-Liste:
-  - Pascal-seitig wird in `ExportHtml` pro File ein Bitmask (1=err,
-    2=warn, 4=hint) ueber alle Findings akkumuliert.
-  - Jede `<option>` bekommt ein `data-sev="err,hint"`-Attribut (Komma-
-    Liste der vorkommenden Severities).
-  - Neue JS-Funktion `applyFileDropdownVisibility()` versteckt Options,
-    deren `data-sev` den aktiven Severity-Filter nicht enthaelt
-    (`opt.hidden = true`). Die "Alle"-Option bleibt sichtbar; ihr
-    Counter wird auf die Anzahl sichtbarer Files aktualisiert.
-  - Wenn das aktuell ausgewaehlte File durch den Filter verschwindet,
-    wird die Auswahl auf "Alle" zurueckgesetzt (verhindert leere
-    Tabellen-Ansicht).
-  - Beide Filter UND-verknuepft. Self-contained (Inline-CSS+JS, keine
-    externen Abhaengigkeiten).
-  Datei: `Infrastructure/uExport.pas` (`ExportHtml`).
+- [ ] **Settings-UI je Inspection — Severity pro Detektor**
+  Heute steuern Profile (`ide-fast`/`default`/`strict`/…) das An/Aus
+  pro Detektor; Severity ist im Code fix. Pendant zu ReSharpers
+  Hint/Suggestion/Warning/Error: pro Detektor in der INI oder UI
+  eine Severity setzbar machen.
+  Datei: `Infrastructure/uRepoSettings.pas`, `Common/uRuleCatalog.pas`,
+  IDE-Settings-Dialog.
 
 - [ ] **Multi-View-Support für Highlight**
   Aktuell wird nur die TopView aktiv repainted — bei Split-View wird
@@ -1242,90 +640,6 @@ hängt zusammen (CLI-Mode ist die Voraussetzung für CI-Integration).
   Expression (mittlerer Aufwand), dann Cognitive/DIT/Halstead
   (separater Pass).
 
-- [x] **DFM + Komponentengraph** — _Phase 1+2+3 Detektoren erledigt (v0.10.0)_
-
-  20 DFM-Detektoren produktiv: dedizierter DFM-Lexer/-Parser,
-  `TComponentGraph`, `TFormBinder` (Pascal-AST ↔ DFM-Graph),
-  `TDfmRepoIndex` (Repo-weiter Cross-Form-Lookup). Pipeline in
-  `uDfmAnalysisRunner` integriert; `.dfm`-Aenderungen im VCS-Diff
-  triggern die zugehoerige `.pas`. IDE-Plugin oeffnet DFM-Befunde via
-  Close-and-Reopen als Text im Code-Editor. Standalone-EXE hat einen
-  Modal-DFM-Text-Viewer. HTML-Report gruppiert `.pas`+`.dfm` pro
-  Basename.
-
-  **Phase 1 — MVP (erledigt):**
-  - [x] DFM-Lexer + -Parser (`uDfmLexer`, `uDfmParser`)
-  - [x] Binaer-DFM via RTL `ObjectBinaryToText`
-  - [x] `TComponentGraph`-Datenmodell (`uDfmComponentGraph`)
-  - [x] `TFormBinder` (`Infrastructure/uFormBinder`)
-  - [x] Pipeline-Erweiterung (`uDfmAnalysisRunner` +
-    `RunComponentDetectors`)
-  - [x] Detektoren der Cluster Dead-Wiring, Naming, Security,
-    UI/UX:
-    `fkDfmDeadEvent`, `fkDfmOrphanHandler`, `fkDfmSchemaMismatch`,
-    `fkDfmHardcodedCaption`, `fkDfmDefaultName`,
-    `fkDfmHardcodedDbCreds`, `fkDfmDuplicateBinding`,
-    `fkDfmEmptyBoundEvent`
-  - [x] DUnitX-Tests pro Detektor (positiv/negativ/Kantenfall)
-
-  **Phase 2 — Erweiterungs-Detektoren (erledigt):**
-  - [x] DataModule-uebergreifender Resolver (`TDfmRepoIndex`)
-  - [x] Cross-Form-Coupling (`fkDfmCrossFormCoupling`)
-  - [x] Layer-Verstoss (`fkDfmLayerViolation`)
-  - [x] God-Handler (`fkDfmGodHandler`)
-  - [x] TAction halb verkabelt (`fkDfmActionMismatch`)
-  - [x] Tab-Order-Konflikte (`fkDfmTabOrderConflict`)
-  - [x] Verbotene Komponentenklassen (`fkDfmForbiddenClass`)
-  - [x] DB-Komponente in UI-Form (`fkDfmDbInUiForm`)
-  - [x] Zirkulaere Datenquellen-Verkettung
-    (`fkDfmCircularDataSource`)
-  - [x] SQL-Injection durch VCL-Komponenten
-    (`fkDfmSqlFromUserInput`)
-
-  **Phase 3 — DB-aware Field-Analyse (erledigt):**
-  - [x] `TField`-Subgraph im ComponentGraph
-  - [x] Bindung Field → UI-Komponente (Cross-Index)
-  - [x] Unsichtbare Pflichtfelder (`fkDfmRequiredFieldNotVisible`)
-  - [x] Pflichtfeld ohne UI-Bindung (`fkDfmRequiredFieldUnbound`)
-  - [x] Falscher Komponententyp fuer Datentyp
-    (`fkDfmFieldTypeMismatch`)
-
-- [x] **DFM — Restposten Infrastruktur** _(erledigt - foundation
-  steht; Folge-Refactor von Detektoren laeuft inkrementell weiter)_
-
-  - [x] **`inherited`-Form-Aufloesung** — `TFormBinder.BindWithParents`
-    + `TFormBinding.Parent` walken die Klassen-Hierarchie via
-    `TDfmRepoIndex`. `HasHandler`/`HasPublishedField`/
-    `HasPublishedMethod` schauen die Parent-Kette durch. Detektoren
-    `DeadEvent`, `OrphanHandler`, `SchemaMismatch` profitieren
-    automatisch (sie nutzen die Walk-Up-Resolver).
-  - [x] **Frame-Composition ueber Units** — `TFrameResolver` in
-    `Infrastructure/uDfmFrameResolver.pas`. `ResolveFrameGraph` +
-    `EnumerateFrameComponents` laden auf Bedarf die Frame-DFM via
-    RepoIndex. Detektor-Refactor (LayerViolation, GodHandler,
-    TabOrderConflict) zur opportunistischen Nutzung folgt sobald
-    konkrete False-Negative-Faelle aufschlagen.
-  - [x] **Property-Typisierung** — `TPropValue.AsBoolean`,
-    `AsInteger`, `AsString`, `AsIdent`, `SetContains` +
-    `TComponentNode.GetBoolean/GetInteger/GetString/GetIdent/
-    SetPropertyContains`. Default-Aware: gibt VCL-Default zurueck,
-    wenn die Property im DFM nicht serialisiert ist. Detektoren
-    `RequiredField`, `DbFieldAnalysis-Helper` umgestellt; weitere
-    Detektoren ziehen opportunistisch nach.
-  - [x] **Live-Refresh im IDE-Plugin auf `.dfm`-Save** — IDE-Plugin
-    haengt jetzt einen zweiten `IOTAModuleNotifier` an das
-    Companion-DFM-Modul (sofern als eigenes Modul offen, z.B.
-    DFM-as-Text nach Close-and-Reopen). `EditorViewModified` mapped
-    `.dfm`-Edits zusaetzlich auf die Watched-`.pas`. Sowohl Save als
-    auch Edit fuehren zur Re-Analyse - manueller "Aktuelle Datei"-
-    Klick nach DFM-Save ist nicht mehr noetig.
-  - [x] **Eigener Binaer-DFM-Reader** — `uDfmBinaryReader` mit
-    `IsBinary` (TPF0-Praefix-Check) + `ToText` (delegiert intern auf
-    `Classes.ObjectBinaryToText`). Schnittstelle ist abstrakt
-    gehalten, sodass ein voller TWriter-Eigen-Parser ohne Caller-
-    Aenderung hineingetauscht werden kann. Sofort-Effekt: binaer-
-    gespeicherte DFMs werden nicht mehr stumm uebersprungen.
-
 - [ ] **DFM — Restposten Detektoren Phase 4**
   (Detektor-Backlog jenseits der heutigen 20)
 
@@ -1344,6 +658,261 @@ hängt zusammen (CLI-Mode ist die Voraussetzung für CI-Integration).
   - [ ] **DataModule-Split-Vorschlag** — wenn `fkDfmDbInUiForm` >= N
     Befunde auf derselben Form, einen aggregierten "extract to data
     module"-Hint emittieren statt N einzelner.
+
+### Neue Detektor-Ideen (allgemeine Code-Quality-Patterns)
+
+Kandidaten für neue Detektoren — sortiert nach erwartetem
+Bug-Hunt-Wert. Nicht alle sind unbedingt sinnvoll, aber jeder hier
+hat in echtem Delphi-Code mal Fundstellen produziert.
+
+#### Korrektheits-Bugs (höchste Priorität)
+
+- [ ] **`fkVirtualCallInCtor`**
+  Aufruf einer `virtual`-Methode im `constructor` ist ein klassischer
+  Subtle-Bug: die abgeleitete Override läuft mit halb-initialisiertem
+  Self (Felder einer Subklasse noch nicht gesetzt). AST-Pattern:
+  Constructor-Body → MethodCall → MethodIsVirtual(Self.X).
+  Datei: `Detectors/uVirtualCallInCtor.pas` (neu).
+
+- [ ] **`fkSelfAssignment`**
+  `x := x;` ist immer ein No-Op (oder Copy-Paste-Bug). Auch
+  `Self.FFoo := FFoo;` (gleicher LHS+RHS nach Trim). AST-Pattern:
+  `nkAssign` mit `LHS.Name = RHS.Name`. Trade-off: Property-Setter
+  mit Side-Effects sind ein False-Positive — Properties via Type-
+  Lookup ausschließen oder per Whitelist (`Capacity`, `Count`).
+  Datei: `Detectors/uSelfAssign.pas` (neu).
+
+- [ ] **`fkIdenticalIfElseBranches`**
+  `if c then DoX else DoX;` — both branches identical, der `if`
+  hat keinen Effekt. AST: Vergleich `IfNode.Then.Children` vs.
+  `IfNode.Else.Children` strukturell (Token-Sequenz reicht).
+  Datei: `Detectors/uIdenticalBranches.pas` (neu).
+
+- [ ] **`fkTautologicalBoolExpr`**
+  `(x = x)`, `(a and a)`, `(b or b)`, `(p <> p)` — Operator mit
+  identischer Linker und rechter Seite. Klassischer Copy-Paste-
+  Bug oder vergessener Index (`arr[i] = arr[j]` aber `j` fehlt).
+  AST-Pattern: BinOp-Knoten mit `LHS.Tokens = RHS.Tokens`.
+  Datei: `Detectors/uTautologicalExpr.pas` (neu).
+
+- [ ] **`fkLengthUnderflow`**
+  `Length(s) - X` ohne Vor-Check `Length(s) >= X` ist Underflow-
+  Risiko: `Length` ist `NativeUInt` → bei `Length=0` und `X=1`
+  wird das zu `MaxNativeUInt`. Häufig in String-Slicing.
+  AST: Subtraktion mit linker Seite `Length(...)` / `.Count` /
+  `.Size`, ohne preceding Guard.
+  Datei: `Detectors/uLengthUnderflow.pas` (neu).
+
+- [ ] **`fkEqualsWithoutHashCode`**
+  Klasse überschreibt `function Equals(Obj: TObject): Boolean;
+  override;` ohne `function GetHashCode: Integer; override;` —
+  bricht TDictionary/TList.IndexOf-Semantik. Symmetrisch:
+  `GetHashCode` ohne `Equals` ist auch verdächtig.
+  AST: Class-Member-Scan auf Override-Trios.
+  Datei: `Detectors/uEqualsHashCodePair.pas` (neu).
+
+- [ ] **`fkUnusedLocalVar`**
+  Lokale `var X: T;` die nie auf der LHS einer Zuweisung steht
+  und nie als Lesezugriff in einer Expression auftaucht. Compiler
+  warnt heute schon (H2164), aber als SCA-Detektor mit Suppression-
+  Marker und Grid-Integration nützlich. AST: nkVarSection iterieren,
+  in MethodBody nach Var-Name suchen.
+  Datei: `Detectors/uUnusedLocal.pas` (neu).
+
+- [ ] **`fkUnusedParameter`**
+  Parameter der nie im Methoden-Body referenziert wird — skippen
+  wenn Methode `override` (Signature-Konformität), Interface-Impl,
+  oder Event-Handler (Sender etc.). AST: Parse Parameter-List,
+  Scan Body für Identifier-Match.
+  Datei: `Detectors/uUnusedParameter.pas` (neu).
+
+- [ ] **`fkConfusingAndOrPrecedence`**
+  Pascal: `and` bindet stärker als `or` — `a or b and c` ist
+  `a or (b and c)`. Häufige Bug-Quelle wenn der Autor `(a or b) and c`
+  meinte. AST: `or`-Operator mit `and`-Child OHNE explizite
+  Parens → Warning, schlage Klammern vor.
+  Datei: `Detectors/uMixedAndOrPrecedence.pas` (neu).
+
+- [ ] **`fkAssertAlwaysTrue`**
+  `Assert(True)`, `Assert(1 = 1)`, `Assert(Self <> nil)` direkt
+  in einer non-static Methode (Self ist garantiert non-nil). AST:
+  konstante Expression als Assert-Argument.
+  Datei: `Detectors/uAssertAlwaysTrue.pas` (neu).
+
+#### Style / Lesbarkeit
+
+- [ ] **`fkAssertWithoutMessage`**
+  `Assert(x > 0)` ohne den optionalen `Message`-Parameter. Beim
+  Fehlschlag nur "Assertion failed at <unit>:<line>" — ohne
+  Kontext schwer zu debuggen. Hint mit Quick-Fix: füge
+  `'reason: ' + DebugDump` als zweiten Param hinzu.
+  Datei: `Detectors/uCodeSmells2.pas` (Erweiterung).
+
+- [ ] **`fkRedundantParens`**
+  Doppelt geklammerte Expressions: `if ((x = 1)) then`, `Result := ((a))`.
+  Pattern: nkParenExpr direkt in nkParenExpr ohne Operator dazwischen.
+  Vorsicht: explizite Klammern bei Mixed-Precedence sind LEGITIM
+  (siehe `fkConfusingAndOrPrecedence`).
+  Datei: `Detectors/uRedundantParens.pas` (neu).
+
+- [ ] **`fkRedundantVisibility`**
+  `private`-Sektion direkt gefolgt von `private`-Sektion (User
+  hat aus Versehen zweimal `private` geschrieben statt z.B.
+  `protected`). Analog `public public`. AST: leere Visibility-
+  Section-Folgen.
+  Datei: `Detectors/uRedundantVisibility.pas` (neu).
+
+- [ ] **`fkRedundantStorageClass`**
+  Doppelte Modifier-Tokens: `procedure Foo; override; override;`,
+  `function Bar; virtual; virtual;`, `var x: const const Integer;`.
+  Compiler erlaubt manche dieser Mehrfach-Marker still, andere als
+  Warning. Detektor sammelt alle Modifier-Token-Listen und meldet
+  Duplikate.
+  Datei: `Detectors/uRedundantModifier.pas` (neu).
+
+- [ ] **`fkAbstractOnInterfaceMethod`**
+  In `IFoo = interface … procedure DoX; abstract;` ist `abstract`
+  redundant — alle Interface-Methoden sind implizit abstract.
+  Hint-Severity, Quick-Fix: Modifier streichen.
+  Datei: `Detectors/uCodeSmells2.pas` (Erweiterung).
+
+- [ ] **`fkFinalOnNonVirtual`**
+  `procedure Foo; final;` ohne `override` ist No-Op (`final`
+  blockiert weitere Überrides, aber nur ergibt Sinn auf override-
+  Methoden). Hint mit Quick-Fix: streichen.
+  Datei: `Detectors/uCodeSmells2.pas` (Erweiterung).
+
+- [ ] **`fkUselessInitializer`**
+  Record-Field-Default-Initializer für Werte die der RTL-Default
+  ohnehin liefert: `myInt: Integer := 0`, `myStr: string := ''`,
+  `myPtr: TObject := nil`. Nur für **Record**-Felder, NICHT für
+  lokale Vars (dort ist `:= 0` keineswegs der Default).
+  Datei: `Detectors/uUselessInitializer.pas` (neu).
+
+- [ ] **`fkUnsortedUses`**
+  `uses`-Klausel mit nicht-alphabetisch sortierten Identifikatoren.
+  RTL-/System-Units gruppieren (`System.*`, `Vcl.*` separat).
+  Style-only, Severity Hint, off by default. Existierende
+  Convention vieler Open-Source-Codebasen.
+  Datei: `Detectors/uUnsortedUses.pas` (neu).
+
+- [ ] **`fkLongLine`**
+  Physische Zeile > 100 Zeichen (konfigurierbar via
+  `[Detectors] MaxLineLength=100`). Skip für Kommentare die URLs
+  enthalten, und für `const`-Definitionen mit langen String-
+  Literalen.
+  Datei: `Detectors/uLongLine.pas` (neu).
+
+- [ ] **`fkLocalVarCouldBeConst`**
+  Lokale `var` die nie wieder zugewiesen wird (single assignment)
+  → kann `const` werden. Im Pascal-Sinne also tatsächlich
+  `const X = …;` (typed const oder echte const). AST: pro
+  lokale Var Anzahl der LHS-Assigns zählen; 1 = Kandidat.
+  Datei: `Detectors/uVarCouldBeConst.pas` (neu).
+
+#### Naming / Doc
+
+- [ ] **`fkNamingConvention`**
+  Konfigurierbarer Naming-Check basierend auf Delphi-Konventionen:
+  - Klassen: `T`-Prefix (`TFoo`, nicht `Foo` oder `MyFoo`)
+  - Interfaces: `I`-Prefix
+  - Generische Typparameter: `T` oder single uppercase letter
+  - Fields: `F`-Prefix in Klassen
+  - Globals: `G`-Prefix empfohlen
+  - Konstanten: `UPPER_SNAKE` oder `PascalCase`
+  Per-Pattern abschaltbar via INI.
+  Datei: `Detectors/uNamingConvention.pas` (neu).
+
+- [ ] **`fkPublicMethodNoXmlDoc`**
+  Public-Sektion-Methoden ohne `///`- oder `{///}`-XMLDoc-
+  Kommentar direkt davor. Skip private/protected/strict private.
+  Skip auto-generierte (Designer-Code, IDE-Hooks).
+  Off by default — viele Codebasen verzichten bewusst auf XMLDoc.
+  Datei: `Detectors/uMissingXmlDoc.pas` (neu).
+
+- [ ] **`fkVarShadowsLabel`**
+  Lokale `var X` mit gleichem Namen wie ein `label`-Eintrag.
+  Selten, aber wenn vorhanden ein klares Lesbarkeits-Problem.
+  Datei: `Detectors/uCodeSmells2.pas` (Erweiterung).
+
+- [ ] **`fkMemberShadowsBuiltinProp`**
+  Klassen-Field mit Namen wie `Name`, `Tag`, `ClassName`, `Owner`
+  (TComponent-Built-Ins). Konflikt-Risiko bei späterem
+  Inheritance-Wechsel zu TComponent.
+  Datei: `Detectors/uCodeSmells2.pas` (Erweiterung).
+
+#### Statement-Patterns
+
+- [ ] **`fkReversedForRange`**
+  `for i := 10 to 1 do` läuft 0 Iterationen (silent No-Op).
+  Wahrscheinlich Tippfehler — `for i := 10 downto 1 do` gemeint.
+  AST: nkForStmt mit konstanter LHS > RHS bei `to`-Richtung.
+  Datei: `Detectors/uReversedForRange.pas` (neu).
+
+- [ ] **`fkFunctionMissingResult`**
+  `function`-Body ohne expliziten `Result :=`-Assign oder
+  `Exit(value)`. Kompiler-Warnung W1035, aber als SCA-Detektor
+  mit besserer Kontextierung (welche Methode, welche Branches
+  fehlen).
+  Datei: `Detectors/uMissingResult.pas` (neu).
+
+- [ ] **`fkEmptyStatement`**
+  Doppelte oder triple Semikolons `;;` außerhalb von
+  `for …;;` (C-Style-Loop-Header — Delphi hat das nicht;
+  also alle `;;` verdächtig). Hint mit Quick-Fix: collapse.
+  Datei: `Detectors/uCodeSmells2.pas` (Erweiterung).
+
+- [ ] **`fkUnusedLabel`**
+  `label`-Eintrag deklariert aber kein `goto X;` im Body. Da
+  `goto` selten ist, ist jedes deklarierte label das nicht
+  benutzt wird mit hoher Wahrscheinlichkeit Dead-Code.
+  Datei: `Detectors/uUnusedLabel.pas` (neu).
+
+#### Architektur / Visibility (Cross-Unit-Analyse)
+
+- [ ] **`fkCanBePrivate`** — Public-Member ohne projekt-weite externe Referenz
+  Methoden, Fields, Properties in der `public`/`published`-Sektion
+  einer Klasse, die NIEMALS von einer anderen Unit referenziert
+  werden. Kandidaten zum Verschieben nach `private` (oder
+  `protected` wenn von Subklassen genutzt). Klassisches
+  "Encapsulation-Tightening" — reduziert API-Oberflaeche und
+  zeigt versehentlich exportierte Helper auf.
+  - **Skip wenn:**
+    - Methode ist `override` oder `virtual`/`abstract` (Vererbungs-
+      Hook, koennte von externer Subklasse benutzt werden)
+    - Methode ist Interface-Impl (`procedure Foo; override;` mit
+      passender Interface-Method)
+    - Methode ist publizierter Event-Handler (DFM-Referenz —
+      `uDfmRepoIndex` weiss das schon)
+    - Klasse ist im `interface`-Teil eines Pakets das als BPL
+      ausgeliefert wird (alles public = Plugin-API)
+    - Designer-generierter Code (`{$R *.dfm}`-Bindings)
+  - **Severity Hint** (kein Bug, nur Lesbarkeit/Encapsulation).
+  - **Cross-Unit-Anforderung:** braucht repo-weiten Symbol-Index
+    analog zu `uDfmRepoIndex` — pro Unit muss bekannt sein
+    welche externen Symbole sie referenziert. Vorhandener
+    AST-Walk koennte ein zweites Pass-Modell pro `AnalyzeBatch`
+    aufbauen (Pass 1: alle Public-Symbole sammeln, Pass 2: alle
+    Referenzen aus anderen Units, Pass 3: Diff).
+  - **Quick-Fix-Idee:** "Move to private" — Member-Block-Boundary
+    finden, Member-Deklaration verschieben, Forward-Refs falls
+    noetig setzen.
+  Datei: `Detectors/uCanBePrivate.pas` (neu), benoetigt neuen
+  `Infrastructure/uSymbolReferenceIndex.pas` fuer Cross-Unit-
+  Lookup.
+
+- [ ] **`fkCanBeProtected`** — Variante: Public-Member nur aus
+  Subklassen referenziert (gleiche Vererbungs-Kette), nicht von
+  fremden Klassen. Kandidat fuer `protected`. Setzt
+  `fkCanBePrivate`-Infrastruktur voraus.
+  Datei: `Detectors/uCanBePrivate.pas` (gleicher Detektor, zwei
+  Severity-Levels).
+
+- [ ] **`fkUnusedPublicMember`** — Public-Member ohne JEDE
+  Referenz, weder intern noch extern. Striktere Variante von
+  `fkCanBePrivate` — der Member kann komplett geloescht werden,
+  nicht nur versteckt. Schaerfere Severity (Warning statt Hint).
+  Datei: `Detectors/uCanBePrivate.pas` (gleicher Detektor).
 
 ---
 
@@ -1464,7 +1033,7 @@ hängt zusammen (CLI-Mode ist die Voraussetzung für CI-Integration).
 
 - **Compiler-Errors verschwinden im Messages-Pane bei Scan-Start**
   Tradeoff für `ClearAllMessages` aus früherer Variante. IDE-Messages-
-  Spiegelung ist heute komplett deaktiviert (siehe Erledigt-History) —
+  Spiegelung ist heute komplett deaktiviert (siehe [docs/done.md](docs/done.md)) —
   TODO obsolet falls Spiegelung später re-aktiviert wird.
 
 - **WatchMode + Plugin-Unload ohne explizites Worker-Cancel**
@@ -1481,84 +1050,3 @@ hängt zusammen (CLI-Mode ist die Voraussetzung für CI-Integration).
   `INTACustomDockableForm` exposes keinen offiziellen Hook für
   Theme-Reapply auf der Wrapper-Form. Workaround: Plugin docken oder
   schließen+öffnen nach Theme-Wechsel.
-
----
-
-## 📝 Erledigt (für die History)
-
-Siehe `git log` für Details. Haupt-Themen chronologisch:
-
-**Strukturell**
-- ✅ Re-Strukturierung in `Common/Parsing/Detectors/Infrastructure/Output/UI`
-- ✅ `repo.ini` → `analyser.ini` mit Auto-Migration
-- ✅ Konsolidierter `uClaudePrompt`-Helper (kein Doppelcode)
-- ✅ FixHint-Wrapper in IDE-Plugin (delegiert an Resolver)
-
-**Konfiguration über INI**
-- ✅ Custom-LeakyClasses + ExcludeLeakyClasses in `[Detectors]`
-- ✅ `UsesCheck` / `IncludeTests` Checkboxen → INI-Settings
-  (Toolbar entlastet, Pattern wie `AutoDiscoverClasses`)
-- ✅ Konfigurierbare Detektor-Schwellwerte: `LongMethodMaxBodyLines`,
-  `LongMethodMaxStatements`, `LongParamListMaxParams`,
-  `DeepNestingMaxDepth`, `DuplicateBlockMinLines`, `MaxFileMB`,
-  `MagicNumberTrivials`. Gespiegelt in `uSCAConsts`-Globals via
-  `TRepoSettings.ApplyDetectorThresholds`
-- ✅ Auto-Discovery von Custom-Klassen — `AutoDiscoverClasses=1` scannt
-  Projekt-AST nach Klassen die `Free` brauchen, splittet in
-  _instantiable_ vs. _static-only_, schreibt nach
-  `LeakyClassesDiscover.log`
-
-**Detektor-Pipeline**
-- ✅ Wortgrenzen-Helper `TDetectorUtils` für 5 Detektoren
-- ✅ Iterativer AST-Traversal (kein Stack-Overflow mehr)
-- ✅ JSON/HTML Encoding RFC-konform mit Surrogate-Handling
-- ✅ Suppression abdeckt alle 21 Finding-Kinds
-- ✅ uExport UTF-8 mit BOM — `TExporter.SaveUtf8WithBom`-Helper mit
-  `TUTF8Encoding.Create(True)`. Default-Singleton hat in Delphi 12
-  `FUseBOM=False` — notwendig für deutsches Excel
-
-**IDE-Plugin Integration**
-- ✅ DE-Lokalisierung (eingebautes Dictionary in `uLocalization`)
-- ✅ Messages-Pane statt Custom-Line-Highlights — später wieder
-  deaktiviert (User-Feedback: kein Export aus Scan)
-- ✅ UI-Race-Schutz: globaler `GLiveAnalyserFrame`-Sentinel verhindert
-  AV bei Frame-Destruction während Worker-Callback
-- ✅ Button „Repo..." → „Settings..." / „Einstellungen..." umbenannt
-- ✅ FilterCombo Edge-Cases: `Items.Count = 0` + `idx >= Count`
-  Pre-Checks + Re-Entry-Schutz beim ItemIndex-Reset
-- ✅ Tooltip im Grid — nur Datei-Spalte, 100 ms Delay (statt IDE-Default
-  500 ms), keine Tooltips auf Method/Line/Type/Severity
-- ✅ Severity / Type Filter-Combos in eigenen Container-Panels —
-  `TLabel`+`TComboBox` mit losem `alLeft` verschoben sich gegeneinander
-  (Graphic- vs. Window-Control), Container-Pattern serialisiert sauber
-
-**Editor-Integration (ToolsAPI)**
-- ✅ Editor-Line-Highlight bei Click auf Befund — via
-  `INTAEditViewNotifier.PaintLine` (DelphiLint-Pattern),
-  `TNotifierObject`-Basisklasse, 3 px roter Stripe links neben der
-  Zeile. Lazy-Attach beim ersten Klick (kein Plugin-Install-Risiko)
-- ✅ `View.RemoveNotifier` beim Plugin-Unload — Manager trackt pro
-  Attach `(TFindingViewNotifier, Index, IOTAEditView)`, ruft
-  `RemoveNotifier` im Destructor mit `try/except` + Buffer-null-Check
-
-**Watch-Mode (Live-Analyse beim Speichern)**
-- ✅ Watch-Mode komplett implementiert in `uIDEWatchMode.pas`:
-  - Pro offener `.pas`-Datei einen `IOTAModuleNotifier`
-  - `AfterSave` triggert nach 300 ms Debounce einen
-    `TWatchAnalyzer`-Background-Thread
-  - `Synchronize` zurück an Frame, der via `OnWatchFindings` nur die
-    Findings für diese eine Datei in `FAllFindings` ersetzt
-  - Generation-Counter dropped späte Worker-Ergebnisse wenn manuelle
-    Analyse zwischenzeitlich läuft
-  - Aktivierung via INI `[Detectors] WatchMode=1` (Pattern wie
-    `UsesCheck` / `IncludeTests`)
-- ✅ WatchMode auto-aktiv bei „Aktuelle Datei" — Klick auf den Button
-  forciert WatchMode unabhängig von der INI-Einstellung; Live-Edit-
-  Update ist da der natural fit. Bulk-Pfade (Full-Project,
-  Branch-Changes) folgen weiterhin dem INI-Wert
-- ✅ `IOTAModuleNotifier` Delphi-12-kompatibel — alle drei
-  Interface-Versionen explizit gelistet (`IOTAModuleNotifier`,
-  `IOTAModuleNotifier80`, `IOTAModuleNotifier90`) + zusätzlich
-  `IInterface` und `IOTANotifier`. Vorher AV in `coreide290.bpl` weil
-  IDE-Kern auf 90 QueryInterface't und beim nil-Result NULL-Pointer
-  dereferenziert
