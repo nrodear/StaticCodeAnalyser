@@ -131,6 +131,25 @@ begin
   end;
 end;
 
+function FindingTypeToSonarType(T: TFindingType): string;
+// Sonar Generic Issue Format legacy field: 'BUG' | 'VULNERABILITY' | 'CODE_SMELL'.
+// Wird als Fallback gesetzt wenn die Rule keine 'impacts' aus dem Catalog
+// mitbringt - Sonar 10+ verlangt mindestens einen der beiden Pfade,
+// sonst wird die JSON komplett abgelehnt.
+//
+// Hotspot ist im Generic Format nicht abbildbar - mappen auf VULNERABILITY
+// (Sonar trennt Hotspot vs Vulnerability nur fuer eigene Detektoren).
+// FileError + CodeDuplication mappen auf CODE_SMELL (kein eigener Sonar-Slot).
+begin
+  case T of
+    ftBug             : Result := 'BUG';
+    ftVulnerability   : Result := 'VULNERABILITY';
+    ftSecurityHotspot : Result := 'VULNERABILITY';
+  else
+    Result := 'CODE_SMELL';
+  end;
+end;
+
 { ---- Rule + Issue Builders ---- }
 
 function BuildRuleObject(const M: TRuleMeta; const IdOverride: string): TJSONObject;
@@ -167,6 +186,14 @@ begin
       Impacts.AddElement(IObj);
     end;
     Result.AddPair('impacts', Impacts);
+  end
+  else
+  begin
+    // Fallback: Catalog hat keinen Impact-Eintrag fuer diese Rule
+    // (typisch wenn rules/sca-rules.json beim Lauf nicht gefunden wurde
+    // und LoadFallback eingesprungen ist). Ohne mindestens einen der zwei
+    // Pfade (impacts ODER type) lehnt Sonar 10+ die JSON ab.
+    Result.AddPair('type', FindingTypeToSonarType(M.FindingType));
   end;
 end;
 

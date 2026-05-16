@@ -127,7 +127,7 @@ begin
     Mi.Caption := '-';
     FPopup.Items.Add(Mi);
   Mi := TMenuItem.Create(FPopup);
-    Mi.Caption := _('Sonar: write Generic Issue report...');
+    Mi.Caption := _('Sonar: write Generic Issue report (all findings)...');
     Mi.OnClick := DoExportSonarGeneric;
     FPopup.Items.Add(Mi);
   Mi := TMenuItem.Create(FPopup);
@@ -313,12 +313,20 @@ begin
 end;
 
 procedure TFindingExportMenu.DoExportSonarGeneric(Sender: TObject);
-// Schreibt einen Generic-Issue-Report mit ALLEN sichtbaren Findings.
-// User waehlt das Output-File - default sca-findings.json.
+// Schreibt einen Generic-Issue-Report mit ALLEN Findings (FAll, vor
+// Grid-Filter). Verhalten matcht den Standalone-EXE-Pfad
+// `--sonar-export <file>`: der schreibt den vollen Analyse-Output, nicht
+// nur das was im Grid sichtbar ist.
+//
+// Vorher wurde FDisplayed exportiert - das hatte den User-Filter mit
+// drin. Resultat: wenn jemand z.B. nach "Errors" gefiltert hatte, wurden
+// im Sonar-Push nur die Errors gepusht und die Warnings/Hints fehlten.
 var
   Dlg     : TSaveDialog;
   BaseDir : string;
   Written : string;
+  Bulk    : TObjectList<TLeakFinding>;
+  Fnd     : TLeakFinding;
 begin
   if Assigned(FGetBaseDir) then BaseDir := FGetBaseDir() else BaseDir := '';
   Dlg := TSaveDialog.Create(nil);
@@ -330,15 +338,16 @@ begin
     Dlg.Options    := Dlg.Options + [ofOverwritePrompt];
     if not Dlg.Execute then Exit;
     try
-      var Bulk := TObjectList<TLeakFinding>.Create(False);
+      // FAll statt FDisplayed - vollstaendiger Analyse-Output wie beim CLI.
+      Bulk := TObjectList<TLeakFinding>.Create(False);
       try
-        for var Fnd in FDisplayed do Bulk.Add(Fnd);
+        for Fnd in FAll do Bulk.Add(Fnd);
         Written := TSonarPush.WriteBulk(Bulk, BaseDir, Dlg.FileName);
       finally
         Bulk.Free;
       end;
-      FOnStatus(Format(_('Sonar report saved: %s'),
-        [ExtractFileName(Written)]));
+      FOnStatus(Format(_('Sonar report saved: %s (%d findings)'),
+        [ExtractFileName(Written), FAll.Count]));
     except
       on E: Exception do
         FOnStatus(_('Sonar export failed: ') + E.Message);
