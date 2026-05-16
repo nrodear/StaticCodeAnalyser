@@ -107,7 +107,10 @@ uses
   uTestClassPerFile in 'uTestClassPerFile.pas',
   uTestSuperfluousSemicolon in 'uTestSuperfluousSemicolon.pas',
   uTestEmptyFinallyBlock in 'uTestEmptyFinallyBlock.pas',
-  uTestAssignedAndAssignedNil in 'uTestAssignedAndAssignedNil.pas';
+  uTestAssignedAndAssignedNil in 'uTestAssignedAndAssignedNil.pas',
+  uTestFreeAndNilHint in 'uTestFreeAndNilHint.pas',
+  uTestAvoidOut in 'uTestAvoidOut.pas',
+  uTestEmptyVisibilitySection in 'uTestEmptyVisibilitySection.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}

@@ -244,6 +244,9 @@
         <DCCReference Include="uTestSuperfluousSemicolon.pas"/>
         <DCCReference Include="uTestEmptyFinallyBlock.pas"/>
         <DCCReference Include="uTestAssignedAndAssignedNil.pas"/>
+        <DCCReference Include="uTestFreeAndNilHint.pas"/>
+        <DCCReference Include="uTestAvoidOut.pas"/>
+        <DCCReference Include="uTestEmptyVisibilitySection.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

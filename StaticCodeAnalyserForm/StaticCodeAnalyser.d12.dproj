@@ -192,6 +192,9 @@
         <DCCReference Include="sources\Detectors\uSuperfluousSemicolon.pas"/>
         <DCCReference Include="sources\Detectors\uEmptyFinallyBlock.pas"/>
         <DCCReference Include="sources\Detectors\uAssignedAndAssignedNil.pas"/>
+        <DCCReference Include="sources\Detectors\uFreeAndNilHint.pas"/>
+        <DCCReference Include="sources\Detectors\uAvoidOut.pas"/>
+        <DCCReference Include="sources\Detectors\uEmptyVisibilitySection.pas"/>
         <DCCReference Include="sources\Output\uExportSARIF.pas"/>
         <DCCReference Include="sources\Output\uExportSonarGeneric.pas"/>
         <DCCReference Include="sources\Output\uSonarPush.pas"/>

@@ -24,6 +24,7 @@ uses
   uGroupedDeclaration, uEmptyBlock, uExceptOnException,
   uConsecutiveSection, uRedundantJump, uClassPerFile,
   uSuperfluousSemicolon, uEmptyFinallyBlock, uAssignedAndAssignedNil,
+  uFreeAndNilHint, uAvoidOut, uEmptyVisibilitySection,
   uReversedForRange, uSelfAssignment, uVirtualCallInCtor, uLengthUnderflow,
   uVisibilityCheck,
   uUnusedLocal, uUnusedParameter, uTautologicalExpr,
@@ -150,6 +151,9 @@ begin
         TSuperfluousSemicolonDetector.AnalyzeUnit(Root, TempPath, Result);
         TEmptyFinallyBlockDetector.AnalyzeUnit(Root, TempPath, Result);
         TAssignedAndAssignedNilDetector.AnalyzeUnit(Root, TempPath, Result);
+        TFreeAndNilHintDetector.AnalyzeUnit(Root, TempPath, Result);
+        TAvoidOutDetector.AnalyzeUnit(Root, TempPath, Result);
+        TEmptyVisibilitySectionDetector.AnalyzeUnit(Root, TempPath, Result);
         TReversedForRangeDetector.AnalyzeUnit(Root, TempPath, Result);
         TLengthUnderflowDetector.AnalyzeUnit(Root, TempPath, Result);
         TTautologicalExprDetector.AnalyzeUnit(Root, TempPath, Result);

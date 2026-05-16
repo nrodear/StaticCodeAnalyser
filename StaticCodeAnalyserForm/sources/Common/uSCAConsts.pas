@@ -265,8 +265,13 @@ type
                                  // (SonarDelphi:SuperfluousSemicolon).
     fkEmptyFinallyBlock,         // `try ... finally end;` leerer Cleanup
                                  // (SonarDelphi:EmptyFinallyBlock).
-    fkAssignedAndAssignedNil     // `Assigned(X) and (X <> nil)` redundant
+    fkAssignedAndAssignedNil,    // `Assigned(X) and (X <> nil)` redundant
                                  // (SonarDelphi:AssignedAndAssignedNil).
+    fkFreeAndNilHint,            // `X.Free; X := nil;` -> `FreeAndNil(X)`
+                                 // (SonarDelphi:FreeAndNil).
+    fkAvoidOut,                  // `out`-Parameter (SonarDelphi:AvoidOut).
+    fkEmptyVisibilitySection     // Leere Visibility-Section in Klasse
+                                 // (SonarDelphi:EmptyVisibilitySection).
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -399,7 +404,10 @@ const
     (Name: 'ClassPerFile';               FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkClassPerFile
     (Name: 'SuperfluousSemicolon';       FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkSuperfluousSemicolon
     (Name: 'EmptyFinallyBlock';          FindingType: ftBug;          DefaultSeverity: lsWarning), // fkEmptyFinallyBlock
-    (Name: 'AssignedAndAssignedNil';     FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkAssignedAndAssignedNil
+    (Name: 'AssignedAndAssignedNil';     FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkAssignedAndAssignedNil
+    (Name: 'FreeAndNilHint';             FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkFreeAndNilHint
+    (Name: 'AvoidOut';                   FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkAvoidOut
+    (Name: 'EmptyVisibilitySection';     FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkEmptyVisibilitySection
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.
