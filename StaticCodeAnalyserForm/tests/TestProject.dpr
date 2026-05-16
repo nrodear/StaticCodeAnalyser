@@ -101,7 +101,10 @@ uses
   uTestExplicitTObjectInheritance in 'uTestExplicitTObjectInheritance.pas',
   uTestGroupedDeclaration in 'uTestGroupedDeclaration.pas',
   uTestEmptyBlock in 'uTestEmptyBlock.pas',
-  uTestExceptOnException in 'uTestExceptOnException.pas';
+  uTestExceptOnException in 'uTestExceptOnException.pas',
+  uTestConsecutiveSection in 'uTestConsecutiveSection.pas',
+  uTestRedundantJump in 'uTestRedundantJump.pas',
+  uTestClassPerFile in 'uTestClassPerFile.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}

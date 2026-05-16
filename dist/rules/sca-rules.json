@@ -1560,6 +1560,63 @@
       "impacts": [
         { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
       ]
+    },
+    {
+      "id": "SCA079",
+      "kind": "ConsecutiveSection",
+      "name": "Consecutive const/type/var section",
+      "shortDescription": "Two `const`/`type`/`var` blocks in a row should be merged",
+      "fullDescription": "`const A = 1; const B = 2;` should be `const A = 1; B = 2;` - one section keyword can declare all of them. Same for `type` and `var`. Unifies SonarDelphi communitydelphi:ConsecutiveConstSection / :ConsecutiveTypeSection / :ConsecutiveVarSection into one rule. The section type is in the message.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["style", "structure"],
+      "detectorUnit": "uConsecutiveSection.pas",
+      "examples": {
+        "bad":  "const A = 1;\nconst B = 2;",
+        "good": "const\n  A = 1;\n  B = 2;"
+      },
+      "cleanCodeAttribute": "FORMATTED",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA080",
+      "kind": "RedundantJump",
+      "name": "Redundant Exit/Continue/Break before end",
+      "shortDescription": "`Exit;` / `Continue;` / `Break;` directly before `end` is a no-op",
+      "fullDescription": "If `Exit` is the last statement of a procedure (or `Continue`/`Break` the last in a loop body), control flow already leaves the block - the jump statement is dead. Delete it to clarify intent. Matches SonarDelphi communitydelphi:RedundantJump.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["dead-code", "control-flow"],
+      "detectorUnit": "uRedundantJump.pas",
+      "examples": {
+        "bad":  "procedure Foo;\nbegin\n  DoStuff;\n  Exit;\nend;",
+        "good": "procedure Foo;\nbegin\n  DoStuff;\nend;"
+      },
+      "cleanCodeAttribute": "CLEAR",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA081",
+      "kind": "ClassPerFile",
+      "name": "Multiple class declarations in one file",
+      "shortDescription": "One class per unit makes refactoring easier",
+      "fullDescription": "When a unit declares two or more public classes, finding and moving them between units is harder than necessary. SonarDelphi communitydelphi:ClassPerFile suggests the same. Forward declarations (`TFoo = class;`) and class-reference types (`TFooClass = class of TFoo`) are exempted.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["organization", "module-boundary"],
+      "detectorUnit": "uClassPerFile.pas",
+      "examples": {
+        "bad":  "type\n  TFoo = class ... end;\n  TBar = class ... end;",
+        "good": "// uFoo.pas\ntype TFoo = class ... end;\n// uBar.pas\ntype TBar = class ... end;"
+      },
+      "cleanCodeAttribute": "MODULAR",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     }
   ]
 }

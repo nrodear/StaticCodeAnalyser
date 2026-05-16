@@ -238,6 +238,9 @@
         <DCCReference Include="uTestGroupedDeclaration.pas"/>
         <DCCReference Include="uTestEmptyBlock.pas"/>
         <DCCReference Include="uTestExceptOnException.pas"/>
+        <DCCReference Include="uTestConsecutiveSection.pas"/>
+        <DCCReference Include="uTestRedundantJump.pas"/>
+        <DCCReference Include="uTestClassPerFile.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

@@ -22,6 +22,7 @@ uses
   uCommentedOutCode, uUnitLevelKeywordIndent, uRedundantBoolean,
   uEmptyInterface, uAssertMessage, uExplicitTObjectInheritance,
   uGroupedDeclaration, uEmptyBlock, uExceptOnException,
+  uConsecutiveSection, uRedundantJump, uClassPerFile,
   uReversedForRange, uSelfAssignment, uVirtualCallInCtor, uLengthUnderflow,
   uVisibilityCheck,
   uUnusedLocal, uUnusedParameter, uTautologicalExpr,
@@ -142,6 +143,9 @@ begin
         TGroupedDeclarationDetector.AnalyzeUnit(Root, TempPath, Result);
         TEmptyBlockDetector.AnalyzeUnit(Root, TempPath, Result);
         TExceptOnExceptionDetector.AnalyzeUnit(Root, TempPath, Result);
+        TConsecutiveSectionDetector.AnalyzeUnit(Root, TempPath, Result);
+        TRedundantJumpDetector.AnalyzeUnit(Root, TempPath, Result);
+        TClassPerFileDetector.AnalyzeUnit(Root, TempPath, Result);
         TReversedForRangeDetector.AnalyzeUnit(Root, TempPath, Result);
         TLengthUnderflowDetector.AnalyzeUnit(Root, TempPath, Result);
         TTautologicalExprDetector.AnalyzeUnit(Root, TempPath, Result);

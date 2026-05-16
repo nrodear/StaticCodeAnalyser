@@ -186,6 +186,9 @@
         <DCCReference Include="sources\Detectors\uGroupedDeclaration.pas"/>
         <DCCReference Include="sources\Detectors\uEmptyBlock.pas"/>
         <DCCReference Include="sources\Detectors\uExceptOnException.pas"/>
+        <DCCReference Include="sources\Detectors\uConsecutiveSection.pas"/>
+        <DCCReference Include="sources\Detectors\uRedundantJump.pas"/>
+        <DCCReference Include="sources\Detectors\uClassPerFile.pas"/>
         <DCCReference Include="sources\Output\uExportSARIF.pas"/>
         <DCCReference Include="sources\Output\uExportSonarGeneric.pas"/>
         <DCCReference Include="sources\Output\uSonarPush.pas"/>
