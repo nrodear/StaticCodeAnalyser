@@ -259,8 +259,14 @@ type
                                  // ConsecutiveConst/Type/Var Section).
     fkRedundantJump,             // `Exit;`/`Continue;`/`Break;` direkt
                                  // vor `end` (SonarDelphi:RedundantJump).
-    fkClassPerFile               // Mehrere Klassen-Deklarationen in einer
+    fkClassPerFile,              // Mehrere Klassen-Deklarationen in einer
                                  // Unit (SonarDelphi:ClassPerFile).
+    fkSuperfluousSemicolon,      // `;;` doppeltes Semikolon
+                                 // (SonarDelphi:SuperfluousSemicolon).
+    fkEmptyFinallyBlock,         // `try ... finally end;` leerer Cleanup
+                                 // (SonarDelphi:EmptyFinallyBlock).
+    fkAssignedAndAssignedNil     // `Assigned(X) and (X <> nil)` redundant
+                                 // (SonarDelphi:AssignedAndAssignedNil).
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -390,7 +396,10 @@ const
     (Name: 'ExceptOnException';          FindingType: ftBug;          DefaultSeverity: lsWarning), // fkExceptOnException
     (Name: 'ConsecutiveSection';         FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkConsecutiveSection
     (Name: 'RedundantJump';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkRedundantJump
-    (Name: 'ClassPerFile';               FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkClassPerFile
+    (Name: 'ClassPerFile';               FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkClassPerFile
+    (Name: 'SuperfluousSemicolon';       FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkSuperfluousSemicolon
+    (Name: 'EmptyFinallyBlock';          FindingType: ftBug;          DefaultSeverity: lsWarning), // fkEmptyFinallyBlock
+    (Name: 'AssignedAndAssignedNil';     FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkAssignedAndAssignedNil
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

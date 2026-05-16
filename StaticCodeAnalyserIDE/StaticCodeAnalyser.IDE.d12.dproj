@@ -253,6 +253,9 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uConsecutiveSection.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uRedundantJump.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uClassPerFile.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSuperfluousSemicolon.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyFinallyBlock.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uAssignedAndAssignedNil.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uReversedForRange.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSelfAssignment.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uVirtualCallInCtor.pas"/>

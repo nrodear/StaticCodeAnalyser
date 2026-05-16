@@ -241,6 +241,9 @@
         <DCCReference Include="uTestConsecutiveSection.pas"/>
         <DCCReference Include="uTestRedundantJump.pas"/>
         <DCCReference Include="uTestClassPerFile.pas"/>
+        <DCCReference Include="uTestSuperfluousSemicolon.pas"/>
+        <DCCReference Include="uTestEmptyFinallyBlock.pas"/>
+        <DCCReference Include="uTestAssignedAndAssignedNil.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

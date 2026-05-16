@@ -1617,6 +1617,63 @@
       "impacts": [
         { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
       ]
+    },
+    {
+      "id": "SCA082",
+      "kind": "SuperfluousSemicolon",
+      "name": "Double semicolon",
+      "shortDescription": "`;;` - drop the extra semicolon",
+      "fullDescription": "A double semicolon (`;;`) usually means a forgotten typo or a stray paste leftover. Compilers treat the second `;` as an empty statement, so it doesn't break, but it adds noise. Matches SonarDelphi communitydelphi:SuperfluousSemicolon.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["typo", "style"],
+      "detectorUnit": "uSuperfluousSemicolon.pas",
+      "examples": {
+        "bad":  "DoStuff;;",
+        "good": "DoStuff;"
+      },
+      "cleanCodeAttribute": "FORMATTED",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA083",
+      "kind": "EmptyFinallyBlock",
+      "name": "Empty finally block",
+      "shortDescription": "`try ... finally end;` has no cleanup - either add it or drop the finally",
+      "fullDescription": "An empty `finally` block is almost always a forgotten cleanup. If there really is nothing to clean up, drop the `try..finally` wrapper. Matches SonarDelphi communitydelphi:EmptyFinallyBlock.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["resource-leak", "refactor"],
+      "detectorUnit": "uEmptyFinallyBlock.pas",
+      "examples": {
+        "bad":  "Stream := TFileStream.Create(P);\ntry\n  ...\nfinally\nend;",
+        "good": "Stream := TFileStream.Create(P);\ntry\n  ...\nfinally\n  Stream.Free;\nend;"
+      },
+      "cleanCodeAttribute": "COMPLETE",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA084",
+      "kind": "AssignedAndAssignedNil",
+      "name": "Redundant Assigned + nil check",
+      "shortDescription": "`Assigned(X) and (X <> nil)` - drop the nil check",
+      "fullDescription": "`Assigned(X)` for pointers and class instances is semantically identical to `X <> nil`. Combining both is redundant - the second check can never give a different result. Matches SonarDelphi communitydelphi:AssignedAndAssignedNil.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["redundancy", "style"],
+      "detectorUnit": "uAssignedAndAssignedNil.pas",
+      "examples": {
+        "bad":  "if Assigned(Obj) and (Obj <> nil) then ...",
+        "good": "if Assigned(Obj) then ..."
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     }
   ]
 }

@@ -23,6 +23,7 @@ uses
   uEmptyInterface, uAssertMessage, uExplicitTObjectInheritance,
   uGroupedDeclaration, uEmptyBlock, uExceptOnException,
   uConsecutiveSection, uRedundantJump, uClassPerFile,
+  uSuperfluousSemicolon, uEmptyFinallyBlock, uAssignedAndAssignedNil,
   uReversedForRange, uSelfAssignment, uVirtualCallInCtor, uLengthUnderflow,
   uVisibilityCheck,
   uUnusedLocal, uUnusedParameter, uTautologicalExpr,
@@ -146,6 +147,9 @@ begin
         TConsecutiveSectionDetector.AnalyzeUnit(Root, TempPath, Result);
         TRedundantJumpDetector.AnalyzeUnit(Root, TempPath, Result);
         TClassPerFileDetector.AnalyzeUnit(Root, TempPath, Result);
+        TSuperfluousSemicolonDetector.AnalyzeUnit(Root, TempPath, Result);
+        TEmptyFinallyBlockDetector.AnalyzeUnit(Root, TempPath, Result);
+        TAssignedAndAssignedNilDetector.AnalyzeUnit(Root, TempPath, Result);
         TReversedForRangeDetector.AnalyzeUnit(Root, TempPath, Result);
         TLengthUnderflowDetector.AnalyzeUnit(Root, TempPath, Result);
         TTautologicalExprDetector.AnalyzeUnit(Root, TempPath, Result);
