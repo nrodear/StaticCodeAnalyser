@@ -242,35 +242,39 @@ begin
   if SonarRuleId = '' then Exit;
   Lower := LowerCase(SonarRuleId);
 
+  // Klammern um jeden Pos(...) > 0 sind PFLICHT - 'or' bindet in Delphi
+  // staerker als '>' (bitweises OR auf Integers); ohne Klammern wird
+  // 'Pos(x) > 0 or Pos(y) > 0' zu 'Pos(x) > (0 or Pos(y)) > 0' und
+  // produziert E2008 Inkompatible Typen.
   case K of
     fkEmptyExcept:
-      Result := Pos('emptyexcept',  Lower) > 0;
+      Result := (Pos('emptyexcept',    Lower) > 0);
     fkUnusedUses:
-      Result := Pos('unusedimport', Lower) > 0
-             or Pos('unuseduses',   Lower) > 0;
+      Result := (Pos('unusedimport',   Lower) > 0)
+             or (Pos('unuseduses',     Lower) > 0);
     fkTodoComment:
-      Result := Pos('todotag',      Lower) > 0
-             or Pos('todocomment',  Lower) > 0;
+      Result := (Pos('todotag',        Lower) > 0)
+             or (Pos('todocomment',    Lower) > 0);
     fkLongMethod:
-      Result := Pos('longmethod',   Lower) > 0
-             or Pos('methodlength', Lower) > 0;
+      Result := (Pos('longmethod',     Lower) > 0)
+             or (Pos('methodlength',   Lower) > 0);
     fkLongParamList:
-      Result := Pos('parametercount', Lower) > 0;
+      Result := (Pos('parametercount', Lower) > 0);
     fkCyclomaticComplexity:
-      Result := Pos('cyclomatic',   Lower) > 0;
+      Result := (Pos('cyclomatic',     Lower) > 0);
     fkDeepNesting:
-      Result := Pos('nestedlevel',  Lower) > 0
-             or Pos('nestingdepth', Lower) > 0;
+      Result := (Pos('nestedlevel',    Lower) > 0)
+             or (Pos('nestingdepth',   Lower) > 0);
     fkWithStatement:
-      Result := Pos('withstatement', Lower) > 0
-             or Pos('withinstruction', Lower) > 0;
+      Result := (Pos('withstatement',  Lower) > 0)
+             or (Pos('withinstruction',Lower) > 0);
     fkMagicNumber:
-      Result := Pos('magicnumber',  Lower) > 0;
+      Result := (Pos('magicnumber',    Lower) > 0);
     fkDuplicateBlock:
-      Result := Pos('duplicat',     Lower) > 0;  // duplicated-blocks, etc.
+      Result := (Pos('duplicat',       Lower) > 0);  // duplicated-blocks, etc.
     fkDeadCode:
-      Result := Pos('deadcode',     Lower) > 0
-             or Pos('unreachable',  Lower) > 0;
+      Result := (Pos('deadcode',       Lower) > 0)
+             or (Pos('unreachable',    Lower) > 0);
   end;
 end;
 
