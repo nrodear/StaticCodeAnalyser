@@ -11,9 +11,17 @@ unit uFindingGridRenderer;
 interface
 
 uses
-  Winapi.Windows, System.Classes, Vcl.Graphics, Vcl.Grids, Vcl.Themes;
+  Winapi.Windows, System.SysUtils, System.Classes,
+  Vcl.Graphics, Vcl.Grids, Vcl.Themes;
 
 type
+  // Virtual-Mode-Callback: liefert den Zell-Inhalt fuer (ACol, ARow). Wird
+  // im OnDrawCell-Handler aufgerufen statt grid.Cells[] zu lesen. Damit
+  // muessen die Forms keine Cells[]-Strings mehr pro Datenzeile
+  // vorallokieren - bei 66k+ Befunden spart das deutlich Speicher
+  // (32-Bit-Process-Limit). ARow = 0 ist immer der Header.
+  TGridCellTextProc = reference to function(ACol, ARow: Integer): string;
+
   TFindingGridConfig = record
     // Spalte in der die SeverityText-Strings liegen ("Fehler"/"Error",
     // "Warnung"/"Warning", "Hinweis"/"Hint"). Standalone: 4, IDE: 5.
@@ -41,6 +49,12 @@ type
     // DT_END_ELLIPSIS am Text - bei zu schmaler Spalte "…" anhaengen
     // statt hart abzuschneiden.
     TruncateEllipsis : Boolean;
+
+    // Optional: wenn gesetzt, wird der Zell-Inhalt aus dieser Callback
+    // gezogen statt aus grid.Cells. Aktiviert den Virtual-Mode. Bei nil
+    // bleibt das alte Verhalten (Cells[] wird verwendet) - Backwards-
+    // Compatibility falls noch jemand Cells[] befuellt.
+    GetCellText      : TGridCellTextProc;
   end;
 
   TFindingGridRenderer = class
@@ -120,6 +134,13 @@ var
   Accent    : TColor;
   IndR      : TRect;
   DtFlags   : Cardinal;
+  function CellText(Col, Row: Integer): string;
+  begin
+    if Assigned(Config.GetCellText) then
+      Result := Config.GetCellText(Col, Row)
+    else
+      Result := grid.Cells[Col, Row];
+  end;
 begin
   grid := TStringGrid(Sender);
   txtRect := Rect;
@@ -158,7 +179,7 @@ begin
     grid.Canvas.Font.Style  := [fsBold];
     grid.Canvas.Font.Color  := HeaderFg;
 
-    HeaderText := grid.Cells[ACol, ARow];
+    HeaderText := CellText(ACol, ARow);
     if Config.ShowSortIndicator and (ACol = Config.SortColumn) then
     begin
       if Config.SortDescending then
@@ -174,7 +195,7 @@ begin
 
   // ---- Datenzeilen --------------------------------------------------------
   if (Config.SeverityColumn >= 0) and (Config.SeverityColumn < grid.ColCount) then
-    severity := grid.Cells[Config.SeverityColumn, ARow]
+    severity := CellText(Config.SeverityColumn, ARow)
   else
     severity := '';
 
@@ -255,7 +276,7 @@ begin
   if Config.TruncateEllipsis then
     DtFlags := DtFlags or DT_END_ELLIPSIS;
 
-  DrawText(grid.Canvas.Handle, PChar(grid.Cells[ACol, ARow]),
+  DrawText(grid.Canvas.Handle, PChar(CellText(ACol, ARow)),
     -1, txtRect, DtFlags);
 end;
 

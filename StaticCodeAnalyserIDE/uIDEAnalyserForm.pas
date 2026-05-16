@@ -1447,30 +1447,20 @@ begin
 end;
 
 procedure TAnalyserFrame.PopulateGridFromDisplayed;
-var
-  f   : TLeakFinding;
-  row : Integer;
+// Virtual-Mode: nur RowCount setzen + Repaint triggern. Die Zell-Strings
+// liest GridDrawCell.GetCellText lazy aus FDisplayedFindings - das
+// vermeidet bei 66k+ Befunden ~50-100 MB Cells[]-Vorallokation
+// (32-Bit-Process-Limit).
 begin
   FResultGrid.RowCount := Max(FDisplayedFindings.Count + 1, 2);
-  row := 1;
-  for f in FDisplayedFindings do
-  begin
-    // Im Grid steht nur der Dateiname - der volle Pfad kommt als Tooltip
-    // ueber TFindingGridTooltip/CM_HINTSHOW aus FDisplayedFindings.
-    FResultGrid.Cells[0, row] := ExtractFileName(f.FileName);
-    FResultGrid.Cells[1, row] := f.MethodName;
-    FResultGrid.Cells[2, row] := f.LineNumber;
-    FResultGrid.Cells[3, row] := f.TypeText;
-    FResultGrid.Cells[4, row] := f.MissingVar;
-    FResultGrid.Cells[5, row] := f.SeverityText;
-    Inc(row);
-  end;
-
   if FDisplayedFindings.Count = 0 then
   begin
+    // Placeholder-Zeile bleibt explizit in Cells (GetCellText liest sie
+    // dann via Fallback aus).
     FResultGrid.Rows[1].Clear;
     FResultGrid.Cells[0, 1] := 'Keine Eintraege fuer diesen Filter.';
   end;
+  FResultGrid.Invalidate;
 end;
 
 procedure TAnalyserFrame.UpdateFilterStatus(
@@ -2614,9 +2604,43 @@ procedure TAnalyserFrame.GridDrawCell(Sender: TObject; ACol, ARow: Integer;
 // Implementation in UI/uFindingGridRenderer.pas - hier nur die Frame-
 // spezifische Konfiguration uebergeben (Severity-Spalte 5, Theme an,
 // Sort-Indicator mit unserem aktuellen Sort-State).
+//
+// Virtual-Mode: Datenzeilen-Inhalt wird ueber GetCellText aus
+// FDisplayedFindings gezogen statt aus FResultGrid.Cells[] - das spart
+// bei 66k+ Befunden ~50-100 MB Cell-String-Allokationen
+// (32-Bit-Process-Limit).
+var
+  Config : TFindingGridConfig;
 begin
-  TFindingGridRenderer.DrawCell(Sender, ACol, ARow, Rect, State,
-    TFindingGridRenderer.IDEConfig(FSortColumn, FSortDescending));
+  Config := TFindingGridRenderer.IDEConfig(FSortColumn, FSortDescending);
+  Config.GetCellText :=
+    function(ACellCol, ACellRow: Integer): string
+    var
+      f : TLeakFinding;
+    begin
+      if ACellRow = 0 then
+        Result := FResultGrid.Cells[ACellCol, 0]
+      else if (FDisplayedFindings <> nil) and
+              (ACellRow >= 1) and
+              (ACellRow <= FDisplayedFindings.Count) then
+      begin
+        f := FDisplayedFindings[ACellRow - 1];
+        case ACellCol of
+          0: Result := ExtractFileName(f.FileName);
+          1: Result := f.MethodName;
+          2: Result := f.LineNumber;
+          3: Result := f.TypeText;
+          4: Result := f.MissingVar;
+          5: Result := f.SeverityText;
+        else
+          Result := '';
+        end;
+      end
+      else
+        // Placeholder-Zeile (z.B. 'Keine Eintraege...') - aus Cells lesen.
+        Result := FResultGrid.Cells[ACellCol, ACellRow];
+    end;
+  TFindingGridRenderer.DrawCell(Sender, ACol, ARow, Rect, State, Config);
 end;
 
 // ---------------------------------------------------------------------------

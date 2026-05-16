@@ -280,10 +280,12 @@ begin
 
   ResultGrid.MouseToCell(HintInfo.CursorPos.X, HintInfo.CursorPos.Y,
     ACol, ARow);
-  if (ACol = 0) and (ARow >= 1) and (ARow < ResultGrid.RowCount) and
-     (ResultGrid.Cells[0, ARow] <> '') then
+  // Virtual-Mode: Tooltip-Text aus FDisplayedFindings (Full-Path) statt
+  // ResultGrid.Cells[0, ARow] (das waere im Virtual-Mode leer).
+  if (ACol = 0) and (ARow >= 1) and (FDisplayedFindings <> nil) and
+     (ARow <= FDisplayedFindings.Count) then
   begin
-    HintStr               := ResultGrid.Cells[0, ARow];
+    HintStr               := FDisplayedFindings[ARow - 1].FileName;
     HintInfo.CursorRect   := ResultGrid.CellRect(ACol, ARow);
     HintInfo.HintMaxWidth := 600;
     CanShow               := True;
@@ -297,9 +299,45 @@ procedure TForm2.ResultGridDrawCell(Sender: TObject; ACol, ARow: Integer;
 // Implementation in UI/uFindingGridRenderer.pas - hier nur die Standalone-
 // Konfiguration: Severity-Spalte 4, kein Theme/Zebra/Sort/Accent-Bar
 // (Standalone-Look ist bewusst einfach, hardcoded Pastell-Pasteltoene).
+//
+// Virtual-Mode: Datenzeilen-Inhalt wird ueber GetCellText aus
+// FDisplayedFindings gezogen statt aus ResultGrid.Cells[] - das spart bei
+// 66k+ Befunden ~50-100 MB Cell-String-Allokationen (32-Bit-Process-Limit).
+// Header-Zeile (ARow=0) bleibt in ResultGrid.Cells[].
+var
+  Config : TFindingGridConfig;
+  baseDir: string;
 begin
-  TFindingGridRenderer.DrawCell(Sender, ACol, ARow, Rect, State,
-    TFindingGridRenderer.StandaloneConfig);
+  Config := TFindingGridRenderer.StandaloneConfig;
+  baseDir := IncludeTrailingPathDelimiter(FCurrentBaseDir);
+  Config.GetCellText :=
+    function(ACellCol, ACellRow: Integer): string
+    var
+      f : TLeakFinding;
+    begin
+      if ACellRow = 0 then
+        Result := ResultGrid.Cells[ACellCol, 0]   // Header weiterhin aus Cells
+      else if (FDisplayedFindings <> nil) and
+              (ACellRow >= 1) and
+              (ACellRow <= FDisplayedFindings.Count) then
+      begin
+        f := FDisplayedFindings[ACellRow - 1];
+        case ACellCol of
+          0: Result := ExtractRelativePath(baseDir, f.FileName);
+          1: Result := f.MethodName;
+          2: Result := f.LineNumber;
+          3: Result := f.MissingVar;
+          4: Result := f.SeverityText;
+        else
+          Result := '';
+        end;
+      end
+      else
+        // Placeholder-Zeilen (z.B. 'No findings.' / 'No matches.') werden
+        // weiterhin via Cells[] gesetzt - aus Cells lesen.
+        Result := ResultGrid.Cells[ACellCol, ACellRow];
+    end;
+  TFindingGridRenderer.DrawCell(Sender, ACol, ARow, Rect, State, Config);
 end;
 
 procedure TForm2.Button1Click(Sender: TObject);
@@ -318,22 +356,31 @@ begin
 end;
 
 procedure TForm2.Button4Click(Sender: TObject);
+// CSV-Export. Virtual-Mode: ResultGrid.Cells[] sind leer, deshalb direkt
+// aus FDisplayedFindings exportieren. Spalten-Mapping muss synchron mit
+// ResultGridDrawCell.GetCellText bleiben.
 var
-  lines: TStringList;
-  i: Integer;
+  lines : TStringList;
+  i     : Integer;
+  f     : TLeakFinding;
+  baseDir : string;
 begin
+  if FDisplayedFindings = nil then Exit;
   lines := TStringList.Create;
   try
     lines.Add('Datei;Methode;Zeile;Variable;Schweregrad');
-    for i := 1 to ResultGrid.RowCount - 1 do
-      if ResultGrid.Cells[0, i] <> '' then
-        lines.Add(
-          ResultGrid.Cells[0, i] + ';' +
-          ResultGrid.Cells[1, i] + ';' +
-          ResultGrid.Cells[2, i] + ';' +
-          ResultGrid.Cells[3, i] + ';' +
-          ResultGrid.Cells[4, i]
-        );
+    baseDir := IncludeTrailingPathDelimiter(FCurrentBaseDir);
+    for i := 0 to FDisplayedFindings.Count - 1 do
+    begin
+      f := FDisplayedFindings[i];
+      lines.Add(
+        ExtractRelativePath(baseDir, f.FileName) + ';' +
+        f.MethodName + ';' +
+        f.LineNumber + ';' +
+        f.MissingVar + ';' +
+        f.SeverityText
+      );
+    end;
     lines.SaveToFile(GetAbsolutePath(Savetofile.Text));
     StatusBar1.Panels[2].Text := _('Saved: ') + GetAbsolutePath(Savetofile.Text);
   finally
@@ -594,14 +641,15 @@ end;
 
 procedure TForm2.ApplyFilter;
 // Wendet Severity-Combo / Type-Combo / Search-Edit auf FAllFindings an,
-// schreibt das Ergebnis in FDisplayedFindings und befuellt das Grid.
+// schreibt das Ergebnis in FDisplayedFindings und triggert Grid-Repaint
+// (Virtual-Mode - ResultGridDrawCell.GetCellText zieht den Inhalt
+// lazy aus FDisplayedFindings, keine Cells[]-Vorallokation).
 // ResultGridClick mappt Grid-Row -> FDisplayedFindings[row-1] (nicht
 // FAllFindings!), siehe ResultGridClick.
 var
   Criteria : TFindingFilterCriteria;
   f        : TLeakFinding;
   i        : Integer;
-  baseDir  : string;
 begin
   Criteria.Mode       := fmAll;
   Criteria.TypeFilter := tfAll;
@@ -644,17 +692,11 @@ begin
     Exit;
   end;
 
-  baseDir := IncludeTrailingPathDelimiter(FCurrentBaseDir);
+  // Virtual-Mode: nur RowCount setzen. Cell-Strings werden im OnDrawCell
+  // ueber Config.GetCellText aus FDisplayedFindings gezogen - spart bei
+  // 66k+ Befunden ~50-100 MB Cell-Storage im TStringGrid (32-Bit-Limit).
   ResultGrid.RowCount := FDisplayedFindings.Count + 1;
-  for i := 0 to FDisplayedFindings.Count - 1 do
-  begin
-    f := FDisplayedFindings[i];
-    ResultGrid.Cells[0, i + 1] := ExtractRelativePath(baseDir, f.FileName);
-    ResultGrid.Cells[1, i + 1] := f.MethodName;
-    ResultGrid.Cells[2, i + 1] := f.LineNumber;
-    ResultGrid.Cells[3, i + 1] := f.MissingVar;
-    ResultGrid.Cells[4, i + 1] := f.SeverityText;
-  end;
+  ResultGrid.Invalidate;
   if FDisplayedFindings.Count = FAllFindings.Count then
     StatusBar1.Panels[2].Text := Format(_('Done. %d findings. Click a row -> ' +
       'AI prompt on clipboard.'), [FAllFindings.Count])
@@ -668,16 +710,25 @@ procedure TForm2.ResultGridDblClick(Sender: TObject);
 // Zeile - kein externer ShellExecute, weil der Standard-Handler die DFM
 // im Form-Designer aufmacht (Goto-Line funktioniert dort nicht).
 // Bei .pas-Befunden weiter ShellExecute + Delphi-IDE-Sprung wie bisher.
+//
+// Virtual-Mode: Pfad und Zeilennummer aus FDisplayedFindings statt aus
+// ResultGrid.Cells[] (die im Virtual-Mode leer sind).
 var
-  row: Integer;
-  relPath, absPath: string;
-  lineNo: Integer;
+  row     : Integer;
+  relPath : string;
+  absPath : string;
+  lineNo  : Integer;
+  baseDir : string;
+  f       : TLeakFinding;
 begin
   row := ResultGrid.Row;
   if row < 1 then Exit;
-  relPath := ResultGrid.Cells[0, row];
+  if (FDisplayedFindings = nil) or (row > FDisplayedFindings.Count) then Exit;
+  f := FDisplayedFindings[row - 1];
+  baseDir := IncludeTrailingPathDelimiter(FCurrentBaseDir);
+  relPath := ExtractRelativePath(baseDir, f.FileName);
   if relPath = '' then Exit;
-  lineNo := StrToIntDef(ResultGrid.Cells[2, row], 0);
+  lineNo := StrToIntDef(f.LineNumber, 0);
   absPath := IncludeTrailingPathDelimiter(Projectpath.Text) + relPath;
   if not FileExists(absPath) then
   begin
