@@ -1845,6 +1845,44 @@
       "impacts": [
         { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
       ]
+    },
+    {
+      "id": "SCA094",
+      "kind": "RedundantParentheses",
+      "name": "Redundant double parentheses",
+      "shortDescription": "`((Ident))` - drop the outer parens",
+      "fullDescription": "Double parentheses around a single identifier, literal or simple expression add nothing - a single pair is sufficient (often none). Matches SonarDelphi communitydelphi:RedundantParentheses. Only the simple-expression case is flagged; complex `((A + B))` may still benefit from inner parens for precedence and is not reported.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["style", "redundancy"],
+      "detectorUnit": "uRedundantParentheses.pas",
+      "examples": {
+        "bad":  "if ((Active)) then ...\nResult := ((42));",
+        "good": "if Active then ...\nResult := 42;"
+      },
+      "cleanCodeAttribute": "CLEAR",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA095",
+      "kind": "ConsecutiveVisibility",
+      "name": "Consecutive visibility section",
+      "shortDescription": "Same `public`/`private`/etc. section appears twice in one class",
+      "fullDescription": "Two `private` (or `public`/`protected`/`published`) sections in the same class with members between them should be merged into one. Helps reviewers grasp class shape at a glance. Matches SonarDelphi communitydelphi:ConsecutiveVisibilitySection. Note: empty header followed by another header is the related but distinct `EmptyVisibilitySection` rule (SCA087).",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["structure", "style"],
+      "detectorUnit": "uConsecutiveVisibility.pas",
+      "examples": {
+        "bad":  "type TFoo = class\n  private FX: Integer;\n  public procedure A;\n  private FY: Integer;\n  end;",
+        "good": "type TFoo = class\n  private\n    FX, FY: Integer;\n  public procedure A;\n  end;"
+      },
+      "cleanCodeAttribute": "FORMATTED",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     }
   ]
 }

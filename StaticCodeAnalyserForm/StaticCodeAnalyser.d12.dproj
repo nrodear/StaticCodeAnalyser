@@ -201,6 +201,8 @@
         <DCCReference Include="sources\Detectors\uCaseStatementSize.pas"/>
         <DCCReference Include="sources\Detectors\uEmptyFile.pas"/>
         <DCCReference Include="sources\Detectors\uTwiceInheritedCalls.pas"/>
+        <DCCReference Include="sources\Detectors\uRedundantParentheses.pas"/>
+        <DCCReference Include="sources\Detectors\uConsecutiveVisibility.pas"/>
         <DCCReference Include="sources\Output\uExportSARIF.pas"/>
         <DCCReference Include="sources\Output\uExportSonarGeneric.pas"/>
         <DCCReference Include="sources\Output\uSonarPush.pas"/>

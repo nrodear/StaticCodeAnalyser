@@ -116,7 +116,9 @@ uses
   uTestNestedTry in 'uTestNestedTry.pas',
   uTestCaseStatementSize in 'uTestCaseStatementSize.pas',
   uTestEmptyFile in 'uTestEmptyFile.pas',
-  uTestTwiceInheritedCalls in 'uTestTwiceInheritedCalls.pas';
+  uTestTwiceInheritedCalls in 'uTestTwiceInheritedCalls.pas',
+  uTestRedundantParentheses in 'uTestRedundantParentheses.pas',
+  uTestConsecutiveVisibility in 'uTestConsecutiveVisibility.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}

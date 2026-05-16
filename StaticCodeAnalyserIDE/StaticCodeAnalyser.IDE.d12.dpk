@@ -144,6 +144,8 @@ contains
   uCaseStatementSize in '..\StaticCodeAnalyserForm\sources\Detectors\uCaseStatementSize.pas',
   uEmptyFile in '..\StaticCodeAnalyserForm\sources\Detectors\uEmptyFile.pas',
   uTwiceInheritedCalls in '..\StaticCodeAnalyserForm\sources\Detectors\uTwiceInheritedCalls.pas',
+  uRedundantParentheses in '..\StaticCodeAnalyserForm\sources\Detectors\uRedundantParentheses.pas',
+  uConsecutiveVisibility in '..\StaticCodeAnalyserForm\sources\Detectors\uConsecutiveVisibility.pas',
   uReversedForRange in '..\StaticCodeAnalyserForm\sources\Detectors\uReversedForRange.pas',
   uSelfAssignment in '..\StaticCodeAnalyserForm\sources\Detectors\uSelfAssignment.pas',
   uVirtualCallInCtor in '..\StaticCodeAnalyserForm\sources\Detectors\uVirtualCallInCtor.pas',

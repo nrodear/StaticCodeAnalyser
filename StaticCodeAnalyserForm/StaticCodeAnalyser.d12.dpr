@@ -87,6 +87,8 @@ uses
   uCaseStatementSize in 'sources\Detectors\uCaseStatementSize.pas',
   uEmptyFile in 'sources\Detectors\uEmptyFile.pas',
   uTwiceInheritedCalls in 'sources\Detectors\uTwiceInheritedCalls.pas',
+  uRedundantParentheses in 'sources\Detectors\uRedundantParentheses.pas',
+  uConsecutiveVisibility in 'sources\Detectors\uConsecutiveVisibility.pas',
   uExportSonarGeneric in 'sources\Output\uExportSonarGeneric.pas',
   uSonarPush in 'sources\Output\uSonarPush.pas',
   uSonarConfig in 'sources\Infrastructure\uSonarConfig.pas',

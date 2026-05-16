@@ -282,8 +282,13 @@ type
                                  // (SonarDelphi:CaseStatementSize).
     fkEmptyFile,                 // Unit ohne jegliche Deklarationen
                                  // (SonarDelphi:EmptyFile).
-    fkTwiceInheritedCalls        // Mehrere `inherited` in derselben Methode
+    fkTwiceInheritedCalls,       // Mehrere `inherited` in derselben Methode
                                  // (SonarDelphi:TwiceInheritedCalls).
+    fkRedundantParentheses,      // `((Ident))` doppelte Klammern um simple
+                                 // Ausdruecke (SonarDelphi:RedundantParentheses).
+    fkConsecutiveVisibility      // Dieselbe Visibility-Section zweimal in
+                                 // einer Klasse (SonarDelphi:
+                                 // ConsecutiveVisibilitySection).
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -425,7 +430,9 @@ const
     (Name: 'NestedTry';                  FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkNestedTry
     (Name: 'CaseStatementSize';          FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkCaseStatementSize
     (Name: 'EmptyFile';                  FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkEmptyFile
-    (Name: 'TwiceInheritedCalls';        FindingType: ftBug;          DefaultSeverity: lsWarning)  // fkTwiceInheritedCalls
+    (Name: 'TwiceInheritedCalls';        FindingType: ftBug;          DefaultSeverity: lsWarning), // fkTwiceInheritedCalls
+    (Name: 'RedundantParentheses';       FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkRedundantParentheses
+    (Name: 'ConsecutiveVisibility';      FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkConsecutiveVisibility
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

@@ -253,6 +253,8 @@
         <DCCReference Include="uTestCaseStatementSize.pas"/>
         <DCCReference Include="uTestEmptyFile.pas"/>
         <DCCReference Include="uTestTwiceInheritedCalls.pas"/>
+        <DCCReference Include="uTestRedundantParentheses.pas"/>
+        <DCCReference Include="uTestConsecutiveVisibility.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

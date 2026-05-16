@@ -27,6 +27,7 @@ uses
   uFreeAndNilHint, uAvoidOut, uEmptyVisibilitySection,
   uLegacyInitializationSection, uPublicField, uNestedTry,
   uCaseStatementSize, uEmptyFile, uTwiceInheritedCalls,
+  uRedundantParentheses, uConsecutiveVisibility,
   uReversedForRange, uSelfAssignment, uVirtualCallInCtor, uLengthUnderflow,
   uVisibilityCheck,
   uUnusedLocal, uUnusedParameter, uTautologicalExpr,
@@ -162,6 +163,8 @@ begin
         TCaseStatementSizeDetector.AnalyzeUnit(Root, TempPath, Result);
         TEmptyFileDetector.AnalyzeUnit(Root, TempPath, Result);
         TTwiceInheritedCallsDetector.AnalyzeUnit(Root, TempPath, Result);
+        TRedundantParenthesesDetector.AnalyzeUnit(Root, TempPath, Result);
+        TConsecutiveVisibilityDetector.AnalyzeUnit(Root, TempPath, Result);
         TReversedForRangeDetector.AnalyzeUnit(Root, TempPath, Result);
         TLengthUnderflowDetector.AnalyzeUnit(Root, TempPath, Result);
         TTautologicalExprDetector.AnalyzeUnit(Root, TempPath, Result);
