@@ -208,6 +208,17 @@ begin
   SeverityFilterCombo.Items.AddObject(_('Errors (all)'),           TObject(Ord(fmErrors)));
   SeverityFilterCombo.Items.AddObject(_('Warnings (all)'),         TObject(Ord(fmWarnings)));
   SeverityFilterCombo.Items.AddObject(_('Hints (all)'),            TObject(Ord(fmHints)));
+  SeverityFilterCombo.Items.AddObject(_('Memory Leaks (all)'),     TObject(Ord(fmMemoryLeak)));
+  SeverityFilterCombo.Items.AddObject(_('Can Be Private'),         TObject(Ord(fmCanBePrivate)));
+  SeverityFilterCombo.Items.AddObject(_('Can Be Protected'),       TObject(Ord(fmCanBeProtected)));
+  SeverityFilterCombo.Items.AddObject(_('Unused Public Member'),   TObject(Ord(fmUnusedPublicMember)));
+  SeverityFilterCombo.Items.AddObject(_('Unused Local Var'),       TObject(Ord(fmUnusedLocalVar)));
+  SeverityFilterCombo.Items.AddObject(_('Unused Parameter'),       TObject(Ord(fmUnusedParameter)));
+  SeverityFilterCombo.Items.AddObject(_('Tautological Expression'),TObject(Ord(fmTautologicalBoolExpr)));
+  SeverityFilterCombo.Items.AddObject(_('Master-Detail Unlinked'), TObject(Ord(fmDfmMasterDetailUnlinked)));
+  SeverityFilterCombo.Items.AddObject(_('Data Module Split Hint'), TObject(Ord(fmDfmDataModuleSplitHint)));
+  SeverityFilterCombo.Items.AddObject(_('Dangerous SQL Statement'),TObject(Ord(fmSqlDangerousStatement)));
+  SeverityFilterCombo.Items.AddObject(_('Format Locale Hint'),     TObject(Ord(fmFormatLocaleHint)));
   SeverityFilterCombo.ItemIndex := 0;
 
   TypeFilterCombo.Items.Add(_('All'));

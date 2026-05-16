@@ -701,6 +701,7 @@ begin
   FFilterCombo.Items.AddObject(_('Hints (all)'),            TObject(Ord(fmHints)));
 
   FFilterCombo.Items.AddObject(_('--- Errors ---'),         TObject(-1));
+  FFilterCombo.Items.AddObject(_('Memory Leak'),            TObject(Ord(fmMemoryLeak)));
   FFilterCombo.Items.AddObject(_('SQL Injection'),          TObject(Ord(fmSQLInjection)));
   FFilterCombo.Items.AddObject(_('Hardcoded Secrets'),      TObject(Ord(fmHardcodedSecret)));
   FFilterCombo.Items.AddObject(_('Format()'),               TObject(Ord(fmFormatMismatch)));
@@ -726,6 +727,16 @@ begin
   FFilterCombo.Items.AddObject(_('Cyclomatic Complexity'),  TObject(Ord(fmCyclomaticComplexity)));
   FFilterCombo.Items.AddObject(_('TODO/FIXME'),             TObject(Ord(fmTodoComment)));
   FFilterCombo.Items.AddObject(_('Empty Methods'),          TObject(Ord(fmEmptyMethod)));
+  FFilterCombo.Items.AddObject(_('Can Be Private'),         TObject(Ord(fmCanBePrivate)));
+  FFilterCombo.Items.AddObject(_('Can Be Protected'),       TObject(Ord(fmCanBeProtected)));
+  FFilterCombo.Items.AddObject(_('Unused Public Member'),   TObject(Ord(fmUnusedPublicMember)));
+  FFilterCombo.Items.AddObject(_('Unused Local Var'),       TObject(Ord(fmUnusedLocalVar)));
+  FFilterCombo.Items.AddObject(_('Unused Parameter'),       TObject(Ord(fmUnusedParameter)));
+  FFilterCombo.Items.AddObject(_('Tautological Expression'),TObject(Ord(fmTautologicalBoolExpr)));
+  FFilterCombo.Items.AddObject(_('Master-Detail Unlinked'), TObject(Ord(fmDfmMasterDetailUnlinked)));
+  FFilterCombo.Items.AddObject(_('Data Module Split Hint'), TObject(Ord(fmDfmDataModuleSplitHint)));
+  FFilterCombo.Items.AddObject(_('Dangerous SQL Statement'),TObject(Ord(fmSqlDangerousStatement)));
+  FFilterCombo.Items.AddObject(_('Format Locale Hint'),     TObject(Ord(fmFormatLocaleHint)));
 
   FFilterCombo.ItemIndex := 0; // "All"
 
@@ -2895,6 +2906,23 @@ begin
     // bleiben. SetAllFindings ist hier OK weil der Silent-Mode pro Klick
     // einen Snapshot setzt, der nur die geklickte Datei zeigt.
     GHighlighter.SetAllFindings(Entries);
+
+    // Editor auf den ERSTEN Befund (= kleinste Zeile > 0) zentrieren -
+    // sonst muesste der User die orange/rote Markierung am Editor-Rand
+    // selber suchen. Datei-Level-Befunde (fkFileReadError, Line 0) zaehlen
+    // nicht als Sprungziel. Erst nach SetAllFindings, damit der
+    // GHighlighter-State bereits passt wenn der Editor neu zeichnet.
+    var FirstLine : Integer := MaxInt;
+    if Assigned(Findings) then
+      for var F in Findings do
+      begin
+        if F.Kind = fkFileReadError then Continue;
+        var LineN := StrToIntDef(F.LineNumber, 0);
+        if (LineN > 0) and (LineN < FirstLine) then
+          FirstLine := LineN;
+      end;
+    if FirstLine < MaxInt then
+      TIDEEditor.CenterCurrentViewOnLine(FirstLine);
   finally
     Findings.Free;
     Settings.Free;

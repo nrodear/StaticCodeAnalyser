@@ -19,6 +19,11 @@ type
     [Test] procedure Test_MultipleHits_AllReported;
     [Test] procedure Test_Finding_KindAndSeverity;
     [Test] procedure Test_Finding_MissingVarMentionsClassAndName;
+
+    // --- Mehr Varianten ---
+    [Test] procedure Test_NestedComponent_ListedClass_Detected;
+    [Test] procedure Test_RootObject_ListedClass_Detected;
+    [Test] procedure Test_MultipleListEntries_OnlyMatchReported;
   end;
 
 implementation
@@ -156,6 +161,50 @@ begin
   try
     Assert.Contains(F[0].MissingVar, 'lblTitle');
     Assert.Contains(F[0].MissingVar, 'TLabel');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmForbiddenClass.Test_NestedComponent_ListedClass_Detected;
+// Untergeordnete Komponente in einem Panel - Detektor laeuft rekursiv.
+const DFM =
+  'object Form: TForm'#13#10 +
+  '  object pnl: TPanel'#13#10 +
+  '    object q: TQuery end'#13#10 +
+  '  end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  DfmForbiddenClasses.Add('TQuery');
+  F := RunOn(DFM);
+  try
+    Assert.AreEqual(1, Count(F, fkDfmForbiddenClass));
+  finally F.Free; end;
+end;
+
+procedure TTestDfmForbiddenClass.Test_RootObject_ListedClass_Detected;
+// Das Root-Object selbst kann auch eine verbotene Klasse sein
+// (z.B. TFrame, wenn man Frames sperrt).
+const DFM = 'object Frame1: TFrame end';
+var F: TObjectList<TLeakFinding>;
+begin
+  DfmForbiddenClasses.Add('TFrame');
+  F := RunOn(DFM);
+  try
+    Assert.AreEqual(1, Count(F, fkDfmForbiddenClass));
+  finally F.Free; end;
+end;
+
+procedure TTestDfmForbiddenClass.Test_MultipleListEntries_OnlyMatchReported;
+// Forbidden-List enthaelt drei Klassen, nur eine kommt im DFM vor.
+const DFM = 'object F: TForm object q: TQuery end end';
+var F: TObjectList<TLeakFinding>;
+begin
+  DfmForbiddenClasses.Add('TQuery');
+  DfmForbiddenClasses.Add('TADOConnection');
+  DfmForbiddenClasses.Add('TIBQuery');
+  F := RunOn(DFM);
+  try
+    Assert.AreEqual(1, Count(F, fkDfmForbiddenClass));
   finally F.Free; end;
 end;
 

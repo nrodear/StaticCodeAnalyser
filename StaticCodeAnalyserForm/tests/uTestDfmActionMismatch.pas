@@ -16,6 +16,11 @@ type
     [Test] procedure Test_NestedComponent_StillDetected;
     [Test] procedure Test_Finding_KindAndSeverity;
     [Test] procedure Test_Finding_MissingVarMentionsBoth;
+
+    // --- Mehr Varianten ---
+    [Test] procedure Test_MultipleButtonsWithConflict_AllReported;
+    [Test] procedure Test_MenuItemAndOnClick_Detected;
+    [Test] procedure Test_NoButtonAtAll_NoFinding;
   end;
 
 implementation
@@ -130,6 +135,47 @@ begin
     Assert.Contains(F[0].MissingVar, 'btnSave');
     Assert.Contains(F[0].MissingVar, 'ActSave');
     Assert.Contains(F[0].MissingVar, 'btnSaveClick');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmActionMismatch.Test_MultipleButtonsWithConflict_AllReported;
+// Zwei Buttons mit Action+OnClick - beide Konflikte werden gemeldet.
+const DFM =
+  'object F: TF'#13#10 +
+  '  object b1: TButton Action = A1 OnClick = C1 end'#13#10 +
+  '  object b2: TButton Action = A2 OnClick = C2 end'#13#10 +
+  '  object b3: TButton Action = A3 end'#13#10 +    // sauber, kein Befund
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM);
+  try Assert.AreEqual(2, Count(F, fkDfmActionMismatch));
+  finally F.Free; end;
+end;
+
+procedure TTestDfmActionMismatch.Test_MenuItemAndOnClick_Detected;
+// Auch TMenuItem hat Action + OnClick - selbe Konflikt-Klasse.
+const DFM =
+  'object F: TF'#13#10 +
+  '  object mi: TMenuItem'#13#10 +
+  '    Action = ActOpen'#13#10 +
+  '    OnClick = miOpenClick'#13#10 +
+  '  end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM);
+  try Assert.AreEqual(1, Count(F, fkDfmActionMismatch));
+  finally F.Free; end;
+end;
+
+procedure TTestDfmActionMismatch.Test_NoButtonAtAll_NoFinding;
+// Form ohne actionfaehige Children - kein Befund moeglich.
+const DFM = 'object F: TF object lbl: TLabel end end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM);
+  try Assert.AreEqual(0, Count(F, fkDfmActionMismatch));
   finally F.Free; end;
 end;
 

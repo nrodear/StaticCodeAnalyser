@@ -17,6 +17,10 @@ type
     [Test] procedure Test_OnlyOneChild_NoFinding;
     [Test] procedure Test_Finding_KindAndSeverity;
     [Test] procedure Test_Finding_MissingVarMentionsValueAndParent;
+
+    // --- Mehr Varianten ---
+    [Test] procedure Test_FourSiblings_AllSameTabOrder_FourReported;
+    [Test] procedure Test_TabOrderInDifferentTypes_Detected;
   end;
 
 implementation
@@ -179,6 +183,40 @@ begin
   try
     Assert.Contains(F[0].MissingVar, '3');
     Assert.Contains(F[0].MissingVar, 'pnl');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmTabOrderConflict.Test_FourSiblings_AllSameTabOrder_FourReported;
+// Vier Siblings, alle TabOrder=0 -> alle vier sind Konfliktpartner.
+const DFM =
+  'object Form: TForm'#13#10 +
+  '  object a: TEdit TabOrder = 0 end'#13#10 +
+  '  object b: TEdit TabOrder = 0 end'#13#10 +
+  '  object c: TEdit TabOrder = 0 end'#13#10 +
+  '  object d: TEdit TabOrder = 0 end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM);
+  try
+    Assert.AreEqual(4, Count(F, fkDfmTabOrderConflict));
+  finally F.Free; end;
+end;
+
+procedure TTestDfmTabOrderConflict.Test_TabOrderInDifferentTypes_Detected;
+// Konflikt gilt typ-uebergreifend: TEdit + TComboBox + TButton mit
+// identischer TabOrder kollidieren genau wie Edits untereinander.
+const DFM =
+  'object Form: TForm'#13#10 +
+  '  object a: TEdit TabOrder = 2 end'#13#10 +
+  '  object b: TComboBox TabOrder = 2 end'#13#10 +
+  '  object c: TButton TabOrder = 2 end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM);
+  try
+    Assert.AreEqual(3, Count(F, fkDfmTabOrderConflict));
   finally F.Free; end;
 end;
 

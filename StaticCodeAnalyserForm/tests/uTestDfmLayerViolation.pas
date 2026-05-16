@@ -17,6 +17,10 @@ type
     [Test] procedure Test_ActionListOnForm_NoFinding;
     [Test] procedure Test_MultipleDirectInputs_AllReported;
     [Test] procedure Test_Finding_KindAndSeverity;
+
+    // --- Mehr Varianten ---
+    [Test] procedure Test_GroupBoxAsContainer_EditInside_NoFinding;
+    [Test] procedure Test_Finding_MissingVarMentionsComponentAndClass;
   end;
 
 implementation
@@ -122,6 +126,31 @@ begin
   try
     Assert.AreEqual(fkDfmLayerViolation, F[0].Kind);
     Assert.AreEqual(lsHint, F[0].Severity);
+  finally F.Free; end;
+end;
+
+procedure TTestDfmLayerViolation.Test_GroupBoxAsContainer_EditInside_NoFinding;
+// Containerklassen wie TGroupBox kapseln Inputs - die Form selbst
+// traegt also keinen direkten Input mehr.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(
+    'object frmMain: TMainForm'#13#10 +
+    '  object gb: TGroupBox'#13#10 +
+    '    object ed: TEdit end'#13#10 +
+    '  end'#13#10 +
+    'end');
+  try Assert.AreEqual(0, Count(F, fkDfmLayerViolation));
+  finally F.Free; end;
+end;
+
+procedure TTestDfmLayerViolation.Test_Finding_MissingVarMentionsComponentAndClass;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn('object frmMain: TMainForm object edUser: TEdit end end');
+  try
+    Assert.Contains(F[0].MissingVar, 'edUser');
+    Assert.Contains(F[0].MissingVar, 'TEdit');
   finally F.Free; end;
 end;
 

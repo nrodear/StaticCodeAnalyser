@@ -23,6 +23,9 @@ type
     // --- Finding-Inhalt ---
     [Test] procedure Test_Finding_KindAndSeverity;
     [Test] procedure Test_Finding_MissingVarMentionsOtherFormAndExpr;
+
+    // --- Multi-Hit ---
+    [Test] procedure Test_MultipleAccesses_AllReported;
   end;
 
 implementation
@@ -332,6 +335,30 @@ begin
   try
     Assert.Contains(F[0].MissingVar, 'Form2');
     Assert.Contains(F[0].MissingVar, 'TOther');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmCrossFormCoupling.Test_MultipleAccesses_AllReported;
+// Zwei Cross-Form-Zugriffe im selben Body -> beide werden gemeldet.
+const PAS_MAIN =
+  'unit uMain;'#13#10 +
+  'interface'#13#10 +
+  'uses Vcl.Forms;'#13#10 +
+  'type TMain = class(TForm) end;'#13#10 +
+  'var Main: TMain;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TMain.Go;'#13#10 +
+  'begin'#13#10 +
+  '  Form2.Edit1.Text := ''a'';'#13#10 +
+  '  Form2.Edit2.Text := ''b'';'#13#10 +
+  'end;'#13#10 +
+  'end.';
+const DFM = 'object Main: TMain end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunWithIndex(DFM, PAS_MAIN, PAS_OTHER);
+  try
+    Assert.AreEqual(2, Count(F, fkDfmCrossFormCoupling));
   finally F.Free; end;
 end;
 

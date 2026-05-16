@@ -19,6 +19,11 @@ type
     [Test] procedure Test_CaseInsensitiveCounting;
     [Test] procedure Test_CustomThreshold_RespectedFromConfig;
     [Test] procedure Test_Finding_KindAndSeverity;
+
+    // --- Mehr Varianten ---
+    [Test] procedure Test_DifferentEvents_SameHandler_StillCounts;
+    [Test] procedure Test_TwoGodHandlers_TwoFindings;
+    [Test] procedure Test_ThresholdZero_FallsBackToFive;
   end;
 
 implementation
@@ -181,6 +186,67 @@ begin
   try
     Assert.AreEqual(fkDfmGodHandler, F[0].Kind);
     Assert.AreEqual(lsHint, F[0].Severity);
+  finally F.Free; end;
+end;
+
+procedure TTestDfmGodHandler.Test_DifferentEvents_SameHandler_StillCounts;
+// Derselbe Handler haengt an OnClick + OnDblClick + OnEnter + OnExit +
+// OnKeyDown - 5 verschiedene Events, aber alle auf MainHandler -> God.
+const DFM =
+  'object F: TF'#13#10 +
+  '  object b1: TButton'#13#10 +
+  '    OnClick    = MainHandler'#13#10 +
+  '    OnDblClick = MainHandler'#13#10 +
+  '    OnEnter    = MainHandler'#13#10 +
+  '    OnExit     = MainHandler'#13#10 +
+  '    OnKeyDown  = MainHandler'#13#10 +
+  '  end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM);
+  try Assert.AreEqual(1, Count(F, fkDfmGodHandler));
+  finally F.Free; end;
+end;
+
+procedure TTestDfmGodHandler.Test_TwoGodHandlers_TwoFindings;
+// Zwei verschiedene Handler, jeder mit 5 Bindings -> zwei Findings.
+const DFM =
+  'object F: TF'#13#10 +
+  '  object a1: TButton OnClick = HandlerA end'#13#10 +
+  '  object a2: TButton OnClick = HandlerA end'#13#10 +
+  '  object a3: TButton OnClick = HandlerA end'#13#10 +
+  '  object a4: TButton OnClick = HandlerA end'#13#10 +
+  '  object a5: TButton OnClick = HandlerA end'#13#10 +
+  '  object b1: TButton OnClick = HandlerB end'#13#10 +
+  '  object b2: TButton OnClick = HandlerB end'#13#10 +
+  '  object b3: TButton OnClick = HandlerB end'#13#10 +
+  '  object b4: TButton OnClick = HandlerB end'#13#10 +
+  '  object b5: TButton OnClick = HandlerB end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM);
+  try Assert.AreEqual(2, Count(F, fkDfmGodHandler));
+  finally F.Free; end;
+end;
+
+procedure TTestDfmGodHandler.Test_ThresholdZero_FallsBackToFive;
+// DetectorMaxGodHandlerEvents = 0 ist nicht "abschalten", sondern Safety-
+// Net (uDfmGodHandler.pas:45 ergaenzt auf 5). Test fixiert das Verhalten.
+const DFM =
+  'object F: TF'#13#10 +
+  '  object b1: TButton OnClick = MainClick end'#13#10 +
+  '  object b2: TButton OnClick = MainClick end'#13#10 +
+  '  object b3: TButton OnClick = MainClick end'#13#10 +
+  '  object b4: TButton OnClick = MainClick end'#13#10 +
+  '  object b5: TButton OnClick = MainClick end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  DetectorMaxGodHandlerEvents := 0;
+  F := RunOn(DFM);
+  try Assert.AreEqual(1, Count(F, fkDfmGodHandler));
   finally F.Free; end;
 end;
 

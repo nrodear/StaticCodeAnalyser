@@ -29,8 +29,17 @@ type
                  // Schweregrad-Gruppen
                  fmErrors, fmWarnings, fmHints,
                  // Fehler-Detektoren
+                 fmMemoryLeak,
                  fmSQLInjection, fmHardcodedSecret, fmFormatMismatch,
                  fmNilDeref, fmDivByZero,
+                 // Cross-Unit Visibility
+                 fmCanBePrivate, fmCanBeProtected, fmUnusedPublicMember,
+                 // Korrektheits-Detektoren (neue Generation)
+                 fmUnusedLocalVar, fmUnusedParameter, fmTautologicalBoolExpr,
+                 // DFM Phase 4
+                 fmDfmMasterDetailUnlinked, fmDfmDataModuleSplitHint,
+                 // mORMot2 Real-World-Review Bugs
+                 fmSqlDangerousStatement, fmFormatLocaleHint,
                  // Warnungs-Detektoren
                  fmEmptyExcept, fmMissingFinally, fmDeadCode,
                  fmUnusedUses, fmDebugOutput, fmHardcodedPath,
@@ -92,6 +101,16 @@ function KindSearchKeywords(Kind: TFindingKind): string;
 begin
   case Kind of
     fkMemoryLeak       : Result := 'memory leak speicherleck';
+    fkCanBePrivate     : Result := 'private encapsulation visibility kapselung sichtbarkeit';
+    fkCanBeProtected   : Result := 'protected encapsulation visibility kapselung subclass';
+    fkUnusedPublicMember : Result := 'unused public api dead api ungenutzt';
+    fkUnusedLocalVar   : Result := 'unused local variable lokale ungenutzt';
+    fkUnusedParameter  : Result := 'unused parameter parameter ungenutzt';
+    fkTautologicalBoolExpr : Result := 'tautological boolean copy paste lhs rhs identical';
+    fkDfmMasterDetailUnlinked : Result := 'master detail unlinked cross join cartesian masterfields';
+    fkDfmDataModuleSplitHint  : Result := 'datamodule split refactor aggregate db';
+    fkSqlDangerousStatement   : Result := 'sql dangerous update delete truncate without where alle';
+    fkFormatLocaleHint        : Result := 'format locale tformatsettings decimal komma punkt';
     fkEmptyExcept      : Result := 'empty except leer verschluckt';
     fkSQLInjection     : Result := 'sql injection einschleusung';
     fkHardcodedSecret  : Result := 'hardcoded secret password token kennwort';
@@ -133,6 +152,17 @@ begin
     fmErrors:          Result := Sev = fsError;
     fmWarnings:        Result := Sev = fsWarning;
     fmHints:           Result := Sev = fsHint;
+    fmMemoryLeak:      Result := F.Kind = fkMemoryLeak;
+    fmCanBePrivate:        Result := F.Kind = fkCanBePrivate;
+    fmCanBeProtected:      Result := F.Kind = fkCanBeProtected;
+    fmUnusedPublicMember:  Result := F.Kind = fkUnusedPublicMember;
+    fmUnusedLocalVar:      Result := F.Kind = fkUnusedLocalVar;
+    fmUnusedParameter:     Result := F.Kind = fkUnusedParameter;
+    fmTautologicalBoolExpr:Result := F.Kind = fkTautologicalBoolExpr;
+    fmDfmMasterDetailUnlinked: Result := F.Kind = fkDfmMasterDetailUnlinked;
+    fmDfmDataModuleSplitHint:  Result := F.Kind = fkDfmDataModuleSplitHint;
+    fmSqlDangerousStatement:   Result := F.Kind = fkSqlDangerousStatement;
+    fmFormatLocaleHint:        Result := F.Kind = fkFormatLocaleHint;
     fmEmptyExcept:     Result := F.Kind = fkEmptyExcept;
     fmSQLInjection:    Result := F.Kind = fkSQLInjection;
     fmHardcodedSecret: Result := F.Kind = fkHardcodedSecret;

@@ -70,6 +70,18 @@ type
     // zerstoeren wuerde.
     class function OpenFileAtLine(const AbsPath: string;
                                   LineNumber: Integer): TOpenFileMode; static;
+
+    // Bringt LineNumber im aktuellen Top-EditView in die Mitte des
+    // Editor-Fensters und setzt den Cursor dorthin. No-op bei
+    // LineNumber <= 0 oder fehlendem Editor-Service.
+    //
+    // Unterschied zu OpenFileAtLine.MoveViewToCursor: letzteres scrollt
+    // nur das Minimum noetig, damit der Cursor sichtbar wird (haengt am
+    // oberen oder unteren Rand). Hier rechnen wir die sichtbare Hoehe
+    // aus BottomRow-TopRow aus und setzen SetTopLeft so dass die
+    // Zielzeile vertikal mittig liegt - der User sieht den Befund
+    // sofort ohne Augen-Tracking-Aufwand.
+    class procedure CenterCurrentViewOnLine(LineNumber: Integer); static;
   end;
 
 implementation
@@ -240,6 +252,43 @@ begin
     EditView.MoveViewToCursor;
     EditView.Paint;
   end;
+end;
+
+class procedure TIDEEditor.CenterCurrentViewOnLine(LineNumber: Integer);
+const
+  // Fallback wenn BottomRow/TopRow keine plausible Editor-Hoehe liefern
+  // (z.B. View noch nicht gepaintet, IDE-Layout-Edge-Case). 24 entspricht
+  // einer typischen Code-Editor-Hoehe; Half = 12 platziert die Zielzeile
+  // ungefaehr in der vertikalen Mitte.
+  FALLBACK_HALF_ROWS = 12;
+var
+  EditorSvc : IOTAEditorServices;
+  EditView  : IOTAEditView;
+  EditPos   : TOTAEditPos;
+  Visible   : Integer;
+  TopTarget : Integer;
+begin
+  if LineNumber <= 0 then Exit;
+  if not Supports(BorlandIDEServices, IOTAEditorServices, EditorSvc) then Exit;
+  EditView := EditorSvc.TopView;
+  if not Assigned(EditView) then Exit;
+
+  // Cursor auf Zielzeile setzen (sichtbarer Caret + Edit-Hooks reagieren).
+  EditPos.Col  := 1;
+  EditPos.Line := LineNumber;
+  EditView.CursorPos := EditPos;
+
+  // Sichtbare Zeilen ausrechnen. BottomRow-TopRow+1 ist die Editor-Hoehe in
+  // Zeilen. Bei nicht-plausiblen Werten (Edge-Case beim ersten Paint) auf
+  // FALLBACK_HALF_ROWS*2 zurueckfallen.
+  Visible := EditView.BottomRow - EditView.TopRow + 1;
+  if Visible < 4 then
+    Visible := FALLBACK_HALF_ROWS * 2;
+
+  TopTarget := LineNumber - (Visible div 2);
+  if TopTarget < 1 then TopTarget := 1;
+  EditView.SetTopLeft(TopTarget, 1);
+  EditView.Paint;
 end;
 
 end.

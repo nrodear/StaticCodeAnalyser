@@ -17,6 +17,10 @@ type
     [Test] procedure Test_UnboundEmptyMethod_NoFinding;       // OrphanHandler-Domain
     [Test] procedure Test_Finding_KindAndSeverity;
     [Test] procedure Test_Finding_MissingVarMentionsComponentAndEvent;
+
+    // --- Mehr Varianten ---
+    [Test] procedure Test_MultipleEmptyBoundEvents_AllReported;
+    [Test] procedure Test_HandlerWithCommentOnly_StillEmpty;
   end;
 
 implementation
@@ -202,6 +206,55 @@ begin
     Assert.Contains(F[0].MissingVar, 'btnX');
     Assert.Contains(F[0].MissingVar, 'OnClick');
     Assert.Contains(F[0].MissingVar, 'C');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmEmptyBoundEvent.Test_MultipleEmptyBoundEvents_AllReported;
+// Mehrere leere gebundene Handler -> mehrere Findings.
+const PAS =
+  'unit u; interface uses Vcl.Forms;'#13#10 +
+  'type TF = class(TForm)'#13#10 +
+  '  procedure E1(Sender: TObject);'#13#10 +
+  '  procedure E2(Sender: TObject);'#13#10 +
+  '  procedure E3(Sender: TObject);'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TF.E1(Sender: TObject); begin end;'#13#10 +
+  'procedure TF.E2(Sender: TObject); begin end;'#13#10 +
+  'procedure TF.E3(Sender: TObject); begin end;'#13#10 +
+  'end.';
+const DFM =
+  'object F: TF'#13#10 +
+  '  object b1: TButton OnClick = E1 end'#13#10 +
+  '  object b2: TButton OnClick = E2 end'#13#10 +
+  '  object b3: TButton OnClick = E3 end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM, PAS);
+  try
+    Assert.AreEqual(3, Count(F, fkDfmEmptyBoundEvent));
+  finally F.Free; end;
+end;
+
+procedure TTestDfmEmptyBoundEvent.Test_HandlerWithCommentOnly_StillEmpty;
+// Body enthaelt nur einen Kommentar - aus Parser-Sicht ist das ein
+// leerer Body, also ein Finding.
+const PAS =
+  'unit u; interface uses Vcl.Forms;'#13#10 +
+  'type TF = class(TForm) procedure C(Sender: TObject); end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TF.C(Sender: TObject);'#13#10 +
+  'begin'#13#10 +
+  '  // TODO: implementieren'#13#10 +
+  'end;'#13#10 +
+  'end.';
+const DFM = 'object F: TF object b: TButton OnClick = C end end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM, PAS);
+  try
+    Assert.AreEqual(1, Count(F, fkDfmEmptyBoundEvent));
   finally F.Free; end;
 end;
 
