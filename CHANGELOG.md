@@ -6,6 +6,159 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.9.1] - 2026-05-16
+
+SonarQube-Integration release. Production-ready external-issues push
+to SonarQube / SonarCloud, plus a major rule-catalog expansion and a
+severity single-source refactor. Detector count grows from 41 to **59**
+(21 Pascal + 20 DFM + 18 newer Pascal / visibility / SQL / format
+detectors).
+
+Full release notes: [docs/releases/v0.9.1.md](docs/releases/v0.9.1.md)
+([deutsch](docs/releases/v0.9.1_de.md)).
+
+### Added
+
+#### SonarQube integration (Phase 0 + A + B + C + D per `todo-sonar.md`)
+
+- **`uSonarConfig`** — 4-source config resolver (CLI > Env >
+  `sonar-project.properties` > User-INI), DPAPI-encrypted token storage
+  on Windows (plaintext+Base64 fallback on non-Windows for CI), each
+  field tracks its source for diagnostics.
+- **Health-check** — `--sonar-test` runs DNS → `/api/system/status` →
+  token validation → project access in stages, renders an ASCII
+  checklist. 403 disambiguation via `/api/components/show` distinguishes
+  "project not found" from "no Browse permission".
+- **Generic Issue Format export** — new unit `uExportSonarGeneric`,
+  CLI flag `--sonar-export <file>`. Emits MQR fields
+  (`cleanCodeAttribute` + `impacts`) per rule from the catalog; falls
+  back to legacy `type` when the catalog isn't loaded so Sonar always
+  accepts the JSON.
+- **Project-template** — `--sonar-init` writes a `sonar-project.properties`
+  template into the project root (or `.sample` if one exists).
+- **IDE plugin Tools > Options > "Sonar Integration"** page
+  ([uIDESonarOptions](StaticCodeAnalyserIDE/uIDESonarOptions.pas)) —
+  Host / Project / Token / Branch / Insecure-TLS toggle, "Test
+  Connection" button runs the same multi-stage check as the CLI,
+  "Detect from project" reads `sonar-project.properties` of the active
+  IDE project, token storage via DPAPI.
+- **Send-to-Sonar context menus** in the findings list — bulk export
+  (all findings, mirrors `--sonar-export`) plus per-issue export to
+  `<repo>\.sonar\external\<severity>-<file>-L<line>-<hash>.json` for
+  `sonar.externalIssuesReportPaths` pickup.
+- **Pull-mode engine** `uSonarPull` — `GET /api/issues/search`, 5-min
+  LRU cache, dedup-matcher for SCA-kind ↔ Sonar-rule name overlap.
+  (UI binding into the findings grid deferred to a later release.)
+- **PowerShell push helpers** under
+  [StaticCodeAnalyserForm/scripts/](StaticCodeAnalyserForm/scripts/):
+  `sonar-scan.ps1` (analysis + JSON), `sonar-upload.ps1` (DPAPI-decrypt
+  + scanner) with `-DryRun` and `-DisableDelphi` switches for the
+  SonarDelphi/communitydelphi sensor-crash case.
+
+#### Rule-Catalog: 22 → 59 rules
+
+- 37 new rule entries documented in [rules/sca-rules.json](rules/sca-rules.json)
+  with full metadata (Name, ShortDescription, FullDescription, examples,
+  tags, CWE, OWASP, configKey, detectorUnit). All 20 DFM detectors plus
+  18 newer Pascal/visibility/SQL/format detectors: `ConcatToFormat`,
+  `WithStatement`, `ReversedForRange`, `SelfAssignment`,
+  `VirtualCallInCtor`, `LengthUnderflow`, `CanBePrivate`,
+  `CanBeProtected`, `UnusedPublicMember`, `UnusedLocalVar`,
+  `UnusedParameter`, `TautologicalBoolExpr`, `DfmMasterDetailUnlinked`,
+  `DfmDataModuleSplitHint`, `SqlDangerousStatement`, `FormatLocaleHint`,
+  `CustomRule`.
+- **MQR mapping** per rule — `cleanCodeAttribute` (14-value taxonomy)
+  + `impacts` (`softwareQuality` × `severity`) populated for all 59
+  rules. Schema [rules/sca-rules.schema.json](rules/sca-rules.schema.json)
+  extended; catalog version bumped 1.1 → 1.3.
+- **Regenerated [docs/rules.md](docs/rules.md)** with the full 59-rule
+  table and per-rule sections.
+
+#### Detector quality
+
+- `--sonar-export` plus `--sonar-test` plus `--sonar-init` plus seven
+  per-flag overrides (`--sonar-host`, `--sonar-token`,
+  `--sonar-project`, `--sonar-branch`, `--sonar-insecure`,
+  `--sonar-config`).
+- New drift tests `JsonSeverityMatchesKindMeta`,
+  `EveryFindingKindHasRichMetadata`, `EveryFindingKindHasMqrMapping`
+  in `uTestRuleCatalog` plus the full `uTestSonarConfig` and
+  `uTestExportSonarGeneric` test fixtures.
+
+### Changed
+
+- **Severity is now single-source via `TLeakFinding.SetKind(K)`**
+  ([uMethodd12](StaticCodeAnalyserForm/sources/Common/uMethodd12.pas)) —
+  the new method sets Kind + pulls Severity from `KIND_META`. 58
+  detector emit sites refactored from the two-line
+  `F.Severity := lsXxx; F.Kind := fkXxx;` pattern; three detectors
+  with context-dependent severity (`uLeakDetector2`, `uDivByZero`,
+  `uCustomRuleDetector`) keep their manual assignment.
+  `TFindingKindMeta.DefaultSeverity` is the new SOT in `KIND_META`.
+- **Catalog lookup** ([uRuleCatalog.FindJsonFile](StaticCodeAnalyserForm/sources/Common/uRuleCatalog.pas))
+  walks up to **8 directory levels** from the EXE/BPL dir (was 3) —
+  fixes catalog-not-found from deep test runners and arbitrary scan
+  working directories.
+- **INI handling** — `TIniFile` → `TMemIniFile` in `uSonarConfig` and
+  `uIDESonarOptions` so UTF-8-BOM files (Notepad default) parse
+  correctly. `StoreToken` calls `Ini.UpdateFile` to persist.
+
+### Fixed
+
+- **Severity-drift** — `fkNilDeref` was emitting `lsError`, catalog
+  said Warning → now Warning. `fkUnusedUses` was emitting `lsWarning`,
+  catalog said Hint → now Hint. No existing test asserted the wrong
+  values; SARIF export was already using the catalog values.
+- **IDE plugin theme adoption** — Tools>Options frames now call
+  `IOTAIDEThemingServices.ApplyTheme` in `FrameCreated` so they
+  respect the active IDE theme (was falling back to VCL-default white).
+  Shared one-shot helper `ApplyIDETheme` in
+  [uIDEThemeIntegration](StaticCodeAnalyserIDE/uIDEThemeIntegration.pas).
+- **IDE plugin Options page i18n** — `GetArea` returns empty string
+  (was `'Third Party'`) so the page lands under the localized
+  "Fremdhersteller" / "Third Party" node instead of creating a second
+  English-named root.
+- **Options-page layout** — Frame total height fits the 520-px IDE
+  pane (Connectivity-Memo no longer clipped at the bottom), labels
+  use `AutoSize=False` to stay DPI-stable, DPAPI help label uses 8pt
+  in a non-clipped 40-px box, memo background `clWindow` not `clBtnFace`.
+- **Build** — `.dpr` contains-list updated with the new Sonar units
+  (Standalone EXE refused to compile without it), `.dfm` resource
+  added for `TSonarOptionsFrame` (VCL streaming needs it even for
+  programmatically built frames), operator-precedence fix in
+  `Pos(...)>0`-or-chains.
+- **Health-check** — DNS-only stage no longer hangs, 403 case shows
+  whether the project is missing or the token lacks Browse.
+
+### Docs
+
+- New: [sonarHowto.md](sonarHowto.md) + [sonarHowto_de.md](sonarHowto_de.md)
+  (standalone-only walkthrough), [docs/sonar-setup.md](docs/sonar-setup.md)
+  (full guide), [docs/sonar-config.md](docs/sonar-config.md) (resolver
+  reference), [StaticCodeAnalyserForm/scripts/README.md](StaticCodeAnalyserForm/scripts/README.md)
+  + `README_de.md` (scripts reference with troubleshooting table).
+- All Sonar-relevant READMEs gained a "Tested with: SonarQube Community
+  Build 26.5+, sits alongside Sonar Way" compatibility block.
+
+---
+
+## [0.9.0] - 2026-05-14
+
+Workflow-focused release: Silent-Mode (single-file analysis from the
+editor right-click + `Ctrl+Alt+A` hotkey), Rule-Set Profiles
+(`ide-fast`/`default`/`strict`/`security`/`bugs-only`/`code-quality`/
+`dfm-only`), Tools>Options page in the IDE, multi-file marker
+storage, IDE-overlay polish, 10 new Pascal detectors with i18n, and
+UI parity between Standalone form and IDE plugin.
+
+Full release notes: [docs/releases/v0.9.0.md](docs/releases/v0.9.0.md)
+([deutsch](docs/releases/v0.9.0_de.md)).
+
+This entry retroactively documents the `v0.9.0` tag (created
+2026-05-14) which was not landed in the changelog at release time.
+
+---
+
 ## [0.8.0] - 2026-05-12
 
 Big tagged release bundling four years of structural work: **DFM
