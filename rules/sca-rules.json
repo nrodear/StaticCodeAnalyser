@@ -1275,6 +1275,63 @@
       "impacts": [
         { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
       ]
+    },
+    {
+      "id": "SCA064",
+      "kind": "LowercaseKeyword",
+      "name": "Pascal keyword not lowercase",
+      "shortDescription": "Pascal keywords (`begin`/`end`/`procedure`/...) should be lowercase",
+      "fullDescription": "Object-Pascal style guide (Embarcadero DocWiki, Marco Cantu, SonarDelphi) is unambiguous: keywords are lowercase. Mixed-case variants like `Begin`/`End`/`Procedure` are leftovers from Turbo-Pascal/Delphi-1 era and create inconsistency in modern codebases. SonarDelphi tracks the same as communitydelphi:LowercaseKeyword.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["formatting", "style", "convention"],
+      "detectorUnit": "uLowercaseKeyword.pas",
+      "examples": {
+        "bad":  "Procedure Foo;\nBegin\n  If X then DoStuff;\nEnd;",
+        "good": "procedure Foo;\nbegin\n  if X then DoStuff;\nend;"
+      },
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA065",
+      "kind": "NoSonarMarker",
+      "name": "NOSONAR suppression marker",
+      "shortDescription": "`// NOSONAR` marker should not silence findings - audit usage",
+      "fullDescription": "NOSONAR markers are technical debt: each one silences a finding without fixing the underlying issue. SCA reports every NOSONAR so reviewers can audit suppressions during code review. SCA uses its own `// noinspection` marker for native suppression - NOSONAR-decorated code coming from SonarDelphi should be migrated. Matches SonarDelphi communitydelphi:NoSonar.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["suppression", "audit"],
+      "detectorUnit": "uNoSonarMarker.pas",
+      "examples": {
+        "bad":  "Dispose(P); // NOSONAR - we know about this",
+        "good": "// noinspection - covered by integration test\nDispose(P);"
+      },
+      "cleanCodeAttribute": "TRUSTWORTHY",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA066",
+      "kind": "EmptyArgumentList",
+      "name": "Empty argument list",
+      "shortDescription": "`Foo()` should be `Foo;` - drop empty parens",
+      "fullDescription": "Delphi convention is to write parameterless calls without `()`. The C-style `Foo()` form adds noise without communicating anything and is inconsistent with the rest of the language (procedures, properties, function refs all omit parens when no args). Matches SonarDelphi communitydelphi:EmptyArgumentList.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["style", "convention"],
+      "detectorUnit": "uEmptyArgumentList.pas",
+      "examples": {
+        "bad":  "MyProc();\nResult := MyFunc();",
+        "good": "MyProc;\nResult := MyFunc;"
+      },
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     }
   ]
 }

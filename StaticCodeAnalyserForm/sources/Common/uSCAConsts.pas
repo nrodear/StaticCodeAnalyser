@@ -218,8 +218,15 @@ type
     fkTooLongLine,               // Zeile > 120 Zeichen (SonarDelphi:TooLongLine).
                                  // Standard-Schwelle aus Code-Review-Praxis,
                                  // siehe MAX_LINE_LEN in uTooLongLine.
-    fkTrailingWhitespace         // Zeile endet mit Space/Tab (SonarDelphi:
+    fkTrailingWhitespace,        // Zeile endet mit Space/Tab (SonarDelphi:
                                  // TrailingWhitespace). Diff-Hygiene.
+    fkLowercaseKeyword,          // Pascal-Keyword nicht in Kleinschreibung
+                                 // (Begin/End/Procedure/...). SonarDelphi:
+                                 // LowercaseKeyword.
+    fkNoSonarMarker,             // // NOSONAR-Suppression-Marker im Source.
+                                 // Audit-Hinweis (SonarDelphi:NoSonar).
+    fkEmptyArgumentList          // Identifier() statt Identifier; - leere
+                                 // Argument-Liste (SonarDelphi:EmptyArgumentList).
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -331,7 +338,10 @@ const
     (Name: 'GotoStatement';              FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkGotoStatement
     (Name: 'TabulationCharacter';        FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkTabulationCharacter
     (Name: 'TooLongLine';                FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkTooLongLine
-    (Name: 'TrailingWhitespace';         FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkTrailingWhitespace
+    (Name: 'TrailingWhitespace';         FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkTrailingWhitespace
+    (Name: 'LowercaseKeyword';           FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkLowercaseKeyword
+    (Name: 'NoSonarMarker';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkNoSonarMarker
+    (Name: 'EmptyArgumentList';          FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkEmptyArgumentList
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

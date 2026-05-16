@@ -16,6 +16,8 @@ uses
   uHardcodedPath, uDebugOutput, uDeepNesting,
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
   uCyclomaticComplexity, uWithStatement,
+  uGotoStatement, uTabulationCharacter, uTooLongLine, uTrailingWhitespace,
+  uLowercaseKeyword, uNoSonarMarker, uEmptyArgumentList,
   uReversedForRange, uSelfAssignment, uVirtualCallInCtor, uLengthUnderflow,
   uVisibilityCheck,
   uUnusedLocal, uUnusedParameter, uTautologicalExpr,
@@ -117,6 +119,13 @@ begin
         TEmptyMethodDetector.AnalyzeUnit(Root, TempPath, Result);
         TDuplicateBlockDetector.AnalyzeUnit(Root, TempPath, Result);
         TWithStatementDetector.AnalyzeUnit(Root, TempPath, Result);
+        TGotoStatementDetector.AnalyzeUnit(Root, TempPath, Result);
+        TTabulationCharacterDetector.AnalyzeUnit(Root, TempPath, Result);
+        TTooLongLineDetector.AnalyzeUnit(Root, TempPath, Result);
+        TTrailingWhitespaceDetector.AnalyzeUnit(Root, TempPath, Result);
+        TLowercaseKeywordDetector.AnalyzeUnit(Root, TempPath, Result);
+        TNoSonarMarkerDetector.AnalyzeUnit(Root, TempPath, Result);
+        TEmptyArgumentListDetector.AnalyzeUnit(Root, TempPath, Result);
         TReversedForRangeDetector.AnalyzeUnit(Root, TempPath, Result);
         TLengthUnderflowDetector.AnalyzeUnit(Root, TempPath, Result);
         TTautologicalExprDetector.AnalyzeUnit(Root, TempPath, Result);

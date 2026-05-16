@@ -86,7 +86,10 @@ uses
   uTestTautologicalExpr in 'uTestTautologicalExpr.pas',
   uTestDfmMasterDetailUnlinked in 'uTestDfmMasterDetailUnlinked.pas',
   uTestDfmDataModuleSplitHint in 'uTestDfmDataModuleSplitHint.pas',
-  uTestSqlDangerousStatement in 'uTestSqlDangerousStatement.pas';
+  uTestSqlDangerousStatement in 'uTestSqlDangerousStatement.pas',
+  uTestLowercaseKeyword in 'uTestLowercaseKeyword.pas',
+  uTestNoSonarMarker in 'uTestNoSonarMarker.pas',
+  uTestEmptyArgumentList in 'uTestEmptyArgumentList.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}

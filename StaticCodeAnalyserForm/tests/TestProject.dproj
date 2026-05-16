@@ -223,6 +223,9 @@
         <DCCReference Include="uTestDfmMasterDetailUnlinked.pas"/>
         <DCCReference Include="uTestDfmDataModuleSplitHint.pas"/>
         <DCCReference Include="uTestSqlDangerousStatement.pas"/>
+        <DCCReference Include="uTestLowercaseKeyword.pas"/>
+        <DCCReference Include="uTestNoSonarMarker.pas"/>
+        <DCCReference Include="uTestEmptyArgumentList.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
