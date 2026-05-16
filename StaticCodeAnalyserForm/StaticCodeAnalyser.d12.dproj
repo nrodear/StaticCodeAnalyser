@@ -180,6 +180,9 @@
         <DCCReference Include="sources\Detectors\uCommentedOutCode.pas"/>
         <DCCReference Include="sources\Detectors\uUnitLevelKeywordIndent.pas"/>
         <DCCReference Include="sources\Detectors\uRedundantBoolean.pas"/>
+        <DCCReference Include="sources\Detectors\uEmptyInterface.pas"/>
+        <DCCReference Include="sources\Detectors\uAssertMessage.pas"/>
+        <DCCReference Include="sources\Detectors\uExplicitTObjectInheritance.pas"/>
         <DCCReference Include="sources\Output\uExportSARIF.pas"/>
         <DCCReference Include="sources\Output\uExportSonarGeneric.pas"/>
         <DCCReference Include="sources\Output\uSonarPush.pas"/>

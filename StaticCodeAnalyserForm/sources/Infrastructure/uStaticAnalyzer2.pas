@@ -46,6 +46,7 @@ uses
   uLowercaseKeyword, uNoSonarMarker, uEmptyArgumentList,
   uInlineAssembly, uTrailingCommaArgList, uDigitGrouping,
   uCommentedOutCode, uUnitLevelKeywordIndent, uRedundantBoolean,
+  uEmptyInterface, uAssertMessage, uExplicitTObjectInheritance,
   uReversedForRange, uSelfAssignment, uVirtualCallInCtor, uLengthUnderflow,
   uVisibilityCheck,
   uUnusedLocal, uUnusedParameter, uTautologicalExpr,
@@ -142,6 +143,9 @@ begin
   Add('CommentedOutCode',fkCommentedOutCode,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TCommentedOutCodeDetector.AnalyzeUnit(R, F, L); end);
   Add('UnitLevelKeywordIndent',fkUnitLevelKeywordIndent,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUnitLevelKeywordIndentDetector.AnalyzeUnit(R, F, L); end);
   Add('RedundantBoolean',fkRedundantBoolean,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TRedundantBooleanDetector.AnalyzeUnit(R, F, L); end);
+  Add('EmptyInterface',  fkEmptyInterface,  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TEmptyInterfaceDetector.AnalyzeUnit(R, F, L); end);
+  Add('AssertMessage',   fkAssertMessage,   procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TAssertMessageDetector.AnalyzeUnit(R, F, L); end);
+  Add('ExplicitTObjectInheritance',fkExplicitTObjectInheritance,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TExplicitTObjectInheritanceDetector.AnalyzeUnit(R, F, L); end);
   Add('ReversedForRange',fkReversedForRange,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TReversedForRangeDetector.AnalyzeUnit(R, F, L); end);
   Add('SelfAssignment',  fkSelfAssignment,  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TSelfAssignmentDetector.AnalyzeUnit(R, F, L); end);
   Add('VirtualCallInCtor',fkVirtualCallInCtor,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TVirtualCallInCtorDetector.AnalyzeUnit(R, F, L); end);

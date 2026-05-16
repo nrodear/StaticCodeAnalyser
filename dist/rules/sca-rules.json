@@ -1446,6 +1446,63 @@
       "impacts": [
         { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
       ]
+    },
+    {
+      "id": "SCA073",
+      "kind": "EmptyInterface",
+      "name": "Empty interface declaration",
+      "shortDescription": "Interface with no methods/properties carries no contract",
+      "fullDescription": "An `IFoo = interface end;` body without any methods or properties is either a refactor leftover or a marker interface in disguise. Marker interfaces are better modeled as attribute classes in Delphi. Matches SonarDelphi communitydelphi:EmptyInterface.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["api-design", "dead-code"],
+      "detectorUnit": "uEmptyInterface.pas",
+      "examples": {
+        "bad":  "type IServiceMarker = interface end;",
+        "good": "type ServiceMarkerAttribute = class(TCustomAttribute) end;"
+      },
+      "cleanCodeAttribute": "COMPLETE",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA074",
+      "kind": "AssertMessage",
+      "name": "Assert without message",
+      "shortDescription": "`Assert(cond);` - add a `'why'` message for diagnosis",
+      "fullDescription": "`Assert(cond)` alone fails with the generic 'Assertion failed at $address' - no clue what was actually expected. `Assert(cond, 'why')` saves debugging hours. Matches SonarDelphi communitydelphi:AssertMessage.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["debuggability", "errors"],
+      "detectorUnit": "uAssertMessage.pas",
+      "examples": {
+        "bad":  "Assert(Items.Count > 0);",
+        "good": "Assert(Items.Count > 0, 'caller must ensure non-empty Items');"
+      },
+      "cleanCodeAttribute": "COMPLETE",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA075",
+      "kind": "ExplicitTObjectInheritance",
+      "name": "Explicit TObject inheritance",
+      "shortDescription": "`class(TObject)` is redundant - drop the parens",
+      "fullDescription": "Every class implicitly inherits from TObject; `TFoo = class(TObject)` is identical to `TFoo = class`. Removing the explicit base highlights real inheritance changes in diffs. Matches SonarDelphi communitydelphi:ExplicitTObjectInheritance.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["style", "redundancy"],
+      "detectorUnit": "uExplicitTObjectInheritance.pas",
+      "examples": {
+        "bad":  "type TFoo = class(TObject) ... end;",
+        "good": "type TFoo = class ... end;"
+      },
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     }
   ]
 }

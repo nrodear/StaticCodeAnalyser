@@ -239,8 +239,14 @@ type
                                  // (SonarDelphi:CommentedOutCode).
     fkUnitLevelKeywordIndent,    // Section-Keyword nicht auf Spalte 1
                                  // (SonarDelphi:UnitLevelKeywordIndentation).
-    fkRedundantBoolean           // `X = True` / `X <> False` Vergleich
+    fkRedundantBoolean,          // `X = True` / `X <> False` Vergleich
                                  // (SonarDelphi:RedundantBoolean).
+    fkEmptyInterface,            // `IFoo = interface end;` ohne Methoden
+                                 // (SonarDelphi:EmptyInterface).
+    fkAssertMessage,             // `Assert(cond);` ohne Message-String
+                                 // (SonarDelphi:AssertMessage).
+    fkExplicitTObjectInheritance // `class(TObject)` explizit (redundant)
+                                 // (SonarDelphi:ExplicitTObjectInheritance).
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -361,7 +367,10 @@ const
     (Name: 'DigitGrouping';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkDigitGrouping
     (Name: 'CommentedOutCode';           FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkCommentedOutCode
     (Name: 'UnitLevelKeywordIndent';     FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkUnitLevelKeywordIndent
-    (Name: 'RedundantBoolean';           FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkRedundantBoolean
+    (Name: 'RedundantBoolean';           FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkRedundantBoolean
+    (Name: 'EmptyInterface';             FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkEmptyInterface
+    (Name: 'AssertMessage';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkAssertMessage
+    (Name: 'ExplicitTObjectInheritance'; FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkExplicitTObjectInheritance
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

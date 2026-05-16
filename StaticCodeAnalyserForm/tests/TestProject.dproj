@@ -232,6 +232,9 @@
         <DCCReference Include="uTestCommentedOutCode.pas"/>
         <DCCReference Include="uTestUnitLevelKeywordIndent.pas"/>
         <DCCReference Include="uTestRedundantBoolean.pas"/>
+        <DCCReference Include="uTestEmptyInterface.pas"/>
+        <DCCReference Include="uTestAssertMessage.pas"/>
+        <DCCReference Include="uTestExplicitTObjectInheritance.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

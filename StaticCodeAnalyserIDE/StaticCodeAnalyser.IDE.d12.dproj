@@ -244,6 +244,9 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCommentedOutCode.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnitLevelKeywordIndent.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uRedundantBoolean.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyInterface.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uAssertMessage.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uExplicitTObjectInheritance.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uReversedForRange.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSelfAssignment.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uVirtualCallInCtor.pas"/>
