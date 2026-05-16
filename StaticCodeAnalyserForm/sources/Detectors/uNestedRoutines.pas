@@ -45,6 +45,7 @@ type
 implementation
 
 uses
+  System.StrUtils,
   uFileTextCache;
 
 const
