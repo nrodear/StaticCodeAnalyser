@@ -1332,6 +1332,63 @@
       "impacts": [
         { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
       ]
+    },
+    {
+      "id": "SCA067",
+      "kind": "InlineAssembly",
+      "name": "Inline assembly block",
+      "shortDescription": "`asm...end` block - prefer Pascal + compiler intrinsics",
+      "fullDescription": "Inline assembly creates platform lock-in (x86/x64-only bytes that don't survive ARM cross-compile or FreePascal targets), bypasses the Delphi optimizer (no inlining or reorg), and is hard to debug. The valid use cases (CPUID detection, MMX/SSE intrinsics) are covered by RTL helpers. Matches SonarDelphi communitydelphi:InlineAssembly.",
+      "defaultSeverity": "Warning",
+      "type": "Code Smell",
+      "tags": ["portability", "maintainability"],
+      "detectorUnit": "uInlineAssembly.pas",
+      "examples": {
+        "bad":  "function Cpuid: Cardinal;\nasm\n  XOR EAX, EAX\n  CPUID\nend;",
+        "good": "function Cpuid: Cardinal;\nbegin\n  Result := GetCpuFeatures;\nend;"
+      },
+      "cleanCodeAttribute": "MODULAR",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA068",
+      "kind": "TrailingCommaArgList",
+      "name": "Trailing comma in argument list",
+      "shortDescription": "`Foo(A, B,)` - drop the comma or add the missing argument",
+      "fullDescription": "Trailing comma before `)` in Delphi has no semantic benefit (unlike Python/JS where it stabilizes the diff) and suggests a forgotten argument. Matches SonarDelphi communitydelphi:TrailingCommaArgumentList.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["style", "bug-risk"],
+      "detectorUnit": "uTrailingCommaArgList.pas",
+      "examples": {
+        "bad":  "WriteLn('A', 'B', );\nDoStuff(Param1, Param2,);",
+        "good": "WriteLn('A', 'B');\nDoStuff(Param1, Param2);"
+      },
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA069",
+      "kind": "DigitGrouping",
+      "name": "Integer literal without digit grouping",
+      "shortDescription": "Large integer literals should use `_` separator",
+      "fullDescription": "Delphi 10.4+ supports `_` as a digit separator in numeric literals. Constants like timeouts (1_800_000 ms = 30 min), file sizes (1_048_576 = 1 MiB), money cents and the like are dramatically more readable with explicit grouping. Threshold is 5 digits (hardcoded; `[Detectors] DigitGroupingThreshold` is planned). Hex and float literals are exempted (different convention). Matches SonarDelphi communitydelphi:DigitGrouping.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["readability", "modern-delphi"],
+      "detectorUnit": "uDigitGrouping.pas",
+      "examples": {
+        "bad":  "const TIMEOUT_MS = 1800000;\nconst MAX_BYTES = 10485760;",
+        "good": "const TIMEOUT_MS = 1_800_000;\nconst MAX_BYTES = 10_485_760;"
+      },
+      "cleanCodeAttribute": "CLEAR",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     }
   ]
 }

@@ -238,6 +238,9 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLowercaseKeyword.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uNoSonarMarker.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyArgumentList.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uInlineAssembly.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTrailingCommaArgList.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDigitGrouping.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uReversedForRange.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSelfAssignment.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uVirtualCallInCtor.pas"/>

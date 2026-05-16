@@ -89,7 +89,10 @@ uses
   uTestSqlDangerousStatement in 'uTestSqlDangerousStatement.pas',
   uTestLowercaseKeyword in 'uTestLowercaseKeyword.pas',
   uTestNoSonarMarker in 'uTestNoSonarMarker.pas',
-  uTestEmptyArgumentList in 'uTestEmptyArgumentList.pas';
+  uTestEmptyArgumentList in 'uTestEmptyArgumentList.pas',
+  uTestInlineAssembly in 'uTestInlineAssembly.pas',
+  uTestTrailingCommaArgList in 'uTestTrailingCommaArgList.pas',
+  uTestDigitGrouping in 'uTestDigitGrouping.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}

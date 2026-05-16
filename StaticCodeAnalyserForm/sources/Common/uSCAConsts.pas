@@ -225,8 +225,16 @@ type
                                  // LowercaseKeyword.
     fkNoSonarMarker,             // // NOSONAR-Suppression-Marker im Source.
                                  // Audit-Hinweis (SonarDelphi:NoSonar).
-    fkEmptyArgumentList          // Identifier() statt Identifier; - leere
+    fkEmptyArgumentList,         // Identifier() statt Identifier; - leere
                                  // Argument-Liste (SonarDelphi:EmptyArgumentList).
+    fkInlineAssembly,            // `asm...end`-Block (SonarDelphi:
+                                 // InlineAssembly). Portabilitaet/Maintainability.
+    fkTrailingCommaArgList,      // `Foo(A, B,)` - trailing Komma in
+                                 // Argument-Liste (SonarDelphi:
+                                 // TrailingCommaArgumentList).
+    fkDigitGrouping              // Grosses Int-Literal ohne `_`-Trennung
+                                 // (SonarDelphi:DigitGrouping). Seit
+                                 // Delphi 10.4: 1_000_000 statt 1000000.
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -341,7 +349,10 @@ const
     (Name: 'TrailingWhitespace';         FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkTrailingWhitespace
     (Name: 'LowercaseKeyword';           FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkLowercaseKeyword
     (Name: 'NoSonarMarker';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkNoSonarMarker
-    (Name: 'EmptyArgumentList';          FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkEmptyArgumentList
+    (Name: 'EmptyArgumentList';          FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkEmptyArgumentList
+    (Name: 'InlineAssembly';             FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkInlineAssembly
+    (Name: 'TrailingCommaArgList';       FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkTrailingCommaArgList
+    (Name: 'DigitGrouping';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkDigitGrouping
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

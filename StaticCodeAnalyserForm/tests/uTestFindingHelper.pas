@@ -18,6 +18,7 @@ uses
   uCyclomaticComplexity, uWithStatement,
   uGotoStatement, uTabulationCharacter, uTooLongLine, uTrailingWhitespace,
   uLowercaseKeyword, uNoSonarMarker, uEmptyArgumentList,
+  uInlineAssembly, uTrailingCommaArgList, uDigitGrouping,
   uReversedForRange, uSelfAssignment, uVirtualCallInCtor, uLengthUnderflow,
   uVisibilityCheck,
   uUnusedLocal, uUnusedParameter, uTautologicalExpr,
@@ -126,6 +127,9 @@ begin
         TLowercaseKeywordDetector.AnalyzeUnit(Root, TempPath, Result);
         TNoSonarMarkerDetector.AnalyzeUnit(Root, TempPath, Result);
         TEmptyArgumentListDetector.AnalyzeUnit(Root, TempPath, Result);
+        TInlineAssemblyDetector.AnalyzeUnit(Root, TempPath, Result);
+        TTrailingCommaArgListDetector.AnalyzeUnit(Root, TempPath, Result);
+        TDigitGroupingDetector.AnalyzeUnit(Root, TempPath, Result);
         TReversedForRangeDetector.AnalyzeUnit(Root, TempPath, Result);
         TLengthUnderflowDetector.AnalyzeUnit(Root, TempPath, Result);
         TTautologicalExprDetector.AnalyzeUnit(Root, TempPath, Result);
