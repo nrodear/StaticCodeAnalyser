@@ -82,6 +82,15 @@ end;
 procedure TTestSonarConfig.Setup;
 var
   Tmp : string;
+// FTempIni zeigt auf einen Pfad innerhalb des Test-Temp-Dirs - die Datei
+// wird NICHT angelegt; WriteIni() macht das pro Test wenn der INI-Inhalt
+// bewusst gesetzt wird.
+//
+// WICHTIG: Tests die Resolve aufrufen MUESSEN FTempIni (auch wenn leer)
+// als AnalyserIniPath uebergeben, nicht ''. Sonst faellt Resolve auf
+// DefaultIniPath = %APPDATA%\StaticCodeAnalyser\analyser.ini zurueck und
+// liest die ECHTE User-INI inkl. DPAPI-Token - dann werden Tests instabil
+// (Symptom: ProjectPropsDoesNotReadToken meldete einen echten squ_*-Token).
 begin
   Tmp := TPath.Combine(TPath.GetTempPath, 'sca_sonar_test_' +
     TGuid.NewGuid.ToString.Replace('{','').Replace('}',''));
@@ -113,7 +122,7 @@ begin
   SetEnvironmentVariable('SONAR_TOKEN', 'tok-env');
   SetEnvironmentVariable('SONAR_PROJECT_KEY', 'proj-env');
   try
-    Cfg := TSonarConfigResolver.Resolve(Cli, '', '');
+    Cfg := TSonarConfigResolver.Resolve(Cli, FTempIni, '');
     Assert.AreEqual('https://from-cli', Cfg.HostUrl);
     Assert.AreEqual('tok-cli', Cfg.Token);
     Assert.AreEqual('proj-cli', Cfg.ProjectKey);
@@ -135,7 +144,7 @@ begin
     'sonar.projectKey=proj-props');
   SetEnvironmentVariable('SONAR_HOST_URL', 'https://from-env');
   try
-    Cfg := TSonarConfigResolver.Resolve(Cli, '', FTempProject);
+    Cfg := TSonarConfigResolver.Resolve(Cli, FTempIni, FTempProject);
     Assert.AreEqual('https://from-env', Cfg.HostUrl,
       'env should beat project-props for HostUrl');
     Assert.AreEqual('proj-props', Cfg.ProjectKey,
@@ -218,7 +227,7 @@ begin
     '! also a comment' + sLineBreak +
     '   ' + sLineBreak +
     'sonar.host.url=https://commented-url');
-  Cfg := TSonarConfigResolver.Resolve(Cli, '', FTempProject);
+  Cfg := TSonarConfigResolver.Resolve(Cli, FTempIni, FTempProject);
   Assert.AreEqual('https://commented-url', Cfg.HostUrl);
 end;
 
@@ -231,7 +240,7 @@ begin
   WriteProjectProps(
     'sonar.host.url:https://colon-syntax' + sLineBreak +
     'sonar.projectKey=mixed-syntax');
-  Cfg := TSonarConfigResolver.Resolve(Cli, '', FTempProject);
+  Cfg := TSonarConfigResolver.Resolve(Cli, FTempIni, FTempProject);
   Assert.AreEqual('https://colon-syntax', Cfg.HostUrl);
   Assert.AreEqual('mixed-syntax',         Cfg.ProjectKey);
 end;
@@ -247,7 +256,7 @@ begin
   WriteProjectProps(
     'sonar.host.url=https://x' + sLineBreak +
     'sonar.token=secret-leaked-token');
-  Cfg := TSonarConfigResolver.Resolve(Cli, '', FTempProject);
+  Cfg := TSonarConfigResolver.Resolve(Cli, FTempIni, FTempProject);
   Assert.AreEqual('', Cfg.Token,
     'Token from sonar-project.properties must be ignored');
 end;
@@ -260,7 +269,7 @@ begin
   Cli := Default(TSonarCliOverrides);
   Cli.HostUrl := 'https://x.example.com:9000///';
   Cli.Token := 't'; Cli.ProjectKey := 'p';
-  Cfg := TSonarConfigResolver.Resolve(Cli, '', '');
+  Cfg := TSonarConfigResolver.Resolve(Cli, FTempIni, '');
   Assert.AreEqual('https://x.example.com:9000', Cfg.HostUrl);
 end;
 
