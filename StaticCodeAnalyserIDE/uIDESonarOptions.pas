@@ -173,12 +173,14 @@ begin
   chkInsecure.Caption := 'Accept self-signed TLS certificates';
 
   // ============== Auth ==============
+  // Hoehe 116 (vorher 100): bei Hi-DPI wickelt der 8pt-Help-Text auf 2
+  // Zeilen und die zweite Zeile lag unter der GroupBox-Unterkante.
   grpAuth         := TGroupBox.Create(Self);
   grpAuth.Parent  := Self;
   grpAuth.Left    := MARGIN_LEFT;
   grpAuth.Top     := Y;
   grpAuth.Width   := GROUP_W;
-  grpAuth.Height  := 100;
+  grpAuth.Height  := 116;
   grpAuth.Caption := 'Authentication';
   Inc(Y, grpAuth.Height + 12);
 
@@ -201,9 +203,11 @@ begin
   lblTokenInfo := TLabel.Create(Self); lblTokenInfo.Parent := grpAuth;
   lblTokenInfo.AutoSize := False;
   lblTokenInfo.Left := INNER_LEFT + LBL_W;
-  lblTokenInfo.Top := edToken.Top + 26;
+  lblTokenInfo.Top := edToken.Top + 28;
   lblTokenInfo.Width := EDIT_W;
-  lblTokenInfo.Height := 26;
+  // 40px statt 26: Hi-DPI 8pt mit WordWrap braucht ~18-20px pro Zeile.
+  // 26 hatte die zweite Zeile angeschnitten.
+  lblTokenInfo.Height := 40;
   lblTokenInfo.WordWrap := True;
   lblTokenInfo.Font.Color := clGrayText;
   // 8pt statt Default 9pt - Hilfe-Text soll subtler als die Field-Labels
