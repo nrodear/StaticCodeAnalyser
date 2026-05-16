@@ -8,8 +8,8 @@ SCA-unique detectors (DFM, security, SQL).
 > - SCA v0.9.1: **59 Rules**, davon ~22 mit SonarDelphi-Overlap, ~37 unique (20 DFM-Rules + SQL/Security/Format-Locale)
 > - Coverage-Gap zum 110 %-Ziel: **~119 Rules** zu portieren, **~25 Rules** schon vorhanden
 >
-> **Fortschritt 2026-05-16 (gleicher Tag)**: Phase 1 zu **31/50** abgeschlossen
-> (SCA060-090). Katalog von 59 → 90 Rules. Siehe "Phase 1 Status" unten.
+> **Fortschritt 2026-05-16 (gleicher Tag)**: Phase 1 zu **34/50** abgeschlossen
+> (SCA060-093). Katalog von 59 → 93 Rules. Siehe "Phase 1 Status" unten.
 
 ---
 
@@ -125,8 +125,19 @@ Triviale Detektoren — Pattern matched 1:1 unsere bestehenden.
 | SCA088 | LegacyInitializationSection  | done   | #11 (`0f18ca7`, fix `ad0632b`) |
 | SCA089 | PublicField                  | done   | #11 |
 | SCA090 | NestedTry                    | done   | #11 |
+| SCA091 | CaseStatementSize            | done   | #12 (`9c95e5c`) |
+| SCA092 | EmptyFile                    | done   | #12 |
+| SCA093 | TwiceInheritedCalls          | done   | #12 (AST-based) |
 
-**Remaining Phase 1 candidates** (~19, with notes on difficulty):
+**Overlap-Audit (2026-05-16)**: `uEmptyBlock` (SCA077) ueberlappte initial mit
+`uEmptyMethod` (existing) auf leeren Methoden-Bodies. Fix in `690d883` -
+uEmptyBlock skipt jetzt Methoden-Bodies (uEmptyMethod ist dort
+zustaendig), feuert nur noch fuer in-statement Bloecke (`if/while/for/case/try`).
+SonarDelphi trennt das auch (EmptyRoutineImplementation vs EmptyBlock).
+`uPublicField` (SCA089) ueberlappt teilweise mit `uVisibilityCheck.fkCanBePrivate`
+- aber unterschiedliche Signale (Convention vs Usage), beides bleibt.
+
+**Remaining Phase 1 candidates** (~16, with notes on difficulty):
 
 Lexical / lower-risk:
 - `MissingSemicolon` (hard - needs AST for statement-end detection)
@@ -135,24 +146,23 @@ Lexical / lower-risk:
 - `CommentRegularExpression`, `StringLiteralRegularExpression` (configurable - Phase 2)
 - `VisibilityKeywordIndentation` (needs class-body context)
 - `PascalStyleResult` (`Result := X` vs `Foo := X` style - hard)
-- `DigitSeparator` (relative of SCA069; same code path with different threshold)
+- `DigitSeparator` (relative of SCA069; different threshold pattern)
 
 AST single-node / Kat B:
-- `EmptyFile` (file with only header + implementation/end.)
-- `EmptyFieldSection` (similar to EmptyVisibilitySection but for fields)
+- `EmptyFieldSection` (similar to EmptyVisibilitySection but only for fields)
 - `ConsecutiveVisibilitySection` (already partially covered by ConsecutiveSection)
 - `MemberDeclarationOrder` (needs class-body parse)
 - `VisibilitySectionOrder` (needs class-body parse)
 - `BeginEndRequired` (`if X then Y;` should be `begin Y end;` - style debated)
-- `CaseStatementSize` (count `of`-branches)
 - `ExplicitBitwiseNot` (needs type info to distinguish boolean vs numeric `not`)
 - `ProjectFileRoutine`, `ProjectFileVariable` (only in `.dpr` context)
-- `TwiceInheritedCalls` (count `inherited;` in method - state-machine)
 - `IfElseBegin` (style for nested if/else with begin)
+- `RaiseExceptionType` (needs flow context)
 
-**Open**: write tests for SCA088-090, then continue with the easier remaining
-candidates. The configurable rules (MixedNames, *RegularExpression*) move to
-Phase 2.
+**Open**: 16 candidates remaining. Configurable rules (MixedNames,
+*RegularExpression*) move to Phase 2 Framework. The deeper AST-context
+rules (MemberDeclarationOrder, VisibilitySectionOrder, ExplicitBitwiseNot)
+move to Phase 3 (multi-node + cross-unit).
 
 ### Phase 2 — Configurable Forbidden + Naming-Conventions (Framework, ~25 Rules, 1 Woche) 🅒
 
