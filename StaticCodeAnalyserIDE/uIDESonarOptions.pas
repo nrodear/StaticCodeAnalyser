@@ -1,0 +1,448 @@
+unit uIDESonarOptions;
+
+// Tools > Options > Third Party > "Sonar Integration"
+//
+// Eigene Options-Page neben "Static Code Analyser" (uIDESCAOptions). Bindet
+// gegen den selben analyser.ini-Store, Section [Sonar] + [SonarTokens].
+// Token wird ueber DPAPI verschluesselt (uSonarConfig.StoreToken).
+//
+// Felder:
+//   * HostUrl       (URL-Validierung beim Speichern)
+//   * ProjectKey    (mit "Detect from project"-Button -> liest aus
+//                    sonar-project.properties im aktuellen Projekt-Pfad)
+//   * Token         (PasswordChar, leerer Edit = vorhandenes Token unveraendert)
+//   * Branch        (optional, leer = main)
+//   * Insecure-TLS  (Checkbox)
+//
+// Buttons:
+//   * "Test Connection"  - ruft TSonarHealthCheck.Run und zeigt Modal-Dialog
+//   * "Open INI"         - oeffnet analyser.ini im Default-Editor
+//
+// Statusbar-Indikator (klein, im Plugin selbst - nicht in dieser Page):
+// gruen/gelb/rot je nach letztem Health-Check (Tooltip mit Timestamp).
+
+interface
+
+uses
+  System.Classes, System.SysUtils, System.UITypes,
+  Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
+  Vcl.Dialogs,
+  ToolsAPI,
+  uSonarConfig;
+
+type
+  TSonarOptionsFrame = class(TFrame)
+    grpServer        : TGroupBox;
+    lblHost          : TLabel;
+    edHost           : TEdit;
+    lblProject       : TLabel;
+    edProject        : TEdit;
+    btnDetectProject : TButton;
+    lblBranch        : TLabel;
+    edBranch         : TEdit;
+    chkInsecure      : TCheckBox;
+
+    grpAuth          : TGroupBox;
+    lblToken         : TLabel;
+    edToken          : TEdit;
+    lblTokenInfo     : TLabel;
+    btnRevealToken   : TButton;
+
+    grpActions       : TGroupBox;
+    btnTest          : TButton;
+    btnOpenIni       : TButton;
+    memoResult       : TMemo;
+  private
+    FOriginalToken : string;   // beim Laden gemerkt; '' = leer beibehalten
+    FIniPath       : string;
+    procedure BuildControls;
+    procedure DetectProjectClick(Sender: TObject);
+    procedure TestConnectionClick(Sender: TObject);
+    procedure RevealTokenClick(Sender: TObject);
+    procedure OpenIniClick(Sender: TObject);
+  public
+    constructor Create(AOwner: TComponent); override;
+    procedure LoadFromIni(const IniPath: string);
+    procedure SaveToIni(const IniPath: string);
+  end;
+
+  TSonarAddInOptions = class(TInterfacedObject, INTAAddInOptions)
+  private
+    FFrame : TSonarOptionsFrame;
+  public
+    function GetArea: string;
+    function GetCaption: string;
+    function GetFrameClass: TCustomFrameClass;
+    procedure FrameCreated(AFrame: TCustomFrame);
+    procedure DialogClosed(Accepted: Boolean);
+    function ValidateContents: Boolean;
+    function GetHelpContext: Integer;
+    function IncludeInIDEInsight: Boolean;
+  end;
+
+procedure RegisterSonarAddInOptions;
+procedure UnregisterSonarAddInOptions;
+
+implementation
+
+uses
+  System.IniFiles, System.IOUtils, Winapi.ShellAPI, Winapi.Windows;
+
+var
+  GSonarOptionsIfc : INTAAddInOptions = nil;
+  GSonarOptionsObj : TSonarAddInOptions = nil;
+
+const
+  TOKEN_REF_DEFAULT = 'ide-default';
+  TOKEN_PLACEHOLDER = '(stored - leave empty to keep)';
+
+{ TSonarOptionsFrame }
+
+constructor TSonarOptionsFrame.Create(AOwner: TComponent);
+begin
+  inherited;
+  Name := '';
+  BuildControls;
+end;
+
+procedure TSonarOptionsFrame.BuildControls;
+const
+  MARGIN_LEFT = 16;
+  GROUP_W     = 540;
+  INNER_LEFT  = 16;
+  INNER_TOP   = 22;
+  LBL_W       = 100;
+  EDIT_W      = 360;
+var
+  Y : Integer;
+begin
+  Y := 12;
+
+  // ============== Server ==============
+  grpServer         := TGroupBox.Create(Self);
+  grpServer.Parent  := Self;
+  grpServer.Left    := MARGIN_LEFT;
+  grpServer.Top     := Y;
+  grpServer.Width   := GROUP_W;
+  grpServer.Height  := 168;
+  grpServer.Caption := 'Server';
+  Inc(Y, grpServer.Height + 12);
+
+  lblHost := TLabel.Create(Self); lblHost.Parent := grpServer;
+  lblHost.Left := INNER_LEFT; lblHost.Top := INNER_TOP + 3;
+  lblHost.Width := LBL_W; lblHost.Caption := 'Host URL:';
+  edHost := TEdit.Create(Self); edHost.Parent := grpServer;
+  edHost.Left := INNER_LEFT + LBL_W; edHost.Top := INNER_TOP;
+  edHost.Width := EDIT_W; edHost.TextHint := 'https://sonar.company.com';
+
+  lblProject := TLabel.Create(Self); lblProject.Parent := grpServer;
+  lblProject.Left := INNER_LEFT; lblProject.Top := lblHost.Top + 32;
+  lblProject.Width := LBL_W; lblProject.Caption := 'Project Key:';
+  edProject := TEdit.Create(Self); edProject.Parent := grpServer;
+  edProject.Left := INNER_LEFT + LBL_W; edProject.Top := edHost.Top + 32;
+  edProject.Width := EDIT_W - 100;
+  btnDetectProject := TButton.Create(Self); btnDetectProject.Parent := grpServer;
+  btnDetectProject.Left := edProject.Left + edProject.Width + 4;
+  btnDetectProject.Top := edProject.Top;
+  btnDetectProject.Width := 96; btnDetectProject.Height := edProject.Height;
+  btnDetectProject.Caption := 'Detect';
+  btnDetectProject.OnClick := DetectProjectClick;
+
+  lblBranch := TLabel.Create(Self); lblBranch.Parent := grpServer;
+  lblBranch.Left := INNER_LEFT; lblBranch.Top := lblProject.Top + 32;
+  lblBranch.Width := LBL_W; lblBranch.Caption := 'Branch:';
+  edBranch := TEdit.Create(Self); edBranch.Parent := grpServer;
+  edBranch.Left := INNER_LEFT + LBL_W; edBranch.Top := edProject.Top + 32;
+  edBranch.Width := EDIT_W; edBranch.TextHint := 'main';
+
+  chkInsecure := TCheckBox.Create(Self); chkInsecure.Parent := grpServer;
+  chkInsecure.Left := INNER_LEFT + LBL_W; chkInsecure.Top := edBranch.Top + 32;
+  chkInsecure.Width := EDIT_W;
+  chkInsecure.Caption := 'Accept self-signed TLS certificates';
+
+  // ============== Auth ==============
+  grpAuth         := TGroupBox.Create(Self);
+  grpAuth.Parent  := Self;
+  grpAuth.Left    := MARGIN_LEFT;
+  grpAuth.Top     := Y;
+  grpAuth.Width   := GROUP_W;
+  grpAuth.Height  := 100;
+  grpAuth.Caption := 'Authentication';
+  Inc(Y, grpAuth.Height + 12);
+
+  lblToken := TLabel.Create(Self); lblToken.Parent := grpAuth;
+  lblToken.Left := INNER_LEFT; lblToken.Top := INNER_TOP + 3;
+  lblToken.Width := LBL_W; lblToken.Caption := 'Bearer Token:';
+  edToken := TEdit.Create(Self); edToken.Parent := grpAuth;
+  edToken.Left := INNER_LEFT + LBL_W; edToken.Top := INNER_TOP;
+  edToken.Width := EDIT_W - 100;
+  edToken.PasswordChar := '*';
+  btnRevealToken := TButton.Create(Self); btnRevealToken.Parent := grpAuth;
+  btnRevealToken.Left := edToken.Left + edToken.Width + 4;
+  btnRevealToken.Top := edToken.Top;
+  btnRevealToken.Width := 96; btnRevealToken.Height := edToken.Height;
+  btnRevealToken.Caption := 'Show';
+  btnRevealToken.OnClick := RevealTokenClick;
+
+  lblTokenInfo := TLabel.Create(Self); lblTokenInfo.Parent := grpAuth;
+  lblTokenInfo.AutoSize := False;
+  lblTokenInfo.Left := INNER_LEFT + LBL_W;
+  lblTokenInfo.Top := edToken.Top + 28;
+  lblTokenInfo.Width := EDIT_W;
+  lblTokenInfo.Height := 32;
+  lblTokenInfo.WordWrap := True;
+  lblTokenInfo.Font.Color := clGrayText;
+  lblTokenInfo.Caption :=
+    'Token is stored DPAPI-encrypted in analyser.ini [SonarTokens]. ' +
+    'Only this Windows user on this machine can decrypt it.';
+
+  // ============== Actions ==============
+  grpActions         := TGroupBox.Create(Self);
+  grpActions.Parent  := Self;
+  grpActions.Left    := MARGIN_LEFT;
+  grpActions.Top     := Y;
+  grpActions.Width   := GROUP_W;
+  grpActions.Height  := 220;
+  grpActions.Caption := 'Connectivity';
+
+  btnTest := TButton.Create(Self); btnTest.Parent := grpActions;
+  btnTest.Left := INNER_LEFT; btnTest.Top := INNER_TOP;
+  btnTest.Width := 140; btnTest.Height := 26;
+  btnTest.Caption := 'Test Connection';
+  btnTest.OnClick := TestConnectionClick;
+
+  btnOpenIni := TButton.Create(Self); btnOpenIni.Parent := grpActions;
+  btnOpenIni.Left := btnTest.Left + btnTest.Width + 8;
+  btnOpenIni.Top := btnTest.Top;
+  btnOpenIni.Width := 140; btnOpenIni.Height := 26;
+  btnOpenIni.Caption := 'Open analyser.ini';
+  btnOpenIni.OnClick := OpenIniClick;
+
+  memoResult := TMemo.Create(Self); memoResult.Parent := grpActions;
+  memoResult.Left := INNER_LEFT; memoResult.Top := btnTest.Top + btnTest.Height + 8;
+  memoResult.Width := GROUP_W - 2 * INNER_LEFT;
+  memoResult.Height := grpActions.Height - (memoResult.Top - INNER_TOP) - 24;
+  memoResult.ScrollBars := ssVertical;
+  memoResult.ReadOnly := True;
+  memoResult.Font.Name := 'Consolas';
+  memoResult.Color := clBtnFace;
+end;
+
+procedure TSonarOptionsFrame.LoadFromIni(const IniPath: string);
+var
+  Ini      : TIniFile;
+  TokenRef : string;
+begin
+  FIniPath := IniPath;
+  if not TFile.Exists(IniPath) then Exit;
+  Ini := TIniFile.Create(IniPath);
+  try
+    edHost.Text     := Ini.ReadString('Sonar', 'HostUrl',      '');
+    edProject.Text  := Ini.ReadString('Sonar', 'ProjectKey',   '');
+    edBranch.Text   := Ini.ReadString('Sonar', 'Branch',       '');
+    chkInsecure.Checked := Ini.ReadBool('Sonar', 'Insecure',   False);
+    TokenRef        := Ini.ReadString('Sonar', 'TokenRef',     '');
+  finally
+    Ini.Free;
+  end;
+
+  if TokenRef <> '' then
+  begin
+    FOriginalToken := TSonarConfigResolver.LoadToken(IniPath, TokenRef);
+    if FOriginalToken <> '' then
+    begin
+      edToken.Text := TOKEN_PLACEHOLDER;
+      edToken.PasswordChar := #0;  // Placeholder lesbar zeigen
+      edToken.Enabled := True;
+    end;
+  end;
+end;
+
+procedure TSonarOptionsFrame.SaveToIni(const IniPath: string);
+var
+  Ini      : TIniFile;
+  NewToken : string;
+begin
+  if IniPath = '' then Exit;
+  ForceDirectories(ExtractFilePath(IniPath));
+
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteString('Sonar', 'HostUrl',    Trim(edHost.Text));
+    Ini.WriteString('Sonar', 'ProjectKey', Trim(edProject.Text));
+    Ini.WriteString('Sonar', 'Branch',     Trim(edBranch.Text));
+    Ini.WriteBool  ('Sonar', 'Insecure',   chkInsecure.Checked);
+    Ini.WriteString('Sonar', 'TokenRef',   TOKEN_REF_DEFAULT);
+  finally
+    Ini.Free;
+  end;
+
+  NewToken := edToken.Text;
+  // Placeholder = "unchanged" - alten Token belassen
+  if NewToken = TOKEN_PLACEHOLDER then Exit;
+  if NewToken = '' then Exit;  // leer = nicht ueberschreiben
+
+  TSonarConfigResolver.StoreToken(IniPath, TOKEN_REF_DEFAULT, NewToken);
+end;
+
+procedure TSonarOptionsFrame.DetectProjectClick(Sender: TObject);
+// Liest sonar.projectKey aus sonar-project.properties im aktiven Projekt
+// und uebernimmt in das Project-Feld.
+var
+  ModSvc   : IOTAModuleServices;
+  ProjGroup: IOTAProjectGroup;
+  Proj     : IOTAProject;
+  Dir, Path: string;
+  Cfg      : TSonarConfig;
+begin
+  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
+  ProjGroup := ModSvc.MainProjectGroup;
+  if (ProjGroup = nil) or (ProjGroup.ProjectCount = 0) then Exit;
+  Proj := ProjGroup.ActiveProject;
+  if Proj = nil then Exit;
+  Dir := ExtractFilePath(Proj.FileName);
+  Path := TSonarConfigResolver.ProjectPropsPath(Dir);
+  if not TFile.Exists(Path) then
+  begin
+    ShowMessage('No sonar-project.properties found in ' + Dir);
+    Exit;
+  end;
+  Cfg := Default(TSonarConfig);
+  TSonarConfigResolver.ReadFromProjectProps(Dir, Cfg);
+  if Cfg.ProjectKey <> '' then
+  begin
+    edProject.Text := Cfg.ProjectKey;
+    if Cfg.HostUrl <> '' then edHost.Text := Cfg.HostUrl;
+  end
+  else
+    ShowMessage('sonar.projectKey not found in ' + Path);
+end;
+
+procedure TSonarOptionsFrame.TestConnectionClick(Sender: TObject);
+// Health-Check mit den AKTUELLEN UI-Werten (nicht den persistierten).
+var
+  Cli : TSonarCliOverrides;
+  Cfg : TSonarConfig;
+  R   : TSonarHealthResult;
+  S   : string;
+begin
+  Cli := Default(TSonarCliOverrides);
+  Cli.HostUrl    := Trim(edHost.Text);
+  Cli.ProjectKey := Trim(edProject.Text);
+  Cli.Branch     := Trim(edBranch.Text);
+  Cli.Insecure   := chkInsecure.Checked;
+  if (edToken.Text <> '') and (edToken.Text <> TOKEN_PLACEHOLDER) then
+    Cli.Token := edToken.Text
+  else
+    Cli.Token := FOriginalToken;
+
+  Cfg := TSonarConfigResolver.Resolve(Cli, '', '');
+  memoResult.Clear;
+  memoResult.Lines.Add('Running health-check...');
+  Application.ProcessMessages;
+
+  R := TSonarHealthCheck.Run(Cfg);
+  S := TSonarHealthCheck.FormatChecklist(R);
+  memoResult.Text := S;
+end;
+
+procedure TSonarOptionsFrame.RevealTokenClick(Sender: TObject);
+begin
+  if edToken.PasswordChar = '*' then
+  begin
+    edToken.PasswordChar := #0;
+    btnRevealToken.Caption := 'Hide';
+  end
+  else
+  begin
+    edToken.PasswordChar := '*';
+    btnRevealToken.Caption := 'Show';
+  end;
+end;
+
+procedure TSonarOptionsFrame.OpenIniClick(Sender: TObject);
+begin
+  if FIniPath = '' then Exit;
+  if not TFile.Exists(FIniPath) then
+  begin
+    ShowMessage('File does not exist yet: ' + FIniPath +
+      sLineBreak + 'Save once to create it.');
+    Exit;
+  end;
+  ShellExecute(0, 'open', PChar(FIniPath), nil, nil, SW_SHOWNORMAL);
+end;
+
+{ TSonarAddInOptions }
+
+function TSonarAddInOptions.GetArea: string;
+begin
+  Result := 'Third Party';
+end;
+
+function TSonarAddInOptions.GetCaption: string;
+begin
+  Result := 'Sonar Integration';
+end;
+
+function TSonarAddInOptions.GetFrameClass: TCustomFrameClass;
+begin
+  Result := TSonarOptionsFrame;
+end;
+
+procedure TSonarAddInOptions.FrameCreated(AFrame: TCustomFrame);
+var
+  Ini : string;
+begin
+  FFrame := AFrame as TSonarOptionsFrame;
+  Ini := TSonarConfigResolver.DefaultIniPath;
+  FFrame.LoadFromIni(Ini);
+end;
+
+procedure TSonarAddInOptions.DialogClosed(Accepted: Boolean);
+var
+  Ini : string;
+begin
+  if not Accepted then Exit;
+  if FFrame = nil then Exit;
+  Ini := TSonarConfigResolver.DefaultIniPath;
+  FFrame.SaveToIni(Ini);
+end;
+
+function TSonarAddInOptions.ValidateContents: Boolean;
+begin
+  Result := True;
+end;
+
+function TSonarAddInOptions.GetHelpContext: Integer;
+begin
+  Result := 0;
+end;
+
+function TSonarAddInOptions.IncludeInIDEInsight: Boolean;
+begin
+  Result := False;
+end;
+
+procedure RegisterSonarAddInOptions;
+var
+  Svc : INTAEnvironmentOptionsServices;
+begin
+  if GSonarOptionsObj <> nil then Exit;
+  GSonarOptionsObj := TSonarAddInOptions.Create;
+  GSonarOptionsIfc := GSonarOptionsObj;
+  if Supports(BorlandIDEServices, INTAEnvironmentOptionsServices, Svc) then
+    Svc.RegisterAddInOptions(GSonarOptionsIfc);
+end;
+
+procedure UnregisterSonarAddInOptions;
+var
+  Svc : INTAEnvironmentOptionsServices;
+begin
+  if GSonarOptionsIfc = nil then Exit;
+  if Supports(BorlandIDEServices, INTAEnvironmentOptionsServices, Svc) then
+    Svc.UnregisterAddInOptions(GSonarOptionsIfc);
+  GSonarOptionsIfc := nil;
+  GSonarOptionsObj := nil;
+end;
+
+end.

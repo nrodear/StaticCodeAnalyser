@@ -168,7 +168,11 @@
         <DCCReference Include="sources\Infrastructure\uDfmRepoIndex.pas"/>
         <DCCReference Include="sources\Output\uClaudePrompt.pas"/>
         <DCCReference Include="sources\Output\uExportSARIF.pas"/>
+        <DCCReference Include="sources\Output\uExportSonarGeneric.pas"/>
+        <DCCReference Include="sources\Output\uSonarPush.pas"/>
         <DCCReference Include="sources\Output\uFixHint.pas"/>
+        <DCCReference Include="sources\Infrastructure\uSonarConfig.pas"/>
+        <DCCReference Include="sources\Infrastructure\uSonarPull.pas"/>
         <DCCReference Include="sources\Console\uConsoleRunner.pas"/>
         <DCCReference Include="sources\Common\uCollectValues.pas"/>
         <DCCReference Include="sources\Common\uDetectorUtils.pas"/>

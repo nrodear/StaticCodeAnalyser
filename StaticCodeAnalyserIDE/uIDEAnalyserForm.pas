@@ -25,6 +25,7 @@ uses
   uIDELifecycle, uIDEAnalyseRunner,
   uIDEAnnotationOverlay,
   uIDESCAOptions,                          // Tools > Options > SCA Page
+  uIDESonarOptions,                        // Tools > Options > Sonar Integration
   uFindingGridRenderer, uFindingFilter;
 
 const
@@ -3460,6 +3461,10 @@ begin
   // Tools > Options > Third Party > Static Code Analyser
   // (Checkbox um den Silent-Mode aus-/anzuschalten).
   RegisterSCAAddInOptions;
+
+  // Tools > Options > Third Party > Sonar Integration
+  // (separate Page - Host/Token/ProjectKey + Test-Connection).
+  RegisterSonarAddInOptions;
 end;
 
 procedure ShowAnalyserDockableForm;
@@ -3483,6 +3488,7 @@ begin
   UnregisterEditorContextMenuHook;
   UnregisterKeyboardBinding;
   UnregisterSCAAddInOptions;
+  UnregisterSonarAddInOptions;
   if Assigned(GDockableForm) then
   begin
     // GDockableForm ist ein TInterfacedObject -> wird ueber den

@@ -199,6 +199,8 @@
         <DCCReference Include="uTestPerformance.pas"/>
         <DCCReference Include="uTestRuleCatalog.pas"/>
         <DCCReference Include="uTestExportSARIF.pas"/>
+        <DCCReference Include="uTestExportSonarGeneric.pas"/>
+        <DCCReference Include="uTestSonarConfig.pas"/>
         <DCCReference Include="uTestYamlSubsetParser.pas"/>
         <DCCReference Include="uTestCustomRuleDetector.pas"/>
         <DCCReference Include="uTestConcatToFormat.pas"/>

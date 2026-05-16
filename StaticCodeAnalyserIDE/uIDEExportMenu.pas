@@ -47,6 +47,8 @@ type
     procedure DoExportJira(Sender: TObject);
     procedure DoCopyClipboard(Sender: TObject);
     procedure DoExportHtml(Sender: TObject);
+    procedure DoExportSonarGeneric(Sender: TObject);
+    procedure DoExportSonarSingleIssue(Sender: TObject);
     procedure DoButtonClick(Sender: TObject);
   public
     // AOwner          - Komponenten-Owner (typisch der Frame, fuer auto-Free).
@@ -79,7 +81,7 @@ implementation
 
 uses
   System.SysUtils, System.Types, Vcl.Dialogs, Vcl.Clipbrd,
-  uExport, uSCAConsts, uLocalization;
+  uExport, uSCAConsts, uLocalization, uSonarPush, Vcl.Dialogs;
 
 constructor TFindingExportMenu.Create(AOwner: TComponent;
   AAllFindings: TObjectList<TLeakFinding>;
@@ -120,6 +122,17 @@ begin
   Mi := TMenuItem.Create(FPopup);
     Mi.Caption := _('Plain text -> Clipboard');
     Mi.OnClick := DoCopyClipboard;
+    FPopup.Items.Add(Mi);
+  Mi := TMenuItem.Create(FPopup);
+    Mi.Caption := '-';
+    FPopup.Items.Add(Mi);
+  Mi := TMenuItem.Create(FPopup);
+    Mi.Caption := _('Sonar: write Generic Issue report...');
+    Mi.OnClick := DoExportSonarGeneric;
+    FPopup.Items.Add(Mi);
+  Mi := TMenuItem.Create(FPopup);
+    Mi.Caption := _('Sonar: send selected as external issue');
+    Mi.OnClick := DoExportSonarSingleIssue;
     FPopup.Items.Add(Mi);
 end;
 
@@ -297,6 +310,103 @@ begin
   FOnStatus(Format(
     _('Errors+warnings for %s copied to clipboard.'),
     [ExtractFileName(src)]));
+end;
+
+procedure TFindingExportMenu.DoExportSonarGeneric(Sender: TObject);
+// Schreibt einen Generic-Issue-Report mit ALLEN sichtbaren Findings.
+// User waehlt das Output-File - default sca-findings.json.
+var
+  Dlg     : TSaveDialog;
+  BaseDir : string;
+  Written : string;
+begin
+  if Assigned(FGetBaseDir) then BaseDir := FGetBaseDir() else BaseDir := '';
+  Dlg := TSaveDialog.Create(nil);
+  try
+    Dlg.Filter     := 'Sonar Generic Issue Format (*.json)|*.json';
+    Dlg.DefaultExt := 'json';
+    Dlg.FileName   := 'sca-findings.json';
+    if BaseDir <> '' then Dlg.InitialDir := BaseDir;
+    Dlg.Options    := Dlg.Options + [ofOverwritePrompt];
+    if not Dlg.Execute then Exit;
+    try
+      var Bulk := TObjectList<TLeakFinding>.Create(False);
+      try
+        for var Fnd in FDisplayed do Bulk.Add(Fnd);
+        Written := TSonarPush.WriteBulk(Bulk, BaseDir, Dlg.FileName);
+      finally
+        Bulk.Free;
+      end;
+      FOnStatus(Format(_('Sonar report saved: %s'),
+        [ExtractFileName(Written)]));
+    except
+      on E: Exception do
+        FOnStatus(_('Sonar export failed: ') + E.Message);
+    end;
+  finally
+    Dlg.Free;
+  end;
+end;
+
+procedure TFindingExportMenu.DoExportSonarSingleIssue(Sender: TObject);
+// Schreibt das aktuell markierte Finding (oder die markierten Findings bei
+// Multi-Select) als einzelne JSON-Files in <baseDir>\.sonar\external\.
+// Sonar-Scanner sammelt die automatisch via
+//   sonar.externalIssuesReportPaths=.sonar/external/
+var
+  BaseDir  : string;
+  Grid     : TStringGrid;
+  Sel      : TArray<TLeakFinding>;
+  Row, Idx : Integer;
+  Cnt      : Integer;
+begin
+  if Assigned(FGetBaseDir) then BaseDir := FGetBaseDir() else BaseDir := '';
+  if BaseDir = '' then
+  begin
+    FOnStatus(_('Sonar push needs a project directory (run analysis first).'));
+    Exit;
+  end;
+  Grid := FGetGrid;
+  if (Grid = nil) or (Grid.RowCount <= 1) then Exit;
+
+  // Multi-Selection: alle markierten Zeilen sammeln. Fallback: Grid.Row.
+  SetLength(Sel, 0);
+  if (goRangeSelect in Grid.Options) and (Grid.Selection.Top > 0) then
+  begin
+    for Row := Grid.Selection.Top to Grid.Selection.Bottom do
+    begin
+      Idx := Row - 1;  // Header-Zeile abziehen
+      if (Idx >= 0) and (Idx < FDisplayed.Count) then
+      begin
+        SetLength(Sel, Length(Sel) + 1);
+        Sel[High(Sel)] := FDisplayed[Idx];
+      end;
+    end;
+  end
+  else
+  begin
+    Idx := Grid.Row - 1;
+    if (Idx >= 0) and (Idx < FDisplayed.Count) then
+    begin
+      SetLength(Sel, 1);
+      Sel[0] := FDisplayed[Idx];
+    end;
+  end;
+
+  if Length(Sel) = 0 then
+  begin
+    FOnStatus(_('Sonar push: select at least one finding first.'));
+    Exit;
+  end;
+
+  try
+    Cnt := TSonarPush.WriteIndividual(Sel, BaseDir, BaseDir);
+    FOnStatus(Format(_('Sonar push: wrote %d issue file(s) to .sonar\external\'),
+      [Cnt]));
+  except
+    on E: Exception do
+      FOnStatus(_('Sonar push failed: ') + E.Message);
+  end;
 end;
 
 procedure TFindingExportMenu.DoExportHtml(Sender: TObject);

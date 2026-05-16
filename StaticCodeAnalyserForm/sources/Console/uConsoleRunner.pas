@@ -55,6 +55,16 @@ type
     CustomRules   : string;         // --custom-rules <analyser-rules.yml>
     Profile       : string;         // --profile <name>         (siehe sca-rules.json)
     MinSeverity   : string;         // --min-severity hint|warning|error
+    // ---- Sonar-Integration (Phase A der todo-sonar.md Roadmap) ----
+    SonarExport   : string;         // --sonar-export <out.json>  Generic Issue Format
+    SonarInit     : Boolean;        // --sonar-init               sonar-project.properties template
+    SonarTest     : Boolean;        // --sonar-test               health-check
+    SonarHost     : string;         // --sonar-host <url>
+    SonarToken    : string;         // --sonar-token <token>
+    SonarProject  : string;         // --sonar-project <key>
+    SonarBranch   : string;         // --sonar-branch <name>
+    SonarInsecure : Boolean;        // --sonar-insecure           accept self-signed TLS
+    SonarConfig   : string;         // --sonar-config <path>      alternative INI
     ParseError    : string;         // nicht-leer wenn Args invalid
   end;
 
@@ -85,7 +95,8 @@ implementation
 uses
   System.IOUtils,
   uSCAConsts, uStaticAnalyzer2, uVcsChanges, uRepoSettings,
-  uExportSARIF, uCustomRuleDetector;
+  uExportSARIF, uCustomRuleDetector,
+  uExportSonarGeneric, uSonarConfig;
 
 const
   SCA_VERSION = '0.8.0';
@@ -134,6 +145,15 @@ begin
   Result.Profile     := '';
   Result.MinSeverity := '';
   Result.ParseError  := '';
+  Result.SonarExport := '';
+  Result.SonarInit   := False;
+  Result.SonarTest   := False;
+  Result.SonarHost   := '';
+  Result.SonarToken  := '';
+  Result.SonarProject:= '';
+  Result.SonarBranch := '';
+  Result.SonarInsecure := False;
+  Result.SonarConfig := '';
   Errored            := False;
 
   i := Low(Args);
@@ -177,6 +197,25 @@ begin
       GetValue(Result.Profile, '--profile')
     else if A = '--min-severity' then
       GetValue(Result.MinSeverity, '--min-severity')
+    // Sonar-Flags (Phase A todo-sonar.md)
+    else if A = '--sonar-export' then
+      GetValue(Result.SonarExport, '--sonar-export')
+    else if A = '--sonar-init' then
+      Result.SonarInit := True
+    else if A = '--sonar-test' then
+      Result.SonarTest := True
+    else if A = '--sonar-host' then
+      GetValue(Result.SonarHost, '--sonar-host')
+    else if A = '--sonar-token' then
+      GetValue(Result.SonarToken, '--sonar-token')
+    else if A = '--sonar-project' then
+      GetValue(Result.SonarProject, '--sonar-project')
+    else if A = '--sonar-branch' then
+      GetValue(Result.SonarBranch, '--sonar-branch')
+    else if A = '--sonar-insecure' then
+      Result.SonarInsecure := True
+    else if A = '--sonar-config' then
+      GetValue(Result.SonarConfig, '--sonar-config')
     else
     begin
       Result.ParseError := Format('Unbekannter Switch: %s', [A]);
@@ -185,6 +224,9 @@ begin
     Inc(i);
   end;
   if Errored then Exit;
+
+  // --sonar-test und --sonar-init sind Standalone-Aktionen ohne Pfad-Pflicht.
+  if Result.SonarTest or Result.SonarInit then Exit;
 
   // Konsistenz-Pruefung: genau eine Eingabe-Quelle muss gesetzt sein.
   if (Result.Path = '') and (Result.SingleFile = '') and
@@ -275,6 +317,20 @@ begin
   WriteLn('                        this severity threshold.');
   WriteLn('                        Overrides [Rules] MinSeverity in analyser.ini.');
   WriteLn('');
+  WriteLn('Sonar integration (see docs/sonar-setup.md):');
+  WriteLn('  --sonar-export <file> Write Sonar Generic Issue Format JSON');
+  WriteLn('                        (consume via sonar.externalIssuesReportPaths)');
+  WriteLn('  --sonar-init          Write sonar-project.properties template');
+  WriteLn('                        next to --path (or current dir)');
+  WriteLn('  --sonar-test          Run connectivity health-check (DNS, status,');
+  WriteLn('                        token, project access). Exit 0 = healthy.');
+  WriteLn('  --sonar-host <url>    Override Sonar host URL');
+  WriteLn('  --sonar-token <tok>   Override Sonar bearer token');
+  WriteLn('  --sonar-project <k>   Override Sonar projectKey');
+  WriteLn('  --sonar-branch <b>    Override Sonar branch name');
+  WriteLn('  --sonar-insecure      Accept self-signed TLS certificates');
+  WriteLn('  --sonar-config <ini>  Alternative analyser.ini path for Sonar lookup');
+  WriteLn('');
   WriteLn('Other:');
   WriteLn('  --help, -h, -?, /?    Show this help');
   WriteLn('  --version             Print version and exit');
@@ -295,6 +351,94 @@ begin
   WriteLn(SCA_TOOLNAME, ' v', SCA_VERSION);
 end;
 
+{ ---- Sonar Helpers ---- }
+
+const
+  SONAR_PROJECT_PROPERTIES_TEMPLATE =
+    '# SonarQube Generic Issue Import - Template fuer StaticCodeAnalyser' + sLineBreak +
+    '# Run: analyser.exe --path . --sonar-export sca-findings.json' + sLineBreak +
+    '# Then: sonar-scanner' + sLineBreak +
+    '' + sLineBreak +
+    'sonar.projectKey=<your-project-key>' + sLineBreak +
+    'sonar.projectName=<your-project-name>' + sLineBreak +
+    'sonar.sources=.' + sLineBreak +
+    'sonar.sourceEncoding=UTF-8' + sLineBreak +
+    'sonar.exclusions=**/*.dcu,**/*.bpl,**/lib/**,**/Win32/**,**/Win64/**' + sLineBreak +
+    '' + sLineBreak +
+    '# SCA findings as external issues (Generic Issue Format)' + sLineBreak +
+    'sonar.externalIssuesReportPaths=sca-findings.json' + sLineBreak +
+    '' + sLineBreak +
+    '# Alternative: SARIF (Sonar deduplicates neither - pick ONE)' + sLineBreak +
+    '# sonar.sarifReportPaths=sca-findings.sarif' + sLineBreak;
+
+function RunSonarInit(const Path: string): Integer;
+// --sonar-init: legt sonar-project.properties an. Wenn die Datei schon
+// existiert wird .sample geschrieben statt zu ueberschreiben.
+var
+  TargetDir, OutFile : string;
+begin
+  if Path <> '' then TargetDir := Path else TargetDir := GetCurrentDir;
+  OutFile := IncludeTrailingPathDelimiter(TargetDir) + 'sonar-project.properties';
+  if TFile.Exists(OutFile) then
+  begin
+    OutFile := OutFile + '.sample';
+    WriteLn('Existing file detected - writing .sample variant instead.');
+  end;
+  try
+    TFile.WriteAllText(OutFile, SONAR_PROJECT_PROPERTIES_TEMPLATE,
+      TEncoding.UTF8);
+    WriteLn('Wrote ', OutFile);
+    Result := Integer(cecClean);
+  except
+    on E: Exception do
+    begin
+      WriteLn(ErrOutput, 'sonar-init failed: ', E.Message);
+      Result := Integer(cecToolError);
+    end;
+  end;
+end;
+
+function BuildSonarConfig(const Args: TCliArgs): TSonarConfig;
+var
+  Cli       : TSonarCliOverrides;
+  Project   : string;
+begin
+  Cli := Default(TSonarCliOverrides);
+  Cli.HostUrl    := Args.SonarHost;
+  Cli.Token      := Args.SonarToken;
+  Cli.ProjectKey := Args.SonarProject;
+  Cli.Branch     := Args.SonarBranch;
+  Cli.Insecure   := Args.SonarInsecure;
+  Cli.ConfigPath := Args.SonarConfig;
+
+  if Args.Path <> '' then Project := Args.Path
+  else if Args.SingleFile <> '' then Project := ExtractFilePath(Args.SingleFile)
+  else Project := GetCurrentDir;
+
+  Result := TSonarConfigResolver.Resolve(Cli, Args.SonarConfig, Project);
+end;
+
+function RunSonarTest(const Args: TCliArgs): Integer;
+// --sonar-test: Connectivity health-check ohne Analyse.
+var
+  Cfg : TSonarConfig;
+  R   : TSonarHealthResult;
+begin
+  Cfg := BuildSonarConfig(Args);
+  WriteLn('Sonar config:');
+  WriteLn('  host    = ', Cfg.HostUrl,   '   (', Cfg.SourceHostUrl, ')');
+  WriteLn('  project = ', Cfg.ProjectKey,'   (', Cfg.SourceProjectKey, ')');
+  if Cfg.Token <> '' then
+    WriteLn('  token   = (', Length(Cfg.Token), ' chars from ', Cfg.SourceToken, ')')
+  else
+    WriteLn('  token   = (none)');
+  WriteLn('');
+  R := TSonarHealthCheck.Run(Cfg);
+  Write(TSonarHealthCheck.FormatChecklist(R));
+  if R.Healthy then Result := Integer(cecClean)
+  else Result := Integer(cecToolError);
+end;
+
 { ---- Run ---- }
 
 class function TConsoleRunner.Run(const Args: TCliArgs): Integer;
@@ -313,6 +457,10 @@ begin
   end;
   if Args.Help    then begin WriteHelp;    Exit(Integer(cecClean)); end;
   if Args.ShowVersion then begin WriteVersion; Exit(Integer(cecClean)); end;
+
+  // Sonar standalone actions - kein Analyse-Run noetig
+  if Args.SonarInit then Exit(RunSonarInit(Args.Path));
+  if Args.SonarTest then Exit(RunSonarTest(Args));
 
   // Pfad-Validierung
   if (Args.Path <> '') and not TDirectory.Exists(Args.Path) then
@@ -425,6 +573,22 @@ begin
         on E: Exception do
         begin
           WriteLn(ErrOutput, 'SARIF write error: ', E.Message);
+          Exit(Integer(cecToolError));
+        end;
+      end;
+    end;
+
+    // Sonar Generic Issue Format (P1 - todo-sonar.md)
+    if Args.SonarExport <> '' then
+    begin
+      try
+        TSonarGenericWriter.WriteFile(Args.SonarExport, Findings, Args.BaseDir);
+        if not Args.Quiet then
+          WriteLn('Sonar Generic report written: ', Args.SonarExport);
+      except
+        on E: Exception do
+        begin
+          WriteLn(ErrOutput, 'Sonar export error: ', E.Message);
           Exit(Integer(cecToolError));
         end;
       end;

@@ -105,6 +105,34 @@ For incremental scans of branch-changed files only, see
 
 ---
 
+## Sonar integration
+
+SCA-Findings can be exported as **external issues** to SonarQube /
+SonarCloud (complementary to [SonarDelphi](https://github.com/integrated-application-development/sonar-delphi)
+— our findings are mORMot-aware, cover DFM files, and ship sonar-foreign
+checks like `TautologicalBoolExpr`, `ConcatToFormat`, `WithStatement`).
+
+```powershell
+# Configure once (IDE: Tools > Options > Sonar Integration, or CLI):
+analyser.exe --sonar-test `
+  --sonar-host http://localhost:9000 `
+  --sonar-token squ_xxxxx `
+  --sonar-project my-delphi-project
+
+# Run analysis and emit Generic Issue Format for sonar-scanner
+analyser.exe --path . --full --sonar-export sca-findings.json
+sonar-scanner   # picks up via sonar.externalIssuesReportPaths
+```
+
+Each rule carries SonarQube MQR fields (`cleanCodeAttribute` + `impacts`) so
+findings show up correctly in the MQR dashboard. Token-storage in the IDE
+uses Windows DPAPI (Current-User-Scope) — no plaintext secrets in `analyser.ini`.
+
+Full setup: [docs/sonar-setup.md](docs/sonar-setup.md). Config-resolver
+reference: [docs/sonar-config.md](docs/sonar-config.md).
+
+---
+
 ## What is detected (41 detectors — 21 Pascal + 20 DFM)
 
 Findings fall into one of **five Sonar categories**:
