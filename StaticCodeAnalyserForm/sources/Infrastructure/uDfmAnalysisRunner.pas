@@ -60,7 +60,9 @@ uses
   uDfmCrossFormCoupling,
   uDfmLayerViolation,
   uDfmGodHandler,
-  uDfmActionMismatch;
+  uDfmActionMismatch,
+  uDfmMasterDetailUnlinked,
+  uDfmDataModuleSplitHint;
 
 class procedure TDfmAnalysisRunner.AnalyzePasFile(const PasFileName: string;
   Results: TObjectList<TLeakFinding>);
@@ -115,8 +117,11 @@ begin
     TDfmTabOrderConflictDetector.Analyze(Graph, DfmFileName, Results);
     TDfmForbiddenClassDetector.Analyze(Graph, DfmFileName, Results);
     TDfmDbInUiFormDetector.Analyze(Graph, DfmFileName, Results);
+    // Aggregat-Hint NACH DbInUiForm (verbraucht dessen Findings als Input)
+    TDfmDataModuleSplitHintDetector.Aggregate(DfmFileName, Results);
     TDfmLayerViolationDetector.Analyze(Graph, DfmFileName, Results);
     TDfmActionMismatchDetector.Analyze(Graph, DfmFileName, Results);
+    TDfmMasterDetailUnlinkedDetector.Analyze(Graph, DfmFileName, Results);
     TDfmGodHandlerDetector.Analyze(Binding, DfmFileName, Results);
 
     // Cross-Unit-Detektoren: brauchen den Repo-Index. Wenn er nicht
