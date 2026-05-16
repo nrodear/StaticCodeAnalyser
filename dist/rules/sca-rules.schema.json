@@ -98,6 +98,36 @@
           "uniqueItems": true,
           "description": "OWASP Top-10 references (e.g. 'A03:2021-Injection')."
         },
+        "cleanCodeAttribute": {
+          "type": "string",
+          "enum": [
+            "FORMATTED", "CONVENTIONAL", "IDENTIFIABLE",
+            "CLEAR", "LOGICAL", "COMPLETE", "EFFICIENT",
+            "FOCUSED", "DISTINCT", "MODULAR",
+            "TESTED", "LAWFUL", "TRUSTWORTHY", "RESPECTFUL"
+          ],
+          "description": "SonarQube Clean-Code-Attribute (MQR mode). https://docs.sonarsource.com/sonarqube-server/user-guide/clean-code/"
+        },
+        "impacts": {
+          "type": "array",
+          "minItems": 1,
+          "description": "SonarQube MQR impacts: software-quality dimensions this rule affects with the per-impact severity.",
+          "items": {
+            "type": "object",
+            "required": ["softwareQuality", "severity"],
+            "additionalProperties": false,
+            "properties": {
+              "softwareQuality": {
+                "type": "string",
+                "enum": ["SECURITY", "RELIABILITY", "MAINTAINABILITY"]
+              },
+              "severity": {
+                "type": "string",
+                "enum": ["BLOCKER", "HIGH", "MEDIUM", "LOW", "INFO"]
+              }
+            }
+          }
+        },
         "configKey": {
           "type": "string",
           "description": "INI section/key that tunes this rule (e.g. '[Detectors] CyclomaticMax')."

@@ -28,21 +28,50 @@ uses
   uSCAConsts;
 
 type
+  // SonarQube MQR (Multi-Quality-Rating) Klassifikation. Die Werte werden
+  // direkt aus rules/sca-rules.json (cleanCodeAttribute + impacts) geladen
+  // und sind Voraussetzung fuer den Sonar Generic Issue Export. SARIF
+  // kennt MQR nicht und ignoriert diese Felder.
+  TSonarSoftwareQuality = (
+    sqSecurity,         // Sicherheits-relevant (Injection, Creds, ...)
+    sqReliability,      // Korrektheits-relevant (Crashes, Datenverlust)
+    sqMaintainability   // Wartbarkeit (Lesbarkeit, Dead Code, Duplikation)
+  );
+
+  TSonarImpactSeverity = (
+    isBlocker,          // Blockiert Release / Production
+    isHigh,
+    isMedium,
+    isLow,
+    isInfo              // Reine Info, kein Aufwands-Mass
+  );
+
+  TSonarImpact = record
+    SoftwareQuality : TSonarSoftwareQuality;
+    Severity        : TSonarImpactSeverity;
+  end;
+
   TRuleMeta = record
-    ID               : string;        // 'SCA001'
-    Kind             : TFindingKind;
-    Name             : string;        // 'Object created without try/finally'
-    ShortDescription : string;
-    FullDescription  : string;
-    DefaultSeverity  : TLeakSeverity;
-    FindingType      : TFindingType;
-    Tags             : TArray<string>;
-    CWE              : TArray<string>;
-    OWASP            : TArray<string>;
-    ConfigKey        : string;
-    DetectorUnit     : string;
-    GoodExample      : string;
-    BadExample       : string;
+    ID                 : string;        // 'SCA001'
+    Kind               : TFindingKind;
+    Name               : string;        // 'Object created without try/finally'
+    ShortDescription   : string;
+    FullDescription    : string;
+    DefaultSeverity    : TLeakSeverity;
+    FindingType        : TFindingType;
+    Tags               : TArray<string>;
+    CWE                : TArray<string>;
+    OWASP              : TArray<string>;
+    ConfigKey          : string;
+    DetectorUnit       : string;
+    GoodExample        : string;
+    BadExample         : string;
+    // SonarQube MQR-Felder. Leer/nil wenn Rule nicht gemappt - der
+    // Sonar-Generic-Issue-Exporter (uExportSonarGeneric, TODO P1) faellt
+    // dann auf Sonar-Defaults zurueck. Test in uTestRuleCatalog
+    // EveryFindingKindHasMqrMapping enforced dass alle Kinds gemappt sind.
+    CleanCodeAttribute : string;        // 'LAWFUL'/'LOGICAL'/'FOCUSED'/...
+    Impacts            : TArray<TSonarImpact>;
   end;
 
   TRuleCatalog = class
@@ -61,6 +90,8 @@ type
     class function FindJsonFile: string; static;
     class function ParseSeverity(const S: string): TLeakSeverity; static;
     class function ParseFindingType(const S: string): TFindingType; static;
+    class function ParseSoftwareQuality(const S: string): TSonarSoftwareQuality; static;
+    class function ParseImpactSeverity(const S: string): TSonarImpactSeverity; static;
     class function AllKinds: TFindingKinds; static;
   public
     // Optional: Caller-seitig den Pfad ueberschreiben (z.B. Tests).
@@ -349,6 +380,25 @@ begin
         Meta.GoodExample := Examples.GetValue<string>('good', '');
       end;
 
+      // SonarQube MQR-Felder (cleanCodeAttribute + impacts). Optional in der
+      // JSON - Rules ohne diese Felder bekommen leere Werte. Test
+      // EveryFindingKindHasMqrMapping schreit wenn welche fehlen.
+      Meta.CleanCodeAttribute := RObj.GetValue<string>('cleanCodeAttribute', '');
+      ArrVal := FindArray(RObj, 'impacts');
+      if ArrVal <> nil then
+      begin
+        SetLength(Meta.Impacts, ArrVal.Count);
+        for var IxImp := 0 to ArrVal.Count - 1 do
+        begin
+          var IObj := ArrVal.Items[IxImp] as TJSONObject;
+          if IObj = nil then Continue;
+          Meta.Impacts[IxImp].SoftwareQuality :=
+            ParseSoftwareQuality(IObj.GetValue<string>('softwareQuality', ''));
+          Meta.Impacts[IxImp].Severity :=
+            ParseImpactSeverity(IObj.GetValue<string>('severity', ''));
+        end;
+      end;
+
       FRules.AddOrSetValue(K, Meta);
       if Meta.ID <> '' then
         FRulesByID.AddOrSetValue(Meta.ID, Meta);
@@ -484,6 +534,35 @@ begin
   if L = 'code duplication'   then Exit(ftCodeDuplication);
   if L = 'file error'         then Exit(ftFileError);
   Result := ftCodeSmell;
+end;
+
+class function TRuleCatalog.ParseSoftwareQuality(const S: string): TSonarSoftwareQuality;
+// Case-insensitive Match auf den 3 SonarQube-MQR-Software-Quality-Werten.
+// Default bei unbekanntem/leeren Wert: sqMaintainability (am breitesten
+// anwendbar; Sonar wirft Unbekanntes ohnehin spaeter bei Import zurueck).
+var
+  L : string;
+begin
+  L := LowerCase(S);
+  if L = 'security'         then Exit(sqSecurity);
+  if L = 'reliability'      then Exit(sqReliability);
+  if L = 'maintainability'  then Exit(sqMaintainability);
+  Result := sqMaintainability;
+end;
+
+class function TRuleCatalog.ParseImpactSeverity(const S: string): TSonarImpactSeverity;
+// Case-insensitive Match auf den 5 SonarQube-MQR-Severity-Werten. Default
+// bei unbekanntem Wert: isMedium (entspricht Sonar-Default im MQR-Mode).
+var
+  L : string;
+begin
+  L := LowerCase(S);
+  if L = 'blocker' then Exit(isBlocker);
+  if L = 'high'    then Exit(isHigh);
+  if L = 'medium'  then Exit(isMedium);
+  if L = 'low'     then Exit(isLow);
+  if L = 'info'    then Exit(isInfo);
+  Result := isMedium;
 end;
 
 { ---- Public API ---- }

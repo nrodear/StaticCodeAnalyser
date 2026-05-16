@@ -1,6 +1,6 @@
-{
+﻿{
   "$schema": "./sca-rules.schema.json",
-  "version": "1.2",
+  "version": "1.3",
   "tool": {
     "name": "StaticCodeAnalyser",
     "version": "0.8.0",
@@ -67,7 +67,11 @@
       "examples": {
         "bad":  "list := TStringList.Create;\nDoStuff(list);   // <-- exception here leaks list",
         "good": "list := TStringList.Create;\ntry\n  DoStuff(list);\nfinally\n  list.Free;\nend;"
-      }
+      },
+      "cleanCodeAttribute": "LAWFUL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
     },
     {
       "id": "SCA002",
@@ -83,7 +87,11 @@
       "examples": {
         "bad":  "try DoStuff except end;",
         "good": "try DoStuff except on E: Exception do LogError(E.Message); end;"
-      }
+      },
+      "cleanCodeAttribute": "LAWFUL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
     },
     {
       "id": "SCA003",
@@ -100,7 +108,11 @@
       "examples": {
         "bad":  "Query.SQL.Text := 'SELECT * FROM Users WHERE Name=''' + UserName + '''';",
         "good": "Query.SQL.Text := 'SELECT * FROM Users WHERE Name=:n';\nQuery.ParamByName('n').AsString := UserName;"
-      }
+      },
+      "cleanCodeAttribute": "LAWFUL",
+      "impacts": [
+        { "softwareQuality": "SECURITY", "severity": "HIGH" }
+      ]
     },
     {
       "id": "SCA004",
@@ -117,7 +129,11 @@
       "examples": {
         "bad":  "Password := 'admin123';",
         "good": "Password := GetEnvironmentVariable('DB_PASSWORD');"
-      }
+      },
+      "cleanCodeAttribute": "LAWFUL",
+      "impacts": [
+        { "softwareQuality": "SECURITY", "severity": "BLOCKER" }
+      ]
     },
     {
       "id": "SCA005",
@@ -133,7 +149,11 @@
       "examples": {
         "bad":  "Format('%s is %d', [Name]);   // <-- Age missing",
         "good": "Format('%s is %d', [Name, Age]);"
-      }
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
     },
     {
       "id": "SCA006",
@@ -148,7 +168,11 @@
       "examples": {
         "bad":  "(file is not valid UTF-8 or has lexer-breaking content)",
         "good": "(check encoding, fix syntax)"
-      }
+      },
+      "cleanCodeAttribute": "LAWFUL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "INFO" }
+      ]
     },
     {
       "id": "SCA007",
@@ -163,7 +187,11 @@
       "examples": {
         "bad":  "uses ..., MyUnusedHelper, ...;",
         "good": "(remove if truly unused; otherwise add a comment why it stays)"
-      }
+      },
+      "cleanCodeAttribute": "FOCUSED",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     },
     {
       "id": "SCA008",
@@ -179,7 +207,11 @@
       "examples": {
         "bad":  "obj := FindObject(id);\nobj.DoStuff;   // <-- AV if FindObject returns nil",
         "good": "obj := FindObject(id);\nif Assigned(obj) then obj.DoStuff;"
-      }
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
     },
     {
       "id": "SCA009",
@@ -194,7 +226,11 @@
       "examples": {
         "bad":  "obj := TFoo.Create;\nobj.DoStuff;\nobj.Free;",
         "good": "obj := TFoo.Create;\ntry obj.DoStuff finally obj.Free end;"
-      }
+      },
+      "cleanCodeAttribute": "LAWFUL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
     },
     {
       "id": "SCA010",
@@ -210,7 +246,11 @@
       "examples": {
         "bad":  "result := total / count;",
         "good": "if count <> 0 then result := total / count;"
-      }
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
     },
     {
       "id": "SCA011",
@@ -226,7 +266,11 @@
       "examples": {
         "bad":  "Exit;\nWriteLn('never reached');",
         "good": "(remove the unreachable line)"
-      }
+      },
+      "cleanCodeAttribute": "FOCUSED",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
     },
     {
       "id": "SCA012",
@@ -242,7 +286,11 @@
       "examples": {
         "bad":  "(150-line procedure doing parsing + validation + persistence)",
         "good": "(extract into ParseInput, Validate, Persist helper methods)"
-      }
+      },
+      "cleanCodeAttribute": "FOCUSED",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
     },
     {
       "id": "SCA013",
@@ -258,7 +306,11 @@
       "examples": {
         "bad":  "procedure SaveOrder(id, customer, address, city, zip, country, total, tax, shipping: ...);",
         "good": "procedure SaveOrder(const Order: TOrder);"
-      }
+      },
+      "cleanCodeAttribute": "FOCUSED",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
     },
     {
       "id": "SCA014",
@@ -273,7 +325,11 @@
       "examples": {
         "bad":  "if RetryCount > 3 then ...",
         "good": "const MAX_RETRIES = 3;\nif RetryCount > MAX_RETRIES then ..."
-      }
+      },
+      "cleanCodeAttribute": "CLEAR",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     },
     {
       "id": "SCA015",
@@ -289,7 +345,11 @@
       "examples": {
         "bad":  "ShowMessage('File not found');\n... \nLogError('File not found');",
         "good": "const MSG_FILE_NOT_FOUND = 'File not found';\nShowMessage(MSG_FILE_NOT_FOUND);"
-      }
+      },
+      "cleanCodeAttribute": "DISTINCT",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     },
     {
       "id": "SCA016",
@@ -304,7 +364,11 @@
       "examples": {
         "bad":  "LogFile := 'C:\\Logs\\app.log';",
         "good": "LogFile := TPath.Combine(GetEnvironmentVariable('LOGDIR'), 'app.log');"
-      }
+      },
+      "cleanCodeAttribute": "CLEAR",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
     },
     {
       "id": "SCA017",
@@ -319,7 +383,11 @@
       "examples": {
         "bad":  "WriteLn('here #3');",
         "good": "Logger.Debug('reached step 3');"
-      }
+      },
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     },
     {
       "id": "SCA018",
@@ -335,7 +403,11 @@
       "examples": {
         "bad":  "if a then\n  if b then\n    if c then\n      if d then DoStuff;",
         "good": "if not a then Exit;\nif not b then Exit;\nif not c then Exit;\nif d then DoStuff;"
-      }
+      },
+      "cleanCodeAttribute": "FOCUSED",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
     },
     {
       "id": "SCA019",
@@ -350,7 +422,11 @@
       "examples": {
         "bad":  "// TODO: handle the case where input is empty",
         "good": "(implement the case OR file an issue and reference it)"
-      }
+      },
+      "cleanCodeAttribute": "COMPLETE",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     },
     {
       "id": "SCA020",
@@ -365,7 +441,11 @@
       "examples": {
         "bad":  "procedure DoStuff;\nbegin\nend;",
         "good": "procedure DoStuff;\nbegin\n  raise ENotImplemented.Create('...');\nend;"
-      }
+      },
+      "cleanCodeAttribute": "COMPLETE",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     },
     {
       "id": "SCA021",
@@ -381,7 +461,11 @@
       "examples": {
         "bad":  "(20 lines of validation code copy-pasted across 3 methods)",
         "good": "(extract into a single ValidateXxx procedure)"
-      }
+      },
+      "cleanCodeAttribute": "DISTINCT",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
     },
     {
       "id": "SCA022",
@@ -397,7 +481,11 @@
       "examples": {
         "bad":  "(method with 15+ if/case/for branches in one body)",
         "good": "(extract decision groups into named helper methods)"
-      }
+      },
+      "cleanCodeAttribute": "FOCUSED",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
     },
     {
       "id": "SCA023",
@@ -413,7 +501,11 @@
       "examples": {
         "bad":  "(pattern from analyser-rules.yml matches)",
         "good": "(fix per the custom rule's message)"
-      }
+      },
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
     },
     {
       "id": "SCA024",
@@ -428,7 +520,11 @@
       "examples": {
         "bad":  "object Button1: TButton\n  Caption = 'Save'\nend",
         "good": "object btnSave: TButton\n  Caption = 'Save'\nend"
-      }
+      },
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     },
     {
       "id": "SCA025",
@@ -443,7 +539,11 @@
       "examples": {
         "bad":  "object btnSave: TButton\n  Caption = 'Speichern'\nend",
         "good": "btnSave.Caption := _('btn.save');  // i18n at runtime"
-      }
+      },
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
     },
     {
       "id": "SCA026",
@@ -460,7 +560,11 @@
       "examples": {
         "bad":  "object FDConnection1: TFDConnection\n  Params.Strings = ('Password=admin123' 'User_Name=sa')\nend",
         "good": "FDConnection1.Params.Values['Password'] := GetEnvironmentVariable('DB_PWD');"
-      }
+      },
+      "cleanCodeAttribute": "LAWFUL",
+      "impacts": [
+        { "softwareQuality": "SECURITY", "severity": "BLOCKER" }
+      ]
     },
     {
       "id": "SCA027",
@@ -475,7 +579,11 @@
       "examples": {
         "bad":  "DBEdit1.DataField = 'NAME'\nDBEdit2.DataField = 'NAME'   // same DataSource",
         "good": "(bind 'NAME' to exactly one control)"
-      }
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
     },
     {
       "id": "SCA028",
@@ -490,7 +598,11 @@
       "examples": {
         "bad":  "object btnSave: TButton\n  OnClick = btnSaveClick   // method removed in .pas\nend",
         "good": "(restore the method or clear OnClick in the designer)"
-      }
+      },
+      "cleanCodeAttribute": "COMPLETE",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
     },
     {
       "id": "SCA029",
@@ -505,7 +617,11 @@
       "examples": {
         "bad":  "procedure TForm1.btnOldClick(Sender: TObject);  // nothing binds this\nbegin\n  ...\nend;",
         "good": "(remove the method or bind it from a control)"
-      }
+      },
+      "cleanCodeAttribute": "FOCUSED",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     },
     {
       "id": "SCA030",
@@ -520,7 +636,11 @@
       "examples": {
         "bad":  "procedure TForm1.btnSaveClick(Sender: TObject);\nbegin\nend;",
         "good": "(implement the handler or clear OnClick in the designer)"
-      }
+      },
+      "cleanCodeAttribute": "COMPLETE",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     },
     {
       "id": "SCA031",
@@ -535,7 +655,11 @@
       "examples": {
         "bad":  "// .dfm contains object btnSave: TButton, but TForm1 has no btnSave: TButton field",
         "good": "(add the field to the published section of TForm1)"
-      }
+      },
+      "cleanCodeAttribute": "COMPLETE",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
     },
     {
       "id": "SCA032",
@@ -550,7 +674,11 @@
       "examples": {
         "bad":  "QA.MasterSource = dsB   QB.MasterSource = dsA   // cycle",
         "good": "(make one query the parent, the other the detail)"
-      }
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
     },
     {
       "id": "SCA033",
@@ -567,7 +695,11 @@
       "examples": {
         "bad":  "FDQuery1.SQL.Text := 'SELECT * FROM U WHERE Name=''' + EdName.Text + '''';",
         "good": "FDQuery1.SQL.Text := 'SELECT * FROM U WHERE Name=:n';\nFDQuery1.ParamByName('n').AsString := EdName.Text;"
-      }
+      },
+      "cleanCodeAttribute": "LAWFUL",
+      "impacts": [
+        { "softwareQuality": "SECURITY", "severity": "HIGH" }
+      ]
     },
     {
       "id": "SCA034",
@@ -582,7 +714,11 @@
       "examples": {
         "bad":  "FieldDefs: Email Required=True   // no DBEdit / DBLookup bound to it",
         "good": "(bind a DBEdit to the Email field)"
-      }
+      },
+      "cleanCodeAttribute": "COMPLETE",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
     },
     {
       "id": "SCA035",
@@ -597,7 +733,11 @@
       "examples": {
         "bad":  "DBEdit1.DataField = 'Email'   DBEdit1.Visible = False",
         "good": "(make the control visible or remove Required=True)"
-      }
+      },
+      "cleanCodeAttribute": "COMPLETE",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
     },
     {
       "id": "SCA036",
@@ -612,7 +752,11 @@
       "examples": {
         "bad":  "DBEdit1.DataField = 'IsActive'   // TBooleanField",
         "good": "DBCheckBox1.DataField = 'IsActive'"
-      }
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
     },
     {
       "id": "SCA037",
@@ -627,7 +771,11 @@
       "examples": {
         "bad":  "EdA.TabOrder = 0\nEdB.TabOrder = 0   // same parent",
         "good": "EdA.TabOrder = 0\nEdB.TabOrder = 1"
-      }
+      },
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     },
     {
       "id": "SCA038",
@@ -643,7 +791,11 @@
       "examples": {
         "bad":  "object Query1: TQuery   // ForbiddenClasses=TQuery",
         "good": "object FDQuery1: TFDQuery"
-      }
+      },
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     },
     {
       "id": "SCA039",
@@ -658,7 +810,11 @@
       "examples": {
         "bad":  "object frmInvoice: TForm\n  object FDQuery1: TFDQuery ...",
         "good": "object dmInvoice: TDataModule\n  object FDQuery1: TFDQuery ..."
-      }
+      },
+      "cleanCodeAttribute": "MODULAR",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
     },
     {
       "id": "SCA040",
@@ -673,7 +829,11 @@
       "examples": {
         "bad":  "Form2.EdName.Text := 'x';",
         "good": "Form2.UserName := 'x';   // property on Form2"
-      }
+      },
+      "cleanCodeAttribute": "MODULAR",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
     },
     {
       "id": "SCA041",
@@ -688,7 +848,11 @@
       "examples": {
         "bad":  "object frmEdit: TForm\n  object EdName: TEdit  // direct child of form",
         "good": "object frmEdit: TForm\n  object pnlBody: TPanel\n    object EdName: TEdit"
-      }
+      },
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     },
     {
       "id": "SCA042",
@@ -704,7 +868,11 @@
       "examples": {
         "bad":  "btn1.OnClick = HandleEverything\nbtn2.OnClick = HandleEverything\nbtn3.OnClick = HandleEverything\nbtn4.OnClick = HandleEverything\nbtn5.OnClick = HandleEverything",
         "good": "(one handler per logical action)"
-      }
+      },
+      "cleanCodeAttribute": "FOCUSED",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
     },
     {
       "id": "SCA043",
@@ -719,7 +887,11 @@
       "examples": {
         "bad":  "object btnSave: TButton\n  Action = actSave\n  OnClick = btnSaveClick   // never fires\nend",
         "good": "(remove OnClick or remove Action)"
-      }
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
     },
     {
       "id": "SCA044",
@@ -734,7 +906,11 @@
       "examples": {
         "bad":  "Msg := 'User ' + Name + ' has ' + IntToStr(N) + ' open tickets';",
         "good": "Msg := Format('User %s has %d open tickets', [Name, N]);"
-      }
+      },
+      "cleanCodeAttribute": "EFFICIENT",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     },
     {
       "id": "SCA045",
@@ -749,7 +925,11 @@
       "examples": {
         "bad":  "with Customer do\nbegin\n  Name := SomeName;   // Customer.Name? or local Name?\nend;",
         "good": "C := Customer;\nC.Name := SomeName;"
-      }
+      },
+      "cleanCodeAttribute": "CLEAR",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     },
     {
       "id": "SCA046",
@@ -764,7 +944,11 @@
       "examples": {
         "bad":  "for i := 10 to 1 do DoStuff(i);",
         "good": "for i := 10 downto 1 do DoStuff(i);"
-      }
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
     },
     {
       "id": "SCA047",
@@ -779,7 +963,11 @@
       "examples": {
         "bad":  "Customer.Name := Customer.Name;",
         "good": "Customer.Name := NewName;"
-      }
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
     },
     {
       "id": "SCA048",
@@ -795,7 +983,11 @@
       "examples": {
         "bad":  "constructor TBase.Create;\nbegin\n  Configure;   // virtual\nend;",
         "good": "constructor TBase.Create;\nbegin\n  // skip virtual call\nend;\nprocedure TBase.AfterConstruction;\nbegin\n  Configure;\nend;"
-      }
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
     },
     {
       "id": "SCA049",
@@ -810,7 +1002,11 @@
       "examples": {
         "bad":  "Last := s[Length(s) - 1];",
         "good": "if Length(s) >= 2 then Last := s[Length(s) - 1];"
-      }
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
     },
     {
       "id": "SCA050",
@@ -825,7 +1021,11 @@
       "examples": {
         "bad":  "public\n  procedure Helper;   // only used in same unit",
         "good": "private\n  procedure Helper;"
-      }
+      },
+      "cleanCodeAttribute": "MODULAR",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     },
     {
       "id": "SCA051",
@@ -840,7 +1040,11 @@
       "examples": {
         "bad":  "public\n  procedure HookForSubclasses; virtual;",
         "good": "protected\n  procedure HookForSubclasses; virtual;"
-      }
+      },
+      "cleanCodeAttribute": "MODULAR",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     },
     {
       "id": "SCA052",
@@ -855,7 +1059,11 @@
       "examples": {
         "bad":  "public\n  procedure NeverCalled;",
         "good": "(remove or document why it stays)"
-      }
+      },
+      "cleanCodeAttribute": "FOCUSED",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     },
     {
       "id": "SCA053",
@@ -870,7 +1078,11 @@
       "examples": {
         "bad":  "var\n  Tmp: Integer;   // never used\nbegin\n  DoStuff;\nend;",
         "good": "(remove the variable)"
-      }
+      },
+      "cleanCodeAttribute": "FOCUSED",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     },
     {
       "id": "SCA054",
@@ -885,7 +1097,11 @@
       "examples": {
         "bad":  "procedure Process(const Data: TData; Mode: Integer);  // Mode never referenced",
         "good": "procedure Process(const Data: TData);"
-      }
+      },
+      "cleanCodeAttribute": "FOCUSED",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     },
     {
       "id": "SCA055",
@@ -900,7 +1116,11 @@
       "examples": {
         "bad":  "if (a = a) then ...",
         "good": "if (a = b) then ..."
-      }
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
     },
     {
       "id": "SCA056",
@@ -915,7 +1135,11 @@
       "examples": {
         "bad":  "QDetail.MasterSource = dsMaster   // MasterFields = '' (empty)",
         "good": "QDetail.MasterSource = dsMaster   QDetail.MasterFields = 'OrderID'"
-      }
+      },
+      "cleanCodeAttribute": "COMPLETE",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
     },
     {
       "id": "SCA057",
@@ -931,7 +1155,11 @@
       "examples": {
         "bad":  "(TForm with 5+ TFDQuery/TFDConnection components)",
         "good": "(move all DB components to a TDataModule)"
-      }
+      },
+      "cleanCodeAttribute": "MODULAR",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     },
     {
       "id": "SCA058",
@@ -947,7 +1175,11 @@
       "examples": {
         "bad":  "Q.SQL.Text := 'UPDATE Users SET Active=0';",
         "good": "Q.SQL.Text := 'UPDATE Users SET Active=0 WHERE Id=:id';"
-      }
+      },
+      "cleanCodeAttribute": "LAWFUL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
     },
     {
       "id": "SCA059",
@@ -962,7 +1194,11 @@
       "examples": {
         "bad":  "S := Format('%.2f', [Price]);",
         "good": "S := Format('%.2f', [Price], TFormatSettings.Invariant);"
-      }
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
     }
   ]
 }

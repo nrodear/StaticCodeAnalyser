@@ -29,6 +29,11 @@ type
     // JSON-Catalog gegeneinander driften (Catalog ist single source of
     // truth fuer Severity nach Refactor in uMethodd12.TLeakFinding.SetKind).
     [Test] procedure JsonSeverityMatchesKindMeta;
+    // Sonar MQR-Mapping: pro Kind MUSS cleanCodeAttribute UND mindestens
+    // ein impact gesetzt sein. Verhindert dass neue Detektoren ohne
+    // MQR-Klassifikation in den Sonar-Generic-Issue-Export rutschen
+    // (P1 in todo-sonar.md).
+    [Test] procedure EveryFindingKindHasMqrMapping;
     // ID-Konvention: 'SCA' + 3-stellige Nummer.
     [Test] procedure RuleIDsFollowConvention;
     // IDs muessen unique sein.
@@ -135,6 +140,47 @@ begin
       Format('Severity-Drift fuer %s: JSON=%d, KIND_META=%d - ' +
              'rules/sca-rules.json oder uSCAConsts.KIND_META anpassen',
         [KindName(K), Ord(Meta.DefaultSeverity), Ord(KindDefaultSeverity(K))]));
+  end;
+end;
+
+procedure TTestRuleCatalog.EveryFindingKindHasMqrMapping;
+// Sonar MQR-Mode braucht pro Rule cleanCodeAttribute + Impacts. Test
+// faellt sofort wenn jemand einen neuen TFindingKind hinzufuegt, ohne
+// die Mapping in rules/sca-rules.json (cleanCodeAttribute + impacts)
+// nachzupflegen. P1 in todo-sonar.md (Sonar Generic Issue Export)
+// braucht die Felder; ohne diesen Test wuerde der Export still
+// degraded fallen.
+const
+  ALLOWED_CCA: array[0..13] of string = (
+    'FORMATTED', 'CONVENTIONAL', 'IDENTIFIABLE',
+    'CLEAR', 'LOGICAL', 'COMPLETE', 'EFFICIENT',
+    'FOCUSED', 'DISTINCT', 'MODULAR',
+    'TESTED', 'LAWFUL', 'TRUSTWORTHY', 'RESPECTFUL'
+  );
+var
+  K       : TFindingKind;
+  Meta    : TRuleMeta;
+  Valid   : Boolean;
+  S       : string;
+begin
+  for K := Low(TFindingKind) to High(TFindingKind) do
+  begin
+    Meta := TRuleCatalog.GetRule(K);
+
+    Assert.IsNotEmpty(Meta.CleanCodeAttribute,
+      Format('Kind %s hat kein cleanCodeAttribute in rules/sca-rules.json',
+        [KindName(K)]));
+
+    Valid := False;
+    for S in ALLOWED_CCA do
+      if SameText(S, Meta.CleanCodeAttribute) then begin Valid := True; Break; end;
+    Assert.IsTrue(Valid,
+      Format('Kind %s hat cleanCodeAttribute "%s" - kein gueltiger Sonar-MQR-Wert',
+        [KindName(K), Meta.CleanCodeAttribute]));
+
+    Assert.IsTrue(Length(Meta.Impacts) >= 1,
+      Format('Kind %s hat keinen impact-Eintrag in rules/sca-rules.json',
+        [KindName(K)]));
   end;
 end;
 
