@@ -99,7 +99,7 @@ uses
   uExportSonarGeneric, uSonarConfig;
 
 const
-  SCA_VERSION = '0.8.0';
+  SCA_VERSION = '0.9.1';
   SCA_TOOLNAME = 'StaticCodeAnalyser';
 
 { ---- Args-Parser ---- }
