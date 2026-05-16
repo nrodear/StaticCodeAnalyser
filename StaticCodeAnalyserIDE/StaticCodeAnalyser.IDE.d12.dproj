@@ -247,6 +247,9 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyInterface.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uAssertMessage.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uExplicitTObjectInheritance.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uGroupedDeclaration.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyBlock.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uExceptOnException.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uReversedForRange.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSelfAssignment.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uVirtualCallInCtor.pas"/>

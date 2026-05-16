@@ -1503,6 +1503,63 @@
       "impacts": [
         { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
       ]
+    },
+    {
+      "id": "SCA076",
+      "kind": "GroupedDeclaration",
+      "name": "Grouped variable / field / parameter declaration",
+      "shortDescription": "Split `A, B: Type` into one declaration per line",
+      "fullDescription": "Grouped declarations (`A, B, C: Integer;` for vars, fields or parameters) confuse diffs (a new variable changes an existing line), prevent per-variable comments, and complicate type-change refactors. Each declaration on its own line is cleaner. Unifies SonarDelphi communitydelphi:GroupedFieldDeclaration / :GroupedVariableDeclaration / :GroupedParameterDeclaration into one rule (SCA may split later).",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["style", "diff-hygiene"],
+      "detectorUnit": "uGroupedDeclaration.pas",
+      "examples": {
+        "bad":  "var A, B, C: Integer;\nfield FX, FY: TPoint;",
+        "good": "var A: Integer;\n    B: Integer;\n    C: Integer;"
+      },
+      "cleanCodeAttribute": "CLEAR",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA077",
+      "kind": "EmptyBlock",
+      "name": "Empty begin..end block",
+      "shortDescription": "Empty `begin..end` - delete it or fill in the statement",
+      "fullDescription": "An empty `begin..end` is almost always a refactor leftover or never-filled-in placeholder. Either delete it or implement the missing logic. Top-level unit `begin end.` initialization sections are exempted (that is the empty init form, not a refactor rest). Matches SonarDelphi communitydelphi:EmptyBlock.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["dead-code", "refactor"],
+      "detectorUnit": "uEmptyBlock.pas",
+      "examples": {
+        "bad":  "if Active then begin end;",
+        "good": "if Active then Activate;"
+      },
+      "cleanCodeAttribute": "COMPLETE",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA078",
+      "kind": "ExceptOnException",
+      "name": "Catch-all on root Exception class",
+      "shortDescription": "`on E: Exception do` swallows everything including AV/OOM",
+      "fullDescription": "Catching the root `Exception` class catches every error including unrecoverable ones (EAccessViolation, EOutOfMemory, EStackOverflow). Prefer a specific exception type (EDatabaseError, EFOpenError, EConvertError, ...) so unrelated failures aren't masked. Suppress with `// noinspection` if the catch-all is intentional (e.g. logger boundary).",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["error-handling", "bug-risk"],
+      "detectorUnit": "uExceptOnException.pas",
+      "examples": {
+        "bad":  "try Foo; except on E: Exception do Log(E.Message); end;",
+        "good": "try Foo; except on E: EDatabaseError do Log(E.Message); end;"
+      },
+      "cleanCodeAttribute": "FOCUSED",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
     }
   ]
 }

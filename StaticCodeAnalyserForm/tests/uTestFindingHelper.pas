@@ -21,6 +21,7 @@ uses
   uInlineAssembly, uTrailingCommaArgList, uDigitGrouping,
   uCommentedOutCode, uUnitLevelKeywordIndent, uRedundantBoolean,
   uEmptyInterface, uAssertMessage, uExplicitTObjectInheritance,
+  uGroupedDeclaration, uEmptyBlock, uExceptOnException,
   uReversedForRange, uSelfAssignment, uVirtualCallInCtor, uLengthUnderflow,
   uVisibilityCheck,
   uUnusedLocal, uUnusedParameter, uTautologicalExpr,
@@ -138,6 +139,9 @@ begin
         TEmptyInterfaceDetector.AnalyzeUnit(Root, TempPath, Result);
         TAssertMessageDetector.AnalyzeUnit(Root, TempPath, Result);
         TExplicitTObjectInheritanceDetector.AnalyzeUnit(Root, TempPath, Result);
+        TGroupedDeclarationDetector.AnalyzeUnit(Root, TempPath, Result);
+        TEmptyBlockDetector.AnalyzeUnit(Root, TempPath, Result);
+        TExceptOnExceptionDetector.AnalyzeUnit(Root, TempPath, Result);
         TReversedForRangeDetector.AnalyzeUnit(Root, TempPath, Result);
         TLengthUnderflowDetector.AnalyzeUnit(Root, TempPath, Result);
         TTautologicalExprDetector.AnalyzeUnit(Root, TempPath, Result);

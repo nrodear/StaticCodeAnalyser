@@ -183,6 +183,9 @@
         <DCCReference Include="sources\Detectors\uEmptyInterface.pas"/>
         <DCCReference Include="sources\Detectors\uAssertMessage.pas"/>
         <DCCReference Include="sources\Detectors\uExplicitTObjectInheritance.pas"/>
+        <DCCReference Include="sources\Detectors\uGroupedDeclaration.pas"/>
+        <DCCReference Include="sources\Detectors\uEmptyBlock.pas"/>
+        <DCCReference Include="sources\Detectors\uExceptOnException.pas"/>
         <DCCReference Include="sources\Output\uExportSARIF.pas"/>
         <DCCReference Include="sources\Output\uExportSonarGeneric.pas"/>
         <DCCReference Include="sources\Output\uSonarPush.pas"/>

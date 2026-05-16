@@ -98,7 +98,10 @@ uses
   uTestRedundantBoolean in 'uTestRedundantBoolean.pas',
   uTestEmptyInterface in 'uTestEmptyInterface.pas',
   uTestAssertMessage in 'uTestAssertMessage.pas',
-  uTestExplicitTObjectInheritance in 'uTestExplicitTObjectInheritance.pas';
+  uTestExplicitTObjectInheritance in 'uTestExplicitTObjectInheritance.pas',
+  uTestGroupedDeclaration in 'uTestGroupedDeclaration.pas',
+  uTestEmptyBlock in 'uTestEmptyBlock.pas',
+  uTestExceptOnException in 'uTestExceptOnException.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}

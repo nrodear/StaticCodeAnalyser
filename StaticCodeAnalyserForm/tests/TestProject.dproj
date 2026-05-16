@@ -235,6 +235,9 @@
         <DCCReference Include="uTestEmptyInterface.pas"/>
         <DCCReference Include="uTestAssertMessage.pas"/>
         <DCCReference Include="uTestExplicitTObjectInheritance.pas"/>
+        <DCCReference Include="uTestGroupedDeclaration.pas"/>
+        <DCCReference Include="uTestEmptyBlock.pas"/>
+        <DCCReference Include="uTestExceptOnException.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

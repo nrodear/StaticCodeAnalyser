@@ -245,8 +245,15 @@ type
                                  // (SonarDelphi:EmptyInterface).
     fkAssertMessage,             // `Assert(cond);` ohne Message-String
                                  // (SonarDelphi:AssertMessage).
-    fkExplicitTObjectInheritance // `class(TObject)` explizit (redundant)
+    fkExplicitTObjectInheritance, // `class(TObject)` explizit (redundant)
                                  // (SonarDelphi:ExplicitTObjectInheritance).
+    fkGroupedDeclaration,        // `A, B: Type;` Gruppen-Deklaration
+                                 // (SonarDelphi:GroupedField/Variable/
+                                 // ParameterDeclaration).
+    fkEmptyBlock,                // Leerer `begin..end`-Block
+                                 // (SonarDelphi:EmptyBlock).
+    fkExceptOnException          // `on E: Exception do` faengt Root-Klasse
+                                 // (SonarDelphi:CatchAllException Variante).
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -370,7 +377,10 @@ const
     (Name: 'RedundantBoolean';           FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkRedundantBoolean
     (Name: 'EmptyInterface';             FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkEmptyInterface
     (Name: 'AssertMessage';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkAssertMessage
-    (Name: 'ExplicitTObjectInheritance'; FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkExplicitTObjectInheritance
+    (Name: 'ExplicitTObjectInheritance'; FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkExplicitTObjectInheritance
+    (Name: 'GroupedDeclaration';         FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkGroupedDeclaration
+    (Name: 'EmptyBlock';                 FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkEmptyBlock
+    (Name: 'ExceptOnException';          FindingType: ftBug;          DefaultSeverity: lsWarning)  // fkExceptOnException
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.
