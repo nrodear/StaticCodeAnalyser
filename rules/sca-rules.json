@@ -1,6 +1,6 @@
 {
   "$schema": "./sca-rules.schema.json",
-  "version": "1.1",
+  "version": "1.2",
   "tool": {
     "name": "StaticCodeAnalyser",
     "version": "0.8.0",
@@ -397,6 +397,571 @@
       "examples": {
         "bad":  "(method with 15+ if/case/for branches in one body)",
         "good": "(extract decision groups into named helper methods)"
+      }
+    },
+    {
+      "id": "SCA023",
+      "kind": "CustomRule",
+      "name": "User-defined custom rule",
+      "shortDescription": "Pattern matched by a rule loaded from analyser-rules.yml",
+      "fullDescription": "Generic kind for user-defined regex / AST rules loaded at runtime from analyser-rules.yml. Specific rule ID, message, and severity come from the YAML entry; this catalog entry is a placeholder so the dispatcher and SARIF exporter have stable metadata.",
+      "defaultSeverity": "Warning",
+      "type": "Code Smell",
+      "tags": ["custom", "user-defined"],
+      "configKey": "analyser-rules.yml",
+      "detectorUnit": "uCustomRuleDetector.pas",
+      "examples": {
+        "bad":  "(pattern from analyser-rules.yml matches)",
+        "good": "(fix per the custom rule's message)"
+      }
+    },
+    {
+      "id": "SCA024",
+      "kind": "DfmDefaultName",
+      "name": "Component with default name",
+      "shortDescription": "Component left at wizard-default name (Button1, Edit3, Panel2 ...)",
+      "fullDescription": "Default names hide intent and break find-usages / rename refactorings. Rename UI controls to convey purpose (btnSave, edUserName, pnlToolbar ...).",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["dfm", "naming"],
+      "detectorUnit": "uDfmDefaultName.pas",
+      "examples": {
+        "bad":  "object Button1: TButton\n  Caption = 'Save'\nend",
+        "good": "object btnSave: TButton\n  Caption = 'Save'\nend"
+      }
+    },
+    {
+      "id": "SCA025",
+      "kind": "DfmHardcodedCaption",
+      "name": "Hardcoded UI text in DFM",
+      "shortDescription": "Caption / Hint / Text property as literal in DFM, not via i18n layer",
+      "fullDescription": "User-facing strings embedded in a .dfm cannot be localised, A/B-tested, or kept in a translation catalog. Assign at form construction time from a resourcestring or i18n helper.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["dfm", "i18n", "localization"],
+      "detectorUnit": "uDfmHardcodedCaption.pas",
+      "examples": {
+        "bad":  "object btnSave: TButton\n  Caption = 'Speichern'\nend",
+        "good": "btnSave.Caption := _('btn.save');  // i18n at runtime"
+      }
+    },
+    {
+      "id": "SCA026",
+      "kind": "DfmHardcodedDbCreds",
+      "name": "Hardcoded DB credentials in DFM",
+      "shortDescription": "Plaintext Password / ConnectionString with Pwd= on a DB component",
+      "fullDescription": "Database credentials persisted in a .dfm leak into version control, build artifacts, and any decompiler. Move secrets to environment variables, OS credential store, or encrypted configuration and assign at runtime.",
+      "defaultSeverity": "Error",
+      "type": "Vulnerability",
+      "tags": ["dfm", "credentials", "security"],
+      "cwe": ["CWE-798"],
+      "owasp": ["A07:2021-Identification-and-Authentication-Failures"],
+      "detectorUnit": "uDfmHardcodedDbCreds.pas",
+      "examples": {
+        "bad":  "object FDConnection1: TFDConnection\n  Params.Strings = ('Password=admin123' 'User_Name=sa')\nend",
+        "good": "FDConnection1.Params.Values['Password'] := GetEnvironmentVariable('DB_PWD');"
+      }
+    },
+    {
+      "id": "SCA027",
+      "kind": "DfmDuplicateBinding",
+      "name": "Duplicate (DataSource, DataField) binding",
+      "shortDescription": "Two or more controls bind the same (DataSource, DataField) pair",
+      "fullDescription": "When the user edits one bound control, the second receives a parallel update from the dataset - racey, hard-to-debug overwrites. Bind each (DataSource, DataField) to exactly one control.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["dfm", "db-binding"],
+      "detectorUnit": "uDfmDuplicateBinding.pas",
+      "examples": {
+        "bad":  "DBEdit1.DataField = 'NAME'\nDBEdit2.DataField = 'NAME'   // same DataSource",
+        "good": "(bind 'NAME' to exactly one control)"
+      }
+    },
+    {
+      "id": "SCA028",
+      "kind": "DfmDeadEvent",
+      "name": "DFM event handler references missing method",
+      "shortDescription": "OnClick / On... points to a method that does not exist in the form class",
+      "fullDescription": "DFM streaming crashes at form-load time with 'class TForm has no published method X'. Usually caused by a manual rename in the .pas without updating the .dfm.",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["dfm", "streaming", "dead-code"],
+      "detectorUnit": "uDfmDeadEvent.pas",
+      "examples": {
+        "bad":  "object btnSave: TButton\n  OnClick = btnSaveClick   // method removed in .pas\nend",
+        "good": "(restore the method or clear OnClick in the designer)"
+      }
+    },
+    {
+      "id": "SCA029",
+      "kind": "DfmOrphanHandler",
+      "name": "Orphan event handler",
+      "shortDescription": "Published TNotifyEvent-shaped method has no DFM binding",
+      "fullDescription": "Method looks like an event handler (Sender: TObject) but nothing in any .dfm references it. Likely leftover from a deleted control - remove or wire it up.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["dfm", "dead-code"],
+      "detectorUnit": "uDfmOrphanHandler.pas",
+      "examples": {
+        "bad":  "procedure TForm1.btnOldClick(Sender: TObject);  // nothing binds this\nbegin\n  ...\nend;",
+        "good": "(remove the method or bind it from a control)"
+      }
+    },
+    {
+      "id": "SCA030",
+      "kind": "DfmEmptyBoundEvent",
+      "name": "Empty bound event handler",
+      "shortDescription": "Event is wired in DFM, method exists, body is empty",
+      "fullDescription": "An empty handler with a live DFM binding is almost always a stub forgotten after the designer added it. Either remove the binding or implement the handler.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["dfm", "stub"],
+      "detectorUnit": "uDfmEmptyBoundEvent.pas",
+      "examples": {
+        "bad":  "procedure TForm1.btnSaveClick(Sender: TObject);\nbegin\nend;",
+        "good": "(implement the handler or clear OnClick in the designer)"
+      }
+    },
+    {
+      "id": "SCA031",
+      "kind": "DfmSchemaMismatch",
+      "name": "DFM component without published field",
+      "shortDescription": "Component in DFM has no matching published field in the form class",
+      "fullDescription": "DFM streaming requires every named component to have a corresponding published field in the host class. A missing field crashes form construction with EReadError.",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["dfm", "streaming"],
+      "detectorUnit": "uDfmSchemaMismatch.pas",
+      "examples": {
+        "bad":  "// .dfm contains object btnSave: TButton, but TForm1 has no btnSave: TButton field",
+        "good": "(add the field to the published section of TForm1)"
+      }
+    },
+    {
+      "id": "SCA032",
+      "kind": "DfmCircularDataSource",
+      "name": "Circular DataSource / Master-Detail loop",
+      "shortDescription": "Cycle in DataSource.DataSet / DataSet.MasterSource edges",
+      "fullDescription": "A cycle in the master-detail graph causes infinite recursion during BeforeOpen or any refresh and stack-overflows the process. Break the cycle by removing one of the links.",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["dfm", "data-access", "infinite-loop"],
+      "detectorUnit": "uDfmCircularDataSource.pas",
+      "examples": {
+        "bad":  "QA.MasterSource = dsB   QB.MasterSource = dsA   // cycle",
+        "good": "(make one query the parent, the other the detail)"
+      }
+    },
+    {
+      "id": "SCA033",
+      "kind": "DfmSqlFromUserInput",
+      "name": "SQL property built from UI input",
+      "shortDescription": "Query.SQL assembled from form-control Text / Caption properties",
+      "fullDescription": "SQL string built from form field values is SQL injection via the UI. Use parameterised queries (`ParamByName(...).AsString := EdInput.Text`).",
+      "defaultSeverity": "Error",
+      "type": "Vulnerability",
+      "tags": ["dfm", "sql", "injection", "security"],
+      "cwe": ["CWE-89"],
+      "owasp": ["A03:2021-Injection"],
+      "detectorUnit": "uDfmSqlFromUserInput.pas",
+      "examples": {
+        "bad":  "FDQuery1.SQL.Text := 'SELECT * FROM U WHERE Name=''' + EdName.Text + '''';",
+        "good": "FDQuery1.SQL.Text := 'SELECT * FROM U WHERE Name=:n';\nFDQuery1.ParamByName('n').AsString := EdName.Text;"
+      }
+    },
+    {
+      "id": "SCA034",
+      "kind": "DfmRequiredFieldUnbound",
+      "name": "Required field has no UI binding",
+      "shortDescription": "TField with Required=True has no bound input control",
+      "fullDescription": "A required field that the user cannot reach makes every insert fail with 'Field X must have a value'. Either bind a control or drop the Required=True.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["dfm", "ux", "required-field"],
+      "detectorUnit": "uDfmRequiredField.pas",
+      "examples": {
+        "bad":  "FieldDefs: Email Required=True   // no DBEdit / DBLookup bound to it",
+        "good": "(bind a DBEdit to the Email field)"
+      }
+    },
+    {
+      "id": "SCA035",
+      "kind": "DfmRequiredFieldNotVisible",
+      "name": "Required field only on hidden controls",
+      "shortDescription": "TField with Required=True is bound only to Visible=False controls",
+      "fullDescription": "Control exists but the user cannot see or interact with it - inserts fail every time. Make at least one bound control visible or drop the Required=True.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["dfm", "ux", "required-field"],
+      "detectorUnit": "uDfmRequiredField.pas",
+      "examples": {
+        "bad":  "DBEdit1.DataField = 'Email'   DBEdit1.Visible = False",
+        "good": "(make the control visible or remove Required=True)"
+      }
+    },
+    {
+      "id": "SCA036",
+      "kind": "DfmFieldTypeMismatch",
+      "name": "UI control type mismatched with TField",
+      "shortDescription": "DB control class does not match TField.DataType (TDBEdit for TBooleanField)",
+      "fullDescription": "User sees the raw value and can corrupt the type. Pick a control compatible with the field type (TDBCheckBox for booleans, TDBLookupComboBox for FKs).",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["dfm", "ux", "db-binding"],
+      "detectorUnit": "uDfmFieldTypeMismatch.pas",
+      "examples": {
+        "bad":  "DBEdit1.DataField = 'IsActive'   // TBooleanField",
+        "good": "DBCheckBox1.DataField = 'IsActive'"
+      }
+    },
+    {
+      "id": "SCA037",
+      "kind": "DfmTabOrderConflict",
+      "name": "Duplicate TabOrder among siblings",
+      "shortDescription": "Two sibling controls in the same parent share the same TabOrder value",
+      "fullDescription": "VCL serialisation tolerates duplicate TabOrder but tab navigation becomes order-of-declaration dependent and unpredictable for the user. Renumber so TabOrder is unique per parent.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["dfm", "ux"],
+      "detectorUnit": "uDfmTabOrderConflict.pas",
+      "examples": {
+        "bad":  "EdA.TabOrder = 0\nEdB.TabOrder = 0   // same parent",
+        "good": "EdA.TabOrder = 0\nEdB.TabOrder = 1"
+      }
+    },
+    {
+      "id": "SCA038",
+      "kind": "DfmForbiddenClass",
+      "name": "Component uses forbidden class",
+      "shortDescription": "Component class is in the project's ForbiddenClasses list",
+      "fullDescription": "Style-guide enforcement for project-specific class bans (TQuery, TLabel if you have a TStyledLabel, ...). Detector stays silent unless the project sets `[Components] ForbiddenClasses=...` in analyser.ini.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["dfm", "style-guide"],
+      "configKey": "[Components] ForbiddenClasses",
+      "detectorUnit": "uDfmForbiddenClass.pas",
+      "examples": {
+        "bad":  "object Query1: TQuery   // ForbiddenClasses=TQuery",
+        "good": "object FDQuery1: TFDQuery"
+      }
+    },
+    {
+      "id": "SCA039",
+      "kind": "DfmDbInUiForm",
+      "name": "DB component on UI form",
+      "shortDescription": "TFDQuery / TFDConnection directly on a TForm/TFrame instead of a DataModule",
+      "fullDescription": "Database infrastructure on a UI form couples persistence to presentation - hard to reuse, hard to test. Move to a TDataModule and reference it from the form.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["dfm", "architecture", "data-access"],
+      "detectorUnit": "uDfmDbInUiForm.pas",
+      "examples": {
+        "bad":  "object frmInvoice: TForm\n  object FDQuery1: TFDQuery ...",
+        "good": "object dmInvoice: TDataModule\n  object FDQuery1: TFDQuery ..."
+      }
+    },
+    {
+      "id": "SCA040",
+      "kind": "DfmCrossFormCoupling",
+      "name": "Cross-form field access",
+      "shortDescription": "Code in Form1 reads / writes Form2.<published_field> directly",
+      "fullDescription": "Reaching across forms to grab a child control breaks encapsulation - any rename in Form2 silently breaks Form1. Expose a property or method on Form2 instead.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["dfm", "architecture", "coupling"],
+      "detectorUnit": "uDfmCrossFormCoupling.pas",
+      "examples": {
+        "bad":  "Form2.EdName.Text := 'x';",
+        "good": "Form2.UserName := 'x';   // property on Form2"
+      }
+    },
+    {
+      "id": "SCA041",
+      "kind": "DfmLayerViolation",
+      "name": "Input control directly on TForm",
+      "shortDescription": "Input control sits on the form instead of being embedded in a TPanel / TGroupBox",
+      "fullDescription": "Layered layout (Form > Panel > Group > Controls) makes resizing, DPI-scaling, and theming significantly easier. Wrap controls in a layout container.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["dfm", "layout"],
+      "detectorUnit": "uDfmLayerViolation.pas",
+      "examples": {
+        "bad":  "object frmEdit: TForm\n  object EdName: TEdit  // direct child of form",
+        "good": "object frmEdit: TForm\n  object pnlBody: TPanel\n    object EdName: TEdit"
+      }
+    },
+    {
+      "id": "SCA042",
+      "kind": "DfmGodHandler",
+      "name": "God event handler",
+      "shortDescription": "Single method wired to >= N component events (default N=5)",
+      "fullDescription": "Spaghetti indicator: one handler dispatching dozens of events is hard to read, hard to change, and almost always has cohesion problems. Split by responsibility.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["dfm", "design"],
+      "configKey": "[Detectors] DfmGodHandlerMaxEvents",
+      "detectorUnit": "uDfmGodHandler.pas",
+      "examples": {
+        "bad":  "btn1.OnClick = HandleEverything\nbtn2.OnClick = HandleEverything\nbtn3.OnClick = HandleEverything\nbtn4.OnClick = HandleEverything\nbtn5.OnClick = HandleEverything",
+        "good": "(one handler per logical action)"
+      }
+    },
+    {
+      "id": "SCA043",
+      "kind": "DfmActionMismatch",
+      "name": "Component has Action + OnClick",
+      "shortDescription": "Action and OnClick both set - Action wins, OnClick is dead code",
+      "fullDescription": "When a TAction is assigned, VCL routes events through the action object and the OnClick never fires. Pick one or call the OnClick body from the action's OnExecute.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["dfm", "dead-code"],
+      "detectorUnit": "uDfmActionMismatch.pas",
+      "examples": {
+        "bad":  "object btnSave: TButton\n  Action = actSave\n  OnClick = btnSaveClick   // never fires\nend",
+        "good": "(remove OnClick or remove Action)"
+      }
+    },
+    {
+      "id": "SCA044",
+      "kind": "ConcatToFormat",
+      "name": "Long string concat - prefer Format()",
+      "shortDescription": "Multi-segment string concatenation - extract to a Format() call",
+      "fullDescription": "'a' + Var + 'b' + IntToStr(N) chains are harder to read and harder to translate than `Format('a%sb%d', [Var, N])`.",
+      "defaultSeverity": "Warning",
+      "type": "Code Smell",
+      "tags": ["maintainability", "string-formatting"],
+      "detectorUnit": "uConcatToFormat.pas",
+      "examples": {
+        "bad":  "Msg := 'User ' + Name + ' has ' + IntToStr(N) + ' open tickets';",
+        "good": "Msg := Format('User %s has %d open tickets', [Name, N]);"
+      }
+    },
+    {
+      "id": "SCA045",
+      "kind": "WithStatement",
+      "name": "with X do ...",
+      "shortDescription": "with statement - scope-shadowing trap the compiler does not warn about",
+      "fullDescription": "Marco Cantu, delphi.org and Stack Overflow consistently rank `with` among the top Delphi bug sources. Identifiers from the outer scope get silently shadowed by members of the with-target. Use a local variable alias instead.",
+      "defaultSeverity": "Warning",
+      "type": "Code Smell",
+      "tags": ["scope", "delphi-classic"],
+      "detectorUnit": "uWithStatement.pas",
+      "examples": {
+        "bad":  "with Customer do\nbegin\n  Name := SomeName;   // Customer.Name? or local Name?\nend;",
+        "good": "C := Customer;\nC.Name := SomeName;"
+      }
+    },
+    {
+      "id": "SCA046",
+      "kind": "ReversedForRange",
+      "name": "for i := High to Low - missing downto",
+      "shortDescription": "for i := 10 to 1 do - loop body never executes",
+      "fullDescription": "Classic typo: `to` instead of `downto` when iterating from high to low. The loop runs zero times. Detector flags constant From > To.",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["loop", "typo"],
+      "detectorUnit": "uReversedForRange.pas",
+      "examples": {
+        "bad":  "for i := 10 to 1 do DoStuff(i);",
+        "good": "for i := 10 downto 1 do DoStuff(i);"
+      }
+    },
+    {
+      "id": "SCA047",
+      "kind": "SelfAssignment",
+      "name": "x := x",
+      "shortDescription": "Self-assignment - no-op or copy-paste typo",
+      "fullDescription": "Detector excludes property setters with documented side effects. A bare `x := x` is almost always a typo where one side should be a different variable.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["typo", "no-op"],
+      "detectorUnit": "uSelfAssignment.pas",
+      "examples": {
+        "bad":  "Customer.Name := Customer.Name;",
+        "good": "Customer.Name := NewName;"
+      }
+    },
+    {
+      "id": "SCA048",
+      "kind": "VirtualCallInCtor",
+      "name": "Virtual call in constructor",
+      "shortDescription": "Virtual method invoked from constructor - subclass override sees half-initialised Self",
+      "fullDescription": "C++ FAQ 23.5 / Effective Java item 17 in Delphi form: virtual dispatch in a ctor runs the most-derived override before subclass fields are initialised. Defer to a non-virtual post-construction hook.",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["oop", "initialization-order"],
+      "cwe": ["CWE-665"],
+      "detectorUnit": "uVirtualCallInCtor.pas",
+      "examples": {
+        "bad":  "constructor TBase.Create;\nbegin\n  Configure;   // virtual\nend;",
+        "good": "constructor TBase.Create;\nbegin\n  // skip virtual call\nend;\nprocedure TBase.AfterConstruction;\nbegin\n  Configure;\nend;"
+      }
+    },
+    {
+      "id": "SCA049",
+      "kind": "LengthUnderflow",
+      "name": "Length(s) - N without guard",
+      "shortDescription": "Length / .Count with subtraction - native-uint underflow when empty",
+      "fullDescription": "`Length(s) - 1` on an empty string evaluates to 0 - 1 = MaxUInt under NativeUInt arithmetic and indexes into garbage. Guard for emptiness or cast to NativeInt.",
+      "defaultSeverity": "Hint",
+      "type": "Bug",
+      "tags": ["arithmetic", "underflow"],
+      "detectorUnit": "uLengthUnderflow.pas",
+      "examples": {
+        "bad":  "Last := s[Length(s) - 1];",
+        "good": "if Length(s) >= 2 then Last := s[Length(s) - 1];"
+      }
+    },
+    {
+      "id": "SCA050",
+      "kind": "CanBePrivate",
+      "name": "Public member could be private",
+      "shortDescription": "Public/protected member referenced only inside its own unit",
+      "fullDescription": "Cross-unit reference analysis: no outside caller, so tightening to private has no external impact. Reduces public API surface.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["encapsulation", "visibility"],
+      "detectorUnit": "uVisibilityCheck.pas",
+      "examples": {
+        "bad":  "public\n  procedure Helper;   // only used in same unit",
+        "good": "private\n  procedure Helper;"
+      }
+    },
+    {
+      "id": "SCA051",
+      "kind": "CanBeProtected",
+      "name": "Public member could be protected",
+      "shortDescription": "Public member referenced only from subclasses, never externally",
+      "fullDescription": "Cross-unit reference analysis: all external callers live in subclasses, so protected is sufficient and keeps the API narrower.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["encapsulation", "visibility"],
+      "detectorUnit": "uVisibilityCheck.pas",
+      "examples": {
+        "bad":  "public\n  procedure HookForSubclasses; virtual;",
+        "good": "protected\n  procedure HookForSubclasses; virtual;"
+      }
+    },
+    {
+      "id": "SCA052",
+      "kind": "UnusedPublicMember",
+      "name": "Unused public member (dead API)",
+      "shortDescription": "Public member is never referenced from any subclass or cross-unit path",
+      "fullDescription": "No internal use AND no external use found - dead API surface. Either remove or document as intentionally exported (e.g. for binary compatibility).",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["dead-code", "api"],
+      "detectorUnit": "uVisibilityCheck.pas",
+      "examples": {
+        "bad":  "public\n  procedure NeverCalled;",
+        "good": "(remove or document why it stays)"
+      }
+    },
+    {
+      "id": "SCA053",
+      "kind": "UnusedLocalVar",
+      "name": "Unused local variable",
+      "shortDescription": "Local var declared but never referenced in method body",
+      "fullDescription": "Mirrors Delphi compiler hint H2164 but emitted as an SCA finding so it can be filtered, suppressed, and tracked uniformly with the other rules.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["dead-code", "locals"],
+      "detectorUnit": "uUnusedLocal.pas",
+      "examples": {
+        "bad":  "var\n  Tmp: Integer;   // never used\nbegin\n  DoStuff;\nend;",
+        "good": "(remove the variable)"
+      }
+    },
+    {
+      "id": "SCA054",
+      "kind": "UnusedParameter",
+      "name": "Unused method parameter",
+      "shortDescription": "Method parameter is never used in the body",
+      "fullDescription": "Detector skips overrides, event handlers (`Sender: TObject`) and interface implementations because those signatures are externally constrained.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["dead-code", "api-design"],
+      "detectorUnit": "uUnusedParameter.pas",
+      "examples": {
+        "bad":  "procedure Process(const Data: TData; Mode: Integer);  // Mode never referenced",
+        "good": "procedure Process(const Data: TData);"
+      }
+    },
+    {
+      "id": "SCA055",
+      "kind": "TautologicalBoolExpr",
+      "name": "Tautological boolean expression",
+      "shortDescription": "Binary operator with identical LHS and RHS: x = x, a and a, (p <> p)",
+      "fullDescription": "Classic copy-paste bug. Either one side is wrong (the typical case - a typo) or the expression is genuinely tautological and should be removed.",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["typo", "copy-paste"],
+      "detectorUnit": "uTautologicalExpr.pas",
+      "examples": {
+        "bad":  "if (a = a) then ...",
+        "good": "if (a = b) then ..."
+      }
+    },
+    {
+      "id": "SCA056",
+      "kind": "DfmMasterDetailUnlinked",
+      "name": "Master-Detail without MasterFields",
+      "shortDescription": "TDataSet has MasterSource set but no MasterFields / IndexFieldNames",
+      "fullDescription": "VCL silently performs a Cartesian product instead of the intended Master-Detail join - every parent row pulls every detail row at runtime. Fix by setting MasterFields (and IndexFieldNames for IB/FB).",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["dfm", "data-access", "performance"],
+      "detectorUnit": "uDfmMasterDetailUnlinked.pas",
+      "examples": {
+        "bad":  "QDetail.MasterSource = dsMaster   // MasterFields = '' (empty)",
+        "good": "QDetail.MasterSource = dsMaster   QDetail.MasterFields = 'OrderID'"
+      }
+    },
+    {
+      "id": "SCA057",
+      "kind": "DfmDataModuleSplitHint",
+      "name": "Form has many DB components - split DataModule",
+      "shortDescription": "Aggregated hint: form holds >= N DB components",
+      "fullDescription": "Aggregate of multiple `DfmDbInUiForm` findings on the same form - emitted as a single refactor hint instead of N individual findings.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["dfm", "architecture"],
+      "configKey": "[Detectors] DfmDataModuleSplitMin",
+      "detectorUnit": "uDfmDataModuleSplitHint.pas",
+      "examples": {
+        "bad":  "(TForm with 5+ TFDQuery/TFDConnection components)",
+        "good": "(move all DB components to a TDataModule)"
+      }
+    },
+    {
+      "id": "SCA058",
+      "kind": "SqlDangerousStatement",
+      "name": "UPDATE / DELETE / TRUNCATE without WHERE",
+      "shortDescription": "SQL statement modifies every row - missing WHERE clause",
+      "fullDescription": "`UPDATE Users SET Active=0` without WHERE flips every row in the table. Same for `DELETE FROM ...` and `TRUNCATE TABLE ...`. Production-disaster waiting to happen.",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["sql", "data-loss"],
+      "cwe": ["CWE-89"],
+      "detectorUnit": "uSqlDangerousStatement.pas",
+      "examples": {
+        "bad":  "Q.SQL.Text := 'UPDATE Users SET Active=0';",
+        "good": "Q.SQL.Text := 'UPDATE Users SET Active=0 WHERE Id=:id';"
+      }
+    },
+    {
+      "id": "SCA059",
+      "kind": "FormatLocaleHint",
+      "name": "Format() float spec without TFormatSettings",
+      "shortDescription": "%.2f / %.3f without explicit TFormatSettings - comma vs dot decimal trap",
+      "fullDescription": "On a DE Windows `Format('%.2f', [3.14])` yields '3,14'; on EN-US it yields '3.14'. For machine-readable output (SQL, JSON, CSV) always pass `TFormatSettings.Invariant`.",
+      "defaultSeverity": "Hint",
+      "type": "Bug",
+      "tags": ["string-formatting", "i18n", "locale"],
+      "detectorUnit": "uFormatMismatch.pas",
+      "examples": {
+        "bad":  "S := Format('%.2f', [Price]);",
+        "good": "S := Format('%.2f', [Price], TFormatSettings.Invariant);"
       }
     }
   ]
