@@ -740,7 +740,14 @@ begin
       Exit;
     end;
 
-    // Stage 5: Project-Lookup
+    // Stage 5: Project-Lookup.
+    // Erste Stufe: /api/projects/search - liefert 200+leeres Array wenn das
+    // Project nicht existiert, 403 wenn User keine Browse-Permission hat,
+    // 200+Treffer wenn alles OK.
+    // Fallback bei 403: /api/components/show - der unterscheidet sauber
+    // zwischen 404 (Project existiert nicht) und 403 (existiert, aber kein
+    // Zugriff). Dadurch kann die Fehlermeldung den User auf die richtige
+    // Aktion fuehren (Project anlegen vs. Permission setzen).
     Sw := TStopwatch.StartNew;
     Url := Cfg.HostUrl + '/api/projects/search?projects=' +
            TNetEncoding.URL.Encode(Cfg.ProjectKey);
@@ -751,13 +758,42 @@ begin
         True, '', Sw.ElapsedMilliseconds)
     else if Ok and (Status = 200) then
       Stage := MakeStage('Project access: ' + Cfg.ProjectKey + ' (not found)',
-        False, 'Project does not exist or user lacks Browse permission. ' +
-               'Create via Web-UI or POST /api/projects/create.',
+        False, 'Project does not exist. Create at ' + Cfg.HostUrl +
+               '/projects or POST /api/projects/create.',
         Sw.ElapsedMilliseconds)
     else if Ok and (Status = 403) then
-      Stage := MakeStage('Project access: 403 Forbidden',
-        False, 'Token lacks Browse permission for ' + Cfg.ProjectKey,
-        Sw.ElapsedMilliseconds)
+    begin
+      // Disambiguiere: /api/components/show liefert 404 fuer
+      // "Project existiert nicht" und 403 fuer "existiert, aber kein
+      // Zugriff". /projects/search wirft beides als 403 ueber den selben
+      // Zaun.
+      var ShowUrl    : string;
+      var ShowStatus : Integer;
+      var ShowBody   : string;
+      var ShowOk     : Boolean;
+      ShowUrl := Cfg.HostUrl + '/api/components/show?component=' +
+                 TNetEncoding.URL.Encode(Cfg.ProjectKey);
+      ShowOk := HttpGet(ShowUrl, Cfg.Token, Cfg.Insecure, ShowStatus, ShowBody);
+      if ShowOk and (ShowStatus = 404) then
+        Stage := MakeStage('Project access: ' + Cfg.ProjectKey + ' (not found)',
+          False, 'Project does not exist on ' + Cfg.HostUrl + '. ' +
+                 'Create at ' + Cfg.HostUrl + '/projects or POST ' +
+                 '/api/projects/create?project=' + Cfg.ProjectKey,
+          Sw.ElapsedMilliseconds)
+      else if ShowOk and (ShowStatus = 200) then
+        Stage := MakeStage('Project access: 403 Forbidden',
+          False, 'Project exists but token user lacks Browse permission. ' +
+                 'In Sonar: Project Settings > Permissions > grant Browse ' +
+                 'to your user/group.',
+          Sw.ElapsedMilliseconds)
+      else
+        Stage := MakeStage('Project access: 403 Forbidden',
+          False, 'Project ''' + Cfg.ProjectKey + ''' is not visible to ' +
+                 'this token - either the project does not exist OR the ' +
+                 'token user lacks Browse permission. Check ' + Cfg.HostUrl +
+                 '/projects after logging in as the token owner.',
+          Sw.ElapsedMilliseconds);
+    end
     else
       Stage := MakeStage(Format('Project access: %d', [Status]),
         False, Copy(Body, 1, 200), Sw.ElapsedMilliseconds);
