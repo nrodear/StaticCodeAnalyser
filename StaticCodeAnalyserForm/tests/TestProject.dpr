@@ -92,7 +92,10 @@ uses
   uTestEmptyArgumentList in 'uTestEmptyArgumentList.pas',
   uTestInlineAssembly in 'uTestInlineAssembly.pas',
   uTestTrailingCommaArgList in 'uTestTrailingCommaArgList.pas',
-  uTestDigitGrouping in 'uTestDigitGrouping.pas';
+  uTestDigitGrouping in 'uTestDigitGrouping.pas',
+  uTestCommentedOutCode in 'uTestCommentedOutCode.pas',
+  uTestUnitLevelKeywordIndent in 'uTestUnitLevelKeywordIndent.pas',
+  uTestRedundantBoolean in 'uTestRedundantBoolean.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}

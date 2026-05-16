@@ -1389,6 +1389,63 @@
       "impacts": [
         { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
       ]
+    },
+    {
+      "id": "SCA070",
+      "kind": "CommentedOutCode",
+      "name": "Commented-out code",
+      "shortDescription": "Comment looks like Pascal code - delete or document",
+      "fullDescription": "Heuristic: comment content with 2+ code-style markers (trailing `;`, `:=`, keywords `begin`/`end`/`procedure`/`function`/`if`/`then`/`for`/`while`) is almost certainly commented-out code. Such code rots silently: nobody dares delete it, nobody updates it. Either remove it, or replace with a TODO that explains the intent. Matches SonarDelphi communitydelphi:CommentedOutCode.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["maintenance", "dead-code"],
+      "detectorUnit": "uCommentedOutCode.pas",
+      "examples": {
+        "bad":  "// X := 42;\n// if Active then Process;",
+        "good": "// TODO: re-enable once issue #123 is fixed - see history"
+      },
+      "cleanCodeAttribute": "COMPLETE",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA071",
+      "kind": "UnitLevelKeywordIndent",
+      "name": "Unit-level keyword not at column 1",
+      "shortDescription": "`unit`/`interface`/`implementation`/`initialization`/`finalization` should start at column 1",
+      "fullDescription": "Object Pascal convention is that the structural section keywords of a unit are flush-left at column 1. Indented section keywords obscure the unit's structure when scanning and may hint at miscounted begin/end nesting. Matches SonarDelphi communitydelphi:UnitLevelKeywordIndentation.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["style", "structure"],
+      "detectorUnit": "uUnitLevelKeywordIndent.pas",
+      "examples": {
+        "bad":  "  implementation\n\n  procedure Foo; ...",
+        "good": "implementation\n\nprocedure Foo; ..."
+      },
+      "cleanCodeAttribute": "FORMATTED",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA072",
+      "kind": "RedundantBoolean",
+      "name": "Redundant boolean comparison",
+      "shortDescription": "`X = True` should be `X` (and `X <> False` likewise)",
+      "fullDescription": "Comparing a Boolean to True/False is verbose and creates subtle bugs (WinAPI BOOL where Truthy != 1 evaluates `X = True` to false). The expression itself already is the condition. Matches SonarDelphi communitydelphi:RedundantBoolean. Note: `const X = True;` declarations are excluded (legitimate assignment, not comparison).",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["style", "bug-risk"],
+      "detectorUnit": "uRedundantBoolean.pas",
+      "examples": {
+        "bad":  "if Active = True then ...\nif Disabled <> False then ...",
+        "good": "if Active then ...\nif Disabled then ..."
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     }
   ]
 }

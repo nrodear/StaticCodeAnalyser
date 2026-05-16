@@ -19,6 +19,7 @@ uses
   uGotoStatement, uTabulationCharacter, uTooLongLine, uTrailingWhitespace,
   uLowercaseKeyword, uNoSonarMarker, uEmptyArgumentList,
   uInlineAssembly, uTrailingCommaArgList, uDigitGrouping,
+  uCommentedOutCode, uUnitLevelKeywordIndent, uRedundantBoolean,
   uReversedForRange, uSelfAssignment, uVirtualCallInCtor, uLengthUnderflow,
   uVisibilityCheck,
   uUnusedLocal, uUnusedParameter, uTautologicalExpr,
@@ -130,6 +131,9 @@ begin
         TInlineAssemblyDetector.AnalyzeUnit(Root, TempPath, Result);
         TTrailingCommaArgListDetector.AnalyzeUnit(Root, TempPath, Result);
         TDigitGroupingDetector.AnalyzeUnit(Root, TempPath, Result);
+        TCommentedOutCodeDetector.AnalyzeUnit(Root, TempPath, Result);
+        TUnitLevelKeywordIndentDetector.AnalyzeUnit(Root, TempPath, Result);
+        TRedundantBooleanDetector.AnalyzeUnit(Root, TempPath, Result);
         TReversedForRangeDetector.AnalyzeUnit(Root, TempPath, Result);
         TLengthUnderflowDetector.AnalyzeUnit(Root, TempPath, Result);
         TTautologicalExprDetector.AnalyzeUnit(Root, TempPath, Result);

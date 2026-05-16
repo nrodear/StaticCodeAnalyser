@@ -229,6 +229,9 @@
         <DCCReference Include="uTestInlineAssembly.pas"/>
         <DCCReference Include="uTestTrailingCommaArgList.pas"/>
         <DCCReference Include="uTestDigitGrouping.pas"/>
+        <DCCReference Include="uTestCommentedOutCode.pas"/>
+        <DCCReference Include="uTestUnitLevelKeywordIndent.pas"/>
+        <DCCReference Include="uTestRedundantBoolean.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

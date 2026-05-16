@@ -241,6 +241,9 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uInlineAssembly.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTrailingCommaArgList.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDigitGrouping.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCommentedOutCode.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnitLevelKeywordIndent.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uRedundantBoolean.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uReversedForRange.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSelfAssignment.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uVirtualCallInCtor.pas"/>

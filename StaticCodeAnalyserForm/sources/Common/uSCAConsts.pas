@@ -232,9 +232,15 @@ type
     fkTrailingCommaArgList,      // `Foo(A, B,)` - trailing Komma in
                                  // Argument-Liste (SonarDelphi:
                                  // TrailingCommaArgumentList).
-    fkDigitGrouping              // Grosses Int-Literal ohne `_`-Trennung
+    fkDigitGrouping,             // Grosses Int-Literal ohne `_`-Trennung
                                  // (SonarDelphi:DigitGrouping). Seit
                                  // Delphi 10.4: 1_000_000 statt 1000000.
+    fkCommentedOutCode,          // Kommentar enthaelt Pascal-Code-Marker
+                                 // (SonarDelphi:CommentedOutCode).
+    fkUnitLevelKeywordIndent,    // Section-Keyword nicht auf Spalte 1
+                                 // (SonarDelphi:UnitLevelKeywordIndentation).
+    fkRedundantBoolean           // `X = True` / `X <> False` Vergleich
+                                 // (SonarDelphi:RedundantBoolean).
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -352,7 +358,10 @@ const
     (Name: 'EmptyArgumentList';          FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkEmptyArgumentList
     (Name: 'InlineAssembly';             FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkInlineAssembly
     (Name: 'TrailingCommaArgList';       FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkTrailingCommaArgList
-    (Name: 'DigitGrouping';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkDigitGrouping
+    (Name: 'DigitGrouping';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkDigitGrouping
+    (Name: 'CommentedOutCode';           FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkCommentedOutCode
+    (Name: 'UnitLevelKeywordIndent';     FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkUnitLevelKeywordIndent
+    (Name: 'RedundantBoolean';           FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkRedundantBoolean
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

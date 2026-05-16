@@ -177,6 +177,9 @@
         <DCCReference Include="sources\Detectors\uInlineAssembly.pas"/>
         <DCCReference Include="sources\Detectors\uTrailingCommaArgList.pas"/>
         <DCCReference Include="sources\Detectors\uDigitGrouping.pas"/>
+        <DCCReference Include="sources\Detectors\uCommentedOutCode.pas"/>
+        <DCCReference Include="sources\Detectors\uUnitLevelKeywordIndent.pas"/>
+        <DCCReference Include="sources\Detectors\uRedundantBoolean.pas"/>
         <DCCReference Include="sources\Output\uExportSARIF.pas"/>
         <DCCReference Include="sources\Output\uExportSonarGeneric.pas"/>
         <DCCReference Include="sources\Output\uSonarPush.pas"/>
