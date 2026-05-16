@@ -155,6 +155,8 @@ contains
   uNestedRoutines in '..\StaticCodeAnalyserForm\sources\Detectors\uNestedRoutines.pas',
   uFieldName in '..\StaticCodeAnalyserForm\sources\Detectors\uFieldName.pas',
   uTypeName in '..\StaticCodeAnalyserForm\sources\Detectors\uTypeName.pas',
+  uInterfaceName in '..\StaticCodeAnalyserForm\sources\Detectors\uInterfaceName.pas',
+  uMethodName in '..\StaticCodeAnalyserForm\sources\Detectors\uMethodName.pas',
   uReversedForRange in '..\StaticCodeAnalyserForm\sources\Detectors\uReversedForRange.pas',
   uSelfAssignment in '..\StaticCodeAnalyserForm\sources\Detectors\uSelfAssignment.pas',
   uVirtualCallInCtor in '..\StaticCodeAnalyserForm\sources\Detectors\uVirtualCallInCtor.pas',

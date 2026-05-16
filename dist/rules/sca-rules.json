@@ -2054,6 +2054,44 @@
       "impacts": [
         { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
       ]
+    },
+    {
+      "id": "SCA105",
+      "kind": "InterfaceName",
+      "name": "Interface type not prefixed with I",
+      "shortDescription": "Interface aliases should start with `I` (`IFoo = interface`)",
+      "fullDescription": "Delphi convention: interfaces are `IXxx`, mirroring `TXxx` for classes and `PXxx` for pointers. The `I` prefix signals contract vs implementation at every callsite. Also covers `dispinterface`. Matches SonarDelphi communitydelphi:InterfaceName.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["naming", "convention"],
+      "detectorUnit": "uInterfaceName.pas",
+      "examples": {
+        "bad":  "type Service = interface ['{...}'] end;",
+        "good": "type IService = interface ['{...}'] end;"
+      },
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA106",
+      "kind": "MethodName",
+      "name": "Method not in PascalCase",
+      "shortDescription": "Methods should start with an uppercase letter (PascalCase)",
+      "fullDescription": "Delphi convention is PascalCase (UpperCamel) for routines and methods: `DoSomething`, not `doSomething` or `do_something`. Operator overloads and identifiers starting with `_` are exempted. Matches SonarDelphi communitydelphi:MethodName. AST-based: checks `nkMethod.Name` (qualified `TFoo.bar` splits on the dot).",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["naming", "convention"],
+      "detectorUnit": "uMethodName.pas",
+      "examples": {
+        "bad":  "procedure doStuff;",
+        "good": "procedure DoStuff;"
+      },
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     }
   ]
 }

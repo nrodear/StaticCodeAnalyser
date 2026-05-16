@@ -212,6 +212,8 @@
         <DCCReference Include="sources\Detectors\uNestedRoutines.pas"/>
         <DCCReference Include="sources\Detectors\uFieldName.pas"/>
         <DCCReference Include="sources\Detectors\uTypeName.pas"/>
+        <DCCReference Include="sources\Detectors\uInterfaceName.pas"/>
+        <DCCReference Include="sources\Detectors\uMethodName.pas"/>
         <DCCReference Include="sources\Output\uExportSARIF.pas"/>
         <DCCReference Include="sources\Output\uExportSonarGeneric.pas"/>
         <DCCReference Include="sources\Output\uSonarPush.pas"/>

@@ -98,6 +98,8 @@ uses
   uNestedRoutines in 'sources\Detectors\uNestedRoutines.pas',
   uFieldName in 'sources\Detectors\uFieldName.pas',
   uTypeName in 'sources\Detectors\uTypeName.pas',
+  uInterfaceName in 'sources\Detectors\uInterfaceName.pas',
+  uMethodName in 'sources\Detectors\uMethodName.pas',
   uExportSonarGeneric in 'sources\Output\uExportSonarGeneric.pas',
   uSonarPush in 'sources\Output\uSonarPush.pas',
   uSonarConfig in 'sources\Infrastructure\uSonarConfig.pas',

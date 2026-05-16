@@ -58,6 +58,7 @@ uses
   uIfElseBegin, uPointerName,
   uBeginEndRequired, uNestedRoutines,
   uFieldName, uTypeName,
+  uInterfaceName, uMethodName,
   uReversedForRange, uSelfAssignment, uVirtualCallInCtor, uLengthUnderflow,
   uVisibilityCheck,
   uUnusedLocal, uUnusedParameter, uTautologicalExpr,
@@ -186,6 +187,8 @@ begin
   Add('NestedRoutine',   fkNestedRoutine,   procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TNestedRoutinesDetector.AnalyzeUnit(R, F, L); end);
   Add('FieldName',       fkFieldName,       procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TFieldNameDetector.AnalyzeUnit(R, F, L); end);
   Add('TypeName',        fkTypeName,        procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TTypeNameDetector.AnalyzeUnit(R, F, L); end);
+  Add('InterfaceName',   fkInterfaceName,   procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TInterfaceNameDetector.AnalyzeUnit(R, F, L); end);
+  Add('MethodName',      fkMethodName,      procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TMethodNameDetector.AnalyzeUnit(R, F, L); end);
   Add('ReversedForRange',fkReversedForRange,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TReversedForRangeDetector.AnalyzeUnit(R, F, L); end);
   Add('SelfAssignment',  fkSelfAssignment,  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TSelfAssignmentDetector.AnalyzeUnit(R, F, L); end);
   Add('VirtualCallInCtor',fkVirtualCallInCtor,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TVirtualCallInCtorDetector.AnalyzeUnit(R, F, L); end);

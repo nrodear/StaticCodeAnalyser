@@ -264,6 +264,8 @@
         <DCCReference Include="uTestNestedRoutines.pas"/>
         <DCCReference Include="uTestFieldName.pas"/>
         <DCCReference Include="uTestTypeName.pas"/>
+        <DCCReference Include="uTestInterfaceName.pas"/>
+        <DCCReference Include="uTestMethodName.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

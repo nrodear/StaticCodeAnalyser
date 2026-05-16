@@ -306,8 +306,12 @@ type
                                  // (SonarDelphi:NestedRoutines-Variante).
     fkFieldName,                 // Klassen-Feld ohne `F`-Prefix
                                  // (SonarDelphi:FieldName).
-    fkTypeName                   // Class/Record-Type ohne `T`-Prefix
+    fkTypeName,                  // Class/Record-Type ohne `T`-Prefix
                                  // (SonarDelphi:TypeName).
+    fkInterfaceName,             // Interface-Typ ohne `I`-Prefix
+                                 // (SonarDelphi:InterfaceName).
+    fkMethodName                 // Methoden-Name nicht in PascalCase
+                                 // (SonarDelphi:MethodName).
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -460,7 +464,9 @@ const
     (Name: 'BeginEndRequired';           FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkBeginEndRequired
     (Name: 'NestedRoutine';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkNestedRoutine
     (Name: 'FieldName';                  FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkFieldName
-    (Name: 'TypeName';                   FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkTypeName
+    (Name: 'TypeName';                   FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkTypeName
+    (Name: 'InterfaceName';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkInterfaceName
+    (Name: 'MethodName';                 FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkMethodName
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

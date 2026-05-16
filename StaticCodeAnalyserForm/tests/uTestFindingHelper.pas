@@ -32,6 +32,7 @@ uses
   uIfElseBegin, uPointerName,
   uBeginEndRequired, uNestedRoutines,
   uFieldName, uTypeName,
+  uInterfaceName, uMethodName,
   uReversedForRange, uSelfAssignment, uVirtualCallInCtor, uLengthUnderflow,
   uVisibilityCheck,
   uUnusedLocal, uUnusedParameter, uTautologicalExpr,
@@ -178,6 +179,8 @@ begin
         TNestedRoutinesDetector.AnalyzeUnit(Root, TempPath, Result);
         TFieldNameDetector.AnalyzeUnit(Root, TempPath, Result);
         TTypeNameDetector.AnalyzeUnit(Root, TempPath, Result);
+        TInterfaceNameDetector.AnalyzeUnit(Root, TempPath, Result);
+        TMethodNameDetector.AnalyzeUnit(Root, TempPath, Result);
         TReversedForRangeDetector.AnalyzeUnit(Root, TempPath, Result);
         TLengthUnderflowDetector.AnalyzeUnit(Root, TempPath, Result);
         TTautologicalExprDetector.AnalyzeUnit(Root, TempPath, Result);

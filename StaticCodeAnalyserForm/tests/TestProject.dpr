@@ -127,7 +127,9 @@ uses
   uTestBeginEndRequired in 'uTestBeginEndRequired.pas',
   uTestNestedRoutines in 'uTestNestedRoutines.pas',
   uTestFieldName in 'uTestFieldName.pas',
-  uTestTypeName in 'uTestTypeName.pas';
+  uTestTypeName in 'uTestTypeName.pas',
+  uTestInterfaceName in 'uTestInterfaceName.pas',
+  uTestMethodName in 'uTestMethodName.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}
