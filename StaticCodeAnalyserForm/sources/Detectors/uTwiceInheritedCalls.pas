@@ -41,6 +41,17 @@ begin
     Inc(Result, CountInheritedInSubtree(Child));
 end;
 
+// Liefert den Body-Block oder nil bei Forward-Deklarationen
+// (Class-Body-Signatur). Konsistent mit uConstructor/uDestructor-
+// WithoutInherited, deren False-Positive-Fix wir hier mitziehen.
+function FindBodyBlock(MethodNode: TAstNode): TAstNode;
+var Child: TAstNode;
+begin
+  Result := nil;
+  for Child in MethodNode.Children do
+    if Child.Kind = nkBlock then Exit(Child);
+end;
+
 class procedure TTwiceInheritedCallsDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -53,6 +64,8 @@ begin
   try
     for M in Methods do
     begin
+      // Nur echte Implementierungen - Forward-Decls haben keinen Body.
+      if FindBodyBlock(M) = nil then Continue;
       Count := CountInheritedInSubtree(M);
       if Count < 2 then Continue;
       F            := TLeakFinding.Create;

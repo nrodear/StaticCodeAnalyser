@@ -41,6 +41,16 @@ begin
   Result := LowerCase(Trim(MethodNode.TypeRef)).StartsWith('constructor');
 end;
 
+// Liefert den Body-Block (nkBlock) oder nil wenn die Methode nur eine
+// Forward-Decl (Class-Body-Signatur) ist. Pattern aus uEmptyMethod.
+function FindBodyBlock(MethodNode: TAstNode): TAstNode;
+var Child: TAstNode;
+begin
+  Result := nil;
+  for Child in MethodNode.Children do
+    if Child.Kind = nkBlock then Exit(Child);
+end;
+
 function HasInheritedCall(Node: TAstNode): Boolean;
 var
   Child : TAstNode;
@@ -64,6 +74,9 @@ begin
     for M in Methods do
     begin
       if not IsConstructor(M) then Continue;
+      // Nur echte Implementierungen pruefen - Forward-Decls (Class-Body-
+      // Signatur) haben kein nkBlock, dort gehoert `inherited` nicht hin.
+      if FindBodyBlock(M) = nil then Continue;
       if HasInheritedCall(M) then Continue;
       F            := TLeakFinding.Create;
       F.FileName   := FileName;

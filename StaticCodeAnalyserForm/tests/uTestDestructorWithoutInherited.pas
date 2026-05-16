@@ -12,6 +12,7 @@ type
     [Test] procedure DtorWithInherited_NoFinding;
     [Test] procedure DtorWithoutInherited_Reported;
     [Test] procedure RegularProcedure_NoFinding;
+    [Test] procedure DtorForwardDecl_NotReported;
     [Test] procedure DtorWithoutInherited_KindAndSeverity;
   end;
 
@@ -57,6 +58,31 @@ const SRC =
   'procedure TFoo.Bar;'#13#10 +
   'begin'#13#10 +
   '  DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkDestructorWithoutInherited));
+  finally F.Free; end;
+end;
+
+procedure TTestDestructorWithoutInherited.DtorForwardDecl_NotReported;
+// Regression: Forward-Deklaration im Class-Body (`destructor Destroy;
+// override;`) ist keine Implementierung - der Detektor darf hier NICHT
+// anschlagen. Echte Implementation steht spaeter im implementation-Teil.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  public'#13#10 +
+  '    destructor Destroy; override;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'destructor TFoo.Destroy;'#13#10 +
+  'begin'#13#10 +
+  '  FreeAndNil(FBar);'#13#10 +
+  '  inherited;'#13#10 +
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin

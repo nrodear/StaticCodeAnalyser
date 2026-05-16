@@ -37,6 +37,19 @@ begin
   Result := LowerCase(Trim(MethodNode.TypeRef)).StartsWith('destructor');
 end;
 
+// Liefert den Body-Block (nkBlock) der Methode oder nil wenn keiner da
+// ist. Forward-Deklarationen in Class-Bodies (`destructor Destroy;
+// override;`) sind nkMethod-Knoten ohne nkBlock - wir muessen die
+// ausnehmen, sonst feuert der Detektor auf der Signatur statt auf der
+// Implementierung. Pattern aus uEmptyMethod uebernommen.
+function FindBodyBlock(MethodNode: TAstNode): TAstNode;
+var Child: TAstNode;
+begin
+  Result := nil;
+  for Child in MethodNode.Children do
+    if Child.Kind = nkBlock then Exit(Child);
+end;
+
 function HasInheritedCall(Node: TAstNode): Boolean;
 var
   Child : TAstNode;
@@ -60,6 +73,9 @@ begin
     for M in Methods do
     begin
       if not IsDestructor(M) then Continue;
+      // Nur echte Implementierungen pruefen - Forward-Decls in Class-Bodies
+      // haben kein nkBlock und wuerden sonst falsch-positiv anschlagen.
+      if FindBodyBlock(M) = nil then Continue;
       if HasInheritedCall(M) then Continue;
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
