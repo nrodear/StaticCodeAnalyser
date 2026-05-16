@@ -85,6 +85,8 @@ procedure UnregisterSonarAddInOptions;
 
 implementation
 
+{$R *.dfm}
+
 uses
   System.IniFiles, System.IOUtils, Winapi.ShellAPI, Winapi.Windows;
 
