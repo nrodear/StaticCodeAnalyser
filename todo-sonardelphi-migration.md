@@ -8,8 +8,8 @@ SCA-unique detectors (DFM, security, SQL).
 > - SCA v0.9.1: **59 Rules**, davon ~22 mit SonarDelphi-Overlap, ~37 unique (20 DFM-Rules + SQL/Security/Format-Locale)
 > - Coverage-Gap zum 110 %-Ziel: **~119 Rules** zu portieren, **~25 Rules** schon vorhanden
 >
-> **Fortschritt 2026-05-16 / 2026-05-17**: Phase 1 zu **45/50** abgeschlossen
-> (SCA060-104). Katalog von 59 → **104 Rules**.
+> **Fortschritt 2026-05-16 / 2026-05-17**: Phase 1 zu **47/50** abgeschlossen
+> (SCA060-106). Katalog von 59 → **106 Rules**.
 > Siehe "Phase 1 Status" unten.
 
 ---
@@ -140,6 +140,8 @@ Triviale Detektoren — Pattern matched 1:1 unsere bestehenden.
 | SCA102 | NestedRoutine                | done   | #16 (AST) |
 | SCA103 | FieldName                    | done   | #17 (`6d11c48`) |
 | SCA104 | TypeName                     | done   | #17 |
+| SCA105 | InterfaceName                | done   | #18 (`29e1857`) |
+| SCA106 | MethodName                   | done   | #18 (AST) |
 
 **Overlap-Audit (2026-05-16)**: `uEmptyBlock` (SCA077) ueberlappte initial mit
 `uEmptyMethod` (existing) auf leeren Methoden-Bodies. Fix in `690d883` -
