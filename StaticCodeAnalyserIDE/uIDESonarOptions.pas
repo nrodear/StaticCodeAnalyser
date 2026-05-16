@@ -407,7 +407,12 @@ end;
 
 function TSonarAddInOptions.GetArea: string;
 begin
-  Result := 'Third Party';
+  // Leerer String -> IDE platziert die Page unter dem sprachabhaengigen
+  // Default-Knoten ("Third Party" auf englischer IDE, "Fremdhersteller"
+  // auf deutscher IDE). Ein hartes 'Third Party' wuerde stattdessen einen
+  // ZWEITEN Top-Level-Knoten daneben erzeugen - was vorher die Sonar-Page
+  // visuell von der bestehenden SCA-Page getrennt hat.
+  Result := '';
 end;
 
 function TSonarAddInOptions.GetCaption: string;
