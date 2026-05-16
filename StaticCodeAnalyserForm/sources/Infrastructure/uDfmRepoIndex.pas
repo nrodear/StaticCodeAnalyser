@@ -115,7 +115,6 @@ var
   IFace   : TAstNode;
   OwnsRoot: Boolean;
 begin
-  Root := nil;
   OwnsRoot := False;
 
   if Assigned(gAstFileCache) then

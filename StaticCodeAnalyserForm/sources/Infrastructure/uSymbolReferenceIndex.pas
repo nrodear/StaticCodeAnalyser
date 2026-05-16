@@ -200,7 +200,6 @@ var
   OwnsRoot: Boolean;
 begin
   if not FileExists(PasFileName) then Exit;
-  Root := nil;
   OwnsRoot := False;
 
   if Assigned(gAstFileCache) then
