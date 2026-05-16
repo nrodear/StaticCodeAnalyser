@@ -70,6 +70,23 @@ begin
          or (Lower = 'public')  or (Lower = 'published');
 end;
 
+// True wenn nach dem ersten Wort (Visibility-Keyword) noch nicht-leerer
+// Inhalt auf der Zeile steht. Faengt den Style ab, in dem Member und
+// Visibility auf einer Zeile zusammenstehen: `public procedure A;`
+// statt `public\n  procedure A;`. Ohne den Check wuerde der Detektor
+// glauben, die Section habe keine Member, und das zweite `public`
+// nicht als konsekutiv erkennen.
+function LineHasContentAfter(const Line, FirstWord: string): Boolean;
+var
+  Trimmed, Rest : string;
+begin
+  Result := False;
+  Trimmed := TrimLeft(Line);
+  if Length(Trimmed) <= Length(FirstWord) then Exit;
+  Rest := TrimLeft(Copy(Trimmed, Length(FirstWord) + 1, MaxInt));
+  Result := Rest <> '';
+end;
+
 class procedure TConsecutiveVisibilityDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -119,6 +136,14 @@ begin
         end;
         CurrentVis  := L;
         CurHasMembs := False;
+        // Same-line Member: `public procedure A;` zaehlt schon als
+        // "Member gesehen" - sonst erkennen wir bei `public ...
+        // public ...` die Wiederholung nicht.
+        if LineHasContentAfter(Lines[i], Word) then
+        begin
+          if SeenVis.IndexOf(L) < 0 then SeenVis.Add(L);
+          CurHasMembs := True;
+        end;
       end
       else
       begin
