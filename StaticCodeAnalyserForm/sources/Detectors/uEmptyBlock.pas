@@ -1,19 +1,23 @@
 unit uEmptyBlock;
 
-// Detektor fuer leere `begin..end`-Bloecke.
+// Detektor fuer leere `begin..end`-Bloecke INNERHALB von Statements.
 //
-// SonarDelphi-Aequivalent: communitydelphi:EmptyBlock. Ein `begin end`
-// ohne Anweisungen dazwischen ist meistens ein vergessener Refactor-
-// Rest oder ein Platzhalter, der nie ausgefuellt wurde. In jedem Fall
-// ist es Toter Code, der dem Reviewer Fragezeichen liefert.
+// SonarDelphi-Aequivalent: communitydelphi:EmptyBlock. Ein `if X then
+// begin end;` oder `while Cond do begin end;` ohne Anweisungen ist
+// meistens ein vergessener Refactor-Rest oder Platzhalter.
 //
-// Erkennung: zeilenweise Tokenstream-Scan ueber die ganze Unit
-// (kommentbereinigt). Wir suchen Vorkommen von `begin` Wort, gefolgt
-// von nur Whitespace, dann `end` Wort.
+// Erkennung: kommentbereinigtes Joinen der Source, dann `begin <ws> end`-
+// Pattern suchen. Pro Treffer wird der Kontext geprueft: das `begin` muss
+// einem statement-Marker folgen (`then`/`else`/`do`/`of`/`finally`/`try`/
+// `except`/aeusserem `begin`), nicht einem Routinen-Header
+// (`procedure`/`function`/`constructor`/`destructor`).
 //
-// Ausgenommen: `begin..end` im Top-Level-Initialization-Pattern
-// (`begin\nEnd.`) - das ist die syntaktisch erlaubte aber leere
-// Initialization-Section, kein Refactor-Rest.
+// Ausnahmen (kein Finding):
+//   * Leere Methoden-Bodies: `procedure Foo; begin end;` - das deckt der
+//     bereits existierende uEmptyMethod-Detektor ab (fkEmptyMethod).
+//     Doppelmeldung wuerde sonst entstehen.
+//   * Top-Level Unit-Init: `begin end.` - das ist die explizit erlaubte
+//     leere Initialization-Section.
 
 interface
 
@@ -120,6 +124,51 @@ begin
   end;
 end;
 
+// Wandert von `BeginPos` rueckwaerts, ueberspringt Whitespace und
+// Nicht-Wort-Zeichen, und sammelt das letzte schluesselwort-aehnliche
+// Wort. Liefert True wenn dieses Wort ein Routinen-Header-Keyword ist
+// (procedure/function/constructor/destructor) - dann gehoert das `begin`
+// zu einem Methoden-Body und wird vom uEmptyMethod-Detektor abgedeckt.
+function IsRoutineBody(const Code: string; BeginPos: Integer): Boolean;
+var
+  p, q, Start : Integer;
+  Word, Lower : string;
+begin
+  Result := False;
+  p := BeginPos - 1;
+  while p >= 1 do
+  begin
+    // Whitespace / Newlines ueberspringen
+    while (p >= 1) and CharInSet(Code[p], [' ', #9, #10, #13]) do Dec(p);
+    if p < 1 then Exit;
+    // Nicht-Wort-Zeichen (`;`, `:`, `>`, `]`, etc.) ueberspringen
+    while (p >= 1) and not CharInSet(Code[p], ['A'..'Z','a'..'z','0'..'9','_']) do
+      Dec(p);
+    if p < 1 then Exit;
+    // Wort rueckwaerts scannen
+    q := p;
+    while (p >= 1) and CharInSet(Code[p], ['A'..'Z','a'..'z','0'..'9','_']) do
+      Dec(p);
+    Start := p + 1;
+    Word := Copy(Code, Start, q - Start + 1);
+    Lower := LowerCase(Word);
+    // Statement-Block-Starter -> kein Methoden-Body, weiterscannen ueberfluessig
+    if (Lower = 'then') or (Lower = 'else') or (Lower = 'do') or
+       (Lower = 'of')   or (Lower = 'finally') or (Lower = 'try') or
+       (Lower = 'except') or (Lower = 'begin') or (Lower = 'repeat') then
+    begin
+      Result := False; Exit;
+    end;
+    // Routinen-Header -> Methoden-Body
+    if (Lower = 'procedure') or (Lower = 'function') or
+       (Lower = 'constructor') or (Lower = 'destructor') then
+    begin
+      Result := True; Exit;
+    end;
+    // Andere Worte (Identifier in var-Section, Typen, etc.) -> weiter zurueck
+  end;
+end;
+
 class procedure TEmptyBlockDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -182,6 +231,12 @@ begin
         while (k <= Length(Code)) and CharInSet(Code[k], [' ', #9, #10, #13]) do
           Inc(k);
         if (k <= Length(Code)) and (Code[k] = '.') then IsInitSec := True;
+        // Methoden-Body ausschliessen: das deckt uEmptyMethod ab.
+        if (not IsInitSec) and IsRoutineBody(Code, pBeg) then
+        begin
+          pBeg := pEnd + 3;
+          Continue;
+        end;
         if not IsInitSec then
         begin
           k := pBeg - 1;
