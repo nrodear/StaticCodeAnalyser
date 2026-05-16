@@ -232,6 +232,9 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnusedUses.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uWithStatement.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uGotoStatement.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTabulationCharacter.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTooLongLine.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTrailingWhitespace.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uReversedForRange.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSelfAssignment.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uVirtualCallInCtor.pas"/>

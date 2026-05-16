@@ -168,6 +168,9 @@
         <DCCReference Include="sources\Infrastructure\uDfmRepoIndex.pas"/>
         <DCCReference Include="sources\Output\uClaudePrompt.pas"/>
         <DCCReference Include="sources\Detectors\uGotoStatement.pas"/>
+        <DCCReference Include="sources\Detectors\uTabulationCharacter.pas"/>
+        <DCCReference Include="sources\Detectors\uTooLongLine.pas"/>
+        <DCCReference Include="sources\Detectors\uTrailingWhitespace.pas"/>
         <DCCReference Include="sources\Output\uExportSARIF.pas"/>
         <DCCReference Include="sources\Output\uExportSonarGeneric.pas"/>
         <DCCReference Include="sources\Output\uSonarPush.pas"/>

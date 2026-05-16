@@ -208,10 +208,18 @@ type
     fkFormatLocaleHint,          // FormatMismatch-Variante: %.2f / %.3f ohne
                                  // TFormatSettings -> Komma-vs-Punkt-Falle
                                  // bei DE/EN-Lokalisierung.
-    fkGotoStatement              // `goto` in Pascal-Code - SonarDelphi-Mapping
+    fkGotoStatement,             // `goto` in Pascal-Code - SonarDelphi-Mapping
                                  // (communitydelphi:GotoStatement). Strukturen-
                                  // brechende Anweisung, sollte durch Exit /
                                  // Helper-Methode ersetzt werden.
+    fkTabulationCharacter,       // Tab-Zeichen im Source (SonarDelphi:
+                                 // TabulationCharacter). Style/Formatting -
+                                 // pro Zeile ein Finding auf erste Tab-Position.
+    fkTooLongLine,               // Zeile > 120 Zeichen (SonarDelphi:TooLongLine).
+                                 // Standard-Schwelle aus Code-Review-Praxis,
+                                 // siehe MAX_LINE_LEN in uTooLongLine.
+    fkTrailingWhitespace         // Zeile endet mit Space/Tab (SonarDelphi:
+                                 // TrailingWhitespace). Diff-Hygiene.
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -320,7 +328,10 @@ const
     (Name: 'DfmDataModuleSplitHint';     FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkDfmDataModuleSplitHint
     (Name: 'SqlDangerousStatement';      FindingType: ftBug;          DefaultSeverity: lsError),   // fkSqlDangerousStatement
     (Name: 'FormatLocaleHint';           FindingType: ftBug;          DefaultSeverity: lsHint),    // fkFormatLocaleHint
-    (Name: 'GotoStatement';              FindingType: ftCodeSmell;    DefaultSeverity: lsWarning)  // fkGotoStatement
+    (Name: 'GotoStatement';              FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkGotoStatement
+    (Name: 'TabulationCharacter';        FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkTabulationCharacter
+    (Name: 'TooLongLine';                FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkTooLongLine
+    (Name: 'TrailingWhitespace';         FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkTrailingWhitespace
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

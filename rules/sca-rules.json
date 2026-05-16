@@ -1218,6 +1218,63 @@
       "impacts": [
         { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
       ]
+    },
+    {
+      "id": "SCA061",
+      "kind": "TabulationCharacter",
+      "name": "Tab character in source",
+      "shortDescription": "Tab characters render inconsistently across editors - use spaces",
+      "fullDescription": "Pascal coding convention has been space-indentation since the 80s. Tabs render at 2/4/8 columns depending on the editor, break code-review side-by-side diffs and confuse alignment. SonarDelphi tracks the same as communitydelphi:TabulationCharacter.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["formatting", "style"],
+      "detectorUnit": "uTabulationCharacter.pas",
+      "examples": {
+        "bad":  "procedure Foo;\nbegin\n<TAB>DoStuff;\nend;",
+        "good": "procedure Foo;\nbegin\n  DoStuff;\nend;"
+      },
+      "cleanCodeAttribute": "FORMATTED",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA062",
+      "kind": "TooLongLine",
+      "name": "Source line too long",
+      "shortDescription": "Line exceeds 120 characters - wrap or extract subexpression",
+      "fullDescription": "Lines over 120 chars don't fit in a standard side-by-side code review (2*120+gutter) and overflow 16:9 monitor thirds. SonarDelphi default and Sun/Java style guides agree on 120. Threshold currently hardcoded; planned config key '[Detectors] MaxLineLength'.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["formatting", "style"],
+      "detectorUnit": "uTooLongLine.pas",
+      "examples": {
+        "bad":  "result := SomeReallyLongFunction(ArgumentOne, ArgumentTwo, ArgumentThree, ArgumentFour, ArgumentFive);",
+        "good": "result := SomeReallyLongFunction(\n  ArgumentOne, ArgumentTwo,\n  ArgumentThree, ArgumentFour, ArgumentFive);"
+      },
+      "cleanCodeAttribute": "FORMATTED",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA063",
+      "kind": "TrailingWhitespace",
+      "name": "Trailing whitespace",
+      "shortDescription": "Line ends with space or tab - hygiene for diffs",
+      "fullDescription": "Trailing space/tab at end of line creates phantom diff lines whenever an editor with 'trim trailing whitespace on save' touches the file. SonarDelphi tracks the same as communitydelphi:TrailingWhitespace.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["formatting", "style"],
+      "detectorUnit": "uTrailingWhitespace.pas",
+      "examples": {
+        "bad":  "  DoStuff;   <-- trailing spaces",
+        "good": "  DoStuff;"
+      },
+      "cleanCodeAttribute": "FORMATTED",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     }
   ]
 }

@@ -42,7 +42,7 @@ uses
   uStaticFiles, uParser2, uAstNode,
   uLeakDetector2, uCodeSmells2, uSQLInjection, uHardcodedSecret,
   uFormatMismatch, uConcatToFormat, uUnusedUses, uWithStatement,
-  uGotoStatement,
+  uGotoStatement, uTabulationCharacter, uTooLongLine, uTrailingWhitespace,
   uReversedForRange, uSelfAssignment, uVirtualCallInCtor, uLengthUnderflow,
   uVisibilityCheck,
   uUnusedLocal, uUnusedParameter, uTautologicalExpr,
@@ -127,6 +127,9 @@ begin
   Add('ConcatToFormat',  fkConcatToFormat,  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TConcatToFormatDetector.AnalyzeUnit(R, F, L); end);
   Add('WithStatement',   fkWithStatement,   procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TWithStatementDetector.AnalyzeUnit(R, F, L); end);
   Add('GotoStatement',   fkGotoStatement,   procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TGotoStatementDetector.AnalyzeUnit(R, F, L); end);
+  Add('TabulationCharacter', fkTabulationCharacter, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TTabulationCharacterDetector.AnalyzeUnit(R, F, L); end);
+  Add('TooLongLine',     fkTooLongLine,     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TTooLongLineDetector.AnalyzeUnit(R, F, L); end);
+  Add('TrailingWhitespace', fkTrailingWhitespace, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TTrailingWhitespaceDetector.AnalyzeUnit(R, F, L); end);
   Add('ReversedForRange',fkReversedForRange,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TReversedForRangeDetector.AnalyzeUnit(R, F, L); end);
   Add('SelfAssignment',  fkSelfAssignment,  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TSelfAssignmentDetector.AnalyzeUnit(R, F, L); end);
   Add('VirtualCallInCtor',fkVirtualCallInCtor,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TVirtualCallInCtorDetector.AnalyzeUnit(R, F, L); end);

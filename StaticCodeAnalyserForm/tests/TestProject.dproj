@@ -206,6 +206,9 @@
         <DCCReference Include="uTestConcatToFormat.pas"/>
         <DCCReference Include="uTestWithStatement.pas"/>
         <DCCReference Include="uTestGotoStatement.pas"/>
+        <DCCReference Include="uTestTabulationCharacter.pas"/>
+        <DCCReference Include="uTestTooLongLine.pas"/>
+        <DCCReference Include="uTestTrailingWhitespace.pas"/>
         <DCCReference Include="uTestReversedForRange.pas"/>
         <DCCReference Include="uTestSelfAssignment.pas"/>
         <DCCReference Include="uTestVirtualCallInCtor.pas"/>
