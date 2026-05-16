@@ -130,16 +130,24 @@ begin
   grpServer.Caption := 'Server';
   Inc(Y, grpServer.Height + 12);
 
+  // TLabel mit AutoSize=True (Default) schrumpft sich beim ersten Layout-
+  // Tick auf seine Caption-Breite - das verschiebt die Label-Right-Kante
+  // unvorhersehbar. AutoSize=False + feste Width/Height haelt die Spalte
+  // stabil, vor allem bei DPI-Skalierung und uebersetzten Captions.
   lblHost := TLabel.Create(Self); lblHost.Parent := grpServer;
+  lblHost.AutoSize := False;
   lblHost.Left := INNER_LEFT; lblHost.Top := INNER_TOP + 3;
-  lblHost.Width := LBL_W; lblHost.Caption := 'Host URL:';
+  lblHost.Width := LBL_W; lblHost.Height := 17;
+  lblHost.Caption := 'Host URL:';
   edHost := TEdit.Create(Self); edHost.Parent := grpServer;
   edHost.Left := INNER_LEFT + LBL_W; edHost.Top := INNER_TOP;
   edHost.Width := EDIT_W; edHost.TextHint := 'https://sonar.company.com';
 
   lblProject := TLabel.Create(Self); lblProject.Parent := grpServer;
+  lblProject.AutoSize := False;
   lblProject.Left := INNER_LEFT; lblProject.Top := lblHost.Top + 32;
-  lblProject.Width := LBL_W; lblProject.Caption := 'Project Key:';
+  lblProject.Width := LBL_W; lblProject.Height := 17;
+  lblProject.Caption := 'Project Key:';
   edProject := TEdit.Create(Self); edProject.Parent := grpServer;
   edProject.Left := INNER_LEFT + LBL_W; edProject.Top := edHost.Top + 32;
   edProject.Width := EDIT_W - 100;
@@ -151,8 +159,10 @@ begin
   btnDetectProject.OnClick := DetectProjectClick;
 
   lblBranch := TLabel.Create(Self); lblBranch.Parent := grpServer;
+  lblBranch.AutoSize := False;
   lblBranch.Left := INNER_LEFT; lblBranch.Top := lblProject.Top + 32;
-  lblBranch.Width := LBL_W; lblBranch.Caption := 'Branch:';
+  lblBranch.Width := LBL_W; lblBranch.Height := 17;
+  lblBranch.Caption := 'Branch:';
   edBranch := TEdit.Create(Self); edBranch.Parent := grpServer;
   edBranch.Left := INNER_LEFT + LBL_W; edBranch.Top := edProject.Top + 32;
   edBranch.Width := EDIT_W; edBranch.TextHint := 'main';
@@ -173,8 +183,10 @@ begin
   Inc(Y, grpAuth.Height + 12);
 
   lblToken := TLabel.Create(Self); lblToken.Parent := grpAuth;
+  lblToken.AutoSize := False;
   lblToken.Left := INNER_LEFT; lblToken.Top := INNER_TOP + 3;
-  lblToken.Width := LBL_W; lblToken.Caption := 'Bearer Token:';
+  lblToken.Width := LBL_W; lblToken.Height := 17;
+  lblToken.Caption := 'Bearer Token:';
   edToken := TEdit.Create(Self); edToken.Parent := grpAuth;
   edToken.Left := INNER_LEFT + LBL_W; edToken.Top := INNER_TOP;
   edToken.Width := EDIT_W - 100;
@@ -199,12 +211,15 @@ begin
     'Only this Windows user on this machine can decrypt it.';
 
   // ============== Actions ==============
+  // Hoehe 200 statt 220 - die Standard-Tools>Options-Page hat ~520 px
+  // Inhaltshoehe. Mit grpServer(168) + 12 + grpAuth(100) + 12 + grpActions
+  // landeten wir vorher bei 524 und die untere Memo-Kante wurde abgeschnitten.
   grpActions         := TGroupBox.Create(Self);
   grpActions.Parent  := Self;
   grpActions.Left    := MARGIN_LEFT;
   grpActions.Top     := Y;
   grpActions.Width   := GROUP_W;
-  grpActions.Height  := 220;
+  grpActions.Height  := 200;
   grpActions.Caption := 'Connectivity';
 
   btnTest := TButton.Create(Self); btnTest.Parent := grpActions;
@@ -227,7 +242,9 @@ begin
   memoResult.ScrollBars := ssVertical;
   memoResult.ReadOnly := True;
   memoResult.Font.Name := 'Consolas';
-  memoResult.Color := clBtnFace;
+  // clWindow statt clBtnFace - ReadOnly reicht als Hinweis, grauer
+  // Background liest sich wie disabled.
+  memoResult.Color := clWindow;
 end;
 
 procedure TSonarOptionsFrame.LoadFromIni(const IniPath: string);
@@ -256,7 +273,6 @@ begin
     begin
       edToken.Text := TOKEN_PLACEHOLDER;
       edToken.PasswordChar := #0;  // Placeholder lesbar zeigen
-      edToken.Enabled := True;
     end;
   end;
 end;
@@ -341,13 +357,20 @@ begin
     Cli.Token := FOriginalToken;
 
   Cfg := TSonarConfigResolver.Resolve(Cli, '', '');
-  memoResult.Clear;
-  memoResult.Lines.Add('Running health-check...');
-  Application.ProcessMessages;
-
-  R := TSonarHealthCheck.Run(Cfg);
-  S := TSonarHealthCheck.FormatChecklist(R);
-  memoResult.Text := S;
+  // KEIN Application.ProcessMessages hier - im IDE-Plugin ist Application
+  // die Delphi-IDE selbst; ProcessMessages kann andere Events feuern und
+  // Re-Entrancy im Options-Dialog ausloesen. Der User sieht das
+  // "Running..."-Update einfach nicht, dafuer bleibt der Dialog stabil.
+  Screen.Cursor := crHourGlass;
+  try
+    memoResult.Clear;
+    memoResult.Lines.Add('Running health-check (this may take up to ~15s)...');
+    R := TSonarHealthCheck.Run(Cfg);
+    S := TSonarHealthCheck.FormatChecklist(R);
+    memoResult.Text := S;
+  finally
+    Screen.Cursor := crDefault;
+  end;
 end;
 
 procedure TSonarOptionsFrame.RevealTokenClick(Sender: TObject);
