@@ -69,6 +69,7 @@ uses
   uTestCustomRuleDetector in 'uTestCustomRuleDetector.pas',
   uTestConcatToFormat   in 'uTestConcatToFormat.pas',
   uTestWithStatement    in 'uTestWithStatement.pas',
+  uTestGotoStatement    in 'uTestGotoStatement.pas',
   uTestReversedForRange in 'uTestReversedForRange.pas',
   uTestSelfAssignment   in 'uTestSelfAssignment.pas',
   uTestVirtualCallInCtor in 'uTestVirtualCallInCtor.pas',

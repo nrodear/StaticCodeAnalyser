@@ -1199,6 +1199,25 @@
       "impacts": [
         { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
       ]
+    },
+    {
+      "id": "SCA060",
+      "kind": "GotoStatement",
+      "name": "goto statement",
+      "shortDescription": "`goto` weakens structured control flow",
+      "fullDescription": "`goto` and labels make the control flow non-structural: loops, nesting and try/finally become hard to follow. SonarDelphi tracks the same as communitydelphi:GotoStatement. Modern Delphi code rarely justifies goto - even multi-level break is cleaner as an extracted procedure with Exit.",
+      "defaultSeverity": "Warning",
+      "type": "Code Smell",
+      "tags": ["control-flow", "delphi-classic"],
+      "detectorUnit": "uGotoStatement.pas",
+      "examples": {
+        "bad":  "label MyExit;\nbegin\n  if Failed then goto MyExit;\n  ...\n  MyExit:\nend;",
+        "good": "if Failed then Exit;\n..."
+      },
+      "cleanCodeAttribute": "CLEAR",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
     }
   ]
 }

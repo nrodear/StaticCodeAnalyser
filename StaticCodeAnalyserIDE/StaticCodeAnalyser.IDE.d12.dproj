@@ -5,7 +5,7 @@
         <ProjectVersion>20.1</ProjectVersion>
         <FrameworkType>None</FrameworkType>
         <Base>True</Base>
-        <Config Condition="'$(Config)'==''">Debug</Config>
+        <Config Condition="'$(Config)'==''">Release</Config>
         <Platform Condition="'$(Platform)'==''">Win32</Platform>
         <ProjectName Condition="'$(ProjectName)'==''">StaticCodeAnalyser.IDE.d12</ProjectName>
         <TargetedPlatforms>1</TargetedPlatforms>
@@ -231,6 +231,7 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uConcatToFormat.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnusedUses.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uWithStatement.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uGotoStatement.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uReversedForRange.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSelfAssignment.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uVirtualCallInCtor.pas"/>

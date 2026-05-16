@@ -205,9 +205,13 @@ type
                                  // Hint statt N Einzelmeldungen.
     fkSqlDangerousStatement,     // SQL: UPDATE/DELETE/TRUNCATE ohne WHERE
                                  // -> betrifft alle Zeilen (Production-Disaster).
-    fkFormatLocaleHint           // FormatMismatch-Variante: %.2f / %.3f ohne
+    fkFormatLocaleHint,          // FormatMismatch-Variante: %.2f / %.3f ohne
                                  // TFormatSettings -> Komma-vs-Punkt-Falle
                                  // bei DE/EN-Lokalisierung.
+    fkGotoStatement              // `goto` in Pascal-Code - SonarDelphi-Mapping
+                                 // (communitydelphi:GotoStatement). Strukturen-
+                                 // brechende Anweisung, sollte durch Exit /
+                                 // Helper-Methode ersetzt werden.
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -315,7 +319,8 @@ const
     (Name: 'DfmMasterDetailUnlinked';    FindingType: ftBug;          DefaultSeverity: lsError),   // fkDfmMasterDetailUnlinked
     (Name: 'DfmDataModuleSplitHint';     FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkDfmDataModuleSplitHint
     (Name: 'SqlDangerousStatement';      FindingType: ftBug;          DefaultSeverity: lsError),   // fkSqlDangerousStatement
-    (Name: 'FormatLocaleHint';           FindingType: ftBug;          DefaultSeverity: lsHint)     // fkFormatLocaleHint
+    (Name: 'FormatLocaleHint';           FindingType: ftBug;          DefaultSeverity: lsHint),    // fkFormatLocaleHint
+    (Name: 'GotoStatement';              FindingType: ftCodeSmell;    DefaultSeverity: lsWarning)  // fkGotoStatement
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

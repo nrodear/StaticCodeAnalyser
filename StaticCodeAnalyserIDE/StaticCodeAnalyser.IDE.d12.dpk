@@ -110,6 +110,7 @@ contains
   uConcatToFormat in '..\StaticCodeAnalyserForm\sources\Detectors\uConcatToFormat.pas',
   uUnusedUses in '..\StaticCodeAnalyserForm\sources\Detectors\uUnusedUses.pas',
   uWithStatement in '..\StaticCodeAnalyserForm\sources\Detectors\uWithStatement.pas',
+  uGotoStatement in '..\StaticCodeAnalyserForm\sources\Detectors\uGotoStatement.pas',
   uReversedForRange in '..\StaticCodeAnalyserForm\sources\Detectors\uReversedForRange.pas',
   uSelfAssignment in '..\StaticCodeAnalyserForm\sources\Detectors\uSelfAssignment.pas',
   uVirtualCallInCtor in '..\StaticCodeAnalyserForm\sources\Detectors\uVirtualCallInCtor.pas',

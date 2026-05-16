@@ -4,7 +4,7 @@
         <ProjectVersion>20.1</ProjectVersion>
         <FrameworkType>VCL</FrameworkType>
         <Base>True</Base>
-        <Config Condition="'$(Config)'==''">Debug</Config>
+        <Config Condition="'$(Config)'==''">Release</Config>
         <Platform Condition="'$(Platform)'==''">Win32</Platform>
         <ProjectName Condition="'$(ProjectName)'==''">StaticCodeAnalyser.d12</ProjectName>
         <TargetedPlatforms>3</TargetedPlatforms>
@@ -167,12 +167,13 @@
         <DCCReference Include="sources\Infrastructure\uDfmDbFieldAnalysis.pas"/>
         <DCCReference Include="sources\Infrastructure\uDfmRepoIndex.pas"/>
         <DCCReference Include="sources\Output\uClaudePrompt.pas"/>
+        <DCCReference Include="sources\Detectors\uGotoStatement.pas"/>
         <DCCReference Include="sources\Output\uExportSARIF.pas"/>
         <DCCReference Include="sources\Output\uExportSonarGeneric.pas"/>
         <DCCReference Include="sources\Output\uSonarPush.pas"/>
-        <DCCReference Include="sources\Output\uFixHint.pas"/>
         <DCCReference Include="sources\Infrastructure\uSonarConfig.pas"/>
         <DCCReference Include="sources\Infrastructure\uSonarPull.pas"/>
+        <DCCReference Include="sources\Output\uFixHint.pas"/>
         <DCCReference Include="sources\Console\uConsoleRunner.pas"/>
         <DCCReference Include="sources\Common\uCollectValues.pas"/>
         <DCCReference Include="sources\Common\uDetectorUtils.pas"/>

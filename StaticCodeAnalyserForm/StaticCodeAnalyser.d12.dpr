@@ -53,6 +53,7 @@ uses
   uDfmRepoIndex in 'sources\Infrastructure\uDfmRepoIndex.pas',
   uClaudePrompt in 'sources\Output\uClaudePrompt.pas',
   uExportSARIF in 'sources\Output\uExportSARIF.pas',
+  uGotoStatement in 'sources\Detectors\uGotoStatement.pas',
   uExportSonarGeneric in 'sources\Output\uExportSonarGeneric.pas',
   uSonarPush in 'sources\Output\uSonarPush.pas',
   uSonarConfig in 'sources\Infrastructure\uSonarConfig.pas',

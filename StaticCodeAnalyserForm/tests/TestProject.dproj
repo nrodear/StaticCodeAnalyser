@@ -4,7 +4,7 @@
         <ProjectVersion>20.1</ProjectVersion>
         <FrameworkType>None</FrameworkType>
         <Base>True</Base>
-        <Config Condition="'$(Config)'==''">Debug</Config>
+        <Config Condition="'$(Config)'==''">Release</Config>
         <Platform Condition="'$(Platform)'==''">Win32</Platform>
         <ProjectName Condition="'$(ProjectName)'==''">TestProject</ProjectName>
         <TargetedPlatforms>1</TargetedPlatforms>
@@ -205,6 +205,7 @@
         <DCCReference Include="uTestCustomRuleDetector.pas"/>
         <DCCReference Include="uTestConcatToFormat.pas"/>
         <DCCReference Include="uTestWithStatement.pas"/>
+        <DCCReference Include="uTestGotoStatement.pas"/>
         <DCCReference Include="uTestReversedForRange.pas"/>
         <DCCReference Include="uTestSelfAssignment.pas"/>
         <DCCReference Include="uTestVirtualCallInCtor.pas"/>
