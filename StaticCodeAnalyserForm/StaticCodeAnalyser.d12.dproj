@@ -195,6 +195,9 @@
         <DCCReference Include="sources\Detectors\uFreeAndNilHint.pas"/>
         <DCCReference Include="sources\Detectors\uAvoidOut.pas"/>
         <DCCReference Include="sources\Detectors\uEmptyVisibilitySection.pas"/>
+        <DCCReference Include="sources\Detectors\uLegacyInitializationSection.pas"/>
+        <DCCReference Include="sources\Detectors\uPublicField.pas"/>
+        <DCCReference Include="sources\Detectors\uNestedTry.pas"/>
         <DCCReference Include="sources\Output\uExportSARIF.pas"/>
         <DCCReference Include="sources\Output\uExportSonarGeneric.pas"/>
         <DCCReference Include="sources\Output\uSonarPush.pas"/>

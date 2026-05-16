@@ -259,6 +259,9 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uFreeAndNilHint.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uAvoidOut.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyVisibilitySection.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLegacyInitializationSection.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uPublicField.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uNestedTry.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uReversedForRange.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSelfAssignment.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uVirtualCallInCtor.pas"/>

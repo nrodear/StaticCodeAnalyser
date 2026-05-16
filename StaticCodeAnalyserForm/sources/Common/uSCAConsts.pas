@@ -270,8 +270,14 @@ type
     fkFreeAndNilHint,            // `X.Free; X := nil;` -> `FreeAndNil(X)`
                                  // (SonarDelphi:FreeAndNil).
     fkAvoidOut,                  // `out`-Parameter (SonarDelphi:AvoidOut).
-    fkEmptyVisibilitySection     // Leere Visibility-Section in Klasse
+    fkEmptyVisibilitySection,    // Leere Visibility-Section in Klasse
                                  // (SonarDelphi:EmptyVisibilitySection).
+    fkLegacyInitializationSection, // `begin..end.` statt `initialization`
+                                 // (SonarDelphi:LegacyInitializationSection).
+    fkPublicField,               // Oeffentliches Klassen-Feld
+                                 // (SonarDelphi:PublicField).
+    fkNestedTry                  // Verschachtelter `try`-Block
+                                 // (SonarDelphi:NestedTry).
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -407,7 +413,10 @@ const
     (Name: 'AssignedAndAssignedNil';     FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkAssignedAndAssignedNil
     (Name: 'FreeAndNilHint';             FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkFreeAndNilHint
     (Name: 'AvoidOut';                   FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkAvoidOut
-    (Name: 'EmptyVisibilitySection';     FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkEmptyVisibilitySection
+    (Name: 'EmptyVisibilitySection';     FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkEmptyVisibilitySection
+    (Name: 'LegacyInitializationSection';FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkLegacyInitializationSection
+    (Name: 'PublicField';                FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkPublicField
+    (Name: 'NestedTry';                  FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkNestedTry
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

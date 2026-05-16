@@ -247,6 +247,9 @@
         <DCCReference Include="uTestFreeAndNilHint.pas"/>
         <DCCReference Include="uTestAvoidOut.pas"/>
         <DCCReference Include="uTestEmptyVisibilitySection.pas"/>
+        <DCCReference Include="uTestLegacyInitializationSection.pas"/>
+        <DCCReference Include="uTestPublicField.pas"/>
+        <DCCReference Include="uTestNestedTry.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

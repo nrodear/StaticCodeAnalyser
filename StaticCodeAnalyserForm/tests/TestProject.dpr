@@ -110,7 +110,10 @@ uses
   uTestAssignedAndAssignedNil in 'uTestAssignedAndAssignedNil.pas',
   uTestFreeAndNilHint in 'uTestFreeAndNilHint.pas',
   uTestAvoidOut in 'uTestAvoidOut.pas',
-  uTestEmptyVisibilitySection in 'uTestEmptyVisibilitySection.pas';
+  uTestEmptyVisibilitySection in 'uTestEmptyVisibilitySection.pas',
+  uTestLegacyInitializationSection in 'uTestLegacyInitializationSection.pas',
+  uTestPublicField in 'uTestPublicField.pas',
+  uTestNestedTry in 'uTestNestedTry.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}

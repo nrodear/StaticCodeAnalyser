@@ -1731,6 +1731,63 @@
       "impacts": [
         { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
       ]
+    },
+    {
+      "id": "SCA088",
+      "kind": "LegacyInitializationSection",
+      "name": "Legacy unit-init begin..end.",
+      "shortDescription": "Use `initialization..end.` instead of legacy `begin..end.`",
+      "fullDescription": "Pre-Delphi-2 units marked their init block with `begin..end.`. Since Delphi 2 the idiomatic form is `initialization..end.` which can be paired with an optional `finalization` block for symmetric cleanup. Matches SonarDelphi communitydelphi:LegacyInitializationSection.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["legacy", "modernization"],
+      "detectorUnit": "uLegacyInitializationSection.pas",
+      "examples": {
+        "bad":  "// at end of unit:\nbegin\n  RegisterClass(TFoo);\nend.",
+        "good": "initialization\n  RegisterClass(TFoo);\nend."
+      },
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA089",
+      "kind": "PublicField",
+      "name": "Public field in class",
+      "shortDescription": "Public field breaks encapsulation - use a property",
+      "fullDescription": "A public field exposes the underlying storage; callers can mutate it without the class noticing. A property gives the class the option to add validation/normalization later without breaking callers. Matches SonarDelphi communitydelphi:PublicField.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["encapsulation", "api-design"],
+      "detectorUnit": "uPublicField.pas",
+      "examples": {
+        "bad":  "type TFoo = class\n  public\n    Count: Integer;\n  end;",
+        "good": "type TFoo = class\n  private\n    FCount: Integer;\n  public\n    property Count: Integer read FCount write FCount;\n  end;"
+      },
+      "cleanCodeAttribute": "MODULAR",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA090",
+      "kind": "NestedTry",
+      "name": "Nested try block",
+      "shortDescription": "Nested `try..end` - consider extracting inner try into a method",
+      "fullDescription": "Nesting try blocks makes the control flow of cleanup / error recovery harder to read. Most cases unwind by either re-ordering the cleanups or extracting the inner block into its own method. Matches SonarDelphi communitydelphi:NestedTry. The detector uses a depth heuristic (counting `try` vs `end` keywords) and may produce a few false positives in heavily nested begin/end code.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["error-handling", "complexity"],
+      "detectorUnit": "uNestedTry.pas",
+      "examples": {
+        "bad":  "try\n  try\n    DoStuff;\n  finally\n    Cleanup;\n  end;\nexcept\n  Log;\nend;",
+        "good": "ProtectedDoStuff;  // helper wraps the inner try"
+      },
+      "cleanCodeAttribute": "FOCUSED",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     }
   ]
 }
