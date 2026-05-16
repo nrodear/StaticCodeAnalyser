@@ -7,6 +7,14 @@
 #  Was NICHT reinkommt: Build-Artefakte, IDE-User-State, Backups.
 # =====================================================================
 
+# ---- Sonar push artifacts ----
+# sonar-scan.ps1 / sonar-upload.ps1 schreiben Reports + Logs neben sich.
+# Inhalt ist run-spezifisch und kann gross werden (MB) - nicht ins VCS.
+StaticCodeAnalyserForm/scripts/*.log
+sca-findings.json
+.sonar/
+.scannerwork/
+
 # ---- Build-Output-Verzeichnisse ----
 # Delphi schreibt kompilierte Artefakte (DCU/BPL/EXE/DLL) typisch
 # nach <Plattform>/<Konfiguration>/. Komplett ignorieren.
