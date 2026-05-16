@@ -118,7 +118,10 @@ uses
   uTestEmptyFile in 'uTestEmptyFile.pas',
   uTestTwiceInheritedCalls in 'uTestTwiceInheritedCalls.pas',
   uTestRedundantParentheses in 'uTestRedundantParentheses.pas',
-  uTestConsecutiveVisibility in 'uTestConsecutiveVisibility.pas';
+  uTestConsecutiveVisibility in 'uTestConsecutiveVisibility.pas',
+  uTestConstructorWithoutInherited in 'uTestConstructorWithoutInherited.pas',
+  uTestDestructorWithoutInherited in 'uTestDestructorWithoutInherited.pas',
+  uTestRedundantConditional in 'uTestRedundantConditional.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}

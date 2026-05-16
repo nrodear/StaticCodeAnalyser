@@ -203,6 +203,9 @@
         <DCCReference Include="sources\Detectors\uTwiceInheritedCalls.pas"/>
         <DCCReference Include="sources\Detectors\uRedundantParentheses.pas"/>
         <DCCReference Include="sources\Detectors\uConsecutiveVisibility.pas"/>
+        <DCCReference Include="sources\Detectors\uConstructorWithoutInherited.pas"/>
+        <DCCReference Include="sources\Detectors\uDestructorWithoutInherited.pas"/>
+        <DCCReference Include="sources\Detectors\uRedundantConditional.pas"/>
         <DCCReference Include="sources\Output\uExportSARIF.pas"/>
         <DCCReference Include="sources\Output\uExportSonarGeneric.pas"/>
         <DCCReference Include="sources\Output\uSonarPush.pas"/>

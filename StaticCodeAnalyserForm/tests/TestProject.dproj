@@ -255,6 +255,9 @@
         <DCCReference Include="uTestTwiceInheritedCalls.pas"/>
         <DCCReference Include="uTestRedundantParentheses.pas"/>
         <DCCReference Include="uTestConsecutiveVisibility.pas"/>
+        <DCCReference Include="uTestConstructorWithoutInherited.pas"/>
+        <DCCReference Include="uTestDestructorWithoutInherited.pas"/>
+        <DCCReference Include="uTestRedundantConditional.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

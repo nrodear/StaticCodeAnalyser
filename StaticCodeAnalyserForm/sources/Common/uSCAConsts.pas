@@ -286,9 +286,15 @@ type
                                  // (SonarDelphi:TwiceInheritedCalls).
     fkRedundantParentheses,      // `((Ident))` doppelte Klammern um simple
                                  // Ausdruecke (SonarDelphi:RedundantParentheses).
-    fkConsecutiveVisibility      // Dieselbe Visibility-Section zweimal in
+    fkConsecutiveVisibility,     // Dieselbe Visibility-Section zweimal in
                                  // einer Klasse (SonarDelphi:
                                  // ConsecutiveVisibilitySection).
+    fkConstructorWithoutInherited, // Konstruktor ohne `inherited` Aufruf
+                                 // (SonarDelphi:ConstructorWithoutInherited).
+    fkDestructorWithoutInherited,// Destruktor ohne `inherited` Aufruf
+                                 // (SonarDelphi:DestructorWithoutInherited).
+    fkRedundantConditional       // `if X then Y := True else Y := False`
+                                 // (SonarDelphi:RedundantConditional).
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -432,7 +438,10 @@ const
     (Name: 'EmptyFile';                  FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkEmptyFile
     (Name: 'TwiceInheritedCalls';        FindingType: ftBug;          DefaultSeverity: lsWarning), // fkTwiceInheritedCalls
     (Name: 'RedundantParentheses';       FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkRedundantParentheses
-    (Name: 'ConsecutiveVisibility';      FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkConsecutiveVisibility
+    (Name: 'ConsecutiveVisibility';      FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkConsecutiveVisibility
+    (Name: 'ConstructorWithoutInherited';FindingType: ftBug;          DefaultSeverity: lsWarning), // fkConstructorWithoutInherited
+    (Name: 'DestructorWithoutInherited'; FindingType: ftBug;          DefaultSeverity: lsError),   // fkDestructorWithoutInherited
+    (Name: 'RedundantConditional';       FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkRedundantConditional
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

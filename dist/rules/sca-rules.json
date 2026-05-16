@@ -1883,6 +1883,63 @@
       "impacts": [
         { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
       ]
+    },
+    {
+      "id": "SCA096",
+      "kind": "ConstructorWithoutInherited",
+      "name": "Constructor without inherited call",
+      "shortDescription": "Constructor missing `inherited Create` - parent stays uninitialized",
+      "fullDescription": "A constructor that does not call `inherited Create(...)` (or `inherited;`) skips parent-class initialization. Parent fields and registrations end up at default/nil state, which leads to follow-up crashes when methods expect the parent to be ready. Matches SonarDelphi communitydelphi:ConstructorWithoutInherited.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["inheritance", "initialization"],
+      "detectorUnit": "uConstructorWithoutInherited.pas",
+      "examples": {
+        "bad":  "constructor TFoo.Create;\nbegin\n  FX := 0;\nend;",
+        "good": "constructor TFoo.Create;\nbegin\n  inherited;\n  FX := 0;\nend;"
+      },
+      "cleanCodeAttribute": "COMPLETE",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA097",
+      "kind": "DestructorWithoutInherited",
+      "name": "Destructor without inherited call",
+      "shortDescription": "Destructor missing `inherited Destroy` - parent cleanup is skipped (leak risk)",
+      "fullDescription": "A destructor without `inherited Destroy` (or `inherited;`) prevents the parent class from releasing its own fields, unregistering handlers, and updating reference counts. Almost always a leak. Matches SonarDelphi communitydelphi:DestructorWithoutInherited.",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["inheritance", "memory-leak"],
+      "detectorUnit": "uDestructorWithoutInherited.pas",
+      "examples": {
+        "bad":  "destructor TFoo.Destroy;\nbegin\n  FreeAndNil(FBar);\nend;",
+        "good": "destructor TFoo.Destroy;\nbegin\n  FreeAndNil(FBar);\n  inherited;\nend;"
+      },
+      "cleanCodeAttribute": "COMPLETE",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
+    },
+    {
+      "id": "SCA098",
+      "kind": "RedundantConditional",
+      "name": "Redundant conditional assignment",
+      "shortDescription": "`if Cond then X := True else X := False` should be `X := Cond`",
+      "fullDescription": "Two branches assigning True/False to the same variable can be reduced to a single direct assignment (or `not Cond` if the polarity is reversed). Shorter, faster, and matches the boolean expression more directly. Matches SonarDelphi communitydelphi:RedundantConditional.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["simplification", "style"],
+      "detectorUnit": "uRedundantConditional.pas",
+      "examples": {
+        "bad":  "if Active then Result := True else Result := False;",
+        "good": "Result := Active;"
+      },
+      "cleanCodeAttribute": "CLEAR",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     }
   ]
 }
