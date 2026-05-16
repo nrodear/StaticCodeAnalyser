@@ -42,6 +42,7 @@ type
 implementation
 
 uses
+  System.StrUtils,                 // PosEx
   uFileTextCache;
 
 const
@@ -144,7 +145,9 @@ begin
       Continue;
     end;
     // `goto`-Match: case-insensitive, beidseitige Wortgrenze.
-    if (c in ['g','G']) and (i + KW_LEN - 1 <= n) and
+    // CharInSet statt c in [...] - WideChar (= Char in Unicode-Delphi) waere
+    // sonst implizit auf ByteChar verkuerzt (W1050).
+    if CharInSet(c, ['g','G']) and (i + KW_LEN - 1 <= n) and
        SameText(Copy(Line, i, KW_LEN), KW) then
     begin
       // Linke Wortgrenze: vorheriges Zeichen nicht-ident
