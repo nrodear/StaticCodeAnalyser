@@ -37,6 +37,10 @@ type
     [Test] procedure Format_OnePlaceholderTwoArgs_ReportsError;
     // Vorgaenger-Filter erlaubt nicht nur '.' - 'Result := Format(...)' wird erkannt
     [Test] procedure Format_AssignmentWithoutDot_ReportsError;
+    // ---- Locale-Hint (fkFormatLocaleHint) ---------------------------------
+    [Test] procedure FormatLocale_FloatSpecWithoutSettings_Reported;
+    [Test] procedure FormatLocale_FloatSpecWithSettings_NoFinding;
+    [Test] procedure FormatLocale_StringSpec_NoFinding;
   end;
 
   // ---- Bare-Style (mORMot FormatUtf8/FormatString) -----------------------------------
@@ -412,6 +416,48 @@ begin
   try
     Assert.AreEqual(1, TFindingHelper.Count(F, fkFormatMismatch),
       'Konkatenation mit echtem Mismatch: 2 Platzhalter, 1 Argument - Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchExt.FormatLocale_FloatSpecWithoutSettings_Reported;
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string; x: Double;'#13#10+
+  'begin s := Format(''%.2f'', [x]); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkFormatLocaleHint) >= 1,
+    'Float-Spec ohne TFormatSettings -> Hint');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchExt.FormatLocale_FloatSpecWithSettings_NoFinding;
+// 3 Top-Level-Args: FmtStr, [x], FmtSettings -> safe.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string; x: Double; fs: TFormatSettings;'#13#10+
+  'begin s := Format(''%.2f'', [x], fs); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkFormatLocaleHint));
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchExt.FormatLocale_StringSpec_NoFinding;
+// %s ist nicht locale-abhaengig.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s, name: string;'#13#10+
+  'begin s := Format(''Hello %s'', [name]); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkFormatLocaleHint));
   finally F.Free; end;
 end;
 

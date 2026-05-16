@@ -87,6 +87,10 @@ type
     [Test] procedure Cyclomatic_OnHandlerCounted_OverLimit_ReportsHint;
     [Test] procedure Cyclomatic_TryFinally_NotCounted_NoFinding;
     [Test] procedure Cyclomatic_TwoMethodsOneOver_OneFinding;
+    // ---- Severity / Finding-Inhalt / Multi-Hit ------------------------------
+    [Test] procedure Cyclomatic_Finding_KindAndSeverity;
+    [Test] procedure Cyclomatic_Finding_MissingVarMentionsCcValue;
+    [Test] procedure Cyclomatic_MultipleHitsInSameUnit_AllReported;
   end;
 
 implementation
@@ -844,6 +848,89 @@ begin
       'nur die komplexe Methode wird gemeldet');
     Assert.IsTrue(F[0].MethodName.EndsWith('Complex'),
       'gemeldete Methode endet auf Complex (nicht Trivial)');
+  finally F.Free; end;
+end;
+
+procedure TTestCyclomaticComplexity.Cyclomatic_Finding_KindAndSeverity;
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'begin'#13#10+
+  '  if a1 then x; if a2 then x; if a3 then x; if a4 then x;'#13#10+
+  '  if a5 then x; if a6 then x; if a7 then x; if a8 then x;'#13#10+
+  '  if a9 then x; if a10 then x; if a11 then x;'#13#10+
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := nil;
+    for Fnd in F do
+      if Fnd.Kind = fkCyclomaticComplexity then
+      begin
+        Hit := Fnd;
+        Break;
+      end;
+    Assert.IsNotNull(Hit, 'fkCyclomaticComplexity finding expected');
+    Assert.AreEqual(fkCyclomaticComplexity, Hit.Kind);
+    Assert.AreEqual(lsHint, Hit.Severity);
+  finally F.Free; end;
+end;
+
+procedure TTestCyclomaticComplexity.Cyclomatic_Finding_MissingVarMentionsCcValue;
+// MissingVar muss den errechneten CC-Wert (>= 11 bei 11 If's + 1 Base)
+// und das Limit (Default 10) enthalten.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'begin'#13#10+
+  '  if a1 then x; if a2 then x; if a3 then x; if a4 then x;'#13#10+
+  '  if a5 then x; if a6 then x; if a7 then x; if a8 then x;'#13#10+
+  '  if a9 then x; if a10 then x; if a11 then x;'#13#10+
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := nil;
+    for Fnd in F do
+      if Fnd.Kind = fkCyclomaticComplexity then
+      begin
+        Hit := Fnd;
+        Break;
+      end;
+    Assert.IsNotNull(Hit);
+    Assert.Contains(LowerCase(Hit.MissingVar), 'cyclomatic');
+    Assert.Contains(Hit.MissingVar, '10');   // Limit
+  finally F.Free; end;
+end;
+
+procedure TTestCyclomaticComplexity.Cyclomatic_MultipleHitsInSameUnit_AllReported;
+// Zwei komplexe Methoden in derselben Unit -> zwei Findings.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.ComplexA;'#13#10+
+  'begin'#13#10+
+  '  if a1 then x; if a2 then x; if a3 then x; if a4 then x;'#13#10+
+  '  if a5 then x; if a6 then x; if a7 then x; if a8 then x;'#13#10+
+  '  if a9 then x; if a10 then x; if a11 then x;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.ComplexB;'#13#10+
+  'begin'#13#10+
+  '  if b1 then x; if b2 then x; if b3 then x; if b4 then x;'#13#10+
+  '  if b5 then x; if b6 then x; if b7 then x; if b8 then x;'#13#10+
+  '  if b9 then x; if b10 then x; if b11 then x;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(2, TFindingHelper.Count(F, fkCyclomaticComplexity));
   finally F.Free; end;
 end;
 

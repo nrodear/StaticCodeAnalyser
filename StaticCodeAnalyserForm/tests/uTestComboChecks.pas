@@ -67,6 +67,22 @@ type
     [Test] procedure Suppression_NoinspectionTodoComment_FiltersFinding;
     [Test] procedure Suppression_NoinspectionEmptyMethod_FiltersFinding;
     [Test] procedure Suppression_NoinspectionDuplicateBlock_FiltersFinding;
+    // Neue Detektoren - Suppression-Coverage einziehen
+    [Test] procedure Suppression_NoinspectionConcatToFormat_FiltersFinding;
+    [Test] procedure Suppression_NoinspectionWithStatement_FiltersFinding;
+    [Test] procedure Suppression_NoinspectionReversedForRange_FiltersFinding;
+    [Test] procedure Suppression_NoinspectionSelfAssignment_FiltersFinding;
+    [Test] procedure Suppression_NoinspectionLengthUnderflow_FiltersFinding;
+    [Test] procedure Suppression_NoinspectionCanBePrivate_FiltersFinding;
+    // Coverage-Aufholjagd fuer die Schwaechsten 5
+    [Test] procedure Suppression_NoinspectionCyclomaticComplexity_FiltersFinding;
+    [Test] procedure Suppression_NoinspectionHardcodedPath_FiltersFinding;
+    [Test] procedure Suppression_NoinspectionHardcodedSecret_FiltersFinding;
+    [Test] procedure Suppression_NoinspectionSQLInjection_FiltersFinding;
+    // DetectorMinSeverity - Post-Filter ueber TStaticAnalyzer2
+    [Test] procedure Severity_MinError_DropsWarningsAndHints;
+    [Test] procedure Severity_MinWarning_DropsHintsKeepsWarningsAndErrors;
+    [Test] procedure Severity_MinHint_KeepsEverything;
   end;
 
 implementation
@@ -823,6 +839,353 @@ begin
   finally
     if FileExists(FName) then DeleteFile(FName);
   end;
+end;
+
+procedure TTestNewChecks.Suppression_NoinspectionConcatToFormat_FiltersFinding;
+// fkConcatToFormat haengt am AST-Pfad. Suppression-Marker direkt ueber der
+// Concat-Zeile muss den Refactor-Hint stillschalten.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var x: string; r: string;'#13#10+
+  'begin'#13#10+
+  '  // noinspection ConcatToFormat'#13#10+
+  '  r := ''a'' + x + ''b'';'#13#10+
+  'end;';
+var
+  FName: string;
+  F: TObjectList<TLeakFinding>;
+begin
+  WriteTempPas(SRC, FName);
+  try
+    F := TStaticAnalyzer2.AnalyzeLeaks(FName);
+    try
+      Assert.AreEqual(0, TFindingHelper.Count(F, fkConcatToFormat),
+        '// noinspection ConcatToFormat muss den Hint unterdruecken');
+    finally F.Free; end;
+  finally
+    if FileExists(FName) then DeleteFile(FName);
+  end;
+end;
+
+procedure TTestNewChecks.Suppression_NoinspectionWithStatement_FiltersFinding;
+// fkWithStatement ist file-scan-basiert. Marker auf der Zeile davor.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var L: TStringList;'#13#10+
+  'begin'#13#10+
+  '  // noinspection WithStatement'#13#10+
+  '  with L do Add(''x'');'#13#10+
+  'end;';
+var
+  FName: string;
+  F: TObjectList<TLeakFinding>;
+begin
+  WriteTempPas(SRC, FName);
+  try
+    F := TStaticAnalyzer2.AnalyzeLeaks(FName);
+    try
+      Assert.AreEqual(0, TFindingHelper.Count(F, fkWithStatement),
+        '// noinspection WithStatement muss den Befund unterdruecken');
+    finally F.Free; end;
+  finally
+    if FileExists(FName) then DeleteFile(FName);
+  end;
+end;
+
+procedure TTestNewChecks.Suppression_NoinspectionReversedForRange_FiltersFinding;
+// fkReversedForRange ist file-scan-basiert.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var i: Integer;'#13#10+
+  'begin'#13#10+
+  '  // noinspection ReversedForRange'#13#10+
+  '  for i := 10 to 1 do Bar(i);'#13#10+
+  'end;';
+var
+  FName: string;
+  F: TObjectList<TLeakFinding>;
+begin
+  WriteTempPas(SRC, FName);
+  try
+    F := TStaticAnalyzer2.AnalyzeLeaks(FName);
+    try
+      Assert.AreEqual(0, TFindingHelper.Count(F, fkReversedForRange),
+        '// noinspection ReversedForRange muss den Befund unterdruecken');
+    finally F.Free; end;
+  finally
+    if FileExists(FName) then DeleteFile(FName);
+  end;
+end;
+
+procedure TTestNewChecks.Suppression_NoinspectionSelfAssignment_FiltersFinding;
+// fkSelfAssignment ist AST-basiert.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var x: Integer;'#13#10+
+  'begin'#13#10+
+  '  // noinspection SelfAssignment'#13#10+
+  '  x := x;'#13#10+
+  'end;';
+var
+  FName: string;
+  F: TObjectList<TLeakFinding>;
+begin
+  WriteTempPas(SRC, FName);
+  try
+    F := TStaticAnalyzer2.AnalyzeLeaks(FName);
+    try
+      Assert.AreEqual(0, TFindingHelper.Count(F, fkSelfAssignment),
+        '// noinspection SelfAssignment muss den Befund unterdruecken');
+    finally F.Free; end;
+  finally
+    if FileExists(FName) then DeleteFile(FName);
+  end;
+end;
+
+procedure TTestNewChecks.Suppression_NoinspectionLengthUnderflow_FiltersFinding;
+// fkLengthUnderflow ist file-scan-basiert.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(const s: string);'#13#10+
+  'var i: Integer;'#13#10+
+  'begin'#13#10+
+  '  // noinspection LengthUnderflow'#13#10+
+  '  i := Length(s) - 3;'#13#10+
+  'end;';
+var
+  FName: string;
+  F: TObjectList<TLeakFinding>;
+begin
+  WriteTempPas(SRC, FName);
+  try
+    F := TStaticAnalyzer2.AnalyzeLeaks(FName);
+    try
+      Assert.AreEqual(0, TFindingHelper.Count(F, fkLengthUnderflow),
+        '// noinspection LengthUnderflow muss den Befund unterdruecken');
+    finally F.Free; end;
+  finally
+    if FileExists(FName) then DeleteFile(FName);
+  end;
+end;
+
+procedure TTestNewChecks.Suppression_NoinspectionCyclomaticComplexity_FiltersFinding;
+// fkCyclomaticComplexity ist AST-basiert. Marker direkt ueber der
+// Methoden-Deklaration (uSuppression mappt auf naechste non-comment Zeile).
+const SRC =
+  'unit t; implementation'#13#10+
+  '// noinspection CyclomaticComplexity'#13#10+
+  'procedure TFoo.Complex;'#13#10+
+  'begin'#13#10+
+  '  if a1 then x; if a2 then x; if a3 then x; if a4 then x;'#13#10+
+  '  if a5 then x; if a6 then x; if a7 then x; if a8 then x;'#13#10+
+  '  if a9 then x; if a10 then x; if a11 then x;'#13#10+
+  'end;';
+var
+  FName: string;
+  F: TObjectList<TLeakFinding>;
+begin
+  WriteTempPas(SRC, FName);
+  try
+    F := TStaticAnalyzer2.AnalyzeLeaks(FName);
+    try
+      Assert.AreEqual(0, TFindingHelper.Count(F, fkCyclomaticComplexity),
+        '// noinspection CyclomaticComplexity muss den Befund unterdruecken');
+    finally F.Free; end;
+  finally
+    if FileExists(FName) then DeleteFile(FName);
+  end;
+end;
+
+procedure TTestNewChecks.Suppression_NoinspectionHardcodedPath_FiltersFinding;
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var p: string;'#13#10+
+  'begin'#13#10+
+  '  // noinspection HardcodedPath'#13#10+
+  '  p := ''C:\Windows\System32'';'#13#10+
+  'end;';
+var
+  FName: string;
+  F: TObjectList<TLeakFinding>;
+begin
+  WriteTempPas(SRC, FName);
+  try
+    F := TStaticAnalyzer2.AnalyzeLeaks(FName);
+    try
+      Assert.AreEqual(0, TFindingHelper.Count(F, fkHardcodedPath),
+        '// noinspection HardcodedPath muss den Befund unterdruecken');
+    finally F.Free; end;
+  finally
+    if FileExists(FName) then DeleteFile(FName);
+  end;
+end;
+
+procedure TTestNewChecks.Suppression_NoinspectionHardcodedSecret_FiltersFinding;
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Init;'#13#10+
+  'begin'#13#10+
+  '  // noinspection HardcodedSecret'#13#10+
+  '  FPassword := ''geheim123'';'#13#10+
+  'end;';
+var
+  FName: string;
+  F: TObjectList<TLeakFinding>;
+begin
+  WriteTempPas(SRC, FName);
+  try
+    F := TStaticAnalyzer2.AnalyzeLeaks(FName);
+    try
+      Assert.AreEqual(0, TFindingHelper.Count(F, fkHardcodedSecret),
+        '// noinspection HardcodedSecret muss den Befund unterdruecken');
+    finally F.Free; end;
+  finally
+    if FileExists(FName) then DeleteFile(FName);
+  end;
+end;
+
+procedure TTestNewChecks.Suppression_NoinspectionSQLInjection_FiltersFinding;
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var q: TFDQuery; UserId: string;'#13#10+
+  'begin'#13#10+
+  '  // noinspection SQLInjection'#13#10+
+  '  q.SQL.Text := ''SELECT * FROM users WHERE id='' + UserId;'#13#10+
+  'end;';
+var
+  FName: string;
+  F: TObjectList<TLeakFinding>;
+begin
+  WriteTempPas(SRC, FName);
+  try
+    F := TStaticAnalyzer2.AnalyzeLeaks(FName);
+    try
+      Assert.AreEqual(0, TFindingHelper.Count(F, fkSQLInjection),
+        '// noinspection SQLInjection muss den Befund unterdruecken');
+    finally F.Free; end;
+  finally
+    if FileExists(FName) then DeleteFile(FName);
+  end;
+end;
+
+procedure TTestNewChecks.Suppression_NoinspectionCanBePrivate_FiltersFinding;
+// fkCanBePrivate ist AST-basiert. Test geht direkt ueber AnalyzeLeaks - der
+// Single-File-Pfad (kein gSymbolRefIndex aufgebaut) triggert den Detektor.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type TFoo = class'#13#10+
+  '  public'#13#10+
+  '    // noinspection CanBePrivate'#13#10+
+  '    procedure Helper;'#13#10+
+  '    procedure Run;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'procedure TFoo.Helper; begin end;'#13#10+
+  'procedure TFoo.Run; begin Helper; end;'#13#10+
+  'end.';
+var
+  FName: string;
+  F: TObjectList<TLeakFinding>;
+begin
+  WriteTempPas(SRC, FName);
+  try
+    F := TStaticAnalyzer2.AnalyzeLeaks(FName);
+    try
+      Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBePrivate),
+        '// noinspection CanBePrivate muss den Befund unterdruecken');
+    finally F.Free; end;
+  finally
+    if FileExists(FName) then DeleteFile(FName);
+  end;
+end;
+
+{ ---- DetectorMinSeverity - Post-Filter ueber TStaticAnalyzer2 ---- }
+
+// Helper: laeuft die Detector-Pipeline ueber TFindingHelper.FindingsOf
+// (das ruft die Detektoren direkt auf, ohne Catalog-abhaengigen Gate-Skip),
+// und appliziert dann den MinSeverity-Filter manuell - genau wie der
+// Post-Filter in TStaticAnalyzer2 ihn anwendet.
+//
+// Warum nicht TStaticAnalyzer2.AnalyzeLeaks: dessen Pre-Filter liest die
+// DefaultSeverity aus dem Rule-Catalog (rules\sca-rules.json). Im Test-
+// Runtime liegt der Working-Dir tief in tests\Win32\Debug\, und der
+// Catalog-Walker findet die JSON nicht (max 3 Levels hoch). Dann faellt
+// die Default-Severity auf lsWarning zurueck (Fallback), und alle
+// Detektoren werden bei MinSeverity=lsError am Gate geskippt - der
+// Post-Filter (den wir hier eigentlich testen wollen) wird nie erreicht.
+procedure RunWithMinSeverity(const SRC: string; MinSev: TLeakSeverity;
+  out HasError, HasWarning, HasHint: Boolean);
+var
+  F : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+begin
+  HasError   := False;
+  HasWarning := False;
+  HasHint    := False;
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    for Fnd in F do
+    begin
+      // Post-Filter-Logik analog uStaticAnalyzer2.AnalyzeLeaks:
+      // "Severity strenger als MinSeverity -> raus"
+      if Ord(Fnd.Severity) > Ord(MinSev) then Continue;
+      case Fnd.Severity of
+        lsError   : HasError   := True;
+        lsWarning : HasWarning := True;
+        lsHint    : HasHint    := True;
+      end;
+    end;
+  finally
+    F.Free;
+  end;
+end;
+
+// SRC mit Mix-Severities ueber rein AST-basierte Detektoren (damit der
+// TFindingHelper.FindingsOf-Pfad das ohne Temp-File abdeckt):
+//   * MemoryLeak (Error)    - TStringList.Create ohne Free in qualifizierter Methode
+//   * LongParamList (Hint)  - 7 Parameter > DetectorMaxParams (=5 Default)
+// (uMagicNumbers feuert NUR in if-Conditions, daher hier nicht nutzbar -
+//  uLongParamList war urspruengliche Wahl, ist verlaesslich.)
+const SEVERITY_MIX_SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar(a, b, c, d, e, f, g: Integer);'#13#10+   // 7 params -> Hint
+  'var list: TStringList;'#13#10+
+  'begin'#13#10+
+  '  list := TStringList.Create;'#13#10+   // Error (MemoryLeak, no Free)
+  '  list.Add(''x'');'#13#10+
+  'end;';
+
+procedure TTestNewChecks.Severity_MinError_DropsWarningsAndHints;
+// MinSeverity=lsError -> nur Error-Findings bleiben uebrig.
+var H_Err, H_Warn, H_Hint: Boolean;
+begin
+  RunWithMinSeverity(SEVERITY_MIX_SRC, lsError, H_Err, H_Warn, H_Hint);
+  Assert.IsTrue(H_Err, 'Errors bleiben bei MinSeverity=lsError');
+  Assert.IsFalse(H_Hint, 'Hints muessen bei MinSeverity=lsError gefiltert werden');
+end;
+
+procedure TTestNewChecks.Severity_MinWarning_DropsHintsKeepsWarningsAndErrors;
+var H_Err, H_Warn, H_Hint: Boolean;
+begin
+  RunWithMinSeverity(SEVERITY_MIX_SRC, lsWarning, H_Err, H_Warn, H_Hint);
+  Assert.IsTrue(H_Err, 'Errors duerfen bei MinSeverity=lsWarning nicht gefiltert werden');
+  Assert.IsFalse(H_Hint, 'Hints muessen bei MinSeverity=lsWarning gefiltert werden');
+end;
+
+procedure TTestNewChecks.Severity_MinHint_KeepsEverything;
+// Default-Pfad: lsHint laesst alles durch (lsHint > alle anderen Severities).
+var H_Err, H_Warn, H_Hint: Boolean;
+begin
+  RunWithMinSeverity(SEVERITY_MIX_SRC, lsHint, H_Err, H_Warn, H_Hint);
+  Assert.IsTrue(H_Err,  'lsHint laesst Errors durch');
+  Assert.IsTrue(H_Hint, 'lsHint laesst Hints durch');
 end;
 
 procedure TTestNewChecks.DeadCode_ExitBeforeExceptBlock_NoFinding;

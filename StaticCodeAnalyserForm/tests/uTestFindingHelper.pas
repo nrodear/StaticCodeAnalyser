@@ -10,12 +10,16 @@ uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uAstNode, uParser2, uMethodd12, uSCAConsts,
   uLeakDetector2, uCodeSmells2, uSQLInjection, uHardcodedSecret,
-  uFormatMismatch, uUnusedUses,
+  uFormatMismatch, uConcatToFormat, uUnusedUses,
   uNilDeref, uMissingFinally, uDivByZero, uDeadCode,
   uLongMethod, uLongParamList, uMagicNumbers, uDuplicateString,
   uHardcodedPath, uDebugOutput, uDeepNesting,
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
-  uCyclomaticComplexity,
+  uCyclomaticComplexity, uWithStatement,
+  uReversedForRange, uSelfAssignment, uVirtualCallInCtor, uLengthUnderflow,
+  uVisibilityCheck,
+  uUnusedLocal, uUnusedParameter, uTautologicalExpr,
+  uSqlDangerousStatement,
   uStaticAnalyzer2,
   uTestSrcBuilder,
   System.IOUtils;
@@ -53,6 +57,7 @@ begin
       TSQLInjectionDetector.AnalyzeUnit(Root, 'test.pas', Result);
       THardcodedSecretDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TFormatMismatchDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TConcatToFormatDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TUnusedUsesDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TNilDerefDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TMissingFinallyDetector.AnalyzeUnit(Root, 'test.pas', Result);
@@ -68,8 +73,16 @@ begin
       TCyclomaticComplexityDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TEmptyMethodDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TFieldLeakDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      // TTodoCommentDetector liest die Datei selbst und braucht eine echte
-      // Datei - hier nicht aufgerufen. FindingsOfFile() benutzen.
+      TSelfAssignmentDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TVirtualCallInCtorDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TVisibilityCheckDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TUnusedLocalDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TUnusedParameterDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TSqlDangerousStatementDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      // TTodoCommentDetector / TReversedForRangeDetector / TLengthUnderflowDetector /
+      // TTautologicalExprDetector
+      // lesen die Datei selbst und brauchen eine echte Datei - hier nicht
+      // aufgerufen. FindingsOfFile() benutzen.
     finally
       Root.Free;
     end;
@@ -103,6 +116,10 @@ begin
         TTodoCommentDetector.AnalyzeUnit(Root, TempPath, Result);
         TEmptyMethodDetector.AnalyzeUnit(Root, TempPath, Result);
         TDuplicateBlockDetector.AnalyzeUnit(Root, TempPath, Result);
+        TWithStatementDetector.AnalyzeUnit(Root, TempPath, Result);
+        TReversedForRangeDetector.AnalyzeUnit(Root, TempPath, Result);
+        TLengthUnderflowDetector.AnalyzeUnit(Root, TempPath, Result);
+        TTautologicalExprDetector.AnalyzeUnit(Root, TempPath, Result);
       finally
         Root.Free;
       end;

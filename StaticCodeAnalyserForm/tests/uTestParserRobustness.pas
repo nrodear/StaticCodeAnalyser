@@ -27,6 +27,9 @@ type
     [Test] procedure Parser_LabelSection_BodyLeakDetected;
     [Test] procedure Parser_ClassHelperFor_FollowingMethodLeakDetected;
     [Test] procedure Parser_IfdefDuplicatedHeaders_NoPhantomDuplicate;
+    [Test] procedure Parser_InlineRecordVarType_BodyNotLost;
+    [Test] procedure Parser_NestedInlineRecordVarType_BodyNotLost;
+    [Test] procedure Parser_InlineRecordTypeInLocalConst_BodyNotLost;
   end;
 
 implementation
@@ -230,6 +233,82 @@ begin
   try
     Assert.AreEqual(1, TFindingHelper.Count(F, fkMemoryLeak),
       'Leak darf nicht durch Phantom-Methoden-Duplikat verdoppelt werden');
+  finally F.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_InlineRecordVarType_BodyNotLost;
+// Vorher: anonymer `record`-Typ als Var-Typ - TypeName-Loop in
+// ParseLocalVarSection brach am ersten `;` _innerhalb_ des records ab,
+// dann las der Outer-Loop das folgende `end` als Section-Grenze und
+// ParseMethodImpl verlor den Methodenrumpf -> Leak weg, doppelter Bug.
+// Heute: Mini-Parser bis matching `end`.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure TFoo.Test;'#13#10+
+  'var'#13#10+
+  '  R: record A: Integer; B: Integer; end;'#13#10+
+  '  L: TStringList;'#13#10+
+  'begin'#13#10+
+  '  L := TStringList.Create;'#13#10+
+  '  // L.Free fehlt!'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'Leak nach inline-record-Var-Typ muss erkannt werden');
+  finally F.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_NestedInlineRecordVarType_BodyNotLost;
+// Nested record inside record - Depth-Tracking muss beide `end` zaehlen.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure TFoo.Test;'#13#10+
+  'var'#13#10+
+  '  R: record'#13#10+
+  '    A: record X: Integer; Y: Integer; end;'#13#10+
+  '    B: Integer;'#13#10+
+  '  end;'#13#10+
+  '  L: TStringList;'#13#10+
+  'begin'#13#10+
+  '  L := TStringList.Create;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'Leak nach nested-inline-record muss erkannt werden');
+  finally F.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_InlineRecordTypeInLocalConst_BodyNotLost;
+// Inline-record als Typ einer Local-Const-Initialisierung. Section bleibt
+// auf var (kein type-Section); der Mini-Parser muss auch hier sauber
+// laufen, sonst geht der Body verloren.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure TFoo.Test;'#13#10+
+  'var'#13#10+
+  '  P: record Key: string; Value: Integer; end;'#13#10+
+  '  L: TStringList;'#13#10+
+  'begin'#13#10+
+  '  L := TStringList.Create;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'Leak nach Single-Line inline-record muss erkannt werden');
   finally F.Free; end;
 end;
 

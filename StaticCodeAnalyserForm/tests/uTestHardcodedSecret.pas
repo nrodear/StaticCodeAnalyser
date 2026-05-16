@@ -40,6 +40,14 @@ type
     [Test] procedure Secret_SecretAssignedLiteral_ReportsError;
     [Test] procedure Secret_PrivateKeyAssignedLiteral_ReportsError;
     [Test] procedure Secret_NormalStringNoSecretName_NoFinding;
+    // ---- Severity / Finding-Inhalt / Multi-Hit -------------------------------
+    [Test] procedure Secret_Finding_KindAndSeverity;
+    [Test] procedure Secret_Finding_MissingVarMentionsVarAndLiteralSnippet;
+    [Test] procedure Secret_MultipleHitsInSameMethod_AllReported;
+    // ---- Const-Naming-Style Skip (mORMot-FP-Fix) ----------------------------
+    [Test] procedure Secret_UpperSnakeConst_NotReported;
+    [Test] procedure Secret_QualifiedUpperSnake_NotReported;
+    [Test] procedure Secret_MixedCaseField_StillReported;
   end;
 
 implementation
@@ -283,6 +291,118 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual(0, TFindingHelper.Count(F, fkHardcodedSecret));
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretExt.Secret_Finding_KindAndSeverity;
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Init;'#13#10+
+  'begin FPassword := ''geheim123''; end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := nil;
+    for Fnd in F do
+      if Fnd.Kind = fkHardcodedSecret then
+      begin
+        Hit := Fnd;
+        Break;
+      end;
+    Assert.IsNotNull(Hit, 'fkHardcodedSecret finding expected');
+    Assert.AreEqual(fkHardcodedSecret, Hit.Kind);
+    Assert.AreEqual(lsError, Hit.Severity);
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretExt.Secret_Finding_MissingVarMentionsVarAndLiteralSnippet;
+// MissingVar enthaelt Name + Literal-Snippet ('FPassword = "geheim123"').
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Init;'#13#10+
+  'begin FPassword := ''geheim123''; end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := nil;
+    for Fnd in F do
+      if Fnd.Kind = fkHardcodedSecret then
+      begin
+        Hit := Fnd;
+        Break;
+      end;
+    Assert.IsNotNull(Hit);
+    Assert.Contains(Hit.MissingVar, 'FPassword');
+    Assert.Contains(Hit.MissingVar, 'geheim');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretExt.Secret_MultipleHitsInSameMethod_AllReported;
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Init;'#13#10+
+  'begin'#13#10+
+  '  FPassword := ''pw_secret'';'#13#10+
+  '  FApiKey   := ''ak_secret'';'#13#10+
+  '  FToken    := ''tk_secret'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(3, TFindingHelper.Count(F, fkHardcodedSecret));
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretExt.Secret_UpperSnakeConst_NotReported;
+// JWT_SECRET_HEADER ist eine Const-Naming-Konvention (Algorithmus-Marker,
+// kein echter Secret). uHardcodedSecret muss das skippen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Init;'#13#10+
+  'begin'#13#10+
+  '  JWT_SECRET_HEADER := ''JWT'';'#13#10+
+  '  X_TOKEN := ''XTKN'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkHardcodedSecret),
+    'UPPER_SNAKE-Identifier sind Const-Marker, kein Secret');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretExt.Secret_QualifiedUpperSnake_NotReported;
+// Self.X_PASSWORD darf genauso geskippt werden (Qualifier wird strippen)
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Init;'#13#10+
+  'begin Self.JWT_PASSWORD_KEY := ''JWTPW''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkHardcodedSecret));
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretExt.Secret_MixedCaseField_StillReported;
+// Standard-Field-Naming (FPassword) muss weiter flagged werden.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Init;'#13#10+
+  'begin FPassword := ''realsecret''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(1, TFindingHelper.Count(F, fkHardcodedSecret),
+    'Mixed-Case-Field ist echte Secret-Zuweisung');
   finally F.Free; end;
 end;
 

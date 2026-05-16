@@ -22,7 +22,8 @@ uses
   System.SysUtils, System.Diagnostics, System.TimeSpan, System.Generics.Collections,
   uAstNode, uLexer, uParser2, uMethodd12, uSCAConsts,
   uLeakDetector2, uCodeSmells2, uSQLInjection,
-  uHardcodedSecret, uFormatMismatch;
+  uHardcodedSecret, uFormatMismatch,
+  uDeadCode;
 
 type
   [TestFixture]
@@ -48,6 +49,11 @@ type
     [Test] procedure Perf_Parser_Repeated100Times;
     [Test] procedure Perf_Lexer_LargeStringLiterals;
     [Test] procedure Perf_FindAll_DeepTree;
+    // Regression 🅱: uDeadCode.CheckBlock muss iterativ via Work-Stack
+    // arbeiten - sonst Stack-Overflow bei tiefen ASTs.
+    [Test] procedure Perf_DeadCode_DeepNesting_NoStackOverflow;
+    [Test] procedure Perf_DeadCode_DeepNesting_HitDetectionStillWorks;
+    [Test] procedure Perf_DeadCode_PathologicalRecursionDepth_1000Levels;
   end;
 
 implementation
@@ -283,6 +289,9 @@ var
   ElapsedMs: Int64;
   Lines    : Integer;
 begin
+  TDUnitX.CurrentRunner.Log(TLogLevel.Information,
+    Format('Pipeline-%d: generate source + all detectors (kann mehrere Sekunden dauern)...',
+           [METHOD_COUNT]));
   Src   := MakeSourceWithFindings(METHOD_COUNT);
   Lines := 0;
   for var Ch in Src do
@@ -467,6 +476,170 @@ begin
   Assert.IsTrue(TotalVars > 0, 'FindAll muss LocalVar-Knoten finden');
   Assert.IsTrue(ElapsedMs < 30000,
     Format('FindAll zu langsam: %d ms', [ElapsedMs]));
+end;
+
+{ ---- Regression 🅱: uDeadCode iterative-Work-Stack-Garantie ---- }
+
+procedure TTestPerformance.Perf_DeadCode_DeepNesting_NoStackOverflow;
+// Vorher (rekursive CheckBlock): pathologisch tiefe begin/end-Verschachtelung
+// crashed den Detektor mit Stack-Overflow. Nach dem 🅱-Refactor (Work-Stack)
+// darf das nicht mehr passieren. 300 reicht als Stress-Smoke und haelt den
+// Parser-Stack (selbst noch rekursiv) komfortabel unter dem Default-1MB-Limit.
+const NESTING_DEPTH = 300;
+var
+  SB     : TStringBuilder;
+  Src    : string;
+  Parser : TParser2;
+  Root   : TAstNode;
+  Findings : TObjectList<TLeakFinding>;
+  i      : Integer;
+begin
+  TDUnitX.CurrentRunner.Log(TLogLevel.Information,
+    Format('DeepNest: building %d-deep source + parsing + analyzing...',
+           [NESTING_DEPTH]));
+  SB := TStringBuilder.Create;
+  try
+    SB.AppendLine('unit t; implementation');
+    SB.AppendLine('procedure DeepNest;');
+    SB.AppendLine('begin');
+    for i := 1 to NESTING_DEPTH do SB.AppendLine('  begin');
+    SB.AppendLine('    Bar;');
+    for i := 1 to NESTING_DEPTH do SB.AppendLine('  end;');
+    SB.AppendLine('end;');
+    Src := SB.ToString;
+  finally
+    SB.Free;
+  end;
+
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  Parser   := TParser2.Create;
+  try
+    Root := Parser.ParseSource(Src);
+    try
+      // Wenn CheckBlock noch rekursiv waere -> Stack-Overflow.
+      // Test gilt als bestanden, wenn die Methode ohne Crash zurueckkehrt.
+      TDeadCodeDetector.AnalyzeUnit(Root, 'test.pas', Findings);
+      Assert.Pass(Format('uDeadCode hat %d-fach verschachtelte Bloecke ohne '
+                       + 'Stack-Overflow verarbeitet', [NESTING_DEPTH]));
+    finally
+      Root.Free;
+    end;
+  finally
+    Parser.Free;
+    Findings.Free;
+  end;
+end;
+
+procedure TTestPerformance.Perf_DeadCode_DeepNesting_HitDetectionStillWorks;
+// Tiefe Verschachtelung + ein echter Dead-Code-Hit ganz innen. Beweist, dass
+// der Work-Stack die nested Block-Descents korrekt abarbeitet und nicht nur
+// das Stack-Overflow vermeidet.
+const NESTING_DEPTH = 150;
+var
+  SB     : TStringBuilder;
+  Src    : string;
+  Parser : TParser2;
+  Root   : TAstNode;
+  Findings : TObjectList<TLeakFinding>;
+  i      : Integer;
+begin
+  TDUnitX.CurrentRunner.Log(TLogLevel.Information,
+    Format('DeepHit: %d-deep nesting with inner Exit -> Dead-Code-Hit...',
+           [NESTING_DEPTH]));
+  SB := TStringBuilder.Create;
+  try
+    SB.AppendLine('unit t; implementation');
+    SB.AppendLine('procedure DeepHit;');
+    SB.AppendLine('begin');
+    for i := 1 to NESTING_DEPTH do SB.AppendLine('  begin');
+    SB.AppendLine('    Exit;');
+    SB.AppendLine('    Unreachable;');                  // genau hier muss der Detector feuern
+    for i := 1 to NESTING_DEPTH do SB.AppendLine('  end;');
+    SB.AppendLine('end;');
+    Src := SB.ToString;
+  finally
+    SB.Free;
+  end;
+
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  Parser   := TParser2.Create;
+  try
+    Root := Parser.ParseSource(Src);
+    try
+      TDeadCodeDetector.AnalyzeUnit(Root, 'test.pas', Findings);
+      var Count := 0;
+      for var F in Findings do
+        if F.Kind = fkDeadCode then Inc(Count);
+      Assert.IsTrue(Count >= 1,
+        Format('Dead-Code-Detection nach %d-fach verschachtelten begin/end '
+             + 'muss noch feuern (gefunden: %d)', [NESTING_DEPTH, Count]));
+    finally
+      Root.Free;
+    end;
+  finally
+    Parser.Free;
+    Findings.Free;
+  end;
+end;
+
+procedure TTestPerformance.Perf_DeadCode_PathologicalRecursionDepth_1000Levels;
+// Worst-Case: tiefe Verschachtelung als Performance-Smoke fuer den iterativen
+// Work-Stack des DeadCode-Detektors. Tiefe auf 250 reduziert (Test-Suite-
+// Speed > Stress-Maximum).
+//
+// Hinweis: ParseBlock im Parser ist selbst noch rekursiv, der Test wird hier
+// also indirekt vom Parser-Stack limitiert (knallt um ~800 herum mit 1 MB
+// Default-Stack). Wenn der Parser irgendwann auch iterativ wird (separater
+// TODO-Eintrag), kann die Tiefe hier hochgezogen werden.
+//
+// (Methodenname behalten, damit existierende Test-Reports nicht brechen.)
+const NESTING_DEPTH = 250;
+var
+  SB     : TStringBuilder;
+  Src    : string;
+  Parser : TParser2;
+  Root   : TAstNode;
+  Findings : TObjectList<TLeakFinding>;
+  i      : Integer;
+  SW     : TStopwatch;
+  ElapsedMs : Int64;
+begin
+  TDUnitX.CurrentRunner.Log(TLogLevel.Information,
+    Format('WorstCase: %d-deep nesting timing benchmark...', [NESTING_DEPTH]));
+  SB := TStringBuilder.Create;
+  try
+    SB.AppendLine('unit t; implementation');
+    SB.AppendLine('procedure WorstCase;');
+    SB.AppendLine('begin');
+    for i := 1 to NESTING_DEPTH do SB.AppendLine('  begin');
+    SB.AppendLine('    DoStuff;');
+    for i := 1 to NESTING_DEPTH do SB.AppendLine('  end;');
+    SB.AppendLine('end;');
+    Src := SB.ToString;
+  finally
+    SB.Free;
+  end;
+
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  Parser   := TParser2.Create;
+  try
+    Root := Parser.ParseSource(Src);
+    try
+      SW := TStopwatch.StartNew;
+      TDeadCodeDetector.AnalyzeUnit(Root, 'test.pas', Findings);
+      ElapsedMs := SW.ElapsedMilliseconds;
+      TDUnitX.CurrentRunner.Log(TLogLevel.Information, Format(
+        'DeadCode | %d-fach nested | %d ms', [NESTING_DEPTH, ElapsedMs]));
+      Assert.IsTrue(ElapsedMs < 5000,
+        Format('DeadCode zu langsam bei %d-Tiefe: %d ms (Work-Stack sollte '
+             + 'in O(n) sein)', [NESTING_DEPTH, ElapsedMs]));
+    finally
+      Root.Free;
+    end;
+  finally
+    Parser.Free;
+    Findings.Free;
+  end;
 end;
 
 initialization

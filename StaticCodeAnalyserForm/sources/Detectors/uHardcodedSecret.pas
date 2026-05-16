@@ -119,6 +119,43 @@ class procedure THardcodedSecretDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 const
   MAX_VAL_LEN = 20;
+
+  // Snake-Upper-Const-Naming: nur Uppercase + Underscore + Digits.
+  // Matched 'JWT_SECRET_HEADER', 'X_TOKEN', 'API_KEY' - das sind in der
+  // Praxis Algorithmus-/Protokoll-Marker (mORMot, JWT, REST-Header), KEINE
+  // Secret-Werte. False-Positive-Reduktion fuer mORMot-Codebase.
+  function IsConstantNamingStyle(const FullName: string): Boolean;
+  var
+    Bare : string;
+    DotPos : Integer;
+    HasUnderscore : Boolean;
+    AllUpperOrDigit : Boolean;
+    C : Char;
+  begin
+    Result := False;
+    // Letztes Segment nach Punkt-Qualifier (Self.FOO -> FOO)
+    Bare := FullName;
+    DotPos := -1;
+    for var i := Length(Bare) downto 1 do
+      if Bare[i] = '.' then begin DotPos := i; Break; end;
+    if DotPos > 0 then Bare := Copy(Bare, DotPos + 1, MaxInt);
+    if Bare = '' then Exit;
+
+    HasUnderscore := False;
+    AllUpperOrDigit := True;
+    for C in Bare do
+    begin
+      if C = '_' then HasUnderscore := True
+      else if CharInSet(C, ['A'..'Z', '0'..'9']) then  // OK
+      else
+      begin
+        AllUpperOrDigit := False;
+        Break;
+      end;
+    end;
+    Result := HasUnderscore and AllUpperOrDigit;
+  end;
+
 var
   Assigns  : TList<TAstNode>;
   A        : TAstNode;
@@ -133,6 +170,9 @@ begin
       if not IsStringLiteral(A.TypeRef) then Continue;
       // Leeres Literal '' ist Initialisierung, kein hartcodiertes Secret.
       if A.TypeRef = '''''' then Continue;
+      // Const-Naming-Style (UPPER_SNAKE) -> Algorithmus-Marker, kein Secret.
+      // Beispiele: JWT_SECRET_HEADER, X_TOKEN, API_KEY_PREFIX.
+      if IsConstantNamingStyle(A.Name) then Continue;
       // ConnectionString ohne Passwort-Anteil ist ein Template, kein Secret.
       if (Pos('connectionstring', A.Name.ToLower) > 0) and
          not ConnectionStringHasPassword(A.TypeRef) then Continue;

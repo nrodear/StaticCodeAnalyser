@@ -475,6 +475,66 @@ begin
   end;
 end;
 
+// Locale-Hint-Helper: True wenn FmtStr ein Float-Format-Spec enthaelt
+// (%f, %.Nf, %g, %e, %m, %n) - das sind die einzigen, deren Output von
+// TFormatSettings abhaengt (Dezimal-Trenner Komma vs. Punkt).
+function HasFloatSpec(const FmtStr: string): Boolean;
+var
+  i, n : Integer;
+  c : Char;
+begin
+  Result := False;
+  n := Length(FmtStr);
+  i := 1;
+  while i <= n do
+  begin
+    if FmtStr[i] = '%' then
+    begin
+      // %% -> nicht relevant, skip
+      if (i < n) and (FmtStr[i+1] = '%') then
+      begin
+        Inc(i, 2);
+        Continue;
+      end;
+      // Optionale Width/Precision-Spec ueberspringen
+      Inc(i);
+      while (i <= n) and CharInSet(FmtStr[i], ['0'..'9', '.', '-', '*']) do
+        Inc(i);
+      if i > n then Exit;
+      c := UpCase(FmtStr[i]);
+      if CharInSet(c, ['F', 'G', 'E', 'M', 'N']) then Exit(True);
+    end;
+    Inc(i);
+  end;
+end;
+
+// Zaehlt Top-Level-Kommas in einem Argument-Bereich (depth-tracking
+// (...)/[...]). CallText vom Aufrufer ist `<fn-args-bis-zum-)`.
+function CountTopLevelArgs(const CallText: string; StartIdx: Integer): Integer;
+var
+  i, n : Integer;
+  Depth : Integer;
+begin
+  Result := 1;
+  Depth := 1;     // wir sind bereits IN den Format-Argumenten (nach `(`)
+  n := Length(CallText);
+  i := StartIdx;
+  while i <= n do
+  begin
+    case CallText[i] of
+      '(', '[': Inc(Depth);
+      ')', ']':
+        begin
+          Dec(Depth);
+          if Depth = 0 then Exit;
+        end;
+      ',':
+        if Depth = 1 then Inc(Result);
+    end;
+    Inc(i);
+  end;
+end;
+
 { ---- Oeffentliche API ---- }
 
 class procedure TFormatMismatchDetector.AnalyzeMethod(MethodNode: TAstNode;
@@ -499,6 +559,28 @@ var
     if not ResolveFormatString(FirstArg, ConstTable, FmtStr) then Exit;
     PlaceCount := CountPlaceholders(FmtStr, IsBareStyle(MatchedFunc));
     ArgCount   := CountArrayArgs(CallText, ArgsStart);
+
+    // Locale-Hint: Float-Spec im Format-String + kein TFormatSettings-Arg
+    // (= weniger als 3 Top-Level-Args: FmtStr + [args], ohne FmtSettings).
+    if HasFloatSpec(FmtStr) and (CountTopLevelArgs(CallText, ArgsStart) <= 2) then
+    begin
+      Key := IntToStr(Line) + ':locale:' + FmtStr;
+      if not Reported.ContainsKey(Key) then
+      begin
+        Reported.Add(Key, True);
+        F            := TLeakFinding.Create;
+        F.FileName   := FileName;
+        F.MethodName := MethodNode.Name;
+        F.LineNumber := IntToStr(Line);
+        F.MissingVar := Format(
+          'Format: float spec %s without TFormatSettings - locale-dependent '
+          + '(comma vs. dot decimal separator)', [FmtStr]);
+        F.Severity   := lsHint;
+        F.Kind       := fkFormatLocaleHint;
+        Results.Add(F);
+      end;
+    end;
+
     if PlaceCount = ArgCount then Exit;
     // Dedup: nkCall + nkAssign-Walk koennen denselben Format-Call doppelt
     // sehen (z.B. 'Result := someFunc(Format(...))' - nkAssign hat den

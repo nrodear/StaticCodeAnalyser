@@ -73,6 +73,10 @@ type
     [Test] procedure Leak_AnonymousFunctionInRhs_NoCrash;
     // Regression: 'list := obj.FList' ist Borrowed-Reference, kein Factory-Call
     [Test] procedure Leak_AssignFromFieldDottedNoParens_NoFinding;
+    // Regression: CamelCase-Konstruktor-Varianten (CreateUtf8, CreateFmt, ...)
+    [Test] procedure Leak_CreateUtf8_NoFree_ReportsError;
+    [Test] procedure Leak_CreateFmt_NoFree_ReportsError;
+    [Test] procedure Leak_DotCreatedProperty_NotConstructor_NoFinding;
   end;
 
   // ---- MemoryLeak Advanced - Wrong-Free / Pointer-Issues / Container-Ownership ----
@@ -756,6 +760,67 @@ begin
   try
     Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Borrowed-Reference (Self.FList) darf nicht als Leak gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_CreateUtf8_NoFree_ReportsError;
+// Regression: mORMot-Idiom `E := EOrmException.CreateUtf8('%', [...])`.
+// Vorher hat HasCreateAssign nur '.create' + non-Ident-Char akzeptiert,
+// 'createutf8' wurde als Verb-Form abgewiesen -> Leak unentdeckt.
+// Jetzt: CamelCase-Suffix (U gross) = Konstruktor-Variante.
+var
+  SRC: string;
+  F  : TObjectList<TLeakFinding>;
+begin
+  SRC := ProcInUnit('TFoo.Bar', 'sl: TStringList', [
+    'sl := TStringList.CreateUtf8(''demo'');',
+    'sl.Add(''x'');',
+    '// kein Free - sollte Leak melden'
+  ]);
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
+      'CreateUtf8 ohne Free muss Leak melden (CamelCase-Konstruktor-Variante)');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_CreateFmt_NoFree_ReportsError;
+// Regression: RTL-Idiom `E := EConvertError.CreateFmt('Bad %s', [s])`.
+// Analog CreateUtf8: 'F' gross => Konstruktor-Variante.
+var
+  SRC: string;
+  F  : TObjectList<TLeakFinding>;
+begin
+  SRC := ProcInUnit('TFoo.Bar', 'sl: TStringList', [
+    'sl := TStringList.CreateFmt(''Bad %s'', [''x'']);',
+    'sl.Add(''y'');'
+  ]);
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
+      'CreateFmt ohne Free muss Leak melden');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_DotCreatedProperty_NotConstructor_NoFinding;
+// Negative regression: `.Created` (Folge-Zeichen klein) ist KEIN Konstruktor -
+// kann Property oder Field-Read sein, die eine bereits existierende Instanz
+// liefert (Borrowed-Reference, kein Ownership-Transfer). Darf nicht als
+// Create-Assign gewertet werden, sonst False-Positive auf jeder Read-
+// Property mit 'created'-Suffix. Wichtig: leaky Typ (TStringList) damit
+// der Detektor wirklich bis MatchesCreate kommt - sonst trivial bestanden.
+var
+  SRC: string;
+  F  : TObjectList<TLeakFinding>;
+begin
+  SRC := ProcInUnit('TFoo.Bar', 'sl: TStringList', [
+    'sl := Self.Created;',
+    '// kein Free - sl ist nur eine Referenz auf eine bestehende Liste'
+  ]);
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+      '.Created (Property/Field-Suffix in lowercase) darf nicht als Konstruktor erkannt werden');
   finally F.Free; end;
 end;
 

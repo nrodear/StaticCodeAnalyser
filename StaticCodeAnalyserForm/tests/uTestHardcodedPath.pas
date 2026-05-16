@@ -28,6 +28,10 @@ type
     [Test] procedure Path_RegularString_NoFinding;
     [Test] procedure Path_RelativePath_NoFinding;
     [Test] procedure Path_SameDuplicateOnce_NotDuplicated;
+    // ---- Severity / Finding-Inhalt / Multi-Hit ---------------------------
+    [Test] procedure Path_Finding_KindAndSeverity;
+    [Test] procedure Path_Finding_MissingVarMentionsPath;
+    [Test] procedure Path_MultipleHitsInSameMethod_AllReported;
   end;
 
 implementation
@@ -204,6 +208,76 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual(1, TFindingHelper.Count(F, fkHardcodedPath));
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedPath.Path_Finding_KindAndSeverity;
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var p: string;'#13#10+
+  'begin p := ''C:\Windows\System32''; end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := nil;
+    for Fnd in F do
+      if Fnd.Kind = fkHardcodedPath then
+      begin
+        Hit := Fnd;
+        Break;
+      end;
+    Assert.IsNotNull(Hit, 'fkHardcodedPath finding expected');
+    Assert.AreEqual(fkHardcodedPath, Hit.Kind);
+    Assert.AreEqual(lsWarning, Hit.Severity);
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedPath.Path_Finding_MissingVarMentionsPath;
+// MissingVar muss den eigentlichen Pfad enthalten, sonst kann der User
+// im Grid nicht erkennen welcher String getroffen wurde.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var p: string;'#13#10+
+  'begin p := ''C:\MyProjects\Secrets''; end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := nil;
+    for Fnd in F do
+      if Fnd.Kind = fkHardcodedPath then
+      begin
+        Hit := Fnd;
+        Break;
+      end;
+    Assert.IsNotNull(Hit);
+    Assert.Contains(Hit.MissingVar, 'C:\MyProjects\Secrets');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedPath.Path_MultipleHitsInSameMethod_AllReported;
+// Zwei verschiedene hardgecodete Pfade in derselben Methode -> beide Findings.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var p, q: string;'#13#10+
+  'begin'#13#10+
+  '  p := ''C:\Windows\System32'';'#13#10+
+  '  q := ''/home/user/secret'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(2, TFindingHelper.Count(F, fkHardcodedPath));
   finally F.Free; end;
 end;
 
