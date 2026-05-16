@@ -260,6 +260,8 @@
         <DCCReference Include="uTestRedundantConditional.pas"/>
         <DCCReference Include="uTestIfElseBegin.pas"/>
         <DCCReference Include="uTestPointerName.pas"/>
+        <DCCReference Include="uTestBeginEndRequired.pas"/>
+        <DCCReference Include="uTestNestedRoutines.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

@@ -297,8 +297,13 @@ type
                                  // (SonarDelphi:RedundantConditional).
     fkIfElseBegin,               // Asymmetrische begin/end-Verwendung in
                                  // if/else (SonarDelphi:IfElseBegin).
-    fkPointerName                // Pointer-Typ-Alias ohne `P`-Prefix
+    fkPointerName,               // Pointer-Typ-Alias ohne `P`-Prefix
                                  // (SonarDelphi:PointerName).
+    fkBeginEndRequired,          // Branch ohne `begin..end` Block
+                                 // (SonarDelphi:BeginEndRequired).
+    fkNestedRoutine              // Geschachtelte procedure/function
+                                 // innerhalb einer anderen Methode
+                                 // (SonarDelphi:NestedRoutines-Variante).
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -447,7 +452,9 @@ const
     (Name: 'DestructorWithoutInherited'; FindingType: ftBug;          DefaultSeverity: lsError),   // fkDestructorWithoutInherited
     (Name: 'RedundantConditional';       FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkRedundantConditional
     (Name: 'IfElseBegin';                FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkIfElseBegin
-    (Name: 'PointerName';                FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkPointerName
+    (Name: 'PointerName';                FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkPointerName
+    (Name: 'BeginEndRequired';           FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkBeginEndRequired
+    (Name: 'NestedRoutine';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkNestedRoutine
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

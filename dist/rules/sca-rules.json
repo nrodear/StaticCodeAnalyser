@@ -1978,6 +1978,44 @@
       "impacts": [
         { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
       ]
+    },
+    {
+      "id": "SCA101",
+      "kind": "BeginEndRequired",
+      "name": "Branch without begin..end block",
+      "shortDescription": "`then`/`else`/`do <stmt>` - prefer explicit `begin..end`",
+      "fullDescription": "A single-statement branch without `begin..end` is easy to misread; adding a second statement later without re-blocking is a classic source of indentation-vs-semantics bugs. Style-debated rule (many Delphi codebases use the compact form deliberately) - lsHint, easy to disable in profiles. `else if` chain, `raise`/`exit`/`break`/`continue` and other block-opening statements are explicitly allowed. Matches SonarDelphi communitydelphi:BeginEndRequired.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["style", "bug-risk"],
+      "detectorUnit": "uBeginEndRequired.pas",
+      "examples": {
+        "bad":  "if Active then DoStuff;",
+        "good": "if Active then\nbegin\n  DoStuff;\nend;"
+      },
+      "cleanCodeAttribute": "FORMATTED",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA102",
+      "kind": "NestedRoutine",
+      "name": "Nested routine inside another method",
+      "shortDescription": "Local nested procedure/function - extract to unit-level",
+      "fullDescription": "Nested routines (a `procedure`/`function` declared inside the local-decl section of another routine) are syntactically allowed but discourage testing and reuse: the inner routine can't be unit-tested or reused from elsewhere. Modern Delphi prefers anonymous methods (lambdas) for the rare cases the nesting was actually needed. Anonymous methods are NOT flagged (they have no name in the AST). Matches SonarDelphi communitydelphi:NestedRoutines.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["modularity", "testing"],
+      "detectorUnit": "uNestedRoutines.pas",
+      "examples": {
+        "bad":  "procedure Outer;\n  procedure Inner; begin DoX; end;\nbegin\n  Inner;\nend;",
+        "good": "procedure Inner; begin DoX; end;\nprocedure Outer;\nbegin\n  Inner;\nend;"
+      },
+      "cleanCodeAttribute": "MODULAR",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     }
   ]
 }
