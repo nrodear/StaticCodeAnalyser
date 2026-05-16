@@ -81,12 +81,29 @@ type
     class procedure ApplyThemeRecursive(AControl: TControl); static;
   end;
 
+// One-shot Theme-Anwendung fuer kurzlebige Frames/Forms (Tools>Options-Pages,
+// Modaldialoge). KEIN Notifier - die IDE zerstoert und re-created den Frame
+// beim naechsten Open, daher kommt das frische Theme automatisch beim
+// naechsten FrameCreated. Fuer langlebige Forms (Dock-Window) stattdessen
+// TIDEThemeIntegration mit Notifier verwenden.
+procedure ApplyIDETheme(AComponent: TComponent);
+
 implementation
 
 uses
   System.SysUtils,
   Vcl.Forms,
   ToolsAPI;
+
+procedure ApplyIDETheme(AComponent: TComponent);
+var
+  Theming : IOTAIDEThemingServices;
+begin
+  if AComponent = nil then Exit;
+  if not Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) then Exit;
+  if not Theming.IDEThemingEnabled then Exit;
+  Theming.ApplyTheme(AComponent);
+end;
 
 type
   // Interner Notifier - haelt den Helper als Reference. Bei Helper-

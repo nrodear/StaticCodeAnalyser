@@ -88,7 +88,8 @@ implementation
 {$R *.dfm}
 
 uses
-  System.IniFiles, System.IOUtils, Winapi.ShellAPI, Winapi.Windows;
+  System.IniFiles, System.IOUtils, Winapi.ShellAPI, Winapi.Windows,
+  uIDEThemeIntegration;   // ApplyIDETheme one-shot helper
 
 var
   GSonarOptionsIfc : INTAAddInOptions = nil;
@@ -436,6 +437,11 @@ begin
   FFrame := AFrame as TSonarOptionsFrame;
   Ini := TSonarConfigResolver.DefaultIniPath;
   FFrame.LoadFromIni(Ini);
+  // IDE-Theme uebernehmen - sonst rendert der Frame im VCL-Default
+  // (hell) auch wenn die IDE im Dark-Mode laeuft. One-shot reicht hier,
+  // weil die IDE den Frame bei jedem erneuten Oeffnen neu erzeugt; ein
+  // Theme-Notifier ist nur fuer das langlebige Dock-Window noetig.
+  ApplyIDETheme(FFrame);
 end;
 
 procedure TSonarAddInOptions.DialogClosed(Accepted: Boolean);

@@ -83,6 +83,9 @@ implementation
 
 {$R *.dfm}
 
+uses
+  uIDEThemeIntegration;   // ApplyIDETheme one-shot helper
+
 const
   // Sentinel-Text fuer "kein Profile-Override". Wird im Combo angezeigt
   // und in LoadFromSettings/SaveToSettings als Marker verglichen - daher
@@ -389,6 +392,10 @@ begin
   finally
     Settings.Free;
   end;
+  // IDE-Theme uebernehmen - sonst rendert der Frame im VCL-Default
+  // (hell) auch wenn die IDE im Dark-Mode laeuft. Bisher hat das Erbe
+  // vom Parent-Panel teilweise gegriffen, war aber inkonsistent.
+  ApplyIDETheme(FFrame);
 end;
 
 procedure TSCAAddInOptions.DialogClosed(Accepted: Boolean);
