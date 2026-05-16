@@ -112,6 +112,11 @@ SonarCloud (complementary to [SonarDelphi](https://github.com/integrated-applica
 — our findings are mORMot-aware, cover DFM files, and ship sonar-foreign
 checks like `TautologicalBoolExpr`, `ConcatToFormat`, `WithStatement`).
 
+> **Tested with**: SonarQube Community Build 26.5+ (Sonar 10+, MQR mode).
+> SCA findings import as external issues via Generic Issue Format and sit
+> alongside Sonar's built-in default profile (**Sonar Way**) — no conflict,
+> no override. Works with both SonarQube Server and SonarCloud.
+
 ```powershell
 # Configure once (IDE: Tools > Options > Sonar Integration, or CLI):
 analyser.exe --sonar-test `

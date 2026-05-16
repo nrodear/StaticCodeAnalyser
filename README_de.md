@@ -104,6 +104,43 @@ Für inkrementelle Analyse nur der im Branch geänderten Dateien siehe
 
 ---
 
+## Sonar-Integration
+
+SCA-Findings können als **External Issues** in SonarQube / SonarCloud
+gepusht werden (komplementär zu [SonarDelphi](https://github.com/integrated-application-development/sonar-delphi)
+— unsere Findings sind mORMot-aware, decken DFM-Files ab und bringen
+sonar-fremde Checks wie `TautologicalBoolExpr`, `ConcatToFormat`,
+`WithStatement` mit).
+
+```powershell
+# Einmalig konfigurieren (IDE: Tools > Optionen > Sonar Integration, oder CLI):
+analyser.exe --sonar-test `
+  --sonar-host http://localhost:9000 `
+  --sonar-token squ_xxxxx `
+  --sonar-project my-delphi-project
+
+# Analyse + Generic Issue Format fuer sonar-scanner
+analyser.exe --path . --full --sonar-export sca-findings.json
+sonar-scanner   # liest via sonar.externalIssuesReportPaths
+```
+
+Jede Rule traegt SonarQube-MQR-Felder (`cleanCodeAttribute` + `impacts`)
+damit Findings korrekt im MQR-Dashboard erscheinen. Token-Speicherung im
+IDE-Plugin per Windows DPAPI (Current-User-Scope) — keine Klartext-
+Secrets in `analyser.ini`.
+
+> **Getestet mit**: SonarQube Community Build 26.5+ (Sonar 10+, MQR-Modus).
+> SCA-Findings werden als External Issues über das Generic Issue Format
+> importiert und stehen neben den built-in Findings des Default-Quality-
+> Profile **Sonar Way** — kein Konflikt, kein Override. Funktioniert sowohl
+> mit SonarQube Server als auch SonarCloud.
+
+Volles Setup: [docs/sonar-setup.md](docs/sonar-setup.md). Quick-Reference:
+[sonarHowto_de.md](sonarHowto_de.md). Resolver-Reihenfolge:
+[docs/sonar-config.md](docs/sonar-config.md).
+
+---
+
 ## Was wird erkannt (41 Detektoren — 21 Pascal + 20 DFM)
 
 Alle Befunde landen in einer der **5 Sonar-Kategorien**:

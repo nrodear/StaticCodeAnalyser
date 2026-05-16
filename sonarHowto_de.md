@@ -5,6 +5,12 @@
 Schritt-für-Schritt-Anleitung um SCA-Findings per **Standalone-EXE** in eine
 SonarQube-Instanz zu pushen. Kein IDE-Plugin nötig.
 
+**Getestet mit**: SonarQube Community Build 26.5+ (Sonar 10+, MQR-Modus).
+SCA-Findings werden als External Issues über das Generic Issue Format
+importiert und stehen neben den built-in Findings des Default-Quality-
+Profile **Sonar Way** — kein Konflikt, kein Override. Funktioniert sowohl
+mit SonarQube Server als auch SonarCloud.
+
 > **Nicht abgedeckt**: das Aufsetzen des SonarQube-Servers selbst (Docker /
 > Project anlegen / User+Token in der Web-UI). Voraussetzung: du hast einen
 > laufenden Server, einen User mit Token und ein Project mit Browse-

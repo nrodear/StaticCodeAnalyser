@@ -7,6 +7,12 @@ Upload getrennt zu halten erlaubt einen Upload-Retry ohne Re-Scan,
 ermöglicht den Scan offline (CI) und macht es einfach, das JSON zwischen
 den Schritten zu inspizieren.
 
+**Getestet mit**: SonarQube Community Build 26.5+ (Sonar 10+, MQR-Modus).
+SCA-Findings werden als External Issues über das Generic Issue Format
+importiert und stehen neben den built-in Findings des Default-Quality-
+Profile **Sonar Way** — kein Konflikt, kein Override. Funktioniert sowohl
+mit SonarQube Server als auch SonarCloud.
+
 | Script | Was es macht |
 |---|---|
 | [`sonar-scan.ps1`](sonar-scan.ps1)     | Ruft `analyser.exe --sonar-export` und produziert `sca-findings.json`. Deployt beim ersten Lauf den Rule-Catalog nach `%APPDATA%`, decodiert den Exit-Code in ein menschenlesbares Verdict, validiert dass die Output-Datei wirklich entstand. |

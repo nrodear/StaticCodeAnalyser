@@ -7,6 +7,11 @@ Splitting scan from upload lets you re-run the upload without re-scanning,
 keeps the scan offline-able for CI, and makes it easy to inspect the JSON
 between the two steps.
 
+**Tested with**: SonarQube Community Build 26.5+ (Sonar 10+, MQR mode).
+SCA findings import as external issues via Generic Issue Format and sit
+alongside Sonar's default **Sonar Way** quality profile — no conflict, no
+override. Works with both SonarQube Server and SonarCloud.
+
 | Script | What it does |
 |---|---|
 | [`sonar-scan.ps1`](sonar-scan.ps1)     | Runs `analyser.exe --sonar-export` and produces `sca-findings.json`. Auto-deploys the rule catalog to `%APPDATA%` on first run, decodes the exit code into a human-readable verdict, validates the output file. |
