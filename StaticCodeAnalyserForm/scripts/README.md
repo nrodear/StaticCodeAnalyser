@@ -1,5 +1,7 @@
 # Sonar push scripts
 
+🇩🇪 [Deutsche Version](README_de.md)
+
 Two PowerShell helpers around the standalone EXE + `sonar-scanner`.
 Splitting scan from upload lets you re-run the upload without re-scanning,
 keeps the scan offline-able for CI, and makes it easy to inspect the JSON
