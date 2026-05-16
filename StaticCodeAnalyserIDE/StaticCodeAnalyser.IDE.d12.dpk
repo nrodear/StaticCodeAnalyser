@@ -153,6 +153,8 @@ contains
   uPointerName in '..\StaticCodeAnalyserForm\sources\Detectors\uPointerName.pas',
   uBeginEndRequired in '..\StaticCodeAnalyserForm\sources\Detectors\uBeginEndRequired.pas',
   uNestedRoutines in '..\StaticCodeAnalyserForm\sources\Detectors\uNestedRoutines.pas',
+  uFieldName in '..\StaticCodeAnalyserForm\sources\Detectors\uFieldName.pas',
+  uTypeName in '..\StaticCodeAnalyserForm\sources\Detectors\uTypeName.pas',
   uReversedForRange in '..\StaticCodeAnalyserForm\sources\Detectors\uReversedForRange.pas',
   uSelfAssignment in '..\StaticCodeAnalyserForm\sources\Detectors\uSelfAssignment.pas',
   uVirtualCallInCtor in '..\StaticCodeAnalyserForm\sources\Detectors\uVirtualCallInCtor.pas',

@@ -262,6 +262,8 @@
         <DCCReference Include="uTestPointerName.pas"/>
         <DCCReference Include="uTestBeginEndRequired.pas"/>
         <DCCReference Include="uTestNestedRoutines.pas"/>
+        <DCCReference Include="uTestFieldName.pas"/>
+        <DCCReference Include="uTestTypeName.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

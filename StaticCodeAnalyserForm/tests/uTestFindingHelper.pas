@@ -31,6 +31,7 @@ uses
   uConstructorWithoutInherited, uDestructorWithoutInherited, uRedundantConditional,
   uIfElseBegin, uPointerName,
   uBeginEndRequired, uNestedRoutines,
+  uFieldName, uTypeName,
   uReversedForRange, uSelfAssignment, uVirtualCallInCtor, uLengthUnderflow,
   uVisibilityCheck,
   uUnusedLocal, uUnusedParameter, uTautologicalExpr,
@@ -175,6 +176,8 @@ begin
         TPointerNameDetector.AnalyzeUnit(Root, TempPath, Result);
         TBeginEndRequiredDetector.AnalyzeUnit(Root, TempPath, Result);
         TNestedRoutinesDetector.AnalyzeUnit(Root, TempPath, Result);
+        TFieldNameDetector.AnalyzeUnit(Root, TempPath, Result);
+        TTypeNameDetector.AnalyzeUnit(Root, TempPath, Result);
         TReversedForRangeDetector.AnalyzeUnit(Root, TempPath, Result);
         TLengthUnderflowDetector.AnalyzeUnit(Root, TempPath, Result);
         TTautologicalExprDetector.AnalyzeUnit(Root, TempPath, Result);

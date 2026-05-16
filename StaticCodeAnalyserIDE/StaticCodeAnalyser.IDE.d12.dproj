@@ -274,6 +274,8 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uPointerName.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uBeginEndRequired.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uNestedRoutines.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uFieldName.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTypeName.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uReversedForRange.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSelfAssignment.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uVirtualCallInCtor.pas"/>

@@ -301,9 +301,13 @@ type
                                  // (SonarDelphi:PointerName).
     fkBeginEndRequired,          // Branch ohne `begin..end` Block
                                  // (SonarDelphi:BeginEndRequired).
-    fkNestedRoutine              // Geschachtelte procedure/function
+    fkNestedRoutine,             // Geschachtelte procedure/function
                                  // innerhalb einer anderen Methode
                                  // (SonarDelphi:NestedRoutines-Variante).
+    fkFieldName,                 // Klassen-Feld ohne `F`-Prefix
+                                 // (SonarDelphi:FieldName).
+    fkTypeName                   // Class/Record-Type ohne `T`-Prefix
+                                 // (SonarDelphi:TypeName).
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -454,7 +458,9 @@ const
     (Name: 'IfElseBegin';                FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkIfElseBegin
     (Name: 'PointerName';                FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkPointerName
     (Name: 'BeginEndRequired';           FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkBeginEndRequired
-    (Name: 'NestedRoutine';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkNestedRoutine
+    (Name: 'NestedRoutine';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkNestedRoutine
+    (Name: 'FieldName';                  FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkFieldName
+    (Name: 'TypeName';                   FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkTypeName
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

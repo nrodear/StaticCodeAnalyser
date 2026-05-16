@@ -2016,6 +2016,44 @@
       "impacts": [
         { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
       ]
+    },
+    {
+      "id": "SCA103",
+      "kind": "FieldName",
+      "name": "Class field not prefixed with F",
+      "shortDescription": "Class fields should follow `F<Name>` convention",
+      "fullDescription": "Delphi convention: class instance fields are named `FFoo` so the reader instantly knows they refer to a class member (vs a local variable or parameter). The `F` prefix avoids naming clashes with public properties (`FFoo` field with `Foo` property is the canonical pair). Only `private` and `protected` field declarations are checked - public/published fields are caught by `PublicField` (SCA089) anyway. Matches SonarDelphi communitydelphi:FieldName.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["naming", "convention"],
+      "detectorUnit": "uFieldName.pas",
+      "examples": {
+        "bad":  "type TFoo = class\n  private\n    Counter: Integer;\n  end;",
+        "good": "type TFoo = class\n  private\n    FCounter: Integer;\n  end;"
+      },
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA104",
+      "kind": "TypeName",
+      "name": "Class/record type not prefixed with T",
+      "shortDescription": "Class and record type aliases should start with `T`",
+      "fullDescription": "Delphi convention: class types `TXxx`, records `TXxx` or `RXxx`, interfaces `IXxx`, pointers `PXxx` (SCA100), exceptions `EXxx`. This detector covers the class/record subset only. Forward declarations (`TFoo = class;`), `class of` references (`TFooClass = class of TFoo`) and generic syntax are handled. Matches SonarDelphi communitydelphi:TypeName.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["naming", "convention"],
+      "detectorUnit": "uTypeName.pas",
+      "examples": {
+        "bad":  "type Counter = class\n  ...\n  end;",
+        "good": "type TCounter = class\n  ...\n  end;"
+      },
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     }
   ]
 }
