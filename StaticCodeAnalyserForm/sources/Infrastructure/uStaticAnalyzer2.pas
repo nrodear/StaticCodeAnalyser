@@ -41,13 +41,18 @@ uses
   System.IOUtils, System.Diagnostics,
   uStaticFiles, uParser2, uAstNode,
   uLeakDetector2, uCodeSmells2, uSQLInjection, uHardcodedSecret,
-  uFormatMismatch, uUnusedUses,
+  uFormatMismatch, uConcatToFormat, uUnusedUses, uWithStatement,
+  uReversedForRange, uSelfAssignment, uVirtualCallInCtor, uLengthUnderflow,
+  uVisibilityCheck,
+  uUnusedLocal, uUnusedParameter, uTautologicalExpr,
+  uSqlDangerousStatement,
   uNilDeref, uMissingFinally, uDivByZero, uDeadCode,
   uLongMethod, uLongParamList, uMagicNumbers, uDuplicateString,
   uHardcodedPath, uDebugOutput, uDeepNesting,
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
   uCyclomaticComplexity, uCustomRuleDetector,
-  uDfmAnalysisRunner, uDfmRepoIndex,
+  uDfmAnalysisRunner, uDfmRepoIndex, uSymbolReferenceIndex, uAstFileCache,
+  uFileTextCache,
   uSuppression, uCustomClassDiscovery,
   uRuleCatalog;
 
@@ -118,6 +123,20 @@ begin
   Add('SQLInjection',    fkSQLInjection,    procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TSQLInjectionDetector.AnalyzeUnit(R, F, L); end);
   Add('HardcodedSecret', fkHardcodedSecret, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin THardcodedSecretDetector.AnalyzeUnit(R, F, L); end);
   Add('FormatMismatch',  fkFormatMismatch,  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TFormatMismatchDetector.AnalyzeUnit(R, F, L); end);
+  Add('ConcatToFormat',  fkConcatToFormat,  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TConcatToFormatDetector.AnalyzeUnit(R, F, L); end);
+  Add('WithStatement',   fkWithStatement,   procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TWithStatementDetector.AnalyzeUnit(R, F, L); end);
+  Add('ReversedForRange',fkReversedForRange,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TReversedForRangeDetector.AnalyzeUnit(R, F, L); end);
+  Add('SelfAssignment',  fkSelfAssignment,  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TSelfAssignmentDetector.AnalyzeUnit(R, F, L); end);
+  Add('VirtualCallInCtor',fkVirtualCallInCtor,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TVirtualCallInCtorDetector.AnalyzeUnit(R, F, L); end);
+  Add('LengthUnderflow', fkLengthUnderflow, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLengthUnderflowDetector.AnalyzeUnit(R, F, L); end);
+  // VisibilityCheck emittiert drei Kinds (CanBePrivate/CanBeProtected/
+  // UnusedPublicMember) auf den fkCanBePrivate-Anker im Profile-Filter.
+  // Single-Unit-MVP - Multi-File-Pfad steht noch aus (TODO 🅷).
+  Add('VisibilityCheck',fkCanBePrivate,    procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TVisibilityCheckDetector.AnalyzeUnit(R, F, L); end);
+  Add('UnusedLocalVar', fkUnusedLocalVar,  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUnusedLocalDetector.AnalyzeUnit(R, F, L); end);
+  Add('UnusedParameter',fkUnusedParameter, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUnusedParameterDetector.AnalyzeUnit(R, F, L); end);
+  Add('TautologicalBoolExpr',fkTautologicalBoolExpr, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TTautologicalExprDetector.AnalyzeUnit(R, F, L); end);
+  Add('SqlDangerousStatement', fkSqlDangerousStatement, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TSqlDangerousStatementDetector.AnalyzeUnit(R, F, L); end);
   Add('UnusedUses',      fkUnusedUses,      procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUnusedUsesDetector.AnalyzeUnit(R, F, L); end);
   // UsesCheck zusaetzlich zum Profile-/Severity-Filter: bleibt Skip-Wahr
   // wenn der Caller AIncludeUsesCheck=False uebergibt - auch bei strict
@@ -343,6 +362,17 @@ begin
       LogStream := nil;
     end;
 
+    // AST-File-Cache: pro .pas einmal parsen, von beiden Pre-Indizes UND
+    // dem Main-Loop wiederverwendet. Spart 2 von 3 Parser-Durchlaeufen pro
+    // File (perf_analyse.md Hot-Spot 🅐).
+    gAstFileCache := TAstFileCache.Create;
+
+    // File-Text-Cache: pro .pas einmal Lines.LoadFromFile, von den
+    // File-Scan-Detektoren (Todo, With, Reversed, Length, Tautological,
+    // DuplicateBlock, CustomRule) wiederverwendet (perf_analyse.md
+    // Hot-Spot 🅑).
+    gFileTextCache := TFileTextCache.Create;
+
     // Repo-weiten Index fuer Cross-Unit-Detektoren einmal pro Scan
     // aufbauen. Wenn das Build crasht (defekte .pas), schluckt der
     // Index das selbst - der Hauptanalyse-Pfad laeuft auch ohne Index
@@ -352,6 +382,16 @@ begin
       gDfmRepoIndex.Build(FileList);
     except
       FreeAndNil(gDfmRepoIndex);
+    end;
+
+    // Symbol-Reference-Index fuer Visibility-Detektoren (fkCanBePrivate &
+    // Co.). Sammelt alle 'Obj.Member'-Referenzen pro Unit, damit
+    // uVisibilityCheck Cross-Unit-Aufrufe sehen kann statt nur Single-File.
+    gSymbolRefIndex := TSymbolReferenceIndex.Create;
+    try
+      gSymbolRefIndex.Build(FileList);
+    except
+      FreeAndNil(gSymbolRefIndex);
     end;
 
     Parser := TParser2.Create;
@@ -411,9 +451,22 @@ begin
       Watch := TStopwatch.StartNew;
 
       Root := nil;
+      // OwnsRoot=False wenn der Cache das Root besitzt (er freet es bei
+      // Evict). True wenn lokal geparst -> nach AST-Verarbeitung selbst free.
+      var OwnsRoot := False;
       try
         try
-          Root := Parser.ParseFile(FileName);
+          // Cache-Pfad bevorzugen: Pre-Indizes haben das Root schon erzeugt.
+          if Assigned(gAstFileCache) then
+          begin
+            Root := gAstFileCache.Acquire(FileName);
+            OwnsRoot := False;
+          end
+          else
+          begin
+            Root := Parser.ParseFile(FileName);
+            OwnsRoot := True;
+          end;
         except
           on E: Exception do
           begin
@@ -425,16 +478,30 @@ begin
 
         if Root = nil then
         begin
-          LogLine('  PARSER liefert nil');
-          AddFileError(FileName, 'Parser lieferte kein Ergebnis');
+          // Bei Cache-Pfad ist die konkrete Parser-Exception in
+          // gAstFileCache.FFailed hinterlegt - rausholen damit der Log
+          // dieselbe Info enthaelt wie im Fallback-Pfad.
+          var FailMsg := '';
+          if Assigned(gAstFileCache) then
+            FailMsg := gAstFileCache.GetFailMessage(FileName);
+          if FailMsg = '' then FailMsg := 'Parser lieferte kein Ergebnis';
+          LogLine('  PARSER-FEHLER: ' + FailMsg);
+          AddFileError(FileName, FailMsg);
           Continue;
         end;
 
         ElapsedMs := Watch.ElapsedMilliseconds;
-        if ElapsedMs > 500 then
-          LogLine(Format('  Parse: %d ms (langsam!)', [ElapsedMs]))
+        // Im Cache-Pfad ist das eine Cache-Lookup-Zeit (~0 ms bei Hit);
+        // im Fallback-Pfad echte Parse-Zeit. Slow-Warning nur fuer letzteres.
+        if OwnsRoot then
+        begin
+          if ElapsedMs > 500 then
+            LogLine(Format('  Parse: %d ms (langsam!)', [ElapsedMs]))
+          else if Assigned(LogStream) then
+            LogLine(Format('  Parse: %d ms', [ElapsedMs]));
+        end
         else if Assigned(LogStream) then
-          LogLine(Format('  Parse: %d ms', [ElapsedMs]));
+          LogLine(Format('  Acquire: %d ms (cache)', [ElapsedMs]));
 
         // Detektoren ausfuehren - jeder einzeln geschuetzt, damit ein
         // fehlerhafter Detektor nicht alle anderen blockiert.
@@ -530,7 +597,14 @@ begin
             CaptResults.Add(F);
           end);
       finally
-        Root.Free;
+        if OwnsRoot then
+          Root.Free
+        else if Assigned(gAstFileCache) then
+          gAstFileCache.Evict(FileName);  // Memory-Peak bremsen
+        // Text-Cache fuer die abgearbeitete Datei freigeben - die File-Scan-
+        // Detektoren haben sie konsumiert, niemand brauchts mehr.
+        if Assigned(gFileTextCache) then
+          gFileTextCache.Clear;
       end;
     end;
   finally
@@ -545,6 +619,12 @@ begin
     // ausserhalb dieses Scans sollen nicht versehentlich stale Daten sehen.
     if Assigned(gDfmRepoIndex) then
       FreeAndNil(gDfmRepoIndex);
+    if Assigned(gSymbolRefIndex) then
+      FreeAndNil(gSymbolRefIndex);
+    if Assigned(gAstFileCache) then
+      FreeAndNil(gAstFileCache);
+    if Assigned(gFileTextCache) then
+      FreeAndNil(gFileTextCache);
   end;
 
   // Suppression-Kommentare auswerten und Befunde filtern

@@ -49,6 +49,16 @@ type
     class function IsWholeWord(const Str, Pattern: string;
       Pos_: Integer): Boolean; static;
     class function IsLeakyType(const TypeRef: string): Boolean; static;
+    // Erkennt einen Konstruktor-Aufruf in der RHS einer Zuweisung:
+    // sowohl `.Create(...)` als auch CamelCase-Varianten wie `.CreateUtf8`,
+    // `.CreateFmt`, `.CreateFromFile`, `.CreateAfterAttach` (mORMot- / RTL-
+    // gebraeuchlich). Verb-Formen `.creates` / `.created` werden bewusst
+    // ausgeschlossen - die fortsetzenden Kleinbuchstaben unterscheiden
+    // Identifier-Suffix (Verb) von CamelCase-Suffix (Konstruktor).
+    // ATypeRef ist die original-Case-Form (TypeRef wie aus dem AST),
+    // ATypeLow ist `ATypeRef.ToLower` (vorberechnet vom Caller).
+    class function MatchesCreate(const ATypeRef, ATypeLow: string;
+      out CreatePos: Integer): Boolean; static;
     class function HasCreateAssign(MethodNode: TAstNode;
       const VarNameLow: string): Boolean; static;
     class function HasFunctionCallAssign(MethodNode: TAstNode;
@@ -137,12 +147,35 @@ end;
 
 { ---- Create-Erkennung ---- }
 
+class function TLeakDetector2.MatchesCreate(const ATypeRef, ATypeLow: string;
+  out CreatePos: Integer): Boolean;
+var
+  pRight : Integer;
+begin
+  Result    := False;
+  CreatePos := 0;
+  CreatePos := Pos('.create', ATypeLow);
+  if CreatePos <= 0 then Exit;
+  pRight := CreatePos + 7;          // direkt hinter 'create'
+  // Fall A: '.Create' am Ende des Ausdrucks (kein Folge-Token)
+  if pRight > Length(ATypeLow) then Exit(True);
+  // Fall B: '.Create(' / '.Create ' / '.Create;' - non-Ident-Char hinter create
+  if not IsIdentChar(ATypeLow[pRight]) then Exit(True);
+  // Fall C: '.CreateXxx' - Folge-Zeichen ist im Original-Case ein
+  // Grossbuchstabe -> CamelCase-Suffix -> Konstruktor-Variante.
+  // Fall D: '.created'/'.creates' - Folge-Zeichen lowercase -> Verb-Form,
+  // kein Konstruktor. ATypeRef und ATypeLow haben gleiche Laenge.
+  if pRight > Length(ATypeRef) then Exit;          // defensive
+  Result := CharInSet(ATypeRef[pRight], ['A'..'Z']);
+end;
+
 class function TLeakDetector2.HasCreateAssign(MethodNode: TAstNode;
   const VarNameLow: string): Boolean;
 var
-  Assigns : TList<TAstNode>;
-  A       : TAstNode;
-  TypeLow : string;
+  Assigns  : TList<TAstNode>;
+  A        : TAstNode;
+  TypeLow  : string;
+  Dummy    : Integer;
 begin
   Result  := False;
   Assigns := MethodNode.FindAll(nkAssign);
@@ -152,15 +185,8 @@ begin
       // Exakter Namensvergleich (A.Name ist immer der vollständige LHS-Ausdruck)
       if A.Name.ToLower <> VarNameLow then Continue;
       TypeLow := A.TypeRef.ToLower;
-      // .create als ganzes Wort (nicht z. B. .creates oder .recreate)
-      var p := Pos('.create', TypeLow);
-      if p > 0 then
-      begin
-        // Rechte Grenze: nach 'create' kein Bezeichner-Zeichen
-        var pRight := p + 7;
-        if (pRight > Length(TypeLow)) or not IsIdentChar(TypeLow[pRight]) then
-          Exit(True);
-      end;
+      if MatchesCreate(A.TypeRef, TypeLow, Dummy) then
+        Exit(True);
     end;
   finally
     Assigns.Free;
@@ -181,15 +207,11 @@ begin
     begin
       if A.Name.ToLower <> VarNameLow then Continue;
       TypeLow := A.TypeRef.ToLower;
-      var p := Pos('.create', TypeLow);
-      if p > 0 then
+      var Dummy : Integer;
+      if MatchesCreate(A.TypeRef, TypeLow, Dummy) then
       begin
-        var pRight := p + 7;
-        if (pRight > Length(TypeLow)) or not IsIdentChar(TypeLow[pRight]) then
-        begin
-          Result := A.Line;
-          Exit;
-        end;
+        Result := A.Line;
+        Exit;
       end;
     end;
   finally

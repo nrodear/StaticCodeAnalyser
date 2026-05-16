@@ -85,7 +85,7 @@ implementation
 
 uses
   System.IOUtils, System.StrUtils,
-  uYamlSubsetParser;
+  uYamlSubsetParser, uFileTextCache;
 
 { ---- Init / Done ---- }
 
@@ -399,12 +399,18 @@ class procedure TCustomRuleDetector.AnalyzeFile(const FileName: string;
   Results: TObjectList<TLeakFinding>);
 var
   Source : string;
+  Lines  : TStringList;
+  Cached : Boolean;
 begin
   if not HasRules then Exit;
+  // Cache-Pfad: wenn der Main-Loop schon ein gFileTextCache angelegt hat,
+  // nutzen wir das (spart Disk-IO, perf_analyse.md Hot-Spot 🅑).
+  Lines := AcquireLines(FileName, Cached);
+  if Lines = nil then Exit;
   try
-    Source := TFile.ReadAllText(FileName, TEncoding.UTF8);
-  except
-    Exit; // IO-Fehler still ignorieren - Hauptanalyzer behandelt das
+    Source := Lines.Text;
+  finally
+    ReleaseLines(Lines, Cached);
   end;
   AnalyzeFile(FileName, Source, Results);
 end;

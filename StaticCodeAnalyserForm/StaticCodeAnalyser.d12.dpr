@@ -40,6 +40,9 @@ uses
   uIgnoreList in 'sources\Infrastructure\uIgnoreList.pas',
   uRepoSettings in 'sources\Infrastructure\uRepoSettings.pas',
   uStaticAnalyzer2 in 'sources\Infrastructure\uStaticAnalyzer2.pas',
+  uSymbolReferenceIndex in 'sources\Infrastructure\uSymbolReferenceIndex.pas',
+  uAstFileCache in 'sources\Infrastructure\uAstFileCache.pas',
+  uFileTextCache in 'sources\Infrastructure\uFileTextCache.pas',
   uStaticFiles in 'sources\Infrastructure\uStaticFiles.pas',
   uSuppression in 'sources\Infrastructure\uSuppression.pas',
   uVcsChanges in 'sources\Infrastructure\uVcsChanges.pas',
@@ -72,6 +75,7 @@ uses
   uEmptyMethod in 'sources\Detectors\uEmptyMethod.pas',
   uFieldLeak in 'sources\Detectors\uFieldLeak.pas',
   uFormatMismatch in 'sources\Detectors\uFormatMismatch.pas',
+  uConcatToFormat in 'sources\Detectors\uConcatToFormat.pas',
   uHardcodedPath in 'sources\Detectors\uHardcodedPath.pas',
   uHardcodedSecret in 'sources\Detectors\uHardcodedSecret.pas',
   uLeakDetector2 in 'sources\Detectors\uLeakDetector2.pas',
@@ -84,6 +88,15 @@ uses
   uSQLInjectionScore in 'sources\Detectors\uSQLInjectionScore.pas',
   uTodoComment in 'sources\Detectors\uTodoComment.pas',
   uUnusedUses in 'sources\Detectors\uUnusedUses.pas',
+  uWithStatement in 'sources\Detectors\uWithStatement.pas',
+  uReversedForRange in 'sources\Detectors\uReversedForRange.pas',
+  uSelfAssignment in 'sources\Detectors\uSelfAssignment.pas',
+  uVirtualCallInCtor in 'sources\Detectors\uVirtualCallInCtor.pas',
+  uLengthUnderflow in 'sources\Detectors\uLengthUnderflow.pas',
+  uVisibilityCheck in 'sources\Detectors\uVisibilityCheck.pas',
+  uUnusedLocal in 'sources\Detectors\uUnusedLocal.pas',
+  uUnusedParameter in 'sources\Detectors\uUnusedParameter.pas',
+  uTautologicalExpr in 'sources\Detectors\uTautologicalExpr.pas',
   uCustomClassDiscovery in 'sources\Detectors\uCustomClassDiscovery.pas',
   uDfmDefaultName in 'sources\Detectors\uDfmDefaultName.pas',
   uDfmHardcodedCaption in 'sources\Detectors\uDfmHardcodedCaption.pas',
@@ -104,10 +117,15 @@ uses
   uDfmLayerViolation in 'sources\Detectors\uDfmLayerViolation.pas',
   uDfmGodHandler in 'sources\Detectors\uDfmGodHandler.pas',
   uDfmActionMismatch in 'sources\Detectors\uDfmActionMismatch.pas',
+  uDfmMasterDetailUnlinked in 'sources\Detectors\uDfmMasterDetailUnlinked.pas',
+  uDfmDataModuleSplitHint in 'sources\Detectors\uDfmDataModuleSplitHint.pas',
+  uSqlDangerousStatement in 'sources\Detectors\uSqlDangerousStatement.pas',
   uCustomerForm in 'resources\uCustomerForm.pas' {CustomerForm},
   uOrderForm in 'resources\uOrderForm.pas' {OrderForm},
   uIDEStatsTiles in 'sources\UI\uIDEStatsTiles.pas',
-  uIDEHelpPanel in 'sources\UI\uIDEHelpPanel.pas';
+  uIDEHelpPanel in 'sources\UI\uIDEHelpPanel.pas',
+  ConcatToFormatSample in 'resources\ConcatToFormatSample.pas',
+  WithStatementSample in 'resources\WithStatementSample.pas';
 
 {$R *.res}
 
@@ -181,7 +199,7 @@ begin
     Application.Initialize;
     Application.MainFormOnTaskbar := True;
     Application.CreateForm(TForm2, Form2);
-    // uCustomerForm + uOrderForm sind Test-Fixtures fuer die DFM-Detektoren
+  // uCustomerForm + uOrderForm sind Test-Fixtures fuer die DFM-Detektoren
     // (qCustomers: TFDQuery, dsOrders: TDataSetProvider, ...). Sie bleiben
     // im Projekt fuer die Kompilierung, werden aber NICHT als Runtime-Form
     // instanziiert - sonst wirft das DFM-Streaming FireDAC-512 (keine

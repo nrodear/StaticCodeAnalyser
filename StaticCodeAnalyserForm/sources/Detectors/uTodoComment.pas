@@ -30,6 +30,9 @@ type
 
 implementation
 
+uses
+  uFileTextCache;
+
 const
   MARKERS : array[0..3] of string = ('TODO', 'FIXME', 'HACK', 'XXX');
 
@@ -148,23 +151,11 @@ var
   MarkerPos   : Integer;
   F           : TLeakFinding;
   Snippet     : string;
+  Cached      : Boolean;
 begin
-  if not FileExists(FileName) then Exit;
-
-  Lines := TStringList.Create;
+  Lines := AcquireLines(FileName, Cached);
+  if Lines = nil then Exit;
   try
-    try
-      Lines.LoadFromFile(FileName, TEncoding.UTF8);
-    except
-      // Bei Encoding-Fehler erneut ohne Encoding-Vorgabe versuchen
-      Lines.Clear;
-      try
-        Lines.LoadFromFile(FileName);
-      except
-        Exit;
-      end;
-    end;
-
     InBlockComm := False;
 
     for i := 0 to Lines.Count - 1 do
@@ -206,7 +197,7 @@ begin
       end;
     end;
   finally
-    Lines.Free;
+    ReleaseLines(Lines, Cached);
   end;
 end;
 

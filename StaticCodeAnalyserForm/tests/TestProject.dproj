@@ -197,6 +197,26 @@
         <DCCReference Include="uTestComboChecks.pas"/>
         <DCCReference Include="uTestParserRobustness.pas"/>
         <DCCReference Include="uTestPerformance.pas"/>
+        <DCCReference Include="uTestRuleCatalog.pas"/>
+        <DCCReference Include="uTestExportSARIF.pas"/>
+        <DCCReference Include="uTestYamlSubsetParser.pas"/>
+        <DCCReference Include="uTestCustomRuleDetector.pas"/>
+        <DCCReference Include="uTestConcatToFormat.pas"/>
+        <DCCReference Include="uTestWithStatement.pas"/>
+        <DCCReference Include="uTestReversedForRange.pas"/>
+        <DCCReference Include="uTestSelfAssignment.pas"/>
+        <DCCReference Include="uTestVirtualCallInCtor.pas"/>
+        <DCCReference Include="uTestLengthUnderflow.pas"/>
+        <DCCReference Include="uTestVisibilityCheck.pas"/>
+        <DCCReference Include="uTestCustomClassDiscovery.pas"/>
+        <DCCReference Include="uTestSQLInjectionScore.pas"/>
+        <DCCReference Include="uTestSymbolReferenceIndex.pas"/>
+        <DCCReference Include="uTestUnusedLocal.pas"/>
+        <DCCReference Include="uTestUnusedParameter.pas"/>
+        <DCCReference Include="uTestTautologicalExpr.pas"/>
+        <DCCReference Include="uTestDfmMasterDetailUnlinked.pas"/>
+        <DCCReference Include="uTestDfmDataModuleSplitHint.pas"/>
+        <DCCReference Include="uTestSqlDangerousStatement.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

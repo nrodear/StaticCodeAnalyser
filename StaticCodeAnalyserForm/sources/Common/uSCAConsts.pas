@@ -59,6 +59,9 @@ var
   DetectorMinBlockLines    : Integer = 8;      // uDuplicateBlock
   DetectorMaxFileBytes     : Integer = 5 * 1024 * 1024;  // uStaticAnalyzer2
   DetectorMaxGodHandlerEvents : Integer = 5;             // uDfmGodHandler
+  DetectorMaxDbInUiFormHint   : Integer = 3;             // uDfmDataModuleSplitHint
+                                                          // (ab N DB-Komponenten auf der Form
+                                                          // empfehlen statt N Einzelmeldungen)
 
   // Trivial-Liste fuer uMagicNumbers - Zahlen die NICHT als Magic-Number
   // gemeldet werden. Default: 0,1,2,-1,10,100. INI-Override moeglich.
@@ -161,8 +164,50 @@ type
                                  // im TPanel/TGroupBox eingebettet
     fkDfmGodHandler,             // Eine Methode haengt an >=N Komponenten-
                                  // Events (Spaghetti-Indikator)
-    fkDfmActionMismatch          // Komponente hat Action UND OnClick gesetzt
+    fkDfmActionMismatch,         // Komponente hat Action UND OnClick gesetzt
                                  // -> Action gewinnt, OnClick ist toter Code
+    fkConcatToFormat,            // Refactoring-Hint: lange String-Konkat-Kette
+                                 // ('a' + x + 'b' + IntToStr(y)) -> Format(...).
+                                 // ReDelphi-Roadmap 2.5.
+    fkWithStatement,             // `with X do ...` - Scope-Shadowing-Falle, vom
+                                 // Compiler nicht gewarnt. Marco Cantu /
+                                 // delphi.org / Stack Overflow zaehlen das zu
+                                 // den haeufigsten Delphi-Bug-Quellen.
+    fkReversedForRange,          // `for i := 10 to 1 do` - From > To, 0 Iter.
+                                 // Klassischer `downto`-vergessen-Tippfehler.
+    fkSelfAssignment,            // `x := x;` - No-Op oder Copy-Paste-Fehler.
+                                 // Property-Setter mit Side-Effects ausgenommen.
+    fkVirtualCallInCtor,         // Virtuelle Methode im Constructor gerufen -
+                                 // abgeleiteter Override laeuft mit halb-
+                                 // initialisiertem Self (klass. Subtle-Bug).
+    fkLengthUnderflow,           // `Length(s) - X` / `.Count - X` ohne Guard ->
+                                 // Native-UInt-Underflow bei leerem String/Array.
+    fkCanBePrivate,              // Public-Member wird nur in eigener Unit
+                                 // referenziert -> private moeglich (Cross-Unit).
+    fkCanBeProtected,            // Public-Member wird nur in Subklassen genutzt
+                                 // -> protected reicht (Cross-Unit).
+    fkUnusedPublicMember,        // Public-Member wird in keinem Sub-Klassen-/
+                                 // Cross-Unit-Pfad gerufen -> Dead-API.
+    fkUnusedLocalVar,            // Lokale `var X: T;` im Methoden-Body nie
+                                 // referenziert. Compiler-Warnung H2164,
+                                 // aber als SCA-Hint mit Suppression nuetzlich.
+    fkUnusedParameter,           // Method-Parameter nirgends im Body genutzt.
+                                 // Skip-Regeln: override, Event-Handler (Sender),
+                                 // Interface-Impl.
+    fkTautologicalBoolExpr,      // Binary-Op mit gleicher LHS und RHS:
+                                 // `x = x`, `a and a`, `(p <> p)` -
+                                 // klassischer Copy-Paste-Bug.
+    fkDfmMasterDetailUnlinked,   // DFM: TDataSet hat MasterSource gesetzt
+                                 // aber kein MasterFields/IndexFieldNames ->
+                                 // silent Cross-Join zur Laufzeit.
+    fkDfmDataModuleSplitHint,    // DFM: viele fkDfmDbInUiForm-Findings auf
+                                 // derselben Form -> aggregierter Refactor-
+                                 // Hint statt N Einzelmeldungen.
+    fkSqlDangerousStatement,     // SQL: UPDATE/DELETE/TRUNCATE ohne WHERE
+                                 // -> betrifft alle Zeilen (Production-Disaster).
+    fkFormatLocaleHint           // FormatMismatch-Variante: %.2f / %.3f ohne
+                                 // TFormatSettings -> Komma-vs-Punkt-Falle
+                                 // bei DE/EN-Lokalisierung.
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -248,7 +293,23 @@ const
     (Name: 'DfmCrossFormCoupling';       FindingType: ftBug),            // fkDfmCrossFormCoupling
     (Name: 'DfmLayerViolation';          FindingType: ftCodeSmell),      // fkDfmLayerViolation
     (Name: 'DfmGodHandler';              FindingType: ftCodeSmell),      // fkDfmGodHandler
-    (Name: 'DfmActionMismatch';          FindingType: ftBug)             // fkDfmActionMismatch
+    (Name: 'DfmActionMismatch';          FindingType: ftBug),            // fkDfmActionMismatch
+    (Name: 'ConcatToFormat';             FindingType: ftCodeSmell),      // fkConcatToFormat
+    (Name: 'WithStatement';              FindingType: ftCodeSmell),      // fkWithStatement
+    (Name: 'ReversedForRange';           FindingType: ftBug),            // fkReversedForRange
+    (Name: 'SelfAssignment';             FindingType: ftBug),            // fkSelfAssignment
+    (Name: 'VirtualCallInCtor';          FindingType: ftBug),            // fkVirtualCallInCtor
+    (Name: 'LengthUnderflow';            FindingType: ftBug),            // fkLengthUnderflow
+    (Name: 'CanBePrivate';               FindingType: ftCodeSmell),      // fkCanBePrivate
+    (Name: 'CanBeProtected';             FindingType: ftCodeSmell),      // fkCanBeProtected
+    (Name: 'UnusedPublicMember';         FindingType: ftCodeSmell),      // fkUnusedPublicMember
+    (Name: 'UnusedLocalVar';             FindingType: ftCodeSmell),      // fkUnusedLocalVar
+    (Name: 'UnusedParameter';            FindingType: ftCodeSmell),      // fkUnusedParameter
+    (Name: 'TautologicalBoolExpr';       FindingType: ftBug),            // fkTautologicalBoolExpr
+    (Name: 'DfmMasterDetailUnlinked';    FindingType: ftBug),            // fkDfmMasterDetailUnlinked
+    (Name: 'DfmDataModuleSplitHint';     FindingType: ftCodeSmell),      // fkDfmDataModuleSplitHint
+    (Name: 'SqlDangerousStatement';      FindingType: ftBug),            // fkSqlDangerousStatement
+    (Name: 'FormatLocaleHint';           FindingType: ftBug)             // fkFormatLocaleHint
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.
@@ -336,6 +397,7 @@ end;
 procedure InitDefaultLeakyClasses;
 const
   DEFAULTS: array of string = [
+    // RTL / VCL
     'TStringList', 'TList', 'TObjectList',
     'TDictionary', 'TObjectDictionary',
     'TStringBuilder',
@@ -347,7 +409,20 @@ const
     'TSocket', 'TRegistry',
     'TXMLDocument', 'THTTPClient',
     'TTimer', 'TIniFile', 'TMemIniFile',
-    'TStreamReader', 'TStreamWriter', 'TZipFile'
+    'TStreamReader', 'TStreamWriter', 'TZipFile',
+    // mORMot2 - die Klassen tauchen in jedem mORMot-Projekt auf und
+    // sind owner-managed (keine ARC, kein Auto-Free). Liste basiert auf
+    // Real-World-Review aus mORMot2-Crosscheck (TODO 🅲).
+    'TJsonWriter', 'TTextWriter', 'TBufferWriter',
+    'TRawUtf8List', 'TSynList', 'TSynObjectList',
+    'TSqlDBStatement', 'TSqlDBConnection', 'TSqlDBStatementCached',
+    'TSynPersistent', 'TSynAutoCreateFields',
+    'TDocVariantData', 'TSynDictionary',
+    'TOrm', 'TOrmTable', 'TOrmTableJson',
+    'TRestServer', 'TRestClientUri',
+    'TSynLogFile', 'TSynLog',
+    'TSynMonitor', 'TSynLocker',
+    'TSynBackgroundThreadMethod'
   ];
 begin
   LeakyClasses := TStringList.Create;

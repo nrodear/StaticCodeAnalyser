@@ -194,6 +194,9 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uExportHtml.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uIgnoreList.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uStaticAnalyzer2.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uSymbolReferenceIndex.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uAstFileCache.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uFileTextCache.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uVcsChanges.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uRepoSettings.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uDfmAnalysisRunner.pas"/>
@@ -217,7 +220,17 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSQLInjection.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uHardcodedSecret.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uFormatMismatch.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uConcatToFormat.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnusedUses.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uWithStatement.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uReversedForRange.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSelfAssignment.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uVirtualCallInCtor.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLengthUnderflow.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uVisibilityCheck.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnusedLocal.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnusedParameter.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTautologicalExpr.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uNilDeref.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uMissingFinally.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDivByZero.pas"/>
@@ -255,6 +268,9 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmLayerViolation.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmGodHandler.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmActionMismatch.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmMasterDetailUnlinked.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmDataModuleSplitHint.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSqlDangerousStatement.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

@@ -42,6 +42,9 @@ type
 
 implementation
 
+uses
+  uFileTextCache;
+
 // Min-Block-Lines kommt aus uSCAConsts.DetectorMinBlockLines
 // (analyser.ini -> DuplicateBlockMinLines). Default 8.
 
@@ -153,19 +156,13 @@ var
   F           : TLeakFinding;
   FirstLine   : Integer;
   Norm        : string;
+  Cached      : Boolean;
 begin
-  if not FileExists(FileName) then Exit;
-
-  Lines    := TStringList.Create;
+  Lines := AcquireLines(FileName, Cached);
+  if Lines = nil then Exit;
   Hashes   := TObjectDictionary<string, TList<Integer>>.Create([doOwnsValues]);
   Reported := TDictionary<Integer, Boolean>.Create;
   try
-    try
-      Lines.LoadFromFile(FileName, TEncoding.UTF8);
-    except
-      try Lines.LoadFromFile(FileName); except Exit; end;
-    end;
-
     if Lines.Count < DetectorMinBlockLines * 2 then Exit;
 
     // Pass 1: Normalisieren + triviale Zeilen rausfiltern
@@ -230,7 +227,7 @@ begin
   finally
     Hashes.Free;     // doOwnsValues: gibt alle TList<Integer> mit frei
     Reported.Free;
-    Lines.Free;
+    ReleaseLines(Lines, Cached);
   end;
 end;
 

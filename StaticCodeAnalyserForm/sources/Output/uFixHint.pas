@@ -1300,6 +1300,406 @@ begin
         '//   btn, edt, lbl, pnl, mem, cbo, lst, grd, tab, img';
     end;
 
+    fkCustomRule:
+    begin
+      Result.Description := _('Custom rule defined in analyser-rules.yml matched this code');
+      Result.Before :=
+        '// Triggered when a regex/AST rule from analyser-rules.yml hit.'#13#10 +
+        '// The MissingVar field of the finding shows the rule ID + matched text.'#13#10 +
+        ''#13#10 +
+        '// Example custom rule (analyser-rules.yml):'#13#10 +
+        '//   id: BAN-WRITELN'#13#10 +
+        '//   pattern: WriteLn'#13#10 +
+        '//   severity: warning'#13#10 +
+        '//   message: WriteLn forbidden in production code';
+      Result.After :=
+        '// Either:'#13#10 +
+        '//   * Adjust the code to satisfy the rule, or'#13#10 +
+        '//   * If the rule is wrong, edit analyser-rules.yml, or'#13#10 +
+        '//   * Suppress this one finding with:  // noinspection CustomRule';
+    end;
+
+    fkConcatToFormat:
+    begin
+      Result.Description := _('Long string concatenation - prefer Format() for readability');
+      Result.Before :=
+        '// Long concat chain - hard to read, easy to miss a separator'#13#10 +
+        'Msg := ''Hallo '' + Name + '', du bist '' + IntToStr(Age) +'#13#10 +
+        '       '' Jahre alt und wohnst in '' + City + ''.'''#13#10 +
+        '// More than two ''+'' with mixed literals + variables ->'#13#10 +
+        '// Format() is usually clearer.';
+      Result.After :=
+        'Msg := Format(''Hallo %s, du bist %d Jahre alt und wohnst in %s.'','#13#10 +
+        '              [Name, Age, City]);'#13#10 +
+        '// Benefits:'#13#10 +
+        '//   * Format-string and arguments are visually separated'#13#10 +
+        '//   * Translation-friendly (one string, no concat splits)'#13#10 +
+        '//   * IntToStr no longer needed - %d does the conversion';
+    end;
+
+    fkWithStatement:
+    begin
+      Result.Description := _('with statement can silently rebind identifiers - avoid it');
+      Result.Before :=
+        'with FCustomer do'#13#10 +
+        'begin'#13#10 +
+        '  Name := ''Mueller'';'#13#10 +
+        '  Age  := 42;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Problem: if a future refactoring adds a "Name" field to the'#13#10 +
+        '// surrounding class, the assignment silently changes target.'#13#10 +
+        '// Compiler emits no warning - subtle, hard-to-diagnose bug.';
+      Result.After :=
+        '// Option A: explicit variable'#13#10 +
+        'C := FCustomer;'#13#10 +
+        'C.Name := ''Mueller'';'#13#10 +
+        'C.Age  := 42;'#13#10 +
+        ''#13#10 +
+        '// Option B: explicit qualifier'#13#10 +
+        'FCustomer.Name := ''Mueller'';'#13#10 +
+        'FCustomer.Age  := 42;';
+    end;
+
+    fkReversedForRange:
+    begin
+      Result.Description := _('for-loop range is reversed - the loop body never runs');
+      Result.Before :=
+        'for i := 10 to 1 do'#13#10 +
+        '  ProcessItem(i);'#13#10 +
+        ''#13#10 +
+        '// From > To in a forward "to" loop: zero iterations.'#13#10 +
+        '// Typical bug: meant "downto" but wrote "to".';
+      Result.After :=
+        'for i := 10 downto 1 do'#13#10 +
+        '  ProcessItem(i);'#13#10 +
+        ''#13#10 +
+        '// Or if forward iteration was intended:'#13#10 +
+        'for i := 1 to 10 do'#13#10 +
+        '  ProcessItem(i);';
+    end;
+
+    fkSelfAssignment:
+    begin
+      Result.Description := _('Self-assignment is a no-op - usually a copy-paste mistake');
+      Result.Before :=
+        'procedure TFoo.Init(const Source: TFoo);'#13#10 +
+        'begin'#13#10 +
+        '  FName := FName;        // <-- meant Source.FName?'#13#10 +
+        '  FAge  := Source.FAge;'#13#10 +
+        'end;';
+      Result.After :=
+        'procedure TFoo.Init(const Source: TFoo);'#13#10 +
+        'begin'#13#10 +
+        '  FName := Source.FName;'#13#10 +
+        '  FAge  := Source.FAge;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Rare exception: property setter with side effects'#13#10 +
+        '//   Visible := Visible;   // forces repaint in legacy VCL code'#13#10 +
+        '// Suppress with:  // noinspection SelfAssignment';
+    end;
+
+    fkVirtualCallInCtor:
+    begin
+      Result.Description := _('Virtual method called from constructor - override sees half-initialized Self');
+      Result.Before :=
+        'type'#13#10 +
+        '  TBase = class'#13#10 +
+        '    constructor Create;'#13#10 +
+        '    procedure Init; virtual;'#13#10 +
+        '  end;'#13#10 +
+        '  TDerived = class(TBase)'#13#10 +
+        '    FCache: TList;'#13#10 +
+        '    procedure Init; override;'#13#10 +
+        '  end;'#13#10 +
+        ''#13#10 +
+        'constructor TBase.Create;'#13#10 +
+        'begin'#13#10 +
+        '  Init;       // <-- calls TDerived.Init, FCache is still nil!'#13#10 +
+        'end;';
+      Result.After :=
+        '// Option A: defer initialization to a separate method the caller invokes'#13#10 +
+        'constructor TBase.Create;'#13#10 +
+        'begin'#13#10 +
+        '  // no virtual calls here'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        'procedure TBase.AfterConstruction;'#13#10 +
+        'begin'#13#10 +
+        '  inherited;'#13#10 +
+        '  Init;       // safe: Self is fully constructed now'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Option B: make Init non-virtual + call a virtual ConfigureDefaults inside';
+    end;
+
+    fkLengthUnderflow:
+    begin
+      Result.Description := _('Length()/.Count minus a constant can underflow on empty input');
+      Result.Before :=
+        'k := Length(s) - 4;'#13#10 +
+        'Move(s[1], buf, k);'#13#10 +
+        ''#13#10 +
+        '// When Length(s) < 4, k becomes negative (or huge as NativeUInt).'#13#10 +
+        '// Move with bogus count -> AV / data corruption.';
+      Result.After :=
+        'if Length(s) >= 4 then'#13#10 +
+        'begin'#13#10 +
+        '  k := Length(s) - 4;'#13#10 +
+        '  Move(s[1], buf, k);'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// The classic idiom "for i := 0 to Length(s) - 1" is fine:'#13#10 +
+        '// -1 produces an empty range (0 iterations) for empty strings.';
+    end;
+
+    fkCanBePrivate:
+    begin
+      Result.Description := _('Public member is used only inside its declaring class - tighten visibility');
+      Result.Before :=
+        'type'#13#10 +
+        '  TFoo = class'#13#10 +
+        '  public'#13#10 +
+        '    procedure Helper;'#13#10 +
+        '    procedure Run;'#13#10 +
+        '  end;'#13#10 +
+        ''#13#10 +
+        'procedure TFoo.Helper; begin ... end;'#13#10 +
+        'procedure TFoo.Run; begin Helper; end;'#13#10 +
+        '// Helper is only called from Run - public is too lax.';
+      Result.After :=
+        'type'#13#10 +
+        '  TFoo = class'#13#10 +
+        '  private'#13#10 +
+        '    procedure Helper;'#13#10 +
+        '  public'#13#10 +
+        '    procedure Run;'#13#10 +
+        '  end;'#13#10 +
+        ''#13#10 +
+        '// Encapsulation tightened: Helper is now an implementation detail.';
+    end;
+
+    fkCanBeProtected:
+    begin
+      Result.Description := _('Public member is used only by subclasses - protected is tighter');
+      Result.Before :=
+        'type'#13#10 +
+        '  TBase = class'#13#10 +
+        '  public'#13#10 +
+        '    procedure Hook;'#13#10 +
+        '  end;'#13#10 +
+        '  TSub = class(TBase)'#13#10 +
+        '    procedure Run;'#13#10 +
+        '  end;'#13#10 +
+        ''#13#10 +
+        'procedure TSub.Run; begin Hook; end;'#13#10 +
+        '// Hook is only called from subclasses - protected is enough.';
+      Result.After :=
+        'type'#13#10 +
+        '  TBase = class'#13#10 +
+        '  protected'#13#10 +
+        '    procedure Hook;'#13#10 +
+        '  end;'#13#10 +
+        ''#13#10 +
+        '// Hook stays accessible from TSub + future subclasses,'#13#10 +
+        '// but is now hidden from unrelated callers.';
+    end;
+
+    fkUnusedLocalVar:
+    begin
+      Result.Description := _('Local variable declared but never read or written');
+      Result.Before :=
+        'procedure TFoo.Run;'#13#10 +
+        'var'#13#10 +
+        '  result: Integer;       // <-- never used'#13#10 +
+        '  count: Integer;'#13#10 +
+        'begin'#13#10 +
+        '  count := Length(FList);'#13#10 +
+        '  DoStuff(count);'#13#10 +
+        'end;';
+      Result.After :=
+        'procedure TFoo.Run;'#13#10 +
+        'var'#13#10 +
+        '  count: Integer;'#13#10 +
+        'begin'#13#10 +
+        '  count := Length(FList);'#13#10 +
+        '  DoStuff(count);'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// If the var name starts with _ (e.g., _ignored), the detector skips'#13#10 +
+        '// it - convention for "intentionally unused".';
+    end;
+
+    fkUnusedParameter:
+    begin
+      Result.Description := _('Parameter never read in method body');
+      Result.Before :=
+        'procedure TFoo.Process(const Data: TBytes; LogLevel: Integer);'#13#10 +
+        'begin'#13#10 +
+        '  HandleBytes(Data);     // LogLevel is never used'#13#10 +
+        'end;';
+      Result.After :=
+        '// Option A: drop the parameter entirely (changes signature)'#13#10 +
+        'procedure TFoo.Process(const Data: TBytes);'#13#10 +
+        'begin'#13#10 +
+        '  HandleBytes(Data);'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Option B: signature must match a virtual / interface contract -'#13#10 +
+        '// rename to leading-underscore so the detector skips it:'#13#10 +
+        '//   procedure TFoo.Process(const Data: TBytes; _LogLevel: Integer);'#13#10 +
+        ''#13#10 +
+        '// Event handlers (single Sender: TObject param) are auto-skipped.';
+    end;
+
+    fkSqlDangerousStatement:
+    begin
+      Result.Description := _('UPDATE/DELETE/TRUNCATE without WHERE - affects ALL rows');
+      Result.Before :=
+        'qry.SQL.Text := ''UPDATE customers SET locked=1'';'#13#10 +
+        'qry.ExecSQL;'#13#10 +
+        ''#13#10 +
+        '// Folge: JEDER Kunde wird gesperrt - kein Filter.'#13#10 +
+        '// Production-Disaster: nicht mehr rueckgaengig zu machen,'#13#10 +
+        '// ausser via DB-Backup.';
+      Result.After :=
+        'qry.SQL.Text := ''UPDATE customers SET locked=1 WHERE id=:id'';'#13#10 +
+        'qry.Params.ParamByName(''id'').AsInteger := UserId;'#13#10 +
+        'qry.ExecSQL;'#13#10 +
+        ''#13#10 +
+        '// Tipp: in Migrations-Skripten WHERE 1=1 explizit annotieren,'#13#10 +
+        '//       wenn JEDE Zeile gewollt ist (Audit-Trail).';
+    end;
+
+    fkFormatLocaleHint:
+    begin
+      Result.Description := _('Float format spec without TFormatSettings - locale-dependent decimal separator');
+      Result.Before :=
+        'Result := Format(''Price: %.2f EUR'', [Amount]);'#13#10 +
+        ''#13#10 +
+        '// Default-Locale entscheidet ueber Komma vs. Punkt:'#13#10 +
+        '//   DE: ''Price: 19,99 EUR'''#13#10 +
+        '//   EN: ''Price: 19.99 EUR'''#13#10 +
+        '// Beim Einlesen via JSON / API-Call -> Parser-Fehler.';
+      Result.After :=
+        '// Option A: invariant culture (immer Punkt)'#13#10 +
+        'Result := Format(''Price: %.2f EUR'', [Amount],'#13#10 +
+        '                 TFormatSettings.Invariant);'#13#10 +
+        ''#13#10 +
+        '// Option B: explizit deutsche Lokalisierung (immer Komma)'#13#10 +
+        'var FS := TFormatSettings.Create(''de-DE'');'#13#10 +
+        'Result := Format(''Price: %.2f EUR'', [Amount], FS);'#13#10 +
+        ''#13#10 +
+        '// Faustregel: wenn der Output JEMALS an eine API oder ein'#13#10 +
+        '// File geht, IMMER mit TFormatSettings.Invariant.';
+    end;
+
+    fkDfmMasterDetailUnlinked:
+    begin
+      Result.Description := _('MasterSource set without MasterFields/IndexFieldNames - silent cross-join');
+      Result.Before :=
+        'object qOrders: TFDQuery'#13#10 +
+        '  MasterSource = dsCustomers'#13#10 +
+        '  // MasterFields fehlt!'#13#10 +
+        '  // IndexFieldNames fehlt!'#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// Folge: bei jedem Master-Recordwechsel feuert ein'#13#10 +
+        '// "open Detail without join" -> Cartesian-Cross-Join,'#13#10 +
+        '// Detail-Grid haengt unsichtbar bei realer Datenmenge.';
+      Result.After :=
+        'object qOrders: TFDQuery'#13#10 +
+        '  MasterSource = dsCustomers'#13#10 +
+        '  MasterFields = ''CustomerID'''#13#10 +
+        '  // oder alternativ:'#13#10 +
+        '  // IndexFieldNames = ''CustomerID'''#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// Tipp: bei mehreren Feldern Semikolon als Trenner:'#13#10 +
+        '//   MasterFields = ''CustomerID;Region''';
+    end;
+
+    fkDfmDataModuleSplitHint:
+    begin
+      Result.Description := _('Many DB components on one form - extract into a TDataModule');
+      Result.Before :=
+        '// uMainForm.dfm'#13#10 +
+        'object MainForm: TMainForm'#13#10 +
+        '  object Conn: TADOConnection end'#13#10 +
+        '  object qCustomers: TADOQuery end'#13#10 +
+        '  object qOrders: TADOQuery end'#13#10 +
+        '  object dsCustomers: TDataSource end'#13#10 +
+        '  object dsOrders: TDataSource end'#13#10 +
+        '  // ... weitere DB-Komponenten ...'#13#10 +
+        '  object Edit1: TEdit end'#13#10 +
+        '  object Button1: TButton end'#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// Probleme: Connection bindet an Form-Lifecycle, kein'#13#10 +
+        '// Sharing zwischen Forms, Test-Setup erfordert UI.';
+      Result.After :=
+        '// uDataMod.dfm (neu)'#13#10 +
+        'object DataMod: TDataModule'#13#10 +
+        '  object Conn: TADOConnection end'#13#10 +
+        '  object qCustomers: TADOQuery end'#13#10 +
+        '  object qOrders: TADOQuery end'#13#10 +
+        '  object dsCustomers: TDataSource end'#13#10 +
+        '  object dsOrders: TDataSource end'#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// uMainForm.dfm (jetzt schlank)'#13#10 +
+        'object MainForm: TMainForm'#13#10 +
+        '  object Edit1: TEdit end'#13#10 +
+        '  object Button1: TButton end'#13#10 +
+        'end'#13#10 +
+        ''#13#10 +
+        '// Tipp: Singleton-Zugriff via global DataMod-Var (uDataMod.pas),'#13#10 +
+        '// damit alle Forms denselben Connection-Pool teilen.';
+    end;
+
+    fkTautologicalBoolExpr:
+    begin
+      Result.Description := _('Binary expression has identical left and right side - copy-paste bug?');
+      Result.Before :=
+        'if (UserId = UserId) then'#13#10 +
+        '  AllowAccess := True;'#13#10 +
+        ''#13#10 +
+        '// Probably meant: UserId = SessionUserId, or'#13#10 +
+        '//                arr[i] = arr[j], with j accidentally typed as i.';
+      Result.After :=
+        'if (UserId = SessionUserId) then'#13#10 +
+        '  AllowAccess := True;'#13#10 +
+        ''#13#10 +
+        '// The detector catches: =, <>, <, >, <=, >=, and, or, xor with'#13#10 +
+        '// identical left and right (whitespace + case ignored).'#13#10 +
+        '// Mathematical operators (+, -, *) are intentionally NOT flagged'#13#10 +
+        '//   - x + x and a * a are legitimate idioms.';
+    end;
+
+    fkUnusedPublicMember:
+    begin
+      Result.Description := _('Public member has no callers anywhere - dead API');
+      Result.Before :=
+        'type'#13#10 +
+        '  TFoo = class'#13#10 +
+        '  public'#13#10 +
+        '    procedure Orphan;        // <-- never called'#13#10 +
+        '    procedure Run;'#13#10 +
+        '  end;';
+      Result.After :=
+        'type'#13#10 +
+        '  TFoo = class'#13#10 +
+        '  public'#13#10 +
+        '    procedure Run;'#13#10 +
+        '  end;'#13#10 +
+        ''#13#10 +
+        '// If the member was kept "just in case", delete it -'#13#10 +
+        '// version control keeps the history.'#13#10 +
+        '// If it is plugin/RTTI surface (rare in single-unit code),'#13#10 +
+        '// suppress with:  // noinspection UnusedPublicMember';
+    end;
+
   end;
 end;
 

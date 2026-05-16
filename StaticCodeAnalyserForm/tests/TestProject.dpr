@@ -1,5 +1,10 @@
 program TestProject;
 
+// CLI-Lauf: Console-Subsystem (DUnitX-Console-Logger braucht stdout).
+// TestInsight-Lauf: GUI-Subsystem (sonst flackert beim Start ein cmd-Fenster
+// auf, da Windows fuer Console-Apps die ohne Parent-Console starten eine
+// neue Console allokiert). Termination wird im TestInsight-Pfad ueber
+// Halt(0) erzwungen (siehe begin-Block unten).
 {$IFNDEF TESTINSIGHT}
 {$APPTYPE CONSOLE}
 {$ENDIF}
@@ -59,7 +64,23 @@ uses
   uTestRuleCatalog      in 'uTestRuleCatalog.pas',
   uTestExportSARIF      in 'uTestExportSARIF.pas',
   uTestYamlSubsetParser in 'uTestYamlSubsetParser.pas',
-  uTestCustomRuleDetector in 'uTestCustomRuleDetector.pas';
+  uTestCustomRuleDetector in 'uTestCustomRuleDetector.pas',
+  uTestConcatToFormat   in 'uTestConcatToFormat.pas',
+  uTestWithStatement    in 'uTestWithStatement.pas',
+  uTestReversedForRange in 'uTestReversedForRange.pas',
+  uTestSelfAssignment   in 'uTestSelfAssignment.pas',
+  uTestVirtualCallInCtor in 'uTestVirtualCallInCtor.pas',
+  uTestLengthUnderflow  in 'uTestLengthUnderflow.pas',
+  uTestVisibilityCheck  in 'uTestVisibilityCheck.pas',
+  uTestCustomClassDiscovery in 'uTestCustomClassDiscovery.pas',
+  uTestSQLInjectionScore in 'uTestSQLInjectionScore.pas',
+  uTestSymbolReferenceIndex in 'uTestSymbolReferenceIndex.pas',
+  uTestUnusedLocal in 'uTestUnusedLocal.pas',
+  uTestUnusedParameter in 'uTestUnusedParameter.pas',
+  uTestTautologicalExpr in 'uTestTautologicalExpr.pas',
+  uTestDfmMasterDetailUnlinked in 'uTestDfmMasterDetailUnlinked.pas',
+  uTestDfmDataModuleSplitHint in 'uTestDfmDataModuleSplitHint.pas',
+  uTestSqlDangerousStatement in 'uTestSqlDangerousStatement.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}
@@ -74,6 +95,13 @@ var
 begin
 {$IFDEF TESTINSIGHT}
   TestInsight.DUnitX.RunRegisteredTests;
+  // Expliziter Exit als Sicherheitsnetz: falls der TestInsight-Client einen
+  // Background-Thread / Hidden-Window offen laesst (Embarcadero-Forum-Issue
+  // mehrfach gesehen), wartet die RTL beim impliziten `end.`-Shutdown auf
+  // dessen Cleanup. Halt(0) umgeht Finalization-Sections und beendet den
+  // Prozess sofort - Testergebnisse sind zu diesem Zeitpunkt schon ueber
+  // den IPC-Kanal an die IDE gesendet.
+  Halt(0);
 {$ELSE}
   try
     // Check command line options, will exit if invalid

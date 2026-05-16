@@ -52,7 +52,7 @@ type
     procedure ParseVarLikeSection(Parent: TAstNode; AKind: TNodeKind);
     procedure ParseClassBody(ClassNode: TAstNode);
     procedure ParseMethodSignature(Parent: TAstNode);
-    procedure ParseMethodDirectives;
+    procedure ParseMethodDirectives(MNode: TAstNode = nil);
     procedure ParseMethodImpl(Parent: TAstNode);
     procedure ParseLocalVarSection(Parent: TAstNode);
     procedure ParseBlock(Parent: TAstNode);
@@ -872,17 +872,26 @@ begin
   end;
 
   Eat(tkSemicolon);
-  ParseMethodDirectives;
+  ParseMethodDirectives(MNode);
 end;
 
 { ---- Methoden-Direktiven überspringen ---- }
 
-procedure TParser2.ParseMethodDirectives;
+procedure TParser2.ParseMethodDirectives(MNode: TAstNode);
+// Konsumiert alle Method-Direktiven (virtual, abstract, override, ...).
+// Wenn MNode gegeben ist, werden die Direktiven case-erhaltend an
+// MNode.TypeRef angehaengt - im Format `'kind[:ret];dir1;dir2'`.
+// Detektoren (uVirtualCallInCtor) lesen das via SplitDirectives.
+var
+  DirKind : TTokenKind;
 begin
   while IsMethodDirective(Tok.Kind) do
   begin
+    DirKind := Tok.Kind;
+    if MNode <> nil then
+      MNode.TypeRef := MNode.TypeRef + ';' + LowerCase(Tok.Value);
     Next;
-    if Tok.Kind = tkStrLit then Next; // deprecated 'Nachricht'
+    if (DirKind = tkKwDeprecated) and (Tok.Kind = tkStrLit) then Next; // deprecated 'Nachricht'
     Eat(tkSemicolon);
   end;
 end;
@@ -995,6 +1004,29 @@ begin
         if Eat(tkColon) then
           while not (Tok.Kind in [tkSemicolon, tkEq, tkKwEnd, tkEof]) do
           begin
+            // Anonymer inline-`record`-Typ als Var-Typ:
+            //   var R: record A: Integer; B: Integer; end;
+            // Ohne Spezial-Behandlung wuerde die Schleife beim ersten ';'
+            // innerhalb des records abbrechen, der naechste Outer-Loop
+            // wuerde das folgende `end` als Section-Grenze interpretieren
+            // und ParseMethodImpl wuerde den Methodenrumpf verlieren.
+            // Mini-Parser bis matching `end` (nested `record` zaehlt mit).
+            if Tok.Kind = tkKwRecord then
+            begin
+              TypeName := TypeName + Tok.Value;
+              Next;
+              var Depth := 1;
+              while (Depth > 0) and (Tok.Kind <> tkEof) do
+              begin
+                case Tok.Kind of
+                  tkKwRecord: Inc(Depth);
+                  tkKwEnd:    Dec(Depth);
+                end;
+                TypeName := TypeName + Tok.Value;
+                Next;
+              end;
+              Continue;
+            end;
             TypeName := TypeName + Tok.Value;
             Next;
           end;

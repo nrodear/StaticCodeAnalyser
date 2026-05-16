@@ -73,6 +73,9 @@ contains
   uExportHtml in '..\StaticCodeAnalyserForm\sources\Infrastructure\uExportHtml.pas',
   uIgnoreList in '..\StaticCodeAnalyserForm\sources\Infrastructure\uIgnoreList.pas',
   uStaticAnalyzer2 in '..\StaticCodeAnalyserForm\sources\Infrastructure\uStaticAnalyzer2.pas',
+  uSymbolReferenceIndex in '..\StaticCodeAnalyserForm\sources\Infrastructure\uSymbolReferenceIndex.pas',
+  uAstFileCache in '..\StaticCodeAnalyserForm\sources\Infrastructure\uAstFileCache.pas',
+  uFileTextCache in '..\StaticCodeAnalyserForm\sources\Infrastructure\uFileTextCache.pas',
   uVcsChanges in '..\StaticCodeAnalyserForm\sources\Infrastructure\uVcsChanges.pas',
   uRepoSettings in '..\StaticCodeAnalyserForm\sources\Infrastructure\uRepoSettings.pas',
   uDfmAnalysisRunner in '..\StaticCodeAnalyserForm\sources\Infrastructure\uDfmAnalysisRunner.pas',
@@ -99,7 +102,17 @@ contains
   uSQLInjection in '..\StaticCodeAnalyserForm\sources\Detectors\uSQLInjection.pas',
   uHardcodedSecret in '..\StaticCodeAnalyserForm\sources\Detectors\uHardcodedSecret.pas',
   uFormatMismatch in '..\StaticCodeAnalyserForm\sources\Detectors\uFormatMismatch.pas',
+  uConcatToFormat in '..\StaticCodeAnalyserForm\sources\Detectors\uConcatToFormat.pas',
   uUnusedUses in '..\StaticCodeAnalyserForm\sources\Detectors\uUnusedUses.pas',
+  uWithStatement in '..\StaticCodeAnalyserForm\sources\Detectors\uWithStatement.pas',
+  uReversedForRange in '..\StaticCodeAnalyserForm\sources\Detectors\uReversedForRange.pas',
+  uSelfAssignment in '..\StaticCodeAnalyserForm\sources\Detectors\uSelfAssignment.pas',
+  uVirtualCallInCtor in '..\StaticCodeAnalyserForm\sources\Detectors\uVirtualCallInCtor.pas',
+  uLengthUnderflow in '..\StaticCodeAnalyserForm\sources\Detectors\uLengthUnderflow.pas',
+  uVisibilityCheck in '..\StaticCodeAnalyserForm\sources\Detectors\uVisibilityCheck.pas',
+  uUnusedLocal in '..\StaticCodeAnalyserForm\sources\Detectors\uUnusedLocal.pas',
+  uUnusedParameter in '..\StaticCodeAnalyserForm\sources\Detectors\uUnusedParameter.pas',
+  uTautologicalExpr in '..\StaticCodeAnalyserForm\sources\Detectors\uTautologicalExpr.pas',
   uNilDeref in '..\StaticCodeAnalyserForm\sources\Detectors\uNilDeref.pas',
   uMissingFinally in '..\StaticCodeAnalyserForm\sources\Detectors\uMissingFinally.pas',
   uDivByZero in '..\StaticCodeAnalyserForm\sources\Detectors\uDivByZero.pas',
@@ -136,6 +149,9 @@ contains
   uDfmCrossFormCoupling in '..\StaticCodeAnalyserForm\sources\Detectors\uDfmCrossFormCoupling.pas',
   uDfmLayerViolation in '..\StaticCodeAnalyserForm\sources\Detectors\uDfmLayerViolation.pas',
   uDfmGodHandler in '..\StaticCodeAnalyserForm\sources\Detectors\uDfmGodHandler.pas',
-  uDfmActionMismatch in '..\StaticCodeAnalyserForm\sources\Detectors\uDfmActionMismatch.pas';
+  uDfmActionMismatch in '..\StaticCodeAnalyserForm\sources\Detectors\uDfmActionMismatch.pas',
+  uDfmMasterDetailUnlinked in '..\StaticCodeAnalyserForm\sources\Detectors\uDfmMasterDetailUnlinked.pas',
+  uDfmDataModuleSplitHint in '..\StaticCodeAnalyserForm\sources\Detectors\uDfmDataModuleSplitHint.pas',
+  uSqlDangerousStatement in '..\StaticCodeAnalyserForm\sources\Detectors\uSqlDangerousStatement.pas';
 
 end.

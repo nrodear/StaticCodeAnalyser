@@ -155,6 +155,9 @@
         <DCCReference Include="sources\Infrastructure\uIgnoreList.pas"/>
         <DCCReference Include="sources\Infrastructure\uRepoSettings.pas"/>
         <DCCReference Include="sources\Infrastructure\uStaticAnalyzer2.pas"/>
+        <DCCReference Include="sources\Infrastructure\uSymbolReferenceIndex.pas"/>
+        <DCCReference Include="sources\Infrastructure\uAstFileCache.pas"/>
+        <DCCReference Include="sources\Infrastructure\uFileTextCache.pas"/>
         <DCCReference Include="sources\Infrastructure\uStaticFiles.pas"/>
         <DCCReference Include="sources\Infrastructure\uSuppression.pas"/>
         <DCCReference Include="sources\Infrastructure\uVcsChanges.pas"/>
@@ -187,6 +190,7 @@
         <DCCReference Include="sources\Detectors\uEmptyMethod.pas"/>
         <DCCReference Include="sources\Detectors\uFieldLeak.pas"/>
         <DCCReference Include="sources\Detectors\uFormatMismatch.pas"/>
+        <DCCReference Include="sources\Detectors\uConcatToFormat.pas"/>
         <DCCReference Include="sources\Detectors\uHardcodedPath.pas"/>
         <DCCReference Include="sources\Detectors\uHardcodedSecret.pas"/>
         <DCCReference Include="sources\Detectors\uLeakDetector2.pas"/>
@@ -199,6 +203,15 @@
         <DCCReference Include="sources\Detectors\uSQLInjectionScore.pas"/>
         <DCCReference Include="sources\Detectors\uTodoComment.pas"/>
         <DCCReference Include="sources\Detectors\uUnusedUses.pas"/>
+        <DCCReference Include="sources\Detectors\uWithStatement.pas"/>
+        <DCCReference Include="sources\Detectors\uReversedForRange.pas"/>
+        <DCCReference Include="sources\Detectors\uSelfAssignment.pas"/>
+        <DCCReference Include="sources\Detectors\uVirtualCallInCtor.pas"/>
+        <DCCReference Include="sources\Detectors\uLengthUnderflow.pas"/>
+        <DCCReference Include="sources\Detectors\uVisibilityCheck.pas"/>
+        <DCCReference Include="sources\Detectors\uUnusedLocal.pas"/>
+        <DCCReference Include="sources\Detectors\uUnusedParameter.pas"/>
+        <DCCReference Include="sources\Detectors\uTautologicalExpr.pas"/>
         <DCCReference Include="sources\Detectors\uCustomClassDiscovery.pas"/>
         <DCCReference Include="sources\Detectors\uDfmDefaultName.pas"/>
         <DCCReference Include="sources\Detectors\uDfmHardcodedCaption.pas"/>
@@ -219,6 +232,9 @@
         <DCCReference Include="sources\Detectors\uDfmLayerViolation.pas"/>
         <DCCReference Include="sources\Detectors\uDfmGodHandler.pas"/>
         <DCCReference Include="sources\Detectors\uDfmActionMismatch.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmMasterDetailUnlinked.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmDataModuleSplitHint.pas"/>
+        <DCCReference Include="sources\Detectors\uSqlDangerousStatement.pas"/>
         <DCCReference Include="resources\uCustomerForm.pas">
             <Form>CustomerForm</Form>
             <FormType>dfm</FormType>
@@ -229,6 +245,8 @@
         </DCCReference>
         <DCCReference Include="sources\UI\uIDEStatsTiles.pas"/>
         <DCCReference Include="sources\UI\uIDEHelpPanel.pas"/>
+        <DCCReference Include="resources\ConcatToFormatSample.pas"/>
+        <DCCReference Include="resources\WithStatementSample.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

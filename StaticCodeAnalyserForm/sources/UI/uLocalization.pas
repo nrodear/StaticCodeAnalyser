@@ -136,6 +136,151 @@ begin
   GDeMap.Add('TODO/FIXME',               'TODO/FIXME');
   GDeMap.Add('Empty Methods',            'Leere Methoden');
   GDeMap.Add('Duplicate Code Blocks',    'Doppelte Code-Bl'#$F6'cke');
+  GDeMap.Add('Memory Leak',              'Speicherleck');
+  GDeMap.Add('Memory Leaks (all)',       'Speicherlecks (alle)');
+  // ---- Visibility-Detektoren (Cross-Unit) ----
+  GDeMap.Add('Can Be Private',           'Kann private sein');
+  GDeMap.Add('Can Be Protected',         'Kann protected sein');
+  GDeMap.Add('Unused Public Member',     'Ungenutzte public-API');
+
+  // ---- FixHint-Description-Strings (Hilfe-Panel + Hover-Tooltips) ----
+  // Diese Strings werden via _() im uFixHint.pas instrumentiert.
+  // Reihenfolge analog uSCAConsts.TFindingKind, damit Wartung leichter ist.
+  GDeMap.Add('Object created but never freed (memory leak)',
+             'Objekt erzeugt, aber nie freigegeben (Speicherleck)');
+  GDeMap.Add('Function return value is not freed by the caller',
+             'R'#$FC'ckgabewert wird vom Aufrufer nicht freigegeben');
+  GDeMap.Add('Free is outside the protecting finally block',
+             'Free liegt au'#$DF'erhalb des sch'#$FC'tzenden finally-Blocks');
+  GDeMap.Add('Empty except block silently swallows every exception',
+             'Leerer except-Block schluckt jede Exception ohne Reaktion');
+  GDeMap.Add('SQL command built with "+" - SQL injection risk',
+             'SQL-Befehl per "+" zusammengebaut - Injection-Risiko');
+  GDeMap.Add('Password / token literal in source code',
+             'Passwort/Token als Stringliteral im Quellcode');
+  GDeMap.Add('Format() placeholder count does not match argument count',
+             'Format()-Platzhalter passen nicht zur Argument-Anzahl');
+  GDeMap.Add('File could not be read or parsed',
+             'Datei konnte nicht gelesen oder geparst werden');
+  GDeMap.Add('Nil dereference: access through a possibly nil reference',
+             'Nil-Dereferenz: Zugriff '#$FC'ber eine eventuell null-Referenz');
+  GDeMap.Add('Create without try/finally - exception path leaks the object',
+             'Create ohne try/finally - Exception-Pfad leakt das Objekt');
+  GDeMap.Add('Division by zero: EZeroDivide or EDivByZero possible',
+             'Division durch Null: EZeroDivide oder EDivByZero m'#$F6'glich');
+  GDeMap.Add('Dead code: statements after Exit / raise are unreachable',
+             'Toter Code: Anweisungen nach Exit/raise werden nie erreicht');
+  GDeMap.Add('Method too long - splitting it improves readability and testability',
+             'Methode zu lang - Aufteilen verbessert Lesbarkeit und Testbarkeit');
+  GDeMap.Add('Too many parameters - introduce a parameter object / record',
+             'Zu viele Parameter - Parameter-Objekt / Record einf'#$FC'hren');
+  GDeMap.Add('Magic number - replace literal with a named constant',
+             'Magic Number - Literal durch benannte Konstante ersetzen');
+  GDeMap.Add('String literal repeated - extract to a constant or resourcestring',
+             'Stringliteral mehrfach genutzt - in Konstante / resourcestring auslagern');
+  GDeMap.Add('Hardcoded path - load it from configuration instead',
+             'Hartcodierter Pfad - stattdessen aus Konfiguration laden');
+  GDeMap.Add('Debug output left in production code',
+             'Debug-Ausgabe im Produktionscode vergessen');
+  GDeMap.Add('Nesting too deep - use early exit (guard clauses) or extract a method',
+             'Zu tief verschachtelt - Early-Exit (Guard-Clauses) oder Methode extrahieren');
+  GDeMap.Add('Cyclomatic complexity too high - too many branches; extract methods or simplify conditions',
+             'Cyclomatic Complexity zu hoch - zu viele Verzweigungen; Methoden extrahieren oder Bedingungen vereinfachen');
+  GDeMap.Add('Uses entry may be unused - remove to reduce coupling',
+             'Uses-Eintrag m'#$F6'glicherweise ungenutzt - entfernen reduziert Kopplung');
+  GDeMap.Add('Open marker (TODO / FIXME / HACK / XXX) - resolve before release',
+             'Offener Marker (TODO / FIXME / HACK / XXX) - vor Release aufl'#$F6'sen');
+  GDeMap.Add('Method body is empty - forgotten stub or unintentional?',
+             'Methodenrumpf ist leer - vergessener Stub oder ungewollt?');
+  GDeMap.Add('Multiple identical code blocks - extract a method (DRY)',
+             'Mehrere identische Code-Bl'#$F6'cke - Methode extrahieren (DRY)');
+  // Custom-Rule
+  GDeMap.Add('Custom rule defined in analyser-rules.yml matched this code',
+             'Custom-Regel aus analyser-rules.yml hat diesen Code getroffen');
+  // Concat / With / Reversed / Self / Virtual / Length
+  GDeMap.Add('Long string concatenation - prefer Format() for readability',
+             'Lange String-Konkatenation - Format() ist lesbarer');
+  GDeMap.Add('with statement can silently rebind identifiers - avoid it',
+             'with-Statement bindet Bezeichner still um - vermeiden');
+  GDeMap.Add('for-loop range is reversed - the loop body never runs',
+             'for-Schleife-Bereich ist umgekehrt - der Body l'#$E4'uft nie');
+  GDeMap.Add('Self-assignment is a no-op - usually a copy-paste mistake',
+             'Selbst-Zuweisung ist ein No-Op - meist ein Copy-Paste-Fehler');
+  GDeMap.Add('Virtual method called from constructor - override sees half-initialized Self',
+             'Virtuelle Methode im Constructor gerufen - Override sieht halb-initialisiertes Self');
+  GDeMap.Add('Length()/.Count minus a constant can underflow on empty input',
+             'Length() / .Count minus Konstante kann bei leerem Input unterlaufen');
+  // Visibility
+  GDeMap.Add('Public member is used only inside its declaring class - tighten visibility',
+             'Public-Member nur in der eigenen Klasse genutzt - Sichtbarkeit einschr'#$E4'nken');
+  GDeMap.Add('Public member is used only by subclasses - protected is tighter',
+             'Public-Member nur in Subklassen genutzt - protected ist strenger');
+  GDeMap.Add('Public member has no callers anywhere - dead API',
+             'Public-Member hat nirgends Aufrufer - tote API');
+  // Unused-Local / Unused-Param / Tautological
+  GDeMap.Add('Local variable declared but never read or written',
+             'Lokale Variable deklariert, aber nie gelesen oder geschrieben');
+  GDeMap.Add('Parameter never read in method body',
+             'Parameter wird im Methoden-Body nie gelesen');
+  GDeMap.Add('Binary expression has identical left and right side - copy-paste bug?',
+             'Binaer-Ausdruck mit gleicher linker und rechter Seite - Copy-Paste-Bug?');
+  // Filter-Combo-Eintraege
+  GDeMap.Add('Unused Local Var',         'Ungenutzte lokale Variable');
+  GDeMap.Add('Unused Parameter',         'Ungenutzter Parameter');
+  GDeMap.Add('Tautological Expression',  'Tautologischer Ausdruck');
+  // DFM Phase 4
+  GDeMap.Add('MasterSource set without MasterFields/IndexFieldNames - silent cross-join',
+             'MasterSource gesetzt ohne MasterFields/IndexFieldNames - stiller Cross-Join');
+  GDeMap.Add('Many DB components on one form - extract into a TDataModule',
+             'Viele DB-Komponenten auf einer Form - in ein TDataModule extrahieren');
+  GDeMap.Add('Master-Detail Unlinked',     'Master-Detail unverlinkt');
+  GDeMap.Add('Data Module Split Hint',     'DataModule-Split-Vorschlag');
+  // SQL-Dangerous + Format-Locale
+  GDeMap.Add('UPDATE/DELETE/TRUNCATE without WHERE - affects ALL rows',
+             'UPDATE/DELETE/TRUNCATE ohne WHERE - betrifft ALLE Zeilen');
+  GDeMap.Add('Float format spec without TFormatSettings - locale-dependent decimal separator',
+             'Float-Format ohne TFormatSettings - Locale-abh'#$E4'ngiger Dezimal-Trenner');
+  GDeMap.Add('Dangerous SQL Statement',  'Gef'#$E4'hrliches SQL-Statement');
+  GDeMap.Add('Format Locale Hint',       'Format-Locale-Hinweis');
+  // DFM
+  GDeMap.Add('Published method looks like an event handler but no component binds it',
+             'Published-Methode sieht aus wie ein Event-Handler, aber keine Komponente bindet sie');
+  GDeMap.Add('Component event is wired but the handler body is empty',
+             'Komponenten-Event ist gebunden, aber der Handler-Body ist leer');
+  GDeMap.Add('DFM declares a component but the form class has no published field for it',
+             'DFM deklariert eine Komponente, aber die Form-Klasse hat kein published-Feld daf'#$FC'r');
+  GDeMap.Add('Event handler in DFM points to a method that no longer exists',
+             'Event-Handler im DFM zeigt auf eine Methode, die nicht (mehr) existiert');
+  GDeMap.Add('Database credentials sit in the form file - move them out',
+             'DB-Credentials liegen im Form-File - aus dem DFM heraus verlagern');
+  GDeMap.Add('Input control sits directly on the form - wrap it in a panel',
+             'Eingabe-Control sitzt direkt auf der Form - in ein Panel einbetten');
+  GDeMap.Add('A single method handles too many component events - split it up',
+             'Eine einzelne Methode bedient zu viele Komponenten-Events - aufteilen');
+  GDeMap.Add('Component has both Action and OnClick - the OnClick handler is dead code',
+             'Komponente hat Action UND OnClick - der OnClick-Handler ist toter Code');
+  GDeMap.Add('Two sibling controls share the same TabOrder - tab navigation is undefined',
+             'Zwei Geschwister-Controls teilen dieselbe TabOrder - Tab-Reihenfolge undefiniert');
+  GDeMap.Add('Component class is on the project-defined forbidden list',
+             'Komponenten-Klasse steht auf der Projekt-Forbidden-Liste');
+  GDeMap.Add('Database component sits on a Form/Frame - move to a TDataModule',
+             'DB-Komponente sitzt auf einer Form/Frame - in ein TDataModule verlegen');
+  GDeMap.Add('Required dataset field has no DB-control binding it',
+             'Required-Feld des DataSet hat keine UI-Bindung');
+  GDeMap.Add('Required field is bound only to invisible controls',
+             'Required-Feld nur an unsichtbare Controls gebunden');
+  GDeMap.Add('DB-control class does not fit the field data type',
+             'DB-Control-Klasse passt nicht zum Field-Data-Type');
+  GDeMap.Add('SQL query is built from a UI input field - parameterize instead of concatenating',
+             'SQL-Query aus UI-Eingabe gebaut - parametrisieren statt konkatenieren');
+  GDeMap.Add('Master-detail wiring forms a cycle - opening the dataset will loop endlessly',
+             'Master-Detail-Verkabelung bildet Zyklus - Open-Call l'#$E4'uft endlos');
+  GDeMap.Add('Multiple components bind the same DataSource and DataField',
+             'Mehrere Komponenten binden gleiche DataSource + DataField');
+  GDeMap.Add('UI text in DFM is a literal string - route it through the localization layer',
+             'UI-Text im DFM ist Stringliteral - '#$FC'ber die Lokalisierungs-Schicht f'#$FC'hren');
+  GDeMap.Add('Component uses the IDE default name - rename for clarity',
+             'Komponente nutzt IDE-Default-Namen - f'#$FC'r Klarheit umbenennen');
 
   // ---- Status-/Progress-Texte ----
   GDeMap.Add('Ready.',                   'Bereit.');

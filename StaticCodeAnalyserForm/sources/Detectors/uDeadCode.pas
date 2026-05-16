@@ -40,67 +40,84 @@ implementation
 
 class procedure TDeadCodeDetector.CheckBlock(BlockNode: TAstNode;
   const MethodName, FileName: string; Results: TObjectList<TLeakFinding>);
+// Iterativ via Work-Stack - analog zu uAstNode.CollectAll. Vorher
+// rekursiver Descent (Detectors/uDeadCode.pas alte Form) konnte bei
+// pathologisch tiefen ASTs den Aufruf-Stack sprengen.
 var
-  i        : Integer;
-  Child    : TAstNode;
-  F        : TLeakFinding;
+  WorkStack    : TStack<TAstNode>;
+  Current      : TAstNode;
+  i            : Integer;
+  Child, Nxt   : TAstNode;
+  IsTerminator : Boolean;
+  TermName     : string;
+  F            : TLeakFinding;
 begin
-  i := 0;
-  while i < BlockNode.Children.Count do
-  begin
-    Child := BlockNode.Children[i];
-
-    // Rekursiv in verschachtelte Bloecke und Kontrollstrukturen absteigen
-    if Child.Kind in [nkBlock,
-                      nkIfStmt, nkElseBranch,
-                      nkCaseStmt, nkCaseArm,
-                      nkForStmt, nkWhileStmt, nkRepeatStmt,
-                      nkTryExcept, nkTryFinally,
-                      nkExceptBlock, nkFinallyBlock,
-                      nkOnHandler] then
-      CheckBlock(Child, MethodName, FileName, Results);
-
-    // Unbedingter Terminator als DIREKTES Kind dieses Blocks?
-    // nkBreak/nkContinue nur in Loop-Bodies, nkExit/nkRaise immer.
-    var IsTerminator := False;
-    var TermName := '';
-    case Child.Kind of
-      nkExit:     begin IsTerminator := True; TermName := 'Exit';     end;
-      nkRaise:    begin IsTerminator := True; TermName := 'raise';    end;
-      nkBreak:    begin IsTerminator := True; TermName := 'Break';    end;
-      nkContinue: begin IsTerminator := True; TermName := 'Continue'; end;
-    end;
-
-    if IsTerminator then
+  WorkStack := TStack<TAstNode>.Create;
+  try
+    WorkStack.Push(BlockNode);
+    while WorkStack.Count > 0 do
     begin
-      // Gibt es noch weitere direkte Geschwister danach?
-      if i + 1 < BlockNode.Children.Count then
+      Current := WorkStack.Pop;
+      i := 0;
+      while i < Current.Children.Count do
       begin
-        var Nxt := BlockNode.Children[i + 1];
-        // Nicht-sequentielle Geschwister sind kein toter Code:
-        //   - nkElseBranch     : alternativer if-Zweig
-        //   - nkExceptBlock    : Exception-Handler (nur bei Exception)
-        //   - nkFinallyBlock   : Cleanup (immer, aber nicht sequentiell)
-        //   - nkOnHandler      : einzelner on-Zweig im except
-        if Nxt.Kind in [nkElseBranch, nkExceptBlock,
-                        nkFinallyBlock, nkOnHandler] then
-        begin
-          Inc(i); Continue;
+        Child := Current.Children[i];
+
+        // Verschachtelte Bloecke nicht rekursiv, sondern auf den Stack
+        if Child.Kind in [nkBlock,
+                          nkIfStmt, nkElseBranch,
+                          nkCaseStmt, nkCaseArm,
+                          nkForStmt, nkWhileStmt, nkRepeatStmt,
+                          nkTryExcept, nkTryFinally,
+                          nkExceptBlock, nkFinallyBlock,
+                          nkOnHandler] then
+          WorkStack.Push(Child);
+
+        // Unbedingter Terminator als DIREKTES Kind dieses Blocks?
+        // nkBreak/nkContinue nur in Loop-Bodies, nkExit/nkRaise immer.
+        IsTerminator := False;
+        TermName := '';
+        case Child.Kind of
+          nkExit:     begin IsTerminator := True; TermName := 'Exit';     end;
+          nkRaise:    begin IsTerminator := True; TermName := 'raise';    end;
+          nkBreak:    begin IsTerminator := True; TermName := 'Break';    end;
+          nkContinue: begin IsTerminator := True; TermName := 'Continue'; end;
         end;
 
-        F            := TLeakFinding.Create;
-        F.FileName   := FileName;
-        F.MethodName := MethodName;
-        F.LineNumber := IntToStr(Nxt.Line);
-        F.MissingVar := 'Dead code after ' + TermName;
-        F.Severity   := lsWarning;
-        F.Kind       := fkDeadCode;
-        Results.Add(F);
-        Break; // Pro Block nur einmal melden
+        if IsTerminator then
+        begin
+          // Gibt es noch weitere direkte Geschwister danach?
+          if i + 1 < Current.Children.Count then
+          begin
+            Nxt := Current.Children[i + 1];
+            // Nicht-sequentielle Geschwister sind kein toter Code:
+            //   - nkElseBranch     : alternativer if-Zweig
+            //   - nkExceptBlock    : Exception-Handler (nur bei Exception)
+            //   - nkFinallyBlock   : Cleanup (immer, aber nicht sequentiell)
+            //   - nkOnHandler      : einzelner on-Zweig im except
+            if Nxt.Kind in [nkElseBranch, nkExceptBlock,
+                            nkFinallyBlock, nkOnHandler] then
+            begin
+              Inc(i); Continue;
+            end;
+
+            F            := TLeakFinding.Create;
+            F.FileName   := FileName;
+            F.MethodName := MethodName;
+            F.LineNumber := IntToStr(Nxt.Line);
+            F.MissingVar := 'Dead code after ' + TermName;
+            F.Severity   := lsWarning;
+            F.Kind       := fkDeadCode;
+            Results.Add(F);
+            Break; // Pro Block nur einmal melden
+          end;
+        end;
+
+        Inc(i);
       end;
     end;
-
-    Inc(i);
+  finally
+    WorkStack.Free;
   end;
 end;
 
