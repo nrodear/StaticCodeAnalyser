@@ -59,39 +59,79 @@ begin
   Result := Copy(Line, wStart, i - wStart);
 end;
 
-// Sucht in der letzten Implementation-Zeile (oberhalb von `end.`) das
-// erste Vorkommen von `begin`/`initialization`/`finalization`. Liefert
-// die Zeile (-1 wenn keine gefunden) und den Keyword-Namen lowercase.
+// Liefert das erste Nicht-Whitespace-Zeichen NACH dem ersten Wort einer
+// Zeile (oder #0 wenn keines).
+function CharAfterFirstWord(const Line: string): Char;
+var
+  i, n : Integer;
+begin
+  Result := #0;
+  n := Length(Line);
+  i := 1;
+  while (i <= n) and CharInSet(Line[i], [' ', #9]) do Inc(i);
+  if i > n then Exit;
+  while (i <= n) and CharInSet(Line[i], ['A'..'Z','a'..'z','0'..'9','_']) do
+    Inc(i);
+  if i > n then Exit;
+  Result := Line[i];
+end;
+
+// Walked backwards from end of file. Trackt Procedure-Body-Tiefe: jedes
+// `end;` (mit Semikolon, gehen wir backwards rein) erhoeht die Tiefe;
+// jedes `begin` bei Tiefe > 0 dekrementiert (wir verlassen das Body
+// going up). Bei Tiefe = 0:
+//   * `begin`        -> Legacy-Init-Match
+//   * `initialization`/`finalization` -> moderne Init
+// `end.` (mit Punkt) ist Unit-Terminator und wird ignoriert.
 function FindLastInitMarker(Lines: TStringList; out Lower: string): Integer;
 var
-  i      : Integer;
+  i, Col : Integer;
   Word   : string;
-  Col    : Integer;
   L      : string;
+  After  : Char;
+  Depth  : Integer;
 begin
   Result := -1;
   Lower := '';
+  Depth := 0;
   for i := Lines.Count - 1 downto 0 do
   begin
     Word := ExtractFirstWord(Lines[i], Col);
     if Word = '' then Continue;
     L := LowerCase(Word);
-    if (L = 'begin') or (L = 'initialization') or (L = 'finalization') then
+    if L = 'end' then
     begin
+      After := CharAfterFirstWord(Lines[i]);
+      if After = '.' then
+      begin
+        // Unit terminator - ueberspringen
+        Continue;
+      end;
+      // `end;` oder `end` ohne Punkt -> Procedure-Body-Schliesser
+      Inc(Depth);
+      Continue;
+    end;
+    if L = 'begin' then
+    begin
+      if Depth > 0 then
+      begin
+        Dec(Depth);
+        Continue;
+      end;
       Result := i;
       Lower := L;
       Exit;
     end;
-    if (L = 'end') then
+    if (L = 'initialization') or (L = 'finalization') then
     begin
-      // `end.` -> Unit terminator. Bevor begin/init/final gefunden.
-      // Continue ueberspringt nicht; wir muessen das `end.` ignorieren.
-      // Falls weitere `end;` darauf folgen (z.B. fuer Procedure-Bodies),
-      // die ueberspringen wir auch.
-      Continue;
+      if Depth = 0 then
+      begin
+        Result := i;
+        Lower := L;
+        Exit;
+      end;
     end;
-    // Andere Worte: koennten Identifier-Statements im Init-Block sein
-    // (z.B. `RegisterClass(...)`). Weiter zurueck suchen.
+    // Andere Worte: weiter zurueck
   end;
 end;
 
