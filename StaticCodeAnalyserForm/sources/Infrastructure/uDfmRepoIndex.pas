@@ -67,7 +67,7 @@ type
 implementation
 
 uses
-  uParser2;
+  uParser2, uAstFileCache;
 
 constructor TDfmRepoIndex.Create;
 begin
@@ -105,22 +105,34 @@ procedure TDfmRepoIndex.ScanUnit(const PasFileName: string);
 // Parst eine einzelne .pas und sammelt globale Variablen + Klassen-
 // Deklarationen. Parse-Fehler werden geschluckt - eine kaputte .pas
 // darf den Repo-Index-Lauf nicht stoppen.
+//
+// Cache-Pfad: wenn gAstFileCache assigned ist, wird die .pas dort
+// einmal geparst und das Root spaeter im Main-Loop wiederverwendet
+// (perf_analyse.md Hot-Spot 🅐). Cache besitzt das Root - NICHT free.
 var
-  Parser : TParser2;
-  Root   : TAstNode;
-  IFace  : TAstNode;
+  Parser  : TParser2;
+  Root    : TAstNode;
+  IFace   : TAstNode;
+  OwnsRoot: Boolean;
 begin
-  // Root wird in den 'try'-Bloecken gesetzt oder per Exit umgangen -
-  // kein Pre-Init noetig (Compiler-Hint H2077 vermieden).
-  try
-    Parser := TParser2.Create;
+  Root := nil;
+  OwnsRoot := False;
+
+  if Assigned(gAstFileCache) then
+    Root := gAstFileCache.Acquire(PasFileName)
+  else
+  begin
     try
-      Root := Parser.ParseFile(PasFileName);
-    finally
-      Parser.Free;
+      Parser := TParser2.Create;
+      try
+        Root := Parser.ParseFile(PasFileName);
+        OwnsRoot := True;
+      finally
+        Parser.Free;
+      end;
+    except
+      Exit;
     end;
-  except
-    Exit;
   end;
 
   try
@@ -133,7 +145,7 @@ begin
     CollectVarsAt(IFace, PasFileName);
     CollectClassesAt(IFace, PasFileName);
   finally
-    Root.Free;
+    if OwnsRoot then Root.Free;
   end;
 end;
 
