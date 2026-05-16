@@ -230,12 +230,13 @@ end;
 
 procedure TSonarOptionsFrame.LoadFromIni(const IniPath: string);
 var
-  Ini      : TIniFile;
+  Ini      : TMemIniFile;
   TokenRef : string;
 begin
   FIniPath := IniPath;
   if not TFile.Exists(IniPath) then Exit;
-  Ini := TIniFile.Create(IniPath);
+  // TMemIniFile statt TIniFile - vertraegt UTF-8-BOM (z.B. Notepad-Save).
+  Ini := TMemIniFile.Create(IniPath, TEncoding.UTF8);
   try
     edHost.Text     := Ini.ReadString('Sonar', 'HostUrl',      '');
     edProject.Text  := Ini.ReadString('Sonar', 'ProjectKey',   '');
@@ -260,19 +261,20 @@ end;
 
 procedure TSonarOptionsFrame.SaveToIni(const IniPath: string);
 var
-  Ini      : TIniFile;
+  Ini      : TMemIniFile;
   NewToken : string;
 begin
   if IniPath = '' then Exit;
   ForceDirectories(ExtractFilePath(IniPath));
 
-  Ini := TIniFile.Create(IniPath);
+  Ini := TMemIniFile.Create(IniPath, TEncoding.UTF8);
   try
     Ini.WriteString('Sonar', 'HostUrl',    Trim(edHost.Text));
     Ini.WriteString('Sonar', 'ProjectKey', Trim(edProject.Text));
     Ini.WriteString('Sonar', 'Branch',     Trim(edBranch.Text));
     Ini.WriteBool  ('Sonar', 'Insecure',   chkInsecure.Checked);
     Ini.WriteString('Sonar', 'TokenRef',   TOKEN_REF_DEFAULT);
+    Ini.UpdateFile;  // TMemIniFile persistiert erst durch UpdateFile
   finally
     Ini.Free;
   end;

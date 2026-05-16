@@ -189,19 +189,29 @@ class function TRuleCatalog.FindJsonFile: string;
 //   4. %APPDATA%\StaticCodeAnalyser\rules\sca-rules.json
 //                            - portable + benutzerspezifisch, ueblicher
 //                              Speicherort fuer das IDE-Plugin.
-// Jede Variante wird zusaetzlich um '..' / '..\..' / '..\..\..' erweitert,
-// damit Build-Layouts (sources\\..\\rules) und Release-Layouts (bin\\..\\rules)
-// gleichermassen greifen.
+// Walked vom BaseDir bis zu 8 Ebenen nach oben - deckt sowohl Release-Layouts
+// (bin\..\rules) als auch tief geschachtelte Test-Layouts (tests\Win32\Debug
+// braucht 4 Ebenen bis zum Repo-Root) ab. Stop bei Drive-Root (z.B. C:\).
 var
   Cands : TList<string>;
 
   procedure AddRoots(const BaseDir: string);
+  var
+    Dir, Parent : string;
+    i           : Integer;
   begin
     if BaseDir = '' then Exit;
-    Cands.Add(TPath.Combine(BaseDir, 'rules\sca-rules.json'));
-    Cands.Add(TPath.Combine(TPath.Combine(BaseDir, '..'), 'rules\sca-rules.json'));
-    Cands.Add(TPath.Combine(TPath.Combine(BaseDir, '..\..'), 'rules\sca-rules.json'));
-    Cands.Add(TPath.Combine(TPath.Combine(BaseDir, '..\..\..'), 'rules\sca-rules.json'));
+    Dir := IncludeTrailingPathDelimiter(BaseDir);
+    for i := 0 to 8 do
+    begin
+      Cands.Add(TPath.Combine(Dir, 'rules\sca-rules.json'));
+      // Eine Ebene hoch. TPath.GetFullPath kanonisiert die '..' und gibt
+      // einen sauberen Pfad mit trailing slash zurueck. Bei Drive-Root
+      // (C:\) liefert GetFullPath denselben Pfad - dann abbrechen.
+      Parent := TPath.GetFullPath(Dir + '..\');
+      if SameText(Parent, Dir) then Break;
+      Dir := Parent;
+    end;
   end;
 
   function ModuleDir: string;

@@ -56,6 +56,9 @@ uses
 { ---- Helpers ---- }
 
 procedure TTestSonarConfig.WriteIni(const Sections: array of string);
+// ASCII-Encoding statt UTF-8: vermeidet BOM-Prefix. TMemIniFile vertraegt
+// das BOM zwar, aber ASCII bleibt portabel und matched genau das was
+// echte Win32-INI-Tools (Notepad classic, INI-Editor) produzieren.
 var
   Lines : TStringList;
   S     : string;
@@ -63,7 +66,7 @@ begin
   Lines := TStringList.Create;
   try
     for S in Sections do Lines.Add(S);
-    Lines.SaveToFile(FTempIni, TEncoding.UTF8);
+    Lines.SaveToFile(FTempIni, TEncoding.ASCII);
   finally
     Lines.Free;
   end;

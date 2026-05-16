@@ -296,12 +296,15 @@ end;
 class procedure TSonarConfigResolver.ReadFromIni(const FileName: string;
   var Cfg: TSonarConfig);
 var
-  Ini      : TIniFile;
+  Ini      : TMemIniFile;
   TokenRef : string;
   Plain    : string;
 begin
   if (FileName = '') or not TFile.Exists(FileName) then Exit;
-  Ini := TIniFile.Create(FileName);
+  // TMemIniFile statt TIniFile: liest UTF-8-BOM-Dateien (Notepad-Default
+  // beim "Save as UTF-8") korrekt, ohne dass das BOM in die erste Section
+  // bleedet und alle Reads den Default zurueckliefern.
+  Ini := TMemIniFile.Create(FileName, TEncoding.UTF8);
   try
     if Cfg.HostUrl = '' then
     begin
@@ -458,7 +461,7 @@ end;
 class procedure TSonarConfigResolver.StoreToken(const FileName, TokenRef,
   PlainTextToken: string);
 var
-  Ini    : TIniFile;
+  Ini    : TMemIniFile;
   Cipher : TBytes;
   Hex    : string;
 begin
@@ -475,9 +478,15 @@ begin
     TEncoding.UTF8.GetBytes(PlainTextToken));
   {$ENDIF}
 
-  Ini := TIniFile.Create(FileName);
+  // TMemIniFile haelt Writes in-memory bis UpdateFile aufgerufen wird.
+  // Vorher: TIniFile schrieb sofort via WritePrivateProfileString - das
+  // hat Win-Default-Encoding (typisch UTF-16 LE auf Win10+), kollidiert
+  // dann mit unserem TMemIniFile-Reader. Beides UTF-8 ohne BOM via
+  // TMemIniFile haelt die Datei konsistent.
+  Ini := TMemIniFile.Create(FileName, TEncoding.UTF8);
   try
     Ini.WriteString('SonarTokens', TokenRef, Hex);
+    Ini.UpdateFile;
   finally
     Ini.Free;
   end;
@@ -486,14 +495,14 @@ end;
 class function TSonarConfigResolver.LoadToken(const FileName,
   TokenRef: string): string;
 var
-  Ini : TIniFile;
+  Ini : TMemIniFile;
   Hex : string;
   Cipher : TBytes;
 begin
   Result := '';
   if (FileName = '') or (TokenRef = '') or not TFile.Exists(FileName) then Exit;
 
-  Ini := TIniFile.Create(FileName);
+  Ini := TMemIniFile.Create(FileName, TEncoding.UTF8);
   try
     Hex := Trim(Ini.ReadString('SonarTokens', TokenRef, ''));
   finally
