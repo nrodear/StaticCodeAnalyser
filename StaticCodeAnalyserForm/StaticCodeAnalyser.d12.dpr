@@ -92,6 +92,8 @@ uses
   uConstructorWithoutInherited in 'sources\Detectors\uConstructorWithoutInherited.pas',
   uDestructorWithoutInherited in 'sources\Detectors\uDestructorWithoutInherited.pas',
   uRedundantConditional in 'sources\Detectors\uRedundantConditional.pas',
+  uIfElseBegin in 'sources\Detectors\uIfElseBegin.pas',
+  uPointerName in 'sources\Detectors\uPointerName.pas',
   uExportSonarGeneric in 'sources\Output\uExportSonarGeneric.pas',
   uSonarPush in 'sources\Output\uSonarPush.pas',
   uSonarConfig in 'sources\Infrastructure\uSonarConfig.pas',

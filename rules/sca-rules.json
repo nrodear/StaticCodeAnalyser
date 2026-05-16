@@ -1940,6 +1940,44 @@
       "impacts": [
         { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
       ]
+    },
+    {
+      "id": "SCA099",
+      "kind": "IfElseBegin",
+      "name": "Asymmetric begin/end in if/else",
+      "shortDescription": "then-branch uses `begin..end` but else-branch is a single statement",
+      "fullDescription": "When the then-branch uses `begin..end`, the else-branch should too (or both should drop it). The mixed form (`end else DoStuff;`) makes a future reader unsure whether more statements belong in the else-branch but were forgotten. `else if` (else-if chain) and `else begin` are explicitly allowed. Matches SonarDelphi communitydelphi:IfElseBegin.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["style", "consistency"],
+      "detectorUnit": "uIfElseBegin.pas",
+      "examples": {
+        "bad":  "if Active then\nbegin\n  DoA;\n  DoB;\nend\nelse\n  DoC;",
+        "good": "if Active then\nbegin\n  DoA;\n  DoB;\nend\nelse\nbegin\n  DoC;\nend;"
+      },
+      "cleanCodeAttribute": "FORMATTED",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA100",
+      "kind": "PointerName",
+      "name": "Pointer type alias not prefixed with P",
+      "shortDescription": "`Foo = ^Bar` should be `PBar = ^Bar` (P-prefix convention)",
+      "fullDescription": "Delphi convention since day one: a pointer alias on `TXxx` is named `PXxx`. The `P` prefix makes the indirection visible at the call site. Matches SonarDelphi communitydelphi:PointerName. Naming framework will later make the prefix configurable.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["naming", "convention"],
+      "detectorUnit": "uPointerName.pas",
+      "examples": {
+        "bad":  "type TIntPtr = ^Integer;",
+        "good": "type PInteger = ^Integer;"
+      },
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     }
   ]
 }

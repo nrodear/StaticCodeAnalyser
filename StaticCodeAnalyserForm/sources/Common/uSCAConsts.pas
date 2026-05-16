@@ -293,8 +293,12 @@ type
                                  // (SonarDelphi:ConstructorWithoutInherited).
     fkDestructorWithoutInherited,// Destruktor ohne `inherited` Aufruf
                                  // (SonarDelphi:DestructorWithoutInherited).
-    fkRedundantConditional       // `if X then Y := True else Y := False`
+    fkRedundantConditional,      // `if X then Y := True else Y := False`
                                  // (SonarDelphi:RedundantConditional).
+    fkIfElseBegin,               // Asymmetrische begin/end-Verwendung in
+                                 // if/else (SonarDelphi:IfElseBegin).
+    fkPointerName                // Pointer-Typ-Alias ohne `P`-Prefix
+                                 // (SonarDelphi:PointerName).
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -441,7 +445,9 @@ const
     (Name: 'ConsecutiveVisibility';      FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkConsecutiveVisibility
     (Name: 'ConstructorWithoutInherited';FindingType: ftBug;          DefaultSeverity: lsWarning), // fkConstructorWithoutInherited
     (Name: 'DestructorWithoutInherited'; FindingType: ftBug;          DefaultSeverity: lsError),   // fkDestructorWithoutInherited
-    (Name: 'RedundantConditional';       FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkRedundantConditional
+    (Name: 'RedundantConditional';       FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkRedundantConditional
+    (Name: 'IfElseBegin';                FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkIfElseBegin
+    (Name: 'PointerName';                FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkPointerName
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

@@ -29,6 +29,7 @@ uses
   uCaseStatementSize, uEmptyFile, uTwiceInheritedCalls,
   uRedundantParentheses, uConsecutiveVisibility,
   uConstructorWithoutInherited, uDestructorWithoutInherited, uRedundantConditional,
+  uIfElseBegin, uPointerName,
   uReversedForRange, uSelfAssignment, uVirtualCallInCtor, uLengthUnderflow,
   uVisibilityCheck,
   uUnusedLocal, uUnusedParameter, uTautologicalExpr,
@@ -169,6 +170,8 @@ begin
         TConstructorWithoutInheritedDetector.AnalyzeUnit(Root, TempPath, Result);
         TDestructorWithoutInheritedDetector.AnalyzeUnit(Root, TempPath, Result);
         TRedundantConditionalDetector.AnalyzeUnit(Root, TempPath, Result);
+        TIfElseBeginDetector.AnalyzeUnit(Root, TempPath, Result);
+        TPointerNameDetector.AnalyzeUnit(Root, TempPath, Result);
         TReversedForRangeDetector.AnalyzeUnit(Root, TempPath, Result);
         TLengthUnderflowDetector.AnalyzeUnit(Root, TempPath, Result);
         TTautologicalExprDetector.AnalyzeUnit(Root, TempPath, Result);

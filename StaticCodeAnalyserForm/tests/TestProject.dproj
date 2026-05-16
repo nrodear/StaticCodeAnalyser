@@ -258,6 +258,8 @@
         <DCCReference Include="uTestConstructorWithoutInherited.pas"/>
         <DCCReference Include="uTestDestructorWithoutInherited.pas"/>
         <DCCReference Include="uTestRedundantConditional.pas"/>
+        <DCCReference Include="uTestIfElseBegin.pas"/>
+        <DCCReference Include="uTestPointerName.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

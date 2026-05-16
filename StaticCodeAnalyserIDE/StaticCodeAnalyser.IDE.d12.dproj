@@ -270,6 +270,8 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uConstructorWithoutInherited.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDestructorWithoutInherited.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uRedundantConditional.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uIfElseBegin.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uPointerName.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uReversedForRange.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSelfAssignment.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uVirtualCallInCtor.pas"/>

@@ -121,7 +121,9 @@ uses
   uTestConsecutiveVisibility in 'uTestConsecutiveVisibility.pas',
   uTestConstructorWithoutInherited in 'uTestConstructorWithoutInherited.pas',
   uTestDestructorWithoutInherited in 'uTestDestructorWithoutInherited.pas',
-  uTestRedundantConditional in 'uTestRedundantConditional.pas';
+  uTestRedundantConditional in 'uTestRedundantConditional.pas',
+  uTestIfElseBegin in 'uTestIfElseBegin.pas',
+  uTestPointerName in 'uTestPointerName.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}

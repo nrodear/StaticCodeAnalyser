@@ -55,6 +55,7 @@ uses
   uCaseStatementSize, uEmptyFile, uTwiceInheritedCalls,
   uRedundantParentheses, uConsecutiveVisibility,
   uConstructorWithoutInherited, uDestructorWithoutInherited, uRedundantConditional,
+  uIfElseBegin, uPointerName,
   uReversedForRange, uSelfAssignment, uVirtualCallInCtor, uLengthUnderflow,
   uVisibilityCheck,
   uUnusedLocal, uUnusedParameter, uTautologicalExpr,
@@ -177,6 +178,8 @@ begin
   Add('ConstructorWithoutInherited',fkConstructorWithoutInherited,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TConstructorWithoutInheritedDetector.AnalyzeUnit(R, F, L); end);
   Add('DestructorWithoutInherited',fkDestructorWithoutInherited,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDestructorWithoutInheritedDetector.AnalyzeUnit(R, F, L); end);
   Add('RedundantConditional',fkRedundantConditional,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TRedundantConditionalDetector.AnalyzeUnit(R, F, L); end);
+  Add('IfElseBegin',     fkIfElseBegin,     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TIfElseBeginDetector.AnalyzeUnit(R, F, L); end);
+  Add('PointerName',     fkPointerName,     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TPointerNameDetector.AnalyzeUnit(R, F, L); end);
   Add('ReversedForRange',fkReversedForRange,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TReversedForRangeDetector.AnalyzeUnit(R, F, L); end);
   Add('SelfAssignment',  fkSelfAssignment,  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TSelfAssignmentDetector.AnalyzeUnit(R, F, L); end);
   Add('VirtualCallInCtor',fkVirtualCallInCtor,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TVirtualCallInCtorDetector.AnalyzeUnit(R, F, L); end);

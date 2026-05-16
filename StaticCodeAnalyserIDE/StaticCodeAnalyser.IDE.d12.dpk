@@ -149,6 +149,8 @@ contains
   uConstructorWithoutInherited in '..\StaticCodeAnalyserForm\sources\Detectors\uConstructorWithoutInherited.pas',
   uDestructorWithoutInherited in '..\StaticCodeAnalyserForm\sources\Detectors\uDestructorWithoutInherited.pas',
   uRedundantConditional in '..\StaticCodeAnalyserForm\sources\Detectors\uRedundantConditional.pas',
+  uIfElseBegin in '..\StaticCodeAnalyserForm\sources\Detectors\uIfElseBegin.pas',
+  uPointerName in '..\StaticCodeAnalyserForm\sources\Detectors\uPointerName.pas',
   uReversedForRange in '..\StaticCodeAnalyserForm\sources\Detectors\uReversedForRange.pas',
   uSelfAssignment in '..\StaticCodeAnalyserForm\sources\Detectors\uSelfAssignment.pas',
   uVirtualCallInCtor in '..\StaticCodeAnalyserForm\sources\Detectors\uVirtualCallInCtor.pas',
