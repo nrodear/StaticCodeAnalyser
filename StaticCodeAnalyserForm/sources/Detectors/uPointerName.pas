@@ -50,12 +50,12 @@ end;
 function FindBadPointerName(const Line: string; var InBlockComm: Boolean;
   var InParenStarComm: Boolean): Integer;
 var
-  i, n, j, k : Integer;
-  InStr      : Boolean;
-  pClose     : Integer;
-  c          : Char;
-  Start      : Integer;
-  Name       : string;
+  i, n, j  : Integer;
+  InStr    : Boolean;
+  pClose   : Integer;
+  c        : Char;
+  Start    : Integer;
+  Name     : string;
 begin
   Result := 0;
   InStr  := False;

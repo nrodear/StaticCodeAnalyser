@@ -51,7 +51,6 @@ function ScoreCodeMarkers(const Content: string): Integer;
 var
   Lower    : string;
   Trimmed  : string;
-  i, n     : Integer;
   pAssign  : Integer;
   function ContainsWord(const W: string): Boolean;
   var k, lenW, lenS : Integer;
@@ -93,8 +92,7 @@ begin
   if ContainsWord('then')      then Inc(Result);
   if ContainsWord('for')       then Inc(Result);
   if ContainsWord('while')     then Inc(Result);
-  // Schwellwert: ab 2 Markern ist es vermutlich Code
-  n := Result; if n = 0 then Result := 0;
+  // Schwellwert: ab 2 Markern ist es vermutlich Code (Caller filtert).
 end;
 
 // Pro Zeile: extrahiert den //-Kommentar-Inhalt (rest nach `//`) und

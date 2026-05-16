@@ -118,9 +118,8 @@ begin
       // Skip whitespace
       j := i + 2;
       while (j <= n) and CharInSet(Line[j], [' ', #9]) do Inc(j);
-      // Identifier
+      // Identifier (Binding-Variable, Name wird nicht gebraucht)
       if (j > n) or not IsIdentStart(Line[j]) then begin Inc(i); Continue; end;
-      wStart := j;
       while (j <= n) and IsIdent(Line[j]) do Inc(j);
       // `:`
       while (j <= n) and CharInSet(Line[j], [' ', #9]) do Inc(j);

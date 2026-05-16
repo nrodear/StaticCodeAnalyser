@@ -269,8 +269,7 @@ begin
       p := q;
       if not ExpectAssign(Code, p) then begin Inc(pIf, 2); Continue; end;
       Rhs2 := '';
-      q := p;
-      q := ScanWordAfter(Code, q, Rhs2);
+      p := ScanWordAfter(Code, p, Rhs2);
       if not (SameText(Rhs2, 'True') or SameText(Rhs2, 'False')) then
       begin Inc(pIf, 2); Continue; end;
       // Boolean-Werte muessen unterschiedlich sein
