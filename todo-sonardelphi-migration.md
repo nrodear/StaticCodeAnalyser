@@ -148,8 +148,13 @@ Triviale Detektoren — Pattern matched 1:1 unsere bestehenden.
 uEmptyBlock skipt jetzt Methoden-Bodies (uEmptyMethod ist dort
 zustaendig), feuert nur noch fuer in-statement Bloecke (`if/while/for/case/try`).
 SonarDelphi trennt das auch (EmptyRoutineImplementation vs EmptyBlock).
-`uPublicField` (SCA089) ueberlappt teilweise mit `uVisibilityCheck.fkCanBePrivate`
-- aber unterschiedliche Signale (Convention vs Usage), beides bleibt.
+`uPublicField` (SCA089) ueberlappte historisch mit
+`uVisibilityCheck.fkCanBeUnitPrivate` / `fkCanBeStrictPrivate` auf
+public FIELDS. **Reduziert 2026-05-17:** `uVisibilityCheck` ueberspringt
+seit dem Overlap-Audit `nkField`-Member; fuer Felder ist `uPublicField`
+der kanonische Detektor (Empfehlung "Property statt Feld" ist
+implizit staerker als "private statt public"). Methoden + Properties
+bleiben in `uVisibilityCheck`.
 
 **Remaining Phase 1 candidates** (~16, with notes on difficulty):
 

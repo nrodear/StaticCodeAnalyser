@@ -12,6 +12,15 @@ Erledigte Punkte siehe [docs/done.md](docs/done.md).
 Kuratierte Liste der höchst-prioritären offenen Punkte. Querverweise
 zur ausführlichen Beschreibung im jeweiligen Abschnitt unten.
 
+### Quick-Fix Hotkey + In-Editor-Apply (2026-05-17 ✅ erledigt)
+
+- [x] Quick-Fix-Hotkey gewählt: **`Ctrl+Alt+F`** (IntelliJ-Konvention;
+  F4 kollidierte mit RAD-Studio-Debug "Run to Cursor", Ctrl+. mit
+  Code-Completion).
+- [x] `TIDEEditor.ApplyLineReplacement` über `IOTAEditPosition.Address`
+  + `EditWriter.CopyTo/DeleteTo/Insert` implementiert.
+  Ein Ctrl+Z reverts den ganzen Quick-Fix atomar (CreateUndoableWriter).
+
 ### Korrektheits-Bugs zuerst (real-world-Fundstellen aus mORMot2-Crosscheck)
 
 - [ ] **🅰 Parser: Anonymer inline-`record`-Typ als Var-Typ → Body verloren**
@@ -21,16 +30,20 @@ zur ausführlichen Beschreibung im jeweiligen Abschnitt unten.
   OS-Code (mormot.core.os, mormot.db.raw.*). Lösung: Mini-Parser für
   inline-record bis matching `end`. Details → 🔴 Bugs.
 
-- [ ] **🅱 DeadCode: `CheckBlock` rekursiv ohne Bound → Stack-Overflow**
-  Einziger offener Bug der einen Crash auslösen kann. Pathologisch
-  tiefe ASTs lassen den Detektor crashen. Lösung: iterativer
-  Work-Stack analog `uAstNode.CollectAll`. Details → 🔴 Bugs.
+- [x] **🅱 DeadCode: `CheckBlock` rekursiv ohne Bound → Stack-Overflow**
+  Erledigt (2026-05-18 Audit): `uDeadCode.CheckBlock` ist seit der
+  CollectAll-Refaktorisierung iterativ via `TStack<TAstNode>`-Work-Stack
+  ([uDeadCode.pas:55-120](StaticCodeAnalyserForm/sources/Detectors/uDeadCode.pas#L55-L120)).
+  Kein Stack-Overflow-Risiko mehr. TODO war veraltet.
 
-- [ ] **🅲 Memory-Detektor: `LeakyClasses` deckt mORMot-Idiomatik nicht ab**
-  Volumen-Bug: `TJsonWriter`, `TRawUtf8List`, `TSynList`,
-  `TBufferWriter` etc. werden nicht getrackt → False-Negatives in
-  jedem mORMot-Projekt. Lösung: `MORMOT_LEAKY`-Default-Liste oder
-  INI-Eintrag. Details → 🔴 Bugs.
+- [x] **🅲 Memory-Detektor: `LeakyClasses` deckt mORMot-Idiomatik nicht ab**
+  Erledigt (2026-05-18 Audit): `InitDefaultLeakyClasses` enthält
+  `TJsonWriter`, `TTextWriter`, `TBufferWriter`, `TRawUtf8List`,
+  `TSynList`, `TSynObjectList`, `TSqlDBStatement*`, `TSynPersistent`,
+  `TOrm*`, `TRestServer/ClientUri`, `TSynLog*`, `TSynMonitor`, `TSynLocker`,
+  `TSynBackgroundThreadMethod`
+  ([uSCAConsts.pas:670-682](StaticCodeAnalyserForm/sources/Common/uSCAConsts.pas#L670-L682)).
+  TODO war veraltet.
 
 ### Neue Detektoren mit höchstem real-world Win
 
@@ -54,30 +67,63 @@ zur ausführlichen Beschreibung im jeweiligen Abschnitt unten.
 
 ### Architektur (eigenes Cross-Unit-Pass-Modell)
 
-- [ ] **🅷 `fkCanBePrivate`** + `fkCanBeProtected` + `fkUnusedPublicMember`
-  Cross-Unit-Visibility-Check. Einziger Punkt mit signifikantem
-  Infrastructure-Aufbau (neuer `uSymbolReferenceIndex`, 3-Pass-
-  Modell). Liefert dafür drei Detektoren auf einmal und öffnet
-  die Tür für weitere Cross-Unit-Inspections. Details → 💡 Features.
+- [x] **🅷 `fkCanBeUnitPrivate` + `fkCanBeStrictPrivate` + `fkCanBeProtected`
+  + `fkUnusedPublicMember`** — **single-file Visibility-Check** (kein
+  Cross-Unit-Pass mehr).
+  Frueher als Cross-Unit-Architektur geplant (`uSymbolReferenceIndex`,
+  3-Pass-Modell). Implementierung lief, lieferte aber zu viele False-
+  Positives (RTTI-/DFM-Streaming, Sibling-`.dpk`/`.dproj`-Konsumenten,
+  Generic-Instanziierungen). Endgueltige Entscheidung 2026-05-17:
+  single-file-only, der Compiler verifiziert beim Anwenden des Refactors
+  via E2361 ob ein versteckter externer Konsument existiert.
+  Split: CanBePrivate -> CanBeUnitPrivate (Delphi-private, unit-scope)
+  + CanBeStrictPrivate (D2007+, class-scope). Details → 💡 Features.
 
 ### Empfohlene Reihenfolge
 
-1. **🅱 + 🅵 + 🅴 + 🅳** zuerst (Single-Unit, je <½ Tag, hoher Wert)
-2. **🅰 + 🅲** danach (Parser-Tiefenarbeit, je ~Tag)
+1. **🅵 + 🅴 + 🅳** zuerst (Single-Unit, je <½ Tag, hoher Wert)
+2. **🅰** danach (Parser-Tiefenarbeit, ~Tag)
 3. **🅶** als eigenes Refactor-Inkrement
 4. **🅷** als Architektur-Increment (~2-3 Tage Infrastructure +
    Detektor + Quick-Fix)
+
+(🅱 + 🅲 sind als erledigt markiert — siehe oben.)
 
 ---
 
 ## 🔴 Bugs / Korrektheit
 
-- [ ] **`uDeadCode.CheckBlock` rekursiv ohne Bound**
-  Rekursiert in `nkBlock`/`nkIfStmt`/...-Children — gleiches Stack-
-  Overflow-Risiko, das `uAstNode.FindAll`/`FindFirst` schon iterativ
-  umgangen haben. Pathologisch tiefe ASTs crashen den Detektor.
-  Datei: `Detectors/uDeadCode.pas:54-61`
-  Lösung: iterativer Work-Stack analog zu `uAstNode.CollectAll`.
+- [x] **`uDeadCode.CheckBlock` rekursiv ohne Bound** ✅ (2026-05-18 Audit)
+  Längst erledigt: iterativer `TStack<TAstNode>`-Work-Stack
+  ([uDeadCode.pas:55-120](StaticCodeAnalyserForm/sources/Detectors/uDeadCode.pas#L55-L120)).
+  Kein Stack-Overflow-Risiko mehr.
+
+### Aus 2026-05-18 Audit (Codereview-Findings)
+
+- [ ] **Parser: Inline-`record` als Var-Typ in lokalen `const`-Sektionen**
+  Im var-Section-Pfad ([uParser2.pas:1033-1047](StaticCodeAnalyserForm/sources/Parsing/uParser2.pas#L1033-L1047))
+  existiert der Mini-Parser fuer `var R: record A: Integer; end;`. Seit
+  lokale `const`-Sektionen ueber `ParseVarLikeSection` laufen (2026-05-18),
+  geht dieser Schutz dort verloren — `const X: record A: Integer; end = (A:1);`
+  bricht den TypeName-Loop am ersten internen `;` ab.
+  In der Praxis sehr selten (typisierte inline-record-Konstanten kommen kaum
+  vor), aber fuer Konsistenz mit dem var-Pfad sollte der Mini-Parser dort
+  auch eingebaut werden.
+  Datei: `Parsing/uParser2.pas:642-646` (TypeName-Loop in
+  `ParseVarLikeSection`).
+  Aufwand: <30 min (Mini-Parser-Block aus `ParseLocalVarSection` kopieren).
+
+- [ ] **`uDivByZero.CollectIntegerVars` verliert lokale `const`-Eintraege**
+  Seit lokale `const`-Sektionen `nkField` unter `nkConstSection` erzeugen
+  (statt vorher `nkLocalVar`), findet
+  [uDivByZero.pas:255](StaticCodeAnalyserForm/sources/Detectors/uDivByZero.pas#L255)
+  getypte Konstanten wie `const N: Integer = 0;` nicht mehr in seiner
+  Integer-Name-Liste. Untypisierte Konstanten (`const N = 0;`) waren auch
+  vorher schon nicht erfasst (kein TypeRef → `IsIntegerType('')`=False),
+  daher nur marginale Einschraenkung.
+  Loesung: zweite `FindAll(nkConstSection)`-Schleife ueber die `nkField`-
+  Kinder, gleiches `AddIntegerNode`-Pattern.
+  Aufwand: <30 min.
 
 ### Aus mORMot2-Real-World-Review (4-Agenten-Crosscheck)
 
@@ -92,17 +138,13 @@ zur ausführlichen Beschreibung im jeweiligen Abschnitt unten.
   Lösung: bei `record` im TypeName-Branch einen Mini-Parser fuer
   inline-record bis matching `end` einsetzen.
 
-- [ ] **Memory-Detektor: `LeakyClasses` deckt mORMot-Idiomatik nicht ab**
-  `Common/uSCAConsts.pas:153-166` listet nur RTL/VCL-Klassen
-  (`TStringList` etc.). Keine mORMot-Klasse (`TJsonWriter`,
-  `TRawUtf8List`, `TSynList`, `TTextWriter`, `TBufferWriter`,
-  `TSqlDBStatement`, `TSynPersistent`-Subklassen, ...) wird getrackt.
-  Beispiel: `ui/mormot.ui.pdf.pas:4131` `fArray := TSynList.Create`
-  ohne Free in der gleichen Methode → **kein Leak gemeldet**.
-  Lösung: Zusatz-Liste `MORMOT_LEAKY` im Default oder Standard-INI-
-  Eintrag der typischen mORMot-Klassen aktivieren.
-  AutoDiscoverClasses (=1 in INI) wuerde es fangen, ist aber per
-  Default off.
+- [x] **Memory-Detektor: `LeakyClasses` deckt mORMot-Idiomatik nicht ab** ✅ (2026-05-18 Audit)
+  Erledigt: `InitDefaultLeakyClasses` listet die mORMot-Klassen
+  ([uSCAConsts.pas:670-682](StaticCodeAnalyserForm/sources/Common/uSCAConsts.pas#L670-L682)):
+  `TJsonWriter`, `TTextWriter`, `TBufferWriter`, `TRawUtf8List`, `TSynList`,
+  `TSynObjectList`, `TSqlDBStatement*`, `TSynPersistent`, `TSynAutoCreateFields`,
+  `TDocVariantData`, `TSynDictionary`, `TOrm*`, `TRestServer/ClientUri`,
+  `TSynLog*`, `TSynMonitor`, `TSynLocker`, `TSynBackgroundThreadMethod`.
 
 - [ ] **SQL-Detektor: `Format`/`FormatUtf8`-basierter SQL ungeprueft**
   `ExecuteFmt('SELECT * FROM % WHERE Id=%', [tbl, id])` ist klassisch
@@ -868,51 +910,39 @@ hat in echtem Delphi-Code mal Fundstellen produziert.
   benutzt wird mit hoher Wahrscheinlichkeit Dead-Code.
   Datei: `Detectors/uUnusedLabel.pas` (neu).
 
-#### Architektur / Visibility (Cross-Unit-Analyse)
+#### Architektur / Visibility (single-file)
 
-- [ ] **`fkCanBePrivate`** — Public-Member ohne projekt-weite externe Referenz
-  Methoden, Fields, Properties in der `public`/`published`-Sektion
-  einer Klasse, die NIEMALS von einer anderen Unit referenziert
-  werden. Kandidaten zum Verschieben nach `private` (oder
-  `protected` wenn von Subklassen genutzt). Klassisches
-  "Encapsulation-Tightening" — reduziert API-Oberflaeche und
-  zeigt versehentlich exportierte Helper auf.
-  - **Skip wenn:**
-    - Methode ist `override` oder `virtual`/`abstract` (Vererbungs-
-      Hook, koennte von externer Subklasse benutzt werden)
-    - Methode ist Interface-Impl (`procedure Foo; override;` mit
-      passender Interface-Method)
-    - Methode ist publizierter Event-Handler (DFM-Referenz —
-      `uDfmRepoIndex` weiss das schon)
-    - Klasse ist im `interface`-Teil eines Pakets das als BPL
-      ausgeliefert wird (alles public = Plugin-API)
-    - Designer-generierter Code (`{$R *.dfm}`-Bindings)
-  - **Severity Hint** (kein Bug, nur Lesbarkeit/Encapsulation).
-  - **Cross-Unit-Anforderung:** braucht repo-weiten Symbol-Index
-    analog zu `uDfmRepoIndex` — pro Unit muss bekannt sein
-    welche externen Symbole sie referenziert. Vorhandener
-    AST-Walk koennte ein zweites Pass-Modell pro `AnalyzeBatch`
-    aufbauen (Pass 1: alle Public-Symbole sammeln, Pass 2: alle
-    Referenzen aus anderen Units, Pass 3: Diff).
-  - **Quick-Fix-Idee:** "Move to private" — Member-Block-Boundary
-    finden, Member-Deklaration verschieben, Forward-Refs falls
-    noetig setzen.
-  Datei: `Detectors/uCanBePrivate.pas` (neu), benoetigt neuen
-  `Infrastructure/uSymbolReferenceIndex.pas` fuer Cross-Unit-
-  Lookup.
+> **Status 2026-05-17 — implementiert + refactored.** Frueher als Cross-Unit-
+> Pass mit `uSymbolReferenceIndex` geplant; die Cross-Unit-Variante lieferte
+> in der Praxis zu viele False-Positives (Sibling-`.dpk`/`.dproj`, RTTI/DFM,
+> Generics). Endgueltige Form: alle vier Kinds laufen **single-file** in
+> `Detectors/uVisibilityCheck.pas`. Der Compiler verifiziert beim Anwenden
+> des Refactors via E2361 ob ein versteckter Cross-Unit-Konsument existiert.
 
-- [ ] **`fkCanBeProtected`** — Variante: Public-Member nur aus
-  Subklassen referenziert (gleiche Vererbungs-Kette), nicht von
-  fremden Klassen. Kandidat fuer `protected`. Setzt
-  `fkCanBePrivate`-Infrastruktur voraus.
-  Datei: `Detectors/uCanBePrivate.pas` (gleicher Detektor, zwei
-  Severity-Levels).
+- [x] **`fkCanBeUnitPrivate`** (SCA050) — Member wird im aktuellen Unit
+  referenziert (Sibling-Klasse oder Top-Level-Code), aber nicht
+  ausschliesslich von der eigenen Klasse. Delphi-klassisches `private`
+  (unit-scope) reicht. Implementiert in `uVisibilityCheck.pas`.
 
-- [ ] **`fkUnusedPublicMember`** — Public-Member ohne JEDE
-  Referenz, weder intern noch extern. Striktere Variante von
-  `fkCanBePrivate` — der Member kann komplett geloescht werden,
-  nicht nur versteckt. Schaerfere Severity (Warning statt Hint).
-  Datei: `Detectors/uCanBePrivate.pas` (gleicher Detektor).
+- [x] **`fkCanBeStrictPrivate`** (SCA107) — Member wird AUSSCHLIESSLICH
+  von Methoden der eigenen Klasse gerufen. `strict private` (D2007+,
+  class-scope) ist die strengste sinnvolle Sichtbarkeit.
+
+- [x] **`fkCanBeProtected`** (SCA051) — Member wird nur von Sub-Klassen
+  derselben Unit gerufen.
+
+- [x] **`fkUnusedPublicMember`** (SCA052) — Member wird in der aktuellen
+  Unit nirgendwo gerufen. Single-file-Hint - der Compiler verifiziert per
+  E2361 ob eine fremde Unit konsumiert. Severity Hint.
+
+**Skip-Regeln (alle vier):** `override`/`virtual`/`abstract`/`dynamic`,
+Interface-Impl, `published`-Member, Form/Frame/DataModule/Component-
+Descendants (RTTI/DFM-Streaming), Konstruktor/Destruktor, Utility-Klassen
+(nur `class function`s).
+
+**Suppression:** `// noinspection CanBeUnitPrivate` /
+`// noinspection CanBeStrictPrivate` / `// noinspection CanBeProtected` /
+`// noinspection UnusedPublicMember`.
 
 ---
 
