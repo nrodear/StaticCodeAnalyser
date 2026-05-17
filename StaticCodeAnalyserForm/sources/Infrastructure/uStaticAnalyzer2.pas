@@ -15,7 +15,18 @@ type
 
     // Speicherleck-Analyse (AST-basiert)
     class function AnalyzeLeaks(const FileName: string;
-      AIncludeUsesCheck: Boolean = False): TObjectList<TLeakFinding>;
+      AIncludeUsesCheck: Boolean = False): TObjectList<TLeakFinding>; overload;
+
+    // Single-File-Analyse mit Cross-Unit-Symbol-Index: scannt die Findings
+    // nur fuer FileName, baut den Symbol-Reference-Index aber aus dem
+    // ganzen Projekt unter ProjectRoot auf. Damit verschwinden die typischen
+    // CanBePrivate-False-Positives, die im reinen Single-File-Pfad mangels
+    // Cross-Unit-Sicht entstehen. ProjectRoot leer -> Fallback auf den
+    // einfachen Single-File-Pfad ohne Index.
+    class function AnalyzeLeaks(const FileName: string;
+      const ProjectRoot: string;
+      AIncludeUsesCheck: Boolean = False): TObjectList<TLeakFinding>; overload;
+
     class function AnalyzeLeaksRecursive(const Path: string;
       AProgress: TProc<Integer, Integer> = nil;
       AIncludeUsesCheck: Boolean = False;
@@ -32,7 +43,8 @@ type
     class procedure ParseLeaks(FileList: TStringList;
       Results: TObjectList<TLeakFinding>;
       AProgress: TProc<Integer, Integer>;
-      AIncludeUsesCheck: Boolean);
+      AIncludeUsesCheck: Boolean;
+      IndexFileList: TStringList = nil);
   end;
 
 implementation
@@ -353,7 +365,7 @@ end;
 
 class procedure TStaticAnalyzer2.ParseLeaks(FileList: TStringList;
   Results: TObjectList<TLeakFinding>; AProgress: TProc<Integer, Integer>;
-  AIncludeUsesCheck: Boolean);
+  AIncludeUsesCheck: Boolean; IndexFileList: TStringList);
 // MAX_FILE_BYTES kommt aus uSCAConsts.DetectorMaxFileBytes (analyser.ini ->
 // MaxFileMB * 1024 * 1024). Default 5 MB.
 
@@ -440,9 +452,17 @@ begin
     // aufbauen. Wenn das Build crasht (defekte .pas), schluckt der
     // Index das selbst - der Hauptanalyse-Pfad laeuft auch ohne Index
     // weiter, Cross-Unit-Detektoren schweigen dann mangels Daten.
+    //
+    // IndexFileList ist optional: wenn der Aufrufer einen breiteren
+    // Projekt-Scope mitgibt (z.B. Single-File-Analyse mit ProjectRoot),
+    // wird der Index aus dem groesseren Scope aufgebaut. Sonst Default:
+    // Index = analysierte Files.
+    var IndexFiles: TStringList := IndexFileList;
+    if IndexFiles = nil then IndexFiles := FileList;
+
     gDfmRepoIndex := TDfmRepoIndex.Create;
     try
-      gDfmRepoIndex.Build(FileList);
+      gDfmRepoIndex.Build(IndexFiles);
     except
       FreeAndNil(gDfmRepoIndex);
     end;
@@ -452,7 +472,7 @@ begin
     // uVisibilityCheck Cross-Unit-Aufrufe sehen kann statt nur Single-File.
     gSymbolRefIndex := TSymbolReferenceIndex.Create;
     try
-      gSymbolRefIndex.Build(FileList);
+      gSymbolRefIndex.Build(IndexFiles);
     except
       FreeAndNil(gSymbolRefIndex);
     end;
@@ -733,6 +753,73 @@ begin
     end;
   finally
     FileList.Free;
+  end;
+end;
+
+class function TStaticAnalyzer2.AnalyzeLeaks(const FileName: string;
+  const ProjectRoot: string;
+  AIncludeUsesCheck: Boolean): TObjectList<TLeakFinding>;
+// Single-File-Findings, aber Symbol-Reference-Index aus dem ganzen Projekt.
+// Loest die typischen CanBePrivate-False-Positives, die im reinen Single-
+// File-Pfad mangels Cross-Unit-Sicht entstehen.
+//
+// Wenn ProjectRoot leer ist oder das Verzeichnis nicht existiert, faellt
+// die Routine auf den einfachen Single-File-Pfad zurueck (kein Index).
+
+  procedure AddError(const Msg: string);
+  var F: TLeakFinding;
+  begin
+    F            := TLeakFinding.Create;
+    F.FileName   := FileName;
+    F.MethodName := '';
+    F.LineNumber := '0';
+    F.MissingVar := Msg;
+    F.SetKind(fkFileReadError);
+    Result.Add(F);
+  end;
+
+var
+  AnalyzeList : TStringList;
+  IndexList   : TStringList;
+  ScanErr     : string;
+begin
+  Result := TObjectList<TLeakFinding>.Create(True);
+  if Trim(FileName) = '' then
+  begin
+    AddError('Kein Dateiname angegeben');
+    Exit;
+  end;
+
+  // ProjectRoot leer oder ungueltig -> Fallback auf den klassischen
+  // Single-File-Pfad ohne Cross-Unit-Index.
+  if (Trim(ProjectRoot) = '') or (not DirectoryExists(ProjectRoot)) then
+  begin
+    Result.Free;
+    Result := AnalyzeLeaks(FileName, AIncludeUsesCheck);
+    Exit;
+  end;
+
+  AnalyzeList := TStringList.Create;
+  IndexList   := nil;
+  try
+    AnalyzeList.Add(FileName);
+    try
+      IndexList := TStaticFiles.TryGetAllPasFiles(ProjectRoot, ScanErr,
+        nil, nil);
+    except
+      IndexList := nil;
+    end;
+    // Bei nil oder leerer IndexList faellt ParseLeaks intern auf
+    // AnalyzeList zurueck - also identisches Verhalten zu Single-File.
+    try
+      ParseLeaks(AnalyzeList, Result, nil, AIncludeUsesCheck, IndexList);
+    except
+      on E: Exception do
+        AddError('Analyseabbruch: ' + E.Message);
+    end;
+  finally
+    IndexList.Free;
+    AnalyzeList.Free;
   end;
 end;
 

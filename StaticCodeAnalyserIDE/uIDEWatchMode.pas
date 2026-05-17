@@ -433,7 +433,10 @@ begin
       if Assigned(GWatchMode) then
         GWatchMode.AcquireAnalyzeLock;
       try
-        FResults := TStaticAnalyzer2.AnalyzeLeaks(FFileName, FUsesCheck);
+        // Watch-Mode: Single-File mit Cross-Unit-Index. Projekt-Scope
+        // = Verzeichnis der watched .pas (sibling-Units sind sichtbar).
+        FResults := TStaticAnalyzer2.AnalyzeLeaks(FFileName,
+          ExtractFilePath(FFileName), FUsesCheck);
       finally
         if Assigned(GWatchMode) then
           GWatchMode.ReleaseAnalyzeLock;

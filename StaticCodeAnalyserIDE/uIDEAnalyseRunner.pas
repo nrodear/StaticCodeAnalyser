@@ -288,8 +288,11 @@ begin
       findings := nil;
       try
         try
+          // Single-File-Analyse mit Cross-Unit-Index: das Verzeichnis der
+          // .pas wird als Projekt-Scope hergenommen, damit CanBePrivate &
+          // Co. nicht in den Single-File-False-Positive laufen.
           findings := TStaticAnalyzer2.AnalyzeLeaks(AFilePath,
-            FRepoSettings.UsesCheck);
+            ExtractFilePath(AFilePath), FRepoSettings.UsesCheck);
         except
           on E: Exception do
           begin

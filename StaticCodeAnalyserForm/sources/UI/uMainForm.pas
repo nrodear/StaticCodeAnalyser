@@ -529,8 +529,13 @@ begin
 
     try
       try
+        // Single-File-Analyse MIT Cross-Unit-Symbol-Index: Projekt-Pfad
+        // mitgeben, damit CanBePrivate & Co. die Aufrufe in anderen Units
+        // sehen statt False-Positives zu emittieren. Wenn Projectpath leer
+        // ist (kein Projekt geladen), faellt die Overload intern auf den
+        // Single-File-Pfad zurueck.
         findings := TStaticAnalyzer2.AnalyzeLeaks(AFilePath,
-          Settings.UsesCheck);
+          Trim(Projectpath.Text), Settings.UsesCheck);
       except
         on E: Exception do
         begin

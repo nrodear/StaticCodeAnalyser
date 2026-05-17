@@ -2914,7 +2914,12 @@ begin
       uSCAConsts.DiscoveredStaticClasses.Clear;
 
     try
-      Findings := TStaticAnalyzer2.AnalyzeLeaks(AFileName, Settings.UsesCheck);
+      // Single-File-Analyse MIT Cross-Unit-Symbol-Index: das Verzeichnis
+      // der .pas-Datei dient als Projekt-Root, damit CanBePrivate & Co.
+      // die Aufrufer in Geschwister-Units sehen. Vermeidet die typischen
+      // False-Positives bei reiner Single-File-Sicht.
+      Findings := TStaticAnalyzer2.AnalyzeLeaks(AFileName,
+        ExtractFilePath(AFileName), Settings.UsesCheck);
     except
       on E: Exception do
       begin
