@@ -625,7 +625,8 @@ begin
       T := Tok;
       if T.Kind in [tkKwType, tkKwVar, tkKwConst,
                     tkKwProcedure, tkKwFunction, tkKwConstructor, tkKwDestructor,
-                    tkKwImplementation, tkKwEnd, tkEof] then
+                    tkKwImplementation, tkKwEnd, tkEof,
+                    tkKwBegin, tkKwAsm] then
         Exit;
 
       if T.Kind <> tkIdent then begin Next; Continue; end;
@@ -998,6 +999,18 @@ begin
           Next;
           GuardAdvance(SkipStart);
         end;
+        Continue;
+      end;
+
+      if SecKind = tkKwConst then
+      begin
+        // Lokale const-Sections wie unit-level behandeln: emittiere
+        // nkConstSection mit nkField-Kindern (statt flacher nkLocalVar),
+        // damit Detektoren (uNamingExt fkLocalConstantName, uFormatMismatch)
+        // Konstanten von Variablen unterscheiden und an die Konstanten-Werte
+        // kommen koennen. ParseVarLikeSection bricht jetzt auch an
+        // tkKwBegin/tkKwAsm ab und ist damit body-safe.
+        ParseVarLikeSection(Parent, nkConstSection);
         Continue;
       end;
 
