@@ -19,7 +19,8 @@ unit uExportHtml;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.Generics.Collections,
+  System.SysUtils, System.Classes, System.Math,
+  System.Generics.Collections, System.Generics.Defaults,
   uSCAConsts, uMethodd12;
 
 type
@@ -42,7 +43,7 @@ type
 implementation
 
 uses
-  uExport, uFixHint;
+  uExport, uFixHint, uRuleCatalog, uQuickFix;
 
 class function TExporterHtml.DefaultFileName(const SourceFile: string;
   const TargetDir: string): string;
@@ -167,6 +168,7 @@ class procedure TExporterHtml.Run(Findings: TObjectList<TLeakFinding>;
   const SourceFile: string; const FileName: string);
 const
   SNIPPET_CONTEXT = 3;  // Zeilen vor und nach der Befund-Zeile
+  TOP_DETECTORS_N = 10; // Anzahl Eintraege in der Top-Liste und im "Top10"-Filter
 var
   SB        : TStringBuilder;
   F         : TLeakFinding;
@@ -183,6 +185,15 @@ var
   Title     : string;
   fnDisp    : string;
   nTotal, nErr, nWarn, nHint: Integer;
+  // Per-Detektor-Counter. Wird in der ersten Schleife gefuettert,
+  // danach absteigend nach Count sortiert fuer die Top-N-Liste +
+  // den Top10-Filter im HTML-Export.
+  KindCount : TDictionary<TFindingKind, Integer>;
+  KindPairs : TList<TPair<TFindingKind, Integer>>;
+  KindEntry : TPair<TFindingKind, Integer>;
+  CurKindCnt : Integer;
+  Top10Set  : TStringList;  // KindName -> in Top10
+  i         : Integer;
 
   function GetSourceLines(const APath: string): TStringList;
   // Liest die Datei genau einmal, cached die Zeilen.
@@ -225,6 +236,9 @@ begin
   Files       := nil;
   FilesSev    := nil;
   SourceCache := nil;
+  KindCount   := nil;
+  KindPairs   := nil;
+  Top10Set    := nil;
   try
     Files := TStringList.Create;
     Files.Duplicates := dupIgnore;
@@ -232,6 +246,11 @@ begin
     Files.CaseSensitive := False;
     FilesSev := TDictionary<string, Cardinal>.Create;
     SourceCache := TObjectDictionary<string, TStringList>.Create([doOwnsValues]);
+    KindCount := TDictionary<TFindingKind, Integer>.Create;
+    Top10Set := TStringList.Create;
+    Top10Set.CaseSensitive := False;
+    Top10Set.Sorted := True;
+    Top10Set.Duplicates := dupIgnore;
     nTotal := 0; nErr := 0; nWarn := 0; nHint := 0;
     if Assigned(Findings) then
       for F in Findings do
@@ -244,6 +263,9 @@ begin
           lsWarning : Inc(nWarn);
           lsHint    : Inc(nHint);
         end;
+        // Detektor-Counter fuer Top-N-Liste.
+        if not KindCount.TryGetValue(F.Kind, CurKindCnt) then CurKindCnt := 0;
+        KindCount.AddOrSetValue(F.Kind, CurKindCnt + 1);
         if F.FileName <> '' then
         begin
           fnDisp := ExtractFileName(F.FileName);
@@ -258,6 +280,20 @@ begin
           FilesSev.AddOrSetValue(fnDisp, SevMask);
         end;
       end;
+
+    // Top-N-Detektoren: absteigend nach Count, Tiebreak: Kind-Name aufsteigend.
+    KindPairs := TList<TPair<TFindingKind, Integer>>.Create;
+    for KindEntry in KindCount do
+      KindPairs.Add(KindEntry);
+    KindPairs.Sort(TComparer<TPair<TFindingKind, Integer>>.Construct(
+      function(const A, B: TPair<TFindingKind, Integer>): Integer
+      begin
+        Result := B.Value - A.Value; // count desc
+        if Result = 0 then
+          Result := CompareText(KindName(A.Key), KindName(B.Key));
+      end));
+    for i := 0 to Min(TOP_DETECTORS_N, KindPairs.Count) - 1 do
+      Top10Set.Add(KindName(KindPairs[i].Key));
 
   SB := TStringBuilder.Create;
   try
@@ -338,6 +374,69 @@ begin
     SB.AppendLine('    th.sortable .sort-ind { color: #aaa; margin-left: 4px; font-size: 10px; }');
     SB.AppendLine('    th.sortable.sort-asc  .sort-ind::before { content: "\25B2"; color: #333; }');
     SB.AppendLine('    th.sortable.sort-desc .sort-ind::before { content: "\25BC"; color: #333; }');
+    SB.AppendLine('    /* Top-Detektoren-Panel */');
+    SB.AppendLine('    .top-detectors { background: #f8f8f8; border: 1px solid #e0e0e0;');
+    SB.AppendLine('       border-radius: 4px; padding: 8px 12px; margin-bottom: 12px;');
+    SB.AppendLine('       font-size: 12px; }');
+    SB.AppendLine('    .top-detectors h2 { font-size: 13px; margin: 0 0 6px 0; color: #444;');
+    SB.AppendLine('       font-weight: 600; }');
+    SB.AppendLine('    .top-detectors ol { margin: 0; padding-left: 22px; columns: 2;');
+    SB.AppendLine('       column-gap: 24px; }');
+    SB.AppendLine('    .top-detectors li { padding: 2px 0; cursor: pointer;');
+    SB.AppendLine('       user-select: none; }');
+    SB.AppendLine('    .top-detectors li:hover { color: #06c; text-decoration: underline; }');
+    SB.AppendLine('    .top-detectors .td-name { font-family: Consolas, "Courier New", monospace; }');
+    SB.AppendLine('    .top-detectors .td-count { color: #666; font-variant-numeric: tabular-nums; }');
+    SB.AppendLine('    /* QF-Badge: markiert Detektoren mit Quick-Fix-Provider (uQuickFix). */');
+    SB.AppendLine('    /* Tech-Lead-Hint: das sind die "low-hanging fruit" beim Refactoring-Sprint. */');
+    SB.AppendLine('    .top-detectors .td-qf { color: #08a; font-size: 10px; margin-left: 6px;');
+    SB.AppendLine('       border: 1px solid #08a; border-radius: 2px; padding: 0 4px;');
+    SB.AppendLine('       font-weight: 600; letter-spacing: 0.5px; }');
+    SB.AppendLine('    /* Audience-Hint-Banner: macht klar fuer wen der Report optimiert ist. */');
+    SB.AppendLine('    .audience-hint { background: #eef5ff; border-left: 3px solid #3b73c4;');
+    SB.AppendLine('       padding: 8px 12px; margin: 0 0 12px 0; font-size: 12px; color: #234; }');
+    SB.AppendLine('    .audience-hint b { color: #1a3b6a; }');
+    SB.AppendLine('    /* Header-Actions: Sprint-Export, Shortcuts-Help neben Titel */');
+    SB.AppendLine('    .header-actions { display: flex; gap: 8px; margin: -8px 0 12px 0; }');
+    SB.AppendLine('    .tl-btn { background: #3b73c4; color: white; border: none;');
+    SB.AppendLine('       padding: 5px 12px; border-radius: 3px; cursor: pointer;');
+    SB.AppendLine('       font-size: 12px; font-family: inherit; }');
+    SB.AppendLine('    .tl-btn:hover { background: #2a5fa0; }');
+    SB.AppendLine('    .tl-btn.secondary { background: #888; }');
+    SB.AppendLine('    .tl-btn.secondary:hover { background: #666; }');
+    SB.AppendLine('    /* Search-Input */');
+    SB.AppendLine('    .controls input[type="search"] { font-size: 12px; padding: 4px 6px;');
+    SB.AppendLine('       border: 1px solid #ccc; border-radius: 3px; width: 200px;');
+    SB.AppendLine('       font-family: inherit; }');
+    SB.AppendLine('    /* Quick-Wins-Option im Profile-Dropdown abheben */');
+    SB.AppendLine('    #ruleFilter option[value="qf"] { color: #08a; font-weight: 600; }');
+    SB.AppendLine('    /* Keyboard-Shortcuts-Help-Overlay */');
+    SB.AppendLine('    .kbd-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4);');
+    SB.AppendLine('       z-index: 999; display: none; }');
+    SB.AppendLine('    .kbd-overlay.open { display: block; }');
+    SB.AppendLine('    .kbd-help { position: fixed; top: 50%; left: 50%;');
+    SB.AppendLine('       transform: translate(-50%,-50%); background: white;');
+    SB.AppendLine('       border: 1px solid #888; border-radius: 5px; padding: 16px 22px;');
+    SB.AppendLine('       box-shadow: 0 4px 20px rgba(0,0,0,0.35); z-index: 1000;');
+    SB.AppendLine('       display: none; font-size: 12px; min-width: 360px; }');
+    SB.AppendLine('    .kbd-help.open { display: block; }');
+    SB.AppendLine('    .kbd-help h3 { margin: 0 0 12px 0; font-size: 14px; color: #1a3b6a; }');
+    SB.AppendLine('    .kbd-help table { width: 100%; border: none; }');
+    SB.AppendLine('    .kbd-help td { padding: 4px 8px; border: none; }');
+    SB.AppendLine('    .kbd-help td.k { width: 110px; text-align: right; }');
+    SB.AppendLine('    .kbd-help kbd { background: #eee; border: 1px solid #999;');
+    SB.AppendLine('       border-radius: 3px; padding: 1px 6px; font-family: Consolas,');
+    SB.AppendLine('       "Courier New", monospace; font-size: 11px; color: #222; }');
+    SB.AppendLine('    .kbd-help-close { position: absolute; top: 8px; right: 12px;');
+    SB.AppendLine('       background: none; border: none; font-size: 18px; cursor: pointer;');
+    SB.AppendLine('       color: #888; }');
+    SB.AppendLine('    /* Copy-Toast - kurze Bestaetigung beim Clipboard-Kopieren */');
+    SB.AppendLine('    .toast { position: fixed; bottom: 30px; left: 50%;');
+    SB.AppendLine('       transform: translateX(-50%); background: #1a3b6a; color: white;');
+    SB.AppendLine('       padding: 8px 18px; border-radius: 4px; font-size: 12px;');
+    SB.AppendLine('       opacity: 0; transition: opacity 0.25s; pointer-events: none;');
+    SB.AppendLine('       z-index: 1001; }');
+    SB.AppendLine('    .toast.show { opacity: 1; }');
     SB.AppendLine('  </style>');
     SB.AppendLine('</head>');
     SB.AppendLine('<body>');
@@ -351,17 +450,103 @@ begin
     end;
     SB.AppendLine('</div>');
 
+    // Audience-Hint: macht im Brief sichtbar fuer welche Rolle der Report
+    // optimiert ist. Tech-Lead / Senior-Dev brauchen die Top-Detektoren
+    // (Volumen) plus Severity-Sortierung (Risiko) - genau das ist der
+    // Aufbau dieser Seite.
+    SB.AppendLine('  <div class="audience-hint">');
+    SB.AppendLine('    <b>Optimiert fuer Tech-Lead / Senior-Dev Review</b> ' +
+                  '&middot; Refactoring-Priorisierung. ' +
+                  'Starte oben mit den Top-Detektoren (groesstes Volumen, ' +
+                  '<span class="td-qf">QF</span> = Quick-Fix vorhanden), ' +
+                  'die Tabelle ist nach Severity sortiert (Fehler &rarr; Hinweis).');
+    SB.AppendLine('  </div>');
+
+    // Header-Actions: zwei Tech-Lead-Tools direkt unter dem Hint.
+    //   * Sprint-Liste kopieren: erzeugt Markdown-Liste der Top-Befunde fuer
+    //     Issue-Tracker (Linear/Jira). Nutzt aktuell sichtbaren Scope (also
+    //     Datei/Severity/Profile-Filter werden respektiert).
+    //   * Shortcuts: oeffnet Hilfe-Overlay mit Tastatur-Bindings.
+    SB.AppendLine('  <div class="header-actions">');
+    SB.AppendLine('    <button class="tl-btn" id="btnSprintCopy" ' +
+                  'title="Sichtbare Top-Befunde als Markdown-Liste in die Zwischenablage">' +
+                  '&#128203; Sprint-Liste kopieren</button>');
+    SB.AppendLine('    <button class="tl-btn" id="btnShareLink" ' +
+                  'title="Aktuelle Filter-Sicht als URL in die Zwischenablage (zum Teilen)">' +
+                  '&#128279; Sicht teilen</button>');
+    SB.AppendLine('    <button class="tl-btn secondary" id="btnKbdHelp" ' +
+                  'title="Tastatur-Shortcuts anzeigen (?)">&#9000; Shortcuts</button>');
+    SB.AppendLine('  </div>');
+
     SB.AppendLine('  <div class="summary">');
     // Klickbare Severity-Badges - data-sev gibt den Wert fuer den JS-Filter
-    // ("err"/"warn"/"hint"/"" fuer alle).
-    SB.AppendLine('    <div class="badge b-err sev-filter" data-sev="err"><b>'  + IntToStr(nErr)  + '</b>Fehler</div>');
-    SB.AppendLine('    <div class="badge b-warn sev-filter" data-sev="warn"><b>' + IntToStr(nWarn) + '</b>Warnungen</div>');
-    SB.AppendLine('    <div class="badge b-hint sev-filter" data-sev="hint"><b>' + IntToStr(nHint) + '</b>Hinweise</div>');
-    SB.AppendLine('    <div class="badge b-tot sev-filter sev-active" data-sev=""><b>'  + IntToStr(nTotal)+ '</b>Gesamt</div>');
+    // ("err"/"warn"/"hint"/"" fuer alle). Counts haben eigene IDs, damit
+    // applyFilter() sie live updaten kann wenn Datei-/Rule-Filter wechseln
+    // (Severity-Klick selbst aendert die Counts NICHT - sie zeigen immer
+    // den Master-Scope, sonst wuerden die anderen Badges auf 0 fallen
+    // sobald man eine Severity klickt).
+    SB.AppendLine('    <div class="badge b-err sev-filter" data-sev="err"><b id="count-err">'   + IntToStr(nErr)  + '</b>Fehler</div>');
+    SB.AppendLine('    <div class="badge b-warn sev-filter" data-sev="warn"><b id="count-warn">' + IntToStr(nWarn) + '</b>Warnungen</div>');
+    SB.AppendLine('    <div class="badge b-hint sev-filter" data-sev="hint"><b id="count-hint">' + IntToStr(nHint) + '</b>Hinweise</div>');
+    SB.AppendLine('    <div class="badge b-tot sev-filter sev-active" data-sev=""><b id="count-tot">'   + IntToStr(nTotal)+ '</b>Gesamt</div>');
     SB.AppendLine('  </div>');
+
+    // Top-Detektoren-Panel - zeigt die Top-N Detektoren nach Befund-Anzahl.
+    // Klick auf einen Eintrag setzt den Rule-Filter auf "nur dieser Detektor"
+    // (data-rule-Match via "kind:<Name>"). Liste ist absteigend nach Count.
+    if (KindPairs <> nil) and (KindPairs.Count > 0) then
+    begin
+      SB.AppendLine('  <div class="top-detectors">');
+      SB.Append    ('    <h2>Top ');
+      SB.Append    (IntToStr(Min(TOP_DETECTORS_N, KindPairs.Count)));
+      SB.Append    (' Detektoren (von ');
+      SB.Append    (IntToStr(KindPairs.Count));
+      SB.AppendLine(')</h2>');
+      SB.AppendLine('    <ol>');
+      for i := 0 to Min(TOP_DETECTORS_N, KindPairs.Count) - 1 do
+      begin
+        var KindNm := KindName(KindPairs[i].Key);
+        var HasQf  := TQuickFix.HasProviderFor(KindPairs[i].Key);
+        SB.Append('      <li data-kind="');
+        SB.Append(HtmlEscape(KindNm));
+        SB.Append('"><span class="td-name">');
+        SB.Append(HtmlEscape(KindNm));
+        SB.Append('</span> <span class="td-count">');
+        SB.Append(IntToStr(KindPairs[i].Value));
+        SB.Append('</span>');
+        if HasQf then
+          SB.Append(' <span class="td-qf" title="Quick-Fix verfuegbar (Ctrl+Alt+F im IDE-Plugin)">QF</span>');
+        SB.AppendLine('</li>');
+      end;
+      SB.AppendLine('    </ol>');
+      SB.AppendLine('  </div>');
+    end;
 
     // Controls-Bar mit Datei-Filter (zeigt alle eindeutigen Dateinamen).
     SB.AppendLine('  <div class="controls">');
+    SB.AppendLine('    <label for="ruleFilter">Profil:</label>');
+    SB.AppendLine('    <select id="ruleFilter">');
+    SB.AppendLine('      <option value="all">Alle</option>');
+    SB.Append    ('      <option value="top10">Top ');
+    SB.Append    (IntToStr(TOP_DETECTORS_N));
+    SB.AppendLine('</option>');
+    // Quick-Wins: alle Befunde deren Kind einen Quick-Fix-Provider hat.
+    // Tech-Lead-Workflow: "was kann das Team batch-fixen via Ctrl+Alt+F im
+    // IDE-Plugin?". Liste der Quick-Fix-Kinds liefert TQuickFix.HasProviderFor;
+    // konkretes Matching passiert im JS gegen ALL_KINDS[*].qf.
+    SB.AppendLine('      <option value="qf">Quick-Wins (Quick-Fix verfuegbar)</option>');
+    // Profile-Optionen aus rules/sca-rules.json (TRuleCatalog.ProfileNames).
+    // Werte: "profile:<Name>", damit der JS-Filter Profile von "all"/"top10"
+    // unterscheiden kann.
+    for var ProfileName in TRuleCatalog.ProfileNames do
+    begin
+      SB.Append('      <option value="profile:');
+      SB.Append(HtmlEscape(ProfileName));
+      SB.Append('">');
+      SB.Append(HtmlEscape(ProfileName));
+      SB.AppendLine('</option>');
+    end;
+    SB.AppendLine('    </select>');
     SB.AppendLine('    <label for="fileFilter">Datei:</label>');
     SB.AppendLine('    <select id="fileFilter">');
     SB.Append    ('      <option value="">Alle (');
@@ -434,10 +619,17 @@ begin
       SB.AppendLine('</option>');
     end;
     SB.AppendLine('    </select>');
+    // Text-Suche - matched gegen data-search-Attribut jeder Befund-Zeile
+    // (zusammengesetzt aus Methode + Datei + Detail). Vorher gab es im
+    // HTML-Export keine Volltextsuche - Tech-Lead musste die Browser-Suche
+    // (Strg+F) nutzen, die aber durch geklappte Hint-Zeilen scrollt und
+    // nicht filtert.
+    SB.AppendLine('    <label for="searchInput">Suche:</label>');
+    SB.AppendLine('    <input type="search" id="searchInput" placeholder="Methode, Datei, Detail...">');
     SB.Append    ('    <span class="row-count" id="rowCount">');
     SB.Append    (IntToStr(nTotal));
     SB.AppendLine(' Befunde</span>');
-    SB.AppendLine('    <span class="hint">Klick auf Spaltentitel sortiert, Klick auf Befund-Zeile zeigt Hinweis.</span>');
+    SB.AppendLine('    <span class="hint">Spalte sortieren &middot; Zeile zeigt Hinweis &middot; <kbd>?</kbd> Shortcuts</span>');
     SB.AppendLine('  </div>');
 
     SB.AppendLine('  <table id="findingsTable">');
@@ -500,11 +692,26 @@ begin
         // gleichem Basename gemeinsam ein-/ausblenden soll.
         var FileBase := ChangeFileExt(FileShort, '');
 
-        // Sichtbare Befund-Zeile - data-file fuer Filter, ganze Zeile klickbar
+        // Sichtbare Befund-Zeile - data-file fuer Filter, ganze Zeile klickbar.
+        // data-rule = KindName (Catalog-Token), gegen das der Profile-Filter
+        // im JS prueft (PROFILES[<name>].kinds[rule]).
+        // data-search = lowercased Methode/Datei/Detail/Regel - wird vom JS
+        // searchInput.value gegen substring-gematcht. Lowercase einmal hier
+        // statt N-mal pro Tastendruck.
+        var KindNm := KindName(F.Kind);
+        var SearchBlob :=
+              LowerCase(F.MethodName) + ' ' +
+              LowerCase(FileShort)    + ' ' +
+              LowerCase(F.MissingVar) + ' ' +
+              LowerCase(KindNm);
         SB.Append('      <tr class="finding ' + SevCl + '" data-file="');
         SB.Append(HtmlEscape(FileShort));
         SB.Append('" data-base="');
         SB.Append(HtmlEscape(FileBase));
+        SB.Append('" data-rule="');
+        SB.Append(HtmlEscape(KindNm));
+        SB.Append('" data-search="');
+        SB.Append(HtmlEscape(SearchBlob));
         SB.Append('">');
         // Toggle-Indikator: Pfeil rechts (oder leer wenn kein Hint)
         if HasHint then
@@ -580,11 +787,87 @@ begin
     SB.AppendLine('    </tbody>');
     SB.AppendLine('  </table>');
     SB.AppendLine('  <script>');
+    // TOP10_KINDS: Set-Lookup fuer den Row-Filter "Top 10" (Bedeutung:
+    // "zeige nur Zeilen aus den unfiltered Top-10"). Bleibt fix, unabhaengig
+    // vom Rule-Filter - sonst waere "Top 10" doppelt-konditional.
+    SB.Append    ('    var TOP10_KINDS = {');
+    for i := 0 to Top10Set.Count - 1 do
+    begin
+      if i > 0 then SB.Append(',');
+      SB.Append(' "');
+      SB.Append(HtmlEscape(Top10Set[i])); // KindNames sind ASCII-Identifier, defensiv escapen
+      SB.Append('": 1');
+    end;
+    SB.AppendLine(' };');
+    // ALL_KINDS: vollstaendige Liste aller getroffenen Kinds, absteigend
+    // sortiert. JS rebuildet daraus die Top-Detektoren-Liste in
+    // Abhaengigkeit vom Profile-Filter.
+    SB.AppendLine('    var ALL_KINDS = [');
+    if (KindPairs <> nil) then
+      for i := 0 to KindPairs.Count - 1 do
+      begin
+        var KindNm := KindName(KindPairs[i].Key);
+        var QfFlag : Integer;
+        if TQuickFix.HasProviderFor(KindPairs[i].Key) then QfFlag := 1 else QfFlag := 0;
+        SB.Append('      {n:"');
+        SB.Append(HtmlEscape(KindNm));
+        SB.Append('", c:');
+        SB.Append(IntToStr(KindPairs[i].Value));
+        SB.Append(', qf:');
+        SB.Append(IntToStr(QfFlag));
+        SB.Append('}');
+        if i < KindPairs.Count - 1 then SB.Append(',');
+        SB.AppendLine;
+      end;
+    SB.AppendLine('    ];');
+    SB.Append    ('    var TOP_N = ');
+    SB.Append    (IntToStr(TOP_DETECTORS_N));
+    SB.AppendLine(';');
+    // PROFILES: Profile-Name -> Set der enthaltenen Kind-Namen. "all":true
+    // ist ein Wildcard-Marker (default/strict aus rules/sca-rules.json
+    // listen "*"); JS-Filter behandelt das als "kein Filter". Andere
+    // Profile listen die enthaltenen Kinds explizit auf, JS-Lookup ist
+    // dann O(1) ueber die Objekt-Property.
+    SB.AppendLine('    var PROFILES = {');
+    var ProfileNames := TRuleCatalog.ProfileNames;
+    for var pi := 0 to High(ProfileNames) do
+    begin
+      var PName := ProfileNames[pi];
+      var PSet  := TRuleCatalog.GetProfile(PName);
+      // Wildcard-Heuristik: wenn das Set alle Kinds enthaelt, behandeln
+      // wir es als "all" (sparen das Inline-Listing aller ~107 Namen).
+      var IsAll : Boolean := True;
+      for var K := Low(TFindingKind) to High(TFindingKind) do
+        if not (K in PSet) then begin IsAll := False; Break; end;
+      SB.Append('      "');
+      SB.Append(HtmlEscape(PName));
+      SB.Append('": {all:');
+      if IsAll then SB.Append('true,') else SB.Append('false,');
+      SB.Append(' kinds:{');
+      if not IsAll then
+      begin
+        var First : Boolean := True;
+        for var K := Low(TFindingKind) to High(TFindingKind) do
+          if K in PSet then
+          begin
+            if not First then SB.Append(',');
+            SB.Append('"');
+            SB.Append(HtmlEscape(KindName(K)));
+            SB.Append('":1');
+            First := False;
+          end;
+      end;
+      SB.Append('}}');
+      if pi < High(ProfileNames) then SB.Append(',');
+      SB.AppendLine;
+    end;
+    SB.AppendLine('    };');
     SB.AppendLine('  (function() {');
     SB.AppendLine('    var table  = document.getElementById(''findingsTable'');');
     SB.AppendLine('    var tbody  = table.querySelector(''tbody'');');
     SB.AppendLine('    var rowCnt = document.getElementById(''rowCount'');');
     SB.AppendLine('    var fileSel = document.getElementById(''fileFilter'');');
+    SB.AppendLine('    var ruleSel = document.getElementById(''ruleFilter'');');
     SB.AppendLine('');
     SB.AppendLine('    // ---- Toggle: Klick auf Befund-Zeile blendet Hint-Zeile ein/aus ----');
     SB.AppendLine('    function wireToggle(row) {');
@@ -600,19 +883,21 @@ begin
     SB.AppendLine('    document.querySelectorAll(''tr.finding'').forEach(wireToggle);');
     SB.AppendLine('');
     SB.AppendLine('    // ---- Sortierung: Klick auf Spaltenheader ----');
-    SB.AppendLine('    // Spalten-Index der sortierten Spalte im finding-tr (ohne Toggle).');
-    SB.AppendLine('    // Mit Datei-Spalte: 0=Datei,1=Sev,2=Typ,3=Zeile,4=Methode,5=Regel,6=Detail');
-    SB.AppendLine('    // Ohne Datei-Spalte verschiebt sich um 1.');
+    SB.AppendLine('    // Spalten-Index im finding-tr - Toggle-Spalte ist immer Index 0,');
+    SB.AppendLine('    // die optionale Datei-Spalte (Multi-File-Modus) schiebt alles ab Sev');
+    SB.AppendLine('    // um eins nach rechts.');
+    SB.AppendLine('    //   Multi-File:  Toggle=0, Datei=1, Sev=2, Typ=3, Zeile=4, Methode=5, Regel=6, Detail=7');
+    SB.AppendLine('    //   Single-File: Toggle=0,           Sev=1, Typ=2, Zeile=3, Methode=4, Regel=5, Detail=6');
     SB.AppendLine('    var hasFile = !!table.querySelector(''th[data-col="file"]'');');
-    SB.AppendLine('    var COL_OFFSET = hasFile ? 1 : 0; // Toggle-Spalte');
+    SB.AppendLine('    var SEV_BASE = hasFile ? 2 : 1; // erste Spalte nach Toggle (+ ggf. Datei)');
     SB.AppendLine('    var colIndex = {');
-    SB.AppendLine('      file:   COL_OFFSET + 0,');
-    SB.AppendLine('      sev:    COL_OFFSET + (hasFile ? 1 : 0),');
-    SB.AppendLine('      type:   COL_OFFSET + (hasFile ? 2 : 1),');
-    SB.AppendLine('      line:   COL_OFFSET + (hasFile ? 3 : 2),');
-    SB.AppendLine('      method: COL_OFFSET + (hasFile ? 4 : 3),');
-    SB.AppendLine('      rule:   COL_OFFSET + (hasFile ? 5 : 4),');
-    SB.AppendLine('      detail: COL_OFFSET + (hasFile ? 6 : 5)');
+    SB.AppendLine('      file:   1, // nur valide wenn hasFile - sortBy(''file'') wird nur wired wenn die Spalte existiert');
+    SB.AppendLine('      sev:    SEV_BASE + 0,');
+    SB.AppendLine('      type:   SEV_BASE + 1,');
+    SB.AppendLine('      line:   SEV_BASE + 2,');
+    SB.AppendLine('      method: SEV_BASE + 3,');
+    SB.AppendLine('      rule:   SEV_BASE + 4,');
+    SB.AppendLine('      detail: SEV_BASE + 5');
     SB.AppendLine('    };');
     SB.AppendLine('    var numericCols = { line: true, sev: true };');
     SB.AppendLine('    var currentSort = { col: null, desc: false };');
@@ -697,20 +982,55 @@ begin
     SB.AppendLine('      });');
     SB.AppendLine('    }');
     SB.AppendLine('');
+    SB.AppendLine('    // QF_KINDS: Lookup-Set aller Kinds mit Quick-Fix-Provider.');
+    SB.AppendLine('    // Wird einmalig aus ALL_KINDS aufgebaut, vom QF-Filter und vom');
+    SB.AppendLine('    // Sprint-Snapshot benutzt.');
+    SB.AppendLine('    var QF_KINDS = {};');
+    SB.AppendLine('    ALL_KINDS.forEach(function(k) { if (k.qf === 1) QF_KINDS[k.n] = 1; });');
+    SB.AppendLine('');
+    SB.AppendLine('    var searchInput = document.getElementById(''searchInput'');');
+    SB.AppendLine('');
     SB.AppendLine('    function applyFilter() {');
     SB.AppendLine('      var fileVal = fileSel ? fileSel.value : '''';');
     SB.AppendLine('      // Gruppen-Filter: "base:<Basename>" matcht alle Files mit gleichem');
     SB.AppendLine('      // Basename (z.B. uMainForm.pas + uMainForm.dfm). Sonst exact match.');
     SB.AppendLine('      var isGroup = fileVal && fileVal.indexOf(''base:'') === 0;');
     SB.AppendLine('      var groupVal = isGroup ? fileVal.substring(5) : '''';');
+    SB.AppendLine('      // Rule-Filter: all / top10 / qf / profile:<Name> /');
+    SB.AppendLine('      // kind:<Name> (Klick auf Eintrag in Top-Detektoren-Liste).');
+    SB.AppendLine('      var ruleVal = ruleSel ? ruleSel.value : ''all'';');
+    SB.AppendLine('      var pinnedKind = (ruleVal.indexOf(''kind:'') === 0) ? ruleVal.substring(5) : '''';');
+    SB.AppendLine('      var profileName = (ruleVal.indexOf(''profile:'') === 0) ? ruleVal.substring(8) : '''';');
+    SB.AppendLine('      var profileDef = profileName ? PROFILES[profileName] : null;');
+    SB.AppendLine('      var q = searchInput ? searchInput.value.trim().toLowerCase() : '''';');
     SB.AppendLine('      var visible = 0;');
+    SB.AppendLine('      // Master-Scope-Counts pro Severity. Werden in den Top-Kacheln');
+    SB.AppendLine('      // angezeigt und reflektieren NUR Datei-+Rule-Filter, NICHT die');
+    SB.AppendLine('      // Sev-Klick-Auswahl (sonst wuerden die anderen Badges auf 0');
+    SB.AppendLine('      // fallen sobald man "Fehler" klickt - verwirrend).');
+    SB.AppendLine('      var nErr = 0, nWarn = 0, nHint = 0;');
     SB.AppendLine('      document.querySelectorAll(''tr.finding'').forEach(function(row) {');
     SB.AppendLine('        var fileOk;');
     SB.AppendLine('        if (!fileVal) fileOk = true;');
     SB.AppendLine('        else if (isGroup) fileOk = row.getAttribute(''data-base'') === groupVal;');
     SB.AppendLine('        else fileOk = row.getAttribute(''data-file'') === fileVal;');
     SB.AppendLine('        var sevOk  = !activeSev || row.classList.contains(activeSev);');
-    SB.AppendLine('        var match  = fileOk && sevOk;');
+    SB.AppendLine('        var rk = row.getAttribute(''data-rule'') || '''';');
+    SB.AppendLine('        var ruleOk;');
+    SB.AppendLine('        if (pinnedKind)                     ruleOk = (rk === pinnedKind);');
+    SB.AppendLine('        else if (ruleVal === ''top10'')      ruleOk = TOP10_KINDS[rk] === 1;');
+    SB.AppendLine('        else if (ruleVal === ''qf'')         ruleOk = QF_KINDS[rk] === 1;');
+    SB.AppendLine('        else if (profileDef)                ruleOk = profileDef.all || (profileDef.kinds[rk] === 1);');
+    SB.AppendLine('        else ruleOk = true; // ''all''');
+    SB.AppendLine('        // Volltextsuche - matched gegen data-search (Methode + Datei + Detail + Regel).');
+    SB.AppendLine('        var searchOk = !q || ((row.getAttribute(''data-search'') || '''').indexOf(q) !== -1);');
+    SB.AppendLine('        // Master-Scope = fileOk && ruleOk && searchOk (ohne sev). Daraus die Kacheln.');
+    SB.AppendLine('        if (fileOk && ruleOk && searchOk) {');
+    SB.AppendLine('          if      (row.classList.contains(''err''))  nErr++;');
+    SB.AppendLine('          else if (row.classList.contains(''warn'')) nWarn++;');
+    SB.AppendLine('          else if (row.classList.contains(''hint'')) nHint++;');
+    SB.AppendLine('        }');
+    SB.AppendLine('        var match  = fileOk && sevOk && ruleOk && searchOk;');
     SB.AppendLine('        row.style.display = match ? '''' : ''none'';');
     SB.AppendLine('        var hint = row.nextElementSibling;');
     SB.AppendLine('        if (hint && hint.classList.contains(''finding-hint'')) {');
@@ -725,11 +1045,99 @@ begin
     SB.AppendLine('        if (match) visible++;');
     SB.AppendLine('      });');
     SB.AppendLine('      if (rowCnt) rowCnt.textContent = visible + '' Befunde'';');
+    SB.AppendLine('      // Master-Kacheln updaten - reflektieren den Datei-+Rule-Scope.');
+    SB.AppendLine('      var cErr  = document.getElementById(''count-err'');');
+    SB.AppendLine('      var cWarn = document.getElementById(''count-warn'');');
+    SB.AppendLine('      var cHint = document.getElementById(''count-hint'');');
+    SB.AppendLine('      var cTot  = document.getElementById(''count-tot'');');
+    SB.AppendLine('      if (cErr)  cErr.textContent  = nErr;');
+    SB.AppendLine('      if (cWarn) cWarn.textContent = nWarn;');
+    SB.AppendLine('      if (cHint) cHint.textContent = nHint;');
+    SB.AppendLine('      if (cTot)  cTot.textContent  = (nErr + nWarn + nHint);');
+    SB.AppendLine('      // URL-Hash aktualisieren (replaceState = kein History-Eintrag,');
+    SB.AppendLine('      // sonst wuerde jeder Tastendruck im Search-Feld die Back-Button-');
+    SB.AppendLine('      // History fluten).');
+    SB.AppendLine('      syncUrlHash();');
     SB.AppendLine('    }');
     SB.AppendLine('    if (fileSel) fileSel.addEventListener(''change'', function() {');
     SB.AppendLine('      collapseAll();');
     SB.AppendLine('      applyFilter();');
     SB.AppendLine('    });');
+    SB.AppendLine('    if (ruleSel) ruleSel.addEventListener(''change'', function() {');
+    SB.AppendLine('      collapseAll();');
+    SB.AppendLine('      rebuildTopDetectors();');
+    SB.AppendLine('      applyFilter();');
+    SB.AppendLine('    });');
+    SB.AppendLine('    if (searchInput) {');
+    SB.AppendLine('      // input statt change - liveupdate beim Tippen, ohne Enter abzuwarten.');
+    SB.AppendLine('      var searchTimer = null;');
+    SB.AppendLine('      searchInput.addEventListener(''input'', function() {');
+    SB.AppendLine('        // Mini-Debounce: vermeidet bei jedem Buchstaben einen Full-Pass');
+    SB.AppendLine('        // ueber alle Befund-Zeilen wenn die Tabelle gross ist.');
+    SB.AppendLine('        if (searchTimer) clearTimeout(searchTimer);');
+    SB.AppendLine('        searchTimer = setTimeout(applyFilter, 120);');
+    SB.AppendLine('      });');
+    SB.AppendLine('    }');
+    SB.AppendLine('');
+    SB.AppendLine('    // ---- Top-Detektoren-Liste live aus ALL_KINDS + Profile-Filter ----');
+    SB.AppendLine('    // profile:<Name> reduziert den Pool auf die Profile-Kinds (Wildcard');
+    SB.AppendLine('    // "all" durchlaesst alles). all/top10/kind:X zeigen die volle Top-N');
+    SB.AppendLine('    // (damit der User immer pivotieren kann).');
+    SB.AppendLine('    function rebuildTopDetectors() {');
+    SB.AppendLine('      var ol = document.querySelector(''.top-detectors ol'');');
+    SB.AppendLine('      var h2 = document.querySelector(''.top-detectors h2'');');
+    SB.AppendLine('      if (!ol) return;');
+    SB.AppendLine('      var rv = ruleSel ? ruleSel.value : ''all'';');
+    SB.AppendLine('      var profileName = (rv.indexOf(''profile:'') === 0) ? rv.substring(8) : '''';');
+    SB.AppendLine('      var profileDef = profileName ? PROFILES[profileName] : null;');
+    SB.AppendLine('      var pool;');
+    SB.AppendLine('      if (profileDef && !profileDef.all) {');
+    SB.AppendLine('        pool = ALL_KINDS.filter(function(k){ return profileDef.kinds[k.n] === 1; });');
+    SB.AppendLine('      } else {');
+    SB.AppendLine('        pool = ALL_KINDS;');
+    SB.AppendLine('      }');
+    SB.AppendLine('      var topN = pool.slice(0, TOP_N);');
+    SB.AppendLine('      var html = '''';');
+    SB.AppendLine('      topN.forEach(function(k) {');
+    SB.AppendLine('        var qfHtml = (k.qf === 1)');
+    SB.AppendLine('          ? '' <span class="td-qf" title="Quick-Fix verfuegbar (Ctrl+Alt+F im IDE-Plugin)">QF</span>''');
+    SB.AppendLine('          : '''';');
+    SB.AppendLine('        html += ''<li data-kind="'' + k.n + ''">'' +');
+    SB.AppendLine('                ''<span class="td-name">'' + k.n + ''</span> '' +');
+    SB.AppendLine('                ''<span class="td-count">'' + k.c + ''</span>'' +');
+    SB.AppendLine('                qfHtml + ''</li>'';');
+    SB.AppendLine('      });');
+    SB.AppendLine('      ol.innerHTML = html;');
+    SB.AppendLine('      if (h2) h2.textContent = ''Top '' + topN.length + '' Detektoren (von '' + pool.length + '')'';');
+    SB.AppendLine('      ol.querySelectorAll(''li[data-kind]'').forEach(wireTopDetectorClick);');
+    SB.AppendLine('    }');
+    SB.AppendLine('');
+    SB.AppendLine('    // Klick auf einen Eintrag in der Top-Detektoren-Liste setzt');
+    SB.AppendLine('    // den Rule-Filter auf "kind:<Name>" (Einzel-Detektor).');
+    SB.AppendLine('    // Erneuter Klick auf den gleichen Eintrag setzt zurueck.');
+    SB.AppendLine('    function wireTopDetectorClick(li) {');
+    SB.AppendLine('      li.addEventListener(''click'', function() {');
+    SB.AppendLine('        if (!ruleSel) return;');
+    SB.AppendLine('        var kind = li.getAttribute(''data-kind'');');
+    SB.AppendLine('        var pinned = ''kind:'' + kind;');
+    SB.AppendLine('        if (ruleSel.value === pinned) {');
+    SB.AppendLine('          ruleSel.value = ''all'';');
+    SB.AppendLine('        } else {');
+    SB.AppendLine('          var existing = ruleSel.querySelector(''option[value="'' + pinned + ''"]'');');
+    SB.AppendLine('          if (!existing) {');
+    SB.AppendLine('            var opt = document.createElement(''option'');');
+    SB.AppendLine('            opt.value = pinned;');
+    SB.AppendLine('            opt.textContent = ''Nur: '' + kind;');
+    SB.AppendLine('            ruleSel.appendChild(opt);');
+    SB.AppendLine('          }');
+    SB.AppendLine('          ruleSel.value = pinned;');
+    SB.AppendLine('        }');
+    SB.AppendLine('        collapseAll();');
+    SB.AppendLine('        rebuildTopDetectors();');
+    SB.AppendLine('        applyFilter();');
+    SB.AppendLine('      });');
+    SB.AppendLine('    }');
+    SB.AppendLine('    document.querySelectorAll(''.top-detectors li[data-kind]'').forEach(wireTopDetectorClick);');
     SB.AppendLine('');
     SB.AppendLine('    // ---- Datei-Dropdown auf Severity-Filter abstimmen ----');
     SB.AppendLine('    // Wenn ein Severity-Filter aktiv ist, blendet diese Funktion alle');
@@ -791,6 +1199,264 @@ begin
     SB.AppendLine('        applyFilter();');
     SB.AppendLine('      });');
     SB.AppendLine('    });');
+    SB.AppendLine('');
+    SB.AppendLine('    // ============================================================');
+    SB.AppendLine('    // Tech-Lead-Tools: URL-Hash, Keyboard, Sprint-Export, Help-Overlay');
+    SB.AppendLine('    // ============================================================');
+    SB.AppendLine('');
+    SB.AppendLine('    // ---- Toast: kurze Bestaetigung bei Clipboard-Aktionen ----');
+    SB.AppendLine('    var toastEl = null;');
+    SB.AppendLine('    function showToast(msg) {');
+    SB.AppendLine('      if (!toastEl) {');
+    SB.AppendLine('        toastEl = document.createElement(''div'');');
+    SB.AppendLine('        toastEl.className = ''toast'';');
+    SB.AppendLine('        document.body.appendChild(toastEl);');
+    SB.AppendLine('      }');
+    SB.AppendLine('      toastEl.textContent = msg;');
+    SB.AppendLine('      toastEl.classList.add(''show'');');
+    SB.AppendLine('      clearTimeout(toastEl._t);');
+    SB.AppendLine('      toastEl._t = setTimeout(function() { toastEl.classList.remove(''show''); }, 1800);');
+    SB.AppendLine('    }');
+    SB.AppendLine('');
+    SB.AppendLine('    function copyToClipboard(text) {');
+    SB.AppendLine('      // Clipboard-API mit Fallback. Synchrones execCommand-Fallback fuer');
+    SB.AppendLine('      // file:// Origin wo navigator.clipboard nicht immer verfuegbar ist.');
+    SB.AppendLine('      if (navigator.clipboard && navigator.clipboard.writeText) {');
+    SB.AppendLine('        navigator.clipboard.writeText(text).then(');
+    SB.AppendLine('          function() { showToast(''In Zwischenablage kopiert''); },');
+    SB.AppendLine('          function()  { fallbackCopy(text); });');
+    SB.AppendLine('      } else { fallbackCopy(text); }');
+    SB.AppendLine('    }');
+    SB.AppendLine('    function fallbackCopy(text) {');
+    SB.AppendLine('      var ta = document.createElement(''textarea'');');
+    SB.AppendLine('      ta.value = text;');
+    SB.AppendLine('      ta.style.position = ''fixed'';');
+    SB.AppendLine('      ta.style.opacity  = ''0'';');
+    SB.AppendLine('      document.body.appendChild(ta);');
+    SB.AppendLine('      ta.select();');
+    SB.AppendLine('      try { document.execCommand(''copy''); showToast(''In Zwischenablage kopiert''); }');
+    SB.AppendLine('      catch(e) { showToast(''Kopieren fehlgeschlagen''); }');
+    SB.AppendLine('      document.body.removeChild(ta);');
+    SB.AppendLine('    }');
+    SB.AppendLine('');
+    SB.AppendLine('    // ---- URL-Hash-Sync (Sicht teilen / Bookmark-Restore) ----');
+    SB.AppendLine('    // Format: #sev=err&rule=kind:fkXyz&file=foo.pas&q=text');
+    SB.AppendLine('    // sev/rule/file/q sind alle optional. Tech-Lead kopiert die URL,');
+    SB.AppendLine('    // schickt sie ans Team - Empfaenger oeffnet sie und sieht exakt');
+    SB.AppendLine('    // den gleichen Filter-Zustand.');
+    SB.AppendLine('    var suspendHashSync = false;');
+    SB.AppendLine('    function syncUrlHash() {');
+    SB.AppendLine('      if (suspendHashSync) return;');
+    SB.AppendLine('      var parts = [];');
+    SB.AppendLine('      if (activeSev) parts.push(''sev='' + encodeURIComponent(activeSev));');
+    SB.AppendLine('      if (ruleSel && ruleSel.value && ruleSel.value !== ''all'')');
+    SB.AppendLine('        parts.push(''rule='' + encodeURIComponent(ruleSel.value));');
+    SB.AppendLine('      if (fileSel && fileSel.value)');
+    SB.AppendLine('        parts.push(''file='' + encodeURIComponent(fileSel.value));');
+    SB.AppendLine('      if (searchInput && searchInput.value.trim())');
+    SB.AppendLine('        parts.push(''q='' + encodeURIComponent(searchInput.value.trim()));');
+    SB.AppendLine('      var hash = parts.length ? (''#'' + parts.join(''&'')) : ''#'';');
+    SB.AppendLine('      // replaceState statt assign-to-hash, sonst rufen wir uns selbst');
+    SB.AppendLine('      // via hashchange wieder auf.');
+    SB.AppendLine('      try { history.replaceState(null, '''', hash); }');
+    SB.AppendLine('      catch(e) { /* file:// in manchen Browsern */ }');
+    SB.AppendLine('    }');
+    SB.AppendLine('');
+    SB.AppendLine('    function loadFromUrlHash() {');
+    SB.AppendLine('      var h = location.hash.replace(/^#/, '''');');
+    SB.AppendLine('      if (!h) return;');
+    SB.AppendLine('      suspendHashSync = true;');
+    SB.AppendLine('      try {');
+    SB.AppendLine('        var params = {};');
+    SB.AppendLine('        h.split(''&'').forEach(function(kv) {');
+    SB.AppendLine('          var eq = kv.indexOf(''='');');
+    SB.AppendLine('          if (eq < 0) return;');
+    SB.AppendLine('          params[kv.substring(0, eq)] = decodeURIComponent(kv.substring(eq + 1));');
+    SB.AppendLine('        });');
+    SB.AppendLine('        if (params.sev) {');
+    SB.AppendLine('          activeSev = params.sev;');
+    SB.AppendLine('          document.querySelectorAll(''.sev-filter'').forEach(function(b) {');
+    SB.AppendLine('            var bSev = b.getAttribute(''data-sev'') || '''';');
+    SB.AppendLine('            b.classList.toggle(''sev-active'', bSev === activeSev);');
+    SB.AppendLine('          });');
+    SB.AppendLine('        }');
+    SB.AppendLine('        if (params.rule && ruleSel) {');
+    SB.AppendLine('          // Falls die Option noch nicht existiert (kind:X), erstellen.');
+    SB.AppendLine('          var opt = ruleSel.querySelector(''option[value="'' + params.rule + ''"]'');');
+    SB.AppendLine('          if (!opt && params.rule.indexOf(''kind:'') === 0) {');
+    SB.AppendLine('            opt = document.createElement(''option'');');
+    SB.AppendLine('            opt.value = params.rule;');
+    SB.AppendLine('            opt.textContent = ''Nur: '' + params.rule.substring(5);');
+    SB.AppendLine('            ruleSel.appendChild(opt);');
+    SB.AppendLine('          }');
+    SB.AppendLine('          if (opt) ruleSel.value = params.rule;');
+    SB.AppendLine('        }');
+    SB.AppendLine('        if (params.file && fileSel) {');
+    SB.AppendLine('          var fopt = fileSel.querySelector(''option[value="'' + params.file.replace(/"/g, ''\\"'') + ''"]'');');
+    SB.AppendLine('          if (fopt) fileSel.value = params.file;');
+    SB.AppendLine('        }');
+    SB.AppendLine('        if (params.q && searchInput) searchInput.value = params.q;');
+    SB.AppendLine('      } finally {');
+    SB.AppendLine('        suspendHashSync = false;');
+    SB.AppendLine('      }');
+    SB.AppendLine('      rebuildTopDetectors();');
+    SB.AppendLine('      applyFileDropdownVisibility();');
+    SB.AppendLine('      applyFilter();');
+    SB.AppendLine('    }');
+    SB.AppendLine('');
+    SB.AppendLine('    // ---- Sprint-Snapshot: Top-N sichtbare Befunde als Markdown ----');
+    SB.AppendLine('    // Output-Format gezielt fuer Issue-Tracker (Linear/Jira/GitHub):');
+    SB.AppendLine('    //   ## Sprint-Backlog: Static Code Analysis');
+    SB.AppendLine('    //   - [ ] **Error** uMainForm.pas:42 - fkNilDeref - <detail>');
+    SB.AppendLine('    //   ...');
+    SB.AppendLine('    // Plus Top-N Detektor-Aggregat fuer Sprint-Themen.');
+    SB.AppendLine('    function buildSprintMarkdown() {');
+    SB.AppendLine('      var MAX = 20; // Top-20 ist eine machbare Sprint-Liste');
+    SB.AppendLine('      var rows = Array.from(document.querySelectorAll(''tr.finding''))');
+    SB.AppendLine('        .filter(function(r) { return r.style.display !== ''none''; });');
+    SB.AppendLine('      // Severity-Reihenfolge: rows sind schon sortiert via sortBy(''sev''),');
+    SB.AppendLine('      // falls aber der User umgesortet hat: explizit nach Rang sortieren');
+    SB.AppendLine('      // (Errors zuerst, fuer das Sprint-Backlog ist das die richtige Prio).');
+    SB.AppendLine('      rows.sort(function(a, b) {');
+    SB.AppendLine('        var ra = parseInt(a.querySelector(''td.sev'').getAttribute(''data-sort''), 10) || 9;');
+    SB.AppendLine('        var rb = parseInt(b.querySelector(''td.sev'').getAttribute(''data-sort''), 10) || 9;');
+    SB.AppendLine('        return ra - rb;');
+    SB.AppendLine('      });');
+    SB.AppendLine('      var picks = rows.slice(0, MAX);');
+    SB.AppendLine('      var md = ''## Sprint-Backlog: Static Code Analysis\n\n'';');
+    SB.AppendLine('      md += ''Gesamt sichtbar: '' + rows.length + '' Befunde. Top '' + picks.length + '' Prioritaeten:\n\n'';');
+    SB.AppendLine('      picks.forEach(function(r) {');
+    SB.AppendLine('        var sev    = r.querySelector(''td.sev'') ? r.querySelector(''td.sev'').textContent.trim() : '''';');
+    SB.AppendLine('        var file   = r.getAttribute(''data-file'') || '''';');
+    SB.AppendLine('        var rule   = r.getAttribute(''data-rule'') || '''';');
+    SB.AppendLine('        var qf     = (QF_KINDS[rule] === 1) ? '' [QF]'' : '''';');
+    SB.AppendLine('        // Spalten-Reihenfolge: Toggle | (Datei?) | Sev | Typ | Zeile | Methode | Regel | Detail');
+    SB.AppendLine('        var cells  = r.children;');
+    SB.AppendLine('        var lineIdx   = colIndex.line;');
+    SB.AppendLine('        var methIdx   = colIndex.method;');
+    SB.AppendLine('        var detIdx    = colIndex.detail;');
+    SB.AppendLine('        var line   = cells[lineIdx] ? cells[lineIdx].textContent.trim() : '''';');
+    SB.AppendLine('        var meth   = cells[methIdx] ? cells[methIdx].textContent.trim() : '''';');
+    SB.AppendLine('        var det    = cells[detIdx]  ? cells[detIdx].textContent.trim()  : '''';');
+    SB.AppendLine('        // Detail koennte mehrere Saetze haben - auf 160 Zeichen kuerzen.');
+    SB.AppendLine('        if (det.length > 160) det = det.substring(0, 157) + ''...'';');
+    SB.AppendLine('        md += ''- [ ] **'' + sev + ''** `'' + file + '':'' + line + ''`'';');
+    SB.AppendLine('        if (meth) md += '' in `'' + meth + ''()`'';');
+    SB.AppendLine('        md += '' - '' + rule + qf + '' - '' + det + ''\n'';');
+    SB.AppendLine('      });');
+    SB.AppendLine('      // Detektor-Aggregat fuer Sprint-Themen.');
+    SB.AppendLine('      var byKind = {};');
+    SB.AppendLine('      rows.forEach(function(r) {');
+    SB.AppendLine('        var k = r.getAttribute(''data-rule'') || '''';');
+    SB.AppendLine('        byKind[k] = (byKind[k] || 0) + 1;');
+    SB.AppendLine('      });');
+    SB.AppendLine('      var aggList = Object.keys(byKind).map(function(k) { return {n:k, c:byKind[k]}; });');
+    SB.AppendLine('      aggList.sort(function(a, b) { return b.c - a.c; });');
+    SB.AppendLine('      var qfAgg = aggList.filter(function(k){ return QF_KINDS[k.n] === 1; });');
+    SB.AppendLine('      if (qfAgg.length) {');
+    SB.AppendLine('        md += ''\n### Quick-Wins (Ctrl+Alt+F im IDE-Plugin)\n\n'';');
+    SB.AppendLine('        qfAgg.slice(0, 10).forEach(function(k) {');
+    SB.AppendLine('          md += ''- [ ] '' + k.n + '' ('' + k.c + '' Vorkommen)\n'';');
+    SB.AppendLine('        });');
+    SB.AppendLine('      }');
+    SB.AppendLine('      return md;');
+    SB.AppendLine('    }');
+    SB.AppendLine('');
+    SB.AppendLine('    var btnSprint = document.getElementById(''btnSprintCopy'');');
+    SB.AppendLine('    if (btnSprint) btnSprint.addEventListener(''click'', function() {');
+    SB.AppendLine('      copyToClipboard(buildSprintMarkdown());');
+    SB.AppendLine('    });');
+    SB.AppendLine('');
+    SB.AppendLine('    var btnShare = document.getElementById(''btnShareLink'');');
+    SB.AppendLine('    if (btnShare) btnShare.addEventListener(''click'', function() {');
+    SB.AppendLine('      syncUrlHash(); // sicherstellen dass der aktuelle Zustand drin ist');
+    SB.AppendLine('      copyToClipboard(location.href);');
+    SB.AppendLine('    });');
+    SB.AppendLine('');
+    SB.AppendLine('    // ---- Keyboard-Shortcuts ----');
+    SB.AppendLine('    // 1/2/3   - Severity-Filter (Error/Warning/Hint)');
+    SB.AppendLine('    // 0       - alle Severities');
+    SB.AppendLine('    // /       - Suche fokussieren');
+    SB.AppendLine('    // Esc     - Filter zuruecksetzen (oder Suche leeren)');
+    SB.AppendLine('    // ?       - Shortcuts-Hilfe');
+    SB.AppendLine('    function activateSev(sev) {');
+    SB.AppendLine('      activeSev = sev;');
+    SB.AppendLine('      document.querySelectorAll(''.sev-filter'').forEach(function(b) {');
+    SB.AppendLine('        var bSev = b.getAttribute(''data-sev'') || '''';');
+    SB.AppendLine('        b.classList.toggle(''sev-active'', bSev === activeSev);');
+    SB.AppendLine('      });');
+    SB.AppendLine('      collapseAll();');
+    SB.AppendLine('      applyFileDropdownVisibility();');
+    SB.AppendLine('      applyFilter();');
+    SB.AppendLine('    }');
+    SB.AppendLine('    function resetAllFilters() {');
+    SB.AppendLine('      if (ruleSel) ruleSel.value = ''all'';');
+    SB.AppendLine('      if (fileSel) fileSel.value = '''';');
+    SB.AppendLine('      if (searchInput) searchInput.value = '''';');
+    SB.AppendLine('      activateSev('''');');
+    SB.AppendLine('      rebuildTopDetectors();');
+    SB.AppendLine('    }');
+    SB.AppendLine('    document.addEventListener(''keydown'', function(e) {');
+    SB.AppendLine('      // Wenn der User in einem Input-Feld tippt: nur Esc abfangen,');
+    SB.AppendLine('      // alles andere durchlassen (sonst kann er kein "1" ins Search-Feld).');
+    SB.AppendLine('      var inField = (e.target.tagName === ''INPUT'' || e.target.tagName === ''TEXTAREA'' || e.target.tagName === ''SELECT'');');
+    SB.AppendLine('      if (e.key === ''Escape'') {');
+    SB.AppendLine('        if (kbdOverlay && kbdOverlay.classList.contains(''open'')) { closeKbdHelp(); return; }');
+    SB.AppendLine('        if (inField && e.target === searchInput) {');
+    SB.AppendLine('          if (searchInput.value) { searchInput.value = ''''; applyFilter(); return; }');
+    SB.AppendLine('          searchInput.blur(); return;');
+    SB.AppendLine('        }');
+    SB.AppendLine('        resetAllFilters();');
+    SB.AppendLine('        return;');
+    SB.AppendLine('      }');
+    SB.AppendLine('      if (inField) return;');
+    SB.AppendLine('      if (e.key === ''1'') { activateSev(activeSev === ''err''  ? '''' : ''err''); }');
+    SB.AppendLine('      else if (e.key === ''2'') { activateSev(activeSev === ''warn'' ? '''' : ''warn''); }');
+    SB.AppendLine('      else if (e.key === ''3'') { activateSev(activeSev === ''hint'' ? '''' : ''hint''); }');
+    SB.AppendLine('      else if (e.key === ''0'') { activateSev(''''); }');
+    SB.AppendLine('      else if (e.key === ''/'') { e.preventDefault(); if (searchInput) searchInput.focus(); }');
+    SB.AppendLine('      else if (e.key === ''?'') { openKbdHelp(); }');
+    SB.AppendLine('    });');
+    SB.AppendLine('');
+    SB.AppendLine('    // ---- Help-Overlay (lazy gebaut, oeffnen via ? / Button) ----');
+    SB.AppendLine('    var kbdOverlay = null, kbdHelp = null;');
+    SB.AppendLine('    function ensureKbdHelp() {');
+    SB.AppendLine('      if (kbdHelp) return;');
+    SB.AppendLine('      kbdOverlay = document.createElement(''div'');');
+    SB.AppendLine('      kbdOverlay.className = ''kbd-overlay'';');
+    SB.AppendLine('      kbdOverlay.addEventListener(''click'', closeKbdHelp);');
+    SB.AppendLine('      kbdHelp = document.createElement(''div'');');
+    SB.AppendLine('      kbdHelp.className = ''kbd-help'';');
+    SB.AppendLine('      kbdHelp.innerHTML = ');
+    SB.AppendLine('        ''<button class="kbd-help-close" title="Schliessen">&times;</button>'' +');
+    SB.AppendLine('        ''<h3>Tastatur-Shortcuts</h3>'' +');
+    SB.AppendLine('        ''<table>'' +');
+    SB.AppendLine('        ''<tr><td class="k"><kbd>1</kbd></td><td>nur Fehler</td></tr>'' +');
+    SB.AppendLine('        ''<tr><td class="k"><kbd>2</kbd></td><td>nur Warnungen</td></tr>'' +');
+    SB.AppendLine('        ''<tr><td class="k"><kbd>3</kbd></td><td>nur Hinweise</td></tr>'' +');
+    SB.AppendLine('        ''<tr><td class="k"><kbd>0</kbd></td><td>alle Severities</td></tr>'' +');
+    SB.AppendLine('        ''<tr><td class="k"><kbd>/</kbd></td><td>Suche fokussieren</td></tr>'' +');
+    SB.AppendLine('        ''<tr><td class="k"><kbd>Esc</kbd></td><td>Filter zuruecksetzen</td></tr>'' +');
+    SB.AppendLine('        ''<tr><td class="k"><kbd>?</kbd></td><td>diese Hilfe</td></tr>'' +');
+    SB.AppendLine('        ''</table>'';');
+    SB.AppendLine('      kbdHelp.querySelector(''.kbd-help-close'').addEventListener(''click'', closeKbdHelp);');
+    SB.AppendLine('      document.body.appendChild(kbdOverlay);');
+    SB.AppendLine('      document.body.appendChild(kbdHelp);');
+    SB.AppendLine('    }');
+    SB.AppendLine('    function openKbdHelp()  { ensureKbdHelp(); kbdOverlay.classList.add(''open''); kbdHelp.classList.add(''open''); }');
+    SB.AppendLine('    function closeKbdHelp() { if (kbdOverlay) kbdOverlay.classList.remove(''open''); if (kbdHelp) kbdHelp.classList.remove(''open''); }');
+    SB.AppendLine('    var btnHelp = document.getElementById(''btnKbdHelp'');');
+    SB.AppendLine('    if (btnHelp) btnHelp.addEventListener(''click'', openKbdHelp);');
+    SB.AppendLine('');
+    SB.AppendLine('    // ---- Initialer Sort: Severity (Fehler -> Hinweis) ----');
+    SB.AppendLine('    // Tech-Lead-Default: hoechstes Risiko zuerst. data-sort der Sev-Spalte');
+    SB.AppendLine('    // ist der numerische Rang (0=Error, 1=Warning, 2=Hint, 3=Read-Error),');
+    SB.AppendLine('    // sortBy(''sev'') sortiert asc und stellt damit Errors an den Anfang.');
+    SB.AppendLine('    sortBy(''sev'');');
+    SB.AppendLine('');
+    SB.AppendLine('    // URL-Hash beim Laden auswerten - wenn die Seite mit Filter-Hash');
+    SB.AppendLine('    // geoeffnet wurde, stellt das die Sicht wieder her.');
+    SB.AppendLine('    loadFromUrlHash();');
     SB.AppendLine('  })();');
     SB.AppendLine('  </script>');
     SB.AppendLine('</body>');
@@ -810,6 +1476,9 @@ begin
     Files.Free;
     FilesSev.Free;
     SourceCache.Free;
+    KindCount.Free;
+    KindPairs.Free;
+    Top10Set.Free;
   end;
 end;
 
