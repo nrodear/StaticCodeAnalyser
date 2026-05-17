@@ -27,6 +27,14 @@ type
       AIgnore: TIgnoreList = nil): TStringList; static;
 
     class function ValidatePath(const Path: string): boolean;
+
+    // Walked von AFilePath aus die Verzeichnishierarchie nach oben und
+    // liefert das erste Verzeichnis das eine `.dproj`, `.dpk` oder
+    // `.dpr` enthaelt. Wenn nichts gefunden wird: ExtractFilePath(AFilePath)
+    // als pragmatischer Fallback (mindestens das eigene Verzeichnis).
+    // Der Search-Stop bei `.git`/`.svn` faengt Repos ohne Delphi-Projekt-
+    // datei (z.B. einzelne `.pas` in einem Git-Repo) ab.
+    class function FindProjectRoot(const AFilePath: string): string; static;
   private
     class procedure ScanRec(const Path: string; List: TStringList;
       Depth: Integer; Errors: TStringList; ATick: TScanTickProc;
@@ -271,6 +279,60 @@ begin
   except
     Result := False;
   end;
+end;
+
+class function TStaticFiles.FindProjectRoot(const AFilePath: string): string;
+
+  function HasProjectFile(const Dir: string): Boolean;
+  var
+    SR : TSearchRec;
+  begin
+    Result := False;
+    if FindFirst(IncludeTrailingPathDelimiter(Dir) + '*.dproj', faAnyFile, SR) = 0 then
+    begin
+      FindClose(SR);
+      Exit(True);
+    end;
+    if FindFirst(IncludeTrailingPathDelimiter(Dir) + '*.dpk', faAnyFile, SR) = 0 then
+    begin
+      FindClose(SR);
+      Exit(True);
+    end;
+    if FindFirst(IncludeTrailingPathDelimiter(Dir) + '*.dpr', faAnyFile, SR) = 0 then
+    begin
+      FindClose(SR);
+      Exit(True);
+    end;
+  end;
+
+  function IsVcsRoot(const Dir: string): Boolean;
+  begin
+    Result := DirectoryExists(IncludeTrailingPathDelimiter(Dir) + '.git')
+           or DirectoryExists(IncludeTrailingPathDelimiter(Dir) + '.svn')
+           or DirectoryExists(IncludeTrailingPathDelimiter(Dir) + '.hg');
+  end;
+
+var
+  Dir, Parent, Fallback : string;
+  Steps : Integer;
+begin
+  Fallback := ExtractFilePath(AFilePath);
+  Result := Fallback;
+  if Fallback = '' then Exit;
+  Dir := ExcludeTrailingPathDelimiter(Fallback);
+  // Maximal 12 Ebenen aufsteigen - schuetzt vor Endlos-Loop bei kaputten
+  // UNC-Pfaden / Sym-Link-Zyklen.
+  Steps := 0;
+  while (Dir <> '') and (Steps < 12) do
+  begin
+    if HasProjectFile(Dir) then Exit(IncludeTrailingPathDelimiter(Dir));
+    if IsVcsRoot(Dir) then Exit(IncludeTrailingPathDelimiter(Dir));
+    Parent := ExtractFileDir(Dir);
+    if (Parent = '') or (Parent = Dir) then Break;  // root reached
+    Dir := Parent;
+    Inc(Steps);
+  end;
+  Result := Fallback;
 end;
 
 end.

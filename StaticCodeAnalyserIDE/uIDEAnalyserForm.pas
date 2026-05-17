@@ -2914,12 +2914,13 @@ begin
       uSCAConsts.DiscoveredStaticClasses.Clear;
 
     try
-      // Single-File-Analyse MIT Cross-Unit-Symbol-Index: das Verzeichnis
-      // der .pas-Datei dient als Projekt-Root, damit CanBePrivate & Co.
-      // die Aufrufer in Geschwister-Units sehen. Vermeidet die typischen
-      // False-Positives bei reiner Single-File-Sicht.
+      // Single-File-Analyse MIT Cross-Unit-Symbol-Index: ProjectRoot via
+      // .dproj/.dpk/.dpr-Walk-Up (Fallback .git-Root). Damit werden auch
+      // Aufrufer in Geschwister-Verzeichnissen (z.B. sources\Detectors
+      // fuer eine .pas in sources\Common) im Symbol-Index erfasst -
+      // CanBePrivate-False-Positives verschwinden.
       Findings := TStaticAnalyzer2.AnalyzeLeaks(AFileName,
-        ExtractFilePath(AFileName), Settings.UsesCheck);
+        TStaticFiles.FindProjectRoot(AFileName), Settings.UsesCheck);
     except
       on E: Exception do
       begin

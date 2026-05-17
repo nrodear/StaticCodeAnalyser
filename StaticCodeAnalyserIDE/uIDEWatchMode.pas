@@ -248,7 +248,7 @@ procedure UnregisterWatchMode;
 implementation
 
 uses
-  System.StrUtils, Vcl.Forms, uStaticAnalyzer2, uLocalization;
+  System.StrUtils, Vcl.Forms, uStaticAnalyzer2, uStaticFiles, uLocalization;
 
 const
   DEBOUNCE_MS      = 300;   // Save-Trigger: schnelle Reaktion erwuenscht
@@ -433,10 +433,11 @@ begin
       if Assigned(GWatchMode) then
         GWatchMode.AcquireAnalyzeLock;
       try
-        // Watch-Mode: Single-File mit Cross-Unit-Index. Projekt-Scope
-        // = Verzeichnis der watched .pas (sibling-Units sind sichtbar).
+        // Watch-Mode: Single-File mit Cross-Unit-Index. ProjectRoot per
+        // .dproj/.dpk/.dpr-Walk-Up - sieht damit auch Sources in
+        // Geschwister-Verzeichnissen statt nur das eigene.
         FResults := TStaticAnalyzer2.AnalyzeLeaks(FFileName,
-          ExtractFilePath(FFileName), FUsesCheck);
+          TStaticFiles.FindProjectRoot(FFileName), FUsesCheck);
       finally
         if Assigned(GWatchMode) then
           GWatchMode.ReleaseAnalyzeLock;

@@ -65,6 +65,10 @@ type
 
     // yntMapping
     function HasKey(const Key: string): Boolean;
+    // noinspection CanBePrivate
+    // Cross-Unit-Aufrufer (uCustomRuleDetector, uTestYamlSubsetParser) -
+    // verschwindet, sobald der Single-File-Scan den .dproj-Walk-Up als
+    // ProjectRoot benutzt.
     function GetChild(const Key: string): TYamlNode; // nil wenn nicht da
     procedure AddChild(const Key: string; ANode: TYamlNode);
     function MapKeys: TArray<string>;

@@ -87,7 +87,7 @@ uses
   Winapi.Windows,                    // GetTickCount
   Vcl.Forms,                         // Application.ProcessMessages, Screen
   Vcl.Controls,                      // crHourglass, crDefault
-  uStaticAnalyzer2, uVcsChanges,
+  uStaticAnalyzer2, uVcsChanges, uStaticFiles,
   uLocalization,                     // _() Macro
   uIDELifecycle;                     // GLiveAnalyserFrame
 
@@ -288,11 +288,15 @@ begin
       findings := nil;
       try
         try
-          // Single-File-Analyse mit Cross-Unit-Index: das Verzeichnis der
-          // .pas wird als Projekt-Scope hergenommen, damit CanBePrivate &
-          // Co. nicht in den Single-File-False-Positive laufen.
+          // Single-File-Analyse mit Cross-Unit-Index: ProjectRoot via
+          // .dproj/.dpk/.dpr-Walk-Up (oder .git als Fallback). Damit
+          // werden Aufrufer in Geschwister-Verzeichnissen (z.B.
+          // sources\Detectors fuer ein File in sources\Common) im
+          // Symbol-Index erfasst und CanBePrivate-False-Positives
+          // verschwinden.
           findings := TStaticAnalyzer2.AnalyzeLeaks(AFilePath,
-            ExtractFilePath(AFilePath), FRepoSettings.UsesCheck);
+            TStaticFiles.FindProjectRoot(AFilePath),
+            FRepoSettings.UsesCheck);
         except
           on E: Exception do
           begin

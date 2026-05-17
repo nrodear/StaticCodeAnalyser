@@ -100,7 +100,7 @@ type
     // Schreibt nichts wenn PlainTextToken leer.
     class procedure StoreToken(const FileName, TokenRef,
       PlainTextToken: string); static;
-
+private
     // Liest ein Token aus [SonarTokens][TokenRef] und entschluesselt es.
     // Liefert '' bei fehlendem Eintrag oder Decrypt-Fehler.
     class function LoadToken(const FileName, TokenRef: string): string; static;
