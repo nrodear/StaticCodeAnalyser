@@ -39,6 +39,7 @@ uses
   Winapi.Windows, System.SysUtils, System.Classes, System.Math,
   Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Themes,
   ToolsAPI, ToolsAPI.Editor,  // INTACodeEditorServices.Options.BackgroundColor[atWhiteSpace]
+  uAnalyserPalette,  // ACCENT_ERROR / ACCENT_HINT als Default-Akzente
   uAnalyserTheme,    // BlendColor + theme-adaptive Severity-Farben
   uLocalization;     // _() — Symbol/Trennzeichen via dxgettext lokalisierbar
 
@@ -128,24 +129,51 @@ uses
                          // den Zyklus mit dem interface-uses dort).
 
 const
-  // Exakte Farben aus dem Mockup (Delphi TColor = $00BBGGRR)
-  CL_STRIPE      = TColor($000020D0); // #D02000 – roter linker Rand
-  CL_TITLE_BG    = TColor($001A1A2A); // #2A1A1A – dunkelrot Titelzeile
-  CL_TITLE_FG    = TColor($00A0A0E8); // #E8A0A0 – helles Rosa/Rot
-  CL_BADGE_BG    = TColor($0015157A); // #7A1515 – sattes Dunkelrot Badge
-  CL_BADGE_FG    = TColor($00AAAAFF); // #FFAAAA – sehr helles Rosa Badge
-  CL_DESC_BG     = TColor($00222222); // #222    – fast Schwarz
-  CL_DESC_FG     = TColor($00888888); // #888    – mittelgrau
   STRIPE_W       = 3;
   // Mindesthoehen in Pixeln (96 DPI-Baseline); ShowAt skaliert dynamisch.
   MIN_TITLE_H    = 20;
   MIN_DESC_H     = 18;
   // Maximale Description-Hoehe in Pixeln — verhindert dass das Overlay
-  // halb-bildschirmgross wird bei sehr langen Texten. ~120px deckt
-  // ca. 6-7 Zeilen Segoe UI 8pt ab.
-  MAX_DESC_H     = 120;
+  // halb-bildschirmgross wird bei sehr langen Texten. ~220px deckt
+  // ca. 12 Zeilen Segoe UI 9pt ab. Wert ist auf den Multi-Finding-Summary
+  // ausgelegt (Bullet-Liste mit allen Befunden einer Zeile) - bei
+  // einzelnen Findings wird die exakte Hoehe per DT_CALCRECT bestimmt.
+  MAX_DESC_H     = 220;
   // Vertikales Padding der Description (oben + unten) in Pixeln.
   DESC_PAD_V     = 8;
+
+// Theme-aware Default-Farben fuer den Constructor.
+//
+// Die echten Color-Werte (BG/FG/Stripe/Badge) werden in ShowAt aus der
+// Severity + dem aktiven Editor-Theme via BlendColor neu berechnet -
+// die Konstruktor-Defaults sind nur fuer den Moment zwischen Create()
+// und der ersten ShowAt-Anwendung relevant.
+//
+// Vorher: hartcodierte dunkle Hex-Werte (CL_TITLE_BG/CL_DESC_BG vor dem
+// Theme-Audit 2026-05-18) - die haben auf einem hellen IDE-Theme einen
+// kurzen dunklen Flash erzeugt wenn der Overlay angezeigt wurde bevor
+// ShowAt seinen ersten Paint-Pass abgeschlossen hatte. Jetzt holen wir
+// die Defaults aus dem aktiven VCL-Style (StyleServices.GetSystemColor)
+// und der Severity-Palette (uAnalyserPalette.ACCENT_*), sodass ein
+// eventueller Flash zumindest theme-konform ist.
+function DefaultSurface: TColor;
+begin
+  Result := StyleServices.GetSystemColor(clWindow);
+end;
+
+function DefaultText: TColor;
+begin
+  Result := StyleServices.GetSystemColor(clWindowText);
+end;
+
+function DefaultBadgeBg: TColor;
+// Akzent-getoeneter Badge-Hintergrund. Saturierter Rot-Hauch ueber dem
+// Theme-Surface - matched die spaetere ShowAt-Logik die BlendColor
+// (Window, Accent, 0.9) verwendet.
+begin
+  Result := BlendColor(StyleServices.GetSystemColor(clWindow),
+                       ACCENT_ERROR, 0.9);
+end;
 
 // Liefert den Source-Editor-Hintergrund via offizieller ToolsAPI.
 // INTACodeEditorServices.Options.BackgroundColor[atWhiteSpace] ist die
@@ -187,7 +215,7 @@ constructor TAnnotationOverlay.Create(AOwner: TComponent);
 begin
   inherited CreateNew(AOwner);
   BorderStyle := bsNone;
-  Color       := CL_TITLE_BG;
+  Color       := DefaultSurface;
   Visible     := False;
   // KRITISCH (Multi-Monitor-Setup):
   //
@@ -220,7 +248,7 @@ begin
   FBorderPanel.BevelOuter     := bvNone;
   FBorderPanel.StyleElements  := [];     // VCL-Theme nicht ueberschreiben
   FBorderPanel.ParentBackground := False; // sonst flaecht clBtnFace durch
-  FBorderPanel.Color          := CL_STRIPE;
+  FBorderPanel.Color          := ACCENT_ERROR;
 
   // ---- rechter Bereich: Titel + Beschreibung ----
   FContentArea                := TPanel.Create(Self);
@@ -229,7 +257,7 @@ begin
   FContentArea.BevelOuter     := bvNone;
   FContentArea.StyleElements  := [];
   FContentArea.ParentBackground := False;
-  FContentArea.Color          := CL_TITLE_BG;
+  FContentArea.Color          := DefaultSurface;
 
   // ---- Titelzeile ----
   FPanelTitle                := TPanel.Create(Self);
@@ -239,7 +267,7 @@ begin
   FPanelTitle.BevelOuter     := bvNone;
   FPanelTitle.StyleElements  := [];
   FPanelTitle.ParentBackground := False;
-  FPanelTitle.Color          := CL_TITLE_BG;
+  FPanelTitle.Color          := DefaultSurface;
 
   // Close-Glyph "✕" ganz links. alLeft + erste Insertion -> liegt am
   // linkesten Rand des Title-Panels. Titel + Badge ruecken um die Close-
@@ -253,11 +281,11 @@ begin
   FLblClose.Caption            := #$2715;  // ✕
   FLblClose.Alignment          := taCenter;
   FLblClose.Layout             := tlCenter;
-  FLblClose.Font.Color         := CL_TITLE_FG;
+  FLblClose.Font.Color         := DefaultText;
   FLblClose.Font.Name          := 'Segoe UI';
   FLblClose.Font.Size          := 11;
   FLblClose.Font.Style         := [fsBold];
-  FLblClose.Color              := CL_TITLE_BG;
+  FLblClose.Color              := DefaultSurface;
   FLblClose.ParentColor        := False;
   FLblClose.StyleElements      := [];
   FLblClose.Cursor             := crHandPoint;
@@ -270,12 +298,12 @@ begin
   FLblBadge.Parent             := FPanelTitle;
   FLblBadge.Align              := alRight;
   FLblBadge.AutoSize           := True;
-  FLblBadge.Font.Color         := CL_BADGE_FG;
+  FLblBadge.Font.Color         := clWhite;
   FLblBadge.Font.Style         := [];
   FLblBadge.Font.Name          := 'Segoe UI';
   FLblBadge.Font.Size          := 9;  // +1pt fuer bessere Lesbarkeit
   FLblBadge.Layout             := tlCenter;
-  FLblBadge.Color              := CL_BADGE_BG;
+  FLblBadge.Color              := DefaultBadgeBg;
   FLblBadge.Transparent        := False;
   FLblBadge.ParentColor        := False;  // KRITISCH: erbt sonst Parent-Color
   FLblBadge.StyleElements      := [];     // VCL-Theme nicht ueberschreiben
@@ -286,7 +314,7 @@ begin
   FLblTitle                    := TLabel.Create(Self);
   FLblTitle.Parent             := FPanelTitle;
   FLblTitle.Align              := alClient;
-  FLblTitle.Font.Color         := CL_TITLE_FG;
+  FLblTitle.Font.Color         := DefaultText;
   FLblTitle.Font.Style         := [fsBold];
   FLblTitle.Font.Name          := 'Segoe UI';
   FLblTitle.Font.Size          := 9;  // +1pt fuer bessere Lesbarkeit
@@ -307,12 +335,12 @@ begin
   FPanelDesc.BevelOuter     := bvNone;
   FPanelDesc.StyleElements  := [];
   FPanelDesc.ParentBackground := False;
-  FPanelDesc.Color          := CL_DESC_BG;
+  FPanelDesc.Color          := DefaultSurface;
 
   FLblDesc                    := TLabel.Create(Self);
   FLblDesc.Parent             := FPanelDesc;
   FLblDesc.Align              := alClient;
-  FLblDesc.Font.Color         := CL_DESC_FG;
+  FLblDesc.Font.Color         := DefaultText;
   FLblDesc.Font.Style         := [fsItalic];
   FLblDesc.Font.Name          := 'Segoe UI';
   FLblDesc.Font.Size          := 9;  // +1pt fuer bessere Lesbarkeit
@@ -336,7 +364,7 @@ begin
   FPanelFix.BevelOuter     := bvNone;
   FPanelFix.StyleElements  := [];
   FPanelFix.ParentBackground := False;
-  FPanelFix.Color          := CL_DESC_BG;
+  FPanelFix.Color          := DefaultSurface;
   FPanelFix.Visible        := False;            // bis ShowAt setzt
 
   FLblFixHeader              := TLabel.Create(Self);
@@ -348,7 +376,7 @@ begin
   // E2 9C 93 wird sonst als 'âœ"'/'ãeˆ' o.ae. interpretiert. Bei dem ⚠
   // im Title-Label wurde derselbe Trick verwendet (siehe ShowAt: _(#$26A0)).
   FLblFixHeader.Caption      := #$2713 + ' ' + _('After');
-  FLblFixHeader.Font.Color   := TColor($0080E080); // weiches Gruen
+  FLblFixHeader.Font.Color   := ACCENT_HINT; // Palette-Hint-Gruen (theme-konsistent)
   FLblFixHeader.Font.Style   := [fsBold];
   FLblFixHeader.Font.Name    := 'Segoe UI';
   FLblFixHeader.Font.Size    := 9;
@@ -362,7 +390,7 @@ begin
   FLblFix                    := TLabel.Create(Self);
   FLblFix.Parent             := FPanelFix;
   FLblFix.Align              := alClient;
-  FLblFix.Font.Color         := CL_DESC_FG;
+  FLblFix.Font.Color         := DefaultText;
   FLblFix.Font.Style         := [];
   FLblFix.Font.Name          := 'Consolas';     // Monospace fuer Code
   FLblFix.Font.Size          := 9;
@@ -528,7 +556,7 @@ begin
   //                  zuverlaessig lesbar (User-Wunsch: Warn-Text soll weiss sein).
   EffAccent := AAccentColor;
   if EffAccent = clNone then
-    EffAccent := CL_STRIPE;
+    EffAccent := ACCENT_ERROR;
   TitleBg := BlendColor(WindowBase, EffAccent, 0.70);
   BadgeBg := BlendColor(WindowBase, EffAccent, 0.90);
   FBorderPanel.Color   := EffAccent;

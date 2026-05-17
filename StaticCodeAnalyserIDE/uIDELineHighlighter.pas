@@ -58,10 +58,10 @@ interface
 
 uses
   Winapi.Windows, System.SysUtils, System.Classes,
-  System.Generics.Collections,
+  System.Generics.Collections, System.Generics.Defaults,
   Vcl.Controls, Vcl.Graphics, Vcl.ExtCtrls,
   ToolsAPI, ToolsAPI.Editor,
-  uMethodd12,
+  uMethodd12, uAnalyserTypes, uLocalization,
   uIDEAnnotationOverlay;
 
 type
@@ -69,17 +69,26 @@ type
 
   // Pro Befund-Eintrag in einer Datei: Annotation-Texte + Stripe-Farbe.
   // Die Zeilennummer ist der TDictionary-Key (nicht im Record selbst).
+  // Wenn mehrere Befunde auf der gleichen Zeile liegen, wird in
+  // TFindingHighlighter.SetAllFindings ein Summary-Mark synthetisiert
+  // (IsMulti=True, Desc als Bullet-Liste staerkste->schwaechste, Fix
+  // unterdrueckt, Color/Badge/Severity = staerkster Eintrag).
   TFindingMark = record
-    Title : string;
-    Desc  : string;
-    Badge : string;
-    Color : TColor;   // Stripe-Farbe (Severity-abhaengig)
-    Fix   : string;   // After-Code aus uFixHint.After (Multiline OK)
+    Title    : string;
+    Desc     : string;
+    Badge    : string;
+    Color    : TColor;          // Stripe-Farbe (staerkste Severity)
+    Fix      : string;          // After-Code (leer im Multi-Mode)
+    Severity : TFindingSeverity;// fuer Stripe-Ranking
+    IsMulti  : Boolean;         // True = synthetisierter Multi-Summary
   end;
   // Eintrag fuer SetAllFindings — die FileName-Property machte den
   // vorher impliziten "alle Eintraege gehoeren zur gleichen Datei"-
   // Vertrag explizit. Damit kann ein einziger SetAllFindings-Call
   // Marker fuer beliebig viele Dateien gleichzeitig setzen.
+  // Severity wird vom Aufrufer gesetzt und steuert in der internen
+  // Multi-Mark-Synthese die Reihenfolge (staerkste zuerst) und die
+  // Stripe-Farbe der Summary-Markierung.
   TFindingMarkEntry = record
     FileName : string;
     Line     : Integer;
@@ -88,6 +97,7 @@ type
     Badge    : string;
     Color    : TColor;
     Fix      : string;
+    Severity : TFindingSeverity;
   end;
 
   // WICHTIG: Basisklasse TNotifierObject, NUR INTACodeEditorEvents listen.
@@ -244,8 +254,10 @@ procedure UnregisterLineHighlighter;
 
 implementation
 
+uses
+  uAnalyserPalette;     // ACCENT_ERROR als zentrale Stripe-Default-Farbe
+
 const
-  CL_HIGHLIGHT_BAR = TColor($000020D0);  // #D02000 – kraeftiges Rot
   STRIPE_WIDTH_PX  = 3;
 
 type
@@ -430,13 +442,50 @@ begin
   end;
 end;
 
+function SeverityRank(S: TFindingSeverity): Integer;
+// Ranking fuer Multi-Mark-Sortierung: kleinerer Rank = staerker.
+// fsError staerker als fsWarning staerker als fsHint staerker als
+// fsFileError; fsUnknown ans Ende.
+begin
+  case S of
+    fsError     : Result := 0;
+    fsWarning   : Result := 1;
+    fsHint      : Result := 2;
+    fsFileError : Result := 3;
+  else
+    Result := 4;
+  end;
+end;
+
+function SeverityLabel(S: TFindingSeverity): string;
+begin
+  case S of
+    fsError     : Result := 'ERROR';
+    fsWarning   : Result := 'WARNING';
+    fsHint      : Result := 'HINT';
+    fsFileError : Result := 'READ ERROR';
+  else
+    Result := '';
+  end;
+end;
+
 procedure TFindingHighlighter.SetAllFindings(
   const AEntries: array of TFindingMarkEntry);
 var
-  i       : Integer;
-  Mark    : TFindingMark;
-  FileKey : string;
-  Bucket  : TFileMarks;
+  i, j      : Integer;
+  Mark      : TFindingMark;
+  FileKey   : string;
+  Bucket    : TFileMarks;
+  // Pro (file, line) sammeln wir zuerst ALLE Eintraege; danach
+  // entscheidet sich pro Gruppe ob 1:1 oder als Summary-Mark gespeichert.
+  PerLine   : TObjectDictionary<string,
+                TObjectDictionary<Integer,
+                  TList<TFindingMarkEntry>>>;
+  LineMap   : TObjectDictionary<Integer, TList<TFindingMarkEntry>>;
+  EntryList : TList<TFindingMarkEntry>;
+  Group     : TList<TFindingMarkEntry>;
+  Strongest : TFindingMarkEntry;
+  DescSB    : TStringBuilder;
 begin
   // Overlay sofort verbergen — im Hover-Modus erscheint es erst wieder,
   // wenn die Maus eine markierte Zeile beruehrt.
@@ -451,25 +500,105 @@ begin
   // doOwnsValues -> innere Dictionaries werden hier freigegeben.
   FMarksByFile.Clear;
 
-  for i := 0 to High(AEntries) do
-  begin
-    if AEntries[i].Line <= 0 then Continue;
-    FileKey := NormalizePath(AEntries[i].FileName);
-    if FileKey = '' then Continue;
-
-    if not FMarksByFile.TryGetValue(FileKey, Bucket) then
+  // Phase 1: Eintraege nach (file, line) gruppieren ohne zu mergen.
+  // doOwnsValues kaskadiert: aeusseres -> mittleres -> innere TList.
+  PerLine := TObjectDictionary<string,
+              TObjectDictionary<Integer,
+                TList<TFindingMarkEntry>>>.Create([doOwnsValues]);
+  try
+    for i := 0 to High(AEntries) do
     begin
-      Bucket := TFileMarks.Create;
-      FMarksByFile.Add(FileKey, Bucket);
+      if AEntries[i].Line <= 0 then Continue;
+      FileKey := NormalizePath(AEntries[i].FileName);
+      if FileKey = '' then Continue;
+
+      if not PerLine.TryGetValue(FileKey, LineMap) then
+      begin
+        LineMap := TObjectDictionary<Integer,
+                     TList<TFindingMarkEntry>>.Create([doOwnsValues]);
+        PerLine.Add(FileKey, LineMap);
+      end;
+
+      if not LineMap.TryGetValue(AEntries[i].Line, EntryList) then
+      begin
+        EntryList := TList<TFindingMarkEntry>.Create;
+        LineMap.Add(AEntries[i].Line, EntryList);
+      end;
+      EntryList.Add(AEntries[i]);
     end;
 
-    Mark.Title := AEntries[i].Title;
-    Mark.Desc  := AEntries[i].Desc;
-    Mark.Badge := AEntries[i].Badge;
-    Mark.Color := AEntries[i].Color;
-    Mark.Fix   := AEntries[i].Fix;
-    // Bei doppelten Zeilen: spaeterer Eintrag gewinnt (AddOrSetValue).
-    Bucket.AddOrSetValue(AEntries[i].Line, Mark);
+    // Phase 2: pro Gruppe Mark synthetisieren und in FMarksByFile ablegen.
+    for FileKey in PerLine.Keys do
+    begin
+      LineMap := PerLine[FileKey];
+      Bucket := TFileMarks.Create;
+      FMarksByFile.Add(FileKey, Bucket);
+
+      for var LineNo in LineMap.Keys do
+      begin
+        Group := LineMap[LineNo];
+        if Group.Count = 0 then Continue;
+
+        // Staerkste Severity zuerst (kleinster Rank). Bei gleichem Rank
+        // bleibt die Insertion-Order (TList.Sort ist stabil seit RAD12).
+        Group.Sort(TComparer<TFindingMarkEntry>.Construct(
+          function(const A, B: TFindingMarkEntry): Integer
+          begin
+            Result := SeverityRank(A.Severity) - SeverityRank(B.Severity);
+          end));
+        Strongest := Group[0];
+
+        if Group.Count = 1 then
+        begin
+          // Single-Finding-Mark: 1:1 uebernehmen.
+          Mark.Title    := Strongest.Title;
+          Mark.Desc     := Strongest.Desc;
+          Mark.Badge    := Strongest.Badge;
+          Mark.Color    := Strongest.Color;
+          Mark.Fix      := Strongest.Fix;
+          Mark.Severity := Strongest.Severity;
+          Mark.IsMulti  := False;
+        end
+        else
+        begin
+          // Multi-Mark: Summary-Markierung mit Bullet-Liste, kein Fix.
+          // Color/Badge/Severity kommen vom staerksten Eintrag, sodass
+          // der Editor-Stripe konsistent die staerkste Severity zeigt.
+          DescSB := TStringBuilder.Create;
+          try
+            for j := 0 to Group.Count - 1 do
+            begin
+              if j > 0 then DescSB.AppendLine;
+              DescSB.Append('• ');
+              if Group[j].Title <> '' then
+                DescSB.Append(Group[j].Title)
+              else
+                DescSB.Append('(unnamed)');
+              if Group[j].Severity <> fsUnknown then
+              begin
+                DescSB.Append('  [');
+                DescSB.Append(SeverityLabel(Group[j].Severity));
+                DescSB.Append(']');
+              end;
+            end;
+            Mark.Desc := DescSB.ToString;
+          finally
+            DescSB.Free;
+          end;
+          // Title-Format ueber _() lokalisierbar (DE: 'N Befunde ...', EN: 'N findings ...').
+          Mark.Title    := Format(_('%d findings on this line'), [Group.Count]);
+          Mark.Badge    := Strongest.Badge;
+          Mark.Color    := Strongest.Color;
+          Mark.Fix      := '';
+          Mark.Severity := Strongest.Severity;
+          Mark.IsMulti  := True;
+        end;
+
+        Bucket.AddOrSetValue(LineNo, Mark);
+      end;
+    end;
+  finally
+    PerLine.Free;
   end;
 
   if Assigned(FEditorEventsObj) then
@@ -911,8 +1040,9 @@ begin
   FRenderedRects.AddOrSetValue(Line, CodeRect);
 
   // Stripe-Farbe aus dem Mark holen (Severity-abhaengig: Error/Warning/Hint).
-  // Fallback auf Default-Rot falls clNone uebergeben wurde.
-  StripeCol := CL_HIGHLIGHT_BAR;
+  // Fallback auf ACCENT_ERROR (Palette) falls clNone uebergeben wurde -
+  // gleiche Farbe die uAnalyserTheme.SeverityAccent(fsError) liefert.
+  StripeCol := ACCENT_ERROR;
   if GHighlighter.TryGetMark(Context.FileName, Line, Mark)
      and (Mark.Color <> clNone) then
     StripeCol := Mark.Color;
