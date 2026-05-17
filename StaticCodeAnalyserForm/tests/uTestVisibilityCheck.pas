@@ -50,6 +50,10 @@ type
     // ---- Mehr Member-Arten + Section-Layouts -----------------------------
     [Test] procedure PublicProperty_OnlyOwnAccess_CanBePrivate;
     [Test] procedure MultiplePublicSections_AllAnalyzed;
+
+    // ---- Utility-/Namespace-Klassen ueberspringen -------------------------
+    [Test] procedure UtilityClass_OnlyClassFunctions_NotReported;
+    [Test] procedure UtilityClass_WithCtor_StillAnalyzed;
   end;
 
 implementation
@@ -629,6 +633,60 @@ begin
   try
     Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedPublicMember),
       'abstract-Methoden sind Vererbungs-Hooks, kein Dead-API');
+  finally F.Free; end;
+end;
+
+procedure TTestVisibilityCheck.UtilityClass_OnlyClassFunctions_NotReported;
+// Klasse ohne Felder/Properties/Konstruktor ist ein Utility-Container
+// (z.B. TDetectorUtils mit lauter class functions). CanBePrivate macht
+// hier semantisch keinen Sinn - die Methoden leben davon, dass sie von
+// AUSSEN gerufen werden. Bei reinen Single-File-Scans wurde dieser Fall
+// bisher als CanBePrivate gemeldet.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TDetectorUtils = class'#13#10 +
+  '  public'#13#10 +
+  '    class function IsIdentChar(Ch: Char): Boolean; static;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'class function TDetectorUtils.IsIdentChar(Ch: Char): Boolean;'#13#10 +
+  'begin'#13#10 +
+  '  Result := True;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBePrivate));
+  finally F.Free; end;
+end;
+
+procedure TTestVisibilityCheck.UtilityClass_WithCtor_StillAnalyzed;
+// Negativ-Probe: sobald die Klasse einen Konstruktor hat, ist sie KEIN
+// Utility-Container mehr - der Skip darf NICHT mehr greifen, die normale
+// CanBePrivate-Analyse muss laufen. Hier wird `Helper` nur intern
+// gerufen, also weiterhin als CanBePrivate gemeldet.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  public'#13#10 +
+  '    constructor Create;'#13#10 +
+  '    procedure Helper;'#13#10 +
+  '    procedure Run;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'constructor TFoo.Create; begin end;'#13#10 +
+  'procedure TFoo.Helper; begin end;'#13#10 +
+  'procedure TFoo.Run; begin Helper; end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkCanBePrivate) >= 1);
   finally F.Free; end;
 end;
 

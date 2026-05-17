@@ -206,6 +206,31 @@ var
     end;
   end;
 
+  // True wenn die Klasse keine Instanz-Felder, keine Properties und keinen
+  // Konstruktor hat. Klassisches Utility-/Namespace-Container-Pattern
+  // (alle Member sind class-Methoden, die von aussen gerufen werden).
+  // Solche Klassen sollten nicht durch CanBePrivate eingeschraenkt werden.
+  function IsUtilityClass(const ClassN: TAstNode): Boolean;
+  var
+    V, M : TAstNode;
+    i, j : Integer;
+  begin
+    Result := True;
+    for i := 0 to ClassN.Children.Count - 1 do
+    begin
+      V := ClassN.Children[i];
+      if V.Kind <> nkVisibilitySection then Continue;
+      for j := 0 to V.Children.Count - 1 do
+      begin
+        M := V.Children[j];
+        if M.Kind = nkField then Exit(False);
+        if M.Kind = nkProperty then Exit(False);
+        if (M.Kind = nkMethod) and
+           (NormalizeIdent(M.Name) = 'create') then Exit(False);
+      end;
+    end;
+  end;
+
   function IsInheritanceHook(const M: TAstNode): Boolean;
   // Virtual/abstract/override/dynamic-Methoden duerfen nicht private werden -
   // selbst wenn unsere Unit den Member nirgends ruft, kann eine externe
@@ -394,6 +419,12 @@ begin
     begin
       if ClassNode.Name = '' then Continue;
       if IsRttiDriven(ClassNode.TypeRef) then Continue;
+      // Utility-/Namespace-Klassen ueberspringen: keine Instanz-Felder,
+      // keine Properties, kein Konstruktor -> sie leben davon, dass ihre
+      // (class) Methoden von AUSSEN gerufen werden. CanBePrivate waere
+      // hier semantisch falsch (typisches Beispiel: TDetectorUtils mit
+      // lauter `class function`s).
+      if IsUtilityClass(ClassNode) then Continue;
 
       for i := 0 to ClassNode.Children.Count - 1 do
       begin

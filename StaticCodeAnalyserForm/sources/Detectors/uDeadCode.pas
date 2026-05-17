@@ -28,9 +28,9 @@ type
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>);
+  private
     class procedure AnalyzeMethod(MethodNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>);
-  private
     class procedure CheckBlock(BlockNode: TAstNode;
       const MethodName, FileName: string;
       Results: TObjectList<TLeakFinding>); static;
