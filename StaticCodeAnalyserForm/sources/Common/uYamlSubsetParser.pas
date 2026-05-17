@@ -48,12 +48,16 @@ type
     // CreateSequence haben identische Signatur, was C++Builder-Bindings
     // bricht und Delphi mit einer Warnung quittiert).
     constructor InternalCreate(AKind: TYamlNodeKind; const AValue: string);
-  public
+
+   public
     class function NewScalar(const AValue: string): TYamlNode; static;
     class function NewMapping: TYamlNode; static;
     class function NewSequence: TYamlNode; static;
     destructor Destroy; override;
-
+    // noinspection CanBePrivate
+    // Cross-Unit-Aufrufe (z.B. uCustomRuleDetector) sind im Single-File-
+    // Scan unsichtbar - Suppression bis der Recursive-Modus benutzt wird.
+    function GetItem(Index: Integer): TYamlNode;
     property Kind : TYamlNodeKind read FKind;
 
     // yntScalar
@@ -67,7 +71,7 @@ type
 
     // yntSequence
     function ItemCount: Integer;
-    function GetItem(Index: Integer): TYamlNode;
+
     procedure AddItem(ANode: TYamlNode);
 
     // Convenience-Getter (wirft Exception wenn nicht yntScalar oder Key nicht da)
