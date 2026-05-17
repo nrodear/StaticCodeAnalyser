@@ -26,6 +26,8 @@ type
     [Test] procedure PlusOp_SameIdent_NoFinding;
     [Test] procedure InString_NotDetected;
     [Test] procedure InComment_NotDetected;
+    [Test] procedure TwoCallsWithDifferentStringArgs_NoFinding;
+    [Test] procedure TwoCallsWithIdenticalStringArgs_Reported;
 
     // ---- Finding-Inhalt ---------------------------------------------------
     [Test] procedure Taut_Finding_KindAndSeverity;
@@ -158,6 +160,39 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual(0, TFindingHelper.Count(F, fkTautologicalBoolExpr));
+  finally F.Free; end;
+end;
+
+procedure TTestTautologicalExpr.TwoCallsWithDifferentStringArgs_NoFinding;
+// Regression: Vor dem Fix wurden String-Literale im Strip-Pass komplett
+// durch Blanks ersetzt - dadurch sahen `Foo('a')` und `Foo('b')`
+// identisch aus und der Detektor meldete einen Fehlalarm. Jetzt werden
+// die finalen Lhs/Rhs aus Line gezogen, der String-Inhalt bleibt im
+// Norm()-Vergleich erhalten.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  '  if Lower.StartsWith(''function '') or Lower.StartsWith(''function('') then Exit;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkTautologicalBoolExpr));
+  finally F.Free; end;
+end;
+
+procedure TTestTautologicalExpr.TwoCallsWithIdenticalStringArgs_Reported;
+// Gegenstueck: wenn beide Strings WIRKLICH gleich sind, ist die
+// Expression echt tautologisch - das muss weiterhin feuern.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  '  if Lower.StartsWith(''a'') and Lower.StartsWith(''a'') then Exit;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkTautologicalBoolExpr) >= 1);
   finally F.Free; end;
 end;
 

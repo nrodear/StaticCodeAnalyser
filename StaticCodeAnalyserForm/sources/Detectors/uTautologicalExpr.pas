@@ -234,19 +234,33 @@ begin
   Clean := StripStringsAndComments(Line, InBlockComm, InParenStarComm);
 
   // Phase 2: Boolean-Operatoren (` and ` / ` or ` / ` xor `).
+  // Op-Position + Stop-Position werden auf Clean gesucht (Strings sind
+  // ausgeblendet -> kein false-match auf Token innerhalb String-Literalen).
+  // Die finalen Lhs/Rhs-Strings kommen aus Line - so behaelt der
+  // Norm()-Vergleich den Original-String-Inhalt, und z.B.
+  //   `Foo('function ') or Foo('function(')`
+  // wird NICHT als tautologisch gemeldet (Strings sind unterschiedlich).
   for var Op in OPS do
   begin
     p := Pos(Op, LowerCase(Clean));
     if p > 0 then
     begin
-      var Lhs := Copy(Clean, 1, p - 1);
-      var Rhs := Copy(Clean, p + Length(Op), MaxInt);
-      // Rhs-Ende beim naechsten Pascal-Stopwort
+      var Lhs       := Copy(Line, 1, p - 1);
+      var RhsStart  := p + Length(Op);
+      var Rhs       := Copy(Line,  RhsStart, MaxInt);
+      var RhsClean  := Copy(Clean, RhsStart, MaxInt);
+      // Rhs-Ende beim naechsten Pascal-Stopwort - in RhsClean suchen,
+      // damit Stops innerhalb String-Literalen nicht falsch matchen.
+      var RhsLower  := LowerCase(RhsClean);
       for var Stop in [';', ' then ', ' then'#13, ' do ', ' do'#13,
                        ' begin', ' and ', ' or '] do
       begin
-        var SP := Pos(Stop, LowerCase(Rhs));
-        if SP > 0 then Rhs := Copy(Rhs, 1, SP - 1);
+        var SP := Pos(Stop, RhsLower);
+        if SP > 0 then
+        begin
+          Rhs      := Copy(Rhs,      1, SP - 1);
+          RhsLower := Copy(RhsLower, 1, SP - 1);
+        end;
       end;
       // Lhs-Prefix-Strip (z.B. `  if a` -> `a`)
       Lhs := StripLhsPrefix(Lhs);
@@ -263,19 +277,27 @@ begin
   // Phase 3: Vergleichs-Operatoren mit Whitespace-Kontext (` = `, ` <> ` ...).
   // Reihenfolge wichtig: `<=`/`>=`/`<>` vor `<`/`>`/`=`, sonst matcht der
   // einstellige Variant zuerst.
+  //
+  // Wie in Phase 2: Op/Stop-Suche auf Clean, finale Lhs/Rhs aus Line.
   for var Op in CMP_OPS do
   begin
     var Search := ' ' + Op + ' ';
     p := Pos(Search, Clean);
     while p > 0 do
     begin
-      var Lhs := Copy(Clean, 1, p);
-      var Rhs := Copy(Clean, p + Length(Search), MaxInt);
-      // Rhs-Ende beim naechsten Pascal-Stopwort
+      var Lhs       := Copy(Line, 1, p);
+      var RhsStart  := p + Length(Search);
+      var Rhs       := Copy(Line,  RhsStart, MaxInt);
+      var RhsClean  := Copy(Clean, RhsStart, MaxInt);
+      var RhsLower  := LowerCase(RhsClean);
       for var Stop in [' then', ' do', ';', ')', ' and ', ' or ', ' xor '] do
       begin
-        var SP := Pos(Stop, LowerCase(Rhs));
-        if SP > 0 then Rhs := Copy(Rhs, 1, SP - 1);
+        var SP := Pos(Stop, RhsLower);
+        if SP > 0 then
+        begin
+          Rhs      := Copy(Rhs,      1, SP - 1);
+          RhsLower := Copy(RhsLower, 1, SP - 1);
+        end;
       end;
       Lhs := StripLhsPrefix(Lhs);
       Rhs := Trim(Rhs);
