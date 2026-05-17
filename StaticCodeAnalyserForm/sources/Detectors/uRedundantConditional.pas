@@ -194,7 +194,6 @@ var
   LineFor    : TArray<Integer>;
   pIf, p     : Integer;
   q          : Integer;
-  Word, W2   : string;
   Lhs1, Lhs2 : string;
   Rhs1, Rhs2 : string;
   LineNumber : Integer;
