@@ -37,6 +37,9 @@ uses
   uVisibilityCheck,
   uUnusedLocal, uUnusedParameter, uTautologicalExpr,
   uSqlDangerousStatement,
+  uSynchronizeInDestructor, uLockWithoutTryFinally,
+  uPerfHotspots, uConcurrencyExt, uRestHttpSecurity,
+  uPublicMemberWithoutDoc, uNamingExt,
   uStaticAnalyzer2,
   uTestSrcBuilder,
   System.IOUtils;
@@ -96,8 +99,11 @@ begin
       TUnusedLocalDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TUnusedParameterDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TSqlDangerousStatementDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TSynchronizeInDestructorDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TNamingExtDetector.AnalyzeUnit(Root, 'test.pas', Result);
       // TTodoCommentDetector / TReversedForRangeDetector / TLengthUnderflowDetector /
-      // TTautologicalExprDetector
+      // TTautologicalExprDetector / TLockWithoutTryFinally / TPerfHotspots /
+      // TConcurrencyExt / TRestHttpSecurity / TPublicMemberWithoutDoc
       // lesen die Datei selbst und brauchen eine echte Datei - hier nicht
       // aufgerufen. FindingsOfFile() benutzen.
     finally
@@ -184,6 +190,11 @@ begin
         TReversedForRangeDetector.AnalyzeUnit(Root, TempPath, Result);
         TLengthUnderflowDetector.AnalyzeUnit(Root, TempPath, Result);
         TTautologicalExprDetector.AnalyzeUnit(Root, TempPath, Result);
+        TLockWithoutTryFinallyDetector.AnalyzeUnit(Root, TempPath, Result);
+        TPerfHotspotsDetector.AnalyzeUnit(Root, TempPath, Result);
+        TConcurrencyExtDetector.AnalyzeUnit(Root, TempPath, Result);
+        TRestHttpSecurityDetector.AnalyzeUnit(Root, TempPath, Result);
+        TPublicMemberWithoutDocDetector.AnalyzeUnit(Root, TempPath, Result);
       finally
         Root.Free;
       end;
