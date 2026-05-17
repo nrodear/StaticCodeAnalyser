@@ -731,7 +731,26 @@ begin
       tkKwConstructor, tkKwDestructor, tkKwOperator:
         ParseMethodSignature(VisNode);
       tkKwClass:
-        Next; // class procedure / class function
+        begin
+          Next; // 'class' konsumieren
+          // class procedure / class function / class operator: die folgende
+          // Methoden-Signatur parsen und im TypeRef mit ';class' markieren.
+          // Class-Var/-Const/-Property werden ignoriert (kein Methoden-
+          // Knoten -> nichts zu markieren).
+          if Tok.Kind in [tkKwProcedure, tkKwFunction, tkKwConstructor,
+                          tkKwDestructor, tkKwOperator] then
+          begin
+            var BeforeCount := VisNode.Children.Count;
+            ParseMethodSignature(VisNode);
+            if VisNode.Children.Count > BeforeCount then
+            begin
+              var Last := VisNode.Children[VisNode.Children.Count - 1];
+              if (Last.Kind = nkMethod) and
+                 (Pos(';class', LowerCase(Last.TypeRef)) = 0) then
+                Last.TypeRef := Last.TypeRef + ';class';
+            end;
+          end;
+        end;
       tkKwProperty:
         begin
           Next;

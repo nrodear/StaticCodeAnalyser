@@ -206,16 +206,26 @@ var
     end;
   end;
 
-  // True wenn die Klasse keine Instanz-Felder, keine Properties und keinen
-  // Konstruktor hat. Klassisches Utility-/Namespace-Container-Pattern
-  // (alle Member sind class-Methoden, die von aussen gerufen werden).
-  // Solche Klassen sollten nicht durch CanBePrivate eingeschraenkt werden.
+  // True wenn die Klasse das klassische Utility-/Namespace-Container-
+  // Pattern hat: keine Instanz-Felder, keine Properties, kein Konstruktor,
+  // UND alle Methoden sind class-Methoden (`class function`/`class
+  // procedure`, vom Parser im TypeRef mit ';class' markiert). Solche
+  // Klassen leben davon, dass ihre Methoden von AUSSEN gerufen werden -
+  // CanBePrivate ist da semantisch falsch (Beispiel: TDetectorUtils mit
+  // lauter `class function`s).
+  //
+  // Wichtig: eine Klasse mit Instanz-Methoden (`procedure Foo;` ohne
+  // `class`-Praefix) ist KEIN Utility-Container, auch wenn keine Felder
+  // da sind - sie wartet nur darauf, dass jemand instanziiert. Deshalb
+  // explizit ueber den class-Marker entscheiden statt nur "keine Felder".
   function IsUtilityClass(const ClassN: TAstNode): Boolean;
   var
     V, M : TAstNode;
     i, j : Integer;
+    HasAnyMethod : Boolean;
   begin
-    Result := True;
+    Result := False;
+    HasAnyMethod := False;
     for i := 0 to ClassN.Children.Count - 1 do
     begin
       V := ClassN.Children[i];
@@ -223,12 +233,19 @@ var
       for j := 0 to V.Children.Count - 1 do
       begin
         M := V.Children[j];
-        if M.Kind = nkField then Exit(False);
-        if M.Kind = nkProperty then Exit(False);
-        if (M.Kind = nkMethod) and
-           (NormalizeIdent(M.Name) = 'create') then Exit(False);
+        if M.Kind = nkField then Exit;
+        if M.Kind = nkProperty then Exit;
+        if M.Kind = nkMethod then
+        begin
+          if NormalizeIdent(M.Name) = 'create' then Exit;
+          if Pos(';class', LowerCase(M.TypeRef)) = 0 then Exit;
+          HasAnyMethod := True;
+        end;
       end;
     end;
+    // Leere Klassen (Marker-Interfaces, abstrakte Stubs ohne Methoden)
+    // sind keine Utility-Container.
+    Result := HasAnyMethod;
   end;
 
   function IsInheritanceHook(const M: TAstNode): Boolean;

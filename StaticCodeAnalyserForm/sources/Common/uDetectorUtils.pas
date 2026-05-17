@@ -15,8 +15,8 @@ interface
 
 type
   TDetectorUtils = class
-  public
-    // True, wenn Ch zu einem Identifier gehoert (a..z, 0..9, _).
+     public
+      // True, wenn Ch zu einem Identifier gehoert (a..z, 0..9, _).
     // Punkt zaehlt NICHT mit - 'sql' in 'mytable.sql' soll trotzdem als
     // Wortgrenze rechts vom Punkt erkannt werden.
     class function IsIdentChar(Ch: Char): Boolean; static; inline;
@@ -30,10 +30,12 @@ type
     class function FindWholeWordLower(const Needle, HaystackLower: string)
       : Integer; static;
 
+
     // True, wenn Needle als ganzes Wort in HaystackLower vorkommt.
     class function ContainsWholeWordLower(const Needle, HaystackLower: string)
       : Boolean; static; inline;
   end;
+
 
 implementation
 
