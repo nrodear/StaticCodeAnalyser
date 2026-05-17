@@ -32,6 +32,13 @@ type
     class function IsSecretName(const Name: string): Boolean; static;
     class function IsStringLiteral(const TypeRef: string): Boolean; static;
     class function ConnectionStringHasPassword(const Literal: string): Boolean; static;
+    // True wenn das LHS auf eine reine UI-Text-Property zeigt (Caption,
+    // Hint, Title, ...). Solche Properties sind per Konvention beschreibende
+    // Labels und tragen keine Credentials - 'Bearer Token:' an einer Label-
+    // Caption ist ein Hinweis fuer das daneben liegende Eingabefeld, kein
+    // hardcodiertes Secret. Match auf den LETZTEN Punkt-Segment, damit
+    // 'Form1.lblToken.Caption' genauso gefiltert wird wie 'lblToken.Caption'.
+    class function IsUITextProperty(const Name: string): Boolean; static;
   end;
 
 implementation
@@ -115,6 +122,33 @@ begin
             (Pos('passwd=', Low) > 0);
 end;
 
+class function THardcodedSecretDetector.IsUITextProperty(const Name: string): Boolean;
+// UI-Text-Properties tragen per Konvention beschreibende Labels, keine
+// Credentials. Beispiel-False-Positive das diese Funktion verhindert:
+//   lblToken.Caption := 'Bearer Token:';   (UI-Label fuer ein PasswordChar-Edit)
+// Match auf das letzte Punkt-Segment des qualifizierten Namens.
+const
+  UI_PROPS: array[0..6] of string = (
+    'caption', 'hint', 'texthint', 'title',
+    'groupcaption',                     // TFrame.GroupCaption
+    'displaylabel',                     // TField.DisplayLabel
+    'showtext'                          // diverse Component-Props
+  );
+var
+  Bare, P : string;
+  DotPos  : Integer;
+begin
+  Result := False;
+  Bare := Name;
+  DotPos := -1;
+  for var i := Length(Bare) downto 1 do
+    if Bare[i] = '.' then begin DotPos := i; Break; end;
+  if DotPos > 0 then Bare := Copy(Bare, DotPos + 1, MaxInt);
+  Bare := Bare.ToLower;
+  for P in UI_PROPS do
+    if Bare = P then Exit(True);
+end;
+
 class procedure THardcodedSecretDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 const
@@ -173,6 +207,10 @@ begin
       // Const-Naming-Style (UPPER_SNAKE) -> Algorithmus-Marker, kein Secret.
       // Beispiele: JWT_SECRET_HEADER, X_TOKEN, API_KEY_PREFIX.
       if IsConstantNamingStyle(A.Name) then Continue;
+      // UI-Text-Property (Caption/Hint/Title/...) -> beschreibendes Label,
+      // kein Credential-Wert. Filter fuer 'lblToken.Caption := ''Bearer Token:'''
+      // und aehnliche UI-Pattern.
+      if IsUITextProperty(A.Name) then Continue;
       // ConnectionString ohne Passwort-Anteil ist ein Template, kein Secret.
       if (Pos('connectionstring', A.Name.ToLower) > 0) and
          not ConnectionStringHasPassword(A.TypeRef) then Continue;
