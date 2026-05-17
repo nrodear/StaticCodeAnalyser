@@ -195,6 +195,8 @@ Vollständiger Status der 50-Sonar-Pruefregeln: siehe [DETECTORS_de.md](DETECTOR
 | **Branch-Changes** | Nur via Git/SVN geänderte Dateien (siehe [BRANCH_CHANGES_de.md](BRANCH_CHANGES_de.md)) |
 | **Abbrechen** | Bricht laufende Analyse ab |
 
+![SCA IDE-Plugin im Einsatz — Buttons, Grid, Hover-Overlays](docs/PlugInSca.gif)
+
 ### Detektor-Konfiguration
 
 In der Toolbar gibt es keine Toggle-Checkboxen mehr — alles optionale
@@ -240,6 +242,8 @@ im **Floating-Modus** angezeigt — wenn das IDE-Plugin-Fenster in eine
 Side-Bar oder einen Tab gedockt ist, blendet sich das Panel aus und
 das Grid bekommt die volle Breite (kommt innerhalb von ~250 ms nach
 dem Loslösen wieder zurück).
+
+![SCA IDE-Plugin in eine Seitenleiste gedockt — Hilfe-Panel ausgeblendet, Grid volle Breite](docs/PlugInDockedSca.gif)
 
 ### Export
 
@@ -476,7 +480,14 @@ Exit-Code-Mapping (siehe [Headless CLI](#headless-cli-mode)):
 
 ## Konfigurations-Dateien
 
-Alle in `%APPDATA%\StaticCodeAnalyser\`:
+Die meisten Einstellungen lassen sich im IDE-Plugin direkt über
+**Tools > Optionen > Fremdhersteller > Static Code Analyser** pflegen
+(Live-Preview, theme-aware):
+
+![Tools > Optionen-Seite für Static Code Analyser in der Delphi-IDE](docs/OptionsSca.gif)
+
+Dieselben Werte werden in die INI-Dateien unten persistiert — frei
+wählbar, was bequemer ist. Alle in `%APPDATA%\StaticCodeAnalyser\`:
 
 | Datei | Inhalt |
 |-------|--------|

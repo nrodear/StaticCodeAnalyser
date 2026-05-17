@@ -161,6 +161,8 @@ Checkbox. **Detect**-Button liest `sonar-project.properties` aus dem
 aktuell offenen Projekt. **Test Connection** läuft denselben Health-Check
 wie das CLI `--sonar-test` und zeigt das Ergebnis als Checkliste.
 
+![Sonar Integration Options-Page im IDE-Plugin](OptionsSonar.gif)
+
 ### "Sonar: write Generic Issue report..." im Export-Menü
 
 Schreibt alle aktuell **sichtbaren** Findings als eine `sca-findings.json`

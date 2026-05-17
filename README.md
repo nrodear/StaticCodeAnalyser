@@ -192,6 +192,8 @@ Full status of all 50 Sonar rules: see [DETECTORS.md](DETECTORS.md).
 | **Branch-Changes** | Only files changed in Git/SVN (see [BRANCH_CHANGES.md](BRANCH_CHANGES.md)) |
 | **Cancel** | Aborts a running analysis |
 
+![SCA IDE plugin in action — buttons, grid, hover overlays](docs/PlugInSca.gif)
+
 ### Per-detector configuration
 
 There are no toggle checkboxes in the toolbar. All optional detector
@@ -227,8 +229,11 @@ Both rows are guaranteed to add up to the same total.
 
 | Action | Effect |
 |--------|--------|
-| **Click a row** | Finding is copied to the clipboard as a Markdown prompt for Claude AI **and** — if the file is open in the IDE — a 3 px red stripe is painted on the left edge of the corresponding line in the editor |
-| **Double-click** | Open the file in the IDE, jump to the finding line, paint the line marker |
+| **Click a row** | Finding is copied to the clipboard as a Markdown prompt for Claude AI. If a Quick-Fix provider exists for the rule (`RedundantBoolean`, `FreeAndNilHint`, `EmptyArgumentList`, `AssignedAndAssignedNil`), the fixed line is prepended to the clipboard as a paste-ready code block. If the file is open in the IDE, a 3 px stripe is painted on the left edge of the corresponding line in the editor. |
+| **Double-click / Enter** | Open the file in the IDE, jump to the finding line, paint the line marker |
+| **Ctrl+Alt+F** | **Apply Quick-Fix in editor** (in-place replace via IOTAEditWriter, Ctrl+Z to undo). Only for rules with a registered provider. Status-bar reports the result. |
+| **Ctrl+Alt+S** | **Insert suppression marker** above the finding line: `// noinspection <RuleName>`. Next analysis run filters the finding. Ctrl+Z to revert. |
+| **F3 / Shift+F3** | Next / previous finding in the grid |
 | **Hover (file column)** | Tooltip with the full file path (100 ms delay) |
 | **Click a column header** | Sort by that column |
 | **3 px stripe on the left edge** of the grid row | Severity accent (red / orange / green / blue) |
@@ -237,6 +242,8 @@ The right-side **help panel** with before/after code blocks is shown only
 when the IDE plugin window is **floating** — when docked into a side
 bar / tab the panel auto-hides and the grid takes the full width
 (re-appears within ~250 ms after un-docking).
+
+![SCA IDE plugin docked into a side panel — auto-hidden help panel, full-width grid](docs/PlugInDockedSca.gif)
 
 ### Export
 
@@ -475,7 +482,13 @@ Exit code mapping:
 
 ## Configuration files
 
-All under `%APPDATA%\StaticCodeAnalyser\`:
+Most settings can be edited through **Tools > Options > Third Party >
+Static Code Analyser** in the IDE plugin (live preview, theme-aware):
+
+![Tools > Options page for Static Code Analyser inside the Delphi IDE](docs/OptionsSca.gif)
+
+The same values persist to the INI files below — pick whichever is more
+convenient. All under `%APPDATA%\StaticCodeAnalyser\`:
 
 | File | Content |
 |------|---------|
