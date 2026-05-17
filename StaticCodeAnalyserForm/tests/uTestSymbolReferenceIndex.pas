@@ -1,7 +1,9 @@
 unit uTestSymbolReferenceIndex;
 
-// Tests fuer TSymbolReferenceIndex - der Cross-Unit-Reference-Index, der
-// uVisibilityCheck (fkCanBePrivate & Co.) mit Multi-File-Wissen fuettert.
+// Tests fuer TSymbolReferenceIndex - der Cross-Unit-Reference-Index.
+// HINWEIS: seit dem Visibility-Detektor-Refactor liest uVisibilityCheck
+// den Index NICHT mehr (single-file-only). Die Tests bleiben fuer
+// kuenftige Konsumenten und Backwards-Compat erhalten.
 
 interface
 

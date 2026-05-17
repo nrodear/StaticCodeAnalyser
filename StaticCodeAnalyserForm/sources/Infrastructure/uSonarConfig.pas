@@ -100,15 +100,25 @@ type
     // Schreibt nichts wenn PlainTextToken leer.
     class procedure StoreToken(const FileName, TokenRef,
       PlainTextToken: string); static;
-private
+
     // Liest ein Token aus [SonarTokens][TokenRef] und entschluesselt es.
     // Liefert '' bei fehlendem Eintrag oder Decrypt-Fehler.
+    // Cross-project: vom IDE-Plugin (uIDESonarOptions) benutzt, daher public
+    // belassen - der CanBePrivate-Detector sieht den Plugin-Code nicht.
+    // noinspection CanBeUnitPrivate
+    // noinspection CanBeStrictPrivate
     class function LoadToken(const FileName, TokenRef: string): string; static;
 
     // Default-INI-Pfad: %APPDATA%\StaticCodeAnalyser\analyser.ini
+    // Cross-project: vom IDE-Plugin benutzt, public belassen.
+    // noinspection CanBeUnitPrivate
+    // noinspection CanBeStrictPrivate
     class function DefaultIniPath: string; static;
 
     // Default-Pfad fuer sonar-project.properties relativ zu ProjectDir.
+    // Cross-project: vom IDE-Plugin benutzt, public belassen.
+    // noinspection CanBeUnitPrivate
+    // noinspection CanBeStrictPrivate
     class function ProjectPropsPath(const ProjectDir: string): string; static;
   end;
 

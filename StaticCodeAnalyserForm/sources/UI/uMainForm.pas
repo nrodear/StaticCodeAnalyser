@@ -209,7 +209,8 @@ begin
   SeverityFilterCombo.Items.AddObject(_('Warnings (all)'),         TObject(Ord(fmWarnings)));
   SeverityFilterCombo.Items.AddObject(_('Hints (all)'),            TObject(Ord(fmHints)));
   SeverityFilterCombo.Items.AddObject(_('Memory Leaks (all)'),     TObject(Ord(fmMemoryLeak)));
-  SeverityFilterCombo.Items.AddObject(_('Can Be Private'),         TObject(Ord(fmCanBePrivate)));
+  SeverityFilterCombo.Items.AddObject(_('Can Be Unit Private'),    TObject(Ord(fmCanBeUnitPrivate)));
+  SeverityFilterCombo.Items.AddObject(_('Can Be Strict Private'),  TObject(Ord(fmCanBeStrictPrivate)));
   SeverityFilterCombo.Items.AddObject(_('Can Be Protected'),       TObject(Ord(fmCanBeProtected)));
   SeverityFilterCombo.Items.AddObject(_('Unused Public Member'),   TObject(Ord(fmUnusedPublicMember)));
   SeverityFilterCombo.Items.AddObject(_('Unused Local Var'),       TObject(Ord(fmUnusedLocalVar)));
@@ -529,11 +530,10 @@ begin
 
     try
       try
-        // Single-File-Analyse MIT Cross-Unit-Symbol-Index: Projekt-Pfad
-        // mitgeben, damit CanBePrivate & Co. die Aufrufe in anderen Units
-        // sehen statt False-Positives zu emittieren. Wenn Projectpath leer
-        // ist (kein Projekt geladen), faellt die Overload intern auf den
-        // Single-File-Pfad zurueck.
+        // Single-File-Analyse mit projektweitem Index (fuer DFM-Repo +
+        // andere Cross-Unit-Detektoren). Visibility-Detektoren (CanBeUnit/
+        // StrictPrivate/Protected/UnusedPublicMember) laufen mittlerweile
+        // single-file-only; der Projekt-Pfad bleibt fuer sie folgenlos.
         findings := TStaticAnalyzer2.AnalyzeLeaks(AFilePath,
           Trim(Projectpath.Text), Settings.UsesCheck);
       except

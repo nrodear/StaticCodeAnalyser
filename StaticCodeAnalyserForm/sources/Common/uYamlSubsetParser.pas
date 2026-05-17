@@ -54,9 +54,11 @@ type
     class function NewMapping: TYamlNode; static;
     class function NewSequence: TYamlNode; static;
     destructor Destroy; override;
-    // noinspection CanBePrivate
-    // Cross-Unit-Aufrufe (z.B. uCustomRuleDetector) sind im Single-File-
-    // Scan unsichtbar - Suppression bis der Recursive-Modus benutzt wird.
+    // noinspection CanBeUnitPrivate
+    // noinspection CanBeStrictPrivate
+    // Cross-Unit-Aufrufe (z.B. uCustomRuleDetector) sind im Single-file-
+    // Scan unsichtbar - der Visibility-Detektor laeuft sowieso single-file
+    // und kann diesen externen Konsumenten nicht sehen.
     function GetItem(Index: Integer): TYamlNode;
     property Kind : TYamlNodeKind read FKind;
 
@@ -65,10 +67,10 @@ type
 
     // yntMapping
     function HasKey(const Key: string): Boolean;
-    // noinspection CanBePrivate
+    // noinspection CanBeUnitPrivate
+    // noinspection CanBeStrictPrivate
     // Cross-Unit-Aufrufer (uCustomRuleDetector, uTestYamlSubsetParser) -
-    // verschwindet, sobald der Single-File-Scan den .dproj-Walk-Up als
-    // ProjectRoot benutzt.
+    // unsichtbar fuer den single-file Visibility-Detektor.
     function GetChild(const Key: string): TYamlNode; // nil wenn nicht da
     procedure AddChild(const Key: string; ANode: TYamlNode);
     function MapKeys: TArray<string>;

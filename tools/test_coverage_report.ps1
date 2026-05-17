@@ -66,7 +66,7 @@ $DetectorKinds = [ordered]@{
     'uSelfAssignment'        = @('fkSelfAssignment')
     'uVirtualCallInCtor'     = @('fkVirtualCallInCtor')
     'uLengthUnderflow'       = @('fkLengthUnderflow')
-    'uVisibilityCheck'       = @('fkCanBePrivate','fkCanBeProtected','fkUnusedPublicMember')
+    'uVisibilityCheck'       = @('fkCanBeUnitPrivate','fkCanBeStrictPrivate','fkCanBeProtected','fkUnusedPublicMember')
     'uUnusedLocal'           = @('fkUnusedLocalVar')
     'uUnusedParameter'       = @('fkUnusedParameter')
     'uTautologicalExpr'      = @('fkTautologicalBoolExpr')
@@ -141,7 +141,7 @@ function Get-Categories {
     # z.B. 'Path_X_ReportsWarning', 'Cyclomatic_Y_ReportsHint'). Plus
     # terminale Severity-Suffixe ('_ReportsHint', '_ReportsWarning',
     # '_ReportsError') als zusaetzliche Trigger.
-    if (($TestName -match '(Reports?|Detected|Discovered|Triggered|Instantiable|CanBePrivate|CanBeProtected|Score\d|Easy|Hard|Trivial|Medium|VeryHard|StaticOnly|Found|Indexed|MentionsQuickFix|StillReported|FromIndex|HitDetectionStillWorks|_ReportsHint|_ReportsWarning|_ReportsError)') -and -not $cats.Contains('negative')) {
+    if (($TestName -match '(Reports?|Detected|Discovered|Triggered|Instantiable|CanBe(Unit|Strict)?Private|CanBeProtected|Score\d|Easy|Hard|Trivial|Medium|VeryHard|StaticOnly|Found|Indexed|MentionsQuickFix|StillReported|FromIndex|HitDetectionStillWorks|_ReportsHint|_ReportsWarning|_ReportsError)') -and -not $cats.Contains('negative')) {
         [void]$cats.Add('positive')
     }
     if ($TestName -match '(KindAndSeverity|Finding_Kind|_Severity)') {

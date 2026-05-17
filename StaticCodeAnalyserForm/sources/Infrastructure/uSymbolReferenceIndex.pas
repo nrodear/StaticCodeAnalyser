@@ -1,9 +1,13 @@
 unit uSymbolReferenceIndex;
 
 // Repo-weiter Index ueber Cross-Unit-Referenzen auf Klassen-Member.
-// Notwendig fuer Visibility-Detektoren (fkCanBePrivate, fkCanBeProtected,
-// fkUnusedPublicMember), die wissen muessen ob ein public-Member einer
-// Klasse in einer ANDEREN Unit gerufen wird.
+// HINWEIS: seit dem Visibility-Detektor-Refactor (single-file-only)
+// liest `uVisibilityCheck` diesen Index NICHT mehr. Index bleibt fuer
+// zukuenftige Konsumenten und kann durch Build() noch befuellt werden;
+// uVisibilityCheck.AnalyzeUnit ignoriert ihn jedoch.
+// Frueher: Visibility-Detektoren (fkCanBePrivate, fkCanBeProtected,
+// fkUnusedPublicMember) konsultierten ihn, um Cross-Unit-Konsumenten
+// zu sehen.
 //
 // Aufbau-Modell (analog uDfmRepoIndex):
 //   * Aufrufer (TStaticAnalyzer2) ruft Build(FileList) einmal pro Scan.

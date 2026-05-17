@@ -1075,14 +1075,16 @@ begin
 end;
 
 procedure TTestNewChecks.Suppression_NoinspectionCanBePrivate_FiltersFinding;
-// fkCanBePrivate ist AST-basiert. Test geht direkt ueber AnalyzeLeaks - der
-// Single-File-Pfad (kein gSymbolRefIndex aufgebaut) triggert den Detektor.
+// fkCanBeStrictPrivate ist AST-basiert (Helper wird nur in TFoo.Run gerufen
+// -> klassisches strict-private-Setup). Test geht direkt ueber AnalyzeLeaks
+// (single-file ohne gSymbolRefIndex - der Detektor laeuft jetzt sowieso
+// nur single-file).
 const SRC =
   'unit t;'#13#10+
   'interface'#13#10+
   'type TFoo = class'#13#10+
   '  public'#13#10+
-  '    // noinspection CanBePrivate'#13#10+
+  '    // noinspection CanBeStrictPrivate'#13#10+
   '    procedure Helper;'#13#10+
   '    procedure Run;'#13#10+
   '  end;'#13#10+
@@ -1098,8 +1100,8 @@ begin
   try
     F := TStaticAnalyzer2.AnalyzeLeaks(FName);
     try
-      Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBePrivate),
-        '// noinspection CanBePrivate muss den Befund unterdruecken');
+      Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeStrictPrivate),
+        '// noinspection CanBeStrictPrivate muss den Befund unterdruecken');
     finally F.Free; end;
   finally
     if FileExists(FName) then DeleteFile(FName);

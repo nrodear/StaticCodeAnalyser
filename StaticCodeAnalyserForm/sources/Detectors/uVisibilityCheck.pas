@@ -1,23 +1,34 @@
 ﻿unit uVisibilityCheck;
 
-// Detektoren: fkCanBePrivate / fkCanBeProtected / fkUnusedPublicMember.
+// Detektoren: fkCanBeUnitPrivate / fkCanBeStrictPrivate / fkCanBeProtected /
+//             fkUnusedPublicMember.
 //
 // Pruefen, ob ein `public`-Member einer Klasse seine public-Sichtbarkeit
 // ueberhaupt braucht. Klassische Code-Smells:
-//   * `fkCanBePrivate`         - Member wird nur innerhalb der eigenen
-//                                Klasse benutzt -> sollte private sein
+//   * `fkCanBeStrictPrivate`   - Member wird AUSSCHLIESSLICH von Methoden
+//                                der eigenen Klasse referenziert -> echtes
+//                                `strict private` reicht (D2007+).
+//   * `fkCanBeUnitPrivate`     - Member wird innerhalb der aktuellen Unit
+//                                referenziert (eigene Klasse ODER Sibling-
+//                                Klassen/Top-Level-Code), aber nicht von
+//                                Sub-Klassen -> Delphi-klassisches `private`
+//                                (unit-scope) reicht.
 //   * `fkCanBeProtected`       - Member wird in eigener Klasse + Sub-
-//                                Klassen genutzt -> protected reicht
-//   * `fkUnusedPublicMember`   - Member wird nirgendwo gerufen
+//                                Klassen genutzt -> protected reicht.
+//   * `fkUnusedPublicMember`   - Member wird in der aktuellen Unit
+//                                nirgends gerufen. Single-file-Hint:
+//                                kann False-Positive sein wenn eine
+//                                fremde Unit konsumiert - der Compiler
+//                                bricht den Refactor mit E2361 ab.
 //
-// Cross-Unit-Modus:
-//   Wenn `gSymbolRefIndex` (Build-Time aufgebaut von TStaticAnalyzer2 bei
-//   AnalyzeLeaksRecursive) verfuegbar ist, konsultiert der Detektor ihn:
-//   sobald irgendeine ANDERE Unit den Member referenziert, wird kein
-//   Befund mehr emittiert (Encapsulation-Argument hinfaellig).
-//   Single-File-Pfad (z.B. CLI-AnalyzeLeaks(File) oder Tests): Index
-//   bleibt nil, der Detektor laeuft nur auf der einzelnen Unit - der
-//   Hint-Text weist dann auf den fehlenden Cross-Unit-Check hin.
+// Single-File-Modus (kein gSymbolRefIndex):
+//   Alle vier Varianten arbeiten ausschliesslich auf dem AST der aktuellen
+//   Datei. Begruendung: globaler Cross-Unit-Scan lieferte in der Praxis
+//   zu viele False-Positives (RTTI-/DFM-Streaming, Plugin-APIs in
+//   Sibling-`.dproj`/.dpk`, Generic-Instanziierungen, ...). Der Detektor
+//   ist eine HINT-Empfehlung: User wendet sie an, Compiler verifiziert
+//   per E2361 ob ein versteckter Cross-Unit-Caller existiert. Schneller
+//   Feedback-Loop ohne Index-Overhead.
 //
 // Skip-Regeln:
 //   * Severity = lsHint (kein Bug, nur Encapsulation-Empfehlung)
@@ -45,8 +56,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12,
-  uSymbolReferenceIndex;
+  uAstNode, uSCAConsts, uMethodd12;
 
 type
   TVisibilityCheckDetector = class
@@ -277,7 +287,6 @@ var
     K : TFindingKind;
     F : TLeakFinding;
     Msg : string;
-    HasCrossUnitRefs : Boolean;
   begin
     MemberLow := NormalizeIdent(Member.Name);
     ClassLow  := NormalizeIdent(ClassNode.Name);
@@ -286,12 +295,10 @@ var
     if MemberLow = 'destroy' then Exit;      // Destruktor analog
     if IsInheritanceHook(Member) then Exit;  // virtual/override/abstract/dynamic
 
-    // Cross-Unit-Check: wenn der Index aufgebaut ist und eine fremde Unit
-    // den Member referenziert, ist `public` legitim - kein Befund.
-    HasCrossUnitRefs := False;
-    if Assigned(gSymbolRefIndex) and (not gSymbolRefIndex.IsEmpty) then
-      HasCrossUnitRefs := gSymbolRefIndex.HasExternalRefs(MemberLow, FileName);
-    if HasCrossUnitRefs then Exit;
+    // Single-file-Modus: keine Konsultation eines globalen Symbol-Index.
+    // Cross-Unit-Callers sind unsichtbar - der Detektor liefert einen Hint,
+    // der Compiler verifiziert die Annahme bei der Anwendung (E2361 falls
+    // ein fremder Konsument existiert).
 
     OwnRefs   := 0;
     SubRefs   := 0;
@@ -354,38 +361,52 @@ var
       AllMethods.Free;
     end;
 
-    // Klassifikation. Sobald OtherRefs > 0 ist, ist `public` korrekt.
-    if OtherRefs > 0 then Exit;
+    // Klassifikation. Alle Empfehlungen sind single-file-stark - bei
+    // Cross-Unit-Konsumenten meckert der Compiler beim Refactor.
+    const SingleFileSuffix =
+      ' (single-file scan - verify no cross-unit caller before refactoring)';
 
-    // Cross-Unit-Modus-Indikator fuer den Hint-Text: wenn der Index nicht
-    // gebaut war, sind alle Aussagen nur Single-File-stark und wir markieren
-    // das im Text.
-    var Suffix := '';
-    if (gSymbolRefIndex = nil) or gSymbolRefIndex.IsEmpty then
-      Suffix := ' (single-file scan - verify no cross-unit caller before refactoring)';
-
-    if (OwnRefs = 0) and (SubRefs = 0) then
+    if (OwnRefs = 0) and (SubRefs = 0) and (OtherRefs = 0) then
     begin
+      // Niemand in dieser Datei ruft den Member. Echt tot ODER fremde Unit
+      // konsumiert ihn (typischer single-file-FP: API-Surface eines Plugins).
       K := fkUnusedPublicMember;
-      Msg := Format('Dead public API: %s.%s is not called anywhere. '
+      Msg := Format('Dead public API: %s.%s is not called anywhere in this unit. '
         + 'Quick-Fix: delete the declaration + implementation, run build.%s',
-        [ClassNode.Name, Member.Name, Suffix]);
+        [ClassNode.Name, Member.Name, SingleFileSuffix]);
     end
     else if SubRefs > 0 then
     begin
+      // Sub-Klassen-Methode ruft den Member -> protected reicht.
       K := fkCanBeProtected;
       Msg := Format('Tighten encapsulation: %s.%s is used by '
         + 'subclasses only - move from `public` to `protected`. '
         + 'Quick-Fix: move declaration into a `protected` section of %s.%s',
-        [ClassNode.Name, Member.Name, ClassNode.Name, Suffix]);
+        [ClassNode.Name, Member.Name, ClassNode.Name, SingleFileSuffix]);
+    end
+    else if OtherRefs > 0 then
+    begin
+      // Sibling-Klasse oder Top-Level-Code in derselben Unit ruft den
+      // Member. `strict private` waere zu eng (verbietet diese Zugriffe),
+      // aber Delphi-`private` ist unit-scope und reicht.
+      K := fkCanBeUnitPrivate;
+      Msg := Format('Tighten encapsulation: %s.%s is referenced only from '
+        + 'within the current unit - move from `public` to `private` '
+        + '(Delphi-classic, unit-scope). '
+        + 'Quick-Fix: move declaration into a `private` section of %s.%s',
+        [ClassNode.Name, Member.Name, ClassNode.Name, SingleFileSuffix]);
     end
     else
     begin
-      K := fkCanBePrivate;
-      Msg := Format('Tighten encapsulation: %s.%s is used only inside %s - '
-        + 'move from `public` to `private`. '
-        + 'Quick-Fix: move declaration into a `private` section of %s.%s',
-        [ClassNode.Name, Member.Name, ClassNode.Name, ClassNode.Name, Suffix]);
+      // Ausschliesslich Methoden der eigenen Klasse rufen den Member.
+      // `strict private` ist die strengste sichere Empfehlung.
+      K := fkCanBeStrictPrivate;
+      Msg := Format('Tighten encapsulation: %s.%s is used only by methods of '
+        + '%s itself - move from `public` to `strict private` (class-scope, '
+        + 'D2007+). Quick-Fix: move declaration into a `strict private` '
+        + 'section of %s.%s',
+        [ClassNode.Name, Member.Name, ClassNode.Name, ClassNode.Name,
+         SingleFileSuffix]);
     end;
 
     F            := TLeakFinding.Create;
@@ -451,7 +472,13 @@ begin
         for var j := 0 to Vis.Children.Count - 1 do
         begin
           Member := Vis.Children[j];
-          if Member.Kind in [nkMethod, nkField, nkProperty] then
+          // FELDER ueberspringen: fuer public/published Fields ist
+          // uPublicField (SCA089) der kanonische Detektor mit dem
+          // staerkeren Vorschlag ("Property statt Feld"). Vorher haben
+          // beide Detektoren auf der gleichen Zeile gefeuert; jetzt
+          // bleibt VisibilityCheck auf Methoden + Properties.
+          if Member.Kind = nkField then Continue;
+          if Member.Kind in [nkMethod, nkProperty] then
             ClassifyMember(ClassNode, Member);
         end;
       end;

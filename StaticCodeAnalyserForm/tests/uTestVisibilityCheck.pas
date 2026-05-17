@@ -1,9 +1,12 @@
 unit uTestVisibilityCheck;
 
 // Tests fuer den TVisibilityCheckDetector.
-// Single-Unit-MVP - die Cross-Unit-Variante ist im TODO 🅷 als kuenftiges
-// Architektur-Increment markiert. Tests fokussieren auf das, was die
-// Single-Unit-Heuristik decken kann.
+// Single-file-Modus (kein gSymbolRefIndex): der Detektor emittiert
+// fkCanBeStrictPrivate (nur eigene Klasse callt), fkCanBeUnitPrivate
+// (gleiche Unit, aber Sibling/Top-Level callt), fkCanBeProtected
+// (Sub-Klasse callt) oder fkUnusedPublicMember (niemand sichtbar callt).
+// Tests pruefen die Klassifikation; Cross-Unit-Konsumenten verifiziert
+// der Compiler beim Anwenden des Refactors via E2361.
 
 interface
 
@@ -80,7 +83,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkCanBePrivate) >= 1);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkCanBeStrictPrivate) >= 1);
   finally F.Free; end;
 end;
 
@@ -126,6 +129,10 @@ begin
 end;
 
 procedure TTestVisibilityCheck.PublicField_OnlyOwn_CanBePrivate;
+// VisibilityCheck ueberspringt seit der Overlap-Reduktion public FIELDS -
+// fuer Felder ist uPublicField (SCA089) der kanonische Detektor. Test
+// stellt sicher, dass kein CanBe*Private-Befund auf einem Feld feuert
+// (sonst doppelte Befunde mit unterschiedlichen Fix-Empfehlungen).
 const SRC =
   'unit t;'#13#10 +
   'interface'#13#10 +
@@ -140,12 +147,18 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkCanBePrivate) >= 1);
+  try
+    Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeStrictPrivate),
+      'Public-Felder werden von uPublicField behandelt, nicht von VisibilityCheck');
+    Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeUnitPrivate));
   finally F.Free; end;
 end;
 
 procedure TTestVisibilityCheck.PublicMethod_OutsideCaller_NoFinding;
-// Toplevel-Funktion (kein Method-Body einer Klasse) ruft Hook -> public bleibt.
+// Toplevel-Funktion ruft Hook -> seit dem single-file-Refactor wird das
+// als CanBeUnitPrivate gemeldet (Delphi-`private` ist unit-scope und
+// erlaubt Top-Level-Zugriffe). CanBeStrictPrivate darf NICHT feuern
+// (das waere zu eng - der Top-Level-Call wuerde brechen).
 const SRC =
   'unit t;'#13#10 +
   'interface'#13#10 +
@@ -162,7 +175,10 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBePrivate));
+    Assert.IsTrue(TFindingHelper.Count(F, fkCanBeUnitPrivate) >= 1,
+      'Top-Level-Caller in derselben Unit -> CanBeUnitPrivate (Delphi-private)');
+    Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeStrictPrivate),
+      'CanBeStrictPrivate waere zu eng - der Top-Level-Call wuerde brechen');
     Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeProtected));
     Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedPublicMember));
   finally F.Free; end;
@@ -184,7 +200,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBePrivate));
+    Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeStrictPrivate));
     Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedPublicMember));
   finally F.Free; end;
 end;
@@ -207,7 +223,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBePrivate));
+    Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeStrictPrivate));
     Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedPublicMember));
   finally F.Free; end;
 end;
@@ -230,7 +246,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBePrivate));
+    Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeStrictPrivate));
     Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedPublicMember));
   finally F.Free; end;
 end;
@@ -257,12 +273,12 @@ begin
   try
     Hit := nil;
     for Fnd in F do
-      if Fnd.Kind = fkCanBePrivate then
+      if Fnd.Kind = fkCanBeStrictPrivate then
       begin
         Hit := Fnd;
         Break;
       end;
-    Assert.IsNotNull(Hit, 'fkCanBePrivate finding expected');
+    Assert.IsNotNull(Hit, 'fkCanBeStrictPrivate finding expected');
     Assert.AreEqual(lsHint, Hit.Severity);
   finally F.Free; end;
 end;
@@ -442,19 +458,24 @@ begin
   finally F.Free; end;
 end;
 
-// ---- Cross-Unit / Skip-Regeln ----------------------------------------------
+// ---- Single-File-Mode (frueher: Cross-Unit / gSymbolRefIndex) -------------
+// Der Detektor konsultiert seit dem single-file-Refactor KEINEN globalen
+// Symbol-Index mehr. Die folgenden Tests stellen sicher, dass die
+// Findings unabhaengig vom (eventuell residualen) Index emittiert werden.
 
 procedure TTestVisibilityCheck.ResetSymbolIndex;
-// Wichtig: Cross-Unit-Tests stoppern den globalen gSymbolRefIndex - andere
-// Tests duerfen das nicht ueberleben.
+// Defensive: falls ein anderer Test den gSymbolRefIndex angefasst hat,
+// nullen wir ihn hier wieder.
 begin
   if Assigned(gSymbolRefIndex) then
     FreeAndNil(gSymbolRefIndex);
 end;
 
 procedure TTestVisibilityCheck.CrossUnit_ExternalCallerFound_NoFinding;
-// Wenn der gSymbolRefIndex weiss, dass ein anderes Unit-File einen
-// 'Foo.Helper'-Call macht, darf der Detektor KEIN Befund melden.
+// Frueher: gSymbolRefIndex-Eintrag in einer fremden Unit unterdrueckte
+// das Finding. JETZT: der Detektor ignoriert den Index und emittiert
+// die Empfehlung trotzdem; der User wendet sie an und der Compiler
+// verifiziert ueber E2361 ob es einen Cross-Unit-Konsumenten gibt.
 const SRC =
   'unit t;'#13#10 +
   'interface'#13#10 +
@@ -470,19 +491,19 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   gSymbolRefIndex := TSymbolReferenceIndex.Create;
-  // FindingsOf nutzt 'test.pas' als FileName, also muss die Index-Ref auf
-  // eine ANDERE Unit zeigen.
+  // Eintrag der frueher als 'Cross-Unit-Caller' interpretiert wurde -
+  // wird vom single-file-Detektor jetzt ignoriert.
   gSymbolRefIndex.AddReference('Helper', 'other.pas');
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBePrivate),
-      'Cross-Unit-Caller muss CanBePrivate unterdruecken');
+    Assert.IsTrue(TFindingHelper.Count(F, fkCanBeStrictPrivate) >= 1,
+      'Single-file-Detektor ignoriert den Index und emittiert das Finding');
   finally F.Free; end;
 end;
 
 procedure TTestVisibilityCheck.CrossUnit_NoExternalCallers_StillReported;
 // Index ist gebaut aber leer fuer den Member -> Befund wird weiter
-// gemeldet (Single-File-Path bleibt aktiv).
+// gemeldet (war schon vorher Single-File-Path, ist jetzt der einzige).
 const SRC =
   'unit t;'#13#10 +
   'interface'#13#10 +
@@ -498,17 +519,15 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   gSymbolRefIndex := TSymbolReferenceIndex.Create;
-  // Eintrag fuer einen anderen Member - 'Helper' wird nicht referenziert
   gSymbolRefIndex.AddReference('SomethingElse', 'other.pas');
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.IsTrue(TFindingHelper.Count(F, fkCanBePrivate) >= 1,
-      'Index ohne passenden Eintrag -> Single-File-Pfad triggert weiter');
+    Assert.IsTrue(TFindingHelper.Count(F, fkCanBeStrictPrivate) >= 1);
   finally F.Free; end;
 end;
 
 procedure TTestVisibilityCheck.CrossUnit_HintTextMentionsQuickFix;
-// Hint-Text soll Quick-Fix-Suggestion enthalten.
+// Hint-Text soll Quick-Fix-Suggestion enthalten (Single-File-Variante).
 const SRC =
   'unit t;'#13#10 +
   'interface'#13#10 +
@@ -530,7 +549,7 @@ begin
   try
     Hit := nil;
     for Fnd in F do
-      if Fnd.Kind = fkCanBePrivate then
+      if Fnd.Kind = fkCanBeStrictPrivate then
       begin
         Hit := Fnd;
         Break;
@@ -559,7 +578,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBePrivate));
+    Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeStrictPrivate));
     Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedPublicMember));
   finally F.Free; end;
 end;
@@ -583,7 +602,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.IsTrue(TFindingHelper.Count(F, fkCanBePrivate) >= 1,
+    Assert.IsTrue(TFindingHelper.Count(F, fkCanBeStrictPrivate) >= 1,
       'Property im public-Block muss in der Visibility-Analyse auftauchen');
   finally F.Free; end;
 end;
@@ -660,7 +679,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBePrivate));
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeStrictPrivate));
   finally F.Free; end;
 end;
 
@@ -687,7 +706,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkCanBePrivate) >= 1);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkCanBeStrictPrivate) >= 1);
   finally F.Free; end;
 end;
 
