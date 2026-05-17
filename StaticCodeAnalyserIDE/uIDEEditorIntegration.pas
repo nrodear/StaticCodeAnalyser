@@ -82,6 +82,38 @@ type
     // Zielzeile vertikal mittig liegt - der User sieht den Befund
     // sofort ohne Augen-Tracking-Aufwand.
     class procedure CenterCurrentViewOnLine(LineNumber: Integer); static;
+
+    // Ersetzt die KOMPLETTE Zeile LineNumber in der Datei AbsPath durch
+    // NewLine. Nutzt IOTAEditWriter (Buffer-Writer): die Aenderung ist
+    // ein normaler Edit-Operation und kann mit Ctrl+Z rueckgaengig
+    // gemacht werden.
+    //
+    // Vorgehen:
+    //   1. Modul finden / oeffnen (FindModule + OpenFile als Fallback)
+    //   2. SourceEditor + EditWriter holen
+    //   3. Byte-Offset des Zeilen-Anfangs via Buffer.GetSubText / Lesen
+    //      bestimmen (Pascal-IDE-Buffer = UTF-8)
+    //   4. DeleteTo (Ende der Zeile vor LineBreak) + Insert(NewLine)
+    //
+    // Liefert True wenn der Replace durchgefuehrt wurde. False bei
+    // jedem Fehler (Datei nicht offen / Service fehlt / Zeile out of
+    // range). Caller zeigt in dem Fall einen Status-Bar-Hint.
+    //
+    // Notiz fuer Anrufer: NewLine darf KEINEN Trailing-LineBreak
+    // enthalten - das System uebernimmt die Zeilenenden des Buffers.
+    class function ApplyLineReplacement(const AbsPath: string;
+      LineNumber: Integer; const NewLine: string): Boolean; static;
+
+    // Fuegt eine neue Zeile DIREKT VOR der angegebenen LineNumber ein.
+    // Wird vom Auto-Suppress benutzt: `// noinspection <RuleName>`
+    // ueber der Befund-Zeile. NewLine wird mit der Einrueckung der
+    // Befund-Zeile ausgerichtet (lexikalisches Whitespace-Kopieren),
+    // damit der Marker visuell zur Code-Zeile gehoert.
+    //
+    // Liefert True bei Erfolg, sonst False (Datei nicht in der IDE,
+    // Zeile out-of-range, ...).
+    class function InsertLineAbove(const AbsPath: string;
+      LineNumber: Integer; const NewLine: string): Boolean; static;
   end;
 
 implementation
@@ -289,6 +321,160 @@ begin
   if TopTarget < 1 then TopTarget := 1;
   EditView.SetTopLeft(TopTarget, 1);
   EditView.Paint;
+end;
+
+class function TIDEEditor.ApplyLineReplacement(const AbsPath: string;
+  LineNumber: Integer; const NewLine: string): Boolean;
+// Strategie (echte API - keine Byte-Offset-Arithmetik):
+//   1. Modul finden (FindModule / OpenModule)
+//   2. SourceEditor via Module.ModuleFileEditors
+//   3. Buffer.EditPosition -> IOTAEditPosition (Cursor-API)
+//   4. GotoLine(LineNumber); MoveEOL; -> Column = Zeilen-Laenge
+//   5. MoveBOL; Delete(ColAfterEOL - 1); InsertText(NewLine);
+//
+// IOTAEditPosition kennt KEIN Address-Property - die API ist row/col +
+// relative Deletes/Inserts vom aktuellen Cursor aus. Das ist langfristig
+// die stabilere Variante (UTF-8/UTF-16-Konversion uebernimmt der IDE-
+// Buffer-Layer selbst).
+//
+// Undo: jede EditPosition-Modifikation laeuft durch den IDE-Edit-Stack,
+// Ctrl+Z reverts. Delete + InsertText in derselben Action-Sequenz
+// koennen 2 Undo-Steps werden - akzeptabel, kostet einen zusaetzlichen
+// Ctrl+Z bei Bedarf.
+var
+  ModSvc      : IOTAModuleServices;
+  Module      : IOTAModule;
+  SourceEdit  : IOTASourceEditor;
+  EditView    : IOTAEditView;
+  EditBuffer  : IOTAEditBuffer;
+  EditPos     : IOTAEditPosition;
+  LineEndCol  : Integer;
+  i           : Integer;
+begin
+  Result := False;
+  if (LineNumber <= 0) or (AbsPath = '') or (NewLine = '') then Exit;
+  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
+
+  // 1) Modul finden (oder oeffnen wenn noch nicht in der IDE).
+  Module := ModSvc.FindModule(AbsPath);
+  if Module = nil then
+  begin
+    try
+      Module := ModSvc.OpenModule(AbsPath);
+    except
+      Exit; // Open fehlgeschlagen - Caller meldet im Status-Bar
+    end;
+  end;
+  if Module = nil then Exit;
+
+  // 2) SourceEditor finden (Pascal-Source, nicht z.B. DFM-Editor).
+  SourceEdit := nil;
+  for i := 0 to Module.ModuleFileCount - 1 do
+    if Supports(Module.ModuleFileEditors[i], IOTASourceEditor, SourceEdit) then
+      Break;
+  if SourceEdit = nil then Exit;
+  if SourceEdit.EditViewCount = 0 then Exit;
+
+  // 3) EditView -> Buffer -> EditPosition (Navigations-Cursor).
+  EditView := SourceEdit.EditViews[0];
+  if EditView = nil then Exit;
+  EditBuffer := EditView.Buffer;
+  if EditBuffer = nil then Exit;
+  EditPos := EditBuffer.EditPosition;
+  if EditPos = nil then Exit;
+
+  try
+    // 4) Zielzeile positionieren + Zeilen-Laenge ermitteln.
+    EditPos.GotoLine(LineNumber);
+    EditPos.MoveEOL;
+    LineEndCol := EditPos.Column; // Column ist 1-basiert; bei leerer Zeile = 1.
+    EditPos.MoveBOL;
+
+    // 5) Komplette Zeile loeschen + Replacement einfuegen.
+    if LineEndCol > 1 then
+      EditPos.Delete(LineEndCol - 1);
+    EditPos.InsertText(NewLine);
+  except
+    Exit; // Out-of-range Line oder API-Edge-Case
+  end;
+
+  Result := True;
+end;
+
+class function TIDEEditor.InsertLineAbove(const AbsPath: string;
+  LineNumber: Integer; const NewLine: string): Boolean;
+// Strategie:
+//   1. Modul / Source-Editor wie in ApplyLineReplacement
+//   2. EditPosition.GotoLine(LineNumber); MoveBOL;
+//   3. Read(MaxIndent) -> Einrueckungs-String der Befund-Zeile lesen
+//   4. EditPosition.GotoLine(LineNumber); MoveBOL; (zurueck nach Read)
+//   5. InsertText(Indent + NewLine + #13#10);
+//
+// `Indent + NewLine` wird VOR der bestehenden Zeile eingefuegt - die
+// alte Zeile rutscht eins runter. Ctrl+Z reverts.
+const
+  MAX_INDENT_LEN = 32; // 32 Leerzeichen Einrueckung sind schon viel.
+var
+  ModSvc      : IOTAModuleServices;
+  Module      : IOTAModule;
+  SourceEdit  : IOTASourceEditor;
+  EditView    : IOTAEditView;
+  EditBuffer  : IOTAEditBuffer;
+  EditPos     : IOTAEditPosition;
+  i, j        : Integer;
+  LineHead    : string;
+  Indent      : string;
+begin
+  Result := False;
+  if (LineNumber <= 0) or (AbsPath = '') or (NewLine = '') then Exit;
+  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
+
+  Module := ModSvc.FindModule(AbsPath);
+  if Module = nil then
+  begin
+    try
+      Module := ModSvc.OpenModule(AbsPath);
+    except
+      Exit;
+    end;
+  end;
+  if Module = nil then Exit;
+
+  SourceEdit := nil;
+  for i := 0 to Module.ModuleFileCount - 1 do
+    if Supports(Module.ModuleFileEditors[i], IOTASourceEditor, SourceEdit) then
+      Break;
+  if SourceEdit = nil then Exit;
+  if SourceEdit.EditViewCount = 0 then Exit;
+
+  EditView := SourceEdit.EditViews[0];
+  if EditView = nil then Exit;
+  EditBuffer := EditView.Buffer;
+  if EditBuffer = nil then Exit;
+  EditPos := EditBuffer.EditPosition;
+  if EditPos = nil then Exit;
+
+  try
+    // Einrueckung der Befund-Zeile auslesen.
+    EditPos.GotoLine(LineNumber);
+    EditPos.MoveBOL;
+    LineHead := EditPos.Read(MAX_INDENT_LEN);
+    Indent := '';
+    for j := 1 to Length(LineHead) do
+      if CharInSet(LineHead[j], [' ', #9]) then
+        Indent := Indent + LineHead[j]
+      else
+        Break;
+
+    // Cursor zurueck an Zeilen-Anfang + neue Zeile davor einfuegen.
+    EditPos.GotoLine(LineNumber);
+    EditPos.MoveBOL;
+    EditPos.InsertText(Indent + NewLine + sLineBreak);
+  except
+    Exit;
+  end;
+
+  Result := True;
 end;
 
 end.

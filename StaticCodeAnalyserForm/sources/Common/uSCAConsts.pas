@@ -182,8 +182,13 @@ type
                                  // initialisiertem Self (klass. Subtle-Bug).
     fkLengthUnderflow,           // `Length(s) - X` / `.Count - X` ohne Guard ->
                                  // Native-UInt-Underflow bei leerem String/Array.
-    fkCanBePrivate,              // Public-Member wird nur in eigener Unit
-                                 // referenziert -> private moeglich (Cross-Unit).
+    fkCanBeUnitPrivate,          // Public-Member wird in der aktuellen Unit
+                                 // referenziert -> Delphi-klassisches `private`
+                                 // (unit-scope) reicht. Single-file-decidable
+                                 // (kein Cross-Unit-Index noetig); bei Cross-
+                                 // Unit-Konsumenten meckert sowieso der
+                                 // Compiler. Vorher: fkCanBePrivate (mit
+                                 // global scan, lieferte zu viele FPs).
     fkCanBeProtected,            // Public-Member wird nur in Subklassen genutzt
                                  // -> protected reicht (Cross-Unit).
     fkUnusedPublicMember,        // Public-Member wird in keinem Sub-Klassen-/
@@ -310,8 +315,63 @@ type
                                  // (SonarDelphi:TypeName).
     fkInterfaceName,             // Interface-Typ ohne `I`-Prefix
                                  // (SonarDelphi:InterfaceName).
-    fkMethodName                 // Methoden-Name nicht in PascalCase
+    fkMethodName,                // Methoden-Name nicht in PascalCase
                                  // (SonarDelphi:MethodName).
+    fkCanBeStrictPrivate,        // Public-Member wird AUSSCHLIESSLICH von
+                                 // Methoden der eigenen Klasse referenziert
+                                 // -> `strict private` (echtes class-scope-
+                                 // private, D2007+). Strengere Variante von
+                                 // fkCanBeUnitPrivate; beide laufen nur
+                                 // single-file (kein gSymbolRefIndex).
+    fkSynchronizeInDestructor,   // TThread.Synchronize-Aufruf in einem
+                                 // destructor Destroy. Klassischer Deadlock-
+                                 // Pfad: der Worker-Thread blockiert auf
+                                 // dem UI-Thread, der UI-Thread wartet via
+                                 // WaitFor auf den Worker -> Hang.
+    fkLockWithoutTryFinally,     // TCriticalSection.Enter (oder Acquire,
+                                 // EnterCriticalSection, MonitorEnter)
+                                 // ohne umschliessendes try/finally
+                                 // .Leave/.Release -> bei Exception
+                                 // verbleibt der Lock dauerhaft gesperrt
+                                 // (Deadlock / Hang in jedem nachfolgenden
+                                 // Enter-Aufruf).
+    // ---- Performance-Hotspots (SCA110-112) ----
+    fkStringConcatInLoop,        // s := s + x innerhalb for/while/repeat -
+                                 // quadratische Allokationen, StringBuilder
+                                 // oder TStringList.Add+Text ist O(n).
+    fkParamByNameInLoop,         // Query.ParamByName('x').AsString := y in
+                                 // Hot-Path - Lookup ist O(n) per Aufruf.
+                                 // Cachen oder Params[i] direkt nutzen.
+    fkFieldByNameInLoop,         // DataSet.FieldByName('x').AsString in
+                                 // Loop - selber O(n)-Lookup-Hit wie
+                                 // ParamByName. Field-Pointer einmal
+                                 // ausserhalb der Loop holen.
+    // ---- Concurrency-Familie erweitert (SCA113-114) ----
+    fkThreadResumeDeprecated,    // TThread.Resume ist seit D2010 deprecated.
+                                 // Stattdessen TThread.Start nutzen oder
+                                 // Create(False).
+    fkTThreadDestroyWithoutTerminate, // FreeAndNil(MyThread) ohne vorheriges
+                                 // Terminate + WaitFor - Worker laeuft
+                                 // weiter waehrend das Objekt zerstoert
+                                 // wird -> AV / Heap-Corruption.
+    // ---- REST/HTTP-Security (SCA115-116) ----
+    fkHttpInsteadOfHttps,        // 'http://'-Stringliteral fuer Remote-URL
+                                 // - Plaintext-Connect, MITM-Risiko.
+                                 // Localhost/127.0.0.1 ausgenommen.
+    fkDisabledTlsVerification,   // THTTPClient.SecureProtocols := [] /
+                                 // .IgnoreCertificateErrors := True /
+                                 // OnVerifyPeer := nil-Body - aktive
+                                 // Deaktivierung der TLS-Validierung.
+    // ---- Doc-Luecken (SCA117) ----
+    fkPublicMemberWithoutDoc,    // Public-Member (Methode/Property/Klasse)
+                                 // ohne XMLDoc oder /// Praefix-Kommentar
+                                 // direkt davor. Setting: nur fuer
+                                 // interface-Section.
+    // ---- Naming-Familie erweitert (SCA118-119) ----
+    fkExceptionName,             // class(Exception)-Descendant ohne
+                                 // 'E'-Prefix (z.B. MyError statt EMyError).
+    fkLocalConstantName          // const im Methoden-Body sollte UPPER_SNAKE
+                                 // (z.B. MAX_RETRIES) - PascalCase = Smell.
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -410,7 +470,7 @@ const
     (Name: 'SelfAssignment';             FindingType: ftBug;          DefaultSeverity: lsWarning), // fkSelfAssignment
     (Name: 'VirtualCallInCtor';          FindingType: ftBug;          DefaultSeverity: lsError),   // fkVirtualCallInCtor
     (Name: 'LengthUnderflow';            FindingType: ftBug;          DefaultSeverity: lsHint),    // fkLengthUnderflow
-    (Name: 'CanBePrivate';               FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkCanBePrivate
+    (Name: 'CanBeUnitPrivate';           FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkCanBeUnitPrivate
     (Name: 'CanBeProtected';             FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkCanBeProtected
     (Name: 'UnusedPublicMember';         FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkUnusedPublicMember
     (Name: 'UnusedLocalVar';             FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkUnusedLocalVar
@@ -466,7 +526,20 @@ const
     (Name: 'FieldName';                  FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkFieldName
     (Name: 'TypeName';                   FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkTypeName
     (Name: 'InterfaceName';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkInterfaceName
-    (Name: 'MethodName';                 FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkMethodName
+    (Name: 'MethodName';                 FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkMethodName
+    (Name: 'CanBeStrictPrivate';         FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkCanBeStrictPrivate
+    (Name: 'SynchronizeInDestructor';    FindingType: ftBug;          DefaultSeverity: lsError),   // fkSynchronizeInDestructor
+    (Name: 'LockWithoutTryFinally';      FindingType: ftBug;          DefaultSeverity: lsError),   // fkLockWithoutTryFinally
+    (Name: 'StringConcatInLoop';         FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkStringConcatInLoop
+    (Name: 'ParamByNameInLoop';          FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkParamByNameInLoop
+    (Name: 'FieldByNameInLoop';          FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkFieldByNameInLoop
+    (Name: 'ThreadResumeDeprecated';     FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkThreadResumeDeprecated
+    (Name: 'TThreadDestroyWithoutTerminate'; FindingType: ftBug;      DefaultSeverity: lsError),   // fkTThreadDestroyWithoutTerminate
+    (Name: 'HttpInsteadOfHttps';         FindingType: ftSecurityHotspot; DefaultSeverity: lsWarning),// fkHttpInsteadOfHttps
+    (Name: 'DisabledTlsVerification';    FindingType: ftVulnerability; DefaultSeverity: lsError),  // fkDisabledTlsVerification
+    (Name: 'PublicMemberWithoutDoc';     FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkPublicMemberWithoutDoc
+    (Name: 'ExceptionName';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkExceptionName
+    (Name: 'LocalConstantName';          FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkLocalConstantName
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.
@@ -480,6 +553,13 @@ function KindDefaultSeverity(K: TFindingKind): TLeakSeverity;
 // Reverse-Lookup ueber Name (case-insensitive). Liefert False bei
 // unbekanntem Namen; Kind ist dann undefiniert.
 function KindFromName(const Name: string; out K: TFindingKind): Boolean;
+// Klassifizierung: liefert True wenn das TFindingKind zur SonarDelphi-
+// Import-Welle (SCA060+) gehoert. Markierung beginnt ab fkGotoStatement -
+// alles davor sind SCA-native Detektoren (Phase 0/A). Wird im HTML-Export
+// fuer den Detector-Filter (Alle/Top10/Ohne SonarDelphi/Nur SonarDelphi)
+// genutzt. Sobald neue SonarDelphi-Kinds zwischen den nativen geschoben
+// werden, muss diese Funktion auf eine Whitelist umgestellt werden.
+function IsSonarDelphiKind(K: TFindingKind): Boolean;
 
 var
   // Whitelist erlaubter Kinds fuer den Detector-Loop. Wird von
@@ -547,6 +627,16 @@ begin
       Exit(True);
     end;
   Result := False;
+end;
+
+function IsSonarDelphiKind(K: TFindingKind): Boolean;
+begin
+  // SonarDelphi-Import lebt zwischen fkGotoStatement (SCA060) und
+  // fkMethodName (SCA106). Alles davor (fkMemoryLeak..fkFormatLocaleHint)
+  // sowie SCA-native Erweiterungen NACH SCA106 (fkCanBeStrictPrivate ff.)
+  // sind nicht SonarDelphi.
+  Result := (Ord(K) >= Ord(fkGotoStatement)) and
+            (Ord(K) <= Ord(fkMethodName));
 end;
 
 { TConsts }

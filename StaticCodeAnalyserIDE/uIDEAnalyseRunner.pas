@@ -288,12 +288,10 @@ begin
       findings := nil;
       try
         try
-          // Single-File-Analyse mit Cross-Unit-Index: ProjectRoot via
-          // .dproj/.dpk/.dpr-Walk-Up (oder .git als Fallback). Damit
-          // werden Aufrufer in Geschwister-Verzeichnissen (z.B.
-          // sources\Detectors fuer ein File in sources\Common) im
-          // Symbol-Index erfasst und CanBePrivate-False-Positives
-          // verschwinden.
+          // Single-File-Analyse mit projektweitem Symbol-Index. ProjectRoot
+          // via .dproj/.dpk/.dpr-Walk-Up (oder .git als Fallback). Visibility-
+          // Detektoren (CanBeUnit/Strict/Protected/Unused) laufen single-
+          // file; der Projekt-Scope dient anderen Cross-Unit-Konsumenten.
           findings := TStaticAnalyzer2.AnalyzeLeaks(AFilePath,
             TStaticFiles.FindProjectRoot(AFilePath),
             FRepoSettings.UsesCheck);

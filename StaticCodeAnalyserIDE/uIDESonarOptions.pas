@@ -189,6 +189,7 @@ begin
   lblToken.AutoSize := False;
   lblToken.Left := INNER_LEFT; lblToken.Top := INNER_TOP + 3;
   lblToken.Width := LBL_W; lblToken.Height := 17;
+  // noinspection HardcodedSecret - UI-Label-Caption, kein Credential-Wert
   lblToken.Caption := 'Bearer Token:';
   edToken := TEdit.Create(Self); edToken.Parent := grpAuth;
   edToken.Left := INNER_LEFT + LBL_W; edToken.Top := INNER_TOP;

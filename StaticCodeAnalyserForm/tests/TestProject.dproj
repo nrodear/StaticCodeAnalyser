@@ -4,7 +4,7 @@
         <ProjectVersion>20.1</ProjectVersion>
         <FrameworkType>None</FrameworkType>
         <Base>True</Base>
-        <Config Condition="'$(Config)'==''">Release</Config>
+        <Config Condition="'$(Config)'==''">Debug</Config>
         <Platform Condition="'$(Platform)'==''">Win32</Platform>
         <ProjectName Condition="'$(ProjectName)'==''">TestProject</ProjectName>
         <TargetedPlatforms>1</TargetedPlatforms>
@@ -214,6 +214,14 @@
         <DCCReference Include="uTestVirtualCallInCtor.pas"/>
         <DCCReference Include="uTestLengthUnderflow.pas"/>
         <DCCReference Include="uTestVisibilityCheck.pas"/>
+        <DCCReference Include="uTestSynchronizeInDestructor.pas"/>
+        <DCCReference Include="uTestLockWithoutTryFinally.pas"/>
+        <DCCReference Include="uTestQuickFix.pas"/>
+        <DCCReference Include="uTestPerfHotspots.pas"/>
+        <DCCReference Include="uTestConcurrencyExt.pas"/>
+        <DCCReference Include="uTestRestHttpSecurity.pas"/>
+        <DCCReference Include="uTestPublicMemberWithoutDoc.pas"/>
+        <DCCReference Include="uTestNamingExt.pas"/>
         <DCCReference Include="uTestCustomClassDiscovery.pas"/>
         <DCCReference Include="uTestSQLInjectionScore.pas"/>
         <DCCReference Include="uTestSymbolReferenceIndex.pas"/>

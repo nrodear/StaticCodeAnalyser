@@ -5,7 +5,7 @@
         <ProjectVersion>20.1</ProjectVersion>
         <FrameworkType>None</FrameworkType>
         <Base>True</Base>
-        <Config Condition="'$(Config)'==''">Release</Config>
+        <Config Condition="'$(Config)'==''">Debug</Config>
         <Platform Condition="'$(Platform)'==''">Win32</Platform>
         <ProjectName Condition="'$(ProjectName)'==''">StaticCodeAnalyser.IDE.d12</ProjectName>
         <TargetedPlatforms>1</TargetedPlatforms>
@@ -200,6 +200,8 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Output\uSonarPush.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uSonarPull.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uIgnoreList.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uPathOverrides.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uBaseline.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uStaticAnalyzer2.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uSymbolReferenceIndex.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uAstFileCache.pas"/>
@@ -222,6 +224,7 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uCollectValues.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uYamlSubsetParser.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uRuleCatalog.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uQuickFix.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLeakDetector2.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCodeSmells2.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSQLInjectionScore.pas"/>
@@ -283,6 +286,13 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uVirtualCallInCtor.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLengthUnderflow.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uVisibilityCheck.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSynchronizeInDestructor.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLockWithoutTryFinally.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uPerfHotspots.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uConcurrencyExt.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uRestHttpSecurity.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uPublicMemberWithoutDoc.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uNamingExt.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnusedLocal.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnusedParameter.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTautologicalExpr.pas"/>

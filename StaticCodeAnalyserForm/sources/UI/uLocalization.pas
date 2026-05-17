@@ -138,8 +138,9 @@ begin
   GDeMap.Add('Duplicate Code Blocks',    'Doppelte Code-Bl'#$F6'cke');
   GDeMap.Add('Memory Leak',              'Speicherleck');
   GDeMap.Add('Memory Leaks (all)',       'Speicherlecks (alle)');
-  // ---- Visibility-Detektoren (Cross-Unit) ----
-  GDeMap.Add('Can Be Private',           'Kann private sein');
+  // ---- Visibility-Detektoren (single-file) ----
+  GDeMap.Add('Can Be Unit Private',      'Kann unit-private sein');
+  GDeMap.Add('Can Be Strict Private',    'Kann strict private sein');
   GDeMap.Add('Can Be Protected',         'Kann protected sein');
   GDeMap.Add('Unused Public Member',     'Ungenutzte public-API');
 
@@ -211,8 +212,10 @@ begin
   GDeMap.Add('Length()/.Count minus a constant can underflow on empty input',
              'Length() / .Count minus Konstante kann bei leerem Input unterlaufen');
   // Visibility
-  GDeMap.Add('Public member is used only inside its declaring class - tighten visibility',
-             'Public-Member nur in der eigenen Klasse genutzt - Sichtbarkeit einschr'#$E4'nken');
+  GDeMap.Add('Public member is referenced only within the current unit - Delphi-classic `private` (unit-scope) suffices',
+             'Public-Member wird nur innerhalb der aktuellen Unit referenziert - Delphi-klassisches `private` (Unit-Scope) reicht');
+  GDeMap.Add('Public member is used only by methods of its own class - `strict private` reaches the strongest encapsulation',
+             'Public-Member wird nur von Methoden der eigenen Klasse genutzt - `strict private` ist die strengste sinnvolle Sichtbarkeit');
   GDeMap.Add('Public member is used only by subclasses - protected is tighter',
              'Public-Member nur in Subklassen genutzt - protected ist strenger');
   GDeMap.Add('Public member has no callers anywhere - dead API',
@@ -224,6 +227,150 @@ begin
              'Parameter wird im Methoden-Body nie gelesen');
   GDeMap.Add('Binary expression has identical left and right side - copy-paste bug?',
              'Binaer-Ausdruck mit gleicher linker und rechter Seite - Copy-Paste-Bug?');
+
+  // ---- SonarDelphi-Import (SCA060+) FixHint-Descriptions ----
+  GDeMap.Add('goto weakens structured control flow',
+             'goto bricht den strukturierten Kontrollfluss');
+  GDeMap.Add('Tab character in source - use spaces for indentation',
+             'Tab-Zeichen im Quelltext - Einr'#$FC'ckung mit Leerzeichen');
+  GDeMap.Add('Source line exceeds 120 characters - wrap or extract',
+             'Zeile > 120 Zeichen - umbrechen oder Teilausdruck extrahieren');
+  GDeMap.Add('Line ends with whitespace - diff hygiene',
+             'Zeile endet mit Whitespace - Diff-Hygiene');
+  GDeMap.Add('Pascal keyword not in lowercase',
+             'Pascal-Keyword nicht in Kleinschreibung');
+  GDeMap.Add('// NOSONAR suppression marker found - audit it',
+             '// NOSONAR-Suppression gefunden - bitte pr'#$FC'fen');
+  GDeMap.Add('Empty argument list "()" - drop the parentheses',
+             'Leere Argument-Liste "()" - Klammern entfernen');
+  GDeMap.Add('asm..end block - platform-specific, hard to port',
+             'asm..end-Block - plattformspezifisch, schlecht portierbar');
+  GDeMap.Add('Trailing comma in argument list',
+             'Trailing-Komma in der Argument-Liste');
+  GDeMap.Add('Large integer literal without digit grouping',
+             'Gro'#$DF'es Integer-Literal ohne Tausender-Trenner');
+  GDeMap.Add('Comment contains Pascal-code markers - delete it or restore it',
+             'Kommentar enth'#$E4'lt Pascal-Code-Marker - l'#$F6'schen oder reaktivieren');
+  GDeMap.Add('Unit-level keyword not at column 1',
+             'Unit-Section-Keyword nicht in Spalte 1');
+  GDeMap.Add('Boolean compared to True/False - redundant',
+             'Boolean gegen True/False verglichen - redundant');
+  GDeMap.Add('Interface declaration has no methods',
+             'Interface-Deklaration ohne Methoden');
+  GDeMap.Add('Assert() without explanatory message',
+             'Assert() ohne erkl'#$E4'rende Message');
+  GDeMap.Add('class(TObject) - TObject is the default base, drop it',
+             'class(TObject) - TObject ist Default-Basis, redundant');
+  GDeMap.Add('Grouped variable/field declaration - one per line',
+             'Gruppierte Variable/Feld-Deklaration - eine pro Zeile');
+  GDeMap.Add('Empty begin..end block',
+             'Leerer begin..end-Block');
+  GDeMap.Add('on E: Exception catches everything - too broad',
+             'on E: Exception f'#$E4'ngt alles - zu breit');
+  GDeMap.Add('Two consecutive const/type/var sections - merge them',
+             'Zwei aufeinanderfolgende const/type/var-Sektionen - zusammenfassen');
+  GDeMap.Add('Exit/Continue/Break directly before end - redundant',
+             'Exit/Continue/Break direkt vor end - redundant');
+  GDeMap.Add('Multiple class declarations in one unit',
+             'Mehrere Klassen-Deklarationen in einer Unit');
+  GDeMap.Add('Double semicolon ";;" - one is enough',
+             'Doppelte Semikolons ";;" - eines reicht');
+  GDeMap.Add('Empty finally block - either drop the try or add cleanup',
+             'Leerer finally-Block - try entfernen oder Cleanup erg'#$E4'nzen');
+  GDeMap.Add('Assigned(X) and (X <> nil) - one check is enough',
+             'Assigned(X) and (X <> nil) - ein Check reicht');
+  GDeMap.Add('X.Free; X := nil; -> use FreeAndNil(X)',
+             'X.Free; X := nil; -> FreeAndNil(X) nutzen');
+  GDeMap.Add('out parameter - prefer Result or var',
+             'out-Parameter - Result oder var bevorzugen');
+  GDeMap.Add('Empty visibility section in class - delete it',
+             'Leere Visibility-Sektion in der Klasse - entfernen');
+  GDeMap.Add('Unit ends with begin..end. - use initialization section',
+             'Unit endet mit begin..end. - initialization-Section verwenden');
+  GDeMap.Add('Public field - expose a property instead',
+             'Public-Feld - stattdessen Property freigeben');
+  GDeMap.Add('Nested try block - consider extracting a procedure',
+             'Geschachtelter try-Block - Methode extrahieren');
+  GDeMap.Add('case statement has many branches - consider dispatch table',
+             'case-Statement mit vielen Branches - Dispatch-Tabelle erw'#$E4'gen');
+  GDeMap.Add('Unit has no declarations - delete it or fill it',
+             'Unit ohne Deklarationen - l'#$F6'schen oder f'#$FC'llen');
+  GDeMap.Add('Method calls inherited more than once',
+             'Methode ruft inherited mehrfach auf');
+  GDeMap.Add('Doubled parentheses around a simple expression',
+             'Doppelte Klammern um einen einfachen Ausdruck');
+  GDeMap.Add('Two visibility sections with the same keyword - merge them',
+             'Zwei Visibility-Sektionen mit gleichem Keyword - zusammenfassen');
+  GDeMap.Add('Constructor does not call inherited - parent state uninitialized',
+             'Konstruktor ruft kein inherited - Eltern-State uninitialisiert');
+  GDeMap.Add('Destructor does not call inherited - resource leak',
+             'Destruktor ruft kein inherited - Ressourcen-Leck');
+  GDeMap.Add('if X then Y := True else Y := False - assign expression directly',
+             'if X then Y := True else Y := False - Ausdruck direkt zuweisen');
+  GDeMap.Add('Asymmetric begin/end in if/else - format consistently',
+             'Asymmetrische begin/end in if/else - konsistent formatieren');
+  GDeMap.Add('Pointer type alias should start with "P"',
+             'Pointer-Typ-Alias sollte mit "P" beginnen');
+  GDeMap.Add('Branch body without begin..end - add explicit block',
+             'Branch-Body ohne begin..end - expliziten Block setzen');
+  GDeMap.Add('Nested procedure/function - consider extracting',
+             'Geschachtelte procedure/function - extrahieren');
+  GDeMap.Add('Class field without "F" prefix',
+             'Klassenfeld ohne "F"-Prefix');
+  GDeMap.Add('Class/record type without "T" prefix',
+             'Class/Record-Typ ohne "T"-Prefix');
+  GDeMap.Add('Interface type without "I" prefix',
+             'Interface-Typ ohne "I"-Prefix');
+  GDeMap.Add('Method name not in PascalCase',
+             'Methoden-Name nicht in PascalCase');
+
+  // ---- Concurrency-Detektor-Familie (SCA108+) ----
+  GDeMap.Add('Synchronize() in a destructor - worker and UI thread deadlock each other',
+             'Synchronize() im Destruktor - Worker- und UI-Thread blockieren sich gegenseitig');
+  GDeMap.Add('Lock acquired without try..finally release - exception leaves the lock held',
+             'Lock ohne umschliessendes try..finally - bei Exception bleibt der Lock dauerhaft gesperrt');
+
+  // ---- Performance-Hotspots (SCA110-112) ----
+  GDeMap.Add('String concatenation in loop - quadratic reallocations',
+             'String-Konkatenation in der Loop - quadratische Allokationen');
+  GDeMap.Add('ParamByName in loop - cache the TParam reference outside',
+             'ParamByName in der Loop - TParam-Referenz ausserhalb cachen');
+  GDeMap.Add('FieldByName in loop - cache the TField reference outside',
+             'FieldByName in der Loop - TField-Referenz ausserhalb cachen');
+
+  // ---- Concurrency-Familie erweitert (SCA113-114) ----
+  GDeMap.Add('TThread.Resume is deprecated - use TThread.Start (since Delphi 2010)',
+             'TThread.Resume ist deprecated - stattdessen TThread.Start (seit Delphi 2010)');
+  GDeMap.Add('TThread destroyed without Terminate+WaitFor - worker may still be running',
+             'TThread zerstoert ohne Terminate+WaitFor - Worker laeuft eventuell noch');
+
+  // ---- REST/HTTP-Security (SCA115-116) ----
+  GDeMap.Add('Plaintext HTTP URL - prefer https:// for remote endpoints',
+             'Plaintext-HTTP-URL - https:// fuer Remote-Endpoints bevorzugen');
+  GDeMap.Add('TLS verification disabled - MITM-attack surface',
+             'TLS-Validierung deaktiviert - MITM-Angriffsflaeche');
+
+  // ---- Doc-Luecken (SCA117) ----
+  GDeMap.Add('Public member missing doc comment',
+             'Public-Member ohne Doku-Kommentar');
+
+  // ---- Naming-Familie erweitert (SCA118-119) ----
+  GDeMap.Add('Exception class without E-prefix',
+             'Exception-Klasse ohne E-Prefix');
+  GDeMap.Add('Local constant should be UPPER_SNAKE_CASE',
+             'Lokale Konstante sollte UPPER_SNAKE_CASE sein');
+
+  // ---- Diff-Mode (CLI --diff <range>) ----
+  GDeMap.Add('Git diff %s: %d file(s) to analyse',
+             'Git-Diff %s: %d Datei(en) zu analysieren');
+
+  // ---- Annotation-Overlay: Multi-Finding-Summary ----
+  // Wird in uIDELineHighlighter.SetAllFindings benutzt wenn mehrere
+  // Befunde auf der gleichen Zeile liegen. Die Bullet-Liste der einzelnen
+  // Befunde steht im Desc-Text; der Titel zeigt die Anzahl.
+  GDeMap.Add('%d findings on this line',
+             '%d Befunde auf dieser Zeile');
+
   // Filter-Combo-Eintraege
   GDeMap.Add('Unused Local Var',         'Ungenutzte lokale Variable');
   GDeMap.Add('Unused Parameter',         'Ungenutzter Parameter');
@@ -422,6 +569,24 @@ begin
                                          'Fehler+Warnungen f'#$FC'r %s in Zwischenablage kopiert.');
   GDeMap.Add('AI prompt copied to clipboard: %s, line %s (%s)',
                                          'KI-Prompt in Zwischenablage: %s, Zeile %s (%s)');
+  GDeMap.Add('Quick-Fix + AI prompt copied to clipboard: %s, line %s (%s)',
+                                         'Quick-Fix + KI-Prompt in Zwischenablage: %s, Zeile %s (%s)');
+  GDeMap.Add('Quick-Fix: no provider for ''%s'' - manual fix required',
+                                         'Quick-Fix: kein Provider fuer ''%s'' - manuell beheben');
+  GDeMap.Add('Quick-Fix: cannot locate source line',
+                                         'Quick-Fix: Quell-Zeile nicht erreichbar');
+  GDeMap.Add('Quick-Fix: line out of range',
+                                         'Quick-Fix: Zeilen-Nummer ausserhalb der Datei');
+  GDeMap.Add('Quick-Fix: pattern not matched on line %d - manual fix required',
+                                         'Quick-Fix: Pattern auf Zeile %d nicht erkannt - manuell beheben');
+  GDeMap.Add('Quick-Fix applied: %s',    'Quick-Fix angewendet: %s');
+  GDeMap.Add('Quick-Fix: editor write failed (file not in IDE?)',
+                                         'Quick-Fix: Editor-Write fehlgeschlagen (Datei nicht in der IDE offen?)');
+  GDeMap.Add('Suppress: cannot locate source line',
+                                         'Suppress: Quell-Zeile nicht erreichbar');
+  GDeMap.Add('Suppress inserted: %s',    'Suppress eingefuegt: %s');
+  GDeMap.Add('Suppress: editor write failed (file not in IDE?)',
+                                         'Suppress: Editor-Write fehlgeschlagen (Datei nicht in der IDE offen?)');
   GDeMap.Add('Done. %d findings. Click a row -> AI prompt on clipboard.',
                                          'Fertig. %d Befunde. Zeile anklicken -> KI-Prompt in der Zwischenablage.');
 

@@ -17,12 +17,12 @@ type
     class function AnalyzeLeaks(const FileName: string;
       AIncludeUsesCheck: Boolean = False): TObjectList<TLeakFinding>; overload;
 
-    // Single-File-Analyse mit Cross-Unit-Symbol-Index: scannt die Findings
-    // nur fuer FileName, baut den Symbol-Reference-Index aber aus dem
-    // ganzen Projekt unter ProjectRoot auf. Damit verschwinden die typischen
-    // CanBePrivate-False-Positives, die im reinen Single-File-Pfad mangels
-    // Cross-Unit-Sicht entstehen. ProjectRoot leer -> Fallback auf den
-    // einfachen Single-File-Pfad ohne Index.
+    // Single-File-Analyse mit projektweitem Symbol-Reference-Index.
+    // Hinweis: seit dem Visibility-Detektor-Refactor laufen
+    // CanBeUnitPrivate/CanBeStrictPrivate/CanBeProtected/UnusedPublicMember
+    // ohne den Index (single-file only). Die Overload bleibt erhalten weil
+    // andere Konsumenten (DFM-Repo-Index, Tests) den projektweiten Scope
+    // brauchen. ProjectRoot leer -> Fallback auf den simplen Single-File-Pfad.
     class function AnalyzeLeaks(const FileName: string;
       const ProjectRoot: string;
       AIncludeUsesCheck: Boolean = False): TObjectList<TLeakFinding>; overload;
@@ -82,7 +82,10 @@ uses
   uCyclomaticComplexity, uCustomRuleDetector,
   uDfmAnalysisRunner, uDfmRepoIndex, uSymbolReferenceIndex, uAstFileCache,
   uFileTextCache,
-  uSuppression, uCustomClassDiscovery,
+  uSuppression, uCustomClassDiscovery, uPathOverrides,
+  uSynchronizeInDestructor, uLockWithoutTryFinally,
+  uPerfHotspots, uConcurrencyExt, uRestHttpSecurity,
+  uPublicMemberWithoutDoc, uNamingExt,
   uRuleCatalog;
 
 type
@@ -205,10 +208,25 @@ begin
   Add('SelfAssignment',  fkSelfAssignment,  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TSelfAssignmentDetector.AnalyzeUnit(R, F, L); end);
   Add('VirtualCallInCtor',fkVirtualCallInCtor,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TVirtualCallInCtorDetector.AnalyzeUnit(R, F, L); end);
   Add('LengthUnderflow', fkLengthUnderflow, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLengthUnderflowDetector.AnalyzeUnit(R, F, L); end);
-  // VisibilityCheck emittiert drei Kinds (CanBePrivate/CanBeProtected/
-  // UnusedPublicMember) auf den fkCanBePrivate-Anker im Profile-Filter.
-  // Single-Unit-MVP - Multi-File-Pfad steht noch aus (TODO 🅷).
-  Add('VisibilityCheck',fkCanBePrivate,    procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TVisibilityCheckDetector.AnalyzeUnit(R, F, L); end);
+  // VisibilityCheck emittiert vier Kinds (CanBeUnitPrivate, CanBeStrict-
+  // Private, CanBeProtected, UnusedPublicMember) auf den
+  // fkCanBeUnitPrivate-Anker im Profile-Filter.
+  // Single-file-Modus (kein gSymbolRefIndex) - global scan abgeschaltet
+  // weil zu viele False-Positives lieferte; siehe uVisibilityCheck.pas.
+  Add('VisibilityCheck',fkCanBeUnitPrivate, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TVisibilityCheckDetector.AnalyzeUnit(R, F, L); end);
+  // Concurrency-Detektor-Familie
+  Add('SynchronizeInDestructor', fkSynchronizeInDestructor, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TSynchronizeInDestructorDetector.AnalyzeUnit(R, F, L); end);
+  Add('LockWithoutTryFinally', fkLockWithoutTryFinally, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLockWithoutTryFinallyDetector.AnalyzeUnit(R, F, L); end);
+  // Concurrency-Familie erweitert (SCA113-114): Thread-Lifecycle-Bugs
+  Add('ConcurrencyExt',     fkThreadResumeDeprecated, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TConcurrencyExtDetector.AnalyzeUnit(R, F, L); end);
+  // Performance-Hotspots (SCA110-112)
+  Add('PerfHotspots',       fkStringConcatInLoop,     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TPerfHotspotsDetector.AnalyzeUnit(R, F, L); end);
+  // REST/HTTP-Security (SCA115-116)
+  Add('RestHttpSecurity',   fkHttpInsteadOfHttps,     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TRestHttpSecurityDetector.AnalyzeUnit(R, F, L); end);
+  // Doc-Luecken (SCA117)
+  Add('PublicMemberWithoutDoc', fkPublicMemberWithoutDoc, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TPublicMemberWithoutDocDetector.AnalyzeUnit(R, F, L); end);
+  // Naming-Familie erweitert (SCA118-119)
+  Add('NamingExt',          fkExceptionName,          procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TNamingExtDetector.AnalyzeUnit(R, F, L); end);
   Add('UnusedLocalVar', fkUnusedLocalVar,  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUnusedLocalDetector.AnalyzeUnit(R, F, L); end);
   Add('UnusedParameter',fkUnusedParameter, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUnusedParameterDetector.AnalyzeUnit(R, F, L); end);
   Add('TautologicalBoolExpr',fkTautologicalBoolExpr, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TTautologicalExprDetector.AnalyzeUnit(R, F, L); end);
@@ -467,9 +485,12 @@ begin
       FreeAndNil(gDfmRepoIndex);
     end;
 
-    // Symbol-Reference-Index fuer Visibility-Detektoren (fkCanBePrivate &
-    // Co.). Sammelt alle 'Obj.Member'-Referenzen pro Unit, damit
-    // uVisibilityCheck Cross-Unit-Aufrufe sehen kann statt nur Single-File.
+    // Symbol-Reference-Index. Visibility-Detektoren (fkCanBeUnitPrivate,
+    // fkCanBeStrictPrivate, fkCanBeProtected, fkUnusedPublicMember)
+    // konsultieren ihn NICHT mehr - sie laufen single-file. Index wird
+    // hier dennoch aufgebaut weil andere Konsumenten (Tests, mORMot-Cross-
+    // Check) ihn lesen; kann perspektivisch entfallen wenn keiner mehr
+    // referenziert.
     gSymbolRefIndex := TSymbolReferenceIndex.Create;
     try
       gSymbolRefIndex.Build(IndexFiles);
@@ -715,6 +736,14 @@ begin
   except
     // Suppression-Fehler duerfen das Ergebnis nicht zerstoeren
   end;
+
+  // Path-Overrides anwenden (analyser.ini [PathOverrides]). Wird nach
+  // uSuppression aufgerufen, sodass `// noinspection` Vorrang hat.
+  try
+    TPathOverrides.ApplyToFindings(Results);
+  except
+    // Path-Override-Fehler duerfen das Ergebnis nicht zerstoeren
+  end;
 end;
 
 class function TStaticAnalyzer2.AnalyzeLeaks(const FileName: string;
@@ -759,9 +788,11 @@ end;
 class function TStaticAnalyzer2.AnalyzeLeaks(const FileName: string;
   const ProjectRoot: string;
   AIncludeUsesCheck: Boolean): TObjectList<TLeakFinding>;
-// Single-File-Findings, aber Symbol-Reference-Index aus dem ganzen Projekt.
-// Loest die typischen CanBePrivate-False-Positives, die im reinen Single-
-// File-Pfad mangels Cross-Unit-Sicht entstehen.
+// Single-File-Findings + projektweit aufgebauter Symbol-Reference-Index.
+// Hinweis: seit dem Visibility-Detektor-Refactor (single-file only) ist
+// der projektweite Index fuer Visibility-Detektoren nicht mehr noetig;
+// die Overload bleibt fuer andere Detektoren erhalten (DFM-Repo-Index,
+// Cross-Unit-Symbol-Lookup, falls spaeter benoetigt).
 //
 // Wenn ProjectRoot leer ist oder das Verzeichnis nicht existiert, faellt
 // die Routine auf den einfachen Single-File-Pfad zurueck (kein Index).

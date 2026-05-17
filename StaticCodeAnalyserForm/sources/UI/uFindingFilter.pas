@@ -32,8 +32,9 @@ type
                  fmMemoryLeak,
                  fmSQLInjection, fmHardcodedSecret, fmFormatMismatch,
                  fmNilDeref, fmDivByZero,
-                 // Cross-Unit Visibility
-                 fmCanBePrivate, fmCanBeProtected, fmUnusedPublicMember,
+                 // Visibility (single-file)
+                 fmCanBeUnitPrivate, fmCanBeStrictPrivate,
+                 fmCanBeProtected, fmUnusedPublicMember,
                  // Korrektheits-Detektoren (neue Generation)
                  fmUnusedLocalVar, fmUnusedParameter, fmTautologicalBoolExpr,
                  // DFM Phase 4
@@ -48,7 +49,9 @@ type
                  fmLongMethod, fmLongParamList, fmMagicNumber,
                  fmDuplicateString, fmDeepNesting,
                  fmTodoComment, fmEmptyMethod, fmDuplicateBlock,
-                 fmCyclomaticComplexity);
+                 fmCyclomaticComplexity,
+                 // Concurrency-Familie (SCA108+)
+                 fmSynchronizeInDestructor, fmLockWithoutTryFinally);
 
   // Zweiter Filter (orthogonal zu Schweregrad): Sonar-Typ-Kategorie.
   TTypeFilter = (tfAll, tfBug, tfCodeSmell, tfVulnerability,
@@ -101,7 +104,8 @@ function KindSearchKeywords(Kind: TFindingKind): string;
 begin
   case Kind of
     fkMemoryLeak       : Result := 'memory leak speicherleck';
-    fkCanBePrivate     : Result := 'private encapsulation visibility kapselung sichtbarkeit';
+    fkCanBeUnitPrivate : Result := 'private unit encapsulation visibility kapselung sichtbarkeit';
+    fkCanBeStrictPrivate: Result := 'strict private class encapsulation visibility kapselung klasse';
     fkCanBeProtected   : Result := 'protected encapsulation visibility kapselung subclass';
     fkUnusedPublicMember : Result := 'unused public api dead api ungenutzt';
     fkUnusedLocalVar   : Result := 'unused local variable lokale ungenutzt';
@@ -111,6 +115,8 @@ begin
     fkDfmDataModuleSplitHint  : Result := 'datamodule split refactor aggregate db';
     fkSqlDangerousStatement   : Result := 'sql dangerous update delete truncate without where alle';
     fkFormatLocaleHint        : Result := 'format locale tformatsettings decimal komma punkt';
+    fkSynchronizeInDestructor : Result := 'synchronize destructor deadlock thread concurrency';
+    fkLockWithoutTryFinally   : Result := 'lock critical section monitor concurrency try finally exception';
     fkEmptyExcept      : Result := 'empty except leer verschluckt';
     fkSQLInjection     : Result := 'sql injection einschleusung';
     fkHardcodedSecret  : Result := 'hardcoded secret password token kennwort';
@@ -153,7 +159,8 @@ begin
     fmWarnings:        Result := Sev = fsWarning;
     fmHints:           Result := Sev = fsHint;
     fmMemoryLeak:      Result := F.Kind = fkMemoryLeak;
-    fmCanBePrivate:        Result := F.Kind = fkCanBePrivate;
+    fmCanBeUnitPrivate:    Result := F.Kind = fkCanBeUnitPrivate;
+    fmCanBeStrictPrivate:  Result := F.Kind = fkCanBeStrictPrivate;
     fmCanBeProtected:      Result := F.Kind = fkCanBeProtected;
     fmUnusedPublicMember:  Result := F.Kind = fkUnusedPublicMember;
     fmUnusedLocalVar:      Result := F.Kind = fkUnusedLocalVar;
@@ -163,6 +170,8 @@ begin
     fmDfmDataModuleSplitHint:  Result := F.Kind = fkDfmDataModuleSplitHint;
     fmSqlDangerousStatement:   Result := F.Kind = fkSqlDangerousStatement;
     fmFormatLocaleHint:        Result := F.Kind = fkFormatLocaleHint;
+    fmSynchronizeInDestructor: Result := F.Kind = fkSynchronizeInDestructor;
+    fmLockWithoutTryFinally:   Result := F.Kind = fkLockWithoutTryFinally;
     fmEmptyExcept:     Result := F.Kind = fkEmptyExcept;
     fmSQLInjection:    Result := F.Kind = fkSQLInjection;
     fmHardcodedSecret: Result := F.Kind = fkHardcodedSecret;

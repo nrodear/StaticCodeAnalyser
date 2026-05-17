@@ -48,6 +48,7 @@ type
     SingleFile    : string;         // --file <path>
     Full          : Boolean;        // --full      (rekursiv ab Path)
     Branch        : Boolean;        // --branch    (nur VCS-geaenderte)
+    Diff          : string;         // --diff <sha1>..<sha2>  PR-Review-Mode
     ReportSarif   : string;         // --report-sarif <out.sarif>
     Quiet         : Boolean;        // --quiet
     BaseDir       : string;         // --base-dir <dir>  (fuer relative Pfade
@@ -55,6 +56,10 @@ type
     CustomRules   : string;         // --custom-rules <analyser-rules.yml>
     Profile       : string;         // --profile <name>         (siehe sca-rules.json)
     MinSeverity   : string;         // --min-severity hint|warning|error
+    // ---- Baseline / CI-Exit-Codes ----
+    Baseline      : string;         // --baseline <file.json>     filter known findings
+    WriteBaseline : string;         // --write-baseline <file.json>  snapshot for future runs
+    FailOn        : string;         // --fail-on=error|warning|hint|none  (default: graded)
     // ---- Sonar-Integration (Phase A der todo-sonar.md Roadmap) ----
     SonarExport   : string;         // --sonar-export <out.json>  Generic Issue Format
     SonarInit     : Boolean;        // --sonar-init               sonar-project.properties template
@@ -96,7 +101,12 @@ uses
   System.IOUtils,
   uSCAConsts, uStaticAnalyzer2, uVcsChanges, uRepoSettings,
   uExportSARIF, uCustomRuleDetector,
-  uExportSonarGeneric, uSonarConfig;
+  uExportSonarGeneric, uSonarConfig,
+  uBaseline;
+
+// Forward-Decl: ApplyFailOnPolicy wird von TConsoleRunner.Run gerufen,
+// die Definition steht weiter unten in dieser Unit.
+function ApplyFailOnPolicy(Raw: Integer; const FailOn: string): Integer; forward;
 
 const
   SCA_VERSION = '0.9.1';
@@ -181,6 +191,8 @@ begin
       Result.Full := True
     else if A = '--branch' then
       Result.Branch := True
+    else if A = '--diff' then
+      GetValue(Result.Diff, '--diff')
     else if A = '--quiet' then
       Result.Quiet := True
     else if A = '--path' then
@@ -197,6 +209,15 @@ begin
       GetValue(Result.Profile, '--profile')
     else if A = '--min-severity' then
       GetValue(Result.MinSeverity, '--min-severity')
+    // Baseline + CI-Exit-Codes
+    else if A = '--baseline' then
+      GetValue(Result.Baseline, '--baseline')
+    else if A = '--write-baseline' then
+      GetValue(Result.WriteBaseline, '--write-baseline')
+    else if A.StartsWith('--fail-on=') then
+      Result.FailOn := LowerCase(A.Substring(Length('--fail-on=')))
+    else if A = '--fail-on' then
+      GetValue(Result.FailOn, '--fail-on')
     // Sonar-Flags (Phase A todo-sonar.md)
     else if A = '--sonar-export' then
       GetValue(Result.SonarExport, '--sonar-export')
@@ -249,6 +270,21 @@ begin
     Exit;
   end;
 
+  // --diff braucht --path (analog --branch, Repo-Root-Resolver)
+  if (Result.Diff <> '') and (Result.Path = '') then
+  begin
+    Result.ParseError := '--diff braucht --path';
+    Exit;
+  end;
+  // --diff und --branch schliessen sich aus (--diff = committed-only,
+  // --branch = committed + working-tree, beides Git aber unterschiedliche
+  // Filter-Strategien).
+  if (Result.Diff <> '') and Result.Branch then
+  begin
+    Result.ParseError := '--diff und --branch sind exklusiv';
+    Exit;
+  end;
+
   // --full / --branch sind exklusiv; ohne beide bei --path = Default --full
   if Result.Full and Result.Branch then
   begin
@@ -296,6 +332,10 @@ begin
   WriteLn('Scope (mit --path):');
   WriteLn('  --full                Recursive (default if neither flag set)');
   WriteLn('  --branch              Only VCS-changed files (Git/SVN auto-detected)');
+  WriteLn('  --diff <range>        Only files changed between two Git refs.');
+  WriteLn('                        Range syntax: sha1..sha2 / branchA..branchB');
+  WriteLn('                        / sha1...sha2 (common-ancestor diff).');
+  WriteLn('                        Use case: PR review - "what changed in this MR?".');
   WriteLn('');
   WriteLn('Output:');
   WriteLn('  --report-sarif <file> Write SARIF v2.1.0 report to <file>');
@@ -316,6 +356,20 @@ begin
   WriteLn('  --min-severity <lvl>  hint|warning|error - skip detectors below');
   WriteLn('                        this severity threshold.');
   WriteLn('                        Overrides [Rules] MinSeverity in analyser.ini.');
+  WriteLn('');
+  WriteLn('CI / Baseline:');
+  WriteLn('  --baseline <file>     Drop findings whose fingerprint matches a known');
+  WriteLn('                        entry in <file> (JSON, written by --write-baseline).');
+  WriteLn('                        Only NEW findings remain in output / exit code.');
+  WriteLn('  --write-baseline <f>  Write current findings to <f> for future --baseline.');
+  WriteLn('                        Idempotent; overwrites existing file.');
+  WriteLn('  --fail-on <lvl>       Exit-code policy: error|warning|hint|none|graded.');
+  WriteLn('                        Default (=graded): use the tiered exit codes below.');
+  WriteLn('                        ''none''  - exit 0 even with findings present.');
+  WriteLn('                        ''hint''  - exit non-zero on any finding (= graded).');
+  WriteLn('                        ''warning'' - only warnings + errors fail the build.');
+  WriteLn('                        ''error''   - only errors fail the build.');
+  WriteLn('                        Read-Errors and Tool-Errors always remain non-zero.');
   WriteLn('');
   WriteLn('Sonar integration (see docs/sonar-setup.md):');
   WriteLn('  --sonar-export <file> Write Sonar Generic Issue Format JSON');
@@ -522,8 +576,23 @@ begin
         [Settings.Profile, Settings.MinSeverity]));
 
     try
+      // Diff-Mode A<->B: nur die Dateien die zwischen den Commits geaendert
+      // wurden. PR-Review-Use-Case (vs Branch: Working-Tree + commits).
+      if Args.Diff <> '' then
+      begin
+        Files := TVcsChanges.GetChangedPasFilesDiff(Args.Path, Args.Diff, RepoInfo, Settings);
+        if (Files = nil) or (Files.Count = 0) then
+        begin
+          if not Args.Quiet then
+            WriteLn('No .pas files differ in range ', Args.Diff, '. ', RepoInfo);
+          Exit(Integer(cecClean));
+        end;
+        if not Args.Quiet then
+          WriteLn(RepoInfo);
+        Findings := TStaticAnalyzer2.AnalyzeLeaksFromList(Files);
+      end
       // Branch-Mode: VCS-geaenderte Dateien ermitteln, dann analysieren
-      if Args.Branch then
+      else if Args.Branch then
       begin
         Files := TVcsChanges.GetChangedPasFilesAuto(Args.Path, RepoInfo, Settings);
         if (Files = nil) or (Files.Count = 0) then
@@ -561,6 +630,38 @@ begin
     if Findings = nil then
       Findings := TObjectList<TLeakFinding>.Create(True);
 
+    // ---- Baseline-Filter (vor Output / Exit-Code) ----
+    if Args.Baseline <> '' then
+    begin
+      try
+        var Dropped := TBaseline.Apply(Findings, Args.Baseline);
+        if (not Args.Quiet) and (Dropped > 0) then
+          WriteLn(Format('Baseline filtered: %d known findings dropped (%s)',
+            [Dropped, Args.Baseline]));
+      except
+        on E: Exception do
+          WriteLn(ErrOutput, 'Baseline read warning: ', E.Message);
+        // Baseline-Fehler ist nicht fatal - Lauf geht ohne Filter weiter
+      end;
+    end;
+
+    // ---- Snapshot fuer kuenftige Baseline ----
+    if Args.WriteBaseline <> '' then
+    begin
+      try
+        TBaseline.Write(Findings, Args.WriteBaseline);
+        if not Args.Quiet then
+          WriteLn(Format('Baseline written: %s (%d findings)',
+            [Args.WriteBaseline, Findings.Count]));
+      except
+        on E: Exception do
+        begin
+          WriteLn(ErrOutput, 'Baseline write error: ', E.Message);
+          Exit(Integer(cecToolError));
+        end;
+      end;
+    end;
+
     // SARIF-Output (wenn angefordert)
     if Args.ReportSarif <> '' then
     begin
@@ -596,6 +697,8 @@ begin
 
     WriteSummary(Findings, Args.Quiet);
     Result := CalcExitCode(Findings);
+    // --fail-on User-Policy ggf. anwenden (Default: graded = Raw beibehalten)
+    Result := ApplyFailOnPolicy(Result, Args.FailOn);
   finally
     Findings.Free;
     Files.Free;
@@ -675,6 +778,46 @@ begin
   if HasHint    then Exit(Integer(cecHints));
   if HasFileErr then Exit(Integer(cecReadErrors));
   Result := Integer(cecClean);
+end;
+
+function ApplyFailOnPolicy(Raw: Integer; const FailOn: string): Integer;
+// Schliesst Exit-Codes auf 0 zurueck wenn die User-Policy die Severity
+// nicht eskalieren will. Werte (case-insensitive):
+//   ''/'graded' - Default-Verhalten (Raw uebernehmen)
+//   'none'      - immer 0
+//   'hint'      - >= cecHints exit non-zero (= aktuelles Default)
+//   'warning'   - nur >= cecWarnings exit non-zero
+//   'error'     - nur >= cecErrors  exit non-zero
+// Read-Errors (cecReadErrors=4) bleiben in jedem nicht-'none' Modus
+// non-zero, weil sie I/O-Probleme signalisieren die der CI sehen soll.
+var
+  L : string;
+begin
+  L := LowerCase(Trim(FailOn));
+  if (L = '') or (L = 'graded') then Exit(Raw);
+  if L = 'none' then Exit(0);
+  // Tool-Fehler bleibt immer nicht-null
+  if Raw = Integer(cecToolError) then Exit(Raw);
+  // Read-Errors muessen sichtbar bleiben (nicht-null) in allen Modi ausser 'none'
+  if Raw = Integer(cecReadErrors) then Exit(Raw);
+
+  if L = 'error' then
+  begin
+    if Raw = Integer(cecErrors) then Exit(Raw)
+    else                              Exit(0);
+  end;
+  if L = 'warning' then
+  begin
+    if Raw >= Integer(cecWarnings) then Exit(Raw)
+    else                                Exit(0);
+  end;
+  if L = 'hint' then
+  begin
+    if Raw >= Integer(cecHints) then Exit(Raw)
+    else                             Exit(0);
+  end;
+  // Unbekannter Wert -> Default
+  Result := Raw;
 end;
 
 end.

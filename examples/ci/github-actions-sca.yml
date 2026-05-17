@@ -1,0 +1,65 @@
+# Example GitHub Actions workflow for Static Code Analysis Tool for Delphi.
+#
+# Runs analyser.d12.exe on every push + pull request, uploads the SARIF
+# report to GitHub Code-Scanning (visible under Security > Code scanning
+# alerts), and uses a baseline file to gate ONLY on new findings.
+#
+# Prerequisites:
+#   1. analyser.d12.exe + rules\sca-rules.json deployed under tools\sca\
+#      in the repo (or downloaded as a release artifact in the prep step).
+#   2. Optional: sca.baseline.json checked in at repo root. If missing,
+#      the first run with this workflow will write it.
+#
+# Adapt the runner (windows-latest) and paths to your repo layout.
+
+name: Static Code Analysis
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  sca:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      security-events: write   # required for SARIF upload to Code-Scanning
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Need history for --branch diff if you use it.
+          fetch-depth: 50
+
+      - name: Run analyser (full scan, --fail-on=warning)
+        # --fail-on=warning: Hints are reported but don't break the build.
+        #                    Warnings and Errors do.
+        # --baseline:        Drops known-accepted findings (legacy backlog).
+        # --write-baseline:  Snapshot only on the main branch (next-run cache).
+        run: |
+          .\tools\sca\analyser.d12.exe `
+            --path . `
+            --full `
+            --profile default `
+            --baseline sca.baseline.json `
+            --report-sarif sca.sarif `
+            --fail-on=warning `
+            --quiet
+
+      - name: Upload SARIF to GitHub Code-Scanning
+        if: always()           # upload even on non-zero exit so reviewers see the alerts
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: sca.sarif
+          category: sca-delphi
+
+      - name: Archive SARIF as build artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sca-sarif
+          path: sca.sarif
+          retention-days: 30

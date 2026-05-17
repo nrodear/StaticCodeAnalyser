@@ -246,7 +246,8 @@ implementation
 
 uses
   Winapi.Windows, System.IOUtils,
-  uIgnoreList, uSCAConsts, uCustomRuleDetector, uRuleCatalog;
+  uIgnoreList, uSCAConsts, uCustomRuleDetector, uRuleCatalog,
+  uPathOverrides;
 
 const
   DEFAULT_INI_CONTENT =
@@ -473,6 +474,33 @@ const
     ';IdeProfile=strict'#13#10 +
     'IdeMinSeverity=hint'#13#10 +
     ';IdeMinSeverity=warning'#13#10 +
+    ''#13#10 +
+    ';'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ';  [PathOverrides] - Pfad-basierte Severity-/Drop-Filter'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ';'#13#10 +
+    '; Loest "Test-Code-Noise" ohne Profile-Schwund: ein Profile bleibt'#13#10 +
+    '; scharf, aber Findings auf Test-/Demo-/Generated-Pfaden werden'#13#10 +
+    '; gedroppt oder runtergestuft.'#13#10 +
+    ';'#13#10 +
+    '; Format:   <glob> = <action>'#13#10 +
+    ';'#13#10 +
+    '; Glob:     Forward- oder Backslashes; case-insensitive; ** = beliebige Tiefe'#13#10 +
+    '; Aktion:   drop:*                    - alle Findings droppen'#13#10 +
+    ';           drop:KindA,KindB,...      - nur diese Kinds droppen'#13#10 +
+    ';           severity:hint:<KindList>  - Severity downgrade'#13#10 +
+    ';           severity:warn:<KindList>  -      "'#13#10 +
+    ';           severity:error:<KindList> -      " (Eskalation)'#13#10 +
+    ';'#13#10 +
+    '; Erste passende Rule gewinnt - Reihenfolge wichtig.'#13#10 +
+    ';'#13#10 +
+    '; Beispiele (auskommentiert):'#13#10 +
+    '[PathOverrides]'#13#10 +
+    ';tests\**.pas        = drop:*'#13#10 +
+    ';**\test_*.pas       = drop:MissingFinally,MagicNumber'#13#10 +
+    ';demos\legacy\**.pas = drop:LongMethod,DeepNesting,CyclomaticComplexity'#13#10 +
+    ';src\generated\**    = severity:hint:*'#13#10 +
     ''#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
@@ -867,6 +895,10 @@ begin
 
   // [Rules] MinSeverity -> globaler Severity-Schwellwert.
   uSCAConsts.DetectorMinSeverity := ParseMinSev(FMinSeverity);
+
+  // [PathOverrides] -> uPathOverrides global. Wird im Analyzer-Pipeline
+  // als Post-Filter nach uSuppression aufgerufen.
+  uPathOverrides.TPathOverrides.Load(ConfigFilePath);
 
   // Trivial-Liste: globale Liste mit unseren INI-Eintraegen ueberschreiben.
   if Assigned(uSCAConsts.DetectorMagicTrivials) then

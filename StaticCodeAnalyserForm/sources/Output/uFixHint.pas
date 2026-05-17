@@ -1454,30 +1454,67 @@ begin
         '// -1 produces an empty range (0 iterations) for empty strings.';
     end;
 
-    fkCanBePrivate:
+    fkCanBeUnitPrivate:
     begin
-      Result.Description := _('Public member is used only inside its declaring class - tighten visibility');
+      Result.Description := _('Public member is referenced only within the current unit - Delphi-classic `private` (unit-scope) suffices');
+      Result.Before :=
+        'unit U;'#13#10 +
+        ''#13#10 +
+        'type'#13#10 +
+        '  TFoo = class'#13#10 +
+        '  public'#13#10 +
+        '    procedure Helper;'#13#10 +
+        '  end;'#13#10 +
+        '  TBar = class'#13#10 +
+        '    procedure Run;'#13#10 +
+        '  end;'#13#10 +
+        ''#13#10 +
+        'procedure TBar.Run;'#13#10 +
+        'begin'#13#10 +
+        '  // Sibling-class call inside the SAME unit'#13#10 +
+        '  FFoo.Helper;'#13#10 +
+        'end;';
+      Result.After :=
+        'type'#13#10 +
+        '  TFoo = class'#13#10 +
+        '  private                  // Delphi-classic: unit-scope'#13#10 +
+        '    procedure Helper;'#13#10 +
+        '  end;'#13#10 +
+        ''#13#10 +
+        '// TBar.Run still compiles - `private` allows access from any'#13#10 +
+        '// code in the SAME unit, not just the declaring class.'#13#10 +
+        '// Single-file scan: if a foreign unit consumes Helper, the'#13#10 +
+        '// compiler will surface E2361 and you revert the change.'#13#10 +
+        ''#13#10 +
+        '// Suppress with: // noinspection CanBeUnitPrivate';
+    end;
+
+    fkCanBeStrictPrivate:
+    begin
+      Result.Description := _('Public member is used only by methods of its own class - `strict private` reaches the strongest encapsulation');
       Result.Before :=
         'type'#13#10 +
         '  TFoo = class'#13#10 +
         '  public'#13#10 +
-        '    procedure Helper;'#13#10 +
+        '    procedure Helper;       // ONLY TFoo.Run calls Helper'#13#10 +
         '    procedure Run;'#13#10 +
         '  end;'#13#10 +
         ''#13#10 +
-        'procedure TFoo.Helper; begin ... end;'#13#10 +
-        'procedure TFoo.Run; begin Helper; end;'#13#10 +
-        '// Helper is only called from Run - public is too lax.';
+        'procedure TFoo.Run; begin Helper; end;';
       Result.After :=
         'type'#13#10 +
         '  TFoo = class'#13#10 +
-        '  private'#13#10 +
+        '  strict private          // D2007+: class-scope, not unit-scope'#13#10 +
         '    procedure Helper;'#13#10 +
         '  public'#13#10 +
         '    procedure Run;'#13#10 +
         '  end;'#13#10 +
         ''#13#10 +
-        '// Encapsulation tightened: Helper is now an implementation detail.';
+        '// `strict private` blocks sibling classes / helpers / top-level'#13#10 +
+        '// code in the same unit from reaching Helper. Stronger than'#13#10 +
+        '// Delphi-classic `private` and the cleanest signal of intent.'#13#10 +
+        ''#13#10 +
+        '// Suppress with: // noinspection CanBeStrictPrivate';
     end;
 
     fkCanBeProtected:
@@ -1698,6 +1735,1217 @@ begin
         '// version control keeps the history.'#13#10 +
         '// If it is plugin/RTTI surface (rare in single-unit code),'#13#10 +
         '// suppress with:  // noinspection UnusedPublicMember';
+    end;
+
+    // -------- SonarDelphi-Import (SCA060 ff.) --------
+
+    fkGotoStatement:
+    begin
+      Result.Description := _('goto weakens structured control flow');
+      Result.Before :=
+        'label MyExit;'#13#10 +
+        'begin'#13#10 +
+        '  if Failed then goto MyExit;'#13#10 +
+        '  DoMoreWork;'#13#10 +
+        '  MyExit:'#13#10 +
+        'end;';
+      Result.After :=
+        'begin'#13#10 +
+        '  if Failed then Exit;'#13#10 +
+        '  DoMoreWork;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// For multi-level break: extract an inner procedure and Exit from it.';
+    end;
+
+    fkTabulationCharacter:
+    begin
+      Result.Description := _('Tab character in source - use spaces for indentation');
+      Result.Before :=
+        'procedure Foo;'#13#10 +
+        'begin'#13#10 +
+        '<TAB>DoStuff;          // <-- tab indent'#13#10 +
+        'end;';
+      Result.After :=
+        'procedure Foo;'#13#10 +
+        'begin'#13#10 +
+        '  DoStuff;             // 2-space indent (Delphi convention)'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// IDE: Tools > Options > Editor > Source Options > Use tab character = off.';
+    end;
+
+    fkTooLongLine:
+    begin
+      Result.Description := _('Source line exceeds 120 characters - wrap or extract');
+      Result.Before :=
+        'Result := SomeReallyLongFunction(ArgumentOne, ArgumentTwo, ArgumentThree, ArgumentFour, ArgumentFive);';
+      Result.After :=
+        'Result := SomeReallyLongFunction('#13#10 +
+        '  ArgumentOne, ArgumentTwo,'#13#10 +
+        '  ArgumentThree, ArgumentFour, ArgumentFive);'#13#10 +
+        ''#13#10 +
+        '// Side-by-side diff is 2*120+gutter; longer lines break review tools.';
+    end;
+
+    fkTrailingWhitespace:
+    begin
+      Result.Description := _('Line ends with whitespace - diff hygiene');
+      Result.Before :=
+        '  DoStuff;...   <-- trailing spaces/tabs'#13#10 +
+        '  AndMore;...';
+      Result.After :=
+        '  DoStuff;'#13#10 +
+        '  AndMore;'#13#10 +
+        ''#13#10 +
+        '// IDE: Tools > Options > Editor > Save > Trim trailing whitespace.';
+    end;
+
+    fkLowercaseKeyword:
+    begin
+      Result.Description := _('Pascal keyword not in lowercase');
+      Result.Before :=
+        'Procedure Foo;'#13#10 +
+        'Begin'#13#10 +
+        '  If X then DoStuff;'#13#10 +
+        'End;';
+      Result.After :=
+        'procedure Foo;'#13#10 +
+        'begin'#13#10 +
+        '  if X then DoStuff;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Delphi convention (DocWiki, Marco Cantu, SonarDelphi):'#13#10 +
+        '// keywords lowercase, identifiers PascalCase.';
+    end;
+
+    fkNoSonarMarker:
+    begin
+      Result.Description := _('// NOSONAR suppression marker found - audit it');
+      Result.Before :=
+        'Query.SQL.Text :='#13#10 +
+        '  ''SELECT * FROM users WHERE id = '' + Id; // NOSONAR';
+      Result.After :=
+        '// Either fix the underlying issue:'#13#10 +
+        'Query.SQL.Text := ''SELECT * FROM users WHERE id = :id'';'#13#10 +
+        'Query.ParamByName(''id'').AsInteger := Id;'#13#10 +
+        ''#13#10 +
+        '// Or document WHY the suppression is justified:'#13#10 +
+        '// NOSONAR: id is a constant from an enum, no user input.'#13#10 +
+        ''#13#10 +
+        '// The detector is a reminder, not a verdict - it surfaces every'#13#10 +
+        '// // NOSONAR so each one can be re-reviewed periodically.';
+    end;
+
+    fkEmptyArgumentList:
+    begin
+      Result.Description := _('Empty argument list "()" - drop the parentheses');
+      Result.Before :=
+        'DoStuff();'#13#10 +
+        'Result := FCalculator.Run();';
+      Result.After :=
+        'DoStuff;'#13#10 +
+        'Result := FCalculator.Run;'#13#10 +
+        ''#13#10 +
+        '// In Pascal a parameterless call has no parentheses, unlike C/Java.'#13#10 +
+        '// Exception: pointer-to-method types (@Foo()) - those keep the ().';
+    end;
+
+    fkInlineAssembly:
+    begin
+      Result.Description := _('asm..end block - platform-specific, hard to port');
+      Result.Before :=
+        'function FastCount(P: PByte; Len: Integer): Integer;'#13#10 +
+        'asm'#13#10 +
+        '  // Win32-only inline asm'#13#10 +
+        '  ...'#13#10 +
+        'end;';
+      Result.After :=
+        '// Prefer a pure-Pascal version unless a profiler proves'#13#10 +
+        '// the asm is needed. If asm is unavoidable:'#13#10 +
+        '//   * isolate it behind {$IFDEF CPUX86} / {$IFDEF CPUX64}'#13#10 +
+        '//   * write a portable Pascal fallback'#13#10 +
+        '//   * benchmark before assuming the asm is faster (modern compilers'#13#10 +
+        '//     often beat hand-rolled 32-bit asm).';
+    end;
+
+    fkTrailingCommaArgList:
+    begin
+      Result.Description := _('Trailing comma in argument list');
+      Result.Before :=
+        'Logger.Info(''ctx=%s'', [Ctx,]);   // <-- stray comma'#13#10 +
+        'CallFoo(A, B,);                  // <-- ditto';
+      Result.After :=
+        'Logger.Info(''ctx=%s'', [Ctx]);'#13#10 +
+        'CallFoo(A, B);'#13#10 +
+        ''#13#10 +
+        '// Unlike Python/JS, Pascal does not allow trailing commas in calls.'#13#10 +
+        '// Usually a leftover from copy-paste or comment-out of last arg.';
+    end;
+
+    fkDigitGrouping:
+    begin
+      Result.Description := _('Large integer literal without digit grouping');
+      Result.Before :=
+        'const'#13#10 +
+        '  MAX_TIMEOUT_MS = 30000;'#13#10 +
+        '  ONE_MILLION   = 1000000;     // <-- hard to read';
+      Result.After :=
+        'const'#13#10 +
+        '  MAX_TIMEOUT_MS = 30_000;'#13#10 +
+        '  ONE_MILLION   = 1_000_000;'#13#10 +
+        ''#13#10 +
+        '// Underscores in integer literals are Delphi 10.4+. Use them for'#13#10 +
+        '// any number with >= 5 digits to disambiguate magnitude at a glance.';
+    end;
+
+    fkCommentedOutCode:
+    begin
+      Result.Description := _('Comment contains Pascal-code markers - delete it or restore it');
+      Result.Before :=
+        '// FOldDb.Connect(Host, User);'#13#10 +
+        '// FOldDb.Open;'#13#10 +
+        '// if not FOldDb.IsOpen then'#13#10 +
+        '//   raise EOldDbError.Create(''cannot open'');';
+      Result.After :=
+        '// Delete the dead block - git history keeps it forever.'#13#10 +
+        ''#13#10 +
+        '// If the code is intentionally kept as a reference,'#13#10 +
+        '// move it to a `{ remarks ... }` doc-comment with a why-explanation,'#13#10 +
+        '// or extract a private procedure with a meaningful name.';
+    end;
+
+    fkUnitLevelKeywordIndent:
+    begin
+      Result.Description := _('Unit-level keyword not at column 1');
+      Result.Before :=
+        '  unit uFoo;       // <-- indented'#13#10 +
+        ''#13#10 +
+        '  interface        // <-- indented'#13#10 +
+        '  uses System.SysUtils;';
+      Result.After :=
+        'unit uFoo;'#13#10 +
+        ''#13#10 +
+        'interface'#13#10 +
+        ''#13#10 +
+        'uses'#13#10 +
+        '  System.SysUtils;'#13#10 +
+        ''#13#10 +
+        '// unit/interface/implementation/initialization/finalization/end'#13#10 +
+        '// start at column 1; nested code is indented within them.';
+    end;
+
+    fkRedundantBoolean:
+    begin
+      Result.Description := _('Boolean compared to True/False - redundant');
+      Result.Before :=
+        'if IsActive = True then ...'#13#10 +
+        'if IsClosed <> False then ...'#13#10 +
+        'while (Done = False) do ...';
+      Result.After :=
+        'if IsActive then ...'#13#10 +
+        'if IsClosed then ...'#13#10 +
+        'while not Done do ...'#13#10 +
+        ''#13#10 +
+        '// Boolean expression evaluates to a Boolean already -'#13#10 +
+        '// "= True" is a no-op that hurts readability and makes'#13#10 +
+        '// the buggy "if (x = True)" pattern more likely to slip in.';
+    end;
+
+    fkEmptyInterface:
+    begin
+      Result.Description := _('Interface declaration has no methods');
+      Result.Before :=
+        'type'#13#10 +
+        '  IPlugin = interface'#13#10 +
+        '    [''{1234-...}'']'#13#10 +
+        '  end;';
+      Result.After :=
+        'type'#13#10 +
+        '  IPlugin = interface'#13#10 +
+        '    [''{1234-...}'']'#13#10 +
+        '    procedure Initialize;'#13#10 +
+        '    procedure Shutdown;'#13#10 +
+        '  end;'#13#10 +
+        ''#13#10 +
+        '// Empty interface adds no behaviour and no type safety -'#13#10 +
+        '// any class satisfies it. Either give it methods (real contract)'#13#10 +
+        '// or use a tag attribute / class-helper class-method as marker.';
+    end;
+
+    fkAssertMessage:
+    begin
+      Result.Description := _('Assert() without explanatory message');
+      Result.Before :=
+        'Assert(List <> nil);'#13#10 +
+        'Assert(Index < Count);';
+      Result.After :=
+        'Assert(List <> nil, ''List must be initialized before Process'');'#13#10 +
+        'Assert(Index < Count, Format(''Index %d out of range [0..%d)'','#13#10 +
+        '  [Index, Count]));'#13#10 +
+        ''#13#10 +
+        '// The message is what the developer reads when the assertion fires.'#13#10 +
+        '// Without it, the message is just the source line - useless if'#13#10 +
+        '// the binary is in production / a customer environment.';
+    end;
+
+    fkExplicitTObjectInheritance:
+    begin
+      Result.Description := _('class(TObject) - TObject is the default base, drop it');
+      Result.Before :=
+        'type'#13#10 +
+        '  TFoo = class(TObject)'#13#10 +
+        '    ...'#13#10 +
+        '  end;';
+      Result.After :=
+        'type'#13#10 +
+        '  TFoo = class'#13#10 +
+        '    ...'#13#10 +
+        '  end;'#13#10 +
+        ''#13#10 +
+        '// "class" without a parent is equivalent to "class(TObject)" -'#13#10 +
+        '// the explicit form adds noise without adding meaning.';
+    end;
+
+    fkGroupedDeclaration:
+    begin
+      Result.Description := _('Grouped variable/field declaration - one per line');
+      Result.Before :=
+        'var'#13#10 +
+        '  A, B, C: Integer;'#13#10 +
+        ''#13#10 +
+        'type'#13#10 +
+        '  TFoo = class'#13#10 +
+        '    FX, FY: Double;'#13#10 +
+        '  end;';
+      Result.After :=
+        'var'#13#10 +
+        '  A: Integer;'#13#10 +
+        '  B: Integer;'#13#10 +
+        '  C: Integer;'#13#10 +
+        ''#13#10 +
+        'type'#13#10 +
+        '  TFoo = class'#13#10 +
+        '    FX: Double;'#13#10 +
+        '    FY: Double;'#13#10 +
+        '  end;'#13#10 +
+        ''#13#10 +
+        '// One declaration per line: easier diffs, individual comments,'#13#10 +
+        '// XML-Doc per field. Exception: parameter lists keep grouping'#13#10 +
+        '// (procedure Foo(const A, B: Integer)).';
+    end;
+
+    fkEmptyBlock:
+    begin
+      Result.Description := _('Empty begin..end block');
+      Result.Before :=
+        'if Condition then'#13#10 +
+        'begin'#13#10 +
+        '  // TODO'#13#10 +
+        'end'#13#10 +
+        'else'#13#10 +
+        '  DoStuff;';
+      Result.After :=
+        'if not Condition then'#13#10 +
+        '  DoStuff;'#13#10 +
+        ''#13#10 +
+        '// An empty begin..end is either dead code (delete) or unfinished'#13#10 +
+        '// (track it). Empty METHOD bodies are handled by uEmptyMethod;'#13#10 +
+        '// this detector only flags bare begin..end inside if/while/...';
+    end;
+
+    fkExceptOnException:
+    begin
+      Result.Description := _('on E: Exception catches everything - too broad');
+      Result.Before :=
+        'try'#13#10 +
+        '  DoDbWork;'#13#10 +
+        'except'#13#10 +
+        '  on E: Exception do'#13#10 +
+        '    LogError(E.Message);'#13#10 +
+        'end;';
+      Result.After :=
+        'try'#13#10 +
+        '  DoDbWork;'#13#10 +
+        'except'#13#10 +
+        '  on E: EDatabaseError do'#13#10 +
+        '    LogError(''DB: '' + E.Message);'#13#10 +
+        '  on E: ETimeoutError do'#13#10 +
+        '    LogError(''Timeout: '' + E.Message);'#13#10 +
+        '  // anything else falls through to the caller'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Catching Exception swallows EAccessViolation/EOutOfMemory.'#13#10 +
+        '// Catch the specific classes you can really recover from.';
+    end;
+
+    fkConsecutiveSection:
+    begin
+      Result.Description := _('Two consecutive const/type/var sections - merge them');
+      Result.Before :=
+        'const'#13#10 +
+        '  TIMEOUT = 30;'#13#10 +
+        ''#13#10 +
+        'const'#13#10 +
+        '  MAX_TRIES = 3;'#13#10 +
+        ''#13#10 +
+        'var'#13#10 +
+        '  Counter: Integer;'#13#10 +
+        ''#13#10 +
+        'var'#13#10 +
+        '  Total: Int64;';
+      Result.After :=
+        'const'#13#10 +
+        '  TIMEOUT   = 30;'#13#10 +
+        '  MAX_TRIES = 3;'#13#10 +
+        ''#13#10 +
+        'var'#13#10 +
+        '  Counter : Integer;'#13#10 +
+        '  Total   : Int64;'#13#10 +
+        ''#13#10 +
+        '// A single section per kind makes scanning faster and lets the'#13#10 +
+        '// IDE outline collapse all-at-once.';
+    end;
+
+    fkRedundantJump:
+    begin
+      Result.Description := _('Exit/Continue/Break directly before end - redundant');
+      Result.Before :=
+        'procedure Foo;'#13#10 +
+        'begin'#13#10 +
+        '  DoStuff;'#13#10 +
+        '  Exit;       // <-- redundant, end follows anyway'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        'for i := 0 to N do'#13#10 +
+        'begin'#13#10 +
+        '  if Bad(i) then Continue;  // <-- redundant if at end of loop'#13#10 +
+        'end;';
+      Result.After :=
+        'procedure Foo;'#13#10 +
+        'begin'#13#10 +
+        '  DoStuff;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        'for i := 0 to N do'#13#10 +
+        '  if not Bad(i) then'#13#10 +
+        '    Process(i);';
+    end;
+
+    fkClassPerFile:
+    begin
+      Result.Description := _('Multiple class declarations in one unit');
+      Result.Before :=
+        '// uForms.pas'#13#10 +
+        'type'#13#10 +
+        '  TMainForm = class(TForm) ... end;'#13#10 +
+        '  TDetailForm = class(TForm) ... end;'#13#10 +
+        '  TLoginForm  = class(TForm) ... end;';
+      Result.After :=
+        '// uMainForm.pas       <-- TMainForm'#13#10 +
+        '// uDetailForm.pas     <-- TDetailForm'#13#10 +
+        '// uLoginForm.pas      <-- TLoginForm'#13#10 +
+        ''#13#10 +
+        '// One public class per unit makes file = symbol, browsing, blame'#13#10 +
+        '// and IDE Class Completion straightforward. Private helper classes'#13#10 +
+        '// next to the main class are fine; the rule targets multiple'#13#10 +
+        '// EQUAL-WEIGHT public classes in one unit.';
+    end;
+
+    fkSuperfluousSemicolon:
+    begin
+      Result.Description := _('Double semicolon ";;" - one is enough');
+      Result.Before :=
+        'DoStuff;;'#13#10 +
+        'Result := X + Y;;';
+      Result.After :=
+        'DoStuff;'#13#10 +
+        'Result := X + Y;'#13#10 +
+        ''#13#10 +
+        '// The Pascal grammar allows it (empty statement), but the second'#13#10 +
+        '// semicolon is dead. Usually leftover from rearranging code.';
+    end;
+
+    fkEmptyFinallyBlock:
+    begin
+      Result.Description := _('Empty finally block - either drop the try or add cleanup');
+      Result.Before :=
+        'Obj := TFoo.Create;'#13#10 +
+        'try'#13#10 +
+        '  DoWork(Obj);'#13#10 +
+        'finally'#13#10 +
+        '  // TODO: free Obj'#13#10 +
+        'end;';
+      Result.After :=
+        'Obj := TFoo.Create;'#13#10 +
+        'try'#13#10 +
+        '  DoWork(Obj);'#13#10 +
+        'finally'#13#10 +
+        '  FreeAndNil(Obj);'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// An empty finally is almost always a forgotten cleanup. If you'#13#10 +
+        '// really need only exception handling, use try..except (not finally).';
+    end;
+
+    fkAssignedAndAssignedNil:
+    begin
+      Result.Description := _('Assigned(X) and (X <> nil) - one check is enough');
+      Result.Before :=
+        'if Assigned(Obj) and (Obj <> nil) then'#13#10 +
+        '  Obj.Run;';
+      Result.After :=
+        'if Assigned(Obj) then'#13#10 +
+        '  Obj.Run;'#13#10 +
+        ''#13#10 +
+        '// Assigned(X) is exactly "X <> nil" for object references and'#13#10 +
+        '// dynamic arrays. Writing both is redundant and signals confusion'#13#10 +
+        '// about ownership semantics.';
+    end;
+
+    fkFreeAndNilHint:
+    begin
+      Result.Description := _('X.Free; X := nil; -> use FreeAndNil(X)');
+      Result.Before :=
+        'FCache.Free;'#13#10 +
+        'FCache := nil;';
+      Result.After :=
+        'FreeAndNil(FCache);'#13#10 +
+        ''#13#10 +
+        '// FreeAndNil is atomic for the field assignment and clearer in'#13#10 +
+        '// intent. Especially important in destructors / shared state where'#13#10 +
+        '// a re-entrant call could see Free''d-but-not-nil''d.';
+    end;
+
+    fkAvoidOut:
+    begin
+      Result.Description := _('out parameter - prefer Result or var');
+      Result.Before :=
+        'procedure ParseUser(const Raw: string; out User: TUser);'#13#10 +
+        'begin'#13#10 +
+        '  User.Id   := ...;'#13#10 +
+        '  User.Name := ...;'#13#10 +
+        'end;';
+      Result.After :=
+        'function ParseUser(const Raw: string): TUser;'#13#10 +
+        'begin'#13#10 +
+        '  Result.Id   := ...;'#13#10 +
+        '  Result.Name := ...;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// out has counter-intuitive semantics: the existing value is'#13#10 +
+        '// CLEARED before the call (managed types finalized). Most uses'#13#10 +
+        '// are better as a function Result or, if multiple outputs are'#13#10 +
+        '// needed, a record return type. Reserve out for COM-style APIs.';
+    end;
+
+    fkEmptyVisibilitySection:
+    begin
+      Result.Description := _('Empty visibility section in class - delete it');
+      Result.Before :=
+        'type'#13#10 +
+        '  TFoo = class'#13#10 +
+        '  private'#13#10 +
+        '    // (empty)'#13#10 +
+        '  public'#13#10 +
+        '    procedure Run;'#13#10 +
+        '  end;';
+      Result.After :=
+        'type'#13#10 +
+        '  TFoo = class'#13#10 +
+        '  public'#13#10 +
+        '    procedure Run;'#13#10 +
+        '  end;'#13#10 +
+        ''#13#10 +
+        '// An empty visibility keyword is just noise. Common after'#13#10 +
+        '// refactoring moved all members of a section elsewhere.';
+    end;
+
+    fkLegacyInitializationSection:
+    begin
+      Result.Description := _('Unit ends with begin..end. - use initialization section');
+      Result.Before :=
+        'unit uOld;'#13#10 +
+        'interface'#13#10 +
+        '...'#13#10 +
+        'implementation'#13#10 +
+        '...'#13#10 +
+        'begin'#13#10 +
+        '  RegisterClasses([TFoo, TBar]);'#13#10 +
+        'end.';
+      Result.After :=
+        'unit uOld;'#13#10 +
+        'interface'#13#10 +
+        '...'#13#10 +
+        'implementation'#13#10 +
+        '...'#13#10 +
+        'initialization'#13#10 +
+        '  RegisterClasses([TFoo, TBar]);'#13#10 +
+        ''#13#10 +
+        'finalization'#13#10 +
+        '  // matching cleanup if needed'#13#10 +
+        ''#13#10 +
+        'end.'#13#10 +
+        ''#13#10 +
+        '// The bare begin..end. is Turbo-Pascal-era; modern Delphi has'#13#10 +
+        '// initialization/finalization for symmetric unit lifecycle.';
+    end;
+
+    fkPublicField:
+    begin
+      Result.Description := _('Public field - expose a property instead');
+      Result.Before :=
+        'type'#13#10 +
+        '  TPerson = class'#13#10 +
+        '  public'#13#10 +
+        '    Name: string;     // <-- public field'#13#10 +
+        '    Age:  Integer;    // <-- public field'#13#10 +
+        '  end;';
+      Result.After :=
+        'type'#13#10 +
+        '  TPerson = class'#13#10 +
+        '  private'#13#10 +
+        '    FName : string;'#13#10 +
+        '    FAge  : Integer;'#13#10 +
+        '  public'#13#10 +
+        '    property Name: string  read FName write FName;'#13#10 +
+        '    property Age:  Integer read FAge  write FAge;'#13#10 +
+        '  end;'#13#10 +
+        ''#13#10 +
+        '// Properties allow later getter/setter logic, validation, RTTI,'#13#10 +
+        '// and DFM streaming without breaking callers. Plain fields lock'#13#10 +
+        '// the API to direct memory access.';
+    end;
+
+    fkNestedTry:
+    begin
+      Result.Description := _('Nested try block - consider extracting a procedure');
+      Result.Before :=
+        'try'#13#10 +
+        '  OpenFile;'#13#10 +
+        '  try'#13#10 +
+        '    ProcessFile;'#13#10 +
+        '    try'#13#10 +
+        '      WriteResults;'#13#10 +
+        '    finally CloseResults; end;'#13#10 +
+        '  finally CloseFile; end;'#13#10 +
+        'except'#13#10 +
+        '  on E: Exception do LogError(E);'#13#10 +
+        'end;';
+      Result.After :=
+        '// Extract each owned resource into its own routine.'#13#10 +
+        'procedure ProcessFileSafely;'#13#10 +
+        'begin'#13#10 +
+        '  OpenFile;'#13#10 +
+        '  try'#13#10 +
+        '    ProcessAndWrite;   // owns its own try/finally'#13#10 +
+        '  finally'#13#10 +
+        '    CloseFile;'#13#10 +
+        '  end;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        'try'#13#10 +
+        '  ProcessFileSafely;'#13#10 +
+        'except'#13#10 +
+        '  on E: Exception do LogError(E);'#13#10 +
+        'end;';
+    end;
+
+    fkCaseStatementSize:
+    begin
+      Result.Description := _('case statement has many branches - consider dispatch table');
+      Result.Before :=
+        'case Cmd of'#13#10 +
+        '  cmdOpen   : DoOpen;'#13#10 +
+        '  cmdClose  : DoClose;'#13#10 +
+        '  cmdSave   : DoSave;'#13#10 +
+        '  cmdSaveAs : DoSaveAs;'#13#10 +
+        '  // ... 10+ more branches'#13#10 +
+        'end;';
+      Result.After :=
+        '// Dispatch table indexed by command enum.'#13#10 +
+        'type TCmdProc = procedure of object;'#13#10 +
+        'var Handlers: array[TCmd] of TCmdProc;'#13#10 +
+        ''#13#10 +
+        'initialization'#13#10 +
+        '  Handlers[cmdOpen]  := DoOpen;'#13#10 +
+        '  Handlers[cmdClose] := DoClose;'#13#10 +
+        '  ...'#13#10 +
+        ''#13#10 +
+        '// dispatch:'#13#10 +
+        'if Assigned(Handlers[Cmd]) then Handlers[Cmd]();'#13#10 +
+        ''#13#10 +
+        '// 10+ case branches = the code reads as data, not control flow.'#13#10 +
+        '// A table or polymorphic dispatch scales better.';
+    end;
+
+    fkEmptyFile:
+    begin
+      Result.Description := _('Unit has no declarations - delete it or fill it');
+      Result.Before :=
+        'unit uPlaceholder;'#13#10 +
+        ''#13#10 +
+        'interface'#13#10 +
+        ''#13#10 +
+        'implementation'#13#10 +
+        ''#13#10 +
+        'end.';
+      Result.After :=
+        '// Either delete the unit (and remove from .dpr/.dproj contains)'#13#10 +
+        '// or add the planned declarations. An empty unit shows up in'#13#10 +
+        '// uses-clauses without buying anything.';
+    end;
+
+    fkTwiceInheritedCalls:
+    begin
+      Result.Description := _('Method calls inherited more than once');
+      Result.Before :=
+        'procedure TDerived.Update;'#13#10 +
+        'begin'#13#10 +
+        '  inherited;       // <-- first call'#13#10 +
+        '  Recompute;'#13#10 +
+        '  inherited;       // <-- second call: double side effects!'#13#10 +
+        'end;';
+      Result.After :=
+        'procedure TDerived.Update;'#13#10 +
+        'begin'#13#10 +
+        '  inherited;'#13#10 +
+        '  Recompute;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Calling the same parent twice in one method runs the base-class'#13#10 +
+        '// logic - including event triggers, refcount changes, logging -'#13#10 +
+        '// twice. Almost always a copy-paste artefact.';
+    end;
+
+    fkRedundantParentheses:
+    begin
+      Result.Description := _('Doubled parentheses around a simple expression');
+      Result.Before :=
+        'if ((Counter)) > 0 then ...'#13#10 +
+        'Result := ((FCache.Value));';
+      Result.After :=
+        'if Counter > 0 then ...'#13#10 +
+        'Result := FCache.Value;'#13#10 +
+        ''#13#10 +
+        '// Use parentheses where they clarify operator precedence:'#13#10 +
+        '//   Result := (A or B) and C;'#13#10 +
+        '// not where they only add visual noise.';
+    end;
+
+    fkConsecutiveVisibility:
+    begin
+      Result.Description := _('Two visibility sections with the same keyword - merge them');
+      Result.Before :=
+        'type'#13#10 +
+        '  TFoo = class'#13#10 +
+        '  private'#13#10 +
+        '    FA: Integer;'#13#10 +
+        '  private              // <-- duplicate private'#13#10 +
+        '    FB: Integer;'#13#10 +
+        '  end;';
+      Result.After :=
+        'type'#13#10 +
+        '  TFoo = class'#13#10 +
+        '  private'#13#10 +
+        '    FA: Integer;'#13#10 +
+        '    FB: Integer;'#13#10 +
+        '  end;'#13#10 +
+        ''#13#10 +
+        '// One visibility section per kind. Common after merging field'#13#10 +
+        '// blocks from two parts of the class.';
+    end;
+
+    fkConstructorWithoutInherited:
+    begin
+      Result.Description := _('Constructor does not call inherited - parent state uninitialized');
+      Result.Before :=
+        'constructor TDerived.Create(AOwner: TComponent);'#13#10 +
+        'begin'#13#10 +
+        '  // missing: inherited Create(AOwner);'#13#10 +
+        '  FList := TStringList.Create;'#13#10 +
+        'end;';
+      Result.After :=
+        'constructor TDerived.Create(AOwner: TComponent);'#13#10 +
+        'begin'#13#10 +
+        '  inherited Create(AOwner);'#13#10 +
+        '  FList := TStringList.Create;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Without inherited, the parent never runs its own constructor:'#13#10 +
+        '// for TComponent that means FComponents, FName, owner-tracking'#13#10 +
+        '// are never initialized -> crashes on first use.';
+    end;
+
+    fkDestructorWithoutInherited:
+    begin
+      Result.Description := _('Destructor does not call inherited - resource leak');
+      Result.Before :=
+        'destructor TDerived.Destroy;'#13#10 +
+        'begin'#13#10 +
+        '  FreeAndNil(FList);'#13#10 +
+        '  // missing: inherited Destroy;'#13#10 +
+        'end;';
+      Result.After :=
+        'destructor TDerived.Destroy;'#13#10 +
+        'begin'#13#10 +
+        '  FreeAndNil(FList);'#13#10 +
+        '  inherited Destroy;        // <-- always last'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Without inherited, the parent destructor never runs:'#13#10 +
+        '// TComponent.Destroy never frees its components, TObject never'#13#10 +
+        '// runs its cleanup. Pattern: own resources first, inherited last.';
+    end;
+
+    fkRedundantConditional:
+    begin
+      Result.Description := _('if X then Y := True else Y := False - assign expression directly');
+      Result.Before :=
+        'if Counter > 0 then'#13#10 +
+        '  HasItems := True'#13#10 +
+        'else'#13#10 +
+        '  HasItems := False;';
+      Result.After :=
+        'HasItems := Counter > 0;'#13#10 +
+        ''#13#10 +
+        '// The if-form is verbose and obscures that the right-hand side'#13#10 +
+        '// is itself a Boolean. Same applies to'#13#10 +
+        '//   Result := if X then A else B    (Delphi: use IfThen).';
+    end;
+
+    fkIfElseBegin:
+    begin
+      Result.Description := _('Asymmetric begin/end in if/else - format consistently');
+      Result.Before :=
+        'if Condition then'#13#10 +
+        '  DoOne'#13#10 +
+        'else'#13#10 +
+        'begin'#13#10 +
+        '  DoTwo;'#13#10 +
+        '  DoThree;'#13#10 +
+        'end;';
+      Result.After :=
+        'if Condition then'#13#10 +
+        'begin'#13#10 +
+        '  DoOne;'#13#10 +
+        'end'#13#10 +
+        'else'#13#10 +
+        'begin'#13#10 +
+        '  DoTwo;'#13#10 +
+        '  DoThree;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Mixed forms invite the classic "dangling else" misread.'#13#10 +
+        '// Pick one style for the branch and apply both ways.';
+    end;
+
+    fkPointerName:
+    begin
+      Result.Description := _('Pointer type alias should start with "P"');
+      Result.Before :=
+        'type'#13#10 +
+        '  RecordPtr = ^TRecord;        // <-- no P-prefix'#13#10 +
+        '  FooHandle = ^TFoo;           // <-- no P-prefix';
+      Result.After :=
+        'type'#13#10 +
+        '  PRecord = ^TRecord;'#13#10 +
+        '  PFoo    = ^TFoo;'#13#10 +
+        ''#13#10 +
+        '// Delphi convention: pointer aliases start with P (PChar, PRecord,'#13#10 +
+        '// PByte, ...). The prefix makes it instantly visible that the type'#13#10 +
+        '// is indirect at every call site.';
+    end;
+
+    fkBeginEndRequired:
+    begin
+      Result.Description := _('Branch body without begin..end - add explicit block');
+      Result.Before :=
+        'if Condition then'#13#10 +
+        '  DoOne;'#13#10 +
+        ''#13#10 +
+        'for i := 0 to N - 1 do'#13#10 +
+        '  Process(i);';
+      Result.After :=
+        'if Condition then'#13#10 +
+        'begin'#13#10 +
+        '  DoOne;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        'for i := 0 to N - 1 do'#13#10 +
+        'begin'#13#10 +
+        '  Process(i);'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Always-begin..end is debatable in Delphi (compact form is widely'#13#10 +
+        '// used), but enforcing it prevents the goto-fail bug: adding a'#13#10 +
+        '// second statement under "if X then" silently misindents otherwise.';
+    end;
+
+    fkNestedRoutine:
+    begin
+      Result.Description := _('Nested procedure/function - consider extracting');
+      Result.Before :=
+        'procedure TFoo.Run;'#13#10 +
+        ''#13#10 +
+        '  procedure Helper(X: Integer);'#13#10 +
+        '  begin'#13#10 +
+        '    ...'#13#10 +
+        '  end;'#13#10 +
+        ''#13#10 +
+        'begin'#13#10 +
+        '  Helper(1); Helper(2);'#13#10 +
+        'end;';
+      Result.After :=
+        'procedure TFoo.Helper(X: Integer);'#13#10 +
+        'begin'#13#10 +
+        '  ...'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        'procedure TFoo.Run;'#13#10 +
+        'begin'#13#10 +
+        '  Helper(1); Helper(2);'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Nested routines are testable only via their parent and surprise'#13#10 +
+        '// the IDE Class Completion. Extract to private class methods or'#13#10 +
+        '// to a unit-private function unless closure over parent locals is'#13#10 +
+        '// the whole point.';
+    end;
+
+    fkFieldName:
+    begin
+      Result.Description := _('Class field without "F" prefix');
+      Result.Before :=
+        'type'#13#10 +
+        '  TFoo = class'#13#10 +
+        '  private'#13#10 +
+        '    Counter : Integer;     // <-- no F-prefix'#13#10 +
+        '    Name    : string;      // <-- no F-prefix'#13#10 +
+        '  end;';
+      Result.After :=
+        'type'#13#10 +
+        '  TFoo = class'#13#10 +
+        '  private'#13#10 +
+        '    FCounter : Integer;'#13#10 +
+        '    FName    : string;'#13#10 +
+        '  end;'#13#10 +
+        ''#13#10 +
+        '// Delphi convention (Embarcadero DocWiki + community): private'#13#10 +
+        '// fields start with F. Makes "FCounter" visually distinct from'#13#10 +
+        '// the "Counter" property/parameter at every assignment.';
+    end;
+
+    fkTypeName:
+    begin
+      Result.Description := _('Class/record type without "T" prefix');
+      Result.Before :=
+        'type'#13#10 +
+        '  Person = class                 // <-- no T-prefix'#13#10 +
+        '    ...'#13#10 +
+        '  end;'#13#10 +
+        '  Point = record X, Y: Integer end;';
+      Result.After :=
+        'type'#13#10 +
+        '  TPerson = class'#13#10 +
+        '    ...'#13#10 +
+        '  end;'#13#10 +
+        '  TPoint = record X, Y: Integer end;'#13#10 +
+        ''#13#10 +
+        '// Delphi RTL convention: T = type, P = pointer, I = interface,'#13#10 +
+        '// E = exception. Prefix tells readers what kind of identifier'#13#10 +
+        '// they''re looking at without jumping to the declaration.';
+    end;
+
+    fkInterfaceName:
+    begin
+      Result.Description := _('Interface type without "I" prefix');
+      Result.Before :=
+        'type'#13#10 +
+        '  Plugin = interface           // <-- no I-prefix'#13#10 +
+        '    [''{1234-...}'']'#13#10 +
+        '    procedure Initialize;'#13#10 +
+        '  end;';
+      Result.After :=
+        'type'#13#10 +
+        '  IPlugin = interface'#13#10 +
+        '    [''{1234-...}'']'#13#10 +
+        '    procedure Initialize;'#13#10 +
+        '  end;'#13#10 +
+        ''#13#10 +
+        '// Delphi convention since Delphi 3 / COM: interfaces start with I.'#13#10 +
+        '// Without the prefix, "var P: Plugin" reads like a value type.';
+    end;
+
+    fkMethodName:
+    begin
+      Result.Description := _('Method name not in PascalCase');
+      Result.Before :=
+        'procedure TFoo.do_stuff;       // <-- snake_case'#13#10 +
+        'procedure TFoo.runFast;        // <-- camelCase'#13#10 +
+        'procedure TFoo.RUN_NOW;        // <-- UPPER_SNAKE_CASE';
+      Result.After :=
+        'procedure TFoo.DoStuff;'#13#10 +
+        'procedure TFoo.RunFast;'#13#10 +
+        'procedure TFoo.RunNow;'#13#10 +
+        ''#13#10 +
+        '// Delphi standard: PascalCase for routines and properties.'#13#10 +
+        '// Reserve snake_case for C-API imports (where the name has to'#13#10 +
+        '// match the foreign symbol) and tag those with the {$EXTERNAL...}.';
+    end;
+
+    // -------- Concurrency-Detektoren (SCA108 ff.) --------
+
+    fkSynchronizeInDestructor:
+    begin
+      Result.Description := _('Synchronize() in a destructor - worker and UI thread deadlock each other');
+      Result.Before :=
+        'destructor TWorker.Destroy;'#13#10 +
+        'begin'#13#10 +
+        '  // UI-Thread wartet typischerweise schon auf WaitFor / .Free,'#13#10 +
+        '  // dieser Aufruf blockt den Worker auf eben diesen UI-Thread.'#13#10 +
+        '  Synchronize('#13#10 +
+        '    procedure'#13#10 +
+        '    begin'#13#10 +
+        '      Form1.Log(''worker done'');'#13#10 +
+        '    end);'#13#10 +
+        '  inherited;'#13#10 +
+        'end;';
+      Result.After :=
+        '// Notify VOR der Zerstoerung - OnTerminate laeuft im UI-Thread'#13#10 +
+        '// nachdem der Worker Execute verlassen hat, aber BEVOR der'#13#10 +
+        '// Destruktor anlaeuft. Kein Synchronize noetig.'#13#10 +
+        'Worker := TWorker.Create(True);'#13#10 +
+        'Worker.OnTerminate :='#13#10 +
+        '  procedure(Sender: TObject)'#13#10 +
+        '  begin'#13#10 +
+        '    Form1.Log(''worker done'');'#13#10 +
+        '  end;'#13#10 +
+        'Worker.Start;'#13#10 +
+        ''#13#10 +
+        '// Destruktor bleibt Synchronize-frei.'#13#10 +
+        ''#13#10 +
+        '// Suppression: // noinspection SynchronizeInDestructor'#13#10 +
+        '// (nur wenn DU SICHER bist, dass das Free niemals vom UI-Thread kommt).';
+    end;
+
+    fkLockWithoutTryFinally:
+    begin
+      Result.Description := _('Lock acquired without try..finally release - exception leaves the lock held');
+      Result.Before :=
+        'FLock := TCriticalSection.Create;'#13#10 +
+        '...'#13#10 +
+        'FLock.Enter;'#13#10 +
+        'DoWork;            // <- Exception hier'#13#10 +
+        'FLock.Leave;       //    erreicht Leave nie';
+      Result.After :=
+        'FLock.Enter;'#13#10 +
+        'try'#13#10 +
+        '  DoWork;'#13#10 +
+        'finally'#13#10 +
+        '  FLock.Leave;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Selbe Regel fuer: TCriticalSection.Acquire/Release,'#13#10 +
+        '// TMonitor.Enter/Exit, TMREWSync.BeginWrite/EndWrite,'#13#10 +
+        '// EnterCriticalSection/LeaveCriticalSection (WinAPI).'#13#10 +
+        ''#13#10 +
+        '// Suppression: // noinspection LockWithoutTryFinally'#13#10 +
+        '// (sehr selten - meist heisst es nur, dass DoWork niemals wirft,'#13#10 +
+        '//  was du nicht wirklich beweisen kannst).';
+    end;
+
+    // -------- Performance-Hotspots (SCA110-112) --------
+
+    fkStringConcatInLoop:
+    begin
+      Result.Description := _('String concatenation in loop - quadratic reallocations');
+      Result.Before :=
+        'for i := 0 to High(Items) do'#13#10 +
+        '  s := s + Items[i] + '', '';';
+      Result.After :=
+        'var SB := TStringBuilder.Create;'#13#10 +
+        'try'#13#10 +
+        '  for i := 0 to High(Items) do'#13#10 +
+        '    SB.Append(Items[i]).Append('', '');'#13#10 +
+        '  s := SB.ToString;'#13#10 +
+        'finally'#13#10 +
+        '  SB.Free;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Alternative: TStringList nutzen, am Ende .DelimitedText / .Text auslesen.';
+    end;
+
+    fkParamByNameInLoop:
+    begin
+      Result.Description := _('ParamByName in loop - cache the TParam reference outside');
+      Result.Before :=
+        'for i := 0 to High(Ids) do'#13#10 +
+        'begin'#13#10 +
+        '  Q.ParamByName(''id'').AsInteger := Ids[i];'#13#10 +
+        '  Q.ExecSQL;'#13#10 +
+        'end;';
+      Result.After :=
+        'var P := Q.ParamByName(''id'');'#13#10 +
+        'for i := 0 to High(Ids) do'#13#10 +
+        'begin'#13#10 +
+        '  P.AsInteger := Ids[i];'#13#10 +
+        '  Q.ExecSQL;'#13#10 +
+        'end;';
+    end;
+
+    fkFieldByNameInLoop:
+    begin
+      Result.Description := _('FieldByName in loop - cache the TField reference outside');
+      Result.Before :=
+        'while not Q.Eof do'#13#10 +
+        'begin'#13#10 +
+        '  Total := Total + Q.FieldByName(''Amount'').AsCurrency;'#13#10 +
+        '  Q.Next;'#13#10 +
+        'end;';
+      Result.After :=
+        'var FldAmount := Q.FieldByName(''Amount'');'#13#10 +
+        'while not Q.Eof do'#13#10 +
+        'begin'#13#10 +
+        '  Total := Total + FldAmount.AsCurrency;'#13#10 +
+        '  Q.Next;'#13#10 +
+        'end;';
+    end;
+
+    // -------- Concurrency-Familie erweitert (SCA113-114) --------
+
+    fkThreadResumeDeprecated:
+    begin
+      Result.Description := _('TThread.Resume is deprecated - use TThread.Start (since Delphi 2010)');
+      Result.Before :=
+        'MyThread := TWorker.Create(True);  // CreateSuspended=True'#13#10 +
+        'MyThread.Resume;                    // deprecated';
+      Result.After :=
+        'MyThread := TWorker.Create(True);'#13#10 +
+        'MyThread.Start;                    // since D2010'#13#10 +
+        ''#13#10 +
+        '// Oder direkt unsuspended:'#13#10 +
+        'MyThread := TWorker.Create(False);'#13#10 +
+        ''#13#10 +
+        '// Suppression: // noinspection ThreadResumeDeprecated'#13#10 +
+        '// (wenn .Resume eine Custom-Methode ist, nicht TThread.Resume).';
+    end;
+
+    fkTThreadDestroyWithoutTerminate:
+    begin
+      Result.Description := _('TThread destroyed without Terminate+WaitFor - worker may still be running');
+      Result.Before :=
+        '// inside an OnClick or destructor:'#13#10 +
+        'FreeAndNil(FWorker);';
+      Result.After :=
+        'FWorker.Terminate;'#13#10 +
+        'FWorker.WaitFor;'#13#10 +
+        'FreeAndNil(FWorker);'#13#10 +
+        ''#13#10 +
+        '// Worker selbst muss Terminated regelmaessig pruefen:'#13#10 +
+        '//   while not Terminated do DoStep;'#13#10 +
+        ''#13#10 +
+        '// Alternative: FreeOnTerminate := True;'#13#10 +
+        '//   - dann NIEMALS manuell Free aufrufen'#13#10 +
+        '//   - der Thread ist nach Execute selber weg.';
+    end;
+
+    // -------- REST/HTTP-Security (SCA115-116) --------
+
+    fkHttpInsteadOfHttps:
+    begin
+      Result.Description := _('Plaintext HTTP URL - prefer https:// for remote endpoints');
+      Result.Before :=
+        'const'#13#10 +
+        '  API_URL = ''http://api.example.com/v1/users'';';
+      Result.After :=
+        'const'#13#10 +
+        '  API_URL = ''https://api.example.com/v1/users'';'#13#10 +
+        ''#13#10 +
+        '// Localhost-URLs (http://localhost, 127.x.x.x, [::1])'#13#10 +
+        '// werden vom Detektor ignoriert - kein Befund.'#13#10 +
+        '// XML-Namespace-URLs (xmlns=, w3.org, schemas) auch.';
+    end;
+
+    fkDisabledTlsVerification:
+    begin
+      Result.Description := _('TLS verification disabled - MITM-attack surface');
+      Result.Before :=
+        'Client.SecureProtocols := [];'#13#10 +
+        'Client.IgnoreCertificateErrors := True;'#13#10 +
+        'Client.OnVerifyPeer := nil;';
+      Result.After :=
+        'Client.SecureProtocols := [TLSv1_2, TLSv1_3];'#13#10 +
+        '// IgnoreCertificateErrors NIE auf True setzen - System-CA'#13#10 +
+        '// store macht Validierung; Self-Signed: Custom-CA via Stores.'#13#10 +
+        'Client.OnVerifyPeer := VerifyPinnedFingerprint;'#13#10 +
+        ''#13#10 +
+        '// Bei legitimen Dev-Setups mit Self-Signed-Cert: Cert ins'#13#10 +
+        '// Windows-Cert-Store importieren statt Validierung deaktivieren.';
+    end;
+
+    // -------- Doc-Luecken (SCA117) --------
+
+    fkPublicMemberWithoutDoc:
+    begin
+      Result.Description := _('Public member missing doc comment');
+      Result.Before :=
+        'type'#13#10 +
+        '  TWorker = class'#13#10 +
+        '  public'#13#10 +
+        '    procedure Run;       // <- keine Doku'#13#10 +
+        '    property Active: Boolean read FActive;'#13#10 +
+        '  end;';
+      Result.After :=
+        'type'#13#10 +
+        '  TWorker = class'#13#10 +
+        '  public'#13#10 +
+        '    /// <summary>Starts the worker thread.</summary>'#13#10 +
+        '    /// <remarks>Idempotent; calling on a running worker is a no-op.</remarks>'#13#10 +
+        '    procedure Run;'#13#10 +
+        ''#13#10 +
+        '    // True wenn Execute laeuft und Terminated noch nicht gesetzt ist.'#13#10 +
+        '    property Active: Boolean read FActive;'#13#10 +
+        '  end;'#13#10 +
+        ''#13#10 +
+        '// Akzeptierte Formate: ///-XMLDoc, { ... }, (* ... *), oder einfach'#13#10 +
+        '// einzeilige //-Kommentare direkt darueber.';
+    end;
+
+    // -------- Naming-Familie erweitert (SCA118-119) --------
+
+    fkExceptionName:
+    begin
+      Result.Description := _('Exception class without E-prefix');
+      Result.Before :=
+        'type'#13#10 +
+        '  MyParseError = class(Exception);';
+      Result.After :=
+        'type'#13#10 +
+        '  EMyParseError = class(Exception);'#13#10 +
+        ''#13#10 +
+        '// Delphi-RTL-Konvention: Exception-Klassen starten mit E.'#13#10 +
+        '// EAbort, EConvertError, EAccessViolation, EDivByZero, ...';
+    end;
+
+    fkLocalConstantName:
+    begin
+      Result.Description := _('Local constant should be UPPER_SNAKE_CASE');
+      Result.Before :=
+        'procedure Foo;'#13#10 +
+        'const'#13#10 +
+        '  MaxRetries = 3;     // <- PascalCase = sieht aus wie Variable'#13#10 +
+        '  BufferSize = 4096;'#13#10 +
+        'begin ... end;';
+      Result.After :=
+        'procedure Foo;'#13#10 +
+        'const'#13#10 +
+        '  MAX_RETRIES = 3;'#13#10 +
+        '  BUFFER_SIZE = 4096;'#13#10 +
+        'begin ... end;'#13#10 +
+        ''#13#10 +
+        '// String-/Char-Konstanten und sehr kurze Namen (<=2 Zeichen)'#13#10 +
+        '// werden vom Detektor uebersprungen.';
     end;
 
   end;

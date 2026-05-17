@@ -17,6 +17,7 @@ uses
   DesignIntf, ToolsAPI, DockForm,    // DockForm: TDockableForm (Editor-Service-Notifier-Signatur)
   uStaticAnalyzer2, uStaticFiles, uMethodd12, uSCAConsts, uExport,
   uFixHint, uIgnoreList, uRepoSettings, uRuleCatalog, uClaudePrompt,
+  uQuickFix,
   uAnalyserPalette, uAnalyserTypes, uAnalyserTheme, uLocalization,
   uRecentPaths,
   uIDELineHighlighter, uIDEMessages, uIDEWatchMode, uIDEStatsTiles,
@@ -249,6 +250,17 @@ type
     // Metadaten, FixHint (Vorher/Nachher) und Code-Auszug aus der Quelldatei.
     function  BuildClaudePrompt(F: TLeakFinding): string;
     procedure CopyFindingToClipboard(F: TLeakFinding);
+    // Wendet einen Quick-Fix DIREKT im IDE-Editor an (TIDEEditor.
+    // ApplyLineReplacement). Trigger: F4 auf der Grid-Zeile. No-op
+    // wenn der Befund-Kind keinen Quick-Fix-Provider hat oder der
+    // Provider auf der Original-Zeile kein Pattern matched. Status-
+    // bar zeigt Ergebnis (success/failure/unsupported).
+    procedure ApplyQuickFixForRow(RowIdx: Integer);
+
+    // Fuegt `// noinspection <RuleName>` direkt ueber der Befund-Zeile
+    // im IDE-Editor ein. Trigger: Ctrl+Alt+S auf der Grid-Zeile.
+    // Beim naechsten Analyse-Lauf filtert uSuppression den Befund.
+    procedure ApplySuppressForRow(RowIdx: Integer);
     procedure UpdateHelp(Row: Integer);
     // Sammelt alle Befunde aus FDisplayedFindings die zur gleichen Datei
     // gehoeren und uebergibt sie als komplette Marker-Liste an den
@@ -728,7 +740,8 @@ begin
   FFilterCombo.Items.AddObject(_('Cyclomatic Complexity'),  TObject(Ord(fmCyclomaticComplexity)));
   FFilterCombo.Items.AddObject(_('TODO/FIXME'),             TObject(Ord(fmTodoComment)));
   FFilterCombo.Items.AddObject(_('Empty Methods'),          TObject(Ord(fmEmptyMethod)));
-  FFilterCombo.Items.AddObject(_('Can Be Private'),         TObject(Ord(fmCanBePrivate)));
+  FFilterCombo.Items.AddObject(_('Can Be Unit Private'),    TObject(Ord(fmCanBeUnitPrivate)));
+  FFilterCombo.Items.AddObject(_('Can Be Strict Private'),  TObject(Ord(fmCanBeStrictPrivate)));
   FFilterCombo.Items.AddObject(_('Can Be Protected'),       TObject(Ord(fmCanBeProtected)));
   FFilterCombo.Items.AddObject(_('Unused Public Member'),   TObject(Ord(fmUnusedPublicMember)));
   FFilterCombo.Items.AddObject(_('Unused Local Var'),       TObject(Ord(fmUnusedLocalVar)));
@@ -782,73 +795,11 @@ begin
   FTypeCombo.ItemIndex := 0;
   FTypeFilter := tfAll;
 
-  // Trennabstand vor Profile-Combo
-  var SepProfile := TPanel.Create(Self);
-  SepProfile.Parent     := PanelButtons;
-  SepProfile.Align      := alLeft;
-  SepProfile.Width      := ScaleW(TB_SPACER_WIDTH);
-  SepProfile.BevelOuter := bvNone;
-  SepProfile.Color      := clBtnFace;
-
-  // ---- Dritter Filter: Profile (rule-set scope) ----------------------------
-  // Schreibt FRepoSettings.IdeProfile (transient, kein INI-Save). Items werden
-  // aus rules/sca-rules.json -> profiles geholt; default-Selektion ist der
-  // INI-Wert (typisch 'ide-fast' im IDE, 'default' im Standalone). Wirkt erst
-  // beim naechsten Analyse-Run (PrepareAnalysis ruft UseIdeRuleSet +
-  // ApplyDetectorThresholds).
-  FPanelProfile := TPanel.Create(Self);
-  FPanelProfile.Parent     := PanelButtons;
-  FPanelProfile.Align      := alLeft;
-  FPanelProfile.BevelOuter := bvNone;
-  FPanelProfile.Color      := clBtnFace;
-  FPanelProfile.Width      := ScaleW(LBL_W_PROFILE + CMB_W_PROFILE);
-
-  FLblProfile := TLabel.Create(Self);
-  FLblProfile.Parent   := FPanelProfile;
-  FLblProfile.Caption  := _('Profile:');
-  FLblProfile.Align    := alLeft;
-  FLblProfile.AutoSize := False;
-  FLblProfile.Width    := ScaleW(LBL_W_PROFILE);
-  FLblProfile.Layout   := tlCenter;
-
-  FProfileCombo := TComboBox.Create(Self);
-  FProfileCombo.Parent      := FPanelProfile;
-  FProfileCombo.Style       := csDropDownList;
-  FProfileCombo.Align       := alClient;
-  FProfileCombo.Font.Name   := 'Segoe UI';
-  FProfileCombo.Font.Size   := 8;
-  FProfileCombo.ParentFont  := False;
-  FProfileCombo.OnChange    := ProfileChange;
-  FProfileCombo.Hint        := _('Rule-set profile (ide-fast / default / strict). ' +
-                                 'Takes effect at the next analysis run.');
-  FProfileCombo.ShowHint    := True;
-  // Items aus TRuleCatalog.ProfileNames (rules/sca-rules.json -> profiles).
-  // FRepoSettings.Load lief schon in FrameCreate (siehe oben), daher koennen
-  // wir die Default-Selektion direkt setzen. Fallback wenn der Catalog leer
-  // ist (z.B. JSON fehlt): ein 'default'-Eintrag, damit die UI nicht crashed.
-  begin
-    var ProfileList := TRuleCatalog.ProfileNames;
-    if Length(ProfileList) = 0 then
-      FProfileCombo.Items.Add(_('default'))
-    else
-      for var ProfileName in ProfileList do
-        FProfileCombo.Items.Add(ProfileName);
-
-    // Default = IdeProfile aus der INI (Frame laeuft im IDE-Plugin).
-    // Wenn der INI-Wert nicht im Catalog ist: erste verfuegbare Option.
-    var Idx := FProfileCombo.Items.IndexOf(FRepoSettings.IdeProfile);
-    if Idx < 0 then Idx := FProfileCombo.Items.IndexOf('ide-fast');
-    if Idx < 0 then Idx := 0;
-    FProfileCombo.ItemIndex := Idx;
-  end;
-
-  // Trennabstand zur Checkbox
-  var Sep2 := TPanel.Create(Self);
-  Sep2.Parent     := PanelButtons;
-  Sep2.Align      := alLeft;
-  Sep2.Width      := ScaleW(TB_SPACER_WIDTH);
-  Sep2.BevelOuter := bvNone;
-  Sep2.Color      := clBtnFace;
+  // Profile-Combo (rule-set scope) wird unten in PanelSearch zwischen
+  // Branch-Changes-Button und Search-Label eingehaengt — gehoert
+  // semantisch zur Aktions-Reihe (steuert was der naechste Analyse-Klick
+  // ausfuehrt), nicht zur Filter-Reihe (Severity/Type filtern die bereits
+  // erzeugten Befunde).
 
   // UsesCheck und IncludeTests werden jetzt aus analyser.ini [Detectors]
   // gelesen - keine Checkboxen mehr in der Toolbar (siehe FRepoSettings).
@@ -882,10 +833,69 @@ begin
   FBtnAnalyseCurrent.Align    := alLeft;
   FBtnAnalyseCurrent.OnClick  := AnalyseCurrentFileClick;
 
+  // ---- Profile-Combo zuerst anlegen, dann Branch-Changes-Button ---------
+  // In dieser PanelSearch-Layout-Konstellation positioniert VCL alLeft-
+  // Children so, dass spaeter-erzeugte Controls links von frueher-erzeugten
+  // landen. Reihenfolge im Code: Profile vor Branch -> Visual: Branch
+  // links neben Profile (User-Wunsch: [⎇] [Profile:][▼ide-fast]).
+  // Steuert welches Rule-Set die NAECHSTE Analyse benutzt (ide-fast /
+  // default / strict / ...). Items kommen aus rules/sca-rules.json
+  // (TRuleCatalog.ProfileNames); Default-Selektion = FRepoSettings.IdeProfile.
+  // Transient (kein INI-Save); wirkt beim naechsten Analyse-Klick ueber
+  // PrepareAnalysis -> UseIdeRuleSet + ApplyDetectorThresholds.
+  FPanelProfile := TPanel.Create(Self);
+  FPanelProfile.Parent     := PanelSearch;
+  FPanelProfile.Align      := alLeft;
+  FPanelProfile.BevelOuter := bvNone;
+  FPanelProfile.Color      := clBtnFace;
+  FPanelProfile.Width      := ScaleW(LBL_W_PROFILE + CMB_W_PROFILE);
+
+  FLblProfile := TLabel.Create(Self);
+  FLblProfile.Parent   := FPanelProfile;
+  FLblProfile.Caption  := _('Profile:');
+  FLblProfile.Align    := alLeft;
+  FLblProfile.AutoSize := False;
+  FLblProfile.Width    := ScaleW(LBL_W_PROFILE);
+  FLblProfile.Layout   := tlCenter;
+
+  FProfileCombo := TComboBox.Create(Self);
+  FProfileCombo.Parent      := FPanelProfile;
+  FProfileCombo.Style       := csDropDownList;
+  FProfileCombo.Align       := alClient;
+  FProfileCombo.Font.Name   := 'Segoe UI';
+  FProfileCombo.Font.Size   := 8;
+  FProfileCombo.ParentFont  := False;
+  FProfileCombo.OnChange    := ProfileChange;
+  FProfileCombo.Hint        := _('Rule-set profile (ide-fast / default / strict). ' +
+                                 'Takes effect at the next analysis run.');
+  FProfileCombo.ShowHint    := True;
+  begin
+    var ProfileList := TRuleCatalog.ProfileNames;
+    if Length(ProfileList) = 0 then
+      FProfileCombo.Items.Add(_('default'))
+    else
+      for var ProfileName in ProfileList do
+        FProfileCombo.Items.Add(ProfileName);
+
+    var Idx := FProfileCombo.Items.IndexOf(FRepoSettings.IdeProfile);
+    if Idx < 0 then Idx := FProfileCombo.Items.IndexOf('ide-fast');
+    if Idx < 0 then Idx := 0;
+    FProfileCombo.ItemIndex := Idx;
+  end;
+
+  // Spacer zwischen Branch-Button und Profile-Panel
+  var SepProfile := TPanel.Create(Self);
+  SepProfile.Parent     := PanelSearch;
+  SepProfile.Align      := alLeft;
+  SepProfile.Width      := ScaleW(TB_SPACER_WIDTH);
+  SepProfile.BevelOuter := bvNone;
+  SepProfile.Color      := clBtnFace;
+
   // Branch-Aenderungen via Git/SVN: nur die im Branch geaenderten .pas-Files.
   // Icon-only (Glyph ⎇ U+2387 "alternative"-Symbol, sieht wie Branch-Fork aus),
   // matcht visuell die anderen Icon-Buttons (Browse "...", Hamburger ☰).
   // Caption-Text "Branch-Changes" ist im Hint und im Hamburger-Menu.
+  // Erzeugt NACH Profile-Panel - VCL platziert ihn dadurch links davon.
   FBtnAnalyseChanged := TButton.Create(Self);
   FBtnAnalyseChanged.Parent   := PanelSearch;
   FBtnAnalyseChanged.Caption  := #$2387; // ⎇
@@ -1007,6 +1017,7 @@ begin
   TToolbarSizing.Apply(FProjectPath,        UnifCtrlH);
   TToolbarSizing.Apply(FFilterCombo,        UnifCtrlH);
   TToolbarSizing.Apply(FTypeCombo,          UnifCtrlH);
+  TToolbarSizing.Apply(FProfileCombo,       UnifCtrlH);
   TToolbarSizing.Apply(FBtnAnalyse,         UnifCtrlH);
   TToolbarSizing.Apply(FBtnAnalyseCurrent,  UnifCtrlH);
   TToolbarSizing.Apply(FBtnCancel,          UnifCtrlH);
@@ -1035,20 +1046,20 @@ begin
   FResponsive.RegisterCtrl(FBtnIgnore,         usFull);
   // (BtnBrowse, LblPath, FProjectPath: immer sichtbar - keine Registrierung noetig)
 
-  // PanelButtons
+  // PanelButtons (Filter-Reihe: Severity + Type)
   FResponsive.RegisterCtrl(FLblFilter,         usMedium);
   FResponsive.RegisterCtrl(FLblType,           usMedium);
-  FResponsive.RegisterCtrl(FLblProfile,        usMedium);
-  // (FFilterCombo, FTypeCombo, FProfileCombo, FPanelSev, FPanelType,
-  //  FPanelProfile: immer sichtbar)
+  // (FFilterCombo, FTypeCombo, FPanelSev, FPanelType: immer sichtbar)
 
-  // PanelSearch
+  // PanelSearch (Aktions-Reihe: Analyse-Buttons + Profile-Combo + Suche)
   FResponsive.RegisterCtrl(FBtnCancel,         usFull);
   FResponsive.RegisterCtrl(FBtnExport,         usFull);
   FResponsive.RegisterCtrl(FBtnAnalyseChanged, usFull);
+  FResponsive.RegisterCtrl(FLblProfile,        usMedium);
   FResponsive.RegisterCtrl(FLblSearch,         usFull);
   FResponsive.RegisterCtrl(FBtnHamburger,      usNarrow, usMedium);  // inverse
-  // (FBtnAnalyse, FBtnAnalyseCurrent, FSearchEdit: immer sichtbar)
+  // (FBtnAnalyse, FBtnAnalyseCurrent, FProfileCombo, FPanelProfile,
+  //  FSearchEdit: immer sichtbar)
 
   // Stats-Tiles werden in BuildStatsTiles registriert (FResponsive ist
   // dort verfuegbar, Owner-Reference ueber Self-Field).
@@ -1576,6 +1587,25 @@ begin
     end;
     Key := 0;
   end
+  else if (Key = Ord('F')) and (ssCtrl in Shift) and (ssAlt in Shift) then
+  begin
+    // Ctrl+Alt+F = Apply Quick-Fix: ersetzt die Zeile direkt im IDE-Editor
+    // (TIDEEditor.ApplyLineReplacement). Konflikt-frei mit RAD-Studio-
+    // Defaults (F4 ist "Run to Cursor", Ctrl+. konfliktet mit Code-
+    // Completion; Ctrl+Alt+F ist die IntelliJ-Quick-Fix-Konvention).
+    // No-op wenn kein Provider registriert oder Pattern auf der Zeile
+    // nicht matched - Status-Bar zeigt jeweils den Grund.
+    ApplyQuickFixForRow(FResultGrid.Row);
+    Key := 0;
+  end
+  else if (Key = Ord('S')) and (ssCtrl in Shift) and (ssAlt in Shift) then
+  begin
+    // Ctrl+Alt+S = Insert Suppression: fuegt `// noinspection <RuleName>`
+    // ueber die Befund-Zeile im IDE-Editor ein. Naechster Analyse-Lauf
+    // filtert den Befund weg. Ctrl+Z reverts den Insert.
+    ApplySuppressForRow(FResultGrid.Row);
+    Key := 0;
+  end
   else if Key = VK_RETURN then
   begin
     GridDblClick(Sender);
@@ -1814,20 +1844,170 @@ begin
 end;
 
 procedure TAnalyserFrame.CopyFindingToClipboard(F: TLeakFinding);
+// Bei Findings mit Quick-Fix-Provider wird ein "Quick-Fix"-Markdown-
+// Block vorangestellt: Original-Zeile + Fixed-Zeile direkt zum Pasten.
+// Der Claude-Prompt-Block folgt darunter wie bisher.
 var
-  prompt: string;
+  prompt    : string;
+  LineNo    : Integer;
+  OrigLine  : string;
+  Fix       : TQuickFixResult;
+  SrcLines  : TStringList;
+  QuickFixHdr : string;
 begin
   if not Assigned(F) then Exit;
+
   prompt := BuildClaudePrompt(F);
+  QuickFixHdr := '';
+
+  // Wenn ein Quick-Fix-Provider fuer dieses Kind registriert ist,
+  // versuche die Original-Zeile zu lesen und einen Fix vorzuschlagen.
+  if TQuickFix.HasProviderFor(F.Kind) then
+  begin
+    LineNo := StrToIntDef(F.LineNumber, 0);
+    if (LineNo > 0) and (F.FileName <> '') and FileExists(F.FileName) then
+    begin
+      SrcLines := TStringList.Create;
+      try
+        try
+          SrcLines.LoadFromFile(F.FileName, TEncoding.UTF8);
+        except
+          try SrcLines.LoadFromFile(F.FileName); except SrcLines.Clear; end;
+        end;
+        if (LineNo <= SrcLines.Count) then
+        begin
+          OrigLine := SrcLines[LineNo - 1];
+          Fix := TQuickFix.ProposeFix(F, OrigLine);
+          if Fix.Applied then
+          begin
+            QuickFixHdr :=
+              '## Quick-Fix' + sLineBreak +
+              Fix.Description + sLineBreak + sLineBreak +
+              '**Vorher (Zeile ' + F.LineNumber + '):**' + sLineBreak +
+              '```pascal' + sLineBreak + Fix.Original + sLineBreak + '```' + sLineBreak + sLineBreak +
+              '**Nachher (direkt einfuegen):**' + sLineBreak +
+              '```pascal' + sLineBreak + Fix.Fixed + sLineBreak + '```' + sLineBreak + sLineBreak +
+              '---' + sLineBreak + sLineBreak;
+          end;
+        end;
+      finally
+        SrcLines.Free;
+      end;
+    end;
+  end;
+
   try
-    Clipboard.AsText := prompt;
+    Clipboard.AsText := QuickFixHdr + prompt;
     if Assigned(FStatusBar) then
-      StatusMode(Format(
-        _('AI prompt copied to clipboard: %s, line %s (%s)'),
-        [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText]));
+    begin
+      if QuickFixHdr <> '' then
+        StatusMode(Format(
+          _('Quick-Fix + AI prompt copied to clipboard: %s, line %s (%s)'),
+          [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText]))
+      else
+        StatusMode(Format(
+          _('AI prompt copied to clipboard: %s, line %s (%s)'),
+          [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText]));
+    end;
   except
     // Clipboard kann unter bestimmten IDE-Modi blockiert sein - silent skip
   end;
+end;
+
+procedure TAnalyserFrame.ApplyQuickFixForRow(RowIdx: Integer);
+// Pipeline:
+//   1. Finding fuer Grid-Zeile holen
+//   2. Source-Zeile aus der Datei lesen (UTF-8 mit ANSI-Fallback)
+//   3. TQuickFix.ProposeFix
+//   4. TIDEEditor.ApplyLineReplacement
+// Bei jedem Schritt: Status-Bar-Hint, kein Crash bei Fehler.
+var
+  F          : TLeakFinding;
+  LineNo     : Integer;
+  SrcLines   : TStringList;
+  Fix        : TQuickFixResult;
+  OK         : Boolean;
+begin
+  if not Assigned(FDisplayedFindings) then Exit;
+  if (RowIdx <= 0) or (RowIdx > FDisplayedFindings.Count) then Exit;
+
+  F := FDisplayedFindings[RowIdx - 1];
+  if not Assigned(F) then Exit;
+
+  if not TQuickFix.HasProviderFor(F.Kind) then
+  begin
+    StatusMode(Format(
+      _('Quick-Fix: no provider for ''%s'' - manual fix required'),
+      [F.RuleID]));
+    Exit;
+  end;
+
+  LineNo := StrToIntDef(F.LineNumber, 0);
+  if (LineNo <= 0) or (F.FileName = '') or not FileExists(F.FileName) then
+  begin
+    StatusMode(_('Quick-Fix: cannot locate source line'));
+    Exit;
+  end;
+
+  SrcLines := TStringList.Create;
+  try
+    try
+      SrcLines.LoadFromFile(F.FileName, TEncoding.UTF8);
+    except
+      try SrcLines.LoadFromFile(F.FileName); except SrcLines.Clear; end;
+    end;
+    if LineNo > SrcLines.Count then
+    begin
+      StatusMode(_('Quick-Fix: line out of range'));
+      Exit;
+    end;
+    Fix := TQuickFix.ProposeFix(F, SrcLines[LineNo - 1]);
+  finally
+    SrcLines.Free;
+  end;
+
+  if not Fix.Applied then
+  begin
+    StatusMode(Format(
+      _('Quick-Fix: pattern not matched on line %d - manual fix required'),
+      [LineNo]));
+    Exit;
+  end;
+
+  OK := TIDEEditor.ApplyLineReplacement(F.FileName, LineNo, Fix.Fixed);
+  if OK then
+    StatusMode(Format(_('Quick-Fix applied: %s'), [Fix.Description]))
+  else
+    StatusMode(_('Quick-Fix: editor write failed (file not in IDE?)'));
+end;
+
+procedure TAnalyserFrame.ApplySuppressForRow(RowIdx: Integer);
+// Holt das Finding fuer die Grid-Zeile + ruft TIDEEditor.InsertLineAbove
+// mit `// noinspection <KindName>`. Schreibt das Result in die Status-Bar.
+var
+  F      : TLeakFinding;
+  LineNo : Integer;
+  OK     : Boolean;
+  Marker : string;
+begin
+  if not Assigned(FDisplayedFindings) then Exit;
+  if (RowIdx <= 0) or (RowIdx > FDisplayedFindings.Count) then Exit;
+  F := FDisplayedFindings[RowIdx - 1];
+  if not Assigned(F) then Exit;
+
+  LineNo := StrToIntDef(F.LineNumber, 0);
+  if (LineNo <= 0) or (F.FileName = '') then
+  begin
+    StatusMode(_('Suppress: cannot locate source line'));
+    Exit;
+  end;
+
+  Marker := '// noinspection ' + KindName(F.Kind);
+  OK := TIDEEditor.InsertLineAbove(F.FileName, LineNo, Marker);
+  if OK then
+    StatusMode(Format(_('Suppress inserted: %s'), [Marker]))
+  else
+    StatusMode(_('Suppress: editor write failed (file not in IDE?)'));
 end;
 
 function TAnalyserFrame.BuildClaudePrompt(F: TLeakFinding): string;
@@ -2467,6 +2647,7 @@ begin
     Entries[Count].Badge    := F.TypeText + _(' · ') + F.SeverityText;
     Entries[Count].Color    := SeverityAccent(DispSev);
     Entries[Count].Fix      := FH.After;   // Nachher-Code im Hover-Overlay
+    Entries[Count].Severity := DispSev;    // Multi-Mark-Ranking (staerkste zuerst)
     Inc(Count);
   end;
   SetLength(Entries, Count);
@@ -2856,6 +3037,7 @@ begin
     Result[Count].Badge    := F.TypeText + _(' · ') + F.SeverityText;
     Result[Count].Color    := SeverityAccent(DispSev);
     Result[Count].Fix      := FH.After;
+    Result[Count].Severity := DispSev;
     Inc(Count);
   end;
   SetLength(Result, Count);
@@ -2914,11 +3096,11 @@ begin
       uSCAConsts.DiscoveredStaticClasses.Clear;
 
     try
-      // Single-File-Analyse MIT Cross-Unit-Symbol-Index: ProjectRoot via
-      // .dproj/.dpk/.dpr-Walk-Up (Fallback .git-Root). Damit werden auch
-      // Aufrufer in Geschwister-Verzeichnissen (z.B. sources\Detectors
-      // fuer eine .pas in sources\Common) im Symbol-Index erfasst -
-      // CanBePrivate-False-Positives verschwinden.
+      // Single-File-Analyse mit projektweitem Symbol-Reference-Index
+      // (ProjectRoot via .dproj/.dpk/.dpr-Walk-Up, Fallback .git-Root).
+      // Visibility-Detektoren laufen mittlerweile single-file-only - der
+      // Projekt-Scope dient den uebrigen Cross-Unit-Detektoren (DFM-Repo,
+      // Custom-Rules) sowie der Symbol-Sammlung fuer kuenftige Analysen.
       Findings := TStaticAnalyzer2.AnalyzeLeaks(AFileName,
         TStaticFiles.FindProjectRoot(AFileName), Settings.UsesCheck);
     except

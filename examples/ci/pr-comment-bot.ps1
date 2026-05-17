@@ -1,0 +1,215 @@
+#!/usr/bin/env pwsh
+# PR-Comment-Bot fuer Static Code Analysis Tool for Delphi
+#
+# Liest einen SARIF-Report (von analyser.d12.exe --report-sarif erzeugt)
+# und postet einen Kommentar an den aktuellen Pull-Request, der die
+# in DIESEM PR NEU hinzugekommenen Findings auflistet.
+#
+# Backends:
+#   * GitHub  (gh CLI)         - default wenn $env:GITHUB_REPOSITORY gesetzt
+#   * GitLab  (glab CLI)       - automatisch wenn $env:CI_PROJECT_PATH gesetzt
+#
+# Voraussetzungen:
+#   * gh CLI installiert und authentifiziert (gh auth login)
+#     - Oder GITHUB_TOKEN als Env-Var
+#   * Pre-existierende Baseline (sca.baseline.json) auf dem Target-Branch:
+#     - analyser.d12.exe verglich vorher gegen die Baseline, SARIF enthaelt
+#       nur NEUE Findings
+#   * SARIF v2.1.0 (analyser.d12.exe Standard-Format)
+#
+# Aufruf:
+#   .\pr-comment-bot.ps1 -SarifPath sca.sarif `
+#                        -PrNumber 42 `
+#                        -Repo nrodear/MeineApp     # nur GitHub
+#
+# In GitHub-Actions:
+#   - name: Comment SCA findings on PR
+#     if: github.event_name == 'pull_request' && always()
+#     run: |
+#       pwsh examples/ci/pr-comment-bot.ps1 `
+#         -SarifPath sca.sarif `
+#         -PrNumber ${{ github.event.pull_request.number }} `
+#         -Repo ${{ github.repository }}
+
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory=$true)]
+    [string]$SarifPath,
+
+    [Parameter(Mandatory=$false)]
+    [int]$PrNumber = 0,
+
+    [Parameter(Mandatory=$false)]
+    [string]$Repo = $env:GITHUB_REPOSITORY,
+
+    [Parameter(Mandatory=$false)]
+    [ValidateSet('github', 'gitlab', 'auto')]
+    [string]$Backend = 'auto',
+
+    [Parameter(Mandatory=$false)]
+    [int]$MaxFindingsInComment = 50
+)
+
+$ErrorActionPreference = 'Stop'
+
+# ---- Sanity-Checks ---------------------------------------------------------
+
+if (-not (Test-Path $SarifPath)) {
+    Write-Host "[pr-comment-bot] SARIF file not found: $SarifPath" -ForegroundColor Red
+    exit 0  # exit-0 statt nonzero: PR-Comment ist optional, soll den Build nicht brechen
+}
+
+# Auto-Detect Backend
+if ($Backend -eq 'auto') {
+    if ($env:CI_PROJECT_PATH) {
+        $Backend = 'gitlab'
+    } elseif ($env:GITHUB_REPOSITORY -or $Repo) {
+        $Backend = 'github'
+    } else {
+        Write-Host "[pr-comment-bot] No CI environment detected (GITHUB_REPOSITORY / CI_PROJECT_PATH). Skipping."
+        exit 0
+    }
+}
+
+if ($Backend -eq 'github' -and -not $Repo) {
+    Write-Host "[pr-comment-bot] -Repo or `$env:GITHUB_REPOSITORY required for GitHub backend."
+    exit 0
+}
+
+# ---- SARIF parsen ----------------------------------------------------------
+
+$sarif = Get-Content $SarifPath -Raw | ConvertFrom-Json
+
+$results = @()
+foreach ($run in $sarif.runs) {
+    foreach ($r in $run.results) {
+        $level = $r.level
+        $ruleId = $r.ruleId
+        $msg = $r.message.text
+
+        $loc = $r.locations[0].physicalLocation
+        $uri = $loc.artifactLocation.uri
+        $line = if ($loc.region.startLine) { $loc.region.startLine } else { 0 }
+
+        $results += [PSCustomObject]@{
+            File   = $uri
+            Line   = $line
+            Rule   = $ruleId
+            Level  = $level
+            Msg    = $msg
+        }
+    }
+}
+
+if ($results.Count -eq 0) {
+    Write-Host "[pr-comment-bot] No findings in SARIF - skipping PR comment."
+    exit 0
+}
+
+# Sortiere by Severity (error > warning > note > none), dann File, dann Line
+$severityRank = @{ 'error'=0; 'warning'=1; 'note'=2; 'none'=3; ''=3 }
+$results = $results | Sort-Object {
+    $severityRank[$_.Level]
+}, File, Line
+
+# ---- Markdown-Comment generieren -------------------------------------------
+
+$nErr  = ($results | Where-Object Level -eq 'error').Count
+$nWarn = ($results | Where-Object Level -eq 'warning').Count
+$nNote = ($results | Where-Object { @('note','none','') -contains $_.Level }).Count
+
+$header = @"
+## :mag: Static Code Analyser - new findings on this PR
+
+| Severity | Count |
+|---|---|
+| :red_circle: Errors | $nErr |
+| :large_orange_diamond: Warnings | $nWarn |
+| :small_blue_diamond: Hints | $nNote |
+| **Total** | **$($results.Count)** |
+"@
+
+$body = @"
+$header
+
+"@
+
+if ($results.Count -gt $MaxFindingsInComment) {
+    $body += "_Showing the first $MaxFindingsInComment of $($results.Count) findings (sorted strongest first). Full report is in the SARIF artifact._`n`n"
+    $shown = $results | Select-Object -First $MaxFindingsInComment
+} else {
+    $shown = $results
+}
+
+$body += "| Severity | File:Line | Rule | Details |`n"
+$body += "|---|---|---|---|`n"
+
+foreach ($f in $shown) {
+    $icon = switch ($f.Level) {
+        'error'   { ':red_circle:' }
+        'warning' { ':large_orange_diamond:' }
+        default   { ':small_blue_diamond:' }
+    }
+    $loc = "$($f.File):$($f.Line)"
+    # Mehrzeiliges Detail in Single-Line ueberfuehren
+    $detail = $f.Msg -replace "`r?`n", ' ' -replace '\|', '\|'
+    if ($detail.Length -gt 140) { $detail = $detail.Substring(0, 137) + '...' }
+    $body += "| $icon | ``$loc`` | $($f.Rule) | $detail |`n"
+}
+
+$body += "`n---`n_Generated by [Static Code Analysis Tool for Delphi](https://github.com/nrodear/StaticCodeAnalyser). Suppress individual findings with ``// noinspection <RuleName>`` at the source line._`n"
+
+# ---- Posten ----------------------------------------------------------------
+
+if ($Backend -eq 'github') {
+    if ($PrNumber -le 0) {
+        # Bei PR-Workflows ist die PR-Nummer in GITHUB_REF / event.json zu finden
+        if ($env:GITHUB_EVENT_PATH -and (Test-Path $env:GITHUB_EVENT_PATH)) {
+            $eventJson = Get-Content $env:GITHUB_EVENT_PATH -Raw | ConvertFrom-Json
+            if ($eventJson.pull_request.number) { $PrNumber = $eventJson.pull_request.number }
+        }
+    }
+    if ($PrNumber -le 0) {
+        Write-Host "[pr-comment-bot] No PR number resolvable. Skipping."
+        exit 0
+    }
+
+    Write-Host "[pr-comment-bot] Posting comment to GitHub PR #$PrNumber in $Repo (gh CLI)..."
+
+    # Markdown-Body ueber temp-File an gh CLI uebergeben - vermeidet
+    # quoting-issues mit Multi-line-Content auf der Command-Line.
+    $tmpFile = New-TemporaryFile
+    try {
+        Set-Content -Path $tmpFile -Value $body -Encoding UTF8
+        & gh pr comment $PrNumber --repo $Repo --body-file $tmpFile.FullName
+        Write-Host "[pr-comment-bot] Comment posted successfully." -ForegroundColor Green
+    }
+    finally {
+        Remove-Item $tmpFile -ErrorAction SilentlyContinue
+    }
+}
+elseif ($Backend -eq 'gitlab') {
+    if (-not $env:CI_PROJECT_PATH) {
+        Write-Host "[pr-comment-bot] `$env:CI_PROJECT_PATH not set - GitLab backend requires running inside GitLab CI."
+        exit 0
+    }
+    if ($PrNumber -le 0) {
+        if ($env:CI_MERGE_REQUEST_IID) { $PrNumber = [int]$env:CI_MERGE_REQUEST_IID }
+    }
+    if ($PrNumber -le 0) {
+        Write-Host "[pr-comment-bot] No MR IID resolvable (set CI_MERGE_REQUEST_IID). Skipping."
+        exit 0
+    }
+
+    Write-Host "[pr-comment-bot] Posting comment to GitLab MR !$PrNumber in $env:CI_PROJECT_PATH (glab CLI)..."
+
+    $tmpFile = New-TemporaryFile
+    try {
+        Set-Content -Path $tmpFile -Value $body -Encoding UTF8
+        & glab mr note $PrNumber --message-file $tmpFile.FullName
+        Write-Host "[pr-comment-bot] Comment posted successfully." -ForegroundColor Green
+    }
+    finally {
+        Remove-Item $tmpFile -ErrorAction SilentlyContinue
+    }
+}

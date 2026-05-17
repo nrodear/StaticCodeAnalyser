@@ -44,6 +44,20 @@ type
     class function GetChangedPasFilesAuto(const APath: string;
       out AInfo: string;
       ASettings: TRepoSettings = nil): TStringList; static;
+
+    // Diff-Mode A<->B: liefert alle .pas/.dfm-Dateien die zwischen den
+    // beiden Commits geaendert wurden. ARange ist eine git-Ref-Range im
+    // Format 'shaA..shaB' oder 'branch1..branch2' (auch '...' fuer
+    // "common ancestor"-Diff wird durchgereicht).
+    // Liefert nil wenn:
+    //   - Pfad kein git-Repo ist
+    //   - die Range nicht aufloesbar ist (unbekannter Sha)
+    //   - git nicht gefunden wurde
+    // Working-Tree wird NICHT einbezogen - diese Methode ist explizit
+    // fuer committed-vs-committed Vergleiche (PR-Review-Use-Case).
+    class function GetChangedPasFilesDiff(const APath, ARange: string;
+      out AInfo: string;
+      ASettings: TRepoSettings = nil): TStringList; static;
   private
     // Ruft '<exe> <args>' im RepoRoot auf und gibt stdout zurueck.
     // Result True wenn Exit-Code 0 war.
@@ -551,6 +565,96 @@ begin
     Exit;
   end;
   Result := GetChangedPasFiles(Root, Kind, AInfo, ASettings);
+end;
+
+class function TVcsChanges.GetChangedPasFilesDiff(const APath, ARange: string;
+  out AInfo: string;
+  ASettings: TRepoSettings = nil): TStringList;
+// Strategie:
+//   1. APath -> git-Repo-Root finden (DetectRepo, vkGit erwartet)
+//   2. git diff --name-only --diff-filter=ACMR <ARange>
+//   3. Resultate analog GetGitChanges in .pas-Pfade umsetzen
+//      (.dfm -> zugehoerige .pas, wie der Branch-Mode auch).
+//
+// Akzeptiert Range-Formate die git diff selber versteht:
+//   - sha1..sha2
+//   - branch1..branch2
+//   - sha1...sha2 (common-ancestor-Diff, fuer PR-Vergleiche)
+//   - HEAD~5..HEAD
+//
+// AInfo: Status-Text fuer UI/CLI ("Git diff <range>", "git not found", ...).
+var
+  Output    : string;
+  ExitCode  : Cardinal;
+  SL        : TStringList;
+  Line, Path, AsPas : string;
+  GitExe    : string;
+  Root      : string;
+  Kind      : TVcsKind;
+begin
+  Result := TStringList.Create;
+  Result.Duplicates := dupIgnore;
+  Result.Sorted := True;
+  Result.CaseSensitive := False;
+
+  Root := DetectRepo(APath, Kind);
+  if (Root = '') or (Kind <> vkGit) then
+  begin
+    AInfo := _('git not found. Install Git for Windows (git-scm.com) ' +
+               'or set the path to git.exe in analyser.ini.');
+    Exit;
+  end;
+
+  GitExe := 'git';
+  if Assigned(ASettings) and (ASettings.GitExePath <> '') and
+     FileExists(ASettings.GitExePath) then
+    GitExe := ASettings.GitExePath;
+
+  // Sanity: git aufrufbar?
+  if not RunCmd(GitExe, '--version', Root, Output, ExitCode) then
+  begin
+    AInfo := _('git not found. Install Git for Windows (git-scm.com) ' +
+               'or set the path to git.exe in analyser.ini.');
+    Exit;
+  end;
+
+  // Diff fuer die Range. ACMR = Added/Copied/Modified/Renamed (Deletes
+  // sind irrelevant - die Files existieren nicht mehr, kann der Analyser
+  // sowieso nicht scannen).
+  if not RunCmd(GitExe,
+       'diff --name-only --diff-filter=ACMR ' + ARange,
+       Root, Output, ExitCode) then
+  begin
+    AInfo := Format('git diff --name-only %s failed (exit %d)',
+                    [ARange, ExitCode]);
+    Exit;
+  end;
+
+  SL := TStringList.Create;
+  try
+    SL.Text := Output;
+    for Line in SL do
+    begin
+      var T := Trim(Line);
+      if T = '' then Continue;
+      if T.ToLower.EndsWith('.pas') then
+      begin
+        Path := IncludeTrailingPathDelimiter(Root) + T.Replace('/', '\');
+        if FileExists(Path) then Result.Add(Path);
+      end
+      else if T.ToLower.EndsWith('.dfm') then
+      begin
+        AsPas := TPath.ChangeExtension(T, '.pas');
+        Path := IncludeTrailingPathDelimiter(Root) + AsPas.Replace('/', '\');
+        if FileExists(Path) then Result.Add(Path);
+      end;
+    end;
+  finally
+    SL.Free;
+  end;
+
+  AInfo := Format(_('Git diff %s: %d file(s) to analyse'),
+                  [ARange, Result.Count]);
 end;
 
 end.

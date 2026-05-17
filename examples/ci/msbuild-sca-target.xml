@@ -1,0 +1,69 @@
+<!--
+  MSBuild-Target-Snippet fuer Static Code Analysis Tool for Delphi.
+
+  KOPIEREN in ein Delphi-Projekt-.dproj (vor dem schliessenden </Project>):
+  - Der Target laeuft als Pre-Build-Step und stoppt den Build bei
+    Findings ab Severity Warning (konfigurierbar ueber FailOn-Variable).
+  - Schlaegt 'gracefully' fehl wenn die analyser.exe noch nicht gebaut
+    ist - der Hauptbuild laeuft normal weiter (siehe ContinueOnError).
+  - Sucht analyser.exe in dieser Reihenfolge:
+      1. $(SCAExePath) - Env-Variable / per /p:SCAExePath=... ueberschrieben
+      2. ..\tools\sca\analyser.d12.exe (Repo-Konvention)
+      3. $(BDS)\bin\..\sca\analyser.d12.exe (Studio-Install)
+
+  ====================================================================
+  ENTWEDER (a) das Snippet unten in dein .dproj nach <Import .../>
+                  pasten und commitn, ODER
+
+  (b) als externes File haben und im .dproj nur
+      <Import Project="...\msbuild-sca-target.xml" />
+
+  Variante (b) ist Update-stabil: aktualisiere das Snippet zentral,
+  alle Projekte ziehen automatisch nach.
+  ====================================================================
+-->
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <PropertyGroup>
+    <!-- Default-Werte; per /p:SCAExePath=... ueberschreibbar. -->
+    <SCAExePath Condition="'$(SCAExePath)' == ''">..\tools\sca\analyser.d12.exe</SCAExePath>
+    <SCABaseline Condition="'$(SCABaseline)' == ''">sca.baseline.json</SCABaseline>
+    <SCAFailOn Condition="'$(SCAFailOn)' == ''">warning</SCAFailOn>
+    <SCAProfile Condition="'$(SCAProfile)' == ''">default</SCAProfile>
+    <SCAScope Condition="'$(SCAScope)' == ''">--branch</SCAScope>
+    <!-- SCAEnabled=false unterdrueckt den Lauf komplett (CI vs lokal). -->
+    <SCAEnabled Condition="'$(SCAEnabled)' == ''">true</SCAEnabled>
+  </PropertyGroup>
+
+  <!--
+    PreBuild-Hook: laeuft vor jedem Build. Wenn analyser.exe nicht
+    existiert -> Skip mit Hinweis (kein Build-Bruch). Wenn ein Befund
+    >= SCAFailOn auftaucht -> Build bricht ab.
+  -->
+  <Target Name="SCAAnalyse" BeforeTargets="Build"
+          Condition="'$(SCAEnabled)' == 'true' and Exists('$(SCAExePath)')">
+    <Message Text="SCA: $(SCAExePath) $(SCAScope) --profile $(SCAProfile) --fail-on=$(SCAFailOn)"
+             Importance="high" />
+
+    <!-- Baseline-Datei optional - nur als Arg uebergeben wenn vorhanden -->
+    <PropertyGroup>
+      <SCABaselineArg Condition="Exists('$(SCABaseline)')">--baseline $(SCABaseline)</SCABaselineArg>
+      <SCABaselineArg Condition="!Exists('$(SCABaseline)')"></SCABaselineArg>
+    </PropertyGroup>
+
+    <Exec Command='"$(SCAExePath)" --path "$(MSBuildProjectDirectory)" $(SCAScope) --profile $(SCAProfile) $(SCABaselineArg) --fail-on=$(SCAFailOn) --quiet'
+          IgnoreExitCode="false"
+          ContinueOnError="false" />
+  </Target>
+
+  <!--
+    Hinweis-Target: wird gerufen wenn SCAExePath NICHT existiert, damit
+    der User in den Logs sieht warum nichts gelaufen ist.
+  -->
+  <Target Name="SCAAnalyseSkipped" BeforeTargets="Build"
+          Condition="'$(SCAEnabled)' == 'true' and !Exists('$(SCAExePath)')">
+    <Message Text="SCA SKIP: analyser.exe not found at '$(SCAExePath)'. Build continues. Set /p:SCAExePath=... or place analyser.d12.exe under ..\tools\sca\."
+             Importance="high" />
+  </Target>
+
+</Project>

@@ -277,7 +277,7 @@
       "kind": "LongMethod",
       "name": "Method exceeds line-count threshold",
       "shortDescription": "Method longer than configured maximum (default 80 lines)",
-      "fullDescription": "Long methods are hard to test and understand. Threshold configurable; consider extracting helper methods or splitting responsibilities.",
+      "fullDescription": "Methods over ~80 statements are correlated with high defect density (Robert C. Martin, McConnell): the reader keeps context in working memory and once the method spills past one screen, that context overflows. Long methods also resist unit testing - test setup ends up duplicating internal state. Refactor: pull cohesive blocks into private helpers (ParseInput/Validate/Persist), or split per responsibility (data fetch vs. transform vs. emit). Threshold is configurable via [Detectors] LongMethodMax / DetectorMaxBodyLines; lines are counted between the routine's `begin` and matching `end;`, comments and blank lines included. Compound-statement detection ignores nested anonymous methods so a method body that only contains a closure is not falsely reported.",
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["maintainability", "complexity"],
@@ -297,7 +297,7 @@
       "kind": "LongParamList",
       "name": "Too many parameters",
       "shortDescription": "Method has more parameters than configured maximum (default 7)",
-      "fullDescription": "High parameter counts indicate the method is doing too much. Consider grouping related parameters into a record or class.",
+      "fullDescription": "High parameter counts are a leading indicator of an SRP violation: the routine is juggling concerns that should be split. Long lists also bring positional confusion (the third Integer is which one again?) and force callers to fill defaults that may not apply. Refactor: group cohesive parameters into a record (TOrderInput), promote configuration to a builder pattern (FluentQuery.Where(...).OrderBy(...)), or split the method by axis (SaveOrder + SaveOrderItems). Threshold via [Detectors] LongParamMax / DetectorMaxParams (default 5). out/var parameters count just like value parameters; the implicit Self for class methods does not count.",
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["api-design"],
@@ -317,7 +317,7 @@
       "kind": "MagicNumber",
       "name": "Numeric literal without named constant",
       "shortDescription": "Numeric literal in expression - extract to a named constant",
-      "fullDescription": "Numeric literals in business logic are unexplained. Use named constants for readability and single-point-of-change.",
+      "fullDescription": "Numeric literals embedded directly in business logic carry no meaning: `if RetryCount > 3` forces every reader to guess what 3 represents and forces every maintenance change to find every occurrence by hand. Extract a named constant so the value has a documented purpose and exactly one source of truth. The detector skips trivials (0, 1, 2, -1, common power-of-2 sizes, indexing into known-tiny collections) - see [Detectors] MagicTrivials for the active list. Loop bounds against `Length(arr)` and array index 0 are also ignored. Use the global config to add project-specific trivials (e.g. a fixed PageSize).",
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["maintainability"],
@@ -375,7 +375,7 @@
       "kind": "DebugOutput",
       "name": "WriteLn/ShowMessage in production code",
       "shortDescription": "Debug output statement found in production unit",
-      "fullDescription": "WriteLn / ShowMessage / OutputDebugString usually indicate forgotten debug code. Use a proper logging framework with configurable levels.",
+      "fullDescription": "WriteLn / ShowMessage / OutputDebugString / OutputDebugStringA in non-test code is almost always leftover debugging: ShowMessage in particular blocks the UI thread and is unfit for any production code path. Replace with a structured logger (TLogger, mORMot TSynLog, log4d) so the call site captures severity, category, and source location, and ops can dial verbosity at runtime. The detector skips units under `*\\tests\\*`, `*\\test\\*` and units flagged by the project as test/cli (`*Console*`, `*TestProject*`). A `// noinspection DebugOutput` marker suppresses individual lines (e.g. interactive CLI banners).",
       "defaultSeverity": "Warning",
       "type": "Code Smell",
       "tags": ["debug-code"],
@@ -414,7 +414,7 @@
       "kind": "TodoComment",
       "name": "TODO/FIXME marker in comment",
       "shortDescription": "Open TODO / FIXME / HACK / XXX marker - resolve before release",
-      "fullDescription": "Tracks open work items embedded in source. CI can enforce zero TODOs in release branches.",
+      "fullDescription": "Open work markers (TODO, FIXME, HACK, XXX, BUG, NOTE) live as a parallel work tracker inside the source. The pattern fails by accretion: markers added years apart never get triaged together, the original author leaves, and the next reader cannot tell whether the TODO is still relevant or has been silently shipped. SCA surfaces every such marker so CI gates can enforce a zero-TODO release branch or PR-time triage. Recognised forms: `// TODO`, `{ TODO ... }`, `(* TODO *)`, case-insensitive, with optional jira-id suffix (`// TODO PROJ-123: ...`). Marker tokens are configurable; the default set matches SonarDelphi.",
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["work-tracking"],
@@ -452,7 +452,7 @@
       "kind": "DuplicateBlock",
       "name": "Duplicated code block",
       "shortDescription": "Multiple identical code blocks (>= configured minimum lines)",
-      "fullDescription": "Detects copy-paste blocks with at least N consecutive identical lines. Extract into a helper method or shared constant.",
+      "fullDescription": "Detects N+ consecutive identical lines that appear in two or more places in the codebase (default minimum: 8 lines). The DRY violation creates change-coupling: a bugfix on one copy silently diverges from the others, and reviewers cannot easily tell that a behaviour-fix only addressed one of N call sites. Refactor: extract into a helper method or a shared constant. Tokens are normalised (whitespace collapsed, identifiers lowered) so cosmetic differences do not mask a true duplicate. Trivial duplicates (uses lists, type alias declarations) are skipped. Threshold via [Detectors] DuplicateBlockMinLines.",
       "defaultSeverity": "Hint",
       "type": "Code Duplication",
       "tags": ["dry"],
@@ -685,7 +685,7 @@
       "kind": "DfmSqlFromUserInput",
       "name": "SQL property built from UI input",
       "shortDescription": "Query.SQL assembled from form-control Text / Caption properties",
-      "fullDescription": "SQL string built from form field values is SQL injection via the UI. Use parameterised queries (`ParamByName(...).AsString := EdInput.Text`).",
+      "fullDescription": "A DB-query SQL property (TADOQuery / TFDQuery / TUniQuery / TZQuery / TKSQLQuery.SQL.Text) is assembled by concatenating the Text / Caption / Hint / EditText / ItemText property of a UI input control (TEdit, TComboBox, TMaskEdit, ...) - classic SQL injection through the form. A user typing `' OR ''1''=''1' --` into the search field reads any row; `'; DROP TABLE Users; --` is destructive. Refactor: bind named parameters and assign via ParamByName, never concatenate. This detector is the DFM/UI-path companion to SCA003 (lexical SQL injection) and SCA058 (dangerous SQL statement).",
       "defaultSeverity": "Error",
       "type": "Vulnerability",
       "tags": ["dfm", "sql", "injection", "security"],
@@ -898,7 +898,7 @@
       "kind": "ConcatToFormat",
       "name": "Long string concat - prefer Format()",
       "shortDescription": "Multi-segment string concatenation - extract to a Format() call",
-      "fullDescription": "'a' + Var + 'b' + IntToStr(N) chains are harder to read and harder to translate than `Format('a%sb%d', [Var, N])`.",
+      "fullDescription": "Chains of `'a' + Var + 'b' + IntToStr(N)` (three or more concatenations involving non-literal segments) are harder to scan and harder to translate than `Format('a%sb%d', [Var, N])`: every IntToStr / FloatToStr / FormatDateTime in the middle of a string is one more place where a `resourcestring` cannot capture the message template. The detector triggers from 3 segments / 2 non-literal pieces upward, ignores trivial cases (`'<' + Name + '>'`) and skips lines under an active `// noinspection ConcatToFormat`. The flagged form may be intentional in performance-critical inner loops where Format's varargs box; the suppression marker is for that case.",
       "defaultSeverity": "Warning",
       "type": "Code Smell",
       "tags": ["maintainability", "string-formatting"],
@@ -936,7 +936,7 @@
       "kind": "ReversedForRange",
       "name": "for i := High to Low - missing downto",
       "shortDescription": "for i := 10 to 1 do - loop body never executes",
-      "fullDescription": "Classic typo: `to` instead of `downto` when iterating from high to low. The loop runs zero times. Detector flags constant From > To.",
+      "fullDescription": "`for i := 10 to 1 do` is a downto-vs-to typo: in Pascal a `to`-loop with start > end iterates zero times, so the body silently never runs and the bug shows up as missing side-effects with no compiler warning. The detector evaluates compile-time integer expressions on both sides (literals, simple negations, and `Length(arr)-1` for constant-length declarations) so `for i := Length(L)-1 to 0` is flagged. Variable-bounded loops are excluded - they may legitimately do nothing depending on runtime data. To iterate descending, write `downto`; to express 'maybe empty' explicitly, guard with an `if From <= To`.",
       "defaultSeverity": "Error",
       "type": "Bug",
       "tags": ["loop", "typo"],
@@ -1010,17 +1010,17 @@
     },
     {
       "id": "SCA050",
-      "kind": "CanBePrivate",
-      "name": "Public member could be private",
-      "shortDescription": "Public/protected member referenced only inside its own unit",
-      "fullDescription": "Cross-unit reference analysis: no outside caller, so tightening to private has no external impact. Reduces public API surface.",
+      "kind": "CanBeUnitPrivate",
+      "name": "Public member could be unit-private",
+      "shortDescription": "Public member is referenced only within the current unit - Delphi-classic `private` (unit-scope) suffices",
+      "fullDescription": "Single-file analysis: the `public` member is referenced from somewhere in the same unit (other classes, top-level procedures, ...), but NOT exclusively from the declaring class itself. Tightening to Delphi-classic `private` (which is unit-scope, not class-scope) is safe: every legal caller within the unit keeps working. This detector intentionally runs single-file ONLY - the previous cross-unit/cross-project scan produced too many false positives (RTTI/DFM streaming, sibling .dpk/.dproj consumers, generic instantiations, plugin APIs). The hint is a recommendation; if a foreign unit consumes the member, the compiler will catch the broken visibility with E2361 once the change is applied. Skips: published, virtual/abstract/override/dynamic, class constructors/destructors, RTTI-driven base classes (TForm/TFrame/TDataModule/TComponent), pure-class-method utility classes. Suppress per-line with `// noinspection CanBeUnitPrivate` for intentional public surface (library API, plugin entry point).",
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["encapsulation", "visibility"],
       "detectorUnit": "uVisibilityCheck.pas",
       "examples": {
-        "bad":  "public\n  procedure Helper;   // only used in same unit",
-        "good": "private\n  procedure Helper;"
+        "bad":  "type\n  TFoo = class\n  public\n    procedure Helper;\n  end;\n  TBar = class\n    procedure Run;  // calls Foo.Helper - same unit\n  end;",
+        "good": "type\n  TFoo = class\n  private\n    procedure Helper;\n  end;\n// Same-unit access stays legal under Delphi-classic `private`."
       },
       "cleanCodeAttribute": "MODULAR",
       "impacts": [
@@ -1032,7 +1032,7 @@
       "kind": "CanBeProtected",
       "name": "Public member could be protected",
       "shortDescription": "Public member referenced only from subclasses, never externally",
-      "fullDescription": "Cross-unit reference analysis: all external callers live in subclasses, so protected is sufficient and keeps the API narrower.",
+      "fullDescription": "Single-file analysis: every visible caller of the public member is itself a method of a class deriving from the declaring class. `protected` is the minimum visibility that satisfies all current call sites and signals the design intent ('this is an extension hook, not part of the consumer API'). Same single-file caveat as CanBeUnitPrivate / CanBeStrictPrivate: cross-unit consumers are invisible to the detector; the compiler verifies the refactor via E2361 if a foreign caller exists. Skips: published / RTTI-exposed members, virtual/override roots that are part of the documented hierarchy. Tighten with confidence inside the declaring project; for shipped library APIs verify external callers manually first.",
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["encapsulation", "visibility"],
@@ -1070,7 +1070,7 @@
       "kind": "UnusedLocalVar",
       "name": "Unused local variable",
       "shortDescription": "Local var declared but never referenced in method body",
-      "fullDescription": "Mirrors Delphi compiler hint H2164 but emitted as an SCA finding so it can be filtered, suppressed, and tracked uniformly with the other rules.",
+      "fullDescription": "A `var X: T;` in a method body is declared but never read or written in the same body. Mirrors Delphi compiler hint H2164 but emitted as an SCA finding so it can be filtered, suppressed, prioritized and tracked uniformly with the other rules - useful when H2164 is muted project-wide. The body scan recognises `with`-rebound identifiers and ignores variables whose names match an existing field/property (the `with` would rebind them implicitly). Inline-vars introduced by `var X: T := ...` are treated identically. Suppress with `// noinspection UnusedLocalVar` when the variable is intentionally kept (declarative documentation, or required-by-API record initialization).",
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["dead-code", "locals"],
@@ -1089,7 +1089,7 @@
       "kind": "UnusedParameter",
       "name": "Unused method parameter",
       "shortDescription": "Method parameter is never used in the body",
-      "fullDescription": "Detector skips overrides, event handlers (`Sender: TObject`) and interface implementations because those signatures are externally constrained.",
+      "fullDescription": "A formal parameter is declared but never read in the method body. The parameter clutters the call site (every caller passes a value that has no effect) and obscures the method's true dependencies. Refactor: drop the parameter, or move the call site to a different overload that doesn't take it. The detector intentionally skips externally constrained signatures: `override` (parent signature is fixed), `; virtual; abstract` placeholder bodies, interface implementations (signature dictated by interface), event handlers (`Sender: TObject` and the rest of the event tuple), and methods registered as DFM event handlers. Suppress per-method with `// noinspection UnusedParameter` for stable-shape callbacks (RTTI/streaming).",
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["dead-code", "api-design"],
@@ -1108,7 +1108,7 @@
       "kind": "TautologicalBoolExpr",
       "name": "Tautological boolean expression",
       "shortDescription": "Binary operator with identical LHS and RHS: x = x, a and a, (p <> p)",
-      "fullDescription": "Classic copy-paste bug. Either one side is wrong (the typical case - a typo) or the expression is genuinely tautological and should be removed.",
+      "fullDescription": "A binary operator has the textually identical operand on both sides: `x = x`, `a and a`, `(p <> p)`. The expression evaluates to a constant (True or False) at compile time and almost always indicates a typo - the operand was meant to be a similarly named identifier (`a = b`, `p1 <> p2`). The detector tracks: equality / inequality / ordering (`=`, `<>`, `<`, `>`, `<=`, `>=`) and boolean ops (`and`, `or`, `xor`). Arithmetic operators (`+`, `-`, `*`) are intentionally exempt: `x + x` and `a * a` are legitimate idioms. Operand normalisation lowers case and strips redundant whitespace but preserves string-literal content so `'foo' = 'foo'` is correctly flagged. Detector requires identifier-equality across the operator - a function call with side-effects (`Next = Next`) is also flagged because two calls produce the bug regardless.",
       "defaultSeverity": "Error",
       "type": "Bug",
       "tags": ["typo", "copy-paste"],
@@ -1146,7 +1146,7 @@
       "kind": "DfmDataModuleSplitHint",
       "name": "Form has many DB components - split DataModule",
       "shortDescription": "Aggregated hint: form holds >= N DB components",
-      "fullDescription": "Aggregate of multiple `DfmDbInUiForm` findings on the same form - emitted as a single refactor hint instead of N individual findings.",
+      "fullDescription": "Aggregate of multiple `DfmDbInUiForm` findings on the same form - once the count reaches the configured threshold (default 3), SCA replaces the N individual findings with a single 'extract a TDataModule' hint to avoid noise and to surface the architectural fix instead of pointing at one component at a time. Moving DB access to a TDataModule cleanly separates data plumbing from UI: the same TFDConnection and queries can be shared by multiple forms, the DB layer is testable without instantiating a TForm, and DesignForm vs RuntimeForm setup stays clean. Threshold via [Detectors] DfmDataModuleSplitMin (default 3 - kept low because once you see 3 DB components on a form, the pattern is already wrong).",
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["dfm", "architecture"],
@@ -2087,6 +2087,260 @@
       "examples": {
         "bad":  "procedure doStuff;",
         "good": "procedure DoStuff;"
+      },
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA107",
+      "kind": "CanBeStrictPrivate",
+      "name": "Public member could be strict private",
+      "shortDescription": "Public member is referenced ONLY by methods of its declaring class - `strict private` reaches the strongest encapsulation",
+      "fullDescription": "Single-file analysis: every visible caller of the `public` member is itself a method of the SAME class (no sibling class, no top-level procedure, no subclass in this unit). `strict private` (D2007+, class-scope, not unit-scope) is the tightest correct visibility. Same single-file caveat as CanBeUnitPrivate: cross-unit consumers are invisible and the compiler enforces correctness via E2361 if the change breaks something. Skips: published, virtual/abstract/override/dynamic, class constructors/destructors, RTTI-driven bases (TForm/TFrame/TDataModule/TComponent), pure-class-method utility classes. Suppress per-line with `// noinspection CanBeStrictPrivate` for intentional public surface.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["encapsulation", "visibility"],
+      "detectorUnit": "uVisibilityCheck.pas",
+      "examples": {
+        "bad":  "type\n  TFoo = class\n  public\n    procedure Helper;       // only TFoo.Run calls it\n    procedure Run;\n  end;",
+        "good": "type\n  TFoo = class\n  strict private\n    procedure Helper;\n  public\n    procedure Run;\n  end;"
+      },
+      "cleanCodeAttribute": "MODULAR",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA108",
+      "kind": "SynchronizeInDestructor",
+      "name": "TThread.Synchronize from destructor",
+      "shortDescription": "Synchronize() called from destructor Destroy - classic deadlock between worker and UI thread",
+      "fullDescription": "TThread.Synchronize() in a destructor body is the canonical Delphi threading deadlock: the worker thread blocks on the UI thread, but the UI thread is typically already blocked in WaitFor or the implicit WaitFor inside .Free, leading to a permanent hang. Move Synchronize-based finalization to a Terminate / OnTerminate callback that runs before the worker reaches its destructor, or guarantee the destructor is never invoked from a context that holds the UI thread. AST-based: walks every nkMethod whose name ends in '.Destroy' (or whose TypeRef carries the 'destructor' marker) and flags nkCall to 'Synchronize' / '<obj>.Synchronize'.",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["concurrency", "deadlock", "threading"],
+      "cwe": ["CWE-833"],
+      "detectorUnit": "uSynchronizeInDestructor.pas",
+      "examples": {
+        "bad":  "destructor TWorker.Destroy;\nbegin\n  Synchronize(procedure begin Form1.Log('done') end);  // deadlock\n  inherited;\nend;",
+        "good": "// Move the notify outside the destructor:\n// trigger an OnTerminate handler that runs BEFORE TThread.Destroy waits.\nFOnDone := procedure begin Form1.Log('done') end;\nOnTerminate := FOnDone;\n// destructor stays Synchronize-free."
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
+    },
+    {
+      "id": "SCA109",
+      "kind": "LockWithoutTryFinally",
+      "name": "Lock acquired without try/finally release",
+      "shortDescription": "TCriticalSection / Monitor / WinAPI lock taken without enclosing try..finally - exception leaves the lock held",
+      "fullDescription": "Acquiring a lock (TCriticalSection.Enter / .Acquire, TMonitor.Enter, TMultiReadExclusiveWriteSynchronizer.BeginWrite, WinAPI EnterCriticalSection) without immediately following with try..finally containing the matching Leave / Release / EndWrite is one of the most common Delphi threading bugs: any exception between the acquire and the release leaves the lock permanently held, deadlocking every subsequent caller. Lexical detection: matches the acquire patterns and checks whether the next statement after the `;` is `try`. Suppress with `// noinspection LockWithoutTryFinally` for intentionally-unprotected sequences (rare; usually means the next call is itself never going to throw).",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["concurrency", "lock", "exception-safety"],
+      "cwe": ["CWE-667"],
+      "detectorUnit": "uLockWithoutTryFinally.pas",
+      "examples": {
+        "bad":  "FLock.Enter;\nDoWork;     // exception here leaves FLock held forever\nFLock.Leave;",
+        "good": "FLock.Enter;\ntry\n  DoWork;\nfinally\n  FLock.Leave;\nend;"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
+    },
+    {
+      "id": "SCA110",
+      "kind": "StringConcatInLoop",
+      "name": "String concatenation in loop",
+      "shortDescription": "`s := s + x` inside for/while/repeat - quadratic reallocations",
+      "fullDescription": "Each `s := s + x` inside a loop body allocates a NEW string of length(s)+length(x) and copies both pieces into it. Across N iterations that is O(N^2) byte copies and Heap pressure. Two idiomatic alternatives in Delphi: (1) build into a TStringBuilder and call ToString once at the end, (2) collect parts in a TStringList and read .Text once. Detector heuristic: lexical match on the LHS == first-RHS-operand pattern (case-insensitive) inside any for/while/repeat block. False positives possible if `s` is intentionally re-used as an accumulator across short loops with tiny payloads; suppress with `// noinspection StringConcatInLoop`.",
+      "defaultSeverity": "Warning",
+      "type": "Code Smell",
+      "tags": ["performance", "memory"],
+      "detectorUnit": "uPerfHotspots.pas",
+      "examples": {
+        "bad":  "for i := 0 to High(Names) do\n  s := s + Names[i] + ', ';",
+        "good": "var SB := TStringBuilder.Create;\ntry\n  for i := 0 to High(Names) do\n    SB.Append(Names[i]).Append(', ');\n  s := SB.ToString;\nfinally SB.Free; end;"
+      },
+      "cleanCodeAttribute": "EFFICIENT",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA111",
+      "kind": "ParamByNameInLoop",
+      "name": "ParamByName(...) called in loop",
+      "shortDescription": "`Query.ParamByName('x').AsXxx := ...` inside a loop - linear lookup per iteration",
+      "fullDescription": "ParamByName walks the TParam collection by string-compare on each call (linear in number of params). Inside a Hot-Path / loop this turns one ParamByName per Query.Execute into N per Execute. Cache the TParam reference once outside the loop or use the integer-indexed Params[i] property if the parameter position is known.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["performance", "database"],
+      "detectorUnit": "uPerfHotspots.pas",
+      "examples": {
+        "bad":  "for i := 0 to High(Ids) do begin\n  Q.ParamByName('id').AsInteger := Ids[i];\n  Q.ExecSQL;\nend;",
+        "good": "var P := Q.ParamByName('id');\nfor i := 0 to High(Ids) do begin\n  P.AsInteger := Ids[i];\n  Q.ExecSQL;\nend;"
+      },
+      "cleanCodeAttribute": "EFFICIENT",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA112",
+      "kind": "FieldByNameInLoop",
+      "name": "FieldByName(...) called in loop",
+      "shortDescription": "`DataSet.FieldByName('x').AsXxx` inside a loop - linear lookup per row",
+      "fullDescription": "FieldByName walks the TFields collection by string-compare for every call. In a DataSet-iteration loop that turns one lookup per Field into N lookups per .Next, sometimes per-row times N-fields = O(N*M). Cache the TField reference once before the loop and read/write it directly. Same fix-path as SCA111 (ParamByName) - just a different collection.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["performance", "database"],
+      "detectorUnit": "uPerfHotspots.pas",
+      "examples": {
+        "bad":  "while not Q.Eof do begin\n  Total := Total + Q.FieldByName('Amount').AsCurrency;\n  Q.Next;\nend;",
+        "good": "var Amt := Q.FieldByName('Amount');\nwhile not Q.Eof do begin\n  Total := Total + Amt.AsCurrency;\n  Q.Next;\nend;"
+      },
+      "cleanCodeAttribute": "EFFICIENT",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA113",
+      "kind": "ThreadResumeDeprecated",
+      "name": "TThread.Resume is deprecated",
+      "shortDescription": "`MyThread.Resume` - use `MyThread.Start` (since Delphi 2010)",
+      "fullDescription": "TThread.Resume has been deprecated since Delphi 2010 in favor of TThread.Start (suspends-on-create + resume-on-start became one explicit Start call). The compiler emits a deprecation warning, but it is easily missed in larger code-bases. Two fixes: (a) call .Start instead of .Resume, (b) construct with CreateSuspended := False and skip the Resume/Start step entirely. Detector matches any `<ident>.Resume` - if the identifier is NOT a TThread descendant (e.g. a TForm), suppress per line with `// noinspection ThreadResumeDeprecated`.",
+      "defaultSeverity": "Warning",
+      "type": "Code Smell",
+      "tags": ["concurrency", "deprecated"],
+      "detectorUnit": "uConcurrencyExt.pas",
+      "examples": {
+        "bad":  "MyThread := TWorker.Create(True);\nMyThread.Resume;",
+        "good": "MyThread := TWorker.Create(True);\nMyThread.Start;"
+      },
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA114",
+      "kind": "TThreadDestroyWithoutTerminate",
+      "name": "TThread destroyed without Terminate+WaitFor",
+      "shortDescription": "`FreeAndNil(MyThread)` without prior `Terminate; WaitFor` - worker may still run",
+      "fullDescription": "Destroying a TThread instance whose Execute is still running causes the destructor to wait via TThread.Free's implicit WaitFor - but if Execute does not honor the Terminated flag, the destructor blocks forever (UI hang), and during that wait the application can hit AVs as half-destroyed state is observed. The safe pattern is `MyThread.Terminate; MyThread.WaitFor; FreeAndNil(MyThread);` (or use FreeOnTerminate=True and never Free manually). Heuristic: matches FreeAndNil(<id>) without `<id>.Terminate` and `<id>.WaitFor` in the preceding ~10 lines. Suppress with `// noinspection TThreadDestroyWithoutTerminate` for non-thread classes.",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["concurrency", "lifecycle"],
+      "cwe": ["CWE-364"],
+      "detectorUnit": "uConcurrencyExt.pas",
+      "examples": {
+        "bad":  "// inside an OnClick:\nFreeAndNil(FWorker);  // FWorker.Execute still running?",
+        "good": "FWorker.Terminate;\nFWorker.WaitFor;\nFreeAndNil(FWorker);"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
+    },
+    {
+      "id": "SCA115",
+      "kind": "HttpInsteadOfHttps",
+      "name": "Plaintext HTTP URL",
+      "shortDescription": "`'http://...'` literal for a remote endpoint - MITM-vulnerable",
+      "fullDescription": "A string literal starting with `http://` for any non-localhost endpoint transmits its payload unencrypted. Credentials, session tokens, and PII travel in plaintext and can be sniffed or modified by any active network actor. The fix is virtually free: change the scheme to `https://` (almost every modern service supports both). Detector skips localhost / 127.x.x.x / [::1] / 0.0.0.0 / host.docker.internal (dev workflows are legitimate) and XML-namespace URIs (`xmlns=`, `schemas`, `w3.org`, ...) which are identities, not network targets.",
+      "defaultSeverity": "Warning",
+      "type": "Security Hotspot",
+      "tags": ["security", "tls", "network"],
+      "cwe": ["CWE-319"],
+      "owasp": ["A02:2021-Cryptographic Failures"],
+      "detectorUnit": "uRestHttpSecurity.pas",
+      "examples": {
+        "bad":  "Url := 'http://api.example.com/v1/users';",
+        "good": "Url := 'https://api.example.com/v1/users';"
+      },
+      "cleanCodeAttribute": "TRUSTWORTHY",
+      "impacts": [
+        { "softwareQuality": "SECURITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA116",
+      "kind": "DisabledTlsVerification",
+      "name": "TLS verification disabled",
+      "shortDescription": "Empty `SecureProtocols`, `IgnoreCertificateErrors := True`, or `OnVerifyPeer := nil`",
+      "fullDescription": "Three Delphi patterns silently turn off TLS validation: (a) `SecureProtocols := []` removes every protocol, allowing fallback to plaintext or weakest-available, (b) `IgnoreCertificateErrors := True` accepts any certificate including expired and self-signed, (c) `OnVerifyPeer := nil` short-circuits the verification callback. All three are MITM-attractive. Replace with explicit modern-only protocols (`[TLSv1_2, TLSv1_3]`), a real trust store, or a fingerprint-pinning OnVerifyPeer handler. Detector matches the three property-assignment patterns lexically.",
+      "defaultSeverity": "Error",
+      "type": "Vulnerability",
+      "tags": ["security", "tls", "network"],
+      "cwe": ["CWE-295"],
+      "owasp": ["A07:2021-Identification and Authentication Failures"],
+      "detectorUnit": "uRestHttpSecurity.pas",
+      "examples": {
+        "bad":  "Client.SecureProtocols := [];\nClient.IgnoreCertificateErrors := True;",
+        "good": "Client.SecureProtocols := [TLSv1_2, TLSv1_3];\nClient.OnVerifyPeer := VerifyPinnedFingerprint;"
+      },
+      "cleanCodeAttribute": "TRUSTWORTHY",
+      "impacts": [
+        { "softwareQuality": "SECURITY", "severity": "HIGH" }
+      ]
+    },
+    {
+      "id": "SCA117",
+      "kind": "PublicMemberWithoutDoc",
+      "name": "Public member missing doc comment",
+      "shortDescription": "Public method or property in `interface` section with no doc comment directly above",
+      "fullDescription": "A public member in a unit's `interface` section is part of the documented API surface that other units consume. Missing doc-comments make the unit harder to use without reading the implementation. The detector accepts any of: `///` XMLDoc, a `{ ... }` block, a `(* ... *)` block, or one-or-more `//` single-line comments directly above the declaration. Skips: constructors `Create` / destructors `Destroy` (self-explanatory by convention), members starting with `_` (private-marker in public sections), `published` members (DFM/RTTI-driven, doc would be noise). Suppression: `// noinspection PublicMemberWithoutDoc` per declaration.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["documentation", "api-design"],
+      "detectorUnit": "uPublicMemberWithoutDoc.pas",
+      "examples": {
+        "bad":  "type\n  TFoo = class\n  public\n    procedure Run;\n  end;",
+        "good": "type\n  TFoo = class\n  public\n    /// <summary>Starts the worker.</summary>\n    procedure Run;\n  end;"
+      },
+      "cleanCodeAttribute": "COMPLETE",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA118",
+      "kind": "ExceptionName",
+      "name": "Exception class without `E` prefix",
+      "shortDescription": "`class(Exception)`-Descendant should follow Delphi-RTL `E<Name>` convention",
+      "fullDescription": "Delphi-RTL convention is unambiguous: exception classes start with `E` (EAbort, EConvertError, EAccessViolation). User-defined exception classes that omit the prefix break the convention and obscure the class kind at the call site (`raise MyError.Create(...)` vs `raise EMyError.Create(...)`). Detector matches any class whose TypeRef inherits from a known Exception class (Exception, EAbort, EAccessViolation, EExternal) and whose name does not start with `E<UpperCase>`.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["naming", "convention"],
+      "detectorUnit": "uNamingExt.pas",
+      "examples": {
+        "bad":  "type\n  MyError = class(Exception);",
+        "good": "type\n  EMyError = class(Exception);"
+      },
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA119",
+      "kind": "LocalConstantName",
+      "name": "Local constant not in UPPER_SNAKE_CASE",
+      "shortDescription": "`const X = 42;` inside a method - prefer UPPER_SNAKE_CASE for numeric constants",
+      "fullDescription": "Local numeric/integer constants inside a method body benefit from UPPER_SNAKE_CASE (`MAX_RETRIES`, `BUFFER_SIZE`, `DEFAULT_TIMEOUT`) - the reader sees instantly that the identifier is a constant, not a variable, and the convention matches the C / Java / Python convention so cross-language readers do not stumble. Detector skips: very-short names (<=2 chars, typically loop counters or temporaries), string/char-typed constants (often UI labels where PascalCase is fine). Suppress with `// noinspection LocalConstantName` for legitimate PascalCase locals.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["naming", "convention"],
+      "detectorUnit": "uNamingExt.pas",
+      "examples": {
+        "bad":  "procedure Foo;\nconst\n  MaxRetries = 3;\nbegin ... end;",
+        "good": "procedure Foo;\nconst\n  MAX_RETRIES = 3;\nbegin ... end;"
       },
       "cleanCodeAttribute": "CONVENTIONAL",
       "impacts": [
