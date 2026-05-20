@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  STATUS: Reine Dokumentations-/Referenz-Datei (NICHT aktiv eingebunden).
+
+  Hintergrund:
+    Erster Versuch war, die Source-Suchpfade ueber <Import> in alle drei
+    .dproj einzubinden, um DRY zu erreichen. Das hat in der Delphi-CE-
+    msbuild-Pipeline nicht zuverlaessig gegriffen - der dcc32 bekam
+    Pfade relativ zum falschen Working-Directory aufgeloest und meldete
+    F2613 "Unit X nicht gefunden". Daher Rueckkehr zur hardcoded Liste
+    in jeder .dproj.
+
+  Diese Datei dient nun als Single Source of Truth fuer die Soll-Liste
+  der Source-Pfade. Wer ein neues Source-Unterverzeichnis unter
+  StaticCodeAnalyserForm\sources\ anlegt, listet es HIER auf und zieht
+  die drei .dproj's nach. Damit ist die Liste an einer Stelle dokumentiert.
+
+  Aktuelle Soll-Pfade (relativ zu StaticCodeAnalyserForm\sources):
+    .                  - Root
+    Common             - Gemeinsam genutzte Utility-Units
+    Console            - CLI-Pfad (NUR Form-Projekt)
+    Detectors          - Alle Detector-Units (uMissingRaise, ...)
+    Infrastructure     - Cache, Index, Suppression, ...
+    Output             - Export-Renderer (HTML, Sonar, ...)
+    Parsing            - Lexer, Parser, AST
+    UI                 - Form/Frame/Renderer
+
+  Soll-Form pro .dproj:
+    StaticCodeAnalyserForm\StaticCodeAnalyser.d12.dproj:
+      Praefix $(PROJECTDIR)\sources\ - plus Console + resources
+    StaticCodeAnalyserIDE\StaticCodeAnalyser.IDE.d12.dproj:
+      Praefix $(PROJECTDIR)\..\StaticCodeAnalyserForm\sources\
+    StaticCodeAnalyserForm\tests\TestProject.dproj:
+      Praefix ..\sources\
+
+  Die untere PropertyGroup ist die zentrale Pfad-Liste (absolute Form
+  ueber $(MSBuildThisFileDirectory)). Wenn eine zukuenftige Delphi-
+  Version die Import-Mechanik sauber unterstuetzt, koennte sie wieder
+  in die .dproj eingebunden werden (siehe Git-History fuer Versuch).
+-->
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ScaFormSourcesRoot>$(MSBuildThisFileDirectory)StaticCodeAnalyserForm\sources</ScaFormSourcesRoot>
+        <ScaFormSourcesPath>$(ScaFormSourcesRoot);$(ScaFormSourcesRoot)\Common;$(ScaFormSourcesRoot)\Detectors;$(ScaFormSourcesRoot)\Infrastructure;$(ScaFormSourcesRoot)\Output;$(ScaFormSourcesRoot)\Parsing;$(ScaFormSourcesRoot)\UI</ScaFormSourcesPath>
+    </PropertyGroup>
+</Project>

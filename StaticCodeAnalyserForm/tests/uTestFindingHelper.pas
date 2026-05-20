@@ -40,6 +40,10 @@ uses
   uSynchronizeInDestructor, uLockWithoutTryFinally,
   uPerfHotspots, uConcurrencyExt, uRestHttpSecurity,
   uPublicMemberWithoutDoc, uNamingExt,
+  uMissingRaise, uRoutineResultAssigned, uReRaiseException, uCastAndFree,
+  uInstanceInvokedConstructor, uInheritedMethodEmpty, uNilComparison,
+  uRaisingRawException, uDateFormatSettings, uUnicodeToAnsiCast,
+  uCharToCharPointerCast, uIfThenShortCircuit,
   uStaticAnalyzer2,
   uTestSrcBuilder,
   System.IOUtils;
@@ -94,6 +98,18 @@ begin
       TEmptyMethodDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TFieldLeakDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TSelfAssignmentDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TMissingRaiseDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TRoutineResultAssignedDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TReRaiseExceptionDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TCastAndFreeDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TInstanceInvokedConstructorDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TInheritedMethodEmptyDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TNilComparisonDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TRaisingRawExceptionDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TDateFormatSettingsDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TUnicodeToAnsiCastDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TCharToCharPointerCastDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TIfThenShortCircuitDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TVirtualCallInCtorDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TVisibilityCheckDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TUnusedLocalDetector.AnalyzeUnit(Root, 'test.pas', Result);

@@ -370,8 +370,53 @@ type
     // ---- Naming-Familie erweitert (SCA118-119) ----
     fkExceptionName,             // class(Exception)-Descendant ohne
                                  // 'E'-Prefix (z.B. MyError statt EMyError).
-    fkLocalConstantName          // const im Methoden-Body sollte UPPER_SNAKE
+    fkLocalConstantName,         // const im Methoden-Body sollte UPPER_SNAKE
                                  // (z.B. MAX_RETRIES) - PascalCase = Smell.
+    fkMissingRaise,              // Exception.Create(...) erzeugt aber nie
+                                 // geraised - klassischer Copy-Paste-Bug
+                                 // nach raise-Refactoring. SonarDelphi-
+                                 // Pendant: MissingRaiseCheck.
+    fkRoutineResultUnassigned,   // Function-Body endet ohne Result-Zuweisung
+                                 // -> undefined Rueckgabewert (Heisenbug).
+                                 // SonarDelphi-Pendant: RoutineResultAssignedCheck.
+    fkReRaiseException,          // `except on E: T do raise E;` verliert den
+                                 // Original-Stack-Trace - `raise;` ohne
+                                 // Argument behaelt ihn. SonarDelphi-Pendant:
+                                 // ReRaiseExceptionCheck.
+    fkCastAndFree,               // `TFoo(x).Free` - Typ-Cast vor Free/Destroy
+                                 // ist redundant (Destroy ist virtual) und
+                                 // signalisiert oft Verwirrung. SonarDelphi-
+                                 // Pendant: CastAndFreeCheck.
+    fkInstanceInvokedConstructor,// `obj.Create` - Constructor auf Instance
+                                 // statt Class -> KEINE Allokation, Fields
+                                 // werden ueber bestehende Daten gemalt.
+                                 // SonarDelphi-Pendant:
+                                 // InstanceInvokedConstructorCheck.
+    fkInheritedMethodEmpty,      // `procedure Foo; override; begin inherited;
+                                 // end;` - leeres Override ohne Mehrwert.
+                                 // SonarDelphi-Pendant:
+                                 // InheritedMethodWithNoCodeCheck.
+    fkNilComparison,             // `x = nil` / `x <> nil` statt `Assigned(x)`
+                                 // - Konvention/Style. SonarDelphi-Pendant:
+                                 // NilComparisonCheck.
+    fkRaisingRawException,       // `raise Exception.Create(...)` mit Basis-
+                                 // klasse statt spezifischer Subklasse.
+                                 // SonarDelphi-Pendant: RaisingRawExceptionCheck.
+    fkDateFormatSettings,        // StrToDate/StrToFloat/... ohne explizites
+                                 // TFormatSettings - locale-abhaengig.
+                                 // SonarDelphi-Pendant: DateFormatSettingsCheck.
+    fkUnicodeToAnsiCast,         // AnsiString(s)/UTF8String(s)/... Cast
+                                 // ohne explizite Encoding - stiller
+                                 // Datenverlust fuer non-ASCII. SonarDelphi-
+                                 // Pendant: UnicodeToAnsiCastCheck.
+    fkCharToCharPointerCast,     // PChar(charValue) - Char wird als Pointer
+                                 // reinterpretiert (Codepoint = Adresse) ->
+                                 // undefined behavior. SonarDelphi-Pendant:
+                                 // CharacterToCharacterPointerCastCheck.
+    fkIfThenShortCircuit         // Math.IfThen / StrUtils.IfThen - beide
+                                 // Aerme werden immer evaluiert, kein
+                                 // Short-Circuit wie bei if/then/else.
+                                 // SonarDelphi-Pendant: IfThenShortCircuitCheck.
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -539,7 +584,19 @@ const
     (Name: 'DisabledTlsVerification';    FindingType: ftVulnerability; DefaultSeverity: lsError),  // fkDisabledTlsVerification
     (Name: 'PublicMemberWithoutDoc';     FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkPublicMemberWithoutDoc
     (Name: 'ExceptionName';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkExceptionName
-    (Name: 'LocalConstantName';          FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkLocalConstantName
+    (Name: 'LocalConstantName';          FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkLocalConstantName
+    (Name: 'MissingRaise';               FindingType: ftBug;          DefaultSeverity: lsError),   // fkMissingRaise
+    (Name: 'RoutineResultUnassigned';    FindingType: ftBug;          DefaultSeverity: lsError),   // fkRoutineResultUnassigned
+    (Name: 'ReRaiseException';           FindingType: ftBug;          DefaultSeverity: lsWarning), // fkReRaiseException
+    (Name: 'CastAndFree';                FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkCastAndFree
+    (Name: 'InstanceInvokedConstructor'; FindingType: ftBug;          DefaultSeverity: lsError),   // fkInstanceInvokedConstructor
+    (Name: 'InheritedMethodEmpty';       FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkInheritedMethodEmpty
+    (Name: 'NilComparison';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkNilComparison
+    (Name: 'RaisingRawException';        FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkRaisingRawException
+    (Name: 'DateFormatSettings';         FindingType: ftBug;          DefaultSeverity: lsWarning), // fkDateFormatSettings
+    (Name: 'UnicodeToAnsiCast';          FindingType: ftBug;          DefaultSeverity: lsWarning), // fkUnicodeToAnsiCast
+    (Name: 'CharToCharPointerCast';      FindingType: ftBug;          DefaultSeverity: lsError),   // fkCharToCharPointerCast
+    (Name: 'IfThenShortCircuit';         FindingType: ftBug;          DefaultSeverity: lsWarning)  // fkIfThenShortCircuit
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.
@@ -634,9 +691,26 @@ begin
   // SonarDelphi-Import lebt zwischen fkGotoStatement (SCA060) und
   // fkMethodName (SCA106). Alles davor (fkMemoryLeak..fkFormatLocaleHint)
   // sowie SCA-native Erweiterungen NACH SCA106 (fkCanBeStrictPrivate ff.)
-  // sind nicht SonarDelphi.
+  // sind nicht SonarDelphi - mit Ausnahme einzelner SonarDelphi-Pendants
+  // die nach SCA106 ans Enum-Ende angehaengt wurden (Whitelist-Suffix).
   Result := (Ord(K) >= Ord(fkGotoStatement)) and
             (Ord(K) <= Ord(fkMethodName));
+  if Result then Exit;
+  case K of
+    fkMissingRaise,                // SCA120, SonarDelphi:MissingRaiseCheck
+    fkRoutineResultUnassigned,     // SCA121, SonarDelphi:RoutineResultAssignedCheck
+    fkReRaiseException,            // SCA122, SonarDelphi:ReRaiseExceptionCheck
+    fkCastAndFree,                 // SCA123, SonarDelphi:CastAndFreeCheck
+    fkInstanceInvokedConstructor,  // SCA124, SonarDelphi:InstanceInvokedConstructorCheck
+    fkInheritedMethodEmpty,        // SCA125, SonarDelphi:InheritedMethodWithNoCodeCheck
+    fkNilComparison,               // SCA126, SonarDelphi:NilComparisonCheck
+    fkRaisingRawException,         // SCA127, SonarDelphi:RaisingRawExceptionCheck
+    fkDateFormatSettings,          // SCA128, SonarDelphi:DateFormatSettingsCheck
+    fkUnicodeToAnsiCast,           // SCA129, SonarDelphi:UnicodeToAnsiCastCheck
+    fkCharToCharPointerCast,       // SCA130, SonarDelphi:CharacterToCharacterPointerCastCheck
+    fkIfThenShortCircuit:          // SCA131, SonarDelphi:IfThenShortCircuitCheck
+      Result := True;
+  end;
 end;
 
 { TConsts }

@@ -244,6 +244,12 @@ type
     // Zeile nicht markiert ist.
     function TryGetMark(const AFile: string; ALine: Integer;
                         out AMark: TFindingMark): Boolean;
+
+    // Liefert die markierten Zeilen einer Datei sortiert aufsteigend.
+    // Wird vom Finding-Navigations-Hotkey (Ctrl+Alt+Up/Down) genutzt,
+    // um zur naechsten/vorherigen Markierung im aktuellen Editor-File
+    // zu springen. Leere Liste wenn keine Marks fuer die Datei.
+    function GetSortedLinesForFile(const AFile: string): TArray<Integer>;
   end;
 
 var
@@ -724,6 +730,18 @@ var
 begin
   Result := FMarksByFile.TryGetValue(NormalizePath(AFile), Bucket)
         and Bucket.TryGetValue(ALine, AMark);
+end;
+
+function TFindingHighlighter.GetSortedLinesForFile(
+  const AFile: string): TArray<Integer>;
+var
+  Bucket : TFileMarks;
+begin
+  if not FMarksByFile.TryGetValue(NormalizePath(AFile), Bucket)
+     or (Bucket.Count = 0) then
+    Exit(nil);
+  Result := Bucket.Keys.ToArray;
+  TArray.Sort<Integer>(Result);
 end;
 
 { ---- TFindingEditorEvents ---- }

@@ -13,6 +13,7 @@ type
   private
     function MethodeMethodeMitSpeicherleck: TStringList;
     function MethodeMethodeTStringListNotFree: TStringList;
+
   public
     // Methode MIT Speicherleck: test wird erstellt, aber nie freigegeben
     function MethodeMitSpeicherleck: string;

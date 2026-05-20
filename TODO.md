@@ -501,6 +501,17 @@ hängt zusammen (CLI-Mode ist die Voraussetzung für CI-Integration).
 
 ## 💡 Features / Erweiterungen
 
+- [x] **Navigation: Sprung zum nächsten/vorherigen Befund im Editor (Hotkey)**
+  (2026-05-20 ✅ erledigt) — `Ctrl+Alt+↓` springt zur nächsten,
+  `Ctrl+Alt+↑` zur vorherigen markierten Zeile im aktuellen Tab.
+  Wrap-around an Datei-Ende/-Anfang. Implementiert als
+  `TSCAFindingNavBinding` (`IOTAKeyboardBinding`) in neuer Unit
+  [uIDEFindingNav.pas](StaticCodeAnalyserIDE/uIDEFindingNav.pas).
+  Markierte Zeilen kommen aus `GHighlighter.GetSortedLinesForFile`;
+  Zielzeile via `TIDEEditor.CenterCurrentViewOnLine` (Caret +
+  Viewport-Zentrierung). Wenn die Datei keine Marken hat, bleibt
+  der Hotkey `krUnhandled` (Default-Editor sieht den Key).
+
 - [ ] **FormatMismatch: zusätzliche Sub-Inspections (ReSharper-Vorbild)**
   Erweitert den bestehenden Detektor um Diagnosen, die heute nicht
   abgedeckt sind. Argumentanzahl, Typ-Mismatch und Konstanten-Auflösung

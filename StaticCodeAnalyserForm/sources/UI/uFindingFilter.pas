@@ -51,7 +51,14 @@ type
                  fmTodoComment, fmEmptyMethod, fmDuplicateBlock,
                  fmCyclomaticComplexity,
                  // Concurrency-Familie (SCA108+)
-                 fmSynchronizeInDestructor, fmLockWithoutTryFinally);
+                 fmSynchronizeInDestructor, fmLockWithoutTryFinally,
+                 // SonarDelphi-Migration (SCA120-131)
+                 fmMissingRaise, fmRoutineResultUnassigned,
+                 fmReRaiseException, fmCastAndFree,
+                 fmInstanceInvokedConstructor, fmInheritedMethodEmpty,
+                 fmNilComparison, fmRaisingRawException,
+                 fmDateFormatSettings, fmUnicodeToAnsiCast,
+                 fmCharToCharPointerCast, fmIfThenShortCircuit);
 
   // Zweiter Filter (orthogonal zu Schweregrad): Sonar-Typ-Kategorie.
   TTypeFilter = (tfAll, tfBug, tfCodeSmell, tfVulnerability,
@@ -138,6 +145,19 @@ begin
     fkTodoComment      : Result := 'todo fixme hack xxx kommentar comment';
     fkEmptyMethod      : Result := 'empty method leere methode';
     fkDuplicateBlock   : Result := 'duplicate block doppelter';
+    // SonarDelphi-Migration (SCA120-131)
+    fkMissingRaise               : Result := 'missing raise exception create fehlt';
+    fkRoutineResultUnassigned    : Result := 'result unassigned function rueckgabe nicht zugewiesen';
+    fkReRaiseException           : Result := 'reraise exception stack trace stacktrace verloren';
+    fkCastAndFree                : Result := 'cast free destroy redundant typumwandlung';
+    fkInstanceInvokedConstructor : Result := 'instance invoked constructor create new auf objekt';
+    fkInheritedMethodEmpty       : Result := 'inherited empty leer override leeres';
+    fkNilComparison              : Result := 'nil comparison assigned vergleich null';
+    fkRaisingRawException        : Result := 'raising raw exception basisklasse base';
+    fkDateFormatSettings         : Result := 'date format settings locale strtodate strtofloat';
+    fkUnicodeToAnsiCast          : Result := 'unicode ansi cast utf8 encoding datenverlust';
+    fkCharToCharPointerCast      : Result := 'char pchar pointer cast codepoint adresse';
+    fkIfThenShortCircuit         : Result := 'ifthen short circuit math strutils kurzschluss';
   else
     Result := '';
   end;
@@ -193,6 +213,19 @@ begin
     fmCyclomaticComplexity: Result := F.Kind = fkCyclomaticComplexity;
     fmTodoComment:     Result := F.Kind = fkTodoComment;
     fmEmptyMethod:     Result := F.Kind = fkEmptyMethod;
+    // SonarDelphi-Migration (SCA120-131)
+    fmMissingRaise:              Result := F.Kind = fkMissingRaise;
+    fmRoutineResultUnassigned:   Result := F.Kind = fkRoutineResultUnassigned;
+    fmReRaiseException:          Result := F.Kind = fkReRaiseException;
+    fmCastAndFree:               Result := F.Kind = fkCastAndFree;
+    fmInstanceInvokedConstructor:Result := F.Kind = fkInstanceInvokedConstructor;
+    fmInheritedMethodEmpty:      Result := F.Kind = fkInheritedMethodEmpty;
+    fmNilComparison:             Result := F.Kind = fkNilComparison;
+    fmRaisingRawException:       Result := F.Kind = fkRaisingRawException;
+    fmDateFormatSettings:        Result := F.Kind = fkDateFormatSettings;
+    fmUnicodeToAnsiCast:         Result := F.Kind = fkUnicodeToAnsiCast;
+    fmCharToCharPointerCast:     Result := F.Kind = fkCharToCharPointerCast;
+    fmIfThenShortCircuit:        Result := F.Kind = fkIfThenShortCircuit;
   else
     Result := True;   // fmAll
   end;

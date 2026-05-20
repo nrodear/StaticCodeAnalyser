@@ -85,8 +85,11 @@ uses
   uSuppression, uCustomClassDiscovery, uPathOverrides,
   uSynchronizeInDestructor, uLockWithoutTryFinally,
   uPerfHotspots, uConcurrencyExt, uRestHttpSecurity,
-  uPublicMemberWithoutDoc, uNamingExt,
-  uRuleCatalog;
+  uPublicMemberWithoutDoc, uNamingExt,  uRuleCatalog,
+  uRoutineResultAssigned, uReRaiseException, uCastAndFree, uMissingRaise,
+  uInstanceInvokedConstructor, uInheritedMethodEmpty, uNilComparison,
+  uRaisingRawException, uDateFormatSettings, uUnicodeToAnsiCast,
+  uCharToCharPointerCast, uIfThenShortCircuit;
 
 type
   // Run-Methode pro Detektor: einheitliche Signatur, damit alle in einem
@@ -206,6 +209,18 @@ begin
   Add('MethodName',      fkMethodName,      procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TMethodNameDetector.AnalyzeUnit(R, F, L); end);
   Add('ReversedForRange',fkReversedForRange,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TReversedForRangeDetector.AnalyzeUnit(R, F, L); end);
   Add('SelfAssignment',  fkSelfAssignment,  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TSelfAssignmentDetector.AnalyzeUnit(R, F, L); end);
+  Add('MissingRaise',    fkMissingRaise,    procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TMissingRaiseDetector.AnalyzeUnit(R, F, L); end);
+  Add('RoutineResultUnassigned', fkRoutineResultUnassigned, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TRoutineResultAssignedDetector.AnalyzeUnit(R, F, L); end);
+  Add('ReRaiseException', fkReRaiseException, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TReRaiseExceptionDetector.AnalyzeUnit(R, F, L); end);
+  Add('CastAndFree',     fkCastAndFree,     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TCastAndFreeDetector.AnalyzeUnit(R, F, L); end);
+  Add('InstanceInvokedConstructor', fkInstanceInvokedConstructor, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TInstanceInvokedConstructorDetector.AnalyzeUnit(R, F, L); end);
+  Add('InheritedMethodEmpty', fkInheritedMethodEmpty, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TInheritedMethodEmptyDetector.AnalyzeUnit(R, F, L); end);
+  Add('NilComparison',   fkNilComparison,   procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TNilComparisonDetector.AnalyzeUnit(R, F, L); end);
+  Add('RaisingRawException', fkRaisingRawException, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TRaisingRawExceptionDetector.AnalyzeUnit(R, F, L); end);
+  Add('DateFormatSettings', fkDateFormatSettings, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDateFormatSettingsDetector.AnalyzeUnit(R, F, L); end);
+  Add('UnicodeToAnsiCast', fkUnicodeToAnsiCast, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUnicodeToAnsiCastDetector.AnalyzeUnit(R, F, L); end);
+  Add('CharToCharPointerCast', fkCharToCharPointerCast, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TCharToCharPointerCastDetector.AnalyzeUnit(R, F, L); end);
+  Add('IfThenShortCircuit', fkIfThenShortCircuit, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TIfThenShortCircuitDetector.AnalyzeUnit(R, F, L); end);
   Add('VirtualCallInCtor',fkVirtualCallInCtor,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TVirtualCallInCtorDetector.AnalyzeUnit(R, F, L); end);
   Add('LengthUnderflow', fkLengthUnderflow, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLengthUnderflowDetector.AnalyzeUnit(R, F, L); end);
   // VisibilityCheck emittiert vier Kinds (CanBeUnitPrivate, CanBeStrict-

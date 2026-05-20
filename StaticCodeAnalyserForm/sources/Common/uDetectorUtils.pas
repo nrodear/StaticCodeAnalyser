@@ -34,6 +34,16 @@ type
     // True, wenn Needle als ganzes Wort in HaystackLower vorkommt.
     class function ContainsWholeWordLower(const Needle, HaystackLower: string)
       : Boolean; static; inline;
+
+    // Entfernt Pascal-String-Literale aus einem Ausdrucks-Text.
+    // Pascal escaped einfache Apostrophe in Strings durch Verdoppelung
+    // (`'don''t'`), aber der Parser-AST hat sie bereits als zusammenhaengen-
+    // den Literal-Token konsumiert; die Funktion arbeitet daher auf einer
+    // Toggle-Logik: jedes Apostrophe schaltet "in-string"-Modus um.
+    // Verwendet von Detektoren, die nach Operator-Pattern (z.B. `= nil`,
+    // `IfThen(...,A(),B())`) suchen und dabei Treffer in String-Literalen
+    // ('= nil als String') ausschliessen muessen.
+    class function StripStringLiterals(const S: string): string; static;
   end;
 
 
@@ -87,6 +97,24 @@ class function TDetectorUtils.ContainsWholeWordLower(const Needle,
   HaystackLower: string): Boolean;
 begin
   Result := FindWholeWordLower(Needle, HaystackLower) > 0;
+end;
+
+class function TDetectorUtils.StripStringLiterals(const S: string): string;
+var
+  i     : Integer;
+  C     : Char;
+  InStr : Boolean;
+begin
+  Result := '';
+  InStr := False;
+  for i := 1 to Length(S) do
+  begin
+    C := S[i];
+    if C = '''' then
+      InStr := not InStr
+    else if not InStr then
+      Result := Result + C;
+  end;
 end;
 
 end.

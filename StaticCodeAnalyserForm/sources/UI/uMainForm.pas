@@ -220,6 +220,19 @@ begin
   SeverityFilterCombo.Items.AddObject(_('Data Module Split Hint'), TObject(Ord(fmDfmDataModuleSplitHint)));
   SeverityFilterCombo.Items.AddObject(_('Dangerous SQL Statement'),TObject(Ord(fmSqlDangerousStatement)));
   SeverityFilterCombo.Items.AddObject(_('Format Locale Hint'),     TObject(Ord(fmFormatLocaleHint)));
+  // SonarDelphi-Migration (SCA120-131)
+  SeverityFilterCombo.Items.AddObject(_('Missing Raise'),                TObject(Ord(fmMissingRaise)));
+  SeverityFilterCombo.Items.AddObject(_('Result Unassigned'),            TObject(Ord(fmRoutineResultUnassigned)));
+  SeverityFilterCombo.Items.AddObject(_('Re-Raise Exception'),           TObject(Ord(fmReRaiseException)));
+  SeverityFilterCombo.Items.AddObject(_('Cast And Free'),                TObject(Ord(fmCastAndFree)));
+  SeverityFilterCombo.Items.AddObject(_('Instance-Invoked Constructor'), TObject(Ord(fmInstanceInvokedConstructor)));
+  SeverityFilterCombo.Items.AddObject(_('Inherited (empty)'),            TObject(Ord(fmInheritedMethodEmpty)));
+  SeverityFilterCombo.Items.AddObject(_('Nil Comparison'),               TObject(Ord(fmNilComparison)));
+  SeverityFilterCombo.Items.AddObject(_('Raising Raw Exception'),        TObject(Ord(fmRaisingRawException)));
+  SeverityFilterCombo.Items.AddObject(_('Date Format Settings'),         TObject(Ord(fmDateFormatSettings)));
+  SeverityFilterCombo.Items.AddObject(_('Unicode -> Ansi Cast'),         TObject(Ord(fmUnicodeToAnsiCast)));
+  SeverityFilterCombo.Items.AddObject(_('Char -> PChar Cast'),           TObject(Ord(fmCharToCharPointerCast)));
+  SeverityFilterCombo.Items.AddObject(_('IfThen Short-Circuit'),         TObject(Ord(fmIfThenShortCircuit)));
   SeverityFilterCombo.ItemIndex := 0;
 
   TypeFilterCombo.Items.Add(_('All'));

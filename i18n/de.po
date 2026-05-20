@@ -154,3 +154,610 @@ msgstr "git nicht gefunden. Installiere Git für Windows."
 
 msgid "svn not found. Install TortoiseSVN with command line tools."
 msgstr "svn nicht gefunden. Installiere TortoiseSVN mit Command-Line-Tools."
+
+# ---- Code-Quality-Score (Letter-Grade-Anzeige + Tooltip) ------------------
+msgid "No findings - clean baseline"
+msgstr "Keine Befunde - sauberer Stand"
+
+msgid "Clean - minor smells only"
+msgstr "Sauber - nur kleinere Smells"
+
+msgid "Visible tech debt, no critical bugs"
+msgstr "Sichtbare technische Schulden, keine kritischen Bugs"
+
+msgid "Multiple errors/vulnerabilities - refactor advised"
+msgstr "Mehrere Errors/Vulnerabilities - Refactor empfohlen"
+
+msgid "Refactor needed - many critical findings"
+msgstr "Refactor noetig - viele kritische Befunde"
+
+msgid "Raw score: %d"
+msgstr "Rohwert: %d"
+
+msgid "Errors: %d, Warnings: %d, Hints: %d"
+msgstr "Fehler: %d, Warnungen: %d, Hinweise: %d"
+
+msgid "Vulnerabilities: %d, Hotspots: %d, File errors: %d"
+msgstr "Vulnerabilities: %d, Hotspots: %d, Lesefehler: %d"
+
+msgid "Grade scale: A=0, B<=%d, C<=%d, D<=%d, E>%d"
+msgstr "Notenskala: A=0, B<=%d, C<=%d, D<=%d, E>%d"
+
+msgid "Weights: Vuln 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2"
+msgstr "Gewichte: Vuln 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2"
+
+msgid "Click: reset filters (show everything)"
+msgstr "Klick: Filter zuruecksetzen (alles anzeigen)"
+
+# ---- Fix-Hint Descriptions (Pascal-Detektoren, vollstaendiger Backfill) ---
+# Beschreibungs-Strings aus uFixHint.pas. Im Plugin werden sie im
+# Hilfe-Panel ueber dem Befund angezeigt sowie im Hover-Overlay im Editor.
+# Code-Beispiele (Vorher/Nachher) bleiben per Konvention englisch.
+
+msgid "// NOSONAR suppression marker found - audit it"
+msgstr "// NOSONAR-Suppression-Marker gefunden - bitte pruefen"
+
+msgid "A single method handles too many component events - split it up"
+msgstr "Eine Methode behandelt zu viele Komponenten-Events - aufteilen"
+
+msgid "Assert() without explanatory message"
+msgstr "Assert() ohne erklaerende Meldung"
+
+msgid "Assigned(X) and (X <> nil) - one check is enough"
+msgstr "Assigned(X) und (X <> nil) - eine Pruefung reicht"
+
+msgid "Asymmetric begin/end in if/else - format consistently"
+msgstr "Asymmetrisches begin/end in if/else - einheitlich formatieren"
+
+msgid "Binary expression has identical left and right side - copy-paste bug?"
+msgstr "Binaer-Ausdruck mit identischer linker und rechter Seite - Copy-Paste-Bug?"
+
+msgid "Boolean compared to True/False - redundant"
+msgstr "Boolean mit True/False verglichen - redundant"
+
+msgid "Branch body without begin..end - add explicit block"
+msgstr "Verzweigungs-Body ohne begin..end - expliziten Block setzen"
+
+msgid "Class field without \"F\" prefix"
+msgstr "Klassenfeld ohne \"F\"-Praefix"
+
+msgid "Class/record type without \"T\" prefix"
+msgstr "Klassen-/Record-Typ ohne \"T\"-Praefix"
+
+msgid "Comment contains Pascal-code markers - delete it or restore it"
+msgstr "Kommentar enthaelt Pascal-Code - loeschen oder wiederherstellen"
+
+msgid "Component class is on the project-defined forbidden list"
+msgstr "Komponenten-Klasse steht auf der projektweiten Verbotsliste"
+
+msgid "Component event is wired but the handler body is empty"
+msgstr "Komponenten-Event ist verdrahtet, aber Handler-Body ist leer"
+
+msgid "Component has both Action and OnClick - the OnClick handler is dead code"
+msgstr "Komponente hat Action UND OnClick - der OnClick-Handler ist toter Code"
+
+msgid "Component uses the IDE default name - rename for clarity"
+msgstr "Komponente hat den IDE-Defaultnamen - umbenennen zur Klarheit"
+
+msgid "Constructor does not call inherited - parent state uninitialized"
+msgstr "Constructor ruft kein inherited - Parent-State nicht initialisiert"
+
+msgid "Create without try/finally - exception path leaks the object"
+msgstr "Create ohne try/finally - Exception-Pfad leakt das Objekt"
+
+msgid "Custom rule defined in analyser-rules.yml matched this code"
+msgstr "Custom-Rule aus analyser-rules.yml hat diesen Code gematched"
+
+msgid "Cyclomatic complexity too high - too many branches; extract methods or simplify conditions"
+msgstr "Zyklomatische Komplexitaet zu hoch - zu viele Verzweigungen; Methoden extrahieren oder Bedingungen vereinfachen"
+
+msgid "DB-control class does not fit the field data type"
+msgstr "DB-Control-Klasse passt nicht zum TField-Datentyp"
+
+msgid "DFM declares a component but the form class has no published field for it"
+msgstr "DFM deklariert Komponente, aber Form-Klasse hat kein passendes published Field"
+
+msgid "Database component sits on a Form/Frame - move to a TDataModule"
+msgstr "DB-Komponente liegt auf Form/Frame - in ein TDataModule verschieben"
+
+msgid "Database credentials sit in the form file - move them out"
+msgstr "Datenbank-Credentials in der Form-Datei - rausziehen"
+
+msgid "Dead code: statements after Exit / raise are unreachable"
+msgstr "Toter Code: Anweisungen nach Exit/raise sind unerreichbar"
+
+msgid "Debug output left in production code"
+msgstr "Debug-Ausgabe im Produktiv-Code stehen geblieben"
+
+msgid "Destructor does not call inherited - resource leak"
+msgstr "Destructor ruft kein inherited - Ressourcen-Leak"
+
+msgid "Division by zero: EZeroDivide or EDivByZero possible"
+msgstr "Division durch Null moeglich: EZeroDivide / EDivByZero"
+
+msgid "Double semicolon \";;\" - one is enough"
+msgstr "Doppeltes Semikolon \";;\" - eines reicht"
+
+msgid "Doubled parentheses around a simple expression"
+msgstr "Doppelte Klammern um einfachen Ausdruck"
+
+msgid "Empty argument list \"()\" - drop the parentheses"
+msgstr "Leere Argument-Liste \"()\" - Klammern weglassen"
+
+msgid "Empty begin..end block"
+msgstr "Leerer begin..end-Block"
+
+msgid "Empty except block silently swallows every exception"
+msgstr "Leerer except-Block verschluckt alle Exceptions"
+
+msgid "Empty finally block - either drop the try or add cleanup"
+msgstr "Leerer finally-Block - try entfernen oder Cleanup ergaenzen"
+
+msgid "Empty visibility section in class - delete it"
+msgstr "Leere Visibility-Section in Klasse - loeschen"
+
+msgid "Event handler in DFM points to a method that no longer exists"
+msgstr "Event-Handler im DFM zeigt auf nicht mehr existierende Methode"
+
+msgid "Exception class without E-prefix"
+msgstr "Exception-Klasse ohne E-Praefix"
+
+msgid "Exit/Continue/Break directly before end - redundant"
+msgstr "Exit/Continue/Break direkt vor end - redundant"
+
+msgid "FieldByName in loop - cache the TField reference outside"
+msgstr "FieldByName in Schleife - TField-Referenz ausserhalb cachen"
+
+msgid "File could not be read or parsed"
+msgstr "Datei konnte nicht gelesen oder geparst werden"
+
+msgid "Float format spec without TFormatSettings - locale-dependent decimal separator"
+msgstr "Float-Format ohne TFormatSettings - Dezimaltrenner locale-abhaengig"
+
+msgid "Format() placeholder count does not match argument count"
+msgstr "Format()-Platzhalter-Anzahl passt nicht zur Argument-Anzahl"
+
+msgid "Free is outside the protecting finally block"
+msgstr "Free liegt ausserhalb des schuetzenden finally-Blocks"
+
+msgid "Function return value is not freed by the caller"
+msgstr "Function-Rueckgabewert wird vom Aufrufer nicht freigegeben"
+
+msgid "Grouped variable/field declaration - one per line"
+msgstr "Gruppen-Deklaration von Variablen/Feldern - eine pro Zeile"
+
+msgid "Hardcoded path - load it from configuration instead"
+msgstr "Hartkodierter Pfad - aus Konfiguration laden"
+
+msgid "Input control sits directly on the form - wrap it in a panel"
+msgstr "Eingabe-Control direkt auf der Form - in ein Panel packen"
+
+msgid "Interface declaration has no methods"
+msgstr "Interface-Deklaration ohne Methoden"
+
+msgid "Interface type without \"I\" prefix"
+msgstr "Interface-Typ ohne \"I\"-Praefix"
+
+msgid "Large integer literal without digit grouping"
+msgstr "Grosses Integer-Literal ohne Tausender-Trenner"
+
+msgid "Length()/.Count minus a constant can underflow on empty input"
+msgstr "Length()/.Count minus Konstante kann bei leerem Input unterlaufen"
+
+msgid "Line ends with whitespace - diff hygiene"
+msgstr "Zeile endet mit Whitespace - Diff-Hygiene"
+
+msgid "Local constant should be UPPER_SNAKE_CASE"
+msgstr "Lokale Konstante sollte UPPER_SNAKE_CASE sein"
+
+msgid "Local variable declared but never read or written"
+msgstr "Lokale Variable deklariert aber nie gelesen oder geschrieben"
+
+msgid "Lock acquired without try..finally release - exception leaves the lock held"
+msgstr "Lock ohne try..finally Release - Exception haelt den Lock"
+
+msgid "Long string concatenation - prefer Format() for readability"
+msgstr "Lange String-Konkatenation - Format() ist lesbarer"
+
+msgid "Magic number - replace literal with a named constant"
+msgstr "Magic Number - durch benannte Konstante ersetzen"
+
+msgid "Many DB components on one form - extract into a TDataModule"
+msgstr "Viele DB-Komponenten auf einer Form - in ein TDataModule auslagern"
+
+msgid "Master-detail wiring forms a cycle - opening the dataset will loop endlessly"
+msgstr "Master-Detail-Verkettung bildet Zyklus - Oeffnen wird endlos schleifen"
+
+msgid "MasterSource set without MasterFields/IndexFieldNames - silent cross-join"
+msgstr "MasterSource gesetzt ohne MasterFields/IndexFieldNames - stiller Cross-Join"
+
+msgid "Method body is empty - forgotten stub or unintentional?"
+msgstr "Method-Body leer - vergessener Stub oder unbeabsichtigt?"
+
+msgid "Method calls inherited more than once"
+msgstr "Methode ruft inherited mehr als einmal"
+
+msgid "Method name not in PascalCase"
+msgstr "Methodenname nicht in PascalCase"
+
+msgid "Method too long - splitting it improves readability and testability"
+msgstr "Methode zu lang - Aufteilen verbessert Lesbarkeit und Testbarkeit"
+
+msgid "Multiple class declarations in one unit"
+msgstr "Mehrere Klassen-Deklarationen in einer Unit"
+
+msgid "Multiple components bind the same DataSource and DataField"
+msgstr "Mehrere Komponenten binden dieselbe DataSource + DataField"
+
+msgid "Multiple identical code blocks - extract a method (DRY)"
+msgstr "Mehrere identische Code-Bloecke - Methode extrahieren (DRY)"
+
+msgid "Nested procedure/function - consider extracting"
+msgstr "Verschachtelte procedure/function - extrahieren erwaegen"
+
+msgid "Nested try block - consider extracting a procedure"
+msgstr "Verschachtelter try-Block - Procedure extrahieren erwaegen"
+
+msgid "Nesting too deep - use early exit (guard clauses) or extract a method"
+msgstr "Zu tiefe Verschachtelung - Early Exit (Guard Clauses) oder Methode extrahieren"
+
+msgid "Nil dereference: access through a possibly nil reference"
+msgstr "Nil-Dereferenz: Zugriff ueber moeglicherweise nil-Referenz"
+
+msgid "Object created but never freed (memory leak)"
+msgstr "Objekt erzeugt, aber nie freigegeben (Memory Leak)"
+
+msgid "Open marker (TODO / FIXME / HACK / XXX) - resolve before release"
+msgstr "Offener Marker (TODO/FIXME/HACK/XXX) - vor Release abarbeiten"
+
+msgid "ParamByName in loop - cache the TParam reference outside"
+msgstr "ParamByName in Schleife - TParam-Referenz ausserhalb cachen"
+
+msgid "Parameter never read in method body"
+msgstr "Parameter wird im Method-Body nie gelesen"
+
+msgid "Pascal keyword not in lowercase"
+msgstr "Pascal-Keyword nicht in Kleinschreibung"
+
+msgid "Password / token literal in source code"
+msgstr "Passwort / Token als Literal im Quellcode"
+
+msgid "Plaintext HTTP URL - prefer https:// for remote endpoints"
+msgstr "Plaintext-HTTP-URL - fuer Remote-Endpunkte https:// bevorzugen"
+
+msgid "Pointer type alias should start with \"P\""
+msgstr "Pointer-Typ-Alias sollte mit \"P\" beginnen"
+
+msgid "Public field - expose a property instead"
+msgstr "Public-Field - lieber Property exposen"
+
+msgid "Public member has no callers anywhere - dead API"
+msgstr "Public-Member hat nirgendwo Aufrufer - Dead API"
+
+msgid "Public member is referenced only within the current unit - Delphi-classic `private` (unit-scope) suffices"
+msgstr "Public-Member nur innerhalb der Unit referenziert - Delphi-klassisches `private` (Unit-Scope) reicht"
+
+msgid "Public member is used only by methods of its own class - `strict private` reaches the strongest encapsulation"
+msgstr "Public-Member nur in Methoden der eigenen Klasse genutzt - `strict private` ist die staerkste Kapselung"
+
+msgid "Public member is used only by subclasses - protected is tighter"
+msgstr "Public-Member nur in Subklassen genutzt - protected ist enger"
+
+msgid "Public member missing doc comment"
+msgstr "Public-Member ohne Doc-Kommentar"
+
+msgid "Published method looks like an event handler but no component binds it"
+msgstr "Published-Methode sieht wie Event-Handler aus, aber keine Komponente bindet sie"
+
+msgid "Required dataset field has no DB-control binding it"
+msgstr "Required-Field hat kein DB-Control das es bindet"
+
+msgid "Required field is bound only to invisible controls"
+msgstr "Required-Field nur an unsichtbare Controls gebunden"
+
+msgid "SQL command built with \"+\" - SQL injection risk"
+msgstr "SQL-Kommando mit \"+\" zusammengebaut - SQL-Injection-Risiko"
+
+msgid "SQL query is built from a UI input field - parameterize instead of concatenating"
+msgstr "SQL-Query aus UI-Eingabefeld gebaut - parametrisieren statt konkatenieren"
+
+msgid "Self-assignment is a no-op - usually a copy-paste mistake"
+msgstr "Self-Assignment ist ein No-Op - meist Copy-Paste-Fehler"
+
+msgid "Source line exceeds 120 characters - wrap or extract"
+msgstr "Quellzeile laenger als 120 Zeichen - umbrechen oder extrahieren"
+
+msgid "String concatenation in loop - quadratic reallocations"
+msgstr "String-Konkatenation in Schleife - quadratische Allokationen"
+
+msgid "String literal repeated - extract to a constant or resourcestring"
+msgstr "String-Literal mehrfach - in Konstante oder resourcestring auslagern"
+
+msgid "Synchronize() in a destructor - worker and UI thread deadlock each other"
+msgstr "Synchronize() im Destructor - Worker und UI-Thread deadlocken sich gegenseitig"
+
+msgid "TLS verification disabled - MITM-attack surface"
+msgstr "TLS-Verifikation deaktiviert - MITM-Angriffsflaeche"
+
+msgid "TThread destroyed without Terminate+WaitFor - worker may still be running"
+msgstr "TThread freigegeben ohne Terminate+WaitFor - Worker laeuft eventuell noch"
+
+msgid "TThread.Resume is deprecated - use TThread.Start (since Delphi 2010)"
+msgstr "TThread.Resume ist deprecated - seit Delphi 2010 TThread.Start verwenden"
+
+msgid "Tab character in source - use spaces for indentation"
+msgstr "Tab-Zeichen im Quellcode - Spaces fuer Einrueckung verwenden"
+
+msgid "Too many parameters - introduce a parameter object / record"
+msgstr "Zu viele Parameter - Parameter-Objekt / Record einfuehren"
+
+msgid "Trailing comma in argument list"
+msgstr "Trailing Komma in Argument-Liste"
+
+msgid "Two consecutive const/type/var sections - merge them"
+msgstr "Zwei aufeinanderfolgende const/type/var-Sections - zusammenfuehren"
+
+msgid "Two sibling controls share the same TabOrder - tab navigation is undefined"
+msgstr "Zwei Geschwister-Controls mit gleichem TabOrder - Tab-Navigation undefiniert"
+
+msgid "Two visibility sections with the same keyword - merge them"
+msgstr "Zwei Visibility-Sections mit gleichem Keyword - zusammenfuehren"
+
+msgid "UI text in DFM is a literal string - route it through the localization layer"
+msgstr "UI-Text im DFM ist Literal - ueber den Lokalisierungs-Layer fuehren"
+
+msgid "UPDATE/DELETE/TRUNCATE without WHERE - affects ALL rows"
+msgstr "UPDATE/DELETE/TRUNCATE ohne WHERE - betrifft ALLE Zeilen"
+
+msgid "Unit ends with begin..end. - use initialization section"
+msgstr "Unit endet mit begin..end. - initialization-Section verwenden"
+
+msgid "Unit has no declarations - delete it or fill it"
+msgstr "Unit hat keine Deklarationen - loeschen oder fuellen"
+
+msgid "Unit-level keyword not at column 1"
+msgstr "Section-Keyword nicht auf Spalte 1"
+
+msgid "Uses entry may be unused - remove to reduce coupling"
+msgstr "Uses-Eintrag moeglicherweise ungenutzt - zur Kopplungsreduktion entfernen"
+
+msgid "Virtual method called from constructor - override sees half-initialized Self"
+msgstr "Virtuelle Methode aus Constructor gerufen - Override sieht halb-initialisiertes Self"
+
+msgid "X.Free; X := nil; -> use FreeAndNil(X)"
+msgstr "X.Free; X := nil; -> FreeAndNil(X) verwenden"
+
+msgid "asm..end block - platform-specific, hard to port"
+msgstr "asm..end-Block - plattform-spezifisch, schwer portierbar"
+
+msgid "case statement has many branches - consider dispatch table"
+msgstr "case-Statement mit vielen Branches - Dispatch-Tabelle erwaegen"
+
+msgid "class(TObject) - TObject is the default base, drop it"
+msgstr "class(TObject) - TObject ist die Default-Basis, weglassen"
+
+msgid "for-loop range is reversed - the loop body never runs"
+msgstr "for-Loop-Range invertiert - Schleifenbody laeuft nie"
+
+msgid "goto weakens structured control flow"
+msgstr "goto schwaecht strukturierten Kontrollfluss"
+
+msgid "if X then Y := True else Y := False - assign expression directly"
+msgstr "if X then Y := True else Y := False - Ausdruck direkt zuweisen"
+
+msgid "on E: Exception catches everything - too broad"
+msgstr "on E: Exception faengt alles - zu breit"
+
+msgid "out parameter - prefer Result or var"
+msgstr "out-Parameter - lieber Result oder var"
+
+msgid "with statement can silently rebind identifiers - avoid it"
+msgstr "with-Statement kann Identifier still umlenken - vermeiden"
+
+# ---- Fix-Hint Descriptions (SonarDelphi-Pendants SCA120..SCA131) ----------
+msgid "Exception is constructed but never raised"
+msgstr "Exception wird erzeugt aber nicht geraised"
+
+msgid "Function never assigns Result - return value undefined"
+msgstr "Function setzt Result nie - Rückgabewert undefiniert"
+
+msgid "Re-raise of bound variable loses the original stack trace"
+msgstr "Re-raise der gebundenen Variable verliert den Original-Stack-Trace"
+
+msgid "Type-cast before Free / Destroy has no effect (Destroy is virtual)"
+msgstr "Typ-Cast vor Free/Destroy hat keinen Effekt (Destroy ist virtual)"
+
+msgid "Constructor invoked on instance - no allocation, fields re-initialised over live data"
+msgstr "Constructor auf Instance aufgerufen - keine Allokation, Felder werden über bestehende Daten gemalt"
+
+msgid "Override whose body is just \"inherited\" adds nothing"
+msgstr "Override dessen Body nur \"inherited\" ist hat keinen Mehrwert"
+
+msgid "Prefer Assigned() over \"= nil\" / \"<> nil\""
+msgstr "Bevorzuge Assigned() gegenüber \"= nil\" / \"<> nil\""
+
+msgid "Raise a specific exception class, not the base Exception"
+msgstr "Spezifische Exception-Subklasse raisen, nicht die Basis Exception"
+
+msgid "Locale-dependent conversion without explicit TFormatSettings"
+msgstr "Locale-abhängige Konvertierung ohne explizites TFormatSettings"
+
+msgid "8-bit string cast silently drops non-codepage characters"
+msgstr "8-Bit-String-Cast verliert stillschweigend Zeichen außerhalb der Codepage"
+
+msgid "PChar(Char) reinterprets the codepoint as a pointer - undefined behaviour"
+msgstr "PChar(Char) interpretiert den Codepoint als Adresse - undefined behaviour"
+
+msgid "IfThen() evaluates both branches - no short-circuit semantics"
+msgstr "IfThen() evaluiert beide Arme - kein Short-Circuit"
+
+# ---- Severity-Filter combo: Severity-Gruppen + Separatoren -----------------
+msgid "Errors (all)"
+msgstr "Fehler (alle)"
+
+msgid "Warnings (all)"
+msgstr "Warnungen (alle)"
+
+msgid "Hints (all)"
+msgstr "Hinweise (alle)"
+
+msgid "Memory Leaks (all)"
+msgstr "Speicherlecks (alle)"
+
+msgid "--- Errors ---"
+msgstr "--- Fehler ---"
+
+msgid "--- Warnings ---"
+msgstr "--- Warnungen ---"
+
+msgid "--- Hints ---"
+msgstr "--- Hinweise ---"
+
+# ---- Severity-Filter combo: Fehler-Detektoren ------------------------------
+msgid "Memory Leak"
+msgstr "Speicherleck"
+
+msgid "SQL Injection"
+msgstr "SQL-Injection"
+
+msgid "Hardcoded Secrets"
+msgstr "Hardcodierte Geheimnisse"
+
+msgid "Format()"
+msgstr "Format()"
+
+msgid "Nil-Deref"
+msgstr "Nil-Dereferenzierung"
+
+msgid "Div by Zero"
+msgstr "Division durch Null"
+
+# ---- Severity-Filter combo: Warnungs-Detektoren ----------------------------
+msgid "Empty Except"
+msgstr "Leeres Except"
+
+msgid "Missing Finally"
+msgstr "Fehlendes Finally"
+
+msgid "Dead Code"
+msgstr "Toter Code"
+
+msgid "Unused Uses"
+msgstr "Ungenutzte Uses"
+
+msgid "Debug Output"
+msgstr "Debug-Ausgabe"
+
+msgid "Hardcoded Path"
+msgstr "Hardcodierter Pfad"
+
+msgid "Read Error"
+msgstr "Lesefehler"
+
+# ---- Severity-Filter combo: Hinweis-Detektoren -----------------------------
+msgid "Long Method"
+msgstr "Lange Methode"
+
+msgid "Many Parameters"
+msgstr "Viele Parameter"
+
+msgid "Magic Number"
+msgstr "Magische Zahl"
+
+msgid "Duplicate Strings"
+msgstr "Doppelte Strings"
+
+msgid "Duplicate Code Blocks"
+msgstr "Doppelte Code-Blöcke"
+
+msgid "Deep Nesting"
+msgstr "Tiefe Verschachtelung"
+
+msgid "Cyclomatic Complexity"
+msgstr "Zyklomatische Komplexität"
+
+msgid "TODO/FIXME"
+msgstr "TODO/FIXME"
+
+msgid "Empty Methods"
+msgstr "Leere Methoden"
+
+msgid "Can Be Unit Private"
+msgstr "Kann unit-private sein"
+
+msgid "Can Be Strict Private"
+msgstr "Kann strict private sein"
+
+msgid "Can Be Protected"
+msgstr "Kann protected sein"
+
+msgid "Unused Public Member"
+msgstr "Ungenutztes öffentliches Member"
+
+msgid "Unused Local Var"
+msgstr "Ungenutzte lokale Variable"
+
+msgid "Unused Parameter"
+msgstr "Ungenutzter Parameter"
+
+msgid "Tautological Expression"
+msgstr "Tautologischer Ausdruck"
+
+msgid "Master-Detail Unlinked"
+msgstr "Master-Detail nicht verknüpft"
+
+msgid "Data Module Split Hint"
+msgstr "Data-Module-Split-Hinweis"
+
+msgid "Dangerous SQL Statement"
+msgstr "Gefährliches SQL-Statement"
+
+msgid "Format Locale Hint"
+msgstr "Format-Locale-Hinweis"
+
+# ---- Severity-Filter combo: SonarDelphi-Migration (SCA120-131) -------------
+msgid "Missing Raise"
+msgstr "Fehlendes Raise"
+
+msgid "Result Unassigned"
+msgstr "Result nicht zugewiesen"
+
+msgid "Re-Raise Exception"
+msgstr "Exception erneut raisen"
+
+msgid "Cast And Free"
+msgstr "Cast vor Free"
+
+msgid "Instance-Invoked Constructor"
+msgstr "Konstruktor auf Instanz"
+
+msgid "Inherited (empty)"
+msgstr "Inherited (leer)"
+
+msgid "Nil Comparison"
+msgstr "Nil-Vergleich"
+
+msgid "Raising Raw Exception"
+msgstr "Basis-Exception raisen"
+
+msgid "Date Format Settings"
+msgstr "Datumsformat-Einstellungen"
+
+msgid "Unicode -> Ansi Cast"
+msgstr "Unicode → Ansi Cast"
+
+msgid "Char -> PChar Cast"
+msgstr "Char → PChar Cast"
+
+msgid "IfThen Short-Circuit"
+msgstr "IfThen ohne Short-Circuit"
+
+# ---- Tools > Options: Hotkeys-Gruppe ---------------------------------------
+msgid "Hotkeys"
+msgstr "Tastenkürzel"
+
+msgid "Enable finding navigation (Ctrl+Alt+Up / Ctrl+Alt+Down)"
+msgstr "Befund-Navigation aktivieren (Strg+Alt+↑ / Strg+Alt+↓)"
+
+msgid "Jump to the next / previous highlighted finding line in the current editor tab (wrap-around at file end/start). Disable to release the shortcut to the IDE default handler."
+msgstr "Im aktuellen Editor-Tab zur nächsten / vorherigen markierten Befund-Zeile springen (Wrap-around am Datei-Ende/-Anfang). Deaktivieren gibt den Shortcut wieder an die IDE-Default-Belegung frei."

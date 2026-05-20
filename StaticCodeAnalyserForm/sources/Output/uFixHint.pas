@@ -2948,6 +2948,243 @@ begin
         '// werden vom Detektor uebersprungen.';
     end;
 
+    // ---- SonarDelphi-Pendants SCA120..SCA131 (12 Detektoren) ---------------
+
+    fkMissingRaise:
+    begin
+      Result.Description := _('Exception is constructed but never raised');
+      Result.Before :=
+        'if x < 0 then'#13#10 +
+        '  EArgumentOutOfRangeException.Create(''x negative'');'#13#10 +
+        '// ^ creates the object, throws nothing - error path is silently skipped.';
+      Result.After :=
+        'if x < 0 then'#13#10 +
+        '  raise EArgumentOutOfRangeException.Create(''x negative'');'#13#10 +
+        ''#13#10 +
+        '// "raise" hands the constructed exception to the runtime;'#13#10 +
+        '// without it the object is allocated, immediately collected (ARC)'#13#10 +
+        '// or leaked (classic TObject), and the caller never notices.';
+    end;
+
+    fkRoutineResultUnassigned:
+    begin
+      Result.Description := _('Function never assigns Result - return value undefined');
+      Result.Before :=
+        'function GetCount(L: TList): Integer;'#13#10 +
+        'begin'#13#10 +
+        '  if L = nil then'#13#10 +
+        '    LogMessage(''nil list'');'#13#10 +
+        '  // Result is never set -> register garbage in Release builds.'#13#10 +
+        'end;';
+      Result.After :=
+        'function GetCount(L: TList): Integer;'#13#10 +
+        'begin'#13#10 +
+        '  Result := 0;          // default for every reachable path'#13#10 +
+        '  if L <> nil then'#13#10 +
+        '    Result := L.Count;'#13#10 +
+        'end;';
+    end;
+
+    fkReRaiseException:
+    begin
+      Result.Description := _('Re-raise of bound variable loses the original stack trace');
+      Result.Before :=
+        'try'#13#10 +
+        '  RiskyCall;'#13#10 +
+        'except'#13#10 +
+        '  on E: EDivByZero do'#13#10 +
+        '  begin'#13#10 +
+        '    Log(E.Message);'#13#10 +
+        '    raise E;            // <- starts new propagation,'#13#10 +
+        '                        //    original trace gone'#13#10 +
+        '  end;'#13#10 +
+        'end;';
+      Result.After :=
+        'try'#13#10 +
+        '  RiskyCall;'#13#10 +
+        'except'#13#10 +
+        '  on E: EDivByZero do'#13#10 +
+        '  begin'#13#10 +
+        '    Log(E.Message);'#13#10 +
+        '    raise;              // <- bare "raise" keeps the trace,'#13#10 +
+        '                        //    crash reports still point at the fault'#13#10 +
+        '  end;'#13#10 +
+        'end;';
+    end;
+
+    fkCastAndFree:
+    begin
+      Result.Description := _('Type-cast before Free / Destroy has no effect (Destroy is virtual)');
+      Result.Before :=
+        'procedure Cleanup(L: TObject);'#13#10 +
+        'begin'#13#10 +
+        '  TStringList(L).Free;   // <- cast is redundant or misleading;'#13#10 +
+        '                         //    Destroy is virtual, dispatches on runtime type'#13#10 +
+        'end;';
+      Result.After :=
+        'procedure Cleanup(L: TObject);'#13#10 +
+        'begin'#13#10 +
+        '  L.Free;                // virtual Destroy resolves to TStringList.Destroy'#13#10 +
+        '                         // automatically, no cast required'#13#10 +
+        'end;';
+    end;
+
+    fkInstanceInvokedConstructor:
+    begin
+      Result.Description := _('Constructor invoked on instance - no allocation, fields re-initialised over live data');
+      Result.Before :=
+        'procedure Reset;'#13#10 +
+        'var list: TStringList;'#13#10 +
+        'begin'#13#10 +
+        '  list := TStringList.Create;'#13#10 +
+        '  ...'#13#10 +
+        '  list.Create;           // <- bypasses TObject.NewInstance;'#13#10 +
+        '                         //    just re-runs the constructor body on'#13#10 +
+        '                         //    the existing object, overwriting fields'#13#10 +
+        'end;';
+      Result.After :=
+        'procedure Reset;'#13#10 +
+        'var list: TStringList;'#13#10 +
+        'begin'#13#10 +
+        '  list := TStringList.Create;'#13#10 +
+        '  ...'#13#10 +
+        '  list.Clear;            // or: FreeAndNil(list) + create new'#13#10 +
+        'end;';
+    end;
+
+    fkInheritedMethodEmpty:
+    begin
+      Result.Description := _('Override whose body is just "inherited" adds nothing');
+      Result.Before :=
+        'procedure TFooSubclass.AfterConstruction; override;'#13#10 +
+        'begin'#13#10 +
+        '  inherited;             // <- empty override, wastes a VMT slot'#13#10 +
+        '                         //    and forces every reader to verify'#13#10 +
+        'end;';
+      Result.After :=
+        '// Remove the override entirely. Virtual dispatch falls'#13#10 +
+        '// through to the parent automatically when no override exists.'#13#10 +
+        ''#13#10 +
+        '// (Different parent method intentionally?  Keep it but document why:'#13#10 +
+        '//  inherited Initialise;  // hijack: call the parent of the parent)';
+    end;
+
+    fkNilComparison:
+    begin
+      Result.Description := _('Prefer Assigned() over "= nil" / "<> nil"');
+      Result.Before :=
+        'if Obj = nil then'#13#10 +
+        '  Exit;'#13#10 +
+        ''#13#10 +
+        'if Obj <> nil then'#13#10 +
+        '  Obj.DoStuff;';
+      Result.After :=
+        'if not Assigned(Obj) then'#13#10 +
+        '  Exit;'#13#10 +
+        ''#13#10 +
+        'if Assigned(Obj) then'#13#10 +
+        '  Obj.DoStuff;'#13#10 +
+        ''#13#10 +
+        '// Assigned() works for object refs, method pointers and Variants;'#13#10 +
+        '// "= nil" silently breaks for method pointers.';
+    end;
+
+    fkRaisingRawException:
+    begin
+      Result.Description := _('Raise a specific exception class, not the base Exception');
+      Result.Before :=
+        'if x < 0 then'#13#10 +
+        '  raise Exception.Create(''x is negative'');'#13#10 +
+        '//      ^^^^^^^^^ callers cannot tell apart from any other failure;'#13#10 +
+        '//                they must catch "on E: Exception" and swallow everything';
+      Result.After :=
+        'if x < 0 then'#13#10 +
+        '  raise EArgumentOutOfRangeException.CreateFmt('#13#10 +
+        '    ''x = %d (must be >= 0)'', [x]);'#13#10 +
+        ''#13#10 +
+        '// Specific subclass + format string -> caller can filter,'#13#10 +
+        '// monitoring tools can group, crash report tells you which contract broke.';
+    end;
+
+    fkDateFormatSettings:
+    begin
+      Result.Description := _('Locale-dependent conversion without explicit TFormatSettings');
+      Result.Before :=
+        'd := StrToDate(UserInput);     // <- DE-machine: ''01.05.2026'' works.'#13#10 +
+        '                               //    EN-machine: same call throws EConvertError.'#13#10 +
+        's := DateToStr(Now);           //    Output flips between . and / by locale.'#13#10 +
+        'x := StrToFloat(''3.14'');      //    DE machine expects ''3,14''.';
+      Result.After :=
+        'var FS: TFormatSettings;'#13#10 +
+        'FS := TFormatSettings.Invariant;     // for machine-readable IO'#13#10 +
+        ''#13#10 +
+        'd := StrToDate(UserInput, FS);'#13#10 +
+        's := DateToStr(Now,       FS);'#13#10 +
+        'x := StrToFloat(''3.14'',   FS);'#13#10 +
+        ''#13#10 +
+        '// For UI: snapshot the user-locale once on form create:'#13#10 +
+        '// FS := TFormatSettings.Create(LOCALE_USER_DEFAULT);';
+    end;
+
+    fkUnicodeToAnsiCast:
+    begin
+      Result.Description := _('8-bit string cast silently drops non-codepage characters');
+      Result.Before :=
+        'var u: UnicodeString;'#13#10 +
+        'u := ''Smiley: '' + #$1F600;'#13#10 +
+        ''#13#10 +
+        'logStream.WriteString(AnsiString(u));'#13#10 +
+        '//                    ^^^^^^^^^ smiley becomes ''?'';'#13#10 +
+        '//                              umlauts on EN-locale machines too.';
+      Result.After :=
+        '// Pick an explicit encoding for the wire/disk format:'#13#10 +
+        'var utf8: UTF8String;'#13#10 +
+        'utf8 := UTF8Encode(u);'#13#10 +
+        'logStream.WriteString(utf8);                       // full Unicode'#13#10 +
+        '// or write the raw bytes via the standard TEncoding helper:'#13#10 +
+        'var bytes: TBytes;'#13#10 +
+        'bytes := TEncoding.UTF8.GetBytes(u);'#13#10 +
+        'logStream.WriteBuffer(bytes[0], Length(bytes));'#13#10 +
+        ''#13#10 +
+        '// If a real AnsiString is required and ASCII-only is acceptable,'#13#10 +
+        '// keep the cast but document the constraint at the call site.';
+    end;
+
+    fkCharToCharPointerCast:
+    begin
+      Result.Description := _('PChar(Char) reinterprets the codepoint as a pointer - undefined behaviour');
+      Result.Before :=
+        'var p: PChar;'#13#10 +
+        'p := PChar(''A'');'#13#10 +
+        '//   ^^^^^   p = $00000041 (the codepoint of ''A''),'#13#10 +
+        '//           NOT a null-terminated 1-character string.'#13#10 +
+        'ShowMessage(p);          // -> access violation';
+      Result.After :=
+        'var p: PChar;'#13#10 +
+        'p := PChar(string(''A''));     // wrap into a real string first'#13#10 +
+        '// or, for a literal use case:'#13#10 +
+        'p := ''A'';                    // direct assignment, compiler builds the buffer'#13#10 +
+        ''#13#10 +
+        '// Same pitfall for PWideChar(Char) and PAnsiChar(AnsiChar).';
+    end;
+
+    fkIfThenShortCircuit:
+    begin
+      Result.Description := _('IfThen() evaluates both branches - no short-circuit semantics');
+      Result.Before :=
+        'x := Math.IfThen(IsCacheHit, FetchFromCache, FetchFromDb);'#13#10 +
+        '//   ^^^^^^^^^^^ both FetchFromCache AND FetchFromDb run, every call;'#13#10 +
+        '//               side effects + cost of both branches always paid.';
+      Result.After :=
+        'if IsCacheHit then'#13#10 +
+        '  x := FetchFromCache'#13#10 +
+        'else'#13#10 +
+        '  x := FetchFromDb;'#13#10 +
+        ''#13#10 +
+        '// if/then/else has short-circuit semantics:'#13#10 +
+        '// only the selected branch runs. Same applies to StrUtils.IfThen.';
+    end;
+
   end;
 end;
 

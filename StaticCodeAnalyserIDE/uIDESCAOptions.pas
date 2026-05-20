@@ -35,6 +35,10 @@ type
     grpSilent          : TGroupBox;
     chkSilentEnabled   : TCheckBox;
     lblSilentInfo      : TLabel;
+    // Hotkeys
+    grpHotkeys           : TGroupBox;
+    chkFindingNavEnabled : TCheckBox;
+    lblFindingNavInfo    : TLabel;
     // Rule-Set
     grpRuleSet         : TGroupBox;
     lblProfile         : TLabel;
@@ -165,6 +169,39 @@ begin
   lblSilentInfo.Caption    :=
     _('Editor right-click + Ctrl+Alt+A trigger a single-file analysis; ' +
       'findings appear as stripes + hover overlays in the editor (no dock).');
+
+  // ================= Hotkeys =================
+  // Eigene Gruppe damit klar erkennbar: das ist nicht Teil von "Silent Mode",
+  // sondern eine separate Convenience-Bindung die nur funktioniert wenn schon
+  // Marker im Editor sind. Hoehe 100 deckt Checkbox + 2-Zeilen-Info ab.
+  grpHotkeys              := TGroupBox.Create(Self);
+  grpHotkeys.Parent       := Self;
+  grpHotkeys.Left         := MARGIN_LEFT;
+  grpHotkeys.Top          := NextY(100);
+  grpHotkeys.Width        := GROUP_W;
+  grpHotkeys.Height       := 100;
+  grpHotkeys.Caption      := _('Hotkeys');
+
+  chkFindingNavEnabled         := TCheckBox.Create(Self);
+  chkFindingNavEnabled.Parent  := grpHotkeys;
+  chkFindingNavEnabled.Left    := INNER_LEFT;
+  chkFindingNavEnabled.Top     := INNER_TOP;
+  chkFindingNavEnabled.Width   := GROUP_W - 2 * INNER_LEFT;
+  chkFindingNavEnabled.Caption :=
+    _('Enable finding navigation (Ctrl+Alt+Up / Ctrl+Alt+Down)');
+
+  lblFindingNavInfo            := TLabel.Create(Self);
+  lblFindingNavInfo.Parent     := grpHotkeys;
+  lblFindingNavInfo.AutoSize   := False;
+  lblFindingNavInfo.Left       := INNER_LEFT + 16;
+  lblFindingNavInfo.Top        := chkFindingNavEnabled.Top + chkFindingNavEnabled.Height + 6;
+  lblFindingNavInfo.Width      := GROUP_W - 2 * INNER_LEFT - 16;
+  lblFindingNavInfo.Height     := 40;
+  lblFindingNavInfo.WordWrap   := True;
+  lblFindingNavInfo.Caption    :=
+    _('Jump to the next / previous highlighted finding line in the current ' +
+      'editor tab (wrap-around at file end/start). Disable to release the ' +
+      'shortcut to the IDE default handler.');
 
   // ================= Rule-Set =================
   grpRuleSet              := TGroupBox.Create(Self);
@@ -318,6 +355,10 @@ begin
   if Assigned(chkSilentEnabled) then
     chkSilentEnabled.Checked := ASettings.SilentEnabled;
 
+  // Hotkeys
+  if Assigned(chkFindingNavEnabled) then
+    chkFindingNavEnabled.Checked := ASettings.FindingNavEnabled;
+
   // Rule-Set: leere Werte aus INI als '(default)' anzeigen
   if Assigned(cboProfile)    then SelectComboBy(cboProfile,    ASettings.Profile);
   if Assigned(cboMinSev)     then SelectComboBy(cboMinSev,     LowerCase(ASettings.MinSeverity), 'hint');
@@ -347,6 +388,9 @@ begin
 
   if Assigned(chkSilentEnabled) then
     ASettings.SilentEnabled := chkSilentEnabled.Checked;
+
+  if Assigned(chkFindingNavEnabled) then
+    ASettings.FindingNavEnabled := chkFindingNavEnabled.Checked;
 
   if Assigned(cboProfile)    then ASettings.Profile     := ComboValueOrEmpty(cboProfile);
   if Assigned(cboMinSev)     then ASettings.MinSeverity := cboMinSev.Items[cboMinSev.ItemIndex];

@@ -63,7 +63,13 @@ type
     FIdeProfile        : string;      // [Rules] IdeProfile (Default: ide-fast)
     FIdeMinSeverity    : string;      // [Rules] IdeMinSeverity (Default: hint)
     FSilentEnabled     : Boolean;     // [Silent] Enabled (Default: True)
+    FFindingNavEnabled : Boolean;     // [Hotkeys] FindingNavEnabled (Default: True)
     FLanguage          : string;      // [UI] Language ('de', 'en', '')
+    // Code-Quality-Grade-Schwellwerte (alle aus [Score]).
+    // Default-Skala: A=0, B<=50, C<=200, D<=500, E>500.
+    FScoreThresholdB   : Integer;     // [Score] GradeBMax (50)
+    FScoreThresholdC   : Integer;     // [Score] GradeCMax (200)
+    FScoreThresholdD   : Integer;     // [Score] GradeDMax (500)
   public
     constructor Create;
     destructor Destroy; override;
@@ -200,10 +206,28 @@ type
     property SilentEnabled:           Boolean     read FSilentEnabled
                                                   write FSilentEnabled;
 
+    // [Hotkeys] FindingNavEnabled - schaltet die Ctrl+Alt+Up/Down-Hotkeys an/aus
+    // mit denen man im aktuellen Editor zur naechsten/vorherigen markierten
+    // Finding-Zeile springt. Default True. Wenn False meldet der Key-Handler
+    // krUnhandled und die IDE leitet den Shortcut an den Default-Editor weiter
+    // (oder an einen anderen Plugin-Handler). Konfigurierbar ueber Tools >
+    // Options > Third Party > Static Code Analyser oder per Hand in analyser.ini.
+    property FindingNavEnabled:       Boolean     read FFindingNavEnabled
+                                                  write FFindingNavEnabled;
+
     // UI-Sprache. '' bedeutet "use Default" (= deutsch beim aktuellen Build,
     // falls dxgettext jemals aktiviert wird, wuerde es OS-Locale nutzen).
     // Aus [UI] Language gelesen. Erlaubte Werte: 'de', 'en', ''.
     property Language: string read FLanguage write FLanguage;
+
+    // Schwellwerte fuer die Letter-Grade-Anzeige der Code-Quality-Kachel.
+    // Roher Score wird auf A..E gemappt (siehe ScoreToGrade in uIDE-
+    // AnalyserForm). Defaults (50/200/500) entsprechen einer Default-Skala
+    // die fuer 5..50k-LOC-Projekte sinnvoll skaliert.
+    // Aus [Score] GradeBMax / GradeCMax / GradeDMax gelesen.
+    property ScoreThresholdB: Integer read FScoreThresholdB write FScoreThresholdB;
+    property ScoreThresholdC: Integer read FScoreThresholdC write FScoreThresholdC;
+    property ScoreThresholdD: Integer read FScoreThresholdD write FScoreThresholdD;
 
     // Customs an uSCAConsts.LeakyClasses anhaengen + Excludes daraus
     // entfernen. Reihenfolge: Adds zuerst, Excludes danach (User koennte
@@ -519,6 +543,23 @@ const
     ''#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
+    ';  [Hotkeys] - Tastenkuerzel-Schalter'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ''#13#10 +
+    '[Hotkeys]'#13#10 +
+    ''#13#10 +
+    '; FindingNavEnabled (bool, default: 1)'#13#10 +
+    '; Schaltet die Hotkeys Ctrl+Alt+Up / Ctrl+Alt+Down an/aus, mit denen'#13#10 +
+    '; man im aktuellen Editor-Tab zwischen markierten Befund-Zeilen'#13#10 +
+    '; springt (Wrap-around am Datei-Ende/-Anfang). Wenn 0: die IDE bekommt'#13#10 +
+    '; den Shortcut wieder fuer Default-Editor oder andere Plugins.'#13#10 +
+    '; Auch konfigurierbar via Tools > Options > Third Party >'#13#10 +
+    '; Static Code Analyser.'#13#10 +
+    'FindingNavEnabled=1'#13#10 +
+    ';FindingNavEnabled=0'#13#10 +
+    ''#13#10 +
+    ';'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
     ';  [UI] - Oberflaechen-Einstellungen'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
     ''#13#10 +
@@ -530,7 +571,47 @@ const
     ';   de = Deutsch (eingebautes Dictionary in uLocalization)'#13#10 +
     ';   '''' (leer) = wie ''en'''#13#10 +
     'Language=en'#13#10 +
-    ';Language=de'#13#10;
+    ';Language=de'#13#10 +
+    ''#13#10 +
+    ';'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ';  [Score] - Code-Quality-Letter-Grade-Schwellwerte'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ';'#13#10 +
+    '; Die Code-Quality-Kachel zeigt den gewichteten Befund-Score als'#13#10 +
+    '; Letter-Grade A..E statt als rohe Zahl. Mapping (roher Score):'#13#10 +
+    ';   A : 0'#13#10 +
+    ';   B : 1..GradeBMax'#13#10 +
+    ';   C : GradeBMax+1 .. GradeCMax'#13#10 +
+    ';   D : GradeCMax+1 .. GradeDMax'#13#10 +
+    ';   E : > GradeDMax'#13#10 +
+    ';'#13#10 +
+    '; Rohwerte landen im Tooltip. Defaults passen fuer Projekte um'#13#10 +
+    '; 5..50k LOC; kleinere Projekte ggf. strengere Schwellwerte,'#13#10 +
+    '; Legacy-Repos toleranter.'#13#10 +
+    ';'#13#10 +
+    '; Gewichte (hardcoded, NICHT konfigurierbar): Vuln=10, Error=7,'#13#10 +
+    '; Hotspot=5, Warning=3, Hint=1, FileErr=2.'#13#10 +
+    ''#13#10 +
+    '[Score]'#13#10 +
+    ''#13#10 +
+    '; GradeBMax (int, default: 50)'#13#10 +
+    '; Roher Score bis einschliesslich dieses Werts gibt Grade B.'#13#10 +
+    'GradeBMax=50'#13#10 +
+    ';GradeBMax=20      ; strikter (kleines Projekt)'#13#10 +
+    ';GradeBMax=100     ; nachsichtiger (Legacy-Repo)'#13#10 +
+    ''#13#10 +
+    '; GradeCMax (int, default: 200)'#13#10 +
+    '; Obergrenze fuer Grade C; danach Grade D.'#13#10 +
+    'GradeCMax=200'#13#10 +
+    ';GradeCMax=80'#13#10 +
+    ';GradeCMax=400'#13#10 +
+    ''#13#10 +
+    '; GradeDMax (int, default: 500)'#13#10 +
+    '; Obergrenze fuer Grade D; alles darueber faellt auf Grade E.'#13#10 +
+    'GradeDMax=500'#13#10 +
+    ';GradeDMax=200'#13#10 +
+    ';GradeDMax=1000'#13#10;
 
 constructor TRepoSettings.Create;
 begin
@@ -572,7 +653,16 @@ begin
   FIdeProfile     := 'ide-fast';      // IDE-Plugin Default: schnelles Subset
   FIdeMinSeverity := 'hint';          // IDE-Plugin: alle Severities (Subset deckt schon)
   FSilentEnabled  := True;            // Silent-Mode standardmaessig an
+  FFindingNavEnabled := True;         // Ctrl+Alt+Up/Down Finding-Nav an
   FLanguage           := 'en';        // Default: englische UI (Source-Sprache)
+
+  // [Score] Defaults: Skala fuer mittelgrosse Projekte. A=0, B<=50,
+  // C<=200, D<=500, E>500. Anpassbar via analyser.ini fuer projekt-
+  // spezifische Kalibrierung (kleinere Projekte ggf. strenger,
+  // Legacy-Repos toleranter).
+  FScoreThresholdB := 50;
+  FScoreThresholdC := 200;
+  FScoreThresholdD := 500;
 end;
 
 destructor TRepoSettings.Destroy;
@@ -737,8 +827,24 @@ begin
     // > Third Party > Static Code Analyser.
     FSilentEnabled := Ini.ReadBool('Silent', 'Enabled', True);
 
+    // [Hotkeys] FindingNavEnabled (bool, Default True) - schaltet die
+    // Ctrl+Alt+Up/Down-Hotkeys an/aus, mit denen man zwischen markierten
+    // Finding-Zeilen im Editor springt.
+    FFindingNavEnabled := Ini.ReadBool('Hotkeys', 'FindingNavEnabled', True);
+
     // [UI] Language=de|en|'' -> FLanguage. Default 'en' (Source-Sprache).
     FLanguage := Trim(Ini.ReadString('UI', 'Language', 'en')).ToLower;
+
+    // [Score] Letter-Grade-Schwellwerte. Defaults bleiben gleich wenn
+    // die Section fehlt - kein Verhaltens-Bruch fuer existierende INIs.
+    FScoreThresholdB := Ini.ReadInteger('Score', 'GradeBMax',  50);
+    FScoreThresholdC := Ini.ReadInteger('Score', 'GradeCMax', 200);
+    FScoreThresholdD := Ini.ReadInteger('Score', 'GradeDMax', 500);
+    // Defensive: erzwinge B < C < D, sonst gibt's "tote" Grades.
+    if FScoreThresholdC <= FScoreThresholdB then
+      FScoreThresholdC := FScoreThresholdB + 1;
+    if FScoreThresholdD <= FScoreThresholdC then
+      FScoreThresholdD := FScoreThresholdC + 1;
   finally
     Ini.Free;
   end;
@@ -796,6 +902,7 @@ begin
     Ini.WriteString('Rules', 'IdeProfile',         FIdeProfile);
     Ini.WriteString('Rules', 'IdeMinSeverity',     FIdeMinSeverity);
     Ini.WriteBool  ('Silent', 'Enabled',           FSilentEnabled);
+    Ini.WriteBool  ('Hotkeys', 'FindingNavEnabled', FFindingNavEnabled);
     // [Detectors]-Toggles: jetzt UI-aenderbar via Tools > Options.
     Ini.WriteBool  ('Detectors', 'UsesCheck',           FUsesCheck);
     Ini.WriteBool  ('Detectors', 'IncludeTests',        FIncludeTests);

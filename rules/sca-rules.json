@@ -2346,6 +2346,234 @@
       "impacts": [
         { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
       ]
+    },
+    {
+      "id": "SCA120",
+      "kind": "MissingRaise",
+      "name": "Exception constructed but never raised",
+      "shortDescription": "`EFoo.Create('msg');` allocates an exception object without `raise` - the error path is silently skipped",
+      "fullDescription": "Pattern `EConvertError.Create('bad input');` without a preceding `raise` constructs an exception instance, fails to throw it, and the calling code continues as if nothing happened. The allocated object leaks (classic TObject) or gets immediately collected (ARC), and the intended error branch is gone. Almost always a copy-paste regression from `raise EConvertError.Create(...)` where the `raise` keyword was deleted. Detector heuristic: any `nkCall` named `<Ident>.Create(...)` where `<Ident>` is `Exception` or matches the Delphi `E`-prefix convention (`E` + uppercase letter, e.g. `EConvertError`, `EMyDomainError`). `raise X.Create(...)` is consumed as a string by the raise-statement parser and never produces a `nkCall`, so genuinely raised exceptions are not false-positives. Maps to Sonar-Delphi `MissingRaiseCheck`.",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["exception", "error-handling", "sonardelphi"],
+      "detectorUnit": "uMissingRaise.pas",
+      "examples": {
+        "bad":  "procedure Validate(x: Integer);\nbegin\n  if x < 0 then\n    EArgumentOutOfRangeException.Create('x negative');  // never raised!\nend;",
+        "good": "procedure Validate(x: Integer);\nbegin\n  if x < 0 then\n    raise EArgumentOutOfRangeException.Create('x negative');\nend;"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
+    },
+    {
+      "id": "SCA121",
+      "kind": "RoutineResultUnassigned",
+      "name": "Function never assigns Result",
+      "shortDescription": "Function body finishes without writing `Result` (or `<FunctionName> := ...`) - return value is undefined",
+      "fullDescription": "A function that reaches its `end;` without any `Result := ...` or Pascal-style `<FunctionName> := ...` returns whatever register/stack garbage happens to occupy the result slot. In Release builds the caller therefore receives the value of the last same-sized call - a classic Heisenbug that flips with optimisation level. Detector is intentionally conservative: it skips functions that contain any `Exit` (could be `Exit(value)` - the AST loses the argument) or `raise` (function may always throw). Procedures, abstract/forward/external declarations, and DispatchID-only declarations are also skipped. Partial coverage (Result set in one branch only) is currently a false-negative pending CFG analysis. Maps to Sonar-Delphi `RoutineResultAssignedCheck`.",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["function", "uninitialized", "sonardelphi"],
+      "detectorUnit": "uRoutineResultAssigned.pas",
+      "examples": {
+        "bad":  "function GetCount(L: TList): Integer;\nbegin\n  if L = nil then\n    LogMessage('nil list');\n  // Result never set -> garbage\nend;",
+        "good": "function GetCount(L: TList): Integer;\nbegin\n  Result := 0;\n  if L <> nil then\n    Result := L.Count;\nend;"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
+    },
+    {
+      "id": "SCA122",
+      "kind": "ReRaiseException",
+      "name": "Re-raise of bound exception variable",
+      "shortDescription": "`on E: T do ... raise E;` discards the original stack trace - use bare `raise;` to keep it",
+      "fullDescription": "`raise E` inside an `on E: SomeException do ...` handler starts a fresh exception propagation rooted at the re-raise site. The original stack trace - the path from where the exception was first raised down through every called routine until it reached this `except` block - is gone. Crash reports and debugger views then point at the handler, not at the actual fault location, which makes triage dramatically harder. The intent of the developer was almost certainly `raise;` (no argument), which continues propagating the *current* exception object with its existing trace intact. Detector walks each `nkOnHandler` with a non-empty bound variable name and flags every `nkRaise` inside that subtree whose argument is exactly that variable (case-insensitive). `raise;` (no argument) is correct and not flagged; `raise EWrapper.Create(...)` is also accepted (deliberate wrap). Maps to Sonar-Delphi `ReRaiseExceptionCheck`.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["exception", "error-handling", "stack-trace", "sonardelphi"],
+      "detectorUnit": "uReRaiseException.pas",
+      "examples": {
+        "bad":  "try\n  RiskyCall;\nexcept\n  on E: EDivByZero do\n  begin\n    Log(E.Message);\n    raise E;          // loses original trace\n  end;\nend;",
+        "good": "try\n  RiskyCall;\nexcept\n  on E: EDivByZero do\n  begin\n    Log(E.Message);\n    raise;            // preserves trace\n  end;\nend;"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA123",
+      "kind": "CastAndFree",
+      "name": "Type-cast immediately before Free / Destroy",
+      "shortDescription": "`TFoo(x).Free` - the type-cast has no effect on which Destroy runs (Destroy is virtual)",
+      "fullDescription": "Writing `TStringList(L).Free` or `TObject(L).Destroy` is a confusion smell. `TObject.Free` is a non-virtual wrapper around the *virtual* `Destroy`, so virtual dispatch happens through the runtime type of `L`, not through the static cast type. Whether you write `L.Free` or `T(L).Free`, the same destructor chain runs. The cast therefore either is redundant (cast to the variable's own type) or is misleading (cast to an unrelated class that suggests Destroy will pick a different override - it will not). If the cast target is wrong, the rest of the surrounding code may rely on that wrong assumption and break under refactoring. Detector pattern-matches `nkCall.Name` against `<Ident>(<expr>).Free[()][;]` and `<Ident>(<expr>).Destroy[()][;]` where `<Ident>` follows the Delphi class/interface naming convention (`T` or `I` plus uppercase letter). Plain `L.Free` and qualified `Owner.Bar(x).Free` (likely a function-result Free) are not flagged. Maps to Sonar-Delphi `CastAndFreeCheck`.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["memory", "destructor", "cast", "sonardelphi"],
+      "detectorUnit": "uCastAndFree.pas",
+      "examples": {
+        "bad":  "procedure Cleanup(L: TObject);\nbegin\n  TStringList(L).Free;     // cast has no effect on dispatch\nend;",
+        "good": "procedure Cleanup(L: TObject);\nbegin\n  L.Free;                  // virtual Destroy resolves at runtime\nend;"
+      },
+      "cleanCodeAttribute": "CLEAR",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA124",
+      "kind": "InstanceInvokedConstructor",
+      "name": "Constructor invoked on instance instead of class",
+      "shortDescription": "`obj.Create` - invokes constructor as method on an existing instance, skips allocation and re-runs field initialisation over live data",
+      "fullDescription": "Delphi allows a constructor to be invoked on an instance, e.g. `obj.Create;`, but the result is almost never what was intended. When called as a class-method (`TFoo.Create`), the runtime first allocates a fresh memory block via `TObject.NewInstance`, sets up the VMT pointer, and then runs the constructor body. When called on an existing instance, the allocation path is skipped entirely - only the constructor body runs, which re-initialises fields (`FList := TList.Create;` overwrites the previous `FList` without freeing it, managed-type refs get stomped, default values clobber whatever the caller had set). The result is at best a logic bug, at worst memory corruption. Detector heuristic (no type-resolver available): match `nkCall.Name` against `<Ident>.Create[(<args>)][;]` where `<Ident>` starts with a lowercase letter (clearly a variable by Delphi convention, since types use the `T<Upper>` / `I<Upper>` prefix). Skips `Self`, `Result`, `Inherited`, multi-dot paths (`A.B.Create` - ambiguous), cast forms (`T(x).Create`) and class names. Accepts a small known false-positive risk for `TClass`-typed lowercase variables (rare in practice). Maps to Sonar-Delphi `InstanceInvokedConstructorCheck`.",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["constructor", "memory", "lifecycle", "sonardelphi"],
+      "detectorUnit": "uInstanceInvokedConstructor.pas",
+      "examples": {
+        "bad":  "procedure Reset;\nvar list: TStringList;\nbegin\n  list := TStringList.Create;\n  ...\n  list.Create;            // no allocation, re-initialises the existing object\nend;",
+        "good": "procedure Reset;\nvar list: TStringList;\nbegin\n  list := TStringList.Create;\n  ...\n  list.Clear;             // or FreeAndNil + new TStringList.Create\nend;"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
+    },
+    {
+      "id": "SCA125",
+      "kind": "InheritedMethodEmpty",
+      "name": "Override whose entire body is `inherited;`",
+      "shortDescription": "An override that only forwards to the parent serves no purpose - remove it",
+      "fullDescription": "A method declared with `override` whose body contains only `inherited;` (or `inherited <SameName>;`) adds nothing on top of the parent class's behaviour. The compiler's normal virtual dispatch already calls the parent implementation if the subclass does not override - the empty override is therefore pure noise that wastes a VMT slot, slows down code reviews ('does this override do something?' - reader has to read the body to confirm 'no'), and creates dead code that needs to be revisited every time the parent method's signature changes. Detector walks every `nkMethod` whose `TypeRef` contains `;override`, skips bodyless variants (abstract / forward / external / dispid), and flags the method when its body contains exactly one non-parameter child that is `nkInherited` with either no argument expression at all (`inherited;`) or with the same identifier as the method itself (`inherited <SameName>;`). Calls to a *different* parent method (`inherited Other;` - intentional hijack) are deliberately not flagged. Maps to Sonar-Delphi `InheritedMethodWithNoCodeCheck`.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["inheritance", "dead-code", "sonardelphi"],
+      "detectorUnit": "uInheritedMethodEmpty.pas",
+      "examples": {
+        "bad":  "procedure TFooSubclass.AfterConstruction; override;\nbegin\n  inherited;     // adds nothing - drop this whole override\nend;",
+        "good": "// Remove the override entirely. The parent's AfterConstruction will\n// be invoked by the normal virtual dispatch."
+      },
+      "cleanCodeAttribute": "DISTINCT",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA126",
+      "kind": "NilComparison",
+      "name": "Use Assigned() instead of `= nil` / `<> nil`",
+      "shortDescription": "Pascal convention: `Assigned(x)` and `not Assigned(x)` are the canonical nil-checks",
+      "fullDescription": "Direct comparison against `nil` works for object references but breaks down for method-pointer types and Variants, where the standard library prefers `Assigned`. Sticking to a single form across the code base avoids edge-case bugs and improves readability - the reader does not need to verify which form the variable's type supports. Detector scans every AST node's `Name` and `TypeRef` (the latter holds the textual form of `if`/`while`/`until` conditions and assignment right-hand sides) for the pattern `<op> nil` where `<op>` is `=` or `<>`. String literals (`'nil'`) are stripped before the match, and `:= nil` (assignment), `<= nil` / `>= nil` (rare nonsensical compares) are explicitly excluded. Maps to Sonar-Delphi `NilComparisonCheck`.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["convention", "nil", "sonardelphi"],
+      "detectorUnit": "uNilComparison.pas",
+      "examples": {
+        "bad":  "if Obj = nil then\n  Exit;\nif Obj <> nil then\n  Obj.DoStuff;",
+        "good": "if not Assigned(Obj) then\n  Exit;\nif Assigned(Obj) then\n  Obj.DoStuff;"
+      },
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA127",
+      "kind": "RaisingRawException",
+      "name": "Raise the bare `Exception` base class instead of a specific subclass",
+      "shortDescription": "`raise Exception.Create('...')` - the base class carries no semantic information, callers cannot filter selectively",
+      "fullDescription": "Raising the RTL base class `Exception` is the equivalent of throwing `new Error('something')` in JavaScript: it tells the caller *that* something went wrong, but not *what*. Calling code is then forced to catch the broadest possible class (`on E: Exception do ...`), which also catches every unrelated runtime error and tends to swallow bugs. Prefer a specific subclass (e.g. `EArgumentOutOfRangeException`, `EFileNotFoundException`, a domain-specific `EMyDomainError`). Detector walks every `nkRaise` node and flags it when the raised expression starts with `Exception.Create` (case-insensitive) or is exactly `Exception` (no Create call). Bare `raise;` (re-raise) and `raise E;` (variable) are not flagged. Maps to Sonar-Delphi `RaisingRawExceptionCheck`.",
+      "defaultSeverity": "Warning",
+      "type": "Code Smell",
+      "tags": ["exception", "error-handling", "sonardelphi"],
+      "detectorUnit": "uRaisingRawException.pas",
+      "examples": {
+        "bad":  "if x < 0 then\n  raise Exception.Create('x is negative');",
+        "good": "if x < 0 then\n  raise EArgumentOutOfRangeException.CreateFmt('x = %d', [x]);"
+      },
+      "cleanCodeAttribute": "DISTINCT",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA128",
+      "kind": "DateFormatSettings",
+      "name": "Locale-dependent format call without explicit TFormatSettings",
+      "shortDescription": "`StrToDate(s)`, `FormatFloat(...)` etc. without TFormatSettings depend on the system locale - breaks across machines / users",
+      "fullDescription": "Pascal's locale-aware conversion functions (`StrToDate`, `StrToTime`, `StrToDateTime`, `DateToStr`, `TimeToStr`, `DateTimeToStr`, `StrToFloat`, `StrToCurr`, `FloatToStr`, `CurrToStr`, `FormatDateTime`, `FormatFloat`, `FormatCurr`) default to the global `SysUtils.FormatSettings` record, which is initialised from the operating-system regional settings. The same code therefore behaves differently on a developer's DE-locale machine (`DateSeparator` = '.', `DecimalSeparator` = ',') than on a production server with EN-locale ('/' and '.'). Data exchanged via files, APIs, databases or CSV must always go through an explicit `TFormatSettings` (typically `FormatSettings := TFormatSettings.Invariant` for machine-readable output, or a user-locale snapshot for UI). Detector walks every `nkCall` whose function name matches a known locale-dependent RTL routine and flags the call when its name does not mention `FormatSettings` (case-insensitive substring). `StrToInt` / `IntToStr` and the boolean variants are explicitly **not** locale-dependent and not flagged. Maps to Sonar-Delphi `DateFormatSettingsCheck`.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["locale", "i18n", "sonardelphi"],
+      "detectorUnit": "uDateFormatSettings.pas",
+      "examples": {
+        "bad":  "var d := StrToDate(UserInput);     // breaks under EN locale\nWriteLn(DateToStr(Now));",
+        "good": "var FS := TFormatSettings.Invariant;\nvar d := StrToDate(UserInput, FS);\nWriteLn(DateToStr(Now, FS));"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA129",
+      "kind": "UnicodeToAnsiCast",
+      "name": "Cast from string to 8-bit string type without explicit encoding",
+      "shortDescription": "`AnsiString(s)` / `UTF8String(s)` / `RawByteString(s)` silently drops characters outside the active code page",
+      "fullDescription": "Casting a `UnicodeString` (or any string typed expression - Delphi `string` is `UnicodeString` since XE) to one of the 8-bit string families (`AnsiString`, `UTF8String`, `RawByteString`, `ShortString`) goes through the implicit `DefaultSystemCodePage` conversion. Every codepoint outside the active code page is silently replaced with `?`. Emoji, non-Latin scripts, and even some Western accented letters disappear, but the assignment compiles cleanly and runs without exception - so the bug surfaces only when the data round-trips back through a Unicode aware consumer (a different DB, an HTTP API, an Excel export). Use a deliberate encoding helper (`UTF8Encode`, `TEncoding.UTF8.GetBytes`, `WideStringToUTF8` ...) instead. Detector walks `nkCall` nodes whose name starts (case-insensitive) with `AnsiString(`, `UTF8String(`, `RawByteString(` or `ShortString(`. Empty string-literal arguments (`AnsiString('')`) are not flagged. Casts to `string` (= `UnicodeString` in modern Delphi) are also not flagged. Accepts the false-positive that the input might already be the same 8-bit type (redundant cast, still suspicious as a smell). Maps to Sonar-Delphi `UnicodeToAnsiCastCheck`.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["encoding", "unicode", "data-loss", "sonardelphi"],
+      "detectorUnit": "uUnicodeToAnsiCast.pas",
+      "examples": {
+        "bad":  "var u: UnicodeString;\nu := 'Smiley: ' + #$1F600;\nlogStream.WriteString(AnsiString(u));   // smiley becomes '?'",
+        "good": "var u: UnicodeString;\nu := 'Smiley: ' + #$1F600;\nlogStream.WriteString(UTF8Encode(u));   // explicit, full Unicode"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA130",
+      "kind": "CharToCharPointerCast",
+      "name": "Cast of Char value to PChar reinterprets codepoint as pointer",
+      "shortDescription": "`PChar('A')` is not `PChar(\"A\")` - the cast treats the 16-bit codepoint as a raw memory address",
+      "fullDescription": "Delphi happily compiles `PChar(c)` where `c` is of type `Char`, `WideChar` or `AnsiChar`. The result is **not** a null-terminated 1-character string - the cast simply reinterprets the 16-bit/8-bit codepoint as a pointer. So `PChar('A')` returns the pointer value `$00000041`, which points into low-process memory; any dereference is undefined behaviour and typically explodes as an access violation, but on some platforms reads stale data instead. The intended pattern is almost always `PChar(stringExpr)`, which returns a pointer into the actual string buffer. Detector walks `nkCall` nodes whose name begins with `PChar(`, `PWideChar(` or `PAnsiChar(` and flags the call when the argument is recognisably a Char value: a single-character quoted literal (`'A'`), a character-ordinal literal (`#65`, `#$41`), or a `Chr(...)` call. Identifier arguments are not flagged because the detector has no type-resolver to determine whether the variable is a `Char` or a `string`. Maps to Sonar-Delphi `CharacterToCharacterPointerCastCheck`.",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["pointer", "char", "undefined-behavior", "sonardelphi"],
+      "detectorUnit": "uCharToCharPointerCast.pas",
+      "examples": {
+        "bad":  "var p: PChar;\np := PChar('A');           // p = $00000041 (not a string)\nShowMessage(p);              // access violation",
+        "good": "var p: PChar;\np := PChar(string('A'));    // explicit string wrap\nShowMessage(p);"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
+    },
+    {
+      "id": "SCA131",
+      "kind": "IfThenShortCircuit",
+      "name": "IfThen() evaluates both branches - no short-circuit",
+      "shortDescription": "`Math.IfThen(cond, A(), B())` / `StrUtils.IfThen` are normal functions - both arms run before the function is called",
+      "fullDescription": "Both `Math.IfThen` (Integer/Double overload) and `StrUtils.IfThen` (string overload) are regular functions, not language constructs. Pascal evaluates every argument *before* the call, so the function only sees the final result values - it cannot 'skip' the not-selected branch. Whenever the arms contain function or method calls with side effects (DB read, file IO, state mutation) or with non-trivial performance cost, both run unconditionally. The whole point of writing `IfThen(cond, A, B)` instead of `if cond then x := A else x := B` was usually the assumption of short-circuit semantics - which doesn't exist here. Detector walks `nkCall` nodes whose name matches `IfThen(`, `Math.IfThen(`, or `StrUtils.IfThen(` (case-insensitive). After extracting the outer argument list, it strips string literals (so `'a(b)'` doesn't trip the heuristic) and looks for nested `(` - any nested call is a strong signal of a side-effecting branch. Calls with only literals or simple variables as arms are not flagged. Maps to Sonar-Delphi `IfThenShortCircuitCheck`.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["control-flow", "side-effects", "performance", "sonardelphi"],
+      "detectorUnit": "uIfThenShortCircuit.pas",
+      "examples": {
+        "bad":  "x := Math.IfThen(IsCacheHit, FetchFromCache, FetchFromDb);\n//                            both calls run every time",
+        "good": "if IsCacheHit then\n  x := FetchFromCache\nelse\n  x := FetchFromDb;"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
     }
   ]
 }

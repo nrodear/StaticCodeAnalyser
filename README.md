@@ -11,9 +11,10 @@
 
 **Delphi static code analysis tool** and **linter** for **RAD Studio 12 (Athens)** —
 ships as an **IDE plugin** with a dockable tool window plus a **standalone Windows app**.
-AST-based analysis with **41 detectors total**: 21 Pascal checks for memory leaks,
-SQL injection, code smells, security vulnerabilities and code duplication, **plus a
-dedicated DFM scanner with 20 checks** built on its own DFM lexer + parser + component
+AST-based analysis with **~120 detectors total**: ~100 Pascal checks for memory leaks,
+SQL injection, code smells, security vulnerabilities and code duplication
+(including a **Sonar-Delphi-compatible** subset SCA060+), **plus a
+dedicated DFM scanner with 22 checks** built on its own DFM lexer + parser + component
 graph paired with the Pascal AST — dead event handlers, hard-coded DB credentials in
 form files, circular master-detail wiring, required dataset fields without UI binding,
 SQL built from `TEdit.Text`, cross-form coupling, and more. Sonar-style classification
@@ -36,7 +37,7 @@ Sonar setup required, running inside the IDE, with a Claude AI hand-off.**
 
 | Capability | Details |
 |------------|---------|
-| 🐛 **Bug detection** | 21 Pascal detectors run against every `.pas` file (MemoryLeak, NilDeref, DivByZero, FormatMismatch, …) plus 20 DFM detectors against every `.dfm` (dead event handlers, hard-coded DB credentials, circular master-detail, …) — **41 total** |
+| 🐛 **Bug detection** | ~100 Pascal detectors run against every `.pas` file (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, …) plus 22 DFM detectors against every `.dfm` (dead event handlers, hard-coded DB credentials, circular master-detail, …) — **~120 total** |
 | 🔐 **Security checks** | SQLInjection (score-based), HardcodedSecret, HardcodedPath |
 | 🧹 **Code smells** | LongMethod, MagicNumber, EmptyExcept, MissingFinally, DeadCode, DuplicateString/Block |
 | ⚡ **Incremental analysis** | "Branch-Changes" button: only the files modified in the Git/SVN branch — 200 ms instead of 60 s |
@@ -52,15 +53,21 @@ Sonar setup required, running inside the IDE, with a Claude AI hand-off.**
 
 ## Main features
 
-### 1. Static code analysis (41 detectors total — 21 Pascal + 20 DFM, Sonar taxonomy)
+### 1. Static code analysis (~120 detectors total — ~100 Pascal + 22 DFM, Sonar taxonomy)
 
-**Pascal AST checks (21)**: **bugs** (MemoryLeak, NilDeref, DivByZero,
-FormatMismatch), **vulnerabilities** (SQLInjection, HardcodedSecret),
-**security hotspots** (HardcodedPath), **code smells** (LongMethod,
-MagicNumber, DeadCode, EmptyExcept, MissingFinally, …), and **code
-duplication** (DuplicateString, DuplicateBlock).
+**Pascal AST checks (~100)**: **bugs** (MemoryLeak, NilDeref, DivByZero,
+FormatMismatch, ReversedForRange, SelfAssignment, VirtualCallInCtor,
+MissingRaise, RoutineResultUnassigned, ReRaiseException,
+InstanceInvokedConstructor, CharToCharPointerCast, UnicodeToAnsiCast,
+DateFormatSettings, IfThenShortCircuit, …), **vulnerabilities**
+(SQLInjection, HardcodedSecret, DisabledTlsVerification),
+**security hotspots** (HardcodedPath, HttpInsteadOfHttps), **code smells**
+(LongMethod, MagicNumber, DeadCode, EmptyExcept, MissingFinally,
+CastAndFree, NilComparison, InheritedMethodEmpty, RaisingRawException,
+~60 SonarDelphi-compatible naming/formatting checks SCA060-SCA131, …),
+and **code duplication** (DuplicateString, DuplicateBlock).
 
-**DFM checks (20)** on the dedicated form-file lexer + parser +
+**DFM checks (22)** on the dedicated form-file lexer + parser +
 component graph, paired with the Pascal AST via the FormBinder: dead
 event handlers, hard-coded DB credentials in form files, circular
 master-detail wiring, required dataset fields without UI binding, SQL
@@ -138,7 +145,7 @@ reference: [docs/sonar-config.md](docs/sonar-config.md).
 
 ---
 
-## What is detected (41 detectors — 21 Pascal + 20 DFM)
+## What is detected (~120 detectors — ~100 Pascal + 22 DFM)
 
 Findings fall into one of **five Sonar categories**:
 
@@ -169,7 +176,7 @@ Every detector comes with a **before/after code example** in the help
 panel. Clicking a finding copies a **Markdown block ready for Claude AI**
 to the clipboard.
 
-For the **20 DFM-specific detectors** (DFM-DeadEventHandler,
+For the **22 DFM-specific detectors** (DFM-DeadEventHandler,
 DFM-HardcodedDBCredentials, DFM-CircularMasterDetail,
 DFM-MissingRequiredFieldBinding, DFM-SQLFromTEditText, …) and their
 fix hints: see [DETECTORS.md](DETECTORS.md).
@@ -649,7 +656,7 @@ StaticCodeAnalyserForm/sources/        Analysis engine (shared by standalone + I
     uAstNode.pas                       AST with FindAll / FindFirst lookup
 
   Infrastructure/
-    uStaticAnalyzer2.pas               Orchestrates the 21 Pascal detectors per file
+    uStaticAnalyzer2.pas               Orchestrates the ~100 Pascal detectors per file
     uStaticFiles.pas                   Recursive file scan, tick callback,
                                        cancel support, symlink protection
     uIgnoreList.pas                    ignore.txt + test filter
@@ -708,8 +715,8 @@ For a typical 1 000-unit repository:
 | Folder scan | — | 1–3 s |
 | Lexer | ~5–15 ms | ~10 s |
 | Parser2 | ~10–50 ms | ~30 s |
-| 21 Pascal detectors | ~5–30 ms | ~20 s |
-| DFM parser + 20 DFM detectors (per `.dfm`) | ~5–20 ms | ~5–10 s |
+| ~100 Pascal detectors | ~10–60 ms | ~40 s |
+| DFM parser + 22 DFM detectors (per `.dfm`) | ~5–20 ms | ~5–10 s |
 | Suppression sweep | — | <1 s |
 | **Total** | **~30–100 ms** | **~60–90 s** |
 
@@ -822,7 +829,7 @@ If you are evaluating this project, you may also be looking at:
 - **Pascal Analyzer (PAL)** — commercial. Overlapping detector set,
   but no DFM-aware checks, no Claude AI hand-off, no SARIF.
 - **DFMCheck / GExperts DFM-Check** — single-purpose DFM linters. The
-  20 DFM detectors in this project are a superset (graph-based
+  22 DFM detectors in this project are a superset (graph-based
   cross-form analysis, repo-wide form index, Pascal-AST coupling).
 - **DCC32 hints / warnings** — built-in compiler diagnostics. Useful
   but limited to syntactic and trivially-semantic checks; no

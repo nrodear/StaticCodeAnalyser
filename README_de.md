@@ -11,9 +11,10 @@
 
 **Statisches Code-Analyse-Tool** und **Linter** für **Delphi 12 / RAD Studio (Athens)** —
 als **IDE-Plugin** mit dockbarem Tool-Fenster plus **eigenständige Windows-Anwendung**.
-AST-basierte Analyse mit **insgesamt 41 Detektoren**: 21 Pascal-Checks für
-Speicherlecks, SQL-Injection, Code-Smells, Sicherheitslücken und Code-Duplikate,
-**plus ein dedizierter DFM-Scanner mit 20 Checks** auf Basis eines eigenen DFM-Lexers
+AST-basierte Analyse mit **insgesamt ~120 Detektoren**: ~100 Pascal-Checks für
+Speicherlecks, SQL-Injection, Code-Smells, Sicherheitslücken und Code-Duplikate
+(inklusive einer **Sonar-Delphi-kompatiblen** Teilmenge SCA060+),
+**plus ein dedizierter DFM-Scanner mit 22 Checks** auf Basis eines eigenen DFM-Lexers
 + Parsers + Komponentengraph, verheiratet mit dem Pascal-AST — tote Event-Handler,
 Klartext-DB-Credentials in Form-Dateien, zirkuläre Master-Detail-Verkettung,
 Required-Felder ohne UI-Bindung, SQL aus `TEdit.Text`, Cross-Form-Kopplung und mehr.
@@ -37,7 +38,7 @@ direkt in der IDE, mit Claude-AI-Anbindung.**
 
 | Fähigkeit | Wie genutzt |
 |-----------|-------------|
-| 🐛 **Bugs finden** | 21 Pascal-Detektoren laufen über jede `.pas`-Datei (MemoryLeak, NilDeref, DivByZero, FormatMismatch, …) plus 20 DFM-Detektoren über jede `.dfm` (tote Event-Handler, Klartext-DB-Credentials, zirkuläre Master-Detail-Verkettung, …) — **insgesamt 41** |
+| 🐛 **Bugs finden** | ~100 Pascal-Detektoren laufen über jede `.pas`-Datei (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, …) plus 22 DFM-Detektoren über jede `.dfm` (tote Event-Handler, Klartext-DB-Credentials, zirkuläre Master-Detail-Verkettung, …) — **insgesamt ~120** |
 | 🔐 **Sicherheitslücken** | SQLInjection (Score-basiert), HardcodedSecret, HardcodedPath |
 | 🧹 **Code-Smells** | LongMethod, MagicNumber, EmptyExcept, MissingFinally, DeadCode, DuplicateString/Block |
 | ⚡ **Inkrementell analysieren** | „Branch-Changes"-Button: nur die im Git-/SVN-Branch geänderten Dateien — 200 ms statt 60 s |
@@ -53,15 +54,21 @@ direkt in der IDE, mit Claude-AI-Anbindung.**
 
 ## Hauptfeatures
 
-### 1. Statische Code-Analyse (insgesamt 41 Detektoren — 21 Pascal + 20 DFM, Sonar-Taxonomie)
+### 1. Statische Code-Analyse (insgesamt ~120 Detektoren — ~100 Pascal + 22 DFM, Sonar-Taxonomie)
 
-**Pascal-AST-Checks (21)**: **Bugs** (MemoryLeak, NilDeref, DivByZero,
-FormatMismatch), **Vulnerabilities** (SQLInjection, HardcodedSecret),
-**Security Hotspots** (HardcodedPath), **Code Smells** (LongMethod,
-MagicNumber, DeadCode, EmptyExcept, MissingFinally, …) und **Code
-Duplication** (DuplicateString, DuplicateBlock).
+**Pascal-AST-Checks (~100)**: **Bugs** (MemoryLeak, NilDeref, DivByZero,
+FormatMismatch, ReversedForRange, SelfAssignment, VirtualCallInCtor,
+MissingRaise, RoutineResultUnassigned, ReRaiseException,
+InstanceInvokedConstructor, CharToCharPointerCast, UnicodeToAnsiCast,
+DateFormatSettings, IfThenShortCircuit, …), **Vulnerabilities**
+(SQLInjection, HardcodedSecret, DisabledTlsVerification),
+**Security Hotspots** (HardcodedPath, HttpInsteadOfHttps), **Code Smells**
+(LongMethod, MagicNumber, DeadCode, EmptyExcept, MissingFinally,
+CastAndFree, NilComparison, InheritedMethodEmpty, RaisingRawException,
+~60 SonarDelphi-kompatible Naming-/Formatting-Checks SCA060-SCA131, …)
+und **Code Duplication** (DuplicateString, DuplicateBlock).
 
-**DFM-Checks (20)** auf Basis eines eigenen Form-Datei-Lexers +
+**DFM-Checks (22)** auf Basis eines eigenen Form-Datei-Lexers +
 Parsers + Komponentengraph, gekoppelt mit dem Pascal-AST via FormBinder:
 tote Event-Handler, Klartext-DB-Credentials in Form-Dateien, zirkuläre
 Master-Detail-Verkettung, Required-Felder ohne UI-Bindung, SQL aus
@@ -141,7 +148,7 @@ Volles Setup: [docs/sonar-setup.md](docs/sonar-setup.md). Quick-Reference:
 
 ---
 
-## Was wird erkannt (41 Detektoren — 21 Pascal + 20 DFM)
+## Was wird erkannt (~120 Detektoren — ~100 Pascal + 22 DFM)
 
 Alle Befunde landen in einer der **5 Sonar-Kategorien**:
 
@@ -172,7 +179,7 @@ Pro Detektor gibt es ein **Vorher/Nachher-Code-Beispiel** im Hilfe-Panel.
 Per Klick auf einen Befund landet ein **Markdown-Block für Claude AI** in
 der Zwischenablage.
 
-Die **20 DFM-spezifischen Detektoren** (DFM-DeadEventHandler,
+Die **22 DFM-spezifischen Detektoren** (DFM-DeadEventHandler,
 DFM-HardcodedDBCredentials, DFM-CircularMasterDetail,
 DFM-MissingRequiredFieldBinding, DFM-SQLFromTEditText …) und ihre
 Fix-Hints: siehe [DETECTORS_de.md](DETECTORS_de.md).
@@ -648,7 +655,7 @@ StaticCodeAnalyserForm/sources/        Analyse-Engine (shared zwischen Standalon
     uAstNode.pas                       AST mit FindAll/FindFirst-Suche
 
   Infrastructure/
-    uStaticAnalyzer2.pas               Orchestriert 21 Pascal-Detektoren pro Datei
+    uStaticAnalyzer2.pas               Orchestriert ~100 Pascal-Detektoren pro Datei
     uStaticFiles.pas                   Rekursiver Datei-Scan, Tick-Callback,
                                        Cancel-Support, Symlink-Schutz
     uIgnoreList.pas                    ignore.txt + Test-Filter
@@ -707,8 +714,8 @@ Bei einem typischen 1000-Unit-Repo:
 | Verzeichnis-Scan | — | 1-3 s |
 | Lexer | ~5-15 ms | ~10 s |
 | Parser2 | ~10-50 ms | ~30 s |
-| 21 Pascal-Detektoren | ~5-30 ms | ~20 s |
-| DFM-Parser + 20 DFM-Detektoren (pro `.dfm`) | ~5-20 ms | ~5-10 s |
+| ~100 Pascal-Detektoren | ~10-60 ms | ~40 s |
+| DFM-Parser + 22 DFM-Detektoren (pro `.dfm`) | ~5-20 ms | ~5-10 s |
 | Suppression-Sweep | — | <1 s |
 | **Gesamt** | **~30-100 ms** | **~60-90 s** |
 
@@ -822,7 +829,7 @@ Wer dieses Projekt evaluiert, schaut häufig parallel auf:
 - **Pascal Analyzer (PAL)** — kommerziell. Überlappendes Detektor-Set,
   aber keine DFM-aware Checks, kein Claude-AI-Hand-off, kein SARIF.
 - **DFMCheck / GExperts DFM-Check** — Single-Purpose-DFM-Linter. Die
-  20 DFM-Detektoren in diesem Projekt sind eine Obermenge
+  22 DFM-Detektoren in diesem Projekt sind eine Obermenge
   (graph-basierte Cross-Form-Analyse, Repo-weiter Form-Index,
   Pascal-AST-Kopplung).
 - **DCC32-Hints/Warnings** — eingebaute Compiler-Diagnostik. Nützlich

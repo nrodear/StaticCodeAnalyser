@@ -118,6 +118,8 @@ var
   LineFor      : TArray<Integer>;
   ReResume     : TRegEx;
   ReFreeNil    : TRegEx;
+  ReDecl       : TRegEx;
+  DeclMatch    : TMatch;
   Matches      : TMatchCollection;
   M            : TMatch;
   Snippet      : string;
@@ -125,6 +127,19 @@ var
   LineNo       : Integer;
   F            : TLeakFinding;
   HasTerminate : Boolean;
+  Ident        : string;
+  DeclaredType : string;
+
+  function LooksLikeThreadType(const ATypeName: string): Boolean;
+  // Heuristik: TThread-Descendants tragen praktisch immer das Token
+  // 'Thread' im Typnamen (TThread, TWorkerThread, TIdHTTPThread,
+  // TBackgroundThread, IOmniThreadPool, ...). Standard-Container und
+  // VCL-Klassen (TObjectList, TStringList, TDictionary, TStream, TForm,
+  // TTimer, TIniFile, ...) tragen es nicht. Damit faellt der weit
+  // verbreitete FreeAndNil(FResults)-FP weg ohne echte Treffer zu verlieren.
+  begin
+    Result := Pos('thread', LowerCase(ATypeName)) > 0;
+  end;
 
   procedure Emit(K: TFindingKind; const Detail: string; AtPos: Integer);
   begin
@@ -169,6 +184,23 @@ begin
     Matches := ReFreeNil.Matches(Code);
     for M in Matches do
     begin
+      Ident := M.Groups[1].Value;
+
+      // Type-Filter: nur weitermachen wenn die Identifier-Deklaration im
+      // selben File nach einem TThread-Descendant aussieht (Typ-Token
+      // enthaelt 'Thread'). Wenn keine Deklaration gefunden wird, weiter
+      // pruefen (extern deklarierter Identifier - konservativ flaggen).
+      ReDecl := TRegEx.Create(
+        '(?i)\b' + Ident + '\s*:\s*([A-Za-z0-9_<>,\s.]+?)\s*(?:;|\)|=)');
+      DeclMatch := ReDecl.Match(Code);
+      if DeclMatch.Success then
+      begin
+        DeclaredType := DeclMatch.Groups[1].Value;
+        if not LooksLikeThreadType(DeclaredType) then
+          Continue;  // Kein TThread-Kontext -> kein Befund (vermeidet FP
+                     // bei TObjectList/TStringList/TStream/TForm/...).
+      end;
+
       LookBack := M.Index - 500;
       if LookBack < 1 then LookBack := 1;
       Snippet := Copy(Code, LookBack, M.Index - LookBack);
@@ -176,16 +208,15 @@ begin
       // ein `<Ident>.Terminate` UND `<Ident>.WaitFor` vorkommen. Wenn
       // beides fehlt -> Befund.
       HasTerminate :=
-        (Pos(LowerCase(M.Groups[1].Value) + '.terminate', LowerCase(Snippet)) > 0) and
-        (Pos(LowerCase(M.Groups[1].Value) + '.waitfor', LowerCase(Snippet)) > 0);
+        (Pos(LowerCase(Ident) + '.terminate', LowerCase(Snippet)) > 0) and
+        (Pos(LowerCase(Ident) + '.waitfor',   LowerCase(Snippet)) > 0);
       if not HasTerminate then
         Emit(fkTThreadDestroyWithoutTerminate,
           Format('FreeAndNil(%s) without prior %s.Terminate + %s.WaitFor. ' +
                  'If %s is a TThread descendant the worker may still be ' +
                  'running -> AV / heap corruption. If it isnt a thread, ' +
                  'suppress with // noinspection TThreadDestroyWithoutTerminate',
-                 [M.Groups[1].Value, M.Groups[1].Value, M.Groups[1].Value,
-                  M.Groups[1].Value]),
+                 [Ident, Ident, Ident, Ident]),
           M.Index);
     end;
   finally

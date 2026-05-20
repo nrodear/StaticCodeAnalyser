@@ -25,6 +25,7 @@ uses
   uIDEThemeIntegration, uIDEAnalyseProgress, uIDEGridTooltip,
   uIDELifecycle, uIDEAnalyseRunner,
   uIDEAnnotationOverlay,
+  uIDEFindingNav,                          // Ctrl+Alt+Up/Down Befund-Navigation
   uIDESCAOptions,                          // Tools > Options > SCA Page
   uIDESonarOptions,                        // Tools > Options > Sonar Integration
   uFindingGridRenderer, uFindingFilter;
@@ -421,7 +422,12 @@ const
   LBL_W_SEARCH       = 32;     // "Search:"
 
   // ---- Combo-Widths (innerhalb der Sub-Panel-Container) -----------------
-  CMB_W_FILTER       = 160;    // Severity-Combo
+  // Severity-Combo: 200 px statt 160, damit die laengsten deutschen Labels
+  // ("Master-Detail nicht verknuepft", "Ungenutztes oeffentliches Member",
+  // "Datumsformat-Einstellungen") im geschlossenen Zustand ohne Ellipse
+  // sichtbar sind. Der Sub-Panel-Container (FPanelSev) skaliert ueber
+  // LBL_W_FILTER + CMB_W_FILTER automatisch mit.
+  CMB_W_FILTER       = 200;    // Severity-Combo
   CMB_W_TYPE         = 130;    // Type-Combo
   CMB_W_PROFILE      = 110;    // Profile-Combo (ide-fast, default, strict)
 
@@ -720,6 +726,10 @@ begin
   FFilterCombo.Items.AddObject(_('Format()'),               TObject(Ord(fmFormatMismatch)));
   FFilterCombo.Items.AddObject(_('Nil-Deref'),              TObject(Ord(fmNilDeref)));
   FFilterCombo.Items.AddObject(_('Div by Zero'),            TObject(Ord(fmDivByZero)));
+  FFilterCombo.Items.AddObject(_('Missing Raise'),               TObject(Ord(fmMissingRaise)));
+  FFilterCombo.Items.AddObject(_('Result Unassigned'),           TObject(Ord(fmRoutineResultUnassigned)));
+  FFilterCombo.Items.AddObject(_('Instance-Invoked Constructor'),TObject(Ord(fmInstanceInvokedConstructor)));
+  FFilterCombo.Items.AddObject(_('Char -> PChar Cast'),          TObject(Ord(fmCharToCharPointerCast)));
 
   FFilterCombo.Items.AddObject(_('--- Warnings ---'),       TObject(-1));
   FFilterCombo.Items.AddObject(_('Empty Except'),           TObject(Ord(fmEmptyExcept)));
@@ -729,6 +739,11 @@ begin
   FFilterCombo.Items.AddObject(_('Debug Output'),           TObject(Ord(fmDebugOutput)));
   FFilterCombo.Items.AddObject(_('Hardcoded Path'),         TObject(Ord(fmHardcodedPath)));
   FFilterCombo.Items.AddObject(_('Read Error'),             TObject(Ord(fmFileReadError)));
+  FFilterCombo.Items.AddObject(_('Re-Raise Exception'),     TObject(Ord(fmReRaiseException)));
+  FFilterCombo.Items.AddObject(_('Raising Raw Exception'),  TObject(Ord(fmRaisingRawException)));
+  FFilterCombo.Items.AddObject(_('Date Format Settings'),   TObject(Ord(fmDateFormatSettings)));
+  FFilterCombo.Items.AddObject(_('Unicode -> Ansi Cast'),   TObject(Ord(fmUnicodeToAnsiCast)));
+  FFilterCombo.Items.AddObject(_('IfThen Short-Circuit'),   TObject(Ord(fmIfThenShortCircuit)));
 
   FFilterCombo.Items.AddObject(_('--- Hints ---'),          TObject(-1));
   FFilterCombo.Items.AddObject(_('Long Method'),            TObject(Ord(fmLongMethod)));
@@ -751,6 +766,9 @@ begin
   FFilterCombo.Items.AddObject(_('Data Module Split Hint'), TObject(Ord(fmDfmDataModuleSplitHint)));
   FFilterCombo.Items.AddObject(_('Dangerous SQL Statement'),TObject(Ord(fmSqlDangerousStatement)));
   FFilterCombo.Items.AddObject(_('Format Locale Hint'),     TObject(Ord(fmFormatLocaleHint)));
+  FFilterCombo.Items.AddObject(_('Cast And Free'),          TObject(Ord(fmCastAndFree)));
+  FFilterCombo.Items.AddObject(_('Inherited (empty)'),      TObject(Ord(fmInheritedMethodEmpty)));
+  FFilterCombo.Items.AddObject(_('Nil Comparison'),         TObject(Ord(fmNilComparison)));
 
   FFilterCombo.ItemIndex := 0; // "All"
 
@@ -1081,6 +1099,12 @@ begin
                                 ScaleW(STATS_PADDING), ScaleW(STATS_PADDING));
 
   BuildStatsTiles(FPanelStats);
+
+  // Initial-Stats setzen, damit die Score-Kachel beim Frame-Open schon
+  // den Letter-Grade ("A" bei leerer Befund-Liste) anzeigt statt der
+  // CountLbl-Default-"0". Severity-/Type-Kacheln bleiben "0" - dort
+  // ist 0 die richtige Anzeige fuer "noch keine Analyse gelaufen".
+  UpdateStats;
 
   // alTop-Reihenfolge explizit setzen (gewuenschte Top-zu-Bottom-Reihenfolge:
   //   FPanelStats -> PanelPath -> PanelButtons -> PanelSearch).
@@ -1709,6 +1733,55 @@ begin
   //  siehe Kommentar am Ende von ApplyFilter.)
 end;
 
+// Liefert den Sonar-Style-Letter-Grade A..E aus dem rohen gewichteten
+// Score. Schwellwerte aus analyser.ini [Score]:
+//   * A  = perfekt (0 Findings)
+//   * B  = 1..ABMax    (Default 50)
+//   * C  = ABMax+1..BCMax (Default 200)
+//   * D  = BCMax+1..CDMax (Default 500)
+//   * E  = > CDMax
+//
+// Vorteil gegenueber der reinen Zahl: skaliert wahrnehmungs-konstant -
+// 12.847 ist nicht "viel schlimmer als 5.420", in beiden Faellen wirft
+// die Kachel "E" raus und der Reader weiss sofort "rot". Detail-Zahl
+// landet im Tooltip.
+function ScoreToGrade(AScore, ABMax, BCMax, CDMax: Integer): string;
+begin
+  if AScore <= 0     then Exit('A');
+  if AScore <= ABMax then Exit('B');
+  if AScore <= BCMax then Exit('C');
+  if AScore <= CDMax then Exit('D');
+  Result := 'E';
+end;
+
+// Liefert eine 1-Zeilen-Erklaerung zum Grade fuer den Tooltip.
+function GradeMeaning(const AGrade: string): string;
+begin
+  if AGrade = 'A' then Exit(_('No findings - clean baseline'));
+  if AGrade = 'B' then Exit(_('Clean - minor smells only'));
+  if AGrade = 'C' then Exit(_('Visible tech debt, no critical bugs'));
+  if AGrade = 'D' then Exit(_('Multiple errors/vulnerabilities - refactor advised'));
+  Result := _('Refactor needed - many critical findings');
+end;
+
+// Setzt Hint-Property rekursiv auf C und seine TWinControl-Children.
+// Notwendig weil der Tile aus mehreren ueberlagerten Labels besteht und
+// der Tooltip auf jedem Sub-Control sichtbar sein muss.
+procedure SetHintRecursive(C: TControl; const NewHint: string);
+var
+  i  : Integer;
+  WC : TWinControl;
+begin
+  if C = nil then Exit;
+  C.Hint := NewHint;
+  if C is TWinControl then
+  begin
+    WC := TWinControl(C);
+    for i := 0 to WC.ControlCount - 1 do
+      SetHintRecursive(WC.Controls[i], NewHint);
+  end;
+end;
+
 procedure TAnalyserFrame.UpdateStats;
 // Befuellt die Sonar-Style Tiles mit Severity-, Typ-Aufteilung und
 // Quality-Score. Jede Kachel hat ihr eigenes Count-Label - keine
@@ -1716,6 +1789,11 @@ procedure TAnalyserFrame.UpdateStats;
 //
 // Quality-Score-Gewichte (gewichtete Summe, niedriger = besser):
 //   Vulnerability=10, Error=7, Hotspot=5, Warning=3, Hint=1, FileErr=2
+//
+// Anzeige seit 2026-05: roher Score wird auf Letter-Grade A..E gemappt
+// (siehe ScoreToGrade). Die Kachel zeigt nur noch den Buchstaben, die
+// Rohzahl + Severity-Breakdown landen im Tooltip - skaliert besser bei
+// grossen Projekten und macht die Aussage wahrnehmungs-konstant.
 const
   W_VULN     = 10;
   W_ERROR    = 7;
@@ -1729,6 +1807,9 @@ var
   nBug, nVuln, nHot, nDup      : Integer;
   nCyclo                       : Integer;
   score                        : Integer;
+  grade                        : string;
+  scoreHint                    : string;
+  scoreTile                    : TControl;
 begin
   nErr  := 0; nWarn := 0; nHint := 0; nFileErr := 0;
   nBug  := 0; nVuln := 0; nHot  := 0; nDup := 0;
@@ -1789,8 +1870,48 @@ begin
   if Assigned(FTileCyclomatic) then
     FTileCyclomatic.Caption := IntToStr(nCyclo);
 
-  // Codequalitaet (gewichteter Score - Smell und Hotspot eingerechnet)
-  FTileScore.Caption    := IntToStr(score);
+  // Codequalitaet: Letter-Grade-Anzeige + Detail im Tooltip.
+  // Kachel zeigt nur den Buchstaben (A..E) - eine rohe Zahl wuerde bei
+  // grossen Projekten 4-/5-stellig werden und ist ohne Skala unleserlich.
+  // Tooltip listet Score + Breakdown, sodass der User per Hover die
+  // Roh-Werte sieht. Schwellwerte aus analyser.ini [Score].
+  var
+    abMax, bcMax, cdMax: Integer;
+  if Assigned(FRepoSettings) then
+  begin
+    abMax := FRepoSettings.ScoreThresholdB;
+    bcMax := FRepoSettings.ScoreThresholdC;
+    cdMax := FRepoSettings.ScoreThresholdD;
+  end
+  else
+  begin
+    abMax := 50;
+    bcMax := 200;
+    cdMax := 500;
+  end;
+  grade := ScoreToGrade(score, abMax, bcMax, cdMax);
+  FTileScore.Caption := grade;
+
+  scoreHint :=
+    _('Code Quality') + ': ' + grade + ' - ' + GradeMeaning(grade) + sLineBreak +
+    Format(_('Raw score: %d'), [score]) + sLineBreak +
+    Format(_('Errors: %d, Warnings: %d, Hints: %d'),
+      [nErr, nWarn, nHint]) + sLineBreak +
+    Format(_('Vulnerabilities: %d, Hotspots: %d, File errors: %d'),
+      [nVuln, nHot, nFileErr]) + sLineBreak +
+    Format(_('Grade scale: A=0, B<=%d, C<=%d, D<=%d, E>%d'),
+      [abMax, bcMax, cdMax, cdMax]) + sLineBreak +
+    _('Weights: Vuln 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2') + sLineBreak +
+    _('Click: reset filters (show everything)');
+
+  // Hint rekursiv setzen: Tile-Container + alle Subcontrols (TopRow,
+  // IconLbl, CountLbl, CapLbl) - sonst wuerde Hover auf Glyph oder
+  // Caption keinen Tooltip zeigen.
+  if Assigned(FTileScore.Parent) and Assigned(FTileScore.Parent.Parent) then
+  begin
+    scoreTile := FTileScore.Parent.Parent;
+    SetHintRecursive(scoreTile, scoreHint);
+  end;
 end;
 
 // ---------------------------------------------------------------------------
@@ -3669,6 +3790,10 @@ begin
   // editor-weit, auch ohne dass das Popup je geoeffnet wurde.
   RegisterEditorContextMenuHook;
   RegisterKeyboardBinding;
+  // Ctrl+Alt+Down / Ctrl+Alt+Up: zur naechsten / vorherigen markierten
+  // Finding-Zeile im aktuellen Editor-Tab springen (wrap-around).
+  // Nutzt GHighlighter; muss daher NACH RegisterLineHighlighter laufen.
+  RegisterFindingNavBinding;
 
   // Tools > Options > Third Party > Static Code Analyser
   // (Checkbox um den Silent-Mode aus-/anzuschalten).
@@ -3698,6 +3823,7 @@ begin
     FreeAndNil(GViewMenuItem);
   end;
   UnregisterEditorContextMenuHook;
+  UnregisterFindingNavBinding;
   UnregisterKeyboardBinding;
   UnregisterSCAAddInOptions;
   UnregisterSonarAddInOptions;

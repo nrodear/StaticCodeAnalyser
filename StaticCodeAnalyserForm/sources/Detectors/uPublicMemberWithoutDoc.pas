@@ -75,7 +75,9 @@ var
   T : string;
   SawDoc : Boolean;
 begin
-  Result := False;
+  // Result wird am Ende aus SawDoc gesetzt - keine separate Initialisierung
+  // noetig (Compiler-Hint H2077: "auf Result zugewiesener Wert wird nie
+  // benutzt"). SawDoc ist der echte Akkumulator der Schleife.
   SawDoc := False;
   i := LineIdx - 1;
   while i >= 0 do

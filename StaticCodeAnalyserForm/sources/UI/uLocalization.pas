@@ -389,6 +389,29 @@ begin
              'Float-Format ohne TFormatSettings - Locale-abh'#$E4'ngiger Dezimal-Trenner');
   GDeMap.Add('Dangerous SQL Statement',  'Gef'#$E4'hrliches SQL-Statement');
   GDeMap.Add('Format Locale Hint',       'Format-Locale-Hinweis');
+  // SonarDelphi-Migration (SCA120-131) - Filter-Combo-Labels
+  GDeMap.Add('Missing Raise',                'Fehlendes Raise');
+  GDeMap.Add('Result Unassigned',            'Result nicht zugewiesen');
+  GDeMap.Add('Re-Raise Exception',           'Exception erneut raisen');
+  GDeMap.Add('Cast And Free',                'Cast vor Free');
+  GDeMap.Add('Instance-Invoked Constructor', 'Konstruktor auf Instanz');
+  GDeMap.Add('Inherited (empty)',            'Inherited (leer)');
+  GDeMap.Add('Nil Comparison',               'Nil-Vergleich');
+  GDeMap.Add('Raising Raw Exception',        'Basis-Exception raisen');
+  GDeMap.Add('Date Format Settings',         'Datumsformat-Einstellungen');
+  GDeMap.Add('Unicode -> Ansi Cast',         'Unicode '#$2192' Ansi Cast');
+  GDeMap.Add('Char -> PChar Cast',           'Char '#$2192' PChar Cast');
+  GDeMap.Add('IfThen Short-Circuit',         'IfThen ohne Short-Circuit');
+  // Tools > Options - Hotkeys-Gruppe
+  GDeMap.Add('Hotkeys',                      'Tastenk'#$FC'rzel');
+  GDeMap.Add('Enable finding navigation (Ctrl+Alt+Up / Ctrl+Alt+Down)',
+             'Befund-Navigation aktivieren (Strg+Alt+'#$2191' / Strg+Alt+'#$2193')');
+  GDeMap.Add('Jump to the next / previous highlighted finding line in the current ' +
+             'editor tab (wrap-around at file end/start). Disable to release the ' +
+             'shortcut to the IDE default handler.',
+             'Im aktuellen Editor-Tab zur n'#$E4'chsten / vorherigen markierten ' +
+             'Befund-Zeile springen (Wrap-around am Datei-Ende/-Anfang). ' +
+             'Deaktivieren gibt den Shortcut wieder an die IDE-Default-Belegung frei.');
   // DFM
   GDeMap.Add('Published method looks like an event handler but no component binds it',
              'Published-Methode sieht aus wie ein Event-Handler, aber keine Komponente bindet sie');
