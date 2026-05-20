@@ -58,7 +58,11 @@ type
                  fmInstanceInvokedConstructor, fmInheritedMethodEmpty,
                  fmNilComparison, fmRaisingRawException,
                  fmDateFormatSettings, fmUnicodeToAnsiCast,
-                 fmCharToCharPointerCast, fmIfThenShortCircuit);
+                 fmCharToCharPointerCast, fmIfThenShortCircuit,
+                 // Sonar-50 Critical (SCA132-137)
+                 fmExceptionTooGeneral, fmRaiseOutsideExcept,
+                 fmUseAfterFree, fmAbstractNotImpl,
+                 fmLeakInConstructor, fmIntegerOverflow);
 
   // Zweiter Filter (orthogonal zu Schweregrad): Sonar-Typ-Kategorie.
   TTypeFilter = (tfAll, tfBug, tfCodeSmell, tfVulnerability,
@@ -158,6 +162,13 @@ begin
     fkUnicodeToAnsiCast          : Result := 'unicode ansi cast utf8 encoding datenverlust';
     fkCharToCharPointerCast      : Result := 'char pchar pointer cast codepoint adresse';
     fkIfThenShortCircuit         : Result := 'ifthen short circuit math strutils kurzschluss';
+    // Sonar-50 Critical (SCA132-137)
+    fkExceptionTooGeneral        : Result := 'exception too general base basisklasse fanger handler catch';
+    fkRaiseOutsideExcept         : Result := 'raise outside except bare nackt access violation av';
+    fkUseAfterFree               : Result := 'use after free dangling pointer benutzt nach freigabe';
+    fkAbstractNotImpl            : Result := 'abstract not implemented eabstracterror nicht ueberschrieben override';
+    fkLeakInConstructor          : Result := 'leak constructor raise field create exception partial init';
+    fkIntegerOverflow            : Result := 'integer overflow int64 multiplication ueberlauf product cast';
   else
     Result := '';
   end;
@@ -226,6 +237,13 @@ begin
     fmUnicodeToAnsiCast:         Result := F.Kind = fkUnicodeToAnsiCast;
     fmCharToCharPointerCast:     Result := F.Kind = fkCharToCharPointerCast;
     fmIfThenShortCircuit:        Result := F.Kind = fkIfThenShortCircuit;
+    // Sonar-50 Critical (SCA132-137)
+    fmExceptionTooGeneral:       Result := F.Kind = fkExceptionTooGeneral;
+    fmRaiseOutsideExcept:        Result := F.Kind = fkRaiseOutsideExcept;
+    fmUseAfterFree:              Result := F.Kind = fkUseAfterFree;
+    fmAbstractNotImpl:           Result := F.Kind = fkAbstractNotImpl;
+    fmLeakInConstructor:         Result := F.Kind = fkLeakInConstructor;
+    fmIntegerOverflow:           Result := F.Kind = fkIntegerOverflow;
   else
     Result := True;   // fmAll
   end;

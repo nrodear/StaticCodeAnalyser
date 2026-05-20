@@ -2574,6 +2574,120 @@
       "impacts": [
         { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
       ]
+    },
+    {
+      "id": "SCA132",
+      "kind": "ExceptionTooGeneral",
+      "name": "except on E: Exception catches every error",
+      "shortDescription": "`on E: Exception do ...` catches the base class and therefore every descendant, including system exceptions that should not be silenced (EOutOfMemory, EAccessViolation, EAbort)",
+      "fullDescription": "Catching `Exception` itself - the root of Delphi's exception hierarchy - silently swallows error categories the calling code is not prepared to handle: out-of-memory conditions, access violations, the `EAbort`-style flow-control exception, and anything else not derived from a domain-specific base class. Prefer a precise `on E: ESpecific do` clause, or several stacked clauses for the cases you can recover from. If you really need a fallback that re-raises after logging, use `except Log(''...''); raise; end;` - the bare `raise;` keeps the original type and stack. The detector walks `nkOnHandler` nodes and reports those whose `TypeRef` equals `Exception` (case-insensitive). Maps to Sonar-50 rule #11 (`ExceptionTooGeneral`).",
+      "defaultSeverity": "Warning",
+      "type": "Code Smell",
+      "tags": ["exception-handling", "error-handling", "sonar50"],
+      "detectorUnit": "uExceptionTooGeneral.pas",
+      "examples": {
+        "bad":  "try\n  ParseConfig(s);\nexcept\n  on E: Exception do        // swallows EOutOfMemory / EAbort / ...\n    Log(E.Message);\nend;",
+        "good": "try\n  ParseConfig(s);\nexcept\n  on E: EConvertError do\n    Log(E.Message);\n  on E: EFileNotFoundException do\n    Log(E.Message);\nend;"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA133",
+      "kind": "RaiseOutsideExcept",
+      "name": "Bare raise outside an except/on handler",
+      "shortDescription": "`raise;` without an exception expression only works *inside* an except handler (re-raise) - outside it raises NIL and produces an Access Violation",
+      "fullDescription": "A bare `raise;` re-raises the exception currently being handled. Outside of `except` / `on E: T do` there *is* no current exception, so the RTL receives a NIL exception pointer and an Access Violation is raised inside `System._Raise` - far away from the actual mistake. The detector recursively walks the method AST while tracking an `InHandler` flag. The flag is set when the walker descends into `nkExceptBlock` or `nkOnHandler`. An `nkRaise` node with `Name = 'raise'` (bare form) that is encountered while the flag is False produces a finding. Bare `raise;` inside `finally` blocks that are themselves outside an except handler is correctly flagged. Maps to Sonar-50 rule #15 (`RaiseWithoutClass`).",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["exception-handling", "crash", "sonar50"],
+      "detectorUnit": "uRaiseOutsideExcept.pas",
+      "examples": {
+        "bad":  "procedure Foo(x: Integer);\nbegin\n  if x < 0 then\n    raise;             // <- no current exception -> AV inside System._Raise\nend;",
+        "good": "procedure Foo(x: Integer);\nbegin\n  if x < 0 then\n    raise EArgumentException.CreateFmt('x = %d (must be >= 0)', [x]);\nend;"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
+    },
+    {
+      "id": "SCA134",
+      "kind": "UseAfterFree",
+      "name": "Variable used after Free / FreeAndNil",
+      "shortDescription": "Dereferencing a variable after `Free` or `FreeAndNil` reads a dangling pointer and produces an Access Violation",
+      "fullDescription": "After `obj.Free` or `FreeAndNil(obj)` the variable points to freed memory (or NIL). Any subsequent member access, indexer, or call passing the variable as receiver is undefined behavior - typically an Access Violation, sometimes silent corruption if the memory was reused. The detector strips strings + comments from the file, finds each `FreeAndNil(<id>)` and `<id>.Free` occurrence, then forward-scans the remaining method body for the same identifier. A subsequent `<id>.<member>`, `<id>(<args>)`, or `<id>[<idx>]` produces a finding. Reassignments `<id> := ...` or var-section starts `<id> :` end the scan window. Bare appearances without an accessor are intentionally not flagged to avoid FP on comparisons like `if x = oldL then`. Maps to Sonar-50 rule #7. Limitation: no control-flow analysis; `if Cond then Free else Use` may FP since the use is on a different path.",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["memory", "lifecycle", "crash", "sonar50"],
+      "detectorUnit": "uUseAfterFree.pas",
+      "examples": {
+        "bad":  "L := TStringList.Create;\nL.Free;\nL.Add('x');           // <- dangling pointer",
+        "good": "L := TStringList.Create;\ntry\n  L.Add('x');\nfinally\n  FreeAndNil(L);     // any subsequent L.Method crashes loudly\nend;"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
+    },
+    {
+      "id": "SCA135",
+      "kind": "AbstractNotImpl",
+      "name": "Concrete subclass inherits an abstract method without override",
+      "shortDescription": "Class derives from a base with an `abstract` method but does not override it - calling the method on the subclass instance raises EAbstractError at runtime",
+      "fullDescription": "When a class inherits an `abstract` method from its parent and does not override it, instantiating the class compiles fine but any call to the method raises `EAbstractError`. The detector walks `nkClass` nodes; for each derived class it looks up the direct parent in the same unit, collects the parent's `abstract`-flagged methods, and reports each abstract method whose name does not appear among the derived class's method names. Limitations: within-unit only (cross-unit bases like `TForm`/`TStrings` are not seen); only direct parent (multi-level chains check just one step); class helpers / interfaces / records are skipped. Classes themselves marked `class abstract` are allowed to leave methods abstract. Maps to Sonar-50 rule #10.",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["oop", "inheritance", "sonar50"],
+      "detectorUnit": "uAbstractNotImpl.pas",
+      "examples": {
+        "bad":  "type\n  TBase = class\n    procedure DoWork; virtual; abstract;\n  end;\n  TDerived = class(TBase)\n    // DoWork not overridden -> EAbstractError on call\n  end;",
+        "good": "type\n  TDerived = class(TBase)\n    procedure DoWork; override;\n  end;"
+      },
+      "cleanCodeAttribute": "COMPLETE",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
+    },
+    {
+      "id": "SCA136",
+      "kind": "LeakInConstructor",
+      "name": "Constructor allocates fields and raises without try/except",
+      "shortDescription": "Constructor assigns fields with `<Class>.Create` and raises later - partially initialised fields leak on the exception path",
+      "fullDescription": "When a constructor allocates instance fields and then raises (or calls something that may raise), the already-allocated fields are not freed. The RTL invokes `Destroy` on the half-constructed instance only if `inherited Create` has already returned, and even then only fields the destructor explicitly frees are released. The detector walks `nkMethod` nodes whose `TypeRef` starts with `constructor` (skipping class constructors via the `;class` marker), then requires (a) at least one `nkAssign` whose LHS is `F<Name>` / `Self.F<Name>` and whose RHS contains a `.Create` call, (b) at least one `nkRaise` anywhere in the body, and (c) no `nkTryExcept` anywhere in the body. The combination strongly suggests a leak on the exception path. Limitations: no flow analysis (raise BEFORE any field-init still flags); a partial try/except is treated as fully protective. Maps to Sonar-50 rule #12.",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["memory", "constructor", "exception-handling", "sonar50"],
+      "detectorUnit": "uLeakInConstructor.pas",
+      "examples": {
+        "bad":  "constructor TFoo.Create;\nbegin\n  FList := TStringList.Create;\n  FOther := TOther.Create;\n  if not Valid then\n    raise EInvalidOp.Create('bad');     // <- FList + FOther leak\nend;",
+        "good": "constructor TFoo.Create;\nbegin\n  FList := TStringList.Create;\n  try\n    FOther := TOther.Create;\n    if not Valid then\n      raise EInvalidOp.Create('bad');\n  except\n    FreeAndNil(FOther);\n    FreeAndNil(FList);\n    raise;\n  end;\nend;"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA137",
+      "kind": "IntegerOverflow",
+      "name": "Int64 target receives product of two 32-bit operands",
+      "shortDescription": "`<Int64-var> := <a> * <b>` evaluates the multiplication in 32-bit before widening - overflow truncates silently",
+      "fullDescription": "Delphi evaluates a binary expression in the type of its operands, not the type of the assignment target. When two `Integer` (32-bit) operands are multiplied and the result is assigned to an `Int64`, the multiplication runs in 32-bit; if the true product exceeds `MaxInt`, the value is silently truncated before being widened. The fix is to cast at least one operand to `Int64`. The detector strips strings + comments, scans the cleaned text for `<ident>: Int64|UInt64|QWord` declarations to build a set of 64-bit variables, then scans for assignments `<lhs> := <a> * <b>;` where the LHS is a 64-bit variable but both RHS operands are simple identifiers (no cast, no parenthesised expression) that are not themselves 64-bit. Numeric literals on either side suppress the finding (the compiler can often constant-fold safely). Limitations: no type inference for non-local operands (parameters, fields); only `*` is checked, not `+`/`-`; complex expressions like `(a + b) * c` are not matched. Maps to Sonar-50 rule #14.",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["arithmetic", "integer-overflow", "sonar50"],
+      "detectorUnit": "uIntegerOverflow.pas",
+      "examples": {
+        "bad":  "var\n  BytesTotal: Int64;\n  SectorCount, SectorSize: Integer;\nbegin\n  BytesTotal := SectorCount * SectorSize;   // <- 32-bit overflow, then widen",
+        "good": "BytesTotal := Int64(SectorCount) * SectorSize;\n// Cast one operand; the other is auto-promoted; multiplication is 64-bit."
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
     }
   ]
 }

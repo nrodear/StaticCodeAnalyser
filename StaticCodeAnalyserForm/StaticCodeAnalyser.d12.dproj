@@ -197,6 +197,7 @@
         <DCCReference Include="sources\Infrastructure\uSuppression.pas"/>
         <DCCReference Include="sources\Infrastructure\uSymbolReferenceIndex.pas"/>
         <DCCReference Include="sources\Infrastructure\uVcsChanges.pas"/>
+        
         <DCCReference Include="sources\Detectors\uAssertMessage.pas"/>
         <DCCReference Include="sources\Detectors\uAssignedAndAssignedNil.pas"/>
         <DCCReference Include="sources\Detectors\uAvoidOut.pas"/>
@@ -252,6 +253,7 @@
         <DCCReference Include="sources\Detectors\uEmptyInterface.pas"/>
         <DCCReference Include="sources\Detectors\uEmptyMethod.pas"/>
         <DCCReference Include="sources\Detectors\uEmptyVisibilitySection.pas"/>
+        <DCCReference Include="sources\Detectors\uExceptionTooGeneral.pas"/>
         <DCCReference Include="sources\Detectors\uExceptOnException.pas"/>
         <DCCReference Include="sources\Detectors\uExplicitTObjectInheritance.pas"/>
         <DCCReference Include="sources\Detectors\uFieldLeak.pas"/>
@@ -267,8 +269,10 @@
         <DCCReference Include="sources\Detectors\uInheritedMethodEmpty.pas"/>
         <DCCReference Include="sources\Detectors\uInlineAssembly.pas"/>
         <DCCReference Include="sources\Detectors\uInstanceInvokedConstructor.pas"/>
+        
         <DCCReference Include="sources\Detectors\uInterfaceName.pas"/>
         <DCCReference Include="sources\Detectors\uLeakDetector2.pas"/>
+        
         <DCCReference Include="sources\Detectors\uLegacyInitializationSection.pas"/>
         <DCCReference Include="sources\Detectors\uLengthUnderflow.pas"/>
         <DCCReference Include="sources\Detectors\uLockWithoutTryFinally.pas"/>
@@ -289,6 +293,7 @@
         <DCCReference Include="sources\Detectors\uPointerName.pas"/>
         <DCCReference Include="sources\Detectors\uPublicField.pas"/>
         <DCCReference Include="sources\Detectors\uPublicMemberWithoutDoc.pas"/>
+        <DCCReference Include="sources\Detectors\uRaiseOutsideExcept.pas"/>
         <DCCReference Include="sources\Detectors\uRaisingRawException.pas"/>
         <DCCReference Include="sources\Detectors\uRedundantBoolean.pas"/>
         <DCCReference Include="sources\Detectors\uRedundantConditional.pas"/>
@@ -313,6 +318,7 @@
         <DCCReference Include="sources\Detectors\uTwiceInheritedCalls.pas"/>
         <DCCReference Include="sources\Detectors\uTypeName.pas"/>
         <DCCReference Include="sources\Detectors\uUnicodeToAnsiCast.pas"/>
+        
         <DCCReference Include="sources\Detectors\uUnitLevelKeywordIndent.pas"/>
         <DCCReference Include="sources\Detectors\uUnusedLocal.pas"/>
         <DCCReference Include="sources\Detectors\uUnusedParameter.pas"/>

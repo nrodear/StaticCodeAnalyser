@@ -13,6 +13,7 @@ type
     [Test] procedure CtorWithoutInherited_Reported;
     [Test] procedure RegularProcedure_NoFinding;
     [Test] procedure CtorForwardDecl_NotReported;
+    [Test] procedure ClassConstructor_NotReported;
     [Test] procedure CtorWithoutInherited_KindAndSeverity;
   end;
 
@@ -84,6 +85,34 @@ const SRC =
   'begin'#13#10 +
   '  inherited;'#13#10 +
   '  FX := 0;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkConstructorWithoutInherited));
+  finally F.Free; end;
+end;
+
+procedure TTestConstructorWithoutInherited.ClassConstructor_NotReported;
+// Spiegelt den realen FP aus uLexer.pas: class constructor laeuft einmal
+// pro Klasse beim Modul-Initialize und hat KEINE inheritance chain -
+// `inherited` ist hier nicht erwuenscht.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    class constructor Create;'#13#10 +
+  '    class destructor Destroy;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'class constructor TFoo.Create;'#13#10 +
+  'begin'#13#10 +
+  '  InitKeywords;'#13#10 +
+  'end;'#13#10 +
+  'class destructor TFoo.Destroy;'#13#10 +
+  'begin'#13#10 +
+  '  FreeAndNil(FStaticThing);'#13#10 +
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin

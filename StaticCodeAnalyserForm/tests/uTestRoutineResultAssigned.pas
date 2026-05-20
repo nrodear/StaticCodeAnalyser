@@ -23,6 +23,11 @@ type
     [Test] procedure Procedure_NoFinding;
     [Test] procedure AbstractFunction_NoFinding;
     [Test] procedure ForwardFunction_NoFinding;
+    [Test] procedure InterfaceMethodDecl_NoFinding;
+    [Test] procedure ClassMethodDecl_NoFinding;
+    [Test] procedure RecordResult_FieldAssign_NoFinding;
+    [Test] procedure ArrayResult_IndexAssign_NoFinding;
+    [Test] procedure FnNameDotField_NoFinding;
 
     // ---- Finding-Inhalt ----------------------------------------------------
     [Test] procedure Finding_KindAndSeverity;
@@ -146,6 +151,100 @@ const SRC =
   'function Foo: Integer; forward;'#13#10 +
   'function Foo: Integer;'#13#10 +
   'begin Result := 1; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkRoutineResultUnassigned));
+  finally F.Free; end;
+end;
+
+procedure TTestRoutineResultAssigned.InterfaceMethodDecl_NoFinding;
+// Interface-Methoden haben keinen Body - die Implementierung kommt in
+// der implementierenden Klasse. Frueher FP, jetzt durch HasBodyStatement
+// abgefangen.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  IFoo = interface'#13#10 +
+  '    function GetServiceNameSuffix: string;'#13#10 +
+  '    function GetCount: Integer;'#13#10 +
+  '    procedure SetActive(Value: Boolean);'#13#10 +
+  '  end;'#13#10 +
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkRoutineResultUnassigned));
+  finally F.Free; end;
+end;
+
+procedure TTestRoutineResultAssigned.ClassMethodDecl_NoFinding;
+// Klassen-Method-Deklarationen im Typ-Section haben auch keinen Body -
+// derselbe Mechanismus.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    function Compute(x: Integer): Integer;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'function TFoo.Compute(x: Integer): Integer;'#13#10 +
+  'begin Result := x * 2; end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkRoutineResultUnassigned));
+  finally F.Free; end;
+end;
+
+procedure TTestRoutineResultAssigned.RecordResult_FieldAssign_NoFinding;
+// Spiegelt den realen FP aus uLexer.MakeTok: Function liefert Record und
+// weist Result feldweise zu. Frueher als "kein Result-Assign" geflaggt.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type TToken = record Kind: Integer; Value: string; end;'#13#10 +
+  'function MakeTok(K: Integer; const V: string): TToken;'#13#10 +
+  'implementation'#13#10 +
+  'function MakeTok(K: Integer; const V: string): TToken;'#13#10 +
+  'begin'#13#10 +
+  '  Result.Kind  := K;'#13#10 +
+  '  Result.Value := V;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkRoutineResultUnassigned));
+  finally F.Free; end;
+end;
+
+procedure TTestRoutineResultAssigned.ArrayResult_IndexAssign_NoFinding;
+// Array-Return: Result[i] := X.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function BuildArray: TArray<Integer>;'#13#10 +
+  'begin'#13#10 +
+  '  SetLength(Result, 3);'#13#10 +
+  '  Result[0] := 1;'#13#10 +
+  '  Result[1] := 2;'#13#10 +
+  '  Result[2] := 3;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkRoutineResultUnassigned));
+  finally F.Free; end;
+end;
+
+procedure TTestRoutineResultAssigned.FnNameDotField_NoFinding;
+// Klassischer Pascal-Stil: <FnName>.Field := X statt Result.Field := X.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function MakeTok: TToken;'#13#10 +
+  'begin'#13#10 +
+  '  MakeTok.Kind  := 1;'#13#10 +
+  '  MakeTok.Value := ''hi'';'#13#10 +
+  'end;';
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);

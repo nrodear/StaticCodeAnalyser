@@ -226,6 +226,7 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uYamlSubsetParser.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uRuleCatalog.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uQuickFix.pas"/>
+        
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uAssertMessage.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uAssignedAndAssignedNil.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uAvoidOut.pas"/>
@@ -281,6 +282,7 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyInterface.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyMethod.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyVisibilitySection.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uExceptionTooGeneral.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uExceptOnException.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uExplicitTObjectInheritance.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uFieldLeak.pas"/>
@@ -296,8 +298,10 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uInheritedMethodEmpty.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uInlineAssembly.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uInstanceInvokedConstructor.pas"/>
+        
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uInterfaceName.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLeakDetector2.pas"/>
+        
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLegacyInitializationSection.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLengthUnderflow.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLockWithoutTryFinally.pas"/>
@@ -318,6 +322,7 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uPointerName.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uPublicField.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uPublicMemberWithoutDoc.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uRaiseOutsideExcept.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uRaisingRawException.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uRedundantBoolean.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uRedundantConditional.pas"/>
@@ -342,6 +347,7 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTwiceInheritedCalls.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTypeName.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnicodeToAnsiCast.pas"/>
+        
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnitLevelKeywordIndent.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnusedLocal.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnusedParameter.pas"/>

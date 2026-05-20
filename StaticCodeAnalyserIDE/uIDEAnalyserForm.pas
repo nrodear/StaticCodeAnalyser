@@ -730,6 +730,11 @@ begin
   FFilterCombo.Items.AddObject(_('Result Unassigned'),           TObject(Ord(fmRoutineResultUnassigned)));
   FFilterCombo.Items.AddObject(_('Instance-Invoked Constructor'),TObject(Ord(fmInstanceInvokedConstructor)));
   FFilterCombo.Items.AddObject(_('Char -> PChar Cast'),          TObject(Ord(fmCharToCharPointerCast)));
+  FFilterCombo.Items.AddObject(_('Raise outside except'),        TObject(Ord(fmRaiseOutsideExcept)));
+  FFilterCombo.Items.AddObject(_('Use After Free'),              TObject(Ord(fmUseAfterFree)));
+  FFilterCombo.Items.AddObject(_('Abstract method not implemented'), TObject(Ord(fmAbstractNotImpl)));
+  FFilterCombo.Items.AddObject(_('Leak in constructor'),         TObject(Ord(fmLeakInConstructor)));
+  FFilterCombo.Items.AddObject(_('Integer overflow (Int64 mul)'),TObject(Ord(fmIntegerOverflow)));
 
   FFilterCombo.Items.AddObject(_('--- Warnings ---'),       TObject(-1));
   FFilterCombo.Items.AddObject(_('Empty Except'),           TObject(Ord(fmEmptyExcept)));
@@ -744,6 +749,7 @@ begin
   FFilterCombo.Items.AddObject(_('Date Format Settings'),   TObject(Ord(fmDateFormatSettings)));
   FFilterCombo.Items.AddObject(_('Unicode -> Ansi Cast'),   TObject(Ord(fmUnicodeToAnsiCast)));
   FFilterCombo.Items.AddObject(_('IfThen Short-Circuit'),   TObject(Ord(fmIfThenShortCircuit)));
+  FFilterCombo.Items.AddObject(_('Exception Too General'),  TObject(Ord(fmExceptionTooGeneral)));
 
   FFilterCombo.Items.AddObject(_('--- Hints ---'),          TObject(-1));
   FFilterCombo.Items.AddObject(_('Long Method'),            TObject(Ord(fmLongMethod)));

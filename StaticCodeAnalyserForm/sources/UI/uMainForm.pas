@@ -233,6 +233,13 @@ begin
   SeverityFilterCombo.Items.AddObject(_('Unicode -> Ansi Cast'),         TObject(Ord(fmUnicodeToAnsiCast)));
   SeverityFilterCombo.Items.AddObject(_('Char -> PChar Cast'),           TObject(Ord(fmCharToCharPointerCast)));
   SeverityFilterCombo.Items.AddObject(_('IfThen Short-Circuit'),         TObject(Ord(fmIfThenShortCircuit)));
+  // Sonar-50 Critical (SCA132-137)
+  SeverityFilterCombo.Items.AddObject(_('Exception Too General'),        TObject(Ord(fmExceptionTooGeneral)));
+  SeverityFilterCombo.Items.AddObject(_('Raise outside except'),         TObject(Ord(fmRaiseOutsideExcept)));
+  SeverityFilterCombo.Items.AddObject(_('Use After Free'),               TObject(Ord(fmUseAfterFree)));
+  SeverityFilterCombo.Items.AddObject(_('Abstract method not implemented'), TObject(Ord(fmAbstractNotImpl)));
+  SeverityFilterCombo.Items.AddObject(_('Leak in constructor'),          TObject(Ord(fmLeakInConstructor)));
+  SeverityFilterCombo.Items.AddObject(_('Integer overflow (Int64 mul)'), TObject(Ord(fmIntegerOverflow)));
   SeverityFilterCombo.ItemIndex := 0;
 
   TypeFilterCombo.Items.Add(_('All'));

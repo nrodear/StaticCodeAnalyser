@@ -44,16 +44,54 @@ begin
 end;
 
 // Normalisiert eine Side-Expression: trim + whitespace collapse + lowercase.
+// WICHTIG: String-Literal-Inhalte werden CASE-PRESERVING durchgereicht -
+// `'F'` bleibt `'F'`, nicht `'f'`. Sonst flaggt ein idiomatic case-check
+// wie `(c = 'A') or (c = 'a')` faelschlich als Tautologie. Pascal-Escape
+// `''` (verdoppeltes Apostroph) bleibt im String-State.
 function Norm(const S: string): string;
 var
-  i : Integer;
+  i, n   : Integer;
   PrevWs : Boolean;
+  InStr  : Boolean;
+  C      : Char;
 begin
   Result := '';
   PrevWs := True;
-  for i := 1 to Length(S) do
+  InStr  := False;
+  n      := Length(S);
+  i      := 1;
+  while i <= n do
   begin
-    var C := S[i];
+    C := S[i];
+    if InStr then
+    begin
+      Result := Result + C;
+      PrevWs := False;
+      if C = '''' then
+      begin
+        if (i < n) and (S[i + 1] = '''') then
+        begin
+          // Pascal-Escape `''` innerhalb eines Strings -> beides emittieren,
+          // im String-State bleiben.
+          Result := Result + '''';
+          Inc(i, 2);
+          Continue;
+        end;
+        // Schliessendes Apostroph - String-State verlassen.
+        InStr := False;
+      end;
+      Inc(i);
+      Continue;
+    end;
+    // Ausserhalb eines String-Literals.
+    if C = '''' then
+    begin
+      Result := Result + C;
+      InStr  := True;
+      PrevWs := False;
+      Inc(i);
+      Continue;
+    end;
     if CharInSet(C, [' ', #9]) then
     begin
       if not PrevWs then Result := Result + ' ';
@@ -64,6 +102,7 @@ begin
       Result := Result + LowerCase(C);
       PrevWs := False;
     end;
+    Inc(i);
   end;
   Result := Trim(Result);
 end;

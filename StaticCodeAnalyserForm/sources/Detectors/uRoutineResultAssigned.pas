@@ -92,6 +92,27 @@ begin
             (Pos(';dispid',    Low) > 0);
 end;
 
+// True wenn die Methode mindestens eine Statement-Art im Body hat.
+// Interface-Methoden-Deklarationen + Class-Method-Deklarationen im
+// Typ-Section haben KEINEN Body - nur evtl. nkParam-Children. Ohne
+// diesen Filter feuert der Detektor auf jede einzelne Interface-
+// Methode (Result wird ja nirgends zugewiesen - logisch, der Body
+// kommt erst in der implementierenden Klasse).
+function HasBodyStatement(N: TAstNode): Boolean;
+const
+  BODY_KINDS = [nkAssign, nkCall, nkIfStmt, nkCaseStmt, nkForStmt,
+                nkWhileStmt, nkRepeatStmt, nkTryExcept, nkTryFinally,
+                nkRaise, nkExit, nkBreak, nkContinue, nkInherited,
+                nkLocalVar];
+var
+  Child : TAstNode;
+begin
+  if N.Kind in BODY_KINDS then Exit(True);
+  for Child in N.Children do
+    if HasBodyStatement(Child) then Exit(True);
+  Result := False;
+end;
+
 // Letztes Segment eines qualifizierten Methodennamens.
 // 'TFoo.Bar' -> 'Bar'; 'Bar' -> 'Bar'; 'TFoo<T>.Bar' -> 'Bar'.
 function UnqualifiedName(const MethName: string): string;
@@ -122,6 +143,39 @@ begin
   end;
 end;
 
+// True wenn LhsLow eine Result-Zuweisung repraesentiert.
+// Akzeptierte Formen (alle case-insensitive nach NormalizeLhs):
+//   Result            - skalar
+//   Result.Field      - Record / Object
+//   Result[i]         - Array / Dynarray / String-Index
+//   Result^           - Pointer-Deref (rare)
+// Analog fuer den klassischen Pascal-Stil ueber den Function-Namen
+//   <FnName>          - skalar
+//   <FnName>.Field    - Record / Object
+//   <FnName>[i]       - Array
+// FnNameLow muss bereits unqualifiziert + lowercased sein.
+function IsResultLhs(const LhsLow, FnNameLow: string): Boolean;
+
+  function IsHeadOrAccess(const Head: string): Boolean;
+  begin
+    if Head = '' then Exit(False);
+    if LhsLow = Head then Exit(True);
+    if Length(LhsLow) <= Length(Head) then Exit(False);
+    if Copy(LhsLow, 1, Length(Head)) <> Head then Exit(False);
+    // Erstes Zeichen NACH Head muss ein Accessor sein - sonst waere es
+    // ein anderer Identifier der zufaellig dasselbe Prefix hat
+    // (z.B. 'resultcache' vs 'result').
+    case LhsLow[Length(Head) + 1] of
+      '.', '[', '^': Result := True;
+    else
+      Result := False;
+    end;
+  end;
+
+begin
+  Result := IsHeadOrAccess('result') or IsHeadOrAccess(FnNameLow);
+end;
+
 class procedure TRoutineResultAssignedDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -138,6 +192,9 @@ begin
   TypeRef := MethodNode.TypeRef;
   if not IsFunctionMethod(TypeRef) then Exit;     // procedure -> skip
   if IsBodyless(TypeRef) then Exit;               // abstract/forward/external
+  // Interface-Method-Deklaration / Klassen-Method-Deklaration im Typ-Section
+  // -> kein Body, Implementation kommt anderswo. Nicht flaggen.
+  if not HasBodyStatement(MethodNode) then Exit;
 
   // Body-Inhalt: jedes Exit oder Raise reicht als Skip-Grund.
   Exits := MethodNode.FindAll(nkExit);
@@ -163,7 +220,7 @@ begin
     for N in Assigns do
     begin
       LhsLow := NormalizeLhs(N.Name);
-      if (LhsLow = 'result') or (LhsLow = FnNameLow) then
+      if IsResultLhs(LhsLow, FnNameLow) then
       begin
         HasResult := True;
         Break;

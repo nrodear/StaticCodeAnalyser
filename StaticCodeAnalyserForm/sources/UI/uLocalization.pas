@@ -402,6 +402,27 @@ begin
   GDeMap.Add('Unicode -> Ansi Cast',         'Unicode '#$2192' Ansi Cast');
   GDeMap.Add('Char -> PChar Cast',           'Char '#$2192' PChar Cast');
   GDeMap.Add('IfThen Short-Circuit',         'IfThen ohne Short-Circuit');
+  // Sonar-50 Critical (SCA132-133) - Filter-Combo-Labels
+  GDeMap.Add('Exception Too General',        'Zu allgemeine Exception');
+  GDeMap.Add('Raise outside except',         'Raise au'#$DF'erhalb except');
+  GDeMap.Add('except on E: Exception catches every error - prefer a specific subclass',
+             '`except on E: Exception` f'#$E4'ngt alles - lieber spezifische Subklasse benutzen');
+  GDeMap.Add('Bare raise; outside an except/on handler raises NIL - Access Violation',
+             'Nacktes `raise;` au'#$DF'erhalb eines except/on-Handlers wirft NIL - Access Violation');
+  // Sonar-50 Critical (SCA134-137) - Filter-Combo-Labels
+  GDeMap.Add('Use After Free',                       'Zugriff nach Free');
+  GDeMap.Add('Abstract method not implemented',      'Abstrakte Methode nicht implementiert');
+  GDeMap.Add('Leak in constructor',                  'Leak im Konstruktor');
+  GDeMap.Add('Integer overflow (Int64 mul)',         'Integer-'#$DC'berlauf (Int64-Multiplikation)');
+  // Sonar-50 Critical (SCA134-137) - FixHint-Descriptions
+  GDeMap.Add('Variable used after Free / FreeAndNil - dangling pointer, AV likely',
+             'Variable nach Free / FreeAndNil verwendet - dangling pointer, AV wahrscheinlich');
+  GDeMap.Add('Class inherits an abstract method but does not override it - EAbstractError',
+             'Klasse erbt eine abstrakte Methode ohne sie zu '#$FC'berschreiben - EAbstractError zur Laufzeit');
+  GDeMap.Add('Constructor allocates fields and raises - partially-initialized fields leak',
+             'Konstruktor erzeugt Felder und raised - teil-initialisierte Felder leaken auf dem Exception-Pfad');
+  GDeMap.Add('Int64 target gets product of two ints - multiplication overflows in 32-bit',
+             'Int64-Ziel bekommt Produkt zweier Int32 - Multiplikation '#$FC'berl'#$E4'uft in 32-Bit');
   // Tools > Options - Hotkeys-Gruppe
   GDeMap.Add('Hotkeys',                      'Tastenk'#$FC'rzel');
   GDeMap.Add('Enable finding navigation (Ctrl+Alt+Up / Ctrl+Alt+Down)',

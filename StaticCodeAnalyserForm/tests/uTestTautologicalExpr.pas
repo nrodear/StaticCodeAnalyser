@@ -28,6 +28,8 @@ type
     [Test] procedure InComment_NotDetected;
     [Test] procedure TwoCallsWithDifferentStringArgs_NoFinding;
     [Test] procedure TwoCallsWithIdenticalStringArgs_Reported;
+    [Test] procedure CaseSensitiveCharLiterals_NoFinding;
+    [Test] procedure CaseSensitiveStringLiterals_NoFinding;
 
     // ---- Finding-Inhalt ---------------------------------------------------
     [Test] procedure Taut_Finding_KindAndSeverity;
@@ -193,6 +195,39 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkTautologicalBoolExpr) >= 1);
+  finally F.Free; end;
+end;
+
+procedure TTestTautologicalExpr.CaseSensitiveCharLiterals_NoFinding;
+// Spiegelt den realen FP aus uFieldName.pas: idiomatic case-insensitive
+// char-check, beide Literale unterscheiden sich nur im Case. Frueher hat
+// Norm() alles lowercased - inklusive String-Literal-Inhalt - und damit
+// 'F' und 'f' falsch als identisch behandelt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(FirstChar: Char);'#13#10 +
+  'begin'#13#10 +
+  '  if (FirstChar = ''F'') or (FirstChar = ''f'') then Exit;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkTautologicalBoolExpr));
+  finally F.Free; end;
+end;
+
+procedure TTestTautologicalExpr.CaseSensitiveStringLiterals_NoFinding;
+// Gleicher Bug, aber mit mehrzeichigem String-Literal.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(s: string);'#13#10 +
+  'begin'#13#10 +
+  '  if (s = ''Yes'') or (s = ''YES'') then Exit;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkTautologicalBoolExpr));
   finally F.Free; end;
 end;
 

@@ -413,10 +413,31 @@ type
                                  // reinterpretiert (Codepoint = Adresse) ->
                                  // undefined behavior. SonarDelphi-Pendant:
                                  // CharacterToCharacterPointerCastCheck.
-    fkIfThenShortCircuit         // Math.IfThen / StrUtils.IfThen - beide
+    fkIfThenShortCircuit,        // Math.IfThen / StrUtils.IfThen - beide
                                  // Aerme werden immer evaluiert, kein
                                  // Short-Circuit wie bei if/then/else.
                                  // SonarDelphi-Pendant: IfThenShortCircuitCheck.
+    fkExceptionTooGeneral,       // SCA132 - `except on E: Exception do`
+                                 // statt spezifischer Exception-Subklasse.
+                                 // Sonar-50 #11.
+    fkRaiseOutsideExcept,        // SCA133 - nacktes `raise;` ausserhalb
+                                 // eines except-/on-Handlers loest eine
+                                 // Access Violation aus. Sonar-50 #15.
+    fkUseAfterFree,              // SCA134 - Zugriff auf eine Variable nach
+                                 // .Free / FreeAndNil ohne Reassignment.
+                                 // Sonar-50 #7.
+    fkAbstractNotImpl,           // SCA135 - konkrete Subklasse erbt
+                                 // abstrakte Methode, ueberschreibt sie
+                                 // aber nicht. Within-unit only.
+                                 // Sonar-50 #10.
+    fkLeakInConstructor,         // SCA136 - Constructor weist Felder zu
+                                 // UND raised - bei raise nach partieller
+                                 // Init leaken die schon erzeugten Felder.
+                                 // Sonar-50 #12.
+    fkIntegerOverflow            // SCA137 - Int64-Ziel-Variable bekommt
+                                 // Product zweier Operanden ohne Int64-
+                                 // Cast - Multiplikation overflow'ed
+                                 // in 32-Bit. Sonar-50 #14.
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -596,7 +617,13 @@ const
     (Name: 'DateFormatSettings';         FindingType: ftBug;          DefaultSeverity: lsWarning), // fkDateFormatSettings
     (Name: 'UnicodeToAnsiCast';          FindingType: ftBug;          DefaultSeverity: lsWarning), // fkUnicodeToAnsiCast
     (Name: 'CharToCharPointerCast';      FindingType: ftBug;          DefaultSeverity: lsError),   // fkCharToCharPointerCast
-    (Name: 'IfThenShortCircuit';         FindingType: ftBug;          DefaultSeverity: lsWarning)  // fkIfThenShortCircuit
+    (Name: 'IfThenShortCircuit';         FindingType: ftBug;          DefaultSeverity: lsWarning), // fkIfThenShortCircuit
+    (Name: 'ExceptionTooGeneral';        FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkExceptionTooGeneral
+    (Name: 'RaiseOutsideExcept';         FindingType: ftBug;          DefaultSeverity: lsError),   // fkRaiseOutsideExcept
+    (Name: 'UseAfterFree';               FindingType: ftBug;          DefaultSeverity: lsError),   // fkUseAfterFree
+    (Name: 'AbstractNotImpl';            FindingType: ftBug;          DefaultSeverity: lsError),   // fkAbstractNotImpl
+    (Name: 'LeakInConstructor';          FindingType: ftBug;          DefaultSeverity: lsError),   // fkLeakInConstructor
+    (Name: 'IntegerOverflow';            FindingType: ftBug;          DefaultSeverity: lsError)    // fkIntegerOverflow
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

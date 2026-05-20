@@ -6,13 +6,18 @@ Orientiert sich am Sonar-50er-Katalog plus eigene Bonus-Detektoren.
 
 Status: ✅ implementiert | 🟡 teilweise | 🔲 offen
 
-**Zusammenfassung:** 17 / 50 vollständig + 1 teilweise + 3 Bonus + **20 DFM-Detektoren** = **insgesamt 41 aktive Detektoren**.
+**Zusammenfassung:** 17 / 50 Sonar-Regel-Slots vollständig + 1 teilweise + 3 Bonus + **22 DFM-Detektoren** + **12 SonarDelphi-Migration** (SCA120-131) + ~60 SonarDelphi-kompatible Naming-/Formatting-Checks (SCA060-119) = **insgesamt ~120 aktive Detektoren**.
 
 Die 21 Pascal-AST-Detektoren unten folgen der Sonar-50-Taxonomie.
-Die **20 DFM-Detektoren** am Ende dieser Datei sind formdatei-
+Die **22 DFM-Detektoren** in eigenem Abschnitt sind formdatei-
 spezifisch und gehören nicht in den Sonar-Katalog — sie arbeiten
 auf dem DFM-Lexer + Parser + Komponentengraph (sowie FormBinder
-für die Pascal-AST-Kopplung), eingeführt mit v0.10.0.
+für die Pascal-AST-Kopplung), eingeführt mit v0.10.0. Das
+**SonarDelphi-Migration-Cluster (SCA120-131)** unten deckt Delphi-
+spezifische Korrektheits-Checks ab, die SonarDelphi liefert und die
+wir portiert haben. Die ~60 SCA060-119 Naming-/Formatting-Checks
+sind hier noch nicht enumeriert — siehe [`rules/sca-rules.json`](rules/sca-rules.json)
+für die kanonische Liste.
 
 🇬🇧 [English version](DETECTORS.md)
 
@@ -35,15 +40,15 @@ für die Pascal-AST-Kopplung), eingeführt mit v0.10.0.
 | # | Regel | Beschreibung | Status | Unit |
 |---|-------|-------------|--------|------|
 | 6 | **DivByZero: Division durch 0 möglich** | Integer-Division oder Modulo, bei der der Divisor 0 sein kann (keine Vorabprüfung) | ✅ | `uDivByZero` |
-| 7 | **UseAfterFree: Objekt nach Free genutzt** | Variable wird nach `Free`/`FreeAndNil` ohne erneute Zuweisung weiterverwendet | 🔲 | |
+| 7 | **UseAfterFree: Objekt nach Free genutzt** | Variable wird nach `Free`/`FreeAndNil` ohne erneute Zuweisung weiterverwendet | ✅ | `uUseAfterFree` |
 | 8 | **MissingFinally: Ressource ohne try/finally** | Objekt erstellt, Methode enthält try/except aber kein try/finally für Cleanup | ✅ | `uMissingFinally` |
 | 9 | **FormatMismatch: Falsche Arg-Anzahl in Format()** | Anzahl der `%s`/`%d`-Platzhalter im Format-String stimmt nicht mit Argumentliste überein | ✅ | `uFormatMismatch` |
-| 10 | **AbstractNotImpl: Abstrakte Methode nicht implementiert** | Konkrete Klasse erbt von abstrakter Basis, implementiert aber nicht alle `abstract`-Methoden | 🔲 | |
-| 11 | **ExceptionTooGeneral: Zu allgemeiner Exception-Typ** | `except on E: Exception` statt spezifischem Typ – verdeckt unerwartete Fehler | 🔲 | |
-| 12 | **LeakInConstructor: Exception im Konstruktor ohne Cleanup** | Konstruktor kann nach partieller Objektinitialisierung eine Exception werfen ohne `Free` | 🔲 | |
+| 10 | **AbstractNotImpl: Abstrakte Methode nicht implementiert** | Konkrete Klasse erbt von abstrakter Basis, implementiert aber nicht alle `abstract`-Methoden | ✅ | `uAbstractNotImpl` (nur within-unit) |
+| 11 | **ExceptionTooGeneral: Zu allgemeiner Exception-Typ** | `except on E: Exception` statt spezifischem Typ – verdeckt unerwartete Fehler | ✅ | `uExceptionTooGeneral` |
+| 12 | **LeakInConstructor: Exception im Konstruktor ohne Cleanup** | Konstruktor kann nach partieller Objektinitialisierung eine Exception werfen ohne `Free` | ✅ | `uLeakInConstructor` |
 | 13 | **MissingDestructor: Destruktor fehlt / Feld nicht freigegeben** | Klasse mit Objekt-Feldern: kein Destruktor oder Feld nicht in `Destroy` freigegeben | ✅ | `uFieldLeak` |
-| 14 | **IntegerOverflow: Überlauf bei Arithmetik** | Multiplikation oder Potenz mit `Integer`/`Word` ohne vorherige Bereichsprüfung | 🔲 | |
-| 15 | **RaiseWithoutClass: `raise` ohne Exception-Objekt** | Nacktes `raise` außerhalb eines `except`-Blocks – löst Access Violation aus | 🔲 | |
+| 14 | **IntegerOverflow: Überlauf bei Arithmetik** | Multiplikation oder Potenz mit `Integer`/`Word` ohne vorherige Bereichsprüfung | ✅ | `uIntegerOverflow` (nur Int64-Ziel) |
+| 15 | **RaiseWithoutClass: `raise` ohne Exception-Objekt** | Nacktes `raise` außerhalb eines `except`-Blocks – löst Access Violation aus | ✅ | `uRaiseOutsideExcept` |
 
 ---
 
@@ -123,18 +128,26 @@ für die Pascal-AST-Kopplung), eingeführt mit v0.10.0.
 ## Implementierungsstand
 
 ```
-✅ Vollständig:  17  (#1, #2, #3, #4, #5, #6, #8, #9, #13, #17,
-                     #26, #27, #29, #32, #38, #40, #41)
-🟡 Teilweise:     1  (#30 - nur Strings statt Code-Blöcke)
-🎁 Bonus:         3  (HardcodedPath, DebugOutput, DuplicateString)
-🔲 Offen:        32
+Sonar-50-Katalog
+  ✅ Vollständig:  23  (#1, #2, #3, #4, #5, #6, #7, #8, #9, #10,
+                       #11, #12, #13, #14, #15, #17, #26, #27, #29,
+                       #32, #38, #40, #41)
+                     Critical (#6-#15) komplett; #7/#10/#12/#14
+                     nutzen heuristische AST-/lexikalische Patterns
+                     mit dokumentierten Limitierungen (siehe Unit-
+                     Header der Detektoren).
+  🟡 Teilweise:     1  (#30 - nur Strings statt Code-Blöcke)
+  🎁 Bonus:         3  (HardcodedPath, DebugOutput, DuplicateString)
+  🔲 Offen:        26
 
-→ 21 von 50 Sonar-Regeln als Pascal-AST-Detektor-Code vorhanden,
-  davon 18 vollständig.
+  → 27 von 50 Sonar-Regeln als Pascal-AST-Detektor-Code vorhanden,
+    davon 24 vollständig.
 
-📐 DFM-Detektoren: 20 (alle vollständig) — siehe Abschnitt unten.
+📐 DFM-Detektoren:                  22 (alle vollständig)
+🛡 SonarDelphi-Migration:           12 (SCA120-131, alle vollständig)
+🧩 SonarDelphi Naming/Formatting:  ~60 (SCA060-119, siehe sca-rules.json)
 
-🎯 Gesamt: 41 aktive Detektoren.
+🎯 Gesamt: ~120 aktive Detektoren.
 ```
 
 ---
@@ -196,6 +209,32 @@ Fix-Hints im Hilfe-Panel und haben DUnitX-Tests.
 | D18 | **DfmDefaultName** | Komponente hat noch ihren Default-Namen (`Button1`, `Edit2`, …) | Code Smell | `uDfmDefaultName` |
 | D19 | **DfmHardcodedCaption** | UI-sichtbarer String (`Caption`, `Hint`, `Text`, …) als Literal im DFM statt via `resourcestring` / dxgettext | Code Smell | `uDfmHardcodedCaption` |
 | D20 | **DfmHardcodedDbCreds — Param-Variante** | _(siehe D8 — selbe Unit, separate Finding-Kind für Param-Values vs. ConnectionString)_ | Vulnerability | `uDfmHardcodedDbCreds` |
+
+---
+
+## 🛡 SonarDelphi-Migration-Cluster — Delphi-spezifische Korrektheit (SCA120-131)
+
+Zwölf Checks aus dem SonarDelphi-Regelsatz portiert. Sie decken
+Delphi-spezifische Korrektheitslücken ab, die in der generischen
+Sonar-50-Taxonomie nicht abgebildet sind: Exception-/Raise-Hygiene,
+Function-Result-Disziplin, Typ-Cast-Fallen bei Free / Char / Unicode
+sowie locale-abhängige Format-Aufrufe. Alle bringen Vorher/Nachher-
+Fix-Hints im Hilfe-Panel und eine DUnitX-Test-Fixture mit.
+
+| ID | Regel | Beschreibung | Schweregrad | Typ | Unit |
+|----|-------|--------------|-------------|-----|------|
+| SCA120 | **MissingRaise** | `EFoo.Create('msg');` erzeugt ein Exception-Objekt ohne `raise` — der Fehlerpfad wird stillschweigend übersprungen | Error | Bug | `uMissingRaise` |
+| SCA121 | **RoutineResultUnassigned** | Function-Body endet ohne `Result`-Zuweisung (oder `<FunctionName> := ...`) — Rückgabewert undefiniert | Error | Bug | `uRoutineResultAssigned` |
+| SCA122 | **ReRaiseException** | `on E: T do ... raise E;` verwirft den Original-Stack-Trace — `raise;` ohne Argument behält ihn | Warning | Bug | `uReRaiseException` |
+| SCA123 | **CastAndFree** | `TFoo(x).Free` — der Typ-Cast hat keinen Effekt auf welches `Destroy` läuft (`Destroy` ist virtual) | Hint | Code Smell | `uCastAndFree` |
+| SCA124 | **InstanceInvokedConstructor** | `obj.Create` — Constructor wird als Methode auf bestehender Instanz aufgerufen, keine Allokation, Felder werden über Live-Daten neu initialisiert | Error | Bug | `uInstanceInvokedConstructor` |
+| SCA125 | **InheritedMethodEmpty** | Override, dessen kompletter Rumpf nur `inherited;` ist — bringt keinen Mehrwert, entfernen | Hint | Code Smell | `uInheritedMethodEmpty` |
+| SCA126 | **NilComparison** | `Assigned(x)` / `not Assigned(x)` statt `x = nil` / `x <> nil` — Pascal-Konvention | Hint | Code Smell | `uNilComparison` |
+| SCA127 | **RaisingRawException** | `raise Exception.Create('...')` — die Basisklasse trägt keine Semantik, Aufrufer können nicht selektiv filtern | Warning | Code Smell | `uRaisingRawException` |
+| SCA128 | **DateFormatSettings** | `StrToDate(s)`, `FormatFloat(...)` etc. ohne TFormatSettings hängen vom System-Locale ab — bricht über Maschinen / User hinweg | Warning | Bug | `uDateFormatSettings` |
+| SCA129 | **UnicodeToAnsiCast** | `AnsiString(s)` / `UTF8String(s)` / `RawByteString(s)` verliert stillschweigend Zeichen außerhalb der aktiven Codepage | Warning | Bug | `uUnicodeToAnsiCast` |
+| SCA130 | **CharToCharPointerCast** | `PChar('A')` ist nicht `PChar("A")` — der Cast interpretiert den 16-Bit-Codepoint als rohe Speicheradresse | Error | Bug | `uCharToCharPointerCast` |
+| SCA131 | **IfThenShortCircuit** | `Math.IfThen` / `StrUtils.IfThen` evaluiert beide Arme — kein Short-Circuit, stattdessen `if/then/else` benutzen | Warning | Bug | `uIfThenShortCircuit` |
 
 ---
 

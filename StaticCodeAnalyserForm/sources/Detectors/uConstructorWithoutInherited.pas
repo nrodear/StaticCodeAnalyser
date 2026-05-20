@@ -37,8 +37,17 @@ const
   EMIT_SEVERITY = lsWarning;
 
 function IsConstructor(MethodNode: TAstNode): Boolean; inline;
+var
+  TR : string;
 begin
-  Result := LowerCase(Trim(MethodNode.TypeRef)).StartsWith('constructor');
+  TR := LowerCase(Trim(MethodNode.TypeRef));
+  // `class constructor` ist ein Klassen-Initialisierungs-Mechanismus (laeuft
+  // einmal pro Klasse beim Modul-Initialize) - hat KEINE inheritance chain
+  // und braucht daher KEIN `inherited`. Parser markiert die mit ';class'-
+  // Suffix im TypeRef (sowohl in der Class-Body- als auch in der
+  // Implementation-Section). Skip wenn dieser Marker vorhanden.
+  if Pos(';class', TR) > 0 then Exit(False);
+  Result := TR.StartsWith('constructor');
 end;
 
 // Liefert den Body-Block (nkBlock) oder nil wenn die Methode nur eine

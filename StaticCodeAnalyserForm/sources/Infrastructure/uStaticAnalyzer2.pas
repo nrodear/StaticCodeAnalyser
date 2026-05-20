@@ -89,7 +89,9 @@ uses
   uRoutineResultAssigned, uReRaiseException, uCastAndFree, uMissingRaise,
   uInstanceInvokedConstructor, uInheritedMethodEmpty, uNilComparison,
   uRaisingRawException, uDateFormatSettings, uUnicodeToAnsiCast,
-  uCharToCharPointerCast, uIfThenShortCircuit;
+  uCharToCharPointerCast, uIfThenShortCircuit,
+  uExceptionTooGeneral, uRaiseOutsideExcept,
+  uUseAfterFree, uAbstractNotImpl, uLeakInConstructor, uIntegerOverflow;
 
 type
   // Run-Methode pro Detektor: einheitliche Signatur, damit alle in einem
@@ -221,6 +223,12 @@ begin
   Add('UnicodeToAnsiCast', fkUnicodeToAnsiCast, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUnicodeToAnsiCastDetector.AnalyzeUnit(R, F, L); end);
   Add('CharToCharPointerCast', fkCharToCharPointerCast, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TCharToCharPointerCastDetector.AnalyzeUnit(R, F, L); end);
   Add('IfThenShortCircuit', fkIfThenShortCircuit, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TIfThenShortCircuitDetector.AnalyzeUnit(R, F, L); end);
+  Add('ExceptionTooGeneral', fkExceptionTooGeneral, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TExceptionTooGeneralDetector.AnalyzeUnit(R, F, L); end);
+  Add('RaiseOutsideExcept', fkRaiseOutsideExcept, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TRaiseOutsideExceptDetector.AnalyzeUnit(R, F, L); end);
+  Add('UseAfterFree', fkUseAfterFree, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUseAfterFreeDetector.AnalyzeUnit(R, F, L); end);
+  Add('AbstractNotImpl', fkAbstractNotImpl, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TAbstractNotImplDetector.AnalyzeUnit(R, F, L); end);
+  Add('LeakInConstructor', fkLeakInConstructor, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLeakInConstructorDetector.AnalyzeUnit(R, F, L); end);
+  Add('IntegerOverflow', fkIntegerOverflow, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TIntegerOverflowDetector.AnalyzeUnit(R, F, L); end);
   Add('VirtualCallInCtor',fkVirtualCallInCtor,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TVirtualCallInCtorDetector.AnalyzeUnit(R, F, L); end);
   Add('LengthUnderflow', fkLengthUnderflow, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLengthUnderflowDetector.AnalyzeUnit(R, F, L); end);
   // VisibilityCheck emittiert vier Kinds (CanBeUnitPrivate, CanBeStrict-

@@ -23,6 +23,9 @@ type
     [Test] procedure FreeAndNilObjectList_NotReported;
     [Test] procedure FreeAndNilStringList_NotReported;
     [Test] procedure FreeAndNilThreadTyped_Reported;
+    // Spezialfall Result: Typ kommt aus dem Function-Header.
+    [Test] procedure FreeAndNilResult_StringListReturn_NotReported;
+    [Test] procedure FreeAndNilResult_ThreadReturn_Reported;
   end;
 
 implementation
@@ -161,6 +164,43 @@ const SRC =
   'procedure TFoo.Do_;'#13#10 +
   'begin'#13#10 +
   '  FreeAndNil(FWorker);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate) >= 1);
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.FreeAndNilResult_StringListReturn_NotReported;
+// Spiegelt den realen FP aus uExportHtml.GetSourceLines: nested function
+// liefert TStringList, FreeAndNil(Result) ist kein Thread-Free.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Load(const APath: string): TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  Result := TStringList.Create;'#13#10 +
+  '  try'#13#10 +
+  '    Result.LoadFromFile(APath);'#13#10 +
+  '  except'#13#10 +
+  '    FreeAndNil(Result);'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate));
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.FreeAndNilResult_ThreadReturn_Reported;
+// Return-Type enthaelt 'Thread' -> echter Treffer, weiterhin flaggen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Spawn: TWorkerThread;'#13#10 +
+  'begin'#13#10 +
+  '  Result := TWorkerThread.Create(True);'#13#10 +
+  '  FreeAndNil(Result);'#13#10 +
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin

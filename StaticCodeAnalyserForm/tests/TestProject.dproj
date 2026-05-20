@@ -223,6 +223,12 @@
         <DCCReference Include="uTestUnicodeToAnsiCast.pas"/>
         <DCCReference Include="uTestCharToCharPointerCast.pas"/>
         <DCCReference Include="uTestIfThenShortCircuit.pas"/>
+        <DCCReference Include="uTestExceptionTooGeneral.pas"/>
+        <DCCReference Include="uTestRaiseOutsideExcept.pas"/>
+        <DCCReference Include="uTestUseAfterFree.pas"/>
+        <DCCReference Include="uTestAbstractNotImpl.pas"/>
+        <DCCReference Include="uTestLeakInConstructor.pas"/>
+        <DCCReference Include="uTestIntegerOverflow.pas"/>
         <DCCReference Include="uTestVirtualCallInCtor.pas"/>
         <DCCReference Include="uTestLengthUnderflow.pas"/>
         <DCCReference Include="uTestVisibilityCheck.pas"/>

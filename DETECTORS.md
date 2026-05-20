@@ -7,13 +7,18 @@ specific to this tool.
 
 Status legend: ✅ implemented · 🟡 partial · 🔲 open
 
-**Summary:** 17 / 50 complete + 1 partial + 3 bonus + **20 DFM** detectors = **41 active detectors total**.
+**Summary:** 17 / 50 Sonar-rule slots complete + 1 partial + 3 bonus + **22 DFM** detectors + **12 SonarDelphi-migration** (SCA120-131) + ~60 SonarDelphi-compatible naming/formatting checks (SCA060-119) = **~120 active detectors total**.
 
 The 21 Pascal-AST detectors below follow the Sonar 50-rule taxonomy.
-The **20 DFM detectors** at the end of this file are form-file
+The **22 DFM detectors** in the dedicated section are form-file
 specific and do not appear in the Sonar catalogue — they operate on
 the DFM lexer + parser + component graph (and FormBinder for
-Pascal-AST coupling) introduced with v0.10.0.
+Pascal-AST coupling) introduced with v0.10.0. The **SonarDelphi-
+migration cluster (SCA120-131)** below covers Delphi-specific
+correctness checks that SonarDelphi ships and we ported. The bulk
+of the SCA060-119 naming / formatting / structural checks is not
+enumerated here yet — see [`rules/sca-rules.json`](rules/sca-rules.json)
+for the canonical roster.
 
 🇩🇪 [Deutsche Version](DETECTORS_de.md)
 
@@ -36,15 +41,15 @@ Pascal-AST coupling) introduced with v0.10.0.
 | # | Rule | Description | Status | Unit |
 |---|------|-------------|--------|------|
 | 6 | **DivByZero — possible division by zero** | Integer division or modulo where the divisor can be zero (no upfront check) | ✅ | `uDivByZero` |
-| 7 | **UseAfterFree — object used after Free** | Variable used after `Free`/`FreeAndNil` without being re-assigned | 🔲 | |
+| 7 | **UseAfterFree — object used after Free** | Variable used after `Free`/`FreeAndNil` without being re-assigned | ✅ | `uUseAfterFree` |
 | 8 | **MissingFinally — resource without try/finally** | Object created, method has try/except but no try/finally for cleanup | ✅ | `uMissingFinally` |
 | 9 | **FormatMismatch — wrong arg count in Format()** | The number of `%s`/`%d` placeholders in the format string does not match the argument list | ✅ | `uFormatMismatch` |
-| 10 | **AbstractNotImpl — abstract method not implemented** | Concrete class inherits from an abstract base but doesn't implement all `abstract` methods | 🔲 | |
-| 11 | **ExceptionTooGeneral — exception type too broad** | `except on E: Exception` instead of a specific type — masks unexpected errors | 🔲 | |
-| 12 | **LeakInConstructor — exception in constructor without cleanup** | Constructor can raise after partial initialisation without calling `Free` | 🔲 | |
+| 10 | **AbstractNotImpl — abstract method not implemented** | Concrete class inherits from an abstract base but doesn't implement all `abstract` methods | ✅ | `uAbstractNotImpl` (within-unit only) |
+| 11 | **ExceptionTooGeneral — exception type too broad** | `except on E: Exception` instead of a specific type — masks unexpected errors | ✅ | `uExceptionTooGeneral` |
+| 12 | **LeakInConstructor — exception in constructor without cleanup** | Constructor can raise after partial initialisation without calling `Free` | ✅ | `uLeakInConstructor` |
 | 13 | **MissingDestructor — destructor missing / field not freed** | Class with object fields: no destructor, or a field isn't freed in `Destroy` | ✅ | `uFieldLeak` |
-| 14 | **IntegerOverflow — arithmetic overflow** | Multiplication or exponentiation on `Integer`/`Word` without a prior range check | 🔲 | |
-| 15 | **RaiseWithoutClass — bare `raise`** | A bare `raise` outside an `except` block — produces an Access Violation | 🔲 | |
+| 14 | **IntegerOverflow — arithmetic overflow** | Multiplication or exponentiation on `Integer`/`Word` without a prior range check | ✅ | `uIntegerOverflow` (Int64 target only) |
+| 15 | **RaiseWithoutClass — bare `raise`** | A bare `raise` outside an `except` block — produces an Access Violation | ✅ | `uRaiseOutsideExcept` |
 
 ---
 
@@ -124,18 +129,25 @@ Pascal-AST coupling) introduced with v0.10.0.
 ## Implementation status
 
 ```
-✅ Complete:  17  (#1, #2, #3, #4, #5, #6, #8, #9, #13, #17,
-                  #26, #27, #29, #32, #38, #40, #41)
-🟡 Partial:    1  (#30 — strings only, not arbitrary blocks)
-🎁 Bonus:      3  (HardcodedPath, DebugOutput, DuplicateString)
-🔲 Open:      32
+Sonar-50 catalogue
+  ✅ Complete:  23  (#1, #2, #3, #4, #5, #6, #7, #8, #9, #10,
+                    #11, #12, #13, #14, #15, #17, #26, #27, #29,
+                    #32, #38, #40, #41)
+                  Critical (#6-#15) all done; #7/#10/#12/#14 use
+                  heuristic AST/lexical patterns with documented
+                  limitations (see detector unit headers).
+  🟡 Partial:    1  (#30 — strings only, not arbitrary blocks)
+  🎁 Bonus:      3  (HardcodedPath, DebugOutput, DuplicateString)
+  🔲 Open:      26
 
-→ 21 of 50 Sonar rules backed by Pascal-AST detector code,
-  18 of those fully complete.
+  → 27 of 50 Sonar rules backed by Pascal-AST detector code,
+    24 of those fully complete.
 
-📐 DFM detectors: 20 (all complete) — see next section.
+📐 DFM detectors:                  22 (all complete)
+🛡 SonarDelphi-migration:          12 (SCA120-131, all complete)
+🧩 SonarDelphi naming/formatting:  ~60 (SCA060-119, see sca-rules.json)
 
-🎯 Grand total: 41 active detectors.
+🎯 Grand total: ~120 active detectors.
 ```
 
 ---
@@ -197,6 +209,32 @@ help panel and DUnitX tests.
 | D18 | **DfmDefaultName** | Component still has its default name (`Button1`, `Edit2`, …) | Code Smell | `uDfmDefaultName` |
 | D19 | **DfmHardcodedCaption** | UI-visible string (`Caption`, `Hint`, `Text`, …) is a literal in the DFM instead of going through `resourcestring` / dxgettext | Code Smell | `uDfmHardcodedCaption` |
 | D20 | **DfmHardcodedDbCreds extras** | _(see D8 — same detector, separate finding kind for parameter values vs. ConnectionString)_ | Vulnerability | `uDfmHardcodedDbCreds` |
+
+---
+
+## 🛡 SonarDelphi-Migration cluster — Delphi-specific correctness (SCA120-131)
+
+Twelve checks ported from the SonarDelphi rule set. They cover
+Delphi-specific correctness gaps that are not represented in the
+generic Sonar 50-rule taxonomy: exception/raise hygiene, function
+result discipline, type-cast traps around Free / Char / Unicode, and
+locale-dependent format calls. All ship with before/after fix hints
+in the help panel and a DUnitX test fixture.
+
+| ID | Rule | Description | Severity | Type | Unit |
+|----|------|-------------|----------|------|------|
+| SCA120 | **MissingRaise** | `EFoo.Create('msg');` allocates an exception object without `raise` — the error path is silently skipped | Error | Bug | `uMissingRaise` |
+| SCA121 | **RoutineResultUnassigned** | Function body finishes without writing `Result` (or `<FunctionName> := ...`) — return value is undefined | Error | Bug | `uRoutineResultAssigned` |
+| SCA122 | **ReRaiseException** | `on E: T do ... raise E;` discards the original stack trace — use bare `raise;` to keep it | Warning | Bug | `uReRaiseException` |
+| SCA123 | **CastAndFree** | `TFoo(x).Free` — the type-cast has no effect on which `Destroy` runs (`Destroy` is virtual) | Hint | Code Smell | `uCastAndFree` |
+| SCA124 | **InstanceInvokedConstructor** | `obj.Create` — invokes constructor as method on an existing instance, skips allocation and re-runs field initialisation over live data | Error | Bug | `uInstanceInvokedConstructor` |
+| SCA125 | **InheritedMethodEmpty** | Override whose entire body is `inherited;` — serves no purpose, remove it | Hint | Code Smell | `uInheritedMethodEmpty` |
+| SCA126 | **NilComparison** | Use `Assigned(x)` / `not Assigned(x)` instead of `x = nil` / `x <> nil` — Pascal convention | Hint | Code Smell | `uNilComparison` |
+| SCA127 | **RaisingRawException** | `raise Exception.Create('...')` — base class carries no semantic information, callers cannot filter selectively | Warning | Code Smell | `uRaisingRawException` |
+| SCA128 | **DateFormatSettings** | `StrToDate(s)`, `FormatFloat(...)` etc. without TFormatSettings depend on the system locale — breaks across machines / users | Warning | Bug | `uDateFormatSettings` |
+| SCA129 | **UnicodeToAnsiCast** | `AnsiString(s)` / `UTF8String(s)` / `RawByteString(s)` silently drops characters outside the active code page | Warning | Bug | `uUnicodeToAnsiCast` |
+| SCA130 | **CharToCharPointerCast** | `PChar('A')` is not `PChar("A")` — the cast treats the 16-bit codepoint as a raw memory address | Error | Bug | `uCharToCharPointerCast` |
+| SCA131 | **IfThenShortCircuit** | `Math.IfThen` / `StrUtils.IfThen` evaluate both branches — no short-circuit semantics, use `if/then/else` instead | Warning | Bug | `uIfThenShortCircuit` |
 
 ---
 

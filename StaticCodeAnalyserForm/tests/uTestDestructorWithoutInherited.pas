@@ -13,6 +13,7 @@ type
     [Test] procedure DtorWithoutInherited_Reported;
     [Test] procedure RegularProcedure_NoFinding;
     [Test] procedure DtorForwardDecl_NotReported;
+    [Test] procedure ClassDestructor_NotReported;
     [Test] procedure DtorWithoutInherited_KindAndSeverity;
   end;
 
@@ -83,6 +84,34 @@ const SRC =
   'begin'#13#10 +
   '  FreeAndNil(FBar);'#13#10 +
   '  inherited;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkDestructorWithoutInherited));
+  finally F.Free; end;
+end;
+
+procedure TTestDestructorWithoutInherited.ClassDestructor_NotReported;
+// Spiegelt den realen FP aus uLexer.pas: class destructor laeuft einmal
+// pro Klasse beim Modul-Unload und hat KEINE inheritance chain - `inherited`
+// ist hier nicht erwuenscht.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    class constructor Create;'#13#10 +
+  '    class destructor Destroy;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'class constructor TFoo.Create;'#13#10 +
+  'begin'#13#10 +
+  '  // init class-level state'#13#10 +
+  'end;'#13#10 +
+  'class destructor TFoo.Destroy;'#13#10 +
+  'begin'#13#10 +
+  '  FreeAndNil(FStaticThing);'#13#10 +
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin

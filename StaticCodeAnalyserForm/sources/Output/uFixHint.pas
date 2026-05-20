@@ -3185,6 +3185,141 @@ begin
         '// only the selected branch runs. Same applies to StrUtils.IfThen.';
     end;
 
+    fkExceptionTooGeneral:
+    begin
+      Result.Description := _('except on E: Exception catches every error - prefer a specific subclass');
+      Result.Before :=
+        'try'#13#10 +
+        '  ParseConfig(s);'#13#10 +
+        'except'#13#10 +
+        '  on E: Exception do          // <- swallows EOutOfMemory,'#13#10 +
+        '    Log(E.Message);           //    EAbort, EAccessViolation, ...'#13#10 +
+        'end;';
+      Result.After :=
+        'try'#13#10 +
+        '  ParseConfig(s);'#13#10 +
+        'except'#13#10 +
+        '  on E: EConvertError do      // expected, recoverable'#13#10 +
+        '    Log(E.Message);'#13#10 +
+        '  on E: EFileNotFoundException do'#13#10 +
+        '    Log(E.Message);'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// System exceptions (EOutOfMemory, EAbort, ...) propagate'#13#10 +
+        '// up to the global handler where they belong.';
+    end;
+
+    fkRaiseOutsideExcept:
+    begin
+      Result.Description := _('Bare raise; outside an except/on handler raises NIL - Access Violation');
+      Result.Before :=
+        'procedure Foo(x: Integer);'#13#10 +
+        'begin'#13#10 +
+        '  if x < 0 then'#13#10 +
+        '    raise;                    // <- no current exception ->'#13#10 +
+        'end;                          //    System._Raise gets NIL -> AV';
+      Result.After :=
+        'procedure Foo(x: Integer);'#13#10 +
+        'begin'#13#10 +
+        '  if x < 0 then'#13#10 +
+        '    raise EArgumentException.CreateFmt('#13#10 +
+        '      ''x = %d (must be >= 0)'', [x]);'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Bare "raise;" is only valid INSIDE except / on handler'#13#10 +
+        '// (re-raise the currently caught exception).';
+    end;
+
+    fkUseAfterFree:
+    begin
+      Result.Description := _('Variable used after Free / FreeAndNil - dangling pointer, AV likely');
+      Result.Before :=
+        'L := TStringList.Create;'#13#10 +
+        'try'#13#10 +
+        '  L.Add(''x'');'#13#10 +
+        'finally'#13#10 +
+        '  L.Free;'#13#10 +
+        'end;'#13#10 +
+        'L.Add(''y'');                  // <- L is dangling -> Access Violation';
+      Result.After :=
+        'L := TStringList.Create;'#13#10 +
+        'try'#13#10 +
+        '  L.Add(''x'');'#13#10 +
+        '  L.Add(''y'');                 // use BEFORE Free'#13#10 +
+        'finally'#13#10 +
+        '  FreeAndNil(L);              // FreeAndNil so further use crashes loudly'#13#10 +
+        'end;';
+    end;
+
+    fkAbstractNotImpl:
+    begin
+      Result.Description := _('Class inherits an abstract method but does not override it - EAbstractError');
+      Result.Before :=
+        'type'#13#10 +
+        '  TBase = class'#13#10 +
+        '    procedure DoWork; virtual; abstract;'#13#10 +
+        '  end;'#13#10 +
+        '  TDerived = class(TBase)'#13#10 +
+        '    procedure SomethingElse;'#13#10 +
+        '    // DoWork not overridden -> EAbstractError on call'#13#10 +
+        '  end;';
+      Result.After :=
+        'type'#13#10 +
+        '  TDerived = class(TBase)'#13#10 +
+        '    procedure DoWork; override;     // implement contract'#13#10 +
+        '    procedure SomethingElse;'#13#10 +
+        '  end;'#13#10 +
+        ''#13#10 +
+        '// Alternative: mark TDerived itself "class abstract" if it should'#13#10 +
+        '// remain an intermediate base.';
+    end;
+
+    fkLeakInConstructor:
+    begin
+      Result.Description := _('Constructor allocates fields and raises - partially-initialized fields leak');
+      Result.Before :=
+        'constructor TFoo.Create;'#13#10 +
+        'begin'#13#10 +
+        '  FList := TStringList.Create;'#13#10 +
+        '  FOther := TOtherThing.Create;'#13#10 +
+        '  if not Valid then'#13#10 +
+        '    raise EInvalidOp.Create(''bad'');     // <- FList + FOther leak'#13#10 +
+        'end;';
+      Result.After :=
+        'constructor TFoo.Create;'#13#10 +
+        'begin'#13#10 +
+        '  FList := TStringList.Create;'#13#10 +
+        '  try'#13#10 +
+        '    FOther := TOtherThing.Create;'#13#10 +
+        '    if not Valid then'#13#10 +
+        '      raise EInvalidOp.Create(''bad'');'#13#10 +
+        '  except'#13#10 +
+        '    FreeAndNil(FOther);'#13#10 +
+        '    FreeAndNil(FList);'#13#10 +
+        '    raise;                              // preserve original exception'#13#10 +
+        '  end;'#13#10 +
+        'end;';
+    end;
+
+    fkIntegerOverflow:
+    begin
+      Result.Description := _('Int64 target gets product of two ints - multiplication overflows in 32-bit');
+      Result.Before :=
+        'var'#13#10 +
+        '  BytesTotal: Int64;'#13#10 +
+        '  SectorCount, SectorSize: Integer;'#13#10 +
+        'begin'#13#10 +
+        '  BytesTotal := SectorCount * SectorSize;'#13#10 +
+        '  // <- multiplication runs in 32-bit, THEN widens to Int64;'#13#10 +
+        '  //    product > MaxInt is silently truncated';
+      Result.After :=
+        'BytesTotal := Int64(SectorCount) * SectorSize;'#13#10 +
+        ''#13#10 +
+        '// Cast ONE operand to Int64 - the other is auto-promoted, then'#13#10 +
+        '// multiplication runs in 64-bit and the result is exact.'#13#10 +
+        '// Equivalent: declare one of the operands as Int64 from the start.';
+    end;
+
   end;
 end;
 

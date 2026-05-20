@@ -141,6 +141,38 @@ var
     Result := Pos('thread', LowerCase(ATypeName)) > 0;
   end;
 
+  function ResolveResultType(AtPos: Integer): string;
+  // 'Result' hat in Pascal keine eigene 'Result: T;'-Deklaration - der Typ
+  // steht im Function-Header `function <name>(...): <Type>;`. Wir suchen
+  // rueckwaerts vom FreeAndNil-Aufruf bis zum NAECHSTEN function-Header
+  // und liefern dessen Return-Type. Bei nested functions zaehlt das
+  // jeweils naechstgelegene Header. Liefert '' wenn nichts passt.
+  const
+    LOOKBACK_CHARS = 4000;  // Method-Header sind selten weiter weg
+  var
+    StartPos : Integer;
+    Snippet  : string;
+    RE       : TRegEx;
+    M        : TMatch;
+    Hit      : string;
+  begin
+    Result := '';
+    StartPos := AtPos - LOOKBACK_CHARS;
+    if StartPos < 1 then StartPos := 1;
+    Snippet := Copy(Code, StartPos, AtPos - StartPos);
+    // Erwartetes Pattern: 'function <ident>[.<ident>]*[(<params>)]: <Type>;'
+    // Die Param-Liste kann verschachtelte Klammern enthalten ([^()]* reicht
+    // nicht), aber fuer Method-Header reicht zwei Verschachtelungsebenen.
+    RE := TRegEx.Create(
+      '(?is)\bfunction\s+[\w.]+\s*(?:\([^()]*(?:\([^()]*\)[^()]*)*\))?\s*:\s*' +
+      '([A-Za-z0-9_<>,\s.]+?)\s*;');
+    // Letzter Match im Snippet = naechstgelegener Header.
+    Hit := '';
+    for M in RE.Matches(Snippet) do
+      Hit := M.Groups[1].Value;
+    Result := Hit;
+  end;
+
   procedure Emit(K: TFindingKind; const Detail: string; AtPos: Integer);
   begin
     LineNo := LineForPos(LineFor, AtPos);
@@ -190,16 +222,21 @@ begin
       // selben File nach einem TThread-Descendant aussieht (Typ-Token
       // enthaelt 'Thread'). Wenn keine Deklaration gefunden wird, weiter
       // pruefen (extern deklarierter Identifier - konservativ flaggen).
-      ReDecl := TRegEx.Create(
-        '(?i)\b' + Ident + '\s*:\s*([A-Za-z0-9_<>,\s.]+?)\s*(?:;|\)|=)');
-      DeclMatch := ReDecl.Match(Code);
-      if DeclMatch.Success then
+      DeclaredType := '';
+      if SameText(Ident, 'Result') then
+        // Spezialfall: Function-Return - Typ kommt aus dem Method-Header.
+        DeclaredType := ResolveResultType(M.Index)
+      else
       begin
-        DeclaredType := DeclMatch.Groups[1].Value;
-        if not LooksLikeThreadType(DeclaredType) then
-          Continue;  // Kein TThread-Kontext -> kein Befund (vermeidet FP
-                     // bei TObjectList/TStringList/TStream/TForm/...).
+        ReDecl := TRegEx.Create(
+          '(?i)\b' + Ident + '\s*:\s*([A-Za-z0-9_<>,\s.]+?)\s*(?:;|\)|=)');
+        DeclMatch := ReDecl.Match(Code);
+        if DeclMatch.Success then
+          DeclaredType := DeclMatch.Groups[1].Value;
       end;
+      if (DeclaredType <> '') and not LooksLikeThreadType(DeclaredType) then
+        Continue;  // Kein TThread-Kontext -> kein Befund (vermeidet FP
+                   // bei TObjectList/TStringList/TStream/TForm/Result).
 
       LookBack := M.Index - 500;
       if LookBack < 1 then LookBack := 1;

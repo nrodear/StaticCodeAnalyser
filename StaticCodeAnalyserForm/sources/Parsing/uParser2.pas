@@ -447,6 +447,28 @@ begin
       tkKwProcedure, tkKwFunction,
       tkKwConstructor, tkKwDestructor,
       tkKwOperator                          : ParseMethodImpl(Parent);
+      tkKwClass                             :
+        begin
+          // `class procedure/function/constructor/destructor`-Impl: Parser
+          // muss den class-Marker erhalten, sonst kann der DestructorWithout-
+          // InheritedDetector den Class-Destruktor (der KEINE inheritance-
+          // chain hat) nicht von einem Instance-Destruktor unterscheiden.
+          // Pattern analog zum Class-Body-Pfad (ParseClassBody tkKwClass).
+          Next; // 'class' konsumieren
+          if Tok.Kind in [tkKwProcedure, tkKwFunction, tkKwConstructor,
+                          tkKwDestructor, tkKwOperator] then
+          begin
+            var BeforeCount := Parent.Children.Count;
+            ParseMethodImpl(Parent);
+            if Parent.Children.Count > BeforeCount then
+            begin
+              var Last := Parent.Children[Parent.Children.Count - 1];
+              if (Last.Kind = nkMethod) and
+                 (Pos(';class', LowerCase(Last.TypeRef)) = 0) then
+                Last.TypeRef := Last.TypeRef + ';class';
+            end;
+          end;
+        end;
       tkKwInitialization, tkKwFinalization,
       tkKwEnd, tkEof                        : Exit;
     else

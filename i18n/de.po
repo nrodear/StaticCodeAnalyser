@@ -761,3 +761,41 @@ msgstr "Befund-Navigation aktivieren (Strg+Alt+↑ / Strg+Alt+↓)"
 
 msgid "Jump to the next / previous highlighted finding line in the current editor tab (wrap-around at file end/start). Disable to release the shortcut to the IDE default handler."
 msgstr "Im aktuellen Editor-Tab zur nächsten / vorherigen markierten Befund-Zeile springen (Wrap-around am Datei-Ende/-Anfang). Deaktivieren gibt den Shortcut wieder an die IDE-Default-Belegung frei."
+
+# ---- Severity-Filter combo: Sonar-50 Critical (SCA132-133) ------------------
+msgid "Exception Too General"
+msgstr "Zu allgemeine Exception"
+
+msgid "Raise outside except"
+msgstr "Raise außerhalb except"
+
+msgid "except on E: Exception catches every error - prefer a specific subclass"
+msgstr "`except on E: Exception` fängt alles - lieber spezifische Subklasse benutzen"
+
+msgid "Bare raise; outside an except/on handler raises NIL - Access Violation"
+msgstr "Nacktes `raise;` außerhalb eines except/on-Handlers wirft NIL - Access Violation"
+
+# ---- Sonar-50 Critical (SCA134-137) ----------------------------------------
+msgid "Use After Free"
+msgstr "Zugriff nach Free"
+
+msgid "Abstract method not implemented"
+msgstr "Abstrakte Methode nicht implementiert"
+
+msgid "Leak in constructor"
+msgstr "Leak im Konstruktor"
+
+msgid "Integer overflow (Int64 mul)"
+msgstr "Integer-Überlauf (Int64-Multiplikation)"
+
+msgid "Variable used after Free / FreeAndNil - dangling pointer, AV likely"
+msgstr "Variable nach Free / FreeAndNil verwendet - dangling pointer, AV wahrscheinlich"
+
+msgid "Class inherits an abstract method but does not override it - EAbstractError"
+msgstr "Klasse erbt eine abstrakte Methode ohne sie zu überschreiben - EAbstractError zur Laufzeit"
+
+msgid "Constructor allocates fields and raises - partially-initialized fields leak"
+msgstr "Konstruktor erzeugt Felder und raised - teil-initialisierte Felder leaken auf dem Exception-Pfad"
+
+msgid "Int64 target gets product of two ints - multiplication overflows in 32-bit"
+msgstr "Int64-Ziel bekommt Produkt zweier Int32 - Multiplikation überläuft in 32-Bit"

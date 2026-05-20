@@ -44,6 +44,8 @@ uses
   uInstanceInvokedConstructor, uInheritedMethodEmpty, uNilComparison,
   uRaisingRawException, uDateFormatSettings, uUnicodeToAnsiCast,
   uCharToCharPointerCast, uIfThenShortCircuit,
+  uExceptionTooGeneral, uRaiseOutsideExcept,
+  uUseAfterFree, uAbstractNotImpl, uLeakInConstructor, uIntegerOverflow,
   uStaticAnalyzer2,
   uTestSrcBuilder,
   System.IOUtils;
@@ -110,6 +112,10 @@ begin
       TUnicodeToAnsiCastDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TCharToCharPointerCastDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TIfThenShortCircuitDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TExceptionTooGeneralDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TRaiseOutsideExceptDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TAbstractNotImplDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TLeakInConstructorDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TVirtualCallInCtorDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TVisibilityCheckDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TUnusedLocalDetector.AnalyzeUnit(Root, 'test.pas', Result);
@@ -211,6 +217,8 @@ begin
         TConcurrencyExtDetector.AnalyzeUnit(Root, TempPath, Result);
         TRestHttpSecurityDetector.AnalyzeUnit(Root, TempPath, Result);
         TPublicMemberWithoutDocDetector.AnalyzeUnit(Root, TempPath, Result);
+        TUseAfterFreeDetector.AnalyzeUnit(Root, TempPath, Result);
+        TIntegerOverflowDetector.AnalyzeUnit(Root, TempPath, Result);
       finally
         Root.Free;
       end;
