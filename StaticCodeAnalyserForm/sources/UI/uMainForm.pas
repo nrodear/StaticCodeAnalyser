@@ -19,15 +19,13 @@ type
     Panel1: TPanel;
     Panel2: TPanel;
     Panel3: TPanel;             // jetzt: Filter-Row (Severity/Type/Profile/Min/Search)
-    PanelActions: TPanel;       // neu: Action-Row (Analyse/Branch/Save/Quit)
-    Button1: TButton;
+    PanelActions: TPanel;
     Projectpath: TComboBox;
     Savetofile: TEdit;
     ResultGrid: TStringGrid;
     Label1: TLabel;
     Button2: TButton;
     Button3: TButton;
-    Button4: TButton;
     Button6: TButton;
     Button7: TButton;
     StatusBar1: TStatusBar;
@@ -240,6 +238,29 @@ begin
   SeverityFilterCombo.Items.AddObject(_('Abstract method not implemented'), TObject(Ord(fmAbstractNotImpl)));
   SeverityFilterCombo.Items.AddObject(_('Leak in constructor'),          TObject(Ord(fmLeakInConstructor)));
   SeverityFilterCombo.Items.AddObject(_('Integer overflow (Int64 mul)'), TObject(Ord(fmIntegerOverflow)));
+  SeverityFilterCombo.Items.AddObject(_('God Class'),                    TObject(Ord(fmGodClass)));
+  SeverityFilterCombo.Items.AddObject(_('Free without nil-out'),         TObject(Ord(fmFreeWithoutNil)));
+  SeverityFilterCombo.Items.AddObject(_('Multiple Exit'),                TObject(Ord(fmMultipleExit)));
+  SeverityFilterCombo.Items.AddObject(_('Large Class'),                  TObject(Ord(fmLargeClass)));
+  SeverityFilterCombo.Items.AddObject(_('Unsorted uses clause'),         TObject(Ord(fmUnsortedUses)));
+  SeverityFilterCombo.Items.AddObject(_('Missing unit header'),          TObject(Ord(fmMissingUnitHeader)));
+  SeverityFilterCombo.Items.AddObject(_('Float equality'),               TObject(Ord(fmFloatEquality)));
+  SeverityFilterCombo.Items.AddObject(_('Raise in destructor'),          TObject(Ord(fmExceptInDestructor)));
+  SeverityFilterCombo.Items.AddObject(_('Boolean parameter as flag'),    TObject(Ord(fmBooleanParam)));
+  SeverityFilterCombo.Items.AddObject(_('Unused private method'),        TObject(Ord(fmUnusedPrivateMethod)));
+  SeverityFilterCombo.Items.AddObject(_('Could be class method'),        TObject(Ord(fmCanBeClassMethod)));
+  SeverityFilterCombo.Items.AddObject(_('Missing override'),             TObject(Ord(fmMissingOverride)));
+  SeverityFilterCombo.Items.AddObject(_('Boolean always true / false'),  TObject(Ord(fmBoolAlwaysTrue)));
+  SeverityFilterCombo.Items.AddObject(_('Constant return value'),        TObject(Ord(fmConstantReturn)));
+  SeverityFilterCombo.Items.AddObject(_('Hardcoded user string'),        TObject(Ord(fmHardcodedString)));
+  // mORMot-Cluster (SCA153-155)
+  SeverityFilterCombo.Items.AddObject(_('Unpaired Lock'),                TObject(Ord(fmUnpairedLock)));
+  SeverityFilterCombo.Items.AddObject(_('Move/FillChar SizeOf(Pointer)'),TObject(Ord(fmMoveSizeOfPointer)));
+  SeverityFilterCombo.Items.AddObject(_('with on multiple targets'),     TObject(Ord(fmWithMultipleTargets)));
+  // mORMot-Cluster Phase 2 (SCA156-158)
+  SeverityFilterCombo.Items.AddObject(_('GetMem without try/finally'),        TObject(Ord(fmGetMemWithoutFreeMem)));
+  SeverityFilterCombo.Items.AddObject(_('SetLength grow in loop'),            TObject(Ord(fmSetLengthAppendInLoop)));
+  SeverityFilterCombo.Items.AddObject(_('PChar arithmetic w/o empty-check'),  TObject(Ord(fmPointerArithmeticOnString)));
   SeverityFilterCombo.ItemIndex := 0;
 
   TypeFilterCombo.Items.Add(_('All'));

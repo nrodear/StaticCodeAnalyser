@@ -762,6 +762,149 @@ msgstr "Befund-Navigation aktivieren (Strg+Alt+↑ / Strg+Alt+↓)"
 msgid "Jump to the next / previous highlighted finding line in the current editor tab (wrap-around at file end/start). Disable to release the shortcut to the IDE default handler."
 msgstr "Im aktuellen Editor-Tab zur nächsten / vorherigen markierten Befund-Zeile springen (Wrap-around am Datei-Ende/-Anfang). Deaktivieren gibt den Shortcut wieder an die IDE-Default-Belegung frei."
 
+# ---- Tools > Options > Hotkeys: Shortcut-Liste -----------------------------
+msgid "Available shortcuts:"
+msgstr "Verfügbare Tastenkürzel:"
+
+msgid "Ctrl+Alt+A      global         Analyse current file (silent)"
+msgstr "Strg+Alt+A      global              Aktuelle Datei still analysieren"
+
+msgid "Ctrl+Alt+Up     global         Jump to previous finding line"
+msgstr "Strg+Alt+↑      global              Zum vorherigen Befund springen"
+
+msgid "Ctrl+Alt+Down   global         Jump to next finding line"
+msgstr "Strg+Alt+↓      global              Zum nächsten Befund springen"
+
+msgid "Ctrl+Alt+F      findings grid  Apply Quick-Fix in editor"
+msgstr "Strg+Alt+F      Befund-Tabelle      Quick-Fix im Editor anwenden"
+
+msgid "Ctrl+Alt+S      findings grid  Insert \"// noinspection\" marker"
+msgstr "Strg+Alt+S      Befund-Tabelle      \"// noinspection\"-Marker einfügen"
+
+msgid "Enter           findings grid  Goto editor line (same as dbl-click)"
+msgstr "Enter           Befund-Tabelle      Zur Editor-Zeile springen (wie Doppelklick)"
+
+# ---- Tools > Options > Hotkeys: Konfigurierbare Shortcuts (cnpack-Stil) ----
+msgid "Configurable shortcuts (click into field + press key combo):"
+msgstr "Konfigurierbare Tastenkürzel (in Feld klicken + Tastenkombi drücken):"
+
+msgid "Silent analysis:"
+msgstr "Stille Analyse:"
+
+msgid "Jump to previous finding:"
+msgstr "Zum vorherigen Befund springen:"
+
+msgid "Jump to next finding:"
+msgstr "Zum nächsten Befund springen:"
+
+msgid "Changes take effect after restarting the IDE."
+msgstr "Änderungen werden erst nach IDE-Neustart wirksam."
+
+msgid "Findings-grid shortcuts (not configurable): Ctrl+Alt+F = Quick-Fix, Ctrl+Alt+S = Suppression, Enter = goto editor line."
+msgstr "Tastenkürzel in der Befund-Tabelle (nicht konfigurierbar): Strg+Alt+F = Quick-Fix, Strg+Alt+S = Suppress-Marker, Enter = Editor-Zeile öffnen."
+
+# ---- Tools > Options > Hotkeys: Master-Toggle ------------------------------
+msgid "Enable all keyboard shortcuts (master toggle)"
+msgstr "Alle Tastenkürzel aktivieren (Master-Toggle)"
+
+msgid "Disable to mute every plugin shortcut at once. Right-click menu + toolbar buttons remain functional."
+msgstr "Deaktivieren schaltet ALLE Plugin-Tastenkürzel auf einmal ab. Rechtsklick-Menü und Toolbar-Buttons bleiben funktional."
+
+# ---- Sonar-50 #19/#23/#33 (SCA144-146) -------------------------------------
+msgid "Float equality"
+msgstr "Float-Gleichheit"
+
+msgid "Raise in destructor"
+msgstr "Raise im Destruktor"
+
+msgid "Boolean parameter as flag"
+msgstr "Boolean-Parameter als Flag"
+
+msgid "Float equality is unreliable due to IEEE-754 rounding - use SameValue/Math.IsZero"
+msgstr "Float-Gleichheit ist wegen IEEE-754-Rundung unzuverlässig - SameValue/Math.IsZero benutzen"
+
+msgid "Raise inside destructor without try/except - cleanup is aborted"
+msgstr "Raise im Destruktor ohne try/except - Cleanup wird abgebrochen"
+
+msgid "Boolean parameter drives internal branching - consider two methods with descriptive names"
+msgstr "Boolean-Parameter steuert internes Branching - zwei Methoden mit sprechenden Namen sind klarer"
+
+# ---- Sonar-50 #37/#50/#21 (SCA147-149) -------------------------------------
+msgid "Unused private method"
+msgstr "Ungenutzte private Methode"
+
+msgid "Could be class method"
+msgstr "Könnte Klassen-Methode sein"
+
+msgid "Missing override"
+msgstr "Fehlendes override"
+
+msgid "Private method has no caller in the unit - dead code"
+msgstr "Private Methode hat keinen Aufrufer in der Unit - toter Code"
+
+msgid "Method never accesses Self or instance fields - could be `class function`"
+msgstr "Methode greift weder auf Self noch auf Instanz-Felder zu - könnte `class function` sein"
+
+msgid "Method shadows a virtual parent method - add `override` directive"
+msgstr "Methode verdeckt eine virtuelle Parent-Methode - `override`-Direktive hinzufügen"
+
+# ---- Sonar-50 #18/#43/#46 (SCA150-152) -------------------------------------
+msgid "Boolean always true / false"
+msgstr "Boolean immer wahr / falsch"
+
+msgid "Constant return value"
+msgstr "Konstanter Rückgabewert"
+
+msgid "Hardcoded user string"
+msgstr "Hartcodierter User-String"
+
+msgid "Boolean comparison is always true / always false"
+msgstr "Boolescher Vergleich ist immer wahr / immer falsch"
+
+msgid "Function always returns the same literal on every code path"
+msgstr "Function liefert auf jedem Pfad dasselbe Literal zurück"
+
+msgid "User-visible string is hardcoded - move to resourcestring / i18n"
+msgstr "User-sichtbarer String ist hartcodiert - in resourcestring / i18n verschieben"
+
+# ---- mORMot-Cluster (SCA153-155) -------------------------------------------
+msgid "Unpaired Lock"
+msgstr "Lock ohne Gegenstück"
+
+msgid "Move/FillChar SizeOf(Pointer)"
+msgstr "Move/FillChar mit SizeOf(Pointer)"
+
+msgid "with on multiple targets"
+msgstr "with mit mehreren Zielen"
+
+msgid "Lock / Enter without try/finally - exception path leaks the lock and deadlocks"
+msgstr "Lock / Enter ohne try/finally - Exception verliert das Lock und führt zum Deadlock"
+
+msgid "Move / FillChar uses SizeOf(pointer-type) - copies only 4/8 bytes, not the target buffer"
+msgstr "Move / FillChar benutzt SizeOf(Pointer-Typ) - kopiert nur 4/8 Bytes, nicht den Zielpuffer"
+
+msgid "with statement names multiple targets - ambiguous member lookup"
+msgstr "with-Anweisung nennt mehrere Ziele - mehrdeutige Member-Auflösung"
+
+# ---- mORMot-Cluster Phase 2 (SCA156-158) -----------------------------------
+msgid "GetMem without try/finally"
+msgstr "GetMem ohne try/finally"
+
+msgid "SetLength grow in loop"
+msgstr "SetLength-Wachstum in Schleife"
+
+msgid "PChar arithmetic w/o empty-check"
+msgstr "PChar-Arithmetik ohne Empty-Check"
+
+msgid "GetMem / AllocMem without surrounding try/finally - exception path leaks the buffer"
+msgstr "GetMem / AllocMem ohne umgebendes try/finally - Exception verliert den Buffer"
+
+msgid "SetLength(arr, Length(arr) + 1) inside a loop - O(n*n) realloc, grow once before the loop"
+msgstr "SetLength(arr, Length(arr) + 1) innerhalb einer Schleife - O(n*n) Realloc, einmal vor der Schleife vergrößern"
+
+msgid "PChar(s) +/- offset without empty-check - PChar('') returns nil, arithmetic triggers AV"
+msgstr "PChar(s) +/- Offset ohne Empty-Check - PChar('') liefert nil, Arithmetik führt zu AV"
+
 # ---- Severity-Filter combo: Sonar-50 Critical (SCA132-133) ------------------
 msgid "Exception Too General"
 msgstr "Zu allgemeine Exception"
@@ -799,3 +942,41 @@ msgstr "Konstruktor erzeugt Felder und raised - teil-initialisierte Felder leake
 
 msgid "Int64 target gets product of two ints - multiplication overflows in 32-bit"
 msgstr "Int64-Ziel bekommt Produkt zweier Int32 - Multiplikation überläuft in 32-Bit"
+
+# ---- Sonar-50 #31 (SCA138) -------------------------------------------------
+msgid "God Class"
+msgstr "Gott-Klasse"
+
+msgid "Class has too many methods or fields - split into focused units"
+msgstr "Klasse hat zu viele Methoden oder Felder - in fokussierte Units aufteilen"
+
+# ---- Sonar-50 #25/#34/#35/#47/#48 (SCA139-143) -----------------------------
+msgid "Free without nil-out"
+msgstr "Free ohne Nil-Out"
+
+msgid "Multiple Exit"
+msgstr "Mehrfaches Exit"
+
+msgid "Large Class"
+msgstr "Große Klasse"
+
+msgid "Unsorted uses clause"
+msgstr "Unsortierte uses-Klausel"
+
+msgid "Missing unit header"
+msgstr "Fehlender Unit-Header"
+
+msgid "Free without nil-out - prefer FreeAndNil for dangling-pointer safety"
+msgstr "Free ohne Nil-Out - FreeAndNil ist sicherer gegen dangling pointer"
+
+msgid "Method has too many Exit statements - consolidate guards / single return"
+msgstr "Methode hat zu viele Exit-Anweisungen - Guards zusammenfassen oder Single-Return-Pattern"
+
+msgid "Class spans too many lines - split responsibilities into focused units"
+msgstr "Klasse umfasst zu viele Zeilen - Verantwortlichkeiten auf fokussierte Units aufteilen"
+
+msgid "uses clause is not in alphabetical order"
+msgstr "uses-Klausel ist nicht alphabetisch sortiert"
+
+msgid "Unit has no descriptive header comment"
+msgstr "Unit hat keinen erklärenden Header-Kommentar"

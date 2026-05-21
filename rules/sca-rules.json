@@ -2688,6 +2688,407 @@
       "impacts": [
         { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
       ]
+    },
+    {
+      "id": "SCA138",
+      "kind": "GodClass",
+      "name": "Class has too many methods or fields",
+      "shortDescription": "A class with more than 20 methods or more than 15 instance fields concentrates too many responsibilities - hard to test, hard to evolve, hard to review",
+      "fullDescription": "God classes are classes that own too much behaviour and state at once: typical examples are UI composite roots, all-in-one manager singletons, or first-generation domain entities that grew with the application. The detector walks `nkClass` nodes, counts direct `nkMethod` and `nkField` children (including those inside `nkVisibilitySection`), and emits a finding when MethodCount > 20 OR FieldCount > 15. Records, interfaces, class helpers, forward declarations and classes marked `class abstract` (designintent contracts) are skipped. Properties are not counted - they are syntactic sugar over getter/setter pairs. Thresholds are hardcoded to the Sonar defaults; god classes typically exceed them by 3-5x so the cutoff does not need to be hyper-tunable. Maps to Sonar-50 rule #31.",
+      "defaultSeverity": "Warning",
+      "type": "Code Smell",
+      "tags": ["oop", "maintainability", "single-responsibility", "sonar50"],
+      "detectorUnit": "uGodClass.pas",
+      "examples": {
+        "bad":  "TUiController = class             // 60 methods, 80 fields\n  FToolbar, FFilters, FGrid, ...: ...;\n  procedure BuildToolbar;\n  procedure FilterChange(...);\n  procedure GridDrawCell(...);\n  // 50 more methods mixing concerns\nend;",
+        "good": "TToolbarSlots    = record ... end;\nTFilterController = class ... end;\nTGridRenderer    = class ... end;\n\nTUiController = class                // ~10 methods, ~5 fields\n  FToolbar: TToolbarSlots;\n  FFilter:  TFilterController;\n  FGrid:    TGridRenderer;\n  procedure Setup;\nend;"
+      },
+      "cleanCodeAttribute": "MODULAR",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "HIGH" }
+      ]
+    },
+    {
+      "id": "SCA139",
+      "kind": "FreeWithoutNil",
+      "name": "Free without subsequent nil-out",
+      "shortDescription": "`obj.Free;` without `obj := nil;` (or using FreeAndNil) leaves a dangling pointer - any subsequent use is Use-After-Free",
+      "fullDescription": "After `obj.Free`, the variable still points at the freed memory. Any further dereference is Use-After-Free, an Access Violation at best, silent corruption at worst. The detector walks `nkCall` nodes whose name matches `<ident>.Free` or `<ident>.Destroy`, then forward-scans the same method for a subsequent `<ident> := nil` or `FreeAndNil(<ident>)`. If neither exists, the call is reported - unless it is the last call in the method body (no follow-up use possible, typical for destructors and try/finally tails). `Self`/`Result`/`inherited` as receivers are excluded since they follow different lifecycle patterns. Maps to Sonar-50 rule #25.",
+      "defaultSeverity": "Warning",
+      "type": "Code Smell",
+      "tags": ["memory", "lifecycle", "sonar50"],
+      "detectorUnit": "uFreeWithoutNil.pas",
+      "examples": {
+        "bad":  "L := TStringList.Create;\ntry\n  L.Add('x');\nfinally\n  L.Free;             // <- L still points at freed memory\nend;\nWriteLn(L.Count);     // Use-After-Free",
+        "good": "L := TStringList.Create;\ntry\n  L.Add('x');\nfinally\n  FreeAndNil(L);      // L is nil; further use raises loudly\nend;"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA140",
+      "kind": "MultipleExit",
+      "name": "Method has too many Exit statements",
+      "shortDescription": "A method with more than 3 Exit calls has too many return paths - hard to read, hard to test, easy to miss one",
+      "fullDescription": "Multiple early returns are useful for guard clauses, but past a small number they fragment the control flow so badly that future maintainers miss conditions. The detector counts `nkExit` descendants of each `nkMethod`; threshold is 3. Refactoring options: consolidate guards into a single `if (... or ... or ...) then Exit;`, switch from early returns to a single return variable, or extract the inner logic into a helper. Maps to Sonar-50 rule #34.",
+      "defaultSeverity": "Warning",
+      "type": "Code Smell",
+      "tags": ["control-flow", "maintainability", "sonar50"],
+      "detectorUnit": "uMultipleExit.pas",
+      "examples": {
+        "bad":  "function Find(Id: Integer): TUser;\nbegin\n  if Id < 0 then begin Result := nil; Exit; end;\n  if not Db.Connected then begin Result := nil; Exit; end;\n  if not Cache.Has(Id) then begin Result := DbLoad(Id); Exit; end;\n  Result := Cache.Get(Id);\n  Exit;                              // 4. Exit\nend;",
+        "good": "function Find(Id: Integer): TUser;\nbegin\n  Result := nil;\n  if (Id < 0) or not Db.Connected then Exit;\n  if Cache.Has(Id) then\n    Result := Cache.Get(Id)\n  else\n    Result := DbLoad(Id);\nend;"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA141",
+      "kind": "LargeClass",
+      "name": "Class implementation exceeds 500 lines",
+      "shortDescription": "A class whose declaration + implementation methods span more than 500 lines has too many responsibilities",
+      "fullDescription": "Like GodClass (SCA138), but measured by line span rather than method/field count. Catches classes that look small from member counts but have huge implementation bodies - typical for legacy logic classes that grew over years. The detector walks `nkClass` nodes; for each class it determines a span via min(class-decl-line, first-method-with-prefix-line) .. max(class-decl-children-line, last-method-with-prefix-line). Threshold 500 lines. Records, interfaces, helpers and forwards are skipped. Maps to Sonar-50 rule #35.",
+      "defaultSeverity": "Warning",
+      "type": "Code Smell",
+      "tags": ["maintainability", "size", "sonar50"],
+      "detectorUnit": "uLargeClass.pas",
+      "examples": {
+        "bad":  "// TMainForm with 800 lines of business logic mixed with UI handlers,\n// database calls and report generation.",
+        "good": "// Extract verticals into focused classes:\nTReportRunner   = class ... end;     // own unit\nTDataController = class ... end;     // own unit\n\nTMainForm = class(TForm)\n  FReport: TReportRunner;\n  FData:   TDataController;\nend;"
+      },
+      "cleanCodeAttribute": "MODULAR",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA142",
+      "kind": "UnsortedUses",
+      "name": "uses clause is not in alphabetical order",
+      "shortDescription": "Entries in a `uses` clause are not in alphabetical order - merges become non-deterministic and review harder",
+      "fullDescription": "Alphabetical order keeps merge conflicts deterministic and removes a class of bikeshed in code review. The detector walks `nkUses` nodes, collects `nkUsesItem` children, and compares the actual order with a case-insensitive sort. Any mismatch produces a finding on the `uses` line. Single-entry clauses are skipped. Severity is Hint because many projects deliberately group entries by layer (RTL / VCL / third-party / custom) rather than alphabetically - opt-in style, not a hard rule. Maps to Sonar-50 rule #47.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["style", "convention", "sonar50"],
+      "detectorUnit": "uUnsortedUses.pas",
+      "examples": {
+        "bad":  "uses\n  System.SysUtils,\n  System.Classes,\n  System.IOUtils,                    // <- order broken\n  System.JSON;",
+        "good": "uses\n  System.Classes,\n  System.IOUtils,\n  System.JSON,\n  System.SysUtils;"
+      },
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA143",
+      "kind": "MissingUnitHeader",
+      "name": "Unit has no descriptive header comment",
+      "shortDescription": "Unit starts with `interface` directly, without an explaining comment block between `unit ...;` and `interface`",
+      "fullDescription": "A short header comment between the `unit ...;` declaration and the `interface` keyword tells future maintainers what the unit is for - purpose, scope, important invariants, ownership. The detector reads the file's leading lines, finds the `unit` and `interface` markers, and verifies that at least one comment line (`//`, `{...}`, or `(* ... *)`) exists between them. Severity is Hint because many legacy units skip the header without functional consequence. Maps to Sonar-50 rule #48.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["documentation", "convention", "sonar50"],
+      "detectorUnit": "uMissingUnitHeader.pas",
+      "examples": {
+        "bad":  "unit MyUnit;\n\ninterface\n\nuses ...;",
+        "good": "unit MyUnit;\n\n// Database-connection pool: wraps FireDAC TFDConnection setup\n// for the report subsystem. Thread-safe; single instance per app.\n\ninterface\n\nuses ...;"
+      },
+      "cleanCodeAttribute": "IDENTIFIABLE",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA144",
+      "kind": "FloatEquality",
+      "name": "Float equality / inequality comparison",
+      "shortDescription": "`a = b` or `a <> b` between Single/Double/Extended operands is unreliable due to IEEE-754 rounding - use SameValue/Math.IsZero",
+      "fullDescription": "IEEE-754 floating-point arithmetic does not guarantee exact equality even for results that look identical to the developer (`0.1 + 0.2 = 0.3` is False). Equality checks against floats are a classic silent-bug source - they look fine in tests but occasionally fire wrong. The detector strips strings and comments, then in two phases: (1) collects local variable declarations whose type is `Single`, `Double`, `Extended`, `Real`, or `Currency`; (2) scans for `<ident> = <expr>` or `<ident> <> <expr>` where at least one side references a known float variable. `:=` assignments are excluded via lookbehind. Limitations: no type-inference for function returns or non-local parameters; complex expressions like `a + b = c + d` only fire when at least one operand is a known float variable. Maps to Sonar-50 rule #19. Fix: use `System.Math.SameValue(a, b, Eps)` or `IsZero(a - b)`.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["floating-point", "precision", "sonar50"],
+      "detectorUnit": "uFloatEquality.pas",
+      "examples": {
+        "bad":  "var Ratio: Double;\n...\nif Ratio = 0.5 then DoStuff;     // <- IEEE-754: almost never true after arithmetic",
+        "good": "uses System.Math;\n...\nif SameValue(Ratio, 0.5, 1e-9) then DoStuff;"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA145",
+      "kind": "ExceptInDestructor",
+      "name": "Raise inside destructor without try/except",
+      "shortDescription": "An unprotected `raise` in a destructor aborts the cleanup chain - inherited Destroy and subsequent FreeAndNil calls are skipped, state stays inconsistent",
+      "fullDescription": "A destructor's job is to release the resources of one object instance and then call `inherited Destroy` to let the parent release its part. If the destructor raises an exception that no surrounding handler catches, the whole cleanup chain unwinds: inherited Destroy is never called, the parent's resources leak, the destructor frame is left half-done and the caller (typically the RTL during stack unwind) sees an exception in a context where it usually swallows or escalates incorrectly. The detector walks `nkMethod` nodes whose `TypeRef` starts with `destructor` (and is not a class destructor, which has different semantics), then recursively visits the body with an `InHandler` flag. Each `nkRaise` encountered while the flag is False is reported. Maps to Sonar-50 rule #23.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["exception-handling", "lifecycle", "destructor", "sonar50"],
+      "detectorUnit": "uExceptInDestructor.pas",
+      "examples": {
+        "bad":  "destructor TFoo.Destroy;\nbegin\n  FList.Free;\n  if Bad then raise EInvalidOp.Create('oops');   // <- inherited never runs\n  inherited;\nend;",
+        "good": "destructor TFoo.Destroy;\nbegin\n  try\n    FList.Free;\n    if Bad then raise EInvalidOp.Create('oops');\n  except\n    Log('cleanup error');\n  end;\n  inherited;\nend;"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA146",
+      "kind": "BooleanParam",
+      "name": "Boolean parameter used as internal branching flag",
+      "shortDescription": "A Boolean parameter whose value selects between two completely different code paths is a hidden Strategy - prefer two methods with descriptive names",
+      "fullDescription": "When a Boolean parameter's value flips the function between two unrelated behaviours (`SendMsg(s, True)` vs `SendMsg(s, False)`), the call site is opaque: the reader has to either remember the method's API or look it up to know what `True` means. Two methods with descriptive names (`SendErrorMessage` / `SendInfoMessage`) make the intent obvious at the call site without comments. The detector walks `nkMethod` nodes, scans `nkParam` children for Boolean (also LongBool/WordBool/ByteBool), and reports when at least one `nkIfStmt` in the body uses the parameter as a condition. Excluded: property setters (method names starting with `Set`), well-known VCL event-handler parameter names (`Handled`, `CanShow`). Pure pass-through (Bool just forwarded without internal branching) is not flagged. Maps to Sonar-50 rule #33. Severity Hint - this is a refactoring suggestion, not a bug.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["api-design", "readability", "sonar50"],
+      "detectorUnit": "uBooleanParam.pas",
+      "examples": {
+        "bad":  "procedure SendNotification(const Msg: string; IsError: Boolean);\nbegin\n  if IsError then Notify(Msg, clRed) else Notify(Msg, clBlack);\nend;\n// Caller: SendNotification(s, True);     // True = ???",
+        "good": "procedure SendErrorNotification(const Msg: string);\nbegin Notify(Msg, clRed); end;\n\nprocedure SendInfoNotification(const Msg: string);\nbegin Notify(Msg, clBlack); end;\n// Caller: SendErrorNotification(s);"
+      },
+      "cleanCodeAttribute": "FOCUSED",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA147",
+      "kind": "UnusedPrivateMethod",
+      "name": "Private method has no caller in the unit",
+      "shortDescription": "A private method that is never referenced from any other method in the same unit is dead code - delete it or wire it up",
+      "fullDescription": "Private methods can only be called from inside the same unit (Delphi-classic) or class (strict private). If no other method references them, they cannot be called at all - they are dead code, often the residue of an incomplete refactoring. The detector walks `nkClass` nodes, finds `nkVisibilitySection` children with name `private` or `strict private`, collects their `nkMethod` names, and then text-scans the (string-and-comment-stripped) file body for word-boundary matches. Two matches per method are tolerated (declaration line + implementation header); more indicate at least one call. Limitations: RTTI-driven invocations via `TypeInfo` / published-by-attribute / interface dispatch are not detected; use `// noinspection UnusedPrivateMethod` to suppress in those cases. Maps to Sonar-50 rule #37.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["dead-code", "maintainability", "sonar50"],
+      "detectorUnit": "uUnusedPrivateMethod.pas",
+      "examples": {
+        "bad":  "TFoo = class\nprivate\n  procedure HelperA;            // <- never called\npublic\n  procedure DoStuff;\nend;",
+        "good": "TFoo = class\npublic\n  procedure DoStuff;\nend;\n// or call HelperA from DoStuff to make the dependency explicit"
+      },
+      "cleanCodeAttribute": "COMPLETE",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA148",
+      "kind": "CanBeClassMethod",
+      "name": "Instance method never accesses Self - could be a class method",
+      "shortDescription": "A method that uses only its parameters (no Self, no instance fields, no virtual chain) is functionally a class method - mark it as such to express the stateless intent",
+      "fullDescription": "When an instance method never touches `Self`, an instance field, or `inherited`, the implicit `Self` parameter is wasted - the method is effectively stateless. Declaring it `class function ... static` saves a pointer-pass, makes the stateless intent explicit, and allows callers to invoke it without an instance (`TMath.Add(1, 2)` instead of `MyMath.Add(1, 2)`). The detector walks `nkMethod` nodes that belong to a class (qualified name like `TFoo.Bar`), skips already-class methods (`;class` in TypeRef), polymorphic ones (`;virtual`/`;override`/`;dynamic`/`;abstract`), constructors and destructors, then recursively checks for any identifier named `self`, any `inherited`, or any `F<UppercaseLetter>` field reference. None of those -> finding. Limitations: implicit property access without `Self.` prefix is not detected as instance access, so calls like `Bar := ...` for a property could FP. Maps to Sonar-50 rule #50.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["oop", "refactoring", "sonar50"],
+      "detectorUnit": "uCanBeClassMethod.pas",
+      "examples": {
+        "bad":  "function TMath.Add(A, B: Integer): Integer;\nbegin\n  Result := A + B;          // only uses params, no Self\nend;",
+        "good": "class function TMath.Add(A, B: Integer): Integer;\nbegin\n  Result := A + B;\nend;\n// Caller: TMath.Add(1, 2)   // no instance needed"
+      },
+      "cleanCodeAttribute": "MODULAR",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA149",
+      "kind": "MissingOverride",
+      "name": "Method shadows a virtual parent method without `override`",
+      "shortDescription": "A method redeclared in a subclass with the same name as a virtual/dynamic parent method, but without the `override` directive, breaks polymorphism - the compiler issues warning W1010",
+      "fullDescription": "Without `override`, the subclass method is treated as a new method by the compiler. Polymorphic dispatch via the parent's vtable still calls the parent's implementation - `Base := Derived; Base.DoWork` runs `TBase.DoWork`, not `TDerived.DoWork`. The compiler warns (W1010), but many codebases suppress that hint. The detector walks `nkClass` nodes, identifies their direct parent in the same unit, collects parent methods with `;virtual` or `;dynamic` in `TypeRef`, and then checks each subclass method whose unqualified name matches a polymorphic parent name: missing `;override` AND missing `;reintroduce` -> finding. Limitations: within-unit only (cross-unit parents like `TForm`/`TStrings` not seen); only direct parent (multi-level chains check just one step). Maps to Sonar-50 rule #21.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["polymorphism", "oop", "compiler-warning", "sonar50"],
+      "detectorUnit": "uMissingOverride.pas",
+      "examples": {
+        "bad":  "TBase = class\n  procedure DoWork; virtual;\nend;\n\nTDerived = class(TBase)\n  procedure DoWork;          // <- shadows TBase.DoWork (W1010)\nend;",
+        "good": "TDerived = class(TBase)\n  procedure DoWork; override;\nend;"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA150",
+      "kind": "BoolAlwaysTrue",
+      "name": "Boolean comparison is always true / always false",
+      "shortDescription": "Comparisons like `Length(s) >= 0` are tautologies - the Length result is never negative, so the condition can never be false",
+      "fullDescription": "Tautological boolean comparisons usually indicate a typo (`< 0` instead of `= 0`, `>= 1` instead of `> 0`) or copy-paste residue from a prior version of the code. The compiler does not warn because the operand type allows the value range syntactically. This narrow detector strips strings + comments, then matches two patterns lexically: `Length(...) >= 0` / `Length(...) < 0` and the mirrored `0 <= Length(...)` / `0 > Length(...)`. Limitations: Cardinal/UInt variables (`<UInt> >= 0` is also always-true) cannot be detected without type inference; complex expressions like `Length(s) - 1 < 0` are not matched. Maps to Sonar-50 rule #18 (narrow form).",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["control-flow", "dead-code", "sonar50"],
+      "detectorUnit": "uBoolAlwaysTrue.pas",
+      "examples": {
+        "bad":  "if Length(s) >= 0 then DoStuff;   // <- always True\nif Length(s) < 0 then DoOther;    // <- always False",
+        "good": "if Length(s) > 0 then DoStuff;    // non-empty check\nif Length(s) = 0 then DoOther;    // empty check"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA151",
+      "kind": "ConstantReturn",
+      "name": "Function always returns the same literal",
+      "shortDescription": "All paths in the function assign the same literal value to Result - the conditional logic adds no behavioural difference, replace the function with a constant",
+      "fullDescription": "When every assignment to `Result` (or to the function name in classic Pascal style) is the same literal, the function returns that literal regardless of inputs. The conditional structure is dead - either an incomplete refactor (one branch was never updated) or branches that should have produced different values do not. The detector walks `nkMethod` whose `TypeRef` declares a return type, collects `nkAssign` nodes whose LHS equals `result` or the unqualified function name, extracts the RHS literal (number, string literal, True/False/nil), and reports when at least two such assigns share the exact same literal and no non-literal assign exists. Maps to Sonar-50 rule #43.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["dead-code", "refactoring", "sonar50"],
+      "detectorUnit": "uConstantReturn.pas",
+      "examples": {
+        "bad":  "function GetTimeout: Integer;\nbegin\n  if SlowMode then\n    Result := 30\n  else\n    Result := 30;       // <- always 30\nend;",
+        "good": "const DEFAULT_TIMEOUT = 30;\n\nfunction GetTimeout: Integer;\nbegin\n  Result := DEFAULT_TIMEOUT;\nend;"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA152",
+      "kind": "HardcodedString",
+      "name": "User-visible string assigned as literal",
+      "shortDescription": "Caption/Hint/Text assignments and ShowMessage/MessageDlg calls with literal text bypass resourcestring / i18n - the string cannot be translated or replaced for localisation",
+      "fullDescription": "Hardcoded user-visible text makes the application untranslatable without source modifications. The detector lexically scans each source line for two narrow patterns: `<ident>.Caption|Hint|Text := '<text>'` and `ShowMessage|MessageDlg('<text>'`. The captured text is reported only when it (a) is at least 2 characters, (b) contains at least one letter (rules out single-char separators like `'-'`, `'.'`, `':'`, and numeric literals), and (c) does not look like a resource key (uppercase + underscores only, or starts with `$`). Line-comments (`//`) are skipped. Limitations: matches on non-UI classes with a Caption/Hint/Text property (e.g. internal helpers) can FP - in that case use the line-suppress marker `// noinspection HardcodedString`. Maps to Sonar-50 rule #46 (narrow form, UI-only).",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["i18n", "localization", "sonar50"],
+      "detectorUnit": "uHardcodedString.pas",
+      "examples": {
+        "bad":  "Form1.Caption := 'Mein Programm';\nButton1.Hint  := 'Klick mich';\nShowMessage('Daten gespeichert');",
+        "good": "resourcestring\n  SAppCaption = 'Mein Programm';\n  SBtnHint    = 'Klick mich';\n  SSavedMsg   = 'Daten gespeichert';\n\nForm1.Caption := SAppCaption;\nButton1.Hint  := SBtnHint;\nShowMessage(SSavedMsg);"
+      },
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA153",
+      "kind": "UnpairedLock",
+      "name": "Lock acquired without try/finally release",
+      "shortDescription": "<ident>.Lock / EnterCriticalSection / TMonitor.Enter followed by a matching UnLock/Leave/Exit in the same routine without an enclosing try/finally - exception path leaks the lock and deadlocks the next caller",
+      "fullDescription": "Scans each source line lexically (comments + strings stripped) for the acquire token `<ident>.Lock`, `Acquire`, `EnterCriticalSection`, or bare `EnterCriticalSection(...)`. A 200-character lookahead window then searches for the matching release token (`UnLock`, `LeaveCriticalSection`, `Release`). When BOTH are present in the window but no `try` keyword precedes the release, the pair is reported - acquiring a lock and then raising before the release causes a deadlock for every subsequent waiter. mORMot-tuned: matches TSynLocker, TRWLock, TLightLock, and the bare-Windows EnterCriticalSection/LeaveCriticalSection pair. Patterns where the release is missing entirely are skipped (likely a lock-helper RAII style with the release in a destructor).",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["concurrency", "mormot", "exception-safety", "sonar50"],
+      "detectorUnit": "uUnpairedLock.pas",
+      "examples": {
+        "bad":  "FLocker.Lock;\nDoStuff;\nFLocker.UnLock;",
+        "good": "FLocker.Lock;\ntry\n  DoStuff;\nfinally\n  FLocker.UnLock;\nend;"
+      },
+      "cleanCodeAttribute": "COMPLETE",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY",     "severity": "HIGH" },
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA154",
+      "kind": "MoveSizeOfPointer",
+      "name": "Move/FillChar with SizeOf(pointer-type)",
+      "shortDescription": "Move, FillChar, CopyMemory, or ZeroMemory called with SizeOf(PXxx) where PXxx is a pointer type - copies only 4/8 bytes (the pointer size) instead of the intended buffer",
+      "fullDescription": "Lexical scan for `Move|FillChar|CopyMemory|ZeroMemory(...SizeOf(<Name>)...)` where <Name> begins with `P` followed by an uppercase letter (Delphi P-prefix convention for pointer types: PByte, PInteger, PCardinal, PChar, PSomeRecord, ...). On 64-bit, SizeOf(PXxx) returns 8 regardless of the pointed-to type; on 32-bit it returns 4. The author almost always meant SizeOf(Xxx) or Length(Buf) - the truncated copy silently leaves the rest of the buffer untouched (FillChar) or only partially copies the source (Move). Common mORMot pitfall: SizeOf(PByte) instead of explicit byte count when copying into a fixed array. Whitelist excludes SizeOf(TXxx) / SizeOf(Integer) / SizeOf(Variable) - only P-prefix-and-uppercase triggers.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["memory", "pointer", "mormot", "sonar50"],
+      "detectorUnit": "uMoveSizeOfPointer.pas",
+      "examples": {
+        "bad":  "var Buf: array[0..255] of Byte; P: PByte;\nMove(Src^, P^, SizeOf(PByte));        // copies 8 bytes (pointer), not the buffer\nFillChar(P^, SizeOf(PInteger), 0);    // zeroes 8 bytes, not the integer",
+        "good": "Move(Src^, P^, SizeOf(Byte) * Count);  // explicit element count\nFillChar(V, SizeOf(V), 0);             // matches the variable's size"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
+    },
+    {
+      "id": "SCA155",
+      "kind": "WithMultipleTargets",
+      "name": "with statement on multiple targets",
+      "shortDescription": "`with A, B do` (two or more comma-separated receivers) makes member lookup ambiguous - adding a method to either A or B silently changes the meaning of the body",
+      "fullDescription": "Regex match `\\bwith\\s+<id>,\\s*<id>\\s*do\\b` across the whole file (multiline / comments stripped). One target alone is already a code-smell (covered by fkWithStatement); two or more turn the body into a maintenance trap: a new method added to A or B can silently override what used to dispatch to the other. The compiler picks the closest match and never warns. Renames via the IDE refactor skip these references because the receiver is not named at the call site. mORMot-tuned: matches up to 200 characters per target name to tolerate fully-qualified names like `Owner.SubObject.Component`. Fix: split into separate `with` blocks, or - better - drop `with` entirely and qualify each member explicitly.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["clarity", "with-statement", "sonar50"],
+      "detectorUnit": "uWithMultipleTargets.pas",
+      "examples": {
+        "bad":  "with Form1, List1 do\n  DoStuff;     // From Form1 or List1?",
+        "good": "Form1.DoStuff;\nList1.Sort;"
+      },
+      "cleanCodeAttribute": "CLEAR",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA156",
+      "kind": "GetMemWithoutFreeMem",
+      "name": "GetMem / AllocMem without try/finally",
+      "shortDescription": "GetMem / AllocMem / ReallocMem followed by a matching FreeMem in the same routine without an enclosing try/finally - exception path leaks the buffer permanently",
+      "fullDescription": "Lexical scan (comments + strings stripped) for `GetMem(...)`, `AllocMem(...)`, or `ReallocMem(...)`. A 400-character lookahead window searches for the matching `FreeMem`. When both are present in the window but no `try` keyword precedes the FreeMem, the pair is reported - any exception between allocation and release leaks the raw heap buffer. mORMot-tuned: matches the ~20 GetMem occurrences in mORMot core/ that implement high-performance buffer manipulation, where every missing try/finally is a production leak. Patterns where FreeMem is missing entirely are skipped (likely ownership-transfer to caller, or custom allocator).",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["memory-leak", "exception-safety", "mormot", "sonar50"],
+      "detectorUnit": "uGetMemWithoutFreeMem.pas",
+      "examples": {
+        "bad":  "GetMem(P, 1024);\nDoStuff(P);\nFreeMem(P);",
+        "good": "GetMem(P, 1024);\ntry\n  DoStuff(P);\nfinally\n  FreeMem(P);\nend;"
+      },
+      "cleanCodeAttribute": "COMPLETE",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY",     "severity": "HIGH" },
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA157",
+      "kind": "SetLengthAppendInLoop",
+      "name": "SetLength(arr, Length(arr) + N) inside a loop",
+      "shortDescription": "Dynamic-array grow-by-one (or grow-by-N) inside a for/while/repeat loop - quadratic reallocation cost; grow once before the loop or use a block-grow strategy",
+      "fullDescription": "Lexical scan for any `for|while|repeat` keyword followed within 600 characters by `SetLength(<id>, Length(<id>) + ...)` where the two `<id>` names are identical (the array grows itself). Each reallocation copies the existing contents - n iterations cost n*(n+1)/2 element-copies instead of n. At 10_000 items this is ~5000x slower than a one-shot SetLength. Common mORMot performance trap when user code accumulates results without knowing the final size. Only the first grow per loop is reported to avoid spam. `SetLength(A, Length(B)+1)` (different arrays) is NOT flagged - that pattern is rare and usually intentional.",
+      "defaultSeverity": "Warning",
+      "type": "Code Smell",
+      "tags": ["performance", "dynamic-array", "mormot", "sonar50"],
+      "detectorUnit": "uSetLengthAppendInLoop.pas",
+      "examples": {
+        "bad":  "for i := 0 to Source.Count - 1 do\nbegin\n  SetLength(Dest, Length(Dest) + 1);  // O(n*n)\n  Dest[High(Dest)] := Source[i];\nend;",
+        "good": "SetLength(Dest, Source.Count);\nfor i := 0 to Source.Count - 1 do\n  Dest[i] := Source[i];"
+      },
+      "cleanCodeAttribute": "EFFICIENT",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA158",
+      "kind": "PointerArithmeticOnString",
+      "name": "PChar(s) +/- offset without empty-check",
+      "shortDescription": "`PChar(s) + n`, `PAnsiChar(s) + n`, or `PWideChar(s) + n` without a prior empty-check on `s` - PChar('') optimizes to NIL, so arithmetic on the result is a latent Access Violation",
+      "fullDescription": "Lexical scan for `PChar|PAnsiChar|PWideChar(<id>) [+-] <offset>`. A 200-character backward window checks for guard patterns: `<id> <> ''`, `<id> = ''`, `Length(<id>) ...`, or `Assigned(<id>)`. When no guard is found, the arithmetic is flagged. The Delphi compiler optimizes `PChar('')` to NIL (not a pointer to a static #0 character), so `PChar(s) + 5` evaluates to address $00000005 when `s` is empty - accessing it triggers Access Violation. mORMot internals consistently guard with explicit empty-checks; user code that copies the PChar arithmetic idiom often skips the guard. Limitations: backward window is 200 chars (long-range checks are missed); arithmetic via `Inc(p, ...)` on a previously-assigned PChar variable is NOT detected (would need flow analysis).",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["pointer", "string", "nil-deref", "mormot", "sonar50"],
+      "detectorUnit": "uPointerArithmeticOnString.pas",
+      "examples": {
+        "bad":  "p := PChar(s) + 5;       // if s='' then PChar(s)=nil -> AV at $00000005",
+        "good": "if s <> '' then\n  p := PChar(s) + 5;"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
     }
   ]
 }

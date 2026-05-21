@@ -46,6 +46,13 @@ uses
   uCharToCharPointerCast, uIfThenShortCircuit,
   uExceptionTooGeneral, uRaiseOutsideExcept,
   uUseAfterFree, uAbstractNotImpl, uLeakInConstructor, uIntegerOverflow,
+  uGodClass, uFreeWithoutNil, uMultipleExit, uLargeClass, uUnsortedUses,
+  uMissingUnitHeader,
+  uFloatEquality, uExceptInDestructor, uBooleanParam,
+  uUnusedPrivateMethod, uCanBeClassMethod, uMissingOverride,
+  uBoolAlwaysTrue, uConstantReturn, uHardcodedString,
+  uUnpairedLock, uMoveSizeOfPointer, uWithMultipleTargets,
+  uGetMemWithoutFreeMem, uSetLengthAppendInLoop, uPointerArithmeticOnString,
   uStaticAnalyzer2,
   uTestSrcBuilder,
   System.IOUtils;
@@ -116,6 +123,16 @@ begin
       TRaiseOutsideExceptDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TAbstractNotImplDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TLeakInConstructorDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TGodClassDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TFreeWithoutNilDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TMultipleExitDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TLargeClassDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TUnsortedUsesDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TExceptInDestructorDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TBooleanParamDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TCanBeClassMethodDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TMissingOverrideDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TConstantReturnDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TVirtualCallInCtorDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TVisibilityCheckDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TUnusedLocalDetector.AnalyzeUnit(Root, 'test.pas', Result);
@@ -219,6 +236,17 @@ begin
         TPublicMemberWithoutDocDetector.AnalyzeUnit(Root, TempPath, Result);
         TUseAfterFreeDetector.AnalyzeUnit(Root, TempPath, Result);
         TIntegerOverflowDetector.AnalyzeUnit(Root, TempPath, Result);
+        TMissingUnitHeaderDetector.AnalyzeUnit(Root, TempPath, Result);
+        TFloatEqualityDetector.AnalyzeUnit(Root, TempPath, Result);
+        TUnusedPrivateMethodDetector.AnalyzeUnit(Root, TempPath, Result);
+        TBoolAlwaysTrueDetector.AnalyzeUnit(Root, TempPath, Result);
+        THardcodedStringDetector.AnalyzeUnit(Root, TempPath, Result);
+        TUnpairedLockDetector.AnalyzeUnit(Root, TempPath, Result);
+        TMoveSizeOfPointerDetector.AnalyzeUnit(Root, TempPath, Result);
+        TWithMultipleTargetsDetector.AnalyzeUnit(Root, TempPath, Result);
+        TGetMemWithoutFreeMemDetector.AnalyzeUnit(Root, TempPath, Result);
+        TSetLengthAppendInLoopDetector.AnalyzeUnit(Root, TempPath, Result);
+        TPointerArithmeticOnStringDetector.AnalyzeUnit(Root, TempPath, Result);
       finally
         Root.Free;
       end;

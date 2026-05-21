@@ -7,7 +7,9 @@ specific to this tool.
 
 Status legend: ✅ implemented · 🟡 partial · 🔲 open
 
-**Summary:** 17 / 50 Sonar-rule slots complete + 1 partial + 3 bonus + **22 DFM** detectors + **12 SonarDelphi-migration** (SCA120-131) + ~60 SonarDelphi-compatible naming/formatting checks (SCA060-119) = **~120 active detectors total**.
+**Summary:** 44 / 50 Sonar-rule slots complete (Critical + Reliability + Maintainability + Minor sections largely done) + 1 partial + 3 bonus + **22 DFM** detectors + **32 SonarDelphi-migration** (SCA120-152) + **6 mORMot-cluster** (SCA153-158) + ~60 SonarDelphi-compatible naming/formatting checks (SCA060-119) = **~150 active detectors total**.
+
+Remaining 5 open slots all need type-inference / flow-analysis / cross-unit symbol resolution: #16 UninitVar, #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI.
 
 The 21 Pascal-AST detectors below follow the Sonar 50-rule taxonomy.
 The **22 DFM detectors** in the dedicated section are form-file
@@ -59,14 +61,14 @@ for the canonical roster.
 |---|------|-------------|--------|------|
 | 16 | **UninitVar — uninitialised variable** | Local variable read before being assigned on every code path | 🔲 | |
 | 17 | **DeadCode — unreachable code** | Statements after `Exit`, `Break`, `Continue` or `raise` at the same nesting level | ✅ | `uDeadCode` |
-| 18 | **BoolAlwaysTrue — boolean always true/false** | Comparison such as `x >= 0` for `Cardinal` or `Length(s) >= 0` — always evaluates to True | 🔲 | |
-| 19 | **FloatEquality — floating-point comparison with =** | `if a = b` where `a` or `b` is `Single`/`Double`/`Extended` | 🔲 | |
+| 18 | **BoolAlwaysTrue — boolean always true/false** | Comparison such as `x >= 0` for `Cardinal` or `Length(s) >= 0` — always evaluates to True | ✅ | `uBoolAlwaysTrue` (Length-pattern only) |
+| 19 | **FloatEquality — floating-point comparison with =** | `if a = b` where `a` or `b` is `Single`/`Double`/`Extended` | ✅ | `uFloatEquality` |
 | 20 | **ResultNotChecked — return value ignored** | A function call whose result (e.g. an error code) is discarded | 🔲 | |
-| 21 | **MissingOverride — `override` missing** | Method overrides a parent's `virtual`/`dynamic` method without `override` | 🔲 | |
+| 21 | **MissingOverride — `override` missing** | Method overrides a parent's `virtual`/`dynamic` method without `override` | ✅ | `uMissingOverride` (within-unit only) |
 | 22 | **CyclicUnitDep — cyclic unit dependency** | Unit A uses unit B (interface), unit B uses unit A (interface) | 🔲 | |
-| 23 | **ExceptInDestructor — exception from destructor** | Destructor contains code that may raise without a try/except | 🔲 | |
-| 24 | **PublicFieldNoProperty — public field instead of property** | `public` field exposed directly instead of via `property` with getter/setter | 🔲 | |
-| 25 | **FreeWithoutNil — Free without nil-out** | `obj.Free` not followed by `obj := nil` or `FreeAndNil` — dangling pointer possible | 🔲 | |
+| 23 | **ExceptInDestructor — exception from destructor** | Destructor contains code that may raise without a try/except | ✅ | `uExceptInDestructor` |
+| 24 | **PublicFieldNoProperty — public field instead of property** | `public` field exposed directly instead of via `property` with getter/setter | ✅ | `uPublicField` |
+| 25 | **FreeWithoutNil — Free without nil-out** | `obj.Free` not followed by `obj := nil` or `FreeAndNil` — dangling pointer possible | ✅ | `uFreeWithoutNil` |
 
 ---
 
@@ -79,11 +81,11 @@ for the canonical roster.
 | 28 | **CyclomaticComplexity — McCabe complexity > 10** | Number of branching paths (`if`, `case` arm, `for`, `while`, `repeat`, `on` handler, `and`/`or`/`xor`) exceeds 10 | ✅ | `uCyclomaticComplexity` |
 | 29 | **DeepNesting — nesting depth > 4** | Code block indented more than four levels deep | ✅ | `uDeepNesting` |
 | 30 | **DuplicateBlock — duplicated code block** | Identical block (>10 lines) appears more than once | 🟡 | `uDuplicateString` (strings only, not blocks) |
-| 31 | **GodClass — god class** | Class has more than 20 methods or more than 15 instance fields | 🔲 | |
+| 31 | **GodClass — god class** | Class has more than 20 methods or more than 15 instance fields | ✅ | `uGodClass` |
 | 32 | **MagicNumber — magic number without constant** | Numeric literal (other than 0 and 1) used directly in code instead of a named constant | ✅ | `uMagicNumbers` |
-| 33 | **BooleanParam — boolean as flag parameter** | Method takes a `Boolean` parameter used internally for branching | 🔲 | |
-| 34 | **MultipleExit — more than 3 exit points** | Method contains more than three `Exit` calls | 🔲 | |
-| 35 | **LargeClass — class too big** | Single-class unit exceeds 500 lines of implementation | 🔲 | |
+| 33 | **BooleanParam — boolean as flag parameter** | Method takes a `Boolean` parameter used internally for branching | ✅ | `uBooleanParam` |
+| 34 | **MultipleExit — more than 3 exit points** | Method contains more than three `Exit` calls | ✅ | `uMultipleExit` |
+| 35 | **LargeClass — class too big** | Single-class unit exceeds 500 lines of implementation | ✅ | `uLargeClass` |
 
 ---
 
@@ -91,16 +93,16 @@ for the canonical roster.
 
 | # | Rule | Description | Status | Unit |
 |---|------|-------------|--------|------|
-| 36 | **UnusedVar — unused local variable** | Variable declared in the `var` block but never read (or only written) | 🔲 | |
-| 37 | **UnusedMethod — unused private method** | Private method never called inside the unit | 🔲 | |
+| 36 | **UnusedVar — unused local variable** | Variable declared in the `var` block but never read (or only written) | ✅ | `uUnusedLocal` |
+| 37 | **UnusedMethod — unused private method** | Private method never called inside the unit | ✅ | `uUnusedPrivateMethod` |
 | 38 | **UnusedUnit — unit in uses not used** | Unit listed in `uses` whose symbols are never referenced | ✅ | `uUnusedUses` |
-| 39 | **CommentedCode — commented-out code** | Block of commented Pascal code (`//` or `{ }`) without explanation | 🔲 | |
+| 39 | **CommentedCode — commented-out code** | Block of commented Pascal code (`//` or `{ }`) without explanation | ✅ | `uCommentedOutCode` |
 | 40 | **TodoComment — TODO/FIXME without ticket** | Comment contains `TODO`, `FIXME`, `HACK`, `XXX` without an issue reference | ✅ | `uTodoComment` |
 | 41 | **EmptyMethod — empty method** | Method only contains `inherited`, or is completely empty | ✅ | `uEmptyMethod` |
 | 42 | **UnnecessaryCast — redundant type cast** | Cast to the same type or to a direct ancestor without extension | 🔲 | |
-| 43 | **ConstantReturn — method always returns the same value** | Every path returns the same literal — should be a constant | 🔲 | |
-| 44 | **LongLine — line too long** | Line exceeds 120 characters | 🔲 | |
-| 45 | **MixedIndent — mixed indentation (tabs + spaces)** | Line contains both tab and space indentation | 🔲 | |
+| 43 | **ConstantReturn — method always returns the same value** | Every path returns the same literal — should be a constant | ✅ | `uConstantReturn` |
+| 44 | **LongLine — line too long** | Line exceeds 120 characters | ✅ | `uTooLongLine` |
+| 45 | **MixedIndent — mixed indentation (tabs + spaces)** | Line contains both tab and space indentation | ✅ | `uTabulationCharacter` |
 
 ---
 
@@ -108,11 +110,11 @@ for the canonical roster.
 
 | # | Rule | Description | Status | Unit |
 |---|------|-------------|--------|------|
-| 46 | **HardcodedString — literal instead of resourcestring** | User-visible string as a literal instead of a `resourcestring` declaration | 🔲 | |
-| 47 | **UnsortedUses — uses not alphabetic** | Entries in the `uses` section are not in alphabetical order | 🔲 | |
-| 48 | **MissingUnitHeader — no unit description comment** | Unit starts without a descriptive comment block (purpose, author, date) | 🔲 | |
+| 46 | **HardcodedString — literal instead of resourcestring** | User-visible string as a literal instead of a `resourcestring` declaration | ✅ | `uHardcodedString` (Caption/Hint/Text + ShowMessage) |
+| 47 | **UnsortedUses — uses not alphabetic** | Entries in the `uses` section are not in alphabetical order | ✅ | `uUnsortedUses` |
+| 48 | **MissingUnitHeader — no unit description comment** | Unit starts without a descriptive comment block (purpose, author, date) | ✅ | `uMissingUnitHeader` |
 | 49 | **DeprecatedAPI — deprecated API used** | Call to a method or class marked `deprecated` | 🔲 | |
-| 50 | **CanBeClassMethod — method without Self access** | Instance method doesn't touch instance fields/methods — could be a `class function` | 🔲 |
+| 50 | **CanBeClassMethod — method without Self access** | Instance method doesn't touch instance fields/methods — could be a `class function` | ✅ | `uCanBeClassMethod` |
 
 ---
 
@@ -130,24 +132,27 @@ for the canonical roster.
 
 ```
 Sonar-50 catalogue
-  ✅ Complete:  23  (#1, #2, #3, #4, #5, #6, #7, #8, #9, #10,
-                    #11, #12, #13, #14, #15, #17, #26, #27, #29,
-                    #32, #38, #40, #41)
-                  Critical (#6-#15) all done; #7/#10/#12/#14 use
-                  heuristic AST/lexical patterns with documented
-                  limitations (see detector unit headers).
+  ✅ Complete:  44  (#1, #2, #3, #4, #5, #6, #7, #8, #9, #10,
+                    #11, #12, #13, #14, #15, #17, #18, #19, #21,
+                    #23, #24, #25, #26, #27, #29, #31, #32, #33,
+                    #34, #35, #36, #37, #38, #39, #40, #41, #43,
+                    #44, #45, #46, #47, #48, #50)
+                  Critical (#6-#15) all done. #7/#10/#12/#14/#18/
+                  #21/#43/#46 use heuristic AST/lexical patterns
+                  with documented limitations (narrow-by-design).
   🟡 Partial:    1  (#30 — strings only, not arbitrary blocks)
   🎁 Bonus:      3  (HardcodedPath, DebugOutput, DuplicateString)
-  🔲 Open:      26
+  🔲 Open:       5
 
-  → 27 of 50 Sonar rules backed by Pascal-AST detector code,
-    24 of those fully complete.
+  → 48 of 50 Sonar rules backed by Pascal-AST detector code,
+    45 of those fully complete.
 
 📐 DFM detectors:                  22 (all complete)
 🛡 SonarDelphi-migration:          12 (SCA120-131, all complete)
+🏛 mORMot-cluster:                  6 (SCA153-158, all complete)
 🧩 SonarDelphi naming/formatting:  ~60 (SCA060-119, see sca-rules.json)
 
-🎯 Grand total: ~120 active detectors.
+🎯 Grand total: ~150 active detectors.
 ```
 
 ---
@@ -235,6 +240,25 @@ in the help panel and a DUnitX test fixture.
 | SCA129 | **UnicodeToAnsiCast** | `AnsiString(s)` / `UTF8String(s)` / `RawByteString(s)` silently drops characters outside the active code page | Warning | Bug | `uUnicodeToAnsiCast` |
 | SCA130 | **CharToCharPointerCast** | `PChar('A')` is not `PChar("A")` — the cast treats the 16-bit codepoint as a raw memory address | Error | Bug | `uCharToCharPointerCast` |
 | SCA131 | **IfThenShortCircuit** | `Math.IfThen` / `StrUtils.IfThen` evaluate both branches — no short-circuit semantics, use `if/then/else` instead | Warning | Bug | `uIfThenShortCircuit` |
+
+---
+
+## 🏛 mORMot-Cluster — concurrency / pointer / aliasing patterns (SCA153-158)
+
+Six detectors added after auditing the [mORMot2](https://github.com/synopse/mORMot2)
+sources, targeting patterns that recur across large low-level Delphi codebases
+(threading primitives, raw heap allocation, dynamic-array growth,
+byte-level buffer manipulation, PChar arithmetic, multi-target `with` blocks).
+All ship with before/after fix hints and a DUnitX test fixture.
+
+| ID | Rule | Description | Severity | Type | Unit |
+|----|------|-------------|----------|------|------|
+| SCA153 | **UnpairedLock** | `<id>.Lock` / `EnterCriticalSection` / `TMonitor.Enter` followed by a matching unlock in the same routine without an enclosing `try/finally` — exception path leaks the lock and deadlocks the next caller | Warning | Bug | `uUnpairedLock` |
+| SCA154 | **MoveSizeOfPointer** | `Move` / `FillChar` / `CopyMemory` / `ZeroMemory` called with `SizeOf(PXxx)` where `PXxx` is a pointer type — copies only 4/8 bytes (the pointer size), not the intended buffer | Warning | Bug | `uMoveSizeOfPointer` |
+| SCA155 | **WithMultipleTargets** | `with A, B do` (two or more comma-separated receivers) — ambiguous member lookup; adding a method to either A or B silently changes the body's meaning | Hint | Code Smell | `uWithMultipleTargets` |
+| SCA156 | **GetMemWithoutFreeMem** | `GetMem` / `AllocMem` / `ReallocMem` followed by a matching `FreeMem` in the same routine without an enclosing `try/finally` — exception path leaks the raw heap buffer | Warning | Bug | `uGetMemWithoutFreeMem` |
+| SCA157 | **SetLengthAppendInLoop** | `SetLength(arr, Length(arr) + N)` inside a `for/while/repeat` loop — quadratic realloc cost; grow once before the loop or use block-grow | Warning | Code Smell | `uSetLengthAppendInLoop` |
+| SCA158 | **PointerArithmeticOnString** | `PChar(s) +/- offset` (or `PAnsiChar` / `PWideChar`) without a prior empty-check on `s` — `PChar('')` is NIL, arithmetic on nil triggers Access Violation | Warning | Bug | `uPointerArithmeticOnString` |
 
 ---
 

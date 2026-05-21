@@ -63,7 +63,15 @@ type
     FIdeProfile        : string;      // [Rules] IdeProfile (Default: ide-fast)
     FIdeMinSeverity    : string;      // [Rules] IdeMinSeverity (Default: hint)
     FSilentEnabled     : Boolean;     // [Silent] Enabled (Default: True)
+    FShortcutsEnabled  : Boolean;     // [Hotkeys] ShortcutsEnabled (Master-Toggle, Default: True)
     FFindingNavEnabled : Boolean;     // [Hotkeys] FindingNavEnabled (Default: True)
+    // Konfigurierbare Shortcut-Strings (Format wie ShortCutToText:
+    // "Ctrl+Alt+A", "Ctrl+Alt+Up", "Ctrl+Alt+Down"). Leer = Default.
+    // Aenderung erfordert IDE-Neustart (Bindings werden beim BPL-Load
+    // gegen die Keyboard-Services registriert, keine Live-Rebinds).
+    FSilentAnalyseShortcut : string;  // [Hotkeys] SilentAnalyseShortcut
+    FFindingNavUpShortcut  : string;  // [Hotkeys] FindingNavUpShortcut
+    FFindingNavDownShortcut: string;  // [Hotkeys] FindingNavDownShortcut
     FLanguage          : string;      // [UI] Language ('de', 'en', '')
     // Code-Quality-Grade-Schwellwerte (alle aus [Score]).
     // Default-Skala: A=0, B<=50, C<=200, D<=500, E>500.
@@ -214,6 +222,26 @@ type
     // Options > Third Party > Static Code Analyser oder per Hand in analyser.ini.
     property FindingNavEnabled:       Boolean     read FFindingNavEnabled
                                                   write FFindingNavEnabled;
+
+    // [Hotkeys] ShortcutsEnabled - Master-Toggle ueber ALLE Plugin-Shortcuts.
+    // Wenn False: weder die global registrierten Bindings (Ctrl+Alt+A,
+    // Ctrl+Alt+Up/Down) noch die Grid-lokalen Bindings (Ctrl+Alt+F/S, Enter)
+    // feuern. Per-Feature-Toggles (SilentEnabled, FindingNavEnabled) sind
+    // dann irrelevant - die werden zusaetzlich gepruft. Default True.
+    property ShortcutsEnabled:        Boolean     read FShortcutsEnabled
+                                                  write FShortcutsEnabled;
+
+    // Konfigurierbare Shortcut-Strings. Leer = Default-Bindung wie im Code.
+    // Format wie ShortCutToText: 'Ctrl+Alt+A', 'Ctrl+Alt+Up' ...
+    // Aenderung erfordert IDE-Neustart - das BPL registriert die Bindings
+    // beim Load gegen IOTAKeyboardServices und es gibt keinen
+    // Live-Rebind-Pfad. Die Settings-Page muss den User entsprechend warnen.
+    property SilentAnalyseShortcut:   string      read FSilentAnalyseShortcut
+                                                  write FSilentAnalyseShortcut;
+    property FindingNavUpShortcut:    string      read FFindingNavUpShortcut
+                                                  write FFindingNavUpShortcut;
+    property FindingNavDownShortcut:  string      read FFindingNavDownShortcut
+                                                  write FFindingNavDownShortcut;
 
     // UI-Sprache. '' bedeutet "use Default" (= deutsch beim aktuellen Build,
     // falls dxgettext jemals aktiviert wird, wuerde es OS-Locale nutzen).
@@ -548,6 +576,13 @@ const
     ''#13#10 +
     '[Hotkeys]'#13#10 +
     ''#13#10 +
+    '; ShortcutsEnabled (bool, default: 1)'#13#10 +
+    '; Master-Toggle. 0 deaktiviert ALLE Plugin-Shortcuts auf einmal'#13#10 +
+    '; (global + Grid-lokal). Per-Feature-Toggles greifen zusaetzlich -'#13#10 +
+    '; ein Shortcut feuert nur wenn beide Toggles 1 sind.'#13#10 +
+    'ShortcutsEnabled=1'#13#10 +
+    ';ShortcutsEnabled=0'#13#10 +
+    ''#13#10 +
     '; FindingNavEnabled (bool, default: 1)'#13#10 +
     '; Schaltet die Hotkeys Ctrl+Alt+Up / Ctrl+Alt+Down an/aus, mit denen'#13#10 +
     '; man im aktuellen Editor-Tab zwischen markierten Befund-Zeilen'#13#10 +
@@ -557,6 +592,16 @@ const
     '; Static Code Analyser.'#13#10 +
     'FindingNavEnabled=1'#13#10 +
     ';FindingNavEnabled=0'#13#10 +
+    ''#13#10 +
+    '; SilentAnalyseShortcut / FindingNavUpShortcut / FindingNavDownShortcut'#13#10 +
+    '; (string, Defaults wie unten)'#13#10 +
+    '; Konfigurierbare Tastenkuerzel im Format wie ShortCutToText:'#13#10 +
+    ';   Ctrl+Alt+A    Ctrl+Shift+F12    Alt+F4    F8'#13#10 +
+    '; Aenderung erfordert IDE-Neustart. Auch konfigurierbar via'#13#10 +
+    '; Tools > Options > Third Party > Static Code Analyser.'#13#10 +
+    'SilentAnalyseShortcut=Ctrl+Alt+A'#13#10 +
+    'FindingNavUpShortcut=Ctrl+Alt+Up'#13#10 +
+    'FindingNavDownShortcut=Ctrl+Alt+Down'#13#10 +
     ''#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
@@ -653,7 +698,11 @@ begin
   FIdeProfile     := 'ide-fast';      // IDE-Plugin Default: schnelles Subset
   FIdeMinSeverity := 'hint';          // IDE-Plugin: alle Severities (Subset deckt schon)
   FSilentEnabled  := True;            // Silent-Mode standardmaessig an
+  FShortcutsEnabled  := True;         // Master-Toggle: alle Hotkeys an
   FFindingNavEnabled := True;         // Ctrl+Alt+Up/Down Finding-Nav an
+  FSilentAnalyseShortcut  := 'Ctrl+Alt+A';
+  FFindingNavUpShortcut   := 'Ctrl+Alt+Up';
+  FFindingNavDownShortcut := 'Ctrl+Alt+Down';
   FLanguage           := 'en';        // Default: englische UI (Source-Sprache)
 
   // [Score] Defaults: Skala fuer mittelgrosse Projekte. A=0, B<=50,
@@ -827,10 +876,17 @@ begin
     // > Third Party > Static Code Analyser.
     FSilentEnabled := Ini.ReadBool('Silent', 'Enabled', True);
 
+    // [Hotkeys] ShortcutsEnabled (bool, Default True) - Master-Toggle.
+    // Wenn False: ALLE Plugin-Shortcuts deaktiviert (global + Grid-lokal).
+    FShortcutsEnabled := Ini.ReadBool('Hotkeys', 'ShortcutsEnabled', True);
     // [Hotkeys] FindingNavEnabled (bool, Default True) - schaltet die
     // Ctrl+Alt+Up/Down-Hotkeys an/aus, mit denen man zwischen markierten
     // Finding-Zeilen im Editor springt.
     FFindingNavEnabled := Ini.ReadBool('Hotkeys', 'FindingNavEnabled', True);
+    // Konfigurierbare Shortcut-Strings. Leer im INI -> Code-Default.
+    FSilentAnalyseShortcut  := Trim(Ini.ReadString('Hotkeys', 'SilentAnalyseShortcut',  'Ctrl+Alt+A'));
+    FFindingNavUpShortcut   := Trim(Ini.ReadString('Hotkeys', 'FindingNavUpShortcut',   'Ctrl+Alt+Up'));
+    FFindingNavDownShortcut := Trim(Ini.ReadString('Hotkeys', 'FindingNavDownShortcut', 'Ctrl+Alt+Down'));
 
     // [UI] Language=de|en|'' -> FLanguage. Default 'en' (Source-Sprache).
     FLanguage := Trim(Ini.ReadString('UI', 'Language', 'en')).ToLower;
@@ -902,7 +958,11 @@ begin
     Ini.WriteString('Rules', 'IdeProfile',         FIdeProfile);
     Ini.WriteString('Rules', 'IdeMinSeverity',     FIdeMinSeverity);
     Ini.WriteBool  ('Silent', 'Enabled',           FSilentEnabled);
-    Ini.WriteBool  ('Hotkeys', 'FindingNavEnabled', FFindingNavEnabled);
+    Ini.WriteBool  ('Hotkeys', 'ShortcutsEnabled',        FShortcutsEnabled);
+    Ini.WriteBool  ('Hotkeys', 'FindingNavEnabled',       FFindingNavEnabled);
+    Ini.WriteString('Hotkeys', 'SilentAnalyseShortcut',   FSilentAnalyseShortcut);
+    Ini.WriteString('Hotkeys', 'FindingNavUpShortcut',    FFindingNavUpShortcut);
+    Ini.WriteString('Hotkeys', 'FindingNavDownShortcut',  FFindingNavDownShortcut);
     // [Detectors]-Toggles: jetzt UI-aenderbar via Tools > Options.
     Ini.WriteBool  ('Detectors', 'UsesCheck',           FUsesCheck);
     Ini.WriteBool  ('Detectors', 'IncludeTests',        FIncludeTests);

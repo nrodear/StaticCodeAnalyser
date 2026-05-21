@@ -6,7 +6,9 @@ Orientiert sich am Sonar-50er-Katalog plus eigene Bonus-Detektoren.
 
 Status: ✅ implementiert | 🟡 teilweise | 🔲 offen
 
-**Zusammenfassung:** 17 / 50 Sonar-Regel-Slots vollständig + 1 teilweise + 3 Bonus + **22 DFM-Detektoren** + **12 SonarDelphi-Migration** (SCA120-131) + ~60 SonarDelphi-kompatible Naming-/Formatting-Checks (SCA060-119) = **insgesamt ~120 aktive Detektoren**.
+**Zusammenfassung:** 44 / 50 Sonar-Regel-Slots vollständig (Critical + Reliability + Maintainability + Minor weitestgehend abgedeckt) + 1 teilweise + 3 Bonus + **22 DFM-Detektoren** + **32 SonarDelphi-Migration** (SCA120-152) + **6 mORMot-Cluster** (SCA153-158) + ~60 SonarDelphi-kompatible Naming-/Formatting-Checks (SCA060-119) = **insgesamt ~150 aktive Detektoren**.
+
+Verbleibende 5 offene Slots brauchen Typ-Inferenz / Flow-Analyse / Cross-Unit-Symbol-Resolution: #16 UninitVar, #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI.
 
 Die 21 Pascal-AST-Detektoren unten folgen der Sonar-50-Taxonomie.
 Die **22 DFM-Detektoren** in eigenem Abschnitt sind formdatei-
@@ -58,14 +60,14 @@ für die kanonische Liste.
 |---|-------|-------------|--------|------|
 | 16 | **UninitVar: Uninitialisierte Variable** | Lokale Variable wird gelesen bevor sie in allen Codepfaden zugewiesen wurde | 🔲 | |
 | 17 | **DeadCode: Unerreichbarer Code** | Anweisungen nach `Exit`, `Break`, `Continue` oder `raise` auf gleicher Ebene | ✅ | `uDeadCode` |
-| 18 | **BoolAlwaysTrue: Boolean-Ausdruck immer wahr/falsch** | Vergleich wie `x >= 0` für `Cardinal` oder `Length(s) >= 0` – ergibt immer True | 🔲 | |
-| 19 | **FloatEquality: Fließkomma-Vergleich mit =** | `if a = b` wobei `a` oder `b` vom Typ `Single`/`Double`/`Extended` ist | 🔲 | |
+| 18 | **BoolAlwaysTrue: Boolean-Ausdruck immer wahr/falsch** | Vergleich wie `x >= 0` für `Cardinal` oder `Length(s) >= 0` – ergibt immer True | ✅ | `uBoolAlwaysTrue` (nur Length-Pattern) |
+| 19 | **FloatEquality: Fließkomma-Vergleich mit =** | `if a = b` wobei `a` oder `b` vom Typ `Single`/`Double`/`Extended` ist | ✅ | `uFloatEquality` |
 | 20 | **ResultNotChecked: Rückgabewert ignoriert** | Aufruf einer Funktion, deren Ergebnis (z. B. Fehlercode) nicht ausgewertet wird | 🔲 | |
-| 21 | **MissingOverride: `override` fehlt** | Methode überschreibt eine `virtual`/`dynamic`-Methode der Elternklasse ohne `override` | 🔲 | |
+| 21 | **MissingOverride: `override` fehlt** | Methode überschreibt eine `virtual`/`dynamic`-Methode der Elternklasse ohne `override` | ✅ | `uMissingOverride` (nur within-unit) |
 | 22 | **CyclicUnitDep: Zyklische Unit-Abhängigkeit** | Unit A verwendet Unit B (interface), Unit B verwendet Unit A (interface) | 🔲 | |
-| 23 | **ExceptInDestructor: Exception aus Destruktor** | Destruktor enthält Code der eine Exception auslösen kann ohne try/except | 🔲 | |
-| 24 | **PublicFieldNoProperty: Öffentliches Feld statt Property** | `public`-Feld direkt exponiert statt über `property` mit Getter/Setter | 🔲 | |
-| 25 | **FreeWithoutNil: Free ohne anschließendes Nil** | `obj.Free` ohne nachfolgendes `obj := nil` oder `FreeAndNil` – Dangling Pointer möglich | 🔲 | |
+| 23 | **ExceptInDestructor: Exception aus Destruktor** | Destruktor enthält Code der eine Exception auslösen kann ohne try/except | ✅ | `uExceptInDestructor` |
+| 24 | **PublicFieldNoProperty: Öffentliches Feld statt Property** | `public`-Feld direkt exponiert statt über `property` mit Getter/Setter | ✅ | `uPublicField` |
+| 25 | **FreeWithoutNil: Free ohne anschließendes Nil** | `obj.Free` ohne nachfolgendes `obj := nil` oder `FreeAndNil` – Dangling Pointer möglich | ✅ | `uFreeWithoutNil` |
 
 ---
 
@@ -78,11 +80,11 @@ für die kanonische Liste.
 | 28 | **CyclomaticComplexity: McCabe-Komplexität > 10** | Anzahl der Verzweigungspfade (`if`, `case`-Arm, `for`, `while`, `repeat`, `on`-Handler, `and`/`or`/`xor`) überschreitet 10 | ✅ | `uCyclomaticComplexity` |
 | 29 | **DeepNesting: Verschachtelungstiefe > 4** | Code-Block ist mehr als 4 Ebenen tief eingerückt | ✅ | `uDeepNesting` |
 | 30 | **DuplicateBlock: Duplizierter Code-Block** | Identischer Block (>10 Zeilen) erscheint mehrfach | 🟡 | `uDuplicateString` (nur Strings, nicht Blöcke) |
-| 31 | **GodClass: Gottklasse** | Klasse hat mehr als 20 Methoden oder mehr als 15 Instanzfelder | 🔲 | |
+| 31 | **GodClass: Gottklasse** | Klasse hat mehr als 20 Methoden oder mehr als 15 Instanzfelder | ✅ | `uGodClass` |
 | 32 | **MagicNumber: Magic Number ohne Konstante** | Numerisches Literal (außer 0 und 1) direkt im Code statt benannter Konstante | ✅ | `uMagicNumbers` |
-| 33 | **BooleanParam: Boolean als Flag-Parameter** | Methode erhält `Boolean`-Parameter der intern als Verzweigung genutzt wird | 🔲 | |
-| 34 | **MultipleExit: Mehr als 3 Exit-Punkte** | Methode enthält mehr als 3 `Exit`-Aufrufe | 🔲 | |
-| 35 | **LargeClass: Klasse zu groß** | Unit mit einer Klasse überschreitet 500 Zeilen Implementierungscode | 🔲 | |
+| 33 | **BooleanParam: Boolean als Flag-Parameter** | Methode erhält `Boolean`-Parameter der intern als Verzweigung genutzt wird | ✅ | `uBooleanParam` |
+| 34 | **MultipleExit: Mehr als 3 Exit-Punkte** | Methode enthält mehr als 3 `Exit`-Aufrufe | ✅ | `uMultipleExit` |
+| 35 | **LargeClass: Klasse zu groß** | Unit mit einer Klasse überschreitet 500 Zeilen Implementierungscode | ✅ | `uLargeClass` |
 
 ---
 
@@ -90,16 +92,16 @@ für die kanonische Liste.
 
 | # | Regel | Beschreibung | Status | Unit |
 |---|-------|-------------|--------|------|
-| 36 | **UnusedVar: Unbenutzte lokale Variable** | Variable im `var`-Block deklariert, aber nie gelesen oder nur geschrieben | 🔲 | |
-| 37 | **UnusedMethod: Unbenutzte private Methode** | Private Methode wird innerhalb der Unit nirgendwo aufgerufen | 🔲 | |
+| 36 | **UnusedVar: Unbenutzte lokale Variable** | Variable im `var`-Block deklariert, aber nie gelesen oder nur geschrieben | ✅ | `uUnusedLocal` |
+| 37 | **UnusedMethod: Unbenutzte private Methode** | Private Methode wird innerhalb der Unit nirgendwo aufgerufen | ✅ | `uUnusedPrivateMethod` |
 | 38 | **UnusedUnit: Unit im uses nicht genutzt** | Unit im `uses`-Abschnitt, deren Symbole im Quelltext nicht referenziert werden | ✅ | `uUnusedUses` |
-| 39 | **CommentedCode: Auskommentierter Code** | Block von auskommentiertem Pascal-Code (`//` oder `{ }`) ohne Erklärung | 🔲 | |
+| 39 | **CommentedCode: Auskommentierter Code** | Block von auskommentiertem Pascal-Code (`//` oder `{ }`) ohne Erklärung | ✅ | `uCommentedOutCode` |
 | 40 | **TodoComment: TODO/FIXME ohne Ticket** | Kommentar enthält `TODO`, `FIXME`, `HACK`, `XXX` ohne zugehörige Issue-Nummer | ✅ | `uTodoComment` |
 | 41 | **EmptyMethod: Leere Methode** | Methode enthält ausschließlich `inherited` oder ist komplett leer | ✅ | `uEmptyMethod` |
 | 42 | **UnnecessaryCast: Überflüssige Typumwandlung** | Cast auf denselben Typ oder auf direkten Vorfahren ohne Erweiterung | 🔲 | |
-| 43 | **ConstantReturn: Methode gibt immer gleichen Wert zurück** | Alle Pfade einer Funktion liefern dasselbe Literal – sollte Konstante sein | 🔲 | |
-| 44 | **LongLine: Zeile zu lang** | Zeile überschreitet 120 Zeichen | 🔲 | |
-| 45 | **MixedIndent: Gemischte Einrückung (Tabs + Spaces)** | Zeile enthält sowohl Tabulator- als auch Leerzeichen-Einrückung | 🔲 | |
+| 43 | **ConstantReturn: Methode gibt immer gleichen Wert zurück** | Alle Pfade einer Funktion liefern dasselbe Literal – sollte Konstante sein | ✅ | `uConstantReturn` |
+| 44 | **LongLine: Zeile zu lang** | Zeile überschreitet 120 Zeichen | ✅ | `uTooLongLine` |
+| 45 | **MixedIndent: Gemischte Einrückung (Tabs + Spaces)** | Zeile enthält sowohl Tabulator- als auch Leerzeichen-Einrückung | ✅ | `uTabulationCharacter` |
 
 ---
 
@@ -107,11 +109,11 @@ für die kanonische Liste.
 
 | # | Regel | Beschreibung | Status | Unit |
 |---|-------|-------------|--------|------|
-| 46 | **HardcodedString: Literal statt resourcestring** | Benutzer-sichtbarer String als Literal statt `resourcestring`-Deklaration | 🔲 | |
-| 47 | **UnsortedUses: uses nicht alphabetisch** | Einträge im `uses`-Abschnitt nicht in alphabetischer Reihenfolge | 🔲 | |
-| 48 | **MissingUnitHeader: Kein Unit-Beschreibungskommentar** | Unit beginnt ohne beschreibenden Kommentarblock (Zweck, Autor, Datum) | 🔲 | |
+| 46 | **HardcodedString: Literal statt resourcestring** | Benutzer-sichtbarer String als Literal statt `resourcestring`-Deklaration | ✅ | `uHardcodedString` (Caption/Hint/Text + ShowMessage) |
+| 47 | **UnsortedUses: uses nicht alphabetisch** | Einträge im `uses`-Abschnitt nicht in alphabetischer Reihenfolge | ✅ | `uUnsortedUses` |
+| 48 | **MissingUnitHeader: Kein Unit-Beschreibungskommentar** | Unit beginnt ohne beschreibenden Kommentarblock (Zweck, Autor, Datum) | ✅ | `uMissingUnitHeader` |
 | 49 | **DeprecatedAPI: Veraltete API verwendet** | Aufruf einer als `deprecated` markierten Methode oder Klasse | 🔲 | |
-| 50 | **CanBeClassMethod: Methode ohne Self-Zugriff** | Instanzmethode greift nicht auf Instanzfelder/-methoden zu – könnte `class function` sein | 🔲 |
+| 50 | **CanBeClassMethod: Methode ohne Self-Zugriff** | Instanzmethode greift nicht auf Instanzfelder/-methoden zu – könnte `class function` sein | ✅ | `uCanBeClassMethod` |
 
 ---
 
@@ -129,22 +131,24 @@ für die kanonische Liste.
 
 ```
 Sonar-50-Katalog
-  ✅ Vollständig:  23  (#1, #2, #3, #4, #5, #6, #7, #8, #9, #10,
-                       #11, #12, #13, #14, #15, #17, #26, #27, #29,
-                       #32, #38, #40, #41)
-                     Critical (#6-#15) komplett; #7/#10/#12/#14
-                     nutzen heuristische AST-/lexikalische Patterns
-                     mit dokumentierten Limitierungen (siehe Unit-
-                     Header der Detektoren).
+  ✅ Vollständig:  44  (#1, #2, #3, #4, #5, #6, #7, #8, #9, #10,
+                       #11, #12, #13, #14, #15, #17, #18, #19, #21,
+                       #23, #24, #25, #26, #27, #29, #31, #32, #33,
+                       #34, #35, #36, #37, #38, #39, #40, #41, #43,
+                       #44, #45, #46, #47, #48, #50)
+                     Critical (#6-#15) komplett. #7/#10/#12/#14/#18/
+                     #21/#43/#46 nutzen heuristische AST-/lexikalische
+                     Patterns mit dokumentierten Limitierungen.
   🟡 Teilweise:     1  (#30 - nur Strings statt Code-Blöcke)
   🎁 Bonus:         3  (HardcodedPath, DebugOutput, DuplicateString)
-  🔲 Offen:        26
+  🔲 Offen:         5
 
-  → 27 von 50 Sonar-Regeln als Pascal-AST-Detektor-Code vorhanden,
-    davon 24 vollständig.
+  → 48 von 50 Sonar-Regeln als Pascal-AST-Detektor-Code vorhanden,
+    davon 45 vollständig.
 
 📐 DFM-Detektoren:                  22 (alle vollständig)
 🛡 SonarDelphi-Migration:           12 (SCA120-131, alle vollständig)
+🏛 mORMot-Cluster:                   6 (SCA153-158, alle vollständig)
 🧩 SonarDelphi Naming/Formatting:  ~60 (SCA060-119, siehe sca-rules.json)
 
 🎯 Gesamt: ~120 aktive Detektoren.
@@ -235,6 +239,25 @@ Fix-Hints im Hilfe-Panel und eine DUnitX-Test-Fixture mit.
 | SCA129 | **UnicodeToAnsiCast** | `AnsiString(s)` / `UTF8String(s)` / `RawByteString(s)` verliert stillschweigend Zeichen außerhalb der aktiven Codepage | Warning | Bug | `uUnicodeToAnsiCast` |
 | SCA130 | **CharToCharPointerCast** | `PChar('A')` ist nicht `PChar("A")` — der Cast interpretiert den 16-Bit-Codepoint als rohe Speicheradresse | Error | Bug | `uCharToCharPointerCast` |
 | SCA131 | **IfThenShortCircuit** | `Math.IfThen` / `StrUtils.IfThen` evaluiert beide Arme — kein Short-Circuit, stattdessen `if/then/else` benutzen | Warning | Bug | `uIfThenShortCircuit` |
+
+---
+
+## 🏛 mORMot-Cluster — Concurrency / Pointer / Aliasing (SCA153-158)
+
+Sechs Detektoren, die nach einem Audit der [mORMot2](https://github.com/synopse/mORMot2)-Sourcen
+hinzugekommen sind. Sie zielen auf Muster, die in großen Low-Level-Delphi-Projekten
+immer wieder auftreten (Locking-Primitiven, Raw-Heap-Allokation, Dynamic-Array-
+Wachstum, Byte-Level-Puffer-Manipulation, PChar-Arithmetik, Multi-Target-`with`-Blöcke).
+Alle bringen Vorher/Nachher-Fix-Hints und ein DUnitX-Fixture mit.
+
+| ID | Regel | Beschreibung | Severity | Type | Unit |
+|----|-------|--------------|----------|------|------|
+| SCA153 | **UnpairedLock** | `<id>.Lock` / `EnterCriticalSection` / `TMonitor.Enter` mit passendem Unlock in derselben Routine, aber ohne umgebendes `try/finally` — eine Exception verliert das Lock und führt zum Deadlock | Warning | Bug | `uUnpairedLock` |
+| SCA154 | **MoveSizeOfPointer** | `Move` / `FillChar` / `CopyMemory` / `ZeroMemory` mit `SizeOf(PXxx)`, wobei `PXxx` ein Pointer-Typ ist — kopiert nur 4/8 Bytes (Pointer-Größe), nicht den Zielpuffer | Warning | Bug | `uMoveSizeOfPointer` |
+| SCA155 | **WithMultipleTargets** | `with A, B do` (zwei oder mehr Komma-getrennte Ziele) — mehrdeutige Member-Auflösung; eine neue Methode an A oder B verändert still die Bedeutung des Bodies | Hint | Code Smell | `uWithMultipleTargets` |
+| SCA156 | **GetMemWithoutFreeMem** | `GetMem` / `AllocMem` / `ReallocMem` mit passendem `FreeMem` in derselben Routine, aber ohne umgebendes `try/finally` — eine Exception verliert den allokierten Heap-Buffer | Warning | Bug | `uGetMemWithoutFreeMem` |
+| SCA157 | **SetLengthAppendInLoop** | `SetLength(arr, Length(arr) + N)` innerhalb einer `for/while/repeat`-Schleife — O(n*n) Realloc-Aufwand; einmal vor der Schleife vergrößern oder Block-Grow benutzen | Warning | Code Smell | `uSetLengthAppendInLoop` |
+| SCA158 | **PointerArithmeticOnString** | `PChar(s) +/- Offset` (oder `PAnsiChar` / `PWideChar`) ohne vorherigen Empty-Check auf `s` — `PChar('')` ist NIL, Arithmetik auf nil führt zur Access-Violation | Warning | Bug | `uPointerArithmeticOnString` |
 
 ---
 

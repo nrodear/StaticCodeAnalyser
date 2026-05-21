@@ -153,11 +153,8 @@ object Form2: TForm2
       BevelOuter = bvNone
       TabOrder = 2
       ExplicitWidth = 846
-      DesignSize = (
-        848
-        41)
       object Button7: TButton
-        Left = 10
+        Left = 152
         Top = 6
         Width = 110
         Height = 25
@@ -166,7 +163,7 @@ object Form2: TForm2
         OnClick = Button7Click
       end
       object Button6: TButton
-        Left = 126
+        Left = 16
         Top = 6
         Width = 130
         Height = 25
@@ -175,7 +172,7 @@ object Form2: TForm2
         OnClick = Button6Click
       end
       object BtnBranch: TButton
-        Left = 262
+        Left = 268
         Top = 6
         Width = 36
         Height = 25
@@ -184,28 +181,6 @@ object Form2: TForm2
         ShowHint = True
         TabOrder = 2
         OnClick = BtnBranchClick
-      end
-      object Button4: TButton
-        Left = 649
-        Top = 6
-        Width = 75
-        Height = 25
-        Anchors = [akTop, akRight]
-        Caption = 'Save'
-        TabOrder = 3
-        OnClick = Button4Click
-        ExplicitLeft = 647
-      end
-      object Button1: TButton
-        Left = 744
-        Top = 6
-        Width = 83
-        Height = 25
-        Anchors = [akTop, akRight]
-        Caption = 'Quit'
-        TabOrder = 4
-        OnClick = Button1Click
-        ExplicitLeft = 742
       end
     end
     object Panel1: TPanel

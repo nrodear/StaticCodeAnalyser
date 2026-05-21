@@ -3320,6 +3320,525 @@ begin
         '// Equivalent: declare one of the operands as Int64 from the start.';
     end;
 
+    fkFreeWithoutNil:
+    begin
+      Result.Description := _('Free without nil-out - prefer FreeAndNil for dangling-pointer safety');
+      Result.Before :=
+        'L := TStringList.Create;'#13#10 +
+        'try'#13#10 +
+        '  L.Add(''x'');'#13#10 +
+        'finally'#13#10 +
+        '  L.Free;          // <- L still points at freed memory'#13#10 +
+        'end;'#13#10 +
+        '// any further L.Method call is Use-After-Free.';
+      Result.After :=
+        'L := TStringList.Create;'#13#10 +
+        'try'#13#10 +
+        '  L.Add(''x'');'#13#10 +
+        'finally'#13#10 +
+        '  FreeAndNil(L);   // L is nil afterwards; further use raises clearly'#13#10 +
+        'end;';
+    end;
+
+    fkMultipleExit:
+    begin
+      Result.Description := _('Method has too many Exit statements - consolidate guards / single return');
+      Result.Before :=
+        'function Find(Id: Integer): TUser;'#13#10 +
+        'begin'#13#10 +
+        '  if Id < 0 then begin Result := nil; Exit; end;'#13#10 +
+        '  if not Db.Connected then begin Result := nil; Exit; end;'#13#10 +
+        '  if not Cache.Has(Id) then begin Result := DbLoad(Id); Exit; end;'#13#10 +
+        '  Result := Cache.Get(Id);'#13#10 +
+        '  Exit;                                       // 4. Exit'#13#10 +
+        'end;';
+      Result.After :=
+        'function Find(Id: Integer): TUser;'#13#10 +
+        'begin'#13#10 +
+        '  Result := nil;'#13#10 +
+        '  if (Id < 0) or not Db.Connected then Exit;'#13#10 +
+        '  if Cache.Has(Id) then'#13#10 +
+        '    Result := Cache.Get(Id)'#13#10 +
+        '  else'#13#10 +
+        '    Result := DbLoad(Id);'#13#10 +
+        'end;'#13#10 +
+        '// One early exit for guard conditions, then a single linear flow.';
+    end;
+
+    fkLargeClass:
+    begin
+      Result.Description := _('Class spans too many lines - split responsibilities into focused units');
+      Result.Before :=
+        '// TForm with 800 lines of business logic mixed with UI handlers,'#13#10 +
+        '// database calls and report generation.'#13#10 +
+        'TMainForm = class(TForm)'#13#10 +
+        '  procedure btnRunClick(Sender: TObject);'#13#10 +
+        '  // ... 60 more methods, 800 lines of impl ...'#13#10 +
+        'end;';
+      Result.After :=
+        '// Extract verticals into focused classes:'#13#10 +
+        'TReportRunner   = class ... end;     // own unit'#13#10 +
+        'TDataController = class ... end;     // own unit'#13#10 +
+        ''#13#10 +
+        'TMainForm = class(TForm)'#13#10 +
+        '  FReport: TReportRunner;'#13#10 +
+        '  FData:   TDataController;'#13#10 +
+        '  procedure btnRunClick(Sender: TObject);'#13#10 +
+        'end;';
+    end;
+
+    fkUnsortedUses:
+    begin
+      Result.Description := _('uses clause is not in alphabetical order');
+      Result.Before :=
+        'uses'#13#10 +
+        '  System.SysUtils,'#13#10 +
+        '  System.Classes,'#13#10 +
+        '  System.IOUtils,                   // <- alphabetical order broken'#13#10 +
+        '  System.JSON;';
+      Result.After :=
+        'uses'#13#10 +
+        '  System.Classes,'#13#10 +
+        '  System.IOUtils,'#13#10 +
+        '  System.JSON,'#13#10 +
+        '  System.SysUtils;'#13#10 +
+        ''#13#10 +
+        '// Alphabetical order keeps merges deterministic + simplifies code review.';
+    end;
+
+    fkMissingUnitHeader:
+    begin
+      Result.Description := _('Unit has no descriptive header comment');
+      Result.Before :=
+        'unit MyUnit;'#13#10 +
+        ''#13#10 +
+        'interface                            // <- straight to code'#13#10 +
+        ''#13#10 +
+        'uses ...;';
+      Result.After :=
+        'unit MyUnit;'#13#10 +
+        ''#13#10 +
+        '// Database-connection pool: wraps FireDAC TFDConnection setup'#13#10 +
+        '// for the report subsystem. Thread-safe; single instance per app.'#13#10 +
+        ''#13#10 +
+        'interface'#13#10 +
+        ''#13#10 +
+        'uses ...;';
+    end;
+
+    fkFloatEquality:
+    begin
+      Result.Description := _('Float equality is unreliable due to IEEE-754 rounding - use SameValue/Math.IsZero');
+      Result.Before :=
+        'var Ratio: Double;'#13#10 +
+        '...'#13#10 +
+        'if Ratio = 0.5 then              // <- almost never true after arithmetic'#13#10 +
+        '  DoStuff;';
+      Result.After :=
+        'uses System.Math;                  // SameValue + IsZero'#13#10 +
+        '...'#13#10 +
+        'if SameValue(Ratio, 0.5, 1e-9) then'#13#10 +
+        '  DoStuff;'#13#10 +
+        ''#13#10 +
+        '// SameValue accepts a tolerance; IsZero(x) is shorthand for'#13#10 +
+        '// SameValue(x, 0). Both live in System.Math.';
+    end;
+
+    fkExceptInDestructor:
+    begin
+      Result.Description := _('Raise inside destructor without try/except - cleanup is aborted');
+      Result.Before :=
+        'destructor TFoo.Destroy;'#13#10 +
+        'begin'#13#10 +
+        '  FList.Free;'#13#10 +
+        '  if Bad then'#13#10 +
+        '    raise EInvalidOp.Create(''oops'');     // <- inherited Destroy never runs'#13#10 +
+        '  inherited;'#13#10 +
+        'end;';
+      Result.After :=
+        'destructor TFoo.Destroy;'#13#10 +
+        'begin'#13#10 +
+        '  try'#13#10 +
+        '    FList.Free;'#13#10 +
+        '    if Bad then raise EInvalidOp.Create(''oops'');'#13#10 +
+        '  except'#13#10 +
+        '    Log(''cleanup error - propagating'');'#13#10 +
+        '    // Optional: raise; - aber dann ist inherited weiter offen'#13#10 +
+        '  end;'#13#10 +
+        '  inherited;'#13#10 +
+        'end;';
+    end;
+
+    fkUnusedPrivateMethod:
+    begin
+      Result.Description := _('Private method has no caller in the unit - dead code');
+      Result.Before :=
+        'TFoo = class'#13#10 +
+        'private'#13#10 +
+        '  procedure HelperA;       // <- never called'#13#10 +
+        'public'#13#10 +
+        '  procedure DoStuff;'#13#10 +
+        'end;';
+      Result.After :=
+        '// Either delete the method, or call it from DoStuff /'#13#10 +
+        '// another method to make the dependency explicit:'#13#10 +
+        'TFoo = class'#13#10 +
+        'public'#13#10 +
+        '  procedure DoStuff;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// If kept for RTTI/published reflection, mark with'#13#10 +
+        '// // noinspection UnusedPrivateMethod';
+    end;
+
+    fkCanBeClassMethod:
+    begin
+      Result.Description := _('Method never accesses Self or instance fields - could be `class function`');
+      Result.Before :=
+        'TMath = class'#13#10 +
+        '  function Add(A, B: Integer): Integer;     // instance method'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        'function TMath.Add(A, B: Integer): Integer;'#13#10 +
+        'begin'#13#10 +
+        '  Result := A + B;          // only uses params, no Self'#13#10 +
+        'end;';
+      Result.After :=
+        'TMath = class'#13#10 +
+        '  class function Add(A, B: Integer): Integer; static;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        'class function TMath.Add(A, B: Integer): Integer;'#13#10 +
+        'begin'#13#10 +
+        '  Result := A + B;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Caller: TMath.Add(1, 2)   // no instance needed';
+    end;
+
+    fkBoolAlwaysTrue:
+    begin
+      Result.Description := _('Boolean comparison is always true / always false');
+      Result.Before :=
+        'if Length(s) >= 0 then       // <- Length is never negative -> always True'#13#10 +
+        '  DoStuff;'#13#10 +
+        ''#13#10 +
+        'if Length(s) < 0 then        // <- always False; dead code in branch'#13#10 +
+        '  DoOtherStuff;';
+      Result.After :=
+        '// Wahrscheinlich wolltest du das schreiben:'#13#10 +
+        'if Length(s) > 0 then DoStuff;       // non-empty check'#13#10 +
+        'if Length(s) = 0 then DoOtherStuff;  // empty check';
+    end;
+
+    fkConstantReturn:
+    begin
+      Result.Description := _('Function always returns the same literal on every code path');
+      Result.Before :=
+        'function GetTimeout: Integer;'#13#10 +
+        'begin'#13#10 +
+        '  if SlowMode then'#13#10 +
+        '    Result := 30'#13#10 +
+        '  else'#13#10 +
+        '    Result := 30;          // <- alle Pfade -> immer 30'#13#10 +
+        'end;';
+      Result.After :=
+        'const DEFAULT_TIMEOUT = 30;'#13#10 +
+        ''#13#10 +
+        'function GetTimeout: Integer;'#13#10 +
+        'begin'#13#10 +
+        '  Result := DEFAULT_TIMEOUT;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// oder: die Konstante direkt am Aufrufer nutzen,'#13#10 +
+        '// die Function komplett entfernen.';
+    end;
+
+    fkHardcodedString:
+    begin
+      Result.Description := _('User-visible string is hardcoded - move to resourcestring / i18n');
+      Result.Before :=
+        'Form1.Caption := ''Mein Programm'';        // not translatable'#13#10 +
+        'Button1.Hint  := ''Klick mich'';'#13#10 +
+        'ShowMessage(''Daten gespeichert'');';
+      Result.After :=
+        'resourcestring'#13#10 +
+        '  SAppCaption = ''Mein Programm'';'#13#10 +
+        '  SBtnHint    = ''Klick mich'';'#13#10 +
+        '  SSavedMsg   = ''Daten gespeichert'';'#13#10 +
+        ''#13#10 +
+        'Form1.Caption := SAppCaption;'#13#10 +
+        'Button1.Hint  := SBtnHint;'#13#10 +
+        'ShowMessage(SSavedMsg);'#13#10 +
+        ''#13#10 +
+        '// oder ueber dxgettext: _(''Mein Programm'')';
+    end;
+
+    fkMissingOverride:
+    begin
+      Result.Description := _('Method shadows a virtual parent method - add `override` directive');
+      Result.Before :=
+        'TBase = class'#13#10 +
+        '  procedure DoWork; virtual;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        'TDerived = class(TBase)'#13#10 +
+        '  procedure DoWork;          // <- shadows TBase.DoWork (W1010)'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Base := Derived;'#13#10 +
+        '// Base.DoWork;              // -> calls TBase.DoWork, not TDerived';
+      Result.After :=
+        'TDerived = class(TBase)'#13#10 +
+        '  procedure DoWork; override;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Now Base.DoWork dispatches polymorphically to TDerived.DoWork.'#13#10 +
+        '// Alternative: if the shadowing is intentional, use `reintroduce`.';
+    end;
+
+    fkBooleanParam:
+    begin
+      Result.Description := _('Boolean parameter drives internal branching - consider two methods with descriptive names');
+      Result.Before :=
+        'procedure SendNotification(const Msg: string; IsError: Boolean);'#13#10 +
+        'begin'#13#10 +
+        '  if IsError then Notify(Msg, clRed) else Notify(Msg, clBlack);'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Caller: SendNotification(s, True);  // True = ???';
+      Result.After :=
+        'procedure SendErrorNotification(const Msg: string);'#13#10 +
+        'begin Notify(Msg, clRed); end;'#13#10 +
+        ''#13#10 +
+        'procedure SendInfoNotification(const Msg: string);'#13#10 +
+        'begin Notify(Msg, clBlack); end;'#13#10 +
+        ''#13#10 +
+        '// Caller: SendErrorNotification(s);   // intent obvious';
+    end;
+
+    fkGodClass:
+    begin
+      Result.Description := _('Class has too many methods or fields - split into focused units');
+      Result.Before :=
+        'TUiController = class             // 60 methods, 80 fields'#13#10 +
+        '  FToolbar: ...;'#13#10 +
+        '  FFilters: ...;'#13#10 +
+        '  FGrid: ...;'#13#10 +
+        '  // ... 50 more F* fields ...'#13#10 +
+        '  procedure BuildToolbar;'#13#10 +
+        '  procedure FilterChange(...);'#13#10 +
+        '  procedure GridDrawCell(...);'#13#10 +
+        '  // ... 50 more methods - mixing concerns'#13#10 +
+        'end;';
+      Result.After :=
+        '// Extract concerns into focused records / helper classes:'#13#10 +
+        'TToolbarSlots = record FBtnRun, FBtnStop, ...: TButton; end;'#13#10 +
+        'TFilterController = class ... end;'#13#10 +
+        'TGridRenderer    = class ... end;'#13#10 +
+        ''#13#10 +
+        'TUiController = class                // now ~10 methods, ~5 fields'#13#10 +
+        '  FToolbar: TToolbarSlots;'#13#10 +
+        '  FFilter:  TFilterController;'#13#10 +
+        '  FGrid:    TGridRenderer;'#13#10 +
+        '  procedure Setup;'#13#10 +
+        'end;';
+    end;
+
+    fkUnpairedLock:
+    begin
+      Result.Description := _('Lock / Enter without try/finally - exception path leaks the lock and deadlocks');
+      Result.Before :=
+        'FLocker.Lock;'#13#10 +
+        'DoStuff;        // <- exception here'#13#10 +
+        'FLocker.UnLock; // <- never reached, lock stays held forever'#13#10 +
+        ''#13#10 +
+        '// EnterCriticalSection / TSynLocker.Lock / TMonitor.Enter:'#13#10 +
+        '// any exception between acquire and release deadlocks the app.'#13#10 +
+        '// Next thread to touch the same lock waits forever.';
+      Result.After :=
+        'FLocker.Lock;'#13#10 +
+        'try'#13#10 +
+        '  DoStuff;'#13#10 +
+        'finally'#13#10 +
+        '  FLocker.UnLock; // always executes'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// EnterCriticalSection -> LeaveCriticalSection'#13#10 +
+        '// TMonitor.Enter      -> TMonitor.Exit'#13#10 +
+        '// TSynLocker.Lock     -> TSynLocker.UnLock'#13#10 +
+        '// Always pair acquire/release in a try/finally block.';
+    end;
+
+    fkMoveSizeOfPointer:
+    begin
+      Result.Description := _('Move / FillChar uses SizeOf(pointer-type) - copies only 4/8 bytes, not the target buffer');
+      Result.Before :=
+        'var Buf: array[0..255] of Byte;'#13#10 +
+        '    P:   PByte;'#13#10 +
+        'P := @Buf;'#13#10 +
+        'Move(Src^, P^, SizeOf(PByte));    // <- copies 8 bytes (pointer), not 256'#13#10 +
+        'FillChar(P^, SizeOf(PInteger), 0); // <- zeroes 8 bytes, not the integer'#13#10 +
+        ''#13#10 +
+        '// Pattern: SizeOf(PXxx) returns the size of the POINTER (4/8 bytes),'#13#10 +
+        '// not the size of the pointed-to data. Almost always a bug - the'#13#10 +
+        '// caller meant SizeOf(Xxx) or Length(Buf) or a count*ElementSize.';
+      Result.After :=
+        '// Option 1: take SizeOf of the value type, not the pointer type.'#13#10 +
+        'Move(Src^, P^, SizeOf(Byte) * Count);   // explicit count'#13#10 +
+        'FillChar(P^, SizeOf(Integer), 0);       // zero the integer'#13#10 +
+        ''#13#10 +
+        '// Option 2: use a typed variable and let the compiler size it.'#13#10 +
+        'var V: Integer;'#13#10 +
+        'FillChar(V, SizeOf(V), 0);              // safe - matches V''s size'#13#10 +
+        ''#13#10 +
+        '// Option 3: copy whole arrays via the array variable, not the pointer.'#13#10 +
+        'Move(Src[0], Buf[0], Length(Buf));      // copies all elements';
+    end;
+
+    fkGetMemWithoutFreeMem:
+    begin
+      Result.Description := _('GetMem / AllocMem without surrounding try/finally - exception path leaks the buffer');
+      Result.Before :=
+        'var P: PByte;'#13#10 +
+        'begin'#13#10 +
+        '  GetMem(P, 1024);'#13#10 +
+        '  FillBuffer(P);    // <- exception here'#13#10 +
+        '  ProcessBuffer(P); // <- never reached'#13#10 +
+        '  FreeMem(P);       // <- never reached, buffer leaked'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// GetMem / AllocMem / ReallocMem allocate raw heap memory.'#13#10 +
+        '// Any exception between allocation and FreeMem leaks the'#13#10 +
+        '// buffer permanently. mORMot uses this idiom for high-'#13#10 +
+        '// performance buffer manipulation in core/ - every'#13#10 +
+        '// missing try/finally is a production leak.';
+      Result.After :=
+        'var P: PByte;'#13#10 +
+        'begin'#13#10 +
+        '  GetMem(P, 1024);'#13#10 +
+        '  try'#13#10 +
+        '    FillBuffer(P);'#13#10 +
+        '    ProcessBuffer(P);'#13#10 +
+        '  finally'#13#10 +
+        '    FreeMem(P); // always executes'#13#10 +
+        '  end;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// The allocation line goes OUTSIDE the try.'#13#10 +
+        '// If GetMem itself fails (out-of-memory), there is'#13#10 +
+        '// no buffer to free.'#13#10 +
+        ''#13#10 +
+        '// Pairings:'#13#10 +
+        '//   GetMem / AllocMem / ReallocMem  -> FreeMem'#13#10 +
+        '//   New(p)                           -> Dispose(p)'#13#10 +
+        '//   StrAlloc                         -> StrDispose';
+    end;
+
+    fkSetLengthAppendInLoop:
+    begin
+      Result.Description := _('SetLength(arr, Length(arr) + 1) inside a loop - O(n*n) realloc, grow once before the loop');
+      Result.Before :=
+        'var i: Integer;'#13#10 +
+        '    Dest: TArray<Integer>;'#13#10 +
+        'begin'#13#10 +
+        '  for i := 0 to Source.Count - 1 do'#13#10 +
+        '  begin'#13#10 +
+        '    SetLength(Dest, Length(Dest) + 1); // <- realloc EVERY iteration'#13#10 +
+        '    Dest[High(Dest)] := Source[i];'#13#10 +
+        '  end;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Realloc on every iteration copies n*(n+1)/2 elements'#13#10 +
+        '// instead of n. At 10_000 items: 50 million ops vs. 10_000'#13#10 +
+        '// - 5000x slower. Quadratic scaling trap that only shows'#13#10 +
+        '// up under real-world load.';
+      Result.After :=
+        '// Option 1: grow once when the size is known.'#13#10 +
+        'SetLength(Dest, Source.Count);'#13#10 +
+        'for i := 0 to Source.Count - 1 do'#13#10 +
+        '  Dest[i] := Source[i];'#13#10 +
+        ''#13#10 +
+        '// Option 2: grow in blocks if the final size is unknown.'#13#10 +
+        'const BLOCK = 64;'#13#10 +
+        'Used := 0;'#13#10 +
+        'SetLength(Dest, BLOCK);'#13#10 +
+        'while More do'#13#10 +
+        'begin'#13#10 +
+        '  if Used >= Length(Dest) then'#13#10 +
+        '    SetLength(Dest, Length(Dest) + BLOCK); // doubling/blocked'#13#10 +
+        '  Dest[Used] := NextItem;'#13#10 +
+        '  Inc(Used);'#13#10 +
+        'end;'#13#10 +
+        'SetLength(Dest, Used); // trim to actual size'#13#10 +
+        ''#13#10 +
+        '// Option 3: use TList<T> which amortizes growth internally.';
+    end;
+
+    fkPointerArithmeticOnString:
+    begin
+      Result.Description := _('PChar(s) +/- offset without empty-check - PChar('''') returns nil, arithmetic triggers AV');
+      Result.Before :=
+        'procedure Foo(const s: string);'#13#10 +
+        'var p: PChar;'#13#10 +
+        'begin'#13#10 +
+        '  p := PChar(s) + 5;       // <- if s='''' then PChar(s) = nil'#13#10 +
+        '  while p^ <> #0 do Inc(p);// <- AV at address $00000005'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Delphi optimizes PChar('''') to NIL (not a pointer to #0).'#13#10 +
+        '// Any arithmetic on the result without a prior empty-check'#13#10 +
+        '// is a latent Access Violation: nil + 5 is dereferenced'#13#10 +
+        '// as a real address. mORMot internals avoid this with'#13#10 +
+        '// explicit `if s <> '''' then` guards; user code copying'#13#10 +
+        '// the idiom often skips the guard.';
+      Result.After :=
+        '// Option 1: empty-check before arithmetic.'#13#10 +
+        'procedure Foo(const s: string);'#13#10 +
+        'var p: PChar;'#13#10 +
+        'begin'#13#10 +
+        '  if s = '''' then Exit;'#13#10 +
+        '  p := PChar(s) + 5;'#13#10 +
+        '  while p^ <> #0 do Inc(p);'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Option 2: length-check makes the offset safe explicitly.'#13#10 +
+        'if Length(s) >= 6 then'#13#10 +
+        '  p := PChar(s) + 5;'#13#10 +
+        ''#13#10 +
+        '// Option 3: use higher-level helpers that take a string'#13#10 +
+        '// (Copy / TStringHelper.Substring) so PChar arithmetic'#13#10 +
+        '// stays out of the call site entirely.';
+    end;
+
+    fkWithMultipleTargets:
+    begin
+      Result.Description := _('with statement names multiple targets - ambiguous member lookup');
+      Result.Before :=
+        'with Form1, List1 do'#13#10 +
+        '  DoStuff;'#13#10 +
+        ''#13#10 +
+        '// Where does DoStuff come from? Form1 or List1? Whichever the'#13#10 +
+        '// compiler picks today, a new method added to either object'#13#10 +
+        '// silently changes the meaning tomorrow. Maintenance trap.'#13#10 +
+        ''#13#10 +
+        '// Renames (F2 / IDE refactor) miss these references because the'#13#10 +
+        '// target object is not named at the call site.';
+      Result.After :=
+        '// Replace with explicit qualifications.'#13#10 +
+        'Form1.DoStuff;        // intent obvious'#13#10 +
+        'List1.Sort;'#13#10 +
+        ''#13#10 +
+        '// Or, if you really need a short alias, introduce a local var:'#13#10 +
+        'var L: TList; F: TForm1;'#13#10 +
+        'L := List1; F := Form1;'#13#10 +
+        'F.DoStuff;'#13#10 +
+        'L.Sort;'#13#10 +
+        ''#13#10 +
+        '// Rule of thumb: avoid with entirely. Code-reviews, refactoring'#13#10 +
+        '// tools, and future readers all benefit from explicit receivers.';
+    end;
+
   end;
 end;
 

@@ -423,6 +423,26 @@ begin
              'Konstruktor erzeugt Felder und raised - teil-initialisierte Felder leaken auf dem Exception-Pfad');
   GDeMap.Add('Int64 target gets product of two ints - multiplication overflows in 32-bit',
              'Int64-Ziel bekommt Produkt zweier Int32 - Multiplikation '#$FC'berl'#$E4'uft in 32-Bit');
+  // Sonar-50 #31 (SCA138)
+  GDeMap.Add('God Class',                            'Gott-Klasse');
+  GDeMap.Add('Class has too many methods or fields - split into focused units',
+             'Klasse hat zu viele Methoden oder Felder - in fokussierte Units aufteilen');
+  // Sonar-50 #25/#34/#35/#47/#48 (SCA139-143)
+  GDeMap.Add('Free without nil-out',                 'Free ohne Nil-Out');
+  GDeMap.Add('Multiple Exit',                        'Mehrfaches Exit');
+  GDeMap.Add('Large Class',                          'Gro'#$DF'e Klasse');
+  GDeMap.Add('Unsorted uses clause',                 'Unsortierte uses-Klausel');
+  GDeMap.Add('Missing unit header',                  'Fehlender Unit-Header');
+  GDeMap.Add('Free without nil-out - prefer FreeAndNil for dangling-pointer safety',
+             'Free ohne Nil-Out - FreeAndNil ist sicherer gegen dangling pointer');
+  GDeMap.Add('Method has too many Exit statements - consolidate guards / single return',
+             'Methode hat zu viele Exit-Anweisungen - Guards zusammenfassen oder Single-Return-Pattern');
+  GDeMap.Add('Class spans too many lines - split responsibilities into focused units',
+             'Klasse umfasst zu viele Zeilen - Verantwortlichkeiten auf fokussierte Units aufteilen');
+  GDeMap.Add('uses clause is not in alphabetical order',
+             'uses-Klausel ist nicht alphabetisch sortiert');
+  GDeMap.Add('Unit has no descriptive header comment',
+             'Unit hat keinen erkl'#$E4'renden Header-Kommentar');
   // Tools > Options - Hotkeys-Gruppe
   GDeMap.Add('Hotkeys',                      'Tastenk'#$FC'rzel');
   GDeMap.Add('Enable finding navigation (Ctrl+Alt+Up / Ctrl+Alt+Down)',
@@ -433,6 +453,90 @@ begin
              'Im aktuellen Editor-Tab zur n'#$E4'chsten / vorherigen markierten ' +
              'Befund-Zeile springen (Wrap-around am Datei-Ende/-Anfang). ' +
              'Deaktivieren gibt den Shortcut wieder an die IDE-Default-Belegung frei.');
+  // Shortcut-Liste in der Hotkeys-Gruppe
+  GDeMap.Add('Available shortcuts:',                 'Verf'#$FC'gbare Tastenk'#$FC'rzel:');
+  GDeMap.Add('Ctrl+Alt+A      global         Analyse current file (silent)',
+             'Strg+Alt+A      global              Aktuelle Datei still analysieren');
+  GDeMap.Add('Ctrl+Alt+Up     global         Jump to previous finding line',
+             'Strg+Alt+'#$2191'      global              Zum vorherigen Befund springen');
+  GDeMap.Add('Ctrl+Alt+Down   global         Jump to next finding line',
+             'Strg+Alt+'#$2193'      global              Zum n'#$E4'chsten Befund springen');
+  GDeMap.Add('Ctrl+Alt+F      findings grid  Apply Quick-Fix in editor',
+             'Strg+Alt+F      Befund-Tabelle      Quick-Fix im Editor anwenden');
+  GDeMap.Add('Ctrl+Alt+S      findings grid  Insert "// noinspection" marker',
+             'Strg+Alt+S      Befund-Tabelle      "// noinspection"-Marker einf'#$FC'gen');
+  GDeMap.Add('Enter           findings grid  Goto editor line (same as dbl-click)',
+             'Enter           Befund-Tabelle      Zur Editor-Zeile springen (wie Doppelklick)');
+  // Konfigurierbare Shortcut-Edits (cnpack-Stil)
+  GDeMap.Add('Configurable shortcuts (click into field + press key combo):',
+             'Konfigurierbare Tastenk'#$FC'rzel (in Feld klicken + Tastenkombi dr'#$FC'cken):');
+  GDeMap.Add('Silent analysis:',           'Stille Analyse:');
+  GDeMap.Add('Jump to previous finding:',  'Zum vorherigen Befund springen:');
+  GDeMap.Add('Jump to next finding:',      'Zum n'#$E4'chsten Befund springen:');
+  GDeMap.Add('Changes take effect after restarting the IDE.',
+             #$C4'nderungen werden erst nach IDE-Neustart wirksam.');
+  GDeMap.Add('Findings-grid shortcuts (not configurable): Ctrl+Alt+F = Quick-Fix, ' +
+             'Ctrl+Alt+S = Suppression, Enter = goto editor line.',
+             'Tastenk'#$FC'rzel in der Befund-Tabelle (nicht konfigurierbar): ' +
+             'Strg+Alt+F = Quick-Fix, Strg+Alt+S = Suppress-Marker, ' +
+             'Enter = Editor-Zeile '#$F6'ffnen.');
+  // Master-Toggle
+  GDeMap.Add('Enable all keyboard shortcuts (master toggle)',
+             'Alle Tastenk'#$FC'rzel aktivieren (Master-Toggle)');
+  GDeMap.Add('Disable to mute every plugin shortcut at once. Right-click menu + ' +
+             'toolbar buttons remain functional.',
+             'Deaktivieren schaltet ALLE Plugin-Tastenk'#$FC'rzel auf einmal ab. ' +
+             'Rechtsklick-Men'#$FC' und Toolbar-Buttons bleiben funktional.');
+  // Sonar-50 #19/#23/#33 (SCA144-146)
+  GDeMap.Add('Float equality',                       'Float-Gleichheit');
+  GDeMap.Add('Raise in destructor',                  'Raise im Destruktor');
+  GDeMap.Add('Boolean parameter as flag',            'Boolean-Parameter als Flag');
+  GDeMap.Add('Float equality is unreliable due to IEEE-754 rounding - use SameValue/Math.IsZero',
+             'Float-Gleichheit ist wegen IEEE-754-Rundung unzuverl'#$E4'ssig - SameValue/Math.IsZero benutzen');
+  GDeMap.Add('Raise inside destructor without try/except - cleanup is aborted',
+             'Raise im Destruktor ohne try/except - Cleanup wird abgebrochen');
+  GDeMap.Add('Boolean parameter drives internal branching - consider two methods with descriptive names',
+             'Boolean-Parameter steuert internes Branching - zwei Methoden mit sprechenden Namen sind klarer');
+  // Sonar-50 #37/#50/#21 (SCA147-149)
+  GDeMap.Add('Unused private method',                'Ungenutzte private Methode');
+  GDeMap.Add('Could be class method',                'K'#$F6'nnte Klassen-Methode sein');
+  GDeMap.Add('Missing override',                     'Fehlendes override');
+  GDeMap.Add('Private method has no caller in the unit - dead code',
+             'Private Methode hat keinen Aufrufer in der Unit - toter Code');
+  GDeMap.Add('Method never accesses Self or instance fields - could be `class function`',
+             'Methode greift weder auf Self noch auf Instanz-Felder zu - k'#$F6'nnte `class function` sein');
+  GDeMap.Add('Method shadows a virtual parent method - add `override` directive',
+             'Methode verdeckt eine virtuelle Parent-Methode - `override`-Direktive hinzuf'#$FC'gen');
+  // Sonar-50 #18/#43/#46 (SCA150-152)
+  GDeMap.Add('Boolean always true / false',          'Boolean immer wahr / falsch');
+  GDeMap.Add('Constant return value',                'Konstanter R'#$FC'ckgabewert');
+  GDeMap.Add('Hardcoded user string',                'Hartcodierter User-String');
+  GDeMap.Add('Boolean comparison is always true / always false',
+             'Boolescher Vergleich ist immer wahr / immer falsch');
+  GDeMap.Add('Function always returns the same literal on every code path',
+             'Function liefert auf jedem Pfad dasselbe Literal zur'#$FC'ck');
+  GDeMap.Add('User-visible string is hardcoded - move to resourcestring / i18n',
+             'User-sichtbarer String ist hartcodiert - in resourcestring / i18n verschieben');
+  // mORMot-Cluster (SCA153-155)
+  GDeMap.Add('Unpaired Lock',                        'Lock ohne Gegenst'#$FC'ck');
+  GDeMap.Add('Move/FillChar SizeOf(Pointer)',        'Move/FillChar mit SizeOf(Pointer)');
+  GDeMap.Add('with on multiple targets',             'with mit mehreren Zielen');
+  GDeMap.Add('Lock / Enter without try/finally - exception path leaks the lock and deadlocks',
+             'Lock / Enter ohne try/finally - Exception verliert das Lock und f'#$FC'hrt zum Deadlock');
+  GDeMap.Add('Move / FillChar uses SizeOf(pointer-type) - copies only 4/8 bytes, not the target buffer',
+             'Move / FillChar benutzt SizeOf(Pointer-Typ) - kopiert nur 4/8 Bytes, nicht den Zielpuffer');
+  GDeMap.Add('with statement names multiple targets - ambiguous member lookup',
+             'with-Anweisung nennt mehrere Ziele - mehrdeutige Member-Aufl'#$F6'sung');
+  // mORMot-Cluster Phase 2 (SCA156-158)
+  GDeMap.Add('GetMem without try/finally',           'GetMem ohne try/finally');
+  GDeMap.Add('SetLength grow in loop',               'SetLength-Wachstum in Schleife');
+  GDeMap.Add('PChar arithmetic w/o empty-check',     'PChar-Arithmetik ohne Empty-Check');
+  GDeMap.Add('GetMem / AllocMem without surrounding try/finally - exception path leaks the buffer',
+             'GetMem / AllocMem ohne umgebendes try/finally - Exception verliert den Buffer');
+  GDeMap.Add('SetLength(arr, Length(arr) + 1) inside a loop - O(n*n) realloc, grow once before the loop',
+             'SetLength(arr, Length(arr) + 1) innerhalb einer Schleife - O(n*n) Realloc, einmal vor der Schleife vergr'#$F6#$DF'ern');
+  GDeMap.Add('PChar(s) +/- offset without empty-check - PChar('''') returns nil, arithmetic triggers AV',
+             'PChar(s) +/- Offset ohne Empty-Check - PChar('''') liefert nil, Arithmetik f'#$FC'hrt zu AV');
   // DFM
   GDeMap.Add('Published method looks like an event handler but no component binds it',
              'Published-Methode sieht aus wie ein Event-Handler, aber keine Komponente bindet sie');

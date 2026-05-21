@@ -30,16 +30,17 @@ uses
   uIDELineHighlighter, uIDEEditorIntegration;
 
 function IsFindingNavEnabled: Boolean;
-// Liest [Hotkeys] FindingNavEnabled aus analyser.ini bei jedem Tastendruck -
-// damit User-Toggle ohne IDE-Restart sofort wirkt. Default True (kein
-// Plugin-Reload noetig wenn die INI noch nichts dazu enthaelt).
+// Liest [Hotkeys] FindingNavEnabled UND ShortcutsEnabled aus analyser.ini
+// bei jedem Tastendruck - beide muessen True sein damit die Hotkey
+// feuert. ShortcutsEnabled ist der Master-Toggle ueber alle Shortcuts,
+// FindingNavEnabled der Per-Feature-Toggle. Default beide True.
 var
   Settings : TRepoSettings;
 begin
   Settings := TRepoSettings.Create;
   try
     try Settings.Load; except end;
-    Result := Settings.FindingNavEnabled;
+    Result := Settings.ShortcutsEnabled and Settings.FindingNavEnabled;
   finally
     Settings.Free;
   end;
@@ -76,15 +77,33 @@ var
 
 procedure TSCAFindingNavBinding.BindKeyboard(
   const BindingServices: IOTAKeyBindingServices);
+// Zwei Bindings, beide konfigurierbar via analyser.ini [Hotkeys]
+// FindingNavUpShortcut / FindingNavDownShortcut. Defaults Ctrl+Alt+Up
+// und Ctrl+Alt+Down. Aenderung erfordert IDE-Neustart.
+var
+  Settings : TRepoSettings;
+  ScUp, ScDown : TShortCut;
 begin
-  // Zwei Bindings: Ctrl+Alt+Down (next) und Ctrl+Alt+Up (previous).
-  // AddKeyBinding mit nur einem ShortCut pro Aufruf (mehrere TShortcut in
-  // einem Array waeren "alle dieser Shortcuts triggern dasselbe Handler" -
-  // wir wollen aber zwei getrennte Handler).
-  BindingServices.AddKeyBinding(
-    [ShortCut(VK_DOWN, [ssCtrl, ssAlt])], NextFindingKeyProc, nil);
-  BindingServices.AddKeyBinding(
-    [ShortCut(VK_UP,   [ssCtrl, ssAlt])], PrevFindingKeyProc, nil);
+  ScUp   := ShortCut(VK_UP,   [ssCtrl, ssAlt]);
+  ScDown := ShortCut(VK_DOWN, [ssCtrl, ssAlt]);
+  Settings := TRepoSettings.Create;
+  try
+    try Settings.Load; except end;
+    if Trim(Settings.FindingNavUpShortcut) <> '' then
+    begin
+      var P := TextToShortCut(Settings.FindingNavUpShortcut);
+      if P <> 0 then ScUp := P;
+    end;
+    if Trim(Settings.FindingNavDownShortcut) <> '' then
+    begin
+      var P := TextToShortCut(Settings.FindingNavDownShortcut);
+      if P <> 0 then ScDown := P;
+    end;
+  finally
+    Settings.Free;
+  end;
+  BindingServices.AddKeyBinding([ScDown], NextFindingKeyProc, nil);
+  BindingServices.AddKeyBinding([ScUp],   PrevFindingKeyProc, nil);
 end;
 
 function TSCAFindingNavBinding.GetBindingType: TBindingType;

@@ -21,9 +21,11 @@ unit uIDESCAOptions;
 interface
 
 uses
+  Winapi.Windows,                                     // VK_TAB / VK_ESCAPE / VK_BACK ...
   System.Classes, System.SysUtils, System.UITypes,    // clGrayText
   Vcl.Graphics,                                       // TFontStyle (fsBold)
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
+  Vcl.Menus,                                          // ShortCut / TextToShortCut / ShortCutToText
   ToolsAPI,
   uRepoSettings,
   uLocalization,                 // _() i18n-Wrapper
@@ -31,14 +33,31 @@ uses
 
 type
   TSCAOptionsFrame = class(TFrame)
+    // Scroll-Container: das Frame ist mittlerweile hoeher als die meisten
+    // Options-Dialoge der IDE - User braucht eine Scroll-Moeglichkeit, sonst
+    // sind die unteren Gruppen (Rule-Set, Detectors) ggf. nicht erreichbar.
+    // TScrollBox mit AutoScroll=True: die ScrollBar-Range adaptiert
+    // automatisch an die kumulative Hoehe der GroupBox-Children.
+    FScroll            : TScrollBox;
     // Silent-Mode
     grpSilent          : TGroupBox;
     chkSilentEnabled   : TCheckBox;
     lblSilentInfo      : TLabel;
     // Hotkeys
     grpHotkeys           : TGroupBox;
+    chkShortcutsEnabled  : TCheckBox;     // Master-Toggle - oben in der Gruppe
+    lblMasterInfo        : TLabel;
     chkFindingNavEnabled : TCheckBox;
     lblFindingNavInfo    : TLabel;
+    lblShortcutsCaption  : TLabel;
+    lblShortcutSilent    : TLabel;
+    edShortcutSilent     : TEdit;
+    lblShortcutUp        : TLabel;
+    edShortcutUp         : TEdit;
+    lblShortcutDown      : TLabel;
+    edShortcutDown       : TEdit;
+    lblRestartHint       : TLabel;
+    lblGridShortcuts     : TLabel;
     // Rule-Set
     grpRuleSet         : TGroupBox;
     lblProfile         : TLabel;
@@ -56,6 +75,10 @@ type
     procedure BuildControls;
     procedure PopulateProfileCombos;
     procedure PopulateMinSevCombo;
+    // KeyDown-Capture (cnpack-Stil): User klickt in das Edit + drueckt eine
+    // Tastenkombi; wir schreiben die ShortCutToText-Repraesentation rein.
+    procedure ShortcutEditKeyDown(Sender: TObject; var Key: Word;
+      Shift: TShiftState);
   public
     constructor Create(AOwner: TComponent); override;
     // Werte aus den Settings in die Controls schreiben (FrameCreated).
@@ -135,11 +158,26 @@ var
   end;
 
 begin
+  // ---- Scroll-Container ----
+  // Frame fuellt sich selbst (Tools > Options legt das in eine fixed-size
+  // Page). Der ScrollBox darin fuellt das Frame komplett (alClient) und
+  // adapter die VertScrollBar-Range automatisch an die GroupBox-Hoehen.
+  // Settings haben mittlerweile 4 Gruppen (Silent/Hotkeys/RuleSet/Detectors)
+  // mit kumulativ ~700+ Pixel - ohne Scroll waeren die unteren nicht
+  // erreichbar auf kleineren Options-Dialogen.
+  FScroll              := TScrollBox.Create(Self);
+  FScroll.Parent       := Self;
+  FScroll.Align        := alClient;
+  FScroll.BorderStyle  := bsNone;
+  FScroll.AutoScroll   := True;
+  FScroll.VertScrollBar.Tracking  := True;
+  FScroll.HorzScrollBar.Visible   := False;
+
   Y := MARGIN_TOP;
   // ================= Silent Mode =================
   // Hoehe 120 deckt Checkbox (22) + Info-Label mit 2 Zeilen WordWrap ab.
   grpSilent              := TGroupBox.Create(Self);
-  grpSilent.Parent       := Self;
+  grpSilent.Parent       := FScroll;
   grpSilent.Left         := MARGIN_LEFT;
   grpSilent.Top          := NextY(120);
   grpSilent.Width        := GROUP_W;
@@ -170,42 +208,9 @@ begin
     _('Editor right-click + Ctrl+Alt+A trigger a single-file analysis; ' +
       'findings appear as stripes + hover overlays in the editor (no dock).');
 
-  // ================= Hotkeys =================
-  // Eigene Gruppe damit klar erkennbar: das ist nicht Teil von "Silent Mode",
-  // sondern eine separate Convenience-Bindung die nur funktioniert wenn schon
-  // Marker im Editor sind. Hoehe 100 deckt Checkbox + 2-Zeilen-Info ab.
-  grpHotkeys              := TGroupBox.Create(Self);
-  grpHotkeys.Parent       := Self;
-  grpHotkeys.Left         := MARGIN_LEFT;
-  grpHotkeys.Top          := NextY(100);
-  grpHotkeys.Width        := GROUP_W;
-  grpHotkeys.Height       := 100;
-  grpHotkeys.Caption      := _('Hotkeys');
-
-  chkFindingNavEnabled         := TCheckBox.Create(Self);
-  chkFindingNavEnabled.Parent  := grpHotkeys;
-  chkFindingNavEnabled.Left    := INNER_LEFT;
-  chkFindingNavEnabled.Top     := INNER_TOP;
-  chkFindingNavEnabled.Width   := GROUP_W - 2 * INNER_LEFT;
-  chkFindingNavEnabled.Caption :=
-    _('Enable finding navigation (Ctrl+Alt+Up / Ctrl+Alt+Down)');
-
-  lblFindingNavInfo            := TLabel.Create(Self);
-  lblFindingNavInfo.Parent     := grpHotkeys;
-  lblFindingNavInfo.AutoSize   := False;
-  lblFindingNavInfo.Left       := INNER_LEFT + 16;
-  lblFindingNavInfo.Top        := chkFindingNavEnabled.Top + chkFindingNavEnabled.Height + 6;
-  lblFindingNavInfo.Width      := GROUP_W - 2 * INNER_LEFT - 16;
-  lblFindingNavInfo.Height     := 40;
-  lblFindingNavInfo.WordWrap   := True;
-  lblFindingNavInfo.Caption    :=
-    _('Jump to the next / previous highlighted finding line in the current ' +
-      'editor tab (wrap-around at file end/start). Disable to release the ' +
-      'shortcut to the IDE default handler.');
-
   // ================= Rule-Set =================
   grpRuleSet              := TGroupBox.Create(Self);
-  grpRuleSet.Parent       := Self;
+  grpRuleSet.Parent       := FScroll;
   grpRuleSet.Left         := MARGIN_LEFT;
   grpRuleSet.Top          := NextY(124);
   grpRuleSet.Width        := GROUP_W;
@@ -262,7 +267,7 @@ begin
 
   // ================= Detectors =================
   grpDetectors            := TGroupBox.Create(Self);
-  grpDetectors.Parent     := Self;
+  grpDetectors.Parent     := FScroll;
   grpDetectors.Left       := MARGIN_LEFT;
   grpDetectors.Top        := NextY(110);
   grpDetectors.Width      := GROUP_W;
@@ -291,6 +296,152 @@ begin
   chkAutoDiscover.Width   := GROUP_W - 2 * INNER_LEFT;
   chkAutoDiscover.Caption := _('AutoDiscoverClasses - extend LeakyClasses with ' +
                                'project-specific classes');
+
+  // ================= Hotkeys ================= (BOTTOM)
+  // Bewusst als letzte Gruppe positioniert - Shortcut-Konfiguration ist
+  // unten in den Settings, weil sie selten geaendert wird und in der ueb-
+  // lichen "scroll to see more" Lese-Reihenfolge der Page steht.
+  //
+  // Struktur:
+  //   * chkShortcutsEnabled         = Master-Toggle ueber ALLE Shortcuts
+  //   * chkFindingNavEnabled + Info = Per-Feature-Toggle Befund-Navigation
+  //   * Drei TEdit-Felder (cnpack-Stil): klick + Tastenkombi -> ShortCutToText
+  //   * Restart-Hinweis (italic) + nicht-konfigurierbare Grid-Shortcuts
+  grpHotkeys              := TGroupBox.Create(Self);
+  grpHotkeys.Parent       := FScroll;
+  grpHotkeys.Left         := MARGIN_LEFT;
+  grpHotkeys.Top          := NextY(360);
+  grpHotkeys.Width        := GROUP_W;
+  grpHotkeys.Height       := 360;
+  grpHotkeys.Caption      := _('Hotkeys');
+
+  // ---- Master-Toggle (alle Shortcuts) ----
+  chkShortcutsEnabled         := TCheckBox.Create(Self);
+  chkShortcutsEnabled.Parent  := grpHotkeys;
+  chkShortcutsEnabled.Left    := INNER_LEFT;
+  chkShortcutsEnabled.Top     := INNER_TOP;
+  chkShortcutsEnabled.Width   := GROUP_W - 2 * INNER_LEFT;
+  chkShortcutsEnabled.Caption := _('Enable all keyboard shortcuts (master toggle)');
+  chkShortcutsEnabled.Font.Style := [fsBold];
+
+  lblMasterInfo               := TLabel.Create(Self);
+  lblMasterInfo.Parent        := grpHotkeys;
+  lblMasterInfo.AutoSize      := False;
+  lblMasterInfo.Left          := INNER_LEFT + 16;
+  lblMasterInfo.Top           := chkShortcutsEnabled.Top + chkShortcutsEnabled.Height + 4;
+  lblMasterInfo.Width         := GROUP_W - 2 * INNER_LEFT - 16;
+  lblMasterInfo.Height        := 28;
+  lblMasterInfo.WordWrap      := True;
+  lblMasterInfo.Caption       :=
+    _('Disable to mute every plugin shortcut at once. Right-click menu + ' +
+      'toolbar buttons remain functional.');
+
+  // ---- Per-Feature: Befund-Navigation ----
+  chkFindingNavEnabled         := TCheckBox.Create(Self);
+  chkFindingNavEnabled.Parent  := grpHotkeys;
+  chkFindingNavEnabled.Left    := INNER_LEFT;
+  chkFindingNavEnabled.Top     := lblMasterInfo.Top + lblMasterInfo.Height + 8;
+  chkFindingNavEnabled.Width   := GROUP_W - 2 * INNER_LEFT;
+  chkFindingNavEnabled.Caption :=
+    _('Enable finding navigation (Ctrl+Alt+Up / Ctrl+Alt+Down)');
+
+  lblFindingNavInfo            := TLabel.Create(Self);
+  lblFindingNavInfo.Parent     := grpHotkeys;
+  lblFindingNavInfo.AutoSize   := False;
+  lblFindingNavInfo.Left       := INNER_LEFT + 16;
+  lblFindingNavInfo.Top        := chkFindingNavEnabled.Top + chkFindingNavEnabled.Height + 4;
+  lblFindingNavInfo.Width      := GROUP_W - 2 * INNER_LEFT - 16;
+  lblFindingNavInfo.Height     := 28;
+  lblFindingNavInfo.WordWrap   := True;
+  lblFindingNavInfo.Caption    :=
+    _('Jump to the next / previous highlighted finding line in the current ' +
+      'editor tab (wrap-around at file end/start).');
+
+  // ---- Konfigurierbare Shortcuts (cnpack-Stil) ----
+  lblShortcutsCaption           := TLabel.Create(Self);
+  lblShortcutsCaption.Parent    := grpHotkeys;
+  lblShortcutsCaption.Left      := INNER_LEFT;
+  lblShortcutsCaption.Top       := lblFindingNavInfo.Top + lblFindingNavInfo.Height + 10;
+  lblShortcutsCaption.AutoSize  := True;
+  lblShortcutsCaption.Caption   := _('Configurable shortcuts (click into field + press key combo):');
+  lblShortcutsCaption.Font.Style := [fsBold];
+
+  const SHORTCUT_LBL_W = 220;
+  const SHORTCUT_EDIT_W = 160;
+  var Y0 := lblShortcutsCaption.Top + lblShortcutsCaption.Height + 6;
+
+  // Silent-Analyse-Shortcut
+  lblShortcutSilent          := TLabel.Create(Self);
+  lblShortcutSilent.Parent   := grpHotkeys;
+  lblShortcutSilent.Left     := INNER_LEFT;
+  lblShortcutSilent.Top      := Y0 + 3;
+  lblShortcutSilent.AutoSize := False;
+  lblShortcutSilent.Width    := SHORTCUT_LBL_W;
+  lblShortcutSilent.Caption  := _('Silent analysis:');
+  edShortcutSilent           := TEdit.Create(Self);
+  edShortcutSilent.Parent    := grpHotkeys;
+  edShortcutSilent.Left      := INNER_LEFT + SHORTCUT_LBL_W;
+  edShortcutSilent.Top       := Y0;
+  edShortcutSilent.Width     := SHORTCUT_EDIT_W;
+  edShortcutSilent.OnKeyDown := ShortcutEditKeyDown;
+  Inc(Y0, 26);
+
+  // Finding-Nav Up
+  lblShortcutUp              := TLabel.Create(Self);
+  lblShortcutUp.Parent       := grpHotkeys;
+  lblShortcutUp.Left         := INNER_LEFT;
+  lblShortcutUp.Top          := Y0 + 3;
+  lblShortcutUp.AutoSize     := False;
+  lblShortcutUp.Width        := SHORTCUT_LBL_W;
+  lblShortcutUp.Caption      := _('Jump to previous finding:');
+  edShortcutUp               := TEdit.Create(Self);
+  edShortcutUp.Parent        := grpHotkeys;
+  edShortcutUp.Left          := INNER_LEFT + SHORTCUT_LBL_W;
+  edShortcutUp.Top           := Y0;
+  edShortcutUp.Width         := SHORTCUT_EDIT_W;
+  edShortcutUp.OnKeyDown     := ShortcutEditKeyDown;
+  Inc(Y0, 26);
+
+  // Finding-Nav Down
+  lblShortcutDown            := TLabel.Create(Self);
+  lblShortcutDown.Parent     := grpHotkeys;
+  lblShortcutDown.Left       := INNER_LEFT;
+  lblShortcutDown.Top        := Y0 + 3;
+  lblShortcutDown.AutoSize   := False;
+  lblShortcutDown.Width      := SHORTCUT_LBL_W;
+  lblShortcutDown.Caption    := _('Jump to next finding:');
+  edShortcutDown             := TEdit.Create(Self);
+  edShortcutDown.Parent      := grpHotkeys;
+  edShortcutDown.Left        := INNER_LEFT + SHORTCUT_LBL_W;
+  edShortcutDown.Top         := Y0;
+  edShortcutDown.Width       := SHORTCUT_EDIT_W;
+  edShortcutDown.OnKeyDown   := ShortcutEditKeyDown;
+  Inc(Y0, 30);
+
+  // Restart-Hinweis (italic)
+  lblRestartHint             := TLabel.Create(Self);
+  lblRestartHint.Parent      := grpHotkeys;
+  lblRestartHint.Left        := INNER_LEFT;
+  lblRestartHint.Top         := Y0;
+  lblRestartHint.AutoSize    := False;
+  lblRestartHint.Width       := GROUP_W - 2 * INNER_LEFT;
+  lblRestartHint.Height      := 16;
+  lblRestartHint.Caption     := _('Changes take effect after restarting the IDE.');
+  lblRestartHint.Font.Style  := [fsItalic];
+  Inc(Y0, 22);
+
+  // Nicht-konfigurierbare Grid-Shortcuts als Read-only-Hinweis.
+  lblGridShortcuts           := TLabel.Create(Self);
+  lblGridShortcuts.Parent    := grpHotkeys;
+  lblGridShortcuts.Left      := INNER_LEFT;
+  lblGridShortcuts.Top       := Y0;
+  lblGridShortcuts.AutoSize  := False;
+  lblGridShortcuts.Width     := GROUP_W - 2 * INNER_LEFT;
+  lblGridShortcuts.Height    := 32;
+  lblGridShortcuts.WordWrap  := True;
+  lblGridShortcuts.Caption   :=
+    _('Findings-grid shortcuts (not configurable): Ctrl+Alt+F = Quick-Fix, ' +
+      'Ctrl+Alt+S = Suppression, Enter = goto editor line.');
 end;
 
 procedure TSCAOptionsFrame.PopulateProfileCombos;
@@ -356,8 +507,16 @@ begin
     chkSilentEnabled.Checked := ASettings.SilentEnabled;
 
   // Hotkeys
+  if Assigned(chkShortcutsEnabled) then
+    chkShortcutsEnabled.Checked := ASettings.ShortcutsEnabled;
   if Assigned(chkFindingNavEnabled) then
     chkFindingNavEnabled.Checked := ASettings.FindingNavEnabled;
+  if Assigned(edShortcutSilent) then
+    edShortcutSilent.Text := ASettings.SilentAnalyseShortcut;
+  if Assigned(edShortcutUp) then
+    edShortcutUp.Text := ASettings.FindingNavUpShortcut;
+  if Assigned(edShortcutDown) then
+    edShortcutDown.Text := ASettings.FindingNavDownShortcut;
 
   // Rule-Set: leere Werte aus INI als '(default)' anzeigen
   if Assigned(cboProfile)    then SelectComboBy(cboProfile,    ASettings.Profile);
@@ -389,8 +548,16 @@ begin
   if Assigned(chkSilentEnabled) then
     ASettings.SilentEnabled := chkSilentEnabled.Checked;
 
+  if Assigned(chkShortcutsEnabled) then
+    ASettings.ShortcutsEnabled := chkShortcutsEnabled.Checked;
   if Assigned(chkFindingNavEnabled) then
     ASettings.FindingNavEnabled := chkFindingNavEnabled.Checked;
+  if Assigned(edShortcutSilent) then
+    ASettings.SilentAnalyseShortcut := Trim(edShortcutSilent.Text);
+  if Assigned(edShortcutUp) then
+    ASettings.FindingNavUpShortcut := Trim(edShortcutUp.Text);
+  if Assigned(edShortcutDown) then
+    ASettings.FindingNavDownShortcut := Trim(edShortcutDown.Text);
 
   if Assigned(cboProfile)    then ASettings.Profile     := ComboValueOrEmpty(cboProfile);
   if Assigned(cboMinSev)     then ASettings.MinSeverity := cboMinSev.Items[cboMinSev.ItemIndex];
@@ -399,6 +566,39 @@ begin
   if Assigned(chkUsesCheck)    then ASettings.UsesCheck           := chkUsesCheck.Checked;
   if Assigned(chkIncludeTests) then ASettings.IncludeTests        := chkIncludeTests.Checked;
   if Assigned(chkAutoDiscover) then ASettings.AutoDiscoverClasses := chkAutoDiscover.Checked;
+end;
+
+procedure TSCAOptionsFrame.ShortcutEditKeyDown(Sender: TObject;
+  var Key: Word; Shift: TShiftState);
+// Capture-Mechanik analog cnpack: User klickt in eines der drei Edit-Felder
+// und drueckt die gewuenschte Tastenkombi - wir schreiben den menschen-
+// lesbaren ShortCutToText-String ins Feld. User kann auch manuell tippen
+// (TEdit ist normal editierbar).
+//
+// Wir ignorieren reine Modifier-Tasten (Shift/Strg/Alt alleine), Tab
+// (sonst kann der User das Feld nicht mehr verlassen), und Backspace
+// (User soll loeschen koennen). Escape leert das Feld.
+var
+  SC : TShortCut;
+begin
+  // Reine Modifier-Tasten alleine ignorieren - sonst flackert das Feld bei
+  // jedem Strg-Druck zwischen leerem String und der vorigen Belegung.
+  if (Key = VK_SHIFT) or (Key = VK_CONTROL) or (Key = VK_MENU)
+     or (Key = VK_LWIN) or (Key = VK_RWIN) then
+    Exit;
+  // Tab + Backspace durchlassen (Navigation + Editier-Standard).
+  if (Key = VK_TAB) or (Key = VK_BACK) then Exit;
+  // Escape = Feld leeren (= "Default-Bindung verwenden").
+  if Key = VK_ESCAPE then
+  begin
+    (Sender as TEdit).Text := '';
+    Key := 0;
+    Exit;
+  end;
+  SC := Vcl.Menus.ShortCut(Key, Shift);
+  if SC = 0 then Exit;
+  (Sender as TEdit).Text := Vcl.Menus.ShortCutToText(SC);
+  Key := 0;  // Tastendruck konsumieren, kein weiteres TEdit-Standard-Verhalten
 end;
 
 { TSCAAddInOptions }

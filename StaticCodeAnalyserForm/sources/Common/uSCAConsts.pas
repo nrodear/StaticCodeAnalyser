@@ -434,10 +434,72 @@ type
                                  // UND raised - bei raise nach partieller
                                  // Init leaken die schon erzeugten Felder.
                                  // Sonar-50 #12.
-    fkIntegerOverflow            // SCA137 - Int64-Ziel-Variable bekommt
+    fkIntegerOverflow,           // SCA137 - Int64-Ziel-Variable bekommt
                                  // Product zweier Operanden ohne Int64-
                                  // Cast - Multiplikation overflow'ed
                                  // in 32-Bit. Sonar-50 #14.
+    fkGodClass,                  // SCA138 - Klasse mit zu vielen Methoden
+                                 // (>20) oder Feldern (>15). Sonar-50 #31.
+    fkFreeWithoutNil,            // SCA139 - obj.Free ohne anschliessendes
+                                 // obj := nil; dangling pointer moeglich.
+                                 // Sonar-50 #25.
+    fkMultipleExit,              // SCA140 - Methode mit > 3 Exit-Statements;
+                                 // Pfad-Vielfalt erschwert Verstaendnis.
+                                 // Sonar-50 #34.
+    fkLargeClass,                // SCA141 - Klassen-Implementation > 500
+                                 // Zeilen. Sonar-50 #35.
+    fkUnsortedUses,              // SCA142 - uses-Klausel-Eintraege nicht
+                                 // alphabetisch. Sonar-50 #47.
+    fkMissingUnitHeader,         // SCA143 - Unit beginnt ohne erklaerendes
+                                 // Kommentar-Block. Sonar-50 #48.
+    fkFloatEquality,             // SCA144 - `=`/`<>` zwischen Float-
+                                 // Operanden ist nie zuverlaessig wegen
+                                 // IEEE-754-Rundung. Sonar-50 #19.
+    fkExceptInDestructor,        // SCA145 - Destruktor enthaelt nkRaise
+                                 // ausserhalb try/except - Crash beim
+                                 // Aufraeumen. Sonar-50 #23.
+    fkBooleanParam,              // SCA146 - Boolean-Parameter wird
+                                 // intern als Branching-Flag genutzt -
+                                 // zwei dedizierte Methoden waeren
+                                 // klarer. Sonar-50 #33.
+    fkUnusedPrivateMethod,       // SCA147 - private Methode in einer
+                                 // Klasse hat keinen Aufrufer in der
+                                 // gleichen Unit. Sonar-50 #37.
+    fkCanBeClassMethod,          // SCA148 - Instance-Methode greift
+                                 // weder auf Self noch auf Instanz-
+                                 // Felder zu - waere als `class function`
+                                 // sauberer. Sonar-50 #50.
+    fkMissingOverride,           // SCA149 - Methode ueberschreibt eine
+                                 // virtuelle Methode der Parent-Klasse
+                                 // ohne `override`-Direktive. Within-
+                                 // unit only. Sonar-50 #21.
+    fkBoolAlwaysTrue,            // SCA150 - Boolean-Vergleich der immer
+                                 // True/False ergibt: `Length(s) >= 0`.
+                                 // Sonar-50 #18 (narrow).
+    fkConstantReturn,            // SCA151 - Function weist `Result` an
+                                 // mehreren Stellen den gleichen Literal-
+                                 // Wert zu. Sonar-50 #43.
+    fkHardcodedString,           // SCA152 - User-sichtbarer String als
+                                 // Literal (Caption/Hint/Text) statt
+                                 // resourcestring / i18n. Sonar-50 #46.
+    fkUnpairedLock,              // SCA153 - Lock/EnterCriticalSection
+                                 // ohne paired UnLock im try/finally.
+                                 // mORMot/concurrency hotspot.
+    fkMoveSizeOfPointer,         // SCA154 - Move(Src, Dst, SizeOf(<Ptr>))
+                                 // kopiert nur Pointer-Groesse statt
+                                 // Buffer-Inhalt - klassischer Bug.
+    fkWithMultipleTargets,       // SCA155 - `with A, B do` mit Komma-
+                                 // separierten Targets - Identifier-
+                                 // Resolution reihenfolgeabhaengig.
+    fkGetMemWithoutFreeMem,      // SCA156 - GetMem(p, n)/AllocMem/ReallocMem
+                                 // ohne paired FreeMem im try/finally.
+                                 // mORMot-Pattern, klassischer Memory-Leak.
+    fkSetLengthAppendInLoop,     // SCA157 - SetLength(arr, Length(arr)+1)
+                                 // innerhalb einer Schleife -> O(n*n)
+                                 // Realloc-Aufwand statt einmal vor-grow.
+    fkPointerArithmeticOnString  // SCA158 - PChar(s) + n / PAnsiChar(s) + n
+                                 // ohne Empty-Check: PChar('') = nil ->
+                                 // Pointer-Arithmetik auf NIL = AV.
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -623,7 +685,28 @@ const
     (Name: 'UseAfterFree';               FindingType: ftBug;          DefaultSeverity: lsError),   // fkUseAfterFree
     (Name: 'AbstractNotImpl';            FindingType: ftBug;          DefaultSeverity: lsError),   // fkAbstractNotImpl
     (Name: 'LeakInConstructor';          FindingType: ftBug;          DefaultSeverity: lsError),   // fkLeakInConstructor
-    (Name: 'IntegerOverflow';            FindingType: ftBug;          DefaultSeverity: lsError)    // fkIntegerOverflow
+    (Name: 'IntegerOverflow';            FindingType: ftBug;          DefaultSeverity: lsError),   // fkIntegerOverflow
+    (Name: 'GodClass';                   FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkGodClass
+    (Name: 'FreeWithoutNil';             FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkFreeWithoutNil
+    (Name: 'MultipleExit';               FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkMultipleExit
+    (Name: 'LargeClass';                 FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkLargeClass
+    (Name: 'UnsortedUses';               FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkUnsortedUses
+    (Name: 'MissingUnitHeader';          FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkMissingUnitHeader
+    (Name: 'FloatEquality';              FindingType: ftBug;          DefaultSeverity: lsWarning), // fkFloatEquality
+    (Name: 'ExceptInDestructor';         FindingType: ftBug;          DefaultSeverity: lsWarning), // fkExceptInDestructor
+    (Name: 'BooleanParam';               FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkBooleanParam
+    (Name: 'UnusedPrivateMethod';        FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkUnusedPrivateMethod
+    (Name: 'CanBeClassMethod';           FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkCanBeClassMethod
+    (Name: 'MissingOverride';            FindingType: ftBug;          DefaultSeverity: lsWarning), // fkMissingOverride
+    (Name: 'BoolAlwaysTrue';             FindingType: ftBug;          DefaultSeverity: lsWarning), // fkBoolAlwaysTrue
+    (Name: 'ConstantReturn';             FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkConstantReturn
+    (Name: 'HardcodedString';            FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkHardcodedString
+    (Name: 'UnpairedLock';               FindingType: ftBug;          DefaultSeverity: lsWarning), // fkUnpairedLock
+    (Name: 'MoveSizeOfPointer';          FindingType: ftBug;          DefaultSeverity: lsWarning), // fkMoveSizeOfPointer
+    (Name: 'WithMultipleTargets';        FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkWithMultipleTargets
+    (Name: 'GetMemWithoutFreeMem';       FindingType: ftBug;          DefaultSeverity: lsWarning), // fkGetMemWithoutFreeMem
+    (Name: 'SetLengthAppendInLoop';      FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkSetLengthAppendInLoop
+    (Name: 'PointerArithmeticOnString';  FindingType: ftBug;          DefaultSeverity: lsWarning)  // fkPointerArithmeticOnString
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

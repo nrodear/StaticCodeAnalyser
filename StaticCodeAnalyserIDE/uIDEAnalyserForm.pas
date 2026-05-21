@@ -735,6 +735,21 @@ begin
   FFilterCombo.Items.AddObject(_('Abstract method not implemented'), TObject(Ord(fmAbstractNotImpl)));
   FFilterCombo.Items.AddObject(_('Leak in constructor'),         TObject(Ord(fmLeakInConstructor)));
   FFilterCombo.Items.AddObject(_('Integer overflow (Int64 mul)'),TObject(Ord(fmIntegerOverflow)));
+  FFilterCombo.Items.AddObject(_('God Class'),                   TObject(Ord(fmGodClass)));
+  FFilterCombo.Items.AddObject(_('Free without nil-out'),        TObject(Ord(fmFreeWithoutNil)));
+  FFilterCombo.Items.AddObject(_('Multiple Exit'),               TObject(Ord(fmMultipleExit)));
+  FFilterCombo.Items.AddObject(_('Large Class'),                 TObject(Ord(fmLargeClass)));
+  FFilterCombo.Items.AddObject(_('Unsorted uses clause'),        TObject(Ord(fmUnsortedUses)));
+  FFilterCombo.Items.AddObject(_('Missing unit header'),         TObject(Ord(fmMissingUnitHeader)));
+  FFilterCombo.Items.AddObject(_('Float equality'),              TObject(Ord(fmFloatEquality)));
+  FFilterCombo.Items.AddObject(_('Raise in destructor'),         TObject(Ord(fmExceptInDestructor)));
+  FFilterCombo.Items.AddObject(_('Boolean parameter as flag'),   TObject(Ord(fmBooleanParam)));
+  FFilterCombo.Items.AddObject(_('Unused private method'),       TObject(Ord(fmUnusedPrivateMethod)));
+  FFilterCombo.Items.AddObject(_('Could be class method'),       TObject(Ord(fmCanBeClassMethod)));
+  FFilterCombo.Items.AddObject(_('Missing override'),            TObject(Ord(fmMissingOverride)));
+  FFilterCombo.Items.AddObject(_('Boolean always true / false'), TObject(Ord(fmBoolAlwaysTrue)));
+  FFilterCombo.Items.AddObject(_('Constant return value'),       TObject(Ord(fmConstantReturn)));
+  FFilterCombo.Items.AddObject(_('Hardcoded user string'),       TObject(Ord(fmHardcodedString)));
 
   FFilterCombo.Items.AddObject(_('--- Warnings ---'),       TObject(-1));
   FFilterCombo.Items.AddObject(_('Empty Except'),           TObject(Ord(fmEmptyExcept)));
@@ -775,6 +790,14 @@ begin
   FFilterCombo.Items.AddObject(_('Cast And Free'),          TObject(Ord(fmCastAndFree)));
   FFilterCombo.Items.AddObject(_('Inherited (empty)'),      TObject(Ord(fmInheritedMethodEmpty)));
   FFilterCombo.Items.AddObject(_('Nil Comparison'),         TObject(Ord(fmNilComparison)));
+  // mORMot-Cluster (SCA153-155)
+  FFilterCombo.Items.AddObject(_('Unpaired Lock'),          TObject(Ord(fmUnpairedLock)));
+  FFilterCombo.Items.AddObject(_('Move/FillChar SizeOf(Pointer)'), TObject(Ord(fmMoveSizeOfPointer)));
+  FFilterCombo.Items.AddObject(_('with on multiple targets'),TObject(Ord(fmWithMultipleTargets)));
+  // mORMot-Cluster Phase 2 (SCA156-158)
+  FFilterCombo.Items.AddObject(_('GetMem without try/finally'),    TObject(Ord(fmGetMemWithoutFreeMem)));
+  FFilterCombo.Items.AddObject(_('SetLength grow in loop'),        TObject(Ord(fmSetLengthAppendInLoop)));
+  FFilterCombo.Items.AddObject(_('PChar arithmetic w/o empty-check'), TObject(Ord(fmPointerArithmeticOnString)));
 
   FFilterCombo.ItemIndex := 0; // "All"
 
@@ -1596,28 +1619,20 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// Tastatur-Navigation: F3 = naechster, Shift+F3 = vorheriger Befund
+// Tastatur-Shortcuts im Findings-Grid:
+//   * Cursor-Up/Down navigieren via VCL-Default; OnSelectCell ruft
+//     UpdateHelp automatisch - kein F3-Handler noetig.
+//   * Ctrl+Alt+F = Apply Quick-Fix
+//   * Ctrl+Alt+S = Insert Suppression
+//   * Enter      = Goto Editor (analog Doppelklick)
 // ---------------------------------------------------------------------------
 procedure TAnalyserFrame.GridKeyDown(Sender: TObject; var Key: Word;
   Shift: TShiftState);
-var
-  NewRow: Integer;
 begin
-  if Key = VK_F3 then
-  begin
-    if ssShift in Shift then
-      NewRow := FResultGrid.Row - 1
-    else
-      NewRow := FResultGrid.Row + 1;
-
-    if (NewRow >= 1) and (NewRow < FResultGrid.RowCount) then
-    begin
-      FResultGrid.Row := NewRow;
-      UpdateHelp(NewRow);
-    end;
-    Key := 0;
-  end
-  else if (Key = Ord('F')) and (ssCtrl in Shift) and (ssAlt in Shift) then
+  // Master-Gate: bei ShortcutsEnabled=False wird KEIN Plugin-Shortcut im
+  // Grid verarbeitet. Cursor-Navigation per VCL-Default bleibt aktiv.
+  if not IsShortcutsMasterEnabled then Exit;
+  if (Key = Ord('F')) and (ssCtrl in Shift) and (ssAlt in Shift) then
   begin
     // Ctrl+Alt+F = Apply Quick-Fix: ersetzt die Zeile direkt im IDE-Editor
     // (TIDEEditor.ApplyLineReplacement). Konflikt-frei mit RAD-Studio-
@@ -3286,6 +3301,23 @@ begin
   end;
 end;
 
+function IsShortcutsMasterEnabled: Boolean;
+// Master-Gate ueber ALLE Plugin-Shortcuts. Wird in jedem Shortcut-Handler
+// (TSCAKeyboardBinding, TSCAFindingNavBinding, GridKeyDown) ganz vorne
+// abgefragt. False -> alle Tastenkuerzel sind tot, aber der Silent-Mode
+// per Rechtsklick-Menue + die Toolbar-Buttons bleiben funktional.
+var
+  Settings : TRepoSettings;
+begin
+  Settings := TRepoSettings.Create;
+  try
+    try Settings.Load; except end;
+    Result := Settings.ShortcutsEnabled;
+  finally
+    Settings.Free;
+  end;
+end;
+
 procedure RunSilentAnalysisForCurrentEditorFile;
 // Holt die aktuell aktive Editor-Datei via TIDEEditor + ruft den Silent-
 // Analyzer. Vorher Settings-Flag pruefen - User kann das Feature ueber
@@ -3637,14 +3669,27 @@ end;
 
 procedure TSCAKeyboardBinding.BindKeyboard(
   const BindingServices: IOTAKeyBindingServices);
-// Bindet Ctrl+Alt+A an SilentAnalyseKeyProc. AddKeyBinding nimmt ein Array
-// von TShortcut entgegen - hier nur ein Wert.
+// Bindet den konfigurierbaren Silent-Analyse-Shortcut.
+// Wird einmalig beim BPL-Load gerufen; Default = Ctrl+Alt+A, kann ueber
+// analyser.ini [Hotkeys] SilentAnalyseShortcut oder Tools > Options
+// veraendert werden. Aenderung erfordert IDE-Neustart.
+var
+  Settings : TRepoSettings;
+  SC       : TShortCut;
 begin
-  // AKeyProcData (3. Param) hat in dieser ToolsAPI-Version keinen Default -
-  // nil explizit uebergeben (wir nutzen keine Per-Binding-Daten).
-  BindingServices.AddKeyBinding(
-    [ShortCut(Ord('A'), [ssCtrl, ssAlt])],
-    SilentAnalyseKeyProc, nil);
+  SC := ShortCut(Ord('A'), [ssCtrl, ssAlt]);  // Default
+  Settings := TRepoSettings.Create;
+  try
+    try Settings.Load; except end;
+    if Trim(Settings.SilentAnalyseShortcut) <> '' then
+    begin
+      var Parsed := TextToShortCut(Settings.SilentAnalyseShortcut);
+      if Parsed <> 0 then SC := Parsed;
+    end;
+  finally
+    Settings.Free;
+  end;
+  BindingServices.AddKeyBinding([SC], SilentAnalyseKeyProc, nil);
 end;
 
 function TSCAKeyboardBinding.GetBindingType: TBindingType;
@@ -3672,7 +3717,15 @@ procedure TSCAKeyboardBinding.SilentAnalyseKeyProc(const Context: IOTAKeyContext
 // Wird bei Ctrl+Alt+A im Editor gerufen. Triggert Silent-Analyse fuer die
 // aktuelle Datei und meldet krHandled - dann reicht die IDE den Key nicht
 // weiter an andere Handler oder den Default-Editor.
+// Master-Toggle ueberlagert: bei ShortcutsEnabled=False meldet der Handler
+// krUnhandled, IDE-Default greift. Rechtsklick-Menue funktioniert
+// unabhaengig (geht ueber IsSilentEnabled, nicht das Master-Gate).
 begin
+  if not IsShortcutsMasterEnabled then
+  begin
+    BindingResult := krUnhandled;
+    Exit;
+  end;
   RunSilentAnalysisForCurrentEditorFile;
   BindingResult := krHandled;
 end;

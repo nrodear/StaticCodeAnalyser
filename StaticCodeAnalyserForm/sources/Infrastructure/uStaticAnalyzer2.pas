@@ -91,7 +91,14 @@ uses
   uRaisingRawException, uDateFormatSettings, uUnicodeToAnsiCast,
   uCharToCharPointerCast, uIfThenShortCircuit,
   uExceptionTooGeneral, uRaiseOutsideExcept,
-  uUseAfterFree, uAbstractNotImpl, uLeakInConstructor, uIntegerOverflow;
+  uUseAfterFree, uAbstractNotImpl, uLeakInConstructor, uIntegerOverflow,
+  uGodClass, uFreeWithoutNil, uMultipleExit, uLargeClass, uUnsortedUses,
+  uMissingUnitHeader,
+  uFloatEquality, uExceptInDestructor, uBooleanParam,
+  uUnusedPrivateMethod, uCanBeClassMethod, uMissingOverride,
+  uBoolAlwaysTrue, uConstantReturn, uHardcodedString,
+  uUnpairedLock, uMoveSizeOfPointer, uWithMultipleTargets,
+  uGetMemWithoutFreeMem, uSetLengthAppendInLoop, uPointerArithmeticOnString;
 
 type
   // Run-Methode pro Detektor: einheitliche Signatur, damit alle in einem
@@ -229,6 +236,27 @@ begin
   Add('AbstractNotImpl', fkAbstractNotImpl, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TAbstractNotImplDetector.AnalyzeUnit(R, F, L); end);
   Add('LeakInConstructor', fkLeakInConstructor, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLeakInConstructorDetector.AnalyzeUnit(R, F, L); end);
   Add('IntegerOverflow', fkIntegerOverflow, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TIntegerOverflowDetector.AnalyzeUnit(R, F, L); end);
+  Add('GodClass', fkGodClass, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TGodClassDetector.AnalyzeUnit(R, F, L); end);
+  Add('FreeWithoutNil', fkFreeWithoutNil, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TFreeWithoutNilDetector.AnalyzeUnit(R, F, L); end);
+  Add('MultipleExit', fkMultipleExit, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TMultipleExitDetector.AnalyzeUnit(R, F, L); end);
+  Add('LargeClass', fkLargeClass, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLargeClassDetector.AnalyzeUnit(R, F, L); end);
+  Add('UnsortedUses', fkUnsortedUses, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUnsortedUsesDetector.AnalyzeUnit(R, F, L); end);
+  Add('MissingUnitHeader', fkMissingUnitHeader, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TMissingUnitHeaderDetector.AnalyzeUnit(R, F, L); end);
+  Add('FloatEquality', fkFloatEquality, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TFloatEqualityDetector.AnalyzeUnit(R, F, L); end);
+  Add('ExceptInDestructor', fkExceptInDestructor, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TExceptInDestructorDetector.AnalyzeUnit(R, F, L); end);
+  Add('BooleanParam', fkBooleanParam, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TBooleanParamDetector.AnalyzeUnit(R, F, L); end);
+  Add('UnusedPrivateMethod', fkUnusedPrivateMethod, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUnusedPrivateMethodDetector.AnalyzeUnit(R, F, L); end);
+  Add('CanBeClassMethod', fkCanBeClassMethod, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TCanBeClassMethodDetector.AnalyzeUnit(R, F, L); end);
+  Add('MissingOverride', fkMissingOverride, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TMissingOverrideDetector.AnalyzeUnit(R, F, L); end);
+  Add('BoolAlwaysTrue', fkBoolAlwaysTrue, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TBoolAlwaysTrueDetector.AnalyzeUnit(R, F, L); end);
+  Add('ConstantReturn', fkConstantReturn, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TConstantReturnDetector.AnalyzeUnit(R, F, L); end);
+  Add('HardcodedString', fkHardcodedString, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin THardcodedStringDetector.AnalyzeUnit(R, F, L); end);
+  Add('UnpairedLock', fkUnpairedLock, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUnpairedLockDetector.AnalyzeUnit(R, F, L); end);
+  Add('MoveSizeOfPointer', fkMoveSizeOfPointer, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TMoveSizeOfPointerDetector.AnalyzeUnit(R, F, L); end);
+  Add('WithMultipleTargets', fkWithMultipleTargets, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TWithMultipleTargetsDetector.AnalyzeUnit(R, F, L); end);
+  Add('GetMemWithoutFreeMem', fkGetMemWithoutFreeMem, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TGetMemWithoutFreeMemDetector.AnalyzeUnit(R, F, L); end);
+  Add('SetLengthAppendInLoop', fkSetLengthAppendInLoop, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TSetLengthAppendInLoopDetector.AnalyzeUnit(R, F, L); end);
+  Add('PointerArithmeticOnString', fkPointerArithmeticOnString, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TPointerArithmeticOnStringDetector.AnalyzeUnit(R, F, L); end);
   Add('VirtualCallInCtor',fkVirtualCallInCtor,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TVirtualCallInCtorDetector.AnalyzeUnit(R, F, L); end);
   Add('LengthUnderflow', fkLengthUnderflow, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLengthUnderflowDetector.AnalyzeUnit(R, F, L); end);
   // VisibilityCheck emittiert vier Kinds (CanBeUnitPrivate, CanBeStrict-

@@ -197,12 +197,15 @@
         <DCCReference Include="sources\Infrastructure\uSuppression.pas"/>
         <DCCReference Include="sources\Infrastructure\uSymbolReferenceIndex.pas"/>
         <DCCReference Include="sources\Infrastructure\uVcsChanges.pas"/>
-        
+        <DCCReference Include="sources\Detectors\uAbstractNotImpl.pas"/>
         <DCCReference Include="sources\Detectors\uAssertMessage.pas"/>
+        <DCCReference Include="sources\Detectors\uBooleanParam.pas"/>
         <DCCReference Include="sources\Detectors\uAssignedAndAssignedNil.pas"/>
         <DCCReference Include="sources\Detectors\uAvoidOut.pas"/>
         <DCCReference Include="sources\Detectors\uBeginEndRequired.pas"/>
+        <DCCReference Include="sources\Detectors\uBoolAlwaysTrue.pas"/>
         <DCCReference Include="sources\Detectors\uCaseStatementSize.pas"/>
+        <DCCReference Include="sources\Detectors\uCanBeClassMethod.pas"/>
         <DCCReference Include="sources\Detectors\uCastAndFree.pas"/>
         <DCCReference Include="sources\Detectors\uCharToCharPointerCast.pas"/>
         <DCCReference Include="sources\Detectors\uClassPerFile.pas"/>
@@ -210,6 +213,7 @@
         <DCCReference Include="sources\Detectors\uCommentedOutCode.pas"/>
         <DCCReference Include="sources\Detectors\uConcatToFormat.pas"/>
         <DCCReference Include="sources\Detectors\uConcurrencyExt.pas"/>
+        <DCCReference Include="sources\Detectors\uConstantReturn.pas"/>
         <DCCReference Include="sources\Detectors\uConsecutiveSection.pas"/>
         <DCCReference Include="sources\Detectors\uConsecutiveVisibility.pas"/>
         <DCCReference Include="sources\Detectors\uConstructorWithoutInherited.pas"/>
@@ -253,26 +257,33 @@
         <DCCReference Include="sources\Detectors\uEmptyInterface.pas"/>
         <DCCReference Include="sources\Detectors\uEmptyMethod.pas"/>
         <DCCReference Include="sources\Detectors\uEmptyVisibilitySection.pas"/>
+        <DCCReference Include="sources\Detectors\uExceptInDestructor.pas"/>
         <DCCReference Include="sources\Detectors\uExceptionTooGeneral.pas"/>
         <DCCReference Include="sources\Detectors\uExceptOnException.pas"/>
         <DCCReference Include="sources\Detectors\uExplicitTObjectInheritance.pas"/>
         <DCCReference Include="sources\Detectors\uFieldLeak.pas"/>
         <DCCReference Include="sources\Detectors\uFieldName.pas"/>
+        <DCCReference Include="sources\Detectors\uFloatEquality.pas"/>
         <DCCReference Include="sources\Detectors\uFormatMismatch.pas"/>
         <DCCReference Include="sources\Detectors\uFreeAndNilHint.pas"/>
+        <DCCReference Include="sources\Detectors\uFreeWithoutNil.pas"/>
+        <DCCReference Include="sources\Detectors\uGetMemWithoutFreeMem.pas"/>
+        <DCCReference Include="sources\Detectors\uGodClass.pas"/>
         <DCCReference Include="sources\Detectors\uGotoStatement.pas"/>
         <DCCReference Include="sources\Detectors\uGroupedDeclaration.pas"/>
         <DCCReference Include="sources\Detectors\uHardcodedPath.pas"/>
+        <DCCReference Include="sources\Detectors\uHardcodedString.pas"/>
         <DCCReference Include="sources\Detectors\uHardcodedSecret.pas"/>
         <DCCReference Include="sources\Detectors\uIfElseBegin.pas"/>
         <DCCReference Include="sources\Detectors\uIfThenShortCircuit.pas"/>
         <DCCReference Include="sources\Detectors\uInheritedMethodEmpty.pas"/>
         <DCCReference Include="sources\Detectors\uInlineAssembly.pas"/>
         <DCCReference Include="sources\Detectors\uInstanceInvokedConstructor.pas"/>
-        
+        <DCCReference Include="sources\Detectors\uIntegerOverflow.pas"/>
         <DCCReference Include="sources\Detectors\uInterfaceName.pas"/>
+        <DCCReference Include="sources\Detectors\uLargeClass.pas"/>
         <DCCReference Include="sources\Detectors\uLeakDetector2.pas"/>
-        
+        <DCCReference Include="sources\Detectors\uLeakInConstructor.pas"/>
         <DCCReference Include="sources\Detectors\uLegacyInitializationSection.pas"/>
         <DCCReference Include="sources\Detectors\uLengthUnderflow.pas"/>
         <DCCReference Include="sources\Detectors\uLockWithoutTryFinally.pas"/>
@@ -282,7 +293,11 @@
         <DCCReference Include="sources\Detectors\uMagicNumbers.pas"/>
         <DCCReference Include="sources\Detectors\uMethodName.pas"/>
         <DCCReference Include="sources\Detectors\uMissingFinally.pas"/>
+        <DCCReference Include="sources\Detectors\uMissingOverride.pas"/>
         <DCCReference Include="sources\Detectors\uMissingRaise.pas"/>
+        <DCCReference Include="sources\Detectors\uMissingUnitHeader.pas"/>
+        <DCCReference Include="sources\Detectors\uMoveSizeOfPointer.pas"/>
+        <DCCReference Include="sources\Detectors\uMultipleExit.pas"/>
         <DCCReference Include="sources\Detectors\uNamingExt.pas"/>
         <DCCReference Include="sources\Detectors\uNestedRoutines.pas"/>
         <DCCReference Include="sources\Detectors\uNestedTry.pas"/>
@@ -290,6 +305,7 @@
         <DCCReference Include="sources\Detectors\uNilDeref.pas"/>
         <DCCReference Include="sources\Detectors\uNoSonarMarker.pas"/>
         <DCCReference Include="sources\Detectors\uPerfHotspots.pas"/>
+        <DCCReference Include="sources\Detectors\uPointerArithmeticOnString.pas"/>
         <DCCReference Include="sources\Detectors\uPointerName.pas"/>
         <DCCReference Include="sources\Detectors\uPublicField.pas"/>
         <DCCReference Include="sources\Detectors\uPublicMemberWithoutDoc.pas"/>
@@ -304,6 +320,7 @@
         <DCCReference Include="sources\Detectors\uReversedForRange.pas"/>
         <DCCReference Include="sources\Detectors\uRoutineResultAssigned.pas"/>
         <DCCReference Include="sources\Detectors\uSelfAssignment.pas"/>
+        <DCCReference Include="sources\Detectors\uSetLengthAppendInLoop.pas"/>
         <DCCReference Include="sources\Detectors\uSqlDangerousStatement.pas"/>
         <DCCReference Include="sources\Detectors\uSQLInjection.pas"/>
         <DCCReference Include="sources\Detectors\uSQLInjectionScore.pas"/>
@@ -318,13 +335,17 @@
         <DCCReference Include="sources\Detectors\uTwiceInheritedCalls.pas"/>
         <DCCReference Include="sources\Detectors\uTypeName.pas"/>
         <DCCReference Include="sources\Detectors\uUnicodeToAnsiCast.pas"/>
-        
         <DCCReference Include="sources\Detectors\uUnitLevelKeywordIndent.pas"/>
+        <DCCReference Include="sources\Detectors\uUnpairedLock.pas"/>
+        <DCCReference Include="sources\Detectors\uUnsortedUses.pas"/>
         <DCCReference Include="sources\Detectors\uUnusedLocal.pas"/>
         <DCCReference Include="sources\Detectors\uUnusedParameter.pas"/>
+        <DCCReference Include="sources\Detectors\uUnusedPrivateMethod.pas"/>
         <DCCReference Include="sources\Detectors\uUnusedUses.pas"/>
+        <DCCReference Include="sources\Detectors\uUseAfterFree.pas"/>
         <DCCReference Include="sources\Detectors\uVirtualCallInCtor.pas"/>
         <DCCReference Include="sources\Detectors\uVisibilityCheck.pas"/>
+        <DCCReference Include="sources\Detectors\uWithMultipleTargets.pas"/>
         <DCCReference Include="sources\Detectors\uWithStatement.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
