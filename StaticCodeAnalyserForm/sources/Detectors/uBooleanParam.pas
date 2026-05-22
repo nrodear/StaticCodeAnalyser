@@ -81,17 +81,36 @@ begin
 end;
 
 function IfStmtRefersToIdent(IfNode: TAstNode; const IdentLow: string): Boolean;
-// Walk Children rekursiv; True wenn IRGENDWO im Condition-Subtree der
-// Identifier vorkommt. nkIfStmt hat in unserem Parser i.d.R. mehrere
-// Children (Condition als nkBinaryOp / nkIdent + Then-Branch + Else-
-// Branch). Wir vergleichen einfach den Identifier-Namen.
+// Der Parser legt die if-Condition als FLACHEN Text in IfNode.TypeRef ab
+// (uParser2.pas ParseIfStmt:1269). Children = Then/Else-Branches, NICHT
+// die Condition. Wir matchen daher den Identifier word-bounded in TypeRef.
+//
+// Word-boundary haendisch: Vor- und Nach-Char muessen non-Identifier sein
+// (kein A-Z, a-z, 0-9, _). Damit matched 'IsError' nicht in 'WasIsErrorSet'.
 var
-  Child : TAstNode;
+  Cond : string;
+  pIx  : Integer;
+  Before, After : Char;
+  function IsIdentChar(c: Char): Boolean;
+  begin
+    Result := CharInSet(c, ['A'..'Z', 'a'..'z', '0'..'9', '_']);
+  end;
 begin
-  if SameText(Trim(IfNode.Name), IdentLow) then Exit(True);
-  for Child in IfNode.Children do
-    if SameText(Trim(Child.Name), IdentLow) then Exit(True);
   Result := False;
+  Cond := LowerCase(IfNode.TypeRef);
+  if Cond = '' then Exit;
+  pIx := Pos(IdentLow, Cond);
+  while pIx > 0 do
+  begin
+    if pIx = 1 then Before := ' ' else Before := Cond[pIx - 1];
+    if pIx + Length(IdentLow) > Length(Cond) then
+      After := ' '
+    else
+      After := Cond[pIx + Length(IdentLow)];
+    if (not IsIdentChar(Before)) and (not IsIdentChar(After)) then
+      Exit(True);
+    pIx := PosEx(IdentLow, Cond, pIx + 1);
+  end;
 end;
 
 class procedure TBooleanParamDetector.AnalyzeUnit(UnitNode: TAstNode;

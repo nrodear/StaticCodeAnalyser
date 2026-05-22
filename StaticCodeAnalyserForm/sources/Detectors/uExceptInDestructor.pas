@@ -68,9 +68,23 @@ end;
 
 procedure CollectUnprotectedRaises(Node: TAstNode; InHandler: Boolean;
   Found: TList<TAstNode>);
+// InHandler=True bedeutet: ein hier liegender raise ist durch
+// einen umgebenden Handler protected und wird NICHT geflaggt.
+//
+// AST-Layout (uParser2 ParseTryStmt):
+//   nkTryExcept
+//   ├── (try-body statements, raises HIER sind durch das except gefangen)
+//   └── nkExceptBlock
+//       └── (handler statements, raises hier sind UN-gefangen
+//            (re-raise propagiert raus))
+//
+// Wir markieren also try-body-Kinder von nkTryExcept als protected,
+// aber NICHT die nkExceptBlock-Kinder.
 var
-  Child         : TAstNode;
-  NextInHandler : Boolean;
+  Child          : TAstNode;
+  NextInHandler  : Boolean;
+  ChildInHandler : Boolean;
+  HasExcept      : Boolean;
 begin
   NextInHandler := InHandler
     or (Node.Kind = nkExceptBlock)
@@ -79,8 +93,24 @@ begin
   if (Node.Kind = nkRaise) and not InHandler then
     Found.Add(Node);
 
+  HasExcept := False;
+  if Node.Kind = nkTryExcept then
+    for Child in Node.Children do
+      if Child.Kind = nkExceptBlock then
+      begin
+        HasExcept := True;
+        Break;
+      end;
+
   for Child in Node.Children do
-    CollectUnprotectedRaises(Child, NextInHandler, Found);
+  begin
+    if (Node.Kind = nkTryExcept) and HasExcept and
+       (Child.Kind <> nkExceptBlock) then
+      ChildInHandler := True   // raise im try-body durch except gefangen
+    else
+      ChildInHandler := NextInHandler;
+    CollectUnprotectedRaises(Child, ChildInHandler, Found);
+  end;
 end;
 
 class procedure TExceptInDestructorDetector.AnalyzeUnit(UnitNode: TAstNode;

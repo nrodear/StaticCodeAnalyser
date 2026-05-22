@@ -78,10 +78,14 @@ begin
       // Forward-Decls / Interfaces / abstract-Klassen skippen.
       if C.Children.Count = 0 then Continue;
       TR := LowerCase(C.TypeRef);
+      // Parser legt `class abstract` aktuell nicht in nkClass.TypeRef ab -
+      // ;abstract-Check bleibt aber defensiv, falls die TypeRef-Befuellung
+      // in Zukunft erweitert wird.
       if Pos(';abstract', TR) > 0 then Continue;
 
       MethodCount := 0;
       FieldCount  := 0;
+      var AbstractMethCount := 0;
       // FindAll nkMethod/nkField waere bequemer, aber wir wollen NUR
       // direkte Children der Klasse zaehlen - keine Methoden in nested
       // Records oder verschachtelten Klassen.
@@ -90,16 +94,31 @@ begin
       for Child in C.Children do
       begin
         case Child.Kind of
-          nkMethod : Inc(MethodCount);
+          nkMethod :
+            begin
+              Inc(MethodCount);
+              if Pos(';abstract', LowerCase(Child.TypeRef)) > 0 then
+                Inc(AbstractMethCount);
+            end;
           nkField  : Inc(FieldCount);
           nkVisibilitySection:
             for var Inner in Child.Children do
               case Inner.Kind of
-                nkMethod : Inc(MethodCount);
+                nkMethod :
+                  begin
+                    Inc(MethodCount);
+                    if Pos(';abstract', LowerCase(Inner.TypeRef)) > 0 then
+                      Inc(AbstractMethCount);
+                  end;
                 nkField  : Inc(FieldCount);
               end;
         end;
       end;
+
+      // All-abstract-Klasse (Framework-Pattern): kein Refactoring noetig,
+      // die Klasse IST die abstrakte API. Skip.
+      if (MethodCount > 0) and (AbstractMethCount = MethodCount) then
+        Continue;
 
       if (MethodCount <= MAX_METHODS) and (FieldCount <= MAX_FIELDS) then
         Continue;

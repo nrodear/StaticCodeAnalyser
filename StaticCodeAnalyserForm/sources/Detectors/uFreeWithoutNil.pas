@@ -80,8 +80,7 @@ end;
 function IsNilAssignTo(const N: TAstNode; const IdentLow: string): Boolean;
 // True wenn N ein nkAssign der Form `<ident> := nil` oder `<owner>.<ident> := nil` ist.
 var
-  Lhs : string;
-  LhsLow : string;
+  Lhs, LhsLow, RhsLow : string;
 begin
   Result := False;
   if N.Kind <> nkAssign then Exit;
@@ -91,9 +90,11 @@ begin
   if (LhsLow = IdentLow)
      or EndsText('.' + IdentLow, LhsLow) then
   begin
-    // RHS-Token = 'nil' (case-insensitive) - die Parser-Repraesentation legt
-    // den RHS-Wert in ein Child mit Kind nkIdent / nkLiteral Name='nil' ab.
-    // Defensiv: pruefe Children fuer eine 'nil'-Erwaehnung.
+    // RHS-Text liegt im TypeRef (uParser2 ParseStatement Z. 1618:
+    // Node.TypeRef := FullRHS). Children sind in der Regel leer.
+    RhsLow := LowerCase(Trim(N.TypeRef));
+    if RhsLow = 'nil' then Exit(True);
+    // Defensiv fuer aeltere AST-Formen.
     for var Child in N.Children do
       if SameText(Trim(Child.Name), 'nil') then Exit(True);
   end;

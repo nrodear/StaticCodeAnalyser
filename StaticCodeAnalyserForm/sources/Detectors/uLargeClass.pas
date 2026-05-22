@@ -56,6 +56,23 @@ begin
     Result := '';
 end;
 
+function DeepMaxLine(N: TAstNode): Integer;
+// Recursive max Line ueber ALLE Descendants. TAstNode hat nur Start-Line,
+// kein EndLine - der Method-Body ist als Children-Tree gespeichert, die
+// letzte Statement-Line approximiert das Method-End. Notwendig damit
+// 600-Zeilen-Methoden auch wirklich als 600 Zeilen erkannt werden.
+var
+  Child : TAstNode;
+  Sub   : Integer;
+begin
+  Result := N.Line;
+  for Child in N.Children do
+  begin
+    Sub := DeepMaxLine(Child);
+    if Sub > Result then Result := Sub;
+  end;
+end;
+
 class procedure TLargeClassDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -76,17 +93,16 @@ begin
       if ClassName = '' then Continue;
 
       MinLine := C.Line;
-      MaxLine := C.Line;
-      // Class-Deklarations-Span: nehme groesste Child-Line.
-      for var Child in C.Children do
-        if Child.Line > MaxLine then MaxLine := Child.Line;
+      MaxLine := DeepMaxLine(C);  // Class-Body voll abdecken
 
-      // Implementation-Methoden mit `TClassName.`-Prefix mitzaehlen.
+      // Implementation-Methoden mit `TClassName.`-Prefix mitzaehlen -
+      // jeweils inkl. Method-Body via DeepMaxLine.
       for M in AllMeths do
         if SameText(ClassPrefix(M.Name), ClassName) then
         begin
           if M.Line < MinLine then MinLine := M.Line;
-          if M.Line > MaxLine then MaxLine := M.Line;
+          var MethEnd := DeepMaxLine(M);
+          if MethEnd > MaxLine then MaxLine := MethEnd;
         end;
 
       Span := MaxLine - MinLine + 1;

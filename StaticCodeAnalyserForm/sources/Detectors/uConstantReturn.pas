@@ -73,13 +73,10 @@ begin
 end;
 
 function IsFunctionMethod(const TypeRef: string): Boolean;
-var
-  ColonPos, SemiPos : Integer;
+// Parser legt MethKind in TypeRef ab - das ist nur 'function' / 'procedure' /
+// 'constructor' / 'destructor', NICHT die volle Signatur mit Returntyp.
 begin
-  ColonPos := Pos(':', TypeRef);
-  if ColonPos = 0 then Exit(False);
-  SemiPos := Pos(';', TypeRef);
-  Result := (SemiPos = 0) or (ColonPos < SemiPos);
+  Result := SameText(Trim(TypeRef), 'function');
 end;
 
 function IsResultLhs(const LhsLow, FnNameLow: string): Boolean;
@@ -113,17 +110,16 @@ begin
 end;
 
 function ExtractRhs(N: TAstNode): string;
-// nkAssign-Subtree: das erste Child traegt die RHS-Repraesentation
-// (entweder Literal-Name oder nkCall/nkBinaryOp). Wir nehmen den
-// trimmed Name des ersten Childs oder, wenn das Child eine nkLiteral
-// ist, dessen Wert.
-var
-  Child : TAstNode;
+// Parser legt RHS-Text in nkAssign.TypeRef ab (uParser2.pas Z. 1618:
+// "Node.TypeRef := FullRHS"). Children sind in der Regel leer.
+// Defensiv: erstes Child als Fallback fuer aeltere AST-Formen.
 begin
-  Result := '';
-  if N.Children.Count = 0 then Exit;
-  Child := N.Children[0];
-  Result := Trim(Child.Name);
+  if N.TypeRef <> '' then
+    Result := Trim(N.TypeRef)
+  else if N.Children.Count > 0 then
+    Result := Trim(N.Children[0].Name)
+  else
+    Result := '';
 end;
 
 class procedure TConstantReturnDetector.AnalyzeUnit(UnitNode: TAstNode;

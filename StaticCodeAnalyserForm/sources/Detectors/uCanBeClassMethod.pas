@@ -83,13 +83,19 @@ begin
 end;
 
 function HasBodyBlock(MethodNode: TAstNode): Boolean;
+// Methode hat einen Body wenn entweder
+//   * nkBlock als direktes Child (ParseBlock-Wrapper um `begin..end`), oder
+//   * eine Body-Statement-Kind direkt darin steht (defensiv, alte AST-Form).
+// Forward-Declarations ohne `begin` haben keinen nkBlock und werden
+// korrekt geskippt.
 var Child: TAstNode;
 begin
   Result := False;
   for Child in MethodNode.Children do
-    if Child.Kind in [nkAssign, nkCall, nkIfStmt, nkCaseStmt, nkForStmt,
-                      nkWhileStmt, nkRepeatStmt, nkTryExcept, nkTryFinally,
-                      nkRaise, nkExit, nkInherited, nkLocalVar] then
+    if (Child.Kind = nkBlock) or
+       (Child.Kind in [nkAssign, nkCall, nkIfStmt, nkCaseStmt, nkForStmt,
+                       nkWhileStmt, nkRepeatStmt, nkTryExcept, nkTryFinally,
+                       nkRaise, nkExit, nkInherited, nkLocalVar]) then
       Exit(True);
 end;
 

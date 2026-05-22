@@ -207,7 +207,10 @@ begin
         // aufloesen koennen.
         LhsLow := LowerCase(Lhs);
         RhsLow := LowerCase(Rhs);
-        if (Pos('.', Lhs) > 0) or (Pos('.', Rhs) > 0) then Continue;
+        // Qualified Identifier (`Self.X`, `Obj.Field`) ausschliessen - aber
+        // NICHT numerische Literale wie `0.5` (haben Punkt + Ziffern).
+        if (Pos('.', Lhs) > 0) and not CharInSet(Lhs[1], ['0'..'9']) then Continue;
+        if (Pos('.', Rhs) > 0) and not CharInSet(Rhs[1], ['0'..'9']) then Continue;
         if (FloatVars.IndexOf(LhsLow) < 0) and (FloatVars.IndexOf(RhsLow) < 0) then
           Continue;
         // Welche Seite ist die Float-Var (fuer Detail-Text).
