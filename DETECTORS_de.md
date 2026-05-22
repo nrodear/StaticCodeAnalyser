@@ -6,7 +6,7 @@ Orientiert sich am Sonar-50er-Katalog plus eigene Bonus-Detektoren.
 
 Status: ✅ implementiert | 🟡 teilweise | 🔲 offen
 
-**Zusammenfassung:** 44 / 50 Sonar-Regel-Slots vollständig (Critical + Reliability + Maintainability + Minor weitestgehend abgedeckt) + 1 teilweise + 3 Bonus + **22 DFM-Detektoren** + **32 SonarDelphi-Migration** (SCA120-152) + **9 mORMot-Cluster** (SCA153-161) + ~60 SonarDelphi-kompatible Naming-/Formatting-Checks (SCA060-119) = **insgesamt ~153 aktive Detektoren**.
+**Zusammenfassung:** 44 / 50 Sonar-Regel-Slots vollständig (Critical + Reliability + Maintainability + Minor weitestgehend abgedeckt) + 1 teilweise + 3 Bonus + **22 DFM-Detektoren** + **32 SonarDelphi-Migration** (SCA120-152) + **9 mORMot-Cluster** (SCA153-161) + ~60 SonarDelphi-kompatible Naming-/Formatting-Checks (SCA060-119) = **insgesamt 161 Detektor-Kinds** (geliefert von ~130 Pipeline-Klassen; einige Klassen emittieren mehrere Kinds — z. B. `uVisibilityCheck` → 4 Kinds, `uDfmAnalysisRunner` → 22 DFM-Kinds).
 
 Verbleibende 5 offene Slots brauchen Typ-Inferenz / Flow-Analyse / Cross-Unit-Symbol-Resolution: #16 UninitVar, #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI.
 
@@ -151,7 +151,7 @@ Sonar-50-Katalog
 🏛 mORMot-Cluster:                   9 (SCA153-161, alle vollständig)
 🧩 SonarDelphi Naming/Formatting:  ~60 (SCA060-119, siehe sca-rules.json)
 
-🎯 Gesamt: ~120 aktive Detektoren.
+🎯 Gesamt: 161 Detektor-Kinds (~130 Pipeline-Klassen).
 ```
 
 ---

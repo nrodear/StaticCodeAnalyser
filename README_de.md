@@ -108,13 +108,13 @@ anderen Workflow. Wahl nach Rolle / Tageszeit:
 | **Befund-Navigation per Tastatur** | ✅ `Strg+Alt+↑/↓` zwischen Befunden | Grid + Pfeiltasten | — |
 | **False-Positive auf dieser Zeile unterdrücken** | ✅ `Strg+Alt+S` fügt `// noinspection RuleName` ein | manuell | manuell |
 | **Befund an Claude AI übergeben** — Markdown-Prompt mit Code-Kontext | ✅ Zeilen-Klick → Clipboard | ✅ Zeilen-Klick → Clipboard | — |
-| **Nur Branch-Changes** — Dateien seit `main` / aktuellem SVN-Diff | ✅ Branch-Button | ✅ Branch-Button | ✅ `-branch-changes` |
+| **Nur Branch-Changes** — Dateien seit `main` / aktuellem SVN-Diff | ✅ Branch-Button | ✅ Branch-Button | ✅ `--branch` oder `--diff <ref>` |
 | **Projekt außerhalb von Delphi analysieren** (kein RAD installiert / Batch-Maschine) | — | ✅ Ordner wählen, Start klicken | ✅ `analyser.exe <ordner>` |
-| **Als Pre-Commit-Hook ausführen** | — | — | ✅ `--severity error --no-progress`, Exit-Code 1 bei Bug/Vuln |
-| **In CI / GitHub Actions ausführen** | — | — | ✅ `--export sarif --out sca.sarif`, SARIF-Upload-Step |
-| **Befunde an SonarQube / SonarCloud pushen** | ✅ `Tools → Sonar Push` | ✅ Menü | ✅ `--sonar-push` |
-| **HTML-Report generieren** für Stakeholder / Jira-Anhang | ✅ Export → HTML | ✅ Export → HTML | ✅ `--export html --out report.html` |
-| **Claude-Review-Prompt** für gesamten Batch (Tech-Lead-Workflow) | ✅ Export → Claude-Prompt | ✅ Export → Claude-Prompt | ✅ `--export claude --out prompt.md` |
+| **Als Pre-Commit-Hook ausführen** | — | — | ✅ `--min-severity error --quiet --fail-on error`, Exit-Code reflektiert Severity |
+| **In CI / GitHub Actions ausführen** | — | — | ✅ `--report-sarif sca.sarif`, SARIF-Upload-Step |
+| **Befunde an SonarQube / SonarCloud pushen** | ✅ `Tools → Sonar Push` | ✅ Menü | ✅ `--sonar-export sca-findings.json --sonar-host <url> --sonar-token <t>` |
+| **HTML-Report generieren** für Stakeholder / Jira-Anhang | ✅ Export → HTML | ✅ Export → HTML | — (nur GUI) |
+| **Claude-Review-Prompt** für gesamten Batch (Tech-Lead-Workflow) | ✅ Export → Claude-Prompt | ✅ Export → Claude-Prompt | — (nur GUI) |
 | **Nightly Full-Repo-Scan** + Diff gegen Baseline | — | ✅ Task Scheduler | ✅ `cron` / `schtasks` |
 | **Auto-Analyse beim Speichern** (Live-Watch) | ✅ opt-in, siehe [Live-Watch](#live-watch-nur-ide-plugin--%EF%B8%8F-riskant) | — | — |
 | **Custom-Rules editieren** (RegEx via `[CustomRules]`-ini) | ✅ Tools → Options | ✅ Einstellungsdialog | `analyser.ini` direkt editieren |
@@ -139,11 +139,14 @@ Overnight-Batch auf einem Build-Server ohne Delphi-Lizenz, EXE an
 Nicht-Delphi-Engineer für einmaliges Audit weitergeben.
 
 **CI-Pipeline / Pre-Commit-Hook / Scheduled Task** → CLI-Mode derselben
-EXE. Keine GUI, Exit-Code zeigt Severity an (0 = sauber, 1 = Bug/Vuln
-gefunden, 2 = Setup-Fehler). Exporte: HTML, SARIF, Sonar-Generic,
-Claude-Prompt, Plain-JSON. Sonar-Push lädt Befunde direkt hoch, ohne
-Zwischen-Report-Datei. Branch-Changes-Filter (`--branch-changes`) lässt
-PR-Builds nur analysieren, was der Diff betrifft.
+EXE. Keine GUI, Exit-Code reflektiert Severity über `--fail-on <level>`
+(0 = sauber / unter Schwelle, 1 = Schwelle überschritten). CLI-Exporte:
+SARIF (`--report-sarif <file>`) für GitHub Code-Scanning / Azure
+Pipelines, Sonar-Generic-JSON (`--sonar-export <file>`) für den
+SonarQube-Import. HTML- und Claude-Prompt-Export sind GUI-only.
+Branch-Changes-Filter (`--branch` für git-Branch vs `main`, oder
+`--diff <ref>` für beliebige Basis) lässt PR-Builds nur das
+analysieren, was der Diff betrifft.
 
 **Alle drei Modi** lesen die gleiche `analyser.ini`, das gleiche
 `rules/sca-rules.json`, die gleichen Suppression-Marker — und emittieren

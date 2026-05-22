@@ -7,7 +7,7 @@ specific to this tool.
 
 Status legend: ✅ implemented · 🟡 partial · 🔲 open
 
-**Summary:** 44 / 50 Sonar-rule slots complete (Critical + Reliability + Maintainability + Minor sections largely done) + 1 partial + 3 bonus + **22 DFM** detectors + **32 SonarDelphi-migration** (SCA120-152) + **9 mORMot-cluster** (SCA153-161) + ~60 SonarDelphi-compatible naming/formatting checks (SCA060-119) = **~153 active detectors total**.
+**Summary:** 44 / 50 Sonar-rule slots complete (Critical + Reliability + Maintainability + Minor sections largely done) + 1 partial + 3 bonus + **22 DFM** detectors + **32 SonarDelphi-migration** (SCA120-152) + **9 mORMot-cluster** (SCA153-161) + ~60 SonarDelphi-compatible naming/formatting checks (SCA060-119) = **161 detector kinds total** (delivered by ~130 pipeline classes; several classes emit multiple kinds — e.g. `uVisibilityCheck` → 4 kinds, `uDfmAnalysisRunner` → 22 DFM kinds).
 
 Remaining 5 open slots all need type-inference / flow-analysis / cross-unit symbol resolution: #16 UninitVar, #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI.
 
@@ -152,7 +152,7 @@ Sonar-50 catalogue
 🏛 mORMot-cluster:                  9 (SCA153-161, all complete)
 🧩 SonarDelphi naming/formatting:  ~60 (SCA060-119, see sca-rules.json)
 
-🎯 Grand total: ~153 active detectors.
+🎯 Grand total: 161 detector kinds (~130 pipeline classes).
 ```
 
 ---

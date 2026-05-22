@@ -313,15 +313,17 @@ begin
 
   // ---- ProgressBar + Cancel-Button in der StatusBar (Laufzeit-Widgets)
   // Layout: Cancel-Button rechts am StatusBar-Rand (alRight, Width=80),
-  // ProgressBar fuellt den restlichen Platz (alClient). Beide sind
-  // initial leer/inaktiv und werden in BeginAnalysisUI/EndAnalysisUI
-  // gesteuert. Visible=True bleibt konstant (kein Flicker).
+  // ProgressBar fuellt den restlichen Platz (alClient). Beide werden in
+  // BeginAnalysisUI sichtbar geschaltet und in EndAnalysisUI wieder
+  // versteckt - so bleiben die Status-Text-Panels im Ruhe-Zustand
+  // vollstaendig sichtbar.
   FBtnCancel := TButton.Create(Self);
   FBtnCancel.Parent  := StatusBar1;
   FBtnCancel.Caption := _('Cancel');
   FBtnCancel.Width   := 80;
   FBtnCancel.Align   := alRight;
   FBtnCancel.Enabled := False;
+  FBtnCancel.Visible := False;
   FBtnCancel.OnClick := BtnCancelClick;
 
   FProgressBar := TProgressBar.Create(Self);
@@ -332,6 +334,7 @@ begin
   FProgressBar.Position:= 0;
   FProgressBar.Smooth  := True;
   FProgressBar.Style   := pbstNormal;
+  FProgressBar.Visible := False;
 
   LoadRecentPaths;
 end;
@@ -350,6 +353,7 @@ begin
   FLastProgressTick := 0;
   Screen.Cursor     := crAppStart;
   FBtnCancel.Enabled := True;
+  FBtnCancel.Visible := True;
   if KnownTotal > 0 then
   begin
     FProgressBar.Style := pbstNormal;
@@ -362,13 +366,16 @@ begin
     FProgressBar.Max   := 100;
   end;
   FProgressBar.Position := 0;
+  FProgressBar.Visible  := True;
 end;
 
 procedure TForm2.EndAnalysisUI;
 begin
   FBtnCancel.Enabled    := False;
+  FBtnCancel.Visible    := False;
   FProgressBar.Style    := pbstNormal;
   FProgressBar.Position := 0;
+  FProgressBar.Visible  := False;
   Screen.Cursor         := crDefault;
 end;
 
