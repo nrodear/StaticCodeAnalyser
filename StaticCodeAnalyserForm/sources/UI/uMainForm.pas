@@ -91,6 +91,13 @@ type
     // Hint-Panel rechts vom Grid (Before/After-Code-Beispiele).
     // Standalone-Modus: AlwaysVisible=True (kein Auto-Hide).
     FHintPanel : TFindingHintPanel;
+    // Progress-Feedback waehrend Analyse (analog zum IDE-Plugin).
+    // ProgressBar in der StatusBar eingebettet, Cancel-Button daneben.
+    // Werden zur Laufzeit erzeugt - kein DFM-Eintrag noetig.
+    FProgressBar    : TProgressBar;
+    FBtnCancel      : TButton;
+    FCancelRequested: Boolean;
+    FLastProgressTick: Cardinal;
     // Wendet die Display-Filter (Severity-Combo / Type-Combo / Search)
     // auf FAllFindings an und fuellt FDisplayedFindings + Grid neu.
     procedure ApplyFilter;
@@ -115,6 +122,15 @@ type
     function  AppPath: string;
     function  RecentIniPath: string;
     procedure NavigateDelphiToLine(LineNo: Integer);
+    // Cancel-Handler fuer den Standalone-Analyse-Lauf.
+    procedure BtnCancelClick(Sender: TObject);
+    // Worker-Callback aus AnalyzeLeaksRecursive / AnalyzeLeaksFromList.
+    // Total < 0  -> Scan-Phase (Marquee)
+    // Total >= 0 -> File-Phase (Normal, Position=Current)
+    procedure ProgressCallback(Current, Total: Integer);
+    // UI-Zustand vor / nach einem Analyse-Lauf.
+    procedure BeginAnalysisUI(KnownTotal: Integer);
+    procedure EndAnalysisUI;
   public
   end;
 
@@ -295,7 +311,125 @@ begin
   // 1/3-Breite anpasst (und die Vorher/Nachher-Aufteilung neu rechnet).
   Self.OnResize := FormResizeHandler;
 
+  // ---- ProgressBar + Cancel-Button in der StatusBar (Laufzeit-Widgets)
+  // Layout: Cancel-Button rechts am StatusBar-Rand (alRight, Width=80),
+  // ProgressBar fuellt den restlichen Platz (alClient). Beide sind
+  // initial leer/inaktiv und werden in BeginAnalysisUI/EndAnalysisUI
+  // gesteuert. Visible=True bleibt konstant (kein Flicker).
+  FBtnCancel := TButton.Create(Self);
+  FBtnCancel.Parent  := StatusBar1;
+  FBtnCancel.Caption := _('Cancel');
+  FBtnCancel.Width   := 80;
+  FBtnCancel.Align   := alRight;
+  FBtnCancel.Enabled := False;
+  FBtnCancel.OnClick := BtnCancelClick;
+
+  FProgressBar := TProgressBar.Create(Self);
+  FProgressBar.Parent  := StatusBar1;
+  FProgressBar.Align   := alClient;
+  FProgressBar.Min     := 0;
+  FProgressBar.Max     := 100;
+  FProgressBar.Position:= 0;
+  FProgressBar.Smooth  := True;
+  FProgressBar.Style   := pbstNormal;
+
   LoadRecentPaths;
+end;
+
+procedure TForm2.BtnCancelClick(Sender: TObject);
+begin
+  FCancelRequested := True;
+  // Sofort sperren - verhindert Doppelklick-Spam bevor der naechste
+  // Callback den Abort durchfuehrt.
+  FBtnCancel.Enabled := False;
+end;
+
+procedure TForm2.BeginAnalysisUI(KnownTotal: Integer);
+begin
+  FCancelRequested  := False;
+  FLastProgressTick := 0;
+  Screen.Cursor     := crAppStart;
+  FBtnCancel.Enabled := True;
+  if KnownTotal > 0 then
+  begin
+    FProgressBar.Style := pbstNormal;
+    FProgressBar.Max   := KnownTotal;
+  end
+  else
+  begin
+    // Scan-Phase: Marquee bis der erste File-Phase-Callback kommt.
+    FProgressBar.Style := pbstMarquee;
+    FProgressBar.Max   := 100;
+  end;
+  FProgressBar.Position := 0;
+end;
+
+procedure TForm2.EndAnalysisUI;
+begin
+  FBtnCancel.Enabled    := False;
+  FProgressBar.Style    := pbstNormal;
+  FProgressBar.Position := 0;
+  Screen.Cursor         := crDefault;
+end;
+
+procedure TForm2.ProgressCallback(Current, Total: Integer);
+// Wird vom Analyzer-Worker aufgerufen. Total<0 = Scan-Phase, sonst File-Phase.
+// Throttle auf ~10/s damit das UI nicht ueberflutet wird.
+const
+  MAX_SCAN_FILES = 20000;
+var
+  tick     : Cardinal;
+  doUpdate : Boolean;
+begin
+  if FCancelRequested then
+    Abort;
+
+  tick     := GetTickCount;
+  doUpdate := (tick - FLastProgressTick > 100);
+
+  // Defensiv: erster File-Phase-Tick (Total>=0) MUSS durch, damit der
+  // Style-Switch Marquee->Normal nicht durch den 100ms-Throttle verzoegert
+  // wird. Gleiche Logik wie im IDE-Plugin (uIDEAnalyseRunner).
+  if (Total >= 0) and (FProgressBar.Style = pbstMarquee) then
+    doUpdate := True;
+
+  if Total < 0 then
+  begin
+    // ---- Scan-Phase ----
+    if Current > MAX_SCAN_FILES then
+    begin
+      StatusBar1.Panels[2].Text := Format(
+        _('More than %d files found - scan cancelled.'), [MAX_SCAN_FILES]);
+      Abort;
+    end;
+    if doUpdate then
+    begin
+      FLastProgressTick := tick;
+      if FProgressBar.Style <> pbstMarquee then
+        FProgressBar.Style := pbstMarquee;
+      StatusBar1.Panels[2].Text := Format(_('Scanning... %d found'), [Current]);
+      Application.ProcessMessages;
+    end;
+  end
+  else
+  begin
+    // ---- File-Phase ----
+    if doUpdate or (Current = Total) then
+    begin
+      FLastProgressTick := tick;
+      if FProgressBar.Style <> pbstNormal then
+        FProgressBar.Style := pbstNormal;
+      if (FProgressBar.Max <> Total) and (Total > 0) then
+        FProgressBar.Max := Total;
+      FProgressBar.Position := Current;
+      if Total > 0 then
+        StatusBar1.Panels[2].Text := Format(_('File %d / %d (%d%%)'),
+          [Current, Total, Round(Current * 100 / Total)])
+      else
+        StatusBar1.Panels[2].Text := Format(_('File %d'), [Current]);
+      Application.ProcessMessages;
+    end;
+  end;
 end;
 
 procedure TForm2.FormResizeHandler(Sender: TObject);
@@ -515,7 +649,6 @@ var
   Settings: TRepoSettings;
   findings: TObjectList<TLeakFinding>;
 begin
-  Screen.Cursor := crHourglass;
   Settings := TRepoSettings.Create;
   try
     try Settings.Load; except end;
@@ -525,15 +658,27 @@ begin
     ApplyDetectorConfig(Settings, True);
 
     StatusBar1.Panels[2].Text := _('Checking all classes...');
+    BeginAnalysisUI(0); // Total unbekannt -> Marquee-Phase
     Application.ProcessMessages;
 
-    // Frueher: TStaticAnalyzer.AnalyzeAllClassesRecursive (uParser-basiert,
-    // nur MemoryLeak + EmptyExcept). Jetzt: TStaticAnalyzer2 ueber alle 21
-    // Detektoren - dieselbe Pipeline wie "Aktuelle Datei" und das IDE-Plugin.
-    findings := TStaticAnalyzer2.AnalyzeLeaksRecursive(path,
-      nil, Settings.UsesCheck);
+    findings := nil;
     try
-      FillGridFromFindings(findings, path);
+      try
+        // Frueher: TStaticAnalyzer.AnalyzeAllClassesRecursive (uParser-basiert,
+        // nur MemoryLeak + EmptyExcept). Jetzt: TStaticAnalyzer2 ueber alle 21
+        // Detektoren - dieselbe Pipeline wie "Aktuelle Datei" und das IDE-Plugin.
+        findings := TStaticAnalyzer2.AnalyzeLeaksRecursive(path,
+          procedure(C, T: Integer) begin ProgressCallback(C, T); end,
+          Settings.UsesCheck);
+        FillGridFromFindings(findings, path);
+      except
+        on EAbort do
+          // User-Cancel oder MAX_SCAN_FILES-Limit. StatusBar wurde im
+          // ProgressCallback bereits gesetzt.
+          ;
+        on E: Exception do
+          StatusBar1.Panels[2].Text := _('Analysis error: ') + E.Message;
+      end;
     finally
       findings.Free;
     end;
@@ -543,7 +688,7 @@ begin
       try Settings.PersistDiscoveredClasses; except end;
   finally
     Settings.Free;
-    Screen.Cursor := crDefault;
+    EndAnalysisUI;
   end;
 end;
 
@@ -564,8 +709,10 @@ begin
   // nil-init ist wichtig: wenn AnalyzeLeaks crasht BEVOR die Liste
   // zugewiesen wird, sehen wir ungueltigen Speicher im finally.
   findings := nil;
-  Screen.Cursor := crHourglass;
   Settings := TRepoSettings.Create;
+  // Marquee-Animation waehrend der Single-File-Analyse - analog zum
+  // IDE-Plugin RunCurrent. Kein File-Phase-Callback (eine Datei).
+  BeginAnalysisUI(0);
   try
     try Settings.Load; except end;
     ApplyDetectorConfig(Settings, True);
@@ -599,7 +746,7 @@ begin
       try Settings.PersistDiscoveredClasses; except end;
   finally
     Settings.Free;
-    Screen.Cursor := crDefault;
+    EndAnalysisUI;
   end;
 end;
 
@@ -1034,7 +1181,6 @@ begin
     Exit;
   end;
 
-  Screen.Cursor := crHourglass;
   Settings := TRepoSettings.Create;
   Files    := nil;
   Findings := nil;
@@ -1051,21 +1197,28 @@ begin
 
     StatusBar1.Panels[2].Text := Format(_('Analysing %d changed file(s). %s'),
       [Files.Count, Info]);
+    // Total ist hier vorab bekannt -> direkt File-Phase (kein Marquee).
+    BeginAnalysisUI(Files.Count);
     Application.ProcessMessages;
 
     try
-      Findings := TStaticAnalyzer2.AnalyzeLeaksFromList(Files, nil,
-        Settings.UsesCheck);
-      FillGridFromFindings(Findings, StartDir);
-    except
-      on E: Exception do
-        StatusBar1.Panels[2].Text := _('Analysis error: ') + E.Message;
+      try
+        Findings := TStaticAnalyzer2.AnalyzeLeaksFromList(Files,
+          procedure(C, T: Integer) begin ProgressCallback(C, T); end,
+          Settings.UsesCheck);
+        FillGridFromFindings(Findings, StartDir);
+      except
+        on EAbort do ;
+        on E: Exception do
+          StatusBar1.Panels[2].Text := _('Analysis error: ') + E.Message;
+      end;
+    finally
+      EndAnalysisUI;
     end;
   finally
     Findings.Free;
     Files.Free;
     Settings.Free;
-    Screen.Cursor := crDefault;
   end;
 end;
 
