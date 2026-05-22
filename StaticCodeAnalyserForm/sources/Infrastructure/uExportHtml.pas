@@ -298,6 +298,8 @@ begin
   SB := TStringBuilder.Create;
   try
     SB.AppendLine('<!DOCTYPE html>');
+    // lang-Attribute wird per JS aus localStorage / navigator.language
+    // auf en/de/fr gesetzt - Default 'de' fuer den Pre-JS-Render.
     SB.AppendLine('<html lang="de">');
     SB.AppendLine('<head>');
     SB.AppendLine('  <meta charset="UTF-8">');
@@ -469,12 +471,15 @@ begin
     //   * Shortcuts: oeffnet Hilfe-Overlay mit Tastatur-Bindings.
     SB.AppendLine('  <div class="header-actions">');
     SB.AppendLine('    <button class="tl-btn" id="btnSprintCopy" ' +
+                  'data-i18n="btn-sprint" data-i18n-title="ttl-sprint" ' +
                   'title="Sichtbare Top-Befunde als Markdown-Liste in die Zwischenablage">' +
                   '&#128203; Sprint-Liste kopieren</button>');
     SB.AppendLine('    <button class="tl-btn" id="btnShareLink" ' +
+                  'data-i18n="btn-share" data-i18n-title="ttl-share" ' +
                   'title="Aktuelle Filter-Sicht als URL in die Zwischenablage (zum Teilen)">' +
                   '&#128279; Sicht teilen</button>');
     SB.AppendLine('    <button class="tl-btn secondary" id="btnKbdHelp" ' +
+                  'data-i18n="btn-kbd" data-i18n-title="ttl-kbd" ' +
                   'title="Tastatur-Shortcuts anzeigen (?)">&#9000; Shortcuts</button>');
     SB.AppendLine('  </div>');
 
@@ -485,10 +490,10 @@ begin
     // (Severity-Klick selbst aendert die Counts NICHT - sie zeigen immer
     // den Master-Scope, sonst wuerden die anderen Badges auf 0 fallen
     // sobald man eine Severity klickt).
-    SB.AppendLine('    <div class="badge b-err sev-filter" data-sev="err"><b id="count-err">'   + IntToStr(nErr)  + '</b>Fehler</div>');
-    SB.AppendLine('    <div class="badge b-warn sev-filter" data-sev="warn"><b id="count-warn">' + IntToStr(nWarn) + '</b>Warnungen</div>');
-    SB.AppendLine('    <div class="badge b-hint sev-filter" data-sev="hint"><b id="count-hint">' + IntToStr(nHint) + '</b>Hinweise</div>');
-    SB.AppendLine('    <div class="badge b-tot sev-filter sev-active" data-sev=""><b id="count-tot">'   + IntToStr(nTotal)+ '</b>Gesamt</div>');
+    SB.AppendLine('    <div class="badge b-err sev-filter" data-sev="err"><b id="count-err">'   + IntToStr(nErr)  + '</b><span data-i18n="sev-err">Fehler</span></div>');
+    SB.AppendLine('    <div class="badge b-warn sev-filter" data-sev="warn"><b id="count-warn">' + IntToStr(nWarn) + '</b><span data-i18n="sev-warn">Warnungen</span></div>');
+    SB.AppendLine('    <div class="badge b-hint sev-filter" data-sev="hint"><b id="count-hint">' + IntToStr(nHint) + '</b><span data-i18n="sev-hint">Hinweise</span></div>');
+    SB.AppendLine('    <div class="badge b-tot sev-filter sev-active" data-sev=""><b id="count-tot">'   + IntToStr(nTotal)+ '</b><span data-i18n="sev-total">Gesamt</span></div>');
     SB.AppendLine('  </div>');
 
     // Top-Detektoren-Panel - zeigt die Top-N Detektoren nach Befund-Anzahl.
@@ -497,7 +502,13 @@ begin
     if (KindPairs <> nil) and (KindPairs.Count > 0) then
     begin
       SB.AppendLine('  <div class="top-detectors">');
-      SB.Append    ('    <h2>Top ');
+      // Top-N-Heading mit i18n: applyLanguage liest data-top-n und data-top-total
+      // und baut den Heading-Text aus dem Template fuer die Sprache zusammen.
+      SB.Append    ('    <h2 data-i18n="hdr-top-detectors" data-top-n="');
+      SB.Append    (IntToStr(Min(TOP_DETECTORS_N, KindPairs.Count)));
+      SB.Append    ('" data-top-total="');
+      SB.Append    (IntToStr(KindPairs.Count));
+      SB.Append    ('">Top ');
       SB.Append    (IntToStr(Min(TOP_DETECTORS_N, KindPairs.Count)));
       SB.Append    (' Detektoren (von ');
       SB.Append    (IntToStr(KindPairs.Count));
@@ -524,9 +535,9 @@ begin
 
     // Controls-Bar mit Datei-Filter (zeigt alle eindeutigen Dateinamen).
     SB.AppendLine('  <div class="controls">');
-    SB.AppendLine('    <label for="ruleFilter">Profil:</label>');
+    SB.AppendLine('    <label for="ruleFilter" data-i18n="lbl-profile">Profil:</label>');
     SB.AppendLine('    <select id="ruleFilter">');
-    SB.AppendLine('      <option value="all">Alle</option>');
+    SB.AppendLine('      <option value="all" data-i18n="opt-all">Alle</option>');
     SB.Append    ('      <option value="top10">Top ');
     SB.Append    (IntToStr(TOP_DETECTORS_N));
     SB.AppendLine('</option>');
@@ -547,9 +558,23 @@ begin
       SB.AppendLine('</option>');
     end;
     SB.AppendLine('    </select>');
-    SB.AppendLine('    <label for="fileFilter">Datei:</label>');
+    // Language-Switcher: EN / DE / FR. Default-Caption ist Deutsch (matched
+    // den Pre-JS-Render); applyLanguage(lang) updated alles auf data-i18n-
+    // Attribut. Auswahl wird in localStorage gespeichert, beim Reload
+    // automatisch aktiviert.
+    SB.AppendLine('    <label for="langSelect" data-i18n="lbl-lang">Sprache:</label>');
+    SB.AppendLine('    <select id="langSelect">');
+    SB.AppendLine('      <option value="en">English</option>');
+    SB.AppendLine('      <option value="de" selected>Deutsch</option>');
+    SB.AppendLine('      <option value="fr">Fran' + #$E7 + 'ais</option>');
+    SB.AppendLine('    </select>');
+    SB.AppendLine('    <label for="fileFilter" data-i18n="lbl-file">Datei:</label>');
     SB.AppendLine('    <select id="fileFilter">');
-    SB.Append    ('      <option value="">Alle (');
+    // "Alle (N Dateien)" - der Text ist data-i18n-kontrolliert,
+    // applyLanguage updated ihn (mit Counter).
+    SB.Append    ('      <option value="" data-i18n="opt-all-files" data-count="');
+    SB.Append    (IntToStr(Files.Count));
+    SB.Append    ('">Alle (');
     SB.Append    (IntToStr(Files.Count));
     SB.AppendLine(' Dateien)</option>');
 
@@ -624,25 +649,29 @@ begin
     // HTML-Export keine Volltextsuche - Tech-Lead musste die Browser-Suche
     // (Strg+F) nutzen, die aber durch geklappte Hint-Zeilen scrollt und
     // nicht filtert.
-    SB.AppendLine('    <label for="searchInput">Suche:</label>');
-    SB.AppendLine('    <input type="search" id="searchInput" placeholder="Methode, Datei, Detail...">');
-    SB.Append    ('    <span class="row-count" id="rowCount">');
+    SB.AppendLine('    <label for="searchInput" data-i18n="lbl-search">Suche:</label>');
+    SB.AppendLine('    <input type="search" id="searchInput" placeholder="Methode, Datei, Detail..." data-i18n-placeholder="ph-search">');
+    SB.Append    ('    <span class="row-count" id="rowCount" data-i18n="row-count" data-count="');
+    SB.Append    (IntToStr(nTotal));
+    SB.Append    ('">');
     SB.Append    (IntToStr(nTotal));
     SB.AppendLine(' Befunde</span>');
-    SB.AppendLine('    <span class="hint">Spalte sortieren &middot; Zeile zeigt Hinweis &middot; <kbd>?</kbd> Shortcuts</span>');
+    SB.AppendLine('    <span class="hint" data-i18n="hint-bar">Spalte sortieren &middot; Zeile zeigt Hinweis &middot; <kbd>?</kbd> Shortcuts</span>');
     SB.AppendLine('  </div>');
 
     SB.AppendLine('  <table id="findingsTable">');
     SB.AppendLine('    <thead><tr>');
     SB.AppendLine('      <th></th>'); // Toggle-Spalte (nicht sortierbar)
+    // Headers: label-Span hat data-i18n damit applyLanguage nur den
+    // Text-Teil aktualisiert, ohne die <span class="sort-ind"> zu zerstoeren.
     if SourceFile = '' then
-      SB.AppendLine('      <th class="sortable" data-col="file">Datei<span class="sort-ind"></span></th>');
-    SB.AppendLine('      <th class="sortable" data-col="sev">Severity<span class="sort-ind"></span></th>');
-    SB.AppendLine('      <th class="sortable" data-col="type">Typ<span class="sort-ind"></span></th>');
-    SB.AppendLine('      <th class="sortable num" data-col="line">Zeile<span class="sort-ind"></span></th>');
-    SB.AppendLine('      <th class="sortable" data-col="method">Methode<span class="sort-ind"></span></th>');
-    SB.AppendLine('      <th class="sortable" data-col="rule">Regel<span class="sort-ind"></span></th>');
-    SB.AppendLine('      <th class="sortable" data-col="detail">Detail<span class="sort-ind"></span></th>');
+      SB.AppendLine('      <th class="sortable" data-col="file"><span data-i18n="th-file">Datei</span><span class="sort-ind"></span></th>');
+    SB.AppendLine('      <th class="sortable" data-col="sev"><span data-i18n="th-sev">Severity</span><span class="sort-ind"></span></th>');
+    SB.AppendLine('      <th class="sortable" data-col="type"><span data-i18n="th-type">Typ</span><span class="sort-ind"></span></th>');
+    SB.AppendLine('      <th class="sortable num" data-col="line"><span data-i18n="th-line">Zeile</span><span class="sort-ind"></span></th>');
+    SB.AppendLine('      <th class="sortable" data-col="method"><span data-i18n="th-method">Methode</span><span class="sort-ind"></span></th>');
+    SB.AppendLine('      <th class="sortable" data-col="rule"><span data-i18n="th-rule">Regel</span><span class="sort-ind"></span></th>');
+    SB.AppendLine('      <th class="sortable" data-col="detail"><span data-i18n="th-detail">Detail</span><span class="sort-ind"></span></th>');
     SB.AppendLine('    </tr></thead>');
     SB.AppendLine('    <tbody>');
 
@@ -787,6 +816,151 @@ begin
     SB.AppendLine('    </tbody>');
     SB.AppendLine('  </table>');
     SB.AppendLine('  <script>');
+    // ---- i18n: Sprach-Wahlmoeglichkeit EN / DE / FR -----------------------
+    // Strings die im DOM stehen werden via data-i18n-Attribut markiert;
+    // dynamische Strings (im JS gebaut) gehen ueber T(key, ...args).
+    // Auswahl wird in localStorage["sca-html-lang"] persistiert. Beim
+    // ersten Laden: navigator.language -> en/de/fr fallback de.
+    SB.AppendLine('    var I18N = {');
+    SB.AppendLine('      en: {');
+    SB.AppendLine('        "lbl-lang": "Language:",');
+    SB.AppendLine('        "lbl-profile": "Profile:",');
+    SB.AppendLine('        "lbl-file": "File:",');
+    SB.AppendLine('        "lbl-search": "Search:",');
+    SB.AppendLine('        "ph-search": "Method, file, detail...",');
+    SB.AppendLine('        "opt-all": "All",');
+    SB.AppendLine('        "opt-all-files": "All ({0} files)",');
+    SB.AppendLine('        "row-count": "{0} findings",');
+    SB.AppendLine('        "hint-bar": "Click column to sort &middot; row toggles hint &middot; <kbd>?</kbd> shortcuts",');
+    SB.AppendLine('        "th-file": "File",');
+    SB.AppendLine('        "th-sev": "Severity",');
+    SB.AppendLine('        "th-type": "Type",');
+    SB.AppendLine('        "th-line": "Line",');
+    SB.AppendLine('        "th-method": "Method",');
+    SB.AppendLine('        "th-rule": "Rule",');
+    SB.AppendLine('        "th-detail": "Detail",');
+    SB.AppendLine('        "sev-err": "Errors",');
+    SB.AppendLine('        "sev-warn": "Warnings",');
+    SB.AppendLine('        "sev-hint": "Hints",');
+    SB.AppendLine('        "sev-total": "Total",');
+    SB.AppendLine('        "btn-sprint": "&#128203; Copy sprint list",');
+    SB.AppendLine('        "ttl-sprint": "Visible top findings as Markdown list to the clipboard",');
+    SB.AppendLine('        "btn-share": "&#128279; Share view",');
+    SB.AppendLine('        "ttl-share": "Current filter view as URL to the clipboard (for sharing)",');
+    SB.AppendLine('        "btn-kbd":   "&#9000; Shortcuts",');
+    SB.AppendLine('        "ttl-kbd":   "Show keyboard shortcuts (?)",');
+    SB.AppendLine('        "hdr-top-detectors": "Top {0} detectors (of {1})",');
+    SB.AppendLine('        "kbd-help-title": "Keyboard shortcuts",');
+    SB.AppendLine('        "kbd-help-close": "Close",');
+    SB.AppendLine('        "sprint-header": "Total visible: {0} findings. Top {1} priorities:"');
+    SB.AppendLine('      },');
+    SB.AppendLine('      de: {');
+    SB.AppendLine('        "lbl-lang": "Sprache:",');
+    SB.AppendLine('        "lbl-profile": "Profil:",');
+    SB.AppendLine('        "lbl-file": "Datei:",');
+    SB.AppendLine('        "lbl-search": "Suche:",');
+    SB.AppendLine('        "ph-search": "Methode, Datei, Detail...",');
+    SB.AppendLine('        "opt-all": "Alle",');
+    SB.AppendLine('        "opt-all-files": "Alle ({0} Dateien)",');
+    SB.AppendLine('        "row-count": "{0} Befunde",');
+    SB.AppendLine('        "hint-bar": "Spalte sortieren &middot; Zeile zeigt Hinweis &middot; <kbd>?</kbd> Shortcuts",');
+    SB.AppendLine('        "th-file": "Datei",');
+    SB.AppendLine('        "th-sev": "Severity",');
+    SB.AppendLine('        "th-type": "Typ",');
+    SB.AppendLine('        "th-line": "Zeile",');
+    SB.AppendLine('        "th-method": "Methode",');
+    SB.AppendLine('        "th-rule": "Regel",');
+    SB.AppendLine('        "th-detail": "Detail",');
+    SB.AppendLine('        "sev-err": "Fehler",');
+    SB.AppendLine('        "sev-warn": "Warnungen",');
+    SB.AppendLine('        "sev-hint": "Hinweise",');
+    SB.AppendLine('        "sev-total": "Gesamt",');
+    SB.AppendLine('        "btn-sprint": "&#128203; Sprint-Liste kopieren",');
+    SB.AppendLine('        "ttl-sprint": "Sichtbare Top-Befunde als Markdown-Liste in die Zwischenablage",');
+    SB.AppendLine('        "btn-share": "&#128279; Sicht teilen",');
+    SB.AppendLine('        "ttl-share": "Aktuelle Filter-Sicht als URL in die Zwischenablage (zum Teilen)",');
+    SB.AppendLine('        "btn-kbd":   "&#9000; Shortcuts",');
+    SB.AppendLine('        "ttl-kbd":   "Tastatur-Shortcuts anzeigen (?)",');
+    SB.AppendLine('        "hdr-top-detectors": "Top {0} Detektoren (von {1})",');
+    SB.AppendLine('        "kbd-help-title": "Tastatur-Shortcuts",');
+    SB.AppendLine('        "kbd-help-close": "Schliessen",');
+    SB.AppendLine('        "sprint-header": "Gesamt sichtbar: {0} Befunde. Top {1} Prioritaeten:"');
+    SB.AppendLine('      },');
+    SB.AppendLine('      fr: {');
+    SB.AppendLine('        "lbl-lang": "Langue\\u00a0:",');
+    SB.AppendLine('        "lbl-profile": "Profil\\u00a0:",');
+    SB.AppendLine('        "lbl-file": "Fichier\\u00a0:",');
+    SB.AppendLine('        "lbl-search": "Rechercher\\u00a0:",');
+    SB.AppendLine('        "ph-search": "M\\u00e9thode, fichier, d\\u00e9tail...",');
+    SB.AppendLine('        "opt-all": "Tous",');
+    SB.AppendLine('        "opt-all-files": "Tous ({0} fichiers)",');
+    SB.AppendLine('        "row-count": "{0} d\\u00e9tections",');
+    SB.AppendLine('        "hint-bar": "Cliquez sur une colonne pour trier &middot; ligne ouvre l\\u2019indice &middot; <kbd>?</kbd> raccourcis",');
+    SB.AppendLine('        "th-file": "Fichier",');
+    SB.AppendLine('        "th-sev": "S\\u00e9v\\u00e9rit\\u00e9",');
+    SB.AppendLine('        "th-type": "Type",');
+    SB.AppendLine('        "th-line": "Ligne",');
+    SB.AppendLine('        "th-method": "M\\u00e9thode",');
+    SB.AppendLine('        "th-rule": "R\\u00e8gle",');
+    SB.AppendLine('        "th-detail": "D\\u00e9tail",');
+    SB.AppendLine('        "sev-err": "Erreurs",');
+    SB.AppendLine('        "sev-warn": "Avertissements",');
+    SB.AppendLine('        "sev-hint": "Indices",');
+    SB.AppendLine('        "sev-total": "Total",');
+    SB.AppendLine('        "btn-sprint": "&#128203; Copier la liste sprint",');
+    SB.AppendLine('        "ttl-sprint": "D\\u00e9tections visibles comme liste Markdown dans le presse-papiers",');
+    SB.AppendLine('        "btn-share": "&#128279; Partager la vue",');
+    SB.AppendLine('        "ttl-share": "Vue de filtre actuelle comme URL dans le presse-papiers (\\u00e0 partager)",');
+    SB.AppendLine('        "btn-kbd":   "&#9000; Raccourcis",');
+    SB.AppendLine('        "ttl-kbd":   "Afficher les raccourcis clavier (?)",');
+    SB.AppendLine('        "hdr-top-detectors": "Top {0} d\\u00e9tecteurs (sur {1})",');
+    SB.AppendLine('        "kbd-help-title": "Raccourcis clavier",');
+    SB.AppendLine('        "kbd-help-close": "Fermer",');
+    SB.AppendLine('        "sprint-header": "Visibles au total\\u00a0: {0} d\\u00e9tections. Top {1} priorit\\u00e9s\\u00a0:"');
+    SB.AppendLine('      }');
+    SB.AppendLine('    };');
+    SB.AppendLine('    var SCA_LANG = (function() {');
+    SB.AppendLine('      try {');
+    SB.AppendLine('        var s = localStorage.getItem("sca-html-lang");');
+    SB.AppendLine('        if (s && I18N[s]) return s;');
+    SB.AppendLine('      } catch(e) {}');
+    SB.AppendLine('      var nav = (navigator.language || "de").substring(0,2).toLowerCase();');
+    SB.AppendLine('      return I18N[nav] ? nav : "de";');
+    SB.AppendLine('    })();');
+    SB.AppendLine('    function T(key) {');
+    SB.AppendLine('      var s = (I18N[SCA_LANG] && I18N[SCA_LANG][key]) || (I18N["en"] && I18N["en"][key]) || key;');
+    SB.AppendLine('      for (var i = 1; i < arguments.length; i++) {');
+    SB.AppendLine('        s = s.replace(new RegExp("\\\\{" + (i-1) + "\\\\}", "g"), arguments[i]);');
+    SB.AppendLine('      }');
+    SB.AppendLine('      return s;');
+    SB.AppendLine('    }');
+    SB.AppendLine('    function applyLanguage(lang) {');
+    SB.AppendLine('      if (!I18N[lang]) return;');
+    SB.AppendLine('      SCA_LANG = lang;');
+    SB.AppendLine('      try { localStorage.setItem("sca-html-lang", lang); } catch(e) {}');
+    SB.AppendLine('      document.documentElement.lang = lang;');
+    SB.AppendLine('      // Text-Nodes: data-i18n-Attribute');
+    SB.AppendLine('      document.querySelectorAll("[data-i18n]").forEach(function(el) {');
+    SB.AppendLine('        var key = el.getAttribute("data-i18n");');
+    SB.AppendLine('        // Dynamische Counter-Strings: data-count / data-top-n / data-top-total');
+    SB.AppendLine('        if (key === "row-count")        el.innerHTML = T(key, el.dataset.count || "0");');
+    SB.AppendLine('        else if (key === "opt-all-files") el.textContent = T(key, el.dataset.count || "0");');
+    SB.AppendLine('        else if (key === "hdr-top-detectors") el.textContent = T(key, el.dataset.topN || "0", el.dataset.topTotal || "0");');
+    SB.AppendLine('        else                            el.innerHTML = T(key);');
+    SB.AppendLine('      });');
+    SB.AppendLine('      // Placeholder-Attribute');
+    SB.AppendLine('      document.querySelectorAll("[data-i18n-placeholder]").forEach(function(el) {');
+    SB.AppendLine('        el.placeholder = T(el.getAttribute("data-i18n-placeholder"));');
+    SB.AppendLine('      });');
+    SB.AppendLine('      // Title-Attribute (Tooltip-Texte)');
+    SB.AppendLine('      document.querySelectorAll("[data-i18n-title]").forEach(function(el) {');
+    SB.AppendLine('        el.title = T(el.getAttribute("data-i18n-title")).replace(/&[#a-z0-9]+;/g, "");');
+    SB.AppendLine('      });');
+    SB.AppendLine('      // Sprach-Select selbst auf den aktiven Wert ziehen');
+    SB.AppendLine('      var sel = document.getElementById("langSelect");');
+    SB.AppendLine('      if (sel) sel.value = lang;');
+    SB.AppendLine('    }');
+    SB.AppendLine('');
     // TOP10_KINDS: Set-Lookup fuer den Row-Filter "Top 10" (Bedeutung:
     // "zeige nur Zeilen aus den unfiltered Top-10"). Bleibt fix, unabhaengig
     // vom Rule-Filter - sonst waere "Top 10" doppelt-konditional.
@@ -1044,7 +1218,7 @@ begin
     SB.AppendLine('        }');
     SB.AppendLine('        if (match) visible++;');
     SB.AppendLine('      });');
-    SB.AppendLine('      if (rowCnt) rowCnt.textContent = visible + '' Befunde'';');
+    SB.AppendLine('      if (rowCnt) { rowCnt.dataset.count = visible; rowCnt.innerHTML = T("row-count", visible); }');
     SB.AppendLine('      // Master-Kacheln updaten - reflektieren den Datei-+Rule-Scope.');
     SB.AppendLine('      var cErr  = document.getElementById(''count-err'');');
     SB.AppendLine('      var cWarn = document.getElementById(''count-warn'');');
@@ -1167,13 +1341,12 @@ begin
     SB.AppendLine('        opt.hidden = !match;');
     SB.AppendLine('        if (match) visible++;');
     SB.AppendLine('      }');
-    SB.AppendLine('      // "Alle (N Dateien)" - Counter aktualisieren');
+    SB.AppendLine('      // "Alle (N Dateien)" - Counter aktualisieren (i18n via T)');
     SB.AppendLine('      var allOpt = fileSel.querySelector(''option[value=""]'');');
     SB.AppendLine('      if (allOpt) {');
-    SB.AppendLine('        if (activeSev)');
-    SB.AppendLine('          allOpt.textContent = ''Alle ('' + visible + '' Dateien)'';');
-    SB.AppendLine('        else');
-    SB.AppendLine('          allOpt.textContent = ''Alle ('' + (opts.length - 1) + '' Dateien)'';');
+    SB.AppendLine('        var cnt = activeSev ? visible : (opts.length - 1);');
+    SB.AppendLine('        allOpt.dataset.count = cnt;');
+    SB.AppendLine('        allOpt.textContent   = T("opt-all-files", cnt);');
     SB.AppendLine('      }');
     SB.AppendLine('      // Aktuelle Auswahl unsichtbar geworden -> auf "Alle" zuruecksetzen');
     SB.AppendLine('      var sel = fileSel.selectedOptions && fileSel.selectedOptions[0];');
@@ -1324,7 +1497,7 @@ begin
     SB.AppendLine('      });');
     SB.AppendLine('      var picks = rows.slice(0, MAX);');
     SB.AppendLine('      var md = ''## Sprint-Backlog: Static Code Analysis\n\n'';');
-    SB.AppendLine('      md += ''Gesamt sichtbar: '' + rows.length + '' Befunde. Top '' + picks.length + '' Prioritaeten:\n\n'';');
+    SB.AppendLine('      md += T("sprint-header", rows.length, picks.length) + ''\n\n'';');
     SB.AppendLine('      picks.forEach(function(r) {');
     SB.AppendLine('        var sev    = r.querySelector(''td.sev'') ? r.querySelector(''td.sev'').textContent.trim() : '''';');
     SB.AppendLine('        var file   = r.getAttribute(''data-file'') || '''';');
@@ -1428,8 +1601,8 @@ begin
     SB.AppendLine('      kbdHelp = document.createElement(''div'');');
     SB.AppendLine('      kbdHelp.className = ''kbd-help'';');
     SB.AppendLine('      kbdHelp.innerHTML = ');
-    SB.AppendLine('        ''<button class="kbd-help-close" title="Schliessen">&times;</button>'' +');
-    SB.AppendLine('        ''<h3>Tastatur-Shortcuts</h3>'' +');
+    SB.AppendLine('        ''<button class="kbd-help-close" title="'' + T("kbd-help-close") + ''">&times;</button>'' +');
+    SB.AppendLine('        ''<h3>'' + T("kbd-help-title") + ''</h3>'' +');
     SB.AppendLine('        ''<table>'' +');
     SB.AppendLine('        ''<tr><td class="k"><kbd>1</kbd></td><td>nur Fehler</td></tr>'' +');
     SB.AppendLine('        ''<tr><td class="k"><kbd>2</kbd></td><td>nur Warnungen</td></tr>'' +');
@@ -1457,6 +1630,11 @@ begin
     SB.AppendLine('    // URL-Hash beim Laden auswerten - wenn die Seite mit Filter-Hash');
     SB.AppendLine('    // geoeffnet wurde, stellt das die Sicht wieder her.');
     SB.AppendLine('    loadFromUrlHash();');
+    SB.AppendLine('');
+    SB.AppendLine('    // ---- i18n: initiale Sprache anwenden + Listener auf langSelect ----');
+    SB.AppendLine('    applyLanguage(SCA_LANG);');
+    SB.AppendLine('    var langSel = document.getElementById("langSelect");');
+    SB.AppendLine('    if (langSel) langSel.addEventListener("change", function(){ applyLanguage(this.value); });');
     SB.AppendLine('  })();');
     SB.AppendLine('  </script>');
     SB.AppendLine('</body>');
