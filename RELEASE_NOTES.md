@@ -1,6 +1,10 @@
-# Release 0.9.1 — 2026-05-22
+# Release 0.9.2 — 2026-05-22
 
 🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md)
+
+> v0.9.1 was already published earlier (2026-05-16, "SonarQube integration").
+> The work in this release tag bumps to **0.9.2** so the previous tag stays
+> intact in the history.
 
 ## Highlights
 
