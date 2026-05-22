@@ -28,6 +28,10 @@ type
     [Test] procedure RecordResult_FieldAssign_NoFinding;
     [Test] procedure ArrayResult_IndexAssign_NoFinding;
     [Test] procedure FnNameDotField_NoFinding;
+    [Test] procedure TryGetValuePassesResult_NoFinding;
+    [Test] procedure TryStrToIntPassesResult_NoFinding;
+    [Test] procedure CallPassesResultFollowedByOther_NoFinding;
+    [Test] procedure UnrelatedVarSimilarName_StillReported;
 
     // ---- Finding-Inhalt ----------------------------------------------------
     [Test] procedure Finding_KindAndSeverity;
@@ -249,6 +253,70 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual(0, TFindingHelper.Count(F, fkRoutineResultUnassigned));
+  finally F.Free; end;
+end;
+
+procedure TTestRoutineResultAssigned.TryGetValuePassesResult_NoFinding;
+// Original-FP aus horse-master/Horse.Core.Param.pas:
+// Result wird via `var`-Parameter an TryGetValue uebergeben - das ist
+// eine Zuweisung von der Callee-Seite, der Detector muss sie erkennen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function GetItem(const AKey: string): string;'#13#10 +
+  'begin'#13#10 +
+  '  FParams.TryGetValue(AKey, Result);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkRoutineResultUnassigned));
+  finally F.Free; end;
+end;
+
+procedure TTestRoutineResultAssigned.TryStrToIntPassesResult_NoFinding;
+// RTL-Standard: TryStrToInt schreibt das Ergebnis ueber var-Param.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Parse(const S: string): Integer;'#13#10 +
+  'begin'#13#10 +
+  '  TryStrToInt(S, Result);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkRoutineResultUnassigned));
+  finally F.Free; end;
+end;
+
+procedure TTestRoutineResultAssigned.CallPassesResultFollowedByOther_NoFinding;
+// Result als nicht-letztes Argument.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Compute: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  DoWork(Result, ''logKey'', 42);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkRoutineResultUnassigned));
+  finally F.Free; end;
+end;
+
+procedure TTestRoutineResultAssigned.UnrelatedVarSimilarName_StillReported;
+// `ResultCache` ist NICHT `Result` - Word-Boundary muss verhindern, dass
+// das Finding faelschlich verschwindet.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Foo: Integer;'#13#10 +
+  'var ResultCache: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  DoWork(ResultCache);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(1, TFindingHelper.Count(F, fkRoutineResultUnassigned));
   finally F.Free; end;
 end;
 

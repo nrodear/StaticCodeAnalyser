@@ -50,7 +50,7 @@ unit uRoutineResultAssigned;
 interface
 
 uses
-  System.SysUtils, System.Generics.Collections,
+  System.SysUtils, System.StrUtils, System.Generics.Collections,
   uAstNode, uSCAConsts, uMethodd12;
 
 type
@@ -176,6 +176,59 @@ begin
   Result := IsHeadOrAccess('result') or IsHeadOrAccess(FnNameLow);
 end;
 
+function IsIdentChar(c: Char): Boolean; inline;
+begin
+  Result := CharInSet(c, ['A'..'Z', 'a'..'z', '0'..'9', '_']);
+end;
+
+// Word-boundary-Lookup von Needle in Haystack. Beide bereits lowercased.
+// Behandelt `Result.Field`, `Result[i]`, `Result^` als Treffer
+// (`.`, `[`, `^` sind keine Identifier-Chars und zaehlen als Boundary).
+function ContainsIdentifier(const Haystack, Needle: string): Boolean;
+var
+  pIx           : Integer;
+  Before, After : Char;
+begin
+  Result := False;
+  if Needle = '' then Exit;
+  pIx := Pos(Needle, Haystack);
+  while pIx > 0 do
+  begin
+    if pIx = 1 then Before := ' ' else Before := Haystack[pIx - 1];
+    if pIx + Length(Needle) > Length(Haystack) then After := ' '
+    else After := Haystack[pIx + Length(Needle)];
+    if (not IsIdentChar(Before)) and (not IsIdentChar(After)) then
+      Exit(True);
+    pIx := PosEx(Needle, Haystack, pIx + 1);
+  end;
+end;
+
+// True wenn der Call Result (oder den Function-Namen) als Argument
+// uebergibt - z.B. `FParams.TryGetValue(AKey, Result)` oder
+// `TryStrToInt(s, Result)`. Wir wissen lexisch nicht ob das Argument
+// `var`/`out`/by-value ist, behandeln das aber konservativ als potentielle
+// Zuweisung. Eliminiert den FP-Cluster bei TryGetValue / TryParse /
+// TryStrToXxx / TryEncode... bei winzigem False-Negative-Risiko fuer
+// `Foo(Result)`-Calls die Result nur LESEN.
+function CallPassesResultAsArg(CallNode: TAstNode; const FnNameLow: string): Boolean;
+var
+  S, ArgsLow    : string;
+  LParen, RParen: Integer;
+begin
+  Result := False;
+  if CallNode.Kind <> nkCall then Exit;
+  S := CallNode.Name;
+  LParen := Pos('(', S);
+  if LParen = 0 then Exit;
+  RParen := Length(S);
+  while (RParen > LParen) and (S[RParen] <> ')') do Dec(RParen);
+  if RParen <= LParen + 1 then Exit;
+  ArgsLow := LowerCase(Copy(S, LParen + 1, RParen - LParen - 1));
+  Result := ContainsIdentifier(ArgsLow, 'result');
+  if (not Result) and (FnNameLow <> '') then
+    Result := ContainsIdentifier(ArgsLow, FnNameLow);
+end;
+
 class procedure TRoutineResultAssignedDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -228,6 +281,25 @@ begin
     end;
   finally
     Assigns.Free;
+  end;
+
+  // Ergaenzung: Result koennte auch via var/out-Parameter an einen Call
+  // geschrieben werden (`TryGetValue(Key, Result)`, `TryStrToInt(s, Result)`,
+  // ...). Lexisch nicht von by-value-Pass unterscheidbar; konservativ als
+  // potentielle Zuweisung behandeln um FP-Cluster zu eliminieren.
+  if not HasResult then
+  begin
+    Assigns := MethodNode.FindAll(nkCall);
+    try
+      for N in Assigns do
+        if CallPassesResultAsArg(N, FnNameLow) then
+        begin
+          HasResult := True;
+          Break;
+        end;
+    finally
+      Assigns.Free;
+    end;
   end;
 
   if HasResult then Exit;
