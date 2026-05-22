@@ -96,10 +96,6 @@ type
     // / Sonar-Generic / Sonar-Push). Identisch zum IDE-Plugin.
     FExportMenu : TFindingExportMenu;
     FBtnExport  : TButton;
-    // Getter / Callback fuer den FExportMenu-Konstruktor.
-    function  GetResultGrid: TStringGrid;
-    function  GetCurrentBaseDir: string;
-    procedure StatusModeProc(const Msg: string);
     // Progress-Feedback waehrend Analyse (analog zum IDE-Plugin).
     // ProgressBar in der StatusBar eingebettet, Cancel-Button daneben.
     // Werden zur Laufzeit erzeugt - kein DFM-Eintrag noetig.
@@ -107,6 +103,10 @@ type
     FBtnCancel      : TButton;
     FCancelRequested: Boolean;
     FLastProgressTick: Cardinal;
+    // Getter / Callback fuer den FExportMenu-Konstruktor.
+    function  GetResultGrid: TStringGrid;
+    function  GetCurrentBaseDir: string;
+    procedure StatusModeProc(const Msg: string);
     // Wendet die Display-Filter (Severity-Combo / Type-Combo / Search)
     // auf FAllFindings an und fuellt FDisplayedFindings + Grid neu.
     procedure ApplyFilter;
