@@ -17,7 +17,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uSCAConsts, uMethodd12, uFixHint, uLocalization;
+  uSCAConsts, uMethodd12, uFixHint, uLocalization, uRuleCatalog;
 
 type
   // Bitset zur Severity-Auswahl beim Jira-/Clipboard-Export.
@@ -180,7 +180,10 @@ var
 begin
   SL := TStringList.Create;
   try
-    SL.Add('File;Method;Line;Type;Severity;Detail');
+    // Spalte 'Kind' enthaelt den Detector-Kind-Namen (z.B. 'MemoryLeak') -
+    // frueher hiess der Header missverstaendlich 'Type', was Sonar-Typen
+    // (Bug/CodeSmell/Vulnerability/...) suggerierte.
+    SL.Add('File;Method;Line;Kind;Severity;Detail');
     if Assigned(Findings) then
       for F in Findings do
         SL.Add(
@@ -217,7 +220,13 @@ begin
         SB.Append('"method": "');   SB.Append(JsonEscape(F.MethodName));       SB.Append('", ');
         SB.Append('"line": ');      SB.Append(StrToIntDef(F.LineNumber, 0));   SB.Append(', ');
         SB.Append('"kind": "');     SB.Append(JsonEscape(KindToName(F.Kind))); SB.Append('", ');
+        SB.Append('"type": "');     SB.Append(JsonEscape(F.TypeText));         SB.Append('", ');
         SB.Append('"severity": "'); SB.Append(JsonEscape(F.SeverityText));     SB.Append('", ');
+        // RuleID: Custom-Rule-ID gewinnt; sonst Catalog-Lookup via Kind.
+        var Rid: string;
+        if F.RuleID <> '' then Rid := F.RuleID
+        else Rid := TRuleCatalog.GetRule(F.Kind).ID;
+        SB.Append('"ruleID": "');   SB.Append(JsonEscape(Rid));                SB.Append('", ');
         SB.Append('"detail": "');   SB.Append(JsonEscape(F.MissingVar));       SB.Append('"');
         if i < Findings.Count - 1 then
           SB.AppendLine('},')

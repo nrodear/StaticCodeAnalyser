@@ -142,6 +142,7 @@ implementation
 uses
   clipbrd,
   uStaticFiles, uRuleCatalog,
+  uExport,                        // TExporter.ExportCsv (kanonischer CSV-Schreiber)
   uFindingFilter,                 // TFilterMode, TTypeFilter, TFindingFilter, TFindingFilterCriteria
   uVcsChanges,                    // BranchClick
   uIDEStatsTiles;                 // TStatsTilesBuilder.Build (Sonar-Style Tiles)
@@ -543,35 +544,26 @@ begin
 end;
 
 procedure TForm2.Button4Click(Sender: TObject);
-// CSV-Export. Virtual-Mode: ResultGrid.Cells[] sind leer, deshalb direkt
-// aus FDisplayedFindings exportieren. Spalten-Mapping muss synchron mit
-// ResultGridDrawCell.GetCellText bleiben.
+// CSV-Export. Frueher: eigene ad-hoc-CSV mit 5 deutschen Spalten, ohne
+// Escape, ohne UTF-8-BOM, ohne Kind/Rule-Spalte. Jetzt: Delegation an
+// den kanonischen TExporter.ExportCsv damit IDE-Plugin + CLI + Standalone
+// das gleiche Format schreiben (6 Spalten: File;Method;Line;Kind;Severity;Detail).
+// FDisplayedFindings ist eine TList<TLeakFinding> (owned=False); fuer den
+// Export bauen wir eine temporaere TObjectList<TLeakFinding> mit
+// OwnsObjects=False, die nur die Pointer haelt.
 var
-  lines : TStringList;
-  i     : Integer;
-  f     : TLeakFinding;
-  baseDir : string;
+  Lst : TObjectList<TLeakFinding>;
+  i   : Integer;
 begin
   if FDisplayedFindings = nil then Exit;
-  lines := TStringList.Create;
+  Lst := TObjectList<TLeakFinding>.Create(False);
   try
-    lines.Add('Datei;Methode;Zeile;Variable;Schweregrad');
-    baseDir := IncludeTrailingPathDelimiter(FCurrentBaseDir);
     for i := 0 to FDisplayedFindings.Count - 1 do
-    begin
-      f := FDisplayedFindings[i];
-      lines.Add(
-        ExtractRelativePath(baseDir, f.FileName) + ';' +
-        f.MethodName + ';' +
-        f.LineNumber + ';' +
-        f.MissingVar + ';' +
-        f.SeverityText
-      );
-    end;
-    lines.SaveToFile(GetAbsolutePath(Savetofile.Text));
+      Lst.Add(FDisplayedFindings[i]);
+    TExporter.ExportCsv(Lst, GetAbsolutePath(Savetofile.Text));
     StatusBar1.Panels[2].Text := _('Saved: ') + GetAbsolutePath(Savetofile.Text);
   finally
-    lines.Free;
+    Lst.Free;
   end;
 end;
 
