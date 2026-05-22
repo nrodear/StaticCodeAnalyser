@@ -85,8 +85,13 @@
         <DCC_UnitSearchPath>..\sources;..\sources\Common;..\sources\Detectors;..\sources\Parsing;..\sources\Infrastructure;..\sources\Output;..\sources\UI;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <SanitizedProjectName>TestProject</SanitizedProjectName>
         <BRCC_IncludePath>.\sources;D:\git-demos\delphi\StaticCodeAnalyser\sources;D:\git-demos\delphi\StaticCodeAnalyser\tests;$(BRCC_IncludePath)</BRCC_IncludePath>
+        <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_Locale>1031</VerInfo_Locale>
-        <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProgramID=com.embarcadero.$(MSBuildProjectName);ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
+        <VerInfo_MajorVer>0</VerInfo_MajorVer>
+        <VerInfo_MinorVer>9</VerInfo_MinorVer>
+        <VerInfo_Release>1</VerInfo_Release>
+        <VerInfo_Build>0</VerInfo_Build>
+        <VerInfo_Keys>CompanyName=;FileDescription=Static Code Analysis Tool for Delphi (DUnitX Test Suite);FileVersion=0.9.1.0;InternalName=TestProject;LegalCopyright=;LegalTrademarks=;OriginalFilename=TestProject.exe;ProductName=Static Code Analysis Tool for Delphi;ProductVersion=0.9.1.0;Comments=Release 0.9.1 (2026-05-22)</VerInfo_Keys>
         <DCC_Define>TESTINSIGHT;$(DCC_Define)</DCC_Define>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Android)'!=''">

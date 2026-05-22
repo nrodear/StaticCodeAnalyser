@@ -119,7 +119,11 @@
         <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;Bde;$(DCC_Namespace)</DCC_Namespace>
         <BT_BuildType>Debug</BT_BuildType>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
-        <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProgramID=com.embarcadero.$(MSBuildProjectName);ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
+        <VerInfo_MajorVer>0</VerInfo_MajorVer>
+        <VerInfo_MinorVer>9</VerInfo_MinorVer>
+        <VerInfo_Release>1</VerInfo_Release>
+        <VerInfo_Build>0</VerInfo_Build>
+        <VerInfo_Keys>CompanyName=;FileDescription=Static Code Analysis Tool for Delphi (IDE Plugin);FileVersion=0.9.1.0;InternalName=StaticCodeAnalyser.IDE;LegalCopyright=;LegalTrademarks=;OriginalFilename=StaticCodeAnalyser.IDE.d12.bpl;ProductName=Static Code Analysis Tool for Delphi;ProductVersion=0.9.1.0;Comments=Release 0.9.1 (2026-05-22)</VerInfo_Keys>
         <VerInfo_Locale>1033</VerInfo_Locale>
         <DCC_UsePackage>vcl;rtl;vclwinx;$(DCC_UsePackage)</DCC_UsePackage>
     </PropertyGroup>
