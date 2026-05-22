@@ -23,12 +23,14 @@ uses
   uTestFindingHelper;
 
 procedure TTestStringFromPointer.StringFromPByte_Reported;
+// Variable muss mit P+Grossbuchstabe beginnen (lex-Heuristik in uSCA160).
+// Realistisches mORMot-Idiom: `var PBuf: PByte` oder direkter Cast `PByte(...)`.
 const SRC =
   'unit t; implementation'#13#10 +
-  'procedure Foo(Buf: PByte);'#13#10 +
-  'var s: string;'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var PBuf: PByte; s: string;'#13#10 +
   'begin'#13#10 +
-  '  s := string(Buf);'#13#10 +
+  '  s := string(PBuf);'#13#10 +
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin
@@ -40,10 +42,10 @@ end;
 procedure TTestStringFromPointer.UTF8StringFromPChar_Reported;
 const SRC =
   'unit t; implementation'#13#10 +
-  'procedure Foo(P: PChar);'#13#10 +
-  'var s: RawUTF8;'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var PName: PChar; s: RawUTF8;'#13#10 +
   'begin'#13#10 +
-  '  s := UTF8String(P);'#13#10 +
+  '  s := UTF8String(PName);'#13#10 +
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin
@@ -72,10 +74,10 @@ end;
 procedure TTestStringFromPointer.Finding_KindAndSeverity;
 const SRC =
   'unit t; implementation'#13#10 +
-  'procedure Foo(P: PByte);'#13#10 +
-  'var s: string;'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var PBuf: PByte; s: string;'#13#10 +
   'begin'#13#10 +
-  '  s := string(P);'#13#10 +
+  '  s := string(PBuf);'#13#10 +
   'end;';
 var
   F   : TObjectList<TLeakFinding>;

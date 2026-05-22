@@ -84,6 +84,8 @@ begin
     for K := Low(TFindingKind) to High(TFindingKind) do
     begin
       if KIND_META[K].Name = '' then Continue;
+      // Guard gegen Succ(High) - waere Range-Check-Error mit {$R+}.
+      if K = High(TFindingKind) then Continue;
       for Other := Succ(K) to High(TFindingKind) do
       begin
         if KIND_META[Other].Name = '' then Continue;
@@ -120,10 +122,13 @@ var
   RemainingNames : TStringList;
 begin
   // Alle Kinds mit non-leerem Namen sammeln (deterministischer Iter-Order).
+  // fkFileReadError ist per Design von der Suppression ausgenommen
+  // (uSuppression.ApplyToFindings, Z. 211) - Parser/IO-Fehler sollen
+  // nicht silent weg-suppressed werden.
   KindList := TList<TFindingKind>.Create;
   try
     for K := Low(TFindingKind) to High(TFindingKind) do
-      if KIND_META[K].Name <> '' then
+      if (KIND_META[K].Name <> '') and (K <> fkFileReadError) then
         KindList.Add(K);
 
     // Tmp-Datei bauen: Suppression-Marker + Dummy-Code im Wechsel.

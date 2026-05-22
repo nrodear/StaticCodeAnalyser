@@ -186,16 +186,22 @@ begin
       Before := Copy(CodeLow, StartPos, M.Index - StartPos);
 
       // Wir akzeptieren als Guard:
-      //   if <var> <> '' ... | if <var> = '' then exit
-      //   if Length(<var>) >= ... | if Length(<var>) > 0
-      //   if Assigned(...) | <var> = '' then
+      //   if <var> <> '' ...   | if <var> = '' then exit
+      //   if Length(<var>) ... | if Assigned(<var>) ...
+      //
+      // Wichtig: StripStringsAndComments ersetzt String-Literale durch
+      // Spaces. Daraus wird aus `if s <> '' then` -> `if s <>    then`.
+      // Wir matchen daher den Comparison-Operator OHNE die '' (zwei
+      // Spaces als Platzhalter zwischen <var> und 'then' duerften nicht
+      // stoeren, weil VarName <> nil und Numeric-Vergleiche eigene
+      // Sicherheits-Semantik haben).
       GuardLow := LowerCase(VarName);
-      if (Pos(GuardLow + ' <> ''''', Before) > 0) or
-         (Pos(GuardLow + '<>''''',  Before) > 0) or
-         (Pos('length(' + GuardLow + ')', Before) > 0) or
-         (Pos('assigned(' + GuardLow + ')', Before) > 0) or
-         (Pos(GuardLow + ' = ''''', Before) > 0) or
-         (Pos(GuardLow + '=''''',   Before) > 0) then
+      if (Pos(GuardLow + ' <> ',   Before) > 0) or
+         (Pos(GuardLow + '<>',     Before) > 0) or
+         (Pos(GuardLow + ' = ',    Before) > 0) or
+         (Pos(GuardLow + '=',      Before) > 0) or
+         (Pos('length(' + GuardLow + ')',   Before) > 0) or
+         (Pos('assigned(' + GuardLow + ')', Before) > 0) then
         Continue;
 
       LineNo := LineForPos(LineFor, M.Index);
