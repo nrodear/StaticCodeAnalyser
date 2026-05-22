@@ -188,6 +188,7 @@
         </DCCReference>
         <DCCReference Include="sources\UI\uIDEStatsTiles.pas"/>
         <DCCReference Include="sources\UI\uIDEHelpPanel.pas"/>
+        <DCCReference Include="sources\UI\uExportMenu.pas"/>
         <DCCReference Include="resources\ConcatToFormatSample.pas"/>
         <DCCReference Include="resources\WithStatementSample.pas"/>
         <DCCReference Include="sources\Infrastructure\uAstFileCache.pas"/>

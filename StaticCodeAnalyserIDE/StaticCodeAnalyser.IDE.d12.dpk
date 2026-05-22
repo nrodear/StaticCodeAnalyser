@@ -43,7 +43,7 @@ contains
   uIDEWatchMode in 'uIDEWatchMode.pas',
   uIDEStatsTiles in '..\StaticCodeAnalyserForm\sources\UI\uIDEStatsTiles.pas',
   uIDEHelpPanel in '..\StaticCodeAnalyserForm\sources\UI\uIDEHelpPanel.pas',
-  uIDEExportMenu in 'uIDEExportMenu.pas',
+  uExportMenu in '..\StaticCodeAnalyserForm\sources\UI\uExportMenu.pas',
   uIDEEditorIntegration in 'uIDEEditorIntegration.pas',
   uIDEStatusBar in 'uIDEStatusBar.pas',
   uIDEThemeIntegration in 'uIDEThemeIntegration.pas',

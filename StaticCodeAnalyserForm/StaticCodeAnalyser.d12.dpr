@@ -54,6 +54,7 @@ uses
   uOrderForm in 'resources\uOrderForm.pas' {OrderForm},
   uIDEStatsTiles in 'sources\UI\uIDEStatsTiles.pas',
   uIDEHelpPanel in 'sources\UI\uIDEHelpPanel.pas',
+  uExportMenu in 'sources\UI\uExportMenu.pas',
   ConcatToFormatSample in 'resources\ConcatToFormatSample.pas',
   WithStatementSample in 'resources\WithStatementSample.pas',
   uAstFileCache in 'sources\Infrastructure\uAstFileCache.pas',

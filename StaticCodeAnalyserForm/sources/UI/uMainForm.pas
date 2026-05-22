@@ -11,6 +11,7 @@ uses
   uMethodd12, uSCAConsts, uFixHint, uClaudePrompt, uLocalization,
   uRepoSettings, uRecentPaths, uFindingGridRenderer, uDfmTextViewer,
   uIDEHelpPanel,                  // TFindingHintPanel (im class-Feld referenziert)
+  uExportMenu,                    // TFindingExportMenu (Class-Field-Reference)
   Vcl.Controls
  ;
 
@@ -91,6 +92,14 @@ type
     // Hint-Panel rechts vom Grid (Before/After-Code-Beispiele).
     // Standalone-Modus: AlwaysVisible=True (kein Auto-Hide).
     FHintPanel : TFindingHintPanel;
+    // Geteilter Export-Menu-Helper (HTML / JSON / CSV / Jira / Clipboard
+    // / Sonar-Generic / Sonar-Push). Identisch zum IDE-Plugin.
+    FExportMenu : TFindingExportMenu;
+    FBtnExport  : TButton;
+    // Getter / Callback fuer den FExportMenu-Konstruktor.
+    function  GetResultGrid: TStringGrid;
+    function  GetCurrentBaseDir: string;
+    procedure StatusModeProc(const Msg: string);
     // Progress-Feedback waehrend Analyse (analog zum IDE-Plugin).
     // ProgressBar in der StatusBar eingebettet, Cancel-Button daneben.
     // Werden zur Laufzeit erzeugt - kein DFM-Eintrag noetig.
@@ -312,6 +321,24 @@ begin
   // 1/3-Breite anpasst (und die Vorher/Nachher-Aufteilung neu rechnet).
   Self.OnResize := FormResizeHandler;
 
+  // ---- Export-Button + geteiltes Popup-Menu (HTML / JSON / CSV / Jira /
+  //      Clipboard / Sonar-Generic / Sonar-Push). Selbe Implementierung
+  //      wie im IDE-Plugin via uExportMenu.TFindingExportMenu.
+  FBtnExport := TButton.Create(Self);
+  FBtnExport.Parent  := PanelActions; // gleiche Toolbar wie Analyse-Buttons
+  FBtnExport.Left    := BtnBranch.Left + BtnBranch.Width + 12;
+  FBtnExport.Top     := BtnBranch.Top;
+  FBtnExport.Width   := 90;
+  FBtnExport.Height  := BtnBranch.Height;
+  FBtnExport.Caption := _('Export') + ' ' + Char($25BC); // "▼"
+  FBtnExport.Hint    := _('Export findings: HTML / JSON / CSV / Jira / ' +
+                          'Clipboard / Sonar');
+  FBtnExport.ShowHint := True;
+  FExportMenu := TFindingExportMenu.Create(Self,
+    FAllFindings, FDisplayedFindings,
+    GetResultGrid, StatusModeProc, GetCurrentBaseDir);
+  FExportMenu.AttachToButton(FBtnExport);
+
   // ---- ProgressBar + Cancel-Button in der StatusBar (Laufzeit-Widgets)
   // Layout: Cancel-Button rechts am StatusBar-Rand (alRight, Width=80),
   // ProgressBar fuellt den restlichen Platz (alClient). Beide werden in
@@ -443,6 +470,24 @@ end;
 procedure TForm2.FormResizeHandler(Sender: TObject);
 begin
   if Assigned(FHintPanel) then FHintPanel.ApplyLayout;
+end;
+
+// Getter / Callbacks fuer FExportMenu. Live-Reads damit das Menu
+// gegen die aktuellen Frame-Felder arbeitet, nicht gegen
+// Construct-Zeit-Snapshots.
+function TForm2.GetResultGrid: TStringGrid;
+begin
+  Result := ResultGrid;
+end;
+
+function TForm2.GetCurrentBaseDir: string;
+begin
+  Result := FCurrentBaseDir;
+end;
+
+procedure TForm2.StatusModeProc(const Msg: string);
+begin
+  StatusBar1.Panels[2].Text := Msg;
 end;
 
 procedure TForm2.FormDestroy(Sender: TObject);

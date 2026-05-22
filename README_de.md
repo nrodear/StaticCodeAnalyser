@@ -112,10 +112,10 @@ anderen Workflow. Wahl nach Rolle / Tageszeit:
 | **Projekt außerhalb von Delphi analysieren** (kein RAD installiert / Batch-Maschine) | — | ✅ Ordner wählen, Start klicken | ✅ `analyser.exe <ordner>` |
 | **Als Pre-Commit-Hook ausführen** | — | — | ✅ `--min-severity error --quiet --fail-on error`, Exit-Code reflektiert Severity |
 | **In CI / GitHub Actions ausführen** | — | — | ✅ `--report-sarif sca.sarif`, SARIF-Upload-Step |
-| **Befunde an SonarQube / SonarCloud pushen** | ✅ `Tools → Sonar Push` | — | ✅ `--sonar-export sca-findings.json --sonar-host <url> --sonar-token <t>` |
-| **HTML-Report generieren** für Stakeholder / Jira-Anhang | ✅ Export → HTML | — | — |
+| **Befunde an SonarQube / SonarCloud pushen** | ✅ `Tools → Sonar Push` | ✅ Export → Sonar | ✅ `--sonar-export sca-findings.json --sonar-host <url> --sonar-token <t>` |
+| **HTML-Report generieren** für Stakeholder / Jira-Anhang | ✅ Export → HTML | ✅ Export → HTML | — |
 | **Claude-Review-Prompt** für gesamten Batch (Tech-Lead-Workflow) | ✅ Export → Claude-Prompt | Zeilen-Klick → Clipboard | — |
-| **CSV-Export** der aktuellen Befund-Liste | ✅ Export → CSV | ✅ "CSV speichern"-Button | ✅ (delegiert auf den gleichen Writer) |
+| **CSV / JSON / Jira-Export** der Befunde | ✅ Export-Menü | ✅ Export-Menü | ✅ (CSV/JSON via Switches) |
 | **Nightly Full-Repo-Scan** + Diff gegen Baseline | — | ✅ Task Scheduler | ✅ `cron` / `schtasks` |
 | **Auto-Analyse beim Speichern** (Live-Watch) | ✅ opt-in, siehe [Live-Watch](#live-watch-nur-ide-plugin--%EF%B8%8F-riskant) | — | — |
 | **Custom-Rules editieren** (RegEx via `[CustomRules]`-ini) | ✅ Tools → Options | ✅ Einstellungsdialog | `analyser.ini` direkt editieren |

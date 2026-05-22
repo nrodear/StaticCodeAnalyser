@@ -112,10 +112,10 @@ different workflow. Pick by where you sit in the day:
 | **Analyse a project outside Delphi** (RAD not installed / batch machine) | — | ✅ pick a folder, click Start | ✅ `analyser.exe <folder>` |
 | **Run as a pre-commit hook** | — | — | ✅ `--min-severity error --quiet --fail-on error`, exit code reflects severity |
 | **Run in CI / GitHub Actions** | — | — | ✅ `--report-sarif sca.sarif`, SARIF upload step |
-| **Push findings to SonarQube / SonarCloud** | ✅ `Tools → Sonar Push` | — | ✅ `--sonar-export sca-findings.json --sonar-host <url> --sonar-token <t>` |
-| **Generate an HTML report** for stakeholders / Jira attachments | ✅ Export → HTML | — | — |
+| **Push findings to SonarQube / SonarCloud** | ✅ `Tools → Sonar Push` | ✅ Export → Sonar | ✅ `--sonar-export sca-findings.json --sonar-host <url> --sonar-token <t>` |
+| **Generate an HTML report** for stakeholders / Jira attachments | ✅ Export → HTML | ✅ Export → HTML | — |
 | **Generate a Claude review prompt** for the whole batch (Tech-Lead workflow) | ✅ Export → Claude prompt | row-click → clipboard | — |
-| **CSV export** of the current finding list | ✅ Export → CSV | ✅ "Save CSV" button | ✅ (delegates to the same writer) |
+| **CSV / JSON / Jira export** of findings | ✅ Export menu | ✅ Export menu | ✅ (CSV/JSON via flags) |
 | **Nightly full-repo scan** + diff-against-baseline | — | ✅ schedule via Task Scheduler | ✅ schedule via `cron` / `schtasks` |
 | **Auto-analyse on file save** (Live-Watch) | ✅ opt-in, see [Live-Watch](#live-watch-ide-plugin-only--%EF%B8%8F-risky) | — | — |
 | **Author / edit custom rules** (RegEx via `[CustomRules]` ini) | ✅ Tools → Options | ✅ Settings dialog | edit `analyser.ini` directly |

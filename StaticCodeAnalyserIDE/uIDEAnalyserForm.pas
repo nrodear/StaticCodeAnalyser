@@ -21,7 +21,7 @@ uses
   uAnalyserPalette, uAnalyserTypes, uAnalyserTheme, uLocalization,
   uRecentPaths,
   uIDELineHighlighter, uIDEMessages, uIDEWatchMode, uIDEStatsTiles,
-  uIDEHelpPanel, uIDEExportMenu, uIDEEditorIntegration, uIDEStatusBar,
+  uIDEHelpPanel, uExportMenu, uIDEEditorIntegration, uIDEStatusBar,
   uIDEThemeIntegration, uIDEAnalyseProgress, uIDEGridTooltip,
   uIDELifecycle, uIDEAnalyseRunner,
   uIDEAnnotationOverlay,

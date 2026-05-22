@@ -1,19 +1,17 @@
-unit uIDEExportMenu;
+unit uExportMenu;
 
-// Export-Popup-Menue des Analyser-Frame-Plugins:
+// Export-Popup-Menue. Geteilt zwischen IDE-Plugin-Frame und Standalone-
+// Form (keine OTA-/IDE-spezifischen Dependencies; nur VCL + Export-Units).
+//
 // HTML-Report, JSON, CSV (alle drei via Save-Dialog) plus Jira-Wiki-
-// Markup und Plain-Text-Befunde in die Zwischenablage.
+// Markup und Plain-Text-Befunde in die Zwischenablage, plus Sonar-
+// Generic-Issue-Report und Single-Issue-Push.
 //
-// Vorher: 6 Click-Handler (~210 Zeilen) + ~16 Zeilen Menu-Setup direkt
-// in der God-Class TAnalyserFrame, plus die Frame-Methode CurrentFocusFile
-// die nur von Jira/Clipboard-Export gebraucht wurde.
-//
-// Jetzt: alles gekapselt in TFindingExportMenu. Frame haelt nur noch
-// einen Field-Reference + ruft AttachToButton beim UI-Setup. Die
-// Findings-Listen + das Grid werden by-reference durchgereicht (kein
-// Ownership-Transfer); StatusMode + GetBaseDir sind Method-References
-// auf den Frame, sodass Live-Werte gelesen werden, nicht eingefroren
-// zur Construct-Zeit.
+// Caller haelt einen Field-Reference + ruft AttachToButton beim
+// UI-Setup. Die Findings-Listen + das Grid werden by-reference
+// durchgereicht (kein Ownership-Transfer); StatusMode + GetBaseDir
+// sind Method-References auf den Caller, sodass Live-Werte gelesen
+// werden, nicht eingefroren zur Construct-Zeit.
 
 interface
 

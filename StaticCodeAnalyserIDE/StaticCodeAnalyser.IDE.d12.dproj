@@ -171,7 +171,7 @@
         <DCCReference Include="uIDEWatchMode.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uIDEStatsTiles.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uIDEHelpPanel.pas"/>
-        <DCCReference Include="uIDEExportMenu.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uExportMenu.pas"/>
         <DCCReference Include="uIDEEditorIntegration.pas"/>
         <DCCReference Include="uIDEStatusBar.pas"/>
         <DCCReference Include="uIDEThemeIntegration.pas"/>
