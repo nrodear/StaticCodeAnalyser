@@ -233,6 +233,21 @@ contains
   uAvoidOut in '..\StaticCodeAnalyserForm\sources\Detectors\uAvoidOut.pas',
   uAssignedAndAssignedNil in '..\StaticCodeAnalyserForm\sources\Detectors\uAssignedAndAssignedNil.pas',
   uAssertMessage in '..\StaticCodeAnalyserForm\sources\Detectors\uAssertMessage.pas',
-  uAbstractNotImpl in '..\StaticCodeAnalyserForm\sources\Detectors\uAbstractNotImpl.pas';
+  uAbstractNotImpl in '..\StaticCodeAnalyserForm\sources\Detectors\uAbstractNotImpl.pas',
+  uFloatEquality in '..\StaticCodeAnalyserForm\sources\Detectors\uFloatEquality.pas',
+  uExceptInDestructor in '..\StaticCodeAnalyserForm\sources\Detectors\uExceptInDestructor.pas',
+  uBooleanParam in '..\StaticCodeAnalyserForm\sources\Detectors\uBooleanParam.pas',
+  uUnusedPrivateMethod in '..\StaticCodeAnalyserForm\sources\Detectors\uUnusedPrivateMethod.pas',
+  uCanBeClassMethod in '..\StaticCodeAnalyserForm\sources\Detectors\uCanBeClassMethod.pas',
+  uMissingOverride in '..\StaticCodeAnalyserForm\sources\Detectors\uMissingOverride.pas',
+  uBoolAlwaysTrue in '..\StaticCodeAnalyserForm\sources\Detectors\uBoolAlwaysTrue.pas',
+  uConstantReturn in '..\StaticCodeAnalyserForm\sources\Detectors\uConstantReturn.pas',
+  uHardcodedString in '..\StaticCodeAnalyserForm\sources\Detectors\uHardcodedString.pas',
+  uUnpairedLock in '..\StaticCodeAnalyserForm\sources\Detectors\uUnpairedLock.pas',
+  uMoveSizeOfPointer in '..\StaticCodeAnalyserForm\sources\Detectors\uMoveSizeOfPointer.pas',
+  uWithMultipleTargets in '..\StaticCodeAnalyserForm\sources\Detectors\uWithMultipleTargets.pas',
+  uGetMemWithoutFreeMem in '..\StaticCodeAnalyserForm\sources\Detectors\uGetMemWithoutFreeMem.pas',
+  uSetLengthAppendInLoop in '..\StaticCodeAnalyserForm\sources\Detectors\uSetLengthAppendInLoop.pas',
+  uPointerArithmeticOnString in '..\StaticCodeAnalyserForm\sources\Detectors\uPointerArithmeticOnString.pas';
 
 end.

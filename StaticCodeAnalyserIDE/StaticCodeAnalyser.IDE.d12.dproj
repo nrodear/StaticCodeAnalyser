@@ -1,5 +1,5 @@
 ﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-    <Import Project="$(MSBuildThisFileDirectory)..\dcc-searchpaths.props"/>
+    <Import Project=".\paths.optset.xml"/>
     <PropertyGroup>
         <ProjectGuid>{DF951A63-B210-4FCD-BD58-B2FE5479D511}</ProjectGuid>
         <MainSource>StaticCodeAnalyser.IDE.d12.dpk</MainSource>
@@ -77,8 +77,8 @@
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
-        <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
-        <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
+        <DCC_DcuOutput>..\Output\Test\$(Platform) $(Config)</DCC_DcuOutput>
+        <DCC_ExeOutput>..\Output\Test\$(Platform) $(Config)</DCC_ExeOutput>
         <DCC_UnitSearchPath>$(PROJECTDIR)\..\StaticCodeAnalyserForm\sources;$(PROJECTDIR)\..\StaticCodeAnalyserForm\sources\Common;$(PROJECTDIR)\..\StaticCodeAnalyserForm\sources\Detectors;$(PROJECTDIR)\..\StaticCodeAnalyserForm\sources\Infrastructure;$(PROJECTDIR)\..\StaticCodeAnalyserForm\sources\Output;$(PROJECTDIR)\..\StaticCodeAnalyserForm\sources\Parsing;$(PROJECTDIR)\..\StaticCodeAnalyserForm\sources\UI;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_E>false</DCC_E>
         <DCC_N>false</DCC_N>
@@ -181,205 +181,8 @@
             <DesignClass>TFrame</DesignClass>
         </DCCReference>
         <DCCReference Include="uIDEAnalyseRunner.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uAnalyserPalette.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uAnalyserTypes.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uAnalyserTheme.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uFindingGridRenderer.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uFindingFilter.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uLocalization.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Parsing\uAstNode.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Parsing\uLexer.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Parsing\uParser2.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Parsing\uComponentGraph.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Parsing\uDfmLexer.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Parsing\uDfmParser.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Parsing\uDfmBinaryReader.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uStaticFiles.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uSuppression.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uExport.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uExportHtml.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Output\uExportSonarGeneric.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Output\uSonarPush.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uSonarPull.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uIgnoreList.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uPathOverrides.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uBaseline.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uStaticAnalyzer2.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uSymbolReferenceIndex.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uAstFileCache.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uFileTextCache.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uVcsChanges.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uRepoSettings.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uSonarConfig.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uDfmAnalysisRunner.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uDfmFrameResolver.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uFormBinder.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uDfmDbFieldAnalysis.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uDfmRepoIndex.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Output\uClaudePrompt.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Output\uFixHint.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uSCAConsts.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uMethodd12.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uRecentPaths.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uRegExMatches.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uDetectorUtils.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uCollectValues.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uYamlSubsetParser.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uRuleCatalog.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uQuickFix.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uWithStatement.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uWithMultipleTargets.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uVisibilityCheck.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uVirtualCallInCtor.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUseAfterFree.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnusedUses.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnusedPrivateMethod.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnusedParameter.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnusedLocal.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnsortedUses.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnpairedLock.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnitLevelKeywordIndent.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnicodeToAnsiCast.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTypeName.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTwiceInheritedCalls.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTrailingWhitespace.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTrailingCommaArgList.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTooLongLine.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTodoComment.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTautologicalExpr.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTabulationCharacter.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSynchronizeInDestructor.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSuperfluousSemicolon.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSQLInjectionScore.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSQLInjection.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSqlDangerousStatement.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSetLengthAppendInLoop.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSelfAssignment.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uRoutineResultAssigned.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uReversedForRange.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uRestHttpSecurity.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uReRaiseException.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uRedundantParentheses.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uRedundantJump.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uRedundantConditional.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uRedundantBoolean.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uRaisingRawException.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uRaiseOutsideExcept.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uPublicMemberWithoutDoc.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uPublicField.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uPointerName.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uPointerArithmeticOnString.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uPerfHotspots.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uNoSonarMarker.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uNilDeref.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uNilComparison.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uNestedTry.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uNestedRoutines.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uNamingExt.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uMultipleExit.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uMoveSizeOfPointer.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uMissingUnitHeader.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uMissingRaise.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uMissingOverride.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uMissingFinally.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uMethodName.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uMagicNumbers.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLowercaseKeyword.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLongParamList.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLongMethod.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLockWithoutTryFinally.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLengthUnderflow.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLegacyInitializationSection.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLeakInConstructor.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLeakDetector2.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLargeClass.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uInterfaceName.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uIntegerOverflow.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uInstanceInvokedConstructor.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uInlineAssembly.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uInheritedMethodEmpty.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uIfThenShortCircuit.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uIfElseBegin.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uHardcodedSecret.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uHardcodedPath.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uHardcodedString.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uGroupedDeclaration.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uGotoStatement.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uGodClass.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uGetMemWithoutFreeMem.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uFreeWithoutNil.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uFreeAndNilHint.pas"/>
         
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uExceptInDestructor.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uBooleanParam.pas"/>
         
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uFormatMismatch.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uFieldName.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uFieldLeak.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uExplicitTObjectInheritance.pas"/>
-        
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uExceptOnException.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uExceptionTooGeneral.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyVisibilitySection.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyMethod.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyInterface.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyFinallyBlock.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyFile.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyBlock.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyArgumentList.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDuplicateString.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDuplicateBlock.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDivByZero.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDigitGrouping.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmTabOrderConflict.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmSqlFromUserInput.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmSchemaMismatch.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmRequiredField.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmOrphanHandler.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmMasterDetailUnlinked.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmLayerViolation.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmHardcodedDbCreds.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmHardcodedCaption.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmGodHandler.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmForbiddenClass.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmFieldTypeMismatch.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmEmptyBoundEvent.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmDuplicateBinding.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmDefaultName.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmDeadEvent.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmDbInUiForm.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmDataModuleSplitHint.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmCrossFormCoupling.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmCircularDataSource.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmActionMismatch.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDestructorWithoutInherited.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDeepNesting.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDebugOutput.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDeadCode.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDateFormatSettings.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCyclomaticComplexity.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCustomRuleDetector.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCustomClassDiscovery.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uConstructorWithoutInherited.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uConsecutiveVisibility.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uConsecutiveSection.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uConcurrencyExt.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uConstantReturn.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uConcatToFormat.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCommentedOutCode.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCodeSmells2.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uClassPerFile.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCharToCharPointerCast.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCanBeClassMethod.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCastAndFree.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCaseStatementSize.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uBeginEndRequired.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uBoolAlwaysTrue.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uAvoidOut.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uAssignedAndAssignedNil.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uAssertMessage.pas"/>
-        
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uAbstractNotImpl.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

@@ -59,8 +59,8 @@
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
-        <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
-        <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
+        <DCC_DcuOutput>..\Output\Test\$(Platform) $(Config)</DCC_DcuOutput>
+        <DCC_ExeOutput>..\Output\Test\$(Platform) $(Config)</DCC_ExeOutput>
         <DCC_UnitSearchPath>$(PROJECTDIR)\sources;$(PROJECTDIR)\sources\Common;$(PROJECTDIR)\sources\Console;$(PROJECTDIR)\sources\Detectors;$(PROJECTDIR)\sources\Infrastructure;$(PROJECTDIR)\sources\Output;$(PROJECTDIR)\sources\Parsing;$(PROJECTDIR)\sources\UI;$(PROJECTDIR)\resources;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_E>false</DCC_E>
         <DCC_N>false</DCC_N>

@@ -1,0 +1,43 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+
+        <!-- Suchpfade: alle Verzeichnisse des Form-Projekts (inkl. Unterordner) -->
+
+        <!-- Form-Projekt-Root -->
+        <DCC_UnitSearchPath>..\StaticCodeAnalyserForm;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+
+        <!-- Ressourcen (RC-Files, Bitmaps, sonstige Build-Inputs) -->
+        <DCC_UnitSearchPath>..\StaticCodeAnalyserForm\resources;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+
+        <!-- Build-Hilfsskripte (validate-i18n.js, sca-rules JSON-Validator etc.) -->
+        <DCC_UnitSearchPath>..\StaticCodeAnalyserForm\scripts;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+
+        <!-- DUnitX-Test-Units (TFindingHelper + alle uTest*.pas) -->
+        <DCC_UnitSearchPath>..\StaticCodeAnalyserForm\tests;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+
+        <!-- Source-Root: enthaelt nur die Container-Units, eigentlicher Code in den Unterordnern -->
+        <DCC_UnitSearchPath>..\StaticCodeAnalyserForm\sources;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+
+        <!-- Common: uSCAConsts, uMethodd12, uRuleCatalog - gemeinsame Typen / Enums -->
+        <DCC_UnitSearchPath>..\StaticCodeAnalyserForm\sources\Common;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+
+        <!-- Console: CLI-Mode-Entry-Points + Argument-Parsing -->
+        <DCC_UnitSearchPath>..\StaticCodeAnalyserForm\sources\Console;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+
+        <!-- Detectors: alle 150+ Detektor-Units (uMemoryLeak, uSQLInjection, ...) -->
+        <DCC_UnitSearchPath>..\StaticCodeAnalyserForm\sources\Detectors;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+
+        <!-- Infrastructure: uStaticAnalyzer2 (Pipeline), uFileTextCache, uRepoSettings, ... -->
+        <DCC_UnitSearchPath>..\StaticCodeAnalyserForm\sources\Infrastructure;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+
+        <!-- Output: uFixHint + Export-Units (HTML/Jira/Clipboard/Sonar-Generic) -->
+        <DCC_UnitSearchPath>..\StaticCodeAnalyserForm\sources\Output;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+
+        <!-- Parsing: uParser2, uAstNode, uLexer - Pascal-AST-Front-End -->
+        <DCC_UnitSearchPath>..\StaticCodeAnalyserForm\sources\Parsing;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+
+        <!-- UI: uMainForm, uAnalyserFrame, uFindingFilter, uLocalization, ... -->
+        <DCC_UnitSearchPath>..\StaticCodeAnalyserForm\sources\UI;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+
+    </PropertyGroup>
+</Project>

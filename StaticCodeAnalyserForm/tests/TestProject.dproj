@@ -71,8 +71,8 @@
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
-        <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
-        <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
+        <DCC_DcuOutput>..\..\Output\Test\$(Platform) $(Config)</DCC_DcuOutput>
+        <DCC_ExeOutput>..\..\Output\Test\$(Platform) $(Config)</DCC_ExeOutput>
         <DCC_E>false</DCC_E>
         <DCC_N>false</DCC_N>
         <DCC_S>false</DCC_S>
@@ -274,38 +274,6 @@
         <DCCReference Include="uTestTypeName.pas"/>
         <DCCReference Include="uTestInterfaceName.pas"/>
         <DCCReference Include="uTestMethodName.pas"/>
-        <DCCReference Include="uTestExceptionTooGeneral.pas"/>
-        <DCCReference Include="uTestRaiseOutsideExcept.pas"/>
-        <DCCReference Include="uTestUseAfterFree.pas"/>
-        <DCCReference Include="uTestAbstractNotImpl.pas"/>
-        <DCCReference Include="uTestLeakInConstructor.pas"/>
-        <DCCReference Include="uTestIntegerOverflow.pas"/>
-        <DCCReference Include="uTestLongMethod.pas"/>
-        <DCCReference Include="uTestLongParamList.pas"/>
-        <DCCReference Include="uTestMagicNumbers.pas"/>
-        <DCCReference Include="uTestMissingFinally.pas"/>
-        <DCCReference Include="uTestNilDeref.pas"/>
-        <DCCReference Include="uTestGodClass.pas"/>
-        <DCCReference Include="uTestFreeWithoutNil.pas"/>
-        <DCCReference Include="uTestMultipleExit.pas"/>
-        <DCCReference Include="uTestLargeClass.pas"/>
-        <DCCReference Include="uTestUnsortedUses.pas"/>
-        <DCCReference Include="uTestMissingUnitHeader.pas"/>
-        <DCCReference Include="uTestFloatEquality.pas"/>
-        <DCCReference Include="uTestExceptInDestructor.pas"/>
-        <DCCReference Include="uTestBooleanParam.pas"/>
-        <DCCReference Include="uTestUnusedPrivateMethod.pas"/>
-        <DCCReference Include="uTestCanBeClassMethod.pas"/>
-        <DCCReference Include="uTestMissingOverride.pas"/>
-        <DCCReference Include="uTestBoolAlwaysTrue.pas"/>
-        <DCCReference Include="uTestConstantReturn.pas"/>
-        <DCCReference Include="uTestHardcodedString.pas"/>
-        <DCCReference Include="uTestUnpairedLock.pas"/>
-        <DCCReference Include="uTestMoveSizeOfPointer.pas"/>
-        <DCCReference Include="uTestWithMultipleTargets.pas"/>
-        <DCCReference Include="uTestGetMemWithoutFreeMem.pas"/>
-        <DCCReference Include="uTestSetLengthAppendInLoop.pas"/>
-        <DCCReference Include="uTestPointerArithmeticOnString.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

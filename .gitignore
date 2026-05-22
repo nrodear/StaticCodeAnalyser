@@ -18,6 +18,8 @@ sca-findings.json
 # ---- Build-Output-Verzeichnisse ----
 # Delphi schreibt kompilierte Artefakte (DCU/BPL/EXE/DLL) typisch
 # nach <Plattform>/<Konfiguration>/. Komplett ignorieren.
+# Output/ ist die zentrale Sammelstelle (DCC_DcuOutput in allen 3 dproj).
+Output/
 Win32/
 Win64/
 OSX32/
