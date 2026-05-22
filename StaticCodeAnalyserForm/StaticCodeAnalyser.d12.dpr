@@ -210,7 +210,22 @@ uses
   uUseAfterFree in 'sources\Detectors\uUseAfterFree.pas',
   uVirtualCallInCtor in 'sources\Detectors\uVirtualCallInCtor.pas',
   uVisibilityCheck in 'sources\Detectors\uVisibilityCheck.pas',
-  uWithStatement in 'sources\Detectors\uWithStatement.pas';
+  uWithStatement in 'sources\Detectors\uWithStatement.pas',
+  uFloatEquality in 'sources\Detectors\uFloatEquality.pas',
+  uExceptInDestructor in 'sources\Detectors\uExceptInDestructor.pas',
+  uBooleanParam in 'sources\Detectors\uBooleanParam.pas',
+  uUnusedPrivateMethod in 'sources\Detectors\uUnusedPrivateMethod.pas',
+  uCanBeClassMethod in 'sources\Detectors\uCanBeClassMethod.pas',
+  uMissingOverride in 'sources\Detectors\uMissingOverride.pas',
+  uBoolAlwaysTrue in 'sources\Detectors\uBoolAlwaysTrue.pas',
+  uConstantReturn in 'sources\Detectors\uConstantReturn.pas',
+  uHardcodedString in 'sources\Detectors\uHardcodedString.pas',
+  uPointerArithmeticOnString in 'sources\Detectors\uPointerArithmeticOnString.pas',
+  uSetLengthAppendInLoop in 'sources\Detectors\uSetLengthAppendInLoop.pas',
+  uGetMemWithoutFreeMem in 'sources\Detectors\uGetMemWithoutFreeMem.pas',
+  uWithMultipleTargets in 'sources\Detectors\uWithMultipleTargets.pas',
+  uMoveSizeOfPointer in 'sources\Detectors\uMoveSizeOfPointer.pas',
+  uUnpairedLock in 'sources\Detectors\uUnpairedLock.pas';
 
 {$R *.res}
 
