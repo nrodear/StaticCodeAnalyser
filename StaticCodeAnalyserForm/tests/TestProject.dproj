@@ -298,6 +298,7 @@
         <DCCReference Include="uTestEmptyOnHandler.pas"/>
         <DCCReference Include="uTestStringFromPointer.pas"/>
         <DCCReference Include="uTestPointerSubtraction.pas"/>
+        <DCCReference Include="uTestSuppressionCompleteness.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
