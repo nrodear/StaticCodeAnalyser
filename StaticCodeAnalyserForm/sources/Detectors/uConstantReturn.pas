@@ -73,10 +73,13 @@ begin
 end;
 
 function IsFunctionMethod(const TypeRef: string): Boolean;
-// Parser legt MethKind in TypeRef ab - das ist nur 'function' / 'procedure' /
-// 'constructor' / 'destructor', NICHT die volle Signatur mit Returntyp.
+// Parser legt MethKind + optional Returntyp + Direktiven in TypeRef ab:
+//   procedure         -> 'procedure'
+//   function: Integer -> 'function:Integer'
+//   function: T; virtual -> 'function:T;virtual'
+// Wir wollen alle Varianten matchen die mit 'function' beginnen.
 begin
-  Result := SameText(Trim(TypeRef), 'function');
+  Result := StartsText('function', Trim(TypeRef));
 end;
 
 function IsResultLhs(const LhsLow, FnNameLow: string): Boolean;

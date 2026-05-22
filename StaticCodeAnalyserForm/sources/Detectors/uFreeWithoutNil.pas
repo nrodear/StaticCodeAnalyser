@@ -122,19 +122,20 @@ var
 
   function HasNilOutAfter(MethodNode, FreeCall: TAstNode;
     const IdentLow: string): Boolean;
+  // Ehemals: `if S = FreeCall then AfterFree := True` - das konnte nie
+  // matchen weil Stmts nur nkAssign sammelt und FreeCall ein nkCall ist
+  // (Reference-Equality scheitert an Kind-Mismatch). Daher Line-basiert:
+  // Statement mit Line > FreeCall.Line gilt als "nach dem Free".
   var
-    Stmts  : TList<TAstNode>;
-    AfterFree : Boolean;
-    S      : TAstNode;
+    Stmts : TList<TAstNode>;
+    S     : TAstNode;
   begin
     Result := False;
-    AfterFree := False;
     Stmts := MethodNode.FindAll(nkAssign);
     try
       for S in Stmts do
       begin
-        if S = FreeCall then begin AfterFree := True; Continue; end;
-        if not AfterFree then Continue;
+        if S.Line <= FreeCall.Line then Continue;
         if IsNilAssignTo(S, IdentLow) then Exit(True);
       end;
     finally
@@ -142,11 +143,9 @@ var
     end;
     Stmts := MethodNode.FindAll(nkCall);
     try
-      AfterFree := False;
       for S in Stmts do
       begin
-        if S = FreeCall then begin AfterFree := True; Continue; end;
-        if not AfterFree then Continue;
+        if S.Line <= FreeCall.Line then Continue;
         if IsFreeAndNilOf(S, IdentLow) then Exit(True);
       end;
     finally

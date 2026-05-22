@@ -133,6 +133,41 @@ begin
   Result := Pos('.', MethodNode.Name) > 0;
 end;
 
+function UnqualifiedMethodName(const MethName: string): string;
+var
+  Dot : Integer;
+begin
+  Dot := Pos('.', MethName);
+  if Dot > 0 then
+    Result := Copy(MethName, Dot + 1, MaxInt)
+  else
+    Result := MethName;
+end;
+
+// True wenn IRGENDWO in AllMeths eine andere nkMethod-Deklaration des
+// gleichen Method-Namens existiert, die als polymorph markiert ist.
+// Interface-Decls tragen die Direktiven (`; virtual; override; abstract`),
+// die Implementations-Bodies haben sie nicht - wir muessen also den
+// passenden Interface-Eintrag finden.
+function HasPolymorphicSiblingDecl(M: TAstNode;
+  AllMeths: TList<TAstNode>): Boolean;
+var
+  Other : TAstNode;
+  MUnq, OUnq : string;
+begin
+  Result := False;
+  MUnq := UnqualifiedMethodName(M.Name);
+  if MUnq = '' then Exit;
+  for Other in AllMeths do
+  begin
+    if Other = M then Continue;
+    OUnq := UnqualifiedMethodName(Other.Name);
+    if not SameText(OUnq, MUnq) then Continue;
+    if IsPolymorphicMethod(Other) or IsAlreadyClassMethod(Other) then
+      Exit(True);
+  end;
+end;
+
 class procedure TCanBeClassMethodDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -147,6 +182,9 @@ begin
       if not BelongsToClass(M) then Continue;
       if IsAlreadyClassMethod(M) then Continue;
       if IsPolymorphicMethod(M) then Continue;
+      // Cross-Decl: Interface-Eintrag der Methode kann ;virtual/;override
+      // tragen waehrend der Implementations-Header nur 'function' fuehrt.
+      if HasPolymorphicSiblingDecl(M, Methods) then Continue;
       if not HasBodyBlock(M) then Continue;
       // Skip Constructor/Destructor - die haben implizit anderen Vertrag.
       if LowerCase(Trim(M.TypeRef)).StartsWith('constructor') then Continue;
