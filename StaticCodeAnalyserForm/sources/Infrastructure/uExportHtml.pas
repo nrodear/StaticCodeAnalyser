@@ -872,7 +872,7 @@ begin
     SB.AppendLine('        "sprint-header": "Total visible: {0} findings. Top {1} priorities:",');
     SB.AppendLine('        "meta-created": "Generated: {0}",');
     SB.AppendLine('        "meta-file":    "File: {0}",');
-    SB.AppendLine('        "audience-hint": "<b>Optimised for Tech-Lead / Senior-Dev review</b> &middot; refactoring prioritisation. Start at the top with the Top Detectors (highest volume, <span class=\\"td-qf\\">QF</span> = quick-fix available); the table is sorted by severity (Errors &rarr; Hints).",');
+    SB.AppendLine('        "audience-hint": "<b>Optimised for Tech-Lead / Senior-Dev review</b> &middot; refactoring prioritisation. Start at the top with the Top Detectors (highest volume, <span class=\"td-qf\">QF</span> = quick-fix available); the table is sorted by severity (Errors &rarr; Hints).",');
     SB.AppendLine('        "src-snippet-hdr": "Source: {0}, line {1}",');
     SB.AppendLine('        "hint-before": "Before (Problem)",');
     SB.AppendLine('        "hint-after":  "After (Fix)"');
@@ -910,7 +910,7 @@ begin
     SB.AppendLine('        "sprint-header": "Gesamt sichtbar: {0} Befunde. Top {1} Prioritaeten:",');
     SB.AppendLine('        "meta-created": "Erstellt: {0}",');
     SB.AppendLine('        "meta-file":    "Datei: {0}",');
-    SB.AppendLine('        "audience-hint": "<b>Optimiert fuer Tech-Lead / Senior-Dev Review</b> &middot; Refactoring-Priorisierung. Starte oben mit den Top-Detektoren (groesstes Volumen, <span class=\\"td-qf\\">QF</span> = Quick-Fix vorhanden), die Tabelle ist nach Severity sortiert (Fehler &rarr; Hinweis).",');
+    SB.AppendLine('        "audience-hint": "<b>Optimiert fuer Tech-Lead / Senior-Dev Review</b> &middot; Refactoring-Priorisierung. Starte oben mit den Top-Detektoren (groesstes Volumen, <span class=\"td-qf\">QF</span> = Quick-Fix vorhanden), die Tabelle ist nach Severity sortiert (Fehler &rarr; Hinweis).",');
     SB.AppendLine('        "src-snippet-hdr": "Quelle: {0}, Zeile {1}",');
     SB.AppendLine('        "hint-before": "Vorher (Problem)",');
     SB.AppendLine('        "hint-after":  "Nachher (Loesung)"');
@@ -948,7 +948,7 @@ begin
     SB.AppendLine('        "sprint-header": "Visibles au total\\u00a0: {0} d\\u00e9tections. Top {1} priorit\\u00e9s\\u00a0:",');
     SB.AppendLine('        "meta-created": "G\\u00e9n\\u00e9r\\u00e9\\u00a0: {0}",');
     SB.AppendLine('        "meta-file":    "Fichier\\u00a0: {0}",');
-    SB.AppendLine('        "audience-hint": "<b>Optimis\\u00e9 pour la revue Tech-Lead / Senior-Dev</b> &middot; priorisation du refactoring. Commencez par les Top D\\u00e9tecteurs (volume le plus important, <span class=\\"td-qf\\">QF</span> = quick-fix disponible)\\u00a0; le tableau est tri\\u00e9 par s\\u00e9v\\u00e9rit\\u00e9 (erreurs &rarr; indices).",');
+    SB.AppendLine('        "audience-hint": "<b>Optimis\\u00e9 pour la revue Tech-Lead / Senior-Dev</b> &middot; priorisation du refactoring. Commencez par les Top D\\u00e9tecteurs (volume le plus important, <span class=\"td-qf\">QF</span> = quick-fix disponible)\\u00a0; le tableau est tri\\u00e9 par s\\u00e9v\\u00e9rit\\u00e9 (erreurs &rarr; indices).",');
     SB.AppendLine('        "src-snippet-hdr": "Source\\u00a0: {0}, ligne {1}",');
     SB.AppendLine('        "hint-before": "Avant (probl\\u00e8me)",');
     SB.AppendLine('        "hint-after":  "Apr\\u00e8s (solution)"');
