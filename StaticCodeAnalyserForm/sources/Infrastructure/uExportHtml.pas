@@ -443,20 +443,31 @@ begin
     SB.AppendLine('</head>');
     SB.AppendLine('<body>');
     SB.Append    ('  <h1>'); SB.Append(HtmlEscape(Title)); SB.AppendLine('</h1>');
-    SB.Append    ('  <div class="meta">Erstellt: ');
+    // meta-Zeile mit zwei i18n-Spans + datums-Daten als Attribute, damit
+    // applyLanguage die "Erstellt:" / "Datei:"-Labels neu rendern kann
+    // (die Werte selbst sind dynamisch und stehen in data-* drin).
+    SB.Append    ('  <div class="meta"><span data-i18n="meta-created" data-when="');
     SB.Append    (HtmlEscape(FormatDateTime('yyyy-mm-dd hh:nn', Now)));
+    SB.Append    ('">Erstellt: ');
+    SB.Append    (HtmlEscape(FormatDateTime('yyyy-mm-dd hh:nn', Now)));
+    SB.Append    ('</span>');
     if SourceFile <> '' then
     begin
-      SB.Append('  &middot; Datei: ');
+      SB.Append('  &middot; <span data-i18n="meta-file" data-file="');
       SB.Append(HtmlEscape(SourceFile));
+      SB.Append('">Datei: ');
+      SB.Append(HtmlEscape(SourceFile));
+      SB.Append('</span>');
     end;
     SB.AppendLine('</div>');
 
     // Audience-Hint: macht im Brief sichtbar fuer welche Rolle der Report
     // optimiert ist. Tech-Lead / Senior-Dev brauchen die Top-Detektoren
     // (Volumen) plus Severity-Sortierung (Risiko) - genau das ist der
-    // Aufbau dieser Seite.
-    SB.AppendLine('  <div class="audience-hint">');
+    // Aufbau dieser Seite. Volltext wird im I18N-Dict gehalten -
+    // data-i18n=audience-hint laesst applyLanguage den kompletten HTML-
+    // Block durch T() schreiben.
+    SB.AppendLine('  <div class="audience-hint" data-i18n="audience-hint">');
     SB.AppendLine('    <b>Optimiert fuer Tech-Lead / Senior-Dev Review</b> ' +
                   '&middot; Refactoring-Priorisierung. ' +
                   'Starte oben mit den Top-Detektoren (groesstes Volumen, ' +
@@ -781,10 +792,16 @@ begin
             SB.Append('</div>');
           end;
 
-          // Echter Code-Auszug aus der Quelldatei mit hervorgehobener Zeile
+          // Echter Code-Auszug aus der Quelldatei mit hervorgehobener Zeile.
+          // Header benutzt data-i18n=src-snippet-hdr mit data-file und data-line -
+          // applyLanguage rendert den ganzen Header via T("src-snippet-hdr", file, line).
           if Snippet <> '' then
           begin
-            SB.Append('<div class="src-snippet-hdr">Quelle: ');
+            SB.Append('<div class="src-snippet-hdr" data-i18n="src-snippet-hdr" data-file="');
+            SB.Append(HtmlEscape(FileShort));
+            SB.Append('" data-line="');
+            SB.Append(F.LineNumber);
+            SB.Append('">Quelle: ');
             SB.Append(HtmlEscape(FileShort));
             SB.Append(', Zeile ');
             SB.Append(F.LineNumber);
@@ -797,13 +814,13 @@ begin
             SB.Append('<div class="code-pair">');
             if Hint.Before <> '' then
             begin
-              SB.Append('<div class="code-block code-before"><h5>Vorher (Problem)</h5><pre>');
+              SB.Append('<div class="code-block code-before"><h5 data-i18n="hint-before">Vorher (Problem)</h5><pre>');
               SB.Append(HtmlEscape(Hint.Before));
               SB.Append('</pre></div>');
             end;
             if Hint.After <> '' then
             begin
-              SB.Append('<div class="code-block code-after"><h5>Nachher (Loesung)</h5><pre>');
+              SB.Append('<div class="code-block code-after"><h5 data-i18n="hint-after">Nachher (Loesung)</h5><pre>');
               SB.Append(HtmlEscape(Hint.After));
               SB.Append('</pre></div>');
             end;
@@ -852,7 +869,13 @@ begin
     SB.AppendLine('        "hdr-top-detectors": "Top {0} detectors (of {1})",');
     SB.AppendLine('        "kbd-help-title": "Keyboard shortcuts",');
     SB.AppendLine('        "kbd-help-close": "Close",');
-    SB.AppendLine('        "sprint-header": "Total visible: {0} findings. Top {1} priorities:"');
+    SB.AppendLine('        "sprint-header": "Total visible: {0} findings. Top {1} priorities:",');
+    SB.AppendLine('        "meta-created": "Generated: {0}",');
+    SB.AppendLine('        "meta-file":    "File: {0}",');
+    SB.AppendLine('        "audience-hint": "<b>Optimised for Tech-Lead / Senior-Dev review</b> &middot; refactoring prioritisation. Start at the top with the Top Detectors (highest volume, <span class=\\"td-qf\\">QF</span> = quick-fix available); the table is sorted by severity (Errors &rarr; Hints).",');
+    SB.AppendLine('        "src-snippet-hdr": "Source: {0}, line {1}",');
+    SB.AppendLine('        "hint-before": "Before (Problem)",');
+    SB.AppendLine('        "hint-after":  "After (Fix)"');
     SB.AppendLine('      },');
     SB.AppendLine('      de: {');
     SB.AppendLine('        "lbl-lang": "Sprache:",');
@@ -884,7 +907,13 @@ begin
     SB.AppendLine('        "hdr-top-detectors": "Top {0} Detektoren (von {1})",');
     SB.AppendLine('        "kbd-help-title": "Tastatur-Shortcuts",');
     SB.AppendLine('        "kbd-help-close": "Schliessen",');
-    SB.AppendLine('        "sprint-header": "Gesamt sichtbar: {0} Befunde. Top {1} Prioritaeten:"');
+    SB.AppendLine('        "sprint-header": "Gesamt sichtbar: {0} Befunde. Top {1} Prioritaeten:",');
+    SB.AppendLine('        "meta-created": "Erstellt: {0}",');
+    SB.AppendLine('        "meta-file":    "Datei: {0}",');
+    SB.AppendLine('        "audience-hint": "<b>Optimiert fuer Tech-Lead / Senior-Dev Review</b> &middot; Refactoring-Priorisierung. Starte oben mit den Top-Detektoren (groesstes Volumen, <span class=\\"td-qf\\">QF</span> = Quick-Fix vorhanden), die Tabelle ist nach Severity sortiert (Fehler &rarr; Hinweis).",');
+    SB.AppendLine('        "src-snippet-hdr": "Quelle: {0}, Zeile {1}",');
+    SB.AppendLine('        "hint-before": "Vorher (Problem)",');
+    SB.AppendLine('        "hint-after":  "Nachher (Loesung)"');
     SB.AppendLine('      },');
     SB.AppendLine('      fr: {');
     SB.AppendLine('        "lbl-lang": "Langue\\u00a0:",');
@@ -916,7 +945,13 @@ begin
     SB.AppendLine('        "hdr-top-detectors": "Top {0} d\\u00e9tecteurs (sur {1})",');
     SB.AppendLine('        "kbd-help-title": "Raccourcis clavier",');
     SB.AppendLine('        "kbd-help-close": "Fermer",');
-    SB.AppendLine('        "sprint-header": "Visibles au total\\u00a0: {0} d\\u00e9tections. Top {1} priorit\\u00e9s\\u00a0:"');
+    SB.AppendLine('        "sprint-header": "Visibles au total\\u00a0: {0} d\\u00e9tections. Top {1} priorit\\u00e9s\\u00a0:",');
+    SB.AppendLine('        "meta-created": "G\\u00e9n\\u00e9r\\u00e9\\u00a0: {0}",');
+    SB.AppendLine('        "meta-file":    "Fichier\\u00a0: {0}",');
+    SB.AppendLine('        "audience-hint": "<b>Optimis\\u00e9 pour la revue Tech-Lead / Senior-Dev</b> &middot; priorisation du refactoring. Commencez par les Top D\\u00e9tecteurs (volume le plus important, <span class=\\"td-qf\\">QF</span> = quick-fix disponible)\\u00a0; le tableau est tri\\u00e9 par s\\u00e9v\\u00e9rit\\u00e9 (erreurs &rarr; indices).",');
+    SB.AppendLine('        "src-snippet-hdr": "Source\\u00a0: {0}, ligne {1}",');
+    SB.AppendLine('        "hint-before": "Avant (probl\\u00e8me)",');
+    SB.AppendLine('        "hint-after":  "Apr\\u00e8s (solution)"');
     SB.AppendLine('      }');
     SB.AppendLine('    };');
     SB.AppendLine('    var SCA_LANG = (function() {');
@@ -946,6 +981,13 @@ begin
     SB.AppendLine('        if (key === "row-count")        el.innerHTML = T(key, el.dataset.count || "0");');
     SB.AppendLine('        else if (key === "opt-all-files") el.textContent = T(key, el.dataset.count || "0");');
     SB.AppendLine('        else if (key === "hdr-top-detectors") el.textContent = T(key, el.dataset.topN || "0", el.dataset.topTotal || "0");');
+    SB.AppendLine('        // meta-Zeile: Datum/Datei stehen in data-when / data-file');
+    SB.AppendLine('        else if (key === "meta-created") el.textContent = T(key, el.dataset.when || "");');
+    SB.AppendLine('        else if (key === "meta-file")    el.textContent = T(key, el.dataset.file || "");');
+    SB.AppendLine('        // src-snippet-Header: file + line stehen in data-file / data-line');
+    SB.AppendLine('        else if (key === "src-snippet-hdr") el.textContent = T(key, el.dataset.file || "", el.dataset.line || "");');
+    SB.AppendLine('        // audience-hint enthaelt eingebettetes Markup (<b>, <span>, &rarr;) -');
+    SB.AppendLine('        // T() darf den Wert nicht escapen, T(key) liefert ihn 1:1 ins innerHTML.');
     SB.AppendLine('        else                            el.innerHTML = T(key);');
     SB.AppendLine('      });');
     SB.AppendLine('      // Placeholder-Attribute');
