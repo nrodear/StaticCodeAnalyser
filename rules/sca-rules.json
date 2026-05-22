@@ -3089,6 +3089,65 @@
       "impacts": [
         { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
       ]
+    },
+    {
+      "id": "SCA159",
+      "kind": "EmptyOnHandler",
+      "name": "Typed exception handler with empty body",
+      "shortDescription": "`on E: SomeException do ;` (or `on E: ... do begin end;`) silently swallows a specific exception class - worse than a bare `except end` because the typed annotation looks intentional",
+      "fullDescription": "Lexical scan for `on [E:] <ExceptionType> do (;|begin end)`. The typed `on E:` form gives the impression of considered handling - a reader assumes the developer thought about this specific exception. An empty body means the failure is invisible in production: no log, no UI feedback, no telemetry. Common mORMot review finding in cleanup code where 'this can be ignored' is not documented. The bare `except end` form is already caught by SCA-001 (EmptyExcept); this rule covers the typed-handler variant.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["exception-handling", "silent-failure", "mormot", "sonar50"],
+      "detectorUnit": "uEmptyOnHandler.pas",
+      "examples": {
+        "bad":  "try DoStuff; except\n  on E: EDatabaseError do ;\nend;",
+        "good": "try DoStuff; except\n  on E: EDatabaseError do\n  begin\n    Logger.Error(E.Message);\n    raise;\n  end;\nend;"
+      },
+      "cleanCodeAttribute": "COMPLETE",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY",     "severity": "HIGH" },
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA160",
+      "kind": "StringFromPointer",
+      "name": "String cast from raw pointer",
+      "shortDescription": "`string(P)` / `AnsiString(P)` / `UTF8String(P)` / `RawByteString(P)` cast from a P-prefixed pointer assumes a null-terminator that may not exist - heap overread",
+      "fullDescription": "Lexical scan for `(string|RawByteString|AnsiString|UTF8String|WideString)(<id>)` where `<id>` starts with `P` followed by an uppercase letter (Delphi P-prefix convention for pointer types: PByte, PChar, PSomeRecord, ...). Delphi treats the cast as null-terminated and reads memory until the next #0 - on a buffer without a terminator this walks past the heap-block boundary, causing silent overread and occasional AV. mORMot internals use this pattern with controlled null-termination; user code copying the idiom often skips the terminator guarantee. Use `SetString(s, PChar(Buf), Len)` with explicit length instead. False-positive filter: only P-prefix+uppercase identifiers trigger - `string(IntegerVar)` (Integer-to-String) is not flagged.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["string", "pointer", "heap-overread", "mormot", "sonar50"],
+      "detectorUnit": "uStringFromPointer.pas",
+      "examples": {
+        "bad":  "s := string(Buf);    // PByte cast assumes null-terminator",
+        "good": "SetString(s, PChar(Buf), Len);   // explicit length"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" },
+        { "softwareQuality": "SECURITY",    "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA161",
+      "kind": "PointerSubtraction",
+      "name": "Pointer subtraction via 32-bit cast",
+      "shortDescription": "`Cardinal(P1) - Cardinal(P2)` (or Integer / LongWord / LongInt variants) truncates the upper 32 bits of a 64-bit pointer on Win64 - difference is intermittently wrong",
+      "fullDescription": "Lexical scan for `(Cardinal|LongWord|Integer|LongInt)(<id>) - (Cardinal|...)(<id>)` - two 32-bit casts joined by minus. On Win64 a Pointer is 64-bit while Cardinal/Integer/LongWord/LongInt are 32-bit, so the cast drops the upper four bytes of the address. The resulting difference is wrong whenever the allocator hands out high addresses - the code works on Win32 and breaks intermittently on Win64. Common porting bug from Delphi-7 / Delphi-2007 examples that pre-date Win64. Fix: use `PtrUInt(P1) - PtrUInt(P2)` or `NativeInt(P1) - NativeInt(P2)` - pointer-width integer types that match the platform pointer size.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["pointer", "win64", "truncation", "mormot", "sonar50"],
+      "detectorUnit": "uPointerSubtraction.pas",
+      "examples": {
+        "bad":  "Diff := Cardinal(P1) - Cardinal(P2);   // upper 32 bits lost on Win64",
+        "good": "Diff := PtrUInt(P1) - PtrUInt(P2);     // pointer-wide cast"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
     }
   ]
 }

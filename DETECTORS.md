@@ -7,7 +7,7 @@ specific to this tool.
 
 Status legend: ✅ implemented · 🟡 partial · 🔲 open
 
-**Summary:** 44 / 50 Sonar-rule slots complete (Critical + Reliability + Maintainability + Minor sections largely done) + 1 partial + 3 bonus + **22 DFM** detectors + **32 SonarDelphi-migration** (SCA120-152) + **6 mORMot-cluster** (SCA153-158) + ~60 SonarDelphi-compatible naming/formatting checks (SCA060-119) = **~150 active detectors total**.
+**Summary:** 44 / 50 Sonar-rule slots complete (Critical + Reliability + Maintainability + Minor sections largely done) + 1 partial + 3 bonus + **22 DFM** detectors + **32 SonarDelphi-migration** (SCA120-152) + **9 mORMot-cluster** (SCA153-161) + ~60 SonarDelphi-compatible naming/formatting checks (SCA060-119) = **~153 active detectors total**.
 
 Remaining 5 open slots all need type-inference / flow-analysis / cross-unit symbol resolution: #16 UninitVar, #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI.
 
@@ -149,10 +149,10 @@ Sonar-50 catalogue
 
 📐 DFM detectors:                  22 (all complete)
 🛡 SonarDelphi-migration:          12 (SCA120-131, all complete)
-🏛 mORMot-cluster:                  6 (SCA153-158, all complete)
+🏛 mORMot-cluster:                  9 (SCA153-161, all complete)
 🧩 SonarDelphi naming/formatting:  ~60 (SCA060-119, see sca-rules.json)
 
-🎯 Grand total: ~150 active detectors.
+🎯 Grand total: ~153 active detectors.
 ```
 
 ---
@@ -243,12 +243,13 @@ in the help panel and a DUnitX test fixture.
 
 ---
 
-## 🏛 mORMot-Cluster — concurrency / pointer / aliasing patterns (SCA153-158)
+## 🏛 mORMot-Cluster — concurrency / pointer / aliasing patterns (SCA153-161)
 
-Six detectors added after auditing the [mORMot2](https://github.com/synopse/mORMot2)
-sources, targeting patterns that recur across large low-level Delphi codebases
-(threading primitives, raw heap allocation, dynamic-array growth,
-byte-level buffer manipulation, PChar arithmetic, multi-target `with` blocks).
+Nine detectors added after auditing the [mORMot2](https://github.com/synopse/mORMot2)
+sources, targeting patterns that recur across large low-level Delphi codebases:
+threading primitives, raw heap allocation, dynamic-array growth, byte-level
+buffer manipulation, PChar arithmetic, multi-target `with` blocks, typed
+exception handlers, string casts from raw pointers, Win64 pointer arithmetic.
 All ship with before/after fix hints and a DUnitX test fixture.
 
 | ID | Rule | Description | Severity | Type | Unit |
@@ -259,6 +260,9 @@ All ship with before/after fix hints and a DUnitX test fixture.
 | SCA156 | **GetMemWithoutFreeMem** | `GetMem` / `AllocMem` / `ReallocMem` followed by a matching `FreeMem` in the same routine without an enclosing `try/finally` — exception path leaks the raw heap buffer | Warning | Bug | `uGetMemWithoutFreeMem` |
 | SCA157 | **SetLengthAppendInLoop** | `SetLength(arr, Length(arr) + N)` inside a `for/while/repeat` loop — quadratic realloc cost; grow once before the loop or use block-grow | Warning | Code Smell | `uSetLengthAppendInLoop` |
 | SCA158 | **PointerArithmeticOnString** | `PChar(s) +/- offset` (or `PAnsiChar` / `PWideChar`) without a prior empty-check on `s` — `PChar('')` is NIL, arithmetic on nil triggers Access Violation | Warning | Bug | `uPointerArithmeticOnString` |
+| SCA159 | **EmptyOnHandler** | `on E: SomeException do ;` (or empty `begin end`) — typed exception handler silently swallows a specific exception class; worse than bare `except end` because the typed annotation looks intentional | Warning | Bug | `uEmptyOnHandler` |
+| SCA160 | **StringFromPointer** | `string(P)` / `AnsiString(P)` / `UTF8String(P)` cast from a P-prefixed pointer assumes a null-terminator — reads past the buffer end if the terminator is missing; heap overread | Warning | Bug | `uStringFromPointer` |
+| SCA161 | **PointerSubtraction** | `Cardinal(P1) - Cardinal(P2)` (or Integer / LongWord / LongInt variants) truncates the upper 32 bits of a 64-bit pointer on Win64; use `PtrUInt` / `NativeInt` | Warning | Bug | `uPointerSubtraction` |
 
 ---
 

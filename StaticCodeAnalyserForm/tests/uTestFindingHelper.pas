@@ -53,6 +53,7 @@ uses
   uBoolAlwaysTrue, uConstantReturn, uHardcodedString,
   uUnpairedLock, uMoveSizeOfPointer, uWithMultipleTargets,
   uGetMemWithoutFreeMem, uSetLengthAppendInLoop, uPointerArithmeticOnString,
+  uEmptyOnHandler, uStringFromPointer, uPointerSubtraction,
   uStaticAnalyzer2,
   uTestSrcBuilder,
   System.IOUtils;
@@ -247,6 +248,9 @@ begin
         TGetMemWithoutFreeMemDetector.AnalyzeUnit(Root, TempPath, Result);
         TSetLengthAppendInLoopDetector.AnalyzeUnit(Root, TempPath, Result);
         TPointerArithmeticOnStringDetector.AnalyzeUnit(Root, TempPath, Result);
+        TEmptyOnHandlerDetector.AnalyzeUnit(Root, TempPath, Result);
+        TStringFromPointerDetector.AnalyzeUnit(Root, TempPath, Result);
+        TPointerSubtractionDetector.AnalyzeUnit(Root, TempPath, Result);
       finally
         Root.Free;
       end;

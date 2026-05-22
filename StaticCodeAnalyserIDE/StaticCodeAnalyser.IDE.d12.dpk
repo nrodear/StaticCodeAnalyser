@@ -248,6 +248,9 @@ contains
   uWithMultipleTargets in '..\StaticCodeAnalyserForm\sources\Detectors\uWithMultipleTargets.pas',
   uGetMemWithoutFreeMem in '..\StaticCodeAnalyserForm\sources\Detectors\uGetMemWithoutFreeMem.pas',
   uSetLengthAppendInLoop in '..\StaticCodeAnalyserForm\sources\Detectors\uSetLengthAppendInLoop.pas',
-  uPointerArithmeticOnString in '..\StaticCodeAnalyserForm\sources\Detectors\uPointerArithmeticOnString.pas';
+  uPointerArithmeticOnString in '..\StaticCodeAnalyserForm\sources\Detectors\uPointerArithmeticOnString.pas',
+  uEmptyOnHandler in '..\StaticCodeAnalyserForm\sources\Detectors\uEmptyOnHandler.pas',
+  uStringFromPointer in '..\StaticCodeAnalyserForm\sources\Detectors\uStringFromPointer.pas',
+  uPointerSubtraction in '..\StaticCodeAnalyserForm\sources\Detectors\uPointerSubtraction.pas';
 
 end.

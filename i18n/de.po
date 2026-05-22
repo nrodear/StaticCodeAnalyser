@@ -869,41 +869,60 @@ msgstr "User-sichtbarer String ist hartcodiert - in resourcestring / i18n versch
 
 # ---- mORMot-Cluster (SCA153-155) -------------------------------------------
 msgid "Unpaired Lock"
-msgstr "Lock ohne Gegenstück"
+msgstr "Lock ohne paired UnLock"
 
 msgid "Move/FillChar SizeOf(Pointer)"
 msgstr "Move/FillChar mit SizeOf(Pointer)"
 
 msgid "with on multiple targets"
-msgstr "with mit mehreren Zielen"
+msgstr "`with` mit mehreren Zielen"
 
-msgid "Lock / Enter without try/finally - exception path leaks the lock and deadlocks"
-msgstr "Lock / Enter ohne try/finally - Exception verliert das Lock und führt zum Deadlock"
+msgid "Lock acquired without try/finally - an exception leaks the lock and deadlocks the next caller"
+msgstr "Lock ohne try/finally akquiriert - eine Exception verliert das Lock und blockiert den nächsten Aufrufer"
 
 msgid "Move / FillChar uses SizeOf(pointer-type) - copies only 4/8 bytes, not the target buffer"
-msgstr "Move / FillChar benutzt SizeOf(Pointer-Typ) - kopiert nur 4/8 Bytes, nicht den Zielpuffer"
+msgstr "Move / FillChar benutzt SizeOf(Pointer-Typ) - kopiert nur 4/8 Bytes (Pointer-Größe), nicht den Zielpuffer"
 
 msgid "with statement names multiple targets - ambiguous member lookup"
-msgstr "with-Anweisung nennt mehrere Ziele - mehrdeutige Member-Auflösung"
+msgstr "`with`-Anweisung mit mehreren Zielen - mehrdeutige Member-Auflösung"
 
 # ---- mORMot-Cluster Phase 2 (SCA156-158) -----------------------------------
 msgid "GetMem without try/finally"
 msgstr "GetMem ohne try/finally"
 
 msgid "SetLength grow in loop"
-msgstr "SetLength-Wachstum in Schleife"
+msgstr "SetLength-Wachstum in Schleife (O(n²))"
 
-msgid "PChar arithmetic w/o empty-check"
+msgid "PChar arithmetic without empty-check"
 msgstr "PChar-Arithmetik ohne Empty-Check"
 
-msgid "GetMem / AllocMem without surrounding try/finally - exception path leaks the buffer"
-msgstr "GetMem / AllocMem ohne umgebendes try/finally - Exception verliert den Buffer"
+msgid "GetMem / AllocMem without try/finally - an exception leaks the heap buffer"
+msgstr "GetMem / AllocMem ohne try/finally - eine Exception leakt den Heap-Buffer"
 
-msgid "SetLength(arr, Length(arr) + 1) inside a loop - O(n*n) realloc, grow once before the loop"
-msgstr "SetLength(arr, Length(arr) + 1) innerhalb einer Schleife - O(n*n) Realloc, einmal vor der Schleife vergrößern"
+msgid "SetLength growing by 1 inside a loop - O(n^2) reallocation; grow once before the loop"
+msgstr "SetLength-Wachstum um 1 in einer Schleife - O(n²) Realloc; stattdessen einmal vor der Schleife vor-allokieren"
 
-msgid "PChar(s) +/- offset without empty-check - PChar('') returns nil, arithmetic triggers AV"
-msgstr "PChar(s) +/- Offset ohne Empty-Check - PChar('') liefert nil, Arithmetik führt zu AV"
+msgid "PChar(s) arithmetic without empty-check - PChar('') is nil, arithmetic triggers AV"
+msgstr "PChar(s)-Arithmetik ohne Empty-Check - PChar('') ist nil, Arithmetik darauf löst AV aus"
+
+# ---- mORMot-Cluster Phase 3 (SCA159-161) -----------------------------------
+msgid "Empty typed exception handler"
+msgstr "Leerer typisierter Exception-Handler"
+
+msgid "String cast from raw pointer"
+msgstr "String-Cast aus Raw-Pointer"
+
+msgid "Pointer subtraction (Win64 truncation)"
+msgstr "Pointer-Subtraktion (Win64-Trunkierung)"
+
+msgid "Typed exception handler is empty - swallows a specific exception silently"
+msgstr "Typisierter Exception-Handler ist leer - eine spezifische Exception wird kommentarlos verschluckt"
+
+msgid "String cast from raw pointer assumes a null-terminator - heap overread if missing"
+msgstr "String-Cast aus Raw-Pointer setzt einen Null-Terminator voraus - Heap-Overread wenn er fehlt"
+
+msgid "Cardinal/Integer subtraction on pointers truncates upper 32 bits on Win64"
+msgstr "Cardinal/Integer-Subtraktion auf Pointern trunkiert die oberen 32 Bit auf Win64"
 
 # ---- Severity-Filter combo: Sonar-50 Critical (SCA132-133) ------------------
 msgid "Exception Too General"
@@ -980,3 +999,31 @@ msgstr "uses-Klausel ist nicht alphabetisch sortiert"
 
 msgid "Unit has no descriptive header comment"
 msgstr "Unit hat keinen erklärenden Header-Kommentar"
+
+# ---- Nachtrag: fehlende Hint-Descriptions (SCA-Audit) ----------------------
+msgid "Class field without \"F\" prefix"
+msgstr "Klassen-Feld ohne \"F\"-Präfix"
+
+msgid "Class/record type without \"T\" prefix"
+msgstr "Class/Record-Typ ohne \"T\"-Präfix"
+
+msgid "Interface type without \"I\" prefix"
+msgstr "Interface-Typ ohne \"I\"-Präfix"
+
+msgid "Pointer type alias should start with \"P\""
+msgstr "Pointer-Typ-Alias sollte mit \"P\" beginnen"
+
+msgid "Double semicolon \";;\" - one is enough"
+msgstr "Doppeltes Semikolon \";;\" - eines reicht"
+
+msgid "Empty argument list \"()\" - drop the parentheses"
+msgstr "Leere Argumentliste \"()\" - die Klammern weglassen"
+
+msgid "Override whose body is just \"inherited\" adds nothing"
+msgstr "Override, dessen Body nur \"inherited\" enthält, hat keinen Effekt"
+
+msgid "Prefer Assigned() over \"= nil\" / \"<> nil\""
+msgstr "Assigned() statt \"= nil\" / \"<> nil\" verwenden"
+
+msgid "SQL command built with \"+\" - SQL injection risk"
+msgstr "SQL-Befehl mit \"+\" zusammengebaut - SQL-Injection-Risiko"

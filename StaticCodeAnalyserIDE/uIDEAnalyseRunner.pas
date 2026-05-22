@@ -157,6 +157,12 @@ begin
                 tick := GetTickCount;
                 doUpdate := (tick - FLastTick > 100);
 
+                // Defensiv: erster File-Phase-Tick (Total>=0) MUSS durch,
+                // damit der Style-Switch Marquee->Normal nicht durch den
+                // 100ms-Throttle bis zum naechsten Tick verzoegert wird.
+                if (Total >= 0) and (FProgressBar.Style = pbstMarquee) then
+                  doUpdate := True;
+
                 if Total < 0 then
                 begin
                   // ---- Scan-Phase ----
@@ -276,6 +282,12 @@ var
 begin
   FrameSnap := FFramePtr;
   Screen.Cursor := crHourglass;
+  // Marquee an, damit der User waehrend der Single-File-Analyse die
+  // "laeuft jetzt"-Indikation bekommt (gleiche Optik wie Scan-Phase
+  // in RunAll). Kein BeginRun/EndRun - die ProgressBar wird hier
+  // nur stilistisch genutzt, ohne Counter-Logik.
+  if Assigned(FProgressBar) then
+    FProgressBar.Style := pbstMarquee;
   try
     try
       DisplayName := ExtractFileName(AFilePath);
@@ -315,6 +327,11 @@ begin
     end;
   finally
     Screen.Cursor := crDefault;
+    if Assigned(FProgressBar) then
+    begin
+      FProgressBar.Style := pbstNormal;
+      FProgressBar.Position := 0;
+    end;
   end;
 end;
 

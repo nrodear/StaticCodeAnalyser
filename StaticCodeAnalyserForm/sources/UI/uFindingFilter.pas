@@ -113,7 +113,10 @@ type
                  fmWithMultipleTargets,
                  // mORMot-Cluster Phase 2 (SCA156-158)
                  fmGetMemWithoutFreeMem, fmSetLengthAppendInLoop,
-                 fmPointerArithmeticOnString);
+                 fmPointerArithmeticOnString,
+                 // mORMot-Cluster Phase 3 (SCA159-161)
+                 fmEmptyOnHandler, fmStringFromPointer,
+                 fmPointerSubtraction);
 
   // Zweiter Filter (orthogonal zu Schweregrad): Sonar-Typ-Kategorie.
   TTypeFilter = (tfAll, tfBug, tfCodeSmell, tfVulnerability,
@@ -326,6 +329,10 @@ begin
     fkGetMemWithoutFreeMem       : Result := 'getmem allocmem reallocmem freemem speicher leak buffer try finally mormot';
     fkSetLengthAppendInLoop      : Result := 'setlength length loop schleife realloc grow quadratic performance dynamic array';
     fkPointerArithmeticOnString  : Result := 'pchar pansichar pwidechar pointer arithmetic offset empty string nil access violation';
+    // mORMot-Cluster Phase 3 (SCA159-161)
+    fkEmptyOnHandler             : Result := 'empty on exception handler typed silent swallow leer ausnahme typisiert';
+    fkStringFromPointer          : Result := 'string ansistring utf8string rawbytestring pointer cast overread buffer p-prefix';
+    fkPointerSubtraction         : Result := 'cardinal integer longword pointer subtraction win64 truncation ptruint nativeuint';
   else
     Result := '';
   end;
@@ -507,6 +514,10 @@ begin
     fmGetMemWithoutFreeMem:          Result := F.Kind = fkGetMemWithoutFreeMem;
     fmSetLengthAppendInLoop:         Result := F.Kind = fkSetLengthAppendInLoop;
     fmPointerArithmeticOnString:     Result := F.Kind = fkPointerArithmeticOnString;
+    // mORMot-Cluster Phase 3 (SCA159-161)
+    fmEmptyOnHandler:                Result := F.Kind = fkEmptyOnHandler;
+    fmStringFromPointer:             Result := F.Kind = fkStringFromPointer;
+    fmPointerSubtraction:            Result := F.Kind = fkPointerSubtraction;
   else
     Result := True;   // fmAll
   end;

@@ -3647,7 +3647,7 @@ begin
 
     fkUnpairedLock:
     begin
-      Result.Description := _('Lock / Enter without try/finally - exception path leaks the lock and deadlocks');
+      Result.Description := _('Lock acquired without try/finally - an exception leaks the lock and deadlocks the next caller');
       Result.Before :=
         'FLocker.Lock;'#13#10 +
         'DoStuff;        // <- exception here'#13#10 +
@@ -3698,7 +3698,7 @@ begin
 
     fkGetMemWithoutFreeMem:
     begin
-      Result.Description := _('GetMem / AllocMem without surrounding try/finally - exception path leaks the buffer');
+      Result.Description := _('GetMem / AllocMem without try/finally - an exception leaks the heap buffer');
       Result.Before :=
         'var P: PByte;'#13#10 +
         'begin'#13#10 +
@@ -3737,7 +3737,7 @@ begin
 
     fkSetLengthAppendInLoop:
     begin
-      Result.Description := _('SetLength(arr, Length(arr) + 1) inside a loop - O(n*n) realloc, grow once before the loop');
+      Result.Description := _('SetLength growing by 1 inside a loop - O(n^2) reallocation; grow once before the loop');
       Result.Before :=
         'var i: Integer;'#13#10 +
         '    Dest: TArray<Integer>;'#13#10 +
@@ -3777,7 +3777,7 @@ begin
 
     fkPointerArithmeticOnString:
     begin
-      Result.Description := _('PChar(s) +/- offset without empty-check - PChar('''') returns nil, arithmetic triggers AV');
+      Result.Description := _('PChar(s) arithmetic without empty-check - PChar('''') is nil, arithmetic triggers AV');
       Result.Before :=
         'procedure Foo(const s: string);'#13#10 +
         'var p: PChar;'#13#10 +
@@ -3809,6 +3809,101 @@ begin
         '// Option 3: use higher-level helpers that take a string'#13#10 +
         '// (Copy / TStringHelper.Substring) so PChar arithmetic'#13#10 +
         '// stays out of the call site entirely.';
+    end;
+
+    fkEmptyOnHandler:
+    begin
+      Result.Description := _('Typed exception handler is empty - swallows a specific exception silently');
+      Result.Before :=
+        'try'#13#10 +
+        '  RiskyCall;'#13#10 +
+        'except'#13#10 +
+        '  on E: EDatabaseError do ;       // <- DB error gone, no log'#13#10 +
+        '  on E: EFileNotFound do'#13#10 +
+        '  begin'#13#10 +
+        '  end;                            // <- equally silent'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Worse than `except end` because the typed `on E:`'#13#10 +
+        '// gives the impression of deliberate handling. The'#13#10 +
+        '// failure becomes invisible in production - no log,'#13#10 +
+        '// no UI feedback, no telemetry.';
+      Result.After :=
+        'try'#13#10 +
+        '  RiskyCall;'#13#10 +
+        'except'#13#10 +
+        '  on E: EDatabaseError do'#13#10 +
+        '  begin'#13#10 +
+        '    Logger.Error(''DB failed: %s'', [E.Message]);'#13#10 +
+        '    raise; // or specific recovery'#13#10 +
+        '  end;'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// At minimum: log. Better: handle the case explicitly'#13#10 +
+        '// (recovery, fallback, user message) and re-raise if'#13#10 +
+        '// nothing can be done locally.'#13#10 +
+        ''#13#10 +
+        '// If silent swallowing is genuinely correct (cleanup'#13#10 +
+        '// path, optional resource), say so with a comment so'#13#10 +
+        '// the next reader does not "fix" it.';
+    end;
+
+    fkStringFromPointer:
+    begin
+      Result.Description := _('String cast from raw pointer assumes a null-terminator - heap overread if missing');
+      Result.Before :=
+        'procedure Foo(Buf: PByte);'#13#10 +
+        'var s: string;'#13#10 +
+        'begin'#13#10 +
+        '  s := string(Buf);              // reads until next #0 -'#13#10 +
+        '                                 // may walk past the buffer end'#13#10 +
+        '  s := UTF8String(SomePointer);  // same bug, UTF-8 flavor'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Delphi treats the PChar-style cast as null-terminated'#13#10 +
+        '// and reads memory until the next #0. On a buffer without'#13#10 +
+        '// a terminator this reads past the heap-block boundary -'#13#10 +
+        '// silent heap overread, occasional AV.';
+      Result.After :=
+        '// Always pass an explicit length when constructing'#13#10 +
+        '// a string from raw memory.'#13#10 +
+        'SetString(s, PChar(Buf), Len);   // bounded by Len'#13#10 +
+        ''#13#10 +
+        '// For UTF-8:'#13#10 +
+        'SetString(s, PAnsiChar(Buf), Len);'#13#10 +
+        '// or UTF8DecodeToString(Buf, Len, s) for explicit decode'#13#10 +
+        ''#13#10 +
+        '// mORMot helpers like FastSetString / FastSetStringCp'#13#10 +
+        '// take Length explicitly and avoid this trap.';
+    end;
+
+    fkPointerSubtraction:
+    begin
+      Result.Description := _('Cardinal/Integer subtraction on pointers truncates upper 32 bits on Win64');
+      Result.Before :=
+        'procedure Foo(P1, P2: Pointer);'#13#10 +
+        'var Diff: Integer;'#13#10 +
+        'begin'#13#10 +
+        '  Diff := Cardinal(P1) - Cardinal(P2);   // <- Win64 truncation'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// On Win64 a Pointer is 64-bit, but Cardinal / Integer /'#13#10 +
+        '// LongWord / LongInt are 32-bit. The cast drops the upper'#13#10 +
+        '// four bytes of the address. The resulting difference is'#13#10 +
+        '// wrong whenever the allocator hands out high addresses -'#13#10 +
+        '// works on Win32, intermittently wrong on Win64.';
+      Result.After :=
+        'procedure Foo(P1, P2: Pointer);'#13#10 +
+        'var Diff: NativeInt;            // 32 on Win32, 64 on Win64'#13#10 +
+        'begin'#13#10 +
+        '  Diff := PtrUInt(P1) - PtrUInt(P2);     // pointer-wide cast'#13#10 +
+        '  // or NativeUInt for an unsigned result'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Pointer-width integer types in Delphi:'#13#10 +
+        '//   NativeInt / PtrInt   - signed, pointer-sized'#13#10 +
+        '//   NativeUInt / PtrUInt - unsigned, pointer-sized'#13#10 +
+        '// Always use these for arithmetic on pointer addresses.';
     end;
 
     fkWithMultipleTargets:

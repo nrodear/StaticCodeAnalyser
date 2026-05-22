@@ -6,7 +6,7 @@ Orientiert sich am Sonar-50er-Katalog plus eigene Bonus-Detektoren.
 
 Status: ✅ implementiert | 🟡 teilweise | 🔲 offen
 
-**Zusammenfassung:** 44 / 50 Sonar-Regel-Slots vollständig (Critical + Reliability + Maintainability + Minor weitestgehend abgedeckt) + 1 teilweise + 3 Bonus + **22 DFM-Detektoren** + **32 SonarDelphi-Migration** (SCA120-152) + **6 mORMot-Cluster** (SCA153-158) + ~60 SonarDelphi-kompatible Naming-/Formatting-Checks (SCA060-119) = **insgesamt ~150 aktive Detektoren**.
+**Zusammenfassung:** 44 / 50 Sonar-Regel-Slots vollständig (Critical + Reliability + Maintainability + Minor weitestgehend abgedeckt) + 1 teilweise + 3 Bonus + **22 DFM-Detektoren** + **32 SonarDelphi-Migration** (SCA120-152) + **9 mORMot-Cluster** (SCA153-161) + ~60 SonarDelphi-kompatible Naming-/Formatting-Checks (SCA060-119) = **insgesamt ~153 aktive Detektoren**.
 
 Verbleibende 5 offene Slots brauchen Typ-Inferenz / Flow-Analyse / Cross-Unit-Symbol-Resolution: #16 UninitVar, #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI.
 
@@ -148,7 +148,7 @@ Sonar-50-Katalog
 
 📐 DFM-Detektoren:                  22 (alle vollständig)
 🛡 SonarDelphi-Migration:           12 (SCA120-131, alle vollständig)
-🏛 mORMot-Cluster:                   6 (SCA153-158, alle vollständig)
+🏛 mORMot-Cluster:                   9 (SCA153-161, alle vollständig)
 🧩 SonarDelphi Naming/Formatting:  ~60 (SCA060-119, siehe sca-rules.json)
 
 🎯 Gesamt: ~120 aktive Detektoren.
@@ -242,12 +242,13 @@ Fix-Hints im Hilfe-Panel und eine DUnitX-Test-Fixture mit.
 
 ---
 
-## 🏛 mORMot-Cluster — Concurrency / Pointer / Aliasing (SCA153-158)
+## 🏛 mORMot-Cluster — Concurrency / Pointer / Aliasing (SCA153-161)
 
-Sechs Detektoren, die nach einem Audit der [mORMot2](https://github.com/synopse/mORMot2)-Sourcen
+Neun Detektoren, die nach einem Audit der [mORMot2](https://github.com/synopse/mORMot2)-Sourcen
 hinzugekommen sind. Sie zielen auf Muster, die in großen Low-Level-Delphi-Projekten
-immer wieder auftreten (Locking-Primitiven, Raw-Heap-Allokation, Dynamic-Array-
-Wachstum, Byte-Level-Puffer-Manipulation, PChar-Arithmetik, Multi-Target-`with`-Blöcke).
+immer wieder auftreten: Locking-Primitiven, Raw-Heap-Allokation, Dynamic-Array-
+Wachstum, Byte-Level-Puffer-Manipulation, PChar-Arithmetik, Multi-Target-`with`-Blöcke,
+typisierte Exception-Handler, String-Casts aus rohen Pointern, Win64-Pointer-Arithmetik.
 Alle bringen Vorher/Nachher-Fix-Hints und ein DUnitX-Fixture mit.
 
 | ID | Regel | Beschreibung | Severity | Type | Unit |
@@ -258,6 +259,9 @@ Alle bringen Vorher/Nachher-Fix-Hints und ein DUnitX-Fixture mit.
 | SCA156 | **GetMemWithoutFreeMem** | `GetMem` / `AllocMem` / `ReallocMem` mit passendem `FreeMem` in derselben Routine, aber ohne umgebendes `try/finally` — eine Exception verliert den allokierten Heap-Buffer | Warning | Bug | `uGetMemWithoutFreeMem` |
 | SCA157 | **SetLengthAppendInLoop** | `SetLength(arr, Length(arr) + N)` innerhalb einer `for/while/repeat`-Schleife — O(n*n) Realloc-Aufwand; einmal vor der Schleife vergrößern oder Block-Grow benutzen | Warning | Code Smell | `uSetLengthAppendInLoop` |
 | SCA158 | **PointerArithmeticOnString** | `PChar(s) +/- Offset` (oder `PAnsiChar` / `PWideChar`) ohne vorherigen Empty-Check auf `s` — `PChar('')` ist NIL, Arithmetik auf nil führt zur Access-Violation | Warning | Bug | `uPointerArithmeticOnString` |
+| SCA159 | **EmptyOnHandler** | `on E: SomeException do ;` (oder leerer `begin end`) — typisierter Exception-Handler schluckt eine spezifische Exception still; schlimmer als `except end` weil die Typ-Annotation absichtlich wirkt | Warning | Bug | `uEmptyOnHandler` |
+| SCA160 | **StringFromPointer** | `string(P)` / `AnsiString(P)` / `UTF8String(P)` Cast aus P-Präfix-Pointer setzt Null-Terminator voraus — liest über das Buffer-Ende hinaus wenn Terminator fehlt; Heap-Overread | Warning | Bug | `uStringFromPointer` |
+| SCA161 | **PointerSubtraction** | `Cardinal(P1) - Cardinal(P2)` (oder Integer/LongWord/LongInt-Varianten) trunkiert die oberen 32 Bit eines 64-Bit-Pointers auf Win64; stattdessen `PtrUInt`/`NativeInt` benutzen | Warning | Bug | `uPointerSubtraction` |
 
 ---
 

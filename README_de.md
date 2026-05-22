@@ -11,7 +11,7 @@
 
 **Statisches Code-Analyse-Tool** und **Linter** für **Delphi 12 / RAD Studio (Athens)** —
 als **IDE-Plugin** mit dockbarem Tool-Fenster plus **eigenständige Windows-Anwendung**.
-AST-basierte Analyse mit **insgesamt ~120 Detektoren**: ~100 Pascal-Checks für
+AST-basierte Analyse mit **insgesamt ~150 Detektoren**: ~130 Pascal-Checks für
 Speicherlecks, SQL-Injection, Code-Smells, Sicherheitslücken und Code-Duplikate
 (inklusive einer **Sonar-Delphi-kompatiblen** Teilmenge SCA060+),
 **plus ein dedizierter DFM-Scanner mit 22 Checks** auf Basis eines eigenen DFM-Lexers
@@ -38,7 +38,7 @@ direkt in der IDE, mit Claude-AI-Anbindung.**
 
 | Fähigkeit | Wie genutzt |
 |-----------|-------------|
-| 🐛 **Bugs finden** | ~100 Pascal-Detektoren laufen über jede `.pas`-Datei (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, …) plus 22 DFM-Detektoren über jede `.dfm` (tote Event-Handler, Klartext-DB-Credentials, zirkuläre Master-Detail-Verkettung, …) — **insgesamt ~120** |
+| 🐛 **Bugs finden** | ~130 Pascal-Detektoren laufen über jede `.pas`-Datei (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 22 DFM-Detektoren über jede `.dfm` (tote Event-Handler, Klartext-DB-Credentials, zirkuläre Master-Detail-Verkettung, …) — **insgesamt ~150** |
 | 🔐 **Sicherheitslücken** | SQLInjection (Score-basiert), HardcodedSecret, HardcodedPath |
 | 🧹 **Code-Smells** | LongMethod, MagicNumber, EmptyExcept, MissingFinally, DeadCode, DuplicateString/Block |
 | ⚡ **Inkrementell analysieren** | „Branch-Changes"-Button: nur die im Git-/SVN-Branch geänderten Dateien — 200 ms statt 60 s |
@@ -54,9 +54,9 @@ direkt in der IDE, mit Claude-AI-Anbindung.**
 
 ## Hauptfeatures
 
-### 1. Statische Code-Analyse (insgesamt ~120 Detektoren — ~100 Pascal + 22 DFM, Sonar-Taxonomie)
+### 1. Statische Code-Analyse (insgesamt ~150 Detektoren — ~130 Pascal + 22 DFM, Sonar-Taxonomie)
 
-**Pascal-AST-Checks (~100)**: **Bugs** (MemoryLeak, NilDeref, DivByZero,
+**Pascal-AST-Checks (~130)**: **Bugs** (MemoryLeak, NilDeref, DivByZero,
 FormatMismatch, ReversedForRange, SelfAssignment, VirtualCallInCtor,
 MissingRaise, RoutineResultUnassigned, ReRaiseException,
 InstanceInvokedConstructor, CharToCharPointerCast, UnicodeToAnsiCast,
@@ -93,6 +93,62 @@ landet in der Zwischenablage: Befund-Metadaten, Code-Kontext (±5 Zeilen
 mit Marker auf der Befund-Zeile), Vorher/Nachher-Lösung. **Strg+V im
 Claude-Chat** — und Claude bekommt genug Kontext um den Fix konkret
 vorzuschlagen.
+
+---
+
+## Anwendungsfälle nach Deployment-Variante
+
+Die gleiche Analyse-Engine kommt in **drei Formen** — jede für einen
+anderen Workflow. Wahl nach Rolle / Tageszeit:
+
+| Anwendungsfall | IDE-Plugin | Standalone EXE (GUI) | CLI (dieselbe EXE) |
+|---|:---:|:---:|:---:|
+| **Inline-Review beim Coden** — Bug/Vuln-Marker neben der gerade geschriebenen Zeile | ✅ Live-Grid + 3 px Editor-Stripe + Hover-Overlay | — | — |
+| **Quick-Fix für die aktuelle Zeile** — Patch-Vorschlag direkt anwenden | ✅ `Strg+Alt+F` | — | — |
+| **Befund-Navigation per Tastatur** | ✅ `Strg+Alt+↑/↓` zwischen Befunden | Grid + Pfeiltasten | — |
+| **False-Positive auf dieser Zeile unterdrücken** | ✅ `Strg+Alt+S` fügt `// noinspection RuleName` ein | manuell | manuell |
+| **Befund an Claude AI übergeben** — Markdown-Prompt mit Code-Kontext | ✅ Zeilen-Klick → Clipboard | ✅ Zeilen-Klick → Clipboard | — |
+| **Nur Branch-Changes** — Dateien seit `main` / aktuellem SVN-Diff | ✅ Branch-Button | ✅ Branch-Button | ✅ `-branch-changes` |
+| **Projekt außerhalb von Delphi analysieren** (kein RAD installiert / Batch-Maschine) | — | ✅ Ordner wählen, Start klicken | ✅ `analyser.exe <ordner>` |
+| **Als Pre-Commit-Hook ausführen** | — | — | ✅ `--severity error --no-progress`, Exit-Code 1 bei Bug/Vuln |
+| **In CI / GitHub Actions ausführen** | — | — | ✅ `--export sarif --out sca.sarif`, SARIF-Upload-Step |
+| **Befunde an SonarQube / SonarCloud pushen** | ✅ `Tools → Sonar Push` | ✅ Menü | ✅ `--sonar-push` |
+| **HTML-Report generieren** für Stakeholder / Jira-Anhang | ✅ Export → HTML | ✅ Export → HTML | ✅ `--export html --out report.html` |
+| **Claude-Review-Prompt** für gesamten Batch (Tech-Lead-Workflow) | ✅ Export → Claude-Prompt | ✅ Export → Claude-Prompt | ✅ `--export claude --out prompt.md` |
+| **Nightly Full-Repo-Scan** + Diff gegen Baseline | — | ✅ Task Scheduler | ✅ `cron` / `schtasks` |
+| **Auto-Analyse beim Speichern** (Live-Watch) | ✅ opt-in, siehe [Live-Watch](#live-watch-nur-ide-plugin--%EF%B8%8F-riskant) | — | — |
+| **Custom-Rules editieren** (RegEx via `[CustomRules]`-ini) | ✅ Tools → Options | ✅ Einstellungsdialog | `analyser.ini` direkt editieren |
+| **Detektor-Schwellwerte konfigurieren** (`LongMethod_MaxLines`, …) | ✅ Einstellungen | ✅ Einstellungen | `analyser.ini` editieren |
+| **UI-Sprache umschalten** (EN / DE) | ✅ Tools → Options | ✅ Einstellungen | n/a (CLI nur EN) |
+| **Rule-Set-Profil wählen** (`ide-fast`, `default`, `strict`) | ✅ Profile-Combo | ✅ Profile-Combo | ✅ `--profile <name>` |
+| **Konfigurierbare Tastenkürzel** (cnpack-Stil: Key drücken → in INI gespeichert) | ✅ Einstellungen → Hotkeys | — | — |
+
+### Welche Variante für welche Rolle
+
+**Entwickler an der Tastatur** → IDE-Plugin. Engste Feedback-Schleife:
+Inline-Marker, Jump-to-Line, Quick-Fix-in-place, Strg+Alt-Navigation,
+Clipboard-an-Claude. Das Plugin nutzt die GLEICHE Engine + den
+gleichen Regel-Katalog + die gleichen FixHints wie die anderen zwei —
+was im IDE auftaucht, taucht auch in CI auf.
+
+**Code-Reviewer / Tech-Lead ohne offene RAD-Studio-Instanz** →
+Standalone-GUI. Gleiches Grid, gleicher Filter, gleiches Help-Panel
+wie das Plugin, läuft aber auf einem Ordner mit `.pas`+`.dfm` ohne
+laufende IDE. Nützlich für: Review auf einer anderen Maschine,
+Overnight-Batch auf einem Build-Server ohne Delphi-Lizenz, EXE an
+Nicht-Delphi-Engineer für einmaliges Audit weitergeben.
+
+**CI-Pipeline / Pre-Commit-Hook / Scheduled Task** → CLI-Mode derselben
+EXE. Keine GUI, Exit-Code zeigt Severity an (0 = sauber, 1 = Bug/Vuln
+gefunden, 2 = Setup-Fehler). Exporte: HTML, SARIF, Sonar-Generic,
+Claude-Prompt, Plain-JSON. Sonar-Push lädt Befunde direkt hoch, ohne
+Zwischen-Report-Datei. Branch-Changes-Filter (`--branch-changes`) lässt
+PR-Builds nur analysieren, was der Diff betrifft.
+
+**Alle drei Modi** lesen die gleiche `analyser.ini`, das gleiche
+`rules/sca-rules.json`, die gleichen Suppression-Marker — und emittieren
+die gleichen Finding-Kinds. Umschalten zwischen den Modi ist
+kostenlos — ein im IDE unterdrückter Befund bleibt auch in CI unterdrückt.
 
 ---
 
@@ -148,7 +204,7 @@ Volles Setup: [docs/sonar-setup.md](docs/sonar-setup.md). Quick-Reference:
 
 ---
 
-## Was wird erkannt (~120 Detektoren — ~100 Pascal + 22 DFM)
+## Was wird erkannt (~150 Detektoren — ~130 Pascal + 22 DFM)
 
 Alle Befunde landen in einer der **5 Sonar-Kategorien**:
 
@@ -655,7 +711,7 @@ StaticCodeAnalyserForm/sources/        Analyse-Engine (shared zwischen Standalon
     uAstNode.pas                       AST mit FindAll/FindFirst-Suche
 
   Infrastructure/
-    uStaticAnalyzer2.pas               Orchestriert ~100 Pascal-Detektoren pro Datei
+    uStaticAnalyzer2.pas               Orchestriert ~130 Pascal-Detektoren pro Datei
     uStaticFiles.pas                   Rekursiver Datei-Scan, Tick-Callback,
                                        Cancel-Support, Symlink-Schutz
     uIgnoreList.pas                    ignore.txt + Test-Filter
@@ -714,7 +770,7 @@ Bei einem typischen 1000-Unit-Repo:
 | Verzeichnis-Scan | — | 1-3 s |
 | Lexer | ~5-15 ms | ~10 s |
 | Parser2 | ~10-50 ms | ~30 s |
-| ~100 Pascal-Detektoren | ~10-60 ms | ~40 s |
+| ~130 Pascal-Detektoren | ~10-60 ms | ~50 s |
 | DFM-Parser + 22 DFM-Detektoren (pro `.dfm`) | ~5-20 ms | ~5-10 s |
 | Suppression-Sweep | — | <1 s |
 | **Gesamt** | **~30-100 ms** | **~60-90 s** |

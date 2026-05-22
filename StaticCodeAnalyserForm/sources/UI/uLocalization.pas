@@ -518,25 +518,60 @@ begin
   GDeMap.Add('User-visible string is hardcoded - move to resourcestring / i18n',
              'User-sichtbarer String ist hartcodiert - in resourcestring / i18n verschieben');
   // mORMot-Cluster (SCA153-155)
-  GDeMap.Add('Unpaired Lock',                        'Lock ohne Gegenst'#$FC'ck');
+  GDeMap.Add('Unpaired Lock',                        'Lock ohne paired UnLock');
   GDeMap.Add('Move/FillChar SizeOf(Pointer)',        'Move/FillChar mit SizeOf(Pointer)');
-  GDeMap.Add('with on multiple targets',             'with mit mehreren Zielen');
-  GDeMap.Add('Lock / Enter without try/finally - exception path leaks the lock and deadlocks',
-             'Lock / Enter ohne try/finally - Exception verliert das Lock und f'#$FC'hrt zum Deadlock');
+  GDeMap.Add('with on multiple targets',             '`with` mit mehreren Zielen');
+  GDeMap.Add('Lock acquired without try/finally - an exception leaks the lock and deadlocks the next caller',
+             'Lock ohne try/finally akquiriert - eine Exception verliert das Lock und blockiert den n'#$E4'chsten Aufrufer');
   GDeMap.Add('Move / FillChar uses SizeOf(pointer-type) - copies only 4/8 bytes, not the target buffer',
-             'Move / FillChar benutzt SizeOf(Pointer-Typ) - kopiert nur 4/8 Bytes, nicht den Zielpuffer');
+             'Move / FillChar benutzt SizeOf(Pointer-Typ) - kopiert nur 4/8 Bytes (Pointer-Gr'#$F6#$DF'e), nicht den Zielpuffer');
   GDeMap.Add('with statement names multiple targets - ambiguous member lookup',
-             'with-Anweisung nennt mehrere Ziele - mehrdeutige Member-Aufl'#$F6'sung');
+             '`with`-Anweisung mit mehreren Zielen - mehrdeutige Member-Aufl'#$F6'sung');
   // mORMot-Cluster Phase 2 (SCA156-158)
   GDeMap.Add('GetMem without try/finally',           'GetMem ohne try/finally');
-  GDeMap.Add('SetLength grow in loop',               'SetLength-Wachstum in Schleife');
-  GDeMap.Add('PChar arithmetic w/o empty-check',     'PChar-Arithmetik ohne Empty-Check');
-  GDeMap.Add('GetMem / AllocMem without surrounding try/finally - exception path leaks the buffer',
-             'GetMem / AllocMem ohne umgebendes try/finally - Exception verliert den Buffer');
-  GDeMap.Add('SetLength(arr, Length(arr) + 1) inside a loop - O(n*n) realloc, grow once before the loop',
-             'SetLength(arr, Length(arr) + 1) innerhalb einer Schleife - O(n*n) Realloc, einmal vor der Schleife vergr'#$F6#$DF'ern');
-  GDeMap.Add('PChar(s) +/- offset without empty-check - PChar('''') returns nil, arithmetic triggers AV',
-             'PChar(s) +/- Offset ohne Empty-Check - PChar('''') liefert nil, Arithmetik f'#$FC'hrt zu AV');
+  GDeMap.Add('SetLength grow in loop',               'SetLength-Wachstum in Schleife (O(n'#$B2'))');
+  GDeMap.Add('PChar arithmetic without empty-check', 'PChar-Arithmetik ohne Empty-Check');
+  GDeMap.Add('GetMem / AllocMem without try/finally - an exception leaks the heap buffer',
+             'GetMem / AllocMem ohne try/finally - eine Exception leakt den Heap-Buffer');
+  GDeMap.Add('SetLength growing by 1 inside a loop - O(n^2) reallocation; grow once before the loop',
+             'SetLength-Wachstum um 1 in einer Schleife - O(n'#$B2') Realloc; stattdessen einmal vor der Schleife vor-allokieren');
+  GDeMap.Add('PChar(s) arithmetic without empty-check - PChar('''') is nil, arithmetic triggers AV',
+             'PChar(s)-Arithmetik ohne Empty-Check - PChar('''') ist nil, Arithmetik darauf l'#$F6'st AV aus');
+  // mORMot-Cluster Phase 3 (SCA159-161)
+  GDeMap.Add('Empty typed exception handler',        'Leerer typisierter Exception-Handler');
+  GDeMap.Add('String cast from raw pointer',         'String-Cast aus Raw-Pointer');
+  GDeMap.Add('Pointer subtraction (Win64 truncation)', 'Pointer-Subtraktion (Win64-Trunkierung)');
+  GDeMap.Add('Typed exception handler is empty - swallows a specific exception silently',
+             'Typisierter Exception-Handler ist leer - eine spezifische Exception wird kommentarlos verschluckt');
+  GDeMap.Add('String cast from raw pointer assumes a null-terminator - heap overread if missing',
+             'String-Cast aus Raw-Pointer setzt einen Null-Terminator voraus - Heap-Overread wenn er fehlt');
+  GDeMap.Add('Cardinal/Integer subtraction on pointers truncates upper 32 bits on Win64',
+             'Cardinal/Integer-Subtraktion auf Pointern trunkiert die oberen 32 Bit auf Win64');
+  // ---- Nachtrag: fehlende Hint-Descriptions (SCA-Audit) ----
+  GDeMap.Add('Exception is constructed but never raised',
+             'Exception wird konstruiert, aber nie geworfen');
+  GDeMap.Add('Function never assigns Result - return value undefined',
+             'Function weist Result nie zu - R'#$FC'ckgabewert undefiniert');
+  GDeMap.Add('Re-raise of bound variable loses the original stack trace',
+             'Re-raise der gebundenen Variable verliert den urspr'#$FC'nglichen Stack-Trace');
+  GDeMap.Add('Type-cast before Free / Destroy has no effect (Destroy is virtual)',
+             'Type-Cast vor Free / Destroy ist wirkungslos (Destroy ist virtual)');
+  GDeMap.Add('Constructor invoked on instance - no allocation, fields re-initialised over live data',
+             'Konstruktor auf Instanz aufgerufen - keine Allokation, Felder werden '#$FC'ber Live-Daten re-initialisiert');
+  GDeMap.Add('Override whose body is just "inherited" adds nothing',
+             'Override, dessen Body nur "inherited" enth'#$E4'lt, hat keinen Effekt');
+  GDeMap.Add('Prefer Assigned() over "= nil" / "<> nil"',
+             'Assigned() statt "= nil" / "<> nil" verwenden');
+  GDeMap.Add('Raise a specific exception class, not the base Exception',
+             'Eine spezifische Exception-Klasse werfen, nicht die Basis-Exception');
+  GDeMap.Add('Locale-dependent conversion without explicit TFormatSettings',
+             'Locale-abh'#$E4'ngige Konvertierung ohne explizite TFormatSettings');
+  GDeMap.Add('8-bit string cast silently drops non-codepage characters',
+             '8-Bit-String-Cast verwirft Zeichen au'#$DF'erhalb der aktuellen Codepage still');
+  GDeMap.Add('PChar(Char) reinterprets the codepoint as a pointer - undefined behaviour',
+             'PChar(Char) interpretiert den Codepoint als Pointer - Undefined Behaviour');
+  GDeMap.Add('IfThen() evaluates both branches - no short-circuit semantics',
+             'IfThen() wertet beide Zweige aus - keine Short-Circuit-Semantik');
   // DFM
   GDeMap.Add('Published method looks like an event handler but no component binds it',
              'Published-Methode sieht aus wie ein Event-Handler, aber keine Komponente bindet sie');

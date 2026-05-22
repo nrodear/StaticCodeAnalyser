@@ -137,7 +137,31 @@ uses
   uTestFieldName in 'uTestFieldName.pas',
   uTestTypeName in 'uTestTypeName.pas',
   uTestInterfaceName in 'uTestInterfaceName.pas',
-  uTestMethodName in 'uTestMethodName.pas';
+  uTestMethodName in 'uTestMethodName.pas',
+  uTestGodClass in 'uTestGodClass.pas',
+  uTestFreeWithoutNil in 'uTestFreeWithoutNil.pas',
+  uTestMultipleExit in 'uTestMultipleExit.pas',
+  uTestLargeClass in 'uTestLargeClass.pas',
+  uTestUnsortedUses in 'uTestUnsortedUses.pas',
+  uTestMissingUnitHeader in 'uTestMissingUnitHeader.pas',
+  uTestFloatEquality in 'uTestFloatEquality.pas',
+  uTestExceptInDestructor in 'uTestExceptInDestructor.pas',
+  uTestBooleanParam in 'uTestBooleanParam.pas',
+  uTestUnusedPrivateMethod in 'uTestUnusedPrivateMethod.pas',
+  uTestCanBeClassMethod in 'uTestCanBeClassMethod.pas',
+  uTestMissingOverride in 'uTestMissingOverride.pas',
+  uTestBoolAlwaysTrue in 'uTestBoolAlwaysTrue.pas',
+  uTestConstantReturn in 'uTestConstantReturn.pas',
+  uTestHardcodedString in 'uTestHardcodedString.pas',
+  uTestUnpairedLock in 'uTestUnpairedLock.pas',
+  uTestMoveSizeOfPointer in 'uTestMoveSizeOfPointer.pas',
+  uTestWithMultipleTargets in 'uTestWithMultipleTargets.pas',
+  uTestGetMemWithoutFreeMem in 'uTestGetMemWithoutFreeMem.pas',
+  uTestSetLengthAppendInLoop in 'uTestSetLengthAppendInLoop.pas',
+  uTestPointerArithmeticOnString in 'uTestPointerArithmeticOnString.pas',
+  uTestEmptyOnHandler in 'uTestEmptyOnHandler.pas',
+  uTestStringFromPointer in 'uTestStringFromPointer.pas',
+  uTestPointerSubtraction in 'uTestPointerSubtraction.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}

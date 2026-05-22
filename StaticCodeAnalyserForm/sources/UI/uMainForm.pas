@@ -260,7 +260,11 @@ begin
   // mORMot-Cluster Phase 2 (SCA156-158)
   SeverityFilterCombo.Items.AddObject(_('GetMem without try/finally'),        TObject(Ord(fmGetMemWithoutFreeMem)));
   SeverityFilterCombo.Items.AddObject(_('SetLength grow in loop'),            TObject(Ord(fmSetLengthAppendInLoop)));
-  SeverityFilterCombo.Items.AddObject(_('PChar arithmetic w/o empty-check'),  TObject(Ord(fmPointerArithmeticOnString)));
+  SeverityFilterCombo.Items.AddObject(_('PChar arithmetic without empty-check'),  TObject(Ord(fmPointerArithmeticOnString)));
+  // mORMot-Cluster Phase 3 (SCA159-161)
+  SeverityFilterCombo.Items.AddObject(_('Empty typed exception handler'),     TObject(Ord(fmEmptyOnHandler)));
+  SeverityFilterCombo.Items.AddObject(_('String cast from raw pointer'),      TObject(Ord(fmStringFromPointer)));
+  SeverityFilterCombo.Items.AddObject(_('Pointer subtraction (Win64 truncation)'), TObject(Ord(fmPointerSubtraction)));
   SeverityFilterCombo.ItemIndex := 0;
 
   TypeFilterCombo.Items.Add(_('All'));

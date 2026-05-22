@@ -497,9 +497,18 @@ type
     fkSetLengthAppendInLoop,     // SCA157 - SetLength(arr, Length(arr)+1)
                                  // innerhalb einer Schleife -> O(n*n)
                                  // Realloc-Aufwand statt einmal vor-grow.
-    fkPointerArithmeticOnString  // SCA158 - PChar(s) + n / PAnsiChar(s) + n
+    fkPointerArithmeticOnString, // SCA158 - PChar(s) + n / PAnsiChar(s) + n
                                  // ohne Empty-Check: PChar('') = nil ->
                                  // Pointer-Arithmetik auf NIL = AV.
+    fkEmptyOnHandler,            // SCA159 - on E: SomeException do ; (oder
+                                 // begin end) - typisierter Exception-Handler
+                                 // schluckt Fehler still, ohne Logging/Raise.
+    fkStringFromPointer,         // SCA160 - String(P) / AnsiString(P) /
+                                 // UTF8String(P) Cast aus typisiertem Pointer
+                                 // ohne Length-Prefix-Garantie -> Buffer-Overread.
+    fkPointerSubtraction         // SCA161 - Cardinal(P1) - Cardinal(P2)
+                                 // (oder Integer/LongWord) auf Pointern -
+                                 // Win64-Truncation: oberes 32-Bit verloren.
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -706,7 +715,10 @@ const
     (Name: 'WithMultipleTargets';        FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkWithMultipleTargets
     (Name: 'GetMemWithoutFreeMem';       FindingType: ftBug;          DefaultSeverity: lsWarning), // fkGetMemWithoutFreeMem
     (Name: 'SetLengthAppendInLoop';      FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkSetLengthAppendInLoop
-    (Name: 'PointerArithmeticOnString';  FindingType: ftBug;          DefaultSeverity: lsWarning)  // fkPointerArithmeticOnString
+    (Name: 'PointerArithmeticOnString';  FindingType: ftBug;          DefaultSeverity: lsWarning), // fkPointerArithmeticOnString
+    (Name: 'EmptyOnHandler';             FindingType: ftBug;          DefaultSeverity: lsWarning), // fkEmptyOnHandler
+    (Name: 'StringFromPointer';          FindingType: ftBug;          DefaultSeverity: lsWarning), // fkStringFromPointer
+    (Name: 'PointerSubtraction';         FindingType: ftBug;          DefaultSeverity: lsWarning)  // fkPointerSubtraction
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

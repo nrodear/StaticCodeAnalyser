@@ -11,7 +11,7 @@
 
 **Delphi static code analysis tool** and **linter** for **RAD Studio 12 (Athens)** —
 ships as an **IDE plugin** with a dockable tool window plus a **standalone Windows app**.
-AST-based analysis with **~120 detectors total**: ~100 Pascal checks for memory leaks,
+AST-based analysis with **~150 detectors total**: ~130 Pascal checks for memory leaks,
 SQL injection, code smells, security vulnerabilities and code duplication
 (including a **Sonar-Delphi-compatible** subset SCA060+), **plus a
 dedicated DFM scanner with 22 checks** built on its own DFM lexer + parser + component
@@ -37,7 +37,7 @@ Sonar setup required, running inside the IDE, with a Claude AI hand-off.**
 
 | Capability | Details |
 |------------|---------|
-| 🐛 **Bug detection** | ~100 Pascal detectors run against every `.pas` file (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, …) plus 22 DFM detectors against every `.dfm` (dead event handlers, hard-coded DB credentials, circular master-detail, …) — **~120 total** |
+| 🐛 **Bug detection** | ~130 Pascal detectors run against every `.pas` file (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 22 DFM detectors against every `.dfm` (dead event handlers, hard-coded DB credentials, circular master-detail, …) — **~150 total** |
 | 🔐 **Security checks** | SQLInjection (score-based), HardcodedSecret, HardcodedPath |
 | 🧹 **Code smells** | LongMethod, MagicNumber, EmptyExcept, MissingFinally, DeadCode, DuplicateString/Block |
 | ⚡ **Incremental analysis** | "Branch-Changes" button: only the files modified in the Git/SVN branch — 200 ms instead of 60 s |
@@ -53,9 +53,9 @@ Sonar setup required, running inside the IDE, with a Claude AI hand-off.**
 
 ## Main features
 
-### 1. Static code analysis (~120 detectors total — ~100 Pascal + 22 DFM, Sonar taxonomy)
+### 1. Static code analysis (~150 detectors total — ~130 Pascal + 22 DFM, Sonar taxonomy)
 
-**Pascal AST checks (~100)**: **bugs** (MemoryLeak, NilDeref, DivByZero,
+**Pascal AST checks (~130)**: **bugs** (MemoryLeak, NilDeref, DivByZero,
 FormatMismatch, ReversedForRange, SelfAssignment, VirtualCallInCtor,
 MissingRaise, RoutineResultUnassigned, ReRaiseException,
 InstanceInvokedConstructor, CharToCharPointerCast, UnicodeToAnsiCast,
@@ -93,6 +93,60 @@ Click a finding row in the grid and the clipboard is filled with a
 lines, with a marker on the offending line), and the before/after fix.
 Paste it into Claude with **Ctrl+V** — the AI now has everything it
 needs to suggest a concrete patch.
+
+---
+
+## Use cases by deployment mode
+
+The same analyser engine ships in **three forms**, each tuned for a
+different workflow. Pick by where you sit in the day:
+
+| Use case | IDE plugin | Standalone EXE (GUI) | CLI (same EXE) |
+|---|:---:|:---:|:---:|
+| **Inline review while coding** — see Bug/Vuln markers next to the line you just wrote | ✅ live grid + 3 px editor stripe + hover-overlay | — | — |
+| **Quick-Fix the current line** — apply a patch suggestion in place | ✅ `Ctrl+Alt+F` | — | — |
+| **Navigate findings with the keyboard** | ✅ `Ctrl+Alt+↑/↓` between findings | grid + arrow keys | — |
+| **Suppress a false positive on this line** | ✅ `Ctrl+Alt+S` adds `// noinspection RuleName` | manual | manual |
+| **Hand a finding to Claude AI** — Markdown prompt with code context | ✅ row-click → clipboard | ✅ row-click → clipboard | — |
+| **Branch-changes only** — analyse files touched since `main` / current SVN diff | ✅ branch-button | ✅ branch-button | ✅ `-branch-changes` |
+| **Analyse a project outside Delphi** (RAD not installed / batch machine) | — | ✅ pick a folder, click Start | ✅ `analyser.exe <folder>` |
+| **Run as a pre-commit hook** | — | — | ✅ `--severity error --no-progress`, exit code 1 on Bug/Vuln |
+| **Run in CI / GitHub Actions** | — | — | ✅ `--export sarif --out sca.sarif`, SARIF upload step |
+| **Push findings to SonarQube / SonarCloud** | ✅ `Tools → Sonar Push` | ✅ menu | ✅ `--sonar-push` |
+| **Generate an HTML report** for stakeholders / Jira attachments | ✅ Export → HTML | ✅ Export → HTML | ✅ `--export html --out report.html` |
+| **Generate a Claude review prompt** for the whole batch (Tech-Lead workflow) | ✅ Export → Claude prompt | ✅ Export → Claude prompt | ✅ `--export claude --out prompt.md` |
+| **Nightly full-repo scan** + diff-against-baseline | — | ✅ schedule via Task Scheduler | ✅ schedule via `cron` / `schtasks` |
+| **Auto-analyse on file save** (Live-Watch) | ✅ opt-in, see [Live-Watch](#live-watch-ide-plugin-only--%EF%B8%8F-risky) | — | — |
+| **Author / edit custom rules** (RegEx via `[CustomRules]` ini) | ✅ Tools → Options | ✅ Settings dialog | edit `analyser.ini` directly |
+| **Configure detector thresholds** (`LongMethod_MaxLines`, …) | ✅ Settings | ✅ Settings | edit `analyser.ini` |
+| **Switch UI language** (EN / DE) | ✅ Tools → Options | ✅ Settings | n/a (CLI is EN-only) |
+| **Pick a rule-set profile** (`ide-fast`, `default`, `strict`) | ✅ profile combo | ✅ profile combo | ✅ `--profile <name>` |
+| **Configurable keyboard shortcuts** (cnpack-style: capture key → store in INI) | ✅ Settings → Hotkeys | — | — |
+
+### Which deployment fits which role
+
+**Developer at the keyboard** → IDE plugin. Tightest feedback loop:
+inline markers, jump-to-line, Quick-Fix-in-place, Ctrl+Alt navigation,
+clipboard-to-Claude. The plugin shares the SAME engine + rule catalog
++ FixHints as the other two — what you see is what CI will see.
+
+**Code-reviewer / Tech-lead without RAD Studio open** → Standalone GUI.
+Same grid, same filter, same help-panel as the plugin, but works on a
+folder of `.pas`+`.dfm` without the IDE running. Useful for: review on
+a different machine, overnight batch on a build server with no Delphi
+seat, sharing the EXE with a non-Delphi engineer for one-off audit.
+
+**CI pipeline / pre-commit hook / scheduled task** → CLI mode of the same
+EXE. No GUI, exit code reflects severity (0 = clean, 1 = Bug/Vuln found,
+2 = setup error). Exports: HTML, SARIF, Sonar-Generic, Claude prompt,
+plain JSON. Sonar push uploads issues directly without an intermediate
+report file. Branch-changes filter (`--branch-changes`) lets PR builds
+analyse only what the diff touched.
+
+**All three modes** read the same `analyser.ini`, the same
+`rules/sca-rules.json`, the same suppression markers, and emit the
+same finding kinds. Switching between them is free — a finding
+suppressed in the IDE stays suppressed in CI.
 
 ---
 
@@ -145,7 +199,7 @@ reference: [docs/sonar-config.md](docs/sonar-config.md).
 
 ---
 
-## What is detected (~120 detectors — ~100 Pascal + 22 DFM)
+## What is detected (~150 detectors — ~130 Pascal + 22 DFM)
 
 Findings fall into one of **five Sonar categories**:
 
@@ -656,7 +710,7 @@ StaticCodeAnalyserForm/sources/        Analysis engine (shared by standalone + I
     uAstNode.pas                       AST with FindAll / FindFirst lookup
 
   Infrastructure/
-    uStaticAnalyzer2.pas               Orchestrates the ~100 Pascal detectors per file
+    uStaticAnalyzer2.pas               Orchestrates the ~130 Pascal detectors per file
     uStaticFiles.pas                   Recursive file scan, tick callback,
                                        cancel support, symlink protection
     uIgnoreList.pas                    ignore.txt + test filter
@@ -715,7 +769,7 @@ For a typical 1 000-unit repository:
 | Folder scan | — | 1–3 s |
 | Lexer | ~5–15 ms | ~10 s |
 | Parser2 | ~10–50 ms | ~30 s |
-| ~100 Pascal detectors | ~10–60 ms | ~40 s |
+| ~130 Pascal detectors | ~10–60 ms | ~50 s |
 | DFM parser + 22 DFM detectors (per `.dfm`) | ~5–20 ms | ~5–10 s |
 | Suppression sweep | — | <1 s |
 | **Total** | **~30–100 ms** | **~60–90 s** |

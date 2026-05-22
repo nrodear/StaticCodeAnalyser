@@ -98,7 +98,8 @@ uses
   uUnusedPrivateMethod, uCanBeClassMethod, uMissingOverride,
   uBoolAlwaysTrue, uConstantReturn, uHardcodedString,
   uUnpairedLock, uMoveSizeOfPointer, uWithMultipleTargets,
-  uGetMemWithoutFreeMem, uSetLengthAppendInLoop, uPointerArithmeticOnString;
+  uGetMemWithoutFreeMem, uSetLengthAppendInLoop, uPointerArithmeticOnString,
+  uEmptyOnHandler, uStringFromPointer, uPointerSubtraction;
 
 type
   // Run-Methode pro Detektor: einheitliche Signatur, damit alle in einem
@@ -257,6 +258,9 @@ begin
   Add('GetMemWithoutFreeMem', fkGetMemWithoutFreeMem, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TGetMemWithoutFreeMemDetector.AnalyzeUnit(R, F, L); end);
   Add('SetLengthAppendInLoop', fkSetLengthAppendInLoop, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TSetLengthAppendInLoopDetector.AnalyzeUnit(R, F, L); end);
   Add('PointerArithmeticOnString', fkPointerArithmeticOnString, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TPointerArithmeticOnStringDetector.AnalyzeUnit(R, F, L); end);
+  Add('EmptyOnHandler', fkEmptyOnHandler, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TEmptyOnHandlerDetector.AnalyzeUnit(R, F, L); end);
+  Add('StringFromPointer', fkStringFromPointer, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TStringFromPointerDetector.AnalyzeUnit(R, F, L); end);
+  Add('PointerSubtraction', fkPointerSubtraction, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TPointerSubtractionDetector.AnalyzeUnit(R, F, L); end);
   Add('VirtualCallInCtor',fkVirtualCallInCtor,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TVirtualCallInCtorDetector.AnalyzeUnit(R, F, L); end);
   Add('LengthUnderflow', fkLengthUnderflow, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLengthUnderflowDetector.AnalyzeUnit(R, F, L); end);
   // VisibilityCheck emittiert vier Kinds (CanBeUnitPrivate, CanBeStrict-
