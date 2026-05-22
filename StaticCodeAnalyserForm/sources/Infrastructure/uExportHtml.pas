@@ -965,7 +965,7 @@ begin
     SB.AppendLine('    function T(key) {');
     SB.AppendLine('      var s = (I18N[SCA_LANG] && I18N[SCA_LANG][key]) || (I18N["en"] && I18N["en"][key]) || key;');
     SB.AppendLine('      for (var i = 1; i < arguments.length; i++) {');
-    SB.AppendLine('        s = s.replace(new RegExp("\\\\{" + (i-1) + "\\\\}", "g"), arguments[i]);');
+    SB.AppendLine('        s = s.replace(new RegExp("\\{" + (i-1) + "\\}", "g"), arguments[i]);');
     SB.AppendLine('      }');
     SB.AppendLine('      return s;');
     SB.AppendLine('    }');
