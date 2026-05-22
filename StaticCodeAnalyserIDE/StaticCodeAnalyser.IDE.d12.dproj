@@ -308,7 +308,7 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uGetMemWithoutFreeMem.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uFreeWithoutNil.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uFreeAndNilHint.pas"/>
-        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uFloatEquality.pas"/>
+        
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uExceptInDestructor.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uBooleanParam.pas"/>
         

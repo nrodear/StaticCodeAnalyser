@@ -354,6 +354,10 @@ implementation
 
 {$R *.dfm}
 
+// Forward-Declaration: IsShortcutsMasterEnabled wird von TAnalyserFrame.GridKeyDown
+// aufgerufen (Zeile ~1634) - die Implementierung steht weiter unten in der Unit.
+function IsShortcutsMasterEnabled: Boolean; forward;
+
 type
   // Access-Class zum Setzen protected-deklarierter Properties (TControl.OnClick).
   // Lokal in der Unit gehalten - kein public API. Standard-VCL-Pattern.
