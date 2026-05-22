@@ -89,7 +89,7 @@ class procedure TAbstractNotImplDetector.AnalyzeUnit(UnitNode: TAstNode;
 var
   ClassNodes  : TList<TAstNode>;
   ClassByName : TDictionary<string, TAstNode>;
-  C, Other    : TAstNode;
+  C           : TAstNode;
   Methods     : TList<TAstNode>;
   M           : TAstNode;
   ParentName  : string;

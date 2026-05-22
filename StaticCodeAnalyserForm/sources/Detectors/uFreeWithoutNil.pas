@@ -123,7 +123,6 @@ var
     const IdentLow: string): Boolean;
   var
     Stmts  : TList<TAstNode>;
-    Found  : Boolean;
     AfterFree : Boolean;
     S      : TAstNode;
   begin
@@ -152,7 +151,6 @@ var
     finally
       Stmts.Free;
     end;
-    Found := False;
   end;
 
   function IsLastStmtOfMethod(MethodNode, FreeCall: TAstNode): Boolean;

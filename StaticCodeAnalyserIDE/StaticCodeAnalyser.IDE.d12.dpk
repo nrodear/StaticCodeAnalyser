@@ -36,6 +36,7 @@ requires
 contains
   uIDEExpert in 'uIDEExpert.pas',
   uIDEAnalyserForm in 'uIDEAnalyserForm.pas',
+  uIDEFindingNav in 'uIDEFindingNav.pas',
   uIDELineHighlighter in 'uIDELineHighlighter.pas',
   uIDEAnnotationOverlay in 'uIDEAnnotationOverlay.pas',
   uIDEMessages in 'uIDEMessages.pas',

@@ -158,6 +158,7 @@
         <DCCReference Include="designide.dcp"/>
         <DCCReference Include="uIDEExpert.pas"/>
         <DCCReference Include="uIDEAnalyserForm.pas"/>
+        <DCCReference Include="uIDEFindingNav.pas"/>
         <DCCReference Include="uIDELineHighlighter.pas"/>
         <DCCReference Include="uIDEAnnotationOverlay.pas"/>
         <DCCReference Include="uIDEMessages.pas"/>

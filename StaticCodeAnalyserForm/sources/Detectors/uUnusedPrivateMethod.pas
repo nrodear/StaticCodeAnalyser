@@ -151,7 +151,6 @@ class procedure TUnusedPrivateMethodDetector.AnalyzeUnit(UnitNode: TAstNode;
 var
   Classes  : TList<TAstNode>;
   C        : TAstNode;
-  Sections : TList<TAstNode>;
   S, Mth   : TAstNode;
   Lines    : TStringList;
   Cached   : Boolean;
@@ -159,7 +158,6 @@ var
   RE       : TRegEx;
   Count    : Integer;
   M        : TMatch;
-  Mthods   : TList<TAstNode>;
   MethName : string;
   MethLow  : string;
   F        : TLeakFinding;
