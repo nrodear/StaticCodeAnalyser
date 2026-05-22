@@ -88,7 +88,7 @@ string casts from raw pointers, Win64 pointer subtraction).
 
 ### Build / Infra
 
-- **Central output directory**: `..\Output\Test\<Platform> <Config>`
+- **Central output directory**: `..\Output\<Platform> <Config>`
   in all three .dproj — no more per-project Win32/Win64 build
   artefacts polluting the source tree. Added to `.gitignore`.
 - **`paths.optset.xml` shared search path** for the IDE plugin —

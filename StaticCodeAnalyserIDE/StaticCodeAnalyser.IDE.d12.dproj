@@ -77,8 +77,8 @@
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
-        <DCC_DcuOutput>..\Output\Test\$(Platform) $(Config)</DCC_DcuOutput>
-        <DCC_ExeOutput>..\Output\Test\$(Platform) $(Config)</DCC_ExeOutput>
+        <DCC_DcuOutput>..\Output\$(Platform) $(Config)</DCC_DcuOutput>
+        <DCC_ExeOutput>..\Output\$(Platform) $(Config)</DCC_ExeOutput>
         <DCC_UnitSearchPath>$(PROJECTDIR)\..\StaticCodeAnalyserForm\sources;$(PROJECTDIR)\..\StaticCodeAnalyserForm\sources\Common;$(PROJECTDIR)\..\StaticCodeAnalyserForm\sources\Detectors;$(PROJECTDIR)\..\StaticCodeAnalyserForm\sources\Infrastructure;$(PROJECTDIR)\..\StaticCodeAnalyserForm\sources\Output;$(PROJECTDIR)\..\StaticCodeAnalyserForm\sources\Parsing;$(PROJECTDIR)\..\StaticCodeAnalyserForm\sources\UI;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_E>false</DCC_E>
         <DCC_N>false</DCC_N>

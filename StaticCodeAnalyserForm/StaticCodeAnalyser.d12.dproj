@@ -59,8 +59,8 @@
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
-        <DCC_DcuOutput>..\Output\Test\$(Platform) $(Config)</DCC_DcuOutput>
-        <DCC_ExeOutput>..\Output\Test\$(Platform) $(Config)</DCC_ExeOutput>
+        <DCC_DcuOutput>..\Output\$(Platform) $(Config)</DCC_DcuOutput>
+        <DCC_ExeOutput>..\Output\$(Platform) $(Config)</DCC_ExeOutput>
         <DCC_UnitSearchPath>$(PROJECTDIR)\sources;$(PROJECTDIR)\sources\Common;$(PROJECTDIR)\sources\Console;$(PROJECTDIR)\sources\Detectors;$(PROJECTDIR)\sources\Infrastructure;$(PROJECTDIR)\sources\Output;$(PROJECTDIR)\sources\Parsing;$(PROJECTDIR)\sources\UI;$(PROJECTDIR)\resources;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_E>false</DCC_E>
         <DCC_N>false</DCC_N>
@@ -391,7 +391,7 @@
                 </Excluded_Packages>
             </Delphi.Personality>
             <Deployment Version="4">
-                <DeployFile LocalName="..\Output\Test\Win32 Debug\StaticCodeAnalyser.d12.exe" Configuration="Debug" Class="ProjectOutput">
+                <DeployFile LocalName="..\Output\Win32 Debug\StaticCodeAnalyser.d12.exe" Configuration="Debug" Class="ProjectOutput">
                     <Platform Name="Win32">
                         <RemoteName>StaticCodeAnalyser.d12.exe</RemoteName>
                         <Overwrite>true</Overwrite>

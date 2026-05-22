@@ -92,7 +92,7 @@ aus rohen Pointern, Win64-Pointer-Subtraktion).
 
 ### Build / Infrastruktur
 
-- **Zentrales Output-Verzeichnis**: `..\Output\Test\<Platform>
+- **Zentrales Output-Verzeichnis**: `..\Output\<Platform>
   <Config>` in allen drei .dproj — keine Win32/Win64-Build-
   Artefakte mehr im Source-Tree. In `.gitignore` aufgenommen.
 - **`paths.optset.xml` Shared-Search-Path** für das IDE-Plugin —
