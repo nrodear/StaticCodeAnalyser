@@ -263,10 +263,21 @@ end;
 
 procedure TIDEThemeImpl.RebuildCache;
 var
-  Svc : INTACodeEditorServices;
+  Svc     : INTACodeEditorServices;
+  Theming : IOTAIDEThemingServices;
+  Styles  : TCustomStyleServices;
 begin
-  FFrameBg := StyleServices.GetSystemColor(clWindow);
-  FFrameFg := StyleServices.GetSystemColor(clWindowText);
+  // IDE-StyleServices verwenden (folgt IDE-Theme), nicht VCL-globale —
+  // die kann von TStyleManager.ActiveStyle abweichen wenn der User
+  // einen anderen VCL-Style als das IDE-Theme aktiv hat.
+  Styles := nil;
+  if Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) then
+    Styles := Theming.StyleServices;
+  if not Assigned(Styles) then
+    Styles := Vcl.Themes.StyleServices;
+  FFrameBg := Styles.GetSystemColor(clWindow);
+  FFrameFg := Styles.GetSystemColor(clWindowText);
+
   FEditorBg := clNone;
   try
     if Supports(BorlandIDEServices, INTACodeEditorServices, Svc) then

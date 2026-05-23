@@ -15,8 +15,24 @@ unit uAnalyserTheme;
 interface
 
 uses
+  System.SysUtils,
   Vcl.Graphics, Vcl.Themes,
   uAnalyserTypes;
+
+type
+  TStyleServicesProvider = reference to function: TCustomStyleServices;
+
+var
+  // Global Hook fuer Color-Auflösung. IDE-Plugin setzt das auf eine
+  // Funktion die IOTAIDEThemingServices.StyleServices liefert.
+  // Standalone laesst's nil — ActiveStyleServices faellt dann auf die
+  // VCL-globale Vcl.Themes.StyleServices zurueck.
+  StyleServicesProvider: TStyleServicesProvider = nil;
+
+// Liefert die aktive TCustomStyleServices. Im IDE-Plugin-Kontext via
+// StyleServicesProvider die IDE-spezifische (folgt IDE-Theme).
+// Sonst die VCL-globale (folgt TStyleManager.ActiveStyle).
+function ActiveStyleServices: TCustomStyleServices;
 
 // Saturierte Akzentfarbe fuer eine Severity. Wird verwendet:
 //   * 3px-Indikatorleiste am linken Zellenrand
@@ -47,6 +63,15 @@ implementation
 uses
   Winapi.Windows,
   uAnalyserPalette;
+
+function ActiveStyleServices: TCustomStyleServices;
+begin
+  Result := nil;
+  if Assigned(StyleServicesProvider) then
+    Result := StyleServicesProvider();
+  if not Assigned(Result) then
+    Result := Vcl.Themes.StyleServices;
+end;
 
 function SeverityAccent(Severity: TFindingSeverity): TColor;
 begin
@@ -81,7 +106,10 @@ end;
 function SeverityBg(Severity: TFindingSeverity;
   ABase: TColor): TColor;
 begin
-  Result := SeverityBg(Severity, ABase, StyleServices);
+  // Default-Pfad: via ActiveStyleServices — im IDE-Plugin liefert das die
+  // IDE-StyleServices via StyleServicesProvider, im Standalone die VCL-
+  // globale.
+  Result := SeverityBg(Severity, ABase, ActiveStyleServices);
 end;
 
 function SeverityBg(Severity: TFindingSeverity;

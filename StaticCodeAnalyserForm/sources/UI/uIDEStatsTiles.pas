@@ -150,7 +150,7 @@ type
 implementation
 
 uses
-  Winapi.Windows, uAnalyserPalette, uIDEColors, uLocalization;
+  Winapi.Windows, uAnalyserPalette, uAnalyserTheme, uIDEColors, uLocalization;
 
 type
   // Access-Class zum Lesen/Schreiben von TControl.OnResize (protected).
@@ -236,8 +236,10 @@ begin
   Canvas.Brush.Style := bsClear;
   // BorderColor ist ein System-Color-Index (z. B. cl3DDkShadow). Canvas.Pen
   // resolved nur ueber GetSysColor (Windows nativ), nicht ueber den aktiven
-  // VCL-Style. Daher hier explizit ueber StyleServices aufloesen.
-  Canvas.Pen.Color := StyleServices.GetSystemColor(FBorderColor);
+  // Style. ActiveStyleServices liefert die IDE-StyleServices im Plugin-
+  // Kontext, sonst die VCL-globale — damit folgt der Border-Pen dem
+  // gleichen Theme wie der Rest des Plugins.
+  Canvas.Pen.Color := ActiveStyleServices.GetSystemColor(FBorderColor);
   Canvas.Pen.Width := 1;
   Canvas.Rectangle(ClientRect);
 end;

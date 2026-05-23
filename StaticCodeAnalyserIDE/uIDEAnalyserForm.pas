@@ -3785,6 +3785,21 @@ begin
   // und der nachfolgende Unregister-Pfad doppel-frees riskieren.
   if not Supports(BorlandIDEServices, INTAServices, NTASvc) then Exit;
 
+  // Globaler Hook: ActiveStyleServices liefert ab jetzt die IDE-Theme-
+  // StyleServices statt der VCL-globalen. Damit folgen alle shared UI-
+  // Komponenten (uAnalyserTheme.SeverityBg, uIDEStatsTiles.TTilePanel.
+  // Paint, uIDEHelpPanel) dem IDE-Theme - kritisch wenn der User einen
+  // anderen VCL-Style aktiv hat als das IDE-Theme.
+  uAnalyserTheme.StyleServicesProvider :=
+    function: TCustomStyleServices
+    var
+      Theming: IOTAIDEThemingServices;
+    begin
+      Result := nil;
+      if Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) then
+        Result := Theming.StyleServices;
+    end;
+
   GDockableForm := TAnalyserDockableForm.Create;
 
   // Dockable Form registrieren (fuer Desktop-State-Persistenz)
