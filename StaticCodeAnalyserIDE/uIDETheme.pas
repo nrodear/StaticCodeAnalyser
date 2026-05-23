@@ -349,10 +349,8 @@ end;
 
 class procedure TIDETheme.Apply(AControl: TWinControl);
 var
-  Theming   : IOTAIDEThemingServices;
-  TopForm   : TCustomForm;
-  IdeStyle  : TCustomStyleServices;
-  IdeName   : string;
+  Theming  : IOTAIDEThemingServices;
+  TopForm  : TCustomForm;
 begin
   if AControl = nil then Exit;
 
@@ -364,25 +362,16 @@ begin
 
   if Assigned(Theming) then
   begin
-    // Kern-Fix: VCL StyleManager.ActiveStyle auf die IDE-StyleServices
-    // syncen. Sonst rendert das Plugin in VCL-Style-Farben (z.B.
-    // Mountain_Mist) statt im IDE-Theme (z.B. Dark) — User-Diagnose
-    // zeigte genau diesen Mismatch. TCustomStyleServices.Name liefert
-    // den Style-Namen den TStyleManager versteht.
-    IdeStyle := Theming.StyleServices;
-    if Assigned(IdeStyle) then
-    begin
-      IdeName := IdeStyle.Name;
-      if (IdeName <> '') and
-         (not SameText(TStyleManager.ActiveStyle.Name, IdeName)) then
-        TStyleManager.TrySetStyle(IdeName, False);
-    end;
-
-    // Float-Mode: GetParentForm liefert das Host-TForm. ApplyTheme dort
-    // erfasst die Titelzeile mit.
+    // ToolsAPI-vorgesehener Weg um eine Form-Klasse fuer IDE-Theming zu
+    // aktivieren: RegisterFormClass + ApplyTheme. Damit verwendet
+    // ApplyTheme die IDE-eigene StyleServices (Theme-Service-intern)
+    // statt der globalen Vcl.Themes.StyleServices. Kein TStyleManager.
+    // SetStyle - das wuerde sonst die GESAMTE Delphi-IDE re-painten
+    // (2-Sek-Hang), unabhaengig davon ob unser Plugin betroffen ist.
     TopForm := GetParentForm(AControl);
     if Assigned(TopForm) then
     begin
+      Theming.RegisterFormClass(TCustomFormClass(TopForm.ClassType));
       Theming.ApplyTheme(TopForm);
       TopForm.Invalidate;
     end;
