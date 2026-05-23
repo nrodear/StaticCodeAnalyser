@@ -317,22 +317,32 @@ end;
 // TIDETheme (statische Facade)
 // ---------------------------------------------------------------------------
 
-procedure ApplyRecursive(AC: TControl);
+procedure ApplyRecursive(ATheming: IOTAIDEThemingServices; AC: TControl);
+// Walked den Control-Baum unter AC. Pro Knoten:
+//   1. ApplyTheme via IOTAIDEThemingServices (registriert Style-Hook
+//      damit der Control dem IDE-Theme folgt). KRITISCH: die IDE-Theme-
+//      ApplyTheme propagiert in Delphi 12 NICHT transitiv von einem TFrame
+//      auf seine Kinder - jedes Panel/Combo/Button/Label braucht den
+//      Aufruf einzeln, sonst rendert es im nativen Windows-Look (hell
+//      auf Dark-IDE).
+//   2. Invalidate (Schedule Repaint).
+//   3. TCustomGrid: zusaetzlich Repaint (Paint-Cache zwingen).
 var
   i  : Integer;
   WC : TWinControl;
 begin
+  if Assigned(ATheming) then
+    ATheming.ApplyTheme(AC);
+
   AC.Invalidate;
-  // TCustomGrid hat einen besonders starren Paint-Cache - rekursive
-  // Invalidate alleine reicht nicht, expliziter Repaint forciert die
-  // neue clWindow/clBtnFace-Aufloesung.
   if AC is TCustomGrid then
     TCustomGrid(AC).Repaint;
+
   if AC is TWinControl then
   begin
     WC := TWinControl(AC);
     for i := 0 to WC.ControlCount - 1 do
-      ApplyRecursive(WC.Controls[i]);
+      ApplyRecursive(ATheming, WC.Controls[i]);
   end;
 end;
 
@@ -346,27 +356,30 @@ begin
   EnsureImpl;
   G.EnsureNotifier;
 
-  if Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) then
-    if Theming.IDEThemingEnabled then
-    begin
-      // Float-Mode: GetParentForm liefert das Host-TForm. ApplyTheme dort
-      // erfasst die Titelzeile mit; sonst bleibt der Float-Container im
-      // alten Style.
-      TopForm := GetParentForm(AControl);
-      if Assigned(TopForm) then
-      begin
-        Theming.ApplyTheme(TopForm);
-        TopForm.Invalidate;
-      end;
-      // ApplyTheme ZUSAETZLICH am Frame selbst: TopForm-ApplyTheme styled
-      // den Container, aber bei manchen IDE-Versionen NICHT transitiv
-      // unsere Frame-Children. Direkter Aufruf auf dem Frame stellt sicher
-      // dass Style-Hooks an Panels/Combos/Buttons sitzen — Voraussetzung
-      // dafuer dass spaetere VCL-Style-Wechsel automatisch propagieren.
-      Theming.ApplyTheme(AControl);
-    end;
+  if not Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) then
+    Theming := nil
+  else if not Theming.IDEThemingEnabled then
+    Theming := nil;
 
-  ApplyRecursive(AControl);
+  if Assigned(Theming) then
+  begin
+    // Float-Mode: GetParentForm liefert das Host-TForm. ApplyTheme dort
+    // erfasst die Titelzeile mit; sonst bleibt der Float-Container im
+    // alten Style.
+    TopForm := GetParentForm(AControl);
+    if Assigned(TopForm) then
+    begin
+      Theming.ApplyTheme(TopForm);
+      TopForm.Invalidate;
+    end;
+  end;
+
+  // ApplyRecursive nimmt Theming als Parameter (kann nil sein bei
+  // disabled IDE-Theming) und ruft ApplyTheme auf JEDEM Descendant.
+  // Notwendig weil IOTAIDEThemingServices.ApplyTheme nicht transitiv
+  // arbeitet — jedes Panel/Combo/Label braucht den Aufruf einzeln, sonst
+  // renderts im nativen Windows-Look statt im IDE-Theme.
+  ApplyRecursive(Theming, AControl);
 end;
 
 class function TIDETheme.Subscribe(ACallback: TThemeChangedProc): IInterface;
