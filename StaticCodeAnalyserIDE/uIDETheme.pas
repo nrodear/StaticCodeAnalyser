@@ -157,50 +157,10 @@ var
   // nicht da ist.
   G: TIDEThemeImpl;
 
-  // Diagnose-Flag: zeigt beim ersten Apply einmalig den Theme-Service-
-  // Zustand via MessageBox. Hilft beim Bug-Reporting wenn das Plugin
-  // im falschen Theme rendert. Nach erfolgreicher Diagnose entfernen.
-  DiagnosticShown: Boolean = False;
-
 procedure EnsureImpl;
 begin
   if G = nil then
     G := TIDEThemeImpl.Create;
-end;
-
-procedure ShowThemeDiagnostic(AControl: TWinControl);
-var
-  Theming    : IOTAIDEThemingServices;
-  Msg        : string;
-  HasService : Boolean;
-  Enabled    : Boolean;
-  ActiveName : string;
-  SubCount   : Integer;
-  ActiveStyle: string;
-begin
-  HasService := Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming);
-  Enabled    := False;
-  ActiveName := '(n/a)';
-  if HasService then
-  begin
-    try Enabled    := Theming.IDEThemingEnabled;  except end;
-    try ActiveName := Theming.ActiveTheme;        except end;
-  end;
-  SubCount   := 0;
-  if Assigned(G) and Assigned(G.FSubs) then
-    SubCount := G.FSubs.Count;
-  ActiveStyle := '(n/a)';
-  try ActiveStyle := TStyleManager.ActiveStyle.Name; except end;
-
-  Msg := 'SCA Theme Diagnostic (einmalig):' + sLineBreak + sLineBreak +
-         'Supports(IOTAIDEThemingServices) = ' + BoolToStr(HasService, True) + sLineBreak +
-         'IDEThemingEnabled = ' + BoolToStr(Enabled, True) + sLineBreak +
-         'ActiveTheme = ' + ActiveName + sLineBreak +
-         'TStyleManager.ActiveStyle = ' + ActiveStyle + sLineBreak +
-         'G.FSubs.Count = ' + IntToStr(SubCount) + sLineBreak +
-         'AControl.ClassName = ' + AControl.ClassName;
-
-  MessageBox(0, PChar(Msg), 'SCA Theme Diag', MB_OK or MB_ICONINFORMATION);
 end;
 
 // ---------------------------------------------------------------------------
@@ -357,57 +317,23 @@ end;
 // TIDETheme (statische Facade)
 // ---------------------------------------------------------------------------
 
-type
-  // Hack-Class um auf protected TControl.Color / .Font zuzugreifen.
-  TControlAccess = class(TControl);
-
-// Resolvet alle logischen System-Color-Properties (clBtnFace, clWindow,
-// clBtnText, clWindowText, clGrayText, cl3DDkShadow) eines Controls
-// gegen die IDE-spezifische StyleServices statt der VCL-globalen.
-// Notwendig wenn der User eine andere VCL-Style hat (z.B. Mountain_Mist)
-// als das IDE-Theme (z.B. Dark) — der Frame soll dem IDE-Theme folgen,
-// nicht dem VCL-Style.
-procedure ResolveIDEColor(var AColor: TColor; const AStyle: TCustomStyleServices);
-// System-Color-Indices (clBtnFace u.a.) sind in TColor mit dem
-// clSystemColor-Bit ($80000000) markiert. Das ist die Bedingung um zu
-// pruefen ob es sich um einen logischen System-Color handelt. Direkter
-// Set-of-TColor geht nicht — TColor ist Integer, Sets sind byte-limited.
-begin
-  if (AColor <> clNone) and ((AColor and clSystemColor) <> 0) then
-    AColor := AStyle.GetSystemColor(AColor);
-end;
-
 procedure ApplyRecursive(ATheming: IOTAIDEThemingServices; AC: TControl);
 // Walked den Control-Baum unter AC. Pro Knoten:
-//   1. ApplyTheme via IOTAIDEThemingServices (registriert Style-Hook).
-//   2. Color + Font.Color via IDE-StyleServices auflösen — fixt den Fall
-//      dass der User eine VCL-Style != IDE-Theme hat (z.B. Mountain_Mist
-//      VCL-Style + Dark-IDE-Theme).
-//   3. Invalidate (Schedule Repaint).
-//   4. TCustomGrid: zusaetzlich Repaint (Paint-Cache zwingen).
+//   1. ApplyTheme via IOTAIDEThemingServices (registriert Style-Hook
+//      damit der Control dem aktiven VCL-Style folgt).
+//   2. Invalidate (Schedule Repaint mit neuen Style-Farben).
+//   3. TCustomGrid: zusaetzlich Repaint (Paint-Cache zwingen).
+//
+// Die eigentliche Theme-Bindung passiert in Apply() via TStyleManager.
+// TrySetStyle — danach paint VCL alle Controls automatisch in den
+// IDE-Theme-Farben. ApplyRecursive sorgt nur dafuer dass jeder Control
+// (auch verschachtelte Frames/Panels) den Style-Hook registriert hat.
 var
-  i        : Integer;
-  WC       : TWinControl;
-  IdeStyle : TCustomStyleServices;
-  C        : TColor;
+  i  : Integer;
+  WC : TWinControl;
 begin
   if Assigned(ATheming) then
-  begin
     ATheming.ApplyTheme(AC);
-
-    // Color + Font.Color via IDE-StyleServices auflösen
-    IdeStyle := ATheming.StyleServices;
-    if Assigned(IdeStyle) then
-    begin
-      C := TControlAccess(AC).Color;
-      ResolveIDEColor(C, IdeStyle);
-      TControlAccess(AC).Color := C;
-
-      C := TControlAccess(AC).Font.Color;
-      ResolveIDEColor(C, IdeStyle);
-      TControlAccess(AC).Font.Color := C;
-    end;
-  end;
 
   AC.Invalidate;
   if AC is TCustomGrid then
@@ -432,12 +358,6 @@ begin
 
   EnsureImpl;
   G.EnsureNotifier;
-
-  if not DiagnosticShown then
-  begin
-    DiagnosticShown := True;
-    ShowThemeDiagnostic(AControl);
-  end;
 
   if not Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) then
     Theming := nil;
