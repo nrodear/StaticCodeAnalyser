@@ -368,15 +368,12 @@ type
 // als das IDE-Theme (z.B. Dark) — der Frame soll dem IDE-Theme folgen,
 // nicht dem VCL-Style.
 procedure ResolveIDEColor(var AColor: TColor; const AStyle: TCustomStyleServices);
-const
-  SYSTEM_COLORS = [clBtnFace, clWindow, clBtnText, clWindowText,
-                   clGrayText, cl3DDkShadow, clBtnHighlight, clBtnShadow,
-                   cl3DLight, clActiveCaption, clInactiveCaption,
-                   clMenu, clMenuText, clHighlight, clHighlightText,
-                   clInfoBk, clInfoText];
+// System-Color-Indices (clBtnFace u.a.) sind in TColor mit dem
+// clSystemColor-Bit ($80000000) markiert. Das ist die Bedingung um zu
+// pruefen ob es sich um einen logischen System-Color handelt. Direkter
+// Set-of-TColor geht nicht — TColor ist Integer, Sets sind byte-limited.
 begin
-  if (AColor <> clNone) and (AColor and clSystemColor <> 0)
-     and (AColor in SYSTEM_COLORS) then
+  if (AColor <> clNone) and ((AColor and clSystemColor) <> 0) then
     AColor := AStyle.GetSystemColor(AColor);
 end;
 
