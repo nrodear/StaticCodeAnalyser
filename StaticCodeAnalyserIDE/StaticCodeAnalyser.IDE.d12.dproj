@@ -174,7 +174,8 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uExportMenu.pas"/>
         <DCCReference Include="uIDEEditorIntegration.pas"/>
         <DCCReference Include="uIDEStatusBar.pas"/>
-        <DCCReference Include="uIDEThemeIntegration.pas"/>
+        <DCCReference Include="uIDETheme.pas"/>
+        <DCCReference Include="uIDEToolbar.pas"/>
         <DCCReference Include="uIDEAnalyseProgress.pas"/>
         <DCCReference Include="uIDEGridTooltip.pas"/>
         <DCCReference Include="uIDELifecycle.pas"/>
@@ -225,6 +226,7 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Output\uClaudePrompt.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Output\uFixHint.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uSCAConsts.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uIDEColors.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uMethodd12.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uRecentPaths.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uRegExMatches.pas"/>

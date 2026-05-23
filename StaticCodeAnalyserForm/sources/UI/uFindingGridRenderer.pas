@@ -55,6 +55,17 @@ type
     // bleibt das alte Verhalten (Cells[] wird verwendet) - Backwards-
     // Compatibility falls noch jemand Cells[] befuellt.
     GetCellText      : TGridCellTextProc;
+
+    // Optional: liefert die TCustomStyleServices, die fuer Color-Auf-
+    // loesungen verwendet werden soll. Bei nil wird die VCL-globale
+    // Vcl.Themes.StyleServices verwendet (= TStyleManager.ActiveStyle).
+    //
+    // KRITISCH fuer das IDE-Plugin: das Plugin soll dem IDE-Theme
+    // folgen (z.B. Dark), nicht dem aktiven VCL-Style (z.B. Mountain_
+    // Mist). Die zwei koennen unterschiedlich sein. Der Provider holt
+    // bei jedem Aufruf die aktuelle IDE-StyleServices via
+    // IOTAIDEThemingServices.StyleServices.
+    GetStyleServices : TFunc<TCustomStyleServices>;
   end;
 
   TFindingGridRenderer = class
@@ -134,6 +145,7 @@ var
   Accent    : TColor;
   IndR      : TRect;
   DtFlags   : Cardinal;
+  Styles    : TCustomStyleServices;
   function CellText(Col, Row: Integer): string;
   begin
     if Assigned(Config.GetCellText) then
@@ -146,14 +158,23 @@ begin
   txtRect := Rect;
   InflateRect(txtRect, -4, 0);
 
+  // Style-Services-Lookup: IDE-Plugin liefert via Config.GetStyleServices
+  // die Theming.StyleServices (IDE-Theme-spezifisch). Standalone und alle
+  // anderen Caller bekommen den VCL-globalen Fallback.
+  Styles := nil;
+  if Assigned(Config.GetStyleServices) then
+    Styles := Config.GetStyleServices();
+  if not Assigned(Styles) then
+    Styles := Vcl.Themes.StyleServices;
+
   // ---- Header-Zeile -------------------------------------------------------
   if ARow = 0 then
   begin
     if Config.UseTheme then
     begin
-      HeaderBg := StyleServices.GetSystemColor(clBtnFace);
-      HeaderFg := StyleServices.GetSystemColor(clBtnText);
-      SepLine  := StyleServices.GetSystemColor(cl3DDkShadow);
+      HeaderBg := Styles.GetSystemColor(clBtnFace);
+      HeaderFg := Styles.GetSystemColor(clBtnText);
+      SepLine  := Styles.GetSystemColor(cl3DDkShadow);
     end
     else
     begin
@@ -206,9 +227,9 @@ begin
     if SevBg <> clNone then
       bgColor := SevBg
     else if Config.ShowZebra and Odd(ARow) then
-      bgColor := StyleServices.GetSystemColor(clBtnFace) // theme-konformes Zebra
+      bgColor := Styles.GetSystemColor(clBtnFace) // theme-konformes Zebra
     else
-      bgColor := StyleServices.GetSystemColor(clWindow);
+      bgColor := Styles.GetSystemColor(clWindow);
   end
   else
   begin
@@ -224,7 +245,7 @@ begin
   if gdSelected in State then
   begin
     if Config.UseTheme then
-      bgColor := StyleServices.GetSystemColor(clHighlight)
+      bgColor := Styles.GetSystemColor(clHighlight)
     else
       bgColor := clHighlight;
   end;
@@ -254,14 +275,14 @@ begin
   if gdSelected in State then
   begin
     if Config.UseTheme then
-      grid.Canvas.Font.Color := StyleServices.GetSystemColor(clHighlightText)
+      grid.Canvas.Font.Color := Styles.GetSystemColor(clHighlightText)
     else
       grid.Canvas.Font.Color := clHighlightText;
   end
   else
   begin
     if Config.UseTheme then
-      grid.Canvas.Font.Color := StyleServices.GetSystemColor(clWindowText)
+      grid.Canvas.Font.Color := Styles.GetSystemColor(clWindowText)
     else
       grid.Canvas.Font.Color := clWindowText;
   end;

@@ -150,7 +150,7 @@ type
 implementation
 
 uses
-  Winapi.Windows, uAnalyserPalette, uLocalization;
+  Winapi.Windows, uAnalyserPalette, uIDEColors, uLocalization;
 
 type
   // Access-Class zum Lesen/Schreiben von TControl.OnResize (protected).
@@ -269,8 +269,8 @@ begin
   Tile.BevelOuter  := bvNone;
   Tile.BorderStyle := bsNone;
   Tile.ParentBackground := False;
-  Tile.Color       := clBtnFace;
-  Tile.BorderColor := cl3DDkShadow;
+  Tile.Color       := IDE_BG_CHROME;
+  Tile.BorderColor := IDE_SEPARATOR;
   Tile.ShowHint    := True;
   Tile.Hint        := Caption;
 
@@ -285,7 +285,7 @@ begin
   TopRow.Height      := ScaleByPPI(Parent, 20);
   TopRow.BevelOuter  := bvNone;
   TopRow.ParentBackground := False;
-  TopRow.Color       := clBtnFace;
+  TopRow.Color       := IDE_BG_CHROME;
 
   IconLbl := TLabel.Create(AOwner);
   IconLbl.Parent      := TopRow;
@@ -309,7 +309,7 @@ begin
   CountLbl.Font.Name   := 'Segoe UI';
   CountLbl.Font.Size   := 12;
   CountLbl.Font.Style  := [fsBold];
-  CountLbl.Font.Color  := clBtnText; // theme-konformer Vordergrund
+  CountLbl.Font.Color  := IDE_FG_CHROME; // theme-konformer Vordergrund
 
   // Caption unten, ueber volle Tile-Breite zentriert.
   // AlignWithMargins/Margins(1,0,1,1) damit der Tile-Rahmen sichtbar bleibt.
@@ -324,7 +324,7 @@ begin
   CapLbl.Transparent := True;
   CapLbl.Font.Name   := 'Segoe UI';
   CapLbl.Font.Size   := 7;
-  CapLbl.Font.Color  := clGrayText; // gedaempfter Themed-Caption-Ton
+  CapLbl.Font.Color  := IDE_FG_DIM; // gedaempfter Themed-Caption-Ton
 
   Result := CountLbl;
 end;

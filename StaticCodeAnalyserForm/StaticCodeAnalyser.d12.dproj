@@ -176,6 +176,7 @@
         <DCCReference Include="sources\Common\uRegExMatches.pas"/>
         <DCCReference Include="sources\Common\uRuleCatalog.pas"/>
         <DCCReference Include="sources\Common\uSCAConsts.pas"/>
+        <DCCReference Include="sources\Common\uIDEColors.pas"/>
         <DCCReference Include="sources\Common\uYamlSubsetParser.pas"/>
         <DCCReference Include="sources\Common\uQuickFix.pas"/>
         <DCCReference Include="resources\uCustomerForm.pas">

@@ -22,6 +22,7 @@ interface
 
 uses
   Winapi.Windows,                                     // VK_TAB / VK_ESCAPE / VK_BACK ...
+  Winapi.Messages,                                    // TMessage / CM_STYLECHANGED
   System.Classes, System.SysUtils, System.UITypes,    // clGrayText
   Vcl.Graphics,                                       // TFontStyle (fsBold)
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
@@ -79,6 +80,10 @@ type
     // Tastenkombi; wir schreiben die ShortCutToText-Repraesentation rein.
     procedure ShortcutEditKeyDown(Sender: TObject; var Key: Word;
       Shift: TShiftState);
+    // VCL-Style-Wechsel via Application.Broadcast - feuert zuverlaessiger
+    // als der TIDETheme-Subscribe in manchen IDE-Versionen. Beide Pfade
+    // rufen Apply auf das Frame; Apply ist idempotent.
+    procedure CMStyleChanged(var Message: TMessage); message CM_STYLECHANGED;
   public
     constructor Create(AOwner: TComponent); override;
     // Werte aus den Settings in die Controls schreiben (FrameCreated).
@@ -90,7 +95,11 @@ type
 
   TSCAAddInOptions = class(TInterfacedObject, INTAAddInOptions)
   private
-    FFrame : TSCAOptionsFrame;
+    FFrame    : TSCAOptionsFrame;
+    // IDE-Theme-Abo: TIDETheme ruft OnThemeChanged bei jedem Wechsel.
+    // Wird in FrameCreated angelegt, in DialogClosed entsorgt.
+    FThemeSub : IInterface;
+    procedure OnThemeChanged;
   public
     // INTAAddInOptions
     function GetArea: string;
@@ -111,7 +120,7 @@ implementation
 {$R *.dfm}
 
 uses
-  uIDEThemeIntegration;   // ApplyIDETheme one-shot helper
+  uIDETheme;   // TIDETheme.Apply + Subscribe
 
 const
   // Sentinel-Text fuer "kein Profile-Override". Wird im Combo angezeigt
@@ -568,6 +577,17 @@ begin
   if Assigned(chkAutoDiscover) then ASettings.AutoDiscoverClasses := chkAutoDiscover.Checked;
 end;
 
+procedure TSCAOptionsFrame.CMStyleChanged(var Message: TMessage);
+begin
+  inherited;
+  // VCL-broadcastet diese Message wenn der aktive Style wechselt.
+  // Belt-and-suspenders zum TIDETheme-Subscribe (siehe TSCAAddInOptions.
+  // OnThemeChanged) - sollte einer der beiden Pfade in einer IDE-Version
+  // mal nicht feuern, faengt der andere es ab. Apply ist idempotent.
+  if csDestroying in ComponentState then Exit;
+  TIDETheme.Apply(Self);
+end;
+
 procedure TSCAOptionsFrame.ShortcutEditKeyDown(Sender: TObject;
   var Key: Word; Shift: TShiftState);
 // Capture-Mechanik analog cnpack: User klickt in eines der drei Edit-Felder
@@ -639,7 +659,17 @@ begin
   // IDE-Theme uebernehmen - sonst rendert der Frame im VCL-Default
   // (hell) auch wenn die IDE im Dark-Mode laeuft. Bisher hat das Erbe
   // vom Parent-Panel teilweise gegriffen, war aber inkonsistent.
-  ApplyIDETheme(FFrame);
+  TIDETheme.Apply(FFrame);
+  // Theme-Live-Update: falls der User mid-Options-Dialog die
+  // "IDE Style"-Option umstellt (gleicher Dialog!), aktualisiert
+  // OnThemeChanged unseren Frame automatisch.
+  FThemeSub := TIDETheme.Subscribe(OnThemeChanged);
+end;
+
+procedure TSCAAddInOptions.OnThemeChanged;
+begin
+  if Assigned(FFrame) then
+    TIDETheme.Apply(FFrame);
 end;
 
 procedure TSCAAddInOptions.DialogClosed(Accepted: Boolean);
@@ -648,15 +678,23 @@ procedure TSCAAddInOptions.DialogClosed(Accepted: Boolean);
 var
   Settings : TRepoSettings;
 begin
-  if not Accepted then Exit;
-  if not Assigned(FFrame) then Exit;
-  Settings := TRepoSettings.Create;
   try
-    try Settings.Load; except end;       // bestehende Werte laden
-    FFrame.SaveToSettings(Settings);     // unsere Aenderungen drueber
-    try Settings.Save; except end;       // zurueckschreiben
+    if not Accepted then Exit;
+    if not Assigned(FFrame) then Exit;
+    Settings := TRepoSettings.Create;
+    try
+      try Settings.Load; except end;       // bestehende Werte laden
+      FFrame.SaveToSettings(Settings);     // unsere Aenderungen drueber
+      try Settings.Save; except end;       // zurueckschreiben
+    finally
+      Settings.Free;
+    end;
   finally
-    Settings.Free;
+    // Theme-Subscription aufloesen - IDE gibt FFrame nach DialogClosed
+    // frei; ein noch lebendes Abo wuerde beim naechsten Theme-Wechsel
+    // in die freigegebene Frame-Referenz feuern.
+    FThemeSub := nil;
+    FFrame := nil;
   end;
 end;
 
