@@ -356,9 +356,12 @@ begin
   EnsureImpl;
   G.EnsureNotifier;
 
+  // Theming OHNE den IDEThemingEnabled-Check holen: in manchen IDE-
+  // Versionen (insb. mit Custom-Theme-Plugins) liefert IDEThemingEnabled
+  // False obwohl die IDE-Chrome themed ist. Trotzdem ApplyTheme aufrufen
+  // — wenn es ein no-op ist (Theming wirklich aus), schadet das nicht;
+  // wenn es ein Effekt hat, kriegen wir das Theme.
   if not Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) then
-    Theming := nil
-  else if not Theming.IDEThemingEnabled then
     Theming := nil;
 
   if Assigned(Theming) then
@@ -374,8 +377,8 @@ begin
     end;
   end;
 
-  // ApplyRecursive nimmt Theming als Parameter (kann nil sein bei
-  // disabled IDE-Theming) und ruft ApplyTheme auf JEDEM Descendant.
+  // ApplyRecursive nimmt Theming als Parameter (kann nil sein wenn der
+  // Service nicht verfuegbar ist) und ruft ApplyTheme auf JEDEM Descendant.
   // Notwendig weil IOTAIDEThemingServices.ApplyTheme nicht transitiv
   // arbeitet — jedes Panel/Combo/Label braucht den Aufruf einzeln, sonst
   // renderts im nativen Windows-Look statt im IDE-Theme.
