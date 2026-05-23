@@ -2904,6 +2904,18 @@ var
   Config : TFindingGridConfig;
 begin
   Config := TFindingGridRenderer.IDEConfig(FSortColumn, FSortDescending);
+  // StyleServices-Provider: Renderer soll die IDE-spezifische
+  // StyleServices verwenden (Dark/Light dem IDE-Theme entsprechend),
+  // nicht die VCL-globale (z.B. Mountain_Mist).
+  Config.GetStyleServices :=
+    function: TCustomStyleServices
+    var
+      Theming: IOTAIDEThemingServices;
+    begin
+      Result := nil;
+      if Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) then
+        Result := Theming.StyleServices;
+    end;
   Config.GetCellText :=
     function(ACellCol, ACellRow: Integer): string
     var
