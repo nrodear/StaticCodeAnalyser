@@ -223,7 +223,10 @@ begin
   if Config.UseTheme then
   begin
     SevEnum := SeverityFromText(severity);
-    SevBg   := SeverityBg(SevEnum); // theme-bewusst (clWindow + Akzent-Tint)
+    // SeverityBg-Overload mit explizitem Styles — sonst wuerde die VCL-
+    // globale StyleServices verwendet (= falscher Style im IDE-Plugin
+    // wenn VCL-Style != IDE-Theme).
+    SevBg   := SeverityBg(SevEnum, clWindow, Styles);
     if SevBg <> clNone then
       bgColor := SevBg
     else if Config.ShowZebra and Odd(ARow) then

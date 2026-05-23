@@ -29,7 +29,14 @@ function SeverityAccent(Severity: TFindingSeverity): TColor;
 //   ABase = clWindow  -> Default fuer Datentabellen
 //   ABase = clBtnFace -> fuer Chrome-Elemente (z. B. Help-Desc-Label)
 function SeverityBg(Severity: TFindingSeverity;
-  ABase: TColor = clWindow): TColor;
+  ABase: TColor = clWindow): TColor; overload;
+
+// Wie oben, aber mit explizitem StyleServices fuer die Color-Aufloesung.
+// Wird vom IDE-Plugin-Renderer aufgerufen — dort muss die IDE-spezifische
+// Theming.StyleServices verwendet werden (sonst gewinnt die VCL-globale
+// und Severity-Hintergruende rendern im VCL-Style statt im IDE-Theme).
+function SeverityBg(Severity: TFindingSeverity;
+  ABase: TColor; AStyleServices: TCustomStyleServices): TColor; overload;
 
 // Lineare Farbmischung. Ratio=0 -> Base, Ratio=1 -> Accent.
 // Loest System-Color-Indices vorher per ColorToRGB auf.
@@ -73,14 +80,25 @@ end;
 
 function SeverityBg(Severity: TFindingSeverity;
   ABase: TColor): TColor;
+begin
+  Result := SeverityBg(Severity, ABase, StyleServices);
+end;
+
+function SeverityBg(Severity: TFindingSeverity;
+  ABase: TColor; AStyleServices: TCustomStyleServices): TColor;
 const
   TINT_RATIO = 0.22; // 22% Akzent eingemischt - sichtbar, nicht aggressiv
 var
   Base, Accent: TColor;
+  ResolvedBase: TColor;
 begin
   Accent := SeverityAccent(Severity);
   if Accent = clNone then Exit(clNone);
-  Base := StyleServices.GetSystemColor(ABase);
+  if Assigned(AStyleServices) then
+    ResolvedBase := AStyleServices.GetSystemColor(ABase)
+  else
+    ResolvedBase := StyleServices.GetSystemColor(ABase);
+  Base := ResolvedBase;
   Result := BlendColor(Base, Accent, TINT_RATIO);
 end;
 
