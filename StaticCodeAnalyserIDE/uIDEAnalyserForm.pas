@@ -18,11 +18,11 @@ uses
   uStaticAnalyzer2, uStaticFiles, uMethodd12, uSCAConsts, uExport,
   uFixHint, uIgnoreList, uRepoSettings, uRuleCatalog, uClaudePrompt,
   uQuickFix,
-  uAnalyserPalette, uAnalyserTypes, uAnalyserTheme, uLocalization,
+  uAnalyserPalette, uAnalyserTypes, uAnalyserTheme, uIDEColors, uLocalization,
   uRecentPaths,
   uIDELineHighlighter, uIDEMessages, uIDEWatchMode, uIDEStatsTiles,
   uIDEHelpPanel, uExportMenu, uIDEEditorIntegration, uIDEStatusBar,
-  uIDEThemeIntegration, uIDEAnalyseProgress, uIDEGridTooltip,
+  uIDETheme, uIDEToolbar, uIDEAnalyseProgress, uIDEGridTooltip,
   uIDELifecycle, uIDEAnalyseRunner,
   uIDEAnnotationOverlay,
   uIDEFindingNav,                          // Ctrl+Alt+Up/Down Befund-Navigation
@@ -77,6 +77,9 @@ type
     // Toolbar-Controls die im gedockten/schmalen Modus ausgeblendet werden -
     // ihre Aktionen bleiben ueber das Hamburger-Menu erreichbar (FHamburgerMenu).
     FBtnRepo, FBtnIgnore                           : TButton;
+    // FBtnBrowse: war frueher lokal — als Field gebraucht damit
+    // ApplyToolbarSizing den Icon-Button-Sizing-Pfad anwenden kann.
+    FBtnBrowse                                     : TButton;
     // Im NARROW/MEDIUM-Mode hidden, FULL-only - via Hamburger-Menu erreichbar.
     FBtnExport                                     : TButton;
     FBtnHamburger                                  : TButton;
@@ -192,6 +195,20 @@ type
 
     // Erstellt die Sonar-Style Tile-Reihe (alle 10 Tiles in einer Zeile).
     procedure BuildStatsTiles(Parent: TPanel);
+    // Combo-Item-Populationen: extrahiert aus dem Constructor um die
+    // ~110 Zeilen Items-AddObject-Setup nicht im UI-Build-Pfad zu mischen.
+    // Jede Methode konfiguriert die Items + ItemIndex einer einzelnen
+    // Combo; Reihenfolge / Sentinel-Marker / Severity-Gruppierung sind in
+    // der Methode selbst dokumentiert.
+    procedure PopulateFilterCombo;
+    procedure PopulateTypeCombo;
+    procedure PopulateProfileCombo;
+    // UI-Build-Helper: aus dem Constructor ausgelagert um die Setup-
+    // Pfade lesbar zu halten. Reihenfolge im Constructor:
+    //   ApplyToolbarSizing -> WireResponsiveLayout -> BuildResultGrid.
+    procedure ApplyToolbarSizing(AUnifCtrlH: Integer);
+    procedure WireResponsiveLayout;
+    procedure BuildResultGrid(AParent: TWinControl);
     // (MakeTile + Tile-Layout sind nach uIDEStatsTiles ausgelagert.)
     // Statusbar-Helpers (3 Panels: Befunde-Count, Datei-Progress, Mode)
     procedure StatusFindings(const T: string);
@@ -274,40 +291,40 @@ type
     procedure LoadRecentPaths;
     procedure SaveRecentPath(const APath: string);
   protected
-    // IDE-Theme-Integration (Notifier + Refresh-Pfade) ist nach
-    // uIDEThemeIntegration.TIDEThemeIntegration ausgelagert. Frame
-    // haelt nur noch die Helper-Instanz und die zwei Hooks die
-    // klassen-gebunden bleiben muessen (CMStyleChanged-Message-
-    // Handler + SetParent-Override).
-    FThemeIntegration : TIDEThemeIntegration;
-    // Reagiert auf VCL-Style-Wechsel (= IDE-Theme-Wechsel). Erzwingt
-    // Re-Paint, damit die ueber clBtnFace/clWindow/StyleServices spaet
-    // aufgeloesten Farben mit dem neuen Theme neu gezeichnet werden.
+    // IDE-Theme-Abonnement: Refcount-Halter aus TIDETheme.Subscribe.
+    // Solange das Interface gehalten wird, ruft TIDETheme bei jedem
+    // ChangedTheme-Event RefreshFromIDETheme. Im Destruktor wird das
+    // Field auf nil gesetzt; die RAII-Hülle deregistriert sich dann
+    // automatisch.
+    FThemeSub : IInterface;
+    // VCL-Style-Wechsel via Application.Broadcast - feuert zuverlaessiger
+    // als der IOTAIDEThemingServicesNotifier in manchen IDE-Versionen.
+    // Beide Pfade rufen dieselbe RefreshFromIDETheme; Apply ist idempotent.
     procedure CMStyleChanged(var Message: TMessage); message CM_STYLECHANGED;
     // SetParent override - feuert beim Dock <-> Float-Wechsel oder beim
-    // ersten Hosting des Frames. Style-Hooks ueberleben den Wechsel oft
-    // nicht (neuer Top-Level-Window-Kontext), daher Theme erneut
-    // applizieren. Postet ausserdem WM_SCA_REFIT fuer deferred FrameResize
-    // (IDE setzt Bounds NACH SetParent; csLoading kann VCL.Resize-Override
-    // ueberspringen).
+    // ersten Hosting des Frames. Zwei Verantwortungen:
+    //   1. Theme: Float-Wechsel erzeugt ein neues Host-TForm, dessen
+    //      Titelzeile noch nicht themed ist. TIDETheme.Apply walked
+    //      bis zum TopForm und macht ApplyTheme dort. (Reine IDE-Theme-
+    //      Wechsel werden NICHT hier behandelt - das macht der Subscribe.)
+    //   2. Layout: postet WM_SCA_REFIT fuer deferred FrameResize (IDE
+    //      setzt Bounds NACH SetParent; csLoading kann VCL.Resize-Override
+    //      ueberspringen).
     procedure SetParent(AParent: TWinControl); override;
     // Deferred FrameResize nach abgeschlossenem IDE-Dock-Vorgang.
     // SetParent postet WM_SCA_REFIT; zu diesem Zeitpunkt sind Bounds
     // korrekt gesetzt und csLoading ist geloescht.
     procedure WMScaRefit(var Message: TMessage); message WM_SCA_REFIT;
-    // Wird nach jedem Theme-Refresh als Callback vom Helper aufgerufen.
-    // Triggert den TStringGrid-Repaint, der ueber die rekursive
-    // Invalidate nicht zuverlaessig vom Paint-Cache abgeholt wird.
-    procedure RepaintGridAfterTheme;
   public
     FProjectPath : TComboBox;
     FResultGrid  : TStringGrid;
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     procedure Resize; override;
-    // Delegiert auf FThemeIntegration.RefreshFromIDETheme. Public,
-    // damit auch externer Code (oder Tests) einen Theme-Refresh
-    // erzwingen kann, ohne den Helper direkt anzufassen.
+    // Wendet das aktuelle IDE-Theme auf den Frame an. Wird vom
+    // TIDETheme-Subscribe bei jedem Theme-Wechsel gerufen und von
+    // CMStyleChanged / SetParent als zusaetzlicher Trigger. Public,
+    // damit auch externer Code einen Theme-Refresh erzwingen kann.
     procedure RefreshFromIDETheme;
     // Liefert die aktuelle Profile-Combo-Auswahl als String, oder leer
     // wenn der Frame keinen Override hat. Der Silent-Mode-Entrypoint
@@ -436,7 +453,7 @@ const
   CMB_W_PROFILE      = 110;    // Profile-Combo (ide-fast, default, strict)
 
   // ---- Stats-Panel ------------------------------------------------------
-  STATS_PANEL_HEIGHT = 45;     // 1 Tile-Reihe (TopRow 20 + Caption 12 + Padding)
+  STATS_PANEL_HEIGHT = 51;     // 1 Tile-Reihe (TopRow 20 + Caption 12 + Padding); +6 px Hoehe fuer Glyph-Atem
   STATS_PADDING      = 4;
 
   // ---- Misc -------------------------------------------------------------
@@ -522,12 +539,12 @@ end;
 
 constructor TAnalyserFrame.Create(AOwner: TComponent);
 var
-  PanelPath, PanelButtons, PanelClient: TPanel;
+  PanelPath, PanelButtons: TPanel;
   // Theming-Service-Vars werden in FrameCreated genutzt; hier nur Default fuer
   // den Notifier-Index setzen, damit Destroy nicht versucht, einen ungueltigen
   // Index abzumelden falls der Service nie verfuegbar war.
   LblPath: TLabel;
-  BtnBrowse, BtnAnalyse: TButton;
+  BtnAnalyse: TButton;
   // Aus Font abgeleitete Hoehen, einmalig nach Font-Setup berechnet:
   //   UnifCtrlH   - Soll-Hoehe fuer alle Toolbar-Controls (Button/Edit/Combo)
   //   ToolbarRowH - Panel-Hoehe = UnifCtrlH + 2*TB_PADDING_TB
@@ -550,18 +567,22 @@ begin
     AutoDiscoverCustomClasses := FRepoSettings.AutoDiscoverClasses;
   except end;
 
-  // IDE-Theme-Helper: registriert sich spaeter via Attach (in
-  // TAnalyserDockableForm.FrameCreated). RepaintGridAfterTheme wird
-  // nach jedem Refresh vom Helper zurueckgerufen.
-  FThemeIntegration := TIDEThemeIntegration.Create(Self, Self, RepaintGridAfterTheme);
+  // IDE-Theme: Subscribe registriert RefreshFromIDETheme als Callback
+  // beim zentralen TIDETheme-Singleton. Der initiale Apply-Call kommt
+  // erst in TAnalyserDockableForm.FrameCreated, sobald BorlandIDEServices
+  // verfuegbar ist und der Frame ein Parent hat. FThemeSub haelt den
+  // Refcount; im Destruktor reicht FThemeSub := nil; um die Subscription
+  // aufzuloesen.
+  FThemeSub := TIDETheme.Subscribe(RefreshFromIDETheme);
 
-  // Frame folgt dem aktiven IDE-Theme: clBtnFace ist der Standard-Chrome-
-  // Hintergrund (hell im Light-Theme, dunkel im Dark-Theme, korrekt in
-  // Mountain Mist/Carbon/Custom-Themes).
-  Color         := clBtnFace;
-  ParentFont    := False;
-  Font.Name     := 'Segoe UI';
-  Font.Size     := 8;
+  // Frame folgt dem aktiven IDE-Theme. IDE_BG_CHROME = clBtnFace, vom
+  // VCL-Style remapped auf das aktive Theme (hell/dunkel/Custom).
+  Color := IDE_BG_CHROME;
+  TIDEToolbar.ApplySegoeUI(Self);
+  // DoubleBuffered: reduziert Flicker bei Resize, Theme-Switch und
+  // Stats-Tile-Updates. Die VCL malt erst in ein Off-Screen-Bitmap
+  // und blittet einmal — kein Zwischenzustand sichtbar.
+  DoubleBuffered := True;
 
   // Toolbar-Hoehen aus Font ableiten. Font.Height ist negativ in Pixel und
   // bereits DPI-aware (=  -PointSize * CurrentPPI / 72) - kein extra ScaleW.
@@ -609,245 +630,86 @@ begin
   // springt. Im Idle-Zustand bleibt der Balken einfach leer (Pos 0).
   FProgressBar.Visible := True;
 
+  // alTop-Panels werden in Sicht-Reihenfolge erzeugt (FPanelStats zuerst →
+  // oben, dann PanelPath, PanelButtons, PanelSearch). VCL dockt alTop in
+  // genau dieser Reihenfolge an den oberen Rand. Die Tiles selbst werden
+  // erst nach WireResponsiveLayout via BuildStatsTiles eingehaengt (Tiles
+  // registrieren sich beim FResponsive-Controller, der bis dahin nicht
+  // existiert).
+  FPanelStats := TPanel.Create(Self);
+  FPanelStats.Parent      := Self;
+  FPanelStats.Align       := alTop;
+  FPanelStats.Height      := ScaleW(STATS_PANEL_HEIGHT);
+  FPanelStats.BevelOuter  := bvNone;
+  // Color + ParentBackground (Default=True) reichen — VCL-Style malt
+  // den themed Chrome-Hintergrund. Frueher war ParentBackground:=False
+  // explizit, das war ein Rest aus der Pre-Theme-Ära und macht keinen
+  // visuellen Unterschied mehr.
+  FPanelStats.Color       := IDE_BG_CHROME;
+  FPanelStats.Padding.SetBounds(ScaleW(STATS_PADDING), ScaleW(STATS_PADDING),
+                                ScaleW(STATS_PADDING), ScaleW(STATS_PADDING));
+
   // ---- Zeile: Projektpfad ----
-  PanelPath := TPanel.Create(Self);
-  PanelPath.Parent      := Self;
-  PanelPath.Align       := alTop;
-  PanelPath.Height      := ToolbarRowH;
-  PanelPath.BevelOuter  := bvNone;
-  PanelPath.Color       := clBtnFace;
-  // Right padding=0: alRight-Button (Browse "...") sitzt buendig am rechten
-  // Panel-Rand statt mit 6 px Inset - matched optisch mit dem Hamburger auf
-  // PanelSearch und mit der Combo-rechts-Kante.
-  PanelPath.Padding.SetBounds(ScaleW(TB_PADDING_LR), ScaleW(TB_PADDING_TB),
-                              0, ScaleW(TB_PADDING_TB));
+  // Outer-Row via Helper. Right padding=0 sitzt im Helper drin, damit
+  // alRight-Buttons (Browse "...") buendig am rechten Panel-Rand sitzen.
+  PanelPath := TIDEToolbar.CreateRow(Self, Self, ToolbarRowH,
+    ScaleW(TB_PADDING_LR), ScaleW(TB_PADDING_TB));
   FPanelPath := PanelPath;
 
-  LblPath := TLabel.Create(Self);
-  LblPath.Parent    := PanelPath;
-  LblPath.Caption   := _('Project path:');
-  LblPath.Align     := alLeft;
-  LblPath.Layout    := tlCenter;
-  LblPath.Width     := ScaleW(LBL_W_PATH);
+  LblPath := TIDEToolbar.AddLabel(Self, PanelPath, _('Project path:'),
+    ScaleW(LBL_W_PATH));
 
-  BtnBrowse := TButton.Create(Self);
-  BtnBrowse.Parent  := PanelPath;
-  BtnBrowse.Caption := '...';
-  BtnBrowse.Width   := ScaleW(BTN_W_ICON);
-  BtnBrowse.Align   := alRight;
-  BtnBrowse.OnClick := BrowseClick;
+  FBtnBrowse := TIDEToolbar.AddButton(Self, PanelPath, '...',
+    ScaleW(BTN_W_ICON), alRight, BrowseClick);
 
   // Ignore-Liste editieren - oeffnet ignore.txt im Notepad/Default-Editor
-  FBtnIgnore := TButton.Create(Self);
-  FBtnIgnore.Parent  := PanelPath;
-  FBtnIgnore.Caption := _('Ignore...');
-  FBtnIgnore.Width   := ScaleW(BTN_W_SHORT);
-  FBtnIgnore.Align   := alRight;
-  FBtnIgnore.Hint    := _('Open ignore list (which files are NOT analysed)');
-  FBtnIgnore.ShowHint := True;
-  FBtnIgnore.OnClick := EditIgnoreListClick;
+  FBtnIgnore := TIDEToolbar.AddButton(Self, PanelPath, _('Ignore...'),
+    ScaleW(BTN_W_SHORT), alRight, EditIgnoreListClick,
+    _('Open ignore list (which files are NOT analysed)'));
 
   // Settings-Datei analyser.ini (BaseBranch + Tortoise-Pfade fuer
   // Branch-Changes, Custom-LeakyClasses fuer den MemoryLeak-Detektor).
-  FBtnRepo := TButton.Create(Self);
-  FBtnRepo.Parent  := PanelPath;
-  FBtnRepo.Caption := _('Settings...');
-  FBtnRepo.Width   := ScaleW(BTN_W_MED_SHORT);
-  FBtnRepo.Align   := alRight;
-  FBtnRepo.Hint    := _('Open analyser.ini (BaseBranch, git/svn paths, custom LeakyClasses)');
-  FBtnRepo.ShowHint := True;
-  FBtnRepo.OnClick := EditRepoSettingsClick;
-
+  FBtnRepo := TIDEToolbar.AddButton(Self, PanelPath, _('Settings...'),
+    ScaleW(BTN_W_MED_SHORT), alRight, EditRepoSettingsClick,
+    _('Open analyser.ini (BaseBranch, git/svn paths, custom LeakyClasses)'));
 
   FProjectPath := TComboBox.Create(Self);
-  FProjectPath.Parent      := PanelPath;
-  FProjectPath.Align       := alClient;
-  FProjectPath.Style       := csDropDown;
-  FProjectPath.ParentFont  := False;
-  FProjectPath.Font.Name   := 'Segoe UI';
-  FProjectPath.Font.Size   := 8;
+  FProjectPath.Parent := PanelPath;
+  FProjectPath.Align  := alClient;
+  FProjectPath.Style  := csDropDown;
+  TIDEToolbar.ApplySegoeUI(FProjectPath);
 
   // ---- Zeile: Buttons ----
-  PanelButtons := TPanel.Create(Self);
-  PanelButtons.Parent      := Self;
-  PanelButtons.Align       := alTop;
-  PanelButtons.Height      := ToolbarRowH;
-  PanelButtons.BevelOuter  := bvNone;
-  PanelButtons.Color       := clBtnFace;
-  // Right padding=0: konsistente rechte Kante mit PanelPath/PanelSearch,
-  // auch wenn diese Zeile selbst keine alRight-Buttons hat - Comboboxen
-  // schliessen optisch in derselben rechten Spalte ab.
-  PanelButtons.Padding.SetBounds(ScaleW(TB_PADDING_LR), ScaleW(TB_PADDING_TB),
-                                 0, ScaleW(TB_PADDING_TB));
+  // Helper liefert identische Padding/Bevel-Konfiguration wie PanelPath
+  // und PanelSearch; konsistente rechte Kante uebernimmt der Helper.
+  PanelButtons := TIDEToolbar.CreateRow(Self, Self, ToolbarRowH,
+    ScaleW(TB_PADDING_LR), ScaleW(TB_PADDING_TB));
   FPanelButtons := PanelButtons;
 
   // Aktions-Buttons (Analyse starten / Aktuelle Datei) liegen nicht hier,
   // sondern in PanelSearch zusammen mit den Export-Buttons. Damit bleibt
   // diese Filter-Zeile uebersichtlich.
 
-  // Severity-Filter: Label + Combo in einem eigenen Panel-Container.
-  // Mit losem alLeft auf PanelButtons direkt verschoben sich Label und
-  // Combo gegeneinander (TLabel ist TGraphicControl, TComboBox ist
-  // TWinControl - VCL aligned die in unterschiedlichen Passes); im
-  // Sub-Panel laufen sie strikt von links nach rechts.
-  FPanelSev := TPanel.Create(Self);
-  FPanelSev.Parent     := PanelButtons;
-  FPanelSev.Align      := alLeft;
-  FPanelSev.BevelOuter := bvNone;
-  FPanelSev.Color      := clBtnFace;
-  FPanelSev.Width      := ScaleW(LBL_W_FILTER + CMB_W_FILTER);
+  // Severity-Filter: Label+Combo via Helper.
+  // Sub-Panel-Layout verhindert die VCL-Quirk dass Label (TGraphicControl)
+  // und Combo (TWinControl) direkt auf einem alLeft-Parent in unter-
+  // schiedlichen Align-Passes verschoben werden — im Sub-Panel strikt
+  // von links nach rechts.
+  FFilterCombo := TIDEToolbar.CreateLabelCombo(Self, PanelButtons,
+    _('Severity:'), ScaleW(LBL_W_FILTER), ScaleW(CMB_W_FILTER), FLblFilter);
+  FFilterCombo.OnChange := FilterChange;
+  FPanelSev := FFilterCombo.Parent as TPanel;
+  PopulateFilterCombo;
 
-  FLblFilter := TLabel.Create(Self);
-  FLblFilter.Parent   := FPanelSev;
-  FLblFilter.Caption  := _('Severity:');
-  FLblFilter.Align    := alLeft;
-  FLblFilter.AutoSize := False;
-  FLblFilter.Width    := ScaleW(LBL_W_FILTER);
-  FLblFilter.Layout   := tlCenter;
+  // Trennabstand vor dem Typ-Filter
+  TIDEToolbar.AddSpacer(Self, PanelButtons, ScaleW(TB_SPACER_WIDTH));
 
-  // Filter-Dropdown - nach Schweregrad gruppiert.
-  // Items.Objects haelt den Ord(TFilterMode) als Tag; Separatoren haben Tag = -1
-  // und werden in FilterChange auf "Alle" zurueckgesetzt.
-  FFilterCombo := TComboBox.Create(Self);
-  FFilterCombo.Parent      := FPanelSev;
-  FFilterCombo.Style       := csDropDownList;
-  FFilterCombo.Align       := alClient;
-  FFilterCombo.Font.Name   := 'Segoe UI';
-  FFilterCombo.Font.Size   := 8;
-  FFilterCombo.ParentFont  := False;
-  FFilterCombo.OnChange    := FilterChange;
-
-  // Hilfsmethode-Inline ueber Lambdas geht in Delphi nicht - direkt schreiben.
-  FFilterCombo.Items.AddObject(_('All'),                    TObject(Ord(fmAll)));
-  FFilterCombo.Items.AddObject(_('Errors (all)'),           TObject(Ord(fmErrors)));
-  FFilterCombo.Items.AddObject(_('Warnings (all)'),         TObject(Ord(fmWarnings)));
-  FFilterCombo.Items.AddObject(_('Hints (all)'),            TObject(Ord(fmHints)));
-
-  FFilterCombo.Items.AddObject(_('--- Errors ---'),         TObject(-1));
-  FFilterCombo.Items.AddObject(_('Memory Leak'),            TObject(Ord(fmMemoryLeak)));
-  FFilterCombo.Items.AddObject(_('SQL Injection'),          TObject(Ord(fmSQLInjection)));
-  FFilterCombo.Items.AddObject(_('Hardcoded Secrets'),      TObject(Ord(fmHardcodedSecret)));
-  FFilterCombo.Items.AddObject(_('Format()'),               TObject(Ord(fmFormatMismatch)));
-  FFilterCombo.Items.AddObject(_('Nil-Deref'),              TObject(Ord(fmNilDeref)));
-  FFilterCombo.Items.AddObject(_('Div by Zero'),            TObject(Ord(fmDivByZero)));
-  FFilterCombo.Items.AddObject(_('Missing Raise'),               TObject(Ord(fmMissingRaise)));
-  FFilterCombo.Items.AddObject(_('Result Unassigned'),           TObject(Ord(fmRoutineResultUnassigned)));
-  FFilterCombo.Items.AddObject(_('Instance-Invoked Constructor'),TObject(Ord(fmInstanceInvokedConstructor)));
-  FFilterCombo.Items.AddObject(_('Char -> PChar Cast'),          TObject(Ord(fmCharToCharPointerCast)));
-  FFilterCombo.Items.AddObject(_('Raise outside except'),        TObject(Ord(fmRaiseOutsideExcept)));
-  FFilterCombo.Items.AddObject(_('Use After Free'),              TObject(Ord(fmUseAfterFree)));
-  FFilterCombo.Items.AddObject(_('Abstract method not implemented'), TObject(Ord(fmAbstractNotImpl)));
-  FFilterCombo.Items.AddObject(_('Leak in constructor'),         TObject(Ord(fmLeakInConstructor)));
-  FFilterCombo.Items.AddObject(_('Integer overflow (Int64 mul)'),TObject(Ord(fmIntegerOverflow)));
-  FFilterCombo.Items.AddObject(_('God Class'),                   TObject(Ord(fmGodClass)));
-  FFilterCombo.Items.AddObject(_('Free without nil-out'),        TObject(Ord(fmFreeWithoutNil)));
-  FFilterCombo.Items.AddObject(_('Multiple Exit'),               TObject(Ord(fmMultipleExit)));
-  FFilterCombo.Items.AddObject(_('Large Class'),                 TObject(Ord(fmLargeClass)));
-  FFilterCombo.Items.AddObject(_('Unsorted uses clause'),        TObject(Ord(fmUnsortedUses)));
-  FFilterCombo.Items.AddObject(_('Missing unit header'),         TObject(Ord(fmMissingUnitHeader)));
-  FFilterCombo.Items.AddObject(_('Float equality'),              TObject(Ord(fmFloatEquality)));
-  FFilterCombo.Items.AddObject(_('Raise in destructor'),         TObject(Ord(fmExceptInDestructor)));
-  FFilterCombo.Items.AddObject(_('Boolean parameter as flag'),   TObject(Ord(fmBooleanParam)));
-  FFilterCombo.Items.AddObject(_('Unused private method'),       TObject(Ord(fmUnusedPrivateMethod)));
-  FFilterCombo.Items.AddObject(_('Could be class method'),       TObject(Ord(fmCanBeClassMethod)));
-  FFilterCombo.Items.AddObject(_('Missing override'),            TObject(Ord(fmMissingOverride)));
-  FFilterCombo.Items.AddObject(_('Boolean always true / false'), TObject(Ord(fmBoolAlwaysTrue)));
-  FFilterCombo.Items.AddObject(_('Constant return value'),       TObject(Ord(fmConstantReturn)));
-  FFilterCombo.Items.AddObject(_('Hardcoded user string'),       TObject(Ord(fmHardcodedString)));
-
-  FFilterCombo.Items.AddObject(_('--- Warnings ---'),       TObject(-1));
-  FFilterCombo.Items.AddObject(_('Empty Except'),           TObject(Ord(fmEmptyExcept)));
-  FFilterCombo.Items.AddObject(_('Missing Finally'),        TObject(Ord(fmMissingFinally)));
-  FFilterCombo.Items.AddObject(_('Dead Code'),              TObject(Ord(fmDeadCode)));
-  FFilterCombo.Items.AddObject(_('Unused Uses'),            TObject(Ord(fmUnusedUses)));
-  FFilterCombo.Items.AddObject(_('Debug Output'),           TObject(Ord(fmDebugOutput)));
-  FFilterCombo.Items.AddObject(_('Hardcoded Path'),         TObject(Ord(fmHardcodedPath)));
-  FFilterCombo.Items.AddObject(_('Read Error'),             TObject(Ord(fmFileReadError)));
-  FFilterCombo.Items.AddObject(_('Re-Raise Exception'),     TObject(Ord(fmReRaiseException)));
-  FFilterCombo.Items.AddObject(_('Raising Raw Exception'),  TObject(Ord(fmRaisingRawException)));
-  FFilterCombo.Items.AddObject(_('Date Format Settings'),   TObject(Ord(fmDateFormatSettings)));
-  FFilterCombo.Items.AddObject(_('Unicode -> Ansi Cast'),   TObject(Ord(fmUnicodeToAnsiCast)));
-  FFilterCombo.Items.AddObject(_('IfThen Short-Circuit'),   TObject(Ord(fmIfThenShortCircuit)));
-  FFilterCombo.Items.AddObject(_('Exception Too General'),  TObject(Ord(fmExceptionTooGeneral)));
-
-  FFilterCombo.Items.AddObject(_('--- Hints ---'),          TObject(-1));
-  FFilterCombo.Items.AddObject(_('Long Method'),            TObject(Ord(fmLongMethod)));
-  FFilterCombo.Items.AddObject(_('Many Parameters'),        TObject(Ord(fmLongParamList)));
-  FFilterCombo.Items.AddObject(_('Magic Number'),           TObject(Ord(fmMagicNumber)));
-  FFilterCombo.Items.AddObject(_('Duplicate Strings'),      TObject(Ord(fmDuplicateString)));
-  FFilterCombo.Items.AddObject(_('Duplicate Code Blocks'),  TObject(Ord(fmDuplicateBlock)));
-  FFilterCombo.Items.AddObject(_('Deep Nesting'),           TObject(Ord(fmDeepNesting)));
-  FFilterCombo.Items.AddObject(_('Cyclomatic Complexity'),  TObject(Ord(fmCyclomaticComplexity)));
-  FFilterCombo.Items.AddObject(_('TODO/FIXME'),             TObject(Ord(fmTodoComment)));
-  FFilterCombo.Items.AddObject(_('Empty Methods'),          TObject(Ord(fmEmptyMethod)));
-  FFilterCombo.Items.AddObject(_('Can Be Unit Private'),    TObject(Ord(fmCanBeUnitPrivate)));
-  FFilterCombo.Items.AddObject(_('Can Be Strict Private'),  TObject(Ord(fmCanBeStrictPrivate)));
-  FFilterCombo.Items.AddObject(_('Can Be Protected'),       TObject(Ord(fmCanBeProtected)));
-  FFilterCombo.Items.AddObject(_('Unused Public Member'),   TObject(Ord(fmUnusedPublicMember)));
-  FFilterCombo.Items.AddObject(_('Unused Local Var'),       TObject(Ord(fmUnusedLocalVar)));
-  FFilterCombo.Items.AddObject(_('Unused Parameter'),       TObject(Ord(fmUnusedParameter)));
-  FFilterCombo.Items.AddObject(_('Tautological Expression'),TObject(Ord(fmTautologicalBoolExpr)));
-  FFilterCombo.Items.AddObject(_('Master-Detail Unlinked'), TObject(Ord(fmDfmMasterDetailUnlinked)));
-  FFilterCombo.Items.AddObject(_('Data Module Split Hint'), TObject(Ord(fmDfmDataModuleSplitHint)));
-  FFilterCombo.Items.AddObject(_('Dangerous SQL Statement'),TObject(Ord(fmSqlDangerousStatement)));
-  FFilterCombo.Items.AddObject(_('Format Locale Hint'),     TObject(Ord(fmFormatLocaleHint)));
-  FFilterCombo.Items.AddObject(_('Cast And Free'),          TObject(Ord(fmCastAndFree)));
-  FFilterCombo.Items.AddObject(_('Inherited (empty)'),      TObject(Ord(fmInheritedMethodEmpty)));
-  FFilterCombo.Items.AddObject(_('Nil Comparison'),         TObject(Ord(fmNilComparison)));
-  // mORMot-Cluster (SCA153-155)
-  FFilterCombo.Items.AddObject(_('Unpaired Lock'),          TObject(Ord(fmUnpairedLock)));
-  FFilterCombo.Items.AddObject(_('Move/FillChar SizeOf(Pointer)'), TObject(Ord(fmMoveSizeOfPointer)));
-  FFilterCombo.Items.AddObject(_('with on multiple targets'),TObject(Ord(fmWithMultipleTargets)));
-  // mORMot-Cluster Phase 2 (SCA156-158)
-  FFilterCombo.Items.AddObject(_('GetMem without try/finally'),    TObject(Ord(fmGetMemWithoutFreeMem)));
-  FFilterCombo.Items.AddObject(_('SetLength grow in loop'),        TObject(Ord(fmSetLengthAppendInLoop)));
-  FFilterCombo.Items.AddObject(_('PChar arithmetic without empty-check'), TObject(Ord(fmPointerArithmeticOnString)));
-  // mORMot-Cluster Phase 3 (SCA159-161)
-  FFilterCombo.Items.AddObject(_('Empty typed exception handler'),    TObject(Ord(fmEmptyOnHandler)));
-  FFilterCombo.Items.AddObject(_('String cast from raw pointer'),     TObject(Ord(fmStringFromPointer)));
-  FFilterCombo.Items.AddObject(_('Pointer subtraction (Win64 truncation)'),TObject(Ord(fmPointerSubtraction)));
-
-  FFilterCombo.ItemIndex := 0; // "All"
-
-  // Trennabstand
-  var SepF1 := TPanel.Create(Self);
-  SepF1.Parent     := PanelButtons;
-  SepF1.Align      := alLeft;
-  SepF1.Width      := ScaleW(TB_SPACER_WIDTH);
-  SepF1.BevelOuter := bvNone;
-  SepF1.Color      := clBtnFace;
-
-  // ---- Zweiter Filter: Typ (Sonar-Kategorie) - gleicher Container-Trick ----
-  FPanelType := TPanel.Create(Self);
-  FPanelType.Parent     := PanelButtons;
-  FPanelType.Align      := alLeft;
-  FPanelType.BevelOuter := bvNone;
-  FPanelType.Color      := clBtnFace;
-  FPanelType.Width      := ScaleW(LBL_W_TYPE + CMB_W_TYPE);
-
-  FLblType := TLabel.Create(Self);
-  FLblType.Parent   := FPanelType;
-  FLblType.Caption  := _('Type:');
-  FLblType.Align    := alLeft;
-  FLblType.AutoSize := False;
-  FLblType.Width    := ScaleW(LBL_W_TYPE);
-  FLblType.Layout   := tlCenter;
-
-  FTypeCombo := TComboBox.Create(Self);
-  FTypeCombo.Parent      := FPanelType;
-  FTypeCombo.Style       := csDropDownList;
-  FTypeCombo.Align       := alClient;
-  FTypeCombo.Font.Name   := 'Segoe UI';
-  FTypeCombo.Font.Size   := 8;
-  FTypeCombo.ParentFont  := False;
-  FTypeCombo.OnChange    := TypeFilterChange;
-  FTypeCombo.Items.Add(_('All'));
-  FTypeCombo.Items.Add('Bug');
-  FTypeCombo.Items.Add('Code Smell');
-  FTypeCombo.Items.Add('Vulnerability');
-  FTypeCombo.Items.Add('Security Hotspot');
-  FTypeCombo.Items.Add('Code Duplication');
-  FTypeCombo.ItemIndex := 0;
+  // ---- Zweiter Filter: Typ (Sonar-Kategorie) ----
+  FTypeCombo := TIDEToolbar.CreateLabelCombo(Self, PanelButtons,
+    _('Type:'), ScaleW(LBL_W_TYPE), ScaleW(CMB_W_TYPE), FLblType);
+  FTypeCombo.OnChange := TypeFilterChange;
+  FPanelType := FTypeCombo.Parent as TPanel;
+  PopulateTypeCombo;
   FTypeFilter := tfAll;
 
   // Profile-Combo (rule-set scope) wird unten in PanelSearch zwischen
@@ -860,33 +722,19 @@ begin
   // gelesen - keine Checkboxen mehr in der Toolbar (siehe FRepoSettings).
 
   // ---- Zeile: Aktionen + Suche + Export ----
-  var PanelSearch := TPanel.Create(Self);
-  PanelSearch.Parent      := Self;
-  PanelSearch.Align       := alTop;
-  PanelSearch.Height      := ToolbarRowH;
-  PanelSearch.BevelOuter  := bvNone;
-  PanelSearch.Color       := clBtnFace;
-  // Right padding=0: Hamburger sitzt buendig am rechten Panel-Rand statt
-  // mit 6 px Inset. Matched optisch mit Browse "..." auf PanelPath.
-  PanelSearch.Padding.SetBounds(ScaleW(TB_PADDING_LR), ScaleW(TB_PADDING_TB),
-                                0, ScaleW(TB_PADDING_TB));
+  // Wie PanelPath/PanelButtons: Right-Padding=0 ist im Helper, damit
+  // Hamburger buendig am rechten Panel-Rand sitzt.
+  var PanelSearch := TIDEToolbar.CreateRow(Self, Self, ToolbarRowH,
+    ScaleW(TB_PADDING_LR), ScaleW(TB_PADDING_TB));
   FPanelSearch := PanelSearch;
 
   // Action-Buttons links - "▶ Analyse" zuerst (links), dann "📄 File"
-  BtnAnalyse := TButton.Create(Self);
-  BtnAnalyse.Parent   := PanelSearch;
-  BtnAnalyse.Caption  := _('▶ Analyse');
-  BtnAnalyse.Width    := ScaleW(BTN_W_LONG);
-  BtnAnalyse.Align    := alLeft;
-  BtnAnalyse.OnClick  := AnalyseClick;
+  BtnAnalyse := TIDEToolbar.AddButton(Self, PanelSearch, _('▶ Analyse'),
+    ScaleW(BTN_W_LONG), alLeft, AnalyseClick);
   FBtnAnalyse := BtnAnalyse;
 
-  FBtnAnalyseCurrent := TButton.Create(Self);
-  FBtnAnalyseCurrent.Parent   := PanelSearch;
-  FBtnAnalyseCurrent.Caption  := _('📄 File');
-  FBtnAnalyseCurrent.Width    := ScaleW(BTN_W_MED_LONG);
-  FBtnAnalyseCurrent.Align    := alLeft;
-  FBtnAnalyseCurrent.OnClick  := AnalyseCurrentFileClick;
+  FBtnAnalyseCurrent := TIDEToolbar.AddButton(Self, PanelSearch, _('📄 File'),
+    ScaleW(BTN_W_MED_LONG), alLeft, AnalyseCurrentFileClick);
 
   // ---- Profile-Combo zuerst anlegen, dann Branch-Changes-Button ---------
   // In dieser PanelSearch-Layout-Konstellation positioniert VCL alLeft-
@@ -898,96 +746,47 @@ begin
   // (TRuleCatalog.ProfileNames); Default-Selektion = FRepoSettings.IdeProfile.
   // Transient (kein INI-Save); wirkt beim naechsten Analyse-Klick ueber
   // PrepareAnalysis -> UseIdeRuleSet + ApplyDetectorThresholds.
-  FPanelProfile := TPanel.Create(Self);
-  FPanelProfile.Parent     := PanelSearch;
-  FPanelProfile.Align      := alLeft;
-  FPanelProfile.BevelOuter := bvNone;
-  FPanelProfile.Color      := clBtnFace;
-  FPanelProfile.Width      := ScaleW(LBL_W_PROFILE + CMB_W_PROFILE);
-
-  FLblProfile := TLabel.Create(Self);
-  FLblProfile.Parent   := FPanelProfile;
-  FLblProfile.Caption  := _('Profile:');
-  FLblProfile.Align    := alLeft;
-  FLblProfile.AutoSize := False;
-  FLblProfile.Width    := ScaleW(LBL_W_PROFILE);
-  FLblProfile.Layout   := tlCenter;
-
-  FProfileCombo := TComboBox.Create(Self);
-  FProfileCombo.Parent      := FPanelProfile;
-  FProfileCombo.Style       := csDropDownList;
-  FProfileCombo.Align       := alClient;
-  FProfileCombo.Font.Name   := 'Segoe UI';
-  FProfileCombo.Font.Size   := 8;
-  FProfileCombo.ParentFont  := False;
-  FProfileCombo.OnChange    := ProfileChange;
-  FProfileCombo.Hint        := _('Rule-set profile (ide-fast / default / strict). ' +
-                                 'Takes effect at the next analysis run.');
-  FProfileCombo.ShowHint    := True;
-  begin
-    var ProfileList := TRuleCatalog.ProfileNames;
-    if Length(ProfileList) = 0 then
-      FProfileCombo.Items.Add(_('default'))
-    else
-      for var ProfileName in ProfileList do
-        FProfileCombo.Items.Add(ProfileName);
-
-    var Idx := FProfileCombo.Items.IndexOf(FRepoSettings.IdeProfile);
-    if Idx < 0 then Idx := FProfileCombo.Items.IndexOf('ide-fast');
-    if Idx < 0 then Idx := 0;
-    FProfileCombo.ItemIndex := Idx;
-  end;
+  FProfileCombo := TIDEToolbar.CreateLabelCombo(Self, PanelSearch,
+    _('Profile:'), ScaleW(LBL_W_PROFILE), ScaleW(CMB_W_PROFILE), FLblProfile);
+  FProfileCombo.OnChange := ProfileChange;
+  FProfileCombo.Hint     := _('Rule-set profile (ide-fast / default / strict). ' +
+                              'Takes effect at the next analysis run.');
+  FProfileCombo.ShowHint := True;
+  FPanelProfile := FProfileCombo.Parent as TPanel;
+  PopulateProfileCombo;
 
   // Spacer zwischen Branch-Button und Profile-Panel
-  var SepProfile := TPanel.Create(Self);
-  SepProfile.Parent     := PanelSearch;
-  SepProfile.Align      := alLeft;
-  SepProfile.Width      := ScaleW(TB_SPACER_WIDTH);
-  SepProfile.BevelOuter := bvNone;
-  SepProfile.Color      := clBtnFace;
+  TIDEToolbar.AddSpacer(Self, PanelSearch, ScaleW(TB_SPACER_WIDTH));
 
   // Branch-Aenderungen via Git/SVN: nur die im Branch geaenderten .pas-Files.
   // Icon-only (Glyph ⎇ U+2387 "alternative"-Symbol, sieht wie Branch-Fork aus),
   // matcht visuell die anderen Icon-Buttons (Browse "...", Hamburger ☰).
   // Caption-Text "Branch-Changes" ist im Hint und im Hamburger-Menu.
   // Erzeugt NACH Profile-Panel - VCL platziert ihn dadurch links davon.
-  FBtnAnalyseChanged := TButton.Create(Self);
-  FBtnAnalyseChanged.Parent   := PanelSearch;
-  FBtnAnalyseChanged.Caption  := #$2387; // ⎇
-  FBtnAnalyseChanged.Width    := ScaleW(BTN_W_ICON);
-  FBtnAnalyseChanged.Align    := alLeft;
-  FBtnAnalyseChanged.OnClick  := AnalyseChangedFilesClick;
-  FBtnAnalyseChanged.Hint     := _('Branch-Changes') + ': ' + _(
-    'Analyses only files changed in the current branch ' +
-    '(Git: branch diff vs main + working tree; SVN: working copy)');
-  FBtnAnalyseChanged.ShowHint := True;
+  FBtnAnalyseChanged := TIDEToolbar.AddButton(Self, PanelSearch, #$2387,
+    ScaleW(BTN_W_ICON), alLeft, AnalyseChangedFilesClick,
+    _('Branch-Changes') + ': ' + _(
+      'Analyses only files changed in the current branch ' +
+      '(Git: branch diff vs main + working tree; SVN: working copy)'));
 
   // Hamburger-Button: ganz rechts in PanelSearch. Als erstes alRight-
   // Control hinzugefuegt -> VCL platziert es am rechten Rand; Cancel und
   // Export landen links davon. Nur im Docked-Modus sichtbar (Inverse-
   // Controller weiter unten). PopupMenu + OnClick via BuildHamburgerMenu.
-  FBtnHamburger := TButton.Create(Self);
-  FBtnHamburger.Parent   := PanelSearch;
-  FBtnHamburger.Caption  := #$2630; // Trigram for Heaven (Hamburger-Glyph)
-  FBtnHamburger.Width    := ScaleW(BTN_W_ICON);
-  FBtnHamburger.Align    := alRight;
-  FBtnHamburger.Hint     := _('All toolbar actions (Analyse, Browse, Export, Settings, ...)');
-  FBtnHamburger.ShowHint := True;
+  // Caption: #$2630 = Trigram for Heaven (Hamburger-Glyph).
+  FBtnHamburger := TIDEToolbar.AddButton(Self, PanelSearch, #$2630,
+    ScaleW(BTN_W_ICON), alRight, HamburgerClick,
+    _('All toolbar actions (Analyse, Browse, Export, Settings, ...)'));
 
   // Cancel-Button - immer sichtbar (verhindert Layout-Sprung beim
   // Start/Ende der Analyse), nur Enabled wird getoggelt. Sitzt fix am
   // rechten Toolbar-Rand (alRight) und ist von den Analyse-Buttons
-  // links optisch entkoppelt.
-  FBtnCancel := TButton.Create(Self);
-  FBtnCancel.Parent   := PanelSearch;
-  FBtnCancel.Caption  := _('Cancel');
-  FBtnCancel.Width    := ScaleW(BTN_W_MED);
-  FBtnCancel.Align    := alRight;
+  // links optisch entkoppelt durch AlignWithMargins.
+  FBtnCancel := TIDEToolbar.AddButton(Self, PanelSearch, _('Cancel'),
+    ScaleW(BTN_W_MED), alRight, CancelAnalyseClick);
   FBtnCancel.AlignWithMargins := True;
   FBtnCancel.Margins.SetBounds(ScaleW(TB_CANCEL_MARGIN), 0, 0, 0);
-  FBtnCancel.Visible  := True;
-  FBtnCancel.Enabled  := False;
-  FBtnCancel.OnClick  := CancelAnalyseClick;
+  FBtnCancel.Enabled := False;
 
   // Analyse-Busy-Controller jetzt erstellen - Buttons + Progressbar
   // existieren alle. Owner=Self -> Auto-Free im Frame-Destroy
@@ -1005,20 +804,11 @@ begin
     FAnalyseProgress, FRepoSettings, FIgnoreList, FProgressBar,
     StatusMode, StatusProgress, PopulateFindings);
 
-  // Trennabstand
-  var SepActions := TPanel.Create(Self);
-  SepActions.Parent     := PanelSearch;
-  SepActions.Align      := alLeft;
-  SepActions.Width      := ScaleW(TB_SPACER_WIDTH);
-  SepActions.BevelOuter := bvNone;
-  SepActions.Color      := clBtnFace;
+  // Trennabstand vor dem Search-Edit
+  TIDEToolbar.AddSpacer(Self, PanelSearch, ScaleW(TB_SPACER_WIDTH));
 
-  FLblSearch := TLabel.Create(Self);
-  FLblSearch.Parent  := PanelSearch;
-  FLblSearch.Caption := _('Search:');
-  FLblSearch.Align   := alLeft;
-  FLblSearch.Layout  := tlCenter;
-  FLblSearch.Width   := ScaleW(LBL_W_SEARCH);
+  FLblSearch := TIDEToolbar.AddLabel(Self, PanelSearch, _('Search:'),
+    ScaleW(LBL_W_SEARCH));
 
   // Export-Dropdown statt 5 Einzel-Buttons - spart ~250 px Toolbar-Platz.
   // Komplettes Menu + Click-Handler + CurrentFocusFile-Logik in
@@ -1029,112 +819,66 @@ begin
     FAllFindings, FDisplayedFindings, GetResultGrid,
     StatusMode, GetCurrentBaseDir);
 
-  var BtnExport := TButton.Create(Self);
-  FBtnExport := BtnExport;
-  BtnExport.Parent     := PanelSearch;
-  BtnExport.Caption    := _('Export') + ' ' + #$25BC; // schwarzes Dreieck nach unten
-  BtnExport.Width      := ScaleW(BTN_W_MED);
-  BtnExport.Align      := alRight;
-  BtnExport.Hint       := _('Export: HTML, JSON, CSV, Jira markup, plain text');
-  BtnExport.ShowHint   := True;
+  // Caption: schwarzes Dreieck #$25BC signalisiert das Dropdown.
+  FBtnExport := TIDEToolbar.AddButton(Self, PanelSearch,
+    _('Export') + ' ' + #$25BC, ScaleW(BTN_W_MED), alRight, nil,
+    _('Export: HTML, JSON, CSV, Jira markup, plain text'));
   // PopupMenu + OnClick wirft der Helper auf den Button.
-  FExportMenu.AttachToButton(BtnExport);
+  FExportMenu.AttachToButton(FBtnExport);
 
   // Sucheingabe fuellt den Rest in der Mitte. MinWidth verhindert Kollaps
   // bei sehr schmal gedocktem Frame - sonst frisst Search-Edit als
   // alClient zwischen den alLeft/alRight-Buttons gerne 0 px.
-  FSearchEdit := TEdit.Create(Self);
-  FSearchEdit.Parent      := PanelSearch;
-  FSearchEdit.Align       := alClient;
   // MinWidth wird per AdjustSearchMinWidth dynamisch gesetzt (docked vs
-  // floated). Hier nur den Floated-Default als sichere Initial-Annahme,
-  // bis der erste Resize-Pass laeuft.
+  // floated); hier nur den Floated-Default als sichere Initial-Annahme.
+  FSearchEdit := TEdit.Create(Self);
+  FSearchEdit.Parent := PanelSearch;
+  FSearchEdit.Align  := alClient;
   FSearchEdit.Constraints.MinWidth := ScaleW(SEARCH_MIN_WIDTH_FLOATED);
-  FSearchEdit.TextHint    := _('Filter file / method / finding...');
-  FSearchEdit.OnChange    := SearchChange;
-  FSearchEdit.ParentFont  := False;
-  FSearchEdit.Font.Name   := 'Segoe UI';
-  FSearchEdit.Font.Size   := 8;
+  FSearchEdit.TextHint := _('Filter file / method / finding...');
+  FSearchEdit.OnChange := SearchChange;
+  TIDEToolbar.ApplySegoeUI(FSearchEdit);
 
-  // ---- Toolbar-Controls einheitliche Hoehe (siehe TToolbarSizing) -------
-  // Loest die VCL-Quirk dass TComboBox die Align.Height ignoriert. Buttons
-  // und Edits respektieren Align von Hause aus, der Helper-Aufruf ist hier
-  // redundant aber konsistent: jede Toolbar-Component geht durch denselben
-  // Sizing-Pfad. ScaleW skaliert den 96-DPI-Wert auf die Container-PPI.
-  // Icon-Buttons mit erzwungener Width+Height-Constraints damit sie pixel-
-  // genau identisch rendern (Browse + Hamburger + Branch-Changes).
-  TToolbarSizing.ApplyIconButton(BtnBrowse,          ScaleW(BTN_W_ICON), UnifCtrlH);
-  TToolbarSizing.ApplyIconButton(FBtnHamburger,      ScaleW(BTN_W_ICON), UnifCtrlH);
-  TToolbarSizing.ApplyIconButton(FBtnAnalyseChanged, ScaleW(BTN_W_ICON), UnifCtrlH);
-  // Restliche Components nur Hoehe vereinheitlichen.
-  TToolbarSizing.Apply(FBtnIgnore,          UnifCtrlH);
-  TToolbarSizing.Apply(FBtnRepo,            UnifCtrlH);
-  TToolbarSizing.Apply(FProjectPath,        UnifCtrlH);
-  TToolbarSizing.Apply(FFilterCombo,        UnifCtrlH);
-  TToolbarSizing.Apply(FTypeCombo,          UnifCtrlH);
-  TToolbarSizing.Apply(FProfileCombo,       UnifCtrlH);
-  TToolbarSizing.Apply(FBtnAnalyse,         UnifCtrlH);
-  TToolbarSizing.Apply(FBtnAnalyseCurrent,  UnifCtrlH);
-  TToolbarSizing.Apply(FBtnCancel,          UnifCtrlH);
-  TToolbarSizing.Apply(FBtnExport,          UnifCtrlH);
-  TToolbarSizing.Apply(FSearchEdit,         UnifCtrlH);
+  // Einheitliche Toolbar-Hoehe + Icon-Button-Constraints. Details siehe
+  // ApplyToolbarSizing weiter unten.
+  ApplyToolbarSizing(UnifCtrlH);
 
-  // ---- Hamburger-Menu (alle "optionalen" Actions als Backup-Pfad) ----
-  // Wird gebraucht wenn der Frame schmal gedockt ist und die zugehoerigen
-  // Buttons via FResponsive ausgeblendet werden.
-  // Setup in BuildHamburgerMenu (referenziert bestehende Click-Handler).
-  BuildHamburgerMenu;
+  // Hamburger-Menu wird LAZY beim ersten Klick gebaut (HamburgerClick →
+  // BuildHamburgerMenu wenn FHamburgerMenu noch nil). Spart die ~12 Items
+  // + INI-Read beim Frame-Open in der haeufigen "User dockt im FULL-Modus
+  // und braucht das Menu nie"-Sequenz.
 
-  // ---- Zentraler Responsive-Layout-Controller (3 Stufen) ----------------
-  // Eine Klasse, eine ClientWidth-Quelle (= Frame.ClientWidth), eine
-  // Sichtbarkeitstabelle. Stage-Bestimmung + DPI-Skalierung intern.
-  // Alle Sichtbarkeitsregeln stehen direkt unter dieser Stelle - kein
-  // Verstreut-Sein ueber 3 Panels und 5 Controller mehr.
-  // AfterApply-Callback fired nach JEDEM Resize -> dynamische Folge-Anpassungen
-  // (FilterSubPanels-Width, SearchEdit-MinWidth) bleiben aktuell.
-  // FResponsive selbst wird Self-owned -> Auto-Free im Frame-Destroy.
-  FResponsive := TResponsiveLayoutController.Create(Self, Self,
-    BREAKPOINT_MEDIUM, BREAKPOINT_FULL);
+  // Responsive-Layout: 3-Stufen-Controller + Sichtbarkeitstabelle.
+  // WireResponsiveLayout legt FResponsive an, registriert die Controls
+  // und setzt den AfterApply-Hook.
+  WireResponsiveLayout;
 
-  // PanelPath
-  FResponsive.RegisterCtrl(FBtnRepo,           usFull);
-  FResponsive.RegisterCtrl(FBtnIgnore,         usFull);
-  // (BtnBrowse, LblPath, FProjectPath: immer sichtbar - keine Registrierung noetig)
+  // ---- alTop-Reihenfolge fix ----
+  // VCL TWinControl.AlignControls sortiert alTop-Children nach Margins.
+  // ControlTop (= Control.Top). Wir setzen die Tops explizit aufsteigend.
+  // DisableAlign/EnableAlign verhindert dass jede einzelne Top-Zuweisung
+  // einen Zwischen-Realign triggert.
+  // Tatsaechliche Top-Werte sind irrelevant — VCL re-positioniert beim
+  // EnableAlign neu basierend auf der relativen Sortierung.
+  //
+  // Visuelle Reihenfolge (top -> bottom):
+  //   FPanelStats   - Tile-Reihe (Errors/Warnings/Hints/Bugs/...)
+  //   PanelPath     - "Project path:" + Combo
+  //   PanelSearch   - "▶ Analyse" + "📄 File" + Profile + Search + Hamburger
+  //   PanelButtons  - "Type:" + "Severity:" Filter
+  DisableAlign;
+  try
+    FPanelStats.Top  := 10;
+    PanelPath.Top    := 20;
+    PanelSearch.Top  := 30;
+    PanelButtons.Top := 40;
+  finally
+    EnableAlign;
+  end;
 
-  // PanelButtons (Filter-Reihe: Severity + Type)
-  FResponsive.RegisterCtrl(FLblFilter,         usMedium);
-  FResponsive.RegisterCtrl(FLblType,           usMedium);
-  // (FFilterCombo, FTypeCombo, FPanelSev, FPanelType: immer sichtbar)
-
-  // PanelSearch (Aktions-Reihe: Analyse-Buttons + Profile-Combo + Suche)
-  FResponsive.RegisterCtrl(FBtnCancel,         usFull);
-  FResponsive.RegisterCtrl(FBtnExport,         usFull);
-  FResponsive.RegisterCtrl(FBtnAnalyseChanged, usFull);
-  FResponsive.RegisterCtrl(FLblProfile,        usMedium);
-  FResponsive.RegisterCtrl(FLblSearch,         usFull);
-  FResponsive.RegisterCtrl(FBtnHamburger,      usNarrow, usMedium);  // inverse
-  // (FBtnAnalyse, FBtnAnalyseCurrent, FProfileCombo, FPanelProfile,
-  //  FSearchEdit: immer sichtbar)
-
-  // Stats-Tiles werden in BuildStatsTiles registriert (FResponsive ist
-  // dort verfuegbar, Owner-Reference ueber Self-Field).
-
-  // Folge-Anpassungen nach jedem Resize (Sub-Panel-Width-Sync,
-  // SearchEdit-MinWidth-Sync). Beide sind idempotent, koennen mehrfach
-  // pro Resize laufen.
-  FResponsive.AfterApply := ResponsiveAfterApply;
-
-  // ---- Statistik-Leiste: eine Reihe Sonar-Style Tiles (dunkler Hintergrund) ---
-  FPanelStats := TPanel.Create(Self);
-  FPanelStats.Parent      := Self;
-  FPanelStats.Align       := alTop;
-  FPanelStats.Height      := ScaleW(STATS_PANEL_HEIGHT);
-  FPanelStats.BevelOuter  := bvNone;
-  FPanelStats.Color       := clBtnFace; // folgt IDE-Theme statt fest dunkel
-  FPanelStats.ParentBackground := False;
-  FPanelStats.Padding.SetBounds(ScaleW(STATS_PADDING), ScaleW(STATS_PADDING),
-                                ScaleW(STATS_PADDING), ScaleW(STATS_PADDING));
-
+  // ---- Statistik-Tiles in das jetzt korrekt gestackte FPanelStats ----
+  // FResponsive existiert ab WireResponsiveLayout, BuildStatsTiles
+  // registriert die optionalen Tiles als FResponsive.RegisterCtrl.
   BuildStatsTiles(FPanelStats);
 
   // Initial-Stats setzen, damit die Score-Kachel beim Frame-Open schon
@@ -1143,70 +887,19 @@ begin
   // ist 0 die richtige Anzeige fuer "noch keine Analyse gelaufen".
   UpdateStats;
 
-  // alTop-Reihenfolge explizit setzen (gewuenschte Top-zu-Bottom-Reihenfolge:
-  //   FPanelStats -> PanelPath -> PanelButtons -> PanelSearch).
-  // alTop dockt in Z-Order von vorne nach hinten - also bringen wir sie in der
-  // gewuenschten Reihenfolge nach vorne (das letzte BringToFront landet ganz
-  // vorne und damit oben).
-  PanelSearch.BringToFront;
-  PanelButtons.BringToFront;
-  PanelPath.BringToFront;
-  FPanelStats.BringToFront;
-
-  // ---- Client: Result-Grid + Hilfe-Panel ----
-  PanelClient := TPanel.Create(Self);
-  PanelClient.Parent     := Self;
-  PanelClient.Align      := alClient;
-  PanelClient.BevelOuter := bvNone;
-
+  // ---- Client: Result-Grid + Hilfe-Panel direkt auf das Frame ----
+  // Frueher gab es einen PanelClient-Wrapper (alClient TPanel) als Container
+  // fuer Grid + Help. Die Wrapper-Schicht war nicht noetig — das Frame
+  // selbst hat genug freie Flaeche nach den alTop/alBottom-Stripes, und
+  // VCL setzt alRight (FHelpPanel) und alClient (FResultGrid) direkt auf
+  // dem Frame korrekt nebeneinander.
+  //
   // Hilfe-Panel + Splitter + Dock-State-Logik komplett gekapselt in
   // uIDEHelpPanel. Anchor = Self damit HostIsFloating den Form-Chain
   // hochlaufen kann. Ownership via Self -> auto-Free.
-  FHintPanel := TFindingHintPanel.Create(Self, PanelClient, Self);
+  FHintPanel := TFindingHintPanel.Create(Self, Self, Self);
 
-  FResultGrid := TStringGrid.Create(Self);
-  FResultGrid.Parent           := PanelClient;
-  FResultGrid.Align            := alClient;
-  // MinWidth=300 verhindert dass der Help-Splitter den Grid-Bereich
-  // praktisch auf Null zieht. MinHeight=120 weiterhin gegen Mini-Hoehe.
-  FResultGrid.Constraints.MinHeight := ScaleW(GRID_MIN_HEIGHT);
-  FResultGrid.Constraints.MinWidth  := ScaleW(GRID_MIN_WIDTH);
-  FResultGrid.FixedCols        := 0;
-  FResultGrid.ColCount         := 6;
-  FResultGrid.RowCount         := 2;
-  FResultGrid.DefaultColWidth  := ScaleW(100);
-  FResultGrid.DefaultRowHeight := ScaleW(20);
-  FResultGrid.FixedRows        := 1;
-  FResultGrid.ParentFont       := False;
-  FResultGrid.Font.Name        := 'Segoe UI';
-  FResultGrid.Font.Size        := 8;
-  FResultGrid.GridLineWidth    := 1;
-  FResultGrid.Options          := [goFixedVertLine, goFixedHorzLine,
-                                   goVertLine, goHorzLine,
-                                   goColSizing, goRowSelect, goThumbTracking];
-  // Spaltenbreiten (DPI-skaliert): 130+85+38+110+240+90 = 693 px @ 100% DPI.
-  // Befund-Spalte (4) faellt der GridResize-Handler den Rest zu.
-  FResultGrid.ColWidths[0] := ScaleW(130);  // Datei
-  FResultGrid.ColWidths[1] := ScaleW( 85);  // Methode
-  FResultGrid.ColWidths[2] := ScaleW( 38);  // Zeile
-  FResultGrid.ColWidths[3] := ScaleW(110);  // Typ (fix)
-  FResultGrid.ColWidths[4] := ScaleW(240);  // Regel/Befund (fuellt Rest per GridResize)
-  FResultGrid.ColWidths[5] := ScaleW( 90);  // Schweregrad (fix)
-  FResultGrid.Cells[0, 0] := _('File');
-  FResultGrid.Cells[1, 0] := _('Method');
-  FResultGrid.Cells[2, 0] := _('Line');
-  FResultGrid.Cells[3, 0] := _('Type');
-  FResultGrid.Cells[4, 0] := _('Rule');
-  FResultGrid.Cells[5, 0] := _('Severity');
-  FResultGrid.OnDrawCell   := GridDrawCell;
-  FResultGrid.OnDblClick    := GridDblClick;
-  FResultGrid.OnSelectCell  := GridSelectCell;
-  FResultGrid.OnMouseDown   := GridMouseDown;
-  FResultGrid.OnKeyDown     := GridKeyDown;
-  // Tooltip-Setup (Subclass + Hint-Properties + HintPause-Override) ist
-  // im TFindingGridTooltip-Helper gekapselt. Owner=Self -> Auto-Free
-  // plus expliziter FreeAndNil im Destruktor (Restore-Reihenfolge).
-  FGridTooltip := TFindingGridTooltip.Create(Self, FResultGrid, FDisplayedFindings);
+  BuildResultGrid(Self);
 
   LoadRecentPaths;
 
@@ -1248,11 +941,11 @@ begin
   // ungueltige WndProc feuern.
   FreeAndNil(FGridTooltip);
 
-  // Theme-Helper FRUEH freigeben: meldet den IDE-Notifier ab, sodass
-  // ein noch schwebender Theme-Wechsel-Callback nicht in halb-zerlegte
-  // Frame-Felder laeuft. Owner=Self wuerde das auch erledigen, aber
-  // erst NACH inherited Destroy - zu spaet.
-  FreeAndNil(FThemeIntegration);
+  // Theme-Subscription FRUEH aufloesen: setzt das IInterface auf nil,
+  // was den Refcount auf 0 fallen laesst -> TSubscription.Destroy
+  // unsubscribed beim Singleton. Ein noch schwebender Theme-Wechsel-
+  // Callback feuert dann nicht mehr in halb-zerlegte Frame-Felder.
+  FThemeSub := nil;
 
   // Analyse-Progress-Controller halt nur Widget-Referenzen (kein
   // Ownership). Wir nilen das Feld trotzdem fruehzeitig, damit ein
@@ -1269,25 +962,15 @@ end;
 
 procedure TAnalyserFrame.RefreshFromIDETheme;
 begin
-  // Reine Delegation - die ganze Refresh-Logik (TopForm-ApplyTheme,
-  // ApplyThemeRecursive, Grid-Repaint via Callback) lebt jetzt im
-  // Helper. Nil-safe weil der Frame waehrend Destroy hier nicht
-  // mehr ankommen sollte, aber defensiv fuer den Fall dass ein
-  // verspaeteter SetParent waehrend Teardown feuert.
-  if Assigned(FThemeIntegration) then
-    FThemeIntegration.RefreshFromIDETheme;
-end;
-
-procedure TAnalyserFrame.RepaintGridAfterTheme;
-begin
-  // Wird vom Helper nach jedem Theme-Refresh als Callback aufgerufen.
-  // TStringGrid hat einen besonders starren Paint-Cache der nicht von
-  // der rekursiven Invalidate abgeholt wird - hier explizit forcieren.
-  if Assigned(FResultGrid) then
-  begin
-    FResultGrid.Invalidate;
-    FResultGrid.Repaint;
-  end;
+  // Delegation an den zentralen TIDETheme-Manager. Apply macht:
+  //   1. IOTAIDEThemingServices.ApplyTheme auf dem TopForm (Float-Mode)
+  //      bzw. auf Self (Dock-Mode).
+  //   2. Rekursives Invalidate aller Kinder.
+  //   3. Expliziten Repaint auf TStringGrid (Paint-Cache).
+  // Defensiv: nicht waehrend Destroy weiterleiten - csDestroying ist
+  // gesetzt sobald der Destructor startet.
+  if csDestroying in ComponentState then Exit;
+  TIDETheme.Apply(Self);
 end;
 
 // ---------------------------------------------------------------------------
@@ -1312,6 +995,277 @@ end;
 // extrahiert. Hier nur noch die Frame-seitige Brücke, die die OUT-Params
 // in die Frame-Felder schreibt - UpdateStats greift weiterhin direkt auf
 // FTileError/FTileWarn/... zu, daher bleibt die Feld-Struktur unveraendert.
+
+// ---------------------------------------------------------------------------
+// Populate-Methoden fuer die drei Toolbar-Combos.
+//
+// Aus dem Constructor ausgelagert (~110 Zeilen reine Items-AddObject-
+// Aufrufe) - der UI-Build-Pfad bleibt damit lesbar, und Sprach-Wechsel-
+// Hooks koennen die Combos bei Bedarf wiederbefuellen.
+// ---------------------------------------------------------------------------
+
+procedure TAnalyserFrame.PopulateFilterCombo;
+// Severity-Filter: gruppiert nach Errors / Warnings / Hints. Sentinel-Items
+// mit Tag = -1 (z.B. '--- Errors ---') sind nicht selektierbar; FilterChange
+// faengt den Klick darauf ab und setzt zurueck auf "All".
+
+  procedure Add(const ACaption: string; AMode: TFilterMode);
+  begin
+    FFilterCombo.Items.AddObject(_(ACaption), TObject(Ord(AMode)));
+  end;
+
+  procedure Sep(const ACaption: string);
+  begin
+    FFilterCombo.Items.AddObject(_(ACaption), TObject(-1));
+  end;
+
+begin
+  // ---- Gesamt-Kategorien ----
+  Add('All',            fmAll);
+  Add('Errors (all)',   fmErrors);
+  Add('Warnings (all)', fmWarnings);
+  Add('Hints (all)',    fmHints);
+
+  // ---- Errors (einzeln) ----
+  Sep('--- Errors ---');
+  Add('Memory Leak',                       fmMemoryLeak);
+  Add('SQL Injection',                     fmSQLInjection);
+  Add('Hardcoded Secrets',                 fmHardcodedSecret);
+  Add('Format()',                          fmFormatMismatch);
+  Add('Nil-Deref',                         fmNilDeref);
+  Add('Div by Zero',                       fmDivByZero);
+  Add('Missing Raise',                     fmMissingRaise);
+  Add('Result Unassigned',                 fmRoutineResultUnassigned);
+  Add('Instance-Invoked Constructor',      fmInstanceInvokedConstructor);
+  Add('Char -> PChar Cast',                fmCharToCharPointerCast);
+  Add('Raise outside except',              fmRaiseOutsideExcept);
+  Add('Use After Free',                    fmUseAfterFree);
+  Add('Abstract method not implemented',   fmAbstractNotImpl);
+  Add('Leak in constructor',               fmLeakInConstructor);
+  Add('Integer overflow (Int64 mul)',      fmIntegerOverflow);
+  Add('God Class',                         fmGodClass);
+  Add('Free without nil-out',              fmFreeWithoutNil);
+  Add('Multiple Exit',                     fmMultipleExit);
+  Add('Large Class',                       fmLargeClass);
+  Add('Unsorted uses clause',              fmUnsortedUses);
+  Add('Missing unit header',               fmMissingUnitHeader);
+  Add('Float equality',                    fmFloatEquality);
+  Add('Raise in destructor',               fmExceptInDestructor);
+  Add('Boolean parameter as flag',         fmBooleanParam);
+  Add('Unused private method',             fmUnusedPrivateMethod);
+  Add('Could be class method',             fmCanBeClassMethod);
+  Add('Missing override',                  fmMissingOverride);
+  Add('Boolean always true / false',       fmBoolAlwaysTrue);
+  Add('Constant return value',             fmConstantReturn);
+  Add('Hardcoded user string',             fmHardcodedString);
+
+  // ---- Warnings (einzeln) ----
+  Sep('--- Warnings ---');
+  Add('Empty Except',          fmEmptyExcept);
+  Add('Missing Finally',       fmMissingFinally);
+  Add('Dead Code',             fmDeadCode);
+  Add('Unused Uses',           fmUnusedUses);
+  Add('Debug Output',          fmDebugOutput);
+  Add('Hardcoded Path',        fmHardcodedPath);
+  Add('Read Error',            fmFileReadError);
+  Add('Re-Raise Exception',    fmReRaiseException);
+  Add('Raising Raw Exception', fmRaisingRawException);
+  Add('Date Format Settings',  fmDateFormatSettings);
+  Add('Unicode -> Ansi Cast',  fmUnicodeToAnsiCast);
+  Add('IfThen Short-Circuit',  fmIfThenShortCircuit);
+  Add('Exception Too General', fmExceptionTooGeneral);
+
+  // ---- Hints (einzeln) ----
+  Sep('--- Hints ---');
+  Add('Long Method',             fmLongMethod);
+  Add('Many Parameters',         fmLongParamList);
+  Add('Magic Number',            fmMagicNumber);
+  Add('Duplicate Strings',       fmDuplicateString);
+  Add('Duplicate Code Blocks',   fmDuplicateBlock);
+  Add('Deep Nesting',            fmDeepNesting);
+  Add('Cyclomatic Complexity',   fmCyclomaticComplexity);
+  Add('TODO/FIXME',              fmTodoComment);
+  Add('Empty Methods',           fmEmptyMethod);
+  Add('Can Be Unit Private',     fmCanBeUnitPrivate);
+  Add('Can Be Strict Private',   fmCanBeStrictPrivate);
+  Add('Can Be Protected',        fmCanBeProtected);
+  Add('Unused Public Member',    fmUnusedPublicMember);
+  Add('Unused Local Var',        fmUnusedLocalVar);
+  Add('Unused Parameter',        fmUnusedParameter);
+  Add('Tautological Expression', fmTautologicalBoolExpr);
+  Add('Master-Detail Unlinked',  fmDfmMasterDetailUnlinked);
+  Add('Data Module Split Hint',  fmDfmDataModuleSplitHint);
+  Add('Dangerous SQL Statement', fmSqlDangerousStatement);
+  Add('Format Locale Hint',      fmFormatLocaleHint);
+  Add('Cast And Free',           fmCastAndFree);
+  Add('Inherited (empty)',       fmInheritedMethodEmpty);
+  Add('Nil Comparison',          fmNilComparison);
+  // mORMot-Cluster (SCA153-155)
+  Add('Unpaired Lock',                            fmUnpairedLock);
+  Add('Move/FillChar SizeOf(Pointer)',            fmMoveSizeOfPointer);
+  Add('with on multiple targets',                 fmWithMultipleTargets);
+  // mORMot-Cluster Phase 2 (SCA156-158)
+  Add('GetMem without try/finally',               fmGetMemWithoutFreeMem);
+  Add('SetLength grow in loop',                   fmSetLengthAppendInLoop);
+  Add('PChar arithmetic without empty-check',     fmPointerArithmeticOnString);
+  // mORMot-Cluster Phase 3 (SCA159-161)
+  Add('Empty typed exception handler',            fmEmptyOnHandler);
+  Add('String cast from raw pointer',             fmStringFromPointer);
+  Add('Pointer subtraction (Win64 truncation)',   fmPointerSubtraction);
+
+  FFilterCombo.ItemIndex := 0; // "All"
+end;
+
+procedure TAnalyserFrame.PopulateTypeCombo;
+// Sonar-Kategorien als Filter. Englische Identifiers fix - matchen die
+// Strings in den Befund-TypeText-Feldern (Bug/Code Smell/Vulnerability/
+// Security Hotspot/Code Duplication).
+begin
+  FTypeCombo.Items.Add(_('All'));
+  FTypeCombo.Items.Add('Bug');
+  FTypeCombo.Items.Add('Code Smell');
+  FTypeCombo.Items.Add('Vulnerability');
+  FTypeCombo.Items.Add('Security Hotspot');
+  FTypeCombo.Items.Add('Code Duplication');
+  FTypeCombo.ItemIndex := 0;
+end;
+
+procedure TAnalyserFrame.PopulateProfileCombo;
+// Profile-Liste aus rules/sca-rules.json (TRuleCatalog.ProfileNames).
+// Fallback 'default' wenn das Catalog leer ist.
+// Default-Selektion: FRepoSettings.IdeProfile, fallback 'ide-fast', sonst 0.
+var
+  ProfileList : TArray<string>;
+  ProfileName : string;
+  Idx         : Integer;
+begin
+  ProfileList := TRuleCatalog.ProfileNames;
+  if Length(ProfileList) = 0 then
+    FProfileCombo.Items.Add(_('default'))
+  else
+    for ProfileName in ProfileList do
+      FProfileCombo.Items.Add(ProfileName);
+
+  Idx := FProfileCombo.Items.IndexOf(FRepoSettings.IdeProfile);
+  if Idx < 0 then Idx := FProfileCombo.Items.IndexOf('ide-fast');
+  if Idx < 0 then Idx := 0;
+  FProfileCombo.ItemIndex := Idx;
+end;
+
+procedure TAnalyserFrame.ApplyToolbarSizing(AUnifCtrlH: Integer);
+// Loest die VCL-Quirk dass TComboBox die Align.Height ignoriert. Buttons
+// und Edits respektieren Align von Hause aus, der Helper-Aufruf ist hier
+// redundant aber konsistent: jede Toolbar-Component geht durch denselben
+// Sizing-Pfad. ScaleW skaliert den 96-DPI-Wert auf die Container-PPI.
+// Icon-Buttons mit erzwungener Width+Height-Constraints damit sie pixel-
+// genau identisch rendern (Browse + Hamburger + Branch-Changes).
+begin
+  // Icon-Buttons - quadratisch mit fixer Width.
+  TToolbarSizing.ApplyIconButton(FBtnBrowse,         ScaleW(BTN_W_ICON), AUnifCtrlH);
+  TToolbarSizing.ApplyIconButton(FBtnHamburger,      ScaleW(BTN_W_ICON), AUnifCtrlH);
+  TToolbarSizing.ApplyIconButton(FBtnAnalyseChanged, ScaleW(BTN_W_ICON), AUnifCtrlH);
+  // Restliche Components nur Hoehe vereinheitlichen.
+  TToolbarSizing.Apply(FBtnIgnore,          AUnifCtrlH);
+  TToolbarSizing.Apply(FBtnRepo,            AUnifCtrlH);
+  TToolbarSizing.Apply(FProjectPath,        AUnifCtrlH);
+  TToolbarSizing.Apply(FFilterCombo,        AUnifCtrlH);
+  TToolbarSizing.Apply(FTypeCombo,          AUnifCtrlH);
+  TToolbarSizing.Apply(FProfileCombo,       AUnifCtrlH);
+  TToolbarSizing.Apply(FBtnAnalyse,         AUnifCtrlH);
+  TToolbarSizing.Apply(FBtnAnalyseCurrent,  AUnifCtrlH);
+  TToolbarSizing.Apply(FBtnCancel,          AUnifCtrlH);
+  TToolbarSizing.Apply(FBtnExport,          AUnifCtrlH);
+  TToolbarSizing.Apply(FSearchEdit,         AUnifCtrlH);
+end;
+
+procedure TAnalyserFrame.WireResponsiveLayout;
+// 3-Stufen-Sichtbarkeitstabelle. Eine Klasse, eine ClientWidth-Quelle
+// (= Frame.ClientWidth). Stage-Bestimmung + DPI-Skalierung intern.
+// AfterApply-Callback fired nach JEDEM Resize -> dynamische Folge-
+// Anpassungen (FilterSubPanels-Width, SearchEdit-MinWidth) bleiben aktuell.
+// FResponsive selbst wird Self-owned -> Auto-Free im Frame-Destroy.
+//
+// Stats-Tiles werden in BuildStatsTiles registriert (laufzeit-bedingt
+// erst NACH dem dortigen Tile-Setup).
+begin
+  FResponsive := TResponsiveLayoutController.Create(Self, Self,
+    BREAKPOINT_MEDIUM, BREAKPOINT_FULL);
+
+  // PanelPath
+  FResponsive.RegisterCtrl(FBtnRepo,           usFull);
+  FResponsive.RegisterCtrl(FBtnIgnore,         usFull);
+  // (FBtnBrowse, LblPath, FProjectPath: immer sichtbar - keine Registrierung noetig)
+
+  // PanelButtons (Filter-Reihe: Severity + Type)
+  FResponsive.RegisterCtrl(FLblFilter,         usMedium);
+  FResponsive.RegisterCtrl(FLblType,           usMedium);
+  // (FFilterCombo, FTypeCombo, FPanelSev, FPanelType: immer sichtbar)
+
+  // PanelSearch (Aktions-Reihe: Analyse-Buttons + Profile-Combo + Suche)
+  FResponsive.RegisterCtrl(FBtnCancel,         usFull);
+  FResponsive.RegisterCtrl(FBtnExport,         usFull);
+  FResponsive.RegisterCtrl(FBtnAnalyseChanged, usFull);
+  FResponsive.RegisterCtrl(FLblProfile,        usMedium);
+  FResponsive.RegisterCtrl(FLblSearch,         usFull);
+  FResponsive.RegisterCtrl(FBtnHamburger,      usNarrow, usMedium);  // inverse
+  // (FBtnAnalyse, FBtnAnalyseCurrent, FProfileCombo, FPanelProfile,
+  //  FSearchEdit: immer sichtbar)
+
+  FResponsive.AfterApply := ResponsiveAfterApply;
+end;
+
+procedure TAnalyserFrame.BuildResultGrid(AParent: TWinControl);
+// Virtuelles TStringGrid: Cell-Inhalt kommt zur Paint-Zeit via OnDrawCell
+// aus FDisplayedFindings (siehe GridDrawCell + TFindingGridRenderer).
+// FixedCols/FixedRows = Header. ColWidths sind 96-DPI-Defaults; GridResize
+// passt die Befund-Spalte (4) dynamisch der verbleibenden Breite an.
+begin
+  FResultGrid := TStringGrid.Create(Self);
+  FResultGrid.Parent := AParent;
+  FResultGrid.Align  := alClient;
+  // MinWidth=300 verhindert dass der Help-Splitter den Grid-Bereich
+  // praktisch auf Null zieht. MinHeight=120 weiterhin gegen Mini-Hoehe.
+  FResultGrid.Constraints.MinHeight := ScaleW(GRID_MIN_HEIGHT);
+  FResultGrid.Constraints.MinWidth  := ScaleW(GRID_MIN_WIDTH);
+  FResultGrid.FixedCols        := 0;
+  FResultGrid.ColCount         := 6;
+  FResultGrid.RowCount         := 2;
+  FResultGrid.DefaultColWidth  := ScaleW(100);
+  FResultGrid.DefaultRowHeight := ScaleW(20);
+  FResultGrid.FixedRows        := 1;
+  TIDEToolbar.ApplySegoeUI(FResultGrid);
+  // DoubleBuffered: TStringGrid hat viele kleine OnDrawCell-Aufrufe,
+  // Off-Screen-Buffer eliminiert Flicker beim Scrollen und beim
+  // Severity-Recolor nach einem Sort-Wechsel.
+  FResultGrid.DoubleBuffered := True;
+  FResultGrid.GridLineWidth  := 1;
+  FResultGrid.Options := [goFixedVertLine, goFixedHorzLine,
+                          goVertLine, goHorzLine,
+                          goColSizing, goRowSelect, goThumbTracking];
+  // Spaltenbreiten (DPI-skaliert): 130+85+38+110+240+90 = 693 px @ 100% DPI.
+  // Befund-Spalte (4) faellt der GridResize-Handler den Rest zu.
+  FResultGrid.ColWidths[0] := ScaleW(130);  // Datei
+  FResultGrid.ColWidths[1] := ScaleW( 85);  // Methode
+  FResultGrid.ColWidths[2] := ScaleW( 38);  // Zeile
+  FResultGrid.ColWidths[3] := ScaleW(110);  // Typ (fix)
+  FResultGrid.ColWidths[4] := ScaleW(240);  // Regel/Befund (fuellt Rest per GridResize)
+  FResultGrid.ColWidths[5] := ScaleW( 90);  // Schweregrad (fix)
+  FResultGrid.Cells[0, 0] := _('File');
+  FResultGrid.Cells[1, 0] := _('Method');
+  FResultGrid.Cells[2, 0] := _('Line');
+  FResultGrid.Cells[3, 0] := _('Type');
+  FResultGrid.Cells[4, 0] := _('Rule');
+  FResultGrid.Cells[5, 0] := _('Severity');
+  FResultGrid.OnDrawCell   := GridDrawCell;
+  FResultGrid.OnDblClick   := GridDblClick;
+  FResultGrid.OnSelectCell := GridSelectCell;
+  FResultGrid.OnMouseDown  := GridMouseDown;
+  FResultGrid.OnKeyDown    := GridKeyDown;
+  // Tooltip-Setup (Subclass + Hint-Properties + HintPause-Override) ist
+  // im TFindingGridTooltip-Helper gekapselt. Owner=Self -> Auto-Free
+  // plus expliziter FreeAndNil im Destruktor (Restore-Reihenfolge).
+  FGridTooltip := TFindingGridTooltip.Create(Self, FResultGrid, FDisplayedFindings);
+end;
 
 procedure TAnalyserFrame.BuildStatsTiles(Parent: TPanel);
 // Thresholds: BREAKPOINT_MEDIUM (500) + BREAKPOINT_FULL (850) aus
@@ -2599,10 +2553,10 @@ begin
   FHamburgerMenu.Items.Add(MI);
 
   FBtnHamburger.PopupMenu := FHamburgerMenu;
-  // Standard-Behavior von TButton.PopupMenu ist Rechtsklick - hier wollen
-  // wir Linksklick. HamburgerClick wirft das Popup unter dem Button auf
-  // (gleicher Pattern wie der Export-Button).
-  FBtnHamburger.OnClick := HamburgerClick;
+  // OnClick wurde bereits beim AddButton-Aufruf im Constructor auf
+  // HamburgerClick gesetzt (lazy-build-Trigger). PopupMenu hier zusaetz-
+  // lich anhaengen damit Rechtsklick auf den Button das Menu auch zeigt
+  // (Standard-VCL-Behavior).
 end;
 
 procedure TAnalyserFrame.HamburgerMenuPopup(Sender: TObject);
@@ -2620,10 +2574,16 @@ end;
 procedure TAnalyserFrame.HamburgerClick(Sender: TObject);
 // Klick auf den Hamburger-Button -> Popup-Menu unter dem Button anzeigen.
 // Position: linke untere Ecke des Buttons (in Screen-Koordinaten).
+// Lazy-Build: das Menu wird erst hier (beim ersten Klick) konstruiert.
+// Spart Open-Time wenn der User den Hamburger nie benutzt (FULL-Modus
+// hat alle Toolbar-Tasten sichtbar).
 var
   P : TPoint;
 begin
-  if not Assigned(FBtnHamburger) or not Assigned(FHamburgerMenu) then Exit;
+  if not Assigned(FBtnHamburger) then Exit;
+  if not Assigned(FHamburgerMenu) then
+    BuildHamburgerMenu;
+  if not Assigned(FHamburgerMenu) then Exit;
   P := FBtnHamburger.ClientToScreen(Point(0, FBtnHamburger.Height));
   FHamburgerMenu.Popup(P.X, P.Y);
 end;
@@ -2821,10 +2781,10 @@ end;
 procedure TAnalyserFrame.CMStyleChanged(var Message: TMessage);
 begin
   inherited;
-  // VCL-Style-Wechsel und IDE-Theme-Wechsel laufen am Ende durch denselben
-  // Refresh-Pfad. Verhindert dass der Code in zwei Routinen synchron
-  // gehalten werden muss. Message-Handler bleibt klassen-gebunden, der
-  // Body delegiert nur.
+  // VCL-Style-Wechsel = IDE-Theme-Wechsel - beide laufen am Ende durch
+  // denselben Refresh-Pfad. Belt-and-suspenders zum TIDETheme-Subscribe:
+  // der OTA-Notifier feuert nicht in jeder IDE-Version/Style-Source
+  // konsistent, CMStyleChanged via Application.Broadcast aber schon.
   RefreshFromIDETheme;
 end;
 
@@ -3027,14 +2987,23 @@ var
 begin
   FFrame := AFrame as TAnalyserFrame;
   F := FFrame;
-  // IDE kann die Schrift des Frames beim Einbetten ueberschreiben ->
-  // hier explizit nach dem Hosting nochmal setzen.
-  F.Font.Name := 'Segoe UI';
-  F.Font.Size := 8;
-  F.FResultGrid.Font.Name := 'Segoe UI';
-  F.FResultGrid.Font.Size := 8;
-  F.FProjectPath.Font.Name := 'Segoe UI';
-  F.FProjectPath.Font.Size := 8;
+  // First-time-open-via-Menu-Flow:
+  //
+  //   1. User -> View > Static Code Analysis
+  //   2. ShowAnalyserDockableForm -> NTASvc.CreateDockableForm
+  //   3. TAnalyserFrame.Create:
+  //        - Color := IDE_BG_CHROME
+  //        - ApplySegoeUI(Self)
+  //        - FThemeSub := TIDETheme.Subscribe  (Notifier registriert)
+  //        - Toolbar-Zeilen + Grid erzeugen
+  //   4. IDE setzt Frame.Parent := HostTForm
+  //        -> SetParent-Override: RefreshFromIDETheme -> Apply (Theme #1)
+  //   5. <hier> FrameCreated:
+  //        - Font-Reset auf Frame (gegen IDE-Embed-Override - Children
+  //          mit ParentFont=False sind davon nicht betroffen).
+  //        - Constraints auf HostForm hochpropagieren (Float-Mindestgroesse).
+  //
+  TIDEToolbar.ApplySegoeUI(F);
 
   // Floated-Mindestbreite/-hoehe auf das IDE-Host-Form propagieren.
   // Frame.Constraints schuetzt nur den Frame selbst - im undocked Zustand
@@ -3049,13 +3018,13 @@ begin
       HostForm.Constraints.MinHeight := F.Constraints.MinHeight;
   end;
 
-  // IDE-Theme einmalig anwenden + Notifier registrieren. Logik
-  // ist nach uIDEThemeIntegration.TIDEThemeIntegration.Attach
-  // ausgelagert - der Helper wurde im Frame-Ctor erstellt und
-  // wartet bis hier auf seinen ersten "es gibt einen Hosting-
-  // Kontext"-Trigger.
-  if Assigned(F.FThemeIntegration) then
-    F.FThemeIntegration.Attach;
+  // Theme-Apply auch hier - belt-and-suspenders zum SetParent-Override:
+  // bei manchen IDE-Dock-Sequenzen (insb. wenn der Frame ueber einen
+  // anderen Mechanismus parented wird als das einfache Parent-Setzen)
+  // greift der SetParent-Pfad nicht zuverlaessig. Apply ist idempotent
+  // (kein Schaden bei mehrfachem Aufruf) und stellt sicher dass das
+  // erstmalige Open via Menue garantiert themed ist.
+  TIDETheme.Apply(F);
 end;
 
 function TAnalyserDockableForm.GetMenuActionList: TCustomActionList;
@@ -3872,12 +3841,26 @@ begin
 end;
 
 procedure ShowAnalyserDockableForm;
+// Wird vom View-Menue-Eintrag + vom IDE-Wizard-Execute gerufen. Robust
+// gegen Race-Conditions: wenn GDockableForm waehrend Plugin-Reload kurz
+// nil ist, einfach nicht crashen. Exception aus CreateDockableForm wuerde
+// sonst stumm verschluckt und der User denkt das Menue reagiert nicht.
 var
   NTASvc : INTAServices;
 begin
   if not Assigned(GDockableForm) then Exit;
-  if Supports(BorlandIDEServices, INTAServices, NTASvc) then
+  if not Supports(BorlandIDEServices, INTAServices, NTASvc) then Exit;
+  try
     NTASvc.CreateDockableForm(GDockableForm);
+  except
+    on E: Exception do
+      // Sichtbares Feedback statt stilles Schlucken - der User sieht
+      // sonst gar nichts beim Menueklick und kann den Fehler nicht melden.
+      Application.MessageBox(
+        PChar('Static Code Analyser: ' + E.ClassName + #10#13 + E.Message),
+        'Plugin Open Error',
+        MB_ICONERROR or MB_OK);
+  end;
 end;
 
 procedure UnregisterAnalyserDockableForm;

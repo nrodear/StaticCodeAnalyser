@@ -24,6 +24,7 @@ unit uIDESonarOptions;
 interface
 
 uses
+  Winapi.Messages,                                    // TMessage / CM_STYLECHANGED
   System.Classes, System.SysUtils, System.UITypes,
   Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
   Vcl.Dialogs,
@@ -60,6 +61,9 @@ type
     procedure TestConnectionClick(Sender: TObject);
     procedure RevealTokenClick(Sender: TObject);
     procedure OpenIniClick(Sender: TObject);
+    // VCL-Style-Wechsel via Application.Broadcast - belt-and-suspenders
+    // zum TIDETheme-Subscribe (TSonarAddInOptions.OnThemeChanged).
+    procedure CMStyleChanged(var Message: TMessage); message CM_STYLECHANGED;
   public
     constructor Create(AOwner: TComponent); override;
     procedure LoadFromIni(const IniPath: string);
@@ -68,7 +72,11 @@ type
 
   TSonarAddInOptions = class(TInterfacedObject, INTAAddInOptions)
   private
-    FFrame : TSonarOptionsFrame;
+    FFrame    : TSonarOptionsFrame;
+    // IDE-Theme-Abo: TIDETheme ruft OnThemeChanged bei jedem Wechsel.
+    // Wird in FrameCreated angelegt, in DialogClosed entsorgt.
+    FThemeSub : IInterface;
+    procedure OnThemeChanged;
   public
     function GetArea: string;
     function GetCaption: string;
@@ -89,7 +97,8 @@ implementation
 
 uses
   System.IniFiles, System.IOUtils, Winapi.ShellAPI, Winapi.Windows,
-  uIDEThemeIntegration;   // ApplyIDETheme one-shot helper
+  uIDETheme,    // TIDETheme.Apply + Subscribe
+  uIDEColors;   // semantische Palette (IDE_BG_CONTENT, IDE_FG_DIM)
 
 var
   GSonarOptionsIfc : INTAAddInOptions = nil;
@@ -211,7 +220,7 @@ begin
   // 26 hatte die zweite Zeile angeschnitten.
   lblTokenInfo.Height := 40;
   lblTokenInfo.WordWrap := True;
-  lblTokenInfo.Font.Color := clGrayText;
+  lblTokenInfo.Font.Color := IDE_FG_DIM;
   // 8pt statt Default 9pt - Hilfe-Text soll subtler als die Field-Labels
   // wirken. ParentFont OFF, damit Theme-Wechsel das nicht zurueckschiebt.
   lblTokenInfo.ParentFont := False;
@@ -252,9 +261,9 @@ begin
   memoResult.ScrollBars := ssVertical;
   memoResult.ReadOnly := True;
   memoResult.Font.Name := 'Consolas';
-  // clWindow statt clBtnFace - ReadOnly reicht als Hinweis, grauer
-  // Background liest sich wie disabled.
-  memoResult.Color := clWindow;
+  // IDE_BG_CONTENT statt IDE_BG_CHROME - ReadOnly reicht als Hinweis,
+  // grauer Background liest sich wie disabled.
+  memoResult.Color := IDE_BG_CONTENT;
 end;
 
 procedure TSonarOptionsFrame.LoadFromIni(const IniPath: string);
@@ -313,6 +322,15 @@ begin
   if NewToken = '' then Exit;  // leer = nicht ueberschreiben
 
   TSonarConfigResolver.StoreToken(IniPath, TOKEN_REF_DEFAULT, NewToken);
+end;
+
+procedure TSonarOptionsFrame.CMStyleChanged(var Message: TMessage);
+begin
+  inherited;
+  // VCL-broadcastet diese Message wenn der aktive Style wechselt.
+  // Belt-and-suspenders zum TIDETheme-Subscribe; Apply ist idempotent.
+  if csDestroying in ComponentState then Exit;
+  TIDETheme.Apply(Self);
 end;
 
 procedure TSonarOptionsFrame.DetectProjectClick(Sender: TObject);
@@ -439,20 +457,36 @@ begin
   Ini := TSonarConfigResolver.DefaultIniPath;
   FFrame.LoadFromIni(Ini);
   // IDE-Theme uebernehmen - sonst rendert der Frame im VCL-Default
-  // (hell) auch wenn die IDE im Dark-Mode laeuft. One-shot reicht hier,
-  // weil die IDE den Frame bei jedem erneuten Oeffnen neu erzeugt; ein
-  // Theme-Notifier ist nur fuer das langlebige Dock-Window noetig.
-  ApplyIDETheme(FFrame);
+  // (hell) auch wenn die IDE im Dark-Mode laeuft.
+  TIDETheme.Apply(FFrame);
+  // Theme-Live-Update: falls der User mid-Options-Dialog die
+  // "IDE Style"-Option umstellt (gleicher Dialog!), aktualisiert
+  // OnThemeChanged unseren Frame automatisch.
+  FThemeSub := TIDETheme.Subscribe(OnThemeChanged);
+end;
+
+procedure TSonarAddInOptions.OnThemeChanged;
+begin
+  if Assigned(FFrame) then
+    TIDETheme.Apply(FFrame);
 end;
 
 procedure TSonarAddInOptions.DialogClosed(Accepted: Boolean);
 var
   Ini : string;
 begin
-  if not Accepted then Exit;
-  if FFrame = nil then Exit;
-  Ini := TSonarConfigResolver.DefaultIniPath;
-  FFrame.SaveToIni(Ini);
+  try
+    if not Accepted then Exit;
+    if FFrame = nil then Exit;
+    Ini := TSonarConfigResolver.DefaultIniPath;
+    FFrame.SaveToIni(Ini);
+  finally
+    // Theme-Subscription aufloesen - IDE gibt FFrame nach DialogClosed
+    // frei; ein noch lebendes Abo wuerde beim naechsten Theme-Wechsel
+    // in die freigegebene Frame-Referenz feuern.
+    FThemeSub := nil;
+    FFrame := nil;
+  end;
 end;
 
 function TSonarAddInOptions.ValidateContents: Boolean;

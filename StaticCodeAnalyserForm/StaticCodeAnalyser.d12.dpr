@@ -48,6 +48,7 @@ uses
   uRegExMatches in 'sources\Common\uRegExMatches.pas',
   uRuleCatalog in 'sources\Common\uRuleCatalog.pas',
   uSCAConsts in 'sources\Common\uSCAConsts.pas',
+  uIDEColors in 'sources\Common\uIDEColors.pas',
   uYamlSubsetParser in 'sources\Common\uYamlSubsetParser.pas',
   uQuickFix in 'sources\Common\uQuickFix.pas',
   uCustomerForm in 'resources\uCustomerForm.pas' {CustomerForm},

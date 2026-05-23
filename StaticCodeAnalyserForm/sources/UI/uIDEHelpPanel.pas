@@ -86,6 +86,7 @@ implementation
 uses
   System.SysUtils, Vcl.Graphics, Vcl.Themes, Vcl.Forms,
   uFixHint, uAnalyserPalette, uAnalyserTheme, uAnalyserTypes,
+  uIDEColors,
   uLocalization;
 
 const
@@ -95,9 +96,20 @@ const
 constructor TFindingHintPanel.Create(AOwner: TComponent;
   AParent: TWinControl; AAnchor: TWinControl;
   AAlwaysVisible: Boolean);
+// Layout-Stapel im FHelpPanel (von oben nach unten):
+//   HelpLeftSep        (alLeft  1px)
+//   FHelpDescLabel     (alTop   16px)  – "Select a row..." Caption
+//   FHelpBeforePanel   (alTop   150px) – Vorher-Memo + Header
+//   BeforeAfterSplitter(alTop   4px)
+//   HelpAfterPanel     (alClient)      – Nachher-Memo + Header
+//
+// Erzeugungsreihenfolge entspricht der gewuenschten Sicht-Reihenfolge
+// — VCL dockt alTop in genau dieser Reihenfolge. Frueher gab es einen
+// zusaetzlichen HelpCode-Wrapper-TPanel als alClient unter FHelpDescLabel
+// (in den Vorher/Splitter/Nachher hineingingen); die Wrapper-Ebene war
+// nicht noetig und wurde entfernt.
 var
   HelpLeftSep         : TPanel;
-  HelpCode            : TPanel;
   LblBefore           : TLabel;
   BeforeAfterSplitter : TSplitter;
   HelpAfterPanel      : TPanel;
@@ -114,7 +126,9 @@ begin
   FHelpPanel.Width               := HELP_PANEL_INIT_WIDTH;
   FHelpPanel.Constraints.MinWidth := HELP_PANEL_MIN_WIDTH;
   FHelpPanel.BevelOuter          := bvNone;
-  FHelpPanel.Color               := clBtnFace;
+  // Color erbt vom Parent (PanelClient -> Frame.clBtnFace). Explizit
+  // gesetzt war es vor dem Theme-Sweep, das ist heute redundant: das
+  // Parent-Chain liefert ohnehin den themed clBtnFace.
 
   // 1px linke Trennlinie zwischen Grid und Help-Panel.
   HelpLeftSep := TPanel.Create(Self);
@@ -122,7 +136,7 @@ begin
   HelpLeftSep.Align      := alLeft;
   HelpLeftSep.Width      := 1;
   HelpLeftSep.BevelOuter := bvNone;
-  HelpLeftSep.Color      := cl3DDkShadow;
+  HelpLeftSep.Color      := IDE_SEPARATOR;
 
   FHelpDescLabel := TLabel.Create(Self);
   FHelpDescLabel.Parent      := FHelpPanel;
@@ -132,24 +146,18 @@ begin
   FHelpDescLabel.Font.Name   := 'Segoe UI';
   FHelpDescLabel.Font.Size   := 8;
   FHelpDescLabel.Font.Style  := [fsBold];
-  FHelpDescLabel.Font.Color  := clBtnText;
-  FHelpDescLabel.Color       := clBtnFace;
+  FHelpDescLabel.Font.Color  := IDE_FG_CHROME;
+  FHelpDescLabel.Color       := IDE_BG_CHROME;
   FHelpDescLabel.ParentColor := False;
   FHelpDescLabel.Caption     := '  ' + _('Select a row to see the fix hint');
 
-  HelpCode := TPanel.Create(Self);
-  HelpCode.Parent      := FHelpPanel;
-  HelpCode.Align       := alClient;
-  HelpCode.BevelOuter  := bvNone;
-  HelpCode.Color       := clBtnFace;
-
   // ---- Vorher (oben) ----
   FHelpBeforePanel := TPanel.Create(Self);
-  FHelpBeforePanel.Parent      := HelpCode;
+  FHelpBeforePanel.Parent      := FHelpPanel;
   FHelpBeforePanel.Align       := alTop;
   FHelpBeforePanel.Height      := 150;
   FHelpBeforePanel.BevelOuter  := bvNone;
-  FHelpBeforePanel.Color       := clWindow;
+  FHelpBeforePanel.Color       := IDE_BG_CONTENT;
 
   LblBefore := TLabel.Create(Self);
   LblBefore.Parent      := FHelpBeforePanel;
@@ -169,25 +177,25 @@ begin
   FHelpBefore.ReadOnly    := True;
   FHelpBefore.BorderStyle := bsNone;
   FHelpBefore.ScrollBars  := ssBoth;
-  FHelpBefore.Color       := clWindow;
+  FHelpBefore.Color       := IDE_BG_CONTENT;
   FHelpBefore.Font.Name   := 'Consolas';
   FHelpBefore.Font.Size   := 8;
-  FHelpBefore.Font.Color  := clWindowText;
+  FHelpBefore.Font.Color  := IDE_FG_CONTENT;
 
   // ---- Splitter Vorher/Nachher ----
   BeforeAfterSplitter := TSplitter.Create(Self);
-  BeforeAfterSplitter.Parent      := HelpCode;
+  BeforeAfterSplitter.Parent      := FHelpPanel;
   BeforeAfterSplitter.Align       := alTop;
   BeforeAfterSplitter.Height      := 4;
-  BeforeAfterSplitter.Color       := cl3DDkShadow;
+  BeforeAfterSplitter.Color       := IDE_SEPARATOR;
   BeforeAfterSplitter.ResizeStyle := rsUpdate;
 
   // ---- Nachher (Rest) ----
   HelpAfterPanel := TPanel.Create(Self);
-  HelpAfterPanel.Parent      := HelpCode;
+  HelpAfterPanel.Parent      := FHelpPanel;
   HelpAfterPanel.Align       := alClient;
   HelpAfterPanel.BevelOuter  := bvNone;
-  HelpAfterPanel.Color       := clWindow;
+  HelpAfterPanel.Color       := IDE_BG_CONTENT;
 
   LblAfter := TLabel.Create(Self);
   LblAfter.Parent      := HelpAfterPanel;
@@ -207,17 +215,17 @@ begin
   FHelpAfter.ReadOnly    := True;
   FHelpAfter.BorderStyle := bsNone;
   FHelpAfter.ScrollBars  := ssBoth;
-  FHelpAfter.Color       := clWindow;
+  FHelpAfter.Color       := IDE_BG_CONTENT;
   FHelpAfter.Font.Name   := 'Consolas';
   FHelpAfter.Font.Size   := 8;
-  FHelpAfter.Font.Color  := clWindowText;
+  FHelpAfter.Font.Color  := IDE_FG_CONTENT;
 
   // ---- Splitter Grid|Help (Visible folgt FHelpPanel) ----
   FHelpSplitter := TSplitter.Create(Self);
   FHelpSplitter.Parent      := AParent;
   FHelpSplitter.Align       := alRight;
   FHelpSplitter.Width       := 4;
-  FHelpSplitter.Color       := cl3DDkShadow;
+  FHelpSplitter.Color       := IDE_SEPARATOR;
   FHelpSplitter.ResizeStyle := rsUpdate;
 
   // ---- Polling-Timer fuer Floating/Docked-Detection ----
@@ -306,7 +314,7 @@ end;
 procedure TFindingHintPanel.ShowPlaceholder;
 begin
   FHelpDescLabel.Caption := '  ' + _('Select a row to see the fix hint');
-  FHelpDescLabel.Color   := StyleServices.GetSystemColor(clBtnFace);
+  FHelpDescLabel.Color   := StyleServices.GetSystemColor(IDE_BG_CHROME);
   FHelpBefore.Lines.Text := '';
   FHelpAfter.Lines.Text  := '';
 end;
@@ -316,7 +324,7 @@ var
   Hint         : TFixHint;
   ColorDefault : TColor;
 begin
-  ColorDefault := StyleServices.GetSystemColor(clBtnFace);
+  ColorDefault := StyleServices.GetSystemColor(IDE_BG_CHROME);
 
   if not Assigned(F) then
   begin
@@ -337,7 +345,7 @@ begin
 
   // Severity-Akzent als Hintergrund des Beschriftungs-Labels.
   FHelpDescLabel.Color :=
-    SeverityBg(SeverityFromKindLevel(F.Kind, F.Severity), clBtnFace);
+    SeverityBg(SeverityFromKindLevel(F.Kind, F.Severity), IDE_BG_CHROME);
   if FHelpDescLabel.Color = clNone then
     FHelpDescLabel.Color := ColorDefault;
 

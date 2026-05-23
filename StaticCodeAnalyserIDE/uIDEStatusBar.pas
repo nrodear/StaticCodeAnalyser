@@ -19,7 +19,7 @@ interface
 
 uses
   System.Classes,
-  Vcl.Controls, Vcl.ComCtrls;
+  Vcl.Controls, Vcl.ComCtrls, Vcl.Forms;
 
 type
   TAnalyserStatusBar = class(TComponent)
@@ -47,6 +47,22 @@ type
 implementation
 
 constructor TAnalyserStatusBar.Create(AOwner: TComponent; AParent: TWinControl);
+// Panel-Widths sind 96-DPI-Defaults. Auf Hi-DPI-Displays (150% / 200%)
+// wachsen Schrift + Glyph-Groessen mit, die Panel-Breiten muessen
+// entsprechend mitziehen. Vcl.Forms.Screen.PixelsPerInch ist auf der
+// Hi-DPI-Skala 144 / 192 etc. - Skalierungsfaktor = PPI / 96.
+const
+  W_FINDINGS = 160; // "X / Y findings"
+  W_PROGRESS = 220; // "Analysing file ..."
+  W_MODE     = 5000; // letztes Panel — fuellt automatisch
+var
+  Scale: Single;
+
+  function S(W: Integer): Integer;
+  begin
+    Result := Round(W * Scale);
+  end;
+
 begin
   inherited Create(AOwner);
   FBar := TStatusBar.Create(Self);
@@ -54,11 +70,13 @@ begin
   FBar.Align       := alBottom;
   FBar.SimplePanel := False;
 
-  with FBar.Panels.Add do begin Width := 160;  Text := ''; end; // Findings
-  with FBar.Panels.Add do begin Width := 220;  Text := ''; end; // Progress
-  // Letztes Panel: TStatusBar streckt es automatisch auf alle uebrige
-  // Breite wenn Width gross genug ist.
-  with FBar.Panels.Add do begin Width := 5000; Text := ''; end; // Mode
+  Scale := Screen.PixelsPerInch / 96;
+
+  with FBar.Panels.Add do begin Width := S(W_FINDINGS); Text := ''; end;
+  with FBar.Panels.Add do begin Width := S(W_PROGRESS); Text := ''; end;
+  // Letztes Panel: TStatusBar streckt es automatisch auf die uebrige
+  // Breite wenn Width gross genug ist. 5000 reicht auch fuer 4K.
+  with FBar.Panels.Add do begin Width := S(W_MODE);     Text := ''; end;
 end;
 
 procedure TAnalyserStatusBar.SetPanelText(Index: Integer; const T: string);
