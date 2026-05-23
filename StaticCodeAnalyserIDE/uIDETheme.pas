@@ -157,10 +157,50 @@ var
   // nicht da ist.
   G: TIDEThemeImpl;
 
+  // Diagnose-Flag: zeigt beim ersten Apply einmalig den Theme-Service-
+  // Zustand via MessageBox. Hilft beim Bug-Reporting wenn das Plugin
+  // im falschen Theme rendert. Nach erfolgreicher Diagnose entfernen.
+  DiagnosticShown: Boolean = False;
+
 procedure EnsureImpl;
 begin
   if G = nil then
     G := TIDEThemeImpl.Create;
+end;
+
+procedure ShowThemeDiagnostic(AControl: TWinControl);
+var
+  Theming    : IOTAIDEThemingServices;
+  Msg        : string;
+  HasService : Boolean;
+  Enabled    : Boolean;
+  ActiveName : string;
+  SubCount   : Integer;
+  ActiveStyle: string;
+begin
+  HasService := Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming);
+  Enabled    := False;
+  ActiveName := '(n/a)';
+  if HasService then
+  begin
+    try Enabled    := Theming.IDEThemingEnabled;  except end;
+    try ActiveName := Theming.ActiveTheme;        except end;
+  end;
+  SubCount   := 0;
+  if Assigned(G) and Assigned(G.FSubs) then
+    SubCount := G.FSubs.Count;
+  ActiveStyle := '(n/a)';
+  try ActiveStyle := TStyleManager.ActiveStyle.Name; except end;
+
+  Msg := 'SCA Theme Diagnostic (einmalig):' + sLineBreak + sLineBreak +
+         'Supports(IOTAIDEThemingServices) = ' + BoolToStr(HasService, True) + sLineBreak +
+         'IDEThemingEnabled = ' + BoolToStr(Enabled, True) + sLineBreak +
+         'ActiveTheme = ' + ActiveName + sLineBreak +
+         'TStyleManager.ActiveStyle = ' + ActiveStyle + sLineBreak +
+         'G.FSubs.Count = ' + IntToStr(SubCount) + sLineBreak +
+         'AControl.ClassName = ' + AControl.ClassName;
+
+  MessageBox(0, PChar(Msg), 'SCA Theme Diag', MB_OK or MB_ICONINFORMATION);
 end;
 
 // ---------------------------------------------------------------------------
@@ -355,6 +395,16 @@ begin
 
   EnsureImpl;
   G.EnsureNotifier;
+
+  // Diagnose-MessageBox einmalig (beim ersten Apply nach BPL-Load).
+  // Zeigt ob der Theme-Service da ist + ob Theming enabled. Nach
+  // erfolgreicher Bug-Reproduktion das ShowThemeDiagnostic wieder
+  // entfernen.
+  if not DiagnosticShown then
+  begin
+    DiagnosticShown := True;
+    ShowThemeDiagnostic(AControl);
+  end;
 
   // Theming OHNE den IDEThemingEnabled-Check holen: in manchen IDE-
   // Versionen (insb. mit Custom-Theme-Plugins) liefert IDEThemingEnabled
