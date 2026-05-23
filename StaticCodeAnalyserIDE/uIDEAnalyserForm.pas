@@ -297,10 +297,6 @@ type
     // Field auf nil gesetzt; die RAII-Hülle deregistriert sich dann
     // automatisch.
     FThemeSub : IInterface;
-    // VCL-Style-Wechsel via Application.Broadcast - feuert zuverlaessiger
-    // als der IOTAIDEThemingServicesNotifier in manchen IDE-Versionen.
-    // Beide Pfade rufen dieselbe RefreshFromIDETheme; Apply ist idempotent.
-    procedure CMStyleChanged(var Message: TMessage); message CM_STYLECHANGED;
     // SetParent override - feuert beim Dock <-> Float-Wechsel oder beim
     // ersten Hosting des Frames. Zwei Verantwortungen:
     //   1. Theme: Float-Wechsel erzeugt ein neues Host-TForm, dessen
@@ -323,7 +319,7 @@ type
     procedure Resize; override;
     // Wendet das aktuelle IDE-Theme auf den Frame an. Wird vom
     // TIDETheme-Subscribe bei jedem Theme-Wechsel gerufen und von
-    // CMStyleChanged / SetParent als zusaetzlicher Trigger. Public,
+    // SetParent als zusaetzlicher Trigger (Dock/Float-Wechsel). Public,
     // damit auch externer Code einen Theme-Refresh erzwingen kann.
     procedure RefreshFromIDETheme;
     // Liefert die aktuelle Profile-Combo-Auswahl als String, oder leer
@@ -2776,16 +2772,6 @@ begin
   Result := ofmRegular;
   if GLiveAnalyserFrame <> Pointer(Self) then Exit;
   Result := TIDEEditor.OpenFileAtLine(AbsPath, LineNumber);
-end;
-
-procedure TAnalyserFrame.CMStyleChanged(var Message: TMessage);
-begin
-  inherited;
-  // VCL-Style-Wechsel = IDE-Theme-Wechsel - beide laufen am Ende durch
-  // denselben Refresh-Pfad. Belt-and-suspenders zum TIDETheme-Subscribe:
-  // der OTA-Notifier feuert nicht in jeder IDE-Version/Style-Source
-  // konsistent, CMStyleChanged via Application.Broadcast aber schon.
-  RefreshFromIDETheme;
 end;
 
 procedure TAnalyserFrame.SetParent(AParent: TWinControl);

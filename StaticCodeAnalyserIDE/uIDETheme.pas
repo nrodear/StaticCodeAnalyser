@@ -141,6 +141,10 @@ type
     FFrameBg     : TColor;
     FFrameFg     : TColor;
     FEditorBg    : TColor;
+    // True bis zum ersten erfolgreichen Apply. Steuert ob ApplyRecursive
+    // per-Control ApplyTheme aufruft (cold-start, registriert die Style-
+    // Hooks) oder nur Invalidate (warm-restart, Hooks sind schon dran).
+    FFirstApply  : Boolean;
     procedure EnsureNotifier;
     procedure RebuildCache;
     procedure NotifyChanged;
@@ -219,6 +223,7 @@ begin
   FSubs        := TList<TSubscription>.Create;
   FNotifierIdx := -1;
   FCacheValid  := False;
+  FFirstApply  := True;
 end;
 
 destructor TIDEThemeImpl.Destroy;
@@ -328,22 +333,20 @@ end;
 // TIDETheme (statische Facade)
 // ---------------------------------------------------------------------------
 
-procedure ApplyRecursive(ATheming: IOTAIDEThemingServices; AC: TControl);
+procedure ApplyRecursive(ATheming: IOTAIDEThemingServices; AC: TControl;
+  AThemeChildren: Boolean);
 // Walked den Control-Baum unter AC. Pro Knoten:
-//   1. ApplyTheme via IOTAIDEThemingServices (registriert Style-Hook
-//      damit der Control dem aktiven VCL-Style folgt).
+//   1. (Nur wenn AThemeChildren=True) ApplyTheme via IOTAIDEThemingServices
+//      — registriert Style-Hook. Wird nur beim ersten Apply pro Session
+//      gemacht (cold-start); spaeter sind die Hooks an, ApplyTheme auf
+//      TopForm propagiert die Farbaenderung automatisch.
 //   2. Invalidate (Schedule Repaint mit neuen Style-Farben).
 //   3. TCustomGrid: zusaetzlich Repaint (Paint-Cache zwingen).
-//
-// Die eigentliche Theme-Bindung passiert in Apply() via TStyleManager.
-// TrySetStyle — danach paint VCL alle Controls automatisch in den
-// IDE-Theme-Farben. ApplyRecursive sorgt nur dafuer dass jeder Control
-// (auch verschachtelte Frames/Panels) den Style-Hook registriert hat.
 var
   i  : Integer;
   WC : TWinControl;
 begin
-  if Assigned(ATheming) then
+  if AThemeChildren and Assigned(ATheming) then
     ATheming.ApplyTheme(AC);
 
   AC.Invalidate;
@@ -354,31 +357,38 @@ begin
   begin
     WC := TWinControl(AC);
     for i := 0 to WC.ControlCount - 1 do
-      ApplyRecursive(ATheming, WC.Controls[i]);
+      ApplyRecursive(ATheming, WC.Controls[i], AThemeChildren);
   end;
 end;
 
 class procedure TIDETheme.Apply(AControl: TWinControl);
 var
-  Theming  : IOTAIDEThemingServices;
-  TopForm  : TCustomForm;
+  Theming     : IOTAIDEThemingServices;
+  TopForm     : TCustomForm;
+  ColdStart   : Boolean;
 begin
   if AControl = nil then Exit;
 
   EnsureImpl;
   G.EnsureNotifier;
 
+  // Cold-Start = erster Apply pro BPL-Session. Beim ersten Apply muessen
+  // alle Children einzeln ApplyTheme bekommen damit ihre Style-Hooks
+  // registriert werden. Bei nachfolgenden Apply-Calls (Theme-Switch)
+  // sind die Hooks bereits installiert — ein einziger ApplyTheme auf
+  // TopForm (rekursiv per ToolsAPI-Doku) plus Invalidate reicht. Das
+  // spart ~80 ApplyTheme-Calls pro Theme-Wechsel.
+  ColdStart := G.FFirstApply;
+  G.FFirstApply := False;
+
   if not Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) then
     Theming := nil;
 
   if Assigned(Theming) then
   begin
-    // ToolsAPI-vorgesehener Weg um eine Form-Klasse fuer IDE-Theming zu
-    // aktivieren: RegisterFormClass + ApplyTheme. Damit verwendet
-    // ApplyTheme die IDE-eigene StyleServices (Theme-Service-intern)
-    // statt der globalen Vcl.Themes.StyleServices. Kein TStyleManager.
-    // SetStyle - das wuerde sonst die GESAMTE Delphi-IDE re-painten
-    // (2-Sek-Hang), unabhaengig davon ob unser Plugin betroffen ist.
+    // RegisterFormClass + ApplyTheme: ToolsAPI-vorgesehener Weg zum
+    // Theming einer Form-Klasse. ApplyTheme(TopForm) ist laut Docs
+    // rekursiv und updated Font.Color/Color der gesamten Form-Tree.
     TopForm := GetParentForm(AControl);
     if Assigned(TopForm) then
     begin
@@ -386,9 +396,18 @@ begin
       Theming.ApplyTheme(TopForm);
       TopForm.Invalidate;
     end;
+
+    // ApplyTheme zusätzlich am Frame selbst — die IDE-Dock-Host-Form
+    // kennt unseren Frame nicht als theme-aware, daher propagiert
+    // ApplyTheme(TopForm) im docked-Modus nicht auf den Frame durch.
+    // Dieser Direkt-Call fixt das. Laut Docs ist ApplyTheme rekursiv,
+    // daher ein Aufruf für den ganzen Frame-Baum.
+    Theming.ApplyTheme(AControl);
   end;
 
-  ApplyRecursive(Theming, AControl);
+  // Cold-Start: ApplyTheme an JEDEN Descendant (defensiv).
+  // Warm-Restart (Theme-Switch): nur Invalidate + Grid.Repaint.
+  ApplyRecursive(Theming, AControl, ColdStart);
 end;
 
 class function TIDETheme.Subscribe(ACallback: TThemeChangedProc): IInterface;

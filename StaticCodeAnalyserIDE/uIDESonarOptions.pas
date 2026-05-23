@@ -24,7 +24,6 @@ unit uIDESonarOptions;
 interface
 
 uses
-  Winapi.Messages,                                    // TMessage / CM_STYLECHANGED
   System.Classes, System.SysUtils, System.UITypes,
   Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
   Vcl.Dialogs,
@@ -61,9 +60,6 @@ type
     procedure TestConnectionClick(Sender: TObject);
     procedure RevealTokenClick(Sender: TObject);
     procedure OpenIniClick(Sender: TObject);
-    // VCL-Style-Wechsel via Application.Broadcast - belt-and-suspenders
-    // zum TIDETheme-Subscribe (TSonarAddInOptions.OnThemeChanged).
-    procedure CMStyleChanged(var Message: TMessage); message CM_STYLECHANGED;
   public
     constructor Create(AOwner: TComponent); override;
     procedure LoadFromIni(const IniPath: string);
@@ -322,15 +318,6 @@ begin
   if NewToken = '' then Exit;  // leer = nicht ueberschreiben
 
   TSonarConfigResolver.StoreToken(IniPath, TOKEN_REF_DEFAULT, NewToken);
-end;
-
-procedure TSonarOptionsFrame.CMStyleChanged(var Message: TMessage);
-begin
-  inherited;
-  // VCL-broadcastet diese Message wenn der aktive Style wechselt.
-  // Belt-and-suspenders zum TIDETheme-Subscribe; Apply ist idempotent.
-  if csDestroying in ComponentState then Exit;
-  TIDETheme.Apply(Self);
 end;
 
 procedure TSonarOptionsFrame.DetectProjectClick(Sender: TObject);
