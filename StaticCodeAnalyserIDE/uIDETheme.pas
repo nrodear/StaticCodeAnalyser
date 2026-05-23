@@ -357,22 +357,60 @@ end;
 // TIDETheme (statische Facade)
 // ---------------------------------------------------------------------------
 
+type
+  // Hack-Class um auf protected TControl.Color / .Font zuzugreifen.
+  TControlAccess = class(TControl);
+
+// Resolvet alle logischen System-Color-Properties (clBtnFace, clWindow,
+// clBtnText, clWindowText, clGrayText, cl3DDkShadow) eines Controls
+// gegen die IDE-spezifische StyleServices statt der VCL-globalen.
+// Notwendig wenn der User eine andere VCL-Style hat (z.B. Mountain_Mist)
+// als das IDE-Theme (z.B. Dark) — der Frame soll dem IDE-Theme folgen,
+// nicht dem VCL-Style.
+procedure ResolveIDEColor(var AColor: TColor; const AStyle: TCustomStyleServices);
+const
+  SYSTEM_COLORS = [clBtnFace, clWindow, clBtnText, clWindowText,
+                   clGrayText, cl3DDkShadow, clBtnHighlight, clBtnShadow,
+                   cl3DLight, clActiveCaption, clInactiveCaption,
+                   clMenu, clMenuText, clHighlight, clHighlightText,
+                   clInfoBk, clInfoText];
+begin
+  if (AColor <> clNone) and (AColor and clSystemColor <> 0)
+     and (AColor in SYSTEM_COLORS) then
+    AColor := AStyle.GetSystemColor(AColor);
+end;
+
 procedure ApplyRecursive(ATheming: IOTAIDEThemingServices; AC: TControl);
 // Walked den Control-Baum unter AC. Pro Knoten:
-//   1. ApplyTheme via IOTAIDEThemingServices (registriert Style-Hook
-//      damit der Control dem IDE-Theme folgt). KRITISCH: die IDE-Theme-
-//      ApplyTheme propagiert in Delphi 12 NICHT transitiv von einem TFrame
-//      auf seine Kinder - jedes Panel/Combo/Button/Label braucht den
-//      Aufruf einzeln, sonst rendert es im nativen Windows-Look (hell
-//      auf Dark-IDE).
-//   2. Invalidate (Schedule Repaint).
-//   3. TCustomGrid: zusaetzlich Repaint (Paint-Cache zwingen).
+//   1. ApplyTheme via IOTAIDEThemingServices (registriert Style-Hook).
+//   2. Color + Font.Color via IDE-StyleServices auflösen — fixt den Fall
+//      dass der User eine VCL-Style != IDE-Theme hat (z.B. Mountain_Mist
+//      VCL-Style + Dark-IDE-Theme).
+//   3. Invalidate (Schedule Repaint).
+//   4. TCustomGrid: zusaetzlich Repaint (Paint-Cache zwingen).
 var
-  i  : Integer;
-  WC : TWinControl;
+  i        : Integer;
+  WC       : TWinControl;
+  IdeStyle : TCustomStyleServices;
+  C        : TColor;
 begin
   if Assigned(ATheming) then
+  begin
     ATheming.ApplyTheme(AC);
+
+    // Color + Font.Color via IDE-StyleServices auflösen
+    IdeStyle := ATheming.StyleServices;
+    if Assigned(IdeStyle) then
+    begin
+      C := TControlAccess(AC).Color;
+      ResolveIDEColor(C, IdeStyle);
+      TControlAccess(AC).Color := C;
+
+      C := TControlAccess(AC).Font.Color;
+      ResolveIDEColor(C, IdeStyle);
+      TControlAccess(AC).Font.Color := C;
+    end;
+  end;
 
   AC.Invalidate;
   if AC is TCustomGrid then
@@ -388,37 +426,43 @@ end;
 
 class procedure TIDETheme.Apply(AControl: TWinControl);
 var
-  Theming : IOTAIDEThemingServices;
-  TopForm : TCustomForm;
+  Theming   : IOTAIDEThemingServices;
+  TopForm   : TCustomForm;
+  IdeStyle  : TCustomStyleServices;
+  IdeName   : string;
 begin
   if AControl = nil then Exit;
 
   EnsureImpl;
   G.EnsureNotifier;
 
-  // Diagnose-MessageBox einmalig (beim ersten Apply nach BPL-Load).
-  // Zeigt ob der Theme-Service da ist + ob Theming enabled. Nach
-  // erfolgreicher Bug-Reproduktion das ShowThemeDiagnostic wieder
-  // entfernen.
   if not DiagnosticShown then
   begin
     DiagnosticShown := True;
     ShowThemeDiagnostic(AControl);
   end;
 
-  // Theming OHNE den IDEThemingEnabled-Check holen: in manchen IDE-
-  // Versionen (insb. mit Custom-Theme-Plugins) liefert IDEThemingEnabled
-  // False obwohl die IDE-Chrome themed ist. Trotzdem ApplyTheme aufrufen
-  // — wenn es ein no-op ist (Theming wirklich aus), schadet das nicht;
-  // wenn es ein Effekt hat, kriegen wir das Theme.
   if not Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) then
     Theming := nil;
 
   if Assigned(Theming) then
   begin
+    // Kern-Fix: VCL StyleManager.ActiveStyle auf die IDE-StyleServices
+    // syncen. Sonst rendert das Plugin in VCL-Style-Farben (z.B.
+    // Mountain_Mist) statt im IDE-Theme (z.B. Dark) — User-Diagnose
+    // zeigte genau diesen Mismatch. TCustomStyleServices.Name liefert
+    // den Style-Namen den TStyleManager versteht.
+    IdeStyle := Theming.StyleServices;
+    if Assigned(IdeStyle) then
+    begin
+      IdeName := IdeStyle.Name;
+      if (IdeName <> '') and
+         (not SameText(TStyleManager.ActiveStyle.Name, IdeName)) then
+        TStyleManager.TrySetStyle(IdeName, False);
+    end;
+
     // Float-Mode: GetParentForm liefert das Host-TForm. ApplyTheme dort
-    // erfasst die Titelzeile mit; sonst bleibt der Float-Container im
-    // alten Style.
+    // erfasst die Titelzeile mit.
     TopForm := GetParentForm(AControl);
     if Assigned(TopForm) then
     begin
@@ -427,11 +471,6 @@ begin
     end;
   end;
 
-  // ApplyRecursive nimmt Theming als Parameter (kann nil sein wenn der
-  // Service nicht verfuegbar ist) und ruft ApplyTheme auf JEDEM Descendant.
-  // Notwendig weil IOTAIDEThemingServices.ApplyTheme nicht transitiv
-  // arbeitet — jedes Panel/Combo/Label braucht den Aufruf einzeln, sonst
-  // renderts im nativen Windows-Look statt im IDE-Theme.
   ApplyRecursive(Theming, AControl);
 end;
 
