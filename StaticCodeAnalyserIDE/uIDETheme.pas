@@ -332,16 +332,21 @@ procedure ApplyRecursive(ATheming: IOTAIDEThemingServices; AC: TControl);
 // Walked den Control-Baum unter AC. Pro Knoten:
 //   1. ApplyTheme via IOTAIDEThemingServices (registriert Style-Hook
 //      damit der Control dem aktiven VCL-Style folgt).
-//   2. Invalidate (Schedule Repaint mit neuen Style-Farben).
+//   2. Invalidate + Update (SYNCHRONER Repaint mit neuen Style-Farben).
 //   3. TCustomGrid: zusaetzlich Repaint (Paint-Cache zwingen).
 //
-// WICHTIG: Per-Descendant ApplyTheme ist Pflicht, NICHT optional.
+// Per-Descendant ApplyTheme ist Pflicht, NICHT optional.
 // IOTAIDEThemingServices.ApplyTheme propagiert in Delphi 12 nicht
 // zuverlaessig transitiv von einem TFrame auf seine Kinder (siehe
-// commit f3c77ac). Eine fruehere Optimierung (cold/warm split, commit
-// 976db55) hat den per-Child-Aufruf eingespart und damit Docked-Mode-
-// Theme-Refresh gebrochen — Tiles/Panels blieben in alten Theme-Farben.
-// Zurueck auf die verlaessliche Variante: jedes Mal alle Children.
+// commit f3c77ac).
+//
+// Update statt nur Invalidate: Empirisch lief beim Docked-Theme-Switch
+// das Grid (bekam Repaint) korrekt frisch, alle anderen Controls
+// (TilePanel, Help-Panel, Combos, Buttons) blieben in den alten
+// Theme-Farben - WM_PAINT kam zwar spaeter, aber zu einem Zeitpunkt an
+// dem die StyleServices noch nicht voll auf das neue Theme umgeschaltet
+// waren. Mit Update wird der Paint SOFORT nach ApplyTheme abgearbeitet,
+// solange die IDE-StyleServices garantiert das neue Theme liefern.
 var
   i  : Integer;
   WC : TWinControl;
@@ -350,6 +355,8 @@ begin
     ATheming.ApplyTheme(AC);
 
   AC.Invalidate;
+  if AC is TWinControl then
+    TWinControl(AC).Update;
   if AC is TCustomGrid then
     TCustomGrid(AC).Repaint;
 
