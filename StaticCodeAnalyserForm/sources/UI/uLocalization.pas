@@ -80,7 +80,7 @@ begin
   GDeMap.Add('with uses check',          'mit uses-Pr'#$FC'fung');
 
   // ---- Felder / Labels ----
-  GDeMap.Add('Project path:',            'Projektpfad:');
+  GDeMap.Add('Path:',                    'Pfad:');
   GDeMap.Add('Search:',                  'Suche:');
   GDeMap.Add('Severity:',                'Schweregrad:');
   GDeMap.Add('Type:',                    'Typ:');
@@ -92,6 +92,7 @@ begin
   GDeMap.Add('Type',                     'Typ');
   GDeMap.Add('Rule',                     'Regel');
   GDeMap.Add('Code Quality',             'Codequalit'#$E4't');
+  GDeMap.Add('Quality',                  'Qualit'#$E4't');
 
   // ---- Filter-Combo Eintraege ----
   GDeMap.Add('All',                      'Alle');

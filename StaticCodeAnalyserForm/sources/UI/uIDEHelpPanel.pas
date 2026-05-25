@@ -97,7 +97,6 @@ constructor TFindingHintPanel.Create(AOwner: TComponent;
   AParent: TWinControl; AAnchor: TWinControl;
   AAlwaysVisible: Boolean);
 // Layout-Stapel im FHelpPanel (von oben nach unten):
-//   HelpLeftSep        (alLeft  1px)
 //   FHelpDescLabel     (alTop   16px)  – "Select a row..." Caption
 //   FHelpBeforePanel   (alTop   150px) – Vorher-Memo + Header
 //   BeforeAfterSplitter(alTop   4px)
@@ -108,8 +107,10 @@ constructor TFindingHintPanel.Create(AOwner: TComponent;
 // zusaetzlichen HelpCode-Wrapper-TPanel als alClient unter FHelpDescLabel
 // (in den Vorher/Splitter/Nachher hineingingen); die Wrapper-Ebene war
 // nicht noetig und wurde entfernt.
+// Zwischen Grid und FHelpPanel sitzt FHelpSplitter (alRight, 4px,
+// IDE_SEPARATOR) — der dient gleichzeitig als optische Trennlinie, der
+// frueher hier vorhandene HelpLeftSep (1px TPanel) war redundant.
 var
-  HelpLeftSep         : TPanel;
   LblBefore           : TLabel;
   BeforeAfterSplitter : TSplitter;
   HelpAfterPanel      : TPanel;
@@ -129,14 +130,6 @@ begin
   // Color erbt vom Parent (PanelClient -> Frame.clBtnFace). Explizit
   // gesetzt war es vor dem Theme-Sweep, das ist heute redundant: das
   // Parent-Chain liefert ohnehin den themed clBtnFace.
-
-  // 1px linke Trennlinie zwischen Grid und Help-Panel.
-  HelpLeftSep := TPanel.Create(Self);
-  HelpLeftSep.Parent     := FHelpPanel;
-  HelpLeftSep.Align      := alLeft;
-  HelpLeftSep.Width      := 1;
-  HelpLeftSep.BevelOuter := bvNone;
-  HelpLeftSep.Color      := IDE_SEPARATOR;
 
   FHelpDescLabel := TLabel.Create(Self);
   FHelpDescLabel.Parent      := FHelpPanel;

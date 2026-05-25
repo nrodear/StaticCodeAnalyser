@@ -395,7 +395,7 @@ begin
   TileVuln       := MakeTile(AOwner, Parent, _('Security'),     GLYPH_VULN,    ICON_VULN,    TILE_W);
   TileDup        := MakeTile(AOwner, Parent, _('Duplicates'),   GLYPH_DUP,     ICON_DUP,     TILE_W);
   TileCyclomatic := MakeTile(AOwner, Parent, _('Cyclomatic'),   GLYPH_CYCLO,   ICON_SMELL,   TILE_W_CYCLO);
-  TileScore      := MakeTile(AOwner, Parent, _('Code Quality'), GLYPH_SCORE,   ICON_SCORE,   TILE_W_SCORE);
+  TileScore      := MakeTile(AOwner, Parent, _('Quality'),      GLYPH_SCORE,   ICON_SCORE,   TILE_W_SCORE);
 end;
 
 { TResponsiveLayoutController }

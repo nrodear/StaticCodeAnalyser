@@ -59,7 +59,7 @@ type
     // Toolbar-Panels - werden in CreateUI als alTop angelegt. Refs gehalten,
     // damit der Responsive-Controller pro Reihe den Resize hooken kann.
     FPanelPath         : TPanel;
-    FPanelButtons      : TPanel;
+    FPanelFilters      : TPanel;
     FPanelSearch       : TPanel;
     // Sub-Panel-Container fuer Severity- und Type-Combo (Label + Combo
     // gemeinsam in einem alLeft-Block). Refs werden gebraucht damit der
@@ -74,23 +74,26 @@ type
     FPanelProfile      : TPanel;
     FLblProfile        : TLabel;
     FProfileCombo      : TComboBox;
-    // Toolbar-Controls die im gedockten/schmalen Modus ausgeblendet werden -
-    // ihre Aktionen bleiben ueber das Hamburger-Menu erreichbar (FHamburgerMenu).
-    FBtnRepo, FBtnIgnore                           : TButton;
+    // Diese Buttons werden NICHT mehr in der Toolbar angezeigt - ihre
+    // Aktionen sind ausschliesslich ueber das Hamburger-Menu (FHamburgerMenu)
+    // erreichbar. Felder bleiben als nil; OnClick-Handler werden direkt
+    // an die MenuItems gebunden, nicht an die Buttons.
+    // (FBtnRepo/FBtnIgnore/FBtnAnalyseChanged/FBtnCancel/FBtnExport entfernt)
+
     // FBtnBrowse: war frueher lokal — als Field gebraucht damit
     // ApplyToolbarSizing den Icon-Button-Sizing-Pfad anwenden kann.
     FBtnBrowse                                     : TButton;
-    // Im NARROW/MEDIUM-Mode hidden, FULL-only - via Hamburger-Menu erreichbar.
-    FBtnExport                                     : TButton;
+
+    // Hamburger-Button + PopupMenu - IMMER sichtbar (keine Stage-Bindung).
+    // Enthaelt: Branch-Changes, Cancel, Export, Settings, Ignore.
     FBtnHamburger                                  : TButton;
     FHamburgerMenu                                 : TPopupMenu;
-    // Hamburger-Menu-Items deren Enabled-Zustand sich zur Laufzeit aendert
-    // (Cancel: nur waehrend laufender Analyse aktiv; Branch-Changes: waehrend
-    // Analyse deaktiviert). HamburgerMenuPopup synct mit den zugehoerigen
-    // Buttons. ▶ Analyse + 📄 File sind keine Menu-Items - die Buttons sind
-    // immer im Toolbar sichtbar.
+    // MenuItems deren Enabled-Zustand sich zur Laufzeit aendert:
+    //   FMICancel         - nur waehrend laufender Analyse aktiv
+    //   FMIAnalyseChanged - waehrend Analyse deaktiviert
+    // Sync via HamburgerMenuPopup an FAnalyseProgress.Running.
     FMICancel, FMIAnalyseChanged                   : TMenuItem;
-    FLblFilter, FLblType, FLblSearch               : TLabel;
+    FLblFilter, FLblType                           : TLabel;
     // Eine horizontale Tile-Reihe: 4 Severity-Tiles + 3 Type-Tiles + Score.
     // Layout pro Tile: Glyph-Icon links + Count rechts (Top-Row), Caption
     // unten zentriert. Glyphs aus Segoe Fluent Icons (vektor, kein SVG-Lib).
@@ -119,10 +122,10 @@ type
     // (FRepoSettings.UsesCheck / .IncludeTests).
     // ---- Analyse-Fortschritt --------------------------------------------
     FProgressBar       : TProgressBar; // sichtbar nur waehrend Analyse
-    FBtnCancel         : TButton;      // sichtbar nur waehrend Analyse
     FBtnAnalyse        : TButton;      // gemerkt fuer Enable/Disable
     FBtnAnalyseCurrent : TButton;
-    FBtnAnalyseChanged : TButton; // Branch-Aenderungen via Git/SVN
+    // (FBtnCancel, FBtnAnalyseChanged sind im Hamburger-Menu, kein Field
+    //  noetig — OnClick-Handler werden direkt an die MenuItems gebunden.)
     // Running/Cancelled-Flags + UI-Toggle (Buttons enable/disable,
     // Progressbar reset, Cursor) sind nach uIDEAnalyseProgress.
     // TAnalyseProgressController ausgelagert. Frame ruft BeginRun/EndRun.
@@ -228,8 +231,6 @@ type
     procedure ResponsiveAfterApply(Sender: TObject);
     procedure HamburgerClick(Sender: TObject);
     procedure HamburgerMenuPopup(Sender: TObject);
-    // Hamburger-Menu-Item "Export...": oeffnet das Export-Popup an der
-    // Hamburger-Button-Position (statt am hidden BtnExport).
     procedure HamburgerExportClick(Sender: TObject);
     procedure BuildHamburgerMenu;
     // DPI-Scaling fuer Layout-Konstanten. Liest TControl.CurrentPPI - falls
@@ -381,21 +382,19 @@ const
   //
   // Stufe 1 (NARROW, < BREAKPOINT_MEDIUM = 500):
   //   Nur die 4 essential Stats-Tiles (Errors/Warnings/Hints/Code Quality).
-  //   Hamburger sichtbar (Aktionen via Menu). Filter-Labels weg.
-  //   Settings/Ignore/Cancel/Branch-Changes/Search-Lbl alle hidden.
-  //   Typisch: schmal gedockt im IDE-Tool-Window.
+  //   Filter-Labels weg. Settings/Ignore/Cancel/Branch-Changes alle hidden -
+  //   User muss das Fenster aufweiten um diese Aktionen zu erreichen.
   //
   // Stufe 2 (MEDIUM, >= 500 .. < BREAKPOINT_FULL = 850):
   //   Komplette Tile-Reihe (alle 9 Tiles) sichtbar. Filter-/Type-Labels
-  //   sichtbar. Settings/Ignore/Cancel/Export/Branch-Changes/Search-Label
-  //   bleiben hidden -> Hamburger bleibt sichtbar fuer diese Aktionen.
-  //   Tile-Reihe braucht abhaengig von TILE_W in uIDEStatsTiles entsprechend
-  //   Platz; ueberzaehlige werden vom alLeft-Layout ggf. beschnitten
-  //   (akzeptabel).
+  //   sichtbar. Settings/Ignore/Cancel/Export/Branch-Changes bleiben
+  //   hidden. Tile-Reihe braucht abhaengig von TILE_W in uIDEStatsTiles
+  //   entsprechend Platz; ueberzaehlige werden vom alLeft-Layout ggf.
+  //   beschnitten (akzeptabel).
   //
   // Stufe 3 (FULL, >= BREAKPOINT_FULL = 850):
-  //   Volle UI: alle 9 Tiles + komplette Toolbar. Hamburger weg
-  //   (alle Aktionen direkt erreichbar). Branch-Changes + Search-Lbl sichtbar.
+  //   Volle UI: alle 9 Tiles + komplette Toolbar (alle Aktionen direkt
+  //   erreichbar). Branch-Changes sichtbar.
   //
   // BREAKPOINT_MEDIUM dient gleichzeitig als FLOAT_MIN_WIDTH: das floated
   // Fenster wird via Constraints.MinWidth auf 500 px begrenzt - schmaler
@@ -424,7 +423,7 @@ const
   // ---- Button-Widths ----------------------------------------------------
   // Captions passen mit Segoe UI 8pt + ~4-6 px Innenpadding. Im NARROW/MEDIUM
   // ist ein Teil ueber FResponsive ausgeblendet - siehe RegisterCtrl-Block.
-  BTN_W_ICON         = 32;     // Icon-only (Browse "...", Hamburger ☰, Branch-Changes ⎇)
+  BTN_W_ICON         = 32;     // Icon-only (Browse "...", Branch-Changes ⎇)
   BTN_W_SHORT        = 56;     // "Ignore..."
   BTN_W_MED_SHORT    = 64;     // "Settings..."
   BTN_W_MED          = 68;     // "Cancel", "Export"
@@ -432,11 +431,10 @@ const
   BTN_W_LONG         = 64;     // "▶ Analyse"
 
   // ---- Label-Widths -----------------------------------------------------
-  LBL_W_PATH         = 78;     // "Project path:"
+  LBL_W_PATH         = 78;     // "Path:" (AutoSize, Wert nur als Fallback)
   LBL_W_FILTER       = 76;     // "Severity:"
   LBL_W_TYPE         = 36;     // "Type:"
   LBL_W_PROFILE      = 48;     // "Profile:"
-  LBL_W_SEARCH       = 32;     // "Search:"
 
   // ---- Combo-Widths (innerhalb der Sub-Panel-Container) -----------------
   // Severity-Combo: 200 px statt 160, damit die laengsten deutschen Labels
@@ -457,7 +455,7 @@ const
   GRID_MIN_HEIGHT    = 120;
   GRID_MIN_WIDTH     = 300;
   // Floated: SearchEdit hat genug Platz, MinWidth grosszuegig.
-  // Docked: nur Cancel + Export + SearchEdit + Hamburger sichtbar -
+  // Docked: nur SearchEdit + Profile + Filter-Combos sichtbar -
   // SearchEdit darf weiter schrumpfen damit auch 300-px-Docks passen.
   SEARCH_MIN_WIDTH_FLOATED = 120;
   SEARCH_MIN_WIDTH_DOCKED  =  60;
@@ -535,7 +533,7 @@ end;
 
 constructor TAnalyserFrame.Create(AOwner: TComponent);
 var
-  PanelPath, PanelButtons: TPanel;
+  PanelPath: TPanel;
   // Theming-Service-Vars werden in FrameCreated genutzt; hier nur Default fuer
   // den Notifier-Index setzen, damit Destroy nicht versucht, einen ungueltigen
   // Index abzumelden falls der Service nie verfuegbar war.
@@ -627,7 +625,7 @@ begin
   FProgressBar.Visible := True;
 
   // alTop-Panels werden in Sicht-Reihenfolge erzeugt (FPanelStats zuerst →
-  // oben, dann PanelPath, PanelButtons, PanelSearch). VCL dockt alTop in
+  // oben, dann PanelPath, PanelSearch). VCL dockt alTop in
   // genau dieser Reihenfolge an den oberen Rand. Die Tiles selbst werden
   // erst nach WireResponsiveLayout via BuildStatsTiles eingehaengt (Tiles
   // registrieren sich beim FResponsive-Controller, der bis dahin nicht
@@ -652,22 +650,19 @@ begin
     ScaleW(TB_PADDING_LR), ScaleW(TB_PADDING_TB));
   FPanelPath := PanelPath;
 
-  LblPath := TIDEToolbar.AddLabel(Self, PanelPath, _('Project path:'),
+  LblPath := TIDEToolbar.AddLabel(Self, PanelPath, _('Path:'),
     ScaleW(LBL_W_PATH));
+  // AddLabel setzt AutoSize:=False mit fixer Width fuer konsistente
+  // Toolbar-Optik. Fuer LblPath bewusst auf AutoSize=True umstellen:
+  // "Path:"/"Pfad:" ist kurz, das alClient-Combo daneben bekommt den
+  // gewonnenen Platz.
+  LblPath.AutoSize := True;
 
   FBtnBrowse := TIDEToolbar.AddButton(Self, PanelPath, '...',
     ScaleW(BTN_W_ICON), alRight, BrowseClick);
 
-  // Ignore-Liste editieren - oeffnet ignore.txt im Notepad/Default-Editor
-  FBtnIgnore := TIDEToolbar.AddButton(Self, PanelPath, _('Ignore...'),
-    ScaleW(BTN_W_SHORT), alRight, EditIgnoreListClick,
-    _('Open ignore list (which files are NOT analysed)'));
-
-  // Settings-Datei analyser.ini (BaseBranch + Tortoise-Pfade fuer
-  // Branch-Changes, Custom-LeakyClasses fuer den MemoryLeak-Detektor).
-  FBtnRepo := TIDEToolbar.AddButton(Self, PanelPath, _('Settings...'),
-    ScaleW(BTN_W_MED_SHORT), alRight, EditRepoSettingsClick,
-    _('Open analyser.ini (BaseBranch, git/svn paths, custom LeakyClasses)'));
+  // FBtnIgnore + FBtnRepo (Ignore-Liste / Settings) sind aus der Toolbar
+  // raus - nur noch ueber Hamburger-Menu erreichbar.
 
   FProjectPath := TComboBox.Create(Self);
   FProjectPath.Parent := PanelPath;
@@ -675,53 +670,46 @@ begin
   FProjectPath.Style  := csDropDown;
   TIDEToolbar.ApplySegoeUI(FProjectPath);
 
-  // ---- Zeile: Buttons ----
-  // Helper liefert identische Padding/Bevel-Konfiguration wie PanelPath
-  // und PanelSearch; konsistente rechte Kante uebernimmt der Helper.
-  PanelButtons := TIDEToolbar.CreateRow(Self, Self, ToolbarRowH,
+  // (Filter-Reihe entfernt — Severity- und Type-Combo sind in PanelSearch
+  // gewandert, neben dem Profile-Combo. Damit eine Toolbar-Reihe weniger.)
+
+  // UsesCheck und IncludeTests werden jetzt aus analyser.ini [Detectors]
+  // gelesen - keine Checkboxen mehr in der Toolbar (siehe FRepoSettings).
+
+  // ---- Zeile: Severity-Filter + Type-Filter ----
+  // Eigene alTop-Toolbar-Reihe fuer die zwei Filter-Sub-Panels.
+  // Sub-Panel-Wrapper (FPanelSev/FPanelType) noetig wegen VCL-Quirk:
+  // TLabel (TGraphicControl) und TComboBox (TWinControl) werden auf
+  // einem gemeinsamen alLeft-Parent in unterschiedlichen Align-Passes
+  // positioniert. Im Sub-Panel haben sie einen exklusiven Container
+  // und sitzen strikt von links nach rechts.
+  var PanelFilters := TIDEToolbar.CreateRow(Self, Self, ToolbarRowH,
     ScaleW(TB_PADDING_LR), ScaleW(TB_PADDING_TB));
-  FPanelButtons := PanelButtons;
+  FPanelFilters := PanelFilters;
 
-  // Aktions-Buttons (Analyse starten / Aktuelle Datei) liegen nicht hier,
-  // sondern in PanelSearch zusammen mit den Export-Buttons. Damit bleibt
-  // diese Filter-Zeile uebersichtlich.
-
-  // Severity-Filter: Label+Combo via Helper.
-  // Sub-Panel-Layout verhindert die VCL-Quirk dass Label (TGraphicControl)
-  // und Combo (TWinControl) direkt auf einem alLeft-Parent in unter-
-  // schiedlichen Align-Passes verschoben werden — im Sub-Panel strikt
-  // von links nach rechts.
-  FFilterCombo := TIDEToolbar.CreateLabelCombo(Self, PanelButtons,
+  // Severity-Filter (filtert bereits erzeugte Befunde).
+  FFilterCombo := TIDEToolbar.CreateLabelCombo(Self, PanelFilters,
     _('Severity:'), ScaleW(LBL_W_FILTER), ScaleW(CMB_W_FILTER), FLblFilter);
   FFilterCombo.OnChange := FilterChange;
   FPanelSev := FFilterCombo.Parent as TPanel;
   PopulateFilterCombo;
 
-  // Trennabstand vor dem Typ-Filter
-  TIDEToolbar.AddSpacer(Self, PanelButtons, ScaleW(TB_SPACER_WIDTH));
-
-  // ---- Zweiter Filter: Typ (Sonar-Kategorie) ----
-  FTypeCombo := TIDEToolbar.CreateLabelCombo(Self, PanelButtons,
+  // Type-Filter (Sonar-Kategorie).
+  FTypeCombo := TIDEToolbar.CreateLabelCombo(Self, PanelFilters,
     _('Type:'), ScaleW(LBL_W_TYPE), ScaleW(CMB_W_TYPE), FLblType);
   FTypeCombo.OnChange := TypeFilterChange;
   FPanelType := FTypeCombo.Parent as TPanel;
   PopulateTypeCombo;
   FTypeFilter := tfAll;
 
-  // Profile-Combo (rule-set scope) wird unten in PanelSearch zwischen
-  // Branch-Changes-Button und Search-Label eingehaengt — gehoert
-  // semantisch zur Aktions-Reihe (steuert was der naechste Analyse-Klick
-  // ausfuehrt), nicht zur Filter-Reihe (Severity/Type filtern die bereits
-  // erzeugten Befunde).
-
-  // UsesCheck und IncludeTests werden jetzt aus analyser.ini [Detectors]
-  // gelesen - keine Checkboxen mehr in der Toolbar (siehe FRepoSettings).
-
-  // ---- Zeile: Aktionen + Suche + Export ----
-  // Wie PanelPath/PanelButtons: Right-Padding=0 ist im Helper, damit
-  // Hamburger buendig am rechten Panel-Rand sitzt.
+  // ---- Zeile: Aktionen + Profile + Suche + Export ----
+  // Wie PanelPath: Right-Padding=0 ist im Helper, damit der rechte
+  // Cancel/Export-Block buendig am Panel-Rand sitzt.
   var PanelSearch := TIDEToolbar.CreateRow(Self, Self, ToolbarRowH,
     ScaleW(TB_PADDING_LR), ScaleW(TB_PADDING_TB));
+  // Left-Padding fuer DIESE Row auf 0: BtnAnalyse soll buendig an der
+  // linken Frame-Kante sitzen (kein Einrueck-Gap wie bei Path-/Filter-Row).
+  PanelSearch.Padding.Left := 0;
   FPanelSearch := PanelSearch;
 
   // Action-Buttons links - "▶ Analyse" zuerst (links), dann "📄 File"
@@ -732,16 +720,12 @@ begin
   FBtnAnalyseCurrent := TIDEToolbar.AddButton(Self, PanelSearch, _('📄 File'),
     ScaleW(BTN_W_MED_LONG), alLeft, AnalyseCurrentFileClick);
 
-  // ---- Profile-Combo zuerst anlegen, dann Branch-Changes-Button ---------
-  // In dieser PanelSearch-Layout-Konstellation positioniert VCL alLeft-
-  // Children so, dass spaeter-erzeugte Controls links von frueher-erzeugten
-  // landen. Reihenfolge im Code: Profile vor Branch -> Visual: Branch
-  // links neben Profile (User-Wunsch: [⎇] [Profile:][▼ide-fast]).
-  // Steuert welches Rule-Set die NAECHSTE Analyse benutzt (ide-fast /
-  // default / strict / ...). Items kommen aus rules/sca-rules.json
-  // (TRuleCatalog.ProfileNames); Default-Selektion = FRepoSettings.IdeProfile.
-  // Transient (kein INI-Save); wirkt beim naechsten Analyse-Klick ueber
-  // PrepareAnalysis -> UseIdeRuleSet + ApplyDetectorThresholds.
+  // Profile (rule-set scope): steuert welches Rule-Set die NAECHSTE
+  // Analyse benutzt (ide-fast / default / strict / ...). Items kommen
+  // aus rules/sca-rules.json (TRuleCatalog.ProfileNames); Default-
+  // Selektion = FRepoSettings.IdeProfile. Transient (kein INI-Save);
+  // wirkt beim naechsten Analyse-Klick ueber PrepareAnalysis ->
+  // UseIdeRuleSet + ApplyDetectorThresholds.
   FProfileCombo := TIDEToolbar.CreateLabelCombo(Self, PanelSearch,
     _('Profile:'), ScaleW(LBL_W_PROFILE), ScaleW(CMB_W_PROFILE), FLblProfile);
   FProfileCombo.OnChange := ProfileChange;
@@ -751,76 +735,32 @@ begin
   FPanelProfile := FProfileCombo.Parent as TPanel;
   PopulateProfileCombo;
 
-  // Spacer zwischen Branch-Button und Profile-Panel
-  TIDEToolbar.AddSpacer(Self, PanelSearch, ScaleW(TB_SPACER_WIDTH));
+  // FBtnAnalyseChanged + FBtnCancel + FBtnExport sind aus der Toolbar raus -
+  // ihre Aktionen sind ausschliesslich im Hamburger-Menu (unten).
 
-  // Branch-Aenderungen via Git/SVN: nur die im Branch geaenderten .pas-Files.
-  // Icon-only (Glyph ⎇ U+2387 "alternative"-Symbol, sieht wie Branch-Fork aus),
-  // matcht visuell die anderen Icon-Buttons (Browse "...", Hamburger ☰).
-  // Caption-Text "Branch-Changes" ist im Hint und im Hamburger-Menu.
-  // Erzeugt NACH Profile-Panel - VCL platziert ihn dadurch links davon.
-  FBtnAnalyseChanged := TIDEToolbar.AddButton(Self, PanelSearch, #$2387,
-    ScaleW(BTN_W_ICON), alLeft, AnalyseChangedFilesClick,
-    _('Branch-Changes') + ': ' + _(
-      'Analyses only files changed in the current branch ' +
-      '(Git: branch diff vs main + working tree; SVN: working copy)'));
-
-  // Hamburger-Button: ganz rechts in PanelSearch. Als erstes alRight-
-  // Control hinzugefuegt -> VCL platziert es am rechten Rand; Cancel und
-  // Export landen links davon. Nur im Docked-Modus sichtbar (Inverse-
-  // Controller weiter unten). PopupMenu + OnClick via BuildHamburgerMenu.
-  // Caption: #$2630 = Trigram for Heaven (Hamburger-Glyph).
+  // Hamburger-Button am rechten Rand - IMMER sichtbar, das ist der
+  // einzige Zugang zu Branch-Changes / Cancel / Export / Settings / Ignore.
+  // Caption #$2630 = "Trigram for Heaven" (Hamburger-Glyph).
   FBtnHamburger := TIDEToolbar.AddButton(Self, PanelSearch, #$2630,
     ScaleW(BTN_W_ICON), alRight, HamburgerClick,
-    _('All toolbar actions (Analyse, Browse, Export, Settings, ...)'));
+    _('Actions menu: Branch-Changes, Cancel, Export, Settings, Ignore'));
 
-  // Cancel-Button - immer sichtbar (verhindert Layout-Sprung beim
-  // Start/Ende der Analyse), nur Enabled wird getoggelt. Sitzt fix am
-  // rechten Toolbar-Rand (alRight) und ist von den Analyse-Buttons
-  // links optisch entkoppelt durch AlignWithMargins.
-  FBtnCancel := TIDEToolbar.AddButton(Self, PanelSearch, _('Cancel'),
-    ScaleW(BTN_W_MED), alRight, CancelAnalyseClick);
-  FBtnCancel.AlignWithMargins := True;
-  FBtnCancel.Margins.SetBounds(ScaleW(TB_CANCEL_MARGIN), 0, 0, 0);
-  FBtnCancel.Enabled := False;
-
-  // Analyse-Busy-Controller jetzt erstellen - Buttons + Progressbar
-  // existieren alle. Owner=Self -> Auto-Free im Frame-Destroy
-  // (wird zusaetzlich explizit FreeAndNil'd vor anderen Feldern).
-  FAnalyseProgress := TAnalyseProgressController.Create(Self,
-    FProgressBar, FBtnCancel,
-    [FBtnAnalyse, FBtnAnalyseCurrent, FBtnAnalyseChanged]);
-
-  // Analyse-Runner: kapselt RunAll/RunCurrent/RunChanged. Bekommt
-  // Refs auf Progress + RepoSettings + IgnoreList + ProgressBar plus
-  // method-of-object Callbacks fuer Status- und Result-Delivery.
-  // Pointer(Self) wird gegen GLiveAnalyserFrame verglichen (Lifecycle-
-  // Race-Schutz beim Hot-Plug-Reload).
-  FAnalyseRunner := TAnalyseRunner.Create(Self, Pointer(Self),
-    FAnalyseProgress, FRepoSettings, FIgnoreList, FProgressBar,
-    StatusMode, StatusProgress, PopulateFindings);
-
-  // Trennabstand vor dem Search-Edit
-  TIDEToolbar.AddSpacer(Self, PanelSearch, ScaleW(TB_SPACER_WIDTH));
-
-  FLblSearch := TIDEToolbar.AddLabel(Self, PanelSearch, _('Search:'),
-    ScaleW(LBL_W_SEARCH));
-
-  // Export-Dropdown statt 5 Einzel-Buttons - spart ~250 px Toolbar-Platz.
-  // Komplettes Menu + Click-Handler + CurrentFocusFile-Logik in
-  // uIDEExportMenu.TFindingExportMenu gekapselt.
-  // FResultGrid existiert hier noch NICHT (wird weiter unten erzeugt) -
-  // daher Getter-Methode statt Direkt-Reference.
+  // Export-Menu (PopupMenu-Objekt) wird trotzdem gebraucht - Hamburger-
+  // Item "Export..." ruft FExportMenu.PopupAt() auf.
   FExportMenu := TFindingExportMenu.Create(Self,
     FAllFindings, FDisplayedFindings, GetResultGrid,
     StatusMode, GetCurrentBaseDir);
 
-  // Caption: schwarzes Dreieck #$25BC signalisiert das Dropdown.
-  FBtnExport := TIDEToolbar.AddButton(Self, PanelSearch,
-    _('Export') + ' ' + #$25BC, ScaleW(BTN_W_MED), alRight, nil,
-    _('Export: HTML, JSON, CSV, Jira markup, plain text'));
-  // PopupMenu + OnClick wirft der Helper auf den Button.
-  FExportMenu.AttachToButton(FBtnExport);
+  // Analyse-Busy-Controller. ABtnCancel=nil (Cancel ist Menu-Item, kein
+  // Button), Run-Buttons-Liste enthaelt nur die immer-sichtbaren beiden.
+  FAnalyseProgress := TAnalyseProgressController.Create(Self,
+    FProgressBar, nil,
+    [FBtnAnalyse, FBtnAnalyseCurrent]);
+
+  // Analyse-Runner: kapselt RunAll/RunCurrent/RunChanged.
+  FAnalyseRunner := TAnalyseRunner.Create(Self, Pointer(Self),
+    FAnalyseProgress, FRepoSettings, FIgnoreList, FProgressBar,
+    StatusMode, StatusProgress, PopulateFindings);
 
   // Sucheingabe fuellt den Rest in der Mitte. MinWidth verhindert Kollaps
   // bei sehr schmal gedocktem Frame - sonst frisst Search-Edit als
@@ -831,6 +771,9 @@ begin
   FSearchEdit.Parent := PanelSearch;
   FSearchEdit.Align  := alClient;
   FSearchEdit.Constraints.MinWidth := ScaleW(SEARCH_MIN_WIDTH_FLOATED);
+  // MaxWidth=150: Search-Edit soll nicht ueber die gewuenschte Breite
+  // hinaus stretchen, alClient cappt dann den Stretch.
+  FSearchEdit.Constraints.MaxWidth := ScaleW(150);
   FSearchEdit.TextHint := _('Filter file / method / finding...');
   FSearchEdit.OnChange := SearchChange;
   TIDEToolbar.ApplySegoeUI(FSearchEdit);
@@ -838,11 +781,6 @@ begin
   // Einheitliche Toolbar-Hoehe + Icon-Button-Constraints. Details siehe
   // ApplyToolbarSizing weiter unten.
   ApplyToolbarSizing(UnifCtrlH);
-
-  // Hamburger-Menu wird LAZY beim ersten Klick gebaut (HamburgerClick →
-  // BuildHamburgerMenu wenn FHamburgerMenu noch nil). Spart die ~12 Items
-  // + INI-Read beim Frame-Open in der haeufigen "User dockt im FULL-Modus
-  // und braucht das Menu nie"-Sequenz.
 
   // Responsive-Layout: 3-Stufen-Controller + Sichtbarkeitstabelle.
   // WireResponsiveLayout legt FResponsive an, registriert die Controls
@@ -859,15 +797,15 @@ begin
   //
   // Visuelle Reihenfolge (top -> bottom):
   //   FPanelStats   - Tile-Reihe (Errors/Warnings/Hints/Bugs/...)
-  //   PanelPath     - "Project path:" + Combo
   //   PanelSearch   - "▶ Analyse" + "📄 File" + Profile + Search + Hamburger
-  //   PanelButtons  - "Type:" + "Severity:" Filter
+  //   PanelPath     - "Path:" + Combo + Browse
+  //   PanelFilters  - Severity + Type
   DisableAlign;
   try
-    FPanelStats.Top  := 10;
-    PanelPath.Top    := 20;
-    PanelSearch.Top  := 30;
-    PanelButtons.Top := 40;
+    FPanelStats.Top   := 10;
+    PanelSearch.Top   := 20;
+    PanelPath.Top     := 30;
+    PanelFilters.Top  := 40;
   finally
     EnableAlign;
   end;
@@ -1154,23 +1092,18 @@ procedure TAnalyserFrame.ApplyToolbarSizing(AUnifCtrlH: Integer);
 // redundant aber konsistent: jede Toolbar-Component geht durch denselben
 // Sizing-Pfad. ScaleW skaliert den 96-DPI-Wert auf die Container-PPI.
 // Icon-Buttons mit erzwungener Width+Height-Constraints damit sie pixel-
-// genau identisch rendern (Browse + Hamburger + Branch-Changes).
+// genau identisch rendern (Browse + Hamburger).
 begin
   // Icon-Buttons - quadratisch mit fixer Width.
   TToolbarSizing.ApplyIconButton(FBtnBrowse,         ScaleW(BTN_W_ICON), AUnifCtrlH);
   TToolbarSizing.ApplyIconButton(FBtnHamburger,      ScaleW(BTN_W_ICON), AUnifCtrlH);
-  TToolbarSizing.ApplyIconButton(FBtnAnalyseChanged, ScaleW(BTN_W_ICON), AUnifCtrlH);
   // Restliche Components nur Hoehe vereinheitlichen.
-  TToolbarSizing.Apply(FBtnIgnore,          AUnifCtrlH);
-  TToolbarSizing.Apply(FBtnRepo,            AUnifCtrlH);
   TToolbarSizing.Apply(FProjectPath,        AUnifCtrlH);
   TToolbarSizing.Apply(FFilterCombo,        AUnifCtrlH);
   TToolbarSizing.Apply(FTypeCombo,          AUnifCtrlH);
   TToolbarSizing.Apply(FProfileCombo,       AUnifCtrlH);
   TToolbarSizing.Apply(FBtnAnalyse,         AUnifCtrlH);
   TToolbarSizing.Apply(FBtnAnalyseCurrent,  AUnifCtrlH);
-  TToolbarSizing.Apply(FBtnCancel,          AUnifCtrlH);
-  TToolbarSizing.Apply(FBtnExport,          AUnifCtrlH);
   TToolbarSizing.Apply(FSearchEdit,         AUnifCtrlH);
 end;
 
@@ -1187,25 +1120,19 @@ begin
   FResponsive := TResponsiveLayoutController.Create(Self, Self,
     BREAKPOINT_MEDIUM, BREAKPOINT_FULL);
 
-  // PanelPath
-  FResponsive.RegisterCtrl(FBtnRepo,           usFull);
-  FResponsive.RegisterCtrl(FBtnIgnore,         usFull);
-  // (FBtnBrowse, LblPath, FProjectPath: immer sichtbar - keine Registrierung noetig)
+  // PanelPath: FBtnBrowse, LblPath, FProjectPath: immer sichtbar.
+  // (FBtnRepo/FBtnIgnore wurden entfernt — im Hamburger-Menu.)
 
-  // PanelButtons (Filter-Reihe: Severity + Type)
+  // PanelFilters (Severity + Type)
   FResponsive.RegisterCtrl(FLblFilter,         usMedium);
   FResponsive.RegisterCtrl(FLblType,           usMedium);
-  // (FFilterCombo, FTypeCombo, FPanelSev, FPanelType: immer sichtbar)
+  // (FFilterCombo, FTypeCombo + Sub-Panels: immer sichtbar)
 
-  // PanelSearch (Aktions-Reihe: Analyse-Buttons + Profile-Combo + Suche)
-  FResponsive.RegisterCtrl(FBtnCancel,         usFull);
-  FResponsive.RegisterCtrl(FBtnExport,         usFull);
-  FResponsive.RegisterCtrl(FBtnAnalyseChanged, usFull);
+  // PanelSearch: Profile-Label im MEDIUM ausblenden.
+  // (FBtnCancel/FBtnExport/FBtnAnalyseChanged wurden entfernt — im Hamburger-Menu.
+  //  FBtnHamburger ist IMMER sichtbar - keine Registrierung.
+  //  FBtnAnalyse, FBtnAnalyseCurrent, FProfileCombo, FSearchEdit: immer sichtbar.)
   FResponsive.RegisterCtrl(FLblProfile,        usMedium);
-  FResponsive.RegisterCtrl(FLblSearch,         usFull);
-  FResponsive.RegisterCtrl(FBtnHamburger,      usNarrow, usMedium);  // inverse
-  // (FBtnAnalyse, FBtnAnalyseCurrent, FProfileCombo, FPanelProfile,
-  //  FSearchEdit: immer sichtbar)
 
   FResponsive.AfterApply := ResponsiveAfterApply;
 end;
@@ -2398,7 +2325,9 @@ procedure TAnalyserFrame.ResponsiveAfterApply(Sender: TObject);
 //   1) FilterSubPanels-Width (haengt an Label-Visibility)
 //   2) SearchEdit-MinWidth (haengt an freier Toolbar-Restbreite)
 begin
-  if Assigned(FPanelButtons) then AdjustFilterSubPanels(FPanelButtons);
+  // FilterSubPanels (Severity+Type+Profile-Wrapper) sitzen in PanelFilters,
+  // SearchEdit-MinWidth haengt an PanelSearch.
+  if Assigned(FPanelFilters) then AdjustFilterSubPanels(FPanelFilters);
   if Assigned(FPanelSearch)  then AdjustSearchMinWidth(FPanelSearch);
 end;
 
@@ -2463,7 +2392,7 @@ procedure TAnalyserFrame.AdjustFilterSubPanels(Sender: TObject);
 // Sub-Panel-Width = Label-Anteil (nur wenn Label sichtbar) + Combo-Anteil.
 // Im NARROW-Modus sind die Labels hidden -> Sub-Panels schrumpfen entsprechend.
 // Sonst wuerden FPanelSev/FPanelType weiterhin die volle Label+Combo-Breite
-// belegen und PanelButtons platzen.
+// belegen und die Search-Row platzen.
 begin
   if Assigned(FPanelSev) and Assigned(FLblFilter) then
   begin
@@ -2488,25 +2417,21 @@ begin
   end;
 end;
 
+// ---------------------------------------------------------------------------
+// Hamburger-Menu: einziger Zugang zu Branch-Changes / Cancel / Export /
+// Settings / Ignore (die zugehoerigen Buttons sind nicht mehr in der
+// Toolbar). Menu wird lazy beim ersten Klick gebaut. PopupMenu-Hook
+// synct die Enabled-States der dynamischen Items (Cancel, Branch) mit
+// FAnalyseProgress.Running.
+// ---------------------------------------------------------------------------
 procedure TAnalyserFrame.BuildHamburgerMenu;
-// Popup-Menu fuer den Hamburger-Button. Im NARROW-Modus (<500 px) sind
-// ALLE Toolbar-Tasten ausgeblendet - das Hamburger-Menu ist die einzige
-// Aktions-Quelle. Im MEDIUM-Modus (500-849) sind die meisten Tasten wieder
-// da, das Menu bleibt aber redundant erreichbar (kein Schaden).
-//
-// Reihenfolge (logische Gruppen, jeweils durch Separator getrennt):
-//   1. Analyse-Aktionen: Voll, Aktuelle Datei, Branch-Changes
-//   2. Cancel (laufende Analyse abbrechen)
-//   3. Ressourcen: Browse (Projekt-Pfad), Export
-//   4. Konfig: Settings, Ignore-Liste
 var
   MI : TMenuItem;
 begin
   FHamburgerMenu := TPopupMenu.Create(Self);
   FHamburgerMenu.OnPopup := HamburgerMenuPopup;
 
-  // ---- Aktions-Block (nur Branch-Changes; Analyse + File sind im
-  // Toolbar IMMER sichtbar und brauchen daher keinen Menu-Eintrag) -------
+  // ---- Aktions-Block: Branch-Changes ---------------------------------
   FMIAnalyseChanged := TMenuItem.Create(FHamburgerMenu);
   FMIAnalyseChanged.Caption := _('Analyse Branch-Changes');
   FMIAnalyseChanged.OnClick := AnalyseChangedFilesClick;
@@ -2516,7 +2441,7 @@ begin
   MI.Caption := '-';
   FHamburgerMenu.Items.Add(MI);
 
-  // ---- Cancel (Enabled wird in HamburgerMenuPopup gesynct) -------------
+  // ---- Cancel (Enabled wird in HamburgerMenuPopup gesynct) -----------
   FMICancel := TMenuItem.Create(FHamburgerMenu);
   FMICancel.Caption := _('Cancel Analysis');
   FMICancel.OnClick := CancelAnalyseClick;
@@ -2526,8 +2451,7 @@ begin
   MI.Caption := '-';
   FHamburgerMenu.Items.Add(MI);
 
-  // ---- Ressourcen-Block: Export ----------------------------------------
-  // (Browse ist nicht im Menu - der "..."-Button ist immer im Toolbar sichtbar)
+  // ---- Export --------------------------------------------------------
   MI := TMenuItem.Create(FHamburgerMenu);
   MI.Caption := _('Export') + '...';
   MI.OnClick := HamburgerExportClick;
@@ -2537,7 +2461,7 @@ begin
   MI.Caption := '-';
   FHamburgerMenu.Items.Add(MI);
 
-  // ---- Konfig-Block: oeffnet externe Editoren, kein Analyse-Trigger ----
+  // ---- Konfig-Block: Settings + Ignore -------------------------------
   MI := TMenuItem.Create(FHamburgerMenu);
   MI.Caption := _('Settings...');
   MI.OnClick := EditRepoSettingsClick;
@@ -2549,30 +2473,22 @@ begin
   FHamburgerMenu.Items.Add(MI);
 
   FBtnHamburger.PopupMenu := FHamburgerMenu;
-  // OnClick wurde bereits beim AddButton-Aufruf im Constructor auf
-  // HamburgerClick gesetzt (lazy-build-Trigger). PopupMenu hier zusaetz-
-  // lich anhaengen damit Rechtsklick auf den Button das Menu auch zeigt
-  // (Standard-VCL-Behavior).
 end;
 
 procedure TAnalyserFrame.HamburgerMenuPopup(Sender: TObject);
-// Enabled-Zustand der Live-Items vor dem Oeffnen des Menus synchronisieren -
-// die zugehoerigen Buttons werden vom TAnalyseProgressController waehrend
-// einer laufenden Analyse toggled. Cancel ist umgekehrt: nur waehrend
-// Analyse aktiv.
+// Enabled-Sync VOR dem Oeffnen: Cancel ist nur waehrend laufender Analyse
+// aktiv; Branch-Changes ist waehrend Analyse deaktiviert.
 begin
-  if Assigned(FMICancel) and Assigned(FBtnCancel) then
-    FMICancel.Enabled := FBtnCancel.Enabled;
-  if Assigned(FMIAnalyseChanged) and Assigned(FBtnAnalyseChanged) then
-    FMIAnalyseChanged.Enabled := FBtnAnalyseChanged.Enabled;
+  if Assigned(FMICancel) then
+    FMICancel.Enabled :=
+      Assigned(FAnalyseProgress) and FAnalyseProgress.Running;
+  if Assigned(FMIAnalyseChanged) then
+    FMIAnalyseChanged.Enabled :=
+      (not Assigned(FAnalyseProgress)) or (not FAnalyseProgress.Running);
 end;
 
 procedure TAnalyserFrame.HamburgerClick(Sender: TObject);
-// Klick auf den Hamburger-Button -> Popup-Menu unter dem Button anzeigen.
-// Position: linke untere Ecke des Buttons (in Screen-Koordinaten).
-// Lazy-Build: das Menu wird erst hier (beim ersten Klick) konstruiert.
-// Spart Open-Time wenn der User den Hamburger nie benutzt (FULL-Modus
-// hat alle Toolbar-Tasten sichtbar).
+// Lazy-Build des Menus beim ersten Klick, dann Popup unter dem Button.
 var
   P : TPoint;
 begin
@@ -2585,9 +2501,7 @@ begin
 end;
 
 procedure TAnalyserFrame.HamburgerExportClick(Sender: TObject);
-// Hamburger-Menu-Item "Export...": oeffnet dasselbe Popup wie der
-// BtnExport, aber an der Hamburger-Button-Position. Im NARROW-Modus
-// ist BtnExport hidden - das Hamburger-Item ist die einzige Quelle.
+// Export-Menu-Item: oeffnet das Export-Popup unter dem Hamburger-Button.
 var
   P : TPoint;
 begin
@@ -2814,7 +2728,7 @@ begin
   if (W > 0) and Assigned(FPanelPath) then
   begin
     if FPanelPath.Width    <> W then FPanelPath.Width    := W;
-    if FPanelButtons.Width <> W then FPanelButtons.Width := W;
+    if FPanelFilters.Width <> W then FPanelFilters.Width := W;
     if FPanelSearch.Width  <> W then FPanelSearch.Width  := W;
     if FPanelStats.Width   <> W then FPanelStats.Width   := W;
   end;
@@ -2835,7 +2749,7 @@ begin
   if (W > 0) and Assigned(FPanelPath) then
   begin
     if FPanelPath.Width    <> W then FPanelPath.Width    := W;
-    if FPanelButtons.Width <> W then FPanelButtons.Width := W;
+    if FPanelFilters.Width <> W then FPanelFilters.Width := W;
     if FPanelSearch.Width  <> W then FPanelSearch.Width  := W;
     if FPanelStats.Width   <> W then FPanelStats.Width   := W;
   end;
@@ -3015,10 +2929,6 @@ begin
     if HostForm.Constraints.MinHeight < F.Constraints.MinHeight then
       HostForm.Constraints.MinHeight := F.Constraints.MinHeight;
 
-    // Host-Form bleibt Dock-PARENT: andere IDE-Tool-Windows sollen IN
-    // dieses Panel andocken koennen (wie z.B. Structure View in Project
-    // Manager). Default TOTADockForm: DockSite=True, UseDockManager=True -
-    // hier KEIN Override mehr, damit IDE-Docking-Manager voll greift.
   end;
 
   // Theme-Apply auch hier - belt-and-suspenders zum SetParent-Override:
