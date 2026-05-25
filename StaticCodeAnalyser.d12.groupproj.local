@@ -2,6 +2,6 @@
 <BorlandProject>
 	<Transactions/>
 	<Default.Personality>
-		<Projects ActiveProject="D:\git-demos\delphi\StaticCodeAnalyser\StaticCodeAnalyserForm\StaticCodeAnalyser.d12.dproj"/>
+		<Projects ActiveProject="D:\git-demos\delphi\StaticCodeAnalyser\StaticCodeAnalyserIDE\StaticCodeAnalyser.IDE.d12.dproj"/>
 	</Default.Personality>
 </BorlandProject>
