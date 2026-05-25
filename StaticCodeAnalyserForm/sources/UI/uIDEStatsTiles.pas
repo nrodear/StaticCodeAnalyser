@@ -236,10 +236,13 @@ var
 begin
   inherited; // zeichnet Hintergrund (Color) und Bevel
   Canvas.Brush.Style := bsClear;
-  // BorderColor ist ein System-Color-Index. ActiveStyleServices liefert
-  // die IDE-StyleServices im Plugin-Kontext, sonst die VCL-globale - der
-  // Border-Pen folgt damit dem gleichen Theme wie der Rest des Plugins.
-  Canvas.Pen.Color := ActiveStyleServices.GetSystemColor(FBorderColor);
+  // BorderColor ist ein System-Color-Index. WICHTIG: Vcl.Themes.StyleServices
+  // (global, nicht ActiveStyleServices/Theming.StyleServices). Per setTheme-
+  // Branch / commit cb3d109-Revert: im Docked-Modus liefert Theming.
+  // StyleServices nach Theme-Switch nicht zuverlaessig frische Farben fuer
+  // Custom-Paint - Tiles blieben in alten Farben. Die VCL-globale wird durch
+  // Theming.ApplyTheme(Form) korrekt mitgezogen.
+  Canvas.Pen.Color := StyleServices.GetSystemColor(FBorderColor);
   Canvas.Pen.Width := 2;
   // Geometrie fuer Pen.Width=2 + Rectangle (exclusive Right/Bottom):
   //   Rect(1, 1, W-1, H-1) -> Pen centered auf geometrische Linie:

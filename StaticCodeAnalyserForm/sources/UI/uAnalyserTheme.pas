@@ -106,10 +106,13 @@ end;
 function SeverityBg(Severity: TFindingSeverity;
   ABase: TColor): TColor;
 begin
-  // Default-Pfad: via ActiveStyleServices — im IDE-Plugin liefert das die
-  // IDE-StyleServices via StyleServicesProvider, im Standalone die VCL-
-  // globale.
-  Result := SeverityBg(Severity, ABase, ActiveStyleServices);
+  // Default-Pfad: via Vcl.Themes.StyleServices (global). Im Docked-Mode
+  // wird die globale durch Theming.ApplyTheme(Form) korrekt mitgezogen;
+  // Theming.StyleServices/ActiveStyleServices liefert dort nach Theme-
+  // Switch nicht zuverlaessig frische Farben fuer Custom-Paint. Wer
+  // explizit die IDE-Variante braucht (Grid-Renderer) kann das ueber
+  // die 3-Parameter-Overload tun.
+  Result := SeverityBg(Severity, ABase, StyleServices);
 end;
 
 function SeverityBg(Severity: TFindingSeverity;
