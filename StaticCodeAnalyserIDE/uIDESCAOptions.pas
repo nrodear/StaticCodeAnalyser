@@ -22,6 +22,7 @@ interface
 
 uses
   Winapi.Windows,                                     // VK_TAB / VK_ESCAPE / VK_BACK ...
+  Winapi.Messages,                                    // TMessage / CM_STYLECHANGED
   System.Classes, System.SysUtils, System.UITypes,    // clGrayText
   Vcl.Graphics,                                       // TFontStyle (fsBold)
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
@@ -79,6 +80,10 @@ type
     // Tastenkombi; wir schreiben die ShortCutToText-Repraesentation rein.
     procedure ShortcutEditKeyDown(Sender: TObject; var Key: Word;
       Shift: TShiftState);
+    // VCL-Style-Wechsel via Application.Broadcast - feuert zuverlaessiger
+    // als der TIDETheme-Subscribe in manchen IDE-Versionen. Beide Pfade
+    // rufen Apply auf das Frame; Apply ist idempotent.
+    procedure CMStyleChanged(var Message: TMessage); message CM_STYLECHANGED;
   public
     constructor Create(AOwner: TComponent); override;
     // Werte aus den Settings in die Controls schreiben (FrameCreated).
@@ -570,6 +575,17 @@ begin
   if Assigned(chkUsesCheck)    then ASettings.UsesCheck           := chkUsesCheck.Checked;
   if Assigned(chkIncludeTests) then ASettings.IncludeTests        := chkIncludeTests.Checked;
   if Assigned(chkAutoDiscover) then ASettings.AutoDiscoverClasses := chkAutoDiscover.Checked;
+end;
+
+procedure TSCAOptionsFrame.CMStyleChanged(var Message: TMessage);
+begin
+  inherited;
+  // VCL-broadcastet diese Message wenn der aktive Style wechselt.
+  // Belt-and-suspenders zum TIDETheme-Subscribe - sollte einer der
+  // beiden Pfade in einer IDE-Version mal nicht feuern, faengt der
+  // andere es ab. Apply ist idempotent.
+  if csDestroying in ComponentState then Exit;
+  TIDETheme.Apply(Self);
 end;
 
 procedure TSCAOptionsFrame.ShortcutEditKeyDown(Sender: TObject;

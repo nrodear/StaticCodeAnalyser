@@ -355,8 +355,6 @@ begin
     ATheming.ApplyTheme(AC);
 
   AC.Invalidate;
-  if AC is TWinControl then
-    TWinControl(AC).Update;
   if AC is TCustomGrid then
     TCustomGrid(AC).Repaint;
 
