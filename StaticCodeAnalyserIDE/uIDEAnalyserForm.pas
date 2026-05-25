@@ -3014,6 +3014,11 @@ begin
       HostForm.Constraints.MinWidth := F.Constraints.MinWidth;
     if HostForm.Constraints.MinHeight < F.Constraints.MinHeight then
       HostForm.Constraints.MinHeight := F.Constraints.MinHeight;
+
+    // Host-Form bleibt Dock-PARENT: andere IDE-Tool-Windows sollen IN
+    // dieses Panel andocken koennen (wie z.B. Structure View in Project
+    // Manager). Default TOTADockForm: DockSite=True, UseDockManager=True -
+    // hier KEIN Override mehr, damit IDE-Docking-Manager voll greift.
   end;
 
   // Theme-Apply auch hier - belt-and-suspenders zum SetParent-Override:
