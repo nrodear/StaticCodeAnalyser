@@ -317,25 +317,77 @@ end;
 // TIDETheme (statische Facade)
 // ---------------------------------------------------------------------------
 
+type
+  // Hack-Class um auf protected TControl.Color / .Font zuzugreifen.
+  TControlAccess = class(TControl);
+
+procedure ResolveIDEColor(var AColor: TColor;
+  const AStyle: TCustomStyleServices);
+// Wenn AColor ein System-Color-Identifier (clBtnFace, clWindow, ...) ist,
+// resolve ihn ueber AStyle zur konkreten RGB-Aufloesung. Identifier-Bit
+// ist $80000000 (clSystemColor).
+//
+// Hintergrund (Konzept_DockedThemeRefresh.md):
+//   System-Color-Properties (TPanel.Color := clBtnFace) werden zur Paint-
+//   Zeit ueber die VCL-globale Vcl.Themes.StyleServices aufgeloest. Im
+//   Docked-Modus ist die VCL-globale aber NICHT auf das IDE-Theme syncen
+//   (Theming.ApplyTheme(IDE-Main) propagiert nicht in fremde Frame-
+//   Subtrees). Mit dieser Funktion schreiben wir konkrete RGB-Werte aus
+//   dem aktiven IDE-Theme direkt auf den Control — Paint haengt nicht
+//   mehr von VCL-Style-Aufloesung ab.
+begin
+  if (AColor <> clNone) and ((AColor and clSystemColor) <> 0) then
+    AColor := AStyle.GetSystemColor(AColor);
+end;
+
 procedure ApplyRecursive(ATheming: IOTAIDEThemingServices; AC: TControl);
 // Walked den Control-Baum unter AC. Pro Knoten:
-//   1. ApplyTheme via IOTAIDEThemingServices (registriert Style-Hook
-//      damit der Control dem aktiven VCL-Style folgt).
-//   2. Invalidate (Schedule Repaint mit neuen Style-Farben).
-//   3. TCustomGrid: zusaetzlich Repaint (Paint-Cache zwingen).
+//   1. ApplyTheme via IOTAIDEThemingServices (registriert Style-Hook).
+//   2. Color + Font.Color via IDE-StyleServices auf konkretes RGB resolven
+//      und auf den Control schreiben (kritisch im Docked-Modus).
+//   3. Invalidate + Update — SYNCHRONER WM_PAINT solange Theming.
+//      StyleServices garantiert frisch ist.
+//   4. TCustomGrid: zusaetzlich Repaint (Paint-Cache zwingen).
 //
 // Per-Descendant ApplyTheme ist Pflicht. IOTAIDEThemingServices.ApplyTheme
 // propagiert in Delphi 12 nicht zuverlaessig transitiv von einem TFrame
-// auf seine Kinder (siehe commit f3c77ac) — jeder Descendant braucht den
-// Aufruf einzeln, sonst rendert er im VCL-Style statt im IDE-Theme.
+// auf seine Kinder (commit f3c77ac).
+//
+// Siehe Konzept_DockedThemeRefresh.md fuer die drei kausalen Ursachen
+// und den kombinierten Fix.
 var
-  i  : Integer;
-  WC : TWinControl;
+  i        : Integer;
+  WC       : TWinControl;
+  IdeStyle : TCustomStyleServices;
+  C        : TColor;
 begin
   if Assigned(ATheming) then
+  begin
     ATheming.ApplyTheme(AC);
 
+    // B: Color + Font.Color per IDE-StyleServices in konkrete RGB-Werte
+    //    aufloesen. Macht den Control paint-zeit-unabhaengig von der
+    //    VCL-globalen StyleServices.
+    IdeStyle := ATheming.StyleServices;
+    if Assigned(IdeStyle) then
+    begin
+      C := TControlAccess(AC).Color;
+      ResolveIDEColor(C, IdeStyle);
+      TControlAccess(AC).Color := C;
+
+      C := TControlAccess(AC).Font.Color;
+      ResolveIDEColor(C, IdeStyle);
+      TControlAccess(AC).Font.Color := C;
+    end;
+  end;
+
+  // A: Invalidate + Update zwingt SYNCHRON WM_PAINT, solange wir noch
+  //    in Apply stehen und Theming.StyleServices definitiv frisch ist.
+  //    Ohne Update kaeme der Paint deferred, bei dem Theming.StyleServices
+  //    moeglicherweise schon weiter gewandert ist.
   AC.Invalidate;
+  if AC is TWinControl then
+    TWinControl(AC).Update;
   if AC is TCustomGrid then
     TCustomGrid(AC).Repaint;
 

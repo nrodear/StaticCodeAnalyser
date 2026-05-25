@@ -150,7 +150,7 @@ type
 implementation
 
 uses
-  Winapi.Windows, uAnalyserPalette, uIDEColors, uLocalization;
+  Winapi.Windows, uAnalyserPalette, uAnalyserTheme, uIDEColors, uLocalization;
 
 type
   // Access-Class zum Lesen/Schreiben von TControl.OnResize (protected).
@@ -234,10 +234,13 @@ procedure TTilePanel.Paint;
 begin
   inherited; // zeichnet Hintergrund (Color) und Bevel
   Canvas.Brush.Style := bsClear;
-  // BorderColor ist ein System-Color-Index (z. B. cl3DDkShadow). Canvas.Pen
-  // resolved nur ueber GetSysColor (Windows nativ), nicht ueber den aktiven
-  // VCL-Style. Daher hier explizit ueber StyleServices aufloesen.
-  Canvas.Pen.Color := StyleServices.GetSystemColor(FBorderColor);
+  // BorderColor ist ein System-Color-Index (z. B. cl3DDkShadow).
+  // ActiveStyleServices liefert die IDE-Theming-StyleServices (via
+  // StyleServicesProvider-Hook in uIDEAnalyserForm.RegisterAnalyserDockableForm)
+  // oder im Standalone-Fall die VCL-globale. Im Docked-Modus ist die
+  // VCL-globale stale nach Theme-Switch (siehe Konzept_DockedThemeRefresh.md);
+  // ActiveStyleServices gibt uns die IDE-Theme-Quelle die immer frisch ist.
+  Canvas.Pen.Color := ActiveStyleServices.GetSystemColor(FBorderColor);
   Canvas.Pen.Width := 1;
   Canvas.Rectangle(ClientRect);
 end;

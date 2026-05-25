@@ -307,7 +307,7 @@ end;
 procedure TFindingHintPanel.ShowPlaceholder;
 begin
   FHelpDescLabel.Caption := '  ' + _('Select a row to see the fix hint');
-  FHelpDescLabel.Color   := StyleServices.GetSystemColor(IDE_BG_CHROME);
+  FHelpDescLabel.Color   := ActiveStyleServices.GetSystemColor(IDE_BG_CHROME);
   FHelpBefore.Lines.Text := '';
   FHelpAfter.Lines.Text  := '';
 end;
@@ -317,7 +317,7 @@ var
   Hint         : TFixHint;
   ColorDefault : TColor;
 begin
-  ColorDefault := StyleServices.GetSystemColor(IDE_BG_CHROME);
+  ColorDefault := ActiveStyleServices.GetSystemColor(IDE_BG_CHROME);
 
   if not Assigned(F) then
   begin
