@@ -150,6 +150,9 @@ begin
   FHelpBeforePanel.Align       := alTop;
   FHelpBeforePanel.Height      := 150;
   FHelpBeforePanel.BevelOuter  := bvNone;
+  // seClient aus StyleElements: Panel malt mit expliziter Color statt
+  // vom VCL-Style ueberzeichnet zu werden (CnPack-Pattern, docked-Mode-Fix).
+  FHelpBeforePanel.StyleElements := FHelpBeforePanel.StyleElements - [seClient];
   FHelpBeforePanel.Color       := IDE_BG_CONTENT;
 
   LblBefore := TLabel.Create(Self);
@@ -188,6 +191,7 @@ begin
   HelpAfterPanel.Parent      := FHelpPanel;
   HelpAfterPanel.Align       := alClient;
   HelpAfterPanel.BevelOuter  := bvNone;
+  HelpAfterPanel.StyleElements := HelpAfterPanel.StyleElements - [seClient];
   HelpAfterPanel.Color       := IDE_BG_CONTENT;
 
   LblAfter := TLabel.Create(Self);

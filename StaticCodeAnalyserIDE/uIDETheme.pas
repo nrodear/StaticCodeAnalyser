@@ -381,13 +381,13 @@ begin
     end;
   end;
 
-  // A: Invalidate + Update zwingt SYNCHRON WM_PAINT, solange wir noch
-  //    in Apply stehen und Theming.StyleServices definitiv frisch ist.
-  //    Ohne Update kaeme der Paint deferred, bei dem Theming.StyleServices
-  //    moeglicherweise schon weiter gewandert ist.
+  // Invalidate ohne synchrones Update (GExperts-Pattern in GX_GrepResults:
+  // ForceRedraw via Visible-Toggle - Update fuehrt zu Flicker, dokumentiert
+  // in GExperts-Bug #86). Color/Font.Color sind durch ResolveIDEColor oben
+  // bereits auf konkrete RGB-Werte aus dem IDE-Theme gesetzt - der spaetere
+  // WM_PAINT laeuft also gegen feste Farben, nicht gegen die noch sich
+  // einpendelnde VCL-globale StyleServices.
   AC.Invalidate;
-  if AC is TWinControl then
-    TWinControl(AC).Update;
   if AC is TCustomGrid then
     TCustomGrid(AC).Repaint;
 

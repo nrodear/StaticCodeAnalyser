@@ -272,6 +272,12 @@ begin
   Tile.BevelOuter  := bvNone;
   Tile.BorderStyle := bsNone;
   Tile.ParentBackground := False;
+  // CnPack-Pattern (CnBytesVisualizer.pas:255-260): seClient aus
+  // StyleElements entfernen damit das Panel mit seiner expliziten Color
+  // malt statt vom VCL-Style-Hook ueberzeichnet zu werden. Kombiniert
+  // mit ResolveIDEColor (uIDETheme.pas) das die Color zur Apply-Zeit auf
+  // konkretes IDE-Theme-RGB resolved -> stabile Theme-Farben im Docked-Mode.
+  Tile.StyleElements := Tile.StyleElements - [seClient];
   Tile.Color       := IDE_BG_CHROME;
   Tile.BorderColor := IDE_SEPARATOR;
   Tile.ShowHint    := True;
@@ -288,6 +294,7 @@ begin
   TopRow.Height      := ScaleByPPI(Parent, 20);
   TopRow.BevelOuter  := bvNone;
   TopRow.ParentBackground := False;
+  TopRow.StyleElements := TopRow.StyleElements - [seClient];
   TopRow.Color       := IDE_BG_CHROME;
 
   IconLbl := TLabel.Create(AOwner);
