@@ -312,6 +312,12 @@ type
     // SetParent postet WM_SCA_REFIT; zu diesem Zeitpunkt sind Bounds
     // korrekt gesetzt und csLoading ist geloescht.
     procedure WMScaRefit(var Message: TMessage); message WM_SCA_REFIT;
+    // Zweiter Theme-Trigger neben dem INTAIDEThemingServicesNotifier.
+    // Im Docked-Modus propagiert ApplyTheme(TopForm) nicht in den
+    // Frame-Subtree (TopForm = IDE-Main, nicht unser Container);
+    // VCL feuert aber CM_STYLECHANGED via WndProc-Kette an jeden
+    // Control. Wir leiten das an RefreshFromIDETheme weiter.
+    procedure CMStyleChanged(var Message: TMessage); message CM_STYLECHANGED;
   public
     FProjectPath : TComboBox;
     FResultGrid  : TStringGrid;
@@ -2713,6 +2719,21 @@ begin
       FDockRefitTimer.Enabled := True;
     end;
   end;
+end;
+
+procedure TAnalyserFrame.CMStyleChanged(var Message: TMessage);
+// Zweiter Theme-Trigger neben TIDETheme.Subscribe (= INTAIDEThemingServices-
+// Notifier). VCL feuert CM_STYLECHANGED via WndProc-Kette an jeden Control
+// wenn TStyleManager.SetStyle laeuft. Im Docked-Modus ist das oft der einzige
+// Pfad der unseren Frame erreicht: TopForm ist dort das IDE-Main-Window,
+// dessen ApplyTheme nicht in unseren Frame-Subtree propagiert; die VCL-
+// Nachricht hingegen wandert ueber Parent-Hierarchie und Control-Iteration
+// an alle Children. Forwarding an RefreshFromIDETheme -> per-Control
+// ApplyTheme im TIDETheme-Manager.
+begin
+  inherited;
+  if csDestroying in ComponentState then Exit;
+  RefreshFromIDETheme;
 end;
 
 procedure TAnalyserFrame.WMScaRefit(var Message: TMessage);

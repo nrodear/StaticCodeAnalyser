@@ -361,24 +361,49 @@ begin
   end;
 end;
 
+function ControlIsFloating(AControl: TWinControl): Boolean;
+// Walked die Parent-Kette zur naechsten TCustomForm und liefert deren
+// Floating-Property. Wenn keine TCustomForm im Chain (sehr selten -
+// z.B. Frame noch nicht parented) -> False als sichere Annahme (=> docked).
+var
+  P: TWinControl;
+begin
+  Result := False;
+  P := AControl;
+  while Assigned(P) do
+  begin
+    if P is TCustomForm then
+      Exit(TCustomForm(P).Floating);
+    P := P.Parent;
+  end;
+end;
+
 class procedure TIDETheme.Apply(AControl: TWinControl);
 var
   Theming     : IOTAIDEThemingServices;
   TopForm     : TCustomForm;
   ColdStart   : Boolean;
+  Floating    : Boolean;
 begin
   if AControl = nil then Exit;
 
   EnsureImpl;
   G.EnsureNotifier;
 
-  // Cold-Start = erster Apply pro BPL-Session. Beim ersten Apply muessen
-  // alle Children einzeln ApplyTheme bekommen damit ihre Style-Hooks
-  // registriert werden. Bei nachfolgenden Apply-Calls (Theme-Switch)
-  // sind die Hooks bereits installiert — ein einziger ApplyTheme auf
-  // TopForm (rekursiv per ToolsAPI-Doku) plus Invalidate reicht. Das
-  // spart ~80 ApplyTheme-Calls pro Theme-Wechsel.
-  ColdStart := G.FFirstApply;
+  // Cold-Start = per-Child ApplyTheme (registriert/refresht Style-Hooks).
+  // Warm-Restart = nur Invalidate (Hooks bleiben, IDE propagiert via TopForm).
+  //
+  // Bedingungen fuer Cold-Start:
+  //   1. Erster Apply der Session (FFirstApply) - Hooks muessen erst dran.
+  //   2. NICHT-floating Frame (Docked-Mode) - hier ist TopForm das IDE-
+  //      Main-Window, dessen ApplyTheme NICHT in unseren Frame-Subtree
+  //      propagiert. Empirisch: Tiles + Panels behalten alte Theme-Farben
+  //      bis ein per-Child ApplyTheme die Hooks neu schiebt.
+  //
+  // Floating-Mode profitiert weiterhin von Warm-Restart (~80x schneller),
+  // weil TOTADockForm tatsaechlich propagiert.
+  Floating  := ControlIsFloating(AControl);
+  ColdStart := G.FFirstApply or (not Floating);
   G.FFirstApply := False;
 
   if not Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) then
@@ -400,13 +425,11 @@ begin
     // ApplyTheme zusätzlich am Frame selbst — die IDE-Dock-Host-Form
     // kennt unseren Frame nicht als theme-aware, daher propagiert
     // ApplyTheme(TopForm) im docked-Modus nicht auf den Frame durch.
-    // Dieser Direkt-Call fixt das. Laut Docs ist ApplyTheme rekursiv,
-    // daher ein Aufruf für den ganzen Frame-Baum.
     Theming.ApplyTheme(AControl);
   end;
 
-  // Cold-Start: ApplyTheme an JEDEN Descendant (defensiv).
-  // Warm-Restart (Theme-Switch): nur Invalidate + Grid.Repaint.
+  // Cold-Start (oder Docked): ApplyTheme an JEDEN Descendant.
+  // Warm-Restart (Floating + nicht-erster Apply): nur Invalidate + Grid.Repaint.
   ApplyRecursive(Theming, AControl, ColdStart);
 end;
 
