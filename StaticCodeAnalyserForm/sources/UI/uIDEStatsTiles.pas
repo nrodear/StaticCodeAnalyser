@@ -150,7 +150,7 @@ type
 implementation
 
 uses
-  Winapi.Windows, uAnalyserPalette, uAnalyserTheme, uIDEColors, uLocalization;
+  Winapi.Windows, uAnalyserPalette, uIDEColors, uLocalization;
 
 type
   // Access-Class zum Lesen/Schreiben von TControl.OnResize (protected).
@@ -231,30 +231,15 @@ end;
 { TTilePanel }
 
 procedure TTilePanel.Paint;
-var
-  R: TRect;
 begin
   inherited; // zeichnet Hintergrund (Color) und Bevel
   Canvas.Brush.Style := bsClear;
-  // BorderColor ist ein System-Color-Index. WICHTIG: Vcl.Themes.StyleServices
-  // (global, nicht ActiveStyleServices/Theming.StyleServices). Per setTheme-
-  // Branch / commit cb3d109-Revert: im Docked-Modus liefert Theming.
-  // StyleServices nach Theme-Switch nicht zuverlaessig frische Farben fuer
-  // Custom-Paint - Tiles blieben in alten Farben. Die VCL-globale wird durch
-  // Theming.ApplyTheme(Form) korrekt mitgezogen.
+  // BorderColor ist ein System-Color-Index (z. B. cl3DDkShadow). Canvas.Pen
+  // resolved nur ueber GetSysColor (Windows nativ), nicht ueber den aktiven
+  // VCL-Style. Daher hier explizit ueber StyleServices aufloesen.
   Canvas.Pen.Color := StyleServices.GetSystemColor(FBorderColor);
-  Canvas.Pen.Width := 2;
-  // Geometrie fuer Pen.Width=2 + Rectangle (exclusive Right/Bottom):
-  //   Rect(1, 1, W-1, H-1) -> Pen centered auf geometrische Linie:
-  //     Top    Linie y=1 deckt Pixel y=0,1
-  //     Bottom Linie y=H-1 deckt Pixel y=H-2,H-1
-  //     Left   Linie x=1 deckt Pixel x=0,1
-  //     Right  Linie x=W-1 deckt Pixel x=W-2,W-1
-  //   -> alle 4 Kanten gleich dick 2 px sichtbar.
-  // Die Sub-Children (TopRow, CapLbl) haben Margin=2 damit sie nicht
-  // ueber die 2-Pixel-Innenkante des Rahmens laufen.
-  R := Rect(1, 1, ClientWidth - 1, ClientHeight - 1);
-  Canvas.Rectangle(R);
+  Canvas.Pen.Width := 1;
+  Canvas.Rectangle(ClientRect);
 end;
 
 { TStatsTilesBuilder }
@@ -284,11 +269,8 @@ begin
   Tile.BevelOuter  := bvNone;
   Tile.BorderStyle := bsNone;
   Tile.ParentBackground := False;
-  // IDE_BG_CONTENT (clWindow) statt IDE_BG_CHROME (clBtnFace): Tile-Flaeche
-  // hebt sich klar vom Toolbar-Hintergrund ab. Hell-Theme: weisse Tiles auf
-  // grauer Toolbar; Dark-Theme: dunklere Content-Flaeche gegen Chrome-Grau.
-  Tile.Color       := IDE_BG_CONTENT;
-  Tile.BorderColor := IDE_TILE_BORDER;
+  Tile.Color       := IDE_BG_CHROME;
+  Tile.BorderColor := IDE_SEPARATOR;
   Tile.ShowHint    := True;
   Tile.Hint        := Caption;
 
@@ -297,17 +279,13 @@ begin
   TopRow.Parent      := Tile;
   TopRow.Align       := alTop;
   TopRow.AlignWithMargins := True;
-  // 2px Abstand zum 2-Pixel-Tile-Rahmen. Bewusst NICHT DPI-skaliert -
-  // der Rahmen ist auch fix 2 px breit, beides muss matchen damit
-  // TopRow nicht ueber die innere Pixelreihe des Rahmens laeuft.
-  // Unten = 0 (TopRow stoesst direkt an die CapLbl-Marge, kein Spalt).
-  TopRow.Margins.SetBounds(2, 2, 2, 0);
+  // 1px Abstand zum Tile-Rahmen - bewusst NICHT skaliert (1 px sieht
+  // auch bei 200% DPI noch als duennes Inset OK aus, 2 px waere zu fett).
+  TopRow.Margins.SetBounds(1, 1, 1, 0);
   TopRow.Height      := ScaleByPPI(Parent, 20);
   TopRow.BevelOuter  := bvNone;
   TopRow.ParentBackground := False;
-  // Muss zu Tile.Color passen (IDE_BG_CONTENT), sonst sieht man eine
-  // Naht zwischen Icon-Zeile und Caption.
-  TopRow.Color       := IDE_BG_CONTENT;
+  TopRow.Color       := IDE_BG_CHROME;
 
   IconLbl := TLabel.Create(AOwner);
   IconLbl.Parent      := TopRow;
@@ -334,13 +312,12 @@ begin
   CountLbl.Font.Color  := IDE_FG_CHROME; // theme-konformer Vordergrund
 
   // Caption unten, ueber volle Tile-Breite zentriert.
-  // Margins(2,0,2,2) - 2px Abstand auf links/rechts/unten passend zum
-  // 2-Pixel-Tile-Rahmen. Oben = 0 (stoesst direkt an TopRow).
+  // AlignWithMargins/Margins(1,0,1,1) damit der Tile-Rahmen sichtbar bleibt.
   CapLbl := TLabel.Create(AOwner);
   CapLbl.Parent      := Tile;
   CapLbl.Align       := alClient;
   CapLbl.AlignWithMargins := True;
-  CapLbl.Margins.SetBounds(2, 0, 2, 2);
+  CapLbl.Margins.SetBounds(1, 0, 1, 1);
   CapLbl.Caption     := Caption;
   CapLbl.Alignment   := taCenter;
   CapLbl.Layout      := tlTop;
@@ -398,7 +375,7 @@ begin
   TileVuln       := MakeTile(AOwner, Parent, _('Security'),     GLYPH_VULN,    ICON_VULN,    TILE_W);
   TileDup        := MakeTile(AOwner, Parent, _('Duplicates'),   GLYPH_DUP,     ICON_DUP,     TILE_W);
   TileCyclomatic := MakeTile(AOwner, Parent, _('Cyclomatic'),   GLYPH_CYCLO,   ICON_SMELL,   TILE_W_CYCLO);
-  TileScore      := MakeTile(AOwner, Parent, _('Quality'),      GLYPH_SCORE,   ICON_SCORE,   TILE_W_SCORE);
+  TileScore      := MakeTile(AOwner, Parent, _('Code Quality'), GLYPH_SCORE,   ICON_SCORE,   TILE_W_SCORE);
 end;
 
 { TResponsiveLayoutController }

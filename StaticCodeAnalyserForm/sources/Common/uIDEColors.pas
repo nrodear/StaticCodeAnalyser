@@ -44,16 +44,7 @@ const
   IDE_FG_DIM       : TColor = clGrayText;
 
   // Separator-Linien (1-2 px Trennlinien zwischen Panels und Splittern).
-  // clBtnShadow statt cl3DDkShadow: bleibt im Dark-Theme deutlich gegen
-  // den Tile-/Panel-Hintergrund sichtbar; cl3DDkShadow kollabiert dort
-  // teilweise auf die selbe RGB-Wert wie clBtnFace.
-  IDE_SEPARATOR    : TColor = clBtnShadow;
-
-  // Tile-Rahmen: clBtnShadow = mittlerer Kontrast. Auf Hell-Theme dezentes
-  // Dunkelgrau, auf Dark-Theme helleres Grau gegen Tile-Hintergrund
-  // (IDE_BG_CONTENT). clWindowText waere zu hart (wirkt wie schwarze
-  // Tinte), cl3DDkShadow zu schwach (verschwindet im Dark-Theme).
-  IDE_TILE_BORDER  : TColor = clBtnShadow;
+  IDE_SEPARATOR    : TColor = cl3DDkShadow;
 
 implementation
 
