@@ -141,10 +141,6 @@ type
     FFrameBg     : TColor;
     FFrameFg     : TColor;
     FEditorBg    : TColor;
-    // True bis zum ersten erfolgreichen Apply. Steuert ob ApplyRecursive
-    // per-Control ApplyTheme aufruft (cold-start, registriert die Style-
-    // Hooks) oder nur Invalidate (warm-restart, Hooks sind schon dran).
-    FFirstApply  : Boolean;
     procedure EnsureNotifier;
     procedure RebuildCache;
     procedure NotifyChanged;
@@ -223,7 +219,6 @@ begin
   FSubs        := TList<TSubscription>.Create;
   FNotifierIdx := -1;
   FCacheValid  := False;
-  FFirstApply  := True;
 end;
 
 destructor TIDEThemeImpl.Destroy;
@@ -333,20 +328,25 @@ end;
 // TIDETheme (statische Facade)
 // ---------------------------------------------------------------------------
 
-procedure ApplyRecursive(ATheming: IOTAIDEThemingServices; AC: TControl;
-  AThemeChildren: Boolean);
+procedure ApplyRecursive(ATheming: IOTAIDEThemingServices; AC: TControl);
 // Walked den Control-Baum unter AC. Pro Knoten:
-//   1. (Nur wenn AThemeChildren=True) ApplyTheme via IOTAIDEThemingServices
-//      — registriert Style-Hook. Wird nur beim ersten Apply pro Session
-//      gemacht (cold-start); spaeter sind die Hooks an, ApplyTheme auf
-//      TopForm propagiert die Farbaenderung automatisch.
+//   1. ApplyTheme via IOTAIDEThemingServices (registriert Style-Hook
+//      damit der Control dem aktiven VCL-Style folgt).
 //   2. Invalidate (Schedule Repaint mit neuen Style-Farben).
 //   3. TCustomGrid: zusaetzlich Repaint (Paint-Cache zwingen).
+//
+// WICHTIG: Per-Descendant ApplyTheme ist Pflicht, NICHT optional.
+// IOTAIDEThemingServices.ApplyTheme propagiert in Delphi 12 nicht
+// zuverlaessig transitiv von einem TFrame auf seine Kinder (siehe
+// commit f3c77ac). Eine fruehere Optimierung (cold/warm split, commit
+// 976db55) hat den per-Child-Aufruf eingespart und damit Docked-Mode-
+// Theme-Refresh gebrochen — Tiles/Panels blieben in alten Theme-Farben.
+// Zurueck auf die verlaessliche Variante: jedes Mal alle Children.
 var
   i  : Integer;
   WC : TWinControl;
 begin
-  if AThemeChildren and Assigned(ATheming) then
+  if Assigned(ATheming) then
     ATheming.ApplyTheme(AC);
 
   AC.Invalidate;
@@ -357,63 +357,31 @@ begin
   begin
     WC := TWinControl(AC);
     for i := 0 to WC.ControlCount - 1 do
-      ApplyRecursive(ATheming, WC.Controls[i], AThemeChildren);
-  end;
-end;
-
-function ControlIsFloating(AControl: TWinControl): Boolean;
-// Walked die Parent-Kette zur naechsten TCustomForm und liefert deren
-// Floating-Property. Wenn keine TCustomForm im Chain (sehr selten -
-// z.B. Frame noch nicht parented) -> False als sichere Annahme (=> docked).
-var
-  P: TWinControl;
-begin
-  Result := False;
-  P := AControl;
-  while Assigned(P) do
-  begin
-    if P is TCustomForm then
-      Exit(TCustomForm(P).Floating);
-    P := P.Parent;
+      ApplyRecursive(ATheming, WC.Controls[i]);
   end;
 end;
 
 class procedure TIDETheme.Apply(AControl: TWinControl);
 var
-  Theming     : IOTAIDEThemingServices;
-  TopForm     : TCustomForm;
-  ColdStart   : Boolean;
-  Floating    : Boolean;
+  Theming : IOTAIDEThemingServices;
+  TopForm : TCustomForm;
 begin
   if AControl = nil then Exit;
 
   EnsureImpl;
   G.EnsureNotifier;
 
-  // Cold-Start = per-Child ApplyTheme (registriert/refresht Style-Hooks).
-  // Warm-Restart = nur Invalidate (Hooks bleiben, IDE propagiert via TopForm).
-  //
-  // Bedingungen fuer Cold-Start:
-  //   1. Erster Apply der Session (FFirstApply) - Hooks muessen erst dran.
-  //   2. NICHT-floating Frame (Docked-Mode) - hier ist TopForm das IDE-
-  //      Main-Window, dessen ApplyTheme NICHT in unseren Frame-Subtree
-  //      propagiert. Empirisch: Tiles + Panels behalten alte Theme-Farben
-  //      bis ein per-Child ApplyTheme die Hooks neu schiebt.
-  //
-  // Floating-Mode profitiert weiterhin von Warm-Restart (~80x schneller),
-  // weil TOTADockForm tatsaechlich propagiert.
-  Floating  := ControlIsFloating(AControl);
-  ColdStart := G.FFirstApply or (not Floating);
-  G.FFirstApply := False;
-
   if not Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) then
     Theming := nil;
 
   if Assigned(Theming) then
   begin
-    // RegisterFormClass + ApplyTheme: ToolsAPI-vorgesehener Weg zum
-    // Theming einer Form-Klasse. ApplyTheme(TopForm) ist laut Docs
-    // rekursiv und updated Font.Color/Color der gesamten Form-Tree.
+    // ToolsAPI-vorgesehener Weg um eine Form-Klasse fuer IDE-Theming zu
+    // aktivieren: RegisterFormClass + ApplyTheme. Damit verwendet
+    // ApplyTheme die IDE-eigene StyleServices (Theme-Service-intern)
+    // statt der globalen Vcl.Themes.StyleServices.
+    // Kein TStyleManager.SetStyle - das wuerde sonst die GESAMTE Delphi-
+    // IDE re-painten (2-Sek-Hang).
     TopForm := GetParentForm(AControl);
     if Assigned(TopForm) then
     begin
@@ -421,16 +389,12 @@ begin
       Theming.ApplyTheme(TopForm);
       TopForm.Invalidate;
     end;
-
-    // ApplyTheme zusätzlich am Frame selbst — die IDE-Dock-Host-Form
-    // kennt unseren Frame nicht als theme-aware, daher propagiert
-    // ApplyTheme(TopForm) im docked-Modus nicht auf den Frame durch.
-    Theming.ApplyTheme(AControl);
   end;
 
-  // Cold-Start (oder Docked): ApplyTheme an JEDEN Descendant.
-  // Warm-Restart (Floating + nicht-erster Apply): nur Invalidate + Grid.Repaint.
-  ApplyRecursive(Theming, AControl, ColdStart);
+  // Per-Descendant ApplyTheme + Invalidate. Pflicht-Pfad - propagiert
+  // selber durch die Frame-Hierarchie, unabhaengig davon ob TopForm
+  // (Float = TOTADockForm) oder die IDE-Main-Form (Docked) ist.
+  ApplyRecursive(Theming, AControl);
 end;
 
 class function TIDETheme.Subscribe(ACallback: TThemeChangedProc): IInterface;
