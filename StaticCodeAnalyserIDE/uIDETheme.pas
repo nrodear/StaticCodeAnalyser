@@ -263,21 +263,10 @@ end;
 
 procedure TIDEThemeImpl.RebuildCache;
 var
-  Svc     : INTACodeEditorServices;
-  Theming : IOTAIDEThemingServices;
-  Styles  : TCustomStyleServices;
+  Svc : INTACodeEditorServices;
 begin
-  // IDE-StyleServices verwenden (folgt IDE-Theme), nicht VCL-globale —
-  // die kann von TStyleManager.ActiveStyle abweichen wenn der User
-  // einen anderen VCL-Style als das IDE-Theme aktiv hat.
-  Styles := nil;
-  if Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) then
-    Styles := Theming.StyleServices;
-  if not Assigned(Styles) then
-    Styles := Vcl.Themes.StyleServices;
-  FFrameBg := Styles.GetSystemColor(clWindow);
-  FFrameFg := Styles.GetSystemColor(clWindowText);
-
+  FFrameBg := StyleServices.GetSystemColor(clWindow);
+  FFrameFg := StyleServices.GetSystemColor(clWindowText);
   FEditorBg := clNone;
   try
     if Supports(BorlandIDEServices, INTACodeEditorServices, Svc) then
@@ -328,69 +317,23 @@ end;
 // TIDETheme (statische Facade)
 // ---------------------------------------------------------------------------
 
-type
-  // Hack-Class um auf protected TControl.Color / .Font zuzugreifen.
-  TControlAccess = class(TControl);
-
-procedure ResolveIDEColor(var AColor: TColor;
-  const AStyle: TCustomStyleServices);
-// Aus commit 3ec52dd: System-Color-Identifier (clWindow, clBtnFace, ...)
-// werden zur Paint-Zeit ueber die VCL-globale StyleServices aufgeloest.
-// Im docked-Modus ist die VCL-globale nicht zuverlaessig auf das IDE-
-// Theme synchronisiert -> TilePanel, Help-Panel-Captions etc. paint'en
-// in alten Farben.
-//
-// Fix: Color/Font.Color schon JETZT (zur Apply-Zeit) ueber die IDE-
-// StyleServices in einen konkreten RGB-Wert aufloesen und auf den
-// Control schreiben. Damit haengt die Custom-Paint nicht mehr von
-// VCL-Style-Aufloesung ab. Beim naechsten Theme-Switch laeuft die
-// Iteration wieder durch und resolved gegen das neue Theme.
-//
-// System-Color-Indices sind durch das clSystemColor-Bit ($80000000)
-// markiert. Direkter Set-of-TColor geht nicht - TColor ist Integer,
-// Sets sind byte-limited (E1012).
-begin
-  if (AColor <> clNone) and ((AColor and clSystemColor) <> 0) then
-    AColor := AStyle.GetSystemColor(AColor);
-end;
-
 procedure ApplyRecursive(ATheming: IOTAIDEThemingServices; AC: TControl);
 // Walked den Control-Baum unter AC. Pro Knoten:
-//   1. ApplyTheme via IOTAIDEThemingServices (registriert Style-Hook).
-//   2. Color + Font.Color via IDE-StyleServices aufloesen und auf den
-//      Control schreiben (kritisch im docked-Modus - siehe commit 3ec52dd).
-//   3. Invalidate (Schedule Repaint).
-//   4. TCustomGrid: zusaetzlich Repaint (Paint-Cache zwingen).
+//   1. ApplyTheme via IOTAIDEThemingServices (registriert Style-Hook
+//      damit der Control dem aktiven VCL-Style folgt).
+//   2. Invalidate (Schedule Repaint mit neuen Style-Farben).
+//   3. TCustomGrid: zusaetzlich Repaint (Paint-Cache zwingen).
 //
-// Per-Descendant ApplyTheme ist Pflicht, NICHT optional. IOTAIDEThemingServices.
-// ApplyTheme propagiert in Delphi 12 nicht zuverlaessig transitiv von einem
-// TFrame auf seine Kinder (commit f3c77ac).
+// Per-Descendant ApplyTheme ist Pflicht. IOTAIDEThemingServices.ApplyTheme
+// propagiert in Delphi 12 nicht zuverlaessig transitiv von einem TFrame
+// auf seine Kinder (siehe commit f3c77ac) — jeder Descendant braucht den
+// Aufruf einzeln, sonst rendert er im VCL-Style statt im IDE-Theme.
 var
-  i        : Integer;
-  WC       : TWinControl;
-  IdeStyle : TCustomStyleServices;
-  C        : TColor;
+  i  : Integer;
+  WC : TWinControl;
 begin
   if Assigned(ATheming) then
-  begin
     ATheming.ApplyTheme(AC);
-
-    // Color + Font.Color per IDE-StyleServices in konkrete RGB-Werte
-    // aufloesen. Ohne diesen Schritt rendern Custom-Paint-Controls
-    // (TilePanel, Help-Panel-Labels) ueber die VCL-globale StyleServices,
-    // die im docked-Modus stale ist.
-    IdeStyle := ATheming.StyleServices;
-    if Assigned(IdeStyle) then
-    begin
-      C := TControlAccess(AC).Color;
-      ResolveIDEColor(C, IdeStyle);
-      TControlAccess(AC).Color := C;
-
-      C := TControlAccess(AC).Font.Color;
-      ResolveIDEColor(C, IdeStyle);
-      TControlAccess(AC).Font.Color := C;
-    end;
-  end;
 
   AC.Invalidate;
   if AC is TCustomGrid then
