@@ -70,9 +70,16 @@ begin
   Result := False;
 end;
 
-// Strippt Strings + Kommentare. Positionen bleiben erhalten (Replace mit
-// Leerzeichen, nicht Loeschen).
+// Strippt Strings + Kommentare. Positionen bleiben erhalten.
+// String-Inhalte werden mit STR_MARK (~) statt Leerzeichen ersetzt, damit
+// die Phase-2-Regex `\s*` NICHT ueber den ehemaligen String hinweg matched.
+// Sonst wuerde `aValue = '' then` nach Strippen als `aValue =    then`
+// erscheinen und `then` faelschlich als RHS einer Float-Equality kassieren
+// (Pascal-Keyword statt Float-Literal). Mit ~~ als Platzhalter scheitert
+// `[\w.]+` schon am ersten ~ und der Match faellt korrekt weg.
 function StripStringsAndComments(Lines: TStringList; out LineForChar: TArray<Integer>): string;
+const
+  STR_MARK = '~';  // Marker fuer stripped string content - nicht in \w, nicht in \s.
 var
   Buf            : TStringBuilder;
   Chars          : TList<Integer>;
@@ -107,17 +114,17 @@ begin
         c := Line[j];
         if InStr then
         begin
-          Buf.Append(' '); Chars.Add(i);
+          Buf.Append(STR_MARK); Chars.Add(i);
           if c = '''' then
           begin
             if (j < n) and (Line[j + 1] = '''') then
-            begin Buf.Append(' '); Chars.Add(i); Inc(j, 2); end
+            begin Buf.Append(STR_MARK); Chars.Add(i); Inc(j, 2); end
             else begin InStr := False; Inc(j); end;
           end else Inc(j);
           Continue;
         end;
         if c = '''' then
-        begin Buf.Append(' '); Chars.Add(i); InStr := True; Inc(j); Continue; end;
+        begin Buf.Append(STR_MARK); Chars.Add(i); InStr := True; Inc(j); Continue; end;
         if (c = '/') and (j < n) and (Line[j + 1] = '/') then Break;
         if c = '{' then
         begin

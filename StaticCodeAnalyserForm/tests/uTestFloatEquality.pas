@@ -14,6 +14,7 @@ type
     [Test] procedure IntegerEquality_NotReported;
     [Test] procedure Assignment_NotReported;
     [Test] procedure Finding_KindAndSeverity;
+    [Test] procedure StringEqualityWithFloatVarNameElsewhere_NotReported;
   end;
 
 implementation
@@ -104,6 +105,42 @@ begin
       if Fnd.Kind = fkFloatEquality then begin Hit := Fnd; Break; end;
     Assert.IsNotNull(Hit, 'fkFloatEquality finding expected');
     Assert.AreEqual(lsWarning, Hit.Severity);
+  finally F.Free; end;
+end;
+
+procedure TTestFloatEquality.StringEqualityWithFloatVarNameElsewhere_NotReported;
+// Regression: `aValue = ''` mit String-Var darf NICHT als Float-Equality
+// kassiert werden, auch wenn an anderer Stelle im File `aValue: Double`
+// als Param vorkommt (file-weite FloatVars).
+// Frueher: String-Strip ersetzte '' durch Leerzeichen -> die Regex bridge
+// uebersprang das und kassierte das naechste Token (Keyword `then`) als RHS.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Foo(aValue: Double): Boolean;'#13#10 +
+  'begin'#13#10 +
+  '  Result := aValue = 0.0;'#13#10 +
+  'end;'#13#10 +
+  'procedure Bar;'#13#10 +
+  'var aValue: string;'#13#10 +
+  'begin'#13#10 +
+  '  if aValue = '''' then Exit;'#13#10 +
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+  Hit : Integer;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    // Foo's Float-Vergleich bleibt erlaubt; Bar's String-Vergleich darf
+    // KEINEN Treffer mehr produzieren.
+    Hit := 0;
+    for Fnd in F do
+      if (Fnd.Kind = fkFloatEquality)
+         and (Pos('then', Fnd.MissingVar) > 0) then
+        Inc(Hit);
+    Assert.AreEqual(0, Hit, 'String-Compare gegen Keyword darf nicht ' +
+      'als Float-Equality kassiert werden');
   finally F.Free; end;
 end;
 
