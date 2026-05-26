@@ -6,6 +6,118 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.9.3] - 2026-05-27
+
+Polish release. No new detectors (count stays at 161). Focus on
+IDE-plugin theme reliability in docked-mode, file encoding correctness,
+and annotation-overlay usability.
+
+Full release notes: [docs/releases/v0.9.3.md](docs/releases/v0.9.3.md)
+([deutsch](docs/releases/v0.9.3_de.md)).
+
+### Added
+
+- IDE-plugin splash-screen entry + About-Box registration via standard
+  ToolsAPI splash/about services.
+- Visible 1 px per-tile border in the Sonar stats row, theme-aware via
+  `ActiveStyleServices.GetSystemColor(clBtnShadow)`.
+- `Konzept_DockedThemeRefresh.md` documenting the docked-mode theme
+  diagnostic trail and the combined fix.
+- `Konzept_ProjektAufteilung.md` outlining the planned project split
+  (Engine / SharedUI / Standalone+CLI / IDE-Plugin / Tests).
+- Regression test `StringEqualityWithFloatVarNameElsewhere_NotReported`
+  for the FloatEquality string-compare false-positive.
+
+### Changed
+
+- **IDE-plugin theme apply pipeline** rewritten as a per-Descendant
+  5-step walker (`ApplyTheme` → preserve `StyleElements - [seClient]`
+  → resolve `Color`/`Font.Color` to concrete RGB → bind `StyleName` to
+  the IDE style → `Invalidate` / grid `Repaint`). Fixes docked-mode
+  theme refresh on tiles, toolbar panels, help-panel caption, memos.
+- **`uIDETheme.TIDEThemeImpl.ApplyRecursive`** split into four named
+  helpers: `ApplyStyleHookPreserveSeClient`, `ResolveDescendantColors`,
+  `BindToIdeStyle`, `TriggerRepaint`.
+- **`uFileTextCache.LoadFileSmart`** does three-stage encoding
+  detection (BOM-sniff → strict-UTF-8 validation → Windows-1252
+  fallback). Replaces the lenient `LoadFromFile(file, TEncoding.UTF8)`
+  pattern that silently substituted invalid bytes.
+- **Multi-finding annotation overlay** keeps each finding's
+  description in an indented bullet list (was title-only summary).
+  Fix-hint still suppressed for multi-mark.
+- **`IDE_SEPARATOR`** color changed from `cl3DDkShadow` to
+  `clBtnShadow` — visible in Dark themes (the old value collapsed
+  onto `clBtnFace`).
+- **`STATS_PANEL_HEIGHT`** 51 → 53 (Sonar stats row 2 px taller).
+- **`FTileScore`** caption shortened from "Code Quality" to "Quality"
+  (tile label + tooltip title; status-bar score line keeps the long
+  form).
+- **IDE-plugin toolbar** reduced from 4 rows to 3 (Path /
+  Filter+Search / Stats); less-used actions moved into a hamburger
+  menu.
+- **`EngineSCA/`** folder renamed to `SCA.Engine/`.
+
+### Fixed
+
+- **Docked-mode IDE-theme refresh** affected only the grid; tiles,
+  toolbar, help-panel caption and memos stayed in the previous theme.
+- **`uFileTextCache`** silently produced mojibake on ANSI files with
+  German umlauts in the unit header (`TEncoding.UTF8` decoded invalid
+  bytes to U+FFFD instead of falling back to Windows-1252).
+- **FloatEquality detector** reported `aValue = ''` (string compare)
+  as a float-equality bug when another function in the same file had
+  `aValue: Double` as a parameter. Stripped string content now uses
+  `~` as marker so the regex can't bridge across an empty literal.
+- **Theme-switch second-pass bug** — concrete RGB values were written
+  back after first apply, so the next theme switch had no
+  `clSystemColor` bit to resolve. Per-control original-color cache
+  (`FOrigColors`) preserves the original identifier.
+
+### Performance
+
+- **~80× faster IDE theme switch** via cold/warm Apply split
+  (per-Descendant `ApplyTheme` only on first apply; subsequent switches
+  reuse registered style hooks). Full switch dropped from ~2 s of
+  broadcast repaints to under ~25 ms.
+
+---
+
+## [0.9.2] - 2026-05-22
+
+mORMot-cluster + Sonar-50 expansion + standalone progress +
+i18n completeness. Detector count grows from 59 to **161 kinds**
+(across ~130 detector classes — `uVisibilityCheck` emits 4 kinds,
+`uDfmAnalysisRunner` emits 22).
+
+Full release notes: [docs/releases/v0.9.2.md](docs/releases/v0.9.2.md)
+([deutsch](docs/releases/v0.9.2_de.md)).
+
+### Added
+
+- **9 mORMot-cluster detectors** (SCA153-161): UnpairedLock,
+  MoveSizeOfPointer, WithMultipleTargets, GetMemWithoutFreeMem,
+  SetLengthAppendInLoop, PointerArithmeticOnString, EmptyOnHandler,
+  StringFromPointer, PointerSubtraction.
+- **SCA138-152 Sonar-50 expansion** filling Maintainability +
+  Code-Smell slots: GodClass, FreeWithoutNil, MultipleExit,
+  LargeClass, UnsortedUses, MissingUnitHeader, FloatEquality,
+  ExceptInDestructor, BooleanParam, UnusedPrivateMethod,
+  CanBeClassMethod, MissingOverride, BoolAlwaysTrue, ConstantReturn,
+  HardcodedString.
+- **Standalone GUI**: progress bar, Cancel button, MAX_SCAN_FILES
+  scan-runaway protection (was IDE-only).
+- **IDE-plugin keyboard shortcuts** are user-configurable (cnpack-
+  style: press key combo, store in INI). Master toggle to disable all
+  shortcuts. Settings dialog scrollable.
+
+### Changed
+
+- **Translation completeness: 161 / 161** finding-hint descriptions
+  covered in both DE translation stores (GDeMap + i18n/de.po), all 82
+  combo-labels translated.
+
+---
+
 ## [0.9.1] - 2026-05-16
 
 SonarQube-Integration release. Production-ready external-issues push
