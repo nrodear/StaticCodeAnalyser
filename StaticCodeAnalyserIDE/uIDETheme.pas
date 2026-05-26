@@ -390,15 +390,31 @@ procedure ApplyRecursive(ATheming: IOTAIDEThemingServices; AC: TControl);
 // Siehe Konzept_DockedThemeRefresh.md fuer die drei kausalen Ursachen
 // und den kombinierten Fix.
 var
-  i        : Integer;
-  WC       : TWinControl;
-  IdeStyle : TCustomStyleServices;
-  Cur, Orig: TControlColors;
-  C        : TColor;
+  i           : Integer;
+  WC          : TWinControl;
+  IdeStyle    : TCustomStyleServices;
+  Cur, Orig   : TControlColors;
+  C           : TColor;
+  HadSeClient : Boolean;
 begin
   if Assigned(ATheming) then
   begin
+    // StyleElements-Snapshot VOR ApplyTheme. Falls Theming.ApplyTheme
+    // intern StyleElements zurueck auf Default [seBorder, seClient, seFont]
+    // setzt, wuerde unser \"seClient entfernt\"-Trick (in MakeTile,
+    // uIDEHelpPanel) verloren gehen. Snapshot + Restore garantiert dass
+    // controls die mit StyleElements - [seClient] erzeugt wurden, das
+    // ueber alle Theme-Switches hinweg behalten.
+    if AC is TCustomControl then
+      HadSeClient := seClient in TCustomControl(AC).StyleElements
+    else
+      HadSeClient := True;  // Default-Annahme, kein Restore noetig
+
     ATheming.ApplyTheme(AC);
+
+    if (AC is TCustomControl) and (not HadSeClient) then
+      TCustomControl(AC).StyleElements :=
+        TCustomControl(AC).StyleElements - [seClient];
 
     // B: Color + Font.Color per IDE-StyleServices in konkrete RGB-Werte
     //    aufloesen. Wichtig: gegen den ORIGINAL-Identifier resolven
