@@ -567,9 +567,18 @@ begin
         end
         else
         begin
-          // Multi-Mark: Summary-Markierung mit Bullet-Liste, kein Fix.
-          // Color/Badge/Severity kommen vom staerksten Eintrag, sodass
-          // der Editor-Stripe konsistent die staerkste Severity zeigt.
+          // Multi-Mark: Summary-Markierung mit Bullet-Liste pro Befund.
+          // Title + Severity-Label inline, Desc auf eingerueckter Folge-
+          // zeile damit alle Detail-Beschreibungen erhalten bleiben - nicht
+          // mehr nur die Titel zusammengefasst. Color/Badge/Severity kommen
+          // weiterhin vom staerksten Eintrag, sodass der Editor-Stripe
+          // konsistent die staerkste Severity zeigt.
+          //
+          // Beispiel-Output fuer 2 Befunde auf einer Zeile:
+          //   • PointerArithmeticOnString  [Warning]
+          //      String + integer addition treated as pointer arithmetic ...
+          //   • UseAfterFree  [Error]
+          //      Variable accessed after FreeAndNil ...
           DescSB := TStringBuilder.Create;
           try
             for j := 0 to Group.Count - 1 do
@@ -585,6 +594,12 @@ begin
                 DescSB.Append('  [');
                 DescSB.Append(SeverityLabel(Group[j].Severity));
                 DescSB.Append(']');
+              end;
+              if Group[j].Desc <> '' then
+              begin
+                DescSB.AppendLine;
+                DescSB.Append('   ');           // 3 spaces = Indent unter Bullet
+                DescSB.Append(Group[j].Desc);
               end;
             end;
             Mark.Desc := DescSB.ToString;

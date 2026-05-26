@@ -69,6 +69,98 @@ procedure ReleaseLines(Lines: TStringList; OwnedByCache: Boolean);
 
 implementation
 
+uses
+  System.Math, System.IOUtils;
+
+function IsValidUtf8(const Bytes: TBytes): Boolean;
+// Pruft ob die komplette Byte-Sequenz wohlgeformtes UTF-8 ist
+// (RFC 3629, ohne ueberlange Encodings strikt zu pruefen — fuer
+// Encoding-Wahl ausreichend). ASCII-only ist trivial gueltig.
+var
+  i, Cont, Len : Integer;
+  B            : Byte;
+begin
+  Len := Length(Bytes);
+  i := 0;
+  while i < Len do
+  begin
+    B := Bytes[i];
+    if B < $80 then
+      Cont := 0                          // ASCII
+    else if (B and $E0) = $C0 then
+      Cont := 1                          // 110xxxxx + 1
+    else if (B and $F0) = $E0 then
+      Cont := 2                          // 1110xxxx + 2
+    else if (B and $F8) = $F0 then
+      Cont := 3                          // 11110xxx + 3
+    else
+      Exit(False);                       // ungueltiges Lead-Byte
+    Inc(i);
+    while (Cont > 0) and (i < Len) do
+    begin
+      if (Bytes[i] and $C0) <> $80 then Exit(False);  // kein Continuation
+      Inc(i); Dec(Cont);
+    end;
+    if Cont > 0 then Exit(False);        // unvollstaendige Sequenz am EOF
+  end;
+  Result := True;
+end;
+
+function LoadFileSmart(const FileName: string; SL: TStringList): Boolean;
+// Encoding-Erkennung in drei Stufen:
+//   1. BOM vorhanden? → Encoding aus BOM (UTF-8/UTF-16 LE/UTF-16 BE).
+//   2. Kein BOM, aber alle Bytes wohlgeformt UTF-8? → UTF-8.
+//   3. Sonst → TEncoding.Default (Windows-1252/Active-CP).
+//
+// Fixt Mojibake bei ANSI-Dateien mit Umlauten in den ersten Zeilen
+// (Unit-Header, Copyright-Kommentare) - Delphi's LoadFromFile(F, UTF-8)
+// ist lenient und ersetzt invalide Bytes still durch U+FFFD, sodass
+// der Aufrufer den Fehler nicht sieht. Wir detecten explizit + waehlen
+// die richtige Encoding bevor wir dekodieren.
+var
+  Bytes  : TBytes;
+  Enc    : TEncoding;
+  BomLen : Integer;
+  Head   : TBytes;
+begin
+  Result := False;
+  if not FileExists(FileName) then Exit;
+  try
+    Bytes := TFile.ReadAllBytes(FileName);
+  except
+    Exit;
+  end;
+
+  // Stufe 1: BOM-Sniff auf den ersten max. 4 Bytes.
+  SetLength(Head, Min(Length(Bytes), 4));
+  if Length(Head) > 0 then
+    Move(Bytes[0], Head[0], Length(Head));
+  Enc := nil;
+  BomLen := TEncoding.GetBufferEncoding(Head, Enc, nil);
+  // GetBufferEncoding setzt Enc nur bei BOM-Treffer. Ohne BOM bleibt
+  // Enc=nil (weil wir ADefaultEncoding=nil uebergeben haben).
+
+  if Enc = nil then
+  begin
+    // Stufe 2/3: kein BOM. UTF-8-strikt oder ANSI.
+    if IsValidUtf8(Bytes) then
+      Enc := TEncoding.UTF8
+    else
+      Enc := TEncoding.Default;
+    BomLen := 0;
+  end;
+
+  try
+    // BOM-Bytes ueberspringen (wenn BOM erkannt war). GetString auf den
+    // Rest. SL.Text setzt automatisch Lines auf.
+    SL.Text := Enc.GetString(Bytes, BomLen, Length(Bytes) - BomLen);
+    Result := True;
+  except
+    // ANSI/Default kann nie werfen (jeder Byte-Wert ist gueltig in CP1252).
+    // UTF-8 ist nach IsValidUtf8 geprueft. Hier nur als Belt-and-Suspenders.
+  end;
+end;
+
 constructor TFileTextCache.Create;
 begin
   inherited;
@@ -98,16 +190,8 @@ begin
 
   SL := TStringList.Create;
   try
-    try
-      SL.LoadFromFile(FileName, TEncoding.UTF8);
-    except
-      try
-        SL.Clear;
-        SL.LoadFromFile(FileName);
-      except
-        FreeAndNil(SL);
-      end;
-    end;
+    if not LoadFileSmart(FileName, SL) then
+      FreeAndNil(SL);
   except
     FreeAndNil(SL);
   end;
@@ -142,16 +226,8 @@ begin
   if not FileExists(FileName) then Exit(nil);
   Result := TStringList.Create;
   try
-    try
-      Result.LoadFromFile(FileName, TEncoding.UTF8);
-    except
-      Result.Clear;
-      try
-        Result.LoadFromFile(FileName);
-      except
-        FreeAndNil(Result);
-      end;
-    end;
+    if not LoadFileSmart(FileName, Result) then
+      FreeAndNil(Result);
   except
     FreeAndNil(Result);
   end;
