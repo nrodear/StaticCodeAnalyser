@@ -2,36 +2,45 @@ unit uIDETheme;
 
 // Zentraler IDE-Theme-Manager fuer das Analyser-Plugin.
 //
-// ZWECK
-//   Ein einziger Notifier registriert sich beim IOTAIDEThemingServices.
-//   Frames/Forms melden sich via Subscribe(Callback) an und bekommen den
-//   Theme-Wechsel als reguliertem Method-Call mitgeteilt. Apply(Control)
-//   ist die kanonische "wende aktuelles IDE-Theme jetzt an" Operation -
-//   inklusive Float-Mode-TopForm-Refresh und Grid-Repaint-Sonderlocke.
+// PUBLIC FACADE (TIDETheme)
+//   * Apply(AControl)                — wendet das aktuelle IDE-Theme auf
+//                                      AControl + alle Descendants an.
+//   * Subscribe(Callback): IInterface — Theme-Wechsel-Event abonnieren;
+//                                      RAII via Refcount.
+//   * FrameBg / FrameFg / EditorBg   — gecachte Theme-Standardfarben.
+//   * IsDark                         — Heuristik fuer Dark-Mode-Akzente.
 //
-// VORHER
-//   - uIDEThemeIntegration.TIDEThemeIntegration pro Frame mit eigener
-//     Notifier-Registration + Detach-Tanz (~240 Zeilen)
-//   - Frei stehende ApplyIDETheme()-Prozedur fuer One-Shot-Aufrufe in
-//     Options-Pages
-//   - CMStyleChanged-Message-Handler im Frame als zweiter Trigger
-//   - 11 hardcoded Color := clBtnFace in TAnalyserFrame
+// APPLY-PIPELINE pro Descendant (siehe ApplyRecursive):
+//   1. ATheming.ApplyTheme(C)               — IDE-Style-Hook initialisieren
+//   2. StyleElements - [seClient] erhalten  — Snapshot+Restore
+//   3. Color/Font.Color resolven            — ORIGINAL-Identifier
+//                                             (clBtnFace, clWindow, ...) ->
+//                                             konkretes RGB aus IDE-Style
+//   4. StyleName := IdeStyle.Name           — per-Control-Style (10.4+),
+//                                             routet StyleHooks zur IDE-
+//                                             Style-Quelle statt zur VCL-
+//                                             globalen (Docked-Mode-Fix)
+//   5. Invalidate / TCustomGrid: Repaint    — repaint mit neuen Farben
 //
-// NACHHER
-//   - Eine Unit, eine Klasse, drei Public-Methoden
-//   - Notifier wird lazy beim ersten Subscribe oder Apply registriert
-//   - Subscriber halten ein IInterface; bei dessen Free wird automatisch
-//     unsubscribed (RAII, kein manueller Detach mehr)
+// WARUM SO AUFWAENDIG
+//   IOTAIDEThemingServices.ApplyTheme propagiert in Delphi 12 nicht
+//   zuverlaessig transitiv von einem TFrame auf seine Kinder. Im Docked-
+//   Modus aktualisiert es ausserdem die VCL-globale Vcl.Themes.StyleServices
+//   NICHT - StyleHooks lesen dann stale Farben. Die per-Descendant-
+//   Pipeline oben kompensiert beide Probleme ohne den 2-Sek-Hang von
+//   TStyleManager.SetStyle (Application.Broadcast(CM_STYLECHANGED) ueber
+//   alle IDE-Forms).
 //
 // THREAD-MODELL
-//   IOTAIDEThemingServices feuert ChangedTheme im Main-Thread. Keine
-//   Locks noetig - alle Subscriber-Aufrufe laufen im VCL-Thread.
+//   IOTAIDEThemingServices feuert ChangedTheme im Main-Thread; alle
+//   Subscriber-Aufrufe laufen im VCL-Thread.
 //
-// FINALIZATION
-//   Globaler Singleton wird in der Unit-Finalization sauber freigegeben,
-//   was den Notifier abmeldet. Noch lebende Subscriptions (deren IInterface-
-//   Halter den Frame noch nicht freigegeben haben) sehen G=nil und werden
-//   beim spaeteren Free zu No-ops.
+// LIFECYCLE
+//   * Singleton G wird lazy beim ersten Apply/Subscribe gebaut.
+//   * Unit-Finalization gibt G frei -> Notifier abgemeldet.
+//   * TSubscription ist refcount-owned; Aufrufer haelt ein IInterface,
+//     bei dessen Free wird automatisch unsubscribed (kein Detach noetig).
+//   * Origin-Color-Cache (FOrigColors) wird mit dem Singleton freigegeben.
 
 interface
 
@@ -49,13 +58,11 @@ type
   // Singleton lebt unit-intern in G und wird lazy initialisiert.
   TIDETheme = class
   public
-    // Wendet das aktuelle IDE-Theme auf AControl an. Hat drei Effekte:
-    //   1. IOTAIDEThemingServices.ApplyTheme auf dem Top-Level-Form
-    //      (Float-Mode: Host-TForm; sonst AControl selbst).
-    //   2. Rekursives Invalidate aller Kindcontrols.
-    //   3. Explizites Repaint auf TCustomGrid-Descendants (StringGrid &
-    //      DrawGrid haben einen Paint-Cache der vom Invalidate nicht
-    //      verlaesslich getroffen wird).
+    // Wendet das aktuelle IDE-Theme auf AControl + alle Descendants an.
+    // Schritte (Details siehe Unit-Header und ApplyRecursive):
+    //   1. RegisterFormClass + ApplyTheme auf dem Top-Level-Form.
+    //   2. Per-Descendant Pipeline: ApplyTheme + Color-Resolve +
+    //      StyleName-Binding + Invalidate (Repaint bei Grids).
     //
     // Idempotent. AControl=nil ist ein no-op.
     class procedure Apply(AControl: TWinControl); static;
@@ -155,6 +162,11 @@ type
     // Origin-Color-Snapshot pro Control. Key = Pointer(TControl);
     // Wert = (orig Color, orig Font.Color). Wird in ApplyRecursive beim
     // ersten Encounter befuellt; bei spaeteren Theme-Switches gelesen.
+    //
+    // Lifetime: Eintraege werden nie geloescht. Raw-Pointer-Key heisst:
+    // wenn ein Control freigegeben + neuer Control an gleiche Adresse
+    // allokiert wird, liefert GetOrigColors veraltete Werte. In der
+    // Praxis unkritisch - Frame + Childs leben die ganze IDE-Session.
     FOrigColors  : TDictionary<Pointer, TControlColors>;
     procedure EnsureNotifier;
     procedure RebuildCache;
@@ -297,10 +309,22 @@ end;
 
 procedure TIDEThemeImpl.RebuildCache;
 var
-  Svc : INTACodeEditorServices;
+  Svc     : INTACodeEditorServices;
+  Theming : IOTAIDEThemingServices;
+  Style   : TCustomStyleServices;
 begin
-  FFrameBg := StyleServices.GetSystemColor(clWindow);
-  FFrameFg := StyleServices.GetSystemColor(clWindowText);
+  // Bevorzugt die IDE-Style-Quelle. Vcl.Themes.StyleServices (global) ist
+  // im Docked-Modus haeufig stale - dann liefern FrameBg/FrameFg Farben
+  // vom vorigen Theme. Fallback nur wenn das ToolsAPI-Service nicht da ist.
+  if Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) then
+    Style := Theming.StyleServices
+  else
+    Style := nil;
+  if not Assigned(Style) then
+    Style := StyleServices;
+
+  FFrameBg := Style.GetSystemColor(clWindow);
+  FFrameFg := Style.GetSystemColor(clWindowText);
   FEditorBg := clNone;
   try
     if Supports(BorlandIDEServices, INTACodeEditorServices, Svc) then
@@ -374,88 +398,104 @@ begin
     AColor := AStyle.GetSystemColor(AColor);
 end;
 
+procedure ApplyStyleHookPreserveSeClient(ATheming: IOTAIDEThemingServices;
+  AC: TControl);
+// ApplyTheme registriert den IDE-Style-Hook auf AC. Sichert dabei den
+// "StyleElements - [seClient]"-Trick: Tile-Panels und der Help-Panel-Caption
+// werden so erzeugt, dass sie ihren Hintergrund vom Parent erben statt vom
+// Style. Falls ATheming.ApplyTheme intern StyleElements auf den Default
+// [seBorder, seClient, seFont] zurueckschreibt, wuerde das den Trick brechen.
+// Snapshot + Restore garantiert die Persistenz ueber alle Theme-Switches.
+var
+  HadSeClient : Boolean;
+begin
+  if AC is TCustomControl then
+    HadSeClient := seClient in TCustomControl(AC).StyleElements
+  else
+    HadSeClient := True;  // Default-Annahme, kein Restore noetig
+
+  ATheming.ApplyTheme(AC);
+
+  if (AC is TCustomControl) and (not HadSeClient) then
+    TCustomControl(AC).StyleElements :=
+      TCustomControl(AC).StyleElements - [seClient];
+end;
+
+procedure ResolveDescendantColors(AC: TControl;
+  const AIdeStyle: TCustomStyleServices);
+// Color + Font.Color auf konkrete RGB-Werte aus dem IDE-Style aufloesen.
+// Resolution laeuft gegen den ORIGINAL-Identifier (clBtnFace, clWindow, ...),
+// gecached pro Control in G.GetOrigColors - sonst wuerde der zweite Switch
+// gegen den schon konkreten RGB vom ersten resolven (Second-Switch-Bug).
+// Im Docked-Modus essenziell, weil VCL-globale StyleServices nicht auf das
+// IDE-Theme syncen.
+var
+  Cur, Orig : TControlColors;
+  C         : TColor;
+begin
+  Cur.Color     := TControlAccess(AC).Color;
+  Cur.FontColor := TControlAccess(AC).Font.Color;
+  Orig := G.GetOrigColors(AC, Cur);
+
+  C := Orig.Color;
+  ResolveIDEColor(C, AIdeStyle);
+  TControlAccess(AC).Color := C;
+
+  C := Orig.FontColor;
+  ResolveIDEColor(C, AIdeStyle);
+  TControlAccess(AC).Font.Color := C;
+end;
+
+procedure BindToIdeStyle(AC: TControl; const AIdeStyle: TCustomStyleServices);
+// Per-Control-Style (Delphi 10.4+): bindet AC direkt an den IDE-Style-Namen.
+// Damit lesen VCL-Style-Hooks (TButton, TComboBox, TStringGrid-Border,
+// TProgressBar, TStatusBar) ihre Farben aus dem IDE-Style statt aus der
+// VCL-globalen StyleServices die im Docked-Modus stale ist - ohne den
+// 2-Sek-Hang von TStyleManager.SetStyle (siehe TIDETheme.Apply).
+begin
+  if AIdeStyle.Name <> '' then
+    AC.StyleName := AIdeStyle.Name;
+end;
+
+procedure TriggerRepaint(AC: TControl);
+// Invalidate ohne synchrones Update (Update wuerde flackern - siehe GExperts
+// Bug #86, GX_GrepResults ForceRedraw via Visible-Toggle). Color/Font.Color
+// sind bereits auf konkrete RGB-Werte gesetzt - der spaetere WM_PAINT laeuft
+// also gegen feste Farben.
+// TCustomGrid braucht zusaetzlich Repaint: StringGrid/DrawGrid haben einen
+// eigenen Paint-Cache, der vom Invalidate nicht verlaesslich getroffen wird.
+begin
+  AC.Invalidate;
+  if AC is TCustomGrid then
+    TCustomGrid(AC).Repaint;
+end;
+
 procedure ApplyRecursive(ATheming: IOTAIDEThemingServices; AC: TControl);
-// Walked den Control-Baum unter AC. Pro Knoten:
-//   1. ApplyTheme via IOTAIDEThemingServices (registriert Style-Hook).
-//   2. Color + Font.Color via IDE-StyleServices auf konkretes RGB resolven
-//      und auf den Control schreiben (kritisch im Docked-Modus).
-//   3. Invalidate + Update — SYNCHRONER WM_PAINT solange Theming.
-//      StyleServices garantiert frisch ist.
-//   4. TCustomGrid: zusaetzlich Repaint (Paint-Cache zwingen).
-//
-// Per-Descendant ApplyTheme ist Pflicht. IOTAIDEThemingServices.ApplyTheme
-// propagiert in Delphi 12 nicht zuverlaessig transitiv von einem TFrame
-// auf seine Kinder (commit f3c77ac).
+// Walked den Control-Baum unter AC und fuehrt pro Knoten die Apply-Pipeline
+// aus (siehe Unit-Header). Per-Descendant ApplyTheme ist Pflicht:
+// IOTAIDEThemingServices.ApplyTheme propagiert in Delphi 12 nicht
+// zuverlaessig transitiv von einem TFrame auf seine Kinder (commit f3c77ac).
 //
 // Siehe Konzept_DockedThemeRefresh.md fuer die drei kausalen Ursachen
 // und den kombinierten Fix.
 var
-  i           : Integer;
-  WC          : TWinControl;
-  IdeStyle    : TCustomStyleServices;
-  Cur, Orig   : TControlColors;
-  C           : TColor;
-  HadSeClient : Boolean;
+  i        : Integer;
+  WC       : TWinControl;
+  IdeStyle : TCustomStyleServices;
 begin
   if Assigned(ATheming) then
   begin
-    // StyleElements-Snapshot VOR ApplyTheme. Falls Theming.ApplyTheme
-    // intern StyleElements zurueck auf Default [seBorder, seClient, seFont]
-    // setzt, wuerde unser \"seClient entfernt\"-Trick (in MakeTile,
-    // uIDEHelpPanel) verloren gehen. Snapshot + Restore garantiert dass
-    // controls die mit StyleElements - [seClient] erzeugt wurden, das
-    // ueber alle Theme-Switches hinweg behalten.
-    if AC is TCustomControl then
-      HadSeClient := seClient in TCustomControl(AC).StyleElements
-    else
-      HadSeClient := True;  // Default-Annahme, kein Restore noetig
+    ApplyStyleHookPreserveSeClient(ATheming, AC);
 
-    ATheming.ApplyTheme(AC);
-
-    if (AC is TCustomControl) and (not HadSeClient) then
-      TCustomControl(AC).StyleElements :=
-        TCustomControl(AC).StyleElements - [seClient];
-
-    // B: Color + Font.Color per IDE-StyleServices in konkrete RGB-Werte
-    //    aufloesen. Wichtig: gegen den ORIGINAL-Identifier resolven
-    //    (clBtnFace, clWindow, ...), nicht gegen den schon konkreten RGB
-    //    vom letzten Switch. G.GetOrigColors cached den Original-Wert
-    //    beim ersten Encounter pro Control.
     IdeStyle := ATheming.StyleServices;
     if Assigned(IdeStyle) and Assigned(G) then
     begin
-      Cur.Color     := TControlAccess(AC).Color;
-      Cur.FontColor := TControlAccess(AC).Font.Color;
-      Orig := G.GetOrigColors(AC, Cur);
-
-      C := Orig.Color;
-      ResolveIDEColor(C, IdeStyle);
-      TControlAccess(AC).Color := C;
-
-      C := Orig.FontColor;
-      ResolveIDEColor(C, IdeStyle);
-      TControlAccess(AC).Font.Color := C;
-
-      // Per-Control-Style (Delphi 10.4+): bindet diesen Control an den
-      // IDE-Style-Namen direkt, ohne globalen TStyleManager.SetStyle und
-      // ohne Application.Broadcast(CM_STYLECHANGED) (der ~2-Sek-Hang).
-      // Damit lesen VCL-Style-Hooks (TButton/TStringGrid-Border/TComboBox/
-      // TProgressBar/TStatusBar) ihre Farben aus dem IDE-Style statt aus
-      // der VCL-globalen StyleServices die im Docked-Modus stale ist.
-      if (AC is TControl) and (IdeStyle.Name <> '') then
-        TControl(AC).StyleName := IdeStyle.Name;
+      ResolveDescendantColors(AC, IdeStyle);
+      BindToIdeStyle(AC, IdeStyle);
     end;
   end;
 
-  // Invalidate ohne synchrones Update (GExperts-Pattern in GX_GrepResults:
-  // ForceRedraw via Visible-Toggle - Update fuehrt zu Flicker, dokumentiert
-  // in GExperts-Bug #86). Color/Font.Color sind durch ResolveIDEColor oben
-  // bereits auf konkrete RGB-Werte aus dem IDE-Theme gesetzt - der spaetere
-  // WM_PAINT laeuft also gegen feste Farben, nicht gegen die noch sich
-  // einpendelnde VCL-globale StyleServices.
-  AC.Invalidate;
-  if AC is TCustomGrid then
-    TCustomGrid(AC).Repaint;
+  TriggerRepaint(AC);
 
   if AC is TWinControl then
   begin
@@ -480,23 +520,18 @@ begin
 
   if Assigned(Theming) then
   begin
-    // BEWUSST KEIN TStyleManager.TrySetStyle(IDE-Theme.Name):
-    // Das wuerde Vcl.Themes.StyleServices (global) auf den IDE-Style
-    // setzen und damit die StyleHooks aller VCL-Controls (TButton,
-    // TStringGrid-Header, TComboBox) syncen. Aber TStyleManager.SetStyle
-    // ruft intern SendStyleChangedMessage = Loop ueber Screen.Forms[]
-    // mit Perform(CM_STYLECHANGED) - jede IDE-Form (50+) benachrichtigt
-    // ihre Children (1000+ Controls), jeder Style-Hook invalidiert +
-    // repainted. Resultat: ~2 Sek Block der gesamten IDE pro Theme-Switch.
+    // Bewusst KEIN TStyleManager.SetStyle(IDE-Theme.Name):
+    // SetStyle ruft intern SendStyleChangedMessage = Loop ueber Screen.Forms[]
+    // mit Perform(CM_STYLECHANGED). Jede IDE-Form (50+) benachrichtigt ihre
+    // Children (1000+ Controls), jeder Style-Hook invalidiert + repainted.
+    // Resultat: ~2 Sek Block der gesamten IDE pro Theme-Switch.
     //
-    // VCL bietet keine Variante von SetStyle ohne diesen Broadcast.
-    // Trade-off: TButton/TStringGrid-Header/TComboBox behalten im Docked-
-    // Mode nach Theme-Switch ihre vorigen Style-Hook-Farben, bis das
-    // Plugin neu geoeffnet wird. Panels, Tiles, Labels, Memos folgen
-    // (durch ResolveIDEColor + StyleElements - [seClient] - Trick) korrekt.
+    // Stattdessen routen wir VCL-Style-Hooks via per-Control TControl.StyleName
+    // in ApplyRecursive auf den IDE-Style (siehe BindToIdeStyle). Selbe
+    // Wirkung fuer unsere Controls (TButton, TComboBox, TStringGrid-Border,
+    // TProgressBar, TStatusBar), ohne den globalen Broadcast.
     //
-    // Frueher (commit daabca5) hatten wir TrySetStyle drin - der hang
-    // war zu teuer.
+    // Historie: commit daabca5 hatte TrySetStyle drin - der Hang war zu teuer.
 
     // ToolsAPI-vorgesehener Weg um eine Form-Klasse fuer IDE-Theming zu
     // aktivieren: RegisterFormClass + ApplyTheme.
@@ -548,18 +583,24 @@ begin
 end;
 
 class function TIDETheme.IsDark: Boolean;
+const
+  // 50 % von 255, perzeptuelle Mitte. Unter dieser Luminanz behandeln
+  // Subscriber das Theme als "dunkel" und schalten Dark-Mode-Akzente ein.
+  DARK_LUMINANCE_MAX = 127;
 var
-  rgb     : Cardinal;
-  R, G_, B: Integer;
-  Lum     : Integer;
+  Rgb       : Cardinal;
+  Red       : Integer;
+  Grn       : Integer;
+  Blu       : Integer;
+  Luminance : Integer;
 begin
-  rgb := ColorToRGB(TIDETheme.FrameBg);
-  R   := GetRValue(rgb);
-  G_  := GetGValue(rgb);
-  B   := GetBValue(rgb);
+  Rgb := ColorToRGB(TIDETheme.FrameBg);
+  Red := GetRValue(Rgb);
+  Grn := GetGValue(Rgb);
+  Blu := GetBValue(Rgb);
   // ITU-R BT.601 perzeptuelles Mittel
-  Lum := (R * 299 + G_ * 587 + B * 114) div 1000;
-  Result := Lum <= 127;
+  Luminance := (Red * 299 + Grn * 587 + Blu * 114) div 1000;
+  Result := Luminance <= DARK_LUMINANCE_MAX;
 end;
 
 initialization
