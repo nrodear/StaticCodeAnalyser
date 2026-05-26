@@ -43,8 +43,11 @@ const
   // Hint-Texte unter Edit-Feldern).
   IDE_FG_DIM       : TColor = clGrayText;
 
-  // Separator-Linien (1-2 px Trennlinien zwischen Panels und Splittern).
-  IDE_SEPARATOR    : TColor = cl3DDkShadow;
+  // Separator-Linien (1 px Trennlinien zwischen Panels, Splittern, Tile-
+  // Rahmen). clBtnShadow statt cl3DDkShadow: bleibt im Dark-Theme deutlich
+  // gegen den Tile/Panel-Hintergrund sichtbar; cl3DDkShadow kollabiert dort
+  // teilweise auf den gleichen RGB-Wert wie clBtnFace und verschwindet.
+  IDE_SEPARATOR    : TColor = clBtnShadow;
 
 implementation
 

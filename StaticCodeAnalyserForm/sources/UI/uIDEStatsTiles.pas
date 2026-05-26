@@ -231,10 +231,13 @@ end;
 { TTilePanel }
 
 procedure TTilePanel.Paint;
+// 1-px Rahmen pro Tile, theme-aufgeloest via ActiveStyleServices. Kontrast
+// kommt aus der Farbwahl in MakeTile (IDE_SEPARATOR = clBtnShadow), nicht
+// aus der Linienbreite - clBtnShadow bleibt in Light/Dark sichtbar gegen
+// IDE_BG_CHROME, waehrend cl3DDkShadow in einigen Themen kollabiert.
 begin
   inherited; // zeichnet Hintergrund (Color) und Bevel
   Canvas.Brush.Style := bsClear;
-  // BorderColor ist ein System-Color-Index (z. B. cl3DDkShadow).
   // ActiveStyleServices liefert die IDE-Theming-StyleServices (via
   // StyleServicesProvider-Hook in uIDEAnalyserForm.RegisterAnalyserDockableForm)
   // oder im Standalone-Fall die VCL-globale. Im Docked-Modus ist die
@@ -288,8 +291,9 @@ begin
   TopRow.Parent      := Tile;
   TopRow.Align       := alTop;
   TopRow.AlignWithMargins := True;
-  // 1px Abstand zum Tile-Rahmen - bewusst NICHT skaliert (1 px sieht
-  // auch bei 200% DPI noch als duennes Inset OK aus, 2 px waere zu fett).
+  // 1 px Inset = Breite der Tile-Border (TTilePanel.Paint Pen.Width=1).
+  // Bewusst NICHT DPI-skaliert: die Border ist auch nicht skaliert (Pen.Width
+  // ist eine Pixel-Konstante), die Margins muessen 1:1 dazu passen.
   TopRow.Margins.SetBounds(1, 1, 1, 0);
   TopRow.Height      := ScaleByPPI(Parent, 20);
   TopRow.BevelOuter  := bvNone;
@@ -322,7 +326,7 @@ begin
   CountLbl.Font.Color  := IDE_FG_CHROME; // theme-konformer Vordergrund
 
   // Caption unten, ueber volle Tile-Breite zentriert.
-  // AlignWithMargins/Margins(1,0,1,1) damit der Tile-Rahmen sichtbar bleibt.
+  // Margins(1,0,1,1) passen auf die 1-px-Tile-Border (TTilePanel.Paint).
   CapLbl := TLabel.Create(AOwner);
   CapLbl.Parent      := Tile;
   CapLbl.Align       := alClient;
@@ -385,7 +389,7 @@ begin
   TileVuln       := MakeTile(AOwner, Parent, _('Security'),     GLYPH_VULN,    ICON_VULN,    TILE_W);
   TileDup        := MakeTile(AOwner, Parent, _('Duplicates'),   GLYPH_DUP,     ICON_DUP,     TILE_W);
   TileCyclomatic := MakeTile(AOwner, Parent, _('Cyclomatic'),   GLYPH_CYCLO,   ICON_SMELL,   TILE_W_CYCLO);
-  TileScore      := MakeTile(AOwner, Parent, _('Code Quality'), GLYPH_SCORE,   ICON_SCORE,   TILE_W_SCORE);
+  TileScore      := MakeTile(AOwner, Parent, _('Quality'),      GLYPH_SCORE,   ICON_SCORE,   TILE_W_SCORE);
 end;
 
 { TResponsiveLayoutController }

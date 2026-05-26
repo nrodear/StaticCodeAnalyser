@@ -387,7 +387,7 @@ const
   // ---- 3-Stufen-Responsive-Layout (96-DPI-logisch, via ScaleW skaliert) -
   //
   // Stufe 1 (NARROW, < BREAKPOINT_MEDIUM = 500):
-  //   Nur die 4 essential Stats-Tiles (Errors/Warnings/Hints/Code Quality).
+  //   Nur die 4 essential Stats-Tiles (Errors/Warnings/Hints/Quality).
   //   Filter-Labels weg. Settings/Ignore/Cancel/Branch-Changes alle hidden -
   //   User muss das Fenster aufweiten um diese Aktionen zu erreichen.
   //
@@ -453,7 +453,7 @@ const
   CMB_W_PROFILE      = 110;    // Profile-Combo (ide-fast, default, strict)
 
   // ---- Stats-Panel ------------------------------------------------------
-  STATS_PANEL_HEIGHT = 51;     // 1 Tile-Reihe (TopRow 20 + Caption 12 + Padding); +6 px Hoehe fuer Glyph-Atem
+  STATS_PANEL_HEIGHT = 53;     // 1 Tile-Reihe (TopRow 20 + Caption 12 + Padding); +8 px Hoehe fuer Glyph-Atem
   STATS_PADDING      = 4;
 
   // ---- Misc -------------------------------------------------------------
@@ -1283,7 +1283,7 @@ begin
 
   // Code-Quality-Score: kein semantischer Filter (Score ist Aggregation),
   // Klick wirkt als Reset-Button auf alle Filter.
-  WireTile(FTileScore,    _('Code Quality') + sLineBreak +
+  WireTile(FTileScore,    _('Quality') + sLineBreak +
            _('Weighted quality score (lower = better).')
            + sLineBreak + _('Weights: Vulnerability 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2.')
            + sLineBreak + _('Click: reset filters (show everything)'),
@@ -1293,7 +1293,7 @@ begin
   // Tile-Labels -> Parent.Parent ist die TilePanel (TopRow dazwischen).
   //
   // Tier-Aufteilung:
-  //   essential (immer):     Errors, Warnings, Hints, Code Quality      (4)
+  //   essential (immer):     Errors, Warnings, Hints, Quality           (4)
   //   MEDIUM+ (>= 500):      Read errors, Bugs, Security, Duplicates,
   //                          Cyclomatic                                 (+5 -> 9)
   if Assigned(FResponsive) then
