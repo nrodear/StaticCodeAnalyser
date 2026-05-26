@@ -129,6 +129,17 @@ type
     procedure Detach;
   end;
 
+  // Per-Control Snapshot der Original-System-Color-Identifier
+  // (clBtnFace / clWindow / clWindowText / ...). Wird beim ersten
+  // ResolveIDEColor pro Control eingefangen damit nachfolgende Theme-
+  // Switches gegen den Original-Identifier resolven (sonst Second-Switch-
+  // Bug: nach erstem Resolve verliert Color das clSystemColor-Bit und
+  // wird beim naechsten Switch nicht mehr aufgeloest).
+  TControlColors = record
+    Color     : TColor;
+    FontColor : TColor;
+  end;
+
   TIDEThemeImpl = class
   private
     FSubs        : TList<TSubscription>;
@@ -141,6 +152,10 @@ type
     FFrameBg     : TColor;
     FFrameFg     : TColor;
     FEditorBg    : TColor;
+    // Origin-Color-Snapshot pro Control. Key = Pointer(TControl);
+    // Wert = (orig Color, orig Font.Color). Wird in ApplyRecursive beim
+    // ersten Encounter befuellt; bei spaeteren Theme-Switches gelesen.
+    FOrigColors  : TDictionary<Pointer, TControlColors>;
     procedure EnsureNotifier;
     procedure RebuildCache;
     procedure NotifyChanged;
@@ -149,6 +164,8 @@ type
   public
     constructor Create;
     destructor Destroy; override;
+    function GetOrigColors(AC: TControl;
+      const ACurrent: TControlColors): TControlColors;
   end;
 
 var
@@ -219,6 +236,7 @@ begin
   FSubs        := TList<TSubscription>.Create;
   FNotifierIdx := -1;
   FCacheValid  := False;
+  FOrigColors  := TDictionary<Pointer, TControlColors>.Create;
 end;
 
 destructor TIDEThemeImpl.Destroy;
@@ -243,7 +261,23 @@ begin
   // Die Subscriptions selbst NICHT freigeben - sie sind refcount-owned
   // vom Aufrufer. Nur unsere Liste.
   FreeAndNil(FSubs);
+  FreeAndNil(FOrigColors);
   inherited;
+end;
+
+function TIDEThemeImpl.GetOrigColors(AC: TControl;
+  const ACurrent: TControlColors): TControlColors;
+// Liefert die Original-System-Color-Identifier fuer AC. Erster Aufruf
+// pro Control: ACurrent wird gespeichert + zurueckgegeben. Spaetere
+// Aufrufe: gespeicherter Wert. Damit kann ResolveIDEColor bei jedem
+// Theme-Switch gegen den Original-Identifier (clBtnFace etc.) resolven,
+// statt gegen den schon konkreten RGB vom letzten Switch.
+begin
+  if not FOrigColors.TryGetValue(Pointer(AC), Result) then
+  begin
+    Result := ACurrent;
+    FOrigColors.Add(Pointer(AC), Result);
+  end;
 end;
 
 procedure TIDEThemeImpl.EnsureNotifier;
@@ -359,6 +393,7 @@ var
   i        : Integer;
   WC       : TWinControl;
   IdeStyle : TCustomStyleServices;
+  Cur, Orig: TControlColors;
   C        : TColor;
 begin
   if Assigned(ATheming) then
@@ -366,16 +401,22 @@ begin
     ATheming.ApplyTheme(AC);
 
     // B: Color + Font.Color per IDE-StyleServices in konkrete RGB-Werte
-    //    aufloesen. Macht den Control paint-zeit-unabhaengig von der
-    //    VCL-globalen StyleServices.
+    //    aufloesen. Wichtig: gegen den ORIGINAL-Identifier resolven
+    //    (clBtnFace, clWindow, ...), nicht gegen den schon konkreten RGB
+    //    vom letzten Switch. G.GetOrigColors cached den Original-Wert
+    //    beim ersten Encounter pro Control.
     IdeStyle := ATheming.StyleServices;
-    if Assigned(IdeStyle) then
+    if Assigned(IdeStyle) and Assigned(G) then
     begin
-      C := TControlAccess(AC).Color;
+      Cur.Color     := TControlAccess(AC).Color;
+      Cur.FontColor := TControlAccess(AC).Font.Color;
+      Orig := G.GetOrigColors(AC, Cur);
+
+      C := Orig.Color;
       ResolveIDEColor(C, IdeStyle);
       TControlAccess(AC).Color := C;
 
-      C := TControlAccess(AC).Font.Color;
+      C := Orig.FontColor;
       ResolveIDEColor(C, IdeStyle);
       TControlAccess(AC).Font.Color := C;
     end;
@@ -401,8 +442,10 @@ end;
 
 class procedure TIDETheme.Apply(AControl: TWinControl);
 var
-  Theming : IOTAIDEThemingServices;
-  TopForm : TCustomForm;
+  Theming  : IOTAIDEThemingServices;
+  TopForm  : TCustomForm;
+  IdeStyle : TCustomStyleServices;
+  IdeName  : string;
 begin
   if AControl = nil then Exit;
 
@@ -414,12 +457,29 @@ begin
 
   if Assigned(Theming) then
   begin
+    // VCL-globale StyleServices auf das IDE-Theme syncen.
+    // Hintergrund: TButton/TStringGrid/TComboBox haben eigene Style-Hooks
+    // die Vcl.Themes.StyleServices (global) auslesen. Im Docked-Modus
+    // syncen sie NICHT automatisch mit dem IDE-Theme - Buttons & Grid-
+    // Header bleiben in alten Farben. TStyleManager.TrySetStyle bringt
+    // die globale auf den IDE-Style-Namen.
+    //
+    // SameText-Guard: nur rufen wenn die Style-Namen unterschiedlich
+    // sind. Damit kein Hang bei redundanten Apply-Calls (z.B. Frame-
+    // Open ohne Theme-Change). Der Style ist beim Theme-Switch bereits
+    // im TStyleManager registriert (IDE laedt ihn intern beim Start),
+    // daher ist TrySetStyle dann ein billiger Rebind, kein File-Load.
+    IdeStyle := Theming.StyleServices;
+    if Assigned(IdeStyle) then
+    begin
+      IdeName := IdeStyle.Name;
+      if (IdeName <> '') and
+         (not SameText(TStyleManager.ActiveStyle.Name, IdeName)) then
+        TStyleManager.TrySetStyle(IdeName, False);
+    end;
+
     // ToolsAPI-vorgesehener Weg um eine Form-Klasse fuer IDE-Theming zu
-    // aktivieren: RegisterFormClass + ApplyTheme. Damit verwendet
-    // ApplyTheme die IDE-eigene StyleServices (Theme-Service-intern)
-    // statt der globalen Vcl.Themes.StyleServices.
-    // Kein TStyleManager.SetStyle - das wuerde sonst die GESAMTE Delphi-
-    // IDE re-painten (2-Sek-Hang).
+    // aktivieren: RegisterFormClass + ApplyTheme.
     TopForm := GetParentForm(AControl);
     if Assigned(TopForm) then
     begin
