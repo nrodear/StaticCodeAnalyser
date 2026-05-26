@@ -442,10 +442,8 @@ end;
 
 class procedure TIDETheme.Apply(AControl: TWinControl);
 var
-  Theming  : IOTAIDEThemingServices;
-  TopForm  : TCustomForm;
-  IdeStyle : TCustomStyleServices;
-  IdeName  : string;
+  Theming : IOTAIDEThemingServices;
+  TopForm : TCustomForm;
 begin
   if AControl = nil then Exit;
 
@@ -457,26 +455,23 @@ begin
 
   if Assigned(Theming) then
   begin
-    // VCL-globale StyleServices auf das IDE-Theme syncen.
-    // Hintergrund: TButton/TStringGrid/TComboBox haben eigene Style-Hooks
-    // die Vcl.Themes.StyleServices (global) auslesen. Im Docked-Modus
-    // syncen sie NICHT automatisch mit dem IDE-Theme - Buttons & Grid-
-    // Header bleiben in alten Farben. TStyleManager.TrySetStyle bringt
-    // die globale auf den IDE-Style-Namen.
+    // BEWUSST KEIN TStyleManager.TrySetStyle(IDE-Theme.Name):
+    // Das wuerde Vcl.Themes.StyleServices (global) auf den IDE-Style
+    // setzen und damit die StyleHooks aller VCL-Controls (TButton,
+    // TStringGrid-Header, TComboBox) syncen. Aber TStyleManager.SetStyle
+    // ruft intern SendStyleChangedMessage = Loop ueber Screen.Forms[]
+    // mit Perform(CM_STYLECHANGED) - jede IDE-Form (50+) benachrichtigt
+    // ihre Children (1000+ Controls), jeder Style-Hook invalidiert +
+    // repainted. Resultat: ~2 Sek Block der gesamten IDE pro Theme-Switch.
     //
-    // SameText-Guard: nur rufen wenn die Style-Namen unterschiedlich
-    // sind. Damit kein Hang bei redundanten Apply-Calls (z.B. Frame-
-    // Open ohne Theme-Change). Der Style ist beim Theme-Switch bereits
-    // im TStyleManager registriert (IDE laedt ihn intern beim Start),
-    // daher ist TrySetStyle dann ein billiger Rebind, kein File-Load.
-    IdeStyle := Theming.StyleServices;
-    if Assigned(IdeStyle) then
-    begin
-      IdeName := IdeStyle.Name;
-      if (IdeName <> '') and
-         (not SameText(TStyleManager.ActiveStyle.Name, IdeName)) then
-        TStyleManager.TrySetStyle(IdeName, False);
-    end;
+    // VCL bietet keine Variante von SetStyle ohne diesen Broadcast.
+    // Trade-off: TButton/TStringGrid-Header/TComboBox behalten im Docked-
+    // Mode nach Theme-Switch ihre vorigen Style-Hook-Farben, bis das
+    // Plugin neu geoeffnet wird. Panels, Tiles, Labels, Memos folgen
+    // (durch ResolveIDEColor + StyleElements - [seClient] - Trick) korrekt.
+    //
+    // Frueher (commit daabca5) hatten wir TrySetStyle drin - der hang
+    // war zu teuer.
 
     // ToolsAPI-vorgesehener Weg um eine Form-Klasse fuer IDE-Theming zu
     // aktivieren: RegisterFormClass + ApplyTheme.
