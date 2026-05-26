@@ -435,6 +435,15 @@ begin
       C := Orig.FontColor;
       ResolveIDEColor(C, IdeStyle);
       TControlAccess(AC).Font.Color := C;
+
+      // Per-Control-Style (Delphi 10.4+): bindet diesen Control an den
+      // IDE-Style-Namen direkt, ohne globalen TStyleManager.SetStyle und
+      // ohne Application.Broadcast(CM_STYLECHANGED) (der ~2-Sek-Hang).
+      // Damit lesen VCL-Style-Hooks (TButton/TStringGrid-Border/TComboBox/
+      // TProgressBar/TStatusBar) ihre Farben aus dem IDE-Style statt aus
+      // der VCL-globalen StyleServices die im Docked-Modus stale ist.
+      if (AC is TControl) and (IdeStyle.Name <> '') then
+        TControl(AC).StyleName := IdeStyle.Name;
     end;
   end;
 
