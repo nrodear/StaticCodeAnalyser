@@ -584,7 +584,12 @@ begin
             for j := 0 to Group.Count - 1 do
             begin
               if j > 0 then DescSB.AppendLine;
-              DescSB.Append('• ');
+              // Bullet als #$2022-Escape, nicht als Literal-Char: das File
+              // hat kein UTF-8-BOM, Delphi 12 liest Source als ANSI/CP-1252
+              // und wuerde die UTF-8-Bytes E2 80 A2 als 3 falsche Chars
+              // ('â€¢') in den String legen. Gleiches Pattern wie der
+              // ✓-Glyph in uIDEAnnotationOverlay (#$2713).
+              DescSB.Append(#$2022 + ' ');
               if Group[j].Title <> '' then
                 DescSB.Append(Group[j].Title)
               else

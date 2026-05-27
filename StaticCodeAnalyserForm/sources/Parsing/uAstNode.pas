@@ -1,7 +1,40 @@
-﻿unit uAstNode;
+unit uAstNode;
 
 // Delphi-AST: Knotentypen und Baumstruktur.
-// Jeder TAstNode repräsentiert ein syntaktisches Konstrukt.
+//
+// Jeder TAstNode repraesentiert ein syntaktisches Konstrukt. Children
+// werden via TObjectList<TAstNode> mit OwnsObjects=True gehalten - der
+// Parent ist Owner aller seiner Kinder, ein Free(root) gibt den
+// kompletten Subtree frei.
+//
+// API-KATEGORIEN
+//
+//   * SUBTREE-WIDE SEARCH (walked rekursiv durch alle Descendants):
+//       FindAll, FindFirst, HasChild, ChildCount
+//       (HasDescendant, DescendantCount sind synonyme Aliase mit
+//       expliziterem Namen)
+//
+//   * DIRECT-CHILDREN-ONLY (nur unmittelbare Kinder):
+//       FindFirstChild, HasDirectChild, DirectChildCount
+//
+//   * MUTATION:
+//       Add (neuer Knoten), AddChild (existierender Knoten + Ownership-
+//       Transfer), AdoptChildrenFrom (alle Children eines anderen Nodes
+//       uebernehmen)
+//
+// API-STOLPERFALLE: Trotz "Child" im Namen walken `HasChild` und
+// `ChildCount` den kompletten Subtree, nicht nur die direkten Kinder.
+// ~250 Detector-Aufrufer haengen an dem Verhalten - nicht aendern.
+// Fuer neuen Code: bevorzugt `HasDescendant` / `DescendantCount` (gleiche
+// Semantik, klarer Name) oder `HasDirectChild` / `DirectChildCount` wenn
+// wirklich nur direkte Kinder gemeint sind.
+//
+// NICHT VERWENDETE KIND-KONSTANTEN
+//
+// nkLiteral, nkBinaryOp, nkUnaryOp, nkIndex, nkDot, nkDeref sind im
+// Enum reserviert fuer einen spaeteren expressions-Subtree, werden vom
+// aktuellen Parser aber nicht produziert. Detectors arbeiten auf der
+// flachen Text-Repraesentation in nkAssign.TypeRef / nkCall.Name.
 
 interface
 
@@ -35,16 +68,12 @@ type
     nkFinallyBlock,
     nkRaise, nkExit, nkBreak, nkContinue,
     nkInherited,
-    // --- Ausdrücke (vereinfacht) ---
+    // --- Ausdruecke (reserviert, vom aktuellen Parser nicht produziert) ---
     nkIdent, nkLiteral, nkBinaryOp, nkUnaryOp,
     nkIndex, nkDot, nkDeref,
     // --- Sonstiges ---
     nkUnknown
   );
-
-  TNodeKindName = record
-    class function ToString(AKind: TNodeKind): string; static;
-  end;
 
   TAstNode = class
   public
@@ -59,33 +88,73 @@ type
       ALine: Integer = 0; ACol: Integer = 0);
     destructor Destroy; override;
 
+    // === MUTATION ===
+
+    // Erzeugt einen neuen Kindknoten und nimmt Ownership. Exception-safe:
+    // wirft Children.Add unerwartet (OOM), wird der gerade erzeugte
+    // Knoten freigegeben - kein Leak.
     function Add(AKind: TNodeKind; const AName: string = '';
       ALine: Integer = 0; ACol: Integer = 0): TAstNode;
+
+    // Haengt einen bereits existierenden Knoten als Kind an. UEBERTRAEGT
+    // OWNERSHIP an Self - ANode darf nach diesem Aufruf NICHT mehr manuell
+    // freigegeben werden (Children.OwnsObjects=True greift). Bei
+    // Free(Self) wird ANode mit freigegeben.
     function AddChild(ANode: TAstNode): TAstNode;
 
-    // Uebernimmt alle Kinder von Source in Self (in Original-Reihenfolge)
-    // und leert Source.Children. O(n) statt O(n²) bei naivem Delete(0)-
-    // Loop - relevant fuer grosse try-Bodies (1000+ Statements).
-    // Atomar bei Exception: keine Doppel-Frees, keine Leaks.
+    // O(n)-Transfer aller Children von Source in Self (Original-Reihen-
+    // folge), Source.Children wird geleert. Vorher: naive Delete(0)-
+    // Loops waren O(n^2) - bei try-Bodies mit 1000+ Statements messbar
+    // (Sekunden statt Millisekunden).
+    // Exception-Sicherheit: wenn AddChild mitten im Loop wirft, gehoeren
+    // die schon uebertragenen Items Self; die Source-Slots werden
+    // genullt, sodass Source.OwnsObjects:=True die noch nicht
+    // uebertragenen Items korrekt freigibt ohne Doppel-Free.
     procedure AdoptChildrenFrom(Source: TAstNode);
 
-    // Suche – gibt Liste ohne Ownership zurück (Caller muss Free aufrufen)
+    // === SUBTREE-WIDE SEARCH ===
+    // Wandern den kompletten Subtree iterativ (Pre-Order DFS) - kein
+    // Stack-Overflow bei tiefen ASTs.
+
+    // Liste mit Ownership-Transfer - Caller MUSS Result.Free aufrufen.
     function FindAll(AKind: TNodeKind): TList<TAstNode>;
     function FindFirst(AKind: TNodeKind): TAstNode;
+
+    // Subtree-wide trotz "Child"-Namen (Legacy-API, 250+ Aufrufer).
+    // Bevorzugt fuer neuen Code: HasDescendant / DescendantCount.
     function HasChild(AKind: TNodeKind): Boolean;
     function ChildCount(AKind: TNodeKind): Integer;
+    function HasDescendant(AKind: TNodeKind): Boolean; inline;
+    function DescendantCount(AKind: TNodeKind): Integer; inline;
+
+    // === DIRECT-CHILDREN-ONLY ===
+    // Iterieren nur ueber Children, nicht rekursiv. Fuer Detectors die
+    // strukturelle Eigenschaften pruefen ("hat dieses Method-Node einen
+    // direkten Block?") ohne in den Block-Body abzusteigen.
+    function FindFirstChild(AKind: TNodeKind): TAstNode;
+    function HasDirectChild(AKind: TNodeKind): Boolean;
+    function DirectChildCount(AKind: TNodeKind): Integer;
 
   private
     procedure CollectAll(AKind: TNodeKind; const AList: TList<TAstNode>);
+    function CountSubtree(AKind: TNodeKind): Integer;
   end;
+
+  // Deprecated Wrapper - existiert nur fuer Backwards-Compat.
+  // Neuer Code soll die globale NodeKindName-Funktion verwenden.
+  TNodeKindName = record
+    class function ToString(AKind: TNodeKind): string; static;
+  end;
+
+// Lesbare Bezeichnung fuer ein TNodeKind (fuer Logging, Dumps, Tests).
+function NodeKindName(AKind: TNodeKind): string;
 
 implementation
 
-{ TNodeKindName }
-
-class function TNodeKindName.ToString(AKind: TNodeKind): string;
 const
-  Names: array[TNodeKind] of string = (
+  // Single-Source-Of-Truth fuer die menschlich lesbaren Kind-Namen.
+  // Reihenfolge MUSS exakt mit TNodeKind uebereinstimmen.
+  KIND_NAMES: array[TNodeKind] of string = (
     'Unit','Interface','Implementation',
     'Uses','UsesItem',
     'TypeSection','VarSection','ConstSection',
@@ -108,8 +177,17 @@ const
     'Index','Dot','Deref',
     'Unknown'
   );
+
+function NodeKindName(AKind: TNodeKind): string;
 begin
-  Result := Names[AKind];
+  Result := KIND_NAMES[AKind];
+end;
+
+{ TNodeKindName }
+
+class function TNodeKindName.ToString(AKind: TNodeKind): string;
+begin
+  Result := NodeKindName(AKind);
 end;
 
 { TAstNode }
@@ -135,7 +213,12 @@ function TAstNode.Add(AKind: TNodeKind; const AName: string;
   ALine, ACol: Integer): TAstNode;
 begin
   Result := TAstNode.Create(AKind, AName, ALine, ACol);
-  Children.Add(Result);
+  try
+    Children.Add(Result);
+  except
+    Result.Free;
+    raise;
+  end;
 end;
 
 function TAstNode.AddChild(ANode: TAstNode): TAstNode;
@@ -145,16 +228,6 @@ begin
 end;
 
 procedure TAstNode.AdoptChildrenFrom(Source: TAstNode);
-// O(n) Transfer: zuerst alle Refs uebernehmen, dann Source bulk-clearen.
-// Vorher: while Count > 0 do begin Add; Delete(0); end - Delete(0) ist
-// O(n) (shift), bei n Items also O(n²). Bei mORMot2-typischen >1000-
-// Statement try-Bodies messbar (Sekunden statt Millisekunden).
-//
-// Exception-Sicherheit: Wenn AddChild mitten im Loop OOM wirft, gehoeren
-// die schon uebertragenen Items Self (Self.OwnsObjects=True per default).
-// Die Source-Slots referenzieren sie immer noch - wir nullen sie, damit
-// das anschliessende Source.OwnsObjects:=True die noch-nicht-uebertragenen
-// Items richtig freigibt, ohne die schon uebertragenen doppelt zu freen.
 var
   Transferred : Integer;
   i           : Integer;
@@ -181,10 +254,9 @@ begin
   end;
 end;
 
+// === Subtree-Walks: iterative Pre-Order DFS via Work-Stack ============
+
 procedure TAstNode.CollectAll(AKind: TNodeKind; const AList: TList<TAstNode>);
-// Iterative Pre-Order-Traversierung mit eigenem Work-Stack.
-// Vorher rekursiv -> Stack-Overflow bei sehr tiefen ASTs (verschachtelte
-// Try/Expression-Baeume in pathologischen Eingaben).
 var
   Stack : TList<TAstNode>;
   Cur   : TAstNode;
@@ -197,11 +269,36 @@ begin
     begin
       Cur := Stack[Stack.Count - 1];
       Stack.Delete(Stack.Count - 1);
-      // Self ueberspringen, nur Children inspizieren wie zuvor
-      if Cur <> Self then
-        if Cur.Kind = AKind then
-          AList.Add(Cur);
-      // Children in umgekehrter Reihenfolge auf Stack -> Pre-Order links->rechts
+      if (Cur <> Self) and (Cur.Kind = AKind) then
+        AList.Add(Cur);
+      // Children in umgekehrter Reihenfolge auf Stack -> Pop in
+      // links-rechts-Pre-Order.
+      for i := Cur.Children.Count - 1 downto 0 do
+        Stack.Add(Cur.Children[i]);
+    end;
+  finally
+    Stack.Free;
+  end;
+end;
+
+function TAstNode.CountSubtree(AKind: TNodeKind): Integer;
+// Wie CollectAll, aber zaehlt nur statt zu sammeln - spart die Liste-
+// Allokation fuer reine Count-Queries.
+var
+  Stack : TList<TAstNode>;
+  Cur   : TAstNode;
+  i     : Integer;
+begin
+  Result := 0;
+  Stack := TList<TAstNode>.Create;
+  try
+    Stack.Add(Self);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack[Stack.Count - 1];
+      Stack.Delete(Stack.Count - 1);
+      if (Cur <> Self) and (Cur.Kind = AKind) then
+        Inc(Result);
       for i := Cur.Children.Count - 1 downto 0 do
         Stack.Add(Cur.Children[i]);
     end;
@@ -217,7 +314,6 @@ begin
 end;
 
 function TAstNode.FindFirst(AKind: TNodeKind): TAstNode;
-// Iterative Variante - kein Stack-Overflow auf tiefen Baeumen.
 var
   Stack : TList<TAstNode>;
   Cur   : TAstNode;
@@ -247,15 +343,45 @@ begin
 end;
 
 function TAstNode.ChildCount(AKind: TNodeKind): Integer;
-var
-  List: TList<TAstNode>;
 begin
-  List := FindAll(AKind);
-  try
-    Result := List.Count;
-  finally
-    List.Free;
-  end;
+  Result := CountSubtree(AKind);
+end;
+
+function TAstNode.HasDescendant(AKind: TNodeKind): Boolean;
+begin
+  Result := HasChild(AKind);
+end;
+
+function TAstNode.DescendantCount(AKind: TNodeKind): Integer;
+begin
+  Result := ChildCount(AKind);
+end;
+
+// === Direct-Children-Only ============================================
+
+function TAstNode.FindFirstChild(AKind: TNodeKind): TAstNode;
+var
+  i : Integer;
+begin
+  Result := nil;
+  for i := 0 to Children.Count - 1 do
+    if Children[i].Kind = AKind then
+      Exit(Children[i]);
+end;
+
+function TAstNode.HasDirectChild(AKind: TNodeKind): Boolean;
+begin
+  Result := Assigned(FindFirstChild(AKind));
+end;
+
+function TAstNode.DirectChildCount(AKind: TNodeKind): Integer;
+var
+  i : Integer;
+begin
+  Result := 0;
+  for i := 0 to Children.Count - 1 do
+    if Children[i].Kind = AKind then
+      Inc(Result);
 end;
 
 end.

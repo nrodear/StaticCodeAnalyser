@@ -193,14 +193,17 @@ begin
                   if doUpdate or (Current = Total) then
                   begin
                     FLastTick := tick;
-                    // Zurueck auf normale Bar. Position ist seit
-                    // BeginRun unveraendert auf 0 (Scan-Phase touched
-                    // sie nicht), daher kein Clamp beim Max-Wechsel.
-                    if FProgressBar.Style <> pbstNormal then
-                      FProgressBar.Style := pbstNormal;
+                    // Reihenfolge wichtig: Max + Position ZUERST, Style
+                    // ZULETZT. Sonst wird beim Style-Wechsel pbstMarquee->
+                    // pbstNormal kurz die alte Position=0 sichtbar (zweite
+                    // "Bar faengt bei 0 an"-Phase nach der Scan-Animation).
+                    // Mit dieser Reihenfolge zeigt die Bar beim Style-
+                    // Switch direkt schon den aktuellen Fortschritt.
                     if (FProgressBar.Max <> Total) and (Total > 0) then
                       FProgressBar.Max := Total;
                     FProgressBar.Position := Current;
+                    if FProgressBar.Style <> pbstNormal then
+                      FProgressBar.Style := pbstNormal;
                     FOnStatusProgress(Format(_('File %d / %d (%d%%)'),
                       [Current, Total,
                        IfThen(Total > 0, Round(Current * 100 / Total), 0)]));

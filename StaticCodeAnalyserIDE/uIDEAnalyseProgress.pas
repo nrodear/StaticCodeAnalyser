@@ -99,21 +99,32 @@ begin
     FBtnCancel.Enabled := True;
 
   // Layout-stabil: Cancel-Button + Progressbar werden NICHT ein-/
-  // ausgeblendet (Visible bleibt konstant True). Nur Enabled/Position
-  // wechseln - die UI bleibt waehrend der Analyse ruhig.
-  // Style := pbstNormal als sicherer Default - Worker wechselt fuer
-  // die Scan-Phase (RunAll, Total noch unbekannt) zu pbstMarquee und
-  // beim Uebergang in die Datei-Phase wieder zurueck auf pbstNormal.
-  // Wenn der vorige Run mid-Scan abgebrochen wurde steckt Style sonst
-  // noch auf Marquee und der naechste Run startet mit animierter Bar.
+  // ausgeblendet (Visible bleibt konstant True). Nur Enabled/Position/
+  // Style wechseln - die UI bleibt waehrend der Analyse ruhig.
+  //
+  // Style-Wahl haengt davon ab, ob Total schon bekannt ist:
+  //   * ATotal > 0  -> Normal-Mode mit fertigem Max (Single-File-Analyse,
+  //                    Branch-Changes mit vorab gezaehlter Liste).
+  //   * ATotal = 0  -> Total noch unbekannt, Worker zaehlt erst beim Scan.
+  //                    Direkt mit pbstMarquee starten, NICHT zuerst leerer
+  //                    Normal-Mode-Bar mit Pos=0. Sonst sieht der User:
+  //                    "leere Bar -> Marquee-Animation -> wieder leere Bar
+  //                    beim Marquee->Normal-Uebergang -> Progress" - die
+  //                    zwei leeren Bars wirken wie "Bar faengt zweimal
+  //                    bei 0 an".
   if Assigned(FProgress) then
   begin
-    FProgress.Style := pbstNormal;
     FProgress.Position := 0;
     if ATotal > 0 then
-      FProgress.Max := ATotal
+    begin
+      FProgress.Style := pbstNormal;
+      FProgress.Max   := ATotal;
+    end
     else
-      FProgress.Max := 100;
+    begin
+      FProgress.Max   := 100;
+      FProgress.Style := pbstMarquee;
+    end;
   end;
 
   Screen.Cursor := crAppStart;
