@@ -203,6 +203,7 @@
         <DCCReference Include="sources\Infrastructure\uFileTextCache.pas"/>
         <DCCReference Include="sources\Infrastructure\uFormBinder.pas"/>
         <DCCReference Include="sources\Infrastructure\uIgnoreList.pas"/>
+        <DCCReference Include="sources\Infrastructure\uConfidenceFilter.pas"/>
         <DCCReference Include="sources\Infrastructure\uPathOverrides.pas"/>
         <DCCReference Include="sources\Infrastructure\uRepoSettings.pas"/>
         <DCCReference Include="sources\Infrastructure\uSonarConfig.pas"/>

@@ -82,7 +82,7 @@ uses
   uCyclomaticComplexity, uCustomRuleDetector,
   uDfmAnalysisRunner, uDfmRepoIndex, uSymbolReferenceIndex, uAstFileCache,
   uFileTextCache,
-  uSuppression, uCustomClassDiscovery, uPathOverrides,
+  uSuppression, uCustomClassDiscovery, uPathOverrides, uConfidenceFilter,
   uSynchronizeInDestructor, uLockWithoutTryFinally,
   uPerfHotspots, uConcurrencyExt, uRestHttpSecurity,
   uPublicMemberWithoutDoc, uNamingExt,  uRuleCatalog,
@@ -843,6 +843,16 @@ begin
     TPathOverrides.ApplyToFindings(Results);
   except
     // Path-Override-Fehler duerfen das Ergebnis nicht zerstoeren
+  end;
+
+  // Konfidenz-Schwellwert anwenden (uSCAConsts.FindingMinConfidence).
+  // Verwirft heuristische Befunde unter der Schwelle (Default fcMedium ->
+  // nur fcLow raus). Zuletzt in der Pipeline: Suppression/Path-Overrides
+  // sollen unabhaengig von der Confidence greifen koennen.
+  try
+    TConfidenceFilter.ApplyToFindings(Results, uSCAConsts.FindingMinConfidence);
+  except
+    // Filter-Fehler duerfen das Ergebnis nicht zerstoeren
   end;
 end;
 

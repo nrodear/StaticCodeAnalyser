@@ -60,6 +60,7 @@ type
     FCustomRulesFile   : string;      // CustomRulesFile (Pfad zur YAML)
     FProfile           : string;      // [Rules] Profile = ide-fast|default|strict
     FMinSeverity       : string;      // [Rules] MinSeverity = error|warning|hint
+    FMinConfidence     : string;      // [Rules] MinConfidence = low|medium|high
     FIdeProfile        : string;      // [Rules] IdeProfile (Default: ide-fast)
     FIdeMinSeverity    : string;      // [Rules] IdeMinSeverity (Default: hint)
     FSilentEnabled     : Boolean;     // [Silent] Enabled (Default: True)
@@ -194,6 +195,16 @@ type
     // Orthogonal zu Profile - beide Filter werden ODER-verknuepft skippen.
     property MinSeverity:             string      read FMinSeverity
                                                   write FMinSeverity;
+
+    // [Rules] MinConfidence = low|medium|high (Default 'medium'). Post-Filter
+    // ueber TLeakFinding.Confidence: Befunde unter der Schwelle fliegen raus.
+    //   'low'    -> kein Filter
+    //   'medium' -> nur fcLow raus (Default)
+    //   'high'   -> nur sichere Treffer
+    // Orthogonal zu Severity/Profile; in ApplyDetectorThresholds nach
+    // uSCAConsts.FindingMinConfidence gespiegelt.
+    property MinConfidence:           string      read FMinConfidence
+                                                  write FMinConfidence;
 
     // Wie Profile / MinSeverity, aber separat fuer das IDE-Plugin. Der
     // Form-Frame ruft UseIdeRuleSet vor ApplyDetectorThresholds; daraufhin
@@ -695,6 +706,7 @@ begin
   FCustomRulesFile := '';
   FProfile        := '';              // '' = default (= AllKinds, kein Filter)
   FMinSeverity    := 'hint';          // 'hint' = alles laeuft
+  FMinConfidence  := 'medium';        // 'medium' = nur fcLow raus (Default)
   FIdeProfile     := 'ide-fast';      // IDE-Plugin Default: schnelles Subset
   FIdeMinSeverity := 'hint';          // IDE-Plugin: alle Severities (Subset deckt schon)
   FSilentEnabled  := True;            // Silent-Mode standardmaessig an
@@ -864,8 +876,9 @@ begin
     // [Rules] MinSeverity=... -> FMinSeverity (default 'hint' = alles).
     // Beide werden in ApplyDetectorThresholds in die uSCAConsts-Globals
     // gespiegelt; Default-Werte erhalten alte Semantik (kein Skip).
-    FProfile     := Trim(Ini.ReadString('Rules', 'Profile',     ''));
-    FMinSeverity := Trim(Ini.ReadString('Rules', 'MinSeverity', 'hint')).ToLower;
+    FProfile       := Trim(Ini.ReadString('Rules', 'Profile',       ''));
+    FMinSeverity   := Trim(Ini.ReadString('Rules', 'MinSeverity',   'hint')).ToLower;
+    FMinConfidence := Trim(Ini.ReadString('Rules', 'MinConfidence', 'medium')).ToLower;
     // IDE-Plugin-spezifische Overrides. Werden via UseIdeRuleSet transient
     // in FProfile/FMinSeverity gespiegelt - die INI bleibt unveraendert.
     FIdeProfile     := Trim(Ini.ReadString('Rules', 'IdeProfile',     'ide-fast'));
@@ -955,6 +968,7 @@ begin
     // ueberfluessige Writes schaden nicht (Wert = INI-Lade-Wert).
     Ini.WriteString('Rules', 'Profile',            FProfile);
     Ini.WriteString('Rules', 'MinSeverity',        FMinSeverity);
+    Ini.WriteString('Rules', 'MinConfidence',      FMinConfidence);
     Ini.WriteString('Rules', 'IdeProfile',         FIdeProfile);
     Ini.WriteString('Rules', 'IdeMinSeverity',     FIdeMinSeverity);
     Ini.WriteBool  ('Silent', 'Enabled',           FSilentEnabled);
@@ -1062,6 +1076,9 @@ begin
 
   // [Rules] MinSeverity -> globaler Severity-Schwellwert.
   uSCAConsts.DetectorMinSeverity := ParseMinSev(FMinSeverity);
+
+  // [Rules] MinConfidence -> globaler Konfidenz-Schwellwert (Post-Filter).
+  uSCAConsts.FindingMinConfidence := uSCAConsts.ParseConfidence(FMinConfidence, fcMedium);
 
   // [PathOverrides] -> uPathOverrides global. Wird im Analyzer-Pipeline
   // als Post-Filter nach uSuppression aufgerufen.

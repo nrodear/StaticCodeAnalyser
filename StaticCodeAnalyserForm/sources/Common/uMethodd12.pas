@@ -29,10 +29,19 @@ type
     MissingVar: string;
     Severity:   TLeakSeverity;
     Kind:       TFindingKind;
+    // Konfidenz des Befundes (FP-Wahrscheinlichkeit). Default fcHigh - im
+    // Constructor gesetzt, damit JEDER Befund (auch ohne SetKind) als
+    // hochkonfident startet. Detektoren mit heuristischen Treffern setzen
+    // .Confidence danach explizit herab (z.B. := fcLow). Der Post-Filter
+    // uConfidenceFilter wirft Befunde unter FindingMinConfidence raus.
+    Confidence: TFindingConfidence;
     // Optionale Custom-Rule-ID (z.B. 'PROJ001'). Bei built-in-Rules leer
     // gelassen - SARIF-Export holt dann die ID aus TRuleCatalog via Kind.
     // Wenn gesetzt, gewinnt RuleID gegen den Catalog-Lookup.
     RuleID:     string;
+    // Setzt Confidence := fcHigh (Default). Bestehende Detektoren erzeugen
+    // Befunde binaer und gelten damit als hochkonfident.
+    constructor Create;
     // Setzt Kind UND Severity in einem Schritt - Severity wird aus
     // KIND_META.DefaultSeverity gezogen (single source of truth). Detektoren
     // die einen kontext-abhaengigen Severity brauchen (z.B. uLeakDetector2,
@@ -98,6 +107,12 @@ var
 begin
   for clazz in classes do
     GetVarNamesByFilter(clazz, vars);
+end;
+
+constructor TLeakFinding.Create;
+begin
+  inherited Create;
+  Confidence := fcHigh; // sicherer Default - Detektoren senken bei Bedarf
 end;
 
 procedure TLeakFinding.SetKind(K: TFindingKind);

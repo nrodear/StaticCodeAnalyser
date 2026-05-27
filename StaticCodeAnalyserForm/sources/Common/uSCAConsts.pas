@@ -95,6 +95,22 @@ type
     lsHint
   );
 
+  // Konfidenz eines Befundes - wie sicher der Detektor ist, dass es KEIN
+  // False-Positive ist. Orthogonal zur Severity (die sagt: wie schlimm
+  // WENN echt). Ordering bewusst aufsteigend (fcLow=0 < fcHigh=2), damit
+  // der Schwellwert-Filter "raus wenn Ord(Confidence) < Ord(MinConfidence)"
+  // natuerlich liest.
+  //   fcLow    - heuristischer Treffer, hohe FP-Quote (z.B. rein lexikalisch
+  //              ohne Typ-/Scope-Kontext)
+  //   fcMedium - plausibel, gelegentlich FP
+  //   fcHigh   - sicherer Treffer (Default - bestehende Detektoren emittieren
+  //              binaer und gelten damit als hochkonfident)
+  TFindingConfidence = (
+    fcLow,
+    fcMedium,
+    fcHigh
+  );
+
   // Art des Befundes
   TFindingKind = (
     fkMemoryLeak,       // Speicherleck (uLeakDetector2)
@@ -748,6 +764,13 @@ function KindFromName(const Name: string; out K: TFindingKind): Boolean;
 // werden, muss diese Funktion auf eine Whitelist umgestellt werden.
 function IsSonarDelphiKind(K: TFindingKind): Boolean;
 
+// Lesbarer Name einer Konfidenz-Stufe ('low'/'medium'/'high') - fuer
+// Config-Serialisierung, SARIF-Rank und UI.
+function ConfidenceName(C: TFindingConfidence): string;
+// Reverse-Lookup (case-insensitive). Unbekannt/leer -> ADefault.
+function ParseConfidence(const S: string;
+  ADefault: TFindingConfidence = fcMedium): TFindingConfidence;
+
 var
   // Whitelist erlaubter Kinds fuer den Detector-Loop. Wird von
   // TRepoSettings.ApplyDetectorThresholds aus dem Profile (rules/
@@ -766,6 +789,16 @@ var
   // Severity-Ordering: lsError=0 < lsWarning=1 < lsHint=2 -> ein
   // Detector wird geskippt wenn Ord(DetectorSev) > Ord(MinSeverity).
   DetectorMinSeverity  : TLeakSeverity = lsHint;
+
+  // Konfidenz-Schwellwert (Post-Filter). Befunde deren Confidence niedriger
+  // ist als dieser Wert werden verworfen.
+  //   fcLow              = kein Filter (alles laeuft, auch heuristische Treffer)
+  //   fcMedium (Default) = nur fcLow raus
+  //   fcHigh             = nur sichere Treffer
+  // Ordering: fcLow=0 < fcMedium=1 < fcHigh=2 -> ein Befund faellt raus
+  // wenn Ord(Confidence) < Ord(FindingMinConfidence). fkFileReadError ist
+  // davon ausgenommen (Diagnose-Befund, vgl. uConfidenceFilter).
+  FindingMinConfidence : TFindingConfidence = fcMedium;
 
 type
   TSectionFlag = record
@@ -814,6 +847,29 @@ begin
       Exit(True);
     end;
   Result := False;
+end;
+
+function ConfidenceName(C: TFindingConfidence): string;
+begin
+  case C of
+    fcLow:    Result := 'low';
+    fcMedium: Result := 'medium';
+    fcHigh:   Result := 'high';
+  else
+    Result := 'high';
+  end;
+end;
+
+function ParseConfidence(const S: string;
+  ADefault: TFindingConfidence): TFindingConfidence;
+var
+  L : string;
+begin
+  L := LowerCase(Trim(S));
+  if L = 'low'    then Exit(fcLow);
+  if L = 'medium' then Exit(fcMedium);
+  if L = 'high'   then Exit(fcHigh);
+  Result := ADefault;
 end;
 
 function IsSonarDelphiKind(K: TFindingKind): Boolean;

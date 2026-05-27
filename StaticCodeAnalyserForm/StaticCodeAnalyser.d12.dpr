@@ -69,6 +69,7 @@ uses
   uFileTextCache in 'sources\Infrastructure\uFileTextCache.pas',
   uFormBinder in 'sources\Infrastructure\uFormBinder.pas',
   uIgnoreList in 'sources\Infrastructure\uIgnoreList.pas',
+  uConfidenceFilter in 'sources\Infrastructure\uConfidenceFilter.pas',
   uPathOverrides in 'sources\Infrastructure\uPathOverrides.pas',
   uRepoSettings in 'sources\Infrastructure\uRepoSettings.pas',
   uSonarConfig in 'sources\Infrastructure\uSonarConfig.pas',

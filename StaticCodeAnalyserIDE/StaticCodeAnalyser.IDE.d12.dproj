@@ -210,6 +210,7 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uSonarPull.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uIgnoreList.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uPathOverrides.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uConfidenceFilter.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uBaseline.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uStaticAnalyzer2.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uSymbolReferenceIndex.pas"/>

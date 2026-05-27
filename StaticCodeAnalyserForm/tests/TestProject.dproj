@@ -161,6 +161,8 @@
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
         <DCCReference Include="uTestSrcBuilder.pas"/>
+        <DCCReference Include="uTestDetectorUtils.pas"/>
+        <DCCReference Include="uTestConfidenceFilter.pas"/>
         <DCCReference Include="uTestTAstNode.pas"/>
         <DCCReference Include="uTestDfmLexer.pas"/>
         <DCCReference Include="uTestDfmParser.pas"/>

@@ -76,6 +76,7 @@ contains
   uSonarPull in '..\StaticCodeAnalyserForm\sources\Infrastructure\uSonarPull.pas',
   uIgnoreList in '..\StaticCodeAnalyserForm\sources\Infrastructure\uIgnoreList.pas',
   uPathOverrides in '..\StaticCodeAnalyserForm\sources\Infrastructure\uPathOverrides.pas',
+  uConfidenceFilter in '..\StaticCodeAnalyserForm\sources\Infrastructure\uConfidenceFilter.pas',
   uBaseline in '..\StaticCodeAnalyserForm\sources\Infrastructure\uBaseline.pas',
   uStaticAnalyzer2 in '..\StaticCodeAnalyserForm\sources\Infrastructure\uStaticAnalyzer2.pas',
   uSymbolReferenceIndex in '..\StaticCodeAnalyserForm\sources\Infrastructure\uSymbolReferenceIndex.pas',

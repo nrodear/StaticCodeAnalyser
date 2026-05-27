@@ -20,6 +20,8 @@ uses
 {$ENDIF }
   DUnitX.TestFramework,
   uTestSrcBuilder       in 'uTestSrcBuilder.pas',
+  uTestDetectorUtils    in 'uTestDetectorUtils.pas',
+  uTestConfidenceFilter in 'uTestConfidenceFilter.pas',
   uTestTAstNode         in 'uTestTAstNode.pas',
   uTestDfmLexer         in 'uTestDfmLexer.pas',
   uTestDfmParser        in 'uTestDfmParser.pas',
