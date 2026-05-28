@@ -22,7 +22,7 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uDetectorUtils;
 
 type
   TSqlDangerousStatementDetector = class
@@ -50,21 +50,28 @@ const
     '''update ', '''delete from ', '''delete ', '''truncate '
   );
 var
+  Merged : string;
   V : string;
   P, EndPos : Integer;
   Fragment : string;
 begin
+  // Pascal-'+'-Konkatenations-Ketten zu einem virtuellen Literal falten,
+  // BEVOR wir nach ' where ' suchen. Sonst fallen Faelle wie
+  //   'UPDATE x SET y=? ' + 'WHERE id=?'
+  // faelschlich durch (zwischen `?` und `WHERE` sitzt `'+'` statt Space).
+  Merged := TDetectorUtils.MergeAdjacentStringLiterals(Low);
+
   Result := False;
   Verb   := '';
   for V in VERBS do
   begin
-    P := Pos(V, Low);
+    P := Pos(V, Merged);
     if P <= 0 then Continue;
     // Statement-Ende: naechstes nicht-escaped Apostroph nach P+1, oder
     // String-Ende. Wir nehmen alles bis zum naechsten ;-Token-Trenner.
-    EndPos := Pos(''';', Low, P + Length(V));
-    if EndPos <= 0 then EndPos := Length(Low);
-    Fragment := Copy(Low, P, EndPos - P + 1);
+    EndPos := Pos(''';', Merged, P + Length(V));
+    if EndPos <= 0 then EndPos := Length(Merged);
+    Fragment := Copy(Merged, P, EndPos - P + 1);
 
     // Pruefen ob WHERE vorkommt (Fragment ist bereits lowercase, siehe Caller).
     if Pos(' where ', Fragment) > 0 then Continue;

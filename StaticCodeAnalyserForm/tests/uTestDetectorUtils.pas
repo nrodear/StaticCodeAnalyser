@@ -28,6 +28,13 @@ type
     [Test] procedure Strip_LineForCharMapsToSourceLine;
     [Test] procedure Strip_EmptyStringKeepsFollowingKeyword;
     [Test] procedure Strip_NewlinePerSourceLine;
+    // ---- MergeAdjacentStringLiterals ----
+    [Test] procedure Merge_SimpleConcat;
+    [Test] procedure Merge_NoSpaceAroundPlus;
+    [Test] procedure Merge_ChainedThreeLiterals;
+    [Test] procedure Merge_EscapedQuotePreservedInsideLiteral;
+    [Test] procedure Merge_PlusOutsideLiterals_Untouched;
+    [Test] procedure Merge_NoLiterals_Unchanged;
   end;
 
 implementation
@@ -223,6 +230,67 @@ begin
   finally
     Lines.Free;
   end;
+end;
+
+{ ---- MergeAdjacentStringLiterals ---- }
+
+procedure TTestDetectorUtils.Merge_SimpleConcat;
+// 'foo' + 'bar' -> 'foobar'  - der Klassiker.
+const Source = '''foo'' + ''bar''';
+const Expected = '''foobar''';
+begin
+  Assert.AreEqual(Expected,
+    TDetectorUtils.MergeAdjacentStringLiterals(Source));
+end;
+
+procedure TTestDetectorUtils.Merge_NoSpaceAroundPlus;
+// 'foo'+'bar' (kein Space) - exakt die Form die uSqlDangerousStatement
+// im AST-Lowercase sieht und an der die WHERE-Erkennung scheiterte.
+const Source = '''foo''+''bar''';
+const Expected = '''foobar''';
+begin
+  Assert.AreEqual(Expected,
+    TDetectorUtils.MergeAdjacentStringLiterals(Source));
+end;
+
+procedure TTestDetectorUtils.Merge_ChainedThreeLiterals;
+// 'a' + 'b' + 'c' -> 'abc' - Kette wird bis zum Ende aufgeloest.
+const Source = '''a'' + ''b'' + ''c''';
+const Expected = '''abc''';
+begin
+  Assert.AreEqual(Expected,
+    TDetectorUtils.MergeAdjacentStringLiterals(Source));
+end;
+
+procedure TTestDetectorUtils.Merge_EscapedQuotePreservedInsideLiteral;
+// Verdoppelte Apostrophen ('') innerhalb des Literals duerfen NICHT als
+// Literal-Ende interpretiert werden - sie sind ein Escape und bleiben
+// als '' im Output. Quelle: 'a''b' + 'c' -> 'a''bc'.
+const Source = '''a''''b'' + ''c''';
+const Expected = '''a''''bc''';
+begin
+  Assert.AreEqual(Expected,
+    TDetectorUtils.MergeAdjacentStringLiterals(Source));
+end;
+
+procedure TTestDetectorUtils.Merge_PlusOutsideLiterals_Untouched;
+// '+' das nicht zwischen zwei Literalen steht (z.B. zwischen Literal
+// und Variable) bleibt unangetastet - sonst wuerden wir Ausdruecke
+// faelschlich zusammenkleben.
+const Source = '''foo'' + xVar';
+const Expected = '''foo'' + xVar';
+begin
+  Assert.AreEqual(Expected,
+    TDetectorUtils.MergeAdjacentStringLiterals(Source));
+end;
+
+procedure TTestDetectorUtils.Merge_NoLiterals_Unchanged;
+// Komplett ohne String-Literale - identitaet.
+const Source = 'a + b + c';
+const Expected = 'a + b + c';
+begin
+  Assert.AreEqual(Expected,
+    TDetectorUtils.MergeAdjacentStringLiterals(Source));
 end;
 
 initialization

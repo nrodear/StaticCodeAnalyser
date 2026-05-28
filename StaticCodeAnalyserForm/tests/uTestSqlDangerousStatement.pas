@@ -22,6 +22,11 @@ type
     [Test] procedure SqlDanger_DeleteWithWhere_NoFinding;
     [Test] procedure SqlDanger_Select_NoFinding;
     [Test] procedure SqlDanger_CaseInsensitiveWhere_NoFinding;
+    // ---- Regression: Konkatenierte String-Literale ------------------------
+    [Test] procedure SqlDanger_UpdateConcatLiteralWithWhere_NoFinding;
+    [Test] procedure SqlDanger_NamedParamConcatWithWhere_NoFinding;
+    [Test] procedure SqlDanger_TripleConcatWithWhere_NoFinding;
+    [Test] procedure SqlDanger_ConcatStillNoWhere_Reported;
 
     // ---- Finding-Inhalt ---------------------------------------------------
     [Test] procedure SqlDanger_Finding_KindAndSeverity;
@@ -186,6 +191,79 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkSqlDangerousStatement) >= 3);
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_UpdateConcatLiteralWithWhere_NoFinding;
+// FP-Regression aus Real-World-Code: Prepare-Call mit zwei String-Literalen
+// per Pascal '+'. Erstes Literal endet mit Space + '?', zweites beginnt
+// mit 'WHERE'. Vor dem Concat-Merger fiel der Detector hier durch weil
+// ' where ' (Space-WHERE-Space) nicht ueber die Apostroph-Grenze hinweg
+// fand.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TFDQuery;'#13#10 +
+  'begin'#13#10 +
+  '  q.SQL.Text := ''UPDATE vgbl SET datei = ? '' +'#13#10 +
+  '                ''WHERE mandantid = ? AND vorgangid = ? '';'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_NamedParamConcatWithWhere_NoFinding;
+// Variante mit benannten Parametern (:Name) - in mORMot / Firebird /
+// FireDAC / Oracle ueblich. Selbe Konkatenations-Form wie oben.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TFDQuery;'#13#10 +
+  'begin'#13#10 +
+  '  q.SQL.Text := ''UPDATE customers SET locked=:L '' +'#13#10 +
+  '                ''WHERE id=:Id'';'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_TripleConcatWithWhere_NoFinding;
+// 3-teilige Kette - der Merger muss bis zum letzten Glied durchgehen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TFDQuery;'#13#10 +
+  'begin'#13#10 +
+  '  q.SQL.Text := ''UPDATE c '' + ''SET x=1 '' + ''WHERE id=?'';'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_ConcatStillNoWhere_Reported;
+// Gegenteilige Richtung: Konkatenation, aber das gemergte SQL hat
+// TROTZDEM kein WHERE - muss weiterhin als Bug erkannt werden. Der
+// Merger soll nicht versehentlich echte Bugs verstecken.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TFDQuery;'#13#10 +
+  'begin'#13#10 +
+  '  q.SQL.Text := ''UPDATE customers '' + ''SET locked=1'';'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkSqlDangerousStatement) >= 1);
   finally F.Free; end;
 end;
 

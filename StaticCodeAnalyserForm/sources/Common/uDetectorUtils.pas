@@ -82,6 +82,25 @@ type
     // gestrippten Text auf die Quellzeile zurueckrechnen.
     class function StripStringsAndComments(Lines: TStrings;
       out LineForChar: TArray<Integer>; FillCh: Char = '~'): string; static;
+
+    // Faltet Pascal-Konkatenations-Sequenzen von String-Literalen zu einem
+    // einzigen virtuellen Literal zusammen:
+    //   'foo' + 'bar'       -> 'foobar'
+    //   'foo'+'bar'         -> 'foobar'
+    //   'foo' + 'bar' + 'b' -> 'foobarb'  (Ketten)
+    // Verdoppelte Apostrophen ('') innerhalb eines Literals bleiben als
+    // Escape erhalten; alles ausserhalb der Literale wird unveraendert
+    // durchgereicht.
+    //
+    // Zweck: Pattern-basierte SQL-Detektoren (uSqlDangerousStatement,
+    // uSQLInjection) scannen String-Literale via Substring-Suche
+    // (z.B. ' WHERE '). Wenn das SQL ueber Pascal-'+' konkateniert ist
+    // (`'UPDATE ... ' + 'WHERE ...'`), trennt zwischen Daten und WHERE
+    // ein `'+'`-Block die Suche - der Match schlaegt fehl, obwohl das
+    // Statement zur Laufzeit ein valides WHERE hat. Nach diesem Merge
+    // sieht der Detektor das SQL so, wie der Compiler es zusammenfuegt.
+    class function MergeAdjacentStringLiterals(const S: string): string;
+      static;
   end;
 
 
@@ -258,6 +277,78 @@ begin
   finally
     Chars.Free;
     Buf.Free;
+  end;
+end;
+
+class function TDetectorUtils.MergeAdjacentStringLiterals(
+  const S: string): string;
+// State-Machine: ausserhalb eines String-Literals durchreichen, am
+// schliessenden Apostroph LOOKAHEAD - wenn Whitespace + '+' + Whitespace
+// + Apostroph folgen, sind beide Literale eine logische Konkatenation;
+// wir ueberspringen das Schliess-Quote, den '+'-Block und das Oeffnungs-
+// Quote und bleiben "in-string". Doppelte '' innerhalb des Literals
+// werden als Escape behandelt (nicht das Ende).
+var
+  Sb   : TStringBuilder;
+  i, n : Integer;
+  j, k : Integer;
+  InStr: Boolean;
+begin
+  Sb := TStringBuilder.Create;
+  try
+    n := Length(S);
+    InStr := False;
+    i := 1;
+    while i <= n do
+    begin
+      if not InStr then
+      begin
+        Sb.Append(S[i]);
+        if S[i] = '''' then InStr := True;
+        Inc(i);
+        Continue;
+      end;
+      // InStr: pruefen ob '' (Escape) oder echtes End.
+      if S[i] = '''' then
+      begin
+        if (i < n) and (S[i + 1] = '''') then
+        begin
+          // Verdoppeltes Apostroph: Escape, beide Zeichen ausgeben, im
+          // String bleiben.
+          Sb.Append(S[i]); Sb.Append(S[i + 1]);
+          Inc(i, 2);
+          Continue;
+        end;
+        // Lookahead: Whitespace* '+' Whitespace* ''' ?
+        j := i + 1;
+        while (j <= n) and CharInSet(S[j], [' ', #9, #13, #10]) do
+          Inc(j);
+        if (j <= n) and (S[j] = '+') then
+        begin
+          k := j + 1;
+          while (k <= n) and CharInSet(S[k], [' ', #9, #13, #10]) do
+            Inc(k);
+          if (k <= n) and (S[k] = '''') then
+          begin
+            // Konkatenation - Schliess-Quote, '+'-Block, Oeffnungs-Quote
+            // ueberspringen, InStr beibehalten.
+            i := k + 1;
+            Continue;
+          end;
+        end;
+        // Echtes Literal-Ende.
+        Sb.Append(S[i]);
+        InStr := False;
+        Inc(i);
+        Continue;
+      end;
+      // Normales String-Zeichen.
+      Sb.Append(S[i]);
+      Inc(i);
+    end;
+    Result := Sb.ToString;
+  finally
+    Sb.Free;
   end;
 end;
 
