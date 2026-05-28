@@ -18,8 +18,12 @@ sca-findings.json
 # ---- Build-Output-Verzeichnisse ----
 # Delphi schreibt kompilierte Artefakte (DCU/BPL/EXE/DLL) typisch
 # nach <Plattform>/<Konfiguration>/. Komplett ignorieren.
-# Output/ ist die zentrale Sammelstelle (DCC_DcuOutput in allen 3 dproj).
-Output/
+# DCC_DcuOutput in allen dproj zeigt via ..\Output\... auf EINE Output/
+# direkt im Repo-Root - daher mit fuehrendem Slash am Root verankern.
+# Sonst greift die Regel auch auf legitime Source-Pfade wie
+# StaticCodeAnalyserForm/sources/Output/ (TClaudePrompt, TFixHint, ...),
+# wodurch jeder `git add` dort einen `-f`-Workaround braucht.
+/Output/
 Win32/
 Win64/
 OSX32/
