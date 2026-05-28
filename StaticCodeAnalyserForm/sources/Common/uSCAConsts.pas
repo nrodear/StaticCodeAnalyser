@@ -63,6 +63,15 @@ var
                                                           // (ab N DB-Komponenten auf der Form
                                                           // empfehlen statt N Einzelmeldungen)
 
+  // UI-Schwelle: maximale Anzahl Befunde im Grid. TStringGrid wird ab
+  // ~50k Zeilen spuerbar trag (interne Cell-Storage-Arrays + Scrollbar-
+  // Metrik), bei 150k+ ist Scrollen unangenehm. Wird der Cap ueber-
+  // schritten, zeigt das Grid nur die ersten N Eintraege (nach Sortierung)
+  // und der Status macht das transparent. Export/CSV/Baseline arbeiten
+  // weiterhin mit der vollen Liste.
+  //   0 = kein Cap (Alt-Verhalten, gefaehrlich bei riesigen Repos)
+  UIMaxDisplayedFindings : Integer = 10000;
+
   // Trivial-Liste fuer uMagicNumbers - Zahlen die NICHT als Magic-Number
   // gemeldet werden. Default: 0,1,2,-1,10,100. INI-Override moeglich.
   // Stringliste damit Vergleich mit den geparsten Zahlen-Strings ohne

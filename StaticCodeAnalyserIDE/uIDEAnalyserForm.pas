@@ -54,6 +54,30 @@ type
     // uIDEHelpPanel.TFindingHintPanel.
     FHintPanel         : TFindingHintPanel;
     FDisplayedFindings : TList<TLeakFinding>;
+    // Vorab gebauter Grid-Renderer-Config mit Closures (siehe InitGridConfig).
+    // Vorher wurde der Config pro Zelle in GridDrawCell frisch erzeugt - bei
+    // ~300 sichtbaren Zellen pro Repaint × 3 anonymen Methoden = 900 Heap-
+    // Allokationen pro Frame. Mausrad-Scroll hat das massiv aufgestaut.
+    FGridConfig        : TFindingGridConfig;
+    // Gecachte IDE-StyleServices fuer den Grid-Renderer. Vorher: pro Zelle
+    // wurde Supports(BorlandIDEServices, IOTAIDEThemingServices, ...)
+    // ausgefuehrt - ein COM-QueryInterface pro Zelle. Wird in
+    // RefreshFromIDETheme genullt, damit ein Theme-Switch frische Werte
+    // holt.
+    FCachedIDEStyles   : TCustomStyleServices;
+    // Original-WindowProc des FResultGrid (von InstallGridWheelCoalescer
+    // gesetzt). GridWindowProc reicht alles an FOrigGridWindowProc weiter.
+    FOrigGridWindowProc: TWndMethod;
+
+    // Debouncer fuer Multi-File-Highlighter-Rebuild (siehe Konzept_
+    // GridPerformance150k.md, Tier A1). HighlightAllFindingsInFile baut
+    // einen Array ueber alle FDisplayedFindings + FixHint pro Eintrag -
+    // bei 10k+ Befunden teuer und wurde frueher pro Pfeiltasten-Event
+    // und pro Such-Keystroke gerufen.
+    FHighlightDebounceTimer : TTimer;
+    FPendingHighlightFile   : string;
+    // Debouncer fuer ApplyFilter (Tier B1) - frueher pro Such-Keystroke.
+    FFilterDebounceTimer    : TTimer;
 
     FPanelStats        : TPanel;
     // Toolbar-Panels - werden in CreateUI als alTop angelegt. Refs gehalten,
@@ -182,6 +206,24 @@ type
       var CanSelect: Boolean);
     procedure GridDrawCell(Sender: TObject; ACol, ARow: Integer;
       Rect: TRect; State: TGridDrawState);
+    // Baut FGridConfig einmal (siehe Field-Kommentar).
+    procedure InitGridConfig;
+    // Installiert Custom-WindowProc auf FResultGrid, der pendingende
+    // WM_MOUSEWHEEL-Messages in einen einzigen grossen Scroll faltet.
+    // Vorher: jeder Wheel-Tick triggerte einen separaten Paint, bei
+    // schnellem Drehen baute sich eine sekundenlange Message-Queue auf.
+    procedure InstallGridWheelCoalescer;
+    procedure GridWindowProc(var Msg: TMessage);
+    // Erzeugt die Debounce-Timer (TTimer-Komponenten owned-by-Self).
+    procedure InitDebounceTimers;
+    // OnTimer der zwei Debouncer.
+    procedure HighlightDebounceFire(Sender: TObject);
+    procedure FilterDebounceFire(Sender: TObject);
+    // Statt direktem HighlightAllFindingsInFile - resettet den 200ms-
+    // Timer und merkt sich die zuletzt angefragte Datei. Aufeinander-
+    // folgende Calls innerhalb des Intervalls kollabieren zu EINEM
+    // Rebuild nach Idle.
+    procedure ScheduleHighlightRefresh(const AFileName: string);
     procedure GridMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
     procedure GridKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
@@ -264,7 +306,8 @@ type
     // leerer Liste erscheint ein Platzhalter-Text in Zeile 1.
     procedure PopulateGridFromDisplayed;
     // Statusbar-Update nach ApplyFilter: zeigt n/m findings + Filter-Text.
-    procedure UpdateFilterStatus(const Criteria: TFindingFilterCriteria);
+    procedure UpdateFilterStatus(const Criteria: TFindingFilterCriteria;
+      TotalMatched: Integer = 0);
     // Erzeugt einen vollstaendigen Markdown-Prompt fuer Claude AI: Befund-
     // Metadaten, FixHint (Vorher/Nachher) und Code-Auszug aus der Quelldatei.
     function  BuildClaudePrompt(F: TLeakFinding): string;
@@ -910,6 +953,9 @@ begin
   // Defensiv: nicht waehrend Destroy weiterleiten - csDestroying ist
   // gesetzt sobald der Destructor startet.
   if csDestroying in ComponentState then Exit;
+  // Style-Cache leeren - der naechste Grid-Repaint zieht die neue
+  // Theme-Referenz nach (z.B. nach Wechsel Dark <-> Light in der IDE).
+  FCachedIDEStyles := nil;
   TIDETheme.Apply(Self);
 end;
 
@@ -1185,6 +1231,12 @@ begin
   FResultGrid.Cells[3, 0] := _('Type');
   FResultGrid.Cells[4, 0] := _('Rule');
   FResultGrid.Cells[5, 0] := _('Severity');
+  InitGridConfig;
+  // WindowProc-Subclassing fuer WM_MOUSEWHEEL-Coalescing. Muss NACH der
+  // Grid-Erzeugung (FResultGrid existiert) und vor dem ersten Paint sein.
+  InstallGridWheelCoalescer;
+  // Debouncer fuer Highlighter-Rebuild + ApplyFilter (Konzept Tier A1+B1).
+  InitDebounceTimers;
   FResultGrid.OnDrawCell   := GridDrawCell;
   FResultGrid.OnDblClick   := GridDblClick;
   FResultGrid.OnSelectCell := GridSelectCell;
@@ -1419,10 +1471,17 @@ begin
 end;
 
 procedure TAnalyserFrame.UpdateFilterStatus(
-  const Criteria: TFindingFilterCriteria);
+  const Criteria: TFindingFilterCriteria; TotalMatched: Integer);
 begin
-  StatusFindings(Format(_('%d / %d findings'),
-    [FDisplayedFindings.Count, FAllFindings.Count]));
+  // Wenn TotalMatched gesetzt ist und ueber dem angezeigten Count liegt,
+  // wurde gecappt (UIMaxDisplayedFindings) - macht's transparent.
+  if (TotalMatched > 0) and (TotalMatched > FDisplayedFindings.Count) then
+    StatusFindings(Format(_(
+      'Showing first %d of %d findings - refine the filter to see more'),
+      [FDisplayedFindings.Count, TotalMatched]))
+  else
+    StatusFindings(Format(_('%d / %d findings'),
+      [FDisplayedFindings.Count, FAllFindings.Count]));
   StatusMode(Format(_('Filter: %s%s'), [FFilterCombo.Text,
     IfThen(Criteria.SearchLow <> '',
            ', ' + _('Search: ') + Criteria.SearchLow, '')]));
@@ -1436,9 +1495,10 @@ end;
 
 procedure TAnalyserFrame.ApplyFilter;
 var
-  i        : Integer;
-  Criteria : TFindingFilterCriteria;
-  SortCfg  : TFindingSortConfig;
+  i            : Integer;
+  Criteria     : TFindingFilterCriteria;
+  SortCfg      : TFindingSortConfig;
+  TotalMatched : Integer;
 begin
   Criteria.Mode       := FFilterMode;
   Criteria.TypeFilter := FTypeFilter;
@@ -1462,28 +1522,47 @@ begin
       TFindingSorter.Sort(FDisplayedFindings, SortCfg);
     end;
 
+    // ---- Anzeige-Cap (NACH Sort, damit die Top-N sortiert sind) ----
+    // TStringGrid wird ab ~50k Zeilen spuerbar trag. Export/Highlighter/
+    // Baseline arbeiten weiterhin mit FAllFindings - der Cap betrifft
+    // ausschliesslich die Grid-Anzeige. 0 = kein Cap.
+    TotalMatched := FDisplayedFindings.Count;
+    if (uSCAConsts.UIMaxDisplayedFindings > 0) and
+       (TotalMatched > uSCAConsts.UIMaxDisplayedFindings) then
+      FDisplayedFindings.Count := uSCAConsts.UIMaxDisplayedFindings;
+
     PopulateGridFromDisplayed;
   finally
     SendMessage(FResultGrid.Handle, WM_SETREDRAW, 1, 0);
     FResultGrid.Invalidate;
   end;
 
-  UpdateFilterStatus(Criteria);
+  UpdateFilterStatus(Criteria, TotalMatched);
 
   // Multi-File-Marker-Refresh: nach jedem Filter-Wechsel oder
   // Analyse-Lauf zeigt der Highlighter ab sofort Stripes + Hover-
   // Overlays auf JEDEM Editor-Tab dessen Datei in der gefilterten
   // Liste vertreten ist. Vorher: erst nach Grid-Klick. Damit ist der
   // Tab-Switch-Use-Case ohne Click erreichbar.
-  HighlightAllFindingsInFile('');
+  ScheduleHighlightRefresh('');
 end;
 
 // ---------------------------------------------------------------------------
 // Suchfeld
 // ---------------------------------------------------------------------------
 procedure TAnalyserFrame.SearchChange(Sender: TObject);
+// 200ms-Debounce statt ApplyFilter pro Keystroke. Bei "memory" tippen
+// laeuft ApplyFilter EINMAL nach Tippstopp, nicht 6x dazwischen.
+// Andere Filter-Wechsel (Severity-/Type-Combo) feuern weiter sofort.
 begin
-  ApplyFilter;
+  if FFilterDebounceTimer = nil then
+  begin
+    // Fallback wenn Setup noch nicht durch (sollte nicht vorkommen).
+    ApplyFilter;
+    Exit;
+  end;
+  FFilterDebounceTimer.Enabled := False;
+  FFilterDebounceTimer.Enabled := True;
 end;
 
 // ---------------------------------------------------------------------------
@@ -1868,12 +1947,17 @@ begin
   if (idx < 0) or (idx >= FDisplayedFindings.Count) then Exit;
 
   Finding := FDisplayedFindings[idx];
+  // Help-Panel-Repaint flushen, bevor der (potenziell blockierende)
+  // Clipboard-Write laeuft - Windows-Clipboard-Listener koennen
+  // Clipboard.AsText 50-200ms abwuergen, das Panel soll vorher sichtbar sein.
+  Application.ProcessMessages;
   CopyFindingToClipboard(Finding);
 
   // Editor-Line-Highlights: alle Befunde der gleichen Datei mit Stripe
   // markieren. Wenn die Datei nicht offen ist, malt GHighlighter beim
-  // naechsten Oeffnen.
-  HighlightAllFindingsInFile(Finding.FileName);
+  // naechsten Oeffnen. Debounce: bei Pfeiltasten-Hold kollabieren viele
+  // Aufrufe zu einem Rebuild nach Idle (Konzept Tier A1).
+  ScheduleHighlightRefresh(Finding.FileName);
 end;
 
 procedure TAnalyserFrame.CopyFindingToClipboard(F: TLeakFinding);
@@ -2613,7 +2697,7 @@ begin
   var Mode: TOpenFileMode := OpenFileAtLine(absPath, lineNo);
   // Editor-Line-Highlights setzen — Datei ist jetzt offen, alle Befunde
   // der Datei werden mit Stripe markiert (Multi-Marker-Modell).
-  HighlightAllFindingsInFile(absPath);
+  ScheduleHighlightRefresh(absPath);
   case Mode of
     ofmDfmAsText:
       StatusMode(Format(_('DFM as text: %s  Line: %d'),
@@ -2811,33 +2895,30 @@ begin
   TFindingGridLayout.SetColumnWidths(FResultGrid);
 end;
 
-procedure TAnalyserFrame.GridDrawCell(Sender: TObject; ACol, ARow: Integer;
-  Rect: TRect; State: TGridDrawState);
-// Implementation in UI/uFindingGridRenderer.pas - hier nur die Frame-
-// spezifische Konfiguration uebergeben (Severity-Spalte 5, Theme an,
-// Sort-Indicator mit unserem aktuellen Sort-State).
+procedure TAnalyserFrame.InitGridConfig;
+// Bau-once: alle 3 Closures (StyleServices, CellText, CellSeverity) werden
+// hier EINMAL alloziert. Vorher: pro DrawCell-Aufruf - 3 anonyme Methoden +
+// Config-Record × ~300 sichtbare Zellen pro Repaint = ~900 Heap-Allokationen
+// pro Frame. Bei Mausrad-Scroll waren das mehrere tausend kleine Objekte
+// pro Sekunde → GDI/Paint kam nicht hinterher → Event-Stau.
 //
-// Virtual-Mode: Datenzeilen-Inhalt wird ueber GetCellText aus
-// FDisplayedFindings gezogen statt aus FResultGrid.Cells[] - das spart
-// bei 66k+ Befunden ~50-100 MB Cell-String-Allokationen
-// (32-Bit-Process-Limit).
-var
-  Config : TFindingGridConfig;
+// Sort-Indicator (FSortColumn / FSortDescending) wird in GridDrawCell pro
+// Frame im Config aktualisiert - kostet nur 2 Integer-Writes, keine Alloc.
 begin
-  Config := TFindingGridRenderer.IDEConfig(FSortColumn, FSortDescending);
-  // StyleServices-Provider: Renderer soll die IDE-spezifische
-  // StyleServices verwenden (Dark/Light dem IDE-Theme entsprechend),
-  // nicht die VCL-globale (z.B. Mountain_Mist).
-  Config.GetStyleServices :=
+  FGridConfig := TFindingGridRenderer.IDEConfig(FSortColumn, FSortDescending);
+  FGridConfig.GetStyleServices :=
     function: TCustomStyleServices
     var
       Theming: IOTAIDEThemingServices;
     begin
-      Result := nil;
+      // Cache-Hit: stabile Theme-Referenz, kein QueryInterface pro Zelle.
+      // Invalidierung in RefreshFromIDETheme.
+      if FCachedIDEStyles <> nil then Exit(FCachedIDEStyles);
       if Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) then
-        Result := Theming.StyleServices;
+        FCachedIDEStyles := Theming.StyleServices;
+      Result := FCachedIDEStyles;
     end;
-  Config.GetCellText :=
+  FGridConfig.GetCellText :=
     function(ACellCol, ACellRow: Integer): string
     var
       f : TLeakFinding;
@@ -2864,7 +2945,124 @@ begin
         // Placeholder-Zeile (z.B. 'Keine Eintraege...') - aus Cells lesen.
         Result := FResultGrid.Cells[ACellCol, ACellRow];
     end;
-  TFindingGridRenderer.DrawCell(Sender, ACol, ARow, Rect, State, Config);
+  FGridConfig.GetCellSeverity :=
+    function(ACellRow: Integer): TFindingSeverity
+    var
+      f : TLeakFinding;
+    begin
+      if (FDisplayedFindings <> nil) and
+         (ACellRow >= 1) and
+         (ACellRow <= FDisplayedFindings.Count) then
+      begin
+        f := FDisplayedFindings[ACellRow - 1];
+        Result := SeverityFromKindLevel(f.Kind, f.Severity);
+      end
+      else
+        Result := fsUnknown;
+    end;
+end;
+
+procedure TAnalyserFrame.GridDrawCell(Sender: TObject; ACol, ARow: Integer;
+  Rect: TRect; State: TGridDrawState);
+// Reicht die in InitGridConfig vorbereitete Config durch. Sort-Indikator-
+// Felder werden pro Aufruf aktualisiert (2 Integer-Writes), die Closures
+// bleiben stabil.
+begin
+  FGridConfig.SortColumn     := FSortColumn;
+  FGridConfig.SortDescending := FSortDescending;
+  TFindingGridRenderer.DrawCell(Sender, ACol, ARow, Rect, State, FGridConfig);
+end;
+
+procedure TAnalyserFrame.InstallGridWheelCoalescer;
+// Installiert einen Custom-WindowProc auf FResultGrid (Instance-Level
+// Subclassing, kein neuer Component-Typ noetig). Das Original wird in
+// FOrigGridWindowProc gemerkt und in GridWindowProc weitergerufen.
+// Cleanup: beim Frame-Destroy gibt inherited FResultGrid frei -
+// FOrigGridWindowProc zeigt dann ins Leere, wird aber nie wieder gerufen.
+begin
+  if FResultGrid = nil then Exit;
+  FOrigGridWindowProc := FResultGrid.WindowProc;
+  FResultGrid.WindowProc := GridWindowProc;
+end;
+
+procedure TAnalyserFrame.GridWindowProc(var Msg: TMessage);
+// Coalescing: alle pendingenden WM_MOUSEWHEEL der Grid-Queue zu einem
+// einzigen grossen Scroll falten. Vorher: jedes WM_MOUSEWHEEL fuehrte
+// zu Scroll + Repaint; bei Repaint > Wheel-Tick-Intervall stauten sich
+// Messages und der Grid scrollte sekundenlang nach dem Loslassen weiter.
+// Nach Coalescing: 1 grosse Scrolloperation, 1 Repaint, kein Backlog.
+var
+  PendingMsg : TMsg;
+  TotalDelta : Integer;
+begin
+  if Msg.Msg = WM_MOUSEWHEEL then
+  begin
+    TotalDelta := TWMMouseWheel(Msg).WheelDelta;
+    // Pendingende WM_MOUSEWHEEL der gleichen HWND aus der Queue ziehen
+    // (PM_REMOVE) und Delta aufsummieren. Andere Messages bleiben drin.
+    while PeekMessage(PendingMsg, FResultGrid.Handle,
+                      WM_MOUSEWHEEL, WM_MOUSEWHEEL, PM_REMOVE) do
+      Inc(TotalDelta, SmallInt(HiWord(PendingMsg.wParam)));
+    // SmallInt-Sattigung, damit HiWord-Roundtrip ueberlebt (Wrap waere
+    // bei einem riesigen Burst sonst moeglich).
+    if TotalDelta > High(SmallInt) then TotalDelta := High(SmallInt)
+    else if TotalDelta < Low(SmallInt) then TotalDelta := Low(SmallInt);
+    TWMMouseWheel(Msg).WheelDelta := SmallInt(TotalDelta);
+  end;
+  FOrigGridWindowProc(Msg);
+end;
+
+procedure TAnalyserFrame.InitDebounceTimers;
+const
+  DEBOUNCE_MS = 200;
+begin
+  FHighlightDebounceTimer := TTimer.Create(Self);
+  FHighlightDebounceTimer.Interval := DEBOUNCE_MS;
+  FHighlightDebounceTimer.Enabled  := False;
+  FHighlightDebounceTimer.OnTimer  := HighlightDebounceFire;
+
+  FFilterDebounceTimer := TTimer.Create(Self);
+  FFilterDebounceTimer.Interval := DEBOUNCE_MS;
+  FFilterDebounceTimer.Enabled  := False;
+  FFilterDebounceTimer.OnTimer  := FilterDebounceFire;
+end;
+
+procedure TAnalyserFrame.HighlightDebounceFire(Sender: TObject);
+// Idle-Tick erreicht - jetzt der eigentliche, teure Highlighter-Rebuild.
+// Bei Pfeiltasten-Hold haben sich viele ScheduleHighlightRefresh-Aufrufe
+// auf EINEN Timer-Reset reduziert; hier feuert er nur 1x nach Stopp.
+begin
+  if FHighlightDebounceTimer <> nil then
+    FHighlightDebounceTimer.Enabled := False;
+  if csDestroying in ComponentState then Exit;
+  HighlightAllFindingsInFile(FPendingHighlightFile);
+end;
+
+procedure TAnalyserFrame.ScheduleHighlightRefresh(const AFileName: string);
+// Statt direkt HighlightAllFindingsInFile zu rufen, 200ms-Timer resetten.
+// Aufeinanderfolgende Aufrufe innerhalb des Intervalls kollabieren zu
+// einem einzigen Rebuild nach User-Idle.
+begin
+  if FHighlightDebounceTimer = nil then
+  begin
+    // Setup noch nicht durch - synchron als Fallback, damit es zumindest
+    // funktionert (z.B. fruehe Frame-Init-Pfade).
+    HighlightAllFindingsInFile(AFileName);
+    Exit;
+  end;
+  FPendingHighlightFile := AFileName;
+  FHighlightDebounceTimer.Enabled := False; // reset countdown
+  FHighlightDebounceTimer.Enabled := True;
+end;
+
+procedure TAnalyserFrame.FilterDebounceFire(Sender: TObject);
+// Idle-Tick: jetzt der eigentliche ApplyFilter-Aufruf (Filter-Scan +
+// Sort + Highlighter-Schedule).
+begin
+  if FFilterDebounceTimer <> nil then
+    FFilterDebounceTimer.Enabled := False;
+  if csDestroying in ComponentState then Exit;
+  ApplyFilter;
 end;
 
 // ---------------------------------------------------------------------------

@@ -12,7 +12,8 @@ interface
 
 uses
   Winapi.Windows, System.SysUtils, System.Classes,
-  Vcl.Graphics, Vcl.Grids, Vcl.Themes;
+  Vcl.Graphics, Vcl.Grids, Vcl.Themes,
+  uAnalyserTypes;  // TFindingSeverity (fuer GetCellSeverity-Callback)
 
 type
   // Virtual-Mode-Callback: liefert den Zell-Inhalt fuer (ACol, ARow). Wird
@@ -56,6 +57,13 @@ type
     // Compatibility falls noch jemand Cells[] befuellt.
     GetCellText      : TGridCellTextProc;
 
+    // Optional: liefert die Severity-Enum-Stufe fuer ARow direkt aus dem
+    // Daten-Model. Wenn gesetzt, spart der Renderer sich pro gezeichneter
+    // Zelle den zusaetzlichen GetCellText(SeverityColumn) + SeverityFromText-
+    // String-Roundtrip - bei 150k+ Befunden sichtbar im Scroll-Frame.
+    // Bei nil bleibt der Legacy-Pfad ueber CellText + SeverityFromText.
+    GetCellSeverity  : TFunc<Integer, TFindingSeverity>;
+
     // Optional: liefert die TCustomStyleServices, die fuer Color-Auf-
     // loesungen verwendet werden soll. Bei nil wird die VCL-globale
     // Vcl.Themes.StyleServices verwendet (= TStyleManager.ActiveStyle).
@@ -93,7 +101,10 @@ type
 implementation
 
 uses
-  uAnalyserPalette, uAnalyserTypes, uAnalyserTheme;
+  // uAnalyserTypes ist bereits in der interface-uses (fuer TFindingSeverity
+  // im Config-Record); doppelte Listung wuerde Delphi 12 mit E2004
+  // "Bezeichner redeklariert" abbrechen.
+  uAnalyserPalette, uAnalyserTheme;
 
 const
   // Hardcoded Pastell-Hintergrund fuer Standalone (UseTheme=False).
@@ -133,7 +144,6 @@ class procedure TFindingGridRenderer.DrawCell(Sender: TObject;
   const Config: TFindingGridConfig);
 var
   grid     : TStringGrid;
-  severity : string;
   bgColor  : TColor;
   txtRect  : TRect;
   HeaderBg : TColor;
@@ -215,18 +225,25 @@ begin
   end;
 
   // ---- Datenzeilen --------------------------------------------------------
-  if (Config.SeverityColumn >= 0) and (Config.SeverityColumn < grid.ColCount) then
-    severity := CellText(Config.SeverityColumn, ARow)
+  // Severity einmal pro Zelle bestimmen. Wenn GetCellSeverity gesetzt ist,
+  // spart der Direkt-Enum-Lookup einen GetCellText(SeverityColumn)-Aufruf +
+  // SeverityFromText-String-Parse pro Zelle - bei 150k+ Befunden spuerbar
+  // beim Scrollen. Legacy-Pfad bleibt fuer Aufrufer die den Callback (noch)
+  // nicht setzen.
+  if Assigned(Config.GetCellSeverity) then
+    SevEnum := Config.GetCellSeverity(ARow)
+  else if (Config.SeverityColumn >= 0) and
+          (Config.SeverityColumn < grid.ColCount) then
+    SevEnum := SeverityFromText(CellText(Config.SeverityColumn, ARow))
   else
-    severity := '';
+    SevEnum := fsUnknown;
 
   if Config.UseTheme then
   begin
-    SevEnum := SeverityFromText(severity);
     // SeverityBg-Overload mit explizitem Styles — sonst wuerde die VCL-
     // globale StyleServices verwendet (= falscher Style im IDE-Plugin
     // wenn VCL-Style != IDE-Theme).
-    SevBg   := SeverityBg(SevEnum, clWindow, Styles);
+    SevBg := SeverityBg(SevEnum, clWindow, Styles);
     if SevBg <> clNone then
       bgColor := SevBg
     else if Config.ShowZebra and Odd(ARow) then
@@ -236,13 +253,14 @@ begin
   end
   else
   begin
-    SevEnum := SeverityFromText(severity); // wird ggf. fuer Accent gebraucht
-    if (severity = 'Fehler') or (severity = 'Error') then
-      bgColor := COLOR_ERROR_FALLBACK
-    else if (severity = 'Warnung') or (severity = 'Warning') then
-      bgColor := COLOR_WARNING_FALLBACK
+    // Standalone-Fallback ohne Theme: hardcoded Pastell aus dem Enum (kein
+    // String-Vergleich mehr, eindeutig + sprachunabhaengig).
+    case SevEnum of
+      fsError:   bgColor := COLOR_ERROR_FALLBACK;
+      fsWarning: bgColor := COLOR_WARNING_FALLBACK;
     else
       bgColor := clWindow;
+    end;
   end;
 
   if gdSelected in State then

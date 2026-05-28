@@ -40,10 +40,83 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Classes, uLocalization;
+  System.SysUtils, System.Classes, System.Generics.Collections,
+  uLocalization;
 
 const
   CONTEXT_LINES = 5;
+  // UI-scope LRU: ueblicher Klick-Workflow trifft mehrfach dieselbe Datei
+  // (mehrere Befunde im selben Modul). 4 Slots decken Hin-und-Her zwischen
+  // verschiedenen Modulen ab, ohne Memory nennenswert zu kosten.
+  SNIPPET_CACHE_CAPACITY = 4;
+
+var
+  // Modul-LRU: MRU=Index 0, LRU=Index Count-1.
+  // gFileTextCache aus uFileTextCache ist scan-scoped und nach dem Lauf nil -
+  // dieser Cache lebt fuer die Form-Lebenszeit, damit aufeinanderfolgende
+  // Klicks auf Befunde derselben Datei nicht jedes Mal LoadFromFile ausloesen.
+  FSnippetPaths : TStringList         = nil;     // gleiche Key-Reihenfolge wie FSnippetData
+  FSnippetData  : TObjectList<TStringList> = nil; // OwnsObjects = True
+
+function GetSnippetLines(const APath: string): TStringList;
+// Holt die Zeilen der Datei aus dem LRU-Cache; laed sie bei Bedarf nach.
+// Liefert nil wenn die Datei nicht lesbar ist. Caller MUSS die Liste NICHT
+// freigeben - der Cache besitzt sie.
+var
+  Key : string;
+  Idx : Integer;
+  SL  : TStringList;
+begin
+  Result := nil;
+  if FSnippetPaths = nil then
+  begin
+    FSnippetPaths := TStringList.Create;
+    FSnippetData  := TObjectList<TStringList>.Create(True);
+  end;
+
+  Key := LowerCase(ExpandFileName(APath));
+  Idx := FSnippetPaths.IndexOf(Key);
+  if Idx >= 0 then
+  begin
+    Result := FSnippetData[Idx];
+    // Hit -> auf Position 0 ziehen (MRU). Move loescht nicht (kein
+    // OwnsObjects-Trigger, nur Reorder).
+    if Idx > 0 then
+    begin
+      FSnippetPaths.Move(Idx, 0);
+      FSnippetData.Move(Idx, 0);
+    end;
+    Exit;
+  end;
+
+  // Miss -> laden. Encoding-Strategie identisch zum vorherigen Code
+  // (UTF-8, sonst System-Default).
+  if not FileExists(APath) then Exit;
+  SL := TStringList.Create;
+  try
+    try
+      SL.LoadFromFile(APath, TEncoding.UTF8);
+    except
+      try SL.LoadFromFile(APath); except FreeAndNil(SL); Exit; end;
+    end;
+  except
+    FreeAndNil(SL);
+    Exit;
+  end;
+
+  FSnippetPaths.Insert(0, Key);
+  FSnippetData.Insert(0, SL);
+
+  // Tail verdraengen bis wir wieder unter der Capacity sind. OwnsObjects=True
+  // gibt die TStringList-Instanz mit der Delete-Operation frei.
+  while FSnippetPaths.Count > SNIPPET_CACHE_CAPACITY do
+  begin
+    FSnippetPaths.Delete(FSnippetPaths.Count - 1);
+    FSnippetData.Delete(FSnippetData.Count - 1);
+  end;
+
+  Result := SL;
+end;
 
 class function TClaudePrompt.KindToName(K: TFindingKind): string;
 // Delegiert an KIND_META in uSCAConsts (single source of truth).
@@ -54,8 +127,9 @@ end;
 class function TClaudePrompt.LoadSnippet(const APath: string;
   ALine: Integer): string;
 // Liest +/- CONTEXT_LINES Zeilen um ALine herum, mit ">>> " als Marker
-// auf der Befund-Zeile (deutlich auffaelliger als nur ">"). Robust gegen
-// Encoding-Probleme: erst UTF-8 versuchen, dann System-Default als Fallback.
+// auf der Befund-Zeile. Zeilen kommen aus dem Modul-LRU - bei wiederholten
+// Klicks auf Befunde derselben Datei spart das den LoadFromFile-Roundtrip
+// (bei 150k+ Befunden im selben Modul war das die spuerbare Klick-Latenz).
 var
   SL                : TStringList;
   SB                : TStringBuilder;
@@ -63,37 +137,29 @@ var
   Marker            : string;
 begin
   Result := '';
-  if (APath = '') or (ALine <= 0) or not FileExists(APath) then Exit;
+  if (APath = '') or (ALine <= 0) then Exit;
 
-  SL := TStringList.Create;
+  SL := GetSnippetLines(APath);
+  if SL = nil then Exit;            // Datei fehlt oder nicht lesbar
+
+  FromIdx := ALine - 1 - CONTEXT_LINES;
+  ToIdx   := ALine - 1 + CONTEXT_LINES;
+  if FromIdx < 0 then FromIdx := 0;
+  if ToIdx > SL.Count - 1 then ToIdx := SL.Count - 1;
+  if FromIdx > ToIdx then Exit;
+
+  SB := TStringBuilder.Create;
   try
-    try
-      SL.LoadFromFile(APath, TEncoding.UTF8);
-    except
-      try SL.LoadFromFile(APath); except Exit; end;
+    for i := FromIdx to ToIdx do
+    begin
+      if (i + 1) = ALine then Marker := '>>> ' else Marker := '    ';
+      SB.Append(Marker);
+      SB.Append(Format('%4d  ', [i + 1]));
+      SB.AppendLine(SL[i]);
     end;
-
-    FromIdx := ALine - 1 - CONTEXT_LINES;
-    ToIdx   := ALine - 1 + CONTEXT_LINES;
-    if FromIdx < 0 then FromIdx := 0;
-    if ToIdx > SL.Count - 1 then ToIdx := SL.Count - 1;
-    if FromIdx > ToIdx then Exit;
-
-    SB := TStringBuilder.Create;
-    try
-      for i := FromIdx to ToIdx do
-      begin
-        if (i + 1) = ALine then Marker := '>>> ' else Marker := '    ';
-        SB.Append(Marker);
-        SB.Append(Format('%4d  ', [i + 1]));
-        SB.AppendLine(SL[i]);
-      end;
-      Result := SB.ToString;
-    finally
-      SB.Free;
-    end;
+    Result := SB.ToString;
   finally
-    SL.Free;
+    SB.Free;
   end;
 end;
 
@@ -196,5 +262,13 @@ begin
     SB.Free;
   end;
 end;
+
+initialization
+
+finalization
+  // LRU sauber abbauen. OwnsObjects=True gibt die gecachten TStringList-
+  // Instanzen mit Free der TObjectList automatisch frei.
+  FreeAndNil(FSnippetData);
+  FreeAndNil(FSnippetPaths);
 
 end.

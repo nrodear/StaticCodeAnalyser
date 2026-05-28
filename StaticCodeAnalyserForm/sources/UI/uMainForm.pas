@@ -9,6 +9,7 @@ uses
    Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls,
   Vcl.ComCtrls, Vcl.Grids, uStaticAnalyzer2,
   uMethodd12, uSCAConsts, uFixHint, uClaudePrompt, uLocalization,
+  uAnalyserTypes,  // SeverityFromKindLevel, TFindingSeverity (Grid-Renderer-Callback)
   uRepoSettings, uRecentPaths, uFindingGridRenderer, uDfmTextViewer,
   uIDEHelpPanel,                  // TFindingHintPanel (im class-Feld referenziert)
   uExportMenu,                    // TFindingExportMenu (Class-Field-Reference)
@@ -84,6 +85,19 @@ type
     // Aktueller BaseDir des letzten Analyse-Laufs - fuer Re-Filter im
     // Grid-Refresh (FillGridFromFindings braucht ihn).
     FCurrentBaseDir    : string;
+    // Cache: absoluter Dateipfad -> ExtractRelativePath(FCurrentBaseDir, ...)
+    // Spalte 0 im Grid wird pro Repaint fuer alle sichtbaren Zeilen neu
+    // berechnet - bei 150k+ Befunden ist ExtractRelativePath nicht trivial.
+    // Wird bei jedem Wechsel von FCurrentBaseDir komplett geleert.
+    FRelPathCache      : TDictionary<string, string>;
+    // Vorab gebauter Grid-Renderer-Config (mit Closures fuer GetCellText/
+    // GetCellSeverity). Zuvor wurde der Config pro Zelle frisch erzeugt -
+    // jede Zelle = 2 frisch alloziierte anonyme Methoden (Heap + IRefCount).
+    // Bei 300 sichtbaren Zellen pro Repaint × mehreren Repaints/s war das
+    // der Hauptgrund warum sich Mausrad-Events bis zu 5s aufgestaut haben.
+    // Die Closures referenzieren Self.FDisplayedFindings / FCurrentBaseDir /
+    // FRelPathCache - bleiben damit auch bei BaseDir-Wechsel gueltig.
+    FGridConfig        : TFindingGridConfig;
     // Stats-Tile Count-Labels (uIDEStatsTiles befuellt sie, UpdateStats
     // schreibt pro Lauf in Caption).
     FTileError, FTileWarn, FTileHint, FTileFileSev : TLabel;
@@ -107,6 +121,10 @@ type
     function  GetResultGrid: TStringGrid;
     function  GetCurrentBaseDir: string;
     procedure StatusModeProc(const Msg: string);
+    // Baut FGridConfig einmal beim Form-Init. Closures binden an Self -
+    // referenzieren bei jedem Aufruf die AKTUELLEN Werte der Form-Felder
+    // (FDisplayedFindings, FCurrentBaseDir, FRelPathCache).
+    procedure InitGridConfig;
     // Wendet die Display-Filter (Severity-Combo / Type-Combo / Search)
     // auf FAllFindings an und fuellt FDisplayedFindings + Grid neu.
     procedure ApplyFilter;
@@ -224,6 +242,11 @@ begin
   FAllFindings       := TObjectList<TLeakFinding>.Create(True);
   // OwnsObjects=False - referenziert nur Items aus FAllFindings, kein Free.
   FDisplayedFindings := TList<TLeakFinding>.Create;
+  // Rel-Path-Cache fuer das Grid (Spalte 0). Wird bei BaseDir-Wechsel
+  // geleert (siehe Stelle wo FCurrentBaseDir gesetzt wird).
+  FRelPathCache      := TDictionary<string, string>.Create;
+  // Grid-Renderer-Config (mit Closures) einmal hier bauen statt pro Zelle.
+  InitGridConfig;
 
   // ---- Display-Filter-Combos befuellen (Severity / Type) ----
   // Tag-Objects halten Ord(TFilterMode/TTypeFilter); ApplyFilter liest sie
@@ -496,6 +519,7 @@ begin
   // ueberlebt wenn das Form zerstoert wird (relevant beim IDE-Plugin-Hosting).
   if TMethod(Application.OnShowHint).Data = Self then
     Application.OnShowHint := nil;
+  FreeAndNil(FRelPathCache);
   FreeAndNil(FDisplayedFindings);
   FreeAndNil(FAllFindings);
 end;
@@ -527,26 +551,18 @@ begin
     CanShow := False;
 end;
 
-procedure TForm2.ResultGridDrawCell(Sender: TObject; ACol, ARow: Integer;
-  Rect: TRect; State: TGridDrawState);
-// Implementation in UI/uFindingGridRenderer.pas - hier nur die Standalone-
-// Konfiguration: Severity-Spalte 4, kein Theme/Zebra/Sort/Accent-Bar
-// (Standalone-Look ist bewusst einfach, hardcoded Pastell-Pasteltoene).
-//
-// Virtual-Mode: Datenzeilen-Inhalt wird ueber GetCellText aus
-// FDisplayedFindings gezogen statt aus ResultGrid.Cells[] - das spart bei
-// 66k+ Befunden ~50-100 MB Cell-String-Allokationen (32-Bit-Process-Limit).
-// Header-Zeile (ARow=0) bleibt in ResultGrid.Cells[].
-var
-  Config : TFindingGridConfig;
-  baseDir: string;
+procedure TForm2.InitGridConfig;
+// Bau-once: die zwei Closures referenzieren Self-Felder direkt, nicht via
+// lokal-eingefrorene Variablen. Damit darf FGridConfig fuer die gesamte
+// Form-Lebenszeit liegen bleiben - aenderbare Werte (FCurrentBaseDir,
+// FDisplayedFindings) werden bei jedem Aufruf frisch ueber Self gelesen.
 begin
-  Config := TFindingGridRenderer.StandaloneConfig;
-  baseDir := IncludeTrailingPathDelimiter(FCurrentBaseDir);
-  Config.GetCellText :=
+  FGridConfig := TFindingGridRenderer.StandaloneConfig;
+  FGridConfig.GetCellText :=
     function(ACellCol, ACellRow: Integer): string
     var
-      f : TLeakFinding;
+      f       : TLeakFinding;
+      baseDir : string;
     begin
       if ACellRow = 0 then
         Result := ResultGrid.Cells[ACellCol, 0]   // Header weiterhin aus Cells
@@ -556,7 +572,15 @@ begin
       begin
         f := FDisplayedFindings[ACellRow - 1];
         case ACellCol of
-          0: Result := ExtractRelativePath(baseDir, f.FileName);
+          0:
+            // Rel-Path-Cache (siehe FRelPathCache). IncludeTrailingPath-
+            // Delimiter nur bei Cache-Miss - frueher pro Zelle.
+            if not FRelPathCache.TryGetValue(f.FileName, Result) then
+            begin
+              baseDir := IncludeTrailingPathDelimiter(FCurrentBaseDir);
+              Result  := ExtractRelativePath(baseDir, f.FileName);
+              FRelPathCache.Add(f.FileName, Result);
+            end;
           1: Result := f.MethodName;
           2: Result := f.LineNumber;
           3: Result := f.MissingVar;
@@ -570,7 +594,32 @@ begin
         // weiterhin via Cells[] gesetzt - aus Cells lesen.
         Result := ResultGrid.Cells[ACellCol, ACellRow];
     end;
-  TFindingGridRenderer.DrawCell(Sender, ACol, ARow, Rect, State, Config);
+  // Direkt-Enum-Lookup statt String-Roundtrip ueber die Severity-Spalte.
+  FGridConfig.GetCellSeverity :=
+    function(ACellRow: Integer): TFindingSeverity
+    var
+      f : TLeakFinding;
+    begin
+      if (FDisplayedFindings <> nil) and
+         (ACellRow >= 1) and
+         (ACellRow <= FDisplayedFindings.Count) then
+      begin
+        f := FDisplayedFindings[ACellRow - 1];
+        Result := SeverityFromKindLevel(f.Kind, f.Severity);
+      end
+      else
+        Result := fsUnknown;
+    end;
+end;
+
+procedure TForm2.ResultGridDrawCell(Sender: TObject; ACol, ARow: Integer;
+  Rect: TRect; State: TGridDrawState);
+// Reicht die in InitGridConfig vorbereitete Config durch - KEINE
+// Allokationen mehr pro Zelle. Vorher: 2 anonyme Methoden + Config-Record
+// pro DrawCell-Aufruf, bei ~300 Zellen pro Repaint × mehreren Repaints/s
+// hat das den Mausrad-Event-Stau verursacht.
+begin
+  TFindingGridRenderer.DrawCell(Sender, ACol, ARow, Rect, State, FGridConfig);
 end;
 
 procedure TForm2.Button1Click(Sender: TObject);
@@ -809,6 +858,9 @@ begin
     for i := 0 to Findings.Count - 1 do
       FAllFindings.Add(Findings[i]);
   end;
+  // BaseDir wechselt -> alle gecachten Rel-Paths sind ungueltig.
+  if Assigned(FRelPathCache) then
+    FRelPathCache.Clear;
   FCurrentBaseDir := ABaseDir;
   // Stats spiegeln immer die GESAMTE Befund-Menge, nicht das gefilterte
   // Subset - User sieht "1 von 234 Bugs gefiltert" auf der Tile-Leiste.
@@ -914,6 +966,16 @@ begin
       FDisplayedFindings.Add(f);
   end;
 
+  // Anzeige-Cap: TStringGrid wird ab ~50k Zeilen spuerbar trag. Sind mehr
+  // Treffer da, kappen wir die Anzeige (Export/CSV/Baseline arbeiten
+  // weiterhin mit FAllFindings, sind also nicht betroffen). Die Status-
+  // Leiste macht es transparent. 0 = kein Cap (alt).
+  var TotalMatched: Integer := FDisplayedFindings.Count;
+  if (uSCAConsts.UIMaxDisplayedFindings > 0) and
+     (TotalMatched > uSCAConsts.UIMaxDisplayedFindings) then
+    // TList<T>.Count := N truncated; OwnsObjects=False -> kein Free.
+    FDisplayedFindings.Count := uSCAConsts.UIMaxDisplayedFindings;
+
   ResultGrid.RowCount := 2;
   ResultGrid.Rows[1].Clear;
 
@@ -938,12 +1000,17 @@ begin
   // 66k+ Befunden ~50-100 MB Cell-Storage im TStringGrid (32-Bit-Limit).
   ResultGrid.RowCount := FDisplayedFindings.Count + 1;
   ResultGrid.Invalidate;
-  if FDisplayedFindings.Count = FAllFindings.Count then
+  if TotalMatched > FDisplayedFindings.Count then
+    // gekappt - User darauf hinweisen, dass mehr Treffer existieren.
+    StatusBar1.Panels[2].Text := Format(_(
+      'Showing first %d of %d findings - refine the filter to see more'),
+      [FDisplayedFindings.Count, TotalMatched])
+  else if TotalMatched = FAllFindings.Count then
     StatusBar1.Panels[2].Text := Format(_('Done. %d findings. Click a row -> ' +
       'AI prompt on clipboard.'), [FAllFindings.Count])
   else
     StatusBar1.Panels[2].Text := Format(_('Filtered: %d of %d findings'),
-      [FDisplayedFindings.Count, FAllFindings.Count]);
+      [TotalMatched, FAllFindings.Count]);
 end;
 
 procedure TForm2.ResultGridDblClick(Sender: TObject);
@@ -1050,8 +1117,11 @@ end;
 
 procedure TForm2.ResultGridClick(Sender: TObject);
 // Bei Klick auf eine Befund-Zeile:
-//   1) kompletten Markdown-Block fuer Claude AI in die Zwischenablage
-//   2) Hint-Panel rechts mit Before/After-Code-Beispielen aktualisieren
+//   1) Hint-Panel rechts mit Before/After-Code-Beispielen aktualisieren
+//      (SOFORT - sichtbares Feedback fuer den User)
+//   2) ProcessMessages laesst den Panel-Repaint durchlaufen, BEVOR
+//   3) Clipboard.AsText evtl. durch Windows-Clipboard-Listener (Snipping-
+//      Tool, Passwortmanager, Browser-Sync) 50-200ms blockiert wird.
 // Index bezieht sich auf FDisplayedFindings, NICHT FAllFindings - der
 // Filter hat moeglicherweise Eintraege entfernt.
 var
@@ -1061,9 +1131,12 @@ begin
   idx := ResultGrid.Row - 1; // 0-basiert: Zeile 0 ist Header
   if (idx < 0) or (idx >= FDisplayedFindings.Count) then Exit;
   F := FDisplayedFindings[idx];
-  Clipboard.AsText := BuildClaudePrompt(F);
   if Assigned(FHintPanel) then
     FHintPanel.ShowFinding(F);
+  // Panel-Repaint flushen, damit der User das Before/After SOFORT sieht.
+  // Erst danach den (potenziell blockierenden) Clipboard-Write absetzen.
+  Application.ProcessMessages;
+  Clipboard.AsText := BuildClaudePrompt(F);
   StatusBar1.Panels[2].Text := Format(
     _('AI prompt copied to clipboard: %s, line %s (%s)'),
     [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText]);
