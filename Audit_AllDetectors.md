@@ -177,16 +177,45 @@ done
 Pro Eintrag entscheiden: Aggregator-Sub (OK) oder Lücke (`AddD` ergänzen).
 
 ### V3 — Detektor ohne dedizierte Test-Datei
-Detektoren ohne `uTestXxx.pas` haben **keine Regressions-Sicherung**. Identifikation:
+**ACHTUNG — Naives File-Name-Matching reicht NICHT.** Viele aeltere Detektoren
+haben Bundle-Tests unter abweichenden Dateinamen (`uTestCodeMetrics`,
+`uTestSafetyChecks`, `uTestDuplicate`, `uTestLeakDetector` etc.). Korrekte
+Coverage-Erkennung geht ueber Assertion auf `fkXxx`-Konstanten:
 
 ```bash
-for f in StaticCodeAnalyserForm/sources/Detectors/u*.pas; do
-  name=$(basename "$f" .pas | sed 's/^u//')
-  [ ! -f "StaticCodeAnalyserForm/tests/uTest${name}.pas" ] && echo "NO TEST: $name"
+# Korrekt: pro Detector den fk-Konstanten suchen, NICHT den File-Namen
+for pair in "CyclomaticComplexity|fkCyclomaticComplexity" \
+            "DeepNesting|fkDeepNesting" \
+            "FieldLeak|fkMemoryLeak"; do
+  det=$(echo "$pair" | cut -d'|' -f1)
+  fk=$(echo "$pair" | cut -d'|' -f2)
+  hits=$(grep -lE "Count\(.*${fk}\)|${fk}[,\)\s]" StaticCodeAnalyserForm/tests/uTest*.pas \
+         | grep -v uTestFindingHelper | grep -v uTestPerformance \
+         | xargs -n1 basename | tr '\n' ' ')
+  if [ -z "$hits" ]; then
+    echo "TRULY UNCOVERED: $det ($fk)"
+  fi
 done
 ```
 
-Pro Eintrag Tests nachziehen oder Begründung dokumentieren.
+**Snapshot 2026-05-30:** Re-Check der urspruenglich 9 vermuteten Detektoren
+(`CodeSmells2`, `CyclomaticComplexity`, `DeadCode`, `DeepNesting`, `DivByZero`,
+`DuplicateBlock`, `DuplicateString`, `FieldLeak`, `LeakDetector2`) zeigt:
+**alle 9 sind tatsaechlich abgedeckt** durch Tests mit nicht-1:1-Namen. V3 ist
+damit aktuell leer; bei kuenftigen Re-Audits diese Skript-Variante (fk-Konstanten
+statt File-Namen) verwenden.
+
+| Detector | Abgedeckt durch |
+|----------|------------------|
+| CodeSmells2 (`fkEmptyExcept`) | `uTestEmptyExcept.pas` |
+| CyclomaticComplexity | `uTestCodeMetrics.pas` |
+| DeadCode | `uTestSafetyChecks.pas` |
+| DeepNesting | `uTestCodeMetrics.pas` |
+| DivByZero | `uTestSafetyChecks.pas` |
+| DuplicateBlock | `uTestDuplicate.pas` |
+| DuplicateString | `uTestDuplicate.pas` |
+| FieldLeak (`fkMemoryLeak`) | `uTestLeakDetector.pas` (+ ExportSARIF, ExportSonarGeneric, QuickFix, ConfidenceFilter, ParserRobustness, ComboChecks) |
+| LeakDetector2 (`fkMemoryLeak`) | dito |
 
 ### V4 — i18n-Vollständigkeit unverifiziert
 Aktuell keine automatische i18n-Coverage-Prüfung im Test-Suite. Schritt-4-Skript manuell ausführen oder als CI-Lauf ergänzen.
@@ -197,7 +226,7 @@ Aktuell keine automatische i18n-Coverage-Prüfung im Test-Suite. Schritt-4-Skrip
 
 1. **Sofort** — Konsistenz-Tests laufen lassen (5 Min). Wenn rot, Lücke gemäß Test-Message schließen. Wenn grün, ist Block A abgehakt.
 2. **Mittelfristig** — V1 + V2-Skripte laufen lassen, Befunde pro Eintrag triagieren (Helfer-OK oder Registrierung nachziehen).
-3. **Längerfristig** — V3 priorisieren: für jeden Detektor ohne Tests entweder Tests nachziehen oder explizit dokumentieren *warum nicht* (z.B. trivialer Wrapper).
+3. **Längerfristig** — V3-Re-Audit mit dem **korrekten Skript** (fk-Konstanten statt File-Namen). Stand 2026-05-30: V3 leer.
 4. **CI-Erweiterung** — V4 als CI-Check automatisieren: jeder PR der `_('...')`-Strings hinzufügt, scheitert wenn `de.po`/`en.po` nicht synchron.
 
 ## Cross-References
