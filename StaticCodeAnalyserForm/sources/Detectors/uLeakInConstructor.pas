@@ -78,17 +78,26 @@ begin
 end;
 
 function HasBodyBlock(MethodNode: TAstNode): Boolean;
+const
+  STMT_KINDS = [nkAssign, nkCall, nkIfStmt, nkCaseStmt, nkForStmt,
+                nkWhileStmt, nkRepeatStmt, nkTryExcept, nkTryFinally,
+                nkRaise, nkExit, nkInherited, nkLocalVar];
 var
-  Child : TAstNode;
+  Child, Inner : TAstNode;
 begin
   // Body-Detection: irgendein Statement-artiger Descendant. Forward-Decls
   // im Class-Body haben keinen Body.
+  // Parser wickelt `begin ... end` in ein nkBlock-Kind ein - eine Ebene
+  // tiefer schauen, sonst sehen wir bei impl-Bodies nur nkBlock und
+  // verpassen den Body komplett (Audit V5, 2026-05-30).
   Result := False;
   for Child in MethodNode.Children do
-    if Child.Kind in [nkAssign, nkCall, nkIfStmt, nkCaseStmt, nkForStmt,
-                      nkWhileStmt, nkRepeatStmt, nkTryExcept, nkTryFinally,
-                      nkRaise, nkExit, nkInherited, nkLocalVar] then
-      Exit(True);
+  begin
+    if Child.Kind in STMT_KINDS then Exit(True);
+    if Child.Kind = nkBlock then
+      for Inner in Child.Children do
+        if Inner.Kind in STMT_KINDS then Exit(True);
+  end;
 end;
 
 function LooksLikeFieldCreate(N: TAstNode): Boolean;

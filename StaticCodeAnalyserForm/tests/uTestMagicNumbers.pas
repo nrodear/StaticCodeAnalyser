@@ -27,12 +27,15 @@ uses
   uTestFindingHelper;
 
 procedure TTestMagicNumbers.MagicNumber_Reported;
+// Detector scannt nur nkIfStmt-Bedingungen (per Design konservativ), und
+// 1024 waere als Power-of-2 ohnehin trivial (siehe IsTrivial). Deshalb
+// non-triviale Konstante in einer if-Bedingung als minimaler Trigger.
 const SRC =
   'unit t; implementation'#13#10 +
   'procedure Foo;'#13#10 +
   'var x: Integer;'#13#10 +
   'begin'#13#10 +
-  '  x := 1024;'#13#10 +
+  '  if x = 1027 then x := 0;'#13#10 +
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin
@@ -91,7 +94,7 @@ const SRC =
   'procedure Foo;'#13#10 +
   'var x: Integer;'#13#10 +
   'begin'#13#10 +
-  '  x := 1024;'#13#10 +
+  '  if x = 1027 then x := 0;'#13#10 +
   'end;';
 var
   F   : TObjectList<TLeakFinding>;

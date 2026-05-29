@@ -121,7 +121,10 @@ begin
   if not IsOverride(TypeRef) then Exit;
   if IsBodyless(TypeRef) then Exit;
 
-  // Body-Statements zaehlen (alles ausser nkParam).
+  // Body-Statements zaehlen (alles ausser nkParam). Der Parser kapselt
+  // `begin ... end` in ein nkBlock-Kind - wenn das das einzige Kind ist,
+  // muessen wir EINE Ebene tiefer schauen, sonst sehen wir nkBlock statt
+  // dem nkInherited darin. Audit V5 / 2026-05-30.
   BodyCount := 0;
   TheOnly   := nil;
   for i := 0 to MethodNode.Children.Count - 1 do
@@ -131,6 +134,23 @@ begin
     Inc(BodyCount);
     TheOnly := Child;
     if BodyCount > 1 then Break;  // mehr als 1 Statement -> nicht relevant
+  end;
+
+  // Single-Block-Unwrap: wenn das einzige non-Param-Kind ein nkBlock ist,
+  // gehen wir eine Ebene tiefer und zaehlen dort.
+  if (BodyCount = 1) and Assigned(TheOnly) and (TheOnly.Kind = nkBlock) then
+  begin
+    var Block := TheOnly;
+    BodyCount := 0;
+    TheOnly   := nil;
+    for i := 0 to Block.Children.Count - 1 do
+    begin
+      Child := Block.Children[i];
+      if Child.Kind = nkParam then Continue;
+      Inc(BodyCount);
+      TheOnly := Child;
+      if BodyCount > 1 then Break;
+    end;
   end;
 
   if BodyCount <> 1 then Exit;
