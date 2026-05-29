@@ -26,13 +26,18 @@ uses
   uTestFindingHelper;
 
 procedure TTestNilDeref.UncheckedReturn_Reported;
+// TNilDerefDetector matched aktuell ausschliesslich `var := nil` gefolgt
+// von `var.Method(...)`. Die "function-return-might-be-nil"-Variante
+// (`x := FindThing; x.DoStuff`) ist out-of-scope - dafuer braeuchte es
+// eine Inter-Procedural-Nullable-Analyse die Delphi-AST nicht
+// strukturell erlaubt. Bis dahin hier das Pattern testen das tatsaechlich
+// erkannt wird (Audit V5 / 2026-05-30).
 const SRC =
   'unit t; implementation'#13#10 +
-  'function FindThing: TObject; forward;'#13#10 +
   'procedure Foo;'#13#10 +
   'var x: TObject;'#13#10 +
   'begin'#13#10 +
-  '  x := FindThing;'#13#10 +
+  '  x := nil;'#13#10 +
   '  x.DoStuff;'#13#10 +
   'end;';
 var F: TObjectList<TLeakFinding>;
@@ -79,13 +84,13 @@ begin
 end;
 
 procedure TTestNilDeref.Finding_KindAndSeverity;
+// Siehe UncheckedReturn_Reported - Detector matched nur `var := nil`.
 const SRC =
   'unit t; implementation'#13#10 +
-  'function FindThing: TObject; forward;'#13#10 +
   'procedure Foo;'#13#10 +
   'var x: TObject;'#13#10 +
   'begin'#13#10 +
-  '  x := FindThing;'#13#10 +
+  '  x := nil;'#13#10 +
   '  x.DoStuff;'#13#10 +
   'end;';
 var

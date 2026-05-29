@@ -111,17 +111,12 @@ begin
   // 90%-Variante: Identifier (optional Self.-Prefix) der mit 'f' beginnt.
   if Lhs.StartsWith('self.') then Lhs := Copy(Lhs, 6, MaxInt);
   if (Length(Lhs) < 2) or (Lhs[1] <> 'f') then Exit(False);
-  // RHS ist im AST nicht direkt verfuegbar - wir koennen aber pruefen,
-  // ob unter dem nkAssign ein nkCall mit Name endend auf '.create' liegt.
-  // Walk descendants once.
-  Rhs := '';
-  for var Child in N.Children do
-    if Child.Kind = nkCall then
-    begin
-      Rhs := LowerCase(Child.Name);
-      Break;
-    end;
-  Result := (Rhs <> '') and (Pos('.create', Rhs) > 0);
+  // RHS landet im Parser direkt in N.TypeRef (Audit V5 / 2026-05-30 -
+  // siehe uParser2.pas:1617). Frueher: walk N.Children fuer nkCall, aber
+  // der Parser erzeugt KEIN nkCall-Kind fuer Assignment-RHS - der Loop
+  // lief immer leer und das Detector-Pattern hat nie gegriffen.
+  Rhs := LowerCase(N.TypeRef);
+  Result := Pos('.create', Rhs) > 0;
 end;
 
 function HasFieldCreate(MethodNode: TAstNode): Boolean;

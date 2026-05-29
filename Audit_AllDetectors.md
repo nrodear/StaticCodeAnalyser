@@ -313,6 +313,35 @@ end;
 Die "andere Logik"-Detektoren brauchen individuelle Analyse — die nkAssign-
 Schablone hilft nur Typecast-/Function-Call-Erkennern.
 
+### V5b — Folge-Befunde (Round 2-3, 2026-05-30)
+
+Nach mehreren Rebuild-Triage-Runden weitere Parser/Detector-Mismatches aufgetaucht:
+
+**Parser-Befunde** (deeper als V5):
+- **Assignment-RHS landet IMMER in `nkAssign.TypeRef`**, nie als `nkCall`-Kind ([uParser2.pas:1617-1618](StaticCodeAnalyserForm/sources/Parsing/uParser2.pas#L1617)).
+  Detektoren die `N.Children` nach `nkCall` durchsuchen sehen die RHS NIE.
+  - Beispiel: `LooksLikeFieldCreate` in `uLeakInConstructor` lief immer leer → Fix: `N.TypeRef` direkt scannen statt Children.
+- **`while`/`repeat`-Conditions werden VOLLSTAENDIG verworfen** ([uParser2.pas:1374](StaticCodeAnalyserForm/sources/Parsing/uParser2.pas#L1374)):
+  `SkipTo([tkKwDo, tkEof])` skippt die Condition; nkWhileStmt hat Name='while' + TypeRef=''.
+  → Detektoren wie `uNilComparison` koennen `while x <> nil do` nicht finden.
+  - **Fix nicht in dieser Runde** — braucht Parser-Aenderung (Condition in TypeRef speichern).
+- **`begin end;` ohne Statements = leerer nkBlock**:
+  Detektoren mit Body-Detection-Whitelist muessen `nkBlock` mit drin haben, sonst ist
+  empty-body == no-body. Betroffen: `uRoutineResultAssigned.HasBodyStatement` → gefixt.
+
+**Capability vs Test-Erwartung:**
+- `uNilDeref` matched aktuell ausschliesslich `var := nil` gefolgt von `var.Method`-Zugriff.
+  Tests waren auf `var := SomeFunction; var.Method` geschrieben (Function-Return-might-be-nil)
+  — out-of-scope ohne Inter-Procedural-Nullable-Analyse. Test-SRCs angepasst auf das
+  Pattern das der Detector tatsaechlich erkennt.
+
+**Bekannte verbliebene Lucken** (nicht in dieser Audit-Runde gefixt):
+
+| Test | Limitation |
+|------|------------|
+| `TTestCharToCharPointerCast.PCharHexOrdinal_Reported` | Parser-Tokenisierung von `#$41` legt es vermutlich nicht als ein zusammenhaengendes Token in TypeRef ab — Detector erkennt das Pattern nicht. Braucht Parser-Inspection oder Detector-Regex-Lockerung. |
+| `TTestNilComparison.InWhileCondition_Reported` | Parser verwirft die `while`-Condition komplett (siehe oben). Braucht Parser-Aenderung. |
+
 ## Action-Items
 
 1. **Sofort** — Konsistenz-Tests laufen lassen (5 Min). Wenn rot, Lücke gemäß Test-Message schließen. Wenn grün, ist Block A abgehakt.

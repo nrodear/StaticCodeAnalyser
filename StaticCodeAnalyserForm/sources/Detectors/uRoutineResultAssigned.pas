@@ -100,10 +100,15 @@ end;
 // kommt erst in der implementierenden Klasse).
 function HasBodyStatement(N: TAstNode): Boolean;
 const
+  // nkBlock auch akzeptieren: ein leerer `begin end;` Function-Body ist
+  // semantisch eine echte Implementation (function-result wird nicht
+  // gesetzt -> genau der Bug den wir suchen). Ohne nkBlock wuerde der
+  // leere Body als "kein Body" gewertet und wir wuerden schweigen
+  // (Audit V5 / 2026-05-30).
   BODY_KINDS = [nkAssign, nkCall, nkIfStmt, nkCaseStmt, nkForStmt,
                 nkWhileStmt, nkRepeatStmt, nkTryExcept, nkTryFinally,
                 nkRaise, nkExit, nkBreak, nkContinue, nkInherited,
-                nkLocalVar];
+                nkLocalVar, nkBlock];
 var
   Child : TAstNode;
 begin
