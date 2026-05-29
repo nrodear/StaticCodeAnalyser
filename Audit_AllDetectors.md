@@ -217,8 +217,50 @@ statt File-Namen) verwenden.
 | FieldLeak (`fkMemoryLeak`) | `uTestLeakDetector.pas` (+ ExportSARIF, ExportSonarGeneric, QuickFix, ConfidenceFilter, ParserRobustness, ComboChecks) |
 | LeakDetector2 (`fkMemoryLeak`) | dito |
 
-### V4 — i18n-Vollständigkeit unverifiziert
-Aktuell keine automatische i18n-Coverage-Prüfung im Test-Suite. Schritt-4-Skript manuell ausführen oder als CI-Lauf ergänzen.
+### V4 — i18n-Vollständigkeit (Snapshot 2026-05-30)
+
+Aktuell keine automatische i18n-Coverage-Prüfung im Test-Suite. Manueller
+Lauf (siehe Schritt-4-Skript oben, mit Glob `sources/` **und** `StaticCodeAnalyserIDE/`):
+
+| Quelle | Count |
+|--------|------:|
+| Source `_(…)`-Strings (eindeutig, sources/ + IDE) | **456** |
+| msgids in `de.po` | **319** |
+| msgids in `en.po` | **1** ⚠️ |
+
+**Drei Befunde:**
+
+1. **~137 Source-Strings haben keine `de.po`-Übersetzung.** Im DE-UI fallen
+   sie auf den Source-String (englisch) zurück. Beispiele aus dem Diff:
+   `'AI prompt copied to clipboard: %s, line %s (%s)'`,
+   `'Analyse current file (silent)'`,
+   `'Anti-pattern'`, `'Before:'`, `'After:'`, `'Bug'`,
+   und viele Toolbar-/Action-Texte aus dem IDE-Plugin.
+2. **~50 `de.po`-Karteileichen** — msgids ohne Source-Match. Beispiele:
+   `'Dead Code'`, `'Debug Output'`, `'Deep Nesting'`, `'Div by Zero'`,
+   `'Duplicate Code Blocks'` — vermutlich nach Refactor auf
+   `KIND_META.Name`-Lookup obsolet geworden, blocken den DE-Übersetzungs-
+   Workflow aber nicht.
+3. **`en.po` ist effektiv leer** (nur Standard-Header). Wenn die Konvention
+   „Source-Strings sind selbst Englisch, msgid==msgstr" gilt, ist das ok;
+   dann sollte das aber explizit in einer README oder im File-Header
+   dokumentiert sein. Sonst bricht ein zukünftiger `xgettext`-Regen-Lauf
+   die Erwartungen.
+
+**Audit-Skript** (reproduzierbar):
+
+```bash
+grep -rohE "_\('[^']*'\)" StaticCodeAnalyserForm/sources/ StaticCodeAnalyserIDE/ \
+  | sed -E "s/^_\('(.*)'\)$/\1/" | sort -u > /tmp/src_strings.txt
+grep -E '^msgid "' i18n/de.po \
+  | sed -E 's/^msgid "(.*)"$/\1/' | grep -v '^$' | sort -u > /tmp/de_strings.txt
+comm -23 /tmp/src_strings.txt /tmp/de_strings.txt  # fehlend in de.po
+comm -13 /tmp/src_strings.txt /tmp/de_strings.txt  # tot in de.po
+```
+
+**Empfehlung:** Skript als CI-Step ergänzen, der bei jedem PR scheitert wenn
+neue Source-Strings keine `de.po`-Einträge bekommen. Dann werden die 137
+Backlog-Strings sukzessive aufgeräumt, statt zu wachsen.
 
 ---
 
