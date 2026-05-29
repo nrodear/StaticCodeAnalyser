@@ -103,33 +103,45 @@ begin
   Result := (Length(Body) = 2) and (Body[1] = '''') and (Body[2] = '''');
 end;
 
+// Pruefen ob `Text` einen AnsiString/AnsiChar/UTF8String/RawByteString/
+// ShortString-Cast enthaelt und entsprechend Befund anlegen. Wird sowohl
+// fuer nkCall (bare call) als auch nkAssign.TypeRef (typische Form
+// `a := AnsiString(u)` - der Parser legt die RHS in TypeRef ab und
+// erzeugt KEINEN separaten nkCall-Knoten, sonst silent miss).
+// Audit V5, 2026-05-30.
+procedure CheckCastText(const Text: string; Node, CurrentMethod: TAstNode;
+  const FileName: string; Results: TObjectList<TLeakFinding>);
+var
+  F        : TLeakFinding;
+  MethName : string;
+  CastType : string;
+begin
+  CastType := DetectAnsiCast(Text);
+  if CastType = '' then Exit;
+  if ArgIsEmptyLiteral(Text) then Exit;
+  if Assigned(CurrentMethod) then MethName := CurrentMethod.Name
+  else MethName := '';
+  F            := TLeakFinding.Create;
+  F.FileName   := FileName;
+  F.MethodName := MethName;
+  F.LineNumber := IntToStr(Node.Line);
+  F.MissingVar := Format(
+    '%s(...) cast loses characters outside the active code page - use UTF8Encode/explicit encoding',
+    [CastType]);
+  F.SetKind(fkUnicodeToAnsiCast);
+  Results.Add(F);
+end;
+
 procedure WalkAndCheck(Node, CurrentMethod: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>);
 var
   i        : Integer;
-  F        : TLeakFinding;
-  MethName : string;
-  CastType : string;
   NextMeth : TAstNode;
 begin
   if Node = nil then Exit;
-  if Node.Kind = nkCall then
-  begin
-    CastType := DetectAnsiCast(Node.Name);
-    if (CastType <> '') and not ArgIsEmptyLiteral(Node.Name) then
-    begin
-      if Assigned(CurrentMethod) then MethName := CurrentMethod.Name
-      else MethName := '';
-      F            := TLeakFinding.Create;
-      F.FileName   := FileName;
-      F.MethodName := MethName;
-      F.LineNumber := IntToStr(Node.Line);
-      F.MissingVar := Format(
-        '%s(...) cast loses characters outside the active code page - use UTF8Encode/explicit encoding',
-        [CastType]);
-      F.SetKind(fkUnicodeToAnsiCast);
-      Results.Add(F);
-    end;
+  case Node.Kind of
+    nkCall:   CheckCastText(Node.Name,    Node, CurrentMethod, FileName, Results);
+    nkAssign: CheckCastText(Node.TypeRef, Node, CurrentMethod, FileName, Results);
   end;
   if Node.Kind = nkMethod then NextMeth := Node else NextMeth := CurrentMethod;
   for i := 0 to Node.Children.Count - 1 do

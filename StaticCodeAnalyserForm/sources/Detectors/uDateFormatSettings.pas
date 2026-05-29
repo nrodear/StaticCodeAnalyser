@@ -41,7 +41,7 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uDetectorUtils;
 
 type
   TDateFormatSettingsDetector = class
@@ -99,19 +99,33 @@ begin
   Result := Pos('formatsettings', LowerCase(CallName)) > 0;
 end;
 
-// Pruefen ob `Text` (nkCall.Name oder nkAssign.TypeRef) einen locale-
-// abhaengigen Call ohne explizite TFormatSettings enthaelt. Wird fuer
-// beide Node-Sorten gerufen - bei nkAssign liegt die RHS in TypeRef,
-// dort koennen Calls wie `dt := StrToDate('1.1.2025')` stehen.
+// Pruefen ob `Text` (nkCall.Name oder nkAssign.TypeRef) IRGENDWO einen
+// locale-abhaengigen Call ohne explizite TFormatSettings enthaelt. Frueher
+// wurde nur der aeusserste Call-Name (`CallFuncName`) geprueft - damit
+// fielen verschachtelte Calls wie `LogIt(StrToDate(s))` durch, weil der
+// Outer-Name "LogIt" nicht in der LOCALE_DEPENDENT-Liste steht. Jetzt
+// wird mit Wortgrenzen-Suche im gesamten Text gescannt.
 procedure CheckCallText(const Text: string; Node, CurrentMethod: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
   F        : TLeakFinding;
   MethName : string;
-  FuncName : string;
+  LowText  : string;
+  Name     : string;
+  HitName  : string;
 begin
-  FuncName := CallFuncName(Text);
-  if not IsLocaleDependentCall(FuncName) then Exit;
+  if Text = '' then Exit;
+  LowText := LowerCase(Text);
+  HitName := '';
+  for Name in LOCALE_DEPENDENT do
+    if TDetectorUtils.ContainsWholeWordLower(Name, LowText) then
+    begin
+      HitName := Name;
+      Break;
+    end;
+  if HitName = '' then Exit;
+  // Defense gegen False-Positive: User reicht explizit TFormatSettings
+  // durch ('strtodate(s, FormatSettings)' ist sicher).
   if MentionsFormatSettings(Text) then Exit;
   if Assigned(CurrentMethod) then MethName := CurrentMethod.Name
   else MethName := '';
@@ -121,7 +135,7 @@ begin
   F.LineNumber := IntToStr(Node.Line);
   F.MissingVar := Format(
     '%s called without explicit TFormatSettings - depends on system locale',
-    [FuncName]);
+    [HitName]);
   F.SetKind(fkDateFormatSettings);
   Results.Add(F);
 end;
