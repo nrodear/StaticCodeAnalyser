@@ -306,6 +306,29 @@
         <DCCReference Include="uTestStringFromPointer.pas"/>
         <DCCReference Include="uTestPointerSubtraction.pas"/>
         <DCCReference Include="uTestSuppressionCompleteness.pas"/>
+        <DCCReference Include="uTestAbstractNotImpl.pas"/>
+        <DCCReference Include="uTestCastAndFree.pas"/>
+        <DCCReference Include="uTestCharToCharPointerCast.pas"/>
+        <DCCReference Include="uTestDateFormatSettings.pas"/>
+        <DCCReference Include="uTestExceptionTooGeneral.pas"/>
+        <DCCReference Include="uTestIfThenShortCircuit.pas"/>
+        <DCCReference Include="uTestInheritedMethodEmpty.pas"/>
+        <DCCReference Include="uTestInstanceInvokedConstructor.pas"/>
+        <DCCReference Include="uTestIntegerOverflow.pas"/>
+        <DCCReference Include="uTestLeakInConstructor.pas"/>
+        <DCCReference Include="uTestLongMethod.pas"/>
+        <DCCReference Include="uTestLongParamList.pas"/>
+        <DCCReference Include="uTestMagicNumbers.pas"/>
+        <DCCReference Include="uTestMissingFinally.pas"/>
+        <DCCReference Include="uTestMissingRaise.pas"/>
+        <DCCReference Include="uTestNilComparison.pas"/>
+        <DCCReference Include="uTestNilDeref.pas"/>
+        <DCCReference Include="uTestRaiseOutsideExcept.pas"/>
+        <DCCReference Include="uTestRaisingRawException.pas"/>
+        <DCCReference Include="uTestReRaiseException.pas"/>
+        <DCCReference Include="uTestRoutineResultAssigned.pas"/>
+        <DCCReference Include="uTestUnicodeToAnsiCast.pas"/>
+        <DCCReference Include="uTestUseAfterFree.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

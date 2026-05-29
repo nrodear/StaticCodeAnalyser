@@ -164,7 +164,31 @@ uses
   uTestEmptyOnHandler in 'uTestEmptyOnHandler.pas',
   uTestStringFromPointer in 'uTestStringFromPointer.pas',
   uTestPointerSubtraction in 'uTestPointerSubtraction.pas',
-  uTestSuppressionCompleteness in 'uTestSuppressionCompleteness.pas';
+  uTestSuppressionCompleteness in 'uTestSuppressionCompleteness.pas',
+  // ---- Geister-Tests nachregistriert (Audit_AllDetectors.md V1, 2026-05-30) ----
+  uTestAbstractNotImpl in 'uTestAbstractNotImpl.pas',
+  uTestCastAndFree in 'uTestCastAndFree.pas',
+  uTestCharToCharPointerCast in 'uTestCharToCharPointerCast.pas',
+  uTestDateFormatSettings in 'uTestDateFormatSettings.pas',
+  uTestExceptionTooGeneral in 'uTestExceptionTooGeneral.pas',
+  uTestIfThenShortCircuit in 'uTestIfThenShortCircuit.pas',
+  uTestInheritedMethodEmpty in 'uTestInheritedMethodEmpty.pas',
+  uTestInstanceInvokedConstructor in 'uTestInstanceInvokedConstructor.pas',
+  uTestIntegerOverflow in 'uTestIntegerOverflow.pas',
+  uTestLeakInConstructor in 'uTestLeakInConstructor.pas',
+  uTestLongMethod in 'uTestLongMethod.pas',
+  uTestLongParamList in 'uTestLongParamList.pas',
+  uTestMagicNumbers in 'uTestMagicNumbers.pas',
+  uTestMissingFinally in 'uTestMissingFinally.pas',
+  uTestMissingRaise in 'uTestMissingRaise.pas',
+  uTestNilComparison in 'uTestNilComparison.pas',
+  uTestNilDeref in 'uTestNilDeref.pas',
+  uTestRaiseOutsideExcept in 'uTestRaiseOutsideExcept.pas',
+  uTestRaisingRawException in 'uTestRaisingRawException.pas',
+  uTestReRaiseException in 'uTestReRaiseException.pas',
+  uTestRoutineResultAssigned in 'uTestRoutineResultAssigned.pas',
+  uTestUnicodeToAnsiCast in 'uTestUnicodeToAnsiCast.pas',
+  uTestUseAfterFree in 'uTestUseAfterFree.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}
