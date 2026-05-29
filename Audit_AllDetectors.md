@@ -228,39 +228,38 @@ Lauf (siehe Schritt-4-Skript oben, mit Glob `sources/` **und** `StaticCodeAnalys
 | msgids in `de.po` | **319** |
 | msgids in `en.po` | **1** ⚠️ |
 
-**Drei Befunde:**
+**Drei Befunde** (Re-Snapshot 2026-05-30 nach genauerem Skript):
 
-1. **~137 Source-Strings haben keine `de.po`-Übersetzung.** Im DE-UI fallen
-   sie auf den Source-String (englisch) zurück. Beispiele aus dem Diff:
-   `'AI prompt copied to clipboard: %s, line %s (%s)'`,
-   `'Analyse current file (silent)'`,
-   `'Anti-pattern'`, `'Before:'`, `'After:'`, `'Bug'`,
-   und viele Toolbar-/Action-Texte aus dem IDE-Plugin.
-2. **~50 `de.po`-Karteileichen** — msgids ohne Source-Match. Beispiele:
-   `'Dead Code'`, `'Debug Output'`, `'Deep Nesting'`, `'Div by Zero'`,
-   `'Duplicate Code Blocks'` — vermutlich nach Refactor auf
+1. **195 Source-Strings haben keine `de.po`-Übersetzung** (urspruengliche
+   Schaetzung war 137, das Skript hat die toten Eintraege urspruenglich
+   doppelt gezaehlt — korrekte Zahl jetzt aus `tools/i18n_audit.sh`).
+   Im DE-UI fallen sie auf den Source-String (englisch) zurück. Vollstaendige
+   Liste in [Todo_I18nBacklog.md](Todo_I18nBacklog.md).
+2. **58 `de.po`-Karteileichen** — msgids ohne Source-Match (vorher ~50 grob
+   geschaetzt). Beispiele: `'Dead Code'`, `'Debug Output'`, `'Deep Nesting'`,
+   `'Div by Zero'`, `'Duplicate Code Blocks'` — vermutlich nach Refactor auf
    `KIND_META.Name`-Lookup obsolet geworden, blocken den DE-Übersetzungs-
-   Workflow aber nicht.
+   Workflow aber nicht. Liste in [Todo_I18nBacklog.md](Todo_I18nBacklog.md).
 3. **`en.po` ist effektiv leer** (nur Standard-Header). Wenn die Konvention
    „Source-Strings sind selbst Englisch, msgid==msgstr" gilt, ist das ok;
    dann sollte das aber explizit in einer README oder im File-Header
    dokumentiert sein. Sonst bricht ein zukünftiger `xgettext`-Regen-Lauf
    die Erwartungen.
 
-**Audit-Skript** (reproduzierbar):
+**Audit-Skript** (reusable, in `tools/i18n_audit.sh`):
 
 ```bash
-grep -rohE "_\('[^']*'\)" StaticCodeAnalyserForm/sources/ StaticCodeAnalyserIDE/ \
-  | sed -E "s/^_\('(.*)'\)$/\1/" | sort -u > /tmp/src_strings.txt
-grep -E '^msgid "' i18n/de.po \
-  | sed -E 's/^msgid "(.*)"$/\1/' | grep -v '^$' | sort -u > /tmp/de_strings.txt
-comm -23 /tmp/src_strings.txt /tmp/de_strings.txt  # fehlend in de.po
-comm -13 /tmp/src_strings.txt /tmp/de_strings.txt  # tot in de.po
+tools/i18n_audit.sh                # Zusammenfassung
+tools/i18n_audit.sh --missing      # fehlende DE-Strings
+tools/i18n_audit.sh --dead         # tote de.po-Eintraege
+tools/i18n_audit.sh --json         # maschinenlesbar
 ```
 
-**Empfehlung:** Skript als CI-Step ergänzen, der bei jedem PR scheitert wenn
-neue Source-Strings keine `de.po`-Einträge bekommen. Dann werden die 137
-Backlog-Strings sukzessive aufgeräumt, statt zu wachsen.
+Exit-Code 0 wenn nichts fehlt, 1 sonst — CI-tauglich.
+
+**Empfehlung:** Skript als pre-commit-hook oder CI-Step verdrahten — dann
+scheitern PRs die neue `_()`-Strings ohne `de.po`-Eintrag einfuehren. Der
+195er-Backlog wird so sukzessive abgebaut statt zu wachsen.
 
 ---
 
