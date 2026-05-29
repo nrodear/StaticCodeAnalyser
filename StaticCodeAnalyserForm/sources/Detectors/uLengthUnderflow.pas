@@ -208,7 +208,13 @@ begin
         F.SetKind(fkLengthUnderflow);
         Results.Add(F);
 
-        LinePos := LinePos + MatchCol + Length(Detail);
+        // MatchCol ist die 1-basierte Position des Matches IN `Sub`. Die
+        // entsprechende Position in `Line` ist `LinePos + MatchCol - 1`.
+        // Die naechste Scan-Position liegt direkt nach dem Match:
+        //   LinePos + MatchCol - 1 + Length(Detail).
+        // Frueher: ohne das "-1" - das hat 1 Zeichen pro Treffer
+        // uebersprungen und konnte direkt-angrenzende Matches verlieren.
+        LinePos := LinePos + MatchCol - 1 + Length(Detail);
       end;
     end;
   finally

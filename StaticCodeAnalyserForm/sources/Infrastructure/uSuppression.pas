@@ -47,6 +47,9 @@ type
 
 implementation
 
+uses
+  uFileTextCache;  // AcquireLines / ReleaseLines (BOM-aware Encoding-Detection)
+
 class function TSuppression.KindFromName(const Name: string;
   out Kind: TFindingKind): Boolean;
 // Delegiert an KIND_META-Reverse-Lookup in uSCAConsts (single source
@@ -109,6 +112,7 @@ class function TSuppression.BuildMap(const FileName: string):
   TDictionary<Integer, TSuppressedKinds>;
 var
   Lines      : TStringList;
+  Cached     : Boolean;
   Kinds      : TSuppressedKinds;
   i, j       : Integer;
   L          : string;
@@ -131,22 +135,14 @@ var
 
 begin
   Result := TDictionary<Integer, TSuppressedKinds>.Create;
-  if not FileExists(FileName) then Exit;
 
-  Lines := TStringList.Create;
+  // AcquireLines geht ueber LoadFileSmart (BOM-Sniff + UTF-8-Validierung +
+  // ANSI-Fallback) - konsistent mit allen anderen file-scannenden
+  // Detektoren statt der alten 3-stufigen LoadFromFile-Kette die UTF-16-BE
+  // gar nicht erkannt hat. Nil = unlesbar / nicht da -> keine Suppressions.
+  Lines := AcquireLines(FileName, Cached);
+  if Lines = nil then Exit;
   try
-    try
-      Lines.LoadFromFile(FileName);
-    except
-      try Lines.LoadFromFile(FileName, TEncoding.UTF8);
-      except
-        try Lines.LoadFromFile(FileName, TEncoding.Unicode);
-        except
-          Exit; // unleserlich – keine Suppressions
-        end;
-      end;
-    end;
-
     for i := 0 to Lines.Count - 1 do
     begin
       if not ParseComment(Lines[i], Kinds) then Continue;
@@ -187,7 +183,7 @@ begin
         MergeKindsAt(Result, NextCode, Kinds);
     end;
   finally
-    Lines.Free;
+    ReleaseLines(Lines, Cached);
   end;
 end;
 

@@ -191,10 +191,12 @@ begin
       NumStr := Copy(Line, Start, p - Start);
       FromVal := StrToInt64Def(NumStr, 0);
 
-      // `to` (Word-Boundary)
+      // `to` (Word-Boundary). p + 2 <= n stellt schon sicher dass
+      // Line[p + 2] existiert (p + 2 > n waere tot durch das erste
+      // Guard); deshalb nur ein IsIdent-Check.
       while (p <= n) and (Line[p] = ' ') do Inc(p);
       if not ((p + 2 <= n) and SameText(Copy(Line, p, 2), 'to') and
-              ((p + 2 > n) or (not IsIdent(Line[p + 2])))) then
+              not IsIdent(Line[p + 2])) then
       begin
         Inc(i); Continue;
       end;
@@ -213,10 +215,11 @@ begin
       NumStr := Copy(Line, Start, p - Start);
       ToVal := StrToInt64Def(NumStr, 0);
 
-      // `do` (optional - manche Style: `for...to N do begin`)
+      // `do` (mit Word-Boundary). Analog zur `to`-Pruefung oben:
+      // p + 2 <= n macht den (p + 2 > n)-Pfad tot, deshalb nur IsIdent.
       while (p <= n) and (Line[p] = ' ') do Inc(p);
       if not ((p + 2 <= n) and SameText(Copy(Line, p, 2), 'do') and
-              ((p + 2 > n) or (not IsIdent(Line[p + 2])))) then
+              not IsIdent(Line[p + 2])) then
       begin
         // Range mehrzeilig - Konservativ: kein Match
         Inc(i); Continue;
