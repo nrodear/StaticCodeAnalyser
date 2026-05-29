@@ -1368,10 +1368,25 @@ procedure TParser2.ParseWhileStmt(Parent: TAstNode);
 var
   T         : TToken;
   WhileNode : TAstNode;
+  Cond      : string;
 begin
   T         := Next; // 'while'
   WhileNode := Parent.Add(nkWhileStmt, 'while', T.Line, T.Col);
-  SkipTo([tkKwDo, tkEof]);
+  // Frueher: `SkipTo([tkKwDo, tkEof])` - die Condition wurde verworfen
+  // und stand im AST nirgends. Detektoren wie uNilComparison konnten
+  // `while x <> nil do` nie finden. Jetzt joinen wir die Tokens zwischen
+  // `while` und `do` in WhileNode.TypeRef - analog zur RHS-Behandlung
+  // bei nkAssign (Z. 1611-1614).
+  Cond := '';
+  while not (Tok.Kind in [tkKwDo, tkEof]) do
+  begin
+    if Tok.Kind = tkStrLit then
+      JoinTokInto(Cond, QuoteStrLit(Tok.Value))
+    else
+      JoinTokInto(Cond, Tok.Value);
+    Next;
+  end;
+  WhileNode.TypeRef := Cond;
   Eat(tkKwDo);
   ParseStatement(WhileNode);
 end;

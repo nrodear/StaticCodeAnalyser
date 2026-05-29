@@ -342,19 +342,42 @@ begin
     end
     else if CurChar = '#' then
     begin
-      // Zeichencode #nn: BMP-Bereich (0..65535). Hoehere Codepoints
-      // (Astral-Plane) brauchen Surrogate-Paare und werden im Lexer
-      // durch U+FFFD (REPLACEMENT CHARACTER) ersetzt - der Source-Text
-      // ist dann technisch falsch, aber der Lexer crasht nicht und der
-      // Parser sieht weiter ein gueltiges StrLit-Token.
+      // Zeichencode #nn (dezimal) ODER #$hhhh (hex). BMP-Bereich
+      // (0..65535). Hoehere Codepoints (Astral-Plane) brauchen
+      // Surrogate-Paare und werden im Lexer durch U+FFFD (REPLACEMENT
+      // CHARACTER) ersetzt - der Source-Text ist dann technisch falsch,
+      // aber der Lexer crasht nicht und der Parser sieht weiter ein
+      // gueltiges StrLit-Token.
+      // Frueher fehlte der `$`-Pfad: `#$41` wurde als `#<leer>` (NUL) +
+      // `$41` (separates Number-Token) gelesen - der Hex-Char-Literal
+      // tauchte im AST nie zusammenhaengend auf.
       Advance;
-      var Num := '';
-      while (FPos <= FLen) and CharInSet(CurChar, ['0'..'9']) do
+      var Num    : string := '';
+      var IsHex  : Boolean := False;
+      if (FPos <= FLen) and (CurChar = '$') then
       begin
-        Num := Num + CurChar;
+        IsHex := True;
         Advance;
+        while (FPos <= FLen) and CharInSet(CurChar,
+              ['0'..'9', 'A'..'F', 'a'..'f']) do
+        begin
+          Num := Num + CurChar;
+          Advance;
+        end;
+      end
+      else
+      begin
+        while (FPos <= FLen) and CharInSet(CurChar, ['0'..'9']) do
+        begin
+          Num := Num + CurChar;
+          Advance;
+        end;
       end;
-      var CodePoint := StrToIntDef(Num, 0);
+      var CodePoint : Integer;
+      if IsHex then
+        CodePoint := StrToIntDef('$' + Num, 0)
+      else
+        CodePoint := StrToIntDef(Num, 0);
       if (CodePoint < 0) or (CodePoint > $FFFF) then
         S := S + #$FFFD
       else
