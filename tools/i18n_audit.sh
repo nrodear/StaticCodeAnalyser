@@ -29,9 +29,14 @@ trap 'rm -rf "$tmp_dir"' EXIT
 grep -rohE "_\('[^']*'\)" "$src_dir1" "$src_dir2" 2>/dev/null \
   | sed -E "s/^_\('(.*)'\)$/\1/" | sort -u > "$tmp_dir/src.txt"
 
-# 2. DE msgids extrahieren (eine pro Zeile).
+# 2. DE msgids extrahieren (eine pro Zeile). po-Format escaped Quotes als
+#    `\"`; nach dem Strippen der aeusseren Quotes wird `\"` zurueck zu `"`
+#    normalisiert, sonst gibt's False-Positives gegen Source-Strings
+#    (die unmaskiert sind).
 grep -E '^msgid "' "$de_po" \
-  | sed -E 's/^msgid "(.*)"$/\1/' | grep -v '^$' | sort -u > "$tmp_dir/de.txt"
+  | sed -E 's/^msgid "(.*)"$/\1/' \
+  | sed 's/\\"/"/g; s/\\\\/\\/g' \
+  | grep -v '^$' | sort -u > "$tmp_dir/de.txt"
 
 src_count=$(wc -l < "$tmp_dir/src.txt")
 de_count=$(wc -l < "$tmp_dir/de.txt")

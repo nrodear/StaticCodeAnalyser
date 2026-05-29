@@ -3,7 +3,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: Static Code Analysis Tool for Delphi 1.0\n"
-"PO-Revision-Date: 2026-05-03 00:00+0000\n"
+"PO-Revision-Date: 2026-05-30 00:00+0000\n"
 "Language-Team: German <de@example.org>\n"
 "Language: de\n"
 "MIME-Version: 1.0\n"
@@ -1027,3 +1027,594 @@ msgstr "Assigned() statt \"= nil\" / \"<> nil\" verwenden"
 
 msgid "SQL command built with \"+\" - SQL injection risk"
 msgstr "SQL-Befehl mit \"+\" zusammengebaut - SQL-Injection-Risiko"
+
+# ---------------------------------------------------------------------------
+# Backfill 2026-05-30 (Audit_AllDetectors.md V4)
+# 195 zuvor fehlende _()-Strings - Best-Effort-Uebersetzung, Review empfohlen.
+# Reihenfolge: identisch zur sortierten Output von tools/i18n_audit.sh --missing.
+# ---------------------------------------------------------------------------
+
+msgid " - no changed .pas files"
+msgstr " - keine geaenderten .pas-Dateien"
+
+msgid " · "
+msgstr " · "
+
+msgid "%d file(s) - running..."
+msgstr "%d Datei(en) - laeuft..."
+
+msgid "%d findings"
+msgstr "%d Befunde"
+
+msgid "%d findings on this line"
+msgstr "%d Befunde auf dieser Zeile"
+
+msgid "..."
+msgstr "..."
+
+msgid "1-2 sentences why the rule fires on THIS specific code (not the generic explanation above)."
+msgstr "1-2 Saetze warum die Regel auf DIESEN konkreten Code feuert (nicht die generische Erklaerung oben)."
+
+msgid "AI prompt copied to clipboard: %s, line %s (%s)"
+msgstr "KI-Prompt in Zwischenablage kopiert: %s, Zeile %s (%s)"
+
+msgid "Actions menu: Branch-Changes, Cancel, Export, Settings, Ignore"
+msgstr "Aktionen-Menue: Branch-Aenderungen, Abbrechen, Export, Einstellungen, Ignorieren"
+
+msgid "After"
+msgstr "Nachher"
+
+msgid "After:"
+msgstr "Nachher:"
+
+msgid "All toolbar actions (Analyse, Browse, Export, Settings, ...)"
+msgstr "Alle Toolbar-Aktionen (Analysieren, Durchsuchen, Export, Einstellungen, ...)"
+
+msgid "Analyse Branch-Changes"
+msgstr "Branch-Aenderungen analysieren"
+
+msgid "Analyse current file (silent)"
+msgstr "Aktuelle Datei analysieren (still)"
+
+msgid "Analysing %d changed file(s). %s"
+msgstr "Analysiere %d geaenderte Datei(en). %s"
+
+msgid "Analysing: "
+msgstr "Analysiere: "
+
+msgid "Analysing: %s"
+msgstr "Analysiere: %s"
+
+msgid "Analysis cancelled - no new findings loaded"
+msgstr "Analyse abgebrochen - keine neuen Befunde geladen"
+
+msgid "Analysis error: "
+msgstr "Analyse-Fehler: "
+
+msgid "Analysis running - searching for files..."
+msgstr "Analyse laeuft - suche Dateien..."
+
+msgid "Anti-pattern"
+msgstr "Anti-Pattern"
+
+msgid "As of: "
+msgstr "Stand: "
+
+msgid "Before:"
+msgstr "Vorher:"
+
+msgid "Branch changes: please provide a valid project path (for repo detection)."
+msgstr "Branch-Aenderungen: bitte gueltigen Projektpfad angeben (fuer Repo-Erkennung)."
+
+msgid "Bug"
+msgstr "Bug"
+
+msgid "CSV export"
+msgstr "CSV-Export"
+
+msgid "CSV export failed: "
+msgstr "CSV-Export fehlgeschlagen: "
+
+msgid "CSV file (*.csv)|*.csv"
+msgstr "CSV-Datei (*.csv)|*.csv"
+
+msgid "CSV files|*.csv|Log files|*.log"
+msgstr "CSV-Dateien|*.csv|Log-Dateien|*.log"
+
+msgid "CSV saved: %s (%d entries)"
+msgstr "CSV gespeichert: %s (%d Eintraege)"
+
+msgid "Cancel Analysis"
+msgstr "Analyse abbrechen"
+
+msgid "Cancelling analysis..."
+msgstr "Analyse wird abgebrochen..."
+
+msgid "Cause"
+msgstr "Ursache"
+
+msgid "Checking all classes..."
+msgstr "Pruefe alle Klassen..."
+
+msgid "Choose folder"
+msgstr "Ordner waehlen"
+
+msgid "Class field without \"F\" prefix"
+msgstr "Klassen-Feld ohne \"F\"-Praefix"
+
+msgid "Class/record type without \"T\" prefix"
+msgstr "Klassen-/Record-Typ ohne \"T\"-Praefix"
+
+msgid "Click: filter grid to Bug type"
+msgstr "Klick: Grid auf Bug-Typ filtern"
+
+msgid "Click: filter grid to Cyclomatic"
+msgstr "Klick: Grid auf Cyclomatic filtern"
+
+msgid "Click: filter grid to Duplicate type"
+msgstr "Klick: Grid auf Duplicate-Typ filtern"
+
+msgid "Click: filter grid to Errors"
+msgstr "Klick: Grid auf Fehler filtern"
+
+msgid "Click: filter grid to Hints"
+msgstr "Klick: Grid auf Hinweise filtern"
+
+msgid "Click: filter grid to Vulnerability type"
+msgstr "Klick: Grid auf Vulnerability-Typ filtern"
+
+msgid "Click: filter grid to Warnings"
+msgstr "Klick: Grid auf Warnungen filtern"
+
+msgid "Click: filter grid to read errors"
+msgstr "Klick: Grid auf Lesefehler filtern"
+
+msgid "Clipboard: please select a row first (file not unambiguous)."
+msgstr "Zwischenablage: bitte zuerst eine Zeile auswaehlen (Datei nicht eindeutig)."
+
+msgid "Code (>>> marks the line that triggered the rule)"
+msgstr "Code (>>> markiert die Zeile die die Regel ausgeloest hat)"
+
+msgid "Code Duplication"
+msgstr "Code-Duplikation"
+
+msgid "Code Smell"
+msgstr "Code Smell"
+
+msgid "Code analysis: "
+msgstr "Code-Analyse: "
+
+msgid "Code review request - Delphi static analysis finding"
+msgstr "Code-Review-Anfrage - Delphi-Static-Analysis-Befund"
+
+msgid "Code smells / style. Refactoring candidates."
+msgstr "Code Smells / Stil. Refactoring-Kandidaten."
+
+msgid "Copied code (strings, blocks). Extract Method/Constant candidates."
+msgstr "Kopierter Code (Strings, Bloecke). Extract Method/Constant-Kandidaten."
+
+msgid "Could not open editor. File: "
+msgstr "Editor konnte nicht geoeffnet werden. Datei: "
+
+msgid "Crosses severities - Bugs can be Errors OR Warnings."
+msgstr "Schweregrad-uebergreifend - Bugs koennen Fehler ODER Warnungen sein."
+
+msgid "Current file is not a Pascal file."
+msgstr "Aktuelle Datei ist keine Pascal-Datei."
+
+msgid "Cyclomatic"
+msgstr "Cyclomatic"
+
+msgid "DFM as text: %s  Line: %d"
+msgstr "DFM als Text: %s  Zeile: %d"
+
+msgid "DFM finding at line %d - .pas is modified, press Alt+F12 to view DFM as text"
+msgstr "DFM-Befund auf Zeile %d - .pas wurde geaendert, Alt+F12 zeigt DFM als Text"
+
+msgid "DFM viewer: %s  Line: %d"
+msgstr "DFM-Viewer: %s  Zeile: %d"
+
+msgid "Detail"
+msgstr "Detail"
+
+msgid "Detectors (analyser.ini [Detectors])"
+msgstr "Detektoren (analyser.ini [Detectors])"
+
+msgid "Dismiss this finding (remove marker)"
+msgstr "Diesen Befund verwerfen (Marker entfernen)"
+
+msgid "Done. No findings."
+msgstr "Fertig. Keine Befunde."
+
+msgid "Double semicolon \";;\" - one is enough"
+msgstr "Doppeltes Semikolon \";;\" - eins reicht"
+
+msgid "ERROR"
+msgstr "FEHLER"
+
+msgid "Empty argument list \"()\" - drop the parentheses"
+msgstr "Leere Argumentliste \"()\" - Klammern weglassen"
+
+msgid "Enable silent analysis (editor right-click + Ctrl+Alt+A)"
+msgstr "Stille Analyse aktivieren (Editor-Rechtsklick + Strg+Alt+A)"
+
+msgid "Errors+warnings for %s copied to clipboard."
+msgstr "Fehler+Warnungen fuer %s in Zwischenablage kopiert."
+
+msgid "Export: HTML, JSON, CSV, Jira markup, plain text"
+msgstr "Export: HTML, JSON, CSV, Jira-Markup, Klartext"
+
+msgid "Field"
+msgstr "Feld"
+
+msgid "File %d"
+msgstr "Datei %d"
+
+msgid "File %d / %d"
+msgstr "Datei %d / %d"
+
+msgid "File %d / %d (%d%%)"
+msgstr "Datei %d / %d (%d%%)"
+
+msgid "File could not be read / parsed. Check path/encoding."
+msgstr "Datei konnte nicht gelesen / geparst werden. Pfad/Encoding pruefen."
+
+msgid "File not found: "
+msgstr "Datei nicht gefunden: "
+
+msgid "Filter: %s%s"
+msgstr "Filter: %s%s"
+
+msgid "Filtered: %d of %d findings"
+msgstr "Gefiltert: %d von %d Befunden"
+
+msgid "Filtered: 0 of %d findings"
+msgstr "Gefiltert: 0 von %d Befunden"
+
+msgid "Finding"
+msgstr "Befund"
+
+msgid "Findings in detail"
+msgstr "Befunde im Detail"
+
+msgid "Findings of type Bug (wrong behaviour, crash, wrong result)."
+msgstr "Befunde vom Typ Bug (Fehlverhalten, Crash, falsches Ergebnis)."
+
+msgid "Fix"
+msgstr "Fix"
+
+msgid "Git diff %s: %d file(s) to analyse"
+msgstr "Git-Diff %s: %d Datei(en) zu analysieren"
+
+msgid "Git: branch vs "
+msgstr "Git: Branch vs "
+
+msgid "Git: no base branch - working tree only"
+msgstr "Git: kein Basis-Branch - nur Working Tree"
+
+msgid "HINT"
+msgstr "HINWEIS"
+
+msgid "HTML export failed: "
+msgstr "HTML-Export fehlgeschlagen: "
+
+msgid "HTML file (*.html)|*.html"
+msgstr "HTML-Datei (*.html)|*.html"
+
+msgid "HTML report (all findings)..."
+msgstr "HTML-Report (alle Befunde)..."
+
+msgid "HTML report saved: %s"
+msgstr "HTML-Report gespeichert: %s"
+
+msgid "Hard to test - refactor into smaller methods."
+msgstr "Schwer testbar - in kleinere Methoden zerlegen."
+
+msgid "Hint: "
+msgstr "Hinweis: "
+
+msgid "IDE Profile:"
+msgstr "IDE-Profil:"
+
+msgid "IDE editor service not available."
+msgstr "IDE-Editor-Service nicht verfuegbar."
+
+msgid "If the finding is a false positive, say so and explain why - then suggest a `// noinspection %s` suppression marker on the affected line."
+msgstr "Falls der Befund ein False-Positive ist, sag das und erklaere warum - schlage dann einen `// noinspection %s`-Suppression-Marker auf der betroffenen Zeile vor."
+
+msgid "Ignore list..."
+msgstr "Ignore-Liste..."
+
+msgid "IncludeTests - analyse DUnit/DUnitX test units too"
+msgstr "IncludeTests - DUnit/DUnitX-Test-Units ebenfalls analysieren"
+
+msgid "Info"
+msgstr "Info"
+
+msgid "Interface type without \"I\" prefix"
+msgstr "Interface-Typ ohne \"I\"-Praefix"
+
+msgid "JSON export"
+msgstr "JSON-Export"
+
+msgid "JSON export failed: "
+msgstr "JSON-Export fehlgeschlagen: "
+
+msgid "JSON file (*.json)|*.json"
+msgstr "JSON-Datei (*.json)|*.json"
+
+msgid "JSON saved: %s (%d entries)"
+msgstr "JSON gespeichert: %s (%d Eintraege)"
+
+msgid "Jira export: please select a row first (file not unambiguous)."
+msgstr "Jira-Export: bitte zuerst eine Zeile auswaehlen (Datei nicht eindeutig)."
+
+msgid "Jira markup -> Clipboard"
+msgstr "Jira-Markup -> Zwischenablage"
+
+msgid "Jira wiki markup for %s copied to clipboard (errors+warnings)."
+msgstr "Jira-Wiki-Markup fuer %s in Zwischenablage kopiert (Fehler+Warnungen)."
+
+msgid "L. "
+msgstr "Z. "
+
+msgid "Likely bugs / risky patterns. Review before merge."
+msgstr "Wahrscheinliche Bugs / riskante Muster. Vor Merge pruefen."
+
+msgid "Methods with McCabe complexity > threshold (default 10)."
+msgstr "Methoden mit McCabe-Komplexitaet > Schwelle (Default 10)."
+
+msgid "Min-Severity:"
+msgstr "Min-Severity:"
+
+msgid "MinSeverity \"%s\" - active on next analysis run"
+msgstr "MinSeverity \"%s\" - aktiv beim naechsten Analyse-Lauf"
+
+msgid "More than %d files found - scan cancelled."
+msgstr "Mehr als %d Dateien gefunden - Scan abgebrochen."
+
+msgid "No file opened."
+msgstr "Keine Datei geoeffnet."
+
+msgid "No findings."
+msgstr "Keine Befunde."
+
+msgid "No matches."
+msgstr "Keine Treffer."
+
+msgid "Nothing to export - filter returns 0 entries."
+msgstr "Nichts zu exportieren - Filter liefert 0 Eintraege."
+
+msgid "Open analyser.ini (BaseBranch, git/svn paths, custom LeakyClasses)"
+msgstr "analyser.ini oeffnen (BaseBranch, git/svn-Pfade, eigene LeakyClasses)"
+
+msgid "Open ignore list (which files are NOT analysed)"
+msgstr "Ignore-Liste oeffnen (welche Dateien NICHT analysiert werden)"
+
+msgid "Opened: %s  Line: %d"
+msgstr "Geoeffnet: %s  Zeile: %d"
+
+msgid "Override whose body is just \"inherited\" adds nothing"
+msgstr "Override mit Body \"inherited\" allein bringt nichts"
+
+msgid "Pascal file (*.pas)|*.pas|All files|*.*"
+msgstr "Pascal-Datei (*.pas)|*.pas|Alle Dateien|*.*"
+
+msgid "Path:"
+msgstr "Pfad:"
+
+msgid "Plain text -> Clipboard"
+msgstr "Klartext -> Zwischenablage"
+
+msgid "Please provide a valid project path."
+msgstr "Bitte gueltigen Projektpfad angeben."
+
+msgid "Please respond with three sections"
+msgstr "Bitte antworte in drei Abschnitten"
+
+msgid "Pointer type alias should start with \"P\""
+msgstr "Pointer-Typ-Alias sollte mit \"P\" beginnen"
+
+msgid "Prefer Assigned() over \"= nil\" / \"<> nil\""
+msgstr "Assigned() bevorzugen statt \"= nil\" / \"<> nil\""
+
+msgid "Profile \"%s\" - active on next analysis run"
+msgstr "Profil \"%s\" - aktiv beim naechsten Analyse-Lauf"
+
+msgid "Profile (CLI/Form):"
+msgstr "Profil (CLI/Form):"
+
+msgid "Profile:"
+msgstr "Profil:"
+
+msgid "Project path is empty."
+msgstr "Projektpfad ist leer."
+
+msgid "Quality"
+msgstr "Qualitaet"
+
+msgid "Quick-Fix + AI prompt copied to clipboard: %s, line %s (%s)"
+msgstr "Quick-Fix + KI-Prompt in Zwischenablage kopiert: %s, Zeile %s (%s)"
+
+msgid "Quick-Fix applied: %s"
+msgstr "Quick-Fix angewendet: %s"
+
+msgid "Quick-Fix: cannot locate source line"
+msgstr "Quick-Fix: Quelltext-Zeile nicht gefunden"
+
+msgid "Quick-Fix: editor write failed (file not in IDE?)"
+msgstr "Quick-Fix: Editor-Schreibvorgang fehlgeschlagen (Datei nicht in der IDE?)"
+
+msgid "Quick-Fix: line out of range"
+msgstr "Quick-Fix: Zeile ausserhalb des gueltigen Bereichs"
+
+msgid "Quick-Fix: pattern not matched on line %d - manual fix required"
+msgstr "Quick-Fix: Pattern auf Zeile %d nicht gematcht - manueller Fix noetig"
+
+msgid "Real bugs / security holes (severity Error). Fix immediately."
+msgstr "Echte Bugs / Sicherheitsluecken (Severity Fehler). Sofort fixen."
+
+msgid "Recommended fix"
+msgstr "Empfohlener Fix"
+
+msgid "Rule description"
+msgstr "Regel-Beschreibung"
+
+msgid "Rule-Set (analyser.ini [Rules])"
+msgstr "Regel-Set (analyser.ini [Rules])"
+
+msgid "Rule-set: Profile=%s, MinSeverity=%s"
+msgstr "Regel-Set: Profil=%s, MinSeverity=%s"
+
+msgid "SQL command built with \"+\" - SQL injection risk"
+msgstr "SQL-Befehl mit \"+\" gebaut - SQL-Injection-Risiko"
+
+msgid "SVN call failed (exit code = %d)"
+msgstr "SVN-Aufruf fehlgeschlagen (Exit-Code = %d)"
+
+msgid "Save results"
+msgstr "Ergebnisse speichern"
+
+msgid "Saved, queueing analysis: %s"
+msgstr "Gespeichert, Analyse in Warteschlange: %s"
+
+msgid "Saved: "
+msgstr "Gespeichert: "
+
+msgid "Scanning... %d found"
+msgstr "Scanne... %d gefunden"
+
+msgid "Search: "
+msgstr "Suche: "
+
+msgid "Security Hotspot"
+msgstr "Security-Hotspot"
+
+msgid "Security holes (SQL injection, hardcoded secrets ...)."
+msgstr "Sicherheitsluecken (SQL-Injection, hardcoded Secrets ...)."
+
+msgid "Select Pascal file to analyse"
+msgstr "Pascal-Datei zur Analyse auswaehlen"
+
+msgid "Select project folder"
+msgstr "Projektordner auswaehlen"
+
+msgid "Settings..."
+msgstr "Einstellungen..."
+
+msgid "Settings: %s - changes take effect on the next analysis run."
+msgstr "Einstellungen: %s - Aenderungen greifen beim naechsten Analyse-Lauf."
+
+msgid "Severity"
+msgstr "Severity"
+
+msgid "Silent Mode"
+msgstr "Stiller Modus"
+
+msgid "Sonar export failed: "
+msgstr "Sonar-Export fehlgeschlagen: "
+
+msgid "Sonar push failed: "
+msgstr "Sonar-Push fehlgeschlagen: "
+
+msgid "Sonar push needs a project directory (run analysis first)."
+msgstr "Sonar-Push braucht ein Projektverzeichnis (zuerst analysieren)."
+
+msgid "Sonar push: select at least one finding first."
+msgstr "Sonar-Push: zuerst mindestens einen Befund auswaehlen."
+
+msgid "Sonar push: wrote %d issue file(s) to .sonar\\external\\"
+msgstr "Sonar-Push: %d Issue-Datei(en) nach .sonar\\external\\ geschrieben"
+
+msgid "Sonar report saved: %s"
+msgstr "Sonar-Report gespeichert: %s"
+
+msgid "Sonar report saved: %s (%d findings)"
+msgstr "Sonar-Report gespeichert: %s (%d Befunde)"
+
+msgid "Sonar: send selected as external issue"
+msgstr "Sonar: Auswahl als External Issue senden"
+
+msgid "Sonar: write Generic Issue report (all findings)..."
+msgstr "Sonar: Generic-Issue-Report schreiben (alle Befunde)..."
+
+msgid "Sonar: write Generic Issue report..."
+msgstr "Sonar: Generic-Issue-Report schreiben..."
+
+msgid "Static Code Analyser: analyse this file, no dock opens"
+msgstr "Static Code Analyser: diese Datei analysieren, ohne Dock zu oeffnen"
+
+msgid "Static Code Analysis"
+msgstr "Statische Code-Analyse"
+
+msgid "Summary"
+msgstr "Zusammenfassung"
+
+msgid "Suppress inserted: %s"
+msgstr "Suppression eingefuegt: %s"
+
+msgid "Suppress: cannot locate source line"
+msgstr "Suppression: Quelltext-Zeile nicht gefunden"
+
+msgid "Suppress: editor write failed (file not in IDE?)"
+msgstr "Suppression: Editor-Schreibvorgang fehlgeschlagen (Datei nicht in der IDE?)"
+
+msgid "Type"
+msgstr "Typ"
+
+msgid "Unexpected error: "
+msgstr "Unerwarteter Fehler: "
+
+msgid "Value"
+msgstr "Wert"
+
+msgid "Verify"
+msgstr "Verifizieren"
+
+msgid "Vulnerability"
+msgstr "Vulnerability"
+
+msgid "WARNING"
+msgstr "WARNUNG"
+
+msgid "Watch: could not attach to %s"
+msgstr "Watch: konnte nicht an %s anbinden"
+
+msgid "Watching: %s"
+msgstr "Beobachte: %s"
+
+msgid "Weighted quality score (lower = better)."
+msgstr "Gewichteter Qualitaets-Score (niedriger = besser)."
+
+msgid "Weights: Vulnerability 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2."
+msgstr "Gewichte: Vulnerability 10, Fehler 7, Hotspot 5, Warnung 3, Hinweis 1, Lesefehler 2."
+
+msgid "analyse only files changed in current branch"
+msgstr "nur Dateien analysieren die im aktuellen Branch geaendert wurden"
+
+msgid "default"
+msgstr "default"
+
+msgid "h2. Code analysis: "
+msgstr "h2. Code-Analyse: "
+
+msgid "in"
+msgstr "in"
+
+msgid "no findings"
+msgstr "keine Befunde"
+
+msgid "text"
+msgstr "Text"
+
+msgid "the modified code as a Pascal block. Keep diff minimal: only the lines that need to change. Match surrounding indentation and naming style."
+msgstr "der geaenderte Code als Pascal-Block. Diff minimal halten: nur die Zeilen die sich aendern muessen. Indent und Namensstil anpassen."
+
+msgid "what to test or check after the fix to confirm the issue is gone (and no regressions)."
+msgstr "was nach dem Fix zu testen ist um zu bestaetigen dass das Problem weg ist (und keine Regressionen entstanden)."
+
+msgid "▶ Analyse"
+msgstr "▶ Analysieren"
+
+msgid "📄 File"
+msgstr "📄 Datei"

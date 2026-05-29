@@ -1,0 +1,39 @@
+# GitHub Actions workflow: verifies that every _('...') source string has
+# a matching msgid in i18n/de.po and reports stale (dead) entries.
+#
+# Runs the reusable script tools/i18n_audit.sh in CI-mode (exit-code 1
+# on missing or dead entries). Auf jedem Push + PR aktiv damit der
+# 195er-Backlog (Stand 2026-05-30) nicht weiter waechst.
+#
+# Lokal vorab pruefen: `bash tools/i18n_audit.sh`
+
+name: i18n Coverage
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run i18n audit
+        run: |
+          chmod +x tools/i18n_audit.sh
+          bash tools/i18n_audit.sh
+
+      - name: Show missing strings (on failure)
+        if: failure()
+        run: |
+          echo "=== FEHLENDE de.po-Uebersetzungen ==="
+          bash tools/i18n_audit.sh --missing || true
+          echo ""
+          echo "=== TOTE de.po-Eintraege ==="
+          bash tools/i18n_audit.sh --dead || true
+          echo ""
+          echo "Backlog-Doku: Todo_I18nBacklog.md"
+          echo "Lokales Skript: tools/i18n_audit.sh"

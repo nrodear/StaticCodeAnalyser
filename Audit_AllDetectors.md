@@ -258,8 +258,24 @@ tools/i18n_audit.sh --json         # maschinenlesbar
 Exit-Code 0 wenn nichts fehlt, 1 sonst — CI-tauglich.
 
 **Empfehlung:** Skript als pre-commit-hook oder CI-Step verdrahten — dann
-scheitern PRs die neue `_()`-Strings ohne `de.po`-Eintrag einfuehren. Der
-195er-Backlog wird so sukzessive abgebaut statt zu wachsen.
+scheitern PRs die neue `_()`-Strings ohne `de.po`-Eintrag einfuehren.
+
+**Status nach Round-4-Backfill (2026-05-30):**
+
+- **Missing: 0** ✅ (war 195) — alle Source-Strings haben jetzt einen
+  `de.po`-Eintrag. Uebersetzungen sind Best-Effort; Review empfohlen
+  (Style/Terminologie).
+- **CI-Workflow** [.github/workflows/i18n-check.yml](.github/workflows/i18n-check.yml)
+  laeuft `tools/i18n_audit.sh` auf jedem Push + PR und scheitert
+  bei Backlog-Wachstum.
+- **Dead: 49** — Karteileichen aus alten Refactorings (Detector-Namen,
+  Keyboard-Shortcut-Tabellen). Beeinflussen den DE-UI nicht, nur das
+  po-File ist 49 Zeilen unaufgeraeumter Historie. Separat per poedit
+  oder Hand-Edit aufzuraeumen; sed-basierte Bulk-Loeschung am po-File
+  ist zu fehleranfaellig.
+- **Skript-Anpassung**: `tools/i18n_audit.sh` normalisiert jetzt
+  po-Escapes (`\"` → `"`, `\\` → `\`) vor dem Vergleich — sonst
+  Falschmeldungen bei Strings mit eingebetteten Quotes/Backslashes.
 
 ---
 
