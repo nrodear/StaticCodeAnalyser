@@ -218,13 +218,17 @@ begin
     begin
       Ident := M.Groups[1].Value;
 
-      // Type-Filter: nur weitermachen wenn die Identifier-Deklaration im
-      // selben File nach einem TThread-Descendant aussieht (Typ-Token
-      // enthaelt 'Thread'). Wenn keine Deklaration gefunden wird, weiter
-      // pruefen (extern deklarierter Identifier - konservativ flaggen).
+      // Type-Filter: nur weitermachen wenn der Identifier nach einem
+      // TThread-Descendant aussieht. Lookups in dieser Reihenfolge:
+      //   1. Spezialfall 'Result': aus Function-Header oben.
+      //   2. `<Ident> : <Type>;`-Deklaration im selben File.
+      //   3. `<Ident> := T<Type>.Create...` als Konstruktor-Call im selben
+      //      File - faengt cross-unit deklarierte Globals (z.B.
+      //      `gDfmRepoIndex` in uDfmRepoIndex.pas, instanziiert hier).
+      // Wenn KEINER der drei Lookups einen Typ liefert, faellt der
+      // konservative Pfad weiter (Befund + Suppress-Hinweis im Detail).
       DeclaredType := '';
       if SameText(Ident, 'Result') then
-        // Spezialfall: Function-Return - Typ kommt aus dem Method-Header.
         DeclaredType := ResolveResultType(M.Index)
       else
       begin
@@ -232,7 +236,18 @@ begin
           '(?i)\b' + Ident + '\s*:\s*([A-Za-z0-9_<>,\s.]+?)\s*(?:;|\)|=)');
         DeclMatch := ReDecl.Match(Code);
         if DeclMatch.Success then
-          DeclaredType := DeclMatch.Groups[1].Value;
+          DeclaredType := DeclMatch.Groups[1].Value
+        else
+        begin
+          // Fallback: Konstruktor-Call `<Ident> := TXxx.Create...`. Faengt
+          // cross-unit-deklarierte Identifier die hier nur instanziiert
+          // werden - typischer Pfad fuer globale Indizes/Caches.
+          ReDecl := TRegEx.Create(
+            '(?i)\b' + Ident + '\s*:=\s*(T\w+)\s*\.\s*Create\b');
+          DeclMatch := ReDecl.Match(Code);
+          if DeclMatch.Success then
+            DeclaredType := DeclMatch.Groups[1].Value;
+        end;
       end;
       if (DeclaredType <> '') and not LooksLikeThreadType(DeclaredType) then
         Continue;  // Kein TThread-Kontext -> kein Befund (vermeidet FP

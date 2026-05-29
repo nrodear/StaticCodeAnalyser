@@ -26,6 +26,9 @@ type
     // Spezialfall Result: Typ kommt aus dem Function-Header.
     [Test] procedure FreeAndNilResult_StringListReturn_NotReported;
     [Test] procedure FreeAndNilResult_ThreadReturn_Reported;
+    // Cross-Unit-Global: Identifier nicht im File deklariert, aber via
+    // Konstruktor-Call instanziiert -> Typ aus `:= TXxx.Create` ableiten.
+    [Test] procedure FreeAndNilCrossUnitGlobal_NotReported;
   end;
 
 implementation
@@ -206,6 +209,29 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate) >= 1);
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.FreeAndNilCrossUnitGlobal_NotReported;
+// Regression: gDfmRepoIndex / gAstFileCache / gSymbolRefIndex sind in
+// anderen Units deklariert, werden im uStaticAnalyzer2 nur instanziiert
+// und freigegeben. Vor dem Detector-Fix hat der `<Ident> : <Type>;`-
+// Regex die Deklaration im selben File nicht gefunden und konservativ
+// geflaggt. Jetzt zieht der Konstruktor-Call-Fallback den Typ aus
+// `:= TXxx.Create`.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure DoStuff;'#13#10 +
+  'begin'#13#10 +
+  '  gFoo := TMyIndex.Create;'#13#10 +
+  '  try gFoo.Build;'#13#10 +
+  '  except FreeAndNil(gFoo);'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate));
   finally F.Free; end;
 end;
 
