@@ -150,38 +150,53 @@ begin
             IsChrCall(Arg);
 end;
 
-procedure WalkAndCheck(Node, CurrentMethod: TAstNode; const FileName: string;
-  Results: TObjectList<TLeakFinding>);
+// Pruefen ob `Text` (Call-Name oder Assign-TypeRef) einen Char->PChar-Cast
+// enthaelt; bei Treffer Befund anlegen. Wird sowohl fuer nkCall (bare call,
+// z.B. SomeProc(PChar('A'))) als auch fuer nkAssign.TypeRef (typischer
+// Fall: p := PChar('A')) aufgerufen - der Parser packt die RHS einer
+// Zuweisung in TypeRef statt einen separaten nkCall-Knoten anzulegen.
+procedure CheckCastText(const Text: string; Node, CurrentMethod: TAstNode;
+  const FileName: string; Results: TObjectList<TLeakFinding>);
 var
-  i        : Integer;
   F        : TLeakFinding;
   MethName : string;
   CastType : string;
   Arg      : string;
+begin
+  CastType := DetectPCharCast(Text);
+  if CastType = '' then Exit;
+  Arg := ExtractCastArg(Text);
+  if not ArgLooksLikeChar(Arg) then Exit;
+  if Assigned(CurrentMethod) then MethName := CurrentMethod.Name
+  else MethName := '';
+  F            := TLeakFinding.Create;
+  F.FileName   := FileName;
+  F.MethodName := MethName;
+  F.LineNumber := IntToStr(Node.Line);
+  F.MissingVar := Format(
+    '%s(Char) reinterprets codepoint as pointer - undefined behavior',
+    [CastType]);
+  F.SetKind(fkCharToCharPointerCast);
+  Results.Add(F);
+end;
+
+procedure WalkAndCheck(Node, CurrentMethod: TAstNode; const FileName: string;
+  Results: TObjectList<TLeakFinding>);
+var
+  i        : Integer;
   NextMeth : TAstNode;
 begin
   if Node = nil then Exit;
-  if Node.Kind = nkCall then
-  begin
-    CastType := DetectPCharCast(Node.Name);
-    if CastType <> '' then
-    begin
-      Arg := ExtractCastArg(Node.Name);
-      if ArgLooksLikeChar(Arg) then
-      begin
-        if Assigned(CurrentMethod) then MethName := CurrentMethod.Name
-        else MethName := '';
-        F            := TLeakFinding.Create;
-        F.FileName   := FileName;
-        F.MethodName := MethName;
-        F.LineNumber := IntToStr(Node.Line);
-        F.MissingVar := Format(
-          '%s(Char) reinterprets codepoint as pointer - undefined behavior',
-          [CastType]);
-        F.SetKind(fkCharToCharPointerCast);
-        Results.Add(F);
-      end;
-    end;
+  case Node.Kind of
+    nkCall:
+      // Bare call, z.B. `SomeProc(PChar('A'))` - Name traegt den Cast.
+      CheckCastText(Node.Name, Node, CurrentMethod, FileName, Results);
+    nkAssign:
+      // `p := PChar('A');` - der Parser legt die RHS in TypeRef ab und
+      // erzeugt KEINEN separaten nkCall-Knoten. Wir muessen also das
+      // TypeRef-Feld zusaetzlich scannen, sonst werden alle Assign-
+      // basierten PChar-Casts schweigend uebersehen.
+      CheckCastText(Node.TypeRef, Node, CurrentMethod, FileName, Results);
   end;
   if Node.Kind = nkMethod then NextMeth := Node else NextMeth := CurrentMethod;
   for i := 0 to Node.Children.Count - 1 do

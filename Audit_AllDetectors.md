@@ -264,6 +264,52 @@ Backlog-Strings sukzessive aufgeräumt, statt zu wachsen.
 
 ---
 
+### V5 — Detektor walken nkCall, Pattern lebt in nkAssign.TypeRef (entdeckt 2026-05-30)
+
+Nach der V1-Registrierung der 23 Geister-Tests: **34 Tests rot** beim ersten
+Lauf. Triage: kein Test-Bug, sondern **echte Detector-Bugs**, die nur deshalb
+seit Jahren unbemerkt waren weil die Tests nie liefen.
+
+**Root-Cause:** Der Parser ([uParser2.pas:1617-1621](StaticCodeAnalyserForm/sources/Parsing/uParser2.pas#L1617))
+unterscheidet:
+
+```pascal
+// Assignment: p := PChar('A');
+Node := Parent.Add(nkAssign, LHS, ...);   // LHS = 'p'
+Node.TypeRef := FullRHS;                  // 'PChar(''A'')'
+// Bare call: SomeProc(PChar('A'));
+Parent.Add(nkCall, LHS, ...);             // LHS = 'PChar(''A'')'
+```
+
+Die jetzt gescheiterten Detektoren (`uCharToCharPointerCast`, `uDateFormatSettings`,
+`uIfThenShortCircuit` und vermutlich weitere) walken **nur** `nkCall` und sehen
+den Cast in `nkAssign.TypeRef` deshalb nie. Bei Assignment-RHS-Patterns
+(`p := PChar('A')`, `dt := StrToDate('1.1.2025')`, `b := IfThen(c, A(), B())`)
+schlagen sie schweigend nicht an.
+
+**Fix-Schablone** (siehe `uCharToCharPointerCast` Commit `XXX`):
+
+```pascal
+case Node.Kind of
+  nkCall:   CheckPattern(Node.Name, ...);     // bare-call-Pfad
+  nkAssign: CheckPattern(Node.TypeRef, ...);  // RHS-of-assignment-Pfad
+end;
+```
+
+**Backlog** (pro fk-Konstante prüfen ob die Schablone passt):
+
+| Fixture | fk | Status |
+|---------|----|----|
+| TTestCharToCharPointerCast (6 Tests) | fkCharToCharPointerCast | 🔧 Schablone angewendet — bitte verifizieren |
+| TTestDateFormatSettings (5) | fkDateFormatSettings | 🟡 wahrscheinlich gleiche Schablone |
+| TTestIfThenShortCircuit (5) | fkIfThenShortCircuit | 🟡 wahrscheinlich gleiche Schablone |
+| TTestInheritedMethodEmpty (3) | fkInheritedMethodEmpty | ❓ andere Logik (Method-Body, nicht Typecast) |
+| TTestLeakInConstructor (2) | fkLeakInConstructor | ❓ andere Logik (Constructor-Body) |
+| übrige ~13 Tests (nicht im Screenshot) | div. | ❓ pro Detektor triagieren |
+
+Die "andere Logik"-Detektoren brauchen individuelle Analyse — die nkAssign-
+Schablone hilft nur Typecast-/Function-Call-Erkennern.
+
 ## Action-Items
 
 1. **Sofort** — Konsistenz-Tests laufen lassen (5 Min). Wenn rot, Lücke gemäß Test-Message schließen. Wenn grün, ist Block A abgehakt.
