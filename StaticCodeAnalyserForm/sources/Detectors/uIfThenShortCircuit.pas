@@ -117,35 +117,42 @@ begin
     if Cleaned[i] = '(' then Exit(True);
 end;
 
+// Pruefen ob `Text` ein `IfThen(...)`-Call mit verschachteltem Call-
+// Argument ist. Wird fuer nkCall (bare) UND nkAssign.TypeRef (RHS einer
+// Zuweisung wie `r := IfThen(c, A(), B())`) aufgerufen - sonst silent
+// miss aller Assignment-Form-Treffer (Audit V5, 2026-05-30).
+procedure CheckIfThenText(const Text: string; Node, CurrentMethod: TAstNode;
+  const FileName: string; Results: TObjectList<TLeakFinding>);
+var
+  F        : TLeakFinding;
+  MethName : string;
+  Args     : string;
+begin
+  if not IsIfThenCall(Text) then Exit;
+  Args := ExtractOuterArgs(Text);
+  if not ArgsContainNestedCall(Args) then Exit;
+  if Assigned(CurrentMethod) then MethName := CurrentMethod.Name
+  else MethName := '';
+  F            := TLeakFinding.Create;
+  F.FileName   := FileName;
+  F.MethodName := MethName;
+  F.LineNumber := IntToStr(Node.Line);
+  F.MissingVar :=
+    'IfThen() always evaluates both branches - use if/then/else for side-effecting calls';
+  F.SetKind(fkIfThenShortCircuit);
+  Results.Add(F);
+end;
+
 procedure WalkAndCheck(Node, CurrentMethod: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>);
 var
   i        : Integer;
-  F        : TLeakFinding;
-  MethName : string;
-  Args     : string;
   NextMeth : TAstNode;
 begin
   if Node = nil then Exit;
-  if Node.Kind = nkCall then
-  begin
-    if IsIfThenCall(Node.Name) then
-    begin
-      Args := ExtractOuterArgs(Node.Name);
-      if ArgsContainNestedCall(Args) then
-      begin
-        if Assigned(CurrentMethod) then MethName := CurrentMethod.Name
-        else MethName := '';
-        F            := TLeakFinding.Create;
-        F.FileName   := FileName;
-        F.MethodName := MethName;
-        F.LineNumber := IntToStr(Node.Line);
-        F.MissingVar :=
-          'IfThen() always evaluates both branches - use if/then/else for side-effecting calls';
-        F.SetKind(fkIfThenShortCircuit);
-        Results.Add(F);
-      end;
-    end;
+  case Node.Kind of
+    nkCall:   CheckIfThenText(Node.Name,    Node, CurrentMethod, FileName, Results);
+    nkAssign: CheckIfThenText(Node.TypeRef, Node, CurrentMethod, FileName, Results);
   end;
   if Node.Kind = nkMethod then NextMeth := Node else NextMeth := CurrentMethod;
   for i := 0 to Node.Children.Count - 1 do

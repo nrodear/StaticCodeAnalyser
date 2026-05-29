@@ -300,12 +300,15 @@ end;
 
 | Fixture | fk | Status |
 |---------|----|----|
-| TTestCharToCharPointerCast (6 Tests) | fkCharToCharPointerCast | 🔧 Schablone angewendet — bitte verifizieren |
-| TTestDateFormatSettings (5) | fkDateFormatSettings | 🟡 wahrscheinlich gleiche Schablone |
-| TTestIfThenShortCircuit (5) | fkIfThenShortCircuit | 🟡 wahrscheinlich gleiche Schablone |
-| TTestInheritedMethodEmpty (3) | fkInheritedMethodEmpty | ❓ andere Logik (Method-Body, nicht Typecast) |
-| TTestLeakInConstructor (2) | fkLeakInConstructor | ❓ andere Logik (Constructor-Body) |
-| übrige ~13 Tests (nicht im Screenshot) | div. | ❓ pro Detektor triagieren |
+| TTestCharToCharPointerCast (6 Tests) | fkCharToCharPointerCast | ✅ Schablone gefixt (5/6 grün, `PCharHexOrdinal_Reported` Edge-Case offen) |
+| TTestDateFormatSettings (5+1) | fkDateFormatSettings | ✅ Schablone angewendet |
+| TTestIfThenShortCircuit (5+1) | fkIfThenShortCircuit | ✅ Schablone angewendet |
+| TTestInheritedMethodEmpty (3+1) | fkInheritedMethodEmpty | ❌ **kein nkCall/nkAssign-Mismatch** — Detector nutzt TypeRef bereits intern. Andere Root-Cause, braucht individuelle Triage. |
+| TTestLeakInConstructor (1+1) | fkLeakInConstructor | ❌ dito |
+| TTestMagicNumbers (1+1) | fkMagicNumber | ❌ dito |
+| TTestNilComparison (1) | fkNilComparison | ❌ dito |
+| TTestNilDeref (1+1) | fkNilDeref | ❌ dito |
+| TTestRoutineResultAssigned (1+1) | fkRoutineResultUnassigned | ❌ dito |
 
 Die "andere Logik"-Detektoren brauchen individuelle Analyse — die nkAssign-
 Schablone hilft nur Typecast-/Function-Call-Erkennern.
