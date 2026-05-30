@@ -16,6 +16,16 @@
 //   * Konservativ: nur direkte Stringliterale, keine Konkat-Ketten
 //     (die werden bereits von uSQLInjection mit anderem Bias erfasst).
 //
+// SQL-Shape-Validierung (FP-Schutz gegen englische Meldungstexte):
+//   * UPDATE-Match braucht zusaetzlich ' set ' im Fragment - sonst ist
+//     der String ein Error-Message-Literal wie 'Update failed for X'
+//     und kein SQL-Statement.
+//   * Bare 'DELETE ' (ohne FROM) wird gar nicht erst gematcht - echtes
+//     SQL-DELETE hat per Syntax IMMER FROM, sodass ein Match ohne FROM
+//     immer englischer Text waere ('Delete failed', 'Cannot delete').
+//   * TRUNCATE bleibt liberal - in Delphi-Quellen praktisch nie als
+//     englisches Verb verwendet, der DB-Schaden waere maximal.
+//
 // Severity: lsError (Production-Disaster).
 
 interface
@@ -46,8 +56,11 @@ const
 class function TSqlDangerousStatementDetector.FindDangerousVerb(
   const Low: string; out Verb: string): Boolean;
 const
-  VERBS : array[0..3] of string = (
-    '''update ', '''delete from ', '''delete ', '''truncate '
+  // Bare 'delete ' (ohne FROM) bewusst NICHT in der Liste - echtes SQL-DELETE
+  // hat per Syntax immer FROM; ein Match ohne FROM waere garantiert englischer
+  // Text ('Delete failed', 'Cannot delete record', ...).
+  VERBS : array[0..2] of string = (
+    '''update ', '''delete from ', '''truncate '
   );
 var
   Merged : string;
@@ -73,10 +86,16 @@ begin
     if EndPos <= 0 then EndPos := Length(Merged);
     Fragment := Copy(Merged, P, EndPos - P + 1);
 
+    // SQL-Shape-Validierung: UPDATE braucht ' set ' im Fragment, sonst ist
+    // es ein englisches Error-Message-Literal ('Update failed for X') und
+    // kein SQL-Statement. DELETE FROM und TRUNCATE sind in Pascal-Literalen
+    // spezifisch genug, dass keine zusaetzliche Pruefung noetig ist.
+    if (V = '''update ') and (Pos(' set ', Fragment) = 0) then Continue;
+
     // Pruefen ob WHERE vorkommt (Fragment ist bereits lowercase, siehe Caller).
     if Pos(' where ', Fragment) > 0 then Continue;
     // TRUNCATE ist immer gefaehrlich (kein WHERE moeglich).
-    // UPDATE/DELETE FROM/DELETE: WHERE fehlt -> Treffer.
+    // UPDATE/DELETE FROM: WHERE fehlt -> Treffer.
     Verb := Trim(V);
     // Apostroph-Praefix abschneiden fuer den User-Output
     if (Length(Verb) > 0) and (Verb[1] = '''') then

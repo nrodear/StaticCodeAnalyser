@@ -164,6 +164,8 @@ uses
   uTestEmptyOnHandler in 'uTestEmptyOnHandler.pas',
   uTestStringFromPointer in 'uTestStringFromPointer.pas',
   uTestPointerSubtraction in 'uTestPointerSubtraction.pas',
+  uTestInsecureCryptoAlgorithm in 'uTestInsecureCryptoAlgorithm.pas',
+  uTestCommandInjection in 'uTestCommandInjection.pas',
   uTestSuppressionCompleteness in 'uTestSuppressionCompleteness.pas',
   // ---- Geister-Tests nachregistriert (Audit_AllDetectors.md V1, 2026-05-30) ----
   uTestAbstractNotImpl in 'uTestAbstractNotImpl.pas',

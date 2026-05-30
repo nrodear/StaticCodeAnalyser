@@ -28,6 +28,19 @@ type
     [Test] procedure SqlDanger_TripleConcatWithWhere_NoFinding;
     [Test] procedure SqlDanger_ConcatStillNoWhere_Reported;
 
+    // ---- FP-Regression: englischer Meldungstext mit SQL-Verb -------------
+    [Test] procedure SqlDanger_UpdateInErrorMessage_NoFinding;
+    [Test] procedure SqlDanger_DeleteInErrorMessage_NoFinding;
+    [Test] procedure SqlDanger_UpdateNounInMessage_NoFinding;
+    // ---- NATO-Permutationen: 26 englische Meldungs-Variationen je Verb ---
+    // Schiesst durch das gesamte NATO-Phonetic-Alphabet als Substantiv, um
+    // sicherzustellen dass der FP-Schutz nicht nur die konkrete 'CreFoId'-
+    // Formulierung abdeckt. Eine einzige fehlschlagende Permutation =
+    // gemeldetes Wort + Verb in der Fehlermeldung sichtbar.
+    [Test] procedure SqlDanger_UpdateNatoEnglish_NoFinding;
+    [Test] procedure SqlDanger_DeleteNatoEnglish_NoFinding;
+    [Test] procedure SqlDanger_NatoTableNames_StillFlagged;
+
     // ---- Finding-Inhalt ---------------------------------------------------
     [Test] procedure SqlDanger_Finding_KindAndSeverity;
     [Test] procedure SqlDanger_Multiple_AllReported;
@@ -247,6 +260,147 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
   finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_UpdateInErrorMessage_NoFinding;
+// FP-Regression aus Real-World-Code (RHDInternalAPI_NextGen, Debtor.Service.pas):
+// Englische Error-Message beginnt mit dem Wort 'Update' aber enthaelt kein
+// SQL. Detector muss erkennen dass ohne ' set ' im Fragment keine
+// UPDATE-Syntax vorliegt und darf nicht feuern.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var mErrorText: string;'#13#10 +
+  'begin mErrorText := ''Update failed for CreFoId''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_DeleteInErrorMessage_NoFinding;
+// FP-Schutz: 'Delete failed' / 'Could not delete' - SQL-DELETE hat per
+// Syntax IMMER FROM, also darf bare 'delete ' nicht matchen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var msg: string;'#13#10 +
+  'begin msg := ''Delete failed for order #5''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_UpdateNounInMessage_NoFinding;
+// 'Update' als Substantiv in einem Meldungstext - kein SQL.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var msg: string;'#13#10 +
+  'begin msg := ''Update notification for user #42''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
+  finally F.Free; end;
+end;
+
+// NATO-Phonetic-Alphabet als Test-Daten-Permutation. Wird von drei Tests
+// genutzt: zwei negative (englische Meldungen), eine positive (echte SQL
+// mit NATO-Worten als Tabellennamen).
+const
+  NATO_WORDS : array[0..25] of string = (
+    'Alfa',    'Bravo',   'Charlie', 'Delta',   'Echo',
+    'Foxtrot', 'Golf',    'Hotel',   'India',   'Juliet',
+    'Kilo',    'Lima',    'Mike',    'November','Oscar',
+    'Papa',    'Quebec',  'Romeo',   'Sierra',  'Tango',
+    'Uniform', 'Victor',  'Whiskey', 'Xray',    'Yankee',
+    'Zulu'
+  );
+
+procedure TTestSqlDangerousStatement.SqlDanger_UpdateNatoEnglish_NoFinding;
+// 26 Permutationen: 'Update <Nato> failed for record'. Keine darf
+// als SQL-Bug gemeldet werden. Failure-Message nennt das verantwortliche
+// NATO-Wort damit Regressionen sofort lokalisierbar sind.
+var
+  Word    : string;
+  Source  : string;
+  Finds   : TObjectList<TLeakFinding>;
+begin
+  for Word in NATO_WORDS do
+  begin
+    Source :=
+      'unit t; implementation'#13#10 +
+      'procedure Foo;'#13#10 +
+      'var msg: string;'#13#10 +
+      'begin msg := ''Update ' + Word + ' failed for record''; end;';
+    Finds := TFindingHelper.FindingsOf(Source);
+    try
+      Assert.AreEqual(0, TFindingHelper.Count(Finds, fkSqlDangerousStatement),
+        Format('FP fuer NATO-Wort "%s" - "Update %s failed for record" ist kein SQL',
+          [Word, Word]));
+    finally
+      Finds.Free;
+    end;
+  end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_DeleteNatoEnglish_NoFinding;
+// Analog zu Update-Variante: 'Delete <Nato> not authorized'. Da der
+// Detector bare 'delete ' (ohne FROM) gar nicht mehr matcht, muessen
+// alle 26 Permutationen leise durchlaufen.
+var
+  Word    : string;
+  Source  : string;
+  Finds   : TObjectList<TLeakFinding>;
+begin
+  for Word in NATO_WORDS do
+  begin
+    Source :=
+      'unit t; implementation'#13#10 +
+      'procedure Foo;'#13#10 +
+      'var msg: string;'#13#10 +
+      'begin msg := ''Delete ' + Word + ' not authorized''; end;';
+    Finds := TFindingHelper.FindingsOf(Source);
+    try
+      Assert.AreEqual(0, TFindingHelper.Count(Finds, fkSqlDangerousStatement),
+        Format('FP fuer NATO-Wort "%s" - "Delete %s not authorized" ist kein SQL',
+          [Word, Word]));
+    finally
+      Finds.Free;
+    end;
+  end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_NatoTableNames_StillFlagged;
+// Gegen-Test: ECHTE gefaehrliche SQL mit NATO-Tabellennamen. Stellt
+// sicher dass der FP-Fix nicht versehentlich das halbe Vokabular
+// suppressed - jedes NATO-Wort muss als Tabellenname weiterhin einen
+// Bug ausloesen, sobald die UPDATE-Syntax (SET ohne WHERE) erfuellt ist.
+var
+  Word    : string;
+  Source  : string;
+  Finds   : TObjectList<TLeakFinding>;
+begin
+  for Word in NATO_WORDS do
+  begin
+    Source :=
+      'unit t; implementation'#13#10 +
+      'procedure Foo;'#13#10 +
+      'var q: TFDQuery;'#13#10 +
+      'begin q.SQL.Text := ''UPDATE ' + Word + ' SET status=1''; end;';
+    Finds := TFindingHelper.FindingsOf(Source);
+    try
+      Assert.IsTrue(TFindingHelper.Count(Finds, fkSqlDangerousStatement) >= 1,
+        Format('Tabellenname "%s" - echte gefaehrliche UPDATE-SQL wurde nicht erkannt',
+          [Word]));
+    finally
+      Finds.Free;
+    end;
+  end;
 end;
 
 procedure TTestSqlDangerousStatement.SqlDanger_ConcatStillNoWhere_Reported;

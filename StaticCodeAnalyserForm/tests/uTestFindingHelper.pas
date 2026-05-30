@@ -54,6 +54,7 @@ uses
   uUnpairedLock, uMoveSizeOfPointer, uWithMultipleTargets,
   uGetMemWithoutFreeMem, uSetLengthAppendInLoop, uPointerArithmeticOnString,
   uEmptyOnHandler, uStringFromPointer, uPointerSubtraction,
+  uInsecureCryptoAlgorithm, uCommandInjection,
   uStaticAnalyzer2,
   uTestSrcBuilder,
   System.IOUtils;
@@ -139,6 +140,8 @@ begin
       TUnusedLocalDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TUnusedParameterDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TSqlDangerousStatementDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TInsecureCryptoAlgorithmDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TCommandInjectionDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TSynchronizeInDestructorDetector.AnalyzeUnit(Root, 'test.pas', Result);
       TNamingExtDetector.AnalyzeUnit(Root, 'test.pas', Result);
       // TTodoCommentDetector / TReversedForRangeDetector / TLengthUnderflowDetector /

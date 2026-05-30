@@ -99,7 +99,8 @@ uses
   uBoolAlwaysTrue, uConstantReturn, uHardcodedString,
   uUnpairedLock, uMoveSizeOfPointer, uWithMultipleTargets,
   uGetMemWithoutFreeMem, uSetLengthAppendInLoop, uPointerArithmeticOnString,
-  uEmptyOnHandler, uStringFromPointer, uPointerSubtraction;
+  uEmptyOnHandler, uStringFromPointer, uPointerSubtraction,
+  uInsecureCryptoAlgorithm, uCommandInjection;
 
 type
   // Run-Methode pro Detektor: einheitliche Signatur, damit alle in einem
@@ -293,6 +294,9 @@ begin
   AddD('EmptyOnHandler', fkEmptyOnHandler, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TEmptyOnHandlerDetector.AnalyzeUnit(R, F, L); end);
   AddD('StringFromPointer', fkStringFromPointer, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TStringFromPointerDetector.AnalyzeUnit(R, F, L); end);
   AddD('PointerSubtraction', fkPointerSubtraction, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TPointerSubtractionDetector.AnalyzeUnit(R, F, L); end);
+  // Security-Familie: schwache Krypto + Command-Injection.
+  AddD('InsecureCryptoAlgorithm', fkInsecureCryptoAlgorithm, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TInsecureCryptoAlgorithmDetector.AnalyzeUnit(R, F, L); end);
+  AddD('CommandInjection', fkCommandInjection, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TCommandInjectionDetector.AnalyzeUnit(R, F, L); end);
   AddD('VirtualCallInCtor',fkVirtualCallInCtor,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TVirtualCallInCtorDetector.AnalyzeUnit(R, F, L); end);
   AddD('LengthUnderflow', fkLengthUnderflow, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLengthUnderflowDetector.AnalyzeUnit(R, F, L); end);
   // VisibilityCheck emittiert vier Kinds (CanBeUnitPrivate, CanBeStrict-

@@ -80,6 +80,8 @@ uses
   uSymbolReferenceIndex in 'sources\Infrastructure\uSymbolReferenceIndex.pas',
   uVcsChanges in 'sources\Infrastructure\uVcsChanges.pas',
   uPointerSubtraction in 'sources\Detectors\uPointerSubtraction.pas',
+  uInsecureCryptoAlgorithm in 'sources\Detectors\uInsecureCryptoAlgorithm.pas',
+  uCommandInjection in 'sources\Detectors\uCommandInjection.pas',
   uStringFromPointer in 'sources\Detectors\uStringFromPointer.pas',
   uEmptyOnHandler in 'sources\Detectors\uEmptyOnHandler.pas',
   uUnusedPrivateMethod in 'sources\Detectors\uUnusedPrivateMethod.pas',

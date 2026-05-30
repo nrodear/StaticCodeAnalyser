@@ -305,6 +305,8 @@
         <DCCReference Include="uTestEmptyOnHandler.pas"/>
         <DCCReference Include="uTestStringFromPointer.pas"/>
         <DCCReference Include="uTestPointerSubtraction.pas"/>
+        <DCCReference Include="uTestInsecureCryptoAlgorithm.pas"/>
+        <DCCReference Include="uTestCommandInjection.pas"/>
         <DCCReference Include="uTestSuppressionCompleteness.pas"/>
         <DCCReference Include="uTestAbstractNotImpl.pas"/>
         <DCCReference Include="uTestCastAndFree.pas"/>

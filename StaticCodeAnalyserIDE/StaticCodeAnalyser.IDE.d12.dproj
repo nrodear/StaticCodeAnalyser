@@ -389,6 +389,8 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyOnHandler.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uStringFromPointer.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uPointerSubtraction.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uInsecureCryptoAlgorithm.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCommandInjection.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

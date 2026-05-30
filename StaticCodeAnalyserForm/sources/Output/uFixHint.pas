@@ -3877,6 +3877,67 @@ begin
         '// take Length explicitly and avoid this trap.';
     end;
 
+    fkInsecureCryptoAlgorithm:
+    begin
+      Result.Description := _('Weak/deprecated crypto algorithm in use');
+      Result.Before :=
+        'algo := ''MD5'';                       // <- broken since 2004'#13#10 +
+        'Hash := THashMD5.GetHashString(Input); // <- wrapper class'#13#10 +
+        ''#13#10 +
+        '// SSL/TLS context:'#13#10 +
+        'Client.SecureProtocols := [tls10, tls11]; // <- deprecated'#13#10 +
+        ''#13#10 +
+        '// Why this is dangerous:'#13#10 +
+        '//   MD5  - practical collisions, not safe for signatures'#13#10 +
+        '//   SHA1 - chosen-prefix collision (SHAttered 2017)'#13#10 +
+        '//   DES  - 56-bit key, brute-forceable'#13#10 +
+        '//   3DES - Sweet32 CBC collision (CVE-2016-2183)'#13#10 +
+        '//   RC4  - statistical biases, prohibited by RFC 7465'#13#10 +
+        '//   TLS 1.0/1.1 - RFC 8996 deprecated (BEAST, POODLE)'#13#10 +
+        '//   SSLv3 - POODLE (CVE-2014-3566)';
+      Result.After :=
+        'algo := ''SHA256'';                    // collision-resistant'#13#10 +
+        'Hash := THashSHA2.GetHashString(Input);'#13#10 +
+        ''#13#10 +
+        '// For password hashing prefer Argon2 / bcrypt / scrypt -'#13#10 +
+        '// SHA-256 alone is still too fast for brute-force defence.'#13#10 +
+        ''#13#10 +
+        '// Symmetric encryption: AES-GCM or AES-CCM (authenticated).'#13#10 +
+        '// TLS: minimum 1.2, prefer 1.3:'#13#10 +
+        'Client.SecureProtocols := [tls12, tls13];';
+    end;
+
+    fkCommandInjection:
+    begin
+      Result.Description := _('Shell API called with string concatenation in arguments');
+      Result.Before :=
+        'ShellExecute(0, ''open'','#13#10 +
+        '  PChar(''cmd /c '' + UserInput),     // <- injection vector'#13#10 +
+        '  nil, nil, SW_SHOW);'#13#10 +
+        ''#13#10 +
+        '// If UserInput is "harmless & rmdir /s /q C:\Data", the shell'#13#10 +
+        '// parses the & as a command separator and runs both commands.'#13#10 +
+        ''#13#10 +
+        '// CWE-78: Improper Neutralization of Special Elements used'#13#10 +
+        '// in an OS Command (''OS Command Injection'').';
+      Result.After :=
+        '// Option 1: Hand args via the structured array (no concat).'#13#10 +
+        'var SEI: TShellExecuteInfo;'#13#10 +
+        'FillChar(SEI, SizeOf(SEI), 0);'#13#10 +
+        'SEI.cbSize     := SizeOf(SEI);'#13#10 +
+        'SEI.lpVerb     := ''open'';'#13#10 +
+        'SEI.lpFile     := ''cmd.exe'';'#13#10 +
+        'SEI.lpParameters := PChar(''/c '' + SafeWhitelistedCommand);'#13#10 +
+        'SEI.nShow      := SW_SHOW;'#13#10 +
+        'ShellExecuteEx(@SEI);'#13#10 +
+        ''#13#10 +
+        '// Option 2: whitelist user input first.'#13#10 +
+        'if MatchesWhitelist(UserInput) then'#13#10 +
+        '  // ... proceed'#13#10 +
+        'else'#13#10 +
+        '  raise EArgumentException.Create(''Invalid command'');';
+    end;
+
     fkPointerSubtraction:
     begin
       Result.Description := _('Cardinal/Integer subtraction on pointers truncates upper 32 bits on Win64');

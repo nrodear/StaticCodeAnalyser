@@ -254,6 +254,8 @@ contains
   uPointerArithmeticOnString in '..\StaticCodeAnalyserForm\sources\Detectors\uPointerArithmeticOnString.pas',
   uEmptyOnHandler in '..\StaticCodeAnalyserForm\sources\Detectors\uEmptyOnHandler.pas',
   uStringFromPointer in '..\StaticCodeAnalyserForm\sources\Detectors\uStringFromPointer.pas',
-  uPointerSubtraction in '..\StaticCodeAnalyserForm\sources\Detectors\uPointerSubtraction.pas';
+  uPointerSubtraction in '..\StaticCodeAnalyserForm\sources\Detectors\uPointerSubtraction.pas',
+  uInsecureCryptoAlgorithm in '..\StaticCodeAnalyserForm\sources\Detectors\uInsecureCryptoAlgorithm.pas',
+  uCommandInjection in '..\StaticCodeAnalyserForm\sources\Detectors\uCommandInjection.pas';
 
 end.

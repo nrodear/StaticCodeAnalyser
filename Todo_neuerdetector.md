@@ -5,8 +5,114 @@ Alle Touch-Points sind hier dokumentiert, damit nichts vergessen wird
 (Compile-Fehler durch fehlende DCCReferences, Tests die den Detektor
 nicht sehen, fehlende Combo-Einträge in nur einer der zwei Formen, ...).
 
-Stand: 2026-05-20 — abgeleitet aus dem SCA132/133-Rollout
-(uExceptionTooGeneral + uRaiseOutsideExcept).
+Stand: 2026-05-30 — letzter Lauf SCA162 (InsecureCryptoAlgorithm) +
+SCA163 (CommandInjection). Davor: SCA132/133-Rollout (2026-05-20).
+
+---
+
+## Aktueller Lauf — 2026-05-30: SCA162 + SCA163
+
+Zwei Security-Detektoren in einer Welle, beide aus der "Top-5 fehlt im
+Repo"-Analyse (siehe [`Todo_FalsePositiveReduction.md`](Todo_FalsePositiveReduction.md)
+und Konversations-Kontext "welche Top-5 sind schon vorhanden"). Drei der
+fünf Vorschläge waren bereits abgedeckt
+([`uHardcodedSecret.pas`](StaticCodeAnalyserForm/sources/Detectors/uHardcodedSecret.pas),
+[`uHardcodedPath.pas`](StaticCodeAnalyserForm/sources/Detectors/uHardcodedPath.pas),
+[`uFormatMismatch.pas`](StaticCodeAnalyserForm/sources/Detectors/uFormatMismatch.pas));
+die verbleibenden zwei werden mit diesem Lauf geschlossen.
+
+### SCA162 — InsecureCryptoAlgorithm
+
+- **Was**: Verwendung schwacher Krypto-Verfahren (MD5/SHA1/DES/3DES/RC4)
+  oder veralteter TLS-Versionen (TLS1.0/TLS1.1/SSLv3) - per Stringliteral
+  oder Klassen-Wrapper (THashMD5, TIdHashSHA1, …).
+- **Severity**: `lsWarning` · **Type**: `ftVulnerability`
+- **Confidence**: `fcHigh` (Default - die Token-Liste ist eindeutig).
+- **CWE/OWASP**: CWE-327, CWE-328 · OWASP A02:2021.
+
+### SCA163 — CommandInjection
+
+- **Was**: `ShellExecute`/`CreateProcess`/`WinExec` aufgerufen mit
+  String-Konkatenation (`+`) im Command-Argument. Heuristik ohne
+  Taint-Tracking - Confidence default `fcLow`, damit das Finding im
+  Standard-Profil (MinConfidence=fcMedium) zuerst versteckt bleibt.
+- **Severity**: `lsError` · **Type**: `ftVulnerability`
+- **Confidence**: `fcLow` (explizit gesetzt in `AnalyzeMethod`, weil
+  Konkatenation mit Konstanten harmlos ist - ohne Taint-Analyse nicht
+  unterscheidbar).
+- **CWE/OWASP**: CWE-78 · OWASP A03:2021.
+
+### Touch-Points (abgehakt)
+
+- [x] **uSCAConsts.pas** — `fkInsecureCryptoAlgorithm` + `fkCommandInjection`
+  ins `TFindingKind`-Enum + `KIND_META`-Array (Komma vor neuem
+  letzten Eintrag korrigiert).
+- [x] **uInsecureCryptoAlgorithm.pas** — neu in
+  [`StaticCodeAnalyserForm/sources/Detectors/`](StaticCodeAnalyserForm/sources/Detectors/uInsecureCryptoAlgorithm.pas).
+  Hybrid: Wortgrenz-Match auf `WEAK_ALGO_TOKENS` + Substring-Match auf
+  `WEAK_CLASS_TOKENS`. Dedup pro `(line, hit)` damit
+  `Hash := THashMD5.Create` nicht zweimal flaggt (einmal über
+  `nkAssign.TypeRef`, einmal über `nkCall.Name`).
+- [x] **uCommandInjection.pas** — neu in
+  [`StaticCodeAnalyserForm/sources/Detectors/`](StaticCodeAnalyserForm/sources/Detectors/uCommandInjection.pas).
+  AST-Scan auf `nkCall`, Method-Path-Suffix-Match gegen `SHELL_APIS`,
+  Args-Scan mit Apostroph-State-Tracking damit `+` IM Literal nicht zählt.
+- [x] **uStaticAnalyzer2.pas** — `uses`-Klausel erweitert, zwei
+  `AddD(...)`-Aufrufe nach `PointerSubtraction`.
+- [x] **uTestFindingHelper.pas** — uses-Klausel + zwei
+  `T<Name>Detector.AnalyzeUnit(Root, 'test.pas', Result)`-Aufrufe in
+  `FindingsOf` (AST-only, beide Detektoren brauchen kein File-IO).
+- [x] **uTestInsecureCryptoAlgorithm.pas** — 15 Tests (6 positive Algo-
+  Token, 2 positive Klassen-Wrapper, 3 negative starke Algorithmen,
+  2 Wortgrenz-FP-Schutz, Kind/Severity, Dedup).
+- [x] **uTestCommandInjection.pas** — 9 Tests (4 positive Shell-API-
+  Varianten, 4 negative inkl. Plus-im-Literal, Kind/Severity/Confidence).
+- [x] **rules/sca-rules.json** — zwei neue Rule-Einträge SCA162/SCA163,
+  jeweils mit `cleanCodeAttribute: TRUSTWORTHY` + `impacts.SECURITY=HIGH`
+  damit `EveryFindingKindHasMqrMapping` grün bleibt. Profil-Eintrag
+  `security` um beide ergänzt.
+- [x] **uFixHint.pas** — zwei `case`-Branches mit Before/After-Beispielen
+  (MD5 → SHA256 für Crypto, `ShellExecuteEx` mit `SHELLEXECUTEINFO` für
+  CommandInjection).
+- [x] **i18n/de.po** — zwei neue msgid/msgstr-Paare für die Description-
+  Strings. `i18n/en.po` ist Fallback-Identity (Source ist englisch) und
+  braucht hier nichts.
+- [x] **Standalone-App-Build**: `StaticCodeAnalyser.d12.dpr` +
+  `StaticCodeAnalyser.d12.dproj` (uses + `<DCCReference>`).
+- [x] **IDE-Plugin-Build**: `StaticCodeAnalyser.IDE.d12.dpk` +
+  `StaticCodeAnalyser.IDE.d12.dproj` (contains + `<DCCReference>`).
+- [x] **Test-Project-Build**: `tests/TestProject.dpr` +
+  `tests/TestProject.dproj`.
+
+### Bewusst weggelassen
+
+- **`IsSonarDelphiKind`-Whitelist**: SCA162/163 sind SCA-native (kein
+  SonarDelphi-Pendant), passen automatisch in den Sonst-Pfad der
+  Funktion (`Ord(K) > Ord(fkMethodName)` und nicht in der Case-Liste).
+- **Combo-Listen-Erweiterung**: beide Detektoren sind bereits über die
+  vorhandenen Severity-Filter (Warning/Error) und Type-Filter
+  (Vulnerability) erreichbar. Eigener `fmXxx`-Filter-Mode nicht nötig.
+- **DETECTORS.md / README.md-Counter**: Bump erfolgt im nächsten Doku-
+  Pass, nicht in diesem Code-Commit.
+
+### Offen (IDE-Sanity)
+
+- [ ] IDE bauen (msbuild/dcc32 ist im Delphi-Edition-CLI blockiert -
+  siehe `feedback_delphi_pitfalls.md`).
+- [ ] `TTestInsecureCryptoAlgorithm` + `TTestCommandInjection` grün im
+  DUnitX-Runner.
+- [ ] `TTestRuleCatalog.EveryFindingKindHasMqrMapping` grün (sollte
+  durch die zwei JSON-Einträge mit `cleanCodeAttribute` + `impacts`
+  automatisch passen).
+- [ ] `TTestSuppressionCompleteness` grün (KIND_META.Name-Token sind
+  `'InsecureCryptoAlgorithm'` + `'CommandInjection'`, identisch zum
+  JSON-`kind`-Feld - sollte greifen).
+- [ ] Echter Run gegen RHDInternalAPI_NextGen-Repo o.ä. um CommandInjection-
+  FP-Rate empirisch zu messen (Confidence-Tuning ggf. nachschärfen).
+
+---
+
+## Vorlage / Default-Checkliste (für künftige Detektoren)
 
 ---
 

@@ -18,6 +18,7 @@
     ],
     "security": [
       "SQLInjection", "HardcodedSecret", "HardcodedPath",
+      "InsecureCryptoAlgorithm", "CommandInjection",
       "DfmHardcodedDbCreds", "DfmSqlFromUserInput"
     ],
     "bugs-only": [
@@ -3147,6 +3148,48 @@
       "cleanCodeAttribute": "LOGICAL",
       "impacts": [
         { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
+    },
+    {
+      "id": "SCA162",
+      "kind": "InsecureCryptoAlgorithm",
+      "name": "Use of weak / deprecated cryptographic algorithm",
+      "shortDescription": "Algorithm name ('MD5', 'SHA1', 'DES', 'RC4', 'TLS1.0', 'SSLv3') or wrapper class (THashMD5, TIdHashSHA1, ...) referenced - vulnerable to collision / known-plaintext attacks",
+      "fullDescription": "MD5 has practical collisions since 2004 (Wang et al.), SHA1 since 2017 (SHAttered chosen-prefix). DES is 56-bit and brute-forceable, 3DES has the Sweet32 CBC collision (CVE-2016-2183). RC4 has documented statistical biases and is prohibited by RFC 7465. TLS 1.0 / 1.1 are RFC 8996 deprecated (BEAST, POODLE, Lucky13). SSLv3 was killed by POODLE (CVE-2014-3566). The detector matches algorithm names with word boundaries inside string literals/identifiers AND a set of well-known wrapper class names (substring match). Fix: switch to SHA-256/SHA-3 for hashing, AES-GCM / AES-CCM for symmetric encryption, TLS 1.2 minimum (1.3 preferred).",
+      "defaultSeverity": "Warning",
+      "type": "Vulnerability",
+      "tags": ["crypto", "security", "compliance"],
+      "cwe": ["CWE-327", "CWE-328"],
+      "owasp": ["A02:2021-Cryptographic Failures"],
+      "detectorUnit": "uInsecureCryptoAlgorithm.pas",
+      "examples": {
+        "bad":  "algo := 'MD5';\nHash := THashMD5.GetHashString(Input);",
+        "good": "algo := 'SHA256';\nHash := THashSHA2.GetHashString(Input);"
+      },
+      "cleanCodeAttribute": "TRUSTWORTHY",
+      "impacts": [
+        { "softwareQuality": "SECURITY", "severity": "HIGH" }
+      ]
+    },
+    {
+      "id": "SCA163",
+      "kind": "CommandInjection",
+      "name": "Shell API called with string concatenation in argument",
+      "shortDescription": "ShellExecute / CreateProcess / WinExec with `+` in the arguments - if any operand is user-controlled it becomes a command-injection vector",
+      "fullDescription": "Building the command string via concatenation (`PChar('cmd /c ' + UserInput)`) allows the attacker to append additional commands when the input is not strictly validated. This detector walks the AST and flags any nkCall whose method name (qualifier-stripped) is one of the known shell entry points AND whose argument list contains a `+` operator OUTSIDE any string literal. Because we cannot statically tell whether an operand is tainted, the finding is emitted with Confidence = Low; it surfaces in the UI only when the minimum-confidence threshold is set to 'low'. Fix: pass arguments via the dedicated parameter array (CreateProcess) or escape/validate before concatenation, prefer ShellExecuteEx with a structured SHELLEXECUTEINFO.",
+      "defaultSeverity": "Error",
+      "type": "Vulnerability",
+      "tags": ["injection", "security", "shell"],
+      "cwe": ["CWE-78"],
+      "owasp": ["A03:2021-Injection"],
+      "detectorUnit": "uCommandInjection.pas",
+      "examples": {
+        "bad":  "ShellExecute(0, 'open', PChar('cmd /c ' + UserInput), nil, nil, SW_SHOW);",
+        "good": "// Validate UserInput against a strict whitelist, then:\nShellExecute(0, 'open', 'cmd.exe', PChar('/c safe_command'), nil, SW_SHOW);"
+      },
+      "cleanCodeAttribute": "TRUSTWORTHY",
+      "impacts": [
+        { "softwareQuality": "SECURITY", "severity": "HIGH" }
       ]
     }
   ]

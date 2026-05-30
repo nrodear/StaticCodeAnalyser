@@ -531,9 +531,18 @@ type
     fkStringFromPointer,         // SCA160 - String(P) / AnsiString(P) /
                                  // UTF8String(P) Cast aus typisiertem Pointer
                                  // ohne Length-Prefix-Garantie -> Buffer-Overread.
-    fkPointerSubtraction         // SCA161 - Cardinal(P1) - Cardinal(P2)
+    fkPointerSubtraction,        // SCA161 - Cardinal(P1) - Cardinal(P2)
                                  // (oder Integer/LongWord) auf Pointern -
                                  // Win64-Truncation: oberes 32-Bit verloren.
+    fkInsecureCryptoAlgorithm,   // SCA162 - Verwendung schwacher/veralteter
+                                 // Krypto-Verfahren (MD5/SHA1/DES/RC4/TLS1.0)
+                                 // via Stringliteral oder Klassen-/Funktions-
+                                 // Aufruf (THashMD5, TIdHashSHA1, ...).
+    fkCommandInjection           // SCA163 - ShellExecute/CreateProcess/WinExec
+                                 // mit String-Konkatenation im Command-
+                                 // Argument - mit untrusted Input = Command-
+                                 // Injection-Risiko. Confidence-Default fcLow,
+                                 // da ohne Taint-Tracking heuristisch.
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -751,7 +760,9 @@ const
     (Name: 'PointerArithmeticOnString';  FindingType: ftBug;          DefaultSeverity: lsWarning), // fkPointerArithmeticOnString
     (Name: 'EmptyOnHandler';             FindingType: ftBug;          DefaultSeverity: lsWarning), // fkEmptyOnHandler
     (Name: 'StringFromPointer';          FindingType: ftBug;          DefaultSeverity: lsWarning), // fkStringFromPointer
-    (Name: 'PointerSubtraction';         FindingType: ftBug;          DefaultSeverity: lsWarning)  // fkPointerSubtraction
+    (Name: 'PointerSubtraction';         FindingType: ftBug;          DefaultSeverity: lsWarning), // fkPointerSubtraction
+    (Name: 'InsecureCryptoAlgorithm';    FindingType: ftVulnerability;DefaultSeverity: lsWarning), // fkInsecureCryptoAlgorithm
+    (Name: 'CommandInjection';           FindingType: ftVulnerability;DefaultSeverity: lsError)    // fkCommandInjection
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.
