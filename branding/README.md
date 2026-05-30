@@ -8,7 +8,8 @@ gemeinsam nutzen. Beide Builds binden die Dateien aus diesem Ordner ein.
 | Datei | Wo gebraucht |
 |---|---|
 | `sca.png` | App-Icon (297x242, 8-bit RGB). Wird via `sca_branding.rc` als `RCDATA`-Resource eingebettet. |
-| `sca_branding.rc` | RC-Definition (`SCA_APP_PNG RCDATA "sca.png"`). Von beiden `.dproj`-Dateien per `<RcCompile Include="..\branding\sca_branding.rc"/>` eingebunden. **NICHT** via `{$R '...rc'}` im `.dpr`/`.dpk` — das triggert den 16-bit-Legacy-BRC und failt mit `E2161 RLINK32: Unsupported 16bit resource`. |
+| `sca_branding.rc` | RC-Definition (`SCA_APP_PNG RCDATA "sca.png"`). Build-Integration ist **zweistufig** (siehe unten). |
+| `sca_branding.res` | BRCC32-Output, **nicht** im Repo (in `.gitignore`). Regeneriert sich pro Build aus `sca_branding.rc`. |
 | `uBrandingImage.pas` | Shared Pascal-Helper. `LoadSCAPng: TPngImage` und `LoadSCABitmap: TBitmap` decodieren die Resource zur Laufzeit. |
 
 ## Was wo angezeigt wird
@@ -40,6 +41,22 @@ Default-Icon von Delphi.
    von `$(BDS)\bin\delphi_PROJECTICON.ico` auf `..\branding\sca.ico` aendern.
 4. IDE-Build → die .ico wird via `brcc32` in die `.res` einkompiliert,
    Windows-Explorer zeigt das neue Icon.
+
+## Build-Integration (zweistufig — beide Schritte zwingend)
+
+| Schritt | Wo | Was bewirkt |
+|---|---|---|
+| 1. Compile | `<RcCompile Include="..\branding\sca_branding.rc"/>` im **`.dproj`** | Delphis MSBuild ruft BRCC32 auf, erzeugt `branding\sca_branding.res` |
+| 2. Link | `{$R '..\branding\sca_branding.res'}` im **`.dpr` / `.dpk`** | Linker bindet die `.res` als Binary-Resource in die EXE/BPL ein |
+
+**WICHTIG:** Schritt 1 allein reicht NICHT — ohne Schritt 2 erzeugt BRCC32
+zwar die `.res`, aber RLINK32 packt sie nicht in die fertige Binary, und
+das App-Icon ist nirgends sichtbar (Window-Caption, Taskleiste, About-Box,
+Splash — alles leer).
+
+**FALLE bei Schritt 2:** Die `.res`-Extension ist Pflicht.
+`{$R '...rc'}` (mit `.rc`-Extension) triggert den **16-bit-Legacy-BRC**
+statt BRCC32 und failt mit `E2161 RLINK32: Unsupported 16bit resource`.
 
 ## Add a new asset
 

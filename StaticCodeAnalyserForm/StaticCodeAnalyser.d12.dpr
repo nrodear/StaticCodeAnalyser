@@ -239,10 +239,14 @@ uses
   uCustomClassDiscovery in 'sources\Detectors\uCustomClassDiscovery.pas';
 
 {$R *.res}
-// branding\sca_branding.rc wird via <RcCompile>-Eintrag im .dproj kompiliert
-// (siehe StaticCodeAnalyser.d12.dproj). Kein {$R rc-file}-Directive hier -
-// das wuerde RLINK32 mit dem 16-bit-BRC statt BRCC32 antriggern und mit
-// "E2161 RLINK32: Unsupported 16bit resource" failen.
+// Branding-Resource (sca.png als RCDATA fuer App-Icon, About-Box, Splash):
+//   * <RcCompile> im .dproj triggert BRCC32 -> sca_branding.res
+//   * {$R 'sca_branding.res'} hier linkt die .res in die EXE (sonst sieht
+//     der Linker das BRCC32-Output zwar im Output-Ordner, ignoriert es
+//     aber - waere genau das Symptom 'App-Icon nirgends sichtbar').
+// WICHTIG: .RES Extension, NICHT .RC - {$R '...rc'} wuerde RLINK32 mit
+// dem 16-bit-Legacy-BRC ankicken (E2161 Unsupported 16bit resource).
+{$R '..\branding\sca_branding.res'}
 
 // Erkennung CLI- vs GUI-Mode: jeder Argument der mit '-' oder '/' anfaengt
 // (typische Switch-Praefixe) -> CLI. Sonst -> GUI starten.
