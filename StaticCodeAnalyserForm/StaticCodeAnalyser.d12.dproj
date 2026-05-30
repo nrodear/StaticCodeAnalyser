@@ -213,9 +213,12 @@
         <DCCReference Include="sources\Infrastructure\uSuppression.pas"/>
         <DCCReference Include="sources\Infrastructure\uSymbolReferenceIndex.pas"/>
         <DCCReference Include="sources\Infrastructure\uVcsChanges.pas"/>
+        <DCCReference Include="..\branding\uBrandingImage.pas"/>
+        <RcCompile Include="..\branding\sca_branding.rc"/>
         <DCCReference Include="sources\Detectors\uPointerSubtraction.pas"/>
         <DCCReference Include="sources\Detectors\uInsecureCryptoAlgorithm.pas"/>
         <DCCReference Include="sources\Detectors\uCommandInjection.pas"/>
+        <DCCReference Include="sources\Detectors\uUnusedRoutine.pas"/>
         <DCCReference Include="sources\Detectors\uStringFromPointer.pas"/>
         <DCCReference Include="sources\Detectors\uEmptyOnHandler.pas"/>
         <DCCReference Include="sources\Detectors\uUnusedPrivateMethod.pas"/>

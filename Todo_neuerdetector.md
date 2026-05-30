@@ -5,12 +5,121 @@ Alle Touch-Points sind hier dokumentiert, damit nichts vergessen wird
 (Compile-Fehler durch fehlende DCCReferences, Tests die den Detektor
 nicht sehen, fehlende Combo-Einträge in nur einer der zwei Formen, ...).
 
-Stand: 2026-05-30 — letzter Lauf SCA162 (InsecureCryptoAlgorithm) +
-SCA163 (CommandInjection). Davor: SCA132/133-Rollout (2026-05-20).
+Stand: 2026-05-30 — letzter Lauf SCA164 (UnusedRoutine, branch
+`feat/sca164-unused-routine`). Davor: SCA162 + SCA163 (Security-Pair),
+SCA132/133 (2026-05-20).
 
 ---
 
-## Aktueller Lauf — 2026-05-30: SCA162 + SCA163
+## Aktueller Lauf — 2026-05-30: SCA164 UnusedRoutine
+
+Schliesst die Luecke zwischen SCA147 (UnusedPrivateMethod - nur class
+private) und SCA148+ (UnusedPublicMember - nur class public). Bisher
+durchfielen top-level Procedures/Functions in der `implementation`-Sektion
+ohne Aufruf alle Maschen.
+
+Konzept-Dokument: [`Konzept_SCA164_UnusedRoutine.md`](Konzept_SCA164_UnusedRoutine.md).
+Vorlage gespiegelt: SonarDelphi
+[`UnusedRoutineCheck.java`](https://github.com/integrated-application-development/sonar-delphi/blob/master/delphi-checks/src/main/java/au/com/integradev/delphi/checks/UnusedRoutineCheck.java).
+
+### SCA164 — UnusedRoutine
+
+- **Was**: Standalone procedure/function im `implementation`-Teil ohne
+  Aufruf irgendwo in der Unit, ohne Forward-Decl im `interface`.
+- **Scope**: Single-file. Cross-Unit-Konsumenten via Bare-Call werden
+  in v1 nicht getrackt (`gSymbolRefIndex` indexiert nur `Obj.Member`).
+  Interface-Forward-Deklarierte Routinen werden daher uebersprungen.
+- **Severity**: `lsHint` · **Type**: `ftCodeSmell` · **Confidence**: `fcHigh`
+  (Implementation-only, kein Cross-Unit-Confound).
+- **Self-/Recursive-Calls**: zaehlen NICHT als Use (Mirror SonarDelphi
+  `testUnusedRecursiveRoutineShouldAddIssue` 2). Range-Tracking ueber
+  Linien-Bereich [Start..NextRoutineStart-1].
+- **FP-Guards (MVP)**: Konstruktor/Destruktor, Methoden-Direktiven
+  `override`/`virtual`/`abstract`/`message`/`dynamic`, `Register`
+  Top-Level-Prozedur, Enumerator-Trio
+  (`MoveNext`/`GetEnumerator`/`Current`), Forward-Decl in
+  `interface`-Sektion (potenzieller Cross-Unit-Caller).
+
+### Touch-Points (abgehakt)
+
+- [x] **uSCAConsts.pas** — `fkUnusedRoutine` ans Enum-Ende + KIND_META
+  (`ftCodeSmell` / `lsHint`).
+- [x] **uUnusedRoutine.pas** — neu in
+  [`StaticCodeAnalyserForm/sources/Detectors/`](StaticCodeAnalyserForm/sources/Detectors/uUnusedRoutine.pas).
+  Boilerplate inspiriert von SCA147; eigene `StripStringsAndCommentsLn`-
+  Kopie (Suffix `Ln` damit Symbol-Name-Konflikt mit dem SCA147-Helper
+  vermieden ist). Wenn der Detektor laenger lebt, beides nach
+  `uDetectorUtils` hochziehen.
+- [x] **uStaticAnalyzer2.pas** — uses-Klausel + `AddD('UnusedRoutine', ...)`
+  nach `CommandInjection`.
+- [x] **uTestFindingHelper.pas** — uses + `TUnusedRoutineDetector`-Eintrag
+  in **`FindingsOfFile`** (NICHT `FindingsOf`, weil der Detektor
+  `AcquireLines` zum File-Body-Scan braucht; siehe Pattern bei SCA147).
+- [x] **uTestUnusedRoutine.pas** — 13 Tests (4 positiv + 3 negativ
+  caller-existiert + 5 negativ FP-Guards + 1 Finding-Inhalt). Alle Tests
+  nutzen `FindingsOfFile`.
+- [x] **rules/sca-rules.json** — SCA164-Eintrag mit
+  `cleanCodeAttribute: CLEAR` + `impacts.MAINTAINABILITY=LOW`. Korrekte
+  Reihenfolge (nach SCA163).
+- [x] **uFixHint.pas** — `case fkUnusedRoutine` mit 4 Fix-Optionen
+  (Routine loeschen / Caller hinzufuegen / ins interface verschieben /
+  Suppression-Marker).
+- [x] **i18n/de.po** — `'Top-level routine appears unused (dead code)'`
+  Description-String.
+- [x] **Build-Files** alle sechs: Standalone-`.dpr`/`.dproj`,
+  IDE-Plugin-`.dpk`/`.dproj`, Test-`.dpr`/`.dproj`.
+
+### Bewusst weggelassen (Phase 2)
+
+- **Bare-Call-Tracking im `gSymbolRefIndex`** — der jetzige Index sieht
+  nur `Obj.Member`-Calls. Cross-unit-public-Routinen werden in v1 daher
+  per `interface`-Forward-Decl-Guard ausgeschlossen, nicht via Index.
+  Verbesserung ~50 LOC in `AddRefsFromNode`.
+- **Klassen-Methoden-Implementierungen** (qualifizierte Namen
+  `TFoo.Bar`) — fallen durch den `Pos('.', ...) = 0`-Filter raus, sind
+  fuer SCA147 (private) und SCA148+ (public) zustaendig.
+- **`[Attribute]`-Awareness**, **Interface-Implementierungs-Check** —
+  als Suppression-Pfad belassen
+  (`// noinspection UnusedRoutine`).
+- **Forward-Decl + Impl in implementation-Sektion (beide tot)** — bekannter
+  False-Negative: die Forward-Decl-Zeile zaehlt aktuell als externer
+  Caller des Impls und umgekehrt. Selten in modernem Code. Full Fix
+  wuerde Forward-Decl-Line-Positionen sammeln und vom external-Match-
+  Counter ausnehmen. Suppression als Escape.
+
+### Code-Review-Fixes (post-MVP, gleicher Branch)
+
+Ein `/code-review` ueber den initialen Wurf hat 6 Findings geliefert,
+alle eingearbeitet:
+
+| # | Finding | Fix |
+|---|---|---|
+| 1 | `HasForwardDeclInInterface` ruft `FindAll(nkInterface)` pro Routine | `InterfaceMethods: TStringList` einmal vor der Loop befuellen, `IndexOf`-Lookup ist O(log N) |
+| 2 | 8-Zeilen-toter-Kommentar in `HasExternalCaller` erklaerte nicht-implementierte Heuristik | Komplett geloescht; HasExternalCaller ist jetzt ~15 LOC |
+| 3 | `StripStringsAndCommentsLn` war byte-identische Kopie von SCA147-Helper | Ersetzt durch `TDetectorUtils.StripStringsAndComments(Lines, LineForChar)` — Funktion existierte bereits in der zentralen Util-Unit |
+| 4 | `LineOfPos` war O(n) pro Match | Eliminiert: das `LineForChar`-Array aus `TDetectorUtils.StripStringsAndComments` liefert O(1)-Lookup |
+| 5 | `forward;`-Direktive nicht im Exempt-Filter | `;forward` in `HasExternalReferenceDirective` aufgenommen; Forward-Decl-Knoten wird nicht mehr separat verarbeitet (False-Negative-Restrisiko fuer dead forward+impl-Paare als Limit dokumentiert) |
+| 6 | Standalones zweimal iteriert + `TArray.Sort` redundant | Parser-Order ist File-Order, also natuerlich sortiert — `TArray.Sort` entfernt, eine For-Loop fuer die Verarbeitung |
+
+**Netto-Auswirkung**: Detector schrumpfte um ~75 LOC, hat eine
+zentrale Helper-Abhaengigkeit weniger redundant. Verhalten der 13
+Tests unveraendert (Code-Pfade gleich; Korrektheit der drei
+PLAUSIBLE-Findings nicht messbar veraendert ohne Profiling).
+
+### Offen (IDE-Sanity)
+
+- [ ] IDE-Build der drei dproj-Dateien gruen.
+- [ ] `TTestUnusedRoutine` (13 Tests) gruen.
+- [ ] `TTestRuleCatalog.EveryFindingKindHasMqrMapping` gruen
+  (`cleanCodeAttribute` + `impacts` sind im JSON-Eintrag).
+- [ ] `TTestSuppressionCompleteness` gruen
+  (`'UnusedRoutine'` als KIND_META.Name, identisch zu JSON-`kind`).
+- [ ] Real-World-Run gegen ein groesseres Repo (z.B. das SCA-Projekt selbst!)
+  um zu sehen ob es eigene tote Helper findet.
+
+---
+
+## Vorheriger Lauf — 2026-05-30: SCA162 + SCA163
 
 Zwei Security-Detektoren in einer Welle, beide aus der "Top-5 fehlt im
 Repo"-Analyse (siehe [`Todo_FalsePositiveReduction.md`](Todo_FalsePositiveReduction.md)

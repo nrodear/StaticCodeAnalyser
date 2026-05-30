@@ -931,6 +931,10 @@ msgstr "Schwacher/veralteter Krypto-Algorithmus in Verwendung"
 msgid "Shell API called with string concatenation in arguments"
 msgstr "Shell-API mit String-Konkatenation im Argument aufgerufen"
 
+# ---- SCA164 UnusedRoutine ------------------------------------------------
+msgid "Top-level routine appears unused (dead code)"
+msgstr "Top-Level-Routine scheint ungenutzt (toter Code)"
+
 # ---- Severity-Filter combo: Sonar-50 Critical (SCA132-133) ------------------
 msgid "Exception Too General"
 msgstr "Zu allgemeine Exception"

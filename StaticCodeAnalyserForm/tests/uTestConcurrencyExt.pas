@@ -29,6 +29,10 @@ type
     // Cross-Unit-Global: Identifier nicht im File deklariert, aber via
     // Konstruktor-Call instanziiert -> Typ aus `:= TXxx.Create` ableiten.
     [Test] procedure FreeAndNilCrossUnitGlobal_NotReported;
+    // FP-Regression: dxgettext-msgid mit 'FreeAndNil(X)' in Quotes darf
+    // den Detector nicht ausloesen - Strings werden via
+    // TDetectorUtils.StripStringsAndComments wegmaskiert.
+    [Test] procedure FreeAndNilInsideStringLiteral_NotReported;
   end;
 
 implementation
@@ -232,6 +236,30 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate));
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.FreeAndNilInsideStringLiteral_NotReported;
+// FP-Regression aus Real-World-Code (uLocalization.pas Z.283):
+//   GDeMap.Add('X.Free; X := nil; -> use FreeAndNil(X)',
+//              'X.Free; X := nil; -> FreeAndNil(X) nutzen');
+// Vor dem Strip-Fix hat der Detector den Text INSIDE der msgid-Strings als
+// echte FreeAndNil-Calls interpretiert und geflaggt. Nach Umstellung auf
+// TDetectorUtils.StripStringsAndComments (statt lokalem StripFileComments
+// der Strings 1:1 erhielt) werden String-Inhalte mit '~' aufgefuellt und
+// das Regex-Match schweigt korrekt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure SetupMap;'#13#10 +
+  'begin'#13#10 +
+  '  Map.Add(''X.Free; X := nil; -> use FreeAndNil(X)'','#13#10 +
+  '          ''X.Free; X := nil; -> FreeAndNil(X) nutzen'');'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
+        'FreeAndNil in String-Literal darf den Detector nicht ausloesen');
   finally F.Free; end;
 end;
 

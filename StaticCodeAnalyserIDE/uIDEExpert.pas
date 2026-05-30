@@ -26,7 +26,8 @@ procedure Register;
 implementation
 
 uses
-  Winapi.Windows, System.SysUtils, uIDEAnalyserForm;
+  Winapi.Windows, System.SysUtils, Vcl.Graphics,
+  uIDEAnalyserForm, uBrandingImage;
 
 const
   PLUGIN_TITLE   = 'Static Code Analysis';
@@ -39,17 +40,42 @@ var
   // Index in der About-Box; gebraucht zum Unregister beim BPL-Unload.
   // -1 = nicht registriert (z.B. wenn IDE keine AboutBoxServices liefert).
   GAboutBoxIndex : Integer = -1;
+  // Branding-Bitmap aus sca_branding.rc gecached fuer die gesamte BPL-Laufzeit.
+  // Die IDE referenziert das HBITMAP-Handle - wenn wir die TBitmap zu frueh
+  // freigeben koennte das Handle ungueltig werden (Verhalten ist API-doku-
+  // unklar zwischen Delphi-Versionen). Lifetime an die BPL koppeln ist
+  // safe, kostet ~80 KB Speicher.
+  GBrandingBmp   : Vcl.Graphics.TBitmap = nil;
+
+function BrandingBitmap: Vcl.Graphics.TBitmap;
+// Lazy-Load. Fallback nil -> Aufrufer uebergeben hBitmap=0 fuer text-only.
+begin
+  if GBrandingBmp = nil then
+  begin
+    try
+      GBrandingBmp := uBrandingImage.LoadSCABitmap;
+    except
+      // Resource fehlt / PNG-Decoder-Mismatch - kein Splash/AboutBox-Icon,
+      // aber kein Plugin-Crash.
+      GBrandingBmp := nil;
+    end;
+  end;
+  Result := GBrandingBmp;
+end;
 
 procedure RegisterSplashScreen;
 // Erscheint waehrend des IDE-Starts unter "Loaded plugins" im Splash.
 // HBITMAP = 0: kein Icon - der Eintrag wird trotzdem als Text gerendert.
-// Spaeter kann eine 24x24 BMP-Resource via {$R} + LoadBitmap(HInstance, ...)
-// nachgereicht werden, dann statt 0 das Handle uebergeben.
+var
+  Bmp  : Vcl.Graphics.TBitmap;
+  HBmp : HBITMAP;
 begin
   if not Assigned(SplashScreenServices) then Exit;
+  Bmp  := BrandingBitmap;
+  if Assigned(Bmp) then HBmp := Bmp.Handle else HBmp := 0;
   SplashScreenServices.AddPluginBitmap(
     PLUGIN_TITLE + ' ' + PLUGIN_VERSION,
-    0,             // hBitmap - 0 = text-only Eintrag
+    HBmp,
     False,         // IsUnregistered
     PLUGIN_LICENSE,
     '');           // SKUBuild
@@ -59,13 +85,17 @@ procedure RegisterAboutBox;
 // Eintrag unter Help -> About -> Plugins. Index merken um beim BPL-Unload
 // sauber UnregisterAboutBox aufzurufen (sonst Dangling-Eintrag bis IDE-Neustart).
 var
-  Svc : IOTAAboutBoxServices;
+  Svc  : IOTAAboutBoxServices;
+  Bmp  : Vcl.Graphics.TBitmap;
+  HBmp : HBITMAP;
 begin
   if not Supports(BorlandIDEServices, IOTAAboutBoxServices, Svc) then Exit;
+  Bmp  := BrandingBitmap;
+  if Assigned(Bmp) then HBmp := Bmp.Handle else HBmp := 0;
   GAboutBoxIndex := Svc.AddPluginInfo(
     PLUGIN_TITLE + ' ' + PLUGIN_VERSION,
     PLUGIN_DESC,
-    0,             // hBitmap
+    HBmp,
     False,         // IsUnregistered
     PLUGIN_LICENSE,
     '');           // SKUBuild
@@ -132,4 +162,7 @@ finalization
   // About-Box-Eintrag entfernen wenn der Plugin-BPL entladen wird
   // (z.B. ueber Component -> Install Packages -> Remove).
   UnregisterAboutBox;
+  // Branding-Bitmap erst NACH Unregister freigeben - die IDE haelt das
+  // HBITMAP-Handle waehrend des AboutBox/Splash-Lifecycle.
+  FreeAndNil(GBrandingBmp);
 end.

@@ -12,6 +12,13 @@ unit uConstructorWithoutInherited;
 //   * Konstruktoren mit `override`-Direktive die explizit den Parent
 //     NICHT aufrufen wollen sind selten - im Zweifel auf Suppression
 //     ueber `// noinspection` umschalten.
+//   * `class constructor`-Class-Initialisierungs-Mechanismus (TypeRef
+//     traegt `;class`-Suffix) - hat keine inheritance-chain.
+//   * Top-level standalone constructor ausserhalb einer Klasse
+//     (z.B. in Demo-/Fixture-Files) - Methoden-Name ist unqualifiziert
+//     (kein '.'), es gibt schlicht keine Parent-Klasse. Compiler-Code
+//     ist solche Konstruktion ohnehin invalid, aber Parser ist permissiv;
+//     wir schweigen statt FP zu produzieren.
 //
 // Erkennung: AST-basiert. Pro `nkMethod`-Knoten mit TypeRef
 // `constructor ...` pruefen, ob im Body `nkInherited` vorkommt.
@@ -83,6 +90,11 @@ begin
     for M in Methods do
     begin
       if not IsConstructor(M) then Continue;
+      // Top-level Standalone-Konstruktor (kein Dot im Name) hat keine
+      // Parent-Klasse - `inherited` waere syntaktisch unsinnig. Klassen-
+      // Methoden-Implementierungen tragen den Klassen-Qualifier mit Punkt
+      // (z.B. 'TFoo.Create'), die werden weiter geprueft.
+      if Pos('.', M.Name) = 0 then Continue;
       // Nur echte Implementierungen pruefen - Forward-Decls (Class-Body-
       // Signatur) haben kein nkBlock, dort gehoert `inherited` nicht hin.
       if FindBodyBlock(M) = nil then Continue;

@@ -14,6 +14,7 @@ type
     [Test] procedure RegularProcedure_NoFinding;
     [Test] procedure CtorForwardDecl_NotReported;
     [Test] procedure ClassConstructor_NotReported;
+    [Test] procedure StandaloneCtorOutsideClass_NotReported;
     [Test] procedure CtorWithoutInherited_KindAndSeverity;
   end;
 
@@ -113,6 +114,24 @@ const SRC =
   'class destructor TFoo.Destroy;'#13#10 +
   'begin'#13#10 +
   '  FreeAndNil(FStaticThing);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkConstructorWithoutInherited));
+  finally F.Free; end;
+end;
+
+procedure TTestConstructorWithoutInherited.StandaloneCtorOutsideClass_NotReported;
+// FP-Regression: Top-level Konstruktor ohne Klassen-Kontext (Demo- oder
+// Fixture-File, z.B. docs/samples/uUnusedRoutine_SCA164_Demo.pas). Es gibt
+// keine Parent-Klasse, der man `inherited` rufen koennte - der Detector
+// darf hier nicht feuern.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'constructor StandaloneCtor;'#13#10 +
+  'begin'#13#10 +
+  '  // keine Parent-Klasse - inherited waere syntaktisch unsinnig'#13#10 +
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin

@@ -308,7 +308,13 @@ begin
   FLblBadge.ParentColor        := False;  // KRITISCH: erbt sonst Parent-Color
   FLblBadge.StyleElements      := [];     // VCL-Theme nicht ueberschreiben
   FLblBadge.AlignWithMargins   := True;
-  FLblBadge.Margins.SetBounds(4, 3, 6, 3);
+  FLblBadge.Margins.SetBounds(4, 1, 6, 3);   // Top 3->1, Bottom bleibt 3
+                                             // => Badge ist insgesamt 2 px
+                                             // TAELLER als Original-Stand
+                                             // (1 px Iteration vom 1.Fix +
+                                             // weitere 1 px Iteration jetzt).
+                                             // Width bleibt AutoSize an der
+                                             // Text-Metrik.
 
   // Titel (alClient, fuellt den Rest links)
   FLblTitle                    := TLabel.Create(Self);
