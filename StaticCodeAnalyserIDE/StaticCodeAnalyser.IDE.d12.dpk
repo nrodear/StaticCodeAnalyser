@@ -2,13 +2,16 @@ package StaticCodeAnalyser.IDE.d12;
 
 {$R *.res}
 // Branding-Resource (sca.png als RCDATA fuer Splash + About-Box):
-//   * <RcCompile> im .dproj triggert BRCC32 -> sca_branding.res
+//   * <RcCompile Include="..\branding\sca_branding.rc"/> im .dproj triggert
+//     BRCC32. BRCC32 legt das Output NEBEN die dproj/dpk (nicht neben die
+//     .rc!) -> StaticCodeAnalyserIDE\sca_branding.res.
 //   * {$R 'sca_branding.res'} hier linkt die .res in die BPL (sonst sieht
-//     der Linker das BRCC32-Output zwar im Output-Ordner, ignoriert es
-//     aber - waere genau das Symptom 'IDE-Plugin-Icon nirgends sichtbar').
-// WICHTIG: .RES Extension, NICHT .RC - {$R '...rc'} wuerde RLINK32 mit
-// dem 16-bit-Legacy-BRC ankicken (E2161 Unsupported 16bit resource).
-{$R '..\branding\sca_branding.res'}
+//     der Linker das BRCC32-Output zwar liegen, ignoriert es aber - waere
+//     genau das Symptom 'IDE-Plugin-Icon nirgends sichtbar').
+// WICHTIG: .RES Extension (NICHT .RC). {$R '...rc'} wuerde den 16-bit-
+// Legacy-BRC ankicken (E2161 Unsupported 16bit resource).
+// PFAD: relativ zur dpk (gleiches Verzeichnis), NICHT relativ zur .rc!
+{$R 'sca_branding.res'}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
 {$ALIGN 8}
 {$ASSERTIONS ON}

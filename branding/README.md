@@ -46,8 +46,8 @@ Default-Icon von Delphi.
 
 | Schritt | Wo | Was bewirkt |
 |---|---|---|
-| 1. Compile | `<RcCompile Include="..\branding\sca_branding.rc"/>` im **`.dproj`** | Delphis MSBuild ruft BRCC32 auf, erzeugt `branding\sca_branding.res` |
-| 2. Link | `{$R '..\branding\sca_branding.res'}` im **`.dpr` / `.dpk`** | Linker bindet die `.res` als Binary-Resource in die EXE/BPL ein |
+| 1. Compile | `<RcCompile Include="..\branding\sca_branding.rc"/>` im **`.dproj`** | Delphis MSBuild ruft BRCC32 auf, erzeugt `sca_branding.res` **NEBEN der dproj** (nicht neben der `.rc`!) — also `StaticCodeAnalyserForm\sca_branding.res` und `StaticCodeAnalyserIDE\sca_branding.res` |
+| 2. Link | `{$R 'sca_branding.res'}` im **`.dpr` / `.dpk`** (relativ zur Build-Head, nicht zur `.rc`) | Linker bindet die `.res` als Binary-Resource in die EXE/BPL ein |
 
 **WICHTIG:** Schritt 1 allein reicht NICHT — ohne Schritt 2 erzeugt BRCC32
 zwar die `.res`, aber RLINK32 packt sie nicht in die fertige Binary, und

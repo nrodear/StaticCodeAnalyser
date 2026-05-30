@@ -240,13 +240,16 @@ uses
 
 {$R *.res}
 // Branding-Resource (sca.png als RCDATA fuer App-Icon, About-Box, Splash):
-//   * <RcCompile> im .dproj triggert BRCC32 -> sca_branding.res
+//   * <RcCompile Include="..\branding\sca_branding.rc"/> im .dproj triggert
+//     BRCC32. BRCC32 legt das Output NEBEN die dproj/dpr (nicht neben die
+//     .rc!) -> StaticCodeAnalyserForm\sca_branding.res.
 //   * {$R 'sca_branding.res'} hier linkt die .res in die EXE (sonst sieht
-//     der Linker das BRCC32-Output zwar im Output-Ordner, ignoriert es
-//     aber - waere genau das Symptom 'App-Icon nirgends sichtbar').
-// WICHTIG: .RES Extension, NICHT .RC - {$R '...rc'} wuerde RLINK32 mit
-// dem 16-bit-Legacy-BRC ankicken (E2161 Unsupported 16bit resource).
-{$R '..\branding\sca_branding.res'}
+//     der Linker das BRCC32-Output zwar liegen, ignoriert es aber - waere
+//     genau das Symptom 'App-Icon nirgends sichtbar').
+// WICHTIG: .RES Extension (NICHT .RC). {$R '...rc'} wuerde den 16-bit-
+// Legacy-BRC ankicken (E2161 Unsupported 16bit resource).
+// PFAD: relativ zur dpr (gleiches Verzeichnis), NICHT relativ zur .rc!
+{$R 'sca_branding.res'}
 
 // Erkennung CLI- vs GUI-Mode: jeder Argument der mit '-' oder '/' anfaengt
 // (typische Switch-Praefixe) -> CLI. Sonst -> GUI starten.
