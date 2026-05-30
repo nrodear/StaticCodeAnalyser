@@ -50,8 +50,22 @@ begin
       Stream.Free;
     end;
   except
-    Result.Free;
-    raise;
+    on E: Exception do
+    begin
+      // Sichtbar machen via OutputDebugString (Sysinternals DebugView/
+      // Tools->Watch). Drei wahrscheinlichste Fehlerquellen:
+      //   - EResNotFound: sca_branding.res nicht in die Binary gelinkt
+      //     ({$R 'sca_branding.res'}-Directive fehlt im .dpr/.dpk)
+      //   - EResNotFound: Resource-Name passt nicht (Mismatch zwischen
+      //     'SCA_APP_PNG' hier und dem .rc-Eintrag)
+      //   - EPngError o.ae.: PNG-Bytes korrupt (BRCC32 hat sca.png gar
+      //     nicht gefunden und eine leere Resource erzeugt)
+      OutputDebugString(PChar(Format(
+        '[SCA-Branding] LoadSCAPng failed (HInstance=0x%p): %s: %s',
+        [Pointer(HInstance), E.ClassName, E.Message])));
+      Result.Free;
+      raise;
+    end;
   end;
 end;
 
