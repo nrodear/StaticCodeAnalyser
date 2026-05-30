@@ -1,0 +1,38 @@
+# Erzwungene CRLF-Zeilenendungen fuer alle Delphi-/Pascal-Quellen.
+# RAD Studio liest LF-Dateien als Warnung
+# ("Zeilen enden mit LF, RAD Studio erfordert aber CRLF"). Damit unsere
+# Quellen unabhaengig von core.autocrlf-Einstellungen auf jedem Checkout
+# CRLF-normalisiert sind, mappen wir die einschlaegigen Endungen explizit.
+*.pas    text eol=crlf
+*.dpr    text eol=crlf
+*.dpk    text eol=crlf
+*.dproj  text eol=crlf
+*.dfm    text eol=crlf
+*.fmx    text eol=crlf
+*.inc    text eol=crlf
+*.lpr    text eol=crlf
+*.lpk    text eol=crlf
+
+# Shell-Skripte muessen LF behalten (sonst meckert bash auf Linux/CI).
+*.sh     text eol=lf
+
+# Markdown / config: plattform-konsistent CRLF auf Windows, autocrlf-frei.
+*.md     text eol=crlf
+*.json   text eol=crlf
+*.yml    text eol=crlf
+*.yaml   text eol=crlf
+*.po     text eol=crlf
+*.ini    text eol=crlf
+
+# Binaerdateien explizit markieren - sonst koennte git autocrlf sie kaputt-
+# konvertieren.
+*.bpl    binary
+*.dcu    binary
+*.exe    binary
+*.dll    binary
+*.png    binary
+*.ico    binary
+*.bmp    binary
+*.jpg    binary
+*.jpeg   binary
+*.res    binary
