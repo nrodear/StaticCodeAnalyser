@@ -25,7 +25,14 @@ uses
 type
   // Welche Befund-Auswahl die Combo "Filter" zeigt.
   // Schweregrad-Gruppen + ein Eintrag pro Detektor-Kind.
+  // fmDetectorReview ist ein Spezial-Modus: Matches selbst kennt ihn nicht,
+  // weil er stateful ist (ein Sample pro Kind ueber die ganze Liste). Die
+  // ApplyFilter-Methode in den Forms behandelt ihn ueber einen separaten
+  // Branch und ruft Matches gar nicht erst auf - siehe Kommentar dort.
   TFilterMode = (fmAll,
+                 // Spezial: Detector-Review-Stichprobe (1 zufaelliger Befund
+                 // pro Detector-Kind, ueber die gesamte Liste).
+                 fmDetectorReview,
                  // Schweregrad-Gruppen
                  fmErrors, fmWarnings, fmHints,
                  // Fehler-Detektoren
@@ -519,7 +526,10 @@ begin
     fmStringFromPointer:             Result := F.Kind = fkStringFromPointer;
     fmPointerSubtraction:            Result := F.Kind = fkPointerSubtraction;
   else
-    Result := True;   // fmAll
+    Result := True;   // fmAll, fmDetectorReview - der Caller wendet die
+                      // Stichproben-Logik selber an, Matches laesst hier
+                      // alles durch damit Severity/Type/Search-Filter
+                      // weiter wirken.
   end;
   if not Result then Exit;
 

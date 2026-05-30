@@ -27,12 +27,22 @@ unit uInsecureCryptoAlgorithm;
 //     Klassen-Wrapper-Liste (Substring-Match, da Klassennamen self-anchoring
 //     sind) gescannt.
 //
+// FP-Schutz fuer natuersprachliche String-Inhalte:
+//   Kurze Tokens wie 'des' (deutsches Wort), 'rc4' (selten, aber denkbar)
+//   koennen in Translation-/Log-/Error-Strings auftauchen ohne dass es um
+//   Krypto geht. Beispiel: dt. 'außerhalb des Blocks'. FindWeakAlgo schaut
+//   per IsNaturalLanguageContext rueckwaerts vom Match: wenn zwischen dem
+//   Match und dem oeffnenden ''' ein Space liegt, ist der Token Teil eines
+//   Satzes -> kein Befund. 'DES' / 'DES-CBC' (Token direkt am String-
+//   Anfang) bleiben echte Treffer.
+//
 // Limitierungen:
 //   * Algorithmus aus Config geladen ('algo := LoadCryptoAlgorithm') wird
 //     nicht erkannt - Symbol-/Taint-Tabelle nicht vorhanden.
-//   * False-Positives moeglich bei englischen Error-Messages
-//     'MD5 hash failed' - akzeptabel, da Audit-relevante Strings ohnehin
-//     in den Code-Review wandern.
+//   * String-Inhalte mit Token direkt am String-Anfang OHNE Space davor
+//     werden geflagged (False-Positives bei 'MD5 hash failed' moeglich,
+//     wenn der Detector auf den Algorithmus-Namen am Wort-Anfang triggert).
+//     Akzeptabel - Audit-relevante Strings wandern ohnehin in den Code-Review.
 //
 // Severity: lsWarning, Type: ftVulnerability (siehe KIND_META).
 
@@ -95,10 +105,48 @@ class function TInsecureCryptoAlgorithmDetector.FindWeakAlgo(
 // Bei "MD5Hash := ..." dagegen:
 //   Pos('md5', 'md5hash := ...') = 1
 //   PRight = 4, Char = 'h' -> in [a-z] -> kein Boundary -> kein Hit
+//
+// FP-Schutz fuer kurze Tokens wie 'des' (deutsches Wort), 'rc4' etc. die
+// in natuersprachlichem String-Inhalt vorkommen koennen: siehe
+// IsNaturalLanguageContext.
 var
   Low      : string;
   Tok      : string;
   P, PRight: Integer;
+
+  function IsNaturalLanguageContext(MatchPos: Integer): Boolean;
+  // True wenn der Match in einem natuersprachlichen String-Literal sitzt.
+  // Heuristik: rueckwaerts vom Match bis zum naechsten ''' (= Anfang des
+  // String-Literals) oder zu einem Code-Syntax-Marker (;:=(,) suchen.
+  //   - Space VOR dem ''' = der Token steht mitten in einem Satz wie
+  //     'außerhalb des Blocks' -> FP.
+  //   - Direkt am String-Start ohne Space dazwischen = algorithmus-name-
+  //     shape wie 'DES' oder 'DES-CBC' -> echter Treffer.
+  //   - Code-Syntax-Marker ohne vorheriges ''' = Code-Kontext (z.B.
+  //     `Algo := DES;` ohne Quotes, named const) -> echter Treffer.
+  var
+    Q        : Integer;
+    SawSpace : Boolean;
+  begin
+    Result   := False;
+    SawSpace := False;
+    Q := MatchPos - 1;
+    while Q >= 1 do
+    begin
+      case Source[Q] of
+        '''':
+          if SawSpace then Exit(True)   // Space im Pfad zum '-Anfang -> FP
+          else Exit(False);             // direkt am String-Anfang -> Algo-Name
+        ' ':
+          SawSpace := True;
+        ';', '(', ',', ':', '=':
+          Exit(False);                  // Code-Kontext -> echter Match
+      end;
+      Dec(Q);
+    end;
+    // Source-Anfang erreicht ohne ''' oder Code-Marker - als Code behandeln.
+  end;
+
 begin
   Result := False;
   Hit    := '';
@@ -121,6 +169,13 @@ begin
         if (PRight > Length(Low))
            or not CharInSet(Low[PRight], ['a'..'z', '0'..'9', '_']) then
         begin
+          // FP-Schutz: 'des' (deutsches Wort), 'rc4' etc. nicht in
+          // natuersprachlichen Translation-/Log-Strings flaggen.
+          if IsNaturalLanguageContext(P) then
+          begin
+            P := Pos(Tok, Low, P + 1);
+            Continue;
+          end;
           // Canonical-Form fuer User-Output. UpperCase ausser bei Token
           // mit '.' (TLS1.0 statt TLS1.0 - okay UpperCase eh idempotent).
           Hit := UpperCase(Tok);

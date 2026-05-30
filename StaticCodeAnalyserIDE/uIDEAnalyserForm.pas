@@ -1014,6 +1014,15 @@ procedure TAnalyserFrame.PopulateFilterCombo;
 begin
   // ---- Gesamt-Kategorien ----
   Add('All',            fmAll);
+  // Spezial-Modus fuer Detector-Qualitaets-Review: zeigt EINEN zufaelligen
+  // Befund pro Detector-Kind. Severity/Type-Filter wirken danach auf die
+  // Stichprobe (kein erneutes Sampling beim Toggle).
+  // Nur in DEBUG-Builds UND wenn die INI [Rules] EnableDetectorReviewFilter
+  // gesetzt hat - Release-Builds sehen den Eintrag nie (internes Tool).
+  {$IFDEF DEBUG}
+  if Assigned(FRepoSettings) and FRepoSettings.DetectorReviewFilterEnabled then
+    Add('Detector Review (1 per detector, random)', fmDetectorReview);
+  {$ENDIF}
   Add('Errors (all)',   fmErrors);
   Add('Warnings (all)', fmWarnings);
   Add('Hints (all)',    fmHints);
@@ -1518,6 +1527,34 @@ begin
     for i := 0 to FAllFindings.Count - 1 do
       if TFindingFilter.Matches(FAllFindings[i], Criteria) then
         FDisplayedFindings.Add(FAllFindings[i]);
+
+    // ---- DetectorReview-Stichprobe ----------------------------------
+    // Pro Detector-Kind 1 zufaelligen Befund behalten. Wirkt NACH dem
+    // normalen Filter-Loop (Type/Search greifen weiter); Severity-Combo
+    // greift implizit nicht (fmDetectorReview faellt in Matches durch
+    // zum else-Pfad = True). Randomize bei jedem Aufruf - Reviewer sieht
+    // bei Re-Toggle eine andere Stichprobe und deckt ueber mehrere Klicks
+    // mehr Befunde ab.
+    if Criteria.Mode = fmDetectorReview then
+    begin
+      Randomize;
+      var Buckets := TObjectDictionary<TFindingKind,
+                       TList<TLeakFinding>>.Create([doOwnsValues]);
+      try
+        for var F in FDisplayedFindings do
+        begin
+          if not Buckets.ContainsKey(F.Kind) then
+            Buckets.Add(F.Kind, TList<TLeakFinding>.Create);
+          Buckets[F.Kind].Add(F);    // nur Referenzen, kein Free
+        end;
+        FDisplayedFindings.Clear;
+        for var Bucket in Buckets.Values do
+          if Bucket.Count > 0 then
+            FDisplayedFindings.Add(Bucket[Random(Bucket.Count)]);
+      finally
+        Buckets.Free;
+      end;
+    end;
 
     // ---- Sortierung (Logik in uFindingFilter.TFindingSorter.Sort) ----
     if FSortColumn >= 0 then

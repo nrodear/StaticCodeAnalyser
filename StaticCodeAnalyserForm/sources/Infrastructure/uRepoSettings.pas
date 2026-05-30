@@ -63,6 +63,8 @@ type
     FMinConfidence     : string;      // [Rules] MinConfidence = low|medium|high
     FIdeProfile        : string;      // [Rules] IdeProfile (Default: ide-fast)
     FIdeMinSeverity    : string;      // [Rules] IdeMinSeverity (Default: hint)
+    FDetectorReviewFilterEnabled : Boolean; // [Rules] EnableDetectorReviewFilter
+                                            // (Default False, Debug-Build-Tool)
     FSilentEnabled     : Boolean;     // [Silent] Enabled (Default: True)
     FShortcutsEnabled  : Boolean;     // [Hotkeys] ShortcutsEnabled (Master-Toggle, Default: True)
     FFindingNavEnabled : Boolean;     // [Hotkeys] FindingNavEnabled (Default: True)
@@ -216,6 +218,14 @@ type
                                                   write FIdeProfile;
     property IdeMinSeverity:          string      read FIdeMinSeverity
                                                   write FIdeMinSeverity;
+
+    // [Rules] EnableDetectorReviewFilter (bool, default False).
+    // Wenn True UND der Build hat das DEBUG-Symbol gesetzt, erscheint der
+    // 'Detector Review (1 per detector, random)'-Eintrag in der Severity-
+    // Filter-Combo. Release-Builds sehen ihn nie - das ist ein internes
+    // Review-Tool, nicht fuer End-User gedacht.
+    property DetectorReviewFilterEnabled: Boolean  read FDetectorReviewFilterEnabled
+                                                   write FDetectorReviewFilterEnabled;
 
     // [Silent] Enabled - schaltet das Editor-Rechtsklick-Item + Ctrl+Alt+A
     // an/aus. Default True. Wenn False feuert der Silent-Mode-Entrypoint
@@ -538,6 +548,13 @@ const
     'IdeMinSeverity=hint'#13#10 +
     ';IdeMinSeverity=warning'#13#10 +
     ''#13#10 +
+    '; EnableDetectorReviewFilter (bool, default: False)'#13#10 +
+    '; Internes Review-Tool: blendet einen Severity-Combo-Eintrag'#13#10 +
+    '; "Detector Review (1 per detector, random)" ein. Greift NUR wenn der'#13#10 +
+    '; Build mit {$DEFINE DEBUG} compiliert wurde - Release-Builds zeigen'#13#10 +
+    '; den Eintrag nie, egal wie diese Einstellung steht. Default off.'#13#10 +
+    ';EnableDetectorReviewFilter=true'#13#10 +
+    ''#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
     ';  [PathOverrides] - Pfad-basierte Severity-/Drop-Filter'#13#10 +
@@ -709,6 +726,7 @@ begin
   FMinConfidence  := 'medium';        // 'medium' = nur fcLow raus (Default)
   FIdeProfile     := 'ide-fast';      // IDE-Plugin Default: schnelles Subset
   FIdeMinSeverity := 'hint';          // IDE-Plugin: alle Severities (Subset deckt schon)
+  FDetectorReviewFilterEnabled := False; // internes Review-Tool, default aus
   FSilentEnabled  := True;            // Silent-Mode standardmaessig an
   FShortcutsEnabled  := True;         // Master-Toggle: alle Hotkeys an
   FFindingNavEnabled := True;         // Ctrl+Alt+Up/Down Finding-Nav an
@@ -883,6 +901,7 @@ begin
     // in FProfile/FMinSeverity gespiegelt - die INI bleibt unveraendert.
     FIdeProfile     := Trim(Ini.ReadString('Rules', 'IdeProfile',     'ide-fast'));
     FIdeMinSeverity := Trim(Ini.ReadString('Rules', 'IdeMinSeverity', 'hint')).ToLower;
+    FDetectorReviewFilterEnabled := Ini.ReadBool('Rules', 'EnableDetectorReviewFilter', False);
 
     // [Silent] Enabled (bool, Default True) - schaltet Editor-Rechtsklick +
     // Hotkey fuer den Silent-Mode an/aus. Konfigurierbar via Tools > Options
@@ -971,6 +990,7 @@ begin
     Ini.WriteString('Rules', 'MinConfidence',      FMinConfidence);
     Ini.WriteString('Rules', 'IdeProfile',         FIdeProfile);
     Ini.WriteString('Rules', 'IdeMinSeverity',     FIdeMinSeverity);
+    Ini.WriteBool  ('Rules', 'EnableDetectorReviewFilter', FDetectorReviewFilterEnabled);
     Ini.WriteBool  ('Silent', 'Enabled',           FSilentEnabled);
     Ini.WriteBool  ('Hotkeys', 'ShortcutsEnabled',        FShortcutsEnabled);
     Ini.WriteBool  ('Hotkeys', 'FindingNavEnabled',       FFindingNavEnabled);

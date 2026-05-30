@@ -27,6 +27,13 @@ unit uFloatEquality;
 //     in if-/while-/until-Kontexten, wo <ident> aus der Float-Var-Liste
 //     stammt. Operator-Match auch fuer `<>`.
 //
+// FP-Schutz fuer Scope-Blindheit:
+//   Wenn 'Value' in einer Float-Record-Felddeklaration vorkommt UND
+//   gleichzeitig ein anderer Pointer-/Boolean-Parameter den gleichen
+//   Namen hat, wuerde der Detector ohne Filter `Value = nil` flaggen.
+//   NEVER_FLOAT_TOKENS (nil/true/false) wird als Operand explizit
+//   ausgeschlossen - das sind nie Floats.
+//
 // Limitierungen:
 //   * Keine Type-Inferenz fuer Function-Returns oder Parameter
 //   * Konstante Literale (`0.5`, `1.0`) auf einer Seite werden korrekt
@@ -59,6 +66,19 @@ const
   FLOAT_TYPES : array[0..4] of string =
     ('single', 'double', 'extended', 'real', 'currency');
 
+  // Tokens die syntaktisch ein Operand sein koennen, semantisch aber NIE
+  // ein Float-Wert sind. Wenn eine Seite des '='-Vergleichs eines davon
+  // ist, ist es kein Float-Equality - egal ob die andere Seite zufaellig
+  // mit einer Float-Var-Namens-Kollision matched.
+  //
+  // Realer FP-Trigger: NullableString.Implicit(const Value: Pointer) hat
+  //   if Value = nil then ...
+  // Detector hat in FloatVars ein 'value' von NullableSingle.Value: Single
+  // -> Lhs.IndexOf('value') matched, ohne Scope-Awareness flaggt er. Mit
+  // dieser Liste wird 'nil' rausgefiltert bevor das Finding generiert wird.
+  NEVER_FLOAT_TOKENS : array[0..2] of string =
+    ('nil', 'true', 'false');
+
 function IsFloatType(const TypeText: string): Boolean;
 var
   Low : string;
@@ -67,6 +87,15 @@ begin
   Low := LowerCase(Trim(TypeText));
   for T in FLOAT_TYPES do
     if Low = T then Exit(True);
+  Result := False;
+end;
+
+function IsNeverFloatToken(const TokenLow: string): Boolean;
+// TokenLow ist bereits lowercased - direkter Vergleich.
+var T : string;
+begin
+  for T in NEVER_FLOAT_TOKENS do
+    if TokenLow = T then Exit(True);
   Result := False;
 end;
 
@@ -138,6 +167,12 @@ begin
         // NICHT numerische Literale wie `0.5` (haben Punkt + Ziffern).
         if (Pos('.', Lhs) > 0) and not CharInSet(Lhs[1], ['0'..'9']) then Continue;
         if (Pos('.', Rhs) > 0) and not CharInSet(Rhs[1], ['0'..'9']) then Continue;
+        // FP-Schutz: 'nil'/'true'/'false' sind nie Float - selbst wenn die
+        // andere Seite eine Identifier-Kollision mit einer Float-Var hat
+        // (Scope-Blindheit). Beispiel real-world:
+        //   if Value = nil   im Pointer-Operator
+        // wo FloatVars 'value' aus NullableSingle.Value: Single enthaelt.
+        if IsNeverFloatToken(LhsLow) or IsNeverFloatToken(RhsLow) then Continue;
         if (FloatVars.IndexOf(LhsLow) < 0) and (FloatVars.IndexOf(RhsLow) < 0) then
           Continue;
         // Welche Seite ist die Float-Var (fuer Detail-Text).

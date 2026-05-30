@@ -31,6 +31,9 @@ type
     // ---- Negative: Wortgrenz-FP-Schutz -----------------------------------
     [Test] procedure InsecureCrypto_MD5HashIdentifier_NoFinding;
     [Test] procedure InsecureCrypto_SHA1024Identifier_NoFinding;
+    // ---- Negative: Natur-Sprach-Kontext (FP-Regression) -----------------
+    [Test] procedure InsecureCrypto_DesInGermanSentence_NoFinding;
+    [Test] procedure InsecureCrypto_DesInLongerString_NoFinding;
 
     // ---- Finding-Inhalt --------------------------------------------------
     [Test] procedure InsecureCrypto_Finding_KindAndSeverity;
@@ -213,6 +216,43 @@ const SRC =
   'procedure Foo;'#13#10 +
   'var SHA1024: Integer;'#13#10 +
   'begin SHA1024 := 1; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm));
+  finally F.Free; end;
+end;
+
+procedure TTestInsecureCryptoAlgorithm.InsecureCrypto_DesInGermanSentence_NoFinding;
+// FP-Regression aus Real-World-Code (uLocalization.pas Z.155):
+//   GDeMap.Add('Free is outside the protecting finally block',
+//              'Free liegt außerhalb des schützenden finally-Blocks');
+// Das Wort 'des' (deutsch) zwischen zwei Spaces darf nicht als
+// Krypto-Algorithmus DES geflagged werden.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure SetupMap;'#13#10 +
+  'begin'#13#10 +
+  '  Map.Add(''Free is outside the protecting finally block'','#13#10 +
+  '          ''Free liegt au'#$DF'erhalb des sch'#$FC'tzenden finally-Blocks'');'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm),
+        'Deutsches ''des'' in Satz-Mitte darf nicht als DES-Krypto geflagged sein');
+  finally F.Free; end;
+end;
+
+procedure TTestInsecureCryptoAlgorithm.InsecureCrypto_DesInLongerString_NoFinding;
+// Englischer Satz mit ' des ' (z.B. franzoesischer Lehn-Begriff oder
+// abkuerzung). Trotzdem natuersprachlich, nicht Krypto.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  msg := ''The handling des operations was deprecated'';'#13#10 +
+  'end;';
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);

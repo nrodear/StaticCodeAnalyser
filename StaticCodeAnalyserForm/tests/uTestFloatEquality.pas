@@ -15,6 +15,13 @@ type
     [Test] procedure Assignment_NotReported;
     [Test] procedure Finding_KindAndSeverity;
     [Test] procedure StringEqualityWithFloatVarNameElsewhere_NotReported;
+    // FP-Regression: nil/true/false als Operand sind nie Float - der
+    // Scope-blinde FloatVars-Lookup darf nicht mit Pointer-/Boolean-
+    // Vergleichen kollidieren (Real-World: MVCFramework.Nullables.pas
+    // 'if Value = nil' wo Value sowohl als Pointer als auch als Float-
+    // Feld irgendwo im File auftaucht).
+    [Test] procedure NilCompareWithFloatVarNameElsewhere_NotReported;
+    [Test] procedure BooleanCompareWithFloatVarNameElsewhere_NotReported;
   end;
 
 implementation
@@ -141,6 +148,44 @@ begin
         Inc(Hit);
     Assert.AreEqual(0, Hit, 'String-Compare gegen Keyword darf nicht ' +
       'als Float-Equality kassiert werden');
+  finally F.Free; end;
+end;
+
+procedure TTestFloatEquality.NilCompareWithFloatVarNameElsewhere_NotReported;
+// FP-Regression aus Real-World (MVCFramework.Nullables.pas Z.1849):
+//   NullableSingle = record Value: Single; end;  -> FloatVars hat 'value'
+//   class operator Implicit(const Value: Pointer): ...;
+//   begin if Value = nil then ...  // <- Pointer-Compare, kein Float
+const SRC =
+  'unit t; implementation'#13#10 +
+  'type NullableSingle = record Value: Single; end;'#13#10 +
+  'procedure Foo(const Value: Pointer);'#13#10 +
+  'begin'#13#10 +
+  '  if Value = nil then Exit;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkFloatEquality),
+        'Pointer = nil darf nicht als Float-Equality kassiert werden');
+  finally F.Free; end;
+end;
+
+procedure TTestFloatEquality.BooleanCompareWithFloatVarNameElsewhere_NotReported;
+// Analog zu NilCompare aber mit Boolean-Vergleich. 'true'/'false' sind
+// nie Float, auch wenn ein gleichnamiges Float-Feld im File deklariert ist.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'type TFoo = record Value: Double; end;'#13#10 +
+  'procedure Bar(const Value: Boolean);'#13#10 +
+  'begin'#13#10 +
+  '  if Value = True then Exit;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkFloatEquality),
+        'Boolean = True darf nicht als Float-Equality kassiert werden');
   finally F.Free; end;
 end;
 

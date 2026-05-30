@@ -935,6 +935,10 @@ msgstr "Shell-API mit String-Konkatenation im Argument aufgerufen"
 msgid "Top-level routine appears unused (dead code)"
 msgstr "Top-Level-Routine scheint ungenutzt (toter Code)"
 
+# ---- DetectorReview-Filter (UI-Combo-Eintrag) ----------------------------
+msgid "Detector Review (1 per detector, random)"
+msgstr "Detector-Review (1 zufaelliger Befund pro Detector)"
+
 # ---- Severity-Filter combo: Sonar-50 Critical (SCA132-133) ------------------
 msgid "Exception Too General"
 msgstr "Zu allgemeine Exception"

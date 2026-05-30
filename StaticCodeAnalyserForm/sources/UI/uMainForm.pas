@@ -252,6 +252,23 @@ begin
   // Tag-Objects halten Ord(TFilterMode/TTypeFilter); ApplyFilter liest sie
   // wieder raus. Liste analog zum IDE-Plugin (uIDEAnalyserForm.CreateUI).
   SeverityFilterCombo.Items.AddObject(_('All'),                    TObject(Ord(fmAll)));
+  // DetectorReview: nur in DEBUG-Builds UND wenn die INI
+  // [Rules] EnableDetectorReviewFilter=true gesetzt hat. Release-Builds
+  // sehen den Eintrag nie - internes Review-Tool, nicht fuer End-User.
+  {$IFDEF DEBUG}
+  begin
+    var DRCfg := TRepoSettings.Create;
+    try
+      try DRCfg.Load; except end;
+      if DRCfg.DetectorReviewFilterEnabled then
+        SeverityFilterCombo.Items.AddObject(
+          _('Detector Review (1 per detector, random)'),
+          TObject(Ord(fmDetectorReview)));
+    finally
+      DRCfg.Free;
+    end;
+  end;
+  {$ENDIF}
   SeverityFilterCombo.Items.AddObject(_('Errors (all)'),           TObject(Ord(fmErrors)));
   SeverityFilterCombo.Items.AddObject(_('Warnings (all)'),         TObject(Ord(fmWarnings)));
   SeverityFilterCombo.Items.AddObject(_('Hints (all)'),            TObject(Ord(fmHints)));
@@ -964,6 +981,34 @@ begin
     f := FAllFindings[i];
     if TFindingFilter.Matches(f, Criteria) then
       FDisplayedFindings.Add(f);
+  end;
+
+  // DetectorReview-Stichprobe: pro Detector-Kind 1 zufaelligen Befund
+  // behalten. Wird NACH dem normalen Filter-Loop ausgefuehrt, damit
+  // Type-/Search-Filter weiter wirken. Severity-Combo greift implizit
+  // nicht (fmDetectorReview faellt im Matches durch zum 'else' = True).
+  if Criteria.Mode = fmDetectorReview then
+  begin
+    // Randomize bei jedem Aufruf: anderer Sample bei jeder Filter-
+    // Aktion (Reviewer sieht bei Re-Toggle eine neue Stichprobe und
+    // deckt ueber mehrere Klicks mehr Befunde ab).
+    Randomize;
+    var Buckets := TObjectDictionary<TFindingKind,
+                     TList<TLeakFinding>>.Create([doOwnsValues]);
+    try
+      for f in FDisplayedFindings do
+      begin
+        if not Buckets.ContainsKey(f.Kind) then
+          Buckets.Add(f.Kind, TList<TLeakFinding>.Create);
+        Buckets[f.Kind].Add(f);  // nur Referenzen, kein Free
+      end;
+      FDisplayedFindings.Clear;
+      for var Bucket in Buckets.Values do
+        if Bucket.Count > 0 then
+          FDisplayedFindings.Add(Bucket[Random(Bucket.Count)]);
+    finally
+      Buckets.Free;
+    end;
   end;
 
   // Anzeige-Cap: TStringGrid wird ab ~50k Zeilen spuerbar trag. Sind mehr
