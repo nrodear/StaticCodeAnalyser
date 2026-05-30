@@ -17,7 +17,9 @@ program StaticCodeAnalyser.d12;
 uses
   Winapi.Windows,
   Vcl.Forms,
+  Vcl.Graphics,
   System.SysUtils,
+  uBrandingImage in '..\branding\uBrandingImage.pas',
   MeineUnit in 'resources\MeineUnit.pas',
   MainController in 'sources\MainController.pas',
   uAnalyserPalette in 'sources\UI\uAnalyserPalette.pas',
@@ -82,6 +84,7 @@ uses
   uPointerSubtraction in 'sources\Detectors\uPointerSubtraction.pas',
   uInsecureCryptoAlgorithm in 'sources\Detectors\uInsecureCryptoAlgorithm.pas',
   uCommandInjection in 'sources\Detectors\uCommandInjection.pas',
+  uUnusedRoutine in 'sources\Detectors\uUnusedRoutine.pas',
   uStringFromPointer in 'sources\Detectors\uStringFromPointer.pas',
   uEmptyOnHandler in 'sources\Detectors\uEmptyOnHandler.pas',
   uUnusedPrivateMethod in 'sources\Detectors\uUnusedPrivateMethod.pas',
@@ -236,6 +239,10 @@ uses
   uCustomClassDiscovery in 'sources\Detectors\uCustomClassDiscovery.pas';
 
 {$R *.res}
+// branding\sca_branding.rc wird via <RcCompile>-Eintrag im .dproj kompiliert
+// (siehe StaticCodeAnalyser.d12.dproj). Kein {$R rc-file}-Directive hier -
+// das wuerde RLINK32 mit dem 16-bit-BRC statt BRCC32 antriggern und mit
+// "E2161 RLINK32: Unsupported 16bit resource" failen.
 
 // Erkennung CLI- vs GUI-Mode: jeder Argument der mit '-' oder '/' anfaengt
 // (typische Switch-Praefixe) -> CLI. Sonst -> GUI starten.
@@ -306,6 +313,21 @@ begin
   begin
     Application.Initialize;
     Application.MainFormOnTaskbar := True;
+    // Branding-Icon aus eingebetteter PNG-Resource VOR CreateForm setzen,
+    // damit das Hauptformular es als Default fuer sein Window-Icon nimmt.
+    // TIcon.Assign(TPngImage) nutzt in Delphi 12 den WIC-Codec - skaliert
+    // automatisch auf System-Icon-Groessen (16/32/48/256). Best-effort:
+    // falls Resource fehlt oder WIC nicht greift, schweigend Default-Icon.
+    try
+      var BrandingPng := uBrandingImage.LoadSCAPng;
+      try
+        Application.Icon.Assign(BrandingPng);
+      finally
+        BrandingPng.Free;
+      end;
+    except
+      // Resource nicht eingebettet / WIC-Decoder-Mismatch - kein Crash.
+    end;
     Application.CreateForm(TForm2, Form2);
   // uCustomerForm + uOrderForm sind Test-Fixtures fuer die DFM-Detektoren
     // (qCustomers: TFDQuery, dsOrders: TDataSetProvider, ...). Sie bleiben

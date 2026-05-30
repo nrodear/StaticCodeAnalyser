@@ -69,8 +69,13 @@ var
   // schritten, zeigt das Grid nur die ersten N Eintraege (nach Sortierung)
   // und der Status macht das transparent. Export/CSV/Baseline arbeiten
   // weiterhin mit der vollen Liste.
-  //   0 = kein Cap (Alt-Verhalten, gefaehrlich bei riesigen Repos)
-  UIMaxDisplayedFindings : Integer = 10000;
+  //   0 = kein Cap (User-Wunsch 2026-05-31: alle Befunde anzeigen, auch
+  //   wenn TStringGrid bei >50k spuerbar laggt - siehe
+  //   Konzept_GridPerformance150k.md fuer Optimierungs-Optionen).
+  //   Beide Consumer (uMainForm Standalone + uIDEAnalyserForm Plugin)
+  //   pruefen `if UIMaxDisplayedFindings > 0` und ueberspringen das Cap
+  //   bei 0 - kein weiterer Code-Aufruf noetig.
+  UIMaxDisplayedFindings : Integer = 0;
 
   // Trivial-Liste fuer uMagicNumbers - Zahlen die NICHT als Magic-Number
   // gemeldet werden. Default: 0,1,2,-1,10,100. INI-Override moeglich.
@@ -538,11 +543,17 @@ type
                                  // Krypto-Verfahren (MD5/SHA1/DES/RC4/TLS1.0)
                                  // via Stringliteral oder Klassen-/Funktions-
                                  // Aufruf (THashMD5, TIdHashSHA1, ...).
-    fkCommandInjection           // SCA163 - ShellExecute/CreateProcess/WinExec
+    fkCommandInjection,          // SCA163 - ShellExecute/CreateProcess/WinExec
                                  // mit String-Konkatenation im Command-
                                  // Argument - mit untrusted Input = Command-
                                  // Injection-Risiko. Confidence-Default fcLow,
                                  // da ohne Taint-Tracking heuristisch.
+    fkUnusedRoutine              // SCA164 - top-level Procedure/Function im
+                                 // Unit-Scope die nirgendwo aufgerufen wird.
+                                 // Schliesst die Luecke zwischen SCA147
+                                 // (nur class private) und SCA148+ (nur class
+                                 // public). Single-File-Scope mit Self-Call-
+                                 // Exclusion (analog SonarDelphi UnusedRoutine).
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -762,7 +773,8 @@ const
     (Name: 'StringFromPointer';          FindingType: ftBug;          DefaultSeverity: lsWarning), // fkStringFromPointer
     (Name: 'PointerSubtraction';         FindingType: ftBug;          DefaultSeverity: lsWarning), // fkPointerSubtraction
     (Name: 'InsecureCryptoAlgorithm';    FindingType: ftVulnerability;DefaultSeverity: lsWarning), // fkInsecureCryptoAlgorithm
-    (Name: 'CommandInjection';           FindingType: ftVulnerability;DefaultSeverity: lsError)    // fkCommandInjection
+    (Name: 'CommandInjection';           FindingType: ftVulnerability;DefaultSeverity: lsError),   // fkCommandInjection
+    (Name: 'UnusedRoutine';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkUnusedRoutine
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

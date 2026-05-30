@@ -3907,6 +3907,51 @@ begin
         'Client.SecureProtocols := [tls12, tls13];';
     end;
 
+    fkUnusedRoutine:
+    begin
+      Result.Description := _('Top-level routine appears unused (dead code)');
+      Result.Before :=
+        'implementation'#13#10 +
+        ''#13#10 +
+        'procedure InternalHelper;   // <- never called from anywhere'#13#10 +
+        'begin'#13#10 +
+        '  WriteLn(''hi'');'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        'procedure DoWork;'#13#10 +
+        'begin'#13#10 +
+        '  // ... no call to InternalHelper here ...'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        'end.'#13#10 +
+        ''#13#10 +
+        '// Single-file scope: cross-unit callers of interface-section'#13#10 +
+        '// routines are NOT tracked, so this rule only fires for routines'#13#10 +
+        '// that are implementation-only (no forward declaration).';
+      Result.After :=
+        '// Option 1: delete the routine.'#13#10 +
+        ''#13#10 +
+        '// Option 2: call it from somewhere - the call site that you'#13#10 +
+        '// forgot during the refactoring.'#13#10 +
+        ''#13#10 +
+        '// Option 3: promote it to the interface section if it is meant'#13#10 +
+        '// to be exported - this rule then steps back automatically.'#13#10 +
+        'interface'#13#10 +
+        '  procedure InternalHelper;'#13#10 +
+        'implementation'#13#10 +
+        '  procedure InternalHelper;'#13#10 +
+        '  begin'#13#10 +
+        '    WriteLn(''hi'');'#13#10 +
+        '  end;'#13#10 +
+        ''#13#10 +
+        '// Option 4: suppress for RTTI / attribute / plugin-loaded routines:'#13#10 +
+        '// noinspection UnusedRoutine'#13#10 +
+        'procedure CalledByPluginLoader;'#13#10 +
+        'begin'#13#10 +
+        '  ...'#13#10 +
+        'end;';
+    end;
+
     fkCommandInjection:
     begin
       Result.Description := _('Shell API called with string concatenation in arguments');

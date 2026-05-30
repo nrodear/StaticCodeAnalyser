@@ -108,3 +108,47 @@ geringem Bug-Finding-Wert. Bei Bedarf später einzeln aufnehmen.
    32→64-bit-Migration.
 4. **B24–B33** als Code-Quality-Sweep.
 5. **C34–C37** (Forbidden-API) sobald Projekt-Policy klar.
+
+---
+
+## Pflicht-Deliverable je Detector: Demo-Datei
+
+Zusätzlich zur Detector-Unit, Tests und Pipeline-Integration (Checkliste siehe
+[Todo_neuerdetector.md](../Todo_neuerdetector.md)) **muss** jeder neue
+Detector eine begleitende Demo-`.pas` im Ordner `docs/samples/` erhalten.
+
+### Konvention
+
+- **Pfad**: `docs/samples/u<DetectorKind>_SCA<id>_Demo.pas`
+- **Unit-Name**: identisch zum Dateinamen (Pascal-Pflicht)
+- **Header-Kommentar**: nennt den Detector-Kind, die SCA-ID und die
+  erwarteten Findings inkl. Zeilennummer und Routine-/Symbol-Name
+- **Inhalt**: Mix aus
+  - mindestens 1 Routine die **flagged** wird (mit `🚩`-Kommentar)
+  - mindestens 1 Routine pro FP-Guard, die **NICHT** flagged wird (mit
+    Kommentar warum der Guard greift)
+  - mindestens 1 Routine, die durch echten Aufruf abgedeckt ist
+  - optional: ein Beispiel mit `// noinspection <Kind>`-Suppression
+- **Sekundäre Detektoren**: die Demo darf andere Detektoren mit-triggern
+  (z. B. SCA147 bei einer SCA164-Demo durch ein eigenes Klassen-Feld) —
+  im Header-Kommentar dokumentieren, was zur Detector-Demo gehört und was
+  Co-Finding ist.
+
+### Vorhandene Beispiele
+
+| Demo | Detector | Verwendet als Vorlage für |
+|---|---|---|
+| [uUnusedRoutine_SCA164_Demo.pas](samples/uUnusedRoutine_SCA164_Demo.pas) | SCA164 `UnusedRoutine` | Standalone-Routinen, Self-Call-Exclusion, 5 FP-Guards |
+| [uUnusedPrivateMethod_SCA147_Demo.pas](samples/uUnusedPrivateMethod_SCA147_Demo.pas) | SCA147 `UnusedPrivateMethod` | class private / strict private, Property-Getter, Suppression-Marker |
+
+### Warum verbindlich?
+
+- **Regression-Sicherung**: jede FP-Guard-Änderung lässt sich in <30 Sekunden
+  durch IDE-Run gegen die Demo verifizieren — Drift-Frühwarnung
+- **Living Documentation**: PR-Reviewer sehen das Detector-Verhalten an einer
+  echten Pascal-Datei statt nur in Test-String-Konstanten
+- **Onboarding**: neuer Contributor versteht in 5 Minuten was der Detector
+  meldet und warum, ohne die Test-Unit durcharbeiten zu müssen
+- **Cross-Detector-Sanity**: bei `docs/samples/`-Lauf werden FP-Klassen
+  zwischen Detektoren sichtbar (z. B. erzeugt eine SCA147-Demo idealerweise
+  0 SCA164-Findings)

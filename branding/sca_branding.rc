@@ -1,0 +1,17 @@
+// Branding-Resource fuer StaticCodeAnalyser (Standalone + IDE-Plugin).
+//
+// Eine einzige RC-Datei wird von beiden Projekten via <RcCompile> aus dem
+// dproj eingebunden - Single source of truth fuer das App-Image.
+//
+// WICHTIG: NICHT via {$R '...sca_branding.rc'} im .dpr/.dpk einbinden -
+// dieser Pfad wuerde den alten 16-bit BRC.exe statt BRCC32 antriggern und
+// mit "E2161 RLINK32: Unsupported 16bit resource" failen. Der Modern-Path
+// geht ueber das dproj-XML-Element <RcCompile>.
+//
+// Runtime-Load: TResourceStream(HInstance, 'SCA_APP_PNG', RT_RCDATA);
+// Helper:       uBrandingImage.LoadSCAPng / LoadSCABitmap
+
+LANGUAGE 0, 0   // LANG_NEUTRAL, SUBLANG_NEUTRAL - explizit setzen damit
+                // BRCC32 nicht in einen System-Locale-Default kippt.
+
+SCA_APP_PNG RCDATA "sca.png"

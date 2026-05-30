@@ -166,6 +166,7 @@ uses
   uTestPointerSubtraction in 'uTestPointerSubtraction.pas',
   uTestInsecureCryptoAlgorithm in 'uTestInsecureCryptoAlgorithm.pas',
   uTestCommandInjection in 'uTestCommandInjection.pas',
+  uTestUnusedRoutine in 'uTestUnusedRoutine.pas',
   uTestSuppressionCompleteness in 'uTestSuppressionCompleteness.pas',
   // ---- Geister-Tests nachregistriert (Audit_AllDetectors.md V1, 2026-05-30) ----
   uTestAbstractNotImpl in 'uTestAbstractNotImpl.pas',

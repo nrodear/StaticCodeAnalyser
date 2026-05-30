@@ -1,6 +1,10 @@
 package StaticCodeAnalyser.IDE.d12;
 
 {$R *.res}
+// branding\sca_branding.rc wird via <RcCompile>-Eintrag im .dproj kompiliert
+// (siehe StaticCodeAnalyser.IDE.d12.dproj). Kein {$R rc-file}-Directive hier -
+// das wuerde RLINK32 mit dem 16-bit-BRC statt BRCC32 antriggern und mit
+// "E2161 RLINK32: Unsupported 16bit resource" failen.
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
 {$ALIGN 8}
 {$ASSERTIONS ON}
@@ -256,6 +260,8 @@ contains
   uStringFromPointer in '..\StaticCodeAnalyserForm\sources\Detectors\uStringFromPointer.pas',
   uPointerSubtraction in '..\StaticCodeAnalyserForm\sources\Detectors\uPointerSubtraction.pas',
   uInsecureCryptoAlgorithm in '..\StaticCodeAnalyserForm\sources\Detectors\uInsecureCryptoAlgorithm.pas',
-  uCommandInjection in '..\StaticCodeAnalyserForm\sources\Detectors\uCommandInjection.pas';
+  uCommandInjection in '..\StaticCodeAnalyserForm\sources\Detectors\uCommandInjection.pas',
+  uUnusedRoutine in '..\StaticCodeAnalyserForm\sources\Detectors\uUnusedRoutine.pas',
+  uBrandingImage in '..\branding\uBrandingImage.pas';
 
 end.

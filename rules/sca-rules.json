@@ -3191,6 +3191,25 @@
       "impacts": [
         { "softwareQuality": "SECURITY", "severity": "HIGH" }
       ]
+    },
+    {
+      "id": "SCA164",
+      "kind": "UnusedRoutine",
+      "name": "Top-level routine never called",
+      "shortDescription": "Standalone procedure/function in the implementation section is never called from anywhere in the unit and is not exported via the interface section - dead code",
+      "fullDescription": "Fills the gap between SCA147 (UnusedPrivateMethod - only class private methods) and the visibility-check family SCA148+ (only class public members). Detects top-level (non-class) routines whose name does not appear as a caller anywhere in the same unit, excluding self-references (a recursive routine that only calls itself is still flagged - mirrors SonarDelphi UnusedRoutineCheck behaviour). False-positive guards: constructors and destructors (not directly callable as a procedure), the `override`/`virtual; abstract`/`message`/`dynamic` directives (cross-class or system dispatch), the IDE-bootstrap `Register` procedure, the enumerator trio (`MoveNext`/`GetEnumerator`/`Current` - invoked implicitly by `for-in`), and any routine forward-declared in the unit's interface section (potential cross-unit consumer). Scope is single-file - cross-unit callers of interface-section routines are not tracked in this MVP, so those are intentionally skipped. Suppress with `// noinspection UnusedRoutine` when the routine is intentionally kept (RTTI-driven invocation, attribute-consumed, plugin-loaded). Maps to SonarDelphi UnusedRoutineCheck.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["dead-code", "maintainability", "sonardelphi"],
+      "detectorUnit": "uUnusedRoutine.pas",
+      "examples": {
+        "bad":  "implementation\nprocedure InternalHelper;     // never called\nbegin\n  WriteLn('hi');\nend;\nend.",
+        "good": "implementation\n// remove InternalHelper, or call it from somewhere,\n// or move it to interface if it should be exported"
+      },
+      "cleanCodeAttribute": "CLEAR",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     }
   ]
 }

@@ -15,6 +15,13 @@ sca-findings.json
 .sonar/
 .scannerwork/
 
+# ---- BRCC32-generierte Branding-Resource ----
+# branding/sca_branding.rc wird via <RcCompile> im dproj zu sca_branding.res
+# kompiliert. Die .rc ist die Source, die .res ein derived Artefakt das pro
+# Subprojekt im jeweiligen Build-Pfad landet. Nicht checken-in - regeneriert
+# sich automatisch bei jedem IDE-Build.
+sca_branding.res
+
 # ---- Build-Output-Verzeichnisse ----
 # Delphi schreibt kompilierte Artefakte (DCU/BPL/EXE/DLL) typisch
 # nach <Plattform>/<Konfiguration>/. Komplett ignorieren.
