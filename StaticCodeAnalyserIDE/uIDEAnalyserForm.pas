@@ -115,8 +115,9 @@ type
     // MenuItems deren Enabled-Zustand sich zur Laufzeit aendert:
     //   FMICancel         - nur waehrend laufender Analyse aktiv
     //   FMIAnalyseChanged - waehrend Analyse deaktiviert
-    // Sync via HamburgerMenuPopup an FAnalyseProgress.Running.
-    FMICancel, FMIAnalyseChanged                   : TMenuItem;
+    //   FMIClearMarks     - nur aktiv wenn GHighlighter ueberhaupt Marker hat
+    // Sync via HamburgerMenuPopup an FAnalyseProgress.Running / GHighlighter.HasMarks.
+    FMICancel, FMIAnalyseChanged, FMIClearMarks    : TMenuItem;
     FLblFilter, FLblType                           : TLabel;
     // Eine horizontale Tile-Reihe: 4 Severity-Tiles + 3 Type-Tiles + Score.
     // Layout pro Tile: Glyph-Icon links + Count rechts (Top-Row), Caption
@@ -265,6 +266,11 @@ type
     // weil PrepareAnalysis dann UseIdeRuleSet + ApplyDetectorThresholds ruft.
     procedure ProfileChange(Sender: TObject);
     procedure CancelAnalyseClick(Sender: TObject);
+    // Loescht ALLE Hover-Annotation-Marker (Stripes + sichtbares Overlay)
+    // quer ueber alle Dateien. Nur Anzeige-Reset - die zugrundeliegende
+    // Findings-Liste im Grid bleibt unveraendert (User kann ueber "Markieren"
+    // im Kontextmenue erneut anzeigen).
+    procedure ClearAllMarksClick(Sender: TObject);
     procedure EditIgnoreListClick(Sender: TObject);
     procedure EditRepoSettingsClick(Sender: TObject);
     // Folge-Anpassungen die FResponsive nach jedem Resize triggert:
@@ -2336,6 +2342,20 @@ begin
   StatusMode(_('Cancelling analysis...'));
 end;
 
+procedure TAnalyserFrame.ClearAllMarksClick(Sender: TObject);
+// Entfernt mit einem Schlag ALLE Hover-Annotation-Marker quer ueber alle
+// Dateien: Editor-Stripes verschwinden, sichtbares Overlay-Popup wird
+// versteckt, Save-Notifier werden abgemeldet. Der GHighlighter.Clear-Pfad
+// triggert intern InvalidateAllLines + HideOverlay + DetachAllSaveNotifiers
+// (siehe uIDELineHighlighter.TFindingHighlighter.Clear). Das Grid mit den
+// Findings bleibt unveraendert - User kann ueber das Kontextmenue "Markieren"
+// erneut Marker setzen, ohne neu zu analysieren.
+begin
+  if Assigned(GHighlighter) then GHighlighter.Clear;
+  if Assigned(GAnnotationOverlay) then GAnnotationOverlay.HideOverlay;
+  StatusMode(_('All markers cleared.'));
+end;
+
 procedure TAnalyserFrame.EditIgnoreListClick(Sender: TObject);
 // Oeffnet die Ignore-Liste mit dem System-Default-Editor (Notepad).
 // Nach Schliessen muss der User die Analyse neu starten - die Datei wird
@@ -2537,6 +2557,12 @@ begin
   FMICancel.OnClick := CancelAnalyseClick;
   FHamburgerMenu.Items.Add(FMICancel);
 
+  // ---- Clear all hover-marker (Enabled-Sync ueber GHighlighter.HasMarks)
+  FMIClearMarks := TMenuItem.Create(FHamburgerMenu);
+  FMIClearMarks.Caption := _('Clear all markers');
+  FMIClearMarks.OnClick := ClearAllMarksClick;
+  FHamburgerMenu.Items.Add(FMIClearMarks);
+
   MI := TMenuItem.Create(FHamburgerMenu);
   MI.Caption := '-';
   FHamburgerMenu.Items.Add(MI);
@@ -2567,7 +2593,8 @@ end;
 
 procedure TAnalyserFrame.HamburgerMenuPopup(Sender: TObject);
 // Enabled-Sync VOR dem Oeffnen: Cancel ist nur waehrend laufender Analyse
-// aktiv; Branch-Changes ist waehrend Analyse deaktiviert.
+// aktiv; Branch-Changes ist waehrend Analyse deaktiviert;
+// Clear-Markers nur wenn ueberhaupt Marker im Highlighter liegen.
 begin
   if Assigned(FMICancel) then
     FMICancel.Enabled :=
@@ -2575,6 +2602,8 @@ begin
   if Assigned(FMIAnalyseChanged) then
     FMIAnalyseChanged.Enabled :=
       (not Assigned(FAnalyseProgress)) or (not FAnalyseProgress.Running);
+  if Assigned(FMIClearMarks) then
+    FMIClearMarks.Enabled := Assigned(GHighlighter) and GHighlighter.HasMarks;
 end;
 
 procedure TAnalyserFrame.HamburgerClick(Sender: TObject);

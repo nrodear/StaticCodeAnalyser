@@ -1130,6 +1130,12 @@ msgstr "Analyse abbrechen"
 msgid "Cancelling analysis..."
 msgstr "Analyse wird abgebrochen..."
 
+msgid "Clear all markers"
+msgstr "Alle Markierungen loeschen"
+
+msgid "All markers cleared."
+msgstr "Alle Markierungen geloescht."
+
 msgid "Cause"
 msgstr "Ursache"
 
