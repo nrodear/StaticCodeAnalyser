@@ -2,8 +2,8 @@ object CustomerForm: TCustomerForm
   Left = 0
   Top = 0
   Caption = 'Kundenpflege'
-  ClientHeight = 450
-  ClientWidth = 700
+  ClientHeight = 442
+  ClientWidth = 698
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -15,8 +15,8 @@ object CustomerForm: TCustomerForm
   object pnlForm: TPanel
     Left = 0
     Top = 0
-    Width = 700
-    Height = 401
+    Width = 698
+    Height = 393
     Align = alClient
     BevelOuter = bvNone
     TabOrder = 0
@@ -87,8 +87,8 @@ object CustomerForm: TCustomerForm
   end
   object pnlButtons: TPanel
     Left = 0
-    Top = 401
-    Width = 700
+    Top = 393
+    Width = 698
     Height = 49
     Align = alBottom
     BevelOuter = bvNone
