@@ -19,7 +19,12 @@
 
 LANGUAGE 0, 0
 
-SCA_APP_BMP BITMAP "sca_24.bmp"
+SCA_APP_BMP   BITMAP "sca_24.bmp"
+// 16x16-Variante fuers IDE-Tools-Menu - INTAServices.AddImages erwartet
+// 16x16 (Standard-IDE-Menu-Icon-Groesse). 24-bit (kein Alpha, weisser
+// Hintergrund) damit BRCC32 nicht meckert; AddMasked mit clWhite mappt
+// Weiss zur Transparency.
+SCA_APP_BMP16 BITMAP "sca_16.bmp"
 
 // ICON-Resource fuer das Window-Caption-Icon des IDE-Plugin-DockForms im
 // Float-Mode. Multi-Res 16/32/48 - Windows waehlt selbst je nach DPI /
