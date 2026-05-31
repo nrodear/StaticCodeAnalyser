@@ -107,8 +107,16 @@ begin
       //   except on E: Exception do begin
       //     WriteLn(...); Result := cecToolError;
       //   end;
-      if (Cur.Kind = nkAssign) and SameText(Trim(Cur.Name), 'Result') then
-        HasLeave := True;
+      // Wir akzeptieren auch Result.Field/Result[i]/Result^-Zuweisungen.
+      if Cur.Kind = nkAssign then
+      begin
+        NameLow := LowerCase(Trim(Cur.Name));
+        if (NameLow = 'result') or
+           NameLow.StartsWith('result.') or
+           NameLow.StartsWith('result[') or
+           NameLow.StartsWith('result^') then
+          HasLeave := True;
+      end;
 
       if Cur.Kind = nkCall then
       begin
