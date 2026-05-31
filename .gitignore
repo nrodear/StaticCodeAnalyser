@@ -106,3 +106,5 @@ node_modules/
 .claude/
 sca-selftest.sarif
 triage-samples.txt
+triage-mid.txt
+triage-tail.txt

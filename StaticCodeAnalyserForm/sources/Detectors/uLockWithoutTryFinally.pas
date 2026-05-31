@@ -154,6 +154,18 @@ const
   LOCK_ENTER_PATTERN =
     '(?i)\b(?:(\w+)\.(Enter|Acquire|BeginWrite)|EnterCriticalSection\s*\()';
 
+var
+  // Lazy-Cache: Pattern ist konstant, kein Grund pro File neu zu kompilieren.
+  CachedLockRe : TRegEx;
+  CachedReInit : Boolean = False;
+
+procedure EnsureRegexCacheBuilt;
+begin
+  if CachedReInit then Exit;
+  CachedLockRe := TRegEx.Create(LOCK_ENTER_PATTERN);
+  CachedReInit := True;
+end;
+
 function FindNextNonSpacePos(const Code: string; Start: Integer): Integer;
 // Skipt Whitespace + Newlines ab Start. Liefert die Position des
 // naechsten Nicht-Whitespace-Chars oder 0 wenn nur Whitespace bis EOF.
@@ -260,7 +272,6 @@ var
   Cached    : Boolean;
   Code      : string;
   LineFor   : TArray<Integer>;
-  Re        : TRegEx;
   Matches   : TMatchCollection;
   M         : TMatch;
   EndOfStmt : Integer;
@@ -269,6 +280,7 @@ var
   LineNo    : Integer;
   LockIdent : string;
 begin
+  EnsureRegexCacheBuilt;
   Lines := AcquireLines(FileName, Cached);
   if Lines = nil then Exit;
   try
@@ -276,8 +288,7 @@ begin
     // Strings keine False-Positives produziert.
     Code := StripFileComments(Lines, LineFor);
 
-    Re := TRegEx.Create(LOCK_ENTER_PATTERN);
-    Matches := Re.Matches(Code);
+    Matches := CachedLockRe.Matches(Code);
 
     for i := 0 to Matches.Count - 1 do
     begin

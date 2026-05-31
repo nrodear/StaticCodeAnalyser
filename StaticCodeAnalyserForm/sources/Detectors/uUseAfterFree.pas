@@ -67,6 +67,24 @@ uses
   System.RegularExpressions, System.StrUtils,
   uFileTextCache;
 
+var
+  // Lazy-Cache: beide Patterns sind konstant. ReEndOfMethod war besonders
+  // teuer weil er PRO Free-Match (= pro identifier-Free im File) neu
+  // kompiliert wurde - in Files mit vielen Free-Aufrufen Faktor 10+ Compiles.
+  CachedReFree        : TRegEx;
+  CachedReEndOfMethod : TRegEx;
+  CachedReInit        : Boolean = False;
+
+procedure EnsureRegexCacheBuilt;
+begin
+  if CachedReInit then Exit;
+  CachedReFree        := TRegEx.Create(
+    '(?i)(?:\bFreeAndNil\s*\(\s*(\w+)\s*\)|\b(\w+)\s*\.\s*Free\b)');
+  CachedReEndOfMethod := TRegEx.Create(
+    '(?im)^\s*end\s*;|\b(procedure|function|constructor|destructor|class\s+(?:procedure|function|constructor|destructor))\b');
+  CachedReInit := True;
+end;
+
 
 
 function IsIdentChar(C: Char): Boolean; inline;
@@ -170,7 +188,6 @@ var
   Cached   : Boolean;
   Code     : string;
   LineFor  : TArray<Integer>;
-  ReFree   : TRegEx;
   Matches  : TMatchCollection;
   M        : TMatch;
   Ident    : string;
@@ -191,7 +208,6 @@ var
     After : Char;
     EndP  : Integer;
     Snippet : string;
-    EndOfMethodRE : TRegEx;
     EndM  : TMatch;
     EndOfMethodPos : Integer;
   begin
@@ -200,9 +216,7 @@ var
     // `destructor`/`constructor`/`class` vor naechstem Use. Wir limitieren
     // den Scan auf das naechste solche Vorkommen.
     Snippet := Copy(Code, StartPos, CodeLen - StartPos + 1);
-    EndOfMethodRE := TRegEx.Create(
-      '(?im)^\s*end\s*;|\b(procedure|function|constructor|destructor|class\s+(?:procedure|function|constructor|destructor))\b');
-    EndM := EndOfMethodRE.Match(Snippet);
+    EndM := CachedReEndOfMethod.Match(Snippet);
     if EndM.Success then
       EndOfMethodPos := StartPos + EndM.Index - 1
     else
@@ -257,6 +271,7 @@ var
   end;
 
 begin
+  EnsureRegexCacheBuilt;
   Lines := AcquireLines(FileName, Cached);
   if Lines = nil then Exit;
   try
@@ -264,9 +279,7 @@ begin
     CodeLen := Length(Code);
 
     // FreeAndNil(<id>) oder <id>.Free als Free-Punkt erkennen.
-    ReFree := TRegEx.Create(
-      '(?i)(?:\bFreeAndNil\s*\(\s*(\w+)\s*\)|\b(\w+)\s*\.\s*Free\b)');
-    Matches := ReFree.Matches(Code);
+    Matches := CachedReFree.Matches(Code);
     for M in Matches do
     begin
       // Gruppe 1 = Ident in FreeAndNil(...), Gruppe 2 = Ident vor .Free

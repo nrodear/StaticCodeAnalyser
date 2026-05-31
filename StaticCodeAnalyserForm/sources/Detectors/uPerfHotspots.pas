@@ -42,6 +42,23 @@ uses
   System.RegularExpressions, System.StrUtils,
   uFileTextCache;
 
+var
+  // Lazy-Cache fuer die drei Module-konstanten Regex-Patterns. Spart 3x
+  // TRegEx.Create pro File pro Scan (Round-9 Code-Review / Perf).
+  CachedReConcat : TRegEx;
+  CachedReParam  : TRegEx;
+  CachedReField  : TRegEx;
+  CachedReInit   : Boolean = False;
+
+procedure EnsureRegexCacheBuilt;
+begin
+  if CachedReInit then Exit;
+  CachedReConcat := TRegEx.Create('(?i)\b([A-Za-z_][A-Za-z0-9_]*)\s*:=\s*\1\s*\+');
+  CachedReParam  := TRegEx.Create('(?i)\b\w+\.ParamByName\s*\(');
+  CachedReField  := TRegEx.Create('(?i)\b\w+\.FieldByName\s*\(');
+  CachedReInit   := True;
+end;
+
 function StripFileComments(Lines: TStringList; out LineForChar: TArray<Integer>): string;
 var
   Buf            : TStringBuilder;
@@ -239,9 +256,6 @@ var
   Code     : string;
   LineFor  : TArray<Integer>;
   Ranges   : TArray<TLoopRange>;
-  ReConcat : TRegEx;
-  ReParam  : TRegEx;
-  ReField  : TRegEx;
   M        : TMatch;
   Matches  : TMatchCollection;
   LineNo   : Integer;
@@ -261,6 +275,7 @@ var
   end;
 
 begin
+  EnsureRegexCacheBuilt;
   Lines := AcquireLines(FileName, Cached);
   if Lines = nil then Exit;
   try
@@ -270,8 +285,7 @@ begin
 
     // 1) String-Concat in Loop:  <var> := <var> + <expr>
     //    Wortgrenzen, Variable beidseitig identisch (case-insensitiv).
-    ReConcat := TRegEx.Create('(?i)\b([A-Za-z_][A-Za-z0-9_]*)\s*:=\s*\1\s*\+');
-    Matches := ReConcat.Matches(Code);
+    Matches := CachedReConcat.Matches(Code);
     for M in Matches do
       if PosInRanges(M.Index, Ranges) then
         Emit(fkStringConcatInLoop,
@@ -282,8 +296,7 @@ begin
           M.Index);
 
     // 2) ParamByName in Loop:   <obj>.ParamByName('...')
-    ReParam := TRegEx.Create('(?i)\b\w+\.ParamByName\s*\(');
-    Matches := ReParam.Matches(Code);
+    Matches := CachedReParam.Matches(Code);
     for M in Matches do
       if PosInRanges(M.Index, Ranges) then
         Emit(fkParamByNameInLoop,
@@ -293,8 +306,7 @@ begin
           M.Index);
 
     // 3) FieldByName in Loop:   <obj>.FieldByName('...')
-    ReField := TRegEx.Create('(?i)\b\w+\.FieldByName\s*\(');
-    Matches := ReField.Matches(Code);
+    Matches := CachedReField.Matches(Code);
     for M in Matches do
       if PosInRanges(M.Index, Ranges) then
         Emit(fkFieldByNameInLoop,

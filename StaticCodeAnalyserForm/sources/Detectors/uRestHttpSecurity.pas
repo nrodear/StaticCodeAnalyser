@@ -30,6 +30,27 @@ uses
   System.RegularExpressions, System.StrUtils,
   uFileTextCache, uDetectorUtils;
 
+var
+  // Module-Level Regex-Cache: Patterns sind konstant, kein Grund pro File
+  // neu zu kompilieren. Lazy-Init in der ersten AnalyzeUnit-Invocation
+  // (Initializer braeuchte sonst RegEx-Unit-Initialization-Order-Garantie).
+  // Spart 4 Compilations x N Files pro Scan.
+  CachedReHttp      : TRegEx;
+  CachedReSecProto  : TRegEx;
+  CachedReIgnoreCrt : TRegEx;
+  CachedReVerifyNil : TRegEx;
+  CachedReInit      : Boolean = False;
+
+procedure EnsureRegexCacheBuilt;
+begin
+  if CachedReInit then Exit;
+  CachedReHttp      := TRegEx.Create('''(http://[^''\s]+)''');
+  CachedReSecProto  := TRegEx.Create('(?i)\bSecureProtocols\s*:=\s*\[\s*\]');
+  CachedReIgnoreCrt := TRegEx.Create('(?i)\bIgnoreCertificateErrors\s*:=\s*True\b');
+  CachedReVerifyNil := TRegEx.Create('(?i)\bOnVerifyPeer\s*:=\s*nil\b');
+  CachedReInit      := True;
+end;
+
 function StripFileComments(Lines: TStringList; out LineForChar: TArray<Integer>): string;
 var
   Buf            : TStringBuilder;
@@ -132,10 +153,6 @@ var
   Code        : string;          // strings KEPT - used by URL matcher
   CodeNoStr   : string;          // strings filled with '~' - used by TLS matcher
   LineFor     : TArray<Integer>;
-  ReHttp      : TRegEx;
-  ReSecProto  : TRegEx;
-  ReIgnoreCrt : TRegEx;
-  ReVerifyNil : TRegEx;
   Matches     : TMatchCollection;
   M           : TMatch;
   LineNo      : Integer;
@@ -156,6 +173,7 @@ var
   end;
 
 begin
+  EnsureRegexCacheBuilt;
   Lines := AcquireLines(FileName, Cached);
   if Lines = nil then Exit;
   try
@@ -173,8 +191,7 @@ begin
     // 1) 'http://...' Stringliteral - aber NICHT XML-Namespace und NICHT
     //    Localhost. Match auf das gesamte URL-Literal bis whitespace
     //    oder ' (closing quote). NUTZT Code (mit Strings), nicht CodeNoStr.
-    ReHttp := TRegEx.Create('''(http://[^''\s]+)''');
-    Matches := ReHttp.Matches(Code);
+    Matches := CachedReHttp.Matches(Code);
     for M in Matches do
     begin
       Url := M.Groups[1].Value;
@@ -196,8 +213,7 @@ begin
     end;
 
     // 2a) ...SecureProtocols := [];   NUTZT CodeNoStr (kein Self-Match in Templates).
-    ReSecProto := TRegEx.Create('(?i)\bSecureProtocols\s*:=\s*\[\s*\]');
-    Matches := ReSecProto.Matches(CodeNoStr);
+    Matches := CachedReSecProto.Matches(CodeNoStr);
     for M in Matches do
       Emit(fkDisabledTlsVerification,
         'SecureProtocols := [] disables all TLS protocols - the HTTP ' +
@@ -206,8 +222,7 @@ begin
         M.Index);
 
     // 2b) ...IgnoreCertificateErrors := True
-    ReIgnoreCrt := TRegEx.Create('(?i)\bIgnoreCertificateErrors\s*:=\s*True\b');
-    Matches := ReIgnoreCrt.Matches(CodeNoStr);
+    Matches := CachedReIgnoreCrt.Matches(CodeNoStr);
     for M in Matches do
       Emit(fkDisabledTlsVerification,
         'IgnoreCertificateErrors := True silently accepts any TLS ' +
@@ -218,8 +233,7 @@ begin
 
     // 2c) OnVerifyPeer := nil (oder leerer Handler) - heuristisch nur
     //     der nil-Match, weil leere Handler AST brauchen.
-    ReVerifyNil := TRegEx.Create('(?i)\bOnVerifyPeer\s*:=\s*nil\b');
-    Matches := ReVerifyNil.Matches(CodeNoStr);
+    Matches := CachedReVerifyNil.Matches(CodeNoStr);
     for M in Matches do
       Emit(fkDisabledTlsVerification,
         'OnVerifyPeer := nil short-circuits the TLS certificate-validation ' +
