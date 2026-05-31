@@ -657,10 +657,15 @@ begin
                        (NameLow[pRight] = ' ');
       if BoundaryOK then
       begin
-        // Funktionsnamen-Teil vor '(' extrahieren und auf Cleanup-Suffix pruefen.
+        // Funktionsnamen-Teil vor '(' extrahieren und auf Cleanup-Marker pruefen.
+        // Akzeptiere sowohl 'Release' als Praefix ('ReleaseLines', 'ReleaseBuffer')
+        // als auch als Suffix ('MyRelease', 'BufferRelease'). Beide Konventionen
+        // sind in Delphi-Code praesent.
         var FnName := Copy(NameLow, 1, pMatch - 1);
-        if FnName.EndsWith('release') or FnName.EndsWith('dispose') or
-           FnName.EndsWith('return')  or FnName.EndsWith('recycle') then
+        if FnName.StartsWith('release') or FnName.EndsWith('release') or
+           FnName.StartsWith('dispose') or FnName.EndsWith('dispose') or
+           FnName.StartsWith('return')  or FnName.EndsWith('return')  or
+           FnName.StartsWith('recycle') or FnName.EndsWith('recycle') then
         begin
           Result := True; FoundInFinally := InFinally; Exit;
         end;

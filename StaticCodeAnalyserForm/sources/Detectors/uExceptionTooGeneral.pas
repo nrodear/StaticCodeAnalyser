@@ -101,6 +101,14 @@ begin
       // propagiert nach oben.
       if Cur.Kind = nkRaise then HasLeave := True;
       if Cur.Kind = nkExit  then HasLeave := True;
+      // Result := exit-code im Handler ist auch Leave-Pattern: Funktion
+      // gibt Fehler-Code zurueck und faellt natuerlich durch ans Method-End.
+      // Klassische CLI-Runner-/Worker-Translation:
+      //   except on E: Exception do begin
+      //     WriteLn(...); Result := cecToolError;
+      //   end;
+      if (Cur.Kind = nkAssign) and SameText(Trim(Cur.Name), 'Result') then
+        HasLeave := True;
 
       if Cur.Kind = nkCall then
       begin
