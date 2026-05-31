@@ -141,6 +141,13 @@ begin
          ((k + 2 > n) or not IsIdent(Line[k + 2])) then Continue;
       // Pruefe Name
       if (Length(Name) >= 1) and CharInSet(Name[1], ['T', 't']) then Continue;
+      // Exception-Klassen folgen der E-Prefix-Konvention (EFOpenError,
+      // EYamlParseError, EArgumentException). Sind KEIN TypeName-Verstoss.
+      // Heuristik: Name beginnt mit 'E' + Grossbuchstabe (CamelCase-Boundary)
+      // ODER endet auf 'Error'/'Exception'/'Exc'.
+      if (Length(Name) >= 2) and (Name[1] = 'E') and
+         CharInSet(Name[2], ['A'..'Z']) then Continue;
+      if EndsText('error', Name) or EndsText('exception', Name) then Continue;
       Result := Start;
       Exit;
     end;
