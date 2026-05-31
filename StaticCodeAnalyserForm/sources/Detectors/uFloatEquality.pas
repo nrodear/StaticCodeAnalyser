@@ -66,6 +66,19 @@ const
   FLOAT_TYPES : array[0..4] of string =
     ('single', 'double', 'extended', 'real', 'currency');
 
+  // Tokens die syntaktisch ein Operand sein koennen, semantisch aber NIE
+  // ein Float-Wert sind. Wenn eine Seite des '='-Vergleichs eines davon
+  // ist, ist es kein Float-Equality - egal ob die andere Seite zufaellig
+  // mit einer Float-Var-Namens-Kollision matched.
+  //
+  // Realer FP-Trigger: NullableString.Implicit(const Value: Pointer) hat
+  //   if Value = nil then ...
+  // Detector hat in FloatVars ein 'value' von NullableSingle.Value: Single
+  // -> Lhs.IndexOf('value') matched, ohne Scope-Awareness flaggt er. Mit
+  // dieser Liste wird 'nil' rausgefiltert bevor das Finding generiert wird.
+  NEVER_FLOAT_TOKENS : array[0..2] of string =
+    ('nil', 'true', 'false');
+
 var
   // Lazy-Cache (Round 11): konstante Patterns einmalig kompilieren.
   CachedReDecl  : TRegEx;
@@ -79,19 +92,6 @@ begin
   CachedReEqual := TRegEx.Create('(?i)\b(\w+(?:\.\w+)?)\s*(=|<>)\s*([\w.]+)');
   CachedReInit  := True;
 end;
-
-  // Tokens die syntaktisch ein Operand sein koennen, semantisch aber NIE
-  // ein Float-Wert sind. Wenn eine Seite des '='-Vergleichs eines davon
-  // ist, ist es kein Float-Equality - egal ob die andere Seite zufaellig
-  // mit einer Float-Var-Namens-Kollision matched.
-  //
-  // Realer FP-Trigger: NullableString.Implicit(const Value: Pointer) hat
-  //   if Value = nil then ...
-  // Detector hat in FloatVars ein 'value' von NullableSingle.Value: Single
-  // -> Lhs.IndexOf('value') matched, ohne Scope-Awareness flaggt er. Mit
-  // dieser Liste wird 'nil' rausgefiltert bevor das Finding generiert wird.
-  NEVER_FLOAT_TOKENS : array[0..2] of string =
-    ('nil', 'true', 'false');
 
 function IsFloatType(const TypeText: string): Boolean;
 var
