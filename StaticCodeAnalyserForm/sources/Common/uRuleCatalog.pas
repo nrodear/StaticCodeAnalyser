@@ -415,9 +415,13 @@ begin
     end;
 
     // ---- Profile-Block (optional) ----
-    // Format: "profiles": { "<name>": ["Kind1","Kind2","*", ...], ... }
-    // '*' expandiert zu allen Kinds; weitere Eintraege nach '*' werden
-    // additiv hinzugefuegt (z.B. "strict": ["*","UnusedUses"]).
+    // Format: "profiles": { "<name>": ["Kind1","Kind2","*","!Style", ...], ... }
+    // Token-Semantik (Reihenfolge zaehlt - links nach rechts angewandt):
+    //   * '*'                  expandiert zu allen Kinds
+    //   * 'Kind'               fuegt Kind hinzu
+    //   * '!Kind' bzw. '-Kind' entfernt Kind aus dem aktuellen Set
+    // Beispiel "selftest-quiet": ["*","!BeginEndRequired","!TooLongLine"]
+    // = "alle Detektoren AUSSER zwei Style-Regeln".
     // Unbekannte Kind-Tokens werden still ignoriert - kein Crash, der
     // Rest des Profils greift weiter. (Aelteres Tool, neueres JSON.)
     Profiles := FindObject(Root, 'profiles');
@@ -434,6 +438,9 @@ begin
           Token := ProfArr.Items[j].Value;
           if Token = '*' then
             ProfSet := ProfSet + AllKinds
+          else if (Length(Token) >= 2) and ((Token[1] = '!') or (Token[1] = '-')) and
+                  KindFromName(Copy(Token, 2, MaxInt), KK) then
+            Exclude(ProfSet, KK)
           else if KindFromName(Token, KK) then
             Include(ProfSet, KK);
           // unbekannte Tokens: still ignorieren - JSON kann Detector-Namen

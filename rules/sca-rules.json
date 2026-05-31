@@ -50,7 +50,22 @@
       "DfmActionMismatch"
     ],
     "default": ["*"],
-    "strict":  ["*", "UnusedUses"]
+    "strict":  ["*", "UnusedUses"],
+
+    "selftest-quiet": [
+      "*",
+      "!BeginEndRequired",
+      "!TooLongLine",
+      "!UnsortedUses",
+      "!ConsecutiveSection",
+      "!ClassPerFile",
+      "!EmptyVisibilitySection",
+      "!ConcatToFormat",
+      "!NestedTry",
+      "!GroupedDeclaration",
+      "!NilComparison",
+      "!CommentedOutCode"
+    ]
   },
   "rules": [
     {
