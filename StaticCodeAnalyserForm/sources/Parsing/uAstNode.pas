@@ -136,6 +136,15 @@ type
     function DirectChildCount(AKind: TNodeKind): Integer;
 
   private
+    // Lazy-Cache fuer FindAll-Resultate: pro Knoten + pro TNodeKind eine
+    // Quell-Liste, die einmalig per CollectAll befuellt wird. FindAll gibt
+    // KEINE Referenz auf die Quelle zurueck, sondern eine frische Kopie -
+    // Caller behalten Ownership wie bisher, koennen frei .Free / .Add aufrufen.
+    // INVARIANTE: AST ist nach dem Parsen immutable; Detektoren mutieren nie.
+    // Daher keine Invalidierung bei Add/AddChild noetig - die kommen nur
+    // waehrend des Parser-Builds, vor der ersten Detector-Query.
+    FFindAllCache: TObjectDictionary<TNodeKind, TList<TAstNode>>;
+    function EnsureCacheFor(AKind: TNodeKind): TList<TAstNode>;
     procedure CollectAll(AKind: TNodeKind; const AList: TList<TAstNode>);
     function CountSubtree(AKind: TNodeKind): Integer;
   end;
@@ -205,6 +214,10 @@ end;
 
 destructor TAstNode.Destroy;
 begin
+  // Cache haelt Pointer in die Children - zuerst die Cache-Wrappers freigeben,
+  // dann die Children. Reihenfolge egal fuer Korrektheit (Cache-Listen
+  // enthalten nur Pointer, kein Ownership), aber explizit fuer Lesbarkeit.
+  FFindAllCache.Free;
   Children.Free;
   inherited;
 end;
@@ -233,6 +246,12 @@ var
   i           : Integer;
 begin
   if (Source = nil) or (Source = Self) then Exit;
+
+  // Defensive Cache-Invalidierung: in der Praxis ist beim Adopt der
+  // FindAll-Cache noch nicht befuellt (Parser-Phase), aber wenn doch jemand
+  // jemals interleavt, sind die Cache-Quellen nach dem Adopt stale.
+  FreeAndNil(FFindAllCache);
+  FreeAndNil(Source.FFindAllCache);
 
   Source.Children.OwnsObjects := False;
   Transferred := 0;
@@ -307,18 +326,50 @@ begin
   end;
 end;
 
-function TAstNode.FindAll(AKind: TNodeKind): TList<TAstNode>;
+function TAstNode.EnsureCacheFor(AKind: TNodeKind): TList<TAstNode>;
+// Lazy-allokiert das Dictionary + die Quell-Liste fuer AKind. Mehrfach-
+// Aufrufer kriegen denselben Pointer zurueck (interne Quelle - NICHT freigeben,
+// nicht mutieren). Performance-Kern: ein CollectAll-Walk pro (Knoten,Kind),
+// danach O(1) Lookup.
 begin
+  if FFindAllCache = nil then
+    FFindAllCache := TObjectDictionary<TNodeKind, TList<TAstNode>>.Create([doOwnsValues]);
+  if not FFindAllCache.TryGetValue(AKind, Result) then
+  begin
+    Result := TList<TAstNode>.Create;
+    FFindAllCache.Add(AKind, Result);
+    CollectAll(AKind, Result);
+  end;
+end;
+
+function TAstNode.FindAll(AKind: TNodeKind): TList<TAstNode>;
+// Cache-First: einmaliger Walk pro (Knoten,Kind), danach O(n)-Copy
+// statt O(N)-Tree-Walk. Caller-Semantik unveraendert (eigene Liste, .Free
+// + Mutation erlaubt - die ist auf die Copy, nicht auf die Cache-Quelle).
+var
+  Source : TList<TAstNode>;
+begin
+  Source := EnsureCacheFor(AKind);
   Result := TList<TAstNode>.Create;
-  CollectAll(AKind, Result);
+  Result.AddRange(Source.ToArray);
 end;
 
 function TAstNode.FindFirst(AKind: TNodeKind): TAstNode;
+// Opportunistisch: wenn der FindAll-Cache fuer AKind schon befuellt ist,
+// O(1)-Lookup. Sonst klassischer Short-Circuit-Walk (KEIN Cache-Populate,
+// um nicht von O(Tiefe-zum-ersten-Match) auf O(N) zu regressen).
 var
-  Stack : TList<TAstNode>;
-  Cur   : TAstNode;
-  i     : Integer;
+  Cached : TList<TAstNode>;
+  Stack  : TList<TAstNode>;
+  Cur    : TAstNode;
+  i      : Integer;
 begin
+  if (FFindAllCache <> nil) and FFindAllCache.TryGetValue(AKind, Cached) then
+  begin
+    if Cached.Count > 0 then
+      Exit(Cached.First);
+    Exit(nil);
+  end;
   Result := nil;
   Stack  := TList<TAstNode>.Create;
   try
@@ -343,7 +394,14 @@ begin
 end;
 
 function TAstNode.ChildCount(AKind: TNodeKind): Integer;
+var
+  Cached : TList<TAstNode>;
 begin
+  // Opportunistisch wie FindFirst: Cache-Hit -> O(1), sonst Full-Walk
+  // wie bisher (CountSubtree spart die Liste-Allokation, populiert
+  // den Cache also bewusst NICHT).
+  if (FFindAllCache <> nil) and FFindAllCache.TryGetValue(AKind, Cached) then
+    Exit(Cached.Count);
   Result := CountSubtree(AKind);
 end;
 
