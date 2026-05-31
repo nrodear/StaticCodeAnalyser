@@ -168,11 +168,31 @@ var
     end;
   end;
 
+var
+  LocalNames : TDictionary<string, Boolean>;
+  LV         : TAstNode;
+  LVs        : TList<TAstNode>;
 begin
   Methods := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
     begin
+      // Lokale Var-Namen einmal pro Methode sammeln. Free-Calls auf Locals
+      // sind harmlos, weil die Variable beim Method-Ende sowieso aus dem
+      // Scope faellt - kein Dangling-Pointer-Risiko. FreeAndNil ist primaer
+      // fuer FELDER relevant (cross-method state). Self-Test fand
+      // ~100 FPs durch Locals (uAbstractNotImpl.Methods, uDetectorUtils.Chars, etc).
+      LocalNames := TDictionary<string, Boolean>.Create;
+      try
+        LVs := M.FindAll(nkLocalVar);
+        try
+          for LV in LVs do
+            if LV.Name <> '' then
+              LocalNames.AddOrSetValue(LowerCase(Trim(LV.Name)), True);
+        finally
+          LVs.Free;
+        end;
+
       Calls := M.FindAll(nkCall);
       try
         for N in Calls do
@@ -184,6 +204,9 @@ begin
           // wird selten von Nil-Out gefolgt (Owner-Pattern).
           if (RecvLow = 'self') or (RecvLow = 'result')
              or (RecvLow = 'inherited') then Continue;
+          // Receiver ist eine lokale Variable -> Free reicht, Var faellt
+          // beim Method-Ende aus dem Scope. KEIN Finding.
+          if LocalNames.ContainsKey(RecvLow) then Continue;
 
           if HasNilOutAfter(M, N, RecvLow) then Continue;
           if IsLastStmtOfMethod(M, N) then Continue;
@@ -200,6 +223,9 @@ begin
         end;
       finally
         Calls.Free;
+      end;
+      finally
+        LocalNames.Free;
       end;
     end;
   finally

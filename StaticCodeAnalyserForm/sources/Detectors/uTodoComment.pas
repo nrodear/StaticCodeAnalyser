@@ -105,9 +105,15 @@ function FindMarkerInComment(const Line: string;
   CommentStart: Integer; out Marker: string;
   out MarkerPos: Integer): Boolean;
 // Sucht den ersten Marker im Bereich [CommentStart..End-of-Line].
+//
+// FP-Schutz fuer Datei-/Pfad-Referenzen wie 'todo-sonar.md', 'todo.md':
+// nach dem Marker direkt ein '-' oder '.' (ohne Whitespace) deutet auf
+// einen kebab-/dotted-Identifier hin (Filename/Markdown-Link), nicht auf
+// einen TODO-Marker. Self-Test fand ~20 FPs auf todo-roadmap-Referenzen.
 var
   M       : string;
   p, pEnd : Integer;
+  Next    : Char;
 begin
   Result := False;
   for M in MARKERS do
@@ -129,6 +135,17 @@ begin
         begin
           Inc(p);
           Continue;
+        end;
+        // Datei-/Pfad-Heuristik: 'TODO' direkt gefolgt von '-' oder '.'
+        // -> 'todo-sonar.md', 'todo.md' etc. KEIN echter Marker.
+        if pEnd <= Length(Line) then
+        begin
+          Next := Line[pEnd];
+          if (Next = '-') or (Next = '.') or (Next = '/') or (Next = '\') then
+          begin
+            Inc(p);
+            Continue;
+          end;
         end;
         Marker    := M;
         MarkerPos := p;

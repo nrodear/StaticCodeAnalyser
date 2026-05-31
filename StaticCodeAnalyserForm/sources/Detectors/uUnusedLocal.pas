@@ -22,7 +22,7 @@
 interface
 
 uses
-  System.SysUtils, System.Generics.Collections,
+  System.SysUtils, System.Classes, System.Generics.Collections,
   uAstNode, uSCAConsts, uMethodd12;
 
 type
@@ -36,8 +36,34 @@ type
 
 implementation
 
+uses
+  uFileTextCache;
+
 const
   EMIT_SEVERITY = lsHint;
+
+// Verifiziert via Source-Line dass die LineNumber des Findings eine
+// echte Var-Deklaration zeigt (Identifier ':' Type) und KEIN nested
+// procedure/function-Header. Der AST kann beides als nkLocalVar liefern
+// weil ParseMethodImpl-Cleanup nested-Methods nicht sauber traegt;
+// dieser Filter haelt FPs am Reporting-Punkt ab.
+function LooksLikeRealLocalVar(Lines: TStringList; LineNo1: Integer): Boolean;
+var
+  S, T : string;
+begin
+  Result := True;
+  if (Lines = nil) or (LineNo1 <= 0) or (LineNo1 > Lines.Count) then Exit;
+  S := Lines[LineNo1 - 1];
+  T := LowerCase(TrimLeft(S));
+  // Nested-Routine: Zeile beginnt mit procedure/function/constructor/
+  // destructor/operator/class procedure/class function -> KEINE Var-Decl.
+  if T.StartsWith('procedure ')   or T.StartsWith('procedure(') or
+     T.StartsWith('function ')    or T.StartsWith('function(')  or
+     T.StartsWith('constructor ') or T.StartsWith('constructor(') or
+     T.StartsWith('destructor ')  or T.StartsWith('destructor(')  or
+     T.StartsWith('operator ')    or T.StartsWith('class ')      then
+    Exit(False);
+end;
 
 function IsIdentChar(C: Char): Boolean; inline;
 begin
@@ -105,9 +131,12 @@ var
   BodyLow : string;
   RefCount : Integer;
   F : TLeakFinding;
+  Lines  : TStringList;
+  Cached : Boolean;
 begin
   LocalVars := MethodNode.FindAll(nkLocalVar);
   BodySB := TStringBuilder.Create;
+  Lines  := AcquireLines(FileName, Cached);
   try
     if LocalVars.Count = 0 then Exit;
 
@@ -143,6 +172,12 @@ begin
 
       if RefCount <= 1 then
       begin
+        // Source-Verifikation: die Zeile MUSS wie eine Var-Decl aussehen.
+        // Wenn dort z.B. 'procedure GetValue(...)' steht, ist das eine
+        // nested Routine und KEIN unused Local - der AST-Knoten kommt
+        // nur durch eine Parser-Eigenart in den nkLocalVar-Strom.
+        if not LooksLikeRealLocalVar(Lines, LV.Line) then Continue;
+
         F            := TLeakFinding.Create;
         F.FileName   := FileName;
         F.MethodName := MethodNode.Name;
@@ -155,6 +190,7 @@ begin
       end;
     end;
   finally
+    ReleaseLines(Lines, Cached);
     BodySB.Free;
     LocalVars.Free;
   end;

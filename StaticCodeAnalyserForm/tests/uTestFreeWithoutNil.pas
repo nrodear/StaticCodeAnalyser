@@ -24,15 +24,26 @@ uses
   uTestFindingHelper;
 
 procedure TTestFreeWithoutNil.FreeWithoutNil_Reported;
+// HINWEIS: Detector flaggt seit Round-5-Fix nur FELDER, nicht Locals
+// (Locals fallen beim Method-End aus dem Scope, kein Dangling-Risiko).
+// Daher SRC mit FFoo-Feld statt 'var L: TStringList;'.
 const SRC =
-  'unit t; implementation'#13#10 +
-  'procedure Foo;'#13#10 +
-  'var L: TStringList;'#13#10 +
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  private'#13#10 +
+  '    FList: TStringList;'#13#10 +
+  '  public'#13#10 +
+  '    procedure DoStuff;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.DoStuff;'#13#10 +
   'begin'#13#10 +
-  '  L := TStringList.Create;'#13#10 +
-  '  L.Free;'#13#10 +
+  '  FList.Free;'#13#10 +
   '  WriteLn(''after free'');'#13#10 +
-  'end;';
+  'end;'#13#10 +
+  'end.';
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
@@ -93,15 +104,24 @@ begin
 end;
 
 procedure TTestFreeWithoutNil.Finding_KindAndSeverity;
+// Field-Pattern - analog zu FreeWithoutNil_Reported (Round-5-Fix).
 const SRC =
-  'unit t; implementation'#13#10 +
-  'procedure Foo;'#13#10 +
-  'var L: TStringList;'#13#10 +
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  private'#13#10 +
+  '    FList: TStringList;'#13#10 +
+  '  public'#13#10 +
+  '    procedure DoStuff;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.DoStuff;'#13#10 +
   'begin'#13#10 +
-  '  L := TStringList.Create;'#13#10 +
-  '  L.Free;'#13#10 +
+  '  FList.Free;'#13#10 +
   '  WriteLn(''after'');'#13#10 +
-  'end;';
+  'end;'#13#10 +
+  'end.';
 var
   F   : TObjectList<TLeakFinding>;
   Fnd : TLeakFinding;
