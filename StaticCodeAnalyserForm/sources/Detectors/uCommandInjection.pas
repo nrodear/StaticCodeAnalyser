@@ -118,7 +118,7 @@ class function TCommandInjectionDetector.HasConcatInArgs(
 var
   i, n   : Integer;
   InStr  : Boolean;
-  C, Nxt : Char;
+  C : Char;
 begin
   Result := False;
   InStr  := False;

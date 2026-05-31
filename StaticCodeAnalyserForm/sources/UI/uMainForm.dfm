@@ -36,70 +36,62 @@ object Form2: TForm2
     Left = 0
     Top = 0
     Width = 850
-    Height = 45
+    Height = 49
     Align = alTop
     BevelOuter = bvNone
     TabOrder = 3
-    ExplicitWidth = 848
   end
   object Panel4: TPanel
     Left = 0
-    Top = 45
+    Top = 49
     Width = 850
-    Height = 165
+    Height = 140
     Align = alTop
     TabOrder = 1
-    ExplicitWidth = 848
+    ExplicitTop = 43
     object Panel3: TPanel
       Left = 1
-      Top = 82
+      Top = 79
       Width = 848
       Height = 41
       Align = alTop
       BevelOuter = bvNone
       TabOrder = 0
-      ExplicitWidth = 846
+      ExplicitLeft = 0
       DesignSize = (
         848
         41)
       object LblFilter: TLabel
-        Left = 10
-        Top = 12
+        Left = 16
+        Top = 9
         Width = 44
         Height = 15
         Caption = 'Severity:'
       end
       object LblType: TLabel
         Left = 184
-        Top = 12
+        Top = 10
         Width = 28
-        Height = 15
+        Height = 20
         Caption = 'Type:'
       end
-      object LblProfile: TLabel
-        Left = 333
-        Top = 12
-        Width = 37
-        Height = 15
-        Caption = 'Profile:'
-      end
       object LblMinSev: TLabel
-        Left = 497
-        Top = 12
+        Left = 366
+        Top = 9
         Width = 24
-        Height = 15
+        Height = 17
         Caption = 'Min:'
       end
       object LblSearch: TLabel
-        Left = 621
-        Top = 12
+        Left = 490
+        Top = 10
         Width = 38
         Height = 15
         Caption = 'Search:'
       end
       object SeverityFilterCombo: TComboBox
-        Left = 64
-        Top = 8
+        Left = 66
+        Top = 7
         Width = 110
         Height = 23
         Style = csDropDownList
@@ -108,51 +100,49 @@ object Form2: TForm2
       end
       object TypeFilterCombo: TComboBox
         Left = 218
-        Top = 8
+        Top = 6
         Width = 105
         Height = 23
         Style = csDropDownList
         TabOrder = 1
         OnChange = TypeFilterComboChange
       end
-      object ProfileCombo: TComboBox
-        Left = 377
-        Top = 8
-        Width = 110
-        Height = 23
-        Style = csDropDownList
-        TabOrder = 2
-        OnChange = ProfileComboChange
-      end
       object MinSevCombo: TComboBox
-        Left = 526
-        Top = 8
+        Left = 396
+        Top = 6
         Width = 85
         Height = 23
         Style = csDropDownList
-        TabOrder = 3
+        TabOrder = 2
         OnChange = MinSevComboChange
       end
       object SearchEdit: TEdit
-        Left = 665
-        Top = 8
-        Width = 175
+        Left = 534
+        Top = 6
+        Width = 169
         Height = 23
         Anchors = [akLeft, akTop, akRight]
-        TabOrder = 4
+        TabOrder = 3
         OnChange = SearchEditChange
-        ExplicitWidth = 173
       end
     end
     object PanelActions: TPanel
       Left = 1
-      Top = 123
+      Top = 1
       Width = 848
-      Height = 41
+      Height = 35
       Align = alTop
       BevelOuter = bvNone
       TabOrder = 2
-      ExplicitWidth = 846
+      ExplicitLeft = 0
+      ExplicitTop = 6
+      object LblProfile: TLabel
+        Left = 352
+        Top = 9
+        Width = 37
+        Height = 15
+        Caption = 'Profile:'
+      end
       object Button7: TButton
         Left = 152
         Top = 6
@@ -173,7 +163,7 @@ object Form2: TForm2
       end
       object BtnBranch: TButton
         Left = 268
-        Top = 6
+        Top = 5
         Width = 36
         Height = 25
         Caption = #9095
@@ -182,92 +172,73 @@ object Form2: TForm2
         TabOrder = 2
         OnClick = BtnBranchClick
       end
+      object ProfileCombo: TComboBox
+        Left = 395
+        Top = 7
+        Width = 110
+        Height = 23
+        Style = csDropDownList
+        TabOrder = 3
+        OnChange = ProfileComboChange
+      end
     end
     object Panel1: TPanel
       Left = 1
-      Top = 1
+      Top = 36
       Width = 848
-      Height = 81
+      Height = 43
       Align = alTop
       BevelOuter = bvNone
       TabOrder = 1
-      ExplicitWidth = 846
+      ExplicitLeft = 2
+      ExplicitTop = 37
       DesignSize = (
         848
-        81)
+        43)
       object Label1: TLabel
         Left = 16
-        Top = 20
+        Top = 17
         Width = 67
         Height = 15
         Caption = 'Project path:'
       end
-      object Label3: TLabel
-        Left = 16
-        Top = 52
-        Width = 54
-        Height = 15
-        Caption = 'Save path:'
-      end
       object Projectpath: TComboBox
-        Left = 112
-        Top = 17
-        Width = 686
+        Left = 89
+        Top = 14
+        Width = 584
         Height = 23
         Anchors = [akLeft, akTop, akRight]
         TabOrder = 0
         Text = 'D:\git-demos\delphi\StaticCodeAnalyser\resources'
-        ExplicitWidth = 684
-      end
-      object Savetofile: TEdit
-        Left = 112
-        Top = 49
-        Width = 686
-        Height = 23
-        Anchors = [akLeft, akTop, akRight]
-        TabOrder = 1
-        Text = '.\analyse_all.csv'
-        ExplicitWidth = 684
       end
       object Button2: TButton
-        Left = 806
-        Top = 15
-        Width = 27
-        Height = 25
+        Left = 679
+        Top = 14
+        Width = 24
+        Height = 23
         Anchors = [akTop, akRight]
         Caption = '...'
-        TabOrder = 2
+        TabOrder = 1
         OnClick = Button2Click
-        ExplicitLeft = 804
-      end
-      object Button3: TButton
-        Left = 806
-        Top = 47
-        Width = 27
-        Height = 25
-        Anchors = [akTop, akRight]
-        Caption = '...'
-        TabOrder = 3
-        OnClick = Button3Click
-        ExplicitLeft = 804
       end
     end
   end
   object Panel2: TPanel
     Left = 0
-    Top = 210
+    Top = 189
     Width = 850
-    Height = 283
+    Height = 304
     Align = alClient
     BevelOuter = bvNone
     TabOrder = 2
+    ExplicitTop = 185
     ExplicitWidth = 848
-    ExplicitHeight = 275
+    ExplicitHeight = 300
     object ResultGrid: TStringGrid
       Left = 0
       Top = 0
       Width = 850
-      Height = 283
+      Height = 304
       Align = alClient
       DefaultColWidth = 100
       DefaultRowHeight = 20
@@ -276,8 +247,7 @@ object Form2: TForm2
       Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goColSizing, goRowSelect, goThumbTracking]
       TabOrder = 0
       OnClick = ResultGridClick
-      ExplicitWidth = 848
-      ExplicitHeight = 275
+      ExplicitTop = -6
       ColWidths = (
         176
         121
