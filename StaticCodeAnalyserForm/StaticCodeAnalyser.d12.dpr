@@ -293,8 +293,10 @@ begin
   begin
     // Headless-Pfad - keine VCL-Form, exit code via Halt.
     AttachToParentConsole;
+    // CliExitCode wird in BEIDEN Pfaden des try/except gesetzt - eine Default-
+    // Initialisierung waere ein Dead-Store (H2077). RunFromCmdLine entweder
+    // returned einen Code, oder wirft -> except setzt 99.
     var CliExitCode: Integer;
-    CliExitCode := 99;
     try
       CliExitCode := uConsoleRunner.TConsoleRunner.RunFromCmdLine;
     except

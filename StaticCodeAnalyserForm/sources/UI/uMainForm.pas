@@ -5,6 +5,7 @@ interface
 uses
   Winapi.Windows, Winapi.Messages, Winapi.ShellAPI, System.SysUtils,
   System.IOUtils, System.StrUtils,
+  System.Types,   // TPoint + Point()-Inline-Funktion (Hamburger-Popup-Positionierung)
   System.Classes, Vcl.Graphics, System.Generics.Collections,
    Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls,
   Vcl.ComCtrls, Vcl.Grids, Vcl.Menus,   // Vcl.Menus: TPopupMenu/TMenuItem (Hamburger-Felder)
@@ -151,8 +152,6 @@ type
     function  BuildClaudePrompt(F: TLeakFinding): string;
     function SelectFolder: string;
     function SelectPasFile: string;
-    function GetAbsolutePath(const RelativePath: string): string;
-    function SelectFile: string;
     procedure LoadRecentPaths;
     procedure SaveRecentPath(const APath: string);
     function  AppPath: string;
@@ -1223,31 +1222,6 @@ begin
   try
     OpenDialog.Options := [fdoPickFolders, fdoPathMustExist, fdoForceFileSystem];
     OpenDialog.Title := _('Choose folder');
-    if OpenDialog.Execute then
-      Result := OpenDialog.FileName;
-  finally
-    OpenDialog.Free;
-  end;
-end;
-
-function TForm2.GetAbsolutePath(const RelativePath: string): string;
-begin
-  Result := RelativePath;
-  if ExtractFileDrive(RelativePath) <> '' then
-    Exit;
-  Result := ExpandFileName(RelativePath);
-end;
-
-function TForm2.SelectFile: string;
-var
-  OpenDialog: TOpenDialog;
-begin
-  Result := '';
-  OpenDialog := TOpenDialog.Create(nil);
-  try
-    OpenDialog.Title := _('Save results');
-    OpenDialog.Filter := _('CSV files|*.csv|Log files|*.log');
-    OpenDialog.FileName := 'analyse_all.csv';
     if OpenDialog.Execute then
       Result := OpenDialog.FileName;
   finally
