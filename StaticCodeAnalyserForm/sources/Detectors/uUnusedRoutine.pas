@@ -150,16 +150,30 @@ var
   IFNode      : TAstNode;
   Fwd         : TAstNode;
 
-  function NextStartAfter(StartLine: Integer): Integer;
-  // Linie der naechsten Standalone-Routine nach StartLine, oder MaxInt
-  // (= bis Datei-Ende) wenn es keine mehr gibt. Parser liefert nkMethod-
-  // Knoten in File-Order, also ist Standalones bereits sortiert.
+  function MaxLineOf(N: TAstNode): Integer;
+  // Tiefste Quell-Zeile irgendwo im Subtree von N. Approximiert das
+  // Routinen-Ende (closing 'end;'-Zeile waere noch grosszuegiger, aber
+  // alle gelisteten Tokens muessen davor sitzen).
   var
-    k : Integer;
+    Stack : TList<TAstNode>;
+    Cur   : TAstNode;
+    j     : Integer;
   begin
-    for k := 0 to Standalones.Count - 1 do
-      if Standalones[k].Line > StartLine then Exit(Standalones[k].Line);
-    Result := MaxInt;
+    Result := N.Line;
+    Stack := TList<TAstNode>.Create;
+    try
+      Stack.Add(N);
+      while Stack.Count > 0 do
+      begin
+        Cur := Stack[Stack.Count - 1];
+        Stack.Delete(Stack.Count - 1);
+        if Cur.Line > Result then Result := Cur.Line;
+        for j := 0 to Cur.Children.Count - 1 do
+          Stack.Add(Cur.Children[j]);
+      end;
+    finally
+      Stack.Free;
+    end;
   end;
 
   function HasExternalCaller(const MethName: string;
@@ -245,7 +259,11 @@ begin
           if IsEnumeratorRoutine(MethName)            then Continue;
           if InterfaceMethods.IndexOf(MethName) >= 0  then Continue;
 
-          RoutineEnd := NextStartAfter(Mth.Line);
+          // Routinen-Ende = tiefste Quell-Zeile im AST-Subtree der Routine,
+          // PLUS eine kleine Toleranz fuer das 'end;'-Closing. KEIN Fallback
+          // auf NextStartAfter mehr - der schloss Caller in zwischenliegenden
+          // Helper-Routinen faelschlich als 'self-call' aus (SCA164 FP).
+          RoutineEnd := MaxLineOf(Mth) + 2;
           if HasExternalCaller(MethName, Mth.Line, RoutineEnd) then Continue;
 
           F            := TLeakFinding.Create;

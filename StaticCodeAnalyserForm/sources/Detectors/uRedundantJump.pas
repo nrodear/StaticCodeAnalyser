@@ -148,6 +148,36 @@ begin
     if SameText(Copy(Code, q, 3), 'end') and
        ((q + 3 > Length(Code)) or not IsIdent(Code[q + 3])) then
     begin
+      // FP-Schutz: das `end` kann ein INNERER Block-End sein (if/case/with),
+      // nicht das Method-/Loop-Body-End. Look-Ahead: NACH `end;` muss der
+      // naechste sinnvolle Token wieder ein Block-End sein (`end`/`until`/
+      // `end.`/end-of-file). Sonst folgt mehr Code im umschliessenden Block
+      // und der Jump war NICHT redundant.
+      //   * Beispiel TP:  `Exit; end; end;`     -> Method-Body-End folgt -> redundant
+      //   * Beispiel FP:  `Continue; end; X;`   -> mehr Loop-Body-Code -> nicht redundant
+      //   * Beispiel FP:  `Exit; end else ...`  -> else-Branch folgt -> nicht redundant
+      var Look := q + 3;                                          // direkt nach `end`
+      // ueberspringen: whitespace + optional `;`
+      while (Look <= Length(Code)) and CharInSet(Code[Look], [' ', #9, #10, #13]) do Inc(Look);
+      if (Look <= Length(Code)) and (Code[Look] = ';') then Inc(Look);
+      while (Look <= Length(Code)) and CharInSet(Code[Look], [' ', #9, #10, #13]) do Inc(Look);
+      // True wenn nach `end;` wieder ein Block-Terminator kommt (`end`, `until`,
+      // `end.`, Datei-Ende) - dann war das matchte `end;` wirklich der Method-/
+      // Loop-Body-End und der Jump davor IST redundant.
+      var NextIsBlockTerminator: Boolean :=
+        (Look > Length(Code)) or                                   // EOF
+        (Code[Look] = '.') or                                      // `end.` Unit-Ende
+        (SameText(Copy(Code, Look, 3), 'end') and
+         ((Look + 3 > Length(Code)) or not IsIdent(Code[Look + 3]))) or
+        (SameText(Copy(Code, Look, 5), 'until') and
+         ((Look + 5 > Length(Code)) or not IsIdent(Code[Look + 5])));
+      if not NextIsBlockTerminator then
+      begin
+        // Irgendetwas anderes folgt (else, Identifier, Keyword) -> das `end;`
+        // war ein innerer Block-End, der Jump ist NICHT redundant.
+        Inc(p);
+        Continue;
+      end;
       k := p - 1;
       if (k >= 0) and (k < Length(LineFor)) then
         LineNumber := LineFor[k]

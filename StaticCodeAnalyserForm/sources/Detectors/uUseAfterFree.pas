@@ -231,8 +231,22 @@ var
       if (After = ':') and (k < CodeLen) and (Code[k + 1] = '=') then Exit(0);
       // `:`   -> Var-Section, Scope wechselt
       if After = ':' then Exit(0);
-      // `.<X>`  -> Use als Receiver
-      if After = '.' then Exit(p);
+      // `.<X>`  -> Use als Receiver. ABER: `.Free` ist Sibling-Cleanup,
+      // kein Use-After-Free. Klassischer if/else-Pattern:
+      //   if Cond then try ... finally V.Free end
+      //                                else V.Free;
+      // Der else-Free wird sonst geflaggt obwohl er Alternative ist.
+      if After = '.' then
+      begin
+        var TailStart := k + 1;
+        while (TailStart <= CodeLen) and
+              CharInSet(Code[TailStart], [' ', #9, #10, #13]) do Inc(TailStart);
+        if (TailStart + 3 <= CodeLen) and
+           SameText(Copy(Code, TailStart, 4), 'Free') and
+           ((TailStart + 4 > CodeLen) or not IsIdentChar(Code[TailStart + 4])) then
+          Exit(0);                       // sibling-Free, kein Use-After-Free
+        Exit(p);
+      end;
       // `(`    -> Aufruf mit Ident als Argument oder ident() Funktion
       if After = '(' then Exit(p);
       // `[`    -> Index-Access

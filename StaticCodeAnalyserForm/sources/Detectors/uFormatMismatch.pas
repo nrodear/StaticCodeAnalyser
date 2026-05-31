@@ -131,6 +131,40 @@ begin
     Inc(I);
 end;
 
+function IsInsideStringLiteral(const S: string; Position: Integer): Boolean;
+// True wenn S[Position] sich INNERHALB eines Pascal-String-Literals
+// '...' befindet. Walked S von 1 bis Position-1 mit Toggle-Logik;
+// verdoppelte '' werden als Escape behandelt (toggeln NICHT den State).
+// FP-Schutz fuer den Detector: wenn 'format(' im RHS-Text auftaucht aber
+// innerhalb eines String-Literals (z.B. Quickfix-Template
+//   Result.After := 'Msg := Format(''%s'', [Name])'
+// ), ist es kein echter Format-Call, sondern ein Pascal-Code-Zitat.
+var
+  i, n  : Integer;
+  InStr : Boolean;
+begin
+  Result := False;
+  InStr  := False;
+  n := Length(S);
+  i := 1;
+  while (i < Position) and (i <= n) do
+  begin
+    if S[i] = '''' then
+    begin
+      if InStr and (i + 1 <= n) and (S[i + 1] = '''') then
+        Inc(i, 2)        // '' = Escape, kein Toggle
+      else
+      begin
+        InStr := not InStr;
+        Inc(i);
+      end;
+    end
+    else
+      Inc(i);
+  end;
+  Result := InStr;
+end;
+
 function ReadStringLiteral(const S: string; var I: Integer;
   var Inner: string): Boolean;
 // Liest ab S[I] (muss '' sein) ein Pascal-String-Literal '...' und haengt
@@ -217,6 +251,12 @@ begin
     if pCall = 0 then Continue;
     // Linke Wortgrenze: kein Ident-Char vor dem Funktionsnamen.
     if (pCall > 1) and TDetectorUtils.IsIdentChar(Low[pCall - 1]) then
+      Continue;
+    // FP-Schutz: 'format(' INNERHALB eines Pascal-String-Literals des
+    // CallText (typischer Quickfix-Template-Pattern in uFixHint.pas:
+    //   Result.After := 'Msg := Format(''%s'', [Name])')
+    // ist kein echter Call sondern ein zitiertes Code-Beispiel.
+    if IsInsideStringLiteral(CallName, pCall) then
       Continue;
 
     MatchedFunc := FuncName;

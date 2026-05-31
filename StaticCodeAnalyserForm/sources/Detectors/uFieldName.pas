@@ -110,8 +110,12 @@ begin
          (Lower = 'class') or (Lower = 'record') then
       begin
         InClass := True;
-        InCheckVis := True;  // default visibility = published in classes,
-                              // wir checken aber von Anfang an
+        // Default-Visibility VOR der ersten expliziten Section ist published
+        // (TPersistent/TComponent/TForm/TFrame/TDataModule). Diese Felder
+        // sind vom Form-Designer/DFM-Binding verwaltet und koennen die
+        // F-Prefix-Regel nicht erfuellen. -> Erst nach explizitem
+        // 'private'/'protected' anfangen zu checken.
+        InCheckVis := False;
         Continue;
       end;
       if not InClass then Continue;
