@@ -123,7 +123,11 @@ type
                  fmPointerArithmeticOnString,
                  // mORMot-Cluster Phase 3 (SCA159-161)
                  fmEmptyOnHandler, fmStringFromPointer,
-                 fmPointerSubtraction);
+                 fmPointerSubtraction,
+                 // Audit-Nachzug (Todo_neuerdetector-Checkliste):
+                 // fm-Filter fuer Detektoren die ihn nie bekamen.
+                 fmCommandInjection, fmInsecureCryptoAlgorithm,
+                 fmUnusedRoutine, fmNoSonarMarker);
 
   // Zweiter Filter (orthogonal zu Schweregrad): Sonar-Typ-Kategorie.
   TTypeFilter = (tfAll, tfBug, tfCodeSmell, tfVulnerability,
@@ -340,6 +344,11 @@ begin
     fkEmptyOnHandler             : Result := 'empty on exception handler typed silent swallow leer ausnahme typisiert';
     fkStringFromPointer          : Result := 'string ansistring utf8string rawbytestring pointer cast overread buffer p-prefix';
     fkPointerSubtraction         : Result := 'cardinal integer longword pointer subtraction win64 truncation ptruint nativeuint';
+    // Audit-Nachzug (Todo_neuerdetector-Checkliste): Search-Keywords ergaenzt.
+    fkCommandInjection           : Result := 'command injection shellexecute createprocess winexec rce einschleusung';
+    fkInsecureCryptoAlgorithm    : Result := 'insecure crypto md5 sha1 des rc4 tls ssl algorithmus schwach veraltet';
+    fkUnusedRoutine              : Result := 'unused routine top-level procedure function ungenutzt dead code';
+    fkNoSonarMarker              : Result := 'nosonar marker legacy migration noinspection suppression';
   else
     Result := '';
   end;
@@ -525,6 +534,11 @@ begin
     fmEmptyOnHandler:                Result := F.Kind = fkEmptyOnHandler;
     fmStringFromPointer:             Result := F.Kind = fkStringFromPointer;
     fmPointerSubtraction:            Result := F.Kind = fkPointerSubtraction;
+    // Audit-Nachzug
+    fmCommandInjection:              Result := F.Kind = fkCommandInjection;
+    fmInsecureCryptoAlgorithm:       Result := F.Kind = fkInsecureCryptoAlgorithm;
+    fmUnusedRoutine:                 Result := F.Kind = fkUnusedRoutine;
+    fmNoSonarMarker:                 Result := F.Kind = fkNoSonarMarker;
   else
     Result := True;   // fmAll, fmDetectorReview - der Caller wendet die
                       // Stichproben-Logik selber an, Matches laesst hier

@@ -343,6 +343,11 @@ begin
   SeverityFilterCombo.Items.AddObject(_('Empty typed exception handler'),     TObject(Ord(fmEmptyOnHandler)));
   SeverityFilterCombo.Items.AddObject(_('String cast from raw pointer'),      TObject(Ord(fmStringFromPointer)));
   SeverityFilterCombo.Items.AddObject(_('Pointer subtraction (Win64 truncation)'), TObject(Ord(fmPointerSubtraction)));
+  // Audit-Nachzug (Todo_neuerdetector-Checkliste)
+  SeverityFilterCombo.Items.AddObject(_('Command Injection'),            TObject(Ord(fmCommandInjection)));
+  SeverityFilterCombo.Items.AddObject(_('Insecure Crypto Algo'),         TObject(Ord(fmInsecureCryptoAlgorithm)));
+  SeverityFilterCombo.Items.AddObject(_('Unused Routine'),               TObject(Ord(fmUnusedRoutine)));
+  SeverityFilterCombo.Items.AddObject(_('NOSONAR Marker (legacy)'),      TObject(Ord(fmNoSonarMarker)));
   SeverityFilterCombo.ItemIndex := 0;
 
   TypeFilterCombo.Items.Add(_('All'));

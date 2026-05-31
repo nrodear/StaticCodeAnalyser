@@ -1059,6 +1059,7 @@ begin
   Add('Boolean always true / false',       fmBoolAlwaysTrue);
   Add('Constant return value',             fmConstantReturn);
   Add('Hardcoded user string',             fmHardcodedString);
+  Add('Command Injection',                 fmCommandInjection);
 
   // ---- Warnings (einzeln) ----
   Sep('--- Warnings ---');
@@ -1075,6 +1076,7 @@ begin
   Add('Unicode -> Ansi Cast',  fmUnicodeToAnsiCast);
   Add('IfThen Short-Circuit',  fmIfThenShortCircuit);
   Add('Exception Too General', fmExceptionTooGeneral);
+  Add('Insecure Crypto Algo',  fmInsecureCryptoAlgorithm);
 
   // ---- Hints (einzeln) ----
   Sep('--- Hints ---');
@@ -1113,6 +1115,9 @@ begin
   Add('Empty typed exception handler',            fmEmptyOnHandler);
   Add('String cast from raw pointer',             fmStringFromPointer);
   Add('Pointer subtraction (Win64 truncation)',   fmPointerSubtraction);
+  // Audit-Nachzug (Todo_neuerdetector-Checkliste)
+  Add('Unused Routine',                           fmUnusedRoutine);
+  Add('NOSONAR Marker (legacy)',                  fmNoSonarMarker);
 
   FFilterCombo.ItemIndex := 0; // "All"
 end;
