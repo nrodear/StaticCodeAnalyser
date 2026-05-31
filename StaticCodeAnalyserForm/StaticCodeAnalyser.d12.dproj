@@ -80,7 +80,7 @@
         <VerInfo_MinorVer>9</VerInfo_MinorVer>
         <VerInfo_Release>3</VerInfo_Release>
         <VerInfo_Build>0</VerInfo_Build>
-        <VerInfo_Keys>CompanyName=;FileDescription=Static Code Analysis Tool for Delphi (Standalone);FileVersion=0.9.3.0;InternalName=StaticCodeAnalyser;LegalCopyright=;LegalTrademarks=;OriginalFilename=StaticCodeAnalyser.exe;ProductName=Static Code Analysis Tool for Delphi;ProductVersion=0.9.3.0;Comments=Release 0.9.3 (2026-05-27)</VerInfo_Keys>
+        <VerInfo_Keys>CompanyName=;FileDescription=Static Code Analysis Tool for Delphi (Standalone);FileVersion=0.9.5.0;InternalName=StaticCodeAnalyser;LegalCopyright=;LegalTrademarks=;OriginalFilename=StaticCodeAnalyser.exe;ProductName=Static Code Analysis Tool for Delphi;ProductVersion=0.9.5.0;Comments=Release 0.9.5 (2026-05-31)</VerInfo_Keys>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
         <DCC_UsePackage>vclwinx;fmx;vclie;DbxCommonDriver;bindengine;IndyIPCommon;VCLRESTComponents;FireDACCommonODBC;FireDACCommonDriver;appanalytics;IndyProtocols;vclx;Skia.Package.RTL;IndyIPClient;dbxcds;vcledge;bindcompvclwinx;bindcompfmx;inetdb;FireDACSqliteDriver;DbxClientDriver;soapmidas;vclactnband;fmxFireDAC;dbexpress;DBXMySQLDriver;VclSmp;inet;vcltouch;fmxase;dbrtl;Skia.Package.FMX;fmxdae;FireDACMSAccDriver;CustomIPTransport;vcldsnap;DBXInterBaseDriver;IndySystem;Skia.Package.VCL;vcldb;vclFireDAC;bindcomp;FireDACCommon;IndyCore;RESTBackendComponents;bindcompdbx;rtl;FireDACMySQLDriver;FireDACADSDriver;RESTComponents;DBXSqliteDriver;vcl;IndyIPServer;dsnapxml;dsnapcon;adortl;FixInsight_12;vclimg;FireDACPgDriver;FireDAC;inetdbxpress;xmlrtl;tethering;bindcompvcl;dsnap;CloudService;fmxobj;bindcompvclsmp;soaprtl;soapserver;FireDACIBDriver;$(DCC_UsePackage)</DCC_UsePackage>
@@ -91,7 +91,7 @@
         <VerInfo_MinorVer>9</VerInfo_MinorVer>
         <VerInfo_Release>3</VerInfo_Release>
         <VerInfo_Build>0</VerInfo_Build>
-        <VerInfo_Keys>CompanyName=;FileDescription=Static Code Analysis Tool for Delphi (Standalone);FileVersion=0.9.3.0;InternalName=StaticCodeAnalyser;LegalCopyright=;LegalTrademarks=;OriginalFilename=StaticCodeAnalyser.exe;ProductName=Static Code Analysis Tool for Delphi;ProductVersion=0.9.3.0;Comments=Release 0.9.3 (2026-05-27)</VerInfo_Keys>
+        <VerInfo_Keys>CompanyName=;FileDescription=Static Code Analysis Tool for Delphi (Standalone);FileVersion=0.9.5.0;InternalName=StaticCodeAnalyser;LegalCopyright=;LegalTrademarks=;OriginalFilename=StaticCodeAnalyser.exe;ProductName=Static Code Analysis Tool for Delphi;ProductVersion=0.9.5.0;Comments=Release 0.9.5 (2026-05-31)</VerInfo_Keys>
         <VerInfo_Locale>1033</VerInfo_Locale>
         <Manifest_File>$(BDS)\bin\default_app.manifest</Manifest_File>
     </PropertyGroup>
@@ -104,7 +104,7 @@
         <VerInfo_MinorVer>9</VerInfo_MinorVer>
         <VerInfo_Release>3</VerInfo_Release>
         <VerInfo_Build>0</VerInfo_Build>
-        <VerInfo_Keys>CompanyName=;FileDescription=Static Code Analysis Tool for Delphi (Standalone);FileVersion=0.9.3.0;InternalName=StaticCodeAnalyser;LegalCopyright=;LegalTrademarks=;OriginalFilename=StaticCodeAnalyser.exe;ProductName=Static Code Analysis Tool for Delphi;ProductVersion=0.9.3.0;Comments=Release 0.9.3 (2026-05-27)</VerInfo_Keys>
+        <VerInfo_Keys>CompanyName=;FileDescription=Static Code Analysis Tool for Delphi (Standalone);FileVersion=0.9.5.0;InternalName=StaticCodeAnalyser;LegalCopyright=;LegalTrademarks=;OriginalFilename=StaticCodeAnalyser.exe;ProductName=Static Code Analysis Tool for Delphi;ProductVersion=0.9.5.0;Comments=Release 0.9.5 (2026-05-31)</VerInfo_Keys>
         <VerInfo_Locale>1033</VerInfo_Locale>
         <Manifest_File>$(BDS)\bin\default_app.manifest</Manifest_File>
     </PropertyGroup>

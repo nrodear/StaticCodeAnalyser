@@ -123,7 +123,7 @@
         <VerInfo_MinorVer>9</VerInfo_MinorVer>
         <VerInfo_Release>3</VerInfo_Release>
         <VerInfo_Build>0</VerInfo_Build>
-        <VerInfo_Keys>CompanyName=;FileDescription=Static Code Analysis Tool for Delphi (IDE Plugin);FileVersion=0.9.3.0;InternalName=StaticCodeAnalyser.IDE;LegalCopyright=;LegalTrademarks=;OriginalFilename=StaticCodeAnalyser.IDE.d12.bpl;ProductName=Static Code Analysis Tool for Delphi;ProductVersion=0.9.3.0;Comments=Release 0.9.3 (2026-05-27)</VerInfo_Keys>
+        <VerInfo_Keys>CompanyName=;FileDescription=Static Code Analysis Tool for Delphi (IDE Plugin);FileVersion=0.9.5.0;InternalName=StaticCodeAnalyser.IDE;LegalCopyright=;LegalTrademarks=;OriginalFilename=StaticCodeAnalyser.IDE.d12.bpl;ProductName=Static Code Analysis Tool for Delphi;ProductVersion=0.9.5.0;Comments=Release 0.9.5 (2026-05-31)</VerInfo_Keys>
         <VerInfo_Locale>1033</VerInfo_Locale>
         <DCC_UsePackage>vcl;rtl;vclwinx;$(DCC_UsePackage)</DCC_UsePackage>
     </PropertyGroup>
