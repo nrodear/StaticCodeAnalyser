@@ -642,6 +642,30 @@ begin
         Result := True; FoundInFinally := InFinally; Exit;
       end;
     end;
+
+    // Custom-Cleanup-Pattern: Funktion deren Name auf 'release'/'dispose'/
+    // 'return'/'recycle' endet und varName als Argument bekommt
+    // (Acquire/Release-Pool-Pattern wie AcquireLines/ReleaseLines).
+    // Match nur wenn varName als bare Argument im Klammerausdruck steht.
+    pMatch := Pos('(' + VarNameLow, NameLow);
+    if pMatch > 0 then
+    begin
+      var pRight := pMatch + 1 + Length(VarNameLow);
+      var BoundaryOK := (pRight > Length(NameLow)) or
+                       (NameLow[pRight] = ',') or
+                       (NameLow[pRight] = ')') or
+                       (NameLow[pRight] = ' ');
+      if BoundaryOK then
+      begin
+        // Funktionsnamen-Teil vor '(' extrahieren und auf Cleanup-Suffix pruefen.
+        var FnName := Copy(NameLow, 1, pMatch - 1);
+        if FnName.EndsWith('release') or FnName.EndsWith('dispose') or
+           FnName.EndsWith('return')  or FnName.EndsWith('recycle') then
+        begin
+          Result := True; FoundInFinally := InFinally; Exit;
+        end;
+      end;
+    end;
   end;
 
   for Child in Node.Children do
