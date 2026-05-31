@@ -38,6 +38,17 @@ unit uExceptionTooGeneral;
 //     (fkEmptyExcept fuer leere Variante) deckt das ab.
 //   * `on E: EAbort do ... raise;` mit re-raise - dort wuerde Filter
 //     greifen, aber TypeRef='EAbort' nicht 'Exception'.
+//   * Legit Top-Level-Handler die LOGGEN und beenden:
+//       on E: Exception do
+//       begin
+//         WriteLn(ErrOutput, 'Fatal: ', E.Message);
+//         Exit(Integer(cecToolError));
+//       end;
+//     Diese Pattern faengt zwar 'Exception' breit, ist aber bewusst die
+//     defensive Schutzschicht am Top-Level (CLI-Runner, Worker-Threads).
+//     Heuristik: Body enthaelt einen Log-Call (WriteLn/Write/Log/Output*)
+//     UND einen Exit/Halt - dann ist es kein Swallow, sondern saubere
+//     Crash-Translation.
 //
 // Sonar-Pendant: ExceptionTooGeneral / "java:S2221" (Java)
 //                S110 Pattern bezogen auf Delphi-Hierarchie.
@@ -59,6 +70,66 @@ type
 
 implementation
 
+function IsLegitTopLevelHandler(OnNode: TAstNode): Boolean;
+// True wenn der Handler-Body sowohl LOGGT (WriteLn/Write/Log*/OutputDebug*)
+// als auch BEENDET/RAISE'T (Exit/Halt/raise). Dann ist es kein blindes
+// Swallow, sondern saubere Crash-Translation am Top-Level.
+//
+// Heuristik scannt nur die DIREKTEN Calls im Subtree des OnHandlers - kein
+// Daten-Fluss, kein Symbol-Lookup. Schmal genug um nur die klare 'log+exit'
+// und 'log+raise' Pattern zu treffen.
+var
+  Stack    : TList<TAstNode>;
+  Cur      : TAstNode;
+  i        : Integer;
+  NameLow  : string;
+  HasLog   : Boolean;
+  HasLeave : Boolean;
+begin
+  Result   := False;
+  HasLog   := False;
+  HasLeave := False;
+  Stack    := TList<TAstNode>.Create;
+  try
+    Stack.Add(OnNode);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack[Stack.Count - 1];
+      Stack.Delete(Stack.Count - 1);
+
+      // raise; (bare re-raise) ist eine Form von Leave - Exception
+      // propagiert nach oben.
+      if Cur.Kind = nkRaise then HasLeave := True;
+      if Cur.Kind = nkExit  then HasLeave := True;
+
+      if Cur.Kind = nkCall then
+      begin
+        NameLow := LowerCase(Cur.Name);
+        // Log-Pattern: WriteLn/Write/Log*/OutputDebugString/ShowMessage
+        if NameLow.StartsWith('writeln(')      or
+           NameLow.StartsWith('write(')        or
+           NameLow.StartsWith('outputdebug')   or
+           NameLow.StartsWith('log')           or
+           NameLow.StartsWith('showmessage(')  or
+           NameLow.StartsWith('savetofile(')   then
+          HasLog := True;
+        // Leave-Pattern: Halt(...) / Exit(...)
+        if NameLow.StartsWith('halt(')         or
+           NameLow.StartsWith('halt;')         or
+           NameLow.StartsWith('exit(')         or
+           NameLow.StartsWith('exit;')         then
+          HasLeave := True;
+      end;
+      if HasLog and HasLeave then Exit(True);
+
+      for i := 0 to Cur.Children.Count - 1 do
+        Stack.Add(Cur.Children[i]);
+    end;
+  finally
+    Stack.Free;
+  end;
+end;
+
 class procedure TExceptionTooGeneralDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -71,6 +142,7 @@ begin
     for N in Handlers do
     begin
       if not SameText(N.TypeRef, 'Exception') then Continue;
+      if IsLegitTopLevelHandler(N) then Continue;
 
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
