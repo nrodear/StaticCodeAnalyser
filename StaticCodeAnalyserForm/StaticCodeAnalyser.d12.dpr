@@ -17,9 +17,7 @@ program StaticCodeAnalyser.d12;
 uses
   Winapi.Windows,
   Vcl.Forms,
-  Vcl.Graphics,
   System.SysUtils,
-  uBrandingImage in '..\branding\uBrandingImage.pas',
   MeineUnit in 'resources\MeineUnit.pas',
   MainController in 'sources\MainController.pas',
   uAnalyserPalette in 'sources\UI\uAnalyserPalette.pas',
@@ -239,17 +237,11 @@ uses
   uCustomClassDiscovery in 'sources\Detectors\uCustomClassDiscovery.pas';
 
 {$R *.res}
-// Branding-Resource (sca.png als RCDATA fuer App-Icon, About-Box, Splash):
-//   * <RcCompile Include="..\branding\sca_branding.rc"/> im .dproj triggert
-//     BRCC32. BRCC32 legt das Output NEBEN die dproj/dpr (nicht neben die
-//     .rc!) -> StaticCodeAnalyserForm\sca_branding.res.
-//   * {$R 'sca_branding.res'} hier linkt die .res in die EXE (sonst sieht
-//     der Linker das BRCC32-Output zwar liegen, ignoriert es aber - waere
-//     genau das Symptom 'App-Icon nirgends sichtbar').
-// WICHTIG: .RES Extension (NICHT .RC). {$R '...rc'} wuerde den 16-bit-
-// Legacy-BRC ankicken (E2161 Unsupported 16bit resource).
-// PFAD: relativ zur dpr (gleiches Verzeichnis), NICHT relativ zur .rc!
-{$R 'sca_branding.res'}
+// App-Icon kommt via <Icon_MainIcon> im .dproj: Delphi auto-embeddet das
+// .ico als MAINICON in die StaticCodeAnalyser.d12.res (= das `*.res`
+// oben), Windows nutzt es fuer Shell-Icon + Taskbar + Application.Icon.
+// Keine explizite {$R '...res'}-Directive noetig, kein uBrandingImage,
+// keine Runtime-Pipeline. Canonical Embarcadero-Weg.
 
 // Erkennung CLI- vs GUI-Mode: jeder Argument der mit '-' oder '/' anfaengt
 // (typische Switch-Praefixe) -> CLI. Sonst -> GUI starten.
@@ -320,21 +312,9 @@ begin
   begin
     Application.Initialize;
     Application.MainFormOnTaskbar := True;
-    // Branding-Icon aus eingebetteter PNG-Resource VOR CreateForm setzen,
-    // damit das Hauptformular es als Default fuer sein Window-Icon nimmt.
-    // TIcon.Assign(TPngImage) nutzt in Delphi 12 den WIC-Codec - skaliert
-    // automatisch auf System-Icon-Groessen (16/32/48/256). Best-effort:
-    // falls Resource fehlt oder WIC nicht greift, schweigend Default-Icon.
-    try
-      var BrandingPng := uBrandingImage.LoadSCAPng;
-      try
-        Application.Icon.Assign(BrandingPng);
-      finally
-        BrandingPng.Free;
-      end;
-    except
-      // Resource nicht eingebettet / WIC-Decoder-Mismatch - kein Crash.
-    end;
+    // Application.Icon wird von der RTL automatisch aus der MAINICON-
+    // Resource gesetzt (siehe <Icon_MainIcon> im dproj -> branding\sca.ico).
+    // Keine explizite Zuweisung noetig - canonical Embarcadero-Weg.
     Application.CreateForm(TForm2, Form2);
   // uCustomerForm + uOrderForm sind Test-Fixtures fuer die DFM-Detektoren
     // (qCustomers: TFDQuery, dsOrders: TDataSetProvider, ...). Sie bleiben

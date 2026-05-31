@@ -1,17 +1,22 @@
-// Branding-Resource fuer StaticCodeAnalyser (Standalone + IDE-Plugin).
+// Branding-Resource fuer das IDE-Plugin (sca_24.bmp als BITMAP-Resource).
 //
-// Eine einzige RC-Datei wird von beiden Projekten via <RcCompile> aus dem
-// dproj eingebunden - Single source of truth fuer das App-Image.
+// Canonical Embarcadero-Pattern fuer IDE-About-Box + Splash-Screen (Source:
+// Embarcadero OTAPI-Docs Kapitel 9, David Hoyle):
+//   bm := LoadBitmap(HInstance, 'SCA_APP_BMP');
+//   SplashScreenServices.AddPluginBitmap(.., bm, ..);
+//   IOTAAboutBoxServices.AddPluginInfo(.., bm, ..);
 //
-// WICHTIG: NICHT via {$R '...sca_branding.rc'} im .dpr/.dpk einbinden -
-// dieser Pfad wuerde den alten 16-bit BRC.exe statt BRCC32 antriggern und
-// mit "E2161 RLINK32: Unsupported 16bit resource" failen. Der Modern-Path
-// geht ueber das dproj-XML-Element <RcCompile>.
+// WICHTIG: 'BITMAP'-Resource-Type, NICHT 'RCDATA' - LoadBitmap erwartet
+// genau diesen Typ. Datei muss ein Windows-BMP sein (kein PNG, kein ICO).
 //
-// Runtime-Load: TResourceStream(HInstance, 'SCA_APP_PNG', RT_RCDATA);
-// Helper:       uBrandingImage.LoadSCAPng / LoadSCABitmap
+// Standalone-EXE braucht diese Resource NICHT - sie nutzt das auto-
+// MAINICON-Pattern via <Icon_MainIcon> im dproj (siehe branding\sca.ico).
+//
+// Build-Integration (NUR IDE-Plugin):
+//   * <RcCompile Include="..\branding\sca_branding.rc"/> im IDE-dproj
+//   * {$R 'sca_branding.res'} im IDE-dpk (Pfad relativ zur dpk, BRCC32
+//     legt das Output neben die dpk).
 
-LANGUAGE 0, 0   // LANG_NEUTRAL, SUBLANG_NEUTRAL - explizit setzen damit
-                // BRCC32 nicht in einen System-Locale-Default kippt.
+LANGUAGE 0, 0
 
-SCA_APP_PNG RCDATA "sca.png"
+SCA_APP_BMP BITMAP "sca_24.bmp"

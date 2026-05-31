@@ -68,7 +68,7 @@
         <DCC_F>false</DCC_F>
         <DCC_K>false</DCC_K>
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;$(DCC_Namespace)</DCC_Namespace>
-        <Icon_MainIcon>$(BDS)\bin\delphi_PROJECTICON.ico</Icon_MainIcon>
+        <Icon_MainIcon>..\branding\sca.ico</Icon_MainIcon>
         <UWP_DelphiLogo44>$(BDS)\bin\Artwork\Windows\UWP\delphi_UwpDefault_44.png</UWP_DelphiLogo44>
         <UWP_DelphiLogo150>$(BDS)\bin\Artwork\Windows\UWP\delphi_UwpDefault_150.png</UWP_DelphiLogo150>
         <SanitizedProjectName>StaticCodeAnalyser_d12</SanitizedProjectName>
@@ -213,8 +213,6 @@
         <DCCReference Include="sources\Infrastructure\uSuppression.pas"/>
         <DCCReference Include="sources\Infrastructure\uSymbolReferenceIndex.pas"/>
         <DCCReference Include="sources\Infrastructure\uVcsChanges.pas"/>
-        <DCCReference Include="..\branding\uBrandingImage.pas"/>
-        <RcCompile Include="..\branding\sca_branding.rc"/>
         <DCCReference Include="sources\Detectors\uPointerSubtraction.pas"/>
         <DCCReference Include="sources\Detectors\uInsecureCryptoAlgorithm.pas"/>
         <DCCReference Include="sources\Detectors\uCommandInjection.pas"/>

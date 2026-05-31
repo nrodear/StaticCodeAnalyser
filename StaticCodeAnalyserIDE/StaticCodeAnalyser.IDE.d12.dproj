@@ -158,6 +158,7 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
+        <DCCReference Include="sca_branding.res"/>
         <DCCReference Include="rtl.dcp"/>
         <DCCReference Include="vcl.dcp"/>
         <DCCReference Include="vclwinx.dcp"/>
@@ -392,7 +393,6 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uInsecureCryptoAlgorithm.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCommandInjection.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnusedRoutine.pas"/>
-        <DCCReference Include="..\branding\uBrandingImage.pas"/>
         <RcCompile Include="..\branding\sca_branding.rc"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

@@ -26,8 +26,8 @@ procedure Register;
 implementation
 
 uses
-  Winapi.Windows, System.SysUtils, Vcl.Graphics,
-  uIDEAnalyserForm, uBrandingImage;
+  Winapi.Windows, System.SysUtils,
+  uIDEAnalyserForm;
 
 const
   PLUGIN_TITLE   = 'Static Code Analysis';
@@ -36,46 +36,38 @@ const
   PLUGIN_VERSION = 'v0.9.1';
   PLUGIN_LICENSE = 'Freeware / Open Source';
 
+  // Resource-Name aus branding\sca_branding.rc (BITMAP-Type).
+  SCA_APP_BMP_RES = 'SCA_APP_BMP';
+
 var
   // Index in der About-Box; gebraucht zum Unregister beim BPL-Unload.
   // -1 = nicht registriert (z.B. wenn IDE keine AboutBoxServices liefert).
   GAboutBoxIndex : Integer = -1;
-  // Branding-Bitmap aus sca_branding.rc gecached fuer die gesamte BPL-Laufzeit.
-  // Die IDE referenziert das HBITMAP-Handle - wenn wir die TBitmap zu frueh
-  // freigeben koennte das Handle ungueltig werden (Verhalten ist API-doku-
-  // unklar zwischen Delphi-Versionen). Lifetime an die BPL koppeln ist
-  // safe, kostet ~80 KB Speicher.
-  GBrandingBmp   : Vcl.Graphics.TBitmap = nil;
+  // Branding-HBITMAP aus sca_branding.res, gecached fuer BPL-Laufzeit.
+  // 0 = nicht geladen (Resource fehlt oder LoadBitmap failed). Lebensdauer
+  // an die BPL gekoppelt - die IDE haelt das Handle waehrend Splash + About-
+  // Box, ein verfruehter DeleteObject wuerde dangling references erzeugen.
+  GBrandingHBmp  : HBITMAP = 0;
 
-function BrandingBitmap: Vcl.Graphics.TBitmap;
-// Lazy-Load. Fallback nil -> Aufrufer uebergeben hBitmap=0 fuer text-only.
+function BrandingHBitmap: HBITMAP;
+// Canonical Embarcadero-Pattern (siehe Embarcadero OTAPI-Docs Kap. 9):
+// LoadBitmap(HInstance, '<resname>') liefert HBITMAP direkt aus der
+// BITMAP-Resource. Null wenn Resource fehlt - dann fallen Splash/About
+// auf Text-only zurueck.
 begin
-  if GBrandingBmp = nil then
-  begin
-    try
-      GBrandingBmp := uBrandingImage.LoadSCABitmap;
-    except
-      // Resource fehlt / PNG-Decoder-Mismatch - kein Splash/AboutBox-Icon,
-      // aber kein Plugin-Crash.
-      GBrandingBmp := nil;
-    end;
-  end;
-  Result := GBrandingBmp;
+  if GBrandingHBmp = 0 then
+    GBrandingHBmp := LoadBitmap(HInstance, SCA_APP_BMP_RES);
+  Result := GBrandingHBmp;
 end;
 
 procedure RegisterSplashScreen;
 // Erscheint waehrend des IDE-Starts unter "Loaded plugins" im Splash.
 // HBITMAP = 0: kein Icon - der Eintrag wird trotzdem als Text gerendert.
-var
-  Bmp  : Vcl.Graphics.TBitmap;
-  HBmp : HBITMAP;
 begin
   if not Assigned(SplashScreenServices) then Exit;
-  Bmp  := BrandingBitmap;
-  if Assigned(Bmp) then HBmp := Bmp.Handle else HBmp := 0;
   SplashScreenServices.AddPluginBitmap(
     PLUGIN_TITLE + ' ' + PLUGIN_VERSION,
-    HBmp,
+    BrandingHBitmap,
     False,         // IsUnregistered
     PLUGIN_LICENSE,
     '');           // SKUBuild
@@ -85,17 +77,13 @@ procedure RegisterAboutBox;
 // Eintrag unter Help -> About -> Plugins. Index merken um beim BPL-Unload
 // sauber UnregisterAboutBox aufzurufen (sonst Dangling-Eintrag bis IDE-Neustart).
 var
-  Svc  : IOTAAboutBoxServices;
-  Bmp  : Vcl.Graphics.TBitmap;
-  HBmp : HBITMAP;
+  Svc : IOTAAboutBoxServices;
 begin
   if not Supports(BorlandIDEServices, IOTAAboutBoxServices, Svc) then Exit;
-  Bmp  := BrandingBitmap;
-  if Assigned(Bmp) then HBmp := Bmp.Handle else HBmp := 0;
   GAboutBoxIndex := Svc.AddPluginInfo(
     PLUGIN_TITLE + ' ' + PLUGIN_VERSION,
     PLUGIN_DESC,
-    HBmp,
+    BrandingHBitmap,
     False,         // IsUnregistered
     PLUGIN_LICENSE,
     '');           // SKUBuild
@@ -162,7 +150,11 @@ finalization
   // About-Box-Eintrag entfernen wenn der Plugin-BPL entladen wird
   // (z.B. ueber Component -> Install Packages -> Remove).
   UnregisterAboutBox;
-  // Branding-Bitmap erst NACH Unregister freigeben - die IDE haelt das
-  // HBITMAP-Handle waehrend des AboutBox/Splash-Lifecycle.
-  FreeAndNil(GBrandingBmp);
+  // Branding-HBITMAP erst NACH Unregister freigeben - die IDE haelt das
+  // Handle waehrend des AboutBox/Splash-Lifecycle.
+  if GBrandingHBmp <> 0 then
+  begin
+    DeleteObject(GBrandingHBmp);
+    GBrandingHBmp := 0;
+  end;
 end.

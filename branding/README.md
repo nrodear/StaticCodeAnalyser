@@ -1,68 +1,96 @@
 # Branding-Assets
 
-Single source of truth fuer Bild-Assets, die Standalone-App und IDE-Plugin
-gemeinsam nutzen. Beide Builds binden die Dateien aus diesem Ordner ein.
+Single source of truth fuer App-Icon und IDE-Plugin-Bitmap. Folgt der
+**canonical Embarcadero**-Konvention — siehe
+[Application_Icon docwiki](https://docwiki.embarcadero.com/RADStudio/Athens/en/Application_Icon)
+und [OTAPI-Docs Kapitel 9](https://github.com/Embarcadero/OTAPI-Docs).
 
 ## Dateien
 
-| Datei | Wo gebraucht |
+| Datei | Zweck |
 |---|---|
-| `sca.png` | App-Icon (297x242, 8-bit RGB). Wird via `sca_branding.rc` als `RCDATA`-Resource eingebettet. |
-| `sca_branding.rc` | RC-Definition (`SCA_APP_PNG RCDATA "sca.png"`). Build-Integration ist **zweistufig** (siehe unten). |
-| `sca_branding.res` | BRCC32-Output, **nicht** im Repo (in `.gitignore`). Regeneriert sich pro Build aus `sca_branding.rc`. |
-| `uBrandingImage.pas` | Shared Pascal-Helper. `LoadSCAPng: TPngImage` und `LoadSCABitmap: TBitmap` decodieren die Resource zur Laufzeit. |
+| `sca.png` | Quell-Image (297×242). Wird **nicht direkt** im Build verwendet, sondern als Source fuer die generierten `.ico` und `.bmp` (siehe "Regenerieren" unten). |
+| `sca.ico` | Multi-Resolution-Icon (16/32/48/256 jeweils PNG-komprimiert in der ICO-Huelle). Wird als `MAINICON`-Resource in die Standalone-EXE einkompiliert. |
+| `sca_24.bmp` | 24×24 Windows-BMP fuer das IDE-Plugin (Splash + About-Box, IOTA-API verlangt BMP via LoadBitmap). |
+| `sca_branding.rc` | `BITMAP`-Definition `SCA_APP_BMP BITMAP "sca_24.bmp"` fuer die IDE-Plugin-Resource. |
 
-## Was wo angezeigt wird
+## Standalone-EXE — canonical MAINICON-Pfad
 
-| Pfad | Stelle | Wie |
-|---|---|---|
-| Standalone-EXE | `Application.Icon` (Taskleiste-Icon waehrend Laufzeit, Window-Caption) | `TIcon.Assign(LoadSCAPng)` in `.dpr` vor `CreateForm` — WIC-Codec skaliert auf System-Icon-Groessen |
-| Standalone-EXE | Datei-Symbol im Explorer / Taskbar-Symbol VOR App-Start | **derzeit Delphi-Default** (`delphi_PROJECTICON.ico`) — Windows kann nur ICO-Format aus der `.res` lesen, kein PNG. Siehe **Bekanntes Limit** unten. |
-| IDE-Plugin | Splash-Screen-Eintrag waehrend IDE-Boot | `SplashScreenServices.AddPluginBitmap(name, HBITMAP, ...)` mit `LoadSCABitmap.Handle` |
-| IDE-Plugin | Help → About → Plugins | `IOTAAboutBoxServices.AddPluginInfo(name, desc, HBITMAP, ...)` mit `LoadSCABitmap.Handle` |
+| Stelle | Inhalt |
+|---|---|
+| `StaticCodeAnalyserForm/StaticCodeAnalyser.d12.dproj` | `<Icon_MainIcon>..\branding\sca.ico</Icon_MainIcon>` |
+| Auto-Mechanismus | Delphi packt das ICO als `MAINICON`-Resource in die auto-generierte `StaticCodeAnalyser.d12.res`. `{$R *.res}` im `.dpr` linkt das automatisch ein. |
+| Runtime | `Application.Icon` wird beim Start automatisch aus `MAINICON` gefuellt. Windows nutzt es fuer **Shell/Explorer-Icon, Taskbar (vor und waehrend Run), Window-Caption, Alt-Tab**. |
 
-## Bekanntes Limit: EXE-Shell-Icon
+Kein `{$R}` fuer Branding noetig, kein `uBrandingImage`-Helper, kein
+Runtime-PNG-Decoder. Nur die dproj-Zeile.
 
-Das **Datei-Icon im Windows-Explorer** und das **Taskbar-Icon vor App-Start**
-liest Windows direkt aus der Resource-Section der .exe — und akzeptiert dort
-nur `RT_GROUP_ICON` / `RT_ICON` (ICO-Format), kein PNG.
+## IDE-Plugin — LoadBitmap-Pattern
 
-`Application.Icon := PNG` setzt das **Runtime-Icon** (sichtbar sobald die App
-laeuft: Window-Caption, Alt-Tab, gepinnter Taskbar-Eintrag waehrend der
-Sitzung). Vor App-Start sieht der User aber das in die .exe einkompilierte
-Default-Icon von Delphi.
+| Stelle | Inhalt |
+|---|---|
+| `StaticCodeAnalyserIDE/StaticCodeAnalyser.IDE.d12.dproj` | `<RcCompile Include="..\branding\sca_branding.rc"/>` triggert BRCC32 → `sca_branding.res` neben der dpk |
+| `StaticCodeAnalyserIDE/StaticCodeAnalyser.IDE.d12.dpk` | `{$R 'sca_branding.res'}` linkt die Resource in die BPL |
+| `uIDEExpert.pas` | `LoadBitmap(HInstance, 'SCA_APP_BMP')` liefert das `HBITMAP` direkt — kein TBitmap-Wrapper, kein PngImage |
+| IOTA-Pfad | `SplashScreenServices.AddPluginBitmap(.., HBmp, ..)` (waehrend IDE-Boot) und `IOTAAboutBoxServices.AddPluginInfo(.., HBmp, ..)` (Help → About → Plugins) |
 
-**Wenn das Shell-Icon ebenfalls `sca` zeigen soll:**
+## Regenerieren (wenn `sca.png` sich aendert)
 
-1. PNG → ICO konvertieren (z. B. mit ImageMagick, online-Konverter, oder
-   `magick convert sca.png -define icon:auto-resize=256,48,32,16 sca.ico`).
-2. `sca.ico` in `branding/` ablegen.
-3. In `StaticCodeAnalyserForm/StaticCodeAnalyser.d12.dproj` Zeile `<Icon_MainIcon>`
-   von `$(BDS)\bin\delphi_PROJECTICON.ico` auf `..\branding\sca.ico` aendern.
-4. IDE-Build → die .ico wird via `brcc32` in die `.res` einkompiliert,
-   Windows-Explorer zeigt das neue Icon.
+Ein einmaliges PowerShell-Snippet erzeugt beide Derivat-Assets aus dem PNG.
+Schreibe folgendes in eine `_regen.ps1` neben den Assets, run, wieder loeschen:
 
-## Build-Integration (zweistufig — beide Schritte zwingend)
+```powershell
+Add-Type -AssemblyName System.Drawing
+$png = [System.Drawing.Image]::FromFile("$PSScriptRoot\sca.png")
+# 24x24 BMP fuer IDE-Plugin
+$b = New-Object System.Drawing.Bitmap 24, 24
+$g = [System.Drawing.Graphics]::FromImage($b)
+$g.InterpolationMode = 'HighQualityBicubic'
+$g.DrawImage($png, 0, 0, 24, 24)
+$b.Save("$PSScriptRoot\sca_24.bmp", [System.Drawing.Imaging.ImageFormat]::Bmp)
+$g.Dispose(); $b.Dispose()
+# Multi-res ICO (16/32/48/256) - jede Groesse PNG-komprimiert
+$sizes = @(16, 32, 48, 256); $pngBytes = @{}
+foreach ($s in $sizes) {
+  $b = New-Object System.Drawing.Bitmap $s, $s
+  $g = [System.Drawing.Graphics]::FromImage($b)
+  $g.InterpolationMode = 'HighQualityBicubic'
+  $g.DrawImage($png, 0, 0, $s, $s)
+  $ms = New-Object System.IO.MemoryStream
+  $b.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+  $pngBytes[$s] = $ms.ToArray()
+  $g.Dispose(); $b.Dispose(); $ms.Dispose()
+}
+$out = New-Object System.IO.MemoryStream
+$bw = New-Object System.IO.BinaryWriter $out
+$bw.Write([UInt16]0); $bw.Write([UInt16]1); $bw.Write([UInt16]$sizes.Count)
+$offset = 6 + 16 * $sizes.Count
+foreach ($s in $sizes) {
+  $bSize = if ($s -eq 256) { [byte]0 } else { [byte]$s }
+  $bw.Write($bSize); $bw.Write($bSize); $bw.Write([byte]0); $bw.Write([byte]0)
+  $bw.Write([UInt16]1); $bw.Write([UInt16]32)
+  $bw.Write([UInt32]$pngBytes[$s].Length); $bw.Write([UInt32]$offset)
+  $offset += $pngBytes[$s].Length
+}
+foreach ($s in $sizes) { $bw.Write($pngBytes[$s]) }
+$bw.Flush()
+[System.IO.File]::WriteAllBytes("$PSScriptRoot\sca.ico", $out.ToArray())
+$out.Dispose(); $png.Dispose()
+```
 
-| Schritt | Wo | Was bewirkt |
-|---|---|---|
-| 1. Compile | `<RcCompile Include="..\branding\sca_branding.rc"/>` im **`.dproj`** | Delphis MSBuild ruft BRCC32 auf, erzeugt `sca_branding.res` **NEBEN der dproj** (nicht neben der `.rc`!) — also `StaticCodeAnalyserForm\sca_branding.res` und `StaticCodeAnalyserIDE\sca_branding.res` |
-| 2. Link | `{$R 'sca_branding.res'}` im **`.dpr` / `.dpk`** (relativ zur Build-Head, nicht zur `.rc`) | Linker bindet die `.res` als Binary-Resource in die EXE/BPL ein |
+## Was vor diesem Umbau probiert wurde (und nicht klappte)
 
-**WICHTIG:** Schritt 1 allein reicht NICHT — ohne Schritt 2 erzeugt BRCC32
-zwar die `.res`, aber RLINK32 packt sie nicht in die fertige Binary, und
-das App-Icon ist nirgends sichtbar (Window-Caption, Taskleiste, About-Box,
-Splash — alles leer).
+Ein paar Iterationen lang hatten wir versucht, `sca.png` direkt als
+`RCDATA`-Resource einzubetten und zur Laufzeit via `TPngImage` +
+`Application.Icon.Assign(TPngImage)` zu setzen, plus IOTA-Bitmap via
+`TBitmap.Canvas.Draw(0, 0, Png)`. Mehrere Stolpersteine zugleich:
 
-**FALLE bei Schritt 2:** Die `.res`-Extension ist Pflicht.
-`{$R '...rc'}` (mit `.rc`-Extension) triggert den **16-bit-Legacy-BRC**
-statt BRCC32 und failt mit `E2161 RLINK32: Unsupported 16bit resource`.
+1. `<RcCompile>` allein bindet die `.res` nicht — `{$R '...res'}` ist Pflicht
+2. `{$R '...rc'}` triggert den 16-bit-Legacy-BRC
+3. `Application.Icon.Assign(TPngImage)` ist in Delphi 12 nicht verlaesslich
+4. BRCC32 erzeugt die `.res` neben der `.dpr/.dpk`, nicht neben der `.rc`
+5. Die IDE schmiess beim Dproj-Save manchmal manuell hinzugefuegte
+   `<RcCompile>`-Elemente weg
 
-## Add a new asset
-
-1. Datei in diesem Ordner ablegen.
-2. Ggf. `sca_branding.rc` um eine weitere Resource-Definition erweitern
-   (`MY_ASSET RCDATA "myasset.png"`).
-3. `uBrandingImage.pas` um einen Loader-Funktion erweitern.
-4. Konsumenten anbinden — kein Edit an `.dproj` / `.dpk` noetig solange die
-   Datei nur ueber `sca_branding.rc` referenziert wird.
+Der canonical Weg (MAINICON via dproj + BITMAP via LoadBitmap) umgeht alle
+diese Punkte.

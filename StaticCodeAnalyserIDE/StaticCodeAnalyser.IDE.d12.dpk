@@ -268,7 +268,6 @@ contains
   uPointerSubtraction in '..\StaticCodeAnalyserForm\sources\Detectors\uPointerSubtraction.pas',
   uInsecureCryptoAlgorithm in '..\StaticCodeAnalyserForm\sources\Detectors\uInsecureCryptoAlgorithm.pas',
   uCommandInjection in '..\StaticCodeAnalyserForm\sources\Detectors\uCommandInjection.pas',
-  uUnusedRoutine in '..\StaticCodeAnalyserForm\sources\Detectors\uUnusedRoutine.pas',
-  uBrandingImage in '..\branding\uBrandingImage.pas';
+  uUnusedRoutine in '..\StaticCodeAnalyserForm\sources\Detectors\uUnusedRoutine.pas';
 
 end.
