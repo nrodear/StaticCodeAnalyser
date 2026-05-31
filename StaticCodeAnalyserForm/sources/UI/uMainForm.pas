@@ -117,6 +117,20 @@ type
     FBtnCancel      : TButton;
     FCancelRequested: Boolean;
     FLastProgressTick: Cardinal;
+    // Hamburger-Menue (analog IDE-Plugin): einziger Zugang zu
+    // Branch-Changes / Cancel / Export / Settings / Ignore. Toolbar
+    // bleibt schlank, Aktionen sind alle ueber dieses Menue erreichbar.
+    FBtnHamburger   : TButton;
+    FHamburgerMenu  : TPopupMenu;
+    // Dynamisch ge-Enable/Disable'd in HamburgerMenuPopup.
+    FMICancel       : TMenuItem;
+    FMIBranch       : TMenuItem;
+    procedure HamburgerClick(Sender: TObject);
+    procedure HamburgerMenuPopup(Sender: TObject);
+    procedure BuildHamburgerMenu;
+    procedure HamburgerExportClick(Sender: TObject);
+    procedure HamburgerSettingsClick(Sender: TObject);
+    procedure HamburgerIgnoreListClick(Sender: TObject);
     // Getter / Callback fuer den FExportMenu-Konstruktor.
     function  GetResultGrid: TStringGrid;
     function  GetCurrentBaseDir: string;
@@ -167,12 +181,16 @@ var
 implementation
 
 uses
-  clipbrd,
+  clipbrd, Vcl.Menus,             // Vcl.Menus: TPopupMenu/TMenuItem (Hamburger)
   uStaticFiles, uRuleCatalog,
   uExport,                        // TExporter.ExportCsv (kanonischer CSV-Schreiber)
   uFindingFilter,                 // TFilterMode, TTypeFilter, TFindingFilter, TFindingFilterCriteria
   uVcsChanges,                    // BranchClick
-  uIDEStatsTiles;                 // TStatsTilesBuilder.Build (Sonar-Style Tiles)
+  uIDEStatsTiles,                 // TStatsTilesBuilder.Build (Sonar-Style Tiles)
+  uIDEToolbar,                    // TIDEToolbar.ApplySegoeUI - UI-Aligning mit IDE-Plugin
+  uIDEColors,                     // IDE_BG_CHROME - Chrome-Panel-Hintergrund analog IDE
+  uIgnoreList;                    // TIgnoreList.ConfigFilePath - Hamburger-Item
+  // ShellAPI + uLocalization sind bereits im interface-uses (E2004-Schutz).
   // uIDEHelpPanel ist im interface-uses (TFindingHintPanel ist class-Feld)
 
 {$R *.dfm}
@@ -403,6 +421,43 @@ begin
   FProgressBar.Smooth  := True;
   FProgressBar.Style   := pbstNormal;
   FProgressBar.Visible := False;
+
+  // ---- Hamburger-Menu (analog IDE-Plugin) -------------------------------
+  // Konsolidiert Branch / Cancel / Export / Settings / Ignore in EIN
+  // Popup-Menu. Toolbar bleibt schlank: nur Analyse-Buttons sichtbar,
+  // alles Sekundaere ist hinter dem ☰-Glyph.
+  FBtnHamburger := TButton.Create(Self);
+  FBtnHamburger.Parent  := PanelActions;
+  FBtnHamburger.Caption := #$2630;  // 'Trigram for Heaven' = Hamburger-Glyph
+  FBtnHamburger.Width   := 32;
+  FBtnHamburger.Height  := BtnBranch.Height;
+  FBtnHamburger.Top     := BtnBranch.Top;
+  FBtnHamburger.Left    := FBtnExport.Left + FBtnExport.Width + 12;
+  FBtnHamburger.Hint    := _('Actions menu: Branch-Changes, Cancel, Export, Settings, Ignore');
+  FBtnHamburger.ShowHint := True;
+  FBtnHamburger.OnClick := HamburgerClick;
+  BuildHamburgerMenu;
+  FBtnHamburger.PopupMenu := FHamburgerMenu;
+
+  // Jetzt BtnBranch und FBtnExport in der Toolbar verstecken - die Aktionen
+  // sind ueber das Hamburger-Menu erreichbar. Layout bleibt unveraendert
+  // (Visible:=False reserviert keinen Platz nicht in alLeft/alRight, aber
+  // die Buttons stehen hier explizit positioniert, also nehmen sie kein
+  // Layout-Slot ein).
+  BtnBranch.Visible  := False;
+  FBtnExport.Visible := False;
+
+  // ---- Theming + Schrift-Konsistenz mit IDE-Plugin ----------------------
+  // Segoe UI rekursiv auf alle Controls. Macht die Standalone-UI optisch
+  // identisch mit dem IDE-Plugin (gleicher Helper).
+  TIDEToolbar.ApplySegoeUI(Self);
+
+  // Chrome-Panels in der gleichen Farbe wie das IDE-Plugin (IDE_BG_CHROME =
+  // clBtnFace in Default-Theme, vom VCL-StyleHook automatisch geupdated
+  // wenn der User ein anderes VCL-Theme aktiviert).
+  PanelStats.Color   := IDE_BG_CHROME;
+  PanelActions.Color := IDE_BG_CHROME;
+  if Assigned(Panel3) then Panel3.Color := IDE_BG_CHROME;
 
   LoadRecentPaths;
 end;
@@ -1381,6 +1436,139 @@ begin
     Findings.Free;
     Files.Free;
     Settings.Free;
+  end;
+end;
+
+// ---------------------------------------------------------------------------
+// Hamburger-Menu - konsolidiert Branch / Cancel / Export / Settings / Ignore
+// in EIN Popup. Spiegelt das IDE-Plugin-Pattern (uIDEAnalyserForm) 1:1 -
+// gleiche Items, gleiche Reihenfolge, gleiche Enabled-Sync-Logik.
+// ---------------------------------------------------------------------------
+
+procedure TForm2.BuildHamburgerMenu;
+var
+  MI : TMenuItem;
+begin
+  FHamburgerMenu := TPopupMenu.Create(Self);
+  FHamburgerMenu.OnPopup := HamburgerMenuPopup;
+
+  // ---- Aktions-Block: Branch-Changes ----
+  FMIBranch := TMenuItem.Create(FHamburgerMenu);
+  FMIBranch.Caption := _('Analyse Branch-Changes');
+  FMIBranch.OnClick := BtnBranchClick;          // existierender Handler
+  FHamburgerMenu.Items.Add(FMIBranch);
+
+  MI := TMenuItem.Create(FHamburgerMenu);
+  MI.Caption := '-';
+  FHamburgerMenu.Items.Add(MI);
+
+  // ---- Cancel (Enabled wird in HamburgerMenuPopup gesynct) ----
+  FMICancel := TMenuItem.Create(FHamburgerMenu);
+  FMICancel.Caption := _('Cancel Analysis');
+  FMICancel.OnClick := BtnCancelClick;          // existierender Handler
+  FHamburgerMenu.Items.Add(FMICancel);
+
+  MI := TMenuItem.Create(FHamburgerMenu);
+  MI.Caption := '-';
+  FHamburgerMenu.Items.Add(MI);
+
+  // ---- Export ----
+  MI := TMenuItem.Create(FHamburgerMenu);
+  MI.Caption := _('Export') + '...';
+  MI.OnClick := HamburgerExportClick;
+  FHamburgerMenu.Items.Add(MI);
+
+  MI := TMenuItem.Create(FHamburgerMenu);
+  MI.Caption := '-';
+  FHamburgerMenu.Items.Add(MI);
+
+  // ---- Konfig-Block: Settings + Ignore ----
+  MI := TMenuItem.Create(FHamburgerMenu);
+  MI.Caption := _('Settings...');
+  MI.OnClick := HamburgerSettingsClick;
+  FHamburgerMenu.Items.Add(MI);
+
+  MI := TMenuItem.Create(FHamburgerMenu);
+  MI.Caption := _('Ignore list...');
+  MI.OnClick := HamburgerIgnoreListClick;
+  FHamburgerMenu.Items.Add(MI);
+end;
+
+procedure TForm2.HamburgerMenuPopup(Sender: TObject);
+// Enabled-Sync VOR dem Oeffnen. Cancel ist nur waehrend laufender Analyse
+// aktiv; Branch-Changes ist waehrend Analyse deaktiviert.
+begin
+  if Assigned(FMICancel) then
+    FMICancel.Enabled := Assigned(FBtnCancel) and FBtnCancel.Enabled;
+  if Assigned(FMIBranch) then
+    FMIBranch.Enabled := (not Assigned(FBtnCancel)) or (not FBtnCancel.Enabled);
+end;
+
+procedure TForm2.HamburgerClick(Sender: TObject);
+// Lazy: bei jedem Klick Popup unter dem Button anzeigen.
+var P : TPoint;
+begin
+  if not Assigned(FBtnHamburger) or not Assigned(FHamburgerMenu) then Exit;
+  P := FBtnHamburger.ClientToScreen(Point(0, FBtnHamburger.Height));
+  FHamburgerMenu.Popup(P.X, P.Y);
+end;
+
+procedure TForm2.HamburgerExportClick(Sender: TObject);
+// Export-Menu unter dem Hamburger-Button oeffnen. FExportMenu ist das
+// gleiche Popup-Menu das frueher direkt am Export-Button hing.
+var P : TPoint;
+begin
+  if not Assigned(FBtnHamburger) or not Assigned(FExportMenu) then Exit;
+  P := FBtnHamburger.ClientToScreen(Point(0, FBtnHamburger.Height));
+  FExportMenu.PopupAt(P.X, P.Y);
+end;
+
+procedure TForm2.HamburgerSettingsClick(Sender: TObject);
+// Oeffnet analyser.ini im Default-Editor. Naechster Analyse-Klick laedt
+// die INI neu (PrepareAnalysis ruft FRepoSettings.Load) - Aenderungen
+// greifen ohne Form-Restart.
+var
+  Settings : TRepoSettings;
+  Path     : string;
+begin
+  Settings := TRepoSettings.Create;
+  try
+    Settings.EnsureConfigExists;
+    Path := Settings.ConfigFilePath;
+  finally
+    Settings.Free;
+  end;
+  try
+    ShellExecute(0, 'open', PChar(Path), nil, nil, SW_SHOWNORMAL);
+  except
+    StatusBar1.Panels[2].Text := _('Could not open editor. File: ') + Path;
+    Exit;
+  end;
+  StatusBar1.Panels[2].Text := Format(_('Settings: %s - changes take effect on the next analysis run.'),
+    [Path]);
+end;
+
+procedure TForm2.HamburgerIgnoreListClick(Sender: TObject);
+// Oeffnet die Ignore-Liste mit dem Default-Editor (Notepad). Nach
+// Schliessen kommt die naechste Analyse mit der frischen Liste.
+var
+  Ignore : TIgnoreList;
+  Path   : string;
+begin
+  Ignore := TIgnoreList.Create;
+  try
+    Ignore.EnsureConfigExists;
+    Path := Ignore.ConfigFilePath;
+    try
+      ShellExecute(0, 'open', PChar(Path), nil, nil, SW_SHOWNORMAL);
+    except
+      StatusBar1.Panels[2].Text := _('Could not open editor. File: ') + Path;
+      Exit;
+    end;
+    StatusBar1.Panels[2].Text := Format(
+      _('Ignore list opened: %s'), [Path]);
+  finally
+    Ignore.Free;
   end;
 end;
 

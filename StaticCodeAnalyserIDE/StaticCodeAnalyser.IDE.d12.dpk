@@ -58,7 +58,7 @@ contains
   uIDEEditorIntegration in 'uIDEEditorIntegration.pas',
   uIDEStatusBar in 'uIDEStatusBar.pas',
   uIDETheme in 'uIDETheme.pas',
-  uIDEToolbar in 'uIDEToolbar.pas',
+  uIDEToolbar in '..\StaticCodeAnalyserForm\sources\UI\uIDEToolbar.pas',
   uIDEAnalyseProgress in 'uIDEAnalyseProgress.pas',
   uIDEGridTooltip in 'uIDEGridTooltip.pas',
   uIDELifecycle in 'uIDELifecycle.pas',
