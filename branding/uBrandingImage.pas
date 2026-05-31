@@ -35,7 +35,7 @@ function LoadSCABitmap: TBitmap;
 implementation
 
 uses
-  Winapi.Windows;
+  Winapi.Windows, System.SysUtils;     // SysUtils: Exception + Format fuer Diagnostik
 
 function LoadSCAPng: TPngImage;
 var
