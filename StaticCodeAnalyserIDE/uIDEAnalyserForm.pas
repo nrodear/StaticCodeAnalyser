@@ -3218,11 +3218,15 @@ begin
     // Caption-Icon im undocked Zustand auf das RAD-Studio-Default zurueck.
     // Multi-Res ICO (SCA_APP_ICO) aus der sca_branding.res - Windows picks
     // size by DPI/Caption-Height/Alt-Tab.
-    try
-      HostForm.Icon.LoadFromResourceName(HInstance, 'SCA_APP_ICO');
-    except
-      // Resource fehlt -> kein Icon, kein Plugin-Crash.
-    end;
+    // GetParentForm liefert TCustomForm dessen .Icon protected ist; erst
+    // TForm macht es published. Cast ist sicher: das IDE-DockHost ist immer
+    // ein TForm-Descendant, KEIN reiner TCustomForm.
+    if HostForm is TForm then
+      try
+        TForm(HostForm).Icon.LoadFromResourceName(HInstance, 'SCA_APP_ICO');
+      except
+        // Resource fehlt -> kein Icon, kein Plugin-Crash.
+      end;
   end;
 
   // Theme-Apply auch hier - belt-and-suspenders zum SetParent-Override:
