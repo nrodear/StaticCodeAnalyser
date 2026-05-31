@@ -12,7 +12,7 @@ type
     [Test] procedure SingleVarPerLine_NoFinding;
     [Test] procedure TwoVarsGrouped_Reported;
     [Test] procedure ThreeVarsGrouped_Reported;
-    [Test] procedure ParameterGrouped_Reported;
+    [Test] procedure ParameterGrouped_NotReported;
     [Test] procedure FieldGrouped_Reported;
     [Test] procedure GroupedDeclaration_KindAndSeverity;
   end;
@@ -66,14 +66,19 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestGroupedDeclaration.ParameterGrouped_Reported;
+procedure TTestGroupedDeclaration.ParameterGrouped_NotReported;
+// Gruppierte Parameter `procedure F(A, B: Integer)` sind in Delphi
+// idiomatische Syntax und werden NICHT als GroupedDecl geflaggt - sonst
+// wuerde jede Helper-Funktion mit gleichgetypten Parametern Noise produzieren.
+// Self-Test auf eigenem Code zeigte 660+ FPs durch diese Klasse;
+// detector-seitig via ParenDepth-Filter geloest.
 const SRC =
   'unit t; implementation'#13#10 +
   'procedure Foo(A, B: Integer); begin DoStuff; end;';
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkGroupedDeclaration) >= 1);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkGroupedDeclaration));
   finally F.Free; end;
 end;
 

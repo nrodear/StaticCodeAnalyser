@@ -3,9 +3,10 @@ unit uGroupedDeclaration;
 // Detektor fuer gruppierte Deklarationen `A, B: Type;`.
 //
 // SonarDelphi-Aequivalent: communitydelphi:GroupedFieldDeclaration,
-// :GroupedVariableDeclaration, :GroupedParameterDeclaration (in SCA
-// als einzelne Regel zusammengefasst, separater Detektor pro Subkategorie
-// folgt evtl. spaeter).
+// :GroupedVariableDeclaration. GroupedParameterDeclaration ist
+// BEWUSST NICHT abgedeckt - gruppierte Parameter `F(A, B: Integer)` sind
+// idiomatische Delphi-Syntax und produzierten in einem Self-Test 660+
+// FPs auf realem Code. Implementiert via ParenDepth-Filter unten.
 //
 // Hintergrund: `A, B, C: Integer;` macht Diffs unklar (eine neue Variable
 // einzufuegen aendert eine bestehende Zeile statt eine eigene), und
