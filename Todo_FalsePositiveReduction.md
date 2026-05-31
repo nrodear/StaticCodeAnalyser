@@ -176,14 +176,32 @@ umgestellt:
 - `uTestFreeWithoutNil.FreeWithoutNil_Reported` + `Finding_KindAndSeverity`
   (Commit `cec4d41`). SRC auf Field-Pattern umgestellt (Locals nicht mehr geflaggt).
 
-### Aggregierte Wirkung
+### Aggregierte Wirkung (verifiziert via Re-Scan)
 
-| Metrik | v0.9.5 | nach Rebuild #1 (R1-R3) | nach Rebuild #2 (R4-R7, erwartet) |
+| Metrik | v0.9.5 | Rebuild #1 (R1-R3) | Rebuild #2 (R5) | nach Rebuild #3 erwartet (R6-R8) |
+|---|---|---|---|---|
+| Total | 12 200 | 7 119 | **6 994** | ~6 850 |
+| Errors | 37 | 16 | 16 | ~12 |
+| Warnings | 609 | 612 | 501 | ~410 |
+| Notes | 11 554 | 6 491 | 6 477 | ~6 440 |
+
+**Reduktion gesamt nach Rebuild #2**: 12 200 → 6 994 = **−43%** verifiziert.
+Erwartet nach Rebuild #3: −44%. Alle eliminierten Findings strukturell
+erklärt, keine echten Bugs übersehen (Cross-Check via DUnit-Suite mit
+1696 Tests).
+
+**Pro-Detector verifizierte Reduktion** (Rebuild #2):
+
+| Detector | Before | After | Δ |
 |---|---|---|---|
-| Total | 12 200 | 7 119 | ~6 800 |
-| Errors | 37 | 16 | ~10 |
-| Warnings | 609 | 612 | ~570 |
-| Notes | 11 554 | 6 491 | ~6 200 |
+| SCA139 FreeWithoutNil | 126 | 15 | **−111** |
+| SCA053 UnusedLocal | 175 | 150 | −25 |
+| SCA019 TodoComment | 38 | 24 | −14 |
 
-**Reduktion gesamt**: ≈ −44%, alle eliminierten Findings strukturell erklärt.
-Keine echten Bugs übersehen (Cross-Check via DUnit-Suite mit 1696 Tests).
+Round-6-8 Commits (679caef, ae2f20b, 0710782, 96a0345) waren NACH der
+manuellen EXE-Build-Zeit (22:16), werden beim naechsten Rebuild aktiv:
+- SCA106 MethodName: 8 → 0 erwartet
+- SCA104 TypeName: 4 → 0 erwartet
+- SCA109 LockWithoutTryFinally: 16 → ~12 erwartet (4 Production-Code-FPs raus)
+- SCA078 ExceptionTooGeneral: 46 → ~5 erwartet
+- SCA001 MemoryLeak ("Rückgabewert"): 68 → ~5 erwartet
