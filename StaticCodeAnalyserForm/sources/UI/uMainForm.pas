@@ -120,7 +120,6 @@ type
     FHamburgerMenu  : TPopupMenu;
     // Dynamisch ge-Enable/Disable'd in HamburgerMenuPopup.
     FMICancel       : TMenuItem;
-    FMIBranch       : TMenuItem;
     procedure HamburgerClick(Sender: TObject);
     procedure HamburgerMenuPopup(Sender: TObject);
     procedure BuildHamburgerMenu;
@@ -419,32 +418,27 @@ begin
   FProgressBar.Visible := False;
 
   // ---- Hamburger-Menu (analog IDE-Plugin) -------------------------------
-  // Konsolidiert Branch / Cancel / Export / Settings / Ignore in EIN
-  // Popup-Menu. Toolbar bleibt schlank: nur Analyse-Buttons sichtbar,
-  // alles Sekundaere ist hinter dem ☰-Glyph.
-  // Position: dorthin wo BtnBranch saess (Single-Source-of-Truth
-  // fuer Toolbar-Geometrie), Width = 32 px Icon-Button.
+  // Konsolidiert Cancel / Export / Settings / Ignore in EIN Popup-Menu.
+  // BtnBranch bleibt als eigenstaendiger Top-Level-Button sichtbar
+  // (User-Wunsch - Branch-Analyse ist haeufig genug fuer einen direkten
+  // Toolbar-Slot, Hamburger wuerde nur Klicks kosten).
+  // Position: rechts neben BtnBranch (dort wo frueher FBtnExport sass).
   FBtnHamburger := TButton.Create(Self);
   FBtnHamburger.Parent  := PanelActions;
   FBtnHamburger.Caption := #$2630;  // 'Trigram for Heaven' = Hamburger-Glyph
   FBtnHamburger.Width   := 32;
   FBtnHamburger.Height  := BtnBranch.Height;
   FBtnHamburger.Top     := BtnBranch.Top;
-  FBtnHamburger.Left    := BtnBranch.Left;
-  FBtnHamburger.Hint    := _('Actions menu: Branch-Changes, Cancel, Export, Settings, Ignore');
+  FBtnHamburger.Left    := BtnBranch.Left + BtnBranch.Width + 12;
+  FBtnHamburger.Hint    := _('Actions menu: Cancel, Export, Settings, Ignore');
   FBtnHamburger.ShowHint := True;
   FBtnHamburger.OnClick := HamburgerClick;
-  FBtnHamburger.Visible := True;
   BuildHamburgerMenu;
   // KEIN PopupMenu-Property setzen - die OnClick-Procedure macht den Popup
-  // explizit via Menu.Popup(P.X, P.Y) am Hamburger-Button. PopupMenu am
-  // Button wuerde die Anzeige auf Rechtsklick mappen und mit OnClick
-  // konkurrieren.
+  // explizit via Menu.Popup(P.X, P.Y) am Hamburger-Button.
 
-  // BtnBranch + FBtnExport in der Toolbar verstecken - ihre Aktionen
-  // sind ueber das Hamburger-Menu erreichbar. NACH dem Hamburger-Setup
-  // (das BtnBranch.Left/Top als Position-Quelle benutzt).
-  BtnBranch.Visible  := False;
+  // FBtnExport in der Toolbar verstecken - Export ist ueber das Hamburger-
+  // Menu erreichbar. BtnBranch bleibt SICHTBAR als eigener Button.
   FBtnExport.Visible := False;
 
   // ---- Theming + Schrift-Konsistenz mit IDE-Plugin ----------------------
@@ -1423,15 +1417,8 @@ begin
   FHamburgerMenu := TPopupMenu.Create(Self);
   FHamburgerMenu.OnPopup := HamburgerMenuPopup;
 
-  // ---- Aktions-Block: Branch-Changes ----
-  FMIBranch := TMenuItem.Create(FHamburgerMenu);
-  FMIBranch.Caption := _('Analyse Branch-Changes');
-  FMIBranch.OnClick := BtnBranchClick;          // existierender Handler
-  FHamburgerMenu.Items.Add(FMIBranch);
-
-  MI := TMenuItem.Create(FHamburgerMenu);
-  MI.Caption := '-';
-  FHamburgerMenu.Items.Add(MI);
+  // (Branch-Changes ist NICHT mehr im Menue - BtnBranch ist eigenstaendiger
+  // Top-Level-Button.)
 
   // ---- Cancel (Enabled wird in HamburgerMenuPopup gesynct) ----
   FMICancel := TMenuItem.Create(FHamburgerMenu);
@@ -1467,12 +1454,11 @@ end;
 
 procedure TForm2.HamburgerMenuPopup(Sender: TObject);
 // Enabled-Sync VOR dem Oeffnen. Cancel ist nur waehrend laufender Analyse
-// aktiv; Branch-Changes ist waehrend Analyse deaktiviert.
+// aktiv. Branch-Changes ist als eigener Top-Level-Button kein Menue-Item
+// mehr.
 begin
   if Assigned(FMICancel) then
     FMICancel.Enabled := Assigned(FBtnCancel) and FBtnCancel.Enabled;
-  if Assigned(FMIBranch) then
-    FMIBranch.Enabled := (not Assigned(FBtnCancel)) or (not FBtnCancel.Enabled);
 end;
 
 procedure TForm2.HamburgerClick(Sender: TObject);
