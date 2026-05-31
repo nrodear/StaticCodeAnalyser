@@ -50,6 +50,15 @@ const
   // 16x16 fuer das IDE-Tools-Menu (Standard-Menu-Icon-Groesse).
   SCA_APP_BMP16_RES = 'SCA_APP_BMP16';
 
+type
+  // Tiny Wrapper-Klasse weil TAction.OnExecute eine Methode (procedure of
+  // object) erwartet, KEINE freie Prozedur. Lebt waehrend der gesamten
+  // BPL-Laufzeit und wird in finalization freigegeben.
+  TToolsMenuHandler = class
+  public
+    procedure MenuClick(Sender: TObject);
+  end;
+
 var
   // Index in der About-Box; gebraucht zum Unregister beim BPL-Unload.
   // -1 = nicht registriert (z.B. wenn IDE keine AboutBoxServices liefert).
@@ -64,6 +73,14 @@ var
   // im IDE-Menue bis IDE-Neustart.
   GToolsMenuItem : TMenuItem = nil;
   GToolsAction   : TAction   = nil;
+  GToolsHandler  : TToolsMenuHandler = nil;
+
+procedure TToolsMenuHandler.MenuClick(Sender: TObject);
+// OnExecute-Methode der TAction - identisch zum vormaligen IOTAMenuWizard.
+// Execute-Pfad: zeigt das Dockable-Form.
+begin
+  ShowAnalyserDockableForm;
+end;
 
 function BrandingHBitmap: HBITMAP;
 // Canonical Embarcadero-Pattern (OTAPI-Docs Kap. 9): LoadBitmap(HInstance,
@@ -159,13 +176,6 @@ begin
   end;
 end;
 
-procedure ToolsMenuItemClick(Sender: TObject);
-// OnExecute-Handler der TAction - identisch zum vormaligen
-// IOTAMenuWizard.Execute-Pfad: zeigt das Dockable-Form.
-begin
-  ShowAnalyserDockableForm;
-end;
-
 procedure RegisterToolsMenuItem;
 // 1) BMP-Resource laden + in TImageList -> INTAServices.AddImages liefert
 //    den IDE-globalen ImageIndex.
@@ -209,10 +219,15 @@ begin
 
   // TAction in der IDE-eigenen ActionList registrieren (Wichtig - sonst
   // gilt der ShortCut-Code nicht und das ImageIndex-Mapping greift nicht).
+  // OnExecute ist TNotifyEvent (procedure of object) - braucht eine
+  // Methode an einer Instanz, nicht eine freie Prozedur. Daher der
+  // GToolsHandler-Wrapper.
+  if GToolsHandler = nil then
+    GToolsHandler := TToolsMenuHandler.Create;
   GToolsAction := TAction.Create(nil);
   GToolsAction.ActionList := NTAS.ActionList;
   GToolsAction.Caption    := PLUGIN_TITLE;
-  GToolsAction.OnExecute  := ToolsMenuItemClick;
+  GToolsAction.OnExecute  := GToolsHandler.MenuClick;
   GToolsAction.Hint       := PLUGIN_DESC;
   GToolsAction.Category   := 'SCA';
   if ImageIndex >= 0 then
@@ -225,9 +240,9 @@ begin
 end;
 
 procedure UnregisterToolsMenuItem;
-// MenuItem zuerst (sonst Dangling-Reference im IDE-Menue), dann Action.
-// Action darf NUR freigegeben werden NACHDEM MenuItem keine Referenz mehr
-// haelt - sonst AV beim naechsten IDE-Repaint.
+// MenuItem zuerst (sonst Dangling-Reference im IDE-Menue), dann Action,
+// dann Handler. Action darf NUR freigegeben werden NACHDEM MenuItem keine
+// Referenz mehr haelt - sonst AV beim naechsten IDE-Repaint.
 begin
   if Assigned(GToolsMenuItem) then
   begin
@@ -238,6 +253,11 @@ begin
   begin
     GToolsAction.Free;
     GToolsAction := nil;
+  end;
+  if Assigned(GToolsHandler) then
+  begin
+    GToolsHandler.Free;
+    GToolsHandler := nil;
   end;
 end;
 
