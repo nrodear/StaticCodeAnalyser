@@ -42,6 +42,20 @@ uses
   System.StrUtils, System.RegularExpressions,
   uFileTextCache;
 
+var
+  // Lazy-Cache (Round 11): konstante Patterns einmalig kompilieren.
+  CachedReMethod   : TRegEx;
+  CachedReProperty : TRegEx;
+  CachedReInit     : Boolean = False;
+
+procedure EnsureRegexCacheBuilt;
+begin
+  if CachedReInit then Exit;
+  CachedReMethod   := TRegEx.Create('(?i)^\s*(procedure|function|constructor|destructor)\s+([A-Za-z_][A-Za-z0-9_]*)');
+  CachedReProperty := TRegEx.Create('(?i)^\s*property\s+([A-Za-z_][A-Za-z0-9_]*)');
+  CachedReInit     := True;
+end;
+
 function TrimL(const S: string): string;
 begin
   Result := TrimLeft(S);
@@ -114,17 +128,14 @@ var
   InInterface : Boolean;
   CurrentVis  : string; // 'public' / 'published' / 'private' / 'protected' / 'strict private' / ''
   InClass     : Boolean;
-  ReMethod    : TRegEx;
-  ReProperty  : TRegEx;
   M           : TMatch;
   Name        : string;
   F           : TLeakFinding;
   IsPublicSection : Boolean;
 begin
+  EnsureRegexCacheBuilt;
   Lines := AcquireLines(FileName, Cached);
   if Lines = nil then Exit;
-  ReMethod   := TRegEx.Create('(?i)^\s*(procedure|function|constructor|destructor)\s+([A-Za-z_][A-Za-z0-9_]*)');
-  ReProperty := TRegEx.Create('(?i)^\s*property\s+([A-Za-z_][A-Za-z0-9_]*)');
   try
     InInterface := False;
     InClass     := False;
@@ -162,9 +173,9 @@ begin
       if not InClass then Continue;
 
       // Methode / Property?
-      M := ReMethod.Match(Line);
+      M := CachedReMethod.Match(Line);
       if not M.Success then
-        M := ReProperty.Match(Line);
+        M := CachedReProperty.Match(Line);
       if not M.Success then Continue;
 
       Name := M.Groups[M.Groups.Count - 1].Value;

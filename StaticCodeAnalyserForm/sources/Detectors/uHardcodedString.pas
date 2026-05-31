@@ -58,6 +58,22 @@ uses
   System.RegularExpressions, System.StrUtils,
   uFileTextCache;
 
+var
+  // Lazy-Cache (Round 11): konstante Patterns einmalig kompilieren.
+  CachedRePropertyAssign : TRegEx;
+  CachedReDialogCall     : TRegEx;
+  CachedReInit           : Boolean = False;
+
+procedure EnsureRegexCacheBuilt;
+begin
+  if CachedReInit then Exit;
+  CachedRePropertyAssign := TRegEx.Create(
+    '(?i)\.\s*(?:Caption|Hint|Text)\s*:=\s*''([^'']*(?:''''[^'']*)*)''');
+  CachedReDialogCall     := TRegEx.Create(
+    '(?i)\b(?:ShowMessage|MessageDlg)\s*\(\s*''([^'']*(?:''''[^'']*)*)''');
+  CachedReInit := True;
+end;
+
 function ContainsLetter(const S: string): Boolean;
 var
   i : Integer;
@@ -109,28 +125,21 @@ var
   Cached   : Boolean;
   i        : Integer;
   Line     : string;
-  RE1, RE2 : TRegEx;
   M        : TMatch;
   Lit      : string;
   F        : TLeakFinding;
 begin
+  EnsureRegexCacheBuilt;
   Lines := AcquireLines(FileName, Cached);
   if Lines = nil then Exit;
   try
-    // Pattern A: <ident>.Caption|Hint|Text := '...';
-    RE1 := TRegEx.Create(
-      '(?i)\.\s*(?:Caption|Hint|Text)\s*:=\s*''([^'']*(?:''''[^'']*)*)''');
-    // Pattern B: ShowMessage('...') | MessageDlg('...'
-    RE2 := TRegEx.Create(
-      '(?i)\b(?:ShowMessage|MessageDlg)\s*\(\s*''([^'']*(?:''''[^'']*)*)''');
-
     for i := 0 to Lines.Count - 1 do
     begin
       Line := Lines[i];
       // Comment-Skip: einfache Zeilen-Kommentare ueberspringen wir grob.
       if Trim(Line).StartsWith('//') then Continue;
 
-      for M in RE1.Matches(Line) do
+      for M in CachedRePropertyAssign.Matches(Line) do
       begin
         Lit := M.Groups[1].Value;
         if not ShouldReport(Lit) then Continue;
@@ -144,7 +153,7 @@ begin
         F.SetKind(fkHardcodedString);
         Results.Add(F);
       end;
-      for M in RE2.Matches(Line) do
+      for M in CachedReDialogCall.Matches(Line) do
       begin
         Lit := M.Groups[1].Value;
         if not ShouldReport(Lit) then Continue;

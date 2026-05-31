@@ -63,6 +63,21 @@ uses
 const
   INT64_TYPES : array[0..2] of string = ('int64', 'uint64', 'qword');
 
+var
+  // Lazy-Cache (Round 11): Patterns sind konstant. Spart 2 Compilations
+  // pro File pro Scan.
+  CachedReVarDecl : TRegEx;
+  CachedReAssign  : TRegEx;
+  CachedReInit    : Boolean = False;
+
+procedure EnsureRegexCacheBuilt;
+begin
+  if CachedReInit then Exit;
+  CachedReVarDecl := TRegEx.Create('(?im)\b(\w+)\s*:\s*(Int64|UInt64|QWord)\b');
+  CachedReAssign  := TRegEx.Create('(?im)\b(\w+)\s*:=\s*(\w+)\s*\*\s*(\w+)\s*;');
+  CachedReInit    := True;
+end;
+
 // True wenn TypeText eines der Int64-Familien-Typen ist.
 function IsInt64Type(const TypeText: string): Boolean;
 var
@@ -163,7 +178,6 @@ var
   Code     : string;
   LineFor  : TArray<Integer>;
   Int64Vars : TStringList;
-  ReVarDecl, ReAssign : TRegEx;
   M  : TMatch;
   Name, TypeText : string;
   Lhs, A, B : string;
@@ -171,6 +185,7 @@ var
   F  : TLeakFinding;
   LineNo : Integer;
 begin
+  EnsureRegexCacheBuilt;
   Lines := AcquireLines(FileName, Cached);
   if Lines = nil then Exit;
   try
@@ -183,9 +198,7 @@ begin
       Int64Vars.CaseSensitive := False;
       Int64Vars.Sorted := True;
       Int64Vars.Duplicates := dupIgnore;
-      ReVarDecl := TRegEx.Create(
-        '(?im)\b(\w+)\s*:\s*(Int64|UInt64|QWord)\b');
-      for M in ReVarDecl.Matches(Code) do
+      for M in CachedReVarDecl.Matches(Code) do
       begin
         Name := M.Groups[1].Value;
         TypeText := M.Groups[2].Value;
@@ -197,9 +210,7 @@ begin
       // Phase 2: Assignments mit Produkt-RHS finden.
       // Pattern: `<lhs> := <a> * <b>;` mit lhs in Int64Vars und a, b
       // simple Identifier ohne Cast.
-      ReAssign := TRegEx.Create(
-        '(?im)\b(\w+)\s*:=\s*(\w+)\s*\*\s*(\w+)\s*;');
-      for M in ReAssign.Matches(Code) do
+      for M in CachedReAssign.Matches(Code) do
       begin
         Lhs := M.Groups[1].Value;
         A   := M.Groups[2].Value;

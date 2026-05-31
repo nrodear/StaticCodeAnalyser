@@ -37,6 +37,26 @@ uses
   System.RegularExpressions, System.StrUtils,
   uFileTextCache, uDetectorUtils;
 
+var
+  // Lazy-Cache (Round 11): die 3 KONSTANTEN Patterns einmalig kompilieren.
+  // Die 2 dynamischen (mit Ident im Pattern) bleiben per-Call compile - das
+  // sind ggf. Round-12-Kandidaten via Capture-Group + Filter-Algorithmus.
+  CachedReFuncHeader : TRegEx;
+  CachedReResume     : TRegEx;
+  CachedReFreeNil    : TRegEx;
+  CachedReInit       : Boolean = False;
+
+procedure EnsureRegexCacheBuilt;
+begin
+  if CachedReInit then Exit;
+  CachedReFuncHeader := TRegEx.Create(
+    '(?is)\bfunction\s+[\w.]+\s*(?:\([^()]*(?:\([^()]*\)[^()]*)*\))?\s*:\s*' +
+    '([A-Za-z0-9_<>,\s.]+?)\s*;');
+  CachedReResume  := TRegEx.Create('(?i)\b(\w+)\.Resume\b(?!\s*\:=)');
+  CachedReFreeNil := TRegEx.Create('(?i)\bFreeAndNil\s*\(\s*(\w+)\s*\)');
+  CachedReInit    := True;
+end;
+
 // Vorheriger lokaler StripFileComments hat Kommentare gestrippt, String-
 // Literale aber 1:1 erhalten - das war die FP-Quelle (TDestroyWithoutTerminate
 // matched 'FreeAndNil(X)' inside einer englischen Hint-msgid). Ersetzt durch
@@ -58,8 +78,6 @@ var
   Cached       : Boolean;
   Code         : string;
   LineFor      : TArray<Integer>;
-  ReResume     : TRegEx;
-  ReFreeNil    : TRegEx;
   ReDecl       : TRegEx;
   DeclMatch    : TMatch;
   Matches      : TMatchCollection;
@@ -94,7 +112,6 @@ var
   var
     StartPos : Integer;
     Snippet  : string;
-    RE       : TRegEx;
     M        : TMatch;
     Hit      : string;
   begin
@@ -105,12 +122,9 @@ var
     // Erwartetes Pattern: 'function <ident>[.<ident>]*[(<params>)]: <Type>;'
     // Die Param-Liste kann verschachtelte Klammern enthalten ([^()]* reicht
     // nicht), aber fuer Method-Header reicht zwei Verschachtelungsebenen.
-    RE := TRegEx.Create(
-      '(?is)\bfunction\s+[\w.]+\s*(?:\([^()]*(?:\([^()]*\)[^()]*)*\))?\s*:\s*' +
-      '([A-Za-z0-9_<>,\s.]+?)\s*;');
     // Letzter Match im Snippet = naechstgelegener Header.
     Hit := '';
-    for M in RE.Matches(Snippet) do
+    for M in CachedReFuncHeader.Matches(Snippet) do
       Hit := M.Groups[1].Value;
     Result := Hit;
   end;
@@ -129,6 +143,7 @@ var
   end;
 
 begin
+  EnsureRegexCacheBuilt;
   Lines := AcquireLines(FileName, Cached);
   if Lines = nil then Exit;
   try
@@ -139,8 +154,7 @@ begin
     //    konservativ alles und verlassen uns auf den User-Suppress
     //    wenn das ein FP ist - der Compiler markiert echte TThread.Resume
     //    sowieso schon als deprecated.
-    ReResume := TRegEx.Create('(?i)\b(\w+)\.Resume\b(?!\s*\:=)');
-    Matches := ReResume.Matches(Code);
+    Matches := CachedReResume.Matches(Code);
     for M in Matches do
       Emit(fkThreadResumeDeprecated,
         Format('%s.Resume is deprecated since Delphi 2010 - prefer ' +
@@ -154,8 +168,7 @@ begin
     //    KEIN <ident>.Terminate (in den letzten ~10 Zeilen).
     //    LookBack-Window in Bytes (gestripte Code-Laenge); ~500 chars
     //    deckt ~10 Code-Zeilen ab.
-    ReFreeNil := TRegEx.Create('(?i)\bFreeAndNil\s*\(\s*(\w+)\s*\)');
-    Matches := ReFreeNil.Matches(Code);
+    Matches := CachedReFreeNil.Matches(Code);
     for M in Matches do
     begin
       Ident := M.Groups[1].Value;

@@ -66,6 +66,20 @@ const
   FLOAT_TYPES : array[0..4] of string =
     ('single', 'double', 'extended', 'real', 'currency');
 
+var
+  // Lazy-Cache (Round 11): konstante Patterns einmalig kompilieren.
+  CachedReDecl  : TRegEx;
+  CachedReEqual : TRegEx;
+  CachedReInit  : Boolean = False;
+
+procedure EnsureRegexCacheBuilt;
+begin
+  if CachedReInit then Exit;
+  CachedReDecl  := TRegEx.Create('(?im)\b(\w+)\s*:\s*(Single|Double|Extended|Real|Currency)\b');
+  CachedReEqual := TRegEx.Create('(?i)\b(\w+(?:\.\w+)?)\s*(=|<>)\s*([\w.]+)');
+  CachedReInit  := True;
+end;
+
   // Tokens die syntaktisch ein Operand sein koennen, semantisch aber NIE
   // ein Float-Wert sind. Wenn eine Seite des '='-Vergleichs eines davon
   // ist, ist es kein Float-Equality - egal ob die andere Seite zufaellig
@@ -115,8 +129,6 @@ var
   Code      : string;
   LineFor   : TArray<Integer>;
   FloatVars : TStringList;
-  ReDecl    : TRegEx;
-  ReEqual   : TRegEx;
   M         : TMatch;
   Lhs, Op, Rhs : string;
   LhsLow, RhsLow : string;
@@ -124,6 +136,7 @@ var
   LineNo    : Integer;
   F         : TLeakFinding;
 begin
+  EnsureRegexCacheBuilt;
   Lines := AcquireLines(FileName, Cached);
   if Lines = nil then Exit;
   try
@@ -136,18 +149,14 @@ begin
       FloatVars.CaseSensitive := False;
       FloatVars.Sorted := True;
       FloatVars.Duplicates := dupIgnore;
-      ReDecl := TRegEx.Create(
-        '(?im)\b(\w+)\s*:\s*(Single|Double|Extended|Real|Currency)\b');
-      for M in ReDecl.Matches(Code) do
+      for M in CachedReDecl.Matches(Code) do
         if IsFloatType(M.Groups[2].Value) then
           FloatVars.Add(LowerCase(M.Groups[1].Value));
       if FloatVars.Count = 0 then Exit;
 
       // Phase 2: scanne nach `<ident> = <token>` oder `<token> = <ident>`
       // sowie `<>`-Variante. Beide Operanden simple Identifier oder Zahlen.
-      ReEqual := TRegEx.Create(
-        '(?i)\b(\w+(?:\.\w+)?)\s*(=|<>)\s*([\w.]+)');
-      for M in ReEqual.Matches(Code) do
+      for M in CachedReEqual.Matches(Code) do
       begin
         Lhs := M.Groups[1].Value;
         Op  := M.Groups[2].Value;

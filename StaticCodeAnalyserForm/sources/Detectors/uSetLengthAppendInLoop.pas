@@ -56,6 +56,21 @@ uses
   System.RegularExpressions, System.StrUtils,
   uFileTextCache;
 
+var
+  // Lazy-Cache (Round 11): konstante Patterns einmalig kompilieren.
+  CachedLoopRE : TRegEx;
+  CachedGrowRE : TRegEx;
+  CachedReInit : Boolean = False;
+
+procedure EnsureRegexCacheBuilt;
+begin
+  if CachedReInit then Exit;
+  CachedLoopRE := TRegEx.Create('(?i)\b(for|while|repeat)\b');
+  CachedGrowRE := TRegEx.Create(
+    '(?i)\bSetLength\s*\(\s*(\w+)\s*,\s*Length\s*\(\s*(\w+)\s*\)\s*\+');
+  CachedReInit := True;
+end;
+
 function StripStringsAndComments(Lines: TStringList; out LineForChar: TArray<Integer>): string;
 var
   Buf            : TStringBuilder;
@@ -145,8 +160,6 @@ var
   Cached       : Boolean;
   Code         : string;
   LineFor      : TArray<Integer>;
-  LoopRE       : TRegEx;
-  GrowRE       : TRegEx;
   LoopM        : TMatch;
   GrowM        : TMatch;
   Snippet      : string;
@@ -157,24 +170,19 @@ var
   Detail       : string;
   AbsolutePos  : Integer;
 begin
+  EnsureRegexCacheBuilt;
   Lines := AcquireLines(FileName, Cached);
   if Lines = nil then Exit;
   try
     Code := StripStringsAndComments(Lines, LineFor);
 
-    // Loop-Heads: for|while|repeat
-    LoopRE := TRegEx.Create('(?i)\b(for|while|repeat)\b');
-    // Grow-Pattern: SetLength(<id>, Length(<id>) + <n>)
-    GrowRE := TRegEx.Create(
-      '(?i)\bSetLength\s*\(\s*(\w+)\s*,\s*Length\s*\(\s*(\w+)\s*\)\s*\+');
-
-    for LoopM in LoopRE.Matches(Code) do
+    for LoopM in CachedLoopRE.Matches(Code) do
     begin
       AbsolutePos := LoopM.Index + LoopM.Length;
       if AbsolutePos > Length(Code) then Continue;
       Snippet := Copy(Code, AbsolutePos, LOOK_AHEAD);
 
-      for GrowM in GrowRE.Matches(Snippet) do
+      for GrowM in CachedGrowRE.Matches(Snippet) do
       begin
         ArrayName := GrowM.Groups[1].Value;
         GrowName  := GrowM.Groups[2].Value;

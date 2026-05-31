@@ -47,6 +47,20 @@ uses
   System.RegularExpressions, System.StrUtils,
   uFileTextCache;
 
+var
+  // Lazy-Cache (Round 11): konstante Patterns einmalig kompilieren.
+  CachedReLenGeZero : TRegEx;
+  CachedReZeroLeLen : TRegEx;
+  CachedReInit      : Boolean = False;
+
+procedure EnsureRegexCacheBuilt;
+begin
+  if CachedReInit then Exit;
+  CachedReLenGeZero := TRegEx.Create('(?i)\bLength\s*\([^()]*\)\s*(>=|<)\s*0\b');
+  CachedReZeroLeLen := TRegEx.Create('(?i)\b0\s*(<=|>)\s*Length\s*\([^()]*\)');
+  CachedReInit      := True;
+end;
+
 function StripStringsAndComments(Lines: TStringList; out LineForChar: TArray<Integer>): string;
 var
   Buf            : TStringBuilder;
@@ -133,13 +147,13 @@ var
   Cached   : Boolean;
   Code     : string;
   LineFor  : TArray<Integer>;
-  RE       : TRegEx;
   M        : TMatch;
   Op       : string;
   AlwaysTrue : Boolean;
   LineNo   : Integer;
   F        : TLeakFinding;
 begin
+  EnsureRegexCacheBuilt;
   Lines := AcquireLines(FileName, Cached);
   if Lines = nil then Exit;
   try
@@ -147,8 +161,7 @@ begin
 
     // Pattern: Length(...) >= 0 | Length(...) < 0
     // (?: handles nested parens via [^()]* | recursive simplistic).
-    RE := TRegEx.Create('(?i)\bLength\s*\([^()]*\)\s*(>=|<)\s*0\b');
-    for M in RE.Matches(Code) do
+    for M in CachedReLenGeZero.Matches(Code) do
     begin
       Op := M.Groups[1].Value;
       AlwaysTrue := Op = '>=';
@@ -168,8 +181,7 @@ begin
     end;
 
     // Spiegel-Variante: 0 <= Length(...) bzw. 0 > Length(...)
-    RE := TRegEx.Create('(?i)\b0\s*(<=|>)\s*Length\s*\([^()]*\)');
-    for M in RE.Matches(Code) do
+    for M in CachedReZeroLeLen.Matches(Code) do
     begin
       Op := M.Groups[1].Value;
       AlwaysTrue := Op = '<=';
