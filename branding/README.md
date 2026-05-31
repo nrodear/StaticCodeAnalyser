@@ -11,7 +11,7 @@ und [OTAPI-Docs Kapitel 9](https://github.com/Embarcadero/OTAPI-Docs).
 |---|---|
 | `sca.png` | Quell-Image (297×242). Wird **nicht direkt** im Build verwendet, sondern als Source fuer die generierten `.ico` und `.bmp` (siehe "Regenerieren" unten). |
 | `sca.ico` | Multi-Resolution-Icon (16/32/48/256 jeweils PNG-komprimiert in der ICO-Huelle). Wird als `MAINICON`-Resource in die Standalone-EXE einkompiliert (Delphi's eigene Toolchain, kein BRCC32). |
-| `sca_small.ico` | Reduziertes ICO (NUR 16/32/48, kein 256er) fuer das IDE-Plugin-Window-Caption. BRCC32 ist 16-bit-Erbe und kippt mit `Allocate failed` beim 256x256-Sub-Icon. |
+| `sca_small.ico` | Reduziertes ICO (NUR 16/32/48, kein 256er) fuer das IDE-Plugin-Window-Caption. **MUSS BMP-encoded sein** (klassisches ICO-Format von 1995), nicht PNG-compressed wie `sca.ico`. BRCC32 versteht das moderne PNG-in-ICO-Format nicht und kippt sonst mit `Allocate failed`. |
 | `sca_24.bmp` | 24×24 Windows-BMP (24-bit, kein Alpha — BRCC32-tauglich) fuer das IDE-Plugin (Splash + About-Box, IOTA-API verlangt BMP via LoadBitmap). |
 | `sca_branding.rc` | `SCA_APP_BMP BITMAP "sca_24.bmp"` + `SCA_APP_ICO ICON "sca_small.ico"`. Beide gehen ueber BRCC32. |
 
