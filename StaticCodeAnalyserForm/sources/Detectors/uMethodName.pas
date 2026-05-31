@@ -42,6 +42,26 @@ begin
     Result := FullName;
 end;
 
+function IsEventHandlerSignature(MethodNode: TAstNode): Boolean;
+// True wenn die Methode eine DFM-Event-Handler-Signatur hat - mind. 1
+// Parameter 'Sender: TObject'. Solche Methoden werden vom Form-Designer
+// per DFM gebunden und tragen per IDE-Konvention den Component-Namen als
+// kleingeschriebenes Praefix (actSaveExecute, btnSaveClick, qDataAfterScroll).
+// Spiegelt die Heuristik aus uCanBeClassMethod (Round-3-Fix); ohne diese
+// produzierte Self-Test auf realem VCL-Form-Code ~8 FPs.
+var
+  Child : TAstNode;
+begin
+  Result := False;
+  for Child in MethodNode.Children do
+  begin
+    if Child.Kind <> nkParam then Continue;
+    if SameText(Child.Name, 'Sender') then Exit(True);
+    if Pos('tobject', LowerCase(Child.TypeRef)) > 0 then Exit(True);
+    Exit;                              // nur ersten Parameter pruefen
+  end;
+end;
+
 class procedure TMethodNameDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -64,6 +84,9 @@ begin
       if not CharInSet(Ch, ['A'..'Z','a'..'z']) then Continue;
       // PascalCase = Upper als erstes Zeichen
       if CharInSet(Ch, ['A'..'Z']) then Continue;
+      // Event-Handler (Sender: TObject als 1. Param) -> per IDE-Designer
+      // benannt (actSaveExecute, btnSaveClick, ...). Style-Regel passt nicht.
+      if IsEventHandlerSignature(M) then Continue;
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
       F.MethodName := M.Name;
