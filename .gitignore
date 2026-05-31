@@ -104,3 +104,4 @@ node_modules/
 
 # ---- Claude Code workspace ----
 .claude/
+sca-selftest.sarif

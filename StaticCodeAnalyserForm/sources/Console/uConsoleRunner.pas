@@ -50,6 +50,7 @@ type
     Branch        : Boolean;        // --branch    (nur VCS-geaenderte)
     Diff          : string;         // --diff <sha1>..<sha2>  PR-Review-Mode
     ReportSarif   : string;         // --report-sarif <out.sarif>
+    ReportHtml    : string;         // --report-html  <out.html>  Self-contained Code-Review-Report
     Quiet         : Boolean;        // --quiet
     BaseDir       : string;         // --base-dir <dir>  (fuer relative Pfade
                                     //   im SARIF; default = Path)
@@ -100,7 +101,7 @@ implementation
 uses
   System.IOUtils,
   uSCAConsts, uStaticAnalyzer2, uVcsChanges, uRepoSettings,
-  uExportSARIF, uCustomRuleDetector,
+  uExportSARIF, uExportHtml, uCustomRuleDetector,
   uExportSonarGeneric, uSonarConfig,
   uBaseline;
 
@@ -149,6 +150,7 @@ begin
   Result.Full        := False;
   Result.Branch      := False;
   Result.ReportSarif := '';
+  Result.ReportHtml  := '';
   Result.Quiet       := False;
   Result.BaseDir     := '';
   Result.CustomRules := '';
@@ -201,6 +203,8 @@ begin
       GetValue(Result.SingleFile, '--file')
     else if A = '--report-sarif' then
       GetValue(Result.ReportSarif, '--report-sarif')
+    else if A = '--report-html' then
+      GetValue(Result.ReportHtml, '--report-html')
     else if A = '--base-dir' then
       GetValue(Result.BaseDir, '--base-dir')
     else if A = '--custom-rules' then
@@ -339,6 +343,8 @@ begin
   WriteLn('');
   WriteLn('Output:');
   WriteLn('  --report-sarif <file> Write SARIF v2.1.0 report to <file>');
+  WriteLn('  --report-html  <file> Write self-contained HTML Code-Review report');
+  WriteLn('                        (filter/sort/snippets, no external assets)');
   WriteLn('  --base-dir <dir>      Make file paths in report relative to <dir>');
   WriteLn('                        (default = --path)');
   WriteLn('  --quiet               Suppress per-finding stdout output');
@@ -674,6 +680,25 @@ begin
         on E: Exception do
         begin
           WriteLn(ErrOutput, 'SARIF write error: ', E.Message);
+          Exit(Integer(cecToolError));
+        end;
+      end;
+    end;
+
+    // HTML Code-Review-Report (wenn angefordert). Wiederverwendet TExporterHtml
+    // aus der GUI-Pfad, daher self-contained mit Filter/Sort/Snippets.
+    if Args.ReportHtml <> '' then
+    begin
+      try
+        // SourceFile = leer -> kein Snippet-Embed, weil das vollstaendige
+        // Repo gescannt wurde; Findings tragen pro Item ihren eigenen FileName.
+        TExporterHtml.Run(Findings, '', Args.ReportHtml);
+        if not Args.Quiet then
+          WriteLn('HTML report written: ', Args.ReportHtml);
+      except
+        on E: Exception do
+        begin
+          WriteLn(ErrOutput, 'HTML write error: ', E.Message);
           Exit(Integer(cecToolError));
         end;
       end;

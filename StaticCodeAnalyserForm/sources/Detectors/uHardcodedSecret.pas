@@ -39,6 +39,17 @@ type
     // hardcodiertes Secret. Match auf den LETZTEN Punkt-Segment, damit
     // 'Form1.lblToken.Caption' genauso gefiltert wird wie 'lblToken.Caption'.
     class function IsUITextProperty(const Name: string): Boolean; static;
+    // True wenn das LHS-Segment ein META-Feld zum Secret ist statt das
+    // Secret selbst - das Literal beschreibt eine HERKUNFT, REFERENZ,
+    // ANZEIGE-EIGENSCHAFT, NAME etc., NICHT den Geheimwert.
+    // Beispiele die diese Funktion zu False-Positives macht:
+    //   Cfg.SourceToken      := 'env SONAR_TOKEN'   (Quell-Label)
+    //   edToken.PasswordChar := '*'                 (VCL-Masken-Char)
+    //   AuthHeader.TokenRef  := 'X-Auth-Token'      (Header-Name)
+    // Pattern: das Secret-Keyword ist ein TEIL des Identifier-Namens,
+    // entweder mit Meta-Prefix (Source/Stored/Cached) oder Meta-Suffix
+    // (Char/Ref/Name/Length/Size/Mask/Header/Label/Caption/Hash).
+    class function IsSecretMetaField(const Name: string): Boolean; static;
   end;
 
 implementation
@@ -120,6 +131,64 @@ begin
   Low := Literal.ToLower;
   Result := (Pos('password=', Low) > 0) or (Pos('pwd=', Low) > 0) or
             (Pos('passwd=', Low) > 0);
+end;
+
+class function THardcodedSecretDetector.IsSecretMetaField(const Name: string): Boolean;
+// Filtert LHS-Namen die zu einem META-Feld eines Secrets gehoeren statt zum
+// Secret selbst. Heuristik: das letzte Punkt-Segment des qualifizierten
+// Namens wird untersucht.
+//
+// META-PREFIX (vor dem Secret-Keyword):
+//   Source, Stored, Cached, Initial, Default, Sample, Example, Last, Old
+//   z.B. 'SourceToken' = 'Source' + 'Token' -> Quell-Label
+//
+// META-SUFFIX (nach dem Secret-Keyword):
+//   Char, Ref, Name, Length, Size, Mask, Header, Label, Caption, Hash,
+//   Field, Column, Url, Path
+//   z.B. 'PasswordChar' = 'Password' + 'Char' -> VCL-Masken-Char
+//        'TokenRef'     = 'Token'    + 'Ref'  -> Header-Name
+//        'PasswordHash' = 'Password' + 'Hash' -> Hash-Wert, nicht Klartext
+//
+// Implementierung: matche das LETZTE Punkt-Segment komplett gegen
+// "[Prefix]Keyword[Suffix]" mit Keyword aus SECRET_KW (case-insensitive).
+const
+  META_PREFIX: array[0..8] of string = (
+    'source', 'stored', 'cached', 'initial',
+    'default', 'sample', 'example', 'last', 'old'
+  );
+  META_SUFFIX: array[0..13] of string = (
+    'char', 'ref', 'name', 'length', 'size', 'mask',
+    'header', 'label', 'caption', 'hash', 'field',
+    'column', 'url', 'path'
+  );
+var
+  Bare, BareLow : string;
+  DotPos        : Integer;
+  Kw, Pre, Suf  : string;
+  P             : Integer;
+  Mid, MidLow   : string;
+begin
+  Result := False;
+  Bare := Name;
+  DotPos := -1;
+  for var i := Length(Bare) downto 1 do
+    if Bare[i] = '.' then begin DotPos := i; Break; end;
+  if DotPos > 0 then Bare := Copy(Bare, DotPos + 1, MaxInt);
+  if Bare = '' then Exit;
+  BareLow := Bare.ToLower;
+
+  for Kw in SECRET_KW do
+  begin
+    P := Pos(Kw, BareLow);
+    if P = 0 then Continue;
+    // Mid = der Teil VOR dem Keyword, MidLow = nach dem Keyword
+    Mid := LowerCase(Copy(BareLow, 1, P - 1));               // Prefix-Kandidat
+    MidLow := Copy(BareLow, P + Length(Kw), MaxInt);          // Suffix-Kandidat
+    for Pre in META_PREFIX do
+      if Mid = Pre then Exit(True);                           // PrefixKeyword
+    for Suf in META_SUFFIX do
+      if MidLow = Suf then Exit(True);                        // KeywordSuffix
+  end;
 end;
 
 class function THardcodedSecretDetector.IsUITextProperty(const Name: string): Boolean;
@@ -211,6 +280,12 @@ begin
       // kein Credential-Wert. Filter fuer 'lblToken.Caption := ''Bearer Token:'''
       // und aehnliche UI-Pattern.
       if IsUITextProperty(A.Name) then Continue;
+      // META-Feld (SourceToken, PasswordChar, TokenRef, PasswordHash, ...)
+      // -> beschreibt HERKUNFT / REFERENZ / DARSTELLUNG eines Secrets,
+      // nicht den Geheimwert selbst. Filter fuer
+      //   Cfg.SourceToken      := 'env SONAR_TOKEN'
+      //   edToken.PasswordChar := '*'
+      if IsSecretMetaField(A.Name) then Continue;
       // ConnectionString ohne Passwort-Anteil ist ein Template, kein Secret.
       if (Pos('connectionstring', A.Name.ToLower) > 0) and
          not ConnectionStringHasPassword(A.TypeRef) then Continue;

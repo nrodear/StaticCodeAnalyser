@@ -74,6 +74,13 @@ begin
   // faelschlich durch (zwischen `?` und `WHERE` sitzt `'+'` statt Space).
   Merged := TDetectorUtils.MergeAdjacentStringLiterals(Low);
 
+  // FP-Schutz: wenn der String-Literal-Inhalt selbst Pascal-Code-Pattern
+  // ':=' enthaelt, ist es ein Quickfix-Template das Pascal-Quelltext zitiert
+  // ('qry.SQL.Text := ''UPDATE ...''';), kein echtes SQL-Statement.
+  // SQL kennt ':=' praktisch nie (':' = Named-Param, '=' = Vergleich;
+  // ':=' nur in exotischen Trigger-Bodies, in Delphi-Query-Strings nie).
+  if Pos(':=', Merged) > 0 then Exit(False);
+
   Result := False;
   Verb   := '';
   for V in VERBS do

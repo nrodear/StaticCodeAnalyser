@@ -28,7 +28,7 @@ implementation
 
 uses
   System.RegularExpressions, System.StrUtils,
-  uFileTextCache;
+  uFileTextCache, uDetectorUtils;
 
 function StripFileComments(Lines: TStringList; out LineForChar: TArray<Integer>): string;
 var
@@ -129,7 +129,8 @@ class procedure TRestHttpSecurityDetector.AnalyzeUnit(UnitNode: TAstNode;
 var
   Lines       : TStringList;
   Cached      : Boolean;
-  Code        : string;
+  Code        : string;          // strings KEPT - used by URL matcher
+  CodeNoStr   : string;          // strings filled with '~' - used by TLS matcher
   LineFor     : TArray<Integer>;
   ReHttp      : TRegEx;
   ReSecProto  : TRegEx;
@@ -159,10 +160,19 @@ begin
   if Lines = nil then Exit;
   try
     Code := StripFileComments(Lines, LineFor);
+    // Zweite Sicht: Strings + Kommentare entfernt (Strings mit '~' aufgefuellt,
+    // Laenge erhalten). Verwendet von den TLS-Property-Patterns, damit die
+    // Quickfix-Templates in uFixHint.pas, die SecureProtocols := [] als
+    // Pascal-String-Literal enthalten, KEIN Self-Match mehr produzieren.
+    // LineFor wird verworfen, weil StripFileComments + StripStringsAndComments
+    // Kommentare identisch entfernen und String-Bereiche die Laenge nicht
+    // veraendern - die LineFor-Mapping ist fuer beide Sichten identisch.
+    var LineForUnused: TArray<Integer>;
+    CodeNoStr := TDetectorUtils.StripStringsAndComments(Lines, LineForUnused);
 
     // 1) 'http://...' Stringliteral - aber NICHT XML-Namespace und NICHT
     //    Localhost. Match auf das gesamte URL-Literal bis whitespace
-    //    oder ' (closing quote).
+    //    oder ' (closing quote). NUTZT Code (mit Strings), nicht CodeNoStr.
     ReHttp := TRegEx.Create('''(http://[^''\s]+)''');
     Matches := ReHttp.Matches(Code);
     for M in Matches do
@@ -185,9 +195,9 @@ begin
         M.Index);
     end;
 
-    // 2a) ...SecureProtocols := [];
+    // 2a) ...SecureProtocols := [];   NUTZT CodeNoStr (kein Self-Match in Templates).
     ReSecProto := TRegEx.Create('(?i)\bSecureProtocols\s*:=\s*\[\s*\]');
-    Matches := ReSecProto.Matches(Code);
+    Matches := ReSecProto.Matches(CodeNoStr);
     for M in Matches do
       Emit(fkDisabledTlsVerification,
         'SecureProtocols := [] disables all TLS protocols - the HTTP ' +
@@ -197,7 +207,7 @@ begin
 
     // 2b) ...IgnoreCertificateErrors := True
     ReIgnoreCrt := TRegEx.Create('(?i)\bIgnoreCertificateErrors\s*:=\s*True\b');
-    Matches := ReIgnoreCrt.Matches(Code);
+    Matches := ReIgnoreCrt.Matches(CodeNoStr);
     for M in Matches do
       Emit(fkDisabledTlsVerification,
         'IgnoreCertificateErrors := True silently accepts any TLS ' +
@@ -209,7 +219,7 @@ begin
     // 2c) OnVerifyPeer := nil (oder leerer Handler) - heuristisch nur
     //     der nil-Match, weil leere Handler AST brauchen.
     ReVerifyNil := TRegEx.Create('(?i)\bOnVerifyPeer\s*:=\s*nil\b');
-    Matches := ReVerifyNil.Matches(Code);
+    Matches := ReVerifyNil.Matches(CodeNoStr);
     for M in Matches do
       Emit(fkDisabledTlsVerification,
         'OnVerifyPeer := nil short-circuits the TLS certificate-validation ' +
