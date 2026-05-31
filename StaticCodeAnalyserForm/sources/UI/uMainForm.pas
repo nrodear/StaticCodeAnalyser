@@ -1,4 +1,4 @@
-unit uMainForm;
+﻿unit uMainForm;
 
 interface
 
@@ -24,15 +24,12 @@ type
     Panel3: TPanel;             // jetzt: Filter-Row (Severity/Type/Profile/Min/Search)
     PanelActions: TPanel;
     Projectpath: TComboBox;
-    Savetofile: TEdit;
     ResultGrid: TStringGrid;
     Label1: TLabel;
     Button2: TButton;
-    Button3: TButton;
     Button6: TButton;
     Button7: TButton;
     StatusBar1: TStatusBar;
-    Label3: TLabel;
     Panel4: TPanel;
     PanelStats: TPanel;       // Sonar-Style Stats-Tile-Reihe (uIDEStatsTiles)
     // ---- Display-Filter (filtern ANGEZEIGTE Findings, kein Re-Run) ----
@@ -55,8 +52,6 @@ type
     procedure ResultGridClick(Sender: TObject);
     procedure ResultGridDblClick(Sender: TObject);
     procedure Button2Click(Sender: TObject);
-    procedure Button4Click(Sender: TObject);
-    procedure Button3Click(Sender: TObject);
     procedure Button6Click(Sender: TObject);
     procedure Button7Click(Sender: TObject);
     procedure FormCreate(Sender: TObject);
@@ -427,24 +422,28 @@ begin
   // Konsolidiert Branch / Cancel / Export / Settings / Ignore in EIN
   // Popup-Menu. Toolbar bleibt schlank: nur Analyse-Buttons sichtbar,
   // alles Sekundaere ist hinter dem ☰-Glyph.
+  // Position: dorthin wo BtnBranch saess (Single-Source-of-Truth
+  // fuer Toolbar-Geometrie), Width = 32 px Icon-Button.
   FBtnHamburger := TButton.Create(Self);
   FBtnHamburger.Parent  := PanelActions;
   FBtnHamburger.Caption := #$2630;  // 'Trigram for Heaven' = Hamburger-Glyph
   FBtnHamburger.Width   := 32;
   FBtnHamburger.Height  := BtnBranch.Height;
   FBtnHamburger.Top     := BtnBranch.Top;
-  FBtnHamburger.Left    := FBtnExport.Left + FBtnExport.Width + 12;
+  FBtnHamburger.Left    := BtnBranch.Left;
   FBtnHamburger.Hint    := _('Actions menu: Branch-Changes, Cancel, Export, Settings, Ignore');
   FBtnHamburger.ShowHint := True;
   FBtnHamburger.OnClick := HamburgerClick;
+  FBtnHamburger.Visible := True;
   BuildHamburgerMenu;
-  FBtnHamburger.PopupMenu := FHamburgerMenu;
+  // KEIN PopupMenu-Property setzen - die OnClick-Procedure macht den Popup
+  // explizit via Menu.Popup(P.X, P.Y) am Hamburger-Button. PopupMenu am
+  // Button wuerde die Anzeige auf Rechtsklick mappen und mit OnClick
+  // konkurrieren.
 
-  // Jetzt BtnBranch und FBtnExport in der Toolbar verstecken - die Aktionen
-  // sind ueber das Hamburger-Menu erreichbar. Layout bleibt unveraendert
-  // (Visible:=False reserviert keinen Platz nicht in alLeft/alRight, aber
-  // die Buttons stehen hier explizit positioniert, also nehmen sie kein
-  // Layout-Slot ein).
+  // BtnBranch + FBtnExport in der Toolbar verstecken - ihre Aktionen
+  // sind ueber das Hamburger-Menu erreichbar. NACH dem Hamburger-Setup
+  // (das BtnBranch.Left/Top als Position-Quelle benutzt).
   BtnBranch.Visible  := False;
   FBtnExport.Visible := False;
 
@@ -703,35 +702,6 @@ end;
 procedure TForm2.Button2Click(Sender: TObject);
 begin
   Projectpath.Text := SelectFolder;
-end;
-
-procedure TForm2.Button3Click(Sender: TObject);
-begin
-  Savetofile.Text := GetAbsolutePath(SelectFile);
-end;
-
-procedure TForm2.Button4Click(Sender: TObject);
-// CSV-Export. Frueher: eigene ad-hoc-CSV mit 5 deutschen Spalten, ohne
-// Escape, ohne UTF-8-BOM, ohne Kind/Rule-Spalte. Jetzt: Delegation an
-// den kanonischen TExporter.ExportCsv damit IDE-Plugin + CLI + Standalone
-// das gleiche Format schreiben (6 Spalten: File;Method;Line;Kind;Severity;Detail).
-// FDisplayedFindings ist eine TList<TLeakFinding> (owned=False); fuer den
-// Export bauen wir eine temporaere TObjectList<TLeakFinding> mit
-// OwnsObjects=False, die nur die Pointer haelt.
-var
-  Lst : TObjectList<TLeakFinding>;
-  i   : Integer;
-begin
-  if FDisplayedFindings = nil then Exit;
-  Lst := TObjectList<TLeakFinding>.Create(False);
-  try
-    for i := 0 to FDisplayedFindings.Count - 1 do
-      Lst.Add(FDisplayedFindings[i]);
-    TExporter.ExportCsv(Lst, GetAbsolutePath(Savetofile.Text));
-    StatusBar1.Panels[2].Text := _('Saved: ') + GetAbsolutePath(Savetofile.Text);
-  finally
-    Lst.Free;
-  end;
 end;
 
 procedure TForm2.Button6Click(Sender: TObject);
