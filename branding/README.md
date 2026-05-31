@@ -10,9 +10,10 @@ und [OTAPI-Docs Kapitel 9](https://github.com/Embarcadero/OTAPI-Docs).
 | Datei | Zweck |
 |---|---|
 | `sca.png` | Quell-Image (297×242). Wird **nicht direkt** im Build verwendet, sondern als Source fuer die generierten `.ico` und `.bmp` (siehe "Regenerieren" unten). |
-| `sca.ico` | Multi-Resolution-Icon (16/32/48/256 jeweils PNG-komprimiert in der ICO-Huelle). Wird als `MAINICON`-Resource in die Standalone-EXE einkompiliert. |
-| `sca_24.bmp` | 24×24 Windows-BMP fuer das IDE-Plugin (Splash + About-Box, IOTA-API verlangt BMP via LoadBitmap). |
-| `sca_branding.rc` | `BITMAP`-Definition `SCA_APP_BMP BITMAP "sca_24.bmp"` fuer die IDE-Plugin-Resource. |
+| `sca.ico` | Multi-Resolution-Icon (16/32/48/256 jeweils PNG-komprimiert in der ICO-Huelle). Wird als `MAINICON`-Resource in die Standalone-EXE einkompiliert (Delphi's eigene Toolchain, kein BRCC32). |
+| `sca_small.ico` | Reduziertes ICO (NUR 16/32/48, kein 256er) fuer das IDE-Plugin-Window-Caption. BRCC32 ist 16-bit-Erbe und kippt mit `Allocate failed` beim 256x256-Sub-Icon. |
+| `sca_24.bmp` | 24×24 Windows-BMP (24-bit, kein Alpha — BRCC32-tauglich) fuer das IDE-Plugin (Splash + About-Box, IOTA-API verlangt BMP via LoadBitmap). |
+| `sca_branding.rc` | `SCA_APP_BMP BITMAP "sca_24.bmp"` + `SCA_APP_ICO ICON "sca_small.ico"`. Beide gehen ueber BRCC32. |
 
 ## Standalone-EXE — canonical MAINICON-Pfad
 
@@ -53,8 +54,12 @@ $g.Clear([System.Drawing.Color]::White)
 $g.DrawImage($png, 0, 0, 24, 24)
 $b.Save("$PSScriptRoot\sca_24.bmp", [System.Drawing.Imaging.ImageFormat]::Bmp)
 $g.Dispose(); $b.Dispose()
-# Multi-res ICO (16/32/48/256) - jede Groesse PNG-komprimiert
-$sizes = @(16, 32, 48, 256); $pngBytes = @{}
+# Multi-res ICO (16/32/48/256) - jede Groesse PNG-komprimiert.
+# Zweite Variante 'sca_small.ico' OHNE 256 fuer das IDE-Plugin - BRCC32
+# (16-bit-Erbe) kippt mit 'Allocate failed' beim 256x256-Sub-Icon.
+foreach ($outName in @('sca.ico', 'sca_small.ico')) {
+$sizes = if ($outName -eq 'sca_small.ico') { @(16, 32, 48) } else { @(16, 32, 48, 256) }
+$pngBytes = @{}
 foreach ($s in $sizes) {
   $b = New-Object System.Drawing.Bitmap $s, $s
   $g = [System.Drawing.Graphics]::FromImage($b)
@@ -78,8 +83,10 @@ foreach ($s in $sizes) {
 }
 foreach ($s in $sizes) { $bw.Write($pngBytes[$s]) }
 $bw.Flush()
-[System.IO.File]::WriteAllBytes("$PSScriptRoot\sca.ico", $out.ToArray())
-$out.Dispose(); $png.Dispose()
+[System.IO.File]::WriteAllBytes("$PSScriptRoot\$outName", $out.ToArray())
+$out.Dispose()
+}
+$png.Dispose()
 ```
 
 ## Was vor diesem Umbau probiert wurde (und nicht klappte)

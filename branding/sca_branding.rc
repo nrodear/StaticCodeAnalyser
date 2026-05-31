@@ -22,8 +22,11 @@ LANGUAGE 0, 0
 SCA_APP_BMP BITMAP "sca_24.bmp"
 
 // ICON-Resource fuer das Window-Caption-Icon des IDE-Plugin-DockForms im
-// Float-Mode. Multi-Res (16/32/48/256) - Windows waehlt selbst die passende
-// Groesse je nach DPI / Caption-Hoehe / Alt-Tab-Anzeige.
-// Geladen via Icon.LoadFromResourceName(HInstance, 'SCA_APP_ICO') in
-// uIDEAnalyserForm.TAnalyserDockableForm.FrameCreated.
-SCA_APP_ICO ICON "sca.ico"
+// Float-Mode. Multi-Res 16/32/48 - Windows waehlt selbst je nach DPI /
+// Caption-Hoehe / Alt-Tab-Anzeige.
+// WICHTIG: kleines ICO ('sca_small.ico'), NICHT das volle 'sca.ico' mit
+// 256x256-Sub-Icon. BRCC32 ist 16-bit-Erbe und kippt mit 'Allocate failed'
+// beim 256er (256*256*4 = 256 KB sprengt das interne Allocation-Limit).
+// Standalone-EXE nutzt das volle sca.ico via Delphi's eigener MAINICON-
+// Toolchain (kein BRCC32-Limit dort).
+SCA_APP_ICO ICON "sca_small.ico"
