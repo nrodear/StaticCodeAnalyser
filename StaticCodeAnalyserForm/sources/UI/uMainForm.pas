@@ -7,7 +7,8 @@ uses
   System.IOUtils, System.StrUtils,
   System.Classes, Vcl.Graphics, System.Generics.Collections,
    Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls,
-  Vcl.ComCtrls, Vcl.Grids, uStaticAnalyzer2,
+  Vcl.ComCtrls, Vcl.Grids, Vcl.Menus,   // Vcl.Menus: TPopupMenu/TMenuItem (Hamburger-Felder)
+  uStaticAnalyzer2,
   uMethodd12, uSCAConsts, uFixHint, uClaudePrompt, uLocalization,
   uAnalyserTypes,  // SeverityFromKindLevel, TFindingSeverity (Grid-Renderer-Callback)
   uRepoSettings, uRecentPaths, uFindingGridRenderer, uDfmTextViewer,
@@ -181,7 +182,7 @@ var
 implementation
 
 uses
-  clipbrd, Vcl.Menus,             // Vcl.Menus: TPopupMenu/TMenuItem (Hamburger)
+  clipbrd,
   uStaticFiles, uRuleCatalog,
   uExport,                        // TExporter.ExportCsv (kanonischer CSV-Schreiber)
   uFindingFilter,                 // TFilterMode, TTypeFilter, TFindingFilter, TFindingFilterCriteria
