@@ -42,10 +42,14 @@ Schreibe folgendes in eine `_regen.ps1` neben den Assets, run, wieder loeschen:
 ```powershell
 Add-Type -AssemblyName System.Drawing
 $png = [System.Drawing.Image]::FromFile("$PSScriptRoot\sca.png")
-# 24x24 BMP fuer IDE-Plugin
-$b = New-Object System.Drawing.Bitmap 24, 24
+# 24x24 BMP fuer IDE-Plugin. WICHTIG: Format24bppRgb (nicht Default 32bppArgb)
+# - BRCC32 stammt aus der 16-bit-Era und lehnt 32-bit-DIB mit
+# 'Invalid bitmap format' ab. Kein Alpha-Channel -> weisser Hintergrund.
+$fmt = [System.Drawing.Imaging.PixelFormat]::Format24bppRgb
+$b = New-Object System.Drawing.Bitmap 24, 24, $fmt
 $g = [System.Drawing.Graphics]::FromImage($b)
 $g.InterpolationMode = 'HighQualityBicubic'
+$g.Clear([System.Drawing.Color]::White)
 $g.DrawImage($png, 0, 0, 24, 24)
 $b.Save("$PSScriptRoot\sca_24.bmp", [System.Drawing.Imaging.ImageFormat]::Bmp)
 $g.Dispose(); $b.Dispose()
