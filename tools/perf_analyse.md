@@ -245,3 +245,43 @@ unter 50 MB Peak bleiben und der Parse-Zeit-Gewinn (3× → 1×) dominant ist.
 `gFileTextCache.Clear` wird nach jeder Main-Loop-Iteration aufgerufen,
 also liegt nur die Text-Repräsentation des **aktuell** verarbeiteten
 Files im Cache (1× ~30 KB). Kein Memory-Concern.
+
+### 🅕 Regex-Cache pro Detektor — Round 9 (commit 81749a0)
+
+22 Detektoren rufen `TRegEx.Create` in `AnalyzeUnit` auf - für KONSTANTE
+Patterns. Im Self-Test mit 409 Files = ~8000 Regex-Compilations pro Scan
+ohne semantischen Grund. Round-9 hat die 4 hot-path Detektoren auf
+Module-Level-Lazy-Cache umgestellt:
+
+| Detektor | Patterns | Hot? |
+|---|---:|---|
+| uRestHttpSecurity | 4 | jeder File |
+| uPerfHotspots | 3 | jeder File |
+| uLockWithoutTryFinally | 1 | jeder File |
+| uUseAfterFree | 2 | besonders teuer: ReEndOfMethod war PRO Free-Match neu kompiliert |
+
+**Pattern**: `var Cached_X : TRegEx; CachedReInit: Boolean = False;` plus
+ein `EnsureRegexCacheBuilt`-Helper. Init beim ersten AnalyzeUnit, dann
+für alle weiteren Files wiederverwendet.
+
+**Restliche 18 Detektoren**: bleiben TRegEx.Create-pro-File. Wenn der
+Self-Test sie als hot zeigt, gleiche Migration nach selbem Pattern.
+
+### 🅖 StripFileComments-Konsolidierung — OFFEN
+
+10 Detektoren haben lokale `StripFileComments`-Funktionen (~70 Zeilen
+pro Kopie = 700 Zeilen Duplikat). ABER: spot-check zeigt mindestens
+zwei Varianten unter gleichem Namen:
+
+- **uRestHttpSecurity / uPerfHotspots / ...**: behält String-Inhalte
+- **uLockWithoutTryFinally / uEmptyBlock / ...**: ersetzt String-Inhalte
+  durch Blanks (analog zu `TDetectorUtils.StripStringsAndComments`)
+
+Naive Zentralisierung würde Detektor-Semantik subtil ändern (FPs / FNs
+in Pattern-Matches). Vor Konsolidierung: pro Detektor verifizieren
+welche Variante er braucht, dann auf `TDetectorUtils.StripFileCommentsOnly`
+(neu) oder `TDetectorUtils.StripStringsAndComments` (vorhanden) migrieren.
+
+Schätzung: 1-2 h pro Detektor inkl. Test-Verifikation = 10-20 h gesamt.
+Trade-off: -700 Zeilen Code, kein Perf-Impact (StripFileComments läuft
+einmal pro File, schon im File-Read-Cache amortisiert).
