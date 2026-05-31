@@ -366,16 +366,34 @@ procedure RunAllDetectors(Root: TAstNode; const FileName: string;
 // Pro-File-Detector-Run. Detector-Liste ist global gecached
 // (BuildAllDetectors) - hier nur noch Filter-Eval + Run pro Detector +
 // Post-Filter auf Finding-Ebene.
+//
+// Perf-Hot-Path:
+//   * PrevCount markiert den Stand von Results VOR den Detektoren. Der
+//     Post-Filter iteriert nur Results[PrevCount..Count-1] (= die NEUEN
+//     Findings dieses Files) statt der kumulativen Liste -> O(n) statt
+//     O(n^2) ueber die Scan-Laufzeit. Bei 1000 Files mit je 100 Findings:
+//     vorher ~50 Mio Filter-Iterations, jetzt ~100k.
+//   * Watch wird nur instanziiert wenn AOnTime tatsaechlich assigned ist
+//     (spart ~1 µs QueryPerformanceCounter pro Detektor pro File).
 var
-  i     : Integer;
-  Watch : TStopwatch;
+  i          : Integer;
+  Watch      : TStopwatch;
+  PrevCount  : Integer;
+  HasTimeCb  : Boolean;
+  FilterActive : Boolean;
 begin
   EnsureDetectorsBuilt;
+
+  HasTimeCb    := Assigned(AOnTime);
+  FilterActive := (uSCAConsts.DetectorEnabledKinds <> []) or
+                  (uSCAConsts.DetectorMinSeverity <> lsHint);
+  PrevCount    := Results.Count;
 
   for i := 0 to High(gDetectors) do
   begin
     if not IsDetectorEnabled(gDetectors[i], AIncludeUsesCheck) then Continue;
-    Watch := TStopwatch.StartNew;
+    if HasTimeCb then
+      Watch := TStopwatch.StartNew;
     try
       gDetectors[i].Run(Root, FileName, Results);
     except
@@ -387,7 +405,7 @@ begin
         if Assigned(AOnError) then
           AOnError(gDetectors[i].Name, E.Message);
     end;
-    if Assigned(AOnTime) then
+    if HasTimeCb then
       AOnTime(gDetectors[i].Name, Watch.ElapsedMilliseconds);
   end;
 
@@ -401,10 +419,11 @@ begin
   //     auch CustomRules tragen variable Severity).
   // fkFileReadError ist immer durchgelassen (Diagnose-Befund), unabhaengig
   // vom Profile.
-  if (uSCAConsts.DetectorEnabledKinds <> []) or
-     (uSCAConsts.DetectorMinSeverity <> lsHint) then
+  // PrevCount-Bound: nur die in diesem Aufruf neu hinzugekommenen Findings
+  // werden geprueft - frueher angelegte sind bereits Filter-validiert.
+  if FilterActive then
   begin
-    for i := Results.Count - 1 downto 0 do
+    for i := Results.Count - 1 downto PrevCount do
     begin
       if Results[i].Kind = fkFileReadError then Continue;
       if (uSCAConsts.DetectorEnabledKinds <> []) and
