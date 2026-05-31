@@ -46,9 +46,42 @@ begin
   Result := CharInSet(C, ['A'..'Z','a'..'z','0'..'9','_']);
 end;
 
-// Zaehlt code-typische Marker im Kommentar-Inhalt.
-function ScoreCodeMarkers(const Content: string): Integer;
+// Strippt Markdown-Inline-Code-Spans (`code`) aus dem Kommentar-Inhalt.
+// Doc-Kommentare zitieren Pascal-Code via Backticks ('`for i := 1 do`')
+// als Beispiel, nicht als commented-out Code. Ohne Strip schlaegt der
+// Marker-Score in solchen Kommentaren immer den Threshold (`for`, `:=`, ...).
+function StripBacktickCodeSpans(const S: string): string;
 var
+  i, n  : Integer;
+  InBT  : Boolean;
+  Buf   : TStringBuilder;
+begin
+  Buf := TStringBuilder.Create;
+  try
+    InBT := False;
+    n := Length(S);
+    i := 1;
+    while i <= n do
+    begin
+      if S[i] = '`' then
+      begin
+        InBT := not InBT;
+        Inc(i);
+        Continue;
+      end;
+      if not InBT then Buf.Append(S[i]);
+      Inc(i);
+    end;
+    Result := Buf.ToString;
+  finally
+    Buf.Free;
+  end;
+end;
+
+// Zaehlt code-typische Marker im Kommentar-Inhalt.
+function ScoreCodeMarkers(const Raw: string): Integer;
+var
+  Content  : string;
   Lower    : string;
   Trimmed  : string;
   pAssign  : Integer;
@@ -76,6 +109,8 @@ var
   end;
 begin
   Result := 0;
+  // Backtick-Code-Spans entfernen BEVOR die Marker gezaehlt werden.
+  Content := StripBacktickCodeSpans(Raw);
   Lower := LowerCase(Content);
   // Marker 1: Inhalt endet mit Semikolon (nach trim)
   Trimmed := Trim(Content);

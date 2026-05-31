@@ -1332,6 +1332,7 @@ procedure TParser2.ParseForStmt(Parent: TAstNode);
 var
   T       : TToken;
   ForNode : TAstNode;
+  Header  : string;
 begin
   T       := Next; // 'for'
   ForNode := Parent.Add(nkForStmt, 'for', T.Line, T.Col);
@@ -1357,7 +1358,18 @@ begin
     end;
   end;
 
-  SkipTo([tkKwDo, tkEof]);
+  // Header-Tokens (Loop-Variable + Range) in TypeRef joinen analog zu
+  // ParseWhileStmt - sonst sehen Detektoren wie uUnusedLocal die Loop-
+  // Variable nicht und melden 'for k := ...' als unused-k.
+  Header := ForNode.TypeRef;                           // ggf. von Inline-var
+  while not (Tok.Kind in [tkKwDo, tkEof]) do
+  begin
+    if Header <> '' then Header := Header + ' ';
+    Header := Header + Tok.Value;
+    Next;
+  end;
+  ForNode.TypeRef := Header;
+
   Eat(tkKwDo);
   ParseStatement(ForNode);
 end;

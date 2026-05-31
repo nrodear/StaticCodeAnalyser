@@ -67,6 +67,7 @@ function LooksLikeField(const Line: string): Boolean;
 var
   trimmed : string;
   Lower   : string;
+  ColonPos: Integer;
 begin
   Result := False;
   trimmed := TrimLeft(Line);
@@ -81,6 +82,18 @@ begin
   if Lower.StartsWith('type ')        then Exit;
   if Lower.StartsWith('class ')       then Exit;
   if Lower.StartsWith('strict ')      then Exit;
+  // Parameter-Modifier-Continuation-Lines ausschliessen. Multi-line Method-
+  // Header schreiben gerne `out X: T; var Y: T):` auf einer Folgezeile -
+  // ohne diesen Filter wird 'out' als Field-Name geflaggt.
+  if Lower.StartsWith('out ')         then Exit;
+  if Lower.StartsWith('var ')         then Exit;
+  if Lower.StartsWith('inout ')       then Exit;
+  if Lower.StartsWith('array ')       then Exit;
+  // Method-Decl-Tail einer Continuation-Zeile: `): TypeName; static;`. Ein
+  // `)` VOR dem `:` ist ein starkes Signal das die Zeile keine Field-Decl
+  // ist, sondern der Schwanz einer mehrzeiligen Method-Signatur.
+  ColonPos := Pos(':', trimmed);
+  if (ColonPos > 0) and (Pos(')', Copy(trimmed, 1, ColonPos)) > 0) then Exit;
   // Muss `:` und `;` enthalten - charakteristisch fuer Feld-Decl
   if (Pos(':', trimmed) = 0) then Exit;
   if (Pos(';', trimmed) = 0) then Exit;
@@ -110,7 +123,16 @@ begin
       if (Lower = 'public') or (Lower = 'published') then
         InPublic := True
       else if (Lower = 'private') or (Lower = 'protected') or
-              (Lower = 'strict')  or (Lower = 'end') then
+              (Lower = 'strict')  or (Lower = 'end') or
+              // Section-Boundaries: nach 'implementation' / 'initialization' /
+              // 'finalization' gibt es keine Klassen-Felder mehr. Vor v0.9.x
+              // blieb InPublic True bis zum naechsten Visibility-Keyword -
+              // damit wurden Methoden-Parameter (out X / var Y) in
+              // multi-line Method-Headers in der Implementation faelschlich
+              // als Public-Field geflaggt.
+              (Lower = 'implementation') or
+              (Lower = 'initialization') or
+              (Lower = 'finalization') then
         InPublic := False
       else if InPublic and LooksLikeField(Lines[i]) then
       begin

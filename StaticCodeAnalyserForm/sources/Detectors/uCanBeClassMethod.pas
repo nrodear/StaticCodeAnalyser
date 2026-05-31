@@ -82,6 +82,29 @@ begin
          or (Pos(';abstract', Low) > 0);
 end;
 
+function IsEventHandlerSignature(MethodNode: TAstNode): Boolean;
+// True wenn die Methode eine Event-Handler-Signatur hat - mind. 1 Parameter
+// 'Sender: TObject'. Solche Methoden werden vom Form-Designer per DFM zur
+// Laufzeit an Komponenten-Events gebunden und MUESSEN Instance-Methods sein.
+// Heuristik:
+//   * Mind. ein nkParam-Child der Methode.
+//   * Erster Parameter hat Name 'Sender' (case-insensitive) ODER
+//     TypeRef matched 'tobject' (case-insensitive).
+// Faengt FormCreate(Sender: TObject), btnClick(Sender: TObject),
+// OnFilter(Sender: TObject; const Item: TItem; var Accept: Boolean) etc.
+var
+  Child : TAstNode;
+begin
+  Result := False;
+  for Child in MethodNode.Children do
+  begin
+    if Child.Kind <> nkParam then Continue;
+    if SameText(Child.Name, 'Sender') then Exit(True);
+    if Pos('tobject', LowerCase(Child.TypeRef)) > 0 then Exit(True);
+    Exit;                              // nur ersten Parameter prufen
+  end;
+end;
+
 function HasBodyBlock(MethodNode: TAstNode): Boolean;
 // Methode hat einen Body wenn entweder
 //   * nkBlock als direktes Child (ParseBlock-Wrapper um `begin..end`), oder
@@ -189,6 +212,9 @@ begin
       // Skip Constructor/Destructor - die haben implizit anderen Vertrag.
       if LowerCase(Trim(M.TypeRef)).StartsWith('constructor') then Continue;
       if LowerCase(Trim(M.TypeRef)).StartsWith('destructor')  then Continue;
+      // Event-Handler werden per DFM gebunden -> muessen Instance bleiben.
+      // (FormCreate, btnClick, actExecute, OnXxx etc. mit Sender: TObject)
+      if IsEventHandlerSignature(M) then Continue;
       if HasSelfOrFieldAccess(M) then Continue;
 
       F            := TLeakFinding.Create;

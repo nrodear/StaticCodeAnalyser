@@ -75,7 +75,11 @@ begin
          or (Lower = 'constructor') or (Lower = 'destructor')
          or (Lower = 'property') or (Lower = 'class')
          or (Lower = 'const') or (Lower = 'type') or (Lower = 'case')
-         or (Lower = 'var') or (Lower = 'strict');
+         or (Lower = 'var') or (Lower = 'strict')
+         // Param-Modifier Continuation-Lines von multi-line Method-Headers
+         // ('  out X: T; var Y: T):...') - sonst werden 'out'/'inout' als
+         // Field-Name geflaggt.
+         or (Lower = 'out') or (Lower = 'inout');
 end;
 
 class procedure TFieldNameDetector.AnalyzeUnit(UnitNode: TAstNode;
@@ -141,6 +145,10 @@ begin
       if (ColonPos = 0) or (SemiPos = 0) or (ColonPos > SemiPos) then Continue;
       // Vor `:` darf kein `(` stehen (Parameterlisten)
       if Pos('(', Copy(trimmed, 1, ColonPos)) > 0 then Continue;
+      // Method-Decl-Tail einer Continuation-Zeile: `): TypeName; static;`.
+      // Ein `)` VOR dem `:` ist starkes Signal fuer Schwanz einer mehrzeiligen
+      // Method-Signatur, nicht fuer Field-Decl.
+      if Pos(')', Copy(trimmed, 1, ColonPos)) > 0 then Continue;
       // Erstes Zeichen des Worts muss `F` sein
       FirstChar := Word[1];
       if (FirstChar = 'F') or (FirstChar = 'f') then Continue;

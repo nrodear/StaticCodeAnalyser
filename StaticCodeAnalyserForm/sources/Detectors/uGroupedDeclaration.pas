@@ -53,8 +53,14 @@ end;
 
 // Liefert Spalte des ersten Identifier wenn die Zeile ein gruppiertes
 // `Id1, Id2[, Id3...]: Type;`-Pattern enthaelt, sonst 0.
+//
+// ParenDepth: 0 = nicht in '('...')'. > 0 = innerhalb eines Klammer-Blocks
+// (Parameter-Liste oder Index-Liste). Gruppierte Parameter `(const A, B: T)`
+// sind LEGITIME Pascal-Syntax und kein Style-Defekt - die Regel betrifft nur
+// var/field/const-Sektionen (depth=0). Caller fuehrt ParenDepth UEBER Zeilen
+// hinweg fort, damit mehrzeilige Method-Header korrekt behandelt werden.
 function FindGroupedDecl(const Line: string; var InBlockComm: Boolean;
-  var InParenStarComm: Boolean): Integer;
+  var InParenStarComm: Boolean; var ParenDepth: Integer): Integer;
 type
   TStateKind = (skScan, skAfterIdent, skExpectId2);
 var
@@ -114,6 +120,18 @@ begin
       if pClose = 0 then begin InParenStarComm := True; Exit; end;
       i := pClose + 2; Continue;
     end;
+    // ParenDepth-Tracking: '(' / ')' ausserhalb von Strings/Kommentaren.
+    // '[' / ']' werden NICHT gezaehlt (Array-Typ-Decl ist depth-0).
+    if c = '(' then begin Inc(ParenDepth); Inc(i); State := skScan; FirstCol := 0; IdCount := 0; Continue; end;
+    if c = ')' then
+    begin
+      if ParenDepth > 0 then Dec(ParenDepth);
+      Inc(i); State := skScan; FirstCol := 0; IdCount := 0; Continue;
+    end;
+    // Innerhalb eines Klammer-Blocks (Parameter-Liste) wird NICHT geflaggt -
+    // gruppierte Parameter sind legitim. Wir tracken nur die Klammern, der
+    // State-Machine-Lauf bleibt aus.
+    if ParenDepth > 0 then begin Inc(i); Continue; end;
     case State of
       skScan:
         begin
@@ -190,6 +208,7 @@ var
   Lines  : TStringList;
   i, Col : Integer;
   InBlk, InParen : Boolean;
+  ParenDepth : Integer;
   F      : TLeakFinding;
   Cached : Boolean;
 begin
@@ -198,9 +217,10 @@ begin
   try
     InBlk   := False;
     InParen := False;
+    ParenDepth := 0;
     for i := 0 to Lines.Count - 1 do
     begin
-      Col := FindGroupedDecl(Lines[i], InBlk, InParen);
+      Col := FindGroupedDecl(Lines[i], InBlk, InParen, ParenDepth);
       if Col <= 0 then Continue;
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
