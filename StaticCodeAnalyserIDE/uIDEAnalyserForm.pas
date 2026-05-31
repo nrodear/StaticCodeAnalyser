@@ -3214,6 +3214,15 @@ begin
     if HostForm.Constraints.MinHeight < F.Constraints.MinHeight then
       HostForm.Constraints.MinHeight := F.Constraints.MinHeight;
 
+    // Float-Mode-Icon: ohne explizites HostForm.Icon faellt das Window-
+    // Caption-Icon im undocked Zustand auf das RAD-Studio-Default zurueck.
+    // Multi-Res ICO (SCA_APP_ICO) aus der sca_branding.res - Windows picks
+    // size by DPI/Caption-Height/Alt-Tab.
+    try
+      HostForm.Icon.LoadFromResourceName(HInstance, 'SCA_APP_ICO');
+    except
+      // Resource fehlt -> kein Icon, kein Plugin-Crash.
+    end;
   end;
 
   // Theme-Apply auch hier - belt-and-suspenders zum SetParent-Override:
