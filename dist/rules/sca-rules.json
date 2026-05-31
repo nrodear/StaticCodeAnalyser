@@ -3,7 +3,7 @@
   "version": "1.3",
   "tool": {
     "name": "StaticCodeAnalyser",
-    "version": "0.9.6",
+    "version": "0.9.7",
     "informationUri": "https://github.com/nrodear/StaticCodeAnalyser"
   },
   "profiles": {

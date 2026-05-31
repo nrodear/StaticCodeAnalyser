@@ -110,7 +110,7 @@ uses
 function ApplyFailOnPolicy(Raw: Integer; const FailOn: string): Integer; forward;
 
 const
-  SCA_VERSION = '0.9.6';
+  SCA_VERSION = '0.9.7';
   SCA_TOOLNAME = 'StaticCodeAnalyser';
 
 { ---- Args-Parser ---- }
