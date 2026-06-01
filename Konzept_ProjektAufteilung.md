@@ -1,7 +1,7 @@
 # Konzept: Aufteilung in eigenständige Projekte
 
 Status: **Konzept**, noch nicht umgesetzt
-Stand: 2026-05-25
+Stand: 2026-06-01 (Update Session 13)
 
 ## 1. Ist-Zustand
 
@@ -299,3 +299,118 @@ zur Run-Time alles findet — Konvention: `$(BDSCOMMONDIR)\Bpl` oder
   gegenüber heute
 - [ ] Engine-Refactor (z.B. neuer Detector) kompiliert nur Engine-BPL + Tests,
   nicht zwingend Standalone/IDE
+
+---
+
+## 9. Update Session 13 (2026-06-01)
+
+Seit dem ersten Konzept (2026-05-25) sind ~30 Detector-Fixes + Architektur-
+Erweiterungen dazugekommen. Für die Engine-Extraction sind besonders relevant:
+
+### 9.1 Neue Engine-API-Felder die mitziehen müssen
+
+| Komponente | Datei(en) | Zielprojekt | Bemerkung |
+|---|---|---|---|
+| Profile-Negation-Syntax | `uRuleCatalog.pas` | Engine | `["*","!Kind"]` jetzt unterstützt — Engine-internes Parsing, kein UI |
+| `selftest-quiet` Bundled-Profile | `rules/sca-rules.json` | Engine | 11 Style-Detektoren ausgeblendet |
+| `--report-html` CLI-Flag | `uConsoleRunner.pas` | Standalone (CLI-Mode) | TExporterHtml ist Engine-Output |
+| `TExporterHtml.Run` | `Output/uExportHtml.pas` | Engine | War schon UI-frei, jetzt offiziell CLI-konsumiert |
+| 4 neue `fm`-Filter | `uFindingFilter.pas` | SharedUI | CommandInjection/Insecure/UnusedRoutine/NoSonarMarker |
+
+### 9.2 Module-Regex-Cache-Pattern (Round 9+11+13)
+
+12 Detektoren tragen jetzt module-private `Cached_X: TRegEx` + Lazy-Init via
+`EnsureRegexCacheBuilt`. Lifecycle-Konsequenz für Package-Build:
+
+- Module-Var lebt für die GESAMTE BPL-Laufzeit (~Prozess-Lebenszeit im IDE)
+- TRegEx hält interne PCRE2-Pattern → ~paar KB pro Pattern × 25 Patterns
+  ≈ ~50KB Steady-State-Memory im Engine-BPL
+- **Cleanup im finalization** wäre sauber, aber heute nicht gemacht
+  (Process-Exit räumt's). Bei Engine-Unload (selten) leakt's.
+
+→ **Empfehlung**: vor BPL-Migration ein einheitliches
+`finalization FreeAndNil(CachedRe...)` pro Detektor ergänzen. Pattern:
+
+```pascal
+finalization
+  // Lazy-allokiert in EnsureRegexCacheBuilt - bei Process-Exit aufrauemen.
+  CachedReInit := False;  // TRegEx ist Record, kein explizites Free noetig
+```
+
+(TRegEx ist record-based, kein .Free nötig — Reset des Init-Flags reicht.)
+
+### 9.3 Self-Test als Engine-Quality-Gate
+
+`HowTo_DetectorSelftest.md` beschreibt den Dogfooding-Workflow. Bei der
+Aufteilung sollte:
+
+- Self-Test als CI-Job auf der `SCA.Engine.bpl` (kein UI nötig)
+- `selftest-quiet` Profile als baseline
+- Counts pro Detektor in einer Trend-Datei → Regression-Alarm wenn ein
+  Detektor plötzlich 10× mehr Findings produziert
+- Vorlage: `Todo_FalsePositiveReduction.md` Section D dokumentiert
+  pro-Detektor verifizierte Reduktionen — wird zur Regression-Baseline
+
+### 9.4 DCU-Cache-Fallstricke (gelernt aus SCA078-Sache)
+
+Beim aktuellen Source-Pfad-Setup wurde meine `uExceptionTooGeneral.pas`-
+Änderung im DCU-Cache nicht aufgefrischt obwohl die mtime stimmte. Symptom:
+Source-Edit hat keinen Effekt im EXE-Verhalten trotz "Build All".
+
+Bei Package-Migration verschärft sich das:
+- Konsumenten linken gegen die **Output-BPL**, nicht gegen die Source
+- DCU vom Engine-Build ist nicht zwingend der DCU vom Standalone-Build
+- Mehrere DCU-Versionen können in `$(BDSCOMMONDIR)` koexistieren
+
+→ **Migration-Risiko**: jeder Refactor braucht *expliziten* Clean-Build der
+Engine-BPL bevor Konsumenten ihn sehen. CI-Script muss `del *.dcu *.bpl`
+einbauen.
+
+### 9.5 156 statt 150 Detektoren
+
+Audit Stand 2026-06-01: 156 Detector-Units, davon
+- ~14 Multi-Kind-Container (CodeSmells2/ConcurrencyExt/PerfHotspots/...)
+- ~20 DFM-Detektoren via `TDfmAnalysisRunner`-Adapter (separater Pfad)
+- 3 Helper/Non-Emitter (CustomClassDiscovery, CustomRuleDetector, LeakDetector2-Engine)
+
+Engine-DPK Contains-Liste muss alle 156 explizit auflisten (kein
+Source-Pfad-Magic). Wartungs-Aufwand: bei jedem neuen Detektor 2 Edits
+(DPK contains + DPR uses).
+
+→ **Vorschlag**: Code-Generator-Script `tools/regen-engine-dpk.ps1` das
+die Contains-Liste aus `ls Detectors/u*.pas | sort` ableitet. Vorbild:
+das bereits vorhandene `tools/perf_log_summary.ps1`.
+
+### 9.6 gAstFileCache + gSymbolRefIndex als Engine-Singletons
+
+Beide globalen Indizes (`Infrastructure/uAstFileCache.pas`,
+`uSymbolReferenceIndex.pas`) sind heute Modul-Level-Variablen die in
+`uStaticAnalyzer2.ParseLeaks` allokiert + freigegeben werden. Bei
+Package-Migration:
+
+- Singleton-Variable lebt im BPL-Adressraum, **shared zwischen allen
+  Konsumenten** des gleichen Prozesses (IDE-Plugin + ... was sonst noch?)
+- Zwei parallele Analyse-Läufe (z.B. Background-Watch + manueller Re-Scan)
+  würden sich den Cache stehlen
+- Heute funktioniert das, weil der Process die EXE/IDE ist und nur EIN
+  Scan parallel läuft
+
+→ **Empfehlung**: vor BPL-Migration die Singleton-Variablen durch
+**Thread-Local-Storage** oder durch einen **expliziten Context-Parameter**
+ersetzen. Letzteres ist sauberer:
+```pascal
+TStaticAnalyzer2.AnalyzeLeaksRecursive(Path, ARequest: TAnalyzeRequest)
+```
+wo ARequest die Caches kapselt.
+
+### 9.7 Aktualisierte Migrationsplan-Phase
+
+**Phase 0** (NEU, vor allem anderen, 1 Tag):
+- Engine-Cleanup: TRegEx-Cache-`finalization` pro Detektor (Round 9/11/13-Files)
+- Singleton-Entkopplung: `gAstFileCache`/`gSymbolRefIndex` in Context-Record
+- `tools/regen-engine-dpk.ps1` schreiben
+- Self-Test-Baseline einfrieren (`sca-baseline-engine.json` für künftiges
+  Regression-Diff)
+
+Damit ist Engine-Code "Package-ready" bevor die eigentliche Verschiebung
+beginnt.
