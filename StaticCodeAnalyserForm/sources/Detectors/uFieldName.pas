@@ -149,6 +149,9 @@ begin
       // Ein `)` VOR dem `:` ist starkes Signal fuer Schwanz einer mehrzeiligen
       // Method-Signatur, nicht fuer Field-Decl.
       if Pos(')', Copy(trimmed, 1, ColonPos)) > 0 then Continue;
+      // Param-Continuation-Tail: `Param: Type);` oder `Param: Type)` mit
+      // ')' irgendwo in der Zeile - echte Field-Decls haben nie ')'.
+      if Pos(')', trimmed) > 0 then Continue;
       // Erstes Zeichen des Worts muss `F` sein
       FirstChar := Word[1];
       if (FirstChar = 'F') or (FirstChar = 'f') then Continue;

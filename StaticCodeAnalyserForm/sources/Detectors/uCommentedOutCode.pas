@@ -233,6 +233,21 @@ begin
   end;
 end;
 
+function IsPrevLineLineComment(Lines: TStringList; CurIdx: Integer): Boolean;
+// True wenn die unmittelbar vorangehende Quelltext-Zeile mit '//' beginnt
+// (nach Whitespace-Strip). Indikator fuer Multi-Line-Doc-Block - dort sind
+// Pascal-Code-Beispiele typisch ('// Pattern: \n // procedure X; \n ...').
+// Single-Line-Comments zwischen echtem Code (= isolierte //-Zeile) bleiben
+// flag-faehig - das sind die echten commented-out-Kandidaten.
+var
+  S : string;
+begin
+  Result := False;
+  if (CurIdx <= 0) or (CurIdx >= Lines.Count) then Exit;
+  S := TrimLeft(Lines[CurIdx - 1]);
+  Result := (Length(S) >= 2) and (S[1] = '/') and (S[2] = '/');
+end;
+
 class procedure TCommentedOutCodeDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -251,6 +266,15 @@ begin
     begin
       Col := FindCommentedOutCode(Lines[i], InBlk, InParen);
       if Col <= 0 then Continue;
+      // FP-Schutz: '//'-Zeilen die Teil eines Multi-Line-Comment-Blocks sind
+      // (Vorzeile beginnt auch mit '//') sind in der Regel Doc-Pattern mit
+      // Pascal-Code-Beispielen, nicht commented-out Code. Echte
+      // commented-out Code-Zeilen stehen einzeln zwischen echtem Code.
+      // Pruefung nur fuer //-Kommentare; '{...}' / '(*...*)' bleiben strikt
+      // gefiltert (Block-Kommentare mit Code-Beispielen sind selten).
+      if (Col > 0) and (Lines[i].TrimLeft.StartsWith('//')) and
+         IsPrevLineLineComment(Lines, i) then
+        Continue;
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
       F.MethodName := '';

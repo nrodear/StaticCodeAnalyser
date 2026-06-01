@@ -39,11 +39,8 @@ unit uExceptionTooGeneral;
 //   * `on E: EAbort do ... raise;` mit re-raise - dort wuerde Filter
 //     greifen, aber TypeRef='EAbort' nicht 'Exception'.
 //   * Legit Top-Level-Handler die LOGGEN und beenden:
-//       on E: Exception do
-//       begin
-//         WriteLn(ErrOutput, 'Fatal: ', E.Message);
-//         Exit(Integer(cecToolError));
-//       end;
+//       `on E: Exception do begin WriteLn(ErrOutput, 'Fatal: ', E.Message);`
+//       `Exit(Integer(cecToolError)); end;`
 //     Diese Pattern faengt zwar 'Exception' breit, ist aber bewusst die
 //     defensive Schutzschicht am Top-Level (CLI-Runner, Worker-Threads).
 //     Heuristik: Body enthaelt einen Log-Call (WriteLn/Write/Log/Output*)
@@ -104,10 +101,8 @@ begin
       // Result := exit-code im Handler ist auch Leave-Pattern: Funktion
       // gibt Fehler-Code zurueck und faellt natuerlich durch ans Method-End.
       // Klassische CLI-Runner-/Worker-Translation:
-      //   except on E: Exception do begin
-      //     WriteLn(...); Result := cecToolError;
-      //   end;
-      // Wir akzeptieren auch Result.Field/Result[i]/Result^-Zuweisungen.
+      //   `except on E: Exception do begin WriteLn(...); Result := cecToolError; end;`
+      // Wir akzeptieren auch `Result.Field`/`Result[i]`/`Result^`-Zuweisungen.
       if Cur.Kind = nkAssign then
       begin
         NameLow := LowerCase(Trim(Cur.Name));

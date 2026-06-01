@@ -94,6 +94,12 @@ begin
   // ist, sondern der Schwanz einer mehrzeiligen Method-Signatur.
   ColonPos := Pos(':', trimmed);
   if (ColonPos > 0) and (Pos(')', Copy(trimmed, 1, ColonPos)) > 0) then Exit;
+  // Param-Continuation-Tail: `Param: Type);` oder `Param: Type)` als letzte
+  // Param-Zeile einer mehrzeiligen Method-Signatur. Hat `:` und `;`, aber
+  // ALSO `)` IRGENDWO in der Zeile. Echte Field-Decls haben nie ')'.
+  // (Edge: Methoden-Pointer-Felder `MyEvt: procedure(x: Integer);` haben '(' -
+  //  die werden ueber die Inside-Parens-Continuation-Heuristik gefiltert.)
+  if Pos(')', trimmed) > 0 then Exit;
   // Muss `:` und `;` enthalten - charakteristisch fuer Feld-Decl
   if (Pos(':', trimmed) = 0) then Exit;
   if (Pos(';', trimmed) = 0) then Exit;
