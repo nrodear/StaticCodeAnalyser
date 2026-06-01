@@ -136,6 +136,13 @@ var
   // ohne Lock OK.
   gDetectors : TArray<TDetectorEntry>;
 
+  // Optional Per-Detector-Timing-Accumulator. Wenn von aussen
+  // (CLI --time-detectors, IDE-Perf-Mode) gesetzt, summieren wir hier
+  // pro Scan TotalMs + CallCount auf. Nil = kein Tracking (Default).
+  // Lifecycle: Caller erzeugt, AOnTime-Lambda fuellt, Caller liest und
+  // gibt frei. Single-Producer-Single-Consumer, kein Lock noetig.
+  gDetectorTimings : TDictionary<string, TPair<Int64, Integer>>;
+
 procedure BuildAllDetectors; forward;
 
 procedure EnsureDetectorsBuilt; inline;
@@ -800,13 +807,28 @@ begin
           TCustomRuleDetector.AnalyzeFile(FileName, Results);
 
         RunAllDetectors(Root, FileName, Results, AIncludeUsesCheck,
-          procedure(const Name: string; ElapsedMs: Int64) begin
+          procedure(const Name: string; ElapsedMs: Int64)
+          var
+            Acc: TPair<Int64, Integer>;
+          begin
             if (ElapsedMs > 500) and Assigned(CaptLogStream) then
               try
                 CaptLogStream.WriteLine(Format('  Detektor %s: %d ms (langsam!)',
                   [Name, ElapsedMs]));
                 CaptLogStream.Flush;
               except end;
+            // Per-Detector-Timing aggregieren wenn Accumulator vom Caller
+            // bereitgestellt wurde. Spart einem CLI-Konsumenten den eigenen
+            // AOnTime-Pfad zu bauen.
+            if Assigned(gDetectorTimings) then
+            begin
+              if gDetectorTimings.TryGetValue(Name, Acc) then
+                gDetectorTimings.AddOrSetValue(Name,
+                  TPair<Int64, Integer>.Create(Acc.Key + ElapsedMs, Acc.Value + 1))
+              else
+                gDetectorTimings.Add(Name,
+                  TPair<Int64, Integer>.Create(ElapsedMs, 1));
+            end;
           end,
           procedure(const Name, ErrMsg: string)
           begin

@@ -71,6 +71,8 @@ type
     SonarBranch   : string;         // --sonar-branch <name>
     SonarInsecure : Boolean;        // --sonar-insecure           accept self-signed TLS
     SonarConfig   : string;         // --sonar-config <path>      alternative INI
+    // ---- Perf-Diagnostik ----
+    TimeDetectors : Boolean;        // --time-detectors           pro-Detektor-Timing-Tabelle nach Scan
     ParseError    : string;         // nicht-leer wenn Args invalid
   end;
 
@@ -99,7 +101,8 @@ type
 implementation
 
 uses
-  System.IOUtils,
+  System.IOUtils, System.Math,
+  System.Generics.Defaults,           // TComparer fuer Detector-Timings-Sort
   uSCAConsts, uStaticAnalyzer2, uVcsChanges, uRepoSettings,
   uExportSARIF, uExportHtml, uCustomRuleDetector,
   uExportSonarGeneric, uSonarConfig,
@@ -151,6 +154,7 @@ begin
   Result.Branch      := False;
   Result.ReportSarif := '';
   Result.ReportHtml  := '';
+  Result.TimeDetectors := False;
   Result.Quiet       := False;
   Result.BaseDir     := '';
   Result.CustomRules := '';
@@ -241,6 +245,8 @@ begin
       Result.SonarInsecure := True
     else if A = '--sonar-config' then
       GetValue(Result.SonarConfig, '--sonar-config')
+    else if A = '--time-detectors' then
+      Result.TimeDetectors := True
     else
     begin
       Result.ParseError := Format('Unbekannter Switch: %s', [A]);
@@ -391,6 +397,12 @@ begin
   WriteLn('  --sonar-insecure      Accept self-signed TLS certificates');
   WriteLn('  --sonar-config <ini>  Alternative analyser.ini path for Sonar lookup');
   WriteLn('');
+  WriteLn('Perf-Diagnostik:');
+  WriteLn('  --time-detectors      Aggregiert per-Detektor TotalMs + CallCount');
+  WriteLn('                        ueber den Scan. Markdown-Tabelle am Ende.');
+  WriteLn('                        Identifiziert Hot-Path-Detektoren fuer');
+  WriteLn('                        gezielte Optimierung.');
+  WriteLn('');
   WriteLn('Other:');
   WriteLn('  --help, -h, -?, /?    Show this help');
   WriteLn('  --version             Print version and exit');
@@ -499,6 +511,60 @@ begin
   else Result := Integer(cecToolError);
 end;
 
+{ ---- Per-Detector-Timing-Tabelle ---- }
+
+procedure WriteDetectorTimingsMarkdown;
+// Schreibt eine Markdown-Tabelle pro Detektor mit TotalMs / CallCount /
+// AvgMs / %-Anteil-am-Scan, sortiert nach TotalMs absteigend. Daten kommt
+// aus gDetectorTimings (befuellt durch das AOnTime-Lambda in ParseLeaks).
+var
+  Pairs       : TArray<TPair<string, TPair<Int64, Integer>>>;
+  TotalMs     : Int64;
+  i           : Integer;
+  Name        : string;
+  Acc         : TPair<Int64, Integer>;
+  Avg, Pct    : Double;
+begin
+  if (gDetectorTimings = nil) or (gDetectorTimings.Count = 0) then Exit;
+
+  // Snapshot in Array kopieren damit wir sortieren koennen.
+  Pairs := gDetectorTimings.ToArray;
+  // Sortieren nach TotalMs absteigend.
+  TArray.Sort<TPair<string, TPair<Int64, Integer>>>(Pairs,
+    TComparer<TPair<string, TPair<Int64, Integer>>>.Construct(
+      function(const L, R: TPair<string, TPair<Int64, Integer>>): Integer
+      begin
+        Result := CompareValue(R.Value.Key, L.Value.Key);
+      end));
+
+  TotalMs := 0;
+  for i := 0 to High(Pairs) do
+    Inc(TotalMs, Pairs[i].Value.Key);
+
+  WriteLn('');
+  WriteLn('## Per-Detector Timing');
+  WriteLn('');
+  WriteLn('| Rank | Detector | Total ms | Calls | Avg ms | % Scan |');
+  WriteLn('|---:|---|---:|---:|---:|---:|');
+  for i := 0 to High(Pairs) do
+  begin
+    Name := Pairs[i].Key;
+    Acc  := Pairs[i].Value;
+    if Acc.Value > 0 then
+      Avg := Acc.Key / Acc.Value
+    else
+      Avg := 0;
+    if TotalMs > 0 then
+      Pct := (Acc.Key * 100.0) / TotalMs
+    else
+      Pct := 0;
+    WriteLn(Format('| %d | %s | %d | %d | %.2f | %.1f%% |',
+      [i + 1, Name, Acc.Key, Acc.Value, Avg, Pct]));
+  end;
+  WriteLn('');
+  WriteLn(Format('Total: %d ms over %d detectors', [TotalMs, Length(Pairs)]));
+end;
+
 { ---- Run ---- }
 
 class function TConsoleRunner.Run(const Args: TCliArgs): Integer;
@@ -580,6 +646,12 @@ begin
     if not Args.Quiet and ((Args.Profile <> '') or (Args.MinSeverity <> '')) then
       WriteLn(Format('Rule-set: Profile=%s, MinSeverity=%s',
         [Settings.Profile, Settings.MinSeverity]));
+
+    // Per-Detector-Timing aktivieren wenn --time-detectors angefordert.
+    // Engine-internes AOnTime-Lambda erkennt das nil-vs-Assigned und
+    // summiert pro Detektor ueber den gesamten Scan.
+    if Args.TimeDetectors then
+      gDetectorTimings := TDictionary<string, TPair<Int64, Integer>>.Create;
 
     try
       // Diff-Mode A<->B: nur die Dateien die zwischen den Commits geaendert
@@ -721,10 +793,16 @@ begin
     end;
 
     WriteSummary(Findings, Args.Quiet);
+    // Per-Detector-Timing-Tabelle wenn --time-detectors aktiv. NACH dem
+    // Summary damit Quiet-Mode-User die Tabelle bekommen waehrend die
+    // Finding-Auflistung weiter unterdrueckt bleibt.
+    if Args.TimeDetectors and Assigned(gDetectorTimings) then
+      WriteDetectorTimingsMarkdown;
     Result := CalcExitCode(Findings);
     // --fail-on User-Policy ggf. anwenden (Default: graded = Raw beibehalten)
     Result := ApplyFailOnPolicy(Result, Args.FailOn);
   finally
+    FreeAndNil(gDetectorTimings);
     Findings.Free;
     Files.Free;
     Settings.Free;
