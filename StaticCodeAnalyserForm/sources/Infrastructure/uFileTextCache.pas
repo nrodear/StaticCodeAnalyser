@@ -32,9 +32,17 @@ uses
   System.SysUtils, System.Classes, System.Generics.Collections;
 
 type
+  TFileTextCacheEntry = class
+  public
+    Lines : TStringList;
+    MTime : TDateTime;
+    constructor Create(ALines: TStringList; AMTime: TDateTime);
+    destructor Destroy; override;
+  end;
+
   TFileTextCache = class
   private
-    FCache : TObjectDictionary<string, TStringList>;
+    FCache : TObjectDictionary<string, TFileTextCacheEntry>;
     function Key(const FileName: string): string;
   public
     constructor Create;
@@ -42,6 +50,9 @@ type
 
     // Liefert TStringList fuer FileName. Cache besitzt die Liste -
     // NICHT freigeben. Nil bei Read-Fehler.
+    // mtime-aware: hat sich die Datei seit dem Cache-Eintrag geaendert,
+    // wird sie neu geladen. Schuetzt vor stale-cache bei Tests die
+    // dieselbe Datei ueberschreiben + bei Edit-Loops im IDE-Plugin.
     function GetLines(const FileName: string): TStringList;
 
     procedure Clear;
@@ -169,10 +180,27 @@ begin
   end;
 end;
 
+{ TFileTextCacheEntry }
+
+constructor TFileTextCacheEntry.Create(ALines: TStringList; AMTime: TDateTime);
+begin
+  inherited Create;
+  Lines := ALines;
+  MTime := AMTime;
+end;
+
+destructor TFileTextCacheEntry.Destroy;
+begin
+  Lines.Free;
+  inherited;
+end;
+
+{ TFileTextCache }
+
 constructor TFileTextCache.Create;
 begin
   inherited;
-  FCache := TObjectDictionary<string, TStringList>.Create([doOwnsValues]);
+  FCache := TObjectDictionary<string, TFileTextCacheEntry>.Create([doOwnsValues]);
 end;
 
 destructor TFileTextCache.Destroy;
@@ -186,14 +214,41 @@ begin
   Result := LowerCase(ExpandFileName(FileName));
 end;
 
+function SafeGetFileMTime(const FileName: string): TDateTime;
+// Liefert die LastWrite-Zeit oder 0 wenn die Datei nicht (mehr) existiert.
+// Mit try-except gegen Race-Conditions zwischen FileExists und FileAge.
+begin
+  Result := 0;
+  try
+    if not FileAge(FileName, Result) then
+      Result := 0;
+  except
+    Result := 0;
+  end;
+end;
+
 function TFileTextCache.GetLines(const FileName: string): TStringList;
 var
-  K  : string;
-  SL : TStringList;
+  K          : string;
+  SL         : TStringList;
+  Entry      : TFileTextCacheEntry;
+  CurrMTime  : TDateTime;
 begin
   Result := nil;
   K := Key(FileName);
-  if FCache.TryGetValue(K, Result) then Exit;
+
+  if FCache.TryGetValue(K, Entry) then
+  begin
+    CurrMTime := SafeGetFileMTime(FileName);
+    // Cache-Hit nur wenn die Datei seit dem Eintrag NICHT modifiziert wurde.
+    // CurrMTime=0 (Datei weg) ist ein Cache-Miss, dann faellt der Code unten
+    // auf den FileExists-Pfad.
+    if (CurrMTime <> 0) and (CurrMTime = Entry.MTime) then
+      Exit(Entry.Lines);
+    // Stale - aus Cache raus, danach neu laden.
+    FCache.Remove(K);
+  end;
+
   if not FileExists(FileName) then Exit;
 
   SL := TStringList.Create;
@@ -205,7 +260,8 @@ begin
   end;
 
   if SL = nil then Exit;
-  FCache.Add(K, SL);
+  CurrMTime := SafeGetFileMTime(FileName);
+  FCache.Add(K, TFileTextCacheEntry.Create(SL, CurrMTime));
   Result := SL;
 end;
 
