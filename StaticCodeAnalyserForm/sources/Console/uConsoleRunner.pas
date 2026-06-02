@@ -757,7 +757,10 @@ begin
       for var i := Findings.Count - 1 downto 0 do
       begin
         if Findings[i].Kind = fkFileReadError then Continue;
-        if TDetectorUtils.IsTestFixturePath(Findings[i].FileName) then
+        // BaseDir hier ist der Scan-Wurzel-Pfad - sichert das Pfad-Anchoring
+        // gegen externe Repo-Pfade die zufaellig '/tests/' enthalten.
+        if TDetectorUtils.IsTestFixturePath(Findings[i].FileName,
+             Args.Path) then
         begin
           Findings.Delete(i);
           Inc(FixtureDropped);

@@ -112,6 +112,16 @@ begin
   end;
 end;
 
+const
+  // Hardening gegen manipulierte Baseline-Dateien:
+  //   * MAX_BASELINE_ENTRIES bremst OOM-Angriffe via riesige JSON-Files
+  //   * MAX_FINGERPRINT_LEN kappt absurd lange Hash-Strings
+  // Werte grosszuegig genug, um realistische Repos zu erfassen (191k
+  // Findings sind machbar). Bei Ueberschreitung werden weitere Eintraege
+  // ignoriert + Warnung in ErrOutput.
+  MAX_BASELINE_ENTRIES = 1_000_000;
+  MAX_FINGERPRINT_LEN  = 256;
+
 class function TBaseline.Apply(Findings: TObjectList<TLeakFinding>;
   const BaselineFile: string): Integer;
 // Match-Strategie (C.2):
@@ -151,24 +161,55 @@ begin
       Arr := nil;
 
     if Arr <> nil then
+    begin
+      var Loaded := 0;
+      var Truncated := False;
       for Obj in Arr do
-        if Obj is TJSONObject then
+      begin
+        if Loaded >= MAX_BASELINE_ENTRIES then
         begin
-          FpJson := TJSONObject(Obj).Values['fingerprint'];
-          if (FpJson <> nil) and not FpJson.Null then
-            FpSet.AddOrSetValue(FpJson.Value, True);
-          CtxJson := TJSONObject(Obj).Values['contextHash'];
-          if (CtxJson <> nil) and not CtxJson.Null
-             and (CtxJson.Value <> '') then
-            CtxSet.AddOrSetValue(CtxJson.Value, True);
+          Truncated := True;
+          Break;
         end;
+        if not (Obj is TJSONObject) then Continue;
+        Inc(Loaded);
+        FpJson := TJSONObject(Obj).Values['fingerprint'];
+        if (FpJson <> nil) and not FpJson.Null
+           and (Length(FpJson.Value) <= MAX_FINGERPRINT_LEN) then
+          FpSet.AddOrSetValue(FpJson.Value, True);
+        CtxJson := TJSONObject(Obj).Values['contextHash'];
+        if (CtxJson <> nil) and not CtxJson.Null
+           and (CtxJson.Value <> '')
+           and (Length(CtxJson.Value) <= MAX_FINGERPRINT_LEN) then
+          CtxSet.AddOrSetValue(CtxJson.Value, True);
+      end;
+      if Truncated then
+        try
+          WriteLn(ErrOutput, Format(
+            'Baseline warning: file %s has more than %d entries - '
+            + 'subsequent entries ignored (truncated). Hardening cap, '
+            + 'see MAX_BASELINE_ENTRIES in uBaseline.pas.',
+            [BaselineFile, MAX_BASELINE_ENTRIES]));
+        except
+          // stdout/stderr nicht erreichbar (GUI ohne AttachConsole) -
+          // silent OK, Hardening greift trotzdem.
+        end;
+    end;
 
-    // Rueckwaerts iterieren wegen Delete
+    // Rueckwaerts iterieren wegen Delete.
+    // Perf: ContextHash nur berechnen wenn die Baseline ueberhaupt
+    // contextHash-Eintraege hat. Bei Legacy-Baselines (nur fingerprint)
+    // spart das ein SHA256 + File-Read pro Finding (= ~191k vermiedene
+    // Operationen bei einem Real-World-Scan).
+    var HasCtx: Boolean := CtxSet.Count > 0;
     for i := Findings.Count - 1 downto 0 do
     begin
       F := Findings[i];
       if F.Kind = fkFileReadError then Continue;
-      FCtx := TFindingFingerprint.ContextHash(F);
+      if HasCtx then
+        FCtx := TFindingFingerprint.ContextHash(F)
+      else
+        FCtx := '';
       if ((FCtx <> '') and CtxSet.ContainsKey(FCtx))
          or FpSet.ContainsKey(Fingerprint(F)) then
       begin

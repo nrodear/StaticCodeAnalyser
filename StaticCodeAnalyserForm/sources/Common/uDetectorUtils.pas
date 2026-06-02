@@ -42,15 +42,20 @@ type
     //   * Basename matched 'uTest*.pas', '*_Test.pas', '*_Tests.pas',
     //     '*TestSuite*.pas', '*Sample.pas', '*Demo.pas', '*Sample_*.pas',
     //     '*_Demo_*.pas'
-    //   * Pfad enthaelt '/test/', '/tests/', '/unittest/', '/samples/',
-    //     '/demos/', '/resources/' (= Form-Designer-Resourcen-Folder)
+    //   * Pfad-Komponente innerhalb der REPO-RELATIVEN Pfad-Segmente
+    //     (relativ zu BaseDir) ist 'test', 'tests', 'unittest', 'samples',
+    //     'demos', 'resources'. Wenn BaseDir leer ist, faellt der
+    //     Detektor auf eine konservative Substring-Suche zurueck mit
+    //     dem Caveat dass externe Pfade ('D:\projects\company-tests\...')
+    //     dann auch matchen koennen.
     //   * Spezifische bekannte Demo-Files: 'MeineUnit.pas', 'uOrderForm.pas',
     //     'uCustomerForm.pas' (im SCA-Repo intentionally-buggy Beispiele)
     //
     // Komplementaer zu TIgnoreList.IsTestPath (nur Test-Files): erweitert
     // um Demo-/Sample-Patterns und ist als Post-Filter-Heuristik gedacht,
     // NICHT als Scan-Exclusion-Mechanismus (TIgnoreList).
-    class function IsTestFixturePath(const FileName: string): Boolean; static;
+    class function IsTestFixturePath(const FileName: string;
+      const BaseDir: string = ''): Boolean; static;
 
     // Sucht Needle in Haystack, beide bereits lower-case, mit Wortgrenzen-
     // Pruefung links UND rechts. Liefert 1-basierte Position oder 0.
@@ -165,17 +170,47 @@ const
     'resources'      // /resources/-Folder enthalten Form-Templates
   );
 var
-  Bare, FullLow : string;
-  Pat, DirPart  : string;
+  Bare, FullLow, BaseLow, RelLow : string;
+  Pat, DirPart, Segment          : string;
+  Segments                       : TArray<string>;
 begin
   Result := False;
   if FileName = '' then Exit;
-  Bare    := ExtractFileName(FileName);
-  FullLow := FileName.Replace('\', '/').ToLower;
-  for DirPart in FIXTURE_DIR_PARTS do
-    if Pos('/' + DirPart + '/', FullLow) > 0 then Exit(True);
+  Bare := ExtractFileName(FileName);
+
+  // 1. Basename-Pattern matched unabhaengig vom Pfad-Anchoring -
+  //    'uTest*.pas' ist projekt-uebergreifend ein Test-File-Indikator.
   for Pat in FIXTURE_FILE_PATTERNS do
     if MatchesMask(Bare, Pat) then Exit(True);
+
+  // 2. Pfad-Komponenten-Match. Wenn BaseDir gegeben, matchen wir NUR
+  //    Segmente des Pfads RELATIV zu BaseDir - so wird '/test/' in einem
+  //    externen Repo-Pfad wie 'D:\projects\company-tests\src\auth.pas'
+  //    nicht mehr als Fixture erkannt. Ohne BaseDir fallen wir auf die
+  //    alte volle Pfad-Substring-Suche zurueck (mit dem dokumentierten
+  //    Caveat).
+  FullLow := FileName.Replace('\', '/').ToLower;
+  if BaseDir <> '' then
+  begin
+    BaseLow := IncludeTrailingPathDelimiter(BaseDir)
+                 .Replace('\', '/').ToLower;
+    if FullLow.StartsWith(BaseLow) then
+      RelLow := Copy(FullLow, Length(BaseLow) + 1, MaxInt)
+    else
+      RelLow := '';
+    if RelLow <> '' then
+    begin
+      Segments := RelLow.Split(['/']);
+      for Segment in Segments do
+        for DirPart in FIXTURE_DIR_PARTS do
+          if Segment = DirPart then Exit(True);
+    end;
+  end
+  else
+  begin
+    for DirPart in FIXTURE_DIR_PARTS do
+      if Pos('/' + DirPart + '/', FullLow) > 0 then Exit(True);
+  end;
 end;
 
 class function TDetectorUtils.FindWholeWordLower(const Needle,

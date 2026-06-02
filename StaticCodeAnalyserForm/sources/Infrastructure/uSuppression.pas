@@ -26,7 +26,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uSCAConsts, uMethodd12, uFileTextCache;
+  uSCAConsts, uMethodd12, uFileTextCache, uDetectorUtils;
 
 type
   TSuppressedKinds = set of TFindingKind;
@@ -50,7 +50,17 @@ type
     class procedure ApplyToFindings(
       Findings: TObjectList<TLeakFinding>); static;
   private
-    class function ParseComment(const Line: string;
+    // Pruft eine Zeile mit String-/Kommentar-Kontext-Awareness auf
+    // `// noinspection X`. State wird vom Caller zwischen Zeilen
+    // mitgefuehrt (offene { ... } / (* ... *)-Bloecke). Schuetzt
+    // gegen Marker-Smuggling via String-Literalen wie
+    //   Log('// noinspection All // ' + Payload);
+    // die heute (ohne ScanCodeLine) als aktiver Marker durchrutschen
+    // wuerden.
+    class function ParseMarkerLine(const Line: string;
+      var State: TCommentScanState;
+      out Kinds: TSuppressedKinds): Boolean; static;
+    class function ParseCommentText(const CommentText: string;
       out Kinds: TSuppressedKinds): Boolean; static;
     class function KindFromName(const Name: string;
       out Kind: TFindingKind): Boolean; static;
@@ -86,6 +96,22 @@ const
     'verbessert oder Target war falsch. Marker entfernen oder ' +
     'Target-Kind pruefen.';
 
+  // Kinds die per '// noinspection All' NICHT pauschal unterdrueckt
+  // werden duerfen. Wer diese Befunde wirklich unterdruecken will,
+  // muss sie explizit nennen ('// noinspection SQLInjection'). Schuetzt
+  // gegen Insider/PR-Supply-Chain-Bypass mit einem einzigen All-Marker.
+  // Auch fkUnusedSuppression ist drin, damit das eigene Tracking nicht
+  // durch All vom Radar fliegt.
+  CRITICAL_KINDS_NOT_SUPPRESSIBLE_BY_ALL: TSuppressedKinds = [
+    fkHardcodedSecret,
+    fkSQLInjection,
+    fkCommandInjection,
+    fkDfmHardcodedDbCreds,
+    fkDfmSqlFromUserInput,
+    fkInsecureCryptoAlgorithm,
+    fkUnusedSuppression
+  ];
+
 implementation
 
 class function TSuppression.KindFromName(const Name: string;
@@ -98,8 +124,10 @@ begin
   Result := uSCAConsts.KindFromName(Name, Kind);
 end;
 
-class function TSuppression.ParseComment(const Line: string;
+class function TSuppression.ParseCommentText(const CommentText: string;
   out Kinds: TSuppressedKinds): Boolean;
+// In: Text NACH dem '//' (ohne Whitespace-Stripping)
+// Out: erkannte Kinds aus '// noinspection X[, Y, ...]'-Direktive
 const
   TAG = 'noinspection';
 var
@@ -112,9 +140,7 @@ begin
   Result := False;
   Kinds  := [];
 
-  Trimmed := TrimLeft(Line);
-  if not Trimmed.StartsWith('//') then Exit;
-  Trimmed := TrimLeft(Trimmed.Substring(2));
+  Trimmed := TrimLeft(CommentText);
   if not Trimmed.ToLower.StartsWith(TAG) then Exit;
 
   Trimmed := Trimmed.Substring(Length(TAG));
@@ -123,11 +149,17 @@ begin
     Trimmed := Trimmed.Substring(1);
   Trimmed := Trim(Trimmed);
 
-  // 'All' = alle Kategorien
+  // 'All' = alle Kategorien AUSSER Security-Critical-Kinds + dem
+  // fkUnusedSuppression-Safety-Net. Wer Hardcoded-Secret/SQL-Injection/
+  // Command-Injection unterdruecken will, MUSS sie explizit nennen -
+  // sonst koennte ein einziger 'noinspection All'-Marker einen Backdoor
+  // verstecken. fkUnusedSuppression muss auch durch (sonst killt All
+  // sein eigenes Tracking).
   if SameText(Trimmed, 'all') or (Trimmed = '*') then
   begin
     for K := Low(TFindingKind) to High(TFindingKind) do
-      Include(Kinds, K);
+      if not (K in CRITICAL_KINDS_NOT_SUPPRESSIBLE_BY_ALL) then
+        Include(Kinds, K);
     Result := True;
     Exit;
   end;
@@ -144,6 +176,31 @@ begin
     end;
   end;
   Result := HasAny;
+end;
+
+class function TSuppression.ParseMarkerLine(const Line: string;
+  var State: TCommentScanState;
+  out Kinds: TSuppressedKinds): Boolean;
+// Scant die Zeile mit String-/Block-Kommentar-State-Awareness und
+// extrahiert ggf. den '// noinspection X'-Marker NUR aus echtem
+// Zeilen-Kommentar (nicht aus Strings, nicht aus offenem (* ... *)).
+// State wird vom Caller pro File mitgefuehrt.
+var
+  LineCommentCol : Integer;
+  CommentText    : string;
+begin
+  Result := False;
+  Kinds  := [];
+
+  TDetectorUtils.ScanCodeLine(Line, State, LineCommentCol);
+  if LineCommentCol <= 0 then Exit;        // kein //-Kommentar im Code-Anteil
+
+  // Comment-Text = alles nach den '//' Zeichen (LineCommentCol ist 1-basiert,
+  // zeigt auf das erste '/').
+  if LineCommentCol + 1 > Length(Line) then Exit;
+  CommentText := Copy(Line, LineCommentCol + 2, MaxInt);
+
+  Result := ParseCommentText(CommentText, Kinds);
 end;
 
 class function TSuppression.BuildMap(const FileName: string):
@@ -170,17 +227,23 @@ var
       Map.Add(Line, NewKinds);
   end;
 
+var
+  ScanState : TCommentScanState;
+  Cached    : Boolean;
 begin
   Result := TDictionary<Integer, TSuppressedKinds>.Create;
   if not FileExists(FileName) then Exit;
 
-  Lines := TStringList.Create;
+  // Perf: AcquireLines nutzt gFileTextCache - zweiter Aufruf (BuildMarkers
+  // im selben Scan) wird zum Cache-Hit, kein doppeltes I/O.
+  Lines := AcquireLines(FileName, Cached);
+  if Lines = nil then Exit;
   try
-    if not TryLoadLinesWithFallback(FileName, Lines) then Exit;
-
+    ScanState.InBraceComment := False;
+    ScanState.InParenComment := False;
     for i := 0 to Lines.Count - 1 do
     begin
-      if not ParseComment(Lines[i], Kinds) then Continue;
+      if not ParseMarkerLine(Lines[i], ScanState, Kinds) then Continue;
       // Wir emittieren Suppression-Eintraege fuer ZWEI moegliche Targets:
       //   * NextNonEmpty: erste folgende non-empty Zeile - kann auch ein
       //     Kommentar sein (Target eines TodoComment-Suppressors etc.).
@@ -218,25 +281,32 @@ begin
         MergeKindsAt(Result, NextCode, Kinds);
     end;
   finally
-    Lines.Free;
+    ReleaseLines(Lines, Cached);
   end;
 end;
 
 class procedure TSuppression.BuildMarkers(const FileName: string;
   Markers: TList<TSuppressionMarker>);
 var
-  Lines : TStringList;
-  Kinds : TSuppressedKinds;
-  i, j  : Integer;
-  L     : string;
-  M     : TSuppressionMarker;
+  Lines  : TStringList;
+  Kinds  : TSuppressedKinds;
+  i, j   : Integer;
+  L      : string;
+  M      : TSuppressionMarker;
+  Cached : Boolean;
 begin
-  Lines := TStringList.Create;
+  // Perf: AcquireLines liefert dieselbe TStringList wie BuildMap (gFile-
+  // TextCache) wenn beide im selben Scan fuer dasselbe File aufgerufen
+  // werden - spart das zweite I/O.
+  Lines := AcquireLines(FileName, Cached);
+  if Lines = nil then Exit;
   try
-    if not TryLoadLinesWithFallback(FileName, Lines) then Exit;
+    var ScanState: TCommentScanState;
+    ScanState.InBraceComment := False;
+    ScanState.InParenComment := False;
     for i := 0 to Lines.Count - 1 do
     begin
-      if not ParseComment(Lines[i], Kinds) then Continue;
+      if not ParseMarkerLine(Lines[i], ScanState, Kinds) then Continue;
       // TargetLine = naechste non-empty + non-comment Zeile (= Code).
       // Wir tracken NUR den Code-Target weil das der harte Suppress-Punkt
       // ist; Doc-Comment-Targets sind ambig (z.B. TodoComment-Suppression
@@ -260,7 +330,7 @@ begin
       Markers.Add(M);
     end;
   finally
-    Lines.Free;
+    ReleaseLines(Lines, Cached);
   end;
 end;
 

@@ -176,11 +176,11 @@ begin
       F.MissingVar := Format(
         'Potential command injection: %s called with string concatenation in arguments',
         [UpperCase(ApiName[1]) + Copy(ApiName, 2, MaxInt)]);
-      F.SetKind(fkCommandInjection);
       // Confidence-Override: ohne Taint-Tracking ist die Heuristik
       // explizit niedrig. Im Standard-Profil (Filter MinConfidence=Medium)
       // wird das Finding nicht angezeigt - User muss 'low' freischalten.
-      F.Confidence := fcLow;
+      // SetKind-mit-Confidence-Overload schuetzt vor Reihenfolge-Bug.
+      F.SetKind(fkCommandInjection, fcLow);
       Results.Add(F);
     end;
   finally

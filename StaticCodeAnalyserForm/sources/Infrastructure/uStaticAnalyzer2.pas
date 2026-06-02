@@ -595,12 +595,16 @@ begin
     // AST-File-Cache: pro .pas einmal parsen, von beiden Pre-Indizes UND
     // dem Main-Loop wiederverwendet. Spart 2 von 3 Parser-Durchlaeufen pro
     // File (perf_analyse.md Hot-Spot 🅐).
+    if Assigned(gAstFileCache) then FreeAndNil(gAstFileCache);
     gAstFileCache := TAstFileCache.Create;
 
     // File-Text-Cache: pro .pas einmal Lines.LoadFromFile, von den
     // File-Scan-Detektoren (Todo, With, Reversed, Length, Tautological,
     // DuplicateBlock, CustomRule) wiederverwendet (perf_analyse.md
     // Hot-Spot 🅑).
+    // WICHTIG: leakt sonst bei wiederholten Scans (IDE-Plugin) -
+    // FreeAndNil-erst, dann Re-Create.
+    if Assigned(gFileTextCache) then FreeAndNil(gFileTextCache);
     gFileTextCache := TFileTextCache.Create;
 
     // Repo-weiten Index fuer Cross-Unit-Detektoren einmal pro Scan
@@ -878,8 +882,13 @@ begin
       FreeAndNil(gSymbolRefIndex);
     if Assigned(gAstFileCache) then
       FreeAndNil(gAstFileCache);
-    if Assigned(gFileTextCache) then
-      FreeAndNil(gFileTextCache);
+    // gFileTextCache lebt absichtlich weiter bis zur naechsten Scan-Start-
+    // Phase (oder dem finalization-Block). Suppression-Phase + ContextHash-
+    // Berechnung im SARIF/Baseline-Output rufen AcquireLines fuer jede
+    // Finding-Datei; ohne den Cache haette das 191k+ einzelne LoadFromFile
+    // + UTF-8-Validierungen zur Folge (gemessen +20-60s pro Real-World-
+    // Scan). Per-File-Clear in der Detector-Schleife bleibt, der Cache
+    // fuellt sich im Post-Scan lazy nach.
   end;
 
   // Suppression-Kommentare auswerten und Befunde filtern

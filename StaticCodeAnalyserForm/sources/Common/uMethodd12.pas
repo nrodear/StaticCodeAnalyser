@@ -46,7 +46,14 @@ type
     // KIND_META.DefaultSeverity gezogen (single source of truth). Detektoren
     // die einen kontext-abhaengigen Severity brauchen (z.B. uLeakDetector2,
     // uDivByZero - Confidence-basiert) setzen .Severity weiterhin manuell.
-    procedure SetKind(K: TFindingKind);
+    procedure SetKind(K: TFindingKind); overload;
+    // Wie SetKind(K), aber mit explizit gesetzter Confidence statt
+    // KindDefaultConfidence. Schuetzt vor der fragilen Reihenfolge
+    //   F.SetKind(K);                 // -> Confidence aus KIND_META
+    //   F.Confidence := fcLow;        // muss DANACH passieren, sonst weg
+    // die heute in uCommandInjection und uDivByZero implizit gilt.
+    procedure SetKind(K: TFindingKind; AConfidence: TFindingConfidence);
+      overload;
     function SeverityText: string;
     function FindingType: TFindingType;
     function TypeText: string;
@@ -117,12 +124,21 @@ end;
 
 procedure TLeakFinding.SetKind(K: TFindingKind);
 // Setzt Kind + Severity + Confidence aus KIND_META / KindDefaultConfidence.
-// Detektoren die einen anderen Confidence-Level brauchen, ueberschreiben
-// .Confidence danach explizit (z.B. uCommandInjection := fcLow).
+// Detektoren die einen anderen Confidence-Level brauchen, nutzen die
+// SetKind(K, AConfidence)-Overload um Override + Default-Reihenfolge
+// nicht zu verwechseln.
 begin
   Kind       := K;
   Severity   := KindDefaultSeverity(K);
   Confidence := KindDefaultConfidence(K);
+end;
+
+procedure TLeakFinding.SetKind(K: TFindingKind;
+  AConfidence: TFindingConfidence);
+begin
+  Kind       := K;
+  Severity   := KindDefaultSeverity(K);
+  Confidence := AConfidence;
 end;
 
 function TLeakFinding.SeverityText: string;

@@ -187,14 +187,22 @@ var
   ParentName, ChildName : string;
   Parents : TStringList;
   i : Integer;
+  AllUnitMethods : TList<TAstNode>;
+  DescendantsCache : TObjectDictionary<string, TList<string>>;
 
-  function DescendantsOf(const ClassLow: string): TList<string>;
+  function DescendantsOfCached(const ClassLow: string): TList<string>;
+  // Memoized BFS ueber den Vererbungs-Graphen. Cache lebt fuer die Dauer
+  // von AnalyzeUnit - bei N public-Members und M Other-Methods wuerde
+  // DescendantsOf sonst O(N x M)-mal mit jeweils neuer TQueue+TDictionary
+  // alloziert.
   var
     Q : TQueue<string>;
     Visited : TDictionary<string, Boolean>;
     Cur, Sub : string;
     Subs : TList<string>;
   begin
+    if DescendantsCache.TryGetValue(ClassLow, Result) then Exit;
+
     Result := TList<string>.Create;
     Q := TQueue<string>.Create;
     Visited := TDictionary<string, Boolean>.Create;
@@ -217,6 +225,7 @@ var
       Visited.Free;
       Q.Free;
     end;
+    DescendantsCache.Add(ClassLow, Result);
   end;
 
   // True wenn die Klasse das klassische Utility-/Namespace-Container-
@@ -286,7 +295,6 @@ var
     Impl : TAstNode;
     Descendants : TList<string>;
     SubLow : string;
-    AllMethods : TList<TAstNode>;
     K : TFindingKind;
     F : TLeakFinding;
     Msg : string;
@@ -320,48 +328,40 @@ var
       ImplList.Free;
     end;
 
-    // 2. Referenzen in Sub-Klassen-Methods
-    Descendants := DescendantsOf(ClassLow);
-    try
-      for SubLow in Descendants do
-      begin
-        if not ClassNameByLow.TryGetValue(SubLow, OtherCls) then Continue;
-        ImplList := TList<TAstNode>.Create;
-        try
-          CollectMethodImplsFor(UnitNode, OtherCls.Name, ImplList);
-          for Impl in ImplList do
-            if BodyReferences(Impl, MemberLow) then Inc(SubRefs);
-        finally
-          ImplList.Free;
-        end;
+    // 2. Referenzen in Sub-Klassen-Methods. Descendants kommt aus dem
+    //    Memoizer (kein .Free - Cache besitzt die Liste).
+    Descendants := DescendantsOfCached(ClassLow);
+    for SubLow in Descendants do
+    begin
+      if not ClassNameByLow.TryGetValue(SubLow, OtherCls) then Continue;
+      ImplList := TList<TAstNode>.Create;
+      try
+        CollectMethodImplsFor(UnitNode, OtherCls.Name, ImplList);
+        for Impl in ImplList do
+          if BodyReferences(Impl, MemberLow) then Inc(SubRefs);
+      finally
+        ImplList.Free;
       end;
-    finally
-      Descendants.Free;
     end;
 
     // 3. Sonstige Unit-Referenzen (in Methoden, die nicht zur Klasse oder
-    //    einer Sub-Klasse gehoeren).
-    AllMethods := UnitNode.FindAll(nkMethod);
-    try
-      for Impl in AllMethods do
-      begin
-        if Impl = Member then Continue;
-        var Lower := NormalizeIdent(Impl.Name);
-        // Skippen wenn zur eigenen Klasse oder einem Descendant
-        if Lower.StartsWith(ClassLow + '.') then Continue;
-        var Skip := False;
-        Descendants := DescendantsOf(ClassLow);
-        try
-          for SubLow in Descendants do
-            if Lower.StartsWith(SubLow + '.') then begin Skip := True; Break; end;
-        finally
-          Descendants.Free;
+    //    einer Sub-Klasse gehoeren). AllUnitMethods + Descendants kommen
+    //    aus den AnalyzeUnit-Caches - kein FindAll/BFS pro Member.
+    for Impl in AllUnitMethods do
+    begin
+      if Impl = Member then Continue;
+      var Lower := NormalizeIdent(Impl.Name);
+      // Skippen wenn zur eigenen Klasse oder einem Descendant
+      if Lower.StartsWith(ClassLow + '.') then Continue;
+      var Skip := False;
+      for SubLow in Descendants do
+        if Lower.StartsWith(SubLow + '.') then
+        begin
+          Skip := True;
+          Break;
         end;
-        if Skip then Continue;
-        if BodyReferences(Impl, MemberLow) then Inc(OtherRefs);
-      end;
-    finally
-      AllMethods.Free;
+      if Skip then Continue;
+      if BodyReferences(Impl, MemberLow) then Inc(OtherRefs);
     end;
 
     // Klassifikation. Alle Empfehlungen sind single-file-stark - bei
@@ -443,6 +443,15 @@ begin
   PublicMembers := TList<TAstNode>.Create;
   ClassNameByLow := TDictionary<string, TAstNode>.Create;
   ChildrenOf := TDictionary<string, TList<string>>.Create;
+  // Perf: einmal pro Unit holen statt pro public-Member (heute ~10-50
+  // Member/Klasse × ~20 Klassen → bis zu 1000× TList-Alloc + Tree-Walk
+  // pro Datei).
+  AllUnitMethods := UnitNode.FindAll(nkMethod);
+  // Perf: DescendantsOf pro ClassLow memoizen - im A.3-Pfad wurde es
+  // pro Member UND pro Other-Method gerufen (= O(members × methods)
+  // mit jeweils TQueue+TDictionary-Allokation).
+  DescendantsCache := TObjectDictionary<string, TList<string>>.Create(
+    [doOwnsValues]);
   try
     // Phase 1: Klassen-Index + Vererbungs-Graph
     for ClassNode in Classes do
@@ -510,6 +519,8 @@ begin
     ClassNameByLow.Free;
     PublicMembers.Free;
     Classes.Free;
+    AllUnitMethods.Free;
+    DescendantsCache.Free;     // doOwnsValues -> innere TList<string> mit weg
   end;
 end;
 
