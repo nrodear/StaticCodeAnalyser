@@ -57,6 +57,35 @@ uses
   System.Classes, System.Hash, System.StrUtils,
   uFileTextCache;
 
+function CollapseWhitespace(const Line: string; Sb: TStringBuilder): string;
+// '   a\tb   c ' -> 'a b c'
+// Tabs zu Space, Runs kollabiert, leading + trailing WS weg.
+// Sb wird vom Caller wiederverwendet (Performance: spart Allocation
+// pro Zeile bei langen Snippet-Listen).
+var
+  i      : Integer;
+  C      : Char;
+  PrevWs : Boolean;
+begin
+  Sb.Clear;
+  PrevWs := True;                        // suppress leading WS
+  for i := 1 to Length(Line) do
+  begin
+    C := Line[i];
+    if (C = ' ') or (C = #9) then
+    begin
+      if not PrevWs then Sb.Append(' ');
+      PrevWs := True;
+    end
+    else
+    begin
+      Sb.Append(C);
+      PrevWs := False;
+    end;
+  end;
+  Result := TrimRight(Sb.ToString);
+end;
+
 class function TFindingFingerprint.Normalize(const Snippet: string): string;
 // In: roher Snippet aus mehreren Zeilen
 // Out: jede Zeile getrimmt + Whitespace-Runs auf 1 Space kollabiert,
@@ -69,64 +98,47 @@ class function TFindingFingerprint.Normalize(const Snippet: string): string;
 //   - Leerzeilen-Cleanup
 //   - CRLF vs LF
 var
-  SL    : TStringList;
-  Out_  : TStringList;
-  i, j  : Integer;
-  Line  : string;
-  Sb    : TStringBuilder;
-  C     : Char;
-  PrevWs: Boolean;
+  InputLines  : TStringList;
+  OutputLines : TStringList;
+  Sb          : TStringBuilder;
+  i           : Integer;
+  Line        : string;
 begin
   if Snippet = '' then Exit('');
-  SL := TStringList.Create;
-  Out_ := TStringList.Create;
+  InputLines  := TStringList.Create;
+  OutputLines := TStringList.Create;
+  Sb          := TStringBuilder.Create;
   try
-    SL.Text := Snippet;
-    for i := 0 to SL.Count - 1 do
+    InputLines.Text := Snippet;
+    for i := 0 to InputLines.Count - 1 do
     begin
-      // Tabs zu Space + WS-Run-Kollabierung
-      Sb := TStringBuilder.Create;
-      try
-        PrevWs := True; // suppress leading WS
-        Line := SL[i];
-        for j := 1 to Length(Line) do
-        begin
-          C := Line[j];
-          if (C = ' ') or (C = #9) then
-          begin
-            if not PrevWs then Sb.Append(' ');
-            PrevWs := True;
-          end
-          else
-          begin
-            Sb.Append(C);
-            PrevWs := False;
-          end;
-        end;
-        Line := Sb.ToString;
-      finally
-        Sb.Free;
-      end;
-      // Trailing-Space von Single-Trailing-Append abschneiden
-      Line := TrimRight(Line);
+      Line := CollapseWhitespace(InputLines[i], Sb);
       if Line <> '' then
-        Out_.Add(Line);
+        OutputLines.Add(Line);
     end;
-    Result := string.Join(#10, Out_.ToStringArray);
+    Result := string.Join(#10, OutputLines.ToStringArray);
   finally
-    SL.Free;
-    Out_.Free;
+    Sb.Free;
+    OutputLines.Free;
+    InputLines.Free;
   end;
+end;
+
+function LineToZeroIndex(LineNo: Integer): Integer; inline;
+// 1-basierte Compiler/Editor-Zeilen -> 0-basierter TStringList-Index.
+begin
+  Result := LineNo - 1;
 end;
 
 class function TFindingFingerprint.ContextHashFor(const FileName: string;
   LineNo, Radius: Integer): string;
 var
-  Lines : TStringList;
-  Cached: Boolean;
-  Sb    : TStringBuilder;
+  Lines     : TStringList;
+  Cached    : Boolean;
+  Sb        : TStringBuilder;
   i, Lo, Hi : Integer;
-  Snippet, Norm : string;
+  Snippet   : string;
+  Norm      : string;
 begin
   Result := '';
   if (FileName = '') or (LineNo < 1) or (Radius < 0) then Exit;
@@ -135,8 +147,8 @@ begin
   if Lines = nil then Exit;
   try
     if Lines.Count = 0 then Exit;
-    Lo := LineNo - 1 - Radius;          // TStringList ist 0-basiert
-    Hi := LineNo - 1 + Radius;
+    Lo := LineToZeroIndex(LineNo) - Radius;
+    Hi := LineToZeroIndex(LineNo) + Radius;
     if Lo < 0 then Lo := 0;
     if Hi > Lines.Count - 1 then Hi := Lines.Count - 1;
     Sb := TStringBuilder.Create;

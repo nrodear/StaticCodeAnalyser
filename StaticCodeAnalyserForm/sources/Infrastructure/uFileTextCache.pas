@@ -67,6 +67,14 @@ function AcquireLines(const FileName: string;
 
 procedure ReleaseLines(Lines: TStringList; OwnedByCache: Boolean);
 
+// Standalone-Loader mit Encoding-Detection (Default -> UTF8 -> Unicode).
+// Caller besitzt Lines. False bei Read-/Decode-Fehler.
+// Wird von Code-Pfaden genutzt, die nicht ueber den Cache laufen
+// (Pre-Index-Scans, Single-File-Tools). Vorher 3-fach try-fallback
+// inline in uSuppression - jetzt single source of truth hier.
+function TryLoadLinesWithFallback(const FileName: string;
+  Lines: TStringList): Boolean;
+
 implementation
 
 uses
@@ -237,6 +245,34 @@ procedure ReleaseLines(Lines: TStringList; OwnedByCache: Boolean);
 begin
   if (Lines <> nil) and not OwnedByCache then
     Lines.Free;
+end;
+
+function TryLoadLinesWithFallback(const FileName: string;
+  Lines: TStringList): Boolean;
+// Encoding-Detection-Pipeline: Default -> UTF8 -> Unicode. Wir nutzen
+// nicht LoadFileSmart (BOM+ANSI/UTF-8-Sniff) weil dieser Pfad explizit
+// fuer Caller ist, die das alte TStringList.LoadFromFile-Verhalten
+// brauchen (z.B. Suppression-Marker-Lookup, der ueber Win-1252-Files
+// genauso laufen muss wie ueber UTF8 ohne BOM).
+begin
+  Result := False;
+  if (Lines = nil) or not FileExists(FileName) then Exit;
+  try
+    Lines.LoadFromFile(FileName);
+    Result := True;
+  except
+    try
+      Lines.LoadFromFile(FileName, TEncoding.UTF8);
+      Result := True;
+    except
+      try
+        Lines.LoadFromFile(FileName, TEncoding.Unicode);
+        Result := True;
+      except
+        // Datei unleserlich - Caller entscheidet was zu tun ist.
+      end;
+    end;
+  end;
 end;
 
 initialization
