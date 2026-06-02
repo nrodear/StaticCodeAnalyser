@@ -31,9 +31,22 @@ uses
 type
   TSuppressedKinds = set of TFindingKind;
 
+  // Suppression-Marker: '// noinspection X' an einer Quell-Zeile, das auf
+  // eine Target-Zeile (= naechste Code-Zeile danach) zielt. Wird vom
+  // Filter konsumiert wenn dort ein Finding der passenden Kind-Sets liegt.
+  TSuppressionMarker = record
+    MarkerLine : Integer;        // Zeile mit dem '// noinspection ...'
+    TargetLine : Integer;        // Zeile auf die der Marker zielt
+    Kinds      : TSuppressedKinds;
+    Consumed   : Boolean;        // True wenn der Marker mind. 1 Finding suppresst hat
+  end;
+
   TSuppression = class
   public
-    // Filtert unterdrueckte Befunde aus der Liste (in-place).
+    // Filtert unterdrueckte Befunde aus der Liste (in-place). Emittiert
+    // zusaetzlich fkUnusedSuppression-Findings fuer Marker die KEIN
+    // Finding suppress't haben - Hinweis fuer den User die Suppression
+    // zu entfernen.
     class procedure ApplyToFindings(
       Findings: TObjectList<TLeakFinding>); static;
   private
@@ -43,6 +56,11 @@ type
       out Kind: TFindingKind): Boolean; static;
     class function BuildMap(const FileName: string): TDictionary<Integer,
       TSuppressedKinds>; static;
+    // Sammelt alle '// noinspection X'-Marker einer Datei. Wird komplementaer
+    // zu BuildMap genutzt: BuildMap fuer den Filter-Lookup (O(1) Target->Kinds),
+    // BuildMarkers fuer den Unused-Tracking-Output (Marker->Quell-Zeile).
+    class procedure BuildMarkers(const FileName: string;
+      Markers: TList<TSuppressionMarker>); static;
   end;
 
 implementation
@@ -191,18 +209,75 @@ begin
   end;
 end;
 
+class procedure TSuppression.BuildMarkers(const FileName: string;
+  Markers: TList<TSuppressionMarker>);
+var
+  Lines : TStringList;
+  Kinds : TSuppressedKinds;
+  i, j  : Integer;
+  L     : string;
+  M     : TSuppressionMarker;
+begin
+  if not FileExists(FileName) then Exit;
+  Lines := TStringList.Create;
+  try
+    try
+      Lines.LoadFromFile(FileName);
+    except
+      try Lines.LoadFromFile(FileName, TEncoding.UTF8);
+      except
+        try Lines.LoadFromFile(FileName, TEncoding.Unicode);
+        except Exit;
+        end;
+      end;
+    end;
+    for i := 0 to Lines.Count - 1 do
+    begin
+      if not ParseComment(Lines[i], Kinds) then Continue;
+      // TargetLine = naechste non-empty + non-comment Zeile (= Code).
+      // Wir tracken NUR den Code-Target weil das der harte Suppress-Punkt
+      // ist; Doc-Comment-Targets sind ambig (z.B. TodoComment-Suppression
+      // auf den TODO-Kommentar selbst) und fuer Unused-Tracking irrelevant.
+      var TargetLine: Integer := -1;
+      for j := i + 1 to Lines.Count - 1 do
+      begin
+        L := TrimLeft(Lines[j]);
+        if L = '' then Continue;
+        if not L.StartsWith('//') then
+        begin
+          TargetLine := j + 1;
+          Break;
+        end;
+      end;
+      if TargetLine <= 0 then Continue;        // Marker am EOF - kein Target
+      M.MarkerLine := i + 1;
+      M.TargetLine := TargetLine;
+      M.Kinds      := Kinds;
+      M.Consumed   := False;
+      Markers.Add(M);
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
 class procedure TSuppression.ApplyToFindings(
   Findings: TObjectList<TLeakFinding>);
 var
-  FileMaps   : TObjectDictionary<string, TDictionary<Integer, TSuppressedKinds>>;
-  i, Line    : Integer;
-  F          : TLeakFinding;
-  Map        : TDictionary<Integer, TSuppressedKinds>;
-  Suppressed : TSuppressedKinds;
+  FileMaps     : TObjectDictionary<string, TDictionary<Integer, TSuppressedKinds>>;
+  FileMarkers  : TObjectDictionary<string, TList<TSuppressionMarker>>;
+  i, j, Line   : Integer;
+  F            : TLeakFinding;
+  Map          : TDictionary<Integer, TSuppressedKinds>;
+  Markers      : TList<TSuppressionMarker>;
+  M            : TSuppressionMarker;
+  Suppressed   : TSuppressedKinds;
+  NewFinding   : TLeakFinding;
 begin
   if (Findings = nil) or (Findings.Count = 0) then Exit;
 
-  FileMaps := TObjectDictionary<string, TDictionary<Integer, TSuppressedKinds>>.Create([doOwnsValues]);
+  FileMaps    := TObjectDictionary<string, TDictionary<Integer, TSuppressedKinds>>.Create([doOwnsValues]);
+  FileMarkers := TObjectDictionary<string, TList<TSuppressionMarker>>.Create([doOwnsValues]);
   try
     // Rueckwaerts iterieren – sicher beim Loeschen
     for i := Findings.Count - 1 downto 0 do
@@ -220,9 +295,53 @@ begin
       if Line <= 0 then Continue;
 
       if Map.TryGetValue(Line, Suppressed) and (F.Kind in Suppressed) then
+      begin
+        // Marker-Liste fuer diese Datei aufbauen wenn noch nicht da -
+        // wird gleich fuer das Consumed-Tagging gebraucht.
+        if not FileMarkers.TryGetValue(F.FileName, Markers) then
+        begin
+          Markers := TList<TSuppressionMarker>.Create;
+          BuildMarkers(F.FileName, Markers);
+          FileMarkers.Add(F.FileName, Markers);
+        end;
+        // Marker als consumed markieren wenn TargetLine + Kind passen.
+        // TList<T> erlaubt nicht direkten Index-Edit auf records via
+        // for-in, daher Index-basierter Loop mit explizitem Schreibzugriff.
+        for j := 0 to Markers.Count - 1 do
+        begin
+          M := Markers[j];
+          if (M.TargetLine = Line) and (F.Kind in M.Kinds) then
+          begin
+            M.Consumed := True;
+            Markers[j] := M;
+          end;
+        end;
         Findings.Delete(i);
+      end;
     end;
+
+    // Zweite Phase: fkUnusedSuppression-Findings fuer Marker emittieren
+    // die KEIN Finding suppress't haben. Damit das nicht ausartet wenn
+    // ein Marker mehrere Kinds suppresst und nur eines davon greift,
+    // emittieren wir EIN Finding pro Marker (nicht pro nicht-getroffenes
+    // Kind im Set).
+    for var Pair in FileMarkers do
+      for M in Pair.Value do
+        if not M.Consumed then
+        begin
+          NewFinding := TLeakFinding.Create;
+          NewFinding.FileName   := Pair.Key;
+          NewFinding.MethodName := '';
+          NewFinding.LineNumber := IntToStr(M.MarkerLine);
+          NewFinding.MissingVar :=
+            '// noinspection-Marker suppresst nichts - Detektor wurde ' +
+            'verbessert oder Target war falsch. Marker entfernen oder ' +
+            'Target-Kind pruefen.';
+          NewFinding.SetKind(fkUnusedSuppression);
+          Findings.Add(NewFinding);
+        end;
   finally
+    FileMarkers.Free;
     FileMaps.Free;
   end;
 end;

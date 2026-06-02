@@ -127,7 +127,9 @@ type
                  // Audit-Nachzug (Todo_neuerdetector-Checkliste):
                  // fm-Filter fuer Detektoren die ihn nie bekamen.
                  fmCommandInjection, fmInsecureCryptoAlgorithm,
-                 fmUnusedRoutine, fmNoSonarMarker);
+                 fmUnusedRoutine, fmNoSonarMarker,
+                 // SCA165 - Unused-Suppression-Marker
+                 fmUnusedSuppression);
 
   // Zweiter Filter (orthogonal zu Schweregrad): Sonar-Typ-Kategorie.
   TTypeFilter = (tfAll, tfBug, tfCodeSmell, tfVulnerability,
@@ -349,6 +351,7 @@ begin
     fkInsecureCryptoAlgorithm    : Result := 'insecure crypto md5 sha1 des rc4 tls ssl algorithmus schwach veraltet';
     fkUnusedRoutine              : Result := 'unused routine top-level procedure function ungenutzt dead code';
     fkNoSonarMarker              : Result := 'nosonar marker legacy migration noinspection suppression';
+    fkUnusedSuppression          : Result := 'unused suppression noinspection marker obsolete hygiene cleanup';
   else
     Result := '';
   end;
@@ -539,6 +542,7 @@ begin
     fmInsecureCryptoAlgorithm:       Result := F.Kind = fkInsecureCryptoAlgorithm;
     fmUnusedRoutine:                 Result := F.Kind = fkUnusedRoutine;
     fmNoSonarMarker:                 Result := F.Kind = fkNoSonarMarker;
+    fmUnusedSuppression:             Result := F.Kind = fkUnusedSuppression;
   else
     Result := True;   // fmAll, fmDetectorReview - der Caller wendet die
                       // Stichproben-Logik selber an, Matches laesst hier

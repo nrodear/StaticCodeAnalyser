@@ -3225,6 +3225,25 @@
       "impacts": [
         { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
       ]
+    },
+    {
+      "id": "SCA165",
+      "kind": "UnusedSuppression",
+      "name": "Unused noinspection marker",
+      "shortDescription": "A `// noinspection X` marker does not suppress any finding at its target line - either the detector improved (suppression no longer needed) or the suppression target was wrong",
+      "fullDescription": "The suppression filter (uSuppression) records every `// noinspection KindName` comment and the next code line it targets. After all detectors finish, the filter checks which markers actually suppressed a finding. Markers that never fired are reported as fkUnusedSuppression at the marker line - the user should remove the marker (detector evolution made it obsolete) or check whether the target kind name was wrong. False-negative-resistant: only markers with a clear non-comment target line are considered (markers at EOF or in pure doc-comment blocks are ignored). Profile-aware: in the default profile this hint shows up; users who want suppression-hygiene reports without detector noise can run with --profile selftest-quiet.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["suppression", "maintainability", "hygiene"],
+      "detectorUnit": "uSuppression.pas",
+      "examples": {
+        "bad":  "// noinspection MemoryLeak\nWriteLn('hello');   // no leak here - suppression never fires",
+        "good": "// (Marker entfernt - das Tool flaggt diese Zeile nicht mehr.)\nWriteLn('hello');"
+      },
+      "cleanCodeAttribute": "CLEAR",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     }
   ]
 }

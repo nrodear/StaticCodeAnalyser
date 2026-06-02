@@ -548,12 +548,18 @@ type
                                  // Argument - mit untrusted Input = Command-
                                  // Injection-Risiko. Confidence-Default fcLow,
                                  // da ohne Taint-Tracking heuristisch.
-    fkUnusedRoutine              // SCA164 - top-level Procedure/Function im
+    fkUnusedRoutine,             // SCA164 - top-level Procedure/Function im
                                  // Unit-Scope die nirgendwo aufgerufen wird.
                                  // Schliesst die Luecke zwischen SCA147
                                  // (nur class private) und SCA148+ (nur class
                                  // public). Single-File-Scope mit Self-Call-
                                  // Exclusion (analog SonarDelphi UnusedRoutine).
+    fkUnusedSuppression          // SCA165 - '// noinspection X'-Marker der
+                                 // an seiner Position kein Finding suppressed
+                                 // hat. Hinweis: Detektor wurde verbessert
+                                 // (Suppression nicht mehr noetig) ODER
+                                 // Suppression-Target war falsch gesetzt.
+                                 // Emittiert vom uSuppression-Post-Filter.
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -774,7 +780,8 @@ const
     (Name: 'PointerSubtraction';         FindingType: ftBug;          DefaultSeverity: lsWarning), // fkPointerSubtraction
     (Name: 'InsecureCryptoAlgorithm';    FindingType: ftVulnerability;DefaultSeverity: lsWarning), // fkInsecureCryptoAlgorithm
     (Name: 'CommandInjection';           FindingType: ftVulnerability;DefaultSeverity: lsError),   // fkCommandInjection
-    (Name: 'UnusedRoutine';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkUnusedRoutine
+    (Name: 'UnusedRoutine';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkUnusedRoutine
+    (Name: 'UnusedSuppression';          FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkUnusedSuppression
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

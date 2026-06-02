@@ -1118,6 +1118,8 @@ begin
   // Audit-Nachzug (Todo_neuerdetector-Checkliste)
   Add('Unused Routine',                           fmUnusedRoutine);
   Add('NOSONAR Marker (legacy)',                  fmNoSonarMarker);
+  // SCA165 - Unused-Suppression-Marker
+  Add('Unused noinspection Marker',               fmUnusedSuppression);
 
   FFilterCombo.ItemIndex := 0; // "All"
 end;

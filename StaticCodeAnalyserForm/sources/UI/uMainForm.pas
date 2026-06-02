@@ -348,6 +348,7 @@ begin
   SeverityFilterCombo.Items.AddObject(_('Insecure Crypto Algo'),         TObject(Ord(fmInsecureCryptoAlgorithm)));
   SeverityFilterCombo.Items.AddObject(_('Unused Routine'),               TObject(Ord(fmUnusedRoutine)));
   SeverityFilterCombo.Items.AddObject(_('NOSONAR Marker (legacy)'),      TObject(Ord(fmNoSonarMarker)));
+  SeverityFilterCombo.Items.AddObject(_('Unused noinspection Marker'),   TObject(Ord(fmUnusedSuppression)));
   SeverityFilterCombo.ItemIndex := 0;
 
   TypeFilterCombo.Items.Add(_('All'));
