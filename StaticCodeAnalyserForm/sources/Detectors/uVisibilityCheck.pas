@@ -67,6 +67,9 @@ type
 
 implementation
 
+uses
+  uSymbolReferenceIndex;
+
 const
   EMIT_SEVERITY = lsHint;
 
@@ -368,6 +371,17 @@ var
 
     if (OwnRefs = 0) and (SubRefs = 0) and (OtherRefs = 0) then
     begin
+      // Phase-4 A.3 minimal: nur fuer fkUnusedPublicMember den Cross-Unit-
+      // Index konsultieren. Wenn der Index vorhanden + nicht-leer ist und
+      // eine externe Unit den Member referenziert -> kein "dead public API"-
+      // Finding (typischer FP: API-Surface eines Plugins / Helper-Klasse).
+      // Single-File-Modus (Index leer): Fallback auf alte Heuristik mit
+      // SingleFileSuffix-Caveat. Die anderen 3 Kinds (CanBe*) bleiben
+      // unangetastet bis Audit ihrer FP-Cluster.
+      if Assigned(gSymbolRefIndex) and not gSymbolRefIndex.IsEmpty
+         and gSymbolRefIndex.HasExternalRefs(MemberLow,
+               ExtractFileName(FileName)) then
+        Exit;
       // Niemand in dieser Datei ruft den Member. Echt tot ODER fremde Unit
       // konsumiert ihn (typischer single-file-FP: API-Surface eines Plugins).
       K := fkUnusedPublicMember;

@@ -67,7 +67,33 @@ Files matchend gegen `uTest*.pas` / `*Sample.pas` / `*Demo.pas` /
 intentional-Fixtures rot.
 **Risiko**: niedrig — Heuristik ist konservativ, opt-in via Profile.
 
-### A.3 Cross-Unit-Symbol-Index für SCA052/107
+### A.3 Cross-Unit-Symbol-Index für SCA052/107 — **🟡 TEIL-ERLEDIGT (2026-06-02)**
+
+**Stand A.3-Minimal (commit folgt):**
+- `uVisibilityCheck` konsultiert `gSymbolRefIndex.HasExternalRefs` für
+  `fkUnusedPublicMember` (SCA052) — wenn Member extern referenziert ist,
+  wird kein "Dead public API"-Finding emittiert.
+- Sanity-Check: `TLeakFinding.SetKind` (klar Cross-Unit) ist NICHT mehr
+  als SCA052 geflaggt. Index wirkt.
+- Real-World-Scan (D:\git-demos\delphi, 2 752 Files): SCA052 = 6 130.
+- Andere Visibility-Kinds (SCA050/SCA107/CanBeProtected) noch
+  Single-File — Audit ihrer FP-Cluster ist separater Schritt.
+
+**Bekannte Limitation:** Index sammelt nur `nkCall` + `nkAssign` mit
+`Obj.Member`-Pattern. Property-Reads / Function-without-Paren
+(`F.SeverityText`) werden NICHT erfasst → `SeverityText`/`FindingType`/
+`TypeText` bleiben fälschlich als SCA052 geflaggt obwohl in 19 Files
+referenziert.
+
+**Follow-up A.3+ (eigener Sprint):**
+- Index um `nkRef`/Identifier-Use ohne Call erweitern (in
+  uSymbolReferenceIndex.AddRefsFromNode) → restliche value-use-FPs
+  würden verschwinden.
+- Dann analog SCA050 (CanBeUnitPrivate) und SCA107 (CanBeStrictPrivate)
+  am Index dranhängen.
+- Konzept-Estimate ~580 FPs ist für die ganze Familie; A.3-Minimal hat
+  nur Teilmenge davon erschlossen.
+
 
 **Problem**: SCA052 (Dead public API) + SCA107 (strict-private candidate)
 + SCA050 (unit-private candidate) sind by-design single-file-Scope —
