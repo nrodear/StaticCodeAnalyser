@@ -116,9 +116,13 @@ begin
 end;
 
 procedure TLeakFinding.SetKind(K: TFindingKind);
+// Setzt Kind + Severity + Confidence aus KIND_META / KindDefaultConfidence.
+// Detektoren die einen anderen Confidence-Level brauchen, ueberschreiben
+// .Confidence danach explizit (z.B. uCommandInjection := fcLow).
 begin
-  Kind     := K;
-  Severity := KindDefaultSeverity(K);
+  Kind       := K;
+  Severity   := KindDefaultSeverity(K);
+  Confidence := KindDefaultConfidence(K);
 end;
 
 function TLeakFinding.SeverityText: string;

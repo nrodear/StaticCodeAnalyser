@@ -24,26 +24,30 @@ Marginal-Hebel: die großen FP-Cluster (FieldName, RedundantJump,
 GroupedDecl, FreeWithoutNil, ...) sind durch. Was bleibt sind
 strukturelle Grenzen der heutigen Heuristik.
 
-### A.1 Confidence-Tagging pro Detektor — **Quick-Win**
+### A.1 Confidence-Tagging pro Detektor — **✅ ERLEDIGT (2026-06-02)**
 
 **Problem**: Heute laufen ALLE Detektoren mit `fcHigh` (Default).
-Confidence-Filter (`MinConfidence`) ist da (commit Confidence-Filter), wird
-aber von keinem Detektor genutzt. Resultat: Profile `default` zeigt
-Style-Heuristiken auf Augenhöhe mit echten Bugs.
+Confidence-Filter (`MinConfidence`) ist da, wird aber von keinem Detektor
+genutzt. Resultat: Profile `default` zeigt Style-Heuristiken auf Augenhöhe
+mit echten Bugs.
 
-**Maßnahme**: Audit der 156 Detektoren, ~30 davon explizit auf `fcLow`
-oder `fcMedium` taggen. Beispiele:
-- `fkCanBeClassMethod` (SCA148) → `fcMedium` (Refactor-Hint, nicht Bug)
-- `fkCommandInjection` (SCA163) → `fcLow` (heuristisch ohne Taint)
-- `fkSqlInjection` (SCA…) → `fcMedium` (ohne Daten-Fluss)
-- `fkUnusedRoutine` (SCA164) → `fcHigh` (klare Logik) — bleibt
-- `fkHardcodedSecret` (SCA004) → `fcMedium` (Pattern-Match, kein Wert-Check)
+**Umsetzung**:
+- Zentrale Funktion `KindDefaultConfidence(K)` in
+  [uSCAConsts.pas](StaticCodeAnalyserForm/sources/Common/uSCAConsts.pas)
+  (case-Statement; Default = `fcHigh`, ~35 Kinds explizit `fcMedium`)
+- `TLeakFinding.SetKind` zieht Confidence aus `KindDefaultConfidence`
+- 3 Detektoren mit direktem `F.Kind :=` (uDivByZero, uLeakDetector2,
+  uCustomRuleDetector) explizit ergänzt
+- Override bleibt möglich: `uCommandInjection` setzt `fcLow` nach SetKind
+- Audit-Doku: [docs/ConfidenceAudit.md](docs/ConfidenceAudit.md)
+- Tests in uTestConfidenceFilter: 4 neue Tests
+  (`KindDefaultConfidence_*`, `SetKind_AppliesKindDefaultConfidence`)
 
-**Aufwand**: 1 Tag (Audit + Code-Edits + Tests anpassen).
-**Wirkung**: `--profile default` blendet ~40% der heutigen Notes
-automatisch aus, ohne Information zu verlieren.
-**Risiko**: niedrig — Default-Schwellwert bleibt fcMedium, User der
-fcLow will, bekommt sie via `--min-confidence low`.
+**Aufwand-Ist**: ~3h
+**Wirkung**: `--min-confidence high` blendet jetzt strukturell die
+~35 heuristischen Kinds aus. Default-Profil unverändert (`fcMedium`-
+Schwelle zeigt alles ausser `fcLow`-Overrides).
+**Risiko**: niedrig — kein Detektor-Code geändert ausser den 3 Direkt-Settern.
 
 ### A.2 Test-Fixture-Auto-Detection — **Quick-Win**
 

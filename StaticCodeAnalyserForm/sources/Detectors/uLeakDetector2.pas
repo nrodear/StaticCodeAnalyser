@@ -705,6 +705,7 @@ class procedure TLeakDetector2.AnalyzeMethod(MethodNode: TAstNode;
     F.MissingVar := MissingVar;
     F.Severity   := Sev;
     F.Kind       := fkMemoryLeak;
+    F.Confidence := KindDefaultConfidence(fkMemoryLeak);
     Results.Add(F);
   end;
 

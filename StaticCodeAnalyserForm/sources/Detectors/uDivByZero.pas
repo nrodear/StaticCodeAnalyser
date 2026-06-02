@@ -273,6 +273,7 @@ class procedure TDivByZeroDetector.AnalyzeMethod(MethodNode: TAstNode;
     F.MissingVar := Detail;
     F.Severity   := Sev;
     F.Kind       := fkDivByZero;
+    F.Confidence := KindDefaultConfidence(fkDivByZero);
     Results.Add(F);
   end;
 

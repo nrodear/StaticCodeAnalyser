@@ -803,6 +803,19 @@ function KindFromName(const Name: string; out K: TFindingKind): Boolean;
 // werden, muss diese Funktion auf eine Whitelist umgestellt werden.
 function IsSonarDelphiKind(K: TFindingKind): Boolean;
 
+// Default-Konfidenz pro TFindingKind (Phase-1 A.1 Audit). Die meisten
+// Detektoren sind sicher (fcHigh) - heuristische Pattern-Matcher und
+// Metrik-basierte Hints sind als fcMedium markiert, damit sie im
+// Default-Profil (FindingMinConfidence=fcMedium) sichtbar bleiben aber
+// per --min-confidence high ausgeblendet werden koennen.
+//   fcLow    - Detektoren die explizit niedrig sein wollen (z.B.
+//              uCommandInjection ohne Taint-Tracking) setzen
+//              Confidence selbst nach SetKind herab.
+//   fcMedium - Pattern-Match-/Metrik-basiert, gelegentliche FPs
+//   fcHigh   - struktureller Bug-Match, klare Logik (Default)
+// Begruendung pro Kind: siehe docs/ConfidenceAudit.md.
+function KindDefaultConfidence(K: TFindingKind): TFindingConfidence;
+
 // Lesbarer Name einer Konfidenz-Stufe ('low'/'medium'/'high') - fuer
 // Config-Serialisierung, SARIF-Rank und UI.
 function ConfidenceName(C: TFindingConfidence): string;
@@ -871,6 +884,65 @@ end;
 function KindDefaultSeverity(K: TFindingKind): TLeakSeverity;
 begin
   Result := KIND_META[K].DefaultSeverity;
+end;
+
+function KindDefaultConfidence(K: TFindingKind): TFindingConfidence;
+// Phase-1 A.1 Confidence-Audit. Listet die Kinds die NICHT als fcHigh
+// gelten. Default (else-Pfad) = fcHigh. Begruendung pro Eintrag:
+// docs/ConfidenceAudit.md.
+begin
+  case K of
+    // --- Pattern-Match-basiert (rein lexikalisch / regex) ---
+    fkHardcodedSecret,           // 'password=...'-Heuristik ohne Wert-Check
+    fkHardcodedPath,             // C:\...-Pattern, viele OK-Faelle (Tests)
+    fkHardcodedString,           // Lokalisierbarer String, kontextabhaengig
+    fkTodoComment,               // rein lexikalisch, Triage-Hint
+    fkCommentedOutCode,          // Heuristik, Round 13 fixt grossen Teil aber FPs bleiben
+    fkDuplicateString,           // Token-Match, viele triviale Hits
+    fkDuplicateBlock,            // LOC-Toleranz, FP bei boilerplate
+    fkMagicNumber,               // viele konventionell-OK-Faelle (0,1,-1,100)
+    fkDebugOutput,               // WriteLn kann legitim sein (CLI-Tools)
+
+    // --- Metric-basiert (Schwellwert-Heuristik) ---
+    fkLongMethod,
+    fkLongParamList,
+    fkLargeClass,
+    fkGodClass,
+    fkDeepNesting,
+    fkCyclomaticComplexity,
+    fkCaseStatementSize,
+
+    // --- Style-/Refactor-Praeferenzen ---
+    fkBooleanParam,              // legitim bei Toggles
+    fkMultipleExit,              // Kontroverses Style-Thema
+    fkCanBeClassMethod,          // statische Method-Refactor-Hint
+    fkCanBeUnitPrivate,          // Single-File-Scope (Cross-Unit-Index off)
+    fkCanBeProtected,            //  "
+    fkCanBeStrictPrivate,        //  "
+    fkPublicMemberWithoutDoc,    // viele triviale Methoden brauchen keinen Doc
+    fkConstantReturn,            // legitim bei Default-Implementierungen
+    fkUnusedParameter,           // legitim bei Interface-Impl
+    fkUnusedPublicMember,        // Single-File-Scope FP-Risiko
+    fkUnusedPrivateMethod,       // RTTI/DFM-Konsumenten unsichtbar
+
+    // --- Schema-Heuristik (DFM ohne vollen Schema-Index) ---
+    fkDfmDefaultName,
+    fkDfmHardcodedCaption,
+    fkDfmFieldTypeMismatch,
+    fkDfmTabOrderConflict,
+    fkDfmForbiddenClass,
+    fkDfmLayerViolation,
+    fkDfmGodHandler,
+    fkDfmDbInUiForm,
+
+    // --- Security-Heuristik ohne Datenfluss ---
+    fkSQLInjection,              // ohne Taint-Tracking, viele Konst-Strings
+    fkInsecureCryptoAlgorithm    // Pattern-Match auf Algo-Namen
+    : Result := fcMedium;
+
+  else
+    Result := fcHigh;
+  end;
 end;
 
 function KindFromName(const Name: string; out K: TFindingKind): Boolean;

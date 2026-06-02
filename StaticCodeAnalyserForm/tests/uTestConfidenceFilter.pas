@@ -17,6 +17,11 @@ type
     [Test] procedure ParseConfidence_KnownValues;
     [Test] procedure ParseConfidence_UnknownUsesDefault;
     [Test] procedure ConfidenceName_RoundTrip;
+    // ---- A.1 Confidence-Audit ----
+    [Test] procedure KindDefaultConfidence_BugKindsAreHigh;
+    [Test] procedure KindDefaultConfidence_MetricsAreMedium;
+    [Test] procedure KindDefaultConfidence_PatternMatchersAreMedium;
+    [Test] procedure SetKind_AppliesKindDefaultConfidence;
     // ---- Filter ----
     [Test] procedure Medium_DropsLowOnly;
     [Test] procedure Low_IsNoOp;
@@ -75,6 +80,72 @@ begin
   // Name -> Parse -> Name ist stabil
   Assert.AreEqual<TFindingConfidence>(fcLow,
     ParseConfidence(ConfidenceName(fcLow)));
+end;
+
+{ ---- A.1 Confidence-Audit ---- }
+
+procedure TTestConfidenceFilter.KindDefaultConfidence_BugKindsAreHigh;
+// Struktureller Bug-Match -> fcHigh
+begin
+  Assert.AreEqual<TFindingConfidence>(fcHigh,
+    KindDefaultConfidence(fkMemoryLeak));
+  Assert.AreEqual<TFindingConfidence>(fcHigh,
+    KindDefaultConfidence(fkUseAfterFree));
+  Assert.AreEqual<TFindingConfidence>(fcHigh,
+    KindDefaultConfidence(fkNilDeref));
+  Assert.AreEqual<TFindingConfidence>(fcHigh,
+    KindDefaultConfidence(fkFreeWithoutNil));
+  Assert.AreEqual<TFindingConfidence>(fcHigh,
+    KindDefaultConfidence(fkUnusedRoutine));
+  Assert.AreEqual<TFindingConfidence>(fcHigh,
+    KindDefaultConfidence(fkUnusedSuppression));
+end;
+
+procedure TTestConfidenceFilter.KindDefaultConfidence_MetricsAreMedium;
+// Metrik-Schwellwerte sind heuristisch -> fcMedium
+begin
+  Assert.AreEqual<TFindingConfidence>(fcMedium,
+    KindDefaultConfidence(fkLongMethod));
+  Assert.AreEqual<TFindingConfidence>(fcMedium,
+    KindDefaultConfidence(fkLongParamList));
+  Assert.AreEqual<TFindingConfidence>(fcMedium,
+    KindDefaultConfidence(fkCyclomaticComplexity));
+  Assert.AreEqual<TFindingConfidence>(fcMedium,
+    KindDefaultConfidence(fkGodClass));
+end;
+
+procedure TTestConfidenceFilter.KindDefaultConfidence_PatternMatchersAreMedium;
+// Pattern-/Heuristik-Detektoren -> fcMedium
+begin
+  Assert.AreEqual<TFindingConfidence>(fcMedium,
+    KindDefaultConfidence(fkHardcodedSecret));
+  Assert.AreEqual<TFindingConfidence>(fcMedium,
+    KindDefaultConfidence(fkHardcodedPath));
+  Assert.AreEqual<TFindingConfidence>(fcMedium,
+    KindDefaultConfidence(fkTodoComment));
+  Assert.AreEqual<TFindingConfidence>(fcMedium,
+    KindDefaultConfidence(fkCommentedOutCode));
+  Assert.AreEqual<TFindingConfidence>(fcMedium,
+    KindDefaultConfidence(fkMagicNumber));
+end;
+
+procedure TTestConfidenceFilter.SetKind_AppliesKindDefaultConfidence;
+// SetKind muss Confidence aus KindDefaultConfidence ziehen - sonst landen
+// neue fcMedium-Tags nie bei den Detektoren.
+var F: TLeakFinding;
+begin
+  F := TLeakFinding.Create;
+  try
+    F.SetKind(fkLongMethod);
+    Assert.AreEqual<TFindingConfidence>(fcMedium, F.Confidence,
+      'SetKind soll fcMedium fuer Metrik-Kind setzen');
+
+    F.SetKind(fkMemoryLeak);
+    Assert.AreEqual<TFindingConfidence>(fcHigh, F.Confidence,
+      'SetKind soll fcHigh fuer Bug-Kind setzen');
+  finally
+    F.Free;
+  end;
 end;
 
 { ---- Filter ---- }

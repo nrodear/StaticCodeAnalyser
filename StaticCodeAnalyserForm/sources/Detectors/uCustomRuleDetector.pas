@@ -408,6 +408,7 @@ begin
           F.MissingVar := IfThen(R.Message <> '', R.Message, R.Name);
           F.Severity := R.Severity;
           F.Kind := fkCustomRule;
+          F.Confidence := KindDefaultConfidence(fkCustomRule);
           F.RuleID := R.ID;
           Results.Add(F);
         end;
