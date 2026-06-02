@@ -73,6 +73,10 @@ type
     SonarConfig   : string;         // --sonar-config <path>      alternative INI
     // ---- Perf-Diagnostik ----
     TimeDetectors : Boolean;        // --time-detectors           pro-Detektor-Timing-Tabelle nach Scan
+    // ---- Findings-Filter ----
+    HideTestFixtures : Boolean;     // --hide-test-fixtures       drop findings aus uTest*/Sample/Demo-Files
+    HideTestExplicit : Boolean;     // True wenn HideTestFixtures vom User explizit gesetzt wurde
+                                    //   (Auto-Default je nach Profile sonst).
     ParseError    : string;         // nicht-leer wenn Args invalid
   end;
 
@@ -106,6 +110,7 @@ uses
   uSCAConsts, uStaticAnalyzer2, uVcsChanges, uRepoSettings,
   uExportSARIF, uExportHtml, uCustomRuleDetector,
   uExportSonarGeneric, uSonarConfig,
+  uDetectorUtils,                     // TDetectorUtils.IsTestFixturePath
   uBaseline;
 
 // Forward-Decl: ApplyFailOnPolicy wird von TConsoleRunner.Run gerufen,
@@ -154,7 +159,9 @@ begin
   Result.Branch      := False;
   Result.ReportSarif := '';
   Result.ReportHtml  := '';
-  Result.TimeDetectors := False;
+  Result.TimeDetectors    := False;
+  Result.HideTestFixtures := False;
+  Result.HideTestExplicit := False;
   Result.Quiet       := False;
   Result.BaseDir     := '';
   Result.CustomRules := '';
@@ -247,6 +254,16 @@ begin
       GetValue(Result.SonarConfig, '--sonar-config')
     else if A = '--time-detectors' then
       Result.TimeDetectors := True
+    else if A = '--hide-test-fixtures' then
+    begin
+      Result.HideTestFixtures := True;
+      Result.HideTestExplicit := True;
+    end
+    else if A = '--show-test-fixtures' then
+    begin
+      Result.HideTestFixtures := False;
+      Result.HideTestExplicit := True;
+    end
     else
     begin
       Result.ParseError := Format('Unbekannter Switch: %s', [A]);
@@ -402,6 +419,14 @@ begin
   WriteLn('                        ueber den Scan. Markdown-Tabelle am Ende.');
   WriteLn('                        Identifiziert Hot-Path-Detektoren fuer');
   WriteLn('                        gezielte Optimierung.');
+  WriteLn('');
+  WriteLn('Findings-Filter:');
+  WriteLn('  --hide-test-fixtures  Findings aus uTest*/Sample/Demo-Files ausblenden.');
+  WriteLn('                        Auto-On bei --profile default/selftest-quiet,');
+  WriteLn('                        Auto-Off bei --profile strict.');
+  WriteLn('                        Explizit setzbar via --hide- / --show-test-fixtures.');
+  WriteLn('  --show-test-fixtures  Komplement: behaelt Test-Fixture-Findings');
+  WriteLn('                        auch bei default-Profile.');
   WriteLn('');
   WriteLn('Other:');
   WriteLn('  --help, -h, -?, /?    Show this help');
@@ -653,6 +678,20 @@ begin
     if Args.TimeDetectors then
       gDetectorTimings := TDictionary<string, TPair<Int64, Integer>>.Create;
 
+    // Test-Fixture-Auto-Default je nach Profile (wenn vom User nicht
+    // explizit per --hide-/--show-test-fixtures ueberschrieben):
+    //   * strict         -> AUS (User will alles sehen)
+    //   * default        -> AN  (Production-Code-Focus)
+    //   * selftest-quiet -> AN  (Dogfooding ohne Fixture-Noise)
+    //   * andere/custom  -> AUS (konservativer Default)
+    var EffectiveHideTestFixtures: Boolean;
+    if Args.HideTestExplicit then
+      EffectiveHideTestFixtures := Args.HideTestFixtures
+    else
+      EffectiveHideTestFixtures :=
+        SameText(Settings.Profile, 'default') or
+        SameText(Settings.Profile, 'selftest-quiet');
+
     try
       // Diff-Mode A<->B: nur die Dateien die zwischen den Commits geaendert
       // wurden. PR-Review-Use-Case (vs Branch: Working-Tree + commits).
@@ -707,6 +746,27 @@ begin
 
     if Findings = nil then
       Findings := TObjectList<TLeakFinding>.Create(True);
+
+    // ---- Test-Fixture-Filter (vor Baseline + Output) ----
+    // Findings aus uTest*/Sample/Demo-Files droppen wenn Profile dies
+    // verlangt (Auto-Default) bzw. --hide-test-fixtures explizit gesetzt.
+    // fkFileReadError bleibt drin (Diagnostic-Befund), kein Profile-Filter.
+    if EffectiveHideTestFixtures then
+    begin
+      var FixtureDropped := 0;
+      for var i := Findings.Count - 1 downto 0 do
+      begin
+        if Findings[i].Kind = fkFileReadError then Continue;
+        if TDetectorUtils.IsTestFixturePath(Findings[i].FileName) then
+        begin
+          Findings.Delete(i);
+          Inc(FixtureDropped);
+        end;
+      end;
+      if (not Args.Quiet) and (FixtureDropped > 0) then
+        WriteLn(Format('Test-fixture filter: %d findings dropped ' +
+          '(uTest*/Sample/Demo/MeineUnit/resources)', [FixtureDropped]));
+    end;
 
     // ---- Baseline-Filter (vor Output / Exit-Code) ----
     if Args.Baseline <> '' then

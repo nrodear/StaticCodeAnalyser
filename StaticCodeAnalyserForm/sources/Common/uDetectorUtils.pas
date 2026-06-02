@@ -33,6 +33,25 @@ type
     // Wortgrenze rechts vom Punkt erkannt werden.
     class function IsIdentChar(Ch: Char): Boolean; static; inline;
 
+    // True wenn FileName auf ein bekanntes Test-/Demo-Fixture-Pattern
+    // matched. Konsumenten (CLI, IDE-Filter) koennen Findings aus solchen
+    // Files optional ausblenden - die enthalten meist absichtliche Bugs
+    // fuer Detektor-Tests bzw. Demo-Code mit nicht-produktiven Patterns.
+    //
+    // Patterns:
+    //   * Basename matched 'uTest*.pas', '*_Test.pas', '*_Tests.pas',
+    //     '*TestSuite*.pas', '*Sample.pas', '*Demo.pas', '*Sample_*.pas',
+    //     '*_Demo_*.pas'
+    //   * Pfad enthaelt '/test/', '/tests/', '/unittest/', '/samples/',
+    //     '/demos/', '/resources/' (= Form-Designer-Resourcen-Folder)
+    //   * Spezifische bekannte Demo-Files: 'MeineUnit.pas', 'uOrderForm.pas',
+    //     'uCustomerForm.pas' (im SCA-Repo intentionally-buggy Beispiele)
+    //
+    // Komplementaer zu TIgnoreList.IsTestPath (nur Test-Files): erweitert
+    // um Demo-/Sample-Patterns und ist als Post-Filter-Heuristik gedacht,
+    // NICHT als Scan-Exclusion-Mechanismus (TIgnoreList).
+    class function IsTestFixturePath(const FileName: string): Boolean; static;
+
     // Sucht Needle in Haystack, beide bereits lower-case, mit Wortgrenzen-
     // Pruefung links UND rechts. Liefert 1-basierte Position oder 0.
     // Beispiele:
@@ -109,6 +128,7 @@ implementation
 uses
   System.SysUtils,               // TStringBuilder
   System.Generics.Collections,   // TList<Integer>
+  System.Masks,                  // MatchesMask fuer Test-Fixture-Patterns
   System.StrUtils;               // PosEx
 
 class function TDetectorUtils.IsIdentChar(Ch: Char): Boolean;
@@ -117,6 +137,45 @@ begin
          or ((Ch >= 'A') and (Ch <= 'Z'))
          or ((Ch >= '0') and (Ch <= '9'))
          or (Ch = '_');
+end;
+
+class function TDetectorUtils.IsTestFixturePath(const FileName: string): Boolean;
+const
+  // Basename-Globs - matcht den File-Namen ohne Pfad.
+  FIXTURE_FILE_PATTERNS : array[0..9] of string = (
+    'uTest*.pas',       // DUnit-Tests
+    '*_Test.pas',
+    '*_Tests.pas',
+    '*TestSuite*.pas',
+    '*Sample.pas',      // Sample-Demos
+    '*_Sample_*.pas',
+    '*Demo.pas',        // Generische Demos
+    '*_Demo_*.pas',
+    'MeineUnit.pas',    // SCA-Repo intentionally-buggy demo
+    '*Demo.dfm'         // Form-Designer-Demos
+  );
+  // Pfad-Substring (normalisiert mit /), case-insensitive.
+  FIXTURE_DIR_PARTS : array[0..6] of string = (
+    'test',          // Singular: /test/
+    'tests',         // Plural: /tests/
+    'unittest',
+    'unittests',
+    'samples',
+    'demos',
+    'resources'      // /resources/-Folder enthalten Form-Templates
+  );
+var
+  Bare, FullLow : string;
+  Pat, DirPart  : string;
+begin
+  Result := False;
+  if FileName = '' then Exit;
+  Bare    := ExtractFileName(FileName);
+  FullLow := FileName.Replace('\', '/').ToLower;
+  for DirPart in FIXTURE_DIR_PARTS do
+    if Pos('/' + DirPart + '/', FullLow) > 0 then Exit(True);
+  for Pat in FIXTURE_FILE_PATTERNS do
+    if MatchesMask(Bare, Pat) then Exit(True);
 end;
 
 class function TDetectorUtils.FindWholeWordLower(const Needle,
