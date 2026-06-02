@@ -144,7 +144,8 @@ begin
          or (Ch = '_');
 end;
 
-class function TDetectorUtils.IsTestFixturePath(const FileName: string): Boolean;
+class function TDetectorUtils.IsTestFixturePath(const FileName: string;
+  const BaseDir: string): Boolean;
 const
   // Basename-Globs - matcht den File-Namen ohne Pfad.
   FIXTURE_FILE_PATTERNS : array[0..9] of string = (
