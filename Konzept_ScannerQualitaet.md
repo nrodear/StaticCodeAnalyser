@@ -85,14 +85,43 @@ intentional-Fixtures rot.
 `TypeText` bleiben fälschlich als SCA052 geflaggt obwohl in 19 Files
 referenziert.
 
-**Follow-up A.3+ (eigener Sprint):**
-- Index um `nkRef`/Identifier-Use ohne Call erweitern (in
-  uSymbolReferenceIndex.AddRefsFromNode) → restliche value-use-FPs
-  würden verschwinden.
-- Dann analog SCA050 (CanBeUnitPrivate) und SCA107 (CanBeStrictPrivate)
-  am Index dranhängen.
-- Konzept-Estimate ~580 FPs ist für die ganze Familie; A.3-Minimal hat
-  nur Teilmenge davon erschlossen.
+**Follow-up A.3+ (eigener Sprint):** Audit (Spot-Check 18 Methoden,
+8/18 = 44% A.3-Wirkung) hat 3 Index-Limitationen offengelegt, die als
+priorisierte Roadmap die restlichen ~56% erschließen würden:
+
+1. **`nkRef`-Sammlung in `AddRefsFromNode`** — Index sammelt heute nur
+   `nkCall` + `nkAssign` mit `Obj.Member`-Pattern. Value-uses ohne
+   Klammern (`F.SeverityText`, Property-Reads, function-without-paren)
+   werden nicht erfasst.
+   *Geschätzt:* ~25-40% der verbleibenden FPs.
+
+2. **Class-Function-Calls `TKlasse.ClassMethod(args)`** — werden vom
+   Index nicht als `Obj.Member`-Pattern erkannt obwohl der nkCall.Name
+   den qualifizierten Namen enthält. Vermutlich AST-Parser klassifiziert
+   `TKlasse` als TypeRef statt als Receiver. Beispiele aus Audit:
+   `TConfidenceFilter.ApplyToFindings`, `TRuleCatalog.GetRule`,
+   `TFindingFingerprint.ContextHash`, `TSymbolReferenceIndex.HasExternalRefs`.
+   *Geschätzt:* ~30-40% der verbleibenden FPs.
+
+3. **Bare-Calls ohne Receiver** (`Fingerprint(F)` statt
+   `Self.Fingerprint(F)`) — heute bewusst ausgeklammert weil zu viele
+   FPs (jeder `Writeln` würde als hypothetischer public Writeln-Member
+   zählen). Lösung: nur indexieren wenn der bare Call-Name mit einem
+   in der Datenbank deklarierten public Member-Namen kollidiert (= Cross-
+   Reference statt blind sammeln). *Aufwendiger, niedrigere Priorität.*
+
+4. Nach 1-3: analog SCA050 (CanBeUnitPrivate) und SCA107
+   (CanBeStrictPrivate) am Index dranhängen — derzeit alle Single-File.
+
+5. Klassen-Filter `RTTI_DRIVEN_BASES` erweitern um IDE-spezifische
+   Bases (Audit zeigt `uIDEAnalyserForm.pas` mit 17 SCA052, vermutlich
+   nicht direkt `TForm`-Descendant).
+
+**Library-FP-Klasse (nicht behebbar):** Real-World-Scan zeigt: Top-Files
+mit SCA052 sind alle externe Libraries (`mormot.*`, `MVCFramework`).
+Public-API für Cross-Repo-Konsumenten kann der Index per definitionem
+nicht sehen. Empfehlung: per Path-Override-Default für `vendor/`-
+ähnliche Ordner SCA052 ausblenden (separate Maßnahme).
 
 
 **Problem**: SCA052 (Dead public API) + SCA107 (strict-private candidate)

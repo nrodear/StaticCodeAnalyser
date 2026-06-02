@@ -378,9 +378,15 @@ var
       // Single-File-Modus (Index leer): Fallback auf alte Heuristik mit
       // SingleFileSuffix-Caveat. Die anderen 3 Kinds (CanBe*) bleiben
       // unangetastet bis Audit ihrer FP-Cluster.
+      //
+      // FileName MUSS der volle Pfad sein - der Index speichert intern
+      // LowerCase(FromUnit) mit Vollpfad (siehe uSymbolReferenceIndex.
+      // AddReference). Wer hier nur den Basename uebergibt, vergleicht
+      // "name.pas" gegen "d:\...\name.pas" und der Self-Match schlaegt nie
+      // an -> Self-Refs wuerden als extern gewertet -> A.3 wird permissiver
+      // als beabsichtigt.
       if Assigned(gSymbolRefIndex) and not gSymbolRefIndex.IsEmpty
-         and gSymbolRefIndex.HasExternalRefs(MemberLow,
-               ExtractFileName(FileName)) then
+         and gSymbolRefIndex.HasExternalRefs(MemberLow, FileName) then
         Exit;
       // Niemand in dieser Datei ruft den Member. Echt tot ODER fremde Unit
       // konsumiert ihn (typischer single-file-FP: API-Surface eines Plugins).
