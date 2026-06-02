@@ -202,6 +202,7 @@
         <DCCReference Include="sources\Infrastructure\uExport.pas"/>
         <DCCReference Include="sources\Infrastructure\uExportHtml.pas"/>
         <DCCReference Include="sources\Infrastructure\uFileTextCache.pas"/>
+        <DCCReference Include="sources\Infrastructure\uFindingFingerprint.pas"/>
         <DCCReference Include="sources\Infrastructure\uFormBinder.pas"/>
         <DCCReference Include="sources\Infrastructure\uIgnoreList.pas"/>
         <DCCReference Include="sources\Infrastructure\uConfidenceFilter.pas"/>

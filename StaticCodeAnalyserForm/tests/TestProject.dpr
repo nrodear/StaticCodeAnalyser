@@ -65,6 +65,7 @@ uses
   uTestPerformance      in 'uTestPerformance.pas',
   uTestRuleCatalog      in 'uTestRuleCatalog.pas',
   uTestExportSARIF      in 'uTestExportSARIF.pas',
+  uTestFindingFingerprint in 'uTestFindingFingerprint.pas',
   uTestExportSonarGeneric in 'uTestExportSonarGeneric.pas',
   uTestSonarConfig      in 'uTestSonarConfig.pas',
   uTestYamlSubsetParser in 'uTestYamlSubsetParser.pas',

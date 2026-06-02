@@ -225,20 +225,27 @@ einzelne SRC-Strings — keine Regression-Bewachung gegen Real-World-Code.
 **Wirkung**: jeder zukünftige Detector-Fix ist regression-gesichert.
 **Risiko**: niedrig.
 
-### C.2 SARIF-PartialFingerprints für Baseline-Diff
+### C.2 SARIF-PartialFingerprints für Baseline-Diff — **✅ ERLEDIGT (2026-06-02)**
 
 **Problem**: aktuelles Baseline-System (`--baseline`/`--write-baseline`)
-nutzt File+Line+Kind als Fingerprint. Edge-Case: Refactor verschiebt
-Code → "neue" Findings obwohl identisch.
+nutzt File+Kind+Method+Detail als Fingerprint. Edge-Case: Method-Rename
+oder Verschieben in andere Methode → "neue" Findings obwohl identisch.
 
-**Maßnahme**: Stabile Fingerprint-Hash über Finding-Inhalt + Code-Snippet
-(±3 Zeilen Kontext, Whitespace-normalisiert). SARIF-Standard hat das
-PartialFingerprints-Feld dafür.
+**Umsetzung**:
+- Neue Unit `uFindingFingerprint.pas` (Infrastructure) mit
+  `ContextHash(F)` über ±3 Zeilen Snippet, whitespace-normalisiert
+  (Tabs→Space, WS-Runs kollabiert, Leerzeilen verworfen, Trim)
+- SARIF: zusätzliches Feld `partialFingerprints.contextHash/v1`
+  neben dem bisherigen `primaryLocationLineHash`
+- Baseline.Write: speichert `contextHash` zusätzlich pro Entry
+- Baseline.Apply: matched contextHash ODER legacy fingerprint
+  (alte Baselines bleiben gültig — kein Migrations-Lauf nötig)
+- Tests in `uTestFindingFingerprint.pas` (10 Tests, decken
+  Normalisierung + Line-Drift + Backward-Compat ab)
 
-**Aufwand**: 1d.
-**Wirkung**: Baseline überlebt kleine Code-Refactors → CI-Quality-Gate
-robuster.
-**Risiko**: niedrig — Migration alter Baselines via Auto-Refresh.
+**Aufwand-Ist**: ~4h
+**Wirkung**: Baseline überlebt Re-Indent, Method-Rename, Line-Drift.
+**Risiko**: niedrig — Backward-Compat ist Code-Pfad, kein Auto-Refresh nötig.
 
 ### C.3 `// noinspection`-Unused-Tracking — **Quick-Win**
 

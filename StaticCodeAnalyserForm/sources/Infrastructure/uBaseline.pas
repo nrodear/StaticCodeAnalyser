@@ -52,7 +52,8 @@ type
 implementation
 
 uses
-  System.JSON, System.IOUtils;
+  System.JSON, System.IOUtils,
+  uFindingFingerprint;
 
 class function TBaseline.Fingerprint(const F: TLeakFinding): string;
 var
@@ -87,6 +88,11 @@ begin
       Obj.AddPair('detail',      F.MissingVar);
       Obj.AddPair('line',        F.LineNumber);
       Obj.AddPair('fingerprint', Fingerprint(F));
+      // C.2: zusaetzlich Code-Snippet-Hash. Leer wenn Datei nicht lesbar -
+      // dann faellt Apply auf den legacy fingerprint zurueck.
+      var Ctx := TFindingFingerprint.ContextHash(F);
+      if Ctx <> '' then
+        Obj.AddPair('contextHash', Ctx);
       Arr.AddElement(Obj);
     end;
 
@@ -108,15 +114,23 @@ end;
 
 class function TBaseline.Apply(Findings: TObjectList<TLeakFinding>;
   const BaselineFile: string): Integer;
+// Match-Strategie (C.2):
+//   1. Wenn Finding einen contextHash hat UND der in der Baseline ist
+//      -> Drop (stabilster Pfad, ueberlebt Line-Drift + Re-Indent).
+//   2. Sonst: legacy fingerprint pruefen (File+Kind+Method+Detail).
+//   Backward-compat: alte Baselines ohne contextHash matchen weiter via 2.
 var
   Raw       : string;
   Root      : TJSONValue;
   Arr       : TJSONArray;
   Obj       : TJSONValue;
   FpJson    : TJSONValue;
-  Set_      : TDictionary<string, Boolean>;
+  CtxJson   : TJSONValue;
+  FpSet     : TDictionary<string, Boolean>;
+  CtxSet    : TDictionary<string, Boolean>;
   i         : Integer;
   F         : TLeakFinding;
+  FCtx      : string;
 begin
   Result := 0;
   if (Findings = nil) or (BaselineFile = '') then Exit;
@@ -126,7 +140,8 @@ begin
   Root := TJSONObject.ParseJSONValue(Raw);
   if Root = nil then Exit;
 
-  Set_ := TDictionary<string, Boolean>.Create;
+  FpSet  := TDictionary<string, Boolean>.Create;
+  CtxSet := TDictionary<string, Boolean>.Create;
   try
     if Root is TJSONObject then
       Arr := TJSONObject(Root).Values['findings'] as TJSONArray
@@ -141,7 +156,11 @@ begin
         begin
           FpJson := TJSONObject(Obj).Values['fingerprint'];
           if (FpJson <> nil) and not FpJson.Null then
-            Set_.AddOrSetValue(FpJson.Value, True);
+            FpSet.AddOrSetValue(FpJson.Value, True);
+          CtxJson := TJSONObject(Obj).Values['contextHash'];
+          if (CtxJson <> nil) and not CtxJson.Null
+             and (CtxJson.Value <> '') then
+            CtxSet.AddOrSetValue(CtxJson.Value, True);
         end;
 
     // Rueckwaerts iterieren wegen Delete
@@ -149,14 +168,17 @@ begin
     begin
       F := Findings[i];
       if F.Kind = fkFileReadError then Continue;
-      if Set_.ContainsKey(Fingerprint(F)) then
+      FCtx := TFindingFingerprint.ContextHash(F);
+      if ((FCtx <> '') and CtxSet.ContainsKey(FCtx))
+         or FpSet.ContainsKey(Fingerprint(F)) then
       begin
         Findings.Delete(i);     // owns - F wird freigegeben
         Inc(Result);
       end;
     end;
   finally
-    Set_.Free;
+    FpSet.Free;
+    CtxSet.Free;
     Root.Free;
   end;
 end;

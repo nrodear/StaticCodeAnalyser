@@ -217,6 +217,7 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uSymbolReferenceIndex.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uAstFileCache.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uFileTextCache.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uFindingFingerprint.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uVcsChanges.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uRepoSettings.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uSonarConfig.pas"/>

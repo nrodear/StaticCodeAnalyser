@@ -51,7 +51,7 @@ implementation
 
 uses
   System.IOUtils, System.JSON, System.Hash, System.StrUtils,
-  uSCAConsts, uRuleCatalog;
+  uSCAConsts, uRuleCatalog, uFindingFingerprint;
 
 { ---- Helpers ---- }
 
@@ -192,6 +192,7 @@ var
   Meta    : TRuleMeta;
   Msg     : string;
   RuleID  : string;
+  CtxHash : string;
 begin
   Arr := TJSONArray.Create;
   for F in AFindings do
@@ -234,9 +235,15 @@ begin
     ResObj.AddPair('locations', Locs);
 
     // partialFingerprints fuer GitHub-Dedup
+    //   primaryLocationLineHash : line-dependent, fuer Cross-Commit-Dedup
+    //   contextHash/v1          : Code-Snippet-basiert (Konzept C.2), stabil
+    //                             gegen Line-Drift + Whitespace-Refactor
     FpObj := TJSONObject.Create;
     FpObj.AddPair('primaryLocationLineHash',
       FingerprintHash(RuleID, RelPath, LineNo, Msg));
+    CtxHash := TFindingFingerprint.ContextHash(F);
+    if CtxHash <> '' then
+      FpObj.AddPair('contextHash/' + CONTEXT_HASH_VERSION, CtxHash);
     ResObj.AddPair('partialFingerprints', FpObj);
 
     Arr.AddElement(ResObj);
