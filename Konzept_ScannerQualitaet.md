@@ -208,18 +208,20 @@ durchgehen, pro Tag 1-2 neue Detektoren nach
 Kein Detector-Code-Change nötig, aber große Wirkung auf Iterations-Speed
 und Vertrauen.
 
-### C.1 Golden-Corpus-Regression-Tests — **Quick-Win**
+### C.1 Golden-Corpus-Regression-Tests — **✅ ERLEDIGT (2026-06-02)**
 
 **Problem**: Jeder Detector-Fix dieser Session hat das Risiko, FUTURE-FPs
 zurück zu bringen (Detector-Regression). Heutige DUnit-Tests prüfen
 einzelne SRC-Strings — keine Regression-Bewachung gegen Real-World-Code.
 
-**Maßnahme**: Folder `tests/golden-corpus/` mit echten `.pas`-Dateien
-+ erwarteter Findings-Liste (`expected.sarif`). CI-Step: scanne corpus,
-diff gegen expected. Pro FP-Fix wandert die "vorher-FP-Datei" als
-Negativ-Beispiel rein.
+**Umsetzung**:
+- `tests/golden-corpus/fp-reproducers/` enthält 5 historische FP-Repro-Snippets
+  (`fp01..fp05`, je 1 Round-Fix aus der FP-Reduction-Session)
+- `expected.json` pro File: `must_not_flag`-Liste mit den gefixten Rules
+- `tools/check-golden-corpus.ps1` scant Corpus + diffed gegen Erwartung
+- Exit 0/1 → CI-tauglich; siehe `tests/golden-corpus/README.md`
 
-**Aufwand**: 4h Setup, dann laufende Pflege.
+**Aufwand-Ist**: ~3h (1h Snippets, 1h Runner, 1h README/Doku)
 **Wirkung**: jeder zukünftige Detector-Fix ist regression-gesichert.
 **Risiko**: niedrig.
 

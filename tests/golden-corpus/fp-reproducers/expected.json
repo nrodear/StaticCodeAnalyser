@@ -1,0 +1,26 @@
+{
+  "comment": "Erwartete Findings pro fpNN-Reproducer-File. Leere Liste = NEGATIV-Test (Datei soll KEINE Findings produzieren).",
+  "comment2": "Bei Bedarf Ausnahmen ('unavoidable' Findings die echten Code-Smell zeigen) als Liste {ruleId,line} eintragen.",
+  "files": {
+    "fp01_HardcodedSecret_metafield.pas": {
+      "must_not_flag": ["SCA004"],
+      "expected_findings": []
+    },
+    "fp02_RedundantJump_inner_end.pas": {
+      "must_not_flag": ["SCA080"],
+      "expected_findings": []
+    },
+    "fp03_PublicField_multiline_method.pas": {
+      "must_not_flag": ["SCA089", "SCA103"],
+      "expected_findings": []
+    },
+    "fp04_FreeWithoutNil_local.pas": {
+      "must_not_flag": ["SCA139"],
+      "expected_findings": []
+    },
+    "fp05_CommentedOutCode_docblock.pas": {
+      "must_not_flag": ["SCA070"],
+      "expected_findings": []
+    }
+  }
+}
