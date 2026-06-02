@@ -1,265 +1,84 @@
-# Release 0.9.3 — 2026-05-27
+# Release 0.9.8 — Phase 1 Quick-Wins + Phase 4 begun
 
 🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md)
 
-A polish release focused on **IDE-plugin theme reliability in docked-mode**,
-**file encoding correctness**, and **annotation-overlay usability** when
-multiple findings sit on the same line. No new detectors (count stays at
-161); the changes target reliability, visual consistency, and false-positive
-reduction.
+Full release notes: [docs/releases/v0.9.8.md](docs/releases/v0.9.8.md)
+([deutsch](docs/releases/v0.9.8_de.md)).
+
+13 commits since v0.9.7. Phase 1 of
+[Konzept_ScannerQualitaet.md](Konzept_ScannerQualitaet.md) is complete
+(6/6 quick-wins); Phase 4 has begun with the A.3-Minimal cross-unit
+visibility check. A multi-persona review (Architecture + Security +
+Performance) hardened the code along the way.
 
 ## Highlights
 
-- **Docked-mode IDE-theme refresh now works for the entire plugin**, not
-  just the grid. Tiles, toolbar panels, help-panel caption and before/after
-  memos now follow IDE theme switches reliably — previously only the grid
-  picked up the new theme while everything else stayed in the old colors.
-- **IDE plugin announces itself in the start sequence** — splash-screen
-  entry + About-Box registration via the standard ToolsAPI splash/about
-  services.
-- **File encoding detection** — BOM-sniff → strict-UTF-8-validation →
-  Windows-1252 fallback. Fixes mojibake on ANSI files with German umlauts
-  in the unit header (the old code forced UTF-8 with lenient byte
-  substitution).
-- **Multi-finding annotation hint shows full descriptions** per finding,
-  not just titles. When two or three findings share the same line, the
-  overlay no longer collapses them to a title list.
-- **FloatEquality false-positive on string comparisons fixed** —
-  `aValue = ''` (string) is no longer reported as a float-equality bug,
-  even when another function in the same file has `aValue: Double` as
-  a parameter.
-- **Visible per-tile border** in the Sonar stats row using `clBtnShadow`
-  (was `cl3DDkShadow` — collapsed onto the chrome background in many
-  IDE themes).
-- **~80× faster theme switch** via cold/warm Apply split (per-Descendant
-  ApplyTheme only on first apply; subsequent switches reuse style hooks).
+- **`--time-detectors` Markdown report** — per-detector cumulative
+  wall-time + call count.
+- **Test-fixture auto-detection** — findings from `uTest*.pas` /
+  `*Sample.pas` / `*Demo.pas` / test/samples/demos/resources directories
+  are filtered out in `default` and `selftest-quiet` profiles. Repo-root-
+  anchored against silent-drop attacks.
+- **SCA165 `UnusedSuppression`** — `// noinspection X` markers that
+  never suppressed a finding are themselves flagged.
+- **Golden-corpus FP-regression suite** — 5 historical FP reproducers,
+  PowerShell runner, CI-ready exit code.
+- **SARIF + Baseline `contextHash/v1`** — SHA256 over a whitespace-
+  normalised ±3-line snippet. Baselines survive small refactors.
+  Backward-compatible with legacy baselines.
+- **Confidence audit (35 kinds → `fcMedium`)** — heuristic / metric /
+  style / DFM-schema / no-data-flow-security kinds tagged. Per-kind
+  justifications in [`docs/ConfidenceAudit.md`](docs/ConfidenceAudit.md).
+- **A.3-Minimal: SCA052 cross-unit reactivated** — `gSymbolRefIndex`
+  is now consulted for `fkUnusedPublicMember`. Spot-check shows 44 %
+  of cross-unit methods correctly recognised; 56 % follow-up scope
+  documented in `Konzept_ScannerQualitaet.md §A.3+`.
 
----
+## Security hardening (multi-persona review)
 
-## 🎨 IDE-plugin theme reliability (NEW)
+- **`// noinspection All`** excludes security-critical kinds
+  (`fkHardcodedSecret`, `fkSQLInjection`, `fkCommandInjection`,
+  `fkDfmHardcodedDbCreds`, `fkDfmSqlFromUserInput`,
+  `fkInsecureCryptoAlgorithm`, `fkUnusedSuppression`). Single-marker
+  backdoor bypass mitigated.
+- **`ParseMarkerLine`** uses `TDetectorUtils.ScanCodeLine` — string-/
+  block-comment-context-aware. Markers inside string literals no longer
+  treated as active.
+- **Baseline JSON** hardened with `MAX_BASELINE_ENTRIES = 1_000_000`
+  and `MAX_FINGERPRINT_LEN = 256` against OOM attacks.
 
-The IDE plugin can run **floating** (its own window) or **docked** (as a
-tab inside the IDE main window or a side bar). Theme handling between
-the two modes diverged significantly in the VCL/ToolsAPI stack, and
-0.9.2 only worked correctly when floating.
+## Performance
 
-### Symptoms before
+- **`gFileTextCache` lives through the post-scan phase** — Suppression,
+  ContextHash and SARIF/baseline output reuse the warm cache instead
+  of re-reading every file. Eliminates ~191k redundant `LoadFromFile`
+  + UTF-8 validations per real-world scan.
+- **`TFileTextCache` is mtime-aware** — stale entries auto-invalidate.
+- **`uVisibilityCheck`** caches `AllUnitMethods` + memoises
+  `DescendantsOf` per unit instead of per-public-member.
 
-Switch IDE → Options → Theme: only the result grid picked up the new
-colors. Tiles, toolbar background, path/filter panels, the help-panel
-caption, and before/after memos remained in the previous theme until
-the IDE was restarted.
+## Migration
 
-### Diagnosis
+No breaking changes. Existing baselines work as-is (matched via legacy
+fingerprint); new baselines additionally carry `contextHash`. Detector
+authors with `F.Confidence := xxx` after `SetKind` should migrate to
+the new `SetKind(K, AConfidence)` overload — the old pattern still
+works.
 
-Three independent root causes:
-
-1. **`IOTAIDEThemingServices.ApplyTheme` doesn't propagate transitively**
-   through a `TFrame` to its descendants in Delphi 12. Only controls the
-   caller passes directly get their style hooks updated.
-2. **`Vcl.Themes.StyleServices` (global) stays stale in docked mode** —
-   `Theming.ApplyTheme(IDE-Main-Form)` doesn't update the VCL-global
-   `StyleServices`, so custom paint code reading `clBtnFace` via the
-   global service gets the previous theme's RGB.
-3. **System-color identifiers (`TPanel.Color := clBtnFace`) are resolved
-   at paint time** against the stale VCL-global, not against the IDE's
-   theming service.
-
-### Solution: per-Descendant 5-step apply pipeline
-
-`uIDETheme.TIDETheme.Apply` now walks the entire control tree under the
-frame and, per node:
-
-1. Apply IDE-style-hook via `IOTAIDEThemingServices.ApplyTheme`.
-2. Preserve `StyleElements - [seClient]` across the apply (snapshot +
-   restore). Lets controls keep their explicit `Color` instead of being
-   overpainted by the style hook.
-3. Resolve `Color` and `Font.Color` against the IDE-theme's
-   `StyleServices` and write the concrete RGB back. The original
-   identifier (`clBtnFace`, `clWindow`, ...) is cached per control so
-   subsequent theme switches still resolve correctly.
-4. Bind to the IDE style by setting `TControl.StyleName := IdeStyle.Name`
-   (Delphi 10.4+ per-control routing). This is what fixes `TButton`,
-   `TStringGrid` header/border, `TComboBox`, `TProgressBar`,
-   `TStatusBar` — they go through VCL-StyleHooks that previously read
-   from the stale VCL-global.
-5. `Invalidate` (with explicit `Repaint` on `TCustomGrid` descendants
-   that have their own paint cache).
-
-The key win: this avoids the 2-second IDE hang that
-`TStyleManager.SetStyle` would cause — `SetStyle` broadcasts
-`CM_STYLECHANGED` over every form in `Screen.Forms[]` (50+ forms ×
-1000+ controls per form). Per-control `StyleName` gives the same
-visual outcome for the plugin's own controls without the broadcast.
-
-See [Konzept_DockedThemeRefresh.md](Konzept_DockedThemeRefresh.md) for
-the full diagnostic trail.
-
----
-
-## 🛠 IDE plugin start-sequence integration
-
-The plugin now registers itself in the IDE start-up sequence with the
-standard ToolsAPI hooks:
-
-- **Splash-screen entry** during IDE boot (the box that lists "Bundled
-  in this product..." — your plugin shows up there alongside
-  GExperts/CnPack/etc.).
-- **About-Box entry** — Help → About... → "Static Code Analyser" with
-  version + description.
-
-Visible confirmation that the plugin loaded correctly without opening
-the tool window.
-
----
-
-## 🧰 Visual polish
-
-### Per-tile border (Sonar stats row)
-
-The 9 stat tiles (Errors / Warnings / Hints / Read errors / Bugs /
-Security / Duplicates / Cyclomatic / Quality) now have a visible 1 px
-border drawn in `clBtnShadow` (theme-aware via
-`ActiveStyleServices.GetSystemColor`). Previously `cl3DDkShadow` was
-used, which collapses onto `clBtnFace` (the tile background) in many
-themes — the border was technically drawn but invisible.
-
-### "Quality" caption
-
-`FTileScore` caption shortened from "Code Quality" to "Quality" (tile
-label + hover tooltip title). The status-bar score line keeps the long
-form — different context, more room.
-
-### Stats row 2 px taller
-
-`STATS_PANEL_HEIGHT 51 → 53` gives glyph + count + caption more vertical
-breathing room. Tiles inherit the panel height via `alLeft`.
-
-### Toolbar simplification
-
-The IDE-plugin toolbar dropped from 4 rows to 3 (Path / Filter+Search /
-Stats). Less-used actions (Branch, Save, Quit, Settings, Ignore,
-Export, Profile) moved into a hamburger menu. The Analyse button and
-filter/severity combos stay always-visible. Responsive layout still
-toggles labels and combo widths on width thresholds.
-
----
-
-## 🔧 Infrastructure fixes
-
-### Encoding detection (file cache)
-
-`uFileTextCache` previously called `LoadFromFile(file, TEncoding.UTF8)`
-which is lenient — invalid UTF-8 bytes get silently replaced with
-U+FFFD (replacement character), and the explicit-fallback `except`
-branch never fired. Result: ANSI files with German umlauts (`ä`, `ö`,
-`ü` in unit headers, copyright comments) came through with mojibake.
-
-The new `LoadFileSmart` helper does three-stage detection:
-
-1. **BOM sniff** (UTF-8 / UTF-16 LE / UTF-16 BE) — if present, use
-   that encoding and skip the BOM bytes.
-2. **No BOM, all bytes form well-formed UTF-8** (RFC 3629 validation)
-   — use UTF-8.
-3. **Otherwise** — `TEncoding.Default` (Windows-1252 on a typical
-   Windows install).
-
-Both `TFileTextCache.GetLines` (cached path) and `AcquireLines`
-(fallback path) go through `LoadFileSmart` now.
-
-### Multi-finding annotation overlay
-
-When two or more findings sit on the same source line, the editor
-annotation overlay used to collapse them into a summary with bullet
-list of titles only — descriptions were dropped. The bullet list now
-includes each finding's full description indented under the title:
+## Commit log
 
 ```
-• PointerArithmeticOnString  [Warning]
-   String + integer addition treated as pointer arithmetic ...
-• UseAfterFree  [Error]
-   Variable accessed after FreeAndNil ...
+1e7e193  fix(cache):       mtime-aware cache-invalidation
+2b723f7  fix(build):       IsTestFixturePath impl signature
+120894a  fix(review):      9 review findings (Sec + Perf + API)
+e18323d  refactor:         Clean-code fixes (DRY, SRP, naming)
+3054630  fix(visibility):  A.3 OwnUnit path + roadmap update
+0ab0bf4  feat(visibility): A.3-Minimal — gSymbolRefIndex for SCA052
+a8c7c35  feat(confidence): A.1 audit — ~35 kinds as fcMedium
+91ae2ec  feat(baseline):   C.2 SARIF contextHash + baseline match
+7b957a8  test(corpus):     C.1 Golden-corpus + runner
+c0234d7  feat(suppression):C.3 Unused-suppression tracking (SCA165)
+57a0b06  feat(filter):     A.2 Test-fixture auto-detection
+1b5a145  fix(perf):        gDetectorTimings in interface section
+79b4f56  feat(cli):        --time-detectors flag
 ```
-
-Title / severity / stripe-color still come from the strongest finding.
-Fix-hint remains suppressed in multi-mark (showing only one fix would
-be misleading).
-
-### FloatEquality detector — false-positive on string compares
-
-The lexical detector strips strings and comments before scanning for
-`<var> = <token>` patterns. Empty string literals (`''`) were replaced
-with two spaces, which let the regex bridge over them and pick up the
-next token. Concrete failure mode:
-
-```pascal
-if aValue = '' then Exit;    // aValue: string
-```
-
-…was reported as `Float equality (aValue = then) is unreliable` —
-because `aValue: Double` existed as a parameter in another function in
-the same file (file-wide `FloatVars`), and `'' → spaces → regex skipped
-to "then"`. The detector also called the Pascal keyword `then` the RHS.
-
-Fix: stripped string content now uses `~` (not `\w`, not `\s`) as the
-marker. The regex `\s*[\w.]+` fails at the first `~`, so cross-string
-matches no longer happen. New regression test:
-`StringEqualityWithFloatVarNameElsewhere_NotReported`.
-
----
-
-## ⚡ Theme-switch performance
-
-The Apply pipeline keeps a per-control snapshot of the original color
-identifiers (`FOrigColors: TDictionary<Pointer, TControlColors>`). On
-first apply per control the original `clBtnFace` / `clWindow` value is
-stored; on every subsequent theme switch the cache returns the
-identifier and resolution runs against the fresh IDE-style — fixing
-the "second-switch bug" where Color had already been written as
-concrete RGB and lost the `clSystemColor` bit.
-
-Combined with the cold/warm split (per-Descendant `ApplyTheme` only
-once; later switches skip the style-hook registration), full theme
-switch time dropped from ~2 s of broadcast-driven repaints to under
-~25 ms.
-
----
-
-## 🧱 Code structure
-
-- `uIDETheme.TIDEThemeImpl.ApplyRecursive` refactored — was an 80-line
-  procedure with four mixed concerns, now four named helpers
-  (`ApplyStyleHookPreserveSeClient`, `ResolveDescendantColors`,
-  `BindToIdeStyle`, `TriggerRepaint`) plus a 15-line walker.
-- `TIDEThemeImpl.RebuildCache` reads from
-  `IOTAIDEThemingServices.StyleServices` instead of the VCL-global —
-  matches the rest of the pipeline and avoids stale docked-mode colors
-  in `FrameBg` / `FrameFg`.
-- `EngineSCA/` folder renamed to `SCA.Engine/` (preparation for a later
-  project-split into Engine / Standalone+CLI / IDE-Plugin / Tests, see
-  [Konzept_ProjektAufteilung.md](Konzept_ProjektAufteilung.md)).
-
----
-
-## Compatibility
-
-- **Delphi 12 Athens** only (no behavioral changes to the supported
-  Delphi version since v0.9.2).
-- **Rule catalog** — no schema changes; same 161 kinds as v0.9.2.
-- **CLI flags** — no changes; existing `--sonar-*` flags work as before.
-- **Save format** — unchanged.
-
----
-
-## Upgrade
-
-```bash
-git pull
-git checkout v0.9.3
-# Build the three projects (Standalone, Tests, IDE-Plugin) or use the
-# group project: StaticCodeAnalyser.d12.groupproj → Build All.
-```
-
-No configuration migration required. IDE-plugin users: uninstall the
-old `.bpl` via Component → Install Packages first, then re-install the
-new build.

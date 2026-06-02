@@ -6,6 +6,123 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased] - Phase 1 Quick-Wins + Phase 4 begun (since v0.9.7)
+
+13 commits since v0.9.7 (released 2026-06-01). Phase 1 of
+[Konzept_ScannerQualitaet.md](Konzept_ScannerQualitaet.md) is complete
+(6/6 quick-wins); Phase 4 has begun with the A.3-Minimal cross-unit
+visibility check. A subsequent multi-persona review hardened the code
+on Security, Performance, and API dimensions.
+
+Full release notes: [docs/releases/v0.9.8.md](docs/releases/v0.9.8.md)
+([deutsch](docs/releases/v0.9.8_de.md)).
+
+### Added
+
+- **`--time-detectors` CLI flag** — emits a Markdown table with per-detector
+  cumulative wall-time and call count after a scan. Drives data-based
+  optimisation choices.
+- **Test-fixture auto-detection** (`uDetectorUtils.IsTestFixturePath`) —
+  filters findings from `uTest*.pas` / `*Sample.pas` / `*Demo.pas`,
+  test/samples/demos/resources directories and known fixture files. Auto-on
+  for `default` and `selftest-quiet` profiles, off for `strict`. Manual
+  overrides via `--hide-test-fixtures` / `--show-test-fixtures`.
+- **SCA165 `UnusedSuppression`** — emits a hint when a `// noinspection X`
+  marker did not suppress any finding (detector improved → marker obsolete).
+- **Golden-corpus regression tests** in `tests/golden-corpus/fp-reproducers/`
+  — 5 historical FP reproducer `.pas` files (one per Round-1..13 fix) plus
+  `expected.json` and `tools/check-golden-corpus.ps1` PowerShell runner.
+- **SARIF `partialFingerprints.contextHash/v1`** — SHA256 over a
+  whitespace-normalised ±3-line snippet around the finding. Stable against
+  re-indent, line drift and method renames (when method header lies outside
+  the radius). Survives baseline diffs that the legacy fingerprint would
+  miss.
+- **Baseline matches via `contextHash` OR legacy fingerprint** — old
+  baselines remain valid; new ones survive small refactors.
+- **`KindDefaultConfidence` in `uSCAConsts`** — ~35 heuristic /
+  metric-based / DFM-schema kinds tagged as `fcMedium`. `TLeakFinding.SetKind`
+  applies the default automatically. `--min-confidence high` now blends
+  out heuristic findings without losing structural-bug coverage.
+  Audit table: [docs/ConfidenceAudit.md](docs/ConfidenceAudit.md).
+- **`TLeakFinding.SetKind(K, AConfidence)`** overload — explicit
+  Confidence-passing instead of the order-fragile post-`SetKind` overwrite.
+  `uCommandInjection` migrated.
+- **A.3-Minimal: `gSymbolRefIndex` reactivated** for `fkUnusedPublicMember`
+  (SCA052) — cross-unit caller lookup, no more dead-public-API false
+  positives for symbols actually called via `obj.Method(args)`. Audit shows
+  44% of known cross-unit methods now correctly recognised; remaining 56%
+  documented as A.3+ follow-up (nkRef + class-function-call index limits).
+
+### Changed
+
+- **`gFileTextCache` lives through the post-scan phase** — Suppression,
+  ContextHash and SARIF/baseline output reuse the warm cache instead of
+  re-reading every file. Eliminates ~191k redundant `LoadFromFile` +
+  UTF-8 validations per real-world scan.
+- **`TFileTextCache` is now mtime-aware** — stale cache entries are
+  invalidated on next `GetLines` if the file's `FileAge` no longer matches.
+- **`uSuppression.BuildMap` / `BuildMarkers` use `AcquireLines`** — second
+  call for the same file is a cache hit instead of a duplicate read.
+- **`uSuppression.ApplyToFindings` split** into three methods
+  (`ApplyToFindings` orchestrator + `RemoveSuppressedFindings` +
+  `EmitUnusedSuppressionFindings`).
+- **`uVisibilityCheck`** caches `AllUnitMethods` (`FindAll(nkMethod)`)
+  and memoises `DescendantsOf(ClassLow)` once per `AnalyzeUnit` — previously
+  re-walked the tree per public member, costing up to `O(members × methods)`.
+- **`uFindingFingerprint.Normalize`** extracted inner whitespace-collapse
+  into `CollapseWhitespace(Line, Sb)` and reuses a single TStringBuilder
+  per call instead of allocating per snippet line.
+- **`TryLoadLinesWithFallback` in `uFileTextCache`** — single source of
+  truth for the 3-step encoding fallback (default → UTF-8 → Unicode).
+  Removed duplicate in `uSuppression`.
+
+### Security
+
+- **`// noinspection All` excludes security-critical kinds**
+  (`fkHardcodedSecret`, `fkSQLInjection`, `fkCommandInjection`,
+  `fkDfmHardcodedDbCreds`, `fkDfmSqlFromUserInput`,
+  `fkInsecureCryptoAlgorithm`, `fkUnusedSuppression`). These must be
+  named explicitly. Prevents a single `All` marker from hiding a backdoor.
+- **`ParseMarkerLine` routes through `TDetectorUtils.ScanCodeLine`** —
+  string-/block-comment-context-aware. A marker inside a string literal
+  (`Log('// noinspection All // ' + Payload);`) is no longer treated as
+  active. Scan state is carried per file across lines.
+- **`IsTestFixturePath` repo-root-anchored** — optional `BaseDir` parameter
+  matches path components only inside the scan root. Stops external paths
+  like `D:\projects\company-tests\src\auth.pas` from being silently filtered.
+- **Baseline JSON hardened** with `MAX_BASELINE_ENTRIES = 1_000_000`
+  and `MAX_FINGERPRINT_LEN = 256`. Mitigates OOM attacks via tampered
+  baseline files. Warning to `ErrOutput` on truncation.
+
+### Fixed
+
+- **`gDetectorTimings` moved to INTERFACE section** of `uStaticAnalyzer2`
+  — was unit-private so `uConsoleRunner` could not see it; `--time-detectors`
+  built but never wrote the report.
+- **Latent memory leak in `gAstFileCache` + `gFileTextCache`** on repeated
+  scans (IDE plugin re-runs) — caches are now freed before re-create.
+- **`uVisibilityCheck` `OwnUnit` path mismatch** — `ExtractFileName`
+  compared "name.pas" against full-path entries in `gSymbolRefIndex`, so
+  self-references were always counted as external. Now passes full path.
+- **`Baseline.Apply` skips `ContextHash` computation** when the loaded
+  baseline contains no `contextHash` entries (legacy file). Saves
+  ~191k SHA256 + file-read operations on legacy baselines.
+
+### Documentation
+
+- New: [`Konzept_ScannerQualitaet.md`](Konzept_ScannerQualitaet.md) —
+  4-axis quality roadmap (Precision / Recall / Tooling / Architecture)
+  with 4 prioritised phases.
+- New: [`docs/ConfidenceAudit.md`](docs/ConfidenceAudit.md) — per-kind
+  default-confidence table with justifications.
+- New: [`tests/golden-corpus/README.md`](tests/golden-corpus/README.md) —
+  FP-regression-test workflow + how to add new reproducers.
+- Updated: A.3 entry in `Konzept_ScannerQualitaet.md` marks the minimal
+  step done and documents the 3 index limitations (nkRef, class-function-
+  call, bare-call) as A.3+ follow-up.
+
+---
+
 ## [0.9.3] - 2026-05-27
 
 Polish release. No new detectors (count stays at 161). Focus on

@@ -16,7 +16,7 @@ Das Repository enthaelt zwei Komponenten:
 
 ## Features auf einen Blick
 
-- **21 implementierte Detektoren** aus dem Sonar-Pruefkatalog (siehe [`DETECTORS_de.md`](DETECTORS_de.md))
+- **~165 Finding-Arten ueber ~156 Detektor-Klassen** — siehe [`DETECTORS_de.md`](DETECTORS_de.md) und [`rules/sca-rules.json`](rules/sca-rules.json) fuer den kanonischen Stand (Sonar + SonarDelphi-Migration + DFM + Bonus)
 - **Sonar-Style Stat-Tiles** ueber dem Grid: Fehler / Warnungen / Hinweise / Bugs / Code-Duplikate / Code-Quality-Score
 - **Severity-Filter** + **Typ-Filter** (Bug, Code Smell, Vulnerability, Security Hotspot, Code Duplication)
 - **Help-Panel rechts** mit "Vorher/Nachher"-Code-Beispielen je Befund
@@ -70,7 +70,7 @@ Open StaticCodeAnalyserIDE.dproj -> Project -> Install
 Vollstaendige Liste mit Status (✅ implementiert / 🟡 teilweise / 🔲 offen)
 in [`DETECTORS_de.md`](DETECTORS_de.md).
 
-Aktueller Stand: **18 vollstaendig + 1 teilweise + 3 Bonus-Detektoren = 21 Detektoren**.
+Aktueller Stand (v0.9.8): **~165 Finding-Arten** ueber ~156 Detektor-Klassen — Sonar-50-Katalog + 32 SonarDelphi-Migration (SCA120-152) + 22 DFM-Detektoren + ~60 Naming/Formatting (SCA060-119) + Bonus.
 
 Schwerpunkte:
 

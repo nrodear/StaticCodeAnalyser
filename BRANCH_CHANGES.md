@@ -16,7 +16,7 @@ The repository ships two components:
 
 ## Features at a glance
 
-- **21 active detectors** drawn from the Sonar rule catalogue — see [`DETECTORS.md`](DETECTORS.md)
+- **~165 finding kinds across ~156 detector classes** — see [`DETECTORS.md`](DETECTORS.md) and [`rules/sca-rules.json`](rules/sca-rules.json) for the canonical roster (Sonar + SonarDelphi-migration + DFM + bonus)
 - **Sonar-style stat tiles** above the grid: Errors / Warnings / Hints / Bugs / Code duplications / Code Quality score
 - **Severity filter** + **type filter** (Bug, Code Smell, Vulnerability, Security Hotspot, Code Duplication)
 - **Help panel on the right** with paired "before/after" code examples per finding
@@ -74,7 +74,7 @@ Open StaticCodeAnalyserIDE.dproj  →  Project  →  Install
 The full list with status (✅ implemented · 🟡 partial · 🔲 open) lives
 in [`DETECTORS.md`](DETECTORS.md).
 
-Current state: **18 complete + 1 partial + 3 bonus detectors = 21 active detectors**.
+Current state (v0.9.8): **~165 finding kinds** across ~156 detector classes — Sonar 50-rule catalogue + 32 SonarDelphi-migration (SCA120-152) + 22 DFM detectors + ~60 naming/formatting checks (SCA060-119) + bonus.
 
 Highlights by severity:
 
