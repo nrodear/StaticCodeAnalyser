@@ -14,9 +14,16 @@ unit uDetectorUtils;
 interface
 
 uses
-  System.Classes; // TStrings
+  System.Classes, System.Generics.Collections; // TStrings, TList<>
 
 type
+  // Container fuer extrahierte Function-Calls aus Expression-Strings
+  // (siehe TDetectorUtils.ParseCallsInExpr).
+  TExprCall = record
+    FuncNameLow : string;
+    ArgsRaw     : string;
+  end;
+
   // Mitgefuehrter Block-Kommentar-Zustand fuer ScanCodeLine. Zeilenstrings
   // und `//`-Zeilenkommentare beginnen/enden IMMER innerhalb einer Zeile -
   // nur `{ ... }` und `(* ... *)` koennen ueber Zeilengrenzen laufen, daher
@@ -125,6 +132,32 @@ type
     // sieht der Detektor das SQL so, wie der Compiler es zusammenfuegt.
     class function MergeAdjacentStringLiterals(const S: string): string;
       static;
+
+    // === EXPRESSION-CALL-EXTRAKTION ===================================
+    // Aus einem Pascal-Expression-String (z.B. nkIfStmt.TypeRef oder
+    // nkAssign.TypeRef oder nkCall.Name) alle Function-Call-Pattern
+    // 'name(args)' extrahieren. Nested-paren-aware via Depth-Counting.
+    // Whitespace zwischen 'name' und '(' wird toleriert - der Parser
+    // packt Conditions oft mit JoinTokInto + Space-Separator.
+    //
+    // Verwendung: uUninitVar Phase 2.2-2.6 (Call-Detection in TypeRef-
+    // Strings die der Parser NICHT als nkCall-Knoten abgelegt hat).
+    // Bewusst List-basiert statt anonymous-method-Callback - anonymous
+    // procs in Delphi koennen Nested-Procedures der enclosing Method
+    // nicht erfassen (E2555).
+    class procedure ParseCallsInExpr(const Expr: string;
+      Calls: TList<TExprCall>); static;
+
+    // Funktions-Name aus nkCall.Name extrahieren ('ReadLn(n)' -> 'readln').
+    // Greift den Teil rechts vom letzten Punkt vor '(' (oder den ganzen
+    // Ident wenn kein Punkt vorhanden).
+    class function ExtractCallFunctionName(const CallExpr: string):
+      string; static;
+
+    // Roh-Args-String zwischen erster '(' und matching ')'.
+    // Nested-paren-aware; Result leer wenn keine '(' vorhanden.
+    class function ExtractCallArgsRaw(const CallExpr: string):
+      string; static;
   end;
 
 
@@ -444,6 +477,101 @@ begin
     Result := Sb.ToString;
   finally
     Sb.Free;
+  end;
+end;
+
+// === EXPRESSION-CALL-EXTRAKTION ===========================================
+
+class function TDetectorUtils.ExtractCallFunctionName(
+  const CallExpr: string): string;
+var
+  S : string;
+  ParenPos, DotPos : Integer;
+begin
+  S := Trim(CallExpr);
+  ParenPos := Pos('(', S);
+  if ParenPos > 0 then
+    S := Trim(Copy(S, 1, ParenPos - 1));
+  DotPos := LastDelimiter('.', S);
+  if DotPos > 0 then
+    S := Trim(Copy(S, DotPos + 1, MaxInt));
+  Result := S;
+end;
+
+class function TDetectorUtils.ExtractCallArgsRaw(
+  const CallExpr: string): string;
+var
+  S : string;
+  ParenPos, Depth, i : Integer;
+begin
+  Result := '';
+  S := CallExpr;
+  ParenPos := Pos('(', S);
+  if ParenPos = 0 then Exit;
+  Depth := 1;
+  for i := ParenPos + 1 to Length(S) do
+  begin
+    if S[i] = '(' then Inc(Depth)
+    else if S[i] = ')' then
+    begin
+      Dec(Depth);
+      if Depth = 0 then
+      begin
+        Result := Copy(S, ParenPos + 1, i - ParenPos - 1);
+        Exit;
+      end;
+    end;
+  end;
+  // Kein matching ')' - alles ab '(' nehmen.
+  Result := Copy(S, ParenPos + 1, MaxInt);
+end;
+
+class procedure TDetectorUtils.ParseCallsInExpr(const Expr: string;
+  Calls: TList<TExprCall>);
+
+  function IsIdentStart(C: Char): Boolean; inline;
+  begin
+    Result := CharInSet(C, ['A'..'Z', 'a'..'z', '_']);
+  end;
+
+var
+  T          : string;
+  i, NameStart, NameEnd, Depth, ArgsStart : Integer;
+  Entry      : TExprCall;
+begin
+  if Calls = nil then Exit;
+  T := Expr;
+  i := 1;
+  while i <= Length(T) do
+  begin
+    if not IsIdentStart(T[i]) then
+    begin
+      Inc(i);
+      Continue;
+    end;
+    NameStart := i;
+    while (i <= Length(T)) and IsIdentChar(T[i]) do Inc(i);
+    NameEnd := i - 1;
+    while (i <= Length(T)) and (T[i] = ' ') do Inc(i);
+    if (i > Length(T)) or (T[i] <> '(') then Continue;
+    // OK - 'name(' Pattern; Args bis matching ')' extrahieren.
+    Inc(i);                                   // hinter '('
+    ArgsStart := i;
+    Depth := 1;
+    while (i <= Length(T)) and (Depth > 0) do
+    begin
+      if T[i] = '(' then Inc(Depth)
+      else if T[i] = ')' then
+      begin
+        Dec(Depth);
+        if Depth = 0 then Break;
+      end;
+      Inc(i);
+    end;
+    Entry.FuncNameLow := LowerCase(Copy(T, NameStart, NameEnd - NameStart + 1));
+    Entry.ArgsRaw     := Copy(T, ArgsStart, i - ArgsStart);
+    Calls.Add(Entry);
+    if (i <= Length(T)) and (T[i] = ')') then Inc(i);
   end;
 end;
 

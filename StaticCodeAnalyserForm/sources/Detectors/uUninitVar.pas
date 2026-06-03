@@ -373,54 +373,9 @@ begin
     Exit(False);
 end;
 
-function ExtractCallFunctionName(const CallExpr: string): string;
-// nkCall.Name ist die ganze Call-Expression (Parser-Pattern aus
-// uParser2.ParseCallOrAssign: 'ReadLn(n)' / 'TConfidenceFilter.Apply(...)' /
-// 'Obj.Method(a, b)'). Wir extrahieren den Funktions-Namen rechts vom
-// letzten Punkt vor dem '(' (oder den ganzen Ident wenn kein Punkt).
-var
-  S : string;
-  ParenPos, DotPos : Integer;
-begin
-  S := Trim(CallExpr);
-  ParenPos := Pos('(', S);
-  if ParenPos > 0 then
-    S := Trim(Copy(S, 1, ParenPos - 1));
-  DotPos := LastDelimiter('.', S);
-  if DotPos > 0 then
-    S := Trim(Copy(S, DotPos + 1, MaxInt));
-  Result := S;
-end;
-
-function ExtractCallArgsRaw(const CallExpr: string): string;
-// Liefert den String zwischen erster '(' und passender ')' (oder ab
-// '(' bis Ende falls kein matching ')'-Pair). Wir parsen die Args
-// nicht semantisch - die Token-Boundary-Suche reicht.
-var
-  S : string;
-  ParenPos, Depth, i : Integer;
-begin
-  Result := '';
-  S := CallExpr;
-  ParenPos := Pos('(', S);
-  if ParenPos = 0 then Exit;
-  Depth := 1;
-  for i := ParenPos + 1 to Length(S) do
-  begin
-    if S[i] = '(' then Inc(Depth)
-    else if S[i] = ')' then
-    begin
-      Dec(Depth);
-      if Depth = 0 then
-      begin
-        Result := Copy(S, ParenPos + 1, i - ParenPos - 1);
-        Exit;
-      end;
-    end;
-  end;
-  // Kein matching ')' - alles ab '(' nehmen.
-  Result := Copy(S, ParenPos + 1, MaxInt);
-end;
+// ExtractCallFunctionName + ExtractCallArgsRaw wurden nach
+// uDetectorUtils verschoben (Block 1b - geteilte Expression-Helper).
+// Aufrufe via TDetectorUtils.ExtractCallFunctionName / .ExtractCallArgsRaw.
 
 function ExtractForLoopVar(const ForTypeRef: string): string;
 // TypeRef von nkForStmt enthaelt den Loop-Header, z.B.:
@@ -462,7 +417,7 @@ var
   FnName, Allow : string;
 begin
   Result := False;
-  FnName := LowerCase(ExtractCallFunctionName(CallName));
+  FnName := LowerCase(TDetectorUtils.ExtractCallFunctionName(CallName));
   if FnName = '' then Exit;
   for Allow in WRITE_ALLOWLIST do
     if FnName = Allow then Exit(True);
@@ -475,77 +430,14 @@ var
   FnName, Allow : string;
 begin
   Result := False;
-  FnName := LowerCase(ExtractCallFunctionName(CallName));
+  FnName := LowerCase(TDetectorUtils.ExtractCallFunctionName(CallName));
   if FnName = '' then Exit;
   for Allow in READ_ALLOWLIST do
     if FnName = Allow then Exit(True);
 end;
 
-function IsIdentStart(C: Char): Boolean; inline;
-begin
-  Result := CharInSet(C, ['A'..'Z', 'a'..'z', '_']);
-end;
-
-type
-  TExprCall = record
-    FuncNameLow : string;
-    ArgsRaw     : string;
-  end;
-
-procedure ParseCallsInExpr(const Expr: string;
-  Calls: TList<TExprCall>);
-// Findet alle 'name(args)'-Pattern im Expr-String und fuegt sie zu
-// Calls hinzu. Nested-paren-aware (Depth-Counting). Whitespace zwischen
-// name und '(' wird toleriert - der Parser packt Conditions oft mit
-// JoinTokInto + Space-Separator.
-//
-// Phase-2.2-Helper: wird genutzt um Calls in if/while/case-Conditions
-// zu finden, die der AST als nkIfStmt.TypeRef-String ablegt (nicht als
-// nkCall-Knoten).
-//
-// List-basiert statt anonymous-method-Callback weil anonymous procs
-// in Delphi Nested-Procedures der enclosing Method (z.B. RegisterWrite
-// in AnalyzeMethod) nicht erfassen koennen (E2555).
-var
-  T          : string;
-  i, NameStart, NameEnd, Depth, ArgsStart : Integer;
-  Entry      : TExprCall;
-begin
-  if Calls = nil then Exit;
-  T := Expr;
-  i := 1;
-  while i <= Length(T) do
-  begin
-    if not IsIdentStart(T[i]) then
-    begin
-      Inc(i);
-      Continue;
-    end;
-    NameStart := i;
-    while (i <= Length(T)) and IsIdentChar(T[i]) do Inc(i);
-    NameEnd := i - 1;
-    while (i <= Length(T)) and (T[i] = ' ') do Inc(i);
-    if (i > Length(T)) or (T[i] <> '(') then Continue;
-    // OK - 'name(' Pattern; Args bis matching ')' extrahieren.
-    Inc(i);                                   // hinter '('
-    ArgsStart := i;
-    Depth := 1;
-    while (i <= Length(T)) and (Depth > 0) do
-    begin
-      if T[i] = '(' then Inc(Depth)
-      else if T[i] = ')' then
-      begin
-        Dec(Depth);
-        if Depth = 0 then Break;
-      end;
-      Inc(i);
-    end;
-    Entry.FuncNameLow := LowerCase(Copy(T, NameStart, NameEnd - NameStart + 1));
-    Entry.ArgsRaw     := Copy(T, ArgsStart, i - ArgsStart);
-    Calls.Add(Entry);
-    if (i <= Length(T)) and (T[i] = ')') then Inc(i);
-  end;
-end;
+// TExprCall + ParseCallsInExpr nach uDetectorUtils verschoben (Block 1b).
+// IsIdentStart-Helper damit ebenfalls obsolet (war nur fuer ParseCallsInExpr).
 
 function FindIdentInArgList(const ArgsLow, NeedleLow: string): Boolean;
 // Wortgrenz-Match fuer einen Identifier in der (lowercase) Arg-Liste.
@@ -638,7 +530,7 @@ var
     //      registrieren (akzeptiert FNs, reduziert FPs bei OOP-Code).
     if IsReadOnlyCall(C.Name) then Exit;
 
-    ArgsLow := LowerCase(ExtractCallArgsRaw(C.Name));
+    ArgsLow := LowerCase(TDetectorUtils.ExtractCallArgsRaw(C.Name));
     if ArgsLow = '' then Exit;
     for i := 0 to VarList.Count - 1 do
     begin
@@ -671,7 +563,7 @@ var
     if IsLineInRanges(Node.Line, NestedRanges) then Exit;
     Calls := TList<TExprCall>.Create;
     try
-      ParseCallsInExpr(Node.TypeRef, Calls);
+      TDetectorUtils.ParseCallsInExpr(Node.TypeRef, Calls);
       for Call in Calls do
       begin
         // IsReadOnlyCall erwartet 'FuncName(...)' - wir bauen Stub.
