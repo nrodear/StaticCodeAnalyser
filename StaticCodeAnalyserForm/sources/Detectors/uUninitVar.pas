@@ -352,6 +352,60 @@ begin
     if FnName = Allow then Exit(True);
 end;
 
+function IsIdentStart(C: Char): Boolean; inline;
+begin
+  Result := CharInSet(C, ['A'..'Z', 'a'..'z', '_']);
+end;
+
+procedure ParseCallsInExpr(const Expr: string;
+  const Callback: TProc<string {FuncNameLow}, string {ArgsRaw}>);
+// Findet alle 'name(args)'-Pattern im Expr-String und ruft Callback
+// pro Treffer. Nested-paren-aware (Depth-Counting). Whitespace zwischen
+// name und '(' wird toleriert - der Parser packt Conditions oft mit
+// JoinTokInto + Space-Separator.
+//
+// Phase-2.2-Helper: wird genutzt um Calls in if/while/case-Conditions
+// zu finden, die der AST als nkIfStmt.TypeRef-String ablegt (nicht als
+// nkCall-Knoten).
+var
+  T      : string;
+  i, NameStart, NameEnd, Depth, ArgsStart : Integer;
+  Name   : string;
+begin
+  T := Expr;
+  i := 1;
+  while i <= Length(T) do
+  begin
+    if not IsIdentStart(T[i]) then
+    begin
+      Inc(i);
+      Continue;
+    end;
+    NameStart := i;
+    while (i <= Length(T)) and IsIdentChar(T[i]) do Inc(i);
+    NameEnd := i - 1;
+    while (i <= Length(T)) and (T[i] = ' ') do Inc(i);
+    if (i > Length(T)) or (T[i] <> '(') then Continue;
+    // OK - 'name(' Pattern; Args bis matching ')' extrahieren.
+    Inc(i);                                   // hinter '('
+    ArgsStart := i;
+    Depth := 1;
+    while (i <= Length(T)) and (Depth > 0) do
+    begin
+      if T[i] = '(' then Inc(Depth)
+      else if T[i] = ')' then
+      begin
+        Dec(Depth);
+        if Depth = 0 then Break;
+      end;
+      Inc(i);
+    end;
+    Name := Copy(T, NameStart, NameEnd - NameStart + 1);
+    Callback(LowerCase(Name), Copy(T, ArgsStart, i - ArgsStart));
+    if (i <= Length(T)) and (T[i] = ')') then Inc(i);
+  end;
+end;
+
 function FindIdentInArgList(const ArgsLow, NeedleLow: string): Boolean;
 // Wortgrenz-Match fuer einen Identifier in der (lowercase) Arg-Liste.
 var
@@ -445,6 +499,38 @@ var
       if FindIdentInArgList(ArgsLow, VI.NameLow) then
         RegisterWrite(i, C.Line);
     end;
+  end;
+
+  procedure ProcessConditionCalls(Node: TAstNode);
+  // Phase 2.2: Calls in if/while/case-Conditions sind im Parser nicht
+  // als nkCall-Knoten abgelegt sondern als TypeRef-String. Wir tokenisieren
+  // den String, finden alle 'name(args)'-Pattern und behandeln sie wie
+  // ProcessCall (READ_ALLOWLIST -> kein Write; sonst pessimistic-Write
+  // pro Var-Identifier in den Args).
+  begin
+    if (Node = nil) or (Node.TypeRef = '') then Exit;
+    ParseCallsInExpr(Node.TypeRef,
+      procedure(const FnLow, ArgsRaw: string)
+      var
+        i : Integer;
+        VI : TVarInfo;
+        ArgsLow : string;
+        FullCallStub : string;
+      begin
+        // IsReadOnlyCall/IsWriteAllowlistCall erwarten 'FuncName(...)';
+        // wir bauen einen Stub damit die existierende Logik wiederverwendet
+        // werden kann.
+        FullCallStub := FnLow + '(';
+        if IsReadOnlyCall(FullCallStub) then Exit;
+        ArgsLow := LowerCase(ArgsRaw);
+        if ArgsLow = '' then Exit;
+        for i := 0 to VarList.Count - 1 do
+        begin
+          VI := VarList[i];
+          if FindIdentInArgList(ArgsLow, VI.NameLow) then
+            RegisterWrite(i, Node.Line);
+        end;
+      end);
   end;
 
   procedure ProcessForStmt(F: TAstNode);
@@ -614,6 +700,22 @@ begin
       finally
         Fors.Free;
       end;
+
+      // Phase 2.2: Condition-Calls in if/while/case. Diese sind als
+      // TypeRef-Strings im AST abgelegt (kein nkCall-Walk moeglich) und
+      // waren die groesste FP-Quelle im Pre-Phase-2.2-Audit (Konzept §13).
+      var Conds : TList<TAstNode> := MethodNode.FindAll(nkIfStmt);
+      try
+        for i := 0 to Conds.Count - 1 do ProcessConditionCalls(Conds[i]);
+      finally Conds.Free; end;
+      Conds := MethodNode.FindAll(nkWhileStmt);
+      try
+        for i := 0 to Conds.Count - 1 do ProcessConditionCalls(Conds[i]);
+      finally Conds.Free; end;
+      Conds := MethodNode.FindAll(nkCaseStmt);
+      try
+        for i := 0 to Conds.Count - 1 do ProcessConditionCalls(Conds[i]);
+      finally Conds.Free; end;
 
       // Phase C: Body-Token-Sammlung fuer RefCount + Reads via Source-Lines.
       // Method-Boundary [Start..End] limitiert den Read-Scan auf den
