@@ -398,9 +398,14 @@ var
     i : Integer;
     VI : TVarInfo;
   begin
-    if (C = nil) or not IsWriteAllowlistCall(C.Name) then Exit;
-    // nkCall.Name ist die ganze Call-Expression, z.B. 'ReadLn(n)'.
-    // Args extrahieren und pro Var-Name in der Arg-Liste prüfen.
+    if C = nil then Exit;
+    // PESSIMISTISCH: JEDER Call wertet seine Args als potentielles Write,
+    // nicht nur die WRITE_ALLOWLIST. Begruendung: ohne Symboltabelle
+    // (Phase 4) koennen wir 'Helper.Init(X)' nicht von 'WriteLn(X)'
+    // unterscheiden. Konservative Default-Annahme = Write reduziert
+    // FPs drastisch (Konzept §6: Pessimistic-Write akzeptiert FNs).
+    // WRITE_ALLOWLIST bleibt fuer Doku-Zwecke und ggf. Phase-2-Strict-
+    // Mode (wo nicht-Allowlist-Calls als Read gezaehlt werden koennten).
     ArgsLow := LowerCase(ExtractCallArgsRaw(C.Name));
     if ArgsLow = '' then Exit;
     for i := 0 to VarList.Count - 1 do
@@ -433,25 +438,30 @@ var
   end;
 
   function FindFirstReadLine(const NameLow: string;
-    DeclLine, FirstWriteLine: Integer): Integer;
-  // Findet die erste Source-Zeile mit einem Identifier-Match die NICHT
-  // die Var-Deklaration ist. Wenn FirstWriteLine > 0, wird die Write-
-  // Zeile NICHT als Read gewertet. Wenn keine Read-Zeile gefunden -> 0.
+    DeclLine, FirstWriteLine, MethodStartLine, MethodEndLine: Integer): Integer;
+  // Findet die erste Source-Zeile MIT einem Identifier-Match INNERHALB
+  // der Method-Boundary [MethodStartLine..MethodEndLine] die NICHT die
+  // Var-Deklaration und NICHT die Write-Zeile ist.
   //
-  // Strategie: linear durch Lines, jede Zeile Word-Boundary-Test gegen
-  // NameLow, erste passende != DeclLine und != WriteLine zurueck.
-  // Vorteil: liefert echte Source-Position (besser als BodyLow-Suche).
+  // Method-Boundary ist KRITISCH: ohne sie wuerde der Scan ueber die
+  // ganze Unit laufen und ein Field-Decl im Interface mit gleichem
+  // Namen als "Read" werten (Faktor 30x FP-Explosion in der Praxis).
   var
     i : Integer;
     L : string;
-    P, NL, LL : Integer;
+    P, NL, LL, From0, To0 : Integer;
     Before, After : Char;
   begin
     Result := 0;
     if Lines = nil then Exit;
     NL := Length(NameLow);
     if NL = 0 then Exit;
-    for i := 0 to Lines.Count - 1 do
+    if (MethodStartLine <= 0) or (MethodEndLine < MethodStartLine) then Exit;
+    From0 := MethodStartLine - 1;
+    To0   := MethodEndLine - 1;
+    if From0 < 0 then From0 := 0;
+    if To0 > Lines.Count - 1 then To0 := Lines.Count - 1;
+    for i := From0 to To0 do
     begin
       if (i + 1 = DeclLine) or (i + 1 = FirstWriteLine) then Continue;
       L := LowerCase(Lines[i]);
@@ -471,6 +481,32 @@ var
         end;
         P := P + NL;
       end;
+    end;
+  end;
+
+  function CalcMethodEndLine(Node: TAstNode): Integer;
+  // Method-Body-Ende = max(Line) ueber alle Descendants. Iterativer
+  // Walk, Stack-safe auch fuer tiefe ASTs.
+  var
+    Stack : TStack<TAstNode>;
+    Cur   : TAstNode;
+    i     : Integer;
+  begin
+    Result := 0;
+    if Node = nil then Exit;
+    Result := Node.Line;
+    Stack := TStack<TAstNode>.Create;
+    try
+      Stack.Push(Node);
+      while Stack.Count > 0 do
+      begin
+        Cur := Stack.Pop;
+        if Cur.Line > Result then Result := Cur.Line;
+        for i := 0 to Cur.Children.Count - 1 do
+          Stack.Push(Cur.Children[i]);
+      end;
+    finally
+      Stack.Free;
     end;
   end;
 
@@ -549,8 +585,13 @@ begin
       end;
 
       // Phase C: Body-Token-Sammlung fuer RefCount + Reads via Source-Lines.
+      // Method-Boundary [Start..End] limitiert den Read-Scan auf den
+      // tatsaechlichen Method-Body - sonst matcht ein Field-Decl im
+      // Interface-Section mit gleichem Namen als "Read" (FP-Faktor ~30x).
       CollectBodyTokens(MethodNode, BodySB);
       BodyLow := LowerCase(BodySB.ToString);
+      var MethodStartLine := MethodNode.Line;
+      var MethodEndLine   := CalcMethodEndLine(MethodNode);
 
       for i := 0 to VarList.Count - 1 do
       begin
@@ -561,10 +602,10 @@ begin
         // (kein UninitVar - faellt unter SCA019).
         if P.RefCount <= 1 then Continue;
 
-        // FirstReadLine sucht im Source. Wenn KEIN Write vorhanden,
-        // ist die "Read-Zeile" jede non-Decl-Erwaehnung.
+        // FirstReadLine sucht im Source-Body (NUR innerhalb der Method).
         P.FirstReadLine := FindFirstReadLine(P.NameLow, P.DeclLine,
-                                             P.FirstWriteLine);
+                                             P.FirstWriteLine,
+                                             MethodStartLine, MethodEndLine);
       end;
 
       // Phase D: Emit.
