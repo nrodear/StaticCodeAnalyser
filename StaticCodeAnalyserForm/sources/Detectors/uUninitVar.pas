@@ -1,4 +1,4 @@
-unit uUninitVar;
+﻿unit uUninitVar;
 
 // Detector: SCA166 fkUninitVar — lokale Variable wird auf einem Pfad
 // gelesen bevor sie auf demselben Pfad geschrieben wurde.
@@ -70,7 +70,7 @@ const
   // als Read (= Variable muss VORHER assigned sein).
   // Default fuer alle ANDEREN Calls (z.B. 'Helper.Init(X)') ist
   // pessimistic-Write - akzeptiert FNs zugunsten weniger FPs.
-  READ_ALLOWLIST : array[0..55] of string = (
+  READ_ALLOWLIST : array[0..57] of string = (
     // --- Output ---
     'write', 'writeln', 'showmessage', 'showmessagefmt',
     'outputdebugstring', 'outputdebugstringa', 'outputdebugstringw',
@@ -266,6 +266,92 @@ begin
   for i := 0 to Ranges.Count - 1 do
     if (Line >= Ranges[i].StartLine) and (Line <= Ranges[i].EndLine) then
       Exit(True);
+end;
+
+procedure CollectNestedMethodRangesViaSource(Lines: TStringList;
+  MethodStartLine, MethodEndLine: Integer;
+  Ranges: TList<TLineRange>);
+// Phase 2.6 - source-line-based Nested-Method-Detection.
+//
+// Hintergrund: Phase 2.4 (AST-basiert) wirkt nur wenn der Parser
+// nested-Procedures als nkMethod-Children unter dem Outer-MethodNode
+// ablegt. ParseMethodImpl entfernt aber bei 'Headless-Method'-Pattern
+// den Outer-Knoten - nested-Pattern wird damit AST-seitig verloren.
+//
+// Source-basierter Workaround: scanne Lines im Range
+// [MethodStartLine..MethodEndLine] nach Pattern
+//   ^\s{2,}(procedure|function|constructor|destructor)\s+\w+
+// (nested = mindestens 2 Leading-Spaces, distinct vom 0-indent Outer-
+// Header). Pro nested-Header: count begin/end-Paare bis matching
+// outer 'end;', dann Range eintragen.
+var
+  i, EndLine, Depth : Integer;
+  L, LTrim : string;
+  StartCol : Integer;
+  Started : Boolean;
+  R : TLineRange;
+
+  function LineLooksLikeNestedHeader(const RawLine: string;
+    out LeadingSpaces: Integer): Boolean;
+  var
+    j : Integer;
+    Low : string;
+  begin
+    Result := False;
+    LeadingSpaces := 0;
+    for j := 1 to Length(RawLine) do
+      if RawLine[j] = ' ' then Inc(LeadingSpaces)
+      else if RawLine[j] = #9 then Inc(LeadingSpaces, 2)
+      else Break;
+    if LeadingSpaces < 2 then Exit;
+    Low := LowerCase(TrimLeft(RawLine));
+    Result := Low.StartsWith('procedure ')   or Low.StartsWith('procedure(') or
+              Low.StartsWith('function ')    or Low.StartsWith('function(')  or
+              Low.StartsWith('constructor ') or Low.StartsWith('destructor ');
+  end;
+
+begin
+  if (Lines = nil) or (Ranges = nil) then Exit;
+  if (MethodStartLine <= 0) or (MethodEndLine < MethodStartLine) then Exit;
+
+  i := MethodStartLine - 1;
+  while (i < Lines.Count) and (i < MethodEndLine) do
+  begin
+    L := Lines[i];
+    if LineLooksLikeNestedHeader(L, StartCol) then
+    begin
+      R.StartLine := i + 1;
+      // Suche begin/end-balanced bis matching 'end;' auf dem Sub-Indent
+      Depth := 0;
+      Started := False;
+      EndLine := i + 1;
+      while (i < Lines.Count) and (i < MethodEndLine) do
+      begin
+        LTrim := LowerCase(TrimLeft(Lines[i]));
+        // begin- und end-Tokens zaehlen (Wortgrenz-Match einfach reicht)
+        if LTrim.StartsWith('begin') or (Pos(' begin ', ' ' + LTrim + ' ') > 0) then
+        begin
+          Inc(Depth);
+          Started := True;
+        end;
+        // 'end' kommt am Zeilenanfang oder als 'end;' am Ende
+        if LTrim.StartsWith('end;') or LTrim.StartsWith('end ')
+           or (LTrim = 'end') then
+        begin
+          Dec(Depth);
+          if Started and (Depth <= 0) then
+          begin
+            EndLine := i + 1;
+            Break;
+          end;
+        end;
+        Inc(i);
+      end;
+      R.EndLine := EndLine;
+      Ranges.Add(R);
+    end;
+    Inc(i);
+  end;
 end;
 
 function CountChildrenRecursive(Node: TAstNode; Cap: Integer): Integer;
@@ -789,6 +875,12 @@ begin
     Lines        := AcquireLines(FileName, Cached);
     try
       CollectNestedMethodRanges(MethodNode, NestedRanges);
+      // Phase 2.6: ergaenzend source-line-basierte Detection. AST-Walk
+      // verpasst nested-Procedures wenn der Parser den Outer-MethodNode
+      // wegen 'Headless-Method'-Pattern aus dem AST entfernt hat.
+      if Lines <> nil then
+        CollectNestedMethodRangesViaSource(Lines, MethodNode.Line,
+          CalcMethodEndLine(MethodNode), NestedRanges);
       // Phase A: Var-Inventur
       for LV in LocalVars do
       begin
