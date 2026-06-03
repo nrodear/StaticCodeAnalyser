@@ -165,7 +165,6 @@ implementation
 
 uses
   System.SysUtils,               // TStringBuilder
-  System.Generics.Collections,   // TList<Integer>
   System.Masks,                  // MatchesMask fuer Test-Fixture-Patterns
   System.StrUtils;               // PosEx
 
