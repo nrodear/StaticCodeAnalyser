@@ -70,18 +70,27 @@ const
   // als Read (= Variable muss VORHER assigned sein).
   // Default fuer alle ANDEREN Calls (z.B. 'Helper.Init(X)') ist
   // pessimistic-Write - akzeptiert FNs zugunsten weniger FPs.
-  READ_ALLOWLIST : array[0..25] of string = (
-    // Output
+  READ_ALLOWLIST : array[0..55] of string = (
+    // --- Output ---
     'write', 'writeln', 'showmessage', 'showmessagefmt',
     'outputdebugstring', 'outputdebugstringa', 'outputdebugstringw',
-    // Typ-Konvertierung / Inspektion (gibt nur einen Wert zurueck)
+    // --- Typ-Konvertierung / Inspektion (gibt nur einen Wert zurueck) ---
     'inttostr', 'inttohex', 'floattostr', 'datetostr', 'timetostr',
     'datetimetostr', 'formatfloat', 'formatdatetime', 'format',
-    // String/Array-Inspektion
+    'inttoidentstr', 'identtoint', 'strtoint', 'strtointdef',
+    'strtofloat', 'strtofloatdef', 'strtodatetime', 'strtodate',
+    // --- String/Array-Inspektion ---
     'length', 'sizeof', 'high', 'low', 'ord', 'chr',
-    'copy', 'pos', 'posex',
-    // Boolean-Inspektion
-    'assigned'
+    'copy', 'pos', 'posex', 'trim', 'trimleft', 'trimright',
+    'uppercase', 'lowercase', 'sametext', 'comparetext', 'comparestr',
+    // --- Boolean-Inspektion ---
+    'assigned', 'isdebuggerpresent',
+    // --- Windows-API Read-Only (Phase 2.5) ---
+    'sleep', 'sleepex', 'gettickcount', 'gettickcount64',
+    'getlasterror', 'getcurrentthreadid', 'getcurrentprocessid',
+    'waitforsingleobject', 'waitformultipleobjects',
+    'closehandle', 'freelibrary',
+    'releasedc', 'deletedc', 'deleteobject', 'deletecriticalsection'
   );
 
   // Managed types die Pascal auto-initialisiert. Wir flaggen sie nur,
