@@ -282,6 +282,39 @@ begin
   end;
 end;
 
+procedure SinglePassCollectByKind(Root: TAstNode;
+  Assigns, Calls, Fors, Ifs, Whiles, Cases: TList<TAstNode>);
+// P1: Statt 8x MethodNode.FindAll(...) ueber den AST zu walken,
+// einen einzigen DFS-Walk der Knoten in 6 Buckets verteilt. Spart
+// ~7/8 der Tree-Walks pro Methode.
+var
+  Stack : TStack<TAstNode>;
+  Cur   : TAstNode;
+  i     : Integer;
+begin
+  if Root = nil then Exit;
+  Stack := TStack<TAstNode>.Create;
+  try
+    Stack.Push(Root);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack.Pop;
+      case Cur.Kind of
+        nkAssign:    if Assigns <> nil then Assigns.Add(Cur);
+        nkCall:      if Calls   <> nil then Calls.Add(Cur);
+        nkForStmt:   if Fors    <> nil then Fors.Add(Cur);
+        nkIfStmt:    if Ifs     <> nil then Ifs.Add(Cur);
+        nkWhileStmt: if Whiles  <> nil then Whiles.Add(Cur);
+        nkCaseStmt:  if Cases   <> nil then Cases.Add(Cur);
+      end;
+      for i := 0 to Cur.Children.Count - 1 do
+        Stack.Push(Cur.Children[i]);
+    end;
+  finally
+    Stack.Free;
+  end;
+end;
+
 function CountChildrenRecursive(Node: TAstNode; Cap: Integer): Integer;
 // Iterativ + Early-Exit bei Cap-Ueberschreitung. Verhindert
 // Pathological-Method-Cost-Eskalation in der Inventur-Phase.
@@ -509,11 +542,36 @@ var
     if Idx >= 0 then RegisterWrite(Idx, A.Line);
   end;
 
+  procedure RegisterArgVarsAsWrites(const ArgsLow: string; Line: Integer);
+  // P2: Single-Pass-Tokenizer ueber ArgsLow. Pro Identifier-Token
+  // Dictionary-Lookup in VarMap (O(args-Length) statt O(N x M) wie
+  // vorher mit FindIdentInArgList-pro-Var). Pessimistic-Write Hit ->
+  // RegisterWrite.
+  var
+    P, Start, Len : Integer;
+    Idx : Integer;
+    Token : string;
+  begin
+    Len := Length(ArgsLow);
+    P := 1;
+    while P <= Len do
+    begin
+      if IsIdentChar(ArgsLow[P]) then
+      begin
+        Start := P;
+        while (P <= Len) and IsIdentChar(ArgsLow[P]) do Inc(P);
+        Token := Copy(ArgsLow, Start, P - Start);
+        Idx := VarIndexFor(Token);     // VarMap-Lookup, O(1) avg
+        if Idx >= 0 then RegisterWrite(Idx, Line);
+      end
+      else
+        Inc(P);
+    end;
+  end;
+
   procedure ProcessCall(C: TAstNode);
   var
     ArgsLow : string;
-    i : Integer;
-    VI : TVarInfo;
   begin
     if C = nil then Exit;
     if IsLineInRanges(C.Line, NestedRanges) then Exit;
@@ -525,15 +583,9 @@ var
     //   3. UNKNOWN-Calls (Helper.Init, MyProc, ...) -> pessimistic-Write
     //      registrieren (akzeptiert FNs, reduziert FPs bei OOP-Code).
     if IsReadOnlyCall(C.Name) then Exit;
-
     ArgsLow := LowerCase(TDetectorUtils.ExtractCallArgsRaw(C.Name));
     if ArgsLow = '' then Exit;
-    for i := 0 to VarList.Count - 1 do
-    begin
-      VI := VarList[i];
-      if FindIdentInArgList(ArgsLow, VI.NameLow) then
-        RegisterWrite(i, C.Line);
-    end;
+    RegisterArgVarsAsWrites(ArgsLow, C.Line);
   end;
 
   procedure ProcessConditionCalls(Node: TAstNode);
@@ -551,8 +603,6 @@ var
   var
     Calls   : TList<TExprCall>;
     Call    : TExprCall;
-    i       : Integer;
-    VI      : TVarInfo;
     ArgsLow : string;
   begin
     if (Node = nil) or (Node.TypeRef = '') then Exit;
@@ -566,12 +616,8 @@ var
         if IsReadOnlyCall(Call.FuncNameLow + '(') then Continue;
         ArgsLow := LowerCase(Call.ArgsRaw);
         if ArgsLow = '' then Continue;
-        for i := 0 to VarList.Count - 1 do
-        begin
-          VI := VarList[i];
-          if FindIdentInArgList(ArgsLow, VI.NameLow) then
-            RegisterWrite(i, Node.Line);
-        end;
+        // P2: Single-Pass-Tokenizer + Dict-Lookup statt O(N) Inner-Loop.
+        RegisterArgVarsAsWrites(ArgsLow, Node.Line);
       end;
     finally
       Calls.Free;
@@ -730,57 +776,45 @@ begin
       end;
       if VarList.Count = 0 then Exit;
 
-      // Phase B: Writes registrieren aus dem AST.
-      Assigns := MethodNode.FindAll(nkAssign);
+      // P1: Single-Pass DFS - 1x walken, 6 Buckets gleichzeitig fuellen.
+      // Vorher: 8x MethodNode.FindAll, jeder Aufruf walked den Sub-Tree
+      // komplett (incl. doppelte Walks fuer nkAssign + nkForStmt die
+      // sowohl in Phase B als auch in Phase 2.3 gebraucht werden).
+      Assigns := TList<TAstNode>.Create;
+      Calls   := TList<TAstNode>.Create;
+      Fors    := TList<TAstNode>.Create;
+      var Ifs    : TList<TAstNode> := TList<TAstNode>.Create;
+      var Whiles : TList<TAstNode> := TList<TAstNode>.Create;
+      var Cases  : TList<TAstNode> := TList<TAstNode>.Create;
       try
-        for i := 0 to Assigns.Count - 1 do
-          ProcessAssign(Assigns[i]);
+        SinglePassCollectByKind(MethodNode, Assigns, Calls, Fors,
+                                Ifs, Whiles, Cases);
+
+        // Phase B: Writes aus nkAssign, nkCall (Allowlist/pessimistic),
+        // nkForStmt (Loop-Var).
+        for i := 0 to Assigns.Count - 1 do ProcessAssign(Assigns[i]);
+        for i := 0 to Calls.Count   - 1 do ProcessCall(Calls[i]);
+        for i := 0 to Fors.Count    - 1 do ProcessForStmt(Fors[i]);
+
+        // Phase 2.2 + 2.3: Calls innerhalb von Expression-tragenden Knoten
+        // (TypeRef-Strings statt nkCall) als pessimistic-Write erkennen.
+        //   Phase 2.2: nkIfStmt + nkWhileStmt + nkCaseStmt
+        //   Phase 2.3: nkAssign.RHS (z.B. 'Lines := AcquireLines(F, Cached)'
+        //              schreibt Cached out-Param) + nkForStmt.Range
+        // Alle teilen den gleichen ParseCallsInExpr-Pfad.
+        for i := 0 to Ifs.Count     - 1 do ProcessConditionCalls(Ifs[i]);
+        for i := 0 to Whiles.Count  - 1 do ProcessConditionCalls(Whiles[i]);
+        for i := 0 to Cases.Count   - 1 do ProcessConditionCalls(Cases[i]);
+        for i := 0 to Assigns.Count - 1 do ProcessConditionCalls(Assigns[i]);
+        for i := 0 to Fors.Count    - 1 do ProcessConditionCalls(Fors[i]);
       finally
+        Cases.Free;
+        Whiles.Free;
+        Ifs.Free;
+        Fors.Free;
+        Calls.Free;
         Assigns.Free;
       end;
-
-      Calls := MethodNode.FindAll(nkCall);
-      try
-        for i := 0 to Calls.Count - 1 do
-          ProcessCall(Calls[i]);
-      finally
-        Calls.Free;
-      end;
-
-      Fors := MethodNode.FindAll(nkForStmt);
-      try
-        for i := 0 to Fors.Count - 1 do
-          ProcessForStmt(Fors[i]);
-      finally
-        Fors.Free;
-      end;
-
-      // Phase 2.2 + 2.3: Calls innerhalb von Expression-tragenden Knoten
-      // (TypeRef-Strings statt nkCall) als pessimistic-Write erkennen.
-      //   Phase 2.2: nkIfStmt + nkWhileStmt + nkCaseStmt
-      //   Phase 2.3: nkAssign.RHS (z.B. 'Lines := AcquireLines(F, Cached)'
-      //              schreibt Cached out-Param) + nkForStmt.Range
-      // Alle teilen den gleichen ParseCallsInExpr-Pfad.
-      var Exprs : TList<TAstNode> := MethodNode.FindAll(nkIfStmt);
-      try
-        for i := 0 to Exprs.Count - 1 do ProcessConditionCalls(Exprs[i]);
-      finally Exprs.Free; end;
-      Exprs := MethodNode.FindAll(nkWhileStmt);
-      try
-        for i := 0 to Exprs.Count - 1 do ProcessConditionCalls(Exprs[i]);
-      finally Exprs.Free; end;
-      Exprs := MethodNode.FindAll(nkCaseStmt);
-      try
-        for i := 0 to Exprs.Count - 1 do ProcessConditionCalls(Exprs[i]);
-      finally Exprs.Free; end;
-      Exprs := MethodNode.FindAll(nkAssign);
-      try
-        for i := 0 to Exprs.Count - 1 do ProcessConditionCalls(Exprs[i]);
-      finally Exprs.Free; end;
-      Exprs := MethodNode.FindAll(nkForStmt);
-      try
-        for i := 0 to Exprs.Count - 1 do ProcessConditionCalls(Exprs[i]);
-      finally Exprs.Free; end;
 
       // Phase C: Body-Token-Sammlung fuer RefCount + Reads via Source-Lines.
       // Method-Boundary [Start..End] limitiert den Read-Scan auf den
