@@ -361,7 +361,16 @@ Aufwand, schafft CI-Isolation der Engine, schlanker IDE-Plugin.
 **Vorbedingung für**: A.1 (Confidence-Audit hat eigene CI), B.1 (Symbol-
 Table-Implementation profitiert von engerer Scope-Grenze).
 
-### D.2 Singleton-Entkopplung (gAstFileCache, gSymbolRefIndex)
+### D.2 Singleton-Entkopplung (gAstFileCache, gSymbolRefIndex) — 🟡 **deferred bis D.1**
+
+> **Detail-Konzept:** [`Konzept_D2_SingletonEntkopplung.md`](Konzept_D2_SingletonEntkopplung.md)
+>
+> Audit-Ergebnis: realistischer Aufwand 3-5d (nicht 1d), kein konkreter
+> aktueller Bug, natürlicher Heimat-Sprint ist D.1 (Engine-Extraction)
+> wo die Engine-API sowieso re-modularisiert wird. **D.2 standalone =
+> Refactor-Bumerang.** Test-Isolation-Risiko ist heute durch
+> mtime-Cache (commit 1e7e193) + Re-Create-Pattern (commit 120894a)
+> ausreichend adressiert.
 
 **Problem**: globaler State im Engine-Code. Parallele Analysen würden
 sich gegenseitig den Cache stehlen. Test-Isolation: jeder Test sieht
