@@ -357,21 +357,32 @@ begin
   Result := CharInSet(C, ['A'..'Z', 'a'..'z', '_']);
 end;
 
+type
+  TExprCall = record
+    FuncNameLow : string;
+    ArgsRaw     : string;
+  end;
+
 procedure ParseCallsInExpr(const Expr: string;
-  const Callback: TProc<string {FuncNameLow}, string {ArgsRaw}>);
-// Findet alle 'name(args)'-Pattern im Expr-String und ruft Callback
-// pro Treffer. Nested-paren-aware (Depth-Counting). Whitespace zwischen
+  Calls: TList<TExprCall>);
+// Findet alle 'name(args)'-Pattern im Expr-String und fuegt sie zu
+// Calls hinzu. Nested-paren-aware (Depth-Counting). Whitespace zwischen
 // name und '(' wird toleriert - der Parser packt Conditions oft mit
 // JoinTokInto + Space-Separator.
 //
 // Phase-2.2-Helper: wird genutzt um Calls in if/while/case-Conditions
 // zu finden, die der AST als nkIfStmt.TypeRef-String ablegt (nicht als
 // nkCall-Knoten).
+//
+// List-basiert statt anonymous-method-Callback weil anonymous procs
+// in Delphi Nested-Procedures der enclosing Method (z.B. RegisterWrite
+// in AnalyzeMethod) nicht erfassen koennen (E2555).
 var
-  T      : string;
+  T          : string;
   i, NameStart, NameEnd, Depth, ArgsStart : Integer;
-  Name   : string;
+  Entry      : TExprCall;
 begin
+  if Calls = nil then Exit;
   T := Expr;
   i := 1;
   while i <= Length(T) do
@@ -400,8 +411,9 @@ begin
       end;
       Inc(i);
     end;
-    Name := Copy(T, NameStart, NameEnd - NameStart + 1);
-    Callback(LowerCase(Name), Copy(T, ArgsStart, i - ArgsStart));
+    Entry.FuncNameLow := LowerCase(Copy(T, NameStart, NameEnd - NameStart + 1));
+    Entry.ArgsRaw     := Copy(T, ArgsStart, i - ArgsStart);
+    Calls.Add(Entry);
     if (i <= Length(T)) and (T[i] = ')') then Inc(i);
   end;
 end;
@@ -507,30 +519,37 @@ var
   // den String, finden alle 'name(args)'-Pattern und behandeln sie wie
   // ProcessCall (READ_ALLOWLIST -> kein Write; sonst pessimistic-Write
   // pro Var-Identifier in den Args).
+  //
+  // Nested-procedure statt anonymous-method (greift auf Outer-Scope
+  // VarList und RegisterWrite zu - anonymous procs koennen das nicht
+  // erfassen, siehe E2555).
+  var
+    Calls   : TList<TExprCall>;
+    Call    : TExprCall;
+    i       : Integer;
+    VI      : TVarInfo;
+    ArgsLow : string;
   begin
     if (Node = nil) or (Node.TypeRef = '') then Exit;
-    ParseCallsInExpr(Node.TypeRef,
-      procedure(const FnLow, ArgsRaw: string)
-      var
-        i : Integer;
-        VI : TVarInfo;
-        ArgsLow : string;
-        FullCallStub : string;
+    Calls := TList<TExprCall>.Create;
+    try
+      ParseCallsInExpr(Node.TypeRef, Calls);
+      for Call in Calls do
       begin
-        // IsReadOnlyCall/IsWriteAllowlistCall erwarten 'FuncName(...)';
-        // wir bauen einen Stub damit die existierende Logik wiederverwendet
-        // werden kann.
-        FullCallStub := FnLow + '(';
-        if IsReadOnlyCall(FullCallStub) then Exit;
-        ArgsLow := LowerCase(ArgsRaw);
-        if ArgsLow = '' then Exit;
+        // IsReadOnlyCall erwartet 'FuncName(...)' - wir bauen Stub.
+        if IsReadOnlyCall(Call.FuncNameLow + '(') then Continue;
+        ArgsLow := LowerCase(Call.ArgsRaw);
+        if ArgsLow = '' then Continue;
         for i := 0 to VarList.Count - 1 do
         begin
           VI := VarList[i];
           if FindIdentInArgList(ArgsLow, VI.NameLow) then
             RegisterWrite(i, Node.Line);
         end;
-      end);
+      end;
+    finally
+      Calls.Free;
+    end;
   end;
 
   procedure ProcessForStmt(F: TAstNode);
