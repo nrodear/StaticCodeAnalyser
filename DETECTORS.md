@@ -80,7 +80,7 @@ for the canonical roster.
 | 27 | **TooManyParams — too many parameters** | Method has more than 5 parameters | ✅ | `uLongParamList` |
 | 28 | **CyclomaticComplexity — McCabe complexity > 10** | Number of branching paths (`if`, `case` arm, `for`, `while`, `repeat`, `on` handler, `and`/`or`/`xor`) exceeds 10 | ✅ | `uCyclomaticComplexity` |
 | 29 | **DeepNesting — nesting depth > 4** | Code block indented more than four levels deep | ✅ | `uDeepNesting` |
-| 30 | **DuplicateBlock — duplicated code block** | Identical block (>10 lines) appears more than once | 🟡 | `uDuplicateString` (strings only, not blocks) |
+| 30 | **DuplicateBlock — duplicated code block** | Identical block (≥ `DuplicateBlockMinLines`, default 8 normalized lines) appears more than once in the same file | ✅ | `uDuplicateBlock` (SCA021) — line-based sliding window, normalises trim/lowercase/whitespace-collapse, skips boilerplate (`begin`/`end`/`else`/`try`/`finally`/`except`, pure comments) and if/end branching blocks |
 | 31 | **GodClass — god class** | Class has more than 20 methods or more than 15 instance fields | ✅ | `uGodClass` |
 | 32 | **MagicNumber — magic number without constant** | Numeric literal (other than 0 and 1) used directly in code instead of a named constant | ✅ | `uMagicNumbers` |
 | 33 | **BooleanParam — boolean as flag parameter** | Method takes a `Boolean` parameter used internally for branching | ✅ | `uBooleanParam` |

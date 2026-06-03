@@ -79,7 +79,7 @@ für die kanonische Liste.
 | 27 | **TooManyParams: Zu viele Parameter** | Methode hat mehr als 5 Parameter | ✅ | `uLongParamList` |
 | 28 | **CyclomaticComplexity: McCabe-Komplexität > 10** | Anzahl der Verzweigungspfade (`if`, `case`-Arm, `for`, `while`, `repeat`, `on`-Handler, `and`/`or`/`xor`) überschreitet 10 | ✅ | `uCyclomaticComplexity` |
 | 29 | **DeepNesting: Verschachtelungstiefe > 4** | Code-Block ist mehr als 4 Ebenen tief eingerückt | ✅ | `uDeepNesting` |
-| 30 | **DuplicateBlock: Duplizierter Code-Block** | Identischer Block (>10 Zeilen) erscheint mehrfach | 🟡 | `uDuplicateString` (nur Strings, nicht Blöcke) |
+| 30 | **DuplicateBlock: Duplizierter Code-Block** | Identischer Block (≥ `DuplicateBlockMinLines`, Default 8 normalisierte Zeilen) erscheint mehrfach in derselben Datei | ✅ | `uDuplicateBlock` (SCA021) — zeilenbasierter Sliding-Window, normalisiert Trim/Lowercase/Whitespace-Collapse, überspringt Boilerplate (`begin`/`end`/`else`/`try`/`finally`/`except`, reine Kommentare) und if/end-Branching-Blöcke |
 | 31 | **GodClass: Gottklasse** | Klasse hat mehr als 20 Methoden oder mehr als 15 Instanzfelder | ✅ | `uGodClass` |
 | 32 | **MagicNumber: Magic Number ohne Konstante** | Numerisches Literal (außer 0 und 1) direkt im Code statt benannter Konstante | ✅ | `uMagicNumbers` |
 | 33 | **BooleanParam: Boolean als Flag-Parameter** | Methode erhält `Boolean`-Parameter der intern als Verzweigung genutzt wird | ✅ | `uBooleanParam` |
