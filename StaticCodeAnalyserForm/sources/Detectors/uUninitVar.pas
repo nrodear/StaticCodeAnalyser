@@ -48,15 +48,11 @@ uses
   System.StrUtils,
   uFileTextCache, uDetectorUtils;
 
-const
-  // Hard-Caps gegen pathologisch grosse Methoden (Konzept §8.7).
-  // Bei Ueberschreitung wird die Methode nicht analysiert (kein Flag,
-  // kein Crash) - sichert die Detector-Wall-Time gegen O(n)-Eskalation.
-  // Werte konfigurierbar via uSCAConsts.DetectorMaxLocalVars /
-  // DetectorMaxChildrenRecursive (analyser.ini [Detectors]).
-  DEFAULT_DEFAULT_MAX_LOCAL_VARS = 200;
-  DEFAULT_DEFAULT_MAX_CHILDREN_RECURSIVE = 5000;
+// Hard-Caps werden zur Laufzeit aus uSCAConsts.DetectorMaxLocalVars /
+// DetectorMaxChildrenRecursive gelesen (konfigurierbar via analyser.ini
+// [Detectors]). Default 200 / 5000.
 
+const
   // RTL-Routinen die ihren Argumenten Werte zuweisen (out/var). Wenn
   // einer dieser Calls eine Variable als Arg hat, gilt das als Write.
   WRITE_ALLOWLIST : array[0..11] of string = (
@@ -694,13 +690,13 @@ begin
   if IsAsmMethod(MethodNode) then Exit;
 
   // Fast-Out 2: pathologisch grosse Methode - Hard-Cap.
-  ChildCount := CountChildrenRecursive(MethodNode, DEFAULT_MAX_CHILDREN_RECURSIVE);
-  if ChildCount > DEFAULT_MAX_CHILDREN_RECURSIVE then Exit;
+  ChildCount := CountChildrenRecursive(MethodNode, DetectorMaxChildrenRecursive);
+  if ChildCount > DetectorMaxChildrenRecursive then Exit;
 
   LocalVars := MethodNode.FindAll(nkLocalVar);
   try
     if LocalVars.Count = 0 then Exit;
-    if LocalVars.Count > DEFAULT_MAX_LOCAL_VARS then Exit;
+    if LocalVars.Count > DetectorMaxLocalVars then Exit;
 
     VarList      := TList<TVarInfo>.Create;
     VarMap       := TDictionary<string, Integer>.Create;

@@ -57,6 +57,11 @@ var
   DetectorMaxNesting       : Integer = 4;      // uDeepNesting (>4 = Fund)
   DetectorMaxCyclomatic    : Integer = 10;     // uCyclomaticComplexity (>10 = Fund)
   DetectorMinBlockLines    : Integer = 8;      // uDuplicateBlock
+  // uUninitVar Hard-Caps gegen pathologisch grosse Methoden:
+  // Bei Ueberschreitung wird die Methode nicht analysiert (kein Flag,
+  // kein Crash) - sichert Detector-Wall-Time gegen O(n)-Eskalation.
+  DetectorMaxLocalVars          : Integer = 200;
+  DetectorMaxChildrenRecursive  : Integer = 5000;
   DetectorMaxFileBytes     : Integer = 5 * 1024 * 1024;  // uStaticAnalyzer2
   DetectorMaxGodHandlerEvents : Integer = 5;             // uDfmGodHandler
   DetectorMaxDbInUiFormHint   : Integer = 3;             // uDfmDataModuleSplitHint
