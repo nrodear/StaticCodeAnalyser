@@ -29,6 +29,17 @@ Full release notes: [docs/releases/v0.9.8.md](docs/releases/v0.9.8.md)
   overrides via `--hide-test-fixtures` / `--show-test-fixtures`.
 - **SCA165 `UnusedSuppression`** — emits a hint when a `// noinspection X`
   marker did not suppress any finding (detector improved → marker obsolete).
+- **SCA166 `UninitVar` (MVP)** — local variable read before being
+  assigned. Conservative single-method-scope detector
+  ([`uUninitVar.pas`](StaticCodeAnalyserForm/sources/Detectors/uUninitVar.pas))
+  with three-class call model (READ_ALLOWLIST: `WriteLn`/`Length`/…,
+  WRITE_ALLOWLIST: `ReadLn`/`FillChar`/…, UNKNOWN-calls: pessimistic-
+  write). Method-boundary scan + `_`-prefix + managed-type skip + hard
+  caps against pathological methods. Full path-sensitivity (if-else
+  sibling-write, CFG, symbol table) deferred to Phase 2-4 per
+  [`Konzept_SCA166_UninitVar.md`](Konzept_SCA166_UninitVar.md).
+  Closes the long-standing DETECTORS.md slot #16 (UninitVar) with a
+  conservative MVP; slot stays `🟡 partial` until full flow analysis.
 - **Golden-corpus regression tests** in `tests/golden-corpus/fp-reproducers/`
   — 5 historical FP reproducer `.pas` files (one per Round-1..13 fix) plus
   `expected.json` and `tools/check-golden-corpus.ps1` PowerShell runner.

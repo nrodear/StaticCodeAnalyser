@@ -576,12 +576,14 @@ Confidence per `SetKind(fkUninitVar, fcMedium)` direkt im Detector.
 
 ## 11. Roadmap
 
-| Phase | Inhalt | Aufwand | Akzeptanz-Kriterium |
-|---|---|---|---|
-| **MVP** | Phase A-E ohne sibling-Write-Check + ohne CFG | 1-1.5d | unit-tests grün, Self-Test produziert ≤ 50 SCA166-Findings (alle manuell als TP verifizierbar oder FP-dokumentiert) |
-| **Phase 2** | Sibling-Write-Check für if-then-else mit beidseitigem Write | 4-6h | Selbstes Beispiel `if cond then X := 1 else X := 2;` flaggt nicht mehr |
-| **Phase 3** | echter CFG-Builder (anstoßend an Konzept §A.4) | 3-5d | Komplexe try-except-finally + nested-if Fälle korrekt; Recall steigt, FP-Rate stabil |
-| **Phase 4** | Symboltabelle (B.1 aus Konzept) integriert für korrektes `var`/`out`-Parameter-Erkennen | abhängig von B.1 | Pessimistic-Read durch exakte Read/Write-Klassifikation ersetzt |
+| Phase | Inhalt | Aufwand | Akzeptanz-Kriterium | Status |
+|---|---|---|---|---|
+| **MVP (Phase 1)** | Phase A-E ohne sibling-Write-Check + ohne CFG | 1-1.5d | 15 unit-tests grün, Real-World-Scan 0.7 Findings/File ohne Crash | ✅ commit 8e439ec |
+| **Phase 2.1** | Sibling-Write-Check für if-then-else mit beidseitigem Write | 4-6h | `if cond then X := 1 else X := 2;` flaggt nicht mehr | 🔲 |
+| **Phase 2.2** | **Calls in `if`/`while`/`case`-Conditions** als pessimistic-Write erkennen (Parser packt sie als TypeRef-String, kein nkCall-Walk) | 1d | `if not ReadFile(F, Buf, ...)` flaggt Buf nicht mehr falsch als unwritten | 🔲 — **größter erwartbarer FP-Killer** |
+| **Phase 2.3** | Read-Allowlist erweitern um Windows-API-Read-Calls (GetTickCount, GetLastError, ...) | 1h | weniger pessimistic-Write-Fälle | 🔲 |
+| **Phase 3** | echter CFG-Builder (anstoßend an Konzept §A.4) | 3-5d | Komplexe try-except-finally + nested-if Fälle korrekt; Recall steigt, FP-Rate stabil | 🔲 |
+| **Phase 4** | Symboltabelle (B.1 aus Konzept) integriert für korrektes `var`/`out`-Parameter-Erkennen | abhängig von B.1 | Pessimistic-Read durch exakte Read/Write-Klassifikation ersetzt | 🔲 |
 
 Phase 1 (MVP) ist Stand-alone realisierbar OHNE Phase 2/3/4 der
 Scanner-Qualität-Roadmap.
@@ -663,21 +665,47 @@ in `expected.json` mit `must_not_flag: ["SCA166"]`.
 
 ---
 
-## 13. Erwarteter FP-Audit-Outcome
+## 13. Erwarteter FP-Audit-Outcome — geschätzt vs. tatsächlich
 
-Auf dem Real-World-Korpus (`D:\git-demos\delphi`, 2 752 Files)
-geschätzte Initial-Findings:
+**Schätzung vor Implementation:**
 
 | Erwartung | Anzahl | Begründung |
 |---|---|---|
 | Echte UninitVar-Bugs | ~5-20 | seltene aber harte Bugs |
 | Conditional-Write FPs (Phase-2-Kandidaten) | ~50-200 | typische if-then-else mit beidseitigem Write |
 | Pessimistic-Read FPs (`var`/`out`-Param nicht erkannt) | ~30-100 | abhängig von AST-Auflösung |
-| Managed-Type-Hints (wenn fcLow aktiv) | ~500-2000 | string-Concat-Idiom — viele Stellen |
+| **Erwarteter MVP-Output** | **~80-320** | nur `fcHigh` + `fcMedium` |
 
-Pragmatischer MVP-Output: nur `fcHigh` und `fcMedium` zeigen →
-~80-200 Findings, davon 70 % echte Bugs oder zumindest Smells, 30 %
-Phase-2-Kandidaten. Akzeptabler Signal-to-Noise.
+**Tatsächliche Audit-Werte** (commit 8e439ec, `D:\git-demos\delphi`,
+2 752 Files):
+
+| Stand | SCA166 | Faktor vs Schätzung |
+|---|---|---|
+| Initial (commit 03438de, ohne Method-Boundary, ohne pessimistic-Write) | 7 322 | 23-86× |
+| + Method-Boundary + pessimistic-Write (commit 2eea78a) | (Tests brachen — alle Reads als Write) | — |
+| + READ_ALLOWLIST (commit 8e439ec) | **1 920** | **6-22×** |
+
+**Realistische Klassifikation der verbleibenden 1 920:**
+
+| Klasse | Geschätzte Anzahl | Phase-2-Adressierung |
+|---|---|---|
+| Echte UninitVar-Bugs | ~50-200 | bleiben (= Detector-Zweck) |
+| FPs aus Calls in `if`/`while`-Conditions | ~500-1 000 | **Phase 2.2** killt das |
+| FPs aus Array-Indexing (`Buf[0]` als Call-Arg) | ~100-300 | Phase 2.4 (TypeRef-Walk) |
+| FPs aus Sub-Expression-Calls die AST-Walk verpasst | ~500-1 000 | Phase 3 (CFG + Expression-AST) |
+
+**Diskrepanz-Erklärung:** die ursprüngliche Schätzung beruhte auf
+SonarDelphi-Erfahrung im SonarDelphi-Korpus. Unser Real-World-Korpus
+enthält dicht Library-Code (mormot, ZXing, MVCFramework) mit vielen
+Patterns die der Parser als `nkIfStmt.TypeRef`-Strings (statt
+`nkCall`-Knoten) ablegt — diese werden vom pessimistic-Write-Pfad
+nicht erfasst. Phase 2.2 löst das.
+
+**Aktueller Signal-to-Noise:** ~0.7 Findings/File, dominiert von
+Library-Code in mormot/MVCFramework/ZXing. App-Code-Density ist
+deutlich niedriger. `// noinspection UninitVar` ist verfügbar für
+einzelne Suppressions, `--profile bugs-only` schließt SCA166 nicht
+explizit aus.
 
 ---
 

@@ -58,7 +58,7 @@ für die kanonische Liste.
 
 | # | Regel | Beschreibung | Status | Unit |
 |---|-------|-------------|--------|------|
-| 16 | **UninitVar: Uninitialisierte Variable** | Lokale Variable wird gelesen bevor sie in allen Codepfaden zugewiesen wurde | 🔲 | |
+| 16 | **UninitVar: Uninitialisierte Variable** | Lokale Variable wird gelesen bevor sie in allen Codepfaden zugewiesen wurde | 🟡 | MVP ausgeliefert als `SCA166` (`uUninitVar.pas`) — konservativer single-method-Scope ohne volle Path-Sensitivity. Slot #16 bleibt `🟡 partial` bis Phase 3 (CFG + Symboltabelle). Siehe [Konzept_SCA166_UninitVar.md](Konzept_SCA166_UninitVar.md). |
 | 17 | **DeadCode: Unerreichbarer Code** | Anweisungen nach `Exit`, `Break`, `Continue` oder `raise` auf gleicher Ebene | ✅ | `uDeadCode` |
 | 18 | **BoolAlwaysTrue: Boolean-Ausdruck immer wahr/falsch** | Vergleich wie `x >= 0` für `Cardinal` oder `Length(s) >= 0` – ergibt immer True | ✅ | `uBoolAlwaysTrue` (nur Length-Pattern) |
 | 19 | **FloatEquality: Fließkomma-Vergleich mit =** | `if a = b` wobei `a` oder `b` vom Typ `Single`/`Double`/`Extended` ist | ✅ | `uFloatEquality` |

@@ -7,9 +7,9 @@ specific to this tool.
 
 Status legend: ✅ implemented · 🟡 partial · 🔲 open
 
-**Summary:** 44 / 50 Sonar-rule slots complete (Critical + Reliability + Maintainability + Minor sections largely done) + 1 partial + 3 bonus + **22 DFM** detectors + **32 SonarDelphi-migration** (SCA120-152) + **9 mORMot-cluster** (SCA153-161) + ~60 SonarDelphi-compatible naming/formatting checks (SCA060-119) = **161 detector kinds total** (delivered by ~130 pipeline classes; several classes emit multiple kinds — e.g. `uVisibilityCheck` → 4 kinds, `uDfmAnalysisRunner` → 22 DFM kinds).
+**Summary:** 44 / 50 Sonar-rule slots complete (Critical + Reliability + Maintainability + Minor sections largely done) + 1 partial + 3 bonus + **22 DFM** detectors + **32 SonarDelphi-migration** (SCA120-152) + **9 mORMot-cluster** (SCA153-161) + ~60 SonarDelphi-compatible naming/formatting checks (SCA060-119) + **SCA164/165/166** (UnusedRoutine + UnusedSuppression + UninitVar-MVP) = **~165 detector kinds total** (delivered by ~158 pipeline classes; several classes emit multiple kinds — e.g. `uVisibilityCheck` → 4 kinds, `uDfmAnalysisRunner` → 22 DFM kinds).
 
-Remaining 5 open slots all need type-inference / flow-analysis / cross-unit symbol resolution: #16 UninitVar, #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI.
+Remaining 4 open slots all need type-inference / flow-analysis / cross-unit symbol resolution: #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI. **#16 UninitVar** has a conservative MVP (`SCA166`) — full path-sensitivity remains open for Phase 3.
 
 The 21 Pascal-AST detectors below follow the Sonar 50-rule taxonomy.
 The **22 DFM detectors** in the dedicated section are form-file
@@ -59,7 +59,7 @@ for the canonical roster.
 
 | # | Rule | Description | Status | Unit |
 |---|------|-------------|--------|------|
-| 16 | **UninitVar — uninitialised variable** | Local variable read before being assigned on every code path | 🔲 | |
+| 16 | **UninitVar — uninitialised variable** | Local variable read before being assigned on every code path | 🟡 | MVP shipped as `SCA166` (`uUninitVar.pas`) — conservative single-method scope without full path-sensitivity. Slot #16 stays `🟡 partial` until Phase 3 (CFG + symbol table). See [Konzept_SCA166_UninitVar.md](Konzept_SCA166_UninitVar.md). |
 | 17 | **DeadCode — unreachable code** | Statements after `Exit`, `Break`, `Continue` or `raise` at the same nesting level | ✅ | `uDeadCode` |
 | 18 | **BoolAlwaysTrue — boolean always true/false** | Comparison such as `x >= 0` for `Cardinal` or `Length(s) >= 0` — always evaluates to True | ✅ | `uBoolAlwaysTrue` (Length-pattern only) |
 | 19 | **FloatEquality — floating-point comparison with =** | `if a = b` where `a` or `b` is `Single`/`Double`/`Extended` | ✅ | `uFloatEquality` |
