@@ -52,8 +52,10 @@ const
   // Hard-Caps gegen pathologisch grosse Methoden (Konzept §8.7).
   // Bei Ueberschreitung wird die Methode nicht analysiert (kein Flag,
   // kein Crash) - sichert die Detector-Wall-Time gegen O(n)-Eskalation.
-  MAX_LOCAL_VARS = 200;
-  MAX_CHILDREN_RECURSIVE = 5000;
+  // Werte konfigurierbar via uSCAConsts.DetectorMaxLocalVars /
+  // DetectorMaxChildrenRecursive (analyser.ini [Detectors]).
+  DEFAULT_DEFAULT_MAX_LOCAL_VARS = 200;
+  DEFAULT_DEFAULT_MAX_CHILDREN_RECURSIVE = 5000;
 
   // RTL-Routinen die ihren Argumenten Werte zuweisen (out/var). Wenn
   // einer dieser Calls eine Variable als Arg hat, gilt das als Write.
@@ -179,82 +181,12 @@ type
     StartLine, EndLine : Integer;
   end;
 
-procedure CollectNestedMethodRanges(MethodNode: TAstNode;
-  Ranges: TList<TLineRange>);
-// Sammelt Line-Ranges aller nested-Methods (nkMethod-Knoten innerhalb
-// MethodNode). MethodNode selbst NICHT mit aufnehmen (das ist der
-// Outer-Body).
-//
-// Hintergrund (Phase 2.4): nkAssign/nkCall/nkForStmt-Walks auf den
-// Outer-MethodNode liefern auch Knoten aus nested-Procedures. Das
-// fuehrt zu FPs:
-//   procedure Outer;
-//   var i: Integer;
-//     procedure Inner; begin Inc(i); end;   // pessimistic-Write auf Z3
-//   begin
-//     i := 0;                                // echter Init auf Z6
-//     ...
-//   end;
-// Mein Detector nimmt Inc(i) als FirstWrite (kleinste Line). Z3 < Z6 ->
-// flag. Echt-init auf Z6 wird ueberhaupt nicht als 'WriteLine' gewertet
-// weil Z3 schon registriert ist (RegisterWrite nimmt MIN).
-//
-// Fix: alle Hits aus nested-Method-Ranges ueberspringen. Nested
-// Procedures haben ihren eigenen AnalyzeMethod-Aufruf.
-var
-  Stack : TStack<TAstNode>;
-  Cur   : TAstNode;
-  i     : Integer;
-  R     : TLineRange;
-
-  function CalcEnd(N: TAstNode): Integer;
-  var
-    Inner : TStack<TAstNode>;
-    Sub   : TAstNode;
-    j     : Integer;
-  begin
-    Result := N.Line;
-    Inner := TStack<TAstNode>.Create;
-    try
-      Inner.Push(N);
-      while Inner.Count > 0 do
-      begin
-        Sub := Inner.Pop;
-        if Sub.Line > Result then Result := Sub.Line;
-        for j := 0 to Sub.Children.Count - 1 do
-          Inner.Push(Sub.Children[j]);
-      end;
-    finally
-      Inner.Free;
-    end;
-  end;
-
-begin
-  if (MethodNode = nil) or (Ranges = nil) then Exit;
-  Stack := TStack<TAstNode>.Create;
-  try
-    // Children durchgehen, MethodNode selbst NICHT (das IST der Outer-Body).
-    for i := 0 to MethodNode.Children.Count - 1 do
-      Stack.Push(MethodNode.Children[i]);
-    while Stack.Count > 0 do
-    begin
-      Cur := Stack.Pop;
-      if Cur.Kind = nkMethod then
-      begin
-        R.StartLine := Cur.Line;
-        R.EndLine   := CalcEnd(Cur);
-        Ranges.Add(R);
-        // NICHT in nested-Method weiter descenden - nested-of-nested
-        // ist Sub-Range der jetzigen, der Skip-Check matched trotzdem.
-        Continue;
-      end;
-      for i := 0 to Cur.Children.Count - 1 do
-        Stack.Push(Cur.Children[i]);
-    end;
-  finally
-    Stack.Free;
-  end;
-end;
+// Note: AST-basierte Nested-Method-Detection wurde im Block-1-Cleanup
+// entfernt — der Parser entfernt den Outer-MethodNode bei
+// 'Headless-Method'-Pattern (ParseMethodImpl), nested-Procedures landen
+// NICHT als nkMethod-Children. Audit zeigte -4 Findings Effekt.
+// Phase 2.6 (CollectNestedMethodRangesViaSource unten) ist die effektive
+// Alternative.
 
 function IsLineInRanges(Line: Integer;
   const Ranges: TList<TLineRange>): Boolean;
@@ -496,17 +428,25 @@ function ExtractForLoopVar(const ForTypeRef: string): string;
 //   'var x: Integer := 0 to 10'    (inline-var Form, aber inline-var hat
 //                                   auch nkLocalVar-Child)
 //   'i in container'
-// Wir extrahieren den ersten Identifier nach optionalem 'var'.
+//   'VAR\tx := 0 to 10'             (Tab statt Space, case-mixed)
+// Wir extrahieren den ersten Identifier nach optionalem 'var'-Keyword.
 var
   S, Token : string;
-  i, Start : Integer;
+  i, Start, KwLen : Integer;
 begin
   Result := '';
   S := Trim(ForTypeRef);
   if S = '' then Exit;
-  // Optional 'var' (lowercase-tolerant) ueberspringen.
-  if SameText(Copy(S, 1, 4), 'var ') then
-    S := TrimLeft(Copy(S, 5, MaxInt));
+  // Optional 'var'-Keyword (case-insensitive) ueberspringen — mit
+  // beliebigem Whitespace (Space oder Tab) als Trennzeichen.
+  if (Length(S) >= 4)
+     and SameText(Copy(S, 1, 3), 'var')
+     and (S[4] <= ' ') then
+  begin
+    KwLen := 3;
+    while (KwLen + 1 <= Length(S)) and (S[KwLen + 1] <= ' ') do Inc(KwLen);
+    S := Copy(S, KwLen + 1, MaxInt);
+  end;
   // Erstes Token = Identifier-Chars + optional Punkt-Qualifier brechen wir
   // an Non-IdentChar ab.
   Start := 1;
@@ -709,11 +649,13 @@ var
   end;
 
   procedure ProcessConditionCalls(Node: TAstNode);
-  // Phase 2.2: Calls in if/while/case-Conditions sind im Parser nicht
-  // als nkCall-Knoten abgelegt sondern als TypeRef-String. Wir tokenisieren
-  // den String, finden alle 'name(args)'-Pattern und behandeln sie wie
-  // ProcessCall (READ_ALLOWLIST -> kein Write; sonst pessimistic-Write
-  // pro Var-Identifier in den Args).
+  // Phase 2.2 + 2.3: Calls innerhalb von Expression-tragenden Knoten
+  // (nkIfStmt/nkWhileStmt/nkCaseStmt fuer Conditions, nkAssign/nkForStmt
+  // fuer RHS-Ausdruecke) sind im Parser nicht als nkCall-Knoten abgelegt
+  // sondern als TypeRef-String. Wir tokenisieren den String, finden alle
+  // 'name(args)'-Pattern und behandeln sie wie ProcessCall
+  // (READ_ALLOWLIST -> kein Write; sonst pessimistic-Write pro
+  // Var-Identifier in den Args).
   //
   // Nested-procedure statt anonymous-method (greift auf Outer-Scope
   // VarList und RegisterWrite zu - anonymous procs koennen das nicht
@@ -860,13 +802,13 @@ begin
   if IsAsmMethod(MethodNode) then Exit;
 
   // Fast-Out 2: pathologisch grosse Methode - Hard-Cap.
-  ChildCount := CountChildrenRecursive(MethodNode, MAX_CHILDREN_RECURSIVE);
-  if ChildCount > MAX_CHILDREN_RECURSIVE then Exit;
+  ChildCount := CountChildrenRecursive(MethodNode, DEFAULT_MAX_CHILDREN_RECURSIVE);
+  if ChildCount > DEFAULT_MAX_CHILDREN_RECURSIVE then Exit;
 
   LocalVars := MethodNode.FindAll(nkLocalVar);
   try
     if LocalVars.Count = 0 then Exit;
-    if LocalVars.Count > MAX_LOCAL_VARS then Exit;
+    if LocalVars.Count > DEFAULT_MAX_LOCAL_VARS then Exit;
 
     VarList      := TList<TVarInfo>.Create;
     VarMap       := TDictionary<string, Integer>.Create;
@@ -874,10 +816,8 @@ begin
     NestedRanges := TList<TLineRange>.Create;
     Lines        := AcquireLines(FileName, Cached);
     try
-      CollectNestedMethodRanges(MethodNode, NestedRanges);
-      // Phase 2.6: ergaenzend source-line-basierte Detection. AST-Walk
-      // verpasst nested-Procedures wenn der Parser den Outer-MethodNode
-      // wegen 'Headless-Method'-Pattern aus dem AST entfernt hat.
+      // Phase 2.6: source-line-basierte Nested-Method-Detection. AST-
+      // basierte Variante war obsolet (Parser entfernt Outer-MethodNode).
       if Lines <> nil then
         CollectNestedMethodRangesViaSource(Lines, MethodNode.Line,
           CalcMethodEndLine(MethodNode), NestedRanges);

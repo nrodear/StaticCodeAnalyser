@@ -47,6 +47,8 @@ type
     // schreibt; Append=True haengt ohne Header an (fuer Multi-Run-Sammlung).
     procedure SaveCsv(const DestFile: string; Append: Boolean = False);
     function Count: Integer;
+    // RFC-4180 Escape - public fuer Unit-Tests.
+    class function CsvEscape(const S: string): string; static;
   end;
 
 var
@@ -92,7 +94,7 @@ begin
   Result := FRecords.Count;
 end;
 
-function CsvEscape(const S: string): string;
+class function TSuppressionTelemetry.CsvEscape(const S: string): string;
 // Minimal RFC-4180: wenn Komma/Quote/Newline in S, in Quotes packen +
 // inner Quotes verdoppeln.
 begin
@@ -123,7 +125,7 @@ begin
          CsvEscape(R.Kind),
          CsvEscape(R.FileName),
          R.FindingLine,
-         R.MarkerLine]));
+         R.MarkerLine]));   // class func ueber TSuppressionTelemetry
     end;
     if Append and TFile.Exists(DestFile) then
       TFile.AppendAllText(DestFile, Lines.Text, TEncoding.UTF8)
