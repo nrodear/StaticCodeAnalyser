@@ -721,20 +721,162 @@ var
     end;
   end;
 
-var
-  i : Integer;
-  LV : TAstNode;
-  VarRec : TVarInfo;
-  ChildCount : Integer;
-  P : PVarInfo;
-  F : TLeakFinding;
-  FirstMatchPos : Integer;
-begin
-  if MethodNode = nil then Exit;
+  procedure PhaseA_VarInventur;
+  // Aus FindAll(nkLocalVar) die Var-Inventur aufbauen + Skip-Regeln
+  // anwenden (underscore-Prefix, Parser-Artefakt, Duplikate).
+  var
+    LV : TAstNode;
+    VarRec : TVarInfo;
+  begin
+    for LV in LocalVars do
+    begin
+      if Trim(LV.Name) = '' then Continue;
+      if LV.Name.StartsWith('_') then Continue;
+      if not LooksLikeRealLocalVar(Lines, LV.Line) then Continue;
+      VarRec.Name           := LV.Name;
+      VarRec.NameLow        := LowerCase(LV.Name);
+      VarRec.TypeLow        := LowerCase(LV.TypeRef);
+      VarRec.DeclLine       := LV.Line;
+      VarRec.FirstWriteLine := 0;
+      VarRec.FirstReadLine  := 0;
+      VarRec.RefCount       := 0;
+      VarRec.IsManaged      := IsManagedType(LV.TypeRef);
+      // Duplikate (same name in nested-scope - selten, defensive skip)
+      if VarMap.ContainsKey(VarRec.NameLow) then Continue;
+      VarMap.Add(VarRec.NameLow, VarList.Count);
+      VarList.Add(VarRec);
+    end;
+  end;
 
+  procedure PhaseB_AstWalks;
+  // P1: Single-Pass DFS - 1x walken, 6 Buckets gleichzeitig fuellen.
+  // Vorher: 8x MethodNode.FindAll mit jeweils komplettem Tree-Walk.
+  //
+  // Phase B (Writes aus nkAssign/nkCall/nkForStmt) + Phase 2.2+2.3
+  // (Calls innerhalb if/while/case/assign-RHS/for-Range TypeRef-
+  // Strings, via ParseCallsInExpr + pessimistic-Write).
+  var
+    Ifs, Whiles, Cases : TList<TAstNode>;
+    i : Integer;
+  begin
+    Assigns := TList<TAstNode>.Create;
+    Calls   := TList<TAstNode>.Create;
+    Fors    := TList<TAstNode>.Create;
+    Ifs     := TList<TAstNode>.Create;
+    Whiles  := TList<TAstNode>.Create;
+    Cases   := TList<TAstNode>.Create;
+    try
+      SinglePassCollectByKind(MethodNode, Assigns, Calls, Fors,
+                              Ifs, Whiles, Cases);
+      // Phase B - direkter Write aus AST-Knoten
+      for i := 0 to Assigns.Count - 1 do ProcessAssign(Assigns[i]);
+      for i := 0 to Calls.Count   - 1 do ProcessCall(Calls[i]);
+      for i := 0 to Fors.Count    - 1 do ProcessForStmt(Fors[i]);
+      // Phase 2.2+2.3 - Calls in TypeRef-Strings
+      for i := 0 to Ifs.Count     - 1 do ProcessConditionCalls(Ifs[i]);
+      for i := 0 to Whiles.Count  - 1 do ProcessConditionCalls(Whiles[i]);
+      for i := 0 to Cases.Count   - 1 do ProcessConditionCalls(Cases[i]);
+      for i := 0 to Assigns.Count - 1 do ProcessConditionCalls(Assigns[i]);
+      for i := 0 to Fors.Count    - 1 do ProcessConditionCalls(Fors[i]);
+    finally
+      Cases.Free;
+      Whiles.Free;
+      Ifs.Free;
+      Fors.Free;
+      Calls.Free;
+      Assigns.Free;
+    end;
+  end;
+
+  procedure PhaseC_BodyTokenAndReads;
+  // BodyToken-Sammlung fuer RefCount + Source-Line-Scan fuer FirstRead.
+  // Method-Boundary [Start..End] limitiert den Scan - sonst matcht
+  // Field-Decl im Interface mit gleichem Namen (FP-Faktor ~30x).
+  var
+    MethodStartLine, MethodEndLine, FirstMatchPos, i : Integer;
+    P : PVarInfo;
+  begin
+    CollectBodyTokens(MethodNode, BodySB);
+    BodyLow := LowerCase(BodySB.ToString);
+    MethodStartLine := MethodNode.Line;
+    MethodEndLine   := CalcMethodEndLine(MethodNode);
+    for i := 0 to VarList.Count - 1 do
+    begin
+      P := @VarList.List[i];
+      P.RefCount := CountWholeWordOccurrences(P.NameLow, BodyLow,
+                                              FirstMatchPos);
+      // RefCount<=1 -> nur Deklaration = UnusedLocal-Domain (SCA019).
+      if P.RefCount <= 1 then Continue;
+      P.FirstReadLine := FindFirstReadLine(P.NameLow, P.DeclLine,
+                                           P.FirstWriteLine,
+                                           MethodStartLine, MethodEndLine);
+    end;
+  end;
+
+  procedure PhaseD_Emit;
+  // Klassifikation pro Var + Emit Findings.
+  // Vier Skip-Pfade (UnusedLocal-Domain, managed types, nur Writes,
+  // clean Read>=Write). Zwei Emit-Pfade:
+  //   - FirstWrite = 0 + Refs > 0  -> 'never written' fcHigh
+  //   - FirstRead < FirstWrite     -> 'read vor write' fcMedium
+  var
+    i : Integer;
+    P : PVarInfo;
+    F : TLeakFinding;
+  begin
+    for i := 0 to VarList.Count - 1 do
+    begin
+      P := @VarList.List[i];
+      if P.RefCount <= 1 then Continue;        // UnusedLocal-Domain
+      if P.IsManaged then Continue;            // managed types: opt-in
+      if P.FirstReadLine = 0 then Continue;    // nur Writes - clean
+
+      if P.FirstWriteLine = 0 then
+      begin
+        // Referenced + never written - UninitVar fcHigh.
+        F            := TLeakFinding.Create;
+        F.FileName   := FileName;
+        F.MethodName := MethodNode.Name;
+        F.LineNumber := IntToStr(P.DeclLine);
+        F.MissingVar := Format(
+          'Uninitialised variable: %s is read on line %d but never ' +
+          'assigned in this method. Add an explicit initialiser ' +
+          '(%s := Default; / Create; / SetLength(...)).',
+          [P.Name, P.FirstReadLine, P.Name]);
+        F.SetKind(fkUninitVar, fcHigh);
+        Results.Add(F);
+        Continue;
+      end;
+
+      if P.FirstReadLine < P.FirstWriteLine then
+      begin
+        // Read vor Write - konservativ fcMedium (Phase 2.1 Sibling-
+        // Write-Check obsolet weil pessimistic-Write sowieso jeden
+        // Write registriert, kein Confidence-Downgrade-Pfad).
+        F            := TLeakFinding.Create;
+        F.FileName   := FileName;
+        F.MethodName := MethodNode.Name;
+        F.LineNumber := IntToStr(P.FirstReadLine);
+        F.MissingVar := Format(
+          'Potential uninitialised read: %s read on line %d before its ' +
+          'first assignment on line %d. Move the assignment up or add ' +
+          'an explicit default before the first use.',
+          [P.Name, P.FirstReadLine, P.FirstWriteLine]);
+        F.SetKind(fkUninitVar, fcMedium);
+        Results.Add(F);
+      end;
+    end;
+  end;
+
+var
+  ChildCount : Integer;
+begin
+  // ------------------------------------------------------------------
+  // ORCHESTRATOR: Fast-Outs + 4 Phasen (A, B, C, D)
+  // ------------------------------------------------------------------
+  if MethodNode = nil then Exit;
   // Fast-Out 1: asm-Block - kein Body zum Parsen.
   if IsAsmMethod(MethodNode) then Exit;
-
   // Fast-Out 2: pathologisch grosse Methode - Hard-Cap.
   ChildCount := CountChildrenRecursive(MethodNode, DetectorMaxChildrenRecursive);
   if ChildCount > DetectorMaxChildrenRecursive then Exit;
@@ -750,139 +892,17 @@ begin
     NestedRanges := TList<TLineRange>.Create;
     Lines        := AcquireLines(FileName, Cached);
     try
-      // Phase 2.6: source-line-basierte Nested-Method-Detection. AST-
-      // basierte Variante war obsolet (Parser entfernt Outer-MethodNode).
+      // Phase 2.6: source-line-basierte Nested-Method-Detection.
       if Lines <> nil then
         CollectNestedMethodRangesViaSource(Lines, MethodNode.Line,
           CalcMethodEndLine(MethodNode), NestedRanges);
-      // Phase A: Var-Inventur
-      for LV in LocalVars do
-      begin
-        if Trim(LV.Name) = '' then Continue;
-        if LV.Name.StartsWith('_') then Continue;
-        if not LooksLikeRealLocalVar(Lines, LV.Line) then Continue;
-        VarRec.Name           := LV.Name;
-        VarRec.NameLow        := LowerCase(LV.Name);
-        VarRec.TypeLow        := LowerCase(LV.TypeRef);
-        VarRec.DeclLine       := LV.Line;
-        VarRec.FirstWriteLine := 0;
-        VarRec.FirstReadLine  := 0;
-        VarRec.RefCount       := 0;
-        VarRec.IsManaged      := IsManagedType(LV.TypeRef);
-        // Duplikate (same name in nested-scope - selten, defensive skip)
-        if VarMap.ContainsKey(VarRec.NameLow) then Continue;
-        VarMap.Add(VarRec.NameLow, VarList.Count);
-        VarList.Add(VarRec);
-      end;
+
+      PhaseA_VarInventur;
       if VarList.Count = 0 then Exit;
 
-      // P1: Single-Pass DFS - 1x walken, 6 Buckets gleichzeitig fuellen.
-      // Vorher: 8x MethodNode.FindAll, jeder Aufruf walked den Sub-Tree
-      // komplett (incl. doppelte Walks fuer nkAssign + nkForStmt die
-      // sowohl in Phase B als auch in Phase 2.3 gebraucht werden).
-      Assigns := TList<TAstNode>.Create;
-      Calls   := TList<TAstNode>.Create;
-      Fors    := TList<TAstNode>.Create;
-      var Ifs    : TList<TAstNode> := TList<TAstNode>.Create;
-      var Whiles : TList<TAstNode> := TList<TAstNode>.Create;
-      var Cases  : TList<TAstNode> := TList<TAstNode>.Create;
-      try
-        SinglePassCollectByKind(MethodNode, Assigns, Calls, Fors,
-                                Ifs, Whiles, Cases);
-
-        // Phase B: Writes aus nkAssign, nkCall (Allowlist/pessimistic),
-        // nkForStmt (Loop-Var).
-        for i := 0 to Assigns.Count - 1 do ProcessAssign(Assigns[i]);
-        for i := 0 to Calls.Count   - 1 do ProcessCall(Calls[i]);
-        for i := 0 to Fors.Count    - 1 do ProcessForStmt(Fors[i]);
-
-        // Phase 2.2 + 2.3: Calls innerhalb von Expression-tragenden Knoten
-        // (TypeRef-Strings statt nkCall) als pessimistic-Write erkennen.
-        //   Phase 2.2: nkIfStmt + nkWhileStmt + nkCaseStmt
-        //   Phase 2.3: nkAssign.RHS (z.B. 'Lines := AcquireLines(F, Cached)'
-        //              schreibt Cached out-Param) + nkForStmt.Range
-        // Alle teilen den gleichen ParseCallsInExpr-Pfad.
-        for i := 0 to Ifs.Count     - 1 do ProcessConditionCalls(Ifs[i]);
-        for i := 0 to Whiles.Count  - 1 do ProcessConditionCalls(Whiles[i]);
-        for i := 0 to Cases.Count   - 1 do ProcessConditionCalls(Cases[i]);
-        for i := 0 to Assigns.Count - 1 do ProcessConditionCalls(Assigns[i]);
-        for i := 0 to Fors.Count    - 1 do ProcessConditionCalls(Fors[i]);
-      finally
-        Cases.Free;
-        Whiles.Free;
-        Ifs.Free;
-        Fors.Free;
-        Calls.Free;
-        Assigns.Free;
-      end;
-
-      // Phase C: Body-Token-Sammlung fuer RefCount + Reads via Source-Lines.
-      // Method-Boundary [Start..End] limitiert den Read-Scan auf den
-      // tatsaechlichen Method-Body - sonst matcht ein Field-Decl im
-      // Interface-Section mit gleichem Namen als "Read" (FP-Faktor ~30x).
-      CollectBodyTokens(MethodNode, BodySB);
-      BodyLow := LowerCase(BodySB.ToString);
-      var MethodStartLine := MethodNode.Line;
-      var MethodEndLine   := CalcMethodEndLine(MethodNode);
-
-      for i := 0 to VarList.Count - 1 do
-      begin
-        P := @VarList.List[i];
-        P.RefCount := CountWholeWordOccurrences(P.NameLow, BodyLow,
-                                                FirstMatchPos);
-        // RefCount<=1 -> nur die Deklaration; das ist UnusedLocal-Domain
-        // (kein UninitVar - faellt unter SCA019).
-        if P.RefCount <= 1 then Continue;
-
-        // FirstReadLine sucht im Source-Body (NUR innerhalb der Method).
-        P.FirstReadLine := FindFirstReadLine(P.NameLow, P.DeclLine,
-                                             P.FirstWriteLine,
-                                             MethodStartLine, MethodEndLine);
-      end;
-
-      // Phase D: Emit.
-      for i := 0 to VarList.Count - 1 do
-      begin
-        P := @VarList.List[i];
-        if P.RefCount <= 1 then Continue;        // UnusedLocal-Domain
-        if P.IsManaged then Continue;            // managed types: opt-in
-
-        if P.FirstReadLine = 0 then Continue;    // nur Writes - clean
-        if P.FirstWriteLine = 0 then
-        begin
-          // Referenced + never written - UninitVar fcHigh.
-          F            := TLeakFinding.Create;
-          F.FileName   := FileName;
-          F.MethodName := MethodNode.Name;
-          F.LineNumber := IntToStr(P.DeclLine);
-          F.MissingVar := Format(
-            'Uninitialised variable: %s is read on line %d but never ' +
-            'assigned in this method. Add an explicit initialiser ' +
-            '(%s := Default; / Create; / SetLength(...)).',
-            [P.Name, P.FirstReadLine, P.Name]);
-          F.SetKind(fkUninitVar, fcHigh);
-          Results.Add(F);
-          Continue;
-        end;
-
-        if P.FirstReadLine < P.FirstWriteLine then
-        begin
-          // Read vor Write - konservativ fcMedium weil wir Conditional-
-          // Writes nicht von Unconditional-Writes unterscheiden koennen
-          // (MVP). Phase 2 erweitert das (Sibling-Write-Check).
-          F            := TLeakFinding.Create;
-          F.FileName   := FileName;
-          F.MethodName := MethodNode.Name;
-          F.LineNumber := IntToStr(P.FirstReadLine);
-          F.MissingVar := Format(
-            'Potential uninitialised read: %s read on line %d before its ' +
-            'first assignment on line %d. Move the assignment up or add ' +
-            'an explicit default before the first use.',
-            [P.Name, P.FirstReadLine, P.FirstWriteLine]);
-          F.SetKind(fkUninitVar, fcMedium);
-          Results.Add(F);
-        end;
-      end;
+      PhaseB_AstWalks;
+      PhaseC_BodyTokenAndReads;
+      PhaseD_Emit;
     finally
       ReleaseLines(Lines, Cached);
       NestedRanges.Free;
