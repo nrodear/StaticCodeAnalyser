@@ -57,15 +57,31 @@ const
 
   // RTL-Routinen die ihren Argumenten Werte zuweisen (out/var). Wenn
   // einer dieser Calls eine Variable als Arg hat, gilt das als Write.
-  // Pessimistic-Default fuer alle anderen Calls: ihre Args sind Reads.
-  // Stoesst der User einen FP, hilft '// noinspection UninitVar' oder
-  // ein expliziter '<var> := Default;' Anker.
   WRITE_ALLOWLIST : array[0..11] of string = (
     'read', 'readln', 'blockread',
     'fillchar', 'move', 'zeromemory',
     'initialize', 'new', 'getmem',
     'setlength', 'setstring',
     'tryfromstring'         // TBytes.TryFromString und Verwandte
+  );
+
+  // Read-Only-Routinen die ihre Args garantiert NICHT schreiben.
+  // Wenn ein Call in dieser Liste eine Variable als Arg hat, gilt das
+  // als Read (= Variable muss VORHER assigned sein).
+  // Default fuer alle ANDEREN Calls (z.B. 'Helper.Init(X)') ist
+  // pessimistic-Write - akzeptiert FNs zugunsten weniger FPs.
+  READ_ALLOWLIST : array[0..25] of string = (
+    // Output
+    'write', 'writeln', 'showmessage', 'showmessagefmt',
+    'outputdebugstring', 'outputdebugstringa', 'outputdebugstringw',
+    // Typ-Konvertierung / Inspektion (gibt nur einen Wert zurueck)
+    'inttostr', 'inttohex', 'floattostr', 'datetostr', 'timetostr',
+    'datetimetostr', 'formatfloat', 'formatdatetime', 'format',
+    // String/Array-Inspektion
+    'length', 'sizeof', 'high', 'low', 'ord', 'chr',
+    'copy', 'pos', 'posex',
+    // Boolean-Inspektion
+    'assigned'
   );
 
   // Managed types die Pascal auto-initialisiert. Wir flaggen sie nur,
@@ -323,6 +339,19 @@ begin
     if FnName = Allow then Exit(True);
 end;
 
+function IsReadOnlyCall(const CallName: string): Boolean;
+// True wenn der Call seine Args garantiert NICHT schreibt. Default
+// (weder Read- noch Write-Allowlist) = pessimistic-Write.
+var
+  FnName, Allow : string;
+begin
+  Result := False;
+  FnName := LowerCase(ExtractCallFunctionName(CallName));
+  if FnName = '' then Exit;
+  for Allow in READ_ALLOWLIST do
+    if FnName = Allow then Exit(True);
+end;
+
 function FindIdentInArgList(const ArgsLow, NeedleLow: string): Boolean;
 // Wortgrenz-Match fuer einen Identifier in der (lowercase) Arg-Liste.
 var
@@ -399,13 +428,15 @@ var
     VI : TVarInfo;
   begin
     if C = nil then Exit;
-    // PESSIMISTISCH: JEDER Call wertet seine Args als potentielles Write,
-    // nicht nur die WRITE_ALLOWLIST. Begruendung: ohne Symboltabelle
-    // (Phase 4) koennen wir 'Helper.Init(X)' nicht von 'WriteLn(X)'
-    // unterscheiden. Konservative Default-Annahme = Write reduziert
-    // FPs drastisch (Konzept §6: Pessimistic-Write akzeptiert FNs).
-    // WRITE_ALLOWLIST bleibt fuer Doku-Zwecke und ggf. Phase-2-Strict-
-    // Mode (wo nicht-Allowlist-Calls als Read gezaehlt werden koennten).
+    // Drei-Klassen-Modell (Konzept §6):
+    //   1. READ_ALLOWLIST  (WriteLn, Assigned, Length, ...) -> KEIN Write
+    //      registrieren. Var-Arg ist ein Read, das spaeter ueber Source-
+    //      Line-Scan erkannt wird.
+    //   2. WRITE_ALLOWLIST (ReadLn, FillChar, ...) -> Write registrieren.
+    //   3. UNKNOWN-Calls (Helper.Init, MyProc, ...) -> pessimistic-Write
+    //      registrieren (akzeptiert FNs, reduziert FPs bei OOP-Code).
+    if IsReadOnlyCall(C.Name) then Exit;
+
     ArgsLow := LowerCase(ExtractCallArgsRaw(C.Name));
     if ArgsLow = '' then Exit;
     for i := 0 to VarList.Count - 1 do
