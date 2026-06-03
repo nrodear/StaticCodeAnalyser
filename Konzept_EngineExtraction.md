@@ -84,7 +84,29 @@ StaticCodeAnalyserForm/tests/        ← unverändert
 **Build-Check**: Engine-BPL muss ohne `vclX0.bpl`/`vclimg.bpl` als
 runtime-Package linken. Wenn das nicht geht → Verstoß lokalisieren.
 
-## 5. UI-Verseuchungs-Audit
+## 5. UI-Verseuchungs-Audit — durchgeführt 2026-06-03
+
+**Befund:**
+
+| Datei | VCL-Abhängigkeit | Aktion |
+|---|---|---|
+| `Common/uIDEColors.pas` | Theme-Farben | bleibt im Form-Projekt (vom Konzept eingeplant) |
+| `Common/uRecentPaths.pas` | **`Vcl.StdCtrls` + `TComboBox`** | **NEU entdeckt** — bleibt im Form-Projekt |
+| `Infrastructure/uPathOverrides.pas` | keine VCL-Imports | engine-tauglich ✅ |
+| `Infrastructure/uIgnoreList.pas` | keine VCL-Imports | engine-tauglich ✅ |
+| `Output/uExportHtml.pas` | keine VCL-Imports | engine-tauglich ✅ |
+| `Output/uFixHint.pas` | nur in String-Konstanten (Beispiel-Code) | engine-tauglich ✅ |
+| `Detectors/uUnusedUses.pas` | nur in Kommentar (`Vcl.Themes` als Erklärung) | engine-tauglich ✅ |
+| `Common/uSCAConsts.pas`, `Infrastructure/uRepoSettings.pas`, `Infrastructure/uFormBinder.pas` | nur in Strings/Kommentaren als Pattern-Beschreibung | engine-tauglich ✅ |
+| **Alle anderen ~200 Units** | keine VCL-Imports | engine-tauglich ✅ |
+
+**Konsequenz für Migration:** 2 Datei-Ausnahmen statt 1, sonst unverändert.
+`uRecentPaths.pas` zusammen mit `uIDEColors.pas` zurückholen nach
+`StaticCodeAnalyserForm/sources/Common/`.
+
+---
+
+## 5a. Original-Verdachtsfälle (zur Referenz)
 
 **Vor** dem Verschieben einmal `grep -r "Vcl\.\|Forms\.\|Controls\.\|Graphics\."`
 über alle Engine-Kandidaten. Bekannte Verdachtsfälle aus dem Konzept-
