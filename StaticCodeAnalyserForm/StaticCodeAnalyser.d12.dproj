@@ -219,6 +219,7 @@
         <DCCReference Include="sources\Detectors\uInsecureCryptoAlgorithm.pas"/>
         <DCCReference Include="sources\Detectors\uCommandInjection.pas"/>
         <DCCReference Include="sources\Detectors\uUnusedRoutine.pas"/>
+        <DCCReference Include="sources\Detectors\uUninitVar.pas"/>
         <DCCReference Include="sources\Detectors\uStringFromPointer.pas"/>
         <DCCReference Include="sources\Detectors\uEmptyOnHandler.pas"/>
         <DCCReference Include="sources\Detectors\uUnusedPrivateMethod.pas"/>

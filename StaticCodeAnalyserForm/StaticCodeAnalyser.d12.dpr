@@ -85,6 +85,7 @@ uses
   uInsecureCryptoAlgorithm in 'sources\Detectors\uInsecureCryptoAlgorithm.pas',
   uCommandInjection in 'sources\Detectors\uCommandInjection.pas',
   uUnusedRoutine in 'sources\Detectors\uUnusedRoutine.pas',
+  uUninitVar in 'sources\Detectors\uUninitVar.pas',
   uStringFromPointer in 'sources\Detectors\uStringFromPointer.pas',
   uEmptyOnHandler in 'sources\Detectors\uEmptyOnHandler.pas',
   uUnusedPrivateMethod in 'sources\Detectors\uUnusedPrivateMethod.pas',

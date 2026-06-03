@@ -554,12 +554,17 @@ type
                                  // (nur class private) und SCA148+ (nur class
                                  // public). Single-File-Scope mit Self-Call-
                                  // Exclusion (analog SonarDelphi UnusedRoutine).
-    fkUnusedSuppression          // SCA165 - '// noinspection X'-Marker der
+    fkUnusedSuppression,         // SCA165 - '// noinspection X'-Marker der
                                  // an seiner Position kein Finding suppressed
                                  // hat. Hinweis: Detektor wurde verbessert
                                  // (Suppression nicht mehr noetig) ODER
                                  // Suppression-Target war falsch gesetzt.
                                  // Emittiert vom uSuppression-Post-Filter.
+    fkUninitVar                  // SCA016 - lokale Variable die auf einem
+                                 // Pfad gelesen wird bevor sie auf demselben
+                                 // Pfad geschrieben wurde. Konservatives
+                                 // single-method-Scope-Modell (FixInsight-
+                                 // Style). Siehe Konzept_SCA016_UninitVar.md.
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -781,7 +786,8 @@ const
     (Name: 'InsecureCryptoAlgorithm';    FindingType: ftVulnerability;DefaultSeverity: lsWarning), // fkInsecureCryptoAlgorithm
     (Name: 'CommandInjection';           FindingType: ftVulnerability;DefaultSeverity: lsError),   // fkCommandInjection
     (Name: 'UnusedRoutine';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkUnusedRoutine
-    (Name: 'UnusedSuppression';          FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkUnusedSuppression
+    (Name: 'UnusedSuppression';          FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkUnusedSuppression
+    (Name: 'UninitVar';                  FindingType: ftBug;          DefaultSeverity: lsError)    // fkUninitVar
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

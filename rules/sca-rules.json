@@ -3244,6 +3244,26 @@
       "impacts": [
         { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
       ]
+    },
+    {
+      "id": "SCA166",
+      "kind": "UninitVar",
+      "name": "Uninitialised local variable",
+      "shortDescription": "Local variable read before being assigned on every code path through the method",
+      "fullDescription": "Local variables of non-managed types (Integer, Boolean, Pointer, record, class instance) start with undefined contents. Reading them before assignment yields garbage values or an access violation - a classic crash bug. The detector walks each method's statements in source order, tracks first-write vs first-read per local variable, and flags reads that precede any write. A conservative branch model treats writes inside if/case/try-blocks as 'conditional' (fcMedium confidence; the FP rate vs full path-sensitivity is the documented trade-off, see Konzept_SCA166_UninitVar.md §5.C). Known writers from the RTL (Read, ReadLn, FillChar, Move, ZeroMemory, Initialize, New, GetMem) are detected via allowlist; other var/out-parameter calls are treated pessimistically as Reads (false-negatives but no false-positives). Pascal's auto-initialised managed types (string, dynamic array, interface) are skipped unless opted-in via INI. Methods larger than configurable caps (200 local vars / 5000 statements, default) skip analysis to avoid pathological worst-case cost.",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["reliability", "memory-safety", "uninit"],
+      "configKey": "[Detectors] UninitVarEnabled",
+      "detectorUnit": "uUninitVar.pas",
+      "examples": {
+        "bad":  "procedure Foo;\nvar L: TStringList;\nbegin\n  if Cond then L := TStringList.Create;\n  L.Add('x');   // L undefined if Cond was false -> AV\nend;",
+        "good": "procedure Foo;\nvar L: TStringList;\nbegin\n  L := TStringList.Create;\n  try\n    L.Add('x');\n  finally\n    L.Free;\n  end;\nend;"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
     }
   ]
 }

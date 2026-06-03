@@ -394,6 +394,7 @@
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uInsecureCryptoAlgorithm.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCommandInjection.pas"/>
         <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnusedRoutine.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUninitVar.pas"/>
         <RcCompile Include="..\branding\sca_branding.rc"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

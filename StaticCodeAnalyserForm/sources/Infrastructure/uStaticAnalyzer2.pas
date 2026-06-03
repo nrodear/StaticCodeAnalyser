@@ -111,7 +111,7 @@ uses
   uGetMemWithoutFreeMem, uSetLengthAppendInLoop, uPointerArithmeticOnString,
   uEmptyOnHandler, uStringFromPointer, uPointerSubtraction,
   uInsecureCryptoAlgorithm, uCommandInjection,
-  uUnusedRoutine;
+  uUnusedRoutine, uUninitVar;
 
 type
   // Run-Methode pro Detektor: einheitliche Signatur, damit alle in einem
@@ -333,6 +333,9 @@ begin
   // Naming-Familie erweitert (SCA118-119)
   AddD('NamingExt',          fkExceptionName,          procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TNamingExtDetector.AnalyzeUnit(R, F, L); end);
   AddD('UnusedLocalVar', fkUnusedLocalVar,  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUnusedLocalDetector.AnalyzeUnit(R, F, L); end);
+  // SCA166 UninitVar - lokale Variable die vor erstem Write gelesen wird.
+  // Konservatives single-method-Modell (siehe Konzept_SCA166_UninitVar.md).
+  AddD('UninitVar',      fkUninitVar,       procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUninitVarDetector.AnalyzeUnit(R, F, L); end);
   AddD('UnusedParameter',fkUnusedParameter, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUnusedParameterDetector.AnalyzeUnit(R, F, L); end);
   AddD('TautologicalBoolExpr',fkTautologicalBoolExpr, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TTautologicalExprDetector.AnalyzeUnit(R, F, L); end);
   AddD('SqlDangerousStatement', fkSqlDangerousStatement, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TSqlDangerousStatementDetector.AnalyzeUnit(R, F, L); end);

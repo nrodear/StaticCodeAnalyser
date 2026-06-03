@@ -1,4 +1,9 @@
-# Konzept SCA016 — UninitVar (uninitialised variable)
+# Konzept SCA166 — UninitVar (uninitialised variable)
+
+> **Note zur ID:** Die historisch in `DETECTORS.md` als Sonar-Slot #16
+> reservierte ID `SCA016` ist seit langem durch `HardcodedPath`
+> belegt. Dieser Detector nutzt daher `SCA166` (nach `SCA164`
+> UnusedRoutine + `SCA165` UnusedSuppression).
 
 Erkennt **lokale Variablen die auf mindestens einem Code-Pfad gelesen
 werden, bevor sie auf demselben Pfad geschrieben wurden**.
@@ -9,7 +14,7 @@ Status: Konzept-Phase. Entkoppelt von Phase 2/3 der
 Expression-AST (B.2) bauchbar. Erweiterung Richtung voller
 Flow-Analyse später, sobald B.1+B.2 erledigt sind.
 
-Branch: `feat/sca016-uninit-var`.
+Branch: `main` (Implementation direkt auf main).
 
 ---
 
@@ -49,7 +54,7 @@ Typen einen Garbage-Wert.
 | [`uFreeWithoutNil.pas`](StaticCodeAnalyserForm/sources/Detectors/uFreeWithoutNil.pas) (Round 5) | `.Free` ohne `:= nil` bei Klassen-Feldern | unrelated |
 | [`uUseAfterFree.pas`](StaticCodeAnalyserForm/sources/Detectors/uUseAfterFree.pas) | Use NACH `Free` | gegenteilig — wir wollen Use VOR erstem Init |
 | DETECTORS.md Slot **#16** | 🔲 open seit v0.5 | weil "needs flow-analysis" |
-| `rules/sca-rules.json` SCA016 | nicht registriert | reserviert |
+| `rules/sca-rules.json` SCA166 | nicht registriert | reserviert |
 
 **Konkretes Beispiel aus dem Self-Test-Corpus** (`Output\Win64 Release\StaticCodeAnalyser.d12.exe --path D:\git-demos\delphi --full --profile strict`) das aktuell durch alle Detektor-Maschen fällt:
 
@@ -134,7 +139,7 @@ Drei Tracks:
    Verzweigungen aufrollen. Korrekt aber teuer und braucht echten
    CFG-Builder.
 
-**SCA016 zielt auf Track 1+2 hybrid**: konservativ + ein basic-block-
+**SCA166 zielt auf Track 1+2 hybrid**: konservativ + ein basic-block-
 Modell. Track 3 ist ein Phase-3-Thema (B.2 Expression-AST + B.1
 Symboltabelle).
 
@@ -154,7 +159,7 @@ Symboltabelle).
 
 ---
 
-## 5. SCA016-Algorithmus (Phasen)
+## 5. SCA166-Algorithmus (Phasen)
 
 ### Phase A — Var-Inventur pro Methode
 
@@ -221,12 +226,12 @@ Writes sind conditional. → false-positives bei sicheren if-else-Mustern.
 
 | Zustand | Befund | Confidence |
 |---|---|---|
-| `FirstRead = 0` (nie gelesen) | **kein** SCA016 — fällt unter SCA019 (`UnusedLocal`) | — |
-| `FirstWrite = 0` und `FirstRead > 0` | **SCA016** — gelesen, nie geschrieben | `fcHigh` |
-| `FirstWrite > 0` und `FirstRead > 0` und `FirstRead < FirstWrite` | **SCA016** — Lese-Zeile vor Schreib-Zeile auf jedem Pfad | `fcHigh` |
-| `FirstWrite > 0` und `FirstRead < FirstWrite` und `ConditionalWrite = True` | **SCA016** — Lese-Zeile kann ohne Write passieren | `fcMedium` (FP-Risiko bei if-else mit beidseitigem Write) |
+| `FirstRead = 0` (nie gelesen) | **kein** SCA166 — fällt unter SCA019 (`UnusedLocal`) | — |
+| `FirstWrite = 0` und `FirstRead > 0` | **SCA166** — gelesen, nie geschrieben | `fcHigh` |
+| `FirstWrite > 0` und `FirstRead > 0` und `FirstRead < FirstWrite` | **SCA166** — Lese-Zeile vor Schreib-Zeile auf jedem Pfad | `fcHigh` |
+| `FirstWrite > 0` und `FirstRead < FirstWrite` und `ConditionalWrite = True` | **SCA166** — Lese-Zeile kann ohne Write passieren | `fcMedium` (FP-Risiko bei if-else mit beidseitigem Write) |
 | `FirstWrite > 0` und `FirstRead >= FirstWrite` | clean | — |
-| `IsManaged = True` und kein Skip-Flag | **SCA016 nur als Code-Smell-Hint** (Pascal hat schon initialisiert, aber expliziter `X := ''` Anker fehlt) | `fcLow` (default-off, opt-in via INI) |
+| `IsManaged = True` und kein Skip-Flag | **SCA166 nur als Code-Smell-Hint** (Pascal hat schon initialisiert, aber expliziter `X := ''` Anker fehlt) | `fcLow` (default-off, opt-in via INI) |
 
 ### Phase E — FP-Guards (Skip-Liste, in dieser Reihenfolge)
 
@@ -237,7 +242,7 @@ Writes sind conditional. → false-positives bei sicheren if-else-Mustern.
 | 3 | Methode ist `asm`-Block (komplett) | Parser zerlegt nicht zuverlässig |
 | 4 | Methode steht in einer Datei matching `IsTestFixturePath` und Profile-Default schließt das aus | Test-Demos haben absichtliche Bugs |
 | 5 | Variable in `try-finally`-Block mit Cleanup-Read (`if Assigned(X) then X.Free`) | Häufiges Pattern: `var X` ohne Init, im `try` zugewiesen, im `finally` mit Assigned-Guard freigegeben → der `Assigned`-Check IST der defensive Read |
-| 6 | Compiler-Direktive `{$WARN VARIANT_AS_FUNC OFF}`-ähnlich im Method-Body suppressiert SCA016 | Per-Method-Opt-Out via `// noinspection UninitVar` (existiert schon über `uSuppression`) |
+| 6 | Compiler-Direktive `{$WARN VARIANT_AS_FUNC OFF}`-ähnlich im Method-Body suppressiert SCA166 | Per-Method-Opt-Out via `// noinspection UninitVar` (existiert schon über `uSuppression`) |
 
 Guard #5 (try-finally-cleanup) braucht Sonderlogik: wenn der einzige
 Read im `finally`-Body steht und ein Write im `try`-Body existiert,
@@ -536,7 +541,7 @@ abgedeckt sobald `fkUninitVar` im KIND_META registriert ist.
 ```pascal
 TFindingKind = (
   ...
-  fkUninitVar         // SCA016
+  fkUninitVar         // SCA166
 );
 
 KIND_META: array[TFindingKind] of TFindingKindMeta = (
@@ -549,7 +554,7 @@ KIND_META: array[TFindingKind] of TFindingKindMeta = (
 
 ```json
 {
-  "id": "SCA016",
+  "id": "SCA166",
   "kind": "UninitVar",
   "name": "Uninitialised local variable",
   "shortDescription": "Local variable read before being assigned on every code path",
@@ -573,7 +578,7 @@ Confidence per `SetKind(fkUninitVar, fcMedium)` direkt im Detector.
 
 | Phase | Inhalt | Aufwand | Akzeptanz-Kriterium |
 |---|---|---|---|
-| **MVP** | Phase A-E ohne sibling-Write-Check + ohne CFG | 1-1.5d | unit-tests grün, Self-Test produziert ≤ 50 SCA016-Findings (alle manuell als TP verifizierbar oder FP-dokumentiert) |
+| **MVP** | Phase A-E ohne sibling-Write-Check + ohne CFG | 1-1.5d | unit-tests grün, Self-Test produziert ≤ 50 SCA166-Findings (alle manuell als TP verifizierbar oder FP-dokumentiert) |
 | **Phase 2** | Sibling-Write-Check für if-then-else mit beidseitigem Write | 4-6h | Selbstes Beispiel `if cond then X := 1 else X := 2;` flaggt nicht mehr |
 | **Phase 3** | echter CFG-Builder (anstoßend an Konzept §A.4) | 3-5d | Komplexe try-except-finally + nested-if Fälle korrekt; Recall steigt, FP-Rate stabil |
 | **Phase 4** | Symboltabelle (B.1 aus Konzept) integriert für korrektes `var`/`out`-Parameter-Erkennen | abhängig von B.1 | Pessimistic-Read durch exakte Read/Write-Klassifikation ersetzt |
@@ -647,7 +652,7 @@ Scanner-Qualität-Roadmap.
 Nach Live-Audit gegen das Real-World-Korpus (D:\git-demos\delphi):
 jeder gefundene FP wird zu einem Reproducer in
 `tests/golden-corpus/fp-reproducers/fp06_UninitVar_XYZ.pas` + Eintrag
-in `expected.json` mit `must_not_flag: ["SCA016"]`.
+in `expected.json` mit `must_not_flag: ["SCA166"]`.
 
 ### 12.3 Performance-Test
 
@@ -680,12 +685,12 @@ Phase-2-Kandidaten. Akzeptabler Signal-to-Noise.
 
 - [Konzept_ScannerQualitaet.md](Konzept_ScannerQualitaet.md) §A.4
   (Control-Flow-Awareness für SCA134) — der dort vorgeschlagene CFG-
-  Builder ist gleichzeitig Voraussetzung für SCA016-Phase-3.
+  Builder ist gleichzeitig Voraussetzung für SCA166-Phase-3.
 - [Konzept_ScannerQualitaet.md](Konzept_ScannerQualitaet.md) §B.1
   (Symboltabelle) + §B.2 (Expression-AST-Knoten) — Voraussetzung für
-  SCA016-Phase-4.
+  SCA166-Phase-4.
 - [Konzept_SCA164_UnusedRoutine.md](Konzept_SCA164_UnusedRoutine.md) —
-  ähnlicher Single-Method-Scope-Detektor; SCA016-Design lehnt sich an
+  ähnlicher Single-Method-Scope-Detektor; SCA166-Design lehnt sich an
   dessen Pipeline-Integration an.
 
 ---

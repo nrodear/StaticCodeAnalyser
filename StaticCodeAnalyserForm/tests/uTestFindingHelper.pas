@@ -55,7 +55,7 @@ uses
   uGetMemWithoutFreeMem, uSetLengthAppendInLoop, uPointerArithmeticOnString,
   uEmptyOnHandler, uStringFromPointer, uPointerSubtraction,
   uInsecureCryptoAlgorithm, uCommandInjection,
-  uUnusedRoutine,
+  uUnusedRoutine, uUninitVar,
   uStaticAnalyzer2,
   uTestSrcBuilder,
   System.IOUtils;
@@ -245,6 +245,7 @@ begin
         TFloatEqualityDetector.AnalyzeUnit(Root, TempPath, Result);
         TUnusedPrivateMethodDetector.AnalyzeUnit(Root, TempPath, Result);
         TUnusedRoutineDetector.AnalyzeUnit(Root, TempPath, Result);
+        TUninitVarDetector.AnalyzeUnit(Root, TempPath, Result);
         TBoolAlwaysTrueDetector.AnalyzeUnit(Root, TempPath, Result);
         THardcodedStringDetector.AnalyzeUnit(Root, TempPath, Result);
         TUnpairedLockDetector.AnalyzeUnit(Root, TempPath, Result);

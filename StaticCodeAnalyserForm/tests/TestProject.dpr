@@ -93,6 +93,7 @@ uses
   uTestSQLInjectionScore in 'uTestSQLInjectionScore.pas',
   uTestSymbolReferenceIndex in 'uTestSymbolReferenceIndex.pas',
   uTestUnusedLocal in 'uTestUnusedLocal.pas',
+  uTestUninitVar in 'uTestUninitVar.pas',
   uTestUnusedParameter in 'uTestUnusedParameter.pas',
   uTestTautologicalExpr in 'uTestTautologicalExpr.pas',
   uTestDfmMasterDetailUnlinked in 'uTestDfmMasterDetailUnlinked.pas',
