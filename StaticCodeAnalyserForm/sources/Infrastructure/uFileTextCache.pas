@@ -36,7 +36,8 @@ type
   public
     Lines : TStringList;
     MTime : TDateTime;
-    constructor Create(ALines: TStringList; AMTime: TDateTime);
+    Size  : Int64;
+    constructor Create(ALines: TStringList; AMTime: TDateTime; ASize: Int64);
     destructor Destroy; override;
   end;
 
@@ -89,7 +90,7 @@ function TryLoadLinesWithFallback(const FileName: string;
 implementation
 
 uses
-  System.Math, System.IOUtils;
+  Winapi.Windows, System.Math, System.IOUtils;
 
 function IsValidUtf8(const Bytes: TBytes): Boolean;
 // Pruft ob die komplette Byte-Sequenz wohlgeformtes UTF-8 ist
@@ -182,11 +183,13 @@ end;
 
 { TFileTextCacheEntry }
 
-constructor TFileTextCacheEntry.Create(ALines: TStringList; AMTime: TDateTime);
+constructor TFileTextCacheEntry.Create(ALines: TStringList; AMTime: TDateTime;
+  ASize: Int64);
 begin
   inherited Create;
   Lines := ALines;
   MTime := AMTime;
+  Size  := ASize;
 end;
 
 destructor TFileTextCacheEntry.Destroy;
@@ -214,36 +217,50 @@ begin
   Result := LowerCase(ExpandFileName(FileName));
 end;
 
-function SafeGetFileMTime(const FileName: string): TDateTime;
-// Liefert die LastWrite-Zeit oder 0 wenn die Datei nicht (mehr) existiert.
-// Mit try-except gegen Race-Conditions zwischen FileExists und FileAge.
+procedure SafeGetFileStat(const FileName: string;
+  out MTime: TDateTime; out Size: Int64);
+// Liest mtime + Size oder liefert 0/0 wenn die Datei nicht (mehr) existiert.
+// Beides zusammen ist robuster gegen sub-Sekunden-Re-Writes mit
+// veraenderter Groesse (FileAge-Granularity ist meist 1-2 Sekunden).
+var
+  Info : TWin32FileAttributeData;
 begin
-  Result := 0;
+  MTime := 0;
+  Size  := 0;
   try
-    if not FileAge(FileName, Result) then
-      Result := 0;
+    if not FileAge(FileName, MTime) then
+      MTime := 0;
   except
-    Result := 0;
+    MTime := 0;
+  end;
+  try
+    if GetFileAttributesEx(PChar(FileName), GetFileExInfoStandard, @Info) then
+      Size := (Int64(Info.nFileSizeHigh) shl 32) or Int64(Info.nFileSizeLow);
+  except
+    Size := 0;
   end;
 end;
 
 function TFileTextCache.GetLines(const FileName: string): TStringList;
 var
-  K          : string;
-  SL         : TStringList;
-  Entry      : TFileTextCacheEntry;
-  CurrMTime  : TDateTime;
+  K         : string;
+  SL        : TStringList;
+  Entry     : TFileTextCacheEntry;
+  CurrMTime : TDateTime;
+  CurrSize  : Int64;
 begin
   Result := nil;
   K := Key(FileName);
 
   if FCache.TryGetValue(K, Entry) then
   begin
-    CurrMTime := SafeGetFileMTime(FileName);
-    // Cache-Hit nur wenn die Datei seit dem Eintrag NICHT modifiziert wurde.
-    // CurrMTime=0 (Datei weg) ist ein Cache-Miss, dann faellt der Code unten
-    // auf den FileExists-Pfad.
-    if (CurrMTime <> 0) and (CurrMTime = Entry.MTime) then
+    SafeGetFileStat(FileName, CurrMTime, CurrSize);
+    // Cache-Hit nur wenn mtime UND Size identisch sind. Bei sub-Sekunden-
+    // Re-Writes der gleichen Datei aendert sich oft nur die Size (FileAge
+    // hat ~1s Granularitaet), daher beide vergleichen.
+    if (CurrMTime <> 0)
+       and (CurrMTime = Entry.MTime)
+       and (CurrSize = Entry.Size) then
       Exit(Entry.Lines);
     // Stale - aus Cache raus, danach neu laden.
     FCache.Remove(K);
@@ -260,8 +277,8 @@ begin
   end;
 
   if SL = nil then Exit;
-  CurrMTime := SafeGetFileMTime(FileName);
-  FCache.Add(K, TFileTextCacheEntry.Create(SL, CurrMTime));
+  SafeGetFileStat(FileName, CurrMTime, CurrSize);
+  FCache.Add(K, TFileTextCacheEntry.Create(SL, CurrMTime, CurrSize));
   Result := SL;
 end;
 

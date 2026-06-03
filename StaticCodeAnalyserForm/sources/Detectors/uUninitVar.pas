@@ -236,19 +236,115 @@ begin
     Exit(False);
 end;
 
+function ExtractCallFunctionName(const CallExpr: string): string;
+// nkCall.Name ist die ganze Call-Expression (Parser-Pattern aus
+// uParser2.ParseCallOrAssign: 'ReadLn(n)' / 'TConfidenceFilter.Apply(...)' /
+// 'Obj.Method(a, b)'). Wir extrahieren den Funktions-Namen rechts vom
+// letzten Punkt vor dem '(' (oder den ganzen Ident wenn kein Punkt).
+var
+  S : string;
+  ParenPos, DotPos : Integer;
+begin
+  S := Trim(CallExpr);
+  ParenPos := Pos('(', S);
+  if ParenPos > 0 then
+    S := Trim(Copy(S, 1, ParenPos - 1));
+  DotPos := LastDelimiter('.', S);
+  if DotPos > 0 then
+    S := Trim(Copy(S, DotPos + 1, MaxInt));
+  Result := S;
+end;
+
+function ExtractCallArgsRaw(const CallExpr: string): string;
+// Liefert den String zwischen erster '(' und passender ')' (oder ab
+// '(' bis Ende falls kein matching ')'-Pair). Wir parsen die Args
+// nicht semantisch - die Token-Boundary-Suche reicht.
+var
+  S : string;
+  ParenPos, Depth, i : Integer;
+begin
+  Result := '';
+  S := CallExpr;
+  ParenPos := Pos('(', S);
+  if ParenPos = 0 then Exit;
+  Depth := 1;
+  for i := ParenPos + 1 to Length(S) do
+  begin
+    if S[i] = '(' then Inc(Depth)
+    else if S[i] = ')' then
+    begin
+      Dec(Depth);
+      if Depth = 0 then
+      begin
+        Result := Copy(S, ParenPos + 1, i - ParenPos - 1);
+        Exit;
+      end;
+    end;
+  end;
+  // Kein matching ')' - alles ab '(' nehmen.
+  Result := Copy(S, ParenPos + 1, MaxInt);
+end;
+
+function ExtractForLoopVar(const ForTypeRef: string): string;
+// TypeRef von nkForStmt enthaelt den Loop-Header, z.B.:
+//   'i := 0 to 10'
+//   'var x: Integer := 0 to 10'    (inline-var Form, aber inline-var hat
+//                                   auch nkLocalVar-Child)
+//   'i in container'
+// Wir extrahieren den ersten Identifier nach optionalem 'var'.
+var
+  S, Token : string;
+  i, Start : Integer;
+begin
+  Result := '';
+  S := Trim(ForTypeRef);
+  if S = '' then Exit;
+  // Optional 'var' (lowercase-tolerant) ueberspringen.
+  if SameText(Copy(S, 1, 4), 'var ') then
+    S := TrimLeft(Copy(S, 5, MaxInt));
+  // Erstes Token = Identifier-Chars + optional Punkt-Qualifier brechen wir
+  // an Non-IdentChar ab.
+  Start := 1;
+  while (Start <= Length(S)) and (S[Start] <= ' ') do Inc(Start);
+  i := Start;
+  while (i <= Length(S)) and IsIdentChar(S[i]) do Inc(i);
+  Token := Copy(S, Start, i - Start);
+  Result := Token;
+end;
+
 function IsWriteAllowlistCall(const CallName: string): Boolean;
 var
-  NameLow, Allow : string;
-  DotPos : Integer;
+  FnName, Allow : string;
 begin
   Result := False;
-  NameLow := LowerCase(Trim(CallName));
-  if NameLow = '' then Exit;
-  // Bei 'Obj.Read' den qualifizierten Methodennamen rechts vom Punkt nehmen.
-  DotPos := LastDelimiter('.', NameLow);
-  if DotPos > 0 then NameLow := Copy(NameLow, DotPos + 1, MaxInt);
+  FnName := LowerCase(ExtractCallFunctionName(CallName));
+  if FnName = '' then Exit;
   for Allow in WRITE_ALLOWLIST do
-    if NameLow = Allow then Exit(True);
+    if FnName = Allow then Exit(True);
+end;
+
+function FindIdentInArgList(const ArgsLow, NeedleLow: string): Boolean;
+// Wortgrenz-Match fuer einen Identifier in der (lowercase) Arg-Liste.
+var
+  P, NL, L : Integer;
+  Before, After : Char;
+begin
+  Result := False;
+  NL := Length(NeedleLow);
+  L  := Length(ArgsLow);
+  if (NL = 0) or (L < NL) then Exit;
+  P := 1;
+  while True do
+  begin
+    P := PosEx(NeedleLow, ArgsLow, P);
+    if P = 0 then Exit;
+    Before := #0;
+    if P > 1 then Before := ArgsLow[P - 1];
+    After := #0;
+    if P + NL - 1 < L then After := ArgsLow[P + NL];
+    if not IsIdentChar(Before) and not IsIdentChar(After) then Exit(True);
+    P := P + NL;
+  end;
 end;
 
 // ============================================================
@@ -298,21 +394,20 @@ var
 
   procedure ProcessCall(C: TAstNode);
   var
-    i, Idx : Integer;
-    ArgBare : string;
+    ArgsLow : string;
+    i : Integer;
+    VI : TVarInfo;
   begin
     if (C = nil) or not IsWriteAllowlistCall(C.Name) then Exit;
-    // Jedes Children-Element wird als Arg behandelt. Bare-Identifier
-    // extrahieren und mit VarMap matchen. ProcessCall ist konservativ:
-    // wir machen den Write nur fuer Allowlist-Calls - andere Calls
-    // bekommen NICHT pessimistic-Read-Vermerk (das deckt der spaetere
-    // Body-Token-Pass ab).
-    for i := 0 to C.Children.Count - 1 do
+    // nkCall.Name ist die ganze Call-Expression, z.B. 'ReadLn(n)'.
+    // Args extrahieren und pro Var-Name in der Arg-Liste prüfen.
+    ArgsLow := LowerCase(ExtractCallArgsRaw(C.Name));
+    if ArgsLow = '' then Exit;
+    for i := 0 to VarList.Count - 1 do
     begin
-      ArgBare := ExtractBareIdent(C.Children[i].Name);
-      if ArgBare = '' then Continue;
-      Idx := VarIndexFor(LowerCase(ArgBare));
-      if Idx >= 0 then RegisterWrite(Idx, C.Line);
+      VI := VarList[i];
+      if FindIdentInArgList(ArgsLow, VI.NameLow) then
+        RegisterWrite(i, C.Line);
     end;
   end;
 
@@ -320,13 +415,18 @@ var
   var
     LoopBare : string;
     Idx : Integer;
+    Child : TAstNode;
   begin
     if F = nil then Exit;
-    // Pascal-Parser legt die Loop-Variable als nkAssign-Child oder
-    // direkt im Name-Feld ab. Heuristik: zuerst Name, sonst erstes Child.
-    LoopBare := ExtractBareIdent(F.Name);
-    if (LoopBare = '') and (F.Children.Count > 0) then
-      LoopBare := ExtractBareIdent(F.Children[0].Name);
+    // Inline-var Form: 'for var x := ...' legt nkLocalVar als Child an.
+    // Die Loop-Variable bekommt damit eine eigene Var-Inventur-Eintrag,
+    // hier nichts zu tun (RegisterWrite waere doppelt).
+    for Child in F.Children do
+      if Child.Kind = nkLocalVar then Exit;
+
+    // Klassische Form: TypeRef enthaelt 'i := 0 to 10' o.ae.
+    // Loop-Var = erstes Token.
+    LoopBare := ExtractForLoopVar(F.TypeRef);
     if LoopBare = '' then Exit;
     Idx := VarIndexFor(LowerCase(LoopBare));
     if Idx >= 0 then RegisterWrite(Idx, F.Line);
