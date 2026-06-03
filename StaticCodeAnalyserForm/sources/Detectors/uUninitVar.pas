@@ -165,6 +165,100 @@ begin
         and (Pos(ASM_MARKER, LowerCase(MethodNode.TypeRef)) > 0);
 end;
 
+type
+  TLineRange = record
+    StartLine, EndLine : Integer;
+  end;
+
+procedure CollectNestedMethodRanges(MethodNode: TAstNode;
+  Ranges: TList<TLineRange>);
+// Sammelt Line-Ranges aller nested-Methods (nkMethod-Knoten innerhalb
+// MethodNode). MethodNode selbst NICHT mit aufnehmen (das ist der
+// Outer-Body).
+//
+// Hintergrund (Phase 2.4): nkAssign/nkCall/nkForStmt-Walks auf den
+// Outer-MethodNode liefern auch Knoten aus nested-Procedures. Das
+// fuehrt zu FPs:
+//   procedure Outer;
+//   var i: Integer;
+//     procedure Inner; begin Inc(i); end;   // pessimistic-Write auf Z3
+//   begin
+//     i := 0;                                // echter Init auf Z6
+//     ...
+//   end;
+// Mein Detector nimmt Inc(i) als FirstWrite (kleinste Line). Z3 < Z6 ->
+// flag. Echt-init auf Z6 wird ueberhaupt nicht als 'WriteLine' gewertet
+// weil Z3 schon registriert ist (RegisterWrite nimmt MIN).
+//
+// Fix: alle Hits aus nested-Method-Ranges ueberspringen. Nested
+// Procedures haben ihren eigenen AnalyzeMethod-Aufruf.
+var
+  Stack : TStack<TAstNode>;
+  Cur   : TAstNode;
+  i     : Integer;
+  R     : TLineRange;
+
+  function CalcEnd(N: TAstNode): Integer;
+  var
+    Inner : TStack<TAstNode>;
+    Sub   : TAstNode;
+    j     : Integer;
+  begin
+    Result := N.Line;
+    Inner := TStack<TAstNode>.Create;
+    try
+      Inner.Push(N);
+      while Inner.Count > 0 do
+      begin
+        Sub := Inner.Pop;
+        if Sub.Line > Result then Result := Sub.Line;
+        for j := 0 to Sub.Children.Count - 1 do
+          Inner.Push(Sub.Children[j]);
+      end;
+    finally
+      Inner.Free;
+    end;
+  end;
+
+begin
+  if (MethodNode = nil) or (Ranges = nil) then Exit;
+  Stack := TStack<TAstNode>.Create;
+  try
+    // Children durchgehen, MethodNode selbst NICHT (das IST der Outer-Body).
+    for i := 0 to MethodNode.Children.Count - 1 do
+      Stack.Push(MethodNode.Children[i]);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack.Pop;
+      if Cur.Kind = nkMethod then
+      begin
+        R.StartLine := Cur.Line;
+        R.EndLine   := CalcEnd(Cur);
+        Ranges.Add(R);
+        // NICHT in nested-Method weiter descenden - nested-of-nested
+        // ist Sub-Range der jetzigen, der Skip-Check matched trotzdem.
+        Continue;
+      end;
+      for i := 0 to Cur.Children.Count - 1 do
+        Stack.Push(Cur.Children[i]);
+    end;
+  finally
+    Stack.Free;
+  end;
+end;
+
+function IsLineInRanges(Line: Integer;
+  const Ranges: TList<TLineRange>): Boolean;
+var
+  i : Integer;
+begin
+  Result := False;
+  if (Ranges = nil) or (Line <= 0) then Exit;
+  for i := 0 to Ranges.Count - 1 do
+    if (Line >= Ranges[i].StartLine) and (Line <= Ranges[i].EndLine) then
+      Exit(True);
+end;
+
 function CountChildrenRecursive(Node: TAstNode; Cap: Integer): Integer;
 // Iterativ + Early-Exit bei Cap-Ueberschreitung. Verhindert
 // Pathological-Method-Cost-Eskalation in der Inventur-Phase.
@@ -457,6 +551,7 @@ var
   Cached           : Boolean;
   BodySB           : TStringBuilder;
   BodyLow          : string;
+  NestedRanges     : TList<TLineRange>;
 
   procedure RegisterWrite(Idx: Integer; Line: Integer);
   var
@@ -481,6 +576,10 @@ var
     Idx     : Integer;
   begin
     if A = nil then Exit;
+    // Phase 2.4: Hits aus nested-Methods ignorieren - die haben ihren
+    // eigenen AnalyzeMethod-Aufruf, dort wird die Vars-Inventur korrekt
+    // gemacht.
+    if IsLineInRanges(A.Line, NestedRanges) then Exit;
     LhsBare := ExtractBareIdent(A.Name);
     if LhsBare = '' then Exit;
     Idx := VarIndexFor(LowerCase(LhsBare));
@@ -494,6 +593,7 @@ var
     VI : TVarInfo;
   begin
     if C = nil then Exit;
+    if IsLineInRanges(C.Line, NestedRanges) then Exit;
     // Drei-Klassen-Modell (Konzept §6):
     //   1. READ_ALLOWLIST  (WriteLn, Assigned, Length, ...) -> KEIN Write
     //      registrieren. Var-Arg ist ein Read, das spaeter ueber Source-
@@ -531,6 +631,7 @@ var
     ArgsLow : string;
   begin
     if (Node = nil) or (Node.TypeRef = '') then Exit;
+    if IsLineInRanges(Node.Line, NestedRanges) then Exit;
     Calls := TList<TExprCall>.Create;
     try
       ParseCallsInExpr(Node.TypeRef, Calls);
@@ -559,6 +660,7 @@ var
     Child : TAstNode;
   begin
     if F = nil then Exit;
+    if IsLineInRanges(F.Line, NestedRanges) then Exit;
     // Inline-var Form: 'for var x := ...' legt nkLocalVar als Child an.
     // Die Loop-Variable bekommt damit eine eigene Var-Inventur-Eintrag,
     // hier nichts zu tun (RegisterWrite waere doppelt).
@@ -577,7 +679,8 @@ var
     DeclLine, FirstWriteLine, MethodStartLine, MethodEndLine: Integer): Integer;
   // Findet die erste Source-Zeile MIT einem Identifier-Match INNERHALB
   // der Method-Boundary [MethodStartLine..MethodEndLine] die NICHT die
-  // Var-Deklaration und NICHT die Write-Zeile ist.
+  // Var-Deklaration, NICHT die Write-Zeile UND NICHT innerhalb einer
+  // nested-Method ist (Phase 2.4).
   //
   // Method-Boundary ist KRITISCH: ohne sie wuerde der Scan ueber die
   // ganze Unit laufen und ein Field-Decl im Interface mit gleichem
@@ -600,6 +703,7 @@ var
     for i := From0 to To0 do
     begin
       if (i + 1 = DeclLine) or (i + 1 = FirstWriteLine) then Continue;
+      if IsLineInRanges(i + 1, NestedRanges) then Continue;
       L := LowerCase(Lines[i]);
       LL := Length(L);
       P := 1;
@@ -669,11 +773,13 @@ begin
     if LocalVars.Count = 0 then Exit;
     if LocalVars.Count > MAX_LOCAL_VARS then Exit;
 
-    VarList := TList<TVarInfo>.Create;
-    VarMap  := TDictionary<string, Integer>.Create;
-    BodySB  := TStringBuilder.Create;
-    Lines   := AcquireLines(FileName, Cached);
+    VarList      := TList<TVarInfo>.Create;
+    VarMap       := TDictionary<string, Integer>.Create;
+    BodySB       := TStringBuilder.Create;
+    NestedRanges := TList<TLineRange>.Create;
+    Lines        := AcquireLines(FileName, Cached);
     try
+      CollectNestedMethodRanges(MethodNode, NestedRanges);
       // Phase A: Var-Inventur
       for LV in LocalVars do
       begin
@@ -816,6 +922,7 @@ begin
       end;
     finally
       ReleaseLines(Lines, Cached);
+      NestedRanges.Free;
       BodySB.Free;
       VarMap.Free;
       VarList.Free;
