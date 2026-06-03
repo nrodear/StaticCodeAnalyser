@@ -109,3 +109,24 @@ triage-samples.txt
 triage-mid.txt
 triage-tail.txt
 sca-delphi-all.sarif
+
+# ---- Internal-only documentation (Konzept_LocalDev.md §2.3 Option B) ----
+# Konzepte, How-Tos, Audits, Backlogs bleiben LOKAL. Niemals push.
+# Reserve Option-B-Folder fuer kuenftige Migration ohne Pattern-Pflege.
+internal/
+
+# Wurzel-Pattern (Option A) - matched auch ohne internal/-Migration.
+Konzept_*.md
+HowTo_*.md
+Todo_*.md
+TODO.md
+Audit_*.md
+I18N.md
+
+# Spezifische internal docs/-Files (kein Pattern, exact match)
+docs/ConfidenceAudit.md
+docs/TodoNextDetectors.md
+docs/done.md
+
+# Performance- + Audit-Notes in tools/
+tools/perf_analyse.md
