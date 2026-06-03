@@ -73,6 +73,8 @@ type
     SonarConfig   : string;         // --sonar-config <path>      alternative INI
     // ---- Perf-Diagnostik ----
     TimeDetectors : Boolean;        // --time-detectors           pro-Detektor-Timing-Tabelle nach Scan
+    // ---- Telemetrie (C.5) ----
+    TelemetryCsv  : string;         // --telemetry-csv <file>     suppression-marker-hits als CSV ausgeben
     // ---- Findings-Filter ----
     HideTestFixtures : Boolean;     // --hide-test-fixtures       drop findings aus uTest*/Sample/Demo-Files
     HideTestExplicit : Boolean;     // True wenn HideTestFixtures vom User explizit gesetzt wurde
@@ -111,7 +113,8 @@ uses
   uExportSARIF, uExportHtml, uCustomRuleDetector,
   uExportSonarGeneric, uSonarConfig,
   uDetectorUtils,                     // TDetectorUtils.IsTestFixturePath
-  uBaseline;
+  uBaseline,
+  uSuppressionTelemetry;              // C.5 Telemetrie
 
 // Forward-Decl: ApplyFailOnPolicy wird von TConsoleRunner.Run gerufen,
 // die Definition steht weiter unten in dieser Unit.
@@ -254,6 +257,8 @@ begin
       GetValue(Result.SonarConfig, '--sonar-config')
     else if A = '--time-detectors' then
       Result.TimeDetectors := True
+    else if A = '--telemetry-csv' then
+      GetValue(Result.TelemetryCsv, '--telemetry-csv')
     else if A = '--hide-test-fixtures' then
     begin
       Result.HideTestFixtures := True;
@@ -419,6 +424,11 @@ begin
   WriteLn('                        ueber den Scan. Markdown-Tabelle am Ende.');
   WriteLn('                        Identifiziert Hot-Path-Detektoren fuer');
   WriteLn('                        gezielte Optimierung.');
+  WriteLn('  --telemetry-csv <file> Pro suppressed Finding eine CSV-Zeile.');
+  WriteLn('                        Spalten: timestamp_iso, kind, filename,');
+  WriteLn('                        finding_line, marker_line. Aggregierbar');
+  WriteLn('                        ueber Runs fuer "Noise-Ranking pro');
+  WriteLn('                        Detektor" (Konzept C.5).');
   WriteLn('');
   WriteLn('Findings-Filter:');
   WriteLn('  --hide-test-fixtures  Findings aus uTest*/Sample/Demo-Files ausblenden.');
@@ -678,6 +688,12 @@ begin
     if Args.TimeDetectors then
       gDetectorTimings := TDictionary<string, TPair<Int64, Integer>>.Create;
 
+    // C.5 Telemetrie: pro suppressed Finding eine CSV-Zeile sammeln,
+    // wenn --telemetry-csv <file> aktiv ist. uSuppression appendet
+    // wenn gSuppressionTelemetry assigned ist.
+    if Args.TelemetryCsv <> '' then
+      gSuppressionTelemetry := TSuppressionTelemetry.Create;
+
     // Test-Fixture-Auto-Default je nach Profile (wenn vom User nicht
     // explizit per --hide-/--show-test-fixtures ueberschrieben):
     //   * strict         -> AUS (User will alles sehen)
@@ -861,11 +877,26 @@ begin
     // Finding-Auflistung weiter unterdrueckt bleibt.
     if Args.TimeDetectors and Assigned(gDetectorTimings) then
       WriteDetectorTimingsMarkdown;
+    // C.5 Telemetrie: CSV schreiben wenn aktiviert.
+    if (Args.TelemetryCsv <> '') and Assigned(gSuppressionTelemetry) then
+    begin
+      try
+        gSuppressionTelemetry.SaveCsv(Args.TelemetryCsv, False);
+        if not Args.Quiet then
+          WriteLn(Format('Telemetry: %d suppression-hits written to %s',
+            [gSuppressionTelemetry.Count, Args.TelemetryCsv]));
+      except
+        on E: Exception do
+          WriteLn(ErrOutput, 'Telemetry write error: ', E.Message);
+      end;
+    end;
     Result := CalcExitCode(Findings);
     // --fail-on User-Policy ggf. anwenden (Default: graded = Raw beibehalten)
     Result := ApplyFailOnPolicy(Result, Args.FailOn);
   finally
     FreeAndNil(gDetectorTimings);
+    if Assigned(gSuppressionTelemetry) then
+      FreeAndNil(gSuppressionTelemetry);
     Findings.Free;
     Files.Free;
     Settings.Free;

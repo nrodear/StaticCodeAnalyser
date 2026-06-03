@@ -69,6 +69,7 @@ uses
   uExportHtml in 'sources\Infrastructure\uExportHtml.pas',
   uFileTextCache in 'sources\Infrastructure\uFileTextCache.pas',
   uFindingFingerprint in 'sources\Infrastructure\uFindingFingerprint.pas',
+  uSuppressionTelemetry in 'sources\Infrastructure\uSuppressionTelemetry.pas',
   uFormBinder in 'sources\Infrastructure\uFormBinder.pas',
   uIgnoreList in 'sources\Infrastructure\uIgnoreList.pas',
   uConfidenceFilter in 'sources\Infrastructure\uConfidenceFilter.pas',

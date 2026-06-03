@@ -94,6 +94,7 @@ contains
   uAstFileCache in '..\StaticCodeAnalyserForm\sources\Infrastructure\uAstFileCache.pas',
   uFileTextCache in '..\StaticCodeAnalyserForm\sources\Infrastructure\uFileTextCache.pas',
   uFindingFingerprint in '..\StaticCodeAnalyserForm\sources\Infrastructure\uFindingFingerprint.pas',
+  uSuppressionTelemetry in '..\StaticCodeAnalyserForm\sources\Infrastructure\uSuppressionTelemetry.pas',
   uVcsChanges in '..\StaticCodeAnalyserForm\sources\Infrastructure\uVcsChanges.pas',
   uRepoSettings in '..\StaticCodeAnalyserForm\sources\Infrastructure\uRepoSettings.pas',
   uSonarConfig in '..\StaticCodeAnalyserForm\sources\Infrastructure\uSonarConfig.pas',

@@ -26,7 +26,8 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uSCAConsts, uMethodd12, uFileTextCache, uDetectorUtils;
+  uSCAConsts, uMethodd12, uFileTextCache, uDetectorUtils,
+  uSuppressionTelemetry;
 
 type
   TSuppressedKinds = set of TFindingKind;
@@ -375,6 +376,7 @@ begin
     // Marker als consumed markieren wenn TargetLine + Kind passen.
     // TList<T> erlaubt keinen direkten Index-Edit auf records via for-in,
     // daher Index-basierter Loop mit explizitem Schreibzugriff.
+    var ConsumedMarkerLine := 0;
     for j := 0 to Markers.Count - 1 do
     begin
       M := Markers[j];
@@ -382,8 +384,16 @@ begin
       begin
         M.Consumed := True;
         Markers[j] := M;
+        if ConsumedMarkerLine = 0 then
+          ConsumedMarkerLine := M.MarkerLine;
       end;
     end;
+    // C.5 Telemetrie: pro suppressed Finding eine CSV-Zeile sammeln
+    // (wenn aktiviert via --telemetry-csv). Niedriger Overhead durch
+    // nil-check.
+    if Assigned(gSuppressionTelemetry) then
+      gSuppressionTelemetry.Append(KindName(F.Kind), F.FileName,
+        Line, ConsumedMarkerLine);
     Findings.Delete(i);
   end;
 end;

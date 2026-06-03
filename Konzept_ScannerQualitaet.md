@@ -336,16 +336,23 @@ existiert für Datei-Granularität, hier analog für Detector-Granularität.
 optimiert wird.
 **Risiko**: niedrig.
 
-### C.5 Detector-Confidence-Telemetrie
+### C.5 Detector-Confidence-Telemetrie — **✅ ERLEDIGT (2026-06-04)**
 
 **Problem**: Suppressions pro Kind sind nicht aggregiert. "Welche Regel
 generiert am meisten User-Reaktion (Noise)?" nur per Bauchgefühl.
 
-**Maßnahme**: pro Suppression-Marker Kind+Datei loggen. Über mehrere
-Repos aggregiert ergibt sich ein "Noise-Ranking" pro Detektor.
+**Umsetzung**:
+- Neue Unit [`uSuppressionTelemetry.pas`](StaticCodeAnalyserForm/sources/Infrastructure/uSuppressionTelemetry.pas)
+  mit `TSuppressionTelemetry`-Klasse + global opt-in `gSuppressionTelemetry`
+- `uSuppression.RemoveSuppressedFindings` appendet pro consumed Marker
+  einen Record (Kind + FileName + FindingLine + MarkerLine)
+- CLI-Flag `--telemetry-csv <out.csv>` aktiviert + schreibt am Ende
+- CSV-Format RFC-4180-konform: `timestamp_iso,kind,filename,finding_line,marker_line`
+- Default = OFF, kein Overhead bei nil-Check
+- Aggregations-Workflow (PowerShell-One-Liner) in Unit-Header dokumentiert
 
-**Aufwand**: 1d.
-**Wirkung**: Datenbasis für A.1 (Confidence-Tagging).
+**Aufwand-Ist**: ~2h.
+**Wirkung**: Datenbasis für A.1 (Confidence-Tagging) + Profile-Default-Anpassungen.
 **Risiko**: niedrig — opt-in.
 
 ---
