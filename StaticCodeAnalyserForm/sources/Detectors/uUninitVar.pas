@@ -720,21 +720,32 @@ begin
         Fors.Free;
       end;
 
-      // Phase 2.2: Condition-Calls in if/while/case. Diese sind als
-      // TypeRef-Strings im AST abgelegt (kein nkCall-Walk moeglich) und
-      // waren die groesste FP-Quelle im Pre-Phase-2.2-Audit (Konzept §13).
-      var Conds : TList<TAstNode> := MethodNode.FindAll(nkIfStmt);
+      // Phase 2.2 + 2.3: Calls innerhalb von Expression-tragenden Knoten
+      // (TypeRef-Strings statt nkCall) als pessimistic-Write erkennen.
+      //   Phase 2.2: nkIfStmt + nkWhileStmt + nkCaseStmt
+      //   Phase 2.3: nkAssign.RHS (z.B. 'Lines := AcquireLines(F, Cached)'
+      //              schreibt Cached out-Param) + nkForStmt.Range
+      // Alle teilen den gleichen ParseCallsInExpr-Pfad.
+      var Exprs : TList<TAstNode> := MethodNode.FindAll(nkIfStmt);
       try
-        for i := 0 to Conds.Count - 1 do ProcessConditionCalls(Conds[i]);
-      finally Conds.Free; end;
-      Conds := MethodNode.FindAll(nkWhileStmt);
+        for i := 0 to Exprs.Count - 1 do ProcessConditionCalls(Exprs[i]);
+      finally Exprs.Free; end;
+      Exprs := MethodNode.FindAll(nkWhileStmt);
       try
-        for i := 0 to Conds.Count - 1 do ProcessConditionCalls(Conds[i]);
-      finally Conds.Free; end;
-      Conds := MethodNode.FindAll(nkCaseStmt);
+        for i := 0 to Exprs.Count - 1 do ProcessConditionCalls(Exprs[i]);
+      finally Exprs.Free; end;
+      Exprs := MethodNode.FindAll(nkCaseStmt);
       try
-        for i := 0 to Conds.Count - 1 do ProcessConditionCalls(Conds[i]);
-      finally Conds.Free; end;
+        for i := 0 to Exprs.Count - 1 do ProcessConditionCalls(Exprs[i]);
+      finally Exprs.Free; end;
+      Exprs := MethodNode.FindAll(nkAssign);
+      try
+        for i := 0 to Exprs.Count - 1 do ProcessConditionCalls(Exprs[i]);
+      finally Exprs.Free; end;
+      Exprs := MethodNode.FindAll(nkForStmt);
+      try
+        for i := 0 to Exprs.Count - 1 do ProcessConditionCalls(Exprs[i]);
+      finally Exprs.Free; end;
 
       // Phase C: Body-Token-Sammlung fuer RefCount + Reads via Source-Lines.
       // Method-Boundary [Start..End] limitiert den Read-Scan auf den

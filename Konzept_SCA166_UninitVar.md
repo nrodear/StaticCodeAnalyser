@@ -581,7 +581,8 @@ Confidence per `SetKind(fkUninitVar, fcMedium)` direkt im Detector.
 | **MVP (Phase 1)** | Phase A-E ohne sibling-Write-Check + ohne CFG | 1-1.5d | 15 unit-tests grün, Real-World-Scan 0.7 Findings/File ohne Crash | ✅ commit 8e439ec |
 | **Phase 2.1** | Sibling-Write-Check für if-then-else mit beidseitigem Write | 4-6h | `if cond then X := 1 else X := 2;` flaggt nicht mehr | 🔲 |
 | **Phase 2.2** | Calls in `if`/`while`/`case`-Conditions als pessimistic-Write erkennen (Parser packt sie als TypeRef-String, kein nkCall-Walk) | 1d | `if not ReadFile(F, Buf, ...)` flaggt Buf nicht mehr falsch als unwritten | ✅ commit folgt — größter erwartbarer FP-Killer |
-| **Phase 2.3** | Read-Allowlist erweitern um Windows-API-Read-Calls (GetTickCount, GetLastError, ...) | 1h | weniger pessimistic-Write-Fälle | 🔲 |
+| **Phase 2.3** | Expression-Call-Walker auf nkAssign.RHS + nkForStmt.Range erweitern (gleicher Pfad wie 2.2, andere Knoten) | 1h | `Lines := AcquireLines(F, Cached)` registriert Cached als pessimistic-Write | ✅ commit folgt |
+| **Phase 2.4** | Read-Allowlist erweitern um Windows-API-Read-Calls (GetTickCount, GetLastError, ...) | 1h | weniger pessimistic-Write-Fälle | 🔲 |
 | **Phase 3** | echter CFG-Builder (anstoßend an Konzept §A.4) | 3-5d | Komplexe try-except-finally + nested-if Fälle korrekt; Recall steigt, FP-Rate stabil | 🔲 |
 | **Phase 4** | Symboltabelle (B.1 aus Konzept) integriert für korrektes `var`/`out`-Parameter-Erkennen | abhängig von B.1 | Pessimistic-Read durch exakte Read/Write-Klassifikation ersetzt | 🔲 |
 
