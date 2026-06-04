@@ -82,6 +82,8 @@ type
     // ---- A.5 IFDEF-Awareness (Phase 1b-Wiring) ----
     IfdefAware    : Boolean;        // --ifdef-aware              Lexer skippt {$IFDEF X}-Branches
                                     //   wo X NICHT im IfdefDefines-Set steht
+    NoIfdefAware  : Boolean;        // --no-ifdef-aware           Opt-Out vom Profile-Auto-Default
+                                    //   (gewinnt ueber Profile-basiertes IfdefAware=True)
     IfdefDefines  : string;         // --define X[,Y,Z]           Comma-separated Defines
                                     //   (mehrfach --define X erlaubt - akkumuliert)
     ParseError    : string;         // nicht-leer wenn Args invalid
@@ -277,6 +279,8 @@ begin
     end
     else if A = '--ifdef-aware' then
       Result.IfdefAware := True
+    else if A = '--no-ifdef-aware' then
+      Result.NoIfdefAware := True
     else if A = '--define' then
     begin
       var DefVal := '';
@@ -455,10 +459,13 @@ begin
   WriteLn('  --show-test-fixtures  Komplement: behaelt Test-Fixture-Findings');
   WriteLn('                        auch bei default-Profile.');
   WriteLn('');
-  WriteLn('Conditional-Compilation (A.5 - experimentell):');
+  WriteLn('Conditional-Compilation (A.5):');
   WriteLn('  --ifdef-aware         Lexer ueberspringt {$IFDEF X}-Branches');
   WriteLn('                        wo X NICHT im Define-Set steht.');
-  WriteLn('                        Default OFF (alle Branches gescannt).');
+  WriteLn('                        Auto-On bei --profile selftest-quiet');
+  WriteLn('                        (mit MSWINDOWS,WIN64,UNICODE,CONDITIONALEXPRESSIONS);');
+  WriteLn('                        sonst Default OFF.');
+  WriteLn('  --no-ifdef-aware      Opt-Out vom Profile-Auto-Default - alle Branches.');
   WriteLn('  --define <X>[,Y,Z]    Defines fuer --ifdef-aware. Mehrfach moeglich.');
   WriteLn('                        Beispiel: --define MSWINDOWS,WIN64,UNICODE');
   WriteLn('');
@@ -650,19 +657,36 @@ begin
   // A.5 Phase 1b-Wiring: IFDEF-Awareness aus CLI-Args in den globalen
   // Lexer-Config-State spiegeln. Wirkt fuer alle TParser2.ParseSource-
   // Aufrufe waehrend des Runs.
-  if Args.IfdefAware then
+  //
+  // Profile-Auto-Default: --profile selftest-quiet aktiviert IfdefAware
+  // automatisch (mit MSWINDOWS+WIN64+UNICODE+CONDITIONALEXPRESSIONS als
+  // Default-Defines). User kann via --no-ifdef-aware opt-out wenn er
+  // bewusst alle Branches scannen will.
+  var EffectiveIfdefAware   : Boolean := Args.IfdefAware;
+  var EffectiveIfdefDefines : string  := Args.IfdefDefines;
+  if (not EffectiveIfdefAware) and (not Args.NoIfdefAware)
+     and SameText(Args.Profile, 'selftest-quiet') then
+  begin
+    EffectiveIfdefAware := True;
+    if EffectiveIfdefDefines = '' then
+      EffectiveIfdefDefines := 'MSWINDOWS,WIN64,UNICODE,CONDITIONALEXPRESSIONS';
+  end;
+  if Args.NoIfdefAware then
+    EffectiveIfdefAware := False;
+
+  if EffectiveIfdefAware then
   begin
     gLexerIfdefSkipEnabled := True;
     LexerIfdefClear;
-    if Args.IfdefDefines <> '' then
+    if EffectiveIfdefDefines <> '' then
     begin
-      var Parts := Args.IfdefDefines.Split([',', ';']);
+      var Parts := EffectiveIfdefDefines.Split([',', ';']);
       for var Def in Parts do
         if Trim(Def) <> '' then LexerIfdefAddDefine(Trim(Def));
     end;
     if not Args.Quiet then
       WriteLn(Format('IFDEF-Awareness aktiv: %d Define(s).',
-        [Length(Args.IfdefDefines.Split([',', ';']))]));
+        [Length(EffectiveIfdefDefines.Split([',', ';']))]));
   end
   else
     gLexerIfdefSkipEnabled := False;
