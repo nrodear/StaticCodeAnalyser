@@ -162,15 +162,20 @@ procedure TSymbolReferenceIndex.AddRefsFromNode(RootNode: TAstNode;
     Result := CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_']);
   end;
 
-  procedure ScanExprForDottedCalls(const Expr: string);
-  // A.3+ Phase 1: TypeRef-Strings von nkIfStmt/nkWhileStmt/nkCaseStmt/
-  // nkAssign/nkForStmt enthalten Calls die der Parser NICHT als nkCall
-  // ablegt. Wir scannen die Strings nach 'Obj.Method(' Pattern und
-  // registrieren 'Method' als Cross-Unit-Reference.
+  procedure ScanExprForDottedRefs(const Expr: string);
+  // A.3+ Phase 1+2: TypeRef-Strings von nkIfStmt/nkWhileStmt/nkCaseStmt/
+  // nkAssign/nkForStmt enthalten Member-Accesses die der Parser NICHT
+  // als nkCall ablegt. Wir scannen die Strings nach 'Obj.Member'
+  // Pattern und registrieren 'Member' als Cross-Unit-Reference.
   //
-  // Bewusst nur DOT-Style-Calls (analog zur nkCall-Logik oben) -
-  // bare Calls wie 'WriteLn(...)' werden NICHT erfasst, sonst FP-
-  // Explosion bei jedem RTL-Function-Aufruf.
+  // Erfasst BEIDES: Calls 'Obj.Method(...)' UND Property/Field-Reads
+  // 'F.SeverityText' ohne Klammern. Bare Calls wie 'WriteLn(...)'
+  // werden bewusst NICHT erfasst (kein Dot), sonst FP-Explosion bei
+  // jedem RTL-Function-Aufruf.
+  //
+  // Trade-off: kann zu Under-Reporting bei Visibility-Detektoren
+  // fuehren wenn ein TP-Member zufaellig denselben Namen hat wie ein
+  // bare 'Obj.Field' irgendwo - bewusst akzeptiert (A.3-Audit).
   var
     i, L, StartSecond : Integer;
     MemberName : string;
@@ -189,13 +194,9 @@ procedure TSymbolReferenceIndex.AddRefsFromNode(RootNode: TAstNode;
       if (i > L) or (Expr[i] <> '.') then Continue;
       Inc(i);  // skip '.'
       if (i > L) or not IsIdentCharLocal(Expr[i]) then Continue;
-      // Zweites Ident (potentielles 'Method')
+      // Zweites Ident (potentielles 'Member' = Property/Field/Method)
       StartSecond := i;
       while (i <= L) and IsIdentCharLocal(Expr[i]) do Inc(i);
-      // Optional Whitespace + '(' - sonst kein Call
-      var j := i;
-      while (j <= L) and (Expr[j] = ' ') do Inc(j);
-      if (j > L) or (Expr[j] <> '(') then Continue;
       MemberName := Copy(Expr, StartSecond, i - StartSecond);
       AddReference(MemberName, SourceUnit);
     end;
@@ -238,7 +239,7 @@ begin
       end;
       // RHS-Calls: 'X := Obj.GetValue()' -> 'GetValue' indexieren.
       if N.TypeRef <> '' then
-        ScanExprForDottedCalls(N.TypeRef);
+        ScanExprForDottedRefs(N.TypeRef);
     end;
   finally
     Assigns.Free;
@@ -251,28 +252,28 @@ begin
   Ifs := RootNode.FindAll(nkIfStmt);
   try
     for N in Ifs do
-      if N.TypeRef <> '' then ScanExprForDottedCalls(N.TypeRef);
+      if N.TypeRef <> '' then ScanExprForDottedRefs(N.TypeRef);
   finally
     Ifs.Free;
   end;
   Whiles := RootNode.FindAll(nkWhileStmt);
   try
     for N in Whiles do
-      if N.TypeRef <> '' then ScanExprForDottedCalls(N.TypeRef);
+      if N.TypeRef <> '' then ScanExprForDottedRefs(N.TypeRef);
   finally
     Whiles.Free;
   end;
   Cases := RootNode.FindAll(nkCaseStmt);
   try
     for N in Cases do
-      if N.TypeRef <> '' then ScanExprForDottedCalls(N.TypeRef);
+      if N.TypeRef <> '' then ScanExprForDottedRefs(N.TypeRef);
   finally
     Cases.Free;
   end;
   Fors := RootNode.FindAll(nkForStmt);
   try
     for N in Fors do
-      if N.TypeRef <> '' then ScanExprForDottedCalls(N.TypeRef);
+      if N.TypeRef <> '' then ScanExprForDottedRefs(N.TypeRef);
   finally
     Fors.Free;
   end;
