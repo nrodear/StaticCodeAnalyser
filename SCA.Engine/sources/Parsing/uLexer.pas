@@ -926,6 +926,8 @@ begin
   if gLexerIfdefDefines <> nil then gLexerIfdefDefines.Clear;
 end;
 
+initialization
+
 finalization
   gLexerIfdefDefines.Free;
   gLexerIfdefDefines := nil;
