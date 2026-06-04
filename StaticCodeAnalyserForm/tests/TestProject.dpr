@@ -62,6 +62,7 @@ uses
   uTestSafetyChecks     in 'uTestSafetyChecks.pas',
   uTestComboChecks      in 'uTestComboChecks.pas',
   uTestParserRobustness in 'uTestParserRobustness.pas',
+  uTestLexerConditionals in 'uTestLexerConditionals.pas',
   uTestPerformance      in 'uTestPerformance.pas',
   uTestRuleCatalog      in 'uTestRuleCatalog.pas',
   uTestExportSARIF      in 'uTestExportSARIF.pas',

@@ -204,6 +204,7 @@
         <DCCReference Include="uTestSafetyChecks.pas"/>
         <DCCReference Include="uTestComboChecks.pas"/>
         <DCCReference Include="uTestParserRobustness.pas"/>
+        <DCCReference Include="uTestLexerConditionals.pas"/>
         <DCCReference Include="uTestPerformance.pas"/>
         <DCCReference Include="uTestRuleCatalog.pas"/>
         <DCCReference Include="uTestExportSARIF.pas"/>
