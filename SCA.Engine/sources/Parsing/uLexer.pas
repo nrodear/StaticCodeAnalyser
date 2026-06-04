@@ -754,9 +754,9 @@ var
   L, Start : Integer;
 begin
   L := Length(ABody);
-  while (Pos <= L) and (ABody[Pos] in [#9, ' ']) do Inc(Pos);
+  while (Pos <= L) and CharInSet(ABody[Pos], [#9, ' ']) do Inc(Pos);
   Start := Pos;
-  while (Pos <= L) and (ABody[Pos] in ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
+  while (Pos <= L) and CharInSet(ABody[Pos], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
     Inc(Pos);
   Result := UpperCase(Copy(ABody, Start, Pos - Start));
 end;
@@ -790,12 +790,11 @@ procedure TLexer.HandleConditionalDirective(const ABody: string;
 // Phase-1b-Limitierung: $IF wird konservativ als Active=True behandelt
 // (Expression-Mini-Parser kommt in Phase 2).
 var
-  i, L         : Integer;
+  i            : Integer;
   Verb, Ident  : string;
   ParentActive : Boolean;
   NewActive    : Boolean;
 begin
-  L := Length(ABody);
   i := 2;  // skip '$'
   Verb := ParseDirectiveIdent(ABody, i);
   ParentActive := CurrentlyActive;
@@ -934,7 +933,7 @@ var
   L : Integer;
 begin
   L := Length(A);
-  while (P <= L) and (A[P] in [#9, #10, #13, ' ']) do Inc(P);
+  while (P <= L) and CharInSet(A[P], [#9, #10, #13, ' ']) do Inc(P);
 end;
 
 function TLexer.MatchExprKeyword(const A: string; var P: Integer;
@@ -955,7 +954,7 @@ begin
   if P + KWL <= L then
   begin
     After := A[P + KWL];
-    if After in ['A'..'Z', 'a'..'z', '0'..'9', '_'] then Exit;
+    if CharInSet(After, ['A'..'Z', 'a'..'z', '0'..'9', '_']) then Exit;
   end;
   Inc(P, KWL);
   Result := True;
@@ -986,7 +985,7 @@ begin
 
   // 'Defined' / 'Declared' / Identifier
   Start := P;
-  while (P <= L) and (A[P] in ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
+  while (P <= L) and CharInSet(A[P], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
     Inc(P);
   Ident := UpperCase(Copy(A, Start, P - Start));
 
@@ -997,7 +996,7 @@ begin
     Inc(P);
     SkipExprWhitespace(A, P);
     var ArgStart := P;
-    while (P <= L) and (A[P] in ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
+    while (P <= L) and CharInSet(A[P], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
       Inc(P);
     var Arg := UpperCase(Copy(A, ArgStart, P - ArgStart));
     SkipExprWhitespace(A, P);
@@ -1016,12 +1015,12 @@ begin
   // (konservativ): kann CompilerVersion >= 36 sein - wenn wir das nicht
   // koennen, behalten wir den Branch.
   // Konsumiere einen optionalen Vergleichs-Operator + Operand-Token.
-  if (P <= L) and (A[P] in ['<', '>', '=']) then
+  if (P <= L) and CharInSet(A[P], ['<', '>', '=']) then
   begin
     Inc(P);
-    if (P <= L) and (A[P] in ['<', '>', '=']) then Inc(P);
+    if (P <= L) and CharInSet(A[P], ['<', '>', '=']) then Inc(P);
     SkipExprWhitespace(A, P);
-    while (P <= L) and (A[P] in ['A'..'Z', 'a'..'z', '0'..'9', '_', '.']) do
+    while (P <= L) and CharInSet(A[P], ['A'..'Z', 'a'..'z', '0'..'9', '_', '.']) do
       Inc(P);
   end;
   Result := True;
