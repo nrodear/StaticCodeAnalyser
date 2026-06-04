@@ -1,17 +1,48 @@
 ﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <Import Project=".\paths.optset.xml"/>
     <PropertyGroup>
-        <ProjectGuid>{D8C69E41-E5E0-4BFA-ACBD-EFD569BE6D14}</ProjectGuid>
+        <ProjectGuid>{DF951A63-B210-4FCD-BD58-B2FE5479D511}</ProjectGuid>
+        <MainSource>StaticCodeAnalyser.IDE.d12.dpk</MainSource>
         <ProjectVersion>20.1</ProjectVersion>
-        <FrameworkType>VCL</FrameworkType>
+        <FrameworkType>None</FrameworkType>
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Release</Config>
-        <Platform Condition="'$(Platform)'==''">Win64</Platform>
-        <ProjectName Condition="'$(ProjectName)'==''">StaticCodeAnalyser.d12</ProjectName>
-        <TargetedPlatforms>3</TargetedPlatforms>
-        <AppType>Application</AppType>
-        <MainSource>StaticCodeAnalyser.d12.dpr</MainSource>
+        <Platform Condition="'$(Platform)'==''">Win32</Platform>
+        <ProjectName Condition="'$(ProjectName)'==''">StaticCodeAnalyser.IDE.d12</ProjectName>
+        <TargetedPlatforms>1</TargetedPlatforms>
+        <AppType>Package</AppType>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Base' or '$(Base)'!=''">
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Android' and '$(Base)'=='true') or '$(Base_Android)'!=''">
+        <Base_Android>true</Base_Android>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Android64' and '$(Base)'=='true') or '$(Base_Android64)'!=''">
+        <Base_Android64>true</Base_Android64>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='iOSDevice64' and '$(Base)'=='true') or '$(Base_iOSDevice64)'!=''">
+        <Base_iOSDevice64>true</Base_iOSDevice64>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='iOSSimARM64' and '$(Base)'=='true') or '$(Base_iOSSimARM64)'!=''">
+        <Base_iOSSimARM64>true</Base_iOSSimARM64>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='OSX64' and '$(Base)'=='true') or '$(Base_OSX64)'!=''">
+        <Base_OSX64>true</Base_OSX64>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='OSXARM64' and '$(Base)'=='true') or '$(Base_OSXARM64)'!=''">
+        <Base_OSXARM64>true</Base_OSXARM64>
+        <CfgParent>Base</CfgParent>
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="('$(Platform)'=='Win32' and '$(Base)'=='true') or '$(Base_Win32)'!=''">
@@ -21,6 +52,11 @@
     </PropertyGroup>
     <PropertyGroup Condition="('$(Platform)'=='Win64' and '$(Base)'=='true') or '$(Base_Win64)'!=''">
         <Base_Win64>true</Base_Win64>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Win64x' and '$(Base)'=='true') or '$(Base_Win64x)'!=''">
+        <Base_Win64x>true</Base_Win64x>
         <CfgParent>Base</CfgParent>
         <Base>true</Base>
     </PropertyGroup>
@@ -35,53 +71,51 @@
         <Cfg_1>true</Cfg_1>
         <Base>true</Base>
     </PropertyGroup>
-    <PropertyGroup Condition="('$(Platform)'=='Win64' and '$(Cfg_1)'=='true') or '$(Cfg_1_Win64)'!=''">
-        <Cfg_1_Win64>true</Cfg_1_Win64>
-        <CfgParent>Cfg_1</CfgParent>
-        <Cfg_1>true</Cfg_1>
-        <Base>true</Base>
-    </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Release' or '$(Cfg_2)'!=''">
         <Cfg_2>true</Cfg_2>
         <CfgParent>Base</CfgParent>
         <Base>true</Base>
     </PropertyGroup>
-    <PropertyGroup Condition="('$(Platform)'=='Win32' and '$(Cfg_2)'=='true') or '$(Cfg_2_Win32)'!=''">
-        <Cfg_2_Win32>true</Cfg_2_Win32>
-        <CfgParent>Cfg_2</CfgParent>
-        <Cfg_2>true</Cfg_2>
-        <Base>true</Base>
-    </PropertyGroup>
-    <PropertyGroup Condition="('$(Platform)'=='Win64' and '$(Cfg_2)'=='true') or '$(Cfg_2_Win64)'!=''">
-        <Cfg_2_Win64>true</Cfg_2_Win64>
-        <CfgParent>Cfg_2</CfgParent>
-        <Cfg_2>true</Cfg_2>
-        <Base>true</Base>
-    </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
         <DCC_DcuOutput>..\Output\$(Platform) $(Config)</DCC_DcuOutput>
         <DCC_ExeOutput>..\Output\$(Platform) $(Config)</DCC_ExeOutput>
-        <DCC_UnitSearchPath>$(PROJECTDIR)\sources;$(PROJECTDIR)\sources\Common;$(PROJECTDIR)\sources\Console;$(PROJECTDIR)\sources\UI;$(PROJECTDIR)\resources;$(PROJECTDIR)\..\SCA.Engine\sources\Common;$(PROJECTDIR)\..\SCA.Engine\sources\Detectors;$(PROJECTDIR)\..\SCA.Engine\sources\Infrastructure;$(PROJECTDIR)\..\SCA.Engine\sources\Output;$(PROJECTDIR)\..\SCA.Engine\sources\Parsing;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>$(PROJECTDIR)\..\StaticCodeAnalyserForm\sources;$(PROJECTDIR)\..\StaticCodeAnalyserForm\sources\Common;$(PROJECTDIR)\..\StaticCodeAnalyserForm\sources\Detectors;$(PROJECTDIR)\..\StaticCodeAnalyserForm\sources\Infrastructure;$(PROJECTDIR)\..\StaticCodeAnalyserForm\sources\Output;$(PROJECTDIR)\..\StaticCodeAnalyserForm\sources\Parsing;$(PROJECTDIR)\..\StaticCodeAnalyserForm\sources\UI;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_E>false</DCC_E>
         <DCC_N>false</DCC_N>
         <DCC_S>false</DCC_S>
         <DCC_F>false</DCC_F>
         <DCC_K>false</DCC_K>
-        <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;$(DCC_Namespace)</DCC_Namespace>
-        <Icon_MainIcon>..\branding\sca.ico</Icon_MainIcon>
-        <UWP_DelphiLogo44>$(BDS)\bin\Artwork\Windows\UWP\delphi_UwpDefault_44.png</UWP_DelphiLogo44>
-        <UWP_DelphiLogo150>$(BDS)\bin\Artwork\Windows\UWP\delphi_UwpDefault_150.png</UWP_DelphiLogo150>
-        <SanitizedProjectName>StaticCodeAnalyser_d12</SanitizedProjectName>
-        <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
-        <VerInfo_Locale>1031</VerInfo_Locale>
-        <VerInfo_MajorVer>0</VerInfo_MajorVer>
-        <VerInfo_MinorVer>9</VerInfo_MinorVer>
-        <VerInfo_Release>3</VerInfo_Release>
-        <VerInfo_Build>0</VerInfo_Build>
-        <VerInfo_Keys>CompanyName=;FileDescription=Static Code Analysis Tool for Delphi (Standalone);FileVersion=0.9.7.0;InternalName=StaticCodeAnalyser;LegalCopyright=;LegalTrademarks=;OriginalFilename=StaticCodeAnalyser.exe;ProductName=Static Code Analysis Tool for Delphi;ProductVersion=0.9.7.0;Comments=Release 0.9.7 (2026-06-01)</VerInfo_Keys>
+        <GenDll>true</GenDll>
+        <GenPackage>true</GenPackage>
+        <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;$(DCC_Namespace)</DCC_Namespace>
+        <DCC_CBuilderOutput>All</DCC_CBuilderOutput>
+        <SanitizedProjectName>StaticCodeAnalyser_IDE_d12</SanitizedProjectName>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Base_Android)'!=''">
+        <DCC_CBuilderOutput>None</DCC_CBuilderOutput>
+        <EnabledSysJars>activity-1.7.2.dex.jar;annotation-experimental-1.3.0.dex.jar;annotation-jvm-1.6.0.dex.jar;annotations-13.0.dex.jar;appcompat-1.2.0.dex.jar;appcompat-resources-1.2.0.dex.jar;billing-6.0.1.dex.jar;biometric-1.1.0.dex.jar;browser-1.4.0.dex.jar;cloud-messaging.dex.jar;collection-1.1.0.dex.jar;concurrent-futures-1.1.0.dex.jar;core-1.10.1.dex.jar;core-common-2.2.0.dex.jar;core-ktx-1.10.1.dex.jar;core-runtime-2.2.0.dex.jar;cursoradapter-1.0.0.dex.jar;customview-1.0.0.dex.jar;documentfile-1.0.0.dex.jar;drawerlayout-1.0.0.dex.jar;error_prone_annotations-2.9.0.dex.jar;exifinterface-1.3.6.dex.jar;firebase-annotations-16.2.0.dex.jar;firebase-common-20.3.1.dex.jar;firebase-components-17.1.0.dex.jar;firebase-datatransport-18.1.7.dex.jar;firebase-encoders-17.0.0.dex.jar;firebase-encoders-json-18.0.0.dex.jar;firebase-encoders-proto-16.0.0.dex.jar;firebase-iid-interop-17.1.0.dex.jar;firebase-installations-17.1.3.dex.jar;firebase-installations-interop-17.1.0.dex.jar;firebase-measurement-connector-19.0.0.dex.jar;firebase-messaging-23.1.2.dex.jar;fmx.dex.jar;fragment-1.2.5.dex.jar;google-play-licensing.dex.jar;interpolator-1.0.0.dex.jar;javax.inject-1.dex.jar;kotlin-stdlib-1.8.22.dex.jar;kotlin-stdlib-common-1.8.22.dex.jar;kotlin-stdlib-jdk7-1.8.22.dex.jar;kotlin-stdlib-jdk8-1.8.22.dex.jar;kotlinx-coroutines-android-1.6.4.dex.jar;kotlinx-coroutines-core-jvm-1.6.4.dex.jar;legacy-support-core-utils-1.0.0.dex.jar;lifecycle-common-2.6.1.dex.jar;lifecycle-livedata-2.6.1.dex.jar;lifecycle-livedata-core-2.6.1.dex.jar;lifecycle-runtime-2.6.1.dex.jar;lifecycle-service-2.6.1.dex.jar;lifecycle-viewmodel-2.6.1.dex.jar;lifecycle-viewmodel-savedstate-2.6.1.dex.jar;listenablefuture-1.0.dex.jar;loader-1.0.0.dex.jar;localbroadcastmanager-1.0.0.dex.jar;okio-jvm-3.4.0.dex.jar;play-services-ads-22.2.0.dex.jar;play-services-ads-base-22.2.0.dex.jar;play-services-ads-identifier-18.0.0.dex.jar;play-services-ads-lite-22.2.0.dex.jar;play-services-appset-16.0.1.dex.jar;play-services-base-18.1.0.dex.jar;play-services-basement-18.1.0.dex.jar;play-services-cloud-messaging-17.0.1.dex.jar;play-services-location-21.0.1.dex.jar;play-services-maps-18.1.0.dex.jar;play-services-measurement-base-20.1.2.dex.jar;play-services-measurement-sdk-api-20.1.2.dex.jar;play-services-stats-17.0.2.dex.jar;play-services-tasks-18.0.2.dex.jar;print-1.0.0.dex.jar;profileinstaller-1.3.0.dex.jar;room-common-2.2.5.dex.jar;room-runtime-2.2.5.dex.jar;savedstate-1.2.1.dex.jar;sqlite-2.1.0.dex.jar;sqlite-framework-2.1.0.dex.jar;startup-runtime-1.1.1.dex.jar;tracing-1.0.0.dex.jar;transport-api-3.0.0.dex.jar;transport-backend-cct-3.1.8.dex.jar;transport-runtime-3.1.8.dex.jar;user-messaging-platform-2.0.0.dex.jar;vectordrawable-1.1.0.dex.jar;vectordrawable-animated-1.1.0.dex.jar;versionedparcelable-1.1.1.dex.jar;viewpager-1.0.0.dex.jar;work-runtime-2.7.0.dex.jar</EnabledSysJars>
+        <DCC_UsePackage>rtl;$(DCC_UsePackage)</DCC_UsePackage>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Base_Android64)'!=''">
+        <DCC_CBuilderOutput>None</DCC_CBuilderOutput>
+        <EnabledSysJars>activity-1.7.2.dex.jar;annotation-experimental-1.3.0.dex.jar;annotation-jvm-1.6.0.dex.jar;annotations-13.0.dex.jar;appcompat-1.2.0.dex.jar;appcompat-resources-1.2.0.dex.jar;billing-6.0.1.dex.jar;biometric-1.1.0.dex.jar;browser-1.4.0.dex.jar;cloud-messaging.dex.jar;collection-1.1.0.dex.jar;concurrent-futures-1.1.0.dex.jar;core-1.10.1.dex.jar;core-common-2.2.0.dex.jar;core-ktx-1.10.1.dex.jar;core-runtime-2.2.0.dex.jar;cursoradapter-1.0.0.dex.jar;customview-1.0.0.dex.jar;documentfile-1.0.0.dex.jar;drawerlayout-1.0.0.dex.jar;error_prone_annotations-2.9.0.dex.jar;exifinterface-1.3.6.dex.jar;firebase-annotations-16.2.0.dex.jar;firebase-common-20.3.1.dex.jar;firebase-components-17.1.0.dex.jar;firebase-datatransport-18.1.7.dex.jar;firebase-encoders-17.0.0.dex.jar;firebase-encoders-json-18.0.0.dex.jar;firebase-encoders-proto-16.0.0.dex.jar;firebase-iid-interop-17.1.0.dex.jar;firebase-installations-17.1.3.dex.jar;firebase-installations-interop-17.1.0.dex.jar;firebase-measurement-connector-19.0.0.dex.jar;firebase-messaging-23.1.2.dex.jar;fmx.dex.jar;fragment-1.2.5.dex.jar;google-play-licensing.dex.jar;interpolator-1.0.0.dex.jar;javax.inject-1.dex.jar;kotlin-stdlib-1.8.22.dex.jar;kotlin-stdlib-common-1.8.22.dex.jar;kotlin-stdlib-jdk7-1.8.22.dex.jar;kotlin-stdlib-jdk8-1.8.22.dex.jar;kotlinx-coroutines-android-1.6.4.dex.jar;kotlinx-coroutines-core-jvm-1.6.4.dex.jar;legacy-support-core-utils-1.0.0.dex.jar;lifecycle-common-2.6.1.dex.jar;lifecycle-livedata-2.6.1.dex.jar;lifecycle-livedata-core-2.6.1.dex.jar;lifecycle-runtime-2.6.1.dex.jar;lifecycle-service-2.6.1.dex.jar;lifecycle-viewmodel-2.6.1.dex.jar;lifecycle-viewmodel-savedstate-2.6.1.dex.jar;listenablefuture-1.0.dex.jar;loader-1.0.0.dex.jar;localbroadcastmanager-1.0.0.dex.jar;okio-jvm-3.4.0.dex.jar;play-services-ads-22.2.0.dex.jar;play-services-ads-base-22.2.0.dex.jar;play-services-ads-identifier-18.0.0.dex.jar;play-services-ads-lite-22.2.0.dex.jar;play-services-appset-16.0.1.dex.jar;play-services-base-18.1.0.dex.jar;play-services-basement-18.1.0.dex.jar;play-services-cloud-messaging-17.0.1.dex.jar;play-services-location-21.0.1.dex.jar;play-services-maps-18.1.0.dex.jar;play-services-measurement-base-20.1.2.dex.jar;play-services-measurement-sdk-api-20.1.2.dex.jar;play-services-stats-17.0.2.dex.jar;play-services-tasks-18.0.2.dex.jar;print-1.0.0.dex.jar;profileinstaller-1.3.0.dex.jar;room-common-2.2.5.dex.jar;room-runtime-2.2.5.dex.jar;savedstate-1.2.1.dex.jar;sqlite-2.1.0.dex.jar;sqlite-framework-2.1.0.dex.jar;startup-runtime-1.1.1.dex.jar;tracing-1.0.0.dex.jar;transport-api-3.0.0.dex.jar;transport-backend-cct-3.1.8.dex.jar;transport-runtime-3.1.8.dex.jar;user-messaging-platform-2.0.0.dex.jar;vectordrawable-1.1.0.dex.jar;vectordrawable-animated-1.1.0.dex.jar;versionedparcelable-1.1.1.dex.jar;viewpager-1.0.0.dex.jar;work-runtime-2.7.0.dex.jar</EnabledSysJars>
+        <DCC_UsePackage>rtl;$(DCC_UsePackage)</DCC_UsePackage>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Base_iOSDevice64)'!=''">
+        <DCC_CBuilderOutput>None</DCC_CBuilderOutput>
+        <DCC_UsePackage>rtl;$(DCC_UsePackage)</DCC_UsePackage>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Base_iOSSimARM64)'!=''">
+        <DCC_CBuilderOutput>None</DCC_CBuilderOutput>
+        <DCC_UsePackage>rtl;$(DCC_UsePackage)</DCC_UsePackage>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Base_OSX64)'!=''">
+        <DCC_UsePackage>rtl;$(DCC_UsePackage)</DCC_UsePackage>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Base_OSXARM64)'!=''">
+        <DCC_UsePackage>rtl;$(DCC_UsePackage)</DCC_UsePackage>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
-        <DCC_UsePackage>vclwinx;fmx;vclie;DbxCommonDriver;bindengine;IndyIPCommon;VCLRESTComponents;FireDACCommonODBC;FireDACCommonDriver;appanalytics;IndyProtocols;vclx;Skia.Package.RTL;IndyIPClient;dbxcds;vcledge;bindcompvclwinx;bindcompfmx;inetdb;FireDACSqliteDriver;DbxClientDriver;soapmidas;vclactnband;fmxFireDAC;dbexpress;DBXMySQLDriver;VclSmp;inet;vcltouch;fmxase;dbrtl;Skia.Package.FMX;fmxdae;FireDACMSAccDriver;CustomIPTransport;vcldsnap;DBXInterBaseDriver;IndySystem;Skia.Package.VCL;vcldb;vclFireDAC;bindcomp;FireDACCommon;IndyCore;RESTBackendComponents;bindcompdbx;rtl;FireDACMySQLDriver;FireDACADSDriver;RESTComponents;DBXSqliteDriver;vcl;IndyIPServer;dsnapxml;dsnapcon;adortl;FixInsight_12;vclimg;FireDACPgDriver;FireDAC;inetdbxpress;xmlrtl;tethering;bindcompvcl;dsnap;CloudService;fmxobj;bindcompvclsmp;soaprtl;soapserver;FireDACIBDriver;$(DCC_UsePackage)</DCC_UsePackage>
         <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;Bde;$(DCC_Namespace)</DCC_Namespace>
         <BT_BuildType>Debug</BT_BuildType>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
@@ -89,22 +123,15 @@
         <VerInfo_MinorVer>9</VerInfo_MinorVer>
         <VerInfo_Release>3</VerInfo_Release>
         <VerInfo_Build>0</VerInfo_Build>
-        <VerInfo_Keys>CompanyName=;FileDescription=Static Code Analysis Tool for Delphi (Standalone);FileVersion=0.9.7.0;InternalName=StaticCodeAnalyser;LegalCopyright=;LegalTrademarks=;OriginalFilename=StaticCodeAnalyser.exe;ProductName=Static Code Analysis Tool for Delphi;ProductVersion=0.9.7.0;Comments=Release 0.9.7 (2026-06-01)</VerInfo_Keys>
+        <VerInfo_Keys>CompanyName=;FileDescription=Static Code Analysis Tool for Delphi (IDE Plugin);FileVersion=0.9.7.0;InternalName=StaticCodeAnalyser.IDE;LegalCopyright=;LegalTrademarks=;OriginalFilename=StaticCodeAnalyser.IDE.d12.bpl;ProductName=Static Code Analysis Tool for Delphi;ProductVersion=0.9.7.0;Comments=Release 0.9.7 (2026-06-01)</VerInfo_Keys>
         <VerInfo_Locale>1033</VerInfo_Locale>
-        <Manifest_File>$(BDS)\bin\default_app.manifest</Manifest_File>
+        <DCC_UsePackage>vcl;rtl;vclwinx;$(DCC_UsePackage)</DCC_UsePackage>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win64)'!=''">
-        <DCC_UsePackage>vclwinx;fmx;vclie;DbxCommonDriver;bindengine;IndyIPCommon;VCLRESTComponents;FireDACCommonODBC;FireDACCommonDriver;appanalytics;IndyProtocols;vclx;IndyIPClient;dbxcds;vcledge;bindcompvclwinx;bindcompfmx;inetdb;FireDACSqliteDriver;DbxClientDriver;soapmidas;vclactnband;fmxFireDAC;dbexpress;DBXMySQLDriver;VclSmp;inet;vcltouch;fmxase;dbrtl;fmxdae;FireDACMSAccDriver;CustomIPTransport;vcldsnap;DBXInterBaseDriver;IndySystem;Skia.Package.VCL;vcldb;vclFireDAC;bindcomp;FireDACCommon;IndyCore;RESTBackendComponents;bindcompdbx;rtl;FireDACMySQLDriver;FireDACADSDriver;RESTComponents;DBXSqliteDriver;vcl;IndyIPServer;dsnapxml;dsnapcon;adortl;vclimg;FireDACPgDriver;FireDAC;inetdbxpress;xmlrtl;tethering;bindcompvcl;dsnap;CloudService;fmxobj;bindcompvclsmp;soaprtl;soapserver;FireDACIBDriver;$(DCC_UsePackage)</DCC_UsePackage>
-        <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;$(DCC_Namespace)</DCC_Namespace>
-        <BT_BuildType>Debug</BT_BuildType>
-        <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
-        <VerInfo_MajorVer>0</VerInfo_MajorVer>
-        <VerInfo_MinorVer>9</VerInfo_MinorVer>
-        <VerInfo_Release>3</VerInfo_Release>
-        <VerInfo_Build>0</VerInfo_Build>
-        <VerInfo_Keys>CompanyName=;FileDescription=Static Code Analysis Tool for Delphi (Standalone);FileVersion=0.9.7.0;InternalName=StaticCodeAnalyser;LegalCopyright=;LegalTrademarks=;OriginalFilename=StaticCodeAnalyser.exe;ProductName=Static Code Analysis Tool for Delphi;ProductVersion=0.9.7.0;Comments=Release 0.9.7 (2026-06-01)</VerInfo_Keys>
-        <VerInfo_Locale>1033</VerInfo_Locale>
-        <Manifest_File>$(BDS)\bin\default_app.manifest</Manifest_File>
+        <DCC_UsePackage>vcl;rtl;vclwinx;$(DCC_UsePackage)</DCC_UsePackage>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Base_Win64x)'!=''">
+        <DCC_UsePackage>vcl;rtl;vclwinx;$(DCC_UsePackage)</DCC_UsePackage>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1)'!=''">
         <DCC_Define>DEBUG;$(DCC_Define)</DCC_Define>
@@ -118,12 +145,8 @@
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1_Win32)'!=''">
         <DCC_RemoteDebug>false</DCC_RemoteDebug>
-        <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_Locale>1033</VerInfo_Locale>
-    </PropertyGroup>
-    <PropertyGroup Condition="'$(Cfg_1_Win64)'!=''">
-        <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2)'!=''">
         <DCC_LocalDebugSymbols>false</DCC_LocalDebugSymbols>
@@ -131,246 +154,249 @@
         <DCC_SymbolReferenceInfo>0</DCC_SymbolReferenceInfo>
         <DCC_DebugInformation>0</DCC_DebugInformation>
     </PropertyGroup>
-    <PropertyGroup Condition="'$(Cfg_2_Win32)'!=''">
-        <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
-    </PropertyGroup>
-    <PropertyGroup Condition="'$(Cfg_2_Win64)'!=''">
-        <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
-    </PropertyGroup>
     <ItemGroup>
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="resources\MeineUnit.pas"/>
-        <DCCReference Include="sources\MainController.pas"/>
-        <DCCReference Include="sources\UI\uAnalyserPalette.pas"/>
-        <DCCReference Include="sources\UI\uAnalyserTheme.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Common\uAnalyserTypes.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Common\uLocalization.pas"/>
-        <DCCReference Include="sources\UI\uFindingGridRenderer.pas"/>
-        <DCCReference Include="sources\UI\uFindingFilter.pas"/>
-        <DCCReference Include="sources\UI\uMainForm.pas">
-            <Form>Form2</Form>
-            <FormType>dfm</FormType>
+        <DCCReference Include="sca_branding.res"/>
+        <DCCReference Include="rtl.dcp"/>
+        <DCCReference Include="vcl.dcp"/>
+        <DCCReference Include="vclwinx.dcp"/>
+        <DCCReference Include="designide.dcp"/>
+        <DCCReference Include="uIDEExpert.pas"/>
+        <DCCReference Include="uIDEAnalyserForm.pas"/>
+        <DCCReference Include="uIDEFindingNav.pas"/>
+        <DCCReference Include="uIDELineHighlighter.pas"/>
+        <DCCReference Include="uIDEAnnotationOverlay.pas"/>
+        <DCCReference Include="uIDEMessages.pas"/>
+        <DCCReference Include="uIDEWatchMode.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uIDEStatsTiles.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uIDEHelpPanel.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uExportMenu.pas"/>
+        <DCCReference Include="uIDEEditorIntegration.pas"/>
+        <DCCReference Include="uIDEStatusBar.pas"/>
+        <DCCReference Include="uIDETheme.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uIDEToolbar.pas"/>
+        <DCCReference Include="uIDEAnalyseProgress.pas"/>
+        <DCCReference Include="uIDEGridTooltip.pas"/>
+        <DCCReference Include="uIDELifecycle.pas"/>
+        <DCCReference Include="uIDESCAOptions.pas">
+            <Form>SCAOptionsFrame</Form>
+            <DesignClass>TFrame</DesignClass>
         </DCCReference>
-        <DCCReference Include="sources\UI\uDfmTextViewer.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Parsing\uAstNode.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Parsing\uLexer.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Parsing\uParser2.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Parsing\uComponentGraph.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Parsing\uDfmLexer.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Parsing\uDfmParser.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Parsing\uDfmBinaryReader.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Output\uClaudePrompt.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Output\uExportSARIF.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Output\uExportSonarGeneric.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Output\uSonarPush.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Output\uFixHint.pas"/>
-        <DCCReference Include="sources\Console\uConsoleRunner.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Common\uCollectValues.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Common\uDetectorUtils.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Common\uMethodd12.pas"/>
-        <DCCReference Include="sources\Common\uRecentPaths.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Common\uRegExMatches.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Common\uRuleCatalog.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Common\uSCAConsts.pas"/>
-        <DCCReference Include="sources\Common\uIDEColors.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Common\uYamlSubsetParser.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Common\uQuickFix.pas"/>
-        <DCCReference Include="resources\uCustomerForm.pas">
-            <Form>CustomerForm</Form>
-            <FormType>dfm</FormType>
+        <DCCReference Include="uIDESonarOptions.pas">
+            <Form>SonarOptionsFrame</Form>
+            <DesignClass>TFrame</DesignClass>
         </DCCReference>
-        <DCCReference Include="resources\uOrderForm.pas">
-            <Form>OrderForm</Form>
-            <FormType>dfm</FormType>
-        </DCCReference>
-        <DCCReference Include="sources\UI\uIDEStatsTiles.pas"/>
-        <DCCReference Include="sources\UI\uIDEHelpPanel.pas"/>
-        <DCCReference Include="sources\UI\uIDEToolbar.pas"/>
-        <DCCReference Include="sources\UI\uExportMenu.pas"/>
-        <DCCReference Include="resources\ConcatToFormatSample.pas"/>
-        <DCCReference Include="resources\WithStatementSample.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uAstFileCache.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uBaseline.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uDfmAnalysisRunner.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uDfmDbFieldAnalysis.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uDfmFrameResolver.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uDfmRepoIndex.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uExport.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uExportHtml.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uFileTextCache.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uFindingFingerprint.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uSuppressionTelemetry.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uFormBinder.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uIgnoreList.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uConfidenceFilter.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uPathOverrides.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uRepoSettings.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uSonarConfig.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uSonarPull.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uStaticAnalyzer2.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uStaticFiles.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uSuppression.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uSymbolReferenceIndex.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uVcsChanges.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uPointerSubtraction.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uInsecureCryptoAlgorithm.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uCommandInjection.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uUnusedRoutine.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uUninitVar.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uStringFromPointer.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyOnHandler.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uUnusedPrivateMethod.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uFreeWithoutNil.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uAbstractNotImpl.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uPointerArithmeticOnString.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uSetLengthAppendInLoop.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uGetMemWithoutFreeMem.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uWithMultipleTargets.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uMoveSizeOfPointer.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uUnpairedLock.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uHardcodedString.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uConstantReturn.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uBoolAlwaysTrue.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uMissingOverride.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uCanBeClassMethod.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uBooleanParam.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uExceptInDestructor.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uFloatEquality.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uMissingUnitHeader.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uUnsortedUses.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uLargeClass.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uMultipleExit.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uGodClass.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uUseAfterFree.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uIntegerOverflow.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uLeakInConstructor.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uTautologicalExpr.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uConstructorWithoutInherited.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uRoutineResultAssigned.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDestructorWithoutInherited.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uConcurrencyExt.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uRaiseOutsideExcept.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uExceptionTooGeneral.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uCustomRuleDetector.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uUnicodeToAnsiCast.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uIfThenShortCircuit.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uNilComparison.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uCharToCharPointerCast.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDateFormatSettings.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uRaisingRawException.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uInheritedMethodEmpty.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uInstanceInvokedConstructor.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uPublicMemberWithoutDoc.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uCastAndFree.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uReRaiseException.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uMissingRaise.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uLockWithoutTryFinally.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uSynchronizeInDestructor.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uNamingExt.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uRestHttpSecurity.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uPerfHotspots.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uRedundantConditional.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uVisibilityCheck.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uHardcodedSecret.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDeadCode.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uConsecutiveVisibility.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uTwiceInheritedCalls.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uNestedRoutines.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyBlock.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uPointerName.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uExceptOnException.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uCommentedOutCode.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uMethodName.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uInterfaceName.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uTypeName.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uFieldName.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uBeginEndRequired.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uIfElseBegin.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uRedundantParentheses.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyFile.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uCaseStatementSize.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uGroupedDeclaration.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uLegacyInitializationSection.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uNestedTry.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uPublicField.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyVisibilitySection.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uAvoidOut.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uFreeAndNilHint.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uAssignedAndAssignedNil.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyFinallyBlock.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uSuperfluousSemicolon.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uClassPerFile.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uRedundantJump.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uConsecutiveSection.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uExplicitTObjectInheritance.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uAssertMessage.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyInterface.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uRedundantBoolean.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uUnitLevelKeywordIndent.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDigitGrouping.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uTrailingCommaArgList.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uInlineAssembly.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uLowercaseKeyword.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyArgumentList.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uNoSonarMarker.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uTrailingWhitespace.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uTooLongLine.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uTabulationCharacter.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uGotoStatement.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmCrossFormCoupling.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmDataModuleSplitHint.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmDbInUiForm.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmDeadEvent.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmDefaultName.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmDuplicateBinding.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmEmptyBoundEvent.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmFieldTypeMismatch.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmForbiddenClass.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmGodHandler.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmHardcodedCaption.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmHardcodedDbCreds.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmLayerViolation.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmMasterDetailUnlinked.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmOrphanHandler.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmRequiredField.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmSchemaMismatch.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmSqlFromUserInput.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmTabOrderConflict.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDuplicateBlock.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDuplicateString.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyMethod.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uFieldLeak.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uFormatMismatch.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uHardcodedPath.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uLengthUnderflow.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uLongMethod.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uLongParamList.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uMagicNumbers.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uMissingFinally.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uNilDeref.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uReversedForRange.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uSelfAssignment.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uSqlDangerousStatement.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uSQLInjection.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uTodoComment.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uUnusedLocal.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uUnusedParameter.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uUnusedUses.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uVirtualCallInCtor.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uWithStatement.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uCodeSmells2.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uConcatToFormat.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uCyclomaticComplexity.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDebugOutput.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDeepNesting.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmActionMismatch.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmCircularDataSource.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uLeakDetector2.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDivByZero.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uSQLInjectionScore.pas"/>
-        <DCCReference Include="..\SCA.Engine\sources\Detectors\uCustomClassDiscovery.pas"/>
+        <DCCReference Include="uIDEAnalyseRunner.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uAnalyserPalette.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uAnalyserTypes.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uAnalyserTheme.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uFindingGridRenderer.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uFindingFilter.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\UI\uLocalization.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Parsing\uAstNode.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Parsing\uLexer.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Parsing\uParser2.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Parsing\uComponentGraph.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Parsing\uDfmLexer.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Parsing\uDfmParser.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Parsing\uDfmBinaryReader.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uStaticFiles.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uSuppression.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uExport.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uExportHtml.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Output\uExportSonarGeneric.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Output\uSonarPush.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uSonarPull.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uIgnoreList.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uPathOverrides.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uConfidenceFilter.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uBaseline.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uStaticAnalyzer2.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uSymbolReferenceIndex.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uAstFileCache.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uFileTextCache.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uFindingFingerprint.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uSuppressionTelemetry.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uVcsChanges.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uRepoSettings.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uSonarConfig.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uDfmAnalysisRunner.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uDfmFrameResolver.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uFormBinder.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uDfmDbFieldAnalysis.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Infrastructure\uDfmRepoIndex.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Output\uClaudePrompt.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Output\uFixHint.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uSCAConsts.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uIDEColors.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uMethodd12.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uRecentPaths.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uRegExMatches.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uDetectorUtils.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uCollectValues.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uYamlSubsetParser.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uRuleCatalog.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Common\uQuickFix.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uWithStatement.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uVisibilityCheck.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uVirtualCallInCtor.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUseAfterFree.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnusedUses.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnusedParameter.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnusedLocal.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnsortedUses.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnitLevelKeywordIndent.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnicodeToAnsiCast.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTypeName.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTwiceInheritedCalls.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTrailingWhitespace.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTrailingCommaArgList.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTooLongLine.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTodoComment.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTautologicalExpr.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uTabulationCharacter.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSynchronizeInDestructor.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSuperfluousSemicolon.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSQLInjectionScore.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSQLInjection.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSqlDangerousStatement.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSelfAssignment.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uRoutineResultAssigned.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uReversedForRange.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uRestHttpSecurity.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uReRaiseException.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uRedundantParentheses.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uRedundantJump.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uRedundantConditional.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uRedundantBoolean.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uRaisingRawException.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uRaiseOutsideExcept.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uPublicMemberWithoutDoc.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uPublicField.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uPointerName.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uPerfHotspots.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uNoSonarMarker.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uNilDeref.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uNilComparison.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uNestedTry.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uNestedRoutines.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uNamingExt.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uMultipleExit.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uMissingUnitHeader.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uMissingRaise.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uMissingFinally.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uMethodName.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uMagicNumbers.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLowercaseKeyword.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLongParamList.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLongMethod.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLockWithoutTryFinally.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLengthUnderflow.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLegacyInitializationSection.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLeakInConstructor.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLeakDetector2.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uLargeClass.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uInterfaceName.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uIntegerOverflow.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uInstanceInvokedConstructor.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uInlineAssembly.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uInheritedMethodEmpty.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uIfThenShortCircuit.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uIfElseBegin.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uHardcodedSecret.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uHardcodedPath.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uGroupedDeclaration.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uGotoStatement.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uGodClass.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uFreeWithoutNil.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uFreeAndNilHint.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uFormatMismatch.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uFieldName.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uFieldLeak.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uExplicitTObjectInheritance.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uExceptOnException.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uExceptionTooGeneral.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyVisibilitySection.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyMethod.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyInterface.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyFinallyBlock.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyFile.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyBlock.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyArgumentList.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDuplicateString.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDuplicateBlock.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDivByZero.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDigitGrouping.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmTabOrderConflict.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmSqlFromUserInput.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmSchemaMismatch.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmRequiredField.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmOrphanHandler.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmMasterDetailUnlinked.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmLayerViolation.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmHardcodedDbCreds.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmHardcodedCaption.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmGodHandler.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmForbiddenClass.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmFieldTypeMismatch.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmEmptyBoundEvent.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmDuplicateBinding.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmDefaultName.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmDeadEvent.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmDbInUiForm.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmDataModuleSplitHint.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmCrossFormCoupling.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmCircularDataSource.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDfmActionMismatch.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDestructorWithoutInherited.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDeepNesting.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDebugOutput.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDeadCode.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uDateFormatSettings.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCyclomaticComplexity.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCustomRuleDetector.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCustomClassDiscovery.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uConstructorWithoutInherited.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uConsecutiveVisibility.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uConsecutiveSection.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uConcurrencyExt.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uConcatToFormat.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCommentedOutCode.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCodeSmells2.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uClassPerFile.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCharToCharPointerCast.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCastAndFree.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCaseStatementSize.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uBeginEndRequired.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uAvoidOut.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uAssignedAndAssignedNil.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uAssertMessage.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uAbstractNotImpl.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uFloatEquality.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uExceptInDestructor.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uBooleanParam.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnusedPrivateMethod.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCanBeClassMethod.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uMissingOverride.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uBoolAlwaysTrue.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uConstantReturn.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uHardcodedString.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnpairedLock.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uMoveSizeOfPointer.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uWithMultipleTargets.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uGetMemWithoutFreeMem.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uSetLengthAppendInLoop.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uPointerArithmeticOnString.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uEmptyOnHandler.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uStringFromPointer.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uPointerSubtraction.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uInsecureCryptoAlgorithm.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uCommandInjection.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUnusedRoutine.pas"/>
+        <DCCReference Include="..\StaticCodeAnalyserForm\sources\Detectors\uUninitVar.pas"/>
+        <RcCompile Include="..\branding\sca_branding.rc"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
@@ -385,43 +411,45 @@
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Delphi.Personality.12</Borland.Personality>
-        <Borland.ProjectType>Application</Borland.ProjectType>
+        <Borland.ProjectType>Package</Borland.ProjectType>
         <BorlandProject>
             <Delphi.Personality>
                 <Source>
-                    <Source Name="MainSource">StaticCodeAnalyser.d12.dpr</Source>
+                    <Source Name="MainSource">StaticCodeAnalyser.IDE.d12.dpk</Source>
                 </Source>
                 <Excluded_Packages>
-                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\StaticCodeAnalyser.IDE.d12.bpl">(Unbenannt)</Excluded_Packages>
+                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\ChatGptWizard.bpl">Datei C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\ChatGptWizard.bpl nicht gefunden</Excluded_Packages>
+                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\BuildLog_plugin.bpl">Datei C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\BuildLog_plugin.bpl nicht gefunden</Excluded_Packages>
+                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\LogStatsFenster.bpl">Datei C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\LogStatsFenster.bpl nicht gefunden</Excluded_Packages>
+                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\StaticCodeAnalyserIDE.bpl">Datei C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\StaticCodeAnalyserIDE.bpl nicht gefunden</Excluded_Packages>
                     <Excluded_Packages Name="$(BDSBIN)\dcloffice2k290.bpl">Microsoft Office 2000 Beispiele für gekapselte Komponenten für Automatisierungsserver</Excluded_Packages>
                     <Excluded_Packages Name="$(BDSBIN)\dclofficexp290.bpl">Microsoft Office XP Beispiele für gekapselte Komponenten für Automation Server</Excluded_Packages>
                 </Excluded_Packages>
             </Delphi.Personality>
             <Deployment Version="4">
-                <DeployFile LocalName="..\Output\Win32 Debug\StaticCodeAnalyser.d12.exe" Configuration="Debug" Class="ProjectOutput">
-                    <Platform Name="Win32">
-                        <RemoteName>StaticCodeAnalyser.d12.exe</RemoteName>
+                <DeployFile LocalName="$(BDS)\Redist\iossimulator\libcgunwind.1.0.dylib" Class="DependencyModule">
+                    <Platform Name="iOSSimulator">
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>
-                <DeployFile LocalName="Win32\Release\StaticCodeAnalyser.d12.exe" Configuration="Release" Class="ProjectOutput">
-                    <Platform Name="Win32">
-                        <RemoteName>StaticCodeAnalyser.d12.exe</RemoteName>
+                <DeployFile LocalName="$(BDS)\Redist\iossimulator\libpcre.dylib" Class="DependencyModule">
+                    <Platform Name="iOSSimulator">
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>
-                <DeployFile LocalName="Win64\Debug\StaticCodeAnalyser.d12.exe" Configuration="Debug" Class="ProjectOutput">
-                    <Platform Name="Win64">
-                        <RemoteName>StaticCodeAnalyser.d12.exe</RemoteName>
+                <DeployFile LocalName="$(BDS)\Redist\osx32\libcgunwind.1.0.dylib" Class="DependencyModule">
+                    <Platform Name="OSX32">
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
+                <DeployFile LocalName="C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\StaticCodeAnalyser.IDE.d12.bpl" Configuration="Debug" Class="ProjectOutput">
+                    <Platform Name="Win32">
+                        <RemoteName>StaticCodeAnalyser.IDE.d12.bpl</RemoteName>
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>
                 <DeployClass Name="AdditionalDebugSymbols">
-                    <Platform Name="iOSSimulator">
-                        <Operation>1</Operation>
-                    </Platform>
                     <Platform Name="OSX32">
-                        <RemoteDir>Contents\MacOS</RemoteDir>
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="Win32">
@@ -835,7 +863,6 @@
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="OSX32">
-                        <RemoteDir>Contents\MacOS</RemoteDir>
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="Win32">
@@ -844,17 +871,14 @@
                 </DeployClass>
                 <DeployClass Name="DependencyFramework">
                     <Platform Name="OSX32">
-                        <RemoteDir>Contents\MacOS</RemoteDir>
                         <Operation>1</Operation>
                         <Extensions>.framework</Extensions>
                     </Platform>
                     <Platform Name="OSX64">
-                        <RemoteDir>Contents\MacOS</RemoteDir>
                         <Operation>1</Operation>
                         <Extensions>.framework</Extensions>
                     </Platform>
                     <Platform Name="OSXARM64">
-                        <RemoteDir>Contents\MacOS</RemoteDir>
                         <Operation>1</Operation>
                         <Extensions>.framework</Extensions>
                     </Platform>
@@ -863,30 +887,15 @@
                     </Platform>
                 </DeployClass>
                 <DeployClass Name="DependencyModule">
-                    <Platform Name="iOSDevice32">
-                        <Operation>1</Operation>
-                        <Extensions>.dylib</Extensions>
-                    </Platform>
-                    <Platform Name="iOSDevice64">
-                        <Operation>1</Operation>
-                        <Extensions>.dylib</Extensions>
-                    </Platform>
-                    <Platform Name="iOSSimARM64">
-                        <Operation>1</Operation>
-                        <Extensions>.dylib</Extensions>
-                    </Platform>
                     <Platform Name="OSX32">
-                        <RemoteDir>Contents\MacOS</RemoteDir>
                         <Operation>1</Operation>
                         <Extensions>.dylib</Extensions>
                     </Platform>
                     <Platform Name="OSX64">
-                        <RemoteDir>Contents\MacOS</RemoteDir>
                         <Operation>1</Operation>
                         <Extensions>.dylib</Extensions>
                     </Platform>
                     <Platform Name="OSXARM64">
-                        <RemoteDir>Contents\MacOS</RemoteDir>
                         <Operation>1</Operation>
                         <Extensions>.dylib</Extensions>
                     </Platform>
@@ -909,17 +918,14 @@
                         <Extensions>.dylib</Extensions>
                     </Platform>
                     <Platform Name="OSX32">
-                        <RemoteDir>Contents\MacOS</RemoteDir>
                         <Operation>1</Operation>
                         <Extensions>.dylib</Extensions>
                     </Platform>
                     <Platform Name="OSX64">
-                        <RemoteDir>Contents\MacOS</RemoteDir>
                         <Operation>1</Operation>
                         <Extensions>.dylib</Extensions>
                     </Platform>
                     <Platform Name="OSXARM64">
-                        <RemoteDir>Contents\MacOS</RemoteDir>
                         <Operation>1</Operation>
                         <Extensions>.dylib</Extensions>
                     </Platform>
@@ -945,15 +951,12 @@
                         <Operation>0</Operation>
                     </Platform>
                     <Platform Name="OSX32">
-                        <RemoteDir>Contents\Resources\StartUp\</RemoteDir>
                         <Operation>0</Operation>
                     </Platform>
                     <Platform Name="OSX64">
-                        <RemoteDir>Contents\Resources\StartUp\</RemoteDir>
                         <Operation>0</Operation>
                     </Platform>
                     <Platform Name="OSXARM64">
-                        <RemoteDir>Contents\Resources\StartUp\</RemoteDir>
                         <Operation>0</Operation>
                     </Platform>
                     <Platform Name="Win32">
@@ -968,44 +971,9 @@
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
-                <DeployClass Name="ProjectOSXDebug">
-                    <Platform Name="OSX64">
-                        <RemoteDir>..\$(PROJECTNAME).app.dSYM\Contents\Resources\DWARF</RemoteDir>
-                        <Operation>1</Operation>
-                    </Platform>
-                    <Platform Name="OSXARM64">
-                        <RemoteDir>..\$(PROJECTNAME).app.dSYM\Contents\Resources\DWARF</RemoteDir>
-                        <Operation>1</Operation>
-                    </Platform>
-                </DeployClass>
-                <DeployClass Name="ProjectOSXEntitlements">
-                    <Platform Name="OSX32">
-                        <RemoteDir>..\</RemoteDir>
-                        <Operation>1</Operation>
-                    </Platform>
-                    <Platform Name="OSX64">
-                        <RemoteDir>..\</RemoteDir>
-                        <Operation>1</Operation>
-                    </Platform>
-                    <Platform Name="OSXARM64">
-                        <RemoteDir>..\</RemoteDir>
-                        <Operation>1</Operation>
-                    </Platform>
-                </DeployClass>
-                <DeployClass Name="ProjectOSXInfoPList">
-                    <Platform Name="OSX32">
-                        <RemoteDir>Contents</RemoteDir>
-                        <Operation>1</Operation>
-                    </Platform>
-                    <Platform Name="OSX64">
-                        <RemoteDir>Contents</RemoteDir>
-                        <Operation>1</Operation>
-                    </Platform>
-                    <Platform Name="OSXARM64">
-                        <RemoteDir>Contents</RemoteDir>
-                        <Operation>1</Operation>
-                    </Platform>
-                </DeployClass>
+                <DeployClass Name="ProjectOSXDebug"/>
+                <DeployClass Name="ProjectOSXEntitlements"/>
+                <DeployClass Name="ProjectOSXInfoPList"/>
                 <DeployClass Name="ProjectOSXResource">
                     <Platform Name="OSX32">
                         <RemoteDir>Contents\Resources</RemoteDir>
@@ -1042,15 +1010,12 @@
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="OSX32">
-                        <RemoteDir>Contents\MacOS</RemoteDir>
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="OSX64">
-                        <RemoteDir>Contents\MacOS</RemoteDir>
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="OSXARM64">
-                        <RemoteDir>Contents\MacOS</RemoteDir>
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="Win32">
@@ -1088,41 +1053,9 @@
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
-                <DeployClass Name="ProjectiOSEntitlements">
-                    <Platform Name="iOSDevice32">
-                        <RemoteDir>..\</RemoteDir>
-                        <Operation>1</Operation>
-                    </Platform>
-                    <Platform Name="iOSDevice64">
-                        <RemoteDir>..\</RemoteDir>
-                        <Operation>1</Operation>
-                    </Platform>
-                    <Platform Name="iOSSimARM64">
-                        <RemoteDir>..\</RemoteDir>
-                        <Operation>1</Operation>
-                    </Platform>
-                </DeployClass>
-                <DeployClass Name="ProjectiOSInfoPList">
-                    <Platform Name="iOSDevice32">
-                        <Operation>1</Operation>
-                    </Platform>
-                    <Platform Name="iOSDevice64">
-                        <Operation>1</Operation>
-                    </Platform>
-                    <Platform Name="iOSSimARM64">
-                        <Operation>1</Operation>
-                    </Platform>
-                </DeployClass>
-                <DeployClass Name="ProjectiOSLaunchScreen">
-                    <Platform Name="iOSDevice64">
-                        <RemoteDir>..\$(PROJECTNAME).launchscreen</RemoteDir>
-                        <Operation>64</Operation>
-                    </Platform>
-                    <Platform Name="iOSSimARM64">
-                        <RemoteDir>..\$(PROJECTNAME).launchscreen</RemoteDir>
-                        <Operation>64</Operation>
-                    </Platform>
-                </DeployClass>
+                <DeployClass Name="ProjectiOSEntitlements"/>
+                <DeployClass Name="ProjectiOSInfoPList"/>
+                <DeployClass Name="ProjectiOSLaunchScreen"/>
                 <DeployClass Name="ProjectiOSResource">
                     <Platform Name="iOSDevice32">
                         <Operation>1</Operation>
@@ -1360,17 +1293,25 @@
                 <ProjectRoot Platform="iOSDevice64" Name="$(PROJECTNAME).app"/>
                 <ProjectRoot Platform="iOSSimARM64" Name="$(PROJECTNAME).app"/>
                 <ProjectRoot Platform="Linux64" Name="$(PROJECTNAME)"/>
-                <ProjectRoot Platform="OSX32" Name="$(PROJECTNAME).app"/>
-                <ProjectRoot Platform="OSX64" Name="$(PROJECTNAME).app"/>
-                <ProjectRoot Platform="OSXARM64" Name="$(PROJECTNAME).app"/>
+                <ProjectRoot Platform="OSX32" Name="$(PROJECTNAME)"/>
+                <ProjectRoot Platform="OSX64" Name="$(PROJECTNAME)"/>
+                <ProjectRoot Platform="OSXARM64" Name="$(PROJECTNAME)"/>
                 <ProjectRoot Platform="Win32" Name="$(PROJECTNAME)"/>
                 <ProjectRoot Platform="Win64" Name="$(PROJECTNAME)"/>
                 <ProjectRoot Platform="Win64x" Name="$(PROJECTNAME)"/>
             </Deployment>
             <Platforms>
+                <Platform value="Android">False</Platform>
+                <Platform value="Android64">False</Platform>
+                <Platform value="iOSDevice64">False</Platform>
+                <Platform value="iOSSimARM64">False</Platform>
+                <Platform value="OSX64">False</Platform>
+                <Platform value="OSXARM64">False</Platform>
                 <Platform value="Win32">True</Platform>
-                <Platform value="Win64">True</Platform>
+                <Platform value="Win64">False</Platform>
+                <Platform value="Win64x">False</Platform>
             </Platforms>
+            <ModelSupport>False</ModelSupport>
         </BorlandProject>
         <ProjectFileVersion>12</ProjectFileVersion>
     </ProjectExtensions>

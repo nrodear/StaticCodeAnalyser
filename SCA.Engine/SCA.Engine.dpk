@@ -1,4 +1,4 @@
-package SCA.Engine;
+﻿package SCA.Engine;
 
 {$R *.res}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
@@ -31,8 +31,10 @@ requires
   rtl;
 
 contains
+  uAnalyserTypes in 'sources\Common\uAnalyserTypes.pas',
   uCollectValues in 'sources\Common\uCollectValues.pas',
   uDetectorUtils in 'sources\Common\uDetectorUtils.pas',
+  uLocalization in 'sources\Common\uLocalization.pas',
   uMethodd12 in 'sources\Common\uMethodd12.pas',
   uQuickFix in 'sources\Common\uQuickFix.pas',
   uRegExMatches in 'sources\Common\uRegExMatches.pas',
@@ -102,8 +104,8 @@ contains
   uEmptyOnHandler in 'sources\Detectors\uEmptyOnHandler.pas',
   uEmptyVisibilitySection in 'sources\Detectors\uEmptyVisibilitySection.pas',
   uExceptInDestructor in 'sources\Detectors\uExceptInDestructor.pas',
-  uExceptOnException in 'sources\Detectors\uExceptOnException.pas',
   uExceptionTooGeneral in 'sources\Detectors\uExceptionTooGeneral.pas',
+  uExceptOnException in 'sources\Detectors\uExceptOnException.pas',
   uExplicitTObjectInheritance in 'sources\Detectors\uExplicitTObjectInheritance.pas',
   uFieldLeak in 'sources\Detectors\uFieldLeak.pas',
   uFieldName in 'sources\Detectors\uFieldName.pas',
@@ -157,19 +159,19 @@ contains
   uPublicMemberWithoutDoc in 'sources\Detectors\uPublicMemberWithoutDoc.pas',
   uRaiseOutsideExcept in 'sources\Detectors\uRaiseOutsideExcept.pas',
   uRaisingRawException in 'sources\Detectors\uRaisingRawException.pas',
-  uReRaiseException in 'sources\Detectors\uReRaiseException.pas',
   uRedundantBoolean in 'sources\Detectors\uRedundantBoolean.pas',
   uRedundantConditional in 'sources\Detectors\uRedundantConditional.pas',
   uRedundantJump in 'sources\Detectors\uRedundantJump.pas',
   uRedundantParentheses in 'sources\Detectors\uRedundantParentheses.pas',
+  uReRaiseException in 'sources\Detectors\uReRaiseException.pas',
   uRestHttpSecurity in 'sources\Detectors\uRestHttpSecurity.pas',
   uReversedForRange in 'sources\Detectors\uReversedForRange.pas',
   uRoutineResultAssigned in 'sources\Detectors\uRoutineResultAssigned.pas',
-  uSQLInjection in 'sources\Detectors\uSQLInjection.pas',
-  uSQLInjectionScore in 'sources\Detectors\uSQLInjectionScore.pas',
   uSelfAssignment in 'sources\Detectors\uSelfAssignment.pas',
   uSetLengthAppendInLoop in 'sources\Detectors\uSetLengthAppendInLoop.pas',
   uSqlDangerousStatement in 'sources\Detectors\uSqlDangerousStatement.pas',
+  uSQLInjection in 'sources\Detectors\uSQLInjection.pas',
+  uSQLInjectionScore in 'sources\Detectors\uSQLInjectionScore.pas',
   uStringFromPointer in 'sources\Detectors\uStringFromPointer.pas',
   uSuperfluousSemicolon in 'sources\Detectors\uSuperfluousSemicolon.pas',
   uSynchronizeInDestructor in 'sources\Detectors\uSynchronizeInDestructor.pas',
