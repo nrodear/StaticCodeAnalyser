@@ -73,6 +73,17 @@ type
     function IsVisibility: Boolean;
   end;
 
+  // A.5 Phase 1a: Conditional-Compilation-Stack ohne Skip-Wirkung.
+  // Pro {$IFDEF/{$IFNDEF/{$IF wird ein Frame gepusht (immer Active=True
+  // in Phase 1a - kein Defines-Eval, kein Token-Skip). Phase 1b/2 wird
+  // die Active-Flag aus dem Define-Set ableiten und im Lexer-Loop
+  // Tokens skippen wenn nicht Active.
+  TConditionalState = record
+    Active        : Boolean;  // True = Token-Emit aktiv (Phase 1a: immer True)
+    InElse        : Boolean;  // True wenn aktuell im else-Branch
+    DirectiveLine : Integer;  // Zeile des oeffnenden {$IFDEF
+  end;
+
   TLexer = class
   private
     FSource  : string;
@@ -82,6 +93,12 @@ type
     FCol     : Integer;
     FPeeked  : Boolean;
     FPeekTok : TToken;
+
+    // A.5 Phase 1a: Conditional-Stack. Top = aktive Direktive.
+    FConditionalStack : TArray<TConditionalState>;
+    // Statistik: max. erreichte Stack-Tiefe pro Lexer-Lauf
+    // (fuer Phase 1b-Audit + Tests).
+    FConditionalMaxDepth : Integer;
 
     class var FKeywords: TDictionary<string, TTokenKind>;
     class procedure InitKeywords; static;
@@ -99,6 +116,12 @@ type
     function  MakeTok(AKind: TTokenKind; const AVal: string;
                       ALine, ACol: Integer): TToken; inline;
     function  ScanNext: TToken;
+
+    // A.5 Phase 1a: Direktive-Recognition + Stack-Pflege.
+    procedure HandleConditionalDirective(const ABody: string; ALine: Integer);
+    procedure PushConditional(AActive: Boolean; ALine: Integer);
+    procedure PopConditional;
+    procedure ToggleConditionalToElse;
   public
     class constructor Create;
     class destructor Destroy;
@@ -110,6 +133,10 @@ type
     function Consume(AKind: TTokenKind): TToken;
     function TryConsume(AKind: TTokenKind; out Tok: TToken): Boolean;
     function AtEnd: Boolean;
+
+    // A.5 Phase 1a: Read-only-Zugriff fuer Tests und Telemetrie.
+    function ConditionalDepth: Integer;
+    function ConditionalMaxDepth: Integer;
   end;
 
 implementation
@@ -274,15 +301,31 @@ begin
 end;
 
 function TLexer.ReadBraceComment: TToken;
-// { ... }  oder  {$ ... } (Compiler-Direktive – wird übersprungen)
+// { ... }  oder  {$ ... } (Compiler-Direktive)
+// A.5 Phase 1a: Conditional-Direktiven ({$IFDEF/{$ELSE/{$ENDIF/etc.)
+// werden recognized und pflegen FConditionalStack. KEIN Token-Skip in
+// Phase 1a - alle Tokens weiter normal emittiert. Phase 1b haengt die
+// Active-Flag aus dem Define-Set ab und skippt im Lexer-Loop.
 var
-  L, C: Integer;
+  L, C, BodyStart : Integer;
+  Body            : string;
 begin
   L := FLine; C := FCol;
   Advance; // skip '{'
+  BodyStart := FPos;
   while (FPos <= FLen) and (CurChar <> '}') do
     Advance;
+  // Body ohne oeffnende/schliessende Klammer
+  if FPos > BodyStart then
+    Body := Copy(FSource, BodyStart, FPos - BodyStart)
+  else
+    Body := '';
   if FPos <= FLen then Advance; // skip '}'
+
+  // Direktive-Erkennung: Body muss mit '$' beginnen (= '{$..}')
+  if (Length(Body) >= 1) and (Body[1] = '$') then
+    HandleConditionalDirective(Body, L);
+
   Result := MakeTok(tkUnknown, '', L, C);
 end;
 
@@ -598,6 +641,86 @@ begin
   Result := Peek.Kind = AKind;
   if Result then
     Tok := Next;
+end;
+
+procedure TLexer.HandleConditionalDirective(const ABody: string;
+  ALine: Integer);
+// Erwartet Body OHNE umschliessende '{' '}'. Body[1] ist '$'.
+// Erkennt: $IFDEF X, $IFNDEF X, $IF expr, $ELSEIF expr, $ELSE,
+//          $ENDIF, $IFEND. Case-insensitive.
+// Phase 1a: Stack wird gepflegt, aber Active = True konstant -
+// keine Defines-Auswertung, kein Token-Skip.
+var
+  i, L : Integer;
+  Verb : string;
+begin
+  L := Length(ABody);
+  // skip '$'
+  i := 2;
+  // skip leading whitespace (selten, aber moeglich)
+  while (i <= L) and (ABody[i] in [#9, ' ']) do Inc(i);
+  // Verb sammeln (alphanumeric)
+  var Start := i;
+  while (i <= L) and (ABody[i] in ['A'..'Z', 'a'..'z']) do Inc(i);
+  Verb := UpperCase(Copy(ABody, Start, i - Start));
+
+  if (Verb = 'IFDEF') or (Verb = 'IFNDEF') or (Verb = 'IF') then
+    PushConditional(True, ALine)
+  else if (Verb = 'ELSE') or (Verb = 'ELSEIF') then
+    ToggleConditionalToElse
+  else if (Verb = 'ENDIF') or (Verb = 'IFEND') then
+    PopConditional;
+  // Andere Direktiven ($R, $WARN, $INCLUDE, etc.) ignorieren.
+end;
+
+procedure TLexer.PushConditional(AActive: Boolean; ALine: Integer);
+var
+  Frame : TConditionalState;
+  L     : Integer;
+begin
+  Frame.Active        := AActive;
+  Frame.InElse        := False;
+  Frame.DirectiveLine := ALine;
+  L := Length(FConditionalStack);
+  SetLength(FConditionalStack, L + 1);
+  FConditionalStack[L] := Frame;
+  if L + 1 > FConditionalMaxDepth then
+    FConditionalMaxDepth := L + 1;
+end;
+
+procedure TLexer.PopConditional;
+var
+  L : Integer;
+begin
+  L := Length(FConditionalStack);
+  if L > 0 then
+    SetLength(FConditionalStack, L - 1);
+  // Pop ohne Push (z.B. orphan $ENDIF) wird silent ignoriert. Real-
+  // world: Defekter Source oder Pre-Compiled-Section - kein
+  // Lexer-Crash-Grund.
+end;
+
+procedure TLexer.ToggleConditionalToElse;
+var
+  L : Integer;
+begin
+  L := Length(FConditionalStack);
+  if L > 0 then
+  begin
+    FConditionalStack[L - 1].InElse := True;
+    // Phase 1a: Active bleibt True. Phase 1b wird hier toggeln
+    // basierend auf Stack-State.
+  end;
+end;
+
+function TLexer.ConditionalDepth: Integer;
+begin
+  Result := Length(FConditionalStack);
+end;
+
+function TLexer.ConditionalMaxDepth: Integer;
+begin
+  Result := FConditionalMaxDepth;
 end;
 
 function TLexer.AtEnd: Boolean;
