@@ -130,3 +130,4 @@ docs/done.md
 
 # Performance- + Audit-Notes in tools/
 tools/perf_analyse.md
+*.bak2
