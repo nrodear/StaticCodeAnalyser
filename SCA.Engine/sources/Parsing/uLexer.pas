@@ -138,6 +138,17 @@ type
     function CurrentlyActive: Boolean;
     function ParseDirectiveIdent(const ABody: string;
       var Pos: Integer): string;
+
+    // A.5 Phase 2.1: Mini-Expression-Parser fuer {$IF ...}.
+    // Recursive-Descent. Default-True (konservativ) bei Unbekanntem.
+    function EvalIfExpression(const ABody: string; APos: Integer): Boolean;
+    function EvalOrExpr(const A: string; var P: Integer): Boolean;
+    function EvalAndExpr(const A: string; var P: Integer): Boolean;
+    function EvalNotExpr(const A: string; var P: Integer): Boolean;
+    function EvalPrimary(const A: string; var P: Integer): Boolean;
+    procedure SkipExprWhitespace(const A: string; var P: Integer);
+    function MatchExprKeyword(const A: string; var P: Integer;
+      const KW: string): Boolean;
   public
     class constructor Create;
     class destructor Destroy;
@@ -388,21 +399,34 @@ begin
 end;
 
 function TLexer.ReadParenStarComment: TToken;
-// (* ... *)
+// (* ... *)  oder  (*$ ... *) (Compiler-Direktive Alternate-Syntax)
+// A.5 Phase 2.2: erkennt '(*$IFDEF X*)' analog zu '{$IFDEF X}'.
 var
-  L, C: Integer;
+  L, C, BodyStart, BodyEnd : Integer;
+  Body                     : string;
 begin
   L := FLine; C := FCol;
   Advance(2); // skip '(*'
+  BodyStart := FPos;
+  BodyEnd   := FPos;
   while FPos <= FLen do
   begin
     if (CurChar = '*') and (PeekChar = ')') then
     begin
+      BodyEnd := FPos;
       Advance(2);
       Break;
     end;
     Advance;
   end;
+  if BodyEnd > BodyStart then
+    Body := Copy(FSource, BodyStart, BodyEnd - BodyStart)
+  else
+    Body := '';
+
+  if (Length(Body) >= 1) and (Body[1] = '$') then
+    HandleConditionalDirective(Body, L);
+
   Result := MakeTok(tkUnknown, '', L, C);
 end;
 
@@ -789,9 +813,31 @@ begin
     PushConditional(NewActive, ALine);
   end
   else if Verb = 'IF' then
-    // Konservativ: Active=True wenn Parent aktiv. Phase 2 expr-eval.
-    PushConditional(ParentActive, ALine)
-  else if (Verb = 'ELSE') or (Verb = 'ELSEIF') then
+  begin
+    // A.5 Phase 2.1: Expression-Auswertung.
+    NewActive := ParentActive and EvalIfExpression(ABody, i);
+    PushConditional(NewActive, ALine);
+  end
+  else if Verb = 'ELSEIF' then
+  begin
+    // A.5 Phase 2.1: ELSEIF mit Expression. Wenn der bisherige Branch
+    // (inkl. urspruengliches IF und etwaige vorhergehende ELSEIFs) NIE
+    // aktiv war, kann ELSEIF aktivieren. Sonst bleibt der ELSEIF-
+    // Branch geskippt.
+    // Pragmatisch in Phase 2.1: wenn Top aktuell False -> evaluiere
+    // ELSEIF und setze Active wenn True. Wenn Top True -> setze Active
+    // auf False (ELSEIF nach erfolgreichem IF: skip).
+    if Length(FConditionalStack) > 0 then
+    begin
+      if FConditionalStack[High(FConditionalStack)].Active then
+        FConditionalStack[High(FConditionalStack)].Active := False
+      else
+        FConditionalStack[High(FConditionalStack)].Active :=
+          ParentActive and EvalIfExpression(ABody, i);
+      FConditionalStack[High(FConditionalStack)].InElse := True;
+    end;
+  end
+  else if Verb = 'ELSE' then
     ToggleConditionalToElse
   else if (Verb = 'ENDIF') or (Verb = 'IFEND') then
     PopConditional;
@@ -837,6 +883,173 @@ begin
   begin
     FConditionalStack[L - 1].InElse := True;
     FConditionalStack[L - 1].Active := not FConditionalStack[L - 1].Active;
+  end;
+end;
+
+{ === A.5 Phase 2.1: Expression-Mini-Parser fuer {$IF expr} ===
+  Grammar (recursive descent):
+    expr     -> or_expr
+    or_expr  -> and_expr ('or' and_expr)*
+    and_expr -> not_expr ('and' not_expr)*
+    not_expr -> 'not' not_expr | primary
+    primary  -> 'true' | 'false'
+              | 'Defined' '(' Ident ')'
+              | 'Declared' '(' Ident ')'    -> default False (konservativ)
+              | '(' expr ')'
+              | <bezeichner> [vergleichsop>=,<,=,<>] <zahl|bezeichner>  -> default True
+              | <bezeichner>                                              -> default True
+
+  Default-True bei unbekannten Konstrukten (CompilerVersion, SizeOf, etc.)
+  ist konservativ: zu viele aktive Branches > zu wenige (= keine
+  Detector-False-Negatives). Phase 2.2 koennte CompilerVersion-Eval
+  hinzufuegen. }
+
+procedure TLexer.SkipExprWhitespace(const A: string; var P: Integer);
+var
+  L : Integer;
+begin
+  L := Length(A);
+  while (P <= L) and (A[P] in [#9, #10, #13, ' ']) do Inc(P);
+end;
+
+function TLexer.MatchExprKeyword(const A: string; var P: Integer;
+  const KW: string): Boolean;
+// Case-insensitive match. KW muss als Wort enden (nicht Mitte eines
+// Identifiers). Bei Match: P wird hinter KW verschoben.
+var
+  L, KWL, i : Integer;
+  After     : Char;
+begin
+  Result := False;
+  L := Length(A);
+  KWL := Length(KW);
+  if P + KWL - 1 > L then Exit;
+  for i := 1 to KWL do
+    if UpCase(A[P + i - 1]) <> UpCase(KW[i]) then Exit;
+  // Wort-Grenze pruefen: naechster Char darf kein Ident-Char sein
+  if P + KWL <= L then
+  begin
+    After := A[P + KWL];
+    if After in ['A'..'Z', 'a'..'z', '0'..'9', '_'] then Exit;
+  end;
+  Inc(P, KWL);
+  Result := True;
+end;
+
+function TLexer.EvalPrimary(const A: string; var P: Integer): Boolean;
+var
+  L, Start : Integer;
+  Ident    : string;
+begin
+  SkipExprWhitespace(A, P);
+  L := Length(A);
+  if P > L then Exit(True);  // leere Expression -> True (konservativ)
+
+  // Klammer-Ausdruck
+  if A[P] = '(' then
+  begin
+    Inc(P);
+    Result := EvalOrExpr(A, P);
+    SkipExprWhitespace(A, P);
+    if (P <= L) and (A[P] = ')') then Inc(P);
+    Exit;
+  end;
+
+  // 'true' / 'false'
+  if MatchExprKeyword(A, P, 'TRUE') then Exit(True);
+  if MatchExprKeyword(A, P, 'FALSE') then Exit(False);
+
+  // 'Defined' / 'Declared' / Identifier
+  Start := P;
+  while (P <= L) and (A[P] in ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
+    Inc(P);
+  Ident := UpperCase(Copy(A, Start, P - Start));
+
+  SkipExprWhitespace(A, P);
+  // Funktions-Call mit Klammer-Argument?
+  if (P <= L) and (A[P] = '(') then
+  begin
+    Inc(P);
+    SkipExprWhitespace(A, P);
+    var ArgStart := P;
+    while (P <= L) and (A[P] in ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
+      Inc(P);
+    var Arg := UpperCase(Copy(A, ArgStart, P - ArgStart));
+    SkipExprWhitespace(A, P);
+    if (P <= L) and (A[P] = ')') then Inc(P);
+
+    if Ident = 'DEFINED' then
+      Result := IsDefined(Arg)
+    else if Ident = 'DECLARED' then
+      Result := False     // konservativ - wir kennen Typen nicht
+    else
+      Result := True;     // unbekannter Function-Call (z.B. SizeOf)
+    Exit;
+  end;
+
+  // Bare Identifier oder Vergleichsausdruck. Beide Default-True
+  // (konservativ): kann CompilerVersion >= 36 sein - wenn wir das nicht
+  // koennen, behalten wir den Branch.
+  // Konsumiere einen optionalen Vergleichs-Operator + Operand-Token.
+  if (P <= L) and (A[P] in ['<', '>', '=']) then
+  begin
+    Inc(P);
+    if (P <= L) and (A[P] in ['<', '>', '=']) then Inc(P);
+    SkipExprWhitespace(A, P);
+    while (P <= L) and (A[P] in ['A'..'Z', 'a'..'z', '0'..'9', '_', '.']) do
+      Inc(P);
+  end;
+  Result := True;
+end;
+
+function TLexer.EvalNotExpr(const A: string; var P: Integer): Boolean;
+begin
+  SkipExprWhitespace(A, P);
+  if MatchExprKeyword(A, P, 'NOT') then
+    Result := not EvalNotExpr(A, P)
+  else
+    Result := EvalPrimary(A, P);
+end;
+
+function TLexer.EvalAndExpr(const A: string; var P: Integer): Boolean;
+var
+  RHS : Boolean;
+begin
+  Result := EvalNotExpr(A, P);
+  SkipExprWhitespace(A, P);
+  while MatchExprKeyword(A, P, 'AND') do
+  begin
+    RHS := EvalNotExpr(A, P);
+    Result := Result and RHS;
+    SkipExprWhitespace(A, P);
+  end;
+end;
+
+function TLexer.EvalOrExpr(const A: string; var P: Integer): Boolean;
+var
+  RHS : Boolean;
+begin
+  Result := EvalAndExpr(A, P);
+  SkipExprWhitespace(A, P);
+  while MatchExprKeyword(A, P, 'OR') do
+  begin
+    RHS := EvalAndExpr(A, P);
+    Result := Result or RHS;
+    SkipExprWhitespace(A, P);
+  end;
+end;
+
+function TLexer.EvalIfExpression(const ABody: string;
+  APos: Integer): Boolean;
+var
+  P : Integer;
+begin
+  P := APos;
+  try
+    Result := EvalOrExpr(ABody, P);
+  except
+    // Parser-Crash bei pathologischem Body -> konservativ Active
+    Result := True;
   end;
 end;
 
