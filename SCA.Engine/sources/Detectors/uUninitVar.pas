@@ -646,6 +646,46 @@ var
     if Idx >= 0 then RegisterWrite(Idx, F.Line);
   end;
 
+  function IsVarDeclLine(const LineLow: string): Boolean;
+  // Heuristik: erkennt reine Var-Deklarationszeilen wie
+  //   'sum: double;'
+  //   's, sum: double;'
+  //   'a, b, c: integer;'
+  // ohne Init-Wert. Pattern: vor dem ersten ':' nur Ident-Chars/Komma/
+  // Whitespace, ':' nicht direkt von '=' gefolgt (sonst ':=' Assignment),
+  // endet mit ';'.
+  //
+  // Var-Decl MIT Init (':' Type = Wert;) zaehlt nicht als "reine Decl" -
+  // wird via FirstWriteLine-Skip behandelt (gleiche Zeile wie Decl).
+  var
+    Trimmed : string;
+    Cp, i, L : Integer;
+    C : Char;
+  begin
+    Result := False;
+    Trimmed := Trim(LineLow);
+    L := Length(Trimmed);
+    if L < 4 then Exit;
+    if Trimmed[L] <> ';' then Exit;
+    // Erste ':' suchen
+    Cp := Pos(':', Trimmed);
+    if (Cp = 0) or (Cp = L) then Exit;
+    // ':=' = Assignment, KEINE Decl
+    if Trimmed[Cp + 1] = '=' then Exit;
+    // Vor dem ':' nur Ident-Chars, Komma, Whitespace
+    for i := 1 to Cp - 1 do
+    begin
+      C := Trimmed[i];
+      if not (CharInSet(C, ['a'..'z', '0'..'9', '_', ',', ' ', #9])) then
+        Exit;
+    end;
+    // Nach dem ':' bis ';': Type (darf '=' enthalten falls Init, dann
+    // ist's keine reine Decl).
+    for i := Cp + 1 to L - 1 do
+      if Trimmed[i] = '=' then Exit;
+    Result := True;
+  end;
+
   function FindFirstReadLine(const NameLow: string;
     DeclLine, FirstWriteLine, MethodStartLine, MethodEndLine: Integer): Integer;
   // Findet die erste Source-Zeile MIT einem Identifier-Match INNERHALB
@@ -656,6 +696,12 @@ var
   // Method-Boundary ist KRITISCH: ohne sie wuerde der Scan ueber die
   // ganze Unit laufen und ein Field-Decl im Interface mit gleichem
   // Namen als "Read" werten (Faktor 30x FP-Explosion in der Praxis).
+  //
+  // FP-Fix (doublecmd-Audit): Multi-line Var-Decls mit Komma-Auflistung
+  // wie 's,\n  sum: Double;' werden vom Parser nur mit EINER DeclLine
+  // gemeldet. Die Zeilen wo die nachfolgenden Idents stehen werden
+  // sonst als Read interpretiert. IsVarDeclLine-Heuristik erkennt
+  // reine Decl-Zeilen und skippt sie.
   var
     i : Integer;
     L : string;
@@ -676,6 +722,8 @@ var
       if (i + 1 = DeclLine) or (i + 1 = FirstWriteLine) then Continue;
       if IsLineInRanges(i + 1, NestedRanges) then Continue;
       L := LowerCase(Lines[i]);
+      // Skip wenn Zeile eine reine Var-Decl ist (Multi-line-Decl-Fix)
+      if IsVarDeclLine(L) then Continue;
       LL := Length(L);
       P := 1;
       while True do

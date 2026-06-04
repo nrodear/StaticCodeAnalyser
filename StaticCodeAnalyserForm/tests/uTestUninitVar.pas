@@ -32,6 +32,8 @@ type
     [Test] procedure FillCharInitialisesVar_NoFinding;
     [Test] procedure WriteBeforeRead_TryFinally_NoFinding;
     [Test] procedure DeclaredButNeverReferenced_NoFinding;
+    [Test] procedure MultiLineVarDecl_CommaList_NoFinding;
+    [Test] procedure VarDeclWithInit_NoFinding;
 
     // ---- EDGE CASES ----
     [Test] procedure AsmBlock_NoCrash;
@@ -417,6 +419,64 @@ begin
     // SCA166 emittiert wird.
     Assert.AreEqual(0, CountKind(L, fkUninitVar),
       'Nicht referenziert - faellt unter UnusedLocal, nicht UninitVar');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.MultiLineVarDecl_CommaList_NoFinding;
+// FP-Fix doublecmd-Audit (EUCSampler.pas:86, nsMBCSMultiProber.pas:277):
+// Multi-line var-decl mit Komma-Auflistung listet die Variablen auf
+// mehreren Zeilen auf. Der Parser meldet nur EINE DeclLine pro Var.
+// Die Zeilen wo die anderen Idents stehen dürfen NICHT als Read
+// interpretiert werden.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'function F: Double;'#13#10 +
+    'var'#13#10 +
+    '   s,'#13#10 +              // Zeile 6: erster Decl-Teil
+    '   sum: Double;'#13#10 +   // Zeile 7: zweiter Decl-Teil + Typ
+    '   i: Integer;'#13#10 +    // Zeile 8
+    'begin'#13#10 +
+    '   sum := 0.0;'#13#10 +     // Zeile 10: erster Write
+    '   for i := 0 to 10 do'#13#10 +
+    '     sum := sum + i;'#13#10 +
+    '   Result := sum;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.AreEqual(0, CountKind(L, fkUninitVar),
+      'Multi-line var-decl darf NICHT als Read interpretiert werden');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.VarDeclWithInit_NoFinding;
+// Var-Decl mit Init-Value (`: Type = Value;`) wird als FirstWriteLine
+// behandelt - kein UninitVar-Befund.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'function F: Integer;'#13#10 +
+    'var n: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  n := 42;'#13#10 +
+    '  Result := n;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.AreEqual(0, CountKind(L, fkUninitVar),
+      'Var-Decl + Assignment + Read ist sauberes Pattern, kein UninitVar');
   finally L.Free; end;
 end;
 
