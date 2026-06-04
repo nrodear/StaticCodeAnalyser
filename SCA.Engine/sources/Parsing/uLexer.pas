@@ -840,7 +840,32 @@ begin
   else if Verb = 'ELSE' then
     ToggleConditionalToElse
   else if (Verb = 'ENDIF') or (Verb = 'IFEND') then
-    PopConditional;
+    PopConditional
+  else if Verb = 'DEFINE' then
+  begin
+    // A.5 Phase 2.3: mid-source {$DEFINE X}. Wirkt nur wenn aktuell
+    // im aktiven Branch (sonst waere {$IFDEF UNDEFINED} {$DEFINE X}
+    // {$ENDIF} faelschlich aktivierend).
+    if ParentActive then
+    begin
+      Ident := ParseDirectiveIdent(ABody, i);
+      if Ident <> '' then FDefines.Add(Ident);
+    end;
+  end
+  else if Verb = 'UNDEF' then
+  begin
+    // A.5 Phase 2.3: mid-source {$UNDEF X}. Wirkt nur wenn aktuell
+    // im aktiven Branch.
+    if ParentActive then
+    begin
+      Ident := ParseDirectiveIdent(ABody, i);
+      if Ident <> '' then
+      begin
+        var Idx := FDefines.IndexOf(Ident);
+        if Idx >= 0 then FDefines.Delete(Idx);
+      end;
+    end;
+  end;
   // Andere Direktiven ($R, $WARN, $INCLUDE, etc.) ignorieren.
 end;
 

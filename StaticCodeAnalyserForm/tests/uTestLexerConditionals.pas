@@ -41,6 +41,11 @@ type
 
     // Phase 2.2: Alternate-Syntax (*$IFDEF*)
     [Test] procedure Phase2_AlternateSyntax_IfdefRecognized;
+
+    // Phase 2.3: mid-source $DEFINE / $UNDEF
+    [Test] procedure Phase2_DefineMidSource_ActivatesIfdef;
+    [Test] procedure Phase2_UndefMidSource_DeactivatesIfdef;
+    [Test] procedure Phase2_DefineInSkippedBranch_NotApplied;
   end;
 
 implementation
@@ -426,6 +431,68 @@ begin
       'Alternate-Syntax mit undefined-X -> else aktiv');
   finally
     IdentsWithout.Free;
+  end;
+end;
+
+{ === Phase 2.3: $DEFINE / $UNDEF mid-source ======================= }
+
+procedure TTestLexerConditionals.Phase2_DefineMidSource_ActivatesIfdef;
+var
+  Idents : TStringList;
+begin
+  // {$DEFINE X} im Source aktiviert X fuer folgende {$IFDEF X}
+  Idents := CollectIdents(
+    'before {$DEFINE MY_FLAG} ' +
+    '{$IFDEF MY_FLAG} after_define {$ELSE} else_branch {$ENDIF}',
+    [], True);
+  try
+    Assert.IsTrue(Idents.IndexOf('before') >= 0, 'before geht durch');
+    Assert.IsTrue(Idents.IndexOf('after_define') >= 0,
+      '{$DEFINE MY_FLAG} dann {$IFDEF MY_FLAG} aktiviert if-branch');
+    Assert.IsTrue(Idents.IndexOf('else_branch') < 0,
+      'else-branch wird geskippt');
+  finally
+    Idents.Free;
+  end;
+end;
+
+procedure TTestLexerConditionals.Phase2_UndefMidSource_DeactivatesIfdef;
+var
+  Idents : TStringList;
+begin
+  // {$UNDEF X} entfernt X aus Defines-Set
+  Idents := CollectIdents(
+    '{$UNDEF MSWINDOWS} ' +
+    '{$IFDEF MSWINDOWS} win_active {$ELSE} no_win {$ENDIF}',
+    ['MSWINDOWS'], True);
+  try
+    Assert.IsTrue(Idents.IndexOf('win_active') < 0,
+      '{$UNDEF MSWINDOWS} entfernt aus Set -> IFDEF MSWINDOWS skip');
+    Assert.IsTrue(Idents.IndexOf('no_win') >= 0,
+      'else-branch aktiv nach UNDEF');
+  finally
+    Idents.Free;
+  end;
+end;
+
+procedure TTestLexerConditionals.Phase2_DefineInSkippedBranch_NotApplied;
+var
+  Idents : TStringList;
+begin
+  // {$DEFINE} im geskippten Branch darf NICHT wirken (sonst waere
+  // {$IFDEF UNDEFINED} {$DEFINE X} {$ENDIF} {$IFDEF X} ... faelschlich
+  // aktivierend).
+  Idents := CollectIdents(
+    '{$IFDEF PARENT_NOT_SET} {$DEFINE SHOULD_NOT_DEFINE} {$ENDIF}' +
+    '{$IFDEF SHOULD_NOT_DEFINE} bad {$ELSE} good {$ENDIF}',
+    [], True);
+  try
+    Assert.IsTrue(Idents.IndexOf('bad') < 0,
+      'DEFINE im skip-branch darf NICHT spaeter aktivieren');
+    Assert.IsTrue(Idents.IndexOf('good') >= 0,
+      'Aussen-IFDEF skipped -> else aktiv');
+  finally
+    Idents.Free;
   end;
 end;
 
