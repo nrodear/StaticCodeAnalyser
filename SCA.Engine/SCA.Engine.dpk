@@ -227,6 +227,7 @@ contains
   uFixHint in 'sources\Output\uFixHint.pas',
   uSonarPush in 'sources\Output\uSonarPush.pas',
   uAstNode in 'sources\Parsing\uAstNode.pas',
+  uCFG in 'sources\Parsing\uCFG.pas',
   uComponentGraph in 'sources\Parsing\uComponentGraph.pas',
   uDfmBinaryReader in 'sources\Parsing\uDfmBinaryReader.pas',
   uDfmLexer in 'sources\Parsing\uDfmLexer.pas',
