@@ -157,8 +157,52 @@ procedure TSymbolReferenceIndex.AddRefsFromNode(RootNode: TAstNode;
     Result := Pos('.', Trimmed) > 0;
   end;
 
+  function IsIdentCharLocal(C: Char): Boolean; inline;
+  begin
+    Result := CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_']);
+  end;
+
+  procedure ScanExprForDottedCalls(const Expr: string);
+  // A.3+ Phase 1: TypeRef-Strings von nkIfStmt/nkWhileStmt/nkCaseStmt/
+  // nkAssign/nkForStmt enthalten Calls die der Parser NICHT als nkCall
+  // ablegt. Wir scannen die Strings nach 'Obj.Method(' Pattern und
+  // registrieren 'Method' als Cross-Unit-Reference.
+  //
+  // Bewusst nur DOT-Style-Calls (analog zur nkCall-Logik oben) -
+  // bare Calls wie 'WriteLn(...)' werden NICHT erfasst, sonst FP-
+  // Explosion bei jedem RTL-Function-Aufruf.
+  var
+    i, L, StartSecond : Integer;
+    MemberName : string;
+  begin
+    L := Length(Expr);
+    i := 1;
+    while i <= L do
+    begin
+      if not IsIdentCharLocal(Expr[i]) then
+      begin
+        Inc(i);
+        Continue;
+      end;
+      // Erstes Ident (potentielles 'Obj')
+      while (i <= L) and IsIdentCharLocal(Expr[i]) do Inc(i);
+      if (i > L) or (Expr[i] <> '.') then Continue;
+      Inc(i);  // skip '.'
+      if (i > L) or not IsIdentCharLocal(Expr[i]) then Continue;
+      // Zweites Ident (potentielles 'Method')
+      StartSecond := i;
+      while (i <= L) and IsIdentCharLocal(Expr[i]) do Inc(i);
+      // Optional Whitespace + '(' - sonst kein Call
+      var j := i;
+      while (j <= L) and (Expr[j] = ' ') do Inc(j);
+      if (j > L) or (Expr[j] <> '(') then Continue;
+      MemberName := Copy(Expr, StartSecond, i - StartSecond);
+      AddReference(MemberName, SourceUnit);
+    end;
+  end;
+
 var
-  Calls, Assigns : TList<TAstNode>;
+  Calls, Assigns, Ifs, Whiles, Cases, Fors : TList<TAstNode>;
   N : TAstNode;
   Target : string;
 begin
@@ -182,16 +226,55 @@ begin
   end;
 
   // nkAssign: LHS kann 'Obj.Field' sein -> wir indexieren das Field.
+  // PLUS A.3+ Phase 1: RHS-Text (TypeRef) nach dotted Calls scannen.
   Assigns := RootNode.FindAll(nkAssign);
   try
     for N in Assigns do
     begin
-      if not HasLhsBeforeDot(N.Name) then Continue;
-      Target := ExtractRightOfDot(N.Name);
-      AddReference(Target, SourceUnit);
+      if HasLhsBeforeDot(N.Name) then
+      begin
+        Target := ExtractRightOfDot(N.Name);
+        AddReference(Target, SourceUnit);
+      end;
+      // RHS-Calls: 'X := Obj.GetValue()' -> 'GetValue' indexieren.
+      if N.TypeRef <> '' then
+        ScanExprForDottedCalls(N.TypeRef);
     end;
   finally
     Assigns.Free;
+  end;
+
+  // A.3+ Phase 1: nkIfStmt/nkWhileStmt/nkCaseStmt/nkForStmt enthalten
+  // Conditions/Ranges als TypeRef-String. Dotted Calls darin auch
+  // registrieren - sonst sieht der Visibility-Detektor SCA052 Members
+  // wie 'TConfigFilter.ApplyToFindings(L, c)' nicht als extern referenziert.
+  Ifs := RootNode.FindAll(nkIfStmt);
+  try
+    for N in Ifs do
+      if N.TypeRef <> '' then ScanExprForDottedCalls(N.TypeRef);
+  finally
+    Ifs.Free;
+  end;
+  Whiles := RootNode.FindAll(nkWhileStmt);
+  try
+    for N in Whiles do
+      if N.TypeRef <> '' then ScanExprForDottedCalls(N.TypeRef);
+  finally
+    Whiles.Free;
+  end;
+  Cases := RootNode.FindAll(nkCaseStmt);
+  try
+    for N in Cases do
+      if N.TypeRef <> '' then ScanExprForDottedCalls(N.TypeRef);
+  finally
+    Cases.Free;
+  end;
+  Fors := RootNode.FindAll(nkForStmt);
+  try
+    for N in Fors do
+      if N.TypeRef <> '' then ScanExprForDottedCalls(N.TypeRef);
+  finally
+    Fors.Free;
   end;
 end;
 
