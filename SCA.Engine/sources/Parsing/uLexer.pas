@@ -886,23 +886,23 @@ begin
   end;
 end;
 
-{ === A.5 Phase 2.1: Expression-Mini-Parser fuer {$IF expr} ===
-  Grammar (recursive descent):
-    expr     -> or_expr
-    or_expr  -> and_expr ('or' and_expr)*
-    and_expr -> not_expr ('and' not_expr)*
-    not_expr -> 'not' not_expr | primary
-    primary  -> 'true' | 'false'
-              | 'Defined' '(' Ident ')'
-              | 'Declared' '(' Ident ')'    -> default False (konservativ)
-              | '(' expr ')'
-              | <bezeichner> [vergleichsop>=,<,=,<>] <zahl|bezeichner>  -> default True
-              | <bezeichner>                                              -> default True
+(* === A.5 Phase 2.1: Expression-Mini-Parser fuer $IF expr ===
+   Grammar (recursive descent):
+     expr     -> or_expr
+     or_expr  -> and_expr ('or' and_expr)*
+     and_expr -> not_expr ('and' not_expr)*
+     not_expr -> 'not' not_expr | primary
+     primary  -> 'true' | 'false'
+               | 'Defined' '(' Ident ')'
+               | 'Declared' '(' Ident ')'    -> default False (konservativ)
+               | '(' expr ')'
+               | bezeichner mit optionalem Vergleich -> default True
+               | bare bezeichner               -> default True
 
-  Default-True bei unbekannten Konstrukten (CompilerVersion, SizeOf, etc.)
-  ist konservativ: zu viele aktive Branches > zu wenige (= keine
-  Detector-False-Negatives). Phase 2.2 koennte CompilerVersion-Eval
-  hinzufuegen. }
+   Default-True bei unbekannten Konstrukten (CompilerVersion, SizeOf,
+   etc.) ist konservativ: zu viele aktive Branches > zu wenige (= keine
+   Detector-False-Negatives). Phase 2.2 koennte CompilerVersion-Eval
+   hinzufuegen. *)
 
 procedure TLexer.SkipExprWhitespace(const A: string; var P: Integer);
 var
