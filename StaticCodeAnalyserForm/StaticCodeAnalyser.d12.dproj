@@ -61,7 +61,7 @@
     <PropertyGroup Condition="'$(Base)'!=''">
         <DCC_DcuOutput>..\Output\$(Platform) $(Config)</DCC_DcuOutput>
         <DCC_ExeOutput>..\Output\$(Platform) $(Config)</DCC_ExeOutput>
-        <DCC_UnitSearchPath>$(PROJECTDIR)\sources;$(PROJECTDIR)\sources\Common;$(PROJECTDIR)\sources\Console;$(PROJECTDIR)\sources\UI;$(PROJECTDIR)\resources;$(PROJECTDIR)\..\SCA.Engine\sources\Common;$(PROJECTDIR)\..\SCA.Engine\sources\Detectors;$(PROJECTDIR)\..\SCA.Engine\sources\Infrastructure;$(PROJECTDIR)\..\SCA.Engine\sources\Output;$(PROJECTDIR)\..\SCA.Engine\sources\Parsing;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>$(PROJECTDIR)\sources;$(PROJECTDIR)\sources\Console;$(PROJECTDIR)\sources\UI;$(PROJECTDIR)\resources;$(PROJECTDIR)\..\SCA.SharedUI\sources;$(PROJECTDIR)\..\SCA.Engine\sources\Common;$(PROJECTDIR)\..\SCA.Engine\sources\Detectors;$(PROJECTDIR)\..\SCA.Engine\sources\Infrastructure;$(PROJECTDIR)\..\SCA.Engine\sources\Output;$(PROJECTDIR)\..\SCA.Engine\sources\Parsing;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_E>false</DCC_E>
         <DCC_N>false</DCC_N>
         <DCC_S>false</DCC_S>
@@ -143,12 +143,12 @@
         </DelphiCompile>
         <DCCReference Include="resources\MeineUnit.pas"/>
         <DCCReference Include="sources\MainController.pas"/>
-        <DCCReference Include="sources\UI\uAnalyserPalette.pas"/>
-        <DCCReference Include="sources\UI\uAnalyserTheme.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uAnalyserPalette.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uAnalyserTheme.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uAnalyserTypes.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uLocalization.pas"/>
-        <DCCReference Include="sources\UI\uFindingGridRenderer.pas"/>
-        <DCCReference Include="sources\UI\uFindingFilter.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uFindingGridRenderer.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uFindingFilter.pas"/>
         <DCCReference Include="sources\UI\uMainForm.pas">
             <Form>Form2</Form>
             <FormType>dfm</FormType>
@@ -170,11 +170,11 @@
         <DCCReference Include="..\SCA.Engine\sources\Common\uCollectValues.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uDetectorUtils.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uMethodd12.pas"/>
-        <DCCReference Include="sources\Common\uRecentPaths.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uRecentPaths.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uRegExMatches.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uRuleCatalog.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uSCAConsts.pas"/>
-        <DCCReference Include="sources\Common\uIDEColors.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uIDEColors.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uYamlSubsetParser.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uQuickFix.pas"/>
         <DCCReference Include="resources\uCustomerForm.pas">
@@ -185,10 +185,10 @@
             <Form>OrderForm</Form>
             <FormType>dfm</FormType>
         </DCCReference>
-        <DCCReference Include="sources\UI\uIDEStatsTiles.pas"/>
-        <DCCReference Include="sources\UI\uIDEHelpPanel.pas"/>
-        <DCCReference Include="sources\UI\uIDEToolbar.pas"/>
-        <DCCReference Include="sources\UI\uExportMenu.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uIDEStatsTiles.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uIDEHelpPanel.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uIDEToolbar.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uExportMenu.pas"/>
         <DCCReference Include="resources\ConcatToFormatSample.pas"/>
         <DCCReference Include="resources\WithStatementSample.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uAstFileCache.pas"/>

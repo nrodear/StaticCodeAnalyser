@@ -43,7 +43,8 @@ requires
   vcl,
   vclwinx,
   designide,
-  SCA.Engine;
+  SCA.Engine,
+  SCA.SharedUI;
 
 contains
   uIDEExpert in 'uIDEExpert.pas',
@@ -53,24 +54,14 @@ contains
   uIDEAnnotationOverlay in 'uIDEAnnotationOverlay.pas',
   uIDEMessages in 'uIDEMessages.pas',
   uIDEWatchMode in 'uIDEWatchMode.pas',
-  uIDEStatsTiles in '..\StaticCodeAnalyserForm\sources\UI\uIDEStatsTiles.pas',
-  uIDEHelpPanel in '..\StaticCodeAnalyserForm\sources\UI\uIDEHelpPanel.pas',
-  uExportMenu in '..\StaticCodeAnalyserForm\sources\UI\uExportMenu.pas',
   uIDEEditorIntegration in 'uIDEEditorIntegration.pas',
   uIDEStatusBar in 'uIDEStatusBar.pas',
   uIDETheme in 'uIDETheme.pas',
-  uIDEToolbar in '..\StaticCodeAnalyserForm\sources\UI\uIDEToolbar.pas',
   uIDEAnalyseProgress in 'uIDEAnalyseProgress.pas',
   uIDEGridTooltip in 'uIDEGridTooltip.pas',
   uIDELifecycle in 'uIDELifecycle.pas',
   uIDESCAOptions in 'uIDESCAOptions.pas' {SCAOptionsFrame: TFrame},
   uIDESonarOptions in 'uIDESonarOptions.pas' {SonarOptionsFrame: TFrame},
-  uIDEAnalyseRunner in 'uIDEAnalyseRunner.pas',
-  uAnalyserPalette in '..\StaticCodeAnalyserForm\sources\UI\uAnalyserPalette.pas',
-  uAnalyserTheme in '..\StaticCodeAnalyserForm\sources\UI\uAnalyserTheme.pas',
-  uFindingGridRenderer in '..\StaticCodeAnalyserForm\sources\UI\uFindingGridRenderer.pas',
-  uFindingFilter in '..\StaticCodeAnalyserForm\sources\UI\uFindingFilter.pas',
-  uIDEColors in '..\StaticCodeAnalyserForm\sources\Common\uIDEColors.pas',
-  uRecentPaths in '..\StaticCodeAnalyserForm\sources\Common\uRecentPaths.pas';
+  uIDEAnalyseRunner in 'uIDEAnalyseRunner.pas';
 
 end.
