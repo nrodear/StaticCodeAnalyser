@@ -3,11 +3,17 @@
         <ProjectGuid>{7012BB59-6051-481D-B373-92ECC22F6CE1}</ProjectGuid>
     </PropertyGroup>
     <ItemGroup>
-        <Projects Include="StaticCodeAnalyserForm\StaticCodeAnalyser.d12.dproj">
+        <Projects Include="SCA.Engine\SCA.Engine.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="SCA.SharedUI\SCA.SharedUI.dproj">
+            <Dependencies>SCA.Engine\SCA.Engine.dproj</Dependencies>
+        </Projects>
+        <Projects Include="StaticCodeAnalyserForm\StaticCodeAnalyser.d12.dproj">
+            <Dependencies>SCA.Engine\SCA.Engine.dproj;SCA.SharedUI\SCA.SharedUI.dproj</Dependencies>
+        </Projects>
         <Projects Include="StaticCodeAnalyserIDE\StaticCodeAnalyser.IDE.d12.dproj">
-            <Dependencies/>
+            <Dependencies>SCA.Engine\SCA.Engine.dproj;SCA.SharedUI\SCA.SharedUI.dproj</Dependencies>
         </Projects>
         <Projects Include="StaticCodeAnalyserForm\tests\TestProject.dproj">
             <Dependencies/>
@@ -20,6 +26,24 @@
             <Default.Personality/>
         </BorlandProject>
     </ProjectExtensions>
+    <Target Name="SCA_Engine">
+        <MSBuild Projects="SCA.Engine\SCA.Engine.dproj"/>
+    </Target>
+    <Target Name="SCA_Engine:Clean">
+        <MSBuild Projects="SCA.Engine\SCA.Engine.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="SCA_Engine:Make">
+        <MSBuild Projects="SCA.Engine\SCA.Engine.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="SCA_SharedUI">
+        <MSBuild Projects="SCA.SharedUI\SCA.SharedUI.dproj"/>
+    </Target>
+    <Target Name="SCA_SharedUI:Clean">
+        <MSBuild Projects="SCA.SharedUI\SCA.SharedUI.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="SCA_SharedUI:Make">
+        <MSBuild Projects="SCA.SharedUI\SCA.SharedUI.dproj" Targets="Make"/>
+    </Target>
     <Target Name="StaticCodeAnalyser_d12">
         <MSBuild Projects="StaticCodeAnalyserForm\StaticCodeAnalyser.d12.dproj"/>
     </Target>
@@ -48,13 +72,13 @@
         <MSBuild Projects="StaticCodeAnalyserForm\tests\TestProject.dproj" Targets="Make"/>
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="StaticCodeAnalyser_d12;StaticCodeAnalyser_IDE_d12;TestProject"/>
+        <CallTarget Targets="SCA_Engine;SCA_SharedUI;StaticCodeAnalyser_d12;StaticCodeAnalyser_IDE_d12;TestProject"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="StaticCodeAnalyser_d12:Clean;StaticCodeAnalyser_IDE_d12:Clean;TestProject:Clean"/>
+        <CallTarget Targets="SCA_Engine:Clean;SCA_SharedUI:Clean;StaticCodeAnalyser_d12:Clean;StaticCodeAnalyser_IDE_d12:Clean;TestProject:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="StaticCodeAnalyser_d12:Make;StaticCodeAnalyser_IDE_d12:Make;TestProject:Make"/>
+        <CallTarget Targets="SCA_Engine:Make;SCA_SharedUI:Make;StaticCodeAnalyser_d12:Make;StaticCodeAnalyser_IDE_d12:Make;TestProject:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>
