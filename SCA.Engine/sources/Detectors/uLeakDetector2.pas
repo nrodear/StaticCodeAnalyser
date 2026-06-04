@@ -281,24 +281,56 @@ end;
 
 class function TLeakDetector2.IsReturnedAsResult(MethodNode: TAstNode;
   const VarNameLow: string): Boolean;
-// Akzeptiert nur 'Result := varname' oder 'Result := varname as ITyp'.
+// Akzeptiert:
+//   'Result := varname'         (moderner Stil)
+//   'Result := varname as ITyp' (explicit cast)
+//   '<funcname> := varname'     (legacy Delphi/Pascal: Funktionsname
+//                                als implizite Ergebnis-Variable)
+//
 // Vorher: Wortgrenzen-Substring-Check matched auch 'Result := L.Count'
 // (L ist drin, aber als Receiver, NICHT als Result-Wert) und unterdrueckte
 // damit echte Leaks (Parser_IfdefDuplicatedHeaders / Real-World-Code).
 // Falls jemand 'Result := SomeWrapper(L)' nutzt: das matched nicht mehr,
 // L wird als Leak gemeldet - bewusster Tradeoff (besser ein False-Positive
 // auf wrap-then-return als ein verstecktes Leak).
+//
+// FP-Fix (doublecmd torrent/BDecode.pas:bdecodeHash): legacy Pascal-Code
+// nutzt 'bdecodeHash := r;' statt 'Result := r;'. Detector hat das
+// vorher als Leak gemeldet weil nur 'Result :=' anerkannt war.
 var
-  Assigns : TList<TAstNode>;
-  A       : TAstNode;
-  Trimmed : string;
+  Assigns        : TList<TAstNode>;
+  A              : TAstNode;
+  LhsLow         : string;
+  Trimmed        : string;
+  FuncNameLow    : string;
+
+  function IsResultLhs(const ALhsLow: string): Boolean;
+  begin
+    // 'Result' oder Funktionsname selbst (legacy Pascal-Return).
+    Result := (ALhsLow = 'result') or
+              ((FuncNameLow <> '') and (ALhsLow = FuncNameLow));
+  end;
+
 begin
-  Result  := False;
+  Result      := False;
+  FuncNameLow := '';
+  if MethodNode <> nil then
+  begin
+    // Method.Name kann 'TFoo.Bar' sein - rightmost Identifier extrahieren.
+    FuncNameLow := MethodNode.Name.ToLower;
+    var DotPos := -1;
+    for var i := Length(FuncNameLow) downto 1 do
+      if FuncNameLow[i] = '.' then begin DotPos := i; Break; end;
+    if DotPos > 0 then
+      FuncNameLow := Copy(FuncNameLow, DotPos + 1, MaxInt);
+  end;
+
   Assigns := MethodNode.FindAll(nkAssign);
   try
     for A in Assigns do
     begin
-      if A.Name.ToLower <> 'result' then Continue;
+      LhsLow := A.Name.ToLower;
+      if not IsResultLhs(LhsLow) then Continue;
       Trimmed := Trim(A.TypeRef.ToLower);
       // Exakter Match: 'Result := varname'
       if Trimmed = VarNameLow then Exit(True);

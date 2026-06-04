@@ -20,6 +20,7 @@ type
     [Test] procedure Leak_CreateFreeInFinally_NoFinding;
     [Test] procedure Leak_FreeOutsideFinally_ReportsWarning;
     [Test] procedure Leak_ReturnResult_NoFinding;
+    [Test] procedure Leak_ReturnViaLegacyFuncName_NoFinding;
     [Test] procedure Leak_PassedToConstructor_NoFinding;
     [Test] procedure Leak_FunctionCallAssign_NoFreeReportsWarning;
     [Test] procedure Leak_FunctionCallAssign_WithFree_NoFinding;
@@ -236,6 +237,30 @@ begin
   try
     Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Ownership über Result abgegeben – kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_ReturnViaLegacyFuncName_NoFinding;
+// FP-Fix doublecmd torrent/BDecode.pas:bdecodeHash:
+// Pascal/Delphi-Legacy-Syntax verwendet den Funktionsnamen selbst als
+// implizite Ergebnis-Variable statt 'Result := ...'. Beide Formen
+// sind gueltig und semantisch identisch - Detector muss beide
+// als Ownership-Transfer-Return erkennen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function bdecodeHash: TStringList;'#13#10+
+  'var r: TStringList;'#13#10+
+  'begin'#13#10+
+  '  r := TStringList.Create;'#13#10+
+  '  r.Add(''x'');'#13#10+
+  '  bdecodeHash := r;'#13#10+      // legacy Pascal-Stil
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'Legacy <FuncName> := r ist Ownership-Transfer wie Result := r');
   finally F.Free; end;
 end;
 
