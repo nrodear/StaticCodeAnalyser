@@ -16,7 +16,7 @@
             <Dependencies>SCA.Engine\SCA.Engine.dproj;SCA.SharedUI\SCA.SharedUI.dproj</Dependencies>
         </Projects>
         <Projects Include="StaticCodeAnalyserForm\tests\TestProject.dproj">
-            <Dependencies/>
+            <Dependencies>SCA.Engine\SCA.Engine.dproj;SCA.SharedUI\SCA.SharedUI.dproj</Dependencies>
         </Projects>
     </ItemGroup>
     <ProjectExtensions>
