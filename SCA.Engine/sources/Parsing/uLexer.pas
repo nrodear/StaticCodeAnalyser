@@ -168,6 +168,22 @@ type
     destructor Destroy; override;
   end;
 
+// A.5 Phase 1b-Wiring: globale Default-Konfiguration. Wird von
+// uParser2.TParser2.ParseSource gelesen und auf jeden neu erzeugten
+// Lexer angewendet. CLI-Flags (`--ifdef-aware`, `--define X`) in
+// uConsoleRunner setzen diese Variablen vor dem Scan.
+//
+// Lazy-init: gLexerIfdefDefines wird beim ersten Add erstellt und in
+// finalization freigegeben. Thread-safe ist NICHT noetig - CLI-Args
+// werden vor dem Scan-Lauf gesetzt, Scan ist single-threaded.
+var
+  gLexerIfdefSkipEnabled : Boolean = False;
+  gLexerIfdefDefines     : TStringList = nil;
+
+procedure LexerIfdefAddDefine(const AName: string);
+procedure LexerIfdefRemoveDefine(const AName: string);
+procedure LexerIfdefClear;
+
 implementation
 
 { TToken }
@@ -872,5 +888,46 @@ function TLexer.AtEnd: Boolean;
 begin
   Result := Peek.Kind = tkEof;
 end;
+
+{ === A.5 Phase 1b Wiring: globale Defines-Liste === }
+
+procedure EnsureLexerIfdefDefines;
+begin
+  if gLexerIfdefDefines = nil then
+  begin
+    gLexerIfdefDefines := TStringList.Create;
+    gLexerIfdefDefines.CaseSensitive := False;
+    gLexerIfdefDefines.Sorted        := True;
+    gLexerIfdefDefines.Duplicates    := dupIgnore;
+  end;
+end;
+
+procedure LexerIfdefAddDefine(const AName: string);
+var
+  Trimmed : string;
+begin
+  Trimmed := Trim(AName);
+  if Trimmed = '' then Exit;
+  EnsureLexerIfdefDefines;
+  gLexerIfdefDefines.Add(Trimmed);
+end;
+
+procedure LexerIfdefRemoveDefine(const AName: string);
+var
+  Idx : Integer;
+begin
+  if gLexerIfdefDefines = nil then Exit;
+  Idx := gLexerIfdefDefines.IndexOf(Trim(AName));
+  if Idx >= 0 then gLexerIfdefDefines.Delete(Idx);
+end;
+
+procedure LexerIfdefClear;
+begin
+  if gLexerIfdefDefines <> nil then gLexerIfdefDefines.Clear;
+end;
+
+finalization
+  gLexerIfdefDefines.Free;
+  gLexerIfdefDefines := nil;
 
 end.

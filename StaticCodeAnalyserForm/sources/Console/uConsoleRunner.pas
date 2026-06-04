@@ -79,6 +79,11 @@ type
     HideTestFixtures : Boolean;     // --hide-test-fixtures       drop findings aus uTest*/Sample/Demo-Files
     HideTestExplicit : Boolean;     // True wenn HideTestFixtures vom User explizit gesetzt wurde
                                     //   (Auto-Default je nach Profile sonst).
+    // ---- A.5 IFDEF-Awareness (Phase 1b-Wiring) ----
+    IfdefAware    : Boolean;        // --ifdef-aware              Lexer skippt {$IFDEF X}-Branches
+                                    //   wo X NICHT im IfdefDefines-Set steht
+    IfdefDefines  : string;         // --define X[,Y,Z]           Comma-separated Defines
+                                    //   (mehrfach --define X erlaubt - akkumuliert)
     ParseError    : string;         // nicht-leer wenn Args invalid
   end;
 
@@ -114,7 +119,8 @@ uses
   uExportSonarGeneric, uSonarConfig,
   uDetectorUtils,                     // TDetectorUtils.IsTestFixturePath
   uBaseline,
-  uSuppressionTelemetry;              // C.5 Telemetrie
+  uSuppressionTelemetry,              // C.5 Telemetrie
+  uLexer;                             // A.5 Phase 1b-Wiring: gLexerIfdefSkipEnabled etc.
 
 // Forward-Decl: ApplyFailOnPolicy wird von TConsoleRunner.Run gerufen,
 // die Definition steht weiter unten in dieser Unit.
@@ -268,6 +274,17 @@ begin
     begin
       Result.HideTestFixtures := False;
       Result.HideTestExplicit := True;
+    end
+    else if A = '--ifdef-aware' then
+      Result.IfdefAware := True
+    else if A = '--define' then
+    begin
+      var V := '';
+      GetValue(V, '--define');
+      if Result.IfdefDefines = '' then
+        Result.IfdefDefines := V
+      else
+        Result.IfdefDefines := Result.IfdefDefines + ',' + V;
     end
     else
     begin
@@ -437,6 +454,13 @@ begin
   WriteLn('                        Explizit setzbar via --hide- / --show-test-fixtures.');
   WriteLn('  --show-test-fixtures  Komplement: behaelt Test-Fixture-Findings');
   WriteLn('                        auch bei default-Profile.');
+  WriteLn('');
+  WriteLn('Conditional-Compilation (A.5 - experimentell):');
+  WriteLn('  --ifdef-aware         Lexer ueberspringt {$IFDEF X}-Branches');
+  WriteLn('                        wo X NICHT im Define-Set steht.');
+  WriteLn('                        Default OFF (alle Branches gescannt).');
+  WriteLn('  --define <X>[,Y,Z]    Defines fuer --ifdef-aware. Mehrfach moeglich.');
+  WriteLn('                        Beispiel: --define MSWINDOWS,WIN64,UNICODE');
   WriteLn('');
   WriteLn('Other:');
   WriteLn('  --help, -h, -?, /?    Show this help');
@@ -622,6 +646,26 @@ begin
   // Sonar standalone actions - kein Analyse-Run noetig
   if Args.SonarInit then Exit(RunSonarInit(Args.Path));
   if Args.SonarTest then Exit(RunSonarTest(Args));
+
+  // A.5 Phase 1b-Wiring: IFDEF-Awareness aus CLI-Args in den globalen
+  // Lexer-Config-State spiegeln. Wirkt fuer alle TParser2.ParseSource-
+  // Aufrufe waehrend des Runs.
+  if Args.IfdefAware then
+  begin
+    gLexerIfdefSkipEnabled := True;
+    LexerIfdefClear;
+    if Args.IfdefDefines <> '' then
+    begin
+      var Parts := Args.IfdefDefines.Split([',', ';']);
+      for var Def in Parts do
+        if Trim(Def) <> '' then LexerIfdefAddDefine(Trim(Def));
+    end;
+    if not Args.Quiet then
+      WriteLn(Format('IFDEF-Awareness aktiv: %d Define(s).',
+        [Args.IfdefDefines.Split([',', ';']).GetLength(0)]));
+  end
+  else
+    gLexerIfdefSkipEnabled := False;
 
   // Pfad-Validierung
   if (Args.Path <> '') and not TDirectory.Exists(Args.Path) then

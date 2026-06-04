@@ -164,6 +164,16 @@ var
 begin
   Root := nil;
   FLex := TLexer.Create(Source);
+  // A.5 Phase 1b-Wiring: globale CLI-Config auf den Lexer anwenden.
+  // Wenn gLexerIfdefSkipEnabled gesetzt ist (via --ifdef-aware-Flag),
+  // werden die globalen Defines uebernommen und Skip aktiviert.
+  if gLexerIfdefSkipEnabled then
+  begin
+    if gLexerIfdefDefines <> nil then
+      for var i := 0 to gLexerIfdefDefines.Count - 1 do
+        FLex.AddDefine(gLexerIfdefDefines[i]);
+    FLex.EnableConditionalSkipping;
+  end;
   try
     FNextCount := 0; // Watchdog pro Datei zuruecksetzen
     Root := TAstNode.Create(nkUnit, '', 1, 1);
