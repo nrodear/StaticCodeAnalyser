@@ -79,7 +79,7 @@
     <PropertyGroup Condition="'$(Base)'!=''">
         <DCC_DcuOutput>..\Output\IDE\$(Platform) $(Config)</DCC_DcuOutput>
         <DCC_ExeOutput>..\Output\IDE\$(Platform) $(Config)</DCC_ExeOutput>
-        <DCC_UnitSearchPath>$(PROJECTDIR)\..\SCA.SharedUI\sources;$(PROJECTDIR)\..\SCA.Engine\sources\Common;$(PROJECTDIR)\..\SCA.Engine\sources\Detectors;$(PROJECTDIR)\..\SCA.Engine\sources\Infrastructure;$(PROJECTDIR)\..\SCA.Engine\sources\Output;$(PROJECTDIR)\..\SCA.Engine\sources\Parsing;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>..\SCA.SharedUI\sources;..\SCA.Engine\sources\Common;..\SCA.Engine\sources\Detectors;..\SCA.Engine\sources\Infrastructure;..\SCA.Engine\sources\Output;..\SCA.Engine\sources\Parsing;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_E>false</DCC_E>
         <DCC_N>false</DCC_N>
         <DCC_S>false</DCC_S>
@@ -163,6 +163,8 @@
         <DCCReference Include="vcl.dcp"/>
         <DCCReference Include="vclwinx.dcp"/>
         <DCCReference Include="designide.dcp"/>
+        <DCCReference Include="SCA.Engine.dcp"/>
+        <DCCReference Include="SCA.SharedUI.dcp"/>
         <DCCReference Include="uIDEExpert.pas"/>
         <DCCReference Include="uIDEAnalyserForm.pas"/>
         <DCCReference Include="uIDEFindingNav.pas"/>
