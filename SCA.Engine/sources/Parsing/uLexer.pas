@@ -6,7 +6,7 @@
 interface
 
 uses
-  System.SysUtils,  System.Generics.Collections, System.TypInfo;
+  System.SysUtils, System.Classes, System.Generics.Collections, System.TypInfo;
 
 type
   TTokenKind = (
