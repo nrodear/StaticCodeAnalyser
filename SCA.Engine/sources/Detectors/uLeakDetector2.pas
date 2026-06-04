@@ -349,26 +349,22 @@ begin
     Assigns.Free;
   end;
 
-  // A: modernes 'Exit(varname)' = Result-Transfer + Sprung. nkCall mit
-  // Name 'exit' und ArgsRaw genau VarName (oder VarName as Type).
+  // A: modernes 'Exit(varname)' = Result-Transfer + Sprung. nkCall.Name
+  // enthaelt den ganzen Call-Expression-String ('Exit(list)') - via
+  // ExtractCallFunctionName + ExtractCallArgsRaw zerlegen.
   // Quelle: doublecmd-Audit, 825 Exit-Calls.
   var Calls : TList<TAstNode>;
+  var FuncName, ArgsRaw : string;
   Calls := MethodNode.FindAll(nkCall);
   try
     for A in Calls do
     begin
-      if A.Name.ToLower <> 'exit' then Continue;
-      Trimmed := Trim(A.TypeRef.ToLower);
-      // ArgsRaw kann mit Klammern kommen ('list)' nach Trim) oder ohne.
-      // Pragmatisch: leading '(' strippen falls vorhanden.
-      if (Length(Trimmed) > 0) and (Trimmed[1] = '(') then
-        Trimmed := Trim(Copy(Trimmed, 2, MaxInt));
-      // Trailing ')' strippen
-      if (Length(Trimmed) > 0) and (Trimmed[Length(Trimmed)] = ')') then
-        Trimmed := Trim(Copy(Trimmed, 1, Length(Trimmed) - 1));
-      if Trimmed = VarNameLow then Exit(True);
+      FuncName := LowerCase(TDetectorUtils.ExtractCallFunctionName(A.Name));
+      if FuncName <> 'exit' then Continue;
+      ArgsRaw := Trim(LowerCase(TDetectorUtils.ExtractCallArgsRaw(A.Name)));
+      if ArgsRaw = VarNameLow then Exit(True);
       // Exit(list as IFoo) - explicit cast wie bei Result := list as IFoo
-      if Trimmed.StartsWith(VarNameLow + ' as ') then Exit(True);
+      if ArgsRaw.StartsWith(VarNameLow + ' as ') then Exit(True);
     end;
   finally
     Calls.Free;
