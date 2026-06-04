@@ -279,12 +279,12 @@ begin
       Result.IfdefAware := True
     else if A = '--define' then
     begin
-      var V := '';
-      GetValue(V, '--define');
+      var DefVal := '';
+      GetValue(DefVal, '--define');
       if Result.IfdefDefines = '' then
-        Result.IfdefDefines := V
+        Result.IfdefDefines := DefVal
       else
-        Result.IfdefDefines := Result.IfdefDefines + ',' + V;
+        Result.IfdefDefines := Result.IfdefDefines + ',' + DefVal;
     end
     else
     begin
@@ -662,7 +662,7 @@ begin
     end;
     if not Args.Quiet then
       WriteLn(Format('IFDEF-Awareness aktiv: %d Define(s).',
-        [Args.IfdefDefines.Split([',', ';']).GetLength(0)]));
+        [Length(Args.IfdefDefines.Split([',', ';']))]));
   end
   else
     gLexerIfdefSkipEnabled := False;
