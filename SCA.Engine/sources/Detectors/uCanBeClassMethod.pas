@@ -72,14 +72,48 @@ begin
 end;
 
 function IsPolymorphicMethod(MethodNode: TAstNode): Boolean;
+
+  function HasDirectiveWord(const Hay, Word: string): Boolean;
+  // Robuster Wortgrenzen-Match. TypeRef kann je nach Parser-Output sein:
+  //   'procedure;virtual'          (kein Space)
+  //   'procedure ; virtual'        (Spaces)
+  //   'function: Boolean; virtual; override'
+  //   'function: Boolean;virtual;override'
+  // Alle Varianten muessen matchen.
+  var
+    P, L, WL : Integer;
+    Before, After : Char;
+  begin
+    Result := False;
+    WL := Length(Word);
+    L  := Length(Hay);
+    P  := 1;
+    while True do
+    begin
+      P := PosEx(Word, Hay, P);
+      if P = 0 then Exit(False);
+      Before := #0;
+      if P > 1 then Before := Hay[P - 1];
+      After := #0;
+      if P + WL - 1 < L then After := Hay[P + WL];
+      // Wort-Grenze: davor kein Identifier-Char, danach kein Identifier-Char
+      if not CharInSet(Before, ['a'..'z', '0'..'9', '_']) and
+         not CharInSet(After,  ['a'..'z', '0'..'9', '_']) then
+        Exit(True);
+      P := P + WL;
+    end;
+  end;
+
 var
   Low : string;
 begin
   Low := LowerCase(MethodNode.TypeRef);
-  Result := (Pos(';virtual',  Low) > 0)
-         or (Pos(';override', Low) > 0)
-         or (Pos(';dynamic',  Low) > 0)
-         or (Pos(';abstract', Low) > 0);
+  Result := HasDirectiveWord(Low, 'virtual')
+         or HasDirectiveWord(Low, 'override')
+         or HasDirectiveWord(Low, 'dynamic')
+         or HasDirectiveWord(Low, 'abstract')
+         or HasDirectiveWord(Low, 'message')      // VCL-Message-Handler
+         or HasDirectiveWord(Low, 'reintroduce'); // Hide-Inherited mit gleichem Namen
 end;
 
 function IsEventHandlerSignature(MethodNode: TAstNode): Boolean;
@@ -221,9 +255,15 @@ begin
       F.FileName   := FileName;
       F.MethodName := M.Name;
       F.LineNumber := IntToStr(M.Line);
+      // Message-Suffix: 'class function' fuer Funktionen, 'class procedure'
+      // fuer Prozeduren. TypeRef beginnt mit 'procedure'/'function'/etc.
+      var TypeLow := LowerCase(Trim(M.TypeRef));
+      var ClassKind : string;
+      if TypeLow.StartsWith('procedure') then ClassKind := 'class procedure'
+      else                                    ClassKind := 'class function';
       F.MissingVar := Format(
-        'Method %s never accesses Self or instance fields - could be declared as `class function`',
-        [M.Name]);
+        'Method %s never accesses Self or instance fields - could be declared as `%s`',
+        [M.Name, ClassKind]);
       F.SetKind(fkCanBeClassMethod);
       Results.Add(F);
     end;

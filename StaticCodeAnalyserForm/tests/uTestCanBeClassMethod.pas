@@ -14,6 +14,8 @@ type
     [Test] procedure FieldAccess_NotReported;
     [Test] procedure AlreadyClassMethod_NotReported;
     [Test] procedure VirtualMethod_NotReported;
+    [Test] procedure VirtualMethodWithSpaceBeforeDirective_NotReported;
+    [Test] procedure ProcedureNoSelfAccess_SuggestsClassProcedure;
     [Test] procedure Constructor_NotReported;
     [Test] procedure Finding_KindAndSeverity;
   end;
@@ -102,6 +104,59 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeClassMethod));
+  finally F.Free; end;
+end;
+
+procedure TTestCanBeClassMethod.VirtualMethodWithSpaceBeforeDirective_NotReported;
+// FP-Fix doublecmd CharDistribution.pas: 'procedure Reset; virtual;'
+// (mit Space vor 'virtual'). Pos(';virtual', ...) im alten Pattern
+// matched nicht weil dort ';virtual' ohne Space gesucht wurde.
+// Real-Pattern: 'procedure ; virtual' im TypeRef (Parser-Output mit
+// Space-Normalisierung).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    procedure Reset; virtual;'#13#10 +     // Space vor virtual
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Reset;'#13#10 +
+  'begin'#13#10 +
+  '  // nothing'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeClassMethod),
+      'virtual mit Space davor MUSS als polymorph erkannt werden');
+  finally F.Free; end;
+end;
+
+procedure TTestCanBeClassMethod.ProcedureNoSelfAccess_SuggestsClassProcedure;
+// FP-Fix doublecmd CharDistribution.pas: bei procedure (statt function)
+// wurde 'could be declared as `class function`' empfohlen - syntaktisch
+// falsch. Sollte 'class procedure' sein.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TUtil.DoIt(X: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  WriteLn(X);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+    Fnd : TLeakFinding;
+    Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := nil;
+    for Fnd in F do
+      if Fnd.Kind = fkCanBeClassMethod then begin Hit := Fnd; Break; end;
+    Assert.IsNotNull(Hit, 'fkCanBeClassMethod finding expected for procedure');
+    Assert.IsTrue(Pos('class procedure', Hit.MissingVar) > 0,
+      'Procedure-Empfehlung muss "class procedure" enthalten, nicht "class function"');
   finally F.Free; end;
 end;
 
