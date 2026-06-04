@@ -349,25 +349,23 @@ begin
     Assigns.Free;
   end;
 
-  // A: modernes 'Exit(varname)' = Result-Transfer + Sprung. nkCall.Name
-  // enthaelt den ganzen Call-Expression-String ('Exit(list)') - via
-  // ExtractCallFunctionName + ExtractCallArgsRaw zerlegen.
+  // A: modernes 'Exit(varname)' = Result-Transfer + Sprung. Parser legt
+  // das als nkExit ab (uParser2 Zeile ~1170), Argument in TypeRef.
   // Quelle: doublecmd-Audit, 825 Exit-Calls.
-  var Calls : TList<TAstNode>;
-  var FuncName, ArgsRaw : string;
-  Calls := MethodNode.FindAll(nkCall);
+  var Exits : TList<TAstNode>;
+  var ArgLow : string;
+  Exits := MethodNode.FindAll(nkExit);
   try
-    for A in Calls do
+    for A in Exits do
     begin
-      FuncName := LowerCase(TDetectorUtils.ExtractCallFunctionName(A.Name));
-      if FuncName <> 'exit' then Continue;
-      ArgsRaw := Trim(LowerCase(TDetectorUtils.ExtractCallArgsRaw(A.Name)));
-      if ArgsRaw = VarNameLow then Exit(True);
+      ArgLow := LowerCase(Trim(A.TypeRef));
+      if ArgLow = '' then Continue;  // 'Exit;' ohne Argument
+      if ArgLow = VarNameLow then Exit(True);
       // Exit(list as IFoo) - explicit cast wie bei Result := list as IFoo
-      if ArgsRaw.StartsWith(VarNameLow + ' as ') then Exit(True);
+      if ArgLow.StartsWith(VarNameLow + ' as ') then Exit(True);
     end;
   finally
-    Calls.Free;
+    Exits.Free;
   end;
 end;
 

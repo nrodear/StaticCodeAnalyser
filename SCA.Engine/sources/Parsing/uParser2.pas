@@ -1171,11 +1171,20 @@ begin
         Next;
         if Eat(tkLParen) then
         begin
-          SkipTo([tkRParen, tkSemicolon, tkEof]);
+          // Exit(value) -> Argument-String in TypeRef ablegen.
+          // Brauchen Detektoren wie TLeakDetector2.IsReturnedAsResult
+          // um 'Exit(list)' als Ownership-Transfer-Return zu erkennen.
+          var ExitArg := '';
+          while not (Tok.Kind in [tkRParen, tkSemicolon, tkEof]) do
+          begin
+            if ExitArg <> '' then ExitArg := ExitArg + ' ';
+            ExitArg := ExitArg + Tok.Value;
+            Next;
+          end;
           Eat(tkRParen);
+          ENode.TypeRef := Trim(ExitArg);
         end;
         Eat(tkSemicolon);
-        ENode.Name := 'exit'; // verhindert Hint "ENode assigned but never used"
       end;
 
     tkKwBreak:
