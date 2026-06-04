@@ -100,6 +100,16 @@ type
     // (fuer Phase 1b-Audit + Tests).
     FConditionalMaxDepth : Integer;
 
+    // A.5 Phase 1b: Defines-Set + Skip-Schalter.
+    // FDefines case-insensitiv, sortiert.
+    // FConditionalSkipEnabled: Default False (kompatibel zu Phase 1a -
+    // kein Verhaltens-Change). Wenn aktiviert: Token-Stream skipt
+    // Branches in denen CurrentlyActive=False.
+    FDefines                : TStringList;
+    FConditionalSkipEnabled : Boolean;
+    // Statistik: wieviele Tokens wurden uebersprungen (fuer Telemetrie).
+    FConditionalSkippedTokens : Integer;
+
     class var FKeywords: TDictionary<string, TTokenKind>;
     class procedure InitKeywords; static;
 
@@ -122,6 +132,12 @@ type
     procedure PushConditional(AActive: Boolean; ALine: Integer);
     procedure PopConditional;
     procedure ToggleConditionalToElse;
+
+    // A.5 Phase 1b: Defines-Auswertung + Skip-Helpers.
+    function IsDefined(const AName: string): Boolean;
+    function CurrentlyActive: Boolean;
+    function ParseDirectiveIdent(const ABody: string;
+      var Pos: Integer): string;
   public
     class constructor Create;
     class destructor Destroy;
@@ -137,6 +153,19 @@ type
     // A.5 Phase 1a: Read-only-Zugriff fuer Tests und Telemetrie.
     function ConditionalDepth: Integer;
     function ConditionalMaxDepth: Integer;
+
+    // A.5 Phase 1b: Defines + Skip-Steuerung.
+    // Default-Konstruktor laesst FConditionalSkipEnabled=False -
+    // Verhalten identisch zu Phase 1a. Aktivierung explizit per
+    // EnableConditionalSkipping(<Defines>).
+    procedure AddDefine(const AName: string);
+    procedure RemoveDefine(const AName: string);
+    procedure EnableConditionalSkipping;
+    procedure DisableConditionalSkipping;
+    function  IsConditionalSkippingEnabled: Boolean;
+    function  ConditionalSkippedTokens: Integer;
+
+    destructor Destroy; override;
   end;
 
 implementation
@@ -237,6 +266,19 @@ begin
   FLine    := 1;
   FCol     := 1;
   FPeeked  := False;
+  // A.5 Phase 1b: Defines case-insensitive, sortiert fuer Binary-Search.
+  FDefines := TStringList.Create;
+  FDefines.CaseSensitive := False;
+  FDefines.Sorted        := True;
+  FDefines.Duplicates    := dupIgnore;
+  FConditionalSkipEnabled   := False;  // Default: kompatibel zu Phase 1a
+  FConditionalSkippedTokens := 0;
+end;
+
+destructor TLexer.Destroy;
+begin
+  FDefines.Free;
+  inherited;
 end;
 
 function TLexer.CurChar: Char;
@@ -607,6 +649,11 @@ begin
 end;
 
 function TLexer.Next: TToken;
+// A.5 Phase 1b: wenn Conditional-Skipping aktiv UND aktuell in inaktivem
+// Branch -> Token verwerfen + naechsten lesen. Direktiven (ReadBrace-
+// Comment) werden trotzdem korrekt verarbeitet (Stack-Pflege), nur
+// die zurueckgegebenen Tokens werden gefiltert. tkEof darf NIE
+// gefiltert werden sonst Endlos-Loop.
 begin
   if FPeeked then
   begin
@@ -615,13 +662,28 @@ begin
   end
   else
     Result := ScanNext;
+
+  if not FConditionalSkipEnabled then Exit;
+
+  while (Result.Kind <> tkEof) and (not CurrentlyActive) do
+  begin
+    Inc(FConditionalSkippedTokens);
+    Result := ScanNext;
+  end;
 end;
 
 function TLexer.Peek: TToken;
+// A.5 Phase 1b: Peek nutzt selbe Skip-Logik wie Next.
 begin
   if not FPeeked then
   begin
     FPeekTok := ScanNext;
+    if FConditionalSkipEnabled then
+      while (FPeekTok.Kind <> tkEof) and (not CurrentlyActive) do
+      begin
+        Inc(FConditionalSkippedTokens);
+        FPeekTok := ScanNext;
+      end;
     FPeeked  := True;
   end;
   Result := FPeekTok;
@@ -643,29 +705,76 @@ begin
     Tok := Next;
 end;
 
+function TLexer.ParseDirectiveIdent(const ABody: string;
+  var Pos: Integer): string;
+// Liest den Identifier nach dem Verb (z.B. nach IFDEF). Skippt
+// Leading-Whitespace, liest A..Z, a..z, 0..9, _. Returnt
+// uppercase-trimmed.
+var
+  L, Start : Integer;
+begin
+  L := Length(ABody);
+  while (Pos <= L) and (ABody[Pos] in [#9, ' ']) do Inc(Pos);
+  Start := Pos;
+  while (Pos <= L) and (ABody[Pos] in ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
+    Inc(Pos);
+  Result := UpperCase(Copy(ABody, Start, Pos - Start));
+end;
+
+function TLexer.IsDefined(const AName: string): Boolean;
+begin
+  Result := FDefines.IndexOf(AName) >= 0;
+end;
+
+function TLexer.CurrentlyActive: Boolean;
+// True wenn ALLE Stack-Frames Active sind. Sobald irgendwo im Stack
+// ein inaktives Frame ist (= wir sind in einem geskippten Branch),
+// wird der gesamte Code geskippt - auch bei aktivem Top-Frame.
+var
+  i : Integer;
+begin
+  for i := 0 to Length(FConditionalStack) - 1 do
+    if not FConditionalStack[i].Active then Exit(False);
+  Result := True;
+end;
+
 procedure TLexer.HandleConditionalDirective(const ABody: string;
   ALine: Integer);
 // Erwartet Body OHNE umschliessende '{' '}'. Body[1] ist '$'.
 // Erkennt: $IFDEF X, $IFNDEF X, $IF expr, $ELSEIF expr, $ELSE,
 //          $ENDIF, $IFEND. Case-insensitive.
-// Phase 1a: Stack wird gepflegt, aber Active = True konstant -
-// keine Defines-Auswertung, kein Token-Skip.
+// A.5 Phase 1b: IFDEF/IFNDEF werten gegen FDefines aus. Die
+// Active-Flag des gepushten Frames spiegelt das Ergebnis - aber:
+// wenn der PARENT bereits inaktiv ist, wird der Frame als Active=False
+// gepushed (egal was Defines sagen) damit nested ELSE nicht aktivieren.
+// Phase-1b-Limitierung: $IF wird konservativ als Active=True behandelt
+// (Expression-Mini-Parser kommt in Phase 2).
 var
-  i, L : Integer;
-  Verb : string;
+  i, L         : Integer;
+  Verb, Ident  : string;
+  ParentActive : Boolean;
+  NewActive    : Boolean;
 begin
   L := Length(ABody);
-  // skip '$'
-  i := 2;
-  // skip leading whitespace (selten, aber moeglich)
-  while (i <= L) and (ABody[i] in [#9, ' ']) do Inc(i);
-  // Verb sammeln (alphanumeric)
-  var Start := i;
-  while (i <= L) and (ABody[i] in ['A'..'Z', 'a'..'z']) do Inc(i);
-  Verb := UpperCase(Copy(ABody, Start, i - Start));
+  i := 2;  // skip '$'
+  Verb := ParseDirectiveIdent(ABody, i);
+  ParentActive := CurrentlyActive;
 
-  if (Verb = 'IFDEF') or (Verb = 'IFNDEF') or (Verb = 'IF') then
-    PushConditional(True, ALine)
+  if Verb = 'IFDEF' then
+  begin
+    Ident := ParseDirectiveIdent(ABody, i);
+    NewActive := ParentActive and IsDefined(Ident);
+    PushConditional(NewActive, ALine);
+  end
+  else if Verb = 'IFNDEF' then
+  begin
+    Ident := ParseDirectiveIdent(ABody, i);
+    NewActive := ParentActive and (not IsDefined(Ident));
+    PushConditional(NewActive, ALine);
+  end
+  else if Verb = 'IF' then
+    // Konservativ: Active=True wenn Parent aktiv. Phase 2 expr-eval.
+    PushConditional(ParentActive, ALine)
   else if (Verb = 'ELSE') or (Verb = 'ELSEIF') then
     ToggleConditionalToElse
   else if (Verb = 'ENDIF') or (Verb = 'IFEND') then
@@ -701,6 +810,9 @@ begin
 end;
 
 procedure TLexer.ToggleConditionalToElse;
+// A.5 Phase 1b: naive Toggle Top.Active. Korrekt, weil CurrentlyActive
+// den GESAMTEN Stack prueft - wenn ein Parent-Frame inaktiv ist,
+// bleibt der else-Branch trotzdem inaktiv (parent dominiert).
 var
   L : Integer;
 begin
@@ -708,8 +820,7 @@ begin
   if L > 0 then
   begin
     FConditionalStack[L - 1].InElse := True;
-    // Phase 1a: Active bleibt True. Phase 1b wird hier toggeln
-    // basierend auf Stack-State.
+    FConditionalStack[L - 1].Active := not FConditionalStack[L - 1].Active;
   end;
 end;
 
@@ -721,6 +832,40 @@ end;
 function TLexer.ConditionalMaxDepth: Integer;
 begin
   Result := FConditionalMaxDepth;
+end;
+
+procedure TLexer.AddDefine(const AName: string);
+begin
+  if Trim(AName) <> '' then
+    FDefines.Add(Trim(AName));
+end;
+
+procedure TLexer.RemoveDefine(const AName: string);
+var
+  Idx : Integer;
+begin
+  Idx := FDefines.IndexOf(Trim(AName));
+  if Idx >= 0 then FDefines.Delete(Idx);
+end;
+
+procedure TLexer.EnableConditionalSkipping;
+begin
+  FConditionalSkipEnabled := True;
+end;
+
+procedure TLexer.DisableConditionalSkipping;
+begin
+  FConditionalSkipEnabled := False;
+end;
+
+function TLexer.IsConditionalSkippingEnabled: Boolean;
+begin
+  Result := FConditionalSkipEnabled;
+end;
+
+function TLexer.ConditionalSkippedTokens: Integer;
+begin
+  Result := FConditionalSkippedTokens;
 end;
 
 function TLexer.AtEnd: Boolean;
