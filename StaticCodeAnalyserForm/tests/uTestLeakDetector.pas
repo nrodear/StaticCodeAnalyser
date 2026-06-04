@@ -21,6 +21,8 @@ type
     [Test] procedure Leak_FreeOutsideFinally_ReportsWarning;
     [Test] procedure Leak_ReturnResult_NoFinding;
     [Test] procedure Leak_ReturnViaLegacyFuncName_NoFinding;
+    [Test] procedure Leak_ExitWithValue_NoFinding;
+    [Test] procedure Leak_ExitWithValueCast_NoFinding;
     [Test] procedure Leak_PassedToConstructor_NoFinding;
     [Test] procedure Leak_FunctionCallAssign_NoFreeReportsWarning;
     [Test] procedure Leak_FunctionCallAssign_WithFree_NoFinding;
@@ -261,6 +263,48 @@ begin
   try
     Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Legacy <FuncName> := r ist Ownership-Transfer wie Result := r');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_ExitWithValue_NoFinding;
+// FP-Fix doublecmd-Audit: 'Exit(varname)' ist moderner Shortcut fuer
+// 'Result := varname; Exit;' - Ownership-Transfer wie Result-Assignment.
+// Detector hat das vorher nicht erkannt (nur nkAssign-Walk).
+// In doublecmd: 825 Exit-Calls.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Build: TStringList;'#13#10+
+  'var list: TStringList;'#13#10+
+  'begin'#13#10+
+  '  list := TStringList.Create;'#13#10+
+  '  list.Add(''x'');'#13#10+
+  '  Exit(list);'#13#10+           // modern Result-Transfer
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'Exit(list) gibt Ownership weiter - kein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_ExitWithValueCast_NoFinding;
+// Wie Leak_ExitWithValue, aber mit explicit cast.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function GetIntf: IInterface;'#13#10+
+  'var L: TInterfacedObject;'#13#10+
+  'begin'#13#10+
+  '  L := TInterfacedObject.Create;'#13#10+
+  '  Exit(L as IInterface);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'Exit(L as IInterface) ist Ownership-Transfer mit Cast');
   finally F.Free; end;
 end;
 
