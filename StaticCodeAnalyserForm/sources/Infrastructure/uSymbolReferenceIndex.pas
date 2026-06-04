@@ -1,19 +1,22 @@
 unit uSymbolReferenceIndex;
 
 // Repo-weiter Index ueber Cross-Unit-Referenzen auf Klassen-Member.
-// HINWEIS: seit dem Visibility-Detektor-Refactor (single-file-only)
-// liest `uVisibilityCheck` diesen Index NICHT mehr. Index bleibt fuer
-// zukuenftige Konsumenten und kann durch Build() noch befuellt werden;
-// uVisibilityCheck.AnalyzeUnit ignoriert ihn jedoch.
-// Frueher: Visibility-Detektoren (fkCanBePrivate, fkCanBeProtected,
-// fkUnusedPublicMember) konsultierten ihn, um Cross-Unit-Konsumenten
-// zu sehen.
+// Wird von Visibility-Detektor `uVisibilityCheck` konsultiert (siehe
+// HasExternalRefs-Aufrufe dort) - wenn ein Member extern referenziert
+// ist, unterdrueckt der Detektor das Finding.
 //
-// Aufbau-Modell (analog uDfmRepoIndex):
+// Aufbau-Modell (analog uDfmRepoIndex), 2-Pass:
 //   * Aufrufer (TStaticAnalyzer2) ruft Build(FileList) einmal pro Scan.
-//   * Build geht ueber alle .pas-Dateien, parst sie und sammelt:
-//       - Welche Member-Namen tauchen in welchen Units als nkCall- oder
-//         nkAssign-Referenzen auf?
+//   * Pass 1: alle Public-/Published-Member-Namen aus Klassen-
+//     Deklarationen sammeln in FPublicMembers (Set).
+//   * Pass 2: pro File AddRefsFromNode - sammelt:
+//       - dotted nkCall + nkAssign LHS (Pattern Obj.Member)
+//       - dotted Refs in TypeRef-Strings von if/while/case/assign/for
+//         (Conditions) - A.3+ Phase 1
+//       - dotted Property-Reads ohne Klammern (F.SeverityText) -
+//         A.3+ Punkt 1
+//       - BARE nkCall WENN Name in FPublicMembers - A.3+ Punkt 3
+//         (verhindert FP-Explosion bei RTL-Standardfunktionen)
 //   * Lookup pro Detektor-Lauf: "Wird MemberLow ausserhalb der eigenen
 //     Unit referenziert?"
 //
@@ -43,8 +46,15 @@ type
   private
     // member-name-lowercase -> Set von Unit-Dateinamen, die ihn referenzieren
     FRefs : TDictionary<string, TStringList>;
+    // A.3+ Punkt 3: Set aller public/published Member-Namen (lowercase).
+    // Wird in Pass 1 vor AddRefsFromNode gefuellt - dient als Filter fuer
+    // bare nkCall-Knoten, damit nicht jeder RTL-Aufruf (WriteLn, Inc, ...)
+    // als hypothetischer Member-Ref zaehlt.
+    FPublicMembers : THashSet<string>;
 
-    procedure ScanUnit(const PasFileName: string);
+    procedure ScanUnitForMembers(const PasFileName: string);
+    procedure ScanUnitForRefs(const PasFileName: string);
+    procedure CollectPublicMembersFrom(RootNode: TAstNode);
     procedure AddRefsFromNode(RootNode: TAstNode; const SourceUnit: string);
   public
     constructor Create;
@@ -82,6 +92,7 @@ constructor TSymbolReferenceIndex.Create;
 begin
   inherited;
   FRefs := TDictionary<string, TStringList>.Create;
+  FPublicMembers := THashSet<string>.Create;
 end;
 
 destructor TSymbolReferenceIndex.Destroy;
@@ -94,6 +105,7 @@ begin
       L.Free;
     FRefs.Free;
   end;
+  FPublicMembers.Free;
   inherited;
 end;
 
@@ -209,18 +221,25 @@ var
 begin
   // nkCall: jeder Call-Name ist ein Member-Aufruf. Wir extrahieren den
   // rightmost Identifier nach optionalem 'Obj.'.
+  // A.3+ Punkt 3: bare-Calls werden registriert WENN ihr Name als
+  // public/published Member irgendwo im Repo deklariert ist (FPublic-
+  // Members aus Pass 1). RTL-Funktionen wie WriteLn/Inc/Length sind
+  // nicht in dem Set -> kein FP-Explosion.
   Calls := RootNode.FindAll(nkCall);
   try
     for N in Calls do
     begin
-      // Wir indexieren NUR Object.Member-Calls (mit Dot) - bare Calls auf
-      // unqualifizierte Funktionen sind meist top-level oder same-class-
-      // intern und wuerden zu viele False-Positives ergeben (jeder
-      // 'Writeln' wuerde als Cross-Unit-Ref fuer einen hypothetischen
-      // public Writeln-Member zaehlen).
-      if not HasLhsBeforeDot(N.Name) then Continue;
-      Target := ExtractRightOfDot(N.Name);
-      AddReference(Target, SourceUnit);
+      if HasLhsBeforeDot(N.Name) then
+      begin
+        Target := ExtractRightOfDot(N.Name);
+        AddReference(Target, SourceUnit);
+      end
+      else
+      begin
+        Target := ExtractRightOfDot(N.Name);  // strippt nur '(args)'
+        if (Target <> '') and FPublicMembers.Contains(LowerCase(Target)) then
+          AddReference(Target, SourceUnit);
+      end;
     end;
   finally
     Calls.Free;
@@ -279,7 +298,93 @@ begin
   end;
 end;
 
-procedure TSymbolReferenceIndex.ScanUnit(const PasFileName: string);
+procedure TSymbolReferenceIndex.CollectPublicMembersFrom(RootNode: TAstNode);
+// Pass 1: alle public/published Member-Namen einer Unit ins Set
+// FPublicMembers eintragen. Struktur im AST:
+//   nkClass -> nkVisibilitySection (Name='published'/'public'/...)
+//             -> nkMethod / nkField / nkProperty
+// Default-Visibility ist 'published' (siehe uParser2 Zeile 740).
+var
+  ClassNodes : TList<TAstNode>;
+  CN, VisSection, Member : TAstNode;
+  VisLow : string;
+  i, j : Integer;
+begin
+  if RootNode = nil then Exit;
+  ClassNodes := RootNode.FindAll(nkClass);
+  try
+    for CN in ClassNodes do
+    begin
+      for i := 0 to CN.Children.Count - 1 do
+      begin
+        VisSection := CN.Children[i];
+        if VisSection.Kind <> nkVisibilitySection then Continue;
+        VisLow := LowerCase(VisSection.Name);
+        // Nur 'public' und 'published' interessieren. 'private',
+        // 'protected', 'strictprivate', 'strictprotected' sind per
+        // Definition nicht extern aufrufbar -> kein bare-Call von
+        // ausserhalb der eigenen Unit moeglich.
+        if (VisLow <> 'public') and (VisLow <> 'published') then Continue;
+        for j := 0 to VisSection.Children.Count - 1 do
+        begin
+          Member := VisSection.Children[j];
+          if Member.Kind in [nkMethod, nkField, nkProperty] then
+          begin
+            // Bei Method kann der Name 'Outer.Inner' sein (qualified im
+            // Type) - wir wollen nur den rightmost Identifier.
+            var Nm := Member.Name;
+            var DotPos := -1;
+            for var k := Length(Nm) downto 1 do
+              if Nm[k] = '.' then begin DotPos := k; Break; end;
+            if DotPos > 0 then Nm := Copy(Nm, DotPos + 1, MaxInt);
+            if Nm <> '' then
+              FPublicMembers.Add(LowerCase(Trim(Nm)));
+          end;
+        end;
+      end;
+    end;
+  finally
+    ClassNodes.Free;
+  end;
+end;
+
+procedure TSymbolReferenceIndex.ScanUnitForMembers(const PasFileName: string);
+// Pass 1 pro File: parse + CollectPublicMembersFrom. FileCache greift
+// in Pass 2 wieder fuer denselben Parse-Output.
+var
+  Parser  : TParser2;
+  Root    : TAstNode;
+  OwnsRoot: Boolean;
+begin
+  if not FileExists(PasFileName) then Exit;
+  OwnsRoot := False;
+
+  if Assigned(gAstFileCache) then
+    Root := gAstFileCache.Acquire(PasFileName)
+  else
+  begin
+    Parser := TParser2.Create;
+    try
+      try
+        Root := Parser.ParseFile(PasFileName);
+        OwnsRoot := True;
+      except
+        Exit;
+      end;
+    finally
+      Parser.Free;
+    end;
+  end;
+
+  if Root = nil then Exit;
+  try
+    CollectPublicMembersFrom(Root);
+  finally
+    if OwnsRoot then Root.Free;
+  end;
+end;
+
+procedure TSymbolReferenceIndex.ScanUnitForRefs(const PasFileName: string);
 // Cache-Pfad: wenn gAstFileCache assigned, einmaliger Parse pro Repo-Lauf
 // (perf_analyse.md Hot-Spot 🅐). Cache besitzt das Root - NICHT free.
 var
@@ -317,12 +422,21 @@ begin
 end;
 
 procedure TSymbolReferenceIndex.Build(FileList: TStringList);
+// 2-Pass-Build:
+//   Pass 1 sammelt alle Public-/Published-Member-Namen ueber alle Files
+//          (FPublicMembers Set) - noetig fuer A.3+ Punkt 3 (bare-Call-
+//          Filter).
+//   Pass 2 ScanUnitForRefs befuellt FRefs. Bare nkCall werden nur dann
+//          registriert wenn der Name als Public-Member bekannt ist.
+// FileCache greift in Pass 2 -> kein doppelter Parse, nur doppelter Walk.
 var
   i : Integer;
 begin
   if FileList = nil then Exit;
   for i := 0 to FileList.Count - 1 do
-    ScanUnit(FileList[i]);
+    ScanUnitForMembers(FileList[i]);
+  for i := 0 to FileList.Count - 1 do
+    ScanUnitForRefs(FileList[i]);
 end;
 
 function TSymbolReferenceIndex.ExternalReferencingUnitCount(const MemberLow,
