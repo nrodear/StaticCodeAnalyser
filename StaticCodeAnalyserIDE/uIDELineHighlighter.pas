@@ -273,6 +273,104 @@ uses
 const
   STRIPE_WIDTH_PX  = 3;
 
+function IsLightColor(AColor: TColor): Boolean;
+// ITU-R BT.601 Luminanz - bei > 127 ist die Farbe "hell" und Schwarz
+// kontrastiert besser, sonst Weiss. Wird fuer Auto-Kontrast der Mini-
+// Infobar-Schrift gebraucht (Severity-Akzent kann hell sein wie clYellow
+// fuer Hint).
+var
+  RGB     : Cardinal;
+  R, G, B : Integer;
+  Lum     : Integer;
+begin
+  RGB := ColorToRGB(AColor);
+  R := GetRValue(RGB);
+  G := GetGValue(RGB);
+  B := GetBValue(RGB);
+  Lum := (R * 299 + G * 587 + B * 114) div 1000;
+  Result := Lum > 127;
+end;
+
+procedure DrawMiniInfoBar(ACanvas: TCanvas; const AMark: TFindingMark;
+  ABgColor: TColor; const ACodeRect: TRect; ATextEndX: Integer);
+// Permanente Mini-Inline-Badge rechts vom Code: "<- Type . Severity"
+// im Severity-Akzent als Hintergrund + kontrastreicher Schrift.
+// Wird bei jedem PaintLine-Tick neu gemalt.
+// Position: ATextEndX + 8px Gap; Y zentriert in ACodeRect.
+// Wenn der Code so lang ist dass keine 60px mehr passen, wird die
+// Badge weggelassen (kein unleserliches Stub).
+const
+  GAP_AFTER_CODE = 8;
+  PAD_H          = 6;
+  PAD_V          = 1;
+  MIN_BADGE_W    = 60;
+  // Linke spitze Klammer + Space, Plain ASCII statt Unicode ◀ damit
+  // jede Editor-Default-Schrift sie korrekt rendert.
+  ARROW_PREFIX   = '< ';
+var
+  Text   : string;
+  Sz     : TSize;
+  BX, BY : Integer;
+  BW, BH : Integer;
+  R      : TRect;
+  OldBrushColor : TColor;
+  OldBrushStyle : TBrushStyle;
+  OldFontColor  : TColor;
+  OldFontName   : string;
+  OldFontSize   : Integer;
+  OldFontStyle  : TFontStyles;
+begin
+  Text := ARROW_PREFIX + AMark.Badge;
+  if Text = ARROW_PREFIX then Exit;  // leer
+
+  // Canvas-State sichern (Editor zeichnet danach noch Text - wir
+  // duerfen die Font-/Brush-Einstellungen nicht permanent veraendern).
+  OldBrushColor := ACanvas.Brush.Color;
+  OldBrushStyle := ACanvas.Brush.Style;
+  OldFontColor  := ACanvas.Font.Color;
+  OldFontName   := ACanvas.Font.Name;
+  OldFontSize   := ACanvas.Font.Size;
+  OldFontStyle  := ACanvas.Font.Style;
+  try
+    ACanvas.Font.Name  := 'Segoe UI';
+    ACanvas.Font.Size  := 8;
+    ACanvas.Font.Style := [fsBold];
+    Sz := ACanvas.TextExtent(Text);
+
+    BW := Sz.cx + 2 * PAD_H;
+    BH := Sz.cy + 2 * PAD_V;
+    BX := ATextEndX + GAP_AFTER_CODE;
+    BY := ACodeRect.Top + (ACodeRect.Bottom - ACodeRect.Top - BH) div 2;
+    if BY < ACodeRect.Top then BY := ACodeRect.Top;
+
+    // Kein Platz mehr fuer eine sinnvolle Badge? -> weglassen.
+    if BX + MIN_BADGE_W > ACodeRect.Right then Exit;
+    // Width clampen falls Badge ueber Code-Rand laufen wuerde.
+    if BX + BW > ACodeRect.Right then
+      BW := ACodeRect.Right - BX;
+
+    R := Rect(BX, BY, BX + BW, BY + BH);
+    ACanvas.Brush.Color := ABgColor;
+    ACanvas.Brush.Style := bsSolid;
+    ACanvas.FillRect(R);
+
+    // Auto-Kontrast: Schwarz auf hellem Akzent, Weiss auf dunklem.
+    if IsLightColor(ABgColor) then
+      ACanvas.Font.Color := clBlack
+    else
+      ACanvas.Font.Color := clWhite;
+    ACanvas.Brush.Style := bsClear;   // transparent fuer Text
+    ACanvas.TextOut(BX + PAD_H, BY + PAD_V, Text);
+  finally
+    ACanvas.Brush.Color := OldBrushColor;
+    ACanvas.Brush.Style := OldBrushStyle;
+    ACanvas.Font.Color  := OldFontColor;
+    ACanvas.Font.Name   := OldFontName;
+    ACanvas.Font.Size   := OldFontSize;
+    ACanvas.Font.Style  := OldFontStyle;
+  end;
+end;
+
 function GetOverlayPositionSetting: string;
 // Liefert [UI] OverlayPosition aus analyser.ini. Frische Read pro Aufruf,
 // aber nur einmal pro Hover-Enter (= neue Finding-Zeile) - nicht im
@@ -1111,6 +1209,7 @@ var
   Line      : Integer;
   Mark      : TFindingMark;
   StripeCol : TColor;
+  HasMark   : Boolean;
 begin
   if not Assigned(GHighlighter) then Exit;
   if not Assigned(Context) or not Assigned(Context.EditControl) then Exit;
@@ -1149,20 +1248,22 @@ begin
   // VisibleTextRect.Right = X-Pixel wo der sichtbare Code-Text endet.
   // Wird im 'sameline'-OverlayPosition-Modus genutzt um die Title-Bar
   // direkt rechts neben dem Code zu platzieren statt drueber zu legen.
+  // ZUSAETZLICH: Mini-Infobar (Type / Severity) wird beim PaintLine
+  // direkt hier rechts neben dem Code gezeichnet.
+  var TextEndX : Integer := -1;
   try
-    FRenderedTextEnds.AddOrSetValue(Line, Context.LineState.VisibleTextRect.Right);
+    TextEndX := Context.LineState.VisibleTextRect.Right;
+    FRenderedTextEnds.AddOrSetValue(Line, TextEndX);
   except
     // VisibleTextRect kann bei manchen Edge-Cases (gefoldete Zeilen, leere
     // Files) nicht verfuegbar sein - EditorMouseMove faellt dann auf
     // CodeRect.Left zurueck.
   end;
 
-  // Stripe-Farbe aus dem Mark holen (Severity-abhaengig: Error/Warning/Hint).
-  // Fallback auf ACCENT_ERROR (Palette) falls clNone uebergeben wurde -
-  // gleiche Farbe die uAnalyserTheme.SeverityAccent(fsError) liefert.
+  // Stripe-Farbe + Mark fuer Mini-Infobar holen.
+  HasMark := GHighlighter.TryGetMark(Context.FileName, Line, Mark);
   StripeCol := ACCENT_ERROR;
-  if GHighlighter.TryGetMark(Context.FileName, Line, Mark)
-     and (Mark.Color <> clNone) then
+  if HasMark and (Mark.Color <> clNone) then
     StripeCol := Mark.Color;
 
   // 3px Stripe am linken Rand des Code-Bereichs.
@@ -1172,6 +1273,14 @@ begin
   Context.Canvas.Brush.Color := StripeCol;
   Context.Canvas.Brush.Style := bsSolid;
   Context.Canvas.FillRect(SR);
+
+  // ---- Mini-Infobar am rechten Zeilenende ----
+  // Format: ◀ <Badge>  (z.B. "◀ BUG · ERROR")
+  // Permanent sichtbar - jeder PaintLine-Tick zeichnet sie neu.
+  // Background = Severity-Akzent, Foreground = Kontrast (weiss/schwarz
+  // je nach Luminanz). 8px Gap nach dem Code, ~10px Padding.
+  if HasMark and (Mark.Badge <> '') and (TextEndX > 0) then
+    DrawMiniInfoBar(Context.Canvas, Mark, StripeCol, CodeRect, TextEndX);
 end;
 
 procedure TFindingEditorEvents.EndPaint(const Editor: TWinControl);
