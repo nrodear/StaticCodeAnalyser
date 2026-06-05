@@ -194,7 +194,8 @@ uses
   clipbrd,
   uStaticFiles, uRuleCatalog,
   uExport,                        // TExporter.ExportCsv (kanonischer CSV-Schreiber)
-  uFindingFilter,                 // TFilterMode, TTypeFilter, TFindingFilter, TFindingFilterCriteria
+  // uFindingFilter ist bereits in interface uses (TFilterComboItem-Feld) -
+  // hier nicht mehr listen, sonst E2004 Bezeichner redeklariert.
   uVcsChanges,                    // BranchClick
   uIDEStatsTiles,                 // TStatsTilesBuilder.Build (Sonar-Style Tiles)
   uIDEToolbar,                    // TIDEToolbar.ApplySegoeUI - UI-Aligning mit IDE-Plugin
