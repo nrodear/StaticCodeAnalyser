@@ -122,6 +122,115 @@ begin
   Result := CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_']);
 end;
 
+function StripCommentsAndStrings(const Line: string): string;
+// FP-Fix (SCA166): Ersetzt alle Zeichen innerhalb von:
+//   - Pascal-Zeilenkommentaren  //  bis EOL
+//   - Block-Kommentaren { ... } und (* ... *)  auf der gleichen Zeile
+//   - String-Literalen '...' (mit '' als Escape)
+// durch Leerzeichen. Identifier-Suchen via Wortgrenz-Match ignorieren
+// dadurch Inhalt von Strings und Kommentaren, sodass z.B.
+//   // Wir akzeptieren `Result[i]`-Zuweisungen.
+// nicht als Read der lokalen Variablen i zaehlt.
+//
+// Multi-Line-Block-Kommentare werden NICHT zeilenuebergreifend getrackt:
+// '{' am Ende einer Zeile ohne '}' bleibt unbeachtet. Akzeptabler
+// Edge-Case-FN-Tradeoff fuer ein nicht-Lexer-basiertes Source-Scan.
+var
+  Buf : array of Char;
+  i, L : Integer;
+  InString, InBrace, InParen : Boolean;
+  C, Next : Char;
+begin
+  L := Length(Line);
+  if L = 0 then Exit('');
+  SetLength(Buf, L);
+  InString := False;
+  InBrace  := False;
+  InParen  := False;
+  i := 1;
+  while i <= L do
+  begin
+    C := Line[i];
+    if i < L then Next := Line[i + 1] else Next := #0;
+
+    if InBrace then
+    begin
+      Buf[i - 1] := ' ';
+      if C = '}' then InBrace := False;
+      Inc(i);
+    end
+    else if InParen then
+    begin
+      Buf[i - 1] := ' ';
+      if (C = '*') and (Next = ')') then
+      begin
+        Buf[i] := ' ';
+        Inc(i, 2);
+        InParen := False;
+      end
+      else
+        Inc(i);
+    end
+    else if InString then
+    begin
+      Buf[i - 1] := ' ';
+      if C = '''' then
+      begin
+        if Next = '''' then    // '' Escape innerhalb String
+        begin
+          Buf[i] := ' ';
+          Inc(i, 2);
+        end
+        else
+        begin
+          InString := False;
+          Inc(i);
+        end;
+      end
+      else
+        Inc(i);
+    end
+    else
+    begin
+      if (C = '/') and (Next = '/') then
+      begin
+        // Line-Comment: Rest der Zeile zu Spaces.
+        while i <= L do
+        begin
+          Buf[i - 1] := ' ';
+          Inc(i);
+        end;
+        Break;
+      end
+      else if C = '{' then
+      begin
+        Buf[i - 1] := ' ';
+        InBrace := True;
+        Inc(i);
+      end
+      else if (C = '(') and (Next = '*') then
+      begin
+        Buf[i - 1] := ' ';
+        Buf[i]     := ' ';
+        Inc(i, 2);
+        InParen := True;
+      end
+      else if C = '''' then
+      begin
+        Buf[i - 1] := ' ';
+        InString := True;
+        Inc(i);
+      end
+      else
+      begin
+        Buf[i - 1] := C;
+        Inc(i);
+      end;
+    end;
+  end;
+  SetString(Result, PChar(Buf), L);
+end;
+
 function CountWholeWordOccurrences(const NeedleLow, HaystackLow: string;
   out FirstMatchPos: Integer): Integer;
 // Wortgrenz-Match analog uUnusedLocal. FirstMatchPos = 1-basierte
@@ -721,7 +830,10 @@ var
     begin
       if (i + 1 = DeclLine) or (i + 1 = FirstWriteLine) then Continue;
       if IsLineInRanges(i + 1, NestedRanges) then Continue;
-      L := LowerCase(Lines[i]);
+      // FP-Fix (Backtick-Inline-Code im Kommentar wie `Result[i]`):
+      // Comments + String-Literale zu Leerzeichen ersetzen, damit der
+      // Wortgrenz-Match keine Identifier aus Kommentar-Text triggert.
+      L := LowerCase(StripCommentsAndStrings(Lines[i]));
       // Skip wenn Zeile eine reine Var-Decl ist (Multi-line-Decl-Fix)
       if IsVarDeclLine(L) then Continue;
       LL := Length(L);
