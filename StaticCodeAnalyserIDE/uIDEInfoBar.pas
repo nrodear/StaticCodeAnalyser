@@ -50,11 +50,17 @@ type
   private
     FTimer  : TTimer;
     FActive : Boolean;
+    // Cache fuer GuessTotalLines - der Cursor-Move dort ist teuer
+    // und stoert User-Scroll. Pro Datei einmal ermitteln; Cache wird
+    // bei UpdateFile invalidiert (Aufruferseite).
+    FCachedTotalLines : Integer;
+    FCachedFileName   : string;
     function ColorForSeverity(S: TDiagnosticSeverity;
                               ABg: TColor;
                               ASS: TCustomStyleServices): TColor;
     function FindEditControl(AForm: TCustomForm): TWinControl;
-    function GuessTotalLines(AView: IOTAEditView): Integer;
+    function GuessTotalLines(AView: IOTAEditView;
+                             const AFileName: string): Integer;
     function ResolveBgColor(ASS: TCustomStyleServices): TColor;
     procedure PaintOnControl(AControl: TWinControl;
                              const AFileName: string;
@@ -63,10 +69,13 @@ type
   public
     constructor Create;
     destructor Destroy; override;
-    // Aktiviert den 200ms-Timer der periodisch nachzeichnet.
-    // Quick-Fix bis Phase C.2 (PaintLine-Detour) persistent macht.
+    // EnableAutoRepaint AKTIVIERT NICHT MEHR per Default.
+    // Grund: Timer-Polling triggert Cursor-Move (GuessTotalLines)
+    // und stoert das User-Scrollen massiv. Verwendung NUR fuer
+    // dedizierte Test-Szenarien.
     procedure EnableAutoRepaint;
     procedure DisableAutoRepaint;
+    procedure InvalidateCache;
     procedure RepaintForCurrentView;
   end;
 
@@ -91,13 +100,15 @@ constructor TInfoBarRenderer.Create;
 begin
   inherited;
   FTimer := TTimer.Create(nil);
-  // 80ms = ~12 fps. Schneller als 200ms (=Flicker beim Scrollen)
-  // aber nicht hochfrequent genug fuer CPU-Drain. Phase C.2 (Detour)
-  // ersetzt das durch event-getriebenes Repaint.
-  FTimer.Interval := 80;
+  // Timer existiert nur fuer Test-Szenarien. Default 1000ms damit ein
+  // versehentliches Enable das Scrollen nicht killt. Phase C.2 (Detour)
+  // ersetzt Polling vollstaendig durch event-getriebenes Repaint.
+  FTimer.Interval := 1000;
   FTimer.Enabled  := False;
   FTimer.OnTimer  := OnTimerTick;
   FActive := False;
+  FCachedTotalLines := 0;
+  FCachedFileName := '';
 end;
 
 destructor TInfoBarRenderer.Destroy;
@@ -116,6 +127,12 @@ procedure TInfoBarRenderer.DisableAutoRepaint;
 begin
   FTimer.Enabled := False;
   FActive := False;
+end;
+
+procedure TInfoBarRenderer.InvalidateCache;
+begin
+  FCachedTotalLines := 0;
+  FCachedFileName := '';
 end;
 
 procedure TInfoBarRenderer.OnTimerTick(Sender: TObject);
@@ -207,11 +224,16 @@ begin
       ' (' + Result.Name + ')'));
 end;
 
-function TInfoBarRenderer.GuessTotalLines(AView: IOTAEditView): Integer;
+function TInfoBarRenderer.GuessTotalLines(AView: IOTAEditView;
+  const AFileName: string): Integer;
 var
   Pos : IOTAEditPosition;
   SavedLine, SavedCol : Integer;
 begin
+  // Cache-Hit: Cursor-Move ist teuer und stoert User-Scroll.
+  if (FCachedTotalLines > 0) and SameText(FCachedFileName, AFileName) then
+    Exit(FCachedTotalLines);
+
   Result := 0;
   if AView = nil then Exit;
   if AView.Buffer = nil then Exit;
@@ -225,6 +247,9 @@ begin
   finally
     Pos.Move(SavedLine, SavedCol);
   end;
+
+  FCachedTotalLines := Result;
+  FCachedFileName := AFileName;
 end;
 
 procedure TInfoBarRenderer.PaintOnControl(AControl: TWinControl;
@@ -309,7 +334,7 @@ begin
   if View.Buffer = nil then Exit;
 
   FileName := View.Buffer.FileName;
-  TotalLines := GuessTotalLines(View);
+  TotalLines := GuessTotalLines(View, FileName);
   PaintOnControl(EditControl, FileName, TotalLines);
 end;
 
@@ -374,11 +399,13 @@ begin
 
   gDiagnosticStore.UpdateFile(FileName, Diags);
 
-  // Painting triggern + Auto-Repaint-Timer aktivieren (Quick-Fix bis
-  // Phase C.2 mit Detour persistent macht).
+  // ON-DEMAND Painting - KEIN Timer mehr. Timer-Polling killt das
+  // User-Scrolling (GuessTotalLines macht Cursor-Move).
+  // Bar verschwindet beim ersten Editor-Repaint - das ist erwartet
+  // bis Phase C.2 (PaintLine-Detour) persistent rendert.
   if gInfoBarRenderer = nil then
     gInfoBarRenderer := TInfoBarRenderer.Create;
-  gInfoBarRenderer.EnableAutoRepaint;
+  gInfoBarRenderer.InvalidateCache;
   gInfoBarRenderer.RepaintForCurrentView;
 end;
 
