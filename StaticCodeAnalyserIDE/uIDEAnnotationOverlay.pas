@@ -76,13 +76,21 @@ type
     // Editor in den wir aktuell als WS_CHILD eingebettet sind. 0 = noch
     // nicht eingebettet (initialer WS_POPUP-Zustand).
     FCurrentParent : HWND;
-    // Zwei-Stufen-Anzeige: Overlay erscheint zuerst nur als Title-Zeile
-    // (= MIN_TITLE_H / CharHeight), nach 250ms faltet der ExpandTimer
-    // es auf die volle Hoehe auf. ShowAt speichert die Zielhoehe in
-    // FExpandedHeight; OnExpandTick ruft MoveWindow mit dieser Hoehe auf.
+    // Drei-Stufen-Morph aus der permanenten Mini-Inline-Badge ins volle
+    // Overlay:
+    //   Stage 0 -> 1 nach 80ms : Window-W waechst von FStartWidth
+    //                            (Mini-Badge-Breite) auf FLastW (volle
+    //                            Title-Bar-Breite). H bleibt FCollapsedHeight.
+    //   Stage 1 -> 2 nach 170ms (250ms gesamt): Window-H waechst von
+    //                            FCollapsedHeight auf FExpandedHeight.
+    //   Stage 2 = final.
+    // Wenn AStartWidth=0 (= kein W-Morph gewuenscht), startet ShowAt
+    // direkt in Stage 1 und springt nur die 250ms-H-Auffaltung.
     FExpandTimer    : TTimer;
     FCollapsedHeight: Integer;
     FExpandedHeight : Integer;
+    FStartWidth     : Integer;  // Mini-Badge-Width fuer Stage 0
+    FExpandStage    : Integer;  // 0=W-morph pending, 1=H-morph pending, 2=final
     procedure EmbedIntoEditor(AEditorHandle: HWND);
     procedure CloseLblClick(Sender: TObject);
     procedure OnExpandTick(Sender: TObject);
@@ -108,13 +116,21 @@ type
     // AFileName + ALineNo identifizieren die aktuell gezeigte Markierung -
     // werden vom Close-Glyph-Klick gebraucht um genau diese eine Markierung
     // aus GHighlighter zu entfernen. Beide leer = Close-Glyph hidden.
+    // AStartWidth (optional, Default 0) - wenn > 0, startet das Overlay
+    // mit dieser schmalen Breite (= Mini-Inline-Badge-Width). Nach 80ms
+    // expandiert die W auf AWidth (Stufe 1), nach weiteren 170ms expandiert
+    // H auf TotalH (Stufe 2). So entsteht ein zweistufiger Morph aus der
+    // permanenten Mini-Badge in das volle Overlay - kein Color/Position-Jump
+    // beim Hover-Beginn, dafuer 2 sichtbare Wachstumsphasen.
+    // AStartWidth=0 -> kein W-Morph (sofort volle AWidth + 250ms-H-Auffalt).
     procedure ShowAt(AEditor: TWinControl;
       AClientX, AClientY, AWidth, ALineH: Integer;
       const ATitle, ADesc, ABadge: string;
       AAccentColor: TColor = clNone;
       const AFix: string = '';
       const AFileName: string = '';
-      ALineNo: Integer = 0);
+      ALineNo: Integer = 0;
+      AStartWidth: Integer = 0);
     procedure HideOverlay;
     // True wenn AScreenPos in einem AZonePx x AZonePx grossen Quadrat um den
     // Close-[x]-Button (Mittelpunkt) liegt. Wird von uIDELineHighlighter
@@ -289,9 +305,9 @@ begin
   FLblClose.Caption            := #$2715;  // ✕
   FLblClose.Alignment          := taCenter;
   FLblClose.Layout             := tlCenter;
-  FLblClose.Font.Color         := DefaultText;
+  FLblClose.Font.Color         := DefaultText;  // wird in ShowAt auf Auto-Kontrast gesetzt
   FLblClose.Font.Name          := 'Segoe UI';
-  FLblClose.Font.Size          := 11;
+  FLblClose.Font.Size          := 9;            // dezenter - frueher 11pt
   FLblClose.Font.Style         := [fsBold];
   FLblClose.Color              := DefaultSurface;
   FLblClose.ParentColor        := False;
@@ -306,10 +322,10 @@ begin
   FLblBadge.Parent             := FPanelTitle;
   FLblBadge.Align              := alRight;
   FLblBadge.AutoSize           := True;
-  FLblBadge.Font.Color         := clWhite;
-  FLblBadge.Font.Style         := [];
+  FLblBadge.Font.Color         := clWhite;     // wird in ShowAt auf Auto-Kontrast gesetzt
+  FLblBadge.Font.Style         := [fsBold];    // wie Mini-Inline-Badge
   FLblBadge.Font.Name          := 'Segoe UI';
-  FLblBadge.Font.Size          := 9;  // +1pt fuer bessere Lesbarkeit
+  FLblBadge.Font.Size          := 8;           // identisch zur Mini-Inline-Badge
   FLblBadge.Layout             := tlCenter;
   FLblBadge.Color              := DefaultBadgeBg;
   FLblBadge.Transparent        := False;
@@ -328,10 +344,10 @@ begin
   FLblTitle                    := TLabel.Create(Self);
   FLblTitle.Parent             := FPanelTitle;
   FLblTitle.Align              := alClient;
-  FLblTitle.Font.Color         := DefaultText;
+  FLblTitle.Font.Color         := DefaultText;  // wird in ShowAt auf Auto-Kontrast gesetzt
   FLblTitle.Font.Style         := [fsBold];
   FLblTitle.Font.Name          := 'Segoe UI';
-  FLblTitle.Font.Size          := 9;  // +1pt fuer bessere Lesbarkeit
+  FLblTitle.Font.Size          := 8;            // identisch zur Mini-Inline-Badge
   FLblTitle.Layout             := tlCenter;
   FLblTitle.Alignment          := taLeftJustify;
   FLblTitle.ParentColor        := False;  // erbt sonst Parent-Color zur Render-Zeit
@@ -417,13 +433,15 @@ begin
   FLblFix.WordWrap           := True;
   FLblFix.EllipsisPosition   := epNone;
 
-  // Auffalt-Timer: ShowAt zeigt zuerst nur die Title-Zeile,
-  // 250ms spaeter expandiert OnExpandTick auf FExpandedHeight.
+  // Morph-Timer: ShowAt setzt das Intervall fuer die naechste Stufe (80ms
+  // fuer Stage 0->1 W-grow, dann 170ms fuer Stage 1->2 H-grow).
   // Owner = Self -> wird mit dem Form freigegeben.
   FExpandTimer          := TTimer.Create(Self);
   FExpandTimer.Interval := 250;
   FExpandTimer.Enabled  := False;
   FExpandTimer.OnTimer  := OnExpandTick;
+  FExpandStage          := 2;       // initialer Zustand: nichts zu morphen
+  FStartWidth           := 0;
 end;
 
 procedure TAnnotationOverlay.CreateParams(var Params: TCreateParams);
@@ -479,7 +497,8 @@ procedure TAnnotationOverlay.ShowAt(AEditor: TWinControl;
   AAccentColor: TColor;
   const AFix: string;
   const AFileName: string;
-  ALineNo: Integer);
+  ALineNo: Integer;
+  AStartWidth: Integer);
 const
   FIX_HEADER_H = 22;  // kleine "✓ After"-Header-Zeile
   MAX_FIX_H    = 200; // ~10 Zeilen Consolas 9pt
@@ -490,6 +509,7 @@ var
   DC                       : HDC;
   EffAccent                : TColor;
   TitleBg, BadgeBg         : TColor;
+  HeaderFg                 : TColor;     // Auto-Kontrast fuer Schrift auf EffAccent
   WindowBase               : TColor;
   HasFix                   : Boolean;
 
@@ -571,22 +591,32 @@ begin
   then
     Exit;
 
-  // Title-BG ~ 70% Akzent + 30% Editor-BG = saturierte Severity-Farbe in
-  //           der Editor-Theme-Helligkeit, weisser Text gut kontrastiert.
-  // Badge-BG ~ 90% Akzent + 10% Editor-BG = fast voller Akzent.
-  // Title/Badge-FG = clWhite fix — auf saturiertem Akzent in jeder Severity
-  //                  zuverlaessig lesbar (User-Wunsch: Warn-Text soll weiss sein).
+  // ZIEL: Title-Zeile sieht GENAUSO aus wie die permanente Mini-Inline-Badge
+  // in uIDELineHighlighter.DrawMiniInfoBar (gleiche BG-Farbe, gleicher
+  // Auto-Kontrast, gleiche Schrift, gleicher Pfeil-Prefix). So entsteht beim
+  // Hover ein nahtloser Morph: die Mini-Badge wird durch die wachsende
+  // Title-Zeile abgeloest ohne Color-Jump.
+  //
+  // Vorher: TitleBg=70%Akzent, BadgeBg=90%Akzent, Schrift immer weiss.
+  // Jetzt: BG voller Akzent, Schrift = Auto-Kontrast (schwarz/weiss) nach
+  // ITU-R-BT.601-Luminanz.
   EffAccent := AAccentColor;
   if EffAccent = clNone then
     EffAccent := ACCENT_ERROR;
-  TitleBg := BlendColor(WindowBase, EffAccent, 0.70);
-  BadgeBg := BlendColor(WindowBase, EffAccent, 0.90);
+  TitleBg := EffAccent;
+  BadgeBg := EffAccent;
+  if IsLightColor(EffAccent) then
+    HeaderFg := clBlack
+  else
+    HeaderFg := clWhite;
   FBorderPanel.Color   := EffAccent;
   FPanelTitle.Color    := TitleBg;
   FContentArea.Color   := TitleBg;
   FLblBadge.Color      := BadgeBg;
-  FLblTitle.Font.Color := clWhite;
-  FLblBadge.Font.Color := clWhite;
+  FLblTitle.Font.Color := HeaderFg;
+  FLblBadge.Font.Color := HeaderFg;
+  FLblClose.Color      := EffAccent;
+  FLblClose.Font.Color := HeaderFg;
   // Description-Bereich: Editor-Hintergrund + dezent abgeschwaechter Text
   // (auto-kontrast — neutraler Bereich der dem Editor-Theme folgt).
   // Im Dark-Theme bewusst heller (0.75) als im Light-Theme (0.55), weil
@@ -598,8 +628,9 @@ begin
     FLblDesc.Font.Color := BlendColor(WindowBase, clWhite, 0.75); // hellgrau auf dunkel
 
   // Inhalt setzen — VCL invalidiert die Labels automatisch beim Caption-Set.
-  // Symbol ueber _() durch dxgettext lokalisierbar (Default U+26A0 = ⚠).
-  FLblTitle.Caption    := _(#$26A0) + '  ' + ATitle;
+  // Pfeil-Prefix '< ' identisch zur Mini-Inline-Badge (DrawMiniInfoBar).
+  // Frueher: U+26A0 ⚠ - aber unstimmig mit der Mini-Badge.
+  FLblTitle.Caption    := '< ' + ATitle;
   FLblDesc.Caption     := ADesc;
   FLblBadge.Caption    := BadgeCaption;
   FLblBadge.Visible    := ABadge <> '';
@@ -633,22 +664,34 @@ begin
   FLastAccent     := AAccentColor;
   FLastWindowBase := WindowBase;
 
-  // ZWEI-STUFEN-ANZEIGE:
-  // Phase 1 (sofort) - Overlay nur als Title-Zeile (TitleH hoch).
-  //   Desc/Fix-Panels sind via alTop/alClient unter den Form-Rand
-  //   geclippt - kein Visible-Toggling noetig.
-  // Phase 2 (nach 250ms via FExpandTimer) - MoveWindow auf TotalH;
-  //   die Panels werden sichtbar weil sie wieder in den Form-Rect fallen.
-  // Bei jedem ShowAt wird der Timer neu gestartet; bewegt sich die Maus
-  // innerhalb von 250ms weg, hat User nur die Title-Zeile gesehen (weniger
-  // Bildschirm-Clutter beim schnellen Drueberhuschen).
+  // DREI-STUFEN-MORPH:
+  // Stage 0 (sofort) - Overlay startet auf Mini-Badge-Breite (AStartWidth)
+  //   und Title-Hoehe; visuell deckungsgleich mit der Mini-Inline-Badge.
+  // Stage 0->1 nach 80ms via FExpandTimer - W expandiert auf AWidth.
+  //   Title-Text + Close-Glyph werden im neuen W-Raum sichtbar.
+  // Stage 1->2 nach weiteren 170ms (= 250ms gesamt nach Show) - H expandiert
+  //   von TitleH auf TotalH. Desc/Fix-Panels werden sichtbar.
+  // Wenn AStartWidth=0: Stage 0 wird uebersprungen, direkt Stage 1
+  //   (alte Default-Auffalt - kein W-Morph).
   FCollapsedHeight := TitleH;
   FExpandedHeight  := TotalH;
+  FStartWidth      := AStartWidth;
 
   // Position via raw Win32 — SetBounds wuerde VCL-Logik triggern die
   // fuer ein WS_CHILD-zwangs-eingebettetes-Form unzuverlaessig ist.
   // Editor-Client-Koordinaten gehen direkt in MoveWindow.
-  Winapi.Windows.MoveWindow(Handle, AClientX, AClientY, AWidth, TitleH, True);
+  if AStartWidth > 0 then
+  begin
+    Winapi.Windows.MoveWindow(Handle, AClientX, AClientY, AStartWidth, TitleH, True);
+    FExpandStage := 0;             // erster Tick wird W-grow machen
+    FExpandTimer.Interval := 80;
+  end
+  else
+  begin
+    Winapi.Windows.MoveWindow(Handle, AClientX, AClientY, AWidth, TitleH, True);
+    FExpandStage := 1;             // erster Tick wird H-grow machen
+    FExpandTimer.Interval := 250;
+  end;
 
   // Visible:=True damit VCL und Win32 synchron sind — sonst zeichnet VCL
   // die TGraphicControl-Children (TLabel) nicht.
@@ -660,7 +703,8 @@ begin
 
   // Timer (re)starten - Enabled:=False vor True erzwingt Countdown-Reset.
   FExpandTimer.Enabled := False;
-  if TotalH > TitleH then
+  // Timer braucht es nur wenn noch etwas zu wachsen ist.
+  if (FExpandStage = 0) or ((FExpandStage = 1) and (TotalH > TitleH)) then
     FExpandTimer.Enabled := True;
 
   // Identitaet der gerade angezeigten Markierung fuer Close-Klick speichern.
@@ -699,16 +743,41 @@ begin
 end;
 
 procedure TAnnotationOverlay.OnExpandTick(Sender: TObject);
-// Phase-2-Trigger: 250ms nach ShowAt - faltet das Overlay auf TotalH auf.
-// Defensive Checks: HideOverlay koennte zwischenzeitlich gefeuert haben.
+// Zwei-Stufen-State-Machine fuer den Morph aus der Mini-Badge in das
+// volle Overlay. ShowAt setzt FExpandStage und Interval; jeder Tick
+// schiebt eine Stufe weiter.
+// Defensive: HideOverlay koennte zwischenzeitlich gefeuert haben.
 begin
   FExpandTimer.Enabled := False;
   if not Visible then Exit;
-  if FExpandedHeight <= FCollapsedHeight then Exit;
-  // Position bleibt, nur Hoehe waechst nach unten.
-  Winapi.Windows.MoveWindow(Handle, FLastX, FLastY, FLastW, FExpandedHeight, True);
-  RedrawWindow(Handle, nil, 0,
-    RDW_INVALIDATE or RDW_ALLCHILDREN or RDW_UPDATENOW);
+
+  case FExpandStage of
+    0:
+    begin
+      // Stage 0 -> 1: W waechst von FStartWidth auf FLastW (volle Breite).
+      // Position + H bleiben.
+      Winapi.Windows.MoveWindow(Handle, FLastX, FLastY, FLastW, FCollapsedHeight, True);
+      RedrawWindow(Handle, nil, 0,
+        RDW_INVALIDATE or RDW_ALLCHILDREN or RDW_UPDATENOW);
+      // Naechste Stufe nach 170ms = 250ms gesamt seit Show.
+      FExpandStage := 1;
+      FExpandTimer.Interval := 170;
+      if FExpandedHeight > FCollapsedHeight then
+        FExpandTimer.Enabled := True;
+    end;
+
+    1:
+    begin
+      // Stage 1 -> 2: H waechst von FCollapsedHeight auf FExpandedHeight.
+      if FExpandedHeight > FCollapsedHeight then
+      begin
+        Winapi.Windows.MoveWindow(Handle, FLastX, FLastY, FLastW, FExpandedHeight, True);
+        RedrawWindow(Handle, nil, 0,
+          RDW_INVALIDATE or RDW_ALLCHILDREN or RDW_UPDATENOW);
+      end;
+      FExpandStage := 2;
+    end;
+  end;
 end;
 
 function TAnnotationOverlay.IsCursorNearClose(const AScreenPos: TPoint;

@@ -1169,9 +1169,18 @@ begin
   LineH := FSavedCharHeight;
   if LineH < 16 then LineH := 20;  // Fallback wenn CharHeight nicht gesetzt
   try
+    // Mini-Badge-W (PaintLine zeichnet sie aus '< ' + Mark.Badge in
+    // Segoe UI 8 bold + 12px Padding). Wir schaetzen hier ueber
+    // ~6px pro Char, damit der Overlay-Morph mit dem gleichen Start-W
+    // anfaengt und die Mini-Badge nahtlos uebergeht (kein W-Jump).
+    // Nur im sameline-Modus relevant - im below-Modus kein W-Morph.
+    var EstBadgeW : Integer := 0;
+    if SameText(GetOverlayPositionSetting, 'sameline') then
+      EstBadgeW := Length('< ' + Mark.Badge) * 6 + 12;
+
     GAnnotationOverlay.ShowAt(FSavedEditor, P.X, P.Y, AWidth, LineH,
       Mark.Title, Mark.Desc, Mark.Badge, Mark.Color, Mark.Fix,
-      FLastPaintedFile, HitLine);
+      FLastPaintedFile, HitLine, EstBadgeW);
     FHoveredLine := HitLine;
     // Hide-on-mouse-leave Timer aktivieren.
     FHoverWatch.Enabled := True;
