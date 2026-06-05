@@ -32,8 +32,9 @@ interface
 uses
   Winapi.Windows, Winapi.Messages,
   System.SysUtils, System.Classes, System.Math, System.Generics.Collections,
-  Vcl.Graphics, Vcl.Controls, Vcl.Forms,
+  Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Menus, Vcl.ActnList,
   ToolsAPI,
+  uSCAConsts,
   uIDEDiagnostic;
 
 const
@@ -62,6 +63,14 @@ var
   gInfoBarRenderer : TInfoBarRenderer = nil;
 
 procedure InfoBarPaintTest;
+
+// Test-Menu-Item "SCA InfoBar Test" im IDE-Tools-Menu. Klick:
+// (1) Dummy-Diagnostics fuer die aktuelle Editor-Datei in den Store,
+// (2) InfoBarPaintTest aufrufen.
+// Fuer Phase-C.1-Verifikation - wird in Phase C.3 durch echten
+// Scan-Hook ersetzt.
+procedure RegisterInfoBarTestMenu;
+procedure UnregisterInfoBarTestMenu;
 
 implementation
 
@@ -208,9 +217,127 @@ begin
   gInfoBarRenderer.RepaintForCurrentView;
 end;
 
+{ === Test-Trigger via IDE-Tools-Menu ============================== }
+
+type
+  TInfoBarTestHandler = class
+  public
+    procedure MenuClick(Sender: TObject);
+  end;
+
+var
+  GInfoBarAction   : TAction = nil;
+  GInfoBarMenuItem : TMenuItem = nil;
+  GInfoBarHandler  : TInfoBarTestHandler = nil;
+
+procedure TInfoBarTestHandler.MenuClick(Sender: TObject);
+var
+  EditorOTA : IOTAEditorServices;
+  View : IOTAEditView;
+  FileName : string;
+  Diags : TObjectList<TDiagnostic>;
+  D : TDiagnostic;
+
+  procedure AddDummy(ALine: Integer; ASev: TDiagnosticSeverity;
+                     const ARuleId, AMsg: string);
+  begin
+    D := TDiagnostic.Create;
+    D.FileName := FileName;
+    D.RuleId := ARuleId;
+    D.Kind := fkMemoryLeak;  // beliebig, fuer Test
+    D.Severity := ASev;
+    D.Title := 'Test';
+    D.Message := AMsg;
+    D.Range := TDiagnosticRange.FromLine(ALine);
+    Diags.Add(D);
+  end;
+
+begin
+  if not Supports(BorlandIDEServices, IOTAEditorServices, EditorOTA) then Exit;
+  View := EditorOTA.TopView;
+  if (View = nil) or (View.Buffer = nil) then Exit;
+  FileName := View.Buffer.FileName;
+  if FileName = '' then Exit;
+  if gDiagnosticStore = nil then gDiagnosticStore := TDiagnosticStore.Create;
+
+  // 6 Dummy-Diagnostics ueber die Datei verteilt
+  Diags := TObjectList<TDiagnostic>.Create(True);
+  AddDummy( 10, dsError,   'SCA999', 'Test error at line 10');
+  AddDummy( 25, dsWarning, 'SCA999', 'Test warning at line 25');
+  AddDummy( 50, dsHint,    'SCA999', 'Test hint at line 50');
+  AddDummy( 80, dsError,   'SCA999', 'Test error at line 80');
+  AddDummy(120, dsWarning, 'SCA999', 'Test warning at line 120');
+  AddDummy(200, dsHint,    'SCA999', 'Test hint at line 200');
+
+  gDiagnosticStore.UpdateFile(FileName, Diags);
+
+  // Painting triggern
+  InfoBarPaintTest;
+end;
+
+function FindIDEToolsMenuLocal(MainMenu: TMainMenu): TMenuItem;
+var
+  i : Integer;
+  M : TMenuItem;
+begin
+  Result := nil;
+  if MainMenu = nil then Exit;
+  for i := 0 to MainMenu.Items.Count - 1 do
+  begin
+    M := MainMenu.Items[i];
+    if (M = nil) or (M.Caption = '') then Continue;
+    if Pos('ools', M.Caption) > 0 then Exit(M);
+  end;
+end;
+
+procedure RegisterInfoBarTestMenu;
+var
+  NTAS : INTAServices;
+  ToolsMenu : TMenuItem;
+begin
+  if not Supports(BorlandIDEServices, INTAServices, NTAS) then Exit;
+  ToolsMenu := FindIDEToolsMenuLocal(NTAS.MainMenu);
+  if not Assigned(ToolsMenu) then Exit;
+
+  if GInfoBarHandler = nil then
+    GInfoBarHandler := TInfoBarTestHandler.Create;
+
+  GInfoBarAction := TAction.Create(nil);
+  GInfoBarAction.ActionList := NTAS.ActionList;
+  GInfoBarAction.Caption    := 'SCA InfoBar Test';
+  GInfoBarAction.Hint       := 'Test: zeichnet 6 Dummy-Findings als InfoBar-Striche';
+  GInfoBarAction.Category   := 'SCA';
+  GInfoBarAction.OnExecute  := GInfoBarHandler.MenuClick;
+
+  GInfoBarMenuItem := TMenuItem.Create(NTAS.MainMenu);
+  GInfoBarMenuItem.Action := GInfoBarAction;
+  GInfoBarMenuItem.Name   := 'SCAInfoBarTestMenuItem';
+  ToolsMenu.Add(GInfoBarMenuItem);
+end;
+
+procedure UnregisterInfoBarTestMenu;
+begin
+  if Assigned(GInfoBarMenuItem) then
+  begin
+    GInfoBarMenuItem.Free;
+    GInfoBarMenuItem := nil;
+  end;
+  if Assigned(GInfoBarAction) then
+  begin
+    GInfoBarAction.Free;
+    GInfoBarAction := nil;
+  end;
+  if Assigned(GInfoBarHandler) then
+  begin
+    GInfoBarHandler.Free;
+    GInfoBarHandler := nil;
+  end;
+end;
+
 initialization
 
 finalization
+  UnregisterInfoBarTestMenu;
   if gInfoBarRenderer <> nil then
   begin
     gInfoBarRenderer.Free;

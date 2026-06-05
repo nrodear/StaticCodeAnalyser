@@ -35,7 +35,8 @@ implementation
 uses
   Winapi.Windows, System.SysUtils,
   Vcl.Graphics, Vcl.ImgList, Vcl.Controls, Vcl.Menus, Vcl.ActnList,
-  uIDEAnalyserForm;
+  uIDEAnalyserForm,
+  uIDEInfoBar;
 
 const
   PLUGIN_TITLE   = 'Static Code Analysis';
@@ -267,6 +268,8 @@ begin
   RegisterPackageWizard(TStaticCodeAnalyserExpert.Create);
   RegisterAboutBox;
   RegisterToolsMenuItem;
+  // Sprint C.1: Test-Menu fuer InfoBar (Painting auf TEditControl).
+  uIDEInfoBar.RegisterInfoBarTestMenu;
 end;
 
 { TStaticCodeAnalyserExpert }
