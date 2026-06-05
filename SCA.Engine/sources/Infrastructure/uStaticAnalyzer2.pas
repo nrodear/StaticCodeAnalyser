@@ -155,6 +155,12 @@ var
   // aufgebaut). Thread-safety: Scan ist single-threaded, EnsureBuilt
   // ohne Lock OK.
   gDetectors : TArray<TDetectorEntry>;
+  // Deduplizierte Liste ALLER Pre-Filter-Tokens (lowercase) aus allen
+  // tagged Detektoren. Wird in BuildAllDetectors gefuellt. RunAllDetectors
+  // baut pro File EIN Token-Presence-Set ueber genau diese Tokens (statt
+  // pro Detector einzeln Pos zu rufen - der waere ~24x doppelt fuer
+  // shared Tokens wie '.free' / 'tcriticalsection').
+  gAllPrefilterTokensLow : TArray<string>;
 
 procedure BuildAllDetectors; forward;
 
@@ -396,6 +402,27 @@ begin
 
   // Array auf tatsaechliche Anzahl trimmen.
   SetLength(gDetectors, Count);
+
+  // Deduplizierte Pre-Filter-Token-Liste aufbauen. RunAllDetectors macht
+  // pro File EIN Token-Presence-Set ueber genau diese Tokens (statt
+  // Pos pro Detector zu wiederholen - shared Tokens wie 'tcriticalsection'
+  // werden sonst mehrmals gescannt).
+  var Seen := TDictionary<string, Boolean>.Create;
+  try
+    for var i := 0 to High(gDetectors) do
+      for var j := 0 to High(gDetectors[i].RequiredTokensLow) do
+        if not Seen.ContainsKey(gDetectors[i].RequiredTokensLow[j]) then
+          Seen.Add(gDetectors[i].RequiredTokensLow[j], True);
+    SetLength(gAllPrefilterTokensLow, Seen.Count);
+    var Idx : Integer := 0;
+    for var Tok in Seen.Keys do
+    begin
+      gAllPrefilterTokensLow[Idx] := Tok;
+      Inc(Idx);
+    end;
+  finally
+    Seen.Free;
+  end;
 end;
 
 procedure RunAllDetectors(Root: TAstNode; const FileName: string;
@@ -419,30 +446,37 @@ var
   PrevCount  : Integer;
   HasTimeCb  : Boolean;
   FilterActive : Boolean;
-  SrcLow       : string;
-  SrcLowReady  : Boolean;
   Lines        : TStringList;
   Cached       : Boolean;
   TokenMatch   : Boolean;
+  // Pro-File Token-Presence-Set: TRUE = Token im File vorhanden, FALSE = nicht.
+  // Wird LAZY beim ersten Tagged-Detector aufgebaut (EinMAL pro File ueber
+  // gAllPrefilterTokensLow). Detector-Check ist danach O(1) Hash-Lookup
+  // pro Token statt teurem Pos pro Detector × Token.
+  TokenPresent : TDictionary<string, Boolean>;
+  TokenSetReady : Boolean;
 
-  function EnsureSrcLow: Boolean;
-  // Lazy: lower-cased Datei-Inhalt nur dann bauen wenn mindestens ein
-  // Detektor mit Pre-Filter-Tokens drankommt. Pro Datei MAX EINMAL.
+  function EnsureTokenSet: Boolean;
+  var
+    SrcLow : string;
+    k      : Integer;
   begin
-    if SrcLowReady then Exit(True);
-    SrcLowReady := True;
+    if TokenSetReady then Exit(TokenPresent.Count > 0);
+    TokenSetReady := True;
     Lines := AcquireLines(FileName, Cached);
-    if Lines = nil then
-    begin
-      SrcLow := '';
-      Exit(False);
-    end;
+    if Lines = nil then Exit(False);
     try
       SrcLow := LowerCase(Lines.Text);
     finally
       ReleaseLines(Lines, Cached);
     end;
-    Result := SrcLow <> '';
+    if SrcLow = '' then Exit(False);
+    // Genau EIN Pos-Scan pro UNIQUE-Token (statt pro Detector). Dedup
+    // ist in BuildAllDetectors gemacht (gAllPrefilterTokensLow).
+    for k := 0 to High(gAllPrefilterTokensLow) do
+      if Pos(gAllPrefilterTokensLow[k], SrcLow) > 0 then
+        TokenPresent.AddOrSetValue(gAllPrefilterTokensLow[k], True);
+    Result := TokenPresent.Count > 0;
   end;
 
 begin
@@ -452,30 +486,28 @@ begin
   FilterActive := (uSCAConsts.DetectorEnabledKinds <> []) or
                   (uSCAConsts.DetectorMinSeverity <> lsHint);
   PrevCount    := Results.Count;
-  SrcLow       := '';
-  SrcLowReady  := False;
+  TokenSetReady := False;
+  TokenPresent := TDictionary<string, Boolean>.Create;
+  try
 
   for i := 0 to High(gDetectors) do
   begin
     if not IsDetectorEnabled(gDetectors[i], AIncludeUsesCheck) then Continue;
 
-    // Pre-Filter via RequiredTokensLow - schneller Multi-Substring-Check
-    // bevor wir in den AST-Walk gehen. Spart fuer Detektoren wie
-    // CommandInjection / RestHttpSecurity / MoveSizeOfPointer den
-    // kompletten Detector-Run bei Files die garantiert keinen Treffer
-    // haben koennen.
+    // Pre-Filter via RequiredTokensLow. TokenPresent enthaelt nach
+    // EnsureTokenSet genau die Tokens die im File vorkommen - O(1)
+    // Hash-Lookup pro Detector-Token, kein wiederholtes Pos mehr.
     if Length(gDetectors[i].RequiredTokensLow) > 0 then
     begin
-      if not EnsureSrcLow then
-        Continue;  // Datei nicht lesbar - kann nichts triggern
+      EnsureTokenSet;  // Result irrelevant - leeres Set -> alle skipen
       TokenMatch := False;
       for j := 0 to High(gDetectors[i].RequiredTokensLow) do
-        if Pos(gDetectors[i].RequiredTokensLow[j], SrcLow) > 0 then
+        if TokenPresent.ContainsKey(gDetectors[i].RequiredTokensLow[j]) then
         begin
           TokenMatch := True;
           Break;
         end;
-      if not TokenMatch then Continue;  // KEIN Token im File -> Skip
+      if not TokenMatch then Continue;
     end;
 
     if HasTimeCb then
@@ -521,6 +553,10 @@ begin
       if Ord(Results[i].Severity) > Ord(uSCAConsts.DetectorMinSeverity) then
         Results.Delete(i);
     end;
+  end;
+
+  finally
+    TokenPresent.Free;
   end;
 end;
 
