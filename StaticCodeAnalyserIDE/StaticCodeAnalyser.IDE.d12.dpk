@@ -64,6 +64,7 @@ contains
   uIDESonarOptions in 'uIDESonarOptions.pas' {SonarOptionsFrame: TFrame},
   uIDEAnalyseRunner in 'uIDEAnalyseRunner.pas',
   uIDEDiagnostic in 'uIDEDiagnostic.pas',
-  uIDEDiagnosticAdapter in 'uIDEDiagnosticAdapter.pas';
+  uIDEDiagnosticAdapter in 'uIDEDiagnosticAdapter.pas',
+  uIDEInfoBar in 'uIDEInfoBar.pas';
 
 end.

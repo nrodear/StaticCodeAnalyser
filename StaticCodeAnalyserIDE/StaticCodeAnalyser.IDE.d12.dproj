@@ -189,6 +189,7 @@
         <DCCReference Include="uIDEAnalyseRunner.pas"/>
         <DCCReference Include="uIDEDiagnostic.pas"/>
         <DCCReference Include="uIDEDiagnosticAdapter.pas"/>
+        <DCCReference Include="uIDEInfoBar.pas"/>
         <RcCompile Include="..\branding\sca_branding.rc"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
