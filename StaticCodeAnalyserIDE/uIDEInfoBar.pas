@@ -124,7 +124,7 @@ var
 begin
   ParentWnd := FCurrentParent;
   if ParentWnd = 0 then Exit;
-  if not GetClientRect(ParentWnd, R) then Exit;
+  if not Winapi.Windows.GetClientRect(ParentWnd, R) then Exit;
 
   // Position: rechts vom Editor-Text, links der Scrollbar.
   X := R.Right - INFOBAR_SCROLLBAR_W - INFOBAR_WIDTH;
@@ -143,7 +143,11 @@ begin
   FEditView := AView;
 
   if AView.Buffer = nil then Exit;
-  FCurrentFile := AView.Buffer.FileName;
+  if not SameText(FCurrentFile, AView.Buffer.FileName) then
+  begin
+    FCurrentFile := AView.Buffer.FileName;
+    FTotalLines  := 0;  // Invalidate cache fuer neue Datei
+  end;
 
   // Nur anzeigen wenn Datei Findings hat
   if (gDiagnosticStore = nil) or
@@ -176,6 +180,7 @@ begin
     HideAndUnbind;
     Exit;
   end;
+  FTotalLines := 0;  // Invalidate falls File durch Edit gewachsen
   RecomputeBounds;
   if not Visible then Visible := True;
   Invalidate;
@@ -207,12 +212,29 @@ begin
   if (gDiagnosticStore = nil) or (FCurrentFile = '') then Exit;
   if FEditView = nil then Exit;
 
-  // Total-Lines aus Buffer ermitteln. Buffer.LinesInBuffer ist
-  // OTAPI-API. Falls 0 -> kein Render.
-  try
-    FTotalLines := FEditView.Buffer.LinesInBuffer;
-  except
-    FTotalLines := 0;
+  // Total-Lines aus Buffer ermitteln. IOTAEditBuffer hat kein
+  // LineCount-Property - via EditPosition.GotoLine(MaxInt) +
+  // .Line abfragen. Save/Restore der urspruenglichen Position
+  // damit der User-Cursor nicht wandert.
+  if FTotalLines <= 0 then  // Cache greift solange Datei sich nicht
+                            // aendert (RefreshFromStore invalidiert)
+  begin
+    try
+      var P := FEditView.Buffer.EditPosition;
+      if P <> nil then
+      begin
+        var SavedLine := P.Row;
+        var SavedCol  := P.Column;
+        try
+          P.GotoLine(MaxInt);  // bounce to last line
+          FTotalLines := P.Row;
+        finally
+          P.Move(SavedLine, SavedCol);  // Cursor zurueck
+        end;
+      end;
+    except
+      FTotalLines := 0;
+    end;
   end;
   if FTotalLines <= 0 then Exit;
 
@@ -272,8 +294,9 @@ begin
     if Pos <> nil then
     begin
       Pos.Move(Best.Range.StartLine, Best.Range.StartCol);
-      // Scroll so dass Zeile sichtbar (3 Zeilen Padding oben)
-      FEditView.SetTopRow(Max(1, Best.Range.StartLine - 3));
+      // Scroll so dass Zeile sichtbar (3 Zeilen Padding oben).
+      // IOTAEditView.TopRow ist eine read/write Property.
+      FEditView.TopRow := Max(1, Best.Range.StartLine - 3);
     end;
     FEditView.Paint;
   end;
