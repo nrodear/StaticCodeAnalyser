@@ -45,6 +45,12 @@ type
     // delegiert die Status-Pushes via StatusFindings/Progress/Mode.
     FStatusBar      : TAnalyserStatusBar;
     FAllFindings    : TObjectList<TLeakFinding>;
+    // Snapshot der initial-populierten Combo-Items (FormCreate). Wird
+    // in RebuildFilterCombos genutzt um nach jedem Scan auf Eintraege
+    // mit > 0 Treffern zu reduzieren - und beim naechsten Scan wieder
+    // zu erweitern.
+    FAllSeverityItems  : TArray<TFilterComboItem>;
+    FAllTypeItems      : TArray<TFilterComboItem>;
     FFilterMode     : TFilterMode;
     FCurrentBaseDir : string;
     FFilterCombo       : TComboBox;
@@ -249,6 +255,14 @@ type
     procedure PopulateFilterCombo;
     procedure PopulateTypeCombo;
     procedure PopulateProfileCombo;
+    // Snapshot der initial-populierten Filter-Combo-Items - wird in
+    // RebuildFilterCombos genutzt um nach jedem Scan auf Eintraege mit
+    // > 0 Treffern zu reduzieren. Separator-Items (ModeOrd = -1) bleiben
+    // bei der Filterung erhalten, werden danach in einem zweiten Pass
+    // wieder entfernt wenn sie "leer" stehen (zwei Separatoren hintereinander
+    // oder am Listen-Ende).
+    procedure SnapshotFilterItems;
+    procedure RebuildFilterCombos;
     // UI-Build-Helper: aus dem Constructor ausgelagert um die Setup-
     // Pfade lesbar zu halten. Reihenfolge im Constructor:
     //   ApplyToolbarSizing -> WireResponsiveLayout -> BuildResultGrid.
@@ -757,6 +771,10 @@ begin
   PopulateTypeCombo;
   FTypeFilter := tfAll;
 
+  // Snapshot der initial-populierten Combo-Items - RebuildFilterCombos
+  // reduziert daraus pro Scan auf Eintraege mit > 0 Treffern.
+  SnapshotFilterItems;
+
   // ---- Zeile: Aktionen + Profile + Suche + Export ----
   // Wie PanelPath: Right-Padding=0 ist im Helper, damit der rechte
   // Cancel/Export-Block buendig am Panel-Rand sitzt.
@@ -1129,12 +1147,16 @@ procedure TAnalyserFrame.PopulateTypeCombo;
 // Strings in den Befund-TypeText-Feldern (Bug/Code Smell/Vulnerability/
 // Security Hotspot/Code Duplication).
 begin
-  FTypeCombo.Items.Add(_('All'));
-  FTypeCombo.Items.Add('Bug');
-  FTypeCombo.Items.Add('Code Smell');
-  FTypeCombo.Items.Add('Vulnerability');
-  FTypeCombo.Items.Add('Security Hotspot');
-  FTypeCombo.Items.Add('Code Duplication');
+  // Items.Objects tragen Ord(TTypeFilter) damit RebuildFilterCombos die
+  // aktuelle Auswahl nach dem Scan via Mode-Ord wiederherstellen kann -
+  // ItemIndex-basiertes Mapping waere nach dem Reduzieren verschoben.
+  // tfAll = 0 -> Object = nil (siehe TypeFilterChange-Lookup).
+  FTypeCombo.Items.AddObject(_('All'),              TObject(Ord(tfAll)));
+  FTypeCombo.Items.AddObject('Bug',                 TObject(Ord(tfBug)));
+  FTypeCombo.Items.AddObject('Code Smell',          TObject(Ord(tfCodeSmell)));
+  FTypeCombo.Items.AddObject('Vulnerability',       TObject(Ord(tfVulnerability)));
+  FTypeCombo.Items.AddObject('Security Hotspot',    TObject(Ord(tfSecurityHotspot)));
+  FTypeCombo.Items.AddObject('Code Duplication',    TObject(Ord(tfCodeDuplication)));
   FTypeCombo.ItemIndex := 0;
 end;
 
@@ -1436,13 +1458,18 @@ begin
 end;
 
 procedure TAnalyserFrame.TypeFilterChange(Sender: TObject);
+// Type-Lookup via Items.Objects = Ord(TTypeFilter) - robust gegen
+// Item-Removal in RebuildFilterCombos. tfAll = 0 als nil-Object.
 var
-  idx: Integer;
+  idx : Integer;
 begin
   if FTypeCombo.Items.Count = 0 then Exit;
   idx := FTypeCombo.ItemIndex;
   if (idx < 0) or (idx >= FTypeCombo.Items.Count) then Exit;
-  FTypeFilter := TTypeFilter(idx);
+  if Assigned(FTypeCombo.Items.Objects[idx]) then
+    FTypeFilter := TTypeFilter(Integer(FTypeCombo.Items.Objects[idx]))
+  else
+    FTypeFilter := tfAll;
   ApplyFilter;
 end;
 
@@ -1754,6 +1781,123 @@ begin
   end;
 end;
 
+procedure TAnalyserFrame.SnapshotFilterItems;
+var
+  i : Integer;
+begin
+  SetLength(FAllSeverityItems, FFilterCombo.Items.Count);
+  for i := 0 to FFilterCombo.Items.Count - 1 do
+  begin
+    FAllSeverityItems[i].Display := FFilterCombo.Items[i];
+    // Sentinel-Separatoren werden mit Tag = -1 angelegt; Pointer-Cast
+    // erhaelt das durch Integer-Roundtrip.
+    FAllSeverityItems[i].ModeOrd := Integer(FFilterCombo.Items.Objects[i]);
+  end;
+  SetLength(FAllTypeItems, FTypeCombo.Items.Count);
+  for i := 0 to FTypeCombo.Items.Count - 1 do
+  begin
+    FAllTypeItems[i].Display := FTypeCombo.Items[i];
+    FAllTypeItems[i].ModeOrd := Integer(FTypeCombo.Items.Objects[i]);
+  end;
+end;
+
+procedure TAnalyserFrame.RebuildFilterCombos;
+// Reduziert FFilterCombo + FTypeCombo auf Eintraege deren Mode/Type in
+// FAllFindings mindestens einen Treffer hat. 'All' und 'Detector Review'
+// bleiben immer drin. Separatoren (ModeOrd = -1) werden im ersten Pass
+// vorlaufig behalten und im zweiten Pass weggeworfen wenn sie keinen
+// folgenden Detail-Eintrag mehr haben (vermeidet '--- Errors ---'-
+// Header ohne darunter liegende Items).
+var
+  Item : TFilterComboItem;
+  SavedSevMode, SavedTypeMode, NewIdx, i : Integer;
+  Filtered : TArray<TFilterComboItem>;
+  Tmp : TList<TFilterComboItem>;
+begin
+  if FAllFindings = nil then Exit;
+  if Length(FAllSeverityItems) = 0 then Exit;
+
+  // Aktuelle Auswahl merken (Mode-Ord, nicht Index).
+  SavedSevMode := Ord(fmAll);
+  if (FFilterCombo.ItemIndex >= 0)
+     and Assigned(FFilterCombo.Items.Objects[FFilterCombo.ItemIndex]) then
+    SavedSevMode := Integer(FFilterCombo.Items.Objects[FFilterCombo.ItemIndex]);
+  SavedTypeMode := Ord(tfAll);
+  if (FTypeCombo.ItemIndex >= 0)
+     and Assigned(FTypeCombo.Items.Objects[FTypeCombo.ItemIndex]) then
+    SavedTypeMode := Integer(FTypeCombo.Items.Objects[FTypeCombo.ItemIndex]);
+
+  // ---- Severity-Filter: zwei-Pass-Filterung ----
+  Tmp := TList<TFilterComboItem>.Create;
+  try
+    for Item in FAllSeverityItems do
+    begin
+      if (Item.ModeOrd = -1)                    // Separator: vorlaeufig behalten
+         or (Item.ModeOrd = Ord(fmAll))
+         or (Item.ModeOrd = Ord(fmDetectorReview))
+         or (TFindingFilter.CountForMode(FAllFindings,
+                                         TFilterMode(Item.ModeOrd)) > 0) then
+        Tmp.Add(Item);
+    end;
+    // Pass 2: orphan separators entfernen (Separator gefolgt von Separator
+    // oder am Ende der Liste -> weg).
+    SetLength(Filtered, 0);
+    for i := 0 to Tmp.Count - 1 do
+    begin
+      if Tmp[i].ModeOrd = -1 then
+      begin
+        if (i = Tmp.Count - 1) or (Tmp[i + 1].ModeOrd = -1) then
+          Continue;
+      end;
+      SetLength(Filtered, Length(Filtered) + 1);
+      Filtered[High(Filtered)] := Tmp[i];
+    end;
+  finally
+    Tmp.Free;
+  end;
+
+  FFilterCombo.Items.BeginUpdate;
+  try
+    FFilterCombo.Clear;
+    for Item in Filtered do
+      FFilterCombo.Items.AddObject(Item.Display, TObject(Item.ModeOrd));
+  finally
+    FFilterCombo.Items.EndUpdate;
+  end;
+  NewIdx := 0;
+  for i := 0 to FFilterCombo.Items.Count - 1 do
+    if (Integer(FFilterCombo.Items.Objects[i]) = SavedSevMode)
+       and (Integer(FFilterCombo.Items.Objects[i]) <> -1) then
+    begin
+      NewIdx := i;
+      Break;
+    end;
+  FFilterCombo.ItemIndex := NewIdx;
+
+  // ---- Type-Combo ----
+  FTypeCombo.Items.BeginUpdate;
+  try
+    FTypeCombo.Clear;
+    for Item in FAllTypeItems do
+    begin
+      if (Item.ModeOrd = Ord(tfAll))
+         or (TFindingFilter.CountForType(FAllFindings,
+                                         TTypeFilter(Item.ModeOrd)) > 0) then
+        FTypeCombo.Items.AddObject(Item.Display, TObject(Item.ModeOrd));
+    end;
+  finally
+    FTypeCombo.Items.EndUpdate;
+  end;
+  NewIdx := 0;
+  for i := 0 to FTypeCombo.Items.Count - 1 do
+    if Integer(FTypeCombo.Items.Objects[i]) = SavedTypeMode then
+    begin
+      NewIdx := i;
+      Break;
+    end;
+  FTypeCombo.ItemIndex := NewIdx;
+end;
+
 procedure TAnalyserFrame.PopulateFindings(
   const findings: TObjectList<TLeakFinding>; const BaseDir: string);
 var
@@ -1765,6 +1909,10 @@ begin
   for i := 0 to findings.Count - 1 do
     FAllFindings.Add(findings[i]);
   UpdateStats;
+  // Filter-Combos auf Eintraege mit > 0 Treffern reduzieren - vor
+  // ApplyFilter damit die anschliessende Filterung schon gegen die
+  // ggf. zurueckgesetzte Auswahl arbeitet.
+  RebuildFilterCombos;
   ApplyFilter;
   // ApplyFilter -> HighlightAllFindingsInFile baut die Multi-File-Marker
   // bereits sauber neu auf (SetAllFindings ersetzt den gesamten internen

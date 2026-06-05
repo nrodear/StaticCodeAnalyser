@@ -154,11 +154,30 @@ type
     BaseDir    : string;
   end;
 
+  // Snapshot eines Filter-Combo-Eintrags (Text + Mode-Ordinal als Integer).
+  // Wird in den Forms gehalten um nach jedem Scan die Combos auf Eintraege
+  // mit > 0 Treffern zu reduzieren - und beim naechsten Scan ggf. wieder
+  // zu erweitern. ModeOrd ist Ord(TFilterMode) oder Ord(TTypeFilter).
+  TFilterComboItem = record
+    Display : string;
+    ModeOrd : Integer;
+  end;
+
   TFindingFilter = class
   public
     // True wenn F unter Criteria im Grid erscheinen soll.
     class function Matches(const F: TLeakFinding;
       const C: TFindingFilterCriteria): Boolean; static;
+
+    // Anzahl Findings die unter Mode/Type allein matchen wuerden.
+    // Werden von den Filter-Combos genutzt um Eintraege mit 0 Treffern
+    // nach einem Scan auszublenden. tfAll als zweiter Filter offen
+    // (CountForMode) bzw. fmAll als erster Filter offen (CountForType),
+    // damit jeder Eintrag isoliert gegen die volle Befund-Liste zaehlt.
+    class function CountForMode(AFindings: TList<TLeakFinding>;
+      AMode: TFilterMode): Integer; static;
+    class function CountForType(AFindings: TList<TLeakFinding>;
+      AType: TTypeFilter): Integer; static;
   end;
 
   TFindingSorter = class
@@ -654,6 +673,38 @@ begin
                   - StrToIntDef(B.LineNumber, 0);
       end;
     end));
+end;
+
+{ TFindingFilter - Count-Helpers }
+
+class function TFindingFilter.CountForMode(AFindings: TList<TLeakFinding>;
+  AMode: TFilterMode): Integer;
+var
+  C : TFindingFilterCriteria;
+  F : TLeakFinding;
+begin
+  Result := 0;
+  if AFindings = nil then Exit;
+  C.Mode       := AMode;
+  C.TypeFilter := tfAll;
+  C.SearchLow  := '';
+  for F in AFindings do
+    if Matches(F, C) then Inc(Result);
+end;
+
+class function TFindingFilter.CountForType(AFindings: TList<TLeakFinding>;
+  AType: TTypeFilter): Integer;
+var
+  C : TFindingFilterCriteria;
+  F : TLeakFinding;
+begin
+  Result := 0;
+  if AFindings = nil then Exit;
+  C.Mode       := fmAll;
+  C.TypeFilter := AType;
+  C.SearchLow  := '';
+  for F in AFindings do
+    if Matches(F, C) then Inc(Result);
 end;
 
 end.

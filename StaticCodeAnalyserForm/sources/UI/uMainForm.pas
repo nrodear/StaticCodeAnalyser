@@ -15,6 +15,7 @@ uses
   uRepoSettings, uRecentPaths, uFindingGridRenderer, uDfmTextViewer,
   uIDEHelpPanel,                  // TFindingHintPanel (im class-Feld referenziert)
   uExportMenu,                    // TFindingExportMenu (Class-Field-Reference)
+  uFindingFilter,                 // TFilterComboItem (Snapshot-Felder)
   Vcl.Controls
  ;
 
@@ -76,6 +77,10 @@ type
     // den vollen TLeakFinding (inkl. Kind/Severity-Details) zur ausgewaehlten
     // Zeile findet und einen kompletten Claude-AI-Prompt erzeugen kann.
     FAllFindings       : TObjectList<TLeakFinding>;
+    // Snapshot der initial-populierten Filter-Combo-Eintraege (FormCreate).
+    // RebuildFilterCombos zieht daraus die Eintraege mit > 0 Treffern.
+    FAllSeverityItems  : TArray<TFilterComboItem>;
+    FAllTypeItems      : TArray<TFilterComboItem>;
     // Gefilterte Untermenge (Display-Filter via Severity/Type/Search).
     // Owned=False - die Findings gehoeren FAllFindings.
     FDisplayedFindings : TList<TLeakFinding>;
@@ -140,6 +145,17 @@ type
     procedure ApplyFilter;
     // Aktualisiert die Stats-Tile-Captions aus FAllFindings.
     procedure UpdateStats;
+    // Snapshot der initial-populierten Combo-Items (FormCreate). Wird von
+    // RebuildFilterCombos genutzt um nach jedem Scan auf nicht-leere
+    // Eintraege zu reduzieren und beim naechsten Scan ggf. wieder zu
+    // erweitern.
+    procedure SnapshotFilterItems;
+    // Reduziert SeverityFilterCombo + TypeFilterCombo auf Eintraege deren
+    // Mode/Type mindestens einen Treffer in FAllFindings hat ('All' und
+    // 'Detector Review' bleiben immer). Aktuelle Auswahl wird via
+    // Items.Objects-Tag wiederhergestellt; gibt es den vorher gewaehlten
+    // Eintrag nach dem Scan nicht mehr, faellt der Combo auf 'All' zurueck.
+    procedure RebuildFilterCombos;
     // Inner helper: registriert eine bereits geladene Settings-Instanz und
     // setzt optional die Discovery-Listen zurueck. Wird vom Analyse-Pfad
     // direkt benutzt (der die Settings noch fuer UsesCheck/AutoDiscover braucht).
@@ -351,13 +367,21 @@ begin
   SeverityFilterCombo.Items.AddObject(_('Unused noinspection Marker'),   TObject(Ord(fmUnusedSuppression)));
   SeverityFilterCombo.ItemIndex := 0;
 
-  TypeFilterCombo.Items.Add(_('All'));
-  TypeFilterCombo.Items.Add('Bug');
-  TypeFilterCombo.Items.Add('Code Smell');
-  TypeFilterCombo.Items.Add('Vulnerability');
-  TypeFilterCombo.Items.Add('Security Hotspot');
-  TypeFilterCombo.Items.Add('Code Duplication');
+  // TypeFilterCombo: Items.Objects tragen Ord(TTypeFilter) damit
+  // RebuildFilterCombos die aktuelle Auswahl nach einem Scan
+  // wiederherstellen kann (ItemIndex-Mapping waere nach dem Filtern
+  // verschoben). tfAll = 0 -> Object = nil (siehe ApplyFilter-Lookup).
+  TypeFilterCombo.Items.AddObject(_('All'),              TObject(Ord(tfAll)));
+  TypeFilterCombo.Items.AddObject('Bug',                 TObject(Ord(tfBug)));
+  TypeFilterCombo.Items.AddObject('Code Smell',          TObject(Ord(tfCodeSmell)));
+  TypeFilterCombo.Items.AddObject('Vulnerability',       TObject(Ord(tfVulnerability)));
+  TypeFilterCombo.Items.AddObject('Security Hotspot',    TObject(Ord(tfSecurityHotspot)));
+  TypeFilterCombo.Items.AddObject('Code Duplication',    TObject(Ord(tfCodeDuplication)));
   TypeFilterCombo.ItemIndex := 0;
+
+  // Snapshot der frisch populierten Combo-Items - RebuildFilterCombos
+  // reduziert daraus pro Scan auf Eintraege mit > 0 Treffern.
+  SnapshotFilterItems;
 
   // ---- Sonar-Style Stats-Tile-Reihe oberhalb des Grids -----------------
   // PanelStats kommt aus dem DFM (alTop, Height=45). Tiles werden als
@@ -907,7 +931,107 @@ begin
   // Stats spiegeln immer die GESAMTE Befund-Menge, nicht das gefilterte
   // Subset - User sieht "1 von 234 Bugs gefiltert" auf der Tile-Leiste.
   UpdateStats;
+  // Filter-Combos auf Eintraege mit > 0 Treffern reduzieren - muss VOR
+  // ApplyFilter laufen damit die anschliessende Filter-Application schon
+  // gegen die aktuelle Auswahl (ggf. zurueckgesetzt auf 'All') arbeitet.
+  RebuildFilterCombos;
   ApplyFilter;
+end;
+
+procedure TForm2.SnapshotFilterItems;
+// Snapshot direkt nach Combo-Populate in FormCreate. Wird einmal
+// aufgerufen - die Combos werden danach in-place reduziert,
+// die Originale leben hier weiter.
+var
+  i : Integer;
+begin
+  SetLength(FAllSeverityItems, SeverityFilterCombo.Items.Count);
+  for i := 0 to SeverityFilterCombo.Items.Count - 1 do
+  begin
+    FAllSeverityItems[i].Display := SeverityFilterCombo.Items[i];
+    FAllSeverityItems[i].ModeOrd := Integer(SeverityFilterCombo.Items.Objects[i]);
+  end;
+  SetLength(FAllTypeItems, TypeFilterCombo.Items.Count);
+  for i := 0 to TypeFilterCombo.Items.Count - 1 do
+  begin
+    FAllTypeItems[i].Display := TypeFilterCombo.Items[i];
+    FAllTypeItems[i].ModeOrd := Integer(TypeFilterCombo.Items.Objects[i]);
+  end;
+end;
+
+procedure TForm2.RebuildFilterCombos;
+// Reduziert beide Combos auf Eintraege deren Mode/Type in FAllFindings
+// mindestens einen Treffer hat. 'All' und 'Detector Review' bleiben
+// immer drin (auch bei 0 Treffern - sind statisch nuetzliche Optionen).
+// Aktuelle Auswahl wird via Mode-Ord wiederhergestellt; war der Eintrag
+// vor dem Scan ausgewaehlt und ist jetzt weg, faellt der Combo auf
+// 'All' (Index 0) zurueck.
+var
+  Item : TFilterComboItem;
+  SavedSevMode, SavedTypeMode, NewIdx, i : Integer;
+begin
+  if FAllFindings = nil then Exit;
+  if Length(FAllSeverityItems) = 0 then Exit;
+
+  // Aktuelle Auswahl merken (Ord, nicht Index - Index verschiebt sich).
+  SavedSevMode := Ord(fmAll);
+  if (SeverityFilterCombo.ItemIndex >= 0)
+     and Assigned(SeverityFilterCombo.Items.Objects[SeverityFilterCombo.ItemIndex]) then
+    SavedSevMode := Integer(
+      SeverityFilterCombo.Items.Objects[SeverityFilterCombo.ItemIndex]);
+  SavedTypeMode := Ord(tfAll);
+  if (TypeFilterCombo.ItemIndex >= 0)
+     and Assigned(TypeFilterCombo.Items.Objects[TypeFilterCombo.ItemIndex]) then
+    SavedTypeMode := Integer(
+      TypeFilterCombo.Items.Objects[TypeFilterCombo.ItemIndex]);
+
+  // ---- SeverityFilterCombo ----
+  SeverityFilterCombo.Items.BeginUpdate;
+  try
+    SeverityFilterCombo.Clear;
+    for Item in FAllSeverityItems do
+    begin
+      if (Item.ModeOrd = Ord(fmAll))
+         or (Item.ModeOrd = Ord(fmDetectorReview))
+         or (TFindingFilter.CountForMode(FAllFindings,
+                                         TFilterMode(Item.ModeOrd)) > 0) then
+        SeverityFilterCombo.Items.AddObject(Item.Display,
+                                            TObject(Item.ModeOrd));
+    end;
+  finally
+    SeverityFilterCombo.Items.EndUpdate;
+  end;
+  NewIdx := 0;
+  for i := 0 to SeverityFilterCombo.Items.Count - 1 do
+    if Integer(SeverityFilterCombo.Items.Objects[i]) = SavedSevMode then
+    begin
+      NewIdx := i;
+      Break;
+    end;
+  SeverityFilterCombo.ItemIndex := NewIdx;
+
+  // ---- TypeFilterCombo ----
+  TypeFilterCombo.Items.BeginUpdate;
+  try
+    TypeFilterCombo.Clear;
+    for Item in FAllTypeItems do
+    begin
+      if (Item.ModeOrd = Ord(tfAll))
+         or (TFindingFilter.CountForType(FAllFindings,
+                                         TTypeFilter(Item.ModeOrd)) > 0) then
+        TypeFilterCombo.Items.AddObject(Item.Display, TObject(Item.ModeOrd));
+    end;
+  finally
+    TypeFilterCombo.Items.EndUpdate;
+  end;
+  NewIdx := 0;
+  for i := 0 to TypeFilterCombo.Items.Count - 1 do
+    if Integer(TypeFilterCombo.Items.Objects[i]) = SavedTypeMode then
+    begin
+      NewIdx := i;
+      Break;
+    end;
+  TypeFilterCombo.ItemIndex := NewIdx;
 end;
 
 procedure TForm2.UpdateStats;
@@ -995,8 +1119,13 @@ begin
     var Tag := Integer(SeverityFilterCombo.Items.Objects[SeverityFilterCombo.ItemIndex]);
     if Tag >= 0 then Criteria.Mode := TFilterMode(Tag);
   end;
-  if Assigned(TypeFilterCombo) and (TypeFilterCombo.ItemIndex >= 0) then
-    Criteria.TypeFilter := TTypeFilter(TypeFilterCombo.ItemIndex);
+  // TypeFilterCombo nutzt jetzt Items.Objects = Ord(TTypeFilter) -
+  // robust gegen Item-Removal in RebuildFilterCombos. tfAll = 0 ist als
+  // nil-Object kodiert (Assigned-Check fuehrt dann auf tfAll-Default).
+  if Assigned(TypeFilterCombo) and (TypeFilterCombo.ItemIndex >= 0)
+     and Assigned(TypeFilterCombo.Items.Objects[TypeFilterCombo.ItemIndex]) then
+    Criteria.TypeFilter := TTypeFilter(
+      Integer(TypeFilterCombo.Items.Objects[TypeFilterCombo.ItemIndex]));
   if Assigned(SearchEdit) then
     Criteria.SearchLow := LowerCase(Trim(SearchEdit.Text));
 
