@@ -91,7 +91,10 @@ constructor TInfoBarRenderer.Create;
 begin
   inherited;
   FTimer := TTimer.Create(nil);
-  FTimer.Interval := 200;
+  // 80ms = ~12 fps. Schneller als 200ms (=Flicker beim Scrollen)
+  // aber nicht hochfrequent genug fuer CPU-Drain. Phase C.2 (Detour)
+  // ersetzt das durch event-getriebenes Repaint.
+  FTimer.Interval := 80;
   FTimer.Enabled  := False;
   FTimer.OnTimer  := OnTimerTick;
   FActive := False;
@@ -246,26 +249,18 @@ begin
   try
     Canvas.Control := AControl;
     R := AControl.ClientRect;
-    OutputDebugString(PChar(Format(
-      'SCA-InfoBar: PaintOnControl on %s rect=%d,%d,%d,%d TotalLines=%d',
-      [AControl.ClassName, R.Left, R.Top, R.Right, R.Bottom, ATotalLines])));
 
-    BarLeft   := R.Right - INFOBAR_SCROLLBAR_W - INFOBAR_WIDTH;
+    // POSITION: User-Test bestaetigte dass Painting LINKS funktioniert,
+    // rechts wird von Scrollbar/EditControl ueberzeichnet. Bar daher
+    // ganz LINKS (vor dem Gutter, am rechten Rand des aktuellen
+    // Line-Number-Bereichs ist sicherer Boden).
+    //
+    // 5px breit, fast volle Hoehe (minus 16px wegen ggf. horizontaler SB).
+    BarLeft   := 0;
     BarHeight := R.Bottom - R.Top - INFOBAR_SCROLLBAR_W;
     if BarHeight < 50 then BarHeight := R.Bottom - R.Top;
 
-    // DIAGNOSE-MODUS: zeichne einen GROSSEN, GARANTIERT SICHTBAREN
-    // Test-Streifen ganz LINKS (Position 0..20, Hoehe 0..ClientHeight)
-    // in PUREM ROT - damit wir sehen ob das Painting ueberhaupt
-    // ankommt. Wenn dieser Streifen NICHT erscheint -> TControlCanvas
-    // funktioniert auf diesem Control nicht.
-    Canvas.Brush.Color := clRed;
-    Canvas.FillRect(Rect(0, 0, 20, R.Bottom - R.Top));
-    OutputDebugString(PChar(Format(
-      'SCA-InfoBar: Painted DIAGNOSTIC RED stripe at (0,0)-(20,%d)',
-      [R.Bottom - R.Top])));
-
-    // Hintergrund theme-konform (Editor-Background) - normaler Bar
+    // Hintergrund (theme-konform)
     Canvas.Brush.Color := BgColor;
     Canvas.FillRect(Rect(BarLeft, R.Top, BarLeft + INFOBAR_WIDTH,
                          R.Top + BarHeight));
