@@ -153,7 +153,18 @@ end;
 
 function TInfoBarRenderer.FindEditControl(AForm: TCustomForm): TWinControl;
 
-  function SearchIn(AParent: TWinControl): TWinControl;
+  procedure LogControl(AControl: TControl; ADepth: Integer);
+  var
+    Pad : string;
+  begin
+    Pad := StringOfChar(' ', ADepth * 2);
+    OutputDebugString(PChar(Format(
+      'SCA-InfoBar: %s%s Name=%s ClientW=%d ClientH=%d',
+      [Pad, AControl.ClassName, AControl.Name,
+       AControl.ClientWidth, AControl.ClientHeight])));
+  end;
+
+  function SearchIn(AParent: TWinControl; ADepth: Integer): TWinControl;
   var
     i : Integer;
     Child : TControl;
@@ -163,20 +174,34 @@ function TInfoBarRenderer.FindEditControl(AForm: TCustomForm): TWinControl;
     for i := 0 to AParent.ControlCount - 1 do
     begin
       Child := AParent.Controls[i];
+      LogControl(Child, ADepth);
       if Child is TWinControl then
       begin
         // Klassenname-Match (TEditControl ist Internal,
-        // nicht via "is TEditControl" pruefbar)
-        if SameText(Child.ClassName, EDIT_CONTROL_CLASSNAME) then
+        // nicht via "is TEditControl" pruefbar). Auch Pattern
+        // 'TEdit...' / '...EditControl' tolerieren.
+        if SameText(Child.ClassName, EDIT_CONTROL_CLASSNAME) or
+           (Pos('EditControl', Child.ClassName) > 0) or
+           (Pos('EditView', Child.ClassName) > 0) then
+        begin
+          OutputDebugString(PChar('SCA-InfoBar: MATCH ' + Child.ClassName));
           Exit(TWinControl(Child));
-        Result := SearchIn(TWinControl(Child));
+        end;
+        Result := SearchIn(TWinControl(Child), ADepth + 1);
         if Result <> nil then Exit;
       end;
     end;
   end;
 
 begin
-  Result := SearchIn(AForm);
+  OutputDebugString(PChar('SCA-InfoBar: FindEditControl in ' +
+    AForm.ClassName + ' (' + AForm.Name + ')'));
+  Result := SearchIn(AForm, 0);
+  if Result = nil then
+    OutputDebugString('SCA-InfoBar: NO MATCH - TEditControl-aehnliche Klasse nicht gefunden')
+  else
+    OutputDebugString(PChar('SCA-InfoBar: Using ' + Result.ClassName +
+      ' (' + Result.Name + ')'));
 end;
 
 function TInfoBarRenderer.GuessTotalLines(AView: IOTAEditView): Integer;
@@ -221,11 +246,26 @@ begin
   try
     Canvas.Control := AControl;
     R := AControl.ClientRect;
+    OutputDebugString(PChar(Format(
+      'SCA-InfoBar: PaintOnControl on %s rect=%d,%d,%d,%d TotalLines=%d',
+      [AControl.ClassName, R.Left, R.Top, R.Right, R.Bottom, ATotalLines])));
+
     BarLeft   := R.Right - INFOBAR_SCROLLBAR_W - INFOBAR_WIDTH;
     BarHeight := R.Bottom - R.Top - INFOBAR_SCROLLBAR_W;
     if BarHeight < 50 then BarHeight := R.Bottom - R.Top;
 
-    // Hintergrund theme-konform (Editor-Background)
+    // DIAGNOSE-MODUS: zeichne einen GROSSEN, GARANTIERT SICHTBAREN
+    // Test-Streifen ganz LINKS (Position 0..20, Hoehe 0..ClientHeight)
+    // in PUREM ROT - damit wir sehen ob das Painting ueberhaupt
+    // ankommt. Wenn dieser Streifen NICHT erscheint -> TControlCanvas
+    // funktioniert auf diesem Control nicht.
+    Canvas.Brush.Color := clRed;
+    Canvas.FillRect(Rect(0, 0, 20, R.Bottom - R.Top));
+    OutputDebugString(PChar(Format(
+      'SCA-InfoBar: Painted DIAGNOSTIC RED stripe at (0,0)-(20,%d)',
+      [R.Bottom - R.Top])));
+
+    // Hintergrund theme-konform (Editor-Background) - normaler Bar
     Canvas.Brush.Color := BgColor;
     Canvas.FillRect(Rect(BarLeft, R.Top, BarLeft + INFOBAR_WIDTH,
                          R.Top + BarHeight));
