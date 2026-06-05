@@ -31,6 +31,7 @@ type
     // ---- Finding-Inhalt ---------------------------------------------------
     [Test] procedure Length_Finding_KindAndSeverity;
     [Test] procedure Length_MultipleHitsInSameMethod_AllReported;
+    [Test] procedure Length_TwoHitsOnSameLine_BothReported;
   end;
 
 implementation
@@ -221,6 +222,27 @@ begin
   try
     Assert.AreEqual(2, TFindingHelper.Count(F, fkLengthUnderflow),
       'Zwei Underflow-Hits in derselben Methode -> 2 Findings');
+  finally F.Free; end;
+end;
+
+procedure TTestLengthUnderflow.Length_TwoHitsOnSameLine_BothReported;
+// Regression: vor dem Off-by-One-Fix an der LinePos-Vorschaltung sprang
+// der Scanner ein Zeichen zu weit nach jedem Treffer und konnte direkt-
+// angrenzende Length(...)-N-Ausdruecke auf derselben Zeile uebersehen.
+// Hier zwei Treffer in einem zusammengesetzten Ausdruck.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(const s, t: string);'#13#10 +
+  'var i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  i := Length(s) - 2 + Length(t) - 3;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual(2, TFindingHelper.Count(F, fkLengthUnderflow),
+      'Zwei Underflows in derselben Zeile -> beide Findings');
   finally F.Free; end;
 end;
 

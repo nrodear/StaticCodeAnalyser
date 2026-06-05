@@ -109,6 +109,19 @@ begin
   inherited;
 end;
 
+// Konsistente Pfad-Normalisierung fuer den Vergleich zwischen "diese Unit"
+// und "fremde Unit". Build laeuft mit absoluten Pfaden (ScanUnit bekommt
+// PasFileName aus dem File-Listing); wenn der Detector-Aufrufer aber nur
+// einen relativen oder bare Basename liefert, wuerde der Self-Filter in
+// ExternalReferencingUnitCount nicht matchen und das eigene File faelschlich
+// als externe Referenz zaehlen. ExpandFileName loest auf einen absoluten
+// kanonischen Pfad auf; LowerCase ist case-insensitive (Windows-FS).
+function NormalizeUnitPath(const Path: string): string;
+begin
+  if Path = '' then Exit('');
+  Result := LowerCase(ExpandFileName(Path));
+end;
+
 procedure TSymbolReferenceIndex.AddReference(const MemberName,
   FromUnit: string);
 var
@@ -117,7 +130,7 @@ var
 begin
   Key := LowerCase(Trim(MemberName));
   if Key = '' then Exit;
-  UnitLow := LowerCase(FromUnit);
+  UnitLow := NormalizeUnitPath(FromUnit);
   if UnitLow = '' then Exit;
   if not FRefs.TryGetValue(Key, L) then
   begin
@@ -448,7 +461,10 @@ var
 begin
   Result := 0;
   if not FRefs.TryGetValue(LowerCase(MemberLow), L) then Exit;
-  OwnLow := LowerCase(OwnUnit);
+  // Selber Normalisierungs-Pfad wie AddReference - sonst zaehlt die
+  // eigene Unit faelschlich als externe Referenz wenn Build mit absolutem
+  // Pfad indizierte und der Caller einen relativen uebergibt.
+  OwnLow := NormalizeUnitPath(OwnUnit);
   for i := 0 to L.Count - 1 do
     if L[i] <> OwnLow then Inc(Result);
 end;
