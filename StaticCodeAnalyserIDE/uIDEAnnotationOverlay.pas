@@ -76,8 +76,16 @@ type
     // Editor in den wir aktuell als WS_CHILD eingebettet sind. 0 = noch
     // nicht eingebettet (initialer WS_POPUP-Zustand).
     FCurrentParent : HWND;
+    // Zwei-Stufen-Anzeige: Overlay erscheint zuerst nur als Title-Zeile
+    // (= MIN_TITLE_H / CharHeight), nach 250ms faltet der ExpandTimer
+    // es auf die volle Hoehe auf. ShowAt speichert die Zielhoehe in
+    // FExpandedHeight; OnExpandTick ruft MoveWindow mit dieser Hoehe auf.
+    FExpandTimer    : TTimer;
+    FCollapsedHeight: Integer;
+    FExpandedHeight : Integer;
     procedure EmbedIntoEditor(AEditorHandle: HWND);
     procedure CloseLblClick(Sender: TObject);
+    procedure OnExpandTick(Sender: TObject);
   protected
     procedure CreateParams(var Params: TCreateParams); override;
   public
@@ -408,6 +416,14 @@ begin
   FLblFix.Margins.SetBounds(8, 0, 8, 6);
   FLblFix.WordWrap           := True;
   FLblFix.EllipsisPosition   := epNone;
+
+  // Auffalt-Timer: ShowAt zeigt zuerst nur die Title-Zeile,
+  // 250ms spaeter expandiert OnExpandTick auf FExpandedHeight.
+  // Owner = Self -> wird mit dem Form freigegeben.
+  FExpandTimer          := TTimer.Create(Self);
+  FExpandTimer.Interval := 250;
+  FExpandTimer.Enabled  := False;
+  FExpandTimer.OnTimer  := OnExpandTick;
 end;
 
 procedure TAnnotationOverlay.CreateParams(var Params: TCreateParams);
@@ -617,10 +633,22 @@ begin
   FLastAccent     := AAccentColor;
   FLastWindowBase := WindowBase;
 
+  // ZWEI-STUFEN-ANZEIGE:
+  // Phase 1 (sofort) - Overlay nur als Title-Zeile (TitleH hoch).
+  //   Desc/Fix-Panels sind via alTop/alClient unter den Form-Rand
+  //   geclippt - kein Visible-Toggling noetig.
+  // Phase 2 (nach 250ms via FExpandTimer) - MoveWindow auf TotalH;
+  //   die Panels werden sichtbar weil sie wieder in den Form-Rect fallen.
+  // Bei jedem ShowAt wird der Timer neu gestartet; bewegt sich die Maus
+  // innerhalb von 250ms weg, hat User nur die Title-Zeile gesehen (weniger
+  // Bildschirm-Clutter beim schnellen Drueberhuschen).
+  FCollapsedHeight := TitleH;
+  FExpandedHeight  := TotalH;
+
   // Position via raw Win32 — SetBounds wuerde VCL-Logik triggern die
   // fuer ein WS_CHILD-zwangs-eingebettetes-Form unzuverlaessig ist.
   // Editor-Client-Koordinaten gehen direkt in MoveWindow.
-  Winapi.Windows.MoveWindow(Handle, AClientX, AClientY, AWidth, TotalH, True);
+  Winapi.Windows.MoveWindow(Handle, AClientX, AClientY, AWidth, TitleH, True);
 
   // Visible:=True damit VCL und Win32 synchron sind — sonst zeichnet VCL
   // die TGraphicControl-Children (TLabel) nicht.
@@ -629,6 +657,11 @@ begin
   else
     RedrawWindow(Handle, nil, 0,
       RDW_INVALIDATE or RDW_ALLCHILDREN or RDW_UPDATENOW or RDW_ERASE);
+
+  // Timer (re)starten - Enabled:=False vor True erzwingt Countdown-Reset.
+  FExpandTimer.Enabled := False;
+  if TotalH > TitleH then
+    FExpandTimer.Enabled := True;
 
   // Identitaet der gerade angezeigten Markierung fuer Close-Klick speichern.
   // Leerer File-Name -> Close-Glyph ausblenden (Caller hat keine Datei
@@ -655,10 +688,27 @@ end;
 
 procedure TAnnotationOverlay.HideOverlay;
 begin
+  // Pending Auffalten cancellen - sonst expandiert ein hidden Form-Handle
+  // und kann beim naechsten Show kurz als grosser Stub aufflackern.
+  if Assigned(FExpandTimer) then
+    FExpandTimer.Enabled := False;
   // Cache leeren damit das naechste ShowAt immer neu zeichnet.
   FLastX := -1; FLastY := -1;
   if Visible then
     Visible := False;
+end;
+
+procedure TAnnotationOverlay.OnExpandTick(Sender: TObject);
+// Phase-2-Trigger: 250ms nach ShowAt - faltet das Overlay auf TotalH auf.
+// Defensive Checks: HideOverlay koennte zwischenzeitlich gefeuert haben.
+begin
+  FExpandTimer.Enabled := False;
+  if not Visible then Exit;
+  if FExpandedHeight <= FCollapsedHeight then Exit;
+  // Position bleibt, nur Hoehe waechst nach unten.
+  Winapi.Windows.MoveWindow(Handle, FLastX, FLastY, FLastW, FExpandedHeight, True);
+  RedrawWindow(Handle, nil, 0,
+    RDW_INVALIDATE or RDW_ALLCHILDREN or RDW_UPDATENOW);
 end;
 
 function TAnnotationOverlay.IsCursorNearClose(const AScreenPos: TPoint;
