@@ -1,16 +1,31 @@
 unit uIDEInfoBar;
 
-// Sprint B von Konzept_DiagnosticsHints.md (lokal):
-// InfoBar = 5px-Streifen links der Editor-Scrollbar mit 2px-Strichen
-// pro Finding-Zeile (Severity-Farbe). Click-to-Jump zur naechstgele-
-// genen Finding-Zeile + Cursor auf Range.Start.
+// Sprint B (Phase C) von Konzept_DiagnosticsHints.md.
+// Parnassus-Pattern: NICHT als WS_CHILD-Form embedden (das funktioniert
+// nicht weil die Editor-Scrollbar 'alRight' belegt), sondern DIREKT
+// AUF DEN EDITOR-CANVAS zeichnen via TControlCanvas auf das interne
+// TEditControl der RAD Studio IDE.
 //
-// Z-ORDER-Pattern: WS_CHILD-Embedding analog uIDEAnnotationOverlay.
-// Initial WS_POPUP, beim ersten ShowForView wird via SetWindowLongPtr
-// + SetParent zum WS_CHILD des Editor-Window-Handle.
+// PHASE C.1 - DISCOVERY (DIESE DATEI):
+//   * FindEditControl(): TWinControl - sucht die TEditControl-Instanz
+//     (Klassenname-Match) als Descendant von INTAEditWindow.Form
+//   * On-demand Paint via PaintTestStripe(EditControl) - zeichnet
+//     einmal beim Aufruf einen 5px-Streifen mit 2px-Strichen pro
+//     Finding-Zeile aus gDiagnosticStore.
+//   * Painting wird beim ersten Editor-Scroll/Repaint ueberschrieben -
+//     KEIN persistent rendering noch.
 //
-// Lifecycle: Singleton gInfoBar, lazy-init beim ersten Aufruf, im
-// finalization-Block freigegeben.
+// PHASE C.2 (NAECHSTER SPRINT):
+//   * PaintLine-Hook via Delphi-Detours-Library auf
+//     TCustomEditControl.PaintLine. Bei jedem Line-Paint nachzeichnen.
+//
+// PHASE C.3 (SPAETER):
+//   * MouseDown-Hook fuer Click-to-Jump
+//   * Hover-Tooltip
+//
+// Internal-API-Risiko: TEditControl ist undokumentiertes Internal
+// in coreide*.bpl. Klassenname kann sich zwischen RAD Studio-Versionen
+// aendern. Aktuell verifiziert fuer RAD Studio 12.
 
 interface
 
@@ -22,298 +37,181 @@ uses
   uIDEDiagnostic;
 
 const
-  INFOBAR_WIDTH       = 5;   // Pixel-Breite
-  INFOBAR_STROKE_H    = 2;   // Pixel-Hoehe pro Finding-Strich
-  INFOBAR_SCROLLBAR_W = 16;  // typische VCL-Scrollbar-Breite
+  INFOBAR_WIDTH       = 5;
+  INFOBAR_STROKE_H    = 2;
+  INFOBAR_SCROLLBAR_W = 16;
+  EDIT_CONTROL_CLASSNAME = 'TEditControl';  // RAD Studio coreide-Internal
 
 type
-  TInfoBar = class(TForm)
+  TInfoBarRenderer = class
   private
-    FCurrentFile   : string;
-    FCurrentParent : HWND;
-    FEditView      : IOTAEditView;
-    FTotalLines    : Integer;
-
-    procedure EmbedIntoEditor(AEditorHandle: HWND);
-    procedure RecomputeBounds;
     function ColorForSeverity(S: TDiagnosticSeverity): TColor;
-    function GetEditorClientWnd(AView: IOTAEditView): HWND;
-  protected
-    procedure CreateParams(var Params: TCreateParams); override;
-    procedure Paint; override;
-    procedure MouseDown(Button: TMouseButton; Shift: TShiftState;
-                        X, Y: Integer); override;
+    function FindEditControl(AForm: TCustomForm): TWinControl;
+    function GuessTotalLines(AView: IOTAEditView): Integer;
+    procedure PaintOnControl(AControl: TWinControl;
+                             const AFileName: string;
+                             ATotalLines: Integer);
   public
-    constructor CreateBar(AOwner: TComponent); reintroduce;
-    procedure ShowForView(AView: IOTAEditView);
-    procedure HideAndUnbind;
-    procedure RefreshFromStore;
+    // Test-Paint: zeichnet einmalig das InfoBar-Stripe auf den Editor
+    // der gerade aktiv ist. Painting verschwindet beim naechsten
+    // Editor-Repaint - Phase C.2 (Detour) macht es persistent.
+    procedure RepaintForCurrentView;
   end;
 
 var
-  gInfoBar : TInfoBar = nil;  // Singleton, lazy-init
+  gInfoBarRenderer : TInfoBarRenderer = nil;
 
-// Wird vom TFindingEditorEvents.EditorViewActivated gerufen wenn der
-// User Editor-Datei wechselt. Erstellt den Bar bei erstem Aufruf.
-procedure InfoBarShowForView(AView: IOTAEditView);
+procedure InfoBarPaintTest;
 
 implementation
 
-{ TInfoBar }
+{ TInfoBarRenderer }
 
-constructor TInfoBar.CreateBar(AOwner: TComponent);
+function TInfoBarRenderer.ColorForSeverity(S: TDiagnosticSeverity): TColor;
 begin
-  inherited CreateNew(AOwner);
-  BorderStyle := bsNone;
-  Position    := poDesigned;
-  Color       := clBtnFace;  // Default - in Paint mit Theme-BG ueberzeichnen
-  FCurrentParent := 0;
-end;
-
-procedure TInfoBar.CreateParams(var Params: TCreateParams);
-begin
-  inherited;
-  // Initial WS_POPUP, EmbedIntoEditor wechselt zu WS_CHILD beim ersten
-  // ShowForView. Analog uIDEAnnotationOverlay.
-  Params.Style     := WS_POPUP;
-  Params.ExStyle   := WS_EX_NOACTIVATE;
-  Params.WndParent := Application.Handle;
-end;
-
-procedure TInfoBar.EmbedIntoEditor(AEditorHandle: HWND);
-var
-  Style, ExStyle : NativeInt;
-begin
-  if AEditorHandle = 0 then Exit;
-  if AEditorHandle = FCurrentParent then Exit;
-
-  if not HandleAllocated then HandleNeeded;
-
-  Style   := GetWindowLongPtr(Handle, GWL_STYLE);
-  ExStyle := GetWindowLongPtr(Handle, GWL_EXSTYLE);
-  Style   := (Style and not WS_POPUP) or WS_CHILD or WS_CLIPSIBLINGS;
-  ExStyle := ExStyle and not (WS_EX_TOPMOST or WS_EX_TOOLWINDOW);
-  SetWindowLongPtr(Handle, GWL_STYLE, Style);
-  SetWindowLongPtr(Handle, GWL_EXSTYLE, ExStyle);
-
-  Winapi.Windows.SetParent(Handle, AEditorHandle);
-  SetWindowPos(Handle, 0, 0, 0, 0, 0,
-    SWP_FRAMECHANGED or SWP_NOMOVE or SWP_NOSIZE or SWP_NOZORDER or
-    SWP_NOACTIVATE or SWP_NOOWNERZORDER);
-
-  FCurrentParent := AEditorHandle;
-end;
-
-function TInfoBar.GetEditorClientWnd(AView: IOTAEditView): HWND;
-var
-  EW : INTAEditWindow;
-begin
-  Result := 0;
-  if AView = nil then Exit;
-  // INTAEditWindow.Form ist TCustomForm des Editor-Tabs.
-  EW := AView.GetEditWindow;
-  if (EW = nil) or (EW.Form = nil) then Exit;
-  Result := EW.Form.Handle;
-end;
-
-procedure TInfoBar.RecomputeBounds;
-var
-  ParentWnd : HWND;
-  R         : TRect;
-  X, Y, H   : Integer;
-begin
-  ParentWnd := FCurrentParent;
-  if ParentWnd = 0 then Exit;
-  if not Winapi.Windows.GetClientRect(ParentWnd, R) then Exit;
-
-  // Position: rechts vom Editor-Text, links der Scrollbar.
-  X := R.Right - INFOBAR_SCROLLBAR_W - INFOBAR_WIDTH;
-  Y := R.Top;
-  H := R.Bottom - R.Top - INFOBAR_SCROLLBAR_W;  // minus horizontale SB
-  if H < 50 then H := R.Bottom - R.Top;  // fallback: keine H-SB
-
-  SetBounds(X, Y, INFOBAR_WIDTH, H);
-end;
-
-procedure TInfoBar.ShowForView(AView: IOTAEditView);
-var
-  EditorWnd : HWND;
-begin
-  if AView = nil then Exit;
-  FEditView := AView;
-
-  if AView.Buffer = nil then Exit;
-  if not SameText(FCurrentFile, AView.Buffer.FileName) then
-  begin
-    FCurrentFile := AView.Buffer.FileName;
-    FTotalLines  := 0;  // Invalidate cache fuer neue Datei
-  end;
-
-  // Nur anzeigen wenn Datei Findings hat
-  if (gDiagnosticStore = nil) or
-     (gDiagnosticStore.CountForFile(FCurrentFile) = 0) then
-  begin
-    HideAndUnbind;
-    Exit;
-  end;
-
-  EditorWnd := GetEditorClientWnd(AView);
-  if EditorWnd = 0 then Exit;
-
-  EmbedIntoEditor(EditorWnd);
-  RecomputeBounds;
-  if not Visible then Visible := True;
-  Invalidate;
-end;
-
-procedure TInfoBar.HideAndUnbind;
-begin
-  if Visible then Visible := False;
-end;
-
-procedure TInfoBar.RefreshFromStore;
-begin
-  if (FCurrentFile = '') or (FEditView = nil) then Exit;
-  if (gDiagnosticStore = nil) or
-     (gDiagnosticStore.CountForFile(FCurrentFile) = 0) then
-  begin
-    HideAndUnbind;
-    Exit;
-  end;
-  FTotalLines := 0;  // Invalidate falls File durch Edit gewachsen
-  RecomputeBounds;
-  if not Visible then Visible := True;
-  Invalidate;
-end;
-
-function TInfoBar.ColorForSeverity(S: TDiagnosticSeverity): TColor;
-begin
-  // BGR-Reihenfolge (Win32 TColor). Theme-aware-Verbesserung in Sprint C.
+  // BGR-Reihenfolge
   case S of
-    dsError:   Result := $001318E8;  // Rot   (R E8, G 18, B 13)
-    dsWarning: Result := $00008CFF;  // Orange (R FF, G 8C, B 00)
-    dsHint:    Result := $00D47800;  // Blau  (R 00, G 78, B D4)
+    dsError:   Result := $001318E8;  // Rot
+    dsWarning: Result := $00008CFF;  // Orange
+    dsHint:    Result := $00D47800;  // Blau
   else
     Result := clGray;
   end;
 end;
 
-procedure TInfoBar.Paint;
-var
-  Map  : TDictionary<Integer, TDiagnosticSeverity>;
-  Pair : TPair<Integer, TDiagnosticSeverity>;
-  Y, BarHeight : Integer;
-  C : TColor;
-begin
-  // Hintergrund (Editor-Theme-aehnlich; spaeter via uAnalyserTheme)
-  Canvas.Brush.Color := clBtnFace;
-  Canvas.FillRect(ClientRect);
+function TInfoBarRenderer.FindEditControl(AForm: TCustomForm): TWinControl;
 
-  if (gDiagnosticStore = nil) or (FCurrentFile = '') then Exit;
-  if FEditView = nil then Exit;
-
-  // Total-Lines aus Buffer ermitteln. IOTAEditBuffer hat kein
-  // LineCount-Property - via EditPosition.GotoLine(MaxInt) +
-  // .Line abfragen. Save/Restore der urspruenglichen Position
-  // damit der User-Cursor nicht wandert.
-  if FTotalLines <= 0 then  // Cache greift solange Datei sich nicht
-                            // aendert (RefreshFromStore invalidiert)
+  function SearchIn(AParent: TWinControl): TWinControl;
+  var
+    i : Integer;
+    Child : TControl;
   begin
-    try
-      var P := FEditView.Buffer.EditPosition;
-      if P <> nil then
+    Result := nil;
+    if AParent = nil then Exit;
+    for i := 0 to AParent.ControlCount - 1 do
+    begin
+      Child := AParent.Controls[i];
+      if Child is TWinControl then
       begin
-        var SavedLine := P.Row;
-        var SavedCol  := P.Column;
-        try
-          P.GotoLine(MaxInt);  // bounce to last line
-          FTotalLines := P.Row;
-        finally
-          P.Move(SavedLine, SavedCol);  // Cursor zurueck
-        end;
+        // Klassenname-Match (TEditControl ist Internal,
+        // nicht via "is TEditControl" pruefbar)
+        if SameText(Child.ClassName, EDIT_CONTROL_CLASSNAME) then
+          Exit(TWinControl(Child));
+        Result := SearchIn(TWinControl(Child));
+        if Result <> nil then Exit;
       end;
-    except
-      FTotalLines := 0;
     end;
   end;
-  if FTotalLines <= 0 then Exit;
 
-  BarHeight := Height;
-  if BarHeight <= 0 then Exit;
+begin
+  Result := SearchIn(AForm);
+end;
 
-  Map := gDiagnosticStore.BuildLineSeverityMap(FCurrentFile);
+function TInfoBarRenderer.GuessTotalLines(AView: IOTAEditView): Integer;
+var
+  Pos : IOTAEditPosition;
+  SavedLine, SavedCol : Integer;
+begin
+  Result := 0;
+  if AView = nil then Exit;
+  if AView.Buffer = nil then Exit;
+  Pos := AView.Buffer.EditPosition;
+  if Pos = nil then Exit;
+  SavedLine := Pos.Row;
+  SavedCol  := Pos.Column;
   try
-    for Pair in Map do
-    begin
-      Y := Round(Pair.Key / FTotalLines * BarHeight);
-      if Y < 0 then Y := 0;
-      if Y > BarHeight - INFOBAR_STROKE_H then Y := BarHeight - INFOBAR_STROKE_H;
-      C := ColorForSeverity(Pair.Value);
-      Canvas.Brush.Color := C;
-      Canvas.FillRect(Rect(0, Y, Width, Y + INFOBAR_STROKE_H));
+    Pos.GotoLine(MaxInt);
+    Result := Pos.Row;
+  finally
+    Pos.Move(SavedLine, SavedCol);
+  end;
+end;
+
+procedure TInfoBarRenderer.PaintOnControl(AControl: TWinControl;
+  const AFileName: string; ATotalLines: Integer);
+var
+  Canvas : TControlCanvas;
+  R : TRect;
+  BarLeft, BarHeight, Y : Integer;
+  Map : TDictionary<Integer, TDiagnosticSeverity>;
+  Pair : TPair<Integer, TDiagnosticSeverity>;
+begin
+  if AControl = nil then Exit;
+  if ATotalLines <= 0 then Exit;
+  if gDiagnosticStore = nil then Exit;
+
+  Canvas := TControlCanvas.Create;
+  try
+    Canvas.Control := AControl;
+    R := AControl.ClientRect;
+    BarLeft   := R.Right - INFOBAR_SCROLLBAR_W - INFOBAR_WIDTH;
+    BarHeight := R.Bottom - R.Top - INFOBAR_SCROLLBAR_W;
+    if BarHeight < 50 then BarHeight := R.Bottom - R.Top;
+
+    // Hintergrund-Streifen (subtil, damit man sieht wo die Bar liegt)
+    Canvas.Brush.Color := clBtnFace;
+    Canvas.FillRect(Rect(BarLeft, R.Top, BarLeft + INFOBAR_WIDTH,
+                         R.Top + BarHeight));
+
+    Map := gDiagnosticStore.BuildLineSeverityMap(AFileName);
+    try
+      for Pair in Map do
+      begin
+        Y := R.Top + Round(Pair.Key / ATotalLines * BarHeight);
+        if Y < R.Top then Y := R.Top;
+        if Y > R.Top + BarHeight - INFOBAR_STROKE_H then
+          Y := R.Top + BarHeight - INFOBAR_STROKE_H;
+        Canvas.Brush.Color := ColorForSeverity(Pair.Value);
+        Canvas.FillRect(Rect(BarLeft, Y,
+                             BarLeft + INFOBAR_WIDTH, Y + INFOBAR_STROKE_H));
+      end;
+    finally
+      Map.Free;
     end;
   finally
-    Map.Free;
+    Canvas.Free;
   end;
 end;
 
-procedure TInfoBar.MouseDown(Button: TMouseButton; Shift: TShiftState;
-  X, Y: Integer);
+procedure TInfoBarRenderer.RepaintForCurrentView;
 var
-  Diags : TArray<TDiagnostic>;
-  D, Best : TDiagnostic;
-  BarY, Dist, MinDist : Integer;
-  Pos : IOTAEditPosition;
+  EditorSvc : INTAEditorServices;
+  EditWnd : INTAEditWindow;
+  View : IOTAEditView;
+  EditControl : TWinControl;
+  FileName : string;
+  TotalLines : Integer;
 begin
-  inherited;
-  if Button <> mbLeft then Exit;
-  if FEditView = nil then Exit;
-  if (gDiagnosticStore = nil) or (FCurrentFile = '') then Exit;
+  if not Supports(BorlandIDEServices, INTAEditorServices, EditorSvc) then Exit;
+  EditWnd := EditorSvc.TopEditWindow;
+  if (EditWnd = nil) or (EditWnd.Form = nil) then Exit;
 
-  Diags := gDiagnosticStore.GetForFile(FCurrentFile);
-  if Length(Diags) = 0 then Exit;
-  if FTotalLines <= 0 then Exit;
+  EditControl := FindEditControl(EditWnd.Form);
+  if EditControl = nil then Exit;
 
-  Best := nil;
-  MinDist := MaxInt;
-  for D in Diags do
-  begin
-    BarY := Round(D.Range.StartLine / FTotalLines * Height);
-    Dist := Abs(BarY - Y);
-    if Dist < MinDist then
-    begin
-      MinDist := Dist;
-      Best := D;
-    end;
-  end;
+  View := EditorSvc.TopView;
+  if View = nil then Exit;
+  if View.Buffer = nil then Exit;
 
-  if Assigned(Best) then
-  begin
-    // Jump zur Finding-Zeile + Cursor auf StartCol.
-    // IOTAEditView.TopRow ist read-only - aber Pos.Move triggert
-    // automatisches Scrollen wenn die Zielzeile ausserhalb der
-    // sichtbaren Range ist (IDE-Default-Verhalten).
-    Pos := FEditView.Buffer.EditPosition;
-    if Pos <> nil then
-      Pos.Move(Best.Range.StartLine, Best.Range.StartCol);
-    FEditView.Paint;
-  end;
+  FileName := View.Buffer.FileName;
+  TotalLines := GuessTotalLines(View);
+  PaintOnControl(EditControl, FileName, TotalLines);
 end;
 
-procedure InfoBarShowForView(AView: IOTAEditView);
+procedure InfoBarPaintTest;
 begin
-  if gInfoBar = nil then
-    gInfoBar := TInfoBar.CreateBar(Application);
-  gInfoBar.ShowForView(AView);
+  if gInfoBarRenderer = nil then
+    gInfoBarRenderer := TInfoBarRenderer.Create;
+  gInfoBarRenderer.RepaintForCurrentView;
 end;
 
 initialization
 
 finalization
-  if gInfoBar <> nil then
+  if gInfoBarRenderer <> nil then
   begin
-    gInfoBar.Free;
-    gInfoBar := nil;
+    gInfoBarRenderer.Free;
+    gInfoBarRenderer := nil;
   end;
 
 end.
