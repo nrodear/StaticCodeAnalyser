@@ -51,6 +51,12 @@ type
     // zu erweitern.
     FAllSeverityItems  : TArray<TFilterComboItem>;
     FAllTypeItems      : TArray<TFilterComboItem>;
+    // Letzter NICHT-Separator-Mode der gewaehlt war. Wird gebraucht um
+    // bei Klick auf einen Separator (Tag = -1) NICHT auf 'All'
+    // zurueckzuspringen sondern auf die zuletzt aktive Auswahl.
+    // Default 0 = Ord(fmAll); FilterChange aktualisiert bei jedem
+    // gueltigen Klick.
+    FLastNonSeparatorMode : Integer;
     FFilterMode     : TFilterMode;
     FCurrentBaseDir : string;
     FFilterCombo       : TComboBox;
@@ -1439,21 +1445,30 @@ begin
   tag := Integer(FFilterCombo.Items.Objects[idx]);
   if tag < 0 then
   begin
-    // Separator-Eintrag - keine Filter-Aktion, Auswahl auf "Alle" zuruecksetzen.
-    // Re-Entry-Schutz: das ItemIndex-Setzen feuert OnChange erneut. Wir
-    // entkoppeln den Handler temporaer, sonst wuerde FilterChange rekursiv
-    // aufgerufen.
+    // Separator-Eintrag (---/--- Errors ---/--- Hints ---). Frueher
+    // wurde hier auf Index 0 ('All') zurueckgesprungen - User-Wunsch:
+    // statt dessen den vorher gewaehlten Eintrag wiederherstellen, kein
+    // Filter-Update.
+    // Re-Entry-Schutz: ItemIndex-Setzen feuert OnChange erneut.
+    var RestoreIdx := 0;
+    for var i := 0 to FFilterCombo.Items.Count - 1 do
+      if (Integer(FFilterCombo.Items.Objects[i]) = FLastNonSeparatorMode)
+         and (Integer(FFilterCombo.Items.Objects[i]) >= 0) then
+      begin
+        RestoreIdx := i;
+        Break;
+      end;
     OldOnChange := FFilterCombo.OnChange;
     FFilterCombo.OnChange := nil;
     try
-      FFilterCombo.ItemIndex := 0;
+      FFilterCombo.ItemIndex := RestoreIdx;
     finally
       FFilterCombo.OnChange := OldOnChange;
     end;
-    FFilterMode := fmAll;
-  end
-  else
-    FFilterMode := TFilterMode(tag);
+    Exit;  // KEIN ApplyFilter - der vorige Filter-State bleibt 1:1.
+  end;
+  FFilterMode := TFilterMode(tag);
+  FLastNonSeparatorMode := tag;  // Anker fuer den naechsten Separator-Klick
   ApplyFilter;
 end;
 
