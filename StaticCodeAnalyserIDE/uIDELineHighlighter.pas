@@ -261,10 +261,33 @@ procedure UnregisterLineHighlighter;
 implementation
 
 uses
-  uAnalyserPalette;     // ACCENT_ERROR als zentrale Stripe-Default-Farbe
+  uAnalyserPalette,     // ACCENT_ERROR als zentrale Stripe-Default-Farbe
+  uRepoSettings;        // OverlayPosition aus [UI]
 
 const
   STRIPE_WIDTH_PX  = 3;
+
+function GetOverlayPositionSetting: string;
+// Liefert [UI] OverlayPosition aus analyser.ini. Frische Read pro Aufruf,
+// aber nur einmal pro Hover-Enter (= neue Finding-Zeile) - nicht im
+// MouseMove-Hot-Path. Default 'sameline' wenn INI nicht lesbar.
+var
+  S : TRepoSettings;
+begin
+  Result := 'sameline';
+  S := TRepoSettings.Create;
+  try
+    try
+      S.Load;
+      if S.OverlayPosition <> '' then
+        Result := S.OverlayPosition;
+    except
+      // INI nicht lesbar -> Default-String greift.
+    end;
+  finally
+    S.Free;
+  end;
+end;
 
 type
   // Wird beim Save (durch den IDE-Kern) gerufen. Wir delegieren an
@@ -996,10 +1019,20 @@ begin
   if not GHighlighter.TryGetMark(FLastPaintedFile, HitLine, Mark) then Exit;
   if not FRenderedRects.TryGetValue(HitLine, HitRect) then Exit;
 
-  // WS_CHILD-Modus: Position = Editor-Client-Koordinaten direkt unter
-  // der markierten Zeile.
+  // WS_CHILD-Modus: Position = Editor-Client-Koordinaten.
+  // OverlayPosition aus analyser.ini steuert Y-Anker:
+  //   sameline (Default): P.Y = HitRect.Top -> Title-Bar ueberlagert
+  //                       die Finding-Zeile selbst (Auffalt-Animation
+  //                       waechst dann nach unten)
+  //   below             : P.Y = HitRect.Bottom -> Overlay startet eine
+  //                       Zeile UNTER der Finding-Zeile (alte Default,
+  //                       Befund-Zeile bleibt sichtbar)
+  // Wert wird hier pro Hover-Enter (= rare) frisch gelesen; kein Cache
+  // noetig - der Hot-Path EditorMouseMove cached bereits via FHoveredLine.
   P.X := HitRect.Left;
   P.Y := HitRect.Bottom;
+  if SameText(GetOverlayPositionSetting, 'sameline') then
+    P.Y := HitRect.Top;
   AWidth := HitRect.Right - HitRect.Left;
   if AWidth < 200 then AWidth := 200;
   LineH := FSavedCharHeight;

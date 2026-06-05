@@ -72,6 +72,11 @@ type
     chkUsesCheck       : TCheckBox;
     chkIncludeTests    : TCheckBox;
     chkAutoDiscover    : TCheckBox;
+    // Display
+    grpDisplay         : TGroupBox;
+    lblOverlayPos      : TLabel;
+    cboOverlayPos      : TComboBox;
+    lblOverlayPosInfo  : TLabel;
   private
     procedure BuildControls;
     procedure PopulateProfileCombos;
@@ -306,6 +311,48 @@ begin
   chkAutoDiscover.Caption := _('AutoDiscoverClasses - extend LeakyClasses with ' +
                                'project-specific classes');
 
+  // ================= Display =================
+  // Annotation-Overlay Position. Combo mit zwei Modi:
+  //   sameline (Default) - Overlay startet AUF der Finding-Zeile
+  //   below             - Overlay startet eine Zeile unter der Finding-Zeile
+  // Aenderung greift erst nach IDE-Neustart (Cache in uIDELineHighlighter).
+  grpDisplay              := TGroupBox.Create(Self);
+  grpDisplay.Parent       := FScroll;
+  grpDisplay.Left         := MARGIN_LEFT;
+  grpDisplay.Top          := NextY(96);
+  grpDisplay.Width        := GROUP_W;
+  grpDisplay.Height       := 96;
+  grpDisplay.Caption      := _('Display');
+
+  lblOverlayPos           := TLabel.Create(Self);
+  lblOverlayPos.Parent    := grpDisplay;
+  lblOverlayPos.Left      := INNER_LEFT;
+  lblOverlayPos.Top       := INNER_TOP + 3;
+  lblOverlayPos.Width     := 160;
+  lblOverlayPos.Caption   := _('Annotation overlay position:');
+
+  cboOverlayPos           := TComboBox.Create(Self);
+  cboOverlayPos.Parent    := grpDisplay;
+  cboOverlayPos.Left      := INNER_LEFT + 160;
+  cboOverlayPos.Top       := INNER_TOP;
+  cboOverlayPos.Width     := 240;
+  cboOverlayPos.Style     := csDropDownList;
+  cboOverlayPos.Items.Add(_('Same line at end (default)'));
+  cboOverlayPos.Items.Add(_('One line below'));
+  cboOverlayPos.ItemIndex := 0;
+
+  lblOverlayPosInfo          := TLabel.Create(Self);
+  lblOverlayPosInfo.Parent   := grpDisplay;
+  lblOverlayPosInfo.AutoSize := False;
+  lblOverlayPosInfo.Left     := INNER_LEFT;
+  lblOverlayPosInfo.Top      := cboOverlayPos.Top + cboOverlayPos.Height + 8;
+  lblOverlayPosInfo.Width    := GROUP_W - 2 * INNER_LEFT;
+  lblOverlayPosInfo.Height   := 28;
+  lblOverlayPosInfo.WordWrap := True;
+  lblOverlayPosInfo.Caption  :=
+    _('Where the hover annotation overlay anchors relative to the finding ' +
+      'line. Takes effect after IDE restart.');
+
   // ================= Hotkeys ================= (BOTTOM)
   // Bewusst als letzte Gruppe positioniert - Shortcut-Konfiguration ist
   // unten in den Settings, weil sie selten geaendert wird und in der ueb-
@@ -536,6 +583,15 @@ begin
   if Assigned(chkUsesCheck)    then chkUsesCheck.Checked    := ASettings.UsesCheck;
   if Assigned(chkIncludeTests) then chkIncludeTests.Checked := ASettings.IncludeTests;
   if Assigned(chkAutoDiscover) then chkAutoDiscover.Checked := ASettings.AutoDiscoverClasses;
+
+  // Display: 'sameline' -> Index 0, 'below' -> Index 1, alles andere -> 0
+  if Assigned(cboOverlayPos) then
+  begin
+    if SameText(ASettings.OverlayPosition, 'below') then
+      cboOverlayPos.ItemIndex := 1
+    else
+      cboOverlayPos.ItemIndex := 0;
+  end;
 end;
 
 procedure TSCAOptionsFrame.SaveToSettings(ASettings: TRepoSettings);
@@ -575,6 +631,15 @@ begin
   if Assigned(chkUsesCheck)    then ASettings.UsesCheck           := chkUsesCheck.Checked;
   if Assigned(chkIncludeTests) then ASettings.IncludeTests        := chkIncludeTests.Checked;
   if Assigned(chkAutoDiscover) then ASettings.AutoDiscoverClasses := chkAutoDiscover.Checked;
+
+  // Display: Index 1 = below, alles andere = sameline
+  if Assigned(cboOverlayPos) then
+  begin
+    if cboOverlayPos.ItemIndex = 1 then
+      ASettings.OverlayPosition := 'below'
+    else
+      ASettings.OverlayPosition := 'sameline';
+  end;
 end;
 
 procedure TSCAOptionsFrame.CMStyleChanged(var Message: TMessage);

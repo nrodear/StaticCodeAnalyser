@@ -76,6 +76,7 @@ type
     FFindingNavUpShortcut  : string;  // [Hotkeys] FindingNavUpShortcut
     FFindingNavDownShortcut: string;  // [Hotkeys] FindingNavDownShortcut
     FLanguage          : string;      // [UI] Language ('de', 'en', '')
+    FOverlayPosition   : string;      // [UI] OverlayPosition ('sameline' | 'below')
     // Code-Quality-Grade-Schwellwerte (alle aus [Score]).
     // Default-Skala: A=0, B<=50, C<=200, D<=500, E>500.
     FScoreThresholdB   : Integer;     // [Score] GradeBMax (50)
@@ -268,6 +269,18 @@ type
     // falls dxgettext jemals aktiviert wird, wuerde es OS-Locale nutzen).
     // Aus [UI] Language gelesen. Erlaubte Werte: 'de', 'en', ''.
     property Language: string read FLanguage write FLanguage;
+
+    // Position des Hover-AnnotationOverlay zur Befund-Zeile. Aus [UI]
+    // OverlayPosition gelesen. Erlaubte Werte:
+    //   'sameline' (Default) - Overlay startet AUF der Finding-Zeile selbst
+    //                          (Title-Bar ueberlagert die Zeile, faltet
+    //                          nach unten auf)
+    //   'below'              - Overlay startet eine Zeile UNTER der Finding-
+    //                          Zeile (alte Default - Befund-Zeile bleibt
+    //                          sichtbar)
+    // Aenderung erfordert IDE-Neustart (Wert wird in uIDELineHighlighter
+    // einmalig zur ShowAt-Zeit gelesen).
+    property OverlayPosition: string read FOverlayPosition write FOverlayPosition;
 
     // Schwellwerte fuer die Letter-Grade-Anzeige der Code-Quality-Kachel.
     // Roher Score wird auf A..E gemappt (siehe ScoreToGrade in uIDE-
@@ -646,6 +659,17 @@ const
     'Language=en'#13#10 +
     ';Language=de'#13#10 +
     ''#13#10 +
+    '; OverlayPosition (string, default: sameline)'#13#10 +
+    '; Position des Hover-Annotation-Overlays im Editor:'#13#10 +
+    ';   sameline = Overlay startet AUF der Finding-Zeile (Title-Bar'#13#10 +
+    ';              ueberlagert die Zeile; faltet nach unten auf)'#13#10 +
+    ';   below    = Overlay startet eine Zeile UNTER der Finding-Zeile'#13#10 +
+    ';              (alte Default - Befund-Zeile bleibt sichtbar)'#13#10 +
+    '; Auch konfigurierbar via Tools > Options > Third Party >'#13#10 +
+    '; Static Code Analyser. Aenderung erfordert IDE-Neustart.'#13#10 +
+    'OverlayPosition=sameline'#13#10 +
+    ';OverlayPosition=below'#13#10 +
+    ''#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
     ';  [Score] - Code-Quality-Letter-Grade-Schwellwerte'#13#10 +
@@ -734,6 +758,7 @@ begin
   FFindingNavUpShortcut   := 'Ctrl+Alt+Up';
   FFindingNavDownShortcut := 'Ctrl+Alt+Down';
   FLanguage           := 'en';        // Default: englische UI (Source-Sprache)
+  FOverlayPosition    := 'sameline';  // Default: Overlay startet auf der Finding-Zeile
 
   // [Score] Defaults: Skala fuer mittelgrosse Projekte. A=0, B<=50,
   // C<=200, D<=500, E>500. Anpassbar via analyser.ini fuer projekt-
@@ -923,6 +948,14 @@ begin
     // [UI] Language=de|en|'' -> FLanguage. Default 'en' (Source-Sprache).
     FLanguage := Trim(Ini.ReadString('UI', 'Language', 'en')).ToLower;
 
+    // [UI] OverlayPosition=sameline|below -> Hover-Overlay-Geometrie.
+    // sameline (Default): Overlay startet AUF der Finding-Zeile selbst
+    // (Title-Bar ueberlagert die Zeile). below: Overlay startet eine Zeile
+    // unter der Finding-Zeile (alte Default).
+    FOverlayPosition := Trim(Ini.ReadString('UI', 'OverlayPosition', 'sameline')).ToLower;
+    if (FOverlayPosition <> 'sameline') and (FOverlayPosition <> 'below') then
+      FOverlayPosition := 'sameline';  // unbekannter Wert -> Default
+
     // [Score] Letter-Grade-Schwellwerte. Defaults bleiben gleich wenn
     // die Section fehlt - kein Verhaltens-Bruch fuer existierende INIs.
     FScoreThresholdB := Ini.ReadInteger('Score', 'GradeBMax',  50);
@@ -1002,6 +1035,7 @@ begin
     Ini.WriteBool  ('Detectors', 'IncludeTests',        FIncludeTests);
     Ini.WriteBool  ('Detectors', 'AutoDiscoverClasses', FAutoDiscover);
     Ini.WriteString('UI',    'Language',           FLanguage);
+    Ini.WriteString('UI',    'OverlayPosition',    FOverlayPosition);
     // Pflicht bei TMemIniFile: ohne UpdateFile bleiben alle Writes nur
     // im Speicher (TIniFile dagegen schreibt pro Write sofort).
     Ini.UpdateFile;
