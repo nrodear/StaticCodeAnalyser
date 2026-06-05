@@ -289,15 +289,13 @@ begin
 
   if Assigned(Best) then
   begin
-    // Jump zur Finding-Zeile + Cursor auf StartCol
+    // Jump zur Finding-Zeile + Cursor auf StartCol.
+    // IOTAEditView.TopRow ist read-only - aber Pos.Move triggert
+    // automatisches Scrollen wenn die Zielzeile ausserhalb der
+    // sichtbaren Range ist (IDE-Default-Verhalten).
     Pos := FEditView.Buffer.EditPosition;
     if Pos <> nil then
-    begin
       Pos.Move(Best.Range.StartLine, Best.Range.StartCol);
-      // Scroll so dass Zeile sichtbar (3 Zeilen Padding oben).
-      // IOTAEditView.TopRow ist eine read/write Property.
-      FEditView.TopRow := Max(1, Best.Range.StartLine - 3);
-    end;
     FEditView.Paint;
   end;
 end;
