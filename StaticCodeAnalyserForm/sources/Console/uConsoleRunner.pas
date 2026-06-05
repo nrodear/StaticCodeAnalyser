@@ -73,6 +73,10 @@ type
     SonarConfig   : string;         // --sonar-config <path>      alternative INI
     // ---- Perf-Diagnostik ----
     TimeDetectors : Boolean;        // --time-detectors           pro-Detektor-Timing-Tabelle nach Scan
+    TimeDetectorsOut : string;      // --time-detectors-out <file> schreibt die Markdown-Tabelle in
+                                    //   die angegebene Datei (zusaetzlich zu/statt stdout). Pflicht
+                                    //   wenn der Aufrufer stdout via Pipe/Redirect nutzt - der CONOUT$-
+                                    //   Pfad im dpr ignoriert Pipe-Redirects.
     // ---- Telemetrie (C.5) ----
     TelemetryCsv  : string;         // --telemetry-csv <file>     suppression-marker-hits als CSV ausgeben
     // ---- Findings-Filter ----
@@ -171,6 +175,7 @@ begin
   Result.ReportSarif := '';
   Result.ReportHtml  := '';
   Result.TimeDetectors    := False;
+  Result.TimeDetectorsOut := '';
   Result.HideTestFixtures := False;
   Result.HideTestExplicit := False;
   Result.Quiet       := False;
@@ -265,6 +270,11 @@ begin
       GetValue(Result.SonarConfig, '--sonar-config')
     else if A = '--time-detectors' then
       Result.TimeDetectors := True
+    else if A = '--time-detectors-out' then
+    begin
+      GetValue(Result.TimeDetectorsOut, '--time-detectors-out');
+      Result.TimeDetectors := True;  // Out impliziert Aktivierung
+    end
     else if A = '--telemetry-csv' then
       GetValue(Result.TelemetryCsv, '--telemetry-csv')
     else if A = '--hide-test-fixtures' then
@@ -442,6 +452,10 @@ begin
   WriteLn('');
   WriteLn('Perf-Diagnostik:');
   WriteLn('  --time-detectors      Aggregiert per-Detektor TotalMs + CallCount');
+  WriteLn('  --time-detectors-out <file>');
+  WriteLn('                        Schreibt die Markdown-Tabelle in die angegebene Datei');
+  WriteLn('                        (impliziert --time-detectors). Nuetzlich weil das exe');
+  WriteLn('                        intern auf CONOUT$ schreibt und stdout-Pipes ignoriert.');
   WriteLn('                        ueber den Scan. Markdown-Tabelle am Ende.');
   WriteLn('                        Identifiziert Hot-Path-Detektoren fuer');
   WriteLn('                        gezielte Optimierung.');
@@ -579,10 +593,12 @@ end;
 
 { ---- Per-Detector-Timing-Tabelle ---- }
 
-procedure WriteDetectorTimingsMarkdown;
+procedure WriteDetectorTimingsMarkdown(const AOutFile: string = '');
 // Schreibt eine Markdown-Tabelle pro Detektor mit TotalMs / CallCount /
 // AvgMs / %-Anteil-am-Scan, sortiert nach TotalMs absteigend. Daten kommt
 // aus gDetectorTimings (befuellt durch das AOnTime-Lambda in ParseLeaks).
+// AOutFile = '' -> stdout (WriteLn). AOutFile <> '' -> zusaetzlich
+// als UTF-8 in die Datei schreiben (bypassing CONOUT$-Limitierung).
 var
   Pairs       : TArray<TPair<string, TPair<Int64, Integer>>>;
   TotalMs     : Int64;
@@ -590,6 +606,7 @@ var
   Name        : string;
   Acc         : TPair<Int64, Integer>;
   Avg, Pct    : Double;
+  Lines       : TStringList;
 begin
   if (gDetectorTimings = nil) or (gDetectorTimings.Count = 0) then Exit;
 
@@ -607,28 +624,53 @@ begin
   for i := 0 to High(Pairs) do
     Inc(TotalMs, Pairs[i].Value.Key);
 
-  WriteLn('');
-  WriteLn('## Per-Detector Timing');
-  WriteLn('');
-  WriteLn('| Rank | Detector | Total ms | Calls | Avg ms | % Scan |');
-  WriteLn('|---:|---|---:|---:|---:|---:|');
-  for i := 0 to High(Pairs) do
-  begin
-    Name := Pairs[i].Key;
-    Acc  := Pairs[i].Value;
-    if Acc.Value > 0 then
-      Avg := Acc.Key / Acc.Value
-    else
-      Avg := 0;
-    if TotalMs > 0 then
-      Pct := (Acc.Key * 100.0) / TotalMs
-    else
-      Pct := 0;
-    WriteLn(Format('| %d | %s | %d | %d | %.2f | %.1f%% |',
-      [i + 1, Name, Acc.Key, Acc.Value, Avg, Pct]));
+  // Zeilen in TStringList aufbauen (single source of truth) - danach
+  // BEIDE Pfade: WriteLn auf stdout/CONOUT$ + optional File-Save.
+  Lines := TStringList.Create;
+  try
+    Lines.Add('');
+    Lines.Add('## Per-Detector Timing');
+    Lines.Add('');
+    Lines.Add('| Rank | Detector | Total ms | Calls | Avg ms | % Scan |');
+    Lines.Add('|---:|---|---:|---:|---:|---:|');
+    for i := 0 to High(Pairs) do
+    begin
+      Name := Pairs[i].Key;
+      Acc  := Pairs[i].Value;
+      if Acc.Value > 0 then
+        Avg := Acc.Key / Acc.Value
+      else
+        Avg := 0;
+      if TotalMs > 0 then
+        Pct := (Acc.Key * 100.0) / TotalMs
+      else
+        Pct := 0;
+      Lines.Add(Format('| %d | %s | %d | %d | %.2f | %.1f%% |',
+        [i + 1, Name, Acc.Key, Acc.Value, Avg, Pct]));
+    end;
+    Lines.Add('');
+    Lines.Add(Format('Total: %d ms over %d detectors',
+      [TotalMs, Length(Pairs)]));
+
+    // stdout-Pfad: weiter wie bisher (greift wenn keine Pipe-Redirection
+    // aktiv ist, sonst landet's via CONOUT$ in der Konsole).
+    for i := 0 to Lines.Count - 1 do
+      WriteLn(Lines[i]);
+
+    // File-Pfad: explizit gewuenschter Output (umgeht CONOUT$-Limit).
+    if AOutFile <> '' then
+    begin
+      try
+        Lines.SaveToFile(AOutFile, TEncoding.UTF8);
+      except
+        on E: Exception do
+          WriteLn(ErrOutput, 'Could not write timings to ', AOutFile,
+                  ': ', E.Message);
+      end;
+    end;
+  finally
+    Lines.Free;
   end;
-  WriteLn('');
-  WriteLn(Format('Total: %d ms over %d detectors', [TotalMs, Length(Pairs)]));
 end;
 
 { ---- Run ---- }
@@ -944,7 +986,7 @@ begin
     // Summary damit Quiet-Mode-User die Tabelle bekommen waehrend die
     // Finding-Auflistung weiter unterdrueckt bleibt.
     if Args.TimeDetectors and Assigned(gDetectorTimings) then
-      WriteDetectorTimingsMarkdown;
+      WriteDetectorTimingsMarkdown(Args.TimeDetectorsOut);
     // C.5 Telemetrie: CSV schreiben wenn aktiviert.
     if (Args.TelemetryCsv <> '') and Assigned(gSuppressionTelemetry) then
     begin
