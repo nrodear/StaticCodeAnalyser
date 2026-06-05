@@ -1445,11 +1445,37 @@ begin
   tag := Integer(FFilterCombo.Items.Objects[idx]);
   if tag < 0 then
   begin
-    // Separator-Eintrag (---/--- Errors ---/--- Hints ---). Frueher
-    // wurde hier auf Index 0 ('All') zurueckgesprungen - User-Wunsch:
-    // statt dessen den vorher gewaehlten Eintrag wiederherstellen, kein
-    // Filter-Update.
+    // Separator-Eintrag (---/--- Errors ---/--- Hints ---). User-Wunsch:
+    // beim Klick zum NAECHSTEN Detail-Eintrag UNTERHALB des Separators
+    // springen (= erstes Item der jeweiligen Kategorie). Fallback wenn
+    // kein Item mehr unter dem Separator liegt: vorherige Auswahl
+    // wiederherstellen.
     // Re-Entry-Schutz: ItemIndex-Setzen feuert OnChange erneut.
+    var NextIdx : Integer := -1;
+    for var j := idx + 1 to FFilterCombo.Items.Count - 1 do
+      if Integer(FFilterCombo.Items.Objects[j]) >= 0 then
+      begin
+        NextIdx := j;
+        Break;
+      end;
+    if NextIdx >= 0 then
+    begin
+      // Forward-Springen zum naechsten echten Eintrag - Filter wechselt.
+      tag := Integer(FFilterCombo.Items.Objects[NextIdx]);
+      OldOnChange := FFilterCombo.OnChange;
+      FFilterCombo.OnChange := nil;
+      try
+        FFilterCombo.ItemIndex := NextIdx;
+      finally
+        FFilterCombo.OnChange := OldOnChange;
+      end;
+      FFilterMode := TFilterMode(tag);
+      FLastNonSeparatorMode := tag;
+      ApplyFilter;
+      Exit;
+    end;
+    // Kein Folge-Eintrag (Separator am Listen-Ende) -> vorherige Auswahl
+    // wiederherstellen, kein Filter-Update.
     var RestoreIdx := 0;
     for var i := 0 to FFilterCombo.Items.Count - 1 do
       if (Integer(FFilterCombo.Items.Objects[i]) = FLastNonSeparatorMode)
@@ -1465,7 +1491,7 @@ begin
     finally
       FFilterCombo.OnChange := OldOnChange;
     end;
-    Exit;  // KEIN ApplyFilter - der vorige Filter-State bleibt 1:1.
+    Exit;
   end;
   FFilterMode := TFilterMode(tag);
   FLastNonSeparatorMode := tag;  // Anker fuer den naechsten Separator-Klick
