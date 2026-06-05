@@ -1308,13 +1308,44 @@ begin
 end;
 
 procedure TFindingEditorEvents.EndPaint(const Editor: TWinControl);
+var
+  Line : Integer;
+  Mark : TFindingMark;
+  ToRemove : TList<Integer>;
 begin
+  if Editor <> FSavedEditor then Exit;
+
+  // Stale-Cache-Cleanup: FRenderedRects/FRenderedTextEnds bekommen pro
+  // PaintLine Eintraege fuer SICHTBARE markierte Zeilen dazu. Wenn der
+  // User aus einem Bereich rausscrollt oder ein Marker durch einen
+  // neuen Scan verschwindet, liegen alte Eintraege bis zum naechsten
+  // ForceFullRepaint (BeginPaint-Branch) brach. Bei langen IDE-Sessions
+  // ohne Full-Repaint summiert sich das. Hier in EndPaint pruefen ob
+  // jede gecachte Line noch einen Mark hat - sonst raus.
+  // Kosten: O(N) Dictionary-Lookups, N typisch ~100; in praxi negligible.
+  if Assigned(GHighlighter) and (FRenderedRects.Count > 0)
+     and (FLastPaintedFile <> '') then
+  begin
+    ToRemove := TList<Integer>.Create;
+    try
+      for Line in FRenderedRects.Keys do
+        if not GHighlighter.TryGetMark(FLastPaintedFile, Line, Mark) then
+          ToRemove.Add(Line);
+      for Line in ToRemove do
+      begin
+        FRenderedRects.Remove(Line);
+        FRenderedTextEnds.Remove(Line);
+      end;
+    finally
+      ToRemove.Free;
+    end;
+  end;
+
   // Bei Full-Repaint (BeginPaint hat FRenderedRects geleert) wurden alle
   // tatsaechlich sichtbaren markierten Zeilen via PaintLine wieder
   // hinzugefuegt. Wenn FRenderedRects danach leer ist, gibt es keine
   // sichtbaren Marker mehr -> Overlay verbergen.
   if not Assigned(GAnnotationOverlay) then Exit;
-  if Editor <> FSavedEditor then Exit;
   if FRenderedRects.Count = 0 then
   begin
     GAnnotationOverlay.HideOverlay;
