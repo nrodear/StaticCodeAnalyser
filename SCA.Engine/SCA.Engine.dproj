@@ -5,7 +5,7 @@
         <ProjectVersion>20.1</ProjectVersion>
         <FrameworkType>None</FrameworkType>
         <Base>True</Base>
-        <Config Condition="'$(Config)'==''">Debug</Config>
+        <Config Condition="'$(Config)'==''">Release</Config>
         <Platform Condition="'$(Platform)'==''">Win32</Platform>
         <ProjectName Condition="'$(ProjectName)'==''">SCA.Engine</ProjectName>
         <TargetedPlatforms>1</TargetedPlatforms>
@@ -34,8 +34,28 @@
         <CfgParent>Base</CfgParent>
         <Base>true</Base>
     </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='OSX64' and '$(Base)'=='true') or '$(Base_OSX64)'!=''">
+        <Base_OSX64>true</Base_OSX64>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='OSXARM64' and '$(Base)'=='true') or '$(Base_OSXARM64)'!=''">
+        <Base_OSXARM64>true</Base_OSXARM64>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
     <PropertyGroup Condition="('$(Platform)'=='Win32' and '$(Base)'=='true') or '$(Base_Win32)'!=''">
         <Base_Win32>true</Base_Win32>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Win64' and '$(Base)'=='true') or '$(Base_Win64)'!=''">
+        <Base_Win64>true</Base_Win64>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Win64x' and '$(Base)'=='true') or '$(Base_Win64x)'!=''">
+        <Base_Win64x>true</Base_Win64x>
         <CfgParent>Base</CfgParent>
         <Base>true</Base>
     </PropertyGroup>
@@ -72,16 +92,26 @@
     <PropertyGroup Condition="'$(Base_Android)'!=''">
         <DCC_CBuilderOutput>None</DCC_CBuilderOutput>
         <EnabledSysJars>activity-1.7.2.dex.jar;annotation-experimental-1.3.0.dex.jar;annotation-jvm-1.6.0.dex.jar;annotations-13.0.dex.jar;appcompat-1.2.0.dex.jar;appcompat-resources-1.2.0.dex.jar;billing-6.0.1.dex.jar;biometric-1.1.0.dex.jar;browser-1.4.0.dex.jar;cloud-messaging.dex.jar;collection-1.1.0.dex.jar;concurrent-futures-1.1.0.dex.jar;core-1.10.1.dex.jar;core-common-2.2.0.dex.jar;core-ktx-1.10.1.dex.jar;core-runtime-2.2.0.dex.jar;cursoradapter-1.0.0.dex.jar;customview-1.0.0.dex.jar;documentfile-1.0.0.dex.jar;drawerlayout-1.0.0.dex.jar;error_prone_annotations-2.9.0.dex.jar;exifinterface-1.3.6.dex.jar;firebase-annotations-16.2.0.dex.jar;firebase-common-20.3.1.dex.jar;firebase-components-17.1.0.dex.jar;firebase-datatransport-18.1.7.dex.jar;firebase-encoders-17.0.0.dex.jar;firebase-encoders-json-18.0.0.dex.jar;firebase-encoders-proto-16.0.0.dex.jar;firebase-iid-interop-17.1.0.dex.jar;firebase-installations-17.1.3.dex.jar;firebase-installations-interop-17.1.0.dex.jar;firebase-measurement-connector-19.0.0.dex.jar;firebase-messaging-23.1.2.dex.jar;fmx.dex.jar;fragment-1.2.5.dex.jar;google-play-licensing.dex.jar;interpolator-1.0.0.dex.jar;javax.inject-1.dex.jar;kotlin-stdlib-1.8.22.dex.jar;kotlin-stdlib-common-1.8.22.dex.jar;kotlin-stdlib-jdk7-1.8.22.dex.jar;kotlin-stdlib-jdk8-1.8.22.dex.jar;kotlinx-coroutines-android-1.6.4.dex.jar;kotlinx-coroutines-core-jvm-1.6.4.dex.jar;legacy-support-core-utils-1.0.0.dex.jar;lifecycle-common-2.6.1.dex.jar;lifecycle-livedata-2.6.1.dex.jar;lifecycle-livedata-core-2.6.1.dex.jar;lifecycle-runtime-2.6.1.dex.jar;lifecycle-service-2.6.1.dex.jar;lifecycle-viewmodel-2.6.1.dex.jar;lifecycle-viewmodel-savedstate-2.6.1.dex.jar;listenablefuture-1.0.dex.jar;loader-1.0.0.dex.jar;localbroadcastmanager-1.0.0.dex.jar;okio-jvm-3.4.0.dex.jar;play-services-ads-22.2.0.dex.jar;play-services-ads-base-22.2.0.dex.jar;play-services-ads-identifier-18.0.0.dex.jar;play-services-ads-lite-22.2.0.dex.jar;play-services-appset-16.0.1.dex.jar;play-services-base-18.1.0.dex.jar;play-services-basement-18.1.0.dex.jar;play-services-cloud-messaging-17.0.1.dex.jar;play-services-location-21.0.1.dex.jar;play-services-maps-18.1.0.dex.jar;play-services-measurement-base-20.1.2.dex.jar;play-services-measurement-sdk-api-20.1.2.dex.jar;play-services-stats-17.0.2.dex.jar;play-services-tasks-18.0.2.dex.jar;print-1.0.0.dex.jar;profileinstaller-1.3.0.dex.jar;room-common-2.2.5.dex.jar;room-runtime-2.2.5.dex.jar;savedstate-1.2.1.dex.jar;sqlite-2.1.0.dex.jar;sqlite-framework-2.1.0.dex.jar;startup-runtime-1.1.1.dex.jar;tracing-1.0.0.dex.jar;transport-api-3.0.0.dex.jar;transport-backend-cct-3.1.8.dex.jar;transport-runtime-3.1.8.dex.jar;user-messaging-platform-2.0.0.dex.jar;vectordrawable-1.1.0.dex.jar;vectordrawable-animated-1.1.0.dex.jar;versionedparcelable-1.1.1.dex.jar;viewpager-1.0.0.dex.jar;work-runtime-2.7.0.dex.jar</EnabledSysJars>
+        <DCC_UsePackage>rtl;$(DCC_UsePackage)</DCC_UsePackage>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Android64)'!=''">
         <DCC_CBuilderOutput>None</DCC_CBuilderOutput>
         <EnabledSysJars>activity-1.7.2.dex.jar;annotation-experimental-1.3.0.dex.jar;annotation-jvm-1.6.0.dex.jar;annotations-13.0.dex.jar;appcompat-1.2.0.dex.jar;appcompat-resources-1.2.0.dex.jar;billing-6.0.1.dex.jar;biometric-1.1.0.dex.jar;browser-1.4.0.dex.jar;cloud-messaging.dex.jar;collection-1.1.0.dex.jar;concurrent-futures-1.1.0.dex.jar;core-1.10.1.dex.jar;core-common-2.2.0.dex.jar;core-ktx-1.10.1.dex.jar;core-runtime-2.2.0.dex.jar;cursoradapter-1.0.0.dex.jar;customview-1.0.0.dex.jar;documentfile-1.0.0.dex.jar;drawerlayout-1.0.0.dex.jar;error_prone_annotations-2.9.0.dex.jar;exifinterface-1.3.6.dex.jar;firebase-annotations-16.2.0.dex.jar;firebase-common-20.3.1.dex.jar;firebase-components-17.1.0.dex.jar;firebase-datatransport-18.1.7.dex.jar;firebase-encoders-17.0.0.dex.jar;firebase-encoders-json-18.0.0.dex.jar;firebase-encoders-proto-16.0.0.dex.jar;firebase-iid-interop-17.1.0.dex.jar;firebase-installations-17.1.3.dex.jar;firebase-installations-interop-17.1.0.dex.jar;firebase-measurement-connector-19.0.0.dex.jar;firebase-messaging-23.1.2.dex.jar;fmx.dex.jar;fragment-1.2.5.dex.jar;google-play-licensing.dex.jar;interpolator-1.0.0.dex.jar;javax.inject-1.dex.jar;kotlin-stdlib-1.8.22.dex.jar;kotlin-stdlib-common-1.8.22.dex.jar;kotlin-stdlib-jdk7-1.8.22.dex.jar;kotlin-stdlib-jdk8-1.8.22.dex.jar;kotlinx-coroutines-android-1.6.4.dex.jar;kotlinx-coroutines-core-jvm-1.6.4.dex.jar;legacy-support-core-utils-1.0.0.dex.jar;lifecycle-common-2.6.1.dex.jar;lifecycle-livedata-2.6.1.dex.jar;lifecycle-livedata-core-2.6.1.dex.jar;lifecycle-runtime-2.6.1.dex.jar;lifecycle-service-2.6.1.dex.jar;lifecycle-viewmodel-2.6.1.dex.jar;lifecycle-viewmodel-savedstate-2.6.1.dex.jar;listenablefuture-1.0.dex.jar;loader-1.0.0.dex.jar;localbroadcastmanager-1.0.0.dex.jar;okio-jvm-3.4.0.dex.jar;play-services-ads-22.2.0.dex.jar;play-services-ads-base-22.2.0.dex.jar;play-services-ads-identifier-18.0.0.dex.jar;play-services-ads-lite-22.2.0.dex.jar;play-services-appset-16.0.1.dex.jar;play-services-base-18.1.0.dex.jar;play-services-basement-18.1.0.dex.jar;play-services-cloud-messaging-17.0.1.dex.jar;play-services-location-21.0.1.dex.jar;play-services-maps-18.1.0.dex.jar;play-services-measurement-base-20.1.2.dex.jar;play-services-measurement-sdk-api-20.1.2.dex.jar;play-services-stats-17.0.2.dex.jar;play-services-tasks-18.0.2.dex.jar;print-1.0.0.dex.jar;profileinstaller-1.3.0.dex.jar;room-common-2.2.5.dex.jar;room-runtime-2.2.5.dex.jar;savedstate-1.2.1.dex.jar;sqlite-2.1.0.dex.jar;sqlite-framework-2.1.0.dex.jar;startup-runtime-1.1.1.dex.jar;tracing-1.0.0.dex.jar;transport-api-3.0.0.dex.jar;transport-backend-cct-3.1.8.dex.jar;transport-runtime-3.1.8.dex.jar;user-messaging-platform-2.0.0.dex.jar;vectordrawable-1.1.0.dex.jar;vectordrawable-animated-1.1.0.dex.jar;versionedparcelable-1.1.1.dex.jar;viewpager-1.0.0.dex.jar;work-runtime-2.7.0.dex.jar</EnabledSysJars>
+        <DCC_UsePackage>rtl;$(DCC_UsePackage)</DCC_UsePackage>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_iOSDevice64)'!=''">
         <DCC_CBuilderOutput>None</DCC_CBuilderOutput>
+        <DCC_UsePackage>rtl;$(DCC_UsePackage)</DCC_UsePackage>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_iOSSimARM64)'!=''">
         <DCC_CBuilderOutput>None</DCC_CBuilderOutput>
+        <DCC_UsePackage>rtl;$(DCC_UsePackage)</DCC_UsePackage>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Base_OSX64)'!=''">
+        <DCC_UsePackage>rtl;$(DCC_UsePackage)</DCC_UsePackage>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Base_OSXARM64)'!=''">
+        <DCC_UsePackage>rtl;$(DCC_UsePackage)</DCC_UsePackage>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
         <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;Bde;$(DCC_Namespace)</DCC_Namespace>
@@ -89,6 +119,13 @@
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProgramID=com.embarcadero.$(MSBuildProjectName);ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
         <VerInfo_Locale>1033</VerInfo_Locale>
+        <DCC_UsePackage>rtl;$(DCC_UsePackage)</DCC_UsePackage>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Base_Win64)'!=''">
+        <DCC_UsePackage>rtl;$(DCC_UsePackage)</DCC_UsePackage>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Base_Win64x)'!=''">
+        <DCC_UsePackage>rtl;$(DCC_UsePackage)</DCC_UsePackage>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1)'!=''">
         <DCC_Define>DEBUG;$(DCC_Define)</DCC_Define>
@@ -114,6 +151,208 @@
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
         <DCCReference Include="rtl.dcp"/>
+        <DCCReference Include="sources\Common\uAnalyserTypes.pas"/>
+        <DCCReference Include="sources\Common\uCollectValues.pas"/>
+        <DCCReference Include="sources\Common\uDetectorUtils.pas"/>
+        <DCCReference Include="sources\Common\uLocalization.pas"/>
+        <DCCReference Include="sources\Common\uMethodd12.pas"/>
+        <DCCReference Include="sources\Common\uQuickFix.pas"/>
+        <DCCReference Include="sources\Common\uRegExMatches.pas"/>
+        <DCCReference Include="sources\Common\uRuleCatalog.pas"/>
+        <DCCReference Include="sources\Common\uSCAConsts.pas"/>
+        <DCCReference Include="sources\Common\uYamlSubsetParser.pas"/>
+        <DCCReference Include="sources\Detectors\uAbstractNotImpl.pas"/>
+        <DCCReference Include="sources\Detectors\uAssertMessage.pas"/>
+        <DCCReference Include="sources\Detectors\uAssignedAndAssignedNil.pas"/>
+        <DCCReference Include="sources\Detectors\uAvoidOut.pas"/>
+        <DCCReference Include="sources\Detectors\uBeginEndRequired.pas"/>
+        <DCCReference Include="sources\Detectors\uBoolAlwaysTrue.pas"/>
+        <DCCReference Include="sources\Detectors\uBooleanParam.pas"/>
+        <DCCReference Include="sources\Detectors\uCanBeClassMethod.pas"/>
+        <DCCReference Include="sources\Detectors\uCaseStatementSize.pas"/>
+        <DCCReference Include="sources\Detectors\uCastAndFree.pas"/>
+        <DCCReference Include="sources\Detectors\uCharToCharPointerCast.pas"/>
+        <DCCReference Include="sources\Detectors\uClassPerFile.pas"/>
+        <DCCReference Include="sources\Detectors\uCodeSmells2.pas"/>
+        <DCCReference Include="sources\Detectors\uCommandInjection.pas"/>
+        <DCCReference Include="sources\Detectors\uCommentedOutCode.pas"/>
+        <DCCReference Include="sources\Detectors\uConcatToFormat.pas"/>
+        <DCCReference Include="sources\Detectors\uConcurrencyExt.pas"/>
+        <DCCReference Include="sources\Detectors\uConsecutiveSection.pas"/>
+        <DCCReference Include="sources\Detectors\uConsecutiveVisibility.pas"/>
+        <DCCReference Include="sources\Detectors\uConstantReturn.pas"/>
+        <DCCReference Include="sources\Detectors\uConstructorWithoutInherited.pas"/>
+        <DCCReference Include="sources\Detectors\uCustomClassDiscovery.pas"/>
+        <DCCReference Include="sources\Detectors\uCustomRuleDetector.pas"/>
+        <DCCReference Include="sources\Detectors\uCyclomaticComplexity.pas"/>
+        <DCCReference Include="sources\Detectors\uDateFormatSettings.pas"/>
+        <DCCReference Include="sources\Detectors\uDeadCode.pas"/>
+        <DCCReference Include="sources\Detectors\uDebugOutput.pas"/>
+        <DCCReference Include="sources\Detectors\uDeepNesting.pas"/>
+        <DCCReference Include="sources\Detectors\uDestructorWithoutInherited.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmActionMismatch.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmCircularDataSource.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmCrossFormCoupling.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmDataModuleSplitHint.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmDbInUiForm.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmDeadEvent.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmDefaultName.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmDuplicateBinding.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmEmptyBoundEvent.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmFieldTypeMismatch.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmForbiddenClass.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmGodHandler.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmHardcodedCaption.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmHardcodedDbCreds.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmLayerViolation.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmMasterDetailUnlinked.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmOrphanHandler.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmRequiredField.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmSchemaMismatch.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmSqlFromUserInput.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmTabOrderConflict.pas"/>
+        <DCCReference Include="sources\Detectors\uDigitGrouping.pas"/>
+        <DCCReference Include="sources\Detectors\uDivByZero.pas"/>
+        <DCCReference Include="sources\Detectors\uDuplicateBlock.pas"/>
+        <DCCReference Include="sources\Detectors\uDuplicateString.pas"/>
+        <DCCReference Include="sources\Detectors\uEmptyArgumentList.pas"/>
+        <DCCReference Include="sources\Detectors\uEmptyBlock.pas"/>
+        <DCCReference Include="sources\Detectors\uEmptyFile.pas"/>
+        <DCCReference Include="sources\Detectors\uEmptyFinallyBlock.pas"/>
+        <DCCReference Include="sources\Detectors\uEmptyInterface.pas"/>
+        <DCCReference Include="sources\Detectors\uEmptyMethod.pas"/>
+        <DCCReference Include="sources\Detectors\uEmptyOnHandler.pas"/>
+        <DCCReference Include="sources\Detectors\uEmptyVisibilitySection.pas"/>
+        <DCCReference Include="sources\Detectors\uExceptInDestructor.pas"/>
+        <DCCReference Include="sources\Detectors\uExceptionTooGeneral.pas"/>
+        <DCCReference Include="sources\Detectors\uExceptOnException.pas"/>
+        <DCCReference Include="sources\Detectors\uExplicitTObjectInheritance.pas"/>
+        <DCCReference Include="sources\Detectors\uFieldLeak.pas"/>
+        <DCCReference Include="sources\Detectors\uFieldName.pas"/>
+        <DCCReference Include="sources\Detectors\uFloatEquality.pas"/>
+        <DCCReference Include="sources\Detectors\uFormatMismatch.pas"/>
+        <DCCReference Include="sources\Detectors\uFreeAndNilHint.pas"/>
+        <DCCReference Include="sources\Detectors\uFreeWithoutNil.pas"/>
+        <DCCReference Include="sources\Detectors\uGetMemWithoutFreeMem.pas"/>
+        <DCCReference Include="sources\Detectors\uGodClass.pas"/>
+        <DCCReference Include="sources\Detectors\uGotoStatement.pas"/>
+        <DCCReference Include="sources\Detectors\uGroupedDeclaration.pas"/>
+        <DCCReference Include="sources\Detectors\uHardcodedPath.pas"/>
+        <DCCReference Include="sources\Detectors\uHardcodedSecret.pas"/>
+        <DCCReference Include="sources\Detectors\uHardcodedString.pas"/>
+        <DCCReference Include="sources\Detectors\uIfElseBegin.pas"/>
+        <DCCReference Include="sources\Detectors\uIfThenShortCircuit.pas"/>
+        <DCCReference Include="sources\Detectors\uInheritedMethodEmpty.pas"/>
+        <DCCReference Include="sources\Detectors\uInlineAssembly.pas"/>
+        <DCCReference Include="sources\Detectors\uInsecureCryptoAlgorithm.pas"/>
+        <DCCReference Include="sources\Detectors\uInstanceInvokedConstructor.pas"/>
+        <DCCReference Include="sources\Detectors\uIntegerOverflow.pas"/>
+        <DCCReference Include="sources\Detectors\uInterfaceName.pas"/>
+        <DCCReference Include="sources\Detectors\uLargeClass.pas"/>
+        <DCCReference Include="sources\Detectors\uLeakDetector2.pas"/>
+        <DCCReference Include="sources\Detectors\uLeakInConstructor.pas"/>
+        <DCCReference Include="sources\Detectors\uLegacyInitializationSection.pas"/>
+        <DCCReference Include="sources\Detectors\uLengthUnderflow.pas"/>
+        <DCCReference Include="sources\Detectors\uLockWithoutTryFinally.pas"/>
+        <DCCReference Include="sources\Detectors\uLongMethod.pas"/>
+        <DCCReference Include="sources\Detectors\uLongParamList.pas"/>
+        <DCCReference Include="sources\Detectors\uLowercaseKeyword.pas"/>
+        <DCCReference Include="sources\Detectors\uMagicNumbers.pas"/>
+        <DCCReference Include="sources\Detectors\uMethodName.pas"/>
+        <DCCReference Include="sources\Detectors\uMissingFinally.pas"/>
+        <DCCReference Include="sources\Detectors\uMissingOverride.pas"/>
+        <DCCReference Include="sources\Detectors\uMissingRaise.pas"/>
+        <DCCReference Include="sources\Detectors\uMissingUnitHeader.pas"/>
+        <DCCReference Include="sources\Detectors\uMoveSizeOfPointer.pas"/>
+        <DCCReference Include="sources\Detectors\uMultipleExit.pas"/>
+        <DCCReference Include="sources\Detectors\uNamingExt.pas"/>
+        <DCCReference Include="sources\Detectors\uNestedRoutines.pas"/>
+        <DCCReference Include="sources\Detectors\uNestedTry.pas"/>
+        <DCCReference Include="sources\Detectors\uNilComparison.pas"/>
+        <DCCReference Include="sources\Detectors\uNilDeref.pas"/>
+        <DCCReference Include="sources\Detectors\uNoSonarMarker.pas"/>
+        <DCCReference Include="sources\Detectors\uPerfHotspots.pas"/>
+        <DCCReference Include="sources\Detectors\uPointerArithmeticOnString.pas"/>
+        <DCCReference Include="sources\Detectors\uPointerName.pas"/>
+        <DCCReference Include="sources\Detectors\uPointerSubtraction.pas"/>
+        <DCCReference Include="sources\Detectors\uPublicField.pas"/>
+        <DCCReference Include="sources\Detectors\uPublicMemberWithoutDoc.pas"/>
+        <DCCReference Include="sources\Detectors\uRaiseOutsideExcept.pas"/>
+        <DCCReference Include="sources\Detectors\uRaisingRawException.pas"/>
+        <DCCReference Include="sources\Detectors\uRedundantBoolean.pas"/>
+        <DCCReference Include="sources\Detectors\uRedundantConditional.pas"/>
+        <DCCReference Include="sources\Detectors\uRedundantJump.pas"/>
+        <DCCReference Include="sources\Detectors\uRedundantParentheses.pas"/>
+        <DCCReference Include="sources\Detectors\uReRaiseException.pas"/>
+        <DCCReference Include="sources\Detectors\uRestHttpSecurity.pas"/>
+        <DCCReference Include="sources\Detectors\uReversedForRange.pas"/>
+        <DCCReference Include="sources\Detectors\uRoutineResultAssigned.pas"/>
+        <DCCReference Include="sources\Detectors\uSelfAssignment.pas"/>
+        <DCCReference Include="sources\Detectors\uSetLengthAppendInLoop.pas"/>
+        <DCCReference Include="sources\Detectors\uSqlDangerousStatement.pas"/>
+        <DCCReference Include="sources\Detectors\uSQLInjection.pas"/>
+        <DCCReference Include="sources\Detectors\uSQLInjectionScore.pas"/>
+        <DCCReference Include="sources\Detectors\uStringFromPointer.pas"/>
+        <DCCReference Include="sources\Detectors\uSuperfluousSemicolon.pas"/>
+        <DCCReference Include="sources\Detectors\uSynchronizeInDestructor.pas"/>
+        <DCCReference Include="sources\Detectors\uTabulationCharacter.pas"/>
+        <DCCReference Include="sources\Detectors\uTautologicalExpr.pas"/>
+        <DCCReference Include="sources\Detectors\uTodoComment.pas"/>
+        <DCCReference Include="sources\Detectors\uTooLongLine.pas"/>
+        <DCCReference Include="sources\Detectors\uTrailingCommaArgList.pas"/>
+        <DCCReference Include="sources\Detectors\uTrailingWhitespace.pas"/>
+        <DCCReference Include="sources\Detectors\uTwiceInheritedCalls.pas"/>
+        <DCCReference Include="sources\Detectors\uTypeName.pas"/>
+        <DCCReference Include="sources\Detectors\uUnicodeToAnsiCast.pas"/>
+        <DCCReference Include="sources\Detectors\uUninitVar.pas"/>
+        <DCCReference Include="sources\Detectors\uUnitLevelKeywordIndent.pas"/>
+        <DCCReference Include="sources\Detectors\uUnpairedLock.pas"/>
+        <DCCReference Include="sources\Detectors\uUnsortedUses.pas"/>
+        <DCCReference Include="sources\Detectors\uUnusedLocal.pas"/>
+        <DCCReference Include="sources\Detectors\uUnusedParameter.pas"/>
+        <DCCReference Include="sources\Detectors\uUnusedPrivateMethod.pas"/>
+        <DCCReference Include="sources\Detectors\uUnusedRoutine.pas"/>
+        <DCCReference Include="sources\Detectors\uUnusedUses.pas"/>
+        <DCCReference Include="sources\Detectors\uUseAfterFree.pas"/>
+        <DCCReference Include="sources\Detectors\uVirtualCallInCtor.pas"/>
+        <DCCReference Include="sources\Detectors\uVisibilityCheck.pas"/>
+        <DCCReference Include="sources\Detectors\uWithMultipleTargets.pas"/>
+        <DCCReference Include="sources\Detectors\uWithStatement.pas"/>
+        <DCCReference Include="sources\Infrastructure\uAstFileCache.pas"/>
+        <DCCReference Include="sources\Infrastructure\uBaseline.pas"/>
+        <DCCReference Include="sources\Infrastructure\uConfidenceFilter.pas"/>
+        <DCCReference Include="sources\Infrastructure\uDfmAnalysisRunner.pas"/>
+        <DCCReference Include="sources\Infrastructure\uDfmDbFieldAnalysis.pas"/>
+        <DCCReference Include="sources\Infrastructure\uDfmFrameResolver.pas"/>
+        <DCCReference Include="sources\Infrastructure\uDfmRepoIndex.pas"/>
+        <DCCReference Include="sources\Infrastructure\uExport.pas"/>
+        <DCCReference Include="sources\Infrastructure\uExportHtml.pas"/>
+        <DCCReference Include="sources\Infrastructure\uFileTextCache.pas"/>
+        <DCCReference Include="sources\Infrastructure\uFindingFingerprint.pas"/>
+        <DCCReference Include="sources\Infrastructure\uFormBinder.pas"/>
+        <DCCReference Include="sources\Infrastructure\uIgnoreList.pas"/>
+        <DCCReference Include="sources\Infrastructure\uPathOverrides.pas"/>
+        <DCCReference Include="sources\Infrastructure\uRepoSettings.pas"/>
+        <DCCReference Include="sources\Infrastructure\uSonarConfig.pas"/>
+        <DCCReference Include="sources\Infrastructure\uSonarPull.pas"/>
+        <DCCReference Include="sources\Infrastructure\uStaticAnalyzer2.pas"/>
+        <DCCReference Include="sources\Infrastructure\uStaticFiles.pas"/>
+        <DCCReference Include="sources\Infrastructure\uSuppression.pas"/>
+        <DCCReference Include="sources\Infrastructure\uSuppressionTelemetry.pas"/>
+        <DCCReference Include="sources\Infrastructure\uSymbolReferenceIndex.pas"/>
+        <DCCReference Include="sources\Infrastructure\uVcsChanges.pas"/>
+        <DCCReference Include="sources\Output\uClaudePrompt.pas"/>
+        <DCCReference Include="sources\Output\uExportSARIF.pas"/>
+        <DCCReference Include="sources\Output\uExportSonarGeneric.pas"/>
+        <DCCReference Include="sources\Output\uFixHint.pas"/>
+        <DCCReference Include="sources\Output\uSonarPush.pas"/>
+        <DCCReference Include="sources\Parsing\uAstNode.pas"/>
+        <DCCReference Include="sources\Parsing\uComponentGraph.pas"/>
+        <DCCReference Include="sources\Parsing\uDfmBinaryReader.pas"/>
+        <DCCReference Include="sources\Parsing\uDfmLexer.pas"/>
+        <DCCReference Include="sources\Parsing\uDfmParser.pas"/>
+        <DCCReference Include="sources\Parsing\uLexer.pas"/>
+        <DCCReference Include="sources\Parsing\uParser2.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
