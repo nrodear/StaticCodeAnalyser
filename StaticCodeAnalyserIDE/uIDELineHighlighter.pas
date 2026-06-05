@@ -348,6 +348,10 @@ begin
     BX := ATextEndX + GAP_AFTER_CODE;
     BY := ACodeRect.Top + (ACodeRect.Bottom - ACodeRect.Top - BH) div 2;
     if BY < ACodeRect.Top then BY := ACodeRect.Top;
+    // 1px mehr Hoehe unten (User-Request) - Text-Position bleibt
+    // gleich, nur die Box waechst nach unten. Boden minimal "atmen
+    // lassen" damit die Schrift nicht direkt am Rand klebt.
+    Inc(BH);
 
     // Kein Platz mehr fuer eine sinnvolle Badge? -> weglassen.
     if BX + MIN_BADGE_W > ACodeRect.Right then Exit;
