@@ -62,9 +62,6 @@ contains
   uIDELifecycle in 'uIDELifecycle.pas',
   uIDESCAOptions in 'uIDESCAOptions.pas' {SCAOptionsFrame: TFrame},
   uIDESonarOptions in 'uIDESonarOptions.pas' {SonarOptionsFrame: TFrame},
-  uIDEAnalyseRunner in 'uIDEAnalyseRunner.pas',
-  uIDEDiagnostic in 'uIDEDiagnostic.pas',
-  uIDEDiagnosticAdapter in 'uIDEDiagnosticAdapter.pas',
-  uIDEInfoBar in 'uIDEInfoBar.pas';
+  uIDEAnalyseRunner in 'uIDEAnalyseRunner.pas';
 
 end.
