@@ -122,51 +122,54 @@ begin
   Result := CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_']);
 end;
 
-function StripCommentsAndStrings(const Line: string): string;
-// FP-Fix (SCA166): Ersetzt alle Zeichen innerhalb von:
-//   - Pascal-Zeilenkommentaren  //  bis EOL
-//   - Block-Kommentaren { ... } und (* ... *)  auf der gleichen Zeile
-//   - String-Literalen '...' (mit '' als Escape)
-// durch Leerzeichen. Identifier-Suchen via Wortgrenz-Match ignorieren
-// dadurch Inhalt von Strings und Kommentaren, sodass z.B.
-//   // Wir akzeptieren `Result[i]`-Zuweisungen.
-// nicht als Read der lokalen Variablen i zaehlt.
-//
-// Multi-Line-Block-Kommentare werden NICHT zeilenuebergreifend getrackt:
-// '{' am Ende einer Zeile ohne '}' bleibt unbeachtet. Akzeptabler
-// Edge-Case-FN-Tradeoff fuer ein nicht-Lexer-basiertes Source-Scan.
+type
+  // State fuer Zeilen-uebergreifende Block-Kommentar-Verfolgung.
+  // String-Literale ('...') koennen in klassischem Delphi nicht ueber
+  // Zeilengrenzen hinweg gehen - daher kein InString-State.
+  // Delphi-12-Multi-Line-Strings ('''...''') werden bewusst NICHT
+  // getrackt - rare Edge-Case, FN akzeptabel.
+  TLineStripState = record
+    InBrace : Boolean;   // True wenn vorige Zeile mit offenem '{' endete
+    InParen : Boolean;   // True wenn vorige Zeile mit offenem '(*' endete
+  end;
+
+function StripLineEx(const Line: string; var State: TLineStripState): string;
+// Stripper mit Zeilen-uebergreifendem State - State.InBrace/InParen
+// werden VOR der Zeile aus dem Caller-State gelesen und NACH der Zeile
+// zurueckgeschrieben. So funktionieren auch Multi-Line-Comments wie
+//   { Foo bar
+//     baz }
+// als Stripping ueber alle drei Zeilen.
 var
   Buf : array of Char;
   i, L : Integer;
-  InString, InBrace, InParen : Boolean;
+  InString : Boolean;
   C, Next : Char;
 begin
   L := Length(Line);
   if L = 0 then Exit('');
   SetLength(Buf, L);
-  InString := False;
-  InBrace  := False;
-  InParen  := False;
+  InString := False;       // Strings koennen sich nicht ueber Zeilen ziehen
   i := 1;
   while i <= L do
   begin
     C := Line[i];
     if i < L then Next := Line[i + 1] else Next := #0;
 
-    if InBrace then
+    if State.InBrace then
     begin
       Buf[i - 1] := ' ';
-      if C = '}' then InBrace := False;
+      if C = '}' then State.InBrace := False;
       Inc(i);
     end
-    else if InParen then
+    else if State.InParen then
     begin
       Buf[i - 1] := ' ';
       if (C = '*') and (Next = ')') then
       begin
         Buf[i] := ' ';
         Inc(i, 2);
-        InParen := False;
+        State.InParen := False;
       end
       else
         Inc(i);
@@ -205,7 +208,7 @@ begin
       else if C = '{' then
       begin
         Buf[i - 1] := ' ';
-        InBrace := True;
+        State.InBrace := True;
         Inc(i);
       end
       else if (C = '(') and (Next = '*') then
@@ -213,7 +216,7 @@ begin
         Buf[i - 1] := ' ';
         Buf[i]     := ' ';
         Inc(i, 2);
-        InParen := True;
+        State.InParen := True;
       end
       else if C = '''' then
       begin
@@ -229,6 +232,18 @@ begin
     end;
   end;
   SetString(Result, PChar(Buf), L);
+end;
+
+function StripCommentsAndStrings(const Line: string): string;
+// Stateless single-line convenience-Wrapper (Alt-API).
+// Multi-Line-Block-Comments werden in dieser Variante NICHT erkannt.
+// Verwendung nur fuer Stellen ohne Zeilen-iterierenden Scan.
+var
+  State : TLineStripState;
+begin
+  State.InBrace := False;
+  State.InParen := False;
+  Result := StripLineEx(Line, State);
 end;
 
 function CountWholeWordOccurrences(const NeedleLow, HaystackLow: string;
@@ -816,6 +831,7 @@ var
     L : string;
     P, NL, LL, From0, To0 : Integer;
     Before, After : Char;
+    StripState : TLineStripState;
   begin
     Result := 0;
     if Lines = nil then Exit;
@@ -826,14 +842,19 @@ var
     To0   := MethodEndLine - 1;
     if From0 < 0 then From0 := 0;
     if To0 > Lines.Count - 1 then To0 := Lines.Count - 1;
+    // FP-Fix: State (InBrace/InParen) muss ueber alle Zeilen mitlaufen,
+    // damit Multi-Line-Block-Comments { ... \n ... } und (* ... \n ... *)
+    // korrekt geclipped werden. Annahme: bei MethodStartLine ist kein
+    // Block-Comment offen (sehr seltene Verletzung in pathologischen
+    // Files - akzeptabler Edge-Case).
+    StripState.InBrace := False;
+    StripState.InParen := False;
     for i := From0 to To0 do
     begin
+      // IMMER strippen - auch bei skip - damit State korrekt mitwandert.
+      L := LowerCase(StripLineEx(Lines[i], StripState));
       if (i + 1 = DeclLine) or (i + 1 = FirstWriteLine) then Continue;
       if IsLineInRanges(i + 1, NestedRanges) then Continue;
-      // FP-Fix (Backtick-Inline-Code im Kommentar wie `Result[i]`):
-      // Comments + String-Literale zu Leerzeichen ersetzen, damit der
-      // Wortgrenz-Match keine Identifier aus Kommentar-Text triggert.
-      L := LowerCase(StripCommentsAndStrings(Lines[i]));
       // Skip wenn Zeile eine reine Var-Decl ist (Multi-line-Decl-Fix)
       if IsVarDeclLine(L) then Continue;
       LL := Length(L);
