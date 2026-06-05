@@ -111,6 +111,12 @@ type
     // Koordinaten). Wird in BeginPaint geleert (nur bei ForceFullRepaint),
     // in PaintLine fuer jede markierte Zeile aktualisiert.
     FRenderedRects   : TDictionary<Integer, TRect>;
+    // Pro markierter Zeile die X-Pixel-Koordinate (Editor-Client-System) wo
+    // der sichtbare Code-Text endet. Aus LineState.VisibleTextRect.Right
+    // in PaintLine. Wird im 'sameline'-OverlayPosition-Modus genutzt um die
+    // Title-Bar direkt rechts neben dem Code zu platzieren. Fuer Zeilen
+    // ohne Eintrag faellt EditorMouseMove auf CodeRect.Left + Fallback zurueck.
+    FRenderedTextEnds : TDictionary<Integer, Integer>;
     // Hide-on-mouse-leave Timer: alle 200ms pruefen ob Cursor noch ueber
     // EINER der markierten Zeilen ist — sonst Overlay verbergen. Notwendig
     // weil EditorMouseMove nicht mehr feuert sobald die Maus den Editor
@@ -792,7 +798,8 @@ end;
 constructor TFindingEditorEvents.Create;
 begin
   inherited;
-  FRenderedRects := TDictionary<Integer, TRect>.Create;
+  FRenderedRects    := TDictionary<Integer, TRect>.Create;
+  FRenderedTextEnds := TDictionary<Integer, Integer>.Create;
   FHoverWatch := TTimer.Create(nil);
   FHoverWatch.Interval := 200;
   FHoverWatch.Enabled  := False;
@@ -804,6 +811,7 @@ destructor TFindingEditorEvents.Destroy;
 begin
   FreeAndNil(FHoverWatch);
   FreeAndNil(FRenderedRects);
+  FreeAndNil(FRenderedTextEnds);
   inherited;
 end;
 
@@ -818,6 +826,8 @@ begin
   FLastPaintedFile := '';
   if Assigned(FRenderedRects) then
     FRenderedRects.Clear;
+  if Assigned(FRenderedTextEnds) then
+    FRenderedTextEnds.Clear;
   if Assigned(FHoverWatch) then
     FHoverWatch.Enabled := False;
 end;
@@ -932,6 +942,7 @@ begin
   // sofort veraltet. Cache leeren, Overlay verbergen.
   if Editor <> FSavedEditor then Exit;
   FRenderedRects.Clear;
+  FRenderedTextEnds.Clear;
   FHoveredLine := -1;
   if Assigned(GAnnotationOverlay) then
     GAnnotationOverlay.HideOverlay;
@@ -973,6 +984,7 @@ begin
     GAnnotationOverlay.HideOverlay;
     FHoveredLine := -1;
     FRenderedRects.Clear;
+    FRenderedTextEnds.Clear;
     FHoverWatch.Enabled := False;
     Exit;
   end;
@@ -1020,21 +1032,42 @@ begin
   if not FRenderedRects.TryGetValue(HitLine, HitRect) then Exit;
 
   // WS_CHILD-Modus: Position = Editor-Client-Koordinaten.
-  // OverlayPosition aus analyser.ini steuert Y-Anker:
-  //   sameline (Default): P.Y = HitRect.Top -> Title-Bar ueberlagert
-  //                       die Finding-Zeile selbst (Auffalt-Animation
-  //                       waechst dann nach unten)
-  //   below             : P.Y = HitRect.Bottom -> Overlay startet eine
-  //                       Zeile UNTER der Finding-Zeile (alte Default,
-  //                       Befund-Zeile bleibt sichtbar)
+  // OverlayPosition aus analyser.ini steuert die Geometrie:
+  //   sameline (Default): Title-Bar erscheint INLINE am rechten Zeilenende
+  //                       (rechts neben dem Code-Text), P.Y = HitRect.Top.
+  //                       Die Auffalt-Animation waechst nach unten in die
+  //                       Code-Zeilen darunter. P.X kommt aus
+  //                       FRenderedTextEnds (LineState.VisibleTextRect.Right);
+  //                       Fallback CodeRect.Left + 60% wenn nicht erfasst.
+  //   below             : Overlay startet eine Zeile UNTER der Finding-Zeile
+  //                       in voller Code-Breite (alte Default, Befund-Zeile
+  //                       bleibt sichtbar).
   // Wert wird hier pro Hover-Enter (= rare) frisch gelesen; kein Cache
   // noetig - der Hot-Path EditorMouseMove cached bereits via FHoveredLine.
-  P.X := HitRect.Left;
-  P.Y := HitRect.Bottom;
   if SameText(GetOverlayPositionSetting, 'sameline') then
+  begin
+    // X = TextEnd + 8px Gap; nach links clampen wenn der Code rechts ueber
+    // das Fenster hinausragt (mindestens MIN_INLINE_W vom rechten Rand).
+    const MIN_INLINE_W = 320;
+    const GAP_AFTER_CODE = 8;
+    var TextEndX : Integer;
+    if not FRenderedTextEnds.TryGetValue(HitLine, TextEndX) then
+      TextEndX := HitRect.Left + ((HitRect.Right - HitRect.Left) * 6) div 10;
+    P.X := TextEndX + GAP_AFTER_CODE;
+    if P.X > HitRect.Right - MIN_INLINE_W then
+      P.X := HitRect.Right - MIN_INLINE_W;
+    if P.X < HitRect.Left then P.X := HitRect.Left;
     P.Y := HitRect.Top;
-  AWidth := HitRect.Right - HitRect.Left;
-  if AWidth < 200 then AWidth := 200;
+    AWidth := HitRect.Right - P.X;
+    if AWidth < MIN_INLINE_W then AWidth := MIN_INLINE_W;
+  end
+  else
+  begin
+    P.X := HitRect.Left;
+    P.Y := HitRect.Bottom;
+    AWidth := HitRect.Right - HitRect.Left;
+    if AWidth < 200 then AWidth := 200;
+  end;
   LineH := FSavedCharHeight;
   if LineH < 16 then LineH := 20;  // Fallback wenn CharHeight nicht gesetzt
   try
@@ -1062,7 +1095,10 @@ begin
   // Bei partiellen Repaints bleiben die markierten Zeilen sichtbar auf
   // dem Bildschirm — also bleiben die gespeicherten Rects gueltig.
   if (Editor = FSavedEditor) and ForceFullRepaint then
+  begin
     FRenderedRects.Clear;
+    FRenderedTextEnds.Clear;
+  end;
 end;
 
 procedure TFindingEditorEvents.PaintLine(const Rect: TRect;
@@ -1092,6 +1128,7 @@ begin
   if not SameText(Context.FileName, FLastPaintedFile) then
   begin
     FRenderedRects.Clear;
+    FRenderedTextEnds.Clear;
     FHoveredLine := -1;
     FLastPaintedFile := Context.FileName;
     if Assigned(GAnnotationOverlay) then
@@ -1109,6 +1146,16 @@ begin
   FSavedCharHeight := Context.EditorState.CharHeight;
   // Rect cachen damit EditorMouseMove pro Zeile den Hit-Test machen kann.
   FRenderedRects.AddOrSetValue(Line, CodeRect);
+  // VisibleTextRect.Right = X-Pixel wo der sichtbare Code-Text endet.
+  // Wird im 'sameline'-OverlayPosition-Modus genutzt um die Title-Bar
+  // direkt rechts neben dem Code zu platzieren statt drueber zu legen.
+  try
+    FRenderedTextEnds.AddOrSetValue(Line, Context.LineState.VisibleTextRect.Right);
+  except
+    // VisibleTextRect kann bei manchen Edge-Cases (gefoldete Zeilen, leere
+    // Files) nicht verfuegbar sein - EditorMouseMove faellt dann auf
+    // CodeRect.Left zurueck.
+  end;
 
   // Stripe-Farbe aus dem Mark holen (Severity-abhaengig: Error/Warning/Hint).
   // Fallback auf ACCENT_ERROR (Palette) falls clNone uebergeben wurde -
