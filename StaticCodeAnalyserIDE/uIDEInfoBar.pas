@@ -175,21 +175,24 @@ end;
 
 procedure TInfoBarRenderer.RepaintForCurrentView;
 var
-  EditorSvc : INTAEditorServices;
+  EditorNTA : INTAEditorServices;  // TopEditWindow.Form (Window-Handle)
+  EditorOTA : IOTAEditorServices;  // TopView (Buffer + Position)
   EditWnd : INTAEditWindow;
   View : IOTAEditView;
   EditControl : TWinControl;
   FileName : string;
   TotalLines : Integer;
 begin
-  if not Supports(BorlandIDEServices, INTAEditorServices, EditorSvc) then Exit;
-  EditWnd := EditorSvc.TopEditWindow;
+  if not Supports(BorlandIDEServices, INTAEditorServices, EditorNTA) then Exit;
+  if not Supports(BorlandIDEServices, IOTAEditorServices, EditorOTA) then Exit;
+
+  EditWnd := EditorNTA.TopEditWindow;
   if (EditWnd = nil) or (EditWnd.Form = nil) then Exit;
 
   EditControl := FindEditControl(EditWnd.Form);
   if EditControl = nil then Exit;
 
-  View := EditorSvc.TopView;
+  View := EditorOTA.TopView;
   if View = nil then Exit;
   if View.Buffer = nil then Exit;
 
