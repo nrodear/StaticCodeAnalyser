@@ -362,11 +362,55 @@ var
               Low.StartsWith('constructor ') or Low.StartsWith('destructor ');
   end;
 
+  function IsTopLevelMethodHeader(const RawLine: string): Boolean;
+  // True wenn die Zeile mit einem Method-Header beginnt der OHNE
+  // Leading-Whitespace anfaengt (= top-level Implementation, nicht
+  // nested). Wird gebraucht um den effektiven Scan-Start zurueck
+  // auf den Function-Header zu trimmen wenn MethodNode.Line auf
+  // den 'begin'-Block zeigt (passiert bei Methoden mit nested-
+  // procs UND zweiter var-Section -> Parser-Headless-Pattern).
+  var
+    L : string;
+  begin
+    Result := False;
+    if (Length(RawLine) = 0) or (RawLine[1] <= ' ') then Exit;
+    L := LowerCase(RawLine);
+    Result := L.StartsWith('procedure ')        or L.StartsWith('function ')        or
+              L.StartsWith('constructor ')      or L.StartsWith('destructor ')      or
+              L.StartsWith('class procedure ')  or L.StartsWith('class function ')  or
+              L.StartsWith('class constructor ')or L.StartsWith('class destructor ');
+  end;
+
+  function ResolveActualMethodStart(AInitialStart: Integer): Integer;
+  // Defensive: ist MethodNode.Line auf den 'begin'-Block gesprungen
+  // (z.B. wenn Method nested-procs UND zweite var-Section hat), liegt
+  // der echte Function-Header weiter oben. Wir scannen rueckwaerts
+  // und nehmen die naechstliegende Zeile die mit 'function'/
+  // 'procedure' OHNE Leading-Whitespace anfaengt. Stop bei Datei-
+  // Anfang oder bei einer anderen schon abgeschlossenen Method-
+  // Boundary (= 'end;' an Spalte 1, naive aber sichere Stopp-Regel).
+  var
+    j : Integer;
+  begin
+    Result := AInitialStart;
+    if AInitialStart <= 1 then Exit;
+    for j := AInitialStart downto 1 do
+    begin
+      if j - 1 >= Lines.Count then Continue;
+      if IsTopLevelMethodHeader(Lines[j - 1]) then Exit(j);
+      // Sentinel: vorherige Method beendet sich mit 'end;' an Spalte 1.
+      if Lines[j - 1].StartsWith('end;') then Exit(AInitialStart);
+    end;
+  end;
+
+var
+  ActualStart : Integer;
 begin
   if (Lines = nil) or (Ranges = nil) then Exit;
   if (MethodStartLine <= 0) or (MethodEndLine < MethodStartLine) then Exit;
 
-  i := MethodStartLine - 1;
+  ActualStart := ResolveActualMethodStart(MethodStartLine);
+  i := ActualStart - 1;
   while (i < Lines.Count) and (i < MethodEndLine) do
   begin
     L := Lines[i];
@@ -810,6 +854,51 @@ var
     Result := True;
   end;
 
+  function FindFirstSourceWriteLine(const NameLow: string;
+    DeclLine, MethodStartLine, MethodEndLine: Integer): Integer;
+  // FP-Fix Source-Line-Fallback fuer Write-Detection. Wird gerufen wenn
+  // PhaseB_AstWalks keinen Write fuer eine Var hatte. Suche nach Pattern
+  //   ^\s*NameLow\s*:=
+  // (= reine Assignment, kein Qualifier wie .Field, [i], ^).
+  // Hintergrund: bei Methoden mit nested-procs UND zweiter var-Section
+  // (Headless-Method-Pattern im Parser) wird der Outer-MethodNode
+  // umgebaut und der Outer-Body-Assign landet nicht im AST.
+  var
+    i, From0, To0 : Integer;
+    L, Trimmed : string;
+    StripState : TLineStripState;
+    TPos, NL : Integer;
+  begin
+    Result := 0;
+    if Lines = nil then Exit;
+    NL := Length(NameLow);
+    if NL = 0 then Exit;
+    if (MethodStartLine <= 0) or (MethodEndLine < MethodStartLine) then Exit;
+    From0 := MethodStartLine - 1;
+    To0   := MethodEndLine - 1;
+    if From0 < 0 then From0 := 0;
+    if To0 > Lines.Count - 1 then To0 := Lines.Count - 1;
+    StripState.InBrace := False;
+    StripState.InParen := False;
+    for i := From0 to To0 do
+    begin
+      L := LowerCase(StripLineEx(Lines[i], StripState));
+      if i + 1 = DeclLine then Continue;
+      if IsLineInRanges(i + 1, NestedRanges) then Continue;
+      Trimmed := TrimLeft(L);
+      if Length(Trimmed) < NL + 2 then Continue;
+      if not Trimmed.StartsWith(NameLow) then Continue;
+      // Nach NameLow Wortgrenze (sonst koennte 'cands' in 'candsx' matchen)
+      if IsIdentChar(Trimmed[NL + 1]) then Continue;
+      // Optional Whitespace, dann ':='
+      TPos := NL + 1;
+      while (TPos <= Length(Trimmed)) and (Trimmed[TPos] = ' ') do Inc(TPos);
+      if (TPos <= Length(Trimmed) - 1)
+         and (Trimmed[TPos] = ':') and (Trimmed[TPos + 1] = '=') then
+        Exit(i + 1);
+    end;
+  end;
+
   function FindFirstReadLine(const NameLow: string;
     DeclLine, FirstWriteLine, MethodStartLine, MethodEndLine: Integer): Integer;
   // Findet die erste Source-Zeile MIT einem Identifier-Match INNERHALB
@@ -988,6 +1077,14 @@ var
                                               FirstMatchPos);
       // RefCount<=1 -> nur Deklaration = UnusedLocal-Domain (SCA019).
       if P.RefCount <= 1 then Continue;
+      // FP-Fix: AST-Walks koennen den Outer-Body-Assign missen wenn
+      // die Methode nested-procs UND eine zweite var-Section hat
+      // (Parser-Headless-Pattern). Source-Scan-Fallback vor der
+      // Read-Detection, damit die Read-Scanner-Skip-Logik die Write-
+      // Zeile korrekt ueberspringt.
+      if P.FirstWriteLine = 0 then
+        P.FirstWriteLine := FindFirstSourceWriteLine(P.NameLow, P.DeclLine,
+                                                     MethodStartLine, MethodEndLine);
       P.FirstReadLine := FindFirstReadLine(P.NameLow, P.DeclLine,
                                            P.FirstWriteLine,
                                            MethodStartLine, MethodEndLine);
