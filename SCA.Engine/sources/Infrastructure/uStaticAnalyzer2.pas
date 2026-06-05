@@ -125,6 +125,16 @@ type
     DefaultSeverity : TLeakSeverity;      // gecached aus TRuleCatalog -
                                           // Catalog-Lookup nur EINMAL beim
                                           // Build, nicht pro File
+    // Pre-Filter-Tokens (lowercase). Wenn nicht-leer: vor dem Detector-
+    // Run wird die lower-cased Datei nach einem dieser Tokens durchsucht;
+    // findet keiner ein Vorkommen, wird der Detector geskippt.
+    // Beispiel: 'shellexecute' fuer CommandInjection - 99% aller Files
+    // haben das nicht und sparen den AST-Walk.
+    // Sicherheitsregel: Tokens muessen NOTWENDIGE Substrings sein - nicht
+    // hinreichend. False-Positives (Token vorhanden aber Detector findet
+    // nichts) sind OK; False-Negatives (Token fehlt aber echte Treffer
+    // werden geskippt) waeren Korrektheits-Regression.
+    RequiredTokensLow : TArray<string>;
   end;
   // Callbacks fuer den Aufrufer (Logging / Fehler-Reporting), damit
   // RunAllDetectors selbst kein Wissen ueber LogStream/FileError-Liste hat.
@@ -191,6 +201,7 @@ var
   Count : Integer;
 
   procedure AddD(const AName: string; AKind: TFindingKind; ARun: TDetectorRun);
+  overload;
   begin
     if Count >= Length(gDetectors) then
       raise Exception.CreateFmt(
@@ -200,7 +211,21 @@ var
     gDetectors[Count].Kind            := AKind;
     gDetectors[Count].Run             := ARun;
     gDetectors[Count].DefaultSeverity := TRuleCatalog.GetRule(AKind).DefaultSeverity;
+    SetLength(gDetectors[Count].RequiredTokensLow, 0);
     Inc(Count);
+  end;
+
+  // Overload mit Pre-Filter-Tokens. AddD-Aufrufer liefern lowercase
+  // Tokens; ist NOTWENDIGE Substring-Bedingung (s. Doku TDetectorEntry).
+  procedure AddD(const AName: string; AKind: TFindingKind; ARun: TDetectorRun;
+    const ARequiredTokensLow: array of string); overload;
+  var
+    i : Integer;
+  begin
+    AddD(AName, AKind, ARun);
+    SetLength(gDetectors[Count - 1].RequiredTokensLow, Length(ARequiredTokensLow));
+    for i := 0 to High(ARequiredTokensLow) do
+      gDetectors[Count - 1].RequiredTokensLow[i] := ARequiredTokensLow[i];
   end;
 
 begin
@@ -213,15 +238,15 @@ begin
   AddD('HardcodedSecret', fkHardcodedSecret, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin THardcodedSecretDetector.AnalyzeUnit(R, F, L); end);
   AddD('FormatMismatch',  fkFormatMismatch,  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TFormatMismatchDetector.AnalyzeUnit(R, F, L); end);
   AddD('ConcatToFormat',  fkConcatToFormat,  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TConcatToFormatDetector.AnalyzeUnit(R, F, L); end);
-  AddD('WithStatement',   fkWithStatement,   procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TWithStatementDetector.AnalyzeUnit(R, F, L); end);
-  AddD('GotoStatement',   fkGotoStatement,   procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TGotoStatementDetector.AnalyzeUnit(R, F, L); end);
+  AddD('WithStatement',   fkWithStatement,   procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TWithStatementDetector.AnalyzeUnit(R, F, L); end, ['with ']);
+  AddD('GotoStatement',   fkGotoStatement,   procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TGotoStatementDetector.AnalyzeUnit(R, F, L); end, ['goto ']);
   AddD('TabulationCharacter', fkTabulationCharacter, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TTabulationCharacterDetector.AnalyzeUnit(R, F, L); end);
   AddD('TooLongLine',     fkTooLongLine,     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TTooLongLineDetector.AnalyzeUnit(R, F, L); end);
   AddD('TrailingWhitespace', fkTrailingWhitespace, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TTrailingWhitespaceDetector.AnalyzeUnit(R, F, L); end);
   AddD('LowercaseKeyword', fkLowercaseKeyword, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLowercaseKeywordDetector.AnalyzeUnit(R, F, L); end);
-  AddD('NoSonarMarker',   fkNoSonarMarker,   procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TNoSonarMarkerDetector.AnalyzeUnit(R, F, L); end);
+  AddD('NoSonarMarker',   fkNoSonarMarker,   procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TNoSonarMarkerDetector.AnalyzeUnit(R, F, L); end, ['nosonar']);
   AddD('EmptyArgumentList',fkEmptyArgumentList,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TEmptyArgumentListDetector.AnalyzeUnit(R, F, L); end);
-  AddD('InlineAssembly',  fkInlineAssembly,  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TInlineAssemblyDetector.AnalyzeUnit(R, F, L); end);
+  AddD('InlineAssembly',  fkInlineAssembly,  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TInlineAssemblyDetector.AnalyzeUnit(R, F, L); end, ['asm']);
   AddD('TrailingCommaArgList',fkTrailingCommaArgList,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TTrailingCommaArgListDetector.AnalyzeUnit(R, F, L); end);
   AddD('DigitGrouping',   fkDigitGrouping,   procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDigitGroupingDetector.AnalyzeUnit(R, F, L); end);
   AddD('CommentedOutCode',fkCommentedOutCode,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TCommentedOutCodeDetector.AnalyzeUnit(R, F, L); end);
@@ -261,7 +286,7 @@ begin
   AddD('TypeName',        fkTypeName,        procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TTypeNameDetector.AnalyzeUnit(R, F, L); end);
   AddD('InterfaceName',   fkInterfaceName,   procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TInterfaceNameDetector.AnalyzeUnit(R, F, L); end);
   AddD('MethodName',      fkMethodName,      procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TMethodNameDetector.AnalyzeUnit(R, F, L); end);
-  AddD('ReversedForRange',fkReversedForRange,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TReversedForRangeDetector.AnalyzeUnit(R, F, L); end);
+  AddD('ReversedForRange',fkReversedForRange,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TReversedForRangeDetector.AnalyzeUnit(R, F, L); end, ['downto']);
   AddD('SelfAssignment',  fkSelfAssignment,  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TSelfAssignmentDetector.AnalyzeUnit(R, F, L); end);
   AddD('MissingRaise',    fkMissingRaise,    procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TMissingRaiseDetector.AnalyzeUnit(R, F, L); end);
   AddD('RoutineResultUnassigned', fkRoutineResultUnassigned, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TRoutineResultAssignedDetector.AnalyzeUnit(R, F, L); end);
@@ -277,17 +302,17 @@ begin
   AddD('IfThenShortCircuit', fkIfThenShortCircuit, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TIfThenShortCircuitDetector.AnalyzeUnit(R, F, L); end);
   AddD('ExceptionTooGeneral', fkExceptionTooGeneral, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TExceptionTooGeneralDetector.AnalyzeUnit(R, F, L); end);
   AddD('RaiseOutsideExcept', fkRaiseOutsideExcept, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TRaiseOutsideExceptDetector.AnalyzeUnit(R, F, L); end);
-  AddD('UseAfterFree', fkUseAfterFree, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUseAfterFreeDetector.AnalyzeUnit(R, F, L); end);
+  AddD('UseAfterFree', fkUseAfterFree, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUseAfterFreeDetector.AnalyzeUnit(R, F, L); end, ['.free', 'freeandnil']);
   AddD('AbstractNotImpl', fkAbstractNotImpl, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TAbstractNotImplDetector.AnalyzeUnit(R, F, L); end);
   AddD('LeakInConstructor', fkLeakInConstructor, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLeakInConstructorDetector.AnalyzeUnit(R, F, L); end);
-  AddD('IntegerOverflow', fkIntegerOverflow, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TIntegerOverflowDetector.AnalyzeUnit(R, F, L); end);
+  AddD('IntegerOverflow', fkIntegerOverflow, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TIntegerOverflowDetector.AnalyzeUnit(R, F, L); end, ['int64']);
   AddD('GodClass', fkGodClass, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TGodClassDetector.AnalyzeUnit(R, F, L); end);
   AddD('FreeWithoutNil', fkFreeWithoutNil, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TFreeWithoutNilDetector.AnalyzeUnit(R, F, L); end);
   AddD('MultipleExit', fkMultipleExit, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TMultipleExitDetector.AnalyzeUnit(R, F, L); end);
   AddD('LargeClass', fkLargeClass, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLargeClassDetector.AnalyzeUnit(R, F, L); end);
   AddD('UnsortedUses', fkUnsortedUses, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUnsortedUsesDetector.AnalyzeUnit(R, F, L); end);
   AddD('MissingUnitHeader', fkMissingUnitHeader, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TMissingUnitHeaderDetector.AnalyzeUnit(R, F, L); end);
-  AddD('FloatEquality', fkFloatEquality, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TFloatEqualityDetector.AnalyzeUnit(R, F, L); end);
+  AddD('FloatEquality', fkFloatEquality, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TFloatEqualityDetector.AnalyzeUnit(R, F, L); end, ['double', 'single', 'extended', 'currency', 'real']);
   AddD('ExceptInDestructor', fkExceptInDestructor, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TExceptInDestructorDetector.AnalyzeUnit(R, F, L); end);
   AddD('BooleanParam', fkBooleanParam, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TBooleanParamDetector.AnalyzeUnit(R, F, L); end);
   AddD('UnusedPrivateMethod', fkUnusedPrivateMethod, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUnusedPrivateMethodDetector.AnalyzeUnit(R, F, L); end);
@@ -296,23 +321,23 @@ begin
   AddD('BoolAlwaysTrue', fkBoolAlwaysTrue, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TBoolAlwaysTrueDetector.AnalyzeUnit(R, F, L); end);
   AddD('ConstantReturn', fkConstantReturn, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TConstantReturnDetector.AnalyzeUnit(R, F, L); end);
   AddD('HardcodedString', fkHardcodedString, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin THardcodedStringDetector.AnalyzeUnit(R, F, L); end);
-  AddD('UnpairedLock', fkUnpairedLock, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUnpairedLockDetector.AnalyzeUnit(R, F, L); end);
-  AddD('MoveSizeOfPointer', fkMoveSizeOfPointer, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TMoveSizeOfPointerDetector.AnalyzeUnit(R, F, L); end);
+  AddD('UnpairedLock', fkUnpairedLock, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUnpairedLockDetector.AnalyzeUnit(R, F, L); end, ['tcriticalsection', 'tmonitor', '.enter', '.acquire']);
+  AddD('MoveSizeOfPointer', fkMoveSizeOfPointer, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TMoveSizeOfPointerDetector.AnalyzeUnit(R, F, L); end, ['move(', 'fillchar(']);
   AddD('WithMultipleTargets', fkWithMultipleTargets, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TWithMultipleTargetsDetector.AnalyzeUnit(R, F, L); end);
-  AddD('GetMemWithoutFreeMem', fkGetMemWithoutFreeMem, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TGetMemWithoutFreeMemDetector.AnalyzeUnit(R, F, L); end);
-  AddD('SetLengthAppendInLoop', fkSetLengthAppendInLoop, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TSetLengthAppendInLoopDetector.AnalyzeUnit(R, F, L); end);
-  AddD('PointerArithmeticOnString', fkPointerArithmeticOnString, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TPointerArithmeticOnStringDetector.AnalyzeUnit(R, F, L); end);
-  AddD('EmptyOnHandler', fkEmptyOnHandler, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TEmptyOnHandlerDetector.AnalyzeUnit(R, F, L); end);
-  AddD('StringFromPointer', fkStringFromPointer, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TStringFromPointerDetector.AnalyzeUnit(R, F, L); end);
-  AddD('PointerSubtraction', fkPointerSubtraction, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TPointerSubtractionDetector.AnalyzeUnit(R, F, L); end);
+  AddD('GetMemWithoutFreeMem', fkGetMemWithoutFreeMem, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TGetMemWithoutFreeMemDetector.AnalyzeUnit(R, F, L); end, ['getmem', 'allocmem', 'reallocmem']);
+  AddD('SetLengthAppendInLoop', fkSetLengthAppendInLoop, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TSetLengthAppendInLoopDetector.AnalyzeUnit(R, F, L); end, ['setlength']);
+  AddD('PointerArithmeticOnString', fkPointerArithmeticOnString, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TPointerArithmeticOnStringDetector.AnalyzeUnit(R, F, L); end, ['pchar(', 'pansichar(', 'pwidechar(']);
+  AddD('EmptyOnHandler', fkEmptyOnHandler, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TEmptyOnHandlerDetector.AnalyzeUnit(R, F, L); end, ['except', 'on ']);
+  AddD('StringFromPointer', fkStringFromPointer, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TStringFromPointerDetector.AnalyzeUnit(R, F, L); end, ['pchar(', 'pansichar(', 'pwidechar(']);
+  AddD('PointerSubtraction', fkPointerSubtraction, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TPointerSubtractionDetector.AnalyzeUnit(R, F, L); end, ['cardinal(', 'integer(', 'nativeuint(', 'nativeint(', 'nativeint ', 'cardinal ']);
   // Security-Familie: schwache Krypto + Command-Injection.
-  AddD('InsecureCryptoAlgorithm', fkInsecureCryptoAlgorithm, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TInsecureCryptoAlgorithmDetector.AnalyzeUnit(R, F, L); end);
-  AddD('CommandInjection', fkCommandInjection, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TCommandInjectionDetector.AnalyzeUnit(R, F, L); end);
+  AddD('InsecureCryptoAlgorithm', fkInsecureCryptoAlgorithm, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TInsecureCryptoAlgorithmDetector.AnalyzeUnit(R, F, L); end, ['md5', 'sha1', 'des', 'rc4', 'crypto', 'hash']);
+  AddD('CommandInjection', fkCommandInjection, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TCommandInjectionDetector.AnalyzeUnit(R, F, L); end, ['shellexecute', 'createprocess', 'winexec']);
   // Dead-Code-Familie: standalone Routinen ohne Aufruf (analog SCA147 fuer
   // class-private Methoden, schliesst die Luecke top-level Routinen).
   AddD('UnusedRoutine', fkUnusedRoutine, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUnusedRoutineDetector.AnalyzeUnit(R, F, L); end);
   AddD('VirtualCallInCtor',fkVirtualCallInCtor,procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TVirtualCallInCtorDetector.AnalyzeUnit(R, F, L); end);
-  AddD('LengthUnderflow', fkLengthUnderflow, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLengthUnderflowDetector.AnalyzeUnit(R, F, L); end);
+  AddD('LengthUnderflow', fkLengthUnderflow, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLengthUnderflowDetector.AnalyzeUnit(R, F, L); end, ['length(', '.count', 'high(']);
   // VisibilityCheck emittiert vier Kinds (CanBeUnitPrivate, CanBeStrict-
   // Private, CanBeProtected, UnusedPublicMember) auf den
   // fkCanBeUnitPrivate-Anker im Profile-Filter.
@@ -321,13 +346,13 @@ begin
   AddD('VisibilityCheck',fkCanBeUnitPrivate, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TVisibilityCheckDetector.AnalyzeUnit(R, F, L); end);
   // Concurrency-Detektor-Familie
   AddD('SynchronizeInDestructor', fkSynchronizeInDestructor, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TSynchronizeInDestructorDetector.AnalyzeUnit(R, F, L); end);
-  AddD('LockWithoutTryFinally', fkLockWithoutTryFinally, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLockWithoutTryFinallyDetector.AnalyzeUnit(R, F, L); end);
+  AddD('LockWithoutTryFinally', fkLockWithoutTryFinally, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TLockWithoutTryFinallyDetector.AnalyzeUnit(R, F, L); end, ['tcriticalsection', 'tmonitor', '.enter', '.acquire']);
   // Concurrency-Familie erweitert (SCA113-114): Thread-Lifecycle-Bugs
-  AddD('ConcurrencyExt',     fkThreadResumeDeprecated, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TConcurrencyExtDetector.AnalyzeUnit(R, F, L); end);
+  AddD('ConcurrencyExt',     fkThreadResumeDeprecated, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TConcurrencyExtDetector.AnalyzeUnit(R, F, L); end, ['tthread', '.synchronize', '.resume', '.queue', 'parambyname', 'fieldbyname']);
   // Performance-Hotspots (SCA110-112)
   AddD('PerfHotspots',       fkStringConcatInLoop,     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TPerfHotspotsDetector.AnalyzeUnit(R, F, L); end);
   // REST/HTTP-Security (SCA115-116)
-  AddD('RestHttpSecurity',   fkHttpInsteadOfHttps,     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TRestHttpSecurityDetector.AnalyzeUnit(R, F, L); end);
+  AddD('RestHttpSecurity',   fkHttpInsteadOfHttps,     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TRestHttpSecurityDetector.AnalyzeUnit(R, F, L); end, ['http://', 'https://', 'tls', 'ssl', 'thttp', 'idhttp', 'rest.client', '.securityprotocol']);
   // Doc-Luecken (SCA117)
   AddD('PublicMemberWithoutDoc', fkPublicMemberWithoutDoc, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TPublicMemberWithoutDocDetector.AnalyzeUnit(R, F, L); end);
   // Naming-Familie erweitert (SCA118-119)
@@ -356,7 +381,7 @@ begin
   AddD('HardcodedPath',   fkHardcodedPath,   procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin THardcodedPathDetector.AnalyzeUnit(R, F, L); end);
   AddD('DebugOutput',     fkDebugOutput,     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDebugOutputDetector.AnalyzeUnit(R, F, L); end);
   AddD('DeepNesting',     fkDeepNesting,     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDeepNestingDetector.AnalyzeUnit(R, F, L); end);
-  AddD('TodoComment',     fkTodoComment,     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TTodoCommentDetector.AnalyzeUnit(R, F, L); end);
+  AddD('TodoComment',     fkTodoComment,     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TTodoCommentDetector.AnalyzeUnit(R, F, L); end, ['todo', 'fixme', 'hack', 'xxx']);
   AddD('EmptyMethod',     fkEmptyMethod,     procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TEmptyMethodDetector.AnalyzeUnit(R, F, L); end);
   // FieldLeak: gleicher Kind wie LeakDetector (fkMemoryLeak) - Profile-
   // Filter behandelt beide identisch.
@@ -389,11 +414,37 @@ procedure RunAllDetectors(Root: TAstNode; const FileName: string;
 //   * Watch wird nur instanziiert wenn AOnTime tatsaechlich assigned ist
 //     (spart ~1 µs QueryPerformanceCounter pro Detektor pro File).
 var
-  i          : Integer;
+  i, j       : Integer;
   Watch      : TStopwatch;
   PrevCount  : Integer;
   HasTimeCb  : Boolean;
   FilterActive : Boolean;
+  SrcLow       : string;
+  SrcLowReady  : Boolean;
+  Lines        : TStringList;
+  Cached       : Boolean;
+  TokenMatch   : Boolean;
+
+  function EnsureSrcLow: Boolean;
+  // Lazy: lower-cased Datei-Inhalt nur dann bauen wenn mindestens ein
+  // Detektor mit Pre-Filter-Tokens drankommt. Pro Datei MAX EINMAL.
+  begin
+    if SrcLowReady then Exit(True);
+    SrcLowReady := True;
+    Lines := AcquireLines(FileName, Cached);
+    if Lines = nil then
+    begin
+      SrcLow := '';
+      Exit(False);
+    end;
+    try
+      SrcLow := LowerCase(Lines.Text);
+    finally
+      ReleaseLines(Lines, Cached);
+    end;
+    Result := SrcLow <> '';
+  end;
+
 begin
   EnsureDetectorsBuilt;
 
@@ -401,10 +452,32 @@ begin
   FilterActive := (uSCAConsts.DetectorEnabledKinds <> []) or
                   (uSCAConsts.DetectorMinSeverity <> lsHint);
   PrevCount    := Results.Count;
+  SrcLow       := '';
+  SrcLowReady  := False;
 
   for i := 0 to High(gDetectors) do
   begin
     if not IsDetectorEnabled(gDetectors[i], AIncludeUsesCheck) then Continue;
+
+    // Pre-Filter via RequiredTokensLow - schneller Multi-Substring-Check
+    // bevor wir in den AST-Walk gehen. Spart fuer Detektoren wie
+    // CommandInjection / RestHttpSecurity / MoveSizeOfPointer den
+    // kompletten Detector-Run bei Files die garantiert keinen Treffer
+    // haben koennen.
+    if Length(gDetectors[i].RequiredTokensLow) > 0 then
+    begin
+      if not EnsureSrcLow then
+        Continue;  // Datei nicht lesbar - kann nichts triggern
+      TokenMatch := False;
+      for j := 0 to High(gDetectors[i].RequiredTokensLow) do
+        if Pos(gDetectors[i].RequiredTokensLow[j], SrcLow) > 0 then
+        begin
+          TokenMatch := True;
+          Break;
+        end;
+      if not TokenMatch then Continue;  // KEIN Token im File -> Skip
+    end;
+
     if HasTimeCb then
       Watch := TStopwatch.StartNew;
     try
