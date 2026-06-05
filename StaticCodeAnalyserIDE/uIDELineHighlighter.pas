@@ -304,11 +304,9 @@ const
   PAD_H          = 6;
   PAD_V          = 1;
   MIN_BADGE_W    = 60;
-  // Linke spitze Klammer + Space, Plain ASCII statt Unicode ◀ damit
-  // jede Editor-Default-Schrift sie korrekt rendert.
-  ARROW_PREFIX   = '< ';
 var
   Text   : string;
+  Icon   : string;
   Sz     : TSize;
   BX, BY : Integer;
   BW, BH : Integer;
@@ -320,8 +318,16 @@ var
   OldFontSize   : Integer;
   OldFontStyle  : TFontStyles;
 begin
-  Text := ARROW_PREFIX + AMark.Badge;
-  if Text = ARROW_PREFIX then Exit;  // leer
+  // Type-Emoji + Badge: '🐞 Bug · Error'. Wenn TypeText unbekannt
+  // bleibt der Icon-Prefix leer, dann nur Badge-Text.
+  // Astral-Plane-Glyphen (🐞 = D83D DC1E surrogate-pair) werden via
+  // OS-Font-Linking (Segoe UI -> Segoe UI Emoji) gerendert.
+  Icon := BadgeIcon(AMark.Badge);
+  if Icon <> '' then
+    Text := Icon + ' ' + AMark.Badge
+  else
+    Text := AMark.Badge;
+  if Trim(Text) = '' then Exit;  // leer
 
   // Canvas-State sichern (Editor zeichnet danach noch Text - wir
   // duerfen die Font-/Brush-Einstellungen nicht permanent veraendern).
@@ -1169,14 +1175,19 @@ begin
   LineH := FSavedCharHeight;
   if LineH < 16 then LineH := 20;  // Fallback wenn CharHeight nicht gesetzt
   try
-    // Mini-Badge-W (PaintLine zeichnet sie aus '< ' + Mark.Badge in
-    // Segoe UI 8 bold + 12px Padding). Wir schaetzen hier ueber
-    // ~6px pro Char, damit der Overlay-Morph mit dem gleichen Start-W
-    // anfaengt und die Mini-Badge nahtlos uebergeht (kein W-Jump).
-    // Nur im sameline-Modus relevant - im below-Modus kein W-Morph.
+    // Mini-Badge-W (PaintLine zeichnet sie aus BadgeIcon + ' ' + Mark.Badge
+    // in Segoe UI 8 bold + 12px Padding). Schaetzung: 6px pro Badge-Char
+    // + 18px fuer das Emoji-Icon (Surrogate-Pair = 2 UTF-16 Chars, aber
+    // Emoji rendert breiter als ein Text-Char). +12px Box-Padding. Wenn
+    // BadgeIcon='' (unbekannter TypeText) entfaellt der Icon-Anteil.
+    // Nur im sameline-Modus relevant.
     var EstBadgeW : Integer := 0;
     if SameText(GetOverlayPositionSetting, 'sameline') then
-      EstBadgeW := Length('< ' + Mark.Badge) * 6 + 12;
+    begin
+      EstBadgeW := Length(Mark.Badge) * 6 + 12;
+      if BadgeIcon(Mark.Badge) <> '' then
+        Inc(EstBadgeW, 18);
+    end;
 
     GAnnotationOverlay.ShowAt(FSavedEditor, P.X, P.Y, AWidth, LineH,
       Mark.Title, Mark.Desc, Mark.Badge, Mark.Color, Mark.Fix,

@@ -146,11 +146,34 @@ var
 procedure RegisterAnnotationOverlay;
 procedure UnregisterAnnotationOverlay;
 
+// Liefert das Emoji-Prefix fuer den TypeText im Badge.
+// Erkennt Praefix (case-insensitive) der englischen TLeakFinding.TypeText-
+// Strings: Bug / Code Smell / Vulnerability / Security Hotspot /
+// Code Duplication / Read Error.
+// Astral-Plane-Glyphen werden als UTF-16-Surrogat-Paare geliefert -
+// werden vom OS-Font-Linking (Segoe UI -> Segoe UI Emoji) gerendert.
+// Liefert '' wenn TypeText unbekannt - Caller faellt dann auf Text-only.
+function BadgeIcon(const ABadge: string): string;
+
 implementation
 
 uses
   uIDELineHighlighter;   // GHighlighter (implementation-only - vermeidet
                          // den Zyklus mit dem interface-uses dort).
+
+function BadgeIcon(const ABadge: string): string;
+var
+  Low : string;
+begin
+  Low := LowerCase(ABadge);
+  if      Low.StartsWith('bug')                then Result := #$D83D#$DC1E  // 🐞
+  else if Low.StartsWith('code smell')         then Result := #$D83D#$DCA8  // 💨
+  else if Low.StartsWith('vulnerability')      then Result := #$D83D#$DD13  // 🔓
+  else if Low.StartsWith('security hotspot')   then Result := #$D83D#$DD25  // 🔥
+  else if Low.StartsWith('code duplication')   then Result := #$D83D#$DCD1  // 📑
+  else if Low.StartsWith('read error')         then Result := #$274C        // ❌
+  else                                              Result := '';
+end;
 
 const
   STRIPE_W       = 3;
@@ -562,7 +585,12 @@ begin
 
   TotalH := TitleH + DescH + FixH;
 
-  BadgeCaption := '  ' + ABadge + '  ';
+  // Icon-Prefix vor dem Badge: '🐞 Bug · Error' (analog Mini-Inline-Badge).
+  // Wenn TypeText nicht erkannt wird, faellt BadgeIcon auf '' zurueck.
+  if BadgeIcon(ABadge) <> '' then
+    BadgeCaption := '  ' + BadgeIcon(ABadge) + ' ' + ABadge + '  '
+  else
+    BadgeCaption := '  ' + ABadge + '  ';
 
   // KRITISCH zuerst: Embedding sicherstellen, BEVOR wir Bounds/Visible
   // setzen. Sonst wuerde VCL das Form als Top-Level-Popup positionieren
@@ -628,9 +656,8 @@ begin
     FLblDesc.Font.Color := BlendColor(WindowBase, clWhite, 0.75); // hellgrau auf dunkel
 
   // Inhalt setzen — VCL invalidiert die Labels automatisch beim Caption-Set.
-  // Pfeil-Prefix '< ' identisch zur Mini-Inline-Badge (DrawMiniInfoBar).
-  // Frueher: U+26A0 ⚠ - aber unstimmig mit der Mini-Badge.
-  FLblTitle.Caption    := '< ' + ATitle;
+  // Pfeil-Prefix wurde entfernt (User-Request) - Icon sitzt jetzt im Badge.
+  FLblTitle.Caption    := ATitle;
   FLblDesc.Caption     := ADesc;
   FLblBadge.Caption    := BadgeCaption;
   FLblBadge.Visible    := ABadge <> '';
