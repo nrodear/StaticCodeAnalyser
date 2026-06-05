@@ -60,6 +60,8 @@ end;
 function AttachToParentConsole: Boolean;
 const
   ATTACH_PARENT_PROCESS_FLAG = DWORD(-1);
+var
+  StdOutType, StdErrType : DWORD;
 begin
   Result := AttachConsole(ATTACH_PARENT_PROCESS_FLAG);
   if not Result then Exit;
@@ -68,11 +70,26 @@ begin
   // Handles ins Leere - daher TextFiles neu auf CONOUT$ binden. CONOUT$ ist
   // ein Windows-Special-File das auf die aktive Konsole verweist und immer
   // schreibbar ist solange eine Konsole attached ist.
+  //
+  // ABER: wenn der Aufrufer stdout/stderr UMGELENKT hat (Pipe oder File-
+  // Redirect wie 'sca.exe args > log.txt'), wuerde CONOUT$ den Redirect
+  // ueberschreiben und direkt auf die Konsole schreiben - der User-Log
+  // bliebe leer. Vorher pruefen ob das vom RTL gesehene STD_OUTPUT_HANDLE
+  // ein Char-Device (Console) ist; nur dann remappen.
+  // FILE_TYPE_CHAR = $0002 (Console), _DISK = $0001 (File), _PIPE = $0003.
+  StdOutType := GetFileType(GetStdHandle(STD_OUTPUT_HANDLE));
+  StdErrType := GetFileType(GetStdHandle(STD_ERROR_HANDLE));
   try
-    AssignFile(Output,    'CONOUT$');
-    Rewrite(Output);
-    AssignFile(ErrOutput, 'CONOUT$');
-    Rewrite(ErrOutput);
+    if StdOutType = FILE_TYPE_CHAR then
+    begin
+      AssignFile(Output, 'CONOUT$');
+      Rewrite(Output);
+    end;
+    if StdErrType = FILE_TYPE_CHAR then
+    begin
+      AssignFile(ErrOutput, 'CONOUT$');
+      Rewrite(ErrOutput);
+    end;
   except
     // Bei IO-Errors stillschweigend zurueck - der CLI-Lauf laeuft weiter,
     // nur ohne Output. Exit-Codes funktionieren unabhaengig davon.
