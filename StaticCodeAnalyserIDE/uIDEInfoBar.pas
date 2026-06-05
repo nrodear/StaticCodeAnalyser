@@ -33,8 +33,10 @@ uses
   Winapi.Windows, Winapi.Messages,
   System.SysUtils, System.Classes, System.Math, System.Generics.Collections,
   Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Menus, Vcl.ActnList,
+  Vcl.ExtCtrls, Vcl.Themes,
   ToolsAPI,
   uSCAConsts,
+  uAnalyserTypes, uAnalyserTheme,
   uIDEDiagnostic;
 
 const
@@ -46,16 +48,25 @@ const
 type
   TInfoBarRenderer = class
   private
-    function ColorForSeverity(S: TDiagnosticSeverity): TColor;
+    FTimer  : TTimer;
+    FActive : Boolean;
+    function ColorForSeverity(S: TDiagnosticSeverity;
+                              ABg: TColor;
+                              ASS: TCustomStyleServices): TColor;
     function FindEditControl(AForm: TCustomForm): TWinControl;
     function GuessTotalLines(AView: IOTAEditView): Integer;
+    function ResolveBgColor(ASS: TCustomStyleServices): TColor;
     procedure PaintOnControl(AControl: TWinControl;
                              const AFileName: string;
                              ATotalLines: Integer);
+    procedure OnTimerTick(Sender: TObject);
   public
-    // Test-Paint: zeichnet einmalig das InfoBar-Stripe auf den Editor
-    // der gerade aktiv ist. Painting verschwindet beim naechsten
-    // Editor-Repaint - Phase C.2 (Detour) macht es persistent.
+    constructor Create;
+    destructor Destroy; override;
+    // Aktiviert den 200ms-Timer der periodisch nachzeichnet.
+    // Quick-Fix bis Phase C.2 (PaintLine-Detour) persistent macht.
+    procedure EnableAutoRepaint;
+    procedure DisableAutoRepaint;
     procedure RepaintForCurrentView;
   end;
 
@@ -76,16 +87,68 @@ implementation
 
 { TInfoBarRenderer }
 
-function TInfoBarRenderer.ColorForSeverity(S: TDiagnosticSeverity): TColor;
+constructor TInfoBarRenderer.Create;
 begin
-  // BGR-Reihenfolge
-  case S of
-    dsError:   Result := $001318E8;  // Rot
-    dsWarning: Result := $00008CFF;  // Orange
-    dsHint:    Result := $00D47800;  // Blau
+  inherited;
+  FTimer := TTimer.Create(nil);
+  FTimer.Interval := 200;
+  FTimer.Enabled  := False;
+  FTimer.OnTimer  := OnTimerTick;
+  FActive := False;
+end;
+
+destructor TInfoBarRenderer.Destroy;
+begin
+  FTimer.Free;
+  inherited;
+end;
+
+procedure TInfoBarRenderer.EnableAutoRepaint;
+begin
+  FActive := True;
+  FTimer.Enabled := True;
+end;
+
+procedure TInfoBarRenderer.DisableAutoRepaint;
+begin
+  FTimer.Enabled := False;
+  FActive := False;
+end;
+
+procedure TInfoBarRenderer.OnTimerTick(Sender: TObject);
+begin
+  if FActive then RepaintForCurrentView;
+end;
+
+function TInfoBarRenderer.ResolveBgColor(ASS: TCustomStyleServices): TColor;
+begin
+  // Editor-Background. clWindow via StyleServices.GetSystemColor liefert
+  // die theme-korrekte Light/Dark-Variante. Fallback clWindow falls SS nil.
+  if ASS <> nil then
+    Result := ASS.GetSystemColor(clWindow)
   else
-    Result := clGray;
+    Result := clWindow;
+end;
+
+function TInfoBarRenderer.ColorForSeverity(S: TDiagnosticSeverity;
+  ABg: TColor; ASS: TCustomStyleServices): TColor;
+var
+  FSev : TFindingSeverity;
+begin
+  case S of
+    dsError:   FSev := fsError;
+    dsWarning: FSev := fsWarning;
+    dsHint:    FSev := fsHint;
+  else
+    FSev := fsUnknown;
   end;
+  // SeverityBg mischt einen Anteil der Akzentfarbe in die theme-aufgeloeste
+  // Basisfarbe. Ergibt im Light-Theme leichten Pastell-Strich, im Dark-Theme
+  // gedaempften Farbton. ABg = Editor-Background.
+  if ASS <> nil then
+    Result := SeverityBg(FSev, ABg, ASS)
+  else
+    Result := SeverityAccent(FSev);  // Fallback ungemischt
 end;
 
 function TInfoBarRenderer.FindEditControl(AForm: TCustomForm): TWinControl;
@@ -144,10 +207,15 @@ var
   BarLeft, BarHeight, Y : Integer;
   Map : TDictionary<Integer, TDiagnosticSeverity>;
   Pair : TPair<Integer, TDiagnosticSeverity>;
+  SS : TCustomStyleServices;
+  BgColor : TColor;
 begin
   if AControl = nil then Exit;
   if ATotalLines <= 0 then Exit;
   if gDiagnosticStore = nil then Exit;
+
+  SS := ActiveStyleServices;
+  BgColor := ResolveBgColor(SS);
 
   Canvas := TControlCanvas.Create;
   try
@@ -157,8 +225,8 @@ begin
     BarHeight := R.Bottom - R.Top - INFOBAR_SCROLLBAR_W;
     if BarHeight < 50 then BarHeight := R.Bottom - R.Top;
 
-    // Hintergrund-Streifen (subtil, damit man sieht wo die Bar liegt)
-    Canvas.Brush.Color := clBtnFace;
+    // Hintergrund theme-konform (Editor-Background)
+    Canvas.Brush.Color := BgColor;
     Canvas.FillRect(Rect(BarLeft, R.Top, BarLeft + INFOBAR_WIDTH,
                          R.Top + BarHeight));
 
@@ -170,7 +238,7 @@ begin
         if Y < R.Top then Y := R.Top;
         if Y > R.Top + BarHeight - INFOBAR_STROKE_H then
           Y := R.Top + BarHeight - INFOBAR_STROKE_H;
-        Canvas.Brush.Color := ColorForSeverity(Pair.Value);
+        Canvas.Brush.Color := ColorForSeverity(Pair.Value, BgColor, SS);
         Canvas.FillRect(Rect(BarLeft, Y,
                              BarLeft + INFOBAR_WIDTH, Y + INFOBAR_STROKE_H));
       end;
@@ -271,8 +339,12 @@ begin
 
   gDiagnosticStore.UpdateFile(FileName, Diags);
 
-  // Painting triggern
-  InfoBarPaintTest;
+  // Painting triggern + Auto-Repaint-Timer aktivieren (Quick-Fix bis
+  // Phase C.2 mit Detour persistent macht).
+  if gInfoBarRenderer = nil then
+    gInfoBarRenderer := TInfoBarRenderer.Create;
+  gInfoBarRenderer.EnableAutoRepaint;
+  gInfoBarRenderer.RepaintForCurrentView;
 end;
 
 function FindIDEToolsMenuLocal(MainMenu: TMainMenu): TMenuItem;
