@@ -348,6 +348,19 @@ var
           [UseBlk.Id, Ord(UseBlk.Kind), UseBlk.Line]);
         Diag := Format('[%s] Free@L%d Use@L%d Method@L%d FreeBlk=[%s] UseBlk=[%s]',
           [FileName, AFreeLine, AUseLine, Meth1.Line, FBStr, UBStr]);
+        // Methods-Liste: Lines der nahegelegenen Eintraege (+- 100).
+        var NearStr : string := '';
+        if Methods <> nil then
+          for var Mi := 0 to Methods.Count - 1 do
+            if Abs(Methods[Mi].Line - AFreeLine) < 200 then
+            begin
+              if NearStr <> '' then NearStr := NearStr + ', ';
+              NearStr := NearStr + Format('"%s"@L%d',
+                [Methods[Mi].Name, Methods[Mi].Line]);
+            end;
+        Diag := Diag + sLineBreak +
+          Format('  Methods near Free (count=%d): [%s]',
+            [Methods.Count, NearStr]);
         if (FreeBlk <> nil) and (UseBlk <> nil) then
           Diag := Diag + Format(' CanReach=%s', [BoolToStr(CFG.CanReach(FreeBlk, UseBlk), True)]);
         // Append full CFG dump: Block-ID -> Successors-IDs + first-line.
