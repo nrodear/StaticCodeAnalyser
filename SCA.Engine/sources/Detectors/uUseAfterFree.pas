@@ -36,10 +36,17 @@ unit uUseAfterFree;
 //   * Bewusst nicht geflaggt: `<ident>` als bare Wort (kein Accessor) -
 //     produziert zu viele FPs (Vergleiche `if x = L then`, etc.).
 //
-// Limitierungen:
-//   * Kein Control-Flow: `if Cond then Free else Use` wird geflaggt obwohl
-//     der Use im else-Zweig den Free im then-Zweig nicht sieht.
-//   * Verschachtelte Scopes / nested functions werden grob behandelt.
+// CFG-Filter (A.4.6, Konzept_A4_CFG.md):
+//   Nach dem lexischen Match wird via TCFGBuilder.BuildFromMethod pro
+//   Method der CFG aufgebaut und CFG.CanReach(FreeBlock, UseBlock)
+//   geprueft. Wenn der Use vom Free aus NICHT reachable ist (z.B.
+//   if Cond then Free+Exit else Use), wird der Befund dropped.
+//   Beide (Free + Use) muessen in DERSELBEN Method liegen damit der
+//   Filter greift - sonst lexisches Verhalten wie bisher (lieber leicht
+//   konservativ als FN).
+//
+// Verbleibende Limitierungen:
+//   * Nested functions werden grob behandelt (innerste Method gewinnt).
 //   * Free in einem Method-Body kann einen Use im naechsten Method-Body
 //     "sehen", wenn das Method-Ende nicht erkannt wird. Defensive
 //     Heuristik: nach Wort 'end' aus dem Scan aussteigen.
@@ -65,7 +72,8 @@ implementation
 
 uses
   System.RegularExpressions, System.StrUtils,
-  uFileTextCache;
+  uFileTextCache,
+  uCFG;
 
 var
   // Lazy-Cache: beide Patterns sind konstant. ReEndOfMethod war besonders
@@ -197,6 +205,100 @@ var
   F        : TLeakFinding;
   UsePos   : Integer;
   LineNo   : Integer;
+  FreeLine : Integer;
+  // CFG-Filter (A.4.6): pro UnitNode einmal alle Methods sammeln und
+  // CFGs lazy bauen. CFGMap besitzt die TCFG-Instanzen (OwnsValues=True).
+  Methods  : TList<TAstNode>;
+  CFGMap   : TObjectDictionary<TAstNode, TCFG>;
+
+  function CalcMethodEndLine(N: TAstNode): Integer;
+  var Stack : TStack<TAstNode>; Cur : TAstNode; Ch : TAstNode;
+  begin
+    Result := 0;
+    if N = nil then Exit;
+    Result := N.Line;
+    Stack := TStack<TAstNode>.Create;
+    try
+      Stack.Push(N);
+      while Stack.Count > 0 do
+      begin
+        Cur := Stack.Pop;
+        if Cur.Line > Result then Result := Cur.Line;
+        for Ch in Cur.Children do Stack.Push(Ch);
+      end;
+    finally Stack.Free; end;
+  end;
+
+  function FindMethodForLine(ALine: Integer): TAstNode;
+  // Innerste Method die ALine umschliesst. Bei nested-Methods gewinnt
+  // die mit der kleinsten Range (= innerste).
+  var
+    Mth, Best : TAstNode;
+    BestSpan, Span : Integer;
+  begin
+    Best := nil;
+    BestSpan := MaxInt;
+    for Mth in Methods do
+    begin
+      var EndL := CalcMethodEndLine(Mth);
+      if (ALine >= Mth.Line) and (ALine <= EndL) then
+      begin
+        Span := EndL - Mth.Line;
+        if Span < BestSpan then
+        begin
+          Best := Mth;
+          BestSpan := Span;
+        end;
+      end;
+    end;
+    Result := Best;
+  end;
+
+  function GetOrBuildCFG(MethNode: TAstNode): TCFG;
+  begin
+    if not CFGMap.TryGetValue(MethNode, Result) then
+    begin
+      Result := TCFGBuilder.BuildFromMethod(MethNode);
+      CFGMap.Add(MethNode, Result);
+    end;
+  end;
+
+  function FindBlockForLine(CFG: TCFG; ALine: Integer): TCFGBlock;
+  // Erster Block der einen AstNode mit der gegebenen Source-Line enthaelt.
+  var B : TCFGBlock; N : TAstNode;
+  begin
+    Result := nil;
+    if CFG = nil then Exit;
+    for B in CFG.Blocks do
+      for N in B.AstNodes do
+        if N.Line = ALine then Exit(B);
+    // Fallback: Block dessen Line-Feld direkt matched.
+    for B in CFG.Blocks do
+      if B.Line = ALine then Exit(B);
+  end;
+
+  function CfgFilterDropsFinding(AFreeLine, AUseLine: Integer): Boolean;
+  // True = Befund DROPPEN (CFG sagt: Use nicht erreichbar vom Free).
+  // Greift nur wenn beide Lines IN DERSELBEN Method liegen.
+  var
+    Meth1, Meth2 : TAstNode;
+    CFG          : TCFG;
+    FreeBlk      : TCFGBlock;
+    UseBlk       : TCFGBlock;
+  begin
+    Result := False;
+    Meth1 := FindMethodForLine(AFreeLine);
+    Meth2 := FindMethodForLine(AUseLine);
+    if (Meth1 = nil) or (Meth2 = nil) or (Meth1 <> Meth2) then Exit;
+    CFG := GetOrBuildCFG(Meth1);
+    FreeBlk := FindBlockForLine(CFG, AFreeLine);
+    UseBlk  := FindBlockForLine(CFG, AUseLine);
+    // Wenn einer der Bloecke nicht gefunden wird (Builder hat das
+    // Statement nicht erfasst, z.B. wegen Parser-Quirk), KEINE
+    // Filterung - lieber lexisches Verhalten beibehalten.
+    if (FreeBlk = nil) or (UseBlk = nil) then Exit;
+    Result := not CFG.CanReach(FreeBlk, UseBlk);
+  end;
 
   function FindUseOrReassign(StartPos: Integer): Integer;
   // Sucht ab StartPos im Code nach dem ersten relevanten Vorkommen von Ident.
@@ -274,9 +376,18 @@ begin
   EnsureRegexCacheBuilt;
   Lines := AcquireLines(FileName, Cached);
   if Lines = nil then Exit;
+  // CFG-Filter-Infrastruktur (A.4.6): Methods aus dem AST sammeln,
+  // CFGs lazy bauen pro Hit. CFGMap besitzt die TCFGs (Owns=True).
+  Methods := nil;
+  CFGMap  := nil;
   try
     Code := StripStringsAndComments(Lines, LineFor);
     CodeLen := Length(Code);
+    if UnitNode <> nil then
+    begin
+      Methods := UnitNode.FindAll(nkMethod);
+      CFGMap  := TObjectDictionary<TAstNode, TCFG>.Create([doOwnsValues]);
+    end;
 
     // FreeAndNil(<id>) oder <id>.Free als Free-Punkt erkennen.
     Matches := CachedReFree.Matches(Code);
@@ -307,6 +418,13 @@ begin
       LineNo := LineForPos(LineFor, UsePos);
       if LineNo <= 0 then LineNo := 1;
 
+      // A.4.6 CFG-Filter: wenn FreeBlock und UseBlock in derselben
+      // Method liegen und CanReach=False, droppen wir den Befund.
+      FreeLine := LineForPos(LineFor, M.Index);
+      if FreeLine <= 0 then FreeLine := 1;
+      if (Methods <> nil) and CfgFilterDropsFinding(FreeLine, LineNo) then
+        Continue;
+
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
       F.MethodName := '';
@@ -318,6 +436,8 @@ begin
       Results.Add(F);
     end;
   finally
+    if Assigned(CFGMap)  then CFGMap.Free;
+    if Assigned(Methods) then Methods.Free;
     ReleaseLines(Lines, Cached);
   end;
 end;

@@ -16,6 +16,9 @@ type
     [Test] procedure FreeOnSelf_NoFinding;
     [Test] procedure FreeOnResult_NoFinding;
     [Test] procedure Finding_KindAndSeverity;
+    // A.4.6 CFG-Filter
+    [Test] procedure CfgFilter_IfThenFreeExit_NoFinding;
+    [Test] procedure CfgFilter_FreeInBothBranches_StillNoFinding;
   end;
 
 implementation
@@ -152,6 +155,56 @@ begin
     Assert.IsNotNull(Hit, 'fkUseAfterFree finding expected');
     Assert.AreEqual(fkUseAfterFree, Hit.Kind);
     Assert.AreEqual(lsError,        Hit.Severity);
+  finally F.Free; end;
+end;
+
+{ ---- A.4.6 CFG-Filter Tests ---- }
+
+procedure TTestUseAfterFree.CfgFilter_IfThenFreeExit_NoFinding;
+// Klassischer FP-Fall: Free + Exit im if-Branch, Use im else-Branch.
+// Lexisch wuerde der Use auf line 8 als UAF geflagged - mit CFG-Filter
+// erkennt CanReach(FreeBlock, UseBlock)=False (Free-Block hat nur
+// Exit_ als Successor, kein Pfad zum Use-Block).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(Cond: Boolean);'#13#10 +
+  'var L: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  if Cond then'#13#10 +
+  '  begin'#13#10 +
+  '    FreeAndNil(L);'#13#10 +
+  '    Exit;'#13#10 +
+  '  end;'#13#10 +
+  '  L.Add(''x'');'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkUseAfterFree),
+    'CFG-Filter muss FP droppen weil Use nicht von Free aus reachable');
+  finally F.Free; end;
+end;
+
+procedure TTestUseAfterFree.CfgFilter_FreeInBothBranches_StillNoFinding;
+// Free in if-then UND in else-Branch, kein nachfolgender Use. Bisheriger
+// lexischer Scan emittiert auch nichts; CFG-Filter veraendert das nicht.
+// Sanity-Check dass A.4.6 bestehende negative Cases nicht bricht.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(Cond: Boolean);'#13#10 +
+  'var L: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  if Cond then'#13#10 +
+  '    FreeAndNil(L)'#13#10 +
+  '  else'#13#10 +
+  '    L.Free;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkUseAfterFree));
   finally F.Free; end;
 end;
 
