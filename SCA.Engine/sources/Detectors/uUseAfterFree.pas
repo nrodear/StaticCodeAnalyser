@@ -86,8 +86,17 @@ var
 procedure EnsureRegexCacheBuilt;
 begin
   if CachedReInit then Exit;
+  // Free-Regex mit zwei Look-Aheads gegen typische FPs (mORMot/Firebird-Audit):
+  //   (?!\s*:=)         vermeidet 'vTable.free := @ptr' (Function-Pointer-
+  //                     Assignment auf ein Field das zufaellig 'free' heisst -
+  //                     kein Destructor-Call). Trifft die generated TLB-Header
+  //                     der Firebird-API.
+  //   (?!\s*\(\s*\w)    vermeidet 'fCx.Free(arg)' - Method-Call mit Argument.
+  //                     TObject.Free() ist arg-los; ein Free MIT Argument ist
+  //                     eine andere Methode mit kollidierendem Namen. Leere
+  //                     Klammern Free() bleiben erlaubt.
   CachedReFree        := TRegEx.Create(
-    '(?i)(?:\bFreeAndNil\s*\(\s*(\w+)\s*\)|\b(\w+)\s*\.\s*Free\b)');
+    '(?i)(?:\bFreeAndNil\s*\(\s*(\w+)\s*\)|\b(\w+)\s*\.\s*Free\b(?!\s*(?::=|\(\s*\w)))');
   CachedReEndOfMethod := TRegEx.Create(
     '(?im)^\s*end\s*;|\b(procedure|function|constructor|destructor|class\s+(?:procedure|function|constructor|destructor))\b');
   CachedReInit := True;

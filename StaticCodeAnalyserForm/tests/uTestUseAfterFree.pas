@@ -19,6 +19,9 @@ type
     // A.4.6 CFG-Filter
     [Test] procedure CfgFilter_IfThenFreeExit_NoFinding;
     [Test] procedure CfgFilter_FreeInBothBranches_StillNoFinding;
+    // Audit-Fixes nach mORMot/Firebird-Self-Test
+    [Test] procedure FreeFieldAssignment_NoFinding;
+    [Test] procedure FreeMethodWithArgument_NoFinding;
   end;
 
 implementation
@@ -205,6 +208,51 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual(0, TFindingHelper.Count(F, fkUseAfterFree));
+  finally F.Free; end;
+end;
+
+{ ---- Audit-Fixes ---- }
+
+procedure TTestUseAfterFree.FreeFieldAssignment_NoFinding;
+// Firebird-Pattern: 'vTable.free := @ptr' ist eine Assignment auf ein
+// Field das zufaellig 'free' heisst (Function-Pointer-Setup fuer
+// generated TLB-Header). KEIN Destructor-Call.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var vTable: PVTable;'#13#10 +
+  'begin'#13#10 +
+  '  vTable := PVTable.Create;'#13#10 +
+  '  vTable.free := @SomeFreeDispatcher;'#13#10 +
+  '  vTable.execute := @SomeExecuteDispatcher;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkUseAfterFree),
+    'Free als Field-Assignment muss ignoriert werden');
+  finally F.Free; end;
+end;
+
+procedure TTestUseAfterFree.FreeMethodWithArgument_NoFinding;
+// mORMot quickjs-Pattern: 'fCx.Free(fGlobalObj)' ist ein Method-Call
+// MIT Argument - eine Method namens 'Free' die nicht der Destructor
+// ist. TObject.Free() hat keinen Parameter. Leere Klammern 'fCx.Free()'
+// bleiben weiter ein Destructor-Match.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var fCx: TQuickJSContext;'#13#10 +
+  'begin'#13#10 +
+  '  fCx := TQuickJSContext.Create;'#13#10 +
+  '  fCx.Free(fGlobalObj);'#13#10 +
+  '  fCx.Done;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkUseAfterFree),
+    'Free mit Argument ist Method-Call, kein Destructor');
   finally F.Free; end;
 end;
 
