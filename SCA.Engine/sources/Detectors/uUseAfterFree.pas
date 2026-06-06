@@ -71,7 +71,7 @@ type
 implementation
 
 uses
-  System.RegularExpressions, System.StrUtils, System.IOUtils,
+  System.RegularExpressions, System.StrUtils, System.IOUtils, System.Math,
   uFileTextCache,
   uCFG;
 
