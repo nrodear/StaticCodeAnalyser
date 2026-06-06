@@ -79,6 +79,39 @@ begin
                   tkKwInline, tkKwExternal, tkKwRead, tkKwWrite];
 end;
 
+// Calling-Conventions und andere Direktiven die als tkIdent geparst werden:
+// 'stdcall', 'cdecl', 'register', 'pascal', 'safecall', 'winapi', 'export',
+// 'varargs', 'assembler', plus User-/Lib-Conventions wie 'dcpcall' (DC-
+// plugin) und 'mwpascal' (mORMot). Wenn diese nicht skipped werden,
+// schlaegt ParseMethodImpl nach der Signatur fehl: Tok zeigt auf den
+// Calling-Convention-Identifier, ParseLocalVarSection findet kein
+// var/const/type, ParseBlock erwartet 'begin', also wird die Method-Body
+// gar nicht geparst (sichtbar als Headless-Method-Pattern: nkMethod ohne
+// nkBlock-Child, base64func.OpenArchiveW war der Audit-Trigger).
+function IsMethodDirectiveIdent(const Value: string): Boolean;
+const
+  KnownConventions: array[0..14] of string = (
+    'stdcall',  'cdecl',     'register',  'pascal',    'safecall',
+    'winapi',   'delphicall','mwpascal',  'dcpcall',   'export',
+    'varargs',  'assembler', 'local',     'far',       'near'
+  );
+var
+  Lower : string;
+  i     : Integer;
+begin
+  Result := False;
+  Lower  := LowerCase(Value);
+  for i := Low(KnownConventions) to High(KnownConventions) do
+    if Lower = KnownConventions[i] then Exit(True);
+end;
+
+function IsMethodDirectiveTok(const T: TToken): Boolean;
+begin
+  if IsMethodDirective(T.Kind) then Exit(True);
+  if T.Kind = tkIdent then Exit(IsMethodDirectiveIdent(T.Value));
+  Result := False;
+end;
+
 // True wenn C ein Identifier-Zeichen ist (Buchstabe/Ziffer/Underscore).
 // Lokaler Helper - der Parser haengt nicht von uDetectorUtils ab.
 function ParserIsIdentChar(C: Char): Boolean; inline;
@@ -930,14 +963,16 @@ end;
 { ---- Methoden-Direktiven überspringen ---- }
 
 procedure TParser2.ParseMethodDirectives(MNode: TAstNode);
-// Konsumiert alle Method-Direktiven (virtual, abstract, override, ...).
+// Konsumiert alle Method-Direktiven (virtual, abstract, override, ...,
+// plus Calling-Conventions wie stdcall/cdecl/dcpcall/export, siehe
+// IsMethodDirectiveTok).
 // Wenn MNode gegeben ist, werden die Direktiven case-erhaltend an
 // MNode.TypeRef angehaengt - im Format `'kind[:ret];dir1;dir2'`.
 // Detektoren (uVirtualCallInCtor) lesen das via SplitDirectives.
 var
   DirKind : TTokenKind;
 begin
-  while IsMethodDirective(Tok.Kind) do
+  while IsMethodDirectiveTok(Tok) do
   begin
     DirKind := Tok.Kind;
     if MNode <> nil then
