@@ -58,7 +58,8 @@ unit uUseAfterFree;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.Generics.Collections,
+  System.SysUtils, System.Classes,
+  System.Generics.Collections, System.Generics.Defaults,
   uAstNode, uSCAConsts, uMethodd12;
 
 type
@@ -241,15 +242,44 @@ var
   function FindMethodForLine(ALine: Integer): TAstNode;
   // Innerste Method die ALine umschliesst. Bei nested-Methods gewinnt
   // die mit der kleinsten Range (= innerste).
+  //
+  // ROBUST gegen Parser-Headless-Method-Pattern: wenn der Parser keine
+  // Body-Children unter nkMethod ablegt (siehe base64func.pas Audit),
+  // gibt CalcMethodEndLine nur die Header-Line zurueck. Als 2.
+  // Heuristik nehmen wir NEXT-Method.Line - 1 als Approximation des
+  // Body-Endes. Methods.FindAll liefert in Reihenfolge der AST-
+  // Erkundung, was meist auch Source-Reihenfolge ist - sicherheits-
+  // halber sortieren wir nochmal nach Line.
   var
     Mth, Best : TAstNode;
     BestSpan, Span : Integer;
+    SortedMethods : TArray<TAstNode>;
+    i, NextStart, EndL : Integer;
   begin
     Best := nil;
     BestSpan := MaxInt;
-    for Mth in Methods do
+
+    // Methods nach Line sortieren (in-place auf einer Kopie).
+    SetLength(SortedMethods, Methods.Count);
+    for i := 0 to Methods.Count - 1 do SortedMethods[i] := Methods[i];
+    TArray.Sort<TAstNode>(SortedMethods,
+      TComparer<TAstNode>.Construct(
+        function(const L, R: TAstNode): Integer
+        begin Result := L.Line - R.Line; end));
+
+    for i := 0 to High(SortedMethods) do
     begin
-      var EndL := CalcMethodEndLine(Mth);
+      Mth := SortedMethods[i];
+      EndL := CalcMethodEndLine(Mth);
+      // Heuristik 2: wenn AST-Range degeneriert ist (nur Header-Line),
+      // nutze NEXT-Method.Line - 1 als Body-End-Approximation.
+      if i < High(SortedMethods) then
+        NextStart := SortedMethods[i + 1].Line
+      else
+        NextStart := MaxInt;
+      if EndL <= Mth.Line then
+        EndL := NextStart - 1;
+
       if (ALine >= Mth.Line) and (ALine <= EndL) then
       begin
         Span := EndL - Mth.Line;
