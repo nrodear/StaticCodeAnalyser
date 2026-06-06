@@ -305,13 +305,26 @@ var
     if Pos('base64func', LowerCase(FileName)) > 0 then
     begin
       try
+        // Dump Methods-Liste einmal pro Hit (Cost ist OK fuer Diag).
+        var MethListStr : string := 'Methods=nil';
+        if Methods <> nil then
+        begin
+          MethListStr := Format('Methods.Count=%d [', [Methods.Count]);
+          for var Mi := 0 to Methods.Count - 1 do
+          begin
+            if Mi > 0 then MethListStr := MethListStr + ', ';
+            MethListStr := MethListStr + Format('"%s"@L%d..L%d',
+              [Methods[Mi].Name, Methods[Mi].Line, CalcMethodEndLine(Methods[Mi])]);
+          end;
+          MethListStr := MethListStr + ']';
+        end;
         var M1Str : string := 'nil';
         if Meth1 <> nil then M1Str := Format('node@L%d', [Meth1.Line]);
         var M2Str : string := 'nil';
         if Meth2 <> nil then M2Str := Format('node@L%d', [Meth2.Line]);
         DiagSnippet := Format(
-          '[%s] FreeLn=%d UseLn=%d Meth1=%s Meth2=%s',
-          [FileName, AFreeLine, AUseLine, M1Str, M2Str]);
+          '[%s] FreeLn=%d UseLn=%d Meth1=%s Meth2=%s | %s',
+          [FileName, AFreeLine, AUseLine, M1Str, M2Str, MethListStr]);
         if (Meth1 <> nil) and (Meth2 <> nil) and (Meth1 = Meth2) then
         begin
           CFG := GetOrBuildCFG(Meth1);
