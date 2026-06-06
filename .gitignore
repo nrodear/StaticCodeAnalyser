@@ -122,6 +122,8 @@ Todo_*.md
 TODO.md
 Audit_*.md
 I18N.md
+# Ausnahmen: setup-relevante HowTos die jeder Contributor braucht.
+!HowTo_Tests.md
 
 # Spezifische internal docs/-Files (kein Pattern, exact match)
 docs/ConfidenceAudit.md
