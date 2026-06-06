@@ -251,7 +251,7 @@ begin
       Dropped := TBaseline.Apply(List, Baseline);
       Assert.AreEqual(1, Dropped,
         'contextHash sollte Finding trotz Line-Drift + Method-Rename matchen');
-      Assert.AreEqual(0, List.Count);
+      Assert.AreEqual<Integer>(0, List.Count);
     finally
       List.Free;
     end;

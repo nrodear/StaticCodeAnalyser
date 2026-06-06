@@ -48,7 +48,7 @@ procedure TTestSQLInjectionScore.SinglePlus_TrivialScore1;
 var E: TFixEstimate;
 begin
   E := TSQLFixScorer.Estimate('SELECT * FROM users WHERE id = +UserId');
-  Assert.AreEqual(1, E.Score);
+  Assert.AreEqual<Integer>(1, E.Score);
   Assert.AreEqual(Ord(fdTrivial), Ord(E.Difficulty));
 end;
 
@@ -56,7 +56,7 @@ procedure TTestSQLInjectionScore.TwoPluses_EasyScore2;
 var E: TFixEstimate;
 begin
   E := TSQLFixScorer.Estimate('SELECT * FROM users WHERE id = +UserId AND name = +UserName');
-  Assert.AreEqual(2, E.Score);
+  Assert.AreEqual<Integer>(2, E.Score);
   Assert.AreEqual(Ord(fdEasy), Ord(E.Difficulty));
 end;
 
@@ -66,7 +66,7 @@ var E: TFixEstimate;
 begin
   E := TSQLFixScorer.Estimate(
     'WHERE a = +A AND b = +B AND c = +C AND d = +D');
-  Assert.AreEqual(3, E.Score);
+  Assert.AreEqual<Integer>(3, E.Score);
   Assert.AreEqual(Ord(fdMedium), Ord(E.Difficulty));
 end;
 
@@ -75,7 +75,7 @@ procedure TTestSQLInjectionScore.FunctionCallConcat_MediumScore3;
 var E: TFixEstimate;
 begin
   E := TSQLFixScorer.Estimate('WHERE id = +(GetCurrentUser)');
-  Assert.AreEqual(3, E.Score);
+  Assert.AreEqual<Integer>(3, E.Score);
   Assert.AreEqual(Ord(fdMedium), Ord(E.Difficulty));
 end;
 
@@ -86,7 +86,7 @@ begin
   // STRUCTURAL-Marker matchen `'from ''+'` (Parser-Repraesentation des
   // SQL-Strings inkl. Quote-Marker). Vgl. uSQLInjectionScore.HasStructuralConcat
   E := TSQLFixScorer.Estimate('SELECT * FROM ''+TableName');
-  Assert.AreEqual(4, E.Score);
+  Assert.AreEqual<Integer>(4, E.Score);
   Assert.AreEqual(Ord(fdHard), Ord(E.Difficulty));
 end;
 
@@ -96,7 +96,7 @@ var E: TFixEstimate;
 begin
   E := TSQLFixScorer.Estimate(
     'SELECT * FROM ''+Tbl WHERE a = +A AND b = +B AND c = +C');
-  Assert.AreEqual(5, E.Score);
+  Assert.AreEqual<Integer>(5, E.Score);
   Assert.AreEqual(Ord(fdVeryHard), Ord(E.Difficulty));
 end;
 
@@ -166,7 +166,7 @@ procedure TTestSQLInjectionScore.EmptyRHS_DefensiveScore1;
 var E: TFixEstimate;
 begin
   E := TSQLFixScorer.Estimate('');
-  Assert.AreEqual(1, E.Score);
+  Assert.AreEqual<Integer>(1, E.Score);
   Assert.AreEqual(Ord(fdTrivial), Ord(E.Difficulty));
   Assert.AreEqual('Trivial', E.Label_);
 end;

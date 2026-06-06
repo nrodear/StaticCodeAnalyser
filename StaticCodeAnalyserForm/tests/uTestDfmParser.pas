@@ -469,7 +469,7 @@ begin
   try
     All := G.EnumerateAll;
     try
-      Assert.AreEqual(4,   All.Count);
+      Assert.AreEqual<Integer>(4,   All.Count);
       Assert.AreEqual('A', All[0].Name);
       Assert.AreEqual('B', All[1].Name);
       Assert.AreEqual('C', All[2].Name);

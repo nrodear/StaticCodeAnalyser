@@ -212,7 +212,7 @@ begin
     '  end'#13#10 +
     'end');
   try
-    Assert.AreEqual(1, F.Count);
+    Assert.AreEqual<Integer>(1, F.Count);
     Assert.AreEqual('3', F[0].LineNumber);
   finally F.Free; end;
 end;
@@ -226,7 +226,7 @@ begin
     '  end'#13#10 +
     'end');
   try
-    Assert.AreEqual(1, F.Count);
+    Assert.AreEqual<Integer>(1, F.Count);
     Assert.Contains(F[0].MissingVar, 'Button1');
     Assert.Contains(F[0].MissingVar, 'TButton');
   finally F.Free; end;

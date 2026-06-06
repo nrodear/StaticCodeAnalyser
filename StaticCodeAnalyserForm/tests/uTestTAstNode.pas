@@ -43,7 +43,7 @@ begin
   try
     Assert.AreEqual(nkUnit, Node.Kind);
     Assert.AreEqual('MyUnit', Node.Name);
-    Assert.AreEqual(1, Node.Line);
+    Assert.AreEqual<Integer>(1, Node.Line);
   finally
     Node.Free;
   end;
@@ -97,7 +97,7 @@ begin
 
     All := Root.FindAll(nkUsesItem);
     try
-      Assert.AreEqual(2, All.Count);
+      Assert.AreEqual<Integer>(2, All.Count);
     finally
       All.Free;
     end;
@@ -279,7 +279,7 @@ begin
 
     All := Root.FindAll(nkMethod);
     try
-      Assert.AreEqual(3, All.Count);
+      Assert.AreEqual<Integer>(3, All.Count);
       // Pre-Order DFS: first-toplevel, dann nkClass-Subtree (inside-
       // class), dann second-toplevel.
       Assert.AreEqual('first-toplevel',  All[0].Name);

@@ -189,7 +189,7 @@ begin
       Rule := Root.GetValue<TJSONArray>('rules').Items[0] as TJSONObject;
       Assert.AreEqual('LAWFUL', Rule.GetValue<string>('cleanCodeAttribute'));
       Impacts := Rule.GetValue<TJSONArray>('impacts');
-      Assert.AreEqual(1, Impacts.Count);
+      Assert.AreEqual<Integer>(1, Impacts.Count);
       Impact := Impacts.Items[0] as TJSONObject;
       Assert.AreEqual('RELIABILITY', Impact.GetValue<string>('softwareQuality'));
       Assert.AreEqual('HIGH',        Impact.GetValue<string>('severity'));

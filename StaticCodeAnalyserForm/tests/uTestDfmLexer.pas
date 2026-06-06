@@ -89,7 +89,7 @@ var
 begin
   Toks := CollectTokens('');
   try
-    Assert.AreEqual(1, Toks.Count);
+    Assert.AreEqual<Integer>(1, Toks.Count);
     Assert.AreEqual(tkEof, Toks[0].Kind);
   finally
     Toks.Free;
@@ -102,7 +102,7 @@ var
 begin
   Toks := CollectTokens('   '#13#10'   '#9'  ');
   try
-    Assert.AreEqual(1, Toks.Count);
+    Assert.AreEqual<Integer>(1, Toks.Count);
     Assert.AreEqual(tkEof, Toks[0].Kind);
   finally
     Toks.Free;

@@ -162,7 +162,7 @@ begin
     L.Add(MakeFinding(fkMemoryLeak, fcHigh));
     Dropped := TConfidenceFilter.ApplyToFindings(L, fcMedium);
     Assert.AreEqual(1, Dropped, 'genau der fcLow-Befund faellt raus');
-    Assert.AreEqual(2, L.Count);
+    Assert.AreEqual<Integer>(2, L.Count);
   finally
     L.Free;
   end;
@@ -180,7 +180,7 @@ begin
     L.Add(MakeFinding(fkMemoryLeak, fcHigh));
     Dropped := TConfidenceFilter.ApplyToFindings(L, fcLow);
     Assert.AreEqual(0, Dropped, 'fcLow-Schwelle filtert nichts');
-    Assert.AreEqual(3, L.Count);
+    Assert.AreEqual<Integer>(3, L.Count);
   finally
     L.Free;
   end;
@@ -198,7 +198,7 @@ begin
     L.Add(MakeFinding(fkMemoryLeak, fcHigh));
     Dropped := TConfidenceFilter.ApplyToFindings(L, fcHigh);
     Assert.AreEqual(2, Dropped, 'fcLow + fcMedium raus');
-    Assert.AreEqual(1, L.Count);
+    Assert.AreEqual<Integer>(1, L.Count);
     Assert.AreEqual<TFindingConfidence>(fcHigh, L[0].Confidence);
   finally
     L.Free;
@@ -218,7 +218,7 @@ begin
     L.Add(MakeFinding(fkMemoryLeak,    fcLow));
     Dropped := TConfidenceFilter.ApplyToFindings(L, fcHigh);
     Assert.AreEqual(1, Dropped, 'nur der echte Low-Befund faellt');
-    Assert.AreEqual(1, L.Count);
+    Assert.AreEqual<Integer>(1, L.Count);
     Assert.AreEqual<TFindingKind>(fkFileReadError, L[0].Kind);
   finally
     L.Free;
