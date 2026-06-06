@@ -81,7 +81,7 @@ begin
   // im TestProject erreichbar ist (separate Tests-Unit fuer Integration).
   CFG := TCFG.Create;
   try
-    Block1 := CFG.NewBlock(nkStatement);
+    Block1 := CFG.NewBlock(ckStatement);
     CFG.Connect(CFG.Entry, Block1);
     CFG.Connect(Block1, CFG.Exit_);
     Assert.AreEqual(1, CFG.Entry.Successors.Count);
@@ -100,8 +100,8 @@ begin
   // Entry -> B1 -> Exit_   ;   B2 nicht verbunden = unreachable.
   CFG := TCFG.Create;
   try
-    B1 := CFG.NewBlock(nkStatement);
-    B2 := CFG.NewBlock(nkStatement);
+    B1 := CFG.NewBlock(ckStatement);
+    B2 := CFG.NewBlock(ckStatement);
     CFG.Connect(CFG.Entry, B1);
     CFG.Connect(B1, CFG.Exit_);
     Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_));
@@ -135,7 +135,7 @@ begin
   CFG := TCFG.Create;
   try
     // Entry + Exit = 2; nach NewBlock fuer Statement = 3
-    CFG.NewBlock(nkStatement);
+    CFG.NewBlock(ckStatement);
     Assert.AreEqual(3, CFG.Blocks.Count, 'Entry + Exit + 1 Statement-Block');
   finally
     CFG.Free;
@@ -149,7 +149,7 @@ var
 begin
   CFG := TCFG.Create;
   try
-    B := CFG.NewBlock(nkStatement);
+    B := CFG.NewBlock(ckStatement);
     CFG.Connect(CFG.Entry, B);
     Assert.IsTrue(CFG.CanReach(CFG.Entry, B));
   finally
@@ -164,9 +164,9 @@ var
 begin
   CFG := TCFG.Create;
   try
-    B1 := CFG.NewBlock(nkStatement);
-    B2 := CFG.NewBlock(nkStatement);
-    B3 := CFG.NewBlock(nkStatement);
+    B1 := CFG.NewBlock(ckStatement);
+    B2 := CFG.NewBlock(ckStatement);
+    B3 := CFG.NewBlock(ckStatement);
     CFG.Connect(B1, B2);
     CFG.Connect(B2, B3);
     Assert.IsTrue(CFG.CanReach(B1, B3));
@@ -183,8 +183,8 @@ var
 begin
   CFG := TCFG.Create;
   try
-    B1 := CFG.NewBlock(nkStatement);
-    B2 := CFG.NewBlock(nkStatement);
+    B1 := CFG.NewBlock(ckStatement);
+    B2 := CFG.NewBlock(ckStatement);
     Assert.IsFalse(CFG.CanReach(B1, B2));
   finally
     CFG.Free;
@@ -198,7 +198,7 @@ var
 begin
   CFG := TCFG.Create;
   try
-    B := CFG.NewBlock(nkStatement);
+    B := CFG.NewBlock(ckStatement);
     Assert.IsTrue(CFG.CanReach(B, B), 'A.4.1 Konvention: From=To -> True');
   finally
     CFG.Free;

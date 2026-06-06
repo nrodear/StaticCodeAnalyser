@@ -21,13 +21,17 @@ uses
   uAstNode;
 
 type
+  // CFG-Node-Kinds. 'ck'-Prefix vermeidet Kollision mit TNodeKind aus
+  // uAstNode (das auch nkExit fuer das exit-Statement enthaelt) - sonst
+  // wuerde Pascal in WalkStatements bei `S.Kind = nkExit` (S = TAstNode)
+  // den lokalen TCFGNodeKind aufloesen und E2010 werfen.
   TCFGNodeKind = (
-    nkEntry,         // virtueller Method-Start (kein Statement)
-    nkExit,          // virtueller Method-End (kein Statement)
-    nkStatement,     // linearer Statement-Block (1..N AST-Knoten)
-    nkBranch,        // if/case-Auswahl-Knoten (mehrere Successors)
-    nkLoop,          // while/for/repeat (hat Back-Edge auf sich selbst)
-    nkException      // try/except/finally (cross-edges fuer Exception-Pfade)
+    ckEntry,         // virtueller Method-Start (kein Statement)
+    ckExit,          // virtueller Method-End (kein Statement)
+    ckStatement,     // linearer Statement-Block (1..N AST-Knoten)
+    ckBranch,        // if/case-Auswahl-Knoten (mehrere Successors)
+    ckLoop,          // while/for/repeat (hat Back-Edge auf sich selbst)
+    ckException      // try/except/finally (cross-edges fuer Exception-Pfade)
   );
 
   TCFGBlock = class
@@ -108,8 +112,8 @@ begin
   inherited;
   FBlocks := TObjectList<TCFGBlock>.Create(True);  // OwnsObjects
   FNextId := 0;
-  FEntry  := NewBlock(nkEntry);
-  FExit   := NewBlock(nkExit);
+  FEntry  := NewBlock(ckEntry);
+  FExit   := NewBlock(ckExit);
 end;
 
 destructor TCFG.Destroy;
@@ -325,7 +329,7 @@ begin
   end;
 
   // Erster Statement-Block. Entry -> StartBlock.
-  var StartBlock := Result.NewBlock(nkStatement);
+  var StartBlock := Result.NewBlock(ckStatement);
   Result.Connect(Result.Entry, StartBlock);
   Tail := WalkStatements(Body.Children, Result, StartBlock);
   // Wenn der Sequenz-Tail nicht durch Exit/Raise abgebrochen wurde,
