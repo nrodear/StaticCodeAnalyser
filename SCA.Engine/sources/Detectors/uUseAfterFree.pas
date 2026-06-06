@@ -325,7 +325,8 @@ var
             DiagSnippet := DiagSnippet +
               Format(' CanReach=%s', [BoolToStr(CFG.CanReach(FreeBlk, UseBlk))]);
         end;
-        TFile.AppendAllText('sca-cfg-debug.log', DiagSnippet + sLineBreak);
+        TFile.AppendAllText('D:\git-demos\delphi\StaticCodeAnalyser\sca-cfg-debug.log',
+          DiagSnippet + sLineBreak);
       except
         // Diagnostic darf den Scan nie crashen
       end;
