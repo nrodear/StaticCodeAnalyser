@@ -175,7 +175,7 @@ begin
     Lines.Add('y := 1;');         // Zeile 2
     Code := TDetectorUtils.StripStringsAndComments(Lines, LineFor);
 
-    Assert.AreEqual(Length(Code), Length(LineFor),
+    Assert.AreEqual<NativeInt>(Length(Code), Length(LineFor),
       'pro Zeichen genau ein Zeilen-Mapping');
     Assert.AreEqual(0, Pos('abc', Code), 'String-Inhalt ersetzt');
     Assert.AreEqual(0, Pos('comment', Code), 'Zeilenkommentar entfernt');
