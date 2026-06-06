@@ -228,7 +228,7 @@ var
 begin
   RunOn(SRC, L);
   try
-    Assert.AreEqual(0, CountKind(L, fkUninitVar),
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
       'Sauber initialisiert - kein SCA166');
   finally L.Free; end;
 end;
@@ -250,7 +250,7 @@ var
 begin
   RunOn(SRC, L);
   try
-    Assert.AreEqual(0, CountKind(L, fkUninitVar),
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
       '_-Prefix Konvention - kein Flag');
   finally L.Free; end;
 end;
@@ -272,7 +272,7 @@ var
 begin
   RunOn(SRC, L);
   try
-    Assert.AreEqual(0, CountKind(L, fkUninitVar),
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
       'Managed type (string) - Pascal initialisiert - kein Flag');
   finally L.Free; end;
 end;
@@ -294,7 +294,7 @@ var
 begin
   RunOn(SRC, L);
   try
-    Assert.AreEqual(0, CountKind(L, fkUninitVar),
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
       'TArray<T> ist managed - kein Flag');
   finally L.Free; end;
 end;
@@ -317,7 +317,7 @@ var
 begin
   RunOn(SRC, L);
   try
-    Assert.AreEqual(0, CountKind(L, fkUninitVar),
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
       'ReadLn ist Write (Allowlist) - kein Flag');
   finally L.Free; end;
 end;
@@ -340,7 +340,7 @@ var
 begin
   RunOn(SRC, L);
   try
-    Assert.AreEqual(0, CountKind(L, fkUninitVar),
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
       'for-Loop initialisiert Index-Var - kein Flag');
   finally L.Free; end;
 end;
@@ -364,7 +364,7 @@ var
 begin
   RunOn(SRC, L);
   try
-    Assert.AreEqual(0, CountKind(L, fkUninitVar),
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
       'FillChar ist Write (Allowlist) - kein Flag');
   finally L.Free; end;
 end;
@@ -392,7 +392,7 @@ var
 begin
   RunOn(SRC, Findings);
   try
-    Assert.AreEqual(0, CountKind(Findings, fkUninitVar),
+    Assert.AreEqual<Integer>(0, CountKind(Findings, fkUninitVar),
       'Write VOR Read im try-finally - kein Flag');
   finally Findings.Free; end;
 end;
@@ -417,7 +417,7 @@ begin
     // Variable n wird nirgends referenziert - das ist UnusedLocal-Domain
     // (SCA019), KEIN UninitVar. Wir muessen sicherstellen dass kein
     // SCA166 emittiert wird.
-    Assert.AreEqual(0, CountKind(L, fkUninitVar),
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
       'Nicht referenziert - faellt unter UnusedLocal, nicht UninitVar');
   finally L.Free; end;
 end;
@@ -450,7 +450,7 @@ var
 begin
   RunOn(SRC, L);
   try
-    Assert.AreEqual(0, CountKind(L, fkUninitVar),
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
       'Multi-line var-decl darf NICHT als Read interpretiert werden');
   finally L.Free; end;
 end;
@@ -475,7 +475,7 @@ var
 begin
   RunOn(SRC, L);
   try
-    Assert.AreEqual(0, CountKind(L, fkUninitVar),
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
       'Var-Decl + Assignment + Read ist sauberes Pattern, kein UninitVar');
   finally L.Free; end;
 end;
@@ -521,7 +521,7 @@ var
 begin
   RunOn(SRC, L);
   try
-    Assert.AreEqual(0, CountKind(L, fkUninitVar),
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
       'Leere Methode ohne LocalVars - kein Flag');
   finally L.Free; end;
 end;
@@ -548,7 +548,7 @@ begin
   RunOn(SRC, L);
   try
     // a ist sauber, b ist UninitVar - es soll genau 1 Finding sein.
-    Assert.AreEqual(1, CountKind(L, fkUninitVar),
+    Assert.AreEqual<Integer>(1, CountKind(L, fkUninitVar),
       'Nur b sollte geflaggt werden, a ist sauber');
   finally L.Free; end;
 end;

@@ -72,7 +72,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkFloatEquality));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFloatEquality));
   finally F.Free; end;
 end;
 
@@ -88,7 +88,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkFloatEquality));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFloatEquality));
   finally F.Free; end;
 end;
 
@@ -146,7 +146,7 @@ begin
       if (Fnd.Kind = fkFloatEquality)
          and (Pos('then', Fnd.MissingVar) > 0) then
         Inc(Hit);
-    Assert.AreEqual(0, Hit, 'String-Compare gegen Keyword darf nicht ' +
+    Assert.AreEqual<Integer>(0, Hit, 'String-Compare gegen Keyword darf nicht ' +
       'als Float-Equality kassiert werden');
   finally F.Free; end;
 end;
@@ -166,7 +166,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkFloatEquality),
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFloatEquality),
         'Pointer = nil darf nicht als Float-Equality kassiert werden');
   finally F.Free; end;
 end;
@@ -184,7 +184,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkFloatEquality),
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFloatEquality),
         'Boolean = True darf nicht als Float-Equality kassiert werden');
   finally F.Free; end;
 end;

@@ -36,7 +36,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkTabulationCharacter));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTabulationCharacter));
   finally F.Free; end;
 end;
 
@@ -47,7 +47,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkTabulationCharacter));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTabulationCharacter));
   finally F.Free; end;
 end;
 
@@ -62,7 +62,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(3, TFindingHelper.Count(F, fkTabulationCharacter));
+  try Assert.AreEqual<Integer>(3, TFindingHelper.Count(F, fkTabulationCharacter));
   finally F.Free; end;
 end;
 
@@ -76,7 +76,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkTabulationCharacter));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTabulationCharacter));
   finally F.Free; end;
 end;
 
@@ -88,7 +88,7 @@ var
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkTabulationCharacter));
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTabulationCharacter));
     for Fnd in F do
       if Fnd.Kind = fkTabulationCharacter then
       begin

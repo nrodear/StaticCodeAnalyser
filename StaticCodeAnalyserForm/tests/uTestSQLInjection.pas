@@ -61,7 +61,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkSQLInjection),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSQLInjection),
       'SQL.Text mit Konkatenation – Error');
   finally F.Free; end;
 end;
@@ -77,7 +77,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkSQLInjection), 'CommandText – Error');
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSQLInjection), 'CommandText – Error');
   finally F.Free; end;
 end;
 
@@ -92,7 +92,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkSQLInjection),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSQLInjection),
       'SELECT-Literal mit Konkatenation – Error');
   finally F.Free; end;
 end;
@@ -108,7 +108,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkSQLInjection),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
       'Parametrisiertes Query ohne + – kein Befund');
   finally F.Free; end;
 end;
@@ -124,7 +124,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkSQLInjection),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSQLInjection),
       'SQL.Add mit Konkatenation – Error');
   finally F.Free; end;
 end;
@@ -141,7 +141,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkSQLInjection),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
       'Parametrisiertes Query – kein Befund');
   finally F.Free; end;
 end;
@@ -161,7 +161,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkSQLInjection),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
       'Doku-String mit SQL-Keyword – kein Befund (H2 nur bei Position 1)');
   finally F.Free; end;
 end;
@@ -180,7 +180,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkSQLInjection),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
       'Pure Literal-Konkatenation darf kein SQL-Injection-Befund sein');
   finally F.Free; end;
 end;
@@ -199,7 +199,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkSQLInjection),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
       'Mehrzeiliges CREATE TABLE-Literal darf kein SQL-Injection-Befund sein');
   finally F.Free; end;
 end;
@@ -219,7 +219,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkSQLInjection),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
       '"mycommandtextra" darf nicht als SQL-Property-Match gelten');
   finally F.Free; end;
 end;
@@ -248,7 +248,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkSQLInjection),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
       'IntToStr-Konkat ist safe-cast-whitelisted');
   finally F.Free; end;
 end;
@@ -278,7 +278,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkSQLInjection));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection));
   finally F.Free; end;
 end;
 
@@ -373,7 +373,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkSQLInjection));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection));
   finally F.Free; end;
 end;
 
@@ -389,7 +389,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(2, TFindingHelper.Count(F, fkSQLInjection));
+  try Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkSQLInjection));
   finally F.Free; end;
 end;
 

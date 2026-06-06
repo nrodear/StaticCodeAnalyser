@@ -101,8 +101,8 @@ begin
   Lex := TLexer.Create('procedure Foo; begin x := 1; end;');
   try
     repeat Tok := Lex.Next; until Tok.Kind = tkEof;
-    Assert.AreEqual(0, Lex.ConditionalDepth, 'Depth ohne IFDEF muss 0 sein');
-    Assert.AreEqual(0, Lex.ConditionalMaxDepth, 'MaxDepth ohne IFDEF muss 0 sein');
+    Assert.AreEqual<Integer>(0, Lex.ConditionalDepth, 'Depth ohne IFDEF muss 0 sein');
+    Assert.AreEqual<Integer>(0, Lex.ConditionalMaxDepth, 'MaxDepth ohne IFDEF muss 0 sein');
   finally
     Lex.Free;
   end;
@@ -116,8 +116,8 @@ begin
   Lex := TLexer.Create('{$IFDEF DEBUG} x {$ENDIF}');
   try
     repeat Tok := Lex.Next; until Tok.Kind = tkEof;
-    Assert.AreEqual(0, Lex.ConditionalDepth, 'IFDEF + ENDIF -> Depth 0');
-    Assert.AreEqual(1, Lex.ConditionalMaxDepth, 'MaxDepth haette 1 erreichen muessen');
+    Assert.AreEqual<Integer>(0, Lex.ConditionalDepth, 'IFDEF + ENDIF -> Depth 0');
+    Assert.AreEqual<Integer>(1, Lex.ConditionalMaxDepth, 'MaxDepth haette 1 erreichen muessen');
   finally
     Lex.Free;
   end;
@@ -125,7 +125,7 @@ end;
 
 procedure TTestLexerConditionals.Phase1a_NestedIfdef_MaxDepthTracked;
 begin
-  Assert.AreEqual(3,
+  Assert.AreEqual<Integer>(3,
     MaxDepthAfterScan('{$IFDEF A}{$IFDEF B}{$IFDEF C}x{$ENDIF}{$ENDIF}{$ENDIF}'),
     'Nested IFDEF muss MaxDepth=3 ergeben');
 end;
@@ -139,7 +139,7 @@ begin
   Lex := TLexer.Create('{$ENDIF} x := 1;');
   try
     repeat Tok := Lex.Next; until Tok.Kind = tkEof;
-    Assert.AreEqual(0, Lex.ConditionalDepth, 'Orphan-ENDIF silent skip');
+    Assert.AreEqual<Integer>(0, Lex.ConditionalDepth, 'Orphan-ENDIF silent skip');
   finally
     Lex.Free;
   end;

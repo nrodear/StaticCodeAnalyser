@@ -52,7 +52,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkLengthUnderflow));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkLengthUnderflow));
   finally F.Free; end;
 end;
 
@@ -66,7 +66,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkLengthUnderflow));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkLengthUnderflow));
   finally F.Free; end;
 end;
 
@@ -81,7 +81,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkLengthUnderflow));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkLengthUnderflow));
   finally F.Free; end;
 end;
 
@@ -96,7 +96,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkLengthUnderflow));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkLengthUnderflow));
   finally F.Free; end;
 end;
 
@@ -113,7 +113,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkLengthUnderflow));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLengthUnderflow));
   finally F.Free; end;
 end;
 
@@ -128,7 +128,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkLengthUnderflow));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLengthUnderflow));
   finally F.Free; end;
 end;
 
@@ -143,7 +143,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkLengthUnderflow));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLengthUnderflow));
   finally F.Free; end;
 end;
 
@@ -158,7 +158,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkLengthUnderflow));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLengthUnderflow));
   finally F.Free; end;
 end;
 
@@ -174,7 +174,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkLengthUnderflow));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLengthUnderflow));
   finally F.Free; end;
 end;
 
@@ -220,7 +220,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try
-    Assert.AreEqual(2, TFindingHelper.Count(F, fkLengthUnderflow),
+    Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkLengthUnderflow),
       'Zwei Underflow-Hits in derselben Methode -> 2 Findings');
   finally F.Free; end;
 end;
@@ -241,7 +241,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try
-    Assert.AreEqual(2, TFindingHelper.Count(F, fkLengthUnderflow),
+    Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkLengthUnderflow),
       'Zwei Underflows in derselben Zeile -> beide Findings');
   finally F.Free; end;
 end;

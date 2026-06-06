@@ -58,8 +58,8 @@ begin
     try
       Assert.IsNotNull(Root.GetValue<TJSONArray>('rules'));
       Assert.IsNotNull(Root.GetValue<TJSONArray>('issues'));
-      Assert.AreEqual(0, Root.GetValue<TJSONArray>('rules').Count);
-      Assert.AreEqual(0, Root.GetValue<TJSONArray>('issues').Count);
+      Assert.AreEqual<Integer>(0, Root.GetValue<TJSONArray>('rules').Count);
+      Assert.AreEqual<Integer>(0, Root.GetValue<TJSONArray>('issues').Count);
     finally
       Root.Free;
     end;
@@ -80,8 +80,8 @@ begin
     Json := TSonarGenericWriter.ToJsonString(Findings, '');
     Root := TJSONObject.ParseJSONValue(Json) as TJSONObject;
     try
-      Assert.AreEqual(1, Root.GetValue<TJSONArray>('rules').Count);
-      Assert.AreEqual(1, Root.GetValue<TJSONArray>('issues').Count);
+      Assert.AreEqual<Integer>(1, Root.GetValue<TJSONArray>('rules').Count);
+      Assert.AreEqual<Integer>(1, Root.GetValue<TJSONArray>('issues').Count);
     finally
       Root.Free;
     end;
@@ -105,9 +105,9 @@ begin
     Json := TSonarGenericWriter.ToJsonString(Findings, '');
     Root := TJSONObject.ParseJSONValue(Json) as TJSONObject;
     try
-      Assert.AreEqual(2, Root.GetValue<TJSONArray>('rules').Count,
+      Assert.AreEqual<Integer>(2, Root.GetValue<TJSONArray>('rules').Count,
         'rules should be deduped');
-      Assert.AreEqual(3, Root.GetValue<TJSONArray>('issues').Count);
+      Assert.AreEqual<Integer>(3, Root.GetValue<TJSONArray>('issues').Count);
     finally
       Root.Free;
     end;
@@ -162,7 +162,7 @@ begin
       Assert.Contains(Loc.GetValue<string>('filePath'), 'Foo.pas');
       Range := Loc.GetValue<TJSONObject>('textRange');
       Assert.IsNotNull(Range);
-      Assert.AreEqual(42, Range.GetValue<Integer>('startLine'));
+      Assert.AreEqual<Integer>(42, Range.GetValue<Integer>('startLine'));
     finally
       Root.Free;
     end;
@@ -231,12 +231,12 @@ end;
 
 procedure TTestExportSonarGeneric.EffortMinutesForBugIs20;
 begin
-  Assert.AreEqual(20, EffortMinutesFor(ftBug));
+  Assert.AreEqual<Integer>(20, EffortMinutesFor(ftBug));
 end;
 
 procedure TTestExportSonarGeneric.EffortMinutesForCodeSmellIs10;
 begin
-  Assert.AreEqual(10, EffortMinutesFor(ftCodeSmell));
+  Assert.AreEqual<Integer>(10, EffortMinutesFor(ftCodeSmell));
 end;
 
 procedure TTestExportSonarGeneric.CustomRuleIdOverridesCatalog;

@@ -32,7 +32,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkNestedTry));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNestedTry));
   finally F.Free; end;
 end;
 

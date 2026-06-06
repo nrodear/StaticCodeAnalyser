@@ -249,7 +249,7 @@ begin
       List.Add(F2);
 
       Dropped := TBaseline.Apply(List, Baseline);
-      Assert.AreEqual(1, Dropped,
+      Assert.AreEqual<Integer>(1, Dropped,
         'contextHash sollte Finding trotz Line-Drift + Method-Rename matchen');
       Assert.AreEqual<Integer>(0, List.Count);
     finally
@@ -303,7 +303,7 @@ begin
     try
       List.Add(MakeFinding(File1, 1));
       Dropped := TBaseline.Apply(List, Baseline);
-      Assert.AreEqual(1, Dropped,
+      Assert.AreEqual<Integer>(1, Dropped,
         'altes Baseline-Format muss weiter funktionieren (backward-compat)');
     finally
       List.Free;

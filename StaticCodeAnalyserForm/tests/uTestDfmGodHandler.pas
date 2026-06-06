@@ -82,7 +82,7 @@ const DFM =
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
-  try Assert.AreEqual(1, Count(F, fkDfmGodHandler));
+  try Assert.AreEqual<Integer>(1, Count(F, fkDfmGodHandler));
   finally F.Free; end;
 end;
 
@@ -97,7 +97,7 @@ const DFM =
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
-  try Assert.AreEqual(0, Count(F, fkDfmGodHandler));
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmGodHandler));
   finally F.Free; end;
 end;
 
@@ -116,7 +116,7 @@ const DFM =
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
-  try Assert.AreEqual(1, Count(F, fkDfmGodHandler));
+  try Assert.AreEqual<Integer>(1, Count(F, fkDfmGodHandler));
   finally F.Free; end;
 end;
 
@@ -133,7 +133,7 @@ const DFM =
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
-  try Assert.AreEqual(0, Count(F, fkDfmGodHandler));
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmGodHandler));
   finally F.Free; end;
 end;
 
@@ -151,7 +151,7 @@ const DFM =
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
-  try Assert.AreEqual(1, Count(F, fkDfmGodHandler));
+  try Assert.AreEqual<Integer>(1, Count(F, fkDfmGodHandler));
   finally F.Free; end;
 end;
 
@@ -167,7 +167,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   DetectorMaxGodHandlerEvents := 3;
   F := RunOn(DFM);
-  try Assert.AreEqual(1, Count(F, fkDfmGodHandler));
+  try Assert.AreEqual<Integer>(1, Count(F, fkDfmGodHandler));
   finally F.Free; end;
 end;
 
@@ -205,7 +205,7 @@ const DFM =
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
-  try Assert.AreEqual(1, Count(F, fkDfmGodHandler));
+  try Assert.AreEqual<Integer>(1, Count(F, fkDfmGodHandler));
   finally F.Free; end;
 end;
 
@@ -227,7 +227,7 @@ const DFM =
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
-  try Assert.AreEqual(2, Count(F, fkDfmGodHandler));
+  try Assert.AreEqual<Integer>(2, Count(F, fkDfmGodHandler));
   finally F.Free; end;
 end;
 
@@ -246,7 +246,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   DetectorMaxGodHandlerEvents := 0;
   F := RunOn(DFM);
-  try Assert.AreEqual(1, Count(F, fkDfmGodHandler));
+  try Assert.AreEqual<Integer>(1, Count(F, fkDfmGodHandler));
   finally F.Free; end;
 end;
 

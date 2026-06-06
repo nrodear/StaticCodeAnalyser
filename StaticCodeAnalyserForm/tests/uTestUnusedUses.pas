@@ -78,7 +78,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedUses),
       'System.IniFiles ohne TIniFile-Verwendung – Warning');
   finally F.Free; end;
 end;
@@ -99,7 +99,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'TIniFile vorhanden – kein Befund');
   finally F.Free; end;
 end;
@@ -120,7 +120,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'Qualifizierter Bezeichner ''inifiles.'' – kein Befund');
   finally F.Free; end;
 end;
@@ -139,7 +139,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'Application.ProcessMessages – Vcl.Forms benoetigt, kein Befund');
   finally F.Free; end;
 end;
@@ -158,7 +158,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'Elternklasse TIniFile – kein Befund (Parser erfasst class()-Block)');
   finally F.Free; end;
 end;
@@ -175,7 +175,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'System.SysUtils – immer benoetigt, kein Befund');
   finally F.Free; end;
 end;
@@ -196,7 +196,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedUses),
       'System.IniFiles ungenutzt – genau 1 Befund');
     Assert.AreEqual('System.IniFiles',
       (F[0] as TLeakFinding).MissingVar,
@@ -219,7 +219,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'Kurzname-Praefix IniFiles. → H1 – kein Befund');
   finally F.Free; end;
 end;
@@ -237,7 +237,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'Vollname-Praefix System.Zip. → H1 – kein Befund');
   finally F.Free; end;
 end;
@@ -256,7 +256,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'TDictionary → Generics.Collections benoetigt');
   finally F.Free; end;
 end;
@@ -274,7 +274,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'TList<T> → Generics.Collections benoetigt, kein false positive');
   finally F.Free; end;
 end;
@@ -292,7 +292,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'TObjectList<T> → Generics.Collections benoetigt, kein false positive');
   finally F.Free; end;
 end;
@@ -308,7 +308,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'Floor() → System.Math benoetigt');
   finally F.Free; end;
 end;
@@ -324,7 +324,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'PosEx → System.StrUtils benoetigt');
   finally F.Free; end;
 end;
@@ -340,7 +340,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'DaysBetween → System.DateUtils benoetigt');
   finally F.Free; end;
 end;
@@ -356,7 +356,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'TFile → System.IOUtils benoetigt');
   finally F.Free; end;
 end;
@@ -373,7 +373,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'TJSONObject → System.JSON benoetigt');
   finally F.Free; end;
 end;
@@ -389,7 +389,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'TRegEx → System.RegularExpressions benoetigt');
   finally F.Free; end;
 end;
@@ -406,7 +406,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'TZipFile → System.Zip benoetigt');
   finally F.Free; end;
 end;
@@ -423,7 +423,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'TStopwatch → System.Diagnostics benoetigt');
   finally F.Free; end;
 end;
@@ -439,7 +439,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'TTask → System.Threading benoetigt');
   finally F.Free; end;
 end;
@@ -456,7 +456,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'TStringList → System.Classes benoetigt');
   finally F.Free; end;
 end;
@@ -473,7 +473,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'TRegistry → System.Win.Registry benoetigt');
   finally F.Free; end;
 end;
@@ -491,7 +491,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'ShowMessage → Vcl.Dialogs benoetigt');
   finally F.Free; end;
 end;
@@ -508,7 +508,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'TBitmap → Vcl.Graphics benoetigt');
   finally F.Free; end;
 end;
@@ -525,7 +525,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'TTabSheet → Vcl.ComCtrls benoetigt');
   finally F.Free; end;
 end;
@@ -542,7 +542,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'TPopupMenu → Vcl.Menus benoetigt');
   finally F.Free; end;
 end;
@@ -560,7 +560,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'TDataSet → Data.DB benoetigt');
   finally F.Free; end;
 end;
@@ -578,7 +578,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'Unbekannte Unit ohne Mapping – nie melden (false positive verhindern)');
   finally F.Free; end;
 end;
@@ -596,7 +596,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'TNotifyEvent in Typ-Alias – System.Classes benoetigt');
   finally F.Free; end;
 end;
@@ -616,7 +616,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'TDataSet im with-Ausdruck – Data.DB benoetigt');
   finally F.Free; end;
 end;
@@ -632,7 +632,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'Unit endet auf ''reg'' → nie melden');
   finally F.Free; end;
 end;
@@ -650,7 +650,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'TStringGrid aus Vcl.Grids – kein Befund');
   finally F.Free; end;
 end;
@@ -668,7 +668,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'TForm als Typparameter – Vcl.Forms benoetigt');
   finally F.Free; end;
 end;
@@ -685,7 +685,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedUses),
       'Doppelter uses-Eintrag – nur 1 Befund');
   finally F.Free; end;
 end;
@@ -701,7 +701,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(3, TFindingHelper.Count(F, fkUnusedUses),
+    Assert.AreEqual<Integer>(3, TFindingHelper.Count(F, fkUnusedUses),
       'Drei ungenutzte Units – alle drei als Warning');
   finally F.Free; end;
 end;

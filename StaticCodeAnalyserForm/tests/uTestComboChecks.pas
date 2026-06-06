@@ -102,7 +102,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkNilDeref),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkNilDeref),
       'nil-Zuweisung dann Punktzugriff – Error');
   finally F.Free; end;
 end;
@@ -121,7 +121,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkNilDeref),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
       'Assigned()-Guard – kein Befund');
   finally F.Free; end;
 end;
@@ -140,7 +140,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkNilDeref),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
       'obj <> nil Guard – kein Befund');
   finally F.Free; end;
 end;
@@ -159,7 +159,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkNilDeref),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
       'Neuzuweisung vor Zugriff – kein Befund');
   finally F.Free; end;
 end;
@@ -177,7 +177,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkNilDeref),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
       '.Free ist nil-sicher (TObject.Free prueft Self) – kein Befund');
   finally F.Free; end;
 end;
@@ -195,7 +195,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkNilDeref),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
       'FreeAndNil ist nil-sicher – kein Befund');
   finally F.Free; end;
 end;
@@ -216,7 +216,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkMissingFinally),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMissingFinally),
       'Create+Free ohne try/finally – Warning');
   finally F.Free; end;
 end;
@@ -238,7 +238,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMissingFinally),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMissingFinally),
       'try/finally vorhanden – kein MissingFinally');
   finally F.Free; end;
 end;
@@ -257,7 +257,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMissingFinally),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMissingFinally),
       'Kein Free → TLeakDetector2 zustaendig, kein MissingFinally');
   finally F.Free; end;
 end;
@@ -279,7 +279,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkMissingFinally),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMissingFinally),
       'try/except ohne finally – Warning');
   finally F.Free; end;
 end;
@@ -298,7 +298,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkDivByZero, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkDivByZero, lsError),
       'Literal 0 als Divisor – Error');
   finally F.Free; end;
 end;
@@ -314,7 +314,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkDivByZero, lsWarning),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkDivByZero, lsWarning),
       'Parameter Count ohne Guard – Warning');
   finally F.Free; end;
 end;
@@ -331,7 +331,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkDivByZero),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
       'Guard if Count > 0 – kein Befund');
   finally F.Free; end;
 end;
@@ -350,7 +350,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkDivByZero, lsWarning),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkDivByZero, lsWarning),
       'Lokale Var m ohne Guard – Warning');
   finally F.Free; end;
 end;
@@ -367,7 +367,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkDivByZero),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
       'Property-Zugriff statt Variable – kein Befund');
   finally F.Free; end;
 end;
@@ -386,7 +386,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkDeadCode),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDeadCode),
       'Code nach Exit – Warning');
   finally F.Free; end;
 end;
@@ -403,7 +403,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkDeadCode),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDeadCode),
       'Code nach raise – Warning');
   finally F.Free; end;
 end;
@@ -424,7 +424,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkDeadCode),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDeadCode),
       'Code nach Break in Loop – Warning');
   finally F.Free; end;
 end;
@@ -442,7 +442,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkDeadCode),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeadCode),
       'Bedingtes Exit – DoSomething nicht tot');
   finally F.Free; end;
 end;
@@ -462,7 +462,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkDeadCode),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeadCode),
       'Exit in if-Branch, else vorhanden – kein toter Code');
   finally F.Free; end;
 end;
@@ -492,7 +492,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkLongMethod),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLongMethod),
       'Body ist kurz – keine LongMethod-Warnung trotz langer Signatur');
   finally F.Free; end;
 end;
@@ -520,7 +520,7 @@ begin
 
   F := TFindingHelper.FindingsOf(Src);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkLongMethod),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkLongMethod),
       'Body > 50 Zeilen UND > 30 Anweisungen – Warning');
   finally F.Free; end;
 end;
@@ -540,7 +540,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkLongMethod),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLongMethod),
       'Methode in Interface-Section ohne Body – kein Befund');
   finally F.Free; end;
 end;
@@ -571,7 +571,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkDeepNesting),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeepNesting),
       'try/finally zaehlen nicht als logische Verschachtelung');
   finally F.Free; end;
 end;
@@ -594,7 +594,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkDeepNesting),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDeepNesting),
       '5 verschachtelte Schleifen/if – Warning');
   finally F.Free; end;
 end;
@@ -619,7 +619,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkDeepNesting),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeepNesting),
       'try um 4 logische Ebenen – Tiefe 4, am Limit, kein Befund');
   finally F.Free; end;
 end;
@@ -653,7 +653,7 @@ begin
   try
     F := TStaticAnalyzer2.AnalyzeLeaks(FName);
     try
-      Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+      Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
         '// noinspection MemoryLeak unterdrueckt das Leak');
     finally F.Free; end;
   finally
@@ -679,7 +679,7 @@ begin
   try
     F := TStaticAnalyzer2.AnalyzeLeaks(FName);
     try
-      Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+      Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
         '// noinspection All unterdrueckt alles');
     finally F.Free; end;
   finally
@@ -705,7 +705,7 @@ begin
   try
     F := TStaticAnalyzer2.AnalyzeLeaks(FName);
     try
-      Assert.AreEqual(1, TFindingHelper.Count(F, fkMemoryLeak),
+      Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
         'Falsche Kategorie unterdrueckt nicht');
     finally F.Free; end;
   finally
@@ -732,9 +732,9 @@ begin
   try
     F := TStaticAnalyzer2.AnalyzeLeaks(FName);
     try
-      Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+      Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
         'MemoryLeak unterdrueckt');
-      Assert.AreEqual(0, TFindingHelper.Count(F, fkMissingFinally),
+      Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMissingFinally),
         'MissingFinally unterdrueckt');
     finally F.Free; end;
   finally
@@ -759,7 +759,7 @@ begin
   try
     F := TStaticAnalyzer2.AnalyzeLeaks(FName);
     try
-      Assert.AreEqual(0, TFindingHelper.Count(F, fkTodoComment),
+      Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTodoComment),
         '// noinspection TodoComment unterdrueckt den TODO-Befund');
     finally F.Free; end;
   finally
@@ -783,7 +783,7 @@ begin
   try
     F := TStaticAnalyzer2.AnalyzeLeaks(FName);
     try
-      Assert.AreEqual(0, TFindingHelper.Count(F, fkEmptyMethod),
+      Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkEmptyMethod),
         '// noinspection EmptyMethod unterdrueckt leere Methode');
     finally F.Free; end;
   finally
@@ -860,7 +860,7 @@ begin
   try
     F := TStaticAnalyzer2.AnalyzeLeaks(FName);
     try
-      Assert.AreEqual(0, TFindingHelper.Count(F, fkConcatToFormat),
+      Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkConcatToFormat),
         '// noinspection ConcatToFormat muss den Hint unterdruecken');
     finally F.Free; end;
   finally
@@ -886,7 +886,7 @@ begin
   try
     F := TStaticAnalyzer2.AnalyzeLeaks(FName);
     try
-      Assert.AreEqual(0, TFindingHelper.Count(F, fkWithStatement),
+      Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkWithStatement),
         '// noinspection WithStatement muss den Befund unterdruecken');
     finally F.Free; end;
   finally
@@ -912,7 +912,7 @@ begin
   try
     F := TStaticAnalyzer2.AnalyzeLeaks(FName);
     try
-      Assert.AreEqual(0, TFindingHelper.Count(F, fkReversedForRange),
+      Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkReversedForRange),
         '// noinspection ReversedForRange muss den Befund unterdruecken');
     finally F.Free; end;
   finally
@@ -938,7 +938,7 @@ begin
   try
     F := TStaticAnalyzer2.AnalyzeLeaks(FName);
     try
-      Assert.AreEqual(0, TFindingHelper.Count(F, fkSelfAssignment),
+      Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSelfAssignment),
         '// noinspection SelfAssignment muss den Befund unterdruecken');
     finally F.Free; end;
   finally
@@ -964,7 +964,7 @@ begin
   try
     F := TStaticAnalyzer2.AnalyzeLeaks(FName);
     try
-      Assert.AreEqual(0, TFindingHelper.Count(F, fkLengthUnderflow),
+      Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLengthUnderflow),
         '// noinspection LengthUnderflow muss den Befund unterdruecken');
     finally F.Free; end;
   finally
@@ -992,7 +992,7 @@ begin
   try
     F := TStaticAnalyzer2.AnalyzeLeaks(FName);
     try
-      Assert.AreEqual(0, TFindingHelper.Count(F, fkCyclomaticComplexity),
+      Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCyclomaticComplexity),
         '// noinspection CyclomaticComplexity muss den Befund unterdruecken');
     finally F.Free; end;
   finally
@@ -1017,7 +1017,7 @@ begin
   try
     F := TStaticAnalyzer2.AnalyzeLeaks(FName);
     try
-      Assert.AreEqual(0, TFindingHelper.Count(F, fkHardcodedPath),
+      Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedPath),
         '// noinspection HardcodedPath muss den Befund unterdruecken');
     finally F.Free; end;
   finally
@@ -1041,7 +1041,7 @@ begin
   try
     F := TStaticAnalyzer2.AnalyzeLeaks(FName);
     try
-      Assert.AreEqual(0, TFindingHelper.Count(F, fkHardcodedSecret),
+      Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret),
         '// noinspection HardcodedSecret muss den Befund unterdruecken');
     finally F.Free; end;
   finally
@@ -1066,7 +1066,7 @@ begin
   try
     F := TStaticAnalyzer2.AnalyzeLeaks(FName);
     try
-      Assert.AreEqual(0, TFindingHelper.Count(F, fkSQLInjection),
+      Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
         '// noinspection SQLInjection muss den Befund unterdruecken');
     finally F.Free; end;
   finally
@@ -1100,7 +1100,7 @@ begin
   try
     F := TStaticAnalyzer2.AnalyzeLeaks(FName);
     try
-      Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeStrictPrivate),
+      Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeStrictPrivate),
         '// noinspection CanBeStrictPrivate muss den Befund unterdruecken');
     finally F.Free; end;
   finally
@@ -1207,7 +1207,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkDeadCode),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeadCode),
       'except-Block ist kein sequenzieller Code – kein DeadCode');
   finally F.Free; end;
 end;
@@ -1228,7 +1228,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkDeadCode),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeadCode),
       'finally-Block laeuft auch nach Exit – kein DeadCode');
   finally F.Free; end;
 end;

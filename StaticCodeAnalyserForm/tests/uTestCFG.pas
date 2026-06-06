@@ -82,9 +82,9 @@ begin
     // Direkt-Test: leere CFG hat Entry und Exit, nicht verbunden.
     Assert.IsNotNull(CFG.Entry);
     Assert.IsNotNull(CFG.Exit_);
-    Assert.AreEqual(0, CFG.Entry.Successors.Count, 'frische CFG: Entry hat keine Successors');
+    Assert.AreEqual<Integer>(0, CFG.Entry.Successors.Count, 'frische CFG: Entry hat keine Successors');
     CFG.Connect(CFG.Entry, CFG.Exit_);
-    Assert.AreEqual(1, CFG.Entry.Successors.Count);
+    Assert.AreEqual<Integer>(1, CFG.Entry.Successors.Count);
     Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_));
   finally
     CFG.Free;
@@ -103,8 +103,8 @@ begin
     Block1 := CFG.NewBlock(ckStatement);
     CFG.Connect(CFG.Entry, Block1);
     CFG.Connect(Block1, CFG.Exit_);
-    Assert.AreEqual(1, CFG.Entry.Successors.Count);
-    Assert.AreEqual(1, Block1.Predecessors.Count, 'Block1 Predecessor = Entry');
+    Assert.AreEqual<Integer>(1, CFG.Entry.Successors.Count);
+    Assert.AreEqual<Integer>(1, Block1.Predecessors.Count, 'Block1 Predecessor = Entry');
     Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_));
   finally
     CFG.Free;
@@ -155,7 +155,7 @@ begin
   try
     // Entry + Exit = 2; nach NewBlock fuer Statement = 3
     CFG.NewBlock(ckStatement);
-    Assert.AreEqual(3, CFG.Blocks.Count, 'Entry + Exit + 1 Statement-Block');
+    Assert.AreEqual<Integer>(3, CFG.Blocks.Count, 'Entry + Exit + 1 Statement-Block');
   finally
     CFG.Free;
   end;
@@ -323,7 +323,7 @@ begin
       for var B in CFG.Blocks do
         if B.Kind = ckBranch then begin BranchBlk := B; Break; end;
       Assert.IsNotNull(BranchBlk);
-      Assert.AreEqual(2, BranchBlk.Successors.Count,
+      Assert.AreEqual<Integer>(2, BranchBlk.Successors.Count,
         'if/else Branch hat 2 Successors');
     finally CFG.Free; end;
   finally Meth.Free; end;
@@ -366,7 +366,7 @@ begin
         'Beide Branches Exit -> Exit_ erreichbar');
       // Exit_ muss EXAKT 2 Predecessors haben (Then-Exit + Else-Exit;
       // KEIN Tail-Connect von StartBlock weil Tail durch Exit beendet).
-      Assert.AreEqual(2, CFG.Exit_.Predecessors.Count);
+      Assert.AreEqual<Integer>(2, CFG.Exit_.Predecessors.Count);
     finally CFG.Free; end;
   finally Meth.Free; end;
 end;
@@ -390,7 +390,7 @@ begin
       for var B in CFG.Blocks do
         if B.Kind = ckBranch then begin BranchBlk := B; Break; end;
       Assert.IsNotNull(BranchBlk);
-      Assert.AreEqual(3, BranchBlk.Successors.Count,
+      Assert.AreEqual<Integer>(3, BranchBlk.Successors.Count,
         '3 Arme = 3 Successors');
     finally CFG.Free; end;
   finally Meth.Free; end;
@@ -412,7 +412,7 @@ begin
     try
       Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_));
       // 3 Arm-Exits = 3 Predecessors auf Exit_
-      Assert.AreEqual(3, CFG.Exit_.Predecessors.Count);
+      Assert.AreEqual<Integer>(3, CFG.Exit_.Predecessors.Count);
     finally CFG.Free; end;
   finally Meth.Free; end;
 end;
@@ -463,7 +463,7 @@ begin
         if B.Kind = ckLoop then begin LoopHead := B; Break; end;
       Assert.IsNotNull(LoopHead, 'ckLoop-Block muss da sein');
       // LoopHead hat 2 Successors: BodyStart + NextBlk
-      Assert.AreEqual(2, LoopHead.Successors.Count, 'while LoopHead 2 Successors');
+      Assert.AreEqual<Integer>(2, LoopHead.Successors.Count, 'while LoopHead 2 Successors');
       // LoopHead hat min. 2 Predecessors: Current und Body-Back-Edge
       Assert.IsTrue(LoopHead.Predecessors.Count >= 2,
         'Back-Edge muss zum LoopHead zeigen');
@@ -506,7 +506,7 @@ begin
         if B.Kind = ckLoop then begin UntilHead := B; Break; end;
       Assert.IsNotNull(UntilHead);
       // UntilHead hat 2 Successors: BodyStart + NextBlk
-      Assert.AreEqual(2, UntilHead.Successors.Count, 'repeat UntilHead 2 Successors');
+      Assert.AreEqual<Integer>(2, UntilHead.Successors.Count, 'repeat UntilHead 2 Successors');
     finally CFG.Free; end;
   finally Meth.Free; end;
 end;
@@ -567,7 +567,7 @@ begin
       var Loops := 0;
       for var B in CFG.Blocks do
         if B.Kind = ckLoop then Inc(Loops);
-      Assert.AreEqual(2, Loops, 'Nested while erzeugt 2 ckLoop-Bloecke');
+      Assert.AreEqual<Integer>(2, Loops, 'Nested while erzeugt 2 ckLoop-Bloecke');
       Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_));
     finally CFG.Free; end;
   finally Meth.Free; end;
@@ -672,7 +672,7 @@ begin
       Assert.IsNotNull(FinallyStart);
       // 2 Predecessors: TryBodyStart (Cross-Edge bei Exception) +
       // If-Merge (Normal-End nach if-Verzweigung)
-      Assert.AreEqual(2, FinallyStart.Predecessors.Count,
+      Assert.AreEqual<Integer>(2, FinallyStart.Predecessors.Count,
         'Finally erreicht aus Cross-Edge UND Normal-End-Pfad');
     finally CFG.Free; end;
   finally Meth.Free; end;

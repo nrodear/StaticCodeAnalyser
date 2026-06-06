@@ -85,7 +85,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
   try
-    Assert.AreEqual(0, Count(F, fkDfmForbiddenClass));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmForbiddenClass));
   finally F.Free; end;
 end;
 
@@ -96,7 +96,7 @@ begin
   DfmForbiddenClasses.Add('TLabel');
   F := RunOn(DFM);
   try
-    Assert.AreEqual(1, Count(F, fkDfmForbiddenClass));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmForbiddenClass));
   finally F.Free; end;
 end;
 
@@ -108,7 +108,7 @@ begin
   DfmForbiddenClasses.Add('tlabel');
   F := RunOn(DFM);
   try
-    Assert.AreEqual(1, Count(F, fkDfmForbiddenClass));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmForbiddenClass));
   finally F.Free; end;
 end;
 
@@ -119,7 +119,7 @@ begin
   DfmForbiddenClasses.Add('TLabel');
   F := RunOn(DFM);
   try
-    Assert.AreEqual(0, Count(F, fkDfmForbiddenClass));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmForbiddenClass));
   finally F.Free; end;
 end;
 
@@ -136,7 +136,7 @@ begin
   DfmForbiddenClasses.Add('TQuery');
   F := RunOn(DFM);
   try
-    Assert.AreEqual(3, Count(F, fkDfmForbiddenClass));
+    Assert.AreEqual<Integer>(3, Count(F, fkDfmForbiddenClass));
   finally F.Free; end;
 end;
 
@@ -177,7 +177,7 @@ begin
   DfmForbiddenClasses.Add('TQuery');
   F := RunOn(DFM);
   try
-    Assert.AreEqual(1, Count(F, fkDfmForbiddenClass));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmForbiddenClass));
   finally F.Free; end;
 end;
 
@@ -190,7 +190,7 @@ begin
   DfmForbiddenClasses.Add('TFrame');
   F := RunOn(DFM);
   try
-    Assert.AreEqual(1, Count(F, fkDfmForbiddenClass));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmForbiddenClass));
   finally F.Free; end;
 end;
 
@@ -204,7 +204,7 @@ begin
   DfmForbiddenClasses.Add('TIBQuery');
   F := RunOn(DFM);
   try
-    Assert.AreEqual(1, Count(F, fkDfmForbiddenClass));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmForbiddenClass));
   finally F.Free; end;
 end;
 

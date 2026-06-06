@@ -80,7 +80,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkFormatMismatch),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFormatMismatch),
       '2 Platzhalter, 1 Argument – Error');
   finally F.Free; end;
 end;
@@ -96,7 +96,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkFormatMismatch),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFormatMismatch),
       '1 Platzhalter, 2 Argumente – Error');
   finally F.Free; end;
 end;
@@ -112,7 +112,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkFormatMismatch),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFormatMismatch),
       '2 Platzhalter, 2 Argumente – kein Befund');
   finally F.Free; end;
 end;
@@ -128,7 +128,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkFormatMismatch),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFormatMismatch),
       '%% ist kein Platzhalter – kein Befund');
   finally F.Free; end;
 end;
@@ -144,7 +144,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkFormatMismatch),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFormatMismatch),
       'Keine Platzhalter, leeres Array – kein Befund');
   finally F.Free; end;
 end;
@@ -160,7 +160,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkFormatMismatch),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFormatMismatch),
       '%8.2f = 1 Platzhalter, 1 Argument – kein Befund');
   finally F.Free; end;
 end;
@@ -178,7 +178,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkFormatMismatch),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFormatMismatch),
       'Format() als Argument in Add() – kein Befund');
   finally F.Free; end;
 end;
@@ -196,7 +196,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkFormatMismatch),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFormatMismatch),
       'Lexer liest String-Inhalt korrekt: 2 Platzhalter, 2 Argumente');
   finally F.Free; end;
 end;
@@ -214,7 +214,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkFormatMismatch),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFormatMismatch),
       'Maskiertes '' im Format-String: 1 Platzhalter, 1 Argument');
   finally F.Free; end;
 end;
@@ -236,7 +236,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkFormatMismatch),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFormatMismatch),
       'Zwei eingebettete '' + %s am Ende: 1 Platzhalter, 1 Argument');
   finally F.Free; end;
 end;
@@ -296,7 +296,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkFormatMismatch),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFormatMismatch),
       'FormatUtf8 Bare-%: 2 Platzhalter, 2 Argumente - kein Befund');
   finally F.Free; end;
 end;
@@ -314,7 +314,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkFormatMismatch),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFormatMismatch),
       'FormatUtf8 Bare-%: 1 Platzhalter, 2 Argumente - Error');
   finally F.Free; end;
 end;
@@ -332,7 +332,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkFormatMismatch),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFormatMismatch),
       'FormatString Bare-%: 2 Platzhalter, 2 Argumente - kein Befund');
   finally F.Free; end;
 end;
@@ -353,7 +353,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkFormatMismatch),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFormatMismatch),
       'mORMot: %% = 2 Platzhalter, 2 Argumente - kein Befund');
   finally F.Free; end;
 end;
@@ -395,7 +395,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkFormatMismatch),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFormatMismatch),
       'String-Konkatenation: 1 Bare-% im 2. Literal-Teil, 1 Argument - kein Befund');
   finally F.Free; end;
 end;
@@ -414,7 +414,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkFormatMismatch),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFormatMismatch),
       'Konkatenation mit echtem Mismatch: 2 Platzhalter, 1 Argument - Befund');
   finally F.Free; end;
 end;
@@ -443,7 +443,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkFormatLocaleHint));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFormatLocaleHint));
   finally F.Free; end;
 end;
 
@@ -457,7 +457,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkFormatLocaleHint));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFormatLocaleHint));
   finally F.Free; end;
 end;
 

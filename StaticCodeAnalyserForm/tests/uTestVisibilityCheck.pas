@@ -148,9 +148,9 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeStrictPrivate),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeStrictPrivate),
       'Public-Felder werden von uPublicField behandelt, nicht von VisibilityCheck');
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeUnitPrivate));
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeUnitPrivate));
   finally F.Free; end;
 end;
 
@@ -177,10 +177,10 @@ begin
   try
     Assert.IsTrue(TFindingHelper.Count(F, fkCanBeUnitPrivate) >= 1,
       'Top-Level-Caller in derselben Unit -> CanBeUnitPrivate (Delphi-private)');
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeStrictPrivate),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeStrictPrivate),
       'CanBeStrictPrivate waere zu eng - der Top-Level-Call wuerde brechen');
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeProtected));
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedPublicMember));
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeProtected));
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedPublicMember));
   finally F.Free; end;
 end;
 
@@ -200,8 +200,8 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeStrictPrivate));
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedPublicMember));
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeStrictPrivate));
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedPublicMember));
   finally F.Free; end;
 end;
 
@@ -223,8 +223,8 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeStrictPrivate));
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedPublicMember));
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeStrictPrivate));
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedPublicMember));
   finally F.Free; end;
 end;
 
@@ -246,8 +246,8 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeStrictPrivate));
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedPublicMember));
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeStrictPrivate));
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedPublicMember));
   finally F.Free; end;
 end;
 
@@ -420,7 +420,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(3, TFindingHelper.Count(F, fkUnusedPublicMember),
+    Assert.AreEqual<Integer>(3, TFindingHelper.Count(F, fkUnusedPublicMember),
       'Drei dead-public-methods -> drei Findings');
   finally F.Free; end;
 end;
@@ -578,8 +578,8 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeStrictPrivate));
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedPublicMember));
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeStrictPrivate));
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedPublicMember));
   finally F.Free; end;
 end;
 
@@ -631,7 +631,7 @@ begin
   try
     // Beide A und B sind nirgendwo gerufen -> beide muessten als
     // UnusedPublicMember reported sein.
-    Assert.AreEqual(2, TFindingHelper.Count(F, fkUnusedPublicMember),
+    Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkUnusedPublicMember),
       'Detektor muss alle public-Sections analysieren, nicht nur die erste');
   finally F.Free; end;
 end;
@@ -650,7 +650,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedPublicMember),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedPublicMember),
       'abstract-Methoden sind Vererbungs-Hooks, kein Dead-API');
   finally F.Free; end;
 end;
@@ -679,7 +679,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeStrictPrivate));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeStrictPrivate));
   finally F.Free; end;
 end;
 

@@ -155,7 +155,7 @@ var E: TFixEstimate;
 begin
   E := TSQLFixScorer.Estimate(
     'WHERE a = +A AND b = +B AND c = +C');
-  Assert.AreEqual(2, E.Score,
+  Assert.AreEqual<Integer>(2, E.Score,
     '3 Wert-Pluses ohne strukturellen Teil -> Score 2 (Boundary)');
   Assert.AreEqual(Ord(fdEasy), Ord(E.Difficulty));
 end;

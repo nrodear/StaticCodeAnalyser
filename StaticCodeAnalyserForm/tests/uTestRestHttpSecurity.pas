@@ -48,7 +48,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkHttpInsteadOfHttps));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHttpInsteadOfHttps));
   finally F.Free; end;
 end;
 
@@ -60,7 +60,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkHttpInsteadOfHttps),
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHttpInsteadOfHttps),
     'Localhost-URLs sind in der Whitelist - kein Befund');
   finally F.Free; end;
 end;
@@ -72,7 +72,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkHttpInsteadOfHttps),
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHttpInsteadOfHttps),
     'XML-Namespace-URI ist eine Identitaet, kein Netz-Aufruf');
   finally F.Free; end;
 end;

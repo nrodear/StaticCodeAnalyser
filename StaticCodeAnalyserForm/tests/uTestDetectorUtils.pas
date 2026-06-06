@@ -54,7 +54,7 @@ begin
   State := Default(TCommentScanState);
   R := TDetectorUtils.ScanCodeLine('x := y + 1;', State, Col);
   Assert.AreEqual('x := y + 1;', R);
-  Assert.AreEqual(0, Col);
+  Assert.AreEqual<Integer>(0, Col);
 end;
 
 procedure TTestDetectorUtils.LineComment_TruncatedAndColReported;
@@ -66,9 +66,9 @@ begin
   State := Default(TCommentScanState);
   // 'DoStuff; // NOSONAR' -> '//' beginnt auf Spalte 10 (1-basiert).
   R := TDetectorUtils.ScanCodeLine('DoStuff; // NOSONAR', State, Col);
-  Assert.AreEqual(10, Col);
+  Assert.AreEqual<Integer>(10, Col);
   Assert.IsTrue(R.StartsWith('DoStuff;'), 'Code vor // bleibt erhalten');
-  Assert.AreEqual(0, Pos('NOSONAR', R), 'Kommentartext darf nicht im Code sein');
+  Assert.AreEqual<Integer>(0, Pos('NOSONAR', R), 'Kommentartext darf nicht im Code sein');
 end;
 
 procedure TTestDetectorUtils.StringLiteral_FilledNotComment;
@@ -79,8 +79,8 @@ var
 begin
   State := Default(TCommentScanState);
   R := TDetectorUtils.ScanCodeLine('s := ''hello'';', State, Col);
-  Assert.AreEqual(0, Col, 'kein Zeilenkommentar');
-  Assert.AreEqual(0, Pos('hello', R), 'String-Inhalt wird ersetzt');
+  Assert.AreEqual<Integer>(0, Col, 'kein Zeilenkommentar');
+  Assert.AreEqual<Integer>(0, Pos('hello', R), 'String-Inhalt wird ersetzt');
   Assert.IsTrue(Pos('~', R) > 0, 'Fuellzeichen steht fuer den String');
 end;
 
@@ -93,8 +93,8 @@ begin
   State := Default(TCommentScanState);
   // Das `//` steckt im String-Literal - es ist KEIN Zeilenkommentar.
   R := TDetectorUtils.ScanCodeLine('s := ''// not a comment'';', State, Col);
-  Assert.AreEqual(0, Col, '// im String ist kein Kommentar');
-  Assert.AreEqual(0, Pos('/', R), 'kein Slash bleibt uebrig (String gefuellt)');
+  Assert.AreEqual<Integer>(0, Col, '// im String ist kein Kommentar');
+  Assert.AreEqual<Integer>(0, Pos('/', R), 'kein Slash bleibt uebrig (String gefuellt)');
 end;
 
 procedure TTestDetectorUtils.BraceComment_Removed;
@@ -105,8 +105,8 @@ var
 begin
   State := Default(TCommentScanState);
   R := TDetectorUtils.ScanCodeLine('a := 1; { note } b := 2;', State, Col);
-  Assert.AreEqual(0, Col);
-  Assert.AreEqual(0, Pos('note', R), 'Block-Kommentar entfernt');
+  Assert.AreEqual<Integer>(0, Col);
+  Assert.AreEqual<Integer>(0, Pos('note', R), 'Block-Kommentar entfernt');
   Assert.IsTrue(Pos('b := 2;', R) > 0, 'Code nach } bleibt erhalten');
   Assert.IsFalse(State.InBraceComment, 'Block auf derselben Zeile geschlossen');
 end;
@@ -121,8 +121,8 @@ begin
   // 'it''s' ist EIN String mit verdoppeltem Apostroph - bleibt offen bis
   // zum echten Schluss-Quote. Danach ist ';' wieder Code.
   R := TDetectorUtils.ScanCodeLine('s := ''it''''s'';', State, Col);
-  Assert.AreEqual(0, Col);
-  Assert.AreEqual(0, Pos('it', R), 'String-Inhalt komplett ersetzt');
+  Assert.AreEqual<Integer>(0, Col);
+  Assert.AreEqual<Integer>(0, Pos('it', R), 'String-Inhalt komplett ersetzt');
   Assert.IsTrue(R.EndsWith(';'), 'Code nach String wieder sichtbar');
 end;
 
@@ -139,7 +139,7 @@ begin
 
   R2 := TDetectorUtils.ScanCodeLine('still comment } code2;', State, Col);
   Assert.IsFalse(State.InBraceComment, 'Block auf Folgezeile geschlossen');
-  Assert.AreEqual(0, Pos('comment', R2), 'Kommentar-Rest entfernt');
+  Assert.AreEqual<Integer>(0, Pos('comment', R2), 'Kommentar-Rest entfernt');
   Assert.IsTrue(Pos('code2;', R2) > 0, 'Code nach } sichtbar');
 end;
 
@@ -155,7 +155,7 @@ begin
 
   R2 := TDetectorUtils.ScanCodeLine('inside *) y := 2;', State, Col);
   Assert.IsFalse(State.InParenComment, '(*-Block geschlossen');
-  Assert.AreEqual(0, Pos('inside', R2), 'Kommentar-Rest entfernt');
+  Assert.AreEqual<Integer>(0, Pos('inside', R2), 'Kommentar-Rest entfernt');
   Assert.IsTrue(Pos('y := 2;', R2) > 0, 'Code nach *) sichtbar');
 end;
 
@@ -177,12 +177,12 @@ begin
 
     Assert.AreEqual<NativeInt>(Length(Code), Length(LineFor),
       'pro Zeichen genau ein Zeilen-Mapping');
-    Assert.AreEqual(0, Pos('abc', Code), 'String-Inhalt ersetzt');
-    Assert.AreEqual(0, Pos('comment', Code), 'Zeilenkommentar entfernt');
+    Assert.AreEqual<Integer>(0, Pos('abc', Code), 'String-Inhalt ersetzt');
+    Assert.AreEqual<Integer>(0, Pos('comment', Code), 'Zeilenkommentar entfernt');
 
     P := Pos('y', Code);
     Assert.IsTrue(P > 0, 'y vorhanden');
-    Assert.AreEqual(2, LineFor[P - 1], 'y stammt aus Quellzeile 2');
+    Assert.AreEqual<Integer>(2, LineFor[P - 1], 'y stammt aus Quellzeile 2');
   finally
     Lines.Free;
   end;
@@ -204,7 +204,7 @@ begin
     Code := TDetectorUtils.StripStringsAndComments(Lines, LineFor);
     Assert.IsTrue(Pos('~~', Code) > 0, 'leerer String wird zu Fuellzeichen');
     Assert.IsTrue(Pos('then', Code) > 0, 'Keyword then bleibt erhalten');
-    Assert.AreEqual(0, Pos('''', Code), 'keine Apostrophe mehr im Code');
+    Assert.AreEqual<Integer>(0, Pos('''', Code), 'keine Apostrophe mehr im Code');
   finally
     Lines.Free;
   end;
@@ -226,7 +226,7 @@ begin
     NL := 0;
     for i := 1 to Length(Code) do
       if Code[i] = #10 then Inc(NL);
-    Assert.AreEqual(3, NL, 'ein #10 pro Quellzeile');
+    Assert.AreEqual<Integer>(3, NL, 'ein #10 pro Quellzeile');
   finally
     Lines.Free;
   end;

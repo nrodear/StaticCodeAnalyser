@@ -87,7 +87,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM, PAS);
   try
-    Assert.AreEqual(1, Count(F, fkDfmSchemaMismatch));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmSchemaMismatch));
   finally F.Free; end;
 end;
 
@@ -108,7 +108,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM, PAS);
   try
-    Assert.AreEqual(0, Count(F, fkDfmSchemaMismatch));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmSchemaMismatch));
   finally F.Free; end;
 end;
 
@@ -123,7 +123,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM, PAS);
   try
-    Assert.AreEqual(0, Count(F, fkDfmSchemaMismatch));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmSchemaMismatch));
   finally F.Free; end;
 end;
 
@@ -145,7 +145,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM, PAS);
   try
-    Assert.AreEqual(1, Count(F, fkDfmSchemaMismatch));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmSchemaMismatch));
   finally F.Free; end;
 end;
 
@@ -161,7 +161,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM, PAS);
   try
-    Assert.AreEqual(0, Count(F, fkDfmSchemaMismatch));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmSchemaMismatch));
   finally F.Free; end;
 end;
 
@@ -177,7 +177,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM, PAS);
   try
-    Assert.AreEqual(0, Count(F, fkDfmSchemaMismatch));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmSchemaMismatch));
   finally F.Free; end;
 end;
 
@@ -187,7 +187,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM, '');
   try
-    Assert.AreEqual(0, Count(F, fkDfmSchemaMismatch));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmSchemaMismatch));
   finally F.Free; end;
 end;
 
@@ -205,7 +205,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM, PAS);
   try
-    Assert.AreEqual(3, Count(F, fkDfmSchemaMismatch));
+    Assert.AreEqual<Integer>(3, Count(F, fkDfmSchemaMismatch));
   finally F.Free; end;
 end;
 

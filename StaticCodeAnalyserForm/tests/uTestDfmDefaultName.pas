@@ -76,7 +76,7 @@ begin
     '  end'#13#10 +
     'end');
   try
-    Assert.AreEqual(1, CountKind(F, fkDfmDefaultName));
+    Assert.AreEqual<Integer>(1, CountKind(F, fkDfmDefaultName));
   finally F.Free; end;
 end;
 
@@ -89,7 +89,7 @@ begin
     '  end'#13#10 +
     'end');
   try
-    Assert.AreEqual(1, CountKind(F, fkDfmDefaultName));
+    Assert.AreEqual<Integer>(1, CountKind(F, fkDfmDefaultName));
   finally F.Free; end;
 end;
 
@@ -102,7 +102,7 @@ begin
     '  end'#13#10 +
     'end');
   try
-    Assert.AreEqual(1, CountKind(F, fkDfmDefaultName));
+    Assert.AreEqual<Integer>(1, CountKind(F, fkDfmDefaultName));
   finally F.Free; end;
 end;
 
@@ -118,7 +118,7 @@ begin
     '  end'#13#10 +
     'end');
   try
-    Assert.AreEqual(0, CountKind(F, fkDfmDefaultName));
+    Assert.AreEqual<Integer>(0, CountKind(F, fkDfmDefaultName));
   finally F.Free; end;
 end;
 
@@ -133,7 +133,7 @@ begin
     '  end'#13#10 +
     'end');
   try
-    Assert.AreEqual(0, CountKind(F, fkDfmDefaultName));
+    Assert.AreEqual<Integer>(0, CountKind(F, fkDfmDefaultName));
   finally F.Free; end;
 end;
 
@@ -147,7 +147,7 @@ begin
     '  end'#13#10 +
     'end');
   try
-    Assert.AreEqual(0, CountKind(F, fkDfmDefaultName));
+    Assert.AreEqual<Integer>(0, CountKind(F, fkDfmDefaultName));
   finally F.Free; end;
 end;
 
@@ -160,7 +160,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn('object Form2: TForm2 end');
   try
-    Assert.AreEqual(0, CountKind(F, fkDfmDefaultName));
+    Assert.AreEqual<Integer>(0, CountKind(F, fkDfmDefaultName));
   finally F.Free; end;
 end;
 
@@ -179,7 +179,7 @@ begin
     '  end'#13#10 +
     'end');
   try
-    Assert.AreEqual(1, CountKind(F, fkDfmDefaultName));
+    Assert.AreEqual<Integer>(1, CountKind(F, fkDfmDefaultName));
   finally F.Free; end;
 end;
 
@@ -196,7 +196,7 @@ begin
     '  end'#13#10 +
     'end');
   try
-    Assert.AreEqual(3, CountKind(F, fkDfmDefaultName));
+    Assert.AreEqual<Integer>(3, CountKind(F, fkDfmDefaultName));
   finally F.Free; end;
 end;
 

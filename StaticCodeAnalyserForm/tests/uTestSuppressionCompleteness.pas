@@ -67,7 +67,7 @@ begin
           'KindFromName(%s) liefert ord=%d statt erwarteter ord=%d (%s)',
           [Name, Ord(Resolved), Ord(K), KIND_META[K].Name]));
     end;
-    Assert.AreEqual(0, Missing.Count,
+    Assert.AreEqual<Integer>(0, Missing.Count,
       'Fehlende oder falsche KIND_META->Kind Lookups:'#13#10 + Missing.Text);
   finally
     Missing.Free;
@@ -95,7 +95,7 @@ begin
             [KIND_META[K].Name, Ord(K), Ord(Other)]));
       end;
     end;
-    Assert.AreEqual(0, Duplicates.Count,
+    Assert.AreEqual<Integer>(0, Duplicates.Count,
       'Doppelte KIND_META-Namen (Suppression waere mehrdeutig):'#13#10 +
       Duplicates.Text);
   finally

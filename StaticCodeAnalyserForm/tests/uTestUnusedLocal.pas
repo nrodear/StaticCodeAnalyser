@@ -46,7 +46,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkUnusedLocalVar));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedLocalVar));
   finally F.Free; end;
 end;
 
@@ -59,7 +59,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(2, TFindingHelper.Count(F, fkUnusedLocalVar));
+  try Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkUnusedLocalVar));
   finally F.Free; end;
 end;
 
@@ -72,7 +72,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(3, TFindingHelper.Count(F, fkUnusedLocalVar));
+  try Assert.AreEqual<Integer>(3, TFindingHelper.Count(F, fkUnusedLocalVar));
   finally F.Free; end;
 end;
 
@@ -85,7 +85,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedLocalVar));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedLocalVar));
   finally F.Free; end;
 end;
 
@@ -98,7 +98,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedLocalVar));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedLocalVar));
   finally F.Free; end;
 end;
 
@@ -112,7 +112,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedLocalVar));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedLocalVar));
   finally F.Free; end;
 end;
 
@@ -125,7 +125,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedLocalVar));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedLocalVar));
   finally F.Free; end;
 end;
 
@@ -140,7 +140,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkUnusedLocalVar),
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedLocalVar),
     'x ist ungenutzt; xLength ist Parameter und matched nicht als Wort');
   finally F.Free; end;
 end;

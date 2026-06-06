@@ -111,7 +111,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM_BASIC, PAS);
   try
-    Assert.AreEqual(1, Count(F, fkDfmSqlFromUserInput));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmSqlFromUserInput));
   finally F.Free; end;
 end;
 
@@ -134,7 +134,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM, PAS);
   try
-    Assert.AreEqual(1, Count(F, fkDfmSqlFromUserInput));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmSqlFromUserInput));
   finally F.Free; end;
 end;
 
@@ -157,7 +157,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM, PAS);
   try
-    Assert.AreEqual(1, Count(F, fkDfmSqlFromUserInput));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmSqlFromUserInput));
   finally F.Free; end;
 end;
 
@@ -177,7 +177,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM_BASIC, PAS);
   try
-    Assert.AreEqual(1, Count(F, fkDfmSqlFromUserInput));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmSqlFromUserInput));
   finally F.Free; end;
 end;
 
@@ -197,7 +197,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM_BASIC, PAS);
   try
-    Assert.AreEqual(0, Count(F, fkDfmSqlFromUserInput));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmSqlFromUserInput));
   finally F.Free; end;
 end;
 
@@ -217,7 +217,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM_BASIC, PAS);
   try
-    Assert.AreEqual(0, Count(F, fkDfmSqlFromUserInput));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmSqlFromUserInput));
   finally F.Free; end;
 end;
 
@@ -236,7 +236,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM, PAS);
   try
-    Assert.AreEqual(0, Count(F, fkDfmSqlFromUserInput));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmSqlFromUserInput));
   finally F.Free; end;
 end;
 
@@ -257,7 +257,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM, PAS);
   try
-    Assert.AreEqual(0, Count(F, fkDfmSqlFromUserInput));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmSqlFromUserInput));
   finally F.Free; end;
 end;
 
@@ -277,7 +277,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM_BASIC, PAS);
   try
-    Assert.AreEqual(0, Count(F, fkDfmSqlFromUserInput));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmSqlFromUserInput));
   finally F.Free; end;
 end;
 
@@ -301,7 +301,7 @@ begin
     // Diese Heuristik-Wahl ist konservativ: ohne '+' ist es zwar auch
     // riskant, aber haeufig legitim (eingebauter SQL-Editor). Wenn das
     // strenger gesetzt werden soll, ist das ein Tuning-Schritt.
-    Assert.AreEqual(0, Count(F, fkDfmSqlFromUserInput));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmSqlFromUserInput));
   finally F.Free; end;
 end;
 
@@ -314,7 +314,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM_BASIC, PAS);
   try
-    Assert.AreEqual(0, Count(F, fkDfmSqlFromUserInput));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmSqlFromUserInput));
   finally F.Free; end;
 end;
 
@@ -323,7 +323,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM_BASIC, '');
   try
-    Assert.AreEqual(0, Count(F, fkDfmSqlFromUserInput));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmSqlFromUserInput));
   finally F.Free; end;
 end;
 

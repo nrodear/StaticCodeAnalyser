@@ -66,7 +66,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkThreadResumeDeprecated));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkThreadResumeDeprecated));
   finally F.Free; end;
 end;
 
@@ -82,7 +82,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkThreadResumeDeprecated));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkThreadResumeDeprecated));
   finally F.Free; end;
 end;
 
@@ -112,7 +112,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate));
   finally F.Free; end;
 end;
 
@@ -134,7 +134,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate));
   finally F.Free; end;
 end;
 
@@ -154,7 +154,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate));
   finally F.Free; end;
 end;
 
@@ -196,7 +196,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate));
   finally F.Free; end;
 end;
 
@@ -235,7 +235,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate));
   finally F.Free; end;
 end;
 
@@ -258,7 +258,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
         'FreeAndNil in String-Literal darf den Detector nicht ausloesen');
   finally F.Free; end;
 end;

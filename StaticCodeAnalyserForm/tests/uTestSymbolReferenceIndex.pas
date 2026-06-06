@@ -79,8 +79,8 @@ begin
     Idx.AddReference('Helper', 'a.pas');
     Idx.AddReference('Helper', 'b.pas');
     Idx.AddReference('Helper', 'c.pas');
-    Assert.AreEqual(3, Idx.ExternalReferencingUnitCount('helper', 'own.pas'));
-    Assert.AreEqual(2, Idx.ExternalReferencingUnitCount('helper', 'a.pas'));
+    Assert.AreEqual<Integer>(3, Idx.ExternalReferencingUnitCount('helper', 'own.pas'));
+    Assert.AreEqual<Integer>(2, Idx.ExternalReferencingUnitCount('helper', 'a.pas'));
   finally
     Idx.Free;
   end;

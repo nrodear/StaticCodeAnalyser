@@ -43,7 +43,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkUnusedParameter));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter));
   finally F.Free; end;
 end;
 
@@ -55,7 +55,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkUnusedParameter));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter));
   finally F.Free; end;
 end;
 
@@ -67,7 +67,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(3, TFindingHelper.Count(F, fkUnusedParameter));
+  try Assert.AreEqual<Integer>(3, TFindingHelper.Count(F, fkUnusedParameter));
   finally F.Free; end;
 end;
 
@@ -79,7 +79,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedParameter));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter));
   finally F.Free; end;
 end;
 
@@ -99,7 +99,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedParameter),
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
     'override-Methoden werden geskippt (Signatur-Konformitaet)');
   finally F.Free; end;
 end;
@@ -114,7 +114,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedParameter),
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
     'Event-Handler mit Single-Sender-Param wird geskippt');
   finally F.Free; end;
 end;
@@ -127,7 +127,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedParameter),
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
     '_-Prefix = intentionally unused -> Skip');
   finally F.Free; end;
 end;
@@ -148,7 +148,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkUnusedParameter),
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
     'virtual-Methoden werden geskippt (Subklassen-Vertrag)');
   finally F.Free; end;
 end;

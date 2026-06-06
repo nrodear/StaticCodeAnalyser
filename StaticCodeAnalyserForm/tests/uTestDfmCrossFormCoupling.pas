@@ -151,7 +151,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunWithIndex(DFM, PAS_MAIN, PAS_OTHER);
   try
-    Assert.AreEqual(1, Count(F, fkDfmCrossFormCoupling));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmCrossFormCoupling));
   finally F.Free; end;
 end;
 
@@ -173,7 +173,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunWithIndex(DFM, PAS_MAIN, PAS_OTHER);
   try
-    Assert.AreEqual(1, Count(F, fkDfmCrossFormCoupling));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmCrossFormCoupling));
   finally F.Free; end;
 end;
 
@@ -195,7 +195,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunWithIndex(DFM, PAS_MAIN, PAS_OTHER);
   try
-    Assert.AreEqual(1, Count(F, fkDfmCrossFormCoupling));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmCrossFormCoupling));
   finally F.Free; end;
 end;
 
@@ -220,7 +220,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunWithIndex(DFM, PAS_MAIN, PAS_OTHER);
   try
-    Assert.AreEqual(0, Count(F, fkDfmCrossFormCoupling));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmCrossFormCoupling));
   finally F.Free; end;
 end;
 
@@ -243,7 +243,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunWithIndex(DFM, PAS_MAIN, PAS_OTHER);
   try
-    Assert.AreEqual(0, Count(F, fkDfmCrossFormCoupling));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmCrossFormCoupling));
   finally F.Free; end;
 end;
 
@@ -266,7 +266,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunWithIndex(DFM, PAS_MAIN, PAS_OTHER, False);
   try
-    Assert.AreEqual(0, Count(F, fkDfmCrossFormCoupling));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmCrossFormCoupling));
   finally F.Free; end;
 end;
 
@@ -290,7 +290,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunWithIndex(DFM, PAS_MAIN, PAS_OTHER);
   try
-    Assert.AreEqual(0, Count(F, fkDfmCrossFormCoupling));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmCrossFormCoupling));
   finally F.Free; end;
 end;
 
@@ -358,7 +358,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunWithIndex(DFM, PAS_MAIN, PAS_OTHER);
   try
-    Assert.AreEqual(2, Count(F, fkDfmCrossFormCoupling));
+    Assert.AreEqual<Integer>(2, Count(F, fkDfmCrossFormCoupling));
   finally F.Free; end;
 end;
 

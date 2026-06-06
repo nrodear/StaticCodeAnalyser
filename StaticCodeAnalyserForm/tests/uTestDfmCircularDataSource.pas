@@ -80,7 +80,7 @@ begin
   F := RunOn(DFM);
   try
     // ds <-> q -> beide gemeldet, weil beide am Zyklus beteiligt
-    Assert.AreEqual(2, Count(F, fkDfmCircularDataSource));
+    Assert.AreEqual<Integer>(2, Count(F, fkDfmCircularDataSource));
   finally F.Free; end;
 end;
 
@@ -95,7 +95,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
   try
-    Assert.AreEqual(1, Count(F, fkDfmCircularDataSource));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmCircularDataSource));
   finally F.Free; end;
 end;
 
@@ -111,7 +111,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
   try
-    Assert.AreEqual(4, Count(F, fkDfmCircularDataSource));
+    Assert.AreEqual<Integer>(4, Count(F, fkDfmCircularDataSource));
   finally F.Free; end;
 end;
 
@@ -158,7 +158,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
   try
-    Assert.AreEqual(0, Count(F, fkDfmCircularDataSource));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmCircularDataSource));
   finally F.Free; end;
 end;
 
@@ -174,7 +174,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
   try
-    Assert.AreEqual(0, Count(F, fkDfmCircularDataSource));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmCircularDataSource));
   finally F.Free; end;
 end;
 
@@ -189,7 +189,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
   try
-    Assert.AreEqual(0, Count(F, fkDfmCircularDataSource));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmCircularDataSource));
   finally F.Free; end;
 end;
 
@@ -198,7 +198,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn('object Form: TForm end');
   try
-    Assert.AreEqual(0, Count(F, fkDfmCircularDataSource));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmCircularDataSource));
   finally F.Free; end;
 end;
 
@@ -215,7 +215,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
   try
-    Assert.AreEqual(0, Count(F, fkDfmCircularDataSource));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmCircularDataSource));
   finally F.Free; end;
 end;
 

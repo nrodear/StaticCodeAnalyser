@@ -90,7 +90,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(MakeDfm('TBooleanField', 'TDBEdit'));
   try
-    Assert.AreEqual(1, Count(F, fkDfmFieldTypeMismatch));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmFieldTypeMismatch));
   finally F.Free; end;
 end;
 
@@ -99,7 +99,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(MakeDfm('TBooleanField', 'TDBComboBox'));
   try
-    Assert.AreEqual(1, Count(F, fkDfmFieldTypeMismatch));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmFieldTypeMismatch));
   finally F.Free; end;
 end;
 
@@ -108,7 +108,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(MakeDfm('TBooleanField', 'TDBCheckBox'));
   try
-    Assert.AreEqual(0, Count(F, fkDfmFieldTypeMismatch));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmFieldTypeMismatch));
   finally F.Free; end;
 end;
 
@@ -119,7 +119,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(MakeDfm('TMemoField', 'TDBEdit'));
   try
-    Assert.AreEqual(1, Count(F, fkDfmFieldTypeMismatch));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmFieldTypeMismatch));
   finally F.Free; end;
 end;
 
@@ -128,7 +128,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(MakeDfm('TBlobField', 'TDBEdit'));
   try
-    Assert.AreEqual(1, Count(F, fkDfmFieldTypeMismatch));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmFieldTypeMismatch));
   finally F.Free; end;
 end;
 
@@ -137,7 +137,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(MakeDfm('TMemoField', 'TDBMemo'));
   try
-    Assert.AreEqual(0, Count(F, fkDfmFieldTypeMismatch));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmFieldTypeMismatch));
   finally F.Free; end;
 end;
 
@@ -146,7 +146,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(MakeDfm('TMemoField', 'TDBRichEdit'));
   try
-    Assert.AreEqual(0, Count(F, fkDfmFieldTypeMismatch));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmFieldTypeMismatch));
   finally F.Free; end;
 end;
 
@@ -157,7 +157,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(MakeDfm('TIntegerField', 'TDBEdit'));
   try
-    Assert.AreEqual(0, Count(F, fkDfmFieldTypeMismatch));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmFieldTypeMismatch));
   finally F.Free; end;
 end;
 
@@ -166,7 +166,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(MakeDfm('TStringField', 'TDBEdit'));
   try
-    Assert.AreEqual(0, Count(F, fkDfmFieldTypeMismatch));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmFieldTypeMismatch));
   finally F.Free; end;
 end;
 
@@ -177,7 +177,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(MakeDfm('TDateField', 'TDBEdit'));
   try
-    Assert.AreEqual(0, Count(F, fkDfmFieldTypeMismatch));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmFieldTypeMismatch));
   finally F.Free; end;
 end;
 
@@ -190,7 +190,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(MakeDfm('TWeirdCustomField', 'TDBEdit'));
   try
-    Assert.AreEqual(0, Count(F, fkDfmFieldTypeMismatch));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmFieldTypeMismatch));
   finally F.Free; end;
 end;
 
@@ -207,7 +207,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
   try
-    Assert.AreEqual(0, Count(F, fkDfmFieldTypeMismatch));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmFieldTypeMismatch));
   finally F.Free; end;
 end;
 

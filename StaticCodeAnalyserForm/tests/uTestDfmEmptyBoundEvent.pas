@@ -87,7 +87,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM, PAS);
   try
-    Assert.AreEqual(1, Count(F, fkDfmEmptyBoundEvent));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmEmptyBoundEvent));
   finally F.Free; end;
 end;
 
@@ -102,7 +102,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM, PAS);
   try
-    Assert.AreEqual(0, Count(F, fkDfmEmptyBoundEvent));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmEmptyBoundEvent));
   finally F.Free; end;
 end;
 
@@ -119,7 +119,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM, PAS);
   try
-    Assert.AreEqual(0, Count(F, fkDfmEmptyBoundEvent));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmEmptyBoundEvent));
   finally F.Free; end;
 end;
 
@@ -143,7 +143,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM, PAS);
   try
-    Assert.AreEqual(1, Count(F, fkDfmEmptyBoundEvent));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmEmptyBoundEvent));
   finally F.Free; end;
 end;
 
@@ -158,7 +158,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM, PAS);
   try
-    Assert.AreEqual(0, Count(F, fkDfmEmptyBoundEvent));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmEmptyBoundEvent));
   finally F.Free; end;
 end;
 
@@ -174,7 +174,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM, PAS);
   try
-    Assert.AreEqual(0, Count(F, fkDfmEmptyBoundEvent));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmEmptyBoundEvent));
   finally F.Free; end;
 end;
 
@@ -233,7 +233,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM, PAS);
   try
-    Assert.AreEqual(3, Count(F, fkDfmEmptyBoundEvent));
+    Assert.AreEqual<Integer>(3, Count(F, fkDfmEmptyBoundEvent));
   finally F.Free; end;
 end;
 
@@ -254,7 +254,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM, PAS);
   try
-    Assert.AreEqual(1, Count(F, fkDfmEmptyBoundEvent));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmEmptyBoundEvent));
   finally F.Free; end;
 end;
 

@@ -60,7 +60,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkPublicMemberWithoutDoc));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkPublicMemberWithoutDoc));
   finally F.Free; end;
 end;
 
@@ -79,7 +79,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkPublicMemberWithoutDoc));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkPublicMemberWithoutDoc));
   finally F.Free; end;
 end;
 
@@ -98,7 +98,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkPublicMemberWithoutDoc));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkPublicMemberWithoutDoc));
   finally F.Free; end;
 end;
 
@@ -116,7 +116,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkPublicMemberWithoutDoc));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkPublicMemberWithoutDoc));
   finally F.Free; end;
 end;
 
@@ -135,7 +135,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkPublicMemberWithoutDoc));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkPublicMemberWithoutDoc));
   finally F.Free; end;
 end;
 
@@ -153,7 +153,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkPublicMemberWithoutDoc),
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkPublicMemberWithoutDoc),
     'published-Methoden sind DFM-Streaming, kein Doku-Befund');
   finally F.Free; end;
 end;

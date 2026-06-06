@@ -79,7 +79,7 @@ begin
     '  Caption = ''Static Code Analysis Tool'''#13#10 +
     'end');
   try
-    Assert.AreEqual(1, CountKind(F, fkDfmHardcodedCaption));
+    Assert.AreEqual<Integer>(1, CountKind(F, fkDfmHardcodedCaption));
   finally F.Free; end;
 end;
 
@@ -93,7 +93,7 @@ begin
     '  end'#13#10 +
     'end');
   try
-    Assert.AreEqual(1, CountKind(F, fkDfmHardcodedCaption));
+    Assert.AreEqual<Integer>(1, CountKind(F, fkDfmHardcodedCaption));
   finally F.Free; end;
 end;
 
@@ -107,7 +107,7 @@ begin
     '  end'#13#10 +
     'end');
   try
-    Assert.AreEqual(1, CountKind(F, fkDfmHardcodedCaption));
+    Assert.AreEqual<Integer>(1, CountKind(F, fkDfmHardcodedCaption));
   finally F.Free; end;
 end;
 
@@ -125,7 +125,7 @@ begin
     '  end'#13#10 +
     'end');
   try
-    Assert.AreEqual(1, CountKind(F, fkDfmHardcodedCaption));
+    Assert.AreEqual<Integer>(1, CountKind(F, fkDfmHardcodedCaption));
   finally F.Free; end;
 end;
 
@@ -142,7 +142,7 @@ begin
     '  end'#13#10 +
     'end');
   try
-    Assert.AreEqual(3, CountKind(F, fkDfmHardcodedCaption));
+    Assert.AreEqual<Integer>(3, CountKind(F, fkDfmHardcodedCaption));
   finally F.Free; end;
 end;
 
@@ -158,7 +158,7 @@ begin
     '  end'#13#10 +
     'end');
   try
-    Assert.AreEqual(0, CountKind(F, fkDfmHardcodedCaption));
+    Assert.AreEqual<Integer>(0, CountKind(F, fkDfmHardcodedCaption));
   finally F.Free; end;
 end;
 
@@ -172,7 +172,7 @@ begin
     '  end'#13#10 +
     'end');
   try
-    Assert.AreEqual(0, CountKind(F, fkDfmHardcodedCaption));
+    Assert.AreEqual<Integer>(0, CountKind(F, fkDfmHardcodedCaption));
   finally F.Free; end;
 end;
 
@@ -187,7 +187,7 @@ begin
     '  Color = clBtnFace'#13#10 +
     'end');
   try
-    Assert.AreEqual(0, CountKind(F, fkDfmHardcodedCaption));
+    Assert.AreEqual<Integer>(0, CountKind(F, fkDfmHardcodedCaption));
   finally F.Free; end;
 end;
 
@@ -202,7 +202,7 @@ begin
     '  Filter = ''All files (*.*)|*.*'''#13#10 +
     'end');
   try
-    Assert.AreEqual(0, CountKind(F, fkDfmHardcodedCaption));
+    Assert.AreEqual<Integer>(0, CountKind(F, fkDfmHardcodedCaption));
   finally F.Free; end;
 end;
 
@@ -215,7 +215,7 @@ begin
     '  Left = 100'#13#10 +
     'end');
   try
-    Assert.AreEqual(0, CountKind(F, fkDfmHardcodedCaption));
+    Assert.AreEqual<Integer>(0, CountKind(F, fkDfmHardcodedCaption));
   finally F.Free; end;
 end;
 

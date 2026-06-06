@@ -60,7 +60,7 @@ const DFM =
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
-  try Assert.AreEqual(1, Count(F, fkDfmActionMismatch));
+  try Assert.AreEqual<Integer>(1, Count(F, fkDfmActionMismatch));
   finally F.Free; end;
 end;
 
@@ -69,7 +69,7 @@ const DFM = 'object F: TF object b: TButton Action = ActSave end end';
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
-  try Assert.AreEqual(0, Count(F, fkDfmActionMismatch));
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmActionMismatch));
   finally F.Free; end;
 end;
 
@@ -78,7 +78,7 @@ const DFM = 'object F: TF object b: TButton OnClick = doClick end end';
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
-  try Assert.AreEqual(0, Count(F, fkDfmActionMismatch));
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmActionMismatch));
   finally F.Free; end;
 end;
 
@@ -95,7 +95,7 @@ const DFM =
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
-  try Assert.AreEqual(0, Count(F, fkDfmActionMismatch));
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmActionMismatch));
   finally F.Free; end;
 end;
 
@@ -109,7 +109,7 @@ const DFM =
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
-  try Assert.AreEqual(1, Count(F, fkDfmActionMismatch));
+  try Assert.AreEqual<Integer>(1, Count(F, fkDfmActionMismatch));
   finally F.Free; end;
 end;
 
@@ -149,7 +149,7 @@ const DFM =
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
-  try Assert.AreEqual(2, Count(F, fkDfmActionMismatch));
+  try Assert.AreEqual<Integer>(2, Count(F, fkDfmActionMismatch));
   finally F.Free; end;
 end;
 
@@ -165,7 +165,7 @@ const DFM =
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
-  try Assert.AreEqual(1, Count(F, fkDfmActionMismatch));
+  try Assert.AreEqual<Integer>(1, Count(F, fkDfmActionMismatch));
   finally F.Free; end;
 end;
 
@@ -175,7 +175,7 @@ const DFM = 'object F: TF object lbl: TLabel end end';
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
-  try Assert.AreEqual(0, Count(F, fkDfmActionMismatch));
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmActionMismatch));
   finally F.Free; end;
 end;
 

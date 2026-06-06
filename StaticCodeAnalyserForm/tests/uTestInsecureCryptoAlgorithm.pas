@@ -163,7 +163,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm));
   finally F.Free; end;
 end;
 
@@ -176,7 +176,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm));
   finally F.Free; end;
 end;
 
@@ -189,7 +189,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm));
   finally F.Free; end;
 end;
 
@@ -204,7 +204,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm));
   finally F.Free; end;
 end;
 
@@ -219,7 +219,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm));
   finally F.Free; end;
 end;
 
@@ -239,7 +239,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm),
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm),
         'Deutsches ''des'' in Satz-Mitte darf nicht als DES-Krypto geflagged sein');
   finally F.Free; end;
 end;
@@ -256,7 +256,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm));
   finally F.Free; end;
 end;
 
@@ -300,7 +300,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm));
   finally F.Free; end;
 end;
 

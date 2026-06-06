@@ -91,7 +91,7 @@ var
 begin
   G := ParseToGraph('');
   try
-    Assert.AreEqual(0, G.Roots.Count);
+    Assert.AreEqual<Integer>(0, G.Roots.Count);
   finally
     G.Free;
   end;
@@ -103,10 +103,10 @@ var
 begin
   G := ParseToGraph('object Form2: TForm2'#13#10'end');
   try
-    Assert.AreEqual(1,         G.Roots.Count);
+    Assert.AreEqual<Integer>(1,         G.Roots.Count);
     Assert.AreEqual('Form2',   G.Roots[0].Name);
     Assert.AreEqual('TForm2',  G.Roots[0].ClassRef);
-    Assert.AreEqual(0,         G.Roots[0].Children.Count);
+    Assert.AreEqual<Integer>(0,         G.Roots[0].Children.Count);
   finally
     G.Free;
   end;
@@ -124,10 +124,10 @@ begin
     '  end'#13#10 +
     'end');
   try
-    Assert.AreEqual(1, G.Roots.Count);
+    Assert.AreEqual<Integer>(1, G.Roots.Count);
     Root := G.Roots[0];
     Assert.AreEqual('Form2', Root.Name);
-    Assert.AreEqual(1, Root.Children.Count);
+    Assert.AreEqual<Integer>(1, Root.Children.Count);
     Btn := Root.Children[0];
     Assert.AreEqual('Btn1',    Btn.Name);
     Assert.AreEqual('TButton', Btn.ClassRef);
@@ -151,7 +151,7 @@ begin
     'end');
   try
     Root := G.Roots[0];
-    Assert.AreEqual(2,   Root.Children.Count);
+    Assert.AreEqual<Integer>(2,   Root.Children.Count);
     Assert.AreEqual('A', Root.Children[0].Name);
     Assert.AreEqual('B', Root.Children[1].Name);
   finally
@@ -243,7 +243,7 @@ begin
   try
     Root := G.Roots[0];
     Assert.AreEqual('Form2', Root.Name);
-    Assert.AreEqual(0,       Root.Children.Count, 'Properties dürfen nicht als Children erscheinen');
+    Assert.AreEqual<Integer>(0,       Root.Children.Count, 'Properties dürfen nicht als Children erscheinen');
   finally
     G.Free;
   end;
@@ -266,7 +266,7 @@ begin
     'end');
   try
     Root := G.Roots[0];
-    Assert.AreEqual(1,     Root.Children.Count);
+    Assert.AreEqual<Integer>(1,     Root.Children.Count);
     Assert.AreEqual('Btn', Root.Children[0].Name);
   finally
     G.Free;
@@ -293,7 +293,7 @@ begin
     'end');
   try
     Root := G.Roots[0];
-    Assert.AreEqual(2,       Root.Children.Count);
+    Assert.AreEqual<Integer>(2,       Root.Children.Count);
     Assert.AreEqual('Memo1', Root.Children[0].Name);
     Assert.AreEqual('Memo2', Root.Children[1].Name);
   finally
@@ -315,7 +315,7 @@ begin
     'end');
   try
     Root := G.Roots[0];
-    Assert.AreEqual(1,        Root.Children.Count);
+    Assert.AreEqual<Integer>(1,        Root.Children.Count);
     Assert.AreEqual('Grid1',  Root.Children[0].Name);
   finally
     G.Free;
@@ -357,7 +357,7 @@ begin
     'end');
   try
     Root := G.Roots[0];
-    Assert.AreEqual(1,     Root.Children.Count);
+    Assert.AreEqual<Integer>(1,     Root.Children.Count);
     Assert.AreEqual('Btn', Root.Children[0].Name);
   finally
     G.Free;
@@ -381,8 +381,8 @@ begin
   try
     Root := G.Roots[0];
     Btn  := Root.Children[0];
-    Assert.AreEqual(1, Root.Line, 'Root-Objekt-Header in Zeile 1');
-    Assert.AreEqual(3, Btn.Line,  'Btn-Objekt-Header in Zeile 3');
+    Assert.AreEqual<Integer>(1, Root.Line, 'Root-Objekt-Header in Zeile 1');
+    Assert.AreEqual<Integer>(3, Btn.Line,  'Btn-Objekt-Header in Zeile 3');
   finally
     G.Free;
   end;
@@ -430,18 +430,18 @@ var
 begin
   G := ParseToGraph(SRC);
   try
-    Assert.AreEqual(1, G.Roots.Count);
+    Assert.AreEqual<Integer>(1, G.Roots.Count);
     Root := G.Roots[0];
     Assert.AreEqual('Form2', Root.Name);
-    Assert.AreEqual(2, Root.Children.Count, 'pnlTop + Memo1 als direkte Children');
+    Assert.AreEqual<Integer>(2, Root.Children.Count, 'pnlTop + Memo1 als direkte Children');
     Assert.AreEqual('pnlTop', Root.Children[0].Name);
     Assert.AreEqual('Memo1',  Root.Children[1].Name);
-    Assert.AreEqual(1, Root.Children[0].Children.Count, 'btnGo unter pnlTop');
+    Assert.AreEqual<Integer>(1, Root.Children[0].Children.Count, 'btnGo unter pnlTop');
     Assert.AreEqual('btnGo', Root.Children[0].Children[0].Name);
 
     All := G.EnumerateAll;
     try
-      Assert.AreEqual(4, All.Count, 'Form2, pnlTop, btnGo, Memo1');
+      Assert.AreEqual<Integer>(4, All.Count, 'Form2, pnlTop, btnGo, Memo1');
     finally
       All.Free;
     end;

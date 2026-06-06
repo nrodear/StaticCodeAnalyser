@@ -70,7 +70,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
   try
-    Assert.AreEqual(2, Count(F, fkDfmTabOrderConflict));
+    Assert.AreEqual<Integer>(2, Count(F, fkDfmTabOrderConflict));
   finally F.Free; end;
 end;
 
@@ -87,7 +87,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
   try
-    Assert.AreEqual(2, Count(F, fkDfmTabOrderConflict));
+    Assert.AreEqual<Integer>(2, Count(F, fkDfmTabOrderConflict));
   finally F.Free; end;
 end;
 
@@ -102,7 +102,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
   try
-    Assert.AreEqual(0, Count(F, fkDfmTabOrderConflict));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmTabOrderConflict));
   finally F.Free; end;
 end;
 
@@ -122,7 +122,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
   try
-    Assert.AreEqual(0, Count(F, fkDfmTabOrderConflict));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmTabOrderConflict));
   finally F.Free; end;
 end;
 
@@ -137,7 +137,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
   try
-    Assert.AreEqual(0, Count(F, fkDfmTabOrderConflict));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmTabOrderConflict));
   finally F.Free; end;
 end;
 
@@ -150,7 +150,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
   try
-    Assert.AreEqual(0, Count(F, fkDfmTabOrderConflict));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmTabOrderConflict));
   finally F.Free; end;
 end;
 
@@ -199,7 +199,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
   try
-    Assert.AreEqual(4, Count(F, fkDfmTabOrderConflict));
+    Assert.AreEqual<Integer>(4, Count(F, fkDfmTabOrderConflict));
   finally F.Free; end;
 end;
 
@@ -216,7 +216,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
   try
-    Assert.AreEqual(3, Count(F, fkDfmTabOrderConflict));
+    Assert.AreEqual<Integer>(3, Count(F, fkDfmTabOrderConflict));
   finally F.Free; end;
 end;
 

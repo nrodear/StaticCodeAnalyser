@@ -53,7 +53,7 @@ procedure TTestDfmLayerViolation.Test_EditDirectlyOnForm_Detected;
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn('object frmMain: TMainForm object ed: TEdit end end');
-  try Assert.AreEqual(1, Count(F, fkDfmLayerViolation));
+  try Assert.AreEqual<Integer>(1, Count(F, fkDfmLayerViolation));
   finally F.Free; end;
 end;
 
@@ -61,7 +61,7 @@ procedure TTestDfmLayerViolation.Test_DBEditDirectlyOnForm_Detected;
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn('object frmMain: TMainForm object ed: TDBEdit end end');
-  try Assert.AreEqual(1, Count(F, fkDfmLayerViolation));
+  try Assert.AreEqual<Integer>(1, Count(F, fkDfmLayerViolation));
   finally F.Free; end;
 end;
 
@@ -74,7 +74,7 @@ begin
     '    object ed: TEdit end'#13#10 +
     '  end'#13#10 +
     'end');
-  try Assert.AreEqual(0, Count(F, fkDfmLayerViolation));
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmLayerViolation));
   finally F.Free; end;
 end;
 
@@ -83,7 +83,7 @@ procedure TTestDfmLayerViolation.Test_PanelOnForm_NoFinding;
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn('object frmMain: TMainForm object pnl: TPanel end end');
-  try Assert.AreEqual(0, Count(F, fkDfmLayerViolation));
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmLayerViolation));
   finally F.Free; end;
 end;
 
@@ -93,7 +93,7 @@ procedure TTestDfmLayerViolation.Test_DataModuleRoot_Silent;
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn('object dm: TDataModule object ed: TEdit end end');
-  try Assert.AreEqual(0, Count(F, fkDfmLayerViolation));
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmLayerViolation));
   finally F.Free; end;
 end;
 
@@ -102,7 +102,7 @@ procedure TTestDfmLayerViolation.Test_ActionListOnForm_NoFinding;
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn('object frmMain: TMainForm object al: TActionList end end');
-  try Assert.AreEqual(0, Count(F, fkDfmLayerViolation));
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmLayerViolation));
   finally F.Free; end;
 end;
 
@@ -115,7 +115,7 @@ begin
     '  object ed2: TEdit end'#13#10 +
     '  object cb: TComboBox end'#13#10 +
     'end');
-  try Assert.AreEqual(3, Count(F, fkDfmLayerViolation));
+  try Assert.AreEqual<Integer>(3, Count(F, fkDfmLayerViolation));
   finally F.Free; end;
 end;
 
@@ -140,7 +140,7 @@ begin
     '    object ed: TEdit end'#13#10 +
     '  end'#13#10 +
     'end');
-  try Assert.AreEqual(0, Count(F, fkDfmLayerViolation));
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmLayerViolation));
   finally F.Free; end;
 end;
 

@@ -35,7 +35,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkTooLongLine));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTooLongLine));
   finally F.Free; end;
 end;
 
@@ -51,7 +51,7 @@ begin
   Line := Line + StringOfChar('A', 120) + #13#10;
   SRC := Line;
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkTooLongLine));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTooLongLine));
   finally F.Free; end;
 end;
 
@@ -63,7 +63,7 @@ begin
   // 121 Zeichen = ueber Schwelle
   SRC := 'unit t; implementation' + #13#10 + StringOfChar('A', 121) + #13#10;
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkTooLongLine));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTooLongLine));
   finally F.Free; end;
 end;
 
@@ -77,7 +77,7 @@ begin
          '  short'                + #13#10 +
          StringOfChar('B', 200) + #13#10;
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(2, TFindingHelper.Count(F, fkTooLongLine));
+  try Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkTooLongLine));
   finally F.Free; end;
 end;
 

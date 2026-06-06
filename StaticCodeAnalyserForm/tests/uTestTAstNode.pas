@@ -57,7 +57,7 @@ begin
   try
     Root.Add(nkUses, 'uses');
     Root.Add(nkInterface, 'interface');
-    Assert.AreEqual(2, Root.Children.Count);
+    Assert.AreEqual<Integer>(2, Root.Children.Count);
     Assert.AreEqual(nkUses,      Root.Children[0].Kind);
     Assert.AreEqual(nkInterface, Root.Children[1].Kind);
   finally
@@ -115,9 +115,9 @@ begin
     Root.Add(nkMethod, 'm1');
     Root.Add(nkMethod, 'm2');
     Root.Add(nkField,  'f1');
-    Assert.AreEqual(2, Root.ChildCount(nkMethod));
-    Assert.AreEqual(1, Root.ChildCount(nkField));
-    Assert.AreEqual(0, Root.ChildCount(nkBlock));
+    Assert.AreEqual<Integer>(2, Root.ChildCount(nkMethod));
+    Assert.AreEqual<Integer>(1, Root.ChildCount(nkField));
+    Assert.AreEqual<Integer>(0, Root.ChildCount(nkBlock));
   finally
     Root.Free;
   end;
@@ -174,9 +174,9 @@ begin
     Mid.Add(nkMethod, 'tief3');
 
     // 2 direkte Methods, 5 Methods im gesamten Subtree.
-    Assert.AreEqual(2, Root.DirectChildCount(nkMethod));
-    Assert.AreEqual(5, Root.ChildCount(nkMethod));
-    Assert.AreEqual(5, Root.DescendantCount(nkMethod));
+    Assert.AreEqual<Integer>(2, Root.DirectChildCount(nkMethod));
+    Assert.AreEqual<Integer>(5, Root.ChildCount(nkMethod));
+    Assert.AreEqual<Integer>(5, Root.DescendantCount(nkMethod));
   finally
     Root.Free;
   end;
@@ -215,8 +215,8 @@ var
 begin
   Root := TAstNode.Create(nkUnit);
   try
-    Assert.AreEqual(0, Root.ChildCount(nkBlock));
-    Assert.AreEqual(0, Root.DirectChildCount(nkBlock));
+    Assert.AreEqual<Integer>(0, Root.ChildCount(nkBlock));
+    Assert.AreEqual<Integer>(0, Root.DirectChildCount(nkBlock));
   finally
     Root.Free;
   end;
@@ -251,8 +251,8 @@ begin
 
     Dest.AdoptChildrenFrom(Source);
 
-    Assert.AreEqual(0, Source.Children.Count, 'Source muss leer sein');
-    Assert.AreEqual(3, Dest.Children.Count,   'Dest muss alle 3 haben');
+    Assert.AreEqual<Integer>(0, Source.Children.Count, 'Source muss leer sein');
+    Assert.AreEqual<Integer>(3, Dest.Children.Count,   'Dest muss alle 3 haben');
     Assert.AreEqual('a', Dest.Children[0].Name);
     Assert.AreEqual('b', Dest.Children[1].Name);
     Assert.AreEqual('c', Dest.Children[2].Name);

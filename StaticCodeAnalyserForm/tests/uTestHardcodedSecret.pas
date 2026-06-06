@@ -65,7 +65,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkHardcodedSecret),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkHardcodedSecret),
       'Passwort-Literal – Error');
   finally F.Free; end;
 end;
@@ -81,7 +81,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkHardcodedSecret),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkHardcodedSecret),
       'Token-Literal – Error');
   finally F.Free; end;
 end;
@@ -97,7 +97,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkHardcodedSecret),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkHardcodedSecret),
       'API-Key-Literal – Error');
   finally F.Free; end;
 end;
@@ -113,7 +113,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkHardcodedSecret),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret),
       'Passwort aus Funktion – kein Befund');
   finally F.Free; end;
 end;
@@ -129,7 +129,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkHardcodedSecret),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret),
       'Passwort aus Parameter – kein Befund');
   finally F.Free; end;
 end;
@@ -148,7 +148,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkHardcodedSecret),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret),
       'Leeres Stringliteral darf nicht als Secret gemeldet werden');
   finally F.Free; end;
 end;
@@ -164,7 +164,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkHardcodedSecret),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret),
       'Normaler String-Literal - kein Befund');
   finally F.Free; end;
 end;
@@ -183,7 +183,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkHardcodedSecret),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret),
       '"secretary" darf nicht als Secret-Pattern matchen');
   finally F.Free; end;
 end;
@@ -217,7 +217,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkHardcodedSecret),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret),
       'ConnectionString ohne Passwort-Anteil darf nicht gemeldet werden');
   finally F.Free; end;
 end;
@@ -233,7 +233,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkHardcodedSecret),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkHardcodedSecret),
       'ConnectionString mit Password= muss als Secret gemeldet werden');
   finally F.Free; end;
 end;
@@ -290,7 +290,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkHardcodedSecret));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret));
   finally F.Free; end;
 end;
 
@@ -357,7 +357,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(3, TFindingHelper.Count(F, fkHardcodedSecret));
+  try Assert.AreEqual<Integer>(3, TFindingHelper.Count(F, fkHardcodedSecret));
   finally F.Free; end;
 end;
 
@@ -374,7 +374,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkHardcodedSecret),
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret),
     'UPPER_SNAKE-Identifier sind Const-Marker, kein Secret');
   finally F.Free; end;
 end;
@@ -388,7 +388,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkHardcodedSecret));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret));
   finally F.Free; end;
 end;
 
@@ -401,7 +401,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkHardcodedSecret),
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkHardcodedSecret),
     'Mixed-Case-Field ist echte Secret-Zuweisung');
   finally F.Free; end;
 end;

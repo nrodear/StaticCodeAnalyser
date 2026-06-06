@@ -51,7 +51,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeClassMethod));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeClassMethod));
   finally F.Free; end;
 end;
 
@@ -65,7 +65,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeClassMethod));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeClassMethod));
   finally F.Free; end;
 end;
 
@@ -84,7 +84,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeClassMethod));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeClassMethod));
   finally F.Free; end;
 end;
 
@@ -103,7 +103,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeClassMethod));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeClassMethod));
   finally F.Free; end;
 end;
 
@@ -130,7 +130,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeClassMethod),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeClassMethod),
       'virtual mit Space davor MUSS als polymorph erkannt werden');
   finally F.Free; end;
 end;
@@ -170,7 +170,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkCanBeClassMethod));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeClassMethod));
   finally F.Free; end;
 end;
 

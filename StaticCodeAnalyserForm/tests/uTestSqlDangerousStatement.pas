@@ -114,7 +114,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
   finally F.Free; end;
 end;
 
@@ -127,7 +127,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
   finally F.Free; end;
 end;
 
@@ -141,7 +141,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
   finally F.Free; end;
 end;
 
@@ -155,7 +155,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
   finally F.Free; end;
 end;
 
@@ -224,7 +224,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
   finally F.Free; end;
 end;
 
@@ -242,7 +242,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
   finally F.Free; end;
 end;
 
@@ -258,7 +258,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
   finally F.Free; end;
 end;
 
@@ -275,7 +275,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
   finally F.Free; end;
 end;
 
@@ -290,7 +290,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
   finally F.Free; end;
 end;
 
@@ -304,7 +304,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSqlDangerousStatement));
   finally F.Free; end;
 end;
 
@@ -339,7 +339,7 @@ begin
       'begin msg := ''Update ' + Word + ' failed for record''; end;';
     Finds := TFindingHelper.FindingsOf(Source);
     try
-      Assert.AreEqual(0, TFindingHelper.Count(Finds, fkSqlDangerousStatement),
+      Assert.AreEqual<Integer>(0, TFindingHelper.Count(Finds, fkSqlDangerousStatement),
         Format('FP fuer NATO-Wort "%s" - "Update %s failed for record" ist kein SQL',
           [Word, Word]));
     finally
@@ -366,7 +366,7 @@ begin
       'begin msg := ''Delete ' + Word + ' not authorized''; end;';
     Finds := TFindingHelper.FindingsOf(Source);
     try
-      Assert.AreEqual(0, TFindingHelper.Count(Finds, fkSqlDangerousStatement),
+      Assert.AreEqual<Integer>(0, TFindingHelper.Count(Finds, fkSqlDangerousStatement),
         Format('FP fuer NATO-Wort "%s" - "Delete %s not authorized" ist kein SQL',
           [Word, Word]));
     finally

@@ -75,7 +75,7 @@ const DFM =
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
-  try Assert.AreEqual(1, Count(F, fkDfmMasterDetailUnlinked));
+  try Assert.AreEqual<Integer>(1, Count(F, fkDfmMasterDetailUnlinked));
   finally F.Free; end;
 end;
 
@@ -91,7 +91,7 @@ const DFM =
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
-  try Assert.AreEqual(1, Count(F, fkDfmMasterDetailUnlinked));
+  try Assert.AreEqual<Integer>(1, Count(F, fkDfmMasterDetailUnlinked));
   finally F.Free; end;
 end;
 
@@ -108,7 +108,7 @@ const DFM =
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
-  try Assert.AreEqual(2, Count(F, fkDfmMasterDetailUnlinked));
+  try Assert.AreEqual<Integer>(2, Count(F, fkDfmMasterDetailUnlinked));
   finally F.Free; end;
 end;
 
@@ -125,7 +125,7 @@ const DFM =
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
-  try Assert.AreEqual(0, Count(F, fkDfmMasterDetailUnlinked));
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmMasterDetailUnlinked));
   finally F.Free; end;
 end;
 
@@ -141,7 +141,7 @@ const DFM =
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
-  try Assert.AreEqual(0, Count(F, fkDfmMasterDetailUnlinked));
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmMasterDetailUnlinked));
   finally F.Free; end;
 end;
 
@@ -156,7 +156,7 @@ const DFM =
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
-  try Assert.AreEqual(0, Count(F, fkDfmMasterDetailUnlinked));
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmMasterDetailUnlinked));
   finally F.Free; end;
 end;
 
@@ -165,7 +165,7 @@ const DFM = 'object F: TF end';
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
-  try Assert.AreEqual(0, Count(F, fkDfmMasterDetailUnlinked));
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmMasterDetailUnlinked));
   finally F.Free; end;
 end;
 
@@ -228,7 +228,7 @@ const DFM =
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
-  try Assert.AreEqual(1, Count(F, fkDfmMasterDetailUnlinked));
+  try Assert.AreEqual<Integer>(1, Count(F, fkDfmMasterDetailUnlinked));
   finally F.Free; end;
 end;
 

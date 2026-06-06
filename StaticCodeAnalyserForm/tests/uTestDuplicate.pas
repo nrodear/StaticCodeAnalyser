@@ -63,7 +63,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkDuplicateString));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDuplicateString));
   finally F.Free; end;
 end;
 
@@ -79,7 +79,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkDuplicateString));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDuplicateString));
   finally F.Free; end;
 end;
 
@@ -96,7 +96,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkDuplicateString));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDuplicateString));
   finally F.Free; end;
 end;
 
@@ -113,7 +113,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkDuplicateString));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDuplicateString));
   finally F.Free; end;
 end;
 
@@ -131,7 +131,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkDuplicateString));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDuplicateString));
   finally F.Free; end;
 end;
 
@@ -148,7 +148,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkDuplicateString));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDuplicateString));
   finally F.Free; end;
 end;
 
@@ -168,7 +168,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(2, TFindingHelper.Count(F, fkDuplicateString));
+  try Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkDuplicateString));
   finally F.Free; end;
 end;
 
@@ -185,7 +185,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkDuplicateString));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDuplicateString));
   finally F.Free; end;
 end;
 
@@ -201,7 +201,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkDuplicateString));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDuplicateString));
   finally F.Free; end;
 end;
 
@@ -218,7 +218,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkDuplicateString));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDuplicateString));
   finally F.Free; end;
 end;
 
@@ -280,7 +280,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkDuplicateBlock));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDuplicateBlock));
   finally F.Free; end;
 end;
 
@@ -307,7 +307,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkDuplicateBlock));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDuplicateBlock));
   finally F.Free; end;
 end;
 
@@ -335,7 +335,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkDuplicateBlock));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDuplicateBlock));
   finally F.Free; end;
 end;
 
@@ -370,7 +370,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkDuplicateBlock),
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDuplicateBlock),
         'Block aus reinen if-Zeilen ist Branching-Boilerplate, soll geskippt werden');
   finally F.Free; end;
 end;
@@ -413,7 +413,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkDuplicateBlock),
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDuplicateBlock),
         'Block in 3 Methoden - genau 1 Befund (kein Mehrfach-Reporting)');
   finally F.Free; end;
 end;
@@ -446,7 +446,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkDuplicateBlock),
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDuplicateBlock),
         'Whitespace-Unterschiede sollen Duplikat-Erkennung nicht verhindern');
   finally F.Free; end;
 end;
@@ -479,7 +479,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkDuplicateBlock),
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDuplicateBlock),
         'Case-Unterschiede sollen Duplikat-Erkennung nicht verhindern');
   finally F.Free; end;
 end;
@@ -516,7 +516,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkDuplicateBlock),
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDuplicateBlock),
         'Kommentare zwischen Code-Zeilen sollen Duplikat-Erkennung nicht verhindern');
   finally F.Free; end;
 end;
@@ -552,7 +552,7 @@ var
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkDuplicateBlock));
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDuplicateBlock));
     FoundExpected := False;
     for Finding in F do
       if (Finding.Kind = fkDuplicateBlock) and (Finding.LineNumber = '3') then

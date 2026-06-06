@@ -81,7 +81,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkUseAfterFree));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUseAfterFree));
   finally F.Free; end;
 end;
 
@@ -98,7 +98,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkUseAfterFree));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUseAfterFree));
   finally F.Free; end;
 end;
 
@@ -114,7 +114,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkUseAfterFree));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUseAfterFree));
   finally F.Free; end;
 end;
 
@@ -133,7 +133,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkUseAfterFree));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUseAfterFree));
   finally F.Free; end;
 end;
 
@@ -186,7 +186,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkUseAfterFree),
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUseAfterFree),
     'CFG-Filter muss FP droppen weil Use nicht von Free aus reachable');
   finally F.Free; end;
 end;
@@ -209,7 +209,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkUseAfterFree));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUseAfterFree));
   finally F.Free; end;
 end;
 
@@ -231,7 +231,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkUseAfterFree),
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUseAfterFree),
     'Free als Field-Assignment muss ignoriert werden');
   finally F.Free; end;
 end;
@@ -253,7 +253,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkUseAfterFree),
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUseAfterFree),
     'Free mit Argument ist Method-Call, kein Destructor');
   finally F.Free; end;
 end;
@@ -289,7 +289,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkUseAfterFree),
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUseAfterFree),
     'try/if-Free/elseif-Use: CFG-Filter muss FP droppen');
   finally F.Free; end;
 end;

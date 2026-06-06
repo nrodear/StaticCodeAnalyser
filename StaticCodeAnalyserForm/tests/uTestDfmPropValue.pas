@@ -113,7 +113,7 @@ begin
   G := ParseRoot('object Form1: TForm'#10'  Width = 800'#10'end'#10);
   try
     N := G.Roots[0];
-    Assert.AreEqual(800, N.GetInteger('Width', 0));
+    Assert.AreEqual<Integer>(800, N.GetInteger('Width', 0));
   finally
     G.Free;
   end;

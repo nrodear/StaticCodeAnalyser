@@ -79,7 +79,7 @@ begin
     '  Password = ''s3cret'''#13#10 +
     'end');
   try
-    Assert.AreEqual(1, Count(F, fkDfmHardcodedDbCreds));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmHardcodedDbCreds));
   finally F.Free; end;
 end;
 
@@ -91,7 +91,7 @@ begin
     '  Password = ''pw'''#13#10 +
     'end');
   try
-    Assert.AreEqual(1, Count(F, fkDfmHardcodedDbCreds));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmHardcodedDbCreds));
   finally F.Free; end;
 end;
 
@@ -103,7 +103,7 @@ begin
     '  Password = ''masterkey'''#13#10 +
     'end');
   try
-    Assert.AreEqual(1, Count(F, fkDfmHardcodedDbCreds));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmHardcodedDbCreds));
   finally F.Free; end;
 end;
 
@@ -117,7 +117,7 @@ begin
     '  ConnectionString = ''Provider=X;User ID=u;Password=p;Data Source=db'''#13#10 +
     'end');
   try
-    Assert.AreEqual(1, Count(F, fkDfmHardcodedDbCreds));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmHardcodedDbCreds));
   finally F.Free; end;
 end;
 
@@ -129,7 +129,7 @@ begin
     '  ConnectionString = ''Driver=Y;UID=u;Pwd=p'''#13#10 +
     'end');
   try
-    Assert.AreEqual(1, Count(F, fkDfmHardcodedDbCreds));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmHardcodedDbCreds));
   finally F.Free; end;
 end;
 
@@ -141,7 +141,7 @@ begin
     '  ConnectionString = ''Server=X;password=secret'''#13#10 +
     'end');
   try
-    Assert.AreEqual(1, Count(F, fkDfmHardcodedDbCreds));
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmHardcodedDbCreds));
   finally F.Free; end;
 end;
 
@@ -154,7 +154,7 @@ begin
     '  ConnectionString = ''Server=X;Password=q'''#13#10 +
     'end');
   try
-    Assert.AreEqual(2, Count(F, fkDfmHardcodedDbCreds));
+    Assert.AreEqual<Integer>(2, Count(F, fkDfmHardcodedDbCreds));
   finally F.Free; end;
 end;
 
@@ -168,7 +168,7 @@ begin
     '  Password = '''''#13#10 +
     'end');
   try
-    Assert.AreEqual(0, Count(F, fkDfmHardcodedDbCreds));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmHardcodedDbCreds));
   finally F.Free; end;
 end;
 
@@ -181,7 +181,7 @@ begin
     '  ConnectionString = ''Provider=X;Integrated Security=SSPI'''#13#10 +
     'end');
   try
-    Assert.AreEqual(0, Count(F, fkDfmHardcodedDbCreds));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmHardcodedDbCreds));
   finally F.Free; end;
 end;
 
@@ -195,7 +195,7 @@ begin
     '  Password = ''s3cret'''#13#10 +
     'end');
   try
-    Assert.AreEqual(0, Count(F, fkDfmHardcodedDbCreds));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmHardcodedDbCreds));
   finally F.Free; end;
 end;
 
@@ -209,7 +209,7 @@ begin
     '  Password = ''s3cret'''#13#10 +
     'end');
   try
-    Assert.AreEqual(0, Count(F, fkDfmHardcodedDbCreds));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmHardcodedDbCreds));
   finally F.Free; end;
 end;
 

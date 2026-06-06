@@ -35,7 +35,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkTrailingWhitespace));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTrailingWhitespace));
   finally F.Free; end;
 end;
 
@@ -47,7 +47,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkTrailingWhitespace));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTrailingWhitespace));
   finally F.Free; end;
 end;
 
@@ -63,7 +63,7 @@ begin
     // Diese Zeile hat sowohl ein internes Tab NICHT (kein fkTabulationCharacter
     // erwartet) als auch trailing-Tab (fkTrailingWhitespace = 1). Tab steht
     // hinter dem ';', also ist die Zeile auch tab-trailing.
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkTrailingWhitespace));
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTrailingWhitespace));
   finally F.Free; end;
 end;
 
@@ -76,7 +76,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkTrailingWhitespace));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTrailingWhitespace));
   finally F.Free; end;
 end;
 
@@ -91,7 +91,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkTrailingWhitespace));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTrailingWhitespace));
   finally F.Free; end;
 end;
 

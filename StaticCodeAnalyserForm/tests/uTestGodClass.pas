@@ -84,7 +84,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkGodClass));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkGodClass));
   finally F.Free; end;
 end;
 
@@ -106,7 +106,7 @@ begin
     SB.AppendLine('  end;');
     SB.AppendLine('implementation end.');
     F := TFindingHelper.FindingsOf(SB.ToString);
-    try Assert.AreEqual(0, TFindingHelper.Count(F, fkGodClass));
+    try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkGodClass));
     finally F.Free; end;
   finally
     SB.Free;

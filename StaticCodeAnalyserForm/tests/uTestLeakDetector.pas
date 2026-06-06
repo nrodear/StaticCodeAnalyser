@@ -170,7 +170,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'list ohne Free soll als Error gemeldet werden');
   finally F.Free; end;
 end;
@@ -192,7 +192,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'list in finally freigegeben – kein Befund');
   finally F.Free; end;
 end;
@@ -216,9 +216,9 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
       'list.Free außerhalb finally – Warning');
-    Assert.AreEqual(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'other korrekt freigegeben – kein Error');
   finally F.Free; end;
 end;
@@ -237,7 +237,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Ownership über Result abgegeben – kein Befund');
   finally F.Free; end;
 end;
@@ -261,7 +261,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Legacy <FuncName> := r ist Ownership-Transfer wie Result := r');
   finally F.Free; end;
 end;
@@ -284,7 +284,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Exit(list) gibt Ownership weiter - kein Leak');
   finally F.Free; end;
 end;
@@ -303,7 +303,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Exit(L as IInterface) ist Ownership-Transfer mit Cast');
   finally F.Free; end;
 end;
@@ -321,7 +321,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'stream an inherited Create übergeben – kein Befund');
   finally F.Free; end;
 end;
@@ -339,7 +339,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
       'Funktionsaufruf-Zuweisung ohne Free – Warning');
   finally F.Free; end;
 end;
@@ -361,7 +361,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Funktionsaufruf mit Free in finally – kein Befund');
   finally F.Free; end;
 end;
@@ -385,7 +385,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'VarNames korrekt freigegeben – kein Befund (kein false positive)');
   finally F.Free; end;
 end;
@@ -405,7 +405,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(2, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(2, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'a und b nie freigegeben – beide als Error');
   finally F.Free; end;
 end;
@@ -430,7 +430,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'list nie freigegeben – Error; blacklist korrekt – kein zweiter Befund');
   finally F.Free; end;
 end;
@@ -454,7 +454,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'list nie freigegeben – FreeAndNil(listExtra) darf nicht zählen');
   finally F.Free; end;
 end;
@@ -474,7 +474,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'list := nil ohne Free – Error');
   finally F.Free; end;
 end;
@@ -502,7 +502,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Reassignment-Lost-Ref wird vom Detektor nicht erkannt (known limitation)');
   finally F.Free; end;
 end;
@@ -533,7 +533,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Field-Receiver mit .Add() faellt auf permissive Default zurueck');
   finally F.Free; end;
 end;
@@ -594,7 +594,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'ParseFilesAllClasses: alle Vars korrekt im finally freigegeben – kein Befund');
   finally F.Free; end;
 end;
@@ -618,7 +618,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'TObjectList<T> in finally freigegeben – kein Befund');
   finally F.Free; end;
 end;
@@ -643,7 +643,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Dotted-no-parens RHS = Borrowed-Reference, kein Befund');
   finally F.Free; end;
 end;
@@ -684,7 +684,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Lst und Counts werden im aeusseren finally freigegeben - kein Befund');
   finally F.Free; end;
 end;
@@ -706,7 +706,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'stream wird an inherited Create uebergeben - kein Befund');
   finally F.Free; end;
 end;
@@ -726,7 +726,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'list an dotted inherited-Call uebergeben - kein Befund');
   finally F.Free; end;
 end;
@@ -747,7 +747,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'inline-var ohne Free muss als Leak (lsError) gemeldet werden');
   finally F.Free; end;
 end;
@@ -769,7 +769,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'inline-var mit Free in finally - kein Befund');
   finally F.Free; end;
 end;
@@ -800,7 +800,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'lst korrekt freigegeben trotz anonymer Methode in der RHS');
   finally F.Free; end;
 end;
@@ -827,7 +827,7 @@ begin
   ]);
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Borrowed-Reference (Self.FList) darf nicht als Leak gemeldet werden');
   finally F.Free; end;
 end;
@@ -888,7 +888,7 @@ begin
   ]);
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       '.Created (Property/Field-Suffix in lowercase) darf nicht als Konstruktor erkannt werden');
   finally F.Free; end;
 end;
@@ -927,7 +927,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Lst und Counts in aeusserem finally, AllNodes in eigenem inneren finally - kein Befund');
   finally F.Free; end;
 end;
@@ -947,7 +947,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'TFileStream nie freigegeben – Error');
   finally F.Free; end;
 end;
@@ -969,7 +969,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'TMemoryStream in finally freigegeben – kein Befund');
   finally F.Free; end;
 end;
@@ -987,7 +987,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'TBitmap nie freigegeben – Error');
   finally F.Free; end;
 end;
@@ -1009,7 +1009,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'TIniFile.Destroy in finally – kein Befund');
   finally F.Free; end;
 end;
@@ -1027,7 +1027,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'TStreamReader nie freigegeben – Error');
   finally F.Free; end;
 end;
@@ -1049,7 +1049,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'TStreamWriter in finally freigegeben – kein Befund');
   finally F.Free; end;
 end;
@@ -1067,7 +1067,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'TRegistry nie freigegeben – Error');
   finally F.Free; end;
 end;
@@ -1085,7 +1085,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'TStringStream nie freigegeben – Error');
   finally F.Free; end;
 end;
@@ -1103,7 +1103,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'Kurzer Variablenname sl – Error');
   finally F.Free; end;
 end;
@@ -1124,7 +1124,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'Create in for-Schleife ohne Free – Error');
   finally F.Free; end;
 end;
@@ -1148,9 +1148,9 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'b nie freigegeben – 1 Error; a korrekt – kein zweiter Befund');
-    Assert.AreEqual(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
       'a in finally freigegeben – kein Warning');
   finally F.Free; end;
 end;
@@ -1173,7 +1173,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
       'Free im try-Rumpf statt finally – Warning');
   finally F.Free; end;
 end;
@@ -1195,7 +1195,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       '.Destroy in finally zählt als Freigabe – kein Befund');
   finally F.Free; end;
 end;
@@ -1217,7 +1217,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Create vor try, FreeAndNil in finally – kein Befund');
   finally F.Free; end;
 end;
@@ -1243,7 +1243,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Drei Variablen alle in finally freigegeben – kein Befund');
   finally F.Free; end;
 end;
@@ -1260,7 +1260,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Deklariert aber nie erzeugt – kein Befund');
   finally F.Free; end;
 end;
@@ -1281,7 +1281,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'Create in while-Schleife ohne Free – Error');
   finally F.Free; end;
 end;
@@ -1303,7 +1303,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Funktionsrückgabe in finally freigegeben – kein Befund');
   finally F.Free; end;
 end;
@@ -1325,7 +1325,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Parameterlose Factory-Methode in finally freigegeben – kein Befund');
   finally F.Free; end;
 end;
@@ -1362,7 +1362,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'Bedingtes Create ohne Free – Error');
   finally F.Free; end;
 end;
@@ -1387,7 +1387,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'FreeAndNil(listmore) zählt nicht für list – list als Error');
   finally F.Free; end;
 end;
@@ -1412,7 +1412,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'streamdata.Free zählt nicht für stream – stream als Error');
   finally F.Free; end;
 end;
@@ -1438,7 +1438,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Verschachteltes try/except im try/finally – kein Befund');
   finally F.Free; end;
 end;
@@ -1460,7 +1460,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Create im try-Rumpf, Free in finally – kein Befund');
   finally F.Free; end;
 end;
@@ -1479,7 +1479,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'inherited Create(stream) – Ownership-Transfer, kein Befund');
   finally F.Free; end;
 end;
@@ -1499,7 +1499,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(3, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(3, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'Drei verschiedene Typen, alle nie freigegeben – 3 Errors');
   finally F.Free; end;
 end;
@@ -1524,9 +1524,9 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
       'list.Free nach try/finally – Warning');
-    Assert.AreEqual(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'other korrekt freigegeben – kein Error');
   finally F.Free; end;
 end;
@@ -1550,7 +1550,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'src und dst beide in finally freigegeben – kein Befund');
   finally F.Free; end;
 end;
@@ -1579,7 +1579,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'result1 nie freigegeben – 1 Error; lines korrekt – kein zweiter');
   finally F.Free; end;
 end;
@@ -1610,7 +1610,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'list ohne Free trotz Tippfehler -> Error');
   finally F.Free; end;
 end;
@@ -1631,7 +1631,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'list := nil ohne vorheriges Free -> Error');
   finally F.Free; end;
 end;
@@ -1658,7 +1658,7 @@ begin
     // Aktueller String-Detektor sieht 'list.Free' im Body und denkt OK.
     // Das ist eine bekannte Limitation - wir dokumentieren das current
     // behavior: KEINE Befund. TODO: Order-of-Operations-aware Detector.
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Detektor erkennt Free-vor-Create-Reihenfolge nicht (known limitation)');
   finally F.Free; end;
 end;
@@ -1679,7 +1679,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'lokale list nicht freigegeben (Field freigegeben statt Local)');
   finally F.Free; end;
 end;
@@ -1704,7 +1704,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'doppeltes FreeAndNil ist safe -> kein Befund');
   finally F.Free; end;
 end;
@@ -1738,7 +1738,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Free-nur-im-except wird vom Detektor nicht erkannt (known limitation)');
   finally F.Free; end;
 end;
@@ -1762,7 +1762,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'FreeAndNil mit Whitespace soll ohne Befund durchgehen');
   finally F.Free; end;
 end;
@@ -1791,7 +1791,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Detektor erkennt verlorene-Referenz-Reassignment nicht (known limitation)');
   finally F.Free; end;
 end;
@@ -1814,7 +1814,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Pfad-abhaengiger Free ist not detected (known limitation)');
   finally F.Free; end;
 end;
@@ -1837,7 +1837,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Use-After-Free wird vom Leak-Detektor nicht erkannt (known limitation)');
   finally F.Free; end;
 end;
@@ -1865,7 +1865,7 @@ begin
   try
     // 'other := list' wird vom Var-zu-Field-Heuristik-Pattern nicht
     // erfasst (other ist kein Feld). Kein Free auf 'list' selbst -> Error.
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'list ohne direktes Free -> Error (Aliasing nicht erkannt)');
   finally F.Free; end;
 end;
@@ -1890,7 +1890,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Double-Free via Aliasing nicht detected (known limitation)');
   finally F.Free; end;
 end;
@@ -1914,7 +1914,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'if Assigned(list) then list.Free ist gueltiges Free');
   finally F.Free; end;
 end;
@@ -1934,7 +1934,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'list zu FField transferiert -> kein Local-Leak');
   finally F.Free; end;
 end;
@@ -1954,7 +1954,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Self.FList := list -> kein Local-Leak');
   finally F.Free; end;
 end;
@@ -1974,7 +1974,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'FField := var as IInterface -> kein Local-Leak');
   finally F.Free; end;
 end;
@@ -1995,7 +1995,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Borrowed-Return aus .Add(...) ist kein Leak');
   finally F.Free; end;
 end;
@@ -2014,7 +2014,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Borrowed-Return aus .AddChild(...) ist kein Leak');
   finally F.Free; end;
 end;
@@ -2042,7 +2042,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Create-im-try mit Free-im-finally -> kein Leak-Befund');
   finally F.Free; end;
 end;
@@ -2071,7 +2071,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Verschachteltes try/finally, beide freigegeben -> kein Befund');
   finally F.Free; end;
 end;
@@ -2097,7 +2097,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'inner ohne Free -> ein Error');
   finally F.Free; end;
 end;
@@ -2122,7 +2122,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'try/except ohne Free -> Error');
   finally F.Free; end;
 end;
@@ -2149,7 +2149,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'drei Vars alle freigegeben -> kein Befund');
   finally F.Free; end;
 end;
@@ -2176,7 +2176,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'c ohne Free -> ein Error');
   finally F.Free; end;
 end;
@@ -2202,9 +2202,9 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
       'list.Free ausserhalb finally -> Warning');
-    Assert.AreEqual(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'other korrekt im finally -> kein Error');
   finally F.Free; end;
 end;
@@ -2231,7 +2231,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'TObjectList.Add(item) -> ownership erkannt, kein Leak fuer item');
   finally F.Free; end;
 end;
@@ -2260,7 +2260,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'TList.Add ist kein Ownership-Transfer -> item leak'#13#10+
       'wird gemeldet');
   finally F.Free; end;
@@ -2286,7 +2286,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'TObjectDictionary.Add(key, val) -> ownership erkannt');
   finally F.Free; end;
 end;
@@ -2311,7 +2311,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'AddObject(text, obj) wird als Ownership-Transfer erkannt');
   finally F.Free; end;
 end;
@@ -2335,7 +2335,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       '.Push(item) wird als Ownership-Transfer erkannt');
   finally F.Free; end;
 end;
@@ -2367,7 +2367,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak));
   finally F.Free; end;
 end;
 
@@ -2393,7 +2393,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+  try Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
         'FList wird nie freigegeben - genau ein Field-Leak');
   finally F.Free; end;
 end;
@@ -2421,7 +2421,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak));
   finally F.Free; end;
 end;
 
@@ -2442,7 +2442,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+  try Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
         'Ohne Destruktor laeuft FList am Ende leak');
   finally F.Free; end;
 end;
@@ -2471,7 +2471,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak));
   finally F.Free; end;
 end;
 
@@ -2494,7 +2494,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak));
   finally F.Free; end;
 end;
 
@@ -2520,7 +2520,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+  try Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
         'Self-qualifizierte Zuweisung muss erkannt werden');
   finally F.Free; end;
 end;
@@ -2550,7 +2550,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+  try Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
         'FStream nicht freigegeben, FList schon');
   finally F.Free; end;
 end;
@@ -2578,7 +2578,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkMemoryLeak));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak));
   finally F.Free; end;
 end;
 
@@ -2612,7 +2612,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+  try Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
         'Nur TBad leakt - genau ein Befund');
   finally F.Free; end;
 end;

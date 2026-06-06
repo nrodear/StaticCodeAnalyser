@@ -92,7 +92,7 @@ const DFM =
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunDbInUiThenAggregate(DFM);
-  try Assert.AreEqual(1, Count(F, fkDfmDataModuleSplitHint));
+  try Assert.AreEqual<Integer>(1, Count(F, fkDfmDataModuleSplitHint));
   finally F.Free; end;
 end;
 
@@ -167,7 +167,7 @@ const DFM =
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunDbInUiThenAggregate(DFM);
-  try Assert.AreEqual(0, Count(F, fkDfmDataModuleSplitHint));
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmDataModuleSplitHint));
   finally F.Free; end;
 end;
 
@@ -183,7 +183,7 @@ const DFM =
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunDbInUiThenAggregate(DFM);
-  try Assert.AreEqual(0, Count(F, fkDfmDataModuleSplitHint));
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmDataModuleSplitHint));
   finally F.Free; end;
 end;
 
@@ -196,7 +196,7 @@ const DFM =
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunDbInUiThenAggregate(DFM);
-  try Assert.AreEqual(0, Count(F, fkDfmDataModuleSplitHint));
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmDataModuleSplitHint));
   finally F.Free; end;
 end;
 
@@ -212,7 +212,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   DetectorMaxDbInUiFormHint := 2;
   F := RunDbInUiThenAggregate(DFM);
-  try Assert.AreEqual(1, Count(F, fkDfmDataModuleSplitHint),
+  try Assert.AreEqual<Integer>(1, Count(F, fkDfmDataModuleSplitHint),
     'Threshold=2 macht 2 Komponenten zum Treffer');
   finally F.Free; end;
 end;
@@ -284,9 +284,9 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunDbInUiThenAggregate(DFM);
   try
-    Assert.AreEqual(3, Count(F, fkDfmDbInUiForm),
+    Assert.AreEqual<Integer>(3, Count(F, fkDfmDbInUiForm),
       'Drei Einzel-DbInUiForm-Findings bleiben');
-    Assert.AreEqual(1, Count(F, fkDfmDataModuleSplitHint),
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmDataModuleSplitHint),
       'Plus ein Aggregat-Hint');
   finally F.Free; end;
 end;

@@ -89,7 +89,7 @@ begin
   try
     TCustomRuleDetector.AnalyzeFile('test.pas',
       'unit Foo;'#10'  q := TADOQuery.Create;'#10, Findings);
-    Assert.AreEqual(1, CountByRule(Findings, 'R001'));
+    Assert.AreEqual<Integer>(1, CountByRule(Findings, 'R001'));
   finally Findings.Free; end;
 end;
 
@@ -102,7 +102,7 @@ begin
   try
     TCustomRuleDetector.AnalyzeFile('test.pas',
       'unit Foo;'#10'  q := TFDQuery.Create;'#10, Findings);
-    Assert.AreEqual(0, CountByRule(Findings, 'R001'));
+    Assert.AreEqual<Integer>(0, CountByRule(Findings, 'R001'));
   finally Findings.Free; end;
 end;
 
@@ -117,7 +117,7 @@ begin
     TCustomRuleDetector.AnalyzeFile('test.pas',
       'var Sleeper: TFoo;'#10'  Sleep(100);'#10'OverSleep := True;'#10,
       Findings);
-    Assert.AreEqual(1, CountByRule(Findings, 'R002'),
+    Assert.AreEqual<Integer>(1, CountByRule(Findings, 'R002'),
       'Nur das echte Sleep( als Wort - Sleeper / OverSleep nicht');
   finally Findings.Free; end;
 end;
@@ -132,7 +132,7 @@ begin
     TCustomRuleDetector.AnalyzeFile('test.pas',
       'DeprecatedFoo := 1;'#10'DeprecatedBar := 2;'#10'Other := 3;'#10,
       Findings);
-    Assert.AreEqual(2, CountByRule(Findings, 'R003'));
+    Assert.AreEqual<Integer>(2, CountByRule(Findings, 'R003'));
   finally Findings.Free; end;
 end;
 

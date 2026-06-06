@@ -117,7 +117,7 @@ var
 begin
   Toks := CollectTokens('object Form2: TForm2'#13#10'end');
   try
-    Assert.AreEqual(6, Toks.Count, 'erwartet: object Form2 : TForm2 end EOF');
+    Assert.AreEqual<Integer>(6, Toks.Count, 'erwartet: object Form2 : TForm2 end EOF');
     Assert.AreEqual(tkKwObject, Toks[0].Kind);
     Assert.AreEqual(tkIdent,    Toks[1].Kind);
     Assert.AreEqual('Form2',    Toks[1].Value);
@@ -153,8 +153,8 @@ begin
       if Toks[I].Kind = tkKwObject then Inc(ObjectCount);
       if Toks[I].Kind = tkKwEnd    then Inc(EndCount);
     end;
-    Assert.AreEqual(4, ObjectCount, 'vier object-Header');
-    Assert.AreEqual(4, EndCount,    'vier end-Tokens');
+    Assert.AreEqual<Integer>(4, ObjectCount, 'vier object-Header');
+    Assert.AreEqual<Integer>(4, EndCount,    'vier end-Tokens');
   finally
     Toks.Free;
   end;
@@ -538,9 +538,9 @@ begin
     end;
     // Quelle enthält Form2 / pnlTop / btnGo / Memo1 = 4 object-Header,
     // dazu jeweils ein end -> 4 / 4.
-    Assert.AreEqual(4, ObjectCount, 'Form2/pnlTop/btnGo/Memo1 = 4 object-Header');
-    Assert.AreEqual(4, EndCount,    'gleiche Anzahl end');
-    Assert.AreEqual(0, UnknownCount, 'keinerlei unerkanntes Token');
+    Assert.AreEqual<Integer>(4, ObjectCount, 'Form2/pnlTop/btnGo/Memo1 = 4 object-Header');
+    Assert.AreEqual<Integer>(4, EndCount,    'gleiche Anzahl end');
+    Assert.AreEqual<Integer>(0, UnknownCount, 'keinerlei unerkanntes Token');
   finally
     Toks.Free;
   end;

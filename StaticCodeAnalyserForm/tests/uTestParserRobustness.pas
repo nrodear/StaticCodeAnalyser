@@ -62,7 +62,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
       'Leak in Methode nach Interface-Decl muss erkannt werden');
   finally F.Free; end;
 end;
@@ -89,7 +89,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
       'Leak in qualifizierter Generic-Methode muss erkannt werden');
   finally F.Free; end;
 end;
@@ -115,7 +115,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
       'DoIt vor Generic-Method muss als Leak erkannt werden');
   finally F.Free; end;
 end;
@@ -142,7 +142,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
       'Leak nach packed record muss erkannt werden');
   finally F.Free; end;
 end;
@@ -169,7 +169,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
       'Leak in Methode mit label-Section muss erkannt werden');
   finally F.Free; end;
 end;
@@ -199,7 +199,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
       'Leak nach record helper muss erkannt werden');
   finally F.Free; end;
 end;
@@ -231,7 +231,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
       'Leak darf nicht durch Phantom-Methoden-Duplikat verdoppelt werden');
   finally F.Free; end;
 end;
@@ -258,7 +258,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
       'Leak nach inline-record-Var-Typ muss erkannt werden');
   finally F.Free; end;
 end;
@@ -283,7 +283,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
       'Leak nach nested-inline-record muss erkannt werden');
   finally F.Free; end;
 end;
@@ -307,7 +307,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkMemoryLeak),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
       'Leak nach Single-Line inline-record muss erkannt werden');
   finally F.Free; end;
 end;

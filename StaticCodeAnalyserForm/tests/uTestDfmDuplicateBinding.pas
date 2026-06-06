@@ -86,7 +86,7 @@ begin
     '  end'#13#10 +
     'end');
   try
-    Assert.AreEqual(2, Count(F, fkDfmDuplicateBinding));
+    Assert.AreEqual<Integer>(2, Count(F, fkDfmDuplicateBinding));
   finally F.Free; end;
 end;
 
@@ -100,7 +100,7 @@ begin
     '  object ed3: TDBEdit DataSource = ds DataField = ''X'' end'#13#10 +
     'end');
   try
-    Assert.AreEqual(3, Count(F, fkDfmDuplicateBinding));
+    Assert.AreEqual<Integer>(3, Count(F, fkDfmDuplicateBinding));
   finally F.Free; end;
 end;
 
@@ -115,7 +115,7 @@ begin
     '  object ed2: TDBEdit DataSource = ds DataField = ''total'' end'#13#10 +
     'end');
   try
-    Assert.AreEqual(2, Count(F, fkDfmDuplicateBinding));
+    Assert.AreEqual<Integer>(2, Count(F, fkDfmDuplicateBinding));
   finally F.Free; end;
 end;
 
@@ -134,7 +134,7 @@ begin
     '  end'#13#10 +
     'end');
   try
-    Assert.AreEqual(2, Count(F, fkDfmDuplicateBinding));
+    Assert.AreEqual<Integer>(2, Count(F, fkDfmDuplicateBinding));
   finally F.Free; end;
 end;
 
@@ -150,7 +150,7 @@ begin
     '  object e4: TDBEdit DataSource = ds DataField = ''B'' end'#13#10 +
     'end');
   try
-    Assert.AreEqual(4, Count(F, fkDfmDuplicateBinding));
+    Assert.AreEqual<Integer>(4, Count(F, fkDfmDuplicateBinding));
   finally F.Free; end;
 end;
 
@@ -165,7 +165,7 @@ begin
     '  object e2: TDBEdit DataSource = ds DataField = ''B'' end'#13#10 +
     'end');
   try
-    Assert.AreEqual(0, Count(F, fkDfmDuplicateBinding));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmDuplicateBinding));
   finally F.Free; end;
 end;
 
@@ -178,7 +178,7 @@ begin
     '  object e2: TDBEdit DataSource = ds2 DataField = ''X'' end'#13#10 +
     'end');
   try
-    Assert.AreEqual(0, Count(F, fkDfmDuplicateBinding));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmDuplicateBinding));
   finally F.Free; end;
 end;
 
@@ -190,7 +190,7 @@ begin
     '  object e1: TDBEdit DataSource = ds DataField = ''X'' end'#13#10 +
     'end');
   try
-    Assert.AreEqual(0, Count(F, fkDfmDuplicateBinding));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmDuplicateBinding));
   finally F.Free; end;
 end;
 
@@ -204,7 +204,7 @@ begin
     '  object e2: TDBEdit DataField = ''X'' end'#13#10 +
     'end');
   try
-    Assert.AreEqual(0, Count(F, fkDfmDuplicateBinding));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmDuplicateBinding));
   finally F.Free; end;
 end;
 
@@ -217,7 +217,7 @@ begin
     '  object e2: TDBEdit DataSource = ds end'#13#10 +
     'end');
   try
-    Assert.AreEqual(0, Count(F, fkDfmDuplicateBinding));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmDuplicateBinding));
   finally F.Free; end;
 end;
 
@@ -230,7 +230,7 @@ begin
     '  object e2: TDBEdit DataSource = ds DataField = '''' end'#13#10 +
     'end');
   try
-    Assert.AreEqual(0, Count(F, fkDfmDuplicateBinding));
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmDuplicateBinding));
   finally F.Free; end;
 end;
 

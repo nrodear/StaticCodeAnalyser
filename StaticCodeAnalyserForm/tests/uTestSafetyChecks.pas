@@ -109,7 +109,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkNilDeref));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref));
   finally F.Free; end;
 end;
 
@@ -126,7 +126,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkNilDeref));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref));
   finally F.Free; end;
 end;
 
@@ -187,7 +187,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkMissingFinally));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMissingFinally));
   finally F.Free; end;
 end;
 
@@ -225,7 +225,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkMissingFinally));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMissingFinally));
   finally F.Free; end;
 end;
 
@@ -305,7 +305,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkDivByZero));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero));
   finally F.Free; end;
 end;
 
@@ -321,7 +321,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkDivByZero));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero));
   finally F.Free; end;
 end;
 
@@ -334,7 +334,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkDivByZero));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero));
   finally F.Free; end;
 end;
 
@@ -354,7 +354,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkDeadCode));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeadCode));
   finally F.Free; end;
 end;
 
@@ -386,7 +386,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkDeadCode));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeadCode));
   finally F.Free; end;
 end;
 

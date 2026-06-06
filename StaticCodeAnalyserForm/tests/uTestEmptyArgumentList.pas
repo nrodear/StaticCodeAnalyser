@@ -38,7 +38,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkEmptyArgumentList));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkEmptyArgumentList));
   finally F.Free; end;
 end;
 
@@ -52,7 +52,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkEmptyArgumentList));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkEmptyArgumentList));
   finally F.Free; end;
 end;
 
@@ -67,7 +67,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkEmptyArgumentList));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkEmptyArgumentList));
   finally F.Free; end;
 end;
 
@@ -83,7 +83,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkEmptyArgumentList));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkEmptyArgumentList));
   finally F.Free; end;
 end;
 
@@ -98,7 +98,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkEmptyArgumentList));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkEmptyArgumentList));
   finally F.Free; end;
 end;
 
@@ -111,7 +111,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkEmptyArgumentList));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkEmptyArgumentList));
   finally F.Free; end;
 end;
 
@@ -124,7 +124,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkEmptyArgumentList));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkEmptyArgumentList));
   finally F.Free; end;
 end;
 

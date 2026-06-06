@@ -53,7 +53,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkVirtualCallInCtor));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkVirtualCallInCtor));
   finally F.Free; end;
 end;
 
@@ -72,7 +72,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkVirtualCallInCtor));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkVirtualCallInCtor));
   finally F.Free; end;
 end;
 
@@ -99,7 +99,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(2, TFindingHelper.Count(F, fkVirtualCallInCtor),
+  try Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkVirtualCallInCtor),
     'Zwei virtuelle Calls im Ctor -> zwei Findings');
   finally F.Free; end;
 end;
@@ -119,7 +119,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkVirtualCallInCtor));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkVirtualCallInCtor));
   finally F.Free; end;
 end;
 
@@ -138,7 +138,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkVirtualCallInCtor));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkVirtualCallInCtor));
   finally F.Free; end;
 end;
 
@@ -158,7 +158,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkVirtualCallInCtor));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkVirtualCallInCtor));
   finally F.Free; end;
 end;
 
@@ -178,7 +178,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkVirtualCallInCtor));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkVirtualCallInCtor));
   finally F.Free; end;
 end;
 
@@ -199,7 +199,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkVirtualCallInCtor));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkVirtualCallInCtor));
   finally F.Free; end;
 end;
 
@@ -219,7 +219,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkVirtualCallInCtor));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkVirtualCallInCtor));
   finally F.Free; end;
 end;
 

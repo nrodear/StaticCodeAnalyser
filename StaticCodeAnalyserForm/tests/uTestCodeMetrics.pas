@@ -107,7 +107,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkLongParamList));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLongParamList));
   finally F.Free; end;
 end;
 
@@ -119,7 +119,7 @@ const SRC =
 var Findings: TObjectList<TLeakFinding>;
 begin
   Findings := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(Findings, fkLongParamList));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(Findings, fkLongParamList));
   finally Findings.Free; end;
 end;
 
@@ -131,7 +131,7 @@ const SRC =
 var Findings: TObjectList<TLeakFinding>;
 begin
   Findings := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(Findings, fkLongParamList));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(Findings, fkLongParamList));
   finally Findings.Free; end;
 end;
 
@@ -143,7 +143,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkLongParamList));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLongParamList));
   finally F.Free; end;
 end;
 
@@ -155,7 +155,7 @@ const SRC =
 var Findings: TObjectList<TLeakFinding>;
 begin
   Findings := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(Findings, fkLongParamList));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(Findings, fkLongParamList));
   finally Findings.Free; end;
 end;
 
@@ -167,7 +167,7 @@ const SRC =
 var Findings: TObjectList<TLeakFinding>;
 begin
   Findings := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(Findings, fkLongParamList));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(Findings, fkLongParamList));
   finally Findings.Free; end;
 end;
 
@@ -179,7 +179,7 @@ const SRC =
 var Findings: TObjectList<TLeakFinding>;
 begin
   Findings := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(Findings, fkLongParamList));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(Findings, fkLongParamList));
   finally Findings.Free; end;
 end;
 
@@ -191,7 +191,7 @@ const SRC =
 var Findings: TObjectList<TLeakFinding>;
 begin
   Findings := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(2, TFindingHelper.Count(Findings, fkLongParamList));
+  try Assert.AreEqual<Integer>(2, TFindingHelper.Count(Findings, fkLongParamList));
   finally Findings.Free; end;
 end;
 
@@ -203,7 +203,7 @@ const SRC =
 var Findings: TObjectList<TLeakFinding>;
 begin
   Findings := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(Findings, fkLongParamList));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(Findings, fkLongParamList));
   finally Findings.Free; end;
 end;
 
@@ -215,7 +215,7 @@ const SRC =
 var Findings: TObjectList<TLeakFinding>;
 begin
   Findings := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(Findings, fkLongParamList));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(Findings, fkLongParamList));
   finally Findings.Free; end;
 end;
 
@@ -231,7 +231,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkMagicNumber));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMagicNumber));
   finally F.Free; end;
 end;
 
@@ -243,7 +243,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkMagicNumber));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMagicNumber));
   finally F.Free; end;
 end;
 
@@ -255,7 +255,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkMagicNumber));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMagicNumber));
   finally F.Free; end;
 end;
 
@@ -267,7 +267,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkMagicNumber));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMagicNumber));
   finally F.Free; end;
 end;
 
@@ -279,7 +279,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkMagicNumber));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMagicNumber));
   finally F.Free; end;
 end;
 
@@ -291,7 +291,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkMagicNumber));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMagicNumber));
   finally F.Free; end;
 end;
 
@@ -303,7 +303,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkMagicNumber));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMagicNumber));
   finally F.Free; end;
 end;
 
@@ -315,7 +315,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkMagicNumber));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMagicNumber));
   finally F.Free; end;
 end;
 
@@ -328,7 +328,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkMagicNumber));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMagicNumber));
   finally F.Free; end;
 end;
 
@@ -343,7 +343,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(2, TFindingHelper.Count(F, fkMagicNumber));
+  try Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkMagicNumber));
   finally F.Free; end;
 end;
 
@@ -362,7 +362,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkMagicNumber),
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMagicNumber),
     '(Count>250) ohne Spaces muss erkannt werden');
   finally F.Free; end;
 end;
@@ -386,7 +386,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkLongMethod));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLongMethod));
   finally F.Free; end;
 end;
 
@@ -410,7 +410,7 @@ begin
   SRC := SRC + 'end;';
 
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkLongMethod));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLongMethod));
   finally F.Free; end;
 end;
 
@@ -429,7 +429,7 @@ begin
   SRC := SRC + 'end;';
 
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkLongMethod));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLongMethod));
   finally F.Free; end;
 end;
 
@@ -449,7 +449,7 @@ begin
   SRC := SRC + 'end;';
 
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkLongMethod));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkLongMethod));
   finally F.Free; end;
 end;
 
@@ -461,7 +461,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkLongMethod));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLongMethod));
   finally F.Free; end;
 end;
 
@@ -479,7 +479,7 @@ begin
   SRC := SRC + 'end;';
 
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkLongMethod));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLongMethod));
   finally F.Free; end;
 end;
 
@@ -517,7 +517,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkDeepNesting));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeepNesting));
   finally F.Free; end;
 end;
 
@@ -536,7 +536,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkDeepNesting));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeepNesting));
   finally F.Free; end;
 end;
 
@@ -641,7 +641,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkDeepNesting));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDeepNesting));
   finally F.Free; end;
 end;
 
@@ -663,7 +663,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkCyclomaticComplexity));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCyclomaticComplexity));
   finally F.Free; end;
 end;
 
@@ -678,7 +678,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkCyclomaticComplexity));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCyclomaticComplexity));
   finally F.Free; end;
 end;
 
@@ -697,7 +697,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkCyclomaticComplexity),
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCyclomaticComplexity),
     '5x if/else = CC 6, soll nicht melden');
   finally F.Free; end;
 end;
@@ -717,7 +717,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkCyclomaticComplexity),
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCyclomaticComplexity),
     'Boolean-Operatoren muessen mitzaehlen');
   finally F.Free; end;
 end;
@@ -735,7 +735,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkCyclomaticComplexity));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCyclomaticComplexity));
   finally F.Free; end;
 end;
 
@@ -753,7 +753,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkCyclomaticComplexity),
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCyclomaticComplexity),
     'Jeder case-arm zaehlt +1');
   finally F.Free; end;
 end;
@@ -773,7 +773,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkCyclomaticComplexity));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCyclomaticComplexity));
   finally F.Free; end;
 end;
 
@@ -801,7 +801,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(1, TFindingHelper.Count(F, fkCyclomaticComplexity),
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCyclomaticComplexity),
     'on-Handler zaehlen +1 wie if/case-arm');
   finally F.Free; end;
 end;
@@ -821,7 +821,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(0, TFindingHelper.Count(F, fkCyclomaticComplexity),
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCyclomaticComplexity),
     'try/finally selbst zaehlt nicht (Resource-Handling, kein Branch)');
   finally F.Free; end;
 end;
@@ -844,7 +844,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual(1, TFindingHelper.Count(F, fkCyclomaticComplexity),
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCyclomaticComplexity),
       'nur die komplexe Methode wird gemeldet');
     Assert.IsTrue(F[0].MethodName.EndsWith('Complex'),
       'gemeldete Methode endet auf Complex (nicht Trivial)');
@@ -930,7 +930,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual(2, TFindingHelper.Count(F, fkCyclomaticComplexity));
+  try Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkCyclomaticComplexity));
   finally F.Free; end;
 end;
 
