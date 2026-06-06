@@ -305,30 +305,38 @@ var
     if Pos('base64func', LowerCase(FileName)) > 0 then
     begin
       try
+        var M1Str : string := 'nil';
+        if Meth1 <> nil then M1Str := Format('node@L%d', [Meth1.Line]);
+        var M2Str : string := 'nil';
+        if Meth2 <> nil then M2Str := Format('node@L%d', [Meth2.Line]);
         DiagSnippet := Format(
-          '[%s] FreeLn=%d UseLn=%d Meth1=%s(L=%d) Meth2=%s(L=%d) ',
-          [FileName, AFreeLine, AUseLine,
-           BoolToStr(Meth1 <> nil), IfThen(Meth1 <> nil, Meth1.Line, -1),
-           BoolToStr(Meth2 <> nil), IfThen(Meth2 <> nil, Meth2.Line, -1)]);
+          '[%s] FreeLn=%d UseLn=%d Meth1=%s Meth2=%s',
+          [FileName, AFreeLine, AUseLine, M1Str, M2Str]);
         if (Meth1 <> nil) and (Meth2 <> nil) and (Meth1 = Meth2) then
         begin
           CFG := GetOrBuildCFG(Meth1);
           FreeBlk := FindBlockForLine(CFG, AFreeLine);
           UseBlk  := FindBlockForLine(CFG, AUseLine);
-          DiagSnippet := DiagSnippet + Format(
-            'FreeBlk=%s(Id=%d Kind=%d) UseBlk=%s(Id=%d Kind=%d)',
-            [BoolToStr(FreeBlk <> nil), IfThen(FreeBlk <> nil, FreeBlk.Id, -1),
-             IfThen(FreeBlk <> nil, Ord(FreeBlk.Kind), -1),
-             BoolToStr(UseBlk  <> nil), IfThen(UseBlk  <> nil, UseBlk.Id, -1),
-             IfThen(UseBlk  <> nil, Ord(UseBlk.Kind), -1)]);
+          var FBStr : string := 'nil';
+          if FreeBlk <> nil then
+            FBStr := Format('Id=%d Kind=%d', [FreeBlk.Id, Ord(FreeBlk.Kind)]);
+          var UBStr : string := 'nil';
+          if UseBlk <> nil then
+            UBStr := Format('Id=%d Kind=%d', [UseBlk.Id, Ord(UseBlk.Kind)]);
+          DiagSnippet := DiagSnippet +
+            Format(' FreeBlk=[%s] UseBlk=[%s]', [FBStr, UBStr]);
           if (FreeBlk <> nil) and (UseBlk <> nil) then
             DiagSnippet := DiagSnippet +
-              Format(' CanReach=%s', [BoolToStr(CFG.CanReach(FreeBlk, UseBlk))]);
+              Format(' CanReach=%s', [BoolToStr(CFG.CanReach(FreeBlk, UseBlk), True)]);
         end;
         TFile.AppendAllText('D:\git-demos\delphi\StaticCodeAnalyser\sca-cfg-debug.log',
           DiagSnippet + sLineBreak);
       except
-        // Diagnostic darf den Scan nie crashen
+        on E: Exception do
+          try
+            TFile.AppendAllText('D:\git-demos\delphi\StaticCodeAnalyser\sca-cfg-debug.log',
+              Format('[%s] DIAG-EXCEPTION: %s', [FileName, E.Message]) + sLineBreak);
+          except end;
       end;
     end;
     if (Meth1 = nil) or (Meth2 = nil) or (Meth1 <> Meth2) then Exit;
