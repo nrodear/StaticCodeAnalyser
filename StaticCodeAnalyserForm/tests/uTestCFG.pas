@@ -648,19 +648,32 @@ var
   Meth : TAstNode;
   CFG  : TCFG;
 begin
-  // try x := 1 finally y := 1 end;
-  Meth := MakeMethod([ StmtTryFinally(StmtAssign, StmtAssign) ]);
+  // try if cond then a := 1 else b := 2; finally y := 1; end;
+  //
+  // Der TryBody enthaelt ein if/else damit der Normal-End-Block
+  // (Merge des if) tatsaechlich ein ANDERER Block ist als der
+  // TryBodyStart-Block. Bei einem Single-Stmt-Body waeren beide
+  // identisch und die Cross-Edge vs. Normal-End-Edge wuerden
+  // ueber denselben Block laufen -> Connect erkennt das als
+  // Doppel-Connect und behaelt nur 1 Edge.
+  Meth := MakeMethod([
+    StmtTryFinally(
+      StmtIf(StmtAssign, StmtAssign),   // try-body mit if/else
+      StmtAssign                        // finally-body
+    )
+  ]);
   try
     CFG := TCFGBuilder.BuildFromMethod(Meth);
     try
       Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_));
-      // FinallyStart hat 2 Predecessors: TryBodyStart (Exception) + TryBodyTail (Normal)
       var FinallyStart : uCFG.TCFGBlock := nil;
       for var B in CFG.Blocks do
         if B.Kind = ckException then begin FinallyStart := B; Break; end;
       Assert.IsNotNull(FinallyStart);
+      // 2 Predecessors: TryBodyStart (Cross-Edge bei Exception) +
+      // If-Merge (Normal-End nach if-Verzweigung)
       Assert.AreEqual(2, FinallyStart.Predecessors.Count,
-        'Finally hat 2 Predecessors (Exception + Normal-End)');
+        'Finally erreicht aus Cross-Edge UND Normal-End-Pfad');
     finally CFG.Free; end;
   finally Meth.Free; end;
 end;
