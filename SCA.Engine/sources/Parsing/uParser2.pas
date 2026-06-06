@@ -651,9 +651,28 @@ begin
         // Typaliase: Inhalt (Bezeichner) in TypeRef speichern damit
         // CollectText referenzierte Typen als Verwendungsnachweis zaehlt.
         // Beispiel: TMyEvent = TNotifyEvent  →  TypeRef = 'TNotifyEvent'
+        //
+        // Procedural-Type-Aliase wie
+        //   TFTPStatus = procedure(Sender: TObject; Response: Boolean;
+        //                          const Value: string) of object;
+        //   TFn        = function(X: Integer): Integer;
+        // enthalten Semicolons INNERHALB der Param-Liste. Ohne Paren-
+        // Depth-Tracking stoppt die Loop dort und der Parser geraet komplett
+        // durcheinander: das uebernaechste Token ('Response') wird als
+        // neuer Typname interpretiert, der Outer-loop beendet die
+        // type-Section sobald sie ein 'procedure' ausserhalb erwartet
+        // wird - die GESAMTE Implementation einer Unit wird verloren
+        // (Audit ftpsend.pas: 52 Method-Headers im Source -> 1 nkMethod
+        // im AST).
         var AliasContent := '';
-        while not (Tok.Kind in [tkSemicolon, tkKwEnd, tkEof]) do
+        var Depth        := 0;
+        while not (Tok.Kind in [tkKwEnd, tkEof]) do
         begin
+          if (Depth = 0) and (Tok.Kind = tkSemicolon) then Break;
+          case Tok.Kind of
+            tkLParen, tkLBracket: Inc(Depth);
+            tkRParen, tkRBracket: if Depth > 0 then Dec(Depth);
+          end;
           if Tok.Kind = tkIdent then
           begin
             if AliasContent <> '' then AliasContent := AliasContent + ' ';
