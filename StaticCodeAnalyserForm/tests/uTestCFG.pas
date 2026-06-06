@@ -33,6 +33,13 @@ type
     [Test] procedure CanReach_FalseWhenNotConnected;
     [Test] procedure CanReach_SelfAlwaysTrue;
     [Test] procedure ExitWithinIfBranch_ConnectsToExit;
+    // A.4.3 Branching
+    [Test] procedure IfThen_NoElse_BranchToMerge;
+    [Test] procedure IfThenElse_BothBranchesToMerge;
+    [Test] procedure IfWithExitInThen_ThenTailIsNil;
+    [Test] procedure IfWithExitInBoth_MergeUnreachable;
+    [Test] procedure CaseStmt_TwoArmsToMerge;
+    [Test] procedure CaseStmtAllArmsExit_ResultNil;
   end;
 
 implementation
@@ -206,13 +213,196 @@ begin
 end;
 
 procedure TTestCFG.ExitWithinIfBranch_ConnectsToExit;
-// Phase A.4.2 hat die Heuristik "1-Ebene-Tiefe-Scan auf nkExit innerhalb
-// von if/case/while/for/try" um den Branch-Exit im Reachability-Graphen
-// mitwirken zu lassen, bevor A.4.3 die strukturierte Branch-Verkabelung
-// uebernimmt. Wir koennen das hier nicht mit echtem AST testen ohne
-// Parser-Integration - Test-Stub als Marker fuer A.4.3 Re-Test.
 begin
-  Assert.Pass('Marker: A.4.3 Branching-Phase wird das mit ParseSource testen');
+  Assert.Pass('Marker: ersetzt durch A.4.3 Branching-Tests unten');
+end;
+
+{ ---- A.4.3 Branching: Mini-AST-Helpers ---- }
+
+function MakeMethod(const Stmts: array of TAstNode): TAstNode;
+// Baut nkMethod + nkBlock(Stmts...). Caller besitzt das Result.
+var
+  Body : TAstNode;
+  i    : Integer;
+begin
+  Result := TAstNode.Create(nkMethod, 'TestMeth', 1, 1);
+  Body := Result.Add(nkBlock, 'begin', 1, 1);
+  for i := 0 to High(Stmts) do
+    Body.AddChild(Stmts[i]);
+end;
+
+function StmtAssign(ALine: Integer = 1): TAstNode;
+begin
+  Result := TAstNode.Create(nkAssign, 'x', ALine, 1);
+end;
+
+function StmtExit(ALine: Integer = 1): TAstNode;
+begin
+  Result := TAstNode.Create(nkExit, 'exit', ALine, 1);
+end;
+
+function StmtIf(ThenS, ElseS: TAstNode; ALine: Integer = 1): TAstNode;
+// nkIfStmt mit Then-Statement als first Child und optional nkElseBranch
+// als second Child der wiederum ElseS als Child enthaelt.
+var
+  ElseNode : TAstNode;
+begin
+  Result := TAstNode.Create(nkIfStmt, 'if', ALine, 1);
+  if ThenS <> nil then Result.AddChild(ThenS);
+  if ElseS <> nil then
+  begin
+    ElseNode := Result.Add(nkElseBranch, 'else', ALine, 1);
+    ElseNode.AddChild(ElseS);
+  end;
+end;
+
+function StmtCase(const Arms: array of TAstNode; ALine: Integer = 1): TAstNode;
+// nkCaseStmt mit Arms als direkten Children (Arms muessen nkCaseArm sein).
+var
+  i : Integer;
+begin
+  Result := TAstNode.Create(nkCaseStmt, 'case', ALine, 1);
+  for i := 0 to High(Arms) do
+    Result.AddChild(Arms[i]);
+end;
+
+function CaseArm(const Name: string; ArmStmt: TAstNode;
+                 ALine: Integer = 1): TAstNode;
+begin
+  Result := TAstNode.Create(nkCaseArm, Name, ALine, 1);
+  if ArmStmt <> nil then Result.AddChild(ArmStmt);
+end;
+
+{ ---- A.4.3 Tests ---- }
+
+procedure TTestCFG.IfThen_NoElse_BranchToMerge;
+var
+  Meth : TAstNode;
+  CFG  : TCFG;
+begin
+  // if cond then x := 1;  (kein else)
+  Meth := MakeMethod([ StmtIf(StmtAssign, nil) ]);
+  try
+    CFG := TCFGBuilder.BuildFromMethod(Meth);
+    try
+      // Entry kann Exit_ erreichen ueber den Branch
+      Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_));
+      // Es gibt mindestens einen ckBranch-Block
+      var Found := False;
+      for var B in CFG.Blocks do if B.Kind = ckBranch then Found := True;
+      Assert.IsTrue(Found, 'CFG enthaelt ckBranch-Block');
+    finally CFG.Free; end;
+  finally Meth.Free; end;
+end;
+
+procedure TTestCFG.IfThenElse_BothBranchesToMerge;
+var
+  Meth : TAstNode;
+  CFG  : TCFG;
+begin
+  // if cond then x := 1 else x := 2;
+  Meth := MakeMethod([ StmtIf(StmtAssign, StmtAssign) ]);
+  try
+    CFG := TCFGBuilder.BuildFromMethod(Meth);
+    try
+      Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_));
+      // Branch hat genau 2 Successors (Then-Start, Else-Start).
+      var BranchBlk : uCFG.TCFGBlock := nil;
+      for var B in CFG.Blocks do
+        if B.Kind = ckBranch then begin BranchBlk := B; Break; end;
+      Assert.IsNotNull(BranchBlk);
+      Assert.AreEqual(2, BranchBlk.Successors.Count,
+        'if/else Branch hat 2 Successors');
+    finally CFG.Free; end;
+  finally Meth.Free; end;
+end;
+
+procedure TTestCFG.IfWithExitInThen_ThenTailIsNil;
+var
+  Meth : TAstNode;
+  CFG  : TCFG;
+begin
+  // if cond then Exit else x := 1;
+  // ThenTail = nil (Exit), ElseTail = Else-Block; Merge ist erreichbar
+  // nur vom Else-Pfad.
+  Meth := MakeMethod([ StmtIf(StmtExit, StmtAssign) ]);
+  try
+    CFG := TCFGBuilder.BuildFromMethod(Meth);
+    try
+      Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_));
+      // Exit_ ist auch direkt vom Then-Stmt erreichbar (Exit-Edge).
+      // Praezise Pfad-Check: es gibt einen Pfad Entry -> .. -> Exit_.
+      Assert.IsTrue(CFG.Exit_.Predecessors.Count >= 1);
+    finally CFG.Free; end;
+  finally Meth.Free; end;
+end;
+
+procedure TTestCFG.IfWithExitInBoth_MergeUnreachable;
+var
+  Meth : TAstNode;
+  CFG  : TCFG;
+begin
+  // if cond then Exit else Exit;  -> nach dem if ist KEIN Code erreichbar
+  // (beide Branches enden in Exit). BuildFromMethod's Tail = nil, daher
+  // wird Tail NICHT mit Exit_ verbunden, aber die Exit_-Edges aus den
+  // beiden Branch-Exits versorgen die Reachability.
+  Meth := MakeMethod([ StmtIf(StmtExit, StmtExit) ]);
+  try
+    CFG := TCFGBuilder.BuildFromMethod(Meth);
+    try
+      Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_),
+        'Beide Branches Exit -> Exit_ erreichbar');
+      // Exit_ muss EXAKT 2 Predecessors haben (Then-Exit + Else-Exit;
+      // KEIN Tail-Connect von StartBlock weil Tail durch Exit beendet).
+      Assert.AreEqual(2, CFG.Exit_.Predecessors.Count);
+    finally CFG.Free; end;
+  finally Meth.Free; end;
+end;
+
+procedure TTestCFG.CaseStmt_TwoArmsToMerge;
+var
+  Meth : TAstNode;
+  CFG  : TCFG;
+begin
+  // case x of  1: y := 1;  2: y := 2;  else y := 0; end;
+  Meth := MakeMethod([
+    StmtCase([ CaseArm('1', StmtAssign),
+               CaseArm('2', StmtAssign),
+               CaseArm('else', StmtAssign) ])
+  ]);
+  try
+    CFG := TCFGBuilder.BuildFromMethod(Meth);
+    try
+      Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_));
+      var BranchBlk : uCFG.TCFGBlock := nil;
+      for var B in CFG.Blocks do
+        if B.Kind = ckBranch then begin BranchBlk := B; Break; end;
+      Assert.IsNotNull(BranchBlk);
+      Assert.AreEqual(3, BranchBlk.Successors.Count,
+        '3 Arme = 3 Successors');
+    finally CFG.Free; end;
+  finally Meth.Free; end;
+end;
+
+procedure TTestCFG.CaseStmtAllArmsExit_ResultNil;
+var
+  Meth : TAstNode;
+  CFG  : TCFG;
+begin
+  // case x of  1: Exit;  2: Exit;  else Exit; end;
+  Meth := MakeMethod([
+    StmtCase([ CaseArm('1',    StmtExit),
+               CaseArm('2',    StmtExit),
+               CaseArm('else', StmtExit) ])
+  ]);
+  try
+    CFG := TCFGBuilder.BuildFromMethod(Meth);
+    try
+      Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_));
+      // 3 Arm-Exits = 3 Predecessors auf Exit_
+      Assert.AreEqual(3, CFG.Exit_.Predecessors.Count);
+    finally CFG.Free; end;
+  finally Meth.Free; end;
 end;
 
 initialization

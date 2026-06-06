@@ -3,9 +3,9 @@ unit uCFG;
 // Control-Flow-Graph (CFG) fuer SCA134 UseAfterFree (Konzept_A4_CFG.md).
 //
 // Phasen-Stand:
-//   A.4.1 Datenstruktur + leerer Builder    -- DONE
-//   A.4.2 Builder fuer lineare Statements    <- DIESE PHASE
-//   A.4.3 Branching (nkIfStmt, nkCaseStmt)
+//   A.4.1 Datenstruktur + leerer Builder              -- DONE
+//   A.4.2 Builder fuer lineare Statements             -- DONE
+//   A.4.3 Branching (nkIfStmt, nkCaseStmt)            <- DIESE PHASE
 //   A.4.4 Loops (nkWhileStmt, nkForStmt, nkRepeatStmt)
 //   A.4.5 Exception-Pfade (nkTryExcept, nkTryFinally)
 //   A.4.6 SCA134-Integration
@@ -170,34 +170,25 @@ end;
 
 { TCFGBuilder }
 
-// A.4.2 Builder fuer lineare Statements + Control-Transfer.
+// A.4.2+A.4.3 Builder fuer lineare Statements + Control-Transfer + Branching.
 //
-// Behandelt in dieser Phase:
-//   * nkAssign, nkCall          -> Sammeln in aktuellem nkStatement-Block
+// Behandelt:
+//   * nkAssign, nkCall          -> Sammeln in aktuellem ckStatement-Block
 //   * nkExit                    -> Block -> Exit_, kein Tail
 //   * nkBreak, nkContinue       -> Block -> nil  (Loop-Aufloesung in A.4.4)
 //   * nkRaise                   -> Block -> Exit_ (Exception-Pfade in A.4.5)
-//   * nkBlock (begin..end)      -> rekursiv abarbeiten (= inline kein neuer Block)
+//   * nkBlock (begin..end)      -> rekursiv abarbeiten (= inline)
+//   * nkIfStmt                  -> BranchBlk + Then/Else-Pfade + Merge   (A.4.3)
+//   * nkCaseStmt                -> BranchBlk + N Arm-Pfade + Merge       (A.4.3)
 //
-// Branches/Loops/Try werden in nachfolgenden Phasen ergaenzt:
-//   nkIfStmt/nkCaseStmt        -> A.4.3
+// Loops/Try noch opak (siehe Sub-Branch unten):
 //   nkWhileStmt/nkForStmt/nkRepeatStmt -> A.4.4
-//   nkTryExcept/nkTryFinally   -> A.4.5
-// In A.4.2 werden sie als opaker Statement im aktuellen Block notiert
-// (AstNodes.Add), aber NICHT in ihre Sub-Bloecke aufgeloest.
-
-type
-  // Walker-State: aktueller "Tail"-Block in den nachfolgende Statements
-  // fallen wuerden. nil bedeutet "unerreichbar" (nach Exit/Raise/...).
-  TWalkResult = TCFGBlock;
+//   nkTryExcept/nkTryFinally           -> A.4.5
 
 class function TCFGBuilder.BuildFromMethod(MethNode: TAstNode): TCFG;
 
   function FindMethodBody(M: TAstNode): TAstNode;
-  // Sucht den nkBlock-Body-Knoten unter der Method. Toleriert das
-  // Pattern Parser produziert sowohl direkten nkBlock-Child als auch
-  // den FALL dass der Body eine Liste von Statements direkt unter
-  // dem nkMethod-Knoten liegt (Pascal-typisch fuer Single-Stmt Body).
+  // Sucht den nkBlock-Body-Knoten unter der Method.
   var
     Child : TAstNode;
   begin
@@ -207,105 +198,209 @@ class function TCFGBuilder.BuildFromMethod(MethNode: TAstNode): TCFG;
       if Child.Kind = nkBlock then Exit(Child);
   end;
 
+  // Forward-Deklaration weil ProcessOneStatement WalkStatements ruft
+  // (nkBlock) und WalkStatements wiederum ProcessOneStatement.
+  function WalkStatements(const Stmts: TList<TAstNode>;
+                          CFG: TCFG; Current: TCFGBlock): TCFGBlock; forward;
+
+  function ProcessOneStatement(S: TAstNode; CFG: TCFG;
+                               Current: TCFGBlock): TCFGBlock;
+  // Verarbeitet EIN AST-Statement. Returnt den neuen Tail-Block oder
+  // nil wenn das Statement die Sequenz beendet (Exit/Raise/Break/Continue).
+  var
+    SubCh        : TAstNode;
+    ThenChild    : TAstNode;
+    ElseChild    : TAstNode;
+    BranchBlk    : TCFGBlock;
+    ThenStart    : TCFGBlock;
+    ElseStart    : TCFGBlock;
+    ThenTail     : TCFGBlock;
+    ElseTail     : TCFGBlock;
+    ArmStart     : TCFGBlock;
+    ArmTail      : TCFGBlock;
+    Merge        : TCFGBlock;
+    HasElseArm   : Boolean;
+    AnyArmTail   : Boolean;
+  begin
+    Result := Current;
+    if (S = nil) or (Current = nil) then Exit;
+
+    case S.Kind of
+      nkAssign, nkCall:
+        begin
+          Current.AstNodes.Add(S);
+          if Current.Line = 0 then Current.Line := S.Line;
+        end;
+
+      nkExit:
+        begin
+          Current.AstNodes.Add(S);
+          if Current.Line = 0 then Current.Line := S.Line;
+          CFG.Connect(Current, CFG.Exit_);
+          Result := nil;
+        end;
+
+      nkRaise:
+        begin
+          Current.AstNodes.Add(S);
+          if Current.Line = 0 then Current.Line := S.Line;
+          CFG.Connect(Current, CFG.Exit_);
+          Result := nil;
+        end;
+
+      nkBreak, nkContinue:
+        begin
+          // A.4.4 verkabelt mit Loop-Header/-Exit. Bis dahin: Sequenz endet.
+          Current.AstNodes.Add(S);
+          if Current.Line = 0 then Current.Line := S.Line;
+          Result := nil;
+        end;
+
+      nkBlock:
+        // begin..end inline: kein neuer CFG-Block, Children walken.
+        Result := WalkStatements(S.Children, CFG, Current);
+
+      nkIfStmt:
+        begin
+          // Branch-Header im aktuellen Block notieren (Bedingung via TypeRef).
+          Current.AstNodes.Add(S);
+          if Current.Line = 0 then Current.Line := S.Line;
+
+          // Then-Body = erstes Child das KEIN nkElseBranch ist.
+          // Else-Body = Single-Child von nkElseBranch (falls vorhanden).
+          ThenChild := nil;
+          ElseChild := nil;
+          for SubCh in S.Children do
+          begin
+            if SubCh.Kind = nkElseBranch then
+            begin
+              if SubCh.Children.Count > 0 then
+                ElseChild := SubCh.Children[0];
+            end
+            else if ThenChild = nil then
+              ThenChild := SubCh;
+          end;
+
+          BranchBlk := CFG.NewBlock(ckBranch);
+          BranchBlk.Line := S.Line;
+          CFG.Connect(Current, BranchBlk);
+
+          // Then-Pfad
+          ThenStart := CFG.NewBlock(ckStatement);
+          CFG.Connect(BranchBlk, ThenStart);
+          if ThenChild <> nil then
+            ThenTail := ProcessOneStatement(ThenChild, CFG, ThenStart)
+          else
+            ThenTail := ThenStart;
+
+          // Else-Pfad ODER Fall-through wenn kein else vorhanden.
+          if ElseChild <> nil then
+          begin
+            ElseStart := CFG.NewBlock(ckStatement);
+            CFG.Connect(BranchBlk, ElseStart);
+            ElseTail := ProcessOneStatement(ElseChild, CFG, ElseStart);
+          end
+          else
+          begin
+            // Ohne else fluesst der Branch direkt weiter zum Merge.
+            ElseTail := BranchBlk;
+          end;
+
+          // Merge-Block sammelt die Pfade die nicht durch Exit/Raise
+          // terminiert sind.
+          Merge := CFG.NewBlock(ckStatement);
+          if ThenTail <> nil then CFG.Connect(ThenTail, Merge);
+          if ElseTail <> nil then CFG.Connect(ElseTail, Merge);
+          // Wenn beide Tails nil sind (both branches Exit/Raise), wird
+          // Merge unerreichbar - das ist semantisch korrekt (Code nach
+          // dem if waere dead). Result = Merge ist aber weiterhin der
+          // erwartete Sequenz-Tail; einen TOTEN Merge erkennt SCA134
+          // ueber Predecessors.Count = 0 wenn noetig.
+          Result := Merge;
+          if (ThenTail = nil) and (ElseTail = nil) then
+            Result := nil;  // beide Pfade beendet -> Sequenz hier auch
+        end;
+
+      nkCaseStmt:
+        begin
+          // case <expr> of arm1: ...; arm2: ...; else ... end;
+          // Parser-Struktur: Children = N x nkCaseArm, wobei der letzte
+          // ggf. Name='else' hat. Jedes Arm hat als Children die
+          // Statements des Arm-Bodys.
+          Current.AstNodes.Add(S);
+          if Current.Line = 0 then Current.Line := S.Line;
+
+          BranchBlk := CFG.NewBlock(ckBranch);
+          BranchBlk.Line := S.Line;
+          CFG.Connect(Current, BranchBlk);
+          Merge := CFG.NewBlock(ckStatement);
+
+          HasElseArm := False;
+          AnyArmTail := False;
+          for SubCh in S.Children do
+          begin
+            if SubCh.Kind <> nkCaseArm then Continue;
+            if SameText(SubCh.Name, 'else') then HasElseArm := True;
+            ArmStart := CFG.NewBlock(ckStatement);
+            CFG.Connect(BranchBlk, ArmStart);
+            // Arm-Body als Sequenz walken (Arm.Children).
+            ArmTail := WalkStatements(SubCh.Children, CFG, ArmStart);
+            if ArmTail <> nil then
+            begin
+              CFG.Connect(ArmTail, Merge);
+              AnyArmTail := True;
+            end;
+          end;
+
+          // Ohne else-Arm gibt es einen Default-Fallthrough (kein Arm
+          // greift) - das ist semantisch das gleiche wie "if kein
+          // Arm matched, geht's einfach weiter". Branch -> Merge.
+          if not HasElseArm then
+          begin
+            CFG.Connect(BranchBlk, Merge);
+            AnyArmTail := True;
+          end;
+
+          if AnyArmTail then
+            Result := Merge
+          else
+            Result := nil;  // alle Arme beendet
+        end;
+
+      nkForStmt, nkWhileStmt, nkRepeatStmt,
+      nkTryExcept, nkTryFinally:
+        begin
+          // Loops + Exception-Pfade in A.4.4/A.4.5. Bis dahin: opaker
+          // Statement im aktuellen Block, 1-Ebenen-Tiefe-Scan auf
+          // nested nkExit damit Reachability OUTER-Exit findet.
+          Current.AstNodes.Add(S);
+          if Current.Line = 0 then Current.Line := S.Line;
+          for SubCh in S.Children do
+            if SubCh.Kind = nkExit then
+              CFG.Connect(Current, CFG.Exit_);
+        end;
+    else
+      // nkLocalVar / nkInherited / etc.: kein Control-Flow.
+    end;
+  end;
+
   function WalkStatements(const Stmts: TList<TAstNode>;
                           CFG: TCFG; Current: TCFGBlock): TCFGBlock;
-  // Iteriert ueber die Statements einer Sequenz (Method-Body oder
-  // begin..end-Inhalt). Returnt den letzten erreichbaren Block oder
-  // nil wenn die Sequenz durch Exit/Raise/Break/Continue unerreichbar
-  // wird. Current = Block in den das erste Statement faellt.
+  // Iteriert ueber eine Sequenz und ruft ProcessOneStatement pro Element.
+  // Returnt den letzten erreichbaren Block oder nil bei Sequenz-Abbruch.
   var
-    S          : TAstNode;
-    StmtBlock  : TCFGBlock;
-    SubBlock   : TAstNode;
+    S         : TAstNode;
+    StmtBlock : TCFGBlock;
   begin
     Result := Current;
     if Stmts = nil then Exit;
     StmtBlock := Current;
-
     for S in Stmts do
     begin
       if S = nil then Continue;
-      if StmtBlock = nil then
-      begin
-        // Sequenz war schon unterbrochen (Exit/Raise). Keine weitere
-        // Verarbeitung - nachfolgender Code waere toter Code, den ein
-        // separater DeadCode-Detektor flaggt.
-        Exit(nil);
-      end;
-
-      case S.Kind of
-        nkAssign, nkCall:
-          begin
-            StmtBlock.AstNodes.Add(S);
-            if StmtBlock.Line = 0 then StmtBlock.Line := S.Line;
-          end;
-
-        nkExit:
-          begin
-            StmtBlock.AstNodes.Add(S);
-            if StmtBlock.Line = 0 then StmtBlock.Line := S.Line;
-            CFG.Connect(StmtBlock, CFG.Exit_);
-            StmtBlock := nil;  // Sequenz hier zu Ende
-          end;
-
-        nkRaise:
-          begin
-            // Raise verlaesst die Method (sofern kein umschliessendes
-            // try/except - das wird in A.4.5 modelliert). Bis dahin
-            // konservativ als Direkt-Exit.
-            StmtBlock.AstNodes.Add(S);
-            if StmtBlock.Line = 0 then StmtBlock.Line := S.Line;
-            CFG.Connect(StmtBlock, CFG.Exit_);
-            StmtBlock := nil;
-          end;
-
-        nkBreak, nkContinue:
-          begin
-            // Break/Continue gehoeren in einen Loop-Kontext (A.4.4).
-            // In A.4.2 schreiben wir sie ins aktuelle Block-AST damit
-            // die Information nicht verloren geht, aber den Sequenz-
-            // Fluss markieren wir als "hier vorerst zu Ende" - der
-            // Loop-Builder verkabelt sie in A.4.4 mit dem korrekten
-            // Loop-Header bzw. Loop-Exit.
-            StmtBlock.AstNodes.Add(S);
-            if StmtBlock.Line = 0 then StmtBlock.Line := S.Line;
-            StmtBlock := nil;
-          end;
-
-        nkBlock:
-          // Begin..end: Children sind die Statements der Sequenz.
-          // Wir bleiben im selben CFG-Block (= inline-Ausweitung statt
-          // neuer Block) - das passt zur Semantik dass begin..end
-          // keinen Control-Flow erzeugt, nur Gruppierung.
-          StmtBlock := WalkStatements(S.Children, CFG, StmtBlock);
-
-        nkIfStmt, nkCaseStmt,
-        nkForStmt, nkWhileStmt, nkRepeatStmt,
-        nkTryExcept, nkTryFinally:
-          begin
-            // Phase A.4.2 modelliert komplexe Statements noch nicht in
-            // Sub-Blocks. Sie werden als opaker Statement im aktuellen
-            // Block notiert; spaetere Phasen ueberschreiben diesen
-            // Branch durch korrekte CFG-Verzweigung.
-            // Wichtig: wir untersuchen rekursiv NICHT die Sub-Children,
-            // sonst wuerde z.B. ein Exit innerhalb des Loops faelschlich
-            // den OUTER Tail abbrechen.
-            StmtBlock.AstNodes.Add(S);
-            if StmtBlock.Line = 0 then StmtBlock.Line := S.Line;
-            // ABER: damit nkExit innerhalb einer Branch noch im Outer
-            // Reachability-Graphen mitwirkt, scannen wir die direkten
-            // Children (1 Ebene tief) auf control-transfers.
-            for SubBlock in S.Children do
-              if SubBlock.Kind = nkExit then
-                CFG.Connect(StmtBlock, CFG.Exit_);
-          end;
-      else
-        // Unbekannter / nicht-Control-Flow-Knoten: silently ignorieren.
-        // Beispiele: nkLocalVar (Variable-Declaration), nkInherited
-        // (nimmt keinen Control-Flow-Slot).
-      end;
+      if StmtBlock = nil then Exit(nil);
+      StmtBlock := ProcessOneStatement(S, CFG, StmtBlock);
     end;
-
     Result := StmtBlock;
   end;
 
@@ -323,17 +418,14 @@ begin
   Body := FindMethodBody(MethNode);
   if (Body = nil) or (Body.Children = nil) or (Body.Children.Count = 0) then
   begin
-    // Leerer / fehlender Body -> Entry direkt nach Exit_.
     Result.Connect(Result.Entry, Result.Exit_);
     Exit;
   end;
 
-  // Erster Statement-Block. Entry -> StartBlock.
+  // Entry -> StartBlock -> ... -> Exit_
   var StartBlock := Result.NewBlock(ckStatement);
   Result.Connect(Result.Entry, StartBlock);
   Tail := WalkStatements(Body.Children, Result, StartBlock);
-  // Wenn der Sequenz-Tail nicht durch Exit/Raise abgebrochen wurde,
-  // fluesst er natuerlich in den End-Block.
   if Tail <> nil then
     Result.Connect(Tail, Result.Exit_);
 end;
