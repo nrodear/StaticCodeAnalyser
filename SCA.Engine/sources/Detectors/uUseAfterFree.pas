@@ -72,7 +72,7 @@ type
 implementation
 
 uses
-  System.RegularExpressions, System.StrUtils, System.IOUtils, System.Math,
+  System.RegularExpressions, System.StrUtils,
   uFileTextCache,
   uCFG;
 
@@ -324,64 +324,10 @@ var
     CFG          : TCFG;
     FreeBlk      : TCFGBlock;
     UseBlk       : TCFGBlock;
-    DiagSnippet  : string;
   begin
     Result := False;
     Meth1 := FindMethodForLine(AFreeLine);
     Meth2 := FindMethodForLine(AUseLine);
-    // TEMPORARY DIAGNOSTIC (audit base64func/JclCompression/uglobs FPs):
-    // append per-finding decisions in a file next to the SARIF output.
-    // Wird in einem Folge-Commit wieder entfernt.
-    if Pos('base64func', LowerCase(FileName)) > 0 then
-    begin
-      try
-        // Dump Methods-Liste einmal pro Hit (Cost ist OK fuer Diag).
-        var MethListStr : string := 'Methods=nil';
-        if Methods <> nil then
-        begin
-          MethListStr := Format('Methods.Count=%d [', [Methods.Count]);
-          for var Mi := 0 to Methods.Count - 1 do
-          begin
-            if Mi > 0 then MethListStr := MethListStr + ', ';
-            MethListStr := MethListStr + Format('"%s"@L%d..L%d',
-              [Methods[Mi].Name, Methods[Mi].Line, CalcMethodEndLine(Methods[Mi])]);
-          end;
-          MethListStr := MethListStr + ']';
-        end;
-        var M1Str : string := 'nil';
-        if Meth1 <> nil then M1Str := Format('node@L%d', [Meth1.Line]);
-        var M2Str : string := 'nil';
-        if Meth2 <> nil then M2Str := Format('node@L%d', [Meth2.Line]);
-        DiagSnippet := Format(
-          '[%s] FreeLn=%d UseLn=%d Meth1=%s Meth2=%s | %s',
-          [FileName, AFreeLine, AUseLine, M1Str, M2Str, MethListStr]);
-        if (Meth1 <> nil) and (Meth2 <> nil) and (Meth1 = Meth2) then
-        begin
-          CFG := GetOrBuildCFG(Meth1);
-          FreeBlk := FindBlockForLine(CFG, AFreeLine);
-          UseBlk  := FindBlockForLine(CFG, AUseLine);
-          var FBStr : string := 'nil';
-          if FreeBlk <> nil then
-            FBStr := Format('Id=%d Kind=%d', [FreeBlk.Id, Ord(FreeBlk.Kind)]);
-          var UBStr : string := 'nil';
-          if UseBlk <> nil then
-            UBStr := Format('Id=%d Kind=%d', [UseBlk.Id, Ord(UseBlk.Kind)]);
-          DiagSnippet := DiagSnippet +
-            Format(' FreeBlk=[%s] UseBlk=[%s]', [FBStr, UBStr]);
-          if (FreeBlk <> nil) and (UseBlk <> nil) then
-            DiagSnippet := DiagSnippet +
-              Format(' CanReach=%s', [BoolToStr(CFG.CanReach(FreeBlk, UseBlk), True)]);
-        end;
-        TFile.AppendAllText('D:\git-demos\delphi\StaticCodeAnalyser\sca-cfg-debug.log',
-          DiagSnippet + sLineBreak);
-      except
-        on E: Exception do
-          try
-            TFile.AppendAllText('D:\git-demos\delphi\StaticCodeAnalyser\sca-cfg-debug.log',
-              Format('[%s] DIAG-EXCEPTION: %s', [FileName, E.Message]) + sLineBreak);
-          except end;
-      end;
-    end;
     if (Meth1 = nil) or (Meth2 = nil) or (Meth1 <> Meth2) then Exit;
     CFG := GetOrBuildCFG(Meth1);
     FreeBlk := FindBlockForLine(CFG, AFreeLine);
