@@ -72,7 +72,7 @@ type
 implementation
 
 uses
-  System.RegularExpressions, System.StrUtils,
+  System.RegularExpressions, System.StrUtils, System.IOUtils,
   uFileTextCache,
   uCFG;
 
@@ -332,6 +332,49 @@ var
     CFG := GetOrBuildCFG(Meth1);
     FreeBlk := FindBlockForLine(CFG, AFreeLine);
     UseBlk  := FindBlockForLine(CFG, AUseLine);
+    // TEMP DIAG (audit-only, removed after analysis):
+    // Dump CFG-structure + Block-IDs fuer uglobs/JclCompression/ftpsend.
+    try
+      if (Pos('uglobs', LowerCase(FileName)) > 0) or
+         (Pos('jclcompression', LowerCase(FileName)) > 0) or
+         (Pos('ftpsend', LowerCase(FileName)) > 0) then
+      begin
+        var Diag : string;
+        var FBStr : string := 'nil';
+        if FreeBlk <> nil then FBStr := Format('Id=%d Kind=%d Line=%d',
+          [FreeBlk.Id, Ord(FreeBlk.Kind), FreeBlk.Line]);
+        var UBStr : string := 'nil';
+        if UseBlk <> nil then UBStr := Format('Id=%d Kind=%d Line=%d',
+          [UseBlk.Id, Ord(UseBlk.Kind), UseBlk.Line]);
+        Diag := Format('[%s] Free@L%d Use@L%d Method@L%d FreeBlk=[%s] UseBlk=[%s]',
+          [FileName, AFreeLine, AUseLine, Meth1.Line, FBStr, UBStr]);
+        if (FreeBlk <> nil) and (UseBlk <> nil) then
+          Diag := Diag + Format(' CanReach=%s', [BoolToStr(CFG.CanReach(FreeBlk, UseBlk), True)]);
+        // Append full CFG dump: Block-ID -> Successors-IDs + first-line.
+        Diag := Diag + sLineBreak + '  CFG-Dump:';
+        for var B in CFG.Blocks do
+        begin
+          var SuccStr : string := '';
+          for var S2 in B.Successors do
+          begin
+            if SuccStr <> '' then SuccStr := SuccStr + ',';
+            SuccStr := SuccStr + IntToStr(S2.Id);
+          end;
+          var NodeLines : string := '';
+          for var N in B.AstNodes do
+          begin
+            if NodeLines <> '' then NodeLines := NodeLines + ',';
+            NodeLines := NodeLines + IntToStr(N.Line);
+          end;
+          Diag := Diag + sLineBreak +
+            Format('    Blk%d Kind=%d Line=%d Succ=[%s] Nodes@[%s]',
+              [B.Id, Ord(B.Kind), B.Line, SuccStr, NodeLines]);
+        end;
+        System.IOUtils.TFile.AppendAllText(
+          'D:\git-demos\delphi\StaticCodeAnalyser\sca-cfg-debug.log',
+          Diag + sLineBreak + sLineBreak);
+      end;
+    except end;
     if (FreeBlk = nil) or (UseBlk = nil) then Exit;
     Result := not CFG.CanReach(FreeBlk, UseBlk);
   end;
