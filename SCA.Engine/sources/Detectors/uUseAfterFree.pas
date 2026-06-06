@@ -71,7 +71,7 @@ type
 implementation
 
 uses
-  System.RegularExpressions, System.StrUtils,
+  System.RegularExpressions, System.StrUtils, System.IOUtils,
   uFileTextCache,
   uCFG;
 
@@ -294,17 +294,46 @@ var
     CFG          : TCFG;
     FreeBlk      : TCFGBlock;
     UseBlk       : TCFGBlock;
+    DiagSnippet  : string;
   begin
     Result := False;
     Meth1 := FindMethodForLine(AFreeLine);
     Meth2 := FindMethodForLine(AUseLine);
+    // TEMPORARY DIAGNOSTIC (audit base64func/JclCompression/uglobs FPs):
+    // append per-finding decisions in a file next to the SARIF output.
+    // Wird in einem Folge-Commit wieder entfernt.
+    if Pos('base64func', LowerCase(FileName)) > 0 then
+    begin
+      try
+        DiagSnippet := Format(
+          '[%s] FreeLn=%d UseLn=%d Meth1=%s(L=%d) Meth2=%s(L=%d) ',
+          [FileName, AFreeLine, AUseLine,
+           BoolToStr(Meth1 <> nil), IfThen(Meth1 <> nil, Meth1.Line, -1),
+           BoolToStr(Meth2 <> nil), IfThen(Meth2 <> nil, Meth2.Line, -1)]);
+        if (Meth1 <> nil) and (Meth2 <> nil) and (Meth1 = Meth2) then
+        begin
+          CFG := GetOrBuildCFG(Meth1);
+          FreeBlk := FindBlockForLine(CFG, AFreeLine);
+          UseBlk  := FindBlockForLine(CFG, AUseLine);
+          DiagSnippet := DiagSnippet + Format(
+            'FreeBlk=%s(Id=%d Kind=%d) UseBlk=%s(Id=%d Kind=%d)',
+            [BoolToStr(FreeBlk <> nil), IfThen(FreeBlk <> nil, FreeBlk.Id, -1),
+             IfThen(FreeBlk <> nil, Ord(FreeBlk.Kind), -1),
+             BoolToStr(UseBlk  <> nil), IfThen(UseBlk  <> nil, UseBlk.Id, -1),
+             IfThen(UseBlk  <> nil, Ord(UseBlk.Kind), -1)]);
+          if (FreeBlk <> nil) and (UseBlk <> nil) then
+            DiagSnippet := DiagSnippet +
+              Format(' CanReach=%s', [BoolToStr(CFG.CanReach(FreeBlk, UseBlk))]);
+        end;
+        TFile.AppendAllText('sca-cfg-debug.log', DiagSnippet + sLineBreak);
+      except
+        // Diagnostic darf den Scan nie crashen
+      end;
+    end;
     if (Meth1 = nil) or (Meth2 = nil) or (Meth1 <> Meth2) then Exit;
     CFG := GetOrBuildCFG(Meth1);
     FreeBlk := FindBlockForLine(CFG, AFreeLine);
     UseBlk  := FindBlockForLine(CFG, AUseLine);
-    // Wenn einer der Bloecke nicht gefunden wird (Builder hat das
-    // Statement nicht erfasst, z.B. wegen Parser-Quirk), KEINE
-    // Filterung - lieber lexisches Verhalten beibehalten.
     if (FreeBlk = nil) or (UseBlk = nil) then Exit;
     Result := not CFG.CanReach(FreeBlk, UseBlk);
   end;
