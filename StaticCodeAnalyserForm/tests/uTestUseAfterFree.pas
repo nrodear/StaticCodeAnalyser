@@ -22,6 +22,8 @@ type
     // Audit-Fixes nach mORMot/Firebird-Self-Test
     [Test] procedure FreeFieldAssignment_NoFinding;
     [Test] procedure FreeMethodWithArgument_NoFinding;
+    // CFG-Variable-Overwrite-Bug (base64func.pas-Pattern)
+    [Test] procedure CfgFilter_TryWithIfElse_NoFinding;
   end;
 
 implementation
@@ -253,6 +255,42 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual(0, TFindingHelper.Count(F, fkUseAfterFree),
     'Free mit Argument ist Method-Call, kein Destructor');
+  finally F.Free; end;
+end;
+
+procedure TTestUseAfterFree.CfgFilter_TryWithIfElse_NoFinding;
+// doublecmd base64func.pas Pattern (Audit-Reproducer):
+// Free in if-then-Branch, Use in else-if-Branch, alles innerhalb
+// eines try/except. Vor dem Fix wurde der function-level 'Merge'
+// von der rekursiven ProcessOneStatement-Call fuer das innere if
+// ueberschrieben - nkTryExcept connectete dann gegen den falschen
+// Merge-Block, CanReach lieferte True und der FP blieb.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var L: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  try'#13#10 +
+  '    L.Add(''init'');'#13#10 +
+  '    if Length(L.Text) = 0 then'#13#10 +
+  '    begin'#13#10 +
+  '      FreeAndNil(L);'#13#10 +
+  '      Exit;'#13#10 +
+  '    end'#13#10 +
+  '    else if L.Count > 1 then'#13#10 +
+  '    begin'#13#10 +
+  '      L.Add(''second'');'#13#10 +
+  '    end;'#13#10 +
+  '  except'#13#10 +
+  '    if Assigned(L) then L.Free;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual(0, TFindingHelper.Count(F, fkUseAfterFree),
+    'try/if-Free/elseif-Use: CFG-Filter muss FP droppen');
   finally F.Free; end;
 end;
 

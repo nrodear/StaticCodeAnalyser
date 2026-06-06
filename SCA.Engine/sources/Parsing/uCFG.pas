@@ -359,7 +359,13 @@ var
           BranchBlk := CFG.NewBlock(ckBranch);
           BranchBlk.Line := S.Line;
           CFG.Connect(Current, BranchBlk);
-          Merge := CFG.NewBlock(ckStatement);
+          // KRITISCH: distinkte inline-Variable CaseMerge statt der
+          // function-level 'Merge'. WalkStatements(SubCh.Children) im
+          // Arm kann ein nested nkIfStmt enthalten dessen rekursive
+          // ProcessOneStatement den function-level Merge ueberschreibt -
+          // nachfolgende Arme wuerden dann gegen den falschen Merge
+          // connecten. Selber Bug wie nkTryExcept (audit-fix).
+          var CaseMerge := CFG.NewBlock(ckStatement);
 
           HasElseArm := False;
           AnyArmTail := False;
@@ -373,7 +379,7 @@ var
             ArmTail := WalkStatements(SubCh.Children, CFG, ArmStart);
             if ArmTail <> nil then
             begin
-              CFG.Connect(ArmTail, Merge);
+              CFG.Connect(ArmTail, CaseMerge);
               AnyArmTail := True;
             end;
           end;
@@ -383,12 +389,12 @@ var
           // Arm matched, geht's einfach weiter". Branch -> Merge.
           if not HasElseArm then
           begin
-            CFG.Connect(BranchBlk, Merge);
+            CFG.Connect(BranchBlk, CaseMerge);
             AnyArmTail := True;
           end;
 
           if AnyArmTail then
-            Result := Merge
+            Result := CaseMerge
           else
             Result := nil;  // alle Arme beendet
         end;
@@ -497,9 +503,16 @@ var
           Current.AstNodes.Add(S);
           if Current.Line = 0 then Current.Line := S.Line;
 
+          // KRITISCH: distinkte inline-Variable TryMerge statt der
+          // function-level 'Merge' aus Line 233. WalkStatements ruft
+          // recursive ProcessOneStatement; wenn TryStmts ein nkIfStmt
+          // oder nkCaseStmt enthaelt, ueberschreibt deren `Merge := ...`
+          // den function-level Merge - die nkTryExcept-Branch wuerde
+          // dann auf den falschen Merge-Block connecten. Reproduziert
+          // im Audit als FP in doublecmd base64func.pas (try/if/else).
           var TryBodyStart := CFG.NewBlock(ckStatement);
           var ExceptStart  := CFG.NewBlock(ckException);
-          Merge := CFG.NewBlock(ckStatement);    // function-level var (Line 233)
+          var TryMerge     := CFG.NewBlock(ckStatement);
           ExceptStart.Line := S.Line;
           CFG.Connect(Current, TryBodyStart);
           CFG.Connect(TryBodyStart, ExceptStart);
@@ -519,19 +532,19 @@ var
 
             var TryBodyTail := WalkStatements(TryStmts, CFG, TryBodyStart);
             if TryBodyTail <> nil then
-              CFG.Connect(TryBodyTail, Merge);
+              CFG.Connect(TryBodyTail, TryMerge);
 
             // Except-Body walken (alle Children inkl. on-Handler).
             var ExceptTail : TCFGBlock := ExceptStart;
             if ExceptNode <> nil then
               ExceptTail := WalkStatements(ExceptNode.Children, CFG, ExceptStart);
             if ExceptTail <> nil then
-              CFG.Connect(ExceptTail, Merge);
+              CFG.Connect(ExceptTail, TryMerge);
           finally
             TryStmts.Free;
           end;
 
-          Result := Merge;
+          Result := TryMerge;
         end;
 
       nkTryFinally:
