@@ -800,11 +800,19 @@ var
   begin
     if F = nil then Exit;
     if IsLineInRanges(F.Line, NestedRanges) then Exit;
-    // Inline-var Form: 'for var x := ...' legt nkLocalVar als Child an.
-    // Die Loop-Variable bekommt damit eine eigene Var-Inventur-Eintrag,
-    // hier nichts zu tun (RegisterWrite waere doppelt).
+    // Inline-var Form: 'for var x := ...' oder 'for var x in container do'.
+    // Der Parser legt die LoopVar als nkLocalVar-Child an. Die LoopVar wird
+    // implizit vom for/for-in-Iterator vor jedem Body-Durchlauf zugewiesen -
+    // ohne RegisterWrite stuende die Var im Inventory ohne FirstWriteLine
+    // und ein Read im Body wuerde als UninitVar gemeldet (FP, gemeldet als
+    // LogStats_plugin MainForm.pas:352 'for var Pair in ADict do').
     for Child in F.Children do
-      if Child.Kind = nkLocalVar then Exit;
+      if Child.Kind = nkLocalVar then
+      begin
+        Idx := VarIndexFor(LowerCase(Child.Name));
+        if Idx >= 0 then RegisterWrite(Idx, F.Line);
+        Exit;
+      end;
 
     // Klassische Form: TypeRef enthaelt 'i := 0 to 10' o.ae.
     // Loop-Var = erstes Token.

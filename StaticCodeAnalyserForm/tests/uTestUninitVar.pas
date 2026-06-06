@@ -29,6 +29,7 @@ type
     [Test] procedure ManagedDynamicArray_NoFinding;
     [Test] procedure ReadLnInitialisesVar_NoFinding;
     [Test] procedure ForLoopInitialisesVar_NoFinding;
+    [Test] procedure ForInInlineVar_NoFinding;
     [Test] procedure FillCharInitialisesVar_NoFinding;
     [Test] procedure WriteBeforeRead_TryFinally_NoFinding;
     [Test] procedure DeclaredButNeverReferenced_NoFinding;
@@ -342,6 +343,35 @@ begin
   try
     Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
       'for-Loop initialisiert Index-Var - kein Flag');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.ForInInlineVar_NoFinding;
+// Regression LogStats_plugin MainForm.pas:352 - 'for var Pair in ADict do'
+// darf NIE UninitVar werfen. Die LoopVar wird implizit vom Enumerator
+// vor jedem Body-Durchlauf zugewiesen.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'uses System.Generics.Collections;'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var D: TDictionary<string,Integer>;'#13#10 +
+    'begin'#13#10 +
+    '  D := TDictionary<string,Integer>.Create;'#13#10 +
+    '  for var Pair in D do'#13#10 +
+    '    WriteLn(Pair.Key);'#13#10 +
+    '  D.Free;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+      'for-in mit inline-var darf kein UninitVar werfen');
   finally L.Free; end;
 end;
 
