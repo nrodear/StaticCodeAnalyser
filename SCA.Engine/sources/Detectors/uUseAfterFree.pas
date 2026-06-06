@@ -370,8 +370,8 @@ var
                 [Sorted[i].Name, Sorted[i].Line]);
               Inc(i); Inc(Shown);
             end;
-            if i < Sorted.Count then
-              NearStr := NearStr + Format(', ... LAST="%s"@L%d',
+            if Sorted.Count > 0 then
+              NearStr := NearStr + Format(' || LAST="%s"@L%d',
                 [Sorted[Sorted.Count - 1].Name, Sorted[Sorted.Count - 1].Line]);
           finally Sorted.Free; end;
         end;
