@@ -552,6 +552,31 @@ begin
     while (i <= Length(T)) and IsIdentChar(T[i]) do Inc(i);
     NameEnd := i - 1;
     while (i <= Length(T)) and (T[i] = ' ') do Inc(i);
+    // Generic-Type-Parameter '<T>' bzw. '<K, V>' zwischen Name und '('
+    // ueberspringen. Pattern: 'TryGet<TestFixtureAttribute>(attrib)'.
+    // Disambiguation gegen '<' als Operator (z.B. 'x < 5'): wir
+    // versuchen einen balancierten Skip und rollen zurueck wenn danach
+    // KEIN '(' folgt (dann war's tatsaechlich ein Operator).
+    if (i <= Length(T)) and (T[i] = '<') then
+    begin
+      var SaveI : Integer := i;
+      var GDepth : Integer := 1;
+      Inc(i);
+      while (i <= Length(T)) and (GDepth > 0) do
+      begin
+        if T[i] = '<' then Inc(GDepth)
+        else if T[i] = '>' then Dec(GDepth);
+        Inc(i);
+      end;
+      while (i <= Length(T)) and (T[i] = ' ') do Inc(i);
+      if (i > Length(T)) or (T[i] <> '(') then
+      begin
+        // War kein Generic-Call - Rewind, der Outer-Loop wird das
+        // '<' als Non-IdentStart skippen.
+        i := SaveI;
+        Continue;
+      end;
+    end;
     if (i > Length(T)) or (T[i] <> '(') then Continue;
     // OK - 'name(' Pattern; Args bis matching ')' extrahieren.
     Inc(i);                                   // hinter '('

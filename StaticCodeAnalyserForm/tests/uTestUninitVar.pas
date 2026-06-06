@@ -30,6 +30,7 @@ type
     [Test] procedure ReadLnInitialisesVar_NoFinding;
     [Test] procedure ForLoopInitialisesVar_NoFinding;
     [Test] procedure ForInInlineVar_NoFinding;
+    [Test] procedure TryGetGenericOutArg_NoFinding;
     [Test] procedure FillCharInitialisesVar_NoFinding;
     [Test] procedure WriteBeforeRead_TryFinally_NoFinding;
     [Test] procedure DeclaredButNeverReferenced_NoFinding;
@@ -372,6 +373,36 @@ begin
   try
     Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
       'for-in mit inline-var darf kein UninitVar werfen');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.TryGetGenericOutArg_NoFinding;
+// Regression DUnitX.TestFramework.pas:851 - das Pattern
+//   if rType.TryGetAttributeOfType<TestFixtureAttribute>(attrib) then
+//     sName := attrib.Name;
+// darf KEIN UninitVar werfen. ParseCallsInExpr muss den Generic-Type-
+// Parameter <T> zwischen Funktionsname und '(' ueberspringen, damit
+// 'attrib' als Call-Arg erkannt und pessimistic als Write registriert
+// wird.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var attrib: TObject; sName: string;'#13#10 +
+    'begin'#13#10 +
+    '  if TryGet<TObject>(attrib) then'#13#10 +
+    '    sName := attrib.ClassName;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+      'TryGet<T>(out arg) im if-Condition darf kein UninitVar werfen');
   finally L.Free; end;
 end;
 
