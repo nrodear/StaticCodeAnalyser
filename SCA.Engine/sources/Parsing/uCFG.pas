@@ -6,8 +6,8 @@ unit uCFG;
 //   A.4.1 Datenstruktur + leerer Builder              -- DONE
 //   A.4.2 Builder fuer lineare Statements             -- DONE
 //   A.4.3 Branching (nkIfStmt, nkCaseStmt)            -- DONE
-//   A.4.4 Loops (while/for/repeat) + Break/Continue   <- DIESE PHASE
-//   A.4.5 Exception-Pfade (nkTryExcept, nkTryFinally)
+//   A.4.4 Loops (while/for/repeat) + Break/Continue   -- DONE
+//   A.4.5 Exception-Pfade (nkTryExcept, nkTryFinally) <- DIESE PHASE
 //   A.4.6 SCA134-Integration
 //
 // Lifecycle: TCFG besitzt ihre TCFGBlock-Instanzen via FBlocks
@@ -479,16 +479,112 @@ var
           Result := NextBlk;
         end;
 
-      nkTryExcept, nkTryFinally:
+      nkTryExcept:
         begin
-          // A.4.5 modelliert Exception-Pfade. Bis dahin: opaker Statement
-          // mit 1-Ebenen-Tiefe-Scan auf nested nkExit damit Reachability
-          // OUTER-Exit findet.
+          //   try { TryBody } except { ExceptBody } end;
+          //
+          // Modell:
+          //   Current -> TryBodyStart
+          //   TryBodyStart -> ExceptStart  (Cross-Edge: Exception passiert)
+          //   TryBodyTail  -> Merge        (normaler Flow durch den try)
+          //   ExceptTail   -> Merge        (Handler beendet, weiter)
+          //   Result = Merge
+          //
+          // Vereinfachung: Cross-Edge nur am START vom Try-Body. Genauer
+          // waere "jeder Statement im Try kann throwen" (= Cross-Edge von
+          // JEDEM TryBody-Block). Fuer SCA134-Reachability reicht der
+          // Start-Edge - ExceptStart wird damit erreichbar markiert.
           Current.AstNodes.Add(S);
           if Current.Line = 0 then Current.Line := S.Line;
-          for SubCh in S.Children do
-            if SubCh.Kind = nkExit then
-              CFG.Connect(Current, CFG.Exit_);
+
+          var TryBodyStart := CFG.NewBlock(ckStatement);
+          var ExceptStart  := CFG.NewBlock(ckException);
+          var Merge        := CFG.NewBlock(ckStatement);
+          ExceptStart.Line := S.Line;
+          CFG.Connect(Current, TryBodyStart);
+          CFG.Connect(TryBodyStart, ExceptStart);
+
+          // TryBody = Children OHNE den nkExceptBlock am Ende.
+          // ExceptBlock = ein Child mit Kind=nkExceptBlock.
+          var ExceptNode : TAstNode := nil;
+          var TryStmts := TList<TAstNode>.Create;
+          try
+            for SubCh in S.Children do
+            begin
+              if SubCh.Kind = nkExceptBlock then
+                ExceptNode := SubCh
+              else
+                TryStmts.Add(SubCh);
+            end;
+
+            var TryBodyTail := WalkStatements(TryStmts, CFG, TryBodyStart);
+            if TryBodyTail <> nil then
+              CFG.Connect(TryBodyTail, Merge);
+
+            // Except-Body walken (alle Children inkl. on-Handler).
+            var ExceptTail : TCFGBlock := ExceptStart;
+            if ExceptNode <> nil then
+              ExceptTail := WalkStatements(ExceptNode.Children, CFG, ExceptStart);
+            if ExceptTail <> nil then
+              CFG.Connect(ExceptTail, Merge);
+          finally
+            TryStmts.Free;
+          end;
+
+          Result := Merge;
+        end;
+
+      nkTryFinally:
+        begin
+          //   try { TryBody } finally { FinallyBody } end;
+          //
+          // Modell (Finally LAEUFT IMMER, sowohl normal-end als auch
+          // Exception):
+          //   Current      -> TryBodyStart
+          //   TryBodyStart -> FinallyStart  (Cross-Edge: Exception waehrend Try)
+          //   TryBodyTail  -> FinallyStart  (normaler Try-End)
+          //   FinallyTail  -> NextBlock     (Continuation)
+          //   Result = NextBlock
+          //
+          // Bei Re-Raise nach Finally (Exception propagiert) waere konservativ
+          // FinallyTail->Exit_; weglassen aktuell, das ist eine Ueber-
+          // Konservativitaet die SCA134 unnoetige TPs erzeugen koennte.
+          Current.AstNodes.Add(S);
+          if Current.Line = 0 then Current.Line := S.Line;
+
+          var TryBodyStart := CFG.NewBlock(ckStatement);
+          var FinallyStart := CFG.NewBlock(ckException);
+          var NextBlk      := CFG.NewBlock(ckStatement);
+          FinallyStart.Line := S.Line;
+          CFG.Connect(Current, TryBodyStart);
+          CFG.Connect(TryBodyStart, FinallyStart);   // Exception-Pfad
+
+          // Children = TryBody-Stmts ... + nkFinallyBlock am Ende.
+          var FinallyNode : TAstNode := nil;
+          var TryStmts := TList<TAstNode>.Create;
+          try
+            for SubCh in S.Children do
+            begin
+              if SubCh.Kind = nkFinallyBlock then
+                FinallyNode := SubCh
+              else
+                TryStmts.Add(SubCh);
+            end;
+
+            var TryBodyTail := WalkStatements(TryStmts, CFG, TryBodyStart);
+            if TryBodyTail <> nil then
+              CFG.Connect(TryBodyTail, FinallyStart);
+
+            var FinallyTail : TCFGBlock := FinallyStart;
+            if FinallyNode <> nil then
+              FinallyTail := WalkStatements(FinallyNode.Children, CFG, FinallyStart);
+            if FinallyTail <> nil then
+              CFG.Connect(FinallyTail, NextBlk);
+          finally
+            TryStmts.Free;
+          end;
+
+          Result := NextBlk;
         end;
     else
       // nkLocalVar / nkInherited / etc.: kein Control-Flow.

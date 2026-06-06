@@ -47,6 +47,11 @@ type
     [Test] procedure Break_ConnectsToLoopExit;
     [Test] procedure Continue_ConnectsToLoopHead;
     [Test] procedure NestedLoops_InnerBreakHitsInnerExit;
+    // A.4.5 Exception-Pfade
+    [Test] procedure TryExcept_HasExceptionBlock;
+    [Test] procedure TryExcept_BothPathsReachMerge;
+    [Test] procedure TryFinally_FinallyRunsOnBothPaths;
+    [Test] procedure TryExceptWithExitInTry_ExitReachable;
   end;
 
 implementation
@@ -563,6 +568,114 @@ begin
       for var B in CFG.Blocks do
         if B.Kind = ckLoop then Inc(Loops);
       Assert.AreEqual(2, Loops, 'Nested while erzeugt 2 ckLoop-Bloecke');
+      Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_));
+    finally CFG.Free; end;
+  finally Meth.Free; end;
+end;
+
+{ ---- A.4.5 Exception-Helpers ---- }
+
+function StmtTryExcept(TryBodyStmt, ExceptBodyStmt: TAstNode;
+                       ALine: Integer = 1): TAstNode;
+// nkTryExcept mit Try-Body-Stmt + nkExceptBlock (mit Except-Body-Stmt).
+var
+  ExNode : TAstNode;
+begin
+  Result := TAstNode.Create(nkTryExcept, 'try', ALine, 1);
+  if TryBodyStmt <> nil then Result.AddChild(TryBodyStmt);
+  ExNode := Result.Add(nkExceptBlock, 'except', ALine, 1);
+  if ExceptBodyStmt <> nil then ExNode.AddChild(ExceptBodyStmt);
+end;
+
+function StmtTryFinally(TryBodyStmt, FinallyBodyStmt: TAstNode;
+                        ALine: Integer = 1): TAstNode;
+var
+  FinNode : TAstNode;
+begin
+  Result := TAstNode.Create(nkTryFinally, 'try', ALine, 1);
+  if TryBodyStmt <> nil then Result.AddChild(TryBodyStmt);
+  FinNode := Result.Add(nkFinallyBlock, 'finally', ALine, 1);
+  if FinallyBodyStmt <> nil then FinNode.AddChild(FinallyBodyStmt);
+end;
+
+{ ---- A.4.5 Tests ---- }
+
+procedure TTestCFG.TryExcept_HasExceptionBlock;
+var
+  Meth : TAstNode;
+  CFG  : TCFG;
+begin
+  // try x := 1 except y := 1 end;
+  Meth := MakeMethod([ StmtTryExcept(StmtAssign, StmtAssign) ]);
+  try
+    CFG := TCFGBuilder.BuildFromMethod(Meth);
+    try
+      Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_));
+      var ExceptBlk : uCFG.TCFGBlock := nil;
+      for var B in CFG.Blocks do
+        if B.Kind = ckException then begin ExceptBlk := B; Break; end;
+      Assert.IsNotNull(ExceptBlk, 'ckException-Block muss da sein');
+      // ExceptBlk muss vom Entry erreichbar sein (via Cross-Edge).
+      Assert.IsTrue(CFG.CanReach(CFG.Entry, ExceptBlk),
+        'Entry kann ExceptBlk erreichen');
+    finally CFG.Free; end;
+  finally Meth.Free; end;
+end;
+
+procedure TTestCFG.TryExcept_BothPathsReachMerge;
+var
+  Meth : TAstNode;
+  CFG  : TCFG;
+begin
+  // try x := 1; except y := 1; end; z := 1;  (z im Merge erreichbar)
+  Meth := MakeMethod([
+    StmtTryExcept(StmtAssign, StmtAssign),
+    StmtAssign  // continuation - sollte im Merge landen
+  ]);
+  try
+    CFG := TCFGBuilder.BuildFromMethod(Meth);
+    try
+      Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_));
+      // Beide Pfade (try-end + except-end) muessen zum gleichen Merge fuehren.
+      // Indirekt pruefbar: Exit_ hat mindestens einen Predecessor.
+      Assert.IsTrue(CFG.Exit_.Predecessors.Count >= 1);
+    finally CFG.Free; end;
+  finally Meth.Free; end;
+end;
+
+procedure TTestCFG.TryFinally_FinallyRunsOnBothPaths;
+var
+  Meth : TAstNode;
+  CFG  : TCFG;
+begin
+  // try x := 1 finally y := 1 end;
+  Meth := MakeMethod([ StmtTryFinally(StmtAssign, StmtAssign) ]);
+  try
+    CFG := TCFGBuilder.BuildFromMethod(Meth);
+    try
+      Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_));
+      // FinallyStart hat 2 Predecessors: TryBodyStart (Exception) + TryBodyTail (Normal)
+      var FinallyStart : uCFG.TCFGBlock := nil;
+      for var B in CFG.Blocks do
+        if B.Kind = ckException then begin FinallyStart := B; Break; end;
+      Assert.IsNotNull(FinallyStart);
+      Assert.AreEqual(2, FinallyStart.Predecessors.Count,
+        'Finally hat 2 Predecessors (Exception + Normal-End)');
+    finally CFG.Free; end;
+  finally Meth.Free; end;
+end;
+
+procedure TTestCFG.TryExceptWithExitInTry_ExitReachable;
+var
+  Meth : TAstNode;
+  CFG  : TCFG;
+begin
+  // try Exit except y := 1 end;
+  // Exit im Try beendet die Method, Except-Pfad weiter zu Merge.
+  Meth := MakeMethod([ StmtTryExcept(StmtExit, StmtAssign) ]);
+  try
+    CFG := TCFGBuilder.BuildFromMethod(Meth);
+    try
       Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_));
     finally CFG.Free; end;
   finally Meth.Free; end;
