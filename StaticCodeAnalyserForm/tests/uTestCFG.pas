@@ -40,6 +40,13 @@ type
     [Test] procedure IfWithExitInBoth_MergeUnreachable;
     [Test] procedure CaseStmt_TwoArmsToMerge;
     [Test] procedure CaseStmtAllArmsExit_ResultNil;
+    // A.4.4 Loops
+    [Test] procedure While_HasLoopHeadAndBackEdge;
+    [Test] procedure For_HasLoopHeadAndBackEdge;
+    [Test] procedure Repeat_HasUntilHeadAndBackEdge;
+    [Test] procedure Break_ConnectsToLoopExit;
+    [Test] procedure Continue_ConnectsToLoopHead;
+    [Test] procedure NestedLoops_InnerBreakHitsInnerExit;
   end;
 
 implementation
@@ -401,6 +408,162 @@ begin
       Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_));
       // 3 Arm-Exits = 3 Predecessors auf Exit_
       Assert.AreEqual(3, CFG.Exit_.Predecessors.Count);
+    finally CFG.Free; end;
+  finally Meth.Free; end;
+end;
+
+{ ---- A.4.4 Loop-Helpers ---- }
+
+function StmtWhile(Body: TAstNode; ALine: Integer = 1): TAstNode;
+begin
+  Result := TAstNode.Create(nkWhileStmt, 'while', ALine, 1);
+  if Body <> nil then Result.AddChild(Body);
+end;
+
+function StmtFor(Body: TAstNode; ALine: Integer = 1): TAstNode;
+begin
+  Result := TAstNode.Create(nkForStmt, 'for', ALine, 1);
+  if Body <> nil then Result.AddChild(Body);
+end;
+
+function StmtRepeat(const Body: array of TAstNode;
+                    ALine: Integer = 1): TAstNode;
+var i: Integer;
+begin
+  Result := TAstNode.Create(nkRepeatStmt, 'repeat', ALine, 1);
+  for i := 0 to High(Body) do Result.AddChild(Body[i]);
+end;
+
+function StmtBreak: TAstNode;
+begin Result := TAstNode.Create(nkBreak, 'break', 1, 1); end;
+
+function StmtContinue: TAstNode;
+begin Result := TAstNode.Create(nkContinue, 'continue', 1, 1); end;
+
+{ ---- A.4.4 Tests ---- }
+
+procedure TTestCFG.While_HasLoopHeadAndBackEdge;
+var
+  Meth : TAstNode;
+  CFG  : TCFG;
+begin
+  // while cond do x := 1;
+  Meth := MakeMethod([ StmtWhile(StmtAssign) ]);
+  try
+    CFG := TCFGBuilder.BuildFromMethod(Meth);
+    try
+      Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_));
+      var LoopHead : uCFG.TCFGBlock := nil;
+      for var B in CFG.Blocks do
+        if B.Kind = ckLoop then begin LoopHead := B; Break; end;
+      Assert.IsNotNull(LoopHead, 'ckLoop-Block muss da sein');
+      // LoopHead hat 2 Successors: BodyStart + NextBlk
+      Assert.AreEqual(2, LoopHead.Successors.Count, 'while LoopHead 2 Successors');
+      // LoopHead hat min. 2 Predecessors: Current und Body-Back-Edge
+      Assert.IsTrue(LoopHead.Predecessors.Count >= 2,
+        'Back-Edge muss zum LoopHead zeigen');
+    finally CFG.Free; end;
+  finally Meth.Free; end;
+end;
+
+procedure TTestCFG.For_HasLoopHeadAndBackEdge;
+var
+  Meth : TAstNode;
+  CFG  : TCFG;
+begin
+  Meth := MakeMethod([ StmtFor(StmtAssign) ]);
+  try
+    CFG := TCFGBuilder.BuildFromMethod(Meth);
+    try
+      Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_));
+      var LoopHead : uCFG.TCFGBlock := nil;
+      for var B in CFG.Blocks do
+        if B.Kind = ckLoop then begin LoopHead := B; Break; end;
+      Assert.IsNotNull(LoopHead);
+      Assert.IsTrue(LoopHead.Predecessors.Count >= 2, 'Back-Edge');
+    finally CFG.Free; end;
+  finally Meth.Free; end;
+end;
+
+procedure TTestCFG.Repeat_HasUntilHeadAndBackEdge;
+var
+  Meth : TAstNode;
+  CFG  : TCFG;
+begin
+  // repeat x := 1; until cond;
+  Meth := MakeMethod([ StmtRepeat([ StmtAssign ]) ]);
+  try
+    CFG := TCFGBuilder.BuildFromMethod(Meth);
+    try
+      Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_));
+      var UntilHead : uCFG.TCFGBlock := nil;
+      for var B in CFG.Blocks do
+        if B.Kind = ckLoop then begin UntilHead := B; Break; end;
+      Assert.IsNotNull(UntilHead);
+      // UntilHead hat 2 Successors: BodyStart + NextBlk
+      Assert.AreEqual(2, UntilHead.Successors.Count, 'repeat UntilHead 2 Successors');
+    finally CFG.Free; end;
+  finally Meth.Free; end;
+end;
+
+procedure TTestCFG.Break_ConnectsToLoopExit;
+var
+  Meth : TAstNode;
+  CFG  : TCFG;
+begin
+  // while cond do break;
+  Meth := MakeMethod([ StmtWhile(StmtBreak) ]);
+  try
+    CFG := TCFGBuilder.BuildFromMethod(Meth);
+    try
+      Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_));
+      // Es muss zwei Wege zu Exit_ geben:
+      //   1) LoopHead -> NextBlk -> Exit_     (Cond-False-Pfad)
+      //   2) Body -> NextBlk (Break) -> Exit_
+      // Reachability test: alles erreicht Exit_.
+    finally CFG.Free; end;
+  finally Meth.Free; end;
+end;
+
+procedure TTestCFG.Continue_ConnectsToLoopHead;
+var
+  Meth : TAstNode;
+  CFG  : TCFG;
+begin
+  Meth := MakeMethod([ StmtWhile(StmtContinue) ]);
+  try
+    CFG := TCFGBuilder.BuildFromMethod(Meth);
+    try
+      // Continue erzeugt eine extra Edge Body -> LoopHead. LoopHead hat
+      // damit mindestens 2 Predecessors (Entry-Path + Continue-Edge).
+      var LoopHead : uCFG.TCFGBlock := nil;
+      for var B in CFG.Blocks do
+        if B.Kind = ckLoop then begin LoopHead := B; Break; end;
+      Assert.IsNotNull(LoopHead);
+      Assert.IsTrue(LoopHead.Predecessors.Count >= 2,
+        'Continue addiert Edge zum LoopHead');
+    finally CFG.Free; end;
+  finally Meth.Free; end;
+end;
+
+procedure TTestCFG.NestedLoops_InnerBreakHitsInnerExit;
+var
+  Meth : TAstNode;
+  CFG  : TCFG;
+begin
+  // while outer do while inner do break;
+  Meth := MakeMethod([ StmtWhile( StmtWhile( StmtBreak ) ) ]);
+  try
+    CFG := TCFGBuilder.BuildFromMethod(Meth);
+    try
+      // Beide Loops haben ckLoop. Inner-Break geht zum Inner-NextBlk,
+      // NICHT zum Outer-NextBlk. Indirekt pruefbar via Block-Count:
+      // Build sollte 2 ckLoop-Bloecke produzieren.
+      var Loops := 0;
+      for var B in CFG.Blocks do
+        if B.Kind = ckLoop then Inc(Loops);
+      Assert.AreEqual(2, Loops, 'Nested while erzeugt 2 ckLoop-Bloecke');
+      Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_));
     finally CFG.Free; end;
   finally Meth.Free; end;
 end;

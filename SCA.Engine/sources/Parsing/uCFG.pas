@@ -5,8 +5,8 @@ unit uCFG;
 // Phasen-Stand:
 //   A.4.1 Datenstruktur + leerer Builder              -- DONE
 //   A.4.2 Builder fuer lineare Statements             -- DONE
-//   A.4.3 Branching (nkIfStmt, nkCaseStmt)            <- DIESE PHASE
-//   A.4.4 Loops (nkWhileStmt, nkForStmt, nkRepeatStmt)
+//   A.4.3 Branching (nkIfStmt, nkCaseStmt)            -- DONE
+//   A.4.4 Loops (while/for/repeat) + Break/Continue   <- DIESE PHASE
 //   A.4.5 Exception-Pfade (nkTryExcept, nkTryFinally)
 //   A.4.6 SCA134-Integration
 //
@@ -170,22 +170,34 @@ end;
 
 { TCFGBuilder }
 
-// A.4.2+A.4.3 Builder fuer lineare Statements + Control-Transfer + Branching.
+// A.4.2-A.4.4 Builder fuer lineare Statements + Control-Transfer + Branching + Loops.
 //
 // Behandelt:
 //   * nkAssign, nkCall          -> Sammeln in aktuellem ckStatement-Block
 //   * nkExit                    -> Block -> Exit_, kein Tail
-//   * nkBreak, nkContinue       -> Block -> nil  (Loop-Aufloesung in A.4.4)
 //   * nkRaise                   -> Block -> Exit_ (Exception-Pfade in A.4.5)
+//   * nkBreak                   -> Block -> LoopExit-Stack-Top, Tail=nil  (A.4.4)
+//   * nkContinue                -> Block -> LoopHead-Stack-Top, Tail=nil  (A.4.4)
 //   * nkBlock (begin..end)      -> rekursiv abarbeiten (= inline)
-//   * nkIfStmt                  -> BranchBlk + Then/Else-Pfade + Merge   (A.4.3)
-//   * nkCaseStmt                -> BranchBlk + N Arm-Pfade + Merge       (A.4.3)
+//   * nkIfStmt                  -> BranchBlk + Then/Else-Pfade + Merge    (A.4.3)
+//   * nkCaseStmt                -> BranchBlk + N Arm-Pfade + Merge        (A.4.3)
+//   * nkWhileStmt, nkForStmt    -> LoopHead + BodyStart + Back-Edge + NextBlock (A.4.4)
+//   * nkRepeatStmt              -> Body + UntilHead + Back-Edge + NextBlock     (A.4.4)
 //
-// Loops/Try noch opak (siehe Sub-Branch unten):
-//   nkWhileStmt/nkForStmt/nkRepeatStmt -> A.4.4
-//   nkTryExcept/nkTryFinally           -> A.4.5
+// Exception-Pfade noch opak:
+//   nkTryExcept/nkTryFinally    -> A.4.5
 
 class function TCFGBuilder.BuildFromMethod(MethNode: TAstNode): TCFG;
+type
+  TLoopFrame = record
+    LoopHead : TCFGBlock;  // Ziel fuer Continue
+    LoopExit : TCFGBlock;  // Ziel fuer Break
+  end;
+var
+  // Stack der aktuell offenen Loops. Bei verschachtelten Loops greift
+  // Break/Continue nach Pascal-Konvention auf die INNERSTE Schleife =
+  // Peek (Top of Stack).
+  LoopStack : TStack<TLoopFrame>;
 
   function FindMethodBody(M: TAstNode): TAstNode;
   // Sucht den nkBlock-Body-Knoten unter der Method.
@@ -248,11 +260,25 @@ class function TCFGBuilder.BuildFromMethod(MethNode: TAstNode): TCFG;
           Result := nil;
         end;
 
-      nkBreak, nkContinue:
+      nkBreak:
         begin
-          // A.4.4 verkabelt mit Loop-Header/-Exit. Bis dahin: Sequenz endet.
           Current.AstNodes.Add(S);
           if Current.Line = 0 then Current.Line := S.Line;
+          // Break springt aus der INNERSTEN Schleife zum LoopExit
+          // (NextBlock nach dem Loop). Ohne Loop-Kontext (Parser-Fehler)
+          // bleibt das ein no-op Tail=nil, robust.
+          if LoopStack.Count > 0 then
+            CFG.Connect(Current, LoopStack.Peek.LoopExit);
+          Result := nil;
+        end;
+
+      nkContinue:
+        begin
+          Current.AstNodes.Add(S);
+          if Current.Line = 0 then Current.Line := S.Line;
+          // Continue springt zum LoopHead (Cond-Check-Punkt).
+          if LoopStack.Count > 0 then
+            CFG.Connect(Current, LoopStack.Peek.LoopHead);
           Result := nil;
         end;
 
@@ -367,12 +393,97 @@ class function TCFGBuilder.BuildFromMethod(MethNode: TAstNode): TCFG;
             Result := nil;  // alle Arme beendet
         end;
 
-      nkForStmt, nkWhileStmt, nkRepeatStmt,
+      nkWhileStmt, nkForStmt:
+        begin
+          // while/for haben Cond-Check VOR dem Body (Pre-Test-Loop):
+          //   Current -> LoopHead    (Cond evaluiert)
+          //   LoopHead -> BodyStart  (Cond=true)
+          //   BodyTail -> LoopHead   (Back-Edge fuer Iteration)
+          //   LoopHead -> NextBlock  (Cond=false, Loop-Exit)
+          Current.AstNodes.Add(S);
+          if Current.Line = 0 then Current.Line := S.Line;
+
+          var LoopHead := CFG.NewBlock(ckLoop);
+          LoopHead.Line := S.Line;
+          var NextBlk  := CFG.NewBlock(ckStatement);
+          CFG.Connect(Current, LoopHead);
+
+          var BodyStart := CFG.NewBlock(ckStatement);
+          CFG.Connect(LoopHead, BodyStart);
+          CFG.Connect(LoopHead, NextBlk);   // Cond=false sofort weiter
+
+          // Loop-Body finden: erstes Child das KEIN nkLocalVar ist
+          // (Inline-var-Loopvar bei 'for var x := ...' wuerde sonst
+          // als Body interpretiert).
+          var BodyChild : TAstNode := nil;
+          for SubCh in S.Children do
+            if SubCh.Kind <> nkLocalVar then
+            begin
+              BodyChild := SubCh;
+              Break;
+            end;
+
+          // LoopStack pushen damit Break/Continue im Body greifen
+          var Frame: TLoopFrame;
+          Frame.LoopHead := LoopHead;
+          Frame.LoopExit := NextBlk;
+          LoopStack.Push(Frame);
+          try
+            var BodyTail : TCFGBlock := BodyStart;
+            if BodyChild <> nil then
+              BodyTail := ProcessOneStatement(BodyChild, CFG, BodyStart);
+            // Back-Edge zum LoopHead wenn Body nicht durch
+            // Exit/Raise/Break/Continue terminiert wurde.
+            if BodyTail <> nil then
+              CFG.Connect(BodyTail, LoopHead);
+          finally
+            LoopStack.Pop;
+          end;
+
+          Result := NextBlk;
+        end;
+
+      nkRepeatStmt:
+        begin
+          // repeat..until: Body laeuft VOR der Bedingung (Post-Test-Loop).
+          //   Current -> BodyStart
+          //   ... (Body als Sequenz aus S.Children)
+          //   BodyTail -> UntilHead (Cond evaluiert)
+          //   UntilHead -> BodyStart  (Cond=false, naechste Iteration)
+          //   UntilHead -> NextBlock  (Cond=true, Loop-Exit)
+          Current.AstNodes.Add(S);
+          if Current.Line = 0 then Current.Line := S.Line;
+
+          var BodyStart := CFG.NewBlock(ckStatement);
+          BodyStart.Line := S.Line;
+          var UntilHead := CFG.NewBlock(ckLoop);
+          var NextBlk   := CFG.NewBlock(ckStatement);
+          CFG.Connect(Current, BodyStart);
+
+          // Continue zielt auf UntilHead (Cond-Check), Break auf NextBlk.
+          var Frame: TLoopFrame;
+          Frame.LoopHead := UntilHead;
+          Frame.LoopExit := NextBlk;
+          LoopStack.Push(Frame);
+          try
+            // Body als Sequenz aus den Children walken
+            var BodyTail := WalkStatements(S.Children, CFG, BodyStart);
+            if BodyTail <> nil then
+              CFG.Connect(BodyTail, UntilHead);
+          finally
+            LoopStack.Pop;
+          end;
+
+          CFG.Connect(UntilHead, BodyStart);  // Cond=false -> Iteration
+          CFG.Connect(UntilHead, NextBlk);    // Cond=true -> Exit
+          Result := NextBlk;
+        end;
+
       nkTryExcept, nkTryFinally:
         begin
-          // Loops + Exception-Pfade in A.4.4/A.4.5. Bis dahin: opaker
-          // Statement im aktuellen Block, 1-Ebenen-Tiefe-Scan auf
-          // nested nkExit damit Reachability OUTER-Exit findet.
+          // A.4.5 modelliert Exception-Pfade. Bis dahin: opaker Statement
+          // mit 1-Ebenen-Tiefe-Scan auf nested nkExit damit Reachability
+          // OUTER-Exit findet.
           Current.AstNodes.Add(S);
           if Current.Line = 0 then Current.Line := S.Line;
           for SubCh in S.Children do
@@ -422,12 +533,16 @@ begin
     Exit;
   end;
 
-  // Entry -> StartBlock -> ... -> Exit_
-  var StartBlock := Result.NewBlock(ckStatement);
-  Result.Connect(Result.Entry, StartBlock);
-  Tail := WalkStatements(Body.Children, Result, StartBlock);
-  if Tail <> nil then
-    Result.Connect(Tail, Result.Exit_);
+  LoopStack := TStack<TLoopFrame>.Create;
+  try
+    var StartBlock := Result.NewBlock(ckStatement);
+    Result.Connect(Result.Entry, StartBlock);
+    Tail := WalkStatements(Body.Children, Result, StartBlock);
+    if Tail <> nil then
+      Result.Connect(Tail, Result.Exit_);
+  finally
+    LoopStack.Free;
+  end;
 end;
 
 end.
