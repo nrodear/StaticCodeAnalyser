@@ -348,19 +348,36 @@ var
           [UseBlk.Id, Ord(UseBlk.Kind), UseBlk.Line]);
         Diag := Format('[%s] Free@L%d Use@L%d Method@L%d FreeBlk=[%s] UseBlk=[%s]',
           [FileName, AFreeLine, AUseLine, Meth1.Line, FBStr, UBStr]);
-        // Methods-Liste: Lines der nahegelegenen Eintraege (+- 100).
+        // Methods sortiert nach Line, alle nach AFreeLine - 500 zeigen
+        // bis 8 Eintraege, dann ... + letzte Method.
         var NearStr : string := '';
         if Methods <> nil then
-          for var Mi := 0 to Methods.Count - 1 do
-            if Abs(Methods[Mi].Line - AFreeLine) < 200 then
+        begin
+          var Sorted := TList<TAstNode>.Create;
+          try
+            for var Mi := 0 to Methods.Count - 1 do Sorted.Add(Methods[Mi]);
+            Sorted.Sort(TComparer<TAstNode>.Construct(
+              function(const L, R: TAstNode): Integer
+              begin Result := L.Line - R.Line; end));
+            var Shown := 0;
+            var i := 0;
+            // Finde Index der ersten Method >= AFreeLine - 500
+            while (i < Sorted.Count) and (Sorted[i].Line < AFreeLine - 500) do Inc(i);
+            while (i < Sorted.Count) and (Shown < 8) do
             begin
               if NearStr <> '' then NearStr := NearStr + ', ';
               NearStr := NearStr + Format('"%s"@L%d',
-                [Methods[Mi].Name, Methods[Mi].Line]);
+                [Sorted[i].Name, Sorted[i].Line]);
+              Inc(i); Inc(Shown);
             end;
+            if i < Sorted.Count then
+              NearStr := NearStr + Format(', ... LAST="%s"@L%d',
+                [Sorted[Sorted.Count - 1].Name, Sorted[Sorted.Count - 1].Line]);
+          finally Sorted.Free; end;
+        end;
         Diag := Diag + sLineBreak +
-          Format('  Methods near Free (count=%d): [%s]',
-            [Methods.Count, NearStr]);
+          Format('  Methods (total=%d, from L%d): [%s]',
+            [Methods.Count, AFreeLine - 500, NearStr]);
         if (FreeBlk <> nil) and (UseBlk <> nil) then
           Diag := Diag + Format(' CanReach=%s', [BoolToStr(CFG.CanReach(FreeBlk, UseBlk), True)]);
         // Append full CFG dump: Block-ID -> Successors-IDs + first-line.
