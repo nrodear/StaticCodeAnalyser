@@ -499,7 +499,7 @@ var
 
           var TryBodyStart := CFG.NewBlock(ckStatement);
           var ExceptStart  := CFG.NewBlock(ckException);
-          var Merge        := CFG.NewBlock(ckStatement);
+          Merge := CFG.NewBlock(ckStatement);    // function-level var (Line 233)
           ExceptStart.Line := S.Line;
           CFG.Connect(Current, TryBodyStart);
           CFG.Connect(TryBodyStart, ExceptStart);
