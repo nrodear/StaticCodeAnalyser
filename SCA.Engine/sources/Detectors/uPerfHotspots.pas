@@ -69,19 +69,9 @@ var
   c              : Char;
   pClose         : Integer;
   Chars          : TList<Integer>;
-  EstSize        : Integer;
 begin
-  // Perf: TStringBuilder + TList<Integer> ohne Capacity haben pro File
-  // ~16 Re-Alloc-Doublings (50KB Source -> 16 Copy-Schritte). Wir
-  // schaetzen die End-Groesse aus Lines.Text-Charcount und allokieren
-  // einmalig. Output ist tendenziell etwas kleiner (Comments raus, aber
-  // ein #10 pro Zeile dazu); ueber-allozieren ist billiger als Re-Alloc.
-  EstSize := 0;
-  for i := 0 to Lines.Count - 1 do
-    Inc(EstSize, Length(Lines[i]) + 1);
-  Buf := TStringBuilder.Create(EstSize);
+  Buf := TStringBuilder.Create;
   Chars := TList<Integer>.Create;
-  Chars.Capacity := EstSize;
   try
     InBlk := False; InParen := False;
     for i := 0 to Lines.Count - 1 do
