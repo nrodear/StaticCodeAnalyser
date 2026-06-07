@@ -335,6 +335,27 @@ begin
     end;
   end;
 
+  // Ergaenzung 2: 'Result.<method>(...)' ist ein Method-Call AM Result -
+  // setzt es semantisch (DUnitX.Utils NameFld -> 'Result.SetData(@Name)',
+  // mORMot 'Result.Init(...)'). Lexisch behandeln wir es als Result-Write.
+  if not HasResult then
+  begin
+    Assigns := MethodNode.FindAll(nkCall);
+    try
+      for N in Assigns do
+      begin
+        var CallNameLow := LowerCase(N.Name);
+        if StartsStr('result.', CallNameLow) then
+        begin
+          HasResult := True;
+          Break;
+        end;
+      end;
+    finally
+      Assigns.Free;
+    end;
+  end;
+
   if HasResult then Exit;
 
   F            := TLeakFinding.Create;
