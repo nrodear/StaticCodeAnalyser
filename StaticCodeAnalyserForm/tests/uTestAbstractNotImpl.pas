@@ -14,6 +14,7 @@ type
     [Test] procedure NoBaseInUnit_NoFinding;
     [Test] procedure DerivedItselfAbstract_NoFinding;
     [Test] procedure AnonymousRecordField_DoesNotConfuseParser;
+    [Test] procedure TCustomBase_TreatedAsAbstract_NoFinding;
     [Test] procedure Finding_KindAndSeverity;
   end;
 
@@ -122,6 +123,28 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkAbstractNotImpl),
     'anonymes record als Feld darf override-Methode nicht aushebeln');
+  finally F.Free; end;
+end;
+
+procedure TTestAbstractNotImpl.TCustomBase_TreatedAsAbstract_NoFinding;
+// Regression Img32.Draw TCustomColorRenderer (~20 FPs):
+// VCL-Konvention - Klassen mit Prefix TCustom*/TAbstract* sind
+// Zwischen-Abstract-Basen die Override an Subklassen weiterreichen.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TBase = class'#13#10 +
+  '    procedure DoIt; virtual; abstract;'#13#10 +
+  '  end;'#13#10 +
+  '  TCustomMiddle = class(TBase)'#13#10 +
+  '    procedure SetSomething(v: Integer); virtual;'#13#10 +
+  '  end;'#13#10 +
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkAbstractNotImpl),
+    'TCustom-Prefix-Klasse als implicit-abstract werten');
   finally F.Free; end;
 end;
 

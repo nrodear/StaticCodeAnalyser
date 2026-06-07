@@ -41,7 +41,7 @@ unit uAbstractNotImpl;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.Generics.Collections,
+  System.SysUtils, System.StrUtils, System.Classes, System.Generics.Collections,
   uAstNode, uSCAConsts, uMethodd12;
 
 type
@@ -143,6 +143,14 @@ begin
           // Wenn Derived selbst auch abstrakt ist (kein Override-Zwang),
           // skippen.
           if Pos(';abstract', LowerCase(C.TypeRef)) > 0 then Continue;
+          // Konvention: Klassen mit Prefix 'TCustom'/'TAbstract' sind
+          // Zwischen-Abstract-Basen die Override an konkrete Subklassen
+          // weiterreichen (VCL-Konvention: TCustomEdit, TCustomCombo,
+          // Image32 TCustomRenderer/TCustomColorRenderer, ...). Audit-
+          // Trigger Img32.Draw, mORMot orm.base.
+          var CLow := LowerCase(C.Name);
+          if StartsStr('tcustom', CLow) or StartsStr('tabstract', CLow) then
+            Continue;
           // Fuer jede abstract-Methode der Parent: existiert sie in Derived?
           for AbstrName in AbstractMethods do
             if DerivedMethods.IndexOf(AbstrName) < 0 then
