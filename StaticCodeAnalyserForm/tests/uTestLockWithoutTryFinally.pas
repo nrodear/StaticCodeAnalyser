@@ -16,6 +16,7 @@ type
     [Test] procedure EnterWithoutTryFinally_Reported;
     [Test] procedure EnterWithTryFinally_NotReported;
     [Test] procedure LockWrapperMethod_NotReported;
+    [Test] procedure EnterLocalLog_NotReported;
     [Test] procedure AcquireWithoutTryFinally_Reported;
     [Test] procedure BeginWriteWithoutTryFinally_Reported;
     [Test] procedure EnterCriticalSection_WinAPI_Reported;
@@ -81,6 +82,27 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLockWithoutTryFinally),
     'Lock-Wrapper-Methode (Enter ist letzte Anweisung) darf kein Finding werfen');
+  finally F.Free; end;
+end;
+
+procedure TTestLockWithoutTryFinally.EnterLocalLog_NotReported;
+// Regression mORMot fLog.EnterLocal(log, ...) - 40+ FPs:
+// EnterLocal/EnterMethod sind keine Critical-Section-Enter sondern
+// Logging-Scope-Helper. Regex muss '\b' nach Enter haben um nicht
+// 'EnterLocal' faelschlich zu matchen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Process;'#13#10 +
+  'var log: ISynLog;'#13#10 +
+  'begin'#13#10 +
+  '  fLog.EnterLocal(log, ''Destroy'', [], self);'#13#10 +
+  '  DoWork;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLockWithoutTryFinally),
+    'EnterLocal ist kein Critical-Section-Enter');
   finally F.Free; end;
 end;
 

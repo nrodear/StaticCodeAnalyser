@@ -152,7 +152,7 @@ const
   //   EnterCriticalSection(
   // Capture-Gruppe 1 = der Lock-Identifier (zur Diagnose).
   LOCK_ENTER_PATTERN =
-    '(?i)\b(?:(\w+)\.(Enter|Acquire|BeginWrite)|EnterCriticalSection\s*\()';
+    '(?i)\b(?:(\w+)\.(Enter|Acquire|BeginWrite)\b|EnterCriticalSection\s*\()';
 
 var
   // Lazy-Cache: Pattern ist konstant, kein Grund pro File neu zu kompilieren.
