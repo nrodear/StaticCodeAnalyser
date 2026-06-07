@@ -739,7 +739,12 @@ var
 
   procedure ProcessCall(C: TAstNode);
   var
-    ArgsLow : string;
+    ArgsLow  : string;
+    FuncName : string;
+    DotPos   : Integer;
+    Receiver : string;
+    Method   : string;
+    Idx      : Integer;
   begin
     if C = nil then Exit;
     if IsLineInRanges(C.Line, NestedRanges) then Exit;
@@ -751,6 +756,27 @@ var
     //   3. UNKNOWN-Calls (Helper.Init, MyProc, ...) -> pessimistic-Write
     //      registrieren (akzeptiert FNs, reduziert FPs bei OOP-Code).
     if IsReadOnlyCall(C.Name) then Exit;
+    // Receiver-Init-Pattern: 'doc.InitJson(...)', 'rec.Init(...)' - der
+    // Receiver wird durch die Methode INITIALISIERT (mORMot/Spring
+    // record-Init-Convention). Pessimistic-Write fuer den Receiver
+    // damit Folge-Reads nicht als UninitVar gemeldet werden.
+    // Audit-Trigger: mORMot dmvc-ai 'doc: TDocVariantData' + 'doc.InitJson'.
+    // C.Name hat Form 'doc.InitJson(data, JSON_FAST)' - direkt parsen,
+    // ExtractCallFunctionName ist hier nutzlos weil's den qualifier abschneidet.
+    FuncName := C.Name;
+    var ParenPos := Pos('(', FuncName);
+    if ParenPos > 0 then FuncName := Trim(Copy(FuncName, 1, ParenPos - 1));
+    DotPos := LastDelimiter('.', FuncName);
+    if DotPos > 1 then
+    begin
+      Receiver := LowerCase(Trim(Copy(FuncName, 1, DotPos - 1)));
+      Method   := LowerCase(Trim(Copy(FuncName, DotPos + 1, MaxInt)));
+      if StartsStr('init', Method) then
+      begin
+        Idx := VarIndexFor(Receiver);
+        if Idx >= 0 then RegisterWrite(Idx, C.Line);
+      end;
+    end;
     ArgsLow := LowerCase(TDetectorUtils.ExtractCallArgsRaw(C.Name));
     if ArgsLow = '' then Exit;
     RegisterArgVarsAsWrites(ArgsLow, C.Line);

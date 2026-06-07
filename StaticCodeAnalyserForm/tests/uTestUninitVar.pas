@@ -33,6 +33,7 @@ type
     [Test] procedure TryGetGenericOutArg_NoFinding;
     [Test] procedure MultiLineVarDeclContinuation_NoFinding;
     [Test] procedure AbsoluteAlias_NoFinding;
+    [Test] procedure ReceiverInitMethod_NoFinding;
     [Test] procedure FillCharInitialisesVar_NoFinding;
     [Test] procedure WriteBeforeRead_TryFinally_NoFinding;
     [Test] procedure DeclaredButNeverReferenced_NoFinding;
@@ -464,6 +465,32 @@ begin
   try
     Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
       'absolute-Alias darf nicht als UninitVar gewertet werden');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.ReceiverInitMethod_NoFinding;
+// Regression mORMot TDocVariantData.InitJson - 'doc.Init<...>(args)' am
+// Receiver behandelt mORMot/Spring als Stack-Init: KEINE Init-Pflicht
+// vor dem Aufruf.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(const data: string);'#13#10 +
+    'var doc: TDocVariantData;'#13#10 +
+    'begin'#13#10 +
+    '  doc.InitJson(data);'#13#10 +
+    '  WriteLn(doc.Count);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+      'doc.InitJson(...) als erstes Statement = Init des Receivers');
   finally L.Free; end;
 end;
 
