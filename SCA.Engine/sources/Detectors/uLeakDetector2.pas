@@ -248,6 +248,34 @@ end;
 
 class function TLeakDetector2.HasFunctionCallAssign(MethodNode: TAstNode;
   const VarNameLow: string): Boolean;
+
+  function IsBorrowedReferenceCall(const RhsLower: string): Boolean;
+  // Non-Ownership-Prefix-Liste: Calls deren Name mit diesen Prefixen
+  // beginnt liefern per Konvention SHARED-Refs (Cache-Getter, Lookups,
+  // Finders) und der Caller darf NICHT free-en. Audit-Trigger:
+  // TAstNode.FindAll -> 'Source := EnsureCacheFor(AKind);' wurde als
+  // Leak gemeldet, obwohl EnsureCacheFor eine geteilte Cache-Liste
+  // zurueckgibt.
+  const
+    BORROWED_PREFIXES : array[0..6] of string =
+      ('ensure', 'get', 'find', 'lookup', 'peek', 'cached', 'fetch');
+  var
+    Name : string;
+    DotPos, ParenPos, i : Integer;
+  begin
+    Result := False;
+    ParenPos := Pos('(', RhsLower);
+    if ParenPos = 0 then Exit;
+    // qualified prefix abschneiden: 'self.ensurecachefor' -> 'ensurecachefor'
+    DotPos := LastDelimiter('.', Copy(RhsLower, 1, ParenPos - 1));
+    if DotPos > 0 then
+      Name := Trim(Copy(RhsLower, DotPos + 1, ParenPos - DotPos - 1))
+    else
+      Name := Trim(Copy(RhsLower, 1, ParenPos - 1));
+    for i := Low(BORROWED_PREFIXES) to High(BORROWED_PREFIXES) do
+      if StartsStr(BORROWED_PREFIXES[i], Name) then Exit(True);
+  end;
+
 var
   Assigns : TList<TAstNode>;
   A       : TAstNode;
@@ -263,7 +291,12 @@ begin
       if Pos('.create', RHS) > 0 then Continue;  // durch HasCreateAssign abgedeckt
       if (RHS = 'nil') or (RHS = '') then Continue;
       // Expliziter Aufruf mit Klammern: GetList()
-      if Pos('(', RHS) > 0 then Exit(True);
+      if Pos('(', RHS) > 0 then
+      begin
+        // Non-Ownership-Calls (Ensure*/Get*/Find*/...) ueberspringen.
+        if IsBorrowedReferenceCall(RHS) then Continue;
+        Exit(True);
+      end;
       // Ohne '(' KEINE Factory-Detection: 'list := obj.FList' oder
       // 'list := SomeProperty' sind geliehene Referenzen, kein Ownership-
       // Transfer. Vorher wurde jeder dotted Bezeichner-Pfad als Factory-

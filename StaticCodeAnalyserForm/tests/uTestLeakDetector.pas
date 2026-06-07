@@ -26,6 +26,7 @@ type
     [Test] procedure Leak_PassedToConstructor_NoFinding;
     [Test] procedure Leak_FunctionCallAssign_NoFreeReportsWarning;
     [Test] procedure Leak_FunctionCallAssign_WithFree_NoFinding;
+    [Test] procedure Leak_BorrowedGetter_NoFinding;
     [Test] procedure Leak_SimilarVarName_NoFalsePositive;
     [Test] procedure Leak_MultipleVars_BothReported;
     [Test] procedure Leak_NoFalsePositive_BlacklistFree;
@@ -332,7 +333,7 @@ const SRC =
   'procedure TFoo.Bar;'#13#10+
   'var list: TStringList;'#13#10+
   'begin'#13#10+
-  '  list := GetList();'#13#10+
+  '  list := BuildList();'#13#10+
   '  list.Add(''x'');'#13#10+
   'end;';
 var F: TObjectList<TLeakFinding>;
@@ -344,13 +345,35 @@ begin
   finally F.Free; end;
 end;
 
+procedure TTestMemoryLeak.Leak_BorrowedGetter_NoFinding;
+// Regression TAstNode.FindAll - 'Source := EnsureCacheFor(AKind)' liefert
+// SHARED-Cache-Ref, kein Ownership-Transfer. Caller darf NICHT free-en.
+// Convention: Functions mit Prefix Ensure*/Get*/Find*/Lookup*/Peek*/
+// Cached*/Fetch* liefern geliehene Referenzen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var list: TStringList;'#13#10+
+  'begin'#13#10+
+  '  list := EnsureCacheFor(42);'#13#10+
+  '  list.Add(''x'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'EnsureCacheFor liefert SHARED-Ref, kein Leak');
+  finally F.Free; end;
+end;
+
 procedure TTestMemoryLeak.Leak_FunctionCallAssign_WithFree_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
   'var list: TStringList;'#13#10+
   'begin'#13#10+
-  '  list := GetList();'#13#10+
+  '  list := BuildList();'#13#10+
   '  try'#13#10+
   '    list.Add(''x'');'#13#10+
   '  finally'#13#10+
