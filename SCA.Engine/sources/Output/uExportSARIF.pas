@@ -263,6 +263,12 @@ var
   Tool   : TJSONObject;
   Driver : TJSONObject;
 begin
+  // TEMP-DIAG (jvcl-segfault audit, sca-realworld 2026-06-07)
+  // Schreibt phase-marker in stderr, dann sofort flush, damit wir bei
+  // Segfault sehen wo's krachte. Entfernen nach Bugfix.
+  try
+    Writeln(ErrOutput, 'SARIF/diag enter, Findings=', AFindings.Count); Flush(ErrOutput);
+  except end;
   Root := TJSONObject.Create;
   try
     Root.AddPair('$schema',
@@ -283,13 +289,17 @@ begin
 
     Run := TJSONObject.Create;
     Run.AddPair('tool', Tool);
+    try Writeln(ErrOutput, 'SARIF/diag before BuildResultsArray'); Flush(ErrOutput); except end;
     Run.AddPair('results', BuildResultsArray(AFindings, ABaseDir));
+    try Writeln(ErrOutput, 'SARIF/diag after BuildResultsArray'); Flush(ErrOutput); except end;
 
     Runs := TJSONArray.Create;
     Runs.AddElement(Run);
     Root.AddPair('runs', Runs);
 
+    try Writeln(ErrOutput, 'SARIF/diag before Format(2)'); Flush(ErrOutput); except end;
     Result := Root.Format(2); // pretty-printed, 2 spaces
+    try Writeln(ErrOutput, 'SARIF/diag after Format(2), Len=', Length(Result)); Flush(ErrOutput); except end;
   finally
     Root.Free;
   end;
