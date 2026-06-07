@@ -766,12 +766,20 @@ var
     FuncName := C.Name;
     var ParenPos := Pos('(', FuncName);
     if ParenPos > 0 then FuncName := Trim(Copy(FuncName, 1, ParenPos - 1));
+    // Trailing-Punctuation/Args entfernen ('timer.Start;' / 'doc.Init data')
+    var EndCut := Length(FuncName) + 1;
+    for var i := 1 to Length(FuncName) do
+      if not CharInSet(FuncName[i], ['A'..'Z','a'..'z','0'..'9','_','.']) then
+      begin EndCut := i; Break; end;
+    FuncName := Copy(FuncName, 1, EndCut - 1);
     DotPos := LastDelimiter('.', FuncName);
     if DotPos > 1 then
     begin
       Receiver := LowerCase(Trim(Copy(FuncName, 1, DotPos - 1)));
       Method   := LowerCase(Trim(Copy(FuncName, DotPos + 1, MaxInt)));
-      if StartsStr('init', Method) then
+      // Stack-Init-Methoden am Receiver: Init*, oder Single-Word 'Start'
+      // (TPrecisionTimer.Start, TStopwatch.Start - mORMot/RTL Patterns).
+      if StartsStr('init', Method) or (Method = 'start') then
       begin
         Idx := VarIndexFor(Receiver);
         if Idx >= 0 then RegisterWrite(Idx, C.Line);
