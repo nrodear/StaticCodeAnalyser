@@ -70,30 +70,48 @@ implementation
 
 procedure WalkForBareRaise(N: TAstNode; const FileName, MethodName: string;
   Results: TObjectList<TLeakFinding>; InHandler: Boolean);
+// Hardening v4: iterative DFS - siehe Audit_jvcl_segfault.
+type TFrame = record Nd: TAstNode; InH: Boolean; end;
 var
-  Child       : TAstNode;
+  Stack : TList<TFrame>;
+  Cur, F2 : TFrame;
+  i      : Integer;
   NextInHandler : Boolean;
-  F           : TLeakFinding;
+  F      : TLeakFinding;
 begin
-  // Wenn der aktuelle Knoten selbst ein Handler ist, gelten ab hier alle
-  // Kinder als "im Handler". Der aktuelle Knoten wird selbst noch unter
-  // dem alten Flag geprueft (nkExceptBlock ist selbst kein nkRaise).
-  NextInHandler := InHandler or (N.Kind = nkExceptBlock) or (N.Kind = nkOnHandler);
-
-  if (N.Kind = nkRaise) and SameText(N.Name, 'raise') and not InHandler then
-  begin
-    F            := TLeakFinding.Create;
-    F.FileName   := FileName;
-    F.MethodName := MethodName;
-    F.LineNumber := IntToStr(N.Line);
-    F.MissingVar :=
-      'Bare `raise;` outside an except/on handler raises NIL - Access Violation';
-    F.SetKind(fkRaiseOutsideExcept);
-    Results.Add(F);
+  if N = nil then Exit;
+  Stack := TList<TFrame>.Create;
+  try
+    F2.Nd := N; F2.InH := InHandler;
+    Stack.Add(F2);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack[Stack.Count - 1];
+      Stack.Delete(Stack.Count - 1);
+      // Children inherit the InHandler-flag updated if current is a handler
+      NextInHandler := Cur.InH or (Cur.Nd.Kind = nkExceptBlock) or
+                                  (Cur.Nd.Kind = nkOnHandler);
+      if (Cur.Nd.Kind = nkRaise) and SameText(Cur.Nd.Name, 'raise')
+         and not Cur.InH then
+      begin
+        F            := TLeakFinding.Create;
+        F.FileName   := FileName;
+        F.MethodName := MethodName;
+        F.LineNumber := IntToStr(Cur.Nd.Line);
+        F.MissingVar :=
+          'Bare `raise;` outside an except/on handler raises NIL - Access Violation';
+        F.SetKind(fkRaiseOutsideExcept);
+        Results.Add(F);
+      end;
+      for i := Cur.Nd.Children.Count - 1 downto 0 do
+      begin
+        F2.Nd := Cur.Nd.Children[i]; F2.InH := NextInHandler;
+        Stack.Add(F2);
+      end;
+    end;
+  finally
+    Stack.Free;
   end;
-
-  for Child in N.Children do
-    WalkForBareRaise(Child, FileName, MethodName, Results, NextInHandler);
 end;
 
 class procedure TRaiseOutsideExceptDetector.AnalyzeMethod(MethodNode: TAstNode;

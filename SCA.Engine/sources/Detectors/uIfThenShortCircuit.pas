@@ -145,18 +145,37 @@ end;
 
 procedure WalkAndCheck(Node, CurrentMethod: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>);
+// Hardening v4: iterative DFS - siehe Audit_jvcl_segfault.
+type TFrame = record N, M: TAstNode; end;
 var
-  i        : Integer;
+  Stack : TList<TFrame>;
+  Cur, F : TFrame;
+  i      : Integer;
   NextMeth : TAstNode;
 begin
   if Node = nil then Exit;
-  case Node.Kind of
-    nkCall:   CheckIfThenText(Node.Name,    Node, CurrentMethod, FileName, Results);
-    nkAssign: CheckIfThenText(Node.TypeRef, Node, CurrentMethod, FileName, Results);
+  Stack := TList<TFrame>.Create;
+  try
+    F.N := Node; F.M := CurrentMethod;
+    Stack.Add(F);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack[Stack.Count - 1];
+      Stack.Delete(Stack.Count - 1);
+      case Cur.N.Kind of
+        nkCall:   CheckIfThenText(Cur.N.Name,    Cur.N, Cur.M, FileName, Results);
+        nkAssign: CheckIfThenText(Cur.N.TypeRef, Cur.N, Cur.M, FileName, Results);
+      end;
+      if Cur.N.Kind = nkMethod then NextMeth := Cur.N else NextMeth := Cur.M;
+      for i := Cur.N.Children.Count - 1 downto 0 do
+      begin
+        F.N := Cur.N.Children[i]; F.M := NextMeth;
+        Stack.Add(F);
+      end;
+    end;
+  finally
+    Stack.Free;
   end;
-  if Node.Kind = nkMethod then NextMeth := Node else NextMeth := CurrentMethod;
-  for i := 0 to Node.Children.Count - 1 do
-    WalkAndCheck(Node.Children[i], NextMeth, FileName, Results);
 end;
 
 class procedure TIfThenShortCircuitDetector.AnalyzeUnit(UnitNode: TAstNode;

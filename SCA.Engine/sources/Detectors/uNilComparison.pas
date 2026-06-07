@@ -116,31 +116,47 @@ end;
 
 procedure WalkAndCheck(Node, CurrentMethod: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>);
+// Hardening v4: iterative DFS - siehe Audit_jvcl_segfault.
+type TFrame = record N, M: TAstNode; end;
 var
-  i         : Integer;
-  F         : TLeakFinding;
-  MethName  : string;
-  NextMeth  : TAstNode;
+  Stack : TList<TFrame>;
+  Cur, F : TFrame;
+  i      : Integer;
+  Find   : TLeakFinding;
+  MethName : string;
+  NextMeth : TAstNode;
 begin
   if Node = nil then Exit;
-  if ContainsNilCompare(Node.Name) or ContainsNilCompare(Node.TypeRef) then
-  begin
-    if Assigned(CurrentMethod) then MethName := CurrentMethod.Name
-    else MethName := '';
-    F            := TLeakFinding.Create;
-    F.FileName   := FileName;
-    F.MethodName := MethName;
-    F.LineNumber := IntToStr(Node.Line);
-    F.MissingVar :=
-      'Use Assigned() instead of "= nil" / "<> nil" for nil checks';
-    F.SetKind(fkNilComparison);
-    Results.Add(F);
+  Stack := TList<TFrame>.Create;
+  try
+    F.N := Node; F.M := CurrentMethod;
+    Stack.Add(F);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack[Stack.Count - 1];
+      Stack.Delete(Stack.Count - 1);
+      if ContainsNilCompare(Cur.N.Name) or ContainsNilCompare(Cur.N.TypeRef) then
+      begin
+        if Assigned(Cur.M) then MethName := Cur.M.Name else MethName := '';
+        Find             := TLeakFinding.Create;
+        Find.FileName    := FileName;
+        Find.MethodName  := MethName;
+        Find.LineNumber  := IntToStr(Cur.N.Line);
+        Find.MissingVar  :=
+          'Use Assigned() instead of "= nil" / "<> nil" for nil checks';
+        Find.SetKind(fkNilComparison);
+        Results.Add(Find);
+      end;
+      if Cur.N.Kind = nkMethod then NextMeth := Cur.N else NextMeth := Cur.M;
+      for i := Cur.N.Children.Count - 1 downto 0 do
+      begin
+        F.N := Cur.N.Children[i]; F.M := NextMeth;
+        Stack.Add(F);
+      end;
+    end;
+  finally
+    Stack.Free;
   end;
-  // Wenn der aktuelle Node eine Methode ist: ab hier als CurrentMethod
-  // weitergeben, damit verschachtelte Nodes den Method-Kontext kennen.
-  if Node.Kind = nkMethod then NextMeth := Node else NextMeth := CurrentMethod;
-  for i := 0 to Node.Children.Count - 1 do
-    WalkAndCheck(Node.Children[i], NextMeth, FileName, Results);
 end;
 
 class procedure TNilComparisonDetector.AnalyzeUnit(UnitNode: TAstNode;

@@ -182,25 +182,46 @@ end;
 
 procedure WalkAndCheck(Node, CurrentMethod: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>);
+// Hardening v4: iterative DFS mit Frame-Tracking. Verhindert
+// STACK_OVERFLOW bei tief verschachteltem AST (siehe Audit_jvcl_segfault).
+type
+  TFrame = record
+    N : TAstNode;
+    M : TAstNode;   // CurrentMethod fuer diesen Knoten
+  end;
 var
-  i        : Integer;
-  NextMeth : TAstNode;
+  Stack : TList<TFrame>;
+  Cur, F : TFrame;
+  Child  : TAstNode;
+  i      : Integer;
 begin
   if Node = nil then Exit;
-  case Node.Kind of
-    nkCall:
-      // Bare call, z.B. `SomeProc(PChar('A'))` - Name traegt den Cast.
-      CheckCastText(Node.Name, Node, CurrentMethod, FileName, Results);
-    nkAssign:
-      // `p := PChar('A');` - der Parser legt die RHS in TypeRef ab und
-      // erzeugt KEINEN separaten nkCall-Knoten. Wir muessen also das
-      // TypeRef-Feld zusaetzlich scannen, sonst werden alle Assign-
-      // basierten PChar-Casts schweigend uebersehen.
-      CheckCastText(Node.TypeRef, Node, CurrentMethod, FileName, Results);
+  Stack := TList<TFrame>.Create;
+  try
+    F.N := Node; F.M := CurrentMethod;
+    Stack.Add(F);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack[Stack.Count - 1];
+      Stack.Delete(Stack.Count - 1);
+      case Cur.N.Kind of
+        nkCall:
+          CheckCastText(Cur.N.Name, Cur.N, Cur.M, FileName, Results);
+        nkAssign:
+          CheckCastText(Cur.N.TypeRef, Cur.N, Cur.M, FileName, Results);
+      end;
+      // Sub-Method-Boundary: nkMethod-Knoten startet eigenen Method-Scope
+      var NextMeth : TAstNode;
+      if Cur.N.Kind = nkMethod then NextMeth := Cur.N else NextMeth := Cur.M;
+      for i := Cur.N.Children.Count - 1 downto 0 do
+      begin
+        F.N := Cur.N.Children[i]; F.M := NextMeth;
+        Stack.Add(F);
+      end;
+    end;
+  finally
+    Stack.Free;
   end;
-  if Node.Kind = nkMethod then NextMeth := Node else NextMeth := CurrentMethod;
-  for i := 0 to Node.Children.Count - 1 do
-    WalkAndCheck(Node.Children[i], NextMeth, FileName, Results);
 end;
 
 class procedure TCharToCharPointerCastDetector.AnalyzeUnit(UnitNode: TAstNode;

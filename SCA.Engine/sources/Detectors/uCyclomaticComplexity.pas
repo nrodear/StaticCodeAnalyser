@@ -92,23 +92,44 @@ end;
 
 class procedure TCyclomaticComplexityDetector.Walk(Node: TAstNode;
   var Count: Integer);
+// Hardening v4: iterative DFS statt rekursiver Walk(Child, Count).
+// Bei tief verschachteltem AST sprengt der Default-Stack
+// (STACK_OVERFLOW $C00000FD; siehe Audit_jvcl_segfault.md).
 var
-  Child: TAstNode;
+  Stack : TList<TAstNode>;
+  Cur   : TAstNode;
+  i     : Integer;
 begin
-  for Child in Node.Children do
-  begin
-    case Child.Kind of
-      nkIfStmt:
-        begin
+  if Node = nil then Exit;
+  Stack := TList<TAstNode>.Create;
+  try
+    // Wichtig: Root-Knoten NICHT klassifizieren - Original-Walk iterierte
+    // nur Children, nicht Self. Daher children direkt enqueuen (reverse
+    // fuer Pre-Order).
+    for i := Node.Children.Count - 1 downto 0 do
+      Stack.Add(Node.Children[i]);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack[Stack.Count - 1];
+      Stack.Delete(Stack.Count - 1);
+      case Cur.Kind of
+        nkIfStmt:
+          begin
+            Inc(Count);
+            Inc(Count, CountBooleanOpsInCond(Cur.TypeRef));
+          end;
+        nkForStmt, nkWhileStmt, nkRepeatStmt,
+        nkCaseArm,
+        nkOnHandler:
           Inc(Count);
-          Inc(Count, CountBooleanOpsInCond(Child.TypeRef));
-        end;
-      nkForStmt, nkWhileStmt, nkRepeatStmt,
-      nkCaseArm,
-      nkOnHandler:
-        Inc(Count);
+      end;
+      // Children in umgekehrter Reihenfolge auf Stack -> Pop in
+      // links-rechts-Pre-Order.
+      for i := Cur.Children.Count - 1 downto 0 do
+        Stack.Add(Cur.Children[i]);
     end;
-    Walk(Child, Count);
+  finally
+    Stack.Free;
   end;
 end;
 

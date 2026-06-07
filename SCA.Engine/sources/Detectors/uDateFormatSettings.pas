@@ -142,6 +142,43 @@ end;
 
 procedure WalkAndCheck(Node, CurrentMethod: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>);
+// Hardening v4: iterative DFS - siehe Audit_jvcl_segfault.
+type
+  TFrame = record N, M: TAstNode; end;
+var
+  Stack : TList<TFrame>;
+  Cur, F : TFrame;
+  i      : Integer;
+  NextMeth : TAstNode;
+begin
+  if Node = nil then Exit;
+  Stack := TList<TFrame>.Create;
+  try
+    F.N := Node; F.M := CurrentMethod;
+    Stack.Add(F);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack[Stack.Count - 1];
+      Stack.Delete(Stack.Count - 1);
+      case Cur.N.Kind of
+        nkCall:   CheckCallText(Cur.N.Name,    Cur.N, Cur.M, FileName, Results);
+        nkAssign: CheckCallText(Cur.N.TypeRef, Cur.N, Cur.M, FileName, Results);
+      end;
+      if Cur.N.Kind = nkMethod then NextMeth := Cur.N else NextMeth := Cur.M;
+      for i := Cur.N.Children.Count - 1 downto 0 do
+      begin
+        F.N := Cur.N.Children[i]; F.M := NextMeth;
+        Stack.Add(F);
+      end;
+    end;
+  finally
+    Stack.Free;
+  end;
+end;
+{$IF False}
+// Original-Recursive-Code zur Referenz - falls Bug im Iterativ.
+procedure WalkAndCheckRec(Node, CurrentMethod: TAstNode; const FileName: string;
+  Results: TObjectList<TLeakFinding>);
 var
   i        : Integer;
   NextMeth : TAstNode;
@@ -152,15 +189,13 @@ begin
       // Bare call, z.B. `Writeln(DateToStr(d));`
       CheckCallText(Node.Name, Node, CurrentMethod, FileName, Results);
     nkAssign:
-      // `s := DateToStr(d);` - der Parser legt die RHS in TypeRef ab und
-      // erzeugt KEINEN separaten nkCall-Knoten. Sonst silent miss
-      // (Audit V5, 2026-05-30).
       CheckCallText(Node.TypeRef, Node, CurrentMethod, FileName, Results);
   end;
   if Node.Kind = nkMethod then NextMeth := Node else NextMeth := CurrentMethod;
   for i := 0 to Node.Children.Count - 1 do
-    WalkAndCheck(Node.Children[i], NextMeth, FileName, Results);
+    WalkAndCheckRec(Node.Children[i], NextMeth, FileName, Results);
 end;
+{$IFEND}
 
 class procedure TDateFormatSettingsDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);

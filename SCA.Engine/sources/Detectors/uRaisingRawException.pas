@@ -65,32 +65,47 @@ end;
 
 procedure WalkAndCheck(Node, CurrentMethod: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>);
+// Hardening v4: iterative DFS - siehe Audit_jvcl_segfault.
+type TFrame = record N, M: TAstNode; end;
 var
-  i        : Integer;
-  F        : TLeakFinding;
+  Stack : TList<TFrame>;
+  Cur, F : TFrame;
+  i      : Integer;
+  Find   : TLeakFinding;
   MethName : string;
   NextMeth : TAstNode;
 begin
   if Node = nil then Exit;
-  if Node.Kind = nkRaise then
-  begin
-    if RaisesGenericException(Node.Name) then
+  Stack := TList<TFrame>.Create;
+  try
+    F.N := Node; F.M := CurrentMethod;
+    Stack.Add(F);
+    while Stack.Count > 0 do
     begin
-      if Assigned(CurrentMethod) then MethName := CurrentMethod.Name
-      else MethName := '';
-      F            := TLeakFinding.Create;
-      F.FileName   := FileName;
-      F.MethodName := MethName;
-      F.LineNumber := IntToStr(Node.Line);
-      F.MissingVar :=
-        'Raising bare "Exception" - use a specific subclass (e.g. EArgumentException)';
-      F.SetKind(fkRaisingRawException);
-      Results.Add(F);
+      Cur := Stack[Stack.Count - 1];
+      Stack.Delete(Stack.Count - 1);
+      if (Cur.N.Kind = nkRaise) and RaisesGenericException(Cur.N.Name) then
+      begin
+        if Assigned(Cur.M) then MethName := Cur.M.Name else MethName := '';
+        Find             := TLeakFinding.Create;
+        Find.FileName    := FileName;
+        Find.MethodName  := MethName;
+        Find.LineNumber  := IntToStr(Cur.N.Line);
+        Find.MissingVar  :=
+          'Raising bare "Exception" - use a specific subclass (e.g. EArgumentException)';
+        Find.SetKind(fkRaisingRawException);
+        Results.Add(Find);
+      end;
+      if Cur.N.Kind = nkMethod then NextMeth := Cur.N else NextMeth := Cur.M;
+      for i := Cur.N.Children.Count - 1 downto 0 do
+      begin
+        F.N := Cur.N.Children[i]; F.M := NextMeth;
+        Stack.Add(F);
+      end;
     end;
+  finally
+    Stack.Free;
   end;
-  if Node.Kind = nkMethod then NextMeth := Node else NextMeth := CurrentMethod;
-  for i := 0 to Node.Children.Count - 1 do
-    WalkAndCheck(Node.Children[i], NextMeth, FileName, Results);
 end;
 
 class procedure TRaisingRawExceptionDetector.AnalyzeUnit(UnitNode: TAstNode;
