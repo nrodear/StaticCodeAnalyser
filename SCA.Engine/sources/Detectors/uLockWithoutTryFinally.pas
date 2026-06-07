@@ -198,6 +198,38 @@ begin
   Result := True;
 end;
 
+function IsLockWrapperMethodTail(const Code: string; AfterPos: Integer): Boolean;
+// True wenn der naechste Token nach AfterPos das Keyword 'end' ist -
+// d.h. das Enter ist die LETZTE Anweisung im Method-Body. Klassisches
+// Lock-Wrapper-Pattern wo Method nur das Enter delegiert und der
+// Caller das try/finally drumherum baut:
+//
+//   procedure TOSLock.Lock;
+//   begin
+//     EnterCriticalSection(CS);
+//   end;
+//
+//   // Caller-Site:
+//   FOSLock.Lock;
+//   try ... finally FOSLock.Unlock; end;
+//
+// Ohne diese Ausnahme melden ALLE solche Wrapper SCA109 als FP - 100+
+// in mORMot allein (TOSLock, TSafeLocker, TPosixLock, ...).
+var
+  p : Integer;
+begin
+  Result := False;
+  p := FindNextNonSpacePos(Code, AfterPos);
+  if p = 0 then Exit;
+  if p + 3 > Length(Code) then Exit;
+  if not SameText(Copy(Code, p, 3), 'end') then Exit;
+  // Wort-Grenze nach 'end'
+  if (p + 3 <= Length(Code)) and
+     CharInSet(Code[p + 3], ['A'..'Z', 'a'..'z', '0'..'9', '_']) then
+    Exit;
+  Result := True;
+end;
+
 function IsMethodDefinitionContext(const Code: string; MatchPos: Integer): Boolean;
 // True wenn die Match-Position auf einer Methoden-DEFINITION-Zeile liegt:
 //   function TFoo.Acquire(...): ...
@@ -313,6 +345,10 @@ begin
       Inc(EndOfStmt); // hinter dem ';'
 
       if NextStatementIsTry(Code, EndOfStmt) then Continue;
+      // Lock-Wrapper-Pattern: Enter ist letzte Anweisung im Body -
+      // Caller wrapt try/finally. Beispiele in mORMot: TOSLock.Lock,
+      // TSafeLocker.Lock, InitializeCriticalSectionIfNeededAndEnter.
+      if IsLockWrapperMethodTail(Code, EndOfStmt) then Continue;
 
       LineNo := LineForPos(LineFor, M.Index);
       if LineNo <= 0 then LineNo := 1;

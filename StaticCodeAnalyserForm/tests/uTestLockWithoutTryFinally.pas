@@ -15,6 +15,7 @@ type
   public
     [Test] procedure EnterWithoutTryFinally_Reported;
     [Test] procedure EnterWithTryFinally_NotReported;
+    [Test] procedure LockWrapperMethod_NotReported;
     [Test] procedure AcquireWithoutTryFinally_Reported;
     [Test] procedure BeginWriteWithoutTryFinally_Reported;
     [Test] procedure EnterCriticalSection_WinAPI_Reported;
@@ -62,6 +63,24 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLockWithoutTryFinally));
+  finally F.Free; end;
+end;
+
+procedure TTestLockWithoutTryFinally.LockWrapperMethod_NotReported;
+// Regression mORMot TOSLock.Lock (35+ FPs auf einen Schlag):
+// Wrapper-Method die nur das Enter delegiert - try/finally landet
+// beim Caller.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TOSLock.Lock;'#13#10 +
+  'begin'#13#10 +
+  '  FCS.Enter;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLockWithoutTryFinally),
+    'Lock-Wrapper-Methode (Enter ist letzte Anweisung) darf kein Finding werfen');
   finally F.Free; end;
 end;
 
