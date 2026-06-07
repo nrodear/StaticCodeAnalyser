@@ -862,6 +862,29 @@ begin
           if Eat(tkColon) then
             while not (Tok.Kind in [tkSemicolon, tkKwEnd, tkEof]) do
             begin
+              // Anonymer inline-`record`-Typ als Feld-Typ:
+              //   fContext: array of record A: Integer; B: TFoo; end;
+              // Ohne Spezial-Behandlung bricht die Loop am ersten ';' im
+              // Record-Body ab, und das innere 'end' wird vom Outer-Loop
+              // als Class-End interpretiert -> Override-Methoden ab
+              // Z216 landen ausserhalb der Klasse (Mustache-Audit, 4x4
+              // SCA135 FPs). Mini-Parser bis matching `end`.
+              if Tok.Kind = tkKwRecord then
+              begin
+                FType := FType + Tok.Value;
+                Next;
+                var Depth := 1;
+                while (Depth > 0) and (Tok.Kind <> tkEof) do
+                begin
+                  case Tok.Kind of
+                    tkKwRecord: Inc(Depth);
+                    tkKwEnd:    Dec(Depth);
+                  end;
+                  FType := FType + Tok.Value;
+                  Next;
+                end;
+                Continue;
+              end;
               FType := FType + Tok.Value;
               Next;
             end;
