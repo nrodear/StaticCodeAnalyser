@@ -219,12 +219,21 @@ destructor TAstNode.Destroy;
 // kaskadiert das default-Destroy via OwnsObjects=True N-Levels tief
 // und triggert STACK_OVERFLOW.
 //
+// FIX (BuildLog-Repro 2026-06-08): nach Cur.Children.OwnsObjects:=False
+// muss zusaetzlich Cur.Children.Clear vor dem kollektiven Free laufen.
+// Sonst sieht die rekursiv aufgerufene Cur.Destroy ein Children.Count>0,
+// startet ihr eigenes iteratives DFS und gibt Knoten frei, die im
+// OUTER AllDesc noch stehen -> double-free + EInvalidPointer im
+// finally-Block von ParseLeaks (gAstFileCache.Evict).
+//
 // Algorithmus:
-// 1. Iterative DFS sammelt ALLE Descendants in eine flache Liste.
-// 2. Jeder Descendant bekommt seine Children.OwnsObjects:=False -
-//    seine spaetere Destroy macht KEINE Cascade.
-// 3. Jeder Descendant wird per .Free freigegeben - jede einzelne
-//    Destroy-Invocation ist nur 1 Stack-Frame tief.
+// 1. Iterative DFS sammelt ALLE Descendants in eine flache Liste,
+//    disowned jede Children-Liste unterwegs.
+// 2. Children-Listen aller Descendants leeren (kein Free wegen
+//    OwnsObjects=False) - die spaetere Destroy sieht Children.Count=0
+//    und macht KEINEN Re-Walk.
+// 3. Jeder Descendant per .Free freigeben - jede Destroy ist 1-Frame
+//    tief, kein Reentry, kein double-free.
 var
   Stack    : TList<TAstNode>;
   AllDesc  : TList<TAstNode>;
@@ -256,8 +265,12 @@ begin
           Stack.Add(Cur.Children[i]);
         end;
       end;
-      // Flach freigeben - jede Cur.Destroy ist 1-Frame-Tief
-      // weil Cur.Children jetzt OwnsObjects=False hat.
+      // Phase A: Children-Listen leeren - Clear entfernt nur Refs
+      // (OwnsObjects=False), kein Free. Vermeidet Reentry in Phase B.
+      for Cur in AllDesc do
+        Cur.Children.Clear;
+      // Phase B: flach freigeben - jede Cur.Destroy sieht
+      // Children.Count=0 und ist 1-Frame tief.
       for Cur in AllDesc do
         Cur.Free;
     finally
