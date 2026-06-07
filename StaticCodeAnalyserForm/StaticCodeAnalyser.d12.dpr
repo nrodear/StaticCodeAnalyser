@@ -14,6 +14,14 @@ program StaticCodeAnalyser.d12;
 // braucht, ruft 'start /wait analyser.exe ...' oder pipt nach 'more'.
 // CI-Runner (PowerShell, GH Actions) sehen das nicht - die loggen synchron.
 
+// Stack-Size erhoeht von 1 MB (Default) auf 32 MB. Detektoren walken
+// rekursiv durchs AST (uDeepNesting.Walk, uCyclomaticComplexity.Walk,
+// ...). Bei tief verschachteltem Real-World-Code (JvId3v2.pas mit langen
+// if-then-else-Ketten) sprengt der Default-Stack. Audit-Trigger:
+// 'D:/git-sca-realworld/jvcl' segfault mit --quiet --report-sarif.
+{$MAXSTACKSIZE 33554432}    // 32 MB Maximum
+{$MINSTACKSIZE 4194304}     // 4  MB Initial-Reserve
+
 uses
   Winapi.Windows,
   Vcl.Forms,
