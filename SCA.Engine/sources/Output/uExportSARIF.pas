@@ -241,7 +241,8 @@ begin
     FpObj := TJSONObject.Create;
     FpObj.AddPair('primaryLocationLineHash',
       FingerprintHash(RuleID, RelPath, LineNo, Msg));
-    CtxHash := TFindingFingerprint.ContextHash(F);
+    // TEMP: ContextHash deaktiviert (jvcl-segfault audit)
+    CtxHash := ''; // TFindingFingerprint.ContextHash(F);
     if CtxHash <> '' then
       FpObj.AddPair('contextHash/' + CONTEXT_HASH_VERSION, CtxHash);
     ResObj.AddPair('partialFingerprints', FpObj);
