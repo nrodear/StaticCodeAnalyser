@@ -195,9 +195,9 @@ begin
       // Identifier extrahieren.
       p := j;
       while (j <= Length(Stripped)) and
-            CharInSet(Stripped[j], ['a'..'z', '_', '0'..'9']) do
+            CharInSet(Stripped[j], ['a'..'z', 'A'..'Z', '_', '0'..'9']) do
         Inc(j);
-      ident := Copy(Stripped, p, j - p);
+      ident := LowerCase(Copy(Stripped, p, j - p));
       if ident = '' then
       begin
         // Position war ein gestripptes Literal -> ok.
@@ -212,6 +212,15 @@ begin
       isSafe := False;
       for s in SAFE_CASTS do
         if ident = s then begin isSafe := True; Break; end;
+      // Pattern-based safe-cast: Schema-Sanitizer-Helfer aus DMVCFramework
+      // / mORMot folgen Konvention 'Get<X>ForSql' bzw. 'Quote<X>' bzw.
+      // 'Escape<X>'. Z.B. lSB.Append('INSERT INTO ' + GetTableNameForSQL(...))
+      // ist Schema-Builder, kein User-Input-Concat.
+      if (not isSafe)
+         and (ident.StartsWith('quote')
+              or ident.StartsWith('escape')
+              or (ident.StartsWith('get') and ident.EndsWith('forsql'))) then
+        isSafe := True;
       if not isSafe then Exit(False); // andere Funktion -> unsicher
     end;
     Inc(i);

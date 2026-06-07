@@ -34,6 +34,7 @@ type
   TTestSQLInjectionExt = class
   public
     [Test] procedure SQL_AssignSelectStarConcat_IntToStrSafe_NoFinding;
+    [Test] procedure SQL_SchemaSanitizerHelper_NoFinding;
     [Test] procedure SQL_DeleteWithVarConcat_ReportsError;
     [Test] procedure SQL_AssignWithoutSQLKeyword_NoFinding;
     // ---- Severity / Finding-Inhalt / Multi-Hit ------------------------------
@@ -250,6 +251,27 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
       'IntToStr-Konkat ist safe-cast-whitelisted');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_SchemaSanitizerHelper_NoFinding;
+// Regression DMVCFramework SQLGenerators - SQL-Builder mit Schema-
+// Sanitizer-Helpern (GetTableNameForSQL, GetFieldNameForSQL) und
+// Quote*-Eskaper sind injection-sicher. Detector erkennt diese
+// Prefix-Pattern jetzt als safe-cast (analog IntToStr-Whitelist).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Build;'#13#10+
+  'var lSB: TStringBuilder;'#13#10+
+  'begin'#13#10+
+  '  lSB.Append(''INSERT INTO '' + GetTableNameForSQL(TableMap.fTableName) + '' ('');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+      'GetTableNameForSQL ist Schema-Sanitizer (Get*ForSQL-Konvention)');
   finally F.Free; end;
 end;
 
