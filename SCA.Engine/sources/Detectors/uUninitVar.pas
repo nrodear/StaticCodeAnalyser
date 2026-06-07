@@ -1056,6 +1056,11 @@ var
       if Trim(LV.Name) = '' then Continue;
       if LV.Name.StartsWith('_') then Continue;
       if not LooksLikeRealLocalVar(Lines, LV.Line) then Continue;
+      // 'absolute'-Aliase ueberspringen: 'c1: TARGB absolute color1;' macht
+      // c1 zum Alias der bestehenden Variable color1 - eigene Storage gibt
+      // es nicht, daher auch keine 'init'-Pflicht. Audit-Trigger Img32.Extra
+      // BlendAverage/AlphaAverage und mORMot crypt.ecc 'absolute Result'.
+      if Pos('absolute', LowerCase(LV.TypeRef)) > 0 then Continue;
       VarRec.Name           := LV.Name;
       VarRec.NameLow        := LowerCase(LV.Name);
       VarRec.TypeLow        := LowerCase(LV.TypeRef);

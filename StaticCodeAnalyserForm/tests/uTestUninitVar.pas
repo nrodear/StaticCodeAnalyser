@@ -32,6 +32,7 @@ type
     [Test] procedure ForInInlineVar_NoFinding;
     [Test] procedure TryGetGenericOutArg_NoFinding;
     [Test] procedure MultiLineVarDeclContinuation_NoFinding;
+    [Test] procedure AbsoluteAlias_NoFinding;
     [Test] procedure FillCharInitialisesVar_NoFinding;
     [Test] procedure WriteBeforeRead_TryFinally_NoFinding;
     [Test] procedure DeclaredButNeverReferenced_NoFinding;
@@ -438,6 +439,31 @@ begin
   try
     Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
       'multi-line var-decl continuation darf kein UninitVar werfen');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.AbsoluteAlias_NoFinding;
+// Regression Img32.Extra BlendAverage/AlphaAverage (~30 FPs):
+// 'c1: TARGB absolute color1;' macht c1 zum Alias der bestehenden
+// Variable - eigene Storage gibt es nicht, also auch keine Init-Pflicht.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'function Foo(color: Cardinal): Cardinal;'#13#10 +
+    'var c: Cardinal absolute color;'#13#10 +
+    'begin'#13#10 +
+    '  Result := c shr 8;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+      'absolute-Alias darf nicht als UninitVar gewertet werden');
   finally L.Free; end;
 end;
 
