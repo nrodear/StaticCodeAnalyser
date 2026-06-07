@@ -66,24 +66,50 @@ end;
 class procedure TDeepNestingDetector.Walk(Node: TAstNode; Depth: Integer;
   var DeepestLine, DeepestDepth: Integer;
   var DeepestKind: TNodeKind);
+// FIX (jvcl-Audit 2026-06-07): iterative DFS statt rekursivem Walk.
+// Bei tief verschachteltem AST (z.B. JvId3v2.pas mit langen
+// if-then-else-Ketten) sprengte Walk(Self) den Default-Stack mit
+// STACK_OVERFLOW ($C00000FD). Explicit Stack mit (Node, Depth)-Paaren.
+type
+  TFrame = record
+    N : TAstNode;
+    D : Integer;
+  end;
 var
+  Stack    : TList<TFrame>;
+  Cur      : TFrame;
   Child    : TAstNode;
   NewDepth : Integer;
+  F        : TFrame;
 begin
-  for Child in Node.Children do
-  begin
-    NewDepth := Depth;
-    if Child.Kind in COUNTING_KINDS then
+  if Node = nil then Exit;
+  Stack := TList<TFrame>.Create;
+  try
+    F.N := Node; F.D := Depth;
+    Stack.Add(F);
+    while Stack.Count > 0 do
     begin
-      Inc(NewDepth);
-      if NewDepth > DeepestDepth then
+      Cur := Stack[Stack.Count - 1];
+      Stack.Delete(Stack.Count - 1);
+      for Child in Cur.N.Children do
       begin
-        DeepestDepth := NewDepth;
-        DeepestLine  := Child.Line;
-        DeepestKind  := Child.Kind;
+        NewDepth := Cur.D;
+        if Child.Kind in COUNTING_KINDS then
+        begin
+          Inc(NewDepth);
+          if NewDepth > DeepestDepth then
+          begin
+            DeepestDepth := NewDepth;
+            DeepestLine  := Child.Line;
+            DeepestKind  := Child.Kind;
+          end;
+        end;
+        F.N := Child; F.D := NewDepth;
+        Stack.Add(F);
       end;
     end;
-    Walk(Child, NewDepth, DeepestLine, DeepestDepth, DeepestKind);
+  finally
+    Stack.Free;
   end;
 end;
 
