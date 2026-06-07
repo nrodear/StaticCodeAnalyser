@@ -984,6 +984,37 @@ var
     end;
   end;
 
+  function LineContainsIdent(ALines: TStringList; LineNo: Integer;
+    const NameLow: string): Boolean;
+  // Sanity-Check: ist Name als Wort-Identifier in Line[LineNo-1] vorhanden?
+  // Strippt nichts - reine Substring-Word-Boundary-Suche im Original.
+  // Defensiver Last-Line-Check vor Finding-Emit (SCA166 Line-Attribution-
+  // Audit 2026-06-07).
+  var
+    L : string;
+    P, NL, LL : Integer;
+    Before, After : Char;
+  begin
+    Result := False;
+    if (ALines = nil) or (LineNo <= 0) or (LineNo > ALines.Count) then Exit;
+    L := LowerCase(ALines[LineNo - 1]);
+    LL := Length(L);
+    NL := Length(NameLow);
+    if NL = 0 then Exit;
+    P := 1;
+    while True do
+    begin
+      P := PosEx(NameLow, L, P);
+      if P = 0 then Break;
+      Before := #0;
+      if P > 1 then Before := L[P - 1];
+      After := #0;
+      if P + NL - 1 < LL then After := L[P + NL];
+      if not IsIdentChar(Before) and not IsIdentChar(After) then Exit(True);
+      P := P + NL;
+    end;
+  end;
+
   function FindFirstReadLine(const NameLow: string;
     DeclLine, FirstWriteLine, MethodStartLine, MethodEndLine: Integer): Integer;
   // Findet die erste Source-Zeile MIT einem Identifier-Match INNERHALB
@@ -1200,6 +1231,16 @@ var
       if P.RefCount <= 1 then Continue;        // UnusedLocal-Domain
       if P.IsManaged then Continue;            // managed types: opt-in
       if P.FirstReadLine = 0 then Continue;    // nur Writes - clean
+
+      // Defensive Sanity-Check (Audit 2026-06-07 SCA166 Line-Attribution):
+      // wenn der Var-Name auf der reported FirstReadLine GAR NICHT
+      // vorkommt, hat irgendwo im Pipeline (Parser ifdef-Bloecke o.ae.)
+      // eine fehlerhafte Zuordnung stattgefunden -> Befund suppress'en.
+      // Klassisches Symptom: mormot.core.text 'temp' auf L3452 wo
+      // weder 'temp' noch 'tmp' im Code steht.
+      if (P.FirstReadLine > 0)
+         and not LineContainsIdent(Lines, P.FirstReadLine, P.NameLow) then
+        Continue;
 
       if P.FirstWriteLine = 0 then
       begin
