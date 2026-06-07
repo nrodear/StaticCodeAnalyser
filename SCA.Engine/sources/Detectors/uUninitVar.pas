@@ -862,6 +862,49 @@ var
     Result := True;
   end;
 
+  function IsVarDeclContinuationLine(const LineLow: string): Boolean;
+  // Multi-Line-var-Decl-Kontinuation:
+  //   var
+  //     luminanceIndex,         <- diese Zeile
+  //     index  : Integer;
+  //     byte1,                  <- diese Zeile
+  //     byte2,                  <- diese Zeile
+  //     b5, g5, r5,             <- diese Zeile
+  //     r8, g8, b8 : Byte;
+  // Pattern: NUR Ident-Chars + Kommas + Whitespace, endet mit ','
+  // (kein ':', kein '(', kein '=', kein ';'). IsVarDeclLine matched
+  // nur die finale Zeile mit ':type;', diese Continuation-Zeilen
+  // wuerde der Source-Line-Scan sonst als Identifier-Reads
+  // interpretieren - 20 FPs allein in TCodeReader RGBLuminance.pas.
+  //
+  // Risk: koennte fold-falsch eine multi-line Call-Arg-Zeile wie
+  //   X := Bar(
+  //     Foo,          <- matched auch!
+  //     Baz);
+  // skippen, wenn Foo eine tracked Local-Var ist. In dem Fall hat aber
+  // der AST-Call-Walk Foo bereits via pessimistic-Write registriert
+  // (siehe ProcessCall) - kein False-Negative.
+  var
+    Trimmed : string;
+    i, L : Integer;
+    C : Char;
+    HasIdent : Boolean;
+  begin
+    Result := False;
+    Trimmed := Trim(LineLow);
+    L := Length(Trimmed);
+    if L < 2 then Exit;
+    if Trimmed[L] <> ',' then Exit;
+    HasIdent := False;
+    for i := 1 to L do
+    begin
+      C := Trimmed[i];
+      if not CharInSet(C, ['a'..'z', '0'..'9', '_', ',', ' ', #9]) then Exit;
+      if CharInSet(C, ['a'..'z', '_']) then HasIdent := True;
+    end;
+    Result := HasIdent;
+  end;
+
   function FindFirstSourceWriteLine(const NameLow: string;
     DeclLine, MethodStartLine, MethodEndLine: Integer): Integer;
   // FP-Fix Source-Line-Fallback fuer Write-Detection. Wird gerufen wenn
@@ -954,6 +997,8 @@ var
       if IsLineInRanges(i + 1, NestedRanges) then Continue;
       // Skip wenn Zeile eine reine Var-Decl ist (Multi-line-Decl-Fix)
       if IsVarDeclLine(L) then Continue;
+      // Skip auch Multi-Line-var-Decl-Continuation ('byte1,' / 'b5, g5,')
+      if IsVarDeclContinuationLine(L) then Continue;
       LL := Length(L);
       P := 1;
       while True do

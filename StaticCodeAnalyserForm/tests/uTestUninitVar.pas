@@ -31,6 +31,7 @@ type
     [Test] procedure ForLoopInitialisesVar_NoFinding;
     [Test] procedure ForInInlineVar_NoFinding;
     [Test] procedure TryGetGenericOutArg_NoFinding;
+    [Test] procedure MultiLineVarDeclContinuation_NoFinding;
     [Test] procedure FillCharInitialisesVar_NoFinding;
     [Test] procedure WriteBeforeRead_TryFinally_NoFinding;
     [Test] procedure DeclaredButNeverReferenced_NoFinding;
@@ -403,6 +404,40 @@ begin
   try
     Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
       'TryGet<T>(out arg) im if-Condition darf kein UninitVar werfen');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.MultiLineVarDeclContinuation_NoFinding;
+// Regression TCodeReader RGBLuminanceSource.pas (20 FPs in einer Datei):
+// Multi-line var-Decl mit Ein-Ident-pro-Zeile - Continuation-Zeilen
+// (nur 'name,' am Zeilenende) duerfen NICHT als Reads interpretiert
+// werden. IsVarDeclLine erkennt nur die finale Zeile mit ':type;'.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var'#13#10 +
+    '  byte1,'#13#10 +
+    '  byte2,'#13#10 +
+    '  b5, g5, r5,'#13#10 +
+    '  r8, g8, b8 : Byte;'#13#10 +
+    'begin'#13#10 +
+    '  byte1 := 0;'#13#10 +
+    '  byte2 := 0;'#13#10 +
+    '  b5 := byte1; g5 := byte1; r5 := byte1;'#13#10 +
+    '  r8 := r5; g8 := g5; b8 := b5;'#13#10 +
+    '  WriteLn(r8 + g8 + b8);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+      'multi-line var-decl continuation darf kein UninitVar werfen');
   finally L.Free; end;
 end;
 
