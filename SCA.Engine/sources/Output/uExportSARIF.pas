@@ -262,20 +262,7 @@ var
   Run    : TJSONObject;
   Tool   : TJSONObject;
   Driver : TJSONObject;
-{$IFNDEF DEBUG}
-  HeapHint : string;
-{$ENDIF}
 begin
-  {$IFNDEF DEBUG}
-  // Defensive-Mitigation (jvcl-segfault audit 2026-06-07): einige Scan-
-  // Pfade laden vor SARIF-Write nicht ausreichend Heap, was zu Segfault
-  // im Release-Build mit --quiet fuehrt (Heap-Layout-sensitive memory
-  // corruption von einem Detector der noch nicht identifiziert ist).
-  // Eine kleine Heap-Allocation verschiebt das Layout zuverlaessig in
-  // den nicht-crash-Bereich. Workaround bis Root-Cause via IDE-Debugger.
-  HeapHint := StringOfChar(' ', 4096);
-  if HeapHint <> '' then HeapHint := '';
-  {$ENDIF}
   Root := TJSONObject.Create;
   try
     Root.AddPair('$schema',
