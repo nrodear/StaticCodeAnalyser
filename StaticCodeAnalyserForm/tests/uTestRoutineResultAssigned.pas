@@ -20,6 +20,7 @@ type
     [Test] procedure FunctionWithFunctionNameAssign_NoFinding;
     [Test] procedure FunctionWithExit_NoFinding;
     [Test] procedure FunctionWithRaise_NoFinding;
+    [Test] procedure FunctionWithRaiseHelper_NoFinding;
     [Test] procedure Procedure_NoFinding;
     [Test] procedure AbstractFunction_NoFinding;
     [Test] procedure ForwardFunction_NoFinding;
@@ -118,6 +119,22 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRoutineResultUnassigned));
+  finally F.Free; end;
+end;
+
+procedure TTestRoutineResultAssigned.FunctionWithRaiseHelper_NoFinding;
+// Regression delphimvcframework Serializer-Stubs (40+ FPs):
+// Functions die ueber Helper-Aufruf raisen ('RaiseNotImplemented;',
+// 'Abort;', 'RaiseLastOSError;') zaehlen wie nkRaise.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Foo: string;'#13#10 +
+  'begin RaiseNotImplemented; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRoutineResultUnassigned),
+    'RaiseNotImplemented im Body = semantisch raise, kein Result noetig');
   finally F.Free; end;
 end;
 

@@ -269,6 +269,34 @@ begin
     Raises.Free;
   end;
 
+  // FP-Fix: Call-Helper die intern raisen (RaiseNotImplemented, Abort,
+  // RaiseLastOSError, NotImplemented, ...) sind semantisch aequivalent zu
+  // einem nkRaise - Methode kehrt nicht regulaer zurueck. Body-Calls
+  // pruefen, wenn der Name auf die ueblichen Verdaechtigen passt.
+  // Trigger-Audit: delphimvcframework Serializer-Stubs:
+  //   function ... ; begin RaiseNotImplemented; end;
+  var RaiseHelperCalls : TList<TAstNode> := MethodNode.FindAll(nkCall);
+  try
+    for N in RaiseHelperCalls do
+    begin
+      var CallNameLow := LowerCase(N.Name);
+      // Qualifizierten Praefix abschneiden: 'Self.RaiseNotImplemented' -> 'raisenotimplemented'.
+      var DotPos := LastDelimiter('.', CallNameLow);
+      if DotPos > 0 then CallNameLow := Copy(CallNameLow, DotPos + 1, MaxInt);
+      // Args/Paren abschneiden.
+      var ParenPos := Pos('(', CallNameLow);
+      if ParenPos > 0 then CallNameLow := Copy(CallNameLow, 1, ParenPos - 1);
+      CallNameLow := Trim(CallNameLow);
+      if (CallNameLow = 'abort') or
+         (CallNameLow = 'raiselastoserror') or
+         (CallNameLow = 'notimplemented') or
+         StartsText('raise', CallNameLow) then
+        Exit;
+    end;
+  finally
+    RaiseHelperCalls.Free;
+  end;
+
   // Pruefe alle nkAssign auf LHS = 'result' oder <FunctionName>.
   FnNameLow := LowerCase(UnqualifiedName(MethodNode.Name));
   HasResult := False;
