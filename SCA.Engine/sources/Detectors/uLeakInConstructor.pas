@@ -146,6 +146,38 @@ begin
   end;
 end;
 
+function HasRaiseAfterFirstFieldCreate(MethodNode: TAstNode): Boolean;
+// Fix (Audit 2026-06-07): klassisches Validate-then-Allocate-Pattern
+//   constructor TFoo.Create(N: Integer);
+//   begin
+//     if N < 1 then raise Exception.Create('bad');
+//     FList := TList.Create;   // erst HIER allokiert
+//   end;
+// Wenn ALLE raises VOR dem ersten Field-.Create kommen, ist nichts zum
+// Leak-en (Validate-fail -> exit ohne Allocation). Audit-Trigger:
+// LoggerPro.MemoryAppender, LoggerPro.WebhookAppender, MVCFramework.
+var
+  Assigns, Raises : TList<TAstNode>;
+  N               : TAstNode;
+  FirstCreateLine : Integer;
+  R               : TAstNode;
+begin
+  Result := False;
+  FirstCreateLine := MaxInt;
+  Assigns := MethodNode.FindAll(nkAssign);
+  try
+    for N in Assigns do
+      if LooksLikeFieldCreate(N) and (N.Line < FirstCreateLine) then
+        FirstCreateLine := N.Line;
+  finally Assigns.Free; end;
+  if FirstCreateLine = MaxInt then Exit; // no field-create at all
+  Raises := MethodNode.FindAll(nkRaise);
+  try
+    for R in Raises do
+      if R.Line >= FirstCreateLine then Exit(True);
+  finally Raises.Free; end;
+end;
+
 function HasProtectingTryExcept(MethodNode: TAstNode): Boolean;
 var
   Tries : TList<TAstNode>;
@@ -174,6 +206,9 @@ begin
       if not HasFieldCreate(M) then Continue;
       if not HasRaise(M) then Continue;
       if HasProtectingTryExcept(M) then Continue;
+      // Validate-then-Allocate-Pattern: alle Raises VOR allen Field-Creates
+      // -> raise feuert vor jeder Allocation -> nichts zum leaken.
+      if not HasRaiseAfterFirstFieldCreate(M) then Continue;
 
       F            := TLeakFinding.Create;
       F.FileName   := FileName;

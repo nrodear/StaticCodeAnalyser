@@ -14,6 +14,7 @@ type
     [Test] procedure RaiseWithoutFieldCreate_NoFinding;
     [Test] procedure ProtectedByTryExcept_NoFinding;
     [Test] procedure ClassConstructor_NoFinding;
+    [Test] procedure ValidateThenAllocate_NoFinding;
     [Test] procedure Finding_KindAndSeverity;
   end;
 
@@ -109,6 +110,27 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLeakInConstructor));
+  finally F.Free; end;
+end;
+
+procedure TTestLeakInConstructor.ValidateThenAllocate_NoFinding;
+// Regression LoggerPro.MemoryAppender/WebhookAppender:
+//   begin
+//     if N < 1 then raise Exception.Create('bad');
+//     FList := TList.Create;   <- raise feuert vor jeder Allocation
+//   end;
+const SRC =
+  'unit t; implementation'#13#10 +
+  'constructor TFoo.Create(N: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  if N < 1 then raise Exception.Create(''bad'');'#13#10 +
+  '  FList := TList.Create;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLeakInConstructor),
+    'raise VOR der ersten Allocation = nichts zum leaken');
   finally F.Free; end;
 end;
 
