@@ -213,11 +213,58 @@ begin
 end;
 
 destructor TAstNode.Destroy;
+// FIX (jvcl-Audit 2026-06-07): iterative Destruktion statt
+// rekursivem Children.Free. Bei tief verschachteltem AST (z.B.
+// JvId3v2.pas mit deeply-nested begin/end-Bloecken oder if-Ketten)
+// kaskadiert das default-Destroy via OwnsObjects=True N-Levels tief
+// und triggert STACK_OVERFLOW.
+//
+// Algorithmus:
+// 1. Iterative DFS sammelt ALLE Descendants in eine flache Liste.
+// 2. Jeder Descendant bekommt seine Children.OwnsObjects:=False -
+//    seine spaetere Destroy macht KEINE Cascade.
+// 3. Jeder Descendant wird per .Free freigegeben - jede einzelne
+//    Destroy-Invocation ist nur 1 Stack-Frame tief.
+var
+  Stack    : TList<TAstNode>;
+  AllDesc  : TList<TAstNode>;
+  Cur      : TAstNode;
+  i        : Integer;
 begin
-  // Cache haelt Pointer in die Children - zuerst die Cache-Wrappers freigeben,
-  // dann die Children. Reihenfolge egal fuer Korrektheit (Cache-Listen
-  // enthalten nur Pointer, kein Ownership), aber explizit fuer Lesbarkeit.
   FFindAllCache.Free;
+  if Children.Count > 0 then
+  begin
+    Stack   := TList<TAstNode>.Create;
+    AllDesc := TList<TAstNode>.Create;
+    try
+      // Eigene direkte Children disownen + auf Stack.
+      Children.OwnsObjects := False;
+      for i := 0 to Children.Count - 1 do
+      begin
+        AllDesc.Add(Children[i]);
+        Stack.Add(Children[i]);
+      end;
+      // Iterative DFS, jeder Knoten disowned + enqueued.
+      while Stack.Count > 0 do
+      begin
+        Cur := Stack[Stack.Count - 1];
+        Stack.Delete(Stack.Count - 1);
+        Cur.Children.OwnsObjects := False;
+        for i := 0 to Cur.Children.Count - 1 do
+        begin
+          AllDesc.Add(Cur.Children[i]);
+          Stack.Add(Cur.Children[i]);
+        end;
+      end;
+      // Flach freigeben - jede Cur.Destroy ist 1-Frame-Tief
+      // weil Cur.Children jetzt OwnsObjects=False hat.
+      for Cur in AllDesc do
+        Cur.Free;
+    finally
+      Stack.Free;
+      AllDesc.Free;
+    end;
+  end;
   Children.Free;
   inherited;
 end;
