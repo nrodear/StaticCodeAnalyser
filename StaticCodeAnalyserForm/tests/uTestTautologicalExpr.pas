@@ -30,6 +30,7 @@ type
     [Test] procedure TwoCallsWithIdenticalStringArgs_Reported;
     [Test] procedure CaseSensitiveCharLiterals_NoFinding;
     [Test] procedure CaseSensitiveStringLiterals_NoFinding;
+    [Test] procedure BitAndCompareConstant_NoFinding;
 
     // ---- Finding-Inhalt ---------------------------------------------------
     [Test] procedure Taut_Finding_KindAndSeverity;
@@ -228,6 +229,27 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTautologicalBoolExpr));
+  finally F.Free; end;
+end;
+
+procedure TTestTautologicalExpr.BitAndCompareConstant_NoFinding;
+// Regression mORMot.core.buffers/.data L8297/L3278 (~26+ FPs):
+// `(n and 1) = 1` ist KEINE Tautologie - das `and` ist Bit-Operator.
+// Pascal's Operator-Precedence: `and` bindet enger als `=`, daher ist
+// das tatsaechlich `(n and 1) = 1`. Der Detector hatte 'and ' als
+// Lhs-Prefix mit Pos() statt StartsStr() entfernt - kapselte das LHS
+// auf '1' und matched gegen RHS '1'.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function IsOdd(n: Integer): Boolean;'#13#10 +
+  'begin'#13#10 +
+  '  Result := (n and 1) = 1;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTautologicalBoolExpr),
+    '(n and 1) = 1 ist Bit-Test, keine Tautologie');
   finally F.Free; end;
 end;
 

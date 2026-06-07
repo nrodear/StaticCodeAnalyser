@@ -33,6 +33,7 @@ type
 implementation
 
 uses
+  System.StrUtils,
   uFileTextCache;
 
 const
@@ -224,6 +225,11 @@ end;
 
 // Strip alle Pascal-Prefixe (`if `, `while `, `until `, `begin `, ...) vom
 // linken Rand eines Lhs-Ausdrucks, damit `if a` zu `a` wird.
+//
+// KRITISCH: Prefixe duerfen nur an Position 1 (nach Trim) entfernt werden,
+// nicht irgendwo in der Mitte. Sonst wuerde `(n and 1)` zu `1` reduziert
+// und ` = 1` matched als tautology. FP-Audit mORMot core.buffers/data:
+// 26x '1 = 1' FPs aus `(n and 1) = 1` bit-test pattern.
 function StripLhsPrefix(const S: string): string;
 const
   PREFIXES : array[0..7] of string =
@@ -232,25 +238,22 @@ var
   Low : string;
   Changed : Boolean;
   Pref : string;
-  SP : Integer;
 begin
-  Result := S;
+  Result := Trim(S);
   repeat
     Changed := False;
     Low := LowerCase(Result);
     for Pref in PREFIXES do
     begin
-      SP := Pos(Pref, Low);
-      if SP > 0 then
+      if StartsStr(Pref, Low) then
       begin
-        // Alles bis nach dem Praefix wegschneiden
-        Result  := Copy(Result, SP + Length(Pref), MaxInt);
+        Result  := Copy(Result, Length(Pref) + 1, MaxInt);
+        Result  := TrimLeft(Result);
         Changed := True;
         Break;
       end;
     end;
   until not Changed;
-  Result := Trim(Result);
 end;
 
 // Sucht in einer Code-Zeile nach `<lhs> <op> <rhs>`-Pattern mit lhs == rhs
