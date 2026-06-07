@@ -19,6 +19,7 @@ type
     // TThreadDestroyWithoutTerminate
     [Test] procedure FreeAndNilWithoutTerminate_Reported;
     [Test] procedure FreeAndNilWithTerminateAndWait_NotReported;
+    [Test] procedure FreeAndNilWithOnlyWaitFor_NotReported;
     // Type-Filter: nur feuern wenn Identifier-Typ nach TThread aussieht.
     [Test] procedure FreeAndNilObjectList_NotReported;
     [Test] procedure FreeAndNilStringList_NotReported;
@@ -113,6 +114,27 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate));
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.FreeAndNilWithOnlyWaitFor_NotReported;
+// Regression MVCFramework.Console.TConsoleSpinner.Hide:
+//   FThread.WaitFor;
+//   FreeAndNil(FThread);
+// Thread laeuft endlichen Job, beendet sich natuerlich. KEIN Terminate
+// noetig. Detector soll WaitFor alleine als protective intent werten.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  FWorker.WaitFor;'#13#10 +
+  '  FreeAndNil(FWorker);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
+    'WaitFor alleine reicht als protective intent');
   finally F.Free; end;
 end;
 

@@ -211,11 +211,21 @@ begin
       LookBack := M.Index - 500;
       if LookBack < 1 then LookBack := 1;
       Snippet := Copy(Code, LookBack, M.Index - LookBack);
-      // Heuristik: vor dem FreeAndNil muss innerhalb der LookBack-Range
-      // ein `<Ident>.Terminate` UND `<Ident>.WaitFor` vorkommen. Wenn
-      // beides fehlt -> Befund.
+      // Heuristik (V2 Audit 2026-06-07): vor dem FreeAndNil muss innerhalb
+      // der LookBack-Range ENTWEDER `<Ident>.Terminate` ODER
+      // `<Ident>.WaitFor` vorkommen.
+      //
+      // V1 forderte BEIDES strikt - das war zu aggressiv: Thread-Patterns
+      // die mit endlichem Job laufen und natuerlich exit-en brauchen NUR
+      // WaitFor (z.B. MVCFramework.Console.TConsoleSpinner.Hide nutzt
+      // CompareExchange-Flag + WaitFor; Terminate macht hier nichts).
+      // Detector hat im Realfall 17 FPs in delphimvcframework gemeldet.
+      //
+      // Wer beide will: jeder Pattern allein ist 'protective intent' -
+      // das ist die relevante Heuristik. Echte Bugs (nackter FreeAndNil
+      // ohne irgendetwas) bleiben gemeldet.
       HasTerminate :=
-        (Pos(LowerCase(Ident) + '.terminate', LowerCase(Snippet)) > 0) and
+        (Pos(LowerCase(Ident) + '.terminate', LowerCase(Snippet)) > 0) or
         (Pos(LowerCase(Ident) + '.waitfor',   LowerCase(Snippet)) > 0);
       if not HasTerminate then
         Emit(fkTThreadDestroyWithoutTerminate,
