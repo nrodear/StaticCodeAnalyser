@@ -168,6 +168,13 @@ begin
           try
             for Ctor in ClassImplCtors do
             begin
+              // Unqualifizierten Konstruktor-Namen extrahieren fuer
+              // Delegation-Erkennung: 'EMVCException.Create' -> 'create'.
+              var CtorSimpleLow := LowerCase(Ctor.Name);
+              var CtorDotPos := LastDelimiter('.', CtorSimpleLow);
+              if CtorDotPos > 0 then
+                CtorSimpleLow := Copy(CtorSimpleLow, CtorDotPos + 1, MaxInt);
+
               CallList := Ctor.FindAll(nkCall);
               try
                 for Call in CallList do
@@ -177,6 +184,13 @@ begin
                   LowName := LowerCase(Target);
                   // inherited skippen (geht hoch, nicht runter)
                   if LowName.StartsWith('inherited') then Continue;
+                  // Konstruktor-Delegation: 'Create(args)' aus einer
+                  // anderen Create-Ueberladung derselben Klasse ist
+                  // KEIN virtueller Call sondern Overload-Resolution.
+                  // FP-Audit: EMVCException.Create.Create, ELoggerProException.
+                  // Echte Bug-Faelle (Subclass override-able virtual) bleiben
+                  // gemeldet wenn die Methode anders heisst als der Ctor.
+                  if LowName = CtorSimpleLow then Continue;
 
                   if not VirtualByName.TryGetValue(LowName, VMethod) then
                     Continue;

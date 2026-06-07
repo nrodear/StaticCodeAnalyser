@@ -23,6 +23,7 @@ type
     [Test] procedure InheritedCreate_NoFinding;
     [Test] procedure CallOnOtherObject_NoFinding;
     [Test] procedure NoConstructor_NoFinding;
+    [Test] procedure CtorDelegation_NoFinding;
 
     // ---- Finding-Inhalt ----------------------------------------------------
     [Test] procedure VCall_Finding_KindAndSeverity;
@@ -220,6 +221,32 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkVirtualCallInCtor));
+  finally F.Free; end;
+end;
+
+procedure TTestVirtualCallInCtor.CtorDelegation_NoFinding;
+// Regression EMVCException.Create-Ueberladungs-Delegation (40+ FPs):
+// Constructor Create(args1) ruft Create(args2) auf - das ist Overload-
+// Resolution innerhalb der Klasse, kein virtueller Dispatch zur Subklasse.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type TBase = class'#13#10 +
+  '  constructor Create(const A: string); overload; virtual;'#13#10 +
+  '  constructor Create(const A: string; B: Integer); overload;'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'constructor TBase.Create(const A: string); begin end;'#13#10 +
+  'constructor TBase.Create(const A: string; B: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  Create(A);'#13#10 +  // <- selber Konstruktor, NICHT virtual-call
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkVirtualCallInCtor),
+    'Create-Ueberladungs-Delegation darf nicht als virtual-call gemeldet werden');
   finally F.Free; end;
 end;
 
