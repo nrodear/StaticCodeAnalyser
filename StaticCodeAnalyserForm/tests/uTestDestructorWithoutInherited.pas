@@ -14,6 +14,7 @@ type
     [Test] procedure RegularProcedure_NoFinding;
     [Test] procedure DtorForwardDecl_NotReported;
     [Test] procedure ClassDestructor_NotReported;
+    [Test] procedure ClassDestructor_AfterVarSection_NotReported;
     [Test] procedure DtorWithoutInherited_KindAndSeverity;
   end;
 
@@ -117,6 +118,32 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDestructorWithoutInherited));
+  finally F.Free; end;
+end;
+
+procedure TTestDestructorWithoutInherited.ClassDestructor_AfterVarSection_NotReported;
+// Regression MVCFramework.Commons.pas L875 (1 echter FP) - var-Section
+// direkt vor 'class destructor' kann den ';class'-Marker am Parser
+// vorbeischmuggeln. Source-Line-Fallback faengt das Pattern.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    class destructor Destroy;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'var'#13#10 +
+  '  G: Integer = 0;'#13#10 +
+  'class destructor TFoo.Destroy;'#13#10 +
+  'begin'#13#10 +
+  '  G := 0;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDestructorWithoutInherited),
+    'class destructor nach var-Section darf nicht gemeldet werden');
   finally F.Free; end;
 end;
 

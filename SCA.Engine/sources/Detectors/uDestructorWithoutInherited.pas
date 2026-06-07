@@ -29,6 +29,10 @@ type
 
 implementation
 
+uses
+  System.Classes, System.StrUtils,
+  uFileTextCache;
+
 const
   EMIT_SEVERITY = lsError;
 
@@ -44,6 +48,30 @@ begin
   // Section). Skip wenn dieser Marker vorhanden.
   if Pos(';class', TR) > 0 then Exit(False);
   Result := TR.StartsWith('destructor');
+end;
+
+function IsClassDestructorByLine(const FileName: string;
+  LineNo: Integer): Boolean;
+// Fallback wenn der Parser die ';class'-Markierung verfehlt
+// (z.B. MVCFramework.Commons.pas TMVCSqids.Destroy). Liest die Source-Zeile
+// und prueft auf 'class destructor' am linken Rand (Whitespace egal).
+var
+  Lines : TStringList;
+  Cached : Boolean;
+  Line : string;
+  Trimmed : string;
+begin
+  Result := False;
+  Lines := AcquireLines(FileName, Cached);
+  if Lines = nil then Exit;
+  try
+    if (LineNo < 1) or (LineNo > Lines.Count) then Exit;
+    Line := Lines[LineNo - 1];
+    Trimmed := LowerCase(TrimLeft(Line));
+    Result := StartsStr('class destructor', Trimmed);
+  finally
+    ReleaseLines(Lines, Cached);
+  end;
 end;
 
 // Liefert den Body-Block (nkBlock) der Methode oder nil wenn keiner da
@@ -85,6 +113,10 @@ begin
       // Nur echte Implementierungen pruefen - Forward-Decls in Class-Bodies
       // haben kein nkBlock und wuerden sonst falsch-positiv anschlagen.
       if FindBodyBlock(M) = nil then Continue;
+      // Source-Line-Fallback: Parser verfehlt manchmal die ';class'-
+      // Markierung bei impl-level class-destructors (MVCFramework.Commons
+      // TMVCSqids.Destroy). Direkt am Source pruefen.
+      if IsClassDestructorByLine(FileName, M.Line) then Continue;
       if HasInheritedCall(M) then Continue;
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
