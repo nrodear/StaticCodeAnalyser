@@ -4040,6 +4040,63 @@ begin
         '// tools, and future readers all benefit from explicit receivers.';
     end;
 
+    fkUninitVar:
+    begin
+      Result.Description := _('Local variable read before its first assignment - undefined value (garbage / AV)');
+      Result.Before :=
+        'procedure DoIt(N: Integer);'#13#10 +
+        'var'#13#10 +
+        '  Total: Integer;'#13#10 +
+        'begin'#13#10 +
+        '  if N > 0 then'#13#10 +
+        '    Total := N * 2;'#13#10 +
+        '  // N=0 oder N<0 -> Total NIE zugewiesen!'#13#10 +
+        '  WriteLn(Total);    // <- liest Stack-Garbage'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Bei nicht-managed Typen (Integer, Boolean, Pointer, record,'#13#10 +
+        '// class instance) startet die Variable mit undefiniertem Inhalt.'#13#10 +
+        '// Lesen vor Schreiben liefert Garbage oder loest AV aus.';
+      Result.After :=
+        'procedure DoIt(N: Integer);'#13#10 +
+        'var'#13#10 +
+        '  Total: Integer;'#13#10 +
+        'begin'#13#10 +
+        '  Total := 0;        // <- explicit default vor jedem Read'#13#10 +
+        '  if N > 0 then'#13#10 +
+        '    Total := N * 2;'#13#10 +
+        '  WriteLn(Total);    // safe: hat IMMER definierten Wert'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Alternativen:'#13#10 +
+        '//   * Total := Default(Integer);'#13#10 +
+        '//   * jeden if-Pfad zuweisen lassen (auch else)'#13#10 +
+        '//   * FillChar(rec, SizeOf(rec), 0) fuer records'#13#10 +
+        '//   * Managed-Typen (string, dynamic array) sind auto-init,'#13#10 +
+        '//     hier nicht relevant.'#13#10 +
+        ''#13#10 +
+        '// Suppress mit: // noinspection UninitVar';
+    end;
+
+    fkUnusedSuppression:
+    begin
+      Result.Description := _('Suppression marker has no matching finding - probably stale after fix');
+      Result.Before :=
+        'procedure Foo;'#13#10 +
+        'begin'#13#10 +
+        '  // noinspection MemoryLeak'#13#10 +
+        '  DoSomething;             // <- der zugehoerige Leak wurde gefixt,'#13#10 +
+        'end;                       //    der Marker is jetzt Toter Code';
+      Result.After :=
+        'procedure Foo;'#13#10 +
+        'begin'#13#10 +
+        '  DoSomething;             // Marker geloescht - Code-Hygiene'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// Stale-Suppression-Marker akkumulieren ueber Zeit und'#13#10 +
+        '// verschleiern echte Befunde. Aufraeumen wie ungenutzten Code.';
+    end;
+
   end;
 end;
 
