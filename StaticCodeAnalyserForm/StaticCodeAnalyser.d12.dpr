@@ -14,13 +14,23 @@ program StaticCodeAnalyser.d12;
 // braucht, ruft 'start /wait analyser.exe ...' oder pipt nach 'more'.
 // CI-Runner (PowerShell, GH Actions) sehen das nicht - die loggen synchron.
 
-// Stack-Size erhoeht von 1 MB (Default) auf 32 MB. Detektoren walken
-// rekursiv durchs AST (uDeepNesting.Walk, uCyclomaticComplexity.Walk,
-// ...). Bei tief verschachteltem Real-World-Code (JvId3v2.pas mit langen
-// if-then-else-Ketten) sprengt der Default-Stack. Audit-Trigger:
-// 'D:/git-sca-realworld/jvcl' segfault mit --quiet --report-sarif.
-{$MAXSTACKSIZE 33554432}    // 32 MB Maximum
-{$MINSTACKSIZE 4194304}     // 4  MB Initial-Reserve
+// STACK-SIZE: Detektoren walken rekursiv durchs AST. Bei tief
+// verschachteltem Real-World-Code (JvId3v2.pas mit langen
+// if-then-else-Ketten) sprengt der Default-Stack (1 MB).
+// Audit-Trigger: 'D:/git-sca-realworld/jvcl' segfault mit
+// --quiet --report-sarif.
+//
+// LIMITATION: $MAXSTACKSIZE/$MINSTACKSIZE Direktiven werden vom Delphi 12
+// Compiler ignoriert (Bug? verifiziert mit PE-Header-Inspektion).
+// Auch <DCC_MaxStackSize> im dproj greift nicht. Post-Build-Patch noetig:
+//
+//   tools\patch-stack-size.ps1 'Output\Win64 Release\StaticCodeAnalyser.d12.exe'
+//
+// TODO (Hardening v4): rekursive Walks durch iterative DFS ersetzen.
+// Bisher gefixed: uDeepNesting (5f67d6e). Verbleibend:
+//   uCyclomaticComplexity, uCharToCharPointerCast, uDateFormatSettings,
+//   uIfThenShortCircuit, uNilComparison, uRaiseOutsideExcept,
+//   uRaisingRawException, uUnicodeToAnsiCast (heuristisches grep).
 
 uses
   Winapi.Windows,
