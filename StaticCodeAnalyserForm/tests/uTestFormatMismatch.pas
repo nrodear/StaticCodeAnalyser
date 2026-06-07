@@ -22,6 +22,7 @@ type
     [Test] procedure Format_EscapedPercent_NotCounted;
     [Test] procedure Format_NoArgs_NoPlaceholders_NoFinding;
     [Test] procedure Format_WidthSpecifier_CorrectCount;
+    [Test] procedure Format_StarWidthAndPrecision_NoFinding;
     [Test] procedure Format_NestedInsideAdd_NoFinding;
     [Test] procedure Format_StringContentParsed_CorrectCount;
     [Test] procedure Format_EscapedQuoteInString_CorrectCount;
@@ -162,6 +163,24 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFormatMismatch),
       '%8.2f = 1 Platzhalter, 1 Argument – kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatch.Format_StarWidthAndPrecision_NoFinding;
+// Regression Clipper.pas L657: '%1.*n' nimmt 2 Args (Precision + Value).
+// '%*.*d' nimmt 3 Args (Width + Precision + Value).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'begin'#13#10+
+  '  ShowMessage(Format(''%1.*n,%1.*n'', [3, 1.5, 3, 2.5]));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFormatMismatch),
+      '%1.*n mit *-Precision konsumiert 2 Args pro Specifier');
   finally F.Free; end;
 end;
 

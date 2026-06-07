@@ -392,12 +392,20 @@ begin
       begin
         Inc(Result); // %X = ein Argument
         Inc(i);
-        // Restliche Zeichen des Specifiers ueberspringen (%8.2f, %0:s, ...)
+        // Restliche Zeichen des Specifiers ueberspringen (%8.2f, %0:s, ...).
+        // Wichtig: '*' im Specifier konsumiert ein EXTRA Argument
+        // (Width oder Precision wird via Argument geliefert), z.B.
+        // '%1.*n' nimmt 2 Args (Precision + Value), '%*.*d' nimmt 3 Args.
+        // Audit-Trigger: Clipper.pas L657 'format(''%1.*n,%1.*n, '', [decimals,
+        // p[i].X, decimals, p[i].Y])' - 4 Args fuer 2 %-Specs mit je '*'.
         while (i <= Length(FmtStr)) and
               not CharInSet(FmtStr[i], ['s','d','f','e','g','n','m','u',
                                         'c','x','p','i','S','D','F','E',
                                         'G','N','M','U','C','X','P','I']) do
+        begin
+          if FmtStr[i] = '*' then Inc(Result);
           Inc(i);
+        end;
         if i <= Length(FmtStr) then Inc(i); // Specifier-Buchstabe ueberspringen
       end;
     end
