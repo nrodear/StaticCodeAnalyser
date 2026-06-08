@@ -17,7 +17,7 @@ unit uFixHint;
 interface
 
 uses
-  System.SysUtils,
+  System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12, uLocalization;
 
 type
@@ -28,6 +28,15 @@ type
   end;
 
   TFixHintResolver = class
+  private
+    // Memoize-Cache: Key = (Ord(Kind) shl 8) or Ord(Severity).
+    // Notwendig fuer IDE-Plugin auf Riesen-Scans (>100k Findings):
+    // HighlightAllFindingsInFile rief FixHint() pro Finding, jedes Mal
+    // mit _() Gettext-Lookup + ~3 KB String-Allokation -> Win32-OOM.
+    // Mit Cache: 165 unique Slots statt N-mal-Allokation; Result-Strings
+    // sind ref-counted, downstream-Entries teilen sich Heap-Speicher.
+    class var FCache : TDictionary<Integer, TFixHint>;
+    class function Build(const Finding: TLeakFinding): TFixHint; static;
   public
     class function FixHint(const Finding: TLeakFinding): TFixHint; static;
   end;
@@ -35,6 +44,18 @@ type
 implementation
 
 class function TFixHintResolver.FixHint(const Finding: TLeakFinding): TFixHint;
+var
+  Key : Integer;
+begin
+  if FCache = nil then
+    FCache := TDictionary<Integer, TFixHint>.Create;
+  Key := (Ord(Finding.Kind) shl 8) or Ord(Finding.Severity);
+  if FCache.TryGetValue(Key, Result) then Exit;
+  Result := Build(Finding);
+  FCache.AddOrSetValue(Key, Result);
+end;
+
+class function TFixHintResolver.Build(const Finding: TLeakFinding): TFixHint;
 begin
   Result.Description := '';
   Result.Before      := '';
@@ -4099,5 +4120,9 @@ begin
 
   end;
 end;
+
+initialization
+finalization
+  TFixHintResolver.FCache.Free;
 
 end.
