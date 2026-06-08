@@ -669,6 +669,11 @@ var
   LogStream : TStreamWriter;
   Watch     : TStopwatch;
   ElapsedMs : Int64;
+  // Phase-Tracking fuer Crash-Diagnose. Wird an Schluesselstellen aktualisiert
+  // und im Outer-Handler bei "Analyseabbruch: ..." mit-geloggt. Variable-
+  // Assignment ist quasi-kostenlos; kein Logging im Happy-Path.
+  LastPhase : string;
+  LastFile  : string;
 
   procedure LogLine(const S: string);
   begin
@@ -692,6 +697,8 @@ begin
     // Best-effort: kein ConfigDir = kein Log, der Scan laeuft trotzdem.
   end;
   Parser := nil;
+  LastPhase := 'init';
+  LastFile  := '';
   // Eine gemeinsame try-finally klammer fuer LogStream UND Parser - so leakt
   // weder bei Parser-Create-OOM der LogStream noch umgekehrt.
   try
@@ -703,6 +710,12 @@ begin
     except
       LogStream := nil;
     end;
+
+    // Outer-Diagnose-Try: bei Exception VOR re-raise die letzte Phase + das
+    // aktuelle File ins Log schreiben. Sonst sieht der Caller-Outer-Handler
+    // nur "Analyseabbruch: <Message>" ohne Kontext.
+    try
+
 
     // AST-File-Cache: pro .pas einmal parsen, von beiden Pre-Indizes UND
     // dem Main-Loop wiederverwendet. Spart 2 von 3 Parser-Durchlaeufen pro
@@ -731,6 +744,7 @@ begin
     var IndexFiles: TStringList := IndexFileList;
     if IndexFiles = nil then IndexFiles := FileList;
 
+    LastPhase := 'Pre-Index: DfmRepoIndex.Build';
     gDfmRepoIndex := TDfmRepoIndex.Create;
     try
       gDfmRepoIndex.Build(IndexFiles);
@@ -744,6 +758,7 @@ begin
     // hier dennoch aufgebaut weil andere Konsumenten (Tests, mORMot-Cross-
     // Check) ihn lesen; kann perspektivisch entfallen wenn keiner mehr
     // referenziert.
+    LastPhase := 'Pre-Index: SymbolRefIndex.Build';
     gSymbolRefIndex := TSymbolReferenceIndex.Create;
     try
       gSymbolRefIndex.Build(IndexFiles);
@@ -751,6 +766,7 @@ begin
       FreeAndNil(gSymbolRefIndex);
     end;
 
+    LastPhase := 'Parser.Create + Main-Loop start';
     Parser := TParser2.Create;
     Total  := FileList.Count;
     for i := 0 to Total - 1 do
@@ -758,6 +774,8 @@ begin
       SafeProgress(i + 1, Total);
 
       FileName := FileList[i];
+      LastFile  := FileName;
+      LastPhase := Format('File %d/%d: pre-check', [i + 1, Total]);
 
       // Leerer Dateiname → ignorieren (defensiv)
       if Trim(FileName) = '' then
@@ -811,6 +829,7 @@ begin
       // OwnsRoot=False wenn der Cache das Root besitzt (er freet es bei
       // Evict). True wenn lokal geparst -> nach AST-Verarbeitung selbst free.
       var OwnsRoot := False;
+      LastPhase := Format('File %d/%d: Parse/Acquire', [i + 1, Total]);
       try
         try
           // Cache-Pfad bevorzugen: Pre-Indizes haben das Root schon erzeugt.
@@ -891,6 +910,7 @@ begin
         // Beide Gruppen respektieren LeakyClassExcludes. Die INI bleibt
         // unangetastet; der User entscheidet handisch welche Klasse er in
         // [Detectors] LeakyClasses uebernimmt.
+        LastPhase := Format('File %d/%d: AutoDiscovery', [i + 1, Total]);
         if AutoDiscoverCustomClasses then
         begin
           var Instantiable : TArray<string>;
@@ -922,9 +942,11 @@ begin
         // Detektoren - so liegen sie im Output sortierbar zusammen.
         // No-op wenn TCustomRuleDetector.LoadFromYaml nicht aufgerufen
         // wurde (HasRules = False).
+        LastPhase := Format('File %d/%d: CustomRules', [i + 1, Total]);
         if TCustomRuleDetector.HasRules then
           TCustomRuleDetector.AnalyzeFile(FileName, Results);
 
+        LastPhase := Format('File %d/%d: RunAllDetectors', [i + 1, Total]);
         RunAllDetectors(Root, FileName, Results, AIncludeUsesCheck,
           procedure(const Name: string; ElapsedMs: Int64)
           var
@@ -968,14 +990,40 @@ begin
             CaptResults.Add(F);
           end);
       finally
+        LastPhase := Format('File %d/%d: finally Root.Free/Evict', [i + 1, Total]);
         if OwnsRoot then
           Root.Free
         else if Assigned(gAstFileCache) then
           gAstFileCache.Evict(FileName);  // Memory-Peak bremsen
+        LastPhase := Format('File %d/%d: finally gFileTextCache.Clear', [i + 1, Total]);
         // Text-Cache fuer die abgearbeitete Datei freigeben - die File-Scan-
         // Detektoren haben sie konsumiert, niemand brauchts mehr.
         if Assigned(gFileTextCache) then
           gFileTextCache.Clear;
+      end;
+    end;
+    LastPhase := 'Main-Loop fertig, post-process';
+
+    // Outer-Diagnose-Try Schliessung: bei Exception VOR re-raise die letzte
+    // Phase + das aktuelle File ins Log schreiben. So sieht der Caller-Outer-
+    // Handler (AnalyzeLeaksRecursive etc.) statt nur "Analyseabbruch: <msg>"
+    // im scan.log einen klaren Trail "letzte Phase: ... aktuelles File: ...".
+    except
+      on EAbort do raise;
+      on E: Exception do
+      begin
+        LogLine('');
+        LogLine(Format('=== ABBRUCH: %s: %s ===',
+                       [E.ClassName, E.Message]));
+        LogLine(Format('=== letzte Phase: %s ===',  [LastPhase]));
+        if LastFile <> '' then
+          LogLine(Format('=== aktuelles File: %s ===', [LastFile]))
+        else
+          LogLine('=== aktuelles File: (n/a - Crash vor Main-Loop) ===');
+        // Re-raise damit der Caller-Outer-Handler sein "Analyseabbruch: ..."
+        // SARIF/UI-Finding wie bisher anlegt. Im scan.log steht jetzt der
+        // Kontext direkt vor dieser Meldung.
+        raise;
       end;
     end;
   finally
