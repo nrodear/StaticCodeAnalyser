@@ -36,10 +36,15 @@ type
     // datei (z.B. einzelne `.pas` in einem Git-Repo) ab.
     class function FindProjectRoot(const AFilePath: string): string; static;
   private
+    // ALogSkip (optional): wird pro uebersprungener Datei/Verzeichnis mit
+    // einem klartext-Grund aufgerufen. Geht in StaticCodeAnalyser_scan.log
+    // damit "warum ist datei X nicht im Scan-Output" diagnostizierbar wird,
+    // ohne den Errors-Channel zu fluten (der landet im UI-Grid).
     class procedure ScanRec(const Path: string; List: TStringList;
       Depth: Integer; Errors: TStringList; ATick: TScanTickProc;
       AIgnore: TIgnoreList;
-      var TickCounter: Integer); static;
+      var TickCounter: Integer;
+      ALogSkip: TProc<string> = nil); static;
   end;
 
 implementation
@@ -55,7 +60,14 @@ const
 class procedure TStaticFiles.ScanRec(const Path: string; List: TStringList;
   Depth: Integer; Errors: TStringList; ATick: TScanTickProc;
   AIgnore: TIgnoreList;
-  var TickCounter: Integer);
+  var TickCounter: Integer;
+  ALogSkip: TProc<string> = nil);
+
+  procedure LogSkip(const S: string);
+  begin
+    if Assigned(ALogSkip) then
+      try ALogSkip(S); except end;
+  end;
 const
   // Tick-Callback nach so vielen verarbeiteten Eintraegen.
   // Klein genug, damit auch kleine Verzeichnisse Cancel zulassen, aber nicht
@@ -97,7 +109,12 @@ begin
         begin
           // Symlinks fuer Dateien skippen (faSymLink ist gesetzt)
           {$WARN SYMBOL_PLATFORM OFF}
-          if (SearchRec.Attr and faSymLink) <> 0 then Continue;
+          if (SearchRec.Attr and faSymLink) <> 0 then
+          begin
+            LogSkip('Skip (Symlink-Datei): ' +
+                    IncludeTrailingPathDelimiter(Path) + SearchRec.Name);
+            Continue;
+          end;
           {$WARN SYMBOL_PLATFORM ON}
           if MatchesMask(SearchRec.Name, '*.pas') then
           begin
@@ -105,9 +122,14 @@ begin
             // Benutzer-Ignore-Liste: Datei wird stillschweigend uebersprungen.
             // Frueher landete "Ignoriert: ..." in Errors und damit als
             // FileError-Befund im Grid - mit dem Test-Filter wuerden hunderte
-            // Zeilen Laerm produziert. Das Skip wird via Log nachvollziehbar.
+            // Zeilen Laerm produziert. Stattdessen via ALogSkip nur ins
+            // scan.log - sichtbar fuer Diagnose, keine UI-Findings.
             if Assigned(AIgnore) and AIgnore.IsIgnored(FullPath) then
+            begin
+              LogSkip(Format('Ignoriert (Datei via ignore.txt): %s',
+                             [FullPath]));
               Continue;
+            end;
             List.Add(FullPath);
           end;
         end
@@ -121,17 +143,35 @@ begin
               Excluded := True;
               Break;
             end;
-          if Excluded then Continue;
+          if Excluded then
+          begin
+            // '.' und '..' nicht loggen (jeder Ordner hat die) - sonst spammt
+            // jeder besuchte Unterordner zwei "Ausgeschlossen"-Zeilen.
+            if (SearchRec.Name <> '.') and (SearchRec.Name <> '..') then
+              LogSkip(Format('Ausgeschlossen (Default-Verzeichnis): %s',
+                [IncludeTrailingPathDelimiter(Path) + SearchRec.Name]));
+            Continue;
+          end;
           // Symlinks fuer Verzeichnisse skippen (Endlosschleifen-Schutz)
           {$WARN SYMBOL_PLATFORM OFF}
-          if (SearchRec.Attr and faSymLink) <> 0 then Continue;
+          if (SearchRec.Attr and faSymLink) <> 0 then
+          begin
+            LogSkip('Skip (Symlink-Verzeichnis): ' +
+                    IncludeTrailingPathDelimiter(Path) + SearchRec.Name);
+            Continue;
+          end;
           {$WARN SYMBOL_PLATFORM ON}
 
           FullPath := IncludeTrailingPathDelimiter(Path) + SearchRec.Name;
           // Verzeichnis-Ignore (z.B. "tests/"): Unterbaum komplett ueberspringen
           if Assigned(AIgnore) and AIgnore.IsIgnored(FullPath + '/dummy.pas') then
+          begin
+            LogSkip(Format('Ignoriert (Verzeichnis via ignore.txt): %s',
+                           [FullPath]));
             Continue;
-          ScanRec(FullPath, List, Depth + 1, Errors, ATick, AIgnore, TickCounter);
+          end;
+          ScanRec(FullPath, List, Depth + 1, Errors, ATick, AIgnore,
+                  TickCounter, ALogSkip);
         end;
 
         // Tick-Callback fuer UI-Responsivitaet/Cancel.
@@ -242,7 +282,16 @@ begin
       if Assigned(AIgnore) then
         Log(Format('Ignore-Liste aktiv: %d Muster aus %s',
                    [AIgnore.PatternCount, AIgnore.ConfigFilePath]));
-      ScanRec(Path, Result, 0, Errors, ATick, AIgnore, TickCounter);
+      // ALogSkip-Callback: ScanRec ruft das pro skip-event (Ignore/Excluded
+      // /Symlink). Capture LogStream direkt - nested procs (Log) sind in
+      // anonymous methods nicht referenzierbar (E2555).
+      var CaptStream := LogStream;
+      ScanRec(Path, Result, 0, Errors, ATick, AIgnore, TickCounter,
+        procedure(S: string)
+        begin
+          if Assigned(CaptStream) then
+            try CaptStream.WriteLine(S); except end;
+        end);
       Log(Format('=== Scan fertig: %d Dateien, %d Eintraege gepruft ===',
                  [Result.Count, TickCounter]));
     except
