@@ -147,6 +147,31 @@ begin
             Continue;
           end;
         end;
+        // FP-Schutz: Marker in single-quotes ('TODO') ist Doku-Erwaehnung
+        // (Detector-Source-File nennt sein Such-Pattern als String).
+        if (p > 1) and (Line[p - 1] = '''') and
+           (pEnd <= Length(Line)) and (Line[pEnd] = '''') then
+        begin
+          Inc(p); Continue;
+        end;
+        // FP-Schutz: Slash-getrennte Marker-Liste (' / TODO ' oder
+        // ' TODO / ') - typische Doku-Notation 'TODO / FIXME / HACK / XXX'.
+        if (p >= 4) and (Line[p - 1] = ' ') and (Line[p - 2] = '/') and
+           (Line[p - 3] = ' ') then
+        begin
+          Inc(p); Continue;
+        end;
+        if (pEnd + 1 <= Length(Line)) and (Line[pEnd] = ' ') and
+           (Line[pEnd + 1] = '/') then
+        begin
+          Inc(p); Continue;
+        end;
+        // FP-Schutz: Marker direkt vor closing-paren - Doku-Erwaehnung in
+        // Klammer wie '(TODO)', '(TODO):', 'siehe Phase 1 TODO).' etc.
+        if (pEnd <= Length(Line)) and (Line[pEnd] = ')') then
+        begin
+          Inc(p); Continue;
+        end;
         Marker    := M;
         MarkerPos := p;
         Exit(True);
