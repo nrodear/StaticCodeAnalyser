@@ -359,6 +359,12 @@ begin
   begin
     // Identifier - in der Const-Tabelle nachschlagen.
     Result := ConstTable.TryGetValue(FirstArg.ToLower, FmtStr);
+    // Defensive: leerer aufgeloester Wert -> als nicht-aufloesbar behandeln.
+    // 0 placeholders vs N args wuerde sonst sicher als FP feuern, wenn die
+    // Const an dem Identifier extern (andere Unit) oder im Parser-Misread
+    // versteckt liegt. Lieber kein Finding als ein False-Positive auf einer
+    // Code-Stelle die der Detector nur teilweise versteht.
+    if Result and (FmtStr = '') then Result := False;
   end;
 end;
 
