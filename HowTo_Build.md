@@ -275,7 +275,7 @@ code example: how the problem looks, and how the fix looks.
 | **"Build failed: unresolved external"** | You built the plugin before the engine. Build `SCA.Engine` first, then `SCA.SharedUI`, then the plugin. |
 | **Plugin menu entry is missing after restart** | Wrong platform (you built Win64 instead of Win32) or wrong path in `Tools → Options → Packages`. |
 | **Standalone crashes after a few seconds on a large project** | Stack-size patch not applied. Re-run `tools\patch-stack-size.ps1`. |
-| **EULA dialog blocks every build** | Embarcadero shows a one-time dialog. Click **OK** once; future builds run without it. |
+| **EULA dialog blocks every build** | Community Edition shows the `TCENotificationDialog` on every build. Just click **OK** — it accepts the rule and continues the build. The dialog reappears next build, that is normal CE behaviour. For automation, the **RemoteDelphi** tool (under `tools\` if you have it) clicks the **OK** for you so the build is not interrupted. |
 | **EXE complains "file not found" on launch** | You moved the EXE out of its `Output\…` folder. Either put it back, or copy the `.dcu`/`.bpl` files with it. |
 | **"Cannot find SCA.Engine.bpl"** when the plugin loads | The plugin sees `SCA.Engine.bpl` via the Delphi-search path. Build `SCA.Engine` for the same platform (Win32) and configuration (Release). |
 
