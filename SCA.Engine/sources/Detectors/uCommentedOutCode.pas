@@ -248,6 +248,33 @@ begin
   Result := (Length(S) >= 2) and (S[1] = '/') and (S[2] = '/');
 end;
 
+function IsNextLineLineComment(Lines: TStringList; CurIdx: Integer): Boolean;
+// Symmetrisch zu IsPrevLineLineComment: True wenn die naechste Zeile auch
+// mit '//' beginnt. Faengt den Doc-Block-Start (erste //-Zeile, Vorzeile
+// ist Code, naechste Zeile ist auch //) der von IsPrevLineLineComment nicht
+// erkannt wird.
+var
+  S : string;
+begin
+  Result := False;
+  if (CurIdx < 0) or (CurIdx >= Lines.Count - 1) then Exit;
+  S := TrimLeft(Lines[CurIdx + 1]);
+  Result := (Length(S) >= 2) and (S[1] = '/') and (S[2] = '/');
+end;
+
+function IsInlineComment(const Line: string; CommentCol: Integer): Boolean;
+// True wenn vor CommentCol non-whitespace steht (Inline-Kommentar nach
+// Code-Statement, z.B. 'fkXxx,  // Pascal-Keyword nicht...'). In Praxis
+// fast immer Doku-Hint, nicht auskommentierter Code.
+var
+  i : Integer;
+begin
+  Result := False;
+  if CommentCol <= 1 then Exit;
+  for i := 1 to CommentCol - 1 do
+    if not CharInSet(Line[i], [' ', #9]) then Exit(True);
+end;
+
 class procedure TCommentedOutCodeDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -266,14 +293,22 @@ begin
     begin
       Col := FindCommentedOutCode(Lines[i], InBlk, InParen);
       if Col <= 0 then Continue;
-      // FP-Schutz: '//'-Zeilen die Teil eines Multi-Line-Comment-Blocks sind
-      // (Vorzeile beginnt auch mit '//') sind in der Regel Doc-Pattern mit
+      // FP-Schutz 1: Multi-Line-Doc-Block per '//' - Doc-Pattern mit
       // Pascal-Code-Beispielen, nicht commented-out Code. Echte
-      // commented-out Code-Zeilen stehen einzeln zwischen echtem Code.
-      // Pruefung nur fuer //-Kommentare; '{...}' / '(*...*)' bleiben strikt
-      // gefiltert (Block-Kommentare mit Code-Beispielen sind selten).
-      if (Col > 0) and (Lines[i].TrimLeft.StartsWith('//')) and
-         IsPrevLineLineComment(Lines, i) then
+      // commented-out Zeilen stehen einzeln zwischen echtem Code.
+      // Aktiv wenn die Zeile selbst mit '//' beginnt UND mind. eine
+      // angrenzende Zeile auch '//' ist (Vorzeile ODER Folgezeile).
+      // Look-Ahead deckt den Block-Start ab (vorher Code, danach '//').
+      if (Col > 0) and Lines[i].TrimLeft.StartsWith('//') and
+         (IsPrevLineLineComment(Lines, i) or
+          IsNextLineLineComment(Lines, i)) then
+        Continue;
+      // FP-Schutz 2: Inline-Kommentar nach Code (Doku-Hint hinter Statement
+      // wie 'fkXxx,  // Pascal-Keyword nicht...'). Echtes auskommentiertes
+      // Code-Statement steht typischerweise allein auf seiner Zeile.
+      // Pruefung nur fuer //-Kommentare; Block-Kommentare bleiben strikt.
+      if (Col > 0) and Lines[i].Contains('//') and
+         IsInlineComment(Lines[i], Col) then
         Continue;
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
