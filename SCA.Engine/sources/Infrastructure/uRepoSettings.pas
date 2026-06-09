@@ -55,6 +55,8 @@ type
     FMaxCyclomatic     : Integer;     // CyclomaticMax
     FMinBlockLines     : Integer;     // DuplicateBlockMinLines
     FMaxFileMB         : Integer;     // MaxFileMB (5 Default)
+    FMaxLineLength     : Integer;     // MaxLineLength (120 Default) - uTooLongLine
+    FMaxCaseBranches   : Integer;     // MaxCaseBranches (10 Default) - uCaseStatementSize
     FMagicTrivials     : TStringList; // MagicNumberTrivials (CSV)
     FFormatFunctions   : TStringList; // FormatFunctions (CSV)
     FCustomRulesFile   : string;      // CustomRulesFile (Pfad zur YAML)
@@ -164,6 +166,14 @@ type
     // (Schutz vor Out-of-Memory bei generiertem Code). In MB statt Bytes
     // weil's INI-freundlicher ist.
     property MaxFileMB:               Integer read FMaxFileMB     write FMaxFileMB;
+
+    // uTooLongLine: Zeilen ueber MaxLineLength werden als lsHint gemeldet.
+    // Default 120, konfigurierbar via [Detectors] MaxLineLength.
+    property MaxLineLength:           Integer read FMaxLineLength write FMaxLineLength;
+
+    // uCaseStatementSize: case-Statements mit >=MaxCaseBranches werden
+    // gemeldet. Default 10, konfigurierbar via [Detectors] MaxCaseBranches.
+    property MaxCaseBranches:         Integer read FMaxCaseBranches write FMaxCaseBranches;
 
     // uMagicNumbers: Liste der Zahlen die NICHT als Magic-Number gemeldet
     // werden. Aus INI als CSV gelesen, im Detektor als StringList verfuegbar.
@@ -733,6 +743,8 @@ begin
   FMaxCyclomatic := 10;
   FMinBlockLines := 8;
   FMaxFileMB     := 5;
+  FMaxLineLength := 120;
+  FMaxCaseBranches := 10;
   FMagicTrivials := TStringList.Create;
   FMagicTrivials.CaseSensitive := False;
   FMagicTrivials.Sorted        := True;
@@ -881,6 +893,8 @@ begin
     FMaxCyclomatic := Ini.ReadInteger('Detectors', 'CyclomaticMax',          10);
     FMinBlockLines := Ini.ReadInteger('Detectors', 'DuplicateBlockMinLines',  8);
     FMaxFileMB     := Ini.ReadInteger('Detectors', 'MaxFileMB',               5);
+    FMaxLineLength := Ini.ReadInteger('Detectors', 'MaxLineLength',           120);
+    FMaxCaseBranches := Ini.ReadInteger('Detectors', 'MaxCaseBranches',       10);
 
     RawList := Trim(Ini.ReadString('Detectors', 'MagicNumberTrivials', ''));
     if RawList <> '' then
@@ -1119,6 +1133,8 @@ begin
   uSCAConsts.DetectorMaxCyclomatic := FMaxCyclomatic;
   uSCAConsts.DetectorMinBlockLines := FMinBlockLines;
   uSCAConsts.DetectorMaxFileBytes  := FMaxFileMB * 1024 * 1024;
+  uSCAConsts.DetectorMaxLineLength   := FMaxLineLength;
+  uSCAConsts.DetectorMaxCaseBranches := FMaxCaseBranches;
 
   // [Rules] Profile -> EnabledKinds Whitelist. Leer = AllKinds = kein
   // Filter (alte Semantik). Unbekannter Name faellt im Catalog auf

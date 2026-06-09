@@ -14,8 +14,7 @@ unit uTooLongLine;
 //
 // Schweregrad: lsHint - reines Style.
 //
-// TODO: Schwelle aus [Detectors] MaxLineLength konfigurierbar machen
-// (analog DetectorMaxBodyLines). Aktuell hardcoded.
+// Schwelle: Default 120, konfigurierbar via INI [Detectors] MaxLineLength.
 
 interface
 
@@ -37,30 +36,34 @@ uses
 
 const
   EMIT_SEVERITY = lsHint;
-  MAX_LINE_LEN  = 120;
 
 class procedure TTooLongLineDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
-  Lines  : TStringList;
-  i, Len : Integer;
-  F      : TLeakFinding;
-  Cached : Boolean;
+  Lines    : TStringList;
+  i, Len   : Integer;
+  MaxLen   : Integer;
+  F        : TLeakFinding;
+  Cached   : Boolean;
 begin
+  // Default 120, konfigurierbar via INI [Detectors] MaxLineLength=N
+  // (gespiegelt in uSCAConsts.DetectorMaxLineLength von RepoSettings).
+  MaxLen := DetectorMaxLineLength;
+  if MaxLen <= 0 then MaxLen := 120;
   Lines := AcquireLines(FileName, Cached);
   if Lines = nil then Exit;
   try
     for i := 0 to Lines.Count - 1 do
     begin
       Len := Length(Lines[i]);
-      if Len <= MAX_LINE_LEN then Continue;
+      if Len <= MaxLen then Continue;
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
       F.MethodName := '';
       F.LineNumber := IntToStr(i + 1);
       F.MissingVar := Format(
         'Line is %d characters (max %d) - wrap or extract subexpression.',
-        [Len, MAX_LINE_LEN]);
+        [Len, MaxLen]);
       F.SetKind(fkTooLongLine);
       Results.Add(F);
     end;

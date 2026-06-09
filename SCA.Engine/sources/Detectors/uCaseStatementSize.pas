@@ -8,8 +8,8 @@ unit uCaseStatementSize;
 // Faelle in Klassen / Methoden-Tabellen / Dictionary<Key, Proc>
 // verteilt waeren.
 //
-// Schwellwert: DEFAULT_MAX_BRANCHES = 10 Branches. Konfigurierbar
-// (TODO: `[Detectors] MaxCaseBranches=N`).
+// Schwelle: Default 10 Branches, konfigurierbar via INI
+// [Detectors] MaxCaseBranches.
 //
 // Erkennung:
 //   * Kommentbereinigtes Joinen
@@ -42,8 +42,11 @@ uses
   uFileTextCache;
 
 const
-  EMIT_SEVERITY      = lsHint;
-  DEFAULT_MAX_BRANCH = 10;
+  EMIT_SEVERITY = lsHint;
+  // Konfigurierbar via INI [Detectors] MaxCaseBranches=N.
+  // DetectorMaxCaseBranches in uSCAConsts wird von RepoSettings gesetzt;
+  // Default 10. <=0 = Fallback auf 10.
+  DEFAULT_MAX_BRANCH_FALLBACK = 10;
 
 function IsIdent(C: Char): Boolean; inline;
 begin
@@ -217,8 +220,12 @@ var
   i           : Integer;
   BranchCount : Integer;
   LineNumber  : Integer;
+  MaxBr       : Integer;
   F           : TLeakFinding;
 begin
+  // Konfigurierbar via INI [Detectors] MaxCaseBranches=N, Default 10.
+  MaxBr := DetectorMaxCaseBranches;
+  if MaxBr <= 0 then MaxBr := DEFAULT_MAX_BRANCH_FALLBACK;
   Lines := AcquireLines(FileName, Cached);
   if Lines = nil then Exit;
   try
@@ -238,7 +245,7 @@ begin
       pEnd := FindMatchingEnd(Code, pOf + 2);
       if pEnd = 0 then begin Inc(pCase, 4); Continue; end;
       BranchCount := CountBranches(Code, pOf + 2, pEnd);
-      if BranchCount >= DEFAULT_MAX_BRANCH then
+      if BranchCount >= MaxBr then
       begin
         i := pCase - 1;
         if (i >= 0) and (i < Length(LineFor)) then
@@ -252,7 +259,7 @@ begin
         F.MissingVar := Format(
           '`case` statement with %d branches (>= %d) - consider ' +
           'polymorphism, a dispatch table, or split into smaller ' +
-          'cases.', [BranchCount, DEFAULT_MAX_BRANCH]);
+          'cases.', [BranchCount, MaxBr]);
         F.SetKind(fkCaseStatementSize);
         Results.Add(F);
       end;

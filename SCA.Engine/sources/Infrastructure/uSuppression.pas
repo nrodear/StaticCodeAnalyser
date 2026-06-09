@@ -252,6 +252,7 @@ begin
       //     Target eines normalen Suppressors (// noinspection MemoryLeak
       //     gefolgt von ggf. dokumentierendem Kommentar gefolgt vom Code).
       // Beide werden gemappt damit Pfade wie
+      // noinspection TodoComment
       //   // noinspection TodoComment\n// TODO: implementieren
       // genauso funktionieren wie
       //   // noinspection MemoryLeak\nlist := Create;

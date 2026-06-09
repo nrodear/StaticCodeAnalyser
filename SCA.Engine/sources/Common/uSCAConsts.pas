@@ -67,6 +67,8 @@ var
   DetectorMaxDbInUiFormHint   : Integer = 3;             // uDfmDataModuleSplitHint
                                                           // (ab N DB-Komponenten auf der Form
                                                           // empfehlen statt N Einzelmeldungen)
+  DetectorMaxLineLength       : Integer = 120;           // uTooLongLine
+  DetectorMaxCaseBranches     : Integer = 10;            // uCaseStatementSize
 
   // UI-Schwelle: maximale Anzahl Befunde im Grid. TStringGrid wird ab
   // ~50k Zeilen spuerbar trag (interne Cell-Storage-Arrays + Scrollbar-
