@@ -715,12 +715,21 @@ begin
       end;
     end;
 
-    // FreeAndNil(varName)  — Klammer links, dann rechte Grenze prüfen
+    // FreeAndNil(varName) und FreeAndNil(Self.varName) - Match auf beide
+    // Varianten. Rechte Grenze: kein Bezeichner-Zeichen nach varName.
     pMatch := Pos('freeandnil(' + VarNameLow, NameLow);
     if pMatch > 0 then
     begin
       var pRight := pMatch + 11 + Length(VarNameLow); // 11 = len('freeandnil(')
-      // Rechte Grenze: kein Bezeichner-Zeichen nach varName
+      if (pRight > Length(NameLow)) or not IsIdentChar(NameLow[pRight]) then
+      begin
+        Result := True; FoundInFinally := InFinally; Exit;
+      end;
+    end;
+    pMatch := Pos('freeandnil(self.' + VarNameLow, NameLow);
+    if pMatch > 0 then
+    begin
+      var pRight := pMatch + 16 + Length(VarNameLow); // 16 = len('freeandnil(self.')
       if (pRight > Length(NameLow)) or not IsIdentChar(NameLow[pRight]) then
       begin
         Result := True; FoundInFinally := InFinally; Exit;
