@@ -31,6 +31,37 @@ const
     'inputbox('
   );
 
+// True wenn die Position AtPos im Text innerhalb eines String-Literals
+// liegt. Pascal-Strings sind durch ''-Apostrophe begrenzt; '' (double-
+// apostroph) ist Escape fuer ein literales '. Heuristik: zaehle bare-
+// Apostrophe (= ohne ''-Escape) vor AtPos. Ungerade -> wir sind im
+// String. Praktisch schaltet das die FP-Klasse aus, in der UI-Hint-Texte
+// oder Code-Doku als String-Literal Patterns wie WriteLn/ShowMessage als
+// Pseudo-Beispiele enthalten - der Detector matcht das sonst als echten
+// Aufruf (zu sehen in uFixHint.pas / uTodoComment.pas).
+function IsInsideStringLiteral(const Text: string; AtPos: Integer): Boolean;
+var
+  i: Integer;
+begin
+  Result := False;
+  i := 1;
+  while i < AtPos do
+  begin
+    if Text[i] = '''' then
+    begin
+      if (i + 1 < AtPos) and (Text[i + 1] = '''') then
+        Inc(i, 2)   // '' = Escape, kein Quote-Toggle
+      else
+      begin
+        Result := not Result;
+        Inc(i);
+      end;
+    end
+    else
+      Inc(i);
+  end;
+end;
+
 class procedure TDebugOutputDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -53,6 +84,10 @@ var
     begin
       var p := Pos(Kw, NameLow);
       if p = 0 then Continue;
+      // Doku-/UI-Hint-Pattern (z.B. Result.Before := '... WriteLn(...) ...'):
+      // wenn das Match innerhalb eines String-Literals liegt, ist es kein
+      // echter Aufruf - skip.
+      if IsInsideStringLiteral(CallText, p) then Continue;
       if p > 1 then
       begin
         var Prev := NameLow[p - 1];
