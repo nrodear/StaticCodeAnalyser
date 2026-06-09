@@ -11,7 +11,7 @@
 
 **Statisches Code-Analyse-Tool** und **Linter** für **Delphi 12 / RAD Studio (Athens)** —
 als **IDE-Plugin** mit dockbarem Tool-Fenster plus **eigenständige Windows-Anwendung**.
-AST-basierte Analyse mit **insgesamt ~150 Detektoren**: ~130 Pascal-Checks für
+AST-basierte Analyse mit **insgesamt ~165 Detektoren**: ~143 Pascal-Checks für
 Speicherlecks, SQL-Injection, Code-Smells, Sicherheitslücken und Code-Duplikate
 (inklusive einer **Sonar-Delphi-kompatiblen** Teilmenge SCA060+),
 **plus ein dedizierter DFM-Scanner mit 22 Checks** auf Basis eines eigenen DFM-Lexers
@@ -38,7 +38,7 @@ direkt in der IDE, mit Claude-AI-Anbindung.**
 
 | Fähigkeit | Wie genutzt |
 |-----------|-------------|
-| 🐛 **Bugs finden** | ~130 Pascal-Detektoren laufen über jede `.pas`-Datei (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 22 DFM-Detektoren über jede `.dfm` (tote Event-Handler, Klartext-DB-Credentials, zirkuläre Master-Detail-Verkettung, …) — **insgesamt ~150** |
+| 🐛 **Bugs finden** | ~143 Pascal-Detektoren laufen über jede `.pas`-Datei (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 22 DFM-Detektoren über jede `.dfm` (tote Event-Handler, Klartext-DB-Credentials, zirkuläre Master-Detail-Verkettung, …) — **insgesamt ~165** |
 | 🔐 **Sicherheitslücken** | SQLInjection (Score-basiert), HardcodedSecret, HardcodedPath |
 | 🧹 **Code-Smells** | LongMethod, MagicNumber, EmptyExcept, MissingFinally, DeadCode, DuplicateString/Block |
 | ⚡ **Inkrementell analysieren** | „Branch-Changes"-Button: nur die im Git-/SVN-Branch geänderten Dateien — 200 ms statt 60 s |
@@ -54,7 +54,7 @@ direkt in der IDE, mit Claude-AI-Anbindung.**
 
 ## Hauptfeatures
 
-### 1. Statische Code-Analyse (insgesamt ~150 Detektoren — ~130 Pascal + 22 DFM, Sonar-Taxonomie)
+### 1. Statische Code-Analyse (insgesamt ~165 Detektoren — ~143 Pascal + 22 DFM, Sonar-Taxonomie)
 
 **Pascal-AST-Checks (~130)**: **Bugs** (MemoryLeak, NilDeref, DivByZero,
 FormatMismatch, ReversedForRange, SelfAssignment, VirtualCallInCtor,
@@ -208,7 +208,7 @@ Volles Setup: [docs/sonar-setup.md](docs/sonar-setup.md). Quick-Reference:
 
 ---
 
-## Was wird erkannt (~150 Detektoren — ~130 Pascal + 22 DFM)
+## Was wird erkannt (~165 Detektoren — ~143 Pascal + 22 DFM)
 
 Alle Befunde landen in einer der **5 Sonar-Kategorien**:
 
@@ -575,6 +575,8 @@ wählbar, was bequemer ist. Alle in `%APPDATA%\StaticCodeAnalyser\`:
 | `CyclomaticMax` | 10 | McCabe-Komplexität `> N` pro Methode (zählt `if`, `case`-Arm, `for`/`while`/`repeat`, `on`-Handler, `and`/`or`/`xor`) |
 | `DuplicateBlockMinLines` | 8 | minimale normalisierte Zeilen-Anzahl für Duplikat-Erkennung |
 | `MaxFileMB` | 5 | größere Dateien werden übersprungen (OOM-Schutz bei generiertem Code) |
+| `MaxLineLength` | 120 | `TooLongLine` schlägt an, wenn eine Zeile diese Laenge ueberschreitet |
+| `MaxCaseBranches` | 10 | `CaseStatementSize` schlägt an, wenn ein `case` so viele Branches hat |
 | `MagicNumberTrivials` | `0,1,2,-1,10,100` | Zahlen die NICHT als Magic-Number gemeldet werden |
 | `UsesCheck` | 0 | `UnusedUses`-Detektor (default off — produziert ggf. false positives) |
 | `IncludeTests` | 0 | `uTest*.pas`, `*_Tests.pas`, `TestProject*.dpr`, `/tests/`-Ordner mit-analysieren |

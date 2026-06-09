@@ -11,7 +11,7 @@
 
 **Delphi static code analysis tool** and **linter** for **RAD Studio 12 (Athens)** —
 ships as an **IDE plugin** with a dockable tool window plus a **standalone Windows app**.
-AST-based analysis with **~150 detectors total**: ~130 Pascal checks for memory leaks,
+AST-based analysis with **~165 detectors total**: ~143 Pascal checks for memory leaks,
 SQL injection, code smells, security vulnerabilities and code duplication
 (including a **Sonar-Delphi-compatible** subset SCA060+), **plus a
 dedicated DFM scanner with 22 checks** built on its own DFM lexer + parser + component
@@ -53,7 +53,7 @@ Sonar setup required, running inside the IDE, with a Claude AI hand-off.**
 
 ## Main features
 
-### 1. Static code analysis (~150 detectors total — ~130 Pascal + 22 DFM, Sonar taxonomy)
+### 1. Static code analysis (~165 detectors total — ~143 Pascal + 22 DFM, Sonar taxonomy)
 
 **Pascal AST checks (~130)**: **bugs** (MemoryLeak, NilDeref, DivByZero,
 FormatMismatch, ReversedForRange, SelfAssignment, VirtualCallInCtor,
@@ -203,7 +203,7 @@ reference: [docs/sonar-config.md](docs/sonar-config.md).
 
 ---
 
-## What is detected (~150 detectors — ~130 Pascal + 22 DFM)
+## What is detected (~165 detectors — ~143 Pascal + 22 DFM)
 
 Findings fall into one of **five Sonar categories**:
 
@@ -574,6 +574,8 @@ convenient. All under `%APPDATA%\StaticCodeAnalyser\`:
 | `CyclomaticMax` | 10 | McCabe complexity `> N` per method (counts `if`, `case` arm, `for`/`while`/`repeat`, `on` handler, `and`/`or`/`xor`) |
 | `DuplicateBlockMinLines` | 8 | minimum normalised line count for duplicate-block detection |
 | `MaxFileMB` | 5 | files larger than that are skipped (OOM guard for generated code) |
+| `MaxLineLength` | 120 | `TooLongLine` triggers when a line exceeds this |
+| `MaxCaseBranches` | 10 | `CaseStatementSize` triggers when a `case` has this many branches |
 | `MagicNumberTrivials` | `0,1,2,-1,10,100` | numbers exempt from `MagicNumber` detection |
 | `UsesCheck` | 0 | `UnusedUses` detector (off by default — can produce false positives) |
 | `IncludeTests` | 0 | include `uTest*.pas`, `*_Tests.pas`, `TestProject*.dpr`, `/tests/` directories |
