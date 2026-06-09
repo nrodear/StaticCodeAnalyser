@@ -100,7 +100,7 @@ für die kanonische Liste.
 | 41 | **EmptyMethod: Leere Methode** | Methode enthält ausschließlich `inherited` oder ist komplett leer | ✅ | `uEmptyMethod` |
 | 42 | **UnnecessaryCast: Überflüssige Typumwandlung** | Cast auf denselben Typ oder auf direkten Vorfahren ohne Erweiterung | 🔲 | |
 | 43 | **ConstantReturn: Methode gibt immer gleichen Wert zurück** | Alle Pfade einer Funktion liefern dasselbe Literal – sollte Konstante sein | ✅ | `uConstantReturn` |
-| 44 | **LongLine: Zeile zu lang** | Zeile überschreitet 120 Zeichen | ✅ | `uTooLongLine` |
+| 44 | **LongLine: Zeile zu lang** | Zeile überschreitet 120 Zeichen (konfigurierbar via `[Detectors] MaxLineLength`) | ✅ | `uTooLongLine` |
 | 45 | **MixedIndent: Gemischte Einrückung (Tabs + Spaces)** | Zeile enthält sowohl Tabulator- als auch Leerzeichen-Einrückung | ✅ | `uTabulationCharacter` |
 
 ---

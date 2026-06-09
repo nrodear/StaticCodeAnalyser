@@ -101,7 +101,7 @@ for the canonical roster.
 | 41 | **EmptyMethod — empty method** | Method only contains `inherited`, or is completely empty | ✅ | `uEmptyMethod` |
 | 42 | **UnnecessaryCast — redundant type cast** | Cast to the same type or to a direct ancestor without extension | 🔲 | |
 | 43 | **ConstantReturn — method always returns the same value** | Every path returns the same literal — should be a constant | ✅ | `uConstantReturn` |
-| 44 | **LongLine — line too long** | Line exceeds 120 characters | ✅ | `uTooLongLine` |
+| 44 | **LongLine — line too long** | Line exceeds 120 characters (configurable via `[Detectors] MaxLineLength`) | ✅ | `uTooLongLine` |
 | 45 | **MixedIndent — mixed indentation (tabs + spaces)** | Line contains both tab and space indentation | ✅ | `uTabulationCharacter` |
 
 ---

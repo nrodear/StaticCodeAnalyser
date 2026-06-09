@@ -6,7 +6,69 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased] - Phase 1 Quick-Wins + Phase 4 begun (since v0.9.7)
+## [Unreleased] - Hardening v3 + v4, FP-Reduction Sprint (since v0.9.7)
+
+### 2026-06-09 — FP-Reduction + Diagnostics Pass
+
+**Detector False-Positive reduction** on self-scan (67 → 12 FPs, −82%):
+- **SCA017 DebugOutput** — String-literal contents (`'WriteLn(...)'` in UI-hint
+  templates) no longer flagged as real debug calls. New `IsInsideStringLiteral`
+  helper counts bare apostrophes before the match position.
+- **SCA070 CommentedOutCode** — Inline-doc comments after code and doc-block
+  starts (look-ahead on next line) skipped. Reduced from 45 to 9 FPs (−80%).
+- **SCA019 TodoComment** — Detector-source mentions like `'TODO'` in quotes,
+  `TODO / FIXME / HACK / XXX` slash-lists and `(TODO)` in parens skipped.
+  Reduced from 13 to 3 FPs (−77%); remaining 3 are real backlog markers.
+- **SCA005 FormatMismatch** — empty-resolved const identifiers
+  (`Format(IDENT, [arg])` where IDENT resolves to empty) no longer reported
+  as `0 placeholders, 1 arguments`.
+
+**Bug fixes:**
+- **FieldLeak detector** — `FreeAndNil(Self.Field)` with `Self.`-qualifier
+  was not recognised as freeing, producing false leak reports in code that
+  consistently uses Self-qualified field access.
+- **TEMP DIAG audit-block** in `uUseAfterFree.pas` (73-line CFG-dump that
+  wrote `sca-cfg-debug.log`) removed — leftover from hardening sprint.
+
+**Diagnostics:**
+- **scan.log Phase-Tracking** — outer handler in `ParseLeaks` now records
+  the last successful phase + current file before any uncaught exception
+  is re-raised. Replaces "Analyseabbruch: ..." mystery findings with a clear
+  trail (`=== ABBRUCH: EXClass: msg / letzte Phase: X / aktuelles File: Y`).
+- **scan.log skip-log** — files/directories skipped by ignore-list,
+  default-exclude (`__history`/`Win32`) or symlink detection now appear in
+  `StaticCodeAnalyser_scan.log` with a clear reason. Previously a black box.
+
+**Configuration:**
+- `[Detectors] MaxLineLength=N` (default 120) for `uTooLongLine`.
+- `[Detectors] MaxCaseBranches=N` (default 10) for `uCaseStatementSize`.
+
+### 2026-06-08 — DFM Resource-Wrapper Support + Stack-Hardening v3/v4
+
+**Critical:**
+- **DFM Resource-Wrapper format `$FF $0A $00`** is now supported. GExperts
+  and JVCL ship binary DFMs in the `$FF $0A $00 [ResName] [pad] TPF0 ...`
+  wrapper layout — previously these were silently misinterpreted as text
+  and produced 0 DFM-findings. GExperts: 0 → 1.084 DFM-findings;
+  JVCL DFM-findings doubled on real-world scans.
+- **AST `Destroy` reentrancy double-free** (Hardening v4 follow-up): the
+  iterative `TAstNode.Destroy` collected descendants into `AllDesc` and
+  freed them, but each `Cur.Free` re-entered the same destructor and
+  re-freed nodes via its own DFS. Manifested as `EInvalidPointer` in
+  `gAstFileCache.Evict` after the first file in a scan.
+
+**Performance:**
+- **`uFixHint` Memoize-Cache** keyed by `(Kind, Severity)` — the IDE plugin's
+  `HighlightAllFindingsInFile` called `FixHint()` per finding, allocating
+  ~3 KB of UI-hint strings each. On a 165k-finding scan that crossed the
+  Win32 user-space limit and produced `EOutOfMemory`. Cache has ≤166 unique
+  slots; downstream `Entries[]`-arrays share ref-counted strings.
+
+**Detector UI Hints:**
+- Added `fkUninitVar` and `fkUnusedSuppression` to `uFixHint` (Before/After
+  code snippets). 165/165 kinds now have UI-hint coverage.
+
+
 
 13 commits since v0.9.7 (released 2026-06-01). Phase 1 of
 [Konzept_ScannerQualitaet.md](Konzept_ScannerQualitaet.md) is complete

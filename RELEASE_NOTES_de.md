@@ -1,9 +1,34 @@
-# Release 0.9.8 — Phase 1 Quick-Wins + Phase 4 begonnen
+# Release 0.9.8 — Phase 1 Quick-Wins, Phase 4, Hardening v3/v4 & FP-Reduktion
 
 🇬🇧 [English version](RELEASE_NOTES.md)
 
 Vollstaendige Release-Notes: [docs/releases/v0.9.8_de.md](docs/releases/v0.9.8_de.md)
 ([english](docs/releases/v0.9.8.md)).
+
+## Update 2026-06-08 / 2026-06-09 — Hardening v3/v4 + FP-Reduktion
+
+- **DFM Resource-Wrapper-Format (`$FF $0A $00`) unterstuetzt** — die 83
+  GExperts-DFMs sprangen von 0 auf 1.084 Findings. JVCL-DFM-Coverage
+  hat sich etwa verdoppelt.
+- **AST `Destroy` Reentrancy-Bug** behoben — `EInvalidPointer` /
+  SARIF SCA006 bei `gAstFileCache.Evict` nach dem ersten File im Scan
+  beseitigt.
+- **`uFixHint` Memoize-Cache** — fixt Win32-`EOutOfMemory` im IDE-
+  Plugin-Pfad `HighlightAllFindingsInFile` bei grossen Scans
+  (≥100k Findings).
+- **scan.log Phase-Tracking + Skip-Log** — jeder `Analyseabbruch:`
+  zeigt jetzt die letzte erfolgreiche Phase + das aktuelle File;
+  ignorierte / ausgeschlossene Files erscheinen mit Grund, statt
+  stillschweigend zu verschwinden.
+- **FP-Reduktion-Sprint** — Self-Scan-FPs in `SCA017 DebugOutput`,
+  `SCA070 CommentedOutCode`, `SCA019 TodoComment` und `SCA005
+  FormatMismatch` um ~80% reduziert (67 → 12 ueber die drei
+  Style-Detektoren). Nebenbei-Fix: `FreeAndNil(Self.Field)` mit
+  `Self.`-Qualifier wird jetzt als Freigabe erkannt.
+- **Konfiguration** — `[Detectors] MaxLineLength` und `MaxCaseBranches`
+  hinzugefuegt.
+
+## Frueherer Stand im 0.9.8-Zyklus
 
 13 Commits seit v0.9.7. Phase 1 aus
 [Konzept_ScannerQualitaet.md](Konzept_ScannerQualitaet.md) ist komplett
