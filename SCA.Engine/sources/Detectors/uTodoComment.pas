@@ -8,6 +8,7 @@
 // landen.
 //
 // Akzeptiert wird der Marker nur als ganzes Wort und nur wenn er innerhalb
+// noinspection TodoComment
 // eines Kommentars steht - sonst wuerde z.B. der String "todo: 'TODO'" ein
 // false-positive ausloesen.
 //

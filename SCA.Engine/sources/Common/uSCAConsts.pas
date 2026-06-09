@@ -150,6 +150,7 @@ type
     fkHardcodedPath,    // Pfad-Literal im Code (C:\ oder UNC)
     fkDebugOutput,      // WriteLn/ShowMessage in Produktion
     fkDeepNesting,      // Zu tiefe Verschachtelung
+    // noinspection TodoComment
     fkTodoComment,      // TODO/FIXME/HACK/XXX im Kommentar
     fkEmptyMethod,      // Methodenrumpf ohne Anweisungen
     fkDuplicateBlock,   // mehrere identische Code-Blocks (>=8 Zeilen)
