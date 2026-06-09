@@ -124,6 +124,8 @@ Audit_*.md
 I18N.md
 # Ausnahmen: setup-relevante HowTos die jeder Contributor braucht.
 !HowTo_Tests.md
+!HowTo_Build.md
+!HowTo_Build_de.md
 
 # Spezifische internal docs/-Files (kein Pattern, exact match)
 docs/ConfidenceAudit.md
