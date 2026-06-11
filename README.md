@@ -37,7 +37,7 @@ Sonar setup required, running inside the IDE, with a Claude AI hand-off.**
 
 | Capability | Details |
 |------------|---------|
-| 🐛 **Bug detection** | ~130 Pascal detectors run against every `.pas` file (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 22 DFM detectors against every `.dfm` (dead event handlers, hard-coded DB credentials, circular master-detail, …) — **~150 total** |
+| 🐛 **Bug detection** | ~143 Pascal detectors run against every `.pas` file (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 22 DFM detectors against every `.dfm` (dead event handlers, hard-coded DB credentials, circular master-detail, …) — **~165 total** |
 | 🔐 **Security checks** | SQLInjection (score-based), HardcodedSecret, HardcodedPath |
 | 🧹 **Code smells** | LongMethod, MagicNumber, EmptyExcept, MissingFinally, DeadCode, DuplicateString/Block |
 | ⚡ **Incremental analysis** | "Branch-Changes" button: only the files modified in the Git/SVN branch — 200 ms instead of 60 s |

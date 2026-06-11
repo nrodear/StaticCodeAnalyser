@@ -6,7 +6,11 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased] - Hardening v3 + v4, FP-Reduction Sprint (since v0.9.7)
+## [Unreleased]
+
+(no entries yet — next release will list here.)
+
+## [v0.9.8] - 2026-06-10 - Phase 1-4 + Hardening v3 + v4 + FP-Reduction Sprint (since v0.9.7)
 
 ### 2026-06-09 — FP-Reduction + Diagnostics Pass
 
