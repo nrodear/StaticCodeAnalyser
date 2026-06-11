@@ -27,93 +27,93 @@ für die kanonische Liste.
 
 ## 🔴 Blocker (5)
 
-| # | Regel | Beschreibung | Status | Unit |
-|---|-------|-------------|--------|------|
-| 1 | **MemoryLeak: Objekt nie freigegeben** | Objekt per `.Create` erzeugt, kein `Free`/`FreeAndNil`/`Destroy` im gesamten Methodenrumpf | ✅ | `uLeakDetector2` |
-| 2 | **EmptyExcept: Leerer except-Block** | `except`-Block ohne ausführbare Anweisung – Exception wird stillschweigend verschluckt | ✅ | `uCodeSmells2` |
-| 3 | **NilDeref: Nil-Zeiger ohne Prüfung** | Objekt-Feld oder Parameter wird ohne vorherige `Assigned()`-Prüfung dereferenziert | ✅ | `uNilDeref` |
-| 4 | **SQLInjection: String-Konkatenation in SQL** | SQL-Befehl durch `+`-Verkettung mit Benutzereingabe – kein parametrisiertes Query | ✅ | `uSQLInjection` |
-| 5 | **HardcodedSecret: Passwort/Token im Code** | Literal-Zuweisung an Variable deren Name `password`, `token`, `secret`, `key` enthält | ✅ | `uHardcodedSecret` |
+| # | SCA | Regel | Beschreibung | Status | Unit |
+|---|-----|-------|-------------|--------|------|
+| 1 | SCA001 | **MemoryLeak: Objekt nie freigegeben** | Objekt per `.Create` erzeugt, kein `Free`/`FreeAndNil`/`Destroy` im gesamten Methodenrumpf | ✅ | `uLeakDetector2` |
+| 2 | SCA002 | **EmptyExcept: Leerer except-Block** | `except`-Block ohne ausführbare Anweisung – Exception wird stillschweigend verschluckt | ✅ | `uCodeSmells2` |
+| 3 | SCA008 | **NilDeref: Nil-Zeiger ohne Prüfung** | Objekt-Feld oder Parameter wird ohne vorherige `Assigned()`-Prüfung dereferenziert | ✅ | `uNilDeref` |
+| 4 | SCA003 | **SQLInjection: String-Konkatenation in SQL** | SQL-Befehl durch `+`-Verkettung mit Benutzereingabe – kein parametrisiertes Query | ✅ | `uSQLInjection` |
+| 5 | SCA004 | **HardcodedSecret: Passwort/Token im Code** | Literal-Zuweisung an Variable deren Name `password`, `token`, `secret`, `key` enthält | ✅ | `uHardcodedSecret` |
 
 ---
 
 ## 🟠 Critical (10)
 
-| # | Regel | Beschreibung | Status | Unit |
-|---|-------|-------------|--------|------|
-| 6 | **DivByZero: Division durch 0 möglich** | Integer-Division oder Modulo, bei der der Divisor 0 sein kann (keine Vorabprüfung) | ✅ | `uDivByZero` |
-| 7 | **UseAfterFree: Objekt nach Free genutzt** | Variable wird nach `Free`/`FreeAndNil` ohne erneute Zuweisung weiterverwendet | ✅ | `uUseAfterFree` |
-| 8 | **MissingFinally: Ressource ohne try/finally** | Objekt erstellt, Methode enthält try/except aber kein try/finally für Cleanup | ✅ | `uMissingFinally` |
-| 9 | **FormatMismatch: Falsche Arg-Anzahl in Format()** | Anzahl der `%s`/`%d`-Platzhalter im Format-String stimmt nicht mit Argumentliste überein | ✅ | `uFormatMismatch` |
-| 10 | **AbstractNotImpl: Abstrakte Methode nicht implementiert** | Konkrete Klasse erbt von abstrakter Basis, implementiert aber nicht alle `abstract`-Methoden | ✅ | `uAbstractNotImpl` (nur within-unit) |
-| 11 | **ExceptionTooGeneral: Zu allgemeiner Exception-Typ** | `except on E: Exception` statt spezifischem Typ – verdeckt unerwartete Fehler | ✅ | `uExceptionTooGeneral` |
-| 12 | **LeakInConstructor: Exception im Konstruktor ohne Cleanup** | Konstruktor kann nach partieller Objektinitialisierung eine Exception werfen ohne `Free` | ✅ | `uLeakInConstructor` |
-| 13 | **MissingDestructor: Destruktor fehlt / Feld nicht freigegeben** | Klasse mit Objekt-Feldern: kein Destruktor oder Feld nicht in `Destroy` freigegeben | ✅ | `uFieldLeak` |
-| 14 | **IntegerOverflow: Überlauf bei Arithmetik** | Multiplikation oder Potenz mit `Integer`/`Word` ohne vorherige Bereichsprüfung | ✅ | `uIntegerOverflow` (nur Int64-Ziel) |
-| 15 | **RaiseWithoutClass: `raise` ohne Exception-Objekt** | Nacktes `raise` außerhalb eines `except`-Blocks – löst Access Violation aus | ✅ | `uRaiseOutsideExcept` |
+| # | SCA | Regel | Beschreibung | Status | Unit |
+|---|-----|-------|-------------|--------|------|
+| 6 | SCA010 | **DivByZero: Division durch 0 möglich** | Integer-Division oder Modulo, bei der der Divisor 0 sein kann (keine Vorabprüfung) | ✅ | `uDivByZero` |
+| 7 | SCA134 | **UseAfterFree: Objekt nach Free genutzt** | Variable wird nach `Free`/`FreeAndNil` ohne erneute Zuweisung weiterverwendet | ✅ | `uUseAfterFree` |
+| 8 | SCA009 | **MissingFinally: Ressource ohne try/finally** | Objekt erstellt, Methode enthält try/except aber kein try/finally für Cleanup | ✅ | `uMissingFinally` |
+| 9 | SCA005 | **FormatMismatch: Falsche Arg-Anzahl in Format()** | Anzahl der `%s`/`%d`-Platzhalter im Format-String stimmt nicht mit Argumentliste überein | ✅ | `uFormatMismatch` |
+| 10 | SCA135 | **AbstractNotImpl: Abstrakte Methode nicht implementiert** | Konkrete Klasse erbt von abstrakter Basis, implementiert aber nicht alle `abstract`-Methoden | ✅ | `uAbstractNotImpl` (nur within-unit) |
+| 11 | SCA132 | **ExceptionTooGeneral: Zu allgemeiner Exception-Typ** | `except on E: Exception` statt spezifischem Typ – verdeckt unerwartete Fehler | ✅ | `uExceptionTooGeneral` |
+| 12 | SCA136 | **LeakInConstructor: Exception im Konstruktor ohne Cleanup** | Konstruktor kann nach partieller Objektinitialisierung eine Exception werfen ohne `Free` | ✅ | `uLeakInConstructor` |
+| 13 | — | **MissingDestructor: Destruktor fehlt / Feld nicht freigegeben** | Klasse mit Objekt-Feldern: kein Destruktor oder Feld nicht in `Destroy` freigegeben | ✅ | `uFieldLeak` |
+| 14 | SCA137 | **IntegerOverflow: Überlauf bei Arithmetik** | Multiplikation oder Potenz mit `Integer`/`Word` ohne vorherige Bereichsprüfung | ✅ | `uIntegerOverflow` (nur Int64-Ziel) |
+| 15 | — | **RaiseWithoutClass: `raise` ohne Exception-Objekt** | Nacktes `raise` außerhalb eines `except`-Blocks – löst Access Violation aus | ✅ | `uRaiseOutsideExcept` |
 
 ---
 
 ## 🟡 Major – Zuverlässigkeit (10)
 
-| # | Regel | Beschreibung | Status | Unit |
-|---|-------|-------------|--------|------|
-| 16 | **UninitVar: Uninitialisierte Variable** | Lokale Variable wird gelesen bevor sie in allen Codepfaden zugewiesen wurde | 🟡 | MVP ausgeliefert als `SCA166` (`uUninitVar.pas`) — konservativer single-method-Scope ohne volle Path-Sensitivity. Slot #16 bleibt `🟡 partial` bis Phase 3 (CFG + Symboltabelle). Siehe [Konzept_SCA166_UninitVar.md](Konzept_SCA166_UninitVar.md). |
-| 17 | **DeadCode: Unerreichbarer Code** | Anweisungen nach `Exit`, `Break`, `Continue` oder `raise` auf gleicher Ebene | ✅ | `uDeadCode` |
-| 18 | **BoolAlwaysTrue: Boolean-Ausdruck immer wahr/falsch** | Vergleich wie `x >= 0` für `Cardinal` oder `Length(s) >= 0` – ergibt immer True | ✅ | `uBoolAlwaysTrue` (nur Length-Pattern) |
-| 19 | **FloatEquality: Fließkomma-Vergleich mit =** | `if a = b` wobei `a` oder `b` vom Typ `Single`/`Double`/`Extended` ist | ✅ | `uFloatEquality` |
-| 20 | **ResultNotChecked: Rückgabewert ignoriert** | Aufruf einer Funktion, deren Ergebnis (z. B. Fehlercode) nicht ausgewertet wird | 🔲 | |
-| 21 | **MissingOverride: `override` fehlt** | Methode überschreibt eine `virtual`/`dynamic`-Methode der Elternklasse ohne `override` | ✅ | `uMissingOverride` (nur within-unit) |
-| 22 | **CyclicUnitDep: Zyklische Unit-Abhängigkeit** | Unit A verwendet Unit B (interface), Unit B verwendet Unit A (interface) | 🔲 | |
-| 23 | **ExceptInDestructor: Exception aus Destruktor** | Destruktor enthält Code der eine Exception auslösen kann ohne try/except | ✅ | `uExceptInDestructor` |
-| 24 | **PublicFieldNoProperty: Öffentliches Feld statt Property** | `public`-Feld direkt exponiert statt über `property` mit Getter/Setter | ✅ | `uPublicField` |
-| 25 | **FreeWithoutNil: Free ohne anschließendes Nil** | `obj.Free` ohne nachfolgendes `obj := nil` oder `FreeAndNil` – Dangling Pointer möglich | ✅ | `uFreeWithoutNil` |
+| # | SCA | Regel | Beschreibung | Status | Unit |
+|---|-----|-------|-------------|--------|------|
+| 16 | SCA166 | **UninitVar: Uninitialisierte Variable** | Lokale Variable wird gelesen bevor sie in allen Codepfaden zugewiesen wurde | 🟡 | MVP ausgeliefert als `SCA166` (`uUninitVar.pas`) — konservativer single-method-Scope ohne volle Path-Sensitivity. Slot #16 bleibt `🟡 partial` bis Phase 3 (CFG + Symboltabelle). Siehe [Konzept_SCA166_UninitVar.md](Konzept_SCA166_UninitVar.md). |
+| 17 | SCA011 | **DeadCode: Unerreichbarer Code** | Anweisungen nach `Exit`, `Break`, `Continue` oder `raise` auf gleicher Ebene | ✅ | `uDeadCode` |
+| 18 | SCA150 | **BoolAlwaysTrue: Boolean-Ausdruck immer wahr/falsch** | Vergleich wie `x >= 0` für `Cardinal` oder `Length(s) >= 0` – ergibt immer True | ✅ | `uBoolAlwaysTrue` (nur Length-Pattern) |
+| 19 | SCA144 | **FloatEquality: Fließkomma-Vergleich mit =** | `if a = b` wobei `a` oder `b` vom Typ `Single`/`Double`/`Extended` ist | ✅ | `uFloatEquality` |
+| 20 | — | **ResultNotChecked: Rückgabewert ignoriert** | Aufruf einer Funktion, deren Ergebnis (z. B. Fehlercode) nicht ausgewertet wird | 🔲 | |
+| 21 | SCA149 | **MissingOverride: `override` fehlt** | Methode überschreibt eine `virtual`/`dynamic`-Methode der Elternklasse ohne `override` | ✅ | `uMissingOverride` (nur within-unit) |
+| 22 | — | **CyclicUnitDep: Zyklische Unit-Abhängigkeit** | Unit A verwendet Unit B (interface), Unit B verwendet Unit A (interface) | 🔲 | |
+| 23 | SCA145 | **ExceptInDestructor: Exception aus Destruktor** | Destruktor enthält Code der eine Exception auslösen kann ohne try/except | ✅ | `uExceptInDestructor` |
+| 24 | — | **PublicFieldNoProperty: Öffentliches Feld statt Property** | `public`-Feld direkt exponiert statt über `property` mit Getter/Setter | ✅ | `uPublicField` |
+| 25 | SCA139 | **FreeWithoutNil: Free ohne anschließendes Nil** | `obj.Free` ohne nachfolgendes `obj := nil` oder `FreeAndNil` – Dangling Pointer möglich | ✅ | `uFreeWithoutNil` |
 
 ---
 
 ## 🟡 Major – Wartbarkeit (10)
 
-| # | Regel | Beschreibung | Status | Unit |
-|---|-------|-------------|--------|------|
-| 26 | **LongMethod: Methode zu lang** | Methoden-Rumpf überschreitet 50 ausführbare Zeilen | ✅ | `uLongMethod` |
-| 27 | **TooManyParams: Zu viele Parameter** | Methode hat mehr als 5 Parameter | ✅ | `uLongParamList` |
-| 28 | **CyclomaticComplexity: McCabe-Komplexität > 10** | Anzahl der Verzweigungspfade (`if`, `case`-Arm, `for`, `while`, `repeat`, `on`-Handler, `and`/`or`/`xor`) überschreitet 10 | ✅ | `uCyclomaticComplexity` |
-| 29 | **DeepNesting: Verschachtelungstiefe > 4** | Code-Block ist mehr als 4 Ebenen tief eingerückt | ✅ | `uDeepNesting` |
-| 30 | **DuplicateBlock: Duplizierter Code-Block** | Identischer Block (≥ `DuplicateBlockMinLines`, Default 8 normalisierte Zeilen) erscheint mehrfach in derselben Datei | ✅ | `uDuplicateBlock` (SCA021) — zeilenbasierter Sliding-Window, normalisiert Trim/Lowercase/Whitespace-Collapse, überspringt Boilerplate (`begin`/`end`/`else`/`try`/`finally`/`except`, reine Kommentare) und if/end-Branching-Blöcke |
-| 31 | **GodClass: Gottklasse** | Klasse hat mehr als 20 Methoden oder mehr als 15 Instanzfelder | ✅ | `uGodClass` |
-| 32 | **MagicNumber: Magic Number ohne Konstante** | Numerisches Literal (außer 0 und 1) direkt im Code statt benannter Konstante | ✅ | `uMagicNumbers` |
-| 33 | **BooleanParam: Boolean als Flag-Parameter** | Methode erhält `Boolean`-Parameter der intern als Verzweigung genutzt wird | ✅ | `uBooleanParam` |
-| 34 | **MultipleExit: Mehr als 3 Exit-Punkte** | Methode enthält mehr als 3 `Exit`-Aufrufe | ✅ | `uMultipleExit` |
-| 35 | **LargeClass: Klasse zu groß** | Unit mit einer Klasse überschreitet 500 Zeilen Implementierungscode | ✅ | `uLargeClass` |
+| # | SCA | Regel | Beschreibung | Status | Unit |
+|---|-----|-------|-------------|--------|------|
+| 26 | SCA012 | **LongMethod: Methode zu lang** | Methoden-Rumpf überschreitet 50 ausführbare Zeilen | ✅ | `uLongMethod` |
+| 27 | — | **TooManyParams: Zu viele Parameter** | Methode hat mehr als 5 Parameter | ✅ | `uLongParamList` |
+| 28 | SCA022 | **CyclomaticComplexity: McCabe-Komplexität > 10** | Anzahl der Verzweigungspfade (`if`, `case`-Arm, `for`, `while`, `repeat`, `on`-Handler, `and`/`or`/`xor`) überschreitet 10 | ✅ | `uCyclomaticComplexity` |
+| 29 | SCA018 | **DeepNesting: Verschachtelungstiefe > 4** | Code-Block ist mehr als 4 Ebenen tief eingerückt | ✅ | `uDeepNesting` |
+| 30 | SCA021 | **DuplicateBlock: Duplizierter Code-Block** | Identischer Block (≥ `DuplicateBlockMinLines`, Default 8 normalisierte Zeilen) erscheint mehrfach in derselben Datei | ✅ | `uDuplicateBlock` (SCA021) — zeilenbasierter Sliding-Window, normalisiert Trim/Lowercase/Whitespace-Collapse, überspringt Boilerplate (`begin`/`end`/`else`/`try`/`finally`/`except`, reine Kommentare) und if/end-Branching-Blöcke |
+| 31 | SCA138 | **GodClass: Gottklasse** | Klasse hat mehr als 20 Methoden oder mehr als 15 Instanzfelder | ✅ | `uGodClass` |
+| 32 | SCA014 | **MagicNumber: Magic Number ohne Konstante** | Numerisches Literal (außer 0 und 1) direkt im Code statt benannter Konstante | ✅ | `uMagicNumbers` |
+| 33 | SCA146 | **BooleanParam: Boolean als Flag-Parameter** | Methode erhält `Boolean`-Parameter der intern als Verzweigung genutzt wird | ✅ | `uBooleanParam` |
+| 34 | SCA140 | **MultipleExit: Mehr als 3 Exit-Punkte** | Methode enthält mehr als 3 `Exit`-Aufrufe | ✅ | `uMultipleExit` |
+| 35 | SCA141 | **LargeClass: Klasse zu groß** | Unit mit einer Klasse überschreitet 500 Zeilen Implementierungscode | ✅ | `uLargeClass` |
 
 ---
 
 ## 🔵 Minor – Code Smells (10)
 
-| # | Regel | Beschreibung | Status | Unit |
-|---|-------|-------------|--------|------|
-| 36 | **UnusedVar: Unbenutzte lokale Variable** | Variable im `var`-Block deklariert, aber nie gelesen oder nur geschrieben | ✅ | `uUnusedLocal` |
-| 37 | **UnusedMethod: Unbenutzte private Methode** | Private Methode wird innerhalb der Unit nirgendwo aufgerufen | ✅ | `uUnusedPrivateMethod` |
-| 38 | **UnusedUnit: Unit im uses nicht genutzt** | Unit im `uses`-Abschnitt, deren Symbole im Quelltext nicht referenziert werden | ✅ | `uUnusedUses` |
-| 39 | **CommentedCode: Auskommentierter Code** | Block von auskommentiertem Pascal-Code (`//` oder `{ }`) ohne Erklärung | ✅ | `uCommentedOutCode` |
-| 40 | **TodoComment: TODO/FIXME ohne Ticket** | Kommentar enthält `TODO`, `FIXME`, `HACK`, `XXX` ohne zugehörige Issue-Nummer | ✅ | `uTodoComment` |
-| 41 | **EmptyMethod: Leere Methode** | Methode enthält ausschließlich `inherited` oder ist komplett leer | ✅ | `uEmptyMethod` |
-| 42 | **UnnecessaryCast: Überflüssige Typumwandlung** | Cast auf denselben Typ oder auf direkten Vorfahren ohne Erweiterung | 🔲 | |
-| 43 | **ConstantReturn: Methode gibt immer gleichen Wert zurück** | Alle Pfade einer Funktion liefern dasselbe Literal – sollte Konstante sein | ✅ | `uConstantReturn` |
-| 44 | **LongLine: Zeile zu lang** | Zeile überschreitet 120 Zeichen (konfigurierbar via `[Detectors] MaxLineLength`) | ✅ | `uTooLongLine` |
-| 45 | **MixedIndent: Gemischte Einrückung (Tabs + Spaces)** | Zeile enthält sowohl Tabulator- als auch Leerzeichen-Einrückung | ✅ | `uTabulationCharacter` |
+| # | SCA | Regel | Beschreibung | Status | Unit |
+|---|-----|-------|-------------|--------|------|
+| 36 | — | **UnusedVar: Unbenutzte lokale Variable** | Variable im `var`-Block deklariert, aber nie gelesen oder nur geschrieben | ✅ | `uUnusedLocal` |
+| 37 | — | **UnusedMethod: Unbenutzte private Methode** | Private Methode wird innerhalb der Unit nirgendwo aufgerufen | ✅ | `uUnusedPrivateMethod` |
+| 38 | — | **UnusedUnit: Unit im uses nicht genutzt** | Unit im `uses`-Abschnitt, deren Symbole im Quelltext nicht referenziert werden | ✅ | `uUnusedUses` |
+| 39 | — | **CommentedCode: Auskommentierter Code** | Block von auskommentiertem Pascal-Code (`//` oder `{ }`) ohne Erklärung | ✅ | `uCommentedOutCode` |
+| 40 | SCA019 | **TodoComment: TODO/FIXME ohne Ticket** | Kommentar enthält `TODO`, `FIXME`, `HACK`, `XXX` ohne zugehörige Issue-Nummer | ✅ | `uTodoComment` |
+| 41 | SCA020 | **EmptyMethod: Leere Methode** | Methode enthält ausschließlich `inherited` oder ist komplett leer | ✅ | `uEmptyMethod` |
+| 42 | — | **UnnecessaryCast: Überflüssige Typumwandlung** | Cast auf denselben Typ oder auf direkten Vorfahren ohne Erweiterung | 🔲 | |
+| 43 | SCA151 | **ConstantReturn: Methode gibt immer gleichen Wert zurück** | Alle Pfade einer Funktion liefern dasselbe Literal – sollte Konstante sein | ✅ | `uConstantReturn` |
+| 44 | — | **LongLine: Zeile zu lang** | Zeile überschreitet 120 Zeichen (konfigurierbar via `[Detectors] MaxLineLength`) | ✅ | `uTooLongLine` |
+| 45 | — | **MixedIndent: Gemischte Einrückung (Tabs + Spaces)** | Zeile enthält sowohl Tabulator- als auch Leerzeichen-Einrückung | ✅ | `uTabulationCharacter` |
 
 ---
 
 ## ⚪ Info (5)
 
-| # | Regel | Beschreibung | Status | Unit |
-|---|-------|-------------|--------|------|
-| 46 | **HardcodedString: Literal statt resourcestring** | Benutzer-sichtbarer String als Literal statt `resourcestring`-Deklaration | ✅ | `uHardcodedString` (Caption/Hint/Text + ShowMessage) |
-| 47 | **UnsortedUses: uses nicht alphabetisch** | Einträge im `uses`-Abschnitt nicht in alphabetischer Reihenfolge | ✅ | `uUnsortedUses` |
-| 48 | **MissingUnitHeader: Kein Unit-Beschreibungskommentar** | Unit beginnt ohne beschreibenden Kommentarblock (Zweck, Autor, Datum) | ✅ | `uMissingUnitHeader` |
-| 49 | **DeprecatedAPI: Veraltete API verwendet** | Aufruf einer als `deprecated` markierten Methode oder Klasse | 🔲 | |
-| 50 | **CanBeClassMethod: Methode ohne Self-Zugriff** | Instanzmethode greift nicht auf Instanzfelder/-methoden zu – könnte `class function` sein | ✅ | `uCanBeClassMethod` |
+| # | SCA | Regel | Beschreibung | Status | Unit |
+|---|-----|-------|-------------|--------|------|
+| 46 | SCA152 | **HardcodedString: Literal statt resourcestring** | Benutzer-sichtbarer String als Literal statt `resourcestring`-Deklaration | ✅ | `uHardcodedString` (Caption/Hint/Text + ShowMessage) |
+| 47 | SCA142 | **UnsortedUses: uses nicht alphabetisch** | Einträge im `uses`-Abschnitt nicht in alphabetischer Reihenfolge | ✅ | `uUnsortedUses` |
+| 48 | SCA143 | **MissingUnitHeader: Kein Unit-Beschreibungskommentar** | Unit beginnt ohne beschreibenden Kommentarblock (Zweck, Autor, Datum) | ✅ | `uMissingUnitHeader` |
+| 49 | — | **DeprecatedAPI: Veraltete API verwendet** | Aufruf einer als `deprecated` markierten Methode oder Klasse | 🔲 | |
+| 50 | SCA148 | **CanBeClassMethod: Methode ohne Self-Zugriff** | Instanzmethode greift nicht auf Instanzfelder/-methoden zu – könnte `class function` sein | ✅ | `uCanBeClassMethod` |
 
 ---
 
