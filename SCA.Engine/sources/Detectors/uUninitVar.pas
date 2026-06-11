@@ -320,6 +320,50 @@ begin
       Exit(True);
 end;
 
+function IsVarUsedInNestedRanges(Lines: TStringList;
+  const NameLow: string; const Ranges: TList<TLineRange>): Boolean;
+// Prueft ob NameLow als Identifier (mit Wortgrenzen) in einer der
+// Nested-Method-Source-Zeilen auftaucht. Wenn ja, ist die Variable
+// vermutlich eine outer-scope-Var die als Closure in nested-Procs
+// benutzt wird - der Detector kann ihren Lifecycle nicht zuverlaessig
+// rekonstruieren (Aufruf-Reihenfolge der nested-Procs vs outer-body
+// Assignment-Stelle = path-sensitive). Konservativ: kein Finding.
+//
+// Loest die FP-Klasse 'Cands.Add(...) in AddRoots, Cands := ... in
+// outer-body NACH der nested-Proc-Definition' (FindRulesConfig-Pattern
+// in uRuleCatalog.pas und 4 weitere im Self-Scan).
+var
+  i, j, k : Integer;
+  L       : string;
+  NameLen : Integer;
+  P       : Integer;
+  Before, After : Char;
+begin
+  Result := False;
+  if (Lines = nil) or (Ranges = nil) or (NameLow = '') then Exit;
+  NameLen := Length(NameLow);
+  for k := 0 to Ranges.Count - 1 do
+  begin
+    for i := Ranges[k].StartLine - 1 to Ranges[k].EndLine - 1 do
+    begin
+      if (i < 0) or (i >= Lines.Count) then Continue;
+      L := LowerCase(Lines[i]);
+      P := Pos(NameLow, L);
+      while P > 0 do
+      begin
+        if P > 1 then Before := L[P - 1] else Before := ' ';
+        j := P + NameLen;
+        if j <= Length(L) then After := L[j] else After := ' ';
+        // Wortgrenzen: vor + nach Match darf kein Identifier-Char sein.
+        if not (CharInSet(Before, ['a'..'z', '0'..'9', '_'])
+             or CharInSet(After,  ['a'..'z', '0'..'9', '_'])) then
+          Exit(True);
+        P := Pos(NameLow, L, P + 1);
+      end;
+    end;
+  end;
+end;
+
 procedure CollectNestedMethodRangesViaSource(Lines: TStringList;
   MethodStartLine, MethodEndLine: Integer;
   Ranges: TList<TLineRange>);
@@ -1240,6 +1284,15 @@ var
       // weder 'temp' noch 'tmp' im Code steht.
       if (P.FirstReadLine > 0)
          and not LineContainsIdent(Lines, P.FirstReadLine, P.NameLow) then
+        Continue;
+
+      // Phase 2.7 (Audit 2026-06-10 Self-Scan): wenn die Variable als
+      // Identifier in einer der Nested-Procedure-Ranges auftaucht, ist
+      // sie potentiell eine Closure-Variable - outer-Body assigned,
+      // nested-Proc liest. Der Lifecycle ist path-sensitive (Aufruf-
+      // Reihenfolge); konservativ kein Finding. Killt 5-12 FPs aus dem
+      // Self-Scan (Cands/Reported/SourceCache/grid/HasVal etc.).
+      if IsVarUsedInNestedRanges(Lines, P.NameLow, NestedRanges) then
         Continue;
 
       if P.FirstWriteLine = 0 then
