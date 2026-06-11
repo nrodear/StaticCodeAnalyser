@@ -209,6 +209,9 @@ var
   procedure AddD(const AName: string; AKind: TFindingKind; ARun: TDetectorRun);
   overload;
   begin
+    // noinspection UninitVar
+    // Count (outer-var von BuildAllDetectors) wird im outer-body initialisiert
+    // bevor AddD aufgerufen wird; FP des Nested-Closure-Pattern.
     if Count >= Length(gDetectors) then
       raise Exception.CreateFmt(
         'BuildAllDetectors: DETECTOR_CAPACITY (%d) ueberschritten - ' +

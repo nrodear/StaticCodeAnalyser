@@ -167,6 +167,9 @@ var
 
   function NextY(AHeight: Integer): Integer;
   begin
+    // noinspection UninitVar
+    // Y (outer) wird im outer-Body initialisiert bevor NextY aufgerufen
+    // wird; FP des Nested-Closure-Pattern.
     Result := Y;
     Y := Y + AHeight + GROUP_GAP;
   end;

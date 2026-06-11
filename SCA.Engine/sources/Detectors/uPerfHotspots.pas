@@ -161,6 +161,9 @@ var
   begin
     Result := False;
     WordLen := Length(Kw);
+    // noinspection UninitVar
+    // n (outer) wird im FindLoopRanges-Body initialisiert bevor
+    // MatchKeyword aufgerufen wird; FP des Nested-Closure-Pattern.
     if AtPos + WordLen - 1 > n then Exit;
     if AtPos > 1 then
       if IsIdent(L[AtPos - 1]) then Exit;

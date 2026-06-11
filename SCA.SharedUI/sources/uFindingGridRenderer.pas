@@ -143,6 +143,9 @@ class procedure TFindingGridRenderer.DrawCell(Sender: TObject;
   ACol, ARow: Integer; Rect: TRect; State: TGridDrawState;
   const Config: TFindingGridConfig);
 var
+  // noinspection UninitVar
+  // grid wird im outer-body zu TStringGrid(Sender); CellText (nested)
+  // greift erst danach darauf zu - FP des Nested-Closure-Pattern.
   grid     : TStringGrid;
   bgColor  : TColor;
   txtRect  : TRect;

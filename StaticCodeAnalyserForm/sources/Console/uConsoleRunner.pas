@@ -145,6 +145,9 @@ var
   i      : Integer;
   A, V   : string;
   EqPos  : Integer;
+  // noinspection UninitVar
+  // HasVal (outer) wird im outer-Body initialisiert bevor GetValue
+  // aufgerufen wird; FP des Nested-Closure-Pattern.
   HasVal : Boolean;
   Errored: Boolean;
 
@@ -154,6 +157,9 @@ var
   procedure GetValue(var Target: string; const SwitchName: string);
   begin
     if HasVal then begin Target := V; Exit; end;
+    // noinspection UninitVar
+    // i (outer) wird im outer-Body in der Switch-Schleife initialisiert
+    // bevor GetValue aufgerufen wird; FP des Nested-Closure-Pattern.
     if i + 1 > High(Args) then
     begin
       Result.ParseError := Format('%s braucht einen Wert', [SwitchName]);
