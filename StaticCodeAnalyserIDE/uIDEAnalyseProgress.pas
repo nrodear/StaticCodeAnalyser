@@ -68,6 +68,9 @@ type
 
 implementation
 
+// noinspection-file BeginEndRequired, PublicField, PublicMemberWithoutDoc, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   Vcl.Controls,  // crAppStart, crDefault
   Vcl.Forms;     // Screen

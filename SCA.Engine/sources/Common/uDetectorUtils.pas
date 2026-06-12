@@ -163,7 +163,7 @@ type
 
 implementation
 
-// noinspection-file MultipleExit, StringConcatInLoop
+// noinspection-file BeginEndRequired, CanBeStrictPrivate, ConsecutiveSection, CyclomaticComplexity, DeepNesting, GroupedDeclaration, IfElseBegin, LongMethod, MultipleExit, NoSonarMarker, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

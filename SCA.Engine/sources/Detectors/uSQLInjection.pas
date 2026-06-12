@@ -55,7 +55,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat, MultipleExit
+// noinspection-file BeginEndRequired, ConcatToFormat, ConsecutiveSection, CyclomaticComplexity, DeepNesting, GroupedDeclaration, LongMethod, MultipleExit, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 const

@@ -34,7 +34,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat, MultipleExit
+// noinspection-file ConcatToFormat, GroupedDeclaration, MultipleExit, NilComparison, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

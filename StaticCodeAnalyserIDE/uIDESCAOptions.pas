@@ -122,7 +122,7 @@ procedure UnregisterSCAAddInOptions;
 
 implementation
 
-// noinspection-file GodClass
+// noinspection-file BeginEndRequired, CanBeClassMethod, ClassPerFile, ConsecutiveSection, GodClass, NestedRoutine, NestedTry, PublicMemberWithoutDoc, TooLongLine, UnsortedUses, UnusedPrivateMethod, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 {$R *.dfm}

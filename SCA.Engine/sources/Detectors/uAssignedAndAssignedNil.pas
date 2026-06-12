@@ -29,7 +29,7 @@ type
 
 implementation
 
-// noinspection-file MultipleExit
+// noinspection-file AvoidOut, BeginEndRequired, ConsecutiveSection, CyclomaticComplexity, DeepNesting, GroupedDeclaration, IfElseBegin, LongMethod, MultipleExit, NilComparison, RedundantJump, TooLongLine, UnsortedUses, UnusedParameter
 // Walker mit vielen guard-clauses fuer Token-Pattern (nil check, Assigned
 // check, Result-Type-Check) - idiomatisch.
 

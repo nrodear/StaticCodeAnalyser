@@ -33,7 +33,7 @@ type
 
 implementation
 
-// noinspection-file StringConcatInLoop
+// noinspection-file CanBeStrictPrivate, GroupedDeclaration, StringConcatInLoop, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 const

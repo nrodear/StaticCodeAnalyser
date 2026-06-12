@@ -61,6 +61,9 @@ type
 
 implementation
 
+// noinspection-file AvoidOut, CanBeClassMethod, CanBeStrictPrivate, ClassPerFile, GroupedDeclaration, LowercaseKeyword, MissingUnitHeader, PublicField, PublicMemberWithoutDoc, TooLongLine, UnsortedUses, UnusedPublicMember
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 { TMethodInfo }
 
 constructor TMethodInfo.Create;

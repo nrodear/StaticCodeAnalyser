@@ -149,6 +149,9 @@ type
 
 implementation
 
+// noinspection-file BeginEndRequired, ClassPerFile, LongParamList, PublicField, PublicMemberWithoutDoc, TooLongLine, UnsortedUses, UnusedPublicMember
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   Winapi.Windows, uAnalyserPalette, uAnalyserTheme, uIDEColors, uLocalization;
 

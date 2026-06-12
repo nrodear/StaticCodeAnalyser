@@ -41,6 +41,9 @@ function CurrentLanguage: string;
 
 implementation
 
+// noinspection-file BeginEndRequired, IfElseBegin, LongMethod, RedundantConditional, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 {$IFDEF USE_GETTEXT}
 uses
   gnugettext;

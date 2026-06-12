@@ -1,4 +1,4 @@
-﻿unit uCodeSmells2;
+unit uCodeSmells2;
 
 // AST-basierter Code-Smell-Detektor (Sonar-Regel #2).
 //
@@ -29,6 +29,9 @@ type
   end;
 
 implementation
+
+// noinspection-file CanBeStrictPrivate, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 class procedure TEmptyExceptDetector2.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);

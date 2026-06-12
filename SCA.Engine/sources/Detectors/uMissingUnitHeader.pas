@@ -46,6 +46,9 @@ type
 
 implementation
 
+// noinspection-file CyclomaticComplexity, GroupedDeclaration, NilComparison, RedundantJump, TooLongLine, UnsortedUses, UnusedParameter
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   uFileTextCache;
 

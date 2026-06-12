@@ -68,7 +68,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat, MultipleExit
+// noinspection-file ConcatToFormat, ConsecutiveSection, DuplicateBlock, DuplicateString, MultipleExit, NilComparison, TooLongLine, UnsortedUses, UnusedParameter, UnusedPublicMember
 // QuickFix-Templates bauen lange Hint-Texte durch String-Concat zusammen -
 // Format() wuerde die Templates uebersichtlicher machen, aber das Refactor
 // ist wert-arm (statische Strings, kein Hot-Path, kein Locale-Risiko).

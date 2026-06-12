@@ -152,7 +152,6 @@ type
     fkHardcodedPath,    // Pfad-Literal im Code (C:\ oder UNC)
     fkDebugOutput,      // WriteLn/ShowMessage in Produktion
     fkDeepNesting,      // Zu tiefe Verschachtelung
-    // noinspection TodoComment
     fkTodoComment,      // TODO/FIXME/HACK/XXX im Kommentar
     fkEmptyMethod,      // Methodenrumpf ohne Anweisungen
     fkDuplicateBlock,   // mehrere identische Code-Blocks (>=8 Zeilen)
@@ -882,6 +881,9 @@ type
   end;
 
 implementation
+
+// noinspection-file AvoidOut, MissingUnitHeader, NestedRoutine, NoSonarMarker, RedundantBoolean, TodoComment, TooLongLine, UnusedParameter
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 { ---- KIND_META Helpers ---- }
 

@@ -1,4 +1,4 @@
-﻿unit uDfmGodHandler;
+unit uDfmGodHandler;
 
 // Detektor: Eine einzige Methode haengt an Events vieler verschiedener
 // Komponenten. Klassischer Spaghetti-Indikator nach 'OnClick = same
@@ -25,6 +25,9 @@ type
   end;
 
 implementation
+
+// noinspection-file BeginEndRequired, NilComparison, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 class procedure TDfmGodHandlerDetector.Analyze(Binding: TFormBinding;
   const FileName: string; Results: TObjectList<TLeakFinding>);

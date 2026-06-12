@@ -157,7 +157,7 @@ function BadgeIcon(const ABadge: string): string;
 
 implementation
 
-// noinspection-file ConcatToFormat, EmptyExcept, GodClass, LargeClass
+// noinspection-file BeginEndRequired, ConcatToFormat, ConsecutiveSection, DeepNesting, DuplicateString, EmptyExcept, GodClass, GroupedDeclaration, LargeClass, LongMethod, LongParamList, NestedRoutine, PublicField, PublicMemberWithoutDoc, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedParameter
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

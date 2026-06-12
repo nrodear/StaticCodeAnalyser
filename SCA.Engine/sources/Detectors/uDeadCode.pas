@@ -1,4 +1,4 @@
-﻿unit uDeadCode;
+unit uDeadCode;
 
 // Detektor fuer toten Code (Sonar-Regel #10).
 //
@@ -37,6 +37,9 @@ type
   end;
 
 implementation
+
+// noinspection-file CyclomaticComplexity, DeepNesting, GroupedDeclaration, LongMethod, RedundantJump, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 class procedure TDeadCodeDetector.CheckBlock(BlockNode: TAstNode;
   const MethodName, FileName: string; Results: TObjectList<TLeakFinding>);

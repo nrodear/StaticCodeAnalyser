@@ -56,6 +56,9 @@ type
 
 implementation
 
+// noinspection-file BeginEndRequired, GroupedDeclaration, RedundantJump, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 const
   // Bekannte 8-bit-String-Cast-Praefixe mit oeffnender Klammer.
   CAST_PREFIXES: array of string = [

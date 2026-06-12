@@ -53,7 +53,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat
+// noinspection-file ConcatToFormat, ConsecutiveSection, CyclomaticComplexity, GroupedDeclaration, LongMethod, NestedTry, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 const

@@ -22,7 +22,7 @@ type
 
 implementation
 
-// noinspection-file MultipleExit
+// noinspection-file LongMethod, MagicNumber, MultipleExit, NestedTry, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 const

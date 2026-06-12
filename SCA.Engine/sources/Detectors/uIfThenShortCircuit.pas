@@ -55,6 +55,9 @@ type
 
 implementation
 
+// noinspection-file BeginEndRequired, GroupedDeclaration, RedundantJump, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 // True wenn CallName ein IfThen-Call ist (bare `IfThen(` oder qualifiziert
 // `Math.IfThen(` / `StrUtils.IfThen(` / `System.Math.IfThen(` ...).
 function IsIfThenCall(const CallName: string): Boolean;

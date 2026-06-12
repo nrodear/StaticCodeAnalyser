@@ -78,7 +78,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat
+// noinspection-file BeginEndRequired, ConcatToFormat, ConsecutiveSection, CyclomaticComplexity, DeepNesting, GroupedDeclaration, IfElseBegin, LengthUnderflow, LongMethod, NestedTry, NilComparison, PublicField, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedParameter, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

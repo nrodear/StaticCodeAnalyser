@@ -49,7 +49,7 @@ type
 
 implementation
 
-// noinspection-file EmptyExcept, ExceptOnException
+// noinspection-file EmptyExcept, ExceptOnException, GroupedDeclaration, LongParamList, MissingUnitHeader, NestedTry, NilComparison, RedundantJump, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 const

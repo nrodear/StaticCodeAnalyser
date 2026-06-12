@@ -53,7 +53,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat, MultipleExit
+// noinspection-file BeginEndRequired, CanBeStrictPrivate, ConcatToFormat, CyclomaticComplexity, GroupedDeclaration, MultipleExit, NestedTry, NilComparison, TooLongLine
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

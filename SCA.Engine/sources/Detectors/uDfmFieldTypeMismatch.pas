@@ -1,4 +1,4 @@
-﻿unit uDfmFieldTypeMismatch;
+unit uDfmFieldTypeMismatch;
 
 // Detektor: UI-DB-Control-Klasse passt nicht zum TField-Datentyp.
 //
@@ -44,6 +44,9 @@ type
   end;
 
 implementation
+
+// noinspection-file GroupedDeclaration, NestedTry, TooLongLine, UnsortedUses, UnusedRoutine
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 function IsBooleanFieldOk(Ctrl: TComponentNode): Boolean;
 begin

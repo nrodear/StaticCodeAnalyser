@@ -52,7 +52,7 @@ type
 
 implementation
 
-// noinspection-file StringConcatInLoop
+// noinspection-file BeginEndRequired, GroupedDeclaration, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedRoutine
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 const

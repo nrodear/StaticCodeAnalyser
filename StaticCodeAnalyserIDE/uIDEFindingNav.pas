@@ -23,7 +23,7 @@ procedure UnregisterFindingNavBinding;
 
 implementation
 
-// noinspection-file DebugOutput, EmptyExcept, ExceptionTooGeneral, ExceptOnException, MultipleExit
+// noinspection-file AvoidOut, BeginEndRequired, BooleanParam, CanBeClassMethod, ConsecutiveSection, DebugOutput, DuplicateBlock, EmptyExcept, ExceptionTooGeneral, ExceptOnException, FieldName, GroupedDeclaration, MultipleExit, NestedRoutine, NestedTry, TooLongLine, UnsortedUses, UnusedParameter
 // IDE-Hotkey-Plugin: empty-except an OTAPI-API-Calls. ShowMessage-Usage als
 // User-Feedback fuer Navigation-Aktionen (kein Production-Debug).
 

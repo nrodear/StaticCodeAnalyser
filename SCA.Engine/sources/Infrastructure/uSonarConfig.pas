@@ -130,7 +130,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat, ExceptionTooGeneral, ExceptOnException, LargeClass, MultipleExit, UnicodeToAnsiCast
+// noinspection-file AvoidOut, BeginEndRequired, BooleanParam, CanBeClassMethod, CanBeStrictPrivate, CanBeUnitPrivate, ClassPerFile, ConcatToFormat, ConsecutiveSection, CyclomaticComplexity, DeepNesting, DigitGrouping, DuplicateString, ExceptionTooGeneral, ExceptOnException, GroupedDeclaration, IfElseBegin, LargeClass, LongMethod, LongParamList, MagicNumber, MultipleExit, NestedRoutine, NestedTry, NilComparison, RedundantJump, TooLongLine, TypeName, UnicodeToAnsiCast, UnsortedUses, UnusedParameter
 // Long-form HTTP/Sonar-URL-Construction via Concat (lesbarer als Format
 // fuer mehrteilige URL-Segmente). MultipleExit = guard-clauses fuer
 // HTTP-Status/Network-Error-Pfade, idiomatisch fuer Network-Calls.

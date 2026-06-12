@@ -1,4 +1,4 @@
-﻿unit uCyclomaticComplexity;
+unit uCyclomaticComplexity;
 
 // Detektor fuer McCabe Cyclomatic Complexity pro Methode.
 //
@@ -46,6 +46,9 @@ type
   end;
 
 implementation
+
+// noinspection-file ConsecutiveSection, RedundantJump, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedParameter
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 class function TCyclomaticComplexityDetector.CountBooleanOpsInCond(
   const CondText: string): Integer;

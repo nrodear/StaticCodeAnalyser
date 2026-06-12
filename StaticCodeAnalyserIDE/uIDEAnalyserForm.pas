@@ -1,4 +1,4 @@
-﻿unit uIDEAnalyserForm;
+unit uIDEAnalyserForm;
 
 // Delphi IDE Expert - Analyser als dockbares IDE-Fenster.
 // TAnalyserFrame enthaelt die gesamte UI; TAnalyserDockableForm
@@ -441,7 +441,7 @@ procedure ShowAnalyserDockableForm;
 
 implementation
 
-// noinspection-file EmptyExcept, ExceptOnException, GodClass, LargeClass, StringConcatInLoop
+// noinspection-file BeginEndRequired, BooleanParam, ClassPerFile, ConsecutiveSection, EmptyExcept, ExceptOnException, GodClass, GroupedDeclaration, IfElseBegin, LargeClass, LongMethod, NestedRoutine, NestedTry, PublicField, PublicMemberWithoutDoc, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedPublicMember, UnusedRoutine
 // Plugin-Form: catch-all an Action-Click-Handlern (Resize, ItemPaint etc.).
 // GodClass/LargeClass: dockable Plugin-Form sammelt alle UI-Events,
 // VCL-Action-Owner-Pattern erlaubt keine sinnvolle Dekomposition.

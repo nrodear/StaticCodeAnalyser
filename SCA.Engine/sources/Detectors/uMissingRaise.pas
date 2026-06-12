@@ -56,6 +56,9 @@ type
 
 implementation
 
+// noinspection-file CanBeStrictPrivate, CyclomaticComplexity, GroupedDeclaration, RedundantJump, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 function IsUpperAsciiLetter(C: Char): Boolean; inline;
 begin
   Result := (C >= 'A') and (C <= 'Z');

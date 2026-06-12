@@ -54,6 +54,9 @@ type
 
 implementation
 
+// noinspection-file BeginEndRequired, CyclomaticComplexity, GroupedDeclaration, LongMethod, NestedTry, RedundantJump, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 function ExtractParentName(const TypeRef: string): string;
 var
   Comma : Integer;

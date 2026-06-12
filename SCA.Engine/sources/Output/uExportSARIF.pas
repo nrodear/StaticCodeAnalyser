@@ -49,7 +49,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat
+// noinspection-file BeginEndRequired, CanBeStrictPrivate, ConcatToFormat, ConsecutiveSection, DuplicateString, GroupedDeclaration, LongMethod, TooLongLine, UnsortedUses, UnusedParameter
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

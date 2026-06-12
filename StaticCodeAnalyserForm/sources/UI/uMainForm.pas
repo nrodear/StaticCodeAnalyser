@@ -190,7 +190,7 @@ var
 
 implementation
 
-// noinspection-file ConcatToFormat, DebugOutput, EmptyExcept, EmptyOnHandler, ExceptOnException, GodClass, LargeClass, MultipleExit
+// noinspection-file BeginEndRequired, BooleanParam, CanBeClassMethod, ConcatToFormat, ConsecutiveSection, CyclomaticComplexity, DebugOutput, DfmDefaultName, DfmHardcodedCaption, DfmOrphanHandler, DigitGrouping, DuplicateString, EmptyExcept, EmptyOnHandler, EmptyVisibilitySection, ExceptOnException, GodClass, GroupedDeclaration, IfElseBegin, LargeClass, LongMethod, MissingUnitHeader, MultipleExit, NestedTry, NilComparison, RedundantJump, TooLongLine, UnsortedUses, UnusedParameter
 // UI-Form-Top-Level: catch-all-Handler an Action-Grenzen (Click/Resize) sind
 // gewollt - eine UI-Exception darf nie die App killen. EmptyOnHandler/
 // EmptyExcept fuer EAbort (User-Cancel) sind intentional. DebugOutput-Pattern

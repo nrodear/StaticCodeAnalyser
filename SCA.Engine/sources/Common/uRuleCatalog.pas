@@ -136,7 +136,7 @@ type
 
 implementation
 
-// noinspection-file GodClass, StringConcatInLoop
+// noinspection-file AvoidOut, BeginEndRequired, GodClass, GroupedDeclaration, StringConcatInLoop, TodoComment, TooLongLine, UnsortedUses, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

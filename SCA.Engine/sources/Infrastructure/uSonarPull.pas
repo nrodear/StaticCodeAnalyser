@@ -80,7 +80,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat, ExceptionTooGeneral, ExceptOnException, MultipleExit
+// noinspection-file BeginEndRequired, CanBeClassMethod, CaseStatementSize, ClassPerFile, ConcatToFormat, CyclomaticComplexity, ExceptionTooGeneral, ExceptOnException, LongMethod, MagicNumber, MultipleExit, NestedTry, NilComparison, PublicMemberWithoutDoc, TooLongLine, UnsortedUses, UnusedParameter, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

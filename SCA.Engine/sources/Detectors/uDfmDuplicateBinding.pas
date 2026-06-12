@@ -37,7 +37,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat
+// noinspection-file AvoidOut, ConcatToFormat, GroupedDeclaration, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 function TryGetBindingKey(N: TComponentNode; out Key: string;

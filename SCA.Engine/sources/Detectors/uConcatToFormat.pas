@@ -1,4 +1,4 @@
-﻿unit uConcatToFormat;
+unit uConcatToFormat;
 
 // AST-basierter Refactoring-Hint: "Convert concatenation -> Format()".
 //
@@ -78,6 +78,9 @@ type
   end;
 
 implementation
+
+// noinspection-file BeginEndRequired, ConsecutiveSection, CyclomaticComplexity, DeepNesting, GroupedDeclaration, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 const
   SQL_LHS_HINTS: array[0..5] of string = (

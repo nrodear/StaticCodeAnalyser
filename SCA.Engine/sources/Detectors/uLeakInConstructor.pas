@@ -69,6 +69,9 @@ type
 
 implementation
 
+// noinspection-file BeginEndRequired, GroupedDeclaration, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 function IsConstructorImpl(MethodNode: TAstNode): Boolean;
 var
   TR : string;

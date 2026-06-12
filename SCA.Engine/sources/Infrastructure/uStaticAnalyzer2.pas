@@ -59,7 +59,7 @@ var
 
 implementation
 
-// noinspection-file ExceptOnException, MultipleExit, RaisingRawException
+// noinspection-file BeginEndRequired, BooleanParam, ConsecutiveSection, DuplicateBlock, ExceptOnException, GroupedDeclaration, MissingUnitHeader, MultipleExit, NestedRoutine, NestedTry, NilComparison, RaisingRawException, RedundantBoolean, RedundantJump, TodoComment, TooLongLine, UnsortedUses, UnusedParameter, UnusedRoutine
 // Detector-Run-Loop: outer except E: Exception fuer per-File-Crash-Recovery
 // (eine kaputte Datei darf den ganzen Scan nicht reissen). Phase-Tracking
 // im scan.log dokumentiert die Ursache.

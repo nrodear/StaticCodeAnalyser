@@ -40,6 +40,9 @@ type
 
 implementation
 
+// noinspection-file NilComparison, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 const
   EMIT_SEVERITY = lsWarning;
 

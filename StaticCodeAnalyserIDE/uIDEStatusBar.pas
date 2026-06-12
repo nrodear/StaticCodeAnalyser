@@ -46,7 +46,7 @@ type
 
 implementation
 
-// noinspection-file WithStatement
+// noinspection-file NestedRoutine, PublicMemberWithoutDoc, TooLongLine, UnsortedUses, UnusedParameter, WithStatement
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 // noinspection ConstructorWithoutInherited

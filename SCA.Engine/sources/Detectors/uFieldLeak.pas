@@ -1,4 +1,4 @@
-﻿unit uFieldLeak;
+unit uFieldLeak;
 
 // Detektor fuer Klassen-Feld-Leaks im Create/Destroy-Pattern.
 //
@@ -65,6 +65,9 @@ type
   end;
 
 implementation
+
+// noinspection-file ConsecutiveSection, CyclomaticComplexity, GroupedDeclaration, LongMethod, NestedTry, NilComparison, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 class function TFieldLeakDetector.FindMethod(UnitNode: TAstNode;
   const Kind, ClassName: string): TAstNode;

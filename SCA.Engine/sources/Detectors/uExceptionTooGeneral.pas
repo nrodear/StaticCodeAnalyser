@@ -67,6 +67,9 @@ type
 
 implementation
 
+// noinspection-file BeginEndRequired, CanBeStrictPrivate, CyclomaticComplexity, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 function IsLegitTopLevelHandler(OnNode: TAstNode): Boolean;
 // True wenn der Handler-Body sowohl LOGGT (WriteLn/Write/Log*/OutputDebug*)
 // als auch BEENDET/RAISE'T (Exit/Halt/raise). Dann ist es kein blindes

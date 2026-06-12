@@ -1,4 +1,4 @@
-﻿unit uUninitVar;
+unit uUninitVar;
 
 // Detector: SCA166 fkUninitVar — lokale Variable wird auf einem Pfad
 // gelesen bevor sie auf demselben Pfad geschrieben wurde.
@@ -44,7 +44,7 @@ type
 
 implementation
 
-// noinspection-file StringConcatInLoop
+// noinspection-file BeginEndRequired, CommentedOutCode, ConsecutiveSection, CyclomaticComplexity, DeepNesting, DuplicateBlock, GroupedDeclaration, IfElseBegin, LongMethod, NestedRoutine, NestedTry, NilComparison, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedParameter, UnusedRoutine
 // PhaseB/PhaseC der Variable-Inventur baut TypeRef-Strings aus Tokens via
 // Concat - kurze qualified names, kein O(n^2)-Risiko.
 

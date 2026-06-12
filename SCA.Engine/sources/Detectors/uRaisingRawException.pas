@@ -48,6 +48,9 @@ type
 
 implementation
 
+// noinspection-file BeginEndRequired, GroupedDeclaration, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 // True wenn der raise-Ausdruck genau die RTL-Klasse `Exception` instanziiert
 // (case-insensitive, mit optionalen Leerzeichen).
 function RaisesGenericException(const Expr: string): Boolean;

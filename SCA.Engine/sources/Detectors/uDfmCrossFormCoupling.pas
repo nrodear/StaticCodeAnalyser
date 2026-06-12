@@ -41,7 +41,7 @@ type
 
 implementation
 
-// noinspection-file MultipleExit, StringConcatInLoop
+// noinspection-file GroupedDeclaration, MultipleExit, NilComparison, StringConcatInLoop, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

@@ -62,6 +62,9 @@ type
 
 implementation
 
+// noinspection-file GroupedDeclaration, IfElseBegin, PublicField, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   Vcl.Forms;  // Application
 

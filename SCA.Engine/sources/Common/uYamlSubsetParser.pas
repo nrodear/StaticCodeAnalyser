@@ -99,7 +99,7 @@ type
 
 implementation
 
-// noinspection-file FreeWithoutNil
+// noinspection-file AvoidOut, BeginEndRequired, CanBeClassMethod, CanBeStrictPrivate, CanBeUnitPrivate, ClassPerFile, CyclomaticComplexity, DeepNesting, FreeWithoutNil, LengthUnderflow, LongMethod, NilComparison, PublicField, PublicMemberWithoutDoc, RedundantBoolean, TooLongLine, UnsortedUses, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

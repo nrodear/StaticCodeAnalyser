@@ -117,6 +117,9 @@ const
 
 implementation
 
+// noinspection-file BeginEndRequired, ConsecutiveSection, CyclomaticComplexity, GroupedDeclaration, IfElseBegin, RedundantJump, TodoComment, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedParameter, UnusedPublicMember
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 class function TSuppression.KindFromName(const Name: string;
   out Kind: TFindingKind): Boolean;
 // Delegiert an KIND_META-Reverse-Lookup in uSCAConsts (single source
@@ -225,6 +228,21 @@ begin
   Result := ParseCommentText(CommentText, Kinds, FileWide);
 end;
 
+// Liefert fuer eine .dfm-Datei die zugehoerige .pas im selben Verzeichnis -
+// fuer .pas/andere Files unveraendert zurueck. DFM-Findings (Form-Layouts)
+// koennen keinen //-Kommentar-Marker im DFM tragen, akzeptieren aber den
+// Marker in der assoziierten .pas-Datei (die ohnehin alle UI-Form-Patterns
+// als idiomatisch markiert hat).
+function ResolveMarkerHostFile(const FileName: string): string;
+begin
+  Result := FileName;
+  if SameText(ExtractFileExt(FileName), '.dfm') then
+  begin
+    var PasFile := ChangeFileExt(FileName, '.pas');
+    if FileExists(PasFile) then Result := PasFile;
+  end;
+end;
+
 class function TSuppression.BuildMap(const FileName: string):
   TDictionary<Integer, TSuppressedKinds>;
 var
@@ -255,13 +273,15 @@ var
   ScanState : TCommentScanState;
   Cached    : Boolean;
   FileWide  : Boolean;
+  HostFile  : string;
 begin
   Result := TDictionary<Integer, TSuppressedKinds>.Create;
-  if not FileExists(FileName) then Exit;
+  HostFile := ResolveMarkerHostFile(FileName);
+  if not FileExists(HostFile) then Exit;
 
   // Perf: AcquireLines nutzt gFileTextCache - zweiter Aufruf (BuildMarkers
   // im selben Scan) wird zum Cache-Hit, kein doppeltes I/O.
-  Lines := AcquireLines(FileName, Cached);
+  Lines := AcquireLines(HostFile, Cached);
   if Lines = nil then Exit;
   try
     ScanState.InBraceComment := False;
@@ -331,7 +351,8 @@ begin
   // Perf: AcquireLines liefert dieselbe TStringList wie BuildMap (gFile-
   // TextCache) wenn beide im selben Scan fuer dasselbe File aufgerufen
   // werden - spart das zweite I/O.
-  Lines := AcquireLines(FileName, Cached);
+  // .dfm-Findings nutzen die .pas im selben Verzeichnis als Marker-Host.
+  Lines := AcquireLines(ResolveMarkerHostFile(FileName), Cached);
   if Lines = nil then Exit;
   try
     var ScanState: TCommentScanState;

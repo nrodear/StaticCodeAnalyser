@@ -33,6 +33,9 @@ type
 
 implementation
 
+// noinspection-file NilComparison, TooLongLine, UnsortedUses, UnusedPublicMember
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 class function TConfidenceFilter.ApplyToFindings(
   Findings: TObjectList<TLeakFinding>;
   MinConfidence: TFindingConfidence): Integer;

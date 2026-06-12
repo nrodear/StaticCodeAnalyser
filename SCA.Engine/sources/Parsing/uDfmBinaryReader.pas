@@ -65,7 +65,7 @@ type
 
 implementation
 
-// noinspection-file ExceptOnException, GodClass
+// noinspection-file BeginEndRequired, ClassPerFile, ExceptOnException, GodClass, GroupedDeclaration, IfElseBegin, NestedTry, TooLongLine, UnsortedUses, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

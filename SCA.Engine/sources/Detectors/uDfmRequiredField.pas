@@ -1,4 +1,4 @@
-﻿unit uDfmRequiredField;
+unit uDfmRequiredField;
 
 // Detektoren fuer Pflichtfeld-Probleme im DFM (Phase 3).
 //
@@ -39,6 +39,9 @@ type
   end;
 
 implementation
+
+// noinspection-file GroupedDeclaration, NestedTry, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 function IsRequired(Field: TComponentNode): Boolean;
 begin

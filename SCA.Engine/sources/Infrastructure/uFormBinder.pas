@@ -126,7 +126,7 @@ function IsEventPropertyName(const PropName: string): Boolean;
 
 implementation
 
-// noinspection-file FreeWithoutNil
+// noinspection-file BeginEndRequired, CanBeClassMethod, CanBeStrictPrivate, ClassPerFile, FreeWithoutNil, GroupedDeclaration, NestedRoutine, NestedTry, NilComparison, PublicField, PublicMemberWithoutDoc, TooLongLine, UnsortedUses, UnusedPublicMember
 // Destructor-Patterns: Free ohne nil-out im Destruktor selbst (Object wird
 // sofort danach freigegeben, nil-out waere redundant).
 

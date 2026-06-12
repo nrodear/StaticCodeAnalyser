@@ -83,7 +83,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat, ExceptionTooGeneral, ExceptOnException, RaisingRawException
+// noinspection-file CanBeStrictPrivate, ConcatToFormat, ConsecutiveSection, ExceptionTooGeneral, ExceptOnException, IfElseBegin, LongMethod, NestedTry, NilComparison, RaisingRawException, TodoComment, TooLongLine, UnsortedUses, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

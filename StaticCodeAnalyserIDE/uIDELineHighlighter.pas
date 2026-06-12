@@ -266,7 +266,7 @@ procedure UnregisterLineHighlighter;
 
 implementation
 
-// noinspection-file ConcatToFormat, EmptyExcept, GodClass, LargeClass, MultipleExit
+// noinspection-file BeginEndRequired, CanBeClassMethod, CanBeUnitPrivate, ClassPerFile, ConcatToFormat, ConsecutiveSection, CyclomaticComplexity, DeepNesting, EmptyExcept, EmptyMethod, GodClass, GroupedDeclaration, LargeClass, LongMethod, LongParamList, MagicNumber, MultipleExit, NestedRoutine, NestedTry, PublicMemberWithoutDoc, RedundantJump, TooLongLine, UnsortedUses, UnusedParameter, UnusedPublicMember
 // OTAPI-Plugin: empty-except schluckt IDE-API-Failures (sonst killt jeder
 // transienter OTAPI-Glitch das Plugin). LargeClass/GodClass = IDE-Plugin
 // braucht alle Highlight-Routinen in einer Klasse fuer Notifier-Lifecycle.

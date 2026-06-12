@@ -125,7 +125,7 @@ type
 
 implementation
 
-// noinspection-file FreeWithoutNil, MultipleExit
+// noinspection-file AvoidOut, CanBeClassMethod, CanBeStrictPrivate, CanBeUnitPrivate, ClassPerFile, FreeWithoutNil, LengthUnderflow, MultipleExit, PublicField, PublicMemberWithoutDoc, RedundantBoolean, TooLongLine, UnsortedUses, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

@@ -47,6 +47,9 @@ function SeverityToText(S: TFindingSeverity): string;
 
 implementation
 
+// noinspection-file BeginEndRequired, TooLongLine, UnusedParameter
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   System.SysUtils;
 

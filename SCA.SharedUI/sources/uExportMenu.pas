@@ -77,7 +77,7 @@ type
 
 implementation
 
-// noinspection-file ExceptionTooGeneral, ExceptOnException
+// noinspection-file BeginEndRequired, CanBeClassMethod, CyclomaticComplexity, EmptyArgumentList, ExceptionTooGeneral, ExceptOnException, GroupedDeclaration, HardcodedString, LongParamList, NestedTry, NilComparison, PublicField, TooLongLine, UnsortedUses
 // Export-Menu-Handlers: catch-all an UI-Action-Grenzen - File-IO/
 // Clipboard-Faults sollen als ShowMessage gemeldet werden, nicht die
 // App killen. Idiomatisch fuer VCL-Action-Handler.

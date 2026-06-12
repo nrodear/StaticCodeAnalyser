@@ -38,6 +38,9 @@ type
 
 implementation
 
+// noinspection-file AvoidOut, BeginEndRequired, ConsecutiveSection, CyclomaticComplexity, DeepNesting, GroupedDeclaration, IfElseBegin, LongMethod, NestedRoutine, RedundantBoolean, RedundantJump, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedParameter
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   System.RegularExpressions, System.StrUtils,
   uFileTextCache;

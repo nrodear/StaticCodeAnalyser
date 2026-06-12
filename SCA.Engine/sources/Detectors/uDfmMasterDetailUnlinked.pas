@@ -1,4 +1,4 @@
-﻿unit uDfmMasterDetailUnlinked;
+unit uDfmMasterDetailUnlinked;
 
 // Detektor: TDataSet hat `MasterSource` gesetzt, aber weder
 // `MasterFields` noch `IndexFieldNames` -> silent Cross-Join zur Laufzeit.
@@ -41,6 +41,9 @@ type
   end;
 
 implementation
+
+// noinspection-file NilComparison, TooLongLine, UnsortedUses, UnusedRoutine
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 const
   EMIT_SEVERITY = lsError;

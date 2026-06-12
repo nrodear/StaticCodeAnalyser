@@ -41,7 +41,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat
+// noinspection-file CanBeStrictPrivate, ConcatToFormat, ConsecutiveSection, CyclomaticComplexity, LongMethod, RedundantJump, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 { Hilfsfunktion: prueft ob in der Bedingung ein Guard fuer varname steht.

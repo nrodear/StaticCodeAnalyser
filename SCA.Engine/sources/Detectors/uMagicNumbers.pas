@@ -26,7 +26,7 @@ type
 
 implementation
 
-// noinspection-file StringConcatInLoop
+// noinspection-file ConsecutiveSection, GroupedDeclaration, StringConcatInLoop, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 class function TMagicNumberDetector.IsTrivial(const NumStr: string): Boolean;

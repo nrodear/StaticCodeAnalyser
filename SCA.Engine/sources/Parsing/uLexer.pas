@@ -197,7 +197,7 @@ procedure LexerIfdefClear;
 
 implementation
 
-// noinspection-file GodClass, LargeClass, MultipleExit, RaisingRawException, StringConcatInLoop
+// noinspection-file AvoidOut, BeginEndRequired, CanBeClassMethod, CanBeStrictPrivate, CaseStatementSize, ConsecutiveSection, CyclomaticComplexity, DeepNesting, FreeAndNilHint, GodClass, GroupedDeclaration, IfElseBegin, LargeClass, LongMethod, MultipleExit, NilComparison, PublicMemberWithoutDoc, RaisingRawException, RedundantBoolean, RedundantConditional, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedPublicMember
 // Lexer-Token-Builder: kurze char-/keyword-Concats. MultipleExit = guard-
 // clauses fuer EOF/Comment-Boundaries beim Tokenize-Stream.
 

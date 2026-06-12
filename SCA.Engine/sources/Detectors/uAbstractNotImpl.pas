@@ -53,6 +53,9 @@ type
 
 implementation
 
+// noinspection-file BeginEndRequired, CyclomaticComplexity, LongMethod, NestedTry, RedundantJump, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 // Extrahiert den direkten Parent-Klassennamen aus `TFoo = class(TBar, IFoo)`.
 // TypeRef der nkClass-Node sieht typisch so aus: 'TBar' oder 'TBar,IFoo' oder
 // leer (kein expliziter Parent).

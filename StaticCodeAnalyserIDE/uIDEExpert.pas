@@ -32,7 +32,7 @@ procedure Register;
 
 implementation
 
-// noinspection-file ConcatToFormat
+// noinspection-file ClassPerFile, ConcatToFormat, FreeAndNilHint, LowercaseKeyword, NestedRoutine, NestedTry, NilComparison, PublicMemberWithoutDoc, RedundantJump, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedParameter, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

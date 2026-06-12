@@ -117,7 +117,7 @@ type
 
 implementation
 
-// noinspection-file ExceptOnException, StringConcatInLoop
+// noinspection-file BeginEndRequired, CanBeClassMethod, ConsecutiveSection, ExceptOnException, GroupedDeclaration, IfElseBegin, NestedRoutine, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedPublicMember
 // CLI-Top-Level: outer except E: Exception fuer "non-zero exit + error msg"
 // statt Crash mit stack-trace. Idiomatisch fuer Console-Apps.
 

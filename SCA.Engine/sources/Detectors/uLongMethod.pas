@@ -1,4 +1,4 @@
-﻿unit uLongMethod;
+unit uLongMethod;
 
 // Detektor fuer zu lange Methoden.
 //
@@ -27,6 +27,9 @@ type
   end;
 
 implementation
+
+// noinspection-file BeginEndRequired, NilComparison, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 // Schwellwerte werden ueber uSCAConsts.DetectorMaxBodyLines /
 // DetectorMaxStatements aus analyser.ini bezogen (Defaults 50/30 wie

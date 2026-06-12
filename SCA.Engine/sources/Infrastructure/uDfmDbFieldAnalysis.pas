@@ -53,7 +53,7 @@ function ResolveDataSetForDataSource(All: TList<TComponentNode>;
 
 implementation
 
-// noinspection-file ConcatToFormat, MultipleExit
+// noinspection-file ConcatToFormat, CyclomaticComplexity, GroupedDeclaration, MultipleExit, NilComparison, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 const

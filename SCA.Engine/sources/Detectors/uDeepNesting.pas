@@ -1,4 +1,4 @@
-﻿unit uDeepNesting;
+unit uDeepNesting;
 
 // Detektor fuer zu tiefe Verschachtelung von Kontrollstrukturen.
 //
@@ -40,6 +40,9 @@ type
   end;
 
 implementation
+
+// noinspection-file ConsecutiveSection, TooLongLine, UnsortedUses, UnusedParameter
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 // Schwellwert kommt aus uSCAConsts.DetectorMaxNesting (analyser.ini ->
 // DeepNestingMaxDepth). Default 4 (also wird ab 5 verschachtelten

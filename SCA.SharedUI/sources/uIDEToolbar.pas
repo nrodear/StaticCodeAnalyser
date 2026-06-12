@@ -89,6 +89,9 @@ type
 
 implementation
 
+// noinspection-file CanBeStrictPrivate, ClassPerFile, ConsecutiveSection, LongParamList, PublicField, TooLongLine, UnusedPublicMember
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 type
   // Delphi friend-by-unit-Trick: TControl.Font und .ParentFont sind in
   // Vcl.Controls als protected deklariert und werden erst in Sub-Klassen

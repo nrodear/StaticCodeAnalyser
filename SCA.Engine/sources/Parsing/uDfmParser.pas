@@ -47,7 +47,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat, MultipleExit, StringConcatInLoop
+// noinspection-file AvoidOut, CanBeClassMethod, ClassPerFile, ConcatToFormat, CyclomaticComplexity, FreeAndNilHint, MultipleExit, NestedTry, NilComparison, PublicMemberWithoutDoc, StringConcatInLoop, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 function TDfmParser.IsObjectStart(Kind: TDfmTokenKind): Boolean;

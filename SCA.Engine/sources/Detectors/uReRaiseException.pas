@@ -71,6 +71,9 @@ type
 
 implementation
 
+// noinspection-file CanBeStrictPrivate, NestedTry, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 class procedure TReRaiseExceptionDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var

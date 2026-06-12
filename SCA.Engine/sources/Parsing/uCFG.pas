@@ -84,7 +84,7 @@ type
 
 implementation
 
-// noinspection-file FreeWithoutNil
+// noinspection-file BeginEndRequired, CanBeClassMethod, CanBeStrictPrivate, CaseStatementSize, ClassPerFile, CommentedOutCode, ConsecutiveSection, FreeWithoutNil, NestedRoutine, NilComparison, PublicField, PublicMemberWithoutDoc, TooLongLine, UnsortedUses, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 { TCFGBlock }

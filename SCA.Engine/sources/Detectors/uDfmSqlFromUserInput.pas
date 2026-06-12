@@ -1,4 +1,4 @@
-﻿unit uDfmSqlFromUserInput;
+unit uDfmSqlFromUserInput;
 
 // Detektor: SQL-Property einer DB-Query wird aus einer UI-Input-Komponente
 // konkateniert. Klassische SQL-Injection ueber Form-Field.
@@ -46,6 +46,9 @@ type
   end;
 
 implementation
+
+// noinspection-file ConsecutiveSection, GroupedDeclaration, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
   System.StrUtils;

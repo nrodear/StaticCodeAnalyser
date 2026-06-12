@@ -89,7 +89,7 @@ function TryLoadLinesWithFallback(const FileName: string;
 
 implementation
 
-// noinspection-file EmptyExcept
+// noinspection-file BooleanParam, CanBeClassMethod, CanBeStrictPrivate, CanBeUnitPrivate, ClassPerFile, CyclomaticComplexity, DeepNesting, EmptyExcept, GroupedDeclaration, NestedTry, NilComparison, PublicField, PublicMemberWithoutDoc, RedundantJump, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

@@ -41,7 +41,7 @@ type
 
 implementation
 
-// noinspection-file StringConcatInLoop
+// noinspection-file BeginEndRequired, CanBeStrictPrivate, CyclomaticComplexity, GroupedDeclaration, IfElseBegin, LengthUnderflow, LongMethod, MagicNumber, NilComparison, StringConcatInLoop, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 class procedure TDfmDataModuleSplitHintDetector.Aggregate(const FileName: string;

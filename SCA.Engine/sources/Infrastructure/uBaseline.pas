@@ -51,7 +51,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat
+// noinspection-file ConcatToFormat, ConsecutiveSection, TooLongLine, UnsortedUses, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

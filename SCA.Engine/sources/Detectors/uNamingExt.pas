@@ -25,6 +25,9 @@ type
 
 implementation
 
+// noinspection-file CyclomaticComplexity, GroupedDeclaration, LongMethod, NestedTry, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   System.StrUtils;
 

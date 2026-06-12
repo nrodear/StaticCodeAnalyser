@@ -16,6 +16,9 @@ procedure ShowDfmAsText(const FileName: string; HighlightLine: Integer);
 
 implementation
 
+// noinspection-file LongMethod, NestedTry, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   System.SysUtils, System.Classes, System.IOUtils,
   Vcl.Forms, Vcl.Controls, Vcl.StdCtrls, Vcl.Buttons, Vcl.Graphics,

@@ -1,4 +1,4 @@
-﻿unit uDfmLayerViolation;
+unit uDfmLayerViolation;
 
 // Detektor: Eingabe-Control liegt direkt auf einer TForm statt eingebettet
 // in einem TPanel / TGroupBox / TPageControl.
@@ -34,6 +34,9 @@ type
   end;
 
 implementation
+
+// noinspection-file NilComparison, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
   System.StrUtils;

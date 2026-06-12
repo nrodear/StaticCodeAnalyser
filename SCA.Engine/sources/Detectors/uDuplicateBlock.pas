@@ -42,7 +42,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat, StringConcatInLoop
+// noinspection-file BeginEndRequired, CanBeClassMethod, ConcatToFormat, ConsecutiveSection, CyclomaticComplexity, GroupedDeclaration, LongMethod, NilComparison, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedParameter
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

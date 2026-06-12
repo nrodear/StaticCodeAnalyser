@@ -36,6 +36,9 @@ type
 
 implementation
 
+// noinspection-file CanBeClassMethod, ConsecutiveSection, GroupedDeclaration, NilComparison, NoSonarMarker, TooLongLine, UnsortedUses, UnusedParameter
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   System.StrUtils,
   uFileTextCache, uDetectorUtils;

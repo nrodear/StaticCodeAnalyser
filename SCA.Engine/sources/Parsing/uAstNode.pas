@@ -160,7 +160,7 @@ function NodeKindName(AKind: TNodeKind): string;
 
 implementation
 
-// noinspection-file FreeWithoutNil
+// noinspection-file CanBeClassMethod, CanBeStrictPrivate, FreeWithoutNil, NilComparison, PublicField, PublicMemberWithoutDoc, TooLongLine, UnsortedUses, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 const

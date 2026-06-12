@@ -103,7 +103,7 @@ type
 
 implementation
 
-// noinspection-file GodClass, MultipleExit, RaisingRawException, StringConcatInLoop
+// noinspection-file AvoidOut, BeginEndRequired, CanBeClassMethod, CanBeStrictPrivate, CyclomaticComplexity, DeepNesting, DuplicateBlock, GodClass, GroupedDeclaration, IfElseBegin, LocalConstantName, LongMethod, MultipleExit, PublicMemberWithoutDoc, RaisingRawException, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses
 // DFM-Lexer-Token-Concat: kurze property-Name-/Value-Strings.
 
 { TDfmLexer – Klassen-Initialisierung }

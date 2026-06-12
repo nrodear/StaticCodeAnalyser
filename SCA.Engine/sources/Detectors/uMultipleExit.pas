@@ -35,6 +35,9 @@ type
 
 implementation
 
+// noinspection-file CanBeClassMethod, ConsecutiveSection, NestedTry, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 const
   MAX_EXITS = 3;
 

@@ -1,4 +1,4 @@
-﻿unit uMissingFinally;
+unit uMissingFinally;
 
 // Detektor fuer fehlenden try/finally-Schutz (Sonar-Regel #8).
 //
@@ -42,6 +42,9 @@ type
   end;
 
 implementation
+
+// noinspection-file BeginEndRequired, CanBeStrictPrivate, LongMethod, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 class procedure TMissingFinallyDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);

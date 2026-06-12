@@ -1,4 +1,4 @@
-﻿unit uEmptyMethod;
+unit uEmptyMethod;
 
 // Detektor fuer Methoden ohne Anweisungen.
 // Erkennt Implementations-Methoden mit leerem begin..end-Rumpf:
@@ -31,6 +31,9 @@ type
   end;
 
 implementation
+
+// noinspection-file NilComparison, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 class function TEmptyMethodDetector.FindBodyBlock(
   MethodNode: TAstNode): TAstNode;

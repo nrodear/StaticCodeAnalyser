@@ -58,7 +58,7 @@ var
 
 implementation
 
-// noinspection-file ConcatToFormat, DateFormatSettings
+// noinspection-file BooleanParam, CanBeClassMethod, CanBeStrictPrivate, ConcatToFormat, DateFormatSettings, PublicMemberWithoutDoc, RedundantBoolean, TooLongLine, UnsortedUses, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

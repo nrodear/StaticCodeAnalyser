@@ -39,7 +39,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat, DateFormatSettings
+// noinspection-file BeginEndRequired, ConcatToFormat, DateFormatSettings, NilComparison, TooLongLine, UnusedParameter, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

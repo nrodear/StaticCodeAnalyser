@@ -59,7 +59,7 @@ type
 
 implementation
 
-// noinspection-file MultipleExit
+// noinspection-file CanBeStrictPrivate, CyclomaticComplexity, GroupedDeclaration, LongMethod, MultipleExit, RedundantJump, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 function IsIdentStart(C: Char): Boolean; inline;

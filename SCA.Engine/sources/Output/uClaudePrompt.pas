@@ -39,7 +39,7 @@ type
 
 implementation
 
-// noinspection-file MultipleExit
+// noinspection-file BeginEndRequired, CanBeStrictPrivate, DuplicateString, GroupedDeclaration, LongMethod, MultipleExit, NestedTry, NilComparison, RedundantJump, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

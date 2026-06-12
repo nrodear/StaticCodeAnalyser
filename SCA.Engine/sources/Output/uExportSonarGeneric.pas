@@ -50,6 +50,9 @@ type
 
 implementation
 
+// noinspection-file BeginEndRequired, CanBeStrictPrivate, ConsecutiveSection, DuplicateString, GroupedDeclaration, TooLongLine, UnsortedUses, UnusedParameter
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   System.IOUtils, System.JSON, System.StrUtils,
   uRuleCatalog;

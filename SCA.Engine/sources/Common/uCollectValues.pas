@@ -14,6 +14,9 @@ type
 
 implementation
 
+// noinspection-file ConsecutiveSection, GroupedDeclaration, MissingUnitHeader, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 class procedure TCollectValues.Aggregate(const Input: TStringList;
   var NameCounts: TDictionary<string, Integer>);
 var

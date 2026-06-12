@@ -72,6 +72,9 @@ type
 
 implementation
 
+// noinspection-file BeginEndRequired, CanBeClassMethod, ConsecutiveSection, CyclomaticComplexity, LongParamList, PublicField, TodoComment, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   System.SysUtils, System.IniFiles;
 

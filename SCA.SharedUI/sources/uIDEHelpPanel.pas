@@ -83,6 +83,9 @@ type
 
 implementation
 
+// noinspection-file CanBeClassMethod, DuplicateString, LongMethod, MagicNumber, PublicField, RedundantBoolean, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   System.SysUtils, Vcl.Graphics, Vcl.Themes, Vcl.Forms,
   uFixHint, uAnalyserPalette, uAnalyserTheme, uAnalyserTypes,

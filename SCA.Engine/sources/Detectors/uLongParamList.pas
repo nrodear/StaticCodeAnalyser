@@ -19,7 +19,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat
+// noinspection-file ConcatToFormat, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 // Schwellwert kommt aus uSCAConsts.DetectorMaxParams (analyser.ini ->

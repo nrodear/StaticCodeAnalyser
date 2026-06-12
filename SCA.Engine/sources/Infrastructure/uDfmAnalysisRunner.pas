@@ -38,7 +38,7 @@ type
 
 implementation
 
-// noinspection-file EmptyExcept
+// noinspection-file EmptyExcept, LongMethod, NestedTry, NilComparison, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

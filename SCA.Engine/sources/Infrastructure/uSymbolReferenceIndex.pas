@@ -85,7 +85,7 @@ var
 
 implementation
 
-// noinspection-file FreeWithoutNil
+// noinspection-file BeginEndRequired, CanBeClassMethod, CanBeUnitPrivate, ConsecutiveSection, DuplicateBlock, FreeWithoutNil, GroupedDeclaration, LowercaseKeyword, NestedRoutine, NestedTry, TooLongLine, UnsortedUses, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

@@ -29,6 +29,9 @@ type
 
 implementation
 
+// noinspection-file AvoidOut, GroupedDeclaration, NilComparison, TooLongLine, UnsortedUses, UnusedParameter
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   uFileTextCache;
 

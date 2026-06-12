@@ -57,7 +57,7 @@ type
 
 implementation
 
-// noinspection-file MultipleExit, StringConcatInLoop
+// noinspection-file CanBeStrictPrivate, CyclomaticComplexity, LongMethod, MultipleExit, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 // Hat das Method-TypeRef ';override' als Direktive?

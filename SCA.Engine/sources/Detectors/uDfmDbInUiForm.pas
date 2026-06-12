@@ -1,4 +1,4 @@
-﻿unit uDfmDbInUiForm;
+unit uDfmDbInUiForm;
 
 // Detektor: DB-Komponente liegt direkt auf einer TForm/TFrame statt im
 // dafuer vorgesehenen TDataModule.
@@ -36,6 +36,9 @@ type
   end;
 
 implementation
+
+// noinspection-file NilComparison, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
   System.StrUtils;

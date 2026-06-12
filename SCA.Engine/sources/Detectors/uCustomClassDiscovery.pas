@@ -63,7 +63,7 @@ type
 
 implementation
 
-// noinspection-file MultipleExit
+// noinspection-file BeginEndRequired, ConsecutiveSection, GroupedDeclaration, MultipleExit, NestedTry, NilComparison, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedParameter, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

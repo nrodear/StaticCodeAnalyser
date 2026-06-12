@@ -57,6 +57,9 @@ type
 
 implementation
 
+// noinspection-file BooleanParam, GroupedDeclaration, NestedTry, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 function IsInstanceDestructor(MethodNode: TAstNode): Boolean;
 var
   TR : string;

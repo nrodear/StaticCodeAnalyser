@@ -60,6 +60,9 @@ function BlendColor(Base, Accent: TColor; Ratio: Single): TColor;
 
 implementation
 
+// noinspection-file EmptyArgumentList, GroupedDeclaration, TooLongLine, UnsortedUses, UnusedParameter
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   Winapi.Windows,
   uAnalyserPalette;

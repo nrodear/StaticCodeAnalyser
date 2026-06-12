@@ -1,4 +1,4 @@
-﻿unit uDfmHardcodedCaption;
+unit uDfmHardcodedCaption;
 
 // Detektor: Hardcodierte UI-Strings im DFM.
 //
@@ -37,6 +37,9 @@ type
   end;
 
 implementation
+
+// noinspection-file CanBeClassMethod, ConsecutiveSection, NilComparison, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 const
   // Default-Whitelist der UI-Text-Properties. Konfigurierbar machen in

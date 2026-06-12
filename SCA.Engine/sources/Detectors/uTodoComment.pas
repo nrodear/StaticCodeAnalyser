@@ -1,4 +1,4 @@
-﻿unit uTodoComment;
+unit uTodoComment;
 
 // Detektor fuer TODO / FIXME / HACK / XXX-Marker in Kommentaren.
 //
@@ -29,6 +29,9 @@ type
   end;
 
 implementation
+
+// noinspection-file ConsecutiveSection, CyclomaticComplexity, DeepNesting, GroupedDeclaration, IfElseBegin, LongMethod, MagicNumber, NilComparison, RedundantJump, TodoComment, TooLongLine, UnsortedUses, UnusedParameter
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
   uFileTextCache;

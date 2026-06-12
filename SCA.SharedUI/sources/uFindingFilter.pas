@@ -189,7 +189,7 @@ type
 
 implementation
 
-// noinspection-file DateFormatSettings, LargeClass, MultipleExit
+// noinspection-file BeginEndRequired, CanBeStrictPrivate, CaseStatementSize, ClassPerFile, CyclomaticComplexity, DateFormatSettings, LargeClass, LongMethod, MultipleExit, NilComparison, TooLongLine, UnsortedUses, UnusedParameter, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

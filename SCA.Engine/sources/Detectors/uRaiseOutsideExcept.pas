@@ -68,6 +68,9 @@ type
 
 implementation
 
+// noinspection-file GroupedDeclaration, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 procedure WalkForBareRaise(N: TAstNode; const FileName, MethodName: string;
   Results: TObjectList<TLeakFinding>; InHandler: Boolean);
 // Hardening v4: iterative DFS - siehe Audit_jvcl_segfault.

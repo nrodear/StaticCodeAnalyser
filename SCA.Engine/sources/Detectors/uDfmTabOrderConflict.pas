@@ -1,4 +1,4 @@
-﻿unit uDfmTabOrderConflict;
+unit uDfmTabOrderConflict;
 
 // Detektor: Zwei oder mehr Geschwister-Komponenten im selben Parent haben
 // den gleichen TabOrder-Wert.
@@ -27,6 +27,9 @@ type
   end;
 
 implementation
+
+// noinspection-file NilComparison, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 procedure CheckParent(Parent: TComponentNode; const FileName: string;
   Results: TObjectList<TLeakFinding>);

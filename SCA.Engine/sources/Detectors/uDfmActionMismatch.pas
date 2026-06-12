@@ -1,4 +1,4 @@
-﻿unit uDfmActionMismatch;
+unit uDfmActionMismatch;
 
 // Detektor: Komponente hat sowohl Action- als auch OnClick-Property
 // gesetzt. Wenn Action gesetzt ist, gewinnt das ueber OnClick - der
@@ -29,6 +29,9 @@ type
   end;
 
 implementation
+
+// noinspection-file GroupedDeclaration, NilComparison, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 class procedure TDfmActionMismatchDetector.Analyze(Graph: TComponentGraph;
   const FileName: string; Results: TObjectList<TLeakFinding>);

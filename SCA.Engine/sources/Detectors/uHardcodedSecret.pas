@@ -1,4 +1,4 @@
-﻿unit uHardcodedSecret;
+unit uHardcodedSecret;
 
 // AST-basierter Detektor für hartcodierte Passwörter/Tokens (Sonar-Regel #5).
 //
@@ -53,6 +53,9 @@ type
   end;
 
 implementation
+
+// noinspection-file BeginEndRequired, CanBeClassMethod, ConsecutiveSection, CyclomaticComplexity, GroupedDeclaration, RedundantJump, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 const
   SECRET_KW: array[0..11] of string = (

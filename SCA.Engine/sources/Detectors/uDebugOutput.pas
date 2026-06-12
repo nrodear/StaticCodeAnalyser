@@ -1,4 +1,4 @@
-﻿unit uDebugOutput;
+unit uDebugOutput;
 
 // Detektor fuer Debug-Ausgaben in Produktionscode.
 // Erkennt Aufrufe von:
@@ -21,6 +21,9 @@ type
   end;
 
 implementation
+
+// noinspection-file IfElseBegin, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedParameter
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 const
   DEBUG_CALLS : array[0..7] of string = (

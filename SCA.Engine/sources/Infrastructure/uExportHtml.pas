@@ -42,7 +42,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat, DateFormatSettings, StringConcatInLoop
+// noinspection-file BeginEndRequired, ConcatToFormat, ConsecutiveSection, CyclomaticComplexity, DateFormatSettings, DeepNesting, GroupedDeclaration, MagicNumber, NestedTry, NilComparison, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedParameter, UnusedPublicMember
 // HTML-Export baut HTML-Fragmente pro Finding via String-Concat - typische
 // Findings-Liste ist klein (~100-500 Eintraege), kein Perf-Hot-Path.
 

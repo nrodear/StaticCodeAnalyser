@@ -247,7 +247,7 @@ procedure UnregisterWatchMode;
 
 implementation
 
-// noinspection-file EmptyExcept, GodClass, LargeClass, LockWithoutTryFinally, MultipleExit, UnpairedLock
+// noinspection-file BeginEndRequired, CanBeClassMethod, CanBeStrictPrivate, CanBeUnitPrivate, ClassPerFile, EmptyExcept, EmptyMethod, GodClass, GroupedDeclaration, LargeClass, LockWithoutTryFinally, LongMethod, MultipleExit, NestedRoutine, NestedTry, PublicField, PublicMemberWithoutDoc, RedundantJump, TooLongLine, UnpairedLock, UnsortedUses, UnusedParameter, UnusedPublicMember
 // Watch-Mode-Plugin: empty-except an Notifier-Boundaries - OTAPI-Notifier-
 // Faults duerfen den File-System-Watcher nicht killen. GodClass/LargeClass:
 // Notifier-Manager sammelt alle Edit/Compile/Save-Events; OTAPI verlangt

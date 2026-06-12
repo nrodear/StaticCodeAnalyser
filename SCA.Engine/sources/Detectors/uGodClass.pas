@@ -57,6 +57,9 @@ type
 
 implementation
 
+// noinspection-file CanBeClassMethod, ConsecutiveSection, CyclomaticComplexity, DeepNesting, GroupedDeclaration, LongMethod, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 const
   MAX_METHODS = 20;
   MAX_FIELDS  = 15;

@@ -93,7 +93,7 @@ type
 
 implementation
 
-// noinspection-file MultipleExit
+// noinspection-file AvoidOut, BeginEndRequired, CanBeStrictPrivate, ConsecutiveSection, ConsecutiveVisibility, GroupedDeclaration, MultipleExit, RedundantJump, TooLongLine, UnsortedUses, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 { ---- Wortgrenz-Hilfsfunktionen ---- }

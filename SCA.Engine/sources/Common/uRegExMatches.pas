@@ -27,7 +27,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat
+// noinspection-file ConcatToFormat, LocalConstantName, MissingUnitHeader, RedundantBoolean, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 // ---------------------------------------------------------------------------

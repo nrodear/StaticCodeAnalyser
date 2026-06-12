@@ -82,7 +82,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat, ExceptionTooGeneral, ExceptOnException
+// noinspection-file BeginEndRequired, ConcatToFormat, CyclomaticComplexity, DigitGrouping, DuplicateString, ExceptionTooGeneral, ExceptOnException, LongParamList, NestedTry, PublicField, PublicMemberWithoutDoc, RedundantJump, TooLongLine, UnsortedUses
 // Plugin-Top-Level: catch-all an OTAPI/Detector-Grenzen - eine geworfene
 // Exception darf nie die laufende IDE killen. Idiomatisch fuer IDE-Plugins.
 

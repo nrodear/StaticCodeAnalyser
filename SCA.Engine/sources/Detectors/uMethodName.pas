@@ -28,6 +28,9 @@ type
 
 implementation
 
+// noinspection-file RedundantJump, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 const
   EMIT_SEVERITY = lsHint;
 

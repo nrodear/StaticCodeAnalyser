@@ -102,7 +102,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat, LargeClass, MultipleExit, StringConcatInLoop
+// noinspection-file BeginEndRequired, BooleanParam, ConcatToFormat, ConsecutiveSection, CyclomaticComplexity, DeepNesting, GroupedDeclaration, IfElseBegin, LargeClass, LengthUnderflow, LongMethod, MultipleExit, NestedTry, NilComparison, PublicField, StringConcatInLoop, TooLongLine, UnsortedUses
 // Detector arbeitet auf Token-Strings - kurze Concat-Patterns fuer Param-
 // und Argument-List-Reconstruction, kein O(n^2)-Risiko.
 

@@ -100,6 +100,9 @@ type
 
 implementation
 
+// noinspection-file ClassPerFile, EmptyArgumentList, GroupedDeclaration, LongParamList, PublicField, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedParameter, UnusedPublicMember
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   // uAnalyserTypes ist bereits in der interface-uses (fuer TFindingSeverity
   // im Config-Record); doppelte Listung wuerde Delphi 12 mit E2004

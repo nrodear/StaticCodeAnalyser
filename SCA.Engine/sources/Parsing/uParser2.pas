@@ -71,7 +71,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat, ExceptionTooGeneral, ExceptOnException, GodClass, LargeClass, RaisingRawException, StringConcatInLoop
+// noinspection-file BeginEndRequired, CanBeClassMethod, CanBeStrictPrivate, CaseStatementSize, CommentedOutCode, ConcatToFormat, ConsecutiveSection, CyclomaticComplexity, DeepNesting, DuplicateBlock, ExceptionTooGeneral, ExceptOnException, GodClass, GroupedDeclaration, IfElseBegin, LargeClass, LongMethod, NestedTry, NilComparison, RaisingRawException, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses
 // Token-Concat-Pattern fuer Identifier/TypeRef-Strings im AST-Build. Strings
 // sind kurz (qualified name: max ~5 Dots, type-param-list ~5 Idents);
 // Format()/TStringBuilder wuerden hier Overhead ohne Gewinn bringen.

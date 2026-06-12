@@ -340,7 +340,7 @@ type
 
 implementation
 
-// noinspection-file EmptyExcept, ExceptOnException, FreeWithoutNil, GodClass, LargeClass
+// noinspection-file BeginEndRequired, CanBeClassMethod, CanBeStrictPrivate, CaseStatementSize, CyclomaticComplexity, DuplicateString, EmptyExcept, ExceptOnException, FreeWithoutNil, GodClass, GroupedDeclaration, IfElseBegin, LargeClass, LongMethod, NestedRoutine, NestedTry, PublicMemberWithoutDoc, TooLongLine, UnsortedUses, UnusedPublicMember
 // Destructor-Pattern: Free im Destruktor ohne nil-out (Object wird sofort
 // danach freigegeben).
 

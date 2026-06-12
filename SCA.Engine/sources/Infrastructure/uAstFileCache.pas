@@ -70,7 +70,7 @@ var
 
 implementation
 
-// noinspection-file ExceptionTooGeneral, ExceptOnException, FreeWithoutNil
+// noinspection-file CanBeClassMethod, CanBeStrictPrivate, ExceptionTooGeneral, ExceptOnException, FreeWithoutNil, NilComparison, PublicMemberWithoutDoc, TooLongLine, UnsortedUses, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 constructor TAstFileCache.Create;

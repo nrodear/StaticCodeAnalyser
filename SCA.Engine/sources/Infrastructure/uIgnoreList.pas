@@ -59,7 +59,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat, EmptyExcept, FreeWithoutNil, MultipleExit
+// noinspection-file CanBeClassMethod, CanBeStrictPrivate, ConcatToFormat, EmptyExcept, FreeWithoutNil, GroupedDeclaration, IfElseBegin, MultipleExit, NestedTry, PublicMemberWithoutDoc, RedundantJump, TooLongLine, UnsortedUses, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 const

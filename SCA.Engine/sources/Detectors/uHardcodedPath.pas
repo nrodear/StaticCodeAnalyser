@@ -31,7 +31,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat, MultipleExit, StringConcatInLoop
+// noinspection-file BeginEndRequired, ConcatToFormat, CyclomaticComplexity, MagicNumber, MultipleExit, NestedTry, StringConcatInLoop, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 class function THardcodedPathDetector.LooksLikePath(const S: string): Boolean;

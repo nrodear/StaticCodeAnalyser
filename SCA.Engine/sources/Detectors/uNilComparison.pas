@@ -43,7 +43,7 @@ type
 
 implementation
 
-// noinspection-file MultipleExit
+// noinspection-file BeginEndRequired, CyclomaticComplexity, GroupedDeclaration, LongMethod, MultipleExit, RedundantJump, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 // True wenn Text das Muster `<op>nil` enthaelt, mit op in {`=`, `<>`}

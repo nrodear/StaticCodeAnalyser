@@ -1,4 +1,4 @@
-﻿unit uDfmHardcodedDbCreds;
+unit uDfmHardcodedDbCreds;
 
 // Detektor: Klartext-Credentials auf DB-Verbindungs-Komponenten im DFM.
 //
@@ -33,6 +33,9 @@ type
   end;
 
 implementation
+
+// noinspection-file TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
   System.StrUtils;

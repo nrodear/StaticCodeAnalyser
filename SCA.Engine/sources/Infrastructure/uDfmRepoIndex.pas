@@ -66,7 +66,7 @@ type
 
 implementation
 
-// noinspection-file FreeWithoutNil
+// noinspection-file BeginEndRequired, CanBeClassMethod, FreeWithoutNil, GroupedDeclaration, NestedTry, NilComparison, PublicMemberWithoutDoc, RedundantJump, TooLongLine, UnsortedUses, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

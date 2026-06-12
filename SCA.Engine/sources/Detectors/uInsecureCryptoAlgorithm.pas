@@ -70,6 +70,9 @@ type
 
 implementation
 
+// noinspection-file AvoidOut, CanBeClassMethod, ConsecutiveSection, GroupedDeclaration, NestedTry, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedParameter
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 const
   // Algorithmus-Namen die als Stringliteral / Konstante / Identifier auftauchen.
   // Match-Methode: Wortgrenz, case-insensitive. Reihenfolge: laengste Token

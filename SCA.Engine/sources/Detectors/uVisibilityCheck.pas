@@ -67,7 +67,7 @@ type
 
 implementation
 
-// noinspection-file StringConcatInLoop
+// noinspection-file BeginEndRequired, ConsecutiveSection, GroupedDeclaration, NestedRoutine, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedParameter
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

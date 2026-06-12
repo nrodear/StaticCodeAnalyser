@@ -56,7 +56,7 @@ type
 
 implementation
 
-// noinspection-file MultipleExit
+// noinspection-file BeginEndRequired, CyclomaticComplexity, GroupedDeclaration, MagicNumber, MultipleExit, RedundantJump, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 const

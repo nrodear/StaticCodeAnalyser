@@ -1,4 +1,4 @@
-﻿unit uDfmSchemaMismatch;
+unit uDfmSchemaMismatch;
 
 // Detektor: DFM-Komponente ohne published Field in der Form-Klasse.
 //
@@ -37,6 +37,9 @@ type
   end;
 
 implementation
+
+// noinspection-file NilComparison, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 class procedure TDfmSchemaMismatchDetector.Analyze(Binding: TFormBinding;
   const FileName: string; Results: TObjectList<TLeakFinding>);

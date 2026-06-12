@@ -101,7 +101,7 @@ type
 
 implementation
 
-// noinspection-file EmptyExcept, LargeClass
+// noinspection-file BeginEndRequired, CanBeClassMethod, CanBeStrictPrivate, CanBeUnitPrivate, ClassPerFile, EmptyArgumentList, EmptyExcept, EmptyMethod, GroupedDeclaration, LargeClass, NestedRoutine, NilComparison, TooLongLine, UnsortedUses, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

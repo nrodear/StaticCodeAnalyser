@@ -1,4 +1,4 @@
-﻿unit uDfmForbiddenClass;
+unit uDfmForbiddenClass;
 
 // Detektor: Komponente nutzt eine via analyser.ini verbotene Klasse.
 //
@@ -28,6 +28,9 @@ type
   end;
 
 implementation
+
+// noinspection-file NilComparison, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 class procedure TDfmForbiddenClassDetector.Analyze(Graph: TComponentGraph;
   const FileName: string; Results: TObjectList<TLeakFinding>);

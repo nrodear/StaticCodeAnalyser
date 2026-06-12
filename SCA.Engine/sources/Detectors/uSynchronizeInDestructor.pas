@@ -39,6 +39,9 @@ type
 
 implementation
 
+// noinspection-file BeginEndRequired, GroupedDeclaration, NestedTry, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 function IsDestructor(const M: TAstNode): Boolean;
 // Method-Name endet auf .Destroy (oder ist plain 'Destroy' im Interface-
 // Header). TypeRef beginnt mit 'destructor' wenn der Parser den Marker

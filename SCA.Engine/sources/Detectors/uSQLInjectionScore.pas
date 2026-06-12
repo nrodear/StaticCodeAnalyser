@@ -54,6 +54,9 @@ type
 
 implementation
 
+// noinspection-file BeginEndRequired, CyclomaticComplexity, LongMethod, MagicNumber, TooLongLine, UnsortedUses, UnusedParameter
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 { ---- Hilfsfunktionen ---- }
 
 class function TSQLFixScorer.CountPlus(const S: string): Integer;

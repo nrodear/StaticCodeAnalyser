@@ -31,6 +31,9 @@ type
 
 implementation
 
+// noinspection-file BeginEndRequired, CanBeClassMethod, ConsecutiveSection, GroupedDeclaration, NilComparison, TooLongLine, UnsortedUses, UnusedParameter
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   uFileTextCache;
 

@@ -1,4 +1,4 @@
-﻿unit uSqlDangerousStatement;
+unit uSqlDangerousStatement;
 
 // Detektor: UPDATE-/DELETE-/TRUNCATE-Statement OHNE WHERE-Klausel.
 //
@@ -49,6 +49,9 @@ type
   end;
 
 implementation
+
+// noinspection-file BeginEndRequired, CanBeClassMethod, CommentedOutCode, ConsecutiveSection, GroupedDeclaration, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 const
   EMIT_SEVERITY = lsError;

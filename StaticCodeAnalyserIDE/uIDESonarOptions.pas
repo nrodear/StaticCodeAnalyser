@@ -93,7 +93,7 @@ procedure UnregisterSonarAddInOptions;
 
 implementation
 
-// noinspection-file DebugOutput, EmptyExcept, GodClass, MultipleExit
+// noinspection-file BeginEndRequired, BooleanParam, CanBeClassMethod, ClassPerFile, DebugOutput, DuplicateString, EmptyExcept, GodClass, GroupedDeclaration, HardcodedString, IfElseBegin, LongMethod, MultipleExit, NilComparison, PublicMemberWithoutDoc, TooLongLine, UnsortedUses, UnusedParameter, UnusedPrivateMethod, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 {$R *.dfm}

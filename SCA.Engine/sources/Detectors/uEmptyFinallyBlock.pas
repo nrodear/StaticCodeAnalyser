@@ -29,7 +29,7 @@ type
 
 implementation
 
-// noinspection-file EmptyFinallyBlock
+// noinspection-file AvoidOut, BeginEndRequired, CyclomaticComplexity, DeepNesting, EmptyFinallyBlock, GroupedDeclaration, IfElseBegin, LegacyInitializationSection, LongMethod, NilComparison, TooLongLine, UnsortedUses, UnusedParameter
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

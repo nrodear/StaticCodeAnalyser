@@ -64,7 +64,7 @@ type
 
 implementation
 
-// noinspection-file MultipleExit, StringConcatInLoop
+// noinspection-file BeginEndRequired, ConsecutiveSection, GroupedDeclaration, MultipleExit, NestedRoutine, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 // Liefert True wenn TypeRef einen Return-Type enthaelt (Format

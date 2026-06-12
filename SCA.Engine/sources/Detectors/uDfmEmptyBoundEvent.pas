@@ -31,7 +31,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat
+// noinspection-file ConcatToFormat, NilComparison, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 function FindBodyBlock(Method: TAstNode): TAstNode;

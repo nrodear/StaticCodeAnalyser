@@ -1,4 +1,4 @@
-﻿unit uUnusedUses;
+unit uUnusedUses;
 
 // AST-basierter Detektor fuer moeglicherweise ungenutzte uses-Eintraege.
 //
@@ -48,6 +48,9 @@ type
   end;
 
 implementation
+
+// noinspection-file BeginEndRequired, GroupedDeclaration, RedundantJump, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 { ---- Hilfsmethoden ---- }
 

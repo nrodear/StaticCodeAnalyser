@@ -57,6 +57,9 @@ type
 
 implementation
 
+// noinspection-file CanBeClassMethod, CanBeStrictPrivate, ConsecutiveSection, GroupedDeclaration, TooLongLine, UnsortedUses
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 const
   // Wir matchen auf die WIN-API-Namen + Delphi-RTL-Pendants. Aufruf-Form ist
   // case-insensitive (Pascal). Liste laesst sich erweitern (PowerShellExecute,
