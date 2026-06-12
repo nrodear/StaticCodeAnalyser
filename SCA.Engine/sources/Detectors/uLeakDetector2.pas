@@ -259,9 +259,11 @@ class function TLeakDetector2.HasFunctionCallAssign(MethodNode: TAstNode;
   // TAstNode.FindAll -> 'Source := EnsureCacheFor(AKind);' wurde als
   // Leak gemeldet, obwohl EnsureCacheFor eine geteilte Cache-Liste
   // zurueckgibt.
+  // Real-World-Sweep 2026-06-13: 'popup' fuer VCL-Pattern wie
+  // PopupComponent(Sender) (TPopupMenu-Property-Lookup, kein Allocator).
   const
-    BORROWED_PREFIXES : array[0..6] of string =
-      ('ensure', 'get', 'find', 'lookup', 'peek', 'cached', 'fetch');
+    BORROWED_PREFIXES : array[0..7] of string =
+      ('ensure', 'get', 'find', 'lookup', 'peek', 'cached', 'fetch', 'popup');
   var
     Name : string;
     DotPos, ParenPos, i : Integer;
