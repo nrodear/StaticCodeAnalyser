@@ -29,6 +29,10 @@ type
 
 implementation
 
+// noinspection-file MultipleExit
+// Walker mit vielen guard-clauses fuer Token-Pattern (nil check, Assigned
+// check, Result-Type-Check) - idiomatisch.
+
 uses
   System.StrUtils,
   uFileTextCache;

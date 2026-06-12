@@ -82,6 +82,10 @@ type
 
 implementation
 
+// noinspection-file ExceptionTooGeneral, ExceptOnException
+// Plugin-Top-Level: catch-all an OTAPI/Detector-Grenzen - eine geworfene
+// Exception darf nie die laufende IDE killen. Idiomatisch fuer IDE-Plugins.
+
 uses
   System.SysUtils, System.IOUtils, System.Math,
   Winapi.Windows,                    // GetTickCount

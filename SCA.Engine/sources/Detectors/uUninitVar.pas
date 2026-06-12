@@ -44,6 +44,10 @@ type
 
 implementation
 
+// noinspection-file StringConcatInLoop
+// PhaseB/PhaseC der Variable-Inventur baut TypeRef-Strings aus Tokens via
+// Concat - kurze qualified names, kein O(n^2)-Risiko.
+
 uses
   System.StrUtils,
   uFileTextCache, uDetectorUtils;

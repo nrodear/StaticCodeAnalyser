@@ -126,6 +126,10 @@ function IsEventPropertyName(const PropName: string): Boolean;
 
 implementation
 
+// noinspection-file FreeWithoutNil
+// Destructor-Patterns: Free ohne nil-out im Destruktor selbst (Object wird
+// sofort danach freigegeben, nil-out waere redundant).
+
 uses
   System.IOUtils, System.StrUtils,
   uDfmParser, uDfmBinaryReader, uParser2;

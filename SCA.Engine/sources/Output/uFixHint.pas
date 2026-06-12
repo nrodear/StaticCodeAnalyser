@@ -2876,6 +2876,8 @@ begin
     fkHttpInsteadOfHttps:
     begin
       Result.Description := _('Plaintext HTTP URL - prefer https:// for remote endpoints');
+      // noinspection HttpInsteadOfHttps
+      // FP: 'http://...' steht im Hint-Beispiel als BEFORE-Code; kein realer HTTP-Call.
       Result.Before :=
         'const'#13#10 +
         '  API_URL = ''http://api.example.com/v1/users'';';
@@ -3901,6 +3903,8 @@ begin
     fkInsecureCryptoAlgorithm:
     begin
       Result.Description := _('Weak/deprecated crypto algorithm in use');
+      // noinspection InsecureCryptoAlgorithm
+      // FP: 'MD5'/'tls10' im Hint-Beispiel als BEFORE-Code; kein realer Crypto-Use.
       Result.Before :=
         'algo := ''MD5'';                       // <- broken since 2004'#13#10 +
         'Hash := THashMD5.GetHashString(Input); // <- wrapper class'#13#10 +

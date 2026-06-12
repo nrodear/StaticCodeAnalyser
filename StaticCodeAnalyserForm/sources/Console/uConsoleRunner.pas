@@ -117,6 +117,10 @@ type
 
 implementation
 
+// noinspection-file ExceptOnException
+// CLI-Top-Level: outer except E: Exception fuer "non-zero exit + error msg"
+// statt Crash mit stack-trace. Idiomatisch fuer Console-Apps.
+
 uses
   System.IOUtils, System.Math,
   System.Generics.Defaults,           // TComparer fuer Detector-Timings-Sort

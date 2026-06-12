@@ -42,6 +42,10 @@ type
 
 implementation
 
+// noinspection-file StringConcatInLoop
+// HTML-Export baut HTML-Fragmente pro Finding via String-Concat - typische
+// Findings-Liste ist klein (~100-500 Eintraege), kein Perf-Hot-Path.
+
 uses
   uExport, uFixHint, uRuleCatalog, uQuickFix;
 

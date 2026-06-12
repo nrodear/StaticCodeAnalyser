@@ -266,6 +266,12 @@ procedure UnregisterLineHighlighter;
 
 implementation
 
+// noinspection-file EmptyExcept, LargeClass, GodClass, MultipleExit
+// OTAPI-Plugin: empty-except schluckt IDE-API-Failures (sonst killt jeder
+// transienter OTAPI-Glitch das Plugin). LargeClass/GodClass = IDE-Plugin
+// braucht alle Highlight-Routinen in einer Klasse fuer Notifier-Lifecycle.
+// MultipleExit = guard-clauses fuer OTAPI-Nil-Checks (Standard-Pattern).
+
 uses
   uAnalyserPalette,     // ACCENT_ERROR als zentrale Stripe-Default-Farbe
   uRepoSettings;        // OverlayPosition aus [UI]

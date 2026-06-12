@@ -247,6 +247,12 @@ procedure UnregisterWatchMode;
 
 implementation
 
+// noinspection-file EmptyExcept, GodClass, LargeClass, MultipleExit
+// Watch-Mode-Plugin: empty-except an Notifier-Boundaries - OTAPI-Notifier-
+// Faults duerfen den File-System-Watcher nicht killen. GodClass/LargeClass:
+// Notifier-Manager sammelt alle Edit/Compile/Save-Events; OTAPI verlangt
+// monolithischen Notifier-Lifecycle.
+
 uses
   System.StrUtils, Vcl.Forms, uStaticAnalyzer2, uStaticFiles, uLocalization;
 
@@ -608,6 +614,8 @@ end;
 
 procedure TWatchModeManager.AcquireAnalyzeLock;
 begin
+  // noinspection LockWithoutTryFinally
+  // Wrapper-Method, der Caller traegt die try/finally-Pflicht (siehe Z430-444).
   if Assigned(FAnalyzeLock) then FAnalyzeLock.Acquire;
 end;
 

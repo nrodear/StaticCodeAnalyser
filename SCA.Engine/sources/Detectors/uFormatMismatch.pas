@@ -102,6 +102,10 @@ type
 
 implementation
 
+// noinspection-file ConcatToFormat, StringConcatInLoop
+// Detector arbeitet auf Token-Strings - kurze Concat-Patterns fuer Param-
+// und Argument-List-Reconstruction, kein O(n^2)-Risiko.
+
 const
   // mORMot-Familie: Funktionen die '%' allein als Platzhalter nutzen
   // (Typ wird zur Laufzeit aus dem Variant-Argument abgeleitet, kein

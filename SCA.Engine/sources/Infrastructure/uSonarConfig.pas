@@ -136,6 +136,11 @@ type
 
 implementation
 
+// noinspection-file ConcatToFormat, MultipleExit
+// Long-form HTTP/Sonar-URL-Construction via Concat (lesbarer als Format
+// fuer mehrteilige URL-Segmente). MultipleExit = guard-clauses fuer
+// HTTP-Status/Network-Error-Pfade, idiomatisch fuer Network-Calls.
+
 uses
   System.IOUtils, System.NetEncoding, System.Net.HttpClient,
   System.Net.URLClient, System.JSON, System.Diagnostics, System.StrUtils,
@@ -563,6 +568,8 @@ begin
   Ip := '';
   if WSAStartup($0202, WsaData) <> 0 then Exit;
   try
+    // noinspection StringTo8BitCast
+    // gethostbyname ist WinSock-Legacy-API mit PAnsiChar; Cast ist intentional.
     H := AnsiString(Host);
     HostEnt := gethostbyname(PAnsiChar(H));
     if HostEnt = nil then Exit;

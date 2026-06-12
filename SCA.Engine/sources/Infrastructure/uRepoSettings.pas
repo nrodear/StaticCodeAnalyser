@@ -340,6 +340,10 @@ type
 
 implementation
 
+// noinspection-file FreeWithoutNil
+// Destructor-Pattern: Free im Destruktor ohne nil-out (Object wird sofort
+// danach freigegeben).
+
 uses
   Winapi.Windows, System.IOUtils,
   uIgnoreList, uSCAConsts, uCustomRuleDetector, uRuleCatalog,

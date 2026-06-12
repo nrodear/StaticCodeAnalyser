@@ -23,6 +23,10 @@ procedure UnregisterFindingNavBinding;
 
 implementation
 
+// noinspection-file EmptyExcept, DebugOutput
+// IDE-Hotkey-Plugin: empty-except an OTAPI-API-Calls. ShowMessage-Usage als
+// User-Feedback fuer Navigation-Aktionen (kein Production-Debug).
+
 uses
   Winapi.Windows, System.SysUtils, System.Classes, Vcl.Menus,
   ToolsAPI,

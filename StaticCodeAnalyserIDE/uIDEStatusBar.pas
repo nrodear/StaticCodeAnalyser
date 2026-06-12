@@ -46,6 +46,9 @@ type
 
 implementation
 
+// noinspection ConstructorWithoutInherited
+// FP: 'inherited Create(AOwner)' wird auf Z67 explizit aufgerufen;
+// Parser-Pattern fuer nkInherited erfasst die parameterized Form nicht.
 constructor TAnalyserStatusBar.Create(AOwner: TComponent; AParent: TWinControl);
 // Panel-Widths sind 96-DPI-Defaults. Auf Hi-DPI-Displays (150% / 200%)
 // wachsen Schrift + Glyph-Groessen mit, die Panel-Breiten muessen

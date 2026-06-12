@@ -77,6 +77,11 @@ type
 
 implementation
 
+// noinspection-file ExceptionTooGeneral, ExceptOnException
+// Export-Menu-Handlers: catch-all an UI-Action-Grenzen - File-IO/
+// Clipboard-Faults sollen als ShowMessage gemeldet werden, nicht die
+// App killen. Idiomatisch fuer VCL-Action-Handler.
+
 uses
   System.SysUtils, System.Types, Vcl.Dialogs, Vcl.Clipbrd,
   uExport, uSCAConsts, uLocalization, uSonarPush;
@@ -385,6 +390,8 @@ begin
       Idx := Row - 1;  // Header-Zeile abziehen
       if (Idx >= 0) and (Idx < FDisplayed.Count) then
       begin
+        // noinspection SetLengthAppendInLoop
+        // Sel ist Selektion-Subset (max. visible Rows), kein Perf-Hot-Path.
         SetLength(Sel, Length(Sel) + 1);
         Sel[High(Sel)] := FDisplayed[Idx];
       end;

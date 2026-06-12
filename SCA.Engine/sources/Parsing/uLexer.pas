@@ -197,6 +197,10 @@ procedure LexerIfdefClear;
 
 implementation
 
+// noinspection-file StringConcatInLoop, MultipleExit
+// Lexer-Token-Builder: kurze char-/keyword-Concats. MultipleExit = guard-
+// clauses fuer EOF/Comment-Boundaries beim Tokenize-Stream.
+
 { TToken }
 
 function TToken.IsKeyword: Boolean;

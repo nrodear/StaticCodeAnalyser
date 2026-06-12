@@ -59,6 +59,11 @@ var
 
 implementation
 
+// noinspection-file ExceptOnException
+// Detector-Run-Loop: outer except E: Exception fuer per-File-Crash-Recovery
+// (eine kaputte Datei darf den ganzen Scan nicht reissen). Phase-Tracking
+// im scan.log dokumentiert die Ursache.
+
 uses
   System.IOUtils, System.Diagnostics,
   uStaticFiles, uParser2, uAstNode,

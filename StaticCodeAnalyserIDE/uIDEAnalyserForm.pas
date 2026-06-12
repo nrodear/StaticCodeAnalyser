@@ -441,6 +441,11 @@ procedure ShowAnalyserDockableForm;
 
 implementation
 
+// noinspection-file ExceptOnException, GodClass, LargeClass, StringConcatInLoop
+// Plugin-Form: catch-all an Action-Click-Handlern (Resize, ItemPaint etc.).
+// GodClass/LargeClass: dockable Plugin-Form sammelt alle UI-Events,
+// VCL-Action-Owner-Pattern erlaubt keine sinnvolle Dekomposition.
+
 {$R *.dfm}
 
 // Forward-Declaration: IsShortcutsMasterEnabled wird von TAnalyserFrame.GridKeyDown
@@ -1890,6 +1895,8 @@ begin
         if (i = Tmp.Count - 1) or (Tmp[i + 1].ModeOrd = -1) then
           Continue;
       end;
+      // noinspection SetLengthAppendInLoop
+      // Filtered ist klein (max. Filter-Combo-Items, ~5-15); kein Perf-Hot-Path.
       SetLength(Filtered, Length(Filtered) + 1);
       Filtered[High(Filtered)] := Tmp[i];
     end;

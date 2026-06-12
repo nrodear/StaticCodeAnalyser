@@ -103,6 +103,9 @@ type
 
 implementation
 
+// noinspection-file StringConcatInLoop
+// DFM-Lexer-Token-Concat: kurze property-Name-/Value-Strings.
+
 { TDfmLexer – Klassen-Initialisierung }
 
 class constructor TDfmLexer.Create;

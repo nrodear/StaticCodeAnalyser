@@ -71,6 +71,13 @@ type
 
 implementation
 
+// noinspection-file StringConcatInLoop, ConcatToFormat, GodClass, LargeClass
+// Token-Concat-Pattern fuer Identifier/TypeRef-Strings im AST-Build. Strings
+// sind kurz (qualified name: max ~5 Dots, type-param-list ~5 Idents);
+// Format()/TStringBuilder wuerden hier Overhead ohne Gewinn bringen.
+// GodClass/LargeClass: Parser ist ein einziger Top-Down-Walker pro Datei,
+// Method-pro-Statement-Kind = unvermeidbarer Fan-Out (~80 Parse-Methoden).
+
 { Methoden-Direktiven nach dem Semikolon }
 function IsMethodDirective(K: TTokenKind): Boolean;
 begin

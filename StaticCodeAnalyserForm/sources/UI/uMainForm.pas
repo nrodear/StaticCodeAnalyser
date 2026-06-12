@@ -190,6 +190,14 @@ var
 
 implementation
 
+// noinspection-file EmptyExcept, ExceptOnException, DebugOutput, EmptyOnHandler, GodClass, LargeClass, ConcatToFormat
+// UI-Form-Top-Level: catch-all-Handler an Action-Grenzen (Click/Resize) sind
+// gewollt - eine UI-Exception darf nie die App killen. EmptyOnHandler/
+// EmptyExcept fuer EAbort (User-Cancel) sind intentional. DebugOutput-Pattern
+// ShowMessage ist hier als User-Feedback-Kanal verwendet, nicht als Debug.
+// GodClass/LargeClass: VCL-Main-Form sammelt VCL-Event-Handler, kann nicht
+// dekomponiert werden ohne Action-Owner-Splits.
+
 uses
   clipbrd,
   uStaticFiles, uRuleCatalog,
