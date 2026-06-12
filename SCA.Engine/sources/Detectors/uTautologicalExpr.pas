@@ -1,4 +1,4 @@
-﻿unit uTautologicalExpr;
+unit uTautologicalExpr;
 
 // Detector: tautologische binaere Ausdruecke wie `x = x`, `a and a`,
 // `(b or b)`, `(p <> p)`. Klassischer Copy-Paste-Bug oder vergessener
@@ -31,6 +31,9 @@ type
   end;
 
 implementation
+
+// noinspection-file ConcatToFormat, MultipleExit, StringConcatInLoop
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
   System.StrUtils,

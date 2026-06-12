@@ -80,6 +80,9 @@ type
 
 implementation
 
+// noinspection-file ConcatToFormat, ExceptionTooGeneral, ExceptOnException, MultipleExit
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   System.Net.HttpClient, System.NetEncoding, System.JSON, System.DateUtils,
   System.StrUtils;

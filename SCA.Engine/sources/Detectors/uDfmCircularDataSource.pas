@@ -1,4 +1,4 @@
-﻿unit uDfmCircularDataSource;
+unit uDfmCircularDataSource;
 
 // Detektor: Zyklus in DataSource <-> DataSet / MasterSource-Verkettung.
 //
@@ -43,6 +43,9 @@ type
   end;
 
 implementation
+
+// noinspection-file ConcatToFormat, StringConcatInLoop
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 type
   TNodeColor = (ncWhite, ncGray, ncBlack);

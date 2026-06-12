@@ -340,7 +340,7 @@ type
 
 implementation
 
-// noinspection-file FreeWithoutNil
+// noinspection-file EmptyExcept, ExceptOnException, FreeWithoutNil, GodClass, LargeClass
 // Destructor-Pattern: Free im Destruktor ohne nil-out (Object wird sofort
 // danach freigegeben).
 

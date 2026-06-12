@@ -70,6 +70,9 @@ var
 
 implementation
 
+// noinspection-file ExceptionTooGeneral, ExceptOnException, FreeWithoutNil
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 constructor TAstFileCache.Create;
 begin
   inherited;

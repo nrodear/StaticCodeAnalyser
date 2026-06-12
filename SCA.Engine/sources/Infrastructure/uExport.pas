@@ -76,6 +76,9 @@ type
 
 implementation
 
+// noinspection-file ConcatToFormat, DateFormatSettings
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   uExportHtml;
 

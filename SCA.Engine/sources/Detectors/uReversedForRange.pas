@@ -1,4 +1,4 @@
-﻿unit uReversedForRange;
+unit uReversedForRange;
 
 // Detektor fuer `for i := A to B do` mit numerischen Literalen, A > B.
 // Klassischer `downto`-vergessen-Tippfehler: Schleife hat 0 Iterationen,
@@ -30,6 +30,9 @@ type
   end;
 
 implementation
+
+// noinspection-file MultipleExit
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
   uFileTextCache;

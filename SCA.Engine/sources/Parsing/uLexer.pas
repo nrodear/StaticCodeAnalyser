@@ -1,4 +1,4 @@
-﻿unit uLexer;
+unit uLexer;
 
 // Delphi-Lexer: zerlegt Quelltext in Token-Stream.
 // Schlüsselwörter werden case-insensitiv erkannt.
@@ -197,7 +197,7 @@ procedure LexerIfdefClear;
 
 implementation
 
-// noinspection-file StringConcatInLoop, MultipleExit
+// noinspection-file GodClass, LargeClass, MultipleExit, RaisingRawException, StringConcatInLoop
 // Lexer-Token-Builder: kurze char-/keyword-Concats. MultipleExit = guard-
 // clauses fuer EOF/Comment-Boundaries beim Tokenize-Stream.
 

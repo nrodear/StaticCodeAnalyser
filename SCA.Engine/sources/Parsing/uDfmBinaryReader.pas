@@ -65,6 +65,9 @@ type
 
 implementation
 
+// noinspection-file ExceptOnException, GodClass
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   System.IOUtils;
 

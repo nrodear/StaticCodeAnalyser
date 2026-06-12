@@ -163,6 +163,9 @@ type
 
 implementation
 
+// noinspection-file MultipleExit, StringConcatInLoop
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   System.SysUtils,               // TStringBuilder
   System.Masks,                  // MatchesMask fuer Test-Fixture-Patterns

@@ -160,6 +160,9 @@ function NodeKindName(AKind: TNodeKind): string;
 
 implementation
 
+// noinspection-file FreeWithoutNil
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 const
   // Single-Source-Of-Truth fuer die menschlich lesbaren Kind-Namen.
   // Reihenfolge MUSS exakt mit TNodeKind uebereinstimmen.

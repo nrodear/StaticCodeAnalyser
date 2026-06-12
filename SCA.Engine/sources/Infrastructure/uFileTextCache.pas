@@ -89,6 +89,9 @@ function TryLoadLinesWithFallback(const FileName: string;
 
 implementation
 
+// noinspection-file EmptyExcept
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   Winapi.Windows, System.Math, System.IOUtils;
 

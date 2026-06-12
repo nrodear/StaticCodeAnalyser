@@ -1,4 +1,4 @@
-﻿unit uLongParamList;
+unit uLongParamList;
 
 // Detektor fuer Methoden mit zu vielen Parametern.
 // Mehr als MAX_PARAMS Parameter deuten auf einen Refactoring-Bedarf hin
@@ -18,6 +18,9 @@ type
   end;
 
 implementation
+
+// noinspection-file ConcatToFormat
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 // Schwellwert kommt aus uSCAConsts.DetectorMaxParams (analyser.ini ->
 // LongParamListMaxParams). Default 5.

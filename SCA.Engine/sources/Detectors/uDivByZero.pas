@@ -55,6 +55,9 @@ type
 
 implementation
 
+// noinspection-file StringConcatInLoop
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 // Ersetzt jeden Char zwischen single-quotes (inkl. ''-Escape-Handling)
 // durch Leerzeichen. Quotes selbst bleiben stehen, damit String-Positionen
 // 1:1 bleiben. Brauchen wir damit Pseudo-Code in String-Literalen (z.B.

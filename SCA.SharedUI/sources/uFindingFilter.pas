@@ -189,6 +189,9 @@ type
 
 implementation
 
+// noinspection-file DateFormatSettings, LargeClass, MultipleExit
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   System.SysUtils, System.Generics.Defaults,
   uAnalyserTypes;    // SeverityFromText, TFindingSeverity

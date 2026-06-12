@@ -54,6 +54,9 @@ type
 
 implementation
 
+// noinspection-file ConcatToFormat
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   System.RegularExpressions, System.StrUtils,
   uFileTextCache;

@@ -1,4 +1,4 @@
-﻿unit uVirtualCallInCtor;
+unit uVirtualCallInCtor;
 
 // Detektor: Aufruf einer `virtual`-Methode im Constructor.
 //
@@ -52,6 +52,9 @@ type
   end;
 
 implementation
+
+// noinspection-file ConcatToFormat
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 const
   EMIT_SEVERITY = lsError;

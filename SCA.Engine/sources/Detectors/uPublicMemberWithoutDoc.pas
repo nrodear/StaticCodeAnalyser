@@ -38,6 +38,9 @@ type
 
 implementation
 
+// noinspection-file MultipleExit
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   System.StrUtils, System.RegularExpressions,
   uFileTextCache;

@@ -1,4 +1,4 @@
-﻿unit uDuplicateBlock;
+unit uDuplicateBlock;
 
 // Detektor fuer duplizierte Code-Bloecke innerhalb einer Datei.
 //
@@ -41,6 +41,9 @@ type
   end;
 
 implementation
+
+// noinspection-file ConcatToFormat, StringConcatInLoop
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
   uFileTextCache;

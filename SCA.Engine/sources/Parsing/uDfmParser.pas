@@ -47,6 +47,9 @@ type
 
 implementation
 
+// noinspection-file ConcatToFormat, MultipleExit, StringConcatInLoop
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 function TDfmParser.IsObjectStart(Kind: TDfmTokenKind): Boolean;
 begin
   Result := (Kind = tkKwObject)

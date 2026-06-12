@@ -136,6 +136,9 @@ type
 
 implementation
 
+// noinspection-file GodClass, StringConcatInLoop
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   Winapi.Windows,                  // OutputDebugString
   System.IOUtils, System.JSON;

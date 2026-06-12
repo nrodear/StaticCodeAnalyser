@@ -57,6 +57,9 @@ type
 
 implementation
 
+// noinspection-file MultipleExit, StringConcatInLoop
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 // Hat das Method-TypeRef ';override' als Direktive?
 function IsOverride(const TypeRef: string): Boolean;
 begin

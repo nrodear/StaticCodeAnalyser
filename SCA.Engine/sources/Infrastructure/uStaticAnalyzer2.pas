@@ -1,4 +1,4 @@
-﻿unit uStaticAnalyzer2;
+unit uStaticAnalyzer2;
 
 interface
 
@@ -59,7 +59,7 @@ var
 
 implementation
 
-// noinspection-file ExceptOnException
+// noinspection-file ExceptOnException, MultipleExit, RaisingRawException
 // Detector-Run-Loop: outer except E: Exception fuer per-File-Crash-Recovery
 // (eine kaputte Datei darf den ganzen Scan nicht reissen). Phase-Tracking
 // im scan.log dokumentiert die Ursache.

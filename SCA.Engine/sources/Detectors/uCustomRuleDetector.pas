@@ -1,4 +1,4 @@
-﻿unit uCustomRuleDetector;
+unit uCustomRuleDetector;
 
 // Custom-Rule-Engine: liest team-/projekt-spezifische Regeln aus
 // analyser-rules.yml und matcht sie als Pattern (Regex/Substring/Word)
@@ -82,6 +82,9 @@ type
   end;
 
 implementation
+
+// noinspection-file ConcatToFormat, ExceptionTooGeneral, ExceptOnException, RaisingRawException
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
   System.IOUtils, System.StrUtils,

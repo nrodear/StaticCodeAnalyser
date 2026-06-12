@@ -53,6 +53,9 @@ function ResolveDataSetForDataSource(All: TList<TComponentNode>;
 
 implementation
 
+// noinspection-file ConcatToFormat, MultipleExit
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 const
   // Whitelist-Approach: wenn die Klasse mit einem dieser Strings beginnt,
   // gilt sie als DataSet. Pragma genuegt fuer die gaengigen TDataSet-

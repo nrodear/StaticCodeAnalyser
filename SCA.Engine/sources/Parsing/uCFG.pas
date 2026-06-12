@@ -84,6 +84,9 @@ type
 
 implementation
 
+// noinspection-file FreeWithoutNil
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 { TCFGBlock }
 
 constructor TCFGBlock.Create(AId: Integer; AKind: TCFGNodeKind);

@@ -1,4 +1,4 @@
-﻿unit uDfmEmptyBoundEvent;
+unit uDfmEmptyBoundEvent;
 
 // Detektor: Leerer gebundener Event-Handler.
 //
@@ -30,6 +30,9 @@ type
   end;
 
 implementation
+
+// noinspection-file ConcatToFormat
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 function FindBodyBlock(Method: TAstNode): TAstNode;
 var Child: TAstNode;

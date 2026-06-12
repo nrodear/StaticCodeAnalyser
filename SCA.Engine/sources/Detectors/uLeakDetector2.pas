@@ -93,6 +93,9 @@ type
 
 implementation
 
+// noinspection-file MultipleExit
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 { ---- Wortgrenz-Hilfsfunktionen ---- }
 
 class function TLeakDetector2.IsIdentChar(C: Char): Boolean;

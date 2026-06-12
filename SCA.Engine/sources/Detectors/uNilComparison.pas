@@ -43,6 +43,9 @@ type
 
 implementation
 
+// noinspection-file MultipleExit
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 // True wenn Text das Muster `<op>nil` enthaelt, mit op in {`=`, `<>`}
 // und 'nil' als ganzes Token (kein Identifier-Suffix). ':=', '<=', '>='
 // + nil werden NICHT als Compare gezaehlt.

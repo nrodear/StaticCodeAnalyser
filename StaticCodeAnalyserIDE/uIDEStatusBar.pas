@@ -46,6 +46,9 @@ type
 
 implementation
 
+// noinspection-file WithStatement
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 // noinspection ConstructorWithoutInherited
 // FP: 'inherited Create(AOwner)' wird auf Z67 explizit aufgerufen;
 // Parser-Pattern fuer nkInherited erfasst die parameterized Form nicht.

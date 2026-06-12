@@ -1,4 +1,4 @@
-﻿unit uVisibilityCheck;
+unit uVisibilityCheck;
 
 // Detektoren: fkCanBeUnitPrivate / fkCanBeStrictPrivate / fkCanBeProtected /
 //             fkUnusedPublicMember.
@@ -66,6 +66,9 @@ type
   end;
 
 implementation
+
+// noinspection-file StringConcatInLoop
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
   uSymbolReferenceIndex;

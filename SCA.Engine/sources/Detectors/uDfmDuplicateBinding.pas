@@ -1,4 +1,4 @@
-﻿unit uDfmDuplicateBinding;
+unit uDfmDuplicateBinding;
 
 // Detektor: Mehrfach gebundene DB-Felder.
 //
@@ -36,6 +36,9 @@ type
   end;
 
 implementation
+
+// noinspection-file ConcatToFormat
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 function TryGetBindingKey(N: TComponentNode; out Key: string;
   out DataSourceName, DataFieldName: string): Boolean;

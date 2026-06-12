@@ -1,4 +1,4 @@
-﻿unit uDuplicateString;
+unit uDuplicateString;
 
 // Detektor fuer mehrfach vorkommende String-Literale.
 // Strings die >= MIN_OCCURRENCES Mal im Quelltext auftauchen, sollten
@@ -21,6 +21,9 @@ type
   end;
 
 implementation
+
+// noinspection-file MultipleExit
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 const
   MIN_OCCURRENCES = 3;

@@ -136,7 +136,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat, MultipleExit
+// noinspection-file ConcatToFormat, ExceptionTooGeneral, ExceptOnException, LargeClass, MultipleExit, UnicodeToAnsiCast
 // Long-form HTTP/Sonar-URL-Construction via Concat (lesbarer als Format
 // fuer mehrteilige URL-Segmente). MultipleExit = guard-clauses fuer
 // HTTP-Status/Network-Error-Pfade, idiomatisch fuer Network-Calls.

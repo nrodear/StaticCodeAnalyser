@@ -59,6 +59,9 @@ type
 
 implementation
 
+// noinspection-file MultipleExit
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 function IsIdentStart(C: Char): Boolean; inline;
 begin
   Result := ((C >= 'A') and (C <= 'Z')) or

@@ -1,4 +1,4 @@
-﻿unit uSelfAssignment;
+unit uSelfAssignment;
 
 // Detektor: `x := x;` - LHS textuell identisch zur RHS.
 //
@@ -32,6 +32,9 @@ type
   end;
 
 implementation
+
+// noinspection-file StringConcatInLoop
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 const
   EMIT_SEVERITY = lsWarning;

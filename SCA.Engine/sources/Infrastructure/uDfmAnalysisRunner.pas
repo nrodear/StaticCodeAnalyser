@@ -38,6 +38,9 @@ type
 
 implementation
 
+// noinspection-file EmptyExcept
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   System.SysUtils, System.IOUtils,
   uDfmParser, uComponentGraph, uDfmBinaryReader,

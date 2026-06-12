@@ -1,4 +1,4 @@
-﻿unit uMainForm;
+unit uMainForm;
 
 interface
 
@@ -190,7 +190,7 @@ var
 
 implementation
 
-// noinspection-file EmptyExcept, ExceptOnException, DebugOutput, EmptyOnHandler, GodClass, LargeClass, ConcatToFormat
+// noinspection-file ConcatToFormat, DebugOutput, EmptyExcept, EmptyOnHandler, ExceptOnException, GodClass, LargeClass, MultipleExit
 // UI-Form-Top-Level: catch-all-Handler an Action-Grenzen (Click/Resize) sind
 // gewollt - eine UI-Exception darf nie die App killen. EmptyOnHandler/
 // EmptyExcept fuer EAbort (User-Cancel) sind intentional. DebugOutput-Pattern

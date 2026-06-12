@@ -1,4 +1,4 @@
-﻿unit uHardcodedPath;
+unit uHardcodedPath;
 
 // Detektor fuer hardkodierte Datei-/Verzeichnispfade im Code.
 // Erkannte Muster:
@@ -30,6 +30,9 @@ type
   end;
 
 implementation
+
+// noinspection-file ConcatToFormat, MultipleExit, StringConcatInLoop
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 class function THardcodedPathDetector.LooksLikePath(const S: string): Boolean;
 var

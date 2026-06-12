@@ -1,4 +1,4 @@
-﻿unit uMagicNumbers;
+unit uMagicNumbers;
 
 // Detektor fuer Magic Numbers in if-Bedingungen.
 // Erkennt Zahlenliterale > 1 in Vergleichen, die nicht via Konstante
@@ -25,6 +25,9 @@ type
   end;
 
 implementation
+
+// noinspection-file StringConcatInLoop
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 class function TMagicNumberDetector.IsTrivial(const NumStr: string): Boolean;
 // Trivial-Liste kommt aus uSCAConsts.DetectorMagicTrivials (analyser.ini ->

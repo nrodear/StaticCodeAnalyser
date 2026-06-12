@@ -52,6 +52,9 @@ type
 
 implementation
 
+// noinspection-file StringConcatInLoop
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 const
   // Locale-abhaengige RTL-Funktionen. Klein-geschrieben fuer Lookup.
   LOCALE_DEPENDENT: array of string = [

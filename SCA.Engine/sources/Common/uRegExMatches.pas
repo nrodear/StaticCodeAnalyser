@@ -27,6 +27,9 @@ type
 
 implementation
 
+// noinspection-file ConcatToFormat
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 // ---------------------------------------------------------------------------
 // Regex-Cache: kompilierte TRegEx-Objekte werden einmalig erstellt und
 // wiederverwendet. Spart ~90% der Kompilierzeit bei grossen Projekten.

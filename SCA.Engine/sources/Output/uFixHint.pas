@@ -43,6 +43,9 @@ type
 
 implementation
 
+// noinspection-file DateFormatSettings, HttpInsteadOfHttps, LargeClass, StringConcatInLoop
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 class function TFixHintResolver.FixHint(const Finding: TLeakFinding): TFixHint;
 var
   Key : Integer;

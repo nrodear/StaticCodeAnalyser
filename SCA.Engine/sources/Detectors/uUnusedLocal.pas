@@ -1,4 +1,4 @@
-﻿unit uUnusedLocal;
+unit uUnusedLocal;
 
 // Detector: lokale `var X: T;` die im Methoden-Body nie referenziert wird.
 //
@@ -35,6 +35,9 @@ type
   end;
 
 implementation
+
+// noinspection-file StringConcatInLoop
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
   uFileTextCache;

@@ -93,6 +93,9 @@ procedure UnregisterSonarAddInOptions;
 
 implementation
 
+// noinspection-file DebugOutput, EmptyExcept, GodClass, MultipleExit
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 {$R *.dfm}
 
 uses

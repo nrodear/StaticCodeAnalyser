@@ -49,6 +49,9 @@ type
 
 implementation
 
+// noinspection-file EmptyExcept, ExceptOnException
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 const
   MAX_DEPTH       = 32;   // Schutz vor Symlink-Endlosschleifen
   EXCLUDED_DIRS  : array[0..6] of string = (

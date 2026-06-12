@@ -157,6 +157,9 @@ function BadgeIcon(const ABadge: string): string;
 
 implementation
 
+// noinspection-file ConcatToFormat, EmptyExcept, GodClass, LargeClass
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   uIDELineHighlighter;   // GHighlighter (implementation-only - vermeidet
                          // den Zyklus mit dem interface-uses dort).

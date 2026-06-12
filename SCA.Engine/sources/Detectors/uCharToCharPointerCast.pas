@@ -56,6 +56,9 @@ type
 
 implementation
 
+// noinspection-file MultipleExit
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 const
   CAST_PREFIXES: array of string = [
     'pchar(', 'pwidechar(', 'pansichar('

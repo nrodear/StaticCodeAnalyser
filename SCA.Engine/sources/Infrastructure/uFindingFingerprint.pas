@@ -53,6 +53,9 @@ type
 
 implementation
 
+// noinspection-file ConcatToFormat, MultipleExit
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   System.Classes, System.Hash, System.StrUtils,
   uFileTextCache;

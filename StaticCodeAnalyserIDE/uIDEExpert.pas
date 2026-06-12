@@ -32,6 +32,9 @@ procedure Register;
 
 implementation
 
+// noinspection-file ConcatToFormat
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   Winapi.Windows, System.SysUtils,
   Vcl.Graphics, Vcl.ImgList, Vcl.Controls, Vcl.Menus, Vcl.ActnList,

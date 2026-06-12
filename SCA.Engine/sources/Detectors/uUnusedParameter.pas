@@ -1,4 +1,4 @@
-﻿unit uUnusedParameter;
+unit uUnusedParameter;
 
 // Detector: Method-Parameter, der im Body nirgendwo referenziert wird.
 //
@@ -33,6 +33,9 @@ type
   end;
 
 implementation
+
+// noinspection-file StringConcatInLoop
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 const
   EMIT_SEVERITY = lsHint;

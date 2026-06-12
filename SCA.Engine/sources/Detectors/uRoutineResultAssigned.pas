@@ -64,6 +64,9 @@ type
 
 implementation
 
+// noinspection-file MultipleExit, StringConcatInLoop
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 // Liefert True wenn TypeRef einen Return-Type enthaelt (Format
 // 'function:RetType[;direktive...]'). Procedures haben keinen ':' im
 // Kind-Teil. Robust gegen Direktiven-Suffix.

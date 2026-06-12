@@ -1,4 +1,4 @@
-﻿unit uDfmDefaultName;
+unit uDfmDefaultName;
 
 // Detektor: Default-Komponentennamen im DFM.
 //
@@ -30,6 +30,9 @@ type
   end;
 
 implementation
+
+// noinspection-file MultipleExit
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
   System.StrUtils;

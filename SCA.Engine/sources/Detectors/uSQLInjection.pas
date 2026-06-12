@@ -1,4 +1,4 @@
-﻿unit uSQLInjection;
+unit uSQLInjection;
 
 // AST-basierter SQL-Injection-Detektor (Sonar-Regel #4).
 //
@@ -54,6 +54,9 @@ type
   end;
 
 implementation
+
+// noinspection-file ConcatToFormat, MultipleExit
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 const
   // Properties/Felder die SQL-Text enthalten

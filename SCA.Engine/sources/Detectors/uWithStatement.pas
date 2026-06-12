@@ -1,4 +1,4 @@
-﻿unit uWithStatement;
+unit uWithStatement;
 
 // Detektor fuer das `with X do ...` Statement.
 //
@@ -42,6 +42,9 @@ type
   end;
 
 implementation
+
+// noinspection-file MultipleExit
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
   uFileTextCache;

@@ -1,4 +1,4 @@
-﻿unit uDfmCrossFormCoupling;
+unit uDfmCrossFormCoupling;
 
 // Detektor: Code in einer Form referenziert published Felder einer ANDEREN
 // Form ueber deren globalen Form-Singleton.
@@ -40,6 +40,9 @@ type
   end;
 
 implementation
+
+// noinspection-file MultipleExit, StringConcatInLoop
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
   System.StrUtils;

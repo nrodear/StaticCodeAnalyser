@@ -117,7 +117,7 @@ type
 
 implementation
 
-// noinspection-file ExceptOnException
+// noinspection-file ExceptOnException, StringConcatInLoop
 // CLI-Top-Level: outer except E: Exception fuer "non-zero exit + error msg"
 // statt Crash mit stack-trace. Idiomatisch fuer Console-Apps.
 

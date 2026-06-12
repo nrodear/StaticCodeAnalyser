@@ -1,4 +1,4 @@
-﻿unit uFormatMismatch;
+unit uFormatMismatch;
 
 // AST-basierter Detektor für Format()-Argument-Fehler (Sonar-Regel #9).
 //
@@ -102,7 +102,7 @@ type
 
 implementation
 
-// noinspection-file ConcatToFormat, StringConcatInLoop
+// noinspection-file ConcatToFormat, LargeClass, MultipleExit, StringConcatInLoop
 // Detector arbeitet auf Token-Strings - kurze Concat-Patterns fuer Param-
 // und Argument-List-Reconstruction, kein O(n^2)-Risiko.
 

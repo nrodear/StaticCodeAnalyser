@@ -1,4 +1,4 @@
-﻿unit uDfmDataModuleSplitHint;
+unit uDfmDataModuleSplitHint;
 
 // Detektor: aggregiert mehrere fkDfmDbInUiForm-Befunde auf derselben Form
 // zu einem einzigen "extract to data module"-Refactor-Hint, sobald die
@@ -40,6 +40,9 @@ type
   end;
 
 implementation
+
+// noinspection-file StringConcatInLoop
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 class procedure TDfmDataModuleSplitHintDetector.Aggregate(const FileName: string;
   Results: TObjectList<TLeakFinding>);

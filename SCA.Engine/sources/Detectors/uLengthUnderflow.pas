@@ -1,4 +1,4 @@
-﻿unit uLengthUnderflow;
+unit uLengthUnderflow;
 
 // Detektor: `Length(s) - X` / `.Count - X` ohne vorausgehenden Guard.
 //
@@ -38,6 +38,9 @@ type
   end;
 
 implementation
+
+// noinspection-file ConcatToFormat, StringConcatInLoop
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
   uFileTextCache;

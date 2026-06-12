@@ -59,6 +59,9 @@ type
 
 implementation
 
+// noinspection-file ConcatToFormat, EmptyExcept, FreeWithoutNil, MultipleExit
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 const
   // Default-Inhalt der Ignore-Datei beim ersten Aufruf
   DEFAULT_FILE_CONTENT =

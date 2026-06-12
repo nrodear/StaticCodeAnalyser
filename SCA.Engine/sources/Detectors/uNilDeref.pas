@@ -1,4 +1,4 @@
-﻿unit uNilDeref;
+unit uNilDeref;
 
 // Detektor fuer potentielle Nil-Dereferenzierungen (Sonar-Regel #3).
 //
@@ -40,6 +40,9 @@ type
   end;
 
 implementation
+
+// noinspection-file ConcatToFormat
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 { Hilfsfunktion: prueft ob in der Bedingung ein Guard fuer varname steht.
   Verwendet TDetectorUtils.ContainsWholeWordLower fuer korrekte Wortgrenzen -

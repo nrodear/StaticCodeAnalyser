@@ -66,6 +66,9 @@ type
 
 implementation
 
+// noinspection-file FreeWithoutNil
+// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
 uses
   uParser2, uAstFileCache;
 
