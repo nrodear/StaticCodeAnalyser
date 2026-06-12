@@ -281,13 +281,12 @@ begin
       //   * NextNonEmpty: erste folgende non-empty Zeile - kann auch ein
       //     Kommentar sein (Target eines TodoComment-Suppressors etc.).
       //   * NextCode:     erste folgende non-empty + non-comment Zeile -
-      //     Target eines normalen Suppressors (// noinspection MemoryLeak
-      //     gefolgt von ggf. dokumentierendem Kommentar gefolgt vom Code).
+      //     Target eines normalen Suppressors (Form `// noinspection
+      //     MemoryLeak` gefolgt von ggf. dokumentierendem Kommentar gefolgt
+      //     vom Code).
       // Beide werden gemappt damit Pfade wie
-      // noinspection TodoComment
-      //   // noinspection TodoComment\n// TODO: implementieren
-      // genauso funktionieren wie
-      //   // noinspection MemoryLeak\nlist := Create;
+      // `// noinspection TodoComment\n// TODO: implementieren`
+      // genauso funktionieren wie `// noinspection MemoryLeak\nlist := Create`.
       // Wenn weder NonEmpty noch Code folgt (Marker am EOF) - keine
       // Map-Eintraege.
       var NextNonEmpty: Integer := -1;

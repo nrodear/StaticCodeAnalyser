@@ -486,11 +486,9 @@ begin
   FMarksByFile     := TObjectDictionary<string, TFileMarks>.Create([doOwnsValues]);
   FSaveNotifiers   := TDictionary<string, TSaveNotifierSlot>.Create;
   FEditorEventsIdx := -1;
-  // SCA-Detektor flaggt das Create-ohne-Free als MemoryLeak. False-Positive:
   // TFindingEditorEvents erbt TInterfacedObject - der Refcount wird ueber
   // FEditorEvents (INTACodeEditorEvents) gehalten, und das Nil-Setzen in
   // Destroy released das Objekt. Kein expliziter Free noetig.
-  // noinspection MemoryLeak
   FEditorEventsObj := TFindingEditorEvents.Create;
   FEditorEvents    := FEditorEventsObj as INTACodeEditorEvents;
 end;

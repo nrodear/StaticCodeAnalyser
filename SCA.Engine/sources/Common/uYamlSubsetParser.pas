@@ -54,8 +54,6 @@ type
     class function NewMapping: TYamlNode; static;
     class function NewSequence: TYamlNode; static;
     destructor Destroy; override;
-    // noinspection CanBeUnitPrivate
-    // noinspection CanBeStrictPrivate
     // Cross-Unit-Aufrufe (z.B. uCustomRuleDetector) sind im Single-file-
     // Scan unsichtbar - der Visibility-Detektor laeuft sowieso single-file
     // und kann diesen externen Konsumenten nicht sehen.
@@ -67,8 +65,6 @@ type
 
     // yntMapping
     function HasKey(const Key: string): Boolean;
-    // noinspection CanBeUnitPrivate
-    // noinspection CanBeStrictPrivate
     // Cross-Unit-Aufrufer (uCustomRuleDetector, uTestYamlSubsetParser) -
     // unsichtbar fuer den single-file Visibility-Detektor.
     function GetChild(const Key: string): TYamlNode; // nil wenn nicht da

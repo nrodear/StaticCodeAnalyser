@@ -732,7 +732,6 @@ begin
     gAstFileCache := TAstFileCache.Create;
 
     // File-Text-Cache: pro .pas einmal Lines.LoadFromFile, von den
-    // noinspection TodoComment
     // File-Scan-Detektoren (Todo, With, Reversed, Length, Tautological,
     // DuplicateBlock, CustomRule) wiederverwendet (perf_analyse.md
     // Hot-Spot 🅑).

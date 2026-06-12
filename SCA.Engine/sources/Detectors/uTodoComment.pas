@@ -8,9 +8,8 @@
 // landen.
 //
 // Akzeptiert wird der Marker nur als ganzes Wort und nur wenn er innerhalb
-// noinspection TodoComment
-// eines Kommentars steht - sonst wuerde z.B. der String "todo: 'TODO'" ein
-// false-positive ausloesen.
+// eines Kommentars steht (Form: `// noinspection TodoComment`) - sonst
+// wuerde z.B. der String "todo: 'TODO'" ein false-positive ausloesen.
 //
 // Schweregrad: lsHint - kein Bug, sondern ein Reminder fuer offene Arbeit.
 

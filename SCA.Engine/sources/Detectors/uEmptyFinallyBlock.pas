@@ -176,9 +176,6 @@ begin
           F.FileName   := FileName;
           F.MethodName := '';
           F.LineNumber := IntToStr(LineNumber + 1);
-          // noinspection EmptyFinallyBlock
-          // FP: Detector findet 'try..finally end' im Message-String-Literal
-          // (StripFileComments strippt nur Kommentare, nicht Strings).
           F.MissingVar := 'Empty `finally` block - either add the missing ' +
             'cleanup or change `try..finally end` to `try ... end`.';
           F.SetKind(fkEmptyFinallyBlock);

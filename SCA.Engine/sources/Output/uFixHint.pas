@@ -2879,8 +2879,6 @@ begin
     fkHttpInsteadOfHttps:
     begin
       Result.Description := _('Plaintext HTTP URL - prefer https:// for remote endpoints');
-      // noinspection HttpInsteadOfHttps
-      // FP: 'http://...' steht im Hint-Beispiel als BEFORE-Code; kein realer HTTP-Call.
       Result.Before :=
         'const'#13#10 +
         '  API_URL = ''http://api.example.com/v1/users'';';
