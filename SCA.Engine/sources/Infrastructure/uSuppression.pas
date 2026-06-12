@@ -60,9 +60,11 @@ type
     // wuerden.
     class function ParseMarkerLine(const Line: string;
       var State: TCommentScanState;
-      out Kinds: TSuppressedKinds): Boolean; static;
+      out Kinds: TSuppressedKinds;
+      out FileWide: Boolean): Boolean; static;
     class function ParseCommentText(const CommentText: string;
-      out Kinds: TSuppressedKinds): Boolean; static;
+      out Kinds: TSuppressedKinds;
+      out FileWide: Boolean): Boolean; static;
     class function KindFromName(const Name: string;
       out Kind: TFindingKind): Boolean; static;
     class function BuildMap(const FileName: string): TDictionary<Integer,
@@ -126,11 +128,17 @@ begin
 end;
 
 class function TSuppression.ParseCommentText(const CommentText: string;
-  out Kinds: TSuppressedKinds): Boolean;
+  out Kinds: TSuppressedKinds; out FileWide: Boolean): Boolean;
 // In: Text NACH dem '//' (ohne Whitespace-Stripping)
-// Out: erkannte Kinds aus '// noinspection X[, Y, ...]'-Direktive
+// Out: erkannte Kinds aus '// noinspection X[, Y, ...]'-Direktive ODER
+//      file-weite Variante '// noinspection-file X[, Y, ...]' (FileWide=True).
+//
+// File-Wide-Marker: ein einziger Marker im File reicht, statt 50+
+// Per-Line-Marker. Praktisch fuer hoch-frequente Stil-Warnings (z.B.
+// SCA110 String-Concat im Parser, SCA002 Empty-Except im IDE-Plugin).
 const
-  TAG = 'noinspection';
+  TAG          = 'noinspection';
+  TAG_FILEWIDE = 'noinspection-file';
 var
   Trimmed   : string;
   KindStrs  : TArray<string>;
@@ -138,14 +146,26 @@ var
   KS        : string;
   HasAny    : Boolean;
 begin
-  Result := False;
-  Kinds  := [];
+  Result   := False;
+  Kinds    := [];
+  FileWide := False;
 
   Trimmed := TrimLeft(CommentText);
-  if not Trimmed.ToLower.StartsWith(TAG) then Exit;
+  // File-Wide-Variante zuerst pruefen (laengeres Match) - sonst wuerde
+  // 'noinspection-file' als 'noinspection' + Rest interpretiert.
+  if Trimmed.ToLower.StartsWith(TAG_FILEWIDE) then
+  begin
+    FileWide := True;
+    Trimmed := Trimmed.Substring(Length(TAG_FILEWIDE));
+  end
+  else if Trimmed.ToLower.StartsWith(TAG) then
+  begin
+    Trimmed := Trimmed.Substring(Length(TAG));
+  end
+  else
+    Exit;
 
-  Trimmed := Trimmed.Substring(Length(TAG));
-  // Optional ':' direkt nach 'noinspection' akzeptieren
+  // Optional ':' direkt nach 'noinspection[-file]' akzeptieren
   if Trimmed.StartsWith(':') then
     Trimmed := Trimmed.Substring(1);
   Trimmed := Trim(Trimmed);
@@ -181,7 +201,7 @@ end;
 
 class function TSuppression.ParseMarkerLine(const Line: string;
   var State: TCommentScanState;
-  out Kinds: TSuppressedKinds): Boolean;
+  out Kinds: TSuppressedKinds; out FileWide: Boolean): Boolean;
 // Scant die Zeile mit String-/Block-Kommentar-State-Awareness und
 // extrahiert ggf. den '// noinspection X'-Marker NUR aus echtem
 // Zeilen-Kommentar (nicht aus Strings, nicht aus offenem (* ... *)).
@@ -190,8 +210,9 @@ var
   LineCommentCol : Integer;
   CommentText    : string;
 begin
-  Result := False;
-  Kinds  := [];
+  Result   := False;
+  Kinds    := [];
+  FileWide := False;
 
   TDetectorUtils.ScanCodeLine(Line, State, LineCommentCol);
   if LineCommentCol <= 0 then Exit;        // kein //-Kommentar im Code-Anteil
@@ -201,7 +222,7 @@ begin
   if LineCommentCol + 1 > Length(Line) then Exit;
   CommentText := Copy(Line, LineCommentCol + 2, MaxInt);
 
-  Result := ParseCommentText(CommentText, Kinds);
+  Result := ParseCommentText(CommentText, Kinds, FileWide);
 end;
 
 class function TSuppression.BuildMap(const FileName: string):
@@ -221,7 +242,9 @@ var
   var
     Existing: TSuppressedKinds;
   begin
-    if Line <= 0 then Exit;
+    // Line < 0 = ungueltig; Line = 0 ist OK = File-Wide-Marker-Slot
+    // (RemoveSuppressedFindings prueft Map[0] als File-weite Vorgabe).
+    if Line < 0 then Exit;
     if Map.TryGetValue(Line, Existing) then
       Map[Line] := Existing + NewKinds
     else
@@ -231,6 +254,7 @@ var
 var
   ScanState : TCommentScanState;
   Cached    : Boolean;
+  FileWide  : Boolean;
 begin
   Result := TDictionary<Integer, TSuppressedKinds>.Create;
   if not FileExists(FileName) then Exit;
@@ -244,7 +268,15 @@ begin
     ScanState.InParenComment := False;
     for i := 0 to Lines.Count - 1 do
     begin
-      if not ParseMarkerLine(Lines[i], ScanState, Kinds) then Continue;
+      if not ParseMarkerLine(Lines[i], ScanState, Kinds, FileWide) then Continue;
+      // File-Wide-Marker: in Line 0 ablegen - RemoveSuppressedFindings
+      // pruefst Line 0 als generelle File-Vorgabe ZUSAETZLICH zum
+      // line-spezifischen Match. WIP - Konsumer-Logik kommt im naechsten Schritt.
+      if FileWide then
+      begin
+        MergeKindsAt(Result, 0, Kinds);
+        Continue;
+      end;
       // Wir emittieren Suppression-Eintraege fuer ZWEI moegliche Targets:
       //   * NextNonEmpty: erste folgende non-empty Zeile - kann auch ein
       //     Kommentar sein (Target eines TodoComment-Suppressors etc.).
@@ -304,11 +336,23 @@ begin
   if Lines = nil then Exit;
   try
     var ScanState: TCommentScanState;
+    var FileWide: Boolean;
     ScanState.InBraceComment := False;
     ScanState.InParenComment := False;
     for i := 0 to Lines.Count - 1 do
     begin
-      if not ParseMarkerLine(Lines[i], ScanState, Kinds) then Continue;
+      if not ParseMarkerLine(Lines[i], ScanState, Kinds, FileWide) then Continue;
+      // File-Wide-Marker: TargetLine = 0 (Sonderwert fuer file-weit).
+      // WIP - RemoveSuppressedFindings konsumiert Line 0 noch nicht.
+      if FileWide then
+      begin
+        M.MarkerLine := i + 1;
+        M.TargetLine := 0;
+        M.Kinds      := Kinds;
+        M.Consumed   := False;
+        Markers.Add(M);
+        Continue;
+      end;
       // TargetLine = naechste non-empty + non-comment Zeile (= Code).
       // Wir tracken NUR den Code-Target weil das der harte Suppress-Punkt
       // ist; Doc-Comment-Targets sind ambig (z.B. TodoComment-Suppression
@@ -341,12 +385,15 @@ class procedure TSuppression.RemoveSuppressedFindings(
   FileMaps: TObjectDictionary<string, TDictionary<Integer, TSuppressedKinds>>;
   FileMarkers: TObjectDictionary<string, TList<TSuppressionMarker>>);
 var
-  i, j, Line : Integer;
-  F          : TLeakFinding;
-  Map        : TDictionary<Integer, TSuppressedKinds>;
-  Markers    : TList<TSuppressionMarker>;
-  M          : TSuppressionMarker;
-  Suppressed : TSuppressedKinds;
+  i, j, Line     : Integer;
+  F              : TLeakFinding;
+  Map            : TDictionary<Integer, TSuppressedKinds>;
+  Markers        : TList<TSuppressionMarker>;
+  M              : TSuppressionMarker;
+  Suppressed     : TSuppressedKinds;
+  FileWideKinds  : TSuppressedKinds;
+  Match          : Boolean;
+  TargetForMark  : Integer;
 begin
   // Rueckwaerts iterieren - sicher beim Loeschen.
   for i := Findings.Count - 1 downto 0 do
@@ -361,10 +408,26 @@ begin
     end;
 
     Line := StrToIntDef(F.LineNumber, 0);
-    if Line <= 0 then Continue;
 
-    if not (Map.TryGetValue(Line, Suppressed) and (F.Kind in Suppressed)) then
-      Continue;
+    // Match-Strategie:
+    //   1. File-Wide-Marker (Map[0]) wirkt unabhaengig von Line-Wert.
+    //   2. Per-Line-Marker (Map[Line]) - nur wenn Line > 0.
+    // TargetForMark fuehrt zur passenden Marker-TargetLine im Consumed-
+    // Tagging: 0 = file-wide, sonst Line.
+    Match := False;
+    TargetForMark := 0;
+    if Map.TryGetValue(0, FileWideKinds) and (F.Kind in FileWideKinds) then
+    begin
+      Match := True;
+      TargetForMark := 0;
+    end
+    else if (Line > 0) and Map.TryGetValue(Line, Suppressed)
+            and (F.Kind in Suppressed) then
+    begin
+      Match := True;
+      TargetForMark := Line;
+    end;
+    if not Match then Continue;
 
     // Marker-Liste fuer diese Datei aufbauen wenn noch nicht da - wird
     // gleich fuer das Consumed-Tagging gebraucht.
@@ -375,13 +438,13 @@ begin
       FileMarkers.Add(F.FileName, Markers);
     end;
     // Marker als consumed markieren wenn TargetLine + Kind passen.
-    // TList<T> erlaubt keinen direkten Index-Edit auf records via for-in,
-    // daher Index-basierter Loop mit explizitem Schreibzugriff.
+    // Bei file-wide (TargetForMark=0) treffen wir alle file-wide-Marker
+    // (TargetLine=0) deren Kind-Set das Finding-Kind enthaelt.
     var ConsumedMarkerLine := 0;
     for j := 0 to Markers.Count - 1 do
     begin
       M := Markers[j];
-      if (M.TargetLine = Line) and (F.Kind in M.Kinds) then
+      if (M.TargetLine = TargetForMark) and (F.Kind in M.Kinds) then
       begin
         M.Consumed := True;
         Markers[j] := M;
