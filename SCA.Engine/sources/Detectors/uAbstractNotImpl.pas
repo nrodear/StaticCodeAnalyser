@@ -154,6 +154,19 @@ begin
           var CLow := LowerCase(C.Name);
           if StartsStr('tcustom', CLow) or StartsStr('tabstract', CLow) then
             Continue;
+          // Real-World-Sweep 2026-06-13: Intermediate-Abstract-Klassen die
+          // KEIN ueberschreiben - 0 von N abstract methods implementiert.
+          // mORMot Pattern: TSqlDBConnectionThreadSafe = class(TSqlDBConnection)
+          // ist semantisch abstrakt (kommentar `abstract connection`), aber
+          // nicht explicit als `;abstract` markiert. Konkrete Subklassen
+          // (OleDB/ODBC/Oracle) liefern die echten Overrides. Heuristik:
+          // wenn die Derived-Klasse 0% der Abstract-Methods ueberschreibt,
+          // ist sie wahrscheinlich Intermediate-Abstract -> skip.
+          var OverrideCount := 0;
+          for AbstrName in AbstractMethods do
+            if DerivedMethods.IndexOf(AbstrName) >= 0 then
+              Inc(OverrideCount);
+          if OverrideCount = 0 then Continue;
           // Fuer jede abstract-Methode der Parent: existiert sie in Derived?
           for AbstrName in AbstractMethods do
             if DerivedMethods.IndexOf(AbstrName) < 0 then
