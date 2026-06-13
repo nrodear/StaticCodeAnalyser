@@ -159,14 +159,20 @@ begin
           // mORMot Pattern: TSqlDBConnectionThreadSafe = class(TSqlDBConnection)
           // ist semantisch abstrakt (kommentar `abstract connection`), aber
           // nicht explicit als `;abstract` markiert. Konkrete Subklassen
-          // (OleDB/ODBC/Oracle) liefern die echten Overrides. Heuristik:
-          // wenn die Derived-Klasse 0% der Abstract-Methods ueberschreibt,
+          // (OleDB/ODBC/Oracle) liefern die echten Overrides.
+          //
+          // Heuristik mit Threshold: wenn die Derived-Klasse 0% der Abstract-
+          // Methods ueberschreibt UND der Parent >= 3 abstract methods hat,
           // ist sie wahrscheinlich Intermediate-Abstract -> skip.
+          // Iter 8 nach Test-Bug 2026-06-13: Threshold 3 noetig, sonst kollidiert
+          // mit DUnitX-Test der genau "1 abstract + 0 overrides -> Finding"
+          // erwartet. mORMot-Trigger hatte 10+ abstract methods, fuer den
+          // greift der Skip weiterhin.
           var OverrideCount := 0;
           for AbstrName in AbstractMethods do
             if DerivedMethods.IndexOf(AbstrName) >= 0 then
               Inc(OverrideCount);
-          if OverrideCount = 0 then Continue;
+          if (OverrideCount = 0) and (AbstractMethods.Count >= 3) then Continue;
           // Fuer jede abstract-Methode der Parent: existiert sie in Derived?
           for AbstrName in AbstractMethods do
             if DerivedMethods.IndexOf(AbstrName) < 0 then
