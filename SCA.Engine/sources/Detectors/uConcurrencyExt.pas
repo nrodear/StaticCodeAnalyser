@@ -100,8 +100,27 @@ var
   // VCL-Klassen (TObjectList, TStringList, TDictionary, TStream, TForm,
   // TTimer, TIniFile, ...) tragen es nicht. Damit faellt der weit
   // verbreitete FreeAndNil(FResults)-FP weg ohne echte Treffer zu verlieren.
+  //
+  // Real-World-Sweep 2026-06-13 iter 7: 'Threaded'-Praefix (mit -ed-Suffix)
+  // ist eine OOP-Konvention fuer Thread-USENDE Container/Options-Klassen,
+  // nicht TThread-Descendants. Beispiele: JVCL
+  // TJvBaseThreadedDatasetAllowedContinueRecordFetchOptions,
+  // TJvBaseThreadedDatasetCapitalizeLabelOptions. Skip auch wenn Type-Name
+  // auf 'Options'/'Settings'/'Container'/'List'/'Dictionary'/'Map' endet.
+  var
+    Low : string;
   begin
-    Result := Pos('thread', LowerCase(ATypeName)) > 0;
+    Low := LowerCase(ATypeName);
+    Result := Pos('thread', Low) > 0;
+    if not Result then Exit;
+    // 'Threaded' (engl. Partizip "thread-using") sind Container, keine
+    // TThread-Descendants -> Falsch-Positiv ausschliessen.
+    if Pos('threaded', Low) > 0 then Exit(False);
+    // Container/Options-Konvention: Type-Name endet auf <suffix>.
+    if EndsStr('options', Low) or EndsStr('settings', Low) or
+       EndsStr('container', Low) or EndsStr('list', Low) or
+       EndsStr('dictionary', Low) or EndsStr('map', Low) then
+      Exit(False);
   end;
 
   function ResolveResultType(AtPos: Integer): string;

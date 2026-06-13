@@ -877,7 +877,14 @@ var
       Method   := LowerCase(Trim(Copy(FuncName, DotPos + 1, MaxInt)));
       // Stack-Init-Methoden am Receiver: Init*, oder Single-Word 'Start'
       // (TPrecisionTimer.Start, TStopwatch.Start - mORMot/RTL Patterns).
-      if StartsStr('init', Method) or (Method = 'start') then
+      // Real-World-Sweep 2026-06-13 iter 7: mORMot crypt records nutzen
+      // Full/Hash/Reset/Done als Init-/Compute-Konvention (TSha3.Full,
+      // TAesCrypto.Reset). Diese sind Method-Calls AM Record-Receiver
+      // die den Record's Felder schreiben (Stack-Record, kein Allokator-
+      // Bedarf). Trigger: mormot.crypt.ecc TSha3-Findings.
+      if StartsStr('init', Method) or (Method = 'start') or
+         (Method = 'full') or (Method = 'hash') or (Method = 'reset') or
+         (Method = 'done') then
       begin
         Idx := VarIndexFor(Receiver);
         if Idx >= 0 then RegisterWrite(Idx, C.Line);
@@ -1174,7 +1181,13 @@ var
         if P + NL - 1 < LL then After := L[P + NL];
         if not IsIdentChar(Before) and not IsIdentChar(After) then
         begin
-          Exit(i + 1);
+          // Real-World-Sweep 2026-06-13 iter 7: '<obj>.<NameLow>' ist
+          // Field-/Property-Access am Objekt, nicht die lokale Variable.
+          // Trigger: pyscripter frmProjectExplorer `Data.ProjectNode` als
+          // ProjectNode-Read interpretiert (FP). Skippen wenn vorheriges
+          // Char ein '.' war.
+          if Before <> '.' then
+            Exit(i + 1);
         end;
         P := P + NL;
       end;
