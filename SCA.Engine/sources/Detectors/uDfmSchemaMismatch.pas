@@ -72,6 +72,16 @@ begin
       // Komponenten aus inherited-Forms (Klassen-Vererbung via
       // TFormBinder.BindWithParents) nicht false-positiv flaggen.
       if Binding.HasPublishedField(Cur.Name) then Continue;
+      // 'inherited Foo: ...' im DFM bedeutet: Field ist in der
+      // Parent-Form-Klasse deklariert. Bei externen Parent-Bibliotheken
+      // (SpTBXLib, JVCL etc.) ist die Parent-Klasse nicht im Source-Tree
+      // und kann von HasPublishedField nicht aufgeloest werden -> FP.
+      // Real-World-Sweep 2026-06-13: pyscripter frmModSpTBXCustomize.dfm
+      // 24 -> 0. Bewusste Konservativitaet: lieber False-Negative bei
+      // einer geerbten Komponente die in keiner Parent-Klasse existiert
+      // (extrem selten - Codepath nur durch falsch-konfiguriertes DFM)
+      // als False-Positive auf jedem inherited-Knoten externer Libs.
+      if Cur.IsInherited then Continue;
 
       F            := TLeakFinding.Create;
       F.FileName   := FileName;

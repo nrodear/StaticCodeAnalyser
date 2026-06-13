@@ -182,6 +182,46 @@ begin
   if i <= n then Result := i;
 end;
 
+function PreviousStatementIsTry(const Code: string; MatchPos: Integer): Boolean;
+// True wenn das letzte Statement-Keyword (genauer: das letzte Pascal-
+// Schluesselwort vor der Match-Position) `try` ist. Dann ist das Match
+// der ERSTE Statement im try-Block.
+//
+// Real-World-Sweep 2026-06-13: CEF4Delphi uCEFChromiumCore.pas Pattern
+//   try
+//     FCS.Acquire;          // <-- Match
+//     ...
+//   finally
+//     FCS.Release;
+//   end;
+// Detector schaute bisher nur NACH dem Acquire-Statement nach try,
+// sah dort kein try. Mit diesem Check sehen wir das umschliessende
+// try korrekt (Acquire ist erstes Statement im try-Block).
+//
+// Heuristik: rueckwaerts vom Match das letzte Wort suchen. Wenn es
+// 'try' ist -> Match ist im try-Block. Sonst kein Skip - Acquire ist
+// nicht direkt nach 'try' (z.B. zwischen try und Acquire steht noch
+// ein anderer Statement -> echtes Risiko dass Acquire fehlt).
+var
+  p, WordEnd : Integer;
+  Word : string;
+begin
+  Result := False;
+  p := MatchPos - 1;
+  // Skip Whitespace + Newlines rueckwaerts
+  while (p >= 1) and CharInSet(Code[p], [' ', #9, #10, #13]) do Dec(p);
+  if p < 1 then Exit;
+  // Wenn das vorherige Zeichen ein ';' war, hatten wir ein vorheriges
+  // Statement zwischen try und Match - kein Try-direkt-davor.
+  if Code[p] = ';' then Exit;
+  // Letztes Wort einlesen
+  WordEnd := p;
+  while (p >= 1) and CharInSet(Code[p],
+      ['A'..'Z', 'a'..'z', '0'..'9', '_']) do Dec(p);
+  Word := LowerCase(Copy(Code, p + 1, WordEnd - p));
+  Result := Word = 'try';
+end;
+
 function NextStatementIsTry(const Code: string; AfterPos: Integer): Boolean;
 // True wenn der naechste Token nach AfterPos das Keyword 'try' ist
 // (case-insensitive, Wortgrenze). AfterPos sollte hinter dem ';'
@@ -352,6 +392,9 @@ begin
       // Caller wrapt try/finally. Beispiele in mORMot: TOSLock.Lock,
       // TSafeLocker.Lock, InitializeCriticalSectionIfNeededAndEnter.
       if IsLockWrapperMethodTail(Code, EndOfStmt) then Continue;
+      // CEF4Delphi-Pattern: try VOR Acquire (Acquire ist erstes
+      // Statement im try-Block). Schau das letzte Wort vor Match.
+      if PreviousStatementIsTry(Code, M.Index) then Continue;
 
       LineNo := LineForPos(LineFor, M.Index);
       if LineNo <= 0 then LineNo := 1;

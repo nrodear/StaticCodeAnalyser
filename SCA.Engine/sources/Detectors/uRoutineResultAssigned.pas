@@ -372,14 +372,67 @@ begin
   Results.Add(F);
 end;
 
+// True wenn der Function-Body effektiv leer ist (`function Foo: T; begin end;`).
+// Wird unten fuer den File-Wide-Stub-Skip benutzt.
+function IsEffectivelyEmptyBody(MethodNode: TAstNode): Boolean;
+var
+  Child : TAstNode;
+  GrandChild : TAstNode;
+begin
+  Result := True;
+  for Child in MethodNode.Children do
+  begin
+    case Child.Kind of
+      nkBlock:
+        for GrandChild in Child.Children do
+          if GrandChild.Kind in [nkAssign, nkCall, nkIfStmt, nkCaseStmt,
+                                  nkForStmt, nkWhileStmt, nkRepeatStmt,
+                                  nkTryExcept, nkTryFinally, nkRaise, nkExit,
+                                  nkBreak, nkContinue, nkInherited] then
+            Exit(False);
+      nkAssign, nkCall, nkIfStmt, nkCaseStmt, nkForStmt, nkWhileStmt,
+      nkRepeatStmt, nkTryExcept, nkTryFinally, nkRaise, nkExit,
+      nkBreak, nkContinue, nkInherited:
+        Exit(False);
+    end;
+  end;
+end;
+
 class procedure TRoutineResultAssignedDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
+// FP-Fix: PScript-Stub-File-Pattern erkennen. Files wie
+// cnwizards/Bin/PSDeclEx/CnWizUtils.pas haben dutzende von
+// `function Foo: T; begin end;` als Pascal-Script-Bridge-Stubs;
+// kein echter Bug, sondern File-Konvention. Wenn die ueberwiegende
+// Mehrheit aller Function-Bodies effektiv leer ist UND mindestens
+// 5 Treffer existieren, ueberspringen wir die Unit komplett.
+// (Audit 2026-06-13: cnwizards CnWizUtils 199 -> 0, CnCommon 165 -> 0
+// etc. Threshold konservativ: kleine Files mit 1-3 leeren Stubs
+// werden weiter geflagged - selten und meistens echte Bugs.)
+const
+  STUB_FILE_MIN_EMPTY   = 5;
+  STUB_FILE_RATIO_LIMIT = 0.7;
 var
-  Methods : TList<TAstNode>;
-  M       : TAstNode;
+  Methods           : TList<TAstNode>;
+  M                 : TAstNode;
+  EmptyCount, Total : Integer;
 begin
   Methods := UnitNode.FindAll(nkMethod);
   try
+    EmptyCount := 0;
+    Total      := 0;
+    for M in Methods do
+    begin
+      if not IsFunctionMethod(M.TypeRef) then Continue;
+      if IsBodyless(M.TypeRef) then Continue;
+      if not HasBodyStatement(M) then Continue;
+      Inc(Total);
+      if IsEffectivelyEmptyBody(M) then Inc(EmptyCount);
+    end;
+    if (EmptyCount >= STUB_FILE_MIN_EMPTY) and (Total > 0) and
+       (EmptyCount / Total > STUB_FILE_RATIO_LIMIT) then
+      Exit;  // PScript-Stub-File - keine Findings emittieren
+
     for M in Methods do
       AnalyzeMethod(M, FileName, Results);
   finally

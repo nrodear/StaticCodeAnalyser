@@ -560,12 +560,39 @@ end;
 // Identifier-Extraktion aus dem nkAssign.Name. Parser liefert hier
 // LHS-Expression, z.B. 'X', 'Obj.X', 'X[i]'. Wir nehmen den linken
 // nackten Identifier vor dem ersten Punkt/Bracket.
+//
+// Real-World-Sweep 2026-06-13: type-cast-LHS unwrappen.
+// `cardinal(Sign) := $80808080;` -> 'cardinal(sign)' aus Parser.
+// FastCode-CharPos und alte Pascal-Asm-Pattern nutzen das ueblich.
+// Heuristik: wenn die LHS einen passenden Open-Paren hat und kein
+// Klammer-Inhalt eine Komma-Liste ist, ziehen wir den Inhalt der
+// Klammer als bare Identifier raus.
 function ExtractBareIdent(const ExprName: string): string;
 var
-  i : Integer;
+  i, LParen, RParen : Integer;
   C : Char;
+  Inner : string;
 begin
   Result := '';
+  // Type-Cast-Form: 'cardinal(sign)' -> 'sign'.
+  LParen := Pos('(', ExprName);
+  if LParen > 0 then
+  begin
+    RParen := Pos(')', ExprName);
+    if (RParen > LParen) and (Pos(',', Copy(ExprName, LParen + 1, RParen - LParen - 1)) = 0) then
+    begin
+      Inner := Trim(Copy(ExprName, LParen + 1, RParen - LParen - 1));
+      for i := 1 to Length(Inner) do
+      begin
+        C := Inner[i];
+        if IsIdentChar(C) then
+          Result := Result + C
+        else
+          Break;
+      end;
+      if Result <> '' then Exit;
+    end;
+  end;
   for i := 1 to Length(ExprName) do
   begin
     C := ExprName[i];
@@ -603,8 +630,23 @@ end;
 function LooksLikeRealLocalVar(Lines: TStringList; LineNo1: Integer): Boolean;
 // Filtert nested-Routine-Headers die der Parser als nkLocalVar liefert
 // (siehe uUnusedLocal.LooksLikeRealLocalVar). Wenn Lines fehlt -> akzeptieren.
+//
+// Real-World-Sweep 2026-06-13: Pascal-`label`-Section schluesselt sich
+// in einigen Files unklar in den nkLocalVar-Stream ein (alter FastCode-
+// Asm-Code mit `label Next, Last4, ...;`). Wenn die Source-Line direkt
+// vor LineNo1 nur 'label' (optional whitespace) enthaelt, ist LineNo1
+// die Label-Liste - kein echter Local-Var. Symptom in cnwizards/
+// FastCodeCharPosUnit.pas (~22 FPs pro Funktion).
 var
   S, T : string;
+
+  function IsLabelKeywordLine(const Raw: string): Boolean;
+  var R : string;
+  begin
+    R := LowerCase(Trim(Raw));
+    Result := (R = 'label') or R.StartsWith('label ') or R.StartsWith('label;');
+  end;
+
 begin
   Result := True;
   if (Lines = nil) or (LineNo1 <= 0) or (LineNo1 > Lines.Count) then Exit;
@@ -616,6 +658,14 @@ begin
      T.StartsWith('operator ')    or T.StartsWith('class procedure ') or
      T.StartsWith('class function ') then
     Exit(False);
+  // Wenn vorherige nicht-leere Line das 'label'-Keyword war, ist die
+  // aktuelle Zeile eine Label-Liste und keine Var-Declaration.
+  var Probe := LineNo1 - 2;
+  while (Probe >= 0) and (Trim(Lines[Probe]) = '') do Dec(Probe);
+  if (Probe >= 0) and IsLabelKeywordLine(Lines[Probe]) then Exit(False);
+  // Zusatzform: 'label X, Y, Z;' single-line - die LineNo1 selbst startet
+  // mit 'label '. Damit fangen wir Inline-Labels ab.
+  if IsLabelKeywordLine(S) then Exit(False);
 end;
 
 // ExtractCallFunctionName + ExtractCallArgsRaw wurden nach
