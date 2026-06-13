@@ -101,15 +101,62 @@ begin
     if HasInheritedCall(Child) then Exit(True);
 end;
 
+// True wenn der Method-Body effektiv leer ist (`begin end;` ohne
+// irgendein Statement). Wird fuer den PScript-Stub-File-Skip benutzt.
+function IsEffectivelyEmptyBody(MethodNode: TAstNode): Boolean;
+var
+  Child : TAstNode;
+  GrandChild : TAstNode;
+begin
+  Result := True;
+  for Child in MethodNode.Children do
+  begin
+    case Child.Kind of
+      nkBlock:
+        for GrandChild in Child.Children do
+          if GrandChild.Kind in [nkAssign, nkCall, nkIfStmt, nkCaseStmt,
+                                  nkForStmt, nkWhileStmt, nkRepeatStmt,
+                                  nkTryExcept, nkTryFinally, nkRaise, nkExit,
+                                  nkBreak, nkContinue, nkInherited] then
+            Exit(False);
+      nkAssign, nkCall, nkIfStmt, nkCaseStmt, nkForStmt, nkWhileStmt,
+      nkRepeatStmt, nkTryExcept, nkTryFinally, nkRaise, nkExit,
+      nkBreak, nkContinue, nkInherited:
+        Exit(False);
+    end;
+  end;
+end;
+
 class procedure TDestructorWithoutInheritedDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
+// Real-World-Sweep 2026-06-13: cnwizards/Bin/PSDeclEx/CnWizClasses.pas
+// 6 SCA097 FPs - alle leere Destructor-Bodies in PScript-Bridge-Stubs.
+// Gleiche Heuristik wie uRoutineResultAssigned: wenn >=5 effektiv-
+// leere Method-Bodies UND >70% empty/total Ratio in der Unit, dann
+// PScript-Stub-File und keine Findings emittieren.
+const
+  STUB_FILE_MIN_EMPTY   = 5;
+  STUB_FILE_RATIO_LIMIT = 0.7;
 var
-  Methods : TList<TAstNode>;
-  M       : TAstNode;
-  F       : TLeakFinding;
+  Methods           : TList<TAstNode>;
+  M                 : TAstNode;
+  F                 : TLeakFinding;
+  EmptyCount, Total : Integer;
 begin
   Methods := UnitNode.FindAll(nkMethod);
   try
+    EmptyCount := 0;
+    Total      := 0;
+    for M in Methods do
+    begin
+      if FindBodyBlock(M) = nil then Continue;
+      Inc(Total);
+      if IsEffectivelyEmptyBody(M) then Inc(EmptyCount);
+    end;
+    if (EmptyCount >= STUB_FILE_MIN_EMPTY) and (Total > 0) and
+       (EmptyCount / Total > STUB_FILE_RATIO_LIMIT) then
+      Exit;  // PScript-Stub-File - keine Findings emittieren
+
     for M in Methods do
     begin
       if not IsDestructor(M) then Continue;

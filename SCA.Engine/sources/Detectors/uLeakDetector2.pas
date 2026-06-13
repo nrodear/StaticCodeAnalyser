@@ -261,6 +261,10 @@ class function TLeakDetector2.HasFunctionCallAssign(MethodNode: TAstNode;
   // zurueckgibt.
   // Real-World-Sweep 2026-06-13: 'popup' fuer VCL-Pattern wie
   // PopupComponent(Sender) (TPopupMenu-Property-Lookup, kein Allocator).
+  // Real-World-Sweep iter 6: 't<klassenname>' als Type-Cast-Konvention
+  // erkennen - `TList<string>(X.AsObject)` ist semantisch identisch zu
+  // `X.AsObject as TList<string>`, also Borrow nicht Alloc. Trigger:
+  // delphimvcframework Serializer.JsonDataObjects 8 SCA001 FPs.
   const
     BORROWED_PREFIXES : array[0..7] of string =
       ('ensure', 'get', 'find', 'lookup', 'peek', 'cached', 'fetch', 'popup');
@@ -279,6 +283,20 @@ class function TLeakDetector2.HasFunctionCallAssign(MethodNode: TAstNode;
       Name := Trim(Copy(RhsLower, 1, ParenPos - 1));
     for i := Low(BORROWED_PREFIXES) to High(BORROWED_PREFIXES) do
       if StartsStr(BORROWED_PREFIXES[i], Name) then Exit(True);
+    // Pascal-Konvention: `TFoo(X.Field)` ist Type-Cast (semantisch
+    // `X.Field as TFoo`), kein Allocator. Heuristik: Name beginnt mit 't'
+    // UND ist >= 2 chars UND zweiter char ist Buchstabe UND das Argument
+    // enthaelt einen '.' (Property-/Field-Access). Trigger:
+    // delphimvcframework Serializer.JsonDataObjects 8 SCA001 FPs auf
+    // `lList := TMVCListOfString(AElementValue.AsObject);`.
+    if (Length(Name) >= 2) and (Name[1] = 't') and
+       CharInSet(Name[2], ['a'..'z']) then
+    begin
+      var ArgsStart := ParenPos + 1;
+      var ArgsEnd := Length(RhsLower);
+      var Args := Copy(RhsLower, ArgsStart, ArgsEnd - ArgsStart);
+      if Pos('.', Args) > 0 then Exit(True);
+    end;
   end;
 
 var
