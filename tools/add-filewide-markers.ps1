@@ -33,7 +33,15 @@ Get-Content $KindsFile | ForEach-Object {
         return
     }
 
-    # Read with BOM-preserving (file is mostly ANSI/UTF-8)
+    # BOM-Detection (UTF-8 = EF BB BF). Vorhandenen BOM beim Schreiben
+    # erhalten - sonst rendert Delphi 12 Multi-Byte-UTF-8-Sequenzen in
+    # String-Literalen als Mojibake (vgl. fix 6613374 fuer ▶/📄 Captions).
+    $hasBom = $false
+    $firstBytes = [System.IO.File]::ReadAllBytes($filePath) | Select-Object -First 3
+    if ($firstBytes.Count -eq 3 -and $firstBytes[0] -eq 0xEF -and
+        $firstBytes[1] -eq 0xBB -and $firstBytes[2] -eq 0xBF) {
+        $hasBom = $true
+    }
     $lines = [System.IO.File]::ReadAllLines($filePath)
 
     # 1) check for existing '// noinspection-file ...' marker
@@ -94,8 +102,18 @@ Get-Content $KindsFile | ForEach-Object {
     }
 
     if (-not $DryRun) {
-        # Re-encode preserving original line endings (CRLF)
-        [System.IO.File]::WriteAllText($filePath, ($lines -join "`r`n") + "`r`n")
+        # Re-encode preserving original line endings (CRLF) und BOM.
+        # WriteAllText mit Default-Encoding (UTF8 ohne BOM) wuerde sonst
+        # einen vorhandenen BOM entfernen -> Delphi 12 interpretiert das
+        # File als ANSI -> Multi-Byte-UTF-8-Glyphs werden Mojibake.
+        $content = ($lines -join "`r`n") + "`r`n"
+        if ($hasBom) {
+            $utf8Bom = New-Object System.Text.UTF8Encoding($true)
+            [System.IO.File]::WriteAllText($filePath, $content, $utf8Bom)
+        } else {
+            $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+            [System.IO.File]::WriteAllText($filePath, $content, $utf8NoBom)
+        }
     }
 }
 

@@ -1,4 +1,4 @@
-unit uIDEAnalyserForm;
+﻿unit uIDEAnalyserForm;
 
 // Delphi IDE Expert - Analyser als dockbares IDE-Fenster.
 // TAnalyserFrame enthaelt die gesamte UI; TAnalyserDockableForm

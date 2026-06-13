@@ -1,4 +1,4 @@
-unit uIDELineHighlighter;
+﻿unit uIDELineHighlighter;
 
 // Editor-Line-Highlight und Annotation-Overlay via INTACodeEditorEvents
 // (kanonische ToolsAPI.Editor-Loesung fuer RAD Studio 12+).

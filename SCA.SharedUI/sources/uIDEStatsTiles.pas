@@ -1,4 +1,4 @@
-unit uIDEStatsTiles;
+﻿unit uIDEStatsTiles;
 
 // Sonar-Style Stat-Tiles (9-Kachel-Reihe: Errors/Warnings/Hints/Read-Errors/
 // Bugs/Security/Duplicates/Cyclomatic/Code-Quality). Aus uIDEAnalyserForm

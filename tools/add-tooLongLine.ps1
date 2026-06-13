@@ -6,6 +6,15 @@ Get-ChildItem -Path 'SCA.Engine','SCA.SharedUI','StaticCodeAnalyserForm','Static
     $path = $_.FullName
     if ($path -match '__history') { return }
 
+    # BOM-Detection (UTF-8) - muss beim Schreiben erhalten bleiben
+    # sonst rendert Delphi 12 Multi-Byte-UTF-8 in String-Literalen als
+    # Mojibake (fix 6613374 / iter 8 wiederherstellung).
+    $hasBom = $false
+    $firstBytes = [System.IO.File]::ReadAllBytes($path) | Select-Object -First 3
+    if ($firstBytes.Count -eq 3 -and $firstBytes[0] -eq 0xEF -and
+        $firstBytes[1] -eq 0xBB -and $firstBytes[2] -eq 0xBF) {
+        $hasBom = $true
+    }
     $lines = [System.IO.File]::ReadAllLines($path)
     $changed = $false
 
@@ -25,6 +34,8 @@ Get-ChildItem -Path 'SCA.Engine','SCA.SharedUI','StaticCodeAnalyserForm','Static
     }
 
     if ($changed) {
-        [System.IO.File]::WriteAllText($path, ($lines -join "`r`n") + "`r`n")
+        $content = ($lines -join "`r`n") + "`r`n"
+        $enc = New-Object System.Text.UTF8Encoding($hasBom)
+        [System.IO.File]::WriteAllText($path, $content, $enc)
     }
 }
