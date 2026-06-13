@@ -182,6 +182,64 @@ begin
   if i <= n then Result := i;
 end;
 
+function IsInsideBeginXxxMethod(const Code: string; MatchPos: Integer): Boolean;
+// True wenn der Match-Pos textuell innerhalb einer Methode mit Name-
+// Prefix 'Begin' liegt. Solche Methoden (BeginDraw, BeginPaint,
+// BeginUpdate, BeginAccess, ...) sind per Konvention Caller-paired:
+// Caller wickelt try/finally um die Begin/End-Call und holt das try
+// nicht in die Begin-Method.
+//
+// Real-World-Sweep 2026-06-13 iter 8: CEF4Delphi uCEFBrowserBitmap
+// `function BeginDraw: Boolean; begin if (FSyncObj <> nil) then begin
+// FSyncObj.Acquire; Result := True; end; end;` - Acquire ist nicht
+// letzter Statement, aber Method-Name signalisiert das Pair-Pattern.
+const
+  LOOKBACK_CHARS = 2000;
+var
+  StartPos, p : Integer;
+  Snippet : string;
+  Lower   : string;
+  HeaderPos, DotPos, NameStart, NameEnd : Integer;
+  FullName : string;
+begin
+  Result := False;
+  StartPos := MatchPos - LOOKBACK_CHARS;
+  if StartPos < 1 then StartPos := 1;
+  Snippet := Copy(Code, StartPos, MatchPos - StartPos);
+  Lower := LowerCase(Snippet);
+  // Rueckwaerts den letzten function/procedure-Header finden
+  HeaderPos := 0;
+  p := Pos('procedure ', Lower);
+  while p > 0 do
+  begin
+    if p > HeaderPos then HeaderPos := p;
+    p := PosEx('procedure ', Lower, p + 1);
+  end;
+  p := Pos('function ', Lower);
+  while p > 0 do
+  begin
+    if p > HeaderPos then HeaderPos := p;
+    p := PosEx('function ', Lower, p + 1);
+  end;
+  if HeaderPos = 0 then Exit;
+  // Method-Name extrahieren: nach 'procedure '/'function ' bis '(', ';',
+  // oder ':'.
+  if SameText(Copy(Lower, HeaderPos, 10), 'procedure ') then
+    NameStart := HeaderPos + 10
+  else
+    NameStart := HeaderPos + 9;
+  NameEnd := NameStart;
+  while (NameEnd <= Length(Lower)) and
+        not CharInSet(Lower[NameEnd], ['(', ';', ':', ' ', #9, #10, #13]) do
+    Inc(NameEnd);
+  FullName := Copy(Lower, NameStart, NameEnd - NameStart);
+  // Qualified: 'TFoo.BeginDraw' -> Name = 'begindraw'
+  DotPos := LastDelimiter('.', FullName);
+  if DotPos > 0 then
+    FullName := Copy(FullName, DotPos + 1, MaxInt);
+  Result := StartsStr('begin', FullName);
+end;
+
 function PreviousStatementIsTry(const Code: string; MatchPos: Integer): Boolean;
 // True wenn das letzte Statement-Keyword (genauer: das letzte Pascal-
 // Schluesselwort vor der Match-Position) `try` ist. Dann ist das Match
@@ -395,6 +453,9 @@ begin
       // CEF4Delphi-Pattern: try VOR Acquire (Acquire ist erstes
       // Statement im try-Block). Schau das letzte Wort vor Match.
       if PreviousStatementIsTry(Code, M.Index) then Continue;
+      // BeginXxx-Method-Name-Konvention: Caller wickelt try/finally
+      // um die paired BeginXxx/EndXxx-Calls.
+      if IsInsideBeginXxxMethod(Code, M.Index) then Continue;
 
       LineNo := LineForPos(LineFor, M.Index);
       if LineNo <= 0 then LineNo := 1;
