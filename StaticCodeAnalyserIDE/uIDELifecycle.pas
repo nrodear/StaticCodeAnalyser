@@ -26,9 +26,87 @@ unit uIDELifecycle;
 
 interface
 
+uses
+  uRepoSettings;
+
 var
   GLiveAnalyserFrame: Pointer = nil;
 
+type
+  // Single-Point-of-Truth fuer das Detector-State-Setup VOR jedem Scan-Run
+  // im IDE-Plugin. Vier Pfade rufen das (siehe Konzept_FindingsPropertiesPanel
+  // Refactor-Notiz):
+  //   1. TAnalyserFrame.PrepareAnalysis             (Plugin-Hauptfenster)
+  //   2. RunSilentAnalysisForFile                   (Silent-Mode + Properties-Auto)
+  //   3. TWatchModeManager.SpawnAnalyzer-Vorbereitung (Watch-Mode-Re-Scan)
+  //   4. Properties-Auto-Scan via #2
+  //
+  // Vorher: jeder Pfad hatte seine eigene Setup-Sequenz - Drift-Risiko
+  // (Profile-Override-Quelle, UsesCheck hardcoded False im Watch, BumpGeneration
+  // fehlte in Silent, etc.). Die Klasse zieht alle Setup-Schritte in EINE
+  // Stelle damit Aenderungen automatisch alle Pfade treffen.
+  TIDEAnalysisPrep = class
+  public
+    // Reihenfolge der Schritte ist signifikant:
+    //   1. Load + RegisterToLeakyClasses (Detector-Klassen-Listen aus INI)
+    //   2. UseIdeRuleSet (IDE-Profile aktivieren, Default ide-fast)
+    //   3. ProfileOverride (UI-Combo / Frame-Override gewinnt)
+    //   4. ApplyDetectorThresholds (Profile-spezifische Schwellwerte)
+    //   5. AutoDiscoverCustomClasses global syncen
+    //   6. DiscoveredClasses-Listen leeren (frischer Run)
+    //   7. Watch-Mode BumpGeneration (laufende Worker droppen)
+    //
+    // AProjectPath: fuer relative Pfade in CustomRulesFile / Project-INI.
+    //               Bei Single-File-Pfaden = ExtractFilePath(AFileName).
+    // AProfileOverride: leer = kein Override (INI-Wert gilt). Sonst:
+    //                   Profile wird explizit auf diesen Wert gesetzt.
+    class procedure SetupForRun(ASettings: TRepoSettings;
+      const AProjectPath: string;
+      const AProfileOverride: string = '');
+  end;
+
 implementation
+
+uses
+  uSCAConsts,         // AutoDiscoverCustomClasses, DiscoveredClasses
+  uIDEWatchMode;      // GWatchMode
+
+class procedure TIDEAnalysisPrep.SetupForRun(ASettings: TRepoSettings;
+  const AProjectPath: string; const AProfileOverride: string);
+// Pro Schritt eigenes try-except: ein Load-Fehler (z.B. INI gelockt vom
+// User-Editor) darf NICHT verhindern dass die spaeteren Schritte
+// (UseIdeRuleSet, ApplyDetectorThresholds) laufen - sonst lauft der
+// Detector mit komplett fehlkonfiguriertem Global-State und liefert
+// keine oder die falschen Findings.
+begin
+  if not Assigned(ASettings) then Exit;
+
+  // 1. Frische INI lesen.
+  try ASettings.Load;                  except end;
+  // 2. Detector-Klassen-Listen aus den frisch geladenen Settings registrieren.
+  try ASettings.RegisterToLeakyClasses; except end;
+  // 3. IDE-Profile-Default (ide-fast) aktivieren. Standalone-EXE laeuft
+  //    NICHT durch hier - sie liest [Rules] Profile direkt.
+  try ASettings.UseIdeRuleSet;          except end;
+  // 4. UI-Override: explizite Profile-Wahl gewinnt ueber INI.
+  if AProfileOverride <> '' then
+    try ASettings.Profile := AProfileOverride; except end;
+  // 5. Profile-spezifische Detector-Thresholds anwenden.
+  try ASettings.ApplyDetectorThresholds(AProjectPath); except end;
+  // 6. Global flag fuer Detector-Discovery aus den Settings ableiten.
+  try AutoDiscoverCustomClasses := ASettings.AutoDiscoverClasses; except end;
+  // 7. Frische Discovery-Listen pro Run.
+  try
+    if Assigned(uSCAConsts.DiscoveredClasses) then
+      uSCAConsts.DiscoveredClasses.Clear;
+    if Assigned(uSCAConsts.DiscoveredStaticClasses) then
+      uSCAConsts.DiscoveredStaticClasses.Clear;
+  except end;
+  // 8. Laufende Watch-Worker invalidieren.
+  try
+    if Assigned(GWatchMode) then
+      GWatchMode.BumpGeneration;
+  except end;
+end;
 
 end.

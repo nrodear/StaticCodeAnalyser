@@ -90,6 +90,21 @@ type
   // Statusbar-Update wenn Watch-Mode aktiv/inaktiv oder ein Worker laeuft.
   TWatchStatusCallback = procedure(const Status: string) of object;
 
+  // Multi-Subscriber-API (Konzept_FindingsPropertiesPanel Phase 2). Mehrere
+  // Konsumer (uIDEAnalyserForm + Properties-Panel + Future) wollen parallel
+  // ueber neue Watch-Ergebnisse informiert werden, ohne sich gegenseitig
+  // den FOnFindings-Slot wegzunehmen.
+  //
+  // KRITISCH - Ownership-Modell:
+  //   * Die Findings-Liste ist BORROWED. Subscriber DUERFEN sie nicht
+  //     freed und nicht modifizieren.
+  //   * Subscriber feuern VOR dem klassischen FOnFindings-Callback - der
+  //     uebernimmt Ownership und freed die Liste danach. Wenn ein Subscriber
+  //     eine persistente Kopie braucht, muss er die Findings sofort klonen.
+  //   * Aufruf auf UI-Thread (im Worker-DeliverResults nach Synchronize).
+  TWatchFindingsSubscriber = reference to procedure(const FileName: string;
+    Findings: TObjectList<TLeakFinding>);
+
   // Per-Modul Notifier. AfterSave delegiert an Manager.
   //
   // KRITISCH: Klasse muss ALLE drei IOTAModuleNotifier-Versionen
@@ -174,6 +189,18 @@ type
     FAnalyzeLock        : TCriticalSection;
     FOnFindings         : TWatchFindingsCallback;
     FOnStatus           : TWatchStatusCallback;
+    // UsesCheck-Flag aus den Caller-Settings. Wird beim Activate gesetzt
+    // und bei jedem SpawnAnalyzer an den Worker weitergereicht. Vorher
+    // hardcoded False ("V1 konservativer Default") -> Watch-Mode lieferte
+    // dauerhaft weniger Findings als der Silent-/Plugin-Pfad fuer die
+    // selbe Datei. Single-Point-of-Truth (TIDEAnalysisPrep) loest das.
+    FUsesCheck          : Boolean;
+    // Multi-Subscriber-Liste (Phase 2). Refcount-RAII: jede TSubscription
+    // entfernt sich beim Destroy aus dieser Liste. Liste haelt nur weak
+    // Refs (TObject), nicht IInterface - sonst wuerden die Subscriptions
+    // nie freigegeben.
+    FSubscribers        : TList<TObject>;
+    procedure RemoveSubscriber(ASub: TObject);
     procedure DebounceFire(Sender: TObject);
     procedure EditDebounceFire(Sender: TObject);
     procedure SpawnAnalyzer(const AFileName: string);
@@ -208,10 +235,29 @@ type
     // ausschliesslich auf AWatchedFile (Save+Edit, je 300/1000 ms debounced).
     // Bei erneutem Aufruf mit anderem AWatchedFile: alter Notifier wird
     // detached, neuer attached.
+    // AUsesCheck: aus den Caller-Settings - bestimmt ob die uses-Liste
+    // analysiert wird. Vorher hardcoded False. Default False fuer
+    // Backward-Compat (Aufrufer die das Argument nicht setzen erben
+    // das alte Verhalten).
     procedure Activate(OnFindings: TWatchFindingsCallback;
       OnStatus: TWatchStatusCallback;
-      const AWatchedFile: string);
+      const AWatchedFile: string;
+      AUsesCheck: Boolean = False);
     procedure Deactivate;
+
+    // Multi-Subscriber: zusaetzlicher Listener fuer Watch-Ergebnisse.
+    // Returnwert ist ein Refcount-Token - solange der Caller die IInterface-
+    // Ref haelt, ist die Subscription aktiv. `Sub := nil` (oder Out-of-Scope)
+    // entfernt sie automatisch. Pattern wie [[ide-theme]] Subscribe.
+    function SubscribeFindings(
+      ACallback: TWatchFindingsSubscriber): IInterface;
+
+    // Manueller Dispatch fuer externe Findings-Producer (Silent-Mode, manuelle
+    // Single-File-Analyse, Editor-Context-Menu). Watch-Worker ruft das intern
+    // im DeliverResults; andere Pfade rufen es explizit mit ihrer Findings-
+    // Liste. Findings sind BORROWED - Subscriber klonen bei Bedarf.
+    procedure DispatchToSubscribers(const AFileName: string;
+      Findings: TObjectList<TLeakFinding>);
 
     // Read-only fuer EditorViewModified-Gate (Hook prueft ob die aktive
     // View zum Watched-File gehoert).
@@ -292,6 +338,21 @@ type
       DockForm: TDockableForm);
     procedure DockFormRefresh(const EditWindow: INTAEditWindow;
       DockForm: TDockableForm);
+  end;
+
+  // Refcount-RAII Subscription-Token. Lebt auf der Caller-Seite (Properties-
+  // Panel-Wrapper haelt eine IInterface-Var); beim Free entfernt sich der
+  // Eintrag automatisch aus FSubscribers. Pattern uebernommen von TIDETheme.
+  TWatchFindingsSubscription = class(TInterfacedObject)
+  private
+    FManager  : TWatchModeManager;
+    FCallback : TWatchFindingsSubscriber;
+  public
+    constructor Create(AManager: TWatchModeManager;
+      ACallback: TWatchFindingsSubscriber);
+    destructor Destroy; override;
+    procedure Fire(const AFileName: string;
+      Findings: TObjectList<TLeakFinding>);
   end;
 
   // Background-Thread: laed die Datei, parsed, fuehrt 21 Detektoren aus,
@@ -473,19 +534,36 @@ var
 begin
   if not Assigned(GWatchMode) then Exit;
   if not GWatchMode.IsCurrentGeneration(FStartGen) then Exit;
-  if not Assigned(GWatchMode.FOnFindings) then Exit;
 
-  // ALLERERSTES: Field-Ref auf nil bevor wir die Liste an den Callback
+  // ALLERERSTES: Field-Ref auf nil bevor wir die Liste an irgendwen
   // weiterreichen. Falls Synchronize mid-Callback eine Exception wirft
   // (Thread-Terminate o.ae.), sieht der Worker-finally FResults=nil und
-  // gibt nicht doppelt frei. Der Callback uebernimmt die Liste via
-  // Local-Snapshot - er ist verantwortlich fuer Free / Re-Parenting.
+  // gibt nicht doppelt frei.
   Local := FResults;
   FResults := nil;
 
-  // Ownership: callback uebernimmt die Liste (sezt OwnsObjects:=False
-  // und freed sie nach dem Reinkopieren in Frame.FAllFindings).
-  GWatchMode.FOnFindings(FFileName, Local);
+  try
+    // Phase-2 Multi-Subscriber: Subscriber kriegen die Liste BORROWED.
+    // Sie duerfen nicht freed, modifizieren nur lesend; persistente
+    // Kopien klonen sie selbst. Dispatch laeuft VOR FOnFindings, weil
+    // der die Liste danach uebernimmt + freed.
+    GWatchMode.DispatchToSubscribers(FFileName, Local);
+
+    if Assigned(GWatchMode.FOnFindings) then
+    begin
+      // Ownership-Transfer: primaerer Callback uebernimmt die Liste (setzt
+      // OwnsObjects:=False und freed sie nach dem Reinkopieren in
+      // Frame.FAllFindings). Wir geben unsere Ref auf, damit das finally
+      // unten keinen Double-Free macht.
+      GWatchMode.FOnFindings(FFileName, Local);
+      Local := nil;
+    end;
+  finally
+    // Falls niemand uebernommen hat (kein Primary-Callback, oder Exception
+    // bevor Ownership-Transfer abgeschlossen war), freed wir hier. Bei
+    // erfolgreichem Transfer ist Local = nil und FreeAndNil ein No-op.
+    FreeAndNil(Local);
+  end;
 end;
 
 { ---- TWatchModeManager ---- }
@@ -499,6 +577,8 @@ begin
   FCompanionNotifIdx  := -1;
   FAnalyzeLock        := TCriticalSection.Create;
   FEditSvcNotifierIdx := -1;
+  FUsesCheck          := False;
+  FSubscribers        := TList<TObject>.Create;
 
   FDebounceTimer := TTimer.Create(nil);
   FDebounceTimer.Enabled  := False;
@@ -514,25 +594,101 @@ end;
 destructor TWatchModeManager.Destroy;
 begin
   Deactivate;
+  // Subscriber-Liste vor allen Timern freed - falls noch Subscriptions
+  // leben, ihre Destroy-Pfade rufen RemoveSubscriber zurueck. Wir setzen
+  // die Liste auf nil VOR Free, damit RemoveSubscriber den nil-Guard
+  // greift und nicht in den freed-Speicher reinpoked.
+  if Assigned(FSubscribers) then
+  begin
+    var L := FSubscribers;
+    FSubscribers := nil;
+    L.Free;
+  end;
   FreeAndNil(FEditDebounceTimer);
   FreeAndNil(FDebounceTimer);
   FreeAndNil(FAnalyzeLock);
   inherited;
 end;
 
+function TWatchModeManager.SubscribeFindings(
+  ACallback: TWatchFindingsSubscriber): IInterface;
+var
+  Sub: TWatchFindingsSubscription;
+begin
+  if not Assigned(ACallback) then Exit(nil);
+  Sub := TWatchFindingsSubscription.Create(Self, ACallback);
+  if Assigned(FSubscribers) then
+    FSubscribers.Add(Sub);
+  Result := Sub;   // Refcount=1, Caller haelt IInterface-Ref
+end;
+
+procedure TWatchModeManager.RemoveSubscriber(ASub: TObject);
+begin
+  if not Assigned(FSubscribers) then Exit;
+  FSubscribers.Remove(ASub);
+end;
+
+procedure TWatchModeManager.DispatchToSubscribers(const AFileName: string;
+  Findings: TObjectList<TLeakFinding>);
+var
+  i  : Integer;
+  Sub: TWatchFindingsSubscription;
+begin
+  if not Assigned(FSubscribers) then Exit;
+  // Rueckwaerts iterieren - falls ein Subscriber-Callback Subscribe/
+  // Unsubscribe triggert, kollidiert das nicht mit unserem Index.
+  for i := FSubscribers.Count - 1 downto 0 do
+  begin
+    if (i < 0) or (i >= FSubscribers.Count) then Continue;
+    Sub := TWatchFindingsSubscription(FSubscribers[i]);
+    if Assigned(Sub) then
+      try
+        Sub.Fire(AFileName, Findings);
+      except
+        // Ein faulender Subscriber darf die anderen nicht reissen.
+      end;
+  end;
+end;
+
+{ ---- TWatchFindingsSubscription ---- }
+
+constructor TWatchFindingsSubscription.Create(AManager: TWatchModeManager;
+  ACallback: TWatchFindingsSubscriber);
+begin
+  inherited Create;
+  FManager  := AManager;
+  FCallback := ACallback;
+end;
+
+destructor TWatchFindingsSubscription.Destroy;
+begin
+  if Assigned(FManager) then
+    FManager.RemoveSubscriber(Self);
+  inherited;
+end;
+
+procedure TWatchFindingsSubscription.Fire(const AFileName: string;
+  Findings: TObjectList<TLeakFinding>);
+begin
+  if Assigned(FCallback) then
+    FCallback(AFileName, Findings);
+end;
+
 procedure TWatchModeManager.Activate(OnFindings: TWatchFindingsCallback;
-  OnStatus: TWatchStatusCallback; const AWatchedFile: string);
+  OnStatus: TWatchStatusCallback; const AWatchedFile: string;
+  AUsesCheck: Boolean);
 var
   NewWatched: string;
 begin
   NewWatched := NormalizePath(AWatchedFile);
 
-  // Callbacks IMMER updaten - auch bei Re-Activate mit gleichem File. Sonst
-  // bleiben bei Frame-Re-Init alte Callbacks auf einem bereits zerstoerten
-  // Frame haengen und der Worker liefert Ergebnisse ins Leere (oder schlimmer:
-  // an einen frisch belegten Speicherbereich).
+  // Callbacks + UsesCheck IMMER updaten - auch bei Re-Activate mit gleichem
+  // File. Sonst bleiben bei Frame-Re-Init alte Callbacks auf einem bereits
+  // zerstoerten Frame haengen und der Worker liefert Ergebnisse ins Leere
+  // (oder schlimmer: an einen frisch belegten Speicherbereich).
   FOnFindings := OnFindings;
   FOnStatus   := OnStatus;
+  FUsesCheck  := AUsesCheck;
 
   if NewWatched = '' then Exit;
 
@@ -766,18 +922,13 @@ begin
 end;
 
 procedure TWatchModeManager.SpawnAnalyzer(const AFileName: string);
-var
-  UsesCheck: Boolean;
 begin
   if not FileExists(AFileName) then Exit;
-  // UsesCheck-Flag aus globalem State lesen (wurde von ApplyDetectorThresholds
-  // / RegisterToLeakyClasses gesetzt). Wir koennten auch FRepoSettings.UsesCheck
-  // lesen, aber das wuerde uns an die Frame-Lifetime koppeln.
-  UsesCheck := False; // V1: konservativer Default. Worker schaltet UsesCheck
-                      // explizit aus, damit der Live-Pfad immer schnell bleibt.
-
+  // UsesCheck wird beim Activate aus den Caller-Settings uebernommen
+  // (Single-Point-of-Truth ueber TIDEAnalysisPrep). Default beim ersten
+  // Activate ohne Argument: False (Backward-Compat-Default des Parameters).
   DoStatus(Format(_('Analysing: %s'), [ExtractFileName(AFileName)]));
-  TWatchAnalyzer.Create(AFileName, UsesCheck, FGeneration);
+  TWatchAnalyzer.Create(AFileName, FUsesCheck, FGeneration);
 end;
 
 procedure TWatchModeManager.DoStatus(const S: string);

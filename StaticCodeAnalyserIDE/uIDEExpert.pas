@@ -38,7 +38,8 @@ implementation
 uses
   Winapi.Windows, System.SysUtils,
   Vcl.Graphics, Vcl.ImgList, Vcl.Controls, Vcl.Menus, Vcl.ActnList,
-  uIDEAnalyserForm;
+  uIDEAnalyserForm,
+  uIDEFindingsPropertiesForm;
 
 const
   PLUGIN_TITLE   = 'Static Code Analysis';
@@ -267,6 +268,11 @@ end;
 procedure Register;
 begin
   RegisterAnalyserDockableForm;
+  // Findings-Properties-Panel (Phase 6 Integration): registriert NACH dem
+  // Analyser-Form, damit RegisterWatchMode darin schon gelaufen ist - der
+  // Wrapper-FrameCreated subscribed GWatchMode.SubscribeFindings beim
+  // ersten Dock-Open.
+  RegisterFindingsPropertiesDockableForm;
   RegisterPackageWizard(TStaticCodeAnalyserExpert.Create);
   RegisterAboutBox;
   RegisterToolsMenuItem;
@@ -276,6 +282,9 @@ end;
 
 destructor TStaticCodeAnalyserExpert.Destroy;
 begin
+  // Properties-Panel zuerst loesen - sein EditServices-Notifier soll
+  // gehen bevor das Analyser-Form seine eigene Cleanup-Sequenz startet.
+  UnregisterFindingsPropertiesDockableForm;
   UnregisterAnalyserDockableForm;
   inherited;
 end;

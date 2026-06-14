@@ -439,6 +439,13 @@ procedure RegisterAnalyserDockableForm;
 procedure UnregisterAnalyserDockableForm;
 procedure ShowAnalyserDockableForm;
 
+// Silent-Single-File-Scan. Vom Properties-Wrapper genutzt um beim Tab-Wechsel
+// die aktive Datei automatisch zu re-analysieren. ACenterOnFirstFinding=False
+// unterdrueckt das Editor-Auto-Scroll auf den ersten Befund (sonst springt
+// der Editor bei jedem Tab-Wechsel unerwartet zur Line des ersten Findings).
+procedure RunSilentAnalysisForFile(const AFileName: string;
+  ACenterOnFirstFinding: Boolean = True);
+
 implementation
 
 // noinspection-file BeginEndRequired, BooleanParam, ClassPerFile, ConsecutiveSection, EmptyExcept, ExceptOnException, GodClass, GroupedDeclaration, IfElseBegin, LargeClass, LongMethod, NestedRoutine, NestedTry, PublicField, PublicMemberWithoutDoc, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedPublicMember, UnusedRoutine
@@ -2405,48 +2412,34 @@ end;
 // Analyse starten
 // ---------------------------------------------------------------------------
 procedure TAnalyserFrame.PrepareAnalysis(const AWatchedFile: string);
+var
+  ProfileOverride: string;
 begin
   if not Assigned(FRepoSettings) then Exit;
-  try
-    FRepoSettings.Load;
-    FRepoSettings.RegisterToLeakyClasses;
-    // IDE-Plugin: vor ApplyDetectorThresholds das IDE-spezifische
-    // Profile/MinSeverity transient aktivieren (IdeProfile=ide-fast als
-    // Default). Standalone-Pfad ruft das NICHT und nutzt [Rules] Profile.
-    FRepoSettings.UseIdeRuleSet;
-    // UI-Override: Profile-Combo gewinnt ueber die INI. So kann der User
-    // im laufenden Frame zwischen ide-fast / default / strict umschalten
-    // ohne die INI zu editieren. Load hat FRepoSettings.Profile gerade
-    // erst aus der INI ueberschrieben - die Combo-Auswahl muss DANACH
-    // gewinnen, sonst wuerde der INI-Wert die UI-Aktion verschlucken.
-    if Assigned(FProfileCombo) and (FProfileCombo.ItemIndex >= 0) then
-      FRepoSettings.Profile := FProfileCombo.Items[FProfileCombo.ItemIndex];
-    // ProjectRoot durchreichen damit relative CustomRulesFile-Pfade
-    // (z.B. 'analyser-rules.yml' im Projekt-Wurzelverzeichnis) gefunden werden.
-    FRepoSettings.ApplyDetectorThresholds(Trim(FProjectPath.Text));
-    AutoDiscoverCustomClasses := FRepoSettings.AutoDiscoverClasses;
-    // Frische Discovery-Liste pro Run, sonst wandern Treffer aus
-    // vorherigen Projekten in die INI mit.
-    if Assigned(uSCAConsts.DiscoveredClasses) then
-      uSCAConsts.DiscoveredClasses.Clear;
-    if Assigned(uSCAConsts.DiscoveredStaticClasses) then
-      uSCAConsts.DiscoveredStaticClasses.Clear;
+  // Profile-Override aus der UI-Combo extrahieren - leere String wenn nichts
+  // gewaehlt (dann gilt der INI-Wert nach UseIdeRuleSet).
+  ProfileOverride := '';
+  if Assigned(FProfileCombo) and (FProfileCombo.ItemIndex >= 0) then
+    ProfileOverride := FProfileCombo.Items[FProfileCombo.ItemIndex];
 
-    // Live-Watch nur im "Aktuelle Datei"-Pfad (AWatchedFile != '').
-    // Bulk-Pfade (Full-Project, Branch-Changes) deaktivieren explizit -
-    // sonst bleibt ein vom letzten "Aktuelle Datei"-Klick aktiver Watcher
-    // haengen. Generation bumpen damit laufende Worker ihre Ergebnisse
-    // droppen (sonst ueberschreiben sie die gleich geschriebenen
-    // FAllFindings).
-    if Assigned(GWatchMode) then
-    begin
-      GWatchMode.BumpGeneration;
-      if AWatchedFile <> '' then
-        GWatchMode.Activate(OnWatchFindings, OnWatchStatus, AWatchedFile)
-      else if GWatchMode.Active then
-        GWatchMode.Deactivate;
-    end;
-  except end;
+  // Schritte 1-7 (Load + Register + IDE-Profile + Override + Thresholds +
+  // AutoDiscover-Sync + Clear + BumpGeneration) laufen ueber den Single-
+  // Point-of-Truth in uIDELifecycle - synchronisiert mit Silent-Mode +
+  // Watch-Worker, damit alle Pfade konsistenten Detector-State setzen.
+  TIDEAnalysisPrep.SetupForRun(FRepoSettings, Trim(FProjectPath.Text),
+    ProfileOverride);
+
+  // Watch-Mode-Activate/Deactivate bleibt Frame-lokal weil die Callbacks
+  // (OnWatchFindings, OnWatchStatus) Frame-Methoden sind. Im Bulk-Pfad
+  // (AWatchedFile leer) deaktivieren um keinen alten Watcher zu halten.
+  if Assigned(GWatchMode) then
+  begin
+    if AWatchedFile <> '' then
+      GWatchMode.Activate(OnWatchFindings, OnWatchStatus, AWatchedFile,
+        FRepoSettings.UsesCheck)
+    else if GWatchMode.Active then
+      GWatchMode.Deactivate;
+  end;
 end;
 
 procedure TAnalyserFrame.FinishAnalysis;
@@ -3576,11 +3569,15 @@ begin
   SetLength(Result, Count);
 end;
 
-procedure RunSilentAnalysisForFile(const AFileName: string);
+procedure RunSilentAnalysisForFile(const AFileName: string;
+  ACenterOnFirstFinding: Boolean = True);
 // Silent-Mode-Entrypoint: analysiert AFileName + setzt Marker direkt am
 // GHighlighter. Kein Frame, kein Dock-Open. Fehler still an
 // OutputDebugString. Settings + Profile werden frisch geladen (analog zu
 // WatchMode-Worker).
+// ACenterOnFirstFinding: True (Default) = Editor scrollt zur ersten
+// Finding-Line. False = nur Analyse, keine Editor-Bewegung (gebraucht vom
+// Properties-Panel-Auto-Scan beim Tab-Wechsel).
 var
   Settings : TRepoSettings;
   Findings : TObjectList<TLeakFinding>;
@@ -3598,35 +3595,19 @@ begin
   Settings := TRepoSettings.Create;
   Findings := nil;
   try
-    try Settings.Load; except end;
-    // IDE-Profile (Default 'ide-fast') aktivieren - sonst laeuft im Silent-
-    // Mode der volle Standalone-Default-Lauf, was bei Live-Klicks zu lang
-    // dauern wuerde.
-    Settings.UseIdeRuleSet;
     // Dock-Combo gewinnt ueber INI - so wirkt eine Profile-Auswahl im Dock
-    // auch im Silent-Run, ohne dass der User vorher Save druecken muss.
-    // Wenn das Dock nie geoeffnet wurde, ist Frame=nil -> Override=leer ->
-    // INI-Wert aus UseIdeRuleSet greift.
+    // auch im Silent-Run. Wenn das Dock nie geoeffnet wurde: Override leer
+    // -> INI-Wert aus UseIdeRuleSet greift.
+    var DockOverride := '';
     if Assigned(GDockableForm) and Assigned(GDockableForm.Frame) then
-    begin
-      var DockOverride := GDockableForm.Frame.CurrentProfileOverride;
-      if DockOverride <> '' then Settings.Profile := DockOverride;
-    end;
-    Settings.ApplyDetectorThresholds(ExtractFilePath(AFileName));
-    Settings.RegisterToLeakyClasses;
+      DockOverride := GDockableForm.Frame.CurrentProfileOverride;
 
-    // Analog Dock-Plugin PrepareAnalysis: das AutoDiscover-
-    // Global muss VOR AnalyzeLeaks aus den Settings gespiegelt werden -
-    // uStaticAnalyzer2 prueft AutoDiscoverCustomClasses, nicht
-    // Settings.AutoDiscoverClasses. Ohne diesen Zuweis bleibt das Flag auf
-    // dem Wert vom letzten Dock-Run haengen (oder False beim Kalt-Start).
-    AutoDiscoverCustomClasses := Settings.AutoDiscoverClasses;
-    // Frische Discovery-Liste pro Silent-Run, sonst schleichen Treffer
-    // vom letzten Dock-/Silent-Run in die Detection mit.
-    if Assigned(uSCAConsts.DiscoveredClasses) then
-      uSCAConsts.DiscoveredClasses.Clear;
-    if Assigned(uSCAConsts.DiscoveredStaticClasses) then
-      uSCAConsts.DiscoveredStaticClasses.Clear;
+    // Single-Point-of-Truth Setup (uIDELifecycle): Load + Register +
+    // UseIdeRuleSet + ProfileOverride + ApplyDetectorThresholds +
+    // AutoDiscover-Sync + Discovered-Clear + BumpGeneration. Schritte
+    // identisch zu TAnalyserFrame.PrepareAnalysis - kein Drift mehr.
+    TIDEAnalysisPrep.SetupForRun(Settings, ExtractFilePath(AFileName),
+      DockOverride);
 
     try
       // Single-File-Analyse mit projektweitem Symbol-Reference-Index
@@ -3653,6 +3634,12 @@ begin
     // einen Snapshot setzt, der nur die geklickte Datei zeigt.
     GHighlighter.SetAllFindings(Entries);
 
+    // Properties-Panel (und andere Subscriber) ueber die Silent-Findings
+    // informieren. Borrowed-Refs - Subscriber klonen selbst wenn sie
+    // persistieren wollen. Idempotent wenn keine Subscriber registriert.
+    if Assigned(GWatchMode) and Assigned(Findings) then
+      GWatchMode.DispatchToSubscribers(AFileName, Findings);
+
     // Editor auf den ERSTEN Befund (= kleinste Zeile > 0) zentrieren -
     // sonst muesste der User die orange/rote Markierung am Editor-Rand
     // selber suchen. Datei-Level-Befunde (fkFileReadError, Line 0) zaehlen
@@ -3667,7 +3654,7 @@ begin
         if (LineN > 0) and (LineN < FirstLine) then
           FirstLine := LineN;
       end;
-    if FirstLine < MaxInt then
+    if ACenterOnFirstFinding and (FirstLine < MaxInt) then
       TIDEEditor.CenterCurrentViewOnLine(FirstLine);
   finally
     Findings.Free;

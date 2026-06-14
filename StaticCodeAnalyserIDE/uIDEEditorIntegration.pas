@@ -71,6 +71,19 @@ type
     class function OpenFileAtLine(const AbsPath: string;
                                   LineNumber: Integer): TOpenFileMode; static;
 
+    // Soft-Variante von OpenFileAtLine - KEIN Close-and-Reopen-Pattern
+    // fuer die Companion-Datei. Sinnvoll wenn der User aus einer Findings-
+    // Liste auf einen Befund klickt und die Datei bereits offen ist - die
+    // Original-Methode schliesst auch normale Form-Module (da
+    // FindModule(.dfm) das Foo-Modul liefert), was zu "Datei wird immer
+    // wieder neu geoeffnet" fuehrt.
+    // Wenn die Datei noch nicht offen ist: ActionSvc.OpenFile.
+    // Bei .dfm-Befunden faellt der DFM-as-Text-Modus weg - die DFM wird im
+    // Form-Designer angezeigt, der Caret laesst sich dort nicht setzen.
+    // Liefert True wenn der Caret erfolgreich gesetzt wurde.
+    class function ShowFileAtLine(const AbsPath: string;
+                                  LineNumber: Integer): Boolean; static;
+
     // Bringt LineNumber im aktuellen Top-EditView in die Mitte des
     // Editor-Fensters und setzt den Cursor dorthin. No-op bei
     // LineNumber <= 0 oder fehlendem Editor-Service.
@@ -287,6 +300,52 @@ begin
     EditView.MoveViewToCursor;
     EditView.Paint;
   end;
+end;
+
+class function TIDEEditor.ShowFileAtLine(const AbsPath: string;
+  LineNumber: Integer): Boolean;
+// Soft-Navigate. Kein SafeCloseModule auf den Companion - ein normales
+// Form-Modul (Foo.pas + Foo.dfm) wuerde sonst beim Klick komplett
+// geschlossen, weil FindModule(Foo.dfm) das Foo-Modul liefert.
+var
+  ModSvc    : IOTAModuleServices;
+  ActSvc    : IOTAActionServices;
+  Module    : IOTAModule;
+  SrcEditor : IOTASourceEditor;
+  EditView  : IOTAEditView;
+  EditPos   : TOTAEditPos;
+  i         : Integer;
+begin
+  Result := False;
+  if (AbsPath = '') or (LineNumber <= 0) then Exit;
+  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
+
+  Module := ModSvc.FindModule(AbsPath);
+  if not Assigned(Module) then
+  begin
+    if Supports(BorlandIDEServices, IOTAActionServices, ActSvc) then
+      ActSvc.OpenFile(AbsPath);
+    Module := ModSvc.FindModule(AbsPath);
+  end;
+  if not Assigned(Module) then Exit;
+
+  // SrcEditor aus dem Modul holen.
+  SrcEditor := nil;
+  for i := 0 to Module.ModuleFileCount - 1 do
+    if Supports(Module.ModuleFileEditors[i], IOTASourceEditor, SrcEditor) then
+      Break;
+  if not Assigned(SrcEditor) then Exit;
+
+  SrcEditor.Show;   // Tab nach vorne bringen
+
+  EditView := SrcEditor.GetEditView(0);
+  if not Assigned(EditView) then Exit;
+  EditPos.Col  := 1;
+  EditPos.Line := LineNumber;
+  EditView.CursorPos := EditPos;
+  EditView.MoveViewToCursor;
+  EditView.Paint;
+  Result := True;
 end;
 
 class procedure TIDEEditor.CenterCurrentViewOnLine(LineNumber: Integer);

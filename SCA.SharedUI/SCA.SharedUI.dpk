@@ -38,6 +38,7 @@ contains
   uAnalyserPalette in 'sources\uAnalyserPalette.pas',
   uAnalyserTheme in 'sources\uAnalyserTheme.pas',
   uFindingGridRenderer in 'sources\uFindingGridRenderer.pas',
+  uFindingsPropertiesFrame in 'sources\uFindingsPropertiesFrame.pas',
   uFindingFilter in 'sources\uFindingFilter.pas',
   uIDEStatsTiles in 'sources\uIDEStatsTiles.pas',
   uIDEHelpPanel in 'sources\uIDEHelpPanel.pas',

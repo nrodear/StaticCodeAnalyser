@@ -3,7 +3,7 @@ package StaticCodeAnalyser.IDE.d12;
 {$R *.res}
 // Branding-Resource (sca.png als RCDATA fuer Splash + About-Box):
 //   * <RcCompile Include="..\branding\sca_branding.rc"/> im .dproj triggert
-//     BRCC32. BRCC32 legt das Output NEBEN die dproj/dpk (nicht neben die
+//     BRCC32. RBCC32 legt das Output NEBEN die dproj/dpk (nicht neben die
 //     .rc!) -> StaticCodeAnalyserIDE\sca_branding.res.
 //   * {$R 'sca_branding.res'} hier linkt die .res in die BPL (sonst sieht
 //     der Linker das BRCC32-Output zwar liegen, ignoriert es aber - waere
@@ -49,6 +49,7 @@ requires
 contains
   uIDEExpert in 'uIDEExpert.pas',
   uIDEAnalyserForm in 'uIDEAnalyserForm.pas',
+  uIDEFindingsPropertiesForm in 'uIDEFindingsPropertiesForm.pas',
   uIDEFindingNav in 'uIDEFindingNav.pas',
   uIDELineHighlighter in 'uIDELineHighlighter.pas',
   uIDEAnnotationOverlay in 'uIDEAnnotationOverlay.pas',

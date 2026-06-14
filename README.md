@@ -320,6 +320,25 @@ bar / tab the panel auto-hides and the grid takes the full width
 | **Jira** | Clipboard | Wiki markup ready to paste into a Jira ticket (filtered to one file) |
 | **Clipboard** | Clipboard | Plain text with before/after (filtered to one file) |
 
+### File-Findings panel (per-file dock)
+
+A second dockable window that focuses on the **currently active editor
+file**. Open via **View → Static Code Analysis - File**. Designed for
+side-docking next to the editor so you always see the findings for the
+file you are working on.
+
+| Property | Behaviour |
+|---|---|
+| **Trigger** | Auto-scans the active editor file on open and on every tab switch. No "Aktuelle Datei" click needed |
+| **Live update** | If the watch-mode is active, save/edit triggers re-feed the panel as well |
+| **Grid columns** | Method / Line / Type / Rule / Severity (Rule stretches; severity accent bar on the left of every row) |
+| **Filter** | Combo with *All severities* / *Errors only* / *Errors + Warnings* |
+| **Sort** | Click a column header to sort (toggle asc/desc) |
+| **Click a row** | Jump to the finding line in the editor (soft navigate, does not close/reopen the file) |
+| **.pas + .dfm** | Treated as one scan target — tab-switching between them keeps the findings visible |
+| **Position memory** | Re-opens at the last position (session-persisted via `analyser.ini`, cross-session via IDE Save Desktop). Falls back to centred on the IDE main window when nothing is stored or the position is off-screen |
+| **Theme + font** | Follows the active IDE theme (light/dark/custom) and the plugin font (Segoe UI 8) |
+
 ---
 
 ## Language / localisation

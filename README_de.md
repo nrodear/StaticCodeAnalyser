@@ -322,6 +322,25 @@ dem Loslösen wieder zurück).
 | **Jira** | Clipboard | Wiki-Markup für Jira-Tickets (gefiltert auf Datei) |
 | **Clipboard** | Clipboard | Plain-Text mit Vorher/Nachher (gefiltert auf Datei) |
 
+### File-Findings-Panel (Per-Datei-Dock)
+
+Ein zweites dockbares Fenster, das sich auf die **aktuell aktive Editor-
+Datei** konzentriert. Öffnen über **Ansicht → Static Code Analysis - File**.
+Für seitliches Andocken neben dem Editor gedacht, damit die Befunde der
+gerade bearbeiteten Datei immer sichtbar sind.
+
+| Eigenschaft | Verhalten |
+|---|---|
+| **Trigger** | Scant die aktive Editor-Datei beim Öffnen und bei jedem Tab-Wechsel automatisch. Kein „Aktuelle Datei"-Klick nötig |
+| **Live-Update** | Wenn der Watch-Mode aktiv ist, lösen Save/Edit den Re-Scan auch hier aus |
+| **Grid-Spalten** | Method / Line / Type / Rule / Severity (Rule stretcht; Severity-Akzentbalken links neben jeder Zeile) |
+| **Filter** | Combo mit *All severities* / *Errors only* / *Errors + Warnings* |
+| **Sortierung** | Klick auf einen Spalten-Header sortiert (Toggle auf-/absteigend) |
+| **Klick auf Zeile** | Springt zur Befund-Zeile im Editor (soft navigate, schließt/öffnet die Datei nicht) |
+| **.pas + .dfm** | Werden als ein Scan-Ziel behandelt — Tab-Wechsel zwischen beiden lässt die Befunde sichtbar |
+| **Positions-Memory** | Öffnet sich an der letzten Position (session-persistent via `analyser.ini`, sessionübergreifend via IDE Save Desktop). Fallback: zentriert über dem IDE-Hauptfenster, wenn nichts gespeichert oder Position off-screen |
+| **Theme + Font** | Folgt dem aktiven IDE-Theme (hell/dunkel/Custom) und der Plugin-Schrift (Segoe UI 8) |
+
 ---
 
 ## Sprache / Lokalisierung
