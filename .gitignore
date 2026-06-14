@@ -135,3 +135,28 @@ docs/done.md
 # Performance- + Audit-Notes in tools/
 tools/perf_analyse.md
 *.bak2
+# Numerierte Delphi-Backups (.bak3, .bak4, ...) - generiert die IDE beim
+# wiederholten Save eines bereits gesicherten Files.
+*.bak[0-9]*
+
+# ---- SCA Run-Outputs in Repo-Root ----
+# sca-*.sarif / .log / .html / .err - run-spezifische Outputs der Standalone-
+# EXE und der Test-Pipelines (sca-realworld-scan.ps1, sonar-scan.ps1 etc).
+# Stueckgut, MB-gross, nicht ins VCS.
+/sca-*.sarif
+/sca-*.log
+/sca-*.log.err
+/sca-*.html
+/sca-*.err
+/sca-realworld-out/
+
+# Scratch-TSVs aus interaktiven Analyse-Sessions.
+/tmp-*.tsv
+
+# Performance-Memos (interne Doku, vergleichbar mit Konzept_*).
+/timings*.md
+
+# Release-Archive (`StaticCodeAnalyser-v*-Win32.zip` etc.) - werden beim
+# Tagging via Release-Script erzeugt und nach GitHub Releases hochgeladen,
+# nicht ins git tracking.
+/StaticCodeAnalyser-v*.zip
