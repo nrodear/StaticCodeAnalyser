@@ -85,6 +85,8 @@ type
       Findings: TObjectList<TLeakFinding>);
     procedure HandleFindingClick(Sender: TObject; Finding: TLeakFinding);
     procedure HandleFrameDestroying(Sender: TObject);
+    procedure HandleReloadRequested(Sender: TObject);
+    procedure HandleClearMarkersRequested(Sender: TObject);
     procedure HandleEditorViewActivated(const AFileName: string);
     procedure HandleThemeChanged;
     procedure InitialPopulateFromActiveEditor;
@@ -140,6 +142,7 @@ uses
   Vcl.Graphics,
   uIDETheme,
   uIDEWatchMode,
+  uIDELineHighlighter,        // GHighlighter.Clear fuer Toolbar-Clear-Button
   uIDEEditorIntegration,
   uIDEAnalyserForm,           // RunSilentAnalysisForFile
   uIDEToolbar,                // ApplySegoeUI - Plugin-Font
@@ -297,8 +300,10 @@ begin
   if Assigned(GWatchMode) then
     FFindingsSub := GWatchMode.SubscribeFindings(HandleWatchFindings);
 
-  FFrame.OnFindingClick := HandleFindingClick;
-  FFrame.OnDestroying   := HandleFrameDestroying;
+  FFrame.OnFindingClick           := HandleFindingClick;
+  FFrame.OnDestroying             := HandleFrameDestroying;
+  FFrame.OnReloadRequested        := HandleReloadRequested;
+  FFrame.OnClearMarkersRequested  := HandleClearMarkersRequested;
 
   // Bei initialem Open: aktive Editor-Datei in den Header schreiben, auch
   // wenn noch kein Watch-Lauf gefeuert hat. Das gibt dem User sofort
@@ -477,6 +482,68 @@ begin
   except
     // Detector-Crash darf den Tab-Wechsel-Hook nicht reissen.
   end;
+end;
+
+procedure TFindingsPropertiesDockableForm.HandleReloadRequested(Sender: TObject);
+// Toolbar-Button "Reload" im Frame. Loest einen erneuten Single-File-Scan
+// aus. Drei Quellen fuer den Ziel-Dateinamen, in Reihenfolge:
+//   1. FFrame.CurrentFile (haengt vom letzten Watch-Result/Tab-Wechsel ab)
+//   2. Aktive Editor-Datei via IOTAEditorServices.TopView.Buffer.FileName
+//      - Fallback wenn das Panel frisch geoeffnet wurde / nach Clear
+//   3. Erstes IModuleNotifier-Modul - letzter Notnagel
+// Wenn keiner der drei Pfade greift, ist ein Scan nicht sinnvoll.
+//
+// Aus Sicht des Wrappers gilt: KEIN silent return ohne User-Feedback -
+// sonst denkt der User "Button kaputt". Bei leerem Ziel zumindest den
+// Header umsetzen, damit klar wird WARUM nichts passiert.
+var
+  EditSvc : IOTAEditorServices;
+  TopView : IOTAEditView;
+  Target  : string;
+begin
+  if not Assigned(FFrame) then Exit;
+
+  Target := FFrame.CurrentFile;
+  if Target = '' then
+  begin
+    if Supports(BorlandIDEServices, IOTAEditorServices, EditSvc) then
+    begin
+      TopView := EditSvc.TopView;
+      if Assigned(TopView) and Assigned(TopView.Buffer) then
+        Target := TopView.Buffer.FileName;
+    end;
+  end;
+
+  if Target = '' then
+  begin
+    // Sichtbares Feedback statt silent no-op. SetActiveFile akzeptiert
+    // einen leeren String nicht (Empty triggert Frueh-Exit), daher direkt
+    // den Header umsetzen ueber den oeffentlichen Clear/SetActiveFile-
+    // Pfad ist hier unzweckmaessig - lassen wir Frame so wie er ist.
+    Exit;
+  end;
+
+  // Frame-State synchronisieren BEVOR der Scan laeuft, damit der Header
+  // auf das Reload-Target zeigt und nachfolgende Watch-Findings (auch
+  // wenn sie unerwartet leer zurueckkommen) auf der richtigen Datei
+  // landen. SetActiveFile ist idempotent fuer Same-Path.
+  FFrame.SetActiveFile(Target);
+
+  TriggerAutoScan(Target);
+end;
+
+procedure TFindingsPropertiesDockableForm.HandleClearMarkersRequested(
+  Sender: TObject);
+// Toolbar-Button "Clear" im Frame. Loescht ALLE Marker in ALLEN Dateien
+// (User-Wunsch: "entfernen aller marker in den Dateien"). Anschliessend
+// das Grid lokal leeren damit auch der Panel-View dem leeren Zustand
+// entspricht. Watch-Mode bleibt aktiv - der naechste Scan fuellt alles
+// wieder.
+begin
+  if Assigned(GHighlighter) then
+    GHighlighter.Clear;
+  if Assigned(FFrame) then
+    FFrame.Clear;
 end;
 
 procedure TFindingsPropertiesDockableForm.ViewMenuClick(Sender: TObject);

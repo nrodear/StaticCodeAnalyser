@@ -46,6 +46,13 @@ type
   strict private
     FHeaderPanel   : TPanel;
     FHeaderLabel   : TLabel;
+    // Sub-Panel direkt unter dem Header-Label - traegt die drei Toolbar-
+    // Controls in fester Reihenfolge: [Clear][Reload] FSeverityCombo.
+    // Reihenfolge ergibt sich aus der Create-Reihenfolge in BuildControls
+    // ueber Align=alLeft (Clear+Reload) bzw. alClient (Combo).
+    FToolbarPanel  : TPanel;
+    FBtnClear      : TButton;
+    FBtnReload     : TButton;
     FSeverityCombo : TComboBox;
     FGrid          : TStringGrid;
     FAllFindings   : TObjectList<TLeakFinding>;   // OWNED, ungefiltert
@@ -54,6 +61,11 @@ type
     FGridConfig    : TFindingGridConfig;
     FOnClick       : TFindingClickEvent;
     FOnDestroying  : TNotifyEvent;
+    // Toolbar-Button-Events. Frame kann selbst nicht scannen oder Marker
+    // loeschen (kein OTAPI/GHighlighter-Zugriff aus SCA.SharedUI). Wrapper
+    // im IDE-Plugin haengt die Handler ein - bleibt Layering-konform.
+    FOnReloadRequested       : TNotifyEvent;
+    FOnClearMarkersRequested : TNotifyEvent;
     // Sort-State. FSortColumn = -1 -> unsortiert (Insertion-Order vom
     // Detector). 0..COL_COUNT-1 -> sortiert nach dieser Spalte.
     // FSortDescending toggelt bei wiederholtem Klick auf gleiche Spalte.
@@ -71,6 +83,10 @@ type
     // Sequenz verworfen hat.
     procedure CreateWnd; override;
     procedure SeverityComboChange(Sender: TObject);
+    // Toolbar-Buttons - Funktionalitaet wird in Step 2 dranngeschraubt.
+    // Aktuell leere Stubs, damit das Layout sichtbar ist und Naming feststeht.
+    procedure BtnClearClick(Sender: TObject);
+    procedure BtnReloadClick(Sender: TObject);
     procedure GridDrawCell(Sender: TObject; ACol, ARow: Integer;
       Rect: TRect; State: TGridDrawState);
     procedure GridDblClick(Sender: TObject);
@@ -127,6 +143,15 @@ type
     // damit asynchrone Callbacks (Theme-Sub, Watch-Findings-Sub) nicht
     // auf einen freed Frame zugreifen.
     property OnDestroying: TNotifyEvent read FOnDestroying write FOnDestroying;
+    // Reload-Button: Wrapper triggert einen erneuten Single-File-Scan fuer
+    // die aktuell sichtbare Datei (TriggerAutoScan im IDE-Wrapper).
+    property OnReloadRequested: TNotifyEvent
+      read FOnReloadRequested write FOnReloadRequested;
+    // Clear-Button: Wrapper loescht ALLE Marker in ALLEN Dateien
+    // (GHighlighter.Clear) - der File-bezogene Grid-Clear wird
+    // anschliessend lokal ausgefuehrt.
+    property OnClearMarkersRequested: TNotifyEvent
+      read FOnClearMarkersRequested write FOnClearMarkersRequested;
   end;
 
 implementation
@@ -213,12 +238,16 @@ begin
 end;
 
 procedure TFindingsPropertiesFrame.BuildControls;
+const
+  BTN_SIZE = 26;   // quadratisch ("4-eckig") - 26 px DIP, skaliert
+                   // ueber Form.Scaled wenn der User DPI != 96 fuehrt
 begin
   // ---- Header-Panel ----
+  // Header-Hoehe nun 18 (Label) + 28 (Toolbar) + 6 (Padding) = ~52.
   FHeaderPanel := TPanel.Create(Self);
   FHeaderPanel.Parent    := Self;
   FHeaderPanel.Align     := alTop;
-  FHeaderPanel.Height    := 48;
+  FHeaderPanel.Height    := 52;
   FHeaderPanel.BevelOuter := bvNone;
   FHeaderPanel.Padding.SetBounds(6, 4, 6, 4);
   TIDEToolbar.ApplySegoeUI(FHeaderPanel);
@@ -231,10 +260,56 @@ begin
   TIDEToolbar.ApplySegoeUI(FHeaderLabel);
   FHeaderLabel.Font.Style := [fsBold];   // bold NACH ApplySegoeUI
 
+  // ---- Toolbar-Sub-Panel: [Clear][Reload] FSeverityCombo ----
+  // Liegt als alTop UNTER dem Label im Header. Reihenfolge der Children
+  // ergibt sich aus der Create-Sequenz + Align (alLeft+alLeft+alClient).
+  FToolbarPanel := TPanel.Create(Self);
+  FToolbarPanel.Parent     := FHeaderPanel;
+  FToolbarPanel.Align      := alTop;
+  FToolbarPanel.Top        := 22;       // direkt unter dem 18px-Label
+  FToolbarPanel.Height     := BTN_SIZE + 2;   // BTN_SIZE + 1px Luft oben/unten
+  FToolbarPanel.BevelOuter := bvNone;
+  FToolbarPanel.ParentBackground := False;
+  FToolbarPanel.ParentColor      := True;
+  TIDEToolbar.ApplySegoeUI(FToolbarPanel);
+
+  // Button "Clear" - ganz links. Quadratisch (BTN_SIZE x BTN_SIZE).
+  // Caption ist ein Unicode-Glyph (U+2715 MULTIPLICATION X) statt Text -
+  // erspart Image-Assets und passt sauber in den 26x26-Button. Hint
+  // traegt den verbalen Namen fuer Tooltip + Screen-Reader.
+  FBtnClear := TButton.Create(Self);
+  FBtnClear.Parent  := FToolbarPanel;
+  FBtnClear.Align   := alLeft;
+  FBtnClear.Width   := BTN_SIZE;
+  FBtnClear.Height  := BTN_SIZE;
+  FBtnClear.Caption := #$2715;   // ✕
+  FBtnClear.Hint    := _('Clear current findings');
+  FBtnClear.ShowHint:= True;
+  FBtnClear.OnClick := BtnClearClick;
+  TIDEToolbar.ApplySegoeUI(FBtnClear);
+  FBtnClear.Font.Size := 11;     // Symbol-Glyph leicht groesser als Text-Default
+
+  // Button "Reload" - rechts neben Clear. Beide alLeft - die zweite
+  // alLeft-Control landet rechts der ersten (VCL ControlIndex-Order).
+  // Caption: U+21BB CLOCKWISE OPEN CIRCLE ARROW (↻).
+  FBtnReload := TButton.Create(Self);
+  FBtnReload.Parent  := FToolbarPanel;
+  FBtnReload.Align   := alLeft;
+  FBtnReload.Width   := BTN_SIZE;
+  FBtnReload.Height  := BTN_SIZE;
+  FBtnReload.Caption := #$21BB;  // ↻
+  FBtnReload.Hint    := _('Re-run analysis for current file');
+  FBtnReload.ShowHint:= True;
+  FBtnReload.OnClick := BtnReloadClick;
+  TIDEToolbar.ApplySegoeUI(FBtnReload);
+  FBtnReload.Font.Size := 11;
+
+  // Severity-Combo - rechter Rest (alClient nach den beiden alLeft).
   FSeverityCombo := TComboBox.Create(Self);
-  FSeverityCombo.Parent    := FHeaderPanel;
-  FSeverityCombo.Align     := alTop;
-  FSeverityCombo.Top       := 22;
+  FSeverityCombo.Parent    := FToolbarPanel;
+  FSeverityCombo.Align     := alClient;
+  FSeverityCombo.AlignWithMargins := True;
+  FSeverityCombo.Margins.SetBounds(4, 1, 0, 1);
   FSeverityCombo.Height    := 24;   // expliziter Wert, sonst kann VCL beim
                                     // Re-Parent (Dock-Recreate) auf 0 gehen
                                     // und die Combo wird optisch verschluckt
@@ -317,6 +392,17 @@ begin
     FHeaderPanel.Color    := Style.GetSystemColor(clBtnFace);
     FHeaderLabel.Color    := FHeaderPanel.Color;
     FHeaderLabel.Font.Color := Style.GetSystemColor(clWindowText);
+
+    // Toolbar-Sub-Panel + Buttons - sonst heller Streifen unter dem Label
+    // in Dark-Theme (Default-Panel-Color ist clBtnFace, was im Dark-Mode
+    // anders aufgeloest wird als unsere explizit gesetzte HeaderPanel-Color).
+    FToolbarPanel.ParentBackground := False;
+    FToolbarPanel.ParentColor      := False;
+    FToolbarPanel.Color := FHeaderPanel.Color;
+    // TButton wird vom IDE-ThemingServices automatisch gefarbt - hier nur
+    // sicherstellen, dass die Schrift mit dem Header-Theme matcht.
+    FBtnClear.Font.Color  := Style.GetSystemColor(clWindowText);
+    FBtnReload.Font.Color := Style.GetSystemColor(clWindowText);
 
     // ComboBox: csDropDownList ignoriert oft das Theming aus dem IDE-
     // ThemingServices weil VCL den csDropDownList-Render an die Windows-
@@ -602,6 +688,25 @@ procedure TFindingsPropertiesFrame.SeverityComboChange(Sender: TObject);
 begin
   ApplySeverityFilter;
   UpdateHeader;
+end;
+
+procedure TFindingsPropertiesFrame.BtnClearClick(Sender: TObject);
+begin
+  // Wrapper loescht alle Marker in allen Dateien (GHighlighter.Clear).
+  // Wenn kein Wrapper haengt, lokaler Fallback = nur Grid + Header
+  // leeren, damit der Button im Standalone-Modus auch nicht no-op ist.
+  if Assigned(FOnClearMarkersRequested) then
+    FOnClearMarkersRequested(Self)
+  else
+    Clear;
+end;
+
+procedure TFindingsPropertiesFrame.BtnReloadClick(Sender: TObject);
+begin
+  // Wrapper triggert TriggerAutoScan(CurrentFile). Ohne Wrapper bleibt
+  // Reload no-op - im Standalone-Modus gibt es keinen Re-Scan-Pfad.
+  if Assigned(FOnReloadRequested) then
+    FOnReloadRequested(Self);
 end;
 
 function TFindingsPropertiesFrame.GetCellText(ACol, ARow: Integer): string;
