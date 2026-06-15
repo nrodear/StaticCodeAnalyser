@@ -79,6 +79,8 @@ type
     lblOverlayPosInfo       : TLabel;
     chkAutoExpandAnnotation : TCheckBox;
     lblAutoExpandInfo       : TLabel;
+    chkOverlayShowOnHover   : TCheckBox;
+    lblOverlayShowOnHoverInfo : TLabel;
   private
     procedure BuildControls;
     procedure PopulateProfileCombos;
@@ -327,9 +329,9 @@ begin
   grpDisplay              := TGroupBox.Create(Self);
   grpDisplay.Parent       := FScroll;
   grpDisplay.Left         := MARGIN_LEFT;
-  grpDisplay.Top          := NextY(160);
+  grpDisplay.Top          := NextY(232);
   grpDisplay.Width        := GROUP_W;
-  grpDisplay.Height       := 160;
+  grpDisplay.Height       := 232;
   grpDisplay.Caption      := _('Display');
 
   lblOverlayPos           := TLabel.Create(Self);
@@ -381,6 +383,27 @@ begin
     _('When OFF (default): overlay stays as a compact title bar until ' +
       'you click the title - keeps the editor uncluttered. When ON: ' +
       'overlay auto-expands after ~250 ms.');
+
+  chkOverlayShowOnHover         := TCheckBox.Create(Self);
+  chkOverlayShowOnHover.Parent  := grpDisplay;
+  chkOverlayShowOnHover.Left    := INNER_LEFT;
+  chkOverlayShowOnHover.Top     := lblAutoExpandInfo.Top + lblAutoExpandInfo.Height + 8;
+  chkOverlayShowOnHover.Width   := GROUP_W - 2 * INNER_LEFT;
+  chkOverlayShowOnHover.Caption :=
+    _('Show annotation overlay on hover');
+
+  lblOverlayShowOnHoverInfo          := TLabel.Create(Self);
+  lblOverlayShowOnHoverInfo.Parent   := grpDisplay;
+  lblOverlayShowOnHoverInfo.AutoSize := False;
+  lblOverlayShowOnHoverInfo.Left     := INNER_LEFT;
+  lblOverlayShowOnHoverInfo.Top      := chkOverlayShowOnHover.Top + chkOverlayShowOnHover.Height + 4;
+  lblOverlayShowOnHoverInfo.Width    := GROUP_W - 2 * INNER_LEFT;
+  lblOverlayShowOnHoverInfo.Height   := 30;
+  lblOverlayShowOnHoverInfo.WordWrap := True;
+  lblOverlayShowOnHoverInfo.Caption  :=
+    _('When OFF (default): overlay appears only when you click a marked ' +
+      'line - undisturbed reading. When ON: overlay follows the mouse ' +
+      'and pops up as soon as you hover a marked line.');
 
   // ================= Hotkeys ================= (BOTTOM)
   // Bewusst als letzte Gruppe positioniert - Shortcut-Konfiguration ist
@@ -623,6 +646,8 @@ begin
   end;
   if Assigned(chkAutoExpandAnnotation) then
     chkAutoExpandAnnotation.Checked := ASettings.AutoExpandAnnotation;
+  if Assigned(chkOverlayShowOnHover) then
+    chkOverlayShowOnHover.Checked := ASettings.OverlayShowOnHover;
 end;
 
 procedure TSCAOptionsFrame.SaveToSettings(ASettings: TRepoSettings);
@@ -673,6 +698,8 @@ begin
   end;
   if Assigned(chkAutoExpandAnnotation) then
     ASettings.AutoExpandAnnotation := chkAutoExpandAnnotation.Checked;
+  if Assigned(chkOverlayShowOnHover) then
+    ASettings.OverlayShowOnHover := chkOverlayShowOnHover.Checked;
 end;
 
 procedure TSCAOptionsFrame.CMStyleChanged(var Message: TMessage);

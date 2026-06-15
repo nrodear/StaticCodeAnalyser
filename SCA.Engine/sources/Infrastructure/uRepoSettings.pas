@@ -74,6 +74,11 @@ type
     // Title-Label klicken um den Desc/Fix-Block zu sehen. True = altes
     // Pre-0.9.9-Verhalten (automatisch nach 250ms).
     FAutoExpandAnnotation : Boolean;
+    // [UI] OverlayShowOnHover: kontrolliert ob das Annotation-Overlay
+    // bereits beim Hover ueber die markierte Zeile erscheint. False (Default)
+    // = erst beim KLICK auf die markierte Zeile zeigt sich das Overlay -
+    // ungestoertes Lesen ist Default. True = altes Hover-Verhalten.
+    FOverlayShowOnHover : Boolean;
     FShortcutsEnabled  : Boolean;     // [Hotkeys] ShortcutsEnabled (Master-Toggle, Default: True)
     FFindingNavEnabled : Boolean;     // [Hotkeys] FindingNavEnabled (Default: True)
     // Konfigurierbare Shortcut-Strings (Format wie ShortCutToText:
@@ -253,6 +258,8 @@ type
                                                   write FSilentEnabled;
     property AutoExpandAnnotation:    Boolean     read FAutoExpandAnnotation
                                                   write FAutoExpandAnnotation;
+    property OverlayShowOnHover:      Boolean     read FOverlayShowOnHover
+                                                  write FOverlayShowOnHover;
 
     // [Hotkeys] FindingNavEnabled - schaltet die Ctrl+Alt+Up/Down-Hotkeys an/aus
     // mit denen man im aktuellen Editor zur naechsten/vorherigen markierten
@@ -777,6 +784,7 @@ begin
   FDetectorReviewFilterEnabled := False; // internes Review-Tool, default aus
   FSilentEnabled  := True;            // Silent-Mode standardmaessig an
   FAutoExpandAnnotation := False;     // Hover-Overlay bleibt collapsed bis User klickt
+  FOverlayShowOnHover   := False;     // Overlay erscheint NUR beim Klick auf markierte Zeile
   FShortcutsEnabled  := True;         // Master-Toggle: alle Hotkeys an
   FFindingNavEnabled := True;         // Ctrl+Alt+Up/Down Finding-Nav an
   FSilentAnalyseShortcut  := 'Ctrl+Alt+A';
@@ -960,6 +968,7 @@ begin
     // > Third Party > Static Code Analyser.
     FSilentEnabled := Ini.ReadBool('Silent', 'Enabled', True);
     FAutoExpandAnnotation := Ini.ReadBool('UI', 'AutoExpandAnnotation', False);
+    FOverlayShowOnHover   := Ini.ReadBool('UI', 'OverlayShowOnHover',   False);
 
     // [Hotkeys] ShortcutsEnabled (bool, Default True) - Master-Toggle.
     // Wenn False: ALLE Plugin-Shortcuts deaktiviert (global + Grid-lokal).
@@ -1054,6 +1063,7 @@ begin
     Ini.WriteBool  ('Rules', 'EnableDetectorReviewFilter', FDetectorReviewFilterEnabled);
     Ini.WriteBool  ('Silent', 'Enabled',           FSilentEnabled);
     Ini.WriteBool  ('UI',     'AutoExpandAnnotation', FAutoExpandAnnotation);
+    Ini.WriteBool  ('UI',     'OverlayShowOnHover',   FOverlayShowOnHover);
     Ini.WriteBool  ('Hotkeys', 'ShortcutsEnabled',        FShortcutsEnabled);
     Ini.WriteBool  ('Hotkeys', 'FindingNavEnabled',       FFindingNavEnabled);
     Ini.WriteString('Hotkeys', 'SilentAnalyseShortcut',   FSilentAnalyseShortcut);

@@ -141,6 +141,15 @@ type
     // Findet welche markierte Zeile die Maus aktuell trifft. Liefert -1
     // wenn keine Zeile getroffen wird.
     function HitTestLine(X, Y: Integer): Integer;
+    // Berechnet Geometrie + ruft GAnnotationOverlay.ShowAt fuer eine
+    // bestimmte markierte Zeile. Wird vom Hover-Pfad (EditorMouseMove,
+    // wenn die User-Option ShowOnHover aktiv ist) UND vom Click-Pfad
+    // (EditorMouseDown, immer wenn der User auf eine markierte Zeile
+    // klickt) genutzt. Setzt FHoveredLine + FHoverWatch-Timer.
+    procedure ShowOverlayForLine(AHitLine: Integer);
+    // Settings frisch lesen (analog IsAutoExpandEnabled im Overlay). Damit
+    // wirkt ein Toggle in Tools > Options sofort, ohne Plugin-Reload.
+    function IsShowOnHoverEnabled: Boolean;
     // True wenn der Cursor (Screen-Koordinaten) gerade ueber dem
     // GAnnotationOverlay-Fenster steht. Wird vor jedem HideOverlay-Aufruf
     // gefragt - sonst koennte der User den Close-[x]-Button nicht klicken,
@@ -384,6 +393,25 @@ begin
     ACanvas.Font.Name   := OldFontName;
     ACanvas.Font.Size   := OldFontSize;
     ACanvas.Font.Style  := OldFontStyle;
+  end;
+end;
+
+function TFindingEditorEvents.IsShowOnHoverEnabled: Boolean;
+// Settings frisch bei jedem Bedarf lesen damit ein Toggle in Tools >
+// Options sofort wirkt. INI-IO ist trivial (cached vom OS-File-Cache).
+var
+  S : TRepoSettings;
+begin
+  Result := False;   // Default: Click-only
+  S := TRepoSettings.Create;
+  try
+    try
+      S.Load;
+      Result := S.OverlayShowOnHover;
+    except
+    end;
+  finally
+    S.Free;
   end;
 end;
 
@@ -685,6 +713,36 @@ begin
       begin
         Group := LineMap[LineNo];
         if Group.Count = 0 then Continue;
+
+        // Duplikate zusammenfassen. Aggressiver Title-only-Match: wenn
+        // zwei Entries dieselbe Befund-Hauptmeldung (Title = F.MissingVar)
+        // haben, ist es derselbe Finding - auch wenn Desc/Color leicht
+        // abweichen (z.B. weil unterschiedliche Detector-Pfade leicht
+        // andere FixHint-Descriptions liefern, oder Watch-Mode und
+        // Properties-Panel-Auto-Scan kurz hintereinander dispatchen).
+        if Group.Count > 1 then
+        begin
+          var SeenKeys : TDictionary<string, Boolean>;
+          SeenKeys := TDictionary<string, Boolean>.Create;
+          try
+            for var k := Group.Count - 1 downto 0 do
+            begin
+              // Key = Title + Severity. Title allein wuerde zwei Findings
+              // mit demselben Variablen-Namen aber unterschiedlichem
+              // Severity (z.B. "Foo" als Error UND als Warning) faelsch-
+              // licherweise zusammenfassen - der Severity-Suffix haelt
+              // diese unterschiedlichen Findings auseinander.
+              var Key := Trim(Group[k].Title) + '|' +
+                         IntToStr(Ord(Group[k].Severity));
+              if SeenKeys.ContainsKey(Key) then
+                Group.Delete(k)
+              else
+                SeenKeys.Add(Key, True);
+            end;
+          finally
+            SeenKeys.Free;
+          end;
+        end;
 
         // Staerkste Severity zuerst (kleinster Rank). Bei gleichem Rank
         // bleibt die Insertion-Order (TList.Sort ist stabil seit RAD12).
@@ -1042,7 +1100,35 @@ end;
 procedure TFindingEditorEvents.EditorResized(const Editor: TWinControl); begin end;
 procedure TFindingEditorEvents.EditorElided(const Editor: TWinControl; const LogicalLineNum: Integer); begin end;
 procedure TFindingEditorEvents.EditorUnElided(const Editor: TWinControl; const LogicalLineNum: Integer); begin end;
-procedure TFindingEditorEvents.EditorMouseDown(const Editor: TWinControl; Button: TMouseButton; Shift: TShiftState; X, Y: Integer); begin end;
+procedure TFindingEditorEvents.EditorMouseDown(const Editor: TWinControl;
+  Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+// Click-Trigger fuer das Annotation-Overlay wenn die User-Option
+// ShowOnHover deaktiviert ist (Default). Linksklick auf eine markierte
+// Zeile zeigt das Overlay als Title-Bar; weiterer Klick aufs Title-Label
+// im Overlay expandiert die Detail-Ansicht (siehe TitleLblClick im
+// Overlay). Im ShowOnHover-True-Modus ist dieser Pfad no-op weil das
+// Overlay bereits beim Hover sichtbar wird.
+var
+  HitLine : Integer;
+begin
+  if Button <> mbLeft then Exit;
+  if not Assigned(GAnnotationOverlay) then Exit;
+  if Editor <> FSavedEditor then Exit;
+  if FRenderedRects.Count = 0 then Exit;
+  if IsShowOnHoverEnabled then Exit;   // alter Pfad regelt das
+
+  HitLine := HitTestLine(X, Y);
+  if HitLine < 0 then
+  begin
+    // Klick auf nicht-markierte Zeile -> falls Overlay sichtbar ist (vom
+    // vorherigen Marker-Klick), verstecken.
+    if GAnnotationOverlay.Visible then
+      GAnnotationOverlay.HideOverlay;
+    FHoveredLine := -1;
+    Exit;
+  end;
+  ShowOverlayForLine(HitLine);
+end;
 procedure TFindingEditorEvents.EditorMouseUp(const Editor: TWinControl; Button: TMouseButton; Shift: TShiftState; X, Y: Integer); begin end;
 procedure TFindingEditorEvents.PaintGutter(const Rect: TRect; const Stage: TPaintGutterStage; const BeforeEvent: Boolean; var AllowDefaultPainting: Boolean; const Context: INTACodeEditorPaintContext); begin end;
 procedure TFindingEditorEvents.PaintText(const Rect: TRect; const ColNum: SmallInt; const Text: string; const SyntaxCode: TOTASyntaxCode; const Hilight, BeforeEvent: Boolean; var AllowDefaultPainting: Boolean; const Context: INTACodeEditorPaintContext); begin end;
@@ -1072,11 +1158,7 @@ end;
 procedure TFindingEditorEvents.EditorMouseMove(const Editor: TWinControl;
   Shift: TShiftState; X, Y: Integer);
 var
-  P             : TPoint;
-  AWidth, LineH : Integer;
   HitLine       : Integer;
-  Mark          : TFindingMark;
-  HitRect       : TRect;
 begin
   // Hot path: erst die billigsten Bailouts, dann Hit-Test, dann Show/Hide.
   if not Assigned(GAnnotationOverlay) or not Assigned(GHighlighter) then Exit;
@@ -1139,9 +1221,36 @@ begin
     Exit;
   end;
 
+  // User-Option: Overlay erscheint NUR beim Klick (Default), nicht beim
+  // Hover. EditorMouseDown ruft denselben ShowOverlayForLine-Helper.
+  if not IsShowOnHoverEnabled then
+  begin
+    // Hover-Path deaktiviert - HoverWatch-Timer trotzdem laufen lassen
+    // damit das Overlay nach Leave wieder versteckt wird (User klickte
+    // vorher, jetzt verlaesst er die Zeile).
+    FHoverWatch.Enabled := True;
+    Exit;
+  end;
+
+  ShowOverlayForLine(HitLine);
+end;
+
+procedure TFindingEditorEvents.ShowOverlayForLine(AHitLine: Integer);
+// Zentraler Entry-Point fuer Overlay-Show. Wird von EditorMouseMove (Hover-
+// Modus) und EditorMouseDown (Click-Modus) gleichermassen genutzt - der
+// gesamte Geometrie- + ShowAt-Code lebt hier.
+var
+  P             : TPoint;
+  AWidth, LineH : Integer;
+  Mark          : TFindingMark;
+  HitRect       : TRect;
+begin
+  if not Assigned(GAnnotationOverlay) or not Assigned(GHighlighter) then Exit;
+  if AHitLine < 0 then Exit;
+
   // Annotation-Texte fuer die getroffene Zeile holen.
-  if not GHighlighter.TryGetMark(FLastPaintedFile, HitLine, Mark) then Exit;
-  if not FRenderedRects.TryGetValue(HitLine, HitRect) then Exit;
+  if not GHighlighter.TryGetMark(FLastPaintedFile, AHitLine, Mark) then Exit;
+  if not FRenderedRects.TryGetValue(AHitLine, HitRect) then Exit;
 
   // WS_CHILD-Modus: Position = Editor-Client-Koordinaten.
   // OverlayPosition aus analyser.ini steuert die Geometrie:
@@ -1163,7 +1272,7 @@ begin
     const MIN_INLINE_W = 320;
     const GAP_AFTER_CODE = 8;
     var TextEndX : Integer;
-    if not FRenderedTextEnds.TryGetValue(HitLine, TextEndX) then
+    if not FRenderedTextEnds.TryGetValue(AHitLine, TextEndX) then
       TextEndX := HitRect.Left + ((HitRect.Right - HitRect.Left) * 6) div 10;
     P.X := TextEndX + GAP_AFTER_CODE;
     if P.X > HitRect.Right - MIN_INLINE_W then
@@ -1199,8 +1308,8 @@ begin
 
     GAnnotationOverlay.ShowAt(FSavedEditor, P.X, P.Y, AWidth, LineH,
       Mark.Title, Mark.Desc, Mark.Badge, Mark.Color, Mark.Fix,
-      FLastPaintedFile, HitLine, EstBadgeW);
-    FHoveredLine := HitLine;
+      FLastPaintedFile, AHitLine, EstBadgeW);
+    FHoveredLine := AHitLine;
     // Hide-on-mouse-leave Timer aktivieren.
     FHoverWatch.Enabled := True;
   except
