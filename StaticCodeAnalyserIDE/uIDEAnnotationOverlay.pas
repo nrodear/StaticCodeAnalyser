@@ -94,6 +94,15 @@ type
     procedure EmbedIntoEditor(AEditorHandle: HWND);
     procedure CloseLblClick(Sender: TObject);
     procedure OnExpandTick(Sender: TObject);
+    // Klick auf das Title-Label faltet das Overlay manuell auf - genutzt
+    // wenn die [UI] AutoExpandAnnotation-Option deaktiviert ist (Default).
+    // Springt direkt zur Stage-1->2-H-Morph-Phase, ohne den 250ms-Timer
+    // abzuwarten.
+    procedure TitleLblClick(Sender: TObject);
+    // True wenn die User-Option [UI] AutoExpandAnnotation in analyser.ini
+    // True ist. Wird in ShowAt bei jedem Hover frisch gelesen damit ein
+    // Toggle in Tools > Options sofort wirkt (kein Plugin-Reload noetig).
+    function IsAutoExpandEnabled: Boolean;
   protected
     procedure CreateParams(var Params: TCreateParams); override;
   public
@@ -161,6 +170,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
+  uRepoSettings,         // TRepoSettings.AutoExpandAnnotation (Hover-Toggle)
   uIDELineHighlighter;   // GHighlighter (implementation-only - vermeidet
                          // den Zyklus mit dem interface-uses dort).
 
@@ -381,6 +391,10 @@ begin
   FLblTitle.AlignWithMargins   := True;
   FLblTitle.Margins.SetBounds(8, 0, 4, 0);
   FLblTitle.EllipsisPosition   := epEndEllipsis;
+  // Klick auf Title faltet das Overlay manuell auf wenn AutoExpand=False.
+  // Cursor=crHandPoint signalisiert dem User dass das Label klickbar ist.
+  FLblTitle.Cursor             := crHandPoint;
+  FLblTitle.OnClick            := TitleLblClick;
 
   // ---- Beschreibungszeile ----
   // Vorher alClient; jetzt alTop mit dynamischer Hoehe (ShowAt setzt die
@@ -733,8 +747,14 @@ begin
 
   // Timer (re)starten - Enabled:=False vor True erzwingt Countdown-Reset.
   FExpandTimer.Enabled := False;
-  // Timer braucht es nur wenn noch etwas zu wachsen ist.
-  if (FExpandStage = 0) or ((FExpandStage = 1) and (TotalH > TitleH)) then
+  // AutoExpand-Toggle: bei Stage 0 lassen wir den W-Morph immer laufen
+  // (Mini-Badge -> volle Title-Bar; Title ist sonst unlesbar). Stage 1->2
+  // (H-Morph in die Detail-Ansicht) wird NUR automatisch gemacht wenn der
+  // User die Option aktiviert hat - sonst bleibt das Overlay collapsed
+  // und der User klickt aufs Title-Label um es manuell aufzufalten.
+  if FExpandStage = 0 then
+    FExpandTimer.Enabled := True
+  else if (FExpandStage = 1) and (TotalH > TitleH) and IsAutoExpandEnabled then
     FExpandTimer.Enabled := True;
 
   // Identitaet der gerade angezeigten Markierung fuer Close-Klick speichern.
@@ -790,9 +810,12 @@ begin
       RedrawWindow(Handle, nil, 0,
         RDW_INVALIDATE or RDW_ALLCHILDREN or RDW_UPDATENOW);
       // Naechste Stufe nach 170ms = 250ms gesamt seit Show.
+      // Nur wenn die User-Option AutoExpandAnnotation aktiv ist - sonst
+      // bleibt das Overlay in Stage 1 collapsed bis der User aufs Title-
+      // Label klickt (TitleLblClick).
       FExpandStage := 1;
       FExpandTimer.Interval := 170;
-      if FExpandedHeight > FCollapsedHeight then
+      if (FExpandedHeight > FCollapsedHeight) and IsAutoExpandEnabled then
         FExpandTimer.Enabled := True;
     end;
 
@@ -807,6 +830,46 @@ begin
       end;
       FExpandStage := 2;
     end;
+  end;
+end;
+
+procedure TAnnotationOverlay.TitleLblClick(Sender: TObject);
+// Manuelles Auffalten wenn [UI] AutoExpandAnnotation=False ist (Default).
+// Springt direkt zur Stage-1->2-H-Morph-Phase und expandiert das Overlay
+// in einem Tick auf FExpandedHeight. Nach Stage 2 ist nichts mehr zu tun.
+// Wenn das Overlay schon expandiert ist: Klick ist no-op (kein Schrumpfen).
+begin
+  if not Visible then Exit;
+  if FExpandStage >= 2 then Exit;                 // schon voll
+  if FExpandedHeight <= FCollapsedHeight then Exit; // nichts zum Auffalten
+  // Direkt-Expand ohne Timer-Verzoegerung.
+  Winapi.Windows.MoveWindow(Handle, FLastX, FLastY, FLastW,
+    FExpandedHeight, True);
+  RedrawWindow(Handle, nil, 0,
+    RDW_INVALIDATE or RDW_ALLCHILDREN or RDW_UPDATENOW);
+  FExpandStage := 2;
+  if Assigned(FExpandTimer) then
+    FExpandTimer.Enabled := False;
+end;
+
+function TAnnotationOverlay.IsAutoExpandEnabled: Boolean;
+// Settings frisch bei jedem Hover-Tick lesen damit ein Toggle in Tools >
+// Options sofort wirkt. INI-IO ist trivial (cached vom OS-File-Cache),
+// kein Performance-Issue im Hover-Pfad.
+var
+  Settings : TRepoSettings;
+begin
+  Result := False;
+  Settings := TRepoSettings.Create;
+  try
+    try
+      Settings.Load;
+      Result := Settings.AutoExpandAnnotation;
+    except
+      // INI-Read-Fail -> Default False (collapsed, User-Click noetig).
+    end;
+  finally
+    Settings.Free;
   end;
 end;
 

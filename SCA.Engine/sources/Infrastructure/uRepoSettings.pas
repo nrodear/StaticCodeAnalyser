@@ -68,6 +68,12 @@ type
     FDetectorReviewFilterEnabled : Boolean; // [Rules] EnableDetectorReviewFilter
                                             // (Default False, Debug-Build-Tool)
     FSilentEnabled     : Boolean;     // [Silent] Enabled (Default: True)
+    // [UI] AutoExpandAnnotation: kontrolliert ob das Hover-Overlay nach
+    // ~250ms automatisch von der Mini-Inline-Badge in die volle Detail-
+    // Ansicht aufklappt. False (Default) = nur Title-Bar; User muss aufs
+    // Title-Label klicken um den Desc/Fix-Block zu sehen. True = altes
+    // Pre-0.9.9-Verhalten (automatisch nach 250ms).
+    FAutoExpandAnnotation : Boolean;
     FShortcutsEnabled  : Boolean;     // [Hotkeys] ShortcutsEnabled (Master-Toggle, Default: True)
     FFindingNavEnabled : Boolean;     // [Hotkeys] FindingNavEnabled (Default: True)
     // Konfigurierbare Shortcut-Strings (Format wie ShortCutToText:
@@ -245,6 +251,8 @@ type
     // (siehe uIDESCAOptions) oder per Hand in analyser.ini.
     property SilentEnabled:           Boolean     read FSilentEnabled
                                                   write FSilentEnabled;
+    property AutoExpandAnnotation:    Boolean     read FAutoExpandAnnotation
+                                                  write FAutoExpandAnnotation;
 
     // [Hotkeys] FindingNavEnabled - schaltet die Ctrl+Alt+Up/Down-Hotkeys an/aus
     // mit denen man im aktuellen Editor zur naechsten/vorherigen markierten
@@ -768,6 +776,7 @@ begin
   FIdeMinSeverity := 'hint';          // IDE-Plugin: alle Severities (Subset deckt schon)
   FDetectorReviewFilterEnabled := False; // internes Review-Tool, default aus
   FSilentEnabled  := True;            // Silent-Mode standardmaessig an
+  FAutoExpandAnnotation := False;     // Hover-Overlay bleibt collapsed bis User klickt
   FShortcutsEnabled  := True;         // Master-Toggle: alle Hotkeys an
   FFindingNavEnabled := True;         // Ctrl+Alt+Up/Down Finding-Nav an
   FSilentAnalyseShortcut  := 'Ctrl+Alt+A';
@@ -950,6 +959,7 @@ begin
     // Hotkey fuer den Silent-Mode an/aus. Konfigurierbar via Tools > Options
     // > Third Party > Static Code Analyser.
     FSilentEnabled := Ini.ReadBool('Silent', 'Enabled', True);
+    FAutoExpandAnnotation := Ini.ReadBool('UI', 'AutoExpandAnnotation', False);
 
     // [Hotkeys] ShortcutsEnabled (bool, Default True) - Master-Toggle.
     // Wenn False: ALLE Plugin-Shortcuts deaktiviert (global + Grid-lokal).
@@ -1043,6 +1053,7 @@ begin
     Ini.WriteString('Rules', 'IdeMinSeverity',     FIdeMinSeverity);
     Ini.WriteBool  ('Rules', 'EnableDetectorReviewFilter', FDetectorReviewFilterEnabled);
     Ini.WriteBool  ('Silent', 'Enabled',           FSilentEnabled);
+    Ini.WriteBool  ('UI',     'AutoExpandAnnotation', FAutoExpandAnnotation);
     Ini.WriteBool  ('Hotkeys', 'ShortcutsEnabled',        FShortcutsEnabled);
     Ini.WriteBool  ('Hotkeys', 'FindingNavEnabled',       FFindingNavEnabled);
     Ini.WriteString('Hotkeys', 'SilentAnalyseShortcut',   FSilentAnalyseShortcut);

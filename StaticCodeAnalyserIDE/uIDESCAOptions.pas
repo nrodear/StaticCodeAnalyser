@@ -73,10 +73,12 @@ type
     chkIncludeTests    : TCheckBox;
     chkAutoDiscover    : TCheckBox;
     // Display
-    grpDisplay         : TGroupBox;
-    lblOverlayPos      : TLabel;
-    cboOverlayPos      : TComboBox;
-    lblOverlayPosInfo  : TLabel;
+    grpDisplay              : TGroupBox;
+    lblOverlayPos           : TLabel;
+    cboOverlayPos           : TComboBox;
+    lblOverlayPosInfo       : TLabel;
+    chkAutoExpandAnnotation : TCheckBox;
+    lblAutoExpandInfo       : TLabel;
   private
     procedure BuildControls;
     procedure PopulateProfileCombos;
@@ -325,9 +327,9 @@ begin
   grpDisplay              := TGroupBox.Create(Self);
   grpDisplay.Parent       := FScroll;
   grpDisplay.Left         := MARGIN_LEFT;
-  grpDisplay.Top          := NextY(96);
+  grpDisplay.Top          := NextY(160);
   grpDisplay.Width        := GROUP_W;
-  grpDisplay.Height       := 96;
+  grpDisplay.Height       := 160;
   grpDisplay.Caption      := _('Display');
 
   lblOverlayPos           := TLabel.Create(Self);
@@ -358,6 +360,27 @@ begin
   lblOverlayPosInfo.Caption  :=
     _('Where the hover annotation overlay anchors relative to the finding ' +
       'line. Takes effect after IDE restart.');
+
+  chkAutoExpandAnnotation         := TCheckBox.Create(Self);
+  chkAutoExpandAnnotation.Parent  := grpDisplay;
+  chkAutoExpandAnnotation.Left    := INNER_LEFT;
+  chkAutoExpandAnnotation.Top     := lblOverlayPosInfo.Top + lblOverlayPosInfo.Height + 10;
+  chkAutoExpandAnnotation.Width   := GROUP_W - 2 * INNER_LEFT;
+  chkAutoExpandAnnotation.Caption :=
+    _('Auto-expand annotation overlay on hover');
+
+  lblAutoExpandInfo          := TLabel.Create(Self);
+  lblAutoExpandInfo.Parent   := grpDisplay;
+  lblAutoExpandInfo.AutoSize := False;
+  lblAutoExpandInfo.Left     := INNER_LEFT;
+  lblAutoExpandInfo.Top      := chkAutoExpandAnnotation.Top + chkAutoExpandAnnotation.Height + 4;
+  lblAutoExpandInfo.Width    := GROUP_W - 2 * INNER_LEFT;
+  lblAutoExpandInfo.Height   := 30;
+  lblAutoExpandInfo.WordWrap := True;
+  lblAutoExpandInfo.Caption  :=
+    _('When OFF (default): overlay stays as a compact title bar until ' +
+      'you click the title - keeps the editor uncluttered. When ON: ' +
+      'overlay auto-expands after ~250 ms.');
 
   // ================= Hotkeys ================= (BOTTOM)
   // Bewusst als letzte Gruppe positioniert - Shortcut-Konfiguration ist
@@ -598,6 +621,8 @@ begin
     else
       cboOverlayPos.ItemIndex := 0;
   end;
+  if Assigned(chkAutoExpandAnnotation) then
+    chkAutoExpandAnnotation.Checked := ASettings.AutoExpandAnnotation;
 end;
 
 procedure TSCAOptionsFrame.SaveToSettings(ASettings: TRepoSettings);
@@ -646,6 +671,8 @@ begin
     else
       ASettings.OverlayPosition := 'sameline';
   end;
+  if Assigned(chkAutoExpandAnnotation) then
+    ASettings.AutoExpandAnnotation := chkAutoExpandAnnotation.Checked;
 end;
 
 procedure TSCAOptionsFrame.CMStyleChanged(var Message: TMessage);
