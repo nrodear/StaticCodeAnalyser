@@ -439,6 +439,20 @@ procedure RegisterAnalyserDockableForm;
 procedure UnregisterAnalyserDockableForm;
 procedure ShowAnalyserDockableForm;
 
+// Konsistente Titel-Konstruktion fuer alle UI-Stellen (Hover-Overlay,
+// Plugin-Frame-Grid, Properties-Panel, IDE-Messages-View): kombiniert
+// F.MissingVar (oft nur ein Identifier wie "test") mit der Rule-
+// Beschreibung zu einer selbst-erklaerenden Zeile. Heuristik:
+//   * MissingVar leer -> nur DescText
+//   * MissingVar ist ausgeschriebener Satz (mit Whitespace) -> unveraendert
+//   * MissingVar = Identifier-only + DescText nicht-leer + Identifier
+//     nicht bereits in DescText enthalten
+//                       -> "<MissingVar>: <DescText>"
+// Quellen fuer DescText: FixHint.Description, sonst RuleCatalog.Short-
+// /FullDescription, als letzter Notnagel KindName.
+function BuildFindingTitle(F: TLeakFinding;
+  out ADescText: string): string;
+
 // Silent-Single-File-Scan. Vom Properties-Wrapper genutzt um beim Tab-Wechsel
 // die aktive Datei automatisch zu re-analysieren. ACenterOnFirstFinding=False
 // unterdrueckt das Editor-Auto-Scroll auf den ersten Befund (sonst springt
@@ -599,6 +613,80 @@ begin
     GradientFill(Canvas.Handle, @tv, 2, @gr, 1, GRADIENT_FILL_RECT_V)
   else
     GradientFill(Canvas.Handle, @tv, 2, @gr, 1, GRADIENT_FILL_RECT_H);
+end;
+
+function BuildFindingTitle(F: TLeakFinding; out ADescText: string): string;
+var
+  FH          : TFixHint;
+  Meta        : TRuleMeta;
+  TitleS      : string;
+  ColonHead   : string;
+  ColonTail   : string;
+  P           : Integer;
+  LowerDesc   : string;
+  LowerTitle  : string;
+begin
+  ADescText := '';
+  Result    := '';
+  if not Assigned(F) then Exit;
+
+  FH := TFixHintResolver.FixHint(F);
+  ADescText := FH.Description;
+  if ADescText = '' then
+  begin
+    Meta := TRuleCatalog.GetRule(F.Kind);
+    if Meta.ShortDescription <> '' then
+      ADescText := Meta.ShortDescription
+    else if Meta.FullDescription <> '' then
+      ADescText := Meta.FullDescription
+    else
+      ADescText := KindName(F.Kind);
+  end;
+
+  TitleS := Trim(F.MissingVar);
+  if TitleS = '' then
+  begin
+    Result := ADescText;
+    Exit;
+  end;
+  if ADescText = '' then
+  begin
+    Result := TitleS;
+    Exit;
+  end;
+
+  // Manche Detektoren liefern MissingVar bereits als "<Rule-Header>:
+  // <Identifier>" (z.B. "Debug output: writeln") - Naives Anhaengen der
+  // DescText ergaebe "Debug output: writeln: Debug output left in
+  // production code", also der Rule-Header doppelt. Wenn der Teil vor
+  // dem ersten ':' in der DescText vorkommt, ist es der Rule-Header -
+  // wir reduzieren auf den Identifier nach dem Doppelpunkt.
+  P := Pos(':', TitleS);
+  if P > 1 then
+  begin
+    ColonHead := Trim(Copy(TitleS, 1, P - 1));
+    ColonTail := Trim(Copy(TitleS, P + 1, MaxInt));
+    if (ColonHead <> '') and (ColonTail <> '') and
+       (Pos(LowerCase(ColonHead), LowerCase(ADescText)) > 0) then
+      TitleS := ColonTail;
+  end;
+
+  LowerTitle := LowerCase(TitleS);
+  LowerDesc  := LowerCase(ADescText);
+
+  // DescText ist bereits in TitleS enthalten -> kein erneutes Anhaengen.
+  if Pos(LowerDesc, LowerTitle) > 0 then
+    Exit(TitleS);
+
+  // TitleS ist eine Substring der DescText -> DescText ist die
+  // ausfuehrlichere Variante, also lieber die nehmen.
+  if Pos(LowerTitle, LowerDesc) > 0 then
+    Exit(ADescText);
+
+  // Sonst Identifier + ': ' + Description kombinieren (z.B.
+  // "test: Object created but never freed (memory leak)" oder
+  // "writeln: Debug output left in production code").
+  Result := TitleS + ': ' + ADescText;
 end;
 
 function GetIniPath: string;
@@ -3014,8 +3102,11 @@ begin
     var FH := FixHint(F);
     Entries[Count].FileName := F.FileName;
     Entries[Count].Line     := LineNo;
-    Entries[Count].Title    := F.MissingVar;
-    Entries[Count].Desc     := FH.Description;
+    // Title + Desc ueber zentralen Helper - identisch zu BuildMarkEntries
+    // (Silent-Mode) und allen anderen UI-Pfaden.
+    var DescText : string;
+    Entries[Count].Title    := BuildFindingTitle(F, DescText);
+    Entries[Count].Desc     := DescText;
     Entries[Count].Badge    := F.TypeText + _(' · ') + F.SeverityText;
     Entries[Count].Color    := SeverityAccent(DispSev);
     Entries[Count].Fix      := FH.After;   // Nachher-Code im Hover-Overlay
@@ -3197,7 +3288,10 @@ begin
           1: Result := f.MethodName;
           2: Result := f.LineNumber;
           3: Result := f.TypeText;
-          4: Result := f.MissingVar;
+          4: begin
+               var Dummy: string;
+               Result := BuildFindingTitle(f, Dummy);
+             end;
           5: Result := f.SeverityText;
         else
           Result := '';
@@ -3558,8 +3652,11 @@ begin
     var FH := TFixHintResolver.FixHint(F);
     Result[Count].FileName := F.FileName;
     Result[Count].Line     := LineNo;
-    Result[Count].Title    := F.MissingVar;
-    Result[Count].Desc     := FH.Description;
+    // Title + Desc via Helper - konsistent mit Frame-Pfad
+    // (HighlightAllFindingsInFile), Messages-View, Properties-Panel.
+    var DescText : string;
+    Result[Count].Title    := BuildFindingTitle(F, DescText);
+    Result[Count].Desc     := DescText;
     Result[Count].Badge    := F.TypeText + _(' · ') + F.SeverityText;
     Result[Count].Color    := SeverityAccent(DispSev);
     Result[Count].Fix      := FH.After;

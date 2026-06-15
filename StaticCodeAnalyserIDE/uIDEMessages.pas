@@ -44,7 +44,8 @@ implementation
 
 uses
   System.SysUtils, ToolsAPI,
-  uLocalization;  // _() Macro - sonst englische Default-Strings
+  uLocalization,     // _() Macro - sonst englische Default-Strings
+  uIDEAnalyserForm;  // BuildFindingTitle (zentrale Title-Konstruktion)
 
 function SeverityPrefix(S: TLeakSeverity): string;
 begin
@@ -84,7 +85,11 @@ begin
     Line := StrToIntDef(F.LineNumber, 0);
     if Line <= 0 then Line := 1;
 
-    MsgText := F.MissingVar;
+    // Konsistent zu Hover-Overlay + Plugin-Grid + Properties-Panel:
+    // F.MissingVar (oft nur Identifier) mit Rule-Description kombinieren
+    // via BuildFindingTitle aus uIDEAnalyserForm.
+    var Dummy: string;
+    MsgText := BuildFindingTitle(F, Dummy);
     if F.MethodName <> '' then
       MsgText := F.MethodName + ': ' + MsgText;
 

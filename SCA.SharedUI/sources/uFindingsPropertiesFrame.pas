@@ -626,7 +626,16 @@ begin
     COL_METHOD:   Result := F.MethodName;
     COL_LINE:     Result := F.LineNumber;
     COL_TYPE:     Result := F.TypeText;
-    COL_RULE:     Result := KIND_META[F.Kind].Name;
+    COL_RULE:
+      begin
+        // Konsistent zur zentralen BuildFindingTitle-Heuristik im
+        // IDE-Plugin: Rule-Name + Identifier-Suffix wenn MissingVar
+        // ein Identifier-only-Wert ist (z.B. ein Variablen-Name) -
+        // sonst nur Rule-Name.
+        Result := KIND_META[F.Kind].Name;
+        if (F.MissingVar <> '') and (Pos(' ', F.MissingVar) = 0) then
+          Result := Result + ': ' + F.MissingVar;
+      end;
     COL_SEVERITY:
       case SeverityFromKindLevel(F.Kind, F.Severity) of
         fsError:   Result := 'E';
