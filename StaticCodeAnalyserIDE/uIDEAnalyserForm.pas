@@ -3908,7 +3908,13 @@ var
   Slot    : TPopupHookSlot;
   NewItem : TMenuItem;
 begin
-  Popup := Sender as TPopupMenu;
+  // Defensiv: Theme-Style-Hooks der IDE rufen OnPopup gelegentlich mit
+  // anderem Sender (TStyleHook-Trampolin). Hard-Cast wuerde EInvalidCast
+  // werfen - mit is-Check und Exit bei Mismatch bleibt das Editor-Popup
+  // funktional, nur unser Custom-Eintrag wird in diesem speziellen Tick
+  // ueberspringen.
+  if not (Sender is TPopupMenu) then Exit;
+  Popup := TPopupMenu(Sender);
   if not FSlots.TryGetValue(Popup, Slot) then Exit;
 
   // (1) Alten SCA-Eintrag vom letzten Show raus + freigeben
