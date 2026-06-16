@@ -40,6 +40,49 @@ function ActiveStyleServices: TCustomStyleServices;
 //   * Mix-Quelle in SeverityBg
 function SeverityAccent(Severity: TFindingSeverity): TColor;
 
+type
+  // Farbschema NUR fuer Editor-Marker (Stripe + Mini-Infobar + Overlay-
+  // Titlebar). Properties-Panel + Hauptfenster-Grid + Stat-Tiles ignorieren
+  // den Schema-Schalter und behalten ihre eigenen Severity-Farben aus
+  // SeverityAccent.
+  TEditorColorScheme = (
+    ecsDefault,   // Original-ACCENT_* (kraftvoll, hohe Saturation)
+    ecsGray,      // Reine Graustufen, kein Farbton
+    ecsSubtle     // Gedaempfte Farben, niedrige Saturation
+  );
+
+// Editor-spezifische Akzentfarbe. Nutzt das gewuenschte Schema und passt
+// die Helligkeit automatisch an Light/Dark-Theme an (BgIsDark = True ->
+// dunkler Theme-Hintergrund -> hellere Marker, sonst umgekehrt).
+function EditorAccent(Severity: TFindingSeverity;
+  Scheme: TEditorColorScheme; BgIsDark: Boolean): TColor;
+
+// Heuristisch: True wenn der aktive Theme einen dunklen Hintergrund hat.
+// Schwellwert: Luminanz von StyleServices.GetSystemColor(clWindow) < 128.
+function IsActiveThemeDark: Boolean;
+
+// String <-> Enum Konvertierung fuer INI-Persistierung. Akzeptiert
+// 'default', 'gray', 'subtle' case-insensitiv. Unbekannt -> ecsDefault.
+function ParseEditorColorScheme(const S: string): TEditorColorScheme;
+function EditorColorSchemeToStr(Scheme: TEditorColorScheme): string;
+
+// Aktualisiert die globalen GCachedEditorScheme + GCachedEditorBgDark.
+// Caller liefert den String aus seiner Settings-Quelle - so kommt der
+// uAnalyserTheme-Layer ohne TRepoSettings-Abhaengigkeit aus (Layering:
+// SCA.SharedUI darf SCA.Engine.uRepoSettings nicht direkt importieren).
+// Komplett defensiv - Exceptions werden geschluckt, die Defaults bleiben
+// erhalten.
+procedure RefreshEditorColorSchemeCache(const ASchemeStr: string);
+
+var
+  // Globaler Cache fuer das Editor-Farbschema. Wird vom IDE-Plugin-Init
+  // gesetzt und nach jedem Settings-Save / Theme-Change refresht.
+  // BuildMarkEntries / HighlightAllFindingsInFile lesen nur diese Var -
+  // kein TRepoSettings.Create + StyleServices-Lookup pro Scan-Lauf.
+  // Defaults sind sicher (ecsDefault, False) bis das Plugin sie aktiv setzt.
+  GCachedEditorScheme : TEditorColorScheme = ecsDefault;
+  GCachedEditorBgDark : Boolean            = False;
+
 // Themed Severity-Hintergrundfarbe. Mischt einen kleinen Anteil
 // (TINT_RATIO) der Akzentfarbe in die theme-aufgeloeste Basisfarbe.
 //   ABase = clWindow  -> Default fuer Datentabellen
@@ -87,6 +130,112 @@ begin
     Result := clNone;
   end;
 end;
+
+function EditorAccent(Severity: TFindingSeverity;
+  Scheme: TEditorColorScheme; BgIsDark: Boolean): TColor;
+begin
+  case Scheme of
+    ecsGray:
+      if BgIsDark then
+        case Severity of
+          fsError:     Result := GRAY_DARK_ERROR;
+          fsWarning:   Result := GRAY_DARK_WARNING;
+          fsHint:      Result := GRAY_DARK_HINT;
+          fsFileError: Result := GRAY_DARK_FILEERROR;
+        else
+          Result := clNone;
+        end
+      else
+        case Severity of
+          fsError:     Result := GRAY_LIGHT_ERROR;
+          fsWarning:   Result := GRAY_LIGHT_WARNING;
+          fsHint:      Result := GRAY_LIGHT_HINT;
+          fsFileError: Result := GRAY_LIGHT_FILEERROR;
+        else
+          Result := clNone;
+        end;
+    ecsSubtle:
+      if BgIsDark then
+        case Severity of
+          fsError:     Result := SUBTLE_DARK_ERROR;
+          fsWarning:   Result := SUBTLE_DARK_WARNING;
+          fsHint:      Result := SUBTLE_DARK_HINT;
+          fsFileError: Result := SUBTLE_DARK_FILEERROR;
+        else
+          Result := clNone;
+        end
+      else
+        case Severity of
+          fsError:     Result := SUBTLE_LIGHT_ERROR;
+          fsWarning:   Result := SUBTLE_LIGHT_WARNING;
+          fsHint:      Result := SUBTLE_LIGHT_HINT;
+          fsFileError: Result := SUBTLE_LIGHT_FILEERROR;
+        else
+          Result := clNone;
+        end;
+  else
+    // ecsDefault - Originalverhalten, theme-unabhaengig.
+    Result := SeverityAccent(Severity);
+  end;
+end;
+
+function IsActiveThemeDark: Boolean;
+// Schwellwert 128: gewichtetes Luminanz-Mittel (Y = 0.299R + 0.587G + 0.114B).
+// Wir nehmen die einfache RGB-Durchschnitts-Heuristik weil clWindow oft
+// neutral-grau ist und der Unterschied eindeutig zwischen ~F0F0F0 (Light)
+// und ~1E1E1E (Dark) liegt.
+var
+  Svc : TCustomStyleServices;
+  C   : TColor;
+  rgb : Cardinal;
+  Avg : Integer;
+begin
+  Result := False;
+  Svc := ActiveStyleServices;
+  if not Assigned(Svc) then Exit;
+  try
+    C := Svc.GetSystemColor(clWindow);
+  except
+    Exit;
+  end;
+  rgb := ColorToRGB(C);
+  Avg := (GetRValue(rgb) + GetGValue(rgb) + GetBValue(rgb)) div 3;
+  Result := Avg < 128;
+end;
+
+function ParseEditorColorScheme(const S: string): TEditorColorScheme;
+var Lower : string;
+begin
+  Lower := LowerCase(Trim(S));
+  if Lower = 'gray' then Result := ecsGray
+  else if Lower = 'subtle' then Result := ecsSubtle
+  else Result := ecsDefault;
+end;
+
+function EditorColorSchemeToStr(Scheme: TEditorColorScheme): string;
+begin
+  case Scheme of
+    ecsGray:   Result := 'gray';
+    ecsSubtle: Result := 'subtle';
+  else
+    Result := 'default';
+  end;
+end;
+
+procedure RefreshEditorColorSchemeCache(const ASchemeStr: string);
+begin
+  try
+    GCachedEditorScheme := ParseEditorColorScheme(ASchemeStr);
+  except
+    GCachedEditorScheme := ecsDefault;
+  end;
+  try
+    GCachedEditorBgDark := IsActiveThemeDark;
+  except
+    GCachedEditorBgDark := False;
+  end;
+end;
+
 
 function BlendColor(Base, Accent: TColor; Ratio: Single): TColor;
 var

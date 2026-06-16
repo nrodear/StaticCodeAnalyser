@@ -81,6 +81,9 @@ type
     lblAutoExpandInfo       : TLabel;
     chkOverlayShowOnHover   : TCheckBox;
     lblOverlayShowOnHoverInfo : TLabel;
+    lblEditorColorScheme    : TLabel;
+    cboEditorColorScheme    : TComboBox;
+    lblEditorColorSchemeInfo: TLabel;
   private
     procedure BuildControls;
     procedure PopulateProfileCombos;
@@ -93,6 +96,12 @@ type
     // als der TIDETheme-Subscribe in manchen IDE-Versionen. Beide Pfade
     // rufen Apply auf das Frame; Apply ist idempotent.
     procedure CMStyleChanged(var Message: TMessage); message CM_STYLECHANGED;
+    // Phase-1-Helpers: konsistentes Styling der Info-/Hint-Labels
+    // (italic + clGrayText) sowie der GroupBox-Captions (bold). Wird
+    // jeweils NACH dem Erzeugen einmal pro Control aufgerufen.
+    procedure StyleAsHint(L: TLabel);
+    procedure StyleAsSectionHeader(G: TGroupBox);
+    procedure ApplyHintStyleToAllInfoLabels;
   public
     constructor Create(AOwner: TComponent); override;
     // Werte aus den Settings in die Controls schreiben (FrameCreated).
@@ -132,7 +141,9 @@ implementation
 {$R *.dfm}
 
 uses
-  uIDETheme;   // TIDETheme.Apply + Subscribe
+  uIDETheme,         // TIDETheme.Apply + Subscribe
+  uIDEToolbar,       // ApplySegoeUI - konsistenter Font-Stack
+  uAnalyserTheme;    // TEditorColorScheme + Parse/ToStr
 
 const
   // Sentinel-Text fuer "kein Profile-Override". Wird im Combo angezeigt
@@ -152,6 +163,14 @@ begin
   inherited;
   Name    := '';       // keinen Komponenten-Namen fuer den Frame
   BuildControls;
+  // Phase 1 - Font-Konsistenz: gleicher Stack wie Plugin-Dock + Properties-
+  // Panel (Segoe UI 8). Ohne diesen Aufruf erbt das Frame den IDE-Default
+  // (oft MS Shell Dlg 8), was typografisch sichtbar abweicht.
+  TIDEToolbar.ApplySegoeUI(Self, 8);
+  // Phase 1 - Info-Labels einheitlich als Hint stylen (italic + clGrayText),
+  // GroupBox-Caption bold. Findet alle bereits erzeugten Controls und
+  // wendet die Styles an - kein Refactor der BuildControls noetig.
+  ApplyHintStyleToAllInfoLabels;
 end;
 
 procedure TSCAOptionsFrame.BuildControls;
@@ -329,9 +348,9 @@ begin
   grpDisplay              := TGroupBox.Create(Self);
   grpDisplay.Parent       := FScroll;
   grpDisplay.Left         := MARGIN_LEFT;
-  grpDisplay.Top          := NextY(232);
+  grpDisplay.Top          := NextY(332);   // 232 + 100 User-Wunsch
   grpDisplay.Width        := GROUP_W;
-  grpDisplay.Height       := 232;
+  grpDisplay.Height       := 332;          // wird unten dynamisch korrigiert
   grpDisplay.Caption      := _('Display');
 
   lblOverlayPos           := TLabel.Create(Self);
@@ -404,6 +423,44 @@ begin
     _('When OFF (default): overlay appears only when you click a marked ' +
       'line - undisturbed reading. When ON: overlay follows the mouse ' +
       'and pops up as soon as you hover a marked line.');
+
+  // ---- Editor-Color-Scheme (Stripe + Mini-Infobar + Overlay-Titlebar) ----
+  lblEditorColorScheme         := TLabel.Create(Self);
+  lblEditorColorScheme.Parent  := grpDisplay;
+  lblEditorColorScheme.Left    := INNER_LEFT;
+  lblEditorColorScheme.Top     := lblOverlayShowOnHoverInfo.Top +
+                                  lblOverlayShowOnHoverInfo.Height + 12;
+  lblEditorColorScheme.Caption := _('Editor marker color scheme:');
+
+  cboEditorColorScheme         := TComboBox.Create(Self);
+  cboEditorColorScheme.Parent  := grpDisplay;
+  cboEditorColorScheme.Left    := INNER_LEFT;
+  cboEditorColorScheme.Top     := lblEditorColorScheme.Top +
+                                  lblEditorColorScheme.Height + 2;
+  cboEditorColorScheme.Width   := 220;
+  cboEditorColorScheme.Style   := csDropDownList;
+  cboEditorColorScheme.Items.Add(_('Default (bright colors)'));   // ecsDefault
+  cboEditorColorScheme.Items.Add(_('Gray (neutral)'));            // ecsGray
+  cboEditorColorScheme.Items.Add(_('Subtle (muted colors)'));     // ecsSubtle
+
+  lblEditorColorSchemeInfo          := TLabel.Create(Self);
+  lblEditorColorSchemeInfo.Parent   := grpDisplay;
+  lblEditorColorSchemeInfo.AutoSize := False;
+  lblEditorColorSchemeInfo.Left     := INNER_LEFT;
+  lblEditorColorSchemeInfo.Top      := cboEditorColorScheme.Top +
+                                       cboEditorColorScheme.Height + 4;
+  lblEditorColorSchemeInfo.Width    := GROUP_W - 2 * INNER_LEFT;
+  lblEditorColorSchemeInfo.Height   := 30;
+  lblEditorColorSchemeInfo.WordWrap := True;
+  lblEditorColorSchemeInfo.Caption  :=
+    _('Affects only the editor marker stripe, mini-infobar and hover ' +
+      'overlay titlebar. Properties Panel + main grid remain at the ' +
+      'default severity colors. Light/Dark variants are automatic.');
+
+  // GroupBox-Hoehe an die echten Children anpassen.
+  // +112 statt +12 = User-Wunsch 100 px mehr Unter-Padding (rein optisch).
+  grpDisplay.Height := lblEditorColorSchemeInfo.Top +
+                       lblEditorColorSchemeInfo.Height + 112;
 
   // ================= Hotkeys ================= (BOTTOM)
   // Bewusst als letzte Gruppe positioniert - Shortcut-Konfiguration ist
@@ -648,6 +705,13 @@ begin
     chkAutoExpandAnnotation.Checked := ASettings.AutoExpandAnnotation;
   if Assigned(chkOverlayShowOnHover) then
     chkOverlayShowOnHover.Checked := ASettings.OverlayShowOnHover;
+  if Assigned(cboEditorColorScheme) then
+    case ParseEditorColorScheme(ASettings.EditorColorScheme) of
+      ecsGray:   cboEditorColorScheme.ItemIndex := 1;
+      ecsSubtle: cboEditorColorScheme.ItemIndex := 2;
+    else
+      cboEditorColorScheme.ItemIndex := 0;
+    end;
 end;
 
 procedure TSCAOptionsFrame.SaveToSettings(ASettings: TRepoSettings);
@@ -700,6 +764,63 @@ begin
     ASettings.AutoExpandAnnotation := chkAutoExpandAnnotation.Checked;
   if Assigned(chkOverlayShowOnHover) then
     ASettings.OverlayShowOnHover := chkOverlayShowOnHover.Checked;
+  if Assigned(cboEditorColorScheme) then
+  begin
+    case cboEditorColorScheme.ItemIndex of
+      1: ASettings.EditorColorScheme := EditorColorSchemeToStr(ecsGray);
+      2: ASettings.EditorColorScheme := EditorColorSchemeToStr(ecsSubtle);
+    else
+      ASettings.EditorColorScheme := EditorColorSchemeToStr(ecsDefault);
+    end;
+    // Cache sofort aktualisieren - sonst wirkt die Schema-Auswahl erst
+    // beim naechsten BPL-Load. RefreshEditorColorSchemeCache ist
+    // komplett defensiv.
+    RefreshEditorColorSchemeCache(ASettings.EditorColorScheme);
+  end;
+end;
+
+procedure TSCAOptionsFrame.StyleAsHint(L: TLabel);
+// Italic + clGrayText = Standard-Hint-Style aus CnPack/GExperts.
+// AutoSize=False behalten wir bei (Layout-Stabilitaet fuer i18n).
+begin
+  if not Assigned(L) then Exit;
+  L.Font.Style := L.Font.Style + [fsItalic];
+  L.Font.Color := clGrayText;
+end;
+
+procedure TSCAOptionsFrame.StyleAsSectionHeader(G: TGroupBox);
+// GroupBox-Caption fett. VCL hat keinen direkten Caption-Style-Switch -
+// wir setzen Font.Style auf der GroupBox; die Caption uebernimmt das.
+// Children erben den Font nicht (Build-Reihenfolge: Caption-Font wird
+// erst NACH Children-Create gesetzt; die haben dann ihren eigenen Font).
+begin
+  if not Assigned(G) then Exit;
+  G.Font.Style := G.Font.Style + [fsBold];
+end;
+
+procedure TSCAOptionsFrame.ApplyHintStyleToAllInfoLabels;
+// Stylet alle Info-Labels einheitlich als Hint (italic + clGrayText) und
+// die GroupBox-Captions als Section-Header (bold).
+// Explizit aufgelistet weil TLabel.Create(Self) in BuildControls keinen
+// Name setzt - ein name-basierter Sweep ueber Components findet nichts.
+begin
+  // Info-Labels (Erklaerungs-Text unter den Controls)
+  StyleAsHint(lblSilentInfo);
+  StyleAsHint(lblOverlayPosInfo);
+  StyleAsHint(lblAutoExpandInfo);
+  StyleAsHint(lblOverlayShowOnHoverInfo);
+  StyleAsHint(lblEditorColorSchemeInfo);
+  StyleAsHint(lblMasterInfo);
+  StyleAsHint(lblFindingNavInfo);
+  StyleAsHint(lblRestartHint);
+  StyleAsHint(lblGridShortcuts);
+
+  // Section-Headers (GroupBox-Captions)
+  StyleAsSectionHeader(grpSilent);
+  StyleAsSectionHeader(grpHotkeys);
+  StyleAsSectionHeader(grpRuleSet);
+  StyleAsSectionHeader(grpDetectors);
+  StyleAsSectionHeader(grpDisplay);
 end;
 
 procedure TSCAOptionsFrame.CMStyleChanged(var Message: TMessage);

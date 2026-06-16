@@ -44,6 +44,38 @@ const
   ACCENT_NEUTRAL   = TColor($00B0B0B0); // Mittelgrau
 
   // ---------------------------------------------------------------------------
+  // Editor-Marker-Farbschemata: gelten NUR fuer Stripe + Mini-Infobar +
+  // Hover-Overlay-Titlebar im IDE-Editor. Properties-Panel, Hauptfenster-
+  // Grid, Stat-Tiles bleiben bei den ACCENT_*-Originalwerten.
+  // Jedes Schema hat eine Light- und Dark-Variante; die Auswahl erfolgt
+  // ueber StyleServices-Luminanz des Editor-Hintergrunds.
+  // ---------------------------------------------------------------------------
+
+  // "Gray" - voellig farblos, neutrale Graustufen. Severity wird nur ueber
+  // die Helligkeit unterschieden, nicht ueber den Farbton.
+  GRAY_LIGHT_ERROR     = TColor($00606060); // dunkler Grau
+  GRAY_LIGHT_WARNING   = TColor($00808080); // mittel
+  GRAY_LIGHT_HINT      = TColor($00A0A0A0); // hell
+  GRAY_LIGHT_FILEERROR = TColor($00505050); // sehr dunkel
+
+  GRAY_DARK_ERROR      = TColor($00C0C0C0); // sehr hell - kontrastiert auf dunklem Editor
+  GRAY_DARK_WARNING    = TColor($00A0A0A0); // hell
+  GRAY_DARK_HINT       = TColor($00808080); // mittel
+  GRAY_DARK_FILEERROR  = TColor($00D0D0D0); // fast weiss
+
+  // "Subtle" - Farben, aber stark desaturiert / abgedaempft. Erkennbar als
+  // Severity-Color, aber nicht visuell aufdringlich.
+  SUBTLE_LIGHT_ERROR     = TColor($006070B0); // gedaempftes Rot
+  SUBTLE_LIGHT_WARNING   = TColor($0050A0C0); // gedaempftes Amber
+  SUBTLE_LIGHT_HINT      = TColor($0080A080); // gedaempftes Gruen
+  SUBTLE_LIGHT_FILEERROR = TColor($005070A0); // gedaempftes Korall
+
+  SUBTLE_DARK_ERROR      = TColor($008090D0); // helleres gedaempftes Rot
+  SUBTLE_DARK_WARNING    = TColor($0070B0D0); // helleres Amber
+  SUBTLE_DARK_HINT       = TColor($0090B090); // helleres Gruen
+  SUBTLE_DARK_FILEERROR  = TColor($007090C0); // helleres Korall
+
+  // ---------------------------------------------------------------------------
   // Stat-Tile-Glyph-Akzente (BGR)
   // ---------------------------------------------------------------------------
   ICON_ERROR       = TColor($002030E0); // Rot-Orange

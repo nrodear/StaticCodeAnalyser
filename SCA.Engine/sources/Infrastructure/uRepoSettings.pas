@@ -79,6 +79,14 @@ type
     // = erst beim KLICK auf die markierte Zeile zeigt sich das Overlay -
     // ungestoertes Lesen ist Default. True = altes Hover-Verhalten.
     FOverlayShowOnHover : Boolean;
+    // [UI] EditorColorScheme: Farbschema NUR fuer Editor-Marker
+    // (Stripe + Mini-Infobar + Overlay-Titlebar). Erlaubte Werte:
+    //   'default' - Original-ACCENT_* Farben (Default)
+    //   'gray'    - reine Graustufen
+    //   'subtle'  - gedaempfte/desaturierte Farben
+    // Properties-Panel + Hauptfenster-Grid + Stat-Tiles bleiben theme-
+    // unabhaengig bei den Original-Severity-Farben.
+    FEditorColorScheme : string;
     FShortcutsEnabled  : Boolean;     // [Hotkeys] ShortcutsEnabled (Master-Toggle, Default: True)
     FFindingNavEnabled : Boolean;     // [Hotkeys] FindingNavEnabled (Default: True)
     // Konfigurierbare Shortcut-Strings (Format wie ShortCutToText:
@@ -260,6 +268,8 @@ type
                                                   write FAutoExpandAnnotation;
     property OverlayShowOnHover:      Boolean     read FOverlayShowOnHover
                                                   write FOverlayShowOnHover;
+    property EditorColorScheme:       string      read FEditorColorScheme
+                                                  write FEditorColorScheme;
 
     // [Hotkeys] FindingNavEnabled - schaltet die Ctrl+Alt+Up/Down-Hotkeys an/aus
     // mit denen man im aktuellen Editor zur naechsten/vorherigen markierten
@@ -785,6 +795,7 @@ begin
   FSilentEnabled  := True;            // Silent-Mode standardmaessig an
   FAutoExpandAnnotation := False;     // Hover-Overlay bleibt collapsed bis User klickt
   FOverlayShowOnHover   := False;     // Overlay erscheint NUR beim Klick auf markierte Zeile
+  FEditorColorScheme    := 'default'; // Original-ACCENT_* Farben
   FShortcutsEnabled  := True;         // Master-Toggle: alle Hotkeys an
   FFindingNavEnabled := True;         // Ctrl+Alt+Up/Down Finding-Nav an
   FSilentAnalyseShortcut  := 'Ctrl+Alt+A';
@@ -969,6 +980,7 @@ begin
     FSilentEnabled := Ini.ReadBool('Silent', 'Enabled', True);
     FAutoExpandAnnotation := Ini.ReadBool('UI', 'AutoExpandAnnotation', False);
     FOverlayShowOnHover   := Ini.ReadBool('UI', 'OverlayShowOnHover',   False);
+    FEditorColorScheme    := Ini.ReadString('UI', 'EditorColorScheme', 'default');
 
     // [Hotkeys] ShortcutsEnabled (bool, Default True) - Master-Toggle.
     // Wenn False: ALLE Plugin-Shortcuts deaktiviert (global + Grid-lokal).
@@ -1064,6 +1076,7 @@ begin
     Ini.WriteBool  ('Silent', 'Enabled',           FSilentEnabled);
     Ini.WriteBool  ('UI',     'AutoExpandAnnotation', FAutoExpandAnnotation);
     Ini.WriteBool  ('UI',     'OverlayShowOnHover',   FOverlayShowOnHover);
+    Ini.WriteString('UI',     'EditorColorScheme',    FEditorColorScheme);
     Ini.WriteBool  ('Hotkeys', 'ShortcutsEnabled',        FShortcutsEnabled);
     Ini.WriteBool  ('Hotkeys', 'FindingNavEnabled',       FFindingNavEnabled);
     Ini.WriteString('Hotkeys', 'SilentAnalyseShortcut',   FSilentAnalyseShortcut);

@@ -3080,15 +3080,16 @@ procedure TAnalyserFrame.HighlightAllFindingsInFile(const AFileName: string);
 // kostet die Liste etwa 2-3 MB Heap - akzeptabel, Lookup ist O(1)
 // per Datei.
 var
-  i       : Integer;
-  F       : TLeakFinding;
-  Entries : TArray<TFindingMarkEntry>;
-  Count   : Integer;
-  LineNo  : Integer;
-  DispSev : TFindingSeverity;
+  i        : Integer;
+  F        : TLeakFinding;
+  Entries  : TArray<TFindingMarkEntry>;
+  Count    : Integer;
+  LineNo   : Integer;
+  DispSev  : TFindingSeverity;
 begin
   if not Assigned(GHighlighter) or not Assigned(FDisplayedFindings) then Exit;
-
+  // Scheme + Dark-Flag aus globalem Cache (siehe BuildMarkEntries fuer
+  // Hintergrund).
   SetLength(Entries, FDisplayedFindings.Count);
   Count := 0;
   for i := 0 to FDisplayedFindings.Count - 1 do
@@ -3102,15 +3103,14 @@ begin
     var FH := FixHint(F);
     Entries[Count].FileName := F.FileName;
     Entries[Count].Line     := LineNo;
-    // Title + Desc ueber zentralen Helper - identisch zu BuildMarkEntries
-    // (Silent-Mode) und allen anderen UI-Pfaden.
     var DescText : string;
     Entries[Count].Title    := BuildFindingTitle(F, DescText);
     Entries[Count].Desc     := DescText;
     Entries[Count].Badge    := F.TypeText + _(' · ') + F.SeverityText;
-    Entries[Count].Color    := SeverityAccent(DispSev);
-    Entries[Count].Fix      := FH.After;   // Nachher-Code im Hover-Overlay
-    Entries[Count].Severity := DispSev;    // Multi-Mark-Ranking (staerkste zuerst)
+    Entries[Count].Color    := EditorAccent(DispSev,
+                                 GCachedEditorScheme, GCachedEditorBgDark);
+    Entries[Count].Fix      := FH.After;
+    Entries[Count].Severity := DispSev;
     Inc(Count);
   end;
   SetLength(Entries, Count);
@@ -3636,6 +3636,13 @@ var
   DispSev  : TFindingSeverity;
 begin
   if not Assigned(Findings) then Exit(nil);
+  // Scheme + Dark-Theme-Flag aus dem globalen Cache holen. Cache wird vom
+  // IDE-Plugin-Init / Settings-Save / Theme-Change-Hook gefuellt - hier
+  // KEIN TRepoSettings.Create und KEIN StyleServices-Lookup, weil dieser
+  // Pfad auch waehrend des IDE-Startups gerufen werden kann (KeyboardChanged
+  // im LoadDefaultLibraries-Path) und dort ist StyleServices nicht final
+  // initialisiert + analyser.ini-Pfad nicht stabil.
+
   SetLength(Result, Findings.Count);
   Count := 0;
   for i := 0 to Findings.Count - 1 do
@@ -3646,19 +3653,15 @@ begin
     LineNo := StrToIntDef(F.LineNumber, 0);
     if LineNo <= 0 then Continue;
     DispSev := SeverityFromKindLevel(F.Kind, F.Severity);
-    // TFixHintResolver.FixHint statt bare FixHint: hier sind wir NICHT in
-    // einer TAnalyserFrame-Methode (wo der Klassen-Wrapper Self.FixHint
-    // greift), sondern in einer Top-Level-Procedure - direkter Resolver-Call.
     var FH := TFixHintResolver.FixHint(F);
     Result[Count].FileName := F.FileName;
     Result[Count].Line     := LineNo;
-    // Title + Desc via Helper - konsistent mit Frame-Pfad
-    // (HighlightAllFindingsInFile), Messages-View, Properties-Panel.
     var DescText : string;
     Result[Count].Title    := BuildFindingTitle(F, DescText);
     Result[Count].Desc     := DescText;
     Result[Count].Badge    := F.TypeText + _(' · ') + F.SeverityText;
-    Result[Count].Color    := SeverityAccent(DispSev);
+    Result[Count].Color    := EditorAccent(DispSev,
+                                GCachedEditorScheme, GCachedEditorBgDark);
     Result[Count].Fix      := FH.After;
     Result[Count].Severity := DispSev;
     Inc(Count);
@@ -3725,11 +3728,12 @@ begin
     end;
 
     Entries := BuildMarkEntries(Findings);
-    // SetAllFindings ersetzt komplett - bei Bedarf koennte man stattdessen
-    // ReplaceMarksForFile nutzen damit Marker anderer Dateien erhalten
-    // bleiben. SetAllFindings ist hier OK weil der Silent-Mode pro Klick
-    // einen Snapshot setzt, der nur die geklickte Datei zeigt.
-    GHighlighter.SetAllFindings(Entries);
+    // ReplaceMarksForFile statt SetAllFindings: Marker anderer Dateien
+    // bleiben erhalten. Vorher hat jeder Single-File-Scan (Tab-Wechsel
+    // im Properties-Panel) die Marker aller anderen offenen Dateien
+    // weggefegt - User sah seine Befunde in Datei A nach einem Wechsel
+    // zu B beim Zurueckkehren nicht mehr.
+    GHighlighter.ReplaceMarksForFile(AFileName, Entries);
 
     // Properties-Panel (und andere Subscriber) ueber die Silent-Findings
     // informieren. Borrowed-Refs - Subscriber klonen selbst wenn sie
@@ -4311,6 +4315,23 @@ begin
   // Options-Page das JSON synchron parsen (~20-50 ms). Hier ist der
   // Aufruf im BPL-Load-Pfad versteckt und faellt nicht auf.
   TRuleCatalog.ProfileNames;   // triggert EnsureLoaded
+
+  // Editor-Color-Scheme-Cache initial fuellen. Komplett defensiv - bei
+  // jedem Fehler bleibt der Cache auf den ecsDefault/False-Defaults und
+  // BuildMarkEntries laeuft ohne Crash durch (kritisch, weil der Pfad
+  // auch waehrend des IDE-Startups gerufen werden kann via
+  // KeyboardChanged -> Hotkey-Binding).
+  try
+    var S := TRepoSettings.Create;
+    try
+      try S.Load; except end;
+      RefreshEditorColorSchemeCache(S.EditorColorScheme);
+    finally
+      S.Free;
+    end;
+  except
+    // Wenn schon Create faellt: Cache bleibt auf Defaults, Plugin laeuft weiter.
+  end;
 
   // Eintrag im Ansicht-Menue hinzufuegen
   MainMenu := NTASvc.GetMainMenu;
