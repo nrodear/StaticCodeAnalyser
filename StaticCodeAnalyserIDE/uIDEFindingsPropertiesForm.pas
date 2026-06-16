@@ -61,6 +61,14 @@ type
     // Events. 250ms reichen fuer typische Event-Bursts ohne legitime
     // User-Tab-Wechsel nennenswert zu blockieren.
     FSuppressActivationUntil : Cardinal;
+    // Re-Scan-Cache: pro Datei die Modification-Time vom letzten erfolgten
+    // Scan. TriggerAutoScan skippt, wenn die Datei seit dem letzten Scan
+    // nicht editiert wurde (typisches Tab-Wechsel-Szenario). Damit wird
+    // der teure AnalyzeLeaks + TryGetAllPasFiles(ProjectRoot) bei jedem
+    // Klick auf einen bereits gesehenen Tab vermieden.
+    // Reload-Button leert den Eintrag fuer die aktuelle Datei -> Force-
+    // Rescan auch wenn die Datei nicht extern modifiziert wurde.
+    FLastScanTimes : TDictionary<string, TDateTime>;
     // Window-State-Persistence (Option C, Hybrid):
     //   * IDE-Desktop-INI (Save/LoadWindowState) - sessionuebergreifend via
     //     Tools > Save Desktop / Project-Desktop-Persistenz.
@@ -91,8 +99,13 @@ type
     procedure HandleThemeChanged;
     procedure InitialPopulateFromActiveEditor;
     procedure TriggerAutoScan(const AFileName: string);
+    // Cache-Helper - lazy create. Schluessel ist NormalizePath(FileName).
+    function  ShouldSkipScan(const AFileName: string): Boolean;
+    procedure RecordScanTime(const AFileName: string);
+    procedure InvalidateScanCache(const AFileName: string);
     function  CloneFinding(F: TLeakFinding): TLeakFinding;
   public
+    destructor Destroy; override;
     // INTACustomDockableForm
     function GetCaption: string;
     function GetIdentifier: string;
@@ -140,6 +153,8 @@ implementation
 uses
   System.IOUtils,
   Vcl.Graphics,
+  System.Math,                // SameValue
+  System.DateUtils,           // OneSecond
   uIDETheme,
   uIDEWatchMode,
   uIDELineHighlighter,        // GHighlighter.Clear fuer Toolbar-Clear-Button
@@ -465,6 +480,12 @@ procedure TFindingsPropertiesDockableForm.TriggerAutoScan(
 // ACenterOnFirstFinding=False unterdrueckt das Editor-Scroll-To-First-
 // Finding (sonst springt der Editor bei jedem Tab-Wechsel unerwartet).
 //
+// Cache-Skip: vor dem (teuren) RunSilentAnalysisForFile pruefen ob die
+// Datei seit dem letzten erfolgreichen Scan modifiziert wurde. Wenn nicht
+// -> skip; der GHighlighter behaelt seine Marker und der Frame seine
+// Findings, kein Re-Dispatch. Loest den Tab-Spam-Lag, weil oft besuchte
+// Files nicht jedes Mal projektweit re-scanned werden.
+//
 // Nur fuer .pas / .dpr / .dpk - andere Extensions (.dfm-as-Text, .inc, ...)
 // hat der Detector kein sinnvolles Single-File-Analyse-Modell.
 var
@@ -474,14 +495,80 @@ begin
   Ext := LowerCase(ExtractFileExt(AFileName));
   if not ((Ext = '.pas') or (Ext = '.dpr') or (Ext = '.dpk')) then Exit;
   if not FileExists(AFileName) then Exit;
-  // RunSilentAnalysisForFile ist synchron. Bei haeufigem Tab-Wechsel
-  // koennte das User-spuerbaren Lag erzeugen - falls noetig, spaeter
-  // mit Debounce-Timer hinterlegen.
+
+  if ShouldSkipScan(AFileName) then Exit;
+
   try
     RunSilentAnalysisForFile(AFileName, {ACenterOnFirstFinding=}False);
+    RecordScanTime(AFileName);
   except
     // Detector-Crash darf den Tab-Wechsel-Hook nicht reissen.
   end;
+end;
+
+function NormalizeForCache(const APath: string): string;
+// Schluessel-Normalisierung fuer FLastScanTimes - gleiche Konvention wie
+// Frame.NormalizePath (case ist Windows-egal, '/' vs '\' nicht).
+begin
+  Result := StringReplace(APath, '/', '\', [rfReplaceAll]).Trim;
+end;
+
+function TFindingsPropertiesDockableForm.ShouldSkipScan(
+  const AFileName: string): Boolean;
+// True wenn die Datei seit dem letzten Scan unveraendert ist. Schluessel
+// im Cache ist NormalizePath - gleicher Stil wie in Frame.NormalizePath.
+var
+  Key      : string;
+  Cached   : TDateTime;
+  CurrentT : TDateTime;
+begin
+  Result := False;
+  if not Assigned(FLastScanTimes) then Exit;
+  Key := NormalizeForCache(AFileName);
+  if not FLastScanTimes.TryGetValue(Key, Cached) then Exit;
+  try
+    CurrentT := TFile.GetLastWriteTime(AFileName);
+  except
+    Exit;   // bei FS-Error lieber re-scannen als skippen
+  end;
+  // SameValue mit 1 sec Toleranz - manche FS speichern Millisekunden nicht
+  // round-trip-stabil (FAT32: 2-Sekunden-Granularitaet).
+  Result := SameValue(CurrentT, Cached, OneSecond);
+end;
+
+procedure TFindingsPropertiesDockableForm.RecordScanTime(
+  const AFileName: string);
+var
+  Key : string;
+  T   : TDateTime;
+begin
+  if not Assigned(FLastScanTimes) then
+    FLastScanTimes := TDictionary<string, TDateTime>.Create;
+  Key := NormalizeForCache(AFileName);
+  try
+    T := TFile.GetLastWriteTime(AFileName);
+  except
+    Exit;
+  end;
+  FLastScanTimes.AddOrSetValue(Key, T);
+end;
+
+procedure TFindingsPropertiesDockableForm.InvalidateScanCache(
+  const AFileName: string);
+// Reload-Button + Clear-Button rufen das, damit der naechste TriggerAutoScan
+// den Cache-Skip umgeht und tatsaechlich neu analysiert.
+begin
+  if not Assigned(FLastScanTimes) then Exit;
+  if AFileName = '' then
+    FLastScanTimes.Clear
+  else
+    FLastScanTimes.Remove(NormalizeForCache(AFileName));
+end;
+
+destructor TFindingsPropertiesDockableForm.Destroy;
+begin
+  FreeAndNil(FLastScanTimes);
+  inherited;
 end;
 
 procedure TFindingsPropertiesDockableForm.HandleReloadRequested(Sender: TObject);
@@ -529,6 +616,14 @@ begin
   // landen. SetActiveFile ist idempotent fuer Same-Path.
   FFrame.SetActiveFile(Target);
 
+  // Reload-Button MUSS einen tatsaechlichen Re-Scan ausloesen, auch wenn
+  // die Datei seit dem letzten Scan unveraendert ist. Cache-Eintrag fuer
+  // Target entfernen, damit ShouldSkipScan False liefert.
+  InvalidateScanCache(Target);
+  // Frame-seitiger Per-File-Findings-Cache fuer Target auch verwerfen -
+  // sonst zeigt der Frame nach dem Re-Scan noch die alten Befunde aus
+  // seinem Cache statt der frisch dispatched-en.
+  FFrame.InvalidateFindingsCache(Target);
   TriggerAutoScan(Target);
 end;
 
@@ -539,11 +634,16 @@ procedure TFindingsPropertiesDockableForm.HandleClearMarkersRequested(
 // das Grid lokal leeren damit auch der Panel-View dem leeren Zustand
 // entspricht. Watch-Mode bleibt aktiv - der naechste Scan fuellt alles
 // wieder.
+//
+// Cache komplett invalidieren: nach Clear soll der NAECHSTE Tab-Wechsel
+// (bzw. Reload) tatsaechlich neu scannen, nicht auf veralteten Cache
+// fallback'n.
 begin
   if Assigned(GHighlighter) then
     GHighlighter.Clear;
   if Assigned(FFrame) then
     FFrame.Clear;
+  InvalidateScanCache('');   // '' = alle Eintraege loeschen
 end;
 
 procedure TFindingsPropertiesDockableForm.ViewMenuClick(Sender: TObject);

@@ -55,8 +55,19 @@ type
     FBtnReload     : TButton;
     FSeverityCombo : TComboBox;
     FGrid          : TStringGrid;
-    FAllFindings   : TObjectList<TLeakFinding>;   // OWNED, ungefiltert
+    FAllFindings   : TObjectList<TLeakFinding>;   // OWNED, ungefiltert (aktuelle Datei)
     FVisibleRows   : TList<TLeakFinding>;         // Refs auf FAllFindings, gefiltert
+    // Per-File-Findings-Cache. Schluessel = NormalizePath. Eintrag wird
+    // gefuellt bei SetFindings, gelesen bei SetActiveFile - so behalten
+    // andere offene Dateien ihre Findings, auch wenn der Wrapper-Cache
+    // den naechsten Re-Scan skippt.
+    // OWNED: das Dictionary hat die TObjectList<TLeakFinding>-Refs; deren
+    // OwnsObjects ist True, damit beim Cache-Eviction die Findings freed
+    // werden. Beim Anzeigen werden Kopien der Refs in FAllFindings gelegt
+    // (Pointer-Sharing, NICHT zweite Owner) - genau wie bisher in
+    // FVisibleRows. FAllFindings.OwnsObjects ist deshalb auf False
+    // gesetzt sobald der Cache aktiv ist.
+    FFindingsByFile : TObjectDictionary<string, TObjectList<TLeakFinding>>;
     FCurrentFile   : string;
     FGridConfig    : TFindingGridConfig;
     FOnClick       : TFindingClickEvent;
@@ -87,6 +98,11 @@ type
     // Aktuell leere Stubs, damit das Layout sichtbar ist und Naming feststeht.
     procedure BtnClearClick(Sender: TObject);
     procedure BtnReloadClick(Sender: TObject);
+    // Cache-Helpers fuer FFindingsByFile.
+    function  CloneFinding(F: TLeakFinding): TLeakFinding;
+    procedure StoreInCache(const AFileName: string);
+    function  LoadFromCache(const AFileName: string): Boolean;
+    procedure RemoveFromCache(const AFileName: string);
     procedure GridDrawCell(Sender: TObject; ACol, ARow: Integer;
       Rect: TRect; State: TGridDrawState);
     procedure GridDblClick(Sender: TObject);
@@ -132,6 +148,9 @@ type
     procedure RefreshFromTheme;
 
     procedure Clear;
+    // Wrapper kann den Cache-Eintrag fuer eine bestimmte Datei verwerfen
+    // (Reload-Button). Public-Wrapper um RemoveFromCache.
+    procedure InvalidateFindingsCache(const AFileName: string);
 
     function VisibleCount: Integer;
     function TotalCount: Integer;
@@ -212,8 +231,10 @@ const
 constructor TFindingsPropertiesFrame.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
-  FAllFindings := TObjectList<TLeakFinding>.Create({AOwnsObjects=}True);
-  FVisibleRows := TList<TLeakFinding>.Create;
+  FAllFindings    := TObjectList<TLeakFinding>.Create({AOwnsObjects=}True);
+  FVisibleRows    := TList<TLeakFinding>.Create;
+  // OwnsValues: Dict-Eviction freed die Cache-Liste samt ihrer Klone.
+  FFindingsByFile := TObjectDictionary<string, TObjectList<TLeakFinding>>.Create([doOwnsValues]);
   FCurrentFile := '';
   FSortColumn      := -1;       // unsortiert = Detector-Reihenfolge
   FSortDescending  := False;
@@ -234,6 +255,7 @@ begin
     try FOnDestroying(Self); except end;
   FVisibleRows.Free;
   FAllFindings.Free;
+  FFindingsByFile.Free;
   inherited;
 end;
 
@@ -443,20 +465,26 @@ begin
   FAllFindings.Clear;
   if Findings <> nil then
   begin
-    // Ownership uebertragen: wir kopieren die Refs und setzen die
-    // Quell-Liste auf OwnsObjects=False, damit ihr Free die Items
-    // NICHT freigibt (wir haben sie jetzt).
+    // Ownership uebertragen: Quell-Liste OwnsObjects=False, damit ihr
+    // Free die Items NICHT freigibt - wir haben sie jetzt in FAllFindings.
+    // VORHER: while Findings.Count > 0 do Add(Findings[0]); Delete(0).
+    //         Jedes Delete(0) shiftet die Restliste -> O(N^2). Bei 200+
+    //         Findings spuerbarer Lag im UI-Thread.
+    // JETZT:  Capacity vorab reservieren + linearer Index-Walk = O(N).
     Findings.OwnsObjects := False;
     try
-      while Findings.Count > 0 do
-      begin
-        FAllFindings.Add(Findings[0]);
-        Findings.Delete(0);
-      end;
+      FAllFindings.Capacity := FAllFindings.Count + Findings.Count;
+      for var I := 0 to Findings.Count - 1 do
+        FAllFindings.Add(Findings[I]);
+      Findings.Clear;   // entfernt Refs, freed Items NICHT (OwnsObjects=False)
     finally
       Findings.Free;
     end;
   end;
+  // Per-File-Cache: spaeter Tab-Wechsel zurueck zu dieser Datei laed die
+  // Findings aus dem Cache statt einen leeren Grid anzuzeigen (Wrapper
+  // skippt den Re-Scan dank FLastScanTimes, dispatched also nichts neu).
+  StoreInCache(AFileName);
   ApplySeverityFilter;
   UpdateHeader;
 end;
@@ -478,6 +506,17 @@ begin
     Exit;
   end;
   FCurrentFile := AFileName;
+  // Per-File-Cache-Hit: Findings der neuen Datei sind noch vom letzten
+  // Scan gespeichert -> nicht clearen, sondern aus Cache laden. So bleibt
+  // das Grid beim Tab-Wechsel zwischen schon-gescannten Dateien gefuellt,
+  // auch wenn der Wrapper-Re-Scan-Cache (FLastScanTimes) skipt und damit
+  // kein Watch-Dispatch nachgeschoben wird.
+  if LoadFromCache(AFileName) then
+  begin
+    ApplySeverityFilter;
+    UpdateHeader;
+    Exit;
+  end;
   FAllFindings.Clear;
   FVisibleRows.Clear;
   FGrid.RowCount := 2;   // FixedRows=1 verlangt RowCount>=2
@@ -519,6 +558,9 @@ end;
 
 procedure TFindingsPropertiesFrame.Clear;
 begin
+  // Cache komplett verwerfen: nach Clear soll der naechste Scan tatsaechlich
+  // neu fuellen, nicht aus altem Per-File-Cache laden.
+  FFindingsByFile.Clear;
   FCurrentFile := '';
   FAllFindings.Clear;
   FVisibleRows.Clear;
@@ -688,6 +730,85 @@ procedure TFindingsPropertiesFrame.SeverityComboChange(Sender: TObject);
 begin
   ApplySeverityFilter;
   UpdateHeader;
+end;
+
+function TFindingsPropertiesFrame.CloneFinding(F: TLeakFinding): TLeakFinding;
+// Deep-Copy aller Datenfelder. Wert-Felder, Strings - shallow Assign reicht.
+// Identisch zu der Variante im IDE-Wrapper, hier nochmal damit das Frame
+// in SCA.SharedUI keine OTAPI-Dependencies braucht.
+begin
+  Result := TLeakFinding.Create;
+  Result.FileName   := F.FileName;
+  Result.MethodName := F.MethodName;
+  Result.LineNumber := F.LineNumber;
+  Result.MissingVar := F.MissingVar;
+  Result.Severity   := F.Severity;
+  Result.Kind       := F.Kind;
+  Result.Confidence := F.Confidence;
+  Result.RuleID     := F.RuleID;
+end;
+
+procedure TFindingsPropertiesFrame.StoreInCache(const AFileName: string);
+// Klont die aktuelle FAllFindings-Liste in den File-Cache. Ueberschreibt
+// einen ggf. existierenden Cache-Eintrag fuer AFileName (OwnsValues ->
+// alte Liste freed).
+var
+  Key   : string;
+  Owned : TObjectList<TLeakFinding>;
+  F     : TLeakFinding;
+begin
+  if AFileName = '' then Exit;
+  Key := NormalizePath(AFileName);
+  if Key = '' then Exit;
+  Owned := TObjectList<TLeakFinding>.Create({AOwnsObjects=}True);
+  try
+    Owned.Capacity := FAllFindings.Count;
+    for F in FAllFindings do
+      Owned.Add(CloneFinding(F));
+  except
+    Owned.Free;
+    raise;
+  end;
+  FFindingsByFile.AddOrSetValue(Key, Owned);
+end;
+
+function TFindingsPropertiesFrame.LoadFromCache(
+  const AFileName: string): Boolean;
+// True wenn fuer AFileName ein Cache-Eintrag existierte und in FAllFindings
+// uebernommen wurde. FAllFindings wird VOR dem Laden geleert.
+var
+  Key    : string;
+  Cached : TObjectList<TLeakFinding>;
+  F      : TLeakFinding;
+begin
+  Result := False;
+  Key := NormalizePath(AFileName);
+  if Key = '' then Exit;
+  if not FFindingsByFile.TryGetValue(Key, Cached) then Exit;
+  FAllFindings.Clear;
+  FAllFindings.Capacity := Cached.Count;
+  for F in Cached do
+    FAllFindings.Add(CloneFinding(F));
+  Result := True;
+end;
+
+procedure TFindingsPropertiesFrame.InvalidateFindingsCache(
+  const AFileName: string);
+begin
+  RemoveFromCache(AFileName);
+end;
+
+procedure TFindingsPropertiesFrame.RemoveFromCache(const AFileName: string);
+// Cache-Eintrag fuer eine Datei explizit verwerfen. Wird vom Wrapper
+// genutzt wenn Reload-Button geklickt - sonst wuerde der naechste Tab-
+// Wechsel zur selben Datei den alten Cache-Eintrag rauskramen statt
+// die frisch gescannten Findings zu zeigen.
+var
+  Key : string;
+begin
+  Key := NormalizePath(AFileName);
+  if Key = '' then Exit;
+  FFindingsByFile.Remove(Key);   // OwnsValues -> Liste freed
 end;
 
 procedure TFindingsPropertiesFrame.BtnClearClick(Sender: TObject);

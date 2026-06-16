@@ -236,6 +236,14 @@ type
     // pro Analyse-Run / Filter-Wechsel. AEntries[i].FileName muss gesetzt
     // sein (leerer FileName -> Eintrag wird geskippt).
     procedure SetAllFindings(const AEntries: array of TFindingMarkEntry);
+    // Pro-File-Variante: ERSETZT NUR die Marker fuer AFileName, alle
+    // anderen Dateien bleiben unangetastet. Wird vom Silent-Scan-Pfad
+    // (Auto-Scan bei Tab-Wechsel, Reload-Button) genutzt - sonst wuerde
+    // jeder Single-File-Scan die Marker aller anderen Dateien wegfegen.
+    // Wenn AEntries leer ist, wird der File-Eintrag in FMarksByFile
+    // entfernt (= dieselbe Wirkung wie ClearFile).
+    procedure ReplaceMarksForFile(const AFileName: string;
+      const AEntries: array of TFindingMarkEntry);
     procedure Clear;
 
     // Loescht alle Marker fuer EINE Datei. Wird vom Save-Auto-Clear
@@ -847,6 +855,187 @@ begin
   // Neue Markierungen einmal repainten damit Stripes in allen sichtbaren
   // Editoren erscheinen.
   InvalidateAllLines;
+end;
+
+procedure TFindingHighlighter.ReplaceMarksForFile(const AFileName: string;
+  const AEntries: array of TFindingMarkEntry);
+// Pro-File-Variante zu SetAllFindings. Logik identisch (Gruppieren ->
+// Dedup -> Sortieren nach Severity -> Single/Multi-Mark), aber Scope auf
+// EINE Datei begrenzt. Marker anderer Dateien bleiben unangetastet.
+var
+  i, j      : Integer;
+  Mark      : TFindingMark;
+  FileKey   : string;
+  Bucket    : TFileMarks;
+  OldBucket : TFileMarks;
+  LineMap   : TObjectDictionary<Integer, TList<TFindingMarkEntry>>;
+  EntryList : TList<TFindingMarkEntry>;
+  Group     : TList<TFindingMarkEntry>;
+  Strongest : TFindingMarkEntry;
+  DescSB    : TStringBuilder;
+  Svc       : INTACodeEditorServices;
+  HasSvc    : Boolean;
+begin
+  FileKey := NormalizePath(AFileName);
+  if FileKey = '' then Exit;
+
+  HasSvc := Supports(BorlandIDEServices, INTACodeEditorServices, Svc);
+
+  // Hover-Overlay nur dann verstecken, wenn es eine Marke unserer Datei
+  // zeigt. Bei anderen Dateien stoeren wir den User nicht.
+  if Assigned(GAnnotationOverlay) then
+    GAnnotationOverlay.HideOverlay;
+
+  // 1) Alte Markierungs-Lines fuer FileKey invalidieren, damit die
+  //    bisherigen Stripes weggemalt werden. Andere Dateien bleiben
+  //    unberuehrt.
+  if FMarksByFile.TryGetValue(FileKey, OldBucket) then
+  begin
+    if HasSvc then
+      for var OldLn in OldBucket.Keys do
+        try Svc.InvalidateTopEditorLogicalLine(OldLn); except end;
+    FMarksByFile.Remove(FileKey);   // OwnsValues -> Bucket freed
+  end;
+
+  // 2) Wenn keine neuen Eintraege: nur Save-Notifier abklemmen + raus.
+  //    Identisch zu ClearFile fuer diese Datei.
+  if Length(AEntries) = 0 then
+  begin
+    if FSaveNotifiers.ContainsKey(FileKey) then
+      DetachSaveNotifier(FileKey);
+    if Assigned(FEditorEventsObj) then
+      FEditorEventsObj.ResetState;
+    Exit;
+  end;
+
+  // 3) Eintraege nach Line gruppieren.
+  LineMap := TObjectDictionary<Integer, TList<TFindingMarkEntry>>.Create([doOwnsValues]);
+  try
+    for i := 0 to High(AEntries) do
+    begin
+      if AEntries[i].Line <= 0 then Continue;
+      // Defensive: FileName muss zu AFileName passen, sonst skip.
+      if NormalizePath(AEntries[i].FileName) <> FileKey then Continue;
+
+      if not LineMap.TryGetValue(AEntries[i].Line, EntryList) then
+      begin
+        EntryList := TList<TFindingMarkEntry>.Create;
+        LineMap.Add(AEntries[i].Line, EntryList);
+      end;
+      EntryList.Add(AEntries[i]);
+    end;
+
+    // 4) Pro Gruppe Mark synthetisieren (identisch zu SetAllFindings).
+    Bucket := TFileMarks.Create;
+    FMarksByFile.Add(FileKey, Bucket);
+
+    for var LineNo in LineMap.Keys do
+    begin
+      Group := LineMap[LineNo];
+      if Group.Count = 0 then Continue;
+
+      // Duplikate (Title + Severity) entfernen.
+      if Group.Count > 1 then
+      begin
+        var SeenKeys : TDictionary<string, Boolean>;
+        SeenKeys := TDictionary<string, Boolean>.Create;
+        try
+          for var k := Group.Count - 1 downto 0 do
+          begin
+            var Key := Trim(Group[k].Title) + '|' +
+                       IntToStr(Ord(Group[k].Severity));
+            if SeenKeys.ContainsKey(Key) then
+              Group.Delete(k)
+            else
+              SeenKeys.Add(Key, True);
+          end;
+        finally
+          SeenKeys.Free;
+        end;
+      end;
+
+      Group.Sort(TComparer<TFindingMarkEntry>.Construct(
+        function(const A, B: TFindingMarkEntry): Integer
+        begin
+          Result := SeverityRank(A.Severity) - SeverityRank(B.Severity);
+        end));
+      Strongest := Group[0];
+
+      if Group.Count = 1 then
+      begin
+        Mark.Title    := Strongest.Title;
+        Mark.Desc     := Strongest.Desc;
+        Mark.Badge    := Strongest.Badge;
+        Mark.Color    := Strongest.Color;
+        Mark.Fix      := Strongest.Fix;
+        Mark.Severity := Strongest.Severity;
+        Mark.IsMulti  := False;
+      end
+      else
+      begin
+        DescSB := TStringBuilder.Create;
+        try
+          for j := 0 to Group.Count - 1 do
+          begin
+            if j > 0 then DescSB.AppendLine;
+            DescSB.Append(#$2022 + ' ');
+            if Group[j].Title <> '' then
+              DescSB.Append(Group[j].Title)
+            else
+              DescSB.Append('(unnamed)');
+            if Group[j].Severity <> fsUnknown then
+            begin
+              DescSB.Append('  [');
+              DescSB.Append(SeverityLabel(Group[j].Severity));
+              DescSB.Append(']');
+            end;
+            if Group[j].Desc <> '' then
+            begin
+              DescSB.AppendLine;
+              DescSB.Append('   ');
+              DescSB.Append(Group[j].Desc);
+            end;
+          end;
+          Mark.Desc := DescSB.ToString;
+        finally
+          DescSB.Free;
+        end;
+        Mark.Title    := Format(_('%d findings on this line'), [Group.Count]);
+        Mark.Badge    := Strongest.Badge;
+        Mark.Color    := Strongest.Color;
+        Mark.Fix      := '';
+        Mark.Severity := Strongest.Severity;
+        Mark.IsMulti  := True;
+      end;
+
+      Bucket.AddOrSetValue(LineNo, Mark);
+    end;
+  finally
+    LineMap.Free;
+  end;
+
+  if Assigned(FEditorEventsObj) then
+    FEditorEventsObj.ResetState;
+
+  // 5) Save-Notifier nur fuer DIESE Datei sync.
+  if Bucket.Count > 0 then
+  begin
+    if not FSaveNotifiers.ContainsKey(FileKey) then
+      AttachSaveNotifier(FileKey);
+  end
+  else
+  begin
+    if FSaveNotifiers.ContainsKey(FileKey) then
+      DetachSaveNotifier(FileKey);
+    // Bucket leer -> Eintrag wieder rausnehmen, sonst stets-leeres File
+    // im Dictionary.
+    FMarksByFile.Remove(FileKey);
+  end;
+
+  // 6) Neue Markierungs-Lines invalidieren - sichtbar im aktiven Editor.
+  if HasSvc and FMarksByFile.TryGetValue(FileKey, Bucket) then
+    for var NewLn in Bucket.Keys do
+      try Svc.InvalidateTopEditorLogicalLine(NewLn); except end;
 end;
 
 procedure TFindingHighlighter.Clear;
