@@ -411,9 +411,9 @@ begin
 end;
 
 function TFindingEditorEvents.IsShowOnHoverEnabled: Boolean;
-// 1-Liner ueber TRepoSettings.QuickReadBool (siehe D-2/D-10 im Audit).
 begin
-  Result := TRepoSettings.QuickReadBool('UI', 'OverlayShowOnHover', False);
+  Result := TRepoSettings.QuickReadBool('UI', 'OverlayShowOnHover',
+                                        DEF_OVERLAY_SHOW_ON_HOVER);
 end;
 
 function GetOverlayPositionSetting: string;

@@ -34,6 +34,29 @@ interface
 uses
   System.SysUtils, System.Classes, System.IniFiles;
 
+const
+  // ---------------------------------------------------------------------------
+  // Default-Werte fuer User-Settings. Zentrale Konstanten damit Constructor
+  // (Z810ff), Load (Ini.ReadXxx-Defaults), Save und externe Quick-Read-Caller
+  // EINEN Wert teilen. Vorher 2-3 mal dupliziert je Property, Drift bei
+  // Default-Aenderung wahrscheinlich.
+  //
+  // Aufgenommen sind nur die "lebenden" User-Settings (Hot-Path-Toggles +
+  // User-Wunsch-Defaults). Detektor-Schwellwerte (MaxBodyLines etc.) bleiben
+  // direkt im Constructor weil die nicht extern quick-readable sind.
+  // ---------------------------------------------------------------------------
+  DEF_SILENT_ENABLED         = True;
+  DEF_AUTO_EXPAND_ANNOTATION = False;
+  DEF_OVERLAY_SHOW_ON_HOVER  = False;
+  DEF_EDITOR_COLOR_SCHEME    = 'default';
+  DEF_SHORTCUTS_ENABLED      = True;
+  DEF_FINDING_NAV_ENABLED    = True;
+  DEF_LANGUAGE               = 'en';
+  DEF_OVERLAY_POSITION       = 'sameline';
+  DEF_SILENT_SHORTCUT        = 'Ctrl+Alt+A';
+  DEF_FINDING_NAV_UP         = 'Ctrl+Alt+Up';
+  DEF_FINDING_NAV_DOWN       = 'Ctrl+Alt+Down';
+
 type
   TRepoSettings = class
   private
@@ -126,6 +149,11 @@ type
     procedure EnsureConfigExists;
 
     function ConfigFilePath: string;
+    // Class-Variante - liefert den Pfad ohne TRepoSettings-Instanz zu
+    // brauchen. Macht auch die repo.ini -> analyser.ini Auto-Migration.
+    // Genutzt von QuickReadBool/Str damit der Pfad-Lookup keine
+    // TStringList-Allokation kostet.
+    class function ResolvedConfigPath: string; static;
 
     // '' bedeutet auto-detect (origin/HEAD, dann main, dann master).
     property BaseBranch: string read FBaseBranch write FBaseBranch;
@@ -803,17 +831,17 @@ begin
   FIdeProfile     := 'ide-fast';      // IDE-Plugin Default: schnelles Subset
   FIdeMinSeverity := 'hint';          // IDE-Plugin: alle Severities (Subset deckt schon)
   FDetectorReviewFilterEnabled := False; // internes Review-Tool, default aus
-  FSilentEnabled  := True;            // Silent-Mode standardmaessig an
-  FAutoExpandAnnotation := False;     // Hover-Overlay bleibt collapsed bis User klickt
-  FOverlayShowOnHover   := False;     // Overlay erscheint NUR beim Klick auf markierte Zeile
-  FEditorColorScheme    := 'default'; // Original-ACCENT_* Farben
-  FShortcutsEnabled  := True;         // Master-Toggle: alle Hotkeys an
-  FFindingNavEnabled := True;         // Ctrl+Alt+Up/Down Finding-Nav an
-  FSilentAnalyseShortcut  := 'Ctrl+Alt+A';
-  FFindingNavUpShortcut   := 'Ctrl+Alt+Up';
-  FFindingNavDownShortcut := 'Ctrl+Alt+Down';
-  FLanguage           := 'en';        // Default: englische UI (Source-Sprache)
-  FOverlayPosition    := 'sameline';  // Default: Overlay startet auf der Finding-Zeile
+  FSilentEnabled          := DEF_SILENT_ENABLED;
+  FAutoExpandAnnotation   := DEF_AUTO_EXPAND_ANNOTATION;
+  FOverlayShowOnHover     := DEF_OVERLAY_SHOW_ON_HOVER;
+  FEditorColorScheme      := DEF_EDITOR_COLOR_SCHEME;
+  FShortcutsEnabled       := DEF_SHORTCUTS_ENABLED;
+  FFindingNavEnabled      := DEF_FINDING_NAV_ENABLED;
+  FSilentAnalyseShortcut  := DEF_SILENT_SHORTCUT;
+  FFindingNavUpShortcut   := DEF_FINDING_NAV_UP;
+  FFindingNavDownShortcut := DEF_FINDING_NAV_DOWN;
+  FLanguage               := DEF_LANGUAGE;
+  FOverlayPosition        := DEF_OVERLAY_POSITION;
 
   // [Score] Defaults: Skala fuer mittelgrosse Projekte. A=0, B<=50,
   // C<=200, D<=500, E>500. Anpassbar via analyser.ini fuer projekt-
@@ -848,21 +876,12 @@ class function TRepoSettings.QuickReadBool(const ASection, AKey: string;
 // GCachedEditorScheme in uAnalyserTheme verwenden und beim Settings-Save
 // refreshen.
 var
-  S       : TRepoSettings;
   Ini     : TIniFile;
   CfgPath : string;
 begin
   Result := ADefault;
   try
-    // ConfigFilePath ist Instanz-Method (resolved Default-Dir + Overrides).
-    // Wir bauen ein leichtes TRepoSettings NUR fuer den Pfad - kein .Load -
-    // dann TIniFile direkt fuer den einzelnen Read.
-    S := TRepoSettings.Create;
-    try
-      CfgPath := S.ConfigFilePath;
-    finally
-      S.Free;
-    end;
+    CfgPath := TRepoSettings.ResolvedConfigPath;
     if (CfgPath = '') or not FileExists(CfgPath) then Exit;
     Ini := TIniFile.Create(CfgPath);
     try
@@ -878,18 +897,12 @@ end;
 class function TRepoSettings.QuickReadStr(
   const ASection, AKey, ADefault: string): string;
 var
-  S       : TRepoSettings;
   Ini     : TIniFile;
   CfgPath : string;
 begin
   Result := ADefault;
   try
-    S := TRepoSettings.Create;
-    try
-      CfgPath := S.ConfigFilePath;
-    finally
-      S.Free;
-    end;
+    CfgPath := TRepoSettings.ResolvedConfigPath;
     if (CfgPath = '') or not FileExists(CfgPath) then Exit;
     Ini := TIniFile.Create(CfgPath);
     try
@@ -902,24 +915,28 @@ begin
 end;
 
 function TRepoSettings.ConfigFilePath: string;
+begin
+  if FConfigPath = '' then
+    FConfigPath := TRepoSettings.ResolvedConfigPath;
+  Result := FConfigPath;
+end;
+
+class function TRepoSettings.ResolvedConfigPath: string;
 var
   OldPath: string;
 begin
-  if FConfigPath <> '' then Exit(FConfigPath);
   // Liegt im selben Verzeichnis wie ignore.txt (= %APPDATA%\StaticCodeAnalyser\).
-  FConfigPath := TIgnoreList.ConfigDir + 'analyser.ini';
+  Result := TIgnoreList.ConfigDir + 'analyser.ini';
 
   // Auto-Migration: wenn die alte repo.ini noch existiert und es noch keine
   // analyser.ini gibt, einfach umbenennen. So bleiben User-Settings
   // (BaseBranch, Tortoise-Pfade, Custom-LeakyClasses) erhalten.
-  if not FileExists(FConfigPath) then
+  if not FileExists(Result) then
   begin
     OldPath := TIgnoreList.ConfigDir + 'repo.ini';
     if FileExists(OldPath) then
-      try RenameFile(OldPath, FConfigPath); except end;
+      try RenameFile(OldPath, Result); except end;
   end;
-
-  Result := FConfigPath;
 end;
 
 procedure TRepoSettings.EnsureConfigExists;
@@ -1056,31 +1073,20 @@ begin
     // [Silent] Enabled (bool, Default True) - schaltet Editor-Rechtsklick +
     // Hotkey fuer den Silent-Mode an/aus. Konfigurierbar via Tools > Options
     // > Third Party > Static Code Analyser.
-    FSilentEnabled := Ini.ReadBool('Silent', 'Enabled', True);
-    FAutoExpandAnnotation := Ini.ReadBool('UI', 'AutoExpandAnnotation', False);
-    FOverlayShowOnHover   := Ini.ReadBool('UI', 'OverlayShowOnHover',   False);
-    FEditorColorScheme    := Ini.ReadString('UI', 'EditorColorScheme', 'default');
+    FSilentEnabled        := Ini.ReadBool  ('Silent',  'Enabled',              DEF_SILENT_ENABLED);
+    FAutoExpandAnnotation := Ini.ReadBool  ('UI',      'AutoExpandAnnotation', DEF_AUTO_EXPAND_ANNOTATION);
+    FOverlayShowOnHover   := Ini.ReadBool  ('UI',      'OverlayShowOnHover',   DEF_OVERLAY_SHOW_ON_HOVER);
+    FEditorColorScheme    := Ini.ReadString('UI',      'EditorColorScheme',    DEF_EDITOR_COLOR_SCHEME);
 
-    // [Hotkeys] ShortcutsEnabled (bool, Default True) - Master-Toggle.
-    // Wenn False: ALLE Plugin-Shortcuts deaktiviert (global + Grid-lokal).
-    FShortcutsEnabled := Ini.ReadBool('Hotkeys', 'ShortcutsEnabled', True);
-    // [Hotkeys] FindingNavEnabled (bool, Default True) - schaltet die
-    // Ctrl+Alt+Up/Down-Hotkeys an/aus, mit denen man zwischen markierten
-    // Finding-Zeilen im Editor springt.
-    FFindingNavEnabled := Ini.ReadBool('Hotkeys', 'FindingNavEnabled', True);
-    // Konfigurierbare Shortcut-Strings. Leer im INI -> Code-Default.
-    FSilentAnalyseShortcut  := Trim(Ini.ReadString('Hotkeys', 'SilentAnalyseShortcut',  'Ctrl+Alt+A'));
-    FFindingNavUpShortcut   := Trim(Ini.ReadString('Hotkeys', 'FindingNavUpShortcut',   'Ctrl+Alt+Up'));
-    FFindingNavDownShortcut := Trim(Ini.ReadString('Hotkeys', 'FindingNavDownShortcut', 'Ctrl+Alt+Down'));
+    // [Hotkeys] Master-Toggle + Per-Feature-Toggle + Shortcut-Strings.
+    FShortcutsEnabled       := Ini.ReadBool  ('Hotkeys', 'ShortcutsEnabled',       DEF_SHORTCUTS_ENABLED);
+    FFindingNavEnabled      := Ini.ReadBool  ('Hotkeys', 'FindingNavEnabled',      DEF_FINDING_NAV_ENABLED);
+    FSilentAnalyseShortcut  := Trim(Ini.ReadString('Hotkeys', 'SilentAnalyseShortcut',  DEF_SILENT_SHORTCUT));
+    FFindingNavUpShortcut   := Trim(Ini.ReadString('Hotkeys', 'FindingNavUpShortcut',   DEF_FINDING_NAV_UP));
+    FFindingNavDownShortcut := Trim(Ini.ReadString('Hotkeys', 'FindingNavDownShortcut', DEF_FINDING_NAV_DOWN));
 
-    // [UI] Language=de|en|'' -> FLanguage. Default 'en' (Source-Sprache).
-    FLanguage := Trim(Ini.ReadString('UI', 'Language', 'en')).ToLower;
-
-    // [UI] OverlayPosition=sameline|below -> Hover-Overlay-Geometrie.
-    // sameline (Default): Overlay startet AUF der Finding-Zeile selbst
-    // (Title-Bar ueberlagert die Zeile). below: Overlay startet eine Zeile
-    // unter der Finding-Zeile (alte Default).
-    FOverlayPosition := Trim(Ini.ReadString('UI', 'OverlayPosition', 'sameline')).ToLower;
+    FLanguage        := Trim(Ini.ReadString('UI', 'Language',        DEF_LANGUAGE)).ToLower;
+    FOverlayPosition := Trim(Ini.ReadString('UI', 'OverlayPosition', DEF_OVERLAY_POSITION)).ToLower;
     if (FOverlayPosition <> 'sameline') and (FOverlayPosition <> 'below') then
       FOverlayPosition := 'sameline';  // unbekannter Wert -> Default
 

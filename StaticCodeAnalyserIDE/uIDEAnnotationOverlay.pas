@@ -853,9 +853,9 @@ begin
 end;
 
 function TAnnotationOverlay.IsAutoExpandEnabled: Boolean;
-// 1-Liner ueber TRepoSettings.QuickReadBool (siehe D-2/D-10 im Audit).
 begin
-  Result := TRepoSettings.QuickReadBool('UI', 'AutoExpandAnnotation', False);
+  Result := TRepoSettings.QuickReadBool('UI', 'AutoExpandAnnotation',
+                                        DEF_AUTO_EXPAND_ANNOTATION);
 end;
 
 function TAnnotationOverlay.IsCursorNearClose(const AScreenPos: TPoint;

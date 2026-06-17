@@ -508,10 +508,22 @@ begin
 end;
 
 
+function TryGetMTime(const AFileName: string; out ATime: TDateTime): Boolean;
+// FS-Wrapper: GetLastWriteTime + try/except in einer Routine. Vorher
+// zweimal dupliziert in ShouldSkipScan + RecordScanTime.
+begin
+  Result := False;
+  try
+    ATime := TFile.GetLastWriteTime(AFileName);
+    Result := True;
+  except
+    // FS-Error - Caller-Default greift.
+  end;
+end;
+
 function TFindingsPropertiesDockableForm.ShouldSkipScan(
   const AFileName: string): Boolean;
-// True wenn die Datei seit dem letzten Scan unveraendert ist. Schluessel
-// im Cache ist NormalizePath - gleicher Stil wie in Frame.NormalizePath.
+// True wenn die Datei seit dem letzten Scan unveraendert ist.
 var
   Key      : string;
   Cached   : TDateTime;
@@ -521,11 +533,7 @@ begin
   if not Assigned(FLastScanTimes) then Exit;
   Key := uPathNormalize.NormalizePathForKey(AFileName);
   if not FLastScanTimes.TryGetValue(Key, Cached) then Exit;
-  try
-    CurrentT := TFile.GetLastWriteTime(AFileName);
-  except
-    Exit;   // bei FS-Error lieber re-scannen als skippen
-  end;
+  if not TryGetMTime(AFileName, CurrentT) then Exit;   // re-scan bei FS-Error
   // SameValue mit 1 sec Toleranz - manche FS speichern Millisekunden nicht
   // round-trip-stabil (FAT32: 2-Sekunden-Granularitaet).
   Result := SameValue(CurrentT, Cached, OneSecond);
@@ -534,18 +542,13 @@ end;
 procedure TFindingsPropertiesDockableForm.RecordScanTime(
   const AFileName: string);
 var
-  Key : string;
-  T   : TDateTime;
+  T : TDateTime;
 begin
   if not Assigned(FLastScanTimes) then
     FLastScanTimes := TDictionary<string, TDateTime>.Create;
-  Key := uPathNormalize.NormalizePathForKey(AFileName);
-  try
-    T := TFile.GetLastWriteTime(AFileName);
-  except
-    Exit;
-  end;
-  FLastScanTimes.AddOrSetValue(Key, T);
+  if TryGetMTime(AFileName, T) then
+    FLastScanTimes.AddOrSetValue(
+      uPathNormalize.NormalizePathForKey(AFileName), T);
 end;
 
 procedure TFindingsPropertiesDockableForm.InvalidateScanCache(

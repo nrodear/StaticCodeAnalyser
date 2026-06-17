@@ -3764,10 +3764,8 @@ begin
 end;
 
 function IsSilentEnabled: Boolean;
-// 1-Liner ueber TRepoSettings.QuickReadBool. Frueher 10 Zeilen
-// Boilerplate (Create + Load + Read + Free); siehe D-2 im Audit.
 begin
-  Result := TRepoSettings.QuickReadBool('Silent', 'Enabled', True);
+  Result := TRepoSettings.QuickReadBool('Silent', 'Enabled', DEF_SILENT_ENABLED);
 end;
 
 function IsShortcutsMasterEnabled: Boolean;
@@ -3775,7 +3773,7 @@ function IsShortcutsMasterEnabled: Boolean;
 // (TSCAKeyboardBinding, TSCAFindingNavBinding, GridKeyDown) ganz vorne
 // abgefragt.
 begin
-  Result := TRepoSettings.QuickReadBool('Hotkeys', 'ShortcutsEnabled', True);
+  Result := TRepoSettings.QuickReadBool('Hotkeys', 'ShortcutsEnabled', DEF_SHORTCUTS_ENABLED);
 end;
 
 procedure RunSilentAnalysisForCurrentEditorFile;

@@ -37,8 +37,10 @@ function IsFindingNavEnabled: Boolean;
 // Master-Toggle ShortcutsEnabled UND Per-Feature-Toggle FindingNavEnabled.
 // Beide muessen True sein. Default beide True. (siehe D-2/D-10 im Audit).
 begin
-  Result := TRepoSettings.QuickReadBool('Hotkeys', 'ShortcutsEnabled',  True)
-        and TRepoSettings.QuickReadBool('Hotkeys', 'FindingNavEnabled', True);
+  Result := TRepoSettings.QuickReadBool('Hotkeys', 'ShortcutsEnabled',
+                                        DEF_SHORTCUTS_ENABLED)
+        and TRepoSettings.QuickReadBool('Hotkeys', 'FindingNavEnabled',
+                                        DEF_FINDING_NAV_ENABLED);
 end;
 
 type

@@ -703,12 +703,8 @@ begin
   if Assigned(chkOverlayShowOnHover) then
     chkOverlayShowOnHover.Checked := ASettings.OverlayShowOnHover;
   if Assigned(cboEditorColorScheme) then
-    case ParseEditorColorScheme(ASettings.EditorColorScheme) of
-      ecsGray:   cboEditorColorScheme.ItemIndex := 1;
-      ecsSubtle: cboEditorColorScheme.ItemIndex := 2;
-    else
-      cboEditorColorScheme.ItemIndex := 0;
-    end;
+    cboEditorColorScheme.ItemIndex :=
+      ComboIndexFromScheme(ParseEditorColorScheme(ASettings.EditorColorScheme));
 end;
 
 procedure TSCAOptionsFrame.SaveToSettings(ASettings: TRepoSettings);
@@ -763,12 +759,8 @@ begin
     ASettings.OverlayShowOnHover := chkOverlayShowOnHover.Checked;
   if Assigned(cboEditorColorScheme) then
   begin
-    case cboEditorColorScheme.ItemIndex of
-      1: ASettings.EditorColorScheme := EditorColorSchemeToStr(ecsGray);
-      2: ASettings.EditorColorScheme := EditorColorSchemeToStr(ecsSubtle);
-    else
-      ASettings.EditorColorScheme := EditorColorSchemeToStr(ecsDefault);
-    end;
+    ASettings.EditorColorScheme := EditorColorSchemeToStr(
+      SchemeFromComboIndex(cboEditorColorScheme.ItemIndex));
     // Cache sofort aktualisieren - sonst wirkt die Schema-Auswahl erst
     // beim naechsten BPL-Load. RefreshEditorColorSchemeCache ist
     // komplett defensiv.

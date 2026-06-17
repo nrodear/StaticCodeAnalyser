@@ -74,6 +74,19 @@ function EditorColorSchemeToStr(Scheme: TEditorColorScheme): string;
 // erhalten.
 procedure RefreshEditorColorSchemeCache(const ASchemeStr: string);
 
+const
+  // Display-Reihenfolge fuer ComboBoxen. Index hier == ComboBox.ItemIndex.
+  // Loest die ehemalige Dreifach-case-Statement (Items.Add + Load-Map +
+  // Save-Map) auf. Neues Schema dazu = ein Eintrag, zwei case-Branches
+  // verschwinden.
+  EDITOR_COLOR_SCHEME_ORDER: array[0..2] of TEditorColorScheme =
+    (ecsDefault, ecsGray, ecsSubtle);
+
+// Konvertierung ComboBox.ItemIndex <-> TEditorColorScheme. Fuer Caller
+// die das Combo-Mapping nicht jedes Mal selbst hinschreiben wollen.
+function SchemeFromComboIndex(AIndex: Integer): TEditorColorScheme;
+function ComboIndexFromScheme(Scheme: TEditorColorScheme): Integer;
+
 var
   // Globaler Cache fuer das Editor-Farbschema. Wird vom IDE-Plugin-Init
   // gesetzt und nach jedem Settings-Save / Theme-Change refresht.
@@ -247,6 +260,24 @@ begin
   except
     GCachedEditorBgDark := False;
   end;
+end;
+
+function SchemeFromComboIndex(AIndex: Integer): TEditorColorScheme;
+begin
+  if (AIndex >= Low(EDITOR_COLOR_SCHEME_ORDER)) and
+     (AIndex <= High(EDITOR_COLOR_SCHEME_ORDER)) then
+    Result := EDITOR_COLOR_SCHEME_ORDER[AIndex]
+  else
+    Result := ecsDefault;
+end;
+
+function ComboIndexFromScheme(Scheme: TEditorColorScheme): Integer;
+var
+  i : Integer;
+begin
+  for i := Low(EDITOR_COLOR_SCHEME_ORDER) to High(EDITOR_COLOR_SCHEME_ORDER) do
+    if EDITOR_COLOR_SCHEME_ORDER[i] = Scheme then Exit(i);
+  Result := 0;   // Fallback: erster Eintrag (Default)
 end;
 
 
