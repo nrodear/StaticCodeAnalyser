@@ -53,6 +53,7 @@ type
     FToolbarPanel  : TPanel;
     FBtnClear      : TButton;
     FBtnReload     : TButton;
+    FBtnClearMarks : TButton;
     FSeverityCombo : TComboBox;
     FGrid          : TStringGrid;
     FAllFindings   : TObjectList<TLeakFinding>;   // OWNED, ungefiltert (aktuelle Datei)
@@ -75,8 +76,9 @@ type
     // Toolbar-Button-Events. Frame kann selbst nicht scannen oder Marker
     // loeschen (kein OTAPI/GHighlighter-Zugriff aus SCA.SharedUI). Wrapper
     // im IDE-Plugin haengt die Handler ein - bleibt Layering-konform.
-    FOnReloadRequested       : TNotifyEvent;
-    FOnClearMarkersRequested : TNotifyEvent;
+    FOnReloadRequested            : TNotifyEvent;
+    FOnClearMarkersRequested      : TNotifyEvent;
+    FOnClearEditorMarksRequested  : TNotifyEvent;
     // Sort-State. FSortColumn = -1 -> unsortiert (Insertion-Order vom
     // Detector). 0..COL_COUNT-1 -> sortiert nach dieser Spalte.
     // FSortDescending toggelt bei wiederholtem Klick auf gleiche Spalte.
@@ -98,6 +100,7 @@ type
     // Aktuell leere Stubs, damit das Layout sichtbar ist und Naming feststeht.
     procedure BtnClearClick(Sender: TObject);
     procedure BtnReloadClick(Sender: TObject);
+    procedure BtnClearMarksClick(Sender: TObject);
     // Cache-Helpers fuer FFindingsByFile.
     function  CloneFinding(F: TLeakFinding): TLeakFinding;
     procedure StoreInCache(const AFileName: string);
@@ -168,6 +171,13 @@ type
     // anschliessend lokal ausgefuehrt.
     property OnClearMarkersRequested: TNotifyEvent
       read FOnClearMarkersRequested write FOnClearMarkersRequested;
+    // [⌫]-Button: ALLE Editor-Marker in ALLEN Dateien (Stripes + Mini-
+    // Infobar + Overlay) raus. Grid + FFindingsByFile-Cache bleiben
+    // unveraendert; Reload bringt die Marker fuer die aktuelle Datei
+    // zurueck. Spiegelt das ClearAllMarks-Verhalten im IDE-Hauptfenster
+    // (uIDEAnalyserForm.ClearAllMarksClick).
+    property OnClearEditorMarksRequested: TNotifyEvent
+      read FOnClearEditorMarksRequested write FOnClearEditorMarksRequested;
   end;
 
 implementation
@@ -324,7 +334,25 @@ begin
   TIDEToolbar.ApplySegoeUI(FBtnReload);
   FBtnReload.Font.Size := 11;
 
-  // Severity-Combo - rechter Rest (alClient nach den beiden alLeft).
+  // Button "Clear Markers" - rechts neben Reload. Loescht ALLE Editor-
+  // Marker in ALLEN Dateien (Stripes + Mini-Infobar + Overlay verschwinden
+  // ueberall). Grid + Cache des Properties-Panel bleiben unangetastet -
+  // Reload bringt die Marker fuer die aktuelle Datei zurueck. Spiegelt
+  // das ClearAllMarks-Verhalten im IDE-Hauptfenster.
+  // Caption: U+232B ERASE TO THE LEFT (⌫).
+  FBtnClearMarks := TButton.Create(Self);
+  FBtnClearMarks.Parent  := FToolbarPanel;
+  FBtnClearMarks.Align   := alLeft;
+  FBtnClearMarks.Width   := BTN_SIZE;
+  FBtnClearMarks.Height  := BTN_SIZE;
+  FBtnClearMarks.Caption := #$232B;  // ⌫
+  FBtnClearMarks.Hint    := _('Clear all editor markers in all files (grid stays)');
+  FBtnClearMarks.ShowHint:= True;
+  FBtnClearMarks.OnClick := BtnClearMarksClick;
+  TIDEToolbar.ApplySegoeUI(FBtnClearMarks);
+  FBtnClearMarks.Font.Size := 11;
+
+  // Severity-Combo - rechter Rest (alClient nach den drei alLeft).
   FSeverityCombo := TComboBox.Create(Self);
   FSeverityCombo.Parent    := FToolbarPanel;
   FSeverityCombo.Align     := alClient;
@@ -421,8 +449,9 @@ begin
     FToolbarPanel.Color := FHeaderPanel.Color;
     // TButton wird vom IDE-ThemingServices automatisch gefarbt - hier nur
     // sicherstellen, dass die Schrift mit dem Header-Theme matcht.
-    FBtnClear.Font.Color  := Style.GetSystemColor(clWindowText);
-    FBtnReload.Font.Color := Style.GetSystemColor(clWindowText);
+    FBtnClear.Font.Color      := Style.GetSystemColor(clWindowText);
+    FBtnReload.Font.Color     := Style.GetSystemColor(clWindowText);
+    FBtnClearMarks.Font.Color := Style.GetSystemColor(clWindowText);
 
     // ComboBox: csDropDownList ignoriert oft das Theming aus dem IDE-
     // ThemingServices weil VCL den csDropDownList-Render an die Windows-
@@ -831,6 +860,15 @@ begin
   // Reload no-op - im Standalone-Modus gibt es keinen Re-Scan-Pfad.
   if Assigned(FOnReloadRequested) then
     FOnReloadRequested(Self);
+end;
+
+procedure TFindingsPropertiesFrame.BtnClearMarksClick(Sender: TObject);
+// Wrapper loescht NUR die Editor-Marker (GHighlighter.Clear + Overlay-
+// Hide). Grid + FFindingsByFile-Cache bleiben - der naechste Reload
+// bringt die Marker zurueck. Ohne Wrapper no-op.
+begin
+  if Assigned(FOnClearEditorMarksRequested) then
+    FOnClearEditorMarksRequested(Self);
 end;
 
 function TFindingsPropertiesFrame.GetCellText(ACol, ARow: Integer): string;

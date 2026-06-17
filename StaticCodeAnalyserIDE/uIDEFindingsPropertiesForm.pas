@@ -95,6 +95,7 @@ type
     procedure HandleFrameDestroying(Sender: TObject);
     procedure HandleReloadRequested(Sender: TObject);
     procedure HandleClearMarkersRequested(Sender: TObject);
+    procedure HandleClearEditorMarksRequested(Sender: TObject);
     procedure HandleEditorViewActivated(const AFileName: string);
     procedure HandleThemeChanged;
     procedure InitialPopulateFromActiveEditor;
@@ -159,6 +160,7 @@ uses
   uIDETheme,
   uIDEWatchMode,
   uIDELineHighlighter,        // GHighlighter.Clear fuer Toolbar-Clear-Button
+  uIDEAnnotationOverlay,      // GAnnotationOverlay.HideOverlay fuer Clear-Marks-Button
   uIDEEditorIntegration,
   uIDEAnalyserForm,           // RunSilentAnalysisForFile
   uIDEToolbar,                // ApplySegoeUI - Plugin-Font
@@ -316,10 +318,11 @@ begin
   if Assigned(GWatchMode) then
     FFindingsSub := GWatchMode.SubscribeFindings(HandleWatchFindings);
 
-  FFrame.OnFindingClick           := HandleFindingClick;
-  FFrame.OnDestroying             := HandleFrameDestroying;
-  FFrame.OnReloadRequested        := HandleReloadRequested;
-  FFrame.OnClearMarkersRequested  := HandleClearMarkersRequested;
+  FFrame.OnFindingClick               := HandleFindingClick;
+  FFrame.OnDestroying                 := HandleFrameDestroying;
+  FFrame.OnReloadRequested            := HandleReloadRequested;
+  FFrame.OnClearMarkersRequested      := HandleClearMarkersRequested;
+  FFrame.OnClearEditorMarksRequested  := HandleClearEditorMarksRequested;
 
   // Bei initialem Open: aktive Editor-Datei in den Header schreiben, auch
   // wenn noch kein Watch-Lauf gefeuert hat. Das gibt dem User sofort
@@ -642,6 +645,26 @@ begin
   if Assigned(FFrame) then
     FFrame.Clear;
   InvalidateScanCache('');   // '' = alle Eintraege loeschen
+end;
+
+procedure TFindingsPropertiesDockableForm.HandleClearEditorMarksRequested(
+  Sender: TObject);
+// Toolbar-Button "Clear Editor Marks" (⌫) im Frame. Spiegelt das
+// ClearAllMarks-Verhalten im IDE-Hauptfenster (uIDEAnalyserForm.
+// ClearAllMarksClick): ALLE Editor-Marker in ALLEN Dateien werden
+// entfernt (GHighlighter.Clear macht FMarksByFile.Clear +
+// DetachAllSaveNotifiers + InvalidateAllLines). Grid + Findings-Cache
+// im Properties-Panel bleiben unangetastet - Reload bringt die Marker
+// fuer die aktuell sichtbare Datei zurueck.
+//
+// Unterschied zu HandleClearMarkersRequested (✕):
+//   * ✕  -> Marker (alle Files) + Grid + Frame-Cache + Scan-Cache komplett leer
+//   * ⌫  -> Marker (alle Files), Panel-State bleibt vollstaendig
+begin
+  if Assigned(GHighlighter) then
+    GHighlighter.Clear;
+  if Assigned(GAnnotationOverlay) then
+    GAnnotationOverlay.HideOverlay;
 end;
 
 procedure TFindingsPropertiesDockableForm.ViewMenuClick(Sender: TObject);
