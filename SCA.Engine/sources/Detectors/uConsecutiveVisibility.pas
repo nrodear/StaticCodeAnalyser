@@ -100,7 +100,6 @@ var
   SeenVis     : TStringList;
   CurrentVis  : string;
   CurHasMembs : Boolean;
-  F           : TLeakFinding;
 begin
   Lines := AcquireLines(FileName, Cached);
   if Lines = nil then Exit;
@@ -126,17 +125,11 @@ begin
       begin
         // Dieselbe Visibility schon mit Membern gesehen?
         if SeenVis.IndexOf(L) >= 0 then
-        begin
-          F            := TLeakFinding.Create;
-          F.FileName   := FileName;
-          F.MethodName := '';
-          F.LineNumber := IntToStr(i + 1);
-          F.MissingVar := Format(
-            'Visibility section `%s` already appeared earlier in this ' +
-            'class - merge the members into a single %s block.', [L, L]);
-          F.SetKind(fkConsecutiveVisibility);
-          Results.Add(F);
-        end;
+          Results.Add(TLeakFinding.New(FileName, '', i + 1,
+            Format('Visibility section `%s` already appeared earlier in ' +
+                   'this class - merge the members into a single %s block.',
+              [L, L]),
+            fkConsecutiveVisibility));
         CurrentVis  := L;
         CurHasMembs := False;
         // Same-line Member: `public procedure A;` zaehlt schon als

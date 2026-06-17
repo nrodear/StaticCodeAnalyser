@@ -213,7 +213,6 @@ var
   i, Col : Integer;
   InBlk, InParen : Boolean;
   ParenDepth : Integer;
-  F      : TLeakFinding;
   Cached : Boolean;
 begin
   Lines := AcquireLines(FileName, Cached);
@@ -226,15 +225,11 @@ begin
     begin
       Col := FindGroupedDecl(Lines[i], InBlk, InParen, ParenDepth);
       if Col <= 0 then Continue;
-      F            := TLeakFinding.Create;
-      F.FileName   := FileName;
-      F.MethodName := '';
-      F.LineNumber := IntToStr(i + 1);
-      F.MissingVar := Format(
-        'Grouped declaration at column %d (`A, B: Type`) - split into ' +
-        'one variable per line for clearer diffs and refactoring.', [Col]);
-      F.SetKind(fkGroupedDeclaration);
-      Results.Add(F);
+      Results.Add(TLeakFinding.New(FileName, '', i + 1,
+        Format('Grouped declaration at column %d (`A, B: Type`) - split ' +
+               'into one variable per line for clearer diffs and refactoring.',
+          [Col]),
+        fkGroupedDeclaration));
     end;
   finally
     ReleaseLines(Lines, Cached);

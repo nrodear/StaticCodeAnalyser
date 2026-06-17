@@ -284,7 +284,6 @@ var
   Lines  : TStringList;
   i, Col : Integer;
   InBlk, InParen : Boolean;
-  F      : TLeakFinding;
   Cached : Boolean;
 begin
   Lines := AcquireLines(FileName, Cached);
@@ -313,15 +312,10 @@ begin
       if (Col > 0) and Lines[i].Contains('//') and
          IsInlineComment(Lines[i], Col) then
         Continue;
-      F            := TLeakFinding.Create;
-      F.FileName   := FileName;
-      F.MethodName := '';
-      F.LineNumber := IntToStr(i + 1);
-      F.MissingVar := Format(
-        'Comment at column %d looks like commented-out code - delete ' +
-        'or extract into a TODO if still relevant.', [Col]);
-      F.SetKind(fkCommentedOutCode);
-      Results.Add(F);
+      Results.Add(TLeakFinding.New(FileName, '', i + 1,
+        Format('Comment at column %d looks like commented-out code - ' +
+               'delete or extract into a TODO if still relevant.', [Col]),
+        fkCommentedOutCode));
     end;
   finally
     ReleaseLines(Lines, Cached);

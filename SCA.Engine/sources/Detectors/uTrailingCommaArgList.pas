@@ -121,7 +121,6 @@ var
   Lines  : TStringList;
   i, Col : Integer;
   InBlk, InParen : Boolean;
-  F      : TLeakFinding;
   Cached : Boolean;
 begin
   Lines := AcquireLines(FileName, Cached);
@@ -133,15 +132,10 @@ begin
     begin
       Col := FindTrailingComma(Lines[i], InBlk, InParen);
       if Col <= 0 then Continue;
-      F            := TLeakFinding.Create;
-      F.FileName   := FileName;
-      F.MethodName := '';
-      F.LineNumber := IntToStr(i + 1);
-      F.MissingVar := Format(
-        'Trailing comma in argument list at column %d - drop the comma ' +
-        'or add the missing argument.', [Col]);
-      F.SetKind(fkTrailingCommaArgList);
-      Results.Add(F);
+      Results.Add(TLeakFinding.New(FileName, '', i + 1,
+        Format('Trailing comma in argument list at column %d - drop the ' +
+               'comma or add the missing argument.', [Col]),
+        fkTrailingCommaArgList));
     end;
   finally
     ReleaseLines(Lines, Cached);

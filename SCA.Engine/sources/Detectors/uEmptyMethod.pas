@@ -51,7 +51,6 @@ var
   Methods : TList<TAstNode>;
   M       : TAstNode;
   Block   : TAstNode;
-  F       : TLeakFinding;
 begin
   Methods := UnitNode.FindAll(nkMethod);
   try
@@ -63,13 +62,8 @@ begin
       // Body hat mindestens eine Anweisung - nicht leer
       if Block.Children.Count > 0 then Continue;
 
-      F            := TLeakFinding.Create;
-      F.FileName   := FileName;
-      F.MethodName := M.Name;
-      F.LineNumber := IntToStr(M.Line);
-      F.MissingVar := 'Method body is empty';
-      F.SetKind(fkEmptyMethod);
-      Results.Add(F);
+      Results.Add(TLeakFinding.New(FileName, M.Name, M.Line,
+        'Method body is empty', fkEmptyMethod));
     end;
   finally
     Methods.Free;

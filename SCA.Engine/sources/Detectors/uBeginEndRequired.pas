@@ -187,7 +187,6 @@ var
   Cols   : TList<Integer>;
   Col    : Integer;
   InBlk, InParen : Boolean;
-  F      : TLeakFinding;
 begin
   Lines := AcquireLines(FileName, Cached);
   if Lines = nil then Exit;
@@ -199,18 +198,11 @@ begin
       Cols.Clear;
       CollectBareBranches(Lines[i], InBlk, InParen, Cols);
       for Col in Cols do
-      begin
-        F            := TLeakFinding.Create;
-        F.FileName   := FileName;
-        F.MethodName := '';
-        F.LineNumber := IntToStr(i + 1);
-        F.MissingVar := Format(
-          'Branch at column %d uses a single statement without ' +
-          '`begin..end` - explicit blocks survive future additions ' +
-          'without re-indenting errors.', [Col]);
-        F.SetKind(fkBeginEndRequired);
-        Results.Add(F);
-      end;
+        Results.Add(TLeakFinding.New(FileName, '', i + 1,
+          Format('Branch at column %d uses a single statement without ' +
+                 '`begin..end` - explicit blocks survive future additions ' +
+                 'without re-indenting errors.', [Col]),
+          fkBeginEndRequired));
     end;
   finally
     Cols.Free;

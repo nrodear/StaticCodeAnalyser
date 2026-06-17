@@ -183,7 +183,6 @@ var
   pBeg, pEnd : Integer;
   j          : Integer;
   LineNumber : Integer;
-  F          : TLeakFinding;
   IsInitSec  : Boolean;
   k          : Integer;
 begin
@@ -238,14 +237,10 @@ begin
             LineNumber := LineFor[k]
           else
             LineNumber := 0;
-          F            := TLeakFinding.Create;
-          F.FileName   := FileName;
-          F.MethodName := '';
-          F.LineNumber := IntToStr(LineNumber + 1);
-          F.MissingVar := 'Empty `begin..end` block - delete it or fill ' +
-            'in the missing statement.';
-          F.SetKind(fkEmptyBlock);
-          Results.Add(F);
+          Results.Add(TLeakFinding.New(FileName, '', LineNumber + 1,
+            'Empty `begin..end` block - delete it or fill in the missing ' +
+            'statement.',
+            fkEmptyBlock));
         end;
       end;
       pBeg := pEnd + 3;

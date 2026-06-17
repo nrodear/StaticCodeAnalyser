@@ -154,7 +154,6 @@ var
   RE       : TRegEx;
   M        : TMatch;
   LineNo   : Integer;
-  F        : TLeakFinding;
   ExName   : string;
 begin
   Lines := AcquireLines(FileName, Cached);
@@ -175,15 +174,10 @@ begin
       LineNo := LineForPos(LineFor, M.Index);
       if LineNo <= 0 then LineNo := 1;
 
-      F            := TLeakFinding.Create;
-      F.FileName   := FileName;
-      F.MethodName := '';
-      F.LineNumber := IntToStr(LineNo);
-      F.MissingVar := Format(
-        'Typed exception handler on %s has empty body - silent failure',
-        [ExName]);
-      F.SetKind(fkEmptyOnHandler);
-      Results.Add(F);
+      Results.Add(TLeakFinding.New(FileName, '', LineNo,
+        Format('Typed exception handler on %s has empty body - silent failure',
+          [ExName]),
+        fkEmptyOnHandler));
     end;
   finally
     ReleaseLines(Lines, Cached);

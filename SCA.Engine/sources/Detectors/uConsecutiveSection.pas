@@ -77,7 +77,6 @@ var
   LastSection : string;
   IsSectionKw : Boolean;
   IsResetKw   : Boolean;
-  F           : TLeakFinding;
 begin
   Lines := AcquireLines(FileName, Cached);
   if Lines = nil then Exit;
@@ -98,18 +97,11 @@ begin
       if IsSectionKw then
       begin
         if LastSection = Lower then
-        begin
-          F            := TLeakFinding.Create;
-          F.FileName   := FileName;
-          F.MethodName := '';
-          F.LineNumber := IntToStr(i + 1);
-          F.MissingVar := Format(
-            'Consecutive `%s` section - merge with the previous %s ' +
-            'block (one section keyword should declare all of them).',
-            [Lower, Lower]);
-          F.SetKind(fkConsecutiveSection);
-          Results.Add(F);
-        end;
+          Results.Add(TLeakFinding.New(FileName, '', i + 1,
+            Format('Consecutive `%s` section - merge with the previous %s ' +
+                   'block (one section keyword should declare all of them).',
+              [Lower, Lower]),
+            fkConsecutiveSection));
         LastSection := Lower;
       end
       else if IsResetKw then

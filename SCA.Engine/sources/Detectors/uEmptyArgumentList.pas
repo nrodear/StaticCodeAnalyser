@@ -152,7 +152,6 @@ var
   Lines  : TStringList;
   i, Col : Integer;
   InBlk, InParen : Boolean;
-  F      : TLeakFinding;
   Cached : Boolean;
 begin
   Lines := AcquireLines(FileName, Cached);
@@ -164,15 +163,10 @@ begin
     begin
       Col := FindEmptyArgList(Lines[i], InBlk, InParen);
       if Col <= 0 then Continue;
-      F            := TLeakFinding.Create;
-      F.FileName   := FileName;
-      F.MethodName := '';
-      F.LineNumber := IntToStr(i + 1);
-      F.MissingVar := Format(
-        'Empty argument list `()` at column %d - drop the parens ' +
-        '(Delphi convention).', [Col]);
-      F.SetKind(fkEmptyArgumentList);
-      Results.Add(F);
+      Results.Add(TLeakFinding.New(FileName, '', i + 1,
+        Format('Empty argument list `()` at column %d - drop the parens ' +
+               '(Delphi convention).', [Col]),
+        fkEmptyArgumentList));
     end;
   finally
     ReleaseLines(Lines, Cached);

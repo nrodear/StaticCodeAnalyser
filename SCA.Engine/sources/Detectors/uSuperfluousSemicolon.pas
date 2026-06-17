@@ -111,7 +111,6 @@ var
   Lines  : TStringList;
   i, Col : Integer;
   InBlk, InParen : Boolean;
-  F      : TLeakFinding;
   Cached : Boolean;
 begin
   Lines := AcquireLines(FileName, Cached);
@@ -123,14 +122,10 @@ begin
     begin
       Col := FindDoubleSemi(Lines[i], InBlk, InParen);
       if Col <= 0 then Continue;
-      F            := TLeakFinding.Create;
-      F.FileName   := FileName;
-      F.MethodName := '';
-      F.LineNumber := IntToStr(i + 1);
-      F.MissingVar := Format(
-        'Double semicolon at column %d (`;;`) - drop the extra one.', [Col]);
-      F.SetKind(fkSuperfluousSemicolon);
-      Results.Add(F);
+      Results.Add(TLeakFinding.New(FileName, '', i + 1,
+        Format('Double semicolon at column %d (`;;`) - drop the extra one.',
+          [Col]),
+        fkSuperfluousSemicolon));
     end;
   finally
     ReleaseLines(Lines, Cached);
