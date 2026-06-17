@@ -141,7 +141,6 @@ var
   RhsSet    : TList<string>;
   Same      : Boolean;
   S         : string;
-  F         : TLeakFinding;
 begin
   Methods := UnitNode.FindAll(nkMethod);
   try
@@ -178,15 +177,11 @@ begin
           end;
         if not Same then Continue;
 
-        F            := TLeakFinding.Create;
-        F.FileName   := FileName;
-        F.MethodName := M.Name;
-        F.LineNumber := IntToStr(M.Line);
-        F.MissingVar := Format(
-          'Function %s always returns %s on every code path - use a named constant',
-          [UnqualifiedName(M.Name), RhsSet[0]]);
-        F.SetKind(fkConstantReturn);
-        Results.Add(F);
+        Results.Add(TLeakFinding.New(FileName, M.Name, M.Line,
+          Format('Function %s always returns %s on every code path - use ' +
+                 'a named constant',
+            [UnqualifiedName(M.Name), RhsSet[0]]),
+          fkConstantReturn));
       finally
         Assigns.Free;
         RhsSet.Free;

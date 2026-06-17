@@ -149,7 +149,6 @@ class procedure TExceptionTooGeneralDetector.AnalyzeMethod(MethodNode: TAstNode;
 var
   Handlers : TList<TAstNode>;
   N        : TAstNode;
-  F        : TLeakFinding;
 begin
   Handlers := MethodNode.FindAll(nkOnHandler);
   try
@@ -157,15 +156,9 @@ begin
     begin
       if not SameText(N.TypeRef, 'Exception') then Continue;
       if IsLegitTopLevelHandler(N) then Continue;
-
-      F            := TLeakFinding.Create;
-      F.FileName   := FileName;
-      F.MethodName := MethodNode.Name;
-      F.LineNumber := IntToStr(N.Line);
-      F.MissingVar :=
-        'except on E: Exception catches every error - prefer a specific subclass';
-      F.SetKind(fkExceptionTooGeneral);
-      Results.Add(F);
+      Results.Add(TLeakFinding.New(FileName, MethodNode.Name, N.Line,
+        'except on E: Exception catches every error - prefer a specific subclass',
+        fkExceptionTooGeneral));
     end;
   finally
     Handlers.Free;

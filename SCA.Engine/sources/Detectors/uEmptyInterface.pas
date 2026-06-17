@@ -141,7 +141,6 @@ var
   c          : Char;
   pLeftEq    : Integer;
   LineNumber : Integer;
-  F          : TLeakFinding;
   pStart     : Integer;
 begin
   Lines := AcquireLines(FileName, Cached);
@@ -206,14 +205,10 @@ begin
           LineNumber := LineFor[k]
         else
           LineNumber := 0;
-        F            := TLeakFinding.Create;
-        F.FileName   := FileName;
-        F.MethodName := '';
-        F.LineNumber := IntToStr(LineNumber + 1);
-        F.MissingVar := 'Empty interface declaration - add a contract ' +
-          '(methods/properties) or use an attribute class instead.';
-        F.SetKind(fkEmptyInterface);
-        Results.Add(F);
+        Results.Add(TLeakFinding.New(FileName, '', LineNumber + 1,
+          'Empty interface declaration - add a contract ' +
+          '(methods/properties) or use an attribute class instead.',
+          fkEmptyInterface));
       end;
       pInt := pEnd + 3;
     end;

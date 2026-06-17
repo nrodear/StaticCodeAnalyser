@@ -161,7 +161,6 @@ end;
 procedure CheckCastText(const Text: string; Node, CurrentMethod: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
-  F        : TLeakFinding;
   MethName : string;
   CastType : string;
   Arg      : string;
@@ -172,15 +171,10 @@ begin
   if not ArgLooksLikeChar(Arg) then Exit;
   if Assigned(CurrentMethod) then MethName := CurrentMethod.Name
   else MethName := '';
-  F            := TLeakFinding.Create;
-  F.FileName   := FileName;
-  F.MethodName := MethName;
-  F.LineNumber := IntToStr(Node.Line);
-  F.MissingVar := Format(
-    '%s(Char) reinterprets codepoint as pointer - undefined behavior',
-    [CastType]);
-  F.SetKind(fkCharToCharPointerCast);
-  Results.Add(F);
+  Results.Add(TLeakFinding.New(FileName, MethName, Node.Line,
+    Format('%s(Char) reinterprets codepoint as pointer - undefined behavior',
+      [CastType]),
+    fkCharToCharPointerCast));
 end;
 
 procedure WalkAndCheck(Node, CurrentMethod: TAstNode; const FileName: string;

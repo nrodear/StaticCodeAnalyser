@@ -233,7 +233,6 @@ class procedure TCanBeClassMethodDetector.AnalyzeUnit(UnitNode: TAstNode;
 var
   Methods : TList<TAstNode>;
   M       : TAstNode;
-  F       : TLeakFinding;
 begin
   Methods := UnitNode.FindAll(nkMethod);
   try
@@ -254,21 +253,16 @@ begin
       if IsEventHandlerSignature(M) then Continue;
       if HasSelfOrFieldAccess(M) then Continue;
 
-      F            := TLeakFinding.Create;
-      F.FileName   := FileName;
-      F.MethodName := M.Name;
-      F.LineNumber := IntToStr(M.Line);
       // Message-Suffix: 'class function' fuer Funktionen, 'class procedure'
       // fuer Prozeduren. TypeRef beginnt mit 'procedure'/'function'/etc.
       var TypeLow := LowerCase(Trim(M.TypeRef));
       var ClassKind : string;
       if TypeLow.StartsWith('procedure') then ClassKind := 'class procedure'
       else                                    ClassKind := 'class function';
-      F.MissingVar := Format(
-        'Method %s never accesses Self or instance fields - could be declared as `%s`',
-        [M.Name, ClassKind]);
-      F.SetKind(fkCanBeClassMethod);
-      Results.Add(F);
+      Results.Add(TLeakFinding.New(FileName, M.Name, M.Line,
+        Format('Method %s never accesses Self or instance fields - could ' +
+               'be declared as `%s`', [M.Name, ClassKind]),
+        fkCanBeClassMethod));
     end;
   finally
     Methods.Free;

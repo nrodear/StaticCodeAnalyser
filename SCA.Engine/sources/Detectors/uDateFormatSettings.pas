@@ -111,7 +111,6 @@ end;
 procedure CheckCallText(const Text: string; Node, CurrentMethod: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
-  F        : TLeakFinding;
   MethName : string;
   LowText  : string;
   Name     : string;
@@ -132,15 +131,10 @@ begin
   if MentionsFormatSettings(Text) then Exit;
   if Assigned(CurrentMethod) then MethName := CurrentMethod.Name
   else MethName := '';
-  F            := TLeakFinding.Create;
-  F.FileName   := FileName;
-  F.MethodName := MethName;
-  F.LineNumber := IntToStr(Node.Line);
-  F.MissingVar := Format(
-    '%s called without explicit TFormatSettings - depends on system locale',
-    [HitName]);
-  F.SetKind(fkDateFormatSettings);
-  Results.Add(F);
+  Results.Add(TLeakFinding.New(FileName, MethName, Node.Line,
+    Format('%s called without explicit TFormatSettings - depends on ' +
+           'system locale', [HitName]),
+    fkDateFormatSettings));
 end;
 
 procedure WalkAndCheck(Node, CurrentMethod: TAstNode; const FileName: string;

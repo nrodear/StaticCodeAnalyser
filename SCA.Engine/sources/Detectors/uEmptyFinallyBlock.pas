@@ -135,7 +135,6 @@ var
   IsEmpty    : Boolean;
   Between    : string;
   LineNumber : Integer;
-  F          : TLeakFinding;
 begin
   Lines := AcquireLines(FileName, Cached);
   if Lines = nil then Exit;
@@ -172,14 +171,10 @@ begin
             LineNumber := LineFor[q]
           else
             LineNumber := 0;
-          F            := TLeakFinding.Create;
-          F.FileName   := FileName;
-          F.MethodName := '';
-          F.LineNumber := IntToStr(LineNumber + 1);
-          F.MissingVar := 'Empty `finally` block - either add the missing ' +
-            'cleanup or change `try..finally end` to `try ... end`.';
-          F.SetKind(fkEmptyFinallyBlock);
-          Results.Add(F);
+          Results.Add(TLeakFinding.New(FileName, '', LineNumber + 1,
+            'Empty `finally` block - either add the missing cleanup or ' +
+            'change `try..finally end` to `try ... end`.',
+            fkEmptyFinallyBlock));
         end;
       end;
       Inc(p, 7);

@@ -79,7 +79,6 @@ var
   var
     NameLow : string;
     Found   : string;
-    F       : TLeakFinding;
   begin
     NameLow := CallText.ToLower;
     Found   := '';
@@ -104,13 +103,8 @@ var
       Break;
     end;
     if Found = '' then Exit;
-    F            := TLeakFinding.Create;
-    F.FileName   := FileName;
-    F.MethodName := '';
-    F.LineNumber := IntToStr(Line);
-    F.MissingVar := 'Debug output: ' + Found.Trim;
-    F.SetKind(fkDebugOutput);
-    Results.Add(F);
+    Results.Add(TLeakFinding.New(FileName, '', Line,
+      'Debug output: ' + Found.Trim, fkDebugOutput));
   end;
 
 var

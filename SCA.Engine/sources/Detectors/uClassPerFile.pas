@@ -137,7 +137,6 @@ var
   p, pEq, k  : Integer;
   ClassCount : Integer;
   LineNumber : Integer;
-  F          : TLeakFinding;
   pAfter     : Integer;
   c          : Char;
 begin
@@ -183,14 +182,10 @@ begin
           LineNumber := LineFor[k]
         else
           LineNumber := 0;
-        F            := TLeakFinding.Create;
-        F.FileName   := FileName;
-        F.MethodName := '';
-        F.LineNumber := IntToStr(LineNumber + 1);
-        F.MissingVar := 'Second class declaration in this unit - prefer ' +
-          'one class per file for clearer module boundaries.';
-        F.SetKind(fkClassPerFile);
-        Results.Add(F);
+        Results.Add(TLeakFinding.New(FileName, '', LineNumber + 1,
+          'Second class declaration in this unit - prefer one class per ' +
+          'file for clearer module boundaries.',
+          fkClassPerFile));
       end;
       Inc(p, 5);
     end;

@@ -122,7 +122,6 @@ var
   Methods : TList<TAstNode>;
   Raises  : TList<TAstNode>;
   M, R    : TAstNode;
-  F       : TLeakFinding;
 begin
   Methods := UnitNode.FindAll(nkMethod);
   try
@@ -133,17 +132,10 @@ begin
       try
         CollectUnprotectedRaises(M, False, Raises);
         for R in Raises do
-        begin
-          F            := TLeakFinding.Create;
-          F.FileName   := FileName;
-          F.MethodName := M.Name;
-          F.LineNumber := IntToStr(R.Line);
-          F.MissingVar :=
-            'Raise inside destructor without try/except - cleanup is aborted, ' +
-            'inherited Destroy not called';
-          F.SetKind(fkExceptInDestructor);
-          Results.Add(F);
-        end;
+          Results.Add(TLeakFinding.New(FileName, M.Name, R.Line,
+            'Raise inside destructor without try/except - cleanup is ' +
+            'aborted, inherited Destroy not called',
+            fkExceptInDestructor));
       finally
         Raises.Free;
       end;

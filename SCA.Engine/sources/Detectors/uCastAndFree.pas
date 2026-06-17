@@ -187,7 +187,6 @@ var
   Calls  : TList<TAstNode>;
   N      : TAstNode;
   Target : string;
-  F      : TLeakFinding;
 begin
   Calls := MethodNode.FindAll(nkCall);
   try
@@ -195,16 +194,10 @@ begin
     begin
       Target := ExtractCastBeforeFree(N.Name);
       if Target = '' then Continue;
-
-      F            := TLeakFinding.Create;
-      F.FileName   := FileName;
-      F.MethodName := MethodNode.Name;
-      F.LineNumber := IntToStr(N.Line);
-      F.MissingVar := Format(
-        'Type-cast %s(...) before Free/Destroy is redundant (Destroy is virtual)',
-        [Target]);
-      F.SetKind(fkCastAndFree);
-      Results.Add(F);
+      Results.Add(TLeakFinding.New(FileName, MethodNode.Name, N.Line,
+        Format('Type-cast %s(...) before Free/Destroy is redundant ' +
+               '(Destroy is virtual)', [Target]),
+        fkCastAndFree));
     end;
   finally
     Calls.Free;

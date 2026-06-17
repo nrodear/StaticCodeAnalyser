@@ -151,7 +151,6 @@ var
   Lines  : TStringList;
   i, Col : Integer;
   InBlk, InParen : Boolean;
-  F      : TLeakFinding;
   Cached : Boolean;
 begin
   Lines := AcquireLines(FileName, Cached);
@@ -163,15 +162,10 @@ begin
     begin
       Col := FindOnException(Lines[i], InBlk, InParen);
       if Col <= 0 then Continue;
-      F            := TLeakFinding.Create;
-      F.FileName   := FileName;
-      F.MethodName := '';
-      F.LineNumber := IntToStr(i + 1);
-      F.MissingVar := Format(
-        '`on E: Exception` at column %d catches the root class (incl. ' +
-        'AV/OOM) - prefer a specific exception type.', [Col]);
-      F.SetKind(fkExceptOnException);
-      Results.Add(F);
+      Results.Add(TLeakFinding.New(FileName, '', i + 1,
+        Format('`on E: Exception` at column %d catches the root class ' +
+               '(incl. AV/OOM) - prefer a specific exception type.', [Col]),
+        fkExceptOnException));
     end;
   finally
     ReleaseLines(Lines, Cached);
