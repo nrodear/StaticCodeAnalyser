@@ -200,7 +200,6 @@ var
   InBlk, InParen : Boolean;
   Cached         : Boolean;
   Hit            : TKwHit;
-  F              : TLeakFinding;
 begin
   Lines := AcquireLines(FileName, Cached);
   if Lines = nil then Exit;
@@ -213,17 +212,10 @@ begin
       Hits.Clear;
       CollectMixedCaseKeywords(Lines[i], InBlk, InParen, Hits);
       for Hit in Hits do
-      begin
-        F            := TLeakFinding.Create;
-        F.FileName   := FileName;
-        F.MethodName := '';
-        F.LineNumber := IntToStr(i + 1);
-        F.MissingVar := Format(
-          'Keyword "%s" should be lowercase ("%s") at column %d.',
-          [Hit.Word, LowerCase(Hit.Word), Hit.Col]);
-        F.SetKind(fkLowercaseKeyword);
-        Results.Add(F);
-      end;
+        Results.Add(TLeakFinding.New(FileName, '', i + 1,
+          Format('Keyword "%s" should be lowercase ("%s") at column %d.',
+            [Hit.Word, LowerCase(Hit.Word), Hit.Col]),
+          fkLowercaseKeyword));
     end;
   finally
     Hits.Free;

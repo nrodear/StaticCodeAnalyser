@@ -44,7 +44,6 @@ class procedure TTabulationCharacterDetector.AnalyzeUnit(UnitNode: TAstNode;
 var
   Lines  : TStringList;
   i, Col : Integer;
-  F      : TLeakFinding;
   Cached : Boolean;
 begin
   Lines := AcquireLines(FileName, Cached);
@@ -54,15 +53,10 @@ begin
     begin
       Col := Pos(TAB, Lines[i]);
       if Col <= 0 then Continue;
-      F            := TLeakFinding.Create;
-      F.FileName   := FileName;
-      F.MethodName := '';
-      F.LineNumber := IntToStr(i + 1);
-      F.MissingVar := Format(
-        'Tab character at column %d - use spaces for indentation ' +
-        '(consistency across editors).', [Col]);
-      F.SetKind(fkTabulationCharacter);
-      Results.Add(F);
+      Results.Add(TLeakFinding.New(FileName, '', i + 1,
+        Format('Tab character at column %d - use spaces for indentation ' +
+               '(consistency across editors).', [Col]),
+        fkTabulationCharacter));
     end;
   finally
     ReleaseLines(Lines, Cached);

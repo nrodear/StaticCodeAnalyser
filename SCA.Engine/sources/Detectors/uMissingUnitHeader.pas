@@ -86,7 +86,6 @@ var
   Cached : Boolean;
   i, UnitLine, IfaceLine : Integer;
   HasComment : Boolean;
-  F : TLeakFinding;
 begin
   Lines := AcquireLines(FileName, Cached);
   if Lines = nil then Exit;
@@ -114,14 +113,9 @@ begin
       end;
     if HasComment then Exit;
 
-    F            := TLeakFinding.Create;
-    F.FileName   := FileName;
-    F.MethodName := '';
-    F.LineNumber := IntToStr(UnitLine + 1);
-    F.MissingVar :=
-      'Unit has no descriptive header comment between `unit ...;` and `interface`';
-    F.SetKind(fkMissingUnitHeader);
-    Results.Add(F);
+    Results.Add(TLeakFinding.New(FileName, '', UnitLine + 1,
+      'Unit has no descriptive header comment between `unit ...;` and `interface`',
+      fkMissingUnitHeader));
   finally
     ReleaseLines(Lines, Cached);
   end;

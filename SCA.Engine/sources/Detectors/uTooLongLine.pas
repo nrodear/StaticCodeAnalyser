@@ -46,7 +46,6 @@ var
   Lines    : TStringList;
   i, Len   : Integer;
   MaxLen   : Integer;
-  F        : TLeakFinding;
   Cached   : Boolean;
 begin
   // Default 120, konfigurierbar via INI [Detectors] MaxLineLength=N
@@ -60,15 +59,10 @@ begin
     begin
       Len := Length(Lines[i]);
       if Len <= MaxLen then Continue;
-      F            := TLeakFinding.Create;
-      F.FileName   := FileName;
-      F.MethodName := '';
-      F.LineNumber := IntToStr(i + 1);
-      F.MissingVar := Format(
-        'Line is %d characters (max %d) - wrap or extract subexpression.',
-        [Len, MaxLen]);
-      F.SetKind(fkTooLongLine);
-      Results.Add(F);
+      Results.Add(TLeakFinding.New(FileName, '', i + 1,
+        Format('Line is %d characters (max %d) - wrap or extract subexpression.',
+          [Len, MaxLen]),
+        fkTooLongLine));
     end;
   finally
     ReleaseLines(Lines, Cached);

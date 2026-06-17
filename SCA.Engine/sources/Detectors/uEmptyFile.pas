@@ -80,7 +80,6 @@ var
   HasIface  : Boolean;
   HasImpl   : Boolean;
   HasDecl   : Boolean;
-  F         : TLeakFinding;
 begin
   Lines := AcquireLines(FileName, Cached);
   if Lines = nil then Exit;
@@ -101,16 +100,10 @@ begin
     end;
     // Es muss eine echte Unit sein UND keine Deklaration enthalten
     if HasUnit and HasIface and HasImpl and (not HasDecl) then
-    begin
-      F            := TLeakFinding.Create;
-      F.FileName   := FileName;
-      F.MethodName := '';
-      F.LineNumber := '1';
-      F.MissingVar := 'Unit contains no declarations (no type/const/var/' +
-        'procedure/function) - delete the file or fill it in.';
-      F.SetKind(fkEmptyFile);
-      Results.Add(F);
-    end;
+      Results.Add(TLeakFinding.New(FileName, '', 1,
+        'Unit contains no declarations (no type/const/var/' +
+        'procedure/function) - delete the file or fill it in.',
+        fkEmptyFile));
   finally
     ReleaseLines(Lines, Cached);
   end;

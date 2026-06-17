@@ -61,7 +61,6 @@ var
   Assigns : TList<TAstNode>;
   N       : TAstNode;
   Lhs, Rhs: string;
-  F       : TLeakFinding;
 begin
   Assigns := MethodNode.FindAll(nkAssign);
   try
@@ -72,14 +71,10 @@ begin
       if (Lhs = '') or (Rhs = '') then Continue;
       if Lhs <> Rhs then Continue;
 
-      F            := TLeakFinding.Create;
-      F.FileName   := FileName;
-      F.MethodName := MethodNode.Name;
-      F.LineNumber := IntToStr(N.Line);
-      F.MissingVar := Format('Self-assignment: %s := %s (no-op or copy-paste)',
-                              [N.Name, N.TypeRef]);
-      F.SetKind(fkSelfAssignment);
-      Results.Add(F);
+      Results.Add(TLeakFinding.New(FileName, MethodNode.Name, N.Line,
+        Format('Self-assignment: %s := %s (no-op or copy-paste)',
+          [N.Name, N.TypeRef]),
+        fkSelfAssignment));
     end;
   finally
     Assigns.Free;

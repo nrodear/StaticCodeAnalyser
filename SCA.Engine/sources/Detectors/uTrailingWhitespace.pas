@@ -65,7 +65,6 @@ class procedure TTrailingWhitespaceDetector.AnalyzeUnit(UnitNode: TAstNode;
 var
   Lines    : TStringList;
   i, Col   : Integer;
-  F        : TLeakFinding;
   Cached   : Boolean;
 begin
   Lines := AcquireLines(FileName, Cached);
@@ -74,15 +73,10 @@ begin
     for i := 0 to Lines.Count - 1 do
     begin
       if not HasTrailingWs(Lines[i], Col) then Continue;
-      F            := TLeakFinding.Create;
-      F.FileName   := FileName;
-      F.MethodName := '';
-      F.LineNumber := IntToStr(i + 1);
-      F.MissingVar := Format(
-        'Trailing whitespace from column %d - configure editor to ' +
-        'trim on save.', [Col]);
-      F.SetKind(fkTrailingWhitespace);
-      Results.Add(F);
+      Results.Add(TLeakFinding.New(FileName, '', i + 1,
+        Format('Trailing whitespace from column %d - configure editor to ' +
+               'trim on save.', [Col]),
+        fkTrailingWhitespace));
     end;
   finally
     ReleaseLines(Lines, Cached);

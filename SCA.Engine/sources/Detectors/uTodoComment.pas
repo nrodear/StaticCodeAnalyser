@@ -194,7 +194,6 @@ var
   CommentAt   : Integer;   // Spalte ab der Kommentar beginnt (1-basiert)
   Marker      : string;
   MarkerPos   : Integer;
-  F           : TLeakFinding;
   Snippet     : string;
   Cached      : Boolean;
 begin
@@ -231,13 +230,8 @@ begin
         if Length(Snippet) > 60 then
           Snippet := Copy(Snippet, 1, 57) + '...';
 
-        F            := TLeakFinding.Create;
-        F.FileName   := FileName;
-        F.MethodName := '';
-        F.LineNumber := IntToStr(i + 1);
-        F.MissingVar := Snippet;
-        F.SetKind(fkTodoComment);
-        Results.Add(F);
+        Results.Add(TLeakFinding.New(FileName, '', i + 1,
+          Snippet, fkTodoComment));
       end;
     end;
   finally

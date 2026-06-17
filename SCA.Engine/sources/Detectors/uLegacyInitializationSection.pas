@@ -145,23 +145,16 @@ var
   Cached : Boolean;
   Marker : Integer;
   Lower  : string;
-  F      : TLeakFinding;
 begin
   Lines := AcquireLines(FileName, Cached);
   if Lines = nil then Exit;
   try
     Marker := FindLastInitMarker(Lines, Lower);
     if (Marker >= 0) and (Lower = 'begin') then
-    begin
-      F            := TLeakFinding.Create;
-      F.FileName   := FileName;
-      F.MethodName := '';
-      F.LineNumber := IntToStr(Marker + 1);
-      F.MissingVar := 'Legacy unit-init `begin..end.` - migrate to ' +
-        '`initialization..end.` for explicit init/finalization separation.';
-      F.SetKind(fkLegacyInitializationSection);
-      Results.Add(F);
-    end;
+      Results.Add(TLeakFinding.New(FileName, '', Marker + 1,
+        'Legacy unit-init `begin..end.` - migrate to ' +
+        '`initialization..end.` for explicit init/finalization separation.',
+        fkLegacyInitializationSection));
   finally
     ReleaseLines(Lines, Cached);
   end;
