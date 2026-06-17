@@ -136,7 +136,6 @@ var
   Lines  : TStringList;
   i, Col : Integer;
   InBlk, InParen : Boolean;
-  F      : TLeakFinding;
   Cached : Boolean;
 begin
   Lines := AcquireLines(FileName, Cached);
@@ -148,15 +147,11 @@ begin
     begin
       Col := FindOutParam(Lines[i], InBlk, InParen);
       if Col <= 0 then Continue;
-      F            := TLeakFinding.Create;
-      F.FileName   := FileName;
-      F.MethodName := '';
-      F.LineNumber := IntToStr(i + 1);
-      F.MissingVar := Format(
-        '`out` parameter at column %d - prefer `var` (out clears managed ' +
-        'types on entry, leaves records uninitialized).', [Col]);
-      F.SetKind(fkAvoidOut);
-      Results.Add(F);
+      Results.Add(TLeakFinding.New(FileName, '', i + 1,
+        Format('`out` parameter at column %d - prefer `var` (out clears ' +
+               'managed types on entry, leaves records uninitialized).',
+          [Col]),
+        fkAvoidOut));
     end;
   finally
     ReleaseLines(Lines, Cached);

@@ -126,7 +126,6 @@ var
   IfStmts : TList<TAstNode>;
   I       : TAstNode;
   IdentLow : string;
-  F       : TLeakFinding;
   Hit     : Boolean;
 begin
   Methods := UnitNode.FindAll(nkMethod);
@@ -162,15 +161,11 @@ begin
           end;
           if not Hit then Continue;
 
-          F            := TLeakFinding.Create;
-          F.FileName   := FileName;
-          F.MethodName := M.Name;
-          F.LineNumber := IntToStr(M.Line);
-          F.MissingVar := Format(
-            'Boolean parameter %s of %s drives internal branching - consider two methods with descriptive names',
-            [P.Name, M.Name]);
-          F.SetKind(fkBooleanParam);
-          Results.Add(F);
+          Results.Add(TLeakFinding.New(FileName, M.Name, M.Line,
+            Format('Boolean parameter %s of %s drives internal branching - ' +
+                   'consider two methods with descriptive names',
+              [P.Name, M.Name]),
+            fkBooleanParam));
         end;
       finally
         Params.Free;

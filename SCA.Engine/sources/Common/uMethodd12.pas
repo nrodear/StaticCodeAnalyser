@@ -57,6 +57,25 @@ type
     function SeverityText: string;
     function FindingType: TFindingType;
     function TypeText: string;
+
+    // Convenience-Constructor: kapselt das 7-Zeilen-Boilerplate-Pattern
+    // (Create + 5 Field-Sets + SetKind) das in 30+ Detector-Files
+    // dupliziert war. Vorher:
+    //   F := TLeakFinding.Create;
+    //   F.FileName := FN; F.MethodName := M;
+    //   F.LineNumber := IntToStr(L);
+    //   F.MissingVar := Msg;
+    //   F.SetKind(K);
+    //   Results.Add(F);
+    // Jetzt:
+    //   Results.Add(TLeakFinding.New(FN, M, L, Msg, K));
+    class function New(const AFileName, AMethodName: string; ALine: Integer;
+      const AMissingVar: string; AKind: TFindingKind): TLeakFinding; overload; static;
+    // Variante mit expliziter Confidence (z.B. fcLow fuer heuristische
+    // Treffer in uLeakDetector2 / uDivByZero).
+    class function New(const AFileName, AMethodName: string; ALine: Integer;
+      const AMissingVar: string; AKind: TFindingKind;
+      AConfidence: TFindingConfidence): TLeakFinding; overload; static;
   end;
 
 implementation
@@ -142,6 +161,30 @@ begin
   Kind       := K;
   Severity   := KindDefaultSeverity(K);
   Confidence := AConfidence;
+end;
+
+class function TLeakFinding.New(const AFileName, AMethodName: string;
+  ALine: Integer; const AMissingVar: string;
+  AKind: TFindingKind): TLeakFinding;
+begin
+  Result := TLeakFinding.Create;
+  Result.FileName   := AFileName;
+  Result.MethodName := AMethodName;
+  Result.LineNumber := IntToStr(ALine);
+  Result.MissingVar := AMissingVar;
+  Result.SetKind(AKind);
+end;
+
+class function TLeakFinding.New(const AFileName, AMethodName: string;
+  ALine: Integer; const AMissingVar: string; AKind: TFindingKind;
+  AConfidence: TFindingConfidence): TLeakFinding;
+begin
+  Result := TLeakFinding.Create;
+  Result.FileName   := AFileName;
+  Result.MethodName := AMethodName;
+  Result.LineNumber := IntToStr(ALine);
+  Result.MissingVar := AMissingVar;
+  Result.SetKind(AKind, AConfidence);
 end;
 
 function TLeakFinding.SeverityText: string;

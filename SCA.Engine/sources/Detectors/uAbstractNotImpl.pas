@@ -100,7 +100,6 @@ var
   AbstractMethods : TList<string>;
   DerivedMethods  : TStringList;
   AbstrName   : string;
-  F           : TLeakFinding;
 begin
   ClassNodes := UnitNode.FindAll(nkClass);
   ClassByName := TDictionary<string, TAstNode>.Create;
@@ -177,15 +176,11 @@ begin
           for AbstrName in AbstractMethods do
             if DerivedMethods.IndexOf(AbstrName) < 0 then
             begin
-              F            := TLeakFinding.Create;
-              F.FileName   := FileName;
-              F.MethodName := C.Name;
-              F.LineNumber := IntToStr(C.Line);
-              F.MissingVar := Format(
-                'Class %s inherits abstract method %s.%s but does not override it - EAbstractError on call',
-                [C.Name, Parent.Name, AbstrName]);
-              F.SetKind(fkAbstractNotImpl);
-              Results.Add(F);
+              Results.Add(TLeakFinding.New(FileName, C.Name, C.Line,
+                Format('Class %s inherits abstract method %s.%s but does ' +
+                       'not override it - EAbstractError on call',
+                  [C.Name, Parent.Name, AbstrName]),
+                fkAbstractNotImpl));
             end;
         finally
           DerivedMethods.Free;

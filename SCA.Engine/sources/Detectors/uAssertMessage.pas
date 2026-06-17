@@ -156,7 +156,6 @@ var
   Lines  : TStringList;
   i, Col : Integer;
   InBlk, InParen : Boolean;
-  F      : TLeakFinding;
   Cached : Boolean;
 begin
   Lines := AcquireLines(FileName, Cached);
@@ -168,15 +167,10 @@ begin
     begin
       Col := FindAssertSingleArg(Lines[i], InBlk, InParen);
       if Col <= 0 then Continue;
-      F            := TLeakFinding.Create;
-      F.FileName   := FileName;
-      F.MethodName := '';
-      F.LineNumber := IntToStr(i + 1);
-      F.MissingVar := Format(
-        'Assert at column %d has no message - add a "why" string for ' +
-        'easier diagnosis.', [Col]);
-      F.SetKind(fkAssertMessage);
-      Results.Add(F);
+      Results.Add(TLeakFinding.New(FileName, '', i + 1,
+        Format('Assert at column %d has no message - add a "why" string ' +
+               'for easier diagnosis.', [Col]),
+        fkAssertMessage));
     end;
   finally
     ReleaseLines(Lines, Cached);
