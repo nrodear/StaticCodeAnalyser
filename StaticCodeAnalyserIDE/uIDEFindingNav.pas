@@ -34,20 +34,11 @@ uses
   uIDELineHighlighter, uIDEEditorIntegration;
 
 function IsFindingNavEnabled: Boolean;
-// Liest [Hotkeys] FindingNavEnabled UND ShortcutsEnabled aus analyser.ini
-// bei jedem Tastendruck - beide muessen True sein damit die Hotkey
-// feuert. ShortcutsEnabled ist der Master-Toggle ueber alle Shortcuts,
-// FindingNavEnabled der Per-Feature-Toggle. Default beide True.
-var
-  Settings : TRepoSettings;
+// Master-Toggle ShortcutsEnabled UND Per-Feature-Toggle FindingNavEnabled.
+// Beide muessen True sein. Default beide True. (siehe D-2/D-10 im Audit).
 begin
-  Settings := TRepoSettings.Create;
-  try
-    try Settings.Load; except end;
-    Result := Settings.ShortcutsEnabled and Settings.FindingNavEnabled;
-  finally
-    Settings.Free;
-  end;
+  Result := TRepoSettings.QuickReadBool('Hotkeys', 'ShortcutsEnabled',  True)
+        and TRepoSettings.QuickReadBool('Hotkeys', 'FindingNavEnabled', True);
 end;
 
 type

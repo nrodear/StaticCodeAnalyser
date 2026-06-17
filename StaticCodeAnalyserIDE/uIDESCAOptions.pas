@@ -96,11 +96,10 @@ type
     // als der TIDETheme-Subscribe in manchen IDE-Versionen. Beide Pfade
     // rufen Apply auf das Frame; Apply ist idempotent.
     procedure CMStyleChanged(var Message: TMessage); message CM_STYLECHANGED;
-    // Phase-1-Helpers: konsistentes Styling der Info-/Hint-Labels
-    // (italic + clGrayText) sowie der GroupBox-Captions (bold). Wird
-    // jeweils NACH dem Erzeugen einmal pro Control aufgerufen.
+    // Hint-Style fuer alle Info-Labels (IDE_FG_DIM, 8pt) - exakt wie in
+    // uIDESonarOptions, damit die zwei Options-Pages optisch konsistent
+    // wirken. Wird einmal nach BuildControls aufgerufen.
     procedure StyleAsHint(L: TLabel);
-    procedure StyleAsSectionHeader(G: TGroupBox);
     procedure ApplyHintStyleToAllInfoLabels;
   public
     constructor Create(AOwner: TComponent); override;
@@ -142,7 +141,7 @@ implementation
 
 uses
   uIDETheme,         // TIDETheme.Apply + Subscribe
-  uIDEToolbar,       // ApplySegoeUI - konsistenter Font-Stack
+  uIDEColors,        // IDE_FG_DIM - semantische Theme-Farbe (wie uIDESonarOptions)
   uAnalyserTheme;    // TEditorColorScheme + Parse/ToStr
 
 const
@@ -163,13 +162,11 @@ begin
   inherited;
   Name    := '';       // keinen Komponenten-Namen fuer den Frame
   BuildControls;
-  // Phase 1 - Font-Konsistenz: gleicher Stack wie Plugin-Dock + Properties-
-  // Panel (Segoe UI 8). Ohne diesen Aufruf erbt das Frame den IDE-Default
-  // (oft MS Shell Dlg 8), was typografisch sichtbar abweicht.
-  TIDEToolbar.ApplySegoeUI(Self, 8);
-  // Phase 1 - Info-Labels einheitlich als Hint stylen (italic + clGrayText),
-  // GroupBox-Caption bold. Findet alle bereits erzeugten Controls und
-  // wendet die Styles an - kein Refactor der BuildControls noetig.
+  // Optisches Match zur Sonar-Options-Page (uIDESonarOptions):
+  //   * KEIN ApplySegoeUI auf Self - Sonar erbt den IDE-Default-Font;
+  //     wenn wir Segoe UI 8 erzwingen wuerden, weicht SCA optisch ab.
+  //   * Info-Labels bekommen IDE_FG_DIM + 8pt (= Sonar-Hint-Style).
+  //   * Keine Bold-GroupBox-Captions (Sonar hat das nicht).
   ApplyHintStyleToAllInfoLabels;
 end;
 
@@ -780,31 +777,25 @@ begin
 end;
 
 procedure TSCAOptionsFrame.StyleAsHint(L: TLabel);
-// Italic + clGrayText = Standard-Hint-Style aus CnPack/GExperts.
-// AutoSize=False behalten wir bei (Layout-Stabilitaet fuer i18n).
+// 1:1 wie Sonar-Options-Page (uIDESonarOptions.lblTokenInfo):
+//   * IDE_FG_DIM = semantische Theme-Farbe (faellt im Dark-Theme auf
+//     den richtigen Grau-Ton, statt hartkodiert clGrayText).
+//   * Font.Size := 8 + ParentFont := False - 8pt statt Default 9pt
+//     damit Hint-Text subtler als Field-Labels wirkt; ParentFont OFF
+//     damit Theme-Wechsel den Size nicht zurueckschiebt.
+//   * Kein italic - Sonar nutzt das auch nicht.
 begin
   if not Assigned(L) then Exit;
-  L.Font.Style := L.Font.Style + [fsItalic];
-  L.Font.Color := clGrayText;
-end;
-
-procedure TSCAOptionsFrame.StyleAsSectionHeader(G: TGroupBox);
-// GroupBox-Caption fett. VCL hat keinen direkten Caption-Style-Switch -
-// wir setzen Font.Style auf der GroupBox; die Caption uebernimmt das.
-// Children erben den Font nicht (Build-Reihenfolge: Caption-Font wird
-// erst NACH Children-Create gesetzt; die haben dann ihren eigenen Font).
-begin
-  if not Assigned(G) then Exit;
-  G.Font.Style := G.Font.Style + [fsBold];
+  L.ParentFont := False;
+  L.Font.Size  := 8;
+  L.Font.Color := IDE_FG_DIM;
 end;
 
 procedure TSCAOptionsFrame.ApplyHintStyleToAllInfoLabels;
-// Stylet alle Info-Labels einheitlich als Hint (italic + clGrayText) und
-// die GroupBox-Captions als Section-Header (bold).
-// Explizit aufgelistet weil TLabel.Create(Self) in BuildControls keinen
-// Name setzt - ein name-basierter Sweep ueber Components findet nichts.
+// Stylet alle Info-Labels einheitlich als Sonar-Hint (IDE_FG_DIM, 8pt).
+// GroupBox-Captions bleiben unangetastet - Sonar-Look hat keine Bold-
+// Captions, das wirkte aufgesetzt und vererbte Bold an die Children.
 begin
-  // Info-Labels (Erklaerungs-Text unter den Controls)
   StyleAsHint(lblSilentInfo);
   StyleAsHint(lblOverlayPosInfo);
   StyleAsHint(lblAutoExpandInfo);
@@ -814,13 +805,6 @@ begin
   StyleAsHint(lblFindingNavInfo);
   StyleAsHint(lblRestartHint);
   StyleAsHint(lblGridShortcuts);
-
-  // Section-Headers (GroupBox-Captions)
-  StyleAsSectionHeader(grpSilent);
-  StyleAsSectionHeader(grpHotkeys);
-  StyleAsSectionHeader(grpRuleSet);
-  StyleAsSectionHeader(grpDetectors);
-  StyleAsSectionHeader(grpDisplay);
 end;
 
 procedure TSCAOptionsFrame.CMStyleChanged(var Message: TMessage);

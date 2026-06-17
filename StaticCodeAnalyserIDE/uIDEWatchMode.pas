@@ -300,7 +300,8 @@ implementation
 // monolithischen Notifier-Lifecycle.
 
 uses
-  System.StrUtils, Vcl.Forms, uStaticAnalyzer2, uStaticFiles, uLocalization;
+  System.StrUtils, Vcl.Forms, uStaticAnalyzer2, uStaticFiles, uLocalization,
+  uPathNormalize;   // SPOT fuer Pfad-Normalisierung
 
 const
   DEBOUNCE_MS      = 300;   // Save-Trigger: schnelle Reaktion erwuenscht
@@ -782,8 +783,9 @@ end;
 
 class function TWatchModeManager.NormalizePath(const APath: string): string;
 begin
-  // Slashes vereinheitlichen + trimmen. Case-Vergleich macht spaeter SameText.
-  Result := StringReplace(APath, '/', '\', [rfReplaceAll]).Trim;
+  // Delegiert an die zentrale Implementation (uPathNormalize) damit Watch-
+  // Cache-Keys mit Frame / Highlighter / Properties-Wrapper konsistent sind.
+  Result := uPathNormalize.NormalizePathForKey(APath);
 end;
 
 class function TWatchModeManager.CompanionOf(const APath: string): string;

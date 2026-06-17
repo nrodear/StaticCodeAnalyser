@@ -3764,37 +3764,18 @@ begin
 end;
 
 function IsSilentEnabled: Boolean;
-// Liest [Silent] Enabled aus analyser.ini - True wenn das User-Flag den
-// Silent-Mode (Rechtsklick + Hotkey) aktiviert. Default True.
-// Wird vor JEDEM Silent-Trigger gefragt damit die User-Konfig sofort wirkt -
-// kein Plugin-Reload noetig.
-var
-  Settings : TRepoSettings;
+// 1-Liner ueber TRepoSettings.QuickReadBool. Frueher 10 Zeilen
+// Boilerplate (Create + Load + Read + Free); siehe D-2 im Audit.
 begin
-  Settings := TRepoSettings.Create;
-  try
-    try Settings.Load; except end;
-    Result := Settings.SilentEnabled;
-  finally
-    Settings.Free;
-  end;
+  Result := TRepoSettings.QuickReadBool('Silent', 'Enabled', True);
 end;
 
 function IsShortcutsMasterEnabled: Boolean;
 // Master-Gate ueber ALLE Plugin-Shortcuts. Wird in jedem Shortcut-Handler
 // (TSCAKeyboardBinding, TSCAFindingNavBinding, GridKeyDown) ganz vorne
-// abgefragt. False -> alle Tastenkuerzel sind tot, aber der Silent-Mode
-// per Rechtsklick-Menue + die Toolbar-Buttons bleiben funktional.
-var
-  Settings : TRepoSettings;
+// abgefragt.
 begin
-  Settings := TRepoSettings.Create;
-  try
-    try Settings.Load; except end;
-    Result := Settings.ShortcutsEnabled;
-  finally
-    Settings.Free;
-  end;
+  Result := TRepoSettings.QuickReadBool('Hotkeys', 'ShortcutsEnabled', True);
 end;
 
 procedure RunSilentAnalysisForCurrentEditorFile;

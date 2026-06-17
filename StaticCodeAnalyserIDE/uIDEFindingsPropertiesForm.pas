@@ -155,6 +155,7 @@ uses
   Vcl.Graphics,
   System.Math,                // SameValue
   System.DateUtils,           // OneSecond
+  uPathNormalize,             // SPOT fuer Pfad-Normalisierung (Cache-Keys)
   uIDETheme,
   uIDEWatchMode,
   uIDELineHighlighter,        // GHighlighter.Clear fuer Toolbar-Clear-Button
@@ -506,12 +507,6 @@ begin
   end;
 end;
 
-function NormalizeForCache(const APath: string): string;
-// Schluessel-Normalisierung fuer FLastScanTimes - gleiche Konvention wie
-// Frame.NormalizePath (case ist Windows-egal, '/' vs '\' nicht).
-begin
-  Result := StringReplace(APath, '/', '\', [rfReplaceAll]).Trim;
-end;
 
 function TFindingsPropertiesDockableForm.ShouldSkipScan(
   const AFileName: string): Boolean;
@@ -524,7 +519,7 @@ var
 begin
   Result := False;
   if not Assigned(FLastScanTimes) then Exit;
-  Key := NormalizeForCache(AFileName);
+  Key := uPathNormalize.NormalizePathForKey(AFileName);
   if not FLastScanTimes.TryGetValue(Key, Cached) then Exit;
   try
     CurrentT := TFile.GetLastWriteTime(AFileName);
@@ -544,7 +539,7 @@ var
 begin
   if not Assigned(FLastScanTimes) then
     FLastScanTimes := TDictionary<string, TDateTime>.Create;
-  Key := NormalizeForCache(AFileName);
+  Key := uPathNormalize.NormalizePathForKey(AFileName);
   try
     T := TFile.GetLastWriteTime(AFileName);
   except
@@ -562,7 +557,7 @@ begin
   if AFileName = '' then
     FLastScanTimes.Clear
   else
-    FLastScanTimes.Remove(NormalizeForCache(AFileName));
+    FLastScanTimes.Remove(uPathNormalize.NormalizePathForKey(AFileName));
 end;
 
 destructor TFindingsPropertiesDockableForm.Destroy;

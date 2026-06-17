@@ -223,6 +223,11 @@ type
     procedure AttachSaveNotifier(const AKey: string);
     procedure DetachSaveNotifier(const AKey: string);
     procedure DetachAllSaveNotifiers;
+    // Group-Synthese aus einer (file, line)-Gruppe in eine TFindingMark.
+    // Geteilt zwischen SetAllFindings (Multi-File-Variante) und
+    // ReplaceMarksForFile (Single-File-Variante) - vorher 80% duplizierter
+    // Code (Dedup -> Sort -> Single-vs-Multi-Mark-Synthese).
+    function BuildMarkForLineGroup(Group: TList<TFindingMarkEntry>): TFindingMark;
   public
     // PUBLIC fuer TFindingEditorEvents — forciert Repaint aller markierten
     // Zeilen via InvalidateTopEditorLogicalLine. Wird in EditorScrolled
@@ -291,6 +296,7 @@ implementation
 
 uses
   uAnalyserPalette,     // ACCENT_ERROR als zentrale Stripe-Default-Farbe
+  uPathNormalize,       // SPOT fuer Pfad-Normalisierung (Cache-Keys)
   uRepoSettings;        // OverlayPosition aus [UI]
 
 const
@@ -405,22 +411,9 @@ begin
 end;
 
 function TFindingEditorEvents.IsShowOnHoverEnabled: Boolean;
-// Settings frisch bei jedem Bedarf lesen damit ein Toggle in Tools >
-// Options sofort wirkt. INI-IO ist trivial (cached vom OS-File-Cache).
-var
-  S : TRepoSettings;
+// 1-Liner ueber TRepoSettings.QuickReadBool (siehe D-2/D-10 im Audit).
 begin
-  Result := False;   // Default: Click-only
-  S := TRepoSettings.Create;
-  try
-    try
-      S.Load;
-      Result := S.OverlayShowOnHover;
-    except
-    end;
-  finally
-    S.Free;
-  end;
+  Result := TRepoSettings.QuickReadBool('UI', 'OverlayShowOnHover', False);
 end;
 
 function GetOverlayPositionSetting: string;
@@ -542,7 +535,9 @@ end;
 
 function TFindingHighlighter.NormalizePath(const APath: string): string;
 begin
-  Result := APath.ToLower.Replace('/', '\');
+  // Delegiert an die zentrale Implementation (uPathNormalize) damit Cache-
+  // Keys hier mit denen in Frame + Watch-Mode + Properties-Wrapper matchen.
+  Result := uPathNormalize.NormalizePathForKey(APath);
 end;
 
 procedure TFindingHighlighter.AttachSaveNotifier(const AKey: string);
@@ -652,10 +647,105 @@ begin
   end;
 end;
 
+function TFindingHighlighter.BuildMarkForLineGroup(
+  Group: TList<TFindingMarkEntry>): TFindingMark;
+// Dedup (Title + Severity) -> Sort by Severity -> Single oder Multi-Mark.
+// Group muss mindestens 1 Eintrag enthalten (Caller pruefen).
+var
+  j         : Integer;
+  Strongest : TFindingMarkEntry;
+  DescSB    : TStringBuilder;
+begin
+  // Duplikate zusammenfassen. Key = Title + Severity (Title allein wuerde
+  // zwei Findings mit gleichem Variablen-Namen aber unterschiedlichem
+  // Severity faelschlich zusammenfassen).
+  if Group.Count > 1 then
+  begin
+    var SeenKeys : TDictionary<string, Boolean>;
+    SeenKeys := TDictionary<string, Boolean>.Create;
+    try
+      for var k := Group.Count - 1 downto 0 do
+      begin
+        var Key := Trim(Group[k].Title) + '|' +
+                   IntToStr(Ord(Group[k].Severity));
+        if SeenKeys.ContainsKey(Key) then
+          Group.Delete(k)
+        else
+          SeenKeys.Add(Key, True);
+      end;
+    finally
+      SeenKeys.Free;
+    end;
+  end;
+
+  // Staerkste Severity zuerst (stabiles Sort seit RAD12).
+  Group.Sort(TComparer<TFindingMarkEntry>.Construct(
+    function(const A, B: TFindingMarkEntry): Integer
+    begin
+      Result := SeverityRank(A.Severity) - SeverityRank(B.Severity);
+    end));
+  Strongest := Group[0];
+
+  if Group.Count = 1 then
+  begin
+    Result.Title    := Strongest.Title;
+    Result.Desc     := Strongest.Desc;
+    Result.Badge    := Strongest.Badge;
+    Result.Color    := Strongest.Color;
+    Result.Fix      := Strongest.Fix;
+    Result.Severity := Strongest.Severity;
+    Result.IsMulti  := False;
+    Exit;
+  end;
+
+  // Multi-Mark: Summary mit Bullet-Liste pro Befund. Color/Badge/Severity
+  // vom staerksten Eintrag, sodass der Editor-Stripe die staerkste Severity
+  // zeigt. Beispiel:
+  //   • PointerArithmeticOnString  [Warning]
+  //      String + integer addition treated as pointer arithmetic ...
+  //   • UseAfterFree  [Error]
+  //      Variable accessed after FreeAndNil ...
+  DescSB := TStringBuilder.Create;
+  try
+    for j := 0 to Group.Count - 1 do
+    begin
+      if j > 0 then DescSB.AppendLine;
+      // Bullet als #$2022-Escape, nicht als Literal-Char: das File hat
+      // kein UTF-8-BOM, Delphi 12 liest Source als ANSI/CP-1252.
+      DescSB.Append(#$2022 + ' ');
+      if Group[j].Title <> '' then
+        DescSB.Append(Group[j].Title)
+      else
+        DescSB.Append('(unnamed)');
+      if Group[j].Severity <> fsUnknown then
+      begin
+        DescSB.Append('  [');
+        DescSB.Append(SeverityLabel(Group[j].Severity));
+        DescSB.Append(']');
+      end;
+      if Group[j].Desc <> '' then
+      begin
+        DescSB.AppendLine;
+        DescSB.Append('   ');           // 3 spaces = Indent unter Bullet
+        DescSB.Append(Group[j].Desc);
+      end;
+    end;
+    Result.Desc := DescSB.ToString;
+  finally
+    DescSB.Free;
+  end;
+  Result.Title    := Format(_('%d findings on this line'), [Group.Count]);
+  Result.Badge    := Strongest.Badge;
+  Result.Color    := Strongest.Color;
+  Result.Fix      := '';
+  Result.Severity := Strongest.Severity;
+  Result.IsMulti  := True;
+end;
+
 procedure TFindingHighlighter.SetAllFindings(
   const AEntries: array of TFindingMarkEntry);
 var
-  i, j      : Integer;
+  i         : Integer;
   Mark      : TFindingMark;
   FileKey   : string;
   Bucket    : TFileMarks;
@@ -667,8 +757,6 @@ var
   LineMap   : TObjectDictionary<Integer, TList<TFindingMarkEntry>>;
   EntryList : TList<TFindingMarkEntry>;
   Group     : TList<TFindingMarkEntry>;
-  Strongest : TFindingMarkEntry;
-  DescSB    : TStringBuilder;
 begin
   // Overlay sofort verbergen — im Hover-Modus erscheint es erst wieder,
   // wenn die Maus eine markierte Zeile beruehrt.
@@ -721,112 +809,7 @@ begin
       begin
         Group := LineMap[LineNo];
         if Group.Count = 0 then Continue;
-
-        // Duplikate zusammenfassen. Aggressiver Title-only-Match: wenn
-        // zwei Entries dieselbe Befund-Hauptmeldung (Title = F.MissingVar)
-        // haben, ist es derselbe Finding - auch wenn Desc/Color leicht
-        // abweichen (z.B. weil unterschiedliche Detector-Pfade leicht
-        // andere FixHint-Descriptions liefern, oder Watch-Mode und
-        // Properties-Panel-Auto-Scan kurz hintereinander dispatchen).
-        if Group.Count > 1 then
-        begin
-          var SeenKeys : TDictionary<string, Boolean>;
-          SeenKeys := TDictionary<string, Boolean>.Create;
-          try
-            for var k := Group.Count - 1 downto 0 do
-            begin
-              // Key = Title + Severity. Title allein wuerde zwei Findings
-              // mit demselben Variablen-Namen aber unterschiedlichem
-              // Severity (z.B. "Foo" als Error UND als Warning) faelsch-
-              // licherweise zusammenfassen - der Severity-Suffix haelt
-              // diese unterschiedlichen Findings auseinander.
-              var Key := Trim(Group[k].Title) + '|' +
-                         IntToStr(Ord(Group[k].Severity));
-              if SeenKeys.ContainsKey(Key) then
-                Group.Delete(k)
-              else
-                SeenKeys.Add(Key, True);
-            end;
-          finally
-            SeenKeys.Free;
-          end;
-        end;
-
-        // Staerkste Severity zuerst (kleinster Rank). Bei gleichem Rank
-        // bleibt die Insertion-Order (TList.Sort ist stabil seit RAD12).
-        Group.Sort(TComparer<TFindingMarkEntry>.Construct(
-          function(const A, B: TFindingMarkEntry): Integer
-          begin
-            Result := SeverityRank(A.Severity) - SeverityRank(B.Severity);
-          end));
-        Strongest := Group[0];
-
-        if Group.Count = 1 then
-        begin
-          // Single-Finding-Mark: 1:1 uebernehmen.
-          Mark.Title    := Strongest.Title;
-          Mark.Desc     := Strongest.Desc;
-          Mark.Badge    := Strongest.Badge;
-          Mark.Color    := Strongest.Color;
-          Mark.Fix      := Strongest.Fix;
-          Mark.Severity := Strongest.Severity;
-          Mark.IsMulti  := False;
-        end
-        else
-        begin
-          // Multi-Mark: Summary-Markierung mit Bullet-Liste pro Befund.
-          // Title + Severity-Label inline, Desc auf eingerueckter Folge-
-          // zeile damit alle Detail-Beschreibungen erhalten bleiben - nicht
-          // mehr nur die Titel zusammengefasst. Color/Badge/Severity kommen
-          // weiterhin vom staerksten Eintrag, sodass der Editor-Stripe
-          // konsistent die staerkste Severity zeigt.
-          //
-          // Beispiel-Output fuer 2 Befunde auf einer Zeile:
-          //   • PointerArithmeticOnString  [Warning]
-          //      String + integer addition treated as pointer arithmetic ...
-          //   • UseAfterFree  [Error]
-          //      Variable accessed after FreeAndNil ...
-          DescSB := TStringBuilder.Create;
-          try
-            for j := 0 to Group.Count - 1 do
-            begin
-              if j > 0 then DescSB.AppendLine;
-              // Bullet als #$2022-Escape, nicht als Literal-Char: das File
-              // hat kein UTF-8-BOM, Delphi 12 liest Source als ANSI/CP-1252
-              // und wuerde die UTF-8-Bytes E2 80 A2 als 3 falsche Chars
-              // ('â€¢') in den String legen. Gleiches Pattern wie der
-              // ✓-Glyph in uIDEAnnotationOverlay (#$2713).
-              DescSB.Append(#$2022 + ' ');
-              if Group[j].Title <> '' then
-                DescSB.Append(Group[j].Title)
-              else
-                DescSB.Append('(unnamed)');
-              if Group[j].Severity <> fsUnknown then
-              begin
-                DescSB.Append('  [');
-                DescSB.Append(SeverityLabel(Group[j].Severity));
-                DescSB.Append(']');
-              end;
-              if Group[j].Desc <> '' then
-              begin
-                DescSB.AppendLine;
-                DescSB.Append('   ');           // 3 spaces = Indent unter Bullet
-                DescSB.Append(Group[j].Desc);
-              end;
-            end;
-            Mark.Desc := DescSB.ToString;
-          finally
-            DescSB.Free;
-          end;
-          // Title-Format ueber _() lokalisierbar (DE: 'N Befunde ...', EN: 'N findings ...').
-          Mark.Title    := Format(_('%d findings on this line'), [Group.Count]);
-          Mark.Badge    := Strongest.Badge;
-          Mark.Color    := Strongest.Color;
-          Mark.Fix      := '';
-          Mark.Severity := Strongest.Severity;
-          Mark.IsMulti  := True;
-        end;
-
+        Mark := BuildMarkForLineGroup(Group);
         Bucket.AddOrSetValue(LineNo, Mark);
       end;
     end;
@@ -859,11 +842,11 @@ end;
 
 procedure TFindingHighlighter.ReplaceMarksForFile(const AFileName: string;
   const AEntries: array of TFindingMarkEntry);
-// Pro-File-Variante zu SetAllFindings. Logik identisch (Gruppieren ->
-// Dedup -> Sortieren nach Severity -> Single/Multi-Mark), aber Scope auf
-// EINE Datei begrenzt. Marker anderer Dateien bleiben unangetastet.
+// Pro-File-Variante zu SetAllFindings. Group-Synthese geteilt via
+// BuildMarkForLineGroup; Scope hier auf EINE Datei begrenzt - Marker
+// anderer Dateien bleiben unangetastet.
 var
-  i, j      : Integer;
+  i         : Integer;
   Mark      : TFindingMark;
   FileKey   : string;
   Bucket    : TFileMarks;
@@ -871,8 +854,6 @@ var
   LineMap   : TObjectDictionary<Integer, TList<TFindingMarkEntry>>;
   EntryList : TList<TFindingMarkEntry>;
   Group     : TList<TFindingMarkEntry>;
-  Strongest : TFindingMarkEntry;
-  DescSB    : TStringBuilder;
   Svc       : INTACodeEditorServices;
   HasSvc    : Boolean;
 begin
@@ -881,8 +862,10 @@ begin
 
   HasSvc := Supports(BorlandIDEServices, INTACodeEditorServices, Svc);
 
-  // Hover-Overlay nur dann verstecken, wenn es eine Marke unserer Datei
-  // zeigt. Bei anderen Dateien stoeren wir den User nicht.
+  // Hover-Overlay verstecken - auch wenn es eine andere Datei zeigt.
+  // Der Overlay hat keine CurrentFile-Property zum Vergleichen; pragma-
+  // tisch ist immer-verstecken besser als veralteten Inhalt anzulassen
+  // (Re-Hover auf der markierten Zeile bringt es sofort zurueck).
   if Assigned(GAnnotationOverlay) then
     GAnnotationOverlay.HideOverlay;
 
@@ -911,12 +894,12 @@ begin
   // 3) Eintraege nach Line gruppieren.
   LineMap := TObjectDictionary<Integer, TList<TFindingMarkEntry>>.Create([doOwnsValues]);
   try
+    // Caller (RunSilentAnalysisForFile via BuildMarkEntries) garantiert
+    // dass alle AEntries dieselbe Datei haben - kein Per-Entry-NormalizePath
+    // mehr (war O(N) String-Op pro Scan, jetzt 0).
     for i := 0 to High(AEntries) do
     begin
       if AEntries[i].Line <= 0 then Continue;
-      // Defensive: FileName muss zu AFileName passen, sonst skip.
-      if NormalizePath(AEntries[i].FileName) <> FileKey then Continue;
-
       if not LineMap.TryGetValue(AEntries[i].Line, EntryList) then
       begin
         EntryList := TList<TFindingMarkEntry>.Create;
@@ -933,81 +916,7 @@ begin
     begin
       Group := LineMap[LineNo];
       if Group.Count = 0 then Continue;
-
-      // Duplikate (Title + Severity) entfernen.
-      if Group.Count > 1 then
-      begin
-        var SeenKeys : TDictionary<string, Boolean>;
-        SeenKeys := TDictionary<string, Boolean>.Create;
-        try
-          for var k := Group.Count - 1 downto 0 do
-          begin
-            var Key := Trim(Group[k].Title) + '|' +
-                       IntToStr(Ord(Group[k].Severity));
-            if SeenKeys.ContainsKey(Key) then
-              Group.Delete(k)
-            else
-              SeenKeys.Add(Key, True);
-          end;
-        finally
-          SeenKeys.Free;
-        end;
-      end;
-
-      Group.Sort(TComparer<TFindingMarkEntry>.Construct(
-        function(const A, B: TFindingMarkEntry): Integer
-        begin
-          Result := SeverityRank(A.Severity) - SeverityRank(B.Severity);
-        end));
-      Strongest := Group[0];
-
-      if Group.Count = 1 then
-      begin
-        Mark.Title    := Strongest.Title;
-        Mark.Desc     := Strongest.Desc;
-        Mark.Badge    := Strongest.Badge;
-        Mark.Color    := Strongest.Color;
-        Mark.Fix      := Strongest.Fix;
-        Mark.Severity := Strongest.Severity;
-        Mark.IsMulti  := False;
-      end
-      else
-      begin
-        DescSB := TStringBuilder.Create;
-        try
-          for j := 0 to Group.Count - 1 do
-          begin
-            if j > 0 then DescSB.AppendLine;
-            DescSB.Append(#$2022 + ' ');
-            if Group[j].Title <> '' then
-              DescSB.Append(Group[j].Title)
-            else
-              DescSB.Append('(unnamed)');
-            if Group[j].Severity <> fsUnknown then
-            begin
-              DescSB.Append('  [');
-              DescSB.Append(SeverityLabel(Group[j].Severity));
-              DescSB.Append(']');
-            end;
-            if Group[j].Desc <> '' then
-            begin
-              DescSB.AppendLine;
-              DescSB.Append('   ');
-              DescSB.Append(Group[j].Desc);
-            end;
-          end;
-          Mark.Desc := DescSB.ToString;
-        finally
-          DescSB.Free;
-        end;
-        Mark.Title    := Format(_('%d findings on this line'), [Group.Count]);
-        Mark.Badge    := Strongest.Badge;
-        Mark.Color    := Strongest.Color;
-        Mark.Fix      := '';
-        Mark.Severity := Strongest.Severity;
-        Mark.IsMulti  := True;
-      end;
-
+      Mark := BuildMarkForLineGroup(Group);
       Bucket.AddOrSetValue(LineNo, Mark);
     end;
   finally

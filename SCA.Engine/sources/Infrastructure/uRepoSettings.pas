@@ -112,6 +112,17 @@ type
     procedure Load;
     // Speichert aktuelle Werte in analyser.ini (legt Verzeichnis bei Bedarf an).
     procedure Save;
+
+    // Convenience-Class-Methoden fuer Ein-Property-Reads. Kapseln
+    // Create + Load + Free, sodass Caller das Boilerplate nicht jedes
+    // Mal hinschreiben muss. Vorher: 8 Zeilen Boilerplate (Settings.Create,
+    // try, try Settings.Load except end, Result := ..., finally, Settings.Free).
+    // Jetzt: TRepoSettings.QuickReadBool('Silent', 'Enabled', True).
+    // Fuer Hot-Path-Reads (jeder Hotkey-Druck) trotzdem ueber den Cache-
+    // Pattern (siehe GCachedEditorScheme in uAnalyserTheme) gehen.
+    class function QuickReadBool(const ASection, AKey: string;
+      ADefault: Boolean): Boolean; static;
+    class function QuickReadStr(const ASection, AKey, ADefault: string): string; static;
     procedure EnsureConfigExists;
 
     function ConfigFilePath: string;
@@ -820,6 +831,74 @@ begin
   FMagicTrivials.Free;
   FFormatFunctions.Free;
   inherited;
+end;
+
+class function TRepoSettings.QuickReadBool(const ASection, AKey: string;
+  ADefault: Boolean): Boolean;
+// Single-Property-Quick-Read. Loest 5+ Boilerplate-Funktionen
+// (IsSilentEnabled, IsShortcutsMasterEnabled, IsAutoExpandEnabled,
+// IsShowOnHoverEnabled, IsFindingNavEnabled) in 1-Liner auf.
+//
+// Caller-Beispiel:
+//   if TRepoSettings.QuickReadBool('Silent', 'Enabled', True) then ...
+//
+// Hinweis: Vollladung der TRepoSettings (TStringList-Allokation +
+// Default-Setup). Wenn das in einem Hot-Path geht (siehe BuildMarkEntries-
+// Crash 2026-06-17), stattdessen einen globalen Cache wie
+// GCachedEditorScheme in uAnalyserTheme verwenden und beim Settings-Save
+// refreshen.
+var
+  S       : TRepoSettings;
+  Ini     : TIniFile;
+  CfgPath : string;
+begin
+  Result := ADefault;
+  try
+    // ConfigFilePath ist Instanz-Method (resolved Default-Dir + Overrides).
+    // Wir bauen ein leichtes TRepoSettings NUR fuer den Pfad - kein .Load -
+    // dann TIniFile direkt fuer den einzelnen Read.
+    S := TRepoSettings.Create;
+    try
+      CfgPath := S.ConfigFilePath;
+    finally
+      S.Free;
+    end;
+    if (CfgPath = '') or not FileExists(CfgPath) then Exit;
+    Ini := TIniFile.Create(CfgPath);
+    try
+      Result := Ini.ReadBool(ASection, AKey, ADefault);
+    finally
+      Ini.Free;
+    end;
+  except
+    // Bei jedem Fehler: ADefault behalten.
+  end;
+end;
+
+class function TRepoSettings.QuickReadStr(
+  const ASection, AKey, ADefault: string): string;
+var
+  S       : TRepoSettings;
+  Ini     : TIniFile;
+  CfgPath : string;
+begin
+  Result := ADefault;
+  try
+    S := TRepoSettings.Create;
+    try
+      CfgPath := S.ConfigFilePath;
+    finally
+      S.Free;
+    end;
+    if (CfgPath = '') or not FileExists(CfgPath) then Exit;
+    Ini := TIniFile.Create(CfgPath);
+    try
+      Result := Ini.ReadString(ASection, AKey, ADefault);
+    finally
+      Ini.Free;
+    end;
+  except
+  end;
 end;
 
 function TRepoSettings.ConfigFilePath: string;

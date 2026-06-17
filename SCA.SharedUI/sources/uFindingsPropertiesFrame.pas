@@ -120,12 +120,9 @@ type
     // NICHT als Datei-Wechsel werten - sonst clear'd er die Findings die
     // gerade vom .pas-Scan kamen.
     class function ArePasDfmRelated(const A, B: string): Boolean; static;
-    // Pfade kommen aus verschiedenen Quellen (Finding.FileName vom
-    // Detector vs. EditView.Buffer.FileName vom OTAPI) und koennen sich
-    // in Slash-Richtung / Trailing-Whitespace unterscheiden. Case ist auf
-    // Windows egal, aber '/' vs '\' nicht. Vor SameText-Vergleich
-    // normalisieren - sonst clear'd ein Klick auf einen Finding das Grid
-    // weil EditorViewActivated mit anders normalisierten Pfad zurueckkommt.
+    // [DEPRECATED] Wrapper auf uPathNormalize.NormalizePathForKey. Bleibt
+    // als class-function fuer interne Stabilitaet (alt-API), Tests
+    // referenzieren sie. Neue Aufrufer importieren uPathNormalize direkt.
     class function NormalizePath(const APath: string): string; static;
   public
     constructor Create(AOwner: TComponent); override;
@@ -185,6 +182,7 @@ uses
   uSCAConsts,        // KIND_META (Rule-Name)
   uAnalyserTheme,    // ActiveStyleServices
   uIDEToolbar,       // ApplySegoeUI - selbes Font-Setup wie TAnalyserFrame
+  uPathNormalize,    // SPOT fuer Pfad-Normalisierung
   uLocalization;     // _() Translation-Macro
 
 type
@@ -526,7 +524,12 @@ end;
 class function TFindingsPropertiesFrame.NormalizePath(
   const APath: string): string;
 begin
-  Result := StringReplace(APath, '/', '\', [rfReplaceAll]).Trim;
+  // Delegiert an die zentrale Implementation. Verhaltens-Aenderung:
+  // jetzt zusaetzlich lowercase (Windows-FS ist case-insensitive) -
+  // SameText-Vergleiche oben werden dadurch redundant aber bleiben
+  // korrekt. AddOrSetValue-Cache-Keys werden konsistent zwischen Frame,
+  // Highlighter und Wrapper.
+  Result := uPathNormalize.NormalizePathForKey(APath);
 end;
 
 class function TFindingsPropertiesFrame.ArePasDfmRelated(

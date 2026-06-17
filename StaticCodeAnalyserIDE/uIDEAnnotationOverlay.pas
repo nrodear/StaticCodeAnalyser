@@ -853,24 +853,9 @@ begin
 end;
 
 function TAnnotationOverlay.IsAutoExpandEnabled: Boolean;
-// Settings frisch bei jedem Hover-Tick lesen damit ein Toggle in Tools >
-// Options sofort wirkt. INI-IO ist trivial (cached vom OS-File-Cache),
-// kein Performance-Issue im Hover-Pfad.
-var
-  Settings : TRepoSettings;
+// 1-Liner ueber TRepoSettings.QuickReadBool (siehe D-2/D-10 im Audit).
 begin
-  Result := False;
-  Settings := TRepoSettings.Create;
-  try
-    try
-      Settings.Load;
-      Result := Settings.AutoExpandAnnotation;
-    except
-      // INI-Read-Fail -> Default False (collapsed, User-Click noetig).
-    end;
-  finally
-    Settings.Free;
-  end;
+  Result := TRepoSettings.QuickReadBool('UI', 'AutoExpandAnnotation', False);
 end;
 
 function TAnnotationOverlay.IsCursorNearClose(const AScreenPos: TPoint;

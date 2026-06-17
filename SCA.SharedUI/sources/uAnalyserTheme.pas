@@ -179,11 +179,15 @@ begin
   end;
 end;
 
+const
+  // Mid-Point der 0..255-Luminanz-Skala. Dark-Themes haben typisch
+  // ~30 (#1E1E1E), Light-Themes ~240 (#F0F0F0) - 128 trennt sicher.
+  THEME_DARK_AVG_THRESHOLD = 128;
+
 function IsActiveThemeDark: Boolean;
-// Schwellwert 128: gewichtetes Luminanz-Mittel (Y = 0.299R + 0.587G + 0.114B).
-// Wir nehmen die einfache RGB-Durchschnitts-Heuristik weil clWindow oft
-// neutral-grau ist und der Unterschied eindeutig zwischen ~F0F0F0 (Light)
-// und ~1E1E1E (Dark) liegt.
+// Einfache RGB-Durchschnitts-Heuristik (statt gewichtetem Luminanz-
+// Mittel Y = 0.299R + 0.587G + 0.114B) weil clWindow meist neutral-grau
+// ist und der Unterschied zwischen Light/Dark eindeutig liegt.
 var
   Svc : TCustomStyleServices;
   C   : TColor;
@@ -200,16 +204,25 @@ begin
   end;
   rgb := ColorToRGB(C);
   Avg := (GetRValue(rgb) + GetGValue(rgb) + GetBValue(rgb)) div 3;
-  Result := Avg < 128;
+  Result := Avg < THEME_DARK_AVG_THRESHOLD;
 end;
 
 function ParseEditorColorScheme(const S: string): TEditorColorScheme;
 var Lower : string;
 begin
   Lower := LowerCase(Trim(S));
-  if Lower = 'gray' then Result := ecsGray
-  else if Lower = 'subtle' then Result := ecsSubtle
-  else Result := ecsDefault;
+  if Lower = 'gray' then Exit(ecsGray);
+  if Lower = 'subtle' then Exit(ecsSubtle);
+  if Lower = 'default' then Exit(ecsDefault);
+  // Unbekannter Wert: still auf Default zurueck, aber Debug-Log fuer
+  // den Fall dass der User einen Tippfehler in der INI hat (z.B. 'grey'
+  // statt 'gray'). Leere String + Erst-Init liefern auch Default, das
+  // ist OK - nur 'echte' Tippfehler werden geloggt.
+  if Lower <> '' then
+    Winapi.Windows.OutputDebugString(PChar(
+      'SCA: unknown EditorColorScheme value ' + QuotedStr(S) +
+      ' - falling back to default'));
+  Result := ecsDefault;
 end;
 
 function EditorColorSchemeToStr(Scheme: TEditorColorScheme): string;

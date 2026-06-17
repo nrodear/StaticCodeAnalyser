@@ -45,6 +45,7 @@ contains
   uIDEToolbar in 'sources\uIDEToolbar.pas',
   uExportMenu in 'sources\uExportMenu.pas',
   uIDEColors in 'sources\uIDEColors.pas',
+  uPathNormalize in 'sources\uPathNormalize.pas',
   uRecentPaths in 'sources\uRecentPaths.pas';
 
 end.
