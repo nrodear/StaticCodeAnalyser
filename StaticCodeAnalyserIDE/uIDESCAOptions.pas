@@ -162,11 +162,15 @@ begin
   inherited;
   Name    := '';       // keinen Komponenten-Namen fuer den Frame
   BuildControls;
-  // Optisches Match zur Sonar-Options-Page (uIDESonarOptions):
-  //   * KEIN ApplySegoeUI auf Self - Sonar erbt den IDE-Default-Font;
-  //     wenn wir Segoe UI 8 erzwingen wuerden, weicht SCA optisch ab.
-  //   * Info-Labels bekommen IDE_FG_DIM + 8pt (= Sonar-Hint-Style).
-  //   * Keine Bold-GroupBox-Captions (Sonar hat das nicht).
+  // 2026-06-19 (User-Bug "#3A4853 ist nicht richtig" - das war das vom
+  // Options-Dialog-Container geerbte clBtnFace im Dark-Theme). Frame
+  // muss eigenen Theme-Color setzen damit es heller wirkt wie der Tree:
+  //   FrameBg = StyleServices.GetSystemColor(clWindow) - die "Window"-
+  //   Variante ist heller als clBtnFace im Dark-Theme und matched die
+  //   Tree-View-Background.
+  Self.ParentColor      := False;
+  Self.ParentBackground := False;
+  Self.Color            := TIDETheme.FrameBg;
   ApplyHintStyleToAllInfoLabels;
 end;
 
