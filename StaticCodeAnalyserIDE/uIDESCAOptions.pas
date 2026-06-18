@@ -162,12 +162,13 @@ begin
   inherited;
   Name    := '';       // keinen Komponenten-Namen fuer den Frame
   BuildControls;
-  // 2026-06-19 User-Wahl #1E1E1E (VS Dark). Hartkodiert weil das vom
-  // Theme-Service gelieferte clBtnFace/clWindow nicht zum gewuenschten
-  // Look matched. TColor-Konvention: $00BBGGRR.
+  // 2026-06-19 User-Wahl #2A2D32 (Tool-Window-Background mit leichtem
+  // Blau-Hauch). Hartkodiert weil das vom Theme-Service gelieferte
+  // clBtnFace/clWindow nicht zum gewuenschten Look matched.
+  // TColor-Konvention BGR: #2A2D32 (R=2A G=2D B=32) -> $00322D2A.
   Self.ParentColor      := False;
   Self.ParentBackground := False;
-  Self.Color            := TColor($001E1E1E);   // #1E1E1E
+  Self.Color            := TColor($00322D2A);   // #2A2D32
   ApplyHintStyleToAllInfoLabels;
 end;
 
