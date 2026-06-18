@@ -242,7 +242,7 @@ begin
   lblSilentInfo.Left       := INNER_LEFT + 16;
   lblSilentInfo.Top        := chkSilentEnabled.Top + chkSilentEnabled.Height + 6;
   lblSilentInfo.Width      := GROUP_W - 2 * INNER_LEFT - 16;
-  lblSilentInfo.Height     := 40;
+  lblSilentInfo.Height     := 60;   // 40 + 20 px (User-Wunsch 2026-06-19)
   lblSilentInfo.WordWrap   := True;
   lblSilentInfo.Caption    :=
     _('Editor right-click + Ctrl+Alt+A trigger a single-file analysis; ' +
@@ -373,7 +373,7 @@ begin
   lblOverlayPosInfo.Left     := INNER_LEFT;
   lblOverlayPosInfo.Top      := cboOverlayPos.Top + cboOverlayPos.Height + 8;
   lblOverlayPosInfo.Width    := GROUP_W - 2 * INNER_LEFT;
-  lblOverlayPosInfo.Height   := 28;
+  lblOverlayPosInfo.Height   := 48;   // 28 + 20
   lblOverlayPosInfo.WordWrap := True;
   lblOverlayPosInfo.Caption  :=
     _('Where the hover annotation overlay anchors relative to the finding ' +
@@ -393,7 +393,7 @@ begin
   lblAutoExpandInfo.Left     := INNER_LEFT;
   lblAutoExpandInfo.Top      := chkAutoExpandAnnotation.Top + chkAutoExpandAnnotation.Height + 4;
   lblAutoExpandInfo.Width    := GROUP_W - 2 * INNER_LEFT;
-  lblAutoExpandInfo.Height   := 30;
+  lblAutoExpandInfo.Height   := 50;   // 30 + 20
   lblAutoExpandInfo.WordWrap := True;
   lblAutoExpandInfo.Caption  :=
     _('When OFF (default): overlay stays as a compact title bar until ' +
@@ -414,7 +414,7 @@ begin
   lblOverlayShowOnHoverInfo.Left     := INNER_LEFT;
   lblOverlayShowOnHoverInfo.Top      := chkOverlayShowOnHover.Top + chkOverlayShowOnHover.Height + 4;
   lblOverlayShowOnHoverInfo.Width    := GROUP_W - 2 * INNER_LEFT;
-  lblOverlayShowOnHoverInfo.Height   := 30;
+  lblOverlayShowOnHoverInfo.Height   := 50;   // 30 + 20
   lblOverlayShowOnHoverInfo.WordWrap := True;
   lblOverlayShowOnHoverInfo.Caption  :=
     _('When OFF (default): overlay appears only when you click a marked ' +
@@ -447,7 +447,7 @@ begin
   lblEditorColorSchemeInfo.Top      := cboEditorColorScheme.Top +
                                        cboEditorColorScheme.Height + 4;
   lblEditorColorSchemeInfo.Width    := GROUP_W - 2 * INNER_LEFT;
-  lblEditorColorSchemeInfo.Height   := 30;
+  lblEditorColorSchemeInfo.Height   := 50;   // 30 + 20
   lblEditorColorSchemeInfo.WordWrap := True;
   lblEditorColorSchemeInfo.Caption  :=
     _('Affects only the editor marker stripe, mini-infobar and hover ' +
@@ -492,7 +492,7 @@ begin
   lblMasterInfo.Left          := INNER_LEFT + 16;
   lblMasterInfo.Top           := chkShortcutsEnabled.Top + chkShortcutsEnabled.Height + 4;
   lblMasterInfo.Width         := GROUP_W - 2 * INNER_LEFT - 16;
-  lblMasterInfo.Height        := 28;
+  lblMasterInfo.Height        := 48;   // 28 + 20
   lblMasterInfo.WordWrap      := True;
   lblMasterInfo.Caption       :=
     _('Disable to mute every plugin shortcut at once. Right-click menu + ' +
@@ -513,7 +513,7 @@ begin
   lblFindingNavInfo.Left       := INNER_LEFT + 16;
   lblFindingNavInfo.Top        := chkFindingNavEnabled.Top + chkFindingNavEnabled.Height + 4;
   lblFindingNavInfo.Width      := GROUP_W - 2 * INNER_LEFT - 16;
-  lblFindingNavInfo.Height     := 28;
+  lblFindingNavInfo.Height     := 48;   // 28 + 20
   lblFindingNavInfo.WordWrap   := True;
   lblFindingNavInfo.Caption    :=
     _('Jump to the next / previous highlighted finding line in the current ' +
