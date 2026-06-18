@@ -162,17 +162,19 @@ begin
   inherited;
   Name    := '';       // keinen Komponenten-Namen fuer den Frame
   BuildControls;
-  // 2026-06-19 (User-Bug Windows 125% DPI): Body-Text erschien groesser
-  // als die Tree-View links. Root-Cause: das Frame skaliert seinen
-  // Inhalt auf 125%, waehrend die System-Tree-View bei 100% bleibt.
-  // Fix: Font explizit auf 'MS Shell Dlg 2' Size 8 (= IDE-Standard fuer
-  // Options-Pages) + ParentFont=False + ParentBiDiMode-Match. Children
-  // mit ParentFont=True erben das. Bei Hi-DPI rendert die VCL die
-  // Font-Punkte gleich gross wie die Tree-View (beide nutzen System-
-  // Font), nur die Frame-Container-Geometrie skaliert weiter.
+  // 2026-06-19: Theme-Sync direkt im Constructor erzwingen, sonst zeigt
+  // der Frame den Win-Default-Grau-Hintergrund statt der IDE-Dark-Theme-
+  // Farbe (User-Bug auf den Options-Pages). Color + ParentColor=False
+  // ist die Standard-VCL-Form-um-an-Theme-zu-koppeln. Das TIDETheme.Apply
+  // im CMStyleChanged greift sonst erst beim ersten Theme-Wechsel.
+  Self.ParentBackground := False;
+  Self.ParentColor      := False;
+  Self.Color            := TIDETheme.FrameBg;
+  // 125% DPI Bug: Font-Override matched die Tree-View-Schrift.
   Self.ParentFont := False;
   Self.Font.Name  := 'MS Shell Dlg 2';
   Self.Font.Size  := 8;
+  Self.Font.Color := TIDETheme.FrameFg;
   ApplyHintStyleToAllInfoLabels;
 end;
 
