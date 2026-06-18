@@ -62,13 +62,23 @@ implementation
 
 const
   // Wir matchen auf die WIN-API-Namen + Delphi-RTL-Pendants. Aufruf-Form ist
-  // case-insensitive (Pascal). Liste laesst sich erweitern (PowerShellExecute,
-  // CreateProcessAsUser, ...) ohne weitere Logik-Aenderung.
-  SHELL_APIS: array[0..7] of string = (
+  // case-insensitive (Pascal). 2026-06-18 erweitert (Audit_ErrorDetectors
+  // E-3 P1):
+  //   * system / _popen / popen        - C-RTL-Pendants (Pascal-Bindings)
+  //   * createprocessasuser            - elevated-Variante
+  //   * jvcreateprocess                - JVCL-Wrapper
+  //   * dsiexecuteandcapture           - OmniThreadLibrary
+  //   * pythonexec / execstring        - TPythonEngine String-Eval (RCE!)
+  SHELL_APIS: array[0..15] of string = (
     'shellexecute', 'shellexecuteex',
     'shellexecutea', 'shellexecutew',
     'createprocess', 'createprocessa', 'createprocessw',
-    'winexec'
+    'createprocessasuser',
+    'winexec',
+    'system', '_popen', 'popen',
+    'jvcreateprocess',
+    'dsiexecuteandcapture',
+    'pythonexec', 'execstring'
   );
 
 class function TCommandInjectionDetector.IsShellApiCall(

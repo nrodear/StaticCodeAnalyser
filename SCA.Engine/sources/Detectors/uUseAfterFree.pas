@@ -99,8 +99,17 @@ begin
   //                     TObject.Free() ist arg-los; ein Free MIT Argument ist
   //                     eine andere Methode mit kollidierendem Namen. Leere
   //                     Klammern Free() bleiben erlaubt.
+  // 2026-06-18 erweitert (Audit_ErrorDetectors E-4 P1): zusaetzlich
+  // .Destroy und .DisposeOf als Free-Aliase. Destroy = direkter
+  // Destructor-Call (umgeht den Free-Wrapper, aber gleicher UAF-Vektor).
+  // DisposeOf = NEXTGEN-Pendant fuer ARC-Mode.
+  // Patterns sind unwahrscheinlicher als .Free aber kommen in
+  // mORMot/Indy/Legacy-Code vor.
   CachedReFree        := TRegEx.Create(
-    '(?i)(?:\bFreeAndNil\s*\(\s*(\w+)\s*\)|\b(\w+)\s*\.\s*Free\b(?!\s*(?::=|\(\s*\w)))');
+    '(?i)(?:\bFreeAndNil\s*\(\s*(\w+)\s*\)' +
+    '|\b(\w+)\s*\.\s*Free\b(?!\s*(?::=|\(\s*\w))' +
+    '|\b(\w+)\s*\.\s*Destroy\b(?!\s*(?::=|\(\s*\w))' +
+    '|\b(\w+)\s*\.\s*DisposeOf\b(?!\s*(?::=|\(\s*\w)))');
   CachedReEndOfMethod := TRegEx.Create(
     '(?im)^\s*end\s*;|\b(procedure|function|constructor|destructor|class\s+(?:procedure|function|constructor|destructor))\b');
   CachedReInit := True;
@@ -428,21 +437,23 @@ begin
       CFGMap  := TObjectDictionary<TAstNode, TCFG>.Create([doOwnsValues]);
     end;
 
-    // FreeAndNil(<id>) oder <id>.Free als Free-Punkt erkennen.
+    // FreeAndNil(<id>) oder <id>.Free / .Destroy / .DisposeOf als Free-Punkt.
     Matches := CachedReFree.Matches(Code);
     for M in Matches do
     begin
-      // Gruppe 1 = Ident in FreeAndNil(...), Gruppe 2 = Ident vor .Free
-      if M.Groups.Count > 1 then
-      begin
-        if (M.Groups.Count > 1) and (M.Groups[1].Value <> '') then
-          Ident := M.Groups[1].Value
-        else if (M.Groups.Count > 2) then
-          Ident := M.Groups[2].Value
-        else
-          Continue;
-      end
-      else Continue;
+      // Gruppe 1 = Ident in FreeAndNil(...)
+      // Gruppe 2 = Ident vor .Free
+      // Gruppe 3 = Ident vor .Destroy   (2026-06-18)
+      // Gruppe 4 = Ident vor .DisposeOf (2026-06-18)
+      Ident := '';
+      if (M.Groups.Count > 1) and (M.Groups[1].Value <> '') then
+        Ident := M.Groups[1].Value
+      else if (M.Groups.Count > 2) and (M.Groups[2].Value <> '') then
+        Ident := M.Groups[2].Value
+      else if (M.Groups.Count > 3) and (M.Groups[3].Value <> '') then
+        Ident := M.Groups[3].Value
+      else if (M.Groups.Count > 4) and (M.Groups[4].Value <> '') then
+        Ident := M.Groups[4].Value;
       if Ident = '' then Continue;
       IdentLow := LowerCase(Ident);
       // Self / inherited / nil / Result als Ident skippen - Result-Free

@@ -50,6 +50,11 @@ type
     // entweder mit Meta-Prefix (Source/Stored/Cached) oder Meta-Suffix
     // (Char/Ref/Name/Length/Size/Mask/Header/Label/Caption/Hash).
     class function IsSecretMetaField(const Name: string): Boolean; static;
+    // FP-Reduktion 2026-06-18 (Audit_ErrorDetectors E-2): erkennt Test-
+    // Files anhand des Pfads (tests/, /utest, *test.pas etc.). Tests
+    // enthalten per Definition keine produktiven Secrets - Mock-Tokens,
+    // Fixture-Passwoerter etc. werden hier nicht geflaggt.
+    class function IsTestFilePath(const AFileName: string): Boolean; static;
   end;
 
 implementation
@@ -312,12 +317,37 @@ begin
   end;
 end;
 
+class function THardcodedSecretDetector.IsTestFilePath(
+  const AFileName: string): Boolean;
+// Erkennt Test-Files anhand des Pfads. Convention-based:
+//   tests/ test/ spec/ fixtures/ im Pfad
+//   uTestXxx.pas / *test.pas / *tests.pas / *spec.pas Dateinamen
+// FP-Reduktion (Audit_ErrorDetectors E-2): Mock-Secrets in Tests
+// sind keine echten Secrets, sollen nicht geflaggt werden.
+var
+  Norm : string;
+begin
+  Norm := LowerCase(StringReplace(AFileName, '\', '/', [rfReplaceAll]));
+  Result :=
+    (Pos('/tests/',    Norm) > 0) or
+    (Pos('/test/',     Norm) > 0) or
+    (Pos('/spec/',     Norm) > 0) or
+    (Pos('/fixtures/', Norm) > 0) or
+    (Pos('/utest',     Norm) > 0) or    // uTestXxx.pas Konvention
+    Norm.EndsWith('test.pas') or
+    Norm.EndsWith('tests.pas') or
+    Norm.EndsWith('spec.pas');
+end;
+
 class procedure THardcodedSecretDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
   Methods : TList<TAstNode>;
   M       : TAstNode;
 begin
+  // Test-Files komplett uebergehen. Mock-Tokens / Fixture-Passwoerter /
+  // Test-Credentials sind per Definition keine produktiven Secrets.
+  if IsTestFilePath(FileName) then Exit;
   Methods := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do

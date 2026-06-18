@@ -59,22 +59,40 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 const
-  // Properties/Felder die SQL-Text enthalten
-  SQL_PROPS: array[0..6] of string = (
+  // Properties/Felder die SQL-Text enthalten. Liste 2026-06-18 erweitert
+  // (Audit_ErrorDetectors E-1 P1): Index-Form sql.strings[N] / commandtext.strings[N]
+  // war Lücke gegen TStringList-Style-Setup.
+  SQL_PROPS: array[0..8] of string = (
     'sql.text', '.sql.', 'commandtext', 'sqltext',
-    'sqlcommand', 'query.sql', '.sql:='
+    'sqlcommand', 'query.sql', '.sql:=',
+    'sql.strings[', 'commandtext.strings['
   );
 
-  // SQL-DML/DDL-Schlüsselwörter als Stringliteral-Anfang
-  SQL_KW: array[0..5] of string = (
+  // SQL-DML/DDL-Schlüsselwörter als Stringliteral-Anfang. Quote als erstes
+  // Zeichen heisst der Match muss am Literal-Anfang stehen - Doku-Strings
+  // wie 'Code: SELECT * ...' bleiben unbeflaggt (kein fuehrendes Quote).
+  // 2026-06-18 erweitert (Audit_ErrorDetectors E-1 P1):
+  //   * MERGE/TRUNCATE/CREATE/ALTER  - DDL/DML mit gleichem Injection-Vektor
+  //   * WITH                          - CTE (Statement startet WITH ... AS SELECT)
+  //   * CALL                          - Stored-Procedure-Aufruf
+  //   * GRANT/REVOKE                  - DCL, Privilege-Eskalation
+  //   * REPLACE                       - MySQL/MariaDB UPSERT-Variante
+  SQL_KW: array[0..14] of string = (
     '''select ', '''insert ', '''update ', '''delete ',
-    '''exec ', '''drop '
+    '''exec ',   '''drop ',
+    '''merge ',  '''truncate ', '''create ', '''alter ',
+    '''with ',   '''call ',
+    '''grant ',  '''revoke ',   '''replace '
   );
 
-  // SQL-Aufruf-Methoden die SQL-Text als Argument nehmen
-  SQL_CALL_METHODS: array[0..5] of string = (
+  // SQL-Aufruf-Methoden die SQL-Text als Argument nehmen. 2026-06-18
+  // erweitert um MacroByName().AsRaw fuer TFDQuery-Macros (Audit E-1 P1):
+  // Macros werden VOR dem SQL-Parse 1:1 substituiert - gleicher Injection-
+  // Vektor wie Concat in SQL.Text.
+  SQL_CALL_METHODS: array[0..7] of string = (
     'sql.add(', 'execsql(', 'execquery(', 'execproc(',
-    'open(', 'commandtext'
+    'open(', 'commandtext',
+    'macrobyname(', '.asraw'
   );
 
 { ---- Heuristiken ---- }
