@@ -163,6 +163,10 @@ type
     FProgressBar       : TProgressBar; // sichtbar nur waehrend Analyse
     FBtnAnalyse        : TButton;      // gemerkt fuer Enable/Disable
     FBtnAnalyseCurrent : TButton;
+    // 2026-06-19: ⊘-Quick-Access fuer "Clear all markers" (Op-1).
+    // Identisch zum Hamburger-Menu-Punkt "Clear all markers" - quadratischer
+    // Button in der Toolbar zwischen File-Knopf und Profile-Combo.
+    FBtnClearMarksToolbar : TButton;
     // (FBtnCancel, FBtnAnalyseChanged sind im Hamburger-Menu, kein Field
     //  noetig — OnClick-Handler werden direkt an die MenuItems gebunden.)
     // Running/Cancelled-Flags + UI-Toggle (Buttons enable/disable,
@@ -912,6 +916,14 @@ begin
   FBtnAnalyseCurrent := TIDEToolbar.AddButton(Self, PanelSearch, _('📄 File'),
     ScaleW(BTN_W_MED_LONG), alLeft, AnalyseCurrentFileClick);
 
+  // 2026-06-19 (User-Wunsch): ⊘-Button zwischen File-Knopf und Profile-
+  // Combo. Funktion = Op-1 'Clear all markers' (siehe ClearAllMarksClick).
+  // Quadratisch, U+2298 CIRCLED DIVISION SLASH konsistent mit dem
+  // ⊘-Button im Properties-Panel-File-Form.
+  FBtnClearMarksToolbar := TIDEToolbar.AddButton(Self, PanelSearch, #$2298,
+    ScaleW(BTN_W_ICON), alLeft, ClearAllMarksClick,
+    _('Clear all editor markers in all files (grids stay)'));
+
   // Profile (rule-set scope): steuert welches Rule-Set die NAECHSTE
   // Analyse benutzt (ide-fast / default / strict / ...). Items kommen
   // aus rules/sca-rules.json (TRuleCatalog.ProfileNames); Default-
@@ -1312,6 +1324,7 @@ begin
   // Icon-Buttons - quadratisch mit fixer Width.
   TToolbarSizing.ApplyIconButton(FBtnBrowse,         ScaleW(BTN_W_ICON), AUnifCtrlH);
   TToolbarSizing.ApplyIconButton(FBtnHamburger,      ScaleW(BTN_W_ICON), AUnifCtrlH);
+  TToolbarSizing.ApplyIconButton(FBtnClearMarksToolbar, ScaleW(BTN_W_ICON), AUnifCtrlH);
   // Restliche Components nur Hoehe vereinheitlichen.
   TToolbarSizing.Apply(FProjectPath,        AUnifCtrlH);
   TToolbarSizing.Apply(FFilterCombo,        AUnifCtrlH);
