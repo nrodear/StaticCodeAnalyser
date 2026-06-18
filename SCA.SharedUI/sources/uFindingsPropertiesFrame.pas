@@ -171,7 +171,7 @@ type
     // anschliessend lokal ausgefuehrt.
     property OnClearMarkersRequested: TNotifyEvent
       read FOnClearMarkersRequested write FOnClearMarkersRequested;
-    // [⌫]-Button: ALLE Editor-Marker in ALLEN Dateien (Stripes + Mini-
+    // [⊘]-Button: ALLE Editor-Marker in ALLEN Dateien (Stripes + Mini-
     // Infobar + Overlay) raus. Grid + FFindingsByFile-Cache bleiben
     // unveraendert; Reload bringt die Marker fuer die aktuelle Datei
     // zurueck. Spiegelt das ClearAllMarks-Verhalten im IDE-Hauptfenster
@@ -339,14 +339,16 @@ begin
   // ueberall). Grid + Cache des Properties-Panel bleiben unangetastet -
   // Reload bringt die Marker fuer die aktuelle Datei zurueck. Spiegelt
   // das ClearAllMarks-Verhalten im IDE-Hauptfenster.
-  // Caption: U+232B ERASE TO THE LEFT (⌫).
+  // Caption: U+2298 CIRCLED DIVISION SLASH (⊘) - User-Wahl 2026-06-19.
   FBtnClearMarks := TButton.Create(Self);
   FBtnClearMarks.Parent  := FToolbarPanel;
   FBtnClearMarks.Align   := alLeft;
   FBtnClearMarks.Width   := BTN_SIZE;
   FBtnClearMarks.Height  := BTN_SIZE;
-  FBtnClearMarks.Caption := #$232B;  // ⌫
-  FBtnClearMarks.Hint    := _('Clear all editor markers in all files (grid stays)');
+  // 2026-06-19 User-Wahl: U+2298 CIRCLED DIVISION SLASH (⊘) statt U+232B
+  // (⌫ Erase to left). Semantisch 'disable/aus' statt 'Text-Backspace'.
+  FBtnClearMarks.Caption := #$2298;  // ⊘
+  FBtnClearMarks.Hint    := _('Clear all editor markers in all files (grids stay)');
   FBtnClearMarks.ShowHint:= True;
   FBtnClearMarks.OnClick := BtnClearMarksClick;
   TIDEToolbar.ApplySegoeUI(FBtnClearMarks);

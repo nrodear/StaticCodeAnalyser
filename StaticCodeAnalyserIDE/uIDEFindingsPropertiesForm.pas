@@ -661,7 +661,7 @@ end;
 
 procedure TFindingsPropertiesDockableForm.HandleClearEditorMarksRequested(
   Sender: TObject);
-// Toolbar-Button "Clear Editor Marks" (⌫) im Frame. Op-1 laut
+// Toolbar-Button "Clear Editor Marks" (⊘) im Frame. Op-1 laut
 // Konzept_MarkerLoeschen: nur Marker raus, Grids bleiben.
 //
 // User-Intent: "Editor wird unuebersichtlich, ich moechte saubere
