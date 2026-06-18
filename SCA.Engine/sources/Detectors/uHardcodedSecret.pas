@@ -432,6 +432,78 @@ begin
     Norm.EndsWith('spec.pas');
 end;
 
+// 2026-06-18 (Audit_ErrorDetectors E-2 Premium): nkField-Pass fuer
+// Const-Sections und Class-Field-Initializer.
+// uParser2 modelliert beides als nkField mit TypeRef-Format:
+//   'Type=value'    (typisierte const oder field-init)
+//   '=value'        (untypisierte const)
+// Beispiele:
+//   const DEFAULT_API_KEY = 'sk-prod-xxx';
+//     -> nkField Name='DEFAULT_API_KEY' TypeRef='='sk-prod-xxx''
+//   FFooKey: string = 'sk-prod-xxx';   (Class-Field-Init)
+//     -> nkField Name='FFooKey' TypeRef='string='sk-prod-xxx''
+// Wir extrahieren den Literal-Teil nach '=' und pruefen mit den
+// gleichen Heuristiken wie AnalyzeMethod (Name-basiert + Pattern-Match).
+procedure ScanFieldsForSecrets(Root: TAstNode; const FileName: string;
+  Results: TObjectList<TLeakFinding>);
+var
+  Fields  : TList<TAstNode>;
+  N       : TAstNode;
+  TypeRef : string;
+  EqPos   : Integer;
+  Literal : string;
+  PatKind : string;
+  LitShort: string;
+const
+  MAX_VAL_LEN = 60;
+begin
+  Fields := Root.FindAll(nkField);
+  try
+    for N in Fields do
+    begin
+      TypeRef := N.TypeRef;
+      EqPos := Pos('=', TypeRef);
+      if EqPos < 1 then Continue;   // keine Initialisierung
+      Literal := Trim(Copy(TypeRef, EqPos + 1, MaxInt));
+
+      // Pattern-Match-Pfad: Wert sieht aus wie AWS/GitHub/JWT/OpenAI.
+      // Unabhaengig vom Field-Namen. Confidence fcHigh.
+      if THardcodedSecretDetector.IsKnownSecretPattern(Literal, PatKind) then
+      begin
+        if Length(Literal) > MAX_VAL_LEN then
+          LitShort := Copy(Literal, 1, MAX_VAL_LEN - 4) + '...'''
+        else
+          LitShort := Literal;
+        Results.Add(TLeakFinding.New(FileName, '', N.Line,
+          PatKind + ' detected in const/field literal: ' + N.Name + ' = ' + LitShort,
+          fkHardcodedSecret, fcHigh));
+        Continue;
+      end;
+
+      // Name-basierter Pfad (analog AnalyzeMethod).
+      if not THardcodedSecretDetector.IsSecretName(N.Name) then Continue;
+      // Untypisierte Const: Literal muss String-Form haben (' Quote-prefix).
+      if Literal = '' then Continue;
+      if Literal[1] <> '''' then Continue;   // nicht-String-Initializer
+      // Leere String-Init
+      if Literal = '''''' then Continue;
+      // FP-Filter analog AnalyzeMethod nicht 1:1 portiert -
+      // Const-Naming-Style (UPPER_SNAKE) und Meta-Field nur nkField
+      // sinnvoll wenn Name-Heuristik greift. Wir nutzen die Helper:
+      if THardcodedSecretDetector.IsSecretMetaField(N.Name) then Continue;
+
+      if Length(Literal) > MAX_VAL_LEN then
+        LitShort := Copy(Literal, 1, MAX_VAL_LEN - 4) + '...'''
+      else
+        LitShort := Literal;
+      Results.Add(TLeakFinding.New(FileName, '', N.Line,
+        N.Name + ' = ' + LitShort, fkHardcodedSecret));
+    end;
+  finally
+    Fields.Free;
+  end;
+end;
+
 class procedure THardcodedSecretDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -441,6 +513,9 @@ begin
   // Test-Files komplett uebergehen. Mock-Tokens / Fixture-Passwoerter /
   // Test-Credentials sind per Definition keine produktiven Secrets.
   if IsTestFilePath(FileName) then Exit;
+  // Pass 1: Const-Section + Class-Field-Initializer (nkField).
+  ScanFieldsForSecrets(UnitNode, FileName, Results);
+  // Pass 2: nkAssign innerhalb der Methoden (bestehender Pfad).
   Methods := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
