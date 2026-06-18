@@ -19,6 +19,7 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
+  System.RegularExpressions,
   uAstNode, uSCAConsts, uMethodd12;
 
 type
@@ -55,6 +56,24 @@ type
     // enthalten per Definition keine produktiven Secrets - Mock-Tokens,
     // Fixture-Passwoerter etc. werden hier nicht geflaggt.
     class function IsTestFilePath(const AFileName: string): Boolean; static;
+    // 2026-06-18 (Audit_ErrorDetectors E-2 P2): Pattern-Match auf
+    // String-Inhalt. Findet Secrets unabhaengig vom Variablen-Namen -
+    // 'FCfg := ''sk-prod-...''' wird erkannt obwohl FCfg kein Secret-
+    // Keyword im Namen hat.
+    //
+    // Patterns sind so spezifisch dass Confidence = fcHigh angemessen:
+    //   * AWS Access Key:   AKIA[0-9A-Z]{16}
+    //   * GitHub PAT:       ghp_[A-Za-z0-9]{36}
+    //   * GitHub fine-grained: github_pat_[A-Z]_[A-Za-z0-9]{82}
+    //   * OpenAI Key:       sk-[A-Za-z0-9]{48} (auch sk-proj- / sk-org-)
+    //   * JWT (3-Segment):  eyJ[A-Za-z0-9+/=_-]{10,}\.eyJ[A-Za-z0-9+/=_-]{10,}\.
+    //   * Slack Bot/User:   xox[bps]-[A-Za-z0-9-]{20,}
+    //   * Google API:       AIza[0-9A-Za-z_-]{35}
+    //
+    // True wenn StrLit eines der Patterns matched. AKind enthaelt einen
+    // sprechenden Namen ('AWS Access Key' etc.) fuer die Finding-Message.
+    class function IsKnownSecretPattern(const StrLit: string;
+      out AKind: string): Boolean; static;
   end;
 
 implementation
@@ -272,11 +291,28 @@ var
   A        : TAstNode;
   F        : TLeakFinding;
   LitShort : string;
+  PatKind  : string;
 begin
   Assigns := MethodNode.FindAll(nkAssign);
   try
     for A in Assigns do
     begin
+      // Pattern-Match-Pfad: Inhalt sieht aus wie AWS/GitHub/JWT/OpenAI...
+      // Unabhaengig vom Variablen-Namen. Confidence fcHigh weil die
+      // Patterns sehr spezifisch sind (Mindestlaenge + Prefix + Charset).
+      if IsStringLiteral(A.TypeRef) and
+         IsKnownSecretPattern(A.TypeRef, PatKind) then
+      begin
+        if Length(A.TypeRef) > MAX_VAL_LEN then
+          LitShort := Copy(A.TypeRef, 1, MAX_VAL_LEN - 4) + '...'''
+        else
+          LitShort := A.TypeRef;
+        Results.Add(TLeakFinding.New(FileName, MethodNode.Name, A.Line,
+          PatKind + ' detected in literal: ' + A.Name + ' = ' + LitShort,
+          fkHardcodedSecret, fcHigh));
+        Continue;   // Name-basierter Pfad wuerde Doppel-Finding produzieren
+      end;
+
       if not IsSecretName(A.Name)       then Continue;
       if not IsStringLiteral(A.TypeRef) then Continue;
       // Leeres Literal '' ist Initialisierung, kein hartcodiertes Secret.
@@ -315,6 +351,63 @@ begin
   finally
     Assigns.Free;
   end;
+end;
+
+class function THardcodedSecretDetector.IsKnownSecretPattern(
+  const StrLit: string; out AKind: string): Boolean;
+// Lazy-Compile mit static-Local-Pattern - in einem Hot-Path waere ein
+// Cache angebracht; hier wird die Func nur in der AnalyzeMethod-Schleife
+// pro nkAssign gerufen, also vermutlich nicht hot genug fuer Premature-Opt.
+// Regex-Compile bei jedem Aufruf akzeptabel weil die Pattern simpel sind.
+//
+// StrLit ist der Roh-RHS aus N.TypeRef, inklusive umschliessender ' '.
+// Wir trimmen sie hier ein und matchen gegen den Body.
+const
+  // Mindestens 16 chars um Trivial-Strings ('test', 'abc') auszufiltern.
+  MIN_SECRET_LEN = 16;
+var
+  Body : string;
+  i, n : Integer;
+begin
+  Result := False;
+  AKind  := '';
+  if Length(StrLit) < MIN_SECRET_LEN + 2 then Exit;  // +2 fuer ' '
+  // Body = Inhalt zwischen erstem und letztem ' Token. Vereinfacht: wenn
+  // beginnt mit ' und endet mit ' -> Substring.
+  if (StrLit[1] <> '''') or (StrLit[Length(StrLit)] <> '''') then Exit;
+  Body := Copy(StrLit, 2, Length(StrLit) - 2);
+  if Length(Body) < MIN_SECRET_LEN then Exit;
+  // '' (Doppel-Quote als Escape) wuerde im Match meist nicht vorkommen
+  // weil Secret-Tokens reine [A-Za-z0-9+/=_.-]-Sets sind. Defensive
+  // Replacement nicht noetig.
+
+  // AWS Access Key (always starts AKIA, 20 chars total)
+  if TRegEx.IsMatch(Body, '^AKIA[0-9A-Z]{16}$') then
+  begin AKind := 'AWS Access Key'; Exit(True); end;
+  // GitHub Personal Access Token (classic, 40 chars)
+  if TRegEx.IsMatch(Body, '^ghp_[A-Za-z0-9]{36}$') then
+  begin AKind := 'GitHub Personal Access Token'; Exit(True); end;
+  // GitHub fine-grained PAT
+  if TRegEx.IsMatch(Body, '^github_pat_[A-Z0-9]{22}_[A-Za-z0-9_]{59,}$') then
+  begin AKind := 'GitHub fine-grained Token'; Exit(True); end;
+  // OpenAI API Key (sk-, sk-proj-, sk-org-)
+  if TRegEx.IsMatch(Body,
+       '^sk-(proj-|org-|svcacct-)?[A-Za-z0-9_-]{20,}$') then
+  begin AKind := 'OpenAI API Key'; Exit(True); end;
+  // Google API Key (AIza prefix, 39 chars total)
+  if TRegEx.IsMatch(Body, '^AIza[0-9A-Za-z_-]{35}$') then
+  begin AKind := 'Google API Key'; Exit(True); end;
+  // Slack Bot/User/Workspace Token (xoxb-, xoxp-, xoxs-)
+  if TRegEx.IsMatch(Body, '^xox[bps]-[A-Za-z0-9-]{20,}$') then
+  begin AKind := 'Slack Token'; Exit(True); end;
+  // JWT (3 Base64URL-segments getrennt durch Punkt; Header beginnt eyJ
+  // weil { -> base64 = eyJ). Auch ohne Signatur-Segment akzeptiert
+  // (manche use Cases haben 2-Segment-JWT).
+  n := 0;
+  for i := 1 to Length(Body) do if Body[i] = '.' then Inc(n);
+  if (n in [1, 2]) and Body.StartsWith('eyJ') and
+     TRegEx.IsMatch(Body, '^eyJ[A-Za-z0-9+/=_-]{10,}\.eyJ[A-Za-z0-9+/=_-]{10,}') then
+  begin AKind := 'JWT Token'; Exit(True); end;
 end;
 
 class function THardcodedSecretDetector.IsTestFilePath(
