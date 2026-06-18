@@ -62,8 +62,18 @@ const
   // Bare 'delete ' (ohne FROM) bewusst NICHT in der Liste - echtes SQL-DELETE
   // hat per Syntax immer FROM; ein Match ohne FROM waere garantiert englischer
   // Text ('Delete failed', 'Cannot delete record', ...).
-  VERBS : array[0..2] of string = (
-    '''update ', '''delete from ', '''truncate '
+  // 2026-06-18 erweitert (Audit_ErrorDetectors E-Kurzliste):
+  //   * 'drop table '/'drop view '/'drop index '/'drop database ' -
+  //     Production-Disaster, kein WHERE moeglich. Diese Statements
+  //     loeschen das Objekt komplett. Action-Verb-Match reicht; das
+  //     "wo where?" ist hier "Statement existiert ueberhaupt = bug".
+  //   * 'alter table ' mit ' drop column ' - destruktive Schema-Aenderung,
+  //     mehrstufige Pattern-Pruefung im Fragment.
+  //   * 'grant all ' mit ' to public' - Privilege-Eskalation,
+  //     mehrstufige Pruefung im Fragment.
+  VERBS : array[0..6] of string = (
+    '''update ', '''delete from ', '''truncate ',
+    '''drop table ', '''drop view ', '''drop index ', '''drop database '
   );
 var
   Merged : string;
@@ -80,34 +90,55 @@ begin
   // FP-Schutz: wenn der String-Literal-Inhalt selbst Pascal-Code-Pattern
   // ':=' enthaelt, ist es ein Quickfix-Template das Pascal-Quelltext zitiert
   // ('qry.SQL.Text := ''UPDATE ...''';), kein echtes SQL-Statement.
-  // SQL kennt ':=' praktisch nie (':' = Named-Param, '=' = Vergleich;
-  // ':=' nur in exotischen Trigger-Bodies, in Delphi-Query-Strings nie).
   if Pos(':=', Merged) > 0 then Exit(False);
 
   Result := False;
   Verb   := '';
+
+  // ALTER TABLE ... DROP COLUMN (destruktive Schema-Aenderung). Liegt
+  // ausserhalb der einfachen Verb-Schleife weil zwei Tokens validiert
+  // werden muessen (alter + drop column).
+  if (Pos('''alter table ', Merged) > 0) and
+     (Pos(' drop column ', Merged) > 0) and
+     (Pos(' if exists',   Merged) = 0) then
+  begin
+    Verb := 'ALTER TABLE DROP COLUMN';
+    Exit(True);
+  end;
+
+  // GRANT ALL ... TO PUBLIC (Privilege-Eskalation). PUBLIC = jeder
+  // angemeldete User, ALL = alle Berechtigungen. Real-Word-Sicherheitsbug.
+  if (Pos('''grant all', Merged) > 0) and
+     (Pos(' to public', Merged) > 0) then
+  begin
+    Verb := 'GRANT ALL TO PUBLIC';
+    Exit(True);
+  end;
+
   for V in VERBS do
   begin
     P := Pos(V, Merged);
     if P <= 0 then Continue;
-    // Statement-Ende: naechstes nicht-escaped Apostroph nach P+1, oder
-    // String-Ende. Wir nehmen alles bis zum naechsten ;-Token-Trenner.
     EndPos := Pos(''';', Merged, P + Length(V));
     if EndPos <= 0 then EndPos := Length(Merged);
     Fragment := Copy(Merged, P, EndPos - P + 1);
 
     // SQL-Shape-Validierung: UPDATE braucht ' set ' im Fragment, sonst ist
-    // es ein englisches Error-Message-Literal ('Update failed for X') und
-    // kein SQL-Statement. DELETE FROM und TRUNCATE sind in Pascal-Literalen
-    // spezifisch genug, dass keine zusaetzliche Pruefung noetig ist.
+    // es ein englisches Error-Message-Literal.
     if (V = '''update ') and (Pos(' set ', Fragment) = 0) then Continue;
 
-    // Pruefen ob WHERE vorkommt (Fragment ist bereits lowercase, siehe Caller).
-    if Pos(' where ', Fragment) > 0 then Continue;
-    // TRUNCATE ist immer gefaehrlich (kein WHERE moeglich).
-    // UPDATE/DELETE FROM: WHERE fehlt -> Treffer.
+    // DROP * mit IF EXISTS ist die "sichere" Variante - kein Hard-Error
+    // wenn das Objekt nicht da ist. Wir wollen trotzdem warnen (DROP
+    // bleibt destruktiv), aber im Output unterscheiden waere
+    // user-freundlich. Pragma: aktuell trotzdem flaggen, IF EXISTS-
+    // Hinweis-Differenzierung waere Folge-Iteration.
+
+    // UPDATE/DELETE FROM: WHERE fehlt -> Treffer. DROP-Statements und
+    // TRUNCATE: kein WHERE moeglich, immer Treffer.
+    if (V = '''update ') or (V = '''delete from ') then
+      if Pos(' where ', Fragment) > 0 then Continue;
+
     Verb := Trim(V);
-    // Apostroph-Praefix abschneiden fuer den User-Output
     if (Length(Verb) > 0) and (Verb[1] = '''') then
       Verb := Copy(Verb, 2, MaxInt);
     Verb := UpperCase(Verb);
@@ -119,17 +150,26 @@ class procedure TSqlDangerousStatementDetector.AnalyzeMethod(MethodNode: TAstNod
   const FileName: string; Results: TObjectList<TLeakFinding>);
 
   procedure Report(const Verb, Context: string; Line: Integer);
-  var F: TLeakFinding;
+  var
+    Msg : string;
   begin
-    F            := TLeakFinding.Create;
-    F.FileName   := FileName;
-    F.MethodName := MethodNode.Name;
-    F.LineNumber := IntToStr(Line);
-    F.MissingVar := Format(
-      'Dangerous SQL: %s without WHERE - affects ALL rows. Context: %s',
-      [Verb, Context]);
-    F.SetKind(fkSqlDangerousStatement);
-    Results.Add(F);
+    // Action-spezifische Begruendung damit die Findings konkret sind.
+    // DROP/TRUNCATE/GRANT haben kein WHERE-Konzept; UPDATE/DELETE schon.
+    if (Verb = 'TRUNCATE') or Verb.StartsWith('DROP ') then
+      Msg := Format('Dangerous SQL: %s drops/clears the entire object. Context: %s',
+        [Verb, Context])
+    else if Verb = 'GRANT ALL TO PUBLIC' then
+      Msg := Format('Privilege escalation: GRANT ALL TO PUBLIC opens access ' +
+                    'to every authenticated user. Context: %s', [Context])
+    else if Verb = 'ALTER TABLE DROP COLUMN' then
+      Msg := Format('Destructive schema change: ALTER TABLE DROP COLUMN ' +
+                    'loses column data permanently. Context: %s', [Context])
+    else
+      Msg := Format(
+        'Dangerous SQL: %s without WHERE - affects ALL rows. Context: %s',
+        [Verb, Context]);
+    Results.Add(TLeakFinding.New(FileName, MethodNode.Name, Line,
+      Msg, fkSqlDangerousStatement));
   end;
 
 var
