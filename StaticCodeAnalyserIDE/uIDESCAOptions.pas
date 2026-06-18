@@ -162,22 +162,11 @@ begin
   inherited;
   Name    := '';       // keinen Komponenten-Namen fuer den Frame
   BuildControls;
-  // 2026-06-19: Theme-Sync direkt im Constructor erzwingen, sonst zeigt
-  // der Frame den Win-Default-Grau-Hintergrund statt der IDE-Dark-Theme-
-  // Farbe.
-  Self.ParentBackground := False;
-  Self.ParentColor      := False;
-  Self.Color            := TIDETheme.FrameBg;
-  // 125% DPI Bug Fix: Segoe UI 9pt = exakt der IDE-Tree-View-Font (sie
-  // zieht ihre Font aus Screen.MenuFont = Segoe UI 9 unter Win10/11).
-  // Auf Per-Monitor-DPI-v2 wird die Point-Size identisch skaliert wie
-  // die Tree-View, weil beide im selben DPI-Modus laufen. Vorher
-  // 'MS Shell Dlg 2' Size 8 - das skalierte zu einer anderen Pixel-
-  // Hoehe und wirkte daher groesser als der Tree.
-  Self.ParentFont := False;
-  Self.Font.Name  := 'Segoe UI';
-  Self.Font.Size  := 9;
-  Self.Font.Color := TIDETheme.FrameFg;
+  // Optisches Match zur Sonar-Options-Page (uIDESonarOptions):
+  //   * KEIN ApplySegoeUI auf Self - Sonar erbt den IDE-Default-Font;
+  //     wenn wir Segoe UI 8 erzwingen wuerden, weicht SCA optisch ab.
+  //   * Info-Labels bekommen IDE_FG_DIM + 8pt (= Sonar-Hint-Style).
+  //   * Keine Bold-GroupBox-Captions (Sonar hat das nicht).
   ApplyHintStyleToAllInfoLabels;
 end;
 
