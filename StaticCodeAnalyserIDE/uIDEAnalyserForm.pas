@@ -291,12 +291,6 @@ type
     // Findings-Liste im Grid bleibt unveraendert (User kann ueber "Markieren"
     // im Kontextmenue erneut anzeigen).
     procedure ClearAllMarksClick(Sender: TObject);
-    // Public-Helper fuer Cross-UI-Sync. Wird vom Properties-Panel-
-    // Wrapper gerufen wenn dort ein Clear-Button geklickt wird - das
-    // Plugin-Hauptfenster-Grid muss sonst veraltete Findings anzeigen
-    // waehrend der Editor schon clean ist. 2026-06-18 (User-Wunsch:
-    // "die beide Liste entsprechend sync werden").
-    procedure ClearAllFindings;
     procedure EditIgnoreListClick(Sender: TObject);
     procedure EditRepoSettingsClick(Sender: TObject);
     // Folge-Anpassungen die FResponsive nach jedem Resize triggert:
@@ -409,6 +403,11 @@ type
     // ruft das so dass eine im Dock geaenderte Profile-Wahl auch ohne
     // INI-Save fuer Silent-Runs gilt (analog Dock-PrepareAnalysis).
     function CurrentProfileOverride: string;
+    // Cross-UI-Sync: vom Properties-Panel-Wrapper gerufen wenn dort
+    // ein Clear-Button geklickt wird. Public weil Cross-Unit-Caller
+    // (uIDEFindingsPropertiesForm) drauf zugreifen muss.
+    // 2026-06-18 (User-Wunsch "die beide Liste sync werden").
+    procedure ClearAllFindings;
   end;
 
   TAnalyserDockableForm = class(TInterfacedObject, INTACustomDockableForm)
