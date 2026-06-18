@@ -162,11 +162,18 @@ begin
   inherited;
   Name    := '';       // keinen Komponenten-Namen fuer den Frame
   BuildControls;
-  // Optisches Match zur Sonar-Options-Page (uIDESonarOptions):
-  //   * KEIN ApplySegoeUI auf Self - Sonar erbt den IDE-Default-Font;
-  //     wenn wir Segoe UI 8 erzwingen wuerden, weicht SCA optisch ab.
-  //   * Info-Labels bekommen IDE_FG_DIM + 8pt (= Sonar-Hint-Style).
-  //   * Keine Bold-GroupBox-Captions (Sonar hat das nicht).
+  // 2026-06-19 (User-Bug bei Windows 125%-Skalierung): die Body-Texte
+  // erschienen groesser als der Options-Dialog-Tree links. Frame-Font
+  // ererbt sonst einen Hi-DPI-skalierten Default, der gegen die Tree-
+  // View nicht sauber matched. Wir zwingen die selben Werte die der
+  // IDE-Default-Tree nutzt: Font 'MS Shell Dlg 2' Size 8 + ParentFont
+  // OFF damit Theme-Wechsel die Werte nicht zurueckschieben. Children
+  // mit ParentFont=True (CheckBox, ComboBox, GroupBox-Caption) erben
+  // das automatisch; Info-Labels haben durch StyleAsHint schon eigene
+  // Werte und werden nicht ueberschrieben.
+  Self.ParentFont := False;
+  Self.Font.Name  := 'MS Shell Dlg 2';
+  Self.Font.Size  := 8;
   ApplyHintStyleToAllInfoLabels;
 end;
 
