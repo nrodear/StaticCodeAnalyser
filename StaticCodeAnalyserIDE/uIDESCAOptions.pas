@@ -164,16 +164,19 @@ begin
   BuildControls;
   // 2026-06-19: Theme-Sync direkt im Constructor erzwingen, sonst zeigt
   // der Frame den Win-Default-Grau-Hintergrund statt der IDE-Dark-Theme-
-  // Farbe (User-Bug auf den Options-Pages). Color + ParentColor=False
-  // ist die Standard-VCL-Form-um-an-Theme-zu-koppeln. Das TIDETheme.Apply
-  // im CMStyleChanged greift sonst erst beim ersten Theme-Wechsel.
+  // Farbe.
   Self.ParentBackground := False;
   Self.ParentColor      := False;
   Self.Color            := TIDETheme.FrameBg;
-  // 125% DPI Bug: Font-Override matched die Tree-View-Schrift.
+  // 125% DPI Bug Fix: Segoe UI 9pt = exakt der IDE-Tree-View-Font (sie
+  // zieht ihre Font aus Screen.MenuFont = Segoe UI 9 unter Win10/11).
+  // Auf Per-Monitor-DPI-v2 wird die Point-Size identisch skaliert wie
+  // die Tree-View, weil beide im selben DPI-Modus laufen. Vorher
+  // 'MS Shell Dlg 2' Size 8 - das skalierte zu einer anderen Pixel-
+  // Hoehe und wirkte daher groesser als der Tree.
   Self.ParentFont := False;
-  Self.Font.Name  := 'MS Shell Dlg 2';
-  Self.Font.Size  := 8;
+  Self.Font.Name  := 'Segoe UI';
+  Self.Font.Size  := 9;
   Self.Font.Color := TIDETheme.FrameFg;
   ApplyHintStyleToAllInfoLabels;
 end;
