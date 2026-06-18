@@ -144,6 +144,11 @@ uses
   uIDEColors,        // IDE_FG_DIM - semantische Theme-Farbe (wie uIDESonarOptions)
   uAnalyserTheme;    // TEditorColorScheme + Parse/ToStr
 
+type
+  // Class-Hack fuer TScrollingWinControl.Scaled (TFrame ererbt das als
+  // protected). 2026-06-19 Fix DPI-Konsistenz mit der IDE-Tree-View.
+  TScrollingHack = class(TScrollingWinControl);
+
 const
   // Sentinel-Text fuer "kein Profile-Override". Wird im Combo angezeigt
   // und in LoadFromSettings/SaveToSettings als Marker verglichen - daher
@@ -170,7 +175,7 @@ begin
   // bleibt bei 96-DPI-Layout. Bei 200%+ DPI muesste der User selbst
   // mit System-Settings nachregeln, das ist Trade-off fuer den
   // Konsistenz-Gewinn gegen die Tree-View.
-  Self.Scaled := False;
+  TScrollingHack(Self).Scaled := False;
   ApplyHintStyleToAllInfoLabels;
 end;
 
