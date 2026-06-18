@@ -313,7 +313,7 @@ begin
   FBtnClear.Width   := BTN_SIZE;
   FBtnClear.Height  := BTN_SIZE;
   FBtnClear.Caption := #$2715;   // ✕
-  FBtnClear.Hint    := _('Reset this panel (editor markers stay)');
+  FBtnClear.Hint    := _('Reset panel + clear editor markers (main grid stays)');
   FBtnClear.ShowHint:= True;
   FBtnClear.OnClick := BtnClearClick;
   TIDEToolbar.ApplySegoeUI(FBtnClear);

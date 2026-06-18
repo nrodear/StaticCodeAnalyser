@@ -637,16 +637,23 @@ end;
 
 procedure TFindingsPropertiesDockableForm.HandleClearMarkersRequested(
   Sender: TObject);
-// Toolbar-Button "✕ Clear" im Frame. Op-2 laut Konzept_MarkerLoeschen:
-// File-Form-Reset, ABER Editor-Marker bleiben + IDE-Panel-Grid bleibt.
+// Toolbar-Button "✕ Clear" im Frame. Op-2 (laut Konzept_MarkerLoeschen)
+// mit User-Praezisierung 2026-06-19: jetzt auch Editor-Marker raus.
 //
-// User-Intent: "Das Properties-Panel zeigt veralteten Inhalt - ich
-// will dort einen Reset, das Hauptfenster geht mich gerade nicht an."
-// Editor behaelt seinen Kontext.
+// Wirkt auf:
+//   * Frame.Clear         - Grid + Per-File-Findings-Cache leer
+//   * Scan-Cache leer     - naechster Tab-Wechsel/Reload scant frisch
+//   * GHighlighter.Clear  - Editor-Marker in ALLEN Dateien raus
+//   * Overlay versteckt
+//   * IDE-Panel-Grid bleibt
 //
-// Scan-Cache wird mitgeleert: nach Reset soll der naechste Tab-Wechsel
-// neu scannen, nicht auf veralteten Cache fallbacken.
+// Reload bringt fuer die dann aktive Datei Findings + Marker zurueck.
+// User-Intent: "Panel + Editor sauber, Hauptfenster geht mich nicht an."
 begin
+  if Assigned(GHighlighter) then
+    GHighlighter.Clear;
+  if Assigned(GAnnotationOverlay) then
+    GAnnotationOverlay.HideOverlay;
   if Assigned(FFrame) then
     FFrame.Clear;
   InvalidateScanCache('');
