@@ -109,51 +109,133 @@ begin
   // Anderes Objekt - nicht relevant
 end;
 
+// Folgt rekursiv den Calls einer non-virtual Methode bis ein virtual
+// erreicht wird oder das Depth-Limit greift. ChainOut akkumuliert die
+// Call-Kette (lowercase-Method-Namen) damit das Finding den vollen
+// Pfad "Init -> DoSetup -> DoStuff" zeigen kann.
+//
+// 2026-06-18 (Audit_ErrorDetectors E-6 P1): Cross-Method-Helper-
+// Detection. Vorher fand der Detector nur direkte Virtual-Calls im
+// Ctor. Helper-Pattern ueberging er:
+//   constructor TFoo.Create; begin Init; end;   // Init = non-virtual
+//   procedure TFoo.Init;     begin DoStuff; end; // DoStuff = virtual!
+// → Bug, weil aufrufende Subklasse DoStuff overriden kann.
+const
+  MAX_CHAIN_DEPTH = 5;   // bei deeper Helpers wird's pathologisch
+
+function FindVirtualInChain(StartName: string;
+  MethodByName: TDictionary<string, TAstNode>;
+  VirtualByName: TDictionary<string, TAstNode>;
+  Visited, ChainOut: TList<string>;
+  Depth: Integer): TAstNode;
+var
+  Method      : TAstNode;
+  CallList    : TList<TAstNode>;
+  Call        : TAstNode;
+  Target, Low : string;
+  VMethod     : TAstNode;
+  RecurResult : TAstNode;
+begin
+  Result := nil;
+  if Depth > MAX_CHAIN_DEPTH then Exit;
+  if Visited.IndexOf(StartName) >= 0 then Exit;   // Zyklus
+  Visited.Add(StartName);
+
+  // Method existiert in dieser Klasse? Sonst koennen wir nicht weiter folgen.
+  if not MethodByName.TryGetValue(StartName, Method) then Exit;
+
+  CallList := Method.FindAll(nkCall);
+  try
+    for Call in CallList do
+    begin
+      Target := ExtractCallTarget(Call.Name);
+      if Target = '' then Continue;
+      Low := LowerCase(Target);
+      if Low.StartsWith('inherited') then Continue;
+
+      // Direkt-Hit: Helper ruft virtual-Method.
+      if VirtualByName.TryGetValue(Low, VMethod) then
+      begin
+        ChainOut.Add(Low);
+        Exit(VMethod);
+      end;
+      // Nicht-virtual, aber in der Klasse - rekursiv folgen.
+      if MethodByName.ContainsKey(Low) then
+      begin
+        ChainOut.Add(Low);
+        RecurResult := FindVirtualInChain(Low, MethodByName, VirtualByName,
+          Visited, ChainOut, Depth + 1);
+        if Assigned(RecurResult) then Exit(RecurResult);
+        // Sackgasse - Element aus Chain wieder rausnehmen.
+        ChainOut.Delete(ChainOut.Count - 1);
+      end;
+    end;
+  finally
+    CallList.Free;
+  end;
+end;
+
 class procedure TVirtualCallInCtorDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
   Classes         : TList<TAstNode>;
   ClassNode       : TAstNode;
   VirtualByName   : TDictionary<string, TAstNode>;
+  MethodByName    : TDictionary<string, TAstNode>;
   Methods         : TList<TAstNode>;
   M, Ctor, Call   : TAstNode;
   CtorList        : TList<TAstNode>;
   CallList        : TList<TAstNode>;
   Target, LowName : string;
   VMethod         : TAstNode;
-  F               : TLeakFinding;
   AlreadyReported : TList<string>;
-  RepKey          : string;
+  RepKey, Msg     : string;
   ClassImplCtors  : TList<TAstNode>;
+  Visited, Chain  : TList<string>;
 begin
-  // 1. Klassen sammeln (interface-Section). Konstruktor-Implementierungen
-  //    leben aber als Top-Level nkMethod ausserhalb der Klasse. Wir
-  //    matchen Constructor-Impls an ihre Klasse via Name-Praefix
-  //    `TBase.Create`.
-
   Classes := UnitNode.FindAll(nkClass);
   try
     for ClassNode in Classes do
     begin
       VirtualByName := TDictionary<string, TAstNode>.Create;
+      MethodByName  := TDictionary<string, TAstNode>.Create;
       try
-        // Alle virtuellen Methoden dieser Klasse einsammeln
+        // Alle virtuellen + ALLE Methoden der Klasse einsammeln.
+        // MethodByName brauchen wir fuer den Cross-Helper-Walk.
         Methods := ClassNode.FindAll(nkMethod);
         try
           for M in Methods do
-            if IsVirtualLike(M) then
-            begin
-              LowName := LowerCase(M.Name);
-              if not VirtualByName.ContainsKey(LowName) then
-                VirtualByName.Add(LowName, M);
-            end;
+          begin
+            LowName := LowerCase(M.Name);
+            if not MethodByName.ContainsKey(LowName) then
+              MethodByName.Add(LowName, M);
+            if IsVirtualLike(M) and not VirtualByName.ContainsKey(LowName) then
+              VirtualByName.Add(LowName, M);
+          end;
         finally
           Methods.Free;
         end;
         if VirtualByName.Count = 0 then Continue;
 
-        // Constructor-Impls finden: Top-Level nkMethod mit Name
-        // `<ClassName>.<MethName>` und TypeRef startsWith 'constructor'.
+        // ABER: MethodByName muss auch die Top-Level-Impls enthalten
+        // (Methods werden im Klassen-Subtree gefunden - meist nur Headers).
+        // Wir nehmen Top-Level-nkMethod und matchen via "<Klasse>.<Name>"-Prefix.
+        CtorList := UnitNode.FindAll(nkMethod);
+        try
+          for M in CtorList do
+            if LowerCase(M.Name).StartsWith(LowerCase(ClassNode.Name) + '.') then
+            begin
+              var DotPos := LastDelimiter('.', M.Name);
+              LowName := LowerCase(Copy(M.Name, DotPos + 1, MaxInt));
+              // Overwrite OK - wir wollen das Impl (mit Body) statt der
+              // Klassen-Subtree-Header-Node.
+              MethodByName.AddOrSetValue(LowName, M);
+            end;
+        finally
+          CtorList.Free;
+        end;
+
+        // Constructor-Impls finden.
         ClassImplCtors := TList<TAstNode>.Create;
         try
           CtorList := UnitNode.FindAll(nkMethod);
@@ -166,13 +248,10 @@ begin
             CtorList.Free;
           end;
 
-          // Pro Constructor alle nkCall durchsuchen
           AlreadyReported := TList<string>.Create;
           try
             for Ctor in ClassImplCtors do
             begin
-              // Unqualifizierten Konstruktor-Namen extrahieren fuer
-              // Delegation-Erkennung: 'EMVCException.Create' -> 'create'.
               var CtorSimpleLow := LowerCase(Ctor.Name);
               var CtorDotPos := LastDelimiter('.', CtorSimpleLow);
               if CtorDotPos > 0 then
@@ -185,33 +264,49 @@ begin
                   Target := ExtractCallTarget(Call.Name);
                   if Target = '' then Continue;
                   LowName := LowerCase(Target);
-                  // inherited skippen (geht hoch, nicht runter)
                   if LowName.StartsWith('inherited') then Continue;
-                  // Konstruktor-Delegation: 'Create(args)' aus einer
-                  // anderen Create-Ueberladung derselben Klasse ist
-                  // KEIN virtueller Call sondern Overload-Resolution.
-                  // FP-Audit: EMVCException.Create.Create, ELoggerProException.
-                  // Echte Bug-Faelle (Subclass override-able virtual) bleiben
-                  // gemeldet wenn die Methode anders heisst als der Ctor.
                   if LowName = CtorSimpleLow then Continue;
 
-                  if not VirtualByName.TryGetValue(LowName, VMethod) then
+                  // Direkt-Hit (alter Pfad)
+                  if VirtualByName.TryGetValue(LowName, VMethod) then
+                  begin
+                    RepKey := Ctor.Name + '|' + LowName + '|' +
+                              IntToStr(Call.Line);
+                    if AlreadyReported.IndexOf(RepKey) >= 0 then Continue;
+                    AlreadyReported.Add(RepKey);
+                    Results.Add(TLeakFinding.New(FileName, Ctor.Name, Call.Line,
+                      Format('Virtual method "%s" called from constructor "%s" ' +
+                             '- override runs on half-initialized Self',
+                        [VMethod.Name, Ctor.Name]),
+                      fkVirtualCallInCtor));
                     Continue;
+                  end;
 
-                  RepKey := Ctor.Name + '|' + LowName + '|' + IntToStr(Call.Line);
-                  if AlreadyReported.IndexOf(RepKey) >= 0 then Continue;
-                  AlreadyReported.Add(RepKey);
+                  // Cross-Helper-Hit: non-virtual Call, aber in dieser Klasse.
+                  // Folge der Kette bis virtual oder Depth/Cycle-Limit.
+                  if not MethodByName.ContainsKey(LowName) then Continue;
+                  Visited := TList<string>.Create;
+                  Chain   := TList<string>.Create;
+                  try
+                    Chain.Add(LowName);   // Erster Helper im Chain
+                    VMethod := FindVirtualInChain(LowName, MethodByName,
+                      VirtualByName, Visited, Chain, 1);
+                    if not Assigned(VMethod) then Continue;
 
-                  F            := TLeakFinding.Create;
-                  F.FileName   := FileName;
-                  F.MethodName := Ctor.Name;
-                  F.LineNumber := IntToStr(Call.Line);
-                  F.MissingVar := Format(
-                    'Virtual method "%s" called from constructor "%s" - '
-                    + 'override runs on half-initialized Self',
-                    [VMethod.Name, Ctor.Name]);
-                  F.SetKind(fkVirtualCallInCtor);
-                  Results.Add(F);
+                    RepKey := Ctor.Name + '|' + LowerCase(VMethod.Name) + '|' +
+                              IntToStr(Call.Line);
+                    if AlreadyReported.IndexOf(RepKey) >= 0 then Continue;
+                    AlreadyReported.Add(RepKey);
+
+                    Msg := Format('Virtual method "%s" reachable from ' +
+                                  'constructor "%s" via helper chain: %s',
+                      [VMethod.Name, Ctor.Name, string.Join(' -> ', Chain.ToArray)]);
+                    Results.Add(TLeakFinding.New(FileName, Ctor.Name, Call.Line,
+                      Msg, fkVirtualCallInCtor));
+                  finally
+                    Visited.Free;
+                    Chain.Free;
+                  end;
                 end;
               finally
                 CallList.Free;
@@ -225,6 +320,7 @@ begin
         end;
       finally
         VirtualByName.Free;
+        MethodByName.Free;
       end;
     end;
   finally
