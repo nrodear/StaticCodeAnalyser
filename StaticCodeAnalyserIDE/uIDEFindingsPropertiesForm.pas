@@ -127,6 +127,13 @@ type
     // Menue-Handler analog ViewMenuClick im TAnalyserDockableForm.
     procedure ViewMenuClick(Sender: TObject);
 
+    // Cross-UI-Sync (2026-06-18, User-Wunsch "die beide Liste sync"):
+    // wird vom IDE-Hauptfenster-ClearAllMarksClick gerufen, damit nach
+    // einem dortigen Clear auch das Properties-Panel-Frame + dessen
+    // Scan-Cache komplett zuruekgesetzt werden. Beide Listen sind dann
+    // wieder leer und der naechste Reload scant frisch.
+    procedure ResetAllStateForSync;
+
     property Frame: TFindingsPropertiesFrame read FFrame;
   end;
 
@@ -645,31 +652,57 @@ begin
   if Assigned(FFrame) then
     FFrame.Clear;
   InvalidateScanCache('');   // '' = alle Eintraege loeschen
+  // Cross-UI-Sync 2026-06-18: Plugin-Hauptfenster-Grid auch leeren
+  // damit beide UI-Listen identisch sind nach dem Clear.
+  if Assigned(GDockableForm) and Assigned(GDockableForm.Frame) then
+    GDockableForm.Frame.ClearAllFindings;
 end;
 
 procedure TFindingsPropertiesDockableForm.HandleClearEditorMarksRequested(
   Sender: TObject);
-// Toolbar-Button "Clear Editor Marks" (⌫) im Frame. Spiegelt das
-// ClearAllMarks-Verhalten im IDE-Hauptfenster (uIDEAnalyserForm.
-// ClearAllMarksClick): ALLE Editor-Marker in ALLEN Dateien werden
-// entfernt (GHighlighter.Clear macht FMarksByFile.Clear +
-// DetachAllSaveNotifiers + InvalidateAllLines). Grid + Findings-Cache
-// im Properties-Panel bleiben unangetastet - Reload bringt die Marker
-// fuer die aktuell sichtbare Datei zurueck.
+// Toolbar-Button "Clear Editor Marks" (⌫) im Frame. ALLE Marker in
+// ALLEN Dateien werden entfernt - in BEIDEN UI-Listen sync:
+//   * Editor-Marker (GHighlighter)
+//   * Plugin-Hauptfenster-Findings-Grid (falls offen)
+//   * Properties-Panel-Frame (eigenes Grid + Per-File-Cache)
+//   * Wrapper-Scan-Cache
 //
-// Unterschied zu HandleClearMarkersRequested (✕):
-//   * ✕  -> Marker (alle Files) + Grid + Frame-Cache + Scan-Cache komplett leer
-//   * ⌫  -> Marker (alle Files), Panel-State bleibt vollstaendig
+// User-Wunsch 2026-06-18: "die liste der Marker ist vermutlich in
+// zwei listen; beim loschen der Marker sollen dann entsprechend die
+// beide Liste entsprechend sync werden".
+//
+// Damit ist ⌫ und ✕ funktional fast gleich. ⌫ bleibt als
+// "Marker-Cleanup"-Button erhalten weil die User-Mental-Map "Marker
+// raus" ist; ✕ bleibt als "Grid-Cleanup"-Button erhalten.
 begin
   if Assigned(GHighlighter) then
     GHighlighter.Clear;
   if Assigned(GAnnotationOverlay) then
     GAnnotationOverlay.HideOverlay;
+  // Cross-UI-Sync: alle anderen Marker-Listen ebenfalls leeren.
+  if Assigned(FFrame) then
+    FFrame.Clear;
+  InvalidateScanCache('');
+  if Assigned(GDockableForm) and Assigned(GDockableForm.Frame) then
+    GDockableForm.Frame.ClearAllFindings;
 end;
 
 procedure TFindingsPropertiesDockableForm.ViewMenuClick(Sender: TObject);
 begin
   ShowFindingsPropertiesDockableForm;
+end;
+
+procedure TFindingsPropertiesDockableForm.ResetAllStateForSync;
+// Cross-UI-Sync-Entrypoint. Wird vom IDE-Hauptfenster-Clear gerufen
+// damit nach DESSEN Reset auch das Properties-Panel komplett clean ist:
+//   * FFrame.Clear     -> Grid + Per-File-Findings-Cache leer
+//   * Scan-Cache leer  -> naechster Tab-Wechsel / Reload scant frisch
+// Wird NICHT direkt vom User getriggert - das macht der Wrapper-eigene
+// Clear-Button.
+begin
+  if Assigned(FFrame) then
+    FFrame.Clear;
+  InvalidateScanCache('');   // '' = alle Eintraege
 end;
 
 // ---- INTACustomDockableForm No-Op-Stubs ----

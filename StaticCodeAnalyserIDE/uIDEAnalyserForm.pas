@@ -291,6 +291,12 @@ type
     // Findings-Liste im Grid bleibt unveraendert (User kann ueber "Markieren"
     // im Kontextmenue erneut anzeigen).
     procedure ClearAllMarksClick(Sender: TObject);
+    // Public-Helper fuer Cross-UI-Sync. Wird vom Properties-Panel-
+    // Wrapper gerufen wenn dort ein Clear-Button geklickt wird - das
+    // Plugin-Hauptfenster-Grid muss sonst veraltete Findings anzeigen
+    // waehrend der Editor schon clean ist. 2026-06-18 (User-Wunsch:
+    // "die beide Liste entsprechend sync werden").
+    procedure ClearAllFindings;
     procedure EditIgnoreListClick(Sender: TObject);
     procedure EditRepoSettingsClick(Sender: TObject);
     // Folge-Anpassungen die FResponsive nach jedem Resize triggert:
@@ -461,6 +467,9 @@ procedure RunSilentAnalysisForFile(const AFileName: string;
   ACenterOnFirstFinding: Boolean = True);
 
 implementation
+
+uses
+  uIDEFindingsPropertiesForm;   // Cross-UI-Sync (GFindingsPropsForm.ResetAllStateForSync)
 
 // noinspection-file BeginEndRequired, BooleanParam, ClassPerFile, ConsecutiveSection, EmptyExcept, ExceptOnException, GodClass, GroupedDeclaration, IfElseBegin, LargeClass, LongMethod, NestedRoutine, NestedTry, PublicField, PublicMemberWithoutDoc, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedPublicMember, UnusedRoutine
 // Plugin-Form: catch-all an Action-Click-Handlern (Resize, ItemPaint etc.).
@@ -2666,15 +2675,35 @@ end;
 procedure TAnalyserFrame.ClearAllMarksClick(Sender: TObject);
 // Entfernt mit einem Schlag ALLE Hover-Annotation-Marker quer ueber alle
 // Dateien: Editor-Stripes verschwinden, sichtbares Overlay-Popup wird
-// versteckt, Save-Notifier werden abgemeldet. Der GHighlighter.Clear-Pfad
-// triggert intern InvalidateAllLines + HideOverlay + DetachAllSaveNotifiers
-// (siehe uIDELineHighlighter.TFindingHighlighter.Clear). Das Grid mit den
-// Findings bleibt unveraendert - User kann ueber das Kontextmenue "Markieren"
-// erneut Marker setzen, ohne neu zu analysieren.
+// versteckt, Save-Notifier werden abgemeldet.
+//
+// 2026-06-18 (User-Wunsch "die beide Liste entsprechend sync werden"):
+// Plus Properties-Panel-Frame leeren falls offen, damit dort kein
+// veralteter Grid-Inhalt steht waehrend der Editor schon clean ist.
+// Plus dessen Scan-Cache invalidieren damit der naechste Reload
+// tatsaechlich neu scannt.
 begin
   if Assigned(GHighlighter) then GHighlighter.Clear;
   if Assigned(GAnnotationOverlay) then GAnnotationOverlay.HideOverlay;
+  // Cross-UI-Sync: Properties-Panel-Frame.
+  if Assigned(GFindingsPropsForm) then
+    GFindingsPropsForm.ResetAllStateForSync;
   StatusMode(_('All markers cleared.'));
+end;
+
+procedure TAnalyserFrame.ClearAllFindings;
+// Leert das Plugin-Hauptfenster-Grid komplett. Wird vom Properties-
+// Panel-Wrapper gerufen wenn dort Clear/ClearMarks geklickt wird -
+// damit das Hauptfenster nicht veralteten Inhalt zeigt waehrend das
+// Properties-Panel schon clean ist.
+begin
+  if Assigned(FAllFindings) then FAllFindings.Clear;
+  if Assigned(FDisplayedFindings) then FDisplayedFindings.Clear;
+  if Assigned(FResultGrid) then
+  begin
+    FResultGrid.RowCount := 2;   // FixedRows=1, RowCount>=FixedRows+1
+    FResultGrid.Invalidate;
+  end;
 end;
 
 procedure TAnalyserFrame.EditIgnoreListClick(Sender: TObject);
