@@ -162,11 +162,12 @@ begin
   inherited;
   Name    := '';       // keinen Komponenten-Namen fuer den Frame
   BuildControls;
-  // Optisches Match zur Sonar-Options-Page (uIDESonarOptions):
-  //   * KEIN ApplySegoeUI auf Self - Sonar erbt den IDE-Default-Font;
-  //     wenn wir Segoe UI 8 erzwingen wuerden, weicht SCA optisch ab.
-  //   * Info-Labels bekommen IDE_FG_DIM + 8pt (= Sonar-Hint-Style).
-  //   * Keine Bold-GroupBox-Captions (Sonar hat das nicht).
+  // 2026-06-19 User-Wahl #1E1E1E (VS Dark). Hartkodiert weil das vom
+  // Theme-Service gelieferte clBtnFace/clWindow nicht zum gewuenschten
+  // Look matched. TColor-Konvention: $00BBGGRR.
+  Self.ParentColor      := False;
+  Self.ParentBackground := False;
+  Self.Color            := TColor($001E1E1E);   // #1E1E1E
   ApplyHintStyleToAllInfoLabels;
 end;
 
