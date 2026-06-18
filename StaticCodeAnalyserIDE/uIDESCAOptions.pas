@@ -144,11 +144,6 @@ uses
   uIDEColors,        // IDE_FG_DIM - semantische Theme-Farbe (wie uIDESonarOptions)
   uAnalyserTheme;    // TEditorColorScheme + Parse/ToStr
 
-type
-  // Class-Hack fuer TScrollingWinControl.Scaled (TFrame ererbt das als
-  // protected). 2026-06-19 Fix DPI-Konsistenz mit der IDE-Tree-View.
-  TScrollingHack = class(TScrollingWinControl);
-
 const
   // Sentinel-Text fuer "kein Profile-Override". Wird im Combo angezeigt
   // und in LoadFromSettings/SaveToSettings als Marker verglichen - daher
@@ -168,14 +163,16 @@ begin
   Name    := '';       // keinen Komponenten-Namen fuer den Frame
   BuildControls;
   // 2026-06-19 (User-Bug Windows 125% DPI): Body-Text erschien groesser
-  // als die Tree-View links. Root-Cause: das Frame ist per-Monitor-DPI-
-  // aware (default Scaled=True) und skaliert seinen Inhalt auf 125%,
-  // waehrend die System-Tree-View bei 100% bleibt. Differenz ~25%.
-  // Fix: Scaled=False unterdrueckt die Auto-Skalierung; das Frame
-  // bleibt bei 96-DPI-Layout. Bei 200%+ DPI muesste der User selbst
-  // mit System-Settings nachregeln, das ist Trade-off fuer den
-  // Konsistenz-Gewinn gegen die Tree-View.
-  TScrollingHack(Self).Scaled := False;
+  // als die Tree-View links. Root-Cause: das Frame skaliert seinen
+  // Inhalt auf 125%, waehrend die System-Tree-View bei 100% bleibt.
+  // Fix: Font explizit auf 'MS Shell Dlg 2' Size 8 (= IDE-Standard fuer
+  // Options-Pages) + ParentFont=False + ParentBiDiMode-Match. Children
+  // mit ParentFont=True erben das. Bei Hi-DPI rendert die VCL die
+  // Font-Punkte gleich gross wie die Tree-View (beide nutzen System-
+  // Font), nur die Frame-Container-Geometrie skaliert weiter.
+  Self.ParentFont := False;
+  Self.Font.Name  := 'MS Shell Dlg 2';
+  Self.Font.Size  := 8;
   ApplyHintStyleToAllInfoLabels;
 end;
 
