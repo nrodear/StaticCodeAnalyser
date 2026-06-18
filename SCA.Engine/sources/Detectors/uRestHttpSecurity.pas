@@ -37,11 +37,16 @@ var
   // Module-Level Regex-Cache: Patterns sind konstant, kein Grund pro File
   // neu zu kompilieren. Lazy-Init in der ersten AnalyzeUnit-Invocation
   // (Initializer braeuchte sonst RegEx-Unit-Initialization-Order-Garantie).
-  // Spart 4 Compilations x N Files pro Scan.
+  // Spart Compilations x N Files pro Scan.
   CachedReHttp      : TRegEx;
   CachedReSecProto  : TRegEx;
   CachedReIgnoreCrt : TRegEx;
   CachedReVerifyNil : TRegEx;
+  // 2026-06-18 (Audit-Kurzliste E-21): Indy-spezifische TLS-Disable.
+  // TIdHTTP / TIdSSLIOHandlerSocketOpenSSL nutzen .SSLOptions.X-Pattern.
+  CachedReIndyVerifyEmpty : TRegEx;   // SSLOptions.VerifyMode := []
+  CachedReIndyOldProto    : TRegEx;   // SSLOptions.Method := sslvSSLv2/3/TLSv1
+  CachedReSecProtoOld     : TRegEx;   // SecureProtocols := [sslv3] (THTTPClient)
   CachedReInit      : Boolean = False;
 
 procedure EnsureRegexCacheBuilt;
@@ -51,6 +56,18 @@ begin
   CachedReSecProto  := TRegEx.Create('(?i)\bSecureProtocols\s*:=\s*\[\s*\]');
   CachedReIgnoreCrt := TRegEx.Create('(?i)\bIgnoreCertificateErrors\s*:=\s*True\b');
   CachedReVerifyNil := TRegEx.Create('(?i)\bOnVerifyPeer\s*:=\s*nil\b');
+  // Indy-Patterns. Pfad-Variante `Foo.SSLOptions.X := …` per `\.` vor Marker.
+  CachedReIndyVerifyEmpty := TRegEx.Create(
+    '(?i)\.?\bSSLOptions\.VerifyMode\s*:=\s*\[\s*\]');
+  // sslvSSLv2/3 sind formal abgeschaltet seit RFC 7568 (SSLv3 - POODLE)
+  // bzw. RFC 6176 (SSLv2). sslvTLSv1 = TLS 1.0 ist seit ~2020 von allen
+  // Browsern abgekuendigt. Wir flaggen alle drei.
+  CachedReIndyOldProto    := TRegEx.Create(
+    '(?i)\.?\bSSLOptions\.Method\s*:=\s*sslv(SSLv2|SSLv3|TLSv1)\b');
+  // THTTPClient.SecureProtocols mit veraltetem Protokoll-Set.
+  // SSL3 / TLS1 sind disallowed in modernen Stacks.
+  CachedReSecProtoOld     := TRegEx.Create(
+    '(?i)\bSecureProtocols\s*:=\s*\[[^]]*\b(SSL3|SSL2|TLS1)\b');
   CachedReInit      := True;
 end;
 
@@ -242,6 +259,39 @@ begin
         'OnVerifyPeer := nil short-circuits the TLS certificate-validation ' +
         'callback. Anything served over TLS is accepted unconditionally. ' +
         'Implement a real verification handler or leave the default in place.',
+        M.Index);
+
+    // 2d) Indy: SSLOptions.VerifyMode := []  (Audit E-Kurzliste 2026-06-18)
+    //     TIdSSLIOHandlerSocketOpenSSL akzeptiert dann jedes Zertifikat -
+    //     gleicher Effekt wie OnVerifyPeer:=nil, aber idiomatischer in
+    //     Indy-Code.
+    Matches := CachedReIndyVerifyEmpty.Matches(CodeNoStr);
+    for M in Matches do
+      Emit(fkDisabledTlsVerification,
+        'Indy SSLOptions.VerifyMode := [] disables peer-certificate ' +
+        'validation - any TLS endpoint is accepted unconditionally. ' +
+        'Set at minimum [sslvrfPeer] and provide a CA cert (RootCertFile).',
+        M.Index);
+
+    // 2e) Indy: SSLOptions.Method := sslvSSLv2/3/TLSv1  (Audit 2026-06-18)
+    //     Veraltete Protokoll-Versionen - POODLE (SSLv3) und alte TLS-
+    //     Suiten sind seit Jahren disallowed.
+    Matches := CachedReIndyOldProto.Matches(CodeNoStr);
+    for M in Matches do
+      Emit(fkDisabledTlsVerification,
+        'Indy SSLOptions.Method set to deprecated TLS/SSL protocol ' +
+        '(sslvSSLv2/sslvSSLv3 = broken; sslvTLSv1 = phased out 2020). ' +
+        'Use sslvTLSv1_2 or sslvTLSv1_3 instead.',
+        M.Index);
+
+    // 2f) THTTPClient.SecureProtocols mit SSL3/SSL2/TLS1 in der Set.
+    //     Andere Code-Basen (System.Net.HttpClient) nutzen das Set-Pattern.
+    Matches := CachedReSecProtoOld.Matches(CodeNoStr);
+    for M in Matches do
+      Emit(fkDisabledTlsVerification,
+        'SecureProtocols includes deprecated SSL/TLS version (SSL2/SSL3/TLS1) ' +
+        '- vulnerable to POODLE / BEAST / weak-cipher attacks. Limit the ' +
+        'set to TLSv1_2 and TLSv1_3.',
         M.Index);
   finally
     ReleaseLines(Lines, Cached);
