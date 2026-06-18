@@ -128,8 +128,10 @@ type
     //   FMICancel         - nur waehrend laufender Analyse aktiv
     //   FMIAnalyseChanged - waehrend Analyse deaktiviert
     //   FMIClearMarks     - nur aktiv wenn GHighlighter ueberhaupt Marker hat
+    //   FMIResetAll       - Op-3 Hard-Reset: Marker + Hauptfenster-Grid +
+    //                       Properties-Panel-Frame + Scan-Cache. Konzept_MarkerLoeschen.
     // Sync via HamburgerMenuPopup an FAnalyseProgress.Running / GHighlighter.HasMarks.
-    FMICancel, FMIAnalyseChanged, FMIClearMarks    : TMenuItem;
+    FMICancel, FMIAnalyseChanged, FMIClearMarks, FMIResetAll : TMenuItem;
     FLblFilter, FLblType                           : TLabel;
     // Eine horizontale Tile-Reihe: 4 Severity-Tiles + 3 Type-Tiles + Score.
     // Layout pro Tile: Glyph-Icon links + Count rechts (Top-Row), Caption
@@ -291,6 +293,9 @@ type
     // Findings-Liste im Grid bleibt unveraendert (User kann ueber "Markieren"
     // im Kontextmenue erneut anzeigen).
     procedure ClearAllMarksClick(Sender: TObject);
+    // Op-3 Hard-Reset (Konzept_MarkerLoeschen): leert Editor-Marker +
+    // Hauptfenster-Grid + Properties-Panel-Frame + Scan-Cache.
+    procedure ResetAllFindingsClick(Sender: TObject);
     procedure EditIgnoreListClick(Sender: TObject);
     procedure EditRepoSettingsClick(Sender: TObject);
     // Folge-Anpassungen die FResponsive nach jedem Resize triggert:
@@ -2672,29 +2677,27 @@ begin
 end;
 
 procedure TAnalyserFrame.ClearAllMarksClick(Sender: TObject);
-// Entfernt mit einem Schlag ALLE Hover-Annotation-Marker quer ueber alle
-// Dateien: Editor-Stripes verschwinden, sichtbares Overlay-Popup wird
-// versteckt, Save-Notifier werden abgemeldet.
+// Op-1 laut Konzept_MarkerLoeschen: nur Marker raus, Grids bleiben.
 //
-// 2026-06-18 (User-Wunsch "die beide Liste entsprechend sync werden"):
-// Plus Properties-Panel-Frame leeren falls offen, damit dort kein
-// veralteter Grid-Inhalt steht waehrend der Editor schon clean ist.
-// Plus dessen Scan-Cache invalidieren damit der naechste Reload
-// tatsaechlich neu scannt.
+// Entfernt mit einem Schlag ALLE Hover-Annotation-Marker quer ueber
+// alle Dateien: Editor-Stripes verschwinden, sichtbares Overlay-Popup
+// wird versteckt, Save-Notifier werden abgemeldet.
+// Findings-Liste im Plugin-Hauptfenster-Grid bleibt unveraendert -
+// User kann ueber das Kontextmenue "Markieren" erneut Marker setzen
+// ohne neu zu analysieren.
+//
+// Hard-Reset (Editor + Hauptfenster-Grid + Properties-Panel) geht
+// ueber den Menuepunkt "Reset All Findings" (siehe ResetAllFindingsClick).
 begin
   if Assigned(GHighlighter) then GHighlighter.Clear;
   if Assigned(GAnnotationOverlay) then GAnnotationOverlay.HideOverlay;
-  // Cross-UI-Sync: Properties-Panel-Frame.
-  if Assigned(GFindingsPropsForm) then
-    GFindingsPropsForm.ResetAllStateForSync;
   StatusMode(_('All markers cleared.'));
 end;
 
 procedure TAnalyserFrame.ClearAllFindings;
-// Leert das Plugin-Hauptfenster-Grid komplett. Wird vom Properties-
-// Panel-Wrapper gerufen wenn dort Clear/ClearMarks geklickt wird -
-// damit das Hauptfenster nicht veralteten Inhalt zeigt waehrend das
-// Properties-Panel schon clean ist.
+// Leert das Plugin-Hauptfenster-Grid komplett. Wird von Op-3
+// (Hard-Reset, Menuepunkt "Reset All Findings") gerufen, plus
+// kuenftig potentiell von anderen UI-Sync-Pfaden.
 begin
   if Assigned(FAllFindings) then FAllFindings.Clear;
   if Assigned(FDisplayedFindings) then FDisplayedFindings.Clear;
@@ -2703,6 +2706,25 @@ begin
     FResultGrid.RowCount := 2;   // FixedRows=1, RowCount>=FixedRows+1
     FResultGrid.Invalidate;
   end;
+end;
+
+procedure TAnalyserFrame.ResetAllFindingsClick(Sender: TObject);
+// Op-3 Hard-Reset (Konzept_MarkerLoeschen): alle drei UI-Listen +
+// Skip-Cache zuruecksetzen.
+//   Op-1 = Editor-Marker raus (GHighlighter + Overlay)
+//   + Hauptfenster-Grid leer (ClearAllFindings)
+//   + Properties-Panel-Frame + Scan-Cache leer (ResetAllStateForSync)
+// Nach dieser Aktion ist der naechste Scan garantiert frisch.
+begin
+  // Op-1
+  if Assigned(GHighlighter) then GHighlighter.Clear;
+  if Assigned(GAnnotationOverlay) then GAnnotationOverlay.HideOverlay;
+  // Hauptfenster-Grid
+  ClearAllFindings;
+  // Properties-Panel falls offen
+  if Assigned(GFindingsPropsForm) then
+    GFindingsPropsForm.ResetAllStateForSync;
+  StatusMode(_('All findings reset.'));
 end;
 
 procedure TAnalyserFrame.EditIgnoreListClick(Sender: TObject);
@@ -2911,6 +2933,15 @@ begin
   FMIClearMarks.Caption := _('Clear all markers');
   FMIClearMarks.OnClick := ClearAllMarksClick;
   FHamburgerMenu.Items.Add(FMIClearMarks);
+
+  // ---- Hard-Reset (Op-3 laut Konzept_MarkerLoeschen): leert Editor +
+  //      Hauptfenster-Grid + Properties-Panel + Scan-Cache. Im
+  //      Unterschied zu "Clear all markers" geht damit auch der
+  //      Findings-Inhalt der Panels verloren - bewusster Hard-Reset.
+  FMIResetAll := TMenuItem.Create(FHamburgerMenu);
+  FMIResetAll.Caption := _('Reset all findings (clear panels + markers)');
+  FMIResetAll.OnClick := ResetAllFindingsClick;
+  FHamburgerMenu.Items.Add(FMIResetAll);
 
   MI := TMenuItem.Create(FHamburgerMenu);
   MI.Caption := '-';
