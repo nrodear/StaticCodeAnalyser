@@ -162,18 +162,15 @@ begin
   inherited;
   Name    := '';       // keinen Komponenten-Namen fuer den Frame
   BuildControls;
-  // 2026-06-19 (User-Bug bei Windows 125%-Skalierung): die Body-Texte
-  // erschienen groesser als der Options-Dialog-Tree links. Frame-Font
-  // ererbt sonst einen Hi-DPI-skalierten Default, der gegen die Tree-
-  // View nicht sauber matched. Wir zwingen die selben Werte die der
-  // IDE-Default-Tree nutzt: Font 'MS Shell Dlg 2' Size 8 + ParentFont
-  // OFF damit Theme-Wechsel die Werte nicht zurueckschieben. Children
-  // mit ParentFont=True (CheckBox, ComboBox, GroupBox-Caption) erben
-  // das automatisch; Info-Labels haben durch StyleAsHint schon eigene
-  // Werte und werden nicht ueberschrieben.
-  Self.ParentFont := False;
-  Self.Font.Name  := 'MS Shell Dlg 2';
-  Self.Font.Size  := 8;
+  // 2026-06-19 (User-Bug Windows 125% DPI): Body-Text erschien groesser
+  // als die Tree-View links. Root-Cause: das Frame ist per-Monitor-DPI-
+  // aware (default Scaled=True) und skaliert seinen Inhalt auf 125%,
+  // waehrend die System-Tree-View bei 100% bleibt. Differenz ~25%.
+  // Fix: Scaled=False unterdrueckt die Auto-Skalierung; das Frame
+  // bleibt bei 96-DPI-Layout. Bei 200%+ DPI muesste der User selbst
+  // mit System-Settings nachregeln, das ist Trade-off fuer den
+  // Konsistenz-Gewinn gegen die Tree-View.
+  Self.Scaled := False;
   ApplyHintStyleToAllInfoLabels;
 end;
 
