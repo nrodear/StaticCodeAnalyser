@@ -13,13 +13,16 @@ type
     [Test] procedure UsedPrivate_NotReported;
     [Test] procedure PublicMethod_NotReported;
     [Test] procedure Finding_KindAndSeverity;
+    // 2026-06-20: DFM-Event-Handler in private-Section nicht als FP melden.
+    [Test] procedure DfmBoundPrivateHandler_NotReported;
   end;
 
 implementation
 
 uses
-  System.SysUtils, System.Generics.Collections,
-  uSCAConsts, uMethodd12,
+  System.SysUtils, System.Classes, System.IOUtils, System.Generics.Collections,
+  uSCAConsts, uMethodd12, uAstNode, uParser2,
+  uUnusedPrivateMethod,
   uTestFindingHelper;
 
 procedure TTestUnusedPrivateMethod.UnusedPrivate_Reported;
@@ -114,6 +117,67 @@ begin
     Assert.IsNotNull(Hit, 'fkUnusedPrivateMethod finding expected');
     Assert.AreEqual(lsHint, Hit.Severity);
   finally F.Free; end;
+end;
+
+procedure TTestUnusedPrivateMethod.DfmBoundPrivateHandler_NotReported;
+// Private Methode Button1Click ist Event-Handler im DFM (OnClick = Button1Click).
+// Im Pascal-Code wird sie nirgends explizit aufgerufen - klassisches FP-Szenario
+// vor dem DFM-Scan-Fix (siehe uUnusedPrivateMethod). Muss jetzt sauber ignoriert
+// werden.
+const PAS_SRC =
+  'unit t; interface'#13#10 +
+  'uses Classes, Controls, StdCtrls, Forms;'#13#10 +
+  'type'#13#10 +
+  '  TFooForm = class(TForm)'#13#10 +
+  '    Button1: TButton;'#13#10 +
+  '  private'#13#10 +
+  '    procedure Button1Click(Sender: TObject);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  '{$R *.dfm}'#13#10 +
+  'procedure TFooForm.Button1Click(Sender: TObject);'#13#10 +
+  'begin end;'#13#10 +
+  'end.';
+const DFM_SRC =
+  'object FooForm: TFooForm'#13#10 +
+  '  Caption = ''Foo'''#13#10 +
+  '  object Button1: TButton'#13#10 +
+  '    OnClick = Button1Click'#13#10 +
+  '  end'#13#10 +
+  'end';
+var
+  Dir, PasPath, DfmPath : string;
+  Parser  : TParser2;
+  Root    : TAstNode;
+  F       : TObjectList<TLeakFinding>;
+begin
+  Dir := TPath.Combine(TPath.GetTempPath, 'sca_dfmtest_' +
+    TGuid.NewGuid.ToString.Replace('{','').Replace('}','').Replace('-',''));
+  TDirectory.CreateDirectory(Dir);
+  try
+    PasPath := TPath.Combine(Dir, 'fooform.pas');
+    DfmPath := TPath.Combine(Dir, 'fooform.dfm');
+    TFile.WriteAllText(PasPath, PAS_SRC, TEncoding.UTF8);
+    TFile.WriteAllText(DfmPath, DFM_SRC, TEncoding.UTF8);
+
+    F := TObjectList<TLeakFinding>.Create(True);
+    Parser := TParser2.Create;
+    try
+      Root := Parser.ParseSource(PAS_SRC);
+      try
+        TUnusedPrivateMethodDetector.AnalyzeUnit(Root, PasPath, F);
+      finally
+        Root.Free;
+      end;
+      Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedPrivateMethod),
+        'DFM-bound Button1Click darf nicht als unused gemeldet werden');
+    finally
+      Parser.Free;
+      F.Free;
+    end;
+  finally
+    try TDirectory.Delete(Dir, True); except end;
+  end;
 end;
 
 initialization

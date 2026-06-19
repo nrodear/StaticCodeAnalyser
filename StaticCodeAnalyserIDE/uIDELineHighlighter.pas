@@ -199,6 +199,27 @@ type
     Cookie    : Integer;
   end;
 
+  // Per-File-Slot fuer den IOTAEditLineTracker. Der Tracker laesst die IDE
+  // unsere Marker-Line-Nummern automatisch durch User-Edits mitwandern -
+  // beim Insert/Delete oberhalb einer markierten Zeile feuert die IDE
+  // LineChanged(Old, New, Data). Tracker + Notifier sind beide an einen
+  // konkreten IOTAEditBuffer gebunden; geht das Buffer (Tab-Close), wird
+  // der Slot beim naechsten Detach geleert.
+  //
+  // Detach-Strategie: der IDE-interne Tracker indiziert Eintraege neu
+  // (Add/Remove/Shift), waehrend wir die Indices halten. Deshalb merken
+  // wir uns NICHT die Indices sondern die Data-Tags (= Line zur Add-Zeit).
+  // Detach scannt den Tracker und loescht alle Eintraege deren Data zu
+  // einem unserer Tags passt - das ueberlebt Foreign-Plugin-Edits in
+  // demselben Tracker.
+  TLineTrackerSlot = record
+    Buffer       : IOTAEditBuffer;
+    Tracker      : IOTAEditLineTracker;
+    Notifier     : IOTAEditLineNotifier;
+    NotifierIdx  : Integer;
+    DataTags     : TList<IntPtr>;
+  end;
+
   TFindingHighlighter = class
   private
     // Multi-File-Marker-Storage: normalisierter Pfad -> TFileMarks.
@@ -209,10 +230,15 @@ type
     FMarksByFile     : TObjectDictionary<string, TFileMarks>;
     // Save-Auto-Clear: pro markierter Datei wird ein IOTAModuleNotifier
     // angehaengt der bei AfterSave die Marker dieser Datei loescht
-    // (User hat editiert -> Zeilen-Nummern stimmen nicht mehr).
+    // (Fallback fuer Faelle in denen der LineTracker nicht greift -
+    // z.B. external file modification).
     // Key ist NormalizePath(filename); leerer Slot = keine Datei dieses
     // Namens aktuell im Editor offen (Attach scheitert dann still).
     FSaveNotifiers   : TDictionary<string, TSaveNotifierSlot>;
+    // Live-Line-Tracking: pro markierter Datei ein IOTAEditLineTracker +
+    // IOTAEditLineNotifier. Damit wandern Marker waehrend des Tippens mit
+    // (Insert/Delete oberhalb shifted die Line-Nummer in FMarksByFile).
+    FLineTrackers    : TDictionary<string, TLineTrackerSlot>;
     FEditorEvents    : INTACodeEditorEvents;  // haelt Refcount am Leben
     FEditorEventsObj : TFindingEditorEvents;   // Refcount via FEditorEvents (siehe Create)
     FEditorEventsIdx : Integer;               // Index aus AddEditorEventsNotifier; -1 = nicht registriert
@@ -223,6 +249,17 @@ type
     procedure AttachSaveNotifier(const AKey: string);
     procedure DetachSaveNotifier(const AKey: string);
     procedure DetachAllSaveNotifiers;
+
+    // Line-Tracker-Verwaltung. Attach holt den IOTAEditLineTracker des
+    // Buffers + registriert pro markierter Zeile ein Tracker.AddLine plus
+    // einen LineNotifier der LineChanged() in OnLineMoved umsetzt.
+    // Rebuild wirft den alten Slot weg und baut neu auf - noetig wenn
+    // sich der Marker-Set fuer eine Datei aendert (SetAllFindings /
+    // ReplaceMarksForFile).
+    procedure AttachLineTracker(const AKey: string);
+    procedure DetachLineTracker(const AKey: string);
+    procedure DetachAllLineTrackers;
+    procedure RebuildLineTracker(const AKey: string);
     // Group-Synthese aus einer (file, line)-Gruppe in eine TFindingMark.
     // Geteilt zwischen SetAllFindings (Multi-File-Variante) und
     // ReplaceMarksForFile (Single-File-Variante) - vorher 80% duplizierter
@@ -233,6 +270,18 @@ type
     // Zeilen via InvalidateTopEditorLogicalLine. Wird in EditorScrolled
     // gerufen damit FRenderedRects nach dem Scroll wieder vollstaendig ist.
     procedure InvalidateAllLines;
+    // PUBLIC fuer TLineTrackerNotifier — wird gerufen wenn die IDE einen
+    // unserer Tracker.AddLine-Eintraege als geshifted meldet. ANewLine=-1
+    // (oder 0) heisst "Zeile wurde geloescht", sonst ist es die neue
+    // Position. Re-keyt FMarksByFile[AFile] entsprechend und triggert
+    // Repaint.
+    procedure OnLineMoved(const AFile: string;
+      AOldLine, ANewLine: Integer);
+    // PUBLIC fuer TFindingEditorEvents.PaintLine — lazy-Attach Hook. Wird
+    // pro markierter Zeile gerufen die gerade gemalt wird; ist der Tracker
+    // schon angehaengt, ist's ein O(1)-No-Op. Sonst attache jetzt, wo
+    // wir wissen dass die Datei wirklich in einem Editor offen ist.
+    procedure EnsureLineTracker(const AFileName: string);
     constructor Create;
     destructor Destroy; override;
 
@@ -272,12 +321,6 @@ type
     // Zeile nicht markiert ist.
     function TryGetMark(const AFile: string; ALine: Integer;
                         out AMark: TFindingMark): Boolean;
-
-    // Liefert die markierten Zeilen einer Datei sortiert aufsteigend.
-    // Wird vom Finding-Navigations-Hotkey (Ctrl+Alt+Up/Down) genutzt,
-    // um zur naechsten/vorherigen Markierung im aktuellen Editor-File
-    // zu springen. Leere Liste wenn keine Marks fuer die Datei.
-    function GetSortedLinesForFile(const AFile: string): TArray<Integer>;
   end;
 
 var
@@ -439,6 +482,21 @@ begin
 end;
 
 type
+  // Per-File-Notifier fuer den Line-Tracker. Wird vom IOTAEditLineTracker
+  // gerufen wenn die IDE ein User-Edit als Line-Shift unserer Eintraege
+  // erkennt. Wir leiten an GHighlighter.OnLineMoved weiter (FFileName
+  // ist Compile-time fest pro Instanz - ein Notifier kennt nur EINE
+  // Datei).
+  TLineTrackerNotifier = class(TNotifierObject, IInterface,
+    IOTANotifier, IOTAEditLineNotifier)
+  private
+    FFileName : string;       // NormalizePath-form
+  protected
+    procedure LineChanged(OldLine, NewLine: Integer; Data: IntPtr);
+  public
+    constructor Create(const ANormalizedFileName: string);
+  end;
+
   // Wird beim Save (durch den IDE-Kern) gerufen. Wir delegieren an
   // GHighlighter.ClearFile damit die Marker dieser Datei verschwinden -
   // sie sind potenziell veraltet weil der User Zeilen verschoben hat.
@@ -473,6 +531,23 @@ type
     constructor Create(const ANormalizedFileName: string);
   end;
 
+{ ---- TLineTrackerNotifier ---- }
+
+constructor TLineTrackerNotifier.Create(const ANormalizedFileName: string);
+begin
+  inherited Create;
+  FFileName := ANormalizedFileName;
+end;
+
+procedure TLineTrackerNotifier.LineChanged(OldLine, NewLine: Integer;
+  Data: IntPtr);
+begin
+  // GHighlighter koennte zwischenzeitlich freigegeben sein (Plugin-Unload-
+  // Race). Defensiv pruefen wie SaveAutoClear.
+  if Assigned(GHighlighter) then
+    GHighlighter.OnLineMoved(FFileName, OldLine, NewLine);
+end;
+
 { ---- TSaveAutoClearNotifier ---- }
 
 constructor TSaveAutoClearNotifier.Create(const ANormalizedFileName: string);
@@ -483,10 +558,11 @@ end;
 
 procedure TSaveAutoClearNotifier.AfterSave;
 begin
-  // GHighlighter koennte zwischenzeitlich freigegeben sein (Plugin-Unload-
-  // Race). Defensiv pruefen, dann nur die EINE Datei loeschen.
-  if Assigned(GHighlighter) then
-    GHighlighter.ClearFile(FFileName);
+  // No-op seit 2026-06-20: der Line-Tracker (IOTAEditLineTracker) haelt
+  // die Marker-Line-Nummern waehrend des Tippens auf dem aktuellen Stand.
+  // Beim Save sind sie bereits korrekt - kein ClearFile mehr noetig.
+  // Klasse + AttachSaveNotifier-Infrastruktur bleibt fuer evtl. spaetere
+  // Save-Trigger (z.B. Re-Scan-on-Save) stehen.
 end;
 
 // IOTANotifier
@@ -514,6 +590,7 @@ begin
   // / Clear / Destroy automatisch freigegeben.
   FMarksByFile     := TObjectDictionary<string, TFileMarks>.Create([doOwnsValues]);
   FSaveNotifiers   := TDictionary<string, TSaveNotifierSlot>.Create;
+  FLineTrackers    := TDictionary<string, TLineTrackerSlot>.Create;
   FEditorEventsIdx := -1;
   // TFindingEditorEvents erbt TInterfacedObject - der Refcount wird ueber
   // FEditorEvents (INTACodeEditorEvents) gehalten, und das Nil-Setzen in
@@ -525,8 +602,12 @@ end;
 destructor TFindingHighlighter.Destroy;
 begin
   FEditorEvents := nil;  // Refcount sinkt; nach RemoveEditorEventsNotifier (in UnregisterLineHighlighter) -> 0 -> Objekt freigegeben
-  // ALLE Save-Notifier abmelden BEVOR FMarksByFile weg ist, sonst koennte
-  // ein verspaeteter AfterSave-Callback in einen freed Dictionary greifen.
+  // ALLE Notifier abmelden BEVOR FMarksByFile weg ist, sonst koennte
+  // ein verspaeteter AfterSave/LineChanged-Callback in ein freed Dict
+  // greifen. Line-Trackers FIRST (sie referenzieren TList<Integer>
+  // die wir mitfreigeben).
+  DetachAllLineTrackers;
+  FreeAndNil(FLineTrackers);
   DetachAllSaveNotifiers;
   FreeAndNil(FSaveNotifiers);
   FreeAndNil(FMarksByFile);
@@ -596,6 +677,184 @@ begin
   Keys := FSaveNotifiers.Keys.ToArray;  // Kopie, damit wir waehrend
                                         // des Loops modifizieren duerfen
   for K in Keys do DetachSaveNotifier(K);
+end;
+
+procedure TFindingHighlighter.AttachLineTracker(const AKey: string);
+// Holt den IOTAEditLineTracker des EditBuffers fuer AKey, registriert
+// pro markierter Zeile einen Tracker-Eintrag plus einen LineNotifier.
+// Wenn die Datei aktuell nicht in einem Editor offen ist, gibt's keinen
+// Buffer -> still skippen (re-versucht beim naechsten SetAllFindings).
+//
+// Re-Attach: bereits existierender Slot wird VOR dem Neuanlegen detached
+// (RebuildLineTracker-Pattern).
+var
+  Slot     : TLineTrackerSlot;
+  ModSvc   : IOTAModuleServices;
+  Module   : IOTAModule;
+  Editor   : IOTAEditor;
+  Buffer   : IOTAEditBuffer;
+  Bucket   : TFileMarks;
+  i        : Integer;
+  ModFile  : string;
+  Ln       : Integer;
+begin
+  if FLineTrackers.ContainsKey(AKey) then DetachLineTracker(AKey);
+  if not FMarksByFile.TryGetValue(AKey, Bucket) or (Bucket.Count = 0) then Exit;
+  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
+
+  Module := nil;
+  for i := 0 to ModSvc.ModuleCount - 1 do
+  begin
+    ModFile := NormalizePath(ModSvc.Modules[i].FileName);
+    if ModFile = AKey then begin Module := ModSvc.Modules[i]; Break; end;
+  end;
+  if not Assigned(Module) then Exit;
+
+  // EditBuffer aus erstem Source-Editor holen. Files koennen mehrere
+  // Editors (Form-Designer + Source) haben; wir wollen den ersten der
+  // ein IOTAEditBuffer ist.
+  Buffer := nil;
+  for i := 0 to Module.ModuleFileCount - 1 do
+  begin
+    Editor := Module.ModuleFileEditors[i];
+    if Supports(Editor, IOTAEditBuffer, Buffer) then Break;
+  end;
+  if not Assigned(Buffer) then Exit;
+
+  Slot.Buffer  := Buffer;
+  Slot.Tracker := Buffer.GetEditLineTracker;
+  if not Assigned(Slot.Tracker) then Exit;   // Buffer kann temporaer kein
+                                             // Tracker liefern (Designer-Tab,
+                                             // Read-Only-Modus, ...).
+  Slot.Notifier    := TLineTrackerNotifier.Create(AKey);
+  Slot.NotifierIdx := Slot.Tracker.AddNotifier(Slot.Notifier);
+  Slot.DataTags    := TList<IntPtr>.Create;
+
+  // Pro markierter Zeile: AddLine mit Data = OriginalLine. Die Data-IntPtrs
+  // identifizieren UNSERE Eintraege beim Detach-Scan, damit wir keine
+  // Foreign-Plugin-Eintraege im selben Tracker treffen.
+  for Ln in Bucket.Keys do
+  begin
+    try
+      Slot.Tracker.AddLine(Ln, IntPtr(Ln));
+      Slot.DataTags.Add(IntPtr(Ln));
+    except
+      // AddLine kann werfen wenn Ln > Buffer-Linecount (z.B. Marker auf
+      // Zeile 500 aber Datei wurde inzwischen auf 200 Zeilen verkleinert).
+      // Skippen statt crashen; die zugehoerige Marker bleibt im Dict, wird
+      // beim naechsten Scan korrigiert.
+    end;
+  end;
+
+  FLineTrackers.Add(AKey, Slot);
+end;
+
+procedure TFindingHighlighter.DetachLineTracker(const AKey: string);
+var
+  Slot     : TLineTrackerSlot;
+  Idx      : Integer;
+  TagSet   : TDictionary<IntPtr, Boolean>;
+begin
+  if not FLineTrackers.TryGetValue(AKey, Slot) then Exit;
+  try
+    if Assigned(Slot.Tracker) then
+    begin
+      if Slot.NotifierIdx >= 0 then
+        Slot.Tracker.RemoveNotifier(Slot.NotifierIdx);
+      // Tracker-Eintraege identifizieren: durch unsere Data-Tags. Andere
+      // Plugin-Eintraege (mit fremden Data) bleiben unangetastet.
+      TagSet := TDictionary<IntPtr, Boolean>.Create;
+      try
+        for Idx := 0 to Slot.DataTags.Count - 1 do
+          TagSet.AddOrSetValue(Slot.DataTags[Idx], True);
+        for Idx := Slot.Tracker.Count - 1 downto 0 do
+        begin
+          try
+            if TagSet.ContainsKey(Slot.Tracker.GetData(Idx)) then
+              Slot.Tracker.Delete(Idx);
+          except
+          end;
+        end;
+      finally
+        TagSet.Free;
+      end;
+    end;
+  except
+    // Buffer evtl. schon geschlossen; Slot trotzdem entfernen.
+  end;
+  Slot.DataTags.Free;
+  FLineTrackers.Remove(AKey);   // strong refs sinken
+end;
+
+procedure TFindingHighlighter.DetachAllLineTrackers;
+var
+  Keys : TArray<string>;
+  K    : string;
+begin
+  if not Assigned(FLineTrackers) or (FLineTrackers.Count = 0) then Exit;
+  Keys := FLineTrackers.Keys.ToArray;
+  for K in Keys do DetachLineTracker(K);
+end;
+
+procedure TFindingHighlighter.RebuildLineTracker(const AKey: string);
+begin
+  // Convenience: Detach + Attach. Wird gerufen wenn der Marker-Set
+  // dieser Datei sich aendert (SetAllFindings / ReplaceMarksForFile -
+  // alte Tracker-Eintraege koennten auf nicht mehr existierende
+  // Marker zeigen).
+  DetachLineTracker(AKey);
+  AttachLineTracker(AKey);
+end;
+
+procedure TFindingHighlighter.EnsureLineTracker(const AFileName: string);
+// Lazy-Attach Hook: aus PaintLine gerufen. Wenn die Datei jetzt im
+// Editor offen ist (sonst wuerde PaintLine nicht feuern) aber kein
+// Tracker existiert (Datei wurde nach SetAllFindings erst geoeffnet),
+// dann jetzt attachen. Idempotenter Fast-Path via FLineTrackers-Lookup.
+var
+  Key : string;
+begin
+  if AFileName = '' then Exit;
+  Key := NormalizePath(AFileName);
+  if FLineTrackers.ContainsKey(Key) then Exit;   // schon attached
+  if not FMarksByFile.ContainsKey(Key) then Exit; // keine Marker -> kein Tracker noetig
+  AttachLineTracker(Key);
+end;
+
+procedure TFindingHighlighter.OnLineMoved(const AFile: string;
+  AOldLine, ANewLine: Integer);
+// Wird vom TLineTrackerNotifier.LineChanged gerufen wenn die IDE einen
+// unserer Tracker-Eintraege beim User-Edit verschoben hat. Wir re-key'en
+// das FMarksByFile-Dict entsprechend.
+//
+// ANewLine = -1 oder 0 (laut Delphi-OTAPI-Konvention) bedeutet
+// "Zeile wurde geloescht" - dann fliegt der Marker raus.
+// Sonst: Marker von AOldLine auf ANewLine umheben.
+var
+  Bucket : TFileMarks;
+  Mark   : TFindingMark;
+  Svc    : INTACodeEditorServices;
+begin
+  if not FMarksByFile.TryGetValue(AFile, Bucket) then Exit;
+  if not Bucket.TryGetValue(AOldLine, Mark) then Exit;
+  Bucket.Remove(AOldLine);
+  if ANewLine > 0 then
+  begin
+    // Collision: zwei Marker landen auf derselben Zeile (z.B. User
+    // joined zwei Zeilen). TDictionary[]:=value ersetzt den existierenden
+    // Eintrag - akzeptabel, naechster Scan-Run merged die echten Befunde.
+    Bucket.AddOrSetValue(ANewLine, Mark);
+  end;
+  // Repaint anstossen - aktive Datei zeigt jetzt die korrigierten Stripes.
+  try
+    if Supports(BorlandIDEServices, INTACodeEditorServices, Svc) then
+    begin
+      Svc.InvalidateTopEditorLogicalLine(AOldLine);
+      if ANewLine > 0 then
+        Svc.InvalidateTopEditorLogicalLine(ANewLine);
+    end;
+  except
+  end;
 end;
 
 procedure TFindingHighlighter.InvalidateAllLines;
@@ -835,6 +1094,16 @@ begin
     if not FSaveNotifiers.ContainsKey(K) then
       AttachSaveNotifier(K);
 
+  // 3) Line-Tracker: bei JEDEM SetAllFindings rebuild fuer alle Files
+  // mit Markern (der Marker-Set hat sich potentiell veraendert).
+  for var K in FMarksByFile.Keys do RebuildLineTracker(K);
+  // Files die ihre Marker verloren haben - Tracker abklemmen.
+  var TrackerKeys : TArray<string>;
+  TrackerKeys := FLineTrackers.Keys.ToArray;
+  for var K in TrackerKeys do
+    if not FMarksByFile.ContainsKey(K) then
+      DetachLineTracker(K);
+
   // Neue Markierungen einmal repainten damit Stripes in allen sichtbaren
   // Editoren erscheinen.
   InvalidateAllLines;
@@ -880,12 +1149,14 @@ begin
     FMarksByFile.Remove(FileKey);   // OwnsValues -> Bucket freed
   end;
 
-  // 2) Wenn keine neuen Eintraege: nur Save-Notifier abklemmen + raus.
+  // 2) Wenn keine neuen Eintraege: Save-Notifier + Line-Tracker abklemmen + raus.
   //    Identisch zu ClearFile fuer diese Datei.
   if Length(AEntries) = 0 then
   begin
     if FSaveNotifiers.ContainsKey(FileKey) then
       DetachSaveNotifier(FileKey);
+    if FLineTrackers.ContainsKey(FileKey) then
+      DetachLineTracker(FileKey);
     if Assigned(FEditorEventsObj) then
       FEditorEventsObj.ResetState;
     Exit;
@@ -926,16 +1197,19 @@ begin
   if Assigned(FEditorEventsObj) then
     FEditorEventsObj.ResetState;
 
-  // 5) Save-Notifier nur fuer DIESE Datei sync.
+  // 5) Save-Notifier + Line-Tracker nur fuer DIESE Datei sync.
   if Bucket.Count > 0 then
   begin
     if not FSaveNotifiers.ContainsKey(FileKey) then
       AttachSaveNotifier(FileKey);
+    RebuildLineTracker(FileKey);   // Marker-Set hat sich geaendert
   end
   else
   begin
     if FSaveNotifiers.ContainsKey(FileKey) then
       DetachSaveNotifier(FileKey);
+    if FLineTrackers.ContainsKey(FileKey) then
+      DetachLineTracker(FileKey);
     // Bucket leer -> Eintrag wieder rausnehmen, sonst stets-leeres File
     // im Dictionary.
     FMarksByFile.Remove(FileKey);
@@ -981,6 +1255,7 @@ begin
     InvalidateAllLines;
     FMarksByFile.Remove(Key);  // doOwnsValues -> inner Dictionary auto-free
     DetachSaveNotifier(Key);
+    DetachLineTracker(Key);
   end;
 
   if Assigned(FEditorEventsObj) then
@@ -1012,7 +1287,10 @@ begin
   begin
     FMarksByFile.Remove(Key);
     DetachSaveNotifier(Key);
-  end;
+    DetachLineTracker(Key);
+  end
+  else
+    RebuildLineTracker(Key);   // Marker-Set hat sich reduziert
 
   if Assigned(FEditorEventsObj) then
     FEditorEventsObj.ResetState;
@@ -1047,18 +1325,6 @@ var
 begin
   Result := FMarksByFile.TryGetValue(NormalizePath(AFile), Bucket)
         and Bucket.TryGetValue(ALine, AMark);
-end;
-
-function TFindingHighlighter.GetSortedLinesForFile(
-  const AFile: string): TArray<Integer>;
-var
-  Bucket : TFileMarks;
-begin
-  if not FMarksByFile.TryGetValue(NormalizePath(AFile), Bucket)
-     or (Bucket.Count = 0) then
-    Exit(nil);
-  Result := Bucket.Keys.ToArray;
-  TArray.Sort<Integer>(Result);
 end;
 
 { ---- TFindingEditorEvents ---- }
@@ -1473,6 +1739,12 @@ begin
 
   Line := Context.LogicalLineNum;
   if not GHighlighter.ShouldHighlight(Context.FileName, Line) then Exit;
+
+  // Lazy-Attach des Line-Trackers: dieselbe Datei wird gerade gemalt,
+  // also ist sie definitiv in einem Editor offen. AttachLineTracker
+  // findet den Buffer und haengt sich ein. Cheaper Idempotenz-Check
+  // ueber FLineTrackers - ein vorhandener Slot wird nicht neu gebaut.
+  GHighlighter.EnsureLineTracker(Context.FileName);
 
   FSavedEditor     := Context.EditControl;
   CodeRect         := Context.LineState.CodeRect;
