@@ -1,7 +1,7 @@
 unit uIDESCAOptions;
 
 // Tools > Options-Page "Static Code Analyser" - User-konfigurierbare
-// Settings fuer den Silent-Mode (Editor-Rechtsklick + Hotkey).
+// Settings fuer den Silent-Mode (Editor-Rechtsklick).
 //
 // Registriert sich unter:
 //   Tools > Options > Third Party > Static Code Analyser
@@ -21,13 +21,12 @@ unit uIDESCAOptions;
 interface
 
 uses
-  Winapi.Windows,                                     // VK_TAB / VK_ESCAPE / VK_BACK ...
   Winapi.Messages,                                    // TMessage / CM_STYLECHANGED
   System.Classes, System.SysUtils, System.UITypes,    // clGrayText
-  Vcl.Graphics,                                       // TFontStyle (fsBold)
+  Vcl.Graphics,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
-  Vcl.Menus,                                          // ShortCut / TextToShortCut / ShortCutToText
   ToolsAPI,
+  uIDEAddInOptionsBase,          // gemeinsame Basis fuer INTAAddInOptions-Adapter
   uRepoSettings,
   uLocalization,                 // _() i18n-Wrapper
   uRuleCatalog;                  // TRuleCatalog.ProfileNames fuer Combo
@@ -44,21 +43,6 @@ type
     grpSilent          : TGroupBox;
     chkSilentEnabled   : TCheckBox;
     lblSilentInfo      : TLabel;
-    // Hotkeys
-    grpHotkeys           : TGroupBox;
-    chkShortcutsEnabled  : TCheckBox;     // Master-Toggle - oben in der Gruppe
-    lblMasterInfo        : TLabel;
-    chkFindingNavEnabled : TCheckBox;
-    lblFindingNavInfo    : TLabel;
-    lblShortcutsCaption  : TLabel;
-    lblShortcutSilent    : TLabel;
-    edShortcutSilent     : TEdit;
-    lblShortcutUp        : TLabel;
-    edShortcutUp         : TEdit;
-    lblShortcutDown      : TLabel;
-    edShortcutDown       : TEdit;
-    lblRestartHint       : TLabel;
-    lblGridShortcuts     : TLabel;
     // Rule-Set
     grpRuleSet         : TGroupBox;
     lblProfile         : TLabel;
@@ -86,20 +70,20 @@ type
     lblEditorColorSchemeInfo: TLabel;
   private
     procedure BuildControls;
+    // BuildControls als Orchestrator + Sektionen. Reihenfolge spiegelt den
+    // Layout-Stapel: Silent / Rule-Set / Detectors / Display.
+    procedure BuildSilentSection(AParent: TWinControl; var AY: Integer);
+    procedure BuildRuleSetSection(AParent: TWinControl; var AY: Integer);
+    procedure BuildDetectorsSection(AParent: TWinControl; var AY: Integer);
+    procedure BuildDisplaySection(AParent: TWinControl; var AY: Integer);
     procedure PopulateProfileCombos;
     procedure PopulateMinSevCombo;
-    // KeyDown-Capture (cnpack-Stil): User klickt in das Edit + drueckt eine
-    // Tastenkombi; wir schreiben die ShortCutToText-Repraesentation rein.
-    procedure ShortcutEditKeyDown(Sender: TObject; var Key: Word;
-      Shift: TShiftState);
     // VCL-Style-Wechsel via Application.Broadcast - feuert zuverlaessiger
     // als der TIDETheme-Subscribe in manchen IDE-Versionen. Beide Pfade
     // rufen Apply auf das Frame; Apply ist idempotent.
     procedure CMStyleChanged(var Message: TMessage); message CM_STYLECHANGED;
-    // Hint-Style fuer alle Info-Labels (IDE_FG_DIM, 8pt) - exakt wie in
-    // uIDESonarOptions, damit die zwei Options-Pages optisch konsistent
-    // wirken. Wird einmal nach BuildControls aufgerufen.
-    procedure StyleAsHint(L: TLabel);
+    // Sammeltrigger fuer den uIDEColors.StyleAsHintLabel-Helper - listet
+    // alle Info-Labels einmal nach BuildControls auf.
     procedure ApplyHintStyleToAllInfoLabels;
   public
     constructor Create(AOwner: TComponent); override;
@@ -110,23 +94,16 @@ type
     procedure SaveToSettings(ASettings: TRepoSettings);
   end;
 
-  TSCAAddInOptions = class(TInterfacedObject, INTAAddInOptions)
-  private
-    FFrame    : TSCAOptionsFrame;
-    // IDE-Theme-Abo: TIDETheme ruft OnThemeChanged bei jedem Wechsel.
-    // Wird in FrameCreated angelegt, in DialogClosed entsorgt.
-    FThemeSub : IInterface;
-    procedure OnThemeChanged;
+  // Boilerplate (FFrame/FThemeSub, FrameCreated, DialogClosed, OnThemeChanged,
+  // ValidateContents, GetHelpContext, IncludeInIDEInsight, GetArea) lebt in
+  // TIDEAddInOptionsBase. Hier nur die SCA-spezifischen Hooks.
+  TSCAAddInOptions = class(TIDEAddInOptionsBase)
+  protected
+    procedure DoLoadFrame(AFrame: TCustomFrame); override;
+    procedure DoSaveFrame(AFrame: TCustomFrame); override;
   public
-    // INTAAddInOptions
-    function GetArea: string;
-    function GetCaption: string;
-    function GetFrameClass: TCustomFrameClass;
-    procedure FrameCreated(AFrame: TCustomFrame);
-    procedure DialogClosed(Accepted: Boolean);
-    function ValidateContents: Boolean;
-    function GetHelpContext: Integer;
-    function IncludeInIDEInsight: Boolean;
+    function GetCaption: string; override;
+    function GetFrameClass: TCustomFrameClass; override;
   end;
 
 procedure RegisterSCAAddInOptions;
@@ -151,6 +128,20 @@ const
   // aber so bleibt der Schluessel offensichtlich stabil).
   SCA_DEFAULT_DISPLAY = '(default)';
 
+  // Layout-Konstanten - frueher Inner-Const-Block in BuildControls. Auf
+  // Unit-Ebene gezogen, damit die BuildXxxSection-Methoden alle dieselben
+  // Werte sehen ohne Parameter-Schleifen.
+  // GROUP_W=540 deckungsgleich mit uIDESonarOptions (konsistente Breite).
+  MARGIN_LEFT  = 16;
+  MARGIN_TOP   = 12;
+  GROUP_W      = 540;
+  GROUP_GAP    = 12;
+  INNER_LEFT   = 16;    // Linker Abstand innerhalb einer GroupBox
+  INNER_TOP    = 22;    // Erstes Element unter der GroupBox-Caption
+  LINE_GAP     = 8;     // Vertikal-Abstand zwischen Zeilen
+  LBL_W        = 100;   // Label-Breite (rechts Combo)
+  CMB_W        = 200;   // Combo-Breite
+
 var
   GSCAOptionsIfc : INTAAddInOptions = nil;
   GSCAOptionsObj : TSCAAddInOptions = nil;
@@ -162,51 +153,29 @@ begin
   inherited;
   Name    := '';       // keinen Komponenten-Namen fuer den Frame
   BuildControls;
-  // 2026-06-19 User-Wahl #2A2D32 (Tool-Window-Background mit leichtem
-  // Blau-Hauch). Hartkodiert weil das vom Theme-Service gelieferte
-  // clBtnFace/clWindow nicht zum gewuenschten Look matched.
-  // TColor-Konvention BGR: #2A2D32 (R=2A G=2D B=32) -> $00322D2A.
+  // Background: semantische Konstante in uIDEColors - identisch zur Sonar-
+  // Options-Page (beide Pages sollen visuell konsistent wirken).
   Self.ParentColor      := False;
   Self.ParentBackground := False;
-  Self.Color            := TColor($00322D2A);   // #2A2D32
+  Self.Color            := IDE_BG_OPTIONS_FRAME;
   ApplyHintStyleToAllInfoLabels;
 end;
 
 procedure TSCAOptionsFrame.BuildControls;
-// Drei Sektionen via TGroupBox: Silent Mode / Rule-Set / Detectors.
-// Persistenz: alle Werte schreiben in analyser.ini (TRepoSettings.Save).
-// Layout: feste Pixel-Positionen, keine Anchors - bei AutoSize+WordWrap
-// produzieren Anchors sonst "0-Breite"-Effekte in der Options-Page.
-const
-  MARGIN_LEFT  = 16;
-  MARGIN_TOP   = 12;
-  GROUP_W      = 500;   // einheitliche Breite fuer alle GroupBoxes
-  GROUP_GAP    = 12;
-  INNER_LEFT   = 16;    // Linker Abstand innerhalb einer GroupBox
-  INNER_TOP    = 22;    // Erstes Element unter der GroupBox-Caption
-  LINE_GAP     = 8;     // Vertikal-Abstand zwischen Zeilen
-  LBL_W        = 100;   // Label-Breite (rechts Combo)
-  CMB_W        = 200;   // Combo-Breite
+// Orchestriert die fuenf Sektionen. Jede BuildXxxSection bekommt den
+// vertikalen Cursor Y per var-Parameter und schreibt ihn nach Section-
+// Ende fortgeschaltet zurueck. Layout: feste Pixel-Positionen, keine
+// Anchors - bei AutoSize+WordWrap produzieren Anchors sonst "0-Breite"-
+// Effekte in der Options-Page.
 var
-  Y : Integer;          // Cursor - typed const waere unter {$J-} read-only
-
-  function NextY(AHeight: Integer): Integer;
-  begin
-    // noinspection UninitVar
-    // Y (outer) wird im outer-Body initialisiert bevor NextY aufgerufen
-    // wird; FP des Nested-Closure-Pattern.
-    Result := Y;
-    Y := Y + AHeight + GROUP_GAP;
-  end;
-
+  Y : Integer;
 begin
   // ---- Scroll-Container ----
   // Frame fuellt sich selbst (Tools > Options legt das in eine fixed-size
   // Page). Der ScrollBox darin fuellt das Frame komplett (alClient) und
   // adapter die VertScrollBar-Range automatisch an die GroupBox-Hoehen.
-  // Settings haben mittlerweile 4 Gruppen (Silent/Hotkeys/RuleSet/Detectors)
-  // mit kumulativ ~700+ Pixel - ohne Scroll waeren die unteren nicht
-  // erreichbar auf kleineren Options-Dialogen.
+  // Settings haben 5 Gruppen mit kumulativ ~1000+ Pixel - ohne Scroll
+  // waeren die unteren nicht erreichbar auf kleineren Options-Dialogen.
   FScroll              := TScrollBox.Create(Self);
   FScroll.Parent       := Self;
   FScroll.Align        := alClient;
@@ -216,15 +185,26 @@ begin
   FScroll.HorzScrollBar.Visible   := False;
 
   Y := MARGIN_TOP;
-  // ================= Silent Mode =================
-  // Hoehe 120 deckt Checkbox (22) + Info-Label mit 2 Zeilen WordWrap ab.
+  BuildSilentSection   (FScroll, Y);
+  BuildRuleSetSection  (FScroll, Y);
+  BuildDetectorsSection(FScroll, Y);
+  BuildDisplaySection  (FScroll, Y);
+end;
+
+procedure TSCAOptionsFrame.BuildSilentSection(AParent: TWinControl;
+  var AY: Integer);
+// Hoehe 120 deckt Checkbox (22) + Info-Label mit 2 Zeilen WordWrap ab.
+const
+  SECT_H = 120;
+begin
   grpSilent              := TGroupBox.Create(Self);
-  grpSilent.Parent       := FScroll;
+  grpSilent.Parent       := AParent;
   grpSilent.Left         := MARGIN_LEFT;
-  grpSilent.Top          := NextY(120);
+  grpSilent.Top          := AY;
   grpSilent.Width        := GROUP_W;
-  grpSilent.Height       := 120;
+  grpSilent.Height       := SECT_H;
   grpSilent.Caption      := _('Silent Mode');
+  Inc(AY, SECT_H + GROUP_GAP);
 
   chkSilentEnabled         := TCheckBox.Create(Self);
   chkSilentEnabled.Parent  := grpSilent;
@@ -232,12 +212,11 @@ begin
   chkSilentEnabled.Top     := INNER_TOP;
   chkSilentEnabled.Width   := GROUP_W - 2 * INNER_LEFT;
   chkSilentEnabled.Caption :=
-    _('Enable silent analysis (editor right-click + Ctrl+Alt+A)');
+    _('Enable silent analysis (editor right-click menu)');
 
   // TLabel mit AutoSize=True (Default) + WordWrap=True ist in VCL buggy:
   // schrumpft die Width auf "text passt in 1 Zeile" zusammen und wrappt
-  // dann pro Wort. AutoSize=False + festes Height (40 = 2 Zeilen 9pt)
-  // umgeht das.
+  // dann pro Wort. AutoSize=False + festes Height umgeht das.
   lblSilentInfo            := TLabel.Create(Self);
   lblSilentInfo.Parent     := grpSilent;
   lblSilentInfo.AutoSize   := False;
@@ -247,17 +226,23 @@ begin
   lblSilentInfo.Height     := 60;   // 40 + 20 px (User-Wunsch 2026-06-19)
   lblSilentInfo.WordWrap   := True;
   lblSilentInfo.Caption    :=
-    _('Editor right-click + Ctrl+Alt+A trigger a single-file analysis; ' +
+    _('Editor right-click triggers a single-file analysis; ' +
       'findings appear as stripes + hover overlays in the editor (no dock).');
+end;
 
-  // ================= Rule-Set =================
+procedure TSCAOptionsFrame.BuildRuleSetSection(AParent: TWinControl;
+  var AY: Integer);
+const
+  SECT_H = 124;
+begin
   grpRuleSet              := TGroupBox.Create(Self);
-  grpRuleSet.Parent       := FScroll;
+  grpRuleSet.Parent       := AParent;
   grpRuleSet.Left         := MARGIN_LEFT;
-  grpRuleSet.Top          := NextY(124);
+  grpRuleSet.Top          := AY;
   grpRuleSet.Width        := GROUP_W;
-  grpRuleSet.Height       := 124;
+  grpRuleSet.Height       := SECT_H;
   grpRuleSet.Caption      := _('Rule-Set (analyser.ini [Rules])');
+  Inc(AY, SECT_H + GROUP_GAP);
 
   // Standalone Profile
   lblProfile              := TLabel.Create(Self);
@@ -306,15 +291,21 @@ begin
 
   PopulateProfileCombos;
   PopulateMinSevCombo;
+end;
 
-  // ================= Detectors =================
+procedure TSCAOptionsFrame.BuildDetectorsSection(AParent: TWinControl;
+  var AY: Integer);
+const
+  SECT_H = 110;
+begin
   grpDetectors            := TGroupBox.Create(Self);
-  grpDetectors.Parent     := FScroll;
+  grpDetectors.Parent     := AParent;
   grpDetectors.Left       := MARGIN_LEFT;
-  grpDetectors.Top        := NextY(110);
+  grpDetectors.Top        := AY;
   grpDetectors.Width      := GROUP_W;
-  grpDetectors.Height     := 110;
+  grpDetectors.Height     := SECT_H;
   grpDetectors.Caption    := _('Detectors (analyser.ini [Detectors])');
+  Inc(AY, SECT_H + GROUP_GAP);
 
   chkUsesCheck            := TCheckBox.Create(Self);
   chkUsesCheck.Parent     := grpDetectors;
@@ -338,19 +329,30 @@ begin
   chkAutoDiscover.Width   := GROUP_W - 2 * INNER_LEFT;
   chkAutoDiscover.Caption := _('AutoDiscoverClasses - extend LeakyClasses with ' +
                                'project-specific classes');
+end;
 
-  // ================= Display =================
+procedure TSCAOptionsFrame.BuildDisplaySection(AParent: TWinControl;
+  var AY: Integer);
+// Section hat dynamische Hoehe - die GroupBox-Hoehe wird unten auf Basis
+// der echten Children-Position rekalkuliert. Der Y-Cursor wird aber wie
+// frueher um den INITIALEN SECT_H_INIT weitergeschaltet (1:1-Verhalten
+// zur Vor-Refactor-Version; ggf. spaeter durch grpDisplay.Height
+// ersetzen wenn das alte Overlap-Verhalten unerwuenscht war).
+const
+  SECT_H_INIT = 332;
+begin
   // Annotation-Overlay Position. Combo mit zwei Modi:
   //   sameline (Default) - Overlay startet AUF der Finding-Zeile
   //   below             - Overlay startet eine Zeile unter der Finding-Zeile
   // Aenderung greift erst nach IDE-Neustart (Cache in uIDELineHighlighter).
   grpDisplay              := TGroupBox.Create(Self);
-  grpDisplay.Parent       := FScroll;
+  grpDisplay.Parent       := AParent;
   grpDisplay.Left         := MARGIN_LEFT;
-  grpDisplay.Top          := NextY(332);   // 232 + 100 User-Wunsch
+  grpDisplay.Top          := AY;
   grpDisplay.Width        := GROUP_W;
-  grpDisplay.Height       := 332;          // wird unten dynamisch korrigiert
+  grpDisplay.Height       := SECT_H_INIT;        // wird unten korrigiert
   grpDisplay.Caption      := _('Display');
+  Inc(AY, SECT_H_INIT + GROUP_GAP);
 
   lblOverlayPos           := TLabel.Create(Self);
   lblOverlayPos.Parent    := grpDisplay;
@@ -381,13 +383,16 @@ begin
     _('Where the hover annotation overlay anchors relative to the finding ' +
       'line. Takes effect after IDE restart.');
 
+  // Caption-Disambiguierung gegenueber chkOverlayShowOnHover unten - die
+  // beiden Checkboxen sind orthogonal (WAS zeigt das Overlay vs. WANN
+  // erscheint es). Frueher endeten beide auf "annotation overlay on hover".
   chkAutoExpandAnnotation         := TCheckBox.Create(Self);
   chkAutoExpandAnnotation.Parent  := grpDisplay;
   chkAutoExpandAnnotation.Left    := INNER_LEFT;
   chkAutoExpandAnnotation.Top     := lblOverlayPosInfo.Top + lblOverlayPosInfo.Height + 10;
   chkAutoExpandAnnotation.Width   := GROUP_W - 2 * INNER_LEFT;
   chkAutoExpandAnnotation.Caption :=
-    _('Auto-expand annotation overlay on hover');
+    _('Auto-expand annotation overlay (otherwise show only title bar)');
 
   lblAutoExpandInfo          := TLabel.Create(Self);
   lblAutoExpandInfo.Parent   := grpDisplay;
@@ -408,7 +413,7 @@ begin
   chkOverlayShowOnHover.Top     := lblAutoExpandInfo.Top + lblAutoExpandInfo.Height + 8;
   chkOverlayShowOnHover.Width   := GROUP_W - 2 * INNER_LEFT;
   chkOverlayShowOnHover.Caption :=
-    _('Show annotation overlay on hover');
+    _('Show annotation overlay on hover (otherwise click marked line)');
 
   lblOverlayShowOnHoverInfo          := TLabel.Create(Self);
   lblOverlayShowOnHoverInfo.Parent   := grpDisplay;
@@ -458,154 +463,11 @@ begin
 
   // GroupBox-Hoehe an die echten Children anpassen.
   // +112 statt +12 = User-Wunsch 100 px mehr Unter-Padding (rein optisch).
+  // Achtung: dies aendert NICHT AY - das Vorgaenger-Layout schaltete den
+  // Cursor immer um SECT_H_INIT(=332) weiter, nicht um die korrigierte
+  // grpDisplay.Height. Refactor preserved das Verhalten 1:1.
   grpDisplay.Height := lblEditorColorSchemeInfo.Top +
                        lblEditorColorSchemeInfo.Height + 112;
-
-  // ================= Hotkeys ================= (BOTTOM)
-  // Bewusst als letzte Gruppe positioniert - Shortcut-Konfiguration ist
-  // unten in den Settings, weil sie selten geaendert wird und in der ueb-
-  // lichen "scroll to see more" Lese-Reihenfolge der Page steht.
-  //
-  // Struktur:
-  //   * chkShortcutsEnabled         = Master-Toggle ueber ALLE Shortcuts
-  //   * chkFindingNavEnabled + Info = Per-Feature-Toggle Befund-Navigation
-  //   * Drei TEdit-Felder (cnpack-Stil): klick + Tastenkombi -> ShortCutToText
-  //   * Restart-Hinweis (italic) + nicht-konfigurierbare Grid-Shortcuts
-  grpHotkeys              := TGroupBox.Create(Self);
-  grpHotkeys.Parent       := FScroll;
-  grpHotkeys.Left         := MARGIN_LEFT;
-  grpHotkeys.Top          := NextY(360);
-  grpHotkeys.Width        := GROUP_W;
-  grpHotkeys.Height       := 360;
-  grpHotkeys.Caption      := _('Hotkeys');
-
-  // ---- Master-Toggle (alle Shortcuts) ----
-  chkShortcutsEnabled         := TCheckBox.Create(Self);
-  chkShortcutsEnabled.Parent  := grpHotkeys;
-  chkShortcutsEnabled.Left    := INNER_LEFT;
-  chkShortcutsEnabled.Top     := INNER_TOP;
-  chkShortcutsEnabled.Width   := GROUP_W - 2 * INNER_LEFT;
-  chkShortcutsEnabled.Caption := _('Enable all keyboard shortcuts (master toggle)');
-  chkShortcutsEnabled.Font.Style := [fsBold];
-
-  lblMasterInfo               := TLabel.Create(Self);
-  lblMasterInfo.Parent        := grpHotkeys;
-  lblMasterInfo.AutoSize      := False;
-  lblMasterInfo.Left          := INNER_LEFT + 16;
-  lblMasterInfo.Top           := chkShortcutsEnabled.Top + chkShortcutsEnabled.Height + 4;
-  lblMasterInfo.Width         := GROUP_W - 2 * INNER_LEFT - 16;
-  lblMasterInfo.Height        := 48;   // 28 + 20
-  lblMasterInfo.WordWrap      := True;
-  lblMasterInfo.Caption       :=
-    _('Disable to mute every plugin shortcut at once. Right-click menu + ' +
-      'toolbar buttons remain functional.');
-
-  // ---- Per-Feature: Befund-Navigation ----
-  chkFindingNavEnabled         := TCheckBox.Create(Self);
-  chkFindingNavEnabled.Parent  := grpHotkeys;
-  chkFindingNavEnabled.Left    := INNER_LEFT;
-  chkFindingNavEnabled.Top     := lblMasterInfo.Top + lblMasterInfo.Height + 8;
-  chkFindingNavEnabled.Width   := GROUP_W - 2 * INNER_LEFT;
-  chkFindingNavEnabled.Caption :=
-    _('Enable finding navigation (Ctrl+Alt+Up / Ctrl+Alt+Down)');
-
-  lblFindingNavInfo            := TLabel.Create(Self);
-  lblFindingNavInfo.Parent     := grpHotkeys;
-  lblFindingNavInfo.AutoSize   := False;
-  lblFindingNavInfo.Left       := INNER_LEFT + 16;
-  lblFindingNavInfo.Top        := chkFindingNavEnabled.Top + chkFindingNavEnabled.Height + 4;
-  lblFindingNavInfo.Width      := GROUP_W - 2 * INNER_LEFT - 16;
-  lblFindingNavInfo.Height     := 48;   // 28 + 20
-  lblFindingNavInfo.WordWrap   := True;
-  lblFindingNavInfo.Caption    :=
-    _('Jump to the next / previous highlighted finding line in the current ' +
-      'editor tab (wrap-around at file end/start).');
-
-  // ---- Konfigurierbare Shortcuts (cnpack-Stil) ----
-  lblShortcutsCaption           := TLabel.Create(Self);
-  lblShortcutsCaption.Parent    := grpHotkeys;
-  lblShortcutsCaption.Left      := INNER_LEFT;
-  lblShortcutsCaption.Top       := lblFindingNavInfo.Top + lblFindingNavInfo.Height + 10;
-  lblShortcutsCaption.AutoSize  := True;
-  lblShortcutsCaption.Caption   := _('Configurable shortcuts (click into field + press key combo):');
-  lblShortcutsCaption.Font.Style := [fsBold];
-
-  const SHORTCUT_LBL_W = 220;
-  const SHORTCUT_EDIT_W = 160;
-  var Y0 := lblShortcutsCaption.Top + lblShortcutsCaption.Height + 6;
-
-  // Silent-Analyse-Shortcut
-  lblShortcutSilent          := TLabel.Create(Self);
-  lblShortcutSilent.Parent   := grpHotkeys;
-  lblShortcutSilent.Left     := INNER_LEFT;
-  lblShortcutSilent.Top      := Y0 + 3;
-  lblShortcutSilent.AutoSize := False;
-  lblShortcutSilent.Width    := SHORTCUT_LBL_W;
-  lblShortcutSilent.Caption  := _('Silent analysis:');
-  edShortcutSilent           := TEdit.Create(Self);
-  edShortcutSilent.Parent    := grpHotkeys;
-  edShortcutSilent.Left      := INNER_LEFT + SHORTCUT_LBL_W;
-  edShortcutSilent.Top       := Y0;
-  edShortcutSilent.Width     := SHORTCUT_EDIT_W;
-  edShortcutSilent.OnKeyDown := ShortcutEditKeyDown;
-  Inc(Y0, 26);
-
-  // Finding-Nav Up
-  lblShortcutUp              := TLabel.Create(Self);
-  lblShortcutUp.Parent       := grpHotkeys;
-  lblShortcutUp.Left         := INNER_LEFT;
-  lblShortcutUp.Top          := Y0 + 3;
-  lblShortcutUp.AutoSize     := False;
-  lblShortcutUp.Width        := SHORTCUT_LBL_W;
-  lblShortcutUp.Caption      := _('Jump to previous finding:');
-  edShortcutUp               := TEdit.Create(Self);
-  edShortcutUp.Parent        := grpHotkeys;
-  edShortcutUp.Left          := INNER_LEFT + SHORTCUT_LBL_W;
-  edShortcutUp.Top           := Y0;
-  edShortcutUp.Width         := SHORTCUT_EDIT_W;
-  edShortcutUp.OnKeyDown     := ShortcutEditKeyDown;
-  Inc(Y0, 26);
-
-  // Finding-Nav Down
-  lblShortcutDown            := TLabel.Create(Self);
-  lblShortcutDown.Parent     := grpHotkeys;
-  lblShortcutDown.Left       := INNER_LEFT;
-  lblShortcutDown.Top        := Y0 + 3;
-  lblShortcutDown.AutoSize   := False;
-  lblShortcutDown.Width      := SHORTCUT_LBL_W;
-  lblShortcutDown.Caption    := _('Jump to next finding:');
-  edShortcutDown             := TEdit.Create(Self);
-  edShortcutDown.Parent      := grpHotkeys;
-  edShortcutDown.Left        := INNER_LEFT + SHORTCUT_LBL_W;
-  edShortcutDown.Top         := Y0;
-  edShortcutDown.Width       := SHORTCUT_EDIT_W;
-  edShortcutDown.OnKeyDown   := ShortcutEditKeyDown;
-  Inc(Y0, 30);
-
-  // Restart-Hinweis (italic)
-  lblRestartHint             := TLabel.Create(Self);
-  lblRestartHint.Parent      := grpHotkeys;
-  lblRestartHint.Left        := INNER_LEFT;
-  lblRestartHint.Top         := Y0;
-  lblRestartHint.AutoSize    := False;
-  lblRestartHint.Width       := GROUP_W - 2 * INNER_LEFT;
-  lblRestartHint.Height      := 16;
-  lblRestartHint.Caption     := _('Changes take effect after restarting the IDE.');
-  lblRestartHint.Font.Style  := [fsItalic];
-  Inc(Y0, 22);
-
-  // Nicht-konfigurierbare Grid-Shortcuts als Read-only-Hinweis.
-  lblGridShortcuts           := TLabel.Create(Self);
-  lblGridShortcuts.Parent    := grpHotkeys;
-  lblGridShortcuts.Left      := INNER_LEFT;
-  lblGridShortcuts.Top       := Y0;
-  lblGridShortcuts.AutoSize  := False;
-  lblGridShortcuts.Width     := GROUP_W - 2 * INNER_LEFT;
-  lblGridShortcuts.Height    := 32;
-  lblGridShortcuts.WordWrap  := True;
-  lblGridShortcuts.Caption   :=
-    _('Findings-grid shortcuts (not configurable): Ctrl+Alt+F = Quick-Fix, ' +
-      'Ctrl+Alt+S = Suppression, Enter = goto editor line.');
 end;
 
 procedure TSCAOptionsFrame.PopulateProfileCombos;
@@ -670,18 +532,6 @@ begin
   if Assigned(chkSilentEnabled) then
     chkSilentEnabled.Checked := ASettings.SilentEnabled;
 
-  // Hotkeys
-  if Assigned(chkShortcutsEnabled) then
-    chkShortcutsEnabled.Checked := ASettings.ShortcutsEnabled;
-  if Assigned(chkFindingNavEnabled) then
-    chkFindingNavEnabled.Checked := ASettings.FindingNavEnabled;
-  if Assigned(edShortcutSilent) then
-    edShortcutSilent.Text := ASettings.SilentAnalyseShortcut;
-  if Assigned(edShortcutUp) then
-    edShortcutUp.Text := ASettings.FindingNavUpShortcut;
-  if Assigned(edShortcutDown) then
-    edShortcutDown.Text := ASettings.FindingNavDownShortcut;
-
   // Rule-Set: leere Werte aus INI als '(default)' anzeigen
   if Assigned(cboProfile)    then SelectComboBy(cboProfile,    ASettings.Profile);
   if Assigned(cboMinSev)     then SelectComboBy(cboMinSev,     LowerCase(ASettings.MinSeverity), 'hint');
@@ -728,17 +578,6 @@ begin
   if Assigned(chkSilentEnabled) then
     ASettings.SilentEnabled := chkSilentEnabled.Checked;
 
-  if Assigned(chkShortcutsEnabled) then
-    ASettings.ShortcutsEnabled := chkShortcutsEnabled.Checked;
-  if Assigned(chkFindingNavEnabled) then
-    ASettings.FindingNavEnabled := chkFindingNavEnabled.Checked;
-  if Assigned(edShortcutSilent) then
-    ASettings.SilentAnalyseShortcut := Trim(edShortcutSilent.Text);
-  if Assigned(edShortcutUp) then
-    ASettings.FindingNavUpShortcut := Trim(edShortcutUp.Text);
-  if Assigned(edShortcutDown) then
-    ASettings.FindingNavDownShortcut := Trim(edShortcutDown.Text);
-
   if Assigned(cboProfile)    then ASettings.Profile     := ComboValueOrEmpty(cboProfile);
   if Assigned(cboMinSev)     then ASettings.MinSeverity := cboMinSev.Items[cboMinSev.ItemIndex];
   if Assigned(cboIdeProfile) then ASettings.IdeProfile  := ComboValueOrEmpty(cboIdeProfile);
@@ -770,35 +609,15 @@ begin
   end;
 end;
 
-procedure TSCAOptionsFrame.StyleAsHint(L: TLabel);
-// 1:1 wie Sonar-Options-Page (uIDESonarOptions.lblTokenInfo):
-//   * IDE_FG_DIM = semantische Theme-Farbe (faellt im Dark-Theme auf
-//     den richtigen Grau-Ton, statt hartkodiert clGrayText).
-//   * Font.Size := 8 + ParentFont := False - 8pt statt Default 9pt
-//     damit Hint-Text subtler als Field-Labels wirkt; ParentFont OFF
-//     damit Theme-Wechsel den Size nicht zurueckschiebt.
-//   * Kein italic - Sonar nutzt das auch nicht.
-begin
-  if not Assigned(L) then Exit;
-  L.ParentFont := False;
-  L.Font.Size  := 8;
-  L.Font.Color := IDE_FG_DIM;
-end;
-
 procedure TSCAOptionsFrame.ApplyHintStyleToAllInfoLabels;
-// Stylet alle Info-Labels einheitlich als Sonar-Hint (IDE_FG_DIM, 8pt).
-// GroupBox-Captions bleiben unangetastet - Sonar-Look hat keine Bold-
-// Captions, das wirkte aufgesetzt und vererbte Bold an die Children.
+// Stylet alle Info-Labels einheitlich (uIDEColors.StyleAsHintLabel -
+// IDE_FG_DIM, 8pt, ParentFont aus). GroupBox-Captions bleiben unangetastet.
 begin
-  StyleAsHint(lblSilentInfo);
-  StyleAsHint(lblOverlayPosInfo);
-  StyleAsHint(lblAutoExpandInfo);
-  StyleAsHint(lblOverlayShowOnHoverInfo);
-  StyleAsHint(lblEditorColorSchemeInfo);
-  StyleAsHint(lblMasterInfo);
-  StyleAsHint(lblFindingNavInfo);
-  StyleAsHint(lblRestartHint);
-  StyleAsHint(lblGridShortcuts);
+  StyleAsHintLabel(lblSilentInfo);
+  StyleAsHintLabel(lblOverlayPosInfo);
+  StyleAsHintLabel(lblAutoExpandInfo);
+  StyleAsHintLabel(lblOverlayShowOnHoverInfo);
+  StyleAsHintLabel(lblEditorColorSchemeInfo);
 end;
 
 procedure TSCAOptionsFrame.CMStyleChanged(var Message: TMessage);
@@ -812,47 +631,7 @@ begin
   TIDETheme.Apply(Self);
 end;
 
-procedure TSCAOptionsFrame.ShortcutEditKeyDown(Sender: TObject;
-  var Key: Word; Shift: TShiftState);
-// Capture-Mechanik analog cnpack: User klickt in eines der drei Edit-Felder
-// und drueckt die gewuenschte Tastenkombi - wir schreiben den menschen-
-// lesbaren ShortCutToText-String ins Feld. User kann auch manuell tippen
-// (TEdit ist normal editierbar).
-//
-// Wir ignorieren reine Modifier-Tasten (Shift/Strg/Alt alleine), Tab
-// (sonst kann der User das Feld nicht mehr verlassen), und Backspace
-// (User soll loeschen koennen). Escape leert das Feld.
-var
-  SC : TShortCut;
-begin
-  // Reine Modifier-Tasten alleine ignorieren - sonst flackert das Feld bei
-  // jedem Strg-Druck zwischen leerem String und der vorigen Belegung.
-  if (Key = VK_SHIFT) or (Key = VK_CONTROL) or (Key = VK_MENU)
-     or (Key = VK_LWIN) or (Key = VK_RWIN) then
-    Exit;
-  // Tab + Backspace durchlassen (Navigation + Editier-Standard).
-  if (Key = VK_TAB) or (Key = VK_BACK) then Exit;
-  // Escape = Feld leeren (= "Default-Bindung verwenden").
-  if Key = VK_ESCAPE then
-  begin
-    (Sender as TEdit).Text := '';
-    Key := 0;
-    Exit;
-  end;
-  SC := Vcl.Menus.ShortCut(Key, Shift);
-  if SC = 0 then Exit;
-  (Sender as TEdit).Text := Vcl.Menus.ShortCutToText(SC);
-  Key := 0;  // Tastendruck konsumieren, kein weiteres TEdit-Standard-Verhalten
-end;
-
 { TSCAAddInOptions }
-
-function TSCAAddInOptions.GetArea: string;
-begin
-  // Leerer String -> erscheint unter "Third Party" im Optionen-Tree
-  // (laut ToolsAPI-Doku: empfohlen fuer Plugin-Pages).
-  Result := '';
-end;
 
 function TSCAAddInOptions.GetCaption: string;
 begin
@@ -866,77 +645,36 @@ begin
   Result := TSCAOptionsFrame;
 end;
 
-procedure TSCAAddInOptions.FrameCreated(AFrame: TCustomFrame);
-// Wird gerufen wenn der User die Options-Page oeffnet. Wir laden hier die
-// aktuellen Werte aus analyser.ini ins Frame.
+procedure TSCAAddInOptions.DoLoadFrame(AFrame: TCustomFrame);
+// Werte aus analyser.ini ins Frame laden. Wrapper-try um Load-Fehler:
+// kaputte/fehlende INI ergibt Default-Werte, kein Crash.
 var
   Settings : TRepoSettings;
 begin
-  FFrame := AFrame as TSCAOptionsFrame;
   Settings := TRepoSettings.Create;
   try
     try Settings.Load; except end;
-    FFrame.LoadFromSettings(Settings);
+    TSCAOptionsFrame(AFrame).LoadFromSettings(Settings);
   finally
     Settings.Free;
   end;
-  // IDE-Theme uebernehmen - sonst rendert der Frame im VCL-Default
-  // (hell) auch wenn die IDE im Dark-Mode laeuft. Bisher hat das Erbe
-  // vom Parent-Panel teilweise gegriffen, war aber inkonsistent.
-  TIDETheme.Apply(FFrame);
-  // Theme-Live-Update: falls der User mid-Options-Dialog die
-  // "IDE Style"-Option umstellt (gleicher Dialog!), aktualisiert
-  // OnThemeChanged unseren Frame automatisch.
-  FThemeSub := TIDETheme.Subscribe(OnThemeChanged);
 end;
 
-procedure TSCAAddInOptions.OnThemeChanged;
-begin
-  if Assigned(FFrame) then
-    TIDETheme.Apply(FFrame);
-end;
-
-procedure TSCAAddInOptions.DialogClosed(Accepted: Boolean);
-// User hat OK oder Cancel geklickt. Bei OK speichern wir die Werte zurueck
-// in analyser.ini. Bei Cancel ignorieren wir die UI-Aenderungen.
+procedure TSCAAddInOptions.DoSaveFrame(AFrame: TCustomFrame);
+// Werte aus Frame zurueck in analyser.ini. Doppel-try ist Absicht: Load
+// merged bestehende Werte unter unseren (sonst wuerden andere Sections
+// geloescht), Save persistiert das Result.
 var
   Settings : TRepoSettings;
 begin
+  Settings := TRepoSettings.Create;
   try
-    if not Accepted then Exit;
-    if not Assigned(FFrame) then Exit;
-    Settings := TRepoSettings.Create;
-    try
-      try Settings.Load; except end;       // bestehende Werte laden
-      FFrame.SaveToSettings(Settings);     // unsere Aenderungen drueber
-      try Settings.Save; except end;       // zurueckschreiben
-    finally
-      Settings.Free;
-    end;
+    try Settings.Load; except end;
+    TSCAOptionsFrame(AFrame).SaveToSettings(Settings);
+    try Settings.Save; except end;
   finally
-    // Theme-Subscription aufloesen - IDE gibt FFrame nach DialogClosed
-    // frei; ein noch lebendes Abo wuerde beim naechsten Theme-Wechsel
-    // in die freigegebene Frame-Referenz feuern.
-    FThemeSub := nil;
-    FFrame := nil;
+    Settings.Free;
   end;
-end;
-
-function TSCAAddInOptions.ValidateContents: Boolean;
-begin
-  // Aktuell keine zu validierenden Felder (Checkbox kann nicht falsch sein).
-  Result := True;
-end;
-
-function TSCAAddInOptions.GetHelpContext: Integer;
-begin
-  Result := 0;     // kein eigener Help-Context
-end;
-
-function TSCAAddInOptions.IncludeInIDEInsight: Boolean;
-begin
-  // True = unser Eintrag wird in der IDE-Insight-Suche ('Preferences') gelistet
-  Result := True;
 end;
 
 { Lifecycle }

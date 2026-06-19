@@ -23,6 +23,8 @@ unit uIDEColors;
 interface
 
 uses
+  Vcl.Controls,    // TLabel fuer StyleAsHintLabel
+  Vcl.StdCtrls,
   Vcl.Graphics;
 
 const
@@ -49,6 +51,27 @@ const
   // teilweise auf den gleichen RGB-Wert wie clBtnFace und verschwindet.
   IDE_SEPARATOR    : TColor = clBtnShadow;
 
+  // Tools>Options-Page Frame-Hintergrund. Hartcodierter dunkler Ton mit
+  // leichtem Blau-Hauch (2026-06-19 User-Wahl); explizit NICHT system-color,
+  // weil clBtnFace/clWindow vom Theme-Service nicht zum gewuenschten Look
+  // remapped. TColor-Konvention BGR: #2A2D32 (R=2A G=2D B=32) -> $00322D2A.
+  // Konsumenten: uIDESCAOptions.TSCAOptionsFrame, uIDESonarOptions.TSonarOptionsFrame.
+  IDE_BG_OPTIONS_FRAME : TColor = TColor($00322D2A);
+
+// Wendet den "Hint-Label-Style" (IDE_FG_DIM, 8pt, ParentFont aus) auf das
+// uebergebene Label an. Dient als Single-Point-of-Truth fuer Help-/Hint-
+// Beschriftungen unter Edit-Feldern und Checkboxes in den Options-Pages.
+// Idempotent; tolerant gegen nil.
+procedure StyleAsHintLabel(L: TLabel);
+
 implementation
+
+procedure StyleAsHintLabel(L: TLabel);
+begin
+  if L = nil then Exit;
+  L.ParentFont := False;
+  L.Font.Size  := 8;
+  L.Font.Color := IDE_FG_DIM;
+end;
 
 end.

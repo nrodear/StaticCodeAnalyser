@@ -752,64 +752,6 @@ msgstr "Char → PChar Cast"
 msgid "IfThen Short-Circuit"
 msgstr "IfThen ohne Short-Circuit"
 
-# ---- Tools > Options: Hotkeys-Gruppe ---------------------------------------
-msgid "Hotkeys"
-msgstr "Tastenkürzel"
-
-msgid "Enable finding navigation (Ctrl+Alt+Up / Ctrl+Alt+Down)"
-msgstr "Befund-Navigation aktivieren (Strg+Alt+↑ / Strg+Alt+↓)"
-
-msgid "Jump to the next / previous highlighted finding line in the current editor tab (wrap-around at file end/start). Disable to release the shortcut to the IDE default handler."
-msgstr "Im aktuellen Editor-Tab zur nächsten / vorherigen markierten Befund-Zeile springen (Wrap-around am Datei-Ende/-Anfang). Deaktivieren gibt den Shortcut wieder an die IDE-Default-Belegung frei."
-
-# ---- Tools > Options > Hotkeys: Shortcut-Liste -----------------------------
-msgid "Available shortcuts:"
-msgstr "Verfügbare Tastenkürzel:"
-
-msgid "Ctrl+Alt+A      global         Analyse current file (silent)"
-msgstr "Strg+Alt+A      global              Aktuelle Datei still analysieren"
-
-msgid "Ctrl+Alt+Up     global         Jump to previous finding line"
-msgstr "Strg+Alt+↑      global              Zum vorherigen Befund springen"
-
-msgid "Ctrl+Alt+Down   global         Jump to next finding line"
-msgstr "Strg+Alt+↓      global              Zum nächsten Befund springen"
-
-msgid "Ctrl+Alt+F      findings grid  Apply Quick-Fix in editor"
-msgstr "Strg+Alt+F      Befund-Tabelle      Quick-Fix im Editor anwenden"
-
-msgid "Ctrl+Alt+S      findings grid  Insert \"// noinspection\" marker"
-msgstr "Strg+Alt+S      Befund-Tabelle      \"// noinspection\"-Marker einfügen"
-
-msgid "Enter           findings grid  Goto editor line (same as dbl-click)"
-msgstr "Enter           Befund-Tabelle      Zur Editor-Zeile springen (wie Doppelklick)"
-
-# ---- Tools > Options > Hotkeys: Konfigurierbare Shortcuts (cnpack-Stil) ----
-msgid "Configurable shortcuts (click into field + press key combo):"
-msgstr "Konfigurierbare Tastenkürzel (in Feld klicken + Tastenkombi drücken):"
-
-msgid "Silent analysis:"
-msgstr "Stille Analyse:"
-
-msgid "Jump to previous finding:"
-msgstr "Zum vorherigen Befund springen:"
-
-msgid "Jump to next finding:"
-msgstr "Zum nächsten Befund springen:"
-
-msgid "Changes take effect after restarting the IDE."
-msgstr "Änderungen werden erst nach IDE-Neustart wirksam."
-
-msgid "Findings-grid shortcuts (not configurable): Ctrl+Alt+F = Quick-Fix, Ctrl+Alt+S = Suppression, Enter = goto editor line."
-msgstr "Tastenkürzel in der Befund-Tabelle (nicht konfigurierbar): Strg+Alt+F = Quick-Fix, Strg+Alt+S = Suppress-Marker, Enter = Editor-Zeile öffnen."
-
-# ---- Tools > Options > Hotkeys: Master-Toggle ------------------------------
-msgid "Enable all keyboard shortcuts (master toggle)"
-msgstr "Alle Tastenkürzel aktivieren (Master-Toggle)"
-
-msgid "Disable to mute every plugin shortcut at once. Right-click menu + toolbar buttons remain functional."
-msgstr "Deaktivieren schaltet ALLE Plugin-Tastenkürzel auf einmal ab. Rechtsklick-Menü und Toolbar-Buttons bleiben funktional."
-
 # ---- Sonar-50 #19/#23/#33 (SCA144-146) -------------------------------------
 msgid "Float equality"
 msgstr "Float-Gleichheit"
@@ -1256,8 +1198,8 @@ msgstr "FEHLER"
 msgid "Empty argument list \"()\" - drop the parentheses"
 msgstr "Leere Argumentliste \"()\" - Klammern weglassen"
 
-msgid "Enable silent analysis (editor right-click + Ctrl+Alt+A)"
-msgstr "Stille Analyse aktivieren (Editor-Rechtsklick + Strg+Alt+A)"
+msgid "Enable silent analysis (editor right-click menu)"
+msgstr "Stille Analyse aktivieren (Editor-Rechtsklick-Menü)"
 
 msgid "Errors+warnings for %s copied to clipboard."
 msgstr "Fehler+Warnungen fuer %s in Zwischenablage kopiert."

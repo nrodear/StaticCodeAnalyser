@@ -29,6 +29,8 @@ uses
   Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
   Vcl.Dialogs,
   ToolsAPI,
+  uIDEAddInOptionsBase,    // gemeinsame Basis fuer INTAAddInOptions-Adapter
+  uLocalization,           // _() i18n-Wrapper (analog uIDESCAOptions)
   uSonarConfig;
 
 type
@@ -70,22 +72,16 @@ type
     procedure SaveToIni(const IniPath: string);
   end;
 
-  TSonarAddInOptions = class(TInterfacedObject, INTAAddInOptions)
-  private
-    FFrame    : TSonarOptionsFrame;
-    // IDE-Theme-Abo: TIDETheme ruft OnThemeChanged bei jedem Wechsel.
-    // Wird in FrameCreated angelegt, in DialogClosed entsorgt.
-    FThemeSub : IInterface;
-    procedure OnThemeChanged;
+  // Boilerplate (FFrame/FThemeSub, FrameCreated, DialogClosed, OnThemeChanged,
+  // ValidateContents, GetHelpContext, IncludeInIDEInsight, GetArea) lebt in
+  // TIDEAddInOptionsBase. Hier nur die Sonar-spezifischen Hooks.
+  TSonarAddInOptions = class(TIDEAddInOptionsBase)
+  protected
+    procedure DoLoadFrame(AFrame: TCustomFrame); override;
+    procedure DoSaveFrame(AFrame: TCustomFrame); override;
   public
-    function GetArea: string;
-    function GetCaption: string;
-    function GetFrameClass: TCustomFrameClass;
-    procedure FrameCreated(AFrame: TCustomFrame);
-    procedure DialogClosed(Accepted: Boolean);
-    function ValidateContents: Boolean;
-    function GetHelpContext: Integer;
-    function IncludeInIDEInsight: Boolean;
+    function GetCaption: string; override;
+    function GetFrameClass: TCustomFrameClass; override;
   end;
 
 procedure RegisterSonarAddInOptions;
@@ -118,6 +114,13 @@ begin
   inherited;
   Name := '';
   BuildControls;
+  // Background-Policy identisch zu TSCAOptionsFrame (uIDESCAOptions) -
+  // beide Options-Pages sollen visuell konsistent wirken. Ohne dieses
+  // Override uebernahm der Frame die hellgraue Container-Farbe des
+  // Options-Dialogs, was neben der dunklen SCA-Page inkonsistent aussah.
+  Self.ParentColor      := False;
+  Self.ParentBackground := False;
+  Self.Color            := IDE_BG_OPTIONS_FRAME;
 end;
 
 procedure TSonarOptionsFrame.BuildControls;
@@ -140,7 +143,7 @@ begin
   grpServer.Top     := Y;
   grpServer.Width   := GROUP_W;
   grpServer.Height  := 168;
-  grpServer.Caption := 'Server';
+  grpServer.Caption := _('Server');
   Inc(Y, grpServer.Height + 12);
 
   // TLabel mit AutoSize=True (Default) schrumpft sich beim ersten Layout-
@@ -151,7 +154,7 @@ begin
   lblHost.AutoSize := False;
   lblHost.Left := INNER_LEFT; lblHost.Top := INNER_TOP + 3;
   lblHost.Width := LBL_W; lblHost.Height := 17;
-  lblHost.Caption := 'Host URL:';
+  lblHost.Caption := _('Host URL:');
   edHost := TEdit.Create(Self); edHost.Parent := grpServer;
   edHost.Left := INNER_LEFT + LBL_W; edHost.Top := INNER_TOP;
   edHost.Width := EDIT_W; edHost.TextHint := 'https://sonar.company.com';
@@ -160,7 +163,7 @@ begin
   lblProject.AutoSize := False;
   lblProject.Left := INNER_LEFT; lblProject.Top := lblHost.Top + 32;
   lblProject.Width := LBL_W; lblProject.Height := 17;
-  lblProject.Caption := 'Project Key:';
+  lblProject.Caption := _('Project Key:');
   edProject := TEdit.Create(Self); edProject.Parent := grpServer;
   edProject.Left := INNER_LEFT + LBL_W; edProject.Top := edHost.Top + 32;
   edProject.Width := EDIT_W - 100;
@@ -168,14 +171,14 @@ begin
   btnDetectProject.Left := edProject.Left + edProject.Width + 4;
   btnDetectProject.Top := edProject.Top;
   btnDetectProject.Width := 96; btnDetectProject.Height := edProject.Height;
-  btnDetectProject.Caption := 'Detect';
+  btnDetectProject.Caption := _('Detect');
   btnDetectProject.OnClick := DetectProjectClick;
 
   lblBranch := TLabel.Create(Self); lblBranch.Parent := grpServer;
   lblBranch.AutoSize := False;
   lblBranch.Left := INNER_LEFT; lblBranch.Top := lblProject.Top + 32;
   lblBranch.Width := LBL_W; lblBranch.Height := 17;
-  lblBranch.Caption := 'Branch:';
+  lblBranch.Caption := _('Branch:');
   edBranch := TEdit.Create(Self); edBranch.Parent := grpServer;
   edBranch.Left := INNER_LEFT + LBL_W; edBranch.Top := edProject.Top + 32;
   edBranch.Width := EDIT_W; edBranch.TextHint := 'main';
@@ -183,7 +186,7 @@ begin
   chkInsecure := TCheckBox.Create(Self); chkInsecure.Parent := grpServer;
   chkInsecure.Left := INNER_LEFT + LBL_W; chkInsecure.Top := edBranch.Top + 32;
   chkInsecure.Width := EDIT_W;
-  chkInsecure.Caption := 'Accept self-signed TLS certificates';
+  chkInsecure.Caption := _('Accept self-signed TLS certificates');
 
   // ============== Auth ==============
   // Hoehe 116 (vorher 100): bei Hi-DPI wickelt der 8pt-Help-Text auf 2
@@ -194,14 +197,14 @@ begin
   grpAuth.Top     := Y;
   grpAuth.Width   := GROUP_W;
   grpAuth.Height  := 116;
-  grpAuth.Caption := 'Authentication';
+  grpAuth.Caption := _('Authentication');
   Inc(Y, grpAuth.Height + 12);
 
   lblToken := TLabel.Create(Self); lblToken.Parent := grpAuth;
   lblToken.AutoSize := False;
   lblToken.Left := INNER_LEFT; lblToken.Top := INNER_TOP + 3;
   lblToken.Width := LBL_W; lblToken.Height := 17;
-  lblToken.Caption := 'Bearer Token:';
+  lblToken.Caption := _('Bearer Token:');
   edToken := TEdit.Create(Self); edToken.Parent := grpAuth;
   edToken.Left := INNER_LEFT + LBL_W; edToken.Top := INNER_TOP;
   edToken.Width := EDIT_W - 100;
@@ -210,7 +213,7 @@ begin
   btnRevealToken.Left := edToken.Left + edToken.Width + 4;
   btnRevealToken.Top := edToken.Top;
   btnRevealToken.Width := 96; btnRevealToken.Height := edToken.Height;
-  btnRevealToken.Caption := 'Show';
+  btnRevealToken.Caption := _('Show');
   btnRevealToken.OnClick := RevealTokenClick;
 
   lblTokenInfo := TLabel.Create(Self); lblTokenInfo.Parent := grpAuth;
@@ -222,14 +225,10 @@ begin
   // 26 hatte die zweite Zeile angeschnitten.
   lblTokenInfo.Height := 40;
   lblTokenInfo.WordWrap := True;
-  lblTokenInfo.Font.Color := IDE_FG_DIM;
-  // 8pt statt Default 9pt - Hilfe-Text soll subtler als die Field-Labels
-  // wirken. ParentFont OFF, damit Theme-Wechsel das nicht zurueckschiebt.
-  lblTokenInfo.ParentFont := False;
-  lblTokenInfo.Font.Size := 8;
-  lblTokenInfo.Caption :=
+  StyleAsHintLabel(lblTokenInfo);   // IDE_FG_DIM, 8pt, ParentFont aus
+  lblTokenInfo.Caption := _(
     'Token is stored DPAPI-encrypted in analyser.ini [SonarTokens]. ' +
-    'Only this Windows user on this machine can decrypt it.';
+    'Only this Windows user on this machine can decrypt it.');
 
   // ============== Actions ==============
   // Hoehe 200 statt 220 - die Standard-Tools>Options-Page hat ~520 px
@@ -241,19 +240,19 @@ begin
   grpActions.Top     := Y;
   grpActions.Width   := GROUP_W;
   grpActions.Height  := 200;
-  grpActions.Caption := 'Connectivity';
+  grpActions.Caption := _('Connectivity');
 
   btnTest := TButton.Create(Self); btnTest.Parent := grpActions;
   btnTest.Left := INNER_LEFT; btnTest.Top := INNER_TOP;
   btnTest.Width := 140; btnTest.Height := 26;
-  btnTest.Caption := 'Test Connection';
+  btnTest.Caption := _('Test Connection');
   btnTest.OnClick := TestConnectionClick;
 
   btnOpenIni := TButton.Create(Self); btnOpenIni.Parent := grpActions;
   btnOpenIni.Left := btnTest.Left + btnTest.Width + 8;
   btnOpenIni.Top := btnTest.Top;
   btnOpenIni.Width := 140; btnOpenIni.Height := 26;
-  btnOpenIni.Caption := 'Open analyser.ini';
+  btnOpenIni.Caption := _('Open analyser.ini');
   btnOpenIni.OnClick := OpenIniClick;
 
   memoResult := TMemo.Create(Self); memoResult.Parent := grpActions;
@@ -354,7 +353,7 @@ begin
   Path := TSonarConfigResolver.ProjectPropsPath(Dir);
   if not TFile.Exists(Path) then
   begin
-    ShowMessage('No sonar-project.properties found in ' + Dir);
+    ShowMessage(_('No sonar-project.properties found in ') + Dir);
     Exit;
   end;
   Cfg := Default(TSonarConfig);
@@ -365,7 +364,7 @@ begin
     if Cfg.HostUrl <> '' then edHost.Text := Cfg.HostUrl;
   end
   else
-    ShowMessage('sonar.projectKey not found in ' + Path);
+    ShowMessage(_('sonar.projectKey not found in ') + Path);
 end;
 
 procedure TSonarOptionsFrame.TestConnectionClick(Sender: TObject);
@@ -394,7 +393,7 @@ begin
   Screen.Cursor := crHourGlass;
   try
     memoResult.Clear;
-    memoResult.Lines.Add('Running health-check (this may take up to ~15s)...');
+    memoResult.Lines.Add(_('Running health-check (this may take up to ~15s)...'));
     R := TSonarHealthCheck.Run(Cfg);
     S := TSonarHealthCheck.FormatChecklist(R);
     memoResult.Text := S;
@@ -408,12 +407,12 @@ begin
   if edToken.PasswordChar = '*' then
   begin
     edToken.PasswordChar := #0;
-    btnRevealToken.Caption := 'Hide';
+    btnRevealToken.Caption := _('Hide');
   end
   else
   begin
     edToken.PasswordChar := '*';
-    btnRevealToken.Caption := 'Show';
+    btnRevealToken.Caption := _('Show');
   end;
 end;
 
@@ -422,24 +421,14 @@ begin
   if FIniPath = '' then Exit;
   if not TFile.Exists(FIniPath) then
   begin
-    ShowMessage('File does not exist yet: ' + FIniPath +
-      sLineBreak + 'Save once to create it.');
+    ShowMessage(_('File does not exist yet: ') + FIniPath +
+      sLineBreak + _('Save once to create it.'));
     Exit;
   end;
   ShellExecute(0, 'open', PChar(FIniPath), nil, nil, SW_SHOWNORMAL);
 end;
 
 { TSonarAddInOptions }
-
-function TSonarAddInOptions.GetArea: string;
-begin
-  // Leerer String -> IDE platziert die Page unter dem sprachabhaengigen
-  // Default-Knoten ("Third Party" auf englischer IDE, "Fremdhersteller"
-  // auf deutscher IDE). Ein hartes 'Third Party' wuerde stattdessen einen
-  // ZWEITEN Top-Level-Knoten daneben erzeugen - was vorher die Sonar-Page
-  // visuell von der bestehenden SCA-Page getrennt hat.
-  Result := '';
-end;
 
 function TSonarAddInOptions.GetCaption: string;
 begin
@@ -451,59 +440,14 @@ begin
   Result := TSonarOptionsFrame;
 end;
 
-procedure TSonarAddInOptions.FrameCreated(AFrame: TCustomFrame);
-var
-  Ini : string;
+procedure TSonarAddInOptions.DoLoadFrame(AFrame: TCustomFrame);
 begin
-  FFrame := AFrame as TSonarOptionsFrame;
-  Ini := TSonarConfigResolver.DefaultIniPath;
-  FFrame.LoadFromIni(Ini);
-  // IDE-Theme uebernehmen - sonst rendert der Frame im VCL-Default
-  // (hell) auch wenn die IDE im Dark-Mode laeuft.
-  TIDETheme.Apply(FFrame);
-  // Theme-Live-Update: falls der User mid-Options-Dialog die
-  // "IDE Style"-Option umstellt (gleicher Dialog!), aktualisiert
-  // OnThemeChanged unseren Frame automatisch.
-  FThemeSub := TIDETheme.Subscribe(OnThemeChanged);
+  TSonarOptionsFrame(AFrame).LoadFromIni(TSonarConfigResolver.DefaultIniPath);
 end;
 
-procedure TSonarAddInOptions.OnThemeChanged;
+procedure TSonarAddInOptions.DoSaveFrame(AFrame: TCustomFrame);
 begin
-  if Assigned(FFrame) then
-    TIDETheme.Apply(FFrame);
-end;
-
-procedure TSonarAddInOptions.DialogClosed(Accepted: Boolean);
-var
-  Ini : string;
-begin
-  try
-    if not Accepted then Exit;
-    if FFrame = nil then Exit;
-    Ini := TSonarConfigResolver.DefaultIniPath;
-    FFrame.SaveToIni(Ini);
-  finally
-    // Theme-Subscription aufloesen - IDE gibt FFrame nach DialogClosed
-    // frei; ein noch lebendes Abo wuerde beim naechsten Theme-Wechsel
-    // in die freigegebene Frame-Referenz feuern.
-    FThemeSub := nil;
-    FFrame := nil;
-  end;
-end;
-
-function TSonarAddInOptions.ValidateContents: Boolean;
-begin
-  Result := True;
-end;
-
-function TSonarAddInOptions.GetHelpContext: Integer;
-begin
-  Result := 0;
-end;
-
-function TSonarAddInOptions.IncludeInIDEInsight: Boolean;
-begin
-  Result := False;
+  TSonarOptionsFrame(AFrame).SaveToIni(TSonarConfigResolver.DefaultIniPath);
 end;
 
 procedure RegisterSonarAddInOptions;

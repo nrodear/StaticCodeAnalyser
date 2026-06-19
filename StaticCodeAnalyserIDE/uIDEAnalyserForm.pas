@@ -25,7 +25,6 @@ uses
   uIDETheme, uIDEToolbar, uIDEAnalyseProgress, uIDEGridTooltip,
   uIDELifecycle, uIDEAnalyseRunner,
   uIDEAnnotationOverlay,
-  uIDEFindingNav,                          // Ctrl+Alt+Up/Down Befund-Navigation
   uIDESCAOptions,                          // Tools > Options > SCA Page
   uIDESonarOptions,                        // Tools > Options > Sonar Integration
   uFindingGridRenderer, uFindingFilter;
@@ -439,7 +438,7 @@ type
     function EditAction(Action: TEditAction): Boolean;
     procedure ViewMenuClick(Sender: TObject);
     // Klickhandler des "Analyse current file (silent)"-Eintrags im
-    // View > Static Code Analysis-Submenu (+ Hotkey Ctrl+Alt+A).
+    // View > Static Code Analysis-Submenu.
     // Triggert Silent-Mode: aktuelle Editor-Datei analysieren + Marker
     // direkt setzen, OHNE Dock-Fenster zu oeffnen.
     procedure AnalyseCurrentFromEditorMenuClick(Sender: TObject);
@@ -485,10 +484,6 @@ uses
 // VCL-Action-Owner-Pattern erlaubt keine sinnvolle Dekomposition.
 
 {$R *.dfm}
-
-// Forward-Declaration: IsShortcutsMasterEnabled wird von TAnalyserFrame.GridKeyDown
-// aufgerufen (Zeile ~1634) - die Implementierung steht weiter unten in der Unit.
-function IsShortcutsMasterEnabled: Boolean; forward;
 
 type
   // Access-Class zum Setzen protected-deklarierter Properties (TControl.OnClick).
@@ -1843,9 +1838,6 @@ end;
 procedure TAnalyserFrame.GridKeyDown(Sender: TObject; var Key: Word;
   Shift: TShiftState);
 begin
-  // Master-Gate: bei ShortcutsEnabled=False wird KEIN Plugin-Shortcut im
-  // Grid verarbeitet. Cursor-Navigation per VCL-Default bleibt aktiv.
-  if not IsShortcutsMasterEnabled then Exit;
   if (Key = Ord('F')) and (ssCtrl in Shift) and (ssAlt in Shift) then
   begin
     // Ctrl+Alt+F = Apply Quick-Fix: ersetzt die Zeile direkt im IDE-Editor
@@ -3840,14 +3832,6 @@ begin
   Result := TRepoSettings.QuickReadBool('Silent', 'Enabled', DEF_SILENT_ENABLED);
 end;
 
-function IsShortcutsMasterEnabled: Boolean;
-// Master-Gate ueber ALLE Plugin-Shortcuts. Wird in jedem Shortcut-Handler
-// (TSCAKeyboardBinding, TSCAFindingNavBinding, GridKeyDown) ganz vorne
-// abgefragt.
-begin
-  Result := TRepoSettings.QuickReadBool('Hotkeys', 'ShortcutsEnabled', DEF_SHORTCUTS_ENABLED);
-end;
-
 procedure RunSilentAnalysisForCurrentEditorFile;
 // Holt die aktuell aktive Editor-Datei via TIDEEditor + ruft den Silent-
 // Analyzer. Vorher Settings-Flag pruefen - User kann das Feature ueber
@@ -3935,29 +3919,10 @@ type
     destructor Destroy; override;
   end;
 
-  // IOTAKeyboardBinding fuer Ctrl+Alt+A (Silent-Mode globaler Hotkey).
-  // Wird via IOTAKeyboardServices.AddKeyboardBinding registriert und feuert
-  // editor-weit - unabhaengig davon ob das Editor-Popup gerade konstruiert
-  // wurde. Ersetzt das frueher genutzte TMenuItem.ShortCut, das nur nach
-  // dem ersten Rechtsklick funktionierte.
-  TSCAKeyboardBinding = class(TNotifierObject, IOTAKeyboardBinding)
-  protected
-    procedure BindKeyboard(const BindingServices: IOTAKeyBindingServices);
-    function GetBindingType: TBindingType;
-    function GetDisplayName: string;
-    function GetName: string;
-  private
-    procedure SilentAnalyseKeyProc(const Context: IOTAKeyContext;
-      KeyCode: TShortcut; var BindingResult: TKeyBindingResult);
-  end;
-
 var
   GCtxMenuHook    : TEditorContextMenuHook = nil;
   GCtxMenuHookIfc : INTAEditServicesNotifier = nil;
   GCtxMenuHookIdx : Integer = -1;
-  GKeyBinding     : TSCAKeyboardBinding = nil;
-  GKeyBindingIfc  : IOTAKeyboardBinding = nil;
-  GKeyBindingIdx  : Integer = -1;
 
 { TPopupHookSlot }
 
@@ -4093,12 +4058,6 @@ begin
   NewItem := TMenuItem.Create(nil);
   NewItem.Caption  := _('Analyse current file (silent)');
   NewItem.Hint     := _('Static Code Analyser: analyse this file, no dock opens');
-  // ShortCut hier dient NUR der visuellen Anzeige im Popup ("Ctrl+Alt+A"
-  // rechts neben Caption). Die echte Hotkey-Verarbeitung laeuft ueber
-  // IOTAKeyboardBinding (TSCAKeyboardBinding), das den Key krHandled-marked
-  // VOR VCL ihn sieht - kein Doppel-Trigger. Lifecycle der beiden Mechanismen
-  // ist symmetrisch in Register/UnregisterAnalyserDockableForm gepaart.
-  NewItem.ShortCut := ShortCut(Ord('A'), [ssCtrl, ssAlt]);
   NewItem.OnClick  := ItemClick;
   Popup.Items.Add(NewItem);
   Slot.OurItem := NewItem;
@@ -4201,123 +4160,6 @@ begin
   GCtxMenuHook    := nil;
 end;
 
-{ TSCAKeyboardBinding }
-
-procedure TSCAKeyboardBinding.BindKeyboard(
-  const BindingServices: IOTAKeyBindingServices);
-// Bindet den konfigurierbaren Silent-Analyse-Shortcut.
-// Wird einmalig beim BPL-Load gerufen; Default = Ctrl+Alt+A, kann ueber
-// analyser.ini [Hotkeys] SilentAnalyseShortcut oder Tools > Options
-// veraendert werden. Aenderung erfordert IDE-Neustart.
-var
-  Settings : TRepoSettings;
-  SC       : TShortCut;
-begin
-  SC := ShortCut(Ord('A'), [ssCtrl, ssAlt]);  // Default
-  Settings := TRepoSettings.Create;
-  try
-    try Settings.Load; except end;
-    if Trim(Settings.SilentAnalyseShortcut) <> '' then
-    begin
-      var Parsed := TextToShortCut(Settings.SilentAnalyseShortcut);
-      if Parsed <> 0 then SC := Parsed;
-    end;
-  finally
-    Settings.Free;
-  end;
-  BindingServices.AddKeyBinding([SC], SilentAnalyseKeyProc, nil);
-end;
-
-function TSCAKeyboardBinding.GetBindingType: TBindingType;
-begin
-  // btPartial = wir fuegen Bindings zur bestehenden IDE-Keymap hinzu.
-  // btComplete waere "wir ersetzen die komplette Keymap" (z.B. Vim-Mode).
-  Result := btPartial;
-end;
-
-function TSCAKeyboardBinding.GetDisplayName: string;
-begin
-  // Sichtbar unter Tools > Options > Keyboard Mappings (falls IDE das listet).
-  Result := 'Static Code Analyser: Silent-Mode Hotkey';
-end;
-
-function TSCAKeyboardBinding.GetName: string;
-begin
-  // Eindeutiger interner Identifier - sollte keinen Clash mit anderen
-  // Plugins haben.
-  Result := 'SCA.SilentAnalysisBinding';
-end;
-
-procedure TSCAKeyboardBinding.SilentAnalyseKeyProc(const Context: IOTAKeyContext;
-  KeyCode: TShortcut; var BindingResult: TKeyBindingResult);
-// Wird bei Ctrl+Alt+A im Editor gerufen. Triggert Silent-Analyse fuer die
-// aktuelle Datei und meldet krHandled - dann reicht die IDE den Key nicht
-// weiter an andere Handler oder den Default-Editor.
-// Master-Toggle ueberlagert: bei ShortcutsEnabled=False meldet der Handler
-// krUnhandled, IDE-Default greift. Rechtsklick-Menue funktioniert
-// unabhaengig (geht ueber IsSilentEnabled, nicht das Master-Gate).
-begin
-  if not IsShortcutsMasterEnabled then
-  begin
-    BindingResult := krUnhandled;
-    Exit;
-  end;
-  RunSilentAnalysisForCurrentEditorFile;
-  BindingResult := krHandled;
-end;
-
-procedure RegisterKeyboardBinding;
-// Registriert die Ctrl+Alt+A-Bindung in der IDE. AddKeyboardBinding liefert
-// einen Index >= 0 fuer Erfolg. Ein negativer Wert (oder eine Exception)
-// deutet auf einen Konflikt mit einem anderen Plugin/Keymap hin -
-// loggen wir nach OutputDebugString damit der User im Event-Log nachsehen
-// kann (kein UI-Crash - Silent-Mode laeuft dann nur ueber Editor-Rechtsklick).
-var
-  KBSvc : IOTAKeyboardServices;
-begin
-  if Assigned(GKeyBinding) then Exit;
-  if not Supports(BorlandIDEServices, IOTAKeyboardServices, KBSvc) then
-  begin
-    OutputDebugString('SCA: IOTAKeyboardServices not available - Ctrl+Alt+A hotkey disabled');
-    Exit;
-  end;
-  GKeyBinding    := TSCAKeyboardBinding.Create;
-  GKeyBindingIfc := GKeyBinding as IOTAKeyboardBinding;
-  try
-    GKeyBindingIdx := KBSvc.AddKeyboardBinding(GKeyBindingIfc);
-    if GKeyBindingIdx < 0 then
-      OutputDebugString('SCA: AddKeyboardBinding returned negative index - Ctrl+Alt+A may conflict with another plugin');
-  except
-    on E: Exception do
-    begin
-      OutputDebugString(PChar(Format(
-        'SCA: AddKeyboardBinding failed: %s: %s', [E.ClassName, E.Message])));
-      // Refcount sauber abbauen - Interface bleibt sonst auf einer
-      // halb-registrierten Bindung haengen.
-      GKeyBindingIfc := nil;
-      GKeyBinding    := nil;
-      GKeyBindingIdx := -1;
-    end;
-  end;
-end;
-
-procedure UnregisterKeyboardBinding;
-var
-  KBSvc : IOTAKeyboardServices;
-begin
-  if GKeyBindingIdx >= 0 then
-  begin
-    try
-      if Supports(BorlandIDEServices, IOTAKeyboardServices, KBSvc) then
-        KBSvc.RemoveKeyboardBinding(GKeyBindingIdx);
-    except
-    end;
-    GKeyBindingIdx := -1;
-  end;
-  GKeyBindingIfc := nil;  // Refcount sinkt -> Destroy
-  GKeyBinding    := nil;
-end;
-
 procedure RegisterAnalyserDockableForm;
 var
   NTASvc   : INTAServices;
@@ -4369,9 +4211,7 @@ begin
 
   // Editor-Color-Scheme-Cache initial fuellen. Komplett defensiv - bei
   // jedem Fehler bleibt der Cache auf den ecsDefault/False-Defaults und
-  // BuildMarkEntries laeuft ohne Crash durch (kritisch, weil der Pfad
-  // auch waehrend des IDE-Startups gerufen werden kann via
-  // KeyboardChanged -> Hotkey-Binding).
+  // BuildMarkEntries laeuft ohne Crash durch.
   try
     var S := TRepoSettings.Create;
     try
@@ -4411,16 +4251,8 @@ begin
   end;
 
   // Editor-Rechtsklick-Menue: dynamischer OnPopup-Hook fuer den
-  // Silent-Mode-Eintrag. Der Shortcut auf dem Menue-Item ist nur noch
-  // Visual-Hint - die echte Hotkey-Verarbeitung laeuft ueber
-  // IOTAKeyboardBinding (siehe RegisterKeyboardBinding) und feuert
-  // editor-weit, auch ohne dass das Popup je geoeffnet wurde.
+  // Silent-Mode-Eintrag. Triggert die Silent-Analyse via Klick.
   RegisterEditorContextMenuHook;
-  RegisterKeyboardBinding;
-  // Ctrl+Alt+Down / Ctrl+Alt+Up: zur naechsten / vorherigen markierten
-  // Finding-Zeile im aktuellen Editor-Tab springen (wrap-around).
-  // Nutzt GHighlighter; muss daher NACH RegisterLineHighlighter laufen.
-  RegisterFindingNavBinding;
 
   // Tools > Options > Third Party > Static Code Analyser
   // (Checkbox um den Silent-Mode aus-/anzuschalten).
@@ -4464,8 +4296,6 @@ begin
     FreeAndNil(GViewMenuItem);
   end;
   UnregisterEditorContextMenuHook;
-  UnregisterFindingNavBinding;
-  UnregisterKeyboardBinding;
   UnregisterSCAAddInOptions;
   UnregisterSonarAddInOptions;
   if Assigned(GDockableForm) then

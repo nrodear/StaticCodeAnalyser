@@ -114,7 +114,6 @@
         <DCCReference Include="uIDEExpert.pas"/>
         <DCCReference Include="uIDEAnalyserForm.pas"/>
         <DCCReference Include="uIDEFindingsPropertiesForm.pas"/>
-        <DCCReference Include="uIDEFindingNav.pas"/>
         <DCCReference Include="uIDELineHighlighter.pas"/>
         <DCCReference Include="uIDEAnnotationOverlay.pas"/>
         <DCCReference Include="uIDEMessages.pas"/>
@@ -125,6 +124,7 @@
         <DCCReference Include="uIDEAnalyseProgress.pas"/>
         <DCCReference Include="uIDEGridTooltip.pas"/>
         <DCCReference Include="uIDELifecycle.pas"/>
+        <DCCReference Include="uIDEAddInOptionsBase.pas"/>
         <DCCReference Include="uIDESCAOptions.pas">
             <Form>SCAOptionsFrame</Form>
             <DesignClass>TFrame</DesignClass>

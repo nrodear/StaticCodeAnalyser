@@ -447,50 +447,6 @@ begin
              'uses-Klausel ist nicht alphabetisch sortiert');
   GDeMap.Add('Unit has no descriptive header comment',
              'Unit hat keinen erkl'#$E4'renden Header-Kommentar');
-  // Tools > Options - Hotkeys-Gruppe
-  GDeMap.Add('Hotkeys',                      'Tastenk'#$FC'rzel');
-  GDeMap.Add('Enable finding navigation (Ctrl+Alt+Up / Ctrl+Alt+Down)',
-             'Befund-Navigation aktivieren (Strg+Alt+'#$2191' / Strg+Alt+'#$2193')');
-  GDeMap.Add('Jump to the next / previous highlighted finding line in the current ' +
-             'editor tab (wrap-around at file end/start). Disable to release the ' +
-             'shortcut to the IDE default handler.',
-             'Im aktuellen Editor-Tab zur n'#$E4'chsten / vorherigen markierten ' +
-             'Befund-Zeile springen (Wrap-around am Datei-Ende/-Anfang). ' +
-             'Deaktivieren gibt den Shortcut wieder an die IDE-Default-Belegung frei.');
-  // Shortcut-Liste in der Hotkeys-Gruppe
-  GDeMap.Add('Available shortcuts:',                 'Verf'#$FC'gbare Tastenk'#$FC'rzel:');
-  GDeMap.Add('Ctrl+Alt+A      global         Analyse current file (silent)',
-             'Strg+Alt+A      global              Aktuelle Datei still analysieren');
-  GDeMap.Add('Ctrl+Alt+Up     global         Jump to previous finding line',
-             'Strg+Alt+'#$2191'      global              Zum vorherigen Befund springen');
-  GDeMap.Add('Ctrl+Alt+Down   global         Jump to next finding line',
-             'Strg+Alt+'#$2193'      global              Zum n'#$E4'chsten Befund springen');
-  GDeMap.Add('Ctrl+Alt+F      findings grid  Apply Quick-Fix in editor',
-             'Strg+Alt+F      Befund-Tabelle      Quick-Fix im Editor anwenden');
-  GDeMap.Add('Ctrl+Alt+S      findings grid  Insert "// noinspection" marker',
-             'Strg+Alt+S      Befund-Tabelle      "// noinspection"-Marker einf'#$FC'gen');
-  GDeMap.Add('Enter           findings grid  Goto editor line (same as dbl-click)',
-             'Enter           Befund-Tabelle      Zur Editor-Zeile springen (wie Doppelklick)');
-  // Konfigurierbare Shortcut-Edits (cnpack-Stil)
-  GDeMap.Add('Configurable shortcuts (click into field + press key combo):',
-             'Konfigurierbare Tastenk'#$FC'rzel (in Feld klicken + Tastenkombi dr'#$FC'cken):');
-  GDeMap.Add('Silent analysis:',           'Stille Analyse:');
-  GDeMap.Add('Jump to previous finding:',  'Zum vorherigen Befund springen:');
-  GDeMap.Add('Jump to next finding:',      'Zum n'#$E4'chsten Befund springen:');
-  GDeMap.Add('Changes take effect after restarting the IDE.',
-             #$C4'nderungen werden erst nach IDE-Neustart wirksam.');
-  GDeMap.Add('Findings-grid shortcuts (not configurable): Ctrl+Alt+F = Quick-Fix, ' +
-             'Ctrl+Alt+S = Suppression, Enter = goto editor line.',
-             'Tastenk'#$FC'rzel in der Befund-Tabelle (nicht konfigurierbar): ' +
-             'Strg+Alt+F = Quick-Fix, Strg+Alt+S = Suppress-Marker, ' +
-             'Enter = Editor-Zeile '#$F6'ffnen.');
-  // Master-Toggle
-  GDeMap.Add('Enable all keyboard shortcuts (master toggle)',
-             'Alle Tastenk'#$FC'rzel aktivieren (Master-Toggle)');
-  GDeMap.Add('Disable to mute every plugin shortcut at once. Right-click menu + ' +
-             'toolbar buttons remain functional.',
-             'Deaktivieren schaltet ALLE Plugin-Tastenk'#$FC'rzel auf einmal ab. ' +
-             'Rechtsklick-Men'#$FC' und Toolbar-Buttons bleiben funktional.');
   // Sonar-50 #19/#23/#33 (SCA144-146)
   GDeMap.Add('Float equality',                       'Float-Gleichheit');
   GDeMap.Add('Raise in destructor',                  'Raise im Destruktor');
@@ -878,11 +834,11 @@ begin
 
   // ---- IDE-Plugin Tools-Options-Page (uIDESCAOptions) ----
   GDeMap.Add('Silent Mode',              'Silent-Modus');
-  GDeMap.Add('Enable silent analysis (editor right-click + Ctrl+Alt+A)',
-                                         'Silent-Analyse aktivieren (Editor-Rechtsklick + Strg+Alt+A)');
-  GDeMap.Add('Editor right-click + Ctrl+Alt+A trigger a single-file analysis; ' +
+  GDeMap.Add('Enable silent analysis (editor right-click menu)',
+                                         'Silent-Analyse aktivieren (Editor-Rechtsklick-Men'#$FC')');
+  GDeMap.Add('Editor right-click triggers a single-file analysis; ' +
              'findings appear as stripes + hover overlays in the editor (no dock).',
-                                         'Editor-Rechtsklick + Strg+Alt+A starten eine Einzeldatei-Analyse; ' +
+                                         'Editor-Rechtsklick startet eine Einzeldatei-Analyse; ' +
                                          'Befunde erscheinen als Markierungen + Hover-Overlays im Editor (kein Dock-Fenster).');
   GDeMap.Add('Rule-Set (analyser.ini [Rules])',
                                          'Regelsatz (analyser.ini [Rules])');
