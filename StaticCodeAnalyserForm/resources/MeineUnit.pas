@@ -39,7 +39,7 @@ function TMeineKlasse.MethodeMitSpeicherleck: string;
 var
   test: TStringList;
 begin
-  test := TStringList.Create;
+
   test.Add('Eintrag 1');
   Result := test.Text;
   // Fehler: test.Free fehlt -> Speicherleck
