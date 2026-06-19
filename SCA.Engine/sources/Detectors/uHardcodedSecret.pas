@@ -74,6 +74,15 @@ type
     // sprechenden Namen ('AWS Access Key' etc.) fuer die Finding-Message.
     class function IsKnownSecretPattern(const StrLit: string;
       out AKind: string): Boolean; static;
+    // Snake-Upper-Const-Naming: nur Uppercase + Underscore + Digits.
+    // Matched 'JWT_SECRET_HEADER', 'X_TOKEN', 'API_KEY', 'TOKEN_REF_DEFAULT' -
+    // das sind in der Praxis Algorithmus-/Protokoll-Marker (JWT, REST-
+    // Header, mORMot-Konstanten) oder Config-Sentinels, KEINE Secret-Werte.
+    // 2026-06-19: Aus AnalyzeMethod (nested function) zu class-static
+    // gezogen, damit ScanFieldsForSecrets denselben Filter anwenden kann -
+    // Const-Sections triggerten sonst FPs auf z.B. `const TOKEN_REF =
+    // 'ide-default';`.
+    class function IsConstantNamingStyle(const FullName: string): Boolean; static;
   end;
 
 implementation
@@ -245,47 +254,47 @@ begin
     if Bare = P then Exit(True);
 end;
 
+class function THardcodedSecretDetector.IsConstantNamingStyle(
+  const FullName: string): Boolean;
+// Letztes Segment nach Punkt-Qualifier (Self.FOO -> FOO). True wenn das
+// Resultat ausschliesslich Uppercase + Underscore + Digits enthaelt UND
+// mindestens ein Underscore vorhanden ist. Damit greift es bei
+// 'TOKEN_REF_DEFAULT', 'JWT_SECRET_HEADER', 'X_TOKEN' - aber NICHT bei
+// 'FToken' oder 'apiKey'.
+var
+  Bare : string;
+  DotPos : Integer;
+  HasUnderscore : Boolean;
+  AllUpperOrDigit : Boolean;
+  C : Char;
+begin
+  Result := False;
+  Bare := FullName;
+  DotPos := -1;
+  for var i := Length(Bare) downto 1 do
+    if Bare[i] = '.' then begin DotPos := i; Break; end;
+  if DotPos > 0 then Bare := Copy(Bare, DotPos + 1, MaxInt);
+  if Bare = '' then Exit;
+
+  HasUnderscore := False;
+  AllUpperOrDigit := True;
+  for C in Bare do
+  begin
+    if C = '_' then HasUnderscore := True
+    else if CharInSet(C, ['A'..'Z', '0'..'9']) then  // OK
+    else
+    begin
+      AllUpperOrDigit := False;
+      Break;
+    end;
+  end;
+  Result := HasUnderscore and AllUpperOrDigit;
+end;
+
 class procedure THardcodedSecretDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 const
   MAX_VAL_LEN = 20;
-
-  // Snake-Upper-Const-Naming: nur Uppercase + Underscore + Digits.
-  // Matched 'JWT_SECRET_HEADER', 'X_TOKEN', 'API_KEY' - das sind in der
-  // Praxis Algorithmus-/Protokoll-Marker (mORMot, JWT, REST-Header), KEINE
-  // Secret-Werte. False-Positive-Reduktion fuer mORMot-Codebase.
-  function IsConstantNamingStyle(const FullName: string): Boolean;
-  var
-    Bare : string;
-    DotPos : Integer;
-    HasUnderscore : Boolean;
-    AllUpperOrDigit : Boolean;
-    C : Char;
-  begin
-    Result := False;
-    // Letztes Segment nach Punkt-Qualifier (Self.FOO -> FOO)
-    Bare := FullName;
-    DotPos := -1;
-    for var i := Length(Bare) downto 1 do
-      if Bare[i] = '.' then begin DotPos := i; Break; end;
-    if DotPos > 0 then Bare := Copy(Bare, DotPos + 1, MaxInt);
-    if Bare = '' then Exit;
-
-    HasUnderscore := False;
-    AllUpperOrDigit := True;
-    for C in Bare do
-    begin
-      if C = '_' then HasUnderscore := True
-      else if CharInSet(C, ['A'..'Z', '0'..'9']) then  // OK
-      else
-      begin
-        AllUpperOrDigit := False;
-        Break;
-      end;
-    end;
-    Result := HasUnderscore and AllUpperOrDigit;
-  end;
-
 var
   Assigns  : TList<TAstNode>;
   A        : TAstNode;
@@ -487,9 +496,13 @@ begin
       if Literal[1] <> '''' then Continue;   // nicht-String-Initializer
       // Leere String-Init
       if Literal = '''''' then Continue;
-      // FP-Filter analog AnalyzeMethod nicht 1:1 portiert -
-      // Const-Naming-Style (UPPER_SNAKE) und Meta-Field nur nkField
-      // sinnvoll wenn Name-Heuristik greift. Wir nutzen die Helper:
+      // Const-Naming-Style (UPPER_SNAKE) -> Algorithmus-Marker / Sentinel,
+      // kein Secret. 2026-06-19: vorher nicht in diesem Pfad - dadurch FPs
+      // auf z.B. `const TOKEN_REF_DEFAULT = 'ide-default';` in der
+      // Sonar-Options-Page.
+      if THardcodedSecretDetector.IsConstantNamingStyle(N.Name) then Continue;
+      // META-Feld (SourceToken, TokenRef, PasswordHash, ...) - beschreibt
+      // HERKUNFT / REFERENZ / DARSTELLUNG eines Secrets, nicht den Wert.
       if THardcodedSecretDetector.IsSecretMetaField(N.Name) then Continue;
 
       if Length(Literal) > MAX_VAL_LEN then

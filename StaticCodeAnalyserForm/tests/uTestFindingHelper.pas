@@ -76,6 +76,15 @@ type
 
 implementation
 
+// Placeholder-Dateiname fuer die in-memory-Tests. NICHT auf 'test.pas',
+// 'tests.pas' oder Pfad-Teile mit '/tests/' / '/test/' / '/spec/' /
+// '/fixtures/' / '/utest' aendern - THardcodedSecretDetector.IsTestFilePath
+// (uHardcodedSecret.pas) skipt diese Pfade als "ist ein Test-File, enthaelt
+// nur Mock-Secrets". 'sample.pas' triggert keine der Heuristiken.
+// 2026-06-19: Regression aus fa15ae4/f263c19 (Test-File-Skip eingefuehrt).
+const
+  SAMPLE_FILENAME = 'sample.pas';
+
 { TFindingHelper }
 
 class function TFindingHelper.FindingsOf(const Source: string): TObjectList<TLeakFinding>;
@@ -88,63 +97,63 @@ begin
   try
     Root := Parser.ParseSource(Source);
     try
-      TLeakDetector2.AnalyzeUnit(Root, 'test.pas', Result);
-      TEmptyExceptDetector2.AnalyzeUnit(Root, 'test.pas', Result);
-      TSQLInjectionDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      THardcodedSecretDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TFormatMismatchDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TConcatToFormatDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TUnusedUsesDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TNilDerefDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TMissingFinallyDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TDivByZeroDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TDeadCodeDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TLongMethodDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TLongParamListDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TMagicNumberDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TDuplicateStringDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      THardcodedPathDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TDebugOutputDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TDeepNestingDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TCyclomaticComplexityDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TEmptyMethodDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TFieldLeakDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TSelfAssignmentDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TMissingRaiseDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TRoutineResultAssignedDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TReRaiseExceptionDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TCastAndFreeDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TInstanceInvokedConstructorDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TInheritedMethodEmptyDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TNilComparisonDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TRaisingRawExceptionDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TDateFormatSettingsDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TUnicodeToAnsiCastDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TCharToCharPointerCastDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TIfThenShortCircuitDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TExceptionTooGeneralDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TRaiseOutsideExceptDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TAbstractNotImplDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TLeakInConstructorDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TGodClassDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TFreeWithoutNilDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TMultipleExitDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TLargeClassDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TUnsortedUsesDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TExceptInDestructorDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TBooleanParamDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TCanBeClassMethodDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TMissingOverrideDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TConstantReturnDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TVirtualCallInCtorDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TVisibilityCheckDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TUnusedLocalDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TUnusedParameterDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TSqlDangerousStatementDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TInsecureCryptoAlgorithmDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TCommandInjectionDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TSynchronizeInDestructorDetector.AnalyzeUnit(Root, 'test.pas', Result);
-      TNamingExtDetector.AnalyzeUnit(Root, 'test.pas', Result);
+      TLeakDetector2.AnalyzeUnit(Root, 'sample.pas', Result);
+      TEmptyExceptDetector2.AnalyzeUnit(Root, 'sample.pas', Result);
+      TSQLInjectionDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      THardcodedSecretDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TFormatMismatchDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TConcatToFormatDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TUnusedUsesDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TNilDerefDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TMissingFinallyDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TDivByZeroDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TDeadCodeDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TLongMethodDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TLongParamListDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TMagicNumberDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TDuplicateStringDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      THardcodedPathDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TDebugOutputDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TDeepNestingDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TCyclomaticComplexityDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TEmptyMethodDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TFieldLeakDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TSelfAssignmentDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TMissingRaiseDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TRoutineResultAssignedDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TReRaiseExceptionDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TCastAndFreeDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TInstanceInvokedConstructorDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TInheritedMethodEmptyDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TNilComparisonDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TRaisingRawExceptionDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TDateFormatSettingsDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TUnicodeToAnsiCastDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TCharToCharPointerCastDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TIfThenShortCircuitDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TExceptionTooGeneralDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TRaiseOutsideExceptDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TAbstractNotImplDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TLeakInConstructorDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TGodClassDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TFreeWithoutNilDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TMultipleExitDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TLargeClassDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TUnsortedUsesDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TExceptInDestructorDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TBooleanParamDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TCanBeClassMethodDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TMissingOverrideDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TConstantReturnDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TVirtualCallInCtorDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TVisibilityCheckDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TUnusedLocalDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TUnusedParameterDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TSqlDangerousStatementDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TInsecureCryptoAlgorithmDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TCommandInjectionDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TSynchronizeInDestructorDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TNamingExtDetector.AnalyzeUnit(Root, 'sample.pas', Result);
       // TTodoCommentDetector / TReversedForRangeDetector / TLengthUnderflowDetector /
       // TTautologicalExprDetector / TLockWithoutTryFinally / TPerfHotspots /
       // TConcurrencyExt / TRestHttpSecurity / TPublicMemberWithoutDoc
