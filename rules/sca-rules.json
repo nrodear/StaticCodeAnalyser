@@ -3444,6 +3444,66 @@
       "impacts": [
         { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
       ]
+    },
+    {
+      "id": "SCA176",
+      "kind": "CognitiveComplexity",
+      "name": "Method has high cognitive complexity (nested control flow)",
+      "shortDescription": "Sonar-style cognitive-complexity exceeds 15 - nested if/for/while/case is hard to follow mentally",
+      "fullDescription": "Cyclomatic complexity (SCA022) counts independent paths linearly - ten flat if-statements weigh the same as one triply-nested if. Cognitive complexity, introduced by Sonar in 2017, multiplies the cost of nesting: each control-flow construct adds 1 + nesting-depth. Three nested loops thus score 1+2+3=6 instead of 3. The detector walks each method with an explicit stack (stack-overflow-safe per Audit_jvcl_segfault) tracking current depth and the running sum. Boolean operators (and/or/xor) in if-conditions add +1 each. Threshold: 15 (Sonar default), configurable via INI [Detectors] CognitiveLimit.",
+      "defaultSeverity": "Warning",
+      "type": "CodeSmell",
+      "tags": ["complexity", "cognitive", "maintainability"],
+      "configKey": "[Detectors] CognitiveLimit",
+      "detectorUnit": "uCognitiveComplexity.pas",
+      "examples": {
+        "bad":  "procedure Foo;\nbegin\n  if A then\n    if B then\n      while C do\n        if D then ...\nend;",
+        "good": "procedure Foo;\nbegin\n  if not A then Exit;\n  if not B then Exit;\n  while C do\n    if D then ...\nend;"
+      },
+      "cleanCodeAttribute": "FOCUSED",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA177",
+      "kind": "ThreadFreeOnTerminateWithRef",
+      "name": "Thread variable accessed after FreeOnTerminate := True",
+      "shortDescription": "After T.FreeOnTerminate := True, any subsequent T.Field/T.Method access risks Access-Violation if the thread has already self-destructed",
+      "fullDescription": "TThread.FreeOnTerminate := True transfers ownership of the thread instance to itself - the thread frees its own memory in its Execute-then-Destroy lifecycle. The caller MUST drop all references to it immediately (typically by setting the local variable to nil) because there is no synchronization between the caller's next statement and the thread's self-destruction. The detector walks each method, collects every `<var>.FreeOnTerminate := True` assignment with its source line, then finds any subsequent `<var>.<member>` access (call OR assign) in the same method. Per-method scope: cross-method references (Field-held thread accessed in another method) are not tracked.",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["concurrency", "lifetime", "thread"],
+      "configKey": "[Detectors] ThreadFreeOnTerminateWithRefEnabled",
+      "detectorUnit": "uThreadFreeOnTerminateWithRef.pas",
+      "examples": {
+        "bad":  "T := TMyThread.Create(True);\nT.FreeOnTerminate := True;\nT.Start;\nT.Resume;   // T may be freed",
+        "good": "T := TMyThread.Create(True);\nT.FreeOnTerminate := True;\nT.Start;\nT := nil;   // drop reference"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
+    },
+    {
+      "id": "SCA178",
+      "kind": "PathTraversal",
+      "name": "File-open API receives concatenated user input",
+      "shortDescription": "File-open call (TFileStream.Create, AssignFile, ...) with a path expression that concatenates user input (Edit.Text, Request.Params, ...) - path-traversal risk",
+      "fullDescription": "Classical path-traversal vulnerability: user-controlled input flows into a file-system API. An attacker can submit `../../../etc/passwd` or similar to escape the intended directory and read/write arbitrary files. The detector flags expressions that contain both a file-open API token (TFileStream.Create, TFile.OpenRead/WriteText, AssignFile, FileOpen, FileCreate) AND a user-input source token (.Text, .Lines.Text, .Caption, .Value, Request.Params, Sender.Text, ParamStr) AND a `+` operator (string concatenation). The detector is heuristic - no taint tracking - so wrapped sanitizers (e.g. `Sanitize(edPath.Text)`) trigger false positives; suppress via marker if the sanitizer is trusted.",
+      "defaultSeverity": "Error",
+      "type": "Vulnerability",
+      "tags": ["security", "owasp-a01", "cwe-22", "path-traversal"],
+      "configKey": "[Detectors] PathTraversalEnabled",
+      "detectorUnit": "uPathTraversal.pas",
+      "examples": {
+        "bad":  "Stream := TFileStream.Create(BaseDir + edPath.Text, fmOpenRead);",
+        "good": "var SafePath := TPath.Combine(BaseDir, TPath.GetFileName(edPath.Text));\nStream := TFileStream.Create(SafePath, fmOpenRead);"
+      },
+      "cleanCodeAttribute": "TRUSTWORTHY",
+      "impacts": [
+        { "softwareQuality": "SECURITY", "severity": "HIGH" }
+      ]
     }
   ]
 }

@@ -200,6 +200,9 @@
         <DCCReference Include="sources\Detectors\uVariantTypeMisuse.pas"/>
         <DCCReference Include="sources\Detectors\uTObjectListWithoutOwnership.pas"/>
         <DCCReference Include="sources\Detectors\uAnonMethodCaptureLoopVar.pas"/>
+        <DCCReference Include="sources\Detectors\uCognitiveComplexity.pas"/>
+        <DCCReference Include="sources\Detectors\uThreadFreeOnTerminateWithRef.pas"/>
+        <DCCReference Include="sources\Detectors\uPathTraversal.pas"/>
         <DCCReference Include="sources\Detectors\uInstanceInvokedConstructor.pas"/>
         <DCCReference Include="sources\Detectors\uIntegerOverflow.pas"/>
         <DCCReference Include="sources\Detectors\uInterfaceName.pas"/>

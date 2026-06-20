@@ -119,6 +119,7 @@ uses
   uDefaultCaseInCaseStatement, uAssertWithSideEffect, uConstStringParameter,
   uCompilerDirectiveScope, uBooleanPropertyNaming,
   uVariantTypeMisuse, uTObjectListWithoutOwnership, uAnonMethodCaptureLoopVar,
+  uCognitiveComplexity, uThreadFreeOnTerminateWithRef, uPathTraversal,
   uUnusedRoutine, uUninitVar;
 
 type
@@ -369,6 +370,12 @@ begin
   AddD('TObjectListWithoutOwnership', fkTObjectListWithoutOwnership, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TTObjectListWithoutOwnershipDetector.AnalyzeUnit(R, F, L); end, ['tlist<']);
   // SCA175 AnonMethodCaptureLoopVar: Pre-Filter 'procedure' (anonymous-Marker).
   AddD('AnonMethodCaptureLoopVar', fkAnonMethodCaptureLoopVar, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TAnonMethodCaptureLoopVarDetector.AnalyzeUnit(R, F, L); end, ['procedure']);
+  // SCA176 CognitiveComplexity: kein Pre-Filter (jede Method gepruft).
+  AddD('CognitiveComplexity', fkCognitiveComplexity, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TCognitiveComplexityDetector.AnalyzeUnit(R, F, L); end);
+  // SCA177 ThreadFreeOnTerminateWithRef: Pre-Filter 'freeonterminate'.
+  AddD('ThreadFreeOnTerminateWithRef', fkThreadFreeOnTerminateWithRef, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TThreadFreeOnTerminateWithRefDetector.AnalyzeUnit(R, F, L); end, ['freeonterminate']);
+  // SCA178 PathTraversal: Pre-Filter file-open-API tokens.
+  AddD('PathTraversal', fkPathTraversal, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TPathTraversalDetector.AnalyzeUnit(R, F, L); end, ['tfilestream', 'tfile.', 'assignfile', 'fileopen', 'filecreate']);
   // Dead-Code-Familie: standalone Routinen ohne Aufruf (analog SCA147 fuer
   // class-private Methoden, schliesst die Luecke top-level Routinen).
   AddD('UnusedRoutine', fkUnusedRoutine, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUnusedRoutineDetector.AnalyzeUnit(R, F, L); end);

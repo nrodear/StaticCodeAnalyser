@@ -594,8 +594,14 @@ type
                                  // COM-VarType-Dispatch in Hot-Path.
     fkTObjectListWithoutOwnership, // SCA174 - TList<T>.Create + Add(T.Create)
                                  // ohne TObjectList<T> - Items leaken.
-    fkAnonMethodCaptureLoopVar   // SCA175 - Anonyme Methode im for-Loop
+    fkAnonMethodCaptureLoopVar,  // SCA175 - Anonyme Methode im for-Loop
                                  // captured Loop-Var per Reference.
+    fkCognitiveComplexity,       // SCA176 - Sonar-Cognitive-Complexity > 15.
+                                 // Verschachtelte Logik schwerer als linear-McCabe.
+    fkThreadFreeOnTerminateWithRef, // SCA177 - Zugriff auf Thread-Var nach
+                                 // FreeOnTerminate := True - AV-Risiko.
+    fkPathTraversal              // SCA178 - File-Open + User-Input-Concat.
+                                 // Heuristik (kein Taint-Tracking).
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -827,7 +833,10 @@ const
     (Name: 'BooleanPropertyNaming';      FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkBooleanPropertyNaming
     (Name: 'VariantTypeMisuse';          FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkVariantTypeMisuse
     (Name: 'TObjectListWithoutOwnership';FindingType: ftBug;          DefaultSeverity: lsWarning), // fkTObjectListWithoutOwnership
-    (Name: 'AnonMethodCaptureLoopVar';   FindingType: ftBug;          DefaultSeverity: lsError)    // fkAnonMethodCaptureLoopVar
+    (Name: 'AnonMethodCaptureLoopVar';   FindingType: ftBug;          DefaultSeverity: lsError),   // fkAnonMethodCaptureLoopVar
+    (Name: 'CognitiveComplexity';        FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkCognitiveComplexity
+    (Name: 'ThreadFreeOnTerminateWithRef';FindingType: ftBug;         DefaultSeverity: lsError),   // fkThreadFreeOnTerminateWithRef
+    (Name: 'PathTraversal';              FindingType: ftVulnerability;DefaultSeverity: lsError)    // fkPathTraversal
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

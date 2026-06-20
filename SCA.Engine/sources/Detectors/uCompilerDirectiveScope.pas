@@ -47,11 +47,68 @@ type
 implementation
 
 uses
-  System.Classes, System.RegularExpressions,
+  System.RegularExpressions,
   uFileTextCache;
 
 const
   DIRECTIVE_RE = '\{\$(WARNINGS|HINTS|RANGECHECKS|BOOLEVAL|OVERFLOWCHECKS)\s+(ON|OFF)\}';
+
+// Strippt Non-Direktive-Kommentare: `//`-Zeilen + `{...}`-Blocks die NICHT
+// mit `{$` beginnen + `(*...*)`-Blocks. Wichtig: `{$...}`-Direktiven
+// BLEIBEN als-ist im Ergebnis, weil der Detector sie braucht.
+// Block-Comment-State spannt nicht ueber Zeilen (Pragma); Compiler-
+// Direktiven sind in der Praxis immer single-line, FP-Edge-Case
+// akzeptiert.
+function StripNonDirectiveComments(const Line: string): string;
+var
+  Buf  : TStringBuilder;
+  j, n : Integer;
+  c    : Char;
+  pClose : Integer;
+begin
+  n := Length(Line);
+  Buf := TStringBuilder.Create;
+  try
+    j := 1;
+    while j <= n do
+    begin
+      c := Line[j];
+      // //-Kommentar bis Zeilen-Ende
+      if (c = '/') and (j < n) and (Line[j + 1] = '/') then Break;
+      // (*...*)-Block - immer Kommentar
+      if (c = '(') and (j < n) and (Line[j + 1] = '*') then
+      begin
+        pClose := PosEx('*)', Line, j + 2);
+        if pClose = 0 then Break;
+        j := pClose + 2; Continue;
+      end;
+      // {...}-Block - ABER {$...} ist Direktive und bleibt!
+      if c = '{' then
+      begin
+        if (j < n) and (Line[j + 1] = '$') then
+        begin
+          // Direktive - vollstaendig uebernehmen (bis '}')
+          pClose := PosEx('}', Line, j + 1);
+          if pClose = 0 then Break;
+          Buf.Append(Copy(Line, j, pClose - j + 1));
+          j := pClose + 1; Continue;
+        end
+        else
+        begin
+          // Normaler Block-Comment - skippen
+          pClose := PosEx('}', Line, j + 1);
+          if pClose = 0 then Break;
+          j := pClose + 1; Continue;
+        end;
+      end;
+      Buf.Append(c);
+      Inc(j);
+    end;
+    Result := Buf.ToString;
+  finally
+    Buf.Free;
+  end;
+end;
 
 class procedure TCompilerDirectiveScopeDetector.AnalyzeUnit(
   UnitNode: TAstNode; const FileName: string;
@@ -60,7 +117,7 @@ var
   Lines    : TStringList;
   Cached   : Boolean;
   i        : Integer;
-  Line     : string;
+  Code     : string;
   RE       : TRegEx;
   M        : TMatch;
   Name     : string;
@@ -77,8 +134,11 @@ begin
     RE := TRegEx.Create(DIRECTIVE_RE, [roIgnoreCase]);
     for i := 0 to Lines.Count - 1 do
     begin
-      Line := Lines[i];
-      for M in RE.Matches(Line) do
+      // StripNonDirectiveComments behaelt {$...} aber strippt
+      // //-Kommentare + {...}-Blocks. Damit zaehlt `// {$WARNINGS OFF}`
+      // NICHT mehr als echte Direktive.
+      Code := StripNonDirectiveComments(Lines[i]);
+      for M in RE.Matches(Code) do
       begin
         Name  := LowerCase(M.Groups[1].Value);
         IsOff := SameText(M.Groups[2].Value, 'OFF');

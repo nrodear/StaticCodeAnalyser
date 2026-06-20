@@ -58,6 +58,7 @@ uses
   uDefaultCaseInCaseStatement, uAssertWithSideEffect, uConstStringParameter,
   uCompilerDirectiveScope, uBooleanPropertyNaming,
   uVariantTypeMisuse, uTObjectListWithoutOwnership, uAnonMethodCaptureLoopVar,
+  uCognitiveComplexity, uThreadFreeOnTerminateWithRef, uPathTraversal,
   uUnusedRoutine, uUninitVar,
   uStaticAnalyzer2,
   uTestSrcBuilder,
@@ -162,6 +163,9 @@ begin
       TVariantTypeMisuseDetector.AnalyzeUnit(Root, 'sample.pas', Result);
       TTObjectListWithoutOwnershipDetector.AnalyzeUnit(Root, 'sample.pas', Result);
       TAnonMethodCaptureLoopVarDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TCognitiveComplexityDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TThreadFreeOnTerminateWithRefDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TPathTraversalDetector.AnalyzeUnit(Root, 'sample.pas', Result);
       TSynchronizeInDestructorDetector.AnalyzeUnit(Root, 'sample.pas', Result);
       TNamingExtDetector.AnalyzeUnit(Root, 'sample.pas', Result);
       // TTodoCommentDetector / TReversedForRangeDetector / TLengthUnderflowDetector /

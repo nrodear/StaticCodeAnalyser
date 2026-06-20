@@ -45,7 +45,7 @@ implementation
 
 uses
   System.RegularExpressions, System.StrUtils,
-  uFileTextCache;
+  uFileTextCache, uDetectorUtils;
 
 const
   PROP_RE = '\bproperty\s+(\w+)\s*:\s*(\w+)\b';
@@ -90,7 +90,9 @@ var
   Lines    : TStringList;
   Cached   : Boolean;
   i        : Integer;
-  Line     : string;
+  Code     : string;
+  State    : TCommentScanState;
+  Dummy    : Integer;
   RE       : TRegEx;
   M        : TMatch;
   PName    : string;
@@ -102,10 +104,13 @@ begin
   if Lines = nil then Exit;
   try
     RE := TRegEx.Create(PROP_RE, [roIgnoreCase]);
+    State := Default(TCommentScanState);
     for i := 0 to Lines.Count - 1 do
     begin
-      Line := Lines[i];
-      for M in RE.Matches(Line) do
+      // ScanCodeLine strippt //, {...}, (*...*), ''-Strings -
+      // auskommentierte `property Foo: Boolean;` matched dann NICHT.
+      Code := TDetectorUtils.ScanCodeLine(Lines[i], State, Dummy);
+      for M in RE.Matches(Code) do
       begin
         PType := LowerCase(M.Groups[2].Value);
         if PType <> 'boolean' then Continue;
