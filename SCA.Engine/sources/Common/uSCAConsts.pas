@@ -588,8 +588,14 @@ type
     fkCompilerDirectiveScope,    // SCA171 - {$WARNINGS OFF} ohne {$WARNINGS ON}
                                  // im File. Switch leakt in nachfolgende
                                  // Compilation-Units.
-    fkBooleanPropertyNaming      // SCA172 - Boolean-Property ohne Is/Has/
+    fkBooleanPropertyNaming,     // SCA172 - Boolean-Property ohne Is/Has/
                                  // Can/Should-Prefix.
+    fkVariantTypeMisuse,         // SCA173 - Variant in Methode mit Loop -
+                                 // COM-VarType-Dispatch in Hot-Path.
+    fkTObjectListWithoutOwnership, // SCA174 - TList<T>.Create + Add(T.Create)
+                                 // ohne TObjectList<T> - Items leaken.
+    fkAnonMethodCaptureLoopVar   // SCA175 - Anonyme Methode im for-Loop
+                                 // captured Loop-Var per Reference.
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -818,7 +824,10 @@ const
     (Name: 'AssertWithSideEffect';       FindingType: ftBug;          DefaultSeverity: lsWarning), // fkAssertWithSideEffect
     (Name: 'ConstStringParameter';       FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkConstStringParameter
     (Name: 'CompilerDirectiveScope';     FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkCompilerDirectiveScope
-    (Name: 'BooleanPropertyNaming';      FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkBooleanPropertyNaming
+    (Name: 'BooleanPropertyNaming';      FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkBooleanPropertyNaming
+    (Name: 'VariantTypeMisuse';          FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkVariantTypeMisuse
+    (Name: 'TObjectListWithoutOwnership';FindingType: ftBug;          DefaultSeverity: lsWarning), // fkTObjectListWithoutOwnership
+    (Name: 'AnonMethodCaptureLoopVar';   FindingType: ftBug;          DefaultSeverity: lsError)    // fkAnonMethodCaptureLoopVar
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

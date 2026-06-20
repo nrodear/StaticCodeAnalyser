@@ -57,6 +57,7 @@ uses
   uInsecureCryptoAlgorithm, uCommandInjection, uInsecureRandom,
   uDefaultCaseInCaseStatement, uAssertWithSideEffect, uConstStringParameter,
   uCompilerDirectiveScope, uBooleanPropertyNaming,
+  uVariantTypeMisuse, uTObjectListWithoutOwnership, uAnonMethodCaptureLoopVar,
   uUnusedRoutine, uUninitVar,
   uStaticAnalyzer2,
   uTestSrcBuilder,
@@ -158,6 +159,9 @@ begin
       TDefaultCaseInCaseStatementDetector.AnalyzeUnit(Root, 'sample.pas', Result);
       TAssertWithSideEffectDetector.AnalyzeUnit(Root, 'sample.pas', Result);
       TConstStringParameterDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TVariantTypeMisuseDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TTObjectListWithoutOwnershipDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TAnonMethodCaptureLoopVarDetector.AnalyzeUnit(Root, 'sample.pas', Result);
       TSynchronizeInDestructorDetector.AnalyzeUnit(Root, 'sample.pas', Result);
       TNamingExtDetector.AnalyzeUnit(Root, 'sample.pas', Result);
       // TTodoCommentDetector / TReversedForRangeDetector / TLengthUnderflowDetector /

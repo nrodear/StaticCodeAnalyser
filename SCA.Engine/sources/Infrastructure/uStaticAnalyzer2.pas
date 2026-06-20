@@ -118,6 +118,7 @@ uses
   uInsecureCryptoAlgorithm, uCommandInjection, uInsecureRandom,
   uDefaultCaseInCaseStatement, uAssertWithSideEffect, uConstStringParameter,
   uCompilerDirectiveScope, uBooleanPropertyNaming,
+  uVariantTypeMisuse, uTObjectListWithoutOwnership, uAnonMethodCaptureLoopVar,
   uUnusedRoutine, uUninitVar;
 
 type
@@ -362,6 +363,12 @@ begin
   AddD('CompilerDirectiveScope', fkCompilerDirectiveScope, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TCompilerDirectiveScopeDetector.AnalyzeUnit(R, F, L); end, ['{$']);
   // SCA172 BooleanPropertyNaming: file-Pre-Filter auf 'boolean'.
   AddD('BooleanPropertyNaming', fkBooleanPropertyNaming, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TBooleanPropertyNamingDetector.AnalyzeUnit(R, F, L); end, ['boolean']);
+  // SCA173 VariantTypeMisuse: Pre-Filter 'variant' damit Files ohne komplett geskippt werden.
+  AddD('VariantTypeMisuse', fkVariantTypeMisuse, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TVariantTypeMisuseDetector.AnalyzeUnit(R, F, L); end, ['variant']);
+  // SCA174 TObjectListWithoutOwnership: Pre-Filter 'tlist<' faengt Generic-Pattern.
+  AddD('TObjectListWithoutOwnership', fkTObjectListWithoutOwnership, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TTObjectListWithoutOwnershipDetector.AnalyzeUnit(R, F, L); end, ['tlist<']);
+  // SCA175 AnonMethodCaptureLoopVar: Pre-Filter 'procedure' (anonymous-Marker).
+  AddD('AnonMethodCaptureLoopVar', fkAnonMethodCaptureLoopVar, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TAnonMethodCaptureLoopVarDetector.AnalyzeUnit(R, F, L); end, ['procedure']);
   // Dead-Code-Familie: standalone Routinen ohne Aufruf (analog SCA147 fuer
   // class-private Methoden, schliesst die Luecke top-level Routinen).
   AddD('UnusedRoutine', fkUnusedRoutine, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUnusedRoutineDetector.AnalyzeUnit(R, F, L); end);

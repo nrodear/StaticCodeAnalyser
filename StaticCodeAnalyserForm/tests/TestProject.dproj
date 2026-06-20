@@ -258,6 +258,9 @@
         <DCCReference Include="uTestConstStringParameter.pas"/>
         <DCCReference Include="uTestCompilerDirectiveScope.pas"/>
         <DCCReference Include="uTestBooleanPropertyNaming.pas"/>
+        <DCCReference Include="uTestVariantTypeMisuse.pas"/>
+        <DCCReference Include="uTestTObjectListWithoutOwnership.pas"/>
+        <DCCReference Include="uTestAnonMethodCaptureLoopVar.pas"/>
         <DCCReference Include="uTestUnusedRoutine.pas"/>
         <DCCReference Include="uTestSuppressionCompleteness.pas"/>
         <DCCReference Include="uTestAbstractNotImpl.pas"/>

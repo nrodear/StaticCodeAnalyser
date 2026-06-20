@@ -3384,6 +3384,66 @@
       "impacts": [
         { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
       ]
+    },
+    {
+      "id": "SCA173",
+      "kind": "VariantTypeMisuse",
+      "name": "Variant in performance-sensitive method (contains a loop)",
+      "shortDescription": "Variant variable inside a method that contains a loop - each Variant operation pays a 10-100x COM dispatch tax",
+      "fullDescription": "Variant operations route through the COM VarType dispatcher (VarAdd, VarCmp, VarCast, ...) which adds a typing-system roundtrip on every read, write, comparison and conversion. Inside a hot loop this multiplies the cost by the iteration count and can dominate the method's runtime. The detector flags every Variant / OleVariant local variable and parameter in methods that contain at least one for/while/repeat loop. Accepted use cases (COM/OLE bridges, JSON-Variant adapters, Excel automation) are reachable via suppression marker `// noinspection VariantTypeMisuse`.",
+      "defaultSeverity": "Hint",
+      "type": "CodeSmell",
+      "tags": ["performance", "variant", "com"],
+      "configKey": "[Detectors] VariantTypeMisuseEnabled",
+      "detectorUnit": "uVariantTypeMisuse.pas",
+      "examples": {
+        "bad":  "procedure SumRows;\nvar v: Variant; i: Integer;\nbegin\n  for i := 0 to N do v := v + Rows[i];\nend;",
+        "good": "procedure SumRows;\nvar s: Double; i: Integer;\nbegin\n  s := 0;\n  for i := 0 to N do s := s + Rows[i];\nend;"
+      },
+      "cleanCodeAttribute": "EFFICIENT",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA174",
+      "kind": "TObjectListWithoutOwnership",
+      "name": "TList<T> filled with T.Create - items leak when list is freed",
+      "shortDescription": "TList<TFoo>.Create + Add(TFoo.Create) - the list does not own its items, every TFoo instance leaks",
+      "fullDescription": "TList<T> is a typed container that does NOT own its items - freeing the list does not free the items it holds. When the items are class instances allocated with .Create, they leak on every list-free unless the caller manually iterates and frees each one. The correct container is TObjectList<T> from Generics.Collections, which has OwnsObjects=True by default and frees its items on destruction. The detector walks each method, collects all `TList<T>.Create` assignments (where T is a class-looking identifier), then looks for `<varname>.Add(<T>.Create)` patterns in the same method. Cross-method ownership (Add in a different method than Create) is not tracked.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["memory-safety", "leak", "container"],
+      "configKey": "[Detectors] TObjectListWithoutOwnershipEnabled",
+      "detectorUnit": "uTObjectListWithoutOwnership.pas",
+      "examples": {
+        "bad":  "L := TList<TFoo>.Create;\nL.Add(TFoo.Create);\nL.Free; // TFoo instance leaks",
+        "good": "L := TObjectList<TFoo>.Create; // OwnsObjects=True default\nL.Add(TFoo.Create);\nL.Free; // item freed"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
+    },
+    {
+      "id": "SCA175",
+      "kind": "AnonMethodCaptureLoopVar",
+      "name": "Anonymous method captures for-loop variable by reference",
+      "shortDescription": "Anonymous method inside `for i := ... do` references i - all closures see the same final value",
+      "fullDescription": "Delphi captures variables by reference in anonymous methods. When the anonymous method is created inside a for-loop and references the loop variable, every closure shares the same reference - by the time the closures run, the loop variable has reached its terminal value and all of them observe that final value. The classic symptom is N parallel threads created in a loop all logging the final iteration number instead of 0..N-1. The detector walks for-statements, extracts the loop variable name (classic `for i :=` or inline `for var i :=`) and scans nkCall / nkAssign descendants for the combination of an `procedure`-keyword (anonymous method start) and a reference to the loop variable. Fix: copy the loop variable to a local immediately before the anonymous method body.",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["concurrency", "closure", "loop", "capture"],
+      "configKey": "[Detectors] AnonMethodCaptureLoopVarEnabled",
+      "detectorUnit": "uAnonMethodCaptureLoopVar.pas",
+      "examples": {
+        "bad":  "for i := 0 to 9 do\n  TThread.CreateAnonymousThread(procedure\n  begin WriteLn(i); end).Start;",
+        "good": "for i := 0 to 9 do\nbegin\n  var Captured := i;\n  TThread.CreateAnonymousThread(procedure\n  begin WriteLn(Captured); end).Start;\nend;"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
     }
   ]
 }
