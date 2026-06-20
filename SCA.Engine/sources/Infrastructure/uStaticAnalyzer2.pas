@@ -120,6 +120,9 @@ uses
   uCompilerDirectiveScope, uBooleanPropertyNaming,
   uVariantTypeMisuse, uTObjectListWithoutOwnership, uAnonMethodCaptureLoopVar,
   uCognitiveComplexity, uThreadFreeOnTerminateWithRef, uPathTraversal,
+  uAttributeIgnoreWithoutReason, uAttributeDuplicate,
+  uAttributeCategoryWithoutString, uAttributeTestFixtureWithoutTests,
+  uAttributeMisalignment,
   uUnusedRoutine, uUninitVar;
 
 type
@@ -376,6 +379,13 @@ begin
   AddD('ThreadFreeOnTerminateWithRef', fkThreadFreeOnTerminateWithRef, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TThreadFreeOnTerminateWithRefDetector.AnalyzeUnit(R, F, L); end, ['freeonterminate']);
   // SCA178 PathTraversal: Pre-Filter file-open-API tokens.
   AddD('PathTraversal', fkPathTraversal, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TPathTraversalDetector.AnalyzeUnit(R, F, L); end, ['tfilestream', 'tfile.', 'assignfile', 'fileopen', 'filecreate']);
+  // SCA179-183 Attribute-Detector-Familie. Pre-Filter '[' faengt
+  // Attribute-Syntax (jeder Detektor scannt file-text fuer Attribut-Patterns).
+  AddD('AttributeIgnoreWithoutReason', fkAttributeIgnoreWithoutReason, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TAttributeIgnoreWithoutReasonDetector.AnalyzeUnit(R, F, L); end, ['[ignore']);
+  AddD('AttributeDuplicate', fkAttributeDuplicate, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TAttributeDuplicateDetector.AnalyzeUnit(R, F, L); end, ['[']);
+  AddD('AttributeCategoryWithoutString', fkAttributeCategoryWithoutString, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TAttributeCategoryWithoutStringDetector.AnalyzeUnit(R, F, L); end, ['[category']);
+  AddD('AttributeTestFixtureWithoutTests', fkAttributeTestFixtureWithoutTests, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TAttributeTestFixtureWithoutTestsDetector.AnalyzeUnit(R, F, L); end, ['[testfixture']);
+  AddD('AttributeMisalignment', fkAttributeMisalignment, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TAttributeMisalignmentDetector.AnalyzeUnit(R, F, L); end, ['[']);
   // Dead-Code-Familie: standalone Routinen ohne Aufruf (analog SCA147 fuer
   // class-private Methoden, schliesst die Luecke top-level Routinen).
   AddD('UnusedRoutine', fkUnusedRoutine, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUnusedRoutineDetector.AnalyzeUnit(R, F, L); end);

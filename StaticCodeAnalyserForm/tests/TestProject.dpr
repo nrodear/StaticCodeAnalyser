@@ -183,6 +183,7 @@ uses
   uTestCognitiveComplexity in 'uTestCognitiveComplexity.pas',
   uTestThreadFreeOnTerminateWithRef in 'uTestThreadFreeOnTerminateWithRef.pas',
   uTestPathTraversal in 'uTestPathTraversal.pas',
+  uTestAttributeFamily in 'uTestAttributeFamily.pas',
   uTestUnusedRoutine in 'uTestUnusedRoutine.pas',
   uTestSuppressionCompleteness in 'uTestSuppressionCompleteness.pas',
   uTestAbstractNotImpl in 'uTestAbstractNotImpl.pas',

@@ -3504,6 +3504,106 @@
       "impacts": [
         { "softwareQuality": "SECURITY", "severity": "HIGH" }
       ]
+    },
+    {
+      "id": "SCA179",
+      "kind": "AttributeIgnoreWithoutReason",
+      "name": "DUnitX [Ignore] attribute without reason argument",
+      "shortDescription": "[Ignore] (no string arg) skips the test silently - add a message explaining why the test is disabled",
+      "fullDescription": "DUnitX accepts [Ignore] both as a marker attribute and as [Ignore('reason')]. The marker form skips the test without surfacing WHY it was disabled - the test then drifts unmaintained, often forgotten. Always add a reason string referencing a ticket / external dependency / known limitation so the disable can be triaged.",
+      "defaultSeverity": "Hint",
+      "type": "CodeSmell",
+      "tags": ["test", "dunitx", "documentation"],
+      "configKey": "[Detectors] AttributeIgnoreWithoutReasonEnabled",
+      "detectorUnit": "uAttributeIgnoreWithoutReason.pas",
+      "examples": {
+        "bad":  "[Ignore]\nprocedure SomeTest;",
+        "good": "[Ignore('TBD ticket #1234 - flaky on CI')]\nprocedure SomeTest;"
+      },
+      "cleanCodeAttribute": "COMPLETE",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA180",
+      "kind": "AttributeDuplicate",
+      "name": "Same attribute applied twice to one member",
+      "shortDescription": "Two identical [X] attributes on the same member - copy-paste leftover, no effect",
+      "fullDescription": "Delphi's attribute model accepts repeated attributes (some, like [TestCase], are intentionally multi-applied with different args). Duplicates with IDENTICAL args are not — they are usually copy-paste leftovers from refactoring. The detector compares (attribute-name, argument-text) pairs and flags identical occurrences in the same attribute group (lines max. 2 apart). Multi-applied attributes with different args (different [TestCase('A','1')] / [TestCase('B','2')]) are correctly NOT flagged.",
+      "defaultSeverity": "Warning",
+      "type": "CodeSmell",
+      "tags": ["attribute", "duplication"],
+      "configKey": "[Detectors] AttributeDuplicateEnabled",
+      "detectorUnit": "uAttributeDuplicate.pas",
+      "examples": {
+        "bad":  "[Test]\n[Test]\nprocedure Foo;",
+        "good": "[Test]\nprocedure Foo;"
+      },
+      "cleanCodeAttribute": "DISTINCT",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA181",
+      "kind": "AttributeCategoryWithoutString",
+      "name": "DUnitX [Category] without category-name string",
+      "shortDescription": "[Category] (no arg) is a compile-time error in DUnitX - always pass a category name",
+      "fullDescription": "DUnitX's [Category] attribute requires a string argument that is used to group tests for selective execution. Without the argument, the compiler raises a missing-parameter error. Always pass an explicit category name (e.g. 'Slow', 'CI-only', 'Integration').",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["test", "dunitx", "compile-error"],
+      "configKey": "[Detectors] AttributeCategoryWithoutStringEnabled",
+      "detectorUnit": "uAttributeCategoryWithoutString.pas",
+      "examples": {
+        "bad":  "[Category]\nprocedure Foo;",
+        "good": "[Category('Slow')]\nprocedure Foo;"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
+    },
+    {
+      "id": "SCA182",
+      "kind": "AttributeTestFixtureWithoutTests",
+      "name": "[TestFixture] class without any [Test] method",
+      "shortDescription": "Class is marked [TestFixture] but contains no [Test] methods - zombie fixture visible in TestInsight but executes nothing",
+      "fullDescription": "DUnitX discovers test classes by scanning for [TestFixture] attributes. A fixture without any [Test] method appears in the test tree but contributes zero executable tests - typically a leftover from refactoring (tests deleted, fixture not). The detector walks file text with a simple state machine: enters fixture-window on [TestFixture] line, watches for [Test] inside, exits on the next top-level `end;`. If no [Test] was seen, the [TestFixture] line is flagged. [SetupFixture]-only fixtures (used to prepare shared state for other fixtures) are a known false-positive case - suppress with `// noinspection AttributeTestFixtureWithoutTests`.",
+      "defaultSeverity": "Warning",
+      "type": "CodeSmell",
+      "tags": ["test", "dunitx", "dead-code"],
+      "configKey": "[Detectors] AttributeTestFixtureWithoutTestsEnabled",
+      "detectorUnit": "uAttributeTestFixtureWithoutTests.pas",
+      "examples": {
+        "bad":  "[TestFixture]\nTFooTests = class\n  procedure Helper;\nend;",
+        "good": "[TestFixture]\nTFooTests = class\n  [Test] procedure DoesX;\nend;"
+      },
+      "cleanCodeAttribute": "COMPLETE",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA183",
+      "kind": "AttributeMisalignment",
+      "name": "Attribute with blank line before target member",
+      "shortDescription": "Attribute line followed by a blank line - visually loose, often a refactoring leftover",
+      "fullDescription": "The Delphi compiler attaches an attribute to the syntactically next member regardless of intervening blank lines. Visually however, an attribute separated from its member by a blank line is easy to overlook - the reader may not realize the attribute applies to the member below. This is also a frequent symptom of refactoring where a member was moved/deleted but the attribute was left behind. The detector flags attribute lines whose next non-blank line is more than one line away.",
+      "defaultSeverity": "Hint",
+      "type": "CodeSmell",
+      "tags": ["attribute", "readability"],
+      "configKey": "[Detectors] AttributeMisalignmentEnabled",
+      "detectorUnit": "uAttributeMisalignment.pas",
+      "examples": {
+        "bad":  "[Test]\n\nprocedure Foo;",
+        "good": "[Test]\nprocedure Foo;"
+      },
+      "cleanCodeAttribute": "FORMATTED",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     }
   ]
 }

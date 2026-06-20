@@ -264,6 +264,7 @@
         <DCCReference Include="uTestCognitiveComplexity.pas"/>
         <DCCReference Include="uTestThreadFreeOnTerminateWithRef.pas"/>
         <DCCReference Include="uTestPathTraversal.pas"/>
+        <DCCReference Include="uTestAttributeFamily.pas"/>
         <DCCReference Include="uTestUnusedRoutine.pas"/>
         <DCCReference Include="uTestSuppressionCompleteness.pas"/>
         <DCCReference Include="uTestAbstractNotImpl.pas"/>

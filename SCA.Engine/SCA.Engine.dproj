@@ -203,6 +203,11 @@
         <DCCReference Include="sources\Detectors\uCognitiveComplexity.pas"/>
         <DCCReference Include="sources\Detectors\uThreadFreeOnTerminateWithRef.pas"/>
         <DCCReference Include="sources\Detectors\uPathTraversal.pas"/>
+        <DCCReference Include="sources\Detectors\uAttributeIgnoreWithoutReason.pas"/>
+        <DCCReference Include="sources\Detectors\uAttributeDuplicate.pas"/>
+        <DCCReference Include="sources\Detectors\uAttributeCategoryWithoutString.pas"/>
+        <DCCReference Include="sources\Detectors\uAttributeTestFixtureWithoutTests.pas"/>
+        <DCCReference Include="sources\Detectors\uAttributeMisalignment.pas"/>
         <DCCReference Include="sources\Detectors\uInstanceInvokedConstructor.pas"/>
         <DCCReference Include="sources\Detectors\uIntegerOverflow.pas"/>
         <DCCReference Include="sources\Detectors\uInterfaceName.pas"/>

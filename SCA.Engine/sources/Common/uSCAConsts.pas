@@ -600,8 +600,13 @@ type
                                  // Verschachtelte Logik schwerer als linear-McCabe.
     fkThreadFreeOnTerminateWithRef, // SCA177 - Zugriff auf Thread-Var nach
                                  // FreeOnTerminate := True - AV-Risiko.
-    fkPathTraversal              // SCA178 - File-Open + User-Input-Concat.
+    fkPathTraversal,             // SCA178 - File-Open + User-Input-Concat.
                                  // Heuristik (kein Taint-Tracking).
+    fkAttributeIgnoreWithoutReason, // SCA179 - [Ignore] ohne Reason-Message.
+    fkAttributeDuplicate,        // SCA180 - same Attribute zweimal am Member.
+    fkAttributeCategoryWithoutString, // SCA181 - [Category] ohne String-Arg.
+    fkAttributeTestFixtureWithoutTests, // SCA182 - [TestFixture]-Klasse ohne [Test].
+    fkAttributeMisalignment      // SCA183 - Attribute mit Leerzeile zum Member.
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -836,7 +841,12 @@ const
     (Name: 'AnonMethodCaptureLoopVar';   FindingType: ftBug;          DefaultSeverity: lsError),   // fkAnonMethodCaptureLoopVar
     (Name: 'CognitiveComplexity';        FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkCognitiveComplexity
     (Name: 'ThreadFreeOnTerminateWithRef';FindingType: ftBug;         DefaultSeverity: lsError),   // fkThreadFreeOnTerminateWithRef
-    (Name: 'PathTraversal';              FindingType: ftVulnerability;DefaultSeverity: lsError)    // fkPathTraversal
+    (Name: 'PathTraversal';              FindingType: ftVulnerability;DefaultSeverity: lsError),   // fkPathTraversal
+    (Name: 'AttributeIgnoreWithoutReason';FindingType: ftCodeSmell;   DefaultSeverity: lsHint),    // fkAttributeIgnoreWithoutReason
+    (Name: 'AttributeDuplicate';         FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkAttributeDuplicate
+    (Name: 'AttributeCategoryWithoutString';FindingType: ftBug;       DefaultSeverity: lsError),   // fkAttributeCategoryWithoutString
+    (Name: 'AttributeTestFixtureWithoutTests';FindingType: ftCodeSmell;DefaultSeverity: lsWarning),// fkAttributeTestFixtureWithoutTests
+    (Name: 'AttributeMisalignment';      FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkAttributeMisalignment
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

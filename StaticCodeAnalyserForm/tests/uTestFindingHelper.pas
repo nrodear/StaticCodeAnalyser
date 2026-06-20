@@ -59,6 +59,9 @@ uses
   uCompilerDirectiveScope, uBooleanPropertyNaming,
   uVariantTypeMisuse, uTObjectListWithoutOwnership, uAnonMethodCaptureLoopVar,
   uCognitiveComplexity, uThreadFreeOnTerminateWithRef, uPathTraversal,
+  uAttributeIgnoreWithoutReason, uAttributeDuplicate,
+  uAttributeCategoryWithoutString, uAttributeTestFixtureWithoutTests,
+  uAttributeMisalignment,
   uUnusedRoutine, uUninitVar,
   uStaticAnalyzer2,
   uTestSrcBuilder,
@@ -206,6 +209,11 @@ begin
         TTodoCommentDetector.AnalyzeUnit(Root, TempPath, Result);
         TCompilerDirectiveScopeDetector.AnalyzeUnit(Root, TempPath, Result);
         TBooleanPropertyNamingDetector.AnalyzeUnit(Root, TempPath, Result);
+        TAttributeIgnoreWithoutReasonDetector.AnalyzeUnit(Root, TempPath, Result);
+        TAttributeDuplicateDetector.AnalyzeUnit(Root, TempPath, Result);
+        TAttributeCategoryWithoutStringDetector.AnalyzeUnit(Root, TempPath, Result);
+        TAttributeTestFixtureWithoutTestsDetector.AnalyzeUnit(Root, TempPath, Result);
+        TAttributeMisalignmentDetector.AnalyzeUnit(Root, TempPath, Result);
         TEmptyMethodDetector.AnalyzeUnit(Root, TempPath, Result);
         TDuplicateBlockDetector.AnalyzeUnit(Root, TempPath, Result);
         TWithStatementDetector.AnalyzeUnit(Root, TempPath, Result);
