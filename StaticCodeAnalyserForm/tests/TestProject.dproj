@@ -71,7 +71,6 @@
         <BT_BuildType>Debug</BT_BuildType>
         <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProgramID=com.embarcadero.$(MSBuildProjectName);ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
         <VerInfo_Locale>1033</VerInfo_Locale>
-        <DCC_Define>TESTINSIGHT;$(DCC_Define)</DCC_Define>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win64)'!=''">
         <DCC_UsePackage>SCA.Engine;vclwinx;fmx;vclie;DbxCommonDriver;bindengine;IndyIPCommon;VCLRESTComponents;FireDACCommonODBC;FireDACCommonDriver;appanalytics;IndyProtocols;vclx;IndyIPClient;dbxcds;vcledge;bindcompvclwinx;bindcompfmx;inetdb;FireDACSqliteDriver;DbxClientDriver;soapmidas;vclactnband;fmxFireDAC;dbexpress;DBXMySQLDriver;VclSmp;inet;vcltouch;fmxase;dbrtl;fmxdae;FireDACMSAccDriver;CustomIPTransport;vcldsnap;DBXInterBaseDriver;IndySystem;Skia.Package.VCL;vcldb;vclFireDAC;bindcomp;FireDACCommon;IndyCore;RESTBackendComponents;bindcompdbx;rtl;FireDACMySQLDriver;FireDACADSDriver;RESTComponents;DBXSqliteDriver;vcl;IndyIPServer;dsnapxml;dsnapcon;adortl;vclimg;FireDACPgDriver;FireDAC;inetdbxpress;xmlrtl;tethering;bindcompvcl;dsnap;CloudService;fmxobj;bindcompvclsmp;soaprtl;soapserver;FireDACIBDriver;$(DCC_UsePackage)</DCC_UsePackage>
@@ -253,6 +252,12 @@
         <DCCReference Include="uTestPointerSubtraction.pas"/>
         <DCCReference Include="uTestInsecureCryptoAlgorithm.pas"/>
         <DCCReference Include="uTestCommandInjection.pas"/>
+        <DCCReference Include="uTestInsecureRandom.pas"/>
+        <DCCReference Include="uTestDefaultCaseInCaseStatement.pas"/>
+        <DCCReference Include="uTestAssertWithSideEffect.pas"/>
+        <DCCReference Include="uTestConstStringParameter.pas"/>
+        <DCCReference Include="uTestCompilerDirectiveScope.pas"/>
+        <DCCReference Include="uTestBooleanPropertyNaming.pas"/>
         <DCCReference Include="uTestUnusedRoutine.pas"/>
         <DCCReference Include="uTestSuppressionCompleteness.pas"/>
         <DCCReference Include="uTestAbstractNotImpl.pas"/>

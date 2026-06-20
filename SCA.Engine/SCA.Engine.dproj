@@ -191,6 +191,12 @@
         <DCCReference Include="sources\Detectors\uInheritedMethodEmpty.pas"/>
         <DCCReference Include="sources\Detectors\uInlineAssembly.pas"/>
         <DCCReference Include="sources\Detectors\uInsecureCryptoAlgorithm.pas"/>
+        <DCCReference Include="sources\Detectors\uInsecureRandom.pas"/>
+        <DCCReference Include="sources\Detectors\uDefaultCaseInCaseStatement.pas"/>
+        <DCCReference Include="sources\Detectors\uAssertWithSideEffect.pas"/>
+        <DCCReference Include="sources\Detectors\uConstStringParameter.pas"/>
+        <DCCReference Include="sources\Detectors\uCompilerDirectiveScope.pas"/>
+        <DCCReference Include="sources\Detectors\uBooleanPropertyNaming.pas"/>
         <DCCReference Include="sources\Detectors\uInstanceInvokedConstructor.pas"/>
         <DCCReference Include="sources\Detectors\uIntegerOverflow.pas"/>
         <DCCReference Include="sources\Detectors\uInterfaceName.pas"/>

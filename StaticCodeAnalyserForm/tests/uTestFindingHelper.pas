@@ -54,7 +54,9 @@ uses
   uUnpairedLock, uMoveSizeOfPointer, uWithMultipleTargets,
   uGetMemWithoutFreeMem, uSetLengthAppendInLoop, uPointerArithmeticOnString,
   uEmptyOnHandler, uStringFromPointer, uPointerSubtraction,
-  uInsecureCryptoAlgorithm, uCommandInjection,
+  uInsecureCryptoAlgorithm, uCommandInjection, uInsecureRandom,
+  uDefaultCaseInCaseStatement, uAssertWithSideEffect, uConstStringParameter,
+  uCompilerDirectiveScope, uBooleanPropertyNaming,
   uUnusedRoutine, uUninitVar,
   uStaticAnalyzer2,
   uTestSrcBuilder,
@@ -152,6 +154,10 @@ begin
       TSqlDangerousStatementDetector.AnalyzeUnit(Root, 'sample.pas', Result);
       TInsecureCryptoAlgorithmDetector.AnalyzeUnit(Root, 'sample.pas', Result);
       TCommandInjectionDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TInsecureRandomDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TDefaultCaseInCaseStatementDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TAssertWithSideEffectDetector.AnalyzeUnit(Root, 'sample.pas', Result);
+      TConstStringParameterDetector.AnalyzeUnit(Root, 'sample.pas', Result);
       TSynchronizeInDestructorDetector.AnalyzeUnit(Root, 'sample.pas', Result);
       TNamingExtDetector.AnalyzeUnit(Root, 'sample.pas', Result);
       // TTodoCommentDetector / TReversedForRangeDetector / TLengthUnderflowDetector /
@@ -190,6 +196,8 @@ begin
       Root := Parser.ParseSource(Source);
       try
         TTodoCommentDetector.AnalyzeUnit(Root, TempPath, Result);
+        TCompilerDirectiveScopeDetector.AnalyzeUnit(Root, TempPath, Result);
+        TBooleanPropertyNamingDetector.AnalyzeUnit(Root, TempPath, Result);
         TEmptyMethodDetector.AnalyzeUnit(Root, TempPath, Result);
         TDuplicateBlockDetector.AnalyzeUnit(Root, TempPath, Result);
         TWithStatementDetector.AnalyzeUnit(Root, TempPath, Result);

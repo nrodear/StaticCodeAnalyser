@@ -115,7 +115,9 @@ uses
   uUnpairedLock, uMoveSizeOfPointer, uWithMultipleTargets,
   uGetMemWithoutFreeMem, uSetLengthAppendInLoop, uPointerArithmeticOnString,
   uEmptyOnHandler, uStringFromPointer, uPointerSubtraction,
-  uInsecureCryptoAlgorithm, uCommandInjection,
+  uInsecureCryptoAlgorithm, uCommandInjection, uInsecureRandom,
+  uDefaultCaseInCaseStatement, uAssertWithSideEffect, uConstStringParameter,
+  uCompilerDirectiveScope, uBooleanPropertyNaming,
   uUnusedRoutine, uUninitVar;
 
 type
@@ -347,6 +349,19 @@ begin
   // Security-Familie: schwache Krypto + Command-Injection.
   AddD('InsecureCryptoAlgorithm', fkInsecureCryptoAlgorithm, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TInsecureCryptoAlgorithmDetector.AnalyzeUnit(R, F, L); end, ['md5', 'sha1', 'des', 'rc4', 'crypto', 'hash']);
   AddD('CommandInjection', fkCommandInjection, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TCommandInjectionDetector.AnalyzeUnit(R, F, L); end, ['shellexecute', 'createprocess', 'winexec']);
+  // SCA167 InsecureRandom: file-Pre-Filter auf 'random' (Substring) skippt
+  // grosse Files die das Wort nicht enthalten.
+  AddD('InsecureRandom', fkInsecureRandom, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TInsecureRandomDetector.AnalyzeUnit(R, F, L); end, ['random']);
+  // SCA168 DefaultCaseInCaseStatement: brauchen nur nkCaseStmt; Pre-Filter 'case'.
+  AddD('DefaultCaseInCaseStatement', fkDefaultCaseInCaseStatement, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TDefaultCaseInCaseStatementDetector.AnalyzeUnit(R, F, L); end, ['case ']);
+  // SCA169 AssertWithSideEffect: Pre-Filter 'assert'.
+  AddD('AssertWithSideEffect', fkAssertWithSideEffect, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TAssertWithSideEffectDetector.AnalyzeUnit(R, F, L); end, ['assert']);
+  // SCA170 ConstStringParameter: kein Pre-Filter (jede Unit kann Methods haben).
+  AddD('ConstStringParameter', fkConstStringParameter, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TConstStringParameterDetector.AnalyzeUnit(R, F, L); end);
+  // SCA171 CompilerDirectiveScope: file-Pre-Filter auf '{$' (Substring).
+  AddD('CompilerDirectiveScope', fkCompilerDirectiveScope, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TCompilerDirectiveScopeDetector.AnalyzeUnit(R, F, L); end, ['{$']);
+  // SCA172 BooleanPropertyNaming: file-Pre-Filter auf 'boolean'.
+  AddD('BooleanPropertyNaming', fkBooleanPropertyNaming, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TBooleanPropertyNamingDetector.AnalyzeUnit(R, F, L); end, ['boolean']);
   // Dead-Code-Familie: standalone Routinen ohne Aufruf (analog SCA147 fuer
   // class-private Methoden, schliesst die Luecke top-level Routinen).
   AddD('UnusedRoutine', fkUnusedRoutine, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>) begin TUnusedRoutineDetector.AnalyzeUnit(R, F, L); end);

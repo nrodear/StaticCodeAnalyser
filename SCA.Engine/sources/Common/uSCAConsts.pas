@@ -567,11 +567,29 @@ type
                                  // (Suppression nicht mehr noetig) ODER
                                  // Suppression-Target war falsch gesetzt.
                                  // Emittiert vom uSuppression-Post-Filter.
-    fkUninitVar                  // SCA016 - lokale Variable die auf einem
+    fkUninitVar,                 // SCA016 - lokale Variable die auf einem
                                  // Pfad gelesen wird bevor sie auf demselben
                                  // Pfad geschrieben wurde. Konservatives
                                  // single-method-Scope-Modell (FixInsight-
                                  // Style). Siehe Konzept_SCA016_UninitVar.md.
+    fkInsecureRandom,            // SCA167 - Random/RandomRange/RandomFrom
+                                 // ohne dass Randomize im File irgendwo
+                                 // aufgerufen wird. Random seedet sich nicht
+                                 // selbst -> bei Seed=0 gleiche Sequenz pro Lauf.
+                                 // FP-Tradeoff: cross-unit Randomize wird
+                                 // nicht gesehen; Suppression-Marker dann.
+    fkDefaultCaseInCaseStatement, // SCA168 - case-Stmt ohne else-Branch.
+                                 // Unhandled-Values fallen still durch.
+    fkAssertWithSideEffect,      // SCA169 - Assert(Func()) wo Func einen
+                                 // Side-Effect hat. Release-Build entfernt
+                                 // Assert komplett -> Side-Effect weg.
+    fkConstStringParameter,      // SCA170 - string-Parameter ohne const-
+                                 // Modifier. Performance + Klarheit.
+    fkCompilerDirectiveScope,    // SCA171 - {$WARNINGS OFF} ohne {$WARNINGS ON}
+                                 // im File. Switch leakt in nachfolgende
+                                 // Compilation-Units.
+    fkBooleanPropertyNaming      // SCA172 - Boolean-Property ohne Is/Has/
+                                 // Can/Should-Prefix.
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -794,7 +812,13 @@ const
     (Name: 'CommandInjection';           FindingType: ftVulnerability;DefaultSeverity: lsError),   // fkCommandInjection
     (Name: 'UnusedRoutine';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkUnusedRoutine
     (Name: 'UnusedSuppression';          FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkUnusedSuppression
-    (Name: 'UninitVar';                  FindingType: ftBug;          DefaultSeverity: lsError)    // fkUninitVar
+    (Name: 'UninitVar';                  FindingType: ftBug;          DefaultSeverity: lsError),   // fkUninitVar
+    (Name: 'InsecureRandom';             FindingType: ftBug;          DefaultSeverity: lsWarning), // fkInsecureRandom
+    (Name: 'DefaultCaseInCaseStatement'; FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkDefaultCaseInCaseStatement
+    (Name: 'AssertWithSideEffect';       FindingType: ftBug;          DefaultSeverity: lsWarning), // fkAssertWithSideEffect
+    (Name: 'ConstStringParameter';       FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkConstStringParameter
+    (Name: 'CompilerDirectiveScope';     FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkCompilerDirectiveScope
+    (Name: 'BooleanPropertyNaming';      FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkBooleanPropertyNaming
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

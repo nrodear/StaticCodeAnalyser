@@ -3264,6 +3264,126 @@
       "impacts": [
         { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
       ]
+    },
+    {
+      "id": "SCA167",
+      "kind": "InsecureRandom",
+      "name": "Random call without prior Randomize",
+      "shortDescription": "Random / RandomRange / RandomFrom used without Randomize - Seed=0 yields a deterministic sequence on every run",
+      "fullDescription": "Delphi's Random function uses an internal seed that defaults to 0 at program start. Until Randomize is called once (typically at the start of program execution), Random returns the same sequence of values every time the program is launched. The detector walks the AST for all calls and skips the entire unit if any Randomize invocation is present anywhere. Otherwise every Random / RandomRange / RandomFrom call is flagged. Note: Randomize calls in other units (e.g. in a use'd unit's initialization block) are not detected; suppress with `// noinspection InsecureRandom` if applicable. For cryptographic use cases (token generation, salts, password reset codes) Random is unsuitable regardless of Randomize - use TBytes from a CSPRNG (e.g. CryptGenRandom on Windows, /dev/urandom on POSIX).",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["reliability", "randomness", "seed"],
+      "configKey": "[Detectors] InsecureRandomEnabled",
+      "detectorUnit": "uInsecureRandom.pas",
+      "examples": {
+        "bad":  "procedure DealCards;\nvar i: Integer;\nbegin\n  for i := 1 to 5 do\n    Players[i].Card := Random(52);\nend;",
+        "good": "procedure DealCards;\nvar i: Integer;\nbegin\n  Randomize;   // once, at startup\n  for i := 1 to 5 do\n    Players[i].Card := Random(52);\nend;"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA168",
+      "kind": "DefaultCaseInCaseStatement",
+      "name": "case statement without else branch",
+      "shortDescription": "case statement has no else branch - unhandled values fall through silently",
+      "fullDescription": "A case statement without an else branch silently ignores all values that are not explicitly listed. When the case expression takes one of these unhandled values, no action is taken and no error is raised, which can mask logic bugs (especially when new enum values are added later and the case statements are not updated). Add `else ;` for an intentional no-op (which documents the decision) or a default handler that raises an exception / logs / asserts.",
+      "defaultSeverity": "Hint",
+      "type": "CodeSmell",
+      "tags": ["control-flow", "default-case"],
+      "configKey": "[Detectors] DefaultCaseInCaseStatementEnabled",
+      "detectorUnit": "uDefaultCaseInCaseStatement.pas",
+      "examples": {
+        "bad":  "case Status of\n  stNew    : DoNew;\n  stActive : DoActive;\nend;",
+        "good": "case Status of\n  stNew    : DoNew;\n  stActive : DoActive;\nelse\n  raise EProgrammerError.Create('Unhandled status');\nend;"
+      },
+      "cleanCodeAttribute": "COMPLETE",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA169",
+      "kind": "AssertWithSideEffect",
+      "name": "Assert argument contains a function call with side effects",
+      "shortDescription": "Assert(SomeCall) - the call disappears in Release builds and its side effect is silently lost",
+      "fullDescription": "The Delphi compiler removes Assert calls entirely from Release builds (unless DCC_Assertions is on). If the asserted expression contains a function call with side effects (allocation, state mutation, I/O, counter increment), the side effect disappears too - the Release-only behavior diverges from Debug. The detector flags Assert calls whose argument contains a function-call pattern, after excluding a whitelist of known-pure RTL helpers (Length, Assigned, SizeOf, IntToStr, ...). Move the call out of the Assert and assert on the result instead.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["reliability", "assert", "side-effect"],
+      "configKey": "[Detectors] AssertWithSideEffectEnabled",
+      "detectorUnit": "uAssertWithSideEffect.pas",
+      "examples": {
+        "bad":  "Assert(InitializeSubsystem);   // Release build skips Init entirely",
+        "good": "var Ok := InitializeSubsystem;\nAssert(Ok, 'subsystem init failed');"
+      },
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
+    },
+    {
+      "id": "SCA170",
+      "kind": "ConstStringParameter",
+      "name": "string parameter without const modifier",
+      "shortDescription": "string parameter declared without const - causes refcount bump on every call",
+      "fullDescription": "Delphi increments the string's reference count on every call when the parameter is declared without `const`. With `const`, the compiler passes a pure reference and skips the refcount roundtrip. The compiler also forbids assignment to a `const` parameter, which makes the no-mutation contract explicit. For non-mutating string parameters (the overwhelming majority), prefer `const`. The detector flags parameters whose type is `string`/`AnsiString`/`UnicodeString`/`WideString`/`RawByteString`/`ShortString` without `const`/`var`/`out`.",
+      "defaultSeverity": "Hint",
+      "type": "CodeSmell",
+      "tags": ["performance", "string", "refcount"],
+      "configKey": "[Detectors] ConstStringParameterEnabled",
+      "detectorUnit": "uConstStringParameter.pas",
+      "examples": {
+        "bad":  "function Hash(s: string): Integer;",
+        "good": "function Hash(const s: string): Integer;"
+      },
+      "cleanCodeAttribute": "EFFICIENT",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA171",
+      "kind": "CompilerDirectiveScope",
+      "name": "Compiler switch OFF without matching ON in same file",
+      "shortDescription": "{$WARNINGS OFF} (or HINTS/RANGECHECKS/...) without a closing ON - leaks into following units",
+      "fullDescription": "Delphi compiler-state directives like {$WARNINGS OFF}, {$HINTS OFF}, {$RANGECHECKS OFF}, {$BOOLEVAL OFF}, {$OVERFLOWCHECKS OFF} change the compiler state for everything compiled after them. If the OFF is not paired with a closing ON in the same file, the switch leaks into all subsequent compilation units in the same build, suppressing warnings/hints/checks far outside the intended scope. The detector counts OFF and ON per directive name in the file and reports any directive whose OFF outnumbers ON at end-of-file.",
+      "defaultSeverity": "Warning",
+      "type": "CodeSmell",
+      "tags": ["compiler-directive", "scope", "switch"],
+      "configKey": "[Detectors] CompilerDirectiveScopeEnabled",
+      "detectorUnit": "uCompilerDirectiveScope.pas",
+      "examples": {
+        "bad":  "{$WARNINGS OFF}\nprocedure Foo;\nbegin\nend;",
+        "good": "{$WARNINGS OFF}\nprocedure Foo;\nbegin\nend;\n{$WARNINGS ON}"
+      },
+      "cleanCodeAttribute": "FORMATTED",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA172",
+      "kind": "BooleanPropertyNaming",
+      "name": "Boolean property without Is / Has / Can / Should prefix",
+      "shortDescription": "Boolean property name reads as a noun - prefer a verb prefix that scans as a question",
+      "fullDescription": "A Boolean property named like a noun reads ambiguously at call sites (`if X.Active then` vs. `if X.IsActive then`). Prefer a verb-style prefix (`Is`/`Has`/`Can`/`Should`/`Will`) which makes the call site read naturally as a question. The detector flags Boolean properties whose name does not start with one of these prefixes, with a built-in whitelist of established VCL conventions (Enabled, Visible, Active, Checked, Modified, ReadOnly, Selected, Focused, Loaded, Modified, Dirty, ...).",
+      "defaultSeverity": "Hint",
+      "type": "CodeSmell",
+      "tags": ["naming", "convention", "boolean"],
+      "configKey": "[Detectors] BooleanPropertyNamingEnabled",
+      "detectorUnit": "uBooleanPropertyNaming.pas",
+      "examples": {
+        "bad":  "property Ready: Boolean;",
+        "good": "property IsReady: Boolean;"
+      },
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
     }
   ]
 }
