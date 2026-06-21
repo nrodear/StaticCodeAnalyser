@@ -38,6 +38,8 @@ type
     [Test] procedure Leak_ParseFilesAllClasses_NoFinding;
     [Test] procedure Leak_GenericObjectList_FreedInFinally_NoFinding;
     [Test] procedure Leak_FactoryMethodNoParens_BorrowedRef_NoFinding;
+    [Test] procedure Leak_SiblingFactoryNoParens_ReportsLeak;
+    [Test] procedure Leak_SiblingBorrowedGetterNoParens_NoFinding;
     // --- 30 weitere Leak-Tests ---
     [Test] procedure Leak_TFileStream_NoFree_ReportsError;
     [Test] procedure Leak_TMemoryStream_FreeInFinally_NoFinding;
@@ -694,6 +696,56 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Dotted-no-parens RHS = Borrowed-Reference, kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_SiblingFactoryNoParens_ReportsLeak;
+// FN-Fix (MeineUnit 2026-06-21): `list := MeineFactory;` (klammerloser
+// Aufruf einer parameterlosen Schwester-Factory DERSELBEN Klasse, deren
+// Body `Result := TFoo.Create` macht) ist Ownership-Transfer -> Leak,
+// wenn list nie freigegeben wird.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TFoo.MakeList: TStringList;'#13#10+
+  'begin'#13#10+
+  '  Result := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'function TFoo.Leaky: TStringList;'#13#10+
+  'var list1: TStringList;'#13#10+
+  'begin'#13#10+
+  '  list1 := MakeList;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
+      'klammerloser Schwester-Factory-Aufruf ohne Free muss als Leak gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_SiblingBorrowedGetterNoParens_NoFinding;
+// Praezisions-Guard: eine Schwester-Methode die ein FELD zurueckgibt
+// (`Result := FCache`, kein Create) ist ein geliehener Getter - der
+// klammerlose Aufruf darf NICHT als Leak gemeldet werden.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TFoo.GetCached: TStringList;'#13#10+
+  'begin'#13#10+
+  '  Result := FCache;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var list1: TStringList;'#13#10+
+  'begin'#13#10+
+  '  list1 := GetCached;'#13#10+
+  '  list1.Add(''x'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'geliehener Getter (Result := FCache) ist kein Leak');
   finally F.Free; end;
 end;
 

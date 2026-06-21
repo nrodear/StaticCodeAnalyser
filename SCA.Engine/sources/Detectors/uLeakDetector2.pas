@@ -40,8 +40,8 @@ type
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>);
-    class procedure AnalyzeMethod(MethodNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+    class procedure AnalyzeMethod(UnitNode, MethodNode: TAstNode;
+      const FileName: string; Results: TObjectList<TLeakFinding>);
 
   // Hilfsmethoden (public fuer Wiederverwendung in anderen Detektoren)
   public
@@ -61,7 +61,7 @@ type
       out CreatePos: Integer): Boolean; static;
     class function HasCreateAssign(MethodNode: TAstNode;
       const VarNameLow: string): Boolean; static;
-    class function HasFunctionCallAssign(MethodNode: TAstNode;
+    class function HasFunctionCallAssign(UnitNode, MethodNode: TAstNode;
       const VarNameLow: string): Boolean; static;
     // Liefert die Quell-Zeile des ERSTEN `var := X.Create(...)`. Wird
     // genutzt um die Befund-Position auf die echte Create-Zeile zu legen
@@ -249,8 +249,49 @@ begin
   end;
 end;
 
-class function TLeakDetector2.HasFunctionCallAssign(MethodNode: TAstNode;
+class function TLeakDetector2.HasFunctionCallAssign(UnitNode, MethodNode: TAstNode;
   const VarNameLow: string): Boolean;
+var
+  ThisClassLow : string;
+
+  // True wenn CalleeLow eine parameterlose Schwester-FUNKTION DERSELBEN
+  // Klasse ist, deren Body direkt `Result := <Typ>.Create` macht - also
+  // eine echte Factory (Caller bekommt Ownership). Damit wird der
+  // klammerlose Aufruf `list := MeineFactory;` als Leak erkannt, OHNE
+  // geliehene Property-/Field-Zuweisungen (`list := obj.FList`) oder
+  // externe/lazy Getter zu treffen: aufgeloest wird nur exakt
+  // `<DieseKlasse>.<Callee>`, und der Body muss DIREKT in Result allokieren
+  // (Lazy-Getter `Result := FList` mit `FList := X.Create` matcht NICHT).
+  function IsLocalFactory(const CalleeLow: string): Boolean;
+  var
+    Methods, Assigns : TList<TAstNode>;
+    Mth, A           : TAstNode;
+    TargetLow, LhsLow: string;
+  begin
+    Result := False;
+    if (ThisClassLow = '') or (CalleeLow = '') then Exit;
+    TargetLow := ThisClassLow + '.' + CalleeLow;
+    Methods := UnitNode.FindAll(nkMethod);
+    try
+      for Mth in Methods do
+      begin
+        if Mth.Name.ToLower <> TargetLow then Continue;
+        Assigns := Mth.FindAll(nkAssign);
+        try
+          for A in Assigns do
+          begin
+            LhsLow := A.Name.ToLower;
+            if (LhsLow = 'result') or (LhsLow = CalleeLow) then
+              if Pos('.create', A.TypeRef.ToLower) > 0 then Exit(True);
+          end;
+        finally
+          Assigns.Free;
+        end;
+      end;
+    finally
+      Methods.Free;
+    end;
+  end;
 
   function IsBorrowedReferenceCall(const RhsLower: string): Boolean;
   // Non-Ownership-Prefix-Liste: Calls deren Name mit diesen Prefixen
@@ -299,12 +340,26 @@ class function TLeakDetector2.HasFunctionCallAssign(MethodNode: TAstNode;
     end;
   end;
 
+  function IsCleanIdent(const S: string): Boolean;
+  var i: Integer;
+  begin
+    Result := S <> '';
+    for i := 1 to Length(S) do
+      if not CharInSet(S[i], ['a'..'z', '0'..'9', '_']) then Exit(False);
+  end;
+
 var
   Assigns : TList<TAstNode>;
   A       : TAstNode;
   RHS     : string;
+  DotP    : Integer;
 begin
   Result  := False;
+  // Klasse der analysierten Methode ('tmeineklasse.foo' -> 'tmeineklasse').
+  ThisClassLow := '';
+  DotP := LastDelimiter('.', MethodNode.Name);
+  if DotP > 0 then ThisClassLow := LowerCase(Copy(MethodNode.Name, 1, DotP - 1));
+
   Assigns := MethodNode.FindAll(nkAssign);
   try
     for A in Assigns do
@@ -320,13 +375,17 @@ begin
         if IsBorrowedReferenceCall(RHS) then Continue;
         Exit(True);
       end;
-      // Ohne '(' KEINE Factory-Detection: 'list := obj.FList' oder
-      // 'list := SomeProperty' sind geliehene Referenzen, kein Ownership-
-      // Transfer. Vorher wurde jeder dotted Bezeichner-Pfad als Factory-
-      // Aufruf gewertet -> False-Positives auf jeder Field-/Property-
-      // Zuweisung. Lieber False-Negative auf seltene parameterlose
-      // Factory-Methoden (TFoo.Singleton) als False-Positive auf Standard-
-      // Field-Access.
+      // Ohne '(': normalerweise geliehene Referenz ('list := obj.FList'
+      // / 'list := SomeProperty') - KEIN Ownership-Transfer. AUSNAHME:
+      // ein klammerloser Aufruf einer parameterlosen Schwester-FACTORY
+      // DERSELBEN Klasse ('list := MeineFactory;' mit
+      // `Result := TFoo.Create` im Body) IST ein Leak. Wir loesen nur
+      // bare bzw. `Self.`-qualifizierte Identifier auf (eindeutig eigene
+      // Klasse); echte Fields/Properties/externe Getter matchen nicht.
+      var RhsId := Trim(RHS);
+      if StartsStr('self.', RhsId) then RhsId := Copy(RhsId, 6, MaxInt);
+      if IsCleanIdent(RhsId) and IsLocalFactory(RhsId) then
+        Exit(True);
     end;
   finally
     Assigns.Free;
@@ -811,7 +870,7 @@ end;
 
 { ---- Öffentliche API ---- }
 
-class procedure TLeakDetector2.AnalyzeMethod(MethodNode: TAstNode;
+class procedure TLeakDetector2.AnalyzeMethod(UnitNode, MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 
   procedure AddFinding(const MissingVar: string; Sev: TLeakSeverity;
@@ -870,7 +929,7 @@ begin
       end;
 
       // ── Pfad 2: Funktionsaufruf-Zuweisung — list := BuildList(...) ──────────
-      if not HasFunctionCallAssign(MethodNode, VarNameLow) then Continue;
+      if not HasFunctionCallAssign(UnitNode, MethodNode, VarNameLow) then Continue;
 
       if IsReturnedAsResult(MethodNode, VarNameLow) then Continue;
       if IsPassedToOwner(MethodNode, VarNameLow)    then Continue;
@@ -898,7 +957,7 @@ begin
   Methods := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
-      AnalyzeMethod(M, FileName, Results);
+      AnalyzeMethod(UnitNode, M, FileName, Results);
   finally
     Methods.Free;
   end;
