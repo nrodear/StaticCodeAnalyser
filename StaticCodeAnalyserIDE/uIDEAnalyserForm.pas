@@ -89,6 +89,11 @@ type
     FPendingHighlightFile   : string;
     // Debouncer fuer ApplyFilter (Tier B1) - frueher pro Such-Keystroke.
     FFilterDebounceTimer    : TTimer;
+    // Debouncer fuer Cursor-Navigation (Selection-follows-Cursor): Pfeil
+    // hoch/runter im Grid -> Editor folgt nach kurzem Idle. FLastPreviewRow
+    // verhindert Doppel-Navigation auf dieselbe Zeile.
+    FNavPreviewTimer        : TTimer;
+    FLastPreviewRow         : Integer;
 
     FPanelStats        : TPanel;
     // Toolbar-Panels - werden in CreateUI als alTop angelegt. Refs gehalten,
@@ -245,6 +250,12 @@ type
     procedure GridMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
     procedure GridKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+    // Cursor-Navigation (Selection-follows-Cursor): KeyUp entprellt
+    // Pfeil/Bild/Pos1/Ende ueber FNavPreviewTimer; NavPreviewFire fuehrt die
+    // entprellte Soft-Navigation aus (Editor folgt, Fokus bleibt im Grid).
+    procedure GridKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
+    procedure NavPreviewFire(Sender: TObject);
+    procedure PreviewFindingAtRow(ARow: Integer);
     procedure GridResize(Sender: TObject);
     procedure SearchChange(Sender: TObject);
     // Export-Click-Handler sind nach uIDEExportMenu ausgelagert.
@@ -1413,6 +1424,7 @@ begin
   FResultGrid.OnSelectCell := GridSelectCell;
   FResultGrid.OnMouseDown  := GridMouseDown;
   FResultGrid.OnKeyDown    := GridKeyDown;
+  FResultGrid.OnKeyUp      := GridKeyUp;     // Cursor-Nav: Editor folgt (entprellt)
   // Tooltip-Setup (Subclass + Hint-Properties + HintPause-Override) ist
   // im TFindingGridTooltip-Helper gekapselt. Owner=Self -> Auto-Free
   // plus expliziter FreeAndNil im Destruktor (Restore-Reihenfolge).
@@ -1862,6 +1874,60 @@ begin
     GridDblClick(Sender);
     Key := 0;
   end;
+end;
+
+procedure TAnalyserFrame.GridKeyUp(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+begin
+  // Selektions-bewegende Tasten -> entprellte Soft-Navigation (Editor folgt).
+  // VCL hat die Auswahl beim KeyDown schon bewegt, daher steht FResultGrid.Row
+  // beim Timer-Tick korrekt.
+  case Key of
+    VK_UP, VK_DOWN, VK_PRIOR, VK_NEXT, VK_HOME, VK_END:
+      if FNavPreviewTimer <> nil then
+      begin
+        FNavPreviewTimer.Enabled := False;   // re-armieren: nur Ruhe-Zeile springt
+        FNavPreviewTimer.Enabled := True;
+      end;
+  end;
+end;
+
+procedure TAnalyserFrame.NavPreviewFire(Sender: TObject);
+// Idle-Tick: jetzt der Editor-Sprung zur aktuell ausgewaehlten Zeile - aber
+// nur wenn sie sich seit der letzten Navigation geaendert hat.
+begin
+  if FNavPreviewTimer <> nil then
+    FNavPreviewTimer.Enabled := False;
+  if csDestroying in ComponentState then Exit;
+  if FResultGrid.Row <> FLastPreviewRow then
+    PreviewFindingAtRow(FResultGrid.Row);
+end;
+
+procedure TAnalyserFrame.PreviewFindingAtRow(ARow: Integer);
+// Soft-Navigate zum Fund in Zeile ARow (Preview): Editor zeigt die Stelle,
+// Fokus kehrt ins Grid zurueck, damit der User mit Pfeiltasten weiternavigieren
+// kann. KEIN OpenFileAtLine (das wuerde per CloseModule die IDE crashen) -
+// ShowFileAtLine schliesst nichts. Highlights setzt bereits GridSelectCell.
+var
+  idx     : Integer;
+  Finding : TLeakFinding;
+  absPath : string;
+  lineNo  : Integer;
+begin
+  if GLiveAnalyserFrame <> Pointer(Self) then Exit;   // Lifecycle-Sentinel
+  idx := ARow - 1;   // Zeile 0 = Header
+  if (idx < 0) or (idx >= FDisplayedFindings.Count) then Exit;
+  Finding := FDisplayedFindings[idx];
+  if not Assigned(Finding) then Exit;
+  absPath := Finding.FileName;
+  lineNo  := StrToIntDef(Finding.LineNumber, 0);
+  if (absPath = '') or (lineNo <= 0) then Exit;
+  if not FileExists(absPath) then Exit;
+
+  TIDEEditor.ShowFileAtLine(absPath, lineNo);
+  TIDEEditor.CenterCurrentViewOnLine(lineNo);
+  if FResultGrid.CanFocus then FResultGrid.SetFocus;
+  FLastPreviewRow := ARow;
 end;
 
 // ---------------------------------------------------------------------------
@@ -3460,6 +3526,14 @@ begin
   FFilterDebounceTimer.Interval := DEBOUNCE_MS;
   FFilterDebounceTimer.Enabled  := False;
   FFilterDebounceTimer.OnTimer  := FilterDebounceFire;
+
+  // Nav-Preview kuerzer (80 ms) als die teuren Rebuilds (200 ms) - der
+  // Editor-Sprung soll sich beim Scrollen "live" anfuehlen, ist aber billig.
+  FNavPreviewTimer := TTimer.Create(Self);
+  FNavPreviewTimer.Interval := 80;
+  FNavPreviewTimer.Enabled  := False;
+  FNavPreviewTimer.OnTimer  := NavPreviewFire;
+  FLastPreviewRow  := -1;
 end;
 
 procedure TAnalyserFrame.HighlightDebounceFire(Sender: TObject);
