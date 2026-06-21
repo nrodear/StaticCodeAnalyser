@@ -96,6 +96,7 @@
         <DCCReference Include="sources\uIDEToolbar.pas"/>
         <DCCReference Include="sources\uExportMenu.pas"/>
         <DCCReference Include="sources\uIDEColors.pas"/>
+        <DCCReference Include="sources\uPathNormalize.pas"/>
         <DCCReference Include="sources\uRecentPaths.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
