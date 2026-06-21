@@ -3098,16 +3098,31 @@ begin
     Exit;
   end;
 
-  // Bei .dfm-Befund hat OpenFileAtLine drei moegliche Auspraegungen:
-  //   ofmRegular         -> .pas-Befund, ganz normal
-  //   ofmDfmAsText       -> .pas war zu (oder nicht modifiziert) -> die
-  //                         DFM wurde geschlossen und als Text wieder
-  //                         geoeffnet. CursorPos zeigt direkt auf die
-  //                         Befund-Zeile in der DFM.
+  // .pas-Befund: SOFT-Navigate statt OpenFileAtLine. OpenFileAtLine ruft
+  // SafeCloseModule -> CloseModule(True) auf die Companion-.dfm; ist das
+  // Form-Modul gerade offen, schliesst das den ganzen Designer und crasht
+  // die IDE intern mit "Der Referenzzaehler von Instanz von Klasse
+  // TEditSource zeigt die Anzahl 1" (WalkDependencies-Destroy). ShowFileAtLine
+  // oeffnet/zeigt nur und schliesst NICHTS - identisch zum File-Findings-Panel.
+  if not SameText(ExtractFileExt(absPath), '.dfm') then
+  begin
+    if GLiveAnalyserFrame <> Pointer(Self) then Exit;   // Lifecycle-Sentinel
+    TIDEEditor.ShowFileAtLine(absPath, lineNo);
+    TIDEEditor.CenterCurrentViewOnLine(lineNo);
+    ScheduleHighlightRefresh(absPath);
+    StatusMode(Format(_('Opened: %s  Line: %d'),
+      [ExtractFileName(absPath), lineNo]));
+    Exit;
+  end;
+
+  // .dfm-Befund: hier ist das Schliessen der .pas GEWOLLT, damit die DFM als
+  // TEXT (statt im Form-Designer) laedt. Drei moegliche Auspraegungen:
+  //   ofmRegular         -> normal
+  //   ofmDfmAsText       -> .pas war zu/unmodifiziert -> DFM als Text geoeffnet,
+  //                         CursorPos zeigt auf die Befund-Zeile.
   //   ofmDfmFallbackPas  -> .pas war modifiziert; statt sie zu zerstoeren
   //                         oeffnen wir die .pas, Cursor auf Zeile 1. User
-  //                         schaltet bei Bedarf via Alt+F12 zur DFM-Text-
-  //                         Sicht und kennt die DFM-Zeile aus dem Hint.
+  //                         schaltet via Alt+F12 zur DFM-Text-Sicht.
   var Mode: TOpenFileMode := OpenFileAtLine(absPath, lineNo);
   // Editor-Line-Highlights setzen — Datei ist jetzt offen, alle Befunde
   // der Datei werden mit Stripe markiert (Multi-Marker-Modell).
