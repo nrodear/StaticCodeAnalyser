@@ -472,6 +472,67 @@ begin
   end;
 end;
 
+procedure FillMissingMethodNames(Root: TAstNode;
+  Results: TObjectList<TLeakFinding>; FromIdx: Integer);
+// Line-basierte Detektoren (AttributeDuplicate, TooLongLine, ...) setzen
+// MethodName = '' weil sie keinen AST-Methodenknoten kennen. Damit das Grid
+// (Haupt-Frame + File-Panel) trotzdem die einschliessende Methode zeigt,
+// loesen wir hier zentral Zeile -> Methode auf: fuer jeden Befund ohne
+// MethodName die Methode mit der GROESSTEN Decl-Zeile <= Befund-Zeile.
+//
+// FindAll(nkMethod) liefert eine eigene Kopie (Caller-owned) - Sortieren +
+// Freigeben sind sicher. Greift nur wenn ueberhaupt ein leerer MethodName im
+// neuen Befund-Bereich existiert (sonst kein Walk).
+var
+  Methods : TList<TAstNode>;
+  i, Ln   : Integer;
+  NeedFill: Boolean;
+
+  function MethodNameForLine(L: Integer): string;
+  var lo, hi, mid, found: Integer;
+  begin
+    Result := '';
+    lo := 0; hi := Methods.Count - 1; found := -1;
+    while lo <= hi do
+    begin
+      mid := (lo + hi) div 2;
+      if Methods[mid].Line <= L then begin found := mid; lo := mid + 1; end
+      else hi := mid - 1;
+    end;
+    if found >= 0 then Result := Methods[found].Name;
+  end;
+
+begin
+  if (Root = nil) or (Results = nil) then Exit;
+  NeedFill := False;
+  for i := FromIdx to Results.Count - 1 do
+    if (Results[i].MethodName = '') and (Results[i].Kind <> fkFileReadError) then
+    begin NeedFill := True; Break; end;
+  if not NeedFill then Exit;
+
+  Methods := Root.FindAll(nkMethod);
+  try
+    for i := Methods.Count - 1 downto 0 do
+      if Methods[i].Name = '' then Methods.Delete(i);   // namenlose raus
+    if Methods.Count = 0 then Exit;
+    Methods.Sort(TComparer<TAstNode>.Construct(
+      function(const A, B: TAstNode): Integer
+      begin
+        Result := A.Line - B.Line;
+      end));
+    for i := FromIdx to Results.Count - 1 do
+    begin
+      if Results[i].MethodName <> '' then Continue;
+      if Results[i].Kind = fkFileReadError then Continue;
+      Ln := StrToIntDef(Results[i].LineNumber, 0);
+      if Ln > 0 then
+        Results[i].MethodName := MethodNameForLine(Ln);
+    end;
+  finally
+    Methods.Free;
+  end;
+end;
+
 procedure RunAllDetectors(Root: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>; AIncludeUsesCheck: Boolean;
   AOnTime: TDetectorTimeProc; AOnError: TDetectorErrorProc);
@@ -601,6 +662,10 @@ begin
         Results.Delete(i);
     end;
   end;
+
+  // Einschliessende Methode fuer line-basierte Befunde (MethodName='')
+  // nachtragen - zentral, damit Haupt-Grid UND File-Panel sie anzeigen.
+  FillMissingMethodNames(Root, Results, PrevCount);
 
   finally
     TokenPresent.Free;

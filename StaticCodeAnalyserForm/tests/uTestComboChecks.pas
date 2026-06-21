@@ -83,6 +83,8 @@ type
     [Test] procedure Severity_MinError_DropsWarningsAndHints;
     [Test] procedure Severity_MinWarning_DropsHintsKeepsWarningsAndErrors;
     [Test] procedure Severity_MinHint_KeepsEverything;
+    // MethodName-Nachtrag fuer line-basierte Befunde (Grid-Anzeige)
+    [Test] procedure MethodName_FilledForLineBasedFinding;
   end;
 
 implementation
@@ -1278,6 +1280,45 @@ begin
     Assert.IsTrue(TFindingHelper.Count(F, fkFileReadError) >= 1,
       'Leerer Pfad -> fkFileReadError');
   finally F.Free; end;
+end;
+
+{ ---- MethodName-Nachtrag (Grid-Anzeige) ---- }
+
+procedure TTestNewChecks.MethodName_FilledForLineBasedFinding;
+// User-Report: im Grid fehlte bei line-basierten Befunden (z.B.
+// AttributeDuplicate) die Methode, obwohl die Zeile in einer Methode liegt.
+// Line-basierte Detektoren setzen MethodName=''; der zentrale Post-Pass
+// FillMissingMethodNames in RunAllDetectors traegt die einschliessende
+// Methode aus dem AST nach. Hier ueber HardcodedPath (line-basiert,
+// MethodName='') in TFoo.Bar verifiziert.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var p: string;'#13#10+
+  'begin'#13#10+
+  '  p := ''C:\Windows\System32'';'#13#10+
+  'end;';
+var
+  FName : string;
+  F     : TObjectList<TLeakFinding>;
+  Fnd, Hit : TLeakFinding;
+begin
+  WriteTempPas(SRC, FName);
+  try
+    F := TStaticAnalyzer2.AnalyzeLeaks(FName);
+    try
+      Hit := nil;
+      for Fnd in F do
+        if Fnd.Kind = fkHardcodedPath then begin Hit := Fnd; Break; end;
+      Assert.IsNotNull(Hit, 'fkHardcodedPath-Befund erwartet');
+      Assert.AreNotEqual('', Hit.MethodName,
+        'line-basierter Befund muss die einschliessende Methode tragen');
+      Assert.IsTrue(Hit.MethodName.Contains('Bar'),
+        'MethodName muss die Methode Bar nennen, war: ' + Hit.MethodName);
+    finally F.Free; end;
+  finally
+    if FileExists(FName) then DeleteFile(FName);
+  end;
 end;
 
 end.
