@@ -180,6 +180,12 @@ begin
   try
     for M in Methods do
     begin
+      // Destruktor: Free eines Feldes braucht KEIN Nil-Out - das Objekt
+      // selbst wird gerade zerstoert, die Felder sterben mit ihm. Real-
+      // World-FP-Cluster (2026-06-21): ein einziger Destruktor mit 8
+      // Field.Free erzeugte 8 Findings. Komplett skippen.
+      if SameText(M.TypeRef, 'destructor') then Continue;
+
       // Lokale Var-Namen einmal pro Methode sammeln. Free-Calls auf Locals
       // sind harmlos, weil die Variable beim Method-Ende sowieso aus dem
       // Scope faellt - kein Dangling-Pointer-Risiko. FreeAndNil ist primaer

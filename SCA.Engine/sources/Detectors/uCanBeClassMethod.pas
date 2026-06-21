@@ -166,17 +166,29 @@ function HasSelfOrFieldAccess(N: TAstNode): Boolean;
 var
   Child : TAstNode;
   NameLow : string;
+  Lead : string;
+  i : Integer;
 begin
   NameLow := LowerCase(N.Name);
   if NameLow = 'self' then Exit(True);
-  // Field-Konvention: 'F' + Grossbuchstabe + Rest, OHNE Punkt
-  // (dann waere es ein Method-Receiver wie 'TFoo.Bar').
-  if (Length(N.Name) >= 2) and (N.Name[1] = 'F')
-     and CharInSet(N.Name[2], ['A'..'Z'])
-     and (Pos('.', N.Name) = 0) then
-    Exit(True);
   // Field-Zugriff mit Self.<Field>-Prefix
   if StartsText('self.', N.Name) then Exit(True);
+  // Field-Konvention auf das FUEHRENDE Identifier-Segment anwenden. Der
+  // Parser legt gepunktete Designatoren ('FList.Add', 'fOwner.Count') als
+  // EINEN Node-Namen ab - die alte Pruefung 'Pos(.)=0' verwarf daher jeden
+  // Feldzugriff via Methode/Property/Index als "kein Feld" (Real-World-FP
+  // 2026-06-21: ~13/15 SCA148 FP). Konvention: 'F'/'f' + GROSSBUCHSTABE
+  // (FList, fOwner, fUpdateSQL). Der Grossbuchstabe als 2. Zeichen grenzt
+  // gegen RTL-Funktionen ab (Format, Free, FloatToStr -> 2. Zeichen klein).
+  Lead := '';
+  for i := 1 to Length(N.Name) do
+    if CharInSet(N.Name[i], ['A'..'Z', 'a'..'z', '0'..'9', '_']) then
+      Lead := Lead + N.Name[i]
+    else
+      Break;
+  if (Length(Lead) >= 2) and CharInSet(Lead[1], ['F', 'f'])
+     and CharInSet(Lead[2], ['A'..'Z']) then
+    Exit(True);
   // Inherited zaehlt als Polymorphie-Indikator (sollte vorher bereits
   // ueber TypeRef geskippt sein, hier defensiv).
   if N.Kind = nkInherited then Exit(True);

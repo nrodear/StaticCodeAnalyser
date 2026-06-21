@@ -31,6 +31,7 @@ type
     [Test] procedure CaseSensitiveCharLiterals_NoFinding;
     [Test] procedure CaseSensitiveStringLiterals_NoFinding;
     [Test] procedure BitAndCompareConstant_NoFinding;
+    [Test] procedure RandomBothSides_NoFinding;
 
     // ---- Finding-Inhalt ---------------------------------------------------
     [Test] procedure Taut_Finding_KindAndSeverity;
@@ -250,6 +251,24 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTautologicalBoolExpr),
     '(n and 1) = 1 ist Bit-Test, keine Tautologie');
+  finally F.Free; end;
+end;
+
+procedure TTestTautologicalExpr.RandomBothSides_NoFinding;
+// FP-Fix (Real-World 2026-06-21): zwei textgleiche Seiten mit nicht-
+// deterministischem Call sind NICHT tautologisch - jeder Random()-Aufruf
+// liefert einen anderen Wert.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  if (Random(20) > 15) or (Random(20) > 15) then Exit;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTautologicalBoolExpr),
+    'Random() beidseitig ist nicht-deterministisch - keine Tautologie');
   finally F.Free; end;
 end;
 

@@ -12,6 +12,8 @@ type
     [Test] procedure NoSelfAccess_Reported;
     [Test] procedure SelfAccess_NotReported;
     [Test] procedure FieldAccess_NotReported;
+    [Test] procedure FieldViaMethodCall_NotReported;
+    [Test] procedure LowercaseFieldAccess_NotReported;
     [Test] procedure AlreadyClassMethod_NotReported;
     [Test] procedure VirtualMethod_NotReported;
     [Test] procedure VirtualMethodWithSpaceBeforeDirective_NotReported;
@@ -66,6 +68,41 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeClassMethod));
+  finally F.Free; end;
+end;
+
+procedure TTestCanBeClassMethod.FieldViaMethodCall_NotReported;
+// FP-Fix (Real-World 2026-06-21): Feldzugriff via Methode/Property/Index
+// (`FList.Add(...)`) wird vom Parser als EIN Node-Name abgelegt - das
+// fuehrende Segment 'FList' ist trotzdem ein Feld -> kein class method.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Bar;'#13#10 +
+  'begin'#13#10 +
+  '  FList.Add(1);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeClassMethod),
+    'Feldzugriff via Methode (FList.Add) ist Instance-State - kein Finding');
+  finally F.Free; end;
+end;
+
+procedure TTestCanBeClassMethod.LowercaseFieldAccess_NotReported;
+// FP-Fix (Real-World 2026-06-21): lowercase-f-Feldkonvention (Alcinoe
+// fOwner/fUpdateSQL) - 'f' + Grossbuchstabe ist ebenfalls ein Feld.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Bar;'#13#10 +
+  'begin'#13#10 +
+  '  fOwner.Update;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeClassMethod),
+    'lowercase-f-Feld (fOwner) ist Instance-State - kein Finding');
   finally F.Free; end;
 end;
 

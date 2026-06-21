@@ -13,6 +13,7 @@ type
     [Test] procedure FreeAndNil_NotReported;
     [Test] procedure FreeAtMethodEnd_NotReported;
     [Test] procedure FreeFollowedByNilAssign_NotReported;
+    [Test] procedure FreeInDestructor_NotReported;
     [Test] procedure Finding_KindAndSeverity;
   end;
 
@@ -134,6 +135,37 @@ begin
       if Fnd.Kind = fkFreeWithoutNil then begin Hit := Fnd; Break; end;
     Assert.IsNotNull(Hit, 'fkFreeWithoutNil finding expected');
     Assert.AreEqual(lsWarning, Hit.Severity);
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNil.FreeInDestructor_NotReported;
+// FP-Fix (Real-World 2026-06-21): im Destruktor ist Nil-Out nach Free
+// sinnlos - das Objekt selbst wird zerstoert. Ein Destruktor mit mehreren
+// Field.Free erzeugte sonst je ein Finding.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  private'#13#10 +
+  '    FA, FB: TObject;'#13#10 +
+  '  public'#13#10 +
+  '    destructor Destroy; override;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'destructor TFoo.Destroy;'#13#10 +
+  'begin'#13#10 +
+  '  FA.Free;'#13#10 +
+  '  FB.Free;'#13#10 +
+  '  inherited;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
+      'Field.Free im Destruktor braucht kein Nil-Out - kein Finding');
   finally F.Free; end;
 end;
 

@@ -781,7 +781,12 @@ begin
         if FnName.StartsWith('release') or FnName.EndsWith('release') or
            FnName.StartsWith('dispose') or FnName.EndsWith('dispose') or
            FnName.StartsWith('return')  or FnName.EndsWith('return')  or
-           FnName.StartsWith('recycle') or FnName.EndsWith('recycle') then
+           FnName.StartsWith('recycle') or FnName.EndsWith('recycle') or
+           // Custom-Free-Wrapper: Funktionsname ENTHAELT 'free'
+           // (ALFreeAndNil, ALFreeObjectList, FreeObject, FreeThenNil ...).
+           // 'enthaelt' statt Praefix/Suffix, weil 'alfreeandnil' weder
+           // mit 'free' beginnt noch endet. Real-World-FP 2026-06-21.
+           (Pos('free', FnName) > 0) then
         begin
           Result := True; FoundInFinally := InFinally; Exit;
         end;

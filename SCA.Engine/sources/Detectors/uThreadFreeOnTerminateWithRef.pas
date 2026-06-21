@@ -56,6 +56,10 @@ type
     // Calls sind in dieser Reihenfolge erwartet (FoT vor Start ist
     // die Standard-Delphi-Idiom).
     class function HasDangerousMemberAccess(const Expr, VarName: string): Boolean; static;
+    // True wenn Expr ein Aktivierungs-Call `<var>.Start` / `<var>.Resume`
+    // ist - der Punkt ab dem der Thread LEBT (und sich selbst zerstoeren
+    // kann). Resume ist der pre-XE2-Start.
+    class function IsActivationCall(const Expr, VarName: string): Boolean; static;
   end;
 
 implementation
@@ -87,7 +91,9 @@ class function TThreadFreeOnTerminateWithRefDetector.HasDangerousMemberAccess(
 // deprecated und nach FoT genauso gefaehrlich wie ein generischer
 // Member-Access -> NICHT auf der Whitelist.
 const
-  WHITELIST : array[0..1] of string = ('start', 'execute');
+  // 'resume' jetzt auf der Whitelist: pre-XE2 ist Resume DER Start-Call,
+  // kein gefaehrlicher Post-Mortem-Zugriff (Real-World-FP 2026-06-21).
+  WHITELIST : array[0..2] of string = ('start', 'execute', 'resume');
 var
   Pat   : string;
   M     : TMatch;
@@ -107,6 +113,19 @@ begin
   end;
 end;
 
+class function TThreadFreeOnTerminateWithRefDetector.IsActivationCall(
+  const Expr, VarName: string): Boolean;
+var
+  M : TMatch;
+  Sub : string;
+begin
+  Result := False;
+  M := TRegEx.Match(Expr, '\b' + VarName + '\s*\.\s*(\w+)', [roIgnoreCase]);
+  if not M.Success then Exit;
+  Sub := LowerCase(M.Groups[1].Value);
+  Result := (Sub = 'start') or (Sub = 'resume');
+end;
+
 class procedure TThreadFreeOnTerminateWithRefDetector.AnalyzeUnit(
   UnitNode: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>);
@@ -116,8 +135,11 @@ var
   M, N    : TAstNode;
   // Var-Name -> Line der FreeOnTerminate-Zuweisung
   FoTLine : TDictionary<string, Integer>;
+  // Var-Name -> Line des Start/Resume-Calls (Thread wird ab hier "lebendig")
+  ActLine : TDictionary<string, Integer>;
   VarName : string;
   Pair    : TPair<string, Integer>;
+  GateLine: Integer;
   F       : TLeakFinding;
 begin
   Methods := UnitNode.FindAll(nkMethod);
@@ -125,6 +147,7 @@ begin
     for M in Methods do
     begin
       FoTLine := TDictionary<string, Integer>.Create;
+      ActLine := TDictionary<string, Integer>.Create;
       try
         // Pass 1: FreeOnTerminate := True finden.
         Assigns := M.FindAll(nkAssign);
@@ -141,17 +164,35 @@ begin
         end;
         if FoTLine.Count = 0 then Continue;
 
-        // Pass 2: subsequent Access auf VarName.
-        // Walk nkAssign (RHS-Reads) und nkCall (Statement-Calls).
+        // Pass 1b: Aktivierungs-Call (Start/Resume) pro Var finden -
+        // FRUEHESTE Zeile. Erst NACH dem Start ist ein Zugriff gefaehrlich;
+        // Config-Assignments + Reads VOR dem Start sind harmlos (Thread
+        // laeuft noch nicht). Real-World-FP 2026-06-21.
+        Calls := M.FindAll(nkCall);
+        try
+          for N in Calls do
+            for Pair in FoTLine do
+              if IsActivationCall(N.Name, Pair.Key) then
+                if (not ActLine.ContainsKey(Pair.Key))
+                   or (N.Line < ActLine[Pair.Key]) then
+                  ActLine.AddOrSetValue(Pair.Key, N.Line);
+        finally
+          Calls.Free;
+        end;
+
+        // Pass 2: subsequent Access auf VarName NACH dem Start.
+        // Ohne Start im selben Method-Scope: kein Finding (per-Method-FN).
         for Pair in FoTLine do
         begin
+          if not ActLine.TryGetValue(Pair.Key, GateLine) then Continue;
           Assigns := M.FindAll(nkAssign);
           try
             for N in Assigns do
             begin
-              if N.Line <= Pair.Value then Continue;
-              if HasDangerousMemberAccess(N.TypeRef, Pair.Key) or
-                 HasDangerousMemberAccess(N.Name, Pair.Key) then
+              if N.Line <= GateLine then Continue;
+              // Nur RHS-Reads (N.TypeRef) flaggen - LHS-Property-Assignments
+              // (`<var>.Name := x`) sind Config, kein gefaehrlicher Read.
+              if HasDangerousMemberAccess(N.TypeRef, Pair.Key) then
               begin
                 F            := TLeakFinding.Create;
                 F.FileName   := FileName;
@@ -173,7 +214,7 @@ begin
           try
             for N in Calls do
             begin
-              if N.Line <= Pair.Value then Continue;
+              if N.Line <= GateLine then Continue;
               if HasDangerousMemberAccess(N.Name, Pair.Key) then
               begin
                 F            := TLeakFinding.Create;
@@ -194,6 +235,7 @@ begin
         end;
       finally
         FoTLine.Free;
+        ActLine.Free;
       end;
     end;
   finally

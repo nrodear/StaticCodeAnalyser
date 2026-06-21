@@ -18,6 +18,7 @@ type
   public
     [Test] procedure Leak_CreateWithoutFree_ReportsError;
     [Test] procedure Leak_CreateFreeInFinally_NoFinding;
+    [Test] procedure Leak_CustomFreeWrapper_NoFinding;
     [Test] procedure Leak_FreeOutsideFinally_ReportsWarning;
     [Test] procedure Leak_ReturnResult_NoFinding;
     [Test] procedure Leak_ReturnViaLegacyFuncName_NoFinding;
@@ -195,6 +196,31 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'list in finally freigegeben – kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_CustomFreeWrapper_NoFinding;
+// FP-Fix (Real-World 2026-06-21): Custom-Free-Wrapper deren Name 'free'
+// enthaelt (ALFreeAndNil, ALFreeObjectList, ...) muessen als Freigabe
+// erkannt werden - sonst FP-Leak. Alcinoe nutzt diese durchgaengig.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var list: TStringList;'#13#10+
+  'begin'#13#10+
+  '  list := TStringList.Create;'#13#10+
+  '  try'#13#10+
+  '    list.Add(''x'');'#13#10+
+  '  finally'#13#10+
+  '    ALFreeAndNil(list);'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'ALFreeAndNil ist ein Free-Wrapper - kein Leak');
   finally F.Free; end;
 end;
 

@@ -259,6 +259,23 @@ begin
   until not Changed;
 end;
 
+// True wenn der Ausdruck einen nicht-deterministischen Call enthaelt -
+// dann sind zwei textgleiche Seiten NICHT tautologisch (jeder Aufruf
+// liefert einen anderen Wert). Real-World-FP 2026-06-21:
+// `(random(20) > 15) or (random(20) > 15)`.
+function ContainsNonDeterministic(const S: string): Boolean;
+const
+  MARKERS : array[0..2] of string =
+    ('random', 'gettickcount', 'queryperformancecounter');
+var
+  Low, Mk : string;
+begin
+  Result := False;
+  Low := LowerCase(S);
+  for Mk in MARKERS do
+    if Pos(Mk, Low) > 0 then Exit(True);
+end;
+
 // Sucht in einer Code-Zeile nach `<lhs> <op> <rhs>`-Pattern mit lhs == rhs
 // und op aus der relevanten Liste. Strings/Kommentare werden vorab
 // ausgeblendet, damit Op-Vorkommen darin nicht falsch matchen.
@@ -310,7 +327,8 @@ begin
       // Lhs-Prefix-Strip (z.B. `  if a` -> `a`)
       Lhs := StripLhsPrefix(Lhs);
       Rhs := Trim(Rhs);
-      if (Lhs <> '') and (Rhs <> '') and (Norm(Lhs) = Norm(Rhs)) then
+      if (Lhs <> '') and (Rhs <> '') and (Norm(Lhs) = Norm(Rhs))
+         and not ContainsNonDeterministic(Lhs) then
       begin
         MatchCol := p;
         Detail := Lhs + Op + Rhs;
@@ -349,7 +367,8 @@ begin
       // Doppelt-genullt-vermeiden: `:= x` darf nicht als `= x` matchen.
       // Da wir Op mit umgebenden Spaces suchen (` = `), trifft das nicht zu -
       // bei `x := x` waere die Such-Subsequence `:= x` ohne Vor-Space.
-      if (Lhs <> '') and (Rhs <> '') and (Norm(Lhs) = Norm(Rhs)) then
+      if (Lhs <> '') and (Rhs <> '') and (Norm(Lhs) = Norm(Rhs))
+         and not ContainsNonDeterministic(Lhs) then
       begin
         MatchCol := p + 1;
         Detail := Lhs + ' ' + Op + ' ' + Rhs;
