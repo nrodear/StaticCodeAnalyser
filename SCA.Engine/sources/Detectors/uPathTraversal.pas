@@ -52,7 +52,7 @@ type
 implementation
 
 uses
-  System.RegularExpressions;
+  uDetectorUtils;
 
 const
   // File-Open-APIs (Substring-Match, case-insensitive Lower-Compare).
@@ -84,7 +84,7 @@ begin
   Low := LowerCase(Expr);
   for API in FILE_OPEN_APIS do
   begin
-    P := Pos(API, Low);
+    P := TDetectorUtils.FindTokenBoundedLower(API, Low);
     if P > 0 then
     begin
       HitAPI := Copy(Expr, P, Length(API));
@@ -106,7 +106,9 @@ begin
   Low := LowerCase(Expr);
   for Tok in USER_INPUT_TOKENS do
   begin
-    P := Pos(Tok, Low);
+    // FindTokenBoundedLower statt Pos: '.text' darf NICHT in
+    // 'MediaType.TEXT_HTML' matchen (rechts steht '_' = Ident-Char).
+    P := TDetectorUtils.FindTokenBoundedLower(Tok, Low);
     if P > 0 then
     begin
       HitInput := Copy(Expr, P, Length(Tok));

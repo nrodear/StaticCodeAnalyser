@@ -12,6 +12,7 @@ type
     [Test] procedure WarningsOffWithoutOn_Reported;
     [Test] procedure WarningsOffAndOn_NotReported;
     [Test] procedure RangeChecksOffWithoutOn_Reported;
+    [Test] procedure WarningsOffInsidePushPop_NotReported;
   end;
 
 implementation
@@ -64,6 +65,25 @@ begin
   try
     Assert.IsTrue(TFindingHelper.Count(F, fkCompilerDirectiveScope) >= 1,
       '{$RANGECHECKS OFF} ohne ON muss gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestCompilerDirectiveScope.WarningsOffInsidePushPop_NotReported;
+// FP-Fix (Real-World 2026-06-21): {$POP} restauriert den Switch-State -
+// ein {$WARNINGS OFF} zwischen {$PUSH} und {$POP} leakt NICHT.
+const SRC =
+  '{$PUSH}'#13#10 +
+  '{$WARNINGS OFF}'#13#10 +
+  'unit t; interface'#13#10 +
+  'implementation'#13#10 +
+  '{$POP}'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCompilerDirectiveScope),
+      '{$PUSH}/{$POP} restauriert den State - kein Leak');
   finally F.Free; end;
 end;
 

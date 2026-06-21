@@ -61,16 +61,22 @@ const
 
 class function TAssertWithSideEffectDetector.ArgContainsCall(
   const Arg: string): Boolean;
-// True wenn Arg verdaechtig nach Side-Effect aussieht:
-//   * Funktion-Call-Pattern `\b\w+\s*\(` (Bare-Name + Parens) das NICHT
-//     auf der PURE_FUNCS-Whitelist steht, ODER
-//   * Bare-Identifier (kein '(', kein Operator) dessen Name nach einem
-//     bekannten Side-Effect-Verb-Praefix aussieht (Init*, Setup*,
-//     Reset*, Create*, Destroy*, Free*, Register*, Unregister*,
-//     Allocate*, Open*, Close*, Mutate*, Update*).
+// True wenn Arg verdaechtig nach Side-Effect aussieht. BEIDE Pfade
+// verlangen jetzt einen Side-Effect-Verb-Praefix am Funktions-Namen:
+//   * Funktion-Call-Pattern `\b\w+\s*\(` dessen Name mit einem Mutations-
+//     Verb beginnt (Init*, Setup*, Reset*, ...) und NICHT auf der
+//     PURE_FUNCS-Whitelist steht, ODER
+//   * Bare-Identifier (kein '(', kein Operator) mit selbem Verb-Praefix.
 //     Hintergrund: `Assert(InitializeSubsystem)` ohne () wird vom
 //     Parser als bare-identifier-arg ausgegeben - der Compiler ruft
-//     trotzdem die Funktion. Heuristik nach Doc-Comment-Konvention.
+//     trotzdem die Funktion.
+//
+// FP-Fix (Real-World 2026-06-21): vorher flaggte Pfad 1 JEDEN nicht-
+// gewhitelisteten Call - reine Conversion-Funktionen (FloatToStr,
+// DateToStr, VarToStr ... in Test-Asserts) wurden faelschlich gemeldet.
+// Die Verb-Praefix-Gate eliminiert diese FP-Klasse; verbleibende FN
+// (mutierender Call mit unverdaechtigem Namen) ist der akzeptierte
+// Tradeoff.
 const
   CALL_RE         = '\b(\w+)\s*\(';
   BARE_IDENT_RE   = '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*$';
@@ -84,14 +90,15 @@ var
   IsPure : Boolean;
 begin
   Result := False;
-  // Pfad 1: Funktion-Call mit Klammern - ueberspringt Pure-Whitelist.
+  // Pfad 1: Funktion-Call dessen Name nach Mutation aussieht.
   for M in TRegEx.Matches(Arg, CALL_RE) do
   begin
     Name := LowerCase(M.Groups[1].Value);
     IsPure := False;
     for P in PURE_FUNCS do
       if Name = P then begin IsPure := True; Break; end;
-    if not IsPure then Exit(True);
+    if (not IsPure) and TRegEx.IsMatch(Name, SIDE_EFFECT_RE) then
+      Exit(True);
   end;
   // Pfad 2: bare-Identifier mit Side-Effect-Praefix.
   BareM := TRegEx.Match(Arg, BARE_IDENT_RE);

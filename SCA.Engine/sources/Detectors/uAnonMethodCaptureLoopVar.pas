@@ -97,6 +97,16 @@ const
   //   procedure(...)    procedurebegin    procedure:RetType
   //   function(...)     functionbegin     function:RetType
   ANON_RE = '\b(procedure|function)(begin|function|\(|:)';
+  // Synchron ausgefuehrte Closures: laufen WAEHREND der Iteration und
+  // lesen die Loop-Var beim korrekten Wert - kein Capture-Bug. Nur
+  // DEFERRED Closures (Thread/Queue/Task) sehen am Ende denselben Wert.
+  // Lower-case Substring-Marker (Parser konkateniert ohne Whitespace).
+  SYNC_MARKERS : array[0..3] of string = (
+    'synchronize',   // TThread.Synchronize - blockierend
+    '.foreach',      // TList/TEnumerable.ForEach - synchron
+    'foreach(',      // freie ForEach-Helfer
+    '.sort('         // Comparer-Closure laeuft waehrend Sort
+  );
 var
   Fors    : TList<TAstNode>;
   Calls   : TList<TAstNode>;
@@ -108,12 +118,49 @@ var
   Reported: TDictionary<Integer, Boolean>;
   F       : TLeakFinding;
 
+  // True wenn im For-Subtree die Loop-Var als LOKALE Variable neu
+  // deklariert wird (Shadowing) - dann referenziert ein gleichnamiges
+  // Token das Local, nicht die captured Loop-Var -> kein Bug. Die
+  // direkte Inline-Loop-Var (`for var i`) selbst zaehlt NICHT als Shadow.
+  function HasShadowingLocal(AForNode: TAstNode; const Lv: string): Boolean;
+  var
+    LocalVars : TList<TAstNode>;
+    LV2, Ch   : TAstNode;
+    IsDirect  : Boolean;
+  begin
+    Result := False;
+    LocalVars := AForNode.FindAll(nkLocalVar);
+    try
+      for LV2 in LocalVars do
+      begin
+        if not SameText(LV2.Name, Lv) then Continue;
+        IsDirect := False;
+        for Ch in AForNode.Children do
+          if Ch = LV2 then begin IsDirect := True; Break; end;
+        if not IsDirect then Exit(True);   // tiefere Re-Decl = Shadow
+      end;
+    finally
+      LocalVars.Free;
+    end;
+  end;
+
+  function HasSyncMarker(const Expr: string): Boolean;
+  var Low, Mk: string;
+  begin
+    Low := LowerCase(Expr);
+    for Mk in SYNC_MARKERS do
+      if Pos(Mk, Low) > 0 then Exit(True);
+    Result := False;
+  end;
+
   procedure CheckNode(N: TAstNode; const Expr: string);
   begin
     if Expr = '' then Exit;
     if Reported.ContainsKey(N.Line) then Exit;
     if not TRegEx.IsMatch(Expr, ANON_RE, [roIgnoreCase]) then Exit;
     if not VarRE.IsMatch(Expr) then Exit;
+    // Synchron ausgefuehrte Closure -> kein Deferred-Capture-Bug.
+    if HasSyncMarker(Expr) then Exit;
     Reported.AddOrSetValue(N.Line, True);
     F            := TLeakFinding.Create;
     F.FileName   := FileName;
@@ -135,6 +182,8 @@ begin
     begin
       LoopVar := ExtractLoopVar(ForNode);
       if LoopVar = '' then Continue;
+      // Shadowing: Loop-Var im Closure neu deklariert -> kein Capture-Bug.
+      if HasShadowingLocal(ForNode, LoopVar) then Continue;
       VarRE := TRegEx.Create('\b' + LoopVar + '\b', [roIgnoreCase]);
       Reported := TDictionary<Integer, Boolean>.Create;
       try

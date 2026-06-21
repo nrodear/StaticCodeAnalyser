@@ -12,6 +12,7 @@ type
     [Test] procedure FileStreamWithEditText_Reported;
     [Test] procedure FileOpenWithLiteral_NotReported;
     [Test] procedure FileStreamWithoutConcat_NotReported;
+    [Test] procedure ConstWithTextSubstring_NotReported;
   end;
 
 implementation
@@ -71,6 +72,25 @@ begin
     // FP wenn das ganze Edit der intendierte File-Path ist).
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkPathTraversal),
       'Ohne + ist Heuristik nicht aktiv (akzeptierter FN)');
+  finally F.Free; end;
+end;
+
+procedure TTestPathTraversal.ConstWithTextSubstring_NotReported;
+// FP-Fix (Real-World 2026-06-21): '.text' darf NICHT als Substring in
+// 'MediaType.TEXT_HTML' matchen (rechts steht '_' = Identifier-Char).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var s: TFileStream;'#13#10 +
+  'begin'#13#10 +
+  '  s := TFileStream.Create(BaseDir + MediaType.TEXT_HTML, fmOpenRead);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkPathTraversal),
+      '.TEXT_HTML ist kein User-Input-Token (Wortgrenze)');
   finally F.Free; end;
 end;
 

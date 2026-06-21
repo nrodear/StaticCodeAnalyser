@@ -51,7 +51,32 @@ uses
   uFileTextCache;
 
 const
-  DIRECTIVE_RE = '\{\$(WARNINGS|HINTS|RANGECHECKS|BOOLEVAL|OVERFLOWCHECKS)\s+(ON|OFF)\}';
+  // Generischer Direktiven-Match: Name + optional ON/OFF. Dispatch im
+  // Loop nach Name - so faengt der Detektor jetzt auch {$PUSH}/{$POP}
+  // (State-Save/Restore) und ignoriert alle anderen ({$DEFINE}, {$I ...}).
+  DIRECTIVE_RE = '\{\$([A-Za-z]+)\s*(ON|OFF)?\}';
+
+  // Switch-Direktiven deren OFF/ON-Balance wir tracken (lower-case).
+  TRACKED : array[0..4] of string = (
+    'warnings', 'hints', 'rangechecks', 'booleval', 'overflowchecks');
+
+function IsTracked(const Name: string): Boolean;
+var T: string;
+begin
+  for T in TRACKED do
+    if Name = T then Exit(True);
+  Result := False;
+end;
+
+// Flache Kopie eines OFF-Dict (Name -> 1-based OFF-Line) fuer {$PUSH}.
+function CloneOffDict(Src: TDictionary<string, Integer>)
+  : TDictionary<string, Integer>;
+var P: TPair<string, Integer>;
+begin
+  Result := TDictionary<string, Integer>.Create;
+  for P in Src do
+    Result.Add(P.Key, P.Value);
+end;
 
 // Strippt Non-Direktive-Kommentare: `//`-Zeilen + `{...}`-Blocks die NICHT
 // mit `{$` beginnen + `(*...*)`-Blocks. Wichtig: `{$...}`-Direktiven
@@ -124,12 +149,15 @@ var
   IsOff    : Boolean;
   // Pro Direktiv: Last-OFF-Zeile (-1 wenn nicht offen), Last-OFF-Token.
   LastOff  : TDictionary<string, Integer>;
+  // {$PUSH}-Snapshots des aktuellen OFF-Zustands; {$POP} restauriert.
+  PushStack: TStack<TDictionary<string, Integer>>;
   Tok      : TPair<string, Integer>;
   F        : TLeakFinding;
 begin
   Lines := AcquireLines(FileName, Cached);
   if Lines = nil then Exit;
   LastOff := TDictionary<string, Integer>.Create;
+  PushStack := TStack<TDictionary<string, Integer>>.Create;
   try
     RE := TRegEx.Create(DIRECTIVE_RE, [roIgnoreCase]);
     for i := 0 to Lines.Count - 1 do
@@ -140,16 +168,34 @@ begin
       Code := StripNonDirectiveComments(Lines[i]);
       for M in RE.Matches(Code) do
       begin
-        Name  := LowerCase(M.Groups[1].Value);
-        IsOff := SameText(M.Groups[2].Value, 'OFF');
-        if IsOff then
-          LastOff.AddOrSetValue(Name, i + 1)   // 1-based line
-        else
-          LastOff.Remove(Name);                // ON closes scope
+        Name := LowerCase(M.Groups[1].Value);
+        if Name = 'push' then
+          // Aktuellen Zustand sichern - alle bis hier offenen OFFs werden
+          // beim korrespondierenden {$POP} exakt so wiederhergestellt.
+          PushStack.Push(CloneOffDict(LastOff))
+        else if Name = 'pop' then
+        begin
+          if PushStack.Count > 0 then
+          begin
+            LastOff.Free;
+            LastOff := PushStack.Pop;   // gesicherten Zustand uebernehmen
+          end
+          else
+            // {$POP} ohne {$PUSH} - tolerant: Zustand leeren statt FP.
+            LastOff.Clear;
+        end
+        else if IsTracked(Name) and M.Groups[2].Success then
+        begin
+          IsOff := SameText(M.Groups[2].Value, 'OFF');
+          if IsOff then
+            LastOff.AddOrSetValue(Name, i + 1)   // 1-based line
+          else
+            LastOff.Remove(Name);                // ON closes scope
+        end;
       end;
     end;
 
-    // Was uebrig bleibt = OFF ohne folgendes ON.
+    // Was uebrig bleibt = OFF ohne folgendes ON (PUSH/POP beruecksichtigt).
     for Tok in LastOff do
     begin
       F            := TLeakFinding.Create;
@@ -164,6 +210,10 @@ begin
     end;
   finally
     LastOff.Free;
+    // Nicht-balancierte {$PUSH} ohne {$POP}: Snapshots noch freigeben.
+    while PushStack.Count > 0 do
+      PushStack.Pop.Free;
+    PushStack.Free;
     ReleaseLines(Lines, Cached);
   end;
 end;

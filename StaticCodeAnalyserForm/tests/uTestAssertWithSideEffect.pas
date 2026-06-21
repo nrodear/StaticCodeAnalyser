@@ -12,6 +12,7 @@ type
     [Test] procedure AssertWithCall_Reported;
     [Test] procedure AssertPureExpression_NotReported;
     [Test] procedure AssertWithLengthCall_NotReported;
+    [Test] procedure AssertWithConversionFunc_NotReported;
   end;
 
 implementation
@@ -67,6 +68,25 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkAssertWithSideEffect),
       'Length() ist Pure-Func, kein Finding');
+  finally F.Free; end;
+end;
+
+procedure TTestAssertWithSideEffect.AssertWithConversionFunc_NotReported;
+// FP-Fix (Real-World 2026-06-21): reine Conversion-Funktionen (FloatToStr
+// & Co.) sind NICHT auf der Pure-Whitelist, haben aber keinen Mutations-
+// Verb-Praefix -> kein Side-Effect -> kein Finding.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(x: Double);'#13#10 +
+  'begin'#13#10 +
+  '  Assert(FloatToStr(x) = ''1.0'');'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkAssertWithSideEffect),
+      'FloatToStr ist eine Conversion-Func, kein Side-Effect');
   finally F.Free; end;
 end;
 

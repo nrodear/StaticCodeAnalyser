@@ -78,6 +78,17 @@ type
     class function ContainsWholeWordLower(const Needle, HaystackLower: string)
       : Boolean; static; inline;
 
+    // Wie FindWholeWordLower, aber die Wortgrenzen-Pruefung erfolgt nur an
+    // den Seiten, an denen das Needle selbst auf einem Identifier-Zeichen
+    // endet/beginnt. Damit matchen Tokens mit fuehrender/abschliessender
+    // Interpunktion korrekt:
+    //   FindTokenBoundedLower('.text', 'edpath.text')      -> 7   (links '.', rechts Ende)
+    //   FindTokenBoundedLower('.text', 'mediatype.text_a') -> 0   (rechts '_' = Ident)
+    //   FindTokenBoundedLower('paramstr(', 'x:=paramstr(0)')-> 4   (rechts '(' = Non-Ident)
+    // Beide Argumente muessen bereits lower-case sein.
+    class function FindTokenBoundedLower(const Needle, HaystackLower: string)
+      : Integer; static;
+
     // Entfernt Pascal-String-Literale aus einem Ausdrucks-Text.
     // Pascal escaped einfache Apostrophe in Strings durch Verdoppelung
     // (`'don''t'`), aber der Parser-AST hat sie bereits als zusammenhaengen-
@@ -309,6 +320,42 @@ class function TDetectorUtils.ContainsWholeWordLower(const Needle,
   HaystackLower: string): Boolean;
 begin
   Result := FindWholeWordLower(Needle, HaystackLower) > 0;
+end;
+
+class function TDetectorUtils.FindTokenBoundedLower(const Needle,
+  HaystackLower: string): Integer;
+var
+  Start, NLen, HLen, i : Integer;
+  CheckLeft, CheckRight: Boolean;
+  LeftOK, RightOK      : Boolean;
+begin
+  Result := 0;
+  NLen   := Length(Needle);
+  HLen   := Length(HaystackLower);
+  if (NLen = 0) or (HLen < NLen) then Exit;
+
+  // Nur dort eine Wortgrenze verlangen, wo das Needle auf einem Identifier-
+  // Zeichen endet/beginnt. '.text' hat links den Punkt als natuerliche
+  // Grenze - der Vorgaenger ('e' in 'mediatype') darf ein Ident-Char sein.
+  CheckLeft  := IsIdentChar(Needle[1]);
+  CheckRight := IsIdentChar(Needle[NLen]);
+
+  Start := 1;
+  while True do
+  begin
+    i := PosEx(Needle, HaystackLower, Start);
+    if i = 0 then Exit;
+
+    LeftOK  := (not CheckLeft)  or (i = 1)
+            or not IsIdentChar(HaystackLower[i - 1]);
+    RightOK := (not CheckRight) or (i + NLen - 1 >= HLen)
+            or not IsIdentChar(HaystackLower[i + NLen]);
+
+    if LeftOK and RightOK then Exit(i);
+
+    Inc(Start);
+    if Start > HLen - NLen + 1 then Exit;
+  end;
 end;
 
 class function TDetectorUtils.StripStringLiterals(const S: string): string;
