@@ -91,7 +91,8 @@ type
     class function IsRectOnAnyMonitor(L, T, W, H: Integer): Boolean; static;
     procedure HandleWatchFindings(const FileName: string;
       Findings: TObjectList<TLeakFinding>);
-    procedure HandleFindingClick(Sender: TObject; Finding: TLeakFinding);
+    procedure HandleFindingClick(Sender: TObject; Finding: TLeakFinding;
+      Mode: TFindingNavMode);
     procedure HandleFrameDestroying(Sender: TObject);
     procedure HandleReloadRequested(Sender: TObject);
     procedure HandleClearMarkersRequested(Sender: TObject);
@@ -424,7 +425,10 @@ begin
 end;
 
 procedure TFindingsPropertiesDockableForm.HandleFindingClick(Sender: TObject;
-  Finding: TLeakFinding);
+  Finding: TLeakFinding; Mode: TFindingNavMode);
+// Mode (fnmPreview/fnmActivate) steuert nur das FOKUS-Verhalten - das macht
+// der Frame selbst (Re-Focus ins Grid bei Preview). Hier ist der Editor-Sprung
+// fuer beide Modi identisch.
 // Soft-Navigate via TIDEEditor.ShowFileAtLine - bringt die Datei nach
 // vorne (oder oeffnet sie wenn noch nicht da), setzt den Caret. Wichtig:
 // NICHT TIDEEditor.OpenFileAtLine - das macht SafeCloseModule auf die

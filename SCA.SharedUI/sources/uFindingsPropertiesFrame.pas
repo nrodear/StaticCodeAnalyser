@@ -28,6 +28,7 @@ unit uFindingsPropertiesFrame;
 interface
 
 uses
+  Winapi.Windows,   // VK_-Konstanten fuer Keyboard-Navigation
   System.Classes, System.SysUtils, System.Types, System.Generics.Collections,
   Vcl.Controls, Vcl.Forms, Vcl.ExtCtrls, Vcl.Grids, Vcl.StdCtrls,
   Vcl.Graphics,
@@ -36,11 +37,18 @@ uses
   uFindingGridRenderer;
 
 type
-  // Callback wenn User auf eine Finding-Zeile klickt - Caller springt im
+  // Navigations-Modus fuer den Finding-Click-Callback:
+  //   fnmPreview  - Editor folgt der Auswahl, Fokus kehrt ins Grid zurueck
+  //                 (Einfachklick + Pfeiltasten -> Weiternavigieren moeglich).
+  //   fnmActivate - bewusster "jetzt editieren"-Sprung, Editor behaelt Fokus
+  //                 (Enter + Doppelklick).
+  TFindingNavMode = (fnmPreview, fnmActivate);
+
+  // Callback wenn User eine Finding-Zeile auswaehlt - Caller springt im
   // Editor zur Zeile (im Standalone-Mode kann der Caller das Mapping
-  // anders machen).
+  // anders machen). Mode steuert das Fokus-Verhalten (s.o.).
   TFindingClickEvent = procedure(Sender: TObject;
-    Finding: TLeakFinding) of object;
+    Finding: TLeakFinding; Mode: TFindingNavMode) of object;
 
   TFindingsPropertiesFrame = class(TFrame)
   strict private
@@ -84,6 +92,12 @@ type
     // FSortDescending toggelt bei wiederholtem Klick auf gleiche Spalte.
     FSortColumn      : Integer;
     FSortDescending  : Boolean;
+    // Keyboard-Navigation (Selection-follows-Cursor): Pfeil hoch/runter im
+    // Grid laesst den Editor live mitspringen. FNavTimer entprellt
+    // Key-Repeat (nur die Ruhe-Zeile triggert den Editor-Sprung).
+    // FLastNavigatedRow verhindert Doppel-Navigation auf dieselbe Zeile.
+    FNavTimer        : TTimer;
+    FLastNavigatedRow: Integer;
     procedure BuildControls;
     procedure BuildGridConfig;
     procedure EnsureComboItems;
@@ -110,6 +124,14 @@ type
       Rect: TRect; State: TGridDrawState);
     procedure GridDblClick(Sender: TObject);
     procedure GridClick(Sender: TObject);
+    // Keyboard-Navigation: KeyUp entprellt Pfeil/Bild/Pos1/Ende ueber
+    // FNavTimer; KeyDown faengt Enter (Activate) ab; NavTimerTick fuehrt die
+    // entprellte Preview-Navigation aus. NavigateToRow ist der gemeinsame
+    // Dispatch (Maus + Tastatur) -> Finding ermitteln + Callback + Re-Focus.
+    procedure GridKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+    procedure GridKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
+    procedure NavTimerTick(Sender: TObject);
+    procedure NavigateToRow(ARow: Integer; Mode: TFindingNavMode);
     procedure GridResize(Sender: TObject);
     procedure GridMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
@@ -246,6 +268,11 @@ begin
   FCurrentFile := '';
   FSortColumn      := -1;       // unsortiert = Detector-Reihenfolge
   FSortDescending  := False;
+  FLastNavigatedRow := -1;
+  FNavTimer := TTimer.Create(Self);   // Owner=Self -> Auto-Free
+  FNavTimer.Enabled  := False;
+  FNavTimer.Interval := 80;           // ms Debounce gegen Key-Repeat
+  FNavTimer.OnTimer  := NavTimerTick;
   BuildControls;
   BuildGridConfig;
   UpdateHeader;
@@ -261,6 +288,7 @@ begin
   // auf nil setzen koennen, BEVOR wir hier die Felder freed.
   if Assigned(FOnDestroying) then
     try FOnDestroying(Self); except end;
+  if Assigned(FNavTimer) then FNavTimer.Enabled := False;   // kein Tick im Teardown
   FVisibleRows.Free;
   FAllFindings.Free;
   FFindingsByFile.Free;
@@ -389,6 +417,8 @@ begin
   FGrid.OnDblClick  := GridDblClick;
   FGrid.OnClick     := GridClick;
   FGrid.OnMouseDown := GridMouseDown;
+  FGrid.OnKeyDown   := GridKeyDown;   // Enter = Activate
+  FGrid.OnKeyUp     := GridKeyUp;     // Pfeil/Bild/Pos1/Ende = Preview (entprellt)
   TStringGridAccess(FGrid).OnResize := GridResize;
   FGrid.DoubleBuffered := True;
   TIDEToolbar.ApplySegoeUI(FGrid);
@@ -931,23 +961,71 @@ begin
   TFindingGridRenderer.DrawCell(Sender, ACol, ARow, Rect, State, FGridConfig);
 end;
 
-procedure TFindingsPropertiesFrame.GridClick(Sender: TObject);
+procedure TFindingsPropertiesFrame.NavigateToRow(ARow: Integer;
+  Mode: TFindingNavMode);
+// Gemeinsamer Dispatch fuer Maus + Tastatur. Ermittelt das Finding zur Zeile,
+// feuert den Callback (Editor springt) und holt im Preview-Modus den Fokus
+// ins Grid zurueck, damit der User mit Pfeiltasten weiternavigieren kann.
 var
-  Row : Integer;
-  F   : TLeakFinding;
+  F : TLeakFinding;
 begin
   if not Assigned(FOnClick) then Exit;
-  Row := FGrid.Row;
-  if (Row <= 0) or ((Row - 1) >= FVisibleRows.Count) then Exit;
-  F := FVisibleRows[Row - 1];
-  FOnClick(Self, F);
+  if (ARow <= 0) or ((ARow - 1) >= FVisibleRows.Count) then Exit;
+  F := FVisibleRows[ARow - 1];
+  FLastNavigatedRow := ARow;
+  FOnClick(Self, F, Mode);
+  // ShowFileAtLine fokussiert den Editor (SrcEditor.Show). Im Preview-Modus
+  // den Fokus zurueck ins Grid holen - sonst stirbt die Pfeiltasten-Navigation
+  // nach dem ersten Sprung. Im Activate-Modus behaelt der Editor den Fokus.
+  if (Mode = fnmPreview) and FGrid.CanFocus then
+    FGrid.SetFocus;
+end;
+
+procedure TFindingsPropertiesFrame.GridClick(Sender: TObject);
+begin
+  // Einfachklick = Preview: Editor folgt, Fokus bleibt im Grid.
+  NavigateToRow(FGrid.Row, fnmPreview);
 end;
 
 procedure TFindingsPropertiesFrame.GridDblClick(Sender: TObject);
 begin
-  // Konsistent zu IntelliJ-Pattern (Doppelklick = Go-To). Single-Click
-  // macht es schon, Dbl-Click ist Konvenienz fuer Power-User.
-  GridClick(Sender);
+  // Doppelklick = Activate (bewusster Sprung zum Editieren, Editor behaelt Fokus).
+  FNavTimer.Enabled := False;
+  NavigateToRow(FGrid.Row, fnmActivate);
+end;
+
+procedure TFindingsPropertiesFrame.GridKeyDown(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+begin
+  // Enter = Activate: zum Editor springen UND dort den Fokus lassen.
+  if Key = VK_RETURN then
+  begin
+    FNavTimer.Enabled := False;
+    NavigateToRow(FGrid.Row, fnmActivate);
+    Key := 0;   // Default-Verarbeitung unterdruecken
+  end;
+end;
+
+procedure TFindingsPropertiesFrame.GridKeyUp(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+begin
+  // Selektions-bewegende Tasten -> entprellte Preview-Navigation. VCL hat die
+  // Auswahl beim KeyDown schon bewegt, daher steht FGrid.Row beim Tick richtig.
+  case Key of
+    VK_UP, VK_DOWN, VK_PRIOR, VK_NEXT, VK_HOME, VK_END:
+      begin
+        FNavTimer.Enabled := False;   // re-armieren: nur die Ruhe-Zeile springt
+        FNavTimer.Enabled := True;
+      end;
+  end;
+end;
+
+procedure TFindingsPropertiesFrame.NavTimerTick(Sender: TObject);
+begin
+  FNavTimer.Enabled := False;
+  // Nur navigieren wenn sich die Zeile seit der letzten Navigation geaendert hat.
+  if FGrid.Row <> FLastNavigatedRow then
+    NavigateToRow(FGrid.Row, fnmPreview);
 end;
 
 procedure TFindingsPropertiesFrame.GridResize(Sender: TObject);
