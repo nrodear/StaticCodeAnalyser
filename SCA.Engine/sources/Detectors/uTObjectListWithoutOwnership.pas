@@ -14,11 +14,12 @@ unit uTObjectListWithoutOwnership;
 //
 // Erkennung (AST + Text-Heuristik):
 //   * Pass 1: nkAssign mit TypeRef der `TList<T>.Create` Pattern
-//     enthaelt (genericized List, NICHT TObjectList).
+//     enthaelt (genericized List, NICHT TObjectList). Nur Klassen-Listen
+//     (Generic-Arg 'T...'): Interface-/Werttyp-Listen leaken nicht.
 //     Sammle: Var-Name -> Generic-Type-Argument.
-//   * Pass 2: nkCall oder nkAssign deren Name/TypeRef
-//     `<varname>.Add(T.Create)` enthaelt (gleicher T wie in Pass 1).
-//     Auch `<varname>.Add(T.Construct)` etc.
+//   * Pass 2: nkCall deren Name `<varname>.Add(<Klasse>.Create)` enthaelt.
+//     Der hinzugefuegte Typ darf eine SUBKLASSE des Generic-Args sein
+//     (`TList<TAnimal>` + `Add(TDog.Create)`) - leakt genauso.
 //
 // FP-Tradeoff:
 //   * Wenn der Generic-Type-Arg KEIN Klassen-Typ ist (z.B. `TList<Integer>`,
@@ -52,11 +53,14 @@ uses
 
 const
   // `TList<T>.Create` aber NICHT `TObjectList<T>.Create`. Negative
-  // Look-Behind (?<!): kein 'Object' direkt vor 'List'.
-  TLIST_CREATE_RE = '(?<!Object)\bTList<\s*([A-Za-z_]\w*)\s*>\s*\.\s*Create';
-  // `<VarName>.Add(<TypeName>.Create` - VarName aus Pass-1, TypeName muss
-  // gleichen Generic-Arg matchen.
-  ADD_CREATE_TMPL = '\b%s\s*\.\s*Add\s*\(\s*%s\s*\.\s*Create';
+  // Look-Behind (?<!): kein 'Object' direkt vor 'List'. `TList\s*<`
+  // toleriert Whitespace zwischen Name und Generic-Bracket.
+  TLIST_CREATE_RE = '(?<!Object)\bTList\s*<\s*([A-Za-z_]\w*)\s*>\s*\.\s*Create';
+  // `<VarName>.Add(<ClassName>.Create` - VarName aus Pass-1. Der
+  // hinzugefuegte Typ muss NICHT exakt dem Generic-Arg entsprechen:
+  // `TList<TAnimal>` + `Add(TDog.Create)` (Subklasse) leakt genauso.
+  // Daher matchen wir JEDE Klassen-`.Create` (Capture-Group fuer Message).
+  ADD_CREATE_TMPL = '\b%s\s*\.\s*Add\s*\(\s*([A-Za-z_]\w*)\s*\.\s*Create';
 
 class procedure TTObjectListWithoutOwnershipDetector.AnalyzeUnit(
   UnitNode: TAstNode; const FileName: string;
@@ -90,6 +94,12 @@ begin
             if not Mtch.Success then Continue;
             VarName := N.Name;
             TypeArg := Mtch.Groups[1].Value;
+            // Nur Klassen-Listen tracken: Generic-Arg muss der Klassen-
+            // Konvention 'T...' folgen. Schliesst Interface-Listen
+            // (`TList<IFoo>` - ref-counted, kein Leak) und Werttyp-Listen
+            // (`TList<Integer>`/`<string>`) aus -> kein FP.
+            if (TypeArg = '') or not CharInSet(TypeArg[1], ['T', 't']) then
+              Continue;
             // Qualifier-Strip auf LHS (Self.List -> List).
             var DotPos := LastDelimiter('.', VarName);
             if DotPos > 0 then VarName := Copy(VarName, DotPos + 1, MaxInt);
@@ -105,23 +115,27 @@ begin
         try
           for Pair in ListVars do
           begin
+            // ADD_CREATE_TMPL hat nur EINEN %s (VarName); der hinzugefuegte
+            // Typ wird als Capture-Group 1 erfasst.
             AddRE := TRegEx.Create(Format(ADD_CREATE_TMPL,
-              [Pair.Key, Pair.Value]), [roIgnoreCase]);
+              [Pair.Key]), [roIgnoreCase]);
             for N in Calls do
-              if AddRE.IsMatch(N.Name) then
-              begin
-                F            := TLeakFinding.Create;
-                F.FileName   := FileName;
-                F.MethodName := M.Name;
-                F.LineNumber := IntToStr(N.Line);
-                F.MissingVar := 'TList<' + Pair.Value + '> "' + Pair.Key +
-                                '" gets a new ' + Pair.Value + '.Create - ' +
-                                'instances will leak when the list is freed. ' +
-                                'Use TObjectList<' + Pair.Value + '> instead ' +
-                                '(OwnsObjects=True is the default).';
-                F.SetKind(fkTObjectListWithoutOwnership);
-                Results.Add(F);
-              end;
+            begin
+              Mtch := AddRE.Match(N.Name);
+              if not Mtch.Success then Continue;
+              var AddedType := Mtch.Groups[1].Value;
+              F            := TLeakFinding.Create;
+              F.FileName   := FileName;
+              F.MethodName := M.Name;
+              F.LineNumber := IntToStr(N.Line);
+              F.MissingVar := 'TList<' + Pair.Value + '> "' + Pair.Key +
+                              '" gets a new ' + AddedType + '.Create - ' +
+                              'instances will leak when the list is freed. ' +
+                              'Use TObjectList<' + Pair.Value + '> instead ' +
+                              '(OwnsObjects=True is the default).';
+              F.SetKind(fkTObjectListWithoutOwnership);
+              Results.Add(F);
+            end;
           end;
         finally
           Calls.Free;

@@ -14,6 +14,7 @@ type
   TTestAttributeIgnoreWithoutReason = class
   public
     [Test] procedure IgnoreNoArg_Reported;
+    [Test] procedure IgnoreEmptyParens_Reported;
     [Test] procedure IgnoreWithMessage_NotReported;
   end;
 
@@ -69,6 +70,27 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkAttributeIgnoreWithoutReason) >= 1);
+  finally F.Free; end;
+end;
+
+procedure TTestAttributeIgnoreWithoutReason.IgnoreEmptyParens_Reported;
+// Coverage-Fix (2026-06-21): [Ignore()] mit leeren Klammern = ebenfalls
+// kein Grund - muss gemeldet werden.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TTest = class'#13#10 +
+  '  public'#13#10 +
+  '    [Ignore()]'#13#10 +
+  '    procedure Foo;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkAttributeIgnoreWithoutReason) >= 1,
+    '[Ignore()] ohne Grund muss gemeldet werden');
   finally F.Free; end;
 end;
 

@@ -9,9 +9,10 @@ unit uAttributeIgnoreWithoutReason;
 //   [Ignore('TBD ticket #1234')]      // GUT - dokumentiert + auffindbar
 //   procedure SomeTest;
 //
-// Erkennung: file-text-scan pro Zeile, Regex `\[Ignore\s*\]` (ohne
-// Klammer-Inhalt nach `Ignore`). Kommentare gestrippt via
-// TDetectorUtils.ScanCodeLine - siehe [[detectors-ignore-comments]].
+// Erkennung: file-text-scan pro Zeile, Regex matcht `[Ignore]` UND
+// `[Ignore()]` (leere Klammern = ebenfalls kein Grund). Kommentare
+// gestrippt via TDetectorUtils.ScanCodeLine - siehe
+// [[detectors-ignore-comments]].
 //
 // Severity: lsHint, Type: ftCodeSmell.
 
@@ -35,7 +36,10 @@ uses
   uFileTextCache, uDetectorUtils;
 
 const
-  IGNORE_NO_ARG_RE = '\[Ignore\s*\]';
+  // `[Ignore]` oder `[Ignore()]` (optional leere Klammern). Ein echtes
+  // Reason-Argument (`[Ignore('...')]`) hat Inhalt zwischen den Klammern
+  // und matched daher NICHT.
+  IGNORE_NO_ARG_RE = '\[Ignore\s*(\(\s*\))?\s*\]';
 
 class procedure TAttributeIgnoreWithoutReasonDetector.AnalyzeUnit(
   UnitNode: TAstNode; const FileName: string;
