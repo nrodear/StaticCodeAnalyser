@@ -282,6 +282,13 @@ type
     // schon angehaengt, ist's ein O(1)-No-Op. Sonst attache jetzt, wo
     // wir wissen dass die Datei wirklich in einem Editor offen ist.
     procedure EnsureLineTracker(const AFileName: string);
+    // Wird vom Save-Notifier (IOTAModuleNotifier.Destroyed) gerufen wenn ein
+    // Modul zerstoert wird - Tab-Close ODER Projektgruppen-Close beim IDE-
+    // Beenden. Gibt unsere gehaltenen Editor-Referenzen (IOTAEditBuffer im
+    // Line-Tracker-Slot, IOTAModule im Save-Slot) SOFORT frei, damit beim
+    // anschliessenden TEditBuffer.Destroy der IDE-interne "TEditSource
+    // Referenzzaehler = 1"-Assert nicht feuert (Crash beim IDE-Schliessen).
+    procedure OnModuleDestroyed(const AKey: string);
     constructor Create;
     destructor Destroy; override;
 
@@ -567,7 +574,17 @@ end;
 
 // IOTANotifier
 procedure TSaveAutoClearNotifier.BeforeSave; begin end;
-procedure TSaveAutoClearNotifier.Destroyed;  begin end;
+procedure TSaveAutoClearNotifier.Destroyed;
+begin
+  // Modul wird zerstoert (Tab-Close ODER Projektgruppen-Close beim IDE-
+  // Beenden). Unsere gehaltene IOTAEditBuffer-/IOTAModule-Referenz fuer
+  // diese Datei JETZT freigeben - sonst feuert beim TEditBuffer.Destroy
+  // der IDE-interne "TEditSource Referenzzaehler = 1"-Assert (Crash beim
+  // IDE-Schliessen nach Navigation). GHighlighter koennte beim Plugin-
+  // Unload-Race schon weg sein -> defensiv pruefen.
+  if Assigned(GHighlighter) then
+    GHighlighter.OnModuleDestroyed(FFileName);
+end;
 procedure TSaveAutoClearNotifier.Modified;   begin end;
 // IOTAModuleNotifier
 function  TSaveAutoClearNotifier.CheckOverwrite: Boolean; begin Result := True; end;
@@ -796,6 +813,26 @@ begin
   for K in Keys do DetachLineTracker(K);
 end;
 
+procedure TFindingHighlighter.OnModuleDestroyed(const AKey: string);
+// SOFT-Release waehrend Modul-Teardown (IOTAModuleNotifier.Destroyed):
+// KEIN Tracker.RemoveNotifier und KEIN Module.RemoveNotifier - das Modul
+// raeumt seine Notifier gerade selbst ab, ein RemoveNotifier von hier waere
+// re-entrant/gefaehrlich. Wir lassen nur unsere Dictionary-Slots fallen,
+// damit die gehaltenen strong refs (IOTAEditBuffer/Tracker/Notifier im
+// Line-Slot, IOTAModule im Save-Slot) SOFORT sinken - noch vor dem
+// TEditBuffer.Destroy, das sonst "TEditSource Refcount=1" asserted.
+var
+  LT : TLineTrackerSlot;
+begin
+  if Assigned(FLineTrackers) and FLineTrackers.TryGetValue(AKey, LT) then
+  begin
+    if Assigned(LT.DataTags) then LT.DataTags.Free;
+    FLineTrackers.Remove(AKey);   // IOTAEditBuffer/Tracker/Notifier-Refs sinken
+  end;
+  if Assigned(FSaveNotifiers) then
+    FSaveNotifiers.Remove(AKey);  // IOTAModule/Notifier-Refs sinken
+end;
+
 procedure TFindingHighlighter.RebuildLineTracker(const AKey: string);
 begin
   // Convenience: Detach + Attach. Wird gerufen wenn der Marker-Set
@@ -818,6 +855,11 @@ begin
   Key := NormalizePath(AFileName);
   if FLineTrackers.ContainsKey(Key) then Exit;   // schon attached
   if not FMarksByFile.ContainsKey(Key) then Exit; // keine Marker -> kein Tracker noetig
+  // Save-Notifier MIT-anhaengen (idempotent): nur er liefert via Destroyed
+  // den Modul-Teardown-Hook, der die IOTAEditBuffer-Ref rechtzeitig
+  // freigibt (sonst "TEditSource Refcount=1"-Crash beim IDE-Schliessen fuer
+  // lazy-attachte Dateien, die SetAllFindings noch nicht erfasst hatte).
+  AttachSaveNotifier(Key);
   AttachLineTracker(Key);
 end;
 
