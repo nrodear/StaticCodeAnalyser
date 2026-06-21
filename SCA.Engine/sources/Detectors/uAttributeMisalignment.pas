@@ -69,6 +69,23 @@ begin
       except
         Continue;
       end;
+      // FP-Fix 2026-06-21: Set-Literale in const-Decls
+      // (`ECC_VALIDSIGN = [ecvValidSigned, ecvValidSelfSigned];`) wurden
+      // als misalignierte Attribute fehl-erkannt - IsLikelyAttributePosition
+      // schaut auf vorherige Zeile (`=` -> Expression-Continuation).
+      if not TDetectorUtils.IsLikelyAttributePosition(Lines, i) then Continue;
+      // FP-Fix 2026-06-21: `[Test]     procedure Foo;` (Attribute + Member
+      // auf GLEICHER Zeile) ist bereits korrekt attached - die Blank-Line
+      // danach ist nur Code-Block-Trenner, keine Misalignment.
+      var TailRaw : string := Trim(Lines[i]);
+      var ClosePos : Integer := 0;
+      for var k := Length(TailRaw) downto 1 do
+        if TailRaw[k] = ']' then begin ClosePos := k; Break; end;
+      if ClosePos > 0 then
+      begin
+        var Tail : string := Trim(Copy(TailRaw, ClosePos + 1, MaxInt));
+        if Tail <> '' then Continue; // Member auf gleicher Zeile -> OK
+      end;
       // Naechste Zeile leer?
       if i + 1 >= Lines.Count then Continue;
       Next := Trim(Lines[i + 1]);

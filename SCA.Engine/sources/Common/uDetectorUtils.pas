@@ -158,6 +158,28 @@ type
     // Nested-paren-aware; Result leer wenn keine '(' vorhanden.
     class function ExtractCallArgsRaw(const CallExpr: string):
       string; static;
+
+    // True wenn Lines[Idx] in einem Kontext steht in dem `[X]` ein
+    // Delphi-Attribute waere (vor einer Member-Deklaration), und NICHT
+    // ein Array-Index, Set-Literal oder Type-Parameter-Liste.
+    //
+    // Heuristik (drei Gates - alle muessen passen):
+    //   1) Trim(Lines[Idx]) beginnt mit '['  (Attribute-Line-Start)
+    //   2) Vorherige nicht-leere Zeile endet NICHT mit Expression-
+    //      Continuation-Tokens (`=`, `:=`, `,`, `+`, `(`, `[`,
+    //      Operator-Keywords wie `or`/`and`/`xor`/`of`/`then`/`else`).
+    //   3) Diese Zeile (nach letztem `]`) ODER die naechste nicht-leere
+    //      Zeile matched ein Member-Decl-Pattern:
+    //        procedure|function|constructor|destructor|operator|property
+    //        |class|interface|record|object
+    //        |strict private/protected/public/published
+    //        |[A-Za-z_]\w*\s*:   (Field-Decl `Name: Type;`)
+    //
+    // Adressiert den Real-World-FP-Storm der Attribute-Detektoren
+    // (SCA180/181/183) wo `pd[x*3]`, `[ecvValidSigned]` etc. als
+    // Attribute fehl-erkannt wurden.
+    class function IsLikelyAttributePosition(Lines: TStringList;
+      Idx: Integer): Boolean; static;
   end;
 
 
@@ -169,7 +191,8 @@ implementation
 uses
   System.SysUtils,               // TStringBuilder
   System.Masks,                  // MatchesMask fuer Test-Fixture-Patterns
-  System.StrUtils;               // PosEx
+  System.StrUtils,               // PosEx
+  System.RegularExpressions;     // TRegEx fuer IsLikelyAttributePosition
 
 class function TDetectorUtils.IsIdentChar(Ch: Char): Boolean;
 begin
@@ -599,6 +622,129 @@ begin
     Entry.ArgsRaw     := Copy(T, ArgsStart, i - ArgsStart);
     Calls.Add(Entry);
     if (i <= Length(T)) and (T[i] = ')') then Inc(i);
+  end;
+end;
+
+class function TDetectorUtils.IsLikelyAttributePosition(
+  Lines: TStringList; Idx: Integer): Boolean;
+// siehe interface-Kommentar fuer Strategie.
+var
+  ThisLine, Prev, Tail : string;
+  i : Integer;
+  LastBracketPos : Integer;
+const
+  // Expression-Continuation: vorherige Zeile endet so -> diese `[` ist
+  // Fortsetzung eines Ausdrucks, kein Attribute.
+  EXPR_CONT_CHARS = ['=', ',', '+', '-', '*', '/', '(', '[', '&', '|', '^', ':', '@'];
+  // Lower-cased Operator-Keywords die eine Continuation andeuten.
+  EXPR_CONT_WORDS : array[0..14] of string = (
+    'or', 'and', 'xor', 'not', 'in', 'is', 'of',
+    'then', 'else', 'do', 'mod', 'div', 'shl', 'shr', 'as');
+
+  function EndsWithOpKeyword(const Lower: string): Boolean;
+  var
+    W: string;
+    L: Integer;
+  begin
+    L := Length(Lower);
+    for W in EXPR_CONT_WORDS do
+      if (L >= Length(W)) and (Copy(Lower, L - Length(W) + 1, Length(W)) = W) then
+      begin
+        // Wortgrenze links: Zeichen vor W darf KEIN Identifier-Char sein
+        // (sonst matched 'as' am Ende von 'class' / 'pos' am Ende von '...').
+        if (L = Length(W)) or
+           (not IsIdentChar(Lower[L - Length(W)])) then
+          Exit(True);
+      end;
+    Result := False;
+  end;
+
+  function LooksLikeMemberDecl(const S: string): Boolean;
+  var
+    Tr, Lo: string;
+  begin
+    Tr := Trim(S);
+    if Tr = '' then Exit(False);
+    Lo := LowerCase(Tr);
+    // Decl-Keywords am Anfang.
+    if (Pos('procedure ', Lo) = 1) or (Lo = 'procedure') then Exit(True);
+    if (Pos('function ', Lo) = 1) or (Lo = 'function') then Exit(True);
+    if (Pos('constructor ', Lo) = 1) or (Lo = 'constructor') then Exit(True);
+    if (Pos('destructor ', Lo) = 1) or (Lo = 'destructor') then Exit(True);
+    if (Pos('operator ', Lo) = 1) then Exit(True);
+    if (Pos('property ', Lo) = 1) then Exit(True);
+    if (Pos('class procedure', Lo) = 1) or (Pos('class function', Lo) = 1) or
+       (Pos('class constructor', Lo) = 1) or (Pos('class destructor', Lo) = 1) or
+       (Pos('class property', Lo) = 1) or (Pos('class var', Lo) = 1) or
+       (Pos('class operator', Lo) = 1) then Exit(True);
+    // Klassen-/Record-/Interface-Decl  `TFoo = class(...)` etc.
+    if TRegEx.IsMatch(Tr,
+         '^[A-Za-z_]\w*\s*=\s*(class|interface|record|object)\b',
+         [roIgnoreCase]) then Exit(True);
+    // Field-Decl `Name[, Name2]: Type;`. Sehr breit - aber nach
+    // attribute-Zeile ist es das uebliche Pattern. Mehrere Namen
+    // mit Komma getrennt, dann `:`, danach Type-Name.
+    if TRegEx.IsMatch(Tr,
+         '^[A-Za-z_]\w*(\s*,\s*[A-Za-z_]\w*)*\s*:\s*[A-Za-z_<]',
+         [roIgnoreCase]) then Exit(True);
+    // Weitere Attribute-Line direkt darunter -> zaehlt auch als
+    // Attribute-Kontext (Member kommt erst danach).
+    if (Length(Tr) > 0) and (Tr[1] = '[') then Exit(True);
+    Result := False;
+  end;
+
+begin
+  Result := False;
+  if (Lines = nil) or (Idx < 0) or (Idx >= Lines.Count) then Exit;
+  ThisLine := Trim(Lines[Idx]);
+  if (ThisLine = '') or (ThisLine[1] <> '[') then Exit;
+
+  // Gate 2: vorherige nicht-leere Zeile - mit `//`-Kommentar-Tail-Strip
+  // damit `[cauNegotiate], // wraNegotiate` als `,`-Continuation erkannt
+  // wird statt als `e`-Endung (mormot.net.client.pas:5238 Set-Literal-FP).
+  i := Idx - 1;
+  Prev := '';
+  while i >= 0 do
+  begin
+    var Raw := Lines[i];
+    var CmtP := Pos('//', Raw);
+    if CmtP > 0 then Raw := Copy(Raw, 1, CmtP - 1);
+    Prev := Trim(Raw);
+    if Prev <> '' then Break;
+    Dec(i);
+  end;
+  if Prev <> '' then
+  begin
+    var Last := Prev[Length(Prev)];
+    if CharInSet(Last, EXPR_CONT_CHARS) then Exit;
+    if EndsWithOpKeyword(LowerCase(Prev)) then Exit;
+  end;
+
+  // Gate 3: Member-Decl auf gleicher Zeile (nach letztem `]`) ODER
+  // auf naechster nicht-leerer Zeile.
+  LastBracketPos := 0;
+  for i := Length(ThisLine) downto 1 do
+    if ThisLine[i] = ']' then begin LastBracketPos := i; Break; end;
+  if LastBracketPos > 0 then
+  begin
+    Tail := Trim(Copy(ThisLine, LastBracketPos + 1, MaxInt));
+    if (Tail <> '') and LooksLikeMemberDecl(Tail) then Exit(True);
+  end;
+  // Naechste nicht-leere Zeile.
+  i := Idx + 1;
+  while i < Lines.Count do
+  begin
+    var NL := Trim(Lines[i]);
+    if NL <> '' then
+    begin
+      if LooksLikeMemberDecl(NL) then Exit(True);
+      // Auch leere Sections wie 'private', 'public' direkt nach
+      // Attribute zaehlen NICHT als Member -> aber typisch ist der
+      // Attribute steht VOR der Visibility-Section, nicht danach.
+      // Hier konservativ False zurueck.
+      Exit(False);
+    end;
+    Inc(i);
   end;
 end;
 

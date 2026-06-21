@@ -62,6 +62,9 @@ begin
       except
         Continue;
       end;
+      // FP-Fix 2026-06-21: Array-Index `Foo[Category]` wurde als Attribute
+      // [Category] fehl-erkannt (jcl/JclUnicode.pas:1876 etc).
+      if not TDetectorUtils.IsLikelyAttributePosition(Lines, i) then Continue;
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
       F.MethodName := '';
