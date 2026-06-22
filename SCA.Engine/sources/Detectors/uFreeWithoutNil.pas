@@ -250,6 +250,12 @@ begin
           Recv := ExtractFreeReceiver(N.Name);
           if Recv = '' then Continue;
           RecvLow := LowerCase(Recv);
+          // Indexed-Element (Objects[i].Free / Items[i].Free / Controls[i].Free)
+          // oder Typecast/Call (TFoo(FItems[i]).Free / TObject(List[i]).Free):
+          // kein simpler Var/Field-Receiver -> die "var := nil"-Empfehlung
+          // trifft nicht zu (Collection-Item-Free-Idiom bzw. Cast, oft im
+          // Clear/Destroy-Loop). Real-World-FP 2026-06-23 (~100+ Treffer).
+          if (Pos('[', Recv) > 0) or (Pos('(', Recv) > 0) then Continue;
           // Receiver darf kein Self/Result/Inherited sein - Free auf Self
           // wird selten von Nil-Out gefolgt (Owner-Pattern).
           if (RecvLow = 'self') or (RecvLow = 'result')

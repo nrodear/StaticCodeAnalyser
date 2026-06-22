@@ -16,6 +16,8 @@ type
     [Test] procedure FreeInDestructor_NotReported;
     [Test] procedure MethodResultFree_NotReported;
     [Test] procedure ParamFree_NotReported;
+    [Test] procedure IndexedElementFree_NotReported;
+    [Test] procedure TypecastFree_NotReported;
     [Test] procedure Finding_KindAndSeverity;
   end;
 
@@ -103,6 +105,47 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil));
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNil.IndexedElementFree_NotReported;
+// FP-Fix (Real-World 2026-06-23): Collection-Item-Free im Loop
+// (`Objects[i].Free`) - kein simpler Var-Receiver, "var := nil" trifft nicht
+// zu. ~100+ Real-World-FPs (TStringList.Objects[], TList Items[], Controls[]).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Bar;'#13#10 +
+  'var i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 0 to FList.Count - 1 do'#13#10 +
+  '    FList.Objects[i].Free;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
+      'Indexed-Element-Free (Objects[i].Free) ist kein Free-Without-Nil');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNil.TypecastFree_NotReported;
+// FP-Fix (Real-World 2026-06-23): Typecast-Free (`TFoo(List[i]).Free`) -
+// nil-Out eines Casts ist syntaktisch unmoeglich.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Bar;'#13#10 +
+  'var i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 0 to FItems.Count - 1 do'#13#10 +
+  '    TObject(FItems[i]).Free;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
+      'Typecast-Free (TObject(X).Free) ist kein Free-Without-Nil');
   finally F.Free; end;
 end;
 
