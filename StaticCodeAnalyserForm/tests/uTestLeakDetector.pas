@@ -155,6 +155,7 @@ type
     [Test] procedure Field_TwoFieldsOneLeaks_OneError;
     [Test] procedure Field_FreedViaDestroyMethod_NoFinding;
     [Test] procedure Field_TwoClassesIndependent_OnlyLeakingReported;
+    [Test] procedure Field_FreedViaAlias_NoFinding;
   end;
 
 implementation
@@ -2496,6 +2497,40 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
         'FList wird nie freigegeben - genau ein Field-Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeak.Field_FreedViaAlias_NoFinding;
+// FP-Fix (Self-Scan 2026-06-21): Alias-Free-Idiom im Destruktor
+//   L := FField;  FField := nil;  L.Free;
+// (Teardown-Pattern gegen Re-Entrancy, uIDEWatchMode FSubscribers). Das Feld
+// WIRD freigegeben - nur ueber die lokale Alias-Var, nicht via FField.Free.
+const SRC =
+  'unit t; interface'#13#10+
+  'type TFoo = class'#13#10+
+  '  FList: TStringList;'#13#10+
+  'public'#13#10+
+  '  constructor Create;'#13#10+
+  '  destructor Destroy; override;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TFoo.Create;'#13#10+
+  'begin'#13#10+
+  '  FList := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'destructor TFoo.Destroy;'#13#10+
+  'var L: TStringList;'#13#10+
+  'begin'#13#10+
+  '  L := FList;'#13#10+
+  '  FList := nil;'#13#10+
+  '  L.Free;'#13#10+
+  '  inherited;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'Feld via lokalen Alias freigegeben - kein Leak');
   finally F.Free; end;
 end;
 

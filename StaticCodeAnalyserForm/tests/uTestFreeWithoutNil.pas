@@ -14,6 +14,8 @@ type
     [Test] procedure FreeAtMethodEnd_NotReported;
     [Test] procedure FreeFollowedByNilAssign_NotReported;
     [Test] procedure FreeInDestructor_NotReported;
+    [Test] procedure MethodResultFree_NotReported;
+    [Test] procedure ParamFree_NotReported;
     [Test] procedure Finding_KindAndSeverity;
   end;
 
@@ -166,6 +168,45 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
       'Field.Free im Destruktor braucht kein Nil-Out - kein Finding');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNil.MethodResultFree_NotReported;
+// FP-Fix (Self-Scan 2026-06-21): `Stack.Pop.Free` gibt das ERGEBNIS eines
+// Methodenaufrufs frei - es gibt keine Variable 'Pop'. Die Wurzel 'Stack'
+// ist lokal -> method-scoped, kein Nil-Out-Smell.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Bar;'#13#10 +
+  'var Stack: TStack;'#13#10 +
+  'begin'#13#10 +
+  '  Stack := TStack.Create;'#13#10 +
+  '  Stack.Pop.Free;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
+      'X.Pop.Free (Methoden-Ergebnis, lokale Wurzel) ist kein Free-Without-Nil');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNil.ParamFree_NotReported;
+// FP-Fix (Self-Scan 2026-06-21): ein Parameter (Methode uebernimmt Ownership)
+// ist method-scoped - Nil-Out beim Method-Ende ist sinnlos.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Consume(Items: TObjectList);'#13#10 +
+  'begin'#13#10 +
+  '  Items.Free;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
+      'Free eines Parameters ist kein Free-Without-Nil-Smell');
   finally F.Free; end;
 end;
 

@@ -163,6 +163,41 @@ begin
   end;
 end;
 
+function IsFreedViaAlias(Dtor: TAstNode; const FieldNameLow: string): Boolean;
+// Erkennt das Alias-Free-Idiom im Destruktor:
+//   L := FField;  FField := nil;  L.Free;
+// (haeufig um Re-Entrancy beim Teardown zu vermeiden - RemoveSubscriber-
+// Callbacks greifen sonst in freed-Speicher). SearchFree findet nur ein
+// direktes FField.Free; hier wird ueber die lokale Alias-Var L freigegeben.
+// Heuristik: nkAssign `<bare-local> := FField` (RHS exakt das Feld), dann
+// SearchFree auf die Alias-Var. Self-Scan-FP 2026-06-21 (uIDEWatchMode
+// FSubscribers).
+var
+  Assigns : TList<TAstNode>;
+  A       : TAstNode;
+  RhsLow, AliasLow : string;
+  Dummy   : Boolean;
+begin
+  Result := False;
+  if Dtor = nil then Exit;
+  Assigns := Dtor.FindAll(nkAssign);
+  try
+    for A in Assigns do
+    begin
+      RhsLow := LowerCase(Trim(A.TypeRef));
+      if (RhsLow = FieldNameLow) or (RhsLow = 'self.' + FieldNameLow) then
+      begin
+        AliasLow := LowerCase(Trim(A.Name));
+        if (AliasLow <> '') and (Pos('.', AliasLow) = 0) and
+           TLeakDetector2.SearchFree(Dtor, AliasLow, False, Dummy) then
+          Exit(True);
+      end;
+    end;
+  finally
+    Assigns.Free;
+  end;
+end;
+
 class procedure TFieldLeakDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -212,6 +247,9 @@ begin
           if Dtor <> nil then
             FreeFound := TLeakDetector2.SearchFree(Dtor, FieldNameLow,
                                                    False, FreeInFin);
+          // Alias-Free-Idiom (L := FField; FField := nil; L.Free) erkennen.
+          if not FreeFound then
+            FreeFound := IsFreedViaAlias(Dtor, FieldNameLow);
 
           if not FreeFound then
           begin

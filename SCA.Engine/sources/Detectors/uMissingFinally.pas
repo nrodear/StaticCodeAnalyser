@@ -55,9 +55,28 @@ var
   FreeFound  : Boolean;
   FreeInFin  : Boolean;
   HasExcept  : Boolean;
+  HasReraise : Boolean;
+  RaiseNodes : TList<TAstNode>;
+  R          : TAstNode;
   F          : TLeakFinding;
 begin
   HasExcept  := MethodNode.HasChild(nkTryExcept);
+
+  // Re-raise-Cleanup-Idiom erkennen: `try Build; except Obj.Free; raise; end`
+  // ist funktional aequivalent zu try/finally fuer den FEHLERpfad - der
+  // ERFOLGSpfad behaelt/transferiert das Objekt bewusst (Owner-Transfer,
+  // Cache-Store). Ein try/finally waere hier FALSCH (es wuerde das Objekt
+  // auch bei Erfolg freigeben). Signal: ein bare `raise;` (nkRaise mit Name
+  // 'raise') irgendwo in der Methode - das gibt es nur in einem except-
+  // Handler. Real-World/Self-Scan FP-Klasse 2026-06-21.
+  HasReraise := False;
+  RaiseNodes := MethodNode.FindAll(nkRaise);
+  try
+    for R in RaiseNodes do
+      if SameText(Trim(R.Name), 'raise') then begin HasReraise := True; Break; end;
+  finally
+    RaiseNodes.Free;
+  end;
 
   // PER-VAR-Pruefung: Methode kann durchaus try/finally haben, aber
   // nicht jede leaky var ist auch IM finally freigegeben. Z.B.:
@@ -87,6 +106,9 @@ begin
       if not FreeFound then Continue;
       // Free liegt bereits IM finally - alles gut, kein MissingFinally.
       if FreeInFin then Continue;
+      // try/except MIT bare re-raise = Cleanup-und-Reraise-Idiom (s.o.) ->
+      // funktional try/finally fuer den Fehlerpfad, kein MissingFinally.
+      if HasExcept and HasReraise then Continue;
 
       // Create + Free vorhanden, aber kein try/finally.
       // Emit auf der Create-Zeile (statt var-decl): bessere UX und

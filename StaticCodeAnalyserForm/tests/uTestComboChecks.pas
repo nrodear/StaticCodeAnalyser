@@ -31,6 +31,7 @@ type
     [Test] procedure MissingFinally_TryFinally_NoFinding;
     [Test] procedure MissingFinally_NoFreeAtAll_NoFinding;
     [Test] procedure MissingFinally_TryExceptOnly_ReportsWarning;
+    [Test] procedure MissingFinally_ExceptReraise_NotReported;
     // DivByZero
     [Test] procedure DivByZero_LiteralZero_ReportsError;
     [Test] procedure DivByZero_ParamWithoutGuard_ReportsWarning;
@@ -283,6 +284,36 @@ begin
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMissingFinally),
       'try/except ohne finally – Warning');
+  finally F.Free; end;
+end;
+
+procedure TTestNewChecks.MissingFinally_ExceptReraise_NotReported;
+// FP-Fix (Self-Scan 2026-06-21): `Obj := Create; try Build; except Obj.Free;
+// raise; end` ist das Cleanup-und-Reraise-Idiom - bei Erfolg wird Obj
+// behalten/transferiert (hier: zurueckgegeben), ein try/finally waere FALSCH.
+// Bare re-raise im except -> kein MissingFinally.
+// Unterschied zum MissingFinally_TryExceptOnly_ReportsWarning-Test ist GENAU
+// das `raise;` - lokale Var, kein Return/Owner-Transfer, nur das bare re-raise
+// im except unterscheidet die beiden Faelle.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var owned: TStringList;'#13#10+
+  'begin'#13#10+
+  '  owned := TStringList.Create;'#13#10+
+  '  try'#13#10+
+  '    DoSomething(owned);'#13#10+
+  '  except'#13#10+
+  '    owned.Free;'#13#10+
+  '    raise;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMissingFinally),
+      'except + bare raise = Cleanup-Reraise-Idiom, kein MissingFinally');
   finally F.Free; end;
 end;
 
