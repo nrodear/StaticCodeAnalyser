@@ -1187,7 +1187,37 @@ var
           // ProjectNode-Read interpretiert (FP). Skippen wenn vorheriges
           // Char ein '.' war.
           if Before <> '.' then
+          begin
+            // Real-World-FP 2026-06-23: folgende Formen sind KEIN Werte-Read:
+            // 1) `@name` (Address-of, oft WinAPI-out-Param der name FUELLT).
+            if Before = '@' then begin P := P + NL; Continue; end;
+            // 2) `sizeof(name)` (Groessen-Query, kein Read).
+            if (P >= 8) and (Copy(L, P - 7, 7) = 'sizeof(') then
+              begin P := P + NL; Continue; end;
+            // 3) Array-Element-Write `name[i] := ` / `name[i].F := ` ist
+            //    Initialisierung (Element-Write), kein Read.
+            if After = '[' then
+            begin
+              var q := P + NL; var depth := 0;
+              while q <= LL do
+              begin
+                if L[q] = '[' then Inc(depth)
+                else if L[q] = ']' then
+                begin Dec(depth); if depth = 0 then begin Inc(q); Break; end; end;
+                Inc(q);
+              end;
+              while (q <= LL) and CharInSet(L[q], ['.', '_', 'a'..'z', '0'..'9']) do Inc(q);
+              while (q <= LL) and (L[q] = ' ') do Inc(q);
+              if (q < LL) and (L[q] = ':') and (L[q + 1] = '=') then
+                begin P := P + NL; Continue; end;
+            end;
+            // 4) `with name do ...`: Feld-Zugriff/-Write am Record, kein
+            //    plain Read der Var (name steht vor dem ` do `).
+            if StartsStr('with ', TrimLeft(L)) and
+               ((Pos(' do', L) = 0) or (P < Pos(' do', L))) then
+              begin P := P + NL; Continue; end;
             Exit(i + 1);
+          end;
         end;
         P := P + NL;
       end;

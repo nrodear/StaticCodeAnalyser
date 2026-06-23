@@ -24,6 +24,9 @@ type
     [Test] procedure FreeMethodWithArgument_NoFinding;
     // CFG-Variable-Overwrite-Bug (base64func.pas-Pattern)
     [Test] procedure CfgFilter_TryWithIfElse_NoFinding;
+    // Real-World 2026-06-23: Destruktor-Header + qualifizierter Member
+    [Test] procedure DestructorHeader_NotReported;
+    [Test] procedure QualifiedMemberOfOtherObject_NotReported;
   end;
 
 implementation
@@ -291,6 +294,50 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUseAfterFree),
     'try/if-Free/elseif-Use: CFG-Filter muss FP droppen');
+  finally F.Free; end;
+end;
+
+procedure TTestUseAfterFree.DestructorHeader_NotReported;
+// FP-Fix (Real-World 2026-06-23): `destructor TFoo.Destroy;` ist ein Method-
+// HEADER - das Regex matcht sonst den Typnamen TFoo als "freigegeben" und
+// flaggt jede spaetere statische Nutzung (TFoo.X / TFoo(x)). Haeufigste
+// SCA134-FP-Klasse.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'destructor TFoo.Destroy;'#13#10 +
+  'begin'#13#10 +
+  '  inherited;'#13#10 +
+  'end;'#13#10 +
+  'class procedure TFoo.Init;'#13#10 +
+  'begin'#13#10 +
+  '  TFoo.FInstance := nil;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUseAfterFree),
+    'Destruktor-Header ist kein Free des Typnamens');
+  finally F.Free; end;
+end;
+
+procedure TTestUseAfterFree.QualifiedMemberOfOtherObject_NotReported;
+// FP-Fix (Real-World 2026-06-23): freigegebene bare-Var `Params`; spaeter
+// `Conn.Session.Params.Text` - dort ist Params Member eines ANDEREN Objekts
+// (Links-Boundary '.'), kein Use der freigegebenen Var.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var Params: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  Params := TStringList.Create;'#13#10 +
+  '  Params.Free;'#13#10 +
+  '  ShowMessage(Conn.Session.Params.Text);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUseAfterFree),
+    'qualifizierter Member eines anderen Objekts ist kein Use-After-Free');
   finally F.Free; end;
 end;
 

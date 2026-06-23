@@ -92,6 +92,7 @@ class procedure TAbstractNotImplDetector.AnalyzeUnit(UnitNode: TAstNode;
 var
   ClassNodes  : TList<TAstNode>;
   ClassByName : TDictionary<string, TAstNode>;
+  ParentSet   : TDictionary<string, Boolean>;
   C           : TAstNode;
   Methods     : TList<TAstNode>;
   M           : TAstNode;
@@ -101,15 +102,32 @@ var
   DerivedMethods  : TStringList;
   AbstrName   : string;
 begin
+  // PScript/RTL-Spiegel-Stub-Files (cnwizards \PSDecl\ / \PSDeclEx\): reine
+  // bodylose Deklarationen der echten RTL - die Overrides stehen in der
+  // echten RTL, nicht im Stub. Real-World-FP 2026-06-23.
+  if Pos('\psdecl', LowerCase(FileName)) > 0 then Exit;
+
   ClassNodes := UnitNode.FindAll(nkClass);
   ClassByName := TDictionary<string, TAstNode>.Create;
+  ParentSet := TDictionary<string, Boolean>.Create;
   try
-    // Index aller Class-Deklarationen nach Name.
+    // Index aller Class-Deklarationen nach Name + Set aller Klassen die als
+    // Parent einer anderen File-Klasse auftauchen.
     for C in ClassNodes do
+    begin
       ClassByName.AddOrSetValue(LowerCase(C.Name), C);
+      var PN := LowerCase(ExtractParentName(C.TypeRef));
+      if PN <> '' then ParentSet.AddOrSetValue(PN, True);
+    end;
 
     for C in ClassNodes do
     begin
+      // Intermediate-Abstract-Skip: ist C selbst Basis einer anderen Klasse
+      // im File, ist es eine Zwischen-Basis - die Blatt-Subklassen liefern
+      // die Overrides (und werden selbst geflaggt, falls sie es nicht tun).
+      // Nur Blatt-Klassen flaggen. Real-World-FP 2026-06-23 (~10/10 FP).
+      if ParentSet.ContainsKey(LowerCase(C.Name)) then Continue;
+
       ParentName := ExtractParentName(C.TypeRef);
       if ParentName = '' then Continue;
       if not ClassByName.TryGetValue(LowerCase(ParentName), Parent) then
@@ -151,7 +169,9 @@ begin
           // Image32 TCustomRenderer/TCustomColorRenderer, ...). Audit-
           // Trigger Img32.Draw, mORMot orm.base.
           var CLow := LowerCase(C.Name);
-          if StartsStr('tcustom', CLow) or StartsStr('tabstract', CLow) then
+          // 'TCustom...'-Prefix ODER 'abstract' irgendwo im Namen
+          // (TALExprAbstractFuncSym): semantisch abstrakte Zwischen-Basis.
+          if StartsStr('tcustom', CLow) or ContainsText(CLow, 'abstract') then
             Continue;
           // Real-World-Sweep 2026-06-13: Intermediate-Abstract-Klassen die
           // KEIN ueberschreiben - 0 von N abstract methods implementiert.
@@ -190,6 +210,7 @@ begin
       end;
     end;
   finally
+    ParentSet.Free;
     ClassByName.Free;
     ClassNodes.Free;
   end;

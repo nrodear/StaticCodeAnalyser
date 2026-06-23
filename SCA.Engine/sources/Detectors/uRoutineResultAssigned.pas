@@ -309,7 +309,14 @@ begin
     for N in Assigns do
     begin
       LhsLow := NormalizeLhs(N.Name);
-      if IsResultLhs(LhsLow, FnNameLow) then
+      // result als LHS-Head (Result / Result.Field / Result[i] / Result^)
+      // ODER irgendwo word-bounded in der LHS - faengt Typecast- und
+      // Pointer-Cast-LHS: `TColorRec(Result).R := ...`,
+      // `PInteger(@Result)^ := ...`. Result steht dort IN den Klammern, der
+      // Prefix-Check allein verfehlt es. Real-World-FP 2026-06-23.
+      if IsResultLhs(LhsLow, FnNameLow) or
+         ContainsIdentifier(LhsLow, 'result') or
+         ((FnNameLow <> '') and ContainsIdentifier(LhsLow, FnNameLow)) then
       begin
         HasResult := True;
         Break;

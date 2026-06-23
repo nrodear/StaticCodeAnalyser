@@ -15,6 +15,7 @@ type
     [Test] procedure DerivedItselfAbstract_NoFinding;
     [Test] procedure AnonymousRecordField_DoesNotConfuseParser;
     [Test] procedure TCustomBase_TreatedAsAbstract_NoFinding;
+    [Test] procedure IntermediateBase_LeafOverrides_NoFinding;
     [Test] procedure Finding_KindAndSeverity;
   end;
 
@@ -171,6 +172,30 @@ begin
     Assert.IsNotNull(Hit, 'fkAbstractNotImpl finding expected');
     Assert.AreEqual(fkAbstractNotImpl, Hit.Kind);
     Assert.AreEqual(lsError,           Hit.Severity);
+  finally F.Free; end;
+end;
+
+procedure TTestAbstractNotImpl.IntermediateBase_LeafOverrides_NoFinding;
+// FP-Fix (Real-World 2026-06-23): TMid erbt Exec, ueberschreibt NICHT - ist
+// aber selbst Basis von TLeaf, das ueberschreibt. TMid ist eine Zwischen-
+// Basis (nie instanziiert) -> kein EAbstractError. Nur Blatt-Klassen flaggen.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TBase = class'#13#10 +
+  '    procedure Exec; virtual; abstract;'#13#10 +
+  '  end;'#13#10 +
+  '  TMid = class(TBase)'#13#10 +
+  '  end;'#13#10 +
+  '  TLeaf = class(TMid)'#13#10 +
+  '    procedure Exec; override;'#13#10 +
+  '  end;'#13#10 +
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkAbstractNotImpl),
+    'Intermediate-Basis (selbst Parent) nicht flaggen - Blatt liefert Override');
   finally F.Free; end;
 end;
 

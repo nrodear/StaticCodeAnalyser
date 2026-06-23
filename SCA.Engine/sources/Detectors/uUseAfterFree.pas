@@ -386,6 +386,13 @@ var
       // selben File). Falls doch: dieser Detector waere ein FN, aber kein FP.
       if not SameText(Copy(Code, p, Length(Ident)), Ident) then
       begin Inc(p); Continue; end;
+      // Links-Boundary: steht unmittelbar vor dem Ident ein '.', ist es ein
+      // Member eines ANDEREN Objekts (Obj.Connection.Parameters) - nicht
+      // unsere bare freigegebene Var. Kein Use-After-Free. Real-World-FP
+      // 2026-06-23 (HeidiSQL main.pas:4730 .Parameters.).
+      var bp := p - 1;
+      while (bp >= 1) and CharInSet(Code[bp], [' ', #9, #10, #13]) do Dec(bp);
+      if (bp >= 1) and (Code[bp] = '.') then begin Inc(p); Continue; end;
       // Naechstes nicht-WS-Zeichen nach EndP bestimmt das Pattern.
       var k := EndP + 1;
       while (k <= CodeLen) and CharInSet(Code[k], [' ', #9, #10, #13]) do Inc(k);
@@ -460,6 +467,29 @@ begin
       // ist Owner-Pattern, Self.Free ist Sonderfall, etc.
       if (IdentLow = 'self') or (IdentLow = 'result') or
          (IdentLow = 'inherited') or (IdentLow = 'nil') then Continue;
+
+      // Method-Header (`destructor TFoo.Destroy;`) bzw. Address-of
+      // (`@TApplication.Destroy`) sind KEIN Free-Call - das Regex matcht
+      // sonst den Typnamen als "freigegebene" Var und flaggt jede spaetere
+      // statische Nutzung. Real-World-FP 2026-06-23 (~haeufigste SCA134-FP-
+      // Klasse). Receiver-Start = Gruppe 2/3/4 (Ident vor .Free/.Destroy/
+      // .DisposeOf); bei FreeAndNil (Gruppe 1) nicht relevant.
+      var RecvStart := 0;
+      if (M.Groups.Count > 2) and (M.Groups[2].Value <> '') then RecvStart := M.Groups[2].Index
+      else if (M.Groups.Count > 3) and (M.Groups[3].Value <> '') then RecvStart := M.Groups[3].Index
+      else if (M.Groups.Count > 4) and (M.Groups[4].Value <> '') then RecvStart := M.Groups[4].Index;
+      if RecvStart > 1 then
+      begin
+        var b := RecvStart - 1;
+        while (b >= 1) and CharInSet(Code[b], [' ', #9, #10, #13]) do Dec(b);
+        if (b >= 1) and (Code[b] = '@') then Continue;   // Address-of, kein Free
+        var we := b;
+        while (b >= 1) and IsIdentChar(Code[b]) do Dec(b);
+        var PrevWord := LowerCase(Copy(Code, b + 1, we - b));
+        if (PrevWord = 'destructor') or (PrevWord = 'procedure') or
+           (PrevWord = 'function') or (PrevWord = 'constructor') then
+          Continue;                                      // Method-Header, kein Free
+      end;
 
       ScanFrom := M.Index + M.Length;
       UsePos := FindUseOrReassign(ScanFrom);

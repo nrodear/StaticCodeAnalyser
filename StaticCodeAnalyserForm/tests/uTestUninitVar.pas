@@ -44,6 +44,9 @@ type
     [Test] procedure AsmBlock_NoCrash;
     [Test] procedure EmptyMethod_NoCrash;
     [Test] procedure MultipleVarsSomeClean_OnlyDirtyFlagged;
+    // Real-World 2026-06-23: Array-Element-Write + @/SizeOf kein Read
+    [Test] procedure ArrayElementWrite_NoFinding;
+    [Test] procedure SizeOfAndAddressOf_NoFinding;
   end;
 
 implementation
@@ -699,6 +702,52 @@ begin
     // a ist sauber, b ist UninitVar - es soll genau 1 Finding sein.
     Assert.AreEqual<Integer>(1, CountKind(L, fkUninitVar),
       'Nur b sollte geflaggt werden, a ist sauber');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.ArrayElementWrite_NoFinding;
+// FP-Fix (Real-World 2026-06-23): `LActions[0] := ...` ist ein Element-Write
+// (Initialisierung), kein Read-Before-Write der Array-Variable.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var LActions: array[0..1] of Integer;'#13#10 +
+    'begin'#13#10 +
+    '  LActions[0] := 1;'#13#10 +
+    '  LActions[1] := 2;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+    'Array-Element-Write ist Initialisierung, kein Uninit-Read');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.SizeOfAndAddressOf_NoFinding;
+// FP-Fix (Real-World 2026-06-23): `SizeOf(Buf)` und `@Buf` lesen NICHT den
+// Wert - oft WinAPI-Out-Param der den Buffer erst fuellt.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var Buf: array[0..15] of Byte; n: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  n := SizeOf(Buf);'#13#10 +
+    '  FillStuff(@Buf, n);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+    'SizeOf(var) / @var sind kein Werte-Read');
   finally L.Free; end;
 end;
 

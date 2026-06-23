@@ -33,6 +33,7 @@ type
     [Test] procedure TryGetValuePassesResult_NoFinding;
     [Test] procedure TryStrToIntPassesResult_NoFinding;
     [Test] procedure CallPassesResultFollowedByOther_NoFinding;
+    [Test] procedure TypecastResultLhs_NoFinding;
     [Test] procedure UnrelatedVarSimilarName_StillReported;
 
     // ---- Finding-Inhalt ----------------------------------------------------
@@ -335,6 +336,26 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRoutineResultUnassigned));
+  finally F.Free; end;
+end;
+
+procedure TTestRoutineResultAssigned.TypecastResultLhs_NoFinding;
+// FP-Fix (Real-World 2026-06-23): Result wird per Typecast/Pointer-Cast als
+// LHS zugewiesen - `TColorRec(Result).R := ...`. Result steht IN den Klammern,
+// der Prefix-Check verfehlt es; ContainsIdentifier(LHS,'result') faengt es.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function ToColor(r, g, b: Byte): Integer;'#13#10 +
+  'begin'#13#10 +
+  '  TColorRec(Result).R := r;'#13#10 +
+  '  TColorRec(Result).G := g;'#13#10 +
+  '  TColorRec(Result).B := b;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRoutineResultUnassigned),
+    'Typecast-Result-LHS (TColorRec(Result).R :=) zaehlt als Result-Zuweisung');
   finally F.Free; end;
 end;
 
