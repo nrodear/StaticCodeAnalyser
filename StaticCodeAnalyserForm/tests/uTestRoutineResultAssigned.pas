@@ -35,6 +35,8 @@ type
     [Test] procedure CallPassesResultFollowedByOther_NoFinding;
     [Test] procedure TypecastResultLhs_NoFinding;
     [Test] procedure UnrelatedVarSimilarName_StillReported;
+    [Test] procedure NestedRoutine_OuterResultAssigned_NoFinding;
+    [Test] procedure NestedFunctionWithoutResult_NotAnalyzed_NoFinding;
 
     // ---- Finding-Inhalt ----------------------------------------------------
     [Test] procedure Finding_KindAndSeverity;
@@ -373,6 +375,57 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkRoutineResultUnassigned));
+  finally F.Free; end;
+end;
+
+procedure TTestRoutineResultAssigned.NestedRoutine_OuterResultAssigned_NoFinding;
+// Root-Cause-Fix (Parser nested routine): aeussere Funktion mit lokaler
+// nested procedure VOR dem begin. Frueher fraß ParseLocalVarSection die
+// nested routine als Pseudo-Local-Var und ParseMethodImpl interpretierte
+// den NESTED-Body als Outer-Body -> der echte Outer-`Result :=` ging
+// verloren -> FP. Jetzt wird die nested routine als eigenes nkMethod-Child
+// geparst, der Outer-Body bleibt erhalten.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Outer: Integer;'#13#10 +
+  'var i: Integer;'#13#10 +
+  '  procedure Helper;'#13#10 +
+  '  begin'#13#10 +
+  '    i := 1;'#13#10 +
+  '  end;'#13#10 +
+  'begin'#13#10 +
+  '  Helper;'#13#10 +
+  '  Result := i;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRoutineResultUnassigned),
+    'Outer-Body Result-Assign darf durch nested routine nicht verloren gehen');
+  finally F.Free; end;
+end;
+
+procedure TTestRoutineResultAssigned.NestedFunctionWithoutResult_NotAnalyzed_NoFinding;
+// Nested routines werden geparst (damit der Outer-Body gefunden wird), aber
+// bewusst NICHT als analysierbare Methoden im AST belassen (siehe
+// ParseMethodImpl: sonst feuern SCA148/176/166/121 massenhaft auf nested
+// Helpern; der Smell selbst meldet der lexische uNestedRoutines-Detektor).
+// Daher: die nested Inner-Function OHNE Result-Assign erzeugt KEIN SCA121.
+// Outer weist Result zu -> ebenfalls sauber -> insgesamt 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Outer: Integer;'#13#10 +
+  '  function Inner: Integer;'#13#10 +
+  '  begin'#13#10 +
+  '  end;'#13#10 +
+  'begin'#13#10 +
+  '  Result := Inner;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRoutineResultUnassigned),
+    'nested routines werden nicht standalone analysiert; Outer ist sauber');
   finally F.Free; end;
 end;
 

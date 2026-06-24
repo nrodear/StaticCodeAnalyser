@@ -19,6 +19,9 @@ type
     [Test] procedure VirtualMethodWithSpaceBeforeDirective_NotReported;
     [Test] procedure ProcedureNoSelfAccess_SuggestsClassProcedure;
     [Test] procedure Constructor_NotReported;
+    [Test] procedure SiblingInstanceMethodCall_NotReported;
+    [Test] procedure NonFFieldInRhs_NotReported;
+    [Test] procedure OnlyParams_WithClassDecl_StillReported;
     [Test] procedure Finding_KindAndSeverity;
   end;
 
@@ -208,6 +211,81 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeClassMethod));
+  finally F.Free; end;
+end;
+
+procedure TTestCanBeClassMethod.SiblingInstanceMethodCall_NotReported;
+// FP-Fix (Real-World 2026-06-24): bare Aufruf einer Sibling-Instanz-Methode
+// (`Helper;` ohne Self.) ist impliziter Self-Zugriff. Wird jetzt ueber die
+// Klassen-Member-Liste erkannt (TStringHashMap.Remove -> FindNode/DeleteNode).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    FList: TObject;'#13#10 +
+  '    procedure Helper;'#13#10 +
+  '    procedure DoIt;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Helper;'#13#10 +
+  'begin FList.Free; end;'#13#10 +              // Field-Zugriff -> nicht geflaggt
+  'procedure TFoo.DoIt;'#13#10 +
+  'begin Helper; end;'#13#10 +                  // Sibling-Call -> mein Fix
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeClassMethod),
+    'bare Sibling-Instanz-Methodenaufruf ist Self-Zugriff - kein Finding');
+  finally F.Free; end;
+end;
+
+procedure TTestCanBeClassMethod.NonFFieldInRhs_NotReported;
+// FP-Fix (Real-World 2026-06-24): Feld OHNE F-Konvention, im RHS-Ausdruck
+// (Parser legt RHS als Blob in nkAssign.TypeRef ab; alter Check sah nur
+// Node.Name=LHS). Ueber die Klassen-Member-Liste wird 'Counter' im RHS erkannt.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    Counter: Integer;'#13#10 +               // Non-F-Feld
+  '    function Calc(X: Integer): Integer;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'function TFoo.Calc(X: Integer): Integer;'#13#10 +
+  'begin Result := X * Counter; end;'#13#10 +   // Counter steht im RHS-Blob
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeClassMethod),
+    'Non-F-Feld im RHS-Ausdruck ist Instance-State - kein Finding');
+  finally F.Free; end;
+end;
+
+procedure TTestCanBeClassMethod.OnlyParams_WithClassDecl_StillReported;
+// Gegenprobe gegen Ueber-Suppression: Methode nutzt NUR Parameter, obwohl die
+// Klasse Member hat. Member-Set-Scan darf hier NICHT matchen -> echtes Finding
+// bleibt erhalten.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TMath = class'#13#10 +
+  '    Counter: Integer;'#13#10 +
+  '    function Add(A, B: Integer): Integer;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'function TMath.Add(A, B: Integer): Integer;'#13#10 +
+  'begin Result := A + B; end;'#13#10 +         // nur Params, kein Member
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkCanBeClassMethod) >= 1,
+    'Methode ohne jeden Member-Zugriff bleibt class-method-Kandidat');
   finally F.Free; end;
 end;
 

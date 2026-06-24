@@ -1046,6 +1046,55 @@ begin
 
   ParseLocalVarSection(MNode);
 
+  // Nested local routines: Delphi erlaubt `procedure`/`function`-Deklarationen
+  // (mit eigenem Rumpf) im Deklarations-Abschnitt VOR dem `begin` der aeusseren
+  // Methode, optional mit weiteren var/const/type-Sektionen dazwischen. Sie
+  // werden hier rekursiv geparst, damit die Lexer-Position korrekt bis hinter
+  // ihre Rumpf-`end;` laeuft und der ECHTE Outer-Body (mit `Result :=` /
+  // Var-Writes) danach normal geparst wird. Frueher fraß ParseLocalVarSection
+  // die nested routine als Pseudo-Local-Var und der Outer-Body ging verloren ->
+  // SCA121/SCA166-False-Positives auf der aeusseren Methode.
+  //
+  // WICHTIG: nested routines werden NICHT als analysierbare nkMethod im AST
+  // belassen. Der AST hat sie noch nie enthalten (der alte Headless-Branch
+  // loeschte sie); der Smell wird vom LEXISCHEN uNestedRoutines-Detektor
+  // (fkNestedRoutine, Hint) gemeldet. Wuerde man sie als Top-Level-Methoden
+  // surfacen, feuerten could-be-class-method (SCA148), Complexity (SCA176),
+  // uninit/Result u.a. massenhaft auf ihnen (Real-World-Messung: +170k
+  // Findings, SCA148 +17k). Darum: parsen, dann verwerfen.
+  //
+  // Sonderfall IFDEF-Konditional-Twin: derselbe Method-Header erscheint zwei-
+  // mal im Token-Stream (Lexer skippt nur Comments), z.B.
+  //   {$IFDEF FPC} function F: integer;
+  //   {$ELSE}      function F: string;  {$ENDIF}  begin ... end;
+  // Der ZWEITE Header (gleicher Name) traegt den gemeinsamen Body. Der headless
+  // erste Knoten (MNode) wird entfernt; der Twin bleibt als die eine echte
+  // Methode MIT Body stehen (kein Phantom-Duplikat, Body bleibt erhalten).
+  while Tok.Kind in [tkKwProcedure, tkKwFunction,
+                     tkKwConstructor, tkKwDestructor, tkKwOperator] do
+  begin
+    var Before := Parent.Children.Count;
+    ParseMethodImpl(Parent);                // nested/twin als Sibling parsen
+    if Parent.Children.Count = Before then Break;  // Defensive: nichts geparst
+    var Sub := Parent.Children[Before];     // die gerade geparste Routine
+
+    if (MNode.Name <> '') and SameText(Sub.Name, MNode.Name) then
+    begin
+      // IFDEF-Twin: Sub ist die echte Methode (mit Body) -> headless MNode weg.
+      Parent.Children.Remove(MNode);        // OwnsObjects=True -> gibt MNode frei
+      Exit;
+    end;
+
+    // Echte nested routine: nur zur Positions-Findung geparst, jetzt verwerfen
+    // (inkl. tiefer verschachtelter, die die Rekursion ebenfalls als Siblings
+    // ab Index `Before` angehaengt hat).
+    while Parent.Children.Count > Before do
+      Parent.Children.Delete(Parent.Children.Count - 1);  // OwnsObjects -> Free
+
+    // Weitere var/const/type-Sektionen koennen vor dem Outer-Body folgen.
+    ParseLocalVarSection(MNode);
+  end;
+
   if Tok.Kind = tkKwBegin then
     ParseBlock(MNode)
   else if Tok.Kind = tkKwAsm then
@@ -1054,24 +1103,6 @@ begin
     SkipTo([tkKwEnd, tkEof]);
     Eat(tkKwEnd);
     Eat(tkSemicolon);
-  end
-  else if Tok.Kind in [tkKwProcedure, tkKwFunction,
-                       tkKwConstructor, tkKwDestructor,
-                       tkKwOperator] then
-  begin
-    // Headless-Method ohne begin/asm direkt vor naechstem Method-Header:
-    // klassischer IFDEF-Konditional-Pattern wie
-    //   {$IFDEF FPC} function F: integer;
-    //   {$ELSE}      function F: string;
-    //   {$ENDIF}
-    //   begin
-    //     ...
-    //   end;
-    // Der Parser sieht beide Header (Lexer skippt nur Comments). Den
-    // ersten Headless-Knoten entfernen, sonst erscheint die Methode
-    // doppelt im AST und Detektoren melden Phantom-Duplikate.
-    var Idx := Parent.Children.IndexOf(MNode);
-    if Idx >= 0 then Parent.Children.Delete(Idx);
   end;
 end;
 
@@ -1131,8 +1162,18 @@ begin
       end;
 
       while not (Tok.Kind in [tkKwVar, tkKwConst, tkKwType,
+                              tkKwProcedure, tkKwFunction, tkKwConstructor,
+                              tkKwDestructor, tkKwOperator,
                               tkKwBegin, tkKwAsm, tkKwEnd, tkEof]) do
       begin
+        // Routine-Keywords (procedure/function/...) beenden die Var-Section:
+        // sie leiten eine NESTED routine ein, KEINE weitere Variable. Ohne
+        // diesen Stop fraesse der Var-Parser `procedure Local` als Pseudo-
+        // Local-Var (`Local` ohne Typ) und ParseMethodImpl wuerde danach den
+        // Body der nested routine als Outer-Body fehlinterpretieren -> der
+        // echte Outer-Body (mit `Result :=` / Var-Writes) ginge verloren
+        // (Wurzel der SCA121/SCA166-False-Positives). ParseMethodImpl parst
+        // die nested routine jetzt selbst als eigenes nkMethod-Child.
         // GuardAdvance schuetzt vor Endlos-Loop: SkipToSemicolon + Eat
         // koennen beide no-ops sein (z.B. wenn der nachfolgende Token ein
         // unerwartetes Schluesselwort ist), waehrend die Outer-Bedingung

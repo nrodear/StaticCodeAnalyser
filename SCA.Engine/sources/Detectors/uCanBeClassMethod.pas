@@ -240,14 +240,121 @@ begin
   end;
 end;
 
+// --- Klassen-Member-Aufloesung gegen bare Instanz-Zugriffe -------------------
+// HasSelfOrFieldAccess prueft nur Node.Name (LHS/Call-Ziel) + die F-Konvention.
+// Damit entgehen ihm bare Zugriffe auf Instanz-Member ueber Identifier, die NICHT
+// der F-Konvention folgen und im RHS-Blob stehen (Parser legt den ganzen RHS als
+// String in nkAssign.TypeRef ab):
+//   H := GetClientHeightInLines * FColCount - 1;   // FColCount im RHS-Blob
+//   PPN := FindNode(S); DeleteNode(PPN^);          // Sibling-Instanz-Methoden
+// Folge: ~87% SCA148-FP (Audit). Loesung: pro Klasse die deklarierten Member
+// (Felder/Properties/Methoden) sammeln und im Methoden-Body (Name UND TypeRef)
+// nach diesen Identifiern suchen - ein Treffer = impliziter Self-Zugriff.
+
+function ScanTextForMember(const S: string; Members: THashSet<string>): Boolean;
+var
+  i, n, st : Integer;
+begin
+  Result := False;
+  if (S = '') or (Members.Count = 0) then Exit;
+  n := Length(S);
+  i := 1;
+  while i <= n do
+  begin
+    if CharInSet(S[i], ['A'..'Z', 'a'..'z', '_']) then
+    begin
+      st := i;
+      while (i <= n) and CharInSet(S[i], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
+        Inc(i);
+      if Members.Contains(LowerCase(Copy(S, st, i - st))) then Exit(True);
+    end
+    else
+      Inc(i);
+  end;
+end;
+
+// Sammelt die Member-Namen (lowercase, unqualifiziert) einer nkClass aus ihren
+// nkVisibilitySection-Kindern (nkField/nkProperty/nkMethod).
+procedure CollectClassMembers(ClassNode: TAstNode; Target: THashSet<string>);
+var
+  Child : TAstNode;
+begin
+  for Child in ClassNode.Children do
+  begin
+    case Child.Kind of
+      nkField, nkProperty, nkMethod:
+        if Child.Name <> '' then
+          Target.Add(LowerCase(UnqualifiedMethodName(Child.Name)));
+      nkVisibilitySection:
+        CollectClassMembers(Child, Target);  // Member liegen in den Sektionen
+    end;
+  end;
+end;
+
+// True wenn der Body von M irgendwo einen Identifier referenziert, der ein
+// deklarierter Member der eigenen Klasse ist (bare Feld/Property/Sibling-Call).
+function BodyRefsInstanceMember(M: TAstNode; Members: THashSet<string>): Boolean;
+
+  function Walk(N: TAstNode): Boolean;
+  var Child: TAstNode;
+  begin
+    if ScanTextForMember(N.Name, Members) then Exit(True);
+    if ScanTextForMember(N.TypeRef, Members) then Exit(True);
+    for Child in N.Children do
+      if Walk(Child) then Exit(True);
+    Result := False;
+  end;
+
+var
+  Child : TAstNode;
+begin
+  Result := False;
+  if Members.Count = 0 then Exit;
+  for Child in M.Children do
+  begin
+    // Deklarationen (Parameter/lokale Var) sind kein Member-Zugriff - ihre
+    // Namen koennten zufaellig mit Membern kollidieren -> ueberspringen.
+    if Child.Kind in [nkParam, nkLocalVar] then Continue;
+    if Walk(Child) then Exit(True);
+  end;
+end;
+
+function ClassKeyOf(const MethName: string): string;
+var
+  Dot : Integer;
+begin
+  Dot := LastDelimiter('.', MethName);
+  if Dot > 0 then Result := LowerCase(Copy(MethName, 1, Dot - 1))
+             else Result := '';
+end;
+
 class procedure TCanBeClassMethodDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
-  Methods : TList<TAstNode>;
-  M       : TAstNode;
+  Methods    : TList<TAstNode>;
+  Classes    : TList<TAstNode>;
+  MemberDict : TObjectDictionary<string, THashSet<string>>;
+  M, C       : TAstNode;
+  Members    : THashSet<string>;
+  Key        : string;
 begin
   Methods := UnitNode.FindAll(nkMethod);
+  // Pro Klasse die deklarierten Member sammeln (einmal pro Unit).
+  MemberDict := TObjectDictionary<string, THashSet<string>>.Create([doOwnsValues]);
+  Classes    := UnitNode.FindAll(nkClass);
   try
+    for C in Classes do
+    begin
+      Key := LowerCase(C.Name);
+      if Key = '' then Continue;
+      if not MemberDict.TryGetValue(Key, Members) then
+      begin
+        Members := THashSet<string>.Create;
+        MemberDict.Add(Key, Members);
+      end;
+      CollectClassMembers(C, Members);
+    end;
+
     for M in Methods do
     begin
       if not BelongsToClass(M) then Continue;
@@ -264,6 +371,10 @@ begin
       // (FormCreate, btnClick, actExecute, OnXxx etc. mit Sender: TObject)
       if IsEventHandlerSignature(M) then Continue;
       if HasSelfOrFieldAccess(M) then Continue;
+      // Bare Instanz-Member-Zugriff (Feld/Property/Sibling-Call) ueber die
+      // eigene Klassen-Member-Liste - faengt die RHS-Blob-/Sibling-FPs.
+      if MemberDict.TryGetValue(ClassKeyOf(M.Name), Members) and
+         BodyRefsInstanceMember(M, Members) then Continue;
 
       // Message-Suffix: 'class function' fuer Funktionen, 'class procedure'
       // fuer Prozeduren. TypeRef beginnt mit 'procedure'/'function'/etc.
@@ -277,6 +388,8 @@ begin
         fkCanBeClassMethod));
     end;
   finally
+    Classes.Free;
+    MemberDict.Free;   // doOwnsValues -> gibt die THashSet-Werte mit frei
     Methods.Free;
   end;
 end;

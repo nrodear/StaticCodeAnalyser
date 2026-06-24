@@ -30,6 +30,8 @@ type
     [Test] procedure Parser_InlineRecordVarType_BodyNotLost;
     [Test] procedure Parser_NestedInlineRecordVarType_BodyNotLost;
     [Test] procedure Parser_InlineRecordTypeInLocalConst_BodyNotLost;
+    [Test] procedure Parser_NestedRoutine_OuterBodyLeakDetected;
+    [Test] procedure Parser_NestedRoutine_NestedBodyNotAnalyzed;
   end;
 
 implementation
@@ -309,6 +311,69 @@ begin
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
       'Leak nach Single-Line inline-record muss erkannt werden');
+  finally F.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_NestedRoutine_OuterBodyLeakDetected;
+// Root-Cause-Fix Parser nested routine: eine lokale `procedure` VOR dem
+// begin der aeusseren Methode. Vorher fraß ParseLocalVarSection sie als
+// Pseudo-Var und ParseMethodImpl nahm den NESTED-Body als Outer-Body ->
+// der echte Outer-Body (mit dem Leak) ging verloren. Heute wird die nested
+// routine als eigenes nkMethod-Child geparst, der Outer-Body bleibt erhalten.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure TFoo.Test;'#13#10+
+  'var L: TStringList;'#13#10+
+  '  procedure Helper;'#13#10+
+  '  begin'#13#10+
+  '    Sleep(1);'#13#10+
+  '  end;'#13#10+
+  'begin'#13#10+
+  '  L := TStringList.Create;'#13#10+
+  '  Helper;'#13#10+
+  '  // L.Free fehlt!'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'Outer-Body-Leak darf durch nested routine nicht verschwinden');
+  finally F.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_NestedRoutine_NestedBodyNotAnalyzed;
+// Der Leak steckt IM Body der nested routine. Nested routines werden geparst
+// (damit der Outer-Body nicht verloren geht), aber bewusst NICHT als
+// analysierbare Methoden im AST belassen (siehe ParseMethodImpl). Daher wird
+// der Leak in der nested routine NICHT als fkMemoryLeak gemeldet - konsistent
+// mit dem fruehen Verhalten (AST enthielt nie nested routines) und vermeidet
+// die Findings-Flut auf nested Helpern. Wichtig ist nur: der Outer-Body bleibt
+// intakt (X := 1 wird sauber geparst, kein Crash, kein verlorener Body).
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure TFoo.Test;'#13#10+
+  'var X: Integer;'#13#10+
+  '  procedure Helper;'#13#10+
+  '  var L: TStringList;'#13#10+
+  '  begin'#13#10+
+  '    L := TStringList.Create;'#13#10+
+  '    // L.Free fehlt!'#13#10+
+  '  end;'#13#10+
+  'begin'#13#10+
+  '  X := 1;'#13#10+
+  '  Helper;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'Leak in nested routine wird nicht standalone gemeldet (nicht analysiert)');
   finally F.Free; end;
 end;
 

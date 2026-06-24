@@ -47,6 +47,8 @@ type
     // Real-World 2026-06-23: Array-Element-Write + @/SizeOf kein Read
     [Test] procedure ArrayElementWrite_NoFinding;
     [Test] procedure SizeOfAndAddressOf_NoFinding;
+    // Root-Cause-Fix Parser nested routine (2026-06-24)
+    [Test] procedure NestedRoutine_OuterVarWrittenBeforeNestedRead_NoFinding;
   end;
 
 implementation
@@ -748,6 +750,37 @@ begin
   RunOn(SRC, L);
   try Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
     'SizeOf(var) / @var sind kein Werte-Read');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.NestedRoutine_OuterVarWrittenBeforeNestedRead_NoFinding;
+// Root-Cause-Fix Parser nested routine: aeussere var `n` wird im OUTER-Body
+// geschrieben (`n := 5`) und nur in der nested routine gelesen. Frueher fraß
+// ParseLocalVarSection die nested routine als Pseudo-Var und ParseMethodImpl
+// nahm den NESTED-Body (`WriteLn(n)`) als Outer-Body -> der echte Outer-Write
+// ging verloren -> `n` schien nur gelesen, nie geschrieben -> FP. Jetzt bleibt
+// der Outer-Body erhalten, der Write steht vor dem Read.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var n: Integer;'#13#10 +
+    '  procedure Helper;'#13#10 +
+    '  begin'#13#10 +
+    '    WriteLn(n);'#13#10 +
+    '  end;'#13#10 +
+    'begin'#13#10 +
+    '  n := 5;'#13#10 +
+    '  Helper;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+    'Outer-Var im Outer-Body geschrieben - nested routine darf Body nicht verschlucken');
   finally L.Free; end;
 end;
 
