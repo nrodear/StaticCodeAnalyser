@@ -64,6 +64,11 @@ type
 
 implementation
 
+// SQLInjection: die Fix-Message wird via String-Concat ('Call on "' + ... )
+// gebaut und vom SQL-Concat-Detektor faelschlich gematcht - Self-Scan-
+// Artefakt im Detektor-Quellcode, kein Bug.
+// noinspection-file SQLInjection
+
 uses
   System.RegularExpressions;
 

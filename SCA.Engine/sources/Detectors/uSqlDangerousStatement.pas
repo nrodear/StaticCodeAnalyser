@@ -50,8 +50,10 @@ type
 
 implementation
 
-// noinspection-file BeginEndRequired, CanBeClassMethod, CommentedOutCode, ConsecutiveSection, GroupedDeclaration, TooLongLine, UnsortedUses
+// noinspection-file BeginEndRequired, CanBeClassMethod, CommentedOutCode, ConsecutiveSection, GroupedDeclaration, SqlDangerousStatement, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+// SqlDangerousStatement: dieser Detektor enthaelt seine eigenen SQL-Pattern-
+// Strings ('grant all' / ' to public') als Such-Needles - Self-Match, kein Bug.
 
 const
   EMIT_SEVERITY = lsError;

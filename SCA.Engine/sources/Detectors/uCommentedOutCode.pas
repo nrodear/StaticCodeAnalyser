@@ -34,7 +34,9 @@ type
 
 implementation
 
-// noinspection-file BeginEndRequired, ConsecutiveSection, GroupedDeclaration, IfElseBegin, LowercaseKeyword, NestedRoutine, RedundantJump, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedParameter
+// noinspection-file BeginEndRequired, ConsecutiveSection, GroupedDeclaration, IfElseBegin, LowercaseKeyword, NestedRoutine, RedundantJump, SQLInjection, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedParameter
+// SQLInjection: Fix-Template-Strings ('Results.Add()' o.ae.) via String-Concat
+// werden faelschlich als SQL-Concat gematcht - Self-Scan-Artefakt, kein Bug.
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
