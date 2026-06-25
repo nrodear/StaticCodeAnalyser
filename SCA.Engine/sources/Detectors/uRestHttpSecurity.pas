@@ -26,7 +26,9 @@ type
 
 implementation
 
-// noinspection-file AvoidOut, BeginEndRequired, CyclomaticComplexity, DeepNesting, GroupedDeclaration, IfElseBegin, LongMethod, RedundantBoolean, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedParameter
+// noinspection-file AvoidOut, BeginEndRequired, CyclomaticComplexity, DeepNesting, GroupedDeclaration, IfElseBegin, InsecureCryptoAlgorithm, LongMethod, RedundantBoolean, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedParameter
+// InsecureCryptoAlgorithm: dieser Detektor enthaelt SSL3/TLS1/MD5/SHA1 als
+// eigene Detection-Patterns - Self-Match, kein realer Krypto-Einsatz.
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

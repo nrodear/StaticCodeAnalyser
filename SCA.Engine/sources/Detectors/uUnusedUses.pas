@@ -49,7 +49,9 @@ type
 
 implementation
 
-// noinspection-file BeginEndRequired, GroupedDeclaration, RedundantJump, TooLongLine, UnsortedUses
+// noinspection-file BeginEndRequired, GroupedDeclaration, InsecureCryptoAlgorithm, RedundantJump, TooLongLine, UnsortedUses
+// InsecureCryptoAlgorithm: die System.Hash-Klassenliste ('thashmd5','thashsha1'...)
+// dient der UnusedUses-Erkennung - Self-Match, kein realer Krypto-Einsatz.
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 { ---- Hilfsmethoden ---- }

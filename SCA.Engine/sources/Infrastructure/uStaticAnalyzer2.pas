@@ -59,7 +59,9 @@ var
 
 implementation
 
-// noinspection-file BeginEndRequired, BooleanParam, ConsecutiveSection, DuplicateBlock, ExceptOnException, GroupedDeclaration, MissingUnitHeader, MultipleExit, NestedRoutine, NestedTry, NilComparison, RaisingRawException, RedundantBoolean, RedundantJump, TodoComment, TooLongLine, UnsortedUses, UnusedParameter, UnusedRoutine
+// noinspection-file BeginEndRequired, BooleanParam, ConsecutiveSection, DuplicateBlock, ExceptOnException, GroupedDeclaration, InsecureCryptoAlgorithm, MissingUnitHeader, MultipleExit, NestedRoutine, NestedTry, NilComparison, RaisingRawException, RedundantBoolean, RedundantJump, TodoComment, TooLongLine, UnsortedUses, UnusedParameter, UnusedRoutine
+// InsecureCryptoAlgorithm: die Detektor-Registrierung enthaelt die Krypto-Pre-
+// Filter-Keywords ['md5','sha1','des','rc4',...] - Self-Match, kein Einsatz.
 // Detector-Run-Loop: outer except E: Exception fuer per-File-Crash-Recovery
 // (eine kaputte Datei darf den ganzen Scan nicht reissen). Phase-Tracking
 // im scan.log dokumentiert die Ursache.

@@ -117,7 +117,9 @@ type
 
 implementation
 
-// noinspection-file BeginEndRequired, CanBeClassMethod, ConsecutiveSection, ExceptOnException, GroupedDeclaration, IfElseBegin, NestedRoutine, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedPublicMember
+// noinspection-file BeginEndRequired, CanBeClassMethod, ConsecutiveSection, DebugOutput, ExceptOnException, GroupedDeclaration, IfElseBegin, InsecureCryptoAlgorithm, NestedRoutine, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedPublicMember
+// DebugOutput: WriteLn IST das CLI-Output-Medium dieses Console-Runners (by design).
+// InsecureCryptoAlgorithm: 'sha1..sha2' im Hilfetext ist ein Git-Ref-Beispiel, keine Krypto.
 // CLI-Top-Level: outer except E: Exception fuer "non-zero exit + error msg"
 // statt Crash mit stack-trace. Idiomatisch fuer Console-Apps.
 
