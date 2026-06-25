@@ -1458,6 +1458,21 @@ begin
         CollectNestedMethodRangesViaSource(Lines, MethodNode.Line,
           CalcMethodEndLine(MethodNode), NestedRanges);
 
+      // Phase 2.7: EXAKTE nkNestedRange-Marker vom Parser (verworfene nested
+      // routines). Der Parser kennt deren Grenzen praezise; das ist robuster
+      // als die line-basierte begin/end-Heuristik oben (die try/case/asm-end
+      // nicht balanciert). Union beider Range-Quellen = nur mehr Skipping =
+      // strikt weniger FP. Loest die SCA166-Self-Errors in grossen Methoden
+      // mit vielen nested procs (uUninitVar/uUseAfterFree/uVisibilityCheck).
+      for var NRMark in MethodNode.Children do
+        if NRMark.Kind = nkNestedRange then
+        begin
+          var Rng : TLineRange;
+          Rng.StartLine := NRMark.Line;
+          Rng.EndLine   := StrToIntDef(NRMark.TypeRef, NRMark.Line);
+          NestedRanges.Add(Rng);
+        end;
+
       PhaseA_VarInventur;
       if VarList.Count = 0 then Exit;
 

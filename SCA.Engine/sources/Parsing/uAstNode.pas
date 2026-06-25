@@ -72,6 +72,10 @@ type
     nkIdent, nkLiteral, nkBinaryOp, nkUnaryOp,
     nkIndex, nkDot, nkDeref,
     // --- Sonstiges ---
+    nkNestedRange,                  // Marker: verworfene nested routine [Line..TypeRef]
+                                    // (Line=Start, TypeRef=IntToStr(EndLine)). Traegt
+                                    // KEINEN Body - nur die Quell-Range, damit Detektoren
+                                    // (SCA166) Reads in nested procs exakt skippen koennen.
     nkUnknown
   );
 
@@ -187,6 +191,7 @@ const
     'Inherited',
     'Ident','Literal','BinaryOp','UnaryOp',
     'Index','Dot','Deref',
+    'NestedRange',
     'Unknown'
   );
 

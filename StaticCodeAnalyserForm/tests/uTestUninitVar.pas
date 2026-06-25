@@ -49,6 +49,8 @@ type
     [Test] procedure SizeOfAndAddressOf_NoFinding;
     // Root-Cause-Fix Parser nested routine (2026-06-24)
     [Test] procedure NestedRoutine_OuterVarWrittenBeforeNestedRead_NoFinding;
+    // Parser nkNestedRange-Marker -> exakte nested-Range-Skips (2026-06-25)
+    [Test] procedure NestedProcWithTry_OuterVarInLaterNested_NoFinding;
   end;
 
 implementation
@@ -781,6 +783,47 @@ begin
   RunOn(SRC, L);
   try Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
     'Outer-Var im Outer-Body geschrieben - nested routine darf Body nicht verschlucken');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.NestedProcWithTry_OuterVarInLaterNested_NoFinding;
+// nkNestedRange-Marker (Parser): eine nested proc MIT try/finally vor einer
+// zweiten nested proc, die eine Outer-Var liest (Outer-Var erst im Outer-Body
+// zugewiesen). Die line-basierte begin/end-Heuristik balanciert try/case-end
+// nicht und konnte die nested-Range abschneiden -> Read galt als Outer-Read ->
+// SCA166-FP. Der Parser haengt jetzt EXAKTE nkNestedRange-Marker an die Methode;
+// SCA166 skippt damit Reads in nested procs zuverlaessig.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure Outer;'#13#10 +
+    'var Data: TStringList;'#13#10 +
+    '  procedure First;'#13#10 +
+    '  begin'#13#10 +
+    '    try'#13#10 +
+    '      DoA;'#13#10 +
+    '    finally'#13#10 +
+    '      DoB;'#13#10 +
+    '    end;'#13#10 +
+    '  end;'#13#10 +
+    '  procedure Second;'#13#10 +
+    '  begin'#13#10 +
+    '    Data.Add(''x'');'#13#10 +
+    '  end;'#13#10 +
+    'begin'#13#10 +
+    '  Data := TStringList.Create;'#13#10 +
+    '  First;'#13#10 +
+    '  Second;'#13#10 +
+    '  Data.Free;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+    'Read einer Outer-Var in nested proc (nach try-proc) ist kein uninit');
   finally L.Free; end;
 end;
 

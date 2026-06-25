@@ -7,7 +7,7 @@ unit uParser2;
 interface
 
 uses
-  System.SysUtils, System.Classes,
+  System.SysUtils, System.Classes, System.Generics.Collections,
   uAstNode, uLexer;
 
 type
@@ -1034,6 +1034,31 @@ end;
 
 { ---- Methoden-Implementierung ---- }
 
+function MaxSubtreeLine(Node: TAstNode): Integer;
+// Hoechste Zeilennummer ueber Node + alle Descendants (iterativ, stack-safe).
+// Fuer die nkNestedRange-Marker-Endzeile beim Verwerfen nested routines.
+var
+  Stack : TStack<TAstNode>;
+  Cur   : TAstNode;
+  i     : Integer;
+begin
+  Result := 0;
+  if Node = nil then Exit;
+  Stack := TStack<TAstNode>.Create;
+  try
+    Stack.Push(Node);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack.Pop;
+      if Cur.Line > Result then Result := Cur.Line;
+      for i := 0 to Cur.Children.Count - 1 do
+        Stack.Push(Cur.Children[i]);
+    end;
+  finally
+    Stack.Free;
+  end;
+end;
+
 procedure TParser2.ParseMethodImpl(Parent: TAstNode);
 var
   MNode : TAstNode;
@@ -1087,7 +1112,19 @@ begin
 
     // Echte nested routine: nur zur Positions-Findung geparst, jetzt verwerfen
     // (inkl. tiefer verschachtelter, die die Rekursion ebenfalls als Siblings
-    // ab Index `Before` angehaengt hat).
+    // ab Index `Before` angehaengt hat). VORHER die exakte Quell-Range als
+    // nkNestedRange-Marker an MNode haengen: Detektoren (SCA166) skippen damit
+    // Reads in nested procs exakt - robuster als die line-basierte Heuristik.
+    var NestStart := Sub.Line;
+    var NestEnd   := Sub.Line;
+    for var di := Before to Parent.Children.Count - 1 do
+    begin
+      var ML := MaxSubtreeLine(Parent.Children[di]);
+      if ML > NestEnd then NestEnd := ML;
+    end;
+    if NestStart > 0 then
+      MNode.Add(nkNestedRange, '', NestStart, 0).TypeRef := IntToStr(NestEnd);
+
     while Parent.Children.Count > Before do
       Parent.Children.Delete(Parent.Children.Count - 1);  // OwnsObjects -> Free
 
