@@ -328,19 +328,62 @@ begin
              else Result := '';
 end;
 
+function FirstTypeRefToken(const S: string): string;
+// Erstes Identifier-Token aus ClassNode.TypeRef = die Parent-Klasse.
+// ParseClassBody legt 'class(TBar, IFoo)' als 'TBar IFoo' ab -> 'tbar'.
+var
+  i, n : Integer;
+begin
+  Result := '';
+  n := Length(S);
+  i := 1;
+  while (i <= n) and not CharInSet(S[i], ['A'..'Z', 'a'..'z', '_']) do Inc(i);
+  while (i <= n) and CharInSet(S[i], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
+  begin
+    Result := Result + S[i];
+    Inc(i);
+  end;
+  Result := LowerCase(Result);
+end;
+
 class procedure TCanBeClassMethodDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
   Methods    : TList<TAstNode>;
   Classes    : TList<TAstNode>;
-  MemberDict : TObjectDictionary<string, THashSet<string>>;
+  MemberDict : TObjectDictionary<string, THashSet<string>>;  // eigene Member
+  ParentOf   : TDictionary<string, string>;                  // Klasse -> Parent (in-Unit)
+  FullDict   : TObjectDictionary<string, THashSet<string>>;  // eigene + In-Unit-Vorfahren
   M, C       : TAstNode;
   Members    : THashSet<string>;
   Key        : string;
+
+  // Stufe 2: Member-Set inkl. In-Unit-Vererbungskette aufloesen (memoized,
+  // cycle-safe). Faengt bare Zugriffe auf geerbte Felder/Properties/Methoden
+  // (z.B. Alcinoe TALExprAbstractFuncSym.CompileFirstArg nutzt geerbtes
+  // Lexer/CompileParser). Cross-Unit-Vererbung (VCL) bleibt offen.
+  function ResolveFull(const ClsKey: string): THashSet<string>;
+  var
+    HS, Own, ParentSet : THashSet<string>;
+    ParentKey, S       : string;
+  begin
+    if FullDict.TryGetValue(ClsKey, HS) then Exit(HS);
+    HS := THashSet<string>.Create;
+    FullDict.Add(ClsKey, HS);                 // VOR Rekursion -> Cycle-Guard
+    if MemberDict.TryGetValue(ClsKey, Own) then
+      for S in Own do HS.Add(S);
+    if ParentOf.TryGetValue(ClsKey, ParentKey) and (ParentKey <> '')
+       and MemberDict.ContainsKey(ParentKey) then
+      for S in ResolveFull(ParentKey) do HS.Add(S);
+    Result := HS;
+  end;
+
 begin
   Methods := UnitNode.FindAll(nkMethod);
-  // Pro Klasse die deklarierten Member sammeln (einmal pro Unit).
+  // Pro Klasse die deklarierten Member + Parent-Bezug sammeln (einmal pro Unit).
   MemberDict := TObjectDictionary<string, THashSet<string>>.Create([doOwnsValues]);
+  ParentOf   := TDictionary<string, string>.Create;
+  FullDict   := TObjectDictionary<string, THashSet<string>>.Create([doOwnsValues]);
   Classes    := UnitNode.FindAll(nkClass);
   try
     for C in Classes do
@@ -353,7 +396,10 @@ begin
         MemberDict.Add(Key, Members);
       end;
       CollectClassMembers(C, Members);
+      ParentOf.AddOrSetValue(Key, FirstTypeRefToken(C.TypeRef));
     end;
+    // Volle Member-Sets (eigene + In-Unit-Vorfahren) aufloesen.
+    for Key in MemberDict.Keys do ResolveFull(Key);
 
     for M in Methods do
     begin
@@ -372,8 +418,9 @@ begin
       if IsEventHandlerSignature(M) then Continue;
       if HasSelfOrFieldAccess(M) then Continue;
       // Bare Instanz-Member-Zugriff (Feld/Property/Sibling-Call) ueber die
-      // eigene Klassen-Member-Liste - faengt die RHS-Blob-/Sibling-FPs.
-      if MemberDict.TryGetValue(ClassKeyOf(M.Name), Members) and
+      // Member-Liste der Klasse inkl. In-Unit-Vorfahren - faengt RHS-Blob-,
+      // Sibling- und vererbte-Member-FPs.
+      if FullDict.TryGetValue(ClassKeyOf(M.Name), Members) and
          BodyRefsInstanceMember(M, Members) then Continue;
 
       // Message-Suffix: 'class function' fuer Funktionen, 'class procedure'
@@ -389,6 +436,8 @@ begin
     end;
   finally
     Classes.Free;
+    FullDict.Free;     // doOwnsValues -> gibt die THashSet-Werte mit frei
+    ParentOf.Free;
     MemberDict.Free;   // doOwnsValues -> gibt die THashSet-Werte mit frei
     Methods.Free;
   end;

@@ -21,6 +21,7 @@ type
     [Test] procedure Constructor_NotReported;
     [Test] procedure SiblingInstanceMethodCall_NotReported;
     [Test] procedure NonFFieldInRhs_NotReported;
+    [Test] procedure InheritedMemberAccess_NotReported;
     [Test] procedure OnlyParams_WithClassDecl_StillReported;
     [Test] procedure Finding_KindAndSeverity;
   end;
@@ -262,6 +263,33 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeClassMethod),
     'Non-F-Feld im RHS-Ausdruck ist Instance-State - kein Finding');
+  finally F.Free; end;
+end;
+
+procedure TTestCanBeClassMethod.InheritedMemberAccess_NotReported;
+// SCA148 Stufe 2 (2026-06-25): bare Zugriff auf einen GEERBTEN Member (Feld der
+// In-Unit-Basisklasse). Real-World: Alcinoe TALExprAbstractFuncSym.CompileFirstArg
+// nutzt geerbtes Lexer/CompileParser. Der Member-Set wird jetzt entlang der
+// In-Unit-Vererbungskette aufgeloest -> `Lexer` zaehlt als Instance-Zugriff.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TBase = class'#13#10 +
+  '    Lexer: TObject;'#13#10 +
+  '  end;'#13#10 +
+  '  TDerived = class(TBase)'#13#10 +
+  '    procedure DoIt;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TDerived.DoIt;'#13#10 +
+  'begin Lexer.Free; end;'#13#10 +              // geerbtes Feld bare
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeClassMethod),
+    'Zugriff auf geerbten Member (In-Unit-Basis) ist Instance-State - kein Finding');
   finally F.Free; end;
 end;
 
