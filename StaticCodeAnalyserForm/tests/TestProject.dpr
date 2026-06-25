@@ -64,6 +64,7 @@ uses
   uTestSafetyChecks in 'uTestSafetyChecks.pas',
   uTestComboChecks in 'uTestComboChecks.pas',
   uTestParserRobustness in 'uTestParserRobustness.pas',
+  uTestGoldenCorpus in 'uTestGoldenCorpus.pas',
   uTestLexerConditionals in 'uTestLexerConditionals.pas',
   uTestPerformance in 'uTestPerformance.pas',
   uTestRuleCatalog in 'uTestRuleCatalog.pas',
