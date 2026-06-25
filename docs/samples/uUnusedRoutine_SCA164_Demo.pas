@@ -1,5 +1,8 @@
 ﻿unit uUnusedRoutine_SCA164_Demo;
 
+// noinspection-file All
+// Sample-/Demo-Datei: demonstriert Detektor-Patterns - alle Findings sind Absicht.
+
 // SCA164 (UnusedRoutine) Demo-Quelltext.
 //
 // Diese Unit demonstriert wie der SCA164-Detektor "top-level Routine ohne

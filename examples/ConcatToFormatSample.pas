@@ -1,5 +1,8 @@
 unit ConcatToFormatSample;
 
+// noinspection-file All
+// Sample-/Demo-Datei: demonstriert Detektor-Patterns - alle Findings sind Absicht.
+
 // Sample-Unit fuer den Detektor uConcatToFormat.
 //
 // Erwartete Treffer (ConcatToFormat-Hint, roter Balken am Zeilenanfang

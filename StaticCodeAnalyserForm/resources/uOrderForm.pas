@@ -1,5 +1,8 @@
 unit uOrderForm;
 
+// noinspection-file All, SQLInjection
+// Sample-/Demo-Form: demonstriert u.a. SQL-Concat als Detektor-Pattern (Absicht).
+
 // Demo-Form fuer den DFM-Analyser.
 // Klassisches Master/Detail-Pattern: TADOQuery -> TDataSource -> TDBEdit
 // mit TField-Subkomponenten. Enthaelt absichtlich einige Smells, damit

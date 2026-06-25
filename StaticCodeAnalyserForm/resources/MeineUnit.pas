@@ -1,5 +1,8 @@
 unit MeineUnit;
 
+// noinspection-file All
+// Sample-/Fixture-Datei: enthaelt absichtliche Bugs (Leak/Uninit) als Detektor-Demo.
+
 // Testklasse fuer den statischen Speicherleck-Analyser (TStaticAnalyzer2).
 // Enthaelt absichtliche Speicherlecks fuer Testzwecke.
 

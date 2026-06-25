@@ -1,5 +1,8 @@
 unit WithStatementSample;
 
+// noinspection-file All
+// Sample-/Demo-Datei: demonstriert Detektor-Patterns - alle Findings sind Absicht.
+
 // Sample-Unit fuer den Detektor uWithStatement.
 //
 // Erwartete Treffer (WithStatement-Warning, oranger Balken im IDE-Editor):
