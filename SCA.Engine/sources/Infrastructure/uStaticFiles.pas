@@ -261,7 +261,7 @@ begin
     Errors := TStringList.Create;
     try
       LogStream := TStreamWriter.Create(LogPath, False, TEncoding.UTF8);
-      Log('=== Scan gestartet: ' + FormatDateTime('yyyy-mm-dd hh:nn:ss', Now)
+      Log('=== Scan gestartet: ' + FormatDateTime('yyyy-mm-dd hh:nn:ss', Now, TFormatSettings.Invariant)
           + ' Pfad: ' + Path + ' ===');
     except
       // Log-Datei optional - kein Hard-Fail. FreeAndNil statt nil-Zuweisung,

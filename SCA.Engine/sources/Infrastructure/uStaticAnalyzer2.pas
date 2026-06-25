@@ -819,7 +819,7 @@ begin
     try
       // Append-Modus, damit der Scan-Log nicht ueberschrieben wird
       LogStream := TStreamWriter.Create(LogPath, True, TEncoding.UTF8);
-      LogLine('=== ParseLeaks gestartet: ' + FormatDateTime('yyyy-mm-dd hh:nn:ss', Now)
+      LogLine('=== ParseLeaks gestartet: ' + FormatDateTime('yyyy-mm-dd hh:nn:ss', Now, TFormatSettings.Invariant)
               + ' (' + IntToStr(FileList.Count) + ' Dateien) ===');
     except
       LogStream := nil;
@@ -1144,7 +1144,7 @@ begin
     // LogStream auch bei EAbort sauber schliessen, danach Parser.
     // Eine gemeinsame Klammer verhindert dass Parser-Create-OOM den LogStream
     // hinterlaesst oder umgekehrt.
-    LogLine('=== ParseLeaks fertig: ' + FormatDateTime('hh:nn:ss', Now) + ' ===');
+    LogLine('=== ParseLeaks fertig: ' + FormatDateTime('hh:nn:ss', Now, TFormatSettings.Invariant) + ' ===');
     if Assigned(LogStream) then
       FreeAndNil(LogStream);
     Parser.Free;
