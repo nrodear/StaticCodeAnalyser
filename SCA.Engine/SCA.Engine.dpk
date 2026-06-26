@@ -221,6 +221,7 @@ contains
   uDfmAnalysisRunner in 'sources\Infrastructure\uDfmAnalysisRunner.pas',
   uDfmDbFieldAnalysis in 'sources\Infrastructure\uDfmDbFieldAnalysis.pas',
   uDfmFrameResolver in 'sources\Infrastructure\uDfmFrameResolver.pas',
+  uAnalyzeContext in 'sources\Infrastructure\uAnalyzeContext.pas',
   uDfmRepoIndex in 'sources\Infrastructure\uDfmRepoIndex.pas',
   uEngineApi in 'sources\Infrastructure\uEngineApi.pas',
   uExport in 'sources\Infrastructure\uExport.pas',

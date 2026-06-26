@@ -98,7 +98,7 @@ uses
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
   uCyclomaticComplexity, uCustomRuleDetector,
   uDfmAnalysisRunner, uDfmRepoIndex, uSymbolReferenceIndex, uAstFileCache,
-  uFileTextCache,
+  uFileTextCache, uAnalyzeContext,
   uSuppression, uCustomClassDiscovery, uPathOverrides, uConfidenceFilter,
   uSynchronizeInDestructor, uLockWithoutTryFinally,
   uPerfHotspots, uConcurrencyExt, uRestHttpSecurity,
@@ -788,6 +788,10 @@ var
   // Assignment ist quasi-kostenlos; kein Logging im Happy-Path.
   LastPhase : string;
   LastFile  : string;
+  // Phase-3-Foundation (Konzept_D2): besitzt die per-Scan-Instanzen
+  // (AstFileCache/SymbolRefIndex/DfmRepoIndex). Globals bleiben Backward-
+  // Compat-Aliase; der Context steuert nur den Lifecycle. Verhaltensneutral.
+  Ctx : TAnalyzeContext;
 
   procedure LogLine(const S: string);
   begin
@@ -825,6 +829,8 @@ begin
       LogStream := nil;
     end;
 
+    Ctx := nil;   // defensiv: FreeAndNil(Ctx) im finally muss immer sicher sein
+
     // Outer-Diagnose-Try: bei Exception VOR re-raise die letzte Phase + das
     // aktuelle File ins Log schreiben. Sonst sieht der Caller-Outer-Handler
     // nur "Analyseabbruch: <Message>" ohne Kontext.
@@ -834,8 +840,14 @@ begin
     // AST-File-Cache: pro .pas einmal parsen, von beiden Pre-Indizes UND
     // dem Main-Loop wiederverwendet. Spart 2 von 3 Parser-Durchlaeufen pro
     // File (perf_analyse.md Hot-Spot 🅐).
+    // Phase-3-Foundation (Konzept_D2): Context erzeugen, der die per-Scan-
+    // Instanzen besitzt. Globals bleiben Backward-Compat-Aliase; jede Instanz
+    // wird direkt nach dem Create dem Context zugewiesen (exception-sicher).
+    Ctx := TAnalyzeContext.Create;
+
     if Assigned(gAstFileCache) then FreeAndNil(gAstFileCache);
     gAstFileCache := TAstFileCache.Create;
+    Ctx.AstFileCache := gAstFileCache;
 
     // File-Text-Cache: pro .pas einmal Lines.LoadFromFile, von den
     // File-Scan-Detektoren (Todo, With, Reversed, Length, Tautological,
@@ -845,6 +857,7 @@ begin
     // FreeAndNil-erst, dann Re-Create.
     if Assigned(gFileTextCache) then FreeAndNil(gFileTextCache);
     gFileTextCache := TFileTextCache.Create;
+    Ctx.FileTextCache := gFileTextCache;   // nur referenziert (lebt weiter)
 
     // Repo-weiten Index fuer Cross-Unit-Detektoren einmal pro Scan
     // aufbauen. Wenn das Build crasht (defekte .pas), schluckt der
@@ -865,6 +878,7 @@ begin
     except
       FreeAndNil(gDfmRepoIndex);
     end;
+    Ctx.DfmRepoIndex := gDfmRepoIndex;   // ggf. nil (Build-Fehler) - ok
 
     // Symbol-Reference-Index. Visibility-Detektoren (fkCanBeUnitPrivate,
     // fkCanBeStrictPrivate, fkCanBeProtected, fkUnusedPublicMember)
@@ -879,6 +893,8 @@ begin
     except
       FreeAndNil(gSymbolRefIndex);
     end;
+    Ctx.SymbolRefIndex  := gSymbolRefIndex;     // ggf. nil (Build-Fehler) - ok
+    Ctx.DetectorTimings := gDetectorTimings;    // nur referenziert (Caller-owned)
 
     LastPhase := 'Parser.Create + Main-Loop start';
     Parser := TParser2.Create;
@@ -1150,12 +1166,15 @@ begin
     Parser.Free;
     // Repo-Index nach dem Scan wieder freigeben - Cross-Unit-Detektoren
     // ausserhalb dieses Scans sollen nicht versehentlich stale Daten sehen.
-    if Assigned(gDfmRepoIndex) then
-      FreeAndNil(gDfmRepoIndex);
-    if Assigned(gSymbolRefIndex) then
-      FreeAndNil(gSymbolRefIndex);
-    if Assigned(gAstFileCache) then
-      FreeAndNil(gAstFileCache);
+    // Phase-3-Foundation: der Context besitzt AstFileCache/SymbolRefIndex/
+    // DfmRepoIndex und gibt sie hier frei (gleiche 3 Instanzen, gleiche
+    // Reihenfolge wie zuvor). Danach die Backward-Compat-Globals auf nil
+    // setzen (zeigten auf die jetzt freigegebenen Instanzen). gFileTextCache
+    // wird vom Context NICHT angefasst und lebt absichtlich weiter.
+    FreeAndNil(Ctx);
+    gDfmRepoIndex   := nil;
+    gSymbolRefIndex := nil;
+    gAstFileCache   := nil;
     // gFileTextCache lebt absichtlich weiter bis zur naechsten Scan-Start-
     // Phase (oder dem finalization-Block). Suppression-Phase + ContextHash-
     // Berechnung im SARIF/Baseline-Output rufen AcquireLines fuer jede

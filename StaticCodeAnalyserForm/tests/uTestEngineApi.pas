@@ -32,6 +32,7 @@ type
 
     [Test] procedure Init_HasSaneDefaults;
     [Test] procedure FindingAliases_MessageLineRuleId;
+    [Test] procedure AnalyzeContext_DestroyFreesOwnedOnly;
     [Test] procedure AnalyzeSource_FindsBugInMemory;
     [Test] procedure AnalyzeSource_StampsVirtualName;
     [Test] procedure SingleFile_FindsSqlInjection;
@@ -44,7 +45,8 @@ implementation
 
 uses
   System.SysUtils, System.IOUtils, System.Generics.Collections,
-  uSCAConsts, uMethodd12;
+  uSCAConsts, uMethodd12,
+  uAnalyzeContext, uAstFileCache, uFileTextCache, uSymbolReferenceIndex;
 
 const
   // Garantiert ein lsError-Befund (fkSQLInjection, fcHigh) - robust gegen
@@ -140,6 +142,24 @@ begin
   finally
     L.Free;
   end;
+end;
+
+procedure TTestEngineApi.AnalyzeContext_DestroyFreesOwnedOnly;
+// Phase-3-Foundation (Konzept_D2): TAnalyzeContext.Destroy gibt die BESESSENEN
+// Instanzen frei (AstFileCache/SymbolRefIndex/DfmRepoIndex), fasst aber die nur
+// REFERENZIERTEN (FileTextCache/DetectorTimings) NICHT an.
+var
+  Ctx : TAnalyzeContext;
+  Ftc : TFileTextCache;
+begin
+  Ftc := TFileTextCache.Create;                          // separat besessen
+  Ctx := TAnalyzeContext.Create;
+  Ctx.AstFileCache   := TAstFileCache.Create;            // owned -> Destroy frees
+  Ctx.SymbolRefIndex := TSymbolReferenceIndex.Create;    // owned -> Destroy frees
+  Ctx.FileTextCache  := Ftc;                             // nur referenziert
+  Ctx.Free;            // darf nicht crashen; gibt nur die besessenen frei
+  Ftc.Free;            // kein Double-Free -> Ctx hat Ftc nicht angefasst
+  Assert.Pass('Context-Destroy gibt nur besessene Instanzen frei');
 end;
 
 procedure TTestEngineApi.AnalyzeSource_FindsBugInMemory;
