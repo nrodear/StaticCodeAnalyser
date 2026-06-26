@@ -124,7 +124,6 @@ var
   Calls, Assigns : TList<TAstNode>;
   N              : TAstNode;
   HitAPI, HitInp : string;
-  F              : TLeakFinding;
 
   procedure Check(N: TAstNode; const Expr: string);
   var L: TLeakFinding;

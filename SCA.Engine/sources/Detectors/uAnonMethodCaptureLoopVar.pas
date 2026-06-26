@@ -62,7 +62,6 @@ class function TAnonMethodCaptureLoopVarDetector.ExtractLoopVar(
 var
   Ch  : TAstNode;
   H   : string;
-  P   : Integer;
   i   : Integer;
   C   : Char;
   Acc : string;

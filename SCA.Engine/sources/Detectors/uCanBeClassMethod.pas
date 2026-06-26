@@ -87,7 +87,6 @@ function IsPolymorphicMethod(MethodNode: TAstNode): Boolean;
     P, L, WL : Integer;
     Before, After : Char;
   begin
-    Result := False;
     WL := Length(Word);
     L  := Length(Hay);
     P  := 1;
@@ -364,8 +363,8 @@ var
   // Lexer/CompileParser). Cross-Unit-Vererbung (VCL) bleibt offen.
   function ResolveFull(const ClsKey: string): THashSet<string>;
   var
-    HS, Own, ParentSet : THashSet<string>;
-    ParentKey, S       : string;
+    HS, Own      : THashSet<string>;
+    ParentKey, S : string;
   begin
     if FullDict.TryGetValue(ClsKey, HS) then Exit(HS);
     HS := THashSet<string>.Create;

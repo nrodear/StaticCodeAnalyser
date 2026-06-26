@@ -189,7 +189,6 @@ type
 var
   Stack : TList<TFrame>;
   Cur, F : TFrame;
-  Child  : TAstNode;
   i      : Integer;
 begin
   if Node = nil then Exit;

@@ -68,7 +68,6 @@ class procedure TVariantTypeMisuseDetector.AnalyzeUnit(
 var
   Methods : TList<TAstNode>;
   M, Ch   : TAstNode;
-  F       : TLeakFinding;
 
   procedure Emit(Line: Integer; const VarName, TypeRef, MethodName: string);
   var L: TLeakFinding;

@@ -106,7 +106,6 @@ var
   N              : TAstNode;
   Bare, Hit      : string;
   HasRandomize   : Boolean;
-  F              : TLeakFinding;
 
   procedure Emit(ALine: Integer; const ACallName: string);
   var L: TLeakFinding;

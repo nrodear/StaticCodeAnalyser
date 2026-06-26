@@ -1,5 +1,7 @@
 unit MeineUnit;
 
+{$WARNINGS OFF}{$HINTS OFF}   // absichtliche Bugs (Leak/Uninit/no-Result) - Compiler-Rauschen aus
+
 // noinspection-file All
 // Sample-/Fixture-Datei: enthaelt absichtliche Bugs (Leak/Uninit) als Detektor-Demo.
 
