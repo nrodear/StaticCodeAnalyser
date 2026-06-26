@@ -51,6 +51,26 @@ var
   Cur   : TComponentNode;
   I     : Integer;
   F     : TLeakFinding;
+
+  function HasInlineAncestorOrSelf(Node: TComponentNode): Boolean;
+  // 'inline Foo: ...'-Bloecke (VCL/LCL Frame- bzw. Collection-Subtrees) und
+  // ALLE ihre Nachfahren sind Laufzeit-Sub-Objekte des inline-Parents, keine
+  // Form-Klassen-Felder. Real-World 2026-06-26: SynEdit-Gutter-Parts
+  // (SynUniDesigner.dfm: 'inline SampleMemo: TSynEdit' enthaelt
+  // 'inline ...: TSynGutterPartList' -> 'object ...: TSynGutterCodeFolding')
+  // feuerten als orphans. Der DFM-Parser setzt IsInline NUR am inline-Knoten
+  // selbst -> Parent-Kette hochlaufen, damit auch verschachtelte object-
+  // Nachfahren erfasst werden. Analog zur IsInherited-Konservativitaet.
+  begin
+    Result := True;
+    while Node <> nil do
+    begin
+      if Node.IsInline then Exit;
+      Node := Node.Parent;
+    end;
+    Result := False;
+  end;
+
 begin
   if Binding = nil then Exit;
   if Binding.FormClass = nil then Exit;
@@ -82,6 +102,8 @@ begin
       // (extrem selten - Codepath nur durch falsch-konfiguriertes DFM)
       // als False-Positive auf jedem inherited-Knoten externer Libs.
       if Cur.IsInherited then Continue;
+      // inline-Sub-Komponenten (und deren Nachfahren) sind keine Felder.
+      if HasInlineAncestorOrSelf(Cur) then Continue;
 
       F            := TLeakFinding.Create;
       F.FileName   := FileName;

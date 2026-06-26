@@ -13,6 +13,10 @@ type
     [Test] procedure Test_AllComponentsHaveFields_NoFinding;
     [Test] procedure Test_RootForm_NotConsideredAsMissingField;
     [Test] procedure Test_NestedComponent_StillDetected;
+    // Real-World 2026-06-26: inline-Sub-Komponenten (SynEdit-Gutter-Parts)
+    // und deren Nachfahren sind keine Form-Felder -> kein Befund.
+    [Test] procedure Test_InlineSubComponent_NotReported;
+    [Test] procedure Test_InlineSubtree_RealOrphanOutside_StillReported;
     [Test] procedure Test_CaseInsensitiveFieldMatch_NoFinding;
     [Test] procedure Test_NoFormClassFound_NoFinding;
     [Test] procedure Test_NoPascalAst_NoFinding;
@@ -146,6 +150,62 @@ begin
   F := RunOn(DFM, PAS);
   try
     Assert.AreEqual<Integer>(1, Count(F, fkDfmSchemaMismatch));
+  finally F.Free; end;
+end;
+
+procedure TTestDfmSchemaMismatch.Test_InlineSubComponent_NotReported;
+// SynEdit-Pattern: 'inline GutterParts: TSynGutterPartList' enthaelt ein
+// verschachteltes 'object Folding1: TSynGutterCodeFolding'. Beide sind
+// Laufzeit-Sub-Objekte (keine Form-Felder). Memo1 IST published -> kein
+// Knoten darf flaggen.
+const PAS =
+  'unit u; interface uses Vcl.Forms;'#13#10 +
+  'type TF = class(TForm)'#13#10 +
+  '  Memo1: TSynEdit;'#13#10 +
+  'end;'#13#10 +
+  'implementation end.';
+const DFM =
+  'object F: TF'#13#10 +
+  '  object Memo1: TSynEdit'#13#10 +
+  '    inline GutterParts: TSynGutterPartList'#13#10 +
+  '      object Folding1: TSynGutterCodeFolding end'#13#10 +
+  '    end'#13#10 +
+  '  end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM, PAS);
+  try
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmSchemaMismatch),
+      'inline-Sub-Komponenten + Nachfahren duerfen nicht flaggen');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmSchemaMismatch.Test_InlineSubtree_RealOrphanOutside_StillReported;
+// Diskriminierung: derselbe inline-Subtree (still) PLUS ein echtes Orphan
+// AUSSERHALB der inline-Hierarchie (muss feuern). Schuetzt gegen einen
+// zu breiten Fix der auch normale verschachtelte Orphans verschluckt.
+const PAS =
+  'unit u; interface uses Vcl.Forms;'#13#10 +
+  'type TF = class(TForm)'#13#10 +
+  '  Memo1: TSynEdit;'#13#10 +
+  'end;'#13#10 +
+  'implementation end.';
+const DFM =
+  'object F: TF'#13#10 +
+  '  object Memo1: TSynEdit'#13#10 +
+  '    inline GutterParts: TSynGutterPartList'#13#10 +
+  '      object Folding1: TSynGutterCodeFolding end'#13#10 +
+  '    end'#13#10 +
+  '  end'#13#10 +
+  '  object OrphanPanel: TPanel end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM, PAS);
+  try
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmSchemaMismatch),
+      'nur das Orphan ausserhalb der inline-Hierarchie zaehlt');
   finally F.Free; end;
 end;
 
