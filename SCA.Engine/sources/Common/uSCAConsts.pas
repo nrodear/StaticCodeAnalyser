@@ -91,10 +91,13 @@ var
   DetectorMagicTrivials    : TStringList = nil;
 
   // Format-Funktionen die der uFormatMismatch-Detektor pruefen soll.
-  // Default: Format, FormatUtf8, FormatString. Alle drei haben dieselbe
-  // %-Platzhalter-Semantik wie Delphi-Format - typisch in mORMot2-Code
-  // wo FormatUtf8 als RawUtf8-Variante haeufig vorkommt. INI-Override:
-  // [Detectors] FormatFunctions=Format,FormatUtf8,FormatString,_fmt
+  // Default: NUR 'Format' (System.SysUtils, printf-Style %s/%d/%.2f).
+  // mORMot's FormatUtf8/FormatString sind BEWUSST NICHT im Default: ihre
+  // %-Semantik ist NICHT identisch mit Delphi-Format (einzelnes '%' statt
+  // %s/%d, '%%' = ZWEI Platzhalter, Argument-Reuse bei Ueberzahl, '?'-SQL-
+  // Params, literale '%' in CSS wie 'width:100%') -> der Detektor produziert
+  // dort fast nur False-Positives (Real-World-Audit 2026-06-25). Wer es
+  // dennoch will: [Detectors] FormatFunctions=Format,FormatUtf8,FormatString.
   // Lowercase-normalisiert beim Match.
   DetectorFormatFunctions  : TStringList = nil;
 
@@ -1158,7 +1161,7 @@ begin
   DetectorFormatFunctions.CaseSensitive := False;
   DetectorFormatFunctions.Sorted        := True;
   DetectorFormatFunctions.Duplicates    := dupIgnore;
-  DetectorFormatFunctions.AddStrings(['format', 'formatutf8', 'formatstring']);
+  DetectorFormatFunctions.AddStrings(['format']);   // mORMot-Funcs bewusst aus (s.o.)
 
   // DfmForbiddenClasses bleibt leer per Default - der Detektor schweigt,
   // bis das Projekt eigene Klassen via analyser.ini eintraegt.

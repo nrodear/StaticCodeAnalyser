@@ -147,7 +147,6 @@ var
   i, n  : Integer;
   InStr : Boolean;
 begin
-  Result := False;
   InStr  := False;
   n := Length(S);
   i := 1;
@@ -295,12 +294,14 @@ begin
         SkipSpaces(CallName, i);
         if (i > Length(CallName)) or (CallName[i] <> '''') then
         begin
-          // '+' aber kein weiteres Literal (z.B. + Ident, + IntToStr(x))
-          // -> Format-String nicht vollstaendig statisch aufloesbar.
-          // Wir liefern was wir haben, der Detector macht keinen Befund
-          // wenn ResolveFormatString unsicher ist.
-          i := savedI;
-          Break;
+          // '+' aber kein weiteres Literal (z.B. + Ident, + sLineBreak,
+          // + IntToStr(x), + benannte-Const) -> der Format-String ist NICHT
+          // vollstaendig statisch aufloesbar. Frueher wurde der bisher
+          // gemergte Teilstring weiterverwendet -> Platzhalter der fehlenden
+          // Fragmente fehlten -> massive FP-Klasse (Jcl-Templates, mehrzeilige
+          // Strings mit sLineBreak, gettext '_()', Char-Consts). Jetzt:
+          // komplett unterdruecken statt mit Teilstring zu zaehlen.
+          Exit(False);
         end;
         if not ReadStringLiteral(CallName, i, Inner) then Exit(False);
       end;
@@ -316,6 +317,13 @@ begin
       while (j <= Length(CallName)) and
             TDetectorUtils.IsIdentChar(CallName[j]) do
         Inc(j);
+      // Ident gefolgt von '+' (Konkatenation, z.B. GXHexPrefix + '%x' oder
+      // VersionDir + '%s') -> Format-String nicht vollstaendig statisch
+      // (die angehaengten Literale wuerden ignoriert -> FP). Suppress.
+      savedI := j;
+      SkipSpaces(CallName, savedI);
+      if (savedI <= Length(CallName)) and (CallName[savedI] = '+') then
+        Exit(False);
       FirstArg  := Copy(CallName, i, j - i);
       ArgsStart := j;
       Exit(True);
@@ -380,48 +388,82 @@ class function TFormatMismatchDetector.CountPlaceholders(
 // das z.B. um Where-Clauses zu kettenkonkatenieren: FormatUtf8('%%>=:(%):...
 // , [Where, FieldName, ...]) - Where + FieldName ohne Trenner).
 //
-// Standard-Style (RTL Format): '%%' IST Escape (literales '%').
+// Standard-Style (RTL Format): '%%' IST Escape (literales '%'). RTL-Format ist
+// POSITIONS-basiert: ein indizierter Platzhalter '%N:x' referenziert Arg-Index N
+// und verbraucht KEIN neues Argument; mehrere '%N:x' mit gleichem N teilen sich
+// dasselbe Argument. Die benoetigte Arg-Anzahl ist daher hoechster-referenzierter-
+// Index + 1, NICHT die Anzahl der '%'-Token. (Real-World-FP-Klasse: JvExcptDlg
+// '%.8x (%1:d)', Jcl/mORMot-Templates '%0:s..%6:s'.)
 var
-  i: Integer;
+  i, n      : Integer;
+  SeqIdx    : Integer;   // naechster sequenzieller Arg-Index (0-basiert)
+  MaxIdx    : Integer;   // hoechster referenzierter Arg-Index (-1 = keiner)
+  Num       : Integer;
+  HasDigit  : Boolean;
+  ExplIdx   : Integer;
+  SavePos   : Integer;
 begin
-  Result := 0;
-  i      := 1;
-  while i <= Length(FmtStr) do
+  n := Length(FmtStr);
+
+  if ABareStyle then
   begin
-    if FmtStr[i] = '%' then
+    // mORMot: jedes '%' = ein Argument, KEIN Escape, kein Type-Letter.
+    Result := 0; i := 1;
+    while i <= n do
     begin
-      if ABareStyle then
+      if FmtStr[i] = '%' then Inc(Result);
+      Inc(i);
+    end;
+    Exit;
+  end;
+
+  i      := 1;
+  SeqIdx := 0;
+  MaxIdx := -1;
+  while i <= n do
+  begin
+    if FmtStr[i] <> '%' then begin Inc(i); Continue; end;
+    if (i < n) and (FmtStr[i + 1] = '%') then begin Inc(i, 2); Continue; end; // %% Escape
+    Inc(i); // hinter '%'
+    // Optionaler expliziter Index 'N:' direkt nach '%'.
+    ExplIdx  := -1;
+    HasDigit := False;
+    Num      := 0;
+    SavePos  := i;
+    while (i <= n) and CharInSet(FmtStr[i], ['0'..'9']) do
+    begin Num := Num * 10 + (Ord(FmtStr[i]) - Ord('0')); HasDigit := True; Inc(i); end;
+    if HasDigit and (i <= n) and (FmtStr[i] = ':') then
+    begin ExplIdx := Num; Inc(i); end   // '%N:' -> indiziert
+    else
+      i := SavePos;                      // Ziffern waren Width, kein Index
+    // Specifier-Rest ueberspringen; '*' (Width/Precision-aus-Arg) verbraucht
+    // je ein EXTRA sequenzielles Argument ('%*.*d' = 3 Args).
+    while (i <= n) and
+          not CharInSet(FmtStr[i], ['s','d','f','e','g','n','m','u',
+                                    'c','x','p','i','S','D','F','E',
+                                    'G','N','M','U','C','X','P','I']) do
+    begin
+      if FmtStr[i] = '*' then
       begin
-        // mORMot: jedes '%' = ein Argument, KEIN Escape, kein Type-Letter.
-        Inc(Result);
-        Inc(i);
-      end
-      else if (i < Length(FmtStr)) and (FmtStr[i + 1] = '%') then
-        Inc(i, 2) // RTL-Format: %% = literales '%' (Escape)
-      else
-      begin
-        Inc(Result); // %X = ein Argument
-        Inc(i);
-        // Restliche Zeichen des Specifiers ueberspringen (%8.2f, %0:s, ...).
-        // Wichtig: '*' im Specifier konsumiert ein EXTRA Argument
-        // (Width oder Precision wird via Argument geliefert), z.B.
-        // '%1.*n' nimmt 2 Args (Precision + Value), '%*.*d' nimmt 3 Args.
-        // Audit-Trigger: Clipper.pas L657 'format(''%1.*n,%1.*n, '', [decimals,
-        // p[i].X, decimals, p[i].Y])' - 4 Args fuer 2 %-Specs mit je '*'.
-        while (i <= Length(FmtStr)) and
-              not CharInSet(FmtStr[i], ['s','d','f','e','g','n','m','u',
-                                        'c','x','p','i','S','D','F','E',
-                                        'G','N','M','U','C','X','P','I']) do
-        begin
-          if FmtStr[i] = '*' then Inc(Result);
-          Inc(i);
-        end;
-        if i <= Length(FmtStr) then Inc(i); // Specifier-Buchstabe ueberspringen
+        if SeqIdx > MaxIdx then MaxIdx := SeqIdx;
+        Inc(SeqIdx);
       end;
+      Inc(i);
+    end;
+    // Den eigentlichen Platzhalter dem Arg-Index zuordnen.
+    if ExplIdx >= 0 then
+    begin
+      if ExplIdx > MaxIdx then MaxIdx := ExplIdx;
+      SeqIdx := ExplIdx + 1;             // sequenziell ab N+1 weiter (Delphi-Semantik)
     end
     else
-      Inc(i);
+    begin
+      if SeqIdx > MaxIdx then MaxIdx := SeqIdx;
+      Inc(SeqIdx);
+    end;
+    if i <= n then Inc(i);               // Specifier-Buchstabe ueberspringen
   end;
+  Result := MaxIdx + 1;                  // erforderliche Arg-Anzahl
 end;
 
 class function TFormatMismatchDetector.CountArrayArgs(const Text: string;
@@ -431,21 +473,45 @@ var
   Depth     : Integer;
   IsEmpty   : Boolean;
   CommaCount: Integer;
+  InStr     : Boolean;
 begin
   Result := 0;
 
   // '[' suchen ab StartPos
   i := StartPos;
   while (i <= Length(Text)) and (Text[i] <> '[') do Inc(i);
-  if i > Length(Text) then Exit; // kein Array gefunden -> 0 Argumente
+  if i > Length(Text) then
+  begin
+    // Kein literales '[...]'-Array -> Args via Variable/Open-Array uebergeben
+    // (z.B. Format(fmt, vr) / FormatUtf8(fmt, params)). Arg-Zahl statisch nicht
+    // bestimmbar -> -1 signalisiert "nicht zaehlbar" (Aufrufer suppresst).
+    Result := -1;
+    Exit;
+  end;
 
   Inc(i); // skip '['
   Depth      := 0;
   IsEmpty    := True;
   CommaCount := 0;
+  InStr      := False;
 
   while i <= Length(Text) do
   begin
+    // String-Literal-Tracking: Kommas/Klammern INNERHALB eines '...'-Literals
+    // sind kein Arg-Trenner (FP-Klasse: Format('%s', ['a, b']) wurde als
+    // 2 Args gezaehlt). '' = Escape innerhalb des Strings.
+    if Text[i] = '''' then
+    begin
+      if InStr and (i < Length(Text)) and (Text[i + 1] = '''') then
+        Inc(i)                      // '' Escape -> ein Zeichen ueberspringen
+      else
+        InStr := not InStr;
+      IsEmpty := False;
+      Inc(i);
+      Continue;
+    end;
+    if InStr then begin Inc(i); Continue; end;
+
     case Text[i] of
       '[', '(' : Inc(Depth);
       ')' : if Depth > 0 then Dec(Depth);
@@ -641,6 +707,9 @@ var
       end;
     end;
 
+    // Args nicht als literales '[...]'-Array zaehlbar (Variable/Open-Array)
+    // -> kein Mismatch-Befund (statisch unentscheidbar).
+    if ArgCount < 0 then Exit;
     if PlaceCount = ArgCount then Exit;
     // Dedup: nkCall + nkAssign-Walk koennen denselben Format-Call doppelt
     // sehen (z.B. 'Result := someFunc(Format(...))' - nkAssign hat den

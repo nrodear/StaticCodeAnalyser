@@ -44,12 +44,40 @@ type
     [Test] procedure FormatLocale_StringSpec_NoFinding;
   end;
 
+  // ---- Real-World-FP-Triage 2026-06-25 (SCA005, 25-Repo-Korpus) ----------------------
+  // Aus Agenten-Triage von 99 Findings (~93 FP). Jede FP-Klasse ein Negativ-
+  // Fall + die echten Bugs als TP-Kontrolle.
+  [TestFixture]
+  TTestFormatMismatchRealWorldFP = class
+  public
+    // K1 - indizierte Platzhalter %N:x (Index-Reuse, nicht je +1 Arg)
+    [Test] procedure Indexed_PositionalReuse_NoFinding;
+    [Test] procedure Indexed_SameIndexRepeated_NoFinding;
+    [Test] procedure Indexed_TemplateManyOccFewIndices_NoFinding;
+    // K2 - Nicht-Literal in Format-String-Konkatenation -> suppress
+    [Test] procedure ConcatWithVariable_NoFinding;
+    [Test] procedure ConcatIdentPlusLiteral_NoFinding;
+    [Test] procedure ConcatWithLineBreakConst_NoFinding;
+    // K5 - Komma im String-Literal-Argument
+    [Test] procedure CommaInsideStringArg_NoFinding;
+    // Variablen-/Open-Array statt [...] -> nicht zaehlbar -> suppress
+    [Test] procedure VariableArrayArg_NoFinding;
+    // ---- TP-Kontrollen (muessen weiter feuern) ----
+    [Test] procedure WidthPrecisionDeadArg_StillReports;
+    [Test] procedure NoPlaceholderWithArg_StillReports;
+    [Test] procedure TrailingLonePercent_StillReports;
+  end;
+
   // ---- Bare-Style (mORMot FormatUtf8/FormatString) -----------------------------------
   // Diese Funktionen nutzen '%' allein als Platzhalter (kein Type-Letter).
   // Detektor muss die Counting-Strategie pro Funktionsname umschalten.
   [TestFixture]
   TTestFormatMismatchBareStyle = class
   public
+    // mORMot-Bare-Style ist per Default AUS (s. uSCAConsts) - hier explizit
+    // aktivieren, damit der Bare-%-Counting-Pfad weiter getestet wird.
+    [Setup]    procedure Setup;
+    [TearDown] procedure TearDown;
     [Test] procedure FormatUtf8_TwoBarePercents_TwoArgs_NoFinding;
     [Test] procedure FormatUtf8_OneBarePercent_TwoArgs_ReportsError;
     [Test] procedure FormatString_BarePercentSeparator_NoFinding;
@@ -300,6 +328,24 @@ end;
 // Bare-Style (mORMot FormatUtf8/FormatString)
 // =============================================================================
 
+procedure TTestFormatMismatchBareStyle.Setup;
+begin
+  // Bare-Style-Funktionen fuer diese Fixture aktivieren (Default = nur 'format').
+  if Assigned(uSCAConsts.DetectorFormatFunctions) then
+    uSCAConsts.DetectorFormatFunctions.AddStrings(['formatutf8', 'formatstring']);
+end;
+
+procedure TTestFormatMismatchBareStyle.TearDown;
+var
+  idx : Integer;
+begin
+  if not Assigned(uSCAConsts.DetectorFormatFunctions) then Exit;
+  idx := uSCAConsts.DetectorFormatFunctions.IndexOf('formatutf8');
+  if idx >= 0 then uSCAConsts.DetectorFormatFunctions.Delete(idx);
+  idx := uSCAConsts.DetectorFormatFunctions.IndexOf('formatstring');
+  if idx >= 0 then uSCAConsts.DetectorFormatFunctions.Delete(idx);
+end;
+
 procedure TTestFormatMismatchBareStyle.FormatUtf8_TwoBarePercents_TwoArgs_NoFinding;
 // Real-world Pattern aus mORMot: '%_%' = 2 Platzhalter, durch literales '_'
 // getrennt. Mit Standard-Format()-Counting waere '%' ohne Type-Letter
@@ -478,6 +524,123 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFormatLocaleHint));
   finally F.Free; end;
+end;
+
+{ ---- TTestFormatMismatchRealWorldFP ---- }
+
+function FmtFP_Count(const Body: string): Integer;
+// Helper: scannt eine Mini-Unit mit Body und zaehlt fkFormatMismatch.
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(
+    'unit t; implementation'#13#10 + Body + #13#10 + 'end.');
+  try
+    Result := TFindingHelper.Count(F, fkFormatMismatch);
+  finally
+    F.Free;
+  end;
+end;
+
+procedure TTestFormatMismatchRealWorldFP.Indexed_PositionalReuse_NoFinding;
+// JvExcptDlg: '%.8x (%1:d)' - %.8x(Index1) und %1:d(Index1) teilen Arg 1.
+begin
+  Assert.AreEqual<Integer>(0, FmtFP_Count(
+    'function Foo(S: string; ErrorCode: Integer): string;'#13#10 +
+    'begin Result := Format(''%s. Code: %.8x (%1:d).'', [S, ErrorCode]); end;'),
+    'Indizierter %1:d referenziert Arg 1 (wie %.8x) - 2 Args, kein Mismatch');
+end;
+
+procedure TTestFormatMismatchRealWorldFP.Indexed_SameIndexRepeated_NoFinding;
+// %0:s ... %0:s teilen Arg 0; %1:s = Arg 1 -> 2 Args.
+begin
+  Assert.AreEqual<Integer>(0, FmtFP_Count(
+    'function Foo(a, b: string): string;'#13#10 +
+    'begin Result := Format(''Plg%0:s.%1:s T%0:s'', [a, b]); end;'),
+    'Mehrfaches %0:s teilt sich Arg 0 - 2 Args, kein Mismatch');
+end;
+
+procedure TTestFormatMismatchRealWorldFP.Indexed_TemplateManyOccFewIndices_NoFinding;
+// JvBandObjectDLLWizard-Muster: viele %N:s, nur Indizes 0..2 -> 3 Args.
+begin
+  Assert.AreEqual<Integer>(0, FmtFP_Count(
+    'function Foo(a, b, c: string): string;'#13#10 +
+    'begin Result := Format(''%0:s %1:s %2:s %0:s %1:s %2:s'', [a, b, c]); end;'),
+    'max(Index)+1 = 3 Args, nicht 6 %-Token');
+end;
+
+procedure TTestFormatMismatchRealWorldFP.ConcatWithVariable_NoFinding;
+// cnwizards: '%s' + Variable + '(%s)' -> Format-String nicht statisch -> suppress.
+begin
+  Assert.AreEqual<Integer>(0, FmtFP_Count(
+    'function Foo(sep, a, b: string): string;'#13#10 +
+    'begin Result := Format(''%s'' + sep + ''(%s)'', [a, b]); end;'),
+    'Nicht-Literal (Variable) in Format-String-Konkatenation -> kein Befund');
+end;
+
+procedure TTestFormatMismatchRealWorldFP.ConcatIdentPlusLiteral_NoFinding;
+// gexperts: GXHexPrefix + '%x' -> Ident gefolgt von '+' -> suppress.
+begin
+  Assert.AreEqual<Integer>(0, FmtFP_Count(
+    'const Prefix = ''$'';'#13#10 +
+    'function Foo(n: Integer): string;'#13#10 +
+    'begin Result := Format(Prefix + ''%x'', [n]); end;'),
+    'Ident + angehaengtes Literal -> nicht vollstaendig aufloesbar -> kein Befund');
+end;
+
+procedure TTestFormatMismatchRealWorldFP.ConcatWithLineBreakConst_NoFinding;
+// JvFullColorCtrls/FmxFPS: '...%s' + sLineBreak + '...%s %s' -> suppress.
+begin
+  Assert.AreEqual<Integer>(0, FmtFP_Count(
+    'function Foo(a, b, c: string): string;'#13#10 +
+    'begin Result := Format(''A: %s'' + sLineBreak + ''B: %s C: %s'', [a, b, c]); end;'),
+    'sLineBreak (Nicht-Literal) in Konkatenation -> kein Befund');
+end;
+
+procedure TTestFormatMismatchRealWorldFP.CommaInsideStringArg_NoFinding;
+// JvSimpleXmlTestCases: Komma IM String-Literal-Argument ist kein Arg-Trenner.
+begin
+  Assert.AreEqual<Integer>(0, FmtFP_Count(
+    'function Foo(a: string): string;'#13#10 +
+    'begin Result := Format(''%s %s'', [a, ''failed, but ok'']); end;'),
+    'Komma im String-Literal-Argument zaehlt nicht als 2. Trenner - 2 Args');
+end;
+
+procedure TTestFormatMismatchRealWorldFP.VariableArrayArg_NoFinding;
+// mORMot test.core.data: Format(fmt, vr) - Args via Variable statt [...].
+begin
+  Assert.AreEqual<Integer>(0, FmtFP_Count(
+    'procedure Foo(const vr: array of const);'#13#10 +
+    'var s: string;'#13#10 +
+    'begin s := Format(''%s %s %s'', vr); end;'),
+    'Open-Array-Variable statt [...] -> Arg-Zahl nicht zaehlbar -> kein Befund');
+end;
+
+procedure TTestFormatMismatchRealWorldFP.WidthPrecisionDeadArg_StillReports;
+// MainFormU: '%5.5d' = EIN Platzhalter (.5 = Precision), 2 Args -> toter Arg.
+begin
+  Assert.IsTrue(FmtFP_Count(
+    'function Foo(tid, i: Integer): string;'#13#10 +
+    'begin Result := Format(''%5.5d'', [tid, i]); end;') >= 1,
+    '%5.5d ist 1 Platzhalter; 2. Arg ist tot -> MUSS feuern');
+end;
+
+procedure TTestFormatMismatchRealWorldFP.NoPlaceholderWithArg_StillReports;
+// WebModuleU: 0 Platzhalter, 1 Arg -> toter Arg.
+begin
+  Assert.IsTrue(FmtFP_Count(
+    'function Foo(c: string): string;'#13#10 +
+    'begin Result := Format(''no placeholders here'', [c]); end;') >= 1,
+    '0 Platzhalter aber 1 Argument -> MUSS feuern');
+end;
+
+procedure TTestFormatMismatchRealWorldFP.TrailingLonePercent_StillReports;
+// Kastri/JvValidateEdit: abschliessendes einzelnes '%' (sollte '%%' sein).
+begin
+  Assert.IsTrue(FmtFP_Count(
+    'function Foo(n: Integer): string;'#13#10 +
+    'begin Result := Format(''value %d%'', [n]); end;') >= 1,
+    'Dangling % (ohne %%-Escape) verbraucht ein 2. Arg -> MUSS feuern');
 end;
 
 end.
