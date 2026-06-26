@@ -316,6 +316,10 @@ var
     Result := False;
     ParenPos := Pos('(', RhsLower);
     if ParenPos = 0 then Exit;
+    // Indexed-Element-Zugriff als Ergebnis borgt das Element - kein Ownership.
+    // Real-World 2026-06-26: cnwizards `(AComp as TWinControl).Controls[I]`,
+    // `TComponent(FSelection[0])`. Ein `]` am Ausdruck-Ende = Collection-Item.
+    if EndsStr(']', TrimRight(RhsLower)) then Exit(True);
     // qualified prefix abschneiden: 'self.ensurecachefor' -> 'ensurecachefor'
     DotPos := LastDelimiter('.', Copy(RhsLower, 1, ParenPos - 1));
     if DotPos > 0 then
@@ -333,10 +337,15 @@ var
     if (Length(Name) >= 2) and (Name[1] = 't') and
        CharInSet(Name[2], ['a'..'z']) then
     begin
-      var ArgsStart := ParenPos + 1;
-      var ArgsEnd := Length(RhsLower);
-      var Args := Copy(RhsLower, ArgsStart, ArgsEnd - ArgsStart);
-      if Pos('.', Args) > 0 then Exit(True);
+      var Args := Trim(Copy(RhsLower, ParenPos + 1, Length(RhsLower) - ParenPos));
+      // Ein Typecast borgt IMMER eine bestehende Referenz (er allokiert nie).
+      // Borrowed wenn das Cast-Argument ein Field-/Property-Access ('.'), ein
+      // Collection-Item ('[') ODER ein Accessor-Aufruf ist (Arg beginnt mit
+      // get/find/...). Real-World 2026-06-26: cnwizards
+      // TComponent(GetComponent(0)), TFont(GetOrdValue), TComponent(FSelection[0]).
+      if (Pos('.', Args) > 0) or (Pos('[', Args) > 0) then Exit(True);
+      for i := Low(BORROWED_PREFIXES) to High(BORROWED_PREFIXES) do
+        if StartsStr(BORROWED_PREFIXES[i], Args) then Exit(True);
     end;
   end;
 

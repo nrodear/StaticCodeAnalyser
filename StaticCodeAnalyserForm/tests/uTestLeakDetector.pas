@@ -28,6 +28,11 @@ type
     [Test] procedure Leak_FunctionCallAssign_NoFreeReportsWarning;
     [Test] procedure Leak_FunctionCallAssign_WithFree_NoFinding;
     [Test] procedure Leak_BorrowedGetter_NoFinding;
+    // Real-World 2026-06-26: 'Rueckgabewert'-FPs durch geliehene Referenzen
+    // in Typecasts / Indexed-Access (cnwizards Design-Editoren).
+    [Test] procedure Leak_TypecastGetterResult_NoFinding;
+    [Test] procedure Leak_TypecastIndexedItem_NoFinding;
+    [Test] procedure Leak_IndexedPropertyResult_NoFinding;
     [Test] procedure Leak_SimilarVarName_NoFalsePositive;
     [Test] procedure Leak_MultipleVars_BothReported;
     [Test] procedure Leak_NoFalsePositive_BlacklistFree;
@@ -393,6 +398,66 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'EnsureCacheFor liefert SHARED-Ref, kein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_TypecastGetterResult_NoFinding;
+// cnwizards CnDesignPropEditors: Comp := TComponent(GetComponent(0)).
+// Typecast eines Accessor-Ergebnisses borgt - kein Ownership, kein Leak.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var Comp: TComponent;'#13#10+
+  'begin'#13#10+
+  '  Comp := TComponent(GetComponent(0));'#13#10+
+  '  Comp.Tag := 1;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'Typecast(Getter) ist geliehen, kein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_TypecastIndexedItem_NoFinding;
+// cnwizards CnPropertyCompareFrm: Comp := TComponent(FSelection[0]).
+// Typecast eines Collection-Items borgt - kein Ownership, kein Leak.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var Comp: TComponent;'#13#10+
+  'begin'#13#10+
+  '  Comp := TComponent(FSelection[0]);'#13#10+
+  '  Comp.Tag := 1;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'Typecast(Item) ist geliehen, kein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_IndexedPropertyResult_NoFinding;
+// cnwizards CnCompToCodeFrm: AChildComp := (Sender as TForm).Components[I].
+// Indexed-Property-Zugriff als Ergebnis borgt das Element - kein Leak.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar(Sender: TObject);'#13#10+
+  'var Comp: TComponent;'#13#10+
+  'begin'#13#10+
+  '  Comp := (Sender as TForm).Components[0];'#13#10+
+  '  Comp.Tag := 1;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'Indexed-Property-Ergebnis ist geliehen, kein Leak');
   finally F.Free; end;
 end;
 
