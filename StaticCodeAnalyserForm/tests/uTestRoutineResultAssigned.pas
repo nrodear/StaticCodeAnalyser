@@ -22,6 +22,9 @@ type
     [Test] procedure FunctionWithRaise_NoFinding;
     [Test] procedure FunctionWithRaiseHelper_NoFinding;
     [Test] procedure FunctionWithResultMethodCall_NoFinding;
+    // Real-World 2026-06-26: 'with Result do begin Field := ... end' setzt
+    // Result (Parser legt with-Target als nkCall 'Result' ab).
+    [Test] procedure FunctionWithResultViaWith_NoFinding;
     [Test] procedure Procedure_NoFinding;
     [Test] procedure AbstractFunction_NoFinding;
     [Test] procedure ForwardFunction_NoFinding;
@@ -156,6 +159,30 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRoutineResultUnassigned),
     'Result.<method>(args) ist semantisch ein Result-write');
+  finally F.Free; end;
+end;
+
+procedure TTestRoutineResultAssigned.FunctionWithResultViaWith_NoFinding;
+// Regression Alcinoe TALFBXClientSQLParam.Create-Stil:
+//   function Make: TPoint;
+//   begin with Result do begin X := 1; Y := 2; end; end;
+// 'with Result do' setzt Result-Felder; der Parser legt das with-Target
+// als nkCall mit Name='Result' ab -> als Result-write werten.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Make: TPoint;'#13#10 +
+  'begin'#13#10 +
+  '  with Result do'#13#10 +
+  '  begin'#13#10 +
+  '    X := 1;'#13#10 +
+  '    Y := 2;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRoutineResultUnassigned),
+    '''with Result do'' ist semantisch ein Result-write');
   finally F.Free; end;
 end;
 

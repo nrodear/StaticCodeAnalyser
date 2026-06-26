@@ -355,7 +355,14 @@ begin
       for N in Assigns do
       begin
         var CallNameLow := LowerCase(N.Name);
-        if StartsStr('result.', CallNameLow) then
+        // 'Result.<method>(...)' setzt Result lexisch. AUCH 'with Result do
+        // ...': der Parser legt das with-Target als nkCall mit Name='Result'
+        // (bzw. 'Result Foo' bei 'with Result.Foo do') ab. Real-World
+        // 2026-06-26: Alcinoe TALFBXClientSQLParam.Create
+        // 'with result do begin Value:=''''; IsNull:=false; end;'.
+        if (CallNameLow = 'result') or
+           StartsStr('result.', CallNameLow) or
+           StartsStr('result ', CallNameLow) then
         begin
           HasResult := True;
           Break;

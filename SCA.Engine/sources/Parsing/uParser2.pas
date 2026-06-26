@@ -1375,7 +1375,11 @@ begin
         var WithExpr := '';
         while not (Tok.Kind in [tkKwDo, tkKwBegin, tkKwEnd, tkEof]) do
         begin
-          if Tok.Kind = tkIdent then
+          // tkKwResult mit aufnehmen: 'Result' ist ein Keyword-Token, kein
+          // tkIdent. Ohne das landet 'with Result do' mit leerem WithExpr im
+          // AST und Detektoren (SCA121) sehen das Result-Write nicht.
+          // Konsistent mit den uebrigen Parse-Stellen (tkIdent, tkKwResult).
+          if Tok.Kind in [tkIdent, tkKwResult] then
           begin
             if WithExpr <> '' then WithExpr := WithExpr + ' ';
             WithExpr := WithExpr + Tok.Value;
