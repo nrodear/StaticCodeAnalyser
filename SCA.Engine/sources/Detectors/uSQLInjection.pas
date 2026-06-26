@@ -36,6 +36,13 @@ type
   private
     class function IsAssignRisk(const Name, RHS: string): Boolean; static;
     class function IsCallRisk(const CallName: string): Boolean; static;
+    // Negativ-Gate fuer die LOSEN Heuristiken (Keyword-Substring + Format):
+    // True wenn der Call/das Ziel eine bekannte Nicht-SQL-Senke ist -
+    // Log-Funktionen (LogMsg/LogMsgError/OutputDebugString), UI-Ausgaben
+    // (ShowMessage/MessageDlg/StatusBar.Panels[].Text/.Caption/.Hint),
+    // WriteLn, raise. Diese tragen oft englische Prosa, die mit SQL-Verben
+    // ('Update '/'Create '/'Exec ') beginnt -> sonst Massen-FP.
+    class function IsNonSqlSink(const Text: string): Boolean; static;
     // H3: Format-Familie mit SQL-Keyword im Format-String + %-Placeholder.
     // mORMot-Pattern: ExecuteFmt('SELECT * FROM % WHERE id=%', [tbl, id]) -
     // strukturelle Injection ueber Tabellenname, kein '+' im Code -> H1/H2
@@ -249,6 +256,35 @@ begin
   Result := True;
 end;
 
+class function TSQLInjectionDetector.IsNonSqlSink(const Text: string): Boolean;
+// Real-World 2026-06-26: 10 FPs durch SQL-Verb-Prosa in Nicht-SQL-Aufrufen
+// (cnwizards CnDebugger.LogMsg('Update Feed...'), ShowMessage(Format('Create
+// %d...')), ALWebSpider StatusBar2.Panels[0].Text := 'Update Href...').
+// SINK_NAMES per WholeWord (callee-Identifier), SINK_TOKENS per Substring
+// (haben natuerliche Grenzen '.'/'[' bzw. matchen 'StatusBar2').
+const
+  SINK_NAMES : array[0..15] of string = (
+    'logmsg', 'logmsgerror', 'logmsgwarning', 'logfmt',
+    'logwarning', 'logerror', 'loginfo', 'logdebug',
+    'showmessage', 'showmessagefmt', 'messagedlg', 'messagebox',
+    'outputdebugstring', 'writeln', 'codesite', 'raise'
+  );
+  SINK_TOKENS : array[0..3] of string = (
+    '.caption', '.hint', 'statusbar', '.panels['
+  );
+var
+  Low : string;
+  S   : string;
+begin
+  Result := True;
+  Low := Text.ToLower;
+  for S in SINK_NAMES do
+    if TDetectorUtils.ContainsWholeWordLower(S, Low) then Exit;
+  for S in SINK_TOKENS do
+    if Pos(S, Low) > 0 then Exit;
+  Result := False;
+end;
+
 class function TSQLInjectionDetector.IsAssignRisk(
   const Name, RHS: string): Boolean;
 var
@@ -303,6 +339,12 @@ begin
   for Kw in SQL_CALL_METHODS do
     if TDetectorUtils.ContainsWholeWordLower(Kw, Low) then Exit(True);
 
+  // Keyword-Substring-Zweig: faengt SQL-Builder OHNE bekannte Exec-Methode
+  // (z.B. Alcinoe SelectData('SELECT '+...)). ABER Log-/UI-Aufrufe tragen
+  // dieselben fuehrenden Verben -> Nicht-SQL-Senke hier ausschliessen
+  // (LogMsg/ShowMessage/...). Der Exec-Methoden-Zweig oben bleibt ungated,
+  // damit ein echtes ExecSQL mit Sink-Wort im Text nicht verloren geht.
+  if IsNonSqlSink(CallName) then Exit;
   // SQL-Schlüsselwort als Stringliteral im Argument (Patterns mit fuehrendem '
   // sind selbst-abgrenzend, brauchen kein WholeWord)
   for Kw in SQL_KW do
@@ -328,6 +370,9 @@ var
   FnIdx, KwIdx, PctIdx : Integer;
 begin
   Result := False;
+  // Nicht-SQL-Senke (ShowMessage(Format('Create %d ...')), LogFmt(...)) raus:
+  // gleiche Verb-Prosa-Kollision wie im Keyword-Zweig.
+  if IsNonSqlSink(CallName) then Exit;
   Low := CallName.ToLower;
   for Fn in FORMAT_FNS do
   begin
@@ -387,8 +432,12 @@ begin
   Assigns := MethodNode.FindAll(nkAssign);
   try
     for N in Assigns do
-      if IsAssignRisk(N.Name, N.TypeRef) or IsFormatSqlRisk(N.TypeRef) then
-        Report(N.Name, N.TypeRef, N.Line);
+      // Zuweisungs-ZIEL als Nicht-SQL-Senke ausschliessen (StatusBar.Panels[]
+      // .Text / Label.Caption := 'Update ...' + x). Echte SQL-Ziele
+      // (SQL.Text/CommandText) tragen keinen Sink-Token -> H1 feuert weiter.
+      if not IsNonSqlSink(N.Name) then
+        if IsAssignRisk(N.Name, N.TypeRef) or IsFormatSqlRisk(N.TypeRef) then
+          Report(N.Name, N.TypeRef, N.Line);
   finally
     Assigns.Free;
   end;

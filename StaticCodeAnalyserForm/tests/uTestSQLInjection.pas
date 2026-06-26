@@ -45,6 +45,15 @@ type
     [Test] procedure SQL_FormatUtf8_WithSqlKeyword_Reported;
     [Test] procedure SQL_ExecuteFmt_TablenamePlaceholder_Reported;
     [Test] procedure SQL_FormatWithoutSql_NoFinding;
+    // ---- Nicht-SQL-Senken (Real-World 2026-06-26 FP-Klasse) -----------------
+    // Log-/UI-Aufrufe tragen oft Prosa die mit SQL-Verben ('Update '/'Create '/
+    // 'Exec ') beginnt -> duerfen NICHT als SQL-Concat flaggen.
+    [Test] procedure SQL_LogMsgWithSqlVerb_NoFinding;
+    [Test] procedure SQL_ShowMessageFormatWithSqlVerb_NoFinding;
+    [Test] procedure SQL_StatusBarPanelCaption_NoFinding;
+    // Gegenkontrolle: SQL-Builder OHNE bekannte Exec-Methode (Alcinoe
+    // SelectData) muss ueber den Keyword-Zweig weiterhin feuern.
+    [Test] procedure SQL_NonExecMethodSelectConcat_Reported;
   end;
 
 implementation
@@ -396,6 +405,75 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection));
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_LogMsgWithSqlVerb_NoFinding;
+// Real-World FP: cnwizards CnDebugger.LogMsg('Update Feed: ' + Def.Url).
+// Debug-Log, keine DB-Senke - 'Update '-Prosa darf nicht flaggen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(const Url: string);'#13#10+
+  'begin'#13#10+
+  '  CnDebugger.LogMsg(''Update Feed: '' + Url);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    'LogMsg mit SQL-Verb-Prosa ist keine SQL-Injection');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_ShowMessageFormatWithSqlVerb_NoFinding;
+// Real-World FP: ShowMessage(Format('Create %d Success. %d Fail.', [s, f])).
+// UI-Meldung via Format (H3-Pfad) - keine SQL.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(s, f: Integer);'#13#10+
+  'begin'#13#10+
+  '  ShowMessage(Format(''Create %d Success. %d Fail.'', [s, f]));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    'ShowMessage(Format(...)) ist keine SQL-Injection');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_StatusBarPanelCaption_NoFinding;
+// Real-World FP: ALWebSpider StatusBar2.Panels[0].Text := 'Update Href...'
+// + FileName. UI-Caption (H2-Pfad), keine SQL.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(const FileName: string);'#13#10+
+  'begin'#13#10+
+  '  StatusBar2.Panels[0].Text := ''Update Href for file: '' + FileName;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    'StatusBar-Panel-Caption ist keine SQL-Injection');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_NonExecMethodSelectConcat_Reported;
+// TP-Kontrolle: Alcinoe-Style SelectData('SELECT ' + Part) - keine bekannte
+// Exec-Methode, aber echter SQL-Aufbau. Der Keyword-Zweig (nicht durch das
+// Sink-Gate blockiert) muss weiterhin feuern.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(const Part: string);'#13#10+
+  'begin'#13#10+
+  '  SelectData(''SELECT '' + Part);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
+    'SQL-Builder ohne Exec-Methode muss ueber Keyword-Zweig feuern');
   finally F.Free; end;
 end;
 
