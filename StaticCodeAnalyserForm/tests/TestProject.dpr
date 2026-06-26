@@ -90,6 +90,7 @@ uses
   uTestQuickFix in 'uTestQuickFix.pas',
   uTestPerfHotspots in 'uTestPerfHotspots.pas',
   uTestConcurrencyExt in 'uTestConcurrencyExt.pas',
+  uTestEngineApi in 'uTestEngineApi.pas',
   uTestRestHttpSecurity in 'uTestRestHttpSecurity.pas',
   uTestPublicMemberWithoutDoc in 'uTestPublicMemberWithoutDoc.pas',
   uTestNamingExt in 'uTestNamingExt.pas',

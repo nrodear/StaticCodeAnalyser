@@ -222,6 +222,7 @@ contains
   uDfmDbFieldAnalysis in 'sources\Infrastructure\uDfmDbFieldAnalysis.pas',
   uDfmFrameResolver in 'sources\Infrastructure\uDfmFrameResolver.pas',
   uDfmRepoIndex in 'sources\Infrastructure\uDfmRepoIndex.pas',
+  uEngineApi in 'sources\Infrastructure\uEngineApi.pas',
   uExport in 'sources\Infrastructure\uExport.pas',
   uExportHtml in 'sources\Infrastructure\uExportHtml.pas',
   uFileTextCache in 'sources\Infrastructure\uFileTextCache.pas',

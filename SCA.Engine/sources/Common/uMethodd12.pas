@@ -58,6 +58,21 @@ type
     function FindingType: TFindingType;
     function TypeText: string;
 
+    // ---- Phase-1 API-Komfort (additiv, 2026-06-26) -----------------------
+    // Sprechende Aliase fuer die Legacy-Feldnamen, damit ein Fremd-Consumer
+    // die Datengrenze ohne Quelltext-Studium versteht
+    // (Konzept_EngineApiSchnittstelle.md, Luecken G4/G8). Bestehende Felder
+    // bleiben unveraendert - rein additiv.
+    //
+    // 'Message' = die Befund-/Detailmeldung (Legacy-Feld 'MissingVar').
+    property Message: string read MissingVar write MissingVar;
+    // 'LineInt' = LineNumber als Integer (das Legacy-Feld ist ein String).
+    function LineInt: Integer;
+    // Aufgeloeste SCAxxx-Regel-ID: das explizite RuleID-Feld falls gesetzt
+    // (Custom-Rule), sonst der Catalog-Lookup ueber Kind. Damit muss der
+    // Consumer nicht selbst TRuleCatalog.GetRule(Kind).ID aufrufen.
+    function ResolvedRuleId: string;
+
     // Convenience-Constructor: kapselt das 7-Zeilen-Boilerplate-Pattern
     // (Create + 5 Field-Sets + SetKind) das in 30+ Detector-Files
     // dupliziert war. Vorher:
@@ -82,6 +97,12 @@ implementation
 
 // noinspection-file AvoidOut, CanBeClassMethod, CanBeStrictPrivate, ClassPerFile, GroupedDeclaration, LowercaseKeyword, MissingUnitHeader, PublicField, PublicMemberWithoutDoc, TooLongLine, UnsortedUses, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
+uses
+  // Nur fuer ResolvedRuleId (Kind -> SCAxxx). Bewusst in der IMPLEMENTATION,
+  // damit das Interface uMethodd12 schlank bleibt und kein Interface-Zyklus
+  // entsteht (uRuleCatalog nutzt uMethodd12 NICHT).
+  uRuleCatalog;
 
 { TMethodInfo }
 
@@ -230,6 +251,19 @@ begin
   else
     Result := '';
   end;
+end;
+
+function TLeakFinding.LineInt: Integer;
+begin
+  Result := StrToIntDef(LineNumber, 0);
+end;
+
+function TLeakFinding.ResolvedRuleId: string;
+begin
+  if RuleID <> '' then
+    Result := RuleID                       // explizite Custom-Rule-ID gewinnt
+  else
+    Result := TRuleCatalog.GetRule(Kind).ID;  // Built-in: Catalog-Lookup ueber Kind
 end;
 
 end.

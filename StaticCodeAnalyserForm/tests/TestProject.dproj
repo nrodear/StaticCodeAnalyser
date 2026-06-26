@@ -5,7 +5,7 @@
         <FrameworkType>None</FrameworkType>
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Release</Config>
-        <Platform Condition="'$(Platform)'==''">Win32</Platform>
+        <Platform Condition="'$(Platform)'==''">Win64</Platform>
         <ProjectName Condition="'$(ProjectName)'==''">TestProject</ProjectName>
         <TargetedPlatforms>3</TargetedPlatforms>
         <AppType>Console</AppType>
@@ -170,6 +170,7 @@
         <DCCReference Include="uTestQuickFix.pas"/>
         <DCCReference Include="uTestPerfHotspots.pas"/>
         <DCCReference Include="uTestConcurrencyExt.pas"/>
+        <DCCReference Include="uTestEngineApi.pas"/>
         <DCCReference Include="uTestRestHttpSecurity.pas"/>
         <DCCReference Include="uTestPublicMemberWithoutDoc.pas"/>
         <DCCReference Include="uTestNamingExt.pas"/>
