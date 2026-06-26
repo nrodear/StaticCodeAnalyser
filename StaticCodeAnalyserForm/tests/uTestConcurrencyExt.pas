@@ -24,6 +24,15 @@ type
     [Test] procedure FreeAndNilObjectList_NotReported;
     [Test] procedure FreeAndNilStringList_NotReported;
     [Test] procedure FreeAndNilThreadTyped_Reported;
+    // FP-Regression Real-World 2026-06-26: thread-BENENNENDE Nicht-Thread-
+    // Klassen (Name enthaelt 'Thread', endet aber nicht darauf; Basis=TObject),
+    // generische Container deren Typargumente 'Thread' leaken, sowie
+    // compound-/cross-unit-deklarierte (unaufloesbare) Felder.
+    [Test] procedure FreeAndNilThreadNamedNonThread_NotReported;
+    [Test] procedure FreeAndNilGenericThreadDict_NotReported;
+    [Test] procedure FreeAndNilCompoundDecl_NotReported;
+    // TP via in-file Basisklassen-Aufloesung: Descendant heisst NICHT *Thread.
+    [Test] procedure FreeAndNilThreadDescendantNoThreadName_Reported;
     // Spezialfall Result: Typ kommt aus dem Function-Header.
     [Test] procedure FreeAndNilResult_StringListReturn_NotReported;
     [Test] procedure FreeAndNilResult_ThreadReturn_Reported;
@@ -88,11 +97,13 @@ begin
 end;
 
 procedure TTestConcurrencyExt.FreeAndNilWithoutTerminate_Reported;
+// Unaufloesbarer Typ, aber Identifier-Name traegt den Thread-Hinweis ->
+// feuert ueber den Name-Fallback (Real-World 2026-06-26 Policy).
 const SRC =
   'unit t; implementation'#13#10 +
   'procedure Foo;'#13#10 +
   'begin'#13#10 +
-  '  FreeAndNil(FWorker);'#13#10 +
+  '  FreeAndNil(FWorkerThread);'#13#10 +
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin
@@ -106,9 +117,9 @@ const SRC =
   'unit t; implementation'#13#10 +
   'procedure Foo;'#13#10 +
   'begin'#13#10 +
-  '  FWorker.Terminate;'#13#10 +
-  '  FWorker.WaitFor;'#13#10 +
-  '  FreeAndNil(FWorker);'#13#10 +
+  '  FWorkerThread.Terminate;'#13#10 +
+  '  FWorkerThread.WaitFor;'#13#10 +
+  '  FreeAndNil(FWorkerThread);'#13#10 +
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin
@@ -127,8 +138,8 @@ const SRC =
   'unit t; implementation'#13#10 +
   'procedure Foo;'#13#10 +
   'begin'#13#10 +
-  '  FWorker.WaitFor;'#13#10 +
-  '  FreeAndNil(FWorker);'#13#10 +
+  '  FWorkerThread.WaitFor;'#13#10 +
+  '  FreeAndNil(FWorkerThread);'#13#10 +
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin
@@ -198,6 +209,108 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate) >= 1);
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.FreeAndNilThreadNamedNonThread_NotReported;
+// Real-World FP: doublecmd TMultiThreadProcItem = class (TObject) - Name
+// enthaelt 'Thread', ist aber kein TThread-Descendant. Frueher feuerte der
+// reine 'enthaelt thread'-Substring-Test. Jetzt: endet nicht auf 'thread'
+// UND in-file Basisklasse ist TObject -> kein Befund.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TMultiThreadProcItem = class(TObject)'#13#10 +
+  '  end;'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    FItem: TMultiThreadProcItem;'#13#10 +
+  '    procedure Do_;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Do_;'#13#10 +
+  'begin'#13#10 +
+  '  FreeAndNil(FItem);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
+    'Thread-benennende TObject-Klasse darf nicht flaggen');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.FreeAndNilGenericThreadDict_NotReported;
+// Real-World FP: FMX.Skia.Canvas.GL FThreadDictionary: TDictionary<TThreadID,
+// TThreadContextInfo>. Generische Typargumente leakten 'thread' in die
+// Heuristik. StripGenerics entfernt sie -> Basis 'TDictionary' -> kein Befund.
+const SRC =
+  'unit t; interface'#13#10 +
+  'uses System.Generics.Collections;'#13#10 +
+  'type TFoo = class'#13#10 +
+  '  FThreadDictionary: TDictionary<TThreadID, TThreadContextInfo>;'#13#10 +
+  '  procedure Do_;'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Do_;'#13#10 +
+  'begin'#13#10 +
+  '  FreeAndNil(FThreadDictionary);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
+    'Generic-Container mit Thread-Typargument darf nicht flaggen');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.FreeAndNilCompoundDecl_NotReported;
+// Real-World FP: doublecmd `FFileR, FFileL: TFile;` - compound-Deklaration,
+// der `<Ident> : <Type>`-Regex findet den Typ von FFileR nicht (Komma statt
+// Doppelpunkt). Unaufloesbarer Typ zaehlt jetzt als Nicht-Thread.
+const SRC =
+  'unit t; interface'#13#10 +
+  'uses System.Classes;'#13#10 +
+  'type TFoo = class'#13#10 +
+  '  FFileR, FFileL: TFile;'#13#10 +
+  '  procedure Do_;'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Do_;'#13#10 +
+  'begin'#13#10 +
+  '  FreeAndNil(FFileR);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
+    'Compound-/unaufloesbare Deklaration darf nicht flaggen');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.FreeAndNilThreadDescendantNoThreadName_Reported;
+// Gegenkontrolle: ein echter TThread-Descendant der NICHT auf 'Thread' endet
+// muss weiterhin (per in-file Basisklassen-Aufloesung) feuern - sonst waere
+// der Fix ein Detektions-Verlust.
+const SRC =
+  'unit t; interface'#13#10 +
+  'uses System.Classes;'#13#10 +
+  'type'#13#10 +
+  '  TBackgroundJob = class(TThread)'#13#10 +
+  '  end;'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    FJob: TBackgroundJob;'#13#10 +
+  '    procedure Do_;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Do_;'#13#10 +
+  'begin'#13#10 +
+  '  FreeAndNil(FJob);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate) >= 1,
+    'TThread-Descendant ohne Thread-Suffix muss per Basisklasse erkannt werden');
   finally F.Free; end;
 end;
 

@@ -93,34 +93,66 @@ var
   Ident        : string;
   DeclaredType : string;
 
-  function LooksLikeThreadType(const ATypeName: string): Boolean;
-  // Heuristik: TThread-Descendants tragen praktisch immer das Token
-  // 'Thread' im Typnamen (TThread, TWorkerThread, TIdHTTPThread,
-  // TBackgroundThread, IOmniThreadPool, ...). Standard-Container und
-  // VCL-Klassen (TObjectList, TStringList, TDictionary, TStream, TForm,
-  // TTimer, TIniFile, ...) tragen es nicht. Damit faellt der weit
-  // verbreitete FreeAndNil(FResults)-FP weg ohne echte Treffer zu verlieren.
-  //
-  // Real-World-Sweep 2026-06-13 iter 7: 'Threaded'-Praefix (mit -ed-Suffix)
-  // ist eine OOP-Konvention fuer Thread-USENDE Container/Options-Klassen,
-  // nicht TThread-Descendants. Beispiele: JVCL
-  // TJvBaseThreadedDatasetAllowedContinueRecordFetchOptions,
-  // TJvBaseThreadedDatasetCapitalizeLabelOptions. Skip auch wenn Type-Name
-  // auf 'Options'/'Settings'/'Container'/'List'/'Dictionary'/'Map' endet.
+  function StripGenerics(const S: string): string;
+  // 'TDictionary<TThreadID, TThreadContextInfo>' -> 'TDictionary'. Ohne das
+  // leakten die GENERISCHEN Typargumente das Token 'thread' in die Heuristik
+  // (Real-World 2026-06-26: FMX.Skia.Canvas.GL FreeAndNil(FThreadDictionary)).
   var
-    Low : string;
+    P : Integer;
   begin
-    Low := LowerCase(ATypeName);
-    Result := Pos('thread', Low) > 0;
-    if not Result then Exit;
-    // 'Threaded' (engl. Partizip "thread-using") sind Container, keine
-    // TThread-Descendants -> Falsch-Positiv ausschliessen.
-    if Pos('threaded', Low) > 0 then Exit(False);
-    // Container/Options-Konvention: Type-Name endet auf <suffix>.
-    if EndsStr('options', Low) or EndsStr('settings', Low) or
-       EndsStr('container', Low) or EndsStr('list', Low) or
-       EndsStr('dictionary', Low) or EndsStr('map', Low) then
-      Exit(False);
+    P := Pos('<', S);
+    if P > 0 then Result := Copy(S, 1, P - 1) else Result := S;
+    Result := Trim(Result);
+  end;
+
+  function ResolveIsThreadByBaseClass(const ATypeName: string): Boolean;
+  // In-file Basisklassen-Aufloesung: folgt `<T> = class(<Parent>)` im selben
+  // File (best-effort, max 8 Schritte gegen Zyklen) bis ein Parent TThread
+  // ist bzw. auf 'Thread' endet. Faengt TThread-Descendants deren NAME nicht
+  // auf 'Thread' endet, solange der Typ lokal deklariert ist. Liefert False
+  // fuer `class` ohne Parent (= TObject) -> haelt z.B.
+  // TMultiThreadProcItem=class(TObject) korrekt draussen.
+  var
+    Cur, Low : string;
+    Re       : TRegEx;
+    Mt       : TMatch;
+    Steps    : Integer;
+  begin
+    Result := False;
+    Cur := StripGenerics(ATypeName);
+    Steps := 0;
+    while (Cur <> '') and (Steps < 8) do
+    begin
+      Low := LowerCase(Cur);
+      if SameText(Cur, 'TThread') or EndsStr('thread', Low) then Exit(True);
+      Re := TRegEx.Create('(?i)\b' + TRegEx.Escape(Cur) +
+        '\s*=\s*class\s*\(\s*([A-Za-z_][\w.]*)');
+      Mt := Re.Match(Code);
+      if not Mt.Success then Exit(False);    // kein Parent (oder = TObject)
+      Cur := Mt.Groups[1].Value;
+      Inc(Steps);
+    end;
+  end;
+
+  function LooksLikeThreadType(const ATypeName: string): Boolean;
+  // Heuristik: TThread-Descendants tragen per Konvention das Token 'Thread'
+  // als SUFFIX (TWorkerThread, TIdHTTPThread, TBackgroundThread, ...) - das
+  // ist der robuste Indikator. NUR 'enthaelt thread' war zu breit:
+  // Real-World 2026-06-26 lieferte 10 FPs aus thread-BENENNENDEN Nicht-Thread-
+  // Klassen (TMultiThreadProcItem=TObject, TSharedThreadNames=TObject,
+  // TJclDebugThreadNotifier=TObject, TJvBaseDatasetThreadHandler=TComponent,
+  // TDictionary<TThreadID,...>). Neue Regel: Typname (ohne Generic-Args)
+  // endet auf 'thread' / IST TThread -> Thread; sonst nur, wenn die in-file
+  // Basisklassen-Kette real bei TThread landet. Leerer Typ (unaufloesbar)
+  // -> KEIN Thread (vorher konservativ gefeuert -> FFullFilesTree/FFileR-FPs).
+  var
+    Base, Low : string;
+  begin
+    Base := StripGenerics(ATypeName);
+    Low := LowerCase(Base);
+    if SameText(Base, 'TThread') or EndsStr('thread', Low) then
+      Exit(True);
+    Result := ResolveIsThreadByBaseClass(Base);
   end;
 
   function ResolveResultType(AtPos: Integer): string;
@@ -226,9 +258,19 @@ begin
             DeclaredType := DeclMatch.Groups[1].Value;
         end;
       end;
-      if (DeclaredType <> '') and not LooksLikeThreadType(DeclaredType) then
-        Continue;  // Kein TThread-Kontext -> kein Befund (vermeidet FP
-                   // bei TObjectList/TStringList/TStream/TForm/Result).
+      // Type-/Name-Filter: feuern wenn ENTWEDER der aufgeloeste Typ nach
+      // TThread aussieht, ODER der Typ unaufloesbar ist UND der IDENTIFIER-
+      // Name selbst den Thread-Hinweis traegt. Vermeidet FP bei
+      // TObjectList/TStringList/TStream/TForm/Result (aufgeloest, kein Thread)
+      // UND bei unaufloesbaren Nicht-Thread-Feldern (Real-World 2026-06-26:
+      // FFullFilesTree: TFiles im Parent-Unit, `FFileR, FFileL: TFile` -
+      // compound-Decl, Regex findet den Typ nicht). Cross-unit Thread-Globals
+      // bleiben erfasst, solange Name oder Konstruktor-Call den Thread zeigt.
+      if not (
+           ((DeclaredType <> '') and LooksLikeThreadType(DeclaredType))
+           or ((DeclaredType = '') and (Pos('thread', LowerCase(Ident)) > 0))
+         ) then
+        Continue;
 
       LookBack := M.Index - 500;
       if LookBack < 1 then LookBack := 1;
