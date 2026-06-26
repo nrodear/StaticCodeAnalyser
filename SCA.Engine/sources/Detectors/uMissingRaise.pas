@@ -135,8 +135,13 @@ begin
     else
       Break;
   end;
-  // Falls das vorherige Zeichen ein '.' war: Owner.Class.Create - skip.
-  if (i >= 1) and (CallName[i] = '.') then Exit;
+  // Vorheriges Zeichen pruefen:
+  //   '.'      -> Owner.Class.Create (kein atomarer Klassen-Ident) - skip
+  //   '(' / ',' -> der Create steht als ARGUMENT in einem anderen Call
+  //               (Func(EFoo.Create(...))) - die Exception wird weitergereicht
+  //               (Handler/Logger/raise-Helper), kein statement-level
+  //               Missing-Raise. Real-World 2026-06-27 (praeventiv).
+  if (i >= 1) and CharInSet(CallName[i], ['.', '(', ',']) then Exit;
   Result := Copy(CallName, i + 1, PosDot - i - 1);
 end;
 
@@ -154,6 +159,12 @@ begin
     begin
       Target := ExtractCreateTarget(N.Name);
       if not LooksLikeExceptionClass(Target) then Continue;
+      // Die eigene 'constructor EFoo.Create(...)'-Definition ist kein
+      // Missing-Raise: mORMot/JVCL definieren Exception-Klassen mit Custom-
+      // Konstruktoren, deren Header als EFoo.Create-Knoten auftaucht. Wenn die
+      // umschliessende Methode der Create-Konstruktor von <Target> ist -> skip.
+      // Real-World 2026-06-27: EInterfaceStub.Create, EMongoConnectionException.Create.
+      if SameText(MethodNode.Name, Target + '.Create') then Continue;
 
       F            := TLeakFinding.Create;
       F.FileName   := FileName;

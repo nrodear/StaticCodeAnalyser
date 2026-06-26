@@ -25,6 +25,10 @@ type
     [Test] procedure NonExceptionCreate_NoFinding;
     [Test] procedure EditCreate_NotMisidentified_NoFinding;
     [Test] procedure EncodingClass_NotMisidentified_NoFinding;
+    // Real-World 2026-06-27 FP-Klassen: eigene 'constructor EFoo.Create'-
+    // Definition (mORMot/JVCL) + Exception als Argument eines anderen Calls.
+    [Test] procedure ConstructorDefinition_NoFinding;
+    [Test] procedure ExceptionAsArgument_NoFinding;
 
     // ---- Finding-Inhalt ----------------------------------------------------
     [Test] procedure Finding_KindAndSeverity;
@@ -140,6 +144,42 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMissingRaise));
+  finally F.Free; end;
+end;
+
+procedure TTestMissingRaise.ConstructorDefinition_NoFinding;
+// mORMot/JVCL: Exception-Klasse mit eigenem Konstruktor. Die
+// 'constructor EFoo.Create(...)'-Definition ist KEIN Missing-Raise.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type EFoo = class(Exception)'#13#10 +
+  '  constructor Create(Sender: TObject; const Msg: string);'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'constructor EFoo.Create(Sender: TObject; const Msg: string);'#13#10 +
+  'begin'#13#10 +
+  '  inherited Create(Msg);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMissingRaise),
+    'eigene constructor EFoo.Create-Definition ist kein Missing-Raise');
+  finally F.Free; end;
+end;
+
+procedure TTestMissingRaise.ExceptionAsArgument_NoFinding;
+// Exception als ARGUMENT eines anderen Calls (Handler/Logger) -> wird
+// weitergereicht, kein statement-level Missing-Raise.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin Application.ShowException(EConvertError.Create(''x'')); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMissingRaise),
+    'Exception als Call-Argument ist kein statement-level Missing-Raise');
   finally F.Free; end;
 end;
 
