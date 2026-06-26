@@ -23,6 +23,13 @@ type
     [Test] procedure EnterInString_NotReported;
     [Test] procedure EnterInComment_NotReported;
     [Test] procedure LockWithoutTryFinally_KindAndSeverity;
+    // Real-World 2026-06-26 FP-Klassen:
+    // CEF4Delphi-Idiom 'try / if (X<>nil) then / begin / X.Acquire' (Cause A)
+    // und '.Enter' als boolescher Ausdruck (ICefv8Context, Cause C).
+    [Test] procedure TryGuardBeginAcquire_NotReported;
+    [Test] procedure EnterAsBooleanExpression_NotReported;
+    // Gegenkontrolle: 'begin' einer Schleife (ohne try) darf NICHT suppressen.
+    [Test] procedure LoopBeginNoTry_Reported;
   end;
 
 implementation
@@ -181,6 +188,73 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLockWithoutTryFinally));
+  finally F.Free; end;
+end;
+
+procedure TTestLockWithoutTryFinally.TryGuardBeginAcquire_NotReported;
+// CEF4Delphi-Idiom (ueber alle Demos wiederholt): das umschliessende try
+// liegt hinter 'if (X<>nil) then begin', Release im finally. Darf NICHT
+// flaggen - NearestBoundaryIsTry erkennt das umschliessende try.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.DoResize;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    if (FResizeCS <> nil) then'#13#10 +
+  '      begin'#13#10 +
+  '        FResizeCS.Acquire;'#13#10 +
+  '        DoWork;'#13#10 +
+  '      end;'#13#10 +
+  '  finally'#13#10 +
+  '    if (FResizeCS <> nil) then'#13#10 +
+  '      FResizeCS.Release;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLockWithoutTryFinally),
+    'try/if-guard/begin/Acquire mit Release im finally ist sicher');
+  finally F.Free; end;
+end;
+
+procedure TTestLockWithoutTryFinally.EnterAsBooleanExpression_NotReported;
+// ICefv8Context.Enter: Boolean - '.Enter' als Bedingung, kein Lock.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Eval;'#13#10 +
+  'begin'#13#10 +
+  '  if pV8Context.Enter then'#13#10 +
+  '    pV8Context.Exit;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLockWithoutTryFinally),
+    '.Enter als boolescher Ausdruck ist kein Lock-Acquire');
+  finally F.Free; end;
+end;
+
+procedure TTestLockWithoutTryFinally.LoopBeginNoTry_Reported;
+// Gegenkontrolle: ein 'begin' (Schleifen-Body) ohne umschliessendes try
+// darf den Befund NICHT unterdruecken - sonst waere NearestBoundaryIsTry
+// zu breit.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Process;'#13#10 +
+  'begin'#13#10 +
+  '  while Cond do'#13#10 +
+  '    begin'#13#10 +
+  '      FLock.Enter;'#13#10 +
+  '      DoWork;'#13#10 +
+  '      FLock.Leave;'#13#10 +
+  '    end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkLockWithoutTryFinally) >= 1,
+    'Lock im Schleifen-Body ohne try muss weiterhin feuern');
   finally F.Free; end;
 end;
 

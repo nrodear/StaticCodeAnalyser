@@ -387,6 +387,76 @@ begin
   Result := True;                  // Args vorhanden -> Cache-/Pool-Call
 end;
 
+function AcquireIsExpressionNotStatement(const Code: string; M: TMatch): Boolean;
+// True wenn der '<ident>.Enter/.Acquire/.BeginWrite'-Match als AUSDRUCK
+// benutzt wird statt als Statement. Ein echter Lock-Acquire ist ein
+// parameterloses Statement, unmittelbar mit ';' terminiert. Folgt stattdessen
+// ein anderes Token (then/do/and/or/')'/','/'='/Vergleich), ist der
+// Identifier KEIN Lock - z.B. ICefv8Context.Enter: Boolean ('if
+// pV8Context.Enter then ...'), CEF4Delphi uJSEval. Real-World 2026-06-26.
+// Die EnterCriticalSection(...)-Form ist nicht betroffen (M.Value endet '(').
+var
+  p : Integer;
+begin
+  Result := False;
+  if (M.Value <> '') and (M.Value[Length(M.Value)] = '(') then Exit;
+  p := M.Index + M.Length;
+  while (p <= Length(Code)) and CharInSet(Code[p], [' ', #9, #10, #13]) do Inc(p);
+  if p > Length(Code) then Exit;     // EOF -> nicht entscheidbar, nicht skippen
+  Result := Code[p] <> ';';          // alles ausser ';' -> Ausdruck -> kein Lock
+end;
+
+function NearestBoundaryIsTry(const Code: string; MatchPos: Integer): Boolean;
+// Generalisiert PreviousStatementIsTry: liefert True, wenn das naechste
+// rueckwaerts gefundene STATEMENT-BOUNDARY ein 'try' ist - d.h. zwischen
+// 'try' und dem Acquire liegen nur Nicht-Statement-Tokens (begin / then /
+// 'if (...) then' / Identifier / Whitespace), KEIN ';' und kein Block-Ende.
+// Faengt das ueber alle CEF4Delphi-Demos wiederholte Idiom:
+//   try
+//     if (FResizeCS <> nil) then
+//       begin
+//         FResizeCS.Acquire;     // <-- sicher, Release im finally
+//   ...
+//   finally
+//     if (FResizeCS <> nil) then FResizeCS.Release;
+//   end;
+// Bricht (False) am ersten ';' oder an einem Block-/Statement-Keyword ab,
+// damit kein fremdes try einer abgeschlossenen Anweisung gematcht wird.
+// Bewusst dieselbe Heuristik-Philosophie wie PreviousStatementIsTry:
+// geprueft wird nur das umschliessende try, nicht das matchende finally.
+const
+  LOOKBACK = 2000;
+var
+  p, lo, wEnd, wStart : Integer;
+  w : string;
+begin
+  Result := False;
+  lo := MatchPos - LOOKBACK;
+  if lo < 1 then lo := 1;
+  p := MatchPos - 1;
+  while p >= lo do
+  begin
+    if CharInSet(Code[p], [' ', #9, #10, #13]) then begin Dec(p); Continue; end;
+    if Code[p] = ';' then Exit(False);        // davor ein abgeschlossenes Statement
+    if CharInSet(Code[p], ['A'..'Z', 'a'..'z', '0'..'9', '_']) then
+    begin
+      wEnd := p;
+      while (p >= lo) and
+            CharInSet(Code[p], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do Dec(p);
+      wStart := p + 1;
+      w := LowerCase(Copy(Code, wStart, wEnd - wStart + 1));
+      if w = 'try' then Exit(True);
+      // Block-/Statement-Grenzen: hier endet die "nur Filler"-Strecke.
+      if (w = 'end') or (w = 'except') or (w = 'finally') or (w = 'repeat') or
+         (w = 'asm') or (w = 'do') or (w = 'else') then Exit(False);
+      // erlaubte Zwischen-Tokens (begin/then/if/nil/and/or/not/Identifier):
+      // weiter rueckwaerts.
+      Continue;
+    end;
+    Dec(p);   // Satzzeichen/Operatoren (Teil von 'if (...)') -> ueberspringen
+  end;
+end;
+
 function LineForPos(const LineFor: TArray<Integer>; Pos: Integer): Integer;
 // LineFor wird von StripFileComments zurueckgegeben:
 // LineFor[i] = 0-basierte Zeilennummer von Code[i+1]. -> +1 fuer 1-basiert.
@@ -433,6 +503,9 @@ begin
       // kein Lock (TCriticalSection.Acquire / TMonitor.Enter haben keine Args).
       // 'gAstFileCache.Acquire(FileName)' -> Cache-Lookup, kein Lock.
       if MatchHasArguments(Code, M) then Continue;
+      // FP-Schutz: '<ident>.Enter' als boolescher AUSDRUCK (kein Lock).
+      // z.B. ICefv8Context.Enter ('if pV8Context.Enter then ...').
+      if AcquireIsExpressionNotStatement(Code, M) then Continue;
       // EndOfStmt = Position direkt NACH dem Match. Wir suchen das ';'
       // bis zur naechsten Anweisung; in einer normalen Enter-Zeile
       // sieht das so aus: "FLock.Enter;" -> Match endet bei 'Enter',
@@ -453,6 +526,9 @@ begin
       // CEF4Delphi-Pattern: try VOR Acquire (Acquire ist erstes
       // Statement im try-Block). Schau das letzte Wort vor Match.
       if PreviousStatementIsTry(Code, M.Index) then Continue;
+      // CEF4Delphi-Idiom: try / if (X<>nil) then / begin / X.Acquire - das
+      // umschliessende try liegt hinter begin/then/Guard, nicht direkt davor.
+      if NearestBoundaryIsTry(Code, M.Index) then Continue;
       // BeginXxx-Method-Name-Konvention: Caller wickelt try/finally
       // um die paired BeginXxx/EndXxx-Calls.
       if IsInsideBeginXxxMethod(Code, M.Index) then Continue;
