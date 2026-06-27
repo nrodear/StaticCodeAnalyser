@@ -148,23 +148,35 @@ begin
 end;
 
 procedure TTestMissingRaise.ConstructorDefinition_NoFinding;
-// mORMot/JVCL: Exception-Klasse mit eigenem Konstruktor. Die
-// 'constructor EFoo.Create(...)'-Definition ist KEIN Missing-Raise.
+// mORMot-Muster: Exception-Klasse mit mehrzeiligem Custom-Konstruktor
+// (const-Params, komplexe Typen, ueberladener CreateUtf8, inherited-Body).
+// Bei solchen Signaturen laeuft der Parser in den Statement-Fallback und der
+// qualifizierte Header 'EMongo...Create(const aMsg: ...; aConn: ...)' landet
+// als nkCall - darf NICHT als Missing-Raise feuern (Typ-Annotation im
+// Argument = Konstruktor-Definition). Real-World 2026-06-27.
 const SRC =
   'unit t; interface'#13#10 +
-  'type EFoo = class(Exception)'#13#10 +
-  '  constructor Create(Sender: TObject; const Msg: string);'#13#10 +
+  'type EMongoConnectionException = class(Exception)'#13#10 +
+  '  constructor Create(const aMsg: RawUtf8; aConn: TObject);'#13#10 +
+  '  constructor CreateUtf8(const Fmt: RawUtf8; const Args: array of const);'#13#10 +
   'end;'#13#10 +
   'implementation'#13#10 +
-  'constructor EFoo.Create(Sender: TObject; const Msg: string);'#13#10 +
+  'constructor EMongoConnectionException.Create(const aMsg: RawUtf8;'#13#10 +
+  '  aConn: TObject);'#13#10 +
   'begin'#13#10 +
-  '  inherited Create(Msg);'#13#10 +
+  '  inherited CreateU(aMsg);'#13#10 +
+  '  FConn := aConn;'#13#10 +
+  'end;'#13#10 +
+  'constructor EMongoConnectionException.CreateUtf8(const Fmt: RawUtf8;'#13#10 +
+  '  const Args: array of const);'#13#10 +
+  'begin'#13#10 +
+  '  inherited CreateUtf8(Fmt, Args);'#13#10 +
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMissingRaise),
-    'eigene constructor EFoo.Create-Definition ist kein Missing-Raise');
+    'mehrzeiliger Custom-Exception-Konstruktor ist kein Missing-Raise');
   finally F.Free; end;
 end;
 

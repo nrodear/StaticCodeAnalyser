@@ -145,6 +145,38 @@ begin
   Result := Copy(CallName, i + 1, PosDot - i - 1);
 end;
 
+function IsCreateDefinitionSignature(const CallName: string): Boolean;
+// True wenn der '.Create(...)'-Match in Wahrheit eine KONSTRUKTOR-DEFINITION
+// ist. Bei komplexen Custom-Exception-Konstruktoren (mORMot/JVCL, mehrzeilige
+// Signatur mit const-Params + Typen wie RawUtf8/array of const) laeuft die
+// Signatur-Parse in den Statement-Fallback - der qualifizierte Header
+// 'EFoo.Create(const aMsg: RawUtf8; aConn: TConn)' landet als nkCall-Statement
+// (Name inkl. Klammer-Inhalt). Attributions-UNABHAENGIGES Signal: die
+// Argumente enthalten eine TYP-ANNOTATION (':') AUSSERHALB von Stringliteralen
+// - das gibt es nur in Parameter-Deklarationen, NIE in einem echten raise-losen
+// 'EFoo.Create(''msg'')'-Aufruf (Message-Strings mit ':' werden weggestrippt).
+// Real-World 2026-06-27: EInterfaceStub.Create, EMongo*Exception.Create.
+var
+  Low   : string;
+  p, i  : Integer;
+  InStr : Boolean;
+begin
+  Result := False;
+  Low := LowerCase(CallName);
+  p := Pos('.create', Low);
+  if p = 0 then Exit;
+  while (p <= Length(CallName)) and (CallName[p] <> '(') do Inc(p);  // '(' nach .Create
+  if p > Length(CallName) then Exit;
+  InStr := False;
+  for i := p + 1 to Length(CallName) do
+  begin
+    if CallName[i] = '''' then
+      InStr := not InStr
+    else if (not InStr) and (CallName[i] = ':') then
+      Exit(True);
+  end;
+end;
+
 class procedure TMissingRaiseDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -160,11 +192,13 @@ begin
       Target := ExtractCreateTarget(N.Name);
       if not LooksLikeExceptionClass(Target) then Continue;
       // Die eigene 'constructor EFoo.Create(...)'-Definition ist kein
-      // Missing-Raise: mORMot/JVCL definieren Exception-Klassen mit Custom-
-      // Konstruktoren, deren Header als EFoo.Create-Knoten auftaucht. Wenn die
-      // umschliessende Methode der Create-Konstruktor von <Target> ist -> skip.
-      // Real-World 2026-06-27: EInterfaceStub.Create, EMongoConnectionException.Create.
+      // Missing-Raise. Zwei Wege, je nachdem wie der Parser den Header ablegt:
+      //  (1) als nkMethod -> die umschliessende Methode IST <Target>.Create.
+      //  (2) als Statement-nkCall (Signatur-Fallback bei komplexen Custom-
+      //      Konstruktoren) -> erkennbar an der Parameter-Typ-Annotation.
+      // Real-World 2026-06-27: EInterfaceStub.Create, EMongo*Exception.Create.
       if SameText(MethodNode.Name, Target + '.Create') then Continue;
+      if IsCreateDefinitionSignature(N.Name) then Continue;
 
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
