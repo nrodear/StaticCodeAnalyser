@@ -300,7 +300,7 @@ implementation
 // monolithischen Notifier-Lifecycle.
 
 uses
-  System.StrUtils, Vcl.Forms, uStaticAnalyzer2, uStaticFiles, uLocalization,
+  System.StrUtils, Vcl.Forms, uStaticAnalyzer2, uEngineApi, uStaticFiles, uLocalization,
   uPathNormalize;   // SPOT fuer Pfad-Normalisierung
 
 const
@@ -504,8 +504,23 @@ begin
         // Watch-Mode: Single-File mit Cross-Unit-Index. ProjectRoot per
         // .dproj/.dpk/.dpr-Walk-Up - sieht damit auch Sources in
         // Geschwister-Verzeichnissen statt nur das eigene.
-        FResults := TStaticAnalyzer2.AnalyzeLeaks(FFileName,
-          TStaticFiles.FindProjectRoot(FFileName), FUsesCheck);
+        // Phase 4: Single-File ueber die Facade. SkipConfig - Watch nutzt den
+        // bereits gesetzten globalen Config-State (lock-geschuetzt, s. oben).
+        var Req := TScanRequest.Init;
+        Req.SkipConfig            := True;
+        Req.Scope                 := ssSingleFile;
+        Req.Path                  := FFileName;
+        Req.SingleFileProjectRoot := TStaticFiles.FindProjectRoot(FFileName);
+        Req.UsesCheck             := FUsesCheck;
+        var Ses := TAnalysisSession.Create;
+        var Res: TScanResult := nil;
+        try
+          Res := Ses.Run(Req);
+          FResults := Res.ReleaseFindings;
+        finally
+          Res.Free;
+          Ses.Free;
+        end;
       finally
         if Assigned(GWatchMode) then
           GWatchMode.ReleaseAnalyzeLock;

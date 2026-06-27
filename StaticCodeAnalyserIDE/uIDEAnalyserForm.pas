@@ -15,7 +15,7 @@ uses
   Vcl.ExtCtrls, Vcl.ComCtrls, Vcl.Grids, Vcl.ActnList, Vcl.ImgList, Vcl.Menus,
   Vcl.Clipbrd, Vcl.Themes,
   DesignIntf, ToolsAPI, DockForm,    // DockForm: TDockableForm (Editor-Service-Notifier-Signatur)
-  uStaticAnalyzer2, uStaticFiles, uMethodd12, uSCAConsts, uExport,
+  uStaticAnalyzer2, uEngineApi, uStaticFiles, uMethodd12, uSCAConsts, uExport,
   uFixHint, uIgnoreList, uRepoSettings, uRuleCatalog, uClaudePrompt,
   uQuickFix,
   uAnalyserPalette, uAnalyserTypes, uAnalyserTheme, uIDEColors, uLocalization,
@@ -3868,8 +3868,23 @@ begin
       // Visibility-Detektoren laufen mittlerweile single-file-only - der
       // Projekt-Scope dient den uebrigen Cross-Unit-Detektoren (DFM-Repo,
       // Custom-Rules) sowie der Symbol-Sammlung fuer kuenftige Analysen.
-      Findings := TStaticAnalyzer2.AnalyzeLeaks(AFileName,
-        TStaticFiles.FindProjectRoot(AFileName), Settings.UsesCheck);
+      // Phase 4: Single-File ueber die Facade. Config via SetupForRun (oben)
+      // -> SkipConfig; ProjectRoot fuer den projektweiten Symbol-Index.
+      var Req := TScanRequest.Init;
+      Req.SkipConfig            := True;
+      Req.Scope                 := ssSingleFile;
+      Req.Path                  := AFileName;
+      Req.SingleFileProjectRoot := TStaticFiles.FindProjectRoot(AFileName);
+      Req.UsesCheck             := Settings.UsesCheck;
+      var Ses := TAnalysisSession.Create;
+      var Res: TScanResult := nil;
+      try
+        Res := Ses.Run(Req);
+        Findings := Res.ReleaseFindings;
+      finally
+        Res.Free;
+        Ses.Free;
+      end;
     except
       on E: Exception do
       begin
