@@ -39,7 +39,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode;
+  uAstNode, uAstFileCache;
 
 type
   TSymbolReferenceIndex = class
@@ -51,6 +51,8 @@ type
     // bare nkCall-Knoten, damit nicht jeder RTL-Aufruf (WriteLn, Inc, ...)
     // als hypothetischer Member-Ref zaehlt.
     FPublicMembers : THashSet<string>;
+    // Per-Scan-AST-Cache (D.2.3 Infra): von Build statt gAstFileCache-Global.
+    FAstCache : TAstFileCache;
 
     procedure ScanUnitForMembers(const PasFileName: string);
     procedure ScanUnitForRefs(const PasFileName: string);
@@ -61,7 +63,7 @@ type
     destructor  Destroy; override;
 
     // Repo-weiten Scan ueber alle Pas-Dateien durchfuehren.
-    procedure Build(FileList: TStringList);
+    procedure Build(FileList: TStringList; ACache: TAstFileCache = nil);
 
     // Manuelles Hinzufuegen (fuer Tests + spezielle Pipeline-Varianten).
     procedure AddReference(const MemberName, FromUnit: string);
@@ -78,18 +80,13 @@ type
     function IsEmpty: Boolean;
   end;
 
-var
-  // Global Index analog gDfmRepoIndex. Wird von TStaticAnalyzer2 in
-  // AnalyzeLeaksRecursive aufgebaut und am Ende freigegeben.
-  gSymbolRefIndex : TSymbolReferenceIndex = nil;
-
 implementation
 
 // noinspection-file BeginEndRequired, CanBeClassMethod, CanBeUnitPrivate, ConsecutiveSection, DuplicateBlock, FreeWithoutNil, GroupedDeclaration, LowercaseKeyword, NestedRoutine, NestedTry, TooLongLine, UnsortedUses, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uParser2, uAstFileCache;
+  uParser2;
 
 constructor TSymbolReferenceIndex.Create;
 begin
@@ -375,8 +372,8 @@ begin
   if not FileExists(PasFileName) then Exit;
   OwnsRoot := False;
 
-  if Assigned(gAstFileCache) then
-    Root := gAstFileCache.Acquire(PasFileName)
+  if Assigned(FAstCache) then
+    Root := FAstCache.Acquire(PasFileName)
   else
   begin
     Parser := TParser2.Create;
@@ -411,8 +408,8 @@ begin
   if not FileExists(PasFileName) then Exit;
   OwnsRoot := False;
 
-  if Assigned(gAstFileCache) then
-    Root := gAstFileCache.Acquire(PasFileName)
+  if Assigned(FAstCache) then
+    Root := FAstCache.Acquire(PasFileName)
   else
   begin
     Parser := TParser2.Create;
@@ -437,7 +434,7 @@ begin
   end;
 end;
 
-procedure TSymbolReferenceIndex.Build(FileList: TStringList);
+procedure TSymbolReferenceIndex.Build(FileList: TStringList; ACache: TAstFileCache);
 // 2-Pass-Build:
 //   Pass 1 sammelt alle Public-/Published-Member-Namen ueber alle Files
 //          (FPublicMembers Set) - noetig fuer A.3+ Punkt 3 (bare-Call-
@@ -448,6 +445,7 @@ procedure TSymbolReferenceIndex.Build(FileList: TStringList);
 var
   i : Integer;
 begin
+  FAstCache := ACache;
   if FileList = nil then Exit;
   for i := 0 to FileList.Count - 1 do
     ScanUnitForMembers(FileList[i]);
@@ -486,7 +484,5 @@ end;
 initialization
 
 finalization
-  if Assigned(gSymbolRefIndex) then
-    FreeAndNil(gSymbolRefIndex);
 
 end.

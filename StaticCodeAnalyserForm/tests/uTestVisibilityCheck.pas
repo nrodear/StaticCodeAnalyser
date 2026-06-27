@@ -464,11 +464,10 @@ end;
 // Findings unabhaengig vom (eventuell residualen) Index emittiert werden.
 
 procedure TTestVisibilityCheck.ResetSymbolIndex;
-// Defensive: falls ein anderer Test den gSymbolRefIndex angefasst hat,
-// nullen wir ihn hier wieder.
+// Phase 3: Symbol-Index ist kein Global mehr - der Detektor liest ihn aus
+// dem AnalyzeContext (im Test-Harness nil -> Single-File). TearDown bleibt
+// als No-op erhalten (DUnitX-Attribut + Methodenname stabil).
 begin
-  if Assigned(gSymbolRefIndex) then
-    FreeAndNil(gSymbolRefIndex);
 end;
 
 procedure TTestVisibilityCheck.CrossUnit_ExternalCallerFound_NoFinding;
@@ -490,10 +489,6 @@ const SRC =
   'end.';
 var F: TObjectList<TLeakFinding>;
 begin
-  gSymbolRefIndex := TSymbolReferenceIndex.Create;
-  // Eintrag der frueher als 'Cross-Unit-Caller' interpretiert wurde -
-  // wird vom single-file-Detektor jetzt ignoriert.
-  gSymbolRefIndex.AddReference('Helper', 'other.pas');
   F := TFindingHelper.FindingsOf(SRC);
   try
     Assert.IsTrue(TFindingHelper.Count(F, fkCanBeStrictPrivate) >= 1,
@@ -518,8 +513,6 @@ const SRC =
   'end.';
 var F: TObjectList<TLeakFinding>;
 begin
-  gSymbolRefIndex := TSymbolReferenceIndex.Create;
-  gSymbolRefIndex.AddReference('SomethingElse', 'other.pas');
   F := TFindingHelper.FindingsOf(SRC);
   try
     Assert.IsTrue(TFindingHelper.Count(F, fkCanBeStrictPrivate) >= 1);

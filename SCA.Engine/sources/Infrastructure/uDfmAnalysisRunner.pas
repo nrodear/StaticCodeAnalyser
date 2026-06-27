@@ -22,13 +22,6 @@ uses
   uMethodd12,
   uDfmRepoIndex, uAnalyzeContext;
 
-var
-  // Optionaler Repo-Index fuer Cross-Unit-Detektoren. Wird von
-  // TStaticAnalyzer2.ParseLeaks einmal pro Scan befuellt und am Ende
-  // freigegeben. Bei Single-File-Analyse bleibt der Index nil und
-  // Cross-Unit-Detektoren (z.B. fkDfmCrossFormCoupling) schweigen.
-  gDfmRepoIndex: TDfmRepoIndex = nil;
-
 type
   TDfmAnalysisRunner = class
   public

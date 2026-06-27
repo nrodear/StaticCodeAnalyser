@@ -841,14 +841,13 @@ begin
     // AST-File-Cache: pro .pas einmal parsen, von beiden Pre-Indizes UND
     // dem Main-Loop wiederverwendet. Spart 2 von 3 Parser-Durchlaeufen pro
     // File (perf_analyse.md Hot-Spot 🅐).
-    // Phase-3-Foundation (Konzept_D2): Context erzeugen, der die per-Scan-
-    // Instanzen besitzt. Globals bleiben Backward-Compat-Aliase; jede Instanz
-    // wird direkt nach dem Create dem Context zugewiesen (exception-sicher).
+    // Phase-3 D.2.3: Context erzeugen, der die per-Scan-Instanzen
+    // (AstFileCache/DfmRepoIndex/SymbolRefIndex) BESITZT und am Scan-Ende
+    // freigibt. Keine Prozess-Globals mehr fuer diese drei -> jeder (auch
+    // paralleler) Scan arbeitet auf eigenem State.
     Ctx := TAnalyzeContext.Create;
 
-    if Assigned(gAstFileCache) then FreeAndNil(gAstFileCache);
-    gAstFileCache := TAstFileCache.Create;
-    Ctx.AstFileCache := gAstFileCache;
+    Ctx.AstFileCache := TAstFileCache.Create;
 
     // File-Text-Cache: pro .pas einmal Lines.LoadFromFile, von den
     // File-Scan-Detektoren (Todo, With, Reversed, Length, Tautological,
@@ -873,13 +872,12 @@ begin
     if IndexFiles = nil then IndexFiles := FileList;
 
     LastPhase := 'Pre-Index: DfmRepoIndex.Build';
-    gDfmRepoIndex := TDfmRepoIndex.Create;
+    Ctx.DfmRepoIndex := TDfmRepoIndex.Create;
     try
-      gDfmRepoIndex.Build(IndexFiles);
+      Ctx.DfmRepoIndex.Build(IndexFiles, Ctx.AstFileCache);
     except
-      FreeAndNil(gDfmRepoIndex);
+      FreeAndNil(Ctx.DfmRepoIndex);   // ggf. nil (Build-Fehler) - ok
     end;
-    Ctx.DfmRepoIndex := gDfmRepoIndex;   // ggf. nil (Build-Fehler) - ok
 
     // Symbol-Reference-Index. Visibility-Detektoren (fkCanBeUnitPrivate,
     // fkCanBeStrictPrivate, fkCanBeProtected, fkUnusedPublicMember)
@@ -888,13 +886,12 @@ begin
     // Check) ihn lesen; kann perspektivisch entfallen wenn keiner mehr
     // referenziert.
     LastPhase := 'Pre-Index: SymbolRefIndex.Build';
-    gSymbolRefIndex := TSymbolReferenceIndex.Create;
+    Ctx.SymbolRefIndex := TSymbolReferenceIndex.Create;
     try
-      gSymbolRefIndex.Build(IndexFiles);
+      Ctx.SymbolRefIndex.Build(IndexFiles, Ctx.AstFileCache);
     except
-      FreeAndNil(gSymbolRefIndex);
+      FreeAndNil(Ctx.SymbolRefIndex);     // ggf. nil (Build-Fehler) - ok
     end;
-    Ctx.SymbolRefIndex  := gSymbolRefIndex;     // ggf. nil (Build-Fehler) - ok
     Ctx.DetectorTimings := gDetectorTimings;    // nur referenziert (Caller-owned)
 
     LastPhase := 'Parser.Create + Main-Loop start';
@@ -964,9 +961,9 @@ begin
       try
         try
           // Cache-Pfad bevorzugen: Pre-Indizes haben das Root schon erzeugt.
-          if Assigned(gAstFileCache) then
+          if Assigned(Ctx.AstFileCache) then
           begin
-            Root := gAstFileCache.Acquire(FileName);
+            Root := Ctx.AstFileCache.Acquire(FileName);
             OwnsRoot := False;
           end
           else
@@ -989,8 +986,8 @@ begin
           // gAstFileCache.FFailed hinterlegt - rausholen damit der Log
           // dieselbe Info enthaelt wie im Fallback-Pfad.
           var FailMsg := '';
-          if Assigned(gAstFileCache) then
-            FailMsg := gAstFileCache.GetFailMessage(FileName);
+          if Assigned(Ctx.AstFileCache) then
+            FailMsg := Ctx.AstFileCache.GetFailMessage(FileName);
           if FailMsg = '' then FailMsg := 'Parser lieferte kein Ergebnis';
           LogLine('  PARSER-FEHLER: ' + FailMsg);
           AddFileError(FileName, FailMsg);
@@ -1124,8 +1121,8 @@ begin
         LastPhase := Format('File %d/%d: finally Root.Free/Evict', [i + 1, Total]);
         if OwnsRoot then
           Root.Free
-        else if Assigned(gAstFileCache) then
-          gAstFileCache.Evict(FileName);  // Memory-Peak bremsen
+        else if Assigned(Ctx.AstFileCache) then
+          Ctx.AstFileCache.Evict(FileName);  // Memory-Peak bremsen
         LastPhase := Format('File %d/%d: finally gFileTextCache.Clear', [i + 1, Total]);
         // Text-Cache fuer die abgearbeitete Datei freigeben - die File-Scan-
         // Detektoren haben sie konsumiert, niemand brauchts mehr.
@@ -1173,9 +1170,6 @@ begin
     // setzen (zeigten auf die jetzt freigegebenen Instanzen). gFileTextCache
     // wird vom Context NICHT angefasst und lebt absichtlich weiter.
     FreeAndNil(Ctx);
-    gDfmRepoIndex   := nil;
-    gSymbolRefIndex := nil;
-    gAstFileCache   := nil;
     // gFileTextCache lebt absichtlich weiter bis zur naechsten Scan-Start-
     // Phase (oder dem finalization-Block). Suppression-Phase + ContextHash-
     // Berechnung im SARIF/Baseline-Output rufen AcquireLines fuer jede

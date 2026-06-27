@@ -24,7 +24,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode;
+  uAstNode, uAstFileCache;
 
 type
   TFormVarInfo = record
@@ -42,6 +42,9 @@ type
     // deklariert. Nicht jede Klasse hat einen Var-Eintrag (z.B. selten
     // gebrauchte Frame-Klassen ohne globalen Singleton).
     FClassUnit : TDictionary<string, string>;
+    // Per-Scan-AST-Cache (D.2.3 Infra): von Build reingereicht statt
+    // gAstFileCache-Global -> ein Index-Lauf nutzt genau einen Cache.
+    FAstCache : TAstFileCache;
     procedure ScanUnit(const PasFileName: string);
     procedure CollectVarsAt(Section: TAstNode; const Unitname: string);
     procedure CollectClassesAt(Section: TAstNode; const Unitname: string);
@@ -49,7 +52,7 @@ type
     constructor Create;
     destructor  Destroy; override;
 
-    procedure Build(FileList: TStringList);
+    procedure Build(FileList: TStringList; ACache: TAstFileCache = nil);
 
     // Lookup: liefert ClassRef und Unitname zur gegebenen Var (z.B. 'Form2'
     // -> 'TForm2' / 'C:\repo\uForm2.pas'). False wenn unbekannt.
@@ -70,7 +73,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uParser2, uAstFileCache;
+  uParser2;
 
 constructor TDfmRepoIndex.Create;
 begin
@@ -86,11 +89,12 @@ begin
   inherited;
 end;
 
-procedure TDfmRepoIndex.Build(FileList: TStringList);
+procedure TDfmRepoIndex.Build(FileList: TStringList; ACache: TAstFileCache);
 var
   I: Integer;
   FN: string;
 begin
+  FAstCache := ACache;
   FVars.Clear;
   FClassUnit.Clear;
   if FileList = nil then Exit;
@@ -120,8 +124,8 @@ var
 begin
   OwnsRoot := False;
 
-  if Assigned(gAstFileCache) then
-    Root := gAstFileCache.Acquire(PasFileName)
+  if Assigned(FAstCache) then
+    Root := FAstCache.Acquire(PasFileName)
   else
   begin
     try

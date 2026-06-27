@@ -62,12 +62,6 @@ type
     function Count: Integer;
   end;
 
-var
-  // Optional - wenn assigned, nutzen alle Pfad-Parser ihn statt eigenem
-  // Parser. Wenn nil (Single-File-Pfad, Tests), faellt jeder Caller auf
-  // seinen lokalen TParser2 zurueck.
-  gAstFileCache : TAstFileCache = nil;
-
 implementation
 
 // noinspection-file CanBeClassMethod, CanBeStrictPrivate, ExceptionTooGeneral, ExceptOnException, FreeWithoutNil, NilComparison, PublicMemberWithoutDoc, TooLongLine, UnsortedUses, UnusedPublicMember
@@ -154,7 +148,5 @@ end;
 initialization
 
 finalization
-  if Assigned(gAstFileCache) then
-    FreeAndNil(gAstFileCache);
 
 end.
