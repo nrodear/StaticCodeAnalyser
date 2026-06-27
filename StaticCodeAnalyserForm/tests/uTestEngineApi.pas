@@ -39,6 +39,7 @@ type
     [Test] procedure NamedProfile_NarrowsOrEqualToAll;
     [Test] procedure WriteSarif_ProducesNonEmptyFile;
     [Test] procedure ReleaseFindings_TransfersOwnership;
+    [Test] procedure Baseline_FiltersKnownFindings;
   end;
 
 implementation
@@ -255,6 +256,50 @@ begin
   finally
     L.Free;
   end;
+end;
+
+procedure TTestEngineApi.Baseline_FiltersKnownFindings;
+// Phase-4-Vorbereitung: Run() filtert request-driven gegen eine Baseline
+// (BaselinePath) und kann eine neue schreiben (WriteBaselinePath). 1. Lauf
+// schreibt die Baseline aus den BUG-Findings; 2. Lauf mit derselben Baseline
+// -> dieselben Findings sind "bekannt" -> 0 neue.
+var
+  Req        : TScanRequest;
+  Ses        : TAnalysisSession;
+  Res        : TScanResult;
+  Fn, BaseFn : string;
+  CountFresh : Integer;
+begin
+  Fn     := TPath.Combine(FDir, 'SampleBug.pas');
+  BaseFn := TPath.Combine(FDir, 'base.json');
+  TFile.WriteAllText(Fn, BUG_SRC, TEncoding.UTF8);
+
+  // 1) Scan + Baseline schreiben
+  Req := TScanRequest.Init;
+  Req.Scope             := ssSingleFile;
+  Req.Path              := Fn;
+  Req.WriteBaselinePath := BaseFn;
+  Ses := TAnalysisSession.Create;
+  try
+    Res := Ses.Run(Req);
+    try CountFresh := Res.FindingCount; finally Res.Free; end;
+  finally Ses.Free; end;
+  Assert.IsTrue(CountFresh >= 1, 'Erst-Scan findet den Bug');
+  Assert.IsTrue(TFile.Exists(BaseFn), 'Baseline-Datei wurde geschrieben');
+
+  // 2) Scan mit Baseline -> bekannte Findings werden gefiltert
+  Req := TScanRequest.Init;
+  Req.Scope        := ssSingleFile;
+  Req.Path         := Fn;
+  Req.BaselinePath := BaseFn;
+  Ses := TAnalysisSession.Create;
+  try
+    Res := Ses.Run(Req);
+    try
+      Assert.AreEqual<Integer>(0, Res.FindingCount,
+        'alle Findings sind in der Baseline -> 0 neue');
+    finally Res.Free; end;
+  finally Ses.Free; end;
 end;
 
 initialization

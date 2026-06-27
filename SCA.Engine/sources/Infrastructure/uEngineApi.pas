@@ -80,6 +80,8 @@ type
     AutoDiscover   : Boolean;           // Custom-Klassen waehrend des Scans entdecken
     IfdefDefines   : TArray<string>;    // {$IFDEF}-aware Parsing mit diesen Defines (leer = aus)
     CustomRulesPath: string;            // YAML mit Custom-Rules ('' = keine)
+    BaselinePath   : string;            // Findings gegen diese Baseline-JSON filtern ('' = aus)
+    WriteBaselinePath: string;          // aktuelle Findings als neue Baseline schreiben ('' = aus)
     Progress       : TProc<Integer, Integer>;  // (current, total); EAbort darin bricht ab
     // Liefert ein Request mit sinnvollen Defaults (ssRecursive, alle Detektoren,
     // loseste Schwellen, Engine-Default-Limits).
@@ -142,7 +144,7 @@ implementation
 uses
   System.IOUtils,
   uStaticAnalyzer2, uRuleCatalog, uLexer, uCustomRuleDetector, uVcsChanges,
-  uExportSARIF, uExportSonarGeneric, uExportHtml;
+  uBaseline, uExportSARIF, uExportSonarGeneric, uExportHtml;
 
 function WriteTempSource(const ASrc: string): string;
 // Schreibt ASrc in eine eindeutige Temp-.pas. GUID-Name (kollisionsfrei bei
@@ -173,6 +175,8 @@ begin
   Result.AutoDiscover    := False;
   Result.IfdefDefines    := nil;
   Result.CustomRulesPath := '';
+  Result.BaselinePath      := '';
+  Result.WriteBaselinePath := '';
   Result.Progress        := nil;
 end;
 
@@ -345,6 +349,13 @@ begin
                   Req.Path, Req.Progress, Req.UsesCheck, nil);
     BaseDir  := Req.Path;
   end;
+
+  // Baseline (wie der CLI: nach dem Scan, vor Result/Export; Fehler nicht
+  // fatal - ein kaputtes Baseline-File soll den Lauf nicht stoppen).
+  if Req.BaselinePath <> '' then
+    try TBaseline.Apply(Findings, Req.BaselinePath); except end;
+  if Req.WriteBaselinePath <> '' then
+    try TBaseline.Write(Findings, Req.WriteBaselinePath); except end;
 
   Result := TScanResult.Create(Findings, BaseDir);
 end;
