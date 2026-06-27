@@ -56,13 +56,13 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TVisibilityCheckDetector = class
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
@@ -179,7 +179,7 @@ begin
 end;
 
 class procedure TVisibilityCheckDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Classes : TList<TAstNode>;
   ClassNode, Vis, Member : TAstNode;
@@ -191,6 +191,7 @@ var
   Parents : TStringList;
   i : Integer;
   AllUnitMethods : TList<TAstNode>;
+  RefIdx : TSymbolReferenceIndex;
   DescendantsCache : TObjectDictionary<string, TList<string>>;
 
   function DescendantsOfCached(const ClassLow: string): TList<string>;
@@ -388,8 +389,9 @@ var
       // "name.pas" gegen "d:\...\name.pas" und der Self-Match schlaegt nie
       // an -> Self-Refs wuerden als extern gewertet -> A.3 wird permissiver
       // als beabsichtigt.
-      if Assigned(gSymbolRefIndex) and not gSymbolRefIndex.IsEmpty
-         and gSymbolRefIndex.HasExternalRefs(MemberLow, FileName) then
+      RefIdx := CtxSymbolRefIndex(AContext);
+      if Assigned(RefIdx) and not RefIdx.IsEmpty
+         and RefIdx.HasExternalRefs(MemberLow, FileName) then
         Exit;
       // Niemand in dieser Datei ruft den Member. Echt tot ODER fremde Unit
       // konsumiert ihn (typischer single-file-FP: API-Surface eines Plugins).

@@ -20,7 +20,7 @@ interface
 uses
   System.Generics.Collections,
   uMethodd12,
-  uDfmRepoIndex;
+  uDfmRepoIndex, uAnalyzeContext;
 
 var
   // Optionaler Repo-Index fuer Cross-Unit-Detektoren. Wird von
@@ -33,7 +33,7 @@ type
   TDfmAnalysisRunner = class
   public
     class procedure AnalyzePasFile(const PasFileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
@@ -68,7 +68,7 @@ uses
   uDfmDataModuleSplitHint;
 
 class procedure TDfmAnalysisRunner.AnalyzePasFile(const PasFileName: string;
-  Results: TObjectList<TLeakFinding>);
+  Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   DfmFileName : string;
   Source      : string;
@@ -77,7 +77,9 @@ var
   PasParser   : TParser2;
   UnitNode    : TAstNode;
   Binding     : TFormBinding;
+  RepoIdx     : TDfmRepoIndex;
 begin
+  RepoIdx := CtxDfmRepoIndex(AContext);
   if PasFileName = '' then Exit;
 
   // Phase-1-Filename-Konvention: u<X>.pas -> u<X>.dfm im gleichen Ordner.
@@ -129,7 +131,7 @@ begin
 
     // Cross-Unit-Detektoren: brauchen den Repo-Index. Wenn er nicht
     // befuellt ist (Single-File-Analyse), schweigen sie selbst.
-    TDfmCrossFormCouplingDetector.Analyze(Binding, gDfmRepoIndex,
+    TDfmCrossFormCouplingDetector.Analyze(Binding, RepoIdx,
       DfmFileName, Results);
 
     // 3) Pascal-AST der zugehoerigen .pas parsen (Iteration 3). Fehler
@@ -154,8 +156,8 @@ begin
     //    Klassen-Vererbungs-Kette aufzubauen, damit DeadEvent /
     //    OrphanHandler / SchemaMismatch bei inherited Forms nicht
     //    falsch-positiv ueber geerbte Member feuern.
-    if gDfmRepoIndex <> nil then
-      Binding := TFormBinder.BindWithParents(Graph, UnitNode, gDfmRepoIndex)
+    if RepoIdx <> nil then
+      Binding := TFormBinder.BindWithParents(Graph, UnitNode, RepoIdx)
     else
       Binding := TFormBinder.Bind(Graph, UnitNode);
 

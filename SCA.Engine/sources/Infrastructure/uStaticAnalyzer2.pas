@@ -398,7 +398,7 @@ begin
   // fkCanBeUnitPrivate-Anker im Profile-Filter.
   // Single-file-Modus (kein gSymbolRefIndex) - global scan abgeschaltet
   // weil zu viele False-Positives lieferte; siehe uVisibilityCheck.pas.
-  AddD('VisibilityCheck',fkCanBeUnitPrivate, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>; Ctx: TAnalyzeContext) begin TVisibilityCheckDetector.AnalyzeUnit(R, F, L); end);
+  AddD('VisibilityCheck',fkCanBeUnitPrivate, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>; Ctx: TAnalyzeContext) begin TVisibilityCheckDetector.AnalyzeUnit(R, F, L, Ctx); end);
   // Concurrency-Detektor-Familie
   AddD('SynchronizeInDestructor', fkSynchronizeInDestructor, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>; Ctx: TAnalyzeContext) begin TSynchronizeInDestructorDetector.AnalyzeUnit(R, F, L); end);
   AddD('LockWithoutTryFinally', fkLockWithoutTryFinally, procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>; Ctx: TAnalyzeContext) begin TLockWithoutTryFinallyDetector.AnalyzeUnit(R, F, L, Ctx); end, ['tcriticalsection', 'tmonitor', '.enter', '.acquire']);
@@ -447,7 +447,7 @@ begin
   // Profile/Severity-Filter darf den Adapter NICHT skippen - die Filterung
   // passiert spaeter im Post-Filter auf Finding-Ebene. IsDetectorEnabled()
   // erkennt den Adapter am Name='DfmAnalysis' und liefert dort immer True.
-  AddD('DfmAnalysis',     fkDfmDefaultName,  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>; Ctx: TAnalyzeContext) begin TDfmAnalysisRunner.AnalyzePasFile(F, L); end);
+  AddD('DfmAnalysis',     fkDfmDefaultName,  procedure(R: TAstNode; const F: string; L: TObjectList<TLeakFinding>; Ctx: TAnalyzeContext) begin TDfmAnalysisRunner.AnalyzePasFile(F, L, Ctx); end);
 
   // Array auf tatsaechliche Anzahl trimmen.
   SetLength(gDetectors, Count);

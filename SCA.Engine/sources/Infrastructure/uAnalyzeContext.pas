@@ -49,6 +49,12 @@ type
 // -> AcquireLines faellt dann auf das Prozess-Global zurueck). So bleibt der
 // Detektor-Body ein Einzeiler: AcquireLines(FileName, Owned, CtxFileTextCache(AContext)).
 function CtxFileTextCache(AContext: TAnalyzeContext): TFileTextCache;
+// Analog fuer die Direkt-Global-Leser (D.2.3 Schritt 2): nil-sicherer Zugriff auf
+// die per-Scan-Indizes. nil -> Detektor verhaelt sich wie Single-File-Modus
+// (kein Cross-Unit-Index), exakt wie heute wenn das Global nil ist.
+function CtxSymbolRefIndex(AContext: TAnalyzeContext): TSymbolReferenceIndex;
+function CtxDfmRepoIndex(AContext: TAnalyzeContext): TDfmRepoIndex;
+function CtxAstFileCache(AContext: TAnalyzeContext): TAstFileCache;
 
 implementation
 
@@ -56,6 +62,30 @@ function CtxFileTextCache(AContext: TAnalyzeContext): TFileTextCache;
 begin
   if AContext <> nil then
     Result := AContext.FileTextCache
+  else
+    Result := nil;
+end;
+
+function CtxSymbolRefIndex(AContext: TAnalyzeContext): TSymbolReferenceIndex;
+begin
+  if AContext <> nil then
+    Result := AContext.SymbolRefIndex
+  else
+    Result := nil;
+end;
+
+function CtxDfmRepoIndex(AContext: TAnalyzeContext): TDfmRepoIndex;
+begin
+  if AContext <> nil then
+    Result := AContext.DfmRepoIndex
+  else
+    Result := nil;
+end;
+
+function CtxAstFileCache(AContext: TAnalyzeContext): TAstFileCache;
+begin
+  if AContext <> nil then
+    Result := AContext.AstFileCache
   else
     Result := nil;
 end;
