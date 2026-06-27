@@ -9,7 +9,7 @@ uses
   System.Classes, Vcl.Graphics, System.Generics.Collections,
    Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls,
   Vcl.ComCtrls, Vcl.Grids, Vcl.Menus,   // Vcl.Menus: TPopupMenu/TMenuItem (Hamburger-Felder)
-  uStaticAnalyzer2,
+  uStaticAnalyzer2, uEngineApi,
   uMethodd12, uSCAConsts, uFixHint, uClaudePrompt, uLocalization,
   uAnalyserTypes,  // SeverityFromKindLevel, TFindingSeverity (Grid-Renderer-Callback)
   uRepoSettings, uRecentPaths, uFindingGridRenderer, uDfmTextViewer,
@@ -835,9 +835,36 @@ begin
         // Frueher: TStaticAnalyzer.AnalyzeAllClassesRecursive (uParser-basiert,
         // nur MemoryLeak + EmptyExcept). Jetzt: TStaticAnalyzer2 ueber alle 21
         // Detektoren - dieselbe Pipeline wie "Aktuelle Datei" und das IDE-Plugin.
-        findings := TStaticAnalyzer2.AnalyzeLeaksRecursive(path,
-          procedure(C, T: Integer) begin ProgressCallback(C, T); end,
-          Settings.UsesCheck);
+        // Phase 4: Scan ueber die Facade. Config via ApplyDetectorConfig (oben)
+        // -> SkipConfig.
+        // Ignore-Liste (SkipTests) EXAKT wie das IDE-Plugin (uIDEAnalyseRunner.
+        // RunAll): ohne sie scannte die Form bisher tests/ + uTest*.pas mit -
+        // Fixtures mit absichtlichen Mustern + dupliziertem SRC -> Standalone
+        // zeigte ~4x Hints / ~42x Duplicates ggue. dem Plugin. SkipTests aus
+        // IncludeTests (Default skip). CLI bleibt bewusst erschoepfend.
+        var Ignore := TIgnoreList.Create;
+        try
+          try Ignore.LoadDefault; except end;
+          Ignore.SkipTests := not Settings.IncludeTests;
+          var Req := TScanRequest.Init;
+          Req.SkipConfig := True;
+          Req.Scope      := ssRecursive;
+          Req.Path       := path;
+          Req.UsesCheck  := Settings.UsesCheck;
+          Req.IgnoreList := Ignore;
+          Req.Progress   := procedure(C, T: Integer) begin ProgressCallback(C, T); end;
+          var Ses := TAnalysisSession.Create;
+          var Res: TScanResult := nil;
+          try
+            Res := Ses.Run(Req);
+            findings := Res.ReleaseFindings;
+          finally
+            Res.Free;
+            Ses.Free;
+          end;
+        finally
+          Ignore.Free;
+        end;
         FillGridFromFindings(findings, path);
       except
         on EAbort do
@@ -894,8 +921,22 @@ begin
         // andere Cross-Unit-Detektoren). Visibility-Detektoren (CanBeUnit/
         // StrictPrivate/Protected/UnusedPublicMember) laufen mittlerweile
         // single-file-only; der Projekt-Pfad bleibt fuer sie folgenlos.
-        findings := TStaticAnalyzer2.AnalyzeLeaks(AFilePath,
-          Trim(Projectpath.Text), Settings.UsesCheck);
+        // Phase 4: Single-File ueber die Facade (ProjectRoot fuer Cross-Unit-Index).
+        var Req := TScanRequest.Init;
+        Req.SkipConfig            := True;
+        Req.Scope                 := ssSingleFile;
+        Req.Path                  := AFilePath;
+        Req.SingleFileProjectRoot := Trim(Projectpath.Text);
+        Req.UsesCheck             := Settings.UsesCheck;
+        var Ses := TAnalysisSession.Create;
+        var Res: TScanResult := nil;
+        try
+          Res := Ses.Run(Req);
+          findings := Res.ReleaseFindings;
+        finally
+          Res.Free;
+          Ses.Free;
+        end;
       except
         on E: Exception do
         begin
@@ -1503,9 +1544,22 @@ begin
 
     try
       try
-        Findings := TStaticAnalyzer2.AnalyzeLeaksFromList(Files,
-          procedure(C, T: Integer) begin ProgressCallback(C, T); end,
-          Settings.UsesCheck);
+        // Phase 4: VCS-Changed-Liste ueber die Facade.
+        var Req := TScanRequest.Init;
+        Req.SkipConfig := True;
+        Req.Scope      := ssFileList;
+        Req.Files      := Files.ToStringArray;
+        Req.UsesCheck  := Settings.UsesCheck;
+        Req.Progress   := procedure(C, T: Integer) begin ProgressCallback(C, T); end;
+        var Ses := TAnalysisSession.Create;
+        var Res: TScanResult := nil;
+        try
+          Res := Ses.Run(Req);
+          Findings := Res.ReleaseFindings;
+        finally
+          Res.Free;
+          Ses.Free;
+        end;
         FillGridFromFindings(Findings, StartDir);
       except
         on EAbort do ;
