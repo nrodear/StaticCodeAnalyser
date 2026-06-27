@@ -44,7 +44,21 @@ type
     destructor Destroy; override;
   end;
 
+// Helfer fuer die Detektor-Migration (D.2.3): liefert den per-Scan-FileText-
+// Cache aus dem Context, oder nil wenn kein Context da ist (Tests/Single-File
+// -> AcquireLines faellt dann auf das Prozess-Global zurueck). So bleibt der
+// Detektor-Body ein Einzeiler: AcquireLines(FileName, Owned, CtxFileTextCache(AContext)).
+function CtxFileTextCache(AContext: TAnalyzeContext): TFileTextCache;
+
 implementation
+
+function CtxFileTextCache(AContext: TAnalyzeContext): TFileTextCache;
+begin
+  if AContext <> nil then
+    Result := AContext.FileTextCache
+  else
+    Result := nil;
+end;
 
 destructor TAnalyzeContext.Destroy;
 begin

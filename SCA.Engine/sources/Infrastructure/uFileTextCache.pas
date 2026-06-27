@@ -74,8 +74,12 @@ var
 //   finally
 //     ReleaseLines(Lines, Cached);
 //   end;
+// ACache (optional): der per-Scan-Cache aus dem TAnalyzeContext. nil -> das
+// Prozess-Global gFileTextCache (Backward-Compat / Single-File / Tests). Phase-3-
+// Schritt: Detektoren reichen kuenftig AContext.FileTextCache durch, damit der
+// Cache nicht mehr global geteilt wird.
 function AcquireLines(const FileName: string;
-  out OwnedByCache: Boolean): TStringList;
+  out OwnedByCache: Boolean; ACache: TFileTextCache = nil): TStringList;
 
 procedure ReleaseLines(Lines: TStringList; OwnedByCache: Boolean);
 
@@ -293,12 +297,17 @@ end;
 // --- Wrapper-Funktionen ---
 
 function AcquireLines(const FileName: string;
-  out OwnedByCache: Boolean): TStringList;
+  out OwnedByCache: Boolean; ACache: TFileTextCache): TStringList;
+var
+  Cache: TFileTextCache;
 begin
   OwnedByCache := False;
-  if Assigned(gFileTextCache) then
+  // Per-Scan-Cache (Context) bevorzugen; nil -> Prozess-Global.
+  Cache := ACache;
+  if Cache = nil then Cache := gFileTextCache;
+  if Assigned(Cache) then
   begin
-    Result := gFileTextCache.GetLines(FileName);
+    Result := Cache.GetLines(FileName);
     if Result <> nil then
     begin
       OwnedByCache := True;
