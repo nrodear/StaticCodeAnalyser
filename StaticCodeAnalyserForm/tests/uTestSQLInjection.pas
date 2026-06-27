@@ -45,6 +45,10 @@ type
     [Test] procedure SQL_FormatUtf8_WithSqlKeyword_Reported;
     [Test] procedure SQL_ExecuteFmt_TablenamePlaceholder_Reported;
     [Test] procedure SQL_FormatWithoutSql_NoFinding;
+    // Real-World FP (BuildLogStats): Windows-Batch call "..."/msbuild ist kein SQL;
+    // Gegenkontrolle: echtes SQL CALL proc bleibt erkannt.
+    [Test] procedure SQL_BatchCallCommand_NoFinding;
+    [Test] procedure SQL_RealSqlCallFormat_Reported;
     // ---- Nicht-SQL-Senken (Real-World 2026-06-26 FP-Klasse) -----------------
     // Log-/UI-Aufrufe tragen oft Prosa die mit SQL-Verben ('Update '/'Create '/
     // 'Exec ') beginnt -> duerfen NICHT als SQL-Concat flaggen.
@@ -54,6 +58,21 @@ type
     // Gegenkontrolle: SQL-Builder OHNE bekannte Exec-Methode (Alcinoe
     // SelectData) muss ueber den Keyword-Zweig weiterhin feuern.
     [Test] procedure SQL_NonExecMethodSelectConcat_Reported;
+    // ---- Verb-Prosa-Gate (Real-World 2026-06-27 FP-Klasse) ------------------
+    // Englische Saetze beginnen oft mit DDL/CTE-Verben ('Create file '/'Delete
+    // directory '/'with spaces'/'update one field') -> kein SQL. Echtes SQL hat
+    // nach dem Verb eine rigide Fortsetzung (Objekt-KW / ' SET ' / ' AS ' /
+    // Concat-Ende / %-Placeholder). FP-Faelle:
+    [Test] procedure SQL_DdlVerbProseAssign_NoFinding;
+    [Test] procedure SQL_WithProseInCheck_NoFinding;
+    [Test] procedure SQL_UpdateProseInCheck_NoFinding;
+    // ...TP-Gegenkontrollen (echtes DDL/CTE/UPDATE muss weiter feuern):
+    [Test] procedure SQL_RealDdlCreateDrop_Reported;
+    [Test] procedure SQL_RealCteWithAs_Reported;
+    [Test] procedure SQL_RealUpdateSet_Reported;
+    // String-Literal-befreiter CALL-Methoden-Match: 'open(' im DDE-Kommando
+    // '[Open("%1")]' (Dev-Cpp RegisterDDEServer) ist kein Methodenaufruf.
+    [Test] procedure SQL_DdeOpenInStringLiteral_NoFinding;
   end;
 
 implementation
@@ -408,6 +427,46 @@ begin
   finally F.Free; end;
 end;
 
+procedure TTestSQLInjectionExt.SQL_BatchCallCommand_NoFinding;
+// Real-World FP (BuildLogStats RunMSBuild): ein Windows-Batch wird zeilenweise
+// in eine TStringList gebaut + als .bat gespeichert. Format('call "%s"',[...])
+// ist der Batch-call-Befehl, NICHT der SQL-Stored-Proc-CALL; die msbuild-Zeile
+// hat kein SQL-Keyword. Darf NICHT als SQL-Injection flaggen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.RunMSBuild(RsVars, ATarget, AConfig, APlatform: string);'#13#10+
+  'var SL: TStringList;'#13#10+
+  'begin'#13#10+
+  '  SL.Add(Format(''call "%s"'', [RsVars]));'#13#10+
+  '  SL.Add(Format(''msbuild "%s" /t:Build /p:Config=%s /p:Platform=%s'','#13#10+
+  '    [ATarget, AConfig, APlatform]));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    'Batch call "..."/msbuild ist kein SQL');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_RealSqlCallFormat_Reported;
+// Gegenkontrolle zum 'call'-Sonder-Gate: echtes SQL  CALL <proc>  via Format
+// bleibt erkannt. Das Gate schluckt nur das Shell-call "..." (folgendes "),
+// nicht das von einem Prozedurnamen gefolgte SQL-CALL.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Del(UserId: string);'#13#10+
+  'begin'#13#10+
+  '  DB.ExecSQL(Format(''CALL sp_delete(%s)'', [UserId]));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
+    'echtes SQL CALL proc(%s) bleibt SQL-Injection-Risiko');
+  finally F.Free; end;
+end;
+
 procedure TTestSQLInjectionExt.SQL_LogMsgWithSqlVerb_NoFinding;
 // Real-World FP: cnwizards CnDebugger.LogMsg('Update Feed: ' + Def.Url).
 // Debug-Log, keine DB-Senke - 'Update '-Prosa darf nicht flaggen.
@@ -474,6 +533,131 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
     'SQL-Builder ohne Exec-Methode muss ueber Keyword-Zweig feuern');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_DdlVerbProseAssign_NoFinding;
+// Real-World FP (jcl makedist MakeDistActions): Result := 'Create file ' + X.
+// Eine Caption-/Beschreibungs-Funktion; 'Create '/'Delete ' sind hier engl.
+// Verben, gefolgt von Alltagsnomen (file/directory), kein SQL-Objekt-Keyword.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TFoo.Describe: string;'#13#10+
+  'begin'#13#10+
+  '  Result := ''Create file '' + FName + '' and set content to '' + FBody;'#13#10+
+  '  Result := ''Delete directory '' + FDir;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    'DDL-Verb + Alltagsnomen ist englische Prosa, kein SQL');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_WithProseInCheck_NoFinding;
+// Real-World FP (mORMot test.core.data): Check(TryUtf8ToBcd(' '+u+' ', b2),
+// 'with spaces'). Die Assert-Message 'with spaces' matcht das CTE-Keyword
+// 'with ', der ' '+u+' '-Concat liefert den Non-Literal-Plus. Kein CTE.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(u: string; b2: TBcd);'#13#10+
+  'begin'#13#10+
+  '  Check(TryUtf8ToBcd('' '' + u + '' '', b2), ''with spaces'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    '''with spaces'' ist Prosa, kein CTE (WITH .. AS)');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_UpdateProseInCheck_NoFinding;
+// Real-World FP (mORMot test.orm.core): Check(UpdateField(.., [100 + 10]),
+// 'update one field of a given record'). Die Message matcht 'update ', der
+// [100 + 10]-Concat liefert den Non-Literal-Plus. Kein UPDATE .. SET.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(rec: TObject);'#13#10+
+  'begin'#13#10+
+  '  Check(DoUpdateField(rec, 100, ''ValWord'', [100 + 10]),'#13#10+
+  '    ''update one field of a given record'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    '''update one field...'' ist Prosa, kein UPDATE .. SET');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_RealDdlCreateDrop_Reported;
+// TP-Kontrolle: echtes DDL muss weiter feuern. 'CREATE TABLE '+x (Objekt-KW
+// TABLE) UND 'DROP '+ObjType (Verb endet am Literal -> Concat-Risk).
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TFoo.Ddl(Tbl, ObjType: string): string;'#13#10+
+  'begin'#13#10+
+  '  Result := ''CREATE TABLE '' + Tbl;'#13#10+
+  '  Result := ''DROP '' + ObjType + '' x'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkSQLInjection),
+    'echtes CREATE TABLE / DROP <obj> bleibt SQL-Injection-Risiko');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_RealCteWithAs_Reported;
+// TP-Kontrolle: echte CTE  WITH c AS (SELECT ... FROM '+x+')  muss feuern.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TFoo.Cte(Tbl: string): string;'#13#10+
+  'begin'#13#10+
+  '  Result := ''WITH c AS (SELECT * FROM '' + Tbl + '')'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
+    'echte CTE (WITH .. AS) bleibt SQL-Injection-Risiko');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_RealUpdateSet_Reported;
+// TP-Kontrolle: echtes  UPDATE users SET name='+x  muss feuern.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TFoo.Upd(Name: string): string;'#13#10+
+  'begin'#13#10+
+  '  Result := ''UPDATE users SET name='' + Name;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
+    'echtes UPDATE .. SET bleibt SQL-Injection-Risiko');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_DdeOpenInStringLiteral_NoFinding;
+// Real-World FP (Dev-Cpp FileAssocs): RegisterDDEServer('DevCpp.'+Ext, 'open',
+// '[Open("%1")]'). Das DDE-Kommando-Literal '[Open("%1")]' enthaelt 'Open(',
+// das faelschlich die Exec-Methode 'open(' matchte. Match erfolgt jetzt auf
+// String-Literal-befreitem Text -> 'Open(' im Literal zaehlt nicht.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(Ext: string);'#13#10+
+  'begin'#13#10+
+  '  RegisterDDEServer(''DevCpp.'' + Ext, ''open'', ''[Open("%1")]'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    '''Open('' im DDE-Kommando-Literal ist kein Methodenaufruf');
   finally F.Free; end;
 end;
 

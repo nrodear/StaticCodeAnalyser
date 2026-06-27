@@ -48,6 +48,22 @@ type
     // strukturelle Injection ueber Tabellenname, kein '+' im Code -> H1/H2
     // uebersehen das. Severity = lsError, gleiche Kind wie sonstige SQL-Risks.
     class function IsFormatSqlRisk(const CallName: string): Boolean; static;
+    // True wenn ein SQL_KW im Text vorkommt. Sonderfall 'call': der Windows-
+    // Batch-Befehl  call "pfad"  (z.B. BuildLogStats RunMSBuild:
+    // Format('call "%s"', [...])) kollidiert mit dem SQL-Stored-Proc-CALL.
+    // Folgt auf 'call ' ein " -> Shell-Befehl (SQL nutzt fuer Werte '...' nie
+    // "..."), kein SQL. Echtes  CALL proc  / 'call '+proc bleibt erkannt.
+    class function HasSqlKwHit(const Hay: string): Boolean; static;
+    // Prosa-Gate fuer prosa-prone SQL-Verben (CREATE/DROP/ALTER/TRUNCATE/
+    // DELETE/UPDATE/WITH): englische Saetze beginnen oft mit diesen Verben
+    // ('Create file '/'Delete directory '/'update one field'/Check(...,'with
+    // spaces')). Echtes SQL hat nach dem Verb IMMER eine rigide Fortsetzung
+    // (Objekt-Keyword TABLE/VIEW/FROM..., ' SET ', ' AS ') ODER endet am Verb
+    // ('CREATE ' + x) ODER %-Placeholder. True = Prosa, kein SQL. Andere
+    // Verben (select/insert/exec/merge/replace/grant/revoke/call) haben
+    // Identifier-/flexible Fortsetzung und werden NICHT gegatet.
+    class function IsKeywordProse(const Hay, Kw: string;
+      KwPos: Integer): Boolean; static;
     // True wenn der String '+' AUSSERHALB von Stringliteralen enthaelt
     // (also echte Konkatenation mit Bezeichner/Variable). 'x'+'y' allein
     // ist kein Risiko, das ist nur Multi-Line-Stringliteral-Aufbau.
@@ -313,15 +329,106 @@ begin
   // H2: SQL-Schlüsselwort als ERSTES Literal im RHS (Position 1).
   // Nur wenn der RHS direkt mit dem SQL-Keyword beginnt – verhindert
   // false positives wenn SQL-Code als Dokumentations-String vorkommt.
+  // Prosa-Gate: 'Create file '/'Delete directory ' = englische Prosa, kein
+  // SQL (jcl makedist FP, s. IsKeywordProse).
   for Kw in SQL_KW do
-    if Pos(Kw, RHSLow) = 1 then Exit(True);
+    if (Pos(Kw, RHSLow) = 1) and not IsKeywordProse(RHSLow, Kw, 1) then
+      Exit(True);
+end;
+
+class function TSQLInjectionDetector.IsKeywordProse(const Hay, Kw: string;
+  KwPos: Integer): Boolean;
+// Hay ist lower-case. Kw = getroffenes SQL_KW inkl. fuehrendem Quote
+// ('''create '). KwPos = 1-basierte Pos von Kw in Hay (zeigt auf das Quote).
+const
+  OBJ_KW : array[0..27] of string = (
+    'table', 'view', 'index', 'database', 'schema', 'procedure', 'proc',
+    'function', 'trigger', 'sequence', 'domain', 'role', 'user', 'type',
+    'tablespace', 'synonym', 'package', 'event', 'aggregate', 'operator',
+    'column', 'constraint', 'temporary', 'temp', 'unique', 'materialized',
+    'global', 'from'
+  );
+var
+  i, p    : Integer;
+  RestLit : string;
+  Lead    : string;
+  FirstW  : string;
+  Obj     : string;
+begin
+  Result := False;
+  // Nur prosa-prone Verben gaten - alle anderen unveraendert als SQL werten.
+  if not ((Kw = '''create ') or (Kw = '''drop ') or (Kw = '''alter ')
+       or (Kw = '''truncate ') or (Kw = '''delete ') or (Kw = '''update ')
+       or (Kw = '''with ')) then
+    Exit;
+
+  // Rest des aktuellen String-Literals nach dem Verb (bis schliessendem ').
+  i := KwPos + Length(Kw);
+  p := i;
+  while (i <= Length(Hay)) and (Hay[i] <> '''') do Inc(i);
+  RestLit := Copy(Hay, p, i - p);
+
+  Lead := TrimLeft(RestLit);
+  // Verb war letztes Literal-Token ('CREATE ' + x) -> echtes SQL (Concat-Risk).
+  if Lead = '' then Exit;
+  // Direkt %-Placeholder ('CREATE %INDEX ...', mORMot FormatUtf8) -> SQL.
+  if Lead[1] = '%' then Exit;
+
+  // Verb-spezifische rigide Fortsetzung.
+  if Kw = '''with ' then
+  begin
+    // CTE: WITH <name> AS ( ... ). Ohne ' as '/' as(' -> Prosa ('with spaces').
+    if (Pos(' as ', ' ' + RestLit + ' ') > 0)
+       or (Pos(' as(', ' ' + RestLit) > 0) then Exit;
+    Exit(True);
+  end;
+  if Kw = '''update ' then
+  begin
+    // UPDATE <table> SET ... Ohne ' set ' -> Prosa ('update one field ...').
+    if Pos(' set ', ' ' + RestLit + ' ') > 0 then Exit;
+    Exit(True);
+  end;
+
+  // create/drop/alter/truncate/delete: erstes Wort muss SQL-Objekt-Keyword
+  // sein (delete -> 'from' ist enthalten). Sonst Prosa ('Create file ').
+  p := 1;
+  while (p <= Length(Lead))
+        and CharInSet(Lead[p], ['a'..'z', '0'..'9', '_']) do Inc(p);
+  FirstW := Copy(Lead, 1, p - 1);
+  for Obj in OBJ_KW do
+    if FirstW = Obj then Exit;
+  Result := True;
+end;
+
+class function TSQLInjectionDetector.HasSqlKwHit(const Hay: string): Boolean;
+var
+  Kw : string;
+  P  : Integer;
+begin
+  Result := False;
+  for Kw in SQL_KW do
+  begin
+    P := Pos(Kw, Hay);
+    if P <= 0 then Continue;
+    // Sonder-Gate 'call': Windows-Batch  call "pfad"  ist KEIN SQL. Signal:
+    // direkt auf 'call ' folgt " (SQL nutzt fuer Werte '...' nie "..."). Echtes
+    // SQL  CALL proc  (Identifier folgt) / 'call '+proc bleiben erkannt.
+    if (Kw = '''call ') and (P + Length(Kw) <= Length(Hay))
+       and (Hay[P + Length(Kw)] = '"') then
+      Continue;
+    // Prosa-Gate: 'Create file '/'Delete directory '/'with spaces'/'update
+    // one field' sind englische Saetze, kein SQL (s. IsKeywordProse).
+    if IsKeywordProse(Hay, Kw, P) then Continue;
+    Exit(True);
+  end;
 end;
 
 class function TSQLInjectionDetector.IsCallRisk(
   const CallName: string): Boolean;
 var
-  Low : string;
-  Kw  : string;
+  Low      : string;
+  LowNoLit : string;
+  Kw       : string;
 begin
   Result := False;
   Low    := CallName.ToLower;
@@ -335,9 +442,12 @@ begin
 
   // SQL-Aufruf-Methode im Call-Namen. Patterns enden auf '(' was natuerliche
   // rechte Grenze ist; links muss aber Wortgrenze her - 'open(' soll nicht
-  // 'reopen(' matchen.
+  // 'reopen(' matchen. Match auf String-Literal-BEFREITEM Text: eine echte
+  // Methode steht nie IN einem Literal. Sonst matcht z.B. Dev-Cpp
+  // RegisterDDEServer(...,'[Open("%1")]') faelschlich 'open(' im DDE-Kommando.
+  LowNoLit := TDetectorUtils.StripStringLiterals(CallName).ToLower;
   for Kw in SQL_CALL_METHODS do
-    if TDetectorUtils.ContainsWholeWordLower(Kw, Low) then Exit(True);
+    if TDetectorUtils.ContainsWholeWordLower(Kw, LowNoLit) then Exit(True);
 
   // Keyword-Substring-Zweig: faengt SQL-Builder OHNE bekannte Exec-Methode
   // (z.B. Alcinoe SelectData('SELECT '+...)). ABER Log-/UI-Aufrufe tragen
@@ -346,9 +456,9 @@ begin
   // damit ein echtes ExecSQL mit Sink-Wort im Text nicht verloren geht.
   if IsNonSqlSink(CallName) then Exit;
   // SQL-Schlüsselwort als Stringliteral im Argument (Patterns mit fuehrendem '
-  // sind selbst-abgrenzend, brauchen kein WholeWord)
-  for Kw in SQL_KW do
-    if Pos(Kw, Low) > 0 then Exit(True);
+  // sind selbst-abgrenzend, brauchen kein WholeWord). 'call'-Sonder-Gate s.
+  // HasSqlKwHit (Batch call "pfad" != SQL).
+  if HasSqlKwHit(Low) then Exit(True);
 end;
 
 class function TSQLInjectionDetector.IsFormatSqlRisk(
@@ -366,8 +476,7 @@ const
 var
   Low : string;
   Fn  : string;
-  Kw  : string;
-  FnIdx, KwIdx, PctIdx : Integer;
+  FnIdx : Integer;
 begin
   Result := False;
   // Nicht-SQL-Senke (ShowMessage(Format('Create %d ...')), LogFmt(...)) raus:
@@ -380,16 +489,11 @@ begin
     if FnIdx <= 0 then Continue;
     // Argument-Bereich = alles nach dem '(' der Format-Funktion
     var ArgsLow := Copy(Low, FnIdx + Length(Fn), MaxInt);
-    // Mindestens ein SQL-Keyword als Literal im Format-String
-    for Kw in SQL_KW do
-    begin
-      KwIdx := Pos(Kw, ArgsLow);
-      if KwIdx <= 0 then Continue;
-      // Plus mindestens ein '%' im Argument-Bereich. Wenn keiner ->
-      // statischer SQL-String ohne Substitution -> kein Risiko.
-      PctIdx := Pos('%', ArgsLow);
-      if PctIdx > 0 then Exit(True);
-    end;
+    // Mindestens ein SQL-Keyword als Literal PLUS ein '%' (Placeholder; ohne ->
+    // statischer SQL-String ohne Substitution -> kein Risiko). 'call'-Sonder-
+    // Gate (Batch call "pfad" != SQL) s. HasSqlKwHit.
+    if HasSqlKwHit(ArgsLow) and (Pos('%', ArgsLow) > 0) then
+      Exit(True);
   end;
 end;
 
