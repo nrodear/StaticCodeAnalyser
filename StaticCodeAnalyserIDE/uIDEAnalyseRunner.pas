@@ -327,9 +327,23 @@ begin
           // via .dproj/.dpk/.dpr-Walk-Up (oder .git als Fallback). Visibility-
           // Detektoren (CanBeUnit/Strict/Protected/Unused) laufen single-
           // file; der Projekt-Scope dient anderen Cross-Unit-Konsumenten.
-          findings := TStaticAnalyzer2.AnalyzeLeaks(AFilePath,
-            TStaticFiles.FindProjectRoot(AFilePath),
-            FRepoSettings.UsesCheck);
+          // Phase 4: Single-File ueber die Facade. Config via SetupForRun
+          // (-> SkipConfig); ProjectRoot fuer den projektweiten Symbol-Index.
+          var Req := TScanRequest.Init;
+          Req.SkipConfig            := True;
+          Req.Scope                 := ssSingleFile;
+          Req.Path                  := AFilePath;
+          Req.SingleFileProjectRoot := TStaticFiles.FindProjectRoot(AFilePath);
+          Req.UsesCheck             := FRepoSettings.UsesCheck;
+          var Ses := TAnalysisSession.Create;
+          var Res: TScanResult := nil;
+          try
+            Res := Ses.Run(Req);
+            findings := Res.ReleaseFindings;
+          finally
+            Res.Free;
+            Ses.Free;
+          end;
         except
           on E: Exception do
           begin
@@ -396,7 +410,15 @@ begin
       findings := nil;
       try
         try
-          findings := TStaticAnalyzer2.AnalyzeLeaksFromList(files,
+          // Phase 4: geaenderte Dateien ueber die Facade (Config via
+          // SetupForRun -> SkipConfig). Liste + Progress-Proc + UsesCheck
+          // wandern in den Request.
+          var Req := TScanRequest.Init;
+          Req.SkipConfig := True;
+          Req.Scope      := ssFileList;
+          Req.Files      := files.ToStringArray;
+          Req.UsesCheck  := FRepoSettings.UsesCheck;
+          Req.Progress   :=
             procedure(Current, Total: Integer)
             var
               tick: Cardinal;
@@ -421,8 +443,16 @@ begin
               except
                 on EAbort do raise;
               end;
-            end,
-            FRepoSettings.UsesCheck);
+            end;
+          var Ses := TAnalysisSession.Create;
+          var Res: TScanResult := nil;
+          try
+            Res := Ses.Run(Req);
+            findings := Res.ReleaseFindings;
+          finally
+            Res.Free;
+            Ses.Free;
+          end;
         except
           on EAbort do
             wasCanc := True;
