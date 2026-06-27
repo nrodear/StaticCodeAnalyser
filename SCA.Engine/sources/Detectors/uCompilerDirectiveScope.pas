@@ -35,13 +35,13 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TCompilerDirectiveScopeDetector = class
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
@@ -137,7 +137,7 @@ end;
 
 class procedure TCompilerDirectiveScopeDetector.AnalyzeUnit(
   UnitNode: TAstNode; const FileName: string;
-  Results: TObjectList<TLeakFinding>);
+  Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Lines    : TStringList;
   Cached   : Boolean;
@@ -154,7 +154,7 @@ var
   Tok      : TPair<string, Integer>;
   F        : TLeakFinding;
 begin
-  Lines := AcquireLines(FileName, Cached);
+  Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   LastOff := TDictionary<string, Integer>.Create;
   PushStack := TStack<TDictionary<string, Integer>>.Create;

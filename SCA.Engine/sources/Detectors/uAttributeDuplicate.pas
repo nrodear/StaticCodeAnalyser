@@ -26,13 +26,13 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TAttributeDuplicateDetector = class
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
@@ -123,7 +123,7 @@ end;
 
 class procedure TAttributeDuplicateDetector.AnalyzeUnit(
   UnitNode: TAstNode; const FileName: string;
-  Results: TObjectList<TLeakFinding>);
+  Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Lines  : TStringList;
   Cached : Boolean;
@@ -137,7 +137,7 @@ var
   FirstLine : Integer;
   F      : TLeakFinding;
 begin
-  Lines := AcquireLines(FileName, Cached);
+  Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   Hits := TList<TAttrHit>.Create;
   try

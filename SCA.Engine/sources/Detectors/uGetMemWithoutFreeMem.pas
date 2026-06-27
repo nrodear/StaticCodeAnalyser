@@ -44,13 +44,13 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TGetMemWithoutFreeMemDetector = class
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
@@ -142,7 +142,7 @@ begin
 end;
 
 class procedure TGetMemWithoutFreeMemDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 const
   LOOK_AHEAD = 400;  // groesseres Fenster als UnpairedLock - Buffer-Code
                      // hat oft mehr Zeilen zwischen Acquire und Release.
@@ -162,7 +162,7 @@ var
   TryPos   : Integer;
   FreePos  : Integer;
 begin
-  Lines := AcquireLines(FileName, Cached);
+  Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
     Code := StripStringsAndComments(Lines, LineFor);

@@ -29,13 +29,13 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TLowercaseKeywordDetector = class
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
@@ -192,7 +192,7 @@ begin
 end;
 
 class procedure TLowercaseKeywordDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Lines          : TStringList;
   Hits           : TList<TKwHit>;
@@ -201,7 +201,7 @@ var
   Cached         : Boolean;
   Hit            : TKwHit;
 begin
-  Lines := AcquireLines(FileName, Cached);
+  Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   Hits := TList<TKwHit>.Create;
   try

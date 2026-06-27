@@ -23,15 +23,15 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TUnusedLocalDetector = class
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
     class procedure AnalyzeMethod(MethodNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
@@ -125,7 +125,7 @@ begin
 end;
 
 class procedure TUnusedLocalDetector.AnalyzeMethod(MethodNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   LocalVars : TList<TAstNode>;
   LV : TAstNode;
@@ -139,7 +139,7 @@ var
 begin
   LocalVars := MethodNode.FindAll(nkLocalVar);
   BodySB := TStringBuilder.Create;
-  Lines  := AcquireLines(FileName, Cached);
+  Lines  := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   try
     if LocalVars.Count = 0 then Exit;
 
@@ -200,7 +200,7 @@ begin
 end;
 
 class procedure TUnusedLocalDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Methods : TList<TAstNode>;
   M : TAstNode;
@@ -208,7 +208,7 @@ begin
   Methods := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
-      AnalyzeMethod(M, FileName, Results);
+      AnalyzeMethod(M, FileName, Results, AContext);
   finally
     Methods.Free;
   end;

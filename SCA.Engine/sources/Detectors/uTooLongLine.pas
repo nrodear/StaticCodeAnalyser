@@ -20,13 +20,13 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TTooLongLineDetector = class
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
@@ -41,7 +41,7 @@ const
   EMIT_SEVERITY = lsHint;
 
 class procedure TTooLongLineDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Lines    : TStringList;
   i, Len   : Integer;
@@ -52,7 +52,7 @@ begin
   // (gespiegelt in uSCAConsts.DetectorMaxLineLength von RepoSettings).
   MaxLen := DetectorMaxLineLength;
   if MaxLen <= 0 then MaxLen := 120;
-  Lines := AcquireLines(FileName, Cached);
+  Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
     for i := 0 to Lines.Count - 1 do

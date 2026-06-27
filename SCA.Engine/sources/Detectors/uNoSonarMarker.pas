@@ -25,13 +25,13 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TNoSonarMarkerDetector = class
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
@@ -47,7 +47,7 @@ const
   MARKER = 'NOSONAR';
 
 class procedure TNoSonarMarkerDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 // Marker zaehlen nur in `//`-Zeilenkommentaren, nicht in {..}/(*..*) oder
 // String-Literalen (SonarDelphi-Konvention: NOSONAR ist ein EOL-Marker).
 // Die String-/Kommentar-Zustandsmaschine lebt zentral in
@@ -61,7 +61,7 @@ var
   F      : TLeakFinding;
   Cached : Boolean;
 begin
-  Lines := AcquireLines(FileName, Cached);
+  Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
     State := Default(TCommentScanState);

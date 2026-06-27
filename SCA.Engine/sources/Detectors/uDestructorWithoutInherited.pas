@@ -18,13 +18,13 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TDestructorWithoutInheritedDetector = class
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
@@ -54,7 +54,7 @@ begin
 end;
 
 function IsClassDestructorByLine(const FileName: string;
-  LineNo: Integer): Boolean;
+  LineNo: Integer; AContext: TAnalyzeContext): Boolean;
 // Fallback wenn der Parser die ';class'-Markierung verfehlt
 // (z.B. MVCFramework.Commons.pas TMVCSqids.Destroy). Liest die Source-Zeile
 // und prueft auf 'class destructor' am linken Rand (Whitespace egal).
@@ -65,7 +65,7 @@ var
   Trimmed : string;
 begin
   Result := False;
-  Lines := AcquireLines(FileName, Cached);
+  Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
     if (LineNo < 1) or (LineNo > Lines.Count) then Exit;
@@ -128,7 +128,7 @@ begin
 end;
 
 class procedure TDestructorWithoutInheritedDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 // Real-World-Sweep 2026-06-13: cnwizards/Bin/PSDeclEx/CnWizClasses.pas
 // 6 SCA097 FPs - alle leere Destructor-Bodies in PScript-Bridge-Stubs.
 // Gleiche Heuristik wie uRoutineResultAssigned: wenn >=5 effektiv-
@@ -166,7 +166,7 @@ begin
       // Source-Line-Fallback: Parser verfehlt manchmal die ';class'-
       // Markierung bei impl-level class-destructors (MVCFramework.Commons
       // TMVCSqids.Destroy). Direkt am Source pruefen.
-      if IsClassDestructorByLine(FileName, M.Line) then Continue;
+      if IsClassDestructorByLine(FileName, M.Line, AContext) then Continue;
       if HasInheritedCall(M) then Continue;
       F            := TLeakFinding.Create;
       F.FileName   := FileName;

@@ -26,13 +26,13 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TCaseStatementSizeDetector = class
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
@@ -211,7 +211,7 @@ begin
 end;
 
 class procedure TCaseStatementSizeDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Lines       : TStringList;
   Cached      : Boolean;
@@ -229,7 +229,7 @@ begin
   // Konfigurierbar via INI [Detectors] MaxCaseBranches=N, Default 10.
   MaxBr := DetectorMaxCaseBranches;
   if MaxBr <= 0 then MaxBr := DEFAULT_MAX_BRANCH_FALLBACK;
-  Lines := AcquireLines(FileName, Cached);
+  Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
     Code := StripFileComments(Lines, LineFor);

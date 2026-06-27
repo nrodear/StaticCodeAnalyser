@@ -17,7 +17,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12, uDetectorUtils;
+  uAstNode, uSCAConsts, uMethodd12, uDetectorUtils, uAnalyzeContext;
 
 type
   TTodoCommentDetector = class
@@ -25,7 +25,7 @@ type
     // UnitNode wird nicht verwendet, der Detektor liest die Datei selbst.
     // Die Signatur bleibt aus Konsistenz mit den anderen Detektoren erhalten.
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
@@ -185,7 +185,7 @@ begin
 end;
 
 class procedure TTodoCommentDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Lines       : TStringList;
   Line        : string;
@@ -197,7 +197,7 @@ var
   Snippet     : string;
   Cached      : Boolean;
 begin
-  Lines := AcquireLines(FileName, Cached);
+  Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
     InBlockComm := False;

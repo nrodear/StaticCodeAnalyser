@@ -22,13 +22,13 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TAttributeMisalignmentDetector = class
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
@@ -42,7 +42,7 @@ const
 
 class procedure TAttributeMisalignmentDetector.AnalyzeUnit(
   UnitNode: TAstNode; const FileName: string;
-  Results: TObjectList<TLeakFinding>);
+  Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Lines  : TStringList;
   Cached : Boolean;
@@ -55,7 +55,7 @@ var
   AttrName : string;
   M      : TMatch;
 begin
-  Lines := AcquireLines(FileName, Cached);
+  Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
     State := Default(TCommentScanState);

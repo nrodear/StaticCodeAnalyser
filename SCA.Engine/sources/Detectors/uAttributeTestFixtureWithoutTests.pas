@@ -34,13 +34,13 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TAttributeTestFixtureWithoutTestsDetector = class
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
@@ -61,7 +61,7 @@ const
 
 class procedure TAttributeTestFixtureWithoutTestsDetector.AnalyzeUnit(
   UnitNode: TAstNode; const FileName: string;
-  Results: TObjectList<TLeakFinding>);
+  Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Lines       : TStringList;
   Cached      : Boolean;
@@ -81,7 +81,7 @@ const
   BASE_NOT_INHERITING : array[0..3] of string = (
     'tobject', 'tinterfacedobject', 'tpersistent', 'exception');
 begin
-  Lines := AcquireLines(FileName, Cached);
+  Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
     State       := Default(TCommentScanState);

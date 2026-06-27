@@ -21,7 +21,7 @@ interface
 uses
   System.Classes, System.SysUtils, System.Generics.Collections,
   System.RegularExpressions,
-  uSCAConsts, uMethodd12;
+  uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TPatternType = (ptSubstring, ptRegex, ptWord);
@@ -75,7 +75,7 @@ type
     // Action (Custom-Rules sollen nicht zusaetzlich crashen wenn der
     // Hauptanalyzer schon gefailt ist).
     class procedure AnalyzeFile(const FileName: string;
-      Results: TObjectList<TLeakFinding>); overload; static;
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil); overload; static;
 
     class function RuleCount: Integer; static;
     class function HasRules: Boolean; static;
@@ -424,7 +424,7 @@ begin
 end;
 
 class procedure TCustomRuleDetector.AnalyzeFile(const FileName: string;
-  Results: TObjectList<TLeakFinding>);
+  Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Source: string;
   Lines: TStringList;
@@ -434,7 +434,7 @@ begin
     Exit;
   // Cache-Pfad: wenn der Main-Loop schon ein gFileTextCache angelegt hat,
   // nutzen wir das (spart Disk-IO, perf_analyse.md Hot-Spot 🅑).
-  Lines := AcquireLines(FileName, Cached);
+  Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then
     Exit;
   try

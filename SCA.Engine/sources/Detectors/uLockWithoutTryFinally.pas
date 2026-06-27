@@ -37,7 +37,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TLockWithoutTryFinallyDetector = class
@@ -46,7 +46,7 @@ type
     // Signatur passt zum AST-Detector-Registry-Pattern in
     // TStaticAnalyzer2.RunAllDetectors.
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
@@ -469,7 +469,7 @@ end;
 
 class procedure TLockWithoutTryFinallyDetector.AnalyzeUnit(
   UnitNode: TAstNode; const FileName: string;
-  Results: TObjectList<TLeakFinding>);
+  Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Lines     : TStringList;
   Cached    : Boolean;
@@ -484,7 +484,7 @@ var
   LockIdent : string;
 begin
   EnsureRegexCacheBuilt;
-  Lines := AcquireLines(FileName, Cached);
+  Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
     // Strings + Kommentare durch Blanks ersetzen, damit Pattern in

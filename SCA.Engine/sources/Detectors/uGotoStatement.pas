@@ -28,7 +28,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TGotoStatementDetector = class
@@ -36,7 +36,7 @@ type
     // UnitNode wird nicht verwendet - File-Scan. Signatur bleibt aus
     // Konsistenz mit den anderen Detektoren (RunAllDetectors-Closure).
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
@@ -177,14 +177,14 @@ begin
 end;
 
 class procedure TGotoStatementDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Lines   : TStringList;
   i, Col  : Integer;
   InBlk, InParen : Boolean;
   Cached  : Boolean;
 begin
-  Lines := AcquireLines(FileName, Cached);
+  Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
     InBlk   := False;

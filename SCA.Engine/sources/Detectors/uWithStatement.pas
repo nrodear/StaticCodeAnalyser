@@ -30,7 +30,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TWithStatementDetector = class
@@ -38,7 +38,7 @@ type
     // UnitNode wird nicht verwendet - File-Scan. Signatur bleibt aus
     // Konsistenz mit den anderen Detektoren (RunAllDetectors-Closure).
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
@@ -185,7 +185,7 @@ begin
 end;
 
 class procedure TWithStatementDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Lines           : TStringList;
   Line, Snippet   : string;
@@ -195,7 +195,7 @@ var
   F               : TLeakFinding;
   Cached          : Boolean;
 begin
-  Lines := AcquireLines(FileName, Cached);
+  Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
     InBlockComm     := False;

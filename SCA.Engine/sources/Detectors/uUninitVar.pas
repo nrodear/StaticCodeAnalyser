@@ -31,15 +31,15 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TUninitVarDetector = class
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
     class procedure AnalyzeMethod(MethodNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
@@ -763,7 +763,7 @@ end;
 // ============================================================
 
 class procedure TUninitVarDetector.AnalyzeMethod(MethodNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   LocalVars        : TList<TAstNode>;
   Assigns, Calls, Fors : TList<TAstNode>;
@@ -1451,7 +1451,7 @@ begin
     VarMap       := TDictionary<string, Integer>.Create;
     BodySB       := TStringBuilder.Create;
     NestedRanges := TList<TLineRange>.Create;
-    Lines        := AcquireLines(FileName, Cached);
+    Lines        := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
     try
       // Phase 2.6: source-line-basierte Nested-Method-Detection.
       if Lines <> nil then
@@ -1492,7 +1492,7 @@ begin
 end;
 
 class procedure TUninitVarDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Methods : TList<TAstNode>;
   M : TAstNode;
@@ -1501,7 +1501,7 @@ begin
   Methods := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
-      AnalyzeMethod(M, FileName, Results);
+      AnalyzeMethod(M, FileName, Results, AContext);
   finally
     Methods.Free;
   end;

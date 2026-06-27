@@ -60,13 +60,13 @@ interface
 uses
   System.SysUtils, System.Classes,
   System.Generics.Collections, System.Generics.Defaults,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TUseAfterFreeDetector = class
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
@@ -212,7 +212,7 @@ begin
 end;
 
 class procedure TUseAfterFreeDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Lines    : TStringList;
   Cached   : Boolean;
@@ -429,7 +429,7 @@ var
 
 begin
   EnsureRegexCacheBuilt;
-  Lines := AcquireLines(FileName, Cached);
+  Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   // CFG-Filter-Infrastruktur (A.4.6): Methods aus dem AST sammeln,
   // CFGs lazy bauen pro Hit. CFGMap besitzt die TCFGs (Owns=True).

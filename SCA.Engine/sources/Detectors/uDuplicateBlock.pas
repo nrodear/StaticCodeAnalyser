@@ -23,14 +23,14 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TDuplicateBlockDetector = class
   public
     // UnitNode wird nicht verwendet, der Detektor liest die Datei selbst.
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   private
     class function NormalizeLine(const S: string): string; static;
     class function IsTrivial(const NormalizedLine: string): Boolean; static;
@@ -143,7 +143,7 @@ begin
 end;
 
 class procedure TDuplicateBlockDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Lines       : TStringList;
   Normalized  : TArray<string>;
@@ -161,7 +161,7 @@ var
   Norm        : string;
   Cached      : Boolean;
 begin
-  Lines := AcquireLines(FileName, Cached);
+  Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   Hashes   := TObjectDictionary<string, TList<Integer>>.Create([doOwnsValues]);
   Reported := TDictionary<Integer, Boolean>.Create;
