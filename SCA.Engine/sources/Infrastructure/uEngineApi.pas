@@ -90,6 +90,12 @@ type
     ConfigRoot     : string;            // INI-Modus: Wurzel fuer INI-/PathOverrides-/Custom-Rules-
                                         // Aufloesung (ApplyDetectorThresholds). '' -> Path verwenden.
                                         // Noetig wenn Scan-Ziel != Config-Root (z.B. Single-File).
+    SkipConfig     : Boolean;           // true: Run wendet KEINE Config an - der Consumer hat den
+                                        // globalen Detektor-/Schwellen-State bereits selbst gesetzt
+                                        // (z.B. IDE via TIDEAnalysisPrep.SetupForRun). Nur Scope->Scan->Baseline.
+    SingleFileProjectRoot: string;      // nur ssSingleFile: ProjectRoot fuer den projektweiten
+                                        // Symbol-Referenz-Index (AnalyzeLeaks(File, ProjectRoot, UsesCheck)).
+                                        // '' -> Single-File ohne Cross-Unit-Index (1-arg-Ueberladung).
     Progress       : TProc<Integer, Integer>;  // (current, total); EAbort darin bricht ab
     // Liefert ein Request mit sinnvollen Defaults (ssRecursive, alle Detektoren,
     // loseste Schwellen, Engine-Default-Limits).
@@ -188,6 +194,8 @@ begin
   Result.ApplyRepoIni      := False;
   Result.MinSeverityName   := '';
   Result.ConfigRoot        := '';
+  Result.SkipConfig        := False;
+  Result.SingleFileProjectRoot := '';
   Result.Progress        := nil;
 end;
 
@@ -319,12 +327,19 @@ var
   Info     : string;
   BaseDir  : string;
 begin
-  ApplyConfig(Req);
+  if not Req.SkipConfig then
+    ApplyConfig(Req);
 
   case Req.Scope of
     ssSingleFile:
       begin
-        Findings := TStaticAnalyzer2.AnalyzeLeaks(Req.Path, Req.UsesCheck);
+        // Mit ProjectRoot -> projektweiter Symbol-Index (Cross-Unit-Detektoren);
+        // ohne -> reiner Single-File-Scan.
+        if Req.SingleFileProjectRoot <> '' then
+          Findings := TStaticAnalyzer2.AnalyzeLeaks(
+                        Req.Path, Req.SingleFileProjectRoot, Req.UsesCheck)
+        else
+          Findings := TStaticAnalyzer2.AnalyzeLeaks(Req.Path, Req.UsesCheck);
         BaseDir  := ExtractFilePath(Req.Path);
       end;
 

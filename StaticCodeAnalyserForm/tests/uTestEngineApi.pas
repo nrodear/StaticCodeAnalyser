@@ -40,6 +40,7 @@ type
     [Test] procedure WriteSarif_ProducesNonEmptyFile;
     [Test] procedure ReleaseFindings_TransfersOwnership;
     [Test] procedure Baseline_FiltersKnownFindings;
+    [Test] procedure SkipConfig_RespectsPresetConfig;
   end;
 
 implementation
@@ -298,6 +299,35 @@ begin
     try
       Assert.AreEqual<Integer>(0, Res.FindingCount,
         'alle Findings sind in der Baseline -> 0 neue');
+    finally Res.Free; end;
+  finally Ses.Free; end;
+end;
+
+procedure TTestEngineApi.SkipConfig_RespectsPresetConfig;
+// Phase-4-Vorbereitung: Req.SkipConfig=true -> Run wendet KEINE Config an, der
+// vom Consumer gesetzte globale Detektor-Filter bleibt stehen (IDE konfiguriert
+// selbst via SetupForRun). Beweis: nur fkTodoComment aktiviert -> der SQL-Bug
+// (BUG_SRC, kein TODO) wird NICHT gefunden. Ohne SkipConfig wuerde Run auf []
+// (alle Detektoren) zuruecksetzen und den SQL-Bug finden.
+var
+  Req : TScanRequest;
+  Ses : TAnalysisSession;
+  Res : TScanResult;
+  Fn  : string;
+begin
+  Fn := TPath.Combine(FDir, 'SampleBug.pas');
+  TFile.WriteAllText(Fn, BUG_SRC, TEncoding.UTF8);
+  uSCAConsts.DetectorEnabledKinds := [fkTodoComment];   // restriktiv, kein SQL
+  Req := TScanRequest.Init;
+  Req.Scope      := ssSingleFile;
+  Req.Path       := Fn;
+  Req.SkipConfig := True;                                // Config NICHT anfassen
+  Ses := TAnalysisSession.Create;
+  try
+    Res := Ses.Run(Req);
+    try
+      Assert.AreEqual<Integer>(0, Res.FindingCount,
+        'SkipConfig laesst [fkTodoComment]-Filter stehen -> SQL-Bug nicht gefunden');
     finally Res.Free; end;
   finally Ses.Free; end;
 end;
