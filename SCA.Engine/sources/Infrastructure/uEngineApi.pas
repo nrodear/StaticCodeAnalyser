@@ -46,7 +46,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uMethodd12, uSCAConsts;
+  uMethodd12, uSCAConsts, uIgnoreList;
 
 const
   // Tool-Identitaet fuer SARIF tool.driver.name. Die Engine-Version kommt
@@ -96,6 +96,8 @@ type
     SingleFileProjectRoot: string;      // nur ssSingleFile: ProjectRoot fuer den projektweiten
                                         // Symbol-Referenz-Index (AnalyzeLeaks(File, ProjectRoot, UsesCheck)).
                                         // '' -> Single-File ohne Cross-Unit-Index (1-arg-Ueberladung).
+    IgnoreList     : TIgnoreList;       // nur ssRecursive: Ignore-/Test-Filter waehrend des rekursiven
+                                        // Scans (IDE reicht ihre FIgnoreList durch). nil -> kein Filter.
     Progress       : TProc<Integer, Integer>;  // (current, total); EAbort darin bricht ab
     // Liefert ein Request mit sinnvollen Defaults (ssRecursive, alle Detektoren,
     // loseste Schwellen, Engine-Default-Limits).
@@ -196,6 +198,7 @@ begin
   Result.ConfigRoot        := '';
   Result.SkipConfig        := False;
   Result.SingleFileProjectRoot := '';
+  Result.IgnoreList        := nil;
   Result.Progress        := nil;
 end;
 
@@ -411,7 +414,7 @@ begin
   else
     // ssRecursive (Default)
     Findings := TStaticAnalyzer2.AnalyzeLeaksRecursive(
-                  Req.Path, Req.Progress, Req.UsesCheck, nil);
+                  Req.Path, Req.Progress, Req.UsesCheck, Req.IgnoreList);
     BaseDir  := Req.Path;
   end;
 

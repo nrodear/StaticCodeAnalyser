@@ -91,7 +91,7 @@ uses
   Winapi.Windows,                    // GetTickCount
   Vcl.Forms,                         // Application.ProcessMessages, Screen
   Vcl.Controls,                      // crHourglass, crDefault
-  uStaticAnalyzer2, uVcsChanges, uStaticFiles,
+  uStaticAnalyzer2, uVcsChanges, uStaticFiles, uEngineApi,
   uLocalization,                     // _() Macro
   uIDELifecycle;                     // GLiveAnalyserFrame
 
@@ -142,7 +142,16 @@ begin
       findings := nil;
       try
         try
-          findings := TStaticAnalyzer2.AnalyzeLeaksRecursive(APath,
+          // Phase 4: Scan ueber die Facade (Config hat der Aufrufer via
+          // SetupForRun gesetzt -> SkipConfig). Progress-Proc + IgnoreList +
+          // UsesCheck wandern in den Request; EAbort propagiert wie zuvor.
+          var Req := TScanRequest.Init;
+          Req.SkipConfig := True;
+          Req.Scope      := ssRecursive;
+          Req.Path       := APath;
+          Req.UsesCheck  := FRepoSettings.UsesCheck;
+          Req.IgnoreList := FIgnoreList;
+          Req.Progress   :=
             procedure(Current, Total: Integer)
             // Total = -1 -> Verzeichnis-Scan-Phase
             // Total >= 0 -> pro-Datei-Analyse-Phase
@@ -221,9 +230,16 @@ begin
                 on EAbort do raise;
                 // andere UI-Update-Fehler schlucken, Analyse weiterlaufen lassen
               end;
-            end,
-            FRepoSettings.UsesCheck,
-            FIgnoreList);
+            end;
+          var Ses := TAnalysisSession.Create;
+          var Res: TScanResult := nil;
+          try
+            Res := Ses.Run(Req);
+            findings := Res.ReleaseFindings;
+          finally
+            Res.Free;
+            Ses.Free;
+          end;
         except
           on EAbort do
           begin
