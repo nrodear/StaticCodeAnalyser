@@ -126,7 +126,7 @@ implementation
 uses
   System.IOUtils, System.Math,
   System.Generics.Defaults,           // TComparer fuer Detector-Timings-Sort
-  uSCAConsts, uStaticAnalyzer2, uVcsChanges, uRepoSettings,
+  uSCAConsts, uStaticAnalyzer2, uVcsChanges, uRepoSettings, uEngineApi,
   uExportSARIF, uExportHtml, uCustomRuleDetector,
   uExportSonarGeneric, uSonarConfig,
   uDetectorUtils,                     // TDetectorUtils.IsTestFixturePath
@@ -728,22 +728,11 @@ begin
   if Args.NoIfdefAware then
     EffectiveIfdefAware := False;
 
-  if EffectiveIfdefAware then
-  begin
-    gLexerIfdefSkipEnabled := True;
-    LexerIfdefClear;
-    if EffectiveIfdefDefines <> '' then
-    begin
-      var Parts := EffectiveIfdefDefines.Split([',', ';']);
-      for var Def in Parts do
-        if Trim(Def) <> '' then LexerIfdefAddDefine(Trim(Def));
-    end;
-    if not Args.Quiet then
-      WriteLn(Format('IFDEF-Awareness aktiv: %d Define(s).',
-        [Length(EffectiveIfdefDefines.Split([',', ';']))]));
-  end
-  else
-    gLexerIfdefSkipEnabled := False;
+  // Die effektiven IFDEF-Defines wandern weiter unten als Request-Feld in
+  // uEngineApi.Run (das setzt den Lexer-State) - hier nur noch die Meldung.
+  if EffectiveIfdefAware and (not Args.Quiet) then
+    WriteLn(Format('IFDEF-Awareness aktiv: %d Define(s).',
+      [Length(EffectiveIfdefDefines.Split([',', ';']))]));
 
   // Pfad-Validierung
   if (Args.Path <> '') and not TDirectory.Exists(Args.Path) then
@@ -799,7 +788,9 @@ begin
     try Settings.Load; except end;
     if Args.Profile     <> '' then Settings.Profile     := Args.Profile;
     if Args.MinSeverity <> '' then Settings.MinSeverity := Args.MinSeverity;
-    Settings.ApplyDetectorThresholds(Args.Path);
+    // ApplyDetectorThresholds (volle Config-Anwendung) macht jetzt
+    // uEngineApi.Run via Req.ApplyRepoIni mit denselben Overrides; Settings
+    // hier bleibt nur fuer Profile-Read (Fixture-Default + Message unten).
     if not Args.Quiet and ((Args.Profile <> '') or (Args.MinSeverity <> '')) then
       WriteLn(Format('Rule-set: Profile=%s, MinSeverity=%s',
         [Settings.Profile, Settings.MinSeverity]));
@@ -831,8 +822,22 @@ begin
         SameText(Settings.Profile, 'selftest-quiet');
 
     try
-      // Diff-Mode A<->B: nur die Dateien die zwischen den Commits geaendert
-      // wurden. PR-Review-Use-Case (vs Branch: Working-Tree + commits).
+      // Request fuer die Engine-Facade bauen. Config kommt aus der repo-INI
+      // (Req.ApplyRepoIni) mit denselben Arg-Overrides wie zuvor; ConfigRoot =
+      // Args.Path, weil das Scan-Ziel davon abweichen kann (Single-File).
+      // IFDEF-Defines + Profil/Severity wandern als Request-Felder statt als
+      // globaler State. Scope-Wahl + VCS-Enumeration + Early-Exit bleiben hier
+      // CLI-Policy; die Datei-Liste geht via ssFileList an Run.
+      var Req := TScanRequest.Init;
+      Req.ApplyRepoIni    := True;
+      Req.ConfigRoot      := Args.Path;
+      Req.Profile         := Args.Profile;
+      Req.MinSeverityName := Args.MinSeverity;
+      if EffectiveIfdefAware and (EffectiveIfdefDefines <> '') then
+        Req.IfdefDefines := EffectiveIfdefDefines.Split([',', ';']);
+      // Custom-Rules hat der CLI oben bereits geladen -> Req.CustomRulesPath leer.
+
+      // Diff-Mode A<->B: nur zwischen Commits geaenderte Dateien (PR-Review).
       if Args.Diff <> '' then
       begin
         Files := TVcsChanges.GetChangedPasFilesDiff(Args.Path, Args.Diff, RepoInfo, Settings);
@@ -844,7 +849,9 @@ begin
         end;
         if not Args.Quiet then
           WriteLn(RepoInfo);
-        Findings := TStaticAnalyzer2.AnalyzeLeaksFromList(Files);
+        Req.Scope := ssFileList;
+        Req.Files := Files.ToStringArray;
+        Req.Path  := Args.Path;
       end
       // Branch-Mode: VCS-geaenderte Dateien ermitteln, dann analysieren
       else if Args.Branch then
@@ -858,21 +865,39 @@ begin
         end;
         if not Args.Quiet then
           WriteLn(Format('Analyzing %d changed file(s). %s', [Files.Count, RepoInfo]));
-        Findings := TStaticAnalyzer2.AnalyzeLeaksFromList(Files);
+        Req.Scope := ssFileList;
+        Req.Files := Files.ToStringArray;
+        Req.Path  := Args.Path;
       end
       // Single-File-Mode
       else if Args.SingleFile <> '' then
       begin
         if not Args.Quiet then
           WriteLn('Analyzing: ', Args.SingleFile);
-        Findings := TStaticAnalyzer2.AnalyzeLeaks(Args.SingleFile);
+        Req.Scope := ssSingleFile;
+        Req.Path  := Args.SingleFile;
       end
       // Full-Recursive-Mode
       else
       begin
         if not Args.Quiet then
           WriteLn('Analyzing recursively: ', Args.Path);
-        Findings := TStaticAnalyzer2.AnalyzeLeaksRecursive(Args.Path);
+        Req.Scope := ssRecursive;
+        Req.Path  := Args.Path;
+      end;
+
+      // Zentraler Engine-Aufruf (ersetzt die bisher 3x duplizierte
+      // Orchestrierung - jetzt eine Facade fuer CLI/IDE/Form).
+      var Ses := TAnalysisSession.Create;
+      try
+        var Res := Ses.Run(Req);
+        try
+          Findings := Res.ReleaseFindings;   // Ownership -> CLI (finally gibt frei)
+        finally
+          Res.Free;
+        end;
+      finally
+        Ses.Free;
       end;
     except
       on E: Exception do

@@ -87,6 +87,9 @@ type
                                         // false (Default): nur die Felder dieses Requests, keine INI.
     MinSeverityName: string;            // nur im INI-Modus: Override fuer [Rules] MinSeverity
                                         // ('error'/'warning'/'hint'; '' = INI/Default belassen)
+    ConfigRoot     : string;            // INI-Modus: Wurzel fuer INI-/PathOverrides-/Custom-Rules-
+                                        // Aufloesung (ApplyDetectorThresholds). '' -> Path verwenden.
+                                        // Noetig wenn Scan-Ziel != Config-Root (z.B. Single-File).
     Progress       : TProc<Integer, Integer>;  // (current, total); EAbort darin bricht ab
     // Liefert ein Request mit sinnvollen Defaults (ssRecursive, alle Detektoren,
     // loseste Schwellen, Engine-Default-Limits).
@@ -184,6 +187,7 @@ begin
   Result.WriteBaselinePath := '';
   Result.ApplyRepoIni      := False;
   Result.MinSeverityName   := '';
+  Result.ConfigRoot        := '';
   Result.Progress        := nil;
 end;
 
@@ -263,7 +267,10 @@ begin
       try Settings.Load; except end;
       if Req.Profile         <> '' then Settings.Profile     := Req.Profile;
       if Req.MinSeverityName <> '' then Settings.MinSeverity := Req.MinSeverityName;
-      Settings.ApplyDetectorThresholds(Req.Path);
+      if Req.ConfigRoot <> '' then
+        Settings.ApplyDetectorThresholds(Req.ConfigRoot)
+      else
+        Settings.ApplyDetectorThresholds(Req.Path);
     finally
       Settings.Free;
     end;
@@ -290,7 +297,8 @@ begin
   begin
     gLexerIfdefSkipEnabled := True;
     for Def in Req.IfdefDefines do
-      LexerIfdefAddDefine(Def);
+      if Trim(Def) <> '' then
+        LexerIfdefAddDefine(Trim(Def));
   end
   else
     gLexerIfdefSkipEnabled := False;
