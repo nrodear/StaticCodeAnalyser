@@ -82,6 +82,11 @@ type
     CustomRulesPath: string;            // YAML mit Custom-Rules ('' = keine)
     BaselinePath   : string;            // Findings gegen diese Baseline-JSON filtern ('' = aus)
     WriteBaselinePath: string;          // aktuelle Findings als neue Baseline schreiben ('' = aus)
+    ApplyRepoIni   : Boolean;           // true: repo analyser.ini laden + VOLL anwenden (8 Schwellen,
+                                        // PathOverrides, Magic/Format-Listen, INI-Profil/Custom-Rules) wie der CLI.
+                                        // false (Default): nur die Felder dieses Requests, keine INI.
+    MinSeverityName: string;            // nur im INI-Modus: Override fuer [Rules] MinSeverity
+                                        // ('error'/'warning'/'hint'; '' = INI/Default belassen)
     Progress       : TProc<Integer, Integer>;  // (current, total); EAbort darin bricht ab
     // Liefert ein Request mit sinnvollen Defaults (ssRecursive, alle Detektoren,
     // loseste Schwellen, Engine-Default-Limits).
@@ -144,7 +149,7 @@ implementation
 uses
   System.IOUtils,
   uStaticAnalyzer2, uRuleCatalog, uLexer, uCustomRuleDetector, uVcsChanges,
-  uBaseline, uExportSARIF, uExportSonarGeneric, uExportHtml;
+  uRepoSettings, uBaseline, uExportSARIF, uExportSonarGeneric, uExportHtml;
 
 function WriteTempSource(const ASrc: string): string;
 // Schreibt ASrc in eine eindeutige Temp-.pas. GUID-Name (kollisionsfrei bei
@@ -177,6 +182,8 @@ begin
   Result.CustomRulesPath := '';
   Result.BaselinePath      := '';
   Result.WriteBaselinePath := '';
+  Result.ApplyRepoIni      := False;
+  Result.MinSeverityName   := '';
   Result.Progress        := nil;
 end;
 
@@ -240,24 +247,44 @@ function TScanResult.HintCount   : Integer; begin Result := CountSeverity(lsHint
 
 procedure TAnalysisSession.ApplyConfig(const Req: TScanRequest);
 var
-  Def: string;
+  Def      : string;
+  Settings : TRepoSettings;
 begin
-  // 1) Profil -> DetectorEnabledKinds. '' = [] = kein Filter = alle Detektoren
-  //    (entspricht dem nativen Engine-Default). Ein benanntes Profil wird
-  //    ueber den Regel-Katalog aufgeloest.
-  if Req.Profile <> '' then
-    uSCAConsts.DetectorEnabledKinds := TRuleCatalog.GetProfile(Req.Profile)
+  // 1) Detektor-/Schwellen-Config.
+  if Req.ApplyRepoIni then
+  begin
+    // INI-Modus (wie CLI): repo-/prozessweite analyser.ini laden, Request-
+    // Overrides drueberlegen, dann das VOLLE TRepoSettings anwenden -- die 8
+    // Detector-Schwellen, PathOverrides, Magic/Format-Listen, INI-Profil und
+    // INI-Custom-Rules. Leeres Profil -> 'default' (TRepoSettings-Semantik,
+    // NICHT die ''=alle-Semantik des Direkt-Modus).
+    Settings := TRepoSettings.Create;
+    try
+      try Settings.Load; except end;
+      if Req.Profile         <> '' then Settings.Profile     := Req.Profile;
+      if Req.MinSeverityName <> '' then Settings.MinSeverity := Req.MinSeverityName;
+      Settings.ApplyDetectorThresholds(Req.Path);
+    finally
+      Settings.Free;
+    end;
+  end
   else
-    uSCAConsts.DetectorEnabledKinds := [];
+  begin
+    // Direkt-Modus: nur die Felder dieses Requests, keine INI. '' = [] = kein
+    // Filter = alle Detektoren (nativer Engine-Default); benanntes Profil via
+    // Regel-Katalog.
+    if Req.Profile <> '' then
+      uSCAConsts.DetectorEnabledKinds := TRuleCatalog.GetProfile(Req.Profile)
+    else
+      uSCAConsts.DetectorEnabledKinds := [];
+    uSCAConsts.DetectorMinSeverity  := Req.MinSeverity;
+    uSCAConsts.FindingMinConfidence := Req.MinConfidence;
+    if Req.MaxFileBytes > 0 then
+      uSCAConsts.DetectorMaxFileBytes := Req.MaxFileBytes;
+    uSCAConsts.AutoDiscoverCustomClasses := Req.AutoDiscover;
+  end;
 
-  // 2) Schwellwerte
-  uSCAConsts.DetectorMinSeverity  := Req.MinSeverity;
-  uSCAConsts.FindingMinConfidence := Req.MinConfidence;
-  if Req.MaxFileBytes > 0 then
-    uSCAConsts.DetectorMaxFileBytes := Req.MaxFileBytes;
-  uSCAConsts.AutoDiscoverCustomClasses := Req.AutoDiscover;
-
-  // 3) {$IFDEF}-aware Parsing: Defines aus dem Request statt globaler Var-Fummelei
+  // 2) {$IFDEF}-aware Parsing (beide Modi - Request-Level statt globaler Fummelei)
   LexerIfdefClear;
   if Length(Req.IfdefDefines) > 0 then
   begin
@@ -268,10 +295,12 @@ begin
   else
     gLexerIfdefSkipEnabled := False;
 
-  // 4) Custom-Rules
+  // 3) Custom-Rules: expliziter Request-Pfad gewinnt. Im INI-Modus hat
+  //    ApplyDetectorThresholds evtl. schon INI-Custom-Rules geladen -- die
+  //    NICHT wegclearen (nur ueberschreiben, wenn der Request einen Pfad nennt).
   if Req.CustomRulesPath <> '' then
     TCustomRuleDetector.LoadFromYaml(Req.CustomRulesPath)
-  else
+  else if not Req.ApplyRepoIni then
     TCustomRuleDetector.ClearRules;
 end;
 
@@ -306,19 +335,32 @@ begin
 
     ssVcsChanged:
       begin
-        if Req.VcsRange <> '' then
-          Files := TVcsChanges.GetChangedPasFilesDiff(Req.Path, Req.VcsRange, Info)
-        else
-          Files := TVcsChanges.GetChangedPasFilesAuto(Req.Path, Info);
+        // Im INI-Modus die analyser.ini an die VCS-Ermittlung reichen
+        // (BaseBranch / Git-Exe / Ignore-Liste) - wie der CLI. Sonst nil
+        // (Overload-Default = Auto-Verhalten).
+        var VcsSettings: TRepoSettings := nil;
+        if Req.ApplyRepoIni then
+        begin
+          VcsSettings := TRepoSettings.Create;
+          try VcsSettings.Load; except end;
+        end;
         try
-          if Files = nil then
-            // kein Repo / Range nicht aufloesbar -> leeres Ergebnis statt Crash
-            Findings := TObjectList<TLeakFinding>.Create(True)
+          if Req.VcsRange <> '' then
+            Files := TVcsChanges.GetChangedPasFilesDiff(Req.Path, Req.VcsRange, Info, VcsSettings)
           else
-            Findings := TStaticAnalyzer2.AnalyzeLeaksFromList(
-                          Files, Req.Progress, Req.UsesCheck);
+            Files := TVcsChanges.GetChangedPasFilesAuto(Req.Path, Info, VcsSettings);
+          try
+            if Files = nil then
+              // kein Repo / Range nicht aufloesbar -> leeres Ergebnis statt Crash
+              Findings := TObjectList<TLeakFinding>.Create(True)
+            else
+              Findings := TStaticAnalyzer2.AnalyzeLeaksFromList(
+                            Files, Req.Progress, Req.UsesCheck);
+          finally
+            Files.Free;   // nil ist fuer .Free unkritisch
+          end;
         finally
-          Files.Free;   // nil ist fuer .Free unkritisch
+          VcsSettings.Free;
         end;
         BaseDir := Req.Path;
       end;
