@@ -409,6 +409,77 @@ begin
   end;
 end;
 
+function IsVarReadInNestedRoutineFromSource(Lines: TStringList;
+  DeclLine: Integer; const NameLow: string): Boolean;
+// Robuste, AST-UNABHAENGIGE Closure-Erkennung fuer die Headless-Method-FP-
+// Klasse: eine outer-scope-Variable wird im outer-body erzeugt/zugewiesen,
+// aber NUR in einer nested routine gelesen. Unter dem Headless-Pattern
+// (nested routine + zweite var-Section) liefert der Parser die
+// nkNestedRange-Marker / Method-End-Zeile nicht zuverlaessig -> weder der
+// AST-Write noch IsVarUsedInNestedRanges (das auf eben diesen AST-Ranges
+// arbeitet) greifen -> FP (uRuleCatalog Cands, uFormatMismatch Reported).
+//
+// Diese Funktion scannt rein auf Source-Ebene ab der ZUVERLAESSIGEN
+// Deklarationszeile bis zum Outer-Body-'begin' (Spalte 0) und meldet True,
+// wenn NameLow als Wort-Identifier im Rumpf einer nested routine
+// (eingerueckter procedure/function-Header) vorkommt. Policy identisch zur
+// bestehenden Closure-Regel (Closure-Vars werden nicht geflaggt) - nur
+// robuster in der Erkennung, daher kein neuer FN-Typ.
+var
+  i, Dummy, Depth : Integer;
+  Raw, LTrim      : string;
+  InNested, Started : Boolean;
+
+  function IsNestedHeader(const S: string): Boolean;
+  var
+    Lead, j : Integer;
+    Low     : string;
+  begin
+    Result := False;
+    Lead := 0;
+    for j := 1 to Length(S) do
+      if S[j] = ' ' then Inc(Lead)
+      else if S[j] = #9 then Inc(Lead, 2)
+      else Break;
+    if Lead < 2 then Exit;               // Top-Level-Header = nicht nested
+    Low := LowerCase(TrimLeft(S));
+    Result := Low.StartsWith('procedure ')   or Low.StartsWith('procedure(') or
+              Low.StartsWith('function ')    or Low.StartsWith('function(')  or
+              Low.StartsWith('constructor ') or Low.StartsWith('destructor ');
+  end;
+
+begin
+  Result := False;
+  if (Lines = nil) or (NameLow = '') then Exit;
+  if (DeclLine <= 0) or (DeclLine >= Lines.Count) then Exit;
+  InNested := False; Depth := 0; Started := False;
+  // Ab der Zeile NACH der Deklaration (0-based Index DeclLine = Quellzeile
+  // DeclLine+1) bis zum Outer-Body-'begin'.
+  for i := DeclLine to Lines.Count - 1 do
+  begin
+    Raw   := Lines[i];
+    LTrim := LowerCase(TrimLeft(Raw));
+    // Spalte-0-'begin' = Outer-Body-Start: Deklarations-/nested-Sektion vorbei.
+    // Nachfolgende Reads waeren echter Outer-Body, keine Closure -> stop.
+    if (Length(Raw) > 0) and (Raw[1] > ' ') and LTrim.StartsWith('begin') then Break;
+    if not InNested and IsNestedHeader(Raw) then
+    begin
+      InNested := True; Depth := 0; Started := False;
+    end;
+    if InNested then
+    begin
+      if CountWholeWordOccurrences(NameLow, LTrim, Dummy) > 0 then Exit(True);
+      if LTrim.StartsWith('begin') or (Pos(' begin ', ' ' + LTrim + ' ') > 0) then
+      begin Inc(Depth); Started := True; end;
+      if LTrim.StartsWith('end;') or LTrim.StartsWith('end ') or (LTrim = 'end') then
+      begin
+        Dec(Depth);
+        if Started and (Depth <= 0) then InNested := False;
+      end;
+    end;
+  end;
+end;
+
 procedure CollectNestedMethodRangesViaSource(Lines: TStringList;
   MethodStartLine, MethodEndLine: Integer;
   Ranges: TList<TLineRange>);
@@ -1438,14 +1509,23 @@ var
                                               FirstMatchPos);
       // RefCount<=1 -> nur Deklaration = UnusedLocal-Domain (SCA019).
       if P.RefCount <= 1 then Continue;
-      // FP-Fix: AST-Walks koennen den Outer-Body-Assign missen wenn
-      // die Methode nested-procs UND eine zweite var-Section hat
-      // (Parser-Headless-Pattern). Source-Scan-Fallback vor der
-      // Read-Detection, damit die Read-Scanner-Skip-Logik die Write-
-      // Zeile korrekt ueberspringt.
-      if P.FirstWriteLine = 0 then
-        P.FirstWriteLine := FindFirstSourceWriteLine(P.NameLow, P.DeclLine,
-                                                     MethodStartLine, MethodEndLine);
+      // FirstWrite = fruehester ECHTER Write. Den Source-Scan IMMER laufen
+      // lassen (nicht nur bei FirstWriteLine=0):
+      //   * AST-Walks koennen den Outer-Body-Assign missen (Parser-Headless-
+      //     Pattern) -> Fallback fuer FirstWriteLine=0.
+      //   * Ein Read-Family-Fill ('Stream.Read(Buf,..)') bzw. 'name :=' kann
+      //     FRUEHER liegen als ein vom AST registrierter Pessimistic-Arg-Write
+      //     (SetLength(buf, lenVar) / Dec(n)), der sonst den echten Buffer-Fill
+      //     maskiert und den Befund nur VERSCHIEBT statt ihn aufzuloesen
+      //     (Real-World 2026-06-28: Abbrevia/SynEdit relocated FPs).
+      // Frueher-Write-gewinnt ist monoton sicher: kann Befunde nur aufloesen,
+      // nie neue erzeugen - ein Read VOR dem fruehen Write bleibt
+      // < FirstWriteLine und wird weiterhin gemeldet.
+      var SrcWrite := FindFirstSourceWriteLine(P.NameLow, P.DeclLine,
+                                               MethodStartLine, MethodEndLine);
+      if (SrcWrite > 0)
+         and ((P.FirstWriteLine = 0) or (SrcWrite < P.FirstWriteLine)) then
+        P.FirstWriteLine := SrcWrite;
       P.FirstReadLine := FindFirstReadLine(P.NameLow, P.DeclLine,
                                            P.FirstWriteLine,
                                            MethodStartLine, MethodEndLine);
@@ -1487,6 +1567,12 @@ var
       // Reihenfolge); konservativ kein Finding. Killt 5-12 FPs aus dem
       // Self-Scan (Cands/Reported/SourceCache/grid/HasVal etc.).
       if IsVarUsedInNestedRanges(Lines, P.NameLow, NestedRanges) then
+        Continue;
+      // Robuster Source-Fallback: greift wenn der Parser unter dem Headless-
+      // Pattern (nested routine + zweite var-Section) KEINE nkNestedRange-Marker
+      // liefert, sodass NestedRanges leer/unvollstaendig ist und obiger Check
+      // ins Leere laeuft (uRuleCatalog Cands, uFormatMismatch Reported).
+      if IsVarReadInNestedRoutineFromSource(Lines, P.DeclLine, P.NameLow) then
         Continue;
 
       if P.FirstWriteLine = 0 then

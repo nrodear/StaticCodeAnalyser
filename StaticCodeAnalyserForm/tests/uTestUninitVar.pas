@@ -60,6 +60,10 @@ type
     [Test] procedure StreamReadFillsIndexedBuffer_NoFinding;
     [Test] procedure StreamReadFillsBareBuffer_NoFinding;
     [Test] procedure ReadBeforeStreamFill_StillFlagged;
+    [Test] procedure StreamFillThenLaterArgWrite_NoFinding;
+    // Real-World 2026-06-28: Nested-Closure unter Headless-Method-Pattern
+    [Test] procedure OuterVarReadOnlyInNestedRoutine_NoFinding;
+    [Test] procedure OuterVarUninitDespiteNestedRoutine_StillFlagged;
   end;
 
 implementation
@@ -993,6 +997,133 @@ begin
   RunOn(SRC, L);
   try Assert.IsTrue(CountKind(L, fkUninitVar) >= 1,
     'echter Read vor dem Stream.Read-Fill bleibt ein UninitVar-Bug');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.StreamFillThenLaterArgWrite_NoFinding;
+// FP-Fix (Real-World 2026-06-28, SynEdit/Abbrevia relocated FPs): Num wird per
+// Stream.Read gefuellt (echter Write), spaeter via Dec(Num) als Pessimistic-
+// Arg-Write an SPAETERER Zeile erneut "geschrieben". Frueher maskierte der
+// spaetere Dec-Write den echten Fill -> der Befund wurde nur verschoben
+// (read 'while Num>0' vor dem Dec-Write). Earliest-Write-gewinnt loest auf.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'uses System.Classes;'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(AStream: TStream);'#13#10 +
+    'var Num: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  AStream.Read(Num, SizeOf(Num));'#13#10 +
+    '  while Num > 0 do'#13#10 +
+    '    Dec(Num);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+    'Stream.Read-Fill darf nicht von spaeterem Dec(Num)-Arg-Write maskiert werden');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.OuterVarReadOnlyInNestedRoutine_NoFinding;
+// FP-Fix (Real-World 2026-06-28, uRuleCatalog.FindJsonFile / uFormatMismatch):
+// outer-var 'Cands' wird im OUTER-Body erzeugt, aber nur in der nested routine
+// 'AddRoot' gelesen. Die zweite var-Section ('C') triggert das Parser-Headless-
+// Pattern -> nkNestedRange-Marker fehlen, AST-Outer-Write geht verloren ->
+// frueher fcHigh-FP. Source-basierte Closure-Erkennung faengt das ab.
+const
+  // Verbatim-getreue Nachbildung von uRuleCatalog.FindJsonFile (Real-World-FP):
+  // class function mit qualifiziertem Namen, Kommentar vor der Decl, nested
+  // 'AddRoots' (liest Cands in einem for-begin, eigene var Dir/Parent/i),
+  // nested function 'ModuleDir', ZWEITE var-Section (C), try/finally, Cands-
+  // Create im outer-body. Exakt das Headless-Method-Pattern, das SCA166 frueher
+  // als 'Cands never assigned' (fcHigh) fehlmeldete.
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'type'#13#10 +
+    '  TRuleCatalog = class'#13#10 +
+    '    class function FindJsonFile: string; static;'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    'uses System.Generics.Collections, System.IOUtils;'#13#10 +
+    'class function TRuleCatalog.FindJsonFile: string;'#13#10 +
+    'var'#13#10 +
+    '  // Cands wird im outer-body erstellt; AddRoots (nested) liest es vorher.'#13#10 +
+    '  Cands : TList<string>;'#13#10 +
+    ''#13#10 +
+    '  procedure AddRoots(const BaseDir: string);'#13#10 +
+    '  var'#13#10 +
+    '    Dir, Parent : string;'#13#10 +
+    '    i           : Integer;'#13#10 +
+    '  begin'#13#10 +
+    '    if BaseDir = '''' then Exit;'#13#10 +
+    '    Dir := BaseDir;'#13#10 +
+    '    for i := 0 to 8 do'#13#10 +
+    '    begin'#13#10 +
+    '      Cands.Add(Dir);'#13#10 +
+    '      Parent := Dir + ''..'';'#13#10 +
+    '      if SameText(Parent, Dir) then Break;'#13#10 +
+    '      Dir := Parent;'#13#10 +
+    '    end;'#13#10 +
+    '  end;'#13#10 +
+    ''#13#10 +
+    '  function ModuleDir: string;'#13#10 +
+    '  begin'#13#10 +
+    '    Result := '''';'#13#10 +
+    '  end;'#13#10 +
+    'var'#13#10 +
+    '  C : string;'#13#10 +
+    'begin'#13#10 +
+    '  Cands := TList<string>.Create;'#13#10 +
+    '  try'#13#10 +
+    '    AddRoots(''a'');'#13#10 +
+    '    C := ModuleDir;'#13#10 +
+    '    if C <> '''' then Cands.Add(C);'#13#10 +
+    '    Result := '''';'#13#10 +
+    '  finally'#13#10 +
+    '    Cands.Free;'#13#10 +
+    '  end;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+    'outer-var nur in nested routine gelesen, im outer-body erzeugt - kein UninitVar');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.OuterVarUninitDespiteNestedRoutine_StillFlagged;
+// TP-Gegenkontrolle: die Closure-Erkennung darf NUR greifen wenn die Variable
+// wirklich in der nested routine vorkommt. 'Total' wird nie geschrieben und im
+// OUTER-Body gelesen (nicht in Helper) -> bleibt ein echter UninitVar-Bug,
+// auch wenn die Methode eine nested routine enthaelt.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'function F: Integer;'#13#10 +
+    'var'#13#10 +
+    '  Total: Integer;'#13#10 +
+    '  procedure Helper;'#13#10 +
+    '  begin'#13#10 +
+    '    WriteLn(''hi'');'#13#10 +
+    '  end;'#13#10 +
+    'begin'#13#10 +
+    '  Helper;'#13#10 +
+    '  Result := Total;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try Assert.IsTrue(CountKind(L, fkUninitVar) >= 1,
+    'Total nie geschrieben, im outer-body gelesen - bleibt UninitVar trotz nested routine');
   finally L.Free; end;
 end;
 
