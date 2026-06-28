@@ -246,7 +246,6 @@ begin
           if Available > 0 then
           begin
             ToRead := Available;
-            // noinspection UninitVar
             // SizeOf(Buf) ist Compile-Time-Constant fuer static array of Byte -
             // kein echter Read; SCA166-Heuristik kann das nicht unterscheiden.
             if ToRead > SizeOf(Buf) then ToRead := SizeOf(Buf);

@@ -665,7 +665,6 @@ class procedure TFormatMismatchDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>;
   ConstTable: TDictionary<string, string>);
 var
-  // noinspection UninitVar
   // Reported wird im outer-body initialisiert; CheckCallText (nested)
   // greift erst nach dem Create darauf zu - FP des Nested-Closure-Pattern.
   Reported : TDictionary<string, Boolean>;

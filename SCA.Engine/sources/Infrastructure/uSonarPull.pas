@@ -168,7 +168,6 @@ begin
 
   Key := CacheKey(ProjectKey, RelativePath);
   if FCache.TryGetValue(Key, Entry) and CacheIsFresh(Entry) then
-    // noinspection UninitVar
     // Entry.Issues ist Field-Access auf den Cache-Entry, nicht die lokale
     // Var Issues - SCA166-Identifier-Recognition unterscheidet das nicht.
     Exit(Entry.Issues);

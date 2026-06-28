@@ -178,7 +178,6 @@ begin
   if M.CleanCodeAttribute <> '' then
     Result.AddPair('cleanCodeAttribute', M.CleanCodeAttribute);
 
-  // noinspection UninitVar
   // M.Impacts ist Field-Access auf den Catalog-Eintrag, nicht die lokale
   // Var Impacts - SCA166-Identifier-Recognition unterscheidet das nicht.
   if Length(M.Impacts) > 0 then

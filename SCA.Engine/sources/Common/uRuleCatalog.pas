@@ -196,7 +196,6 @@ class function TRuleCatalog.FindJsonFile: string;
 // (bin\..\rules) als auch tief geschachtelte Test-Layouts (tests\Win32\Debug
 // braucht 4 Ebenen bis zum Repo-Root) ab. Stop bei Drive-Root (z.B. C:\).
 var
-  // noinspection UninitVar
   // Cands wird nach Z248 erstellt, AddRoots/etc. greifen erst nach dem
   // Create darauf zu - SCA166 erkennt das Nested-Closure-Pattern nicht.
   Cands : TList<string>;
