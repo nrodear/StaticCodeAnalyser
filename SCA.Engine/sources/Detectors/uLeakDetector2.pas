@@ -344,6 +344,18 @@ var
       // get/find/...). Real-World 2026-06-26: cnwizards
       // TComponent(GetComponent(0)), TFont(GetOrdValue), TComponent(FSelection[0]).
       if (Pos('.', Args) > 0) or (Pos('[', Args) > 0) then Exit(True);
+      // Bare-Identifier-Argument ('TMVCListOfInteger(AObject)', 'TButton(Comp)')
+      // = Cast einer bestehenden Variable/Param -> Borrow, kein Allocator (ein
+      // Typecast allokiert nie). Real-World 2026-06-28: delphimvcframework
+      // 'lList := TMVCListOfInteger(AObject);'.
+      // Args enthaelt noch die schliessende ')' (z.B. 'aobject)') - daher bis
+      // zur ersten ')' pruefen, ob das Cast-Argument ein bare Identifier ist.
+      var ArgInner := Trim(Copy(Args, 1, Pos(')', Args + ')') - 1));
+      var IsBareIdent := ArgInner <> '';
+      for var ci := 1 to Length(ArgInner) do
+        if not CharInSet(ArgInner[ci], ['a'..'z', '0'..'9', '_']) then
+        begin IsBareIdent := False; Break; end;
+      if IsBareIdent then Exit(True);
       for i := Low(BORROWED_PREFIXES) to High(BORROWED_PREFIXES) do
         if StartsStr(BORROWED_PREFIXES[i], Args) then Exit(True);
     end;

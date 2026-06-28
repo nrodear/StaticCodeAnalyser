@@ -13,6 +13,7 @@ type
     [Test] procedure AbstractInBase_OverriddenInDerived_NoFinding;
     [Test] procedure NoBaseInUnit_NoFinding;
     [Test] procedure DerivedItselfAbstract_NoFinding;
+    [Test] procedure DerivedIntroducesAbstractMethod_NoFinding;
     [Test] procedure AnonymousRecordField_DoesNotConfuseParser;
     [Test] procedure TCustomBase_TreatedAsAbstract_NoFinding;
     [Test] procedure IntermediateBase_LeafOverrides_NoFinding;
@@ -94,6 +95,29 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkAbstractNotImpl));
+  finally F.Free; end;
+end;
+
+procedure TTestAbstractNotImpl.DerivedIntroducesAbstractMethod_NoFinding;
+// FP-Fix (Real-World 2026-06-28): die Subklasse ueberschreibt die Base-Abstract-
+// Methode nicht, fuehrt aber SELBST eine neue 'virtual; abstract'-Methode ein
+// -> sie ist damit ebenfalls abstrakt (Zwischen-Basis), die konkreten Blatt-
+// Subklassen liefern die Overrides. Kein EAbstractError-Befund.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TBase = class'#13#10 +
+  '    procedure DoWork; virtual; abstract;'#13#10 +
+  '  end;'#13#10 +
+  '  TMid = class(TBase)'#13#10 +
+  '    procedure DoOther; virtual; abstract;'#13#10 +
+  '  end;'#13#10 +
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkAbstractNotImpl),
+    'Subklasse mit eigener abstract-Methode ist selbst abstrakt - kein Finding');
   finally F.Free; end;
 end;
 

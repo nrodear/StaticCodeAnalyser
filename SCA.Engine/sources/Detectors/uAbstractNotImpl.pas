@@ -153,16 +153,24 @@ begin
           DerivedMethods.CaseSensitive := False;
           DerivedMethods.Duplicates := dupIgnore;
           DerivedMethods.Sorted := True;
+          var DerivedHasAbstract := False;
           Methods := C.FindAll(nkMethod);
           try
             for M in Methods do
+            begin
               DerivedMethods.Add(LowerCase(UnqualifiedName(M.Name)));
+              if IsAbstractMethod(M.TypeRef) then DerivedHasAbstract := True;
+            end;
           finally
             Methods.Free;
           end;
-          // Wenn Derived selbst auch abstrakt ist (kein Override-Zwang),
-          // skippen.
-          if Pos(';abstract', LowerCase(C.TypeRef)) > 0 then Continue;
+          // Wenn Derived selbst (noch) abstrakt ist, kein Override-Zwang ->
+          // skippen. Zwei Faelle: explizit als Klasse markiert, ODER die Klasse
+          // fuehrt SELBST eine neue 'virtual; abstract'-Methode ein (dann ist
+          // sie abstrakt; die konkreten Blatt-Subklassen liefern die Overrides).
+          // Real-World-FP 2026-06-28: TWebSocketSocketIOProtocol u.ae.
+          if (Pos(';abstract', LowerCase(C.TypeRef)) > 0)
+             or DerivedHasAbstract then Continue;
           // Konvention: Klassen mit Prefix 'TCustom'/'TAbstract' sind
           // Zwischen-Abstract-Basen die Override an konkrete Subklassen
           // weiterreichen (VCL-Konvention: TCustomEdit, TCustomCombo,
@@ -171,7 +179,8 @@ begin
           var CLow := LowerCase(C.Name);
           // 'TCustom...'-Prefix ODER 'abstract' irgendwo im Namen
           // (TALExprAbstractFuncSym): semantisch abstrakte Zwischen-Basis.
-          if StartsStr('tcustom', CLow) or ContainsText(CLow, 'abstract') then
+          if StartsStr('tcustom', CLow) or StartsStr('tbase', CLow)
+             or ContainsText(CLow, 'abstract') then
             Continue;
           // Real-World-Sweep 2026-06-13: Intermediate-Abstract-Klassen die
           // KEIN ueberschreiben - 0 von N abstract methods implementiert.

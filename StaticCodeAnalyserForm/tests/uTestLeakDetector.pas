@@ -32,6 +32,7 @@ type
     // in Typecasts / Indexed-Access (cnwizards Design-Editoren).
     [Test] procedure Leak_TypecastGetterResult_NoFinding;
     [Test] procedure Leak_TypecastIndexedItem_NoFinding;
+    [Test] procedure Leak_TypecastBareIdent_NoFinding;
     [Test] procedure Leak_IndexedPropertyResult_NoFinding;
     [Test] procedure Leak_SimilarVarName_NoFalsePositive;
     [Test] procedure Leak_MultipleVars_BothReported;
@@ -398,6 +399,27 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'EnsureCacheFor liefert SHARED-Ref, kein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_TypecastBareIdent_NoFinding;
+// FP-Fix 2026-06-28 (delphimvcframework): 'lList := TMVCListOfInteger(AObject)'.
+// Typecast eines bestehenden Identifiers/Params borgt die Referenz (ein Cast
+// allokiert nie) - kein Ownership, kein Leak. Frueher nur Casts mit '.'/'['-Arg
+// erkannt; bare-Ident-Arg fiel durch.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar(AObject: TObject);'#13#10+
+  'var lList: TList;'#13#10+
+  'begin'#13#10+
+  '  lList := TMVCListOfInteger(AObject);'#13#10+
+  '  lList.Clear;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'Typecast eines bare Identifiers borgt - kein Leak');
   finally F.Free; end;
 end;
 
