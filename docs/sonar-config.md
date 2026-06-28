@@ -8,7 +8,7 @@ Sonar-Integration. Schritt-für-Schritt-Setup siehe
 
 Beim Start jedes Sonar-Befehls (CLI: `--sonar-*`, IDE: Tools>Options Save,
 Export-Menü) ruft die Implementierung
-[`TSonarConfigResolver.Resolve`](../StaticCodeAnalyserForm/sources/Infrastructure/uSonarConfig.pas)
+[`TSonarConfigResolver.Resolve`](../SCA.Engine/sources/Infrastructure/uSonarConfig.pas)
 in dieser Reihenfolge:
 
 1. **CLI-Flags** — Werte aus `--sonar-host` / `--sonar-token` /

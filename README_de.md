@@ -530,7 +530,7 @@ versioniert, in Code-Reviews mitchangbar.
 
 ### CI/CD-Integration
 
-**GitHub Actions** (Git): siehe Vorlage [`.github/workflows/sca.yml`](.github/workflows/sca.yml).
+**GitHub Actions** (Git): siehe Vorlage [`examples/ci/github-actions-sca.yml`](examples/ci/github-actions-sca.yml).
 SARIF-Upload erscheint als Inline-Annotations im PR.
 
 **GitLab CI / Jenkins / TeamCity / Azure DevOps**: identisches Muster —

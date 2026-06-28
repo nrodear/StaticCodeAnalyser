@@ -170,9 +170,9 @@ Architecture units:
 
 | Unit | Content |
 |------|---------|
-| [`uAnalyserPalette.pas`](StaticCodeAnalyserForm/sources/uAnalyserPalette.pas) | Central colour constants (severity backgrounds, accents, icon colours) |
-| [`uAnalyserTypes.pas`](StaticCodeAnalyserForm/sources/uAnalyserTypes.pas) | `TFindingSeverity` enum + conversions |
-| [`uAnalyserTheme.pas`](StaticCodeAnalyserForm/sources/uAnalyserTheme.pas) | `SeverityBg`, `SeverityAccent`, `BlendColor` |
+| [`uAnalyserPalette.pas`](SCA.SharedUI/sources/uAnalyserPalette.pas) | Central colour constants (severity backgrounds, accents, icon colours) |
+| [`uAnalyserTypes.pas`](SCA.Engine/sources/Common/uAnalyserTypes.pas) | `TFindingSeverity` enum + conversions |
+| [`uAnalyserTheme.pas`](SCA.SharedUI/sources/uAnalyserTheme.pas) | `SeverityBg`, `SeverityAccent`, `BlendColor` |
 
 **Known limitation**: in floating mode the plugin window does not pick
 up runtime IDE theme changes reliably. Workaround: dock the plugin, or

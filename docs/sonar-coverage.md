@@ -8,7 +8,7 @@ Spalten:
 
 - **Sonar-Check** — Klassenname (ohne `.java`)
 - **Lokal** — `J` = vorhanden, `N` = nicht umgesetzt, `~` = teilweise
-- **Pendant** — Datei in [StaticCodeAnalyserForm/sources/Detectors/](../StaticCodeAnalyserForm/sources/Detectors/)
+- **Pendant** — Datei in [SCA.Engine/sources/Detectors/](../SCA.Engine/sources/Detectors/)
 - **Hinweis** — Anmerkung bei Teil-Coverage
 
 Nicht aufgeführt sind reine Plumbing-Klassen (`Abstract*`, `CheckList`,

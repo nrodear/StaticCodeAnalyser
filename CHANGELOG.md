@@ -97,7 +97,7 @@ Full release notes: [docs/releases/v0.9.8.md](docs/releases/v0.9.8.md)
   marker did not suppress any finding (detector improved → marker obsolete).
 - **SCA166 `UninitVar` (MVP)** — local variable read before being
   assigned. Conservative single-method-scope detector
-  ([`uUninitVar.pas`](StaticCodeAnalyserForm/sources/Detectors/uUninitVar.pas))
+  ([`uUninitVar.pas`](SCA.Engine/sources/Detectors/uUninitVar.pas))
   with three-class call model (READ_ALLOWLIST: `WriteLn`/`Length`/…,
   WRITE_ALLOWLIST: `ReadLn`/`FillChar`/…, UNKNOWN-calls: pessimistic-
   write). Method-boundary scan + `_`-prefix + managed-type skip + hard
@@ -394,14 +394,14 @@ Full release notes: [docs/releases/v0.9.1.md](docs/releases/v0.9.1.md)
 ### Changed
 
 - **Severity is now single-source via `TLeakFinding.SetKind(K)`**
-  ([uMethodd12](StaticCodeAnalyserForm/sources/Common/uMethodd12.pas)) —
+  ([uMethodd12](SCA.Engine/sources/Common/uMethodd12.pas)) —
   the new method sets Kind + pulls Severity from `KIND_META`. 58
   detector emit sites refactored from the two-line
   `F.Severity := lsXxx; F.Kind := fkXxx;` pattern; three detectors
   with context-dependent severity (`uLeakDetector2`, `uDivByZero`,
   `uCustomRuleDetector`) keep their manual assignment.
   `TFindingKindMeta.DefaultSeverity` is the new SOT in `KIND_META`.
-- **Catalog lookup** ([uRuleCatalog.FindJsonFile](StaticCodeAnalyserForm/sources/Common/uRuleCatalog.pas))
+- **Catalog lookup** ([uRuleCatalog.FindJsonFile](SCA.Engine/sources/Common/uRuleCatalog.pas))
   walks up to **8 directory levels** from the EXE/BPL dir (was 3) —
   fixes catalog-not-found from deep test runners and arbitrary scan
   working directories.
@@ -419,7 +419,7 @@ Full release notes: [docs/releases/v0.9.1.md](docs/releases/v0.9.1.md)
   `IOTAIDEThemingServices.ApplyTheme` in `FrameCreated` so they
   respect the active IDE theme (was falling back to VCL-default white).
   Shared one-shot helper `ApplyIDETheme` in
-  [uIDEThemeIntegration](StaticCodeAnalyserIDE/uIDEThemeIntegration.pas).
+  `uIDEThemeIntegration`.
 - **IDE plugin Options page i18n** — `GetArea` returns empty string
   (was `'Third Party'`) so the page lands under the localized
   "Fremdhersteller" / "Third Party" node instead of creating a second

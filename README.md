@@ -530,7 +530,7 @@ team-shared, versioned, reviewable in PR/MR diffs.
 
 ### CI/CD integration
 
-**GitHub Actions** (Git): see template [`.github/workflows/sca.yml`](.github/workflows/sca.yml).
+**GitHub Actions** (Git): see template [`examples/ci/github-actions-sca.yml`](examples/ci/github-actions-sca.yml).
 SARIF upload appears as inline annotations in PRs.
 
 **GitLab CI / Jenkins / TeamCity / Azure DevOps**: same pattern —

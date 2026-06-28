@@ -162,9 +162,9 @@ Architektur-Module:
 
 | Unit | Inhalt |
 |------|--------|
-| [`uAnalyserPalette.pas`](StaticCodeAnalyserForm/sources/uAnalyserPalette.pas) | Zentrale Farb-Konstanten (Severity-Hintergruende, Akzente, Icon-Farben) |
-| [`uAnalyserTypes.pas`](StaticCodeAnalyserForm/sources/uAnalyserTypes.pas) | `TFindingSeverity`-Enum + Konversion |
-| [`uAnalyserTheme.pas`](StaticCodeAnalyserForm/sources/uAnalyserTheme.pas) | `SeverityBg`, `SeverityAccent`, `BlendColor` |
+| [`uAnalyserPalette.pas`](SCA.SharedUI/sources/uAnalyserPalette.pas) | Zentrale Farb-Konstanten (Severity-Hintergruende, Akzente, Icon-Farben) |
+| [`uAnalyserTypes.pas`](SCA.Engine/sources/Common/uAnalyserTypes.pas) | `TFindingSeverity`-Enum + Konversion |
+| [`uAnalyserTheme.pas`](SCA.SharedUI/sources/uAnalyserTheme.pas) | `SeverityBg`, `SeverityAccent`, `BlendColor` |
 
 **Bekannte Limitation**: Im Floating-Modus uebernimmt das Plugin-Fenster
 IDE-Theme-Wechsel zur Laufzeit nicht zuverlaessig. Workaround: Plugin im
