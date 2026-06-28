@@ -48,6 +48,27 @@ const
   // 'Text' ist bei TEdit auch User-Input, dort aber Designer-typisch leer.
   CAPTION_PROPS: array[0..2] of string = ('Caption', 'Hint', 'Text');
 
+function IsNonTranslatable(const S: string): Boolean;
+// True wenn die Caption KEINEN Buchstaben enthaelt und rein ASCII ist - also
+// reine Symbole/Ziffern/Interpunktion ('-', '...', '>>', '|', '123', '/').
+// Solche Captions umgehen keinen Lokalisierungs-Layer (es gibt nichts zu
+// uebersetzen) -> kein i18n-Smell (dominante DfmHardcodedCaption-FP-Klasse,
+// Real-World 2026-06-28). Unicode-Zeichen (Ord > 127, z.B. CJK/kyrillisch/
+// akzentuiert) werden NICHT geskippt - das ist uebersetzbarer Text.
+var
+  C : Char;
+  HasLetter, AllAscii : Boolean;
+begin
+  HasLetter := False;
+  AllAscii  := True;
+  for C in S do
+  begin
+    if CharInSet(C, ['A'..'Z', 'a'..'z']) then HasLetter := True;
+    if Ord(C) > 127 then AllAscii := False;
+  end;
+  Result := (not HasLetter) and AllAscii;
+end;
+
 class procedure TDfmHardcodedCaptionDetector.Analyze(Graph: TComponentGraph;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -68,6 +89,9 @@ begin
         if not N.TryGetProperty(P, V) then Continue;
         if V.Kind <> pvkString          then Continue;
         if Trim(V.RawValue) = ''        then Continue;
+        // Reine Symbol-/Ziffern-Captions ('-', '...', '123') sind nicht
+        // lokalisierbar -> kein i18n-Smell.
+        if IsNonTranslatable(Trim(V.RawValue)) then Continue;
 
         F            := TLeakFinding.Create;
         F.FileName   := FileName;

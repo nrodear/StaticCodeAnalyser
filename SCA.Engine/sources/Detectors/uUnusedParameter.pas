@@ -112,6 +112,10 @@ function IsInheritanceHook(UnitNode, MethodNode: TAstNode): Boolean;
 
   function CheckOne(N: TAstNode): Boolean;
   begin
+    // Hinweis: 'message' ist KEINE vom Parser erkannte Method-Direktive
+    // (IsMethodDirective/IsMethodDirectiveIdent kennen sie nicht; 'message N'
+    // mit Konstanten-Arg landet nicht als ';message' im TypeRef). Message-
+    // Handler-Erkennung braucht daher einen Parser-Followup, nicht HasModifier.
     Result := (N <> nil) and
               (HasModifier(N, 'override')
             or HasModifier(N, 'virtual')
@@ -133,24 +137,28 @@ begin
   end;
 end;
 
-// Sender-only-Heuristik fuer Event-Handler. Hat genau einen Param und der
-// heisst 'Sender' (oder 'ASender' etc.) -> Event-Handler-Konvention, der
-// Parameter wird auch nicht-benutzt akzeptiert.
+// Event-Handler-Konvention: der ERSTE Parameter ist 'Sender' (bzw. *Sender)
+// oder vom Typ TObject. Solche Methoden bindet der Form-Designer per DFM an
+// Component-Events; ihre Signatur ist durch den Event-Typ vorgegeben, daher
+// sind ungenutzte Parameter unvermeidbar (kein Finding).
+//
+// Erfasst BEWUSST auch Multi-Param-Handler (OnKeyPress(Sender; var Key),
+// OnDrawCell(Sender; ACol, ARow, Rect, State), OnFilter(Sender; Item; Accept)).
+// Frueher nur Single-`Sender` -> FP bei jedem Mehr-Param-Handler mit einem
+// ungenutzten Pflicht-Param (Real-World 2026-06-28: dominante SCA054-FP-Klasse).
 function IsLikelyEventHandler(MethodNode: TAstNode): Boolean;
 var
   Params : TList<TAstNode>;
-  P : TAstNode;
-  LowName : string;
+  LowName, LowType : string;
 begin
   Result := False;
   Params := MethodNode.FindAll(nkParam);
   try
-    if Params.Count <> 1 then Exit;
-    P := Params[0];
-    LowName := LowerCase(Trim(P.Name));
-    // Sender, ASender, sender — alle akzeptieren
-    if (LowName = 'sender') or LowName.EndsWith('sender') then
-      Result := True;
+    if Params.Count = 0 then Exit;
+    LowName := LowerCase(Trim(Params[0].Name));   // Modifier-Prefix stoert EndsWith nicht
+    LowType := LowerCase(Params[0].TypeRef);
+    Result := (LowName = 'sender') or LowName.EndsWith('sender')
+              or (Pos('tobject', LowType) > 0);
   finally
     Params.Free;
   end;

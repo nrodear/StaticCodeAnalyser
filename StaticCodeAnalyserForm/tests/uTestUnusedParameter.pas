@@ -20,6 +20,7 @@ type
     [Test] procedure Param_Used_NoFinding;
     [Test] procedure Param_OverrideMethod_AllParamsSkipped;
     [Test] procedure Param_EventHandlerSender_Skipped;
+    [Test] procedure Param_MultiParamEventHandler_Skipped;
     [Test] procedure Param_UnderscorePrefix_Skipped;
     [Test] procedure Param_VirtualMethod_AllParamsSkipped;
 
@@ -116,6 +117,22 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
     'Event-Handler mit Single-Sender-Param wird geskippt');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.Param_MultiParamEventHandler_Skipped;
+// FP-Fix (Real-World 2026-06-28): Multi-Param-Event-Handler (erster Param
+// Sender) - weitere Params sind durch den Event-Typ vorgeschrieben und oft
+// ungenutzt. Frueher nur Single-Sender erfasst -> hier 2 FPs (Sender + State).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.GridDrawCell(Sender: TObject; ACol: Integer; State: Integer);'#13#10 +
+  'begin Bar(ACol); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
+    'Multi-Param-Event-Handler (erster Param Sender) wird komplett geskippt');
   finally F.Free; end;
 end;
 

@@ -237,6 +237,39 @@ begin
     Result := ContainsIdentifier(ArgsLow, FnNameLow);
 end;
 
+// True wenn die Methode eine lokale Variable mit 'absolute Result'-Alias
+// deklariert (z.B. 'Bits: UInt32 absolute Result;'). Schreibzugriffe gehen
+// dann ueber den Alias an den Result-Slot - der Detektor sieht nie 'Result'
+// auf einer LHS und meldet faelschlich "unassigned". (Real-World 2026-06-28,
+// z.B. Img32/mORMot-Bit-Manipulation; zero-FN: ein absolute-Result-Alias
+// schreibt per Definition in den Return-Slot.)
+function HasAbsoluteResultAlias(MethodNode: TAstNode): Boolean;
+var
+  LocalVars : TList<TAstNode>;
+  LV : TAstNode;
+  Low : string;
+  p, j : Integer;
+begin
+  Result := False;
+  LocalVars := MethodNode.FindAll(nkLocalVar);
+  try
+    for LV in LocalVars do
+    begin
+      Low := LowerCase(LV.TypeRef);
+      p := Pos('absolute', Low);
+      if p = 0 then Continue;
+      j := p + 8;                                  // hinter 'absolute'
+      while (j <= Length(Low)) and (Low[j] <= ' ') do Inc(j);
+      if (Copy(Low, j, 6) = 'result')
+         and ((j + 6 > Length(Low))
+              or not CharInSet(Low[j + 6], ['a'..'z', '0'..'9', '_'])) then
+        Exit(True);
+    end;
+  finally
+    LocalVars.Free;
+  end;
+end;
+
 class procedure TRoutineResultAssignedDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -256,6 +289,10 @@ begin
   // Interface-Method-Deklaration / Klassen-Method-Deklaration im Typ-Section
   // -> kein Body, Implementation kommt anderswo. Nicht flaggen.
   if not HasBodyStatement(MethodNode) then Exit;
+
+  // 'absolute Result'-Alias: Schreibzugriffe laufen ueber den Alias-Namen,
+  // nie ueber 'Result' -> sonst FP.
+  if HasAbsoluteResultAlias(MethodNode) then Exit;
 
   // Body-Inhalt: jedes Exit oder Raise reicht als Skip-Grund.
   Exits := MethodNode.FindAll(nkExit);

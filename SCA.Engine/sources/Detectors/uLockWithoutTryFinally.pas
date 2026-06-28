@@ -467,6 +467,65 @@ begin
     Result := 0;
 end;
 
+function LockBodyIsExceptionFree(const Code: string; AfterAcquirePos: Integer): Boolean;
+// True wenn zwischen dem Acquire-';' und dem naechsten Leave/Release/Exit/
+// EndWrite/LeaveCriticalSection NUR reine Zuweisungen stehen: KEIN Call '(',
+// kein Index '[', kein 'raise'. Dann kann zwischen Enter und Leave nichts
+// werfen -> das Lock kann nicht haengen, try/finally ist nicht noetig.
+// Dominante SCA109-FP-Klasse (Real-World 2026-06-28): triviale Getter/Setter
+// 'Acquire; Result := FField; Release;' / 'Acquire; FField := V; Release;'
+// (~12/17 der Stichproben-FPs). Konservativ: ohne Release in Reichweite wird
+// NICHT geskippt; ein '['/'(' (Array-Range bzw. Call koennen werfen) verhindert
+// den Skip -> praktisch null FN-Risiko.
+const
+  WINDOW = 600;
+var
+  hi, relPos : Integer;
+  seg, segLow, stmt, t : string;
+
+  function MinPos(a, b: Integer): Integer;
+  begin
+    if a = 0 then Result := b
+    else if b = 0 then Result := a
+    else if a < b then Result := a
+    else Result := b;
+  end;
+
+begin
+  Result := False;
+  hi := AfterAcquirePos + WINDOW;
+  if hi > Length(Code) then hi := Length(Code);
+  if AfterAcquirePos > hi then Exit;
+  seg := Copy(Code, AfterAcquirePos, hi - AfterAcquirePos + 1);
+  segLow := LowerCase(seg);
+  relPos := 0;
+  relPos := MinPos(relPos, Pos('.leave', segLow));
+  relPos := MinPos(relPos, Pos('.release', segLow));
+  relPos := MinPos(relPos, Pos('.exit', segLow));
+  relPos := MinPos(relPos, Pos('.endwrite', segLow));
+  relPos := MinPos(relPos, Pos('leavecriticalsection', segLow));
+  if relPos = 0 then Exit;                 // kein Release in Reichweite -> nicht skippen
+  // Bis zum letzten ';' VOR dem Release-Token zuruecksetzen, damit der
+  // Release-Receiver ('FLock' in 'FLock.Leave') nicht als dangling Token
+  // (ohne ':=') faelschlich den Skip verhindert. Leer = back-to-back Enter/Leave.
+  relPos := relPos - 1;
+  while (relPos >= 1) and (seg[relPos] <> ';') do Dec(relPos);
+  seg := Copy(seg, 1, relPos);             // Body bis einschl. letztem ';' (leer wenn keiner)
+  // Jede ;-getrennte Anweisung muss eine REINE Zuweisung sein. Ein paren-loser
+  // Call ('DoWork;') hat zwar kein '(', aber auch kein ':=' -> kann werfen ->
+  // dann NICHT skippen (sonst FN: echtes Leak unterdrueckt).
+  Result := True;
+  for stmt in seg.Split([';']) do
+  begin
+    t := Trim(stmt);
+    if t = '' then Continue;
+    if Pos(':=', t) = 0 then Exit(False);  // keine Zuweisung -> evtl. (paren-loser) Call
+    if Pos('(', t) > 0 then Exit(False);   // Call auf der RHS -> kann werfen
+    if Pos('[', t) > 0 then Exit(False);   // Array-Index -> Range-Check kann werfen
+    if Pos('raise', LowerCase(t)) > 0 then Exit(False);
+  end;
+end;
+
 class procedure TLockWithoutTryFinallyDetector.AnalyzeUnit(
   UnitNode: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
@@ -532,6 +591,9 @@ begin
       // BeginXxx-Method-Name-Konvention: Caller wickelt try/finally
       // um die paired BeginXxx/EndXxx-Calls.
       if IsInsideBeginXxxMethod(Code, M.Index) then Continue;
+      // Exception-freier Body (nur Zuweisungen, kein Call/Index/raise) zwischen
+      // Enter und Leave -> Lock kann nicht haengen (triviale Getter/Setter).
+      if LockBodyIsExceptionFree(Code, EndOfStmt) then Continue;
 
       LineNo := LineForPos(LineFor, M.Index);
       if LineNo <= 0 then LineNo := 1;

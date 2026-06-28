@@ -26,6 +26,7 @@ type
     [Test] procedure Test_NonStringValue_NotDetected;       // Ident wie 'clRed'
     [Test] procedure Test_NonWhitelistedProp_NotDetected;   // 'Filter' etc.
     [Test] procedure Test_NumericProp_NotDetected;          // 'Top = 42'
+    [Test] procedure Test_NonTranslatableCaption_Skipped_TextStillDetected;
 
     // --- Finding-Inhalt ---
     [Test] procedure Test_Finding_LineNumberMatchesValueLine;
@@ -216,6 +217,30 @@ begin
     'end');
   try
     Assert.AreEqual<Integer>(0, CountKind(F, fkDfmHardcodedCaption));
+  finally F.Free; end;
+end;
+
+procedure TTestDfmHardcodedCaption.Test_NonTranslatableCaption_Skipped_TextStillDetected;
+// FP-Fix (Real-World 2026-06-28): reine Symbol-/Ziffern-Captions ('...', '-',
+// '123') sind nicht lokalisierbar -> kein i18n-Smell. Echter Text ('Save')
+// bleibt erkannt. Bidirektional in einer Form.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(
+    'object Form: TForm'#13#10 +
+    '  object btnEllipsis: TButton'#13#10 +
+    '    Caption = ''...'''#13#10 +
+    '  end'#13#10 +
+    '  object btnMinus: TButton'#13#10 +
+    '    Caption = ''-'''#13#10 +
+    '  end'#13#10 +
+    '  object btnSave: TButton'#13#10 +
+    '    Caption = ''Save'''#13#10 +
+    '  end'#13#10 +
+    'end');
+  try
+    Assert.AreEqual<Integer>(1, CountKind(F, fkDfmHardcodedCaption),
+      'nur die echte Text-Caption ''Save'' zaehlt - ''...'' und ''-'' sind nicht uebersetzbar');
   finally F.Free; end;
 end;
 

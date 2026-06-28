@@ -21,6 +21,7 @@ type
     [Test] procedure KindDefaultConfidence_BugKindsAreHigh;
     [Test] procedure KindDefaultConfidence_MetricsAreMedium;
     [Test] procedure KindDefaultConfidence_PatternMatchersAreMedium;
+    [Test] procedure KindDefaultConfidence_HardenedHeuristicsAreLow;
     [Test] procedure SetKind_AppliesKindDefaultConfidence;
     // ---- Filter ----
     [Test] procedure Medium_DropsLowOnly;
@@ -89,8 +90,8 @@ procedure TTestConfidenceFilter.KindDefaultConfidence_BugKindsAreHigh;
 begin
   Assert.AreEqual<TFindingConfidence>(fcHigh,
     KindDefaultConfidence(fkMemoryLeak));
-  Assert.AreEqual<TFindingConfidence>(fcHigh,
-    KindDefaultConfidence(fkUseAfterFree));
+  // fkUseAfterFree wurde 2026-06-28 auf fcLow demotet (~94% FP, CFG noetig) -
+  // siehe KindDefaultConfidence_HardenedHeuristicsAreLow.
   Assert.AreEqual<TFindingConfidence>(fcHigh,
     KindDefaultConfidence(fkNilDeref));
   Assert.AreEqual<TFindingConfidence>(fcHigh,
@@ -127,6 +128,30 @@ begin
     KindDefaultConfidence(fkCommentedOutCode));
   Assert.AreEqual<TFindingConfidence>(fcMedium,
     KindDefaultConfidence(fkMagicNumber));
+end;
+
+procedure TTestConfidenceFilter.KindDefaultConfidence_HardenedHeuristicsAreLow;
+// Detector-Hardening 2026-06-28: Detektoren mit gemessener/struktureller hoher
+// FP-Rate, die nur mit Cross-Unit-Index fixbar waeren, sind nach fcLow demotet
+// -> raus aus dem Default-Profil (fcMedium-Schwelle), bleiben opt-in.
+begin
+  Assert.AreEqual<TFindingConfidence>(fcLow,
+    KindDefaultConfidence(fkCanBeClassMethod), 'SCA148 ~68% FP -> fcLow');
+  Assert.AreEqual<TFindingConfidence>(fcLow,
+    KindDefaultConfidence(fkConstStringParameter), 'SCA170 ~26% FP + war fcHigh -> fcLow');
+  Assert.AreEqual<TFindingConfidence>(fcLow,
+    KindDefaultConfidence(fkCanBeUnitPrivate), 'Single-File-Scope -> fcLow');
+  Assert.AreEqual<TFindingConfidence>(fcLow,
+    KindDefaultConfidence(fkCanBeProtected));
+  Assert.AreEqual<TFindingConfidence>(fcLow,
+    KindDefaultConfidence(fkCanBeStrictPrivate));
+  Assert.AreEqual<TFindingConfidence>(fcLow,
+    KindDefaultConfidence(fkUnusedPublicMember), 'Single-File-Scope -> fcLow');
+  // Bug-Detektoren mit >50% FP ohne billigen Vollfix (CFG/Cross-Unit noetig).
+  Assert.AreEqual<TFindingConfidence>(fcLow,
+    KindDefaultConfidence(fkUseAfterFree), 'SCA134 ~94% FP -> fcLow');
+  Assert.AreEqual<TFindingConfidence>(fcLow,
+    KindDefaultConfidence(fkAbstractNotImpl), 'SCA135 ~79% FP -> fcLow');
 end;
 
 procedure TTestConfidenceFilter.SetKind_AppliesKindDefaultConfidence;

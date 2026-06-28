@@ -45,6 +45,9 @@ type
 
 implementation
 
+uses
+  System.StrUtils;
+
 const
   STRING_TYPES : array[0..5] of string = (
     'string', 'ansistring', 'unicodestring',
@@ -75,17 +78,88 @@ begin
             Low.StartsWith('out ');
 end;
 
+function MethodHasDirective(const TypeRefLow, Directive: string): Boolean;
+// Wortgrenz-Match einer Methoden-Direktive (z.B. 'override') im (bereits
+// lowercase) TypeRef. TypeRef-Formen variieren ('function: string; override',
+// 'procedure;virtual') - daher Wortgrenze statt nacktem Pos.
+var
+  P, L, DL : Integer;
+  Before, After : Char;
+begin
+  Result := False;
+  DL := Length(Directive); L := Length(TypeRefLow);
+  P := 1;
+  while True do
+  begin
+    P := PosEx(Directive, TypeRefLow, P);
+    if P = 0 then Exit;
+    if P > 1 then Before := TypeRefLow[P - 1] else Before := #0;
+    if P + DL - 1 < L then After := TypeRefLow[P + DL] else After := #0;
+    if not CharInSet(Before, ['a'..'z', '0'..'9', '_']) and
+       not CharInSet(After,  ['a'..'z', '0'..'9', '_']) then Exit(True);
+    P := P + DL;
+  end;
+end;
+
+function MethodHasAnyContractDirective(const TypeRefLow: string): Boolean;
+// Polymorphe/Vertrags-Direktiven, die die Signatur fixieren -> string-Param
+// kann nicht lokal auf const umgestellt werden (Basisklasse/Interface-Vertrag).
+begin
+  Result := MethodHasDirective(TypeRefLow, 'virtual')  or MethodHasDirective(TypeRefLow, 'override') or
+            MethodHasDirective(TypeRefLow, 'dynamic')  or MethodHasDirective(TypeRefLow, 'message')  or
+            MethodHasDirective(TypeRefLow, 'abstract') or MethodHasDirective(TypeRefLow, 'reintroduce');
+end;
+
+function UnqualifiedName(const N: string): string;
+// 'TFoo.Bar' -> 'bar', 'Bar' -> 'bar' (lowercase, fuer Decl<->Impl-Matching).
+var Dot : Integer;
+begin
+  Dot := LastDelimiter('.', N);
+  if Dot > 0 then Result := LowerCase(Copy(N, Dot + 1, MaxInt))
+             else Result := LowerCase(N);
+end;
+
+function IsEventHandlerMethod(M: TAstNode): Boolean;
+// Event-Handler-Form: erster Param 'Sender' bzw. Typ TObject - per Event-Typ
+// /DFM gebunden, Signatur nicht aenderbar.
+var Child : TAstNode;
+begin
+  Result := False;
+  for Child in M.Children do
+  begin
+    if Child.Kind <> nkParam then Continue;
+    if SameText(Child.Name, 'Sender')
+       or (Pos('tobject', LowerCase(Child.TypeRef)) > 0) then Exit(True);
+    Break;                               // nur ersten Parameter pruefen
+  end;
+end;
+
 class procedure TConstStringParameterDetector.AnalyzeUnit(
   UnitNode: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>);
 var
-  Methods : TList<TAstNode>;
-  M, P    : TAstNode;
-  F       : TLeakFinding;
+  Methods   : TList<TAstNode>;
+  PolyNames : THashSet<string>;
+  M, P      : TAstNode;
+  F         : TLeakFinding;
 begin
   Methods := UnitNode.FindAll(nkMethod);
+  PolyNames := THashSet<string>.Create;
   try
+    // 1. Durchlauf: Namen aller polymorphen Method-Decls sammeln. Die Direktive
+    //    (virtual/override/...) steht i.d.R. nur auf der Interface-Decl, NICHT
+    //    auf dem Implementierungs-Header (der die Params traegt) -> ueber den
+    //    Namen matchen, damit beide Seiten als vertrags-fixiert gelten.
     for M in Methods do
+      if MethodHasAnyContractDirective(LowerCase(M.TypeRef)) then
+        PolyNames.Add(UnqualifiedName(M.Name));
+
+    for M in Methods do
+    begin
+      // Vertrags-fixierte Signaturen (polymorph via Name-Match / Event-Handler)
+      // ueberspringen - dort ist const nicht lokal umstellbar (dominante FP-Klasse).
+      if PolyNames.Contains(UnqualifiedName(M.Name)) then Continue;
+      if IsEventHandlerMethod(M) then Continue;
       for P in M.Children do
       begin
         if P.Kind <> nkParam then Continue;
@@ -103,7 +177,9 @@ begin
         F.SetKind(fkConstStringParameter);
         Results.Add(F);
       end;
+    end;
   finally
+    PolyNames.Free;
     Methods.Free;
   end;
 end;

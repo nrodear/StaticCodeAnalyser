@@ -16,6 +16,7 @@ type
     [Test] procedure CodeLineComment_Reported;
     [Test] procedure CodeBlockComment_Reported;
     [Test] procedure SinglePascalToken_NoFinding;
+    [Test] procedure ProseWithWeakKeywords_NoFinding;
     [Test] procedure CompilerDirective_NoFinding;
     [Test] procedure CommentedOutCode_KindAndSeverity;
   end;
@@ -79,6 +80,28 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCommentedOutCode));
+  finally F.Free; end;
+end;
+
+procedure TTestCommentedOutCode.ProseWithWeakKeywords_NoFinding;
+// FP-Fix (Real-World 2026-06-28): englische Prosa mit prosa-haeufigen Keywords
+// (if/then/for/while/end) traf frueher die 2-Marker-Schwelle und wurde als
+// Code geflaggt. Ohne STARKEN Pascal-Marker (:=, trailing ;, begin/procedure/
+// function) jetzt kein Treffer. Kommentar steht isoliert zwischen Code-Zeilen,
+// damit nicht der Doc-Block-Guard (angrenzende //) das Ergebnis verfaelscht.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  DoA;'#13#10 +
+  '  // if the value is nil then return for each item while at the end'#13#10 +
+  '  DoB;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCommentedOutCode),
+    'Prosa mit if/then/for/while/end ohne starken Marker ist kein Code');
   finally F.Free; end;
 end;
 

@@ -973,6 +973,28 @@ begin
     // H4-Entscheidung: Demotion statt grossem fragilem Detektor-Umbau (lsHint,
     // kein Bug). Siehe Todo_DetectorHardening.md.
     fkCanBeClassMethod: Result := fcLow;
+    // SCA170 ConstStringParameter: Korpus-Triage 2026-06-28 ~26% FP (20-50%-
+    // Band) bei fast ungeguardetem Detektor, der zudem auf fcHigh stand
+    // (mis-tiered fuer einen Perf-Hint-Smell). Guard fuer vertrags-fixierte
+    // Signaturen (virtual/override/message/Event-Handler) ergaenzt; Tier auf
+    // fcLow -> raus aus dem Default-Profil, opt-in.
+    fkConstStringParameter: Result := fcLow;
+    // Single-File-Scope-Familie: Sichtbarkeits-/Nutzungs-Regeln auf PUBLIC-
+    // Member, die nur das aktuelle File sehen (kein Cross-Unit-Index). Public-
+    // Member sind per Definition fuer Cross-Unit-Nutzung da -> hohe strukturelle
+    // FP-Rate (gleiche Ursache wie CanBeClassMethod, dort 68% gemessen). Nicht
+    // ohne Cross-Unit-Index fixbar -> fcLow (raus aus Default, opt-in).
+    // (fkUnusedPrivateMethod bleibt fcMedium: private Scope ist single-file
+    //  weitgehend valide, FP nur via RTTI/DFM.)
+    fkCanBeUnitPrivate, fkCanBeProtected, fkCanBeStrictPrivate,
+    fkUnusedPublicMember: Result := fcLow;
+    // Bug-Detektoren mit gemessener FP-Rate >50% (Real-World-Triage 2026-06-28)
+    // OHNE billigen Vollfix (brauchen CFG-/Cross-Unit-Analyse) -> aus fcHigh auf
+    // fcLow, damit sie den CI-Build nicht mit ueberwiegend falschen Befunden rot
+    // faerben. SCA134 UseAfterFree ~94% (then/else-Branch-Disjunktheit, echte
+    // CFG-Dominanz noetig); SCA135 AbstractNotImpl ~79% (konkrete Leaf-Subklasse
+    // liegt cross-file, in-Unit-ParentSet sieht sie nicht).
+    fkUseAfterFree, fkAbstractNotImpl: Result := fcLow;
 
     // --- Pattern-Match-basiert (rein lexikalisch / regex) ---
     fkHardcodedSecret,           // 'password=...'-Heuristik ohne Wert-Check
@@ -997,13 +1019,9 @@ begin
     // --- Style-/Refactor-Praeferenzen ---
     fkBooleanParam,              // legitim bei Toggles
     fkMultipleExit,              // Kontroverses Style-Thema
-    fkCanBeUnitPrivate,          // Single-File-Scope (Cross-Unit-Index off)
-    fkCanBeProtected,            //  "
-    fkCanBeStrictPrivate,        //  "
     fkPublicMemberWithoutDoc,    // viele triviale Methoden brauchen keinen Doc
     fkConstantReturn,            // legitim bei Default-Implementierungen
     fkUnusedParameter,           // legitim bei Interface-Impl
-    fkUnusedPublicMember,        // Single-File-Scope FP-Risiko
     fkUnusedPrivateMethod,       // RTTI/DFM-Konsumenten unsichtbar
 
     // --- Schema-Heuristik (DFM ohne vollen Schema-Index) ---
@@ -1018,7 +1036,13 @@ begin
 
     // --- Security-Heuristik ohne Datenfluss ---
     fkSQLInjection,              // ohne Taint-Tracking, viele Konst-Strings
-    fkInsecureCryptoAlgorithm    // Pattern-Match auf Algo-Namen
+    fkInsecureCryptoAlgorithm,   // Pattern-Match auf Algo-Namen
+
+    // --- Bug-Detektoren mit FP-Rate ~55-60% + billigem Teil-Guard (Real-World
+    //     2026-06-28): aus fcHigh auf fcMedium herabgestuft (bleiben im Default,
+    //     aber nicht mehr "hochkonfident"; Rest-FP via CFG/Parser-Followup).
+    fkRoutineResultUnassigned,   // SCA121 ~58% (absolute-Result, nested-scope, ifdef)
+    fkLockWithoutTryFinally      // SCA109 ~85% pre-guard (call-free-Getter/Setter)
     : Result := fcMedium;
 
   else

@@ -83,56 +83,74 @@ begin
   end;
 end;
 
-// Zaehlt code-typische Marker im Kommentar-Inhalt.
+// Wortgrenz-Match (case-insensitive) eines Keywords im (lowercase) Inhalt.
+function ContainsWordCI(const Lower, W: string): Boolean;
+var k, lenW, lenS : Integer;
+begin
+  Result := False;
+  lenW := Length(W); lenS := Length(Lower);
+  if lenW = 0 then Exit;
+  k := 1;
+  while k <= lenS - lenW + 1 do
+  begin
+    if Copy(Lower, k, lenW) = W then
+      if ((k = 1) or not IsIdentChar(Lower[k - 1])) and
+         ((k + lenW > lenS) or not IsIdentChar(Lower[k + lenW])) then
+        Exit(True);
+    Inc(k);
+  end;
+end;
+
+// True wenn der Inhalt einen UNZWEIDEUTIGEN Pascal-Marker traegt, der in
+// englischer Prosa praktisch nie vorkommt: ':=', Inhalt endet mit ';', oder
+// 'begin'/'procedure'/'function' als Wort. Die schwachen Keywords
+// (if/then/for/while/end) sind prosa-haeufig und reichen ALLEIN nicht -
+// sonst flaggt z.B. "if the value is nil then return" reine Prosa als Code
+// (dominante SCA070-FP-Klasse, Real-World 2026-06-28).
+function HasStrongCodeMarker(const Raw: string): Boolean;
+var Content, Lower, Trimmed : string;
+begin
+  Content := StripBacktickCodeSpans(Raw);
+  Lower   := LowerCase(Content);
+  Trimmed := Trim(Content);
+  Result := ((Trimmed <> '') and (Trimmed[Length(Trimmed)] = ';'))
+            or (Pos(':=', Content) > 0)
+            or ContainsWordCI(Lower, 'begin')
+            or ContainsWordCI(Lower, 'procedure')
+            or ContainsWordCI(Lower, 'function');
+end;
+
+// Zaehlt code-typische Marker im Kommentar-Inhalt (starke + schwache).
 function ScoreCodeMarkers(const Raw: string): Integer;
 var
-  Content  : string;
-  Lower    : string;
-  Trimmed  : string;
-  pAssign  : Integer;
-  function ContainsWord(const W: string): Boolean;
-  var k, lenW, lenS : Integer;
-  begin
-    Result := False;
-    lenW := Length(W); lenS := Length(Lower);
-    if lenW = 0 then Exit;
-    k := 1;
-    while k <= lenS - lenW + 1 do
-    begin
-      if Copy(Lower, k, lenW) = W then
-      begin
-        // Wortgrenzen pruefen
-        if ((k = 1) or not IsIdentChar(Lower[k - 1])) and
-           ((k + lenW > lenS) or not IsIdentChar(Lower[k + lenW])) then
-        begin
-          Result := True;
-          Exit;
-        end;
-      end;
-      Inc(k);
-    end;
-  end;
+  Content : string;
+  Lower   : string;
+  Trimmed : string;
 begin
   Result := 0;
   // Backtick-Code-Spans entfernen BEVOR die Marker gezaehlt werden.
   Content := StripBacktickCodeSpans(Raw);
   Lower := LowerCase(Content);
-  // Marker 1: Inhalt endet mit Semikolon (nach trim)
   Trimmed := Trim(Content);
   if (Trimmed <> '') and (Trimmed[Length(Trimmed)] = ';') then Inc(Result);
-  // Marker 2: enthaelt `:=`-Operator (Pascal-Assign)
-  pAssign := Pos(':=', Content);
-  if pAssign > 0 then Inc(Result);
-  // Marker 3-6: enthaelt typische Code-Keywords als Wort
-  if ContainsWord('begin')     then Inc(Result);
-  if ContainsWord('end')       then Inc(Result);
-  if ContainsWord('procedure') then Inc(Result);
-  if ContainsWord('function')  then Inc(Result);
-  if ContainsWord('if')        then Inc(Result);
-  if ContainsWord('then')      then Inc(Result);
-  if ContainsWord('for')       then Inc(Result);
-  if ContainsWord('while')     then Inc(Result);
-  // Schwellwert: ab 2 Markern ist es vermutlich Code (Caller filtert).
+  if Pos(':=', Content) > 0 then Inc(Result);
+  if ContainsWordCI(Lower, 'begin')     then Inc(Result);
+  if ContainsWordCI(Lower, 'end')       then Inc(Result);
+  if ContainsWordCI(Lower, 'procedure') then Inc(Result);
+  if ContainsWordCI(Lower, 'function')  then Inc(Result);
+  if ContainsWordCI(Lower, 'if')        then Inc(Result);
+  if ContainsWordCI(Lower, 'then')      then Inc(Result);
+  if ContainsWordCI(Lower, 'for')       then Inc(Result);
+  if ContainsWordCI(Lower, 'while')     then Inc(Result);
+end;
+
+// True wenn der Kommentar-Inhalt nach Code aussieht: >=2 Marker UND mind. ein
+// STARKER (Pascal-spezifischer) Marker. Der Strong-Zwang killt die dominante
+// FP-Klasse (englische Prosa mit if/then/for/while/end). Echter commented-out
+// Code hat fast immer ':=', ';' oder begin/procedure/function.
+function LooksLikeCommentedCode(const Raw: string): Boolean;
+begin
+  Result := (ScoreCodeMarkers(Raw) >= 2) and HasStrongCodeMarker(Raw);
 end;
 
 // Pro Zeile: extrahiert den //-Kommentar-Inhalt (rest nach `//`) und
@@ -158,11 +176,11 @@ begin
       if pClose = 0 then
       begin
         CmtContent := Copy(Line, i, n - i + 1);
-        if ScoreCodeMarkers(CmtContent) >= 2 then Result := i;
+        if LooksLikeCommentedCode(CmtContent) then Result := i;
         Exit;
       end;
       CmtContent := Copy(Line, i, pClose - i);
-      if (Result = 0) and (ScoreCodeMarkers(CmtContent) >= 2) then Result := i;
+      if (Result = 0) and (LooksLikeCommentedCode(CmtContent)) then Result := i;
       InBlockComm := False;
       i := pClose + 1; Continue;
     end;
@@ -172,11 +190,11 @@ begin
       if pClose = 0 then
       begin
         CmtContent := Copy(Line, i, n - i + 1);
-        if ScoreCodeMarkers(CmtContent) >= 2 then Result := i;
+        if LooksLikeCommentedCode(CmtContent) then Result := i;
         Exit;
       end;
       CmtContent := Copy(Line, i, pClose - i);
-      if (Result = 0) and (ScoreCodeMarkers(CmtContent) >= 2) then Result := i;
+      if (Result = 0) and (LooksLikeCommentedCode(CmtContent)) then Result := i;
       InParenStarComm := False;
       i := pClose + 2; Continue;
     end;
@@ -196,7 +214,7 @@ begin
     begin
       // Inhalt des //-Kommentars
       CmtContent := Copy(Line, i + 2, MaxInt);
-      if ScoreCodeMarkers(CmtContent) >= 2 then Result := i;
+      if LooksLikeCommentedCode(CmtContent) then Result := i;
       Exit;
     end;
     if c = '{' then
@@ -213,11 +231,11 @@ begin
       begin
         InBlockComm := True;
         CmtContent := Copy(Line, i + 1, n - i);
-        if ScoreCodeMarkers(CmtContent) >= 2 then Result := i;
+        if LooksLikeCommentedCode(CmtContent) then Result := i;
         Exit;
       end;
       CmtContent := Copy(Line, i + 1, pClose - i - 1);
-      if (Result = 0) and (ScoreCodeMarkers(CmtContent) >= 2) then Result := i;
+      if (Result = 0) and (LooksLikeCommentedCode(CmtContent)) then Result := i;
       i := pClose + 1; Continue;
     end;
     if (c = '(') and (i < n) and (Line[i + 1] = '*') then
@@ -227,11 +245,11 @@ begin
       begin
         InParenStarComm := True;
         CmtContent := Copy(Line, i + 2, n - i - 1);
-        if ScoreCodeMarkers(CmtContent) >= 2 then Result := i;
+        if LooksLikeCommentedCode(CmtContent) then Result := i;
         Exit;
       end;
       CmtContent := Copy(Line, i + 2, pClose - i - 2);
-      if (Result = 0) and (ScoreCodeMarkers(CmtContent) >= 2) then Result := i;
+      if (Result = 0) and (LooksLikeCommentedCode(CmtContent)) then Result := i;
       i := pClose + 2; Continue;
     end;
     Inc(i);

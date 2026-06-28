@@ -30,6 +30,7 @@ type
     [Test] procedure ForwardFunction_NoFinding;
     [Test] procedure InterfaceMethodDecl_NoFinding;
     [Test] procedure ClassMethodDecl_NoFinding;
+    [Test] procedure AbsoluteResultAlias_NoFinding;
     [Test] procedure RecordResult_FieldAssign_NoFinding;
     [Test] procedure ArrayResult_IndexAssign_NoFinding;
     [Test] procedure FnNameDotField_NoFinding;
@@ -51,6 +52,24 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+procedure TTestRoutineResultAssigned.AbsoluteResultAlias_NoFinding;
+// FP-Fix (Real-World 2026-06-28): 'X: T absolute Result' - Schreibzugriffe via
+// Alias X gehen an den Result-Slot, 'Result' steht nie auf einer LHS.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Pack(a, b: Word): Cardinal;'#13#10 +
+  'var Bits: Cardinal absolute Result;'#13#10 +
+  'begin'#13#10 +
+  '  Bits := (a shl 16) or b;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRoutineResultUnassigned),
+    'absolute-Result-Alias schreibt den Return-Slot - kein unassigned');
+  finally F.Free; end;
+end;
 
 procedure TTestRoutineResultAssigned.FunctionWithoutResult_Reported;
 const SRC =

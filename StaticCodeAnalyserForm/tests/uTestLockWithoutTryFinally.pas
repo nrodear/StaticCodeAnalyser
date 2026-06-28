@@ -30,6 +30,10 @@ type
     [Test] procedure EnterAsBooleanExpression_NotReported;
     // Gegenkontrolle: 'begin' einer Schleife (ohne try) darf NICHT suppressen.
     [Test] procedure LoopBeginNoTry_Reported;
+    // Real-World 2026-06-28: exception-freier Getter/Setter (nur Zuweisung
+    // zwischen Enter/Leave) braucht kein try/finally.
+    [Test] procedure ExceptionFreeGetter_NotReported;
+    [Test] procedure CallBetweenEnterLeave_StillReported;
   end;
 
 implementation
@@ -284,6 +288,45 @@ begin
     Assert.IsNotNull(Hit, 'fkLockWithoutTryFinally finding expected');
     Assert.AreEqual(lsError, Hit.Severity,
       'Lock-Leak-Pattern muss als Error emittieren (Deadlock-Risiko)');
+  finally F.Free; end;
+end;
+
+procedure TTestLockWithoutTryFinally.ExceptionFreeGetter_NotReported;
+// FP-Fix (Real-World 2026-06-28): zwischen Enter und Leave stehen nur reine
+// Zuweisungen (Result := FField) - kein Call/Index/raise -> kann nicht werfen
+// -> Lock kann nicht haengen -> kein try/finally noetig.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function TFoo.GetValue: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  FLock.Enter;'#13#10 +
+  '  Result := FValue;'#13#10 +
+  '  FLock.Leave;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLockWithoutTryFinally),
+    'exception-freier Getter (nur Zuweisung) braucht kein try/finally');
+  finally F.Free; end;
+end;
+
+procedure TTestLockWithoutTryFinally.CallBetweenEnterLeave_StillReported;
+// TP-Gegenkontrolle: sobald zwischen Enter und Leave ein CALL steht (kann
+// werfen), bleibt der Befund - auch ein paren-loser Call ('DoWork;').
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function TFoo.GetValue: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  FLock.Enter;'#13#10 +
+  '  Result := Compute(FValue);'#13#10 +
+  '  FLock.Leave;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkLockWithoutTryFinally) >= 1,
+    'Call zwischen Enter/Leave kann werfen - bleibt ein Finding');
   finally F.Free; end;
 end;
 
