@@ -1,89 +1,88 @@
-# HowTo: Tests bauen und laufen
+# HowTo: Build and run the tests
 
-Die DUnitX-Test-Suite (`StaticCodeAnalyserForm\tests\TestProject.dproj`)
-braucht **zwei externe Komponenten**. Ohne sie scheitert "Alle Projekte
-erzeugen" mit `F2613 Unit '...' nicht gefunden`.
+*🇬🇧 English — 🇩🇪 [Deutsch](HowTo_Tests_de.md)*
 
-| Komponente | Pflicht | Zweck |
+The DUnitX test suite (`StaticCodeAnalyserForm\tests\TestProject.dproj`) needs
+**two external components**. Without them "Build all projects" fails with
+`F2613 Unit '...' not found`.
+
+| Component | Required | Purpose |
 |---|---|---|
-| **DUnitX** | Pflicht | Test-Framework (Assert/[Test]-Attribute/Runner) |
-| **TestInsight** | Win32 optional | IDE-Integration (Tests-Panel, live-Status) |
+| **DUnitX** | required | Test framework (Assert / `[Test]` attributes / runner) |
+| **TestInsight** | Win32 optional | IDE integration (test panel, live status) |
 
-Das eigentliche SCA-Engine + Standalone-EXE laufen unabhaengig — die
-Tests sind nur fuer Entwickler relevant. Wer nur den SCA bauen will,
-kann das TestProject im IDE-Build aushaengen (s. Workarounds unten).
+The actual SCA engine + standalone EXE run independently — the tests are only
+relevant for developers. If you only want to build the SCA, you can exclude the
+TestProject from the IDE build (see workarounds below).
 
 ---
 
 ## Installation
 
-### DUnitX (Pflicht — beide Plattformen)
+### DUnitX (required — both platforms)
 
 ```bash
 cd D:\git-demos\delphi
 git clone https://github.com/VSoftTechnologies/DUnitX.git dunitx
 ```
 
-Im `TestProject.dproj` ist der Pfad `..\..\..\dunitx\Source` bereits in
-`DCC_UnitSearchPath` eingetragen (Commit `3f1cab0`). Andere Parent-
-Directory? Pfad in der dproj entsprechend anpassen oder via Tools ->
-Options -> Language -> Delphi -> Library global setzen (fuer **Win32
-und Win64** je separat).
+In `TestProject.dproj` the path `..\..\..\dunitx\Source` is already in
+`DCC_UnitSearchPath` (commit `3f1cab0`). Different parent directory? Adjust the
+path in the dproj or set it globally via Tools → Options → Language → Delphi →
+Library (separately for **Win32 and Win64**).
 
-### TestInsight (optional — Win32 IDE-Integration)
+### TestInsight (optional — Win32 IDE integration)
 
-Bevorzugt via **GetIt Package Manager**:
+Preferably via the **GetIt Package Manager**:
 
-1. RAD-Studio IDE -> Tools -> GetIt Package Manager
-2. Suche "TestInsight" -> **Install** klicken
-3. IDE-Neustart
+1. RAD Studio IDE → Tools → GetIt Package Manager
+2. Search "TestInsight" → click **Install**
+3. Restart the IDE
 
-GetIt setzt Library-Path und installiert das Plugin automatisch.
+GetIt sets the library path and installs the plugin automatically.
 
-Falls GetIt-Eintrag nicht da: GitHub/Bitbucket nach
-`TestInsight Stefan Glienke` durchsuchen, manuell clonen, die
-`TestInsight.RADxx.dpk` kompilieren + installieren, dann `Source/` zum
-Win32-Library-Path adden.
+If the GetIt entry is missing: search GitHub/Bitbucket for
+`TestInsight Stefan Glienke`, clone manually, compile + install the
+`TestInsight.RADxx.dpk`, then add `Source/` to the Win32 library path.
 
 ---
 
-## Build-Pfade
+## Build targets
 
-| Build-Target | Plattform | Voraussetzung |
+| Build target | Platform | Prerequisite |
 |---|---|---|
-| SCA.Engine.bpl | Win32 + Win64 | rtl, nichts extern |
-| SCA.SharedUI.bpl | **nur Win32** | rtl, vcl, designide (IDE-only) |
-| StaticCodeAnalyser.exe (Standalone) | Win32 + Win64 | nichts extern |
-| StaticCodeAnalyser.IDE.bpl | **nur Win32** | rtl, vcl, designide |
+| SCA.Engine.bpl | Win32 + Win64 | rtl, nothing external |
+| SCA.SharedUI.bpl | **Win32 only** | rtl, vcl, designide (IDE-only) |
+| StaticCodeAnalyser.exe (standalone) | Win32 + Win64 | nothing external |
+| StaticCodeAnalyser.IDE.bpl | **Win32 only** | rtl, vcl, designide |
 | **TestProject.exe** | Win32 + Win64 | **DUnitX** + (Win32: TestInsight) |
 
-Die Group baut mit "Alle Projekte erzeugen" alle 5 Targets auf der
-aktuell gewaehlten Plattform.
+"Build all projects" builds all 5 targets on the currently selected platform.
 
 ---
 
-## Tests laufen
+## Running the tests
 
-### IDE (Win32 mit TestInsight)
+### IDE (Win32 with TestInsight)
 
-Standard-Setup. Tests-Panel zeigt live Result, Click auf failing Test
-springt zur Assertion.
+Standard setup. The test panel shows live results; clicking a failing test jumps
+to the assertion.
 
-### IDE ohne TestInsight (Win32 oder Win64)
+### IDE without TestInsight (Win32 or Win64)
 
-`TestProject.exe` als Standalone-Konsole laufen — DUnitX-Console-Logger
-wird verwendet (siehe `TestProject.dpr` Z18-20):
+Run `TestProject.exe` as a standalone console — the DUnitX console logger is used
+(see `TestProject.dpr` lines 18-20):
 
 ```powershell
 ".\Output\Tests\Win64 Release\TestProject.exe"
 ```
 
-Exit-Code 0 = alle gruen. Failures kommen als stdout + nunit-XML
-neben der EXE (per `DUnitX.Loggers.Xml.NUnit`).
+Exit code 0 = all green. Failures appear as stdout + NUnit XML next to the EXE
+(via `DUnitX.Loggers.Xml.NUnit`).
 
-### Subset laufen lassen
+### Running a subset
 
-DUnitX-Command-Line nimmt Filter:
+The DUnitX command line takes filters:
 
 ```powershell
 TestProject.exe --include:TTestUninitVar
@@ -94,18 +93,17 @@ TestProject.exe --exclude:TTestPerformance
 
 ## Workarounds
 
-### TestProject komplett vom Build ausnehmen
+### Exclude TestProject from the build entirely
 
-Wenn Tests gerade nicht relevant sind und nur SCA gebaut werden soll,
-in IDE -> Projektgruppe rechtsklicken -> **Build-Auftrag** -> Haken bei
-`TestProject.dproj` entfernen. "Alle Projekte erzeugen" ueberspringt
-das Projekt dann.
+If the tests are not currently relevant and you only want to build the SCA, in
+IDE → right-click the project group → **Build order** → uncheck
+`TestProject.dproj`. "Build all projects" then skips that project.
 
-Aequivalent direkt im `.groupproj`: Eintrag fuer TestProject auskommentieren.
+Equivalently, comment out the TestProject entry directly in the `.groupproj`.
 
-### TESTINSIGHT-Define plattform-gated
+### Platform-gated TESTINSIGHT define
 
-Im `TestProject.dproj` ist der Define nur fuer Win32 aktiv (Z133):
+In `TestProject.dproj` the define is active only for Win32 (line 133):
 
 ```xml
 <PropertyGroup Condition="'$(Base_Win32)'!=''">
@@ -113,36 +111,34 @@ Im `TestProject.dproj` ist der Define nur fuer Win32 aktiv (Z133):
 </PropertyGroup>
 ```
 
-Win64-Build ueberspringt damit automatisch die TestInsight-Imports und
-braucht das Plugin nicht. Wer TestInsight gar nicht haben will, kann
-den Eintrag ersatzlos loeschen.
+The Win64 build therefore skips the TestInsight imports automatically and does
+not need the plugin. If you do not want TestInsight at all, delete the entry.
 
-### EFOpenError-Dialog beim Test-Run
+### EFOpenError dialog during the test run
 
-Mehrere Tests werfen absichtlich Exceptions (`EFOpenError`,
-`Exception`, etc.) um Error-Handling zu verifizieren. Der IDE-Debugger
-faengt sie ab und zeigt einen Dialog. Workaround:
+Several tests deliberately raise exceptions (`EFOpenError`, `Exception`, etc.) to
+verify error handling. The IDE debugger catches them and shows a dialog.
+Workaround:
 
-- **Im Dialog**: Haken bei "Diesen Exception-Typ ignorieren" +
-  Fortsetzen
-- **Dauerhaft**: Run -> Run Without Debugging (`Strg+Shift+F9`) statt
-  F9 — der Debugger interveniert dann gar nicht
-- **Selektiv**: Tools -> Options -> Debugger Options -> Language
-  Exceptions -> Exception-Klasse zur Ignore-Liste adden
+- **In the dialog:** check "Ignore this exception type" + continue
+- **Permanently:** Run → Run Without Debugging (`Ctrl+Shift+F9`) instead of F9 —
+  the debugger then does not intervene at all
+- **Selectively:** Tools → Options → Debugger Options → Language Exceptions → add
+  the exception class to the ignore list
 
-### Win64-spezifische E2532 bei `Assert.AreEqual(N, X.Count)`
+### Win64-specific E2532 on `Assert.AreEqual(N, X.Count)`
 
-Generic-Inference scheitert unter Win64 wenn untyped Int-Literal +
-Integer kombiniert werden. Fix: expliziter Typ-Parameter
-`Assert.AreEqual<Integer>(N, X.Count)`. Bereits in 1209 Stellen der
-Suite gepatcht (Commit `5f1661c`). Bei neuen Tests beachten.
+Generic inference fails under Win64 when an untyped int literal + Integer are
+combined. Fix: explicit type parameter `Assert.AreEqual<Integer>(N, X.Count)`.
+Already patched in 1209 places of the suite (commit `5f1661c`). Mind this for new
+tests.
 
 ---
 
-## Verwandte Files im Repo
+## Related files in the repo
 
-- `StaticCodeAnalyserForm\tests\TestProject.dproj` — Test-Projekt-Config
-- `StaticCodeAnalyserForm\tests\TestProject.dpr` — Test-Runner-Code
-- `StaticCodeAnalyserForm\tests\uTest*.pas` — die einzelnen Test-Units
-- `HowTo_AddDetector.md` — wenn ein neuer Detektor + Tests anzulegen sind
-- `HowTo_DetectorSelftest.md` — Dogfooding-Workflow fuer das SCA-EXE
+- `StaticCodeAnalyserForm\tests\TestProject.dproj` — test project config
+- `StaticCodeAnalyserForm\tests\TestProject.dpr` — test runner code
+- `StaticCodeAnalyserForm\tests\uTest*.pas` — the individual test units
+- `HowTo_AddDetector.md` — when a new detector + tests are to be created
+- `HowTo_DetectorSelftest.md` — dogfooding workflow for the SCA EXE

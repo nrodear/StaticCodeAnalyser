@@ -1,79 +1,88 @@
 # SCA.CLI.Demo
 
-Minimaler Beispiel-Consumer der **SCA-Engine-API** (`uEngineApi`).
+*🇬🇧 English — 🇩🇪 [Deutsch](README_de.md) — Full engine/API reference: [../SCA.Engine/API.md](../SCA.Engine/API.md)*
 
-Zeigt, dass die komplette statische Analyse über die öffentliche Facade nutzbar
-ist, **ohne** die Engine-Quelltexte zu kennen: dieses Projekt referenziert
-ausschließlich das Laufzeit-Package **`SCA.Engine`** (`DCC_UsePackage`) — es
-liegt **kein** Engine-Source-Verzeichnis im Suchpfad.
+Minimal example consumer of the **SCA engine API** (`uEngineApi`).
 
-Das Programm scannt ein Verzeichnis rekursiv und gibt nur eine
-**Kennwert-Statistik** aus.
+It demonstrates that the complete static analysis is usable through the public
+facade **without knowing the engine's source code**: this project references the
+runtime package **`SCA.Engine`** exclusively (`DCC_UsePackage`) — there is **no**
+engine source directory on the search path.
 
-## Bauen (RAD Studio / Delphi 12)
+The program scans a directory recursively and prints only a **metrics summary**.
 
-Reihenfolge wichtig — das Package muss vor dem Demo vorliegen:
+## The API it uses
 
-1. `SCA.Engine.dproj` für die Zielplattform bauen (erzeugt `SCA.Engine.dcp`
-   + `SCA.Engine.bpl` im globalen DCP/BPL-Verzeichnis).
-2. `SCA.CLI.Demo.dproj` öffnen und bauen (Konsolen-EXE, Win32 oder Win64).
+| API | Purpose |
+|-----|---------|
+| `ScanRecursive(path, profile): TScanResult` | One-line recursive scan. |
+| `TScanResult.FindingCount / ErrorCount / WarningCount / HintCount` | Severity metrics. |
+| `TScanResult.Findings` (`TObjectList<TLeakFinding>`) | Detail access. |
+| `TLeakFinding.FindingType` / `.FileName` | Category breakdown + file count. |
 
-Am einfachsten beide Projekte in eine Projektgruppe legen — die
-`DCCReference SCA.Engine.dcp` sorgt für die richtige Build-Reihenfolge.
+That's the whole surface — a clean proof that the facade alone is enough. For
+more control (profiles, MinSeverity, baseline, ignore list, SARIF/Sonar/HTML
+export) there is `TScanRequest.Init` + `TAnalysisSession.Run` and
+`TScanResult.WriteSarif/WriteSonar/WriteHtml` — see
+[../SCA.Engine/API.md](../SCA.Engine/API.md).
 
-> Zur Laufzeit muss `SCA.Engine.bpl` auffindbar sein (globales BPL-Verzeichnis
-> liegt bei installiertem RAD Studio auf dem Pfad; für eine eigenständige
-> Auslieferung die `.bpl` neben die `.exe` legen).
+## Building (RAD Studio / Delphi 12)
 
-## Aufruf
+Order matters — the package must exist before the demo:
+
+1. Build `SCA.Engine.dproj` for the target platform (produces `SCA.Engine.dcp` +
+   `SCA.Engine.bpl` in the global DCP/BPL directory).
+2. Open and build `SCA.CLI.Demo.dproj` (console EXE, Win32 or Win64).
+
+Easiest: put both projects in one project group. The package linkage is via
+`DCC_UsePackage SCA.Engine` (no source paths).
+
+> At runtime `SCA.Engine.bpl` must be findable (the global BPL directory is on
+> the path with RAD Studio installed; for standalone deployment ship the `.bpl`
+> next to the `.exe`).
+
+## Usage
 
 ```
-SCA.CLI.Demo.exe [<Pfad>] [<Profil>]
+SCA.CLI.Demo.exe [<path>] [<profile>]
 ```
 
-| Argument | Bedeutung |
-|----------|-----------|
-| `<Pfad>`   | Wurzelverzeichnis (Default: aktuelles Verzeichnis) |
-| `<Profil>` | optional. `''` = alle Detektoren (Default). Bekannt: `default`, `strict`, `ide-fast`, `security`, `bugs-only`, `code-quality`, `dfm-only` |
+| Argument | Meaning |
+|----------|---------|
+| `<path>`    | Root directory (default: current directory) |
+| `<profile>` | optional. `''` = all detectors (default). Known: `default`, `strict`, `ide-fast`, `security`, `bugs-only`, `code-quality`, `dfm-only` |
 
-Exit-Code (wie der CLI): `0` = sauber, `3` = Funde vorhanden, `1`/`2` = Fehler.
+Exit code (like the CLI): `0` = clean, `3` = findings present, `1`/`2` = error.
 
-## Beispiel-Ausgabe
+## Example output
 
 ```
 ========================================================
  SCA CLI Demo - Kennwert-Statistik
 ========================================================
-  Pfad         : D:\meinprojekt
+  Pfad         : D:\myproject
   Profil       : (alle Detektoren)
-  Dauer        : 1234 ms
-  Dateien      : 186 (mit Funden)
+  Dauer        : 1082 ms
+  Dateien      : 174 (mit Funden)
 --------------------------------------------------------
-  Funde gesamt : 1156
+  Funde gesamt : 714
 
   Nach Schweregrad:
-    Fehler  (Error)  : 36
-    Warnung (Warning): 438
-    Hinweis (Hint)   : 865
+    Fehler  (Error)  : 0
+    Warnung (Warning): 206
+    Hinweis (Hint)   : 508
 
   Nach Kategorie:
-    Bug              : 72
-    Code Smell       : 980
-    Vulnerability    : 18
-    Security Hotspot : 4
-    Duplication      : 32
+    Bug              : 2
+    Code Smell       : 705
+    Vulnerability    : 0
+    Security Hotspot : 0
+    Duplication      : 7
     File Error       : 0
 ========================================================
 ```
 
-## Was die Demo aus der API benutzt
-
-- `ScanRecursive(Pfad, Profil): TScanResult` — Ein-Zeilen-Rekursiv-Scan.
-- `TScanResult.FindingCount / ErrorCount / WarningCount / HintCount` —
-  Schweregrad-Kennwerte.
-- `TScanResult.Findings` (`TObjectList<TLeakFinding>`) + `TLeakFinding.FindingType`
-  / `.FileName` — Kategorie-Aufschlüsselung und Datei-Zählung.
-
-Mehr Kontrolle (Profil, MinSeverity, Baseline, Ignore-Liste, SARIF-/Sonar-/
-HTML-Export …) gäbe es über `TScanRequest.Init` + `TAnalysisSession.Run` bzw.
-`TScanResult.WriteSarif/WriteSonar/WriteHtml`.
+*(The program output itself is German; the metric meanings are: Pfad=path,
+Dauer=duration, Dateien=files with findings, Funde gesamt=total findings,
+Nach Schweregrad=by severity [Fehler=error, Warnung=warning, Hinweis=hint],
+Nach Kategorie=by category.)*
