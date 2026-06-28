@@ -47,7 +47,7 @@ type
       IndexFileList: TStringList = nil);
   end;
 
-var
+threadvar
   // Optional Per-Detector-Timing-Accumulator. Wenn von aussen
   // (CLI --time-detectors, IDE-Perf-Mode) gesetzt, summiert das
   // AOnTime-Lambda in ParseLeaks pro Scan TotalMs + CallCount auf.
@@ -55,6 +55,10 @@ var
   // Lifecycle: Caller erzeugt, Lambda fuellt, Caller liest und gibt frei.
   // Public exposed weil Konsumenten (CLI/IDE) das Dictionary nach dem
   // Scan auslesen muessen.
+  // TD-1 (Thread-Safety): threadvar = thread-lokal. Caller erzeugt/liest/freet
+  // auf DEMSELBEN Thread wie der (synchrone) Run -> Single-Thread-Verhalten
+  // identisch (verhaltensneutral), paralleler Scan bekommt je Thread einen
+  // eigenen Accumulator statt eines geteilten Prozess-Globals.
   gDetectorTimings : TDictionary<string, TPair<Int64, Integer>>;
 
 implementation
