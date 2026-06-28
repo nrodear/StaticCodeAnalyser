@@ -51,6 +51,11 @@ type
     [Test] procedure NestedRoutine_OuterVarWrittenBeforeNestedRead_NoFinding;
     // Parser nkNestedRange-Marker -> exakte nested-Range-Skips (2026-06-25)
     [Test] procedure NestedProcWithTry_OuterVarInLaterNested_NoFinding;
+    // Real-World 2026-06-28: Auto-init-Record (TRttiContext) + escaped-field
+    // Array-Element-Write (name[0].&Type := ...)
+    [Test] procedure RttiContextRecord_NoFinding;
+    [Test] procedure NonAutoInitRecord_StillFlagged;
+    [Test] procedure EscapedFieldArrayElementWrite_NoFinding;
   end;
 
 implementation
@@ -824,6 +829,87 @@ begin
   RunOn(SRC, L);
   try Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
     'Read einer Outer-Var in nested proc (nach try-proc) ist kein uninit');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.RttiContextRecord_NoFinding;
+// FP-Fix (Real-World 2026-06-28, Alcinoe.FMX.Controls:1852 / CEF4):
+//   var LContext: TRttiContext;
+//   LType := LContext.GetType(...);
+// TRttiContext ist ein Auto-init-Record (lazy Self-Init / Management-
+// Operatoren). Bare-Verwendung ohne explizite Zuweisung ist das Standard-
+// RTTI-Idiom und NIE ein uninitialisierter Read.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'uses System.Rtti;'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(Obj: TObject);'#13#10 +
+    'var LContext: TRttiContext;'#13#10 +
+    'begin'#13#10 +
+    '  WriteLn(LContext.GetType(Obj.ClassType).Name);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+    'TRttiContext ist Auto-init-Record - bare-Verwendung kein UninitVar');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.NonAutoInitRecord_StillFlagged;
+// TP-Gegenkontrolle: die NOINIT_RECORD_TYPES-Denylist ist eng (nur
+// TRttiContext). Ein gewoehnlicher Record der vor jedem Write gelesen
+// wird MUSS weiter feuern - sonst waere die Denylist zu breit.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'uses System.Types;'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var pt: TPoint;'#13#10 +
+    'begin'#13#10 +
+    '  WriteLn(pt.X);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try Assert.IsTrue(CountKind(L, fkUninitVar) >= 1,
+    'gewoehnlicher Record (TPoint) vor Write gelesen - muss weiter flaggen');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.EscapedFieldArrayElementWrite_NoFinding;
+// FP-Fix (Real-World 2026-06-28, Alcinoe.ServiceUtils:107):
+//   var LActions: array[0..2] of SC_ACTION;
+//   LActions[0].&Type := SC_ACTION_RESTART;
+// Das escaped-keyword-Feld '&Type' brach den Qualifier-Walk im Array-
+// Element-Write-Skip ab -> der Write wurde als Read fehlgedeutet. Mit '&'
+// im Charset wird '[0].&Type :=' korrekt als Element-Write erkannt.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'type TAct = record &Type: Integer; Delay: Integer; end;'#13#10 +
+    'procedure P;'#13#10 +
+    'var LActions: array[0..1] of TAct;'#13#10 +
+    'begin'#13#10 +
+    '  LActions[0].&Type := 1;'#13#10 +
+    '  LActions[0].Delay := 5000;'#13#10 +
+    '  LActions[1].&Type := 1;'#13#10 +
+    '  LActions[1].Delay := 5000;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+    'name[i].&Field := ... ist Element-Write (escaped keyword), kein Read');
   finally L.Free; end;
 end;
 

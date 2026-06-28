@@ -103,6 +103,17 @@ const
     'iinterface'            // sehr defensive Annaehrung an ALLE Interfaces
   );
 
+  // Auto-init-Record-Typen: Records mit Initialize/Finalize-Management-
+  // Operatoren bzw. lazy Self-Init. Bare-Verwendung
+  //   'var ctx: TRttiContext; ctx.GetType(...)'
+  // ist das Standard-Idiom und braucht NIE eine explizite Zuweisung ->
+  // read-without-write ist hier KEIN Bug (also kein FN beim Skippen).
+  // FP-Klasse Real-World 2026-06-28: Alcinoe/CEF4 RTTI-Walks, 195 bare
+  // TRttiContext-Decls im 25-Repo-Korpus = dominante SCA166-FP-Quelle.
+  NOINIT_RECORD_TYPES : array[0..0] of string = (
+    'trtticontext'
+  );
+
   // Methoden-Body wird als asm-Block gekennzeichnet wenn das TypeRef
   // des nkMethod-Knotens einen ';asm'-Marker enthaelt (analog dem
   // virtual/override-Pattern in uVisibilityCheck).
@@ -292,6 +303,23 @@ begin
   if T = '' then Exit;
   for Prefix in MANAGED_TYPE_PREFIXES do
     if T.StartsWith(Prefix) then Exit(True);
+end;
+
+function IsNoInitRecordType(const TypeRef: string): Boolean;
+// True wenn der Typ ein Auto-init-Record (NOINIT_RECORD_TYPES) ist - dann
+// ist read-without-write KEIN UninitVar (Standard-Idiom). Qualifier wie
+// 'System.Rtti.TRttiContext' werden auf den nackten Namen reduziert.
+var
+  T, NameOnly, NT : string;
+  DotPos : Integer;
+begin
+  Result := False;
+  T := LowerCase(Trim(TypeRef));
+  if T = '' then Exit;
+  DotPos := LastDelimiter('.', T);
+  if DotPos > 0 then NameOnly := Copy(T, DotPos + 1, MaxInt) else NameOnly := T;
+  for NT in NOINIT_RECORD_TYPES do
+    if NameOnly = NT then Exit(True);
 end;
 
 function IsAsmMethod(MethodNode: TAstNode): Boolean;
@@ -1206,7 +1234,11 @@ var
                 begin Dec(depth); if depth = 0 then begin Inc(q); Break; end; end;
                 Inc(q);
               end;
-              while (q <= LL) and CharInSet(L[q], ['.', '_', 'a'..'z', '0'..'9']) do Inc(q);
+              // '&' im Charset: escaped-keyword-Felder ('name[0].&Type := ...')
+              // sind Element-Writes, kein Read. Ohne '&' bricht der Qualifier-
+              // Walk an '&Type' ab und der Write wird als Read fehlgedeutet
+              // (FP-Klasse Real-World 2026-06-28, Alcinoe.ServiceUtils SC_ACTION).
+              while (q <= LL) and CharInSet(L[q], ['.', '_', '&', 'a'..'z', '0'..'9']) do Inc(q);
               while (q <= LL) and (L[q] = ' ') do Inc(q);
               if (q < LL) and (L[q] = ':') and (L[q + 1] = '=') then
                 begin P := P + NL; Continue; end;
@@ -1267,6 +1299,10 @@ var
       // es nicht, daher auch keine 'init'-Pflicht. Audit-Trigger Img32.Extra
       // BlendAverage/AlphaAverage und mORMot crypt.ecc 'absolute Result'.
       if Pos('absolute', LowerCase(LV.TypeRef)) > 0 then Continue;
+      // Auto-init-Record-Typen (TRttiContext u.a.): bare-Verwendung ist das
+      // Standard-RTTI-Idiom, niemals explizit zugewiesen -> read-without-write
+      // ist kein Bug. Aus der Inventur entfernen (Real-World 2026-06-28).
+      if IsNoInitRecordType(LV.TypeRef) then Continue;
       VarRec.Name           := LV.Name;
       VarRec.NameLow        := LowerCase(LV.Name);
       VarRec.TypeLow        := LowerCase(LV.TypeRef);
