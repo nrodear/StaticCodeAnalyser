@@ -5,7 +5,7 @@
         <FrameworkType>None</FrameworkType>
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Release</Config>
-        <Platform Condition="'$(Platform)'==''">Win64</Platform>
+        <Platform Condition="'$(Platform)'==''">Win32</Platform>
         <ProjectName Condition="'$(ProjectName)'==''">TestProject</ProjectName>
         <TargetedPlatforms>3</TargetedPlatforms>
         <AppType>Console</AppType>
@@ -145,6 +145,7 @@
         <DCCReference Include="uTestSafetyChecks.pas"/>
         <DCCReference Include="uTestComboChecks.pas"/>
         <DCCReference Include="uTestParserRobustness.pas"/>
+        <DCCReference Include="uTestGoldenCorpus.pas"/>
         <DCCReference Include="uTestLexerConditionals.pas"/>
         <DCCReference Include="uTestPerformance.pas"/>
         <DCCReference Include="uTestRuleCatalog.pas"/>

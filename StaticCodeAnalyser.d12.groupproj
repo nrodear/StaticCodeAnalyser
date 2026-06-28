@@ -7,7 +7,7 @@
             <Dependencies/>
         </Projects>
         <Projects Include="SCA.SharedUI\SCA.SharedUI.dproj">
-            <Dependencies>SCA.Engine\SCA.Engine.dproj</Dependencies>
+            <Dependencies/>
         </Projects>
         <Projects Include="StaticCodeAnalyserForm\StaticCodeAnalyser.d12.dproj">
             <Dependencies>SCA.Engine\SCA.Engine.dproj;SCA.SharedUI\SCA.SharedUI.dproj</Dependencies>
@@ -16,7 +16,7 @@
             <Dependencies>SCA.Engine\SCA.Engine.dproj;SCA.SharedUI\SCA.SharedUI.dproj</Dependencies>
         </Projects>
         <Projects Include="StaticCodeAnalyserForm\tests\TestProject.dproj">
-            <Dependencies>SCA.Engine\SCA.Engine.dproj;SCA.SharedUI\SCA.SharedUI.dproj</Dependencies>
+            <Dependencies/>
         </Projects>
     </ItemGroup>
     <ProjectExtensions>
@@ -44,22 +44,22 @@
     <Target Name="SCA_SharedUI:Make">
         <MSBuild Projects="SCA.SharedUI\SCA.SharedUI.dproj" Targets="Make"/>
     </Target>
-    <Target Name="StaticCodeAnalyser_d12">
+    <Target Name="StaticCodeAnalyser_d12" DependsOnTargets="SCA.Engine;SCA.SharedUI">
         <MSBuild Projects="StaticCodeAnalyserForm\StaticCodeAnalyser.d12.dproj"/>
     </Target>
-    <Target Name="StaticCodeAnalyser_d12:Clean">
+    <Target Name="StaticCodeAnalyser_d12:Clean" DependsOnTargets="SCA.Engine:Clean;SCA.SharedUI:Clean">
         <MSBuild Projects="StaticCodeAnalyserForm\StaticCodeAnalyser.d12.dproj" Targets="Clean"/>
     </Target>
-    <Target Name="StaticCodeAnalyser_d12:Make">
+    <Target Name="StaticCodeAnalyser_d12:Make" DependsOnTargets="SCA.Engine:Make;SCA.SharedUI:Make">
         <MSBuild Projects="StaticCodeAnalyserForm\StaticCodeAnalyser.d12.dproj" Targets="Make"/>
     </Target>
-    <Target Name="StaticCodeAnalyser_IDE_d12">
+    <Target Name="StaticCodeAnalyser_IDE_d12" DependsOnTargets="SCA.Engine;SCA.SharedUI">
         <MSBuild Projects="StaticCodeAnalyserIDE\StaticCodeAnalyser.IDE.d12.dproj"/>
     </Target>
-    <Target Name="StaticCodeAnalyser_IDE_d12:Clean">
+    <Target Name="StaticCodeAnalyser_IDE_d12:Clean" DependsOnTargets="SCA.Engine:Clean;SCA.SharedUI:Clean">
         <MSBuild Projects="StaticCodeAnalyserIDE\StaticCodeAnalyser.IDE.d12.dproj" Targets="Clean"/>
     </Target>
-    <Target Name="StaticCodeAnalyser_IDE_d12:Make">
+    <Target Name="StaticCodeAnalyser_IDE_d12:Make" DependsOnTargets="SCA.Engine:Make;SCA.SharedUI:Make">
         <MSBuild Projects="StaticCodeAnalyserIDE\StaticCodeAnalyser.IDE.d12.dproj" Targets="Make"/>
     </Target>
     <Target Name="TestProject">

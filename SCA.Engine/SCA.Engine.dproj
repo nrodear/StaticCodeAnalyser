@@ -6,7 +6,7 @@
         <FrameworkType>None</FrameworkType>
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Release</Config>
-        <Platform Condition="'$(Platform)'==''">Win64</Platform>
+        <Platform Condition="'$(Platform)'==''">Win32</Platform>
         <ProjectName Condition="'$(ProjectName)'==''">SCA.Engine</ProjectName>
         <TargetedPlatforms>3</TargetedPlatforms>
         <AppType>Package</AppType>
@@ -287,7 +287,9 @@
         <DCCReference Include="sources\Infrastructure\uDfmAnalysisRunner.pas"/>
         <DCCReference Include="sources\Infrastructure\uDfmDbFieldAnalysis.pas"/>
         <DCCReference Include="sources\Infrastructure\uDfmFrameResolver.pas"/>
+        <DCCReference Include="sources\Infrastructure\uAnalyzeContext.pas"/>
         <DCCReference Include="sources\Infrastructure\uDfmRepoIndex.pas"/>
+        <DCCReference Include="sources\Infrastructure\uEngineApi.pas"/>
         <DCCReference Include="sources\Infrastructure\uExport.pas"/>
         <DCCReference Include="sources\Infrastructure\uExportHtml.pas"/>
         <DCCReference Include="sources\Infrastructure\uFileTextCache.pas"/>
