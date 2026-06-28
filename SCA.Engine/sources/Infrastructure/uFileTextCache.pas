@@ -59,10 +59,15 @@ type
     procedure Clear;
   end;
 
-var
+threadvar
   // Optional. Wenn nil (Tests, Single-File-Pfad), faellt AcquireLines auf
   // einen frischen LoadFromFile-Roundtrip zurueck.
-  gFileTextCache : TFileTextCache = nil;
+  // TD-1 (Thread-Safety): threadvar = thread-lokal. Aller Zugriff (ParseLeaks
+  // Create/Clear, AcquireLines, Post-Scan-Suppression, uClaudePrompt) laeuft auf
+  // DEMSELBEN Thread wie der synchrone Scan -> Single-Thread-Verhalten identisch
+  // (verhaltensneutral); paralleler Scan bekommt je Thread einen eigenen Cache.
+  // Kein Initializer: threadvar defaultet je Thread auf nil.
+  gFileTextCache : TFileTextCache;
 
 // Bequemer Wrapper fuer File-Scan-Detektoren - liefert Lines + Ownership-
 // Flag. Caller-Muster:
