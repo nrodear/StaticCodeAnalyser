@@ -47,18 +47,18 @@ type
       IndexFileList: TStringList = nil);
   end;
 
-threadvar
+var
   // Optional Per-Detector-Timing-Accumulator. Wenn von aussen
   // (CLI --time-detectors, IDE-Perf-Mode) gesetzt, summiert das
   // AOnTime-Lambda in ParseLeaks pro Scan TotalMs + CallCount auf.
   // Nil = kein Tracking (Default).
   // Lifecycle: Caller erzeugt, Lambda fuellt, Caller liest und gibt frei.
-  // Public exposed weil Konsumenten (CLI/IDE) das Dictionary nach dem
-  // Scan auslesen muessen.
-  // TD-1 (Thread-Safety): threadvar = thread-lokal. Caller erzeugt/liest/freet
-  // auf DEMSELBEN Thread wie der (synchrone) Run -> Single-Thread-Verhalten
-  // identisch (verhaltensneutral), paralleler Scan bekommt je Thread einen
-  // eigenen Accumulator statt eines geteilten Prozess-Globals.
+  // KEIN threadvar: Konsumenten (CLI uConsoleRunner / IDE) erzeugen, lesen und
+  // freen dieses Dictionary AUSSERHALB des SCA.Engine-Package. Ein exportierter
+  // Package-threadvar loest W1032 aus und funktioniert ueber die Package-Grenze
+  // nicht (Caller-Thread-TLS-Slot != Engine-Thread-Slot) - dieselbe Lektion wie
+  // beim DetectorEnabledKinds-threadvar-Revert. Caller-gesetzte, package-
+  // exportierte Globals MUESSEN var bleiben.
   gDetectorTimings : TDictionary<string, TPair<Int64, Integer>>;
 
 implementation

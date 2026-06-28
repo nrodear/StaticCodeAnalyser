@@ -59,15 +59,16 @@ type
     procedure Clear;
   end;
 
-threadvar
+var
   // Optional. Wenn nil (Tests, Single-File-Pfad), faellt AcquireLines auf
   // einen frischen LoadFromFile-Roundtrip zurueck.
-  // TD-1 (Thread-Safety): threadvar = thread-lokal. Aller Zugriff (ParseLeaks
-  // Create/Clear, AcquireLines, Post-Scan-Suppression, uClaudePrompt) laeuft auf
-  // DEMSELBEN Thread wie der synchrone Scan -> Single-Thread-Verhalten identisch
-  // (verhaltensneutral); paralleler Scan bekommt je Thread einen eigenen Cache.
-  // Kein Initializer: threadvar defaultet je Thread auf nil.
-  gFileTextCache : TFileTextCache;
+  // KEIN threadvar: dieses Global liegt in der Interface-Section einer
+  // Package-Unit (SCA.Engine.dpk) -> ein exportierter Package-threadvar
+  // loest W1032 aus und kann ueber Package-Grenzen NICHT zuverlaessig
+  // genutzt werden. Thread-Safety fuer parallele Scans laeuft ueber
+  // TAnalyzeContext (Ctx.FileTextCache), nicht ueber dieses Backward-Compat-
+  // Global. (TD-1 threadvar-Ansatz verworfen, vgl. DetectorEnabledKinds.)
+  gFileTextCache : TFileTextCache = nil;
 
 // Bequemer Wrapper fuer File-Scan-Detektoren - liefert Lines + Ownership-
 // Flag. Caller-Muster:
