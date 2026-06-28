@@ -14,6 +14,8 @@ type
     [Test] procedure TypeThenType_Reported;
     [Test] procedure VarThenVar_Reported;
     [Test] procedure SectionAcrossProcedure_NoFinding;
+    [Test] procedure VarParamThenBodyVar_NoFinding;
+    [Test] procedure MultiLineParamThenConsecutiveVar_Reported;
     [Test] procedure ConsecutiveSection_KindAndSeverity;
   end;
 
@@ -133,6 +135,53 @@ begin
         Exit;
       end;
     Assert.Fail('expected fkConsecutiveSection finding');
+  finally F.Free; end;
+end;
+
+procedure TTestConsecutiveSection.VarParamThenBodyVar_NoFinding;
+// FP-Regression (Real-World, Alcinoe): mehrzeilige Methoden-Signatur mit
+// `const`/`var`-PARAMETERN am Zeilenanfang, dann eine Body-`var`-Section.
+// Die Parameter-Modifier sind KEINE Sections -> kein "consecutive".
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo('#13#10 +
+  '  const URL: string;'#13#10 +
+  '  var Stop: Boolean);'#13#10 +
+  'var'#13#10 +
+  '  Node: Integer;'#13#10 +
+  'begin'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkConsecutiveSection),
+    'const/var-Parameter sind keine Sections - keine consecutive-Meldung');
+  finally F.Free; end;
+end;
+
+procedure TTestConsecutiveSection.MultiLineParamThenConsecutiveVar_Reported;
+// TP-Gegenkontrolle: nach derselben mehrzeiligen Param-Signatur ZWEI echte
+// Body-`var`-Sections -> muss weiterhin als consecutive feuern.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo('#13#10 +
+  '  const URL: string;'#13#10 +
+  '  var Stop: Boolean);'#13#10 +
+  'var'#13#10 +
+  '  A: Integer;'#13#10 +
+  'var'#13#10 +
+  '  B: Integer;'#13#10 +
+  'begin'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkConsecutiveSection),
+    'echte konsekutive Body-var-Sections muessen weiter feuern');
   finally F.Free; end;
 end;
 
