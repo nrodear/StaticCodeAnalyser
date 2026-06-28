@@ -67,6 +67,19 @@ const
     'tryfromstring'         // TBytes.TryFromString und Verwandte
   );
 
+  // Read-Family-RTL-Methoden die ihre Buffer-Argumente FUELLEN (out/var):
+  // TStream.Read/ReadBuffer/ReadData, System.Read/ReadLn, System.BlockRead.
+  // Wird im Source-Scan benutzt (LineFillsVarViaReadCall) - der AST-
+  // Pessimistic-Write erfasst diese Calls bei manchen Methoden nicht
+  // zuverlaessig (Buffer als 'Buf[0]'-Element / Headless-Method-Pattern).
+  // Das ist die dominante SCA166-FP-Klasse (Real-World 2026-06-28:
+  // Abbrevia/zip/ID3/Syn*-Stream-Reader). Return-Wert-Varianten wie
+  // ReadInteger/ReadString matchen NICHT (kein gefuelltes Arg, sondern
+  // Rueckgabewert) - der '(' direkt nach dem Namen filtert sie aus.
+  READ_FILL_FUNCS : array[0..4] of string = (
+    'read', 'readln', 'readbuffer', 'blockread', 'readdata'
+  );
+
   // Read-Only-Routinen die ihre Args garantiert NICHT schreiben.
   // Wenn ein Call in dieser Liste eine Variable als Arg hat, gilt das
   // als Read (= Variable muss VORHER assigned sein).
@@ -786,6 +799,49 @@ begin
   end;
 end;
 
+function LineFillsVarViaReadCall(const LLow, NameLow: string): Boolean;
+// True wenn die (bereits lowercase + comment/string-stripped) Zeile einen
+// Read-Family-Call (READ_FILL_FUNCS, bare oder '<recv>.read') enthaelt,
+// dessen Argumentliste NameLow als Wort-Identifier fuehrt. Diese RTL-
+// Methoden FUELLEN ihre Buffer-Argumente -> das ist ein WRITE, kein Read.
+// Wortgrenze davor (kein Ident-Char; '.' erlaubt fuer 'Stream.Read') +
+// '(' direkt danach schliessen ReadInteger/ReadString/MyRead etc. aus.
+var
+  Fn, Args : string;
+  i, FnLen, J, K, Depth : Integer;
+  Before : Char;
+begin
+  Result := False;
+  if (LLow = '') or (NameLow = '') then Exit;
+  for Fn in READ_FILL_FUNCS do
+  begin
+    FnLen := Length(Fn);
+    i := 1;
+    while True do
+    begin
+      i := PosEx(Fn, LLow, i);
+      if i = 0 then Break;
+      if i > 1 then Before := LLow[i - 1] else Before := ' ';
+      J := i + FnLen;                         // Position direkt nach dem Namen
+      while (J <= Length(LLow)) and (LLow[J] = ' ') do Inc(J);
+      if (not IsIdentChar(Before))
+         and (J <= Length(LLow)) and (LLow[J] = '(') then
+      begin
+        Depth := 1; K := J + 1;
+        while (K <= Length(LLow)) and (Depth > 0) do
+        begin
+          if LLow[K] = '(' then Inc(Depth)
+          else if LLow[K] = ')' then Dec(Depth);
+          Inc(K);
+        end;
+        Args := Copy(LLow, J + 1, K - (J + 1) - 1);
+        if FindIdentInArgList(Args, NameLow) then Exit(True);
+      end;
+      i := i + FnLen;
+    end;
+  end;
+end;
+
 // ============================================================
 // HAUPT-LOGIK
 // ============================================================
@@ -1103,6 +1159,8 @@ var
       L := LowerCase(StripLineEx(Lines[i], StripState));
       if i + 1 = DeclLine then Continue;
       if IsLineInRanges(i + 1, NestedRanges) then Continue;
+      // Read-Family-Fill ('Stream.Read(Buf, Size)') fuellt den Buffer = Write.
+      if LineFillsVarViaReadCall(L, NameLow) then Exit(i + 1);
       Trimmed := TrimLeft(L);
       if Length(Trimmed) < NL + 2 then Continue;
       if not Trimmed.StartsWith(NameLow) then Continue;
@@ -1197,6 +1255,9 @@ var
       if IsVarDeclLine(L) then Continue;
       // Skip auch Multi-Line-var-Decl-Continuation ('byte1,' / 'b5, g5,')
       if IsVarDeclContinuationLine(L) then Continue;
+      // Read-Family-Fill-Zeile ('Stream.Read(Buf,...)'): Buffer wird hier
+      // GESCHRIEBEN, nicht gelesen -> nicht als Read werten.
+      if LineFillsVarViaReadCall(L, NameLow) then Continue;
       LL := Length(L);
       P := 1;
       while True do

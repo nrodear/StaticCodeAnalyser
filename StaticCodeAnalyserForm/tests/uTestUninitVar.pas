@@ -56,6 +56,10 @@ type
     [Test] procedure RttiContextRecord_NoFinding;
     [Test] procedure NonAutoInitRecord_StillFlagged;
     [Test] procedure EscapedFieldArrayElementWrite_NoFinding;
+    // Real-World 2026-06-28: Read-Family-Fill (Stream.Read fuellt Buffer)
+    [Test] procedure StreamReadFillsIndexedBuffer_NoFinding;
+    [Test] procedure StreamReadFillsBareBuffer_NoFinding;
+    [Test] procedure ReadBeforeStreamFill_StillFlagged;
   end;
 
 implementation
@@ -910,6 +914,85 @@ begin
   RunOn(SRC, L);
   try Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
     'name[i].&Field := ... ist Element-Write (escaped keyword), kein Read');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.StreamReadFillsIndexedBuffer_NoFinding;
+// FP-Fix (Real-World 2026-06-28, Abbrevia AbCompnd / zip / ID3 etc.):
+//   var Sig: array[..] of AnsiChar;
+//   FStream.Read(Sig[0], n);   <- FUELLT den Buffer (out/var), kein Read
+//   if Sig[0] = 'A' ...
+// Der by-reference Array-Element-Arg 'Sig[0]' wurde als Read fehlgedeutet,
+// der Buffer als "never assigned" gemeldet. Read-Family-Calls fuellen ihre
+// Argumente -> das ist ein Write.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'uses System.Classes;'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(FStream: TStream);'#13#10 +
+    'var Sig: array[0..3] of AnsiChar;'#13#10 +
+    'begin'#13#10 +
+    '  FStream.Read(Sig[0], 4);'#13#10 +
+    '  if Sig[0] = ''A'' then Exit;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+    'Stream.Read(Buf[0], n) fuellt den Buffer - kein UninitVar');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.StreamReadFillsBareBuffer_NoFinding;
+// Variante mit bare-Buffer-Arg (CnScanners Bom-Pattern, fcMedium):
+//   Stream.Read(Bom, SizeOf(Bom));  <- Fill
+//   if Bom[0] = #255 ...
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'uses System.Classes;'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(Stream: TStream);'#13#10 +
+    'var Bom: array[0..1] of AnsiChar;'#13#10 +
+    'begin'#13#10 +
+    '  Stream.Read(Bom, SizeOf(Bom));'#13#10 +
+    '  if Bom[0] = #255 then Exit;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+    'Stream.Read(Bom, SizeOf(Bom)) fuellt den Buffer - kein UninitVar');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.ReadBeforeStreamFill_StillFlagged;
+// TP-Gegenkontrolle: ein ECHTER Read VOR dem Read-Family-Fill bleibt ein
+// Bug. Die Fill-Erkennung darf nur die Fill-Zeile entschaerfen, nicht einen
+// frueheren echten Read verschlucken.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'uses System.Classes;'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(Stream: TStream);'#13#10 +
+    'var n: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  WriteLn(n);'#13#10 +
+    '  Stream.Read(n, SizeOf(n));'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try Assert.IsTrue(CountKind(L, fkUninitVar) >= 1,
+    'echter Read vor dem Stream.Read-Fill bleibt ein UninitVar-Bug');
   finally L.Free; end;
 end;
 
