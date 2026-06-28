@@ -963,6 +963,17 @@ function KindDefaultConfidence(K: TFindingKind): TFindingConfidence;
 // docs/ConfidenceAudit.md.
 begin
   case K of
+    // --- FP-Rate >50% gemessen -> fcLow = raus aus dem Default-Profil
+    //     (fcLow < fcMedium-Schwelle), bleibt opt-in via Profil mit
+    //     niedrigerer FindingMinConfidence ---
+    // SCA148 CanBeClassMethod: Korpus-Triage 2026-06-28 ~68% FP (Stichprobe
+    // 31 / 19090 Funde). Dominante FP-Klasse = geerbte VCL-/Basisklassen-
+    // Member ueber Unit-Grenzen (z.B. SynHighlighter-FuncXxx = 3725 Funde,
+    // VCL-Property-Setter), nur mit cross-unit-Member-Resolution fixbar.
+    // H4-Entscheidung: Demotion statt grossem fragilem Detektor-Umbau (lsHint,
+    // kein Bug). Siehe Todo_DetectorHardening.md.
+    fkCanBeClassMethod: Result := fcLow;
+
     // --- Pattern-Match-basiert (rein lexikalisch / regex) ---
     fkHardcodedSecret,           // 'password=...'-Heuristik ohne Wert-Check
     fkHardcodedPath,             // C:\...-Pattern, viele OK-Faelle (Tests)
@@ -986,7 +997,6 @@ begin
     // --- Style-/Refactor-Praeferenzen ---
     fkBooleanParam,              // legitim bei Toggles
     fkMultipleExit,              // Kontroverses Style-Thema
-    fkCanBeClassMethod,          // statische Method-Refactor-Hint
     fkCanBeUnitPrivate,          // Single-File-Scope (Cross-Unit-Index off)
     fkCanBeProtected,            //  "
     fkCanBeStrictPrivate,        //  "

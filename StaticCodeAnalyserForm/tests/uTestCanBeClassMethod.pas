@@ -336,6 +336,10 @@ begin
       if Fnd.Kind = fkCanBeClassMethod then begin Hit := Fnd; Break; end;
     Assert.IsNotNull(Hit, 'fkCanBeClassMethod finding expected');
     Assert.AreEqual(lsHint, Hit.Severity);
+    // H4-Demotion 2026-06-28 (Korpus-Triage ~68% FP): SCA148 ist fcLow ->
+    // faellt unter der Default-Schwelle fcMedium aus dem Standard-Profil,
+    // bleibt opt-in. Lock gegen versehentliches Re-Promote.
+    Assert.AreEqual(fcLow, Hit.Confidence);
   finally F.Free; end;
 end;
 
