@@ -58,6 +58,46 @@ implementation
 uses
   System.RegularExpressions;
 
+// True wenn das Random-Token an MatchIndex (1-basiert) ein Methoden-Aufruf auf
+// einem OBJEKT ist (Obj.Random) statt der globalen RTL-Random. Unqualified,
+// 'System.Random' und 'Math.Random*' sind die echten -> False. Custom-RNG-
+// Klassen ('FRng.Random', 'Generator.RandomRange') verwalten ihren EIGENEN
+// Seed und sind KEIN InsecureRandom -> True (Welle 3, 2026-06-28, ~35% FP).
+function IsObjectQualifiedRandom(const Expr: string; MatchIndex: Integer): Boolean;
+var i: Integer; Qual: string;
+begin
+  Result := False;
+  i := MatchIndex - 1;
+  while (i >= 1) and CharInSet(Expr[i], [' ', #9]) do Dec(i);
+  if (i < 1) or (Expr[i] <> '.') then Exit;       // unqualified -> globale Random
+  Dec(i);
+  while (i >= 1) and CharInSet(Expr[i], [' ', #9]) do Dec(i);
+  Qual := '';
+  while (i >= 1) and CharInSet(Expr[i], ['a'..'z', 'A'..'Z', '0'..'9', '_']) do
+  begin Qual := Expr[i] + Qual; Dec(i); end;
+  Qual := LowerCase(Qual);
+  // 'self' gilt als globale Random (Test-Vertrag SelfDotRandomCall_StillReported);
+  // nur FREMDE Objekt-Refs (FRng/Generator/...) sind Custom-RNG.
+  Result := (Qual <> '') and (Qual <> 'system') and (Qual <> 'math')
+            and (Qual <> 'self');
+end;
+
+// Letztes Qualifier-Segment vor dem Methodennamen, lower-case. 'FRng.Random(1)'
+// -> 'frng'; 'System.Random(1)' -> 'system'; 'Random(1)' -> ''.
+function CallQualifierLower(const FullName: string): string;
+var Bare: string; ParenP, DotPos: Integer;
+begin
+  Bare := FullName;
+  ParenP := Pos('(', Bare);
+  if ParenP > 1 then Bare := Copy(Bare, 1, ParenP - 1);
+  DotPos := LastDelimiter('.', Bare);
+  if DotPos <= 0 then Exit('');
+  Bare := Copy(Bare, 1, DotPos - 1);              // alles vor dem Methodennamen
+  DotPos := LastDelimiter('.', Bare);             // nur letztes Qualifier-Segment
+  if DotPos > 0 then Bare := Copy(Bare, DotPos + 1, MaxInt);
+  Result := LowerCase(Trim(Bare));
+end;
+
 class function TInsecureRandomDetector.BareNameLower(
   const FullName: string): string;
 // uParser2 nkCall.Name enthaelt die ganze Call-Expression mit '(args)',
@@ -92,10 +132,16 @@ begin
   AHit   := '';
   if Expr = '' then Exit;
   M := TRegEx.Match(Expr, RANDOM_RE, [roIgnoreCase]);
-  if M.Success then
+  while M.Success do
   begin
-    AHit   := M.Groups[1].Value;  // Original-Casing
-    Result := True;
+    // Objekt-qualifizierte Custom-RNG-Methoden (FRng.Random(..)) ueberspringen -
+    // nur globale RTL-Random (unqualified / System. / Math.) ist deterministisch.
+    if not IsObjectQualifiedRandom(Expr, M.Index) then
+    begin
+      AHit   := M.Groups[1].Value;  // Original-Casing
+      Exit(True);
+    end;
+    M := M.NextMatch;
   end;
 end;
 
@@ -139,7 +185,13 @@ begin
     begin
       Bare := BareNameLower(N.Name);
       if (Bare = 'random') or (Bare = 'randomrange') or (Bare = 'randomfrom') then
-        Emit(N.Line, N.Name);
+      begin
+        // Objekt-qualifizierte Custom-RNG-Methoden (FRng.Random) ueberspringen;
+        // nur unqualified / System. / Math. ist die globale RTL-Random.
+        var Q := CallQualifierLower(N.Name);
+        if (Q = '') or (Q = 'system') or (Q = 'math') or (Q = 'self') then
+          Emit(N.Line, N.Name);
+      end;
     end;
   finally
     Calls.Free;

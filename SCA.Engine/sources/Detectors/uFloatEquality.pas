@@ -187,6 +187,24 @@ begin
         if IsNeverFloatToken(LhsLow) or IsNeverFloatToken(RhsLow) then Continue;
         if (FloatVars.IndexOf(LhsLow) < 0) and (FloatVars.IndexOf(RhsLow) < 0) then
           Continue;
+        // Praezisions-Guard (Welle 3, 2026-06-28): ein echter Float-Equality-Bug
+        // braucht den ANDEREN Operanden ebenfalls float-kompatibel - numerisches
+        // Literal (Ziffer-Start: 0.5, 100, 1e9) ODER selbst eine Float-Var. Ein
+        // gewoehnlicher Identifier (Boolean-/String-/Pointer-Feld, das nur
+        // NAMENSGLEICH zu einer Float-Var ist = Scope-Blindheit) ist KEIN Float-
+        // Vergleich -> FP. Dominante SCA144-FP-Klasse (Real-World: 88% FP, z.B.
+        // 'FJavascriptEnabled <> aValue', 'Value <> ShowSeconds'). compare-to-0
+        // wird bewusst NICHT geskippt ('a-b = 0' kann echter Bug sein).
+        var LhsIsFloat := FloatVars.IndexOf(LhsLow) >= 0;
+        var RhsIsFloat := FloatVars.IndexOf(RhsLow) >= 0;
+        if not (LhsIsFloat and RhsIsFloat) then
+        begin
+          var OtherLow : string;
+          if LhsIsFloat then OtherLow := RhsLow else OtherLow := LhsLow;
+          if (OtherLow <> '') and not CharInSet(OtherLow[1], ['0'..'9'])
+             and (FloatVars.IndexOf(OtherLow) < 0) then
+            Continue;
+        end;
         // Welche Seite ist die Float-Var (fuer Detail-Text).
         if FloatVars.IndexOf(LhsLow) >= 0 then IdentName := Lhs
                                           else IdentName := Rhs;

@@ -61,6 +61,29 @@ begin
   Result := CharInSet(C, ['A'..'Z','a'..'z','0'..'9','_']);
 end;
 
+// Name (lower-case) der Funktion, deren OFFENE Klammer das Zeichen an MatchPos
+// umschliesst, oder '' wenn der Match nicht in einer Klammer steht. LineLow
+// muss lower-case sein. Fuer den Delete(/Copy(-Idiom-Guard.
+function EnclosingCallNameLower(const LineLow: string; MatchPos: Integer): string;
+var i, depth, parenPos, nameEnd: Integer;
+begin
+  Result := '';
+  depth := 0; parenPos := 0;
+  for i := MatchPos - 1 downto 1 do
+    case LineLow[i] of
+      ')': Inc(depth);
+      '(':
+        if depth > 0 then Dec(depth)
+        else begin parenPos := i; Break; end;   // erste unbalancierte '('
+    end;
+  if parenPos = 0 then Exit;
+  i := parenPos - 1;
+  while (i >= 1) and CharInSet(LineLow[i], [' ', #9]) do Dec(i);
+  nameEnd := i;
+  while (i >= 1) and CharInSet(LineLow[i], ['a'..'z', '0'..'9', '_', '.']) do Dec(i);
+  Result := Copy(LineLow, i + 1, nameEnd - i);
+end;
+
 // Sucht ab Position StartIdx in S das naechste vollstaendige Match
 // `<Length-or-Count-Expr> - <numeric>` ausserhalb von Strings/Comments.
 // Liefert Treffer-Spalte (1-basiert) oder 0.
@@ -201,6 +224,23 @@ begin
         var Sub := Copy(Line, LinePos, MaxInt);
         if not FindMatch(Sub, InStr, Offset, MatchCol, Detail) then Break;
 
+        // MatchCol ist die 1-basierte Position des Matches IN `Sub`. Die
+        // entsprechende Position in `Line` ist `LinePos + MatchCol - 1`.
+        // Die naechste Scan-Position liegt direkt nach dem Match.
+        var MatchAbsPos := LinePos + MatchCol - 1;
+        var NextScan    := MatchAbsPos + Length(Detail);
+
+        // FP-Guard (2026-06-29): strip-trailing-Idiom Delete(s, Length(s)-K, n)
+        // bzw. Copy(s, Length(s)-K, n). Delete/Copy klemmen einen negativen oder
+        // 0-Index intern auf 1 -> KEIN Underflow-Crash. Wenn der Match in einer
+        // offenen Delete(/Copy(-Klammer steht, ist es dieses sichere Idiom.
+        var EnclName := EnclosingCallNameLower(LowerCase(Line), MatchAbsPos);
+        if EnclName.EndsWith('delete') or EnclName.EndsWith('copy') then
+        begin
+          LinePos := NextScan;
+          Continue;
+        end;
+
         F            := TLeakFinding.Create;
         F.FileName   := FileName;
         F.MethodName := '';
@@ -211,13 +251,7 @@ begin
         F.SetKind(fkLengthUnderflow);
         Results.Add(F);
 
-        // MatchCol ist die 1-basierte Position des Matches IN `Sub`. Die
-        // entsprechende Position in `Line` ist `LinePos + MatchCol - 1`.
-        // Die naechste Scan-Position liegt direkt nach dem Match:
-        //   LinePos + MatchCol - 1 + Length(Detail).
-        // Frueher: ohne das "-1" - das hat 1 Zeichen pro Treffer
-        // uebersprungen und konnte direkt-angrenzende Matches verlieren.
-        LinePos := LinePos + MatchCol - 1 + Length(Detail);
+        LinePos := NextScan;
       end;
     end;
   finally

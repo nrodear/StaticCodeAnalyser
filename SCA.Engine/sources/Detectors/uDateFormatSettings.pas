@@ -95,11 +95,18 @@ begin
     if Low = LOCALE_DEPENDENT[i] then Exit(True);
 end;
 
-// True wenn der Call-Ausdruck einen Identifier mit 'formatsettings' (case-
-// insensitive) in seiner Argument-Liste hat.
+// True wenn der Call-Ausdruck einen Identifier mit 'formatsettings' bzw. der
+// gaengigen Abkuerzung 'fmtsettings' (case-insensitive) in seiner Argument-
+// Liste hat. Erfasst 'FormatSettings', 'FFormatSettings', 'AFormatSettings',
+// 'LFmtSettings', 'FmtSettings' usw. - alle benennen ein explizit
+// uebergebenes TFormatSettings -> kein Locale-Bug.
+// 'TFormatSettings.Invariant' / 'DefaultFormatSettings' sind ueber das
+// 'formatsettings'-Teilwort ebenfalls abgedeckt.
 function MentionsFormatSettings(const CallName: string): Boolean;
+var Low : string;
 begin
-  Result := Pos('formatsettings', LowerCase(CallName)) > 0;
+  Low := LowerCase(CallName);
+  Result := (Pos('formatsettings', Low) > 0) or (Pos('fmtsettings', Low) > 0);
 end;
 
 // Pruefen ob `Text` (nkCall.Name oder nkAssign.TypeRef) IRGENDWO einen

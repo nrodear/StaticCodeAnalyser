@@ -33,15 +33,40 @@ implementation
 const
   EMIT_SEVERITY = lsWarning;
 
-function CountInheritedInSubtree(Node: TAstNode): Integer;
+// Maximale Anzahl `inherited`-Calls die DIREKTE Kinder EINES nkBlock sind
+// (= sequenziell im selben begin..end-Block, laufen also garantiert beide).
+// Der Methoden-Rumpf selbst ist ein nkBlock (ParseBlock) -> der Kanonik-Bug
+// `procedure X; begin inherited; inherited; end;` wird erfasst.
+//
+// inherited-Calls die ueber verschiedene Branches verteilt sind (if/else,
+// case-Arme, except/on-Handler) haengen an nkIfStmt/nkCase/nkExceptBlock/
+// nkOnHandler - NICHT an einem nkBlock - und werden NICHT zusammengezaehlt.
+// Damit faellt der dominante FP weg: mutual-exklusive `inherited` (z.B.
+// message-/WndProc-Handler mit if-Kaskade), wo pro Aufruf nur EINER laeuft
+// (~90% FP, Welle 3, 2026-06-28).
+//
+// Bewusster (seltener) FN: 2 sequenzielle `inherited` direkt im try-Rumpf
+// (`try inherited; inherited; finally`), in einem repeat-Rumpf oder im
+// finally-Block - dort sind die Statements direkte Kinder von nkTryFinally/
+// nkTryExcept/nkRepeat/nkFinallyBlock statt nkBlock. Akzeptiert zugunsten
+// der FP-Reduktion; ggf. spaeter den Container-Kind-Set erweitern.
+function MaxSequentialInheritedInBlock(MethodNode: TAstNode): Integer;
 var
-  Child : TAstNode;
+  Blocks : TList<TAstNode>;
+  B      : TAstNode;
+  C      : Integer;
 begin
   Result := 0;
-  if Node = nil then Exit;
-  if Node.Kind = nkInherited then Inc(Result);
-  for Child in Node.Children do
-    Inc(Result, CountInheritedInSubtree(Child));
+  Blocks := MethodNode.FindAll(nkBlock);
+  try
+    for B in Blocks do
+    begin
+      C := B.DirectChildCount(nkInherited);
+      if C > Result then Result := C;
+    end;
+  finally
+    Blocks.Free;
+  end;
 end;
 
 // Liefert den Body-Block oder nil bei Forward-Deklarationen
@@ -69,16 +94,15 @@ begin
     begin
       // Nur echte Implementierungen - Forward-Decls haben keinen Body.
       if FindBodyBlock(M) = nil then Continue;
-      Count := CountInheritedInSubtree(M);
+      Count := MaxSequentialInheritedInBlock(M);
       if Count < 2 then Continue;
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
       F.MethodName := M.Name;
       F.LineNumber := IntToStr(M.Line);
       F.MissingVar := Format(
-        '%d `inherited` calls in this method - usually a bug ' +
-        '(parent side-effects run twice). Keep one call or extract ' +
-        'helpers.', [Count]);
+        '%d sequential `inherited` calls in the same block - parent ' +
+        'side-effects run twice. Keep one call or extract helpers.', [Count]);
       F.SetKind(fkTwiceInheritedCalls);
       Results.Add(F);
     end;

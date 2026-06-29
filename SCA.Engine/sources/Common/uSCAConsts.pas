@@ -995,6 +995,18 @@ begin
     // CFG-Dominanz noetig); SCA135 AbstractNotImpl ~79% (konkrete Leaf-Subklasse
     // liegt cross-file, in-Unit-ParentSet sieht sie nicht).
     fkUseAfterFree, fkAbstractNotImpl: Result := fcLow;
+    // SCA078 ExceptOnException: lexikalisch + guard-los, ist ein striktes
+    // Superset von SCA132 (ExceptionTooGeneral) - 1370/1414 SCA132-Stellen
+    // sind auch hier, plus 3910 zusaetzliche, die SCA132 als legitime
+    // Boundary-/Translate-Reraise-Handler bewusst unterdrueckt. ~72% FP.
+    // Bis SCA078 in SCA132 gemerged ist -> fcLow (SCA132 deckt die echten ab).
+    fkExceptOnException: Result := fcLow;
+    // SCA049 LengthUnderflow: lexikalisch, KEIN Guard-/CFG-Wissen (`if Length(s)
+    // >= K` davor unsichtbar). ~80% FP (Triage 2026-06-29): vorab-geguardete
+    // Slices, penultimate-Index `arr[Count-2]`, strip-trailing nach Build.
+    // Delete(/Copy(-Idiom ist jetzt geguarded; der CFG-Rest ist nicht billig
+    // fixbar -> fcLow (lsHint sowieso).
+    fkLengthUnderflow: Result := fcLow;
 
     // --- Pattern-Match-basiert (rein lexikalisch / regex) ---
     fkHardcodedSecret,           // 'password=...'-Heuristik ohne Wert-Check

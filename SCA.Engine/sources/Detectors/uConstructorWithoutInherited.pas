@@ -85,9 +85,30 @@ class procedure TConstructorWithoutInheritedDetector.AnalyzeUnit(UnitNode: TAstN
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
   Methods : TList<TAstNode>;
+  Recs    : TList<TAstNode>;
+  RecordNames : THashSet<string>;
   M       : TAstNode;
   F       : TLeakFinding;
 begin
+  // Vorlauf (Welle 3, 2026-06-28): Record-Typnamen sammeln. Records haben KEINE
+  // Vererbungs-Hierarchie - `inherited` ist im record-Konstruktor syntaktisch
+  // unmoeglich. 'TMyRec.Create' ohne inherited ist daher KEIN Bug. Dominante
+  // SCA096-FP-Klasse (Real-World ~30-50% FP).
+  RecordNames := THashSet<string>.Create;
+  Recs := UnitNode.FindAll(nkRecord);
+  try
+    for var R in Recs do
+      if R.Name <> '' then
+      begin
+        var RN := LowerCase(Trim(R.Name));
+        var Lt := Pos('<', RN);                 // Generic-Args weg: TFoo<T> -> tfoo
+        if Lt > 0 then RN := Trim(Copy(RN, 1, Lt - 1));
+        if RN <> '' then RecordNames.Add(RN);
+      end;
+  finally
+    Recs.Free;
+  end;
+
   Methods := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
@@ -98,6 +119,11 @@ begin
       // Methoden-Implementierungen tragen den Klassen-Qualifier mit Punkt
       // (z.B. 'TFoo.Create'), die werden weiter geprueft.
       if Pos('.', M.Name) = 0 then Continue;
+      // Record-Konstruktor (Qualifier ist ein record-Typname) -> kein inherited.
+      var Qual := LowerCase(Copy(M.Name, 1, Pos('.', M.Name) - 1));
+      var QLt := Pos('<', Qual);
+      if QLt > 0 then Qual := Copy(Qual, 1, QLt - 1);
+      if RecordNames.Contains(Trim(Qual)) then Continue;
       // Nur echte Implementierungen pruefen - Forward-Decls (Class-Body-
       // Signatur) haben kein nkBlock, dort gehoert `inherited` nicht hin.
       if FindBodyBlock(M) = nil then Continue;
@@ -114,6 +140,7 @@ begin
     end;
   finally
     Methods.Free;
+    RecordNames.Free;
   end;
 end;
 

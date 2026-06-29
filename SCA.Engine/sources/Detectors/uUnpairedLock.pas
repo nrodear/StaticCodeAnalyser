@@ -152,10 +152,32 @@ begin
     Result := 0;
 end;
 
+// Position des LETZTEN Vorkommens von Needle als GANZES Wort in Hay (sonst 0).
+// Hay muss lower-case sein. Verhindert Teilwort-Treffer ('retry'/'entry' fuer
+// 'try', 'send'/'append' fuer 'end').
+function LastWholeWord(const Hay, Needle: string): Integer;
+var P, NextP, AfterIdx: Integer; BeforeOk, AfterOk: Boolean;
+begin
+  Result := 0;
+  P := Pos(Needle, Hay);
+  while P > 0 do
+  begin
+    BeforeOk := (P = 1) or not CharInSet(Hay[P - 1], ['a'..'z', '0'..'9', '_']);
+    AfterIdx := P + Length(Needle);
+    AfterOk  := (AfterIdx > Length(Hay)) or
+                not CharInSet(Hay[AfterIdx], ['a'..'z', '0'..'9', '_']);
+    if BeforeOk and AfterOk then Result := P;
+    NextP := PosEx(Needle, Hay, P + 1);
+    if NextP = 0 then Break;
+    P := NextP;
+  end;
+end;
+
 class procedure TUnpairedLockDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 const
-  LOOK_AHEAD = 200;  // Bytes nach dem Lock-Aufruf
+  LOOK_AHEAD  = 200;  // Bytes nach dem Lock-Aufruf
+  LOOK_BEHIND = 200;  // Bytes vor dem Lock-Aufruf (umschliessendes try suchen)
 var
   Lines    : TStringList;
   Cached   : Boolean;
@@ -201,6 +223,27 @@ begin
       if UnlockPos = 0 then Continue;
       // try kommt VOR unlock -> Pattern OK
       if (TryPos > 0) and (TryPos < UnlockPos) then Continue;
+
+      // FP-Guard (2026-06-29): das try/finally kann den Lock UMSCHLIESSEN -
+      // `try` steht VOR dem Lock, nicht nur danach. Real-World-dominante FP-
+      // Klasse (CEF4Delphi uCEFBrowserThread: 29/30 Funde so geschuetzt):
+      //   try
+      //     FCS.Acquire;          // <- hier gematcht
+      //     ...
+      //   finally FCS.Release; end;
+      // Wenn das naechste `try` VOR dem Lock noch OFFEN ist (kein finally/
+      // except/end zwischen ihm und dem Lock), liegt der Lock im try-Body.
+      var BeforeStart := M.Index - LOOK_BEHIND;
+      if BeforeStart < 1 then BeforeStart := 1;
+      var BeforeSnippet := Copy(CodeLow, BeforeStart, M.Index - BeforeStart);
+      var LastTry := LastWholeWord(BeforeSnippet, 'try');
+      if LastTry > 0 then
+      begin
+        var Between := Copy(BeforeSnippet, LastTry + 3, MaxInt);
+        if (Pos('finally', Between) = 0) and (Pos('except', Between) = 0)
+           and (LastWholeWord(Between, 'end') = 0) then
+          Continue;  // Lock liegt im offenen try-Body -> kein bare-Lock
+      end;
 
       LineNo := LineForPos(LineFor, M.Index);
       if LineNo <= 0 then LineNo := 1;
