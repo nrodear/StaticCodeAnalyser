@@ -1007,6 +1007,13 @@ begin
     // Delete(/Copy(-Idiom ist jetzt geguarded; der CFG-Rest ist nicht billig
     // fixbar -> fcLow (lsHint sowieso).
     fkLengthUnderflow: Result := fcLow;
+    // SCA158 PointerArithmeticOnString: lexisch `PChar(x) +/- n`. ~645 Funde,
+    // strukturell >50% FP (Triage 2026-06-29): dominante Klasse ist das sichere
+    // interne Header-Zugriffs-Idiom auf ROHE Pointer/dyn. Arrays (mORMot/
+    // dmustache: PAnsiChar(arr)-_DALEN etc.), NICHT managed Strings - die
+    // PChar('')=nil-Praemisse trifft dort nicht. Kein billiger Guard ohne
+    // Typ-Aufloesung (string vs Pointer) -> fcLow.
+    fkPointerArithmeticOnString: Result := fcLow;
 
     // --- Pattern-Match-basiert (rein lexikalisch / regex) ---
     fkHardcodedSecret,           // 'password=...'-Heuristik ohne Wert-Check

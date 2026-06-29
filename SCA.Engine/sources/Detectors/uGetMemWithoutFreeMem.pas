@@ -175,6 +175,30 @@ begin
       AfterPos := M.Index + M.Length;
       if AfterPos > Length(Code) then Continue;
 
+      // FP-Guard A (2026-06-29): DEFINITION, kein Aufruf - 'function GetMem(...)'
+      // / 'procedure ReallocMem(...)' (Custom-Allocator-/MM-Wrapper-Deklaration).
+      // Voriges Wort vor dem Bezeichner pruefen.
+      var Bi := M.Index - 1;
+      while (Bi >= 1) and CharInSet(CodeLow[Bi], [' ', #9, #10, #13]) do Dec(Bi);
+      var WordEnd := Bi;
+      while (Bi >= 1) and CharInSet(CodeLow[Bi], ['a'..'z', '0'..'9', '_']) do Dec(Bi);
+      var PrevWord := Copy(CodeLow, Bi + 1, WordEnd - Bi);
+      if (PrevWord = 'function') or (PrevWord = 'procedure') then Continue;
+
+      // FP-Guard B: erstes Argument ist ein FELD (FXxx-Konvention) oder ein
+      // Array-/Index-/Deref-Element (ident[..] / ident^[..]). Ownership liegt
+      // dann beim Objekt, FreeMem im Destruktor - ausserhalb der Single-Routine-
+      // Scope dieses Detektors (vgl. Unit-Header, GetMem-im-Ctor/Free-im-Dtor).
+      var Ai := AfterPos;                       // direkt nach '('
+      while (Ai <= Length(Code)) and CharInSet(Code[Ai], [' ', #9]) do Inc(Ai);
+      if (Ai < Length(Code)) and (Code[Ai] = 'F')
+         and CharInSet(Code[Ai + 1], ['A'..'Z']) then Continue;   // Feld FXxx
+      var Aj := Ai;
+      while (Aj <= Length(Code)) and
+            CharInSet(Code[Aj], ['A'..'Z', 'a'..'z', '0'..'9', '_', '.']) do Inc(Aj);
+      if (Aj <= Length(Code)) and (Code[Aj] = '^') then Inc(Aj);
+      if (Aj <= Length(Code)) and (Code[Aj] = '[') then Continue;  // Array-Element
+
       // Snippet nach dem Alloc (max 400 Zeichen) lowercased.
       Snippet := Copy(CodeLow, AfterPos, LOOK_AHEAD);
       TryPos  := Pos('try',     Snippet);

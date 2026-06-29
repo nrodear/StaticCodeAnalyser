@@ -270,6 +270,11 @@ begin
                   // Direkt-Hit (alter Pfad)
                   if VirtualByName.TryGetValue(LowName, VMethod) then
                   begin
+                    // FP-Guard (2026-06-29): Ziel ist selbst ein Konstruktor
+                    // (delegating-ctor `CreateFrom; begin Create; ... end`) - ein
+                    // virtueller Konstruktor-Aufruf konstruiert VOLLSTAENDIG, kein
+                    // half-init-Self. Nur virtuelle PROZEDUREN sind der Anti-Pattern.
+                    if IsConstructor(VMethod) then Continue;
                     RepKey := Ctor.Name + '|' + LowName + '|' +
                               IntToStr(Call.Line);
                     if AlreadyReported.IndexOf(RepKey) >= 0 then Continue;
@@ -292,6 +297,7 @@ begin
                     VMethod := FindVirtualInChain(LowName, MethodByName,
                       VirtualByName, Visited, Chain, 1);
                     if not Assigned(VMethod) then Continue;
+                    if IsConstructor(VMethod) then Continue;  // delegating-ctor, kein half-init
 
                     RepKey := Ctor.Name + '|' + LowerCase(VMethod.Name) + '|' +
                               IntToStr(Call.Line);
