@@ -14,6 +14,8 @@ type
     [Test] procedure LockInTryFinally_NotReported;
     [Test] procedure LockWithoutMatchingUnlock_NotReported;
     [Test] procedure Finding_KindAndSeverity;
+    [Test] procedure TryEnclosesLock_NoFinding;
+    [Test] procedure BareLockNoTry_StillReported;
   end;
 
 implementation
@@ -112,6 +114,46 @@ begin
       if Fnd.Kind = fkUnpairedLock then begin Hit := Fnd; Break; end;
     Assert.IsNotNull(Hit, 'fkUnpairedLock finding expected');
     Assert.AreEqual(lsWarning, Hit.Severity);
+  finally F.Free; end;
+end;
+
+// FP-Guard (2026-06-29): das try/finally UMSCHLIESST den Lock - `try` steht VOR
+// dem Acquire und ist noch offen (kein finally/except/end dazwischen). Der Lock
+// liegt im try-Body -> Exception leakt ihn nicht -> kein bare-Lock.
+procedure TTestUnpairedLock.TryEnclosesLock_NoFinding;
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  FCS := TCriticalSection.Create;'#13#10 +
+  '  try'#13#10 +
+  '    FCS.Acquire;'#13#10 +
+  '    DoStuff;'#13#10 +
+  '  finally'#13#10 +
+  '    FCS.Release;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnpairedLock));
+  finally F.Free; end;
+end;
+
+// Kein try ueberhaupt: Acquire ... Release ohne Schutz -> Finding bleibt.
+procedure TTestUnpairedLock.BareLockNoTry_StillReported;
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  FCS.Acquire;'#13#10 +
+  '  DoStuff;'#13#10 +
+  '  FCS.Release;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkUnpairedLock) >= 1);
   finally F.Free; end;
 end;
 

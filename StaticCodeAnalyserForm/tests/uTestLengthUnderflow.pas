@@ -27,6 +27,8 @@ type
     [Test] procedure InStringLiteral_NotDetected;
     [Test] procedure InLineComment_NotDetected;
     [Test] procedure Identifier_LengthMinusX_NotMatched;
+    [Test] procedure DeleteStripTrailing_NoFinding;
+    [Test] procedure BareLengthMinus4_StillReported;
 
     // ---- Finding-Inhalt ---------------------------------------------------
     [Test] procedure Length_Finding_KindAndSeverity;
@@ -175,6 +177,43 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLengthUnderflow));
+  finally F.Free; end;
+end;
+
+procedure TTestLengthUnderflow.DeleteStripTrailing_NoFinding;
+// FP-Guard (2026-06-29): strip-trailing-Idiom Delete(s, Length(s)-K, n).
+// Delete klemmt einen negativen/0-Index intern auf 1 -> KEIN Underflow-Crash.
+// Der `Length(Result) - 4`-Match steht in einer offenen Delete(-Klammer ->
+// EnclosingCallNameLower endet auf 'delete' -> Skip.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Foo: string;'#13#10 +
+  'begin'#13#10 +
+  '  Delete(Result, Length(Result) - 4, 5);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLengthUnderflow),
+    'Length(s)-K innerhalb Delete( ist das sichere strip-trailing-Idiom');
+  finally F.Free; end;
+end;
+
+procedure TTestLengthUnderflow.BareLengthMinus4_StillReported;
+// Gegenprobe: ein blankes `Length(s) - 4` AUSSERHALB von Delete/Copy bleibt
+// ein Treffer - der Guard greift nur fuer den umschliessenden Delete/Copy-Call.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(const s: string);'#13#10 +
+  'var k: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  k := Length(s) - 4;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkLengthUnderflow) >= 1,
+    'Blankes Length(s)-4 ohne Delete/Copy bleibt ein Treffer');
   finally F.Free; end;
 end;
 

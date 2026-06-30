@@ -24,6 +24,8 @@ type
     [Test] procedure CallOnOtherObject_NoFinding;
     [Test] procedure NoConstructor_NoFinding;
     [Test] procedure CtorDelegation_NoFinding;
+    [Test] procedure CtorCallsOwnConstructor_NoFinding;
+    [Test] procedure CtorCallsVirtualProc_StillReported;
 
     // ---- Finding-Inhalt ----------------------------------------------------
     [Test] procedure VCall_Finding_KindAndSeverity;
@@ -247,6 +249,60 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkVirtualCallInCtor),
     'Create-Ueberladungs-Delegation darf nicht als virtual-call gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestVirtualCallInCtor.CtorCallsOwnConstructor_NoFinding;
+// FP-Guard (2026-06-29): das Call-Ziel ist selbst ein Konstruktor
+// (delegating-ctor `CreateFrom; begin Create; ... end`). Ein virtueller
+// Konstruktor-Aufruf konstruiert VOLLSTAENDIG -> kein half-init-Self.
+// Der gerufene Create ist virtual -> landet in VirtualByName; IsConstructor
+// (VMethod) -> Continue. Wichtig: der rufende Ctor (CreateFrom) hat einen
+// anderen Namen als der gerufene (Create), sonst greift der Selbst-Skip.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type TBase = class'#13#10 +
+  '  constructor Create; virtual;'#13#10 +
+  '  constructor CreateFrom;'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'constructor TBase.Create; begin end;'#13#10 +
+  'constructor TBase.CreateFrom;'#13#10 +
+  'begin'#13#10 +
+  '  Create;'#13#10 +  // <- virtueller Ctor-Aufruf, konstruiert vollstaendig
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkVirtualCallInCtor),
+    'Aufruf eines virtuellen KONSTRUKTORS aus einem Ctor ist kein half-init');
+  finally F.Free; end;
+end;
+
+procedure TTestVirtualCallInCtor.CtorCallsVirtualProc_StillReported;
+// Gegenprobe: ruft der Ctor eine virtuelle PROZEDUR (kein Konstruktor),
+// bleibt es der klassische Anti-Pattern -> Treffer.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type TBase = class'#13#10 +
+  '  constructor Create;'#13#10 +
+  '  procedure SetupStuff; virtual;'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'constructor TBase.Create;'#13#10 +
+  'begin'#13#10 +
+  '  SetupStuff;'#13#10 +
+  'end;'#13#10 +
+  'procedure TBase.SetupStuff; begin end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkVirtualCallInCtor) >= 1,
+    'Virtuelle PROZEDUR aus dem Ctor bleibt ein Treffer');
   finally F.Free; end;
 end;
 

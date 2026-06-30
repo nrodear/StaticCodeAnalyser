@@ -22,6 +22,7 @@ type
     [Test] procedure KindDefaultConfidence_MetricsAreMedium;
     [Test] procedure KindDefaultConfidence_PatternMatchersAreMedium;
     [Test] procedure KindDefaultConfidence_HardenedHeuristicsAreLow;
+    [Test] procedure KindDefaultConfidence_PureFormattingIsLow;
     [Test] procedure SetKind_AppliesKindDefaultConfidence;
     // ---- Filter ----
     [Test] procedure Medium_DropsLowOnly;
@@ -152,6 +153,27 @@ begin
     KindDefaultConfidence(fkUseAfterFree), 'SCA134 ~94% FP -> fcLow');
   Assert.AreEqual<TFindingConfidence>(fcLow,
     KindDefaultConfidence(fkAbstractNotImpl), 'SCA135 ~79% FP -> fcLow');
+  // Welle 3/3b 2026-06-29: weitere Demotionen (>50% FP bzw. lsHint ohne CFG).
+  Assert.AreEqual<TFindingConfidence>(fcLow,
+    KindDefaultConfidence(fkExceptOnException), 'SCA078 Superset von SCA132 -> fcLow');
+  Assert.AreEqual<TFindingConfidence>(fcLow,
+    KindDefaultConfidence(fkLengthUnderflow), 'SCA049 lsHint, kein CFG -> fcLow');
+  Assert.AreEqual<TFindingConfidence>(fcLow,
+    KindDefaultConfidence(fkPointerArithmeticOnString), 'SCA158 >50% FP Header-Idiom -> fcLow');
+end;
+
+procedure TTestConfidenceFilter.KindDefaultConfidence_PureFormattingIsLow;
+// Welle 4 2026-06-29: reine Formatierungs-/Style-Regeln (keine Bugs) sind nach
+// fcLow demotet -> raus aus jedem Confidence>=Medium-Profil, bleiben opt-in.
+begin
+  Assert.AreEqual<TFindingConfidence>(fcLow, KindDefaultConfidence(fkTooLongLine));
+  Assert.AreEqual<TFindingConfidence>(fcLow, KindDefaultConfidence(fkTrailingWhitespace));
+  Assert.AreEqual<TFindingConfidence>(fcLow, KindDefaultConfidence(fkTabulationCharacter));
+  Assert.AreEqual<TFindingConfidence>(fcLow, KindDefaultConfidence(fkLowercaseKeyword));
+  Assert.AreEqual<TFindingConfidence>(fcLow, KindDefaultConfidence(fkDigitGrouping));
+  Assert.AreEqual<TFindingConfidence>(fcLow, KindDefaultConfidence(fkGroupedDeclaration));
+  Assert.AreEqual<TFindingConfidence>(fcLow, KindDefaultConfidence(fkConsecutiveSection));
+  Assert.AreEqual<TFindingConfidence>(fcLow, KindDefaultConfidence(fkUnsortedUses));
 end;
 
 procedure TTestConfidenceFilter.SetKind_AppliesKindDefaultConfidence;

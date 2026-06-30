@@ -13,6 +13,8 @@ type
     [Test] procedure AllocMemWithoutTryFinally_Reported;
     [Test] procedure GetMemInTryFinally_NotReported;
     [Test] procedure GetMemWithoutMatchingFreeMem_NotReported;
+    [Test] procedure GetMemIntoField_NoFinding;
+    [Test] procedure GetMemLocalNoTry_StillReported;
     [Test] procedure Finding_KindAndSeverity;
   end;
 
@@ -91,6 +93,47 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkGetMemWithoutFreeMem));
+  finally F.Free; end;
+end;
+
+procedure TTestGetMemWithoutFreeMem.GetMemIntoField_NoFinding;
+// FP-Guard B (2026-06-29): erstes Argument ist ein FELD (FXxx-Konvention).
+// Ownership liegt dann beim Objekt, FreeMem im Destruktor - ausserhalb des
+// Single-Routine-Scopes dieses Detektors. Trotz fehlendem try/finally:
+// kein Befund, weil das Ziel ein Feld FBuffer ist.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  GetMem(FBuffer, 1024);'#13#10 +
+  '  DoStuff(FBuffer);'#13#10 +
+  '  FreeMem(FBuffer);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkGetMemWithoutFreeMem),
+    'GetMem in ein Feld FXxx ist Objekt-Ownership -> kein Single-Routine-Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestGetMemWithoutFreeMem.GetMemLocalNoTry_StillReported;
+// Gegenprobe: lokale Variable (kleingeschrieben, kein F-Prefix, kein Feld),
+// FreeMem ohne try/finally -> Leak bei Exception zwischen GetMem und FreeMem.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var P: PByte;'#13#10 +
+  'begin'#13#10 +
+  '  GetMem(P, 1024);'#13#10 +
+  '  DoStuff(P);'#13#10 +
+  '  FreeMem(P);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkGetMemWithoutFreeMem) >= 1,
+    'GetMem in lokale Var ohne try/finally bleibt ein Leak-Treffer');
   finally F.Free; end;
 end;
 

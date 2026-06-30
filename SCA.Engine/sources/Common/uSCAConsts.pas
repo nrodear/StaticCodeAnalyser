@@ -1015,6 +1015,19 @@ begin
     // Typ-Aufloesung (string vs Pointer) -> fcLow.
     fkPointerArithmeticOnString: Result := fcLow;
 
+    // --- Welle 4: reine FORMATIERUNGS-/Style-Regeln (2026-06-29) ---
+    // Definitiv KEINE Bugs (Whitespace, Zeilenlaenge, Keyword-Casing, Deklara-
+    // tions-Gruppierung, uses-Reihenfolge). Standen bisher auf fcHigh (else-
+    // Default) und waren mit ~75k Funden die groesste Rauschquelle im strict-/
+    // hint-Profil. fcLow -> raus aus jedem Confidence>=Medium-Profil, bleiben
+    // opt-in. (Kampagne Welle 4: via Confidence ruhigstellen, NICHT haerten.)
+    // Bewusst NICHT demotet: BeginEndRequired/WithStatement/NestedRoutine/
+    // NilComparison/PublicMemberWithoutDoc (debattierbar, echte Smells) -> die
+    // gehoeren in die Profil-Konfiguration, nicht pauschal fcLow.
+    fkTooLongLine, fkTrailingWhitespace, fkTabulationCharacter,
+    fkLowercaseKeyword, fkDigitGrouping, fkGroupedDeclaration,
+    fkConsecutiveSection, fkUnsortedUses: Result := fcLow;
+
     // --- Pattern-Match-basiert (rein lexikalisch / regex) ---
     fkHardcodedSecret,           // 'password=...'-Heuristik ohne Wert-Check
     fkHardcodedPath,             // C:\...-Pattern, viele OK-Faelle (Tests)

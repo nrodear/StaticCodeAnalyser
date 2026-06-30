@@ -20,6 +20,13 @@ type
     [Test] procedure StrToIntNoSettings_NoFinding;
     [Test] procedure UnrelatedCall_NoFinding;
 
+    // FP-Regression (FmtSettings-Abkuerzung 2026-06-29): ein explizit
+    // uebergebenes TFormatSettings-Argument namens 'FmtSettings'/'LFmtSettings'
+    // zaehlt jetzt - wie 'FormatSettings' - als "Settings vorhanden".
+    [Test] procedure StrToFloatWithFmtSettings_NoFinding;
+    // Gegenprobe: ohne jegliches Settings-Argument bleibt es ein Treffer.
+    [Test] procedure StrToFloatNoSettings_StillReported;
+
     [Test] procedure Finding_KindAndSeverity;
   end;
 
@@ -137,6 +144,35 @@ begin
     Assert.IsNotNull(Hit, 'fkDateFormatSettings finding expected');
     Assert.AreEqual(fkDateFormatSettings, Hit.Kind);
     Assert.AreEqual(lsWarning,            Hit.Severity);
+  finally F.Free; end;
+end;
+
+procedure TTestDateFormatSettings.StrToFloatWithFmtSettings_NoFinding;
+// FmtSettings-Abkuerzung (2026-06-29): 'FmtSettings' ist die gaengige Kurzform
+// fuer ein explizit uebergebenes TFormatSettings. MentionsFormatSettings matched
+// jetzt zusaetzlich das Teilwort 'fmtsettings' -> kein Locale-Bug, kein Finding.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(s: string; const FmtSettings: TFormatSettings);'#13#10 +
+  'begin i := StrToFloat(s, FmtSettings); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDateFormatSettings),
+        'StrToFloat mit FmtSettings-Argument darf nicht gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestDateFormatSettings.StrToFloatNoSettings_StillReported;
+// Gegenprobe: ohne Settings-Argument ist StrToFloat locale-abhaengig -> Treffer.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(s: string);'#13#10 +
+  'begin i := StrToFloat(s); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkDateFormatSettings) >= 1);
   finally F.Free; end;
 end;
 

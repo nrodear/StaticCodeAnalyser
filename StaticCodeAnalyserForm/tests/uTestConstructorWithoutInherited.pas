@@ -16,6 +16,11 @@ type
     [Test] procedure ClassConstructor_NotReported;
     [Test] procedure StandaloneCtorOutsideClass_NotReported;
     [Test] procedure CtorWithoutInherited_KindAndSeverity;
+    // FP-Regression (Record-Guard 2026-06-29): Records haben KEINE Vererbungs-
+    // Hierarchie - ein record-Konstruktor ohne `inherited` ist kein Bug.
+    [Test] procedure RecordConstructor_NoFinding;
+    // Gegenprobe: ein echter Klassen-Konstruktor ohne `inherited` feuert weiter.
+    [Test] procedure ClassConstructorNoInherited_StillReported;
   end;
 
 implementation
@@ -162,6 +167,56 @@ begin
       end;
     Assert.Fail('expected fkConstructorWithoutInherited finding');
   finally Findings.Free; end;
+end;
+
+procedure TTestConstructorWithoutInherited.RecordConstructor_NoFinding;
+// Record-Guard (2026-06-29): TMyRec ist ein record - er hat keine Parent-
+// Klasse, `inherited` ist syntaktisch unmoeglich. Der Detector sammelt
+// record-Typnamen vorab und ueberspringt Konstruktoren, deren Qualifier
+// ein record-Name ist. 'TMyRec.Create' ohne inherited ist daher KEIN Bug.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TMyRec = record'#13#10 +
+  '    FX: Integer;'#13#10 +
+  '    constructor Create(AX: Integer);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'constructor TMyRec.Create(AX: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  FX := AX;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkConstructorWithoutInherited),
+        'Record-Konstruktor ohne inherited darf nicht gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestConstructorWithoutInherited.ClassConstructorNoInherited_StillReported;
+// Gegenprobe zum Record-Guard: TFoo ist eine echte class. Sein Konstruktor
+// ohne `inherited` laesst die Parent-Klasse uninitialisiert -> Treffer bleibt.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  public'#13#10 +
+  '    FX: Integer;'#13#10 +
+  '    constructor Create;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'constructor TFoo.Create;'#13#10 +
+  'begin'#13#10 +
+  '  FX := 0;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkConstructorWithoutInherited) >= 1);
+  finally F.Free; end;
 end;
 
 initialization

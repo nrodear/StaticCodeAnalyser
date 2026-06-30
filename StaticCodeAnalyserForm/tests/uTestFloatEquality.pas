@@ -22,6 +22,13 @@ type
     // Feld irgendwo im File auftaucht).
     [Test] procedure NilCompareWithFloatVarNameElsewhere_NotReported;
     [Test] procedure BooleanCompareWithFloatVarNameElsewhere_NotReported;
+    // FP-Regression (Praezisions-Guard 2026-06-29): ein echter Float-Equality-
+    // Bug braucht den ANDEREN Operanden ebenfalls float-kompatibel. Ein Float-
+    // Var-Vergleich gegen einen gewoehnlichen Nicht-Float-Identifier (Boolean-
+    // Feld o.ae., nur NAMENSGLEICH) ist Scope-Blindheit -> kein Treffer.
+    [Test] procedure FloatVarVsNonFloatIdent_NoFinding;
+    // Gegenprobe: Float-Var gegen numerisches Literal bleibt ein Treffer.
+    [Test] procedure FloatVarVsLiteral_StillReported;
   end;
 
 implementation
@@ -186,6 +193,42 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFloatEquality),
         'Boolean = True darf nicht als Float-Equality kassiert werden');
+  finally F.Free; end;
+end;
+
+procedure TTestFloatEquality.FloatVarVsNonFloatIdent_NoFinding;
+// Praezisions-Guard (2026-06-29): `Value <> ShowSeconds` - Value ist Double,
+// aber ShowSeconds ist Boolean. Der ANDERE Operand ist kein numerisches
+// Literal und keine Float-Var -> reine Namens-/Scope-Blindheit, kein Bug.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var Value: Double; ShowSeconds: Boolean;'#13#10 +
+  'begin'#13#10 +
+  '  if Value <> ShowSeconds then Exit;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFloatEquality),
+        'Float-Var vs Nicht-Float-Identifier darf kein Float-Equality sein');
+  finally F.Free; end;
+end;
+
+procedure TTestFloatEquality.FloatVarVsLiteral_StillReported;
+// Gegenprobe zum Guard: der ANDERE Operand IST hier ein numerisches Literal
+// (0.5) - das ist der klassische IEEE-754-Bug und muss weiterhin feuern.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var Ratio: Double;'#13#10 +
+  'begin'#13#10 +
+  '  if Ratio = 0.5 then Exit;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkFloatEquality) >= 1);
   finally F.Free; end;
 end;
 

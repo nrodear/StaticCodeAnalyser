@@ -16,6 +16,8 @@ type
     [Test] procedure RandomWithRandomize_NotReported;
     [Test] procedure QualifiedRandomize_AlsoCounts;
     [Test] procedure SelfDotRandomCall_StillReported;
+    [Test] procedure ForeignObjectRandom_NoFinding;
+    [Test] procedure BareRandomRange_StillReported;
   end;
 
 implementation
@@ -117,6 +119,46 @@ begin
   try
     Assert.IsTrue(TFindingHelper.Count(F, fkInsecureRandom) >= 1,
       'Self.Random muss als Random-Call zaehlen');
+  finally F.Free; end;
+end;
+
+procedure TTestInsecureRandom.ForeignObjectRandom_NoFinding;
+// FP-Guard (2026-06-28/29): object-qualified Custom-RNG (FRng.Random) verwaltet
+// einen EIGENEN Seed -> keine deterministische RTL-Random -> darf NICHT melden,
+// auch wenn nirgends Randomize aufgerufen wird.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Roll;'#13#10 +
+  'var i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  i := FRng.Random(100);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkInsecureRandom),
+      'FRng.Random ist Custom-RNG, kein InsecureRandom');
+  finally F.Free; end;
+end;
+
+procedure TTestInsecureRandom.BareRandomRange_StillReported;
+// Unqualified RandomRange ohne Randomize bleibt globale RTL-Random -> Finding.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Roll;'#13#10 +
+  'var i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  i := RandomRange(1, 6);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkInsecureRandom) >= 1,
+      'bare RandomRange ohne Randomize muss gemeldet werden');
   finally F.Free; end;
 end;
 
