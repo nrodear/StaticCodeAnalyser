@@ -71,7 +71,7 @@ implementation
 
 uses
   System.RegularExpressions, System.StrUtils,
-  uFileTextCache;
+  uFileTextCache, uDetectorUtils;
 
 function StripStringsAndComments(Lines: TStringList; out LineForChar: TArray<Integer>): string;
 var
@@ -212,7 +212,11 @@ begin
       // Wenn `try` direkt folgt (mit beliebigen Whitespace + ';' / EOL
       // dazwischen), ist es korrekt. Wir wollen NUR Pattern wo bis zum
       // naechsten `unlock`/`leavecriticalsection` kein `try` kommt.
-      var TryPos    := Pos('try', Snippet);
+      // Audit 2026-07-01: 'try' als GANZES WORT suchen - Substring-Pos matchte
+      // 'retry'/'entry' und unterdrueckte dann echte Unpaired-Lock-Befunde
+      // (False-Negative). Snippet ist lowercased. Die Unlock-Keywords bleiben
+      // bewusst Substring (sollen auch 'unlocked'/'ReleaseLock' o.ae. treffen).
+      var TryPos    := TDetectorUtils.FindWholeWordLower('try', Snippet);
       var UnlockPos := Pos('unlock',     Snippet);
       if UnlockPos = 0 then
         UnlockPos := Pos('leavecriticalsection', Snippet);

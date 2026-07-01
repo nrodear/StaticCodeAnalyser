@@ -60,7 +60,7 @@ implementation
 
 uses
   System.RegularExpressions, System.StrUtils,
-  uFileTextCache;
+  uFileTextCache, uDetectorUtils;
 
 function StripStringsAndComments(Lines: TStringList; out LineForChar: TArray<Integer>): string;
 var
@@ -201,7 +201,11 @@ begin
 
       // Snippet nach dem Alloc (max 400 Zeichen) lowercased.
       Snippet := Copy(CodeLow, AfterPos, LOOK_AHEAD);
-      TryPos  := Pos('try',     Snippet);
+      // Audit 2026-07-01: 'try' als GANZES WORT (Substring-Pos matchte
+      // 'retry'/'entry' -> ein Wort davor liess einen echten GetMem-Leak
+      // faelschlich als geschuetzt durchgehen, False-Negative). 'freemem'
+      // bleibt bewusst Substring (soll auch 'FreeMemAndNil' treffen).
+      TryPos  := TDetectorUtils.FindWholeWordLower('try', Snippet);
       FreePos := Pos('freemem', Snippet);
       // Kein Folge-FreeMem -> Ownership-Transfer / Custom-Allocator
       // -> Skip (nicht flaggen).
