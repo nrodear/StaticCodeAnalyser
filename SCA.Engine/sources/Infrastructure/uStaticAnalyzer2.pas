@@ -796,6 +796,12 @@ var
   // (AstFileCache/SymbolRefIndex/DfmRepoIndex). Globals bleiben Backward-
   // Compat-Aliase; der Context steuert nur den Lifecycle. Verhaltensneutral.
   Ctx : TAnalyzeContext;
+  // Audit 2026-07-01 (Global-State): Snapshot der Caller/User/INI-konfigurierten
+  // LeakyClasses VOR der Auto-Discovery. AutoDiscovery ergaenzt die GLOBALE
+  // LeakyClasses waehrend des Scans; ohne Restore akkumulieren die auto-
+  // entdeckten Klassen ueber wiederholte Scans (Server/IDE-Reuse) und
+  // verfaelschen Folge-Scans. Im finally wird auf diesen Baseline restauriert.
+  LeakySnapshot : TArray<string>;
 
   procedure LogLine(const S: string);
   begin
@@ -805,6 +811,15 @@ var
 
 begin
   if (FileList = nil) or (Results = nil) then Exit;
+
+  // Audit 2026-07-01 (Global-State): Baseline der Caller/User/INI-konfigurierten
+  // LeakyClasses sichern (VOR jeder Auto-Discovery). Im finally wird darauf
+  // zurueckgesetzt, damit die per-Scan auto-entdeckten Klassen nicht ueber
+  // wiederholte Scans in der GLOBALEN LeakyClasses akkumulieren.
+  if AutoDiscoverCustomClasses and Assigned(LeakyClasses) then
+    LeakySnapshot := LeakyClasses.ToStringArray
+  else
+    LeakySnapshot := nil;
 
   // Log-Datei zur Diagnose: zeigt pro Datei welcher Schritt wie lange dauert.
   // Bei "App haengt" laesst sich daraus ablesen welche Datei der Uebeltaeter ist.
@@ -1043,7 +1058,7 @@ begin
         // [Detectors] LeakyClasses uebernimmt.
         LastPhase := Format('File %d/%d: AutoDiscovery', [i + 1, Total]);
         if AutoDiscoverCustomClasses then
-        begin
+        try
           var Instantiable : TArray<string>;
           var StaticOnly   : TArray<string>;
           TCustomClassDiscovery.DiscoverInUnit(Root, Instantiable, StaticOnly);
@@ -1067,6 +1082,23 @@ begin
             if Assigned(DiscoveredStaticClasses) then
               DiscoveredStaticClasses.Add(Cls);
           end;
+        except
+          // Audit 2026-07-01 (Error-Handling): Discovery-Fehler auf EINER Datei
+          // darf nicht den GESAMTEN Scan abreissen (frueher: Exception
+          // propagierte an der try/finally vorbei aus der File-Schleife).
+          // Wie der RunAllDetectors-Fehlerpfad: als fkFileReadError melden +
+          // weiter. User-Cancel (EAbort) bleibt durchgereicht.
+          on EAbort do raise;
+          on E: Exception do
+          begin
+            var Ferr := TLeakFinding.Create;
+            Ferr.FileName   := FileName;
+            Ferr.MethodName := '';
+            Ferr.LineNumber := '0';
+            Ferr.MissingVar := 'AutoDiscovery failed: ' + E.Message;
+            Ferr.SetKind(fkFileReadError);
+            Results.Add(Ferr);
+          end;
         end;
 
         // Custom-Rules (aus analyser-rules.yml) NACH den built-in
@@ -1075,7 +1107,24 @@ begin
         // wurde (HasRules = False).
         LastPhase := Format('File %d/%d: CustomRules', [i + 1, Total]);
         if TCustomRuleDetector.HasRules then
-          TCustomRuleDetector.AnalyzeFile(FileName, Results, Ctx);
+          try
+            TCustomRuleDetector.AnalyzeFile(FileName, Results, Ctx);
+          except
+            // Audit 2026-07-01 (Error-Handling): eine fehlerhafte Custom-Rule
+            // darf nicht den GESAMTEN Scan abreissen - als fkFileReadError
+            // melden + weiter. EAbort bleibt durchgereicht.
+            on EAbort do raise;
+            on E: Exception do
+            begin
+              var Ferr := TLeakFinding.Create;
+              Ferr.FileName   := FileName;
+              Ferr.MethodName := '';
+              Ferr.LineNumber := '0';
+              Ferr.MissingVar := 'CustomRules failed: ' + E.Message;
+              Ferr.SetKind(fkFileReadError);
+              Results.Add(Ferr);
+            end;
+          end;
 
         LastPhase := Format('File %d/%d: RunAllDetectors', [i + 1, Total]);
         RunAllDetectors(Root, FileName, Results, AIncludeUsesCheck, Ctx,
@@ -1173,6 +1222,16 @@ begin
     // setzen (zeigten auf die jetzt freigegebenen Instanzen). gFileTextCache
     // wird vom Context NICHT angefasst und lebt absichtlich weiter.
     FreeAndNil(Ctx);
+    // Audit 2026-07-01 (Global-State): die in diesem Scan auto-entdeckten Klassen
+    // wieder aus der GLOBALEN LeakyClasses entfernen -> zurueck auf die Caller-
+    // Baseline. Verhindert Akkumulation ueber wiederholte Scans (Server/IDE-
+    // Reuse) und damit Detektions-Drift in Folge-Scans.
+    if AutoDiscoverCustomClasses and Assigned(LeakyClasses) then
+    begin
+      LeakyClasses.Clear;
+      if LeakySnapshot <> nil then
+        LeakyClasses.AddStrings(LeakySnapshot);
+    end;
     // gFileTextCache lebt absichtlich weiter bis zur naechsten Scan-Start-
     // Phase (oder dem finalization-Block). Suppression-Phase + ContextHash-
     // Berechnung im SARIF/Baseline-Output rufen AcquireLines fuer jede
