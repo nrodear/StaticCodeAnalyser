@@ -11,9 +11,10 @@ unit uIDEFindingsPropertiesForm;
 //                                            Subscribe + Watch-Mode-Subscribe
 //
 // Lifecycle:
-//   1. RegisterFindingsPropertiesDockableForm (im RegisterAnalyserDockableForm-
-//      Pfad nach RegisterWatchMode): erzeugt GFindingsPropsForm, registriert
-//      das DockableForm beim NTAServices. Kein Frame, keine Subscription.
+//   1. RegisterFindingsPropertiesDockableForm (in uIDEExpert.Register direkt
+//      nach RegisterAnalyserDockableForm - damit RegisterWatchMode darin schon
+//      gelaufen ist): erzeugt GFindingsPropsForm, registriert das DockableForm
+//      beim NTAServices. Kein Frame, keine Subscription.
 //   2. User klickt View > Findings Properties (oder per Editor-Context-Menu):
 //      NTASvc.CreateDockableForm -> IDE erzeugt TFindingsPropertiesFrame
 //      -> FrameCreated() wird gerufen:

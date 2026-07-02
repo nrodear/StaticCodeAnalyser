@@ -4418,6 +4418,11 @@ begin
   UnregisterLineHighlighter;
   UnregisterAnnotationOverlay;
   UnregisterWatchMode;
+  // Theme-Provider-Closure zuruecksetzen: der in RegisterAnalyserDockableForm
+  // installierte anonyme Provider captured BorlandIDEServices und lebt sonst
+  // in uAnalyserTheme (SCA.SharedUI) ueber den BPL-Unload hinaus weiter
+  // -> dangling Aufruf in unloaded Plugin-Code. nil = Fallback auf VCL-Default.
+  uAnalyserTheme.StyleServicesProvider := nil;
 end;
 
 end.
