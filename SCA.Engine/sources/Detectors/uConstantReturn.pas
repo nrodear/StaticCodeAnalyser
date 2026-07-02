@@ -149,9 +149,14 @@ begin
       if not IsFunctionMethod(M.TypeRef) then Continue;
       FnNameLow := LowerCase(UnqualifiedName(M.Name));
 
-      RhsSet := TList<string>.Create;
-      Assigns := M.FindAll(nkAssign);
+      // nil-init vor dem try (uDuplicateString-Muster): wirft M.FindAll,
+      // gibt das finally ein bereits erzeugtes RhsSet sauber frei statt es
+      // zu lecken.
+      RhsSet := nil;
+      Assigns := nil;
       try
+        RhsSet := TList<string>.Create;
+        Assigns := M.FindAll(nkAssign);
         for N in Assigns do
         begin
           LhsLow := LowerCase(Trim(N.Name));

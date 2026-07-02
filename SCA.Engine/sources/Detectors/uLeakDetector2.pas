@@ -920,12 +920,12 @@ var
 begin
   LocalVars := MethodNode.FindAll(nkLocalVar);
   try
+    HasFinally := HasTryFinallyBlock(MethodNode);  // schleifeninvariant: einmal vor der Schleife statt pro Var
     for V in LocalVars do
     begin
       if not IsLeakyType(V.TypeRef) then Continue;
 
       VarNameLow := V.Name.ToLower;
-      HasFinally := HasTryFinallyBlock(MethodNode);
 
       // ── Pfad 1: direkte .Create-Zuweisung ──────────────────────────────────
       if HasCreateAssign(MethodNode, VarNameLow) then

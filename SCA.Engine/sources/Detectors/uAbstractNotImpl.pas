@@ -107,10 +107,15 @@ begin
   // echten RTL, nicht im Stub. Real-World-FP 2026-06-23.
   if Pos('\psdecl', LowerCase(FileName)) > 0 then Exit;
 
-  ClassNodes := UnitNode.FindAll(nkClass);
-  ClassByName := TDictionary<string, TAstNode>.Create;
-  ParentSet := TDictionary<string, Boolean>.Create;
+  // nil-init vor dem try: wirft eine der spaeteren Allokationen, gibt das
+  // finally die frueheren sauber frei statt sie zu lecken.
+  ClassNodes := nil;
+  ClassByName := nil;
+  ParentSet := nil;
   try
+    ClassNodes := UnitNode.FindAll(nkClass);
+    ClassByName := TDictionary<string, TAstNode>.Create;
+    ParentSet := TDictionary<string, Boolean>.Create;
     // Index aller Class-Deklarationen nach Name + Set aller Klassen die als
     // Parent einer anderen File-Klasse auftauchen.
     for C in ClassNodes do

@@ -109,9 +109,13 @@ var
   MethName    : string;
   F           : TLeakFinding;
 begin
-  ClassNodes := UnitNode.FindAll(nkClass);
-  ClassByName := TDictionary<string, TAstNode>.Create;
+  // nil-init vor dem try: wirft die zweite Allokation, gibt das finally die
+  // erste sauber frei statt sie zu lecken (uDuplicateString-Muster).
+  ClassNodes := nil;
+  ClassByName := nil;
   try
+    ClassNodes := UnitNode.FindAll(nkClass);
+    ClassByName := TDictionary<string, TAstNode>.Create;
     for C in ClassNodes do
       ClassByName.AddOrSetValue(LowerCase(C.Name), C);
 
