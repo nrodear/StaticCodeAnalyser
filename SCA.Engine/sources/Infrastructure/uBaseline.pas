@@ -157,7 +157,17 @@ begin
   CtxSet := TDictionary<string, Boolean>.Create;
   try
     if Root is TJSONObject then
-      Arr := TJSONObject(Root).Values['findings'] as TJSONArray
+    begin
+      // Weicher Cast: 'findings' kann fehlen (Values liefert nil) ODER falsch
+      // typisiert sein (manuell editiert / Merge-Konflikt: "findings": {}).
+      // Hartes 'as TJSONArray' wuerfe dann EInvalidCast und deaktivierte die
+      // Baseline still komplett - stattdessen als "kein Array" behandeln.
+      var FindingsVal := TJSONObject(Root).Values['findings'];
+      if FindingsVal is TJSONArray then
+        Arr := TJSONArray(FindingsVal)
+      else
+        Arr := nil;
+    end
     else if Root is TJSONArray then
       Arr := TJSONArray(Root)            // Alt-Format: rein das Array
     else

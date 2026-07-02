@@ -942,6 +942,11 @@ begin
     FMaxNesting    := Ini.ReadInteger('Detectors', 'DeepNestingMaxDepth',     4);
     FMaxCyclomatic := Ini.ReadInteger('Detectors', 'CyclomaticMax',          10);
     FMinBlockLines := Ini.ReadInteger('Detectors', 'DuplicateBlockMinLines',  8);
+    // Untere Schranke: <2 laesst in uDuplicateBlock den Window-Loop
+    // (0..MinBlockLines-1) leer laufen + einen Out-of-Bounds-Read auf
+    // Normalized[NCount] zu -> jede Datei als Massen-Duplikat bzw. Range-
+    // Check-Crash. Endanwender-Fehlkonfig (0/negativ) hart abfangen.
+    if FMinBlockLines < 2 then FMinBlockLines := 2;
     FMaxFileMB     := Ini.ReadInteger('Detectors', 'MaxFileMB',               5);
     FMaxLineLength := Ini.ReadInteger('Detectors', 'MaxLineLength',           120);
     FMaxCaseBranches := Ini.ReadInteger('Detectors', 'MaxCaseBranches',       10);
