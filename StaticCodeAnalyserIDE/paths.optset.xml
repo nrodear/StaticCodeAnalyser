@@ -24,17 +24,12 @@
         <!-- Console: CLI-Mode-Entry-Points + Argument-Parsing -->
         <DCC_UnitSearchPath>..\StaticCodeAnalyserForm\sources\Console;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
 
-        <!-- Detectors: alle 150+ Detektor-Units (uMemoryLeak, uSQLInjection, ...) -->
-        <DCC_UnitSearchPath>..\StaticCodeAnalyserForm\sources\Detectors;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
-
-        <!-- Infrastructure: uStaticAnalyzer2 (Pipeline), uFileTextCache, uRepoSettings, ... -->
-        <DCC_UnitSearchPath>..\StaticCodeAnalyserForm\sources\Infrastructure;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
-
-        <!-- Output: uFixHint + Export-Units (HTML/Jira/Clipboard/Sonar-Generic) -->
-        <DCC_UnitSearchPath>..\StaticCodeAnalyserForm\sources\Output;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
-
-        <!-- Parsing: uParser2, uAstNode, uLexer - Pascal-AST-Front-End -->
-        <DCC_UnitSearchPath>..\StaticCodeAnalyserForm\sources\Parsing;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <!-- Detectors/Infrastructure/Output/Parsing existieren NICHT unter
+             Form\sources - der Engine-Code liegt in SCA.Engine\sources\* und
+             kommt ueber das Package (DCC_UsePackage) herein. Frueher hier als
+             tote Suchpfade gelistet = Shadowing-Fangnetz (eine versehentlich
+             unter Form\sources\Detectors angelegte .pas haette die Engine-Unit
+             lautlos ueberschattet). 2026-07-03 entfernt, Audit_CodeReview. -->
 
         <!-- UI: uMainForm, uAnalyserFrame, uFindingFilter, uLocalization, ... -->
         <DCC_UnitSearchPath>..\StaticCodeAnalyserForm\sources\UI;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
