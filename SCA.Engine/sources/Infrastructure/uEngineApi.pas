@@ -158,9 +158,21 @@ function AnalyzeSource(const Source: string;
 implementation
 
 uses
-  System.IOUtils,
+  System.IOUtils, System.SyncObjs,
   uStaticAnalyzer2, uRuleCatalog, uLexer, uCustomRuleDetector, uVcsChanges,
   uRepoSettings, uBaseline, uExportSARIF, uExportSonarGeneric, uExportHtml;
+
+var
+  // Serialisiert ALLE Engine-Scans prozessweit. Der Engine-State ist global
+  // und nicht thread-safe: LeakyClasses/DiscoveredClasses/Config-Vars werden
+  // waehrend des Scans mutiert (uStaticAnalyzer2). Ohne Serialisierung racet
+  // ein Background-Consumer (IDE-Watch-Worker) mit UI-Thread-Scans -> TString-
+  // List-Mutation waehrend Fremd-Iteration -> AV / korrupte Findings.
+  // Rekursiv (TCriticalSection ist reentrant), damit ein Consumer, der den
+  // Lock um SetupForRun+Run als Einheit haelt, mit Run's internem Enter nicht
+  // deadlockt. Single-Threaded (CLI/Form): unkontent -> null Verhaltens-
+  // aenderung, A/B byte-identisch.
+  GEngineLock: TCriticalSection = nil;
 
 function WriteTempSource(const ASrc: string): string;
 // Schreibt ASrc in eine eindeutige Temp-.pas. GUID-Name (kollisionsfrei bei
@@ -330,6 +342,13 @@ var
   Info     : string;
   BaseDir  : string;
 begin
+  // Prozessweite Scan-Serialisierung gegen den nicht-thread-safen globalen
+  // Engine-State (s. GEngineLock). Deckt ApplyConfig + Scan + Baseline ab.
+  // Rekursiv -> ein Consumer, der den Lock bereits um SetupForRun+Run haelt,
+  // re-entert hier problemlos. NIE ueber Synchronize/ProcessMessages hinweg
+  // halten (Deadlock) - der Watch-Worker released daher vor Synchronize.
+  GEngineLock.Enter;
+  try
   if not Req.SkipConfig then
     ApplyConfig(Req);
 
@@ -426,6 +445,9 @@ begin
     try TBaseline.Write(Findings, Req.WriteBaselinePath); except end;
 
   Result := TScanResult.Create(Findings, BaseDir);
+  finally
+    GEngineLock.Leave;
+  end;
 end;
 
 { Convenience }
@@ -462,5 +484,11 @@ begin
     Ses.Free;
   end;
 end;
+
+initialization
+  GEngineLock := TCriticalSection.Create;
+
+finalization
+  FreeAndNil(GEngineLock);
 
 end.
