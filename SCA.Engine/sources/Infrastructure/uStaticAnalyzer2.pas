@@ -1430,6 +1430,17 @@ begin
       FreeAndNil(Result);
       raise;
     end;
+    on E: Exception do
+    begin
+      // Nicht-EAbort-Fehler im Verzeichnis-Scan (z.B. OOM): frueher
+      // propagierte er ungefangen aus der Funktion -> die bereits erzeugte
+      // Result-Liste leakte (kein umschliessendes try/finally). Jetzt als
+      // Finding melden und die (nicht-leere) Liste sauber zurueckgeben.
+      // (FileList ist hier unassigned - Wurf VOR dem Return -> KEIN FileList.Free;
+      //  das folgende ParseLeaks-try/finally wird per Exit bewusst uebersprungen.)
+      AddError('Verzeichnis-Scan fehlgeschlagen: ' + E.Message);
+      Exit;
+    end;
   end;
   try
     if ScanErr <> '' then
