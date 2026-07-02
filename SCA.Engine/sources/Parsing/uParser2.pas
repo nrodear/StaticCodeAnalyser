@@ -218,19 +218,14 @@ begin
     FNextCount := 0; // Watchdog pro Datei zuruecksetzen
     Root := TAstNode.Create(nkUnit, '', 1, 1);
     try
-      try
-        ParseUnit(Root);
-      except
-        on E: Exception do
-          // Parser-Fehler nie nach aussen lassen, aber den Aufrufer informieren
-          // wenn die Watchdog-Bremse griff (sonst wuerde der Detector mit
-          // unvollstaendigem AST weitermachen, was zusaetzliche Crashes geben kann).
-          if Pos('Parser-Watchdog', E.Message) > 0 then
-            raise;
-      end;
+      ParseUnit(Root);
     except
-      // Watchdog (oder andere durchgereichte Exception): unvollstaendigen
-      // AST-Baum freigeben, sonst leakt der bei jedem Watchdog-Treffer.
+      // Parser-Fehler NIE schlucken: frueher wurde nur die Watchdog-Exception
+      // re-raised (per fragilem Pos('Parser-Watchdog')-Match), jeder echte
+      // Parser-Bug aber verschluckt -> Detektoren liefen auf einem partiellen
+      // AST weiter (falsche/fehlende Findings ohne Spur). Jetzt jede Exception
+      // nach aussen reichen; den unvollstaendigen Baum vorher freigeben.
+      // ParseLeaks faengt sie per-Datei ab und loggt PARSER-FEHLER.
       FreeAndNil(Root);
       raise;
     end;
