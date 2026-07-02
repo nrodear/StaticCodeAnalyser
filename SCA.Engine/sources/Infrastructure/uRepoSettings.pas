@@ -46,7 +46,12 @@ const
   // direkt im Constructor weil die nicht extern quick-readable sind.
   // ---------------------------------------------------------------------------
   DEF_SILENT_ENABLED         = True;
-  DEF_AUTO_EXPAND_ANNOTATION = False;
+  // True = das Editor-Annotation-Overlay faltet beim Hover automatisch auf
+  // volle Hoehe auf (Vorher/Nachher-Hints sichtbar). Vor dem opt-in-Refactor
+  // (45e5aeb) war das immer an; die Einfuehrung als Default-False liess das
+  // Overlay auf Titel-Hoehe kollabiert -> "zu klein fuer Vorher/Nachher".
+  // Wer das ruhigere Klick-zum-Auffalten will, setzt [UI] AutoExpandAnnotation=False.
+  DEF_AUTO_EXPAND_ANNOTATION = True;
   DEF_OVERLAY_SHOW_ON_HOVER  = False;
   DEF_EDITOR_COLOR_SCHEME    = 'default';
   DEF_LANGUAGE               = 'en';
