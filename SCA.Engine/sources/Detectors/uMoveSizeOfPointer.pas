@@ -61,77 +61,6 @@ uses
   System.RegularExpressions, System.StrUtils,
   uFileTextCache, uDetectorUtils;
 
-function StripStringsAndComments(Lines: TStringList; out LineForChar: TArray<Integer>): string;
-var
-  Buf            : TStringBuilder;
-  Chars          : TList<Integer>;
-  i, n, j        : Integer;
-  Line           : string;
-  InBlk, InParen : Boolean;
-  InStr          : Boolean;
-  c              : Char;
-  pClose         : Integer;
-begin
-  Buf := TStringBuilder.Create;
-  Chars := TList<Integer>.Create;
-  try
-    InBlk := False; InParen := False;
-    for i := 0 to Lines.Count - 1 do
-    begin
-      Line := Lines[i]; InStr := False; j := 1; n := Length(Line);
-      while j <= n do
-      begin
-        if InBlk then
-        begin
-          pClose := PosEx('}', Line, j);
-          if pClose = 0 then Break;
-          InBlk := False; j := pClose + 1; Continue;
-        end;
-        if InParen then
-        begin
-          pClose := PosEx('*)', Line, j);
-          if pClose = 0 then Break;
-          InParen := False; j := pClose + 2; Continue;
-        end;
-        c := Line[j];
-        if InStr then
-        begin
-          Buf.Append(' '); Chars.Add(i);
-          if c = '''' then
-          begin
-            if (j < n) and (Line[j + 1] = '''') then
-            begin Buf.Append(' '); Chars.Add(i); Inc(j, 2); end
-            else begin InStr := False; Inc(j); end;
-          end else Inc(j);
-          Continue;
-        end;
-        if c = '''' then
-        begin Buf.Append(' '); Chars.Add(i); InStr := True; Inc(j); Continue; end;
-        if (c = '/') and (j < n) and (Line[j + 1] = '/') then Break;
-        if c = '{' then
-        begin
-          pClose := PosEx('}', Line, j + 1);
-          if pClose = 0 then begin InBlk := True; Break; end;
-          j := pClose + 1; Continue;
-        end;
-        if (c = '(') and (j < n) and (Line[j + 1] = '*') then
-        begin
-          pClose := PosEx('*)', Line, j + 2);
-          if pClose = 0 then begin InParen := True; Break; end;
-          j := pClose + 2; Continue;
-        end;
-        Buf.Append(c); Chars.Add(i);
-        Inc(j);
-      end;
-      Buf.Append(#10); Chars.Add(i);
-    end;
-    Result := Buf.ToString;
-    LineForChar := Chars.ToArray;
-  finally
-    Chars.Free; Buf.Free;
-  end;
-end;
-
 class procedure TMoveSizeOfPointerDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
@@ -149,7 +78,7 @@ begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
-    Code := StripStringsAndComments(Lines, LineFor);
+    Code := TDetectorUtils.StripStringsAndComments(Lines, LineFor, ' ');
 
     // Pattern: Move/FillChar/CopyMemory/ZeroMemory mit SizeOf(P<Name>)
     // im Argumentenblock. Pointer-Typname-Konvention: `P` + Grossbuchstabe.
