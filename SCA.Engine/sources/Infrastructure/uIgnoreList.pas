@@ -38,6 +38,12 @@ type
     // Aus angegebener Datei laden. Datei darf fehlen (= leere Liste).
     procedure LoadFromFile(const APath: string);
 
+    // Uebernimmt Patterns + Flags aus einer anderen Liste (Deep-Copy).
+    // Fuer Consumer, die einen Scan in einen Background-Thread geben und
+    // dem Worker eine EIGENE Kopie mitgeben muessen (Quelle lebt z.B. im
+    // UI-Frame und kann waehrend des Scans zerstoert werden).
+    procedure CopyFrom(ASource: TIgnoreList);
+
     // Prueft ob eine Datei (voller Pfad oder nur Name) ignoriert werden soll.
     function IsIgnored(const FileName: string): Boolean;
 
@@ -168,6 +174,15 @@ procedure TIgnoreList.LoadDefault;
 begin
   EnsureConfigExists;
   LoadFromFile(ConfigFilePath);
+end;
+
+procedure TIgnoreList.CopyFrom(ASource: TIgnoreList);
+begin
+  if (not Assigned(ASource)) or (ASource = Self) then Exit;
+  FPatterns.Assign(ASource.FPatterns);
+  FDirParts.Assign(ASource.FDirParts);
+  FConfigPath := ASource.FConfigPath;
+  FSkipTests  := ASource.FSkipTests;
 end;
 
 procedure TIgnoreList.LoadFromFile(const APath: string);
