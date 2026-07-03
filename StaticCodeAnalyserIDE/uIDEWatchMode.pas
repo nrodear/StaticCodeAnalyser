@@ -78,7 +78,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  System.SyncObjs, Vcl.ExtCtrls, ToolsAPI, DeskUtil, DockForm,
+  Vcl.ExtCtrls, ToolsAPI, DeskUtil, DockForm,
   uMethodd12, uSCAConsts;
 
 type
@@ -183,10 +183,10 @@ type
     // unzuverlaessig). Gegated gegen FWatchedFile - andere Dateien ignoriert.
     FEditSvcNotifierIdx : Integer;
     FEditSvcNotifierIfc : INTAEditServicesNotifier;
-    // Mutex serialisiert globale Detector-State-Zugriffe (LeakyClasses,
-    // AutoDiscoverCustomClasses ...) zwischen UI-Thread (manuelle Analyse)
-    // und Background-Thread (Watch-Worker).
-    FAnalyzeLock        : TCriticalSection;
+    // Serialisierung der globalen Detector-State-Zugriffe liegt seit dem
+    // Plugin-Audit (Cluster A) im Engine-Lock: TAnalysisSession.Run nimmt
+    // ihn intern, TIDEAnalysisPrep.SetupForRun explizit. Der fruehere
+    // FAnalyzeLock hier war einseitig (nur Worker) und damit wirkungslos.
     FOnFindings         : TWatchFindingsCallback;
     FOnStatus           : TWatchStatusCallback;
     // UsesCheck-Flag aus den Caller-Settings. Wird beim Activate gesetzt
@@ -277,11 +277,6 @@ type
     function IsCurrentGeneration(AGen: Integer): Boolean;
     function CurrentGeneration: Integer;
 
-    // Wird vom Worker (Background) UM den Detector-Lauf herum genutzt um
-    // den Detector-State exklusiv zu serialisieren.
-    procedure AcquireAnalyzeLock;
-    procedure ReleaseAnalyzeLock;
-
     property Active: Boolean read FActive;
   end;
 
@@ -293,7 +288,7 @@ procedure UnregisterWatchMode;
 
 implementation
 
-// noinspection-file BeginEndRequired, CanBeClassMethod, CanBeStrictPrivate, CanBeUnitPrivate, ClassPerFile, EmptyExcept, EmptyMethod, GodClass, GroupedDeclaration, LargeClass, LockWithoutTryFinally, LongMethod, MultipleExit, NestedRoutine, NestedTry, PublicField, PublicMemberWithoutDoc, RedundantJump, TooLongLine, UnpairedLock, UnsortedUses, UnusedParameter, UnusedPublicMember
+// noinspection-file BeginEndRequired, CanBeClassMethod, CanBeStrictPrivate, CanBeUnitPrivate, ClassPerFile, EmptyExcept, EmptyMethod, GodClass, GroupedDeclaration, LargeClass, LongMethod, MultipleExit, NestedRoutine, NestedTry, PublicField, PublicMemberWithoutDoc, RedundantJump, TooLongLine, UnsortedUses, UnusedParameter, UnusedPublicMember
 // Watch-Mode-Plugin: empty-except an Notifier-Boundaries - OTAPI-Notifier-
 // Faults duerfen den File-System-Watcher nicht killen. GodClass/LargeClass:
 // Notifier-Manager sammelt alle Edit/Compile/Save-Events; OTAPI verlangt
@@ -496,34 +491,30 @@ begin
   FResults := nil;
   try
     try
-      // Globale Detector-Variablen koennen waehrend manueller Analyse
-      // umgeschrieben werden -> Lock vorm Detector-Lauf.
-      if Assigned(GWatchMode) then
-        GWatchMode.AcquireAnalyzeLock;
+      // Watch-Mode: Single-File mit Cross-Unit-Index. ProjectRoot per
+      // .dproj/.dpk/.dpr-Walk-Up - sieht damit auch Sources in
+      // Geschwister-Verzeichnissen statt nur das eigene.
+      // Phase 4: Single-File ueber die Facade. SkipConfig - Watch nutzt den
+      // zuletzt via SetupForRun gesetzten globalen Config-State.
+      // Serialisierung: TAnalysisSession.Run nimmt intern den prozessweiten
+      // Engine-Lock (gegen UI-Scans UND gegen SetupForRun, das denselben
+      // Lock haelt) - der fruehere einseitige FAnalyzeLock ist geloescht.
+      // Run kehrt erst nach Lock-Freigabe zurueck -> das Synchronize unten
+      // laeuft garantiert ausserhalb des Locks (deadlock-frei).
+      var Req := TScanRequest.Init;
+      Req.SkipConfig            := True;
+      Req.Scope                 := ssSingleFile;
+      Req.Path                  := FFileName;
+      Req.SingleFileProjectRoot := TStaticFiles.FindProjectRoot(FFileName);
+      Req.UsesCheck             := FUsesCheck;
+      var Ses := TAnalysisSession.Create;
+      var Res: TScanResult := nil;
       try
-        // Watch-Mode: Single-File mit Cross-Unit-Index. ProjectRoot per
-        // .dproj/.dpk/.dpr-Walk-Up - sieht damit auch Sources in
-        // Geschwister-Verzeichnissen statt nur das eigene.
-        // Phase 4: Single-File ueber die Facade. SkipConfig - Watch nutzt den
-        // bereits gesetzten globalen Config-State (lock-geschuetzt, s. oben).
-        var Req := TScanRequest.Init;
-        Req.SkipConfig            := True;
-        Req.Scope                 := ssSingleFile;
-        Req.Path                  := FFileName;
-        Req.SingleFileProjectRoot := TStaticFiles.FindProjectRoot(FFileName);
-        Req.UsesCheck             := FUsesCheck;
-        var Ses := TAnalysisSession.Create;
-        var Res: TScanResult := nil;
-        try
-          Res := Ses.Run(Req);
-          FResults := Res.ReleaseFindings;
-        finally
-          Res.Free;
-          Ses.Free;
-        end;
+        Res := Ses.Run(Req);
+        FResults := Res.ReleaseFindings;
       finally
-        if Assigned(GWatchMode) then
-          GWatchMode.ReleaseAnalyzeLock;
+        Res.Free;
+        Ses.Free;
       end;
     except
       // Detector-Crash darf das Plugin nicht reissen. Liste leer lassen
@@ -591,7 +582,6 @@ begin
   FGeneration         := 0;
   FAttachedNotifIdx   := -1;
   FCompanionNotifIdx  := -1;
-  FAnalyzeLock        := TCriticalSection.Create;
   FEditSvcNotifierIdx := -1;
   FUsesCheck          := False;
   FSubscribers        := TList<TObject>.Create;
@@ -622,7 +612,6 @@ begin
   end;
   FreeAndNil(FEditDebounceTimer);
   FreeAndNil(FDebounceTimer);
-  FreeAndNil(FAnalyzeLock);
   inherited;
 end;
 
@@ -782,18 +771,6 @@ end;
 function TWatchModeManager.IsCurrentGeneration(AGen: Integer): Boolean;
 begin
   Result := FActive and (FGeneration = AGen);
-end;
-
-procedure TWatchModeManager.AcquireAnalyzeLock;
-begin
-  // Wrapper-Method, der Caller traegt die try/finally-Pflicht (siehe Z430-444).
-  // Suppression wirkt ueber file-wide-Marker oben (UnpairedLock).
-  if Assigned(FAnalyzeLock) then FAnalyzeLock.Acquire;
-end;
-
-procedure TWatchModeManager.ReleaseAnalyzeLock;
-begin
-  if Assigned(FAnalyzeLock) then FAnalyzeLock.Release;
 end;
 
 class function TWatchModeManager.NormalizePath(const APath: string): string;

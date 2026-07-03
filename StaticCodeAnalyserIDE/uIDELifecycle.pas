@@ -46,6 +46,12 @@ type
   // fehlte in Silent, etc.). Die Klasse zieht alle Setup-Schritte in EINE
   // Stelle damit Aenderungen automatisch alle Pfade treffen.
   TIDEAnalysisPrep = class
+  strict private
+    // Die eigentlichen Setup-Schritte 1-8; laufen IMMER unter dem Engine-
+    // Lock (SetupForRun klammert). Eigene Methode, damit die bewussten
+    // per-Step-try-excepts nicht im Lock-try/finally verschachtelt sind.
+    class procedure RunSetupSteps(ASettings: TRepoSettings;
+      const AProjectPath: string; const AProfileOverride: string);
   public
     // Reihenfolge der Schritte ist signifikant:
     //   1. Load + RegisterToLeakyClasses (Detector-Klassen-Listen aus INI)
@@ -69,6 +75,7 @@ implementation
 
 uses
   uSCAConsts,         // AutoDiscoverCustomClasses, DiscoveredClasses
+  uEngineApi,         // TAnalysisSession.Acquire/ReleaseEngineLock
   uIDEWatchMode;      // GWatchMode
 
 class procedure TIDEAnalysisPrep.SetupForRun(ASettings: TRepoSettings;
@@ -81,6 +88,26 @@ class procedure TIDEAnalysisPrep.SetupForRun(ASettings: TRepoSettings;
 begin
   if not Assigned(ASettings) then Exit;
 
+  // Engine-Lock (rekursiv, prozessweit - derselbe, den TAnalysisSession.Run
+  // intern nimmt): die Setup-Schritte mutieren den globalen Detector-State
+  // (LeakyClasses via RegisterToLeakyClasses, DiscoveredClasses.Clear ...).
+  // Ohne Lock racte das mit einem laufenden Watch-Worker-Scan, der genau
+  // diese Listen iteriert -> TStringList-Mutation waehrend Fremd-Iteration
+  // (Plugin-Audit CRITICAL, Cluster A). Kein Synchronize/ProcessMessages
+  // im Block -> deadlock-frei. Der fruehere FAnalyzeLock (uIDEWatchMode)
+  // war einseitig und damit wirkungslos; er ist geloescht.
+  TAnalysisSession.AcquireEngineLock;
+  try
+    RunSetupSteps(ASettings, AProjectPath, AProfileOverride);
+  finally
+    TAnalysisSession.ReleaseEngineLock;
+  end;
+end;
+
+class procedure TIDEAnalysisPrep.RunSetupSteps(ASettings: TRepoSettings;
+  const AProjectPath: string; const AProfileOverride: string);
+// Laeuft unter dem Engine-Lock (Caller SetupForRun klammert).
+begin
   // 1. Frische INI lesen.
   try ASettings.Load;                  except end;
   // 2. Detector-Klassen-Listen aus den frisch geladenen Settings registrieren.
