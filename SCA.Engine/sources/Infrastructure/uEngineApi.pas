@@ -143,6 +143,14 @@ type
     procedure ApplyConfig(const Req: TScanRequest);
   public
     function Run(const Req: TScanRequest): TScanResult;
+    // Prozessweiter Engine-Lock fuer Consumer, die eigene Config-Mutation
+    // (globaler Detector-State) gegen laufende Scans serialisieren muessen
+    // - z.B. TIDEAnalysisPrep.SetupForRun im IDE-Plugin. Der Lock ist
+    // rekursiv: ein Halter, der danach Run aufruft, re-entert dessen
+    // internes Enter problemlos. NIE ueber Synchronize/ProcessMessages
+    // hinweg halten (Deadlock-Gefahr mit blockierten UI-Thread-Wartenden).
+    class procedure AcquireEngineLock; static;
+    class procedure ReleaseEngineLock; static;
   end;
 
 // Bequemlichkeit: Ein-Zeilen-Rekursiv-Scan ohne explizite Session.
@@ -448,6 +456,16 @@ begin
   finally
     GEngineLock.Leave;
   end;
+end;
+
+class procedure TAnalysisSession.AcquireEngineLock;
+begin
+  GEngineLock.Enter;
+end;
+
+class procedure TAnalysisSession.ReleaseEngineLock;
+begin
+  GEngineLock.Leave;
 end;
 
 { Convenience }
