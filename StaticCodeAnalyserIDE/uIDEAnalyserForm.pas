@@ -590,26 +590,18 @@ const
 // und werden ueber uAnalyserTheme.SeverityBg / SeverityAccent (mit
 // TFindingSeverity-Enum) abgerufen.
 
-// Sentinel fuer Frame-Lifecycle-Race in der Worker-Anonymous-Method:
-// TAnalyseRunner.RunAll/RunChanged uebergeben Closures die ProgressBar /
-// AnalyseProgress / StatusMode-Callbacks ueber den Runner-Self captured
-// halten. Wenn der User waehrend der Analyse das IDE-Dock-Fenster
-// schliesst, wird das Frame-Objekt zerstoert - die Closure haelt aber
-// noch eine ungueltige Self-Referenz und greift bei Application.
-// ProcessMessages-Reentry darauf zu (AV in ein freies Heap-Block).
+// Sentinel fuer Frame-Lifecycle-Races (GLiveAnalyserFrame, uIDELifecycle):
+// globaler Pointer auf den aktuell lebenden Frame; Constructor setzt ihn
+// auf Self, Destructor auf nil. Async-Callbacks pruefen ihn VOR jedem
+// Field-Zugriff (reiner Pointer-Vergleich, kein Deref - safe auch bei
+// dangling Self).
 //
-// Schutzmassnahme: globaler Pointer der genau auf den aktuell lebenden
-// Frame zeigt. Constructor setzt ihn auf Self, Destructor auf nil.
-// Closures snapshoten den Frame-Pointer in eine LOKALE Variable
-// (anonymous-method-Capture-by-Value) und vergleichen sie pro Iteration
-// gegen GLiveAnalyserFrame. Bei Mismatch (Frame zerstoert oder anderer
-// Frame aktiv) sofort Abort ohne Field-Zugriff.
-//
-// Funktioniert weil der Pointer-VERGLEICH safe ist auch wenn Self auf
-// invaliden Speicher zeigt - es wird kein Feld dereferenziert.
-//
-// GLiveAnalyserFrame lebt in uIDELifecycle (gemeinsam mit TAnalyseRunner
-// nutzbar ohne uses-Zyklus).
+// SEIT PLUGIN-AUDIT STUFE 3 nutzt der TAnalyseRunner ihn NICHT mehr:
+// der Bulk-Scan laeuft im Worker-Thread, der Runner detacht den Worker
+// in seinem Destructor (siehe uIDEAnalyseRunner-Header). Verbleibende
+// Sentinel-Nutzer sind die Frame-eigenen Async-Eintrittspunkte
+// (StatusMode/StatusProgress/Watch-Callbacks) - deren Abloesung kommt
+// mit dem Single-Worker-Slot fuer Silent/Watch (Audit Stufe 2).
 
 // Einfacher Verlauf von AFrom (oben) nach ATo (unten)
 procedure GradientFillRect(Canvas: TCanvas; R: TRect; AFrom, ATo: TColor;
@@ -967,10 +959,13 @@ begin
     FProgressBar, nil,
     [FBtnAnalyse, FBtnAnalyseCurrent]);
 
-  // Analyse-Runner: kapselt RunAll/RunCurrent/RunChanged.
-  FAnalyseRunner := TAnalyseRunner.Create(Self, Pointer(Self),
+  // Analyse-Runner: kapselt RunAll/RunCurrent/RunChanged (asynchron im
+  // Worker-Thread seit Plugin-Audit Stufe 3 - kein Frame-Pointer-Sentinel
+  // mehr noetig, der Runner detacht den Worker in seinem Destructor).
+  // FinishAnalysis feuert via OnRunDone nach JEDEM Lauf-Ende.
+  FAnalyseRunner := TAnalyseRunner.Create(Self,
     FAnalyseProgress, FRepoSettings, FIgnoreList, FProgressBar,
-    StatusMode, StatusProgress, PopulateFindings);
+    StatusMode, StatusProgress, PopulateFindings, FinishAnalysis);
 
   // Sucheingabe fuellt den Rest in der Mitte. MinWidth verhindert Kollaps
   // bei sehr schmal gedocktem Frame - sonst frisst Search-Edit als
@@ -1072,11 +1067,12 @@ begin
   if Assigned(GWatchMode) and GWatchMode.Active then
     GWatchMode.Deactivate;
 
-  // Analyse-Runner FRUEH freigeben - vor anderen Feldern. Falls noch
-  // ein Worker-Callback in flight waere, wuerde GLiveAnalyserFrame=nil
-  // (oben gesetzt) den Sentinel-Check failen lassen. Wir haben hier
-  // also eine Default-no-op-Garantie. Owner=Self wuerde es spaeter via
-  // DestroyComponents ohnehin freigeben.
+  // Analyse-Runner FRUEH freigeben - vor allen Widgets/Feldern. Sein
+  // Destructor detacht einen evtl. laufenden Bulk-Worker (FRunner := nil
+  // + Terminate + RemoveQueuedEvents) -> keine Queue-/Synchronize-Closure
+  // fasst danach noch Frame-Felder an. Owner=Self wuerde es spaeter via
+  // DestroyComponents ohnehin freigeben, aber dann zu SPAET (nach den
+  // expliziten FreeAndNil unten).
   FreeAndNil(FAnalyseRunner);
 
   // Tooltip-Helper FRUEH freigeben: restored die WndProc-Subclass am
@@ -2615,6 +2611,9 @@ begin
 end;
 
 procedure TAnalyserFrame.FinishAnalysis;
+// Seit dem Async-Runner (Plugin-Audit Stufe 3) NICHT mehr aus den Click-
+// Handlern gerufen, sondern vom Runner via OnRunDone nach JEDEM Lauf-Ende
+// (normal, Cancel oder Fehler) - auf dem UI-Thread.
 begin
   if Assigned(FRepoSettings) and FRepoSettings.AutoDiscoverClasses then
     try FRepoSettings.PersistDiscoveredClasses; except end;
@@ -2629,12 +2628,10 @@ begin
   end;
   SaveRecentPath(FProjectPath.Text);
   PrepareAnalysis;
-  try
-    if Assigned(FAnalyseRunner) then
-      FAnalyseRunner.RunAll(FProjectPath.Text);
-  finally
-    FinishAnalysis;
-  end;
+  // Asynchron: RunAll kehrt sofort zurueck; FinishAnalysis kommt via
+  // OnRunDone-Callback des Runners nach dem Lauf-Ende.
+  if Assigned(FAnalyseRunner) then
+    FAnalyseRunner.RunAll(FProjectPath.Text);
 end;
 
 procedure TAnalyserFrame.AnalyseCurrentFileClick(Sender: TObject);
@@ -2699,12 +2696,9 @@ begin
   // "Aktuelle Datei" -> Single-File-Live-Watch auf genau diese Datei
   // (Save+Edit-Trigger). Andere offene Dateien werden NICHT mit-beobachtet.
   PrepareAnalysis(FilePath);
-  try
-    if Assigned(FAnalyseRunner) then
-      FAnalyseRunner.RunCurrent(FilePath);
-  finally
-    FinishAnalysis;
-  end;
+  // Asynchron - FinishAnalysis via OnRunDone (s. AnalyseClick).
+  if Assigned(FAnalyseRunner) then
+    FAnalyseRunner.RunCurrent(FilePath);
 end;
 
 procedure TAnalyserFrame.AnalyseChangedFilesClick(Sender: TObject);
@@ -2730,20 +2724,20 @@ begin
       // Plugin-Reload fuer vollen Sprachwechsel.
       SetLanguage(FRepoSettings.Language);
     except end;
-  try
-    if Assigned(FAnalyseRunner) then
-      FAnalyseRunner.RunChanged(startPath);
-  finally
-    FinishAnalysis;
-  end;
+  // Asynchron - FinishAnalysis via OnRunDone (s. AnalyseClick).
+  if Assigned(FAnalyseRunner) then
+    FAnalyseRunner.RunChanged(startPath);
 end;
 
 procedure TAnalyserFrame.CancelAnalyseClick(Sender: TObject);
-// Markiert die Analyse als abzubrechen; der Progress-Callback raised EAbort
-// beim naechsten Update und unwindet so aus AnalyzeLeaksRecursive heraus.
+// Markiert die Analyse als abzubrechen. CancelRun terminiert den Worker
+// direkt (Engine wirft EAbort am naechsten Progress-Tick); RequestCancel
+// haelt zusaetzlich den Controller-State konsistent (Button-Sperre).
 begin
   if not Assigned(FAnalyseProgress) or not FAnalyseProgress.Running then Exit;
   FAnalyseProgress.RequestCancel;
+  if Assigned(FAnalyseRunner) then
+    FAnalyseRunner.CancelRun;
   StatusMode(_('Cancelling analysis...'));
 end;
 
