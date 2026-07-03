@@ -966,7 +966,10 @@ begin
         if Eat(tkColon) then
           while not (Tok.Kind in [tkSemicolon, tkRParen, tkEof]) do
           begin
-            PType := PType + Tok.Value;
+            // JoinTokInto statt roher Konkatenation: Mehrwort-Typen wie
+            // 'array of Integer' klebten sonst zu 'arrayofInteger' zusammen
+            // (Audit 2026-07) - Wortgrenzen-Checks auf TypeRef liefen ins Leere.
+            JoinTokInto(PType, Tok.Value);
             Next;
           end;
 
@@ -994,7 +997,9 @@ begin
     var RetType := '';
     while not (Tok.Kind in [tkSemicolon, tkKwEnd, tkEof]) do
     begin
-      RetType := RetType + Tok.Value;
+      // JoinTokInto: 'function F: array of Integer' ergab sonst
+      // TypeRef '...:arrayofInteger' (s. Param-Typ-Loop, Audit 2026-07).
+      JoinTokInto(RetType, Tok.Value);
       Next;
     end;
     MNode.TypeRef := MethKind + ':' + RetType;
