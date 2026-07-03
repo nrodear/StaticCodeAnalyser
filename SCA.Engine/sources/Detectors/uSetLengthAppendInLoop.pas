@@ -57,7 +57,7 @@ implementation
 
 uses
   System.RegularExpressions, System.StrUtils,
-  uFileTextCache;
+  uFileTextCache, uDetectorUtils;
 
 var
   // Lazy-Cache (Round 11): konstante Patterns einmalig kompilieren.
@@ -145,14 +145,6 @@ begin
   end;
 end;
 
-function LineForPos(const LineFor: TArray<Integer>; APos: Integer): Integer;
-begin
-  if (APos >= 1) and (APos - 1 < Length(LineFor)) then
-    Result := LineFor[APos - 1] + 1
-  else
-    Result := 0;
-end;
-
 class procedure TSetLengthAppendInLoopDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 const
@@ -193,7 +185,7 @@ begin
         // Array dessen Length() abgefragt wurde.
         if not SameText(ArrayName, GrowName) then Continue;
 
-        LineNo := LineForPos(LineFor, AbsolutePos + GrowM.Index - 1);
+        LineNo := TDetectorUtils.LineForPos(LineFor, AbsolutePos + GrowM.Index - 1);
         if LineNo <= 0 then LineNo := 1;
 
         Detail := Format(

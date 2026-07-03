@@ -116,14 +116,6 @@ begin
   Result := False;
 end;
 
-function LineForPos(const LineFor: TArray<Integer>; APos: Integer): Integer;
-begin
-  if (APos >= 1) and (APos - 1 < Length(LineFor)) then
-    Result := LineFor[APos - 1] + 1
-  else
-    Result := 0;
-end;
-
 class procedure TFloatEqualityDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
@@ -209,7 +201,7 @@ begin
         if FloatVars.IndexOf(LhsLow) >= 0 then IdentName := Lhs
                                           else IdentName := Rhs;
 
-        LineNo := LineForPos(LineFor, M.Index);
+        LineNo := TDetectorUtils.LineForPos(LineFor, M.Index);
         if LineNo <= 0 then LineNo := 1;
 
         F            := TLeakFinding.Create;

@@ -61,7 +61,7 @@ implementation
 
 uses
   System.RegularExpressions, System.StrUtils,
-  uFileTextCache;
+  uFileTextCache, uDetectorUtils;
 
 const
   INT64_TYPES : array[0..2] of string = ('int64', 'uint64', 'qword');
@@ -165,14 +165,6 @@ begin
   end;
 end;
 
-function LineForPos(const LineFor: TArray<Integer>; APos: Integer): Integer;
-begin
-  if (APos >= 1) and (APos - 1 < Length(LineFor)) then
-    Result := LineFor[APos - 1] + 1
-  else
-    Result := 0;
-end;
-
 class procedure TIntegerOverflowDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
@@ -232,7 +224,7 @@ begin
         // Lhs muss Int64 sein.
         if Int64Vars.IndexOf(LowerCase(Lhs)) < 0 then Continue;
 
-        LineNo := LineForPos(LineFor, M.Index);
+        LineNo := TDetectorUtils.LineForPos(LineFor, M.Index);
         if LineNo <= 0 then LineNo := 1;
 
         F            := TLeakFinding.Create;

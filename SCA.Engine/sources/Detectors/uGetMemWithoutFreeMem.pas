@@ -133,14 +133,6 @@ begin
   end;
 end;
 
-function LineForPos(const LineFor: TArray<Integer>; APos: Integer): Integer;
-begin
-  if (APos >= 1) and (APos - 1 < Length(LineFor)) then
-    Result := LineFor[APos - 1] + 1
-  else
-    Result := 0;
-end;
-
 class procedure TGetMemWithoutFreeMemDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 const
@@ -213,7 +205,7 @@ begin
       // try kommt VOR FreeMem -> Pattern OK
       if (TryPos > 0) and (TryPos < FreePos) then Continue;
 
-      LineNo := LineForPos(LineFor, M.Index);
+      LineNo := TDetectorUtils.LineForPos(LineFor, M.Index);
       if LineNo <= 0 then LineNo := 1;
 
       Detail := Format(

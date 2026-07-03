@@ -144,14 +144,6 @@ begin
   end;
 end;
 
-function LineForPos(const LineFor: TArray<Integer>; APos: Integer): Integer;
-begin
-  if (APos >= 1) and (APos - 1 < Length(LineFor)) then
-    Result := LineFor[APos - 1] + 1
-  else
-    Result := 0;
-end;
-
 // Position des LETZTEN Vorkommens von Needle als GANZES Wort in Hay (sonst 0).
 // Hay muss lower-case sein. Verhindert Teilwort-Treffer ('retry'/'entry' fuer
 // 'try', 'send'/'append' fuer 'end').
@@ -249,7 +241,7 @@ begin
           Continue;  // Lock liegt im offenen try-Body -> kein bare-Lock
       end;
 
-      LineNo := LineForPos(LineFor, M.Index);
+      LineNo := TDetectorUtils.LineForPos(LineFor, M.Index);
       if LineNo <= 0 then LineNo := 1;
 
       Detail := Format(

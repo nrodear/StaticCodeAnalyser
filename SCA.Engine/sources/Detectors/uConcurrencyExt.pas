@@ -66,14 +66,6 @@ end;
 // TDetectorUtils.StripStringsAndComments, der beides strippt und die
 // Char->Quellzeile-Map (LineForChar) gleich mitliefert.
 
-function LineForPos(const LineFor: TArray<Integer>; Pos: Integer): Integer;
-begin
-  if (Pos >= 1) and (Pos - 1 < Length(LineFor)) then
-    Result := LineFor[Pos - 1] + 1
-  else
-    Result := 0;
-end;
-
 class procedure TConcurrencyExtDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
@@ -185,7 +177,7 @@ var
 
   procedure Emit(K: TFindingKind; const Detail: string; AtPos: Integer);
   begin
-    LineNo := LineForPos(LineFor, AtPos);
+    LineNo := TDetectorUtils.LineForPos(LineFor, AtPos);
     if LineNo <= 0 then LineNo := 1;
     F            := TLeakFinding.Create;
     F.FileName   := FileName;

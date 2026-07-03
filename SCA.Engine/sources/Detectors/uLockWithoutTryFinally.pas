@@ -56,7 +56,7 @@ implementation
 
 uses
   System.RegularExpressions, System.StrUtils,
-  uFileTextCache;
+  uFileTextCache, uDetectorUtils;
 
 // Lokale Kopie von StripFileComments (in den Lexer-Detektoren konventionell
 // inline statt aus einer Library exportiert - vermeidet zyklische uses).
@@ -457,16 +457,6 @@ begin
   end;
 end;
 
-function LineForPos(const LineFor: TArray<Integer>; Pos: Integer): Integer;
-// LineFor wird von StripFileComments zurueckgegeben:
-// LineFor[i] = 0-basierte Zeilennummer von Code[i+1]. -> +1 fuer 1-basiert.
-begin
-  if (Pos >= 1) and (Pos - 1 < Length(LineFor)) then
-    Result := LineFor[Pos - 1] + 1
-  else
-    Result := 0;
-end;
-
 function LockBodyIsExceptionFree(const Code: string; AfterAcquirePos: Integer): Boolean;
 // True wenn zwischen dem Acquire-';' und dem naechsten Leave/Release/Exit/
 // EndWrite/LeaveCriticalSection NUR reine Zuweisungen stehen: KEIN Call '(',
@@ -595,7 +585,7 @@ begin
       // Enter und Leave -> Lock kann nicht haengen (triviale Getter/Setter).
       if LockBodyIsExceptionFree(Code, EndOfStmt) then Continue;
 
-      LineNo := LineForPos(LineFor, M.Index);
+      LineNo := TDetectorUtils.LineForPos(LineFor, M.Index);
       if LineNo <= 0 then LineNo := 1;
 
       // Lock-Identifier aus dem Match-Wert extrahieren statt Groups[1]:

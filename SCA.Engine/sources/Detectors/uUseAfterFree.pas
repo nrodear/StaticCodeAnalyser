@@ -77,7 +77,7 @@ implementation
 uses
   System.RegularExpressions, System.StrUtils, System.IOUtils,
   uFileTextCache,
-  uCFG;
+  uCFG, uDetectorUtils;
 
 var
   // Lazy-Cache: beide Patterns sind konstant. ReEndOfMethod war besonders
@@ -193,14 +193,6 @@ begin
   finally
     Chars.Free; Buf.Free;
   end;
-end;
-
-function LineForPos(const LineFor: TArray<Integer>; Pos: Integer): Integer;
-begin
-  if (Pos >= 1) and (Pos - 1 < Length(LineFor)) then
-    Result := LineFor[Pos - 1] + 1
-  else
-    Result := 0;
 end;
 
 // Wortgrenze: davor und danach kein Ident-Char.
@@ -495,12 +487,12 @@ begin
       UsePos := FindUseOrReassign(ScanFrom);
       if UsePos = 0 then Continue;
 
-      LineNo := LineForPos(LineFor, UsePos);
+      LineNo := TDetectorUtils.LineForPos(LineFor, UsePos);
       if LineNo <= 0 then LineNo := 1;
 
       // A.4.6 CFG-Filter: wenn FreeBlock und UseBlock in derselben
       // Method liegen und CanReach=False, droppen wir den Befund.
-      FreeLine := LineForPos(LineFor, M.Index);
+      FreeLine := TDetectorUtils.LineForPos(LineFor, M.Index);
       if FreeLine <= 0 then FreeLine := 1;
       if (Methods <> nil) and CfgFilterDropsFinding(FreeLine, LineNo) then
         Continue;

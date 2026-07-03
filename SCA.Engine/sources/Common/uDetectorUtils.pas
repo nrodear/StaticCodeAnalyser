@@ -125,6 +125,14 @@ type
     class function StripStringsAndComments(Lines: TStrings;
       out LineForChar: TArray<Integer>; FillCh: Char = '~'): string; static;
 
+    // Rueckrechnung Match-Position -> 1-basierte Quellzeile ueber die
+    // LineForChar-Map aus StripStringsAndComments (dort: 0-basierter
+    // Zeilenindex pro Zeichen). 0 wenn APos ausserhalb der Map liegt.
+    // Audit 2026-07: war in 17 Detektor-Units byte-identisch kopiert -
+    // hier zentralisiert (Konsumenten rufen TDetectorUtils.LineForPos).
+    class function LineForPos(const LineFor: TArray<Integer>;
+      APos: Integer): Integer; static;
+
     // Faltet Pascal-Konkatenations-Sequenzen von String-Literalen zu einem
     // einzigen virtuellen Literal zusammen:
     //   'foo' + 'bar'       -> 'foobar'
@@ -478,6 +486,15 @@ begin
     Chars.Free;
     Buf.Free;
   end;
+end;
+
+class function TDetectorUtils.LineForPos(const LineFor: TArray<Integer>;
+  APos: Integer): Integer;
+begin
+  if (APos >= 1) and (APos - 1 < Length(LineFor)) then
+    Result := LineFor[APos - 1] + 1
+  else
+    Result := 0;
 end;
 
 class function TDetectorUtils.MergeAdjacentStringLiterals(

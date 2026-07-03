@@ -60,7 +60,7 @@ implementation
 
 uses
   System.RegularExpressions, System.StrUtils,
-  uFileTextCache;
+  uFileTextCache, uDetectorUtils;
 
 function StripStringsAndComments(Lines: TStringList; out LineForChar: TArray<Integer>): string;
 var
@@ -133,14 +133,6 @@ begin
   end;
 end;
 
-function LineForPos(const LineFor: TArray<Integer>; APos: Integer): Integer;
-begin
-  if (APos >= 1) and (APos - 1 < Length(LineFor)) then
-    Result := LineFor[APos - 1] + 1
-  else
-    Result := 0;
-end;
-
 class procedure TWithMultipleTargetsDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
@@ -166,7 +158,7 @@ begin
       '(?ism)\bwith\s+[^,;{}\r\n]{1,200},\s*[^;{}]{1,200}\bdo\b');
     for M in RE.Matches(Code) do
     begin
-      LineNo := LineForPos(LineFor, M.Index);
+      LineNo := TDetectorUtils.LineForPos(LineFor, M.Index);
       if LineNo <= 0 then LineNo := 1;
 
       F            := TLeakFinding.Create;

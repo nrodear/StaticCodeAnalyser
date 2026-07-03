@@ -48,7 +48,7 @@ implementation
 
 uses
   System.RegularExpressions, System.StrUtils,
-  uFileTextCache;
+  uFileTextCache, uDetectorUtils;
 
 var
   // Lazy-Cache (Round 11): konstante Patterns einmalig kompilieren.
@@ -135,14 +135,6 @@ begin
   end;
 end;
 
-function LineForPos(const LineFor: TArray<Integer>; APos: Integer): Integer;
-begin
-  if (APos >= 1) and (APos - 1 < Length(LineFor)) then
-    Result := LineFor[APos - 1] + 1
-  else
-    Result := 0;
-end;
-
 class procedure TBoolAlwaysTrueDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
@@ -168,7 +160,7 @@ begin
     begin
       Op := M.Groups[1].Value;
       AlwaysTrue := Op = '>=';
-      LineNo := LineForPos(LineFor, M.Index);
+      LineNo := TDetectorUtils.LineForPos(LineFor, M.Index);
       if LineNo <= 0 then LineNo := 1;
 
       F            := TLeakFinding.Create;
@@ -188,7 +180,7 @@ begin
     begin
       Op := M.Groups[1].Value;
       AlwaysTrue := Op = '<=';
-      LineNo := LineForPos(LineFor, M.Index);
+      LineNo := TDetectorUtils.LineForPos(LineFor, M.Index);
       if LineNo <= 0 then LineNo := 1;
 
       F            := TLeakFinding.Create;
