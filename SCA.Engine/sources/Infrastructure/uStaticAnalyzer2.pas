@@ -167,11 +167,13 @@ const
   DETECTOR_CAPACITY = 220;
 
 var
-  // Unit-globale Detector-Liste. Lazy beim ersten Scan gebaut, danach
-  // read-only fuer die Programm-Laufzeit. Spart ~170 Closure-Allokationen
-  // pro Datei (vorher wurde die Liste in RunAllDetectors pro File neu
-  // aufgebaut). Thread-safety: Scan ist single-threaded, EnsureBuilt
-  // ohne Lock OK.
+  // Unit-globale Detector-Liste. Wird deterministisch in der unit-
+  // initialization gebaut (s. Datei-Ende) und ist danach read-only fuer
+  // die Programm-Laufzeit. Spart ~170 Closure-Allokationen pro Datei
+  // (vorher wurde die Liste in RunAllDetectors pro File neu aufgebaut).
+  // Audit 2026-07: vorher lazy beim ersten Scan mit Length()=0-Check -
+  // ein Datenrennen sobald zwei Scans erstmals parallel starten
+  // (SetLength-Trim macht Length<>0 bevor die Liste fertig ist).
   gDetectors : TArray<TDetectorEntry>;
   // Deduplizierte Liste ALLER Pre-Filter-Tokens (lowercase) aus allen
   // tagged Detektoren. Wird in BuildAllDetectors gefuellt. RunAllDetectors
@@ -183,6 +185,7 @@ var
 procedure BuildAllDetectors; forward;
 
 procedure EnsureDetectorsBuilt; inline;
+// Seit dem initialization-Build nur noch Sicherheitsnetz (idempotent).
 begin
   if Length(gDetectors) = 0 then BuildAllDetectors;
 end;
@@ -1545,5 +1548,12 @@ begin
     FileList.Free;
   end;
 end;
+
+initialization
+  // Detector-Liste deterministisch beim Unit-Load bauen statt lazy beim
+  // ersten Scan (Race-frei; Kosten einmalig ~150 Closure-Allokationen).
+  // BuildAllDetectors liest keinen Config-State - Filter werden pro Scan
+  // via IsDetectorEnabled ausgewertet - daher Init-Reihenfolge-unabhaengig.
+  BuildAllDetectors;
 
 end.
