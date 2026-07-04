@@ -328,22 +328,30 @@ end;
 // Bare-Style (mORMot FormatUtf8/FormatString)
 // =============================================================================
 
+var
+  GOldFormatFunctions: TArray<string>;
+
 procedure TTestFormatMismatchBareStyle.Setup;
 begin
   // Bare-Style-Funktionen fuer diese Fixture aktivieren (Default = nur 'format').
+  // Snapshot statt asymmetrischem Add/IndexOf-Delete (Audit F5): enthielte
+  // der Default je 'formatutf8', wuerde das alte TearDown einen legitimen
+  // Eintrag loeschen; leakte eine Vor-Fixture Eintraege, stapelten sie sich.
   if Assigned(uSCAConsts.DetectorFormatFunctions) then
+  begin
+    GOldFormatFunctions := uSCAConsts.DetectorFormatFunctions.ToStringArray;
     uSCAConsts.DetectorFormatFunctions.AddStrings(['formatutf8', 'formatstring']);
+  end;
 end;
 
 procedure TTestFormatMismatchBareStyle.TearDown;
 var
-  idx : Integer;
+  S : string;
 begin
   if not Assigned(uSCAConsts.DetectorFormatFunctions) then Exit;
-  idx := uSCAConsts.DetectorFormatFunctions.IndexOf('formatutf8');
-  if idx >= 0 then uSCAConsts.DetectorFormatFunctions.Delete(idx);
-  idx := uSCAConsts.DetectorFormatFunctions.IndexOf('formatstring');
-  if idx >= 0 then uSCAConsts.DetectorFormatFunctions.Delete(idx);
+  uSCAConsts.DetectorFormatFunctions.Clear;
+  for S in GOldFormatFunctions do
+    uSCAConsts.DetectorFormatFunctions.Add(S);
 end;
 
 procedure TTestFormatMismatchBareStyle.FormatUtf8_TwoBarePercents_TwoArgs_NoFinding;

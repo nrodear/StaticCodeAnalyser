@@ -60,14 +60,21 @@ begin
   for X in F do if X.Kind = K then Inc(Result);
 end;
 
+var
+  GOldGodHandlerMax: Integer;
+
 procedure TTestDfmGodHandler.SetUp;
 begin
+  // Alt-Wert sichern statt hartkodiertem Default-Restore: driftet der
+  // Engine-Default je von 5 weg, wuerde TearDown sonst den falschen Wert
+  // in Folge-Fixtures injizieren (Audit_TestQualitaet F3).
+  GOldGodHandlerMax := DetectorMaxGodHandlerEvents;
   DetectorMaxGodHandlerEvents := 5;     // Phase-1-Default
 end;
 
 procedure TTestDfmGodHandler.TearDown;
 begin
-  DetectorMaxGodHandlerEvents := 5;
+  DetectorMaxGodHandlerEvents := GOldGodHandlerMax;
 end;
 
 procedure TTestDfmGodHandler.Test_FiveBindings_Detected;

@@ -70,14 +70,20 @@ begin
   for X in F do if X.Kind = K then Inc(Result);
 end;
 
+var
+  GOldDbHintMax: Integer;
+
 procedure TTestDfmDataModuleSplitHint.SetUp;
 begin
+  // Alt-Wert sichern statt hartkodiertem Default-Restore (Audit F4,
+  // Begruendung siehe uTestDfmGodHandler.SetUp).
+  GOldDbHintMax := DetectorMaxDbInUiFormHint;
   DetectorMaxDbInUiFormHint := 3;
 end;
 
 procedure TTestDfmDataModuleSplitHint.TearDown;
 begin
-  DetectorMaxDbInUiFormHint := 3;
+  DetectorMaxDbInUiFormHint := GOldDbHintMax;
 end;
 
 // --- Positive ---
