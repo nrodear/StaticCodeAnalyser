@@ -22,6 +22,20 @@ type
     FLex      : TLexer;
     FNextCount: Integer; // Watchdog: max. Token-Aufrufe pro Datei
 
+    // IFDEF-Body-Recovery (2026-07-04, blcksock-Muster): Kontext fuer
+    // Methoden-Header, die MITTEN in einem offenen Methoden-Body auftauchen
+    // (zwei begin, ein end durch {$IFDEF}/{$ELSE}-Twin-Bodies). FImplNode
+    // ist der aktuelle nkImplementation-Knoten - Ziel-Parent fuer die auf
+    // Unit-Ebene recoverten Methoden. FResume* transportieren den von
+    // ParseStatement bereits konsumierten Header-Prefix (Keyword + erster
+    // Namens-Ident) zu ParseMethodSignature, das dort nahtlos ab dem '.'
+    // weiterparst (der Lexer hat nur 1-Token-Peek, ein Multi-Lookahead
+    // ohne Konsum ist nicht moeglich).
+    FImplNode            : TAstNode;
+    FResumeHeaderPending : Boolean;
+    FResumeKwTok         : TToken;
+    FResumeName1         : string;
+
     // ---- Lexer-Hilfsmethoden ----
     function  Tok: TToken;
     function  Next: TToken;
@@ -216,6 +230,12 @@ begin
   end;
   try
     FNextCount := 0; // Watchdog pro Datei zuruecksetzen
+    // Recovery-Zustand pro Datei zuruecksetzen (2026-07-04): ein Parser-
+    // Objekt kann mehrere Dateien nacheinander parsen; Reste einer
+    // abgebrochenen Recovery duerfen nicht in die naechste Datei lecken.
+    FImplNode            := nil;
+    FResumeHeaderPending := False;
+    FResumeName1         := '';
     Root := TAstNode.Create(nkUnit, '', 1, 1);
     try
       ParseUnit(Root);
@@ -437,7 +457,19 @@ begin
           Eat(tkDot);
           Exit;
         end;
-      tkKwEnd : begin Next; Eat(tkDot); Exit; end;
+      tkKwEnd :
+        begin
+          // Bug-A-Resync (2026-07-04): 'end' beendet die Unit nur als
+          // 'end.' (oder am Dateiende). Ein einzelnes 'end' stammt aus
+          // einem unbalancierten Konstrukt (z.B. nested type im Class-
+          // Body: das innere 'end' schloss ParseClassBody, das aeussere
+          // sickerte bis hierher durch) - frueher brach der Parse hier ab
+          // und die KOMPLETTE Implementation fehlte im AST. Jetzt: stray
+          // 'end' konsumieren und weiterparsen (Skip statt Truncation).
+          Next; // 'end'
+          if Tok.Kind = tkDot then begin Next; Exit; end;
+          if Tok.Kind = tkEof then Exit;
+        end;
       tkEof   : Exit;
     else
       Next;
@@ -480,6 +512,9 @@ var
   T          : TToken;
   StartCount : Integer;
 begin
+  // Ziel-Parent fuer die IFDEF-Body-Recovery merken (siehe ParseStatement,
+  // Routine-Header-Branch): recoverte Methoden gehoeren auf Unit-Ebene.
+  FImplNode := Parent;
   while not FLex.AtEnd do
   begin
     StartCount := FNextCount;
@@ -507,15 +542,45 @@ begin
             ParseMethodImpl(Parent);
             if Parent.Children.Count > BeforeCount then
             begin
-              var Last := Parent.Children[Parent.Children.Count - 1];
-              if (Last.Kind = nkMethod) and
-                 (Pos(';class', LowerCase(Last.TypeRef)) = 0) then
-                Last.TypeRef := Last.TypeRef + ';class';
+              // Review-Fix (2026-07-04): index-basiert statt .Last - feuert
+              // waehrend des Bodys die IFDEF-Body-Recovery, haengen dahinter
+              // RECOVERTE Methoden; .Last waere dann die falsche. Das Kind
+              // an BeforeCount ist immer die hier geparste class-Methode
+              // (auch im Twin-Dedup-Fall der verbliebene Twin).
+              var First := Parent.Children[BeforeCount];
+              if (First.Kind = nkMethod) and
+                 (Pos(';class', LowerCase(First.TypeRef)) = 0) then
+                First.TypeRef := First.TypeRef + ';class';
             end;
           end;
         end;
       tkKwInitialization, tkKwFinalization,
-      tkKwEnd, tkEof                        : Exit;
+      tkEof                                 : Exit;
+      tkKwEnd                               :
+        begin
+          // Bug-A-Resync (2026-07-04): 'end' ist auf Implementation-Ebene
+          // nur als Unit-Terminator 'end.' legal. Ein einzelnes 'end'
+          // stammt aus einem unbalancierten Konstrukt weiter oben (z.B.
+          // nested type im Class-Body einer impl-lokalen type-Section) -
+          // frueher beendete es die Section und der REST DER DATEI fehlte
+          // im AST (Selbstscan-Repro: 20 -> 1 Findings). Jetzt: nur bei
+          // echtem Datei-Ende terminieren, sonst konsumieren und weiter-
+          // parsen. Einzelne Deklarationen des kaputten Konstrukts bleiben
+          // unsichtbar - Skip ist strikt besser als Truncation.
+          Next; // 'end'
+          if Tok.Kind = tkDot then
+          begin
+            // Echtes 'end.': Rest der Datei ist per Sprachdefinition tot
+            // (Dead-Code-Idiom 'end.' hochziehen, Alt-Kopien hinter end.).
+            // Review-Fix (2026-07-04): explizit bis EOF verwerfen, sonst
+            // wuerde der Impl-Loop von ParseUnit Trailing-Text als Live-
+            // Code parsen -> Phantom-Findings auf totem Code.
+            Next; // '.'
+            SkipTo([tkEof]);
+            Exit;
+          end;
+          if Tok.Kind = tkEof then Exit;                  // 'end<EOF>'
+        end;
     else
       Next;
     end;
@@ -912,13 +977,27 @@ var
   PType    : string;
   PN, Modifier : string;
 begin
-  T        := Next; // procedure / function / constructor / destructor
-  MethKind := T.Value;
-  MethName := '';
-
-  if Tok.Kind = tkIdent then
+  if FResumeHeaderPending then
   begin
-    MethName := Next.Value;
+    // IFDEF-Body-Recovery (2026-07-04): ParseStatement hat Keyword und
+    // ersten Namens-Ident bereits konsumiert (der Lexer bietet nur
+    // 1-Token-Peek, ein Lookahead ohne Konsum ist nicht moeglich).
+    // Hier nahtlos ab dem '.' weiterparsen.
+    FResumeHeaderPending := False;
+    T        := FResumeKwTok;
+    MethName := FResumeName1;
+  end
+  else
+  begin
+    T        := Next; // procedure / function / constructor / destructor
+    MethName := '';
+    if Tok.Kind = tkIdent then
+      MethName := Next.Value;
+  end;
+  MethKind := T.Value;
+
+  if MethName <> '' then
+  begin
     // Klassen-Generic-Param zwischen Klassen-Name und Methoden-Name:
     //   procedure TFoo<T>.Bar;     <- nach 'TFoo' kommt '<T>' vor '.'
     SkipGenericParams;
@@ -1069,6 +1148,24 @@ begin
   MNode := Parent.Children.Last;
   if MNode.Kind <> nkMethod then Exit;
 
+  // Bug-A-Teilfix (2026-07-04): forward-/external-Deklarationen haben
+  // weder Deklarationsteil noch Body - sofort zurueck zum Aufrufer.
+  // Frueher lief ParseLocalVarSection trotzdem weiter und interpretierte
+  // eine FOLGENDE impl-level type/const/var-Section als lokale Sektion
+  // der Forward-Decl; eine type-Section mit record/class stoppte dabei
+  // am inneren 'end' -> ParseImplementationSection hielt das fuer das
+  // Unit-Ende, der Rest der Datei fehlte im AST. Jetzt parst der
+  // Impl-Loop die Section regulaer (nkTypeSection/nkVarSection/...).
+  // Hinweis: der Forward-Knoten bleibt als headless nkMethod stehen
+  // (gleiches Muster wie eine Interface-Signatur); die echte
+  // Implementierung erzeugt spaeter ihren eigenen nkMethod.
+  // ';forward'/';external' stammen aus ParseMethodDirectives (lowercase);
+  // in Return-Typ/Direktiven-Teil von TypeRef kann kein ';' aus
+  // Nutzertext auftauchen - der Substring-Match ist eindeutig.
+  if (Pos(';forward', MNode.TypeRef) > 0) or
+     (Pos(';external', MNode.TypeRef) > 0) then
+    Exit;
+
   ParseLocalVarSection(MNode);
 
   // Nested local routines: Delphi erlaubt `procedure`/`function`-Deklarationen
@@ -1176,10 +1273,52 @@ begin
         // Skip-Loop bis zum naechsten Section/Body. Next garantiert
         // normalerweise Forward-Progress; GuardAdvance ist defensiv falls
         // Lexer in einem korrupten Zustand stecken bleibt.
+        //
+        // Bug-A-Fix (2026-07-04), zwei Ergaenzungen gegen Datei-Truncation:
+        // 1) Lokale record-Typen (`TRec = record ... end;`) werden mit dem
+        //    etablierten Mini-Parser bis zum matching `end` balanciert
+        //    uebersprungen (nested records zaehlen mit). Frueher stoppte
+        //    der Skip am ERSTEN `end` im record-Body; die Outer-Loops
+        //    hielten es fuer das Methoden-/Unit-Ende -> der Rest der Datei
+        //    fehlte im AST. Limitation: die Deklarationen der Section
+        //    bleiben wie bisher unsichtbar (kein AST-Knoten) - nur die
+        //    Lexer-Position muss hinter der Section stimmen.
+        // 2) Ein Routine-Header NACH einer Deklaration (procedure/function
+        //    mit vorangehendem ';') beendet den Skip: er leitet eine
+        //    nested routine ein, die der nested-Routine-Pfad von
+        //    ParseMethodImpl parst. Prozedurale Typaliase wie
+        //    `TCb = procedure(...) of object;` folgen dagegen auf `=`
+        //    (PrevKind <> ';') und werden weiterhin mitgeskippt.
+        var PrevKind := tkKwType;
         while not (Tok.Kind in [tkKwVar, tkKwConst, tkKwBegin, tkKwAsm,
                                  tkKwEnd, tkEof]) do
         begin
           var SkipStart := FNextCount;
+          if (Tok.Kind in [tkKwProcedure, tkKwFunction, tkKwConstructor,
+                           tkKwDestructor, tkKwOperator]) and
+             (PrevKind = tkSemicolon) then
+            Break;
+          if Tok.Kind = tkKwRecord then
+          begin
+            // record-Body balanciert konsumieren (inkl. schliessendem
+            // `end`). Nur tkKwRecord zaehlt als Opener: `class`/`object`
+            // waeren als lokale Typen ohnehin illegal, und `class` kommt
+            // in record-Bodies als Modifier (`class function`) vor -
+            // Depth-Zaehlung darauf wuerde ueberzaehlen.
+            Next; // 'record'
+            var Depth := 1;
+            while (Depth > 0) and (Tok.Kind <> tkEof) do
+            begin
+              case Tok.Kind of
+                tkKwRecord: Inc(Depth);
+                tkKwEnd:    Dec(Depth);
+              end;
+              Next;
+            end;
+            PrevKind := tkKwEnd;
+            Continue;
+          end;
+          PrevKind := Tok.Kind;
           Next;
           GuardAdvance(SkipStart);
         end;
@@ -1405,6 +1544,52 @@ begin
         end;
         Eat(tkKwEnd);
         Eat(tkSemicolon);
+      end;
+
+    tkKwProcedure, tkKwFunction,
+    tkKwConstructor, tkKwDestructor, tkKwOperator:
+      begin
+        // IFDEF-Body-Recovery (2026-07-04, blcksock-Muster): {$IFDEF}/
+        // {$ELSE}-Twin-Bodies erzeugen im Token-Stream zwei `begin` bei
+        // nur einem `end` (der Lexer skippt Direktiven als Kommentare).
+        // Das eine `end` schliesst dann nur den inneren Block, und der
+        // Header der NAECHSTEN Top-Level-Methode taucht mitten im noch
+        // offenen Body auf - frueher wurde er als Junk konsumiert und
+        // saemtliche Folge-Methoden bis Dateiende landeten als Statements
+        // im Body der ersten Methode (blcksock.pas InternalCanRead).
+        //
+        // Recovery: ein Header mit QUALIFIZIERTEM Namen (Ident '.' Ident)
+        // ist als nested routine illegal - er kann nur eine neue Top-
+        // Level-Implementierung sein. Also: neue Methode direkt auf
+        // Unit-Ebene (FImplNode) parsen; die offenen Aufrufer-Loops
+        // laufen nach dem Return am Folge-Token normal weiter.
+        //
+        // KEIN Recovery (Junk-Verhalten wie der fruehere else-Zweig):
+        //  - unqualifizierte Namen (`procedure Foo;` - legale nested
+        //    routines gehoeren dem Deklarationsteil-Pfad in
+        //    ParseMethodImpl und kommen hier gar nicht vorbei),
+        //  - anonyme Methoden (`procedure(...)` ohne Namen - stehen nur
+        //    in Expression-Kontexten und werden dort von den RHS-/
+        //    Argument-Scannern konsumiert, nie hier dispatcht),
+        //  - `procedure(...)`-TYPEN in var-Deklarationen (stehen hinter
+        //    ':' und werden von den TypeName-Loops konsumiert).
+        // `class procedure TFoo.X`-Header verlieren auf diesem Weg ihr
+        // 'class'-Praefix (wird vorher als Junk konsumiert) - die Methode
+        // selbst wird trotzdem recovert, nur ohne ';class'-Marker.
+        var KwTok := Next; // Routine-Keyword konsumieren (Lookahead-Ersatz)
+        if (FImplNode <> nil) and (Tok.Kind = tkIdent) then
+        begin
+          var Name1 := Next.Value; // Klassen-Name-Kandidat
+          if Tok.Kind = tkDot then
+          begin
+            FResumeHeaderPending := True;
+            FResumeKwTok         := KwTok;
+            FResumeName1         := Name1;
+            ParseMethodImpl(FImplNode);
+            Exit;
+          end;
+        end;
+        Eat(tkSemicolon); // Junk-Pfad: Paritaet zum frueheren else-Zweig
       end;
 
     tkKwEnd, tkKwElse, tkKwExcept, tkKwFinally,
