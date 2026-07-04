@@ -32,6 +32,19 @@ type
     [Test] procedure EveryKindNameResolvesViaKindFromName;
     [Test] procedure EveryKindNameIsUnique;
     [Test] procedure EveryKindCanBeSuppressedEndToEnd;
+
+    // ---- fkUnusedSuppression-EMISSION (Audit P4: war komplett ungetestet;
+    //      Semantik empirisch validiert 2026-07-04 via CLI-Scan) ----------
+    // Staler Marker wird gemeldet, wenn die Datei daneben einen
+    // konsumierten Marker hat; Fundzeile = Marker-Zeile.
+    [Test] procedure UnusedMarker_WithConsumedSiblingInFile_Reported;
+    // Nur konsumierte Marker -> kein UnusedSuppression-Rauschen.
+    [Test] procedure ConsumedMarkerOnly_NoUnusedFinding;
+    // BEKANNTE LUECKE (Audit_CodeReview "UnusedSuppression", zurueckgestellt):
+    // in Dateien OHNE konsumierten Marker wird FileMarkers nie gebaut ->
+    // stale Marker dort werden NICHT gemeldet. Dieser Test schreibt den
+    // Ist-Zustand fest - der kuenftige Fix MUSS ihn bewusst anfassen.
+    [Test] procedure StaleMarkerOnly_KnownGap_NotReported;
   end;
 
 implementation
@@ -39,7 +52,8 @@ implementation
 uses
   System.SysUtils, System.IOUtils, System.Classes,
   System.Generics.Collections,
-  uSCAConsts, uMethodd12, uSuppression;
+  uSCAConsts, uMethodd12, uSuppression,
+  uTestFindingHelper;
 
 procedure TTestSuppressionCompleteness.EveryKindNameResolvesViaKindFromName;
 var
@@ -193,6 +207,77 @@ begin
   finally
     KindList.Free;
   end;
+end;
+
+procedure TTestSuppressionCompleteness.UnusedMarker_WithConsumedSiblingInFile_Reported;
+// Konsumierter EmptyMethod-Marker + staler GotoStatement-Marker (kein goto
+// im File). Erwartung: EmptyMethod unterdrueckt, genau 1 fkUnusedSuppression
+// auf der stalen Marker-Zeile. (Pipeline-Weg: Suppression laeuft nur dort.)
+const SRC =
+  'unit t; interface implementation'#13#10 +
+  '// noinspection EmptyMethod'#13#10 +
+  'procedure Leer;'#13#10 +
+  'begin'#13#10 +
+  'end;'#13#10 +
+  '// noinspection GotoStatement'#13#10 +
+  'procedure Voll;'#13#10 +
+  'begin'#13#10 +
+  '  Writeln(1);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkEmptyMethod),
+      'EmptyMethod-Marker muss konsumiert sein');
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedSuppression),
+      'genau 1 UnusedSuppression fuer den stalen GotoStatement-Marker');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'noinspection GotoStatement'),
+      TFindingHelper.FirstOf(F, fkUnusedSuppression).LineNumber,
+      'Fundzeile = Marker-Zeile');
+  finally F.Free; end;
+end;
+
+procedure TTestSuppressionCompleteness.ConsumedMarkerOnly_NoUnusedFinding;
+const SRC =
+  'unit t; interface implementation'#13#10 +
+  '// noinspection EmptyMethod'#13#10 +
+  'procedure Leer;'#13#10 +
+  'begin'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkEmptyMethod),
+      'Marker muss konsumiert sein');
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedSuppression),
+      'konsumierter Marker darf nicht als unused gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestSuppressionCompleteness.StaleMarkerOnly_KnownGap_NotReported;
+// Datei hat Findings (Writeln etc.), aber KEIN Marker konsumiert etwas ->
+// FileMarkers wird nie gebaut, der stale Marker bleibt unentdeckt.
+// DOKUMENTIERTE LUECKE - siehe Fixture-Deklaration.
+const SRC =
+  'unit t; interface implementation'#13#10 +
+  '// noinspection GotoStatement'#13#10 +
+  'procedure Voll;'#13#10 +
+  'begin'#13#10 +
+  '  Writeln(1);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedSuppression),
+      'Ist-Zustand (bekannte Luecke): ohne konsumierten Marker keine ' +
+      'UnusedSuppression-Emission - Fix muss diesen Test bewusst drehen');
+  finally F.Free; end;
 end;
 
 initialization

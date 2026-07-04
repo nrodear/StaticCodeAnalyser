@@ -47,7 +47,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkStringConcatInLoop) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkStringConcatInLoop),
+      'genau 1 StringConcatInLoop-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 's := s + IntToStr(i)'),
+      TFindingHelper.FirstOf(F, fkStringConcatInLoop).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -82,7 +87,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkStringConcatInLoop) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkStringConcatInLoop),
+      'genau 1 StringConcatInLoop-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 's := s + '),
+      TFindingHelper.FirstOf(F, fkStringConcatInLoop).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -120,7 +130,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkParamByNameInLoop) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkParamByNameInLoop),
+      'genau 1 ParamByNameInLoop-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'ParamByName'),
+      TFindingHelper.FirstOf(F, fkParamByNameInLoop).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -155,7 +170,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkFieldByNameInLoop) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFieldByNameInLoop),
+      'genau 1 FieldByNameInLoop-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'FieldByName'),
+      TFindingHelper.FirstOf(F, fkFieldByNameInLoop).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
