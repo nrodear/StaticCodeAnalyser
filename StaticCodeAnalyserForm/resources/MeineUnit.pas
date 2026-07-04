@@ -18,7 +18,7 @@ type
   private
     function MethodeMethodeMitSpeicherleck: TStringList;
     function MethodeMethodeTStringListNotFree: TStringList;
-
+    constructor create;
   public
     // Methode MIT Speicherleck: test wird erstellt, aber nie freigegeben
     function MethodeMitSpeicherleck: string;
@@ -90,6 +90,11 @@ var
   list1: TStringList;
 begin
   list1 := MethodeMethodeMitSpeicherleck;
+end;
+
+constructor TMeineKlasse.create;
+begin
+  inherited;
 end;
 
 procedure TMeineKlasse.LeererExceptBlock;
