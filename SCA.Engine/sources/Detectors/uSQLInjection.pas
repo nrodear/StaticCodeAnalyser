@@ -19,6 +19,16 @@ unit uSQLInjection;
 //
 // Hinweis: Calls wie Query.SQL.Add('SELECT '+var) werden über die
 // nkCall.Name-Prüfung erfasst, da ParsePrimary die Argumente einschließt.
+//
+// FP-Gates (2026-07-04, Real-World-Audit Sektion 3.1, Prio 1 -
+// Const/Literal-Dataflow):
+//   * const-derived-variable: konkatenierte Variable wird in der Routine
+//     NUR aus String-Literalen zugewiesen -> kein Fund (IsConstDerivedLocal)
+//   * int-format-concat: Format()-Maske nur mit %d/%u/%x-Platzhaltern bzw.
+//     Format-Familie mit ausschliesslich Integer-/Literal-Argumenten ->
+//     kein Fund (IsIntOnlyFormatArg / AreFormatArgsInjectionSafe)
+//   * const-concat: Format-Familie mit reinen Literal-Argumenten
+//     (Seed-Daten) -> kein Fund (AreFormatArgsInjectionSafe)
 
 interface
 
@@ -34,8 +44,10 @@ type
     class procedure AnalyzeMethod(MethodNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>);
   private
-    class function IsAssignRisk(const Name, RHS: string): Boolean; static;
-    class function IsCallRisk(const CallName: string): Boolean; static;
+    class function IsAssignRisk(MethodNode: TAstNode;
+      const Name, RHS: string): Boolean; static;
+    class function IsCallRisk(MethodNode: TAstNode;
+      const CallName: string): Boolean; static;
     // Negativ-Gate fuer die LOSEN Heuristiken (Keyword-Substring + Format):
     // True wenn der Call/das Ziel eine bekannte Nicht-SQL-Senke ist -
     // Log-Funktionen (LogMsg/LogMsgError/OutputDebugString), UI-Ausgaben
@@ -47,7 +59,8 @@ type
     // mORMot-Pattern: ExecuteFmt('SELECT * FROM % WHERE id=%', [tbl, id]) -
     // strukturelle Injection ueber Tabellenname, kein '+' im Code -> H1/H2
     // uebersehen das. Severity = lsError, gleiche Kind wie sonstige SQL-Risks.
-    class function IsFormatSqlRisk(const CallName: string): Boolean; static;
+    class function IsFormatSqlRisk(MethodNode: TAstNode;
+      const CallName: string): Boolean; static;
     // True wenn ein SQL_KW im Text vorkommt. Sonderfall 'call': der Windows-
     // Batch-Befehl  call "pfad"  (z.B. BuildLogStats RunMSBuild:
     // Format('call "%s"', [...])) kollidiert mit dem SQL-Stored-Proc-CALL.
@@ -73,7 +86,50 @@ type
     //   IntToStr, Int64ToStr, FormatInt, GetEnumName  (numerisch)
     //   QuotedStr, QuotedSQL, QuotedStrJSON, SQLVarToText  (escape'd)
     // Dann ist die Konkatenation injection-sicher trotz '+'-Operator.
-    class function AllConcatTermsSafe(const RHS: string): Boolean; static;
+    // MethodNode wird fuer die lokalen Dataflow-Gates gebraucht (const-
+    // derived-Variablen, Format-Masken) und darf nil sein (dann greifen
+    // nur die kontextfreien Pruefungen).
+    class function AllConcatTermsSafe(MethodNode: TAstNode;
+      const RHS: string): Boolean; static;
+    // True wenn S ausschliesslich aus String-Literalen, Char-Codes
+    // (#13, #$1B), '+'-Konkatenation und Whitespace besteht - also ein
+    // zur Compile-Zeit fixer String, den kein Angreifer beeinflussen kann.
+    class function IsPureLiteralText(const S: string): Boolean; static;
+    // FP-Gate (2026-07-04): const-derived-variable - True wenn der
+    // Bezeichner in dieser Routine AUSSCHLIESSLICH aus String-Literalen
+    // zugewiesen wird (if/else ueber geschlossene Literalmenge, z.B.
+    // lTimestampType := 'DATETIME2'|'DATETIME'|'TIMESTAMP', DMVC
+    // activerecord_showcase MainFormU) ODER eine lokale Konstante mit
+    // Literal-Wert ist. Solche Werte kann kein externer Input erreichen.
+    class function IsConstDerivedLocal(MethodNode: TAstNode;
+      const IdentLow: string): Boolean; static;
+    // FP-Gate (2026-07-04): int-format-concat - True wenn die Format-
+    // Maske ausschliesslich Integer-Platzhalter (%d/%u/%x, inkl. Index/
+    // Breite/Praezision wie %0:d, %-8d, %*.2d) enthaelt. Solche Masken
+    // koennen nur Ziffern erzeugen - kein Injection-Vektor.
+    class function IsIntFormatMask(const Mask: string): Boolean; static;
+    // Extrahiert das ERSTE Argument eines Format-Aufrufs (ab der
+    // oeffnenden Klammer an Position OpenParen in RHS) und prueft es via
+    // IsIntFormatMask. Nur statisch bekannte Masken (reine Literal-/
+    // Konkat-Ketten) gelten als sicher; Variablen-Masken -> False.
+    class function IsIntOnlyFormatArg(const RHS: string;
+      OpenParen: Integer): Boolean; static;
+    // FP-Gate (2026-07-04): int-format-concat + const-concat (Format-
+    // Familie H3) - True wenn JEDES Element ALLER [..]-Argument-Arrays ab
+    // StartAt entweder String-/Zahl-Literal oder ein lokal als Integer
+    // deklarierter Bezeichner ist. Integer koennen keine SQL-Syntax
+    // injizieren; Literale sind Entwickler-kontrolliert (Seed-INSERTs wie
+    // mORMot dmvc-ai server.pas ['ACME', ..., 5]). String-VARIABLEN
+    // (RawUtf8-Parameter, api.impl CreateCustomer) bleiben Risiko.
+    class function AreFormatArgsInjectionSafe(MethodNode: TAstNode;
+      const CallLow: string; StartAt: Integer): Boolean; static;
+    class function IsSafeFormatArgElement(MethodNode: TAstNode;
+      const ElemLow: string): Boolean; static;
+    // True wenn IdentLow als Parameter/lokale Variable der Routine mit
+    // Integer-Typ deklariert ist (Modifier out/var/const werden gestrippt).
+    class function IsLocalIntegerIdent(MethodNode: TAstNode;
+      const IdentLow: string): Boolean; static;
+    class function IsIntTypeName(const TypeLow: string): Boolean; static;
   end;
 
 implementation
@@ -174,7 +230,7 @@ begin
   end;
 end;
 
-class function TSQLInjectionDetector.AllConcatTermsSafe(
+class function TSQLInjectionDetector.AllConcatTermsSafe(MethodNode: TAstNode;
   const RHS: string): Boolean;
 // Strippt alle String-Literale (mit ''-Escape-Handling) raus, dann an
 // jedem '+' den nachfolgenden Token (Identifier/Whitespace) extrahieren.
@@ -252,7 +308,16 @@ begin
       // Pflicht: '(' direkt nach (ggf. Whitespace) dem Identifier.
       while (j <= Length(Stripped)) and (Stripped[j] <= ' ') do Inc(j);
       if (j > Length(Stripped)) or (Stripped[j] <> '(') then
-        Exit(False); // bare Identifier -> Variable, unsicher
+      begin
+        // FP-Gate (2026-07-04): const-derived-variable - bare Identifier
+        // ist doch sicher, wenn er in dieser Routine ausschliesslich aus
+        // String-Literalen zugewiesen wird bzw. lokale Literal-Konstante
+        // ist (geschlossene Wertemenge, kein externer Input erreichbar).
+        if not IsConstDerivedLocal(MethodNode, ident) then
+          Exit(False); // bare Identifier -> Variable, unsicher
+        Inc(i);
+        Continue;
+      end;
       isSafe := False;
       for s in SAFE_CASTS do
         if ident = s then begin isSafe := True; Break; end;
@@ -265,11 +330,409 @@ begin
               or ident.StartsWith('escape')
               or (ident.StartsWith('get') and ident.EndsWith('forsql'))) then
         isSafe := True;
+      // FP-Gate (2026-07-04): int-format-concat - Format(...) dessen Maske
+      // nur Integer-Platzhalter (%d/%u/%x) traegt, kann nur Ziffern
+      // erzeugen (DMVC PeopleModuleU: 'ORDER BY ... ' +
+      // Format('ROWS %d to %d', [StartRec, EndRec])) -> injection-sicher.
+      // Stripped ist positionsgleich zu RHS, j zeigt auf das '(' des Calls.
+      if (not isSafe) and (ident = 'format') then
+        isSafe := IsIntOnlyFormatArg(RHS, j);
       if not isSafe then Exit(False); // andere Funktion -> unsicher
     end;
     Inc(i);
   end;
   Result := True;
+end;
+
+class function TSQLInjectionDetector.IsPureLiteralText(
+  const S: string): Boolean;
+// True wenn S nur aus String-Literalen, Char-Codes (#13 / #$1B), '+' und
+// Whitespace besteht. Bezeichner, Aufrufe oder andere Operatoren -> False.
+var
+  i, L : Integer;
+  c    : Char;
+begin
+  Result := False;
+  L := Length(S);
+  i := 1;
+  while i <= L do
+  begin
+    c := S[i];
+    if c = '''' then
+    begin
+      // String-Literal bis zum schliessenden Quote konsumieren ('' = Escape).
+      Inc(i);
+      while i <= L do
+      begin
+        if S[i] = '''' then
+        begin
+          if (i < L) and (S[i + 1] = '''') then
+            Inc(i, 2)
+          else
+            Break;
+        end
+        else
+          Inc(i);
+      end;
+      if i > L then Exit; // unterminiertes Literal -> unklar, kein Gate
+      Inc(i);             // schliessendes Quote
+    end
+    else if c = '#' then
+    begin
+      Inc(i);
+      if (i <= L) and (S[i] = '$') then Inc(i);
+      while (i <= L) and CharInSet(S[i], ['0'..'9', 'a'..'f', 'A'..'F']) do
+        Inc(i);
+    end
+    else if (c = '+') or (c <= ' ') then
+      Inc(i)
+    else
+      Exit; // Bezeichner/Call/sonstiger Operator -> nicht rein literal
+  end;
+  Result := True;
+end;
+
+class function TSQLInjectionDetector.IsConstDerivedLocal(MethodNode: TAstNode;
+  const IdentLow: string): Boolean;
+// FP-Gate (2026-07-04): const-derived-variable (Real-World-Audit 3.1).
+// Lokaler Definitions-Walk: sind ALLE Zuweisungen an den Bezeichner in
+// dieser Routine reine Literal-Expressions (bzw. ist er eine lokale
+// Konstante mit Literal-Wert), kann kein Angreifer den Wert beeinflussen
+// -> die Konkatenation ist injection-sicher. Konservativ: eine einzige
+// nicht-literale Zuweisung (oder gar keine sichtbare Definition, z.B.
+// Parameter/Feld) schaltet das Gate ab.
+var
+  Nodes : TList<TAstNode>;
+  N     : TAstNode;
+  Sec   : TAstNode;
+  i     : Integer;
+  Found : Boolean;
+  eqPos : Integer;
+begin
+  Result := False;
+  if (MethodNode = nil) or (IdentLow = '') then Exit;
+  Found := False;
+
+  // 1) Lokale const-Deklaration mit Literal-Wert. Der Parser emittiert
+  //    nkConstSection mit nkField-Kindern, TypeRef = 'TypeName=Wert' bzw.
+  //    '=Wert' (s. ParseVarLikeSection / uFormatMismatch-Konsument).
+  Nodes := MethodNode.FindAll(nkConstSection);
+  try
+    for Sec in Nodes do
+      for i := 0 to Sec.Children.Count - 1 do
+      begin
+        N := Sec.Children[i];
+        if N.Kind <> nkField then Continue;
+        if not SameText(Trim(N.Name), IdentLow) then Continue;
+        eqPos := Pos('=', N.TypeRef);
+        if (eqPos > 0)
+           and IsPureLiteralText(Copy(N.TypeRef, eqPos + 1, MaxInt)) then
+          Found := True
+        else
+          Exit; // Konstante mit nicht-literalem/unbekanntem Wert
+      end;
+  finally
+    Nodes.Free;
+  end;
+
+  // 2) Alle Zuweisungen an den Bezeichner muessen reine Literal-RHS sein
+  //    (if/else ueber geschlossene Literalmenge zaehlt: jede Branch-
+  //    Zuweisung ist ein eigener nkAssign-Knoten).
+  Nodes := MethodNode.FindAll(nkAssign);
+  try
+    for N in Nodes do
+    begin
+      if not SameText(Trim(N.Name), IdentLow) then Continue;
+      if not IsPureLiteralText(N.TypeRef) then
+        Exit; // mind. eine nicht-literale Zuweisung -> Gate greift nicht
+      Found := True;
+    end;
+  finally
+    Nodes.Free;
+  end;
+
+  Result := Found;
+end;
+
+class function TSQLInjectionDetector.IsIntFormatMask(
+  const Mask: string): Boolean;
+// FP-Gate (2026-07-04): int-format-concat - Maske mit ausschliesslich
+// %d/%u/%x-Platzhaltern (inkl. Index-/Breiten-/Praezisions-Spezifikation)
+// kann nur Ziffern/Hex-Ziffern erzeugen. '%%' ist Escape (fixes '%').
+// Bare '%' (mORMot FormatUtf8-Generic) oder %s/%f/%g etc. -> False.
+var
+  i, L : Integer;
+begin
+  Result := False;
+  L := Length(Mask);
+  i := 1;
+  while i <= L do
+  begin
+    if Mask[i] = '%' then
+    begin
+      Inc(i);
+      if i > L then Exit; // '%' am Maskenende -> unklar
+      if Mask[i] = '%' then
+      begin
+        Inc(i);
+        Continue; // '%%' -> literales Prozentzeichen
+      end;
+      // Index/Breite/Praezision: [0-9 : - . *]
+      while (i <= L) and CharInSet(Mask[i], ['0'..'9', ':', '-', '.', '*']) do
+        Inc(i);
+      if i > L then Exit;
+      if not CharInSet(Mask[i], ['d', 'D', 'u', 'U', 'x', 'X']) then Exit;
+      Inc(i);
+    end
+    else
+      Inc(i);
+  end;
+  Result := True;
+end;
+
+class function TSQLInjectionDetector.IsIntOnlyFormatArg(const RHS: string;
+  OpenParen: Integer): Boolean;
+// Sammelt das ERSTE Argument des Format-Aufrufs (Literal-Konkat-Kette) ab
+// der oeffnenden Klammer ein und prueft es via IsIntFormatMask. Sobald ein
+// Nicht-Literal-Anteil (Variable, Call) in der Maske steckt, ist sie nicht
+// statisch bekannt -> False (konservativ, Fund bleibt).
+var
+  i     : Integer;
+  inStr : Boolean;
+  Mask  : string;
+  c     : Char;
+begin
+  Result := False;
+  if (OpenParen < 1) or (OpenParen > Length(RHS))
+     or (RHS[OpenParen] <> '(') then Exit;
+  Mask  := '';
+  inStr := False;
+  i := OpenParen + 1;
+  while i <= Length(RHS) do
+  begin
+    c := RHS[i];
+    if inStr then
+    begin
+      if c = '''' then
+      begin
+        if (i < Length(RHS)) and (RHS[i + 1] = '''') then
+        begin
+          Mask := Mask + '''';
+          Inc(i, 2);
+          Continue;
+        end;
+        inStr := False;
+      end
+      else
+        Mask := Mask + c;
+    end
+    else if c = '''' then
+      inStr := True
+    else if (c = ',') or (c = ')') then
+      Break // Ende des ersten Arguments
+    else if c = '#' then
+    begin
+      // Char-Code-Literal (#13, #$1B): fester Text, platzhalter-neutral.
+      Inc(i);
+      if (i <= Length(RHS)) and (RHS[i] = '$') then Inc(i);
+      while (i <= Length(RHS))
+            and CharInSet(RHS[i], ['0'..'9', 'a'..'f', 'A'..'F']) do
+        Inc(i);
+      Continue;
+    end
+    else if (c <> '+') and (c > ' ') then
+      Exit; // Nicht-Literal-Anteil -> Maske nicht statisch bekannt
+    Inc(i);
+  end;
+  Result := (Mask <> '') and IsIntFormatMask(Mask);
+end;
+
+class function TSQLInjectionDetector.IsIntTypeName(
+  const TypeLow: string): Boolean;
+// Integer-artige Typnamen (inkl. mORMot TID = Int64-Alias). Bewusst nur
+// exakte Matches - 'TMyIntegerList' o.ae. darf NICHT als Integer gelten.
+begin
+  Result :=
+    (TypeLow = 'integer') or (TypeLow = 'cardinal') or
+    (TypeLow = 'int64') or (TypeLow = 'longint') or
+    (TypeLow = 'longword') or (TypeLow = 'smallint') or
+    (TypeLow = 'shortint') or (TypeLow = 'byte') or
+    (TypeLow = 'word') or (TypeLow = 'nativeint') or
+    (TypeLow = 'nativeuint') or (TypeLow = 'uint64') or
+    (TypeLow = 'uint32') or (TypeLow = 'int32') or
+    (TypeLow = 'dword') or (TypeLow = 'tid') or
+    (TypeLow = 'ptrint') or (TypeLow = 'ptruint');
+end;
+
+class function TSQLInjectionDetector.IsLocalIntegerIdent(
+  MethodNode: TAstNode; const IdentLow: string): Boolean;
+// Loest IdentLow gegen die Parameter-/LocalVar-Deklarationen der Routine
+// auf. Nicht gefunden oder Nicht-Integer-Typ -> False (konservativ).
+var
+  Lst     : TList<TAstNode>;
+  N       : TAstNode;
+  NameLow : string;
+  Kind    : TNodeKind;
+begin
+  Result := False;
+  if (MethodNode = nil) or (IdentLow = '') then Exit;
+  for Kind in [nkParam, nkLocalVar] do
+  begin
+    Lst := MethodNode.FindAll(Kind);
+    try
+      for N in Lst do
+      begin
+        NameLow := N.Name.ToLower;
+        // Parameter-Modifier abstreifen ('const code' -> 'code')
+        for var Mod_ in ['out ', 'var ', 'const '] do
+          if NameLow.StartsWith(Mod_) then
+            NameLow := Copy(NameLow, Length(Mod_) + 1, MaxInt);
+        if Trim(NameLow) = IdentLow then
+          Exit(IsIntTypeName(Trim(N.TypeRef.ToLower)));
+      end;
+    finally
+      Lst.Free;
+    end;
+  end;
+end;
+
+class function TSQLInjectionDetector.IsSafeFormatArgElement(
+  MethodNode: TAstNode; const ElemLow: string): Boolean;
+// Element eines Format-Argument-Arrays (lowercase, getrimmt):
+//   * String-/Char-Literal  -> sicher (Entwickler-kontrolliert, Seed-Daten)
+//   * Zahlen-Literal        -> sicher (nur Ziffern im Output)
+//   * true/false            -> sicher
+//   * reiner Bezeichner     -> nur sicher wenn lokal als Integer deklariert
+//   * alles andere (Calls, Member-Zugriffe, Ausdruecke) -> unsicher
+var
+  i : Integer;
+begin
+  Result := False;
+  if ElemLow = '' then Exit(True); // leeres Array [] ist trivial sicher
+
+  if (ElemLow[1] = '''') or (ElemLow[1] = '#') then
+    Exit(IsPureLiteralText(ElemLow));
+
+  if CharInSet(ElemLow[1], ['0'..'9', '-', '$']) then
+  begin
+    for i := 2 to Length(ElemLow) do
+      if not CharInSet(ElemLow[i], ['0'..'9', '.', '$', '+', '-',
+                                    'a'..'f', 'x']) then
+        Exit;
+    Exit(True);
+  end;
+
+  if (ElemLow = 'true') or (ElemLow = 'false') then Exit(True);
+
+  for i := 1 to Length(ElemLow) do
+    if not CharInSet(ElemLow[i], ['a'..'z', '0'..'9', '_']) then Exit;
+  Result := IsLocalIntegerIdent(MethodNode, ElemLow);
+end;
+
+class function TSQLInjectionDetector.AreFormatArgsInjectionSafe(
+  MethodNode: TAstNode; const CallLow: string; StartAt: Integer): Boolean;
+// FP-Gate (2026-07-04): int-format-concat / const-concat fuer die Format-
+// Familie (H3): scannt ab StartAt (hinter dem '(' der Format-Funktion)
+// alle [..]-Argument-Arrays und prueft jedes Element via
+// IsSafeFormatArgElement. Kein Array gefunden -> False (Fund bleibt).
+var
+  i, L     : Integer;
+  inStr    : Boolean;
+  Depth    : Integer;
+  Elem     : string;
+  FoundArr : Boolean;
+  InArr    : Boolean;
+  c        : Char;
+
+  function FlushElem: Boolean;
+  begin
+    Result := IsSafeFormatArgElement(MethodNode, Trim(Elem));
+    Elem := '';
+  end;
+
+begin
+  Result := False;
+  L := Length(CallLow);
+  if (StartAt < 1) or (StartAt > L) then Exit;
+  inStr    := False;
+  InArr    := False;
+  Depth    := 0;
+  FoundArr := False;
+  Elem     := '';
+  i := StartAt;
+  while i <= L do
+  begin
+    c := CallLow[i];
+    if inStr then
+    begin
+      // ''-Escape toggelt zweimal - fuer das Scannen unschaedlich.
+      if c = '''' then inStr := False;
+      if InArr then Elem := Elem + c;
+      Inc(i);
+      Continue;
+    end;
+    case c of
+      '''':
+        begin
+          inStr := True;
+          if InArr then Elem := Elem + c;
+        end;
+      '[':
+        if not InArr then
+        begin
+          InArr    := True;
+          FoundArr := True;
+          Depth    := 0;
+          Elem     := '';
+        end
+        else
+        begin
+          Inc(Depth);
+          Elem := Elem + c;
+        end;
+      ']':
+        if InArr then
+        begin
+          if Depth > 0 then
+          begin
+            Dec(Depth);
+            Elem := Elem + c;
+          end
+          else
+          begin
+            if (Trim(Elem) <> '') and (not FlushElem) then Exit;
+            Elem  := '';
+            InArr := False;
+          end;
+        end;
+      '(':
+        if InArr then
+        begin
+          Inc(Depth);
+          Elem := Elem + c;
+        end;
+      ')':
+        if InArr then
+        begin
+          if Depth > 0 then Dec(Depth);
+          Elem := Elem + c;
+        end;
+      ',':
+        if InArr then
+        begin
+          if Depth = 0 then
+          begin
+            if not FlushElem then Exit;
+          end
+          else
+            Elem := Elem + c;
+        end;
+    else
+      if InArr then Elem := Elem + c;
+    end;
+    Inc(i);
+  end;
+  Result := FoundArr;
 end;
 
 class function TSQLInjectionDetector.IsNonSqlSink(const Text: string): Boolean;
@@ -301,7 +764,7 @@ begin
   Result := False;
 end;
 
-class function TSQLInjectionDetector.IsAssignRisk(
+class function TSQLInjectionDetector.IsAssignRisk(MethodNode: TAstNode;
   const Name, RHS: string): Boolean;
 var
   NameLow, RHSLow : string;
@@ -317,7 +780,7 @@ begin
 
   // Whitelist: alle Konkat-Terme sind String-Literale oder safe-cast-Calls
   // (IntToStr, QuotedStr, ...) -> injection-sicher trotz '+'.
-  if AllConcatTermsSafe(RHS) then Exit;
+  if AllConcatTermsSafe(MethodNode, RHS) then Exit;
 
   // H1: bekannte SQL-Property im Ziel-Namen.
   // Wortgrenzen-Pruefung: 'commandtext' soll nicht 'mycommandtextra' matchen.
@@ -423,7 +886,7 @@ begin
   end;
 end;
 
-class function TSQLInjectionDetector.IsCallRisk(
+class function TSQLInjectionDetector.IsCallRisk(MethodNode: TAstNode;
   const CallName: string): Boolean;
 var
   Low      : string;
@@ -438,7 +901,7 @@ begin
 
   // Whitelist: alle Konkat-Terme sind String-Literale oder safe-cast-Calls
   // (IntToStr, QuotedStr, ...) -> injection-sicher trotz '+'.
-  if AllConcatTermsSafe(CallName) then Exit;
+  if AllConcatTermsSafe(MethodNode, CallName) then Exit;
 
   // SQL-Aufruf-Methode im Call-Namen. Patterns enden auf '(' was natuerliche
   // rechte Grenze ist; links muss aber Wortgrenze her - 'open(' soll nicht
@@ -461,7 +924,7 @@ begin
   if HasSqlKwHit(Low) then Exit(True);
 end;
 
-class function TSQLInjectionDetector.IsFormatSqlRisk(
+class function TSQLInjectionDetector.IsFormatSqlRisk(MethodNode: TAstNode;
   const CallName: string): Boolean;
 // Pattern: <FormatFn>(<SqlKeyword-Literal mit %>, [args])
 // FormatFn ist eine der bekannten Format-/Exec-Familien (Format, FormatUtf8,
@@ -493,7 +956,17 @@ begin
     // statischer SQL-String ohne Substitution -> kein Risiko). 'call'-Sonder-
     // Gate (Batch call "pfad" != SQL) s. HasSqlKwHit.
     if HasSqlKwHit(ArgsLow) and (Pos('%', ArgsLow) > 0) then
-      Exit(True);
+    begin
+      // FP-Gate (2026-07-04): int-format-concat / const-concat - wenn ALLE
+      // Argument-Array-Elemente Literale oder lokal deklarierte Integer-
+      // Bezeichner sind (ExecuteFmt('...RowID=%', [id]) bzw. Seed-INSERT
+      // mit ['ACME', ..., 5]), kann die %-Substitution keine SQL-Syntax
+      // injizieren -> kein Fund. String-VARIABLEN (RawUtf8-Parameter wie
+      // api.impl CreateCustomer/UpdateCustomer) bleiben als Risiko stehen.
+      if not AreFormatArgsInjectionSafe(MethodNode, Low,
+        FnIdx + Length(Fn)) then
+        Exit(True);
+    end;
   end;
 end;
 
@@ -540,7 +1013,8 @@ begin
       // .Text / Label.Caption := 'Update ...' + x). Echte SQL-Ziele
       // (SQL.Text/CommandText) tragen keinen Sink-Token -> H1 feuert weiter.
       if not IsNonSqlSink(N.Name) then
-        if IsAssignRisk(N.Name, N.TypeRef) or IsFormatSqlRisk(N.TypeRef) then
+        if IsAssignRisk(MethodNode, N.Name, N.TypeRef)
+           or IsFormatSqlRisk(MethodNode, N.TypeRef) then
           Report(N.Name, N.TypeRef, N.Line);
   finally
     Assigns.Free;
@@ -551,7 +1025,8 @@ begin
   Calls := MethodNode.FindAll(nkCall);
   try
     for N in Calls do
-      if IsCallRisk(N.Name) or IsFormatSqlRisk(N.Name) then
+      if IsCallRisk(MethodNode, N.Name)
+         or IsFormatSqlRisk(MethodNode, N.Name) then
         Report(N.Name, N.Name, N.Line);
   finally
     Calls.Free;

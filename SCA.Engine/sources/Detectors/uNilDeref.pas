@@ -12,6 +12,9 @@ unit uNilDeref;
 //   - if obj <> nil then ...     (in If-Bedingung)
 //   - if obj = nil then Exit;    (Early-Exit-Guard)
 //   - .Free / .Destroy           (TObject.Free ist nil-safe)
+//   - Foo(obj) / x := Foo(obj)   (Uebergabe als Argument = potentielle
+//                                 var/out-Zuweisung, beendet nil-Zustand)
+//   - for obj in ... / for obj := (Schleife weist obj zu)
 //
 // Nicht erkannt (bewusst):
 //   - obj.field := nil           (Cleanup-Muster)
@@ -37,6 +40,17 @@ type
     // Erkennt ob ein Call ein nil-sicherer Aufruf ist (.Free, .Destroy)
     class function IsNilSafeCall(const CallNameLow,
       VarLow: string): Boolean; static;
+    // FP-Gate (2026-07-04): out-param-assign - VarLow kommt in TextLow als
+    // eigenstaendiges Argument nach einer oeffnenden Klammer vor
+    class function HasBareArgUse(const TextLow,
+      VarLow: string): Boolean; static;
+    // FP-Gate (2026-07-04): out-param-assign - Uebergabe als Argument
+    // zwischen nil-Zuweisung und Zugriff zaehlt als Zuweisung
+    class function IsPassedAsArgBetween(Calls, Assigns: TList<TAstNode>;
+      const VarLow: string; AfterLine, BeforeLine: Integer): Boolean; static;
+    // FP-Gate (2026-07-04): for-in-loop-assign - Schleifenkopf weist VarLow zu
+    class function IsForLoopAssigned(MethodNode: TAstNode;
+      const VarLow: string; AfterLine, BeforeLine: Integer): Boolean; static;
   end;
 
 implementation
@@ -111,6 +125,112 @@ begin
     TDetectorUtils.ContainsWholeWordLower('freeandnil( ' + VarLow,  CallNameLow);
 end;
 
+{ FP-Gate (2026-07-04): out-param-assign - prueft ob VarLow in TextLow als
+  eigenstaendiges Argument vorkommt: nach der ersten oeffnenden Klammer, mit
+  Identifier-Wortgrenzen und OHNE angrenzenden Punkt (x.var / var.y sind
+  Member-Zugriffe, keine Argument-Uebergabe). String-Literale werden vorab
+  entfernt, damit 'Log(''lst kaputt'')' nicht als Uebergabe von lst zaehlt
+  (Real-World-Audit 2026-07-04, z.B. LoadJson(l, ...) in test.core.data). }
+class function TNilDerefDetector.HasBareArgUse(const TextLow,
+  VarLow: string): Boolean;
+var
+  Code   : string;
+  ParenP : Integer;
+  p, L   : Integer;
+  PrevCh : Char;
+  NextCh : Char;
+begin
+  Result := False;
+  if (VarLow = '') or (TextLow = '') then Exit;
+  Code   := TDetectorUtils.StripStringLiterals(TextLow);
+  ParenP := Pos('(', Code);
+  if ParenP = 0 then Exit; // ohne Klammer keine Argumentliste
+  L := Length(VarLow);
+  p := PosEx(VarLow, Code, ParenP + 1);
+  while p > 0 do
+  begin
+    if p > 1 then PrevCh := Code[p - 1] else PrevCh := #0;
+    if p + L <= Length(Code) then NextCh := Code[p + L] else NextCh := #0;
+    // Wortgrenzen beidseitig; '.' zusaetzlich ausgeschlossen, damit weder
+    // 'rec.varname' noch 'varname.prop' (Deref!) als Uebergabe gelten.
+    if (not CharInSet(PrevCh, ['a'..'z', '0'..'9', '_', '.'])) and
+       (not CharInSet(NextCh, ['a'..'z', '0'..'9', '_', '.'])) then
+      Exit(True);
+    p := PosEx(VarLow, Code, p + 1);
+  end;
+end;
+
+{ FP-Gate (2026-07-04): out-param-assign - jede Uebergabe der Variable als
+  blankes Argument an einen Aufruf zwischen nil-Zuweisung und Punkt-Zugriff
+  zaehlt als Zuweisung (var/out-Parameter wie LoadJson(l, ...) oder
+  TInterfaceStub.Create(TypeInfo(...), I) fuellen die Variable). Bewusst
+  konservativ-grosszuegig: SCA008 hatte im Real-World-Audit 2026-07-04
+  0 TPs bei 21 FPs, davon 7 aus genau diesem Muster. Gescannt werden
+  sowohl Call-Statements als auch RHS-Ausdruecke fremder Zuweisungen
+  (Stub := TFoo.Create(..., I)). FreeAndNil ist ausgenommen - es laesst
+  die Variable nil. }
+class function TNilDerefDetector.IsPassedAsArgBetween(Calls,
+  Assigns: TList<TAstNode>; const VarLow: string;
+  AfterLine, BeforeLine: Integer): Boolean;
+var
+  N       : TAstNode;
+  TextLow : string;
+begin
+  Result := False;
+  for N in Calls do
+  begin
+    if N.Line <= AfterLine then Continue;
+    if N.Line >= BeforeLine then Continue;
+    TextLow := N.Name.ToLower;
+    // FreeAndNil(x) setzt x auf nil - beendet den nil-Zustand NICHT
+    if TDetectorUtils.ContainsWholeWordLower('freeandnil', TextLow) then
+      Continue;
+    if HasBareArgUse(TextLow, VarLow) then Exit(True);
+  end;
+  for N in Assigns do
+  begin
+    if N.Line <= AfterLine then Continue;
+    if N.Line >= BeforeLine then Continue;
+    // Neuzuweisungen an die Variable selbst behandelt der Reassigned-Check
+    if N.Name.ToLower = VarLow then Continue;
+    TextLow := N.TypeRef.ToLower;
+    if TDetectorUtils.ContainsWholeWordLower('freeandnil', TextLow) then
+      Continue;
+    if HasBareArgUse(TextLow, VarLow) then Exit(True);
+  end;
+end;
+
+{ FP-Gate (2026-07-04): for-in-loop-assign - 'for X in ...' weist X bei
+  jedem Durchlauf zu, 'for X := a to b' ebenso. Der Header steht seit
+  ParseForStmt als Token-Join in TypeRef ('x in <expr>' / 'x := a to b').
+  nil-Inits vor solchen Schleifen dienen typisch nur dem except-Handler
+  (Real-World-Audit 2026-07-04, z.B. MVCFramework.Serializer.URLEncoded).
+  Konservativ: auch ein Deref NACH der Schleife wird unterdrueckt (leere
+  Collection waere der einzige Restfall - 0 TPs auf dem Korpus). }
+class function TNilDerefDetector.IsForLoopAssigned(MethodNode: TAstNode;
+  const VarLow: string; AfterLine, BeforeLine: Integer): Boolean;
+var
+  Fors : TList<TAstNode>;
+  FN   : TAstNode;
+  Head : string;
+begin
+  Result := False;
+  Fors := MethodNode.FindAll(nkForStmt);
+  try
+    for FN in Fors do
+    begin
+      if FN.Line <= AfterLine then Continue;
+      if FN.Line > BeforeLine then Continue; // Deref darf im Loop-Body liegen
+      Head := FN.TypeRef.ToLower;
+      if Head.StartsWith(VarLow + ' in ') or
+         Head.StartsWith(VarLow + ' := ') then
+        Exit(True);
+    end;
+  finally
+    Fors.Free;
+  end;
+end;
+
 class procedure TNilDerefDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -173,6 +293,16 @@ begin
 
         // Guard via If-Bedingung zwischen nil und Zugriff?
         if HasGuardingIf(MethodNode, VarLow, NA.Line, C.Line) then Continue;
+
+        // FP-Gate (2026-07-04): out-param-assign - Variable wurde zwischen
+        // nil und Zugriff als Argument uebergeben (var/out-Zuweisung)?
+        if IsPassedAsArgBetween(Calls, Assigns, VarLow, NA.Line, C.Line) then
+          Continue;
+
+        // FP-Gate (2026-07-04): for-in-loop-assign - Variable ist
+        // Schleifenvariable eines for zwischen nil und Zugriff?
+        if IsForLoopAssigned(MethodNode, VarLow, NA.Line, C.Line) then
+          Continue;
 
         // Befund: nil-Zuweisung ohne Guard, dann Punkt-Zugriff
         F            := TLeakFinding.Create;

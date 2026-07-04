@@ -48,6 +48,21 @@ type
     [Test] procedure Secret_UpperSnakeConst_NotReported;
     [Test] procedure Secret_QualifiedUpperSnake_NotReported;
     [Test] procedure Secret_MixedCaseField_StillReported;
+    // ---- FP-Gates 2026-07-04 (Audit_RealWorldBugs 3.5: 14 FP / 0 TP) --------
+    // Wert-Plausibilitaet: kein Fund bei Werten ohne alphanumerischen Kern
+    [Test] procedure Secret_TemplateDelimiterValue_NoFinding;
+    [Test] procedure Secret_NulCharInitValue_NoFinding;
+    [Test] procedure Secret_SentinelCharValue_NoFinding;
+    // Dummy-Wert-Liste: bekannte Beispiel-/Platzhalterwerte
+    [Test] procedure Secret_DummyFixtureValues_NoFinding;
+    [Test] procedure Secret_ConstDummyValue_NoFinding;
+    [Test] procedure Secret_PureDigitsValue_NoFinding;
+    // Gegenprobe: realistischer Wert muss weiter feuern
+    [Test] procedure Secret_RealisticPassword_StillReported;
+    // Refinement 2026-07-04 (Code-Review): Trailing-Digit-Strip max. 2 +
+    // Reinzahl-Regel nur bis Laenge 6 -> echte Credentials feuern weiter
+    [Test] procedure Secret_EmbeddedYearValue_StillReported;
+    [Test] procedure Secret_LongNumericValue_StillReported;
   end;
 
 implementation
@@ -55,11 +70,14 @@ implementation
 { ---- HardcodedSecret ---- }
 
 procedure TTestHardcodedSecret.Secret_PasswordAssignedLiteral_ReportsError;
+// Testwert 2026-07-04 von 'geheim123' auf realistischen Wert geaendert:
+// 'geheim' (+Trailing-Digits) faellt jetzt unter die Dummy-Wert-Liste
+// (FP-Gate test-fixture, Audit_RealWorldBugs 3.5).
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Init;'#13#10+
   'begin'#13#10+
-  '  FPassword := ''geheim123'';'#13#10+
+  '  FPassword := ''Xk9#pQz7Lm'';'#13#10+
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin
@@ -243,11 +261,12 @@ end;
 // =============================================================================
 
 procedure TTestHardcodedSecretExt.Secret_PwdLowercaseAssign_ReportsError;
+// Testwert 2026-07-04: 'geheim123' -> realistischer Wert (Dummy-Liste, s.o.).
 const SRC =
   'unit t; implementation'#13#10+
   'procedure Foo;'#13#10+
   'var pwd: string;'#13#10+
-  'begin pwd := ''geheim123''; end;';
+  'begin pwd := ''Xk9#pQz7Lm''; end;';
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
@@ -310,10 +329,11 @@ begin
 end;
 
 procedure TTestHardcodedSecretExt.Secret_Finding_KindAndSeverity;
+// Testwert 2026-07-04: 'geheim123' -> realistischer Wert (Dummy-Liste, s.o.).
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Init;'#13#10+
-  'begin FPassword := ''geheim123''; end;';
+  'begin FPassword := ''Xk9#pQz7Lm''; end;';
 var
   F   : TObjectList<TLeakFinding>;
   Fnd : TLeakFinding;
@@ -335,11 +355,12 @@ begin
 end;
 
 procedure TTestHardcodedSecretExt.Secret_Finding_MissingVarMentionsVarAndLiteralSnippet;
-// MissingVar enthaelt Name + Literal-Snippet ('FPassword = "geheim123"').
+// MissingVar enthaelt Name + Literal-Snippet ('FPassword = "Xk9#pQz7Lm"').
+// Testwert 2026-07-04: 'geheim123' -> realistischer Wert (Dummy-Liste, s.o.).
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Init;'#13#10+
-  'begin FPassword := ''geheim123''; end;';
+  'begin FPassword := ''Xk9#pQz7Lm''; end;';
 var
   F   : TObjectList<TLeakFinding>;
   Fnd : TLeakFinding;
@@ -356,7 +377,7 @@ begin
       end;
     Assert.IsNotNull(Hit);
     Assert.Contains(Hit.MissingVar, 'FPassword');
-    Assert.Contains(Hit.MissingVar, 'geheim');
+    Assert.Contains(Hit.MissingVar, 'Xk9#pQz7Lm');
   finally F.Free; end;
 end;
 
@@ -407,6 +428,146 @@ begin
   finally F.Free; end;
 end;
 
+// =============================================================================
+// FP-Gates 2026-07-04 (Audit_RealWorldBugs 3.5: 14 FP / 0 TP auf 25 Repos)
+// =============================================================================
+
+procedure TTestHardcodedSecretExt.Secret_TemplateDelimiterValue_NoFinding;
+// FP-Klasse template-delimiter (MVCFramework.View.Renderers.Sempare.pas:80/81):
+// StartToken/EndToken sind Lexer-Delimiter der Template-Engine. Werte ohne
+// alphanumerischen Kern ('{{', '}}') sind keine plausiblen Secrets.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Configure;'#13#10+
+  'begin'#13#10+
+  '  StartToken := ''{{'';'#13#10+
+  '  EndToken := ''}}'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret),
+      'Template-Delimiter ohne alphanumerischen Kern darf nicht gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretExt.Secret_NulCharInitValue_NoFinding;
+// FP-Klasse nul-char-init (doublecmd ftpfunc.pas:287, fpsnumformat.pas:3556):
+// #0-Zuweisungen terminieren Puffer bzw. resetten Parser-Token-Zeichen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Reset;'#13#10+
+  'begin'#13#10+
+  '  FToken := #0;'#13#10+
+  '  APassword[1] := #0;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret),
+      '#0-Steuerzeichen ist Puffer-/Lexer-Reset, kein Secret');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretExt.Secret_SentinelCharValue_NoFinding;
+// FP-Klasse sentinel-value (mormot.rest.client.pas:1407):
+// PasswordHashHexa := '#' ist ein Statusflag fuer erfolgreiche SCRAM-Auth.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.MarkAuth;'#13#10+
+  'begin'#13#10+
+  '  PasswordHashHexa := ''#'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret),
+      'Einzelzeichen-Sentinel ist ein Statusflag, kein Secret');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretExt.Secret_DummyFixtureValues_NoFinding;
+// FP-Klasse test-fixture (mORMot PerfTestCases.pas:393/734, 35-sessions
+// server.pas:56/65): dokumentierte Demo-Credentials. 'pass1' greift ueber
+// den Trailing-Digit-Strip ('pass1' -> 'pass').
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Setup;'#13#10+
+  'begin'#13#10+
+  '  DBPassword := ''password'';'#13#10+
+  '  PasswordPlain := ''pass1'';'#13#10+
+  '  FMasterPwd := ''masterkey'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret),
+      'Bekannte Dummy-/Beispielwerte duerfen nicht gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretExt.Secret_ConstDummyValue_NoFinding;
+// Dummy-Wert-Gate muss auch im nkField-Pfad (Const-Section) greifen -
+// Korpus-FP: `cPassword = 'masterkey'` (Firebird-Default in extdb-bench).
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'const cPassword = ''masterkey'';'#13#10+
+  'implementation'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret),
+      'Dummy-Wert in Const-Section darf nicht gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretExt.Secret_PureDigitsValue_NoFinding;
+// Rein numerische Kurzwerte ('1234') sind PIN-Platzhalter aus Beispielen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Init;'#13#10+
+  'begin'#13#10+
+  '  FPassword := ''1234'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret),
+      'Rein numerischer Platzhalter darf nicht gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretExt.Secret_RealisticPassword_StillReported;
+// Gegenprobe zu den Wert-Gates: ein realistischer Wert (>= 4 Zeichen,
+// alphanumerischer Kern, kein Dummy-Listen-Treffer) muss weiter feuern -
+// auch wenn er auf eine Ziffer endet (Trailing-Digit-Strip darf nur
+// Listen-Staemme treffen, keine echten Werte).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Init;'#13#10+
+  'begin'#13#10+
+  '  FPassword := ''Tr0ub4dor&3'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkHardcodedSecret),
+      'Realistischer Secret-Wert muss trotz Wert-Gates gemeldet werden');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'FPassword := '),
+      TFindingHelper.FirstOf(F, fkHardcodedSecret).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
+  finally F.Free; end;
+end;
+
 procedure TTestHardcodedSecretExt.Secret_MixedCaseField_StillReported;
 // Standard-Field-Naming (FPassword) muss weiter flagged werden.
 const SRC =
@@ -418,6 +579,44 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkHardcodedSecret),
     'Mixed-Case-Field ist echte Secret-Zuweisung');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretExt.Secret_EmbeddedYearValue_StillReported;
+// Refinement-Gegenprobe (2026-07-04, Code-Review): ein echter Credential mit
+// eingebetteter Jahreszahl ('admin2024') darf NICHT vom Trailing-Digit-Strip
+// (max. 2 Ziffern -> 'admin20') auf den Dummy-Stamm 'admin' reduziert und
+// damit faelschlich unterdrueckt werden.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Init;'#13#10+
+  'begin'#13#10+
+  '  FPassword := ''admin2024'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkHardcodedSecret),
+      'Credential mit eingebetteter Jahreszahl darf nicht als Dummy gelten');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretExt.Secret_LongNumericValue_StillReported;
+// Refinement-Gegenprobe: eine lange reine Ziffernfolge (> 6) ist kein
+// PIN-Platzhalter mehr, sondern ein moegliches numerisches Token/Passwort.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Init;'#13#10+
+  'begin'#13#10+
+  '  FPassword := ''1234567890123456'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkHardcodedSecret),
+      'Lange reine Ziffernfolge (>6) darf nicht als PIN-Platzhalter gelten');
   finally F.Free; end;
 end;
 

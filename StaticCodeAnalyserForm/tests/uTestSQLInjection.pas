@@ -73,6 +73,20 @@ type
     // String-Literal-befreiter CALL-Methoden-Match: 'open(' im DDE-Kommando
     // '[Open("%1")]' (Dev-Cpp RegisterDDEServer) ist kein Methodenaufruf.
     [Test] procedure SQL_DdeOpenInStringLiteral_NoFinding;
+    // ---- Const/Literal-Dataflow-Gate (Real-World 2026-07-04, Prio 1) --------
+    // FP-Klassen const-concat / const-derived-variable / int-format-concat:
+    // Konkatenation bzw. Format-Substitution, die nachweislich nur aus
+    // Literalen/lokalen Literal-Variablen/Integern besteht, ist kein
+    // Injection-Vektor.
+    [Test] procedure SQL_ExecuteFmtAllLiteralArgs_NoFinding;
+    [Test] procedure SQL_ConstDerivedVariableConcat_NoFinding;
+    [Test] procedure SQL_LocalConstConcat_NoFinding;
+    [Test] procedure SQL_IntFormatMaskConcat_NoFinding;
+    [Test] procedure SQL_ExecuteFmtIntegerArgs_NoFinding;
+    // ...TP-Gegenkontrollen (String-Variablen bleiben Risiko):
+    [Test] procedure SQL_ExecuteFmtStringParamArgs_Reported;
+    [Test] procedure SQL_VariableFromUserInput_Reported;
+    [Test] procedure SQL_FormatStringMaskConcat_Reported;
   end;
 
 implementation
@@ -673,6 +687,182 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
     '''Open('' im DDE-Kommando-Literal ist kein Methodenaufruf');
+  finally F.Free; end;
+end;
+
+// =============================================================================
+// Const/Literal-Dataflow-Gate (Real-World-Audit 2026-07-04, Sektion 3.1)
+// =============================================================================
+
+procedure TTestSQLInjectionExt.SQL_ExecuteFmtAllLiteralArgs_NoFinding;
+// Real-World FP (fpClass const-concat, mORMot dmvc-ai server.pas:91/95/99):
+// Seed-Daten-INSERT via ExecuteFmt - ALLE Argument-Array-Elemente sind
+// hartkodierte Literale ('ACME', ..., 5). Kein externer Input, keine
+// Injection moeglich -> kein Fund.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Seed;'#13#10+
+  'begin'#13#10+
+  '  fServer.Orm.ExecuteFmt('#13#10+
+  '    ''INSERT INTO CustomerOrm (Code, CompanyName, City, Rating, Note) '' +'#13#10+
+  '    ''VALUES (%, %, %, %, %)'','#13#10+
+  '    [''ACME'', ''ACME Corporation'', ''New York'', 5, ''Premium customer'']);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    'Seed-INSERT mit reinen Literal-Argumenten ist keine SQL-Injection');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_ConstDerivedVariableConcat_NoFinding;
+// Real-World FP (fpClass const-derived-variable, DMVC activerecord_showcase
+// MainFormU.pas:3207/3237/3296): die konkatenierte Variable wird in der
+// Routine AUSSCHLIESSLICH per if/else aus String-Literalen zugewiesen
+// (geschlossene Wertemenge 'DATETIME2'/'TIMESTAMP') -> kein Angreifer-
+// Einfluss, kein Fund.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.SetupTable;'#13#10+
+  'var lTimestampType, lDDL: string;'#13#10+
+  'begin'#13#10+
+  '  if GetBackend = ''mssql'' then'#13#10+
+  '    lTimestampType := ''DATETIME2'''#13#10+
+  '  else'#13#10+
+  '    lTimestampType := ''TIMESTAMP'';'#13#10+
+  '  lDDL := ''CREATE TABLE audit_demo ('' +'#13#10+
+  '    ''  created_at '' + lTimestampType + '')'';'#13#10+
+  '  Conn.ExecSQL(lDDL);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    'Variable aus geschlossener Literalmenge ist keine SQL-Injection');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_LocalConstConcat_NoFinding;
+// fpClass const-concat, Variante lokale Konstante: Konkatenation aus
+// Literal + echter const mit Literal-Wert - zur Compile-Zeit fix.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Run;'#13#10+
+  'const ORDER_COL = ''LastName'';'#13#10+
+  'var s: string;'#13#10+
+  'begin'#13#10+
+  '  s := ''SELECT * FROM People ORDER BY '' + ORDER_COL;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    'Konkatenation mit lokaler Literal-Konstante ist keine SQL-Injection');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_IntFormatMaskConcat_NoFinding;
+// Real-World FP (fpClass int-format-concat, DMVC outputcachewithredis
+// PeopleModuleU.pas:88/116): der einzige variable Konkat-Anteil ist
+// Format() mit reiner %d-Maske (Paging LIMIT/ROWS) - kann nur Ziffern
+// erzeugen, kein Injection-/Syntax-Risiko.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.GetPeople(APage: Integer);'#13#10+
+  'var StartRec, EndRec: Integer;'#13#10+
+  'begin'#13#10+
+  '  qryPeople.Open(''SELECT * FROM PEOPLE ORDER BY LAST_NAME '' +'#13#10+
+  '    Format(''ROWS %d to %d'', [StartRec, EndRec]));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    'Format-Maske nur mit %d-Platzhaltern ist keine SQL-Injection');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_ExecuteFmtIntegerArgs_NoFinding;
+// Real-World FP (fpClass int-format-concat, mORMot dmvc-ai
+// api.impl.pas:62/133/299/407): mORMot-'%'-Substitution mit
+// ausschliesslich Integer-Argumenten (RowID/Rating) - Integer koennen
+// keine SQL-Syntax injizieren.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Del(id: Integer);'#13#10+
+  'begin'#13#10+
+  '  Server.Orm.ExecuteFmt(''DELETE FROM CustomerOrm WHERE RowID=%'', [id]);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    'ExecuteFmt mit reinen Integer-Argumenten ist keine SQL-Injection');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_ExecuteFmtStringParamArgs_Reported;
+// TP-Gegenkontrolle (Korpus-TP mORMot dmvc-ai api.impl.pas:90/110): REST-
+// exponierte String-Parameter (RawUtf8) werden per '%' roh substituiert -
+// echte SQL-Injection, das Dataflow-Gate darf NICHT greifen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.CreateCustomer(const code, city: RawUtf8; rating: Integer);'#13#10+
+  'begin'#13#10+
+  '  Server.Orm.ExecuteFmt(''INSERT INTO CustomerOrm (Code, City, Rating) '' +'#13#10+
+  '    ''VALUES (%, %, %)'', [code, city, rating]);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSQLInjection),
+      'ExecuteFmt mit String-Parametern bleibt SQL-Injection-Risiko');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'ExecuteFmt'),
+      TFindingHelper.FirstOf(F, fkSQLInjection).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_VariableFromUserInput_Reported;
+// TP-Gegenkontrolle zum const-derived-Gate: sobald die Variable auch nur
+// EINE nicht-literale Zuweisung hat (UI-Input), bleibt der Fund stehen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Run;'#13#10+
+  'var lFilter: string;'#13#10+
+  'begin'#13#10+
+  '  lFilter := Edit1.Text;'#13#10+
+  '  Query.SQL.Text := ''SELECT * FROM t WHERE name='' + lFilter;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSQLInjection),
+      'Variable mit nicht-literaler Zuweisung bleibt SQL-Injection-Risiko');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'WHERE name='),
+      TFindingHelper.FirstOf(F, fkSQLInjection).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_FormatStringMaskConcat_Reported;
+// TP-Gegenkontrolle zum Masken-Gate: Format mit %s-Platzhalter kann
+// beliebige Strings in das SQL tragen - Fund bleibt.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Run(Name: string);'#13#10+
+  'begin'#13#10+
+  '  qry.Open(''SELECT * FROM t WHERE name='' + Format(''%s'', [Name]));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSQLInjection),
+      'Format mit %s-Maske bleibt SQL-Injection-Risiko');
   finally F.Free; end;
 end;
 

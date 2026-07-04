@@ -23,6 +23,13 @@ unit uLeakDetector2;
 //   Container.Insert(i, var)     TList.Insert
 //   Container.Push(var)          TStack.Push
 //   Container.Enqueue(var)       TQueue.Enqueue
+//   TKlasse.Create(Self|Owner|AOwner|Application)
+//                                Owner-Konvention: Owner gibt frei (2026-07-04)
+//
+// Kein Objekt (kein Befund, 2026-07-04):
+//   var := socket(...)/accept(...)/CreateFile(...)/...
+//                                OS-Handle-APIs liefern Integer-Handles,
+//                                keine Delphi-Objekt-Allokationen
 //
 // Korrektheitsprinzip:
 //   Alle Namensvergleiche prüfen Wortgrenzen auf BEIDEN Seiten,
@@ -77,6 +84,19 @@ type
     class function IsReturnedAsResult(MethodNode: TAstNode;
       const VarNameLow: string): Boolean; static;
     class function IsPassedToOwner(MethodNode: TAstNode;
+      const VarNameLow: string): Boolean; static;
+    // FP-Gate (2026-07-04): os-handle - True wenn die RHS ein Aufruf einer
+    // bekannten OS-Handle-API ist (socket/accept/CreateFile/CreateEvent/...).
+    // Deren Rueckgaben sind Integer-Handles (ggf. in Handle-Wrapper wie
+    // TNetSocket gecastet), KEINE Delphi-Objekt-Allokationen - Free waere
+    // sogar falsch (closesocket/CloseHandle sind zustaendig).
+    class function IsOsHandleApiCall(const RhsLow: string): Boolean; static;
+    // FP-Gate (2026-07-04): owner-parameter - True wenn die Variable per
+    // `TKlasse.Create(Self|Owner|AOwner|Application)` erzeugt wird
+    // (TComponent-Owner-Konvention: der Owner gibt das Objekt in seinem
+    // Destroy ueber die Components[]-Liste frei). Create(nil) zaehlt
+    // bewusst NICHT - da muss der Aufrufer selbst freigeben.
+    class function IsOwnerParamCreate(MethodNode: TAstNode;
       const VarNameLow: string): Boolean; static;
     class function SearchFree(Node: TAstNode; const VarNameLow: string;
       InFinally: Boolean; out FoundInFinally: Boolean): Boolean; static;
@@ -172,6 +192,112 @@ begin
   Result := CharInSet(ATypeRef[pRight], ['A'..'Z']);
 end;
 
+class function TLeakDetector2.IsOsHandleApiCall(const RhsLow: string): Boolean;
+// FP-Gate (2026-07-04): os-handle - Real-World-Audit Sektion 3.2 (6 Faelle):
+// mormot.net.sock.pas:2835/3106/3122 `s := socket(...)`, :3230
+// `sock := doaccept(...)`, DMVC.Expert.Forms.NewProjectWizard.pas:1039
+// `LSock := socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)`. Diese Funktionen
+// liefern OS-Handles (Integer/THandle), keine Delphi-Objekte - SCA001 darf
+// nur echte Objekt-Konstruktionen melden. Exakter Namensvergleich (kein
+// Prefix-Match), damit lokale Factories wie `CreateFileList(...)` weiter
+// als potentielles Leak gelten.
+const
+  // Alle lowercase; Qualifier (`Winapi.Winsock2.socket`) wird vor dem
+  // Vergleich abgestreift. A/W-Suffixe der WinAPI explizit gelistet.
+  OS_HANDLE_APIS : array[0..38] of string = (
+    // BSD-/WinSock-/FPC-Socket-Familie
+    'socket', 'accept', 'doaccept', 'wsasocket', 'wsasocketw', 'wsaaccept',
+    'fpsocket', 'fpaccept', 'socketpair',
+    // Kernel-Objekt-Handles
+    'createfile', 'createfilew', 'createfilea',
+    'createevent', 'createeventw', 'createeventa',
+    'createmutex', 'createmutexw', 'createmutexa',
+    'createsemaphore', 'createsemaphorew', 'createsemaphorea',
+    'createfilemapping', 'createfilemappingw', 'createfilemappinga',
+    'createnamedpipe', 'createnamedpipew', 'createnamedpipea',
+    'createiocompletionport',
+    'createprocess', 'createprocessw', 'createprocessa',
+    'createthread', 'createremotethread',
+    'openprocess', 'openthread', 'openevent', 'openmutex', 'openfilemapping',
+    // Modul-Handles (HMODULE)
+    'loadlibrary');
+var
+  ParenPos, DotPos, i : Integer;
+  Name : string;
+begin
+  Result := False;
+  ParenPos := Pos('(', RhsLow);
+  if ParenPos <= 1 then Exit;
+  Name := Trim(Copy(RhsLow, 1, ParenPos - 1));
+  // Qualifizierten Prefix abschneiden: 'winapi.winsock2.socket' -> 'socket'.
+  DotPos := LastDelimiter('.', Name);
+  if DotPos > 0 then
+    Name := Trim(Copy(Name, DotPos + 1, MaxInt));
+  if Name = '' then Exit;
+  for i := Low(OS_HANDLE_APIS) to High(OS_HANDLE_APIS) do
+    if Name = OS_HANDLE_APIS[i] then Exit(True);
+  // 'loadlibraryex'/'loadlibraryexw'/... ueber Prefix, da Suffix-Varianten
+  // zahlreich sind und kein Objekt-Konstruktor je so heisst.
+  if StartsStr('loadlibrary', Name) then Exit(True);
+end;
+
+class function TLeakDetector2.IsOwnerParamCreate(MethodNode: TAstNode;
+  const VarNameLow: string): Boolean;
+// FP-Gate (2026-07-04): owner-parameter - Real-World-Audit Sektion 3.2:
+// doublecmd foptionshotkeys.pas:687 `CommandsFormClass.Create(Application)`.
+// TComponent-Konvention: ein nicht-nil Owner-Argument uebernimmt die
+// Freigabe (Components[]-Liste im Owner-Destroy) -> kein Leak-Befund.
+// Bewusst eng gefasst: das GESAMTE Argument muss exakt einer der
+// kanonischen Owner-Bezeichner sein. Damit fallen keine TPs:
+//   TSQLQuery.Create(nil)                -> nil-Owner, Caller muss freigeben
+//   TFileStream.Create(Datei, fmOpenRead) -> Parameter sind kein Owner
+//   TStringBuilder.Create(8 * Self.Degree) -> Ausdruck, kein Owner-Ident
+var
+  Assigns : TList<TAstNode>;
+  A       : TAstNode;
+  TypeLow : string;
+  CreatePos, idx, depth, ArgStart : Integer;
+  ArgLow  : string;
+begin
+  Result  := False;
+  Assigns := MethodNode.FindAll(nkAssign);
+  try
+    for A in Assigns do
+    begin
+      if A.Name.ToLower <> VarNameLow then Continue;
+      TypeLow := A.TypeRef.ToLower;
+      if not MatchesCreate(A.TypeRef, TypeLow, CreatePos) then Continue;
+      // Hinter '.create' evtl. CamelCase-Suffix ('createnew') ueberspringen,
+      // dann Whitespace - danach muss die Argumentklammer folgen.
+      idx := CreatePos + 7;  // direkt hinter 'create'
+      while (idx <= Length(TypeLow)) and IsIdentChar(TypeLow[idx]) do Inc(idx);
+      while (idx <= Length(TypeLow)) and (TypeLow[idx] = ' ') do Inc(idx);
+      if (idx > Length(TypeLow)) or (TypeLow[idx] <> '(') then Continue;
+      // Argumentliste bis zur passenden schliessenden Klammer extrahieren
+      // (Tiefenzaehlung, bounds-safe; unbalancierte RHS -> kein Match).
+      ArgStart := idx + 1;
+      depth    := 1;
+      Inc(idx);
+      while (idx <= Length(TypeLow)) and (depth > 0) do
+      begin
+        if TypeLow[idx] = '(' then Inc(depth)
+        else if TypeLow[idx] = ')' then Dec(depth);
+        if depth > 0 then Inc(idx);
+      end;
+      if depth <> 0 then Continue;
+      ArgLow := Trim(Copy(TypeLow, ArgStart, idx - ArgStart));
+      // Kanonische Owner-Bezeichner (TComponent-Konvention). Exakter
+      // Ganz-Argument-Vergleich - Teilausdruecke wie '8 * self.degree'
+      // oder 'self.owner.tag' matchen NICHT.
+      if (ArgLow = 'self') or (ArgLow = 'owner') or (ArgLow = 'aowner') or
+         (ArgLow = 'application') or (ArgLow = 'self.owner') then
+        Exit(True);
+    end;
+  finally
+    Assigns.Free;
+  end;
+end;
+
 class function TLeakDetector2.HasCreateAssign(MethodNode: TAstNode;
   const VarNameLow: string): Boolean;
 var
@@ -238,6 +364,10 @@ begin
       RHS := A.TypeRef.ToLower;
       if Pos('.create', RHS) > 0 then Continue;
       if (RHS = 'nil') or (RHS = '') then Continue;
+      // FP-Gate (2026-07-04): os-handle - dieselben Assigns ueberspringen,
+      // die HasFunctionCallAssign nicht als Fund wertet, damit die
+      // Befund-Zeile konsistent auf dem echten Ausloeser landet.
+      if IsOsHandleApiCall(RHS) then Continue;
       if Pos('(', RHS) > 0 then
       begin
         Result := A.Line;
@@ -394,6 +524,9 @@ begin
       begin
         // Non-Ownership-Calls (Ensure*/Get*/Find*/...) ueberspringen.
         if IsBorrowedReferenceCall(RHS) then Continue;
+        // FP-Gate (2026-07-04): os-handle - socket()/accept()/CreateFile()
+        // & Co. liefern OS-Handles, keine Delphi-Objekte -> kein SCA001.
+        if IsOsHandleApiCall(RHS) then Continue;
         Exit(True);
       end;
       // Ohne '(': normalerweise geliehene Referenz ('list := obj.FList'
@@ -932,6 +1065,10 @@ begin
       begin
         if IsReturnedAsResult(MethodNode, VarNameLow) then Continue;
         if IsPassedToOwner(MethodNode, VarNameLow)    then Continue;
+        // FP-Gate (2026-07-04): owner-parameter - TKlasse.Create(Self/
+        // Owner/AOwner/Application) uebergibt Ownership an den Owner
+        // (TComponent-Konvention) -> kein Fund. Create(nil) meldet weiter.
+        if IsOwnerParamCreate(MethodNode, VarNameLow) then Continue;
 
         FreeFound := SearchFree(MethodNode, VarNameLow, False, FreeInFin);
 
@@ -972,15 +1109,46 @@ end;
 class procedure TLeakDetector2.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
-  Methods : TList<TAstNode>;
-  M       : TAstNode;
+  Methods  : TList<TAstNode>;
+  M        : TAstNode;
+  Seen     : TDictionary<string, Boolean>;
+  StartIdx : Integer;
+  i        : Integer;
+  Key      : string;
 begin
+  StartIdx := Results.Count;
   Methods := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
       AnalyzeMethod(UnitNode, M, FileName, Results);
   finally
     Methods.Free;
+  end;
+
+  // Dedup (2026-07-04): Bei conditional-compilation-lastigen Units (z.B.
+  // Synapse blcksock mit {$IFDEF CIL}) verschachtelt der Parser Methoden
+  // ineinander. Dann sammelt AnalyzeMethod's FindAll(nkLocalVar) REKURSIV
+  // dieselbe lokale Variable aus eingebetteten Methoden mehrfach ein, und
+  // AnalyzeUnit's FindAll(nkMethod) analysiert verschachtelte Methoden ein
+  // zweites Mal -> identischer Leak-Fund (gleiche Zeile + Variable) N-fach.
+  // Zwei Funde mit gleicher (Zeile|MissingVar) betreffen dieselbe
+  // Allokation und sind per Definition redundant -> nur den ersten behalten.
+  Seen := TDictionary<string, Boolean>.Create;
+  try
+    i := StartIdx;
+    while i < Results.Count do
+    begin
+      Key := Results[i].LineNumber + '|' + Results[i].MissingVar;
+      if Seen.ContainsKey(Key) then
+        Results.Delete(i)          // TObjectList(True) -> gibt den Fund frei
+      else
+      begin
+        Seen.Add(Key, True);
+        Inc(i);
+      end;
+    end;
+  finally
+    Seen.Free;
   end;
 end;
 

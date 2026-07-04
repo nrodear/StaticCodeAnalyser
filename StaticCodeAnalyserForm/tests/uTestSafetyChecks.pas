@@ -23,6 +23,14 @@ type
     [Test] procedure NilDeref_NilGuardWithBegin_NoFinding;
     // Wortgrenze: 'assigned(objOld)' darf 'obj' nicht schuetzen
     [Test] procedure NilDeref_AssignedGuardVarSubstring_StillReports;
+    // FP-Gate (2026-07-04): out-param-assign - Call mit Var als Argument
+    [Test] procedure NilDeref_OutParamCallBetween_NoFinding;
+    // FP-Gate (2026-07-04): out-param-assign - Var als Ctor-Argument im RHS
+    [Test] procedure NilDeref_CtorOutParamInAssignRhs_NoFinding;
+    // FP-Gate (2026-07-04): for-in-loop-assign - for-in weist die Var zu
+    [Test] procedure NilDeref_ForInLoopVar_NoFinding;
+    // Gegenprobe: Call ohne die Variable (nur im String-Literal) gated NICHT
+    [Test] procedure NilDeref_UnrelatedCallBetween_StillReports;
   end;
 
   // ---- MissingFinally Erweiterungen --------------------------------------------------
@@ -152,6 +160,101 @@ begin
   try
     Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
       'assigned(objOld) darf nicht als Guard fuer obj gelten');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDerefExt.NilDeref_OutParamCallBetween_NoFinding;
+// FP-Gate (2026-07-04): out-param-assign - die Uebergabe der Variable als
+// Argument an einen Aufruf zwischen nil-Zuweisung und Punkt-Zugriff zaehlt
+// als Zuweisung (var/out-Parameter). Real-World-Muster: LoadJson(l, ...)
+// in mORMot2 test.core.data.pas:4940 fuellt l vor l.Len (4942).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var lst: TStringList;'#13#10+
+  'begin'#13#10+
+  '  lst := nil;'#13#10+
+  '  LoadThing(lst, 42);'#13#10+
+  '  lst.Add(''x'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
+      'Uebergabe als Argument beendet den nil-Zustand - kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDerefExt.NilDeref_CtorOutParamInAssignRhs_NoFinding;
+// FP-Gate (2026-07-04): out-param-assign - die Variable steckt als
+// Argument im RHS einer fremden Zuweisung. Real-World-Muster:
+// Stub := TInterfaceStub.Create(TypeInfo(ICalculator), I) in mORMot2
+// test.soa.core.pas:2428 fuellt I per out-Parameter vor I.Add (2441).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var stub: TObject;'#13#10+
+  '  intf: ICalc;'#13#10+
+  'begin'#13#10+
+  '  intf := nil;'#13#10+
+  '  stub := TInterfaceStub.Create(TypeInfo(ICalc), intf);'#13#10+
+  '  intf.DoStuff;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
+      'Ctor-out-Argument im RHS beendet den nil-Zustand - kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDerefExt.NilDeref_ForInLoopVar_NoFinding;
+// FP-Gate (2026-07-04): for-in-loop-assign - 'for X in ...' weist X zu;
+// der nil-Init davor dient typisch nur dem except-Handler. Real-World-
+// Muster: lProp in MVCFramework.Serializer.URLEncoded.pas:306/314/330.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var itm: TObject;'#13#10+
+  'begin'#13#10+
+  '  itm := nil;'#13#10+
+  '  for itm in FList do'#13#10+
+  '    itm.DoStuff;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
+      'for-in-Schleifenvariable gilt als zugewiesen - kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDerefExt.NilDeref_UnrelatedCallBetween_StillReports;
+// Gegenprobe zum out-param-assign-Gate: ein Aufruf zwischen nil und
+// Zugriff, der die Variable NICHT als Argument uebergibt (hier steht
+// 'lst' nur in einem String-Literal - StripStringLiterals-Pfad), darf
+// den Befund nicht unterdruecken.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var lst: TStringList;'#13#10+
+  'begin'#13#10+
+  '  lst := nil;'#13#10+
+  '  Log(''lst ist noch nil'');'#13#10+
+  '  lst.Add(''x'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkNilDeref),
+      'Aufruf ohne die Variable als Argument darf nicht gaten');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'lst.Add'),
+      TFindingHelper.FirstOf(F, fkNilDeref).LineNumber,
+      'Fund muss auf der Deref-Zeile liegen');
   finally F.Free; end;
 end;
 

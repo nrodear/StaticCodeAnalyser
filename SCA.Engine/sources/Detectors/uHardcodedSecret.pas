@@ -9,11 +9,13 @@ unit uHardcodedSecret;
 //     (TypeRef beginnt mit ' und enthält kein '+'-Operator)
 //
 // Beispiele:
-//   FPassword     := 'geheim123'        → Fehler
+//   FPassword     := 'Xk9#pQz7Lm'       → Fehler
 //   ApiToken      := 'sk-abc...'        → Fehler
 //   ConnString    := 'Server=…;Pwd=x'  → Fehler
 //   FPassword     := GetPassword()      → kein Befund (Funktionsaufruf)
 //   FPassword     := FStoredPwd         → kein Befund (Variable)
+//   FPassword     := 'changeme'         → kein Befund (Dummy-Beispielwert)
+//   StartToken    := '{{'               → kein Befund (kein plausibler Wert)
 
 interface
 
@@ -83,6 +85,26 @@ type
     // Const-Sections triggerten sonst FPs auf z.B. `const TOKEN_REF =
     // 'ide-default';`.
     class function IsConstantNamingStyle(const FullName: string): Boolean; static;
+    // FP-Gates (2026-07-04, Audit_RealWorldBugs Sektion 3.5 - 14 FP / 0 TP
+    // auf dem 25-Repo-Korpus):
+    // ExtractLiteralBody schaelt den Inhalt aus der Source-Form '...'
+    // (QuoteStrLit-Format inkl. verdoppelter innerer Quotes). Bounds-safe;
+    // liefert bei Nicht-Quote-Form den Eingabestring unveraendert zurueck.
+    class function ExtractLiteralBody(const Literal: string): string; static;
+    // FP-Gate (2026-07-04): template-delimiter / nul-char-init /
+    // sentinel-value - Wert-Plausibilitaet. Ein plausibler Secret-Wert hat
+    // einen Kern von >= 4 Zeichen und mindestens 3 alphanumerische Zeichen.
+    // Killt '{{' / '}}' (Sempare-Template-Delimiter), #0 (Puffer-/Lexer-
+    // Token-Reset, z.B. doublecmd fpsnumformat FToken := #0) und '#'
+    // (mORMot SCRAM-Status-Sentinel in PasswordHashHexa).
+    class function IsPlausibleSecretValue(const Literal: string): Boolean; static;
+    // FP-Gate (2026-07-04): test-fixture - bekannte Dummy-/Beispielwerte
+    // (case-insensitive, Trailing-Digits werden abgestreift: 'pass1' ->
+    // 'pass'). Killt dokumentierte Demo-Credentials wie 'masterkey'
+    // (Firebird-Default in mORMot extdb-bench), 'password', 'pass1'/'pass2'
+    // (Demo-User in ThirdPartyDemos) und rein numerische PIN-Platzhalter
+    // ('1234'). Echte Secrets sind praktisch nie woertlich 'pass'.
+    class function IsDummySecretValue(const Literal: string): Boolean; static;
   end;
 
 implementation
@@ -291,6 +313,113 @@ begin
   Result := HasUnderscore and AllUpperOrDigit;
 end;
 
+const
+  // FP-Gate (2026-07-04): test-fixture (Audit_RealWorldBugs 3.5) -
+  // typische Beispiel-/Platzhalterwerte aus Demos, Benchmarks, Doku und
+  // Tutorials. Match case-insensitive auf den kompletten Literal-Body,
+  // zusaetzlich mit abgestreiften Trailing-Digits (pass1/pass2 -> pass,
+  // test123 -> test). Bewusst NUR Komplett-Match, kein Substring -
+  // 'realsecret' oder 'my-secret-key' bleiben meldepflichtig.
+  DUMMY_SECRET_VALUES: array[0..47] of string = (
+    'changeme', 'change_me', 'changeit',
+    'password', 'passwort',  'passwd',  'pass', 'pwd', 'kennwort',
+    'secret',   'geheim',    'geheimnis',
+    'test',     'testing',   'demo',    'example', 'sample',
+    'dummy',    'fake',      'mock',    'placeholder',
+    'default',  'none',      'empty',   'unknown', 'undefined',
+    'foo',      'bar',       'foobar',  'baz',
+    'xxx',      'xxxx',      'xxxxx',
+    'abc',      'abcd',      'abcde',
+    'admin',    'administrator', 'root', 'guest', 'user',
+    'letmein',  'qwerty',    'qwertz',  'asdf',
+    'masterkey',                          // Firebird-Default (SYSDBA)
+    'sesam',    'sesame'
+  );
+
+class function THardcodedSecretDetector.ExtractLiteralBody(
+  const Literal: string): string;
+// Schaelt den Inhalt aus der Parser-Source-Form eines Stringliterals:
+// umschliessende ' ' entfernen, QuoteStrLit-verdoppelte innere Quotes
+// wieder auf einfach reduzieren. Nicht-Quote-Formen (z.B. bereits
+// getrimmte Werte) werden unveraendert durchgereicht.
+begin
+  Result := Literal;
+  if (Length(Result) >= 2) and (Result[1] = '''') and
+     (Result[Length(Result)] = '''') then
+    Result := Copy(Result, 2, Length(Result) - 2)
+  else if (Length(Result) >= 1) and (Result[1] = '''') then
+    Result := Copy(Result, 2, MaxInt);
+  Result := StringReplace(Result, '''''', '''', [rfReplaceAll]);
+end;
+
+class function THardcodedSecretDetector.IsPlausibleSecretValue(
+  const Literal: string): Boolean;
+// FP-Gate (2026-07-04): template-delimiter / nul-char-init / sentinel-value.
+// Plausibel = Body >= 4 Zeichen UND >= 3 alphanumerische Zeichen (ASCII).
+// Reine Sonderzeichen-/Steuerzeichen-Werte ('{{', '}}', '#', #0, '****')
+// sind Delimiter, Sentinels oder Masken - keine Secrets. Jeder realistische
+// Credential-Wert (Passwoerter, API-Keys, PEM-Header) erfuellt beide
+// Kriterien locker.
+var
+  Body  : string;
+  C     : Char;
+  Alnum : Integer;
+begin
+  Body := ExtractLiteralBody(Literal);
+  if Length(Body) < 4 then Exit(False);
+  Alnum := 0;
+  for C in Body do
+    if CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9']) then
+    begin
+      Inc(Alnum);
+      if Alnum >= 3 then Exit(True);
+    end;
+  Result := False;
+end;
+
+class function THardcodedSecretDetector.IsDummySecretValue(
+  const Literal: string): Boolean;
+// FP-Gate (2026-07-04): test-fixture. Komplett-Match (case-insensitive)
+// gegen DUMMY_SECRET_VALUES, einmal roh und einmal mit abgestreiften
+// Trailing-Digits ('pass1' -> 'pass').
+// Refinement (2026-07-04, Code-Review): (a) Trailing-Digit-Strip auf HOECHSTENS
+// 2 Ziffern begrenzt, damit echte Credentials mit eingebetteten Zahlenfolgen
+// ('admin2024' -> 'admin20', kein Dummy) nicht faelschlich unterdrueckt werden;
+// (b) reine Ziffernwerte gelten nur bis Laenge 6 als PIN-Platzhalter ('1234'),
+// laengere Ziffernfolgen koennen echte numerische Tokens/Passwoerter sein.
+var
+  Body, Stem : string;
+  D          : string;
+  i, Stripped: Integer;
+  AllDigits  : Boolean;
+begin
+  Result := False;
+  Body := LowerCase(Trim(ExtractLiteralBody(Literal)));
+  if Body = '' then Exit;
+
+  AllDigits := True;
+  for i := 1 to Length(Body) do
+    if not CharInSet(Body[i], ['0'..'9']) then
+    begin
+      AllDigits := False;
+      Break;
+    end;
+  if AllDigits then
+    Exit(Length(Body) <= 6);   // nur kurze reine Ziffern -> Platzhalter-PIN
+
+  i := Length(Body);
+  Stripped := 0;
+  while (i >= 1) and (Stripped < 2) and CharInSet(Body[i], ['0'..'9']) do
+  begin
+    Dec(i);
+    Inc(Stripped);
+  end;
+  Stem := Copy(Body, 1, i);
+
+  for D in DUMMY_SECRET_VALUES do
+    if (Body = D) or (Stem = D) then Exit(True);
+end;
+
 class procedure THardcodedSecretDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 const
@@ -339,6 +468,15 @@ begin
       //   Cfg.SourceToken      := 'env SONAR_TOKEN'
       //   edToken.PasswordChar := '*'
       if IsSecretMetaField(A.Name) then Continue;
+      // FP-Gate (2026-07-04): template-delimiter / nul-char-init /
+      // sentinel-value (Audit_RealWorldBugs 3.5) - Werte wie '{{', '}}',
+      // '#' oder #0 sind Template-Delimiter, Status-Sentinels oder
+      // Puffer-Terminierung, keine Secrets.
+      if not IsPlausibleSecretValue(A.TypeRef) then Continue;
+      // FP-Gate (2026-07-04): test-fixture (Audit_RealWorldBugs 3.5) -
+      // dokumentierte Demo-/Platzhalterwerte ('masterkey', 'password',
+      // 'pass1', ...) sind Beispiel-Credentials, keine echten Secrets.
+      if IsDummySecretValue(A.TypeRef) then Continue;
       // ConnectionString ohne Passwort-Anteil ist ein Template, kein Secret.
       if (Pos('connectionstring', A.Name.ToLower) > 0) and
          not ConnectionStringHasPassword(A.TypeRef) then Continue;
@@ -504,6 +642,12 @@ begin
       // META-Feld (SourceToken, TokenRef, PasswordHash, ...) - beschreibt
       // HERKUNFT / REFERENZ / DARSTELLUNG eines Secrets, nicht den Wert.
       if THardcodedSecretDetector.IsSecretMetaField(N.Name) then Continue;
+      // FP-Gate (2026-07-04): template-delimiter / nul-char-init /
+      // sentinel-value - Wert-Plausibilitaet analog AnalyzeMethod.
+      if not THardcodedSecretDetector.IsPlausibleSecretValue(Literal) then Continue;
+      // FP-Gate (2026-07-04): test-fixture - Dummy-Beispielwerte, z.B.
+      // `cPassword = 'masterkey'` (mORMot extdb-bench, Firebird-Default).
+      if THardcodedSecretDetector.IsDummySecretValue(Literal) then Continue;
 
       if Length(Literal) > MAX_VAL_LEN then
         LitShort := Copy(Literal, 1, MAX_VAL_LEN - 4) + '...'''

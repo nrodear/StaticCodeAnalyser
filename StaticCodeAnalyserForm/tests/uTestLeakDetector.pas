@@ -90,6 +90,14 @@ type
     [Test] procedure Leak_CreateUtf8_NoFree_ReportsError;
     [Test] procedure Leak_CreateFmt_NoFree_ReportsError;
     [Test] procedure Leak_DotCreatedProperty_NotConstructor_NoFinding;
+    // FP-Gates (2026-07-04, Real-World-Audit Prio 3): os-handle- und
+    // owner-parameter-Gate inkl. TP-Guards (Create(nil) / Expr-Argument).
+    [Test] procedure Leak_OsHandleSocketAssign_NoFinding;
+    [Test] procedure Leak_OsHandleAcceptWrapperAssign_NoFinding;
+    [Test] procedure Leak_CreateWithOwnerApplication_NoFinding;
+    [Test] procedure Leak_CreateWithOwnerSelf_NoFinding;
+    [Test] procedure Leak_CreateWithNilOwner_ReportsError;
+    [Test] procedure Leak_CreateWithSelfDerivedExprArg_ReportsError;
   end;
 
   // ---- MemoryLeak Advanced - Wrong-Free / Pointer-Issues / Container-Ownership ----
@@ -1079,6 +1087,136 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       '.Created (Property/Field-Suffix in lowercase) darf nicht als Konstruktor erkannt werden');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_OsHandleSocketAssign_NoFinding;
+// FP-Gate (2026-07-04): os-handle - socket() liefert ein Integer-OS-Handle,
+// kein Delphi-Objekt; Freigabe laeuft ueber closesocket, nicht ueber Free.
+// Real-World: mormot.net.sock.pas:2835/3106/3122,
+// DMVC.Expert.Forms.NewProjectWizard.pas:1039.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.TestPort;'#13#10+
+  'var s: TSocket;'#13#10+
+  'begin'#13#10+
+  '  s := socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);'#13#10+
+  '  closesocket(s);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'socket() ist eine OS-Handle-API, keine Objekt-Konstruktion - kein SCA001');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_OsHandleAcceptWrapperAssign_NoFinding;
+// FP-Gate (2026-07-04): os-handle - doaccept() (mORMot-Wrapper um accept())
+// liefert ebenfalls ein OS-Handle. Real-World: mormot.net.sock.pas:3230.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.AcceptClient;'#13#10+
+  'var sock: TSocket;'#13#10+
+  'begin'#13#10+
+  '  sock := doaccept(FListener, FAddr, True);'#13#10+
+  '  UseSocket(sock);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'doaccept() ist eine OS-Handle-API, keine Objekt-Konstruktion - kein SCA001');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_CreateWithOwnerApplication_NoFinding;
+// FP-Gate (2026-07-04): owner-parameter - Create(Application) folgt der
+// TComponent-Owner-Konvention: die Application gibt das Objekt in ihrem
+// Destroy ueber die Components[]-Liste frei -> kein Leak.
+// Real-World: doublecmd foptionshotkeys.pas:687
+// 'CommandsForm := CommandsFormClass.Create(Application);'.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.ShowOptions;'#13#10+
+  'var frm: TComponent;'#13#10+
+  'begin'#13#10+
+  '  frm := TOptionsForm.Create(Application);'#13#10+
+  '  frm.Tag := 1;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'Create(Application) uebergibt Ownership an den Owner - kein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_CreateWithOwnerSelf_NoFinding;
+// FP-Gate (2026-07-04): owner-parameter - Create(Self) im Form-/Frame-Code:
+// Self (der umgebende TComponent) uebernimmt die Freigabe.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.InitUi;'#13#10+
+  'var tmr: TTimer;'#13#10+
+  'begin'#13#10+
+  '  tmr := TTimer.Create(Self);'#13#10+
+  '  tmr.Enabled := True;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'Create(Self) uebergibt Ownership an den Owner - kein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_CreateWithNilOwner_ReportsError;
+// TP-Guard fuer das owner-parameter-Gate (2026-07-04): Create(nil) hat
+// KEINEN Owner - der Aufrufer muss selbst freigeben. Entspricht dem
+// Korpus-TP sample-dunitx-belege_ui/BelegeUnit.pas:52
+// 'SQLQuery := TSQLQuery.Create(nil);' ohne Free.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.LoadFromDB;'#13#10+
+  'var q: TSQLQuery;'#13#10+
+  'begin'#13#10+
+  '  q := TSQLQuery.Create(nil);'#13#10+
+  '  q.Open;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'Create(nil) ohne Free muss weiterhin als Leak (lsError) gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_CreateWithSelfDerivedExprArg_ReportsError;
+// TP-Guard fuer das owner-parameter-Gate (2026-07-04): das Gate verlangt,
+// dass das GESAMTE Argument exakt ein Owner-Bezeichner ist. Ein Ausdruck,
+// der 'Self' nur enthaelt, ist kein Owner. Entspricht dem Korpus-TP
+// CodeReader.ZXing...GenericGF.pas:642
+// 'lResult := TStringBuilder.Create((8 * self.degree));' ohne Free.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Dump;'#13#10+
+  'var sb: TStringBuilder;'#13#10+
+  'begin'#13#10+
+  '  sb := TStringBuilder.Create(8 * Self.Degree);'#13#10+
+  '  sb.Append(''x'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'Create(8 * Self.Degree) ist kein Owner-Argument - Leak bleibt gemeldet');
   finally F.Free; end;
 end;
 
