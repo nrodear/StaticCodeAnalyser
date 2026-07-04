@@ -29,6 +29,7 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
+  uCompatSet,  // D11: THashSet<T>-Ersatz (D12: leere Unit, natives THashSet)
   uAstNode, uSCAConsts, uMethodd12;
 
 type

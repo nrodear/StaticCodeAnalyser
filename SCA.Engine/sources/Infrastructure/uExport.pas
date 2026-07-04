@@ -84,18 +84,13 @@ uses
 
 class procedure TExporter.SaveUtf8WithBom(SL: TStringList;
   const FileName: string);
-var
-  Enc: TUTF8Encoding;
 begin
-  // UseBOM=True erzwingt EF BB BF Preamble in SaveToFile/SaveToStream.
-  // Die Standard-Singleton TEncoding.UTF8 hat FUseBOM=False (Boolean-
-  // Default) und wuerde keinen BOM schreiben.
-  Enc := TUTF8Encoding.Create(True);
-  try
-    SL.SaveToFile(FileName, Enc);
-  finally
-    Enc.Free;
-  end;
+  // WriteBOM=True + TEncoding.UTF8 schreibt die EF BB BF Preamble.
+  // (Vorher TUTF8Encoding.Create(True) - der Bool-Konstruktor existiert
+  // erst seit Delphi 12; TStrings.WriteBOM ist D11-kompatibel und
+  // byte-identisch im Output.)
+  SL.WriteBOM := True;
+  SL.SaveToFile(FileName, TEncoding.UTF8);
 end;
 
 class function TExporter.KindToName(Kind: TFindingKind): string;

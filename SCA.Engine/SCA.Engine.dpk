@@ -1,4 +1,4 @@
-﻿package SCA.Engine;
+package SCA.Engine;
 
 {$R *.res}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
@@ -33,6 +33,7 @@ requires
 contains
   uAnalyserTypes in 'sources\Common\uAnalyserTypes.pas',
   uCollectValues in 'sources\Common\uCollectValues.pas',
+  uCompatSet in 'sources\Common\uCompatSet.pas',
   uDetectorUtils in 'sources\Common\uDetectorUtils.pas',
   uLocalization in 'sources\Common\uLocalization.pas',
   uMethodd12 in 'sources\Common\uMethodd12.pas',

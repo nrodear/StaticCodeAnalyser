@@ -39,6 +39,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
+  uCompatSet,  // D11: THashSet<T>-Ersatz (D12: leere Unit, natives THashSet)
   uAstNode, uAstFileCache;
 
 type

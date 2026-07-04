@@ -99,6 +99,7 @@
         <DCCReference Include="rtl.dcp"/>
         <DCCReference Include="sources\Common\uAnalyserTypes.pas"/>
         <DCCReference Include="sources\Common\uCollectValues.pas"/>
+        <DCCReference Include="sources\Common\uCompatSet.pas"/>
         <DCCReference Include="sources\Common\uDetectorUtils.pas"/>
         <DCCReference Include="sources\Common\uLocalization.pas"/>
         <DCCReference Include="sources\Common\uMethodd12.pas"/>
