@@ -14,19 +14,20 @@ program StaticCodeAnalyser.d12;
 // braucht, ruft 'start /wait analyser.exe ...' oder pipt nach 'more'.
 // CI-Runner (PowerShell, GH Actions) sehen das nicht - die loggen synchron.
 
+// Build-Hygiene (2026-07-04): die Scan-Fixtures (MeineUnit, uCustomerForm,
+// uOrderForm, ConcatToFormatSample, WithStatementSample) sind NICHT mehr
+// gelinkt - keine Form-Source referenziert sie, sie blaehten nur die
+// ausgelieferte EXE auf (uCustomerForm zog FireDAC-DFM-Streaming mit).
+// Die Dateien bleiben unter resources\ als reine Scan-Eingaben liegen
+// (Self-Scan-Baseline + Demo-Scans lesen sie von Disk, nicht aus der EXE).
 uses
   Winapi.Windows,
   Vcl.Forms,
   System.SysUtils,
-  MeineUnit in 'resources\MeineUnit.pas',
   MainController in 'sources\MainController.pas',
   uMainForm in 'sources\UI\uMainForm.pas' {Form2},
   uDfmTextViewer in 'sources\UI\uDfmTextViewer.pas',
-  uConsoleRunner in 'sources\Console\uConsoleRunner.pas',
-  uCustomerForm in 'resources\uCustomerForm.pas' {CustomerForm},
-  uOrderForm in 'resources\uOrderForm.pas' {OrderForm},
-  ConcatToFormatSample in 'resources\ConcatToFormatSample.pas',
-  WithStatementSample in 'resources\WithStatementSample.pas';
+  uConsoleRunner in 'sources\Console\uConsoleRunner.pas';
 
 {$R *.res}
 // App-Icon kommt via <Icon_MainIcon> im .dproj: Delphi auto-embeddet das
@@ -114,11 +115,8 @@ begin
     // Resource gesetzt (siehe <Icon_MainIcon> im dproj -> branding\sca.ico).
     // Keine explizite Zuweisung noetig - canonical Embarcadero-Weg.
     Application.CreateForm(TForm2, Form2);
-  // uCustomerForm + uOrderForm sind Test-Fixtures fuer die DFM-Detektoren
-    // (qCustomers: TFDQuery, dsOrders: TDataSetProvider, ...). Sie bleiben
-    // im Projekt fuer die Kompilierung, werden aber NICHT als Runtime-Form
-    // instanziiert - sonst wirft das DFM-Streaming FireDAC-512 (keine
-    // Connection auf qCustomers). Bei Bedarf manuell als TForm.Create.
+    // uCustomerForm + uOrderForm (resources\) sind seit 2026-07-04 nicht
+    // mehr einkompiliert - reine Scan-Fixtures auf Disk, siehe uses-Kommentar.
     Application.Run;
   end;
 end.

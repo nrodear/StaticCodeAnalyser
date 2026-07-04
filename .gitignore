@@ -2,7 +2,7 @@
 #  Delphi / RAD Studio - .gitignore
 # =====================================================================
 #  Was reinkommt: Source (*.pas, *.dfm, *.fmx, *.dpr, *.dpk),
-#                 Projekt-Konfiguration (*.dproj, *.groupproj, *.res),
+#                 Projekt-Konfiguration (*.dproj, *.groupproj),
 #                 Resourcen, Tests, Doku.
 #  Was NICHT reinkommt: Build-Artefakte, IDE-User-State, Backups.
 # =====================================================================
@@ -21,6 +21,17 @@ sca-findings.json
 # Subprojekt im jeweiligen Build-Pfad landet. Nicht checken-in - regeneriert
 # sich automatisch bei jedem IDE-Build.
 sca_branding.res
+
+# ---- Projekt-Haupt-.res (2026-07-04) ----
+# Die IDE regeneriert diese .res aus den VerInfo-Keys im dproj bei jedem
+# Build - eingecheckt erzeugen sie nur Dauer-Churn im Diff. Dateien bleiben
+# auf Disk (git rm --cached), werden ab jetzt nicht mehr getrackt.
+SCA.CLI.Demo/SCA.CLI.Demo.res
+SCA.Engine/SCA.Engine.res
+SCA.SharedUI/SCA.SharedUI.res
+StaticCodeAnalyserForm/StaticCodeAnalyser.d12.res
+StaticCodeAnalyserForm/tests/TestProject.res
+StaticCodeAnalyserIDE/StaticCodeAnalyser.IDE.d12.res
 
 # ---- Build-Output-Verzeichnisse ----
 # Delphi schreibt kompilierte Artefakte (DCU/BPL/EXE/DLL) typisch

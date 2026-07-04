@@ -142,7 +142,6 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="resources\MeineUnit.pas"/>
         <DCCReference Include="sources\MainController.pas"/>
         <DCCReference Include="sources\UI\uMainForm.pas">
             <Form>Form2</Form>
@@ -150,16 +149,6 @@
         </DCCReference>
         <DCCReference Include="sources\UI\uDfmTextViewer.pas"/>
         <DCCReference Include="sources\Console\uConsoleRunner.pas"/>
-        <DCCReference Include="resources\uCustomerForm.pas">
-            <Form>CustomerForm</Form>
-            <FormType>dfm</FormType>
-        </DCCReference>
-        <DCCReference Include="resources\uOrderForm.pas">
-            <Form>OrderForm</Form>
-            <FormType>dfm</FormType>
-        </DCCReference>
-        <DCCReference Include="resources\ConcatToFormatSample.pas"/>
-        <DCCReference Include="resources\WithStatementSample.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

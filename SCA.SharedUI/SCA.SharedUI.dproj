@@ -48,7 +48,7 @@
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;$(DCC_Namespace)</DCC_Namespace>
         <DCC_CBuilderOutput>All</DCC_CBuilderOutput>
         <SanitizedProjectName>SCA_SharedUI</SanitizedProjectName>
-        <DCC_UnitSearchPath>sources;..\SCA.Engine\sources\Common;..\SCA.Engine\sources\Parsing;..\SCA.Engine\sources\Infrastructure;..\SCA.Engine\sources\Output;..\SCA.Engine\sources\Detectors;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>sources;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_UsePackage>SCA.Engine;rtl;vcl;vclwinx;designide;$(DCC_UsePackage)</DCC_UsePackage>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">

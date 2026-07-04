@@ -3,6 +3,15 @@ unit ConcatToFormatSample;
 // noinspection-file All
 // Sample-/Demo-Datei: demonstriert Detektor-Patterns - alle Findings sind Absicht.
 
+// ZWILLING (Entscheid Build-Hygiene 2026-07-04): dieselbe Unit liegt AUCH in
+// StaticCodeAnalyserForm\resources\ConcatToFormatSample.pas - dort OHNE die
+// noinspection-file-Zeilen, weil die resources-Kopie das aktive Scan-Fixture
+// ist, dessen Funde in sca-selftest-baseline.json eingefroren sind (Zeilen 46/
+// 52/58/64). Diese examples-Kopie ist die ausgelieferte Doku-Variante und
+// demonstriert zusaetzlich die File-Wide-Suppression. Die RUMPF-Inhalte beider
+// Kopien muessen synchron bleiben; NUR dieser Header-Block darf abweichen
+// (jede Zeilenverschiebung in der resources-Kopie wuerde die Baseline kippen).
+
 // Sample-Unit fuer den Detektor uConcatToFormat.
 //
 // Erwartete Treffer (ConcatToFormat-Hint, roter Balken am Zeilenanfang
