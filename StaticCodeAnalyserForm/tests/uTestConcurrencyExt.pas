@@ -62,7 +62,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkThreadResumeDeprecated) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkThreadResumeDeprecated),
+      'genau 1 ThreadResume-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'MyWorker.Resume'),
+      TFindingHelper.FirstOf(F, fkThreadResumeDeprecated).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -108,7 +113,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
+      'genau 1 ThreadDestroy-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'FreeAndNil(FWorkerThread'),
+      TFindingHelper.FirstOf(F, fkTThreadDestroyWithoutTerminate).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -208,7 +218,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
+      'genau 1 ThreadDestroy-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'FreeAndNil(FWorker)'),
+      TFindingHelper.FirstOf(F, fkTThreadDestroyWithoutTerminate).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -347,7 +362,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
+      'genau 1 ThreadDestroy-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'FreeAndNil(Result)'),
+      TFindingHelper.FirstOf(F, fkTThreadDestroyWithoutTerminate).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 

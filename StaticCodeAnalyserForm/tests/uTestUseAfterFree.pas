@@ -49,7 +49,9 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkUseAfterFree) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUseAfterFree),
+      'genau 1 UseAfterFree-Fund erwartet');
   finally F.Free; end;
 end;
 
@@ -66,7 +68,9 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkUseAfterFree) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUseAfterFree),
+      'genau 1 UseAfterFree-Fund erwartet');
   finally F.Free; end;
 end;
 

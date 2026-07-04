@@ -38,7 +38,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkGetMemWithoutFreeMem) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkGetMemWithoutFreeMem),
+      'genau 1 GetMem-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'GetMem(P, 1024'),
+      TFindingHelper.FirstOf(F, fkGetMemWithoutFreeMem).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -55,7 +60,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkGetMemWithoutFreeMem) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkGetMemWithoutFreeMem),
+      'genau 1 GetMem-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'AllocMem(256'),
+      TFindingHelper.FirstOf(F, fkGetMemWithoutFreeMem).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 

@@ -75,7 +75,9 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkNilDeref),
+      'genau 1 NilDeref-Fund erwartet');
   finally F.Free; end;
 end;
 
@@ -204,7 +206,9 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkMissingFinally) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMissingFinally),
+      'genau 1 MissingFinally-Fund erwartet');
   finally F.Free; end;
 end;
 
@@ -242,7 +246,9 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkMissingFinally) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMissingFinally),
+      'genau 1 MissingFinally-Fund erwartet');
   finally F.Free; end;
 end;
 
@@ -259,7 +265,9 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkMissingFinally) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMissingFinally),
+      'genau 1 MissingFinally-Fund erwartet');
   finally F.Free; end;
 end;
 
@@ -276,7 +284,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkDivByZero) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+      'genau 1 DivByZero-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'mod 0'),
+      TFindingHelper.FirstOf(F, fkDivByZero).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 

@@ -55,7 +55,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkLockWithoutTryFinally) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkLockWithoutTryFinally),
+      'genau 1 Lock-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'FLock.Enter'),
+      TFindingHelper.FirstOf(F, fkLockWithoutTryFinally).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -129,7 +134,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkLockWithoutTryFinally) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkLockWithoutTryFinally),
+      'genau 1 Lock-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'FCS.Acquire'),
+      TFindingHelper.FirstOf(F, fkLockWithoutTryFinally).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -145,7 +155,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkLockWithoutTryFinally) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkLockWithoutTryFinally),
+      'genau 1 Lock-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'FRWLock.BeginWrite'),
+      TFindingHelper.FirstOf(F, fkLockWithoutTryFinally).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -161,7 +176,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkLockWithoutTryFinally) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkLockWithoutTryFinally),
+      'genau 1 Lock-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'EnterCriticalSection(FCS'),
+      TFindingHelper.FirstOf(F, fkLockWithoutTryFinally).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 

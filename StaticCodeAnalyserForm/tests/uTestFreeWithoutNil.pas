@@ -52,7 +52,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkFreeWithoutNil) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFreeWithoutNil),
+      'genau 1 FreeWithoutNil-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'FList.Free'),
+      TFindingHelper.FirstOf(F, fkFreeWithoutNil).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
