@@ -36,6 +36,15 @@ type
     // ---- Finding-Inhalt ---------------------------------------------------
     [Test] procedure Taut_Finding_KindAndSeverity;
     [Test] procedure Taut_MultipleHitsInSameUnit_AllReported;
+
+    // ---- Strip-Semantik festgenagelt (Audit 2026-07-04) --------------------
+    // Der Detector hat eine LOKALE StripStringsAndComments-Variante, die
+    // Kommentare positionstreu mit Spaces BLANKT (nicht entfernt). Die
+    // Call-Site zieht Lhs/Rhs per Index aus der ORIGINAL-Zeile - jede
+    // Migration auf die zentrale ScanCodeLine (entfernt Kommentare,
+    // verschiebt Spalten) muss diese Tests unveraendert gruen halten.
+    [Test] procedure Taut_CommentBetweenOperands_PositionParity;
+    [Test] procedure Taut_StringSlashSlash_DirectiveAndBlockCommentState;
   end;
 
 implementation
@@ -314,6 +323,58 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkTautologicalBoolExpr) >= 2);
+  finally F.Free; end;
+end;
+
+procedure TTestTautologicalExpr.Taut_CommentBetweenOperands_PositionParity;
+// Audit 2026-07-04 (Strip-Konsolidierung): Positions-Paritaet Clean<->Line.
+// Die lokale Strip-Variante blankt `{ ... }` mit Spaces, dadurch zeigt die
+// Op-Position aus Clean 1:1 in die Original-Zeile und Lhs/Rhs werden
+// INKLUSIVE der (identischen) Kommentar-Texte extrahiert -> Tautologie
+// feuert. Wuerde der Strip Kommentare ENTFERNEN (zentrale ScanCodeLine),
+// verschoebe sich der Index und Lhs/Rhs wuerden zerhackt extrahiert.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var x: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  if x { same } = x { same } then Bar;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkTautologicalBoolExpr) >= 1,
+    'Kommentar zwischen Operanden: Blank-Strip haelt Spalten stabil, Match muss feuern');
+  finally F.Free; end;
+end;
+
+procedure TTestTautologicalExpr.Taut_StringSlashSlash_DirectiveAndBlockCommentState;
+// Audit 2026-07-04 (Strip-Konsolidierung): fieser Kombi-Fall.
+//   * `//` INNERHALB eines String-Literals darf die Zeile nicht abschneiden
+//   * `{$IFDEF}`-Direktiven-Zeilen werden wie Kommentare geblankt und
+//     duerfen keinen Block-Kommentar-State offen lassen
+//   * mehrzeiliger `(* ... *)`-Block traegt State ueber Zeilen: die fake
+//     Tautologie IM Kommentar darf nicht feuern
+//   * Zeilenkommentar mit Apostroph (don't) darf keinen String-State setzen
+// Erwartung: exakt 1 Finding (die IsUrl-and-Zeile; beide String-Args
+// identisch -> echte Tautologie).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var y: Integer;'#13#10 +
+  'begin'#13#10 +
+  '{$IFDEF FOO}'#13#10 +
+  '  (* alter Code:'#13#10 +
+  '     if y = y then Bar;'#13#10 +
+  '  *)'#13#10 +
+  '  if IsUrl(''http://'') and IsUrl(''http://'') then Bar; // don''t panic'#13#10 +
+  '{$ENDIF}'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTautologicalBoolExpr),
+    'genau 1 Finding: IsUrl-Zeile feuert, y=y im (*..*)-Block nicht');
   finally F.Free; end;
 end;
 

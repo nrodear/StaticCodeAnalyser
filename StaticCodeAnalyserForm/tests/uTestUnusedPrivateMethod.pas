@@ -15,6 +15,15 @@ type
     [Test] procedure Finding_KindAndSeverity;
     // 2026-06-20: DFM-Event-Handler in private-Section nicht als FP melden.
     [Test] procedure DfmBoundPrivateHandler_NotReported;
+    // 2026-07-04: Strip-Konsolidierung (lokale Kopie -> TDetectorUtils).
+    // Nagelt die Ist-Semantik fest: Vorkommen in //-Kommentar, Block-
+    // Kommentar (mit Quote drin), String-Literal und {$IFDEF}-Direktive
+    // zaehlen NICHT als Verwendung.
+    [Test] procedure StripSemantics_CommentAndStringUsesDontCount;
+    // 2026-07-04: `//` INNERHALB eines String-Literals (inkl. verdoppeltem
+    // Quote) darf die Zeile nicht abschneiden - der echte Call dahinter
+    // muss weiterhin als Verwendung zaehlen.
+    [Test] procedure StripSemantics_CallAfterUrlString_NotReported;
   end;
 
 implementation
@@ -178,6 +187,71 @@ begin
   finally
     try TDirectory.Delete(Dir, True); except end;
   end;
+end;
+
+procedure TTestUnusedPrivateMethod.StripSemantics_CommentAndStringUsesDontCount;
+// DeadHelper taucht im Roh-Text 6x auf: Deklaration, Impl-Header,
+// //-Kommentar (mit 'Quote'), Block-Kommentar (mit 'Quote), String-Literal,
+// {$IFDEF}-Direktive. Nur Deklaration + Impl-Header ueberleben das Strippen
+// -> Count 2 (nicht > 2) -> MUSS gemeldet werden. Wuerde irgendeine der
+// vier gestrippten Fundstellen faelschlich mitzaehlen, kippte der Test.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  private'#13#10 +
+  '    procedure DeadHelper;'#13#10 +
+  '  public'#13#10 +
+  '    procedure DoStuff;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  '{$IFDEF DEADHELPER}'#13#10 +
+  '{$ENDIF}'#13#10 +
+  'procedure TFoo.DeadHelper;'#13#10 +
+  'begin end;'#13#10 +
+  'procedure TFoo.DoStuff;'#13#10 +
+  '// DeadHelper wird nicht mehr gerufen (''legacy'')'#13#10 +
+  'begin'#13#10 +
+  '  Writeln(''call DeadHelper now'');'#13#10 +
+  '  { DeadHelper im Block-Kommentar mit ''Quote }'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkUnusedPrivateMethod) >= 1,
+    'Kommentar-/String-/Direktiven-Vorkommen duerfen nicht als Use zaehlen');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedPrivateMethod.StripSemantics_CallAfterUrlString_NotReported;
+// Der String ''don''t // stop'' enthaelt ein verdoppeltes Quote UND `//`.
+// Wuerde der Stripper das `//` im String als Zeilenkommentar deuten, fiele
+// der echte Call `UsedHelper;` dahinter weg -> Count 2 -> False Positive.
+// Korrekte Semantik: Call zaehlt, Count 3 (> 2) -> KEIN Fund.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  private'#13#10 +
+  '    procedure UsedHelper;'#13#10 +
+  '  public'#13#10 +
+  '    procedure DoStuff;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.UsedHelper;'#13#10 +
+  'begin end;'#13#10 +
+  'procedure TFoo.DoStuff;'#13#10 +
+  'begin'#13#10 +
+  '  Writeln(''don''''t // stop''); UsedHelper;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedPrivateMethod),
+    '`//` im String-Literal darf den echten Call dahinter nicht abschneiden');
+  finally F.Free; end;
 end;
 
 initialization

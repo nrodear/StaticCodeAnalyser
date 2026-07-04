@@ -68,8 +68,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  System.RegularExpressions, System.StrUtils, System.IOUtils,
-  uFileTextCache;
+  System.RegularExpressions, System.IOUtils,
+  uDetectorUtils, uFileTextCache;
 
 // Liest die zur PAS-Datei gehoerende DFM (gleicher Pfad mit .dfm-Extension)
 // und extrahiert alle Event-Handler-Werte. Pattern:
@@ -128,73 +128,6 @@ begin
   Result := (Low = 'private') or (Low = 'strict private');
 end;
 
-// File-Text-Buffer mit gestrippten Strings + Kommentaren (Lower-Case).
-function StripStringsAndComments(Lines: TStringList): string;
-var
-  Buf            : TStringBuilder;
-  i, n, j        : Integer;
-  Line           : string;
-  InBlk, InParen : Boolean;
-  InStr          : Boolean;
-  c              : Char;
-  pClose         : Integer;
-begin
-  Buf := TStringBuilder.Create;
-  try
-    InBlk := False; InParen := False;
-    for i := 0 to Lines.Count - 1 do
-    begin
-      Line := Lines[i]; InStr := False; j := 1; n := Length(Line);
-      while j <= n do
-      begin
-        if InBlk then
-        begin
-          pClose := PosEx('}', Line, j);
-          if pClose = 0 then Break;
-          InBlk := False; j := pClose + 1; Continue;
-        end;
-        if InParen then
-        begin
-          pClose := PosEx('*)', Line, j);
-          if pClose = 0 then Break;
-          InParen := False; j := pClose + 2; Continue;
-        end;
-        c := Line[j];
-        if InStr then
-        begin
-          Buf.Append(' ');
-          if c = '''' then
-          begin
-            if (j < n) and (Line[j + 1] = '''') then begin Buf.Append(' '); Inc(j, 2); end
-            else begin InStr := False; Inc(j); end;
-          end else Inc(j);
-          Continue;
-        end;
-        if c = '''' then begin Buf.Append(' '); InStr := True; Inc(j); Continue; end;
-        if (c = '/') and (j < n) and (Line[j + 1] = '/') then Break;
-        if c = '{' then
-        begin
-          pClose := PosEx('}', Line, j + 1);
-          if pClose = 0 then begin InBlk := True; Break; end;
-          j := pClose + 1; Continue;
-        end;
-        if (c = '(') and (j < n) and (Line[j + 1] = '*') then
-        begin
-          pClose := PosEx('*)', Line, j + 2);
-          if pClose = 0 then begin InParen := True; Break; end;
-          j := pClose + 2; Continue;
-        end;
-        Buf.Append(LowerCase(c));
-        Inc(j);
-      end;
-      Buf.Append(#10);
-    end;
-    Result := Buf.ToString;
-  finally
-    Buf.Free;
-  end;
-end;
-
 class procedure TUnusedPrivateMethodDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
@@ -211,11 +144,17 @@ var
   MethLow    : string;
   F          : TLeakFinding;
   DfmHandlers: TDictionary<string, Boolean>;
+  LineFor    : TArray<Integer>; // von der zentralen Strip-Fassung, hier ungenutzt
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
-    Code := StripStringsAndComments(Lines);
+    // 2026-07-04: lokale Strip-Kopie durch zentrale TDetectorUtils-Fassung
+    // ersetzt (Audit Duplikations-Rest). Verhaltensgleich zur alten Variante:
+    // FillCh=' ' wie frueher (String-Inhalte -> Space, nicht Tilde-Default),
+    // und LowerCase auf dem Gesamtergebnis ist aequivalent zum frueheren
+    // Inline-LowerCase pro Code-Zeichen (LowerCase(' ')=' ', #10 invariant).
+    Code := LowerCase(TDetectorUtils.StripStringsAndComments(Lines, LineFor, ' '));
     // DFM-Event-Handler-Set fuer diese .pas/.dfm-Paarung.
     DfmHandlers := BuildDfmHandlerSet(FileName);
     try
