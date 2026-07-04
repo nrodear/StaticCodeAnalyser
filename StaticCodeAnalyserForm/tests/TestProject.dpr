@@ -23,6 +23,7 @@ uses
   uTestSrcBuilder in 'uTestSrcBuilder.pas',
   uTestDetectorUtils in 'uTestDetectorUtils.pas',
   uTestConfidenceFilter in 'uTestConfidenceFilter.pas',
+  uTestConfidencePipeline in 'uTestConfidencePipeline.pas',
   uTestCFG in 'uTestCFG.pas',
   uTestTAstNode in 'uTestTAstNode.pas',
   uTestDfmLexer in 'uTestDfmLexer.pas',

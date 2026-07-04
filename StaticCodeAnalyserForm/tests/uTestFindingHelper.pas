@@ -64,6 +64,7 @@ uses
   uAttributeMisalignment,
   uUnusedRoutine, uUninitVar,
   uStaticAnalyzer2,
+  uEngineApi,
   uTestSrcBuilder,
   System.IOUtils;
 
@@ -75,6 +76,17 @@ type
     // alle Detektoren auf - benoetigt fuer file-scannende Detektoren wie
     // TTodoCommentDetector, die nicht ueber den AST gehen.
     class function FindingsOfFile(const Source: string): TObjectList<TLeakFinding>; static;
+    // Voller PRODUKTIONS-Pipeline-Weg (Audit 2026-07 Stufe 3): scannt den
+    // Source ueber uEngineApi/TAnalysisSession.Run (ssSource) - inklusive
+    // Profil-/Severity-Filter, Suppression, PathOverrides und Confidence-
+    // Filter. Im Gegensatz zu FindingsOf/FindingsOfFile (rohe Detektor-
+    // Aufrufe, KEINE Post-Filter) zeigt dieser Einstieg, was der User im
+    // ausgelieferten Default WIRKLICH sieht. AMinConfidence steuert den
+    // Confidence-Post-Filter (fcMedium = Auslieferungs-Default, filtert
+    // fcLow-demotete Kinds; fcLow = Filter aus).
+    class function FindingsViaPipeline(const Source: string;
+      AMinConfidence: TFindingConfidence = fcMedium)
+      : TObjectList<TLeakFinding>; static;
     class function Count(Findings: TObjectList<TLeakFinding>;
       Kind: TFindingKind): Integer; static;
     class function CountSev(Findings: TObjectList<TLeakFinding>;
@@ -299,6 +311,46 @@ begin
   finally
     if TFile.Exists(TempPath) then
       TFile.Delete(TempPath);
+  end;
+end;
+
+class function TFindingHelper.FindingsViaPipeline(const Source: string;
+  AMinConfidence: TFindingConfidence): TObjectList<TLeakFinding>;
+var
+  Req      : TScanRequest;
+  Ses      : TAnalysisSession;
+  Res      : TScanResult;
+  OldConf  : TFindingConfidence;
+  OldKinds : TFindingKinds;
+  OldSev   : TLeakSeverity;
+begin
+  // Globalen Filter-State sichern: ApplyConfig (in Run) schreibt ihn aus dem
+  // Request und laesst ihn stehen - andere Tests (uTestConfidenceFilter,
+  // Raw-Harness) sollen den Prozess-Default unveraendert vorfinden.
+  OldConf  := uSCAConsts.FindingMinConfidence;
+  OldKinds := uSCAConsts.DetectorEnabledKinds;
+  OldSev   := uSCAConsts.DetectorMinSeverity;
+  try
+    Req := TScanRequest.Init;         // Direkt-Modus: alle Detektoren, lsHint
+    Req.Scope         := ssSource;
+    Req.Source        := Source;
+    Req.Path          := SAMPLE_FILENAME; // logischer Findings-Name (nicht test-artig!)
+    Req.MinConfidence := AMinConfidence;
+    Ses := TAnalysisSession.Create;
+    try
+      Res := Ses.Run(Req);
+      try
+        Result := Res.ReleaseFindings;
+      finally
+        Res.Free;
+      end;
+    finally
+      Ses.Free;
+    end;
+  finally
+    uSCAConsts.FindingMinConfidence := OldConf;
+    uSCAConsts.DetectorEnabledKinds := OldKinds;
+    uSCAConsts.DetectorMinSeverity  := OldSev;
   end;
 end;
 

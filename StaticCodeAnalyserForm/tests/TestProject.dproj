@@ -104,6 +104,7 @@
         <DCCReference Include="uTestSrcBuilder.pas"/>
         <DCCReference Include="uTestDetectorUtils.pas"/>
         <DCCReference Include="uTestConfidenceFilter.pas"/>
+        <DCCReference Include="uTestConfidencePipeline.pas"/>
         <DCCReference Include="uTestCFG.pas"/>
         <DCCReference Include="uTestTAstNode.pas"/>
         <DCCReference Include="uTestDfmLexer.pas"/>
