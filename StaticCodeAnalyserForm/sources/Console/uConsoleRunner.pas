@@ -113,6 +113,11 @@ type
     class procedure WriteSummary(const Findings: TObjectList<TLeakFinding>;
       Quiet: Boolean); static;
     class function CalcExitCode(const Findings: TObjectList<TLeakFinding>): Integer; static;
+    // Gemeinsame Severity-Klassifikation fuer WriteSummary + CalcExitCode
+    // (2026-07-04 dedupliziert). fkFileReadError zaehlt IMMER als ReadError,
+    // unabhaengig von seiner Severity - nie in Errors/Warnings/Hints.
+    class procedure CountBySeverity(const Findings: TObjectList<TLeakFinding>;
+      out Errors, Warnings, Hints, ReadErrors: Integer); static;
   end;
 
 implementation
@@ -175,35 +180,12 @@ var
   end;
 
 begin
-  // Defaults
-  Result.Help        := False;
-  Result.ShowVersion := False;
-  Result.Path        := '';
-  Result.SingleFile  := '';
-  Result.Full        := False;
-  Result.Branch      := False;
-  Result.ReportSarif := '';
-  Result.ReportHtml  := '';
-  Result.TimeDetectors    := False;
-  Result.TimeDetectorsOut := '';
-  Result.HideTestFixtures := False;
-  Result.HideTestExplicit := False;
-  Result.Quiet       := False;
-  Result.BaseDir     := '';
-  Result.CustomRules := '';
-  Result.Profile     := '';
-  Result.MinSeverity := '';
-  Result.ParseError  := '';
-  Result.SonarExport := '';
-  Result.SonarInit   := False;
-  Result.SonarTest   := False;
-  Result.SonarHost   := '';
-  Result.SonarToken  := '';
-  Result.SonarProject:= '';
-  Result.SonarBranch := '';
-  Result.SonarInsecure := False;
-  Result.SonarConfig := '';
-  Errored            := False;
+  // Defaults: alle Felder sind Zero-Value (False / '' / 0) - Default()
+  // initialisiert den kompletten Record, inkl. der Felder die der alte
+  // explizite Block nicht abdeckte (Diff, FailOn, IfdefAware, ...).
+  // 2026-07-04 konsolidiert; Nicht-Zero-Defaults gibt es hier keine.
+  Result  := Default(TCliArgs);
+  Errored := False;
 
   i := Low(Args);
   while (i <= High(Args)) and not Errored do
@@ -1055,6 +1037,30 @@ end;
 
 { ---- Output ---- }
 
+class procedure TConsoleRunner.CountBySeverity(
+  const Findings: TObjectList<TLeakFinding>;
+  out Errors, Warnings, Hints, ReadErrors: Integer);
+// Klassifikations-Kern von WriteSummary + CalcExitCode. Sonderfall:
+// fkFileReadError landet ausschliesslich in ReadErrors - seine Severity
+// wird bewusst ignoriert (Exit-Code 4 = I/O-Problem, siehe Unit-Header).
+var
+  F : TLeakFinding;
+begin
+  Errors     := 0;
+  Warnings   := 0;
+  Hints      := 0;
+  ReadErrors := 0;
+  for F in Findings do
+  begin
+    if F.Kind = fkFileReadError then Inc(ReadErrors)
+    else case F.Severity of
+      lsError   : Inc(Errors);
+      lsWarning : Inc(Warnings);
+      lsHint    : Inc(Hints);
+    end;
+  end;
+end;
+
 class procedure TConsoleRunner.WriteSummary(
   const Findings: TObjectList<TLeakFinding>; Quiet: Boolean);
 var
@@ -1064,19 +1070,7 @@ var
   CntHint       : Integer;
   CntFileErr    : Integer;
 begin
-  CntErr     := 0;
-  CntWarn    := 0;
-  CntHint    := 0;
-  CntFileErr := 0;
-  for F in Findings do
-  begin
-    if F.Kind = fkFileReadError then Inc(CntFileErr)
-    else case F.Severity of
-      lsError   : Inc(CntErr);
-      lsWarning : Inc(CntWarn);
-      lsHint    : Inc(CntHint);
-    end;
-  end;
+  CountBySeverity(Findings, CntErr, CntWarn, CntHint, CntFileErr);
 
   if not Quiet then
   begin
@@ -1095,30 +1089,17 @@ end;
 class function TConsoleRunner.CalcExitCode(
   const Findings: TObjectList<TLeakFinding>): Integer;
 var
-  F          : TLeakFinding;
-  HasErr     : Boolean;
-  HasWarn    : Boolean;
-  HasHint    : Boolean;
-  HasFileErr : Boolean;
+  CntErr     : Integer;
+  CntWarn    : Integer;
+  CntHint    : Integer;
+  CntFileErr : Integer;
 begin
-  HasErr     := False;
-  HasWarn    := False;
-  HasHint    := False;
-  HasFileErr := False;
-  for F in Findings do
-  begin
-    if F.Kind = fkFileReadError then HasFileErr := True
-    else case F.Severity of
-      lsError   : HasErr  := True;
-      lsWarning : HasWarn := True;
-      lsHint    : HasHint := True;
-    end;
-  end;
+  CountBySeverity(Findings, CntErr, CntWarn, CntHint, CntFileErr);
   // Reihenfolge: Errors > Warnings > Hints > FileErrors > Clean
-  if HasErr     then Exit(Integer(cecErrors));
-  if HasWarn    then Exit(Integer(cecWarnings));
-  if HasHint    then Exit(Integer(cecHints));
-  if HasFileErr then Exit(Integer(cecReadErrors));
+  if CntErr     > 0 then Exit(Integer(cecErrors));
+  if CntWarn    > 0 then Exit(Integer(cecWarnings));
+  if CntHint    > 0 then Exit(Integer(cecHints));
+  if CntFileErr > 0 then Exit(Integer(cecReadErrors));
   Result := Integer(cecClean);
 end;
 

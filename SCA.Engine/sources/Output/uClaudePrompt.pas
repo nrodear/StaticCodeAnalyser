@@ -32,7 +32,6 @@ type
       overload; static;
 
   private
-    class function KindToName(K: TFindingKind): string; static;
     class function LoadSnippet(const APath: string;
       ALine: Integer): string; static;
   end;
@@ -121,12 +120,6 @@ begin
   Result := SL;
 end;
 
-class function TClaudePrompt.KindToName(K: TFindingKind): string;
-// Delegiert an KIND_META in uSCAConsts (single source of truth).
-begin
-  Result := KindName(K);
-end;
-
 class function TClaudePrompt.LoadSnippet(const APath: string;
   ALine: Integer): string;
 // Liest +/- CONTEXT_LINES Zeilen um ALine herum, mit ">>> " als Marker
@@ -203,7 +196,7 @@ begin
       SB.AppendLine('| ' + _('Method') + ' | `' + F.MethodName + '` |');
     SB.AppendLine('| ' + _('Severity') + ' | ' + F.SeverityText + ' |');
     SB.AppendLine('| ' + _('Type') + ' | ' + F.TypeText + ' |');
-    SB.AppendLine('| ' + _('Rule') + ' | `' + KindToName(F.Kind) + '` |');
+    SB.AppendLine('| ' + _('Rule') + ' | `' + KindName(F.Kind) + '` |');
     SB.AppendLine('| ' + _('Detail') + ' | ' + F.MissingVar + ' |');
     SB.AppendLine('');
 
@@ -259,7 +252,7 @@ begin
       _('what to test or check after the fix to confirm the issue is gone (and no regressions).'));
     SB.AppendLine('');
     SB.AppendLine(Format(_('If the finding is a false positive, say so and explain why - then suggest a `// noinspection %s` suppression marker on the affected line.'),
-      [KindToName(F.Kind)]));
+      [KindName(F.Kind)]));
     Result := SB.ToString;
   finally
     SB.Free;

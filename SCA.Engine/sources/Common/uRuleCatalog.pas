@@ -93,6 +93,7 @@ type
     class function ParseSoftwareQuality(const S: string): TSonarSoftwareQuality; static;
     class function ParseImpactSeverity(const S: string): TSonarImpactSeverity; static;
     class function AllKinds: TFindingKinds; static;
+    class function MakeFallbackMeta(K: TFindingKind): TRuleMeta; static;
   public
     // Optional: Caller-seitig den Pfad ueberschreiben (z.B. Tests).
     // Muss VOR dem ersten GetRule-Call gesetzt werden.
@@ -462,6 +463,19 @@ begin
   end;
 end;
 
+class function TRuleCatalog.MakeFallbackMeta(K: TFindingKind): TRuleMeta;
+// Gemeinsamer Kern der Fallback-Metadaten (2026-07-04 dedupliziert aus
+// LoadFallback + GetRule-Notfallpfad). Alle nicht gesetzten Felder bleiben
+// auf Default() (leere Strings/Arrays).
+begin
+  Result := Default(TRuleMeta);
+  Result.ID              := Format('SCA%.3d', [Ord(K) + 1]);
+  Result.Kind            := K;
+  Result.Name            := KindName(K);
+  Result.DefaultSeverity := lsWarning;
+  Result.FindingType     := KindFindingType(K);
+end;
+
 class procedure TRuleCatalog.LoadFallback;
 // Wird gerufen wenn rules/sca-rules.json fehlt oder kaputt ist. Erzeugt
 // Minimal-Metadaten pro TFindingKind aus KIND_META, damit der restliche
@@ -476,14 +490,10 @@ begin
 
   for K := Low(TFindingKind) to High(TFindingKind) do
   begin
-    Meta := Default(TRuleMeta);
-    Meta.ID               := Format('SCA%.3d', [Ord(K) + 1]);
-    Meta.Kind             := K;
-    Meta.Name             := KindName(K);
+    Meta := MakeFallbackMeta(K);
+    // ShortDescription nur hier im Katalog-Fallback setzen - der GetRule-
+    // Notfallpfad liess das Feld schon immer leer (Verhalten beibehalten).
     Meta.ShortDescription := KindName(K);
-    Meta.FullDescription  := '';
-    Meta.DefaultSeverity  := lsWarning;
-    Meta.FindingType      := KindFindingType(K);
     FRules.AddOrSetValue(K, Meta);
     FRulesByID.AddOrSetValue(Meta.ID, Meta);
   end;
@@ -595,12 +605,7 @@ begin
   if not FRules.TryGetValue(K, Result) then
   begin
     // Should not happen wenn LoadFallback alles fuellt.
-    Result := Default(TRuleMeta);
-    Result.ID   := Format('SCA%.3d', [Ord(K) + 1]);
-    Result.Kind := K;
-    Result.Name := KindName(K);
-    Result.DefaultSeverity := lsWarning;
-    Result.FindingType     := KindFindingType(K);
+    Result := MakeFallbackMeta(K);
   end;
 end;
 
