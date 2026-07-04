@@ -24,6 +24,7 @@ uses
   uTestDetectorUtils in 'uTestDetectorUtils.pas',
   uTestConfidenceFilter in 'uTestConfidenceFilter.pas',
   uTestConfidencePipeline in 'uTestConfidencePipeline.pas',
+  uTestPathOverrides in 'uTestPathOverrides.pas',
   uTestCFG in 'uTestCFG.pas',
   uTestTAstNode in 'uTestTAstNode.pas',
   uTestDfmLexer in 'uTestDfmLexer.pas',

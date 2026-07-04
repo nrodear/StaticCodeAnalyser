@@ -61,11 +61,13 @@ begin
 
   MainFn  := TPath.Combine(Tmp, 'uMain.pas');
   OtherFn := TPath.Combine(Tmp, 'uOther.pas');
-  TFile.WriteAllText(MainFn,  MainPas);
-  if OtherPas <> '' then
-    TFile.WriteAllText(OtherFn, OtherPas);
-
+  // Writes INNERHALB des try: wirft der zweite Write, raeumt das finally
+  // den ersten + das Verzeichnis trotzdem ab (Audit_TestQualitaet F7).
   try
+    TFile.WriteAllText(MainFn,  MainPas);
+    if OtherPas <> '' then
+      TFile.WriteAllText(OtherFn, OtherPas);
+
     DfmParser := TDfmParser.Create;
     try
       Graph := DfmParser.ParseSource(DfmSrc);
@@ -105,10 +107,9 @@ begin
       Graph.Free;
     end;
   finally
-    // Aufrauemen
-    if TFile.Exists(MainFn)  then TFile.Delete(MainFn);
-    if TFile.Exists(OtherFn) then TFile.Delete(OtherFn);
-    if TDirectory.Exists(Tmp) then TDirectory.Delete(Tmp);
+    // Rekursives Delete: raeumt auch Restdateien ab statt im finally zu
+    // werfen (und die Original-Exception zu maskieren).
+    if TDirectory.Exists(Tmp) then TDirectory.Delete(Tmp, True);
   end;
 end;
 

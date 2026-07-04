@@ -664,7 +664,7 @@ end;
 procedure WriteTempPas(const Content: string; out FileName: string);
 begin
   FileName := IncludeTrailingPathDelimiter(TPath.GetTempPath) +
-              'sca_test_' + IntToStr(Random(MaxInt)) + '.pas';
+              'sca_test_' + TGuid.NewGuid.ToString.Replace('{','').Replace('}','').Replace('-','') + '.pas';
   TFile.WriteAllText(FileName, Content, TEncoding.UTF8);
 end;
 

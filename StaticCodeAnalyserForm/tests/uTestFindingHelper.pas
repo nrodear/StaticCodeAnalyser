@@ -65,6 +65,7 @@ uses
   uUnusedRoutine, uUninitVar,
   uStaticAnalyzer2,
   uEngineApi,
+  uLexer,            // gLexerIfdef*-Save/Restore in FindingsViaPipeline
   uTestSrcBuilder,
   System.IOUtils;
 
@@ -91,6 +92,16 @@ type
       Kind: TFindingKind): Integer; static;
     class function CountSev(Findings: TObjectList<TLeakFinding>;
       Kind: TFindingKind; Sev: TLeakSeverity): Integer; static;
+    // Erster Befund eines Kinds (nil wenn keiner) - fuer Inhalt-Asserts
+    // (LineNumber/Severity/Message) nach dem Count-Check.
+    class function FirstOf(Findings: TObjectList<TLeakFinding>;
+      Kind: TFindingKind): TLeakFinding; static;
+    // 1-basierte Zeilennummer (als String, wie TLeakFinding.LineNumber) der
+    // ERSTEN Zeile in Source, die AMarker enthaelt; '' wenn nicht gefunden.
+    // Fuer selbstwartende Fundzeilen-Asserts: die Erwartung wird aus dem
+    // Test-SRC abgeleitet statt hartkodiert (Audit_TestQualitaet P2) -
+    // Layout-Aenderungen am SRC brechen den Assert nicht.
+    class function LineOf(const Source, AMarker: string): string; static;
   end;
 
 implementation
@@ -234,6 +245,11 @@ begin
         TDuplicateBlockDetector.AnalyzeUnit(Root, TempPath, Result);
         TWithStatementDetector.AnalyzeUnit(Root, TempPath, Result);
         TGotoStatementDetector.AnalyzeUnit(Root, TempPath, Result);
+        // Audit_TestQualitaet F2: UnusedLocal MUSS im File-Harness laufen -
+        // sein LooksLikeRealLocalVar-Gate (Nested-Routine-FP-Schutz) liest
+        // die Datei; im In-Memory-Harness (FindingsOf) ist Lines=nil und
+        // das Gate unbedingt True -> Produktionspfad ungetestet.
+        TUnusedLocalDetector.AnalyzeUnit(Root, TempPath, Result);
         TTabulationCharacterDetector.AnalyzeUnit(Root, TempPath, Result);
         TTooLongLineDetector.AnalyzeUnit(Root, TempPath, Result);
         TTrailingWhitespaceDetector.AnalyzeUnit(Root, TempPath, Result);
@@ -327,13 +343,28 @@ var
   OldConf  : TFindingConfidence;
   OldKinds : TFindingKinds;
   OldSev   : TLeakSeverity;
+  OldAuto  : Boolean;
+  OldIfdefOn      : Boolean;
+  OldIfdefDefines : TArray<string>;
+  DefName  : string;
 begin
   // Globalen Filter-State sichern: ApplyConfig (in Run) schreibt ihn aus dem
   // Request und laesst ihn stehen - andere Tests (uTestConfidenceFilter,
   // Raw-Harness) sollen den Prozess-Default unveraendert vorfinden.
+  // Audit_TestQualitaet F1: ApplyConfig mutiert AUSSER den 3 Filter-Globals
+  // auch AutoDiscoverCustomClasses + gLexerIfdefSkipEnabled/-Defines - alle
+  // mitsichern. NICHT restaurierbar: TCustomRuleDetector.ClearRules (Rules-
+  // Liste ist privat, kein Snapshot-API) - Fixtures mit Custom-Rules laden
+  // ihre Rules ohnehin pro Test in Setup (uTestCustomRuleDetector).
   OldConf  := uSCAConsts.FindingMinConfidence;
   OldKinds := uSCAConsts.DetectorEnabledKinds;
   OldSev   := uSCAConsts.DetectorMinSeverity;
+  OldAuto  := uSCAConsts.AutoDiscoverCustomClasses;
+  OldIfdefOn := gLexerIfdefSkipEnabled;
+  if Assigned(gLexerIfdefDefines) then
+    OldIfdefDefines := gLexerIfdefDefines.ToStringArray
+  else
+    OldIfdefDefines := nil;
   try
     Req := TScanRequest.Init;         // Direkt-Modus: alle Detektoren, lsHint
     Req.Scope         := ssSource;
@@ -355,6 +386,38 @@ begin
     uSCAConsts.FindingMinConfidence := OldConf;
     uSCAConsts.DetectorEnabledKinds := OldKinds;
     uSCAConsts.DetectorMinSeverity  := OldSev;
+    uSCAConsts.AutoDiscoverCustomClasses := OldAuto;
+    LexerIfdefClear;
+    for DefName in OldIfdefDefines do
+      LexerIfdefAddDefine(DefName);
+    gLexerIfdefSkipEnabled := OldIfdefOn;
+  end;
+end;
+
+class function TFindingHelper.FirstOf(Findings: TObjectList<TLeakFinding>;
+  Kind: TFindingKind): TLeakFinding;
+var
+  F: TLeakFinding;
+begin
+  Result := nil;
+  for F in Findings do
+    if F.Kind = Kind then Exit(F);
+end;
+
+class function TFindingHelper.LineOf(const Source, AMarker: string): string;
+var
+  SL : TStringList;
+  i  : Integer;
+begin
+  Result := '';
+  SL := TStringList.Create;
+  try
+    SL.Text := Source;
+    for i := 0 to SL.Count - 1 do
+      if Pos(AMarker, SL[i]) > 0 then
+        Exit(IntToStr(i + 1));
+  finally
+    SL.Free;
   end;
 end;
 

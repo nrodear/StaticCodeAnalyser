@@ -45,7 +45,7 @@ const SRC =
   'begin Bar; end;';
 var F: TObjectList<TLeakFinding>;
 begin
-  F := TFindingHelper.FindingsOf(SRC);
+  F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedLocalVar));
   finally F.Free; end;
 end;
@@ -58,7 +58,7 @@ const SRC =
   'begin Bar; end;';
 var F: TObjectList<TLeakFinding>;
 begin
-  F := TFindingHelper.FindingsOf(SRC);
+  F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkUnusedLocalVar));
   finally F.Free; end;
 end;
@@ -71,7 +71,7 @@ const SRC =
   'begin Bar; end;';
 var F: TObjectList<TLeakFinding>;
 begin
-  F := TFindingHelper.FindingsOf(SRC);
+  F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(3, TFindingHelper.Count(F, fkUnusedLocalVar));
   finally F.Free; end;
 end;
@@ -84,7 +84,7 @@ const SRC =
   'begin x := 42; end;';
 var F: TObjectList<TLeakFinding>;
 begin
-  F := TFindingHelper.FindingsOf(SRC);
+  F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedLocalVar));
   finally F.Free; end;
 end;
@@ -97,7 +97,7 @@ const SRC =
   'begin Bar(x); end;';
 var F: TObjectList<TLeakFinding>;
 begin
-  F := TFindingHelper.FindingsOf(SRC);
+  F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedLocalVar));
   finally F.Free; end;
 end;
@@ -111,7 +111,7 @@ const SRC =
   'begin Bar; end;';
 var F: TObjectList<TLeakFinding>;
 begin
-  F := TFindingHelper.FindingsOf(SRC);
+  F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedLocalVar));
   finally F.Free; end;
 end;
@@ -124,7 +124,7 @@ const SRC =
   'begin if x > 0 then Bar; end;';
 var F: TObjectList<TLeakFinding>;
 begin
-  F := TFindingHelper.FindingsOf(SRC);
+  F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedLocalVar));
   finally F.Free; end;
 end;
@@ -139,7 +139,7 @@ const SRC =
   'begin Bar(xLength); end;';
 var F: TObjectList<TLeakFinding>;
 begin
-  F := TFindingHelper.FindingsOf(SRC);
+  F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedLocalVar),
     'x ist ungenutzt; xLength ist Parameter und matched nicht als Wort');
   finally F.Free; end;
@@ -156,7 +156,7 @@ var
   Fnd : TLeakFinding;
   Hit : TLeakFinding;
 begin
-  F := TFindingHelper.FindingsOf(SRC);
+  F := TFindingHelper.FindingsOfFile(SRC);
   try
     Hit := nil;
     for Fnd in F do
@@ -182,7 +182,7 @@ var
   Fnd : TLeakFinding;
   Hit : TLeakFinding;
 begin
-  F := TFindingHelper.FindingsOf(SRC);
+  F := TFindingHelper.FindingsOfFile(SRC);
   try
     Hit := nil;
     for Fnd in F do
