@@ -41,9 +41,6 @@ implementation
 // noinspection-file BeginEndRequired, GroupedDeclaration, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
-uses
-  System.StrUtils;
-
 const
   MAX_LINES = 500;
 

@@ -28,9 +28,6 @@ implementation
 // noinspection-file CyclomaticComplexity, GroupedDeclaration, LongMethod, NestedTry, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
-uses
-  System.StrUtils;
-
 function IsExceptionDescendant(const TypeRef: string): Boolean;
 // True wenn das TypeRef-Feld eines Class-Nodes auf einer Exception-Klasse
 // basiert. Match auf 'Exception' oder klassische E-prefixed Vorfahren.

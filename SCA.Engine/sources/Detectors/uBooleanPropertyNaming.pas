@@ -44,7 +44,7 @@ type
 implementation
 
 uses
-  System.RegularExpressions, System.StrUtils,
+  System.RegularExpressions,
   uFileTextCache, uDetectorUtils;
 
 const

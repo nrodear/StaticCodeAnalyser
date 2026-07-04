@@ -40,7 +40,7 @@ unit uFieldLeak;
 interface
 
 uses
-  System.SysUtils, System.StrUtils, System.Generics.Collections,
+  System.SysUtils, System.Generics.Collections,
   uAstNode, uSCAConsts, uMethodd12, uLeakDetector2;
 
 type

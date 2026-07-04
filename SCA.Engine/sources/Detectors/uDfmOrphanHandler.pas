@@ -37,9 +37,6 @@ implementation
 // noinspection-file ConcatToFormat, GroupedDeclaration, MultipleExit, NilComparison, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
-uses
-  System.StrUtils;
-
 function IsSenderEventHandler(Method: TAstNode): Boolean;
 // Erster Param: Name 'Sender' (mit optionalem 'var '/'const '/'out '
 // Modifier-Prefix vom Parser), Typ 'TObject'.

@@ -25,7 +25,7 @@ unit uSQLInjectionScore;
 interface
 
 uses
-  System.SysUtils, System.StrUtils;
+  System.SysUtils;
 
 type
   TFixDifficulty = (fdTrivial, fdEasy, fdMedium, fdHard, fdVeryHard);
