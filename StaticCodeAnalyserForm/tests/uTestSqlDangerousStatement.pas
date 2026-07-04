@@ -62,7 +62,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkSqlDangerousStatement) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'genau 1 SqlDangerous-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'UPDATE customers SET locked=1'),
+      TFindingHelper.FirstOf(F, fkSqlDangerousStatement).LineNumber,
+      'Fund muss auf der SQL-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -75,7 +80,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkSqlDangerousStatement) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'genau 1 SqlDangerous-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'DELETE FROM orders'),
+      TFindingHelper.FirstOf(F, fkSqlDangerousStatement).LineNumber,
+      'Fund muss auf der SQL-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -88,7 +98,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkSqlDangerousStatement) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'genau 1 SqlDangerous-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'TRUNCATE TABLE log'),
+      TFindingHelper.FirstOf(F, fkSqlDangerousStatement).LineNumber,
+      'Fund muss auf der SQL-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -101,7 +116,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkSqlDangerousStatement) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'genau 1 SqlDangerous-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'DELETE FROM cache'),
+      TFindingHelper.FirstOf(F, fkSqlDangerousStatement).LineNumber,
+      'Fund muss auf der SQL-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -417,7 +437,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkSqlDangerousStatement) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'genau 1 SqlDangerous-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'UPDATE customers '' + ''SET locked=1'),
+      TFindingHelper.FirstOf(F, fkSqlDangerousStatement).LineNumber,
+      'Fund muss auf der SQL-Zeile liegen');
   finally F.Free; end;
 end;
 

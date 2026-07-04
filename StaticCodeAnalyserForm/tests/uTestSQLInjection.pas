@@ -313,7 +313,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSQLInjection),
+      'genau 1 SQLInjection-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'DELETE FROM t WHERE name'),
+      TFindingHelper.FirstOf(F, fkSQLInjection).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -396,7 +401,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSQLInjection),
+      'genau 1 SQLInjection-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'FormatUtf8'),
+      TFindingHelper.FirstOf(F, fkSQLInjection).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -409,7 +419,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSQLInjection),
+      'genau 1 SQLInjection-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'ExecuteFmt'),
+      TFindingHelper.FirstOf(F, fkSQLInjection).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 

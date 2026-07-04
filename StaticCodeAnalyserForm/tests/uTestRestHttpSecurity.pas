@@ -37,7 +37,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkHttpInsteadOfHttps) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkHttpInsteadOfHttps),
+      'genau 1 HttpInsteadOfHttps-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'http://api.example.com'),
+      TFindingHelper.FirstOf(F, fkHttpInsteadOfHttps).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -87,7 +92,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkDisabledTlsVerification) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDisabledTlsVerification),
+      'genau 1 DisabledTls-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'SecureProtocols := []'),
+      TFindingHelper.FirstOf(F, fkDisabledTlsVerification).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -101,7 +111,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkDisabledTlsVerification) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDisabledTlsVerification),
+      'genau 1 DisabledTls-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'IgnoreCertificateErrors := True'),
+      TFindingHelper.FirstOf(F, fkDisabledTlsVerification).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -115,7 +130,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkDisabledTlsVerification) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDisabledTlsVerification),
+      'genau 1 DisabledTls-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'OnVerifyPeer := nil'),
+      TFindingHelper.FirstOf(F, fkDisabledTlsVerification).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 

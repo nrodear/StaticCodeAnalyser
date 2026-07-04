@@ -49,7 +49,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkCommandInjection) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCommandInjection),
+      'genau 1 CommandInjection-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'ShellExecute(0'),
+      TFindingHelper.FirstOf(F, fkCommandInjection).LineNumber,
+      'Fund muss auf der Aufruf-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -64,7 +69,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkCommandInjection) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCommandInjection),
+      'genau 1 CommandInjection-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'CreateProcess(nil'),
+      TFindingHelper.FirstOf(F, fkCommandInjection).LineNumber,
+      'Fund muss auf der Aufruf-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -77,7 +87,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkCommandInjection) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCommandInjection),
+      'genau 1 CommandInjection-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'WinExec('),
+      TFindingHelper.FirstOf(F, fkCommandInjection).LineNumber,
+      'Fund muss auf der Aufruf-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -94,7 +109,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkCommandInjection) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCommandInjection),
+      'genau 1 CommandInjection-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'Winapi.ShellAPI.ShellExecute'),
+      TFindingHelper.FirstOf(F, fkCommandInjection).LineNumber,
+      'Fund muss auf der Aufruf-Zeile liegen');
   finally F.Free; end;
 end;
 

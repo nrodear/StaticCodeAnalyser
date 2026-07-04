@@ -56,7 +56,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkInsecureCryptoAlgorithm) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm),
+      'genau 1 InsecureCrypto-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, '''MD5'''),
+      TFindingHelper.FirstOf(F, fkInsecureCryptoAlgorithm).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -69,7 +74,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkInsecureCryptoAlgorithm) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm),
+      'genau 1 InsecureCrypto-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, '''SHA1'''),
+      TFindingHelper.FirstOf(F, fkInsecureCryptoAlgorithm).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -82,7 +92,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkInsecureCryptoAlgorithm) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm),
+      'genau 1 InsecureCrypto-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, '''DES'''),
+      TFindingHelper.FirstOf(F, fkInsecureCryptoAlgorithm).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -95,7 +110,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkInsecureCryptoAlgorithm) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm),
+      'genau 1 InsecureCrypto-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, '''RC4'''),
+      TFindingHelper.FirstOf(F, fkInsecureCryptoAlgorithm).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -108,7 +128,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkInsecureCryptoAlgorithm) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm),
+      'genau 1 InsecureCrypto-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, '''TLS1.0'''),
+      TFindingHelper.FirstOf(F, fkInsecureCryptoAlgorithm).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -121,7 +146,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkInsecureCryptoAlgorithm) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm),
+      'genau 1 InsecureCrypto-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, '''SSLv3'''),
+      TFindingHelper.FirstOf(F, fkInsecureCryptoAlgorithm).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -136,7 +166,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkInsecureCryptoAlgorithm) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm),
+      'genau 1 InsecureCrypto-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'THashMD5.GetHashString'),
+      TFindingHelper.FirstOf(F, fkInsecureCryptoAlgorithm).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -149,7 +184,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkInsecureCryptoAlgorithm) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm),
+      'genau 1 InsecureCrypto-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'TIdHashSHA1.Create'),
+      TFindingHelper.FirstOf(F, fkInsecureCryptoAlgorithm).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 

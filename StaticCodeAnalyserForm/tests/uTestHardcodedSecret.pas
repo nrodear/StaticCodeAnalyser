@@ -251,7 +251,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkHardcodedSecret) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkHardcodedSecret),
+      'genau 1 HardcodedSecret-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'pwd := '),
+      TFindingHelper.FirstOf(F, fkHardcodedSecret).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -264,7 +269,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkHardcodedSecret) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkHardcodedSecret),
+      'genau 1 HardcodedSecret-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'secret := '),
+      TFindingHelper.FirstOf(F, fkHardcodedSecret).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
@@ -277,7 +287,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkHardcodedSecret) >= 1);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkHardcodedSecret),
+      'genau 1 HardcodedSecret-Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'private_key := '),
+      TFindingHelper.FirstOf(F, fkHardcodedSecret).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 
