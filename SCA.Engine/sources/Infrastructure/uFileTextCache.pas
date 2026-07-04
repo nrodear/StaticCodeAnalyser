@@ -22,9 +22,15 @@ unit uFileTextCache;
 //     Lines := AcquireLines(FileName, Cached); try ... finally
 //       ReleaseLines(Lines, Cached); end;
 //
-// Lifecycle:
-//   gFileTextCache wird beim Start jedes Files in der Main-Loop angelegt
-//   und am Ende freigegeben. Pro File-Scope = pro Cache-Instanz.
+// Lifecycle (aktualisiert 2026-07-04, Audit Global-State):
+//   gFileTextCache ist EINE prozessweit stabile Instanz: beim ersten
+//   Scan-Start erzeugt (uStaticAnalyzer2), bei jedem weiteren Scan-Start
+//   nur GECLEART - die Objekt-Identitaet wechselt nie, haengende Referenzen
+//   auf das Cache-Objekt bleiben gueltig (kein Use-after-free mehr durch
+//   FreeAndNil + Re-Create). Waehrend des Scans leert der Main-Loop die
+//   Eintraege nach jedem File (Memory-Peak); nach dem Scan lebt der Cache
+//   absichtlich weiter (Suppression-/ContextHash-Phase fuellt ihn lazy
+//   nach) und wird erst im finalization-Block freigegeben.
 
 interface
 

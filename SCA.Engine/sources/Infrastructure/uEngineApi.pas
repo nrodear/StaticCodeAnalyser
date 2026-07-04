@@ -168,7 +168,8 @@ implementation
 uses
   System.IOUtils, System.SyncObjs,
   uStaticAnalyzer2, uRuleCatalog, uLexer, uCustomRuleDetector, uVcsChanges,
-  uRepoSettings, uBaseline, uExportSARIF, uExportSonarGeneric, uExportHtml;
+  uRepoSettings, uBaseline, uExportSARIF, uExportSonarGeneric, uExportHtml,
+  uPathOverrides;   // TPathOverrides.Clear im Direkt-Modus (Config-Riegel 2026-07-04)
 
 var
   // Serialisiert ALLE Engine-Scans prozessweit. Der Engine-State ist global
@@ -285,6 +286,26 @@ var
   Def      : string;
   Settings : TRepoSettings;
 begin
+  // 0) Config-Riegel (2026-07-04, Audit Global-State): den kompletten
+  //    uSCAConsts-Config-Satz auf Engine-Defaults zuruecksetzen, BEVOR der
+  //    Request-Config-Satz aufgebaut wird. Ziel-Problem: Scan 1 (INI-Modus)
+  //    setzt Schwellen/Listen, Scan 2 (Direkt-Modus) erbte sie bisher still.
+  //    Hier beweisbar sicher, weil beide Zweige danach ihren kompletten
+  //    Config-Satz neu etablieren:
+  //      * INI-Modus: ApplyDetectorThresholds ueberschreibt alle von ihm
+  //        gemanagten Schwellen/Filter/Listen ohnehin; die uebrigen Config-
+  //        Globals (LeakyClasses/Excludes, AutoDiscover, GodHandler-/DbInUi-
+  //        Caps, UIMax) setzt der einzige INI-Modus-Consumer (CLI) nie ->
+  //        Reset == bisheriger Prozess-Default == neutral.
+  //      * Direkt-Modus: dokumentierter Kontrakt "nur die Felder dieses
+  //        Requests, nativer Engine-Default fuer den Rest" - der galt bisher
+  //        nur fuer frische Prozesse, jetzt fuer jeden Run.
+  //    Form/IDE laufen mit Req.SkipConfig=True an ApplyConfig komplett
+  //    vorbei - deren SetupForRun-/ApplyDetectorConfig-Zustand (Register-
+  //    ToLeakyClasses etc.) bleibt unangetastet. Laeuft unter GEngineLock
+  //    (Run klammert ApplyConfig).
+  uSCAConsts.ResetEngineConfigDefaults;
+
   // 1) Detektor-/Schwellen-Config.
   if Req.ApplyRepoIni then
   begin
@@ -320,6 +341,11 @@ begin
     if Req.MaxFileBytes > 0 then
       uSCAConsts.DetectorMaxFileBytes := Req.MaxFileBytes;
     uSCAConsts.AutoDiscoverCustomClasses := Req.AutoDiscover;
+    // Direkt-Modus = keine INI: auch [PathOverrides] aus einem frueheren
+    // INI-Lauf desselben Prozesses duerfen hier nicht nachwirken (Config-
+    // Riegel 2026-07-04). Im INI-Zweig laedt ApplyDetectorThresholds die
+    // Overrides ohnehin frisch.
+    TPathOverrides.Clear;
   end;
 
   // 2) {$IFDEF}-aware Parsing (beide Modi - Request-Level statt globaler Fummelei)

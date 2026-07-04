@@ -19,7 +19,9 @@ unit uAnalyzeContext;
 //     AST-Cache, den sie referenzieren koennten).
 //   * FileTextCache: nur REFERENZIERT. Lebt ABSICHTLICH ueber das Scan-Ende
 //     hinaus (Post-Scan-Suppression + Fingerprint/ContextHash nutzen ihn);
-//     wird vom naechsten Scan-Start bzw. der unit-finalization freigegeben.
+//     wird vom naechsten Scan-Start GECLEART (Instanz bleibt stabil, seit
+//     2026-07-04 kein FreeAndNil+Re-Create mehr - kein Use-after-free-
+//     Fenster) und erst in der unit-finalization freigegeben.
 //     Der Context fasst ihn NICHT an.
 //   * DetectorTimings: gehoert dem AUFRUFER (CLI --time-detectors). Nur
 //     referenziert, NICHT freigegeben.

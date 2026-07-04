@@ -356,6 +356,13 @@ begin
   // mitsichern. NICHT restaurierbar: TCustomRuleDetector.ClearRules (Rules-
   // Liste ist privat, kein Snapshot-API) - Fixtures mit Custom-Rules laden
   // ihre Rules ohnehin pro Test in Setup (uTestCustomRuleDetector).
+  // ACHTUNG (2026-07-04, Context-Riegel): ApplyConfig ruft jetzt zusaetzlich
+  // ResetEngineConfigDefaults - der KOMPLETTE uSCAConsts-Config-Satz
+  // (Schwellen, LeakyClasses/MagicTrivials/... , PathOverrides im Direkt-
+  // Modus) steht nach einem Pipeline-Call auf Engine-Defaults. Fixtures
+  // duerfen sich NICHT darauf verlassen, dass eigene Presets dieser Globals
+  // einen FindingsViaPipeline-Aufruf ueberleben (heute tut das keins; wer es
+  // braucht, muss den Save/Restore-Block hier erweitern).
   OldConf  := uSCAConsts.FindingMinConfidence;
   OldKinds := uSCAConsts.DetectorEnabledKinds;
   OldSev   := uSCAConsts.DetectorMinSeverity;

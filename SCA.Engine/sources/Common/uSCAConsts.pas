@@ -5,6 +5,28 @@ interface
 uses
   System.Classes, SysUtils;
 
+const
+  // --- Engine-Defaults der Scan-Konfiguration (2026-07-04) ---
+  // Single Source of Truth: dieselben Konstanten speisen die Deklarations-
+  // Initializer der Config-Globals unten UND ResetEngineConfigDefaults.
+  // Eine Wert-Aenderung hier wirkt damit garantiert auf BEIDE Stellen
+  // (kein Drift zwischen Prozess-Start-Zustand und Reset-Zustand).
+  DEF_MAX_BODY_LINES            = 50;
+  DEF_MAX_STATEMENTS            = 30;
+  DEF_MAX_PARAMS                = 5;
+  DEF_MAX_NESTING               = 4;
+  DEF_MAX_CYCLOMATIC            = 10;
+  DEF_MIN_BLOCK_LINES           = 8;
+  DEF_MAX_LOCAL_VARS            = 200;
+  DEF_MAX_CHILDREN_RECURSIVE    = 5000;
+  DEF_MAX_FILE_BYTES            = 5 * 1024 * 1024;
+  DEF_MAX_GOD_HANDLER_EVENTS    = 5;
+  DEF_MAX_DB_IN_UI_FORM_HINT    = 3;
+  DEF_MAX_LINE_LENGTH           = 120;
+  DEF_MAX_CASE_BRANCHES         = 10;
+  DEF_UI_MAX_DISPLAYED_FINDINGS = 0;
+  DEF_AUTO_DISCOVER_CLASSES     = False;
+
 var
   Flags: Byte;
 
@@ -23,7 +45,7 @@ var
   // auf 'class(...)' Deklarationen und ergaenzt LeakyClasses um Custom-
   // Klassen die NICHT von TForm/TFrame/TComponent/TInterfacedObject erben.
   // Wird vom Aufrufer gesetzt (z.B. UI aus RepoSettings.AutoDiscoverClasses).
-  AutoDiscoverCustomClasses: Boolean = False;
+  AutoDiscoverCustomClasses: Boolean = DEF_AUTO_DISCOVER_CLASSES;
 
   // Globale Exclude-Liste: Klassen die der MemoryLeak-Detektor NICHT melden
   // soll, auch wenn sie in LeakyClasses landen wuerden. Wird vom Aufrufer
@@ -51,24 +73,24 @@ var
   // gesetzt (TRepoSettings.ApplyDetectorThresholds). Default-Werte spiegeln
   // die alten hardcoded Konstanten - wenn die INI keine Eintraege hat,
   // bleibt das Verhalten exakt wie vorher.
-  DetectorMaxBodyLines     : Integer = 50;     // uLongMethod
-  DetectorMaxStatements    : Integer = 30;     // uLongMethod sek. Schwelle
-  DetectorMaxParams        : Integer = 5;      // uLongParamList
-  DetectorMaxNesting       : Integer = 4;      // uDeepNesting (>4 = Fund)
-  DetectorMaxCyclomatic    : Integer = 10;     // uCyclomaticComplexity (>10 = Fund)
-  DetectorMinBlockLines    : Integer = 8;      // uDuplicateBlock
+  DetectorMaxBodyLines     : Integer = DEF_MAX_BODY_LINES;   // uLongMethod
+  DetectorMaxStatements    : Integer = DEF_MAX_STATEMENTS;   // uLongMethod sek. Schwelle
+  DetectorMaxParams        : Integer = DEF_MAX_PARAMS;       // uLongParamList
+  DetectorMaxNesting       : Integer = DEF_MAX_NESTING;      // uDeepNesting (>4 = Fund)
+  DetectorMaxCyclomatic    : Integer = DEF_MAX_CYCLOMATIC;   // uCyclomaticComplexity (>10 = Fund)
+  DetectorMinBlockLines    : Integer = DEF_MIN_BLOCK_LINES;  // uDuplicateBlock
   // uUninitVar Hard-Caps gegen pathologisch grosse Methoden:
   // Bei Ueberschreitung wird die Methode nicht analysiert (kein Flag,
   // kein Crash) - sichert Detector-Wall-Time gegen O(n)-Eskalation.
-  DetectorMaxLocalVars          : Integer = 200;
-  DetectorMaxChildrenRecursive  : Integer = 5000;
-  DetectorMaxFileBytes     : Integer = 5 * 1024 * 1024;  // uStaticAnalyzer2
-  DetectorMaxGodHandlerEvents : Integer = 5;             // uDfmGodHandler
-  DetectorMaxDbInUiFormHint   : Integer = 3;             // uDfmDataModuleSplitHint
+  DetectorMaxLocalVars          : Integer = DEF_MAX_LOCAL_VARS;
+  DetectorMaxChildrenRecursive  : Integer = DEF_MAX_CHILDREN_RECURSIVE;
+  DetectorMaxFileBytes     : Integer = DEF_MAX_FILE_BYTES;          // uStaticAnalyzer2
+  DetectorMaxGodHandlerEvents : Integer = DEF_MAX_GOD_HANDLER_EVENTS; // uDfmGodHandler
+  DetectorMaxDbInUiFormHint   : Integer = DEF_MAX_DB_IN_UI_FORM_HINT; // uDfmDataModuleSplitHint
                                                           // (ab N DB-Komponenten auf der Form
                                                           // empfehlen statt N Einzelmeldungen)
-  DetectorMaxLineLength       : Integer = 120;           // uTooLongLine
-  DetectorMaxCaseBranches     : Integer = 10;            // uCaseStatementSize
+  DetectorMaxLineLength       : Integer = DEF_MAX_LINE_LENGTH;      // uTooLongLine
+  DetectorMaxCaseBranches     : Integer = DEF_MAX_CASE_BRANCHES;    // uCaseStatementSize
 
   // UI-Schwelle: maximale Anzahl Befunde im Grid. TStringGrid wird ab
   // ~50k Zeilen spuerbar trag (interne Cell-Storage-Arrays + Scrollbar-
@@ -82,7 +104,7 @@ var
   //   Beide Consumer (uMainForm Standalone + uIDEAnalyserForm Plugin)
   //   pruefen `if UIMaxDisplayedFindings > 0` und ueberspringen das Cap
   //   bei 0 - kein weiterer Code-Aufruf noetig.
-  UIMaxDisplayedFindings : Integer = 0;
+  UIMaxDisplayedFindings : Integer = DEF_UI_MAX_DISPLAYED_FINDINGS;
 
   // Trivial-Liste fuer uMagicNumbers - Zahlen die NICHT als Magic-Number
   // gemeldet werden. Default: 0,1,2,-1,10,100. INI-Override moeglich.
@@ -891,6 +913,14 @@ function ConfidenceName(C: TFindingConfidence): string;
 function ParseConfidence(const S: string;
   ADefault: TFindingConfidence = fcMedium): TFindingConfidence;
 
+const
+  // Engine-Defaults der Filter-Globals unten - Teil des Default-Satzes von
+  // ResetEngineConfigDefaults (2026-07-04, s. Const-Block am Unit-Anfang;
+  // hier separat, weil TLeakSeverity/TFindingConfidence erst oben deklariert
+  // sind).
+  DEF_DETECTOR_MIN_SEVERITY  = lsHint;
+  DEF_FINDING_MIN_CONFIDENCE = fcMedium;
+
 var
   // Whitelist erlaubter Kinds fuer den Detector-Loop. Wird von
   // TRepoSettings.ApplyDetectorThresholds aus dem Profile (rules/
@@ -908,7 +938,7 @@ var
   //   lsError             = nur sichere Bugs / Vulnerabilities
   // Severity-Ordering: lsError=0 < lsWarning=1 < lsHint=2 -> ein
   // Detector wird geskippt wenn Ord(DetectorSev) > Ord(MinSeverity).
-  DetectorMinSeverity  : TLeakSeverity = lsHint;
+  DetectorMinSeverity  : TLeakSeverity = DEF_DETECTOR_MIN_SEVERITY;
 
   // Konfidenz-Schwellwert (Post-Filter). Befunde deren Confidence niedriger
   // ist als dieser Wert werden verworfen.
@@ -918,7 +948,29 @@ var
   // Ordering: fcLow=0 < fcMedium=1 < fcHigh=2 -> ein Befund faellt raus
   // wenn Ord(Confidence) < Ord(FindingMinConfidence). fkFileReadError ist
   // davon ausgenommen (Diagnose-Befund, vgl. uConfidenceFilter).
-  FindingMinConfidence : TFindingConfidence = fcMedium;
+  FindingMinConfidence : TFindingConfidence = DEF_FINDING_MIN_CONFIDENCE;
+
+// Setzt ALLE Scan-Konfigurations-Globals dieser Unit auf die dokumentierten
+// Engine-Defaults zurueck (2026-07-04, Audit Global-State):
+//   * skalare Detektor-Schwellen (DetectorMax*/DetectorMin*, DEF_*-Konstanten)
+//   * Filter (DetectorEnabledKinds/DetectorMinSeverity/FindingMinConfidence)
+//   * Flags (AutoDiscoverCustomClasses, UIMaxDisplayedFindings)
+//   * Konfigurations-Listen: Clear + Basisbefuellung (LeakyClasses,
+//     LeakyClassExcludes, DetectorMagicTrivials, DetectorFormatFunctions,
+//     DfmForbiddenClasses) - die Listen-OBJEKTE bleiben dabei stabil
+//     (kein Re-Create), haengende Referenzen bleiben gueltig.
+//
+// BEWUSST NICHT enthalten:
+//   * DiscoveredClasses/DiscoveredStaticClasses - Output-SAMMLER des Laufs,
+//     keine Konfiguration; Consumer leeren sie pro Run selbst (SetupForRun
+//     Schritt 7 / ApplyDetectorConfig).
+//   * Flags (Byte) - Parser-Zustands-Bitmaske (TSectionFlag), kein Config.
+//
+// Wird im initialization-Block gerufen (Startzustand = beweisbar derselbe
+// wie vor dem Refactoring) und von uEngineApi.TAnalysisSession.ApplyConfig
+// als Config-Riegel vor jedem Neuaufbau des Config-Satzes (verhindert dass
+// Scan 2 im Direkt-Modus still die INI-Schwellen von Scan 1 erbt).
+procedure ResetEngineConfigDefaults;
 
 type
   TSectionFlag = record
@@ -1159,9 +1211,58 @@ begin
     Result.AddStrings(LeakyClasses);
 end;
 
-procedure InitDefaultLeakyClasses;
+procedure CreateEngineConfigLists;
+// Erzeugt die Listen-OBJEKTE einmal pro Prozess (initialization) und setzt
+// ihre Objekt-Eigenschaften (CaseSensitive/Sorted/Duplicates). Die inhalt-
+// liche Basisbefuellung liegt in ResetEngineConfigDefaults - Aufteilung
+// 2026-07-04 (Audit Global-State): Erzeugung und Default-WERTE getrennt,
+// damit der Default-Satz jederzeit wiederherstellbar ist, ohne die Objekt-
+// Identitaet der Listen zu wechseln (haengende Referenzen bleiben gueltig).
+// (Vorher: InitDefaultLeakyClasses = Erzeugung + Befuellung in einem.)
+begin
+  LeakyClasses := TStringList.Create;
+  LeakyClasses.CaseSensitive := False;
+  LeakyClasses.Sorted        := True;
+  LeakyClasses.Duplicates    := dupIgnore;
+
+  LeakyClassExcludes := TStringList.Create;
+  LeakyClassExcludes.CaseSensitive := False;
+  LeakyClassExcludes.Sorted        := True;
+  LeakyClassExcludes.Duplicates    := dupIgnore;
+
+  DiscoveredClasses := TStringList.Create;
+  DiscoveredClasses.CaseSensitive := False;
+  DiscoveredClasses.Sorted        := True;
+  DiscoveredClasses.Duplicates    := dupIgnore;
+
+  DiscoveredStaticClasses := TStringList.Create;
+  DiscoveredStaticClasses.CaseSensitive := False;
+  DiscoveredStaticClasses.Sorted        := True;
+  DiscoveredStaticClasses.Duplicates    := dupIgnore;
+
+  DetectorMagicTrivials := TStringList.Create;
+  DetectorMagicTrivials.CaseSensitive := False;
+  DetectorMagicTrivials.Sorted        := True;
+  DetectorMagicTrivials.Duplicates    := dupIgnore;
+
+  DetectorFormatFunctions := TStringList.Create;
+  DetectorFormatFunctions.CaseSensitive := False;
+  DetectorFormatFunctions.Sorted        := True;
+  DetectorFormatFunctions.Duplicates    := dupIgnore;
+
+  DfmForbiddenClasses := TStringList.Create;
+  DfmForbiddenClasses.CaseSensitive := False;
+  DfmForbiddenClasses.Sorted        := True;
+  DfmForbiddenClasses.Duplicates    := dupIgnore;
+end;
+
+procedure ResetEngineConfigDefaults;
+// Kompletter Config-Default-Satz - Doku am Interface-Prototyp (2026-07-04).
+// Skalar-Defaults kommen aus den DEF_*-Konstanten (dieselben, die die
+// Deklarations-Initializer speisen) -> Reset-Zustand == Prozess-Start-
+// Zustand ist per Konstruktion garantiert.
 const
-  DEFAULTS: array of string = [
+  DEFAULT_LEAKY_CLASSES: array of string = [
     // RTL / VCL
     'TStringList', 'TList', 'TObjectList',
     'TDictionary', 'TObjectDictionary',
@@ -1189,56 +1290,70 @@ const
     'TSynMonitor', 'TSynLocker',
     'TSynBackgroundThreadMethod'
   ];
-begin
-  LeakyClasses := TStringList.Create;
-  LeakyClasses.CaseSensitive := False;
-  LeakyClasses.Sorted        := True;
-  LeakyClasses.Duplicates    := dupIgnore;
-  LeakyClasses.AddStrings(DEFAULTS);
-
-  LeakyClassExcludes := TStringList.Create;
-  LeakyClassExcludes.CaseSensitive := False;
-  LeakyClassExcludes.Sorted        := True;
-  LeakyClassExcludes.Duplicates    := dupIgnore;
-
-  DiscoveredClasses := TStringList.Create;
-  DiscoveredClasses.CaseSensitive := False;
-  DiscoveredClasses.Sorted        := True;
-  DiscoveredClasses.Duplicates    := dupIgnore;
-
-  DiscoveredStaticClasses := TStringList.Create;
-  DiscoveredStaticClasses.CaseSensitive := False;
-  DiscoveredStaticClasses.Sorted        := True;
-  DiscoveredStaticClasses.Duplicates    := dupIgnore;
-
   // Default-Trivial-Liste fuer uMagicNumbers.
-  DetectorMagicTrivials := TStringList.Create;
-  DetectorMagicTrivials.CaseSensitive := False;
-  DetectorMagicTrivials.Sorted        := True;
-  DetectorMagicTrivials.Duplicates    := dupIgnore;
-  DetectorMagicTrivials.AddStrings(['0', '1', '2', '3', '4', '5', '6', '7', '-1',
+  DEFAULT_MAGIC_TRIVIALS: array of string = [
+    '0', '1', '2', '3', '4', '5', '6', '7', '-1',
     '8', '10', '16', '24', '31', '32', '63', '64', '100', '128', '255', '256',
-    '512', '1024']);
-
-  // Default-Liste der Format-aehnlichen Funktionen fuer uFormatMismatch.
+    '512', '1024'];
+  // Default der Format-aehnlichen Funktionen fuer uFormatMismatch.
   // Lower-case (CaseSensitive=False), damit die Detector-Match-Logik
-  // direkt darauf operieren kann.
-  DetectorFormatFunctions := TStringList.Create;
-  DetectorFormatFunctions.CaseSensitive := False;
-  DetectorFormatFunctions.Sorted        := True;
-  DetectorFormatFunctions.Duplicates    := dupIgnore;
-  DetectorFormatFunctions.AddStrings(['format']);   // mORMot-Funcs bewusst aus (s.o.)
+  // direkt darauf operieren kann. mORMot-Funcs bewusst aus (s. Interface).
+  DEFAULT_FORMAT_FUNCTIONS: array of string = ['format'];
+begin
+  // Skalare Detektor-Schwellen.
+  DetectorMaxBodyLines         := DEF_MAX_BODY_LINES;
+  DetectorMaxStatements        := DEF_MAX_STATEMENTS;
+  DetectorMaxParams            := DEF_MAX_PARAMS;
+  DetectorMaxNesting           := DEF_MAX_NESTING;
+  DetectorMaxCyclomatic        := DEF_MAX_CYCLOMATIC;
+  DetectorMinBlockLines        := DEF_MIN_BLOCK_LINES;
+  DetectorMaxLocalVars         := DEF_MAX_LOCAL_VARS;
+  DetectorMaxChildrenRecursive := DEF_MAX_CHILDREN_RECURSIVE;
+  DetectorMaxFileBytes         := DEF_MAX_FILE_BYTES;
+  DetectorMaxGodHandlerEvents  := DEF_MAX_GOD_HANDLER_EVENTS;
+  DetectorMaxDbInUiFormHint    := DEF_MAX_DB_IN_UI_FORM_HINT;
+  DetectorMaxLineLength        := DEF_MAX_LINE_LENGTH;
+  DetectorMaxCaseBranches      := DEF_MAX_CASE_BRANCHES;
+  UIMaxDisplayedFindings       := DEF_UI_MAX_DISPLAYED_FINDINGS;
 
+  // Filter/Whitelist + Flags.
+  DetectorEnabledKinds      := [];   // leer = kein Filter, alle Detektoren
+  DetectorMinSeverity       := DEF_DETECTOR_MIN_SEVERITY;
+  FindingMinConfidence      := DEF_FINDING_MIN_CONFIDENCE;
+  AutoDiscoverCustomClasses := DEF_AUTO_DISCOVER_CLASSES;
+
+  // Konfigurations-Listen: Clear + Basisbefuellung. Assigned-Guards, damit
+  // der Aufruf auch vor CreateEngineConfigLists (bzw. nach finalization)
+  // nie crasht - dann sind nur die Skalare gesetzt.
+  if Assigned(LeakyClasses) then
+  begin
+    LeakyClasses.Clear;
+    LeakyClasses.AddStrings(DEFAULT_LEAKY_CLASSES);
+  end;
+  if Assigned(LeakyClassExcludes) then
+    LeakyClassExcludes.Clear;
+  if Assigned(DetectorMagicTrivials) then
+  begin
+    DetectorMagicTrivials.Clear;
+    DetectorMagicTrivials.AddStrings(DEFAULT_MAGIC_TRIVIALS);
+  end;
+  if Assigned(DetectorFormatFunctions) then
+  begin
+    DetectorFormatFunctions.Clear;
+    DetectorFormatFunctions.AddStrings(DEFAULT_FORMAT_FUNCTIONS);
+  end;
   // DfmForbiddenClasses bleibt leer per Default - der Detektor schweigt,
   // bis das Projekt eigene Klassen via analyser.ini eintraegt.
-  DfmForbiddenClasses := TStringList.Create;
-  DfmForbiddenClasses.CaseSensitive := False;
-  DfmForbiddenClasses.Sorted        := True;
-  DfmForbiddenClasses.Duplicates    := dupIgnore;
+  if Assigned(DfmForbiddenClasses) then
+    DfmForbiddenClasses.Clear;
 end;
 
 initialization
-  InitDefaultLeakyClasses;
+  // Reihenfolge: erst Listen-Objekte erzeugen, dann Default-Satz befuellen.
+  // Netto-Startzustand identisch zum frueheren InitDefaultLeakyClasses
+  // (reines Refactoring der Init, 2026-07-04).
+  CreateEngineConfigLists;
+  ResetEngineConfigDefaults;
 
 finalization
   if Assigned(LeakyClasses) then
