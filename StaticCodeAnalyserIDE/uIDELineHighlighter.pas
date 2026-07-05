@@ -23,8 +23,9 @@
 //                           FMarksByFile: TObjectDictionary<NormalizedPath,
 //                           TDictionary<Line, TFindingMark>>. SetAllFindings
 //                           ersetzt den gesamten Zustand atomar und loest
-//                           per InvalidateTopEditorLogicalLine einen
-//                           gezielten Repaint aller markierten Zeilen aus.
+//                           per InvalidateTopEditor EINEN Repaint des
+//                           sichtbaren Editors aus (P11a: vorher ein
+//                           Invalidate-Call pro Marker-Zeile).
 //                           PaintLine dispatcht ueber Context.FileName,
 //                           damit der User beim Tab-Wechsel die Befunde
 //                           der neuen Datei sieht ohne weiteren API-Call.
@@ -267,8 +268,10 @@ type
     function BuildMarkForLineGroup(Group: TList<TFindingMarkEntry>): TFindingMark;
   public
     // PUBLIC fuer TFindingEditorEvents — forciert Repaint aller markierten
-    // Zeilen via InvalidateTopEditorLogicalLine. Wird in EditorScrolled
-    // gerufen damit FRenderedRects nach dem Scroll wieder vollstaendig ist.
+    // Zeilen via InvalidateTopEditor (EIN Call fuer den ganzen sichtbaren
+    // Editor statt einem pro Marker, siehe Perf-Kommentar in der
+    // Implementation). Wird in EditorScrolled gerufen damit FRenderedRects
+    // nach dem Scroll wieder vollstaendig ist.
     procedure InvalidateAllLines;
     // PUBLIC fuer TLineTrackerNotifier — wird gerufen wenn die IDE einen
     // unserer Tracker.AddLine-Eintraege als geshifted meldet. ANewLine=-1
@@ -902,21 +905,21 @@ end;
 procedure TFindingHighlighter.InvalidateAllLines;
 var
   Svc      : INTACodeEditorServices;
-  Bucket   : TFileMarks;
-  Ln       : Integer;
 begin
   // Forciert Repaint aller markierten Zeilen quer ueber alle Dateien.
-  // InvalidateTopEditorLogicalLine triggert den Repaint im aktuell
-  // sichtbaren Editor - der Filename-Filter passiert dann in PaintLine
-  // ueber ShouldHighlight. Wir muessen daher nicht wissen, welche Datei
-  // gerade vor dem User liegt, sondern nur welche Line-Nummern ueberhaupt
-  // irgendwo gemerkt sind.
+  // Perf (2026-07-05): P11a - vorher ein InvalidateTopEditorLogicalLine
+  // pro Marker-Zeile ueber ALLE Dateien, d.h. O(Gesamt-Marker) einzelne
+  // IDE-Calls pro Scroll-Tick (nach einem Bulk-Scan schnell tausende).
+  // Jetzt EIN InvalidateTopEditor: invalidiert den kompletten sichtbaren
+  // Editor - ein Superset der frueheren Line-Rects, gezeichnet wird exakt
+  // dasselbe (PaintLine filtert weiterhin pro Zeile via ShouldHighlight,
+  // unmarkierte Zeilen malen nur ihren Default-Hintergrund neu). Der
+  // Filename-Filter passiert dadurch unveraendert in PaintLine - wir
+  // muessen nicht wissen, welche Datei gerade vor dem User liegt.
   if FMarksByFile.Count = 0 then Exit;
   try
     if not Supports(BorlandIDEServices, INTACodeEditorServices, Svc) then Exit;
-    for Bucket in FMarksByFile.Values do
-      for Ln in Bucket.Keys do
-        Svc.InvalidateTopEditorLogicalLine(Ln);
+    Svc.InvalidateTopEditor;
   except
   end;
 end;

@@ -193,7 +193,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  System.SysUtils, System.Generics.Defaults,
+  System.SysUtils, System.Character, System.Generics.Defaults,
   uAnalyserTypes;    // SeverityFromText, TFindingSeverity
 
 // Such-Schluesselworte pro Kind. Enthaelt sowohl die englische als auch
@@ -380,13 +380,61 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
+// Perf (2026-07-05): P11b - allokationsfreie Suche im Matches-Hot-Path.
+// ---------------------------------------------------------------------------
+
+// Lowert genau EIN UTF-16-Zeichen invariant (ASCII-Fast-Path, sonst
+// TCharHelper.ToLower aus System.Character). Kein Heap-Zugriff.
+// BEWUSST NICHT locale-sensitiv wie TStringHelper.ToLower (LCMapString):
+// die Filter-Treffermenge soll nicht von der Windows-Locale abhaengen
+// (Review 2026-07-05; Abweichung nur auf Sonder-Locales wie tr/az -
+// auf de/en ist das Mapping fuer alle BMP-Zeichen identisch).
+function LowerCharBmp(const AChar: Char): Char; inline;
+begin
+  if (AChar >= 'A') and (AChar <= 'Z') then
+    Result := Char(Word(AChar) + 32)
+  else if AChar < #128 then
+    Result := AChar
+  else
+    Result := AChar.ToLower;
+end;
+
+// Case-insensitives Contains OHNE String-Allokation. ANeedleLow ist bereits
+// lowercased (Criteria.SearchLow - der Aufrufer lowert einmal). Liefert
+// dasselbe Ergebnis wie Pos(ANeedleLow, AHaystack.ToLower) > 0, da ToLower
+// pro UTF-16-Einheit 1:1 mapped - nur eben ohne die Vollkopie des Strings.
+// Leere Needle -> False (Pos(''-Konvention), der Caller filtert das aber
+// schon per C.SearchLow <> '' weg.
+function ContainsLoweredNoAlloc(const ANeedleLow, AHaystack: string): Boolean;
+var
+  LenN, LenH : Integer;
+  i, j       : Integer;
+  First      : Char;
+begin
+  Result := False;
+  LenN := Length(ANeedleLow);
+  if LenN = 0 then Exit;
+  LenH := Length(AHaystack);
+  if LenH < LenN then Exit;
+  First := ANeedleLow[1];
+  for i := 1 to LenH - LenN + 1 do
+  begin
+    if LowerCharBmp(AHaystack[i]) <> First then Continue;
+    j := 2;
+    while (j <= LenN) and
+          (LowerCharBmp(AHaystack[i + j - 1]) = ANeedleLow[j]) do
+      Inc(j);
+    if j > LenN then Exit(True);
+  end;
+end;
+
+// ---------------------------------------------------------------------------
 // TFindingFilter
 // ---------------------------------------------------------------------------
 class function TFindingFilter.Matches(const F: TLeakFinding;
   const C: TFindingFilterCriteria): Boolean;
 var
-  Sev         : TFindingSeverity;
-  fileNameLow : string;
+  Sev : TFindingSeverity;
 begin
   // 1) Schweregrad-/Kind-Filter - direkter Enum-Pfad, kein String-Roundtrip
   Sev := SeverityFromKindLevel(F.Kind, F.Severity);
@@ -589,15 +637,22 @@ begin
   //    Methoden- oder Variablennamen steckt, "Bug" alle ftBug-Befunde.
   if C.SearchLow <> '' then
   begin
-    fileNameLow := ExtractFileName(F.FileName).ToLower;
-    if (Pos(C.SearchLow, fileNameLow)                 = 0) and
-       (Pos(C.SearchLow, F.FileName.ToLower)          = 0) and
-       (Pos(C.SearchLow, F.MethodName.ToLower)        = 0) and
-       (Pos(C.SearchLow, F.LineNumber.ToLower)        = 0) and
-       (Pos(C.SearchLow, F.TypeText.ToLower)          = 0) and
-       (Pos(C.SearchLow, F.MissingVar.ToLower)        = 0) and
-       (Pos(C.SearchLow, F.SeverityText.ToLower)      = 0) and
-       (Pos(C.SearchLow, KindSearchKeywords(F.Kind))  = 0) then
+    // Perf (2026-07-05): P11b - vorher 8 ToLower/ExtractFileName-String-
+    // Allokationen PRO Finding PRO Filterlauf (= pro Tastendruck im
+    // Suchfeld ueber die komplette Befundliste). ContainsLoweredNoAlloc
+    // lowert zeichenweise ohne Kopie - identische Treffermenge. Der
+    // fruehere separate ExtractFileName-Vergleich war redundant: der
+    // Basename ist ein Suffix von F.FileName, jeder Basename-Treffer traf
+    // damit zwangslaeufig auch den Volltext-Check auf F.FileName.
+    // KindSearchKeywords liefert lowercase String-Literale (keine
+    // Allokation) - dort bleibt das originale Pos.
+    if not ContainsLoweredNoAlloc(C.SearchLow, F.FileName)     and
+       not ContainsLoweredNoAlloc(C.SearchLow, F.MethodName)   and
+       not ContainsLoweredNoAlloc(C.SearchLow, F.LineNumber)   and
+       not ContainsLoweredNoAlloc(C.SearchLow, F.TypeText)     and
+       not ContainsLoweredNoAlloc(C.SearchLow, F.MissingVar)   and
+       not ContainsLoweredNoAlloc(C.SearchLow, F.SeverityText) and
+       (Pos(C.SearchLow, KindSearchKeywords(F.Kind)) = 0) then
       Exit(False);
   end;
 
@@ -637,45 +692,69 @@ class procedure TFindingSorter.Sort(List: TList<TLeakFinding>;
   const Config: TFindingSortConfig);
 var
   CapturedCfg: TFindingSortConfig;
+  Keys       : TDictionary<TLeakFinding, string>;
+  i          : Integer;
 begin
   if Config.Column < 0 then Exit;
+  if List.Count < 2 then Exit;   // nichts zu sortieren, der Comparator
+                                 // wuerde ohnehin nie feuern
 
   // Capture per Wert in lokale Var, damit der anonyme Vergleicher
   // nicht den Param-Const-Slot referenziert (lebt nur fuer die
   // Methode, nicht fuer die Closure).
   CapturedCfg := Config;
-  List.Sort(TComparer<TLeakFinding>.Construct(
-    function(const A, B: TLeakFinding): Integer
-    var
-      SA, SB: string;
-    begin
-      case CapturedCfg.Column of
-        0: Result := CompareText(FileKey(A, CapturedCfg.BaseDir),
-                                 FileKey(B, CapturedCfg.BaseDir));
-        1: Result := CompareText(A.MethodName, B.MethodName);
-        2: Result := StrToIntDef(A.LineNumber, 0)
-                   - StrToIntDef(B.LineNumber, 0);
-        3: Result := CompareText(A.TypeText, B.TypeText);
-        4: Result := CompareText(A.MissingVar, B.MissingVar);
-        5: Result := SeverityRank(A.SeverityText)
-                   - SeverityRank(B.SeverityText);
-      else
-        Result := 0;
-      end;
-      if CapturedCfg.Descending then Result := -Result;
 
-      // Sekundaer-Sortierung (immer aufsteigend) damit Reihenfolge
-      // bei gleichem Primaerschluessel deterministisch ist.
-      if Result = 0 then
+  // Perf (2026-07-05): P11c - Schwartzian Transform fuer den Datei-
+  // Schluessel: FileKey (ExtractRelativePath = Pfad-Zerlegung + String-
+  // Allokation) wurde vorher PRO VERGLEICH berechnet - O(n log n) mal,
+  // und bei Primaer-Gleichstand in der Sekundaer-Sortierung gleich noch
+  // einmal. Jetzt EINMAL pro Finding vorberechnet; der Comparator
+  // vergleicht nur noch die gecachten Strings (Pointer-Hash-Lookup).
+  // Gleiche Vergleichsfunktion auf denselben Keys -> byte-identische
+  // Sortierreihenfolge. Lifecycle: lokal pro Sort-Aufruf, kein
+  // persistenter State.
+  Keys := TDictionary<TLeakFinding, string>.Create(List.Count);
+  try
+    for i := 0 to List.Count - 1 do
+      Keys.AddOrSetValue(List[i], FileKey(List[i], CapturedCfg.BaseDir));
+
+    List.Sort(TComparer<TLeakFinding>.Construct(
+      function(const A, B: TLeakFinding): Integer
+      var
+        SA, SB: string;
       begin
-        SA := FileKey(A, CapturedCfg.BaseDir);
-        SB := FileKey(B, CapturedCfg.BaseDir);
-        Result := CompareText(SA, SB);
+        case CapturedCfg.Column of
+          0: Result := CompareText(Keys[A], Keys[B]);
+          1: Result := CompareText(A.MethodName, B.MethodName);
+          2: Result := StrToIntDef(A.LineNumber, 0)
+                     - StrToIntDef(B.LineNumber, 0);
+          3: Result := CompareText(A.TypeText, B.TypeText);
+          4: Result := CompareText(A.MissingVar, B.MissingVar);
+          5: Result := SeverityRank(A.SeverityText)
+                     - SeverityRank(B.SeverityText);
+        else
+          Result := 0;
+        end;
+        if CapturedCfg.Descending then Result := -Result;
+
+        // Sekundaer-Sortierung (immer aufsteigend) damit Reihenfolge
+        // bei gleichem Primaerschluessel deterministisch ist.
         if Result = 0 then
-          Result := StrToIntDef(A.LineNumber, 0)
-                  - StrToIntDef(B.LineNumber, 0);
-      end;
-    end));
+        begin
+          SA := Keys[A];
+          SB := Keys[B];
+          Result := CompareText(SA, SB);
+          if Result = 0 then
+            Result := StrToIntDef(A.LineNumber, 0)
+                    - StrToIntDef(B.LineNumber, 0);
+        end;
+      end));
+  finally
+    // Comparator feuert nur innerhalb von List.Sort - danach darf der
+    // Key-Cache sofort weg (die Closure haelt nur die Variable, nicht
+    // das Dictionary am Leben).
+    Keys.Free;
+  end;
 end;
 
 { TFindingFilter - Count-Helpers }
