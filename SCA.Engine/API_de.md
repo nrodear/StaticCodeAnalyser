@@ -11,7 +11,7 @@ komplette Analyse aufruft, ohne die internen Einheiten zu kennen.
 
 - **Package:** `SCA.Engine` (`requires rtl;` — keine VCL/FMX-Abhängigkeit)
 - **Version:** 0.9.8 (`uSCAConsts.SCA_VERSION`)
-- **Umfang:** ~174 Detektoren (Regel-IDs `SCA001`–`SCA183`)
+- **Umfang:** ~175 Detektoren (Regel-IDs `SCA001`–`SCA184`)
 
 ---
 

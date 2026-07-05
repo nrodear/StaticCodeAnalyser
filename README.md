@@ -11,7 +11,7 @@
 
 **Delphi static code analysis tool** and **linter** for **RAD Studio 12 (Athens)** —
 ships as an **IDE plugin** with a dockable tool window plus a **standalone Windows app**.
-AST-based analysis with **~165 detectors total**: ~143 Pascal checks for memory leaks,
+AST-based analysis with **~166 detectors total**: ~143 Pascal checks for memory leaks,
 SQL injection, code smells, security vulnerabilities and code duplication
 (including a **Sonar-Delphi-compatible** subset SCA060+), **plus a
 dedicated DFM scanner with 22 checks** built on its own DFM lexer + parser + component
@@ -37,7 +37,7 @@ Sonar setup required, running inside the IDE, with a Claude AI hand-off.**
 
 | Capability | Details |
 |------------|---------|
-| 🐛 **Bug detection** | ~143 Pascal detectors run against every `.pas` file (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 22 DFM detectors against every `.dfm` (dead event handlers, hard-coded DB credentials, circular master-detail, …) — **~165 total** |
+| 🐛 **Bug detection** | ~143 Pascal detectors run against every `.pas` file (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 23 DFM detectors against every `.dfm` (dead event handlers, hard-coded DB credentials, circular master-detail, unused components, …) — **~166 total** |
 | 🔐 **Security checks** | SQLInjection (score-based), HardcodedSecret, HardcodedPath |
 | 🧹 **Code smells** | LongMethod, MagicNumber, EmptyExcept, MissingFinally, DeadCode, DuplicateString/Block |
 | ⚡ **Incremental analysis** | "Branch-Changes" button: only the files modified in the Git/SVN branch — 200 ms instead of 60 s |
@@ -53,7 +53,7 @@ Sonar setup required, running inside the IDE, with a Claude AI hand-off.**
 
 ## Main features
 
-### 1. Static code analysis (~165 detectors total — ~143 Pascal + 22 DFM, Sonar taxonomy)
+### 1. Static code analysis (~166 detectors total — ~143 Pascal + 23 DFM, Sonar taxonomy)
 
 **Pascal AST checks (~130)**: **bugs** (MemoryLeak, NilDeref, DivByZero,
 FormatMismatch, ReversedForRange, SelfAssignment, VirtualCallInCtor,
@@ -203,7 +203,7 @@ reference: [docs/sonar-config.md](docs/sonar-config.md).
 
 ---
 
-## What is detected (~165 detectors — ~143 Pascal + 22 DFM)
+## What is detected (~166 detectors — ~143 Pascal + 23 DFM)
 
 Findings fall into one of **five Sonar categories**:
 
@@ -234,7 +234,7 @@ Every detector comes with a **before/after code example** in the help
 panel. Clicking a finding copies a **Markdown block ready for Claude AI**
 to the clipboard.
 
-For the **22 DFM-specific detectors** (DFM-DeadEventHandler,
+For the **23 DFM-specific detectors** (DFM-DeadEventHandler,
 DFM-HardcodedDBCredentials, DFM-CircularMasterDetail,
 DFM-MissingRequiredFieldBinding, DFM-SQLFromTEditText, …) and their
 fix hints: see [DETECTORS.md](DETECTORS.md).
@@ -795,7 +795,7 @@ For a typical 1 000-unit repository:
 | Lexer | ~5–15 ms | ~10 s |
 | Parser2 | ~10–50 ms | ~30 s |
 | ~130 Pascal detectors | ~10–60 ms | ~50 s |
-| DFM parser + 22 DFM detectors (per `.dfm`) | ~5–20 ms | ~5–10 s |
+| DFM parser + 23 DFM detectors (per `.dfm`) | ~5–20 ms | ~5–10 s |
 | Suppression sweep | — | <1 s |
 | **Total** | **~30–100 ms** | **~60–90 s** |
 
@@ -908,7 +908,7 @@ If you are evaluating this project, you may also be looking at:
 - **Pascal Analyzer (PAL)** — commercial. Overlapping detector set,
   but no DFM-aware checks, no Claude AI hand-off, no SARIF.
 - **DFMCheck / GExperts DFM-Check** — single-purpose DFM linters. The
-  22 DFM detectors in this project are a superset (graph-based
+  23 DFM detectors in this project are a superset (graph-based
   cross-form analysis, repo-wide form index, Pascal-AST coupling).
 - **DCC32 hints / warnings** — built-in compiler diagnostics. Useful
   but limited to syntactic and trivially-semantic checks; no

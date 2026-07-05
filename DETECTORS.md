@@ -7,12 +7,12 @@ specific to this tool.
 
 Status legend: ✅ implemented · 🟡 partial · 🔲 open
 
-**Summary:** 44 / 50 Sonar-rule slots complete (Critical + Reliability + Maintainability + Minor sections largely done) + 1 partial + 3 bonus + **22 DFM** detectors + **32 SonarDelphi-migration** (SCA120-152) + **9 mORMot-cluster** (SCA153-161) + ~60 SonarDelphi-compatible naming/formatting checks (SCA060-119) + **SCA164/165/166** (UnusedRoutine + UnusedSuppression + UninitVar-MVP) = **~165 detector kinds total** (delivered by ~158 pipeline classes; several classes emit multiple kinds — e.g. `uVisibilityCheck` → 4 kinds, `uDfmAnalysisRunner` → 22 DFM kinds).
+**Summary:** 44 / 50 Sonar-rule slots complete (Critical + Reliability + Maintainability + Minor sections largely done) + 1 partial + 3 bonus + **23 DFM** detectors + **32 SonarDelphi-migration** (SCA120-152) + **9 mORMot-cluster** (SCA153-161) + ~60 SonarDelphi-compatible naming/formatting checks (SCA060-119) + **SCA164/165/166** (UnusedRoutine + UnusedSuppression + UninitVar-MVP) = **~166 detector kinds total** (delivered by ~158 pipeline classes; several classes emit multiple kinds — e.g. `uVisibilityCheck` → 4 kinds, `uDfmAnalysisRunner` → 23 DFM kinds).
 
 Remaining 4 open slots all need type-inference / flow-analysis / cross-unit symbol resolution: #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI. **#16 UninitVar** has a conservative MVP (`SCA166`) — full path-sensitivity remains open for Phase 3.
 
 The 21 Pascal-AST detectors below follow the Sonar 50-rule taxonomy.
-The **22 DFM detectors** in the dedicated section are form-file
+The **23 DFM detectors** in the dedicated section are form-file
 specific and do not appear in the Sonar catalogue — they operate on
 the DFM lexer + parser + component graph (and FormBinder for
 Pascal-AST coupling) introduced with v0.10.0. The **SonarDelphi-
@@ -147,12 +147,12 @@ Sonar-50 catalogue
   → 48 of 50 Sonar rules backed by Pascal-AST detector code,
     45 of those fully complete.
 
-📐 DFM detectors:                  22 (all complete)
+📐 DFM detectors:                  23 (all complete)
 🛡 SonarDelphi-migration:          12 (SCA120-131, all complete)
 🏛 mORMot-cluster:                  9 (SCA153-161, all complete)
 🧩 SonarDelphi naming/formatting:  ~60 (SCA060-119, see sca-rules.json)
 
-🎯 Grand total: 161 detector kinds (~130 pipeline classes).
+🎯 Grand total: 162 detector kinds (~130 pipeline classes).
 ```
 
 ---
@@ -214,6 +214,12 @@ help panel and DUnitX tests.
 | D18 | **DfmDefaultName** | Component still has its default name (`Button1`, `Edit2`, …) | Code Smell | `uDfmDefaultName` |
 | D19 | **DfmHardcodedCaption** | UI-visible string (`Caption`, `Hint`, `Text`, …) is a literal in the DFM instead of going through `resourcestring` / dxgettext | Code Smell | `uDfmHardcodedCaption` |
 | D20 | **DfmHardcodedDbCreds extras** | _(see D8 — same detector, separate finding kind for parameter values vs. ConnectionString)_ | Vulnerability | `uDfmHardcodedDbCreds` |
+
+### Dead-component cluster (1) — unreferenced components
+
+| # | Rule (`fk…` id) | Description | Type | Unit |
+|---|-----------------|-------------|------|------|
+| D21 | **DfmComponentUnused** (SCA184) | Component declared in the DFM is never referenced — not in the form's own code, not by another unit via the global form variable (`Form1.Comp`, resolved through `TSymbolReferenceIndex`), and not by another component inside the DFM (`DataSource=`, `Action=`, …). Likely dead after refactoring. Ships at `fcLow` (below the default `fcMedium` confidence filter — opt-in via `--min-confidence low`); emits nothing without the repo-wide symbol index. Persistent `TField`s, embedded frames, and `FindComponent`-by-name units are deliberately skipped in v1. Known v1 gap: cross-unit **mutations** where the component is a middle chain token (`Form.Comp.Prop := x` / `.Method`) are not yet recognised. | Code Smell | `uDfmComponentUnused` |
 
 ---
 

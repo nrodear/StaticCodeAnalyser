@@ -8,7 +8,65 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-(no entries yet — next release will list here.)
+Changes since **v0.9.8**. Detector roster grows from 183 to **184 rules**
+(`SCA001`–`SCA184`); DFM detectors 22 → **23**.
+
+### Added
+
+- **SCA184 `DfmComponentUnused`** — new DFM detector: flags a component
+  declared in a `.dfm` that is never referenced — not in the form's own
+  code, not from another unit via the global form variable
+  (`Form1.Comp`, resolved through the repo-wide symbol index), and not by
+  another component inside the DFM (`DataSource=`, `Action=`, …). Likely
+  dead after refactoring. Ships at `fcLow` (opt-in via
+  `--min-confidence low`); emits nothing without the cross-unit symbol
+  index. Persistent `TField`s, embedded frames and `FindComponent`-by-name
+  units are deliberately skipped in v1.
+- **CLI stdout/stderr redirect support** — `sca.exe … > log.txt` and
+  pipes now land in the redirect target (previously bound to `CONOUT$`,
+  which ignored redirects). Works even without a parent console (CI
+  runners / mintty, where output was previously lost). The redirect path
+  gets a 64 KB output buffer.
+
+### Changed
+
+- **Performance** — full-profile corpus scan ~263 s → **~230 s** (12.8k
+  files) via a per-scan strip cache (~17 detectors share one strip
+  result), a single-pass token pre-filter (was ~82 full-text scans per
+  file), stat-per-scan-generation in the file-text cache, and
+  loop-invariant hoists in the heaviest detectors (`uCanBeClassMethod`
+  O(n²)→set lookup, `uUninitVar`, `uVisibilityCheck`,
+  `uSymbolReferenceIndex`, `uUseAfterFree`). The **SARIF export now
+  streams** per finding instead of building the whole JSON DOM in memory.
+  IDE-plugin hot paths trimmed (scroll-invalidate, search filter, sort).
+- **False-positive reduction (real-world corpus, bugs-only profile)** —
+  `SCA003` (SQL injection), `SCA008` (nil-deref), `SCA001` (leak),
+  `SCA004` (hard-coded secret) hardened: **−29 % false positives** on the
+  reference corpus with **all 37 verified true-positives preserved**.
+  Includes an ORM / SQL-builder gate (mORMot `:(%):` inline-binding,
+  quoting-helper calls, ORM meta-paths).
+- **SCA166 `UninitVar`** — a method call on a record-typed local
+  (`match.Prepare(…)`; `Self` is passed as `var`) now counts as
+  initialisation, fixing a systematic false positive on mORMot
+  record-with-methods. Records are distinguished from classes via the AST,
+  so a genuine "method on an uninitialised class instance" bug still flags.
+
+### Fixed
+
+- **UnusedSuppression** — stale `// noinspection` markers in
+  finding-free files are now reported; the finding points at the `.pas`
+  host line for DFM findings; a file-wide + per-line marker covering the
+  same finding no longer mis-reports the per-line marker. An unreadable
+  marker-host file now emits a diagnostic finding instead of silently
+  disabling all suppressions for that file.
+- **Parser** — a `type` / `const` / `var` section between top-level
+  routine implementations no longer truncates the rest of the file's AST;
+  `{$IFDEF}`-nested method bodies (Synapse `blcksock`-style) no longer
+  absorb the following methods.
+- **Build hygiene** — Engine source search-paths removed from the package
+  consumers (`SCA.SharedUI` / IDE plugin), main `.res` files untracked
+  (regenerated per build), sample fixtures dropped from the shipped
+  standalone EXE; Delphi 11 compilation restored (`uCompatSet` shim).
 
 ## [v0.9.8] - 2026-06-10 - Phase 1-4 + Hardening v3 + v4 + FP-Reduction Sprint (since v0.9.7)
 

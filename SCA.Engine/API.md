@@ -11,7 +11,7 @@ knowing the internal units.
 
 - **Package:** `SCA.Engine` (`requires rtl;` — no VCL/FMX dependency)
 - **Version:** 0.9.8 (`uSCAConsts.SCA_VERSION`)
-- **Scope:** ~174 detectors (rule IDs `SCA001`–`SCA183`)
+- **Scope:** ~175 detectors (rule IDs `SCA001`–`SCA184`)
 
 ---
 

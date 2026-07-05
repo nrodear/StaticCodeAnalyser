@@ -6,12 +6,12 @@ Orientiert sich am Sonar-50er-Katalog plus eigene Bonus-Detektoren.
 
 Status: ✅ implementiert | 🟡 teilweise | 🔲 offen
 
-**Zusammenfassung:** 44 / 50 Sonar-Regel-Slots vollständig (Critical + Reliability + Maintainability + Minor weitestgehend abgedeckt) + 1 teilweise + 3 Bonus + **22 DFM-Detektoren** + **32 SonarDelphi-Migration** (SCA120-152) + **9 mORMot-Cluster** (SCA153-161) + ~60 SonarDelphi-kompatible Naming-/Formatting-Checks (SCA060-119) + **SCA164/165/166** (UnusedRoutine + UnusedSuppression + UninitVar-MVP) = **~165 Detektor-Kinds insgesamt** (geliefert von ~158 Pipeline-Klassen; einige Klassen emittieren mehrere Kinds — z. B. `uVisibilityCheck` → 4 Kinds, `uDfmAnalysisRunner` → 22 DFM-Kinds).
+**Zusammenfassung:** 44 / 50 Sonar-Regel-Slots vollständig (Critical + Reliability + Maintainability + Minor weitestgehend abgedeckt) + 1 teilweise + 3 Bonus + **23 DFM-Detektoren** + **32 SonarDelphi-Migration** (SCA120-152) + **9 mORMot-Cluster** (SCA153-161) + ~60 SonarDelphi-kompatible Naming-/Formatting-Checks (SCA060-119) + **SCA164/165/166** (UnusedRoutine + UnusedSuppression + UninitVar-MVP) = **~166 Detektor-Kinds insgesamt** (geliefert von ~158 Pipeline-Klassen; einige Klassen emittieren mehrere Kinds — z. B. `uVisibilityCheck` → 4 Kinds, `uDfmAnalysisRunner` → 23 DFM-Kinds).
 
 Verbleibende 4 offene Slots brauchen Typ-Inferenz / Flow-Analyse / Cross-Unit-Symbol-Resolution: #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI. **#16 UninitVar** ist als konservativer MVP (`SCA166`) ausgeliefert — Full Path-Sensitivity bleibt fuer Phase 3 offen.
 
 Die 21 Pascal-AST-Detektoren unten folgen der Sonar-50-Taxonomie.
-Die **22 DFM-Detektoren** in eigenem Abschnitt sind formdatei-
+Die **23 DFM-Detektoren** in eigenem Abschnitt sind formdatei-
 spezifisch und gehören nicht in den Sonar-Katalog — sie arbeiten
 auf dem DFM-Lexer + Parser + Komponentengraph (sowie FormBinder
 für die Pascal-AST-Kopplung), eingeführt mit v0.10.0. Das
@@ -146,12 +146,12 @@ Sonar-50-Katalog
   → 48 von 50 Sonar-Regeln als Pascal-AST-Detektor-Code vorhanden,
     davon 45 vollständig.
 
-📐 DFM-Detektoren:                  22 (alle vollständig)
+📐 DFM-Detektoren:                  23 (alle vollständig)
 🛡 SonarDelphi-Migration:           12 (SCA120-131, alle vollständig)
 🏛 mORMot-Cluster:                   9 (SCA153-161, alle vollständig)
 🧩 SonarDelphi Naming/Formatting:  ~60 (SCA060-119, siehe sca-rules.json)
 
-🎯 Gesamt: ~165 Detektor-Kinds (~158 Pipeline-Klassen).
+🎯 Gesamt: ~166 Detektor-Kinds (~158 Pipeline-Klassen).
 ```
 
 ---
@@ -213,6 +213,12 @@ Fix-Hints im Hilfe-Panel und haben DUnitX-Tests.
 | D18 | **DfmDefaultName** | Komponente hat noch ihren Default-Namen (`Button1`, `Edit2`, …) | Code Smell | `uDfmDefaultName` |
 | D19 | **DfmHardcodedCaption** | UI-sichtbarer String (`Caption`, `Hint`, `Text`, …) als Literal im DFM statt via `resourcestring` / dxgettext | Code Smell | `uDfmHardcodedCaption` |
 | D20 | **DfmHardcodedDbCreds — Param-Variante** | _(siehe D8 — selbe Unit, separate Finding-Kind für Param-Values vs. ConnectionString)_ | Vulnerability | `uDfmHardcodedDbCreds` |
+
+### Cluster Tote Komponenten (1) — nicht referenzierte Komponenten
+
+| # | Regel (`fk…`-ID) | Beschreibung | Typ | Unit |
+|---|------------------|--------------|-----|------|
+| D21 | **DfmComponentUnused** (SCA184) | Im DFM deklarierte Komponente wird nirgends referenziert — nicht im Code der Form, nicht aus einer anderen Unit über die globale Form-Variable (`Form1.Comp`, aufgelöst via `TSymbolReferenceIndex`) und nicht von einer anderen Komponente im DFM (`DataSource=`, `Action=`, …). Vermutlich nach einem Refactoring übrig. Läuft als `fcLow` (unter dem Default-`fcMedium`-Confidence-Filter — opt-in via `--min-confidence low`); ohne repo-weiten Symbol-Index kein Fund. Persistente `TField`s, eingebettete Frames und Units mit `FindComponent`-by-Name werden in v1 bewusst übersprungen. Bekannte v1-Lücke: Cross-Unit-**Mutationen**, bei denen die Komponente ein mittleres Kettenglied ist (`Form.Comp.Prop := x` / `.Method`), werden noch nicht erkannt. | Code Smell | `uDfmComponentUnused` |
 
 ---
 
