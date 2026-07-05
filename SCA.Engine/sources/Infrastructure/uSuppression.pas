@@ -31,17 +31,13 @@ uses
   uSuppressionTelemetry;
 
 type
-  TSuppressedKinds = set of TFindingKind;
-
-  // Suppression-Marker: '// noinspection X' an einer Quell-Zeile, das auf
-  // eine Target-Zeile (= naechste Code-Zeile danach) zielt. Wird vom
-  // Filter konsumiert wenn dort ein Finding der passenden Kind-Sets liegt.
-  TSuppressionMarker = record
-    MarkerLine : Integer;        // Zeile mit dem '// noinspection ...'
-    TargetLine : Integer;        // Zeile auf die der Marker zielt
-    Kinds      : TSuppressedKinds;
-    Consumed   : Boolean;        // True wenn der Marker mind. 1 Finding suppresst hat
-  end;
+  // 2026-07-05 (Audit_CodeReview #2): TSuppressionMarker + Kind-Set leben
+  // jetzt in uSCAConsts - TAnalyzeContext traegt die per-Scan-Marker-
+  // Collection und darf uSuppression nicht uses'en (Interface-Zyklus ueber
+  // uDetectorUtils/P1-Strip-Cache). Aliase halten alle bestehenden
+  // Konsumenten dieser Unit quelltext-stabil.
+  TSuppressedKinds = uSCAConsts.TFindingKinds;
+  TSuppressionMarker = uSCAConsts.TSuppressionMarker;
 
   TSuppression = class
   public
@@ -49,9 +45,43 @@ type
     // zusaetzlich fkUnusedSuppression-Findings fuer Marker die KEIN
     // Finding suppress't haben - Hinweis fuer den User die Suppression
     // zu entfernen.
+    //
+    // APreMarkers (optional, Audit #2a 2026-07-05): die zur SCAN-Zeit
+    // eingesammelte Marker-Collection (ParseLeaks-Main-Loop via
+    // CollectMarkersForScan; Key = Marker-HOST-Pfad). Wenn gesetzt:
+    //   * wird als FileMarkers-Quelle benutzt (Caller behaelt Ownership -
+    //     wird hier NICHT freigegeben), kein lazy BuildMarkers mehr;
+    //   * laeuft die Unused-Emission auch bei Findings.Count=0 - stale
+    //     Marker in befund-freien Dateien werden damit endlich gemeldet.
+    // nil = Legacy-Verhalten (lazy Marker-Build im Match-Zweig).
     class procedure ApplyToFindings(
-      Findings: TObjectList<TLeakFinding>); static;
+      Findings: TObjectList<TLeakFinding>;
+      APreMarkers: TObjectDictionary<string,
+        TList<TSuppressionMarker>> = nil); static;
+
+    // Scan-Zeit-Collection (Audit #2a, 2026-07-05): sammelt die Marker
+    // der gerade gescannten Datei in das per-Scan-Dictionary (Key =
+    // Marker-HOST-Pfad, ResolveMarkerHostFile). Gedacht fuer den
+    // ParseLeaks-Main-Loop, solange der Dateitext noch heiss im
+    // gFileTextCache liegt. Perf-Guard: billiger case-insensitiver
+    // 'noinspection'-Substring-Check pro Zeile (allokationsfrei) BEVOR
+    // BuildMarkers laeuft. Dateien ohne Marker landen NICHT im Dictionary.
+    class procedure CollectMarkersForScan(const FileName: string;
+      AMarkers: TObjectDictionary<string,
+        TList<TSuppressionMarker>>); static;
   private
+    // Allokationsfreier case-insensitiver Substring-Check auf
+    // 'noinspection' (ASCII-Folding reicht - der Tag selbst ist ASCII).
+    // Bewusst OHNE Kommentar-Kontext: nur billiger Vorfilter, die
+    // praezise Auswertung macht BuildMarkers/ParseMarkerLine.
+    // Hinweis (dokumentierte Design-Abweichung): der von EnsureTokenSet
+    // (P4, uStaticAnalyzer2) gelowerte Ganztext ist NICHT wiederverwendbar
+    // - er ist ein Lokal der nested Function und beim Collect-Zeitpunkt
+    // laengst freigegeben; ihn zu persistieren hiesse eine Ganztext-Kopie
+    // pro Datei ueber RunAllDetectors hinaus zu halten. Der Zeilen-Scan
+    // hier ist billiger als Pos(LowerCase(...)) und kopiert nichts.
+    class function ContainsNoInspectionToken(
+      const Line: string): Boolean; static;
     // Pruft eine Zeile mit String-/Kommentar-Kontext-Awareness auf
     // `// noinspection X`. State wird vom Caller zwischen Zeilen
     // mitgefuehrt (offene { ... } / (* ... *)-Bloecke). Schuetzt
@@ -86,13 +116,17 @@ type
     class procedure NoteReadFailure(const AHostFile: string;
       AFailedFiles: TStrings); static;
     // Phase 1 von ApplyToFindings: entfernt unterdrueckte Findings in-place
-    // und markiert die zugehoerigen Marker als Consumed.
+    // und markiert die zugehoerigen Marker als Consumed. FileMarkers ist
+    // seit 2026-07-05 IMMER nach Marker-HOST-Pfad gekeyt (Audit #2b).
+    // APreBuilt=True: FileMarkers kam fertig aus der Scan-Zeit-Collection -
+    // KEIN lazy BuildMarkers, nur Lookup via ResolveMarkerHostFile.
     class procedure RemoveSuppressedFindings(
       Findings: TObjectList<TLeakFinding>;
       FileMaps: TObjectDictionary<string, TDictionary<Integer,
         TSuppressedKinds>>;
       FileMarkers: TObjectDictionary<string,
         TList<TSuppressionMarker>>;
+      APreBuilt: Boolean;
       AFailedFiles: TStrings); static;
     // Phase 2: emittiert fkUnusedSuppression-Findings fuer alle Marker
     // die nichts unterdrueckt haben.
@@ -273,6 +307,81 @@ begin
     AFailedFiles.Add(AHostFile);
 end;
 
+class function TSuppression.ContainsNoInspectionToken(
+  const Line: string): Boolean;
+// Case-insensitiver 'noinspection'-Substring-Scan ohne Allokation (kein
+// LowerCase/Copy der Zeile). Semantik wie Pos('noinspection',
+// LowerCase(Line)) > 0 fuer ASCII - Nicht-ASCII-Zeichen matchen den
+// ASCII-Tag ohnehin nie. Deckt 'noinspection-file' mit ab (Prefix).
+const
+  TOKEN = 'noinspection';                    // lowercase, 12 Zeichen
+var
+  i, j, MaxStart : Integer;
+  C              : Char;
+begin
+  Result := False;
+  MaxStart := Length(Line) - Length(TOKEN) + 1;
+  for i := 1 to MaxStart do
+  begin
+    C := Line[i];
+    if (C <> 'n') and (C <> 'N') then Continue;
+    j := 1;
+    while j < Length(TOKEN) do
+    begin
+      C := Line[i + j];
+      if (C >= 'A') and (C <= 'Z') then
+        C := Char(Ord(C) + 32);              // ASCII-Lower ohne Alloc
+      if C <> TOKEN[j + 1] then Break;
+      Inc(j);
+    end;
+    if j = Length(TOKEN) then Exit(True);
+  end;
+end;
+
+class procedure TSuppression.CollectMarkersForScan(const FileName: string;
+  AMarkers: TObjectDictionary<string, TList<TSuppressionMarker>>);
+// Scan-Zeit-Collection (Audit #2a, 2026-07-05) - siehe Interface-Kommentar.
+// Wird im ParseLeaks-Main-Loop pro erfolgreich gescannter Datei gerufen,
+// SOLANGE der Dateitext noch im gFileTextCache liegt (AcquireLines =
+// Cache-Hit, kein zusaetzliches I/O). AFailedFiles bewusst nil: ein hier
+// nicht lesbarer Host wird zur Apply-Zeit von BuildMap (#10b) gemeldet,
+// sofern die Datei Findings hat - exakt das Legacy-Diagnose-Verhalten.
+var
+  HostFile : string;
+  Lines    : TStringList;
+  Cached   : Boolean;
+  HasToken : Boolean;
+  i        : Integer;
+  List     : TList<TSuppressionMarker>;
+begin
+  if AMarkers = nil then Exit;
+  HostFile := ResolveMarkerHostFile(FileName);
+  if AMarkers.ContainsKey(HostFile) then Exit;   // schon eingesammelt
+  Lines := AcquireLines(HostFile, Cached);
+  if Lines = nil then Exit;                      // unlesbar -> s. Kommentar oben
+  try
+    // Perf-Guard: erst der billige Substring-Check, BuildMarkers (mit
+    // ScanCodeLine-State-Maschine) nur wenn der Tag ueberhaupt vorkommt.
+    HasToken := False;
+    for i := 0 to Lines.Count - 1 do
+      if ContainsNoInspectionToken(Lines[i]) then
+      begin
+        HasToken := True;
+        Break;
+      end;
+  finally
+    ReleaseLines(Lines, Cached);
+  end;
+  if not HasToken then Exit;                     // kein Eintrag ohne Marker
+
+  List := TList<TSuppressionMarker>.Create;
+  BuildMarkers(HostFile, List, nil);             // Cache-Hit (Text noch heiss)
+  if List.Count = 0 then
+    List.Free                                    // Token war Prosa/String-Payload
+  else
+    AMarkers.Add(HostFile, List);                // Ownership -> Dictionary
+end;
+
 class function TSuppression.BuildMap(const FileName: string;
   AFailedFiles: TStrings):
   TDictionary<Integer, TSuppressedKinds>;
@@ -327,8 +436,8 @@ begin
     begin
       if not ParseMarkerLine(Lines[i], ScanState, Kinds, FileWide) then Continue;
       // File-Wide-Marker: in Line 0 ablegen - RemoveSuppressedFindings
-      // pruefst Line 0 als generelle File-Vorgabe ZUSAETZLICH zum
-      // line-spezifischen Match. WIP - Konsumer-Logik kommt im naechsten Schritt.
+      // prueft Line 0 als generelle File-Vorgabe ZUSAETZLICH zum
+      // line-spezifischen Match.
       if FileWide then
       begin
         MergeKindsAt(Result, 0, Kinds);
@@ -410,7 +519,7 @@ begin
     begin
       if not ParseMarkerLine(Lines[i], ScanState, Kinds, FileWide) then Continue;
       // File-Wide-Marker: TargetLine = 0 (Sonderwert fuer file-weit).
-      // WIP - RemoveSuppressedFindings konsumiert Line 0 noch nicht.
+      // RemoveSuppressedFindings tagt sie beim File-Wide-Match als Consumed.
       if FileWide then
       begin
         M.MarkerLine := i + 1;
@@ -451,6 +560,7 @@ class procedure TSuppression.RemoveSuppressedFindings(
   Findings: TObjectList<TLeakFinding>;
   FileMaps: TObjectDictionary<string, TDictionary<Integer, TSuppressedKinds>>;
   FileMarkers: TObjectDictionary<string, TList<TSuppressionMarker>>;
+  APreBuilt: Boolean;
   AFailedFiles: TStrings);
 var
   i, j, Line     : Integer;
@@ -462,6 +572,7 @@ var
   FileWideKinds  : TSuppressedKinds;
   Match          : Boolean;
   TargetForMark  : Integer;
+  HostFile       : string;
   Drop           : TArray<Boolean>;
   Dropped        : Integer;
   r, w           : Integer;
@@ -507,29 +618,50 @@ begin
     end;
     if not Match then Continue;
 
-    // Marker-Liste fuer diese Datei aufbauen wenn noch nicht da - wird
-    // gleich fuer das Consumed-Tagging gebraucht.
-    if not FileMarkers.TryGetValue(F.FileName, Markers) then
+    // Marker-Liste fuer das Consumed-Tagging. Key ist seit 2026-07-05
+    // IMMER der Marker-HOST-Pfad (Audit #2b: .dfm-Findings -> .pas), damit
+    // .dfm- und .pas-Findings DIESELBE Liste taggen und die Unused-
+    // Emission auf die Host-Datei zeigt (vorher: zwei getrennte Listen-
+    // Kopien unter .dfm- und .pas-Key, Emission auf die .dfm).
+    HostFile := ResolveMarkerHostFile(F.FileName);
+    if not FileMarkers.TryGetValue(HostFile, Markers) then
     begin
-      Markers := TList<TSuppressionMarker>.Create;
-      BuildMarkers(F.FileName, Markers, AFailedFiles);
-      FileMarkers.Add(F.FileName, Markers);
-    end;
-    // Marker als consumed markieren wenn TargetLine + Kind passen.
-    // Bei file-wide (TargetForMark=0) treffen wir alle file-wide-Marker
-    // (TargetLine=0) deren Kind-Set das Finding-Kind enthaelt.
-    var ConsumedMarkerLine := 0;
-    for j := 0 to Markers.Count - 1 do
-    begin
-      M := Markers[j];
-      if (M.TargetLine = TargetForMark) and (F.Kind in M.Kinds) then
+      if APreBuilt then
+        // Scan-Zeit-Collection kennt diese Datei nicht (Host lag nicht in
+        // der Scan-Liste). Defensiv: kein Tagging, aber auch keine Unused-
+        // Emission fuer die Datei (nicht im Dictionary) -> kein Rauschen.
+        Markers := nil
+      else
       begin
-        M.Consumed := True;
-        Markers[j] := M;
-        if ConsumedMarkerLine = 0 then
-          ConsumedMarkerLine := M.MarkerLine;
+        Markers := TList<TSuppressionMarker>.Create;
+        BuildMarkers(HostFile, Markers, AFailedFiles);
+        FileMarkers.Add(HostFile, Markers);
       end;
     end;
+    // Consumed-Tagging (Audit #2c, 2026-07-05): ALLE Marker taggen, die
+    // das Finding abdecken - file-wide (TargetLine=0) UND per-line.
+    // Vorher exklusiv nur die Match-Ebene (TargetForMark): deckte ein
+    // file-wide-Marker das Finding ab, blieb ein ebenfalls zutreffender
+    // Per-Line-Marker Consumed=False und wurde faelschlich als unused
+    // gemeldet. Das ENTFERNEN des Findings (Match oben) ist unveraendert -
+    // einmal ist einmal.
+    var ConsumedMarkerLine := 0;
+    if Markers <> nil then
+      for j := 0 to Markers.Count - 1 do
+      begin
+        M := Markers[j];
+        if (F.Kind in M.Kinds) and
+           ((M.TargetLine = 0) or
+            ((Line > 0) and (M.TargetLine = Line))) then
+        begin
+          M.Consumed := True;
+          Markers[j] := M;
+          // Telemetrie-Zeile wie bisher: erster Marker der PRIMAEREN
+          // Match-Ebene (TargetForMark), nicht irgendein Co-Marker.
+          if (ConsumedMarkerLine = 0) and (M.TargetLine = TargetForMark) then
+            ConsumedMarkerLine := M.MarkerLine;
+        end;
+      end;
     // C.5 Telemetrie: pro suppressed Finding eine CSV-Zeile sammeln
     // (wenn aktiviert via --telemetry-csv). Niedriger Overhead durch
     // nil-check.
@@ -573,14 +705,35 @@ class procedure TSuppression.EmitUnusedSuppressionFindings(
 // EIN Finding pro Marker (nicht pro nicht-getroffenes Kind im Set) -
 // sonst explodiert die Liste wenn ein Marker mehrere Kinds suppresst
 // und nur eines davon greift.
+// FileName = Pair.Key = Marker-HOST-Pfad (Audit #2b, 2026-07-05): fuer
+// .dfm-Findings ist das die .pas, aus der MarkerLine stammt - der Fund
+// zeigt damit auf die richtige Datei+Zeile (vorher: .dfm-Datei mit
+// .pas-Zeilennummer, Klick lief ins Leere). Gilt in beiden Modi, weil
+// RemoveSuppressedFindings/CollectMarkersForScan host-gekeyt befuellen.
 var
   M          : TSuppressionMarker;
   NewFinding : TLeakFinding;
+  KindGate   : Boolean;
 begin
+  // Review-Fix (2026-07-05, Profil-Rauschen): die Emission laeuft NACH dem
+  // Kind-Filter von RunAllDetectors - ohne eigenes Gate wuerden Profil-
+  // Scans (bugs-only/security/...), in denen fkUnusedSuppression gar nicht
+  // enthalten ist, seit der Scan-Zeit-Collection hunderte Stil-Marker-
+  // Funde ausserhalb des angeforderten Profils melden (Self-Scan: ~230
+  // file-wide-Marker-Dateien). Gate: Emission nur wenn das Profil
+  // fkUnusedSuppression fuehrt ([] = kein Filter = alles), und pro Marker
+  // nur, wenn er mindestens einen im Profil AKTIVEN Kind suppresst -
+  // Marker deaktivierter Detektoren KOENNEN nichts konsumieren und sind
+  // in diesem Profil keine Aussage wert.
+  KindGate := DetectorEnabledKinds <> [];
+  if KindGate and not (fkUnusedSuppression in DetectorEnabledKinds) then
+    Exit;
   for var Pair in FileMarkers do
     for M in Pair.Value do
       if not M.Consumed then
       begin
+        if KindGate and (M.Kinds * DetectorEnabledKinds = []) then
+          Continue;
         NewFinding := TLeakFinding.Create;
         NewFinding.FileName   := Pair.Key;
         NewFinding.MethodName := '';
@@ -592,7 +745,8 @@ begin
 end;
 
 class procedure TSuppression.ApplyToFindings(
-  Findings: TObjectList<TLeakFinding>);
+  Findings: TObjectList<TLeakFinding>;
+  APreMarkers: TObjectDictionary<string, TList<TSuppressionMarker>>);
 var
   FileMaps    : TObjectDictionary<string, TDictionary<Integer, TSuppressedKinds>>;
   FileMarkers : TObjectDictionary<string, TList<TSuppressionMarker>>;
@@ -600,14 +754,29 @@ var
   i           : Integer;
   Ferr        : TLeakFinding;
 begin
-  if (Findings = nil) or (Findings.Count = 0) then Exit;
+  if Findings = nil then Exit;
+  // Count=0-Early-Exit NUR im Legacy-Modus (Audit #2a, 2026-07-05): mit
+  // Scan-Zeit-Collection muss die Unused-Emission auch laufen, wenn die
+  // Findings-Liste leer ist - sonst bleiben stale Marker in befund-freien
+  // Dateien fuer immer unsichtbar.
+  if (Findings.Count = 0) and (APreMarkers = nil) then Exit;
 
   FileMaps    := TObjectDictionary<string, TDictionary<Integer, TSuppressedKinds>>.Create([doOwnsValues]);
-  FileMarkers := TObjectDictionary<string, TList<TSuppressionMarker>>.Create([doOwnsValues]);
+  // Mit PreMarkers wird das Caller-Dictionary direkt benutzt (Key =
+  // Marker-HOST-Pfad) und NICHT freigegeben - Ownership bleibt beim
+  // Caller (ParseLeaks). Ohne: Legacy-Container, lazy im Match-Zweig.
+  if APreMarkers <> nil then
+    FileMarkers := APreMarkers
+  else
+    FileMarkers := TObjectDictionary<string, TList<TSuppressionMarker>>.Create([doOwnsValues]);
   FailedFiles := TStringList.Create;
   try
     FailedFiles.CaseSensitive := False;   // Windows-Pfade
-    RemoveSuppressedFindings(Findings, FileMaps, FileMarkers, FailedFiles);
+    RemoveSuppressedFindings(Findings, FileMaps, FileMarkers,
+      APreMarkers <> nil, FailedFiles);
+    // Iteriert ALLE Dictionary-Eintraege - im PreMarkers-Modus also auch
+    // Dateien, deren Findings alle unmatched blieben oder die gar keine
+    // Findings hatten (Fix Audit #2a).
     EmitUnusedSuppressionFindings(Findings, FileMarkers);
 
     // Audit #10b (2026-07-05): nicht lesbare Marker-Hosts als Diagnose-
@@ -626,7 +795,8 @@ begin
     end;
   finally
     FailedFiles.Free;
-    FileMarkers.Free;
+    if APreMarkers = nil then
+      FileMarkers.Free;   // nur den selbst erzeugten Legacy-Container
     FileMaps.Free;
   end;
 end;

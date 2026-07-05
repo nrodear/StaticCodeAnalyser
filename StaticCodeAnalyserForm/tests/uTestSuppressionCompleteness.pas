@@ -40,11 +40,35 @@ type
     [Test] procedure UnusedMarker_WithConsumedSiblingInFile_Reported;
     // Nur konsumierte Marker -> kein UnusedSuppression-Rauschen.
     [Test] procedure ConsumedMarkerOnly_NoUnusedFinding;
-    // BEKANNTE LUECKE (Audit_CodeReview "UnusedSuppression", zurueckgestellt):
-    // in Dateien OHNE konsumierten Marker wird FileMarkers nie gebaut ->
-    // stale Marker dort werden NICHT gemeldet. Dieser Test schreibt den
-    // Ist-Zustand fest - der kuenftige Fix MUSS ihn bewusst anfassen.
-    [Test] procedure StaleMarkerOnly_KnownGap_NotReported;
+    // Audit #2a (2026-07-05) - Fix der frueher hier festgeschriebenen
+    // Luecke: Marker werden jetzt zur SCAN-Zeit eingesammelt (ParseLeaks ->
+    // TSuppression.CollectMarkersForScan), stale Marker werden auch dann
+    // gemeldet, wenn KEIN Marker der Datei etwas konsumiert hat. Der Test
+    // hiess vorher StaleMarkerOnly_KnownGap_NotReported und wurde mit dem
+    // Fix BEWUSST gedreht (so hat es sein Kommentar gefordert).
+    [Test] procedure StaleMarkerOnly_Reported;
+    // Audit #2a: stale file-wide-Marker ('// noinspection-file') ohne je
+    // ein konsumiertes Finding -> gemeldet, Fundzeile = Marker-Zeile.
+    [Test] procedure StaleFileWideMarker_NoConsumption_Reported;
+    // Audit #2c: deckt ein Finding BEIDE Marker-Ebenen ab (file-wide UND
+    // per-line), werden BEIDE Consumed getagt - kein UnusedSuppression
+    // fuer den Per-Line-Marker (vorher: exklusives if/else-if tagte nur
+    // die file-wide-Ebene, der Per-Line-Marker galt faelschlich als stale).
+    [Test] procedure FileWideAndPerLineBothCover_NoUnusedFinding;
+    // Audit #2a, 0-Findings-Pfad: ApplyToFindings mit LEERER Findings-
+    // Liste + PreMarkers emittiert die stalen Marker trotzdem (der alte
+    // Count=0-Early-Exit gilt nur noch im Legacy-Modus ohne PreMarkers).
+    // Direkt-Test: der Pipeline-Weg kann keine garantiert befund-freie
+    // ROHE Detektor-Ausgabe erzeugen (irgendein Kind feuert vor dem
+    // Confidence-Filter praktisch immer).
+    [Test] procedure PreMarkers_EmptyFindingsList_StaleMarkersReported;
+    // Audit #2b: .dfm-Finding konsumiert einen Marker in der .pas-Host-
+    // Datei; der stale Sibling-Marker dort wird mit FileName = .pas
+    // gemeldet (vorher: FileName = .dfm bei MarkerLine aus der .pas -
+    // Klick lief ins Leere). Legacy-Pfad (ohne PreMarkers); der Pipeline-
+    // Weg braeuchte ein echtes DFM-Findings-Setup (DfmAnalysisRunner) und
+    // ist hier bewusst nicht nachgebaut.
+    [Test] procedure DfmFinding_StaleSiblingMarker_ReportedOnPasHost;
 
     // ---- Audit #10b (2026-07-05): Lesefehler ist kein stilles fail-open --
     // Marker-Host existiert, ist aber nicht lesbar (exklusiver Lock):
@@ -264,10 +288,12 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestSuppressionCompleteness.StaleMarkerOnly_KnownGap_NotReported;
-// Datei hat Findings (Writeln etc.), aber KEIN Marker konsumiert etwas ->
-// FileMarkers wird nie gebaut, der stale Marker bleibt unentdeckt.
-// DOKUMENTIERTE LUECKE - siehe Fixture-Deklaration.
+procedure TTestSuppressionCompleteness.StaleMarkerOnly_Reported;
+// Datei hat Findings (Writeln etc.), aber KEIN Marker konsumiert etwas.
+// Seit Audit #2a (2026-07-05, Scan-Zeit-Collection in ParseLeaks) wird
+// der stale Per-Line-Marker trotzdem gemeldet - vorher wurde FileMarkers
+// nur im Match-Zweig gebaut und der Marker blieb unsichtbar (der
+// Vorgaenger-Test StaleMarkerOnly_KnownGap_NotReported schrieb das fest).
 const SRC =
   'unit t; interface implementation'#13#10 +
   '// noinspection GotoStatement'#13#10 +
@@ -280,10 +306,174 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsViaPipeline(SRC);
   try
-    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedSuppression),
-      'Ist-Zustand (bekannte Luecke): ohne konsumierten Marker keine ' +
-      'UnusedSuppression-Emission - Fix muss diesen Test bewusst drehen');
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedSuppression),
+      'staler Per-Line-Marker ohne Konsum muss gemeldet werden (Audit #2a)');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'noinspection GotoStatement'),
+      TFindingHelper.FirstOf(F, fkUnusedSuppression).LineNumber,
+      'Fundzeile = Marker-Zeile');
   finally F.Free; end;
+end;
+
+procedure TTestSuppressionCompleteness.StaleFileWideMarker_NoConsumption_Reported;
+// File-wide-Marker fuer ein Kind, das im File nie feuert (kein goto).
+// Muss seit Audit #2a als unused gemeldet werden - auch ohne dass
+// irgendein anderer Marker der Datei konsumiert wurde.
+const SRC =
+  'unit t; interface implementation'#13#10 +
+  '// noinspection-file GotoStatement'#13#10 +
+  'procedure Voll;'#13#10 +
+  'begin'#13#10 +
+  '  Writeln(1);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedSuppression),
+      'staler file-wide-Marker muss gemeldet werden (Audit #2a)');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'noinspection-file GotoStatement'),
+      TFindingHelper.FirstOf(F, fkUnusedSuppression).LineNumber,
+      'Fundzeile = Marker-Zeile des file-wide-Markers');
+  finally F.Free; end;
+end;
+
+procedure TTestSuppressionCompleteness.FileWideAndPerLineBothCover_NoUnusedFinding;
+// EIN EmptyMethod-Finding, abgedeckt von file-wide UND per-line Marker.
+// Entfernt wird es (wie bisher) ueber die file-wide-Ebene; das Consumed-
+// Tagging muss seit Audit #2c aber BEIDE deckenden Marker treffen - sonst
+// wuerde der Per-Line-Marker faelschlich als unused gemeldet.
+const SRC =
+  'unit t; interface implementation'#13#10 +
+  '// noinspection-file EmptyMethod'#13#10 +
+  '// noinspection EmptyMethod'#13#10 +
+  'procedure Leer;'#13#10 +
+  'begin'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkEmptyMethod),
+      'EmptyMethod-Finding muss suppresst sein (Entfernen unveraendert)');
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedSuppression),
+      'BEIDE deckenden Marker sind Consumed - kein UnusedSuppression ' +
+      'fuer den Per-Line-Marker (Audit #2c)');
+  finally F.Free; end;
+end;
+
+procedure TTestSuppressionCompleteness.PreMarkers_EmptyFindingsList_StaleMarkersReported;
+// Kuenstliches PreMarkers-Dictionary, wie es die Scan-Zeit-Collection
+// baut (Key = Marker-Host-Pfad). Die Host-Datei muss NICHT existieren:
+// bei leerer Findings-Liste liest die Unused-Emission nur das Dictionary.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Pre      : TObjectDictionary<string, TList<TSuppressionMarker>>;
+  L        : TList<TSuppressionMarker>;
+  M        : TSuppressionMarker;
+  F        : TLeakFinding;
+  HostPath : string;
+  CntWide  : Integer;
+  CntLine  : Integer;
+begin
+  HostPath := 'C:\virtuell\clean.pas';
+  Pre      := TObjectDictionary<string, TList<TSuppressionMarker>>.Create([doOwnsValues]);
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    L := TList<TSuppressionMarker>.Create;
+    M.MarkerLine := 3;                       // staler file-wide-Marker
+    M.TargetLine := 0;
+    M.Kinds      := [fkGotoStatement];
+    M.Consumed   := False;
+    L.Add(M);
+    M.MarkerLine := 7;                       // staler per-line-Marker
+    M.TargetLine := 8;
+    M.Kinds      := [fkMemoryLeak];
+    M.Consumed   := False;
+    L.Add(M);
+    Pre.Add(HostPath, L);                    // Ownership -> Pre (doOwnsValues)
+
+    TSuppression.ApplyToFindings(Findings, Pre);
+
+    Assert.AreEqual<Integer>(2, Findings.Count,
+      'beide stalen Marker gemeldet - der Count=0-Early-Exit gilt im ' +
+      'PreMarkers-Modus nicht mehr (Audit #2a)');
+    CntWide := 0;
+    CntLine := 0;
+    for F in Findings do
+    begin
+      Assert.AreEqual<Integer>(Ord(fkUnusedSuppression), Ord(F.Kind),
+        'nur fkUnusedSuppression erwartet');
+      Assert.AreEqual(HostPath, F.FileName,
+        'FileName = Marker-Host (Dictionary-Key)');
+      if F.LineNumber = '3' then Inc(CntWide);
+      if F.LineNumber = '7' then Inc(CntLine);
+    end;
+    Assert.AreEqual<Integer>(1, CntWide, 'file-wide-Marker (Zeile 3) gemeldet');
+    Assert.AreEqual<Integer>(1, CntLine, 'per-line-Marker (Zeile 7) gemeldet');
+  finally
+    Findings.Free;
+    Pre.Free;                                // Caller behaelt Ownership
+  end;
+end;
+
+procedure TTestSuppressionCompleteness.DfmFinding_StaleSiblingMarker_ReportedOnPasHost;
+// Marker-Host (.pas) mit konsumiertem MemoryLeak-Marker (Konsument ist
+// ein synthetisches .dfm-Finding) + stalem GotoStatement-Marker. Die
+// .dfm selbst muss nicht existieren - ResolveMarkerHostFile prueft nur
+// die .pas. Erwartung (Audit #2b): das Unused-Finding zeigt auf die
+// .pas (Host), nicht auf die .dfm; das Entfernen des .dfm-Findings
+// bleibt unveraendert.
+var
+  TmpPas    : string;
+  TmpDfm    : string;
+  Findings  : TObjectList<TLeakFinding>;
+  F         : TLeakFinding;
+  UnusedF   : TLeakFinding;
+  LeakCnt   : Integer;
+  UnusedCnt : Integer;
+begin
+  TmpPas := TPath.Combine(TPath.GetTempPath,
+    'sca_suppr_dfmhost_' + TGUID.NewGuid.ToString + '.pas');
+  TmpDfm := ChangeFileExt(TmpPas, '.dfm');
+  TFile.WriteAllText(TmpPas,
+    '// noinspection MemoryLeak'#13#10 +
+    'x := TStringList.Create;'#13#10 +
+    '// noinspection GotoStatement'#13#10 +
+    'y := 1;'#13#10);
+  try
+    Findings := TObjectList<TLeakFinding>.Create(True);
+    try
+      Findings.Add(TLeakFinding.New(TmpDfm, '', 2, 'x', fkMemoryLeak));
+      TSuppression.ApplyToFindings(Findings);
+
+      LeakCnt   := 0;
+      UnusedCnt := 0;
+      UnusedF   := nil;
+      for F in Findings do
+      begin
+        if F.Kind = fkMemoryLeak then Inc(LeakCnt);
+        if F.Kind = fkUnusedSuppression then
+        begin
+          Inc(UnusedCnt);
+          UnusedF := F;
+        end;
+      end;
+      Assert.AreEqual<Integer>(0, LeakCnt,
+        '.dfm-Finding via .pas-Host-Marker suppresst (Entfernen unveraendert)');
+      Assert.AreEqual<Integer>(1, UnusedCnt,
+        'genau 1 UnusedSuppression fuer den stalen GotoStatement-Marker');
+      Assert.AreEqual(TmpPas, UnusedF.FileName,
+        'FileName = Marker-HOST (.pas), nicht die .dfm (Audit #2b)');
+      Assert.AreEqual('3', UnusedF.LineNumber,
+        'Fundzeile = Marker-Zeile in der .pas');
+    finally
+      Findings.Free;
+    end;
+  finally
+    TFile.Delete(TmpPas);
+  end;
 end;
 
 procedure TTestSuppressionCompleteness.UnreadableMarkerHost_EmitsDiagnosticFinding;

@@ -631,12 +631,32 @@ type
     fkAttributeDuplicate,        // SCA180 - same Attribute zweimal am Member.
     fkAttributeCategoryWithoutString, // SCA181 - [Category] ohne String-Arg.
     fkAttributeTestFixtureWithoutTests, // SCA182 - [TestFixture]-Klasse ohne [Test].
-    fkAttributeMisalignment      // SCA183 - Attribute mit Leerzeile zum Member.
+    fkAttributeMisalignment,     // SCA183 - Attribute mit Leerzeile zum Member.
+    fkDfmComponentUnused         // SCA184 - published DFM-Komponente die weder
+                                 // im Code, in anderen Units noch DFM-intern
+                                 // referenziert wird (Refactoring-Rest). fcLow.
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
   // weit unter dem 256-Element-Limit eines Delphi-Sets.
   TFindingKinds = set of TFindingKind;
+
+  // Suppression-Marker: '// noinspection X' an einer Quell-Zeile, das auf
+  // eine Target-Zeile (naechste Code-Zeile danach; 0 = file-wide Marker
+  // '// noinspection-file') zielt. Wird vom Suppression-Filter konsumiert,
+  // wenn dort ein Finding der passenden Kinds liegt.
+  // 2026-07-05 (Audit_CodeReview #2): aus uSuppression hierher verschoben -
+  // TAnalyzeContext traegt jetzt die per-Scan-Marker-Collection und darf
+  // uSuppression nicht uses'en (uAnalyzeContext -> uSuppression ->
+  // uDetectorUtils -> uAnalyzeContext waere ein Interface-Zyklus, seit
+  // uDetectorUtils fuer den P1-Strip-Cache uAnalyzeContext kennt).
+  // uSuppression aliast die Typen fuer alle bestehenden Konsumenten.
+  TSuppressionMarker = record
+    MarkerLine : Integer;        // Zeile mit dem '// noinspection ...'
+    TargetLine : Integer;        // Ziel-Zeile (0 = file-wide)
+    Kinds      : TFindingKinds;
+    Consumed   : Boolean;        // True wenn der Marker mind. 1 Finding suppresst hat
+  end;
 
   // SonarQube-aehnliche Kategorisierung der Befunde:
   //   ftBug             - falsches Verhalten (Crash, falsches Ergebnis)
@@ -871,7 +891,8 @@ const
     (Name: 'AttributeDuplicate';         FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkAttributeDuplicate
     (Name: 'AttributeCategoryWithoutString';FindingType: ftBug;       DefaultSeverity: lsError),   // fkAttributeCategoryWithoutString
     (Name: 'AttributeTestFixtureWithoutTests';FindingType: ftCodeSmell;DefaultSeverity: lsWarning),// fkAttributeTestFixtureWithoutTests
-    (Name: 'AttributeMisalignment';      FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkAttributeMisalignment
+    (Name: 'AttributeMisalignment';      FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkAttributeMisalignment
+    (Name: 'DfmComponentUnused';         FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkDfmComponentUnused
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.
@@ -1066,6 +1087,11 @@ begin
     // PChar('')=nil-Praemisse trifft dort nicht. Kein billiger Guard ohne
     // Typ-Aufloesung (string vs Pointer) -> fcLow.
     fkPointerArithmeticOnString: Result := fcLow;
+    // SCA184 DfmComponentUnused: neuer Cross-Unit-Heuristik-Detektor mit
+    // realer FP-Flaeche (namens-basierter Use-Nachweis ueber Code/DFM/Cross-
+    // Unit-Index, kein exaktes Binding). Bewusst unter dem fcMedium-Default-
+    // Filter; Promotion erst nach Real-World-A/B.
+    fkDfmComponentUnused: Result := fcLow;
 
     // --- Welle 4: reine FORMATIERUNGS-/Style-Regeln (2026-06-29) ---
     // Definitiv KEINE Bugs (Whitespace, Zeilenlaenge, Keyword-Casing, Deklara-

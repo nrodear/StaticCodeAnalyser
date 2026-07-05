@@ -29,7 +29,8 @@ unit uAnalyzeContext;
 interface
 
 uses
-  System.SysUtils, System.Generics.Collections,
+  System.SysUtils, System.Generics.Collections, System.Generics.Defaults,
+  uSCAConsts,        // TSuppressionMarker (UnusedSuppression-Collection, 2026-07-05)
   uAstFileCache, uFileTextCache, uSymbolReferenceIndex, uDfmRepoIndex;
 
 type
@@ -59,6 +60,15 @@ type
     AstFileCache    : TAstFileCache;
     SymbolRefIndex  : TSymbolReferenceIndex;
     DfmRepoIndex    : TDfmRepoIndex;
+    // UnusedSuppression (Audit_CodeReview #2, 2026-07-05): per-Scan-Collection
+    // der '// noinspection'-Marker, eingesammelt im ParseLeaks-Main-Loop
+    // solange der Dateitext noch heiss im FileTextCache liegt. Key = Marker-
+    // HOST-Pfad (fuer .dfm-Findings die zugehoerige .pas), case-insensitiv
+    // (Windows-Pfade). Dateien ohne Marker landen NICHT im Dictionary.
+    // BESESSEN (Create/Destroy); ParseLeaks uebernimmt das Dictionary am
+    // Scan-Ende per Ownership-Transfer (Feld -> nil) fuer die Post-Scan-
+    // Suppression-Phase - Destroy ist dann nil-sicher.
+    SuppressionMarkers : TObjectDictionary<string, TList<TSuppressionMarker>>;
     // --- nur referenziert (Destroy fasst sie NICHT an) ---
     FileTextCache   : TFileTextCache;
     DetectorTimings : TDictionary<string, TPair<Int64, Integer>>;
@@ -72,6 +82,7 @@ type
     procedure PutStrippedText(const FileName: string; FillCh: Char;
       const Code: string; const LineFor: TArray<Integer>);
 
+    constructor Create;
     destructor Destroy; override;
   end;
 
@@ -167,10 +178,26 @@ begin
   FStripEntries[n].LineFor := LineFor;
 end;
 
+constructor TAnalyzeContext.Create;
+begin
+  inherited Create;
+  // UnusedSuppression (Audit #2, 2026-07-05): Marker-Collection sofort
+  // anlegen - der Main-Loop fuellt sie pro Datei (TSuppression.
+  // CollectMarkersForScan). doOwnsValues: die TList<TSuppressionMarker>-
+  // Werte sterben mit dem Dictionary. TIStringComparer.Ordinal: Pfad-Keys
+  // case-insensitiv, damit z.B. ChangeFileExt-abgeleitete .dfm-Host-Pfade
+  // nicht an Gross/Klein-Drift vorbeilaufen.
+  SuppressionMarkers := TObjectDictionary<string, TList<TSuppressionMarker>>
+    .Create([doOwnsValues], TIStringComparer.Ordinal);
+end;
+
 destructor TAnalyzeContext.Destroy;
 begin
   // Reihenfolge wie bisher in ParseLeaks (Indizes vor AST-Cache).
   // FileTextCache + DetectorTimings bewusst NICHT freigeben.
+  // SuppressionMarkers ist nil-sicher, wenn ParseLeaks das Dictionary per
+  // Ownership-Transfer fuer die Post-Scan-Suppression uebernommen hat.
+  FreeAndNil(SuppressionMarkers);
   FreeAndNil(DfmRepoIndex);
   FreeAndNil(SymbolRefIndex);
   FreeAndNil(AstFileCache);

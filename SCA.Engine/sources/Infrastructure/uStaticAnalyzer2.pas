@@ -934,6 +934,14 @@ var
   // (AstFileCache/SymbolRefIndex/DfmRepoIndex). Globals bleiben Backward-
   // Compat-Aliase; der Context steuert nur den Lifecycle. Verhaltensneutral.
   Ctx : TAnalyzeContext;
+  // UnusedSuppression (Audit_CodeReview #2, 2026-07-05): die im Main-Loop
+  // pro Datei eingesammelten '// noinspection'-Marker. Der Context BESITZT
+  // die Collection waehrend des Scans; im inneren finally (vor FreeAndNil(
+  // Ctx)) wird sie per Ownership-Transfer hierher gerettet, weil die
+  // Suppression-Phase (TSuppression.ApplyToFindings) erst NACH dem Context-
+  // Teardown laeuft. Die aeusserste try-finally-Klammer unten gibt sie auf
+  // JEDEM Pfad frei (auch beim Re-Raise aus dem Scan).
+  PreMarkers : TObjectDictionary<string, TList<TSuppressionMarker>>;
   // Audit 2026-07-01 (Global-State): Snapshot der Caller/User/INI-konfigurierten
   // LeakyClasses VOR der Auto-Discovery. AutoDiscovery ergaenzt die GLOBALE
   // LeakyClasses waehrend des Scans; ohne Restore akkumulieren die auto-
@@ -974,6 +982,14 @@ begin
   Parser := nil;
   LastPhase := 'init';
   LastFile  := '';
+  PreMarkers := nil;
+  // UnusedSuppression (Audit #2, 2026-07-05): aeusserste Klammer NUR fuer
+  // PreMarkers - die Marker-Collection wechselt im inneren finally per
+  // Ownership-Transfer vom Ctx hierher und muss auch dann freigegeben
+  // werden, wenn der Scan per Re-Raise abbricht (die Post-Filter unten
+  // laufen dann nie). Bewusst ohne Re-Indent des Bestands - gleiches
+  // Muster wie der Outer-Diagnose-Try weiter unten.
+  try
   // Eine gemeinsame try-finally klammer fuer LogStream UND Parser - so leakt
   // weder bei Parser-Create-OOM der LogStream noch umgekehrt.
   try
@@ -1319,6 +1335,23 @@ begin
             F.SetKind(fkFileReadError);
             CaptResults.Add(F);
           end);
+
+        // UnusedSuppression Scan-Zeit-Collection (Audit #2a, 2026-07-05):
+        // Marker dieser Datei JETZT einsammeln - der Dateitext liegt noch
+        // heiss im gFileTextCache (das finally unten cleart ihn gleich).
+        // Bewusst NUR fuer erfolgreich gescannte Dateien (nach RunAll-
+        // Detectors): fuer Parse-Fehler-Dateien liefe kein Detektor, jeder
+        // Marker waere trivial "unused" - das waere Rauschen, kein Signal.
+        LastPhase := Format('File %d/%d: CollectSuppressionMarkers',
+                            [i + 1, Total]);
+        try
+          TSuppression.CollectMarkersForScan(FileName, Ctx.SuppressionMarkers);
+        except
+          // Best-effort: ein Collection-Fehler degradiert nur das Unused-
+          // Tracking dieser Datei, nicht den Scan. User-Cancel geht durch.
+          on EAbort do raise;
+          on Exception do ;
+        end;
       finally
         LastPhase := Format('File %d/%d: finally Root.Free/Evict', [i + 1, Total]);
         if OwnsRoot then
@@ -1371,6 +1404,15 @@ begin
     // Reihenfolge wie zuvor). Danach die Backward-Compat-Globals auf nil
     // setzen (zeigten auf die jetzt freigegebenen Instanzen). gFileTextCache
     // wird vom Context NICHT angefasst und lebt absichtlich weiter.
+    // UnusedSuppression (Audit #2, 2026-07-05): die Marker-Collection
+    // ueberlebt den Context - Ownership-Transfer ins lokale PreMarkers
+    // (Suppression-Phase unten braucht sie; die aeusserste Klammer gibt
+    // sie frei). Ctx.Destroy sieht nil und fasst nichts an.
+    if Ctx <> nil then
+    begin
+      PreMarkers := Ctx.SuppressionMarkers;
+      Ctx.SuppressionMarkers := nil;
+    end;
     FreeAndNil(Ctx);
     // Audit 2026-07-01 (Global-State): die in diesem Scan auto-entdeckten Klassen
     // wieder aus der GLOBALEN LeakyClasses entfernen -> zurueck auf die Caller-
@@ -1391,9 +1433,13 @@ begin
     // fuellt sich im Post-Scan lazy nach.
   end;
 
-  // Suppression-Kommentare auswerten und Befunde filtern
+  // Suppression-Kommentare auswerten und Befunde filtern. PreMarkers =
+  // Scan-Zeit-Marker-Collection (Audit #2a): damit meldet die Unused-
+  // Emission auch stale Marker in Dateien ohne (suppresste) Findings.
+  // Das ENTFERNEN von Findings laeuft unveraendert ueber die lazy
+  // BuildMap-Lookups - byte-identisch zum bisherigen Filter-Verhalten.
   try
-    TSuppression.ApplyToFindings(Results);
+    TSuppression.ApplyToFindings(Results, PreMarkers);
   except
     // Suppression-Fehler duerfen das Ergebnis nicht zerstoeren
   end;
@@ -1414,6 +1460,12 @@ begin
     TConfidenceFilter.ApplyToFindings(Results, uSCAConsts.FindingMinConfidence);
   except
     // Filter-Fehler duerfen das Ergebnis nicht zerstoeren
+  end;
+
+  finally
+    // PreMarkers-Klammer (s. Kommentar am Prozedur-Anfang): Scan-Zeit-
+    // Marker-Collection auf jedem Pfad freigeben. nil-sicher.
+    FreeAndNil(PreMarkers);
   end;
 end;
 
