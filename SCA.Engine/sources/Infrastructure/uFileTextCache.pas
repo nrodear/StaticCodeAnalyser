@@ -43,13 +43,33 @@ type
     Lines : TStringList;
     MTime : TDateTime;
     Size  : Int64;
-    constructor Create(ALines: TStringList; AMTime: TDateTime; ASize: Int64);
+    // Perf (2026-07-05): P2-filetextcache-stat - Cache-Generation des letzten
+    // Disk-Stat-Checks dieses Eintrags. Solange die Generation des Caches
+    // unveraendert ist, skippt GetLines den Stat (siehe dort).
+    StatGeneration : Integer;
+    constructor Create(ALines: TStringList; AMTime: TDateTime; ASize: Int64;
+      AStatGeneration: Integer);
     destructor Destroy; override;
   end;
 
   TFileTextCache = class
   private
     FCache : TObjectDictionary<string, TFileTextCacheEntry>;
+    // Perf (2026-07-05): P2-filetextcache-stat - Generation-Zaehler.
+    // Clear bumpt ihn; Eintraege merken sich die Generation ihres letzten
+    // Stat-Checks. Innerhalb einer Generation (= innerhalb eines Scan-
+    // Abschnitts) gilt der Cache als Snapshot -> kein FileAge/
+    // GetFileAttributesEx pro Cache-Hit mehr (~60-80x pro Datei durch die
+    // File-Scan-Detektoren + ~770k Hits ueber den Fingerprint-Pfad).
+    FGeneration : Integer;
+    // Perf (2026-07-05): P2-filetextcache-stat - 1-Slot-Memo fuer die
+    // Key-Normalisierung (LowerCase+ExpandFileName kostet einen
+    // GetFullPathName-Roundtrip pro Aufruf; dieselbe Datei wird von den
+    // Detektoren aber direkt hintereinander angefragt). Nur fuer bereits
+    // absolute Pfade aktiv - relative Pfade haengen vom cwd ab und werden
+    // nicht memoisiert.
+    FLastName : string;
+    FLastKey  : string;
     function Key(const FileName: string): string;
   public
     constructor Create;
@@ -57,10 +77,25 @@ type
 
     // Liefert TStringList fuer FileName. Cache besitzt die Liste -
     // NICHT freigeben. Nil bei Read-Fehler.
-    // mtime-aware: hat sich die Datei seit dem Cache-Eintrag geaendert,
-    // wird sie neu geladen. Schuetzt vor stale-cache bei Tests die
-    // dieselbe Datei ueberschreiben + bei Edit-Loops im IDE-Plugin.
-    function GetLines(const FileName: string): TStringList;
+    // Staleness-Modell (Perf 2026-07-05, P2-filetextcache-stat):
+    //   * Innerhalb einer Generation (zwischen zwei Clear-Aufrufen) ist der
+    //     Cache ein Snapshot - KEIN Disk-Stat pro Hit. Ein Scan ist per
+    //     Definition ein Snapshot des Datei-Standes.
+    //   * Cross-Scan bleibt das Verhalten identisch: der Scan-Start
+    //     (uStaticAnalyzer2.ParseLeaks) ruft Clear -> Generation-Bump +
+    //     alle Eintraege werden zerstoert -> naechster Zugriff laedt frisch.
+    //     Edit-Loops im IDE-Plugin sind damit abgedeckt (jeder Lauf geht
+    //     durch ParseLeaks). Konsumenten OHNE dazwischenliegendes Clear,
+    //     die Ueberschreibungen sehen muessen (Fingerprint/Baseline-Drift,
+    //     direkte TBaseline.Write/Apply-Aufrufe), nutzen AForceStat=True.
+    //   * Der mtime+Size-Vergleich bleibt als Belt-and-Suspenders fuer
+    //     Eintraege mit aelterer Stat-Generation bestehen.
+    //   * AForceStat=True erzwingt den mtime+Size-Recheck auch innerhalb
+    //     der aktuellen Generation - fuer Konsumenten, die Datei-
+    //     Ueberschreibungen ohne zwischenzeitliches Clear sehen MUESSEN
+    //     (Fingerprint-/Baseline-Drift-Pfad, s. GetLines-Implementierung).
+    function GetLines(const FileName: string;
+      AForceStat: Boolean = False): TStringList;
 
     procedure Clear;
   end;
@@ -90,8 +125,11 @@ var
 // Prozess-Global gFileTextCache (Backward-Compat / Single-File / Tests). Phase-3-
 // Schritt: Detektoren reichen kuenftig AContext.FileTextCache durch, damit der
 // Cache nicht mehr global geteilt wird.
+// AForceStat: siehe TFileTextCache.GetLines - True nur fuer den
+// Fingerprint-/Baseline-Drift-Pfad (aktueller Datei-Inhalt Pflicht).
 function AcquireLines(const FileName: string;
-  out OwnedByCache: Boolean; ACache: TFileTextCache = nil): TStringList;
+  out OwnedByCache: Boolean; ACache: TFileTextCache = nil;
+  AForceStat: Boolean = False): TStringList;
 
 procedure ReleaseLines(Lines: TStringList; OwnedByCache: Boolean);
 
@@ -203,12 +241,13 @@ end;
 { TFileTextCacheEntry }
 
 constructor TFileTextCacheEntry.Create(ALines: TStringList; AMTime: TDateTime;
-  ASize: Int64);
+  ASize: Int64; AStatGeneration: Integer);
 begin
   inherited Create;
   Lines := ALines;
   MTime := AMTime;
   Size  := ASize;
+  StatGeneration := AStatGeneration;
 end;
 
 destructor TFileTextCacheEntry.Destroy;
@@ -233,7 +272,28 @@ end;
 
 function TFileTextCache.Key(const FileName: string): string;
 begin
+  // Perf (2026-07-05): P2-filetextcache-stat - 1-Slot-Memo. Die Detektoren
+  // fragen dieselbe Datei 60-80x direkt hintereinander an; ExpandFileName
+  // macht pro Aufruf einen GetFullPathName-Roundtrip. Exakter String-Match
+  // auf den ROHEN FileName -> gleiche Eingabe ergibt garantiert denselben
+  // Key (reine Funktion), also verhaltensneutral.
+  if (FLastName <> '') and (FileName = FLastName) then
+    Exit(FLastKey);
+
   Result := LowerCase(ExpandFileName(FileName));
+
+  // Nur absolute Pfade memoisieren: bei relativen Pfaden haengt
+  // ExpandFileName vom aktuellen Verzeichnis ab, das sich zwischen zwei
+  // Aufrufen aendern koennte ('C:\...'-Laufwerkspfad mit Slash oder
+  // UNC '\\server\...'; laufwerksrelative 'C:foo' fallen bewusst raus).
+  if ((Length(FileName) >= 3) and (FileName[2] = ':')
+      and CharInSet(FileName[3], ['\', '/']))
+     or ((Length(FileName) >= 2) and (FileName[1] = '\')
+      and (FileName[2] = '\')) then
+  begin
+    FLastName := FileName;
+    FLastKey  := Result;
+  end;
 end;
 
 procedure SafeGetFileStat(const FileName: string;
@@ -260,7 +320,8 @@ begin
   end;
 end;
 
-function TFileTextCache.GetLines(const FileName: string): TStringList;
+function TFileTextCache.GetLines(const FileName: string;
+  AForceStat: Boolean): TStringList;
 var
   K         : string;
   SL        : TStringList;
@@ -273,6 +334,18 @@ begin
 
   if FCache.TryGetValue(K, Entry) then
   begin
+    // Perf (2026-07-05): P2-filetextcache-stat - innerhalb EINER Generation
+    // ist der Cache ein Snapshot: kein FileAge/GetFileAttributesEx pro Hit.
+    // Cross-Scan-Staleness ist ueber Clear am Scan-Start abgedeckt
+    // (Generation-Bump + Eintraege weg -> frischer Load).
+    // AForceStat=True (Fingerprint/Baseline-Drift-Pfad): Snapshot-Shortcut
+    // ueberspringen - dieser Konsument MUSS Datei-Ueberschreibungen auch
+    // OHNE zwischenzeitliches Clear sehen (Kontrakt: contextHash rechnet
+    // auf dem aktuellen Datei-Inhalt; Regressionstest
+    // Baseline_MatchesViaContextHashAfterLineDrift).
+    if (Entry.StatGeneration = FGeneration) and not AForceStat then
+      Exit(Entry.Lines);
+
     SafeGetFileStat(FileName, CurrMTime, CurrSize);
     // Cache-Hit nur wenn mtime UND Size identisch sind. Bei sub-Sekunden-
     // Re-Writes der gleichen Datei aendert sich oft nur die Size (FileAge
@@ -280,7 +353,10 @@ begin
     if (CurrMTime <> 0)
        and (CurrMTime = Entry.MTime)
        and (CurrSize = Entry.Size) then
+    begin
+      Entry.StatGeneration := FGeneration;  // Stat fuer diese Generation erledigt
       Exit(Entry.Lines);
+    end;
     // Stale - aus Cache raus, danach neu laden.
     FCache.Remove(K);
   end;
@@ -297,19 +373,28 @@ begin
 
   if SL = nil then Exit;
   SafeGetFileStat(FileName, CurrMTime, CurrSize);
-  FCache.Add(K, TFileTextCacheEntry.Create(SL, CurrMTime, CurrSize));
+  // Perf (2026-07-05): P2-filetextcache-stat - der frische Eintrag traegt die
+  // aktuelle Generation: der Stat ist hiermit fuer diese Generation erledigt.
+  FCache.Add(K, TFileTextCacheEntry.Create(SL, CurrMTime, CurrSize, FGeneration));
   Result := SL;
 end;
 
 procedure TFileTextCache.Clear;
 begin
+  // Perf (2026-07-05): P2-filetextcache-stat - Generation-Bump: alle danach
+  // (theoretisch) noch gesehenen Alt-Eintraege muessten neu ge-stat-et
+  // werden. Praktisch zerstoert FCache.Clear ohnehin alle Eintraege; der
+  // Bump haelt die Invariante "Eintrag mit fremder Generation => Stat"
+  // auch fuer kuenftige partielle Invalidierungen (Remove o.ae.) korrekt.
+  Inc(FGeneration);
   FCache.Clear;
 end;
 
 // --- Wrapper-Funktionen ---
 
 function AcquireLines(const FileName: string;
-  out OwnedByCache: Boolean; ACache: TFileTextCache): TStringList;
+  out OwnedByCache: Boolean; ACache: TFileTextCache;
+  AForceStat: Boolean): TStringList;
 var
   Cache: TFileTextCache;
 begin
@@ -319,7 +404,7 @@ begin
   if Cache = nil then Cache := gFileTextCache;
   if Assigned(Cache) then
   begin
-    Result := Cache.GetLines(FileName);
+    Result := Cache.GetLines(FileName, AForceStat);
     if Result <> nil then
     begin
       OwnedByCache := True;

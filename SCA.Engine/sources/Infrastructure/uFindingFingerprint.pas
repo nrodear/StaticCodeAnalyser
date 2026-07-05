@@ -25,7 +25,7 @@ unit uFindingFingerprint;
 interface
 
 uses
-  System.SysUtils,
+  System.SysUtils, System.Generics.Collections,
   uMethodd12;
 
 const
@@ -44,6 +44,20 @@ type
     // Variante mit expliziten Parametern - fuer Tests + direkte Aufrufer.
     class function ContextHashFor(const FileName: string; LineNo: Integer;
       Radius: Integer = CONTEXT_HASH_RADIUS): string; static;
+
+    // Perf (2026-07-05): P3 ContextHash-Memo - memoisierte Variante fuer
+    // Schleifen ueber viele Findings (SARIF-Export, Baseline Write/Apply).
+    // AMemo ist ein CALLER-SCOPED Dictionary (kein Global, kein Lifecycle-
+    // Problem): Key ist LowerCase(Datei)+'|'+Zeile, Value der fertige Hash.
+    // Mehrere Findings auf derselben (Datei,Zeile) bezahlen Snippet-Join +
+    // Normalize + SHA256 (und im kalten Cache den File-Read) nur einmal;
+    // auch '' (Datei nicht lesbar) wird memoisiert. Gilt nur fuer den
+    // DEFAULT-Radius. AMemo=nil faellt auf ContextHash(F) zurueck.
+    // Verhaltensneutral: ContextHashFor ist deterministisch in
+    // (Datei,Zeile) bei stabilem Datei-Inhalt - dieselbe Annahme, die der
+    // bestehende gFileTextCache-Snapshot bereits macht.
+    class function ContextHashMemo(const F: TLeakFinding;
+      AMemo: TDictionary<string, string>): string; static;
 
     // Normalisierungs-Helper (public fuer Tests):
     // Tabs -> Space, kollabiert Whitespace-Runs zu einem Space, trim,
@@ -146,7 +160,13 @@ begin
   Result := '';
   if (FileName = '') or (LineNo < 1) or (Radius < 0) then Exit;
 
-  Lines := AcquireLines(FileName, Cached);
+  // AForceStat=True: der contextHash MUSS auf dem AKTUELLEN Datei-Inhalt
+  // rechnen - Baseline-Drift-Matching vergleicht Kontexte UEBER Datei-
+  // Ueberschreibungen hinweg, auch ohne zwischenzeitliches Cache-Clear
+  // (Kontrakt-Test: Baseline_MatchesViaContextHashAfterLineDrift). Das
+  // P2-Generation-Skip gilt hier deshalb nicht; die Kosten deckelt das
+  // P3-Memo (1x pro Datei|Zeile).
+  Lines := AcquireLines(FileName, Cached, nil, True);
   if Lines = nil then Exit;
   try
     if Lines.Count = 0 then Exit;
@@ -183,6 +203,26 @@ begin
   if F = nil then Exit('');
   if not TryStrToInt(F.LineNumber, LineNo) then LineNo := 0;
   Result := ContextHashFor(F.FileName, LineNo, Radius);
+end;
+
+class function TFindingFingerprint.ContextHashMemo(const F: TLeakFinding;
+  AMemo: TDictionary<string, string>): string;
+// Perf (2026-07-05): P3 ContextHash-Memo - siehe Interface-Kommentar.
+// Key-Bildung: LineNumber wird wie in ContextHash geparst (unparsbar -> 0,
+// liefert dann wie bisher ''), damit '7' und '07' denselben Eintrag
+// treffen. LowerCase auf den Pfad: Windows-FS ist case-insensitiv, gleiche
+// Datei in anderer Schreibweise soll nicht doppelt gelesen werden.
+var
+  LineNo : Integer;
+  Key    : string;
+begin
+  if F = nil then Exit('');
+  if AMemo = nil then Exit(ContextHash(F));
+  if not TryStrToInt(F.LineNumber, LineNo) then LineNo := 0;
+  Key := LowerCase(F.FileName) + '|' + IntToStr(LineNo);
+  if AMemo.TryGetValue(Key, Result) then Exit;
+  Result := ContextHashFor(F.FileName, LineNo, CONTEXT_HASH_RADIUS);
+  AMemo.Add(Key, Result);
 end;
 
 end.

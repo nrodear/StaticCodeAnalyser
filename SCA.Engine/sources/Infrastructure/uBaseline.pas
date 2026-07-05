@@ -72,32 +72,41 @@ end;
 class procedure TBaseline.Write(Findings: TObjectList<TLeakFinding>;
   const DestFile: string);
 var
-  Arr   : TJSONArray;
-  Obj   : TJSONObject;
-  F     : TLeakFinding;
-  Root  : TJSONObject;
-  SL    : TStringList;
+  Arr     : TJSONArray;
+  Obj     : TJSONObject;
+  F       : TLeakFinding;
+  Root    : TJSONObject;
+  SL      : TStringList;
+  CtxMemo : TDictionary<string, string>;
 begin
   if DestFile = '' then Exit;
   Arr := TJSONArray.Create;
-  if Assigned(Findings) then
-    for F in Findings do
-    begin
-      if F.Kind = fkFileReadError then Continue; // I/O-Fehler nicht baseline'n
-      Obj := TJSONObject.Create;
-      Obj.AddPair('file',        ExtractFileName(F.FileName));
-      Obj.AddPair('kind',        KindName(F.Kind));
-      Obj.AddPair('method',      F.MethodName);
-      Obj.AddPair('detail',      F.MissingVar);
-      Obj.AddPair('line',        F.LineNumber);
-      Obj.AddPair('fingerprint', Fingerprint(F));
-      // C.2: zusaetzlich Code-Snippet-Hash. Leer wenn Datei nicht lesbar -
-      // dann faellt Apply auf den legacy fingerprint zurueck.
-      var Ctx := TFindingFingerprint.ContextHash(F);
-      if Ctx <> '' then
-        Obj.AddPair('contextHash', Ctx);
-      Arr.AddElement(Obj);
-    end;
+  // Perf (2026-07-05): P3 ContextHash-Memo - caller-scoped Memo fuer diesen
+  // Write-Lauf (kein Global): identische (Datei,Zeile) wird nur einmal
+  // gelesen + gehasht. Hash-Werte bleiben identisch (deterministisch).
+  CtxMemo := TDictionary<string, string>.Create;
+  try
+    if Assigned(Findings) then
+      for F in Findings do
+      begin
+        if F.Kind = fkFileReadError then Continue; // I/O-Fehler nicht baseline'n
+        Obj := TJSONObject.Create;
+        Obj.AddPair('file',        ExtractFileName(F.FileName));
+        Obj.AddPair('kind',        KindName(F.Kind));
+        Obj.AddPair('method',      F.MethodName);
+        Obj.AddPair('detail',      F.MissingVar);
+        Obj.AddPair('line',        F.LineNumber);
+        Obj.AddPair('fingerprint', Fingerprint(F));
+        // C.2: zusaetzlich Code-Snippet-Hash. Leer wenn Datei nicht lesbar -
+        // dann faellt Apply auf den legacy fingerprint zurueck.
+        var Ctx := TFindingFingerprint.ContextHashMemo(F, CtxMemo);
+        if Ctx <> '' then
+          Obj.AddPair('contextHash', Ctx);
+        Arr.AddElement(Obj);
+      end;
+  finally
+    CtxMemo.Free;
+  end;
 
   Root := TJSONObject.Create;
   Root.AddPair('version',     '1');
@@ -141,11 +150,13 @@ var
   CtxJson   : TJSONValue;
   FpSet     : TDictionary<string, Boolean>;
   CtxSet    : TDictionary<string, Boolean>;
+  CtxMemo   : TDictionary<string, string>;
   i         : Integer;
   F         : TLeakFinding;
   FCtx      : string;
 begin
   Result := 0;
+  CtxMemo := nil;
   if (Findings = nil) or (BaselineFile = '') then Exit;
   if not FileExists(BaselineFile) then Exit;
 
@@ -214,13 +225,18 @@ begin
     // contextHash-Eintraege hat. Bei Legacy-Baselines (nur fingerprint)
     // spart das ein SHA256 + File-Read pro Finding (= ~191k vermiedene
     // Operationen bei einem Real-World-Scan).
+    // Perf (2026-07-05): P3 ContextHash-Memo - zusaetzlich wird innerhalb
+    // dieses Apply-Laufs jede (Datei,Zeile) nur einmal gehasht (CtxMemo,
+    // caller-scoped, im finally freigegeben).
     var HasCtx: Boolean := CtxSet.Count > 0;
+    if HasCtx then
+      CtxMemo := TDictionary<string, string>.Create;
     for i := Findings.Count - 1 downto 0 do
     begin
       F := Findings[i];
       if F.Kind = fkFileReadError then Continue;
       if HasCtx then
-        FCtx := TFindingFingerprint.ContextHash(F)
+        FCtx := TFindingFingerprint.ContextHashMemo(F, CtxMemo)
       else
         FCtx := '';
       if ((FCtx <> '') and CtxSet.ContainsKey(FCtx))
@@ -233,6 +249,7 @@ begin
   finally
     FpSet.Free;
     CtxSet.Free;
+    CtxMemo.Free;
     Root.Free;
   end;
 end;
