@@ -37,7 +37,7 @@ implementation
 uses
   System.SysUtils, System.IOUtils,
   uDfmParser, uComponentGraph, uDfmBinaryReader,
-  uParser2, uAstNode, uFormBinder,
+  uParser2, uAstNode, uFormBinder, uSymbolReferenceIndex,
   uDfmDefaultName,
   uDfmHardcodedCaption,
   uDfmHardcodedDbCreds,
@@ -54,6 +54,7 @@ uses
   uDfmForbiddenClass,
   uDfmDbInUiForm,
   uDfmCrossFormCoupling,
+  uDfmComponentUnused,
   uDfmLayerViolation,
   uDfmGodHandler,
   uDfmActionMismatch,
@@ -160,6 +161,12 @@ begin
     TDfmEmptyBoundEventDetector.Analyze(Binding, DfmFileName, Results);
     TDfmSchemaMismatchDetector.Analyze(Binding, DfmFileName, Results);
     TDfmSqlFromUserInputDetector.Analyze(Binding, DfmFileName, Results);
+    // Cross-Unit-Detektor (SCA184): unbenutzte DFM-Komponente. Braucht den
+    // repo-weiten Symbol-Index; ohne ihn (Single-File) schweigt er selbst (S1).
+    // AOwnUnitPath = PasFileName (Cross-Unit-Lookup + S3-Quelltext),
+    // AFileName = DfmFileName (Fundort).
+    TDfmComponentUnusedDetector.Analyze(Binding, Graph, RepoIdx,
+      CtxSymbolRefIndex(AContext), PasFileName, DfmFileName, Results);
   except
     // Parser-/Lookup-Crash bei degenerierten Eingaben nicht propagieren.
     // Der Pascal-Detektor-Lauf laeuft danach sauber weiter.

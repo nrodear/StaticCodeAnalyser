@@ -73,6 +73,7 @@ contains
   uDestructorWithoutInherited in 'sources\Detectors\uDestructorWithoutInherited.pas',
   uDfmActionMismatch in 'sources\Detectors\uDfmActionMismatch.pas',
   uDfmCircularDataSource in 'sources\Detectors\uDfmCircularDataSource.pas',
+  uDfmComponentUnused in 'sources\Detectors\uDfmComponentUnused.pas',
   uDfmCrossFormCoupling in 'sources\Detectors\uDfmCrossFormCoupling.pas',
   uDfmDataModuleSplitHint in 'sources\Detectors\uDfmDataModuleSplitHint.pas',
   uDfmDbInUiForm in 'sources\Detectors\uDfmDbInUiForm.pas',

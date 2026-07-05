@@ -47,6 +47,7 @@ uses
   uTestDfmForbiddenClass in 'uTestDfmForbiddenClass.pas',
   uTestDfmDbInUiForm in 'uTestDfmDbInUiForm.pas',
   uTestDfmCrossFormCoupling in 'uTestDfmCrossFormCoupling.pas',
+  uTestDfmComponentUnused in 'uTestDfmComponentUnused.pas',
   uTestDfmLayerViolation in 'uTestDfmLayerViolation.pas',
   uTestDfmGodHandler in 'uTestDfmGodHandler.pas',
   uTestDfmActionMismatch in 'uTestDfmActionMismatch.pas',

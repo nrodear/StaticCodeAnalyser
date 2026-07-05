@@ -5,7 +5,7 @@
         <FrameworkType>None</FrameworkType>
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Release</Config>
-        <Platform Condition="'$(Platform)'==''">Win32</Platform>
+        <Platform Condition="'$(Platform)'==''">Win64</Platform>
         <ProjectName Condition="'$(ProjectName)'==''">TestProject</ProjectName>
         <TargetedPlatforms>3</TargetedPlatforms>
         <AppType>Console</AppType>
@@ -63,6 +63,7 @@
         <VerInfo_Release>3</VerInfo_Release>
         <VerInfo_Build>0</VerInfo_Build>
         <VerInfo_Keys>CompanyName=;FileDescription=Static Code Analysis Tool for Delphi (DUnitX Test Suite);FileVersion=0.9.3.0;InternalName=TestProject;LegalCopyright=;LegalTrademarks=;OriginalFilename=TestProject.exe;ProductName=Static Code Analysis Tool for Delphi;ProductVersion=0.9.3.0;Comments=Release 0.9.3 (2026-05-27)</VerInfo_Keys>
+        <DCC_Define>TESTINSIGHT;$(DCC_Define)</DCC_Define>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
         <DCC_UsePackage>SCA.SharedUI;SCA.Engine;vclwinx;fmx;vclie;DbxCommonDriver;bindengine;IndyIPCommon;VCLRESTComponents;FireDACCommonODBC;FireDACCommonDriver;appanalytics;IndyProtocols;vclx;Skia.Package.RTL;IndyIPClient;dbxcds;vcledge;bindcompvclwinx;bindcompfmx;inetdb;FireDACSqliteDriver;DbxClientDriver;soapmidas;vclactnband;fmxFireDAC;dbexpress;DBXMySQLDriver;VclSmp;inet;vcltouch;fmxase;dbrtl;Skia.Package.FMX;fmxdae;FireDACMSAccDriver;CustomIPTransport;vcldsnap;DBXInterBaseDriver;IndySystem;Skia.Package.VCL;vcldb;vclFireDAC;bindcomp;FireDACCommon;IndyCore;RESTBackendComponents;bindcompdbx;rtl;FireDACMySQLDriver;FireDACADSDriver;RESTComponents;DBXSqliteDriver;vcl;IndyIPServer;dsnapxml;dsnapcon;adortl;vclimg;FireDACPgDriver;FireDAC;inetdbxpress;xmlrtl;tethering;bindcompvcl;dsnap;CloudService;fmxobj;bindcompvclsmp;soaprtl;soapserver;FireDACIBDriver;$(DCC_UsePackage)</DCC_UsePackage>
@@ -128,6 +129,7 @@
         <DCCReference Include="uTestDfmForbiddenClass.pas"/>
         <DCCReference Include="uTestDfmDbInUiForm.pas"/>
         <DCCReference Include="uTestDfmCrossFormCoupling.pas"/>
+        <DCCReference Include="uTestDfmComponentUnused.pas"/>
         <DCCReference Include="uTestDfmLayerViolation.pas"/>
         <DCCReference Include="uTestDfmGodHandler.pas"/>
         <DCCReference Include="uTestDfmActionMismatch.pas"/>

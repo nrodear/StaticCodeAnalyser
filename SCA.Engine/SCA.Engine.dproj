@@ -6,7 +6,7 @@
         <FrameworkType>None</FrameworkType>
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Release</Config>
-        <Platform Condition="'$(Platform)'==''">Win32</Platform>
+        <Platform Condition="'$(Platform)'==''">Win64</Platform>
         <ProjectName Condition="'$(ProjectName)'==''">SCA.Engine</ProjectName>
         <TargetedPlatforms>3</TargetedPlatforms>
         <AppType>Package</AppType>
@@ -139,6 +139,7 @@
         <DCCReference Include="sources\Detectors\uDestructorWithoutInherited.pas"/>
         <DCCReference Include="sources\Detectors\uDfmActionMismatch.pas"/>
         <DCCReference Include="sources\Detectors\uDfmCircularDataSource.pas"/>
+        <DCCReference Include="sources\Detectors\uDfmComponentUnused.pas"/>
         <DCCReference Include="sources\Detectors\uDfmCrossFormCoupling.pas"/>
         <DCCReference Include="sources\Detectors\uDfmDataModuleSplitHint.pas"/>
         <DCCReference Include="sources\Detectors\uDfmDbInUiForm.pas"/>
