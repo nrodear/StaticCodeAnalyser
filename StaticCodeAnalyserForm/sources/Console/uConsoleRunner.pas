@@ -75,8 +75,8 @@ type
     TimeDetectors : Boolean;        // --time-detectors           pro-Detektor-Timing-Tabelle nach Scan
     TimeDetectorsOut : string;      // --time-detectors-out <file> schreibt die Markdown-Tabelle in
                                     //   die angegebene Datei (zusaetzlich zu/statt stdout). Pflicht
-                                    //   wenn der Aufrufer stdout via Pipe/Redirect nutzt - der CONOUT$-
-                                    //   Pfad im dpr ignoriert Pipe-Redirects.
+                                    //   wenn man die Tabelle als Datei archivieren will (stdout-Pipes
+                                    //   funktionieren seit 2026-07-05 ebenfalls, s. dpr-Redirect-Support).
     // ---- Telemetrie (C.5) ----
     TelemetryCsv  : string;         // --telemetry-csv <file>     suppression-marker-hits als CSV ausgeben
     // ---- Findings-Filter ----
@@ -446,8 +446,8 @@ begin
   WriteLn('  --time-detectors      Aggregiert per-Detektor TotalMs + CallCount');
   WriteLn('  --time-detectors-out <file>');
   WriteLn('                        Schreibt die Markdown-Tabelle in die angegebene Datei');
-  WriteLn('                        (impliziert --time-detectors). Nuetzlich weil das exe');
-  WriteLn('                        intern auf CONOUT$ schreibt und stdout-Pipes ignoriert.');
+  WriteLn('                        (impliziert --time-detectors). Praktisch zum');
+  WriteLn('                        Archivieren; stdout-Pipes funktionieren ebenfalls.');
   WriteLn('                        ueber den Scan. Markdown-Tabelle am Ende.');
   WriteLn('                        Identifiziert Hot-Path-Detektoren fuer');
   WriteLn('                        gezielte Optimierung.');
@@ -590,7 +590,8 @@ procedure WriteDetectorTimingsMarkdown(const AOutFile: string = '');
 // AvgMs / %-Anteil-am-Scan, sortiert nach TotalMs absteigend. Daten kommt
 // aus gDetectorTimings (befuellt durch das AOnTime-Lambda in ParseLeaks).
 // AOutFile = '' -> stdout (WriteLn). AOutFile <> '' -> zusaetzlich
-// als UTF-8 in die Datei schreiben (bypassing CONOUT$-Limitierung).
+// als UTF-8 in die Datei schreiben (Archiv-Komfort; stdout-Pipes gehen seit
+// dem dpr-Redirect-Support 2026-07-05 ebenfalls).
 var
   Pairs       : TArray<TPair<string, TPair<Int64, Integer>>>;
   TotalMs     : Int64;
@@ -644,12 +645,12 @@ begin
     Lines.Add(Format('Total: %d ms over %d detectors',
       [TotalMs, Length(Pairs)]));
 
-    // stdout-Pfad: weiter wie bisher (greift wenn keine Pipe-Redirection
-    // aktiv ist, sonst landet's via CONOUT$ in der Konsole).
+    // stdout-Pfad: Konsole ODER Redirect-Ziel (dpr bindet umgeleitete
+    // Streams seit 2026-07-05 an ihre Std-Handles).
     for i := 0 to Lines.Count - 1 do
       WriteLn(Lines[i]);
 
-    // File-Pfad: explizit gewuenschter Output (umgeht CONOUT$-Limit).
+    // File-Pfad: explizit gewuenschte Zusatz-Datei.
     if AOutFile <> '' then
     begin
       try

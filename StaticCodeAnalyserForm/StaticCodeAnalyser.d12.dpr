@@ -5,8 +5,9 @@ program StaticCodeAnalyser.d12;
 //
 // Im CLI-Mode haengen wir uns ueber AttachConsole(ATTACH_PARENT_PROCESS)
 // an die schon offene Konsole des Aufrufers an (typisch: cmd.exe oder ein
-// CI-Runner). stdout/stderr werden danach auf CONOUT$ umgebogen, damit
-// WriteLn / Output / ErrOutput am erwarteten Ziel landen.
+// CI-Runner). Nicht umgeleitete Streams gehen auf CONOUT$; UMGELEITETE
+// Streams (Pipe / '> log.txt') werden an ihre geerbten Std-Handles
+// gebunden und landen im Redirect-Ziel (siehe AttachToParentConsole).
 //
 // Bekannter Schoenheitsfehler: der cmd-Prompt kommt sofort zurueck bevor
 // die letzte Output-Zeile sichtbar ist (Windows-Quirk fuer GUI-Subsystem-
@@ -54,30 +55,87 @@ end;
 
 // Hangt sich an die Konsole des Aufrufer-Prozesses (typisch cmd.exe / pwsh)
 // und biegt die Pascal-RTL-TextFiles Output/ErrOutput dorthin um.
-// Liefert True wenn eine Konsole verfuegbar war (auch wenn sie bereits
-// zuvor existierte, z.B. CI-Runner). False wenn der Aufrufer keine Konsole
-// hatte (Doppelklick aus Explorer) - in dem Fall gehen WriteLns ins Leere,
-// was im CLI-Mode unueblich aber nicht crash-relevant ist.
+//
+// Redirect-Support (Design-Entscheid 2026-07-05, ersetzt den frueheren
+// CONOUT$-only-Trade-Off): ist stdout/stderr beim Start UMGELEITET
+// (Pipe oder 'sca.exe > log.txt'), wird das jeweilige TextFile direkt an
+// den geerbten Std-Handle gebunden - der Output landet also im Redirect-
+// Ziel wie bei jedem normalen Konsolenprogramm. Das funktioniert AUCH
+// ohne Parent-Konsole (CI-Runner/mintty, wo AttachConsole fehlschlaegt -
+// vorher ging der Output dort komplett verloren). Nicht umgeleitete
+// Streams gehen wie bisher auf CONOUT$ der attachten Konsole.
+// Fuer den Redirect-Fall bekommt Output einen 64KB-Puffer (P13: statt
+// einem WriteFile-Syscall pro 128 Bytes; auf der echten Konsole flusht
+// die RTL ohnehin pro Write-Statement, dort bringt der Puffer nichts).
+//
+// Liefert True wenn irgendein Output-Kanal verfuegbar ist (Konsole
+// und/oder Redirect). False nur ohne beides (Doppelklick aus Explorer) -
+// dann gehen WriteLns ins Leere, was nicht crash-relevant ist.
+var
+  // Muss die komplette WriteLn-Lifetime bis zum RTL-Finalization-Close
+  // ueberleben -> Programm-globale Variable, kein lokales Array.
+  GStdOutTextBuf: array[0..65535] of Byte;
+
 function AttachToParentConsole: Boolean;
 const
   ATTACH_PARENT_PROCESS_FLAG = DWORD(-1);
+
+  // True wenn der Std-Handle existiert und KEINE echte Konsole ist
+  // (= umgeleitet auf Datei, Pipe oder Geraet wie NUL). GetConsoleMode
+  // schlaegt genau fuer Nicht-Konsolen-Handles fehl - deckt damit auch
+  // '> NUL' ab, das als FILE_TYPE_CHAR durch einen reinen
+  // GetFileType-Check rutschen wuerde (Review 2026-07-05).
+  function IsRedirected(AHandle: THandle): Boolean;
+  var
+    Mode: DWORD;
+  begin
+    Result := False;
+    if (AHandle = 0) or (AHandle = INVALID_HANDLE_VALUE) then Exit;
+    Result := not GetConsoleMode(AHandle, Mode);
+  end;
+
+  // Bindet ein RTL-TextFile an seinen Std-Handle. AssignFile('') + Rewrite
+  // bindet laut RTL (System.TextOpen) adressbasiert: @T=@ErrOutput ->
+  // STD_ERROR_HANDLE, sonst STD_OUTPUT_HANDLE. Der explizite Override
+  // danach ist dafuer redundant, macht die Bindung aber unabhaengig von
+  // dieser Adress-Magie (z.B. falls kuenftig ein drittes TextFile hier
+  // durchlaeuft) und dokumentiert die Absicht.
+  procedure BindToStdHandle(var T: Text; AStdHandleId: DWORD);
+  begin
+    AssignFile(T, '');
+    Rewrite(T);
+    TTextRec(T).Handle := GetStdHandle(AStdHandleId);
+  end;
+
+var
+  OutRedirected, ErrRedirected, Attached: Boolean;
 begin
-  Result := AttachConsole(ATTACH_PARENT_PROCESS_FLAG);
+  OutRedirected := IsRedirected(GetStdHandle(STD_OUTPUT_HANDLE));
+  ErrRedirected := IsRedirected(GetStdHandle(STD_ERROR_HANDLE));
+  Attached      := AttachConsole(ATTACH_PARENT_PROCESS_FLAG);
+  Result        := Attached or OutRedirected or ErrRedirected;
   if not Result then Exit;
-  // System.Output / System.ErrOutput wurden vom RTL-Startup auf die (nicht
-  // existente) Default-Konsole gemappt. Nach AttachConsole zeigen die alten
-  // Handles ins Leere - daher TextFiles neu auf CONOUT$ binden. CONOUT$ ist
-  // ein Windows-Special-File das auf die aktive Konsole verweist und immer
-  // schreibbar ist solange eine Konsole attached ist.
-  //
-  // Bekannter Trade-Off: CONOUT$ ignoriert stdout/stderr-Redirects (Pipe
-  // oder 'sca.exe > log.txt'). Wer Output in eine Datei braucht, soll
-  // detector-specific File-Flags nutzen (z.B. --time-detectors-out FILE).
   try
-    AssignFile(Output,    'CONOUT$');
-    Rewrite(Output);
-    AssignFile(ErrOutput, 'CONOUT$');
-    Rewrite(ErrOutput);
+    if OutRedirected then
+    begin
+      BindToStdHandle(Output, STD_OUTPUT_HANDLE);
+      SetTextBuf(Output, GStdOutTextBuf);
+    end
+    else if Attached then
+    begin
+      // CONOUT$ = Special-File der aktiven Konsole, immer schreibbar
+      // solange eine Konsole attached ist.
+      AssignFile(Output, 'CONOUT$');
+      Rewrite(Output);
+    end;
+
+    if ErrRedirected then
+      BindToStdHandle(ErrOutput, STD_ERROR_HANDLE)
+    else if Attached then
+    begin
+      AssignFile(ErrOutput, 'CONOUT$');
+      Rewrite(ErrOutput);
+    end;
   except
     // Bei IO-Errors stillschweigend zurueck - der CLI-Lauf laeuft weiter,
     // nur ohne Output. Exit-Codes funktionieren unabhaengig davon.
