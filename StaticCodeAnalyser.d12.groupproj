@@ -18,6 +18,9 @@
         <Projects Include="StaticCodeAnalyserForm\tests\TestProject.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="SCA.CLI.Demo\SCA.CLI.Demo.dproj">
+            <Dependencies/>
+        </Projects>
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Default.Personality.12</Borland.Personality>
@@ -71,14 +74,23 @@
     <Target Name="TestProject:Make">
         <MSBuild Projects="StaticCodeAnalyserForm\tests\TestProject.dproj" Targets="Make"/>
     </Target>
+    <Target Name="SCA_CLI_Demo">
+        <MSBuild Projects="SCA.CLI.Demo\SCA.CLI.Demo.dproj"/>
+    </Target>
+    <Target Name="SCA_CLI_Demo:Clean">
+        <MSBuild Projects="SCA.CLI.Demo\SCA.CLI.Demo.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="SCA_CLI_Demo:Make">
+        <MSBuild Projects="SCA.CLI.Demo\SCA.CLI.Demo.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="SCA_Engine;SCA_SharedUI;StaticCodeAnalyser_d12;StaticCodeAnalyser_IDE_d12;TestProject"/>
+        <CallTarget Targets="SCA_Engine;SCA_SharedUI;StaticCodeAnalyser_d12;StaticCodeAnalyser_IDE_d12;TestProject;SCA_CLI_Demo"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="SCA_Engine:Clean;SCA_SharedUI:Clean;StaticCodeAnalyser_d12:Clean;StaticCodeAnalyser_IDE_d12:Clean;TestProject:Clean"/>
+        <CallTarget Targets="SCA_Engine:Clean;SCA_SharedUI:Clean;StaticCodeAnalyser_d12:Clean;StaticCodeAnalyser_IDE_d12:Clean;TestProject:Clean;SCA_CLI_Demo:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="SCA_Engine:Make;SCA_SharedUI:Make;StaticCodeAnalyser_d12:Make;StaticCodeAnalyser_IDE_d12:Make;TestProject:Make"/>
+        <CallTarget Targets="SCA_Engine:Make;SCA_SharedUI:Make;StaticCodeAnalyser_d12:Make;StaticCodeAnalyser_IDE_d12:Make;TestProject:Make;SCA_CLI_Demo:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>
