@@ -33,7 +33,27 @@ uses
   uAstFileCache, uFileTextCache, uSymbolReferenceIndex, uDfmRepoIndex;
 
 type
+  // Perf (2026-07-05): P1-strip-cache - EIN Cache-Eintrag fuer den Output
+  // von TDetectorUtils.StripStringsAndComments (gestrippter Ganztext +
+  // Char->Quellzeile-Map), pro FillCh-Variante (aktuell genau 2: '~' / ' ').
+  TStripCacheEntry = record
+    FillCh  : Char;
+    Code    : string;
+    LineFor : TArray<Integer>;
+  end;
+
   TAnalyzeContext = class
+  private
+    // Perf (2026-07-05): P1-strip-cache - per-Scan-Cache fuer gestrippte
+    // Ganztexte. Der Main-Loop verarbeitet Datei fuer Datei und
+    // RunAllDetectors laesst alle Detektoren nacheinander ueber DIESELBE
+    // Datei laufen - deshalb wird bewusst NUR die AKTUELLE Datei gehalten
+    // (Key-Vergleich, bei Datei-Wechsel ersetzen). So kollabieren ~16
+    // Ganztext-Strips pro Datei auf 1 pro FillCh-Variante, ohne dass bei
+    // 12k Dateien gestrippte Texte (~= Dateigroesse) akkumulieren.
+    // Lifecycle: Eintraege sind managed Types -> sterben mit dem Context.
+    FStripFile    : string;                    // Datei der Cache-Eintraege
+    FStripEntries : TArray<TStripCacheEntry>;  // praktisch max. 2 Slots
   public
     // --- vom Context besessen (Destroy gibt frei) ---
     AstFileCache    : TAstFileCache;
@@ -42,6 +62,15 @@ type
     // --- nur referenziert (Destroy fasst sie NICHT an) ---
     FileTextCache   : TFileTextCache;
     DetectorTimings : TDictionary<string, TPair<Int64, Integer>>;
+
+    // Perf (2026-07-05): P1-strip-cache - Lookup/Store fuer
+    // TDetectorUtils.StripStringsAndCommentsCached. TryGet liefert nur bei
+    // exaktem Key-Match (FileName UND FillCh) True; Put verwirft bei
+    // Datei-Wechsel alle alten Eintraege (Speicher-Deckel, s.o.).
+    function  TryGetStrippedText(const FileName: string; FillCh: Char;
+      out Code: string; out LineFor: TArray<Integer>): Boolean;
+    procedure PutStrippedText(const FileName: string; FillCh: Char;
+      const Code: string; const LineFor: TArray<Integer>);
 
     destructor Destroy; override;
   end;
@@ -90,6 +119,52 @@ begin
     Result := AContext.AstFileCache
   else
     Result := nil;
+end;
+
+function TAnalyzeContext.TryGetStrippedText(const FileName: string;
+  FillCh: Char; out Code: string; out LineFor: TArray<Integer>): Boolean;
+var
+  i : Integer;
+begin
+  Result := False;
+  // Anderer Dateiname -> Miss (der Aufrufer rechnet und ruft Put, das die
+  // alten Eintraege ersetzt). Exakter String-Vergleich reicht: innerhalb
+  // eines Scans bekommt jeder Detektor denselben FileName-String.
+  if FStripFile <> FileName then Exit;
+  for i := 0 to High(FStripEntries) do
+    if FStripEntries[i].FillCh = FillCh then
+    begin
+      Code    := FStripEntries[i].Code;
+      LineFor := FStripEntries[i].LineFor;
+      Exit(True);
+    end;
+end;
+
+procedure TAnalyzeContext.PutStrippedText(const FileName: string;
+  FillCh: Char; const Code: string; const LineFor: TArray<Integer>);
+var
+  i, n : Integer;
+begin
+  if FStripFile <> FileName then
+  begin
+    // Datei-Wechsel: NUR die aktuelle Datei halten (siehe Klassen-Kommentar).
+    FStripEntries := nil;
+    FStripFile    := FileName;
+  end;
+  // Vorhandenen FillCh-Slot ueberschreiben (defensiv - Aufrufer fragt vor
+  // dem Put via TryGet, praktisch kommt der Fall also nicht vor).
+  for i := 0 to High(FStripEntries) do
+    if FStripEntries[i].FillCh = FillCh then
+    begin
+      FStripEntries[i].Code    := Code;
+      FStripEntries[i].LineFor := LineFor;
+      Exit;
+    end;
+  n := Length(FStripEntries);
+  SetLength(FStripEntries, n + 1);
+  FStripEntries[n].FillCh  := FillCh;
+  FStripEntries[n].Code    := Code;
+  FStripEntries[n].LineFor := LineFor;
 end;
 
 destructor TAnalyzeContext.Destroy;

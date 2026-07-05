@@ -200,7 +200,9 @@ begin
     // Kommentare identisch entfernen und String-Bereiche die Laenge nicht
     // veraendern - die LineFor-Mapping ist fuer beide Sichten identisch.
     var LineForUnused: TArray<Integer>;
-    CodeNoStr := TDetectorUtils.StripStringsAndComments(Lines, LineForUnused);
+    // Perf (2026-07-05): P1-strip-cache - geteilter Strip via Context-Cache.
+    CodeNoStr := TDetectorUtils.StripStringsAndCommentsCached(
+      Lines, LineForUnused, AContext, FileName);
 
     // 1) 'http://...' Stringliteral - aber NICHT XML-Namespace und NICHT
     //    Localhost. Match auf das gesamte URL-Literal bis whitespace

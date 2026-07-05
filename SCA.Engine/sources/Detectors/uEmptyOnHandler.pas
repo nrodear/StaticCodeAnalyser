@@ -80,7 +80,9 @@ begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
-    Code := TDetectorUtils.StripStringsAndComments(Lines, LineFor, ' ');
+    // Perf (2026-07-05): P1-strip-cache - geteilter Strip via Context-Cache.
+    Code := TDetectorUtils.StripStringsAndCommentsCached(
+      Lines, LineFor, AContext, FileName, ' ');
 
     // Pattern: `on [E:] SomeExceptionClass do ;` or `on ... do begin end;`
     // Group 1: optional 'E:' prefix (eats up `Name : `).

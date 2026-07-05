@@ -135,7 +135,9 @@ begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
-    Code := TDetectorUtils.StripStringsAndComments(Lines, LineFor);
+    // Perf (2026-07-05): P1-strip-cache - geteilter Strip via Context-Cache.
+    Code := TDetectorUtils.StripStringsAndCommentsCached(
+      Lines, LineFor, AContext, FileName);
 
     // Phase 1: Float-Variablen sammeln. Single-Ident pro Deklaration
     // (Vereinfachung; Komma-Liste `A, B: Double` faengt nur den ersten Ident).

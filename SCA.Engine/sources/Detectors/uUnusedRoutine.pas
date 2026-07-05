@@ -215,7 +215,9 @@ begin
     // Strippt Strings + Kommentare und liefert die Char->Quellzeile-Map mit -
     // ersetzt den Zwilling von uUnusedPrivateMethod und sparte das O(n)-pro-
     // Match LineOfPos durch direkten Array-Lookup.
-    Code := TDetectorUtils.StripStringsAndComments(Lines, LineForChar);
+    // Perf (2026-07-05): P1-strip-cache - geteilter Strip via Context-Cache.
+    Code := TDetectorUtils.StripStringsAndCommentsCached(
+      Lines, LineForChar, AContext, FileName);
 
     // Interface-Method-Namen EINMAL einsammeln statt pro Routine die ganze
     // AST mit FindAll(nkInterface) zu traversieren.

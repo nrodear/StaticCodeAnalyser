@@ -154,7 +154,9 @@ begin
     // FillCh=' ' wie frueher (String-Inhalte -> Space, nicht Tilde-Default),
     // und LowerCase auf dem Gesamtergebnis ist aequivalent zum frueheren
     // Inline-LowerCase pro Code-Zeichen (LowerCase(' ')=' ', #10 invariant).
-    Code := LowerCase(TDetectorUtils.StripStringsAndComments(Lines, LineFor, ' '));
+    // Perf (2026-07-05): P1-strip-cache - geteilter Strip via Context-Cache.
+    Code := LowerCase(TDetectorUtils.StripStringsAndCommentsCached(
+      Lines, LineFor, AContext, FileName, ' '));
     // DFM-Event-Handler-Set fuer diese .pas/.dfm-Paarung.
     DfmHandlers := BuildDfmHandlerSet(FileName);
     try

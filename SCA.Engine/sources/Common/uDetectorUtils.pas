@@ -14,7 +14,8 @@ unit uDetectorUtils;
 interface
 
 uses
-  System.Classes, System.Generics.Collections; // TStrings, TList<>
+  System.Classes, System.Generics.Collections, // TStrings, TList<>
+  uAnalyzeContext;                             // Perf (2026-07-05): P1-strip-cache
 
 type
   // Container fuer extrahierte Function-Calls aus Expression-Strings
@@ -124,6 +125,17 @@ type
     // gestrippten Text auf die Quellzeile zurueckrechnen.
     class function StripStringsAndComments(Lines: TStrings;
       out LineForChar: TArray<Integer>; FillCh: Char = '~'): string; static;
+
+    // Perf (2026-07-05): P1-strip-cache - wie StripStringsAndComments, aber
+    // mit per-Scan-Cache im TAnalyzeContext (Key = FileName + FillCh).
+    // RunAllDetectors laesst alle Detektoren nacheinander ueber DIESELBE
+    // Datei laufen - die ~16 Ganztext-Strip-Aufrufer teilen sich so EIN
+    // Ergebnis pro FillCh-Variante statt jeder selbst zu strippen.
+    // AContext = nil -> exakt heutiges Verhalten (direkt rechnen, kein
+    // Cache; Tests/Single-File-Modus).
+    class function StripStringsAndCommentsCached(Lines: TStrings;
+      out LineForChar: TArray<Integer>; AContext: TAnalyzeContext;
+      const FileName: string; FillCh: Char = '~'): string; static;
 
     // Rueckrechnung Match-Position -> 1-basierte Quellzeile ueber die
     // LineForChar-Map aus StripStringsAndComments (dort: 0-basierter
@@ -388,104 +400,139 @@ class function TDetectorUtils.ScanCodeLine(const Line: string;
   var State: TCommentScanState; out LineCommentCol: Integer;
   FillCh: Char): string;
 var
-  Buf    : TStringBuilder;
   j, n   : Integer;
   c      : Char;
   InStr  : Boolean;   // String-Literale spannen nie ueber Zeilen -> lokal
   pClose : Integer;
+  Dst    : PChar;     // Schreibcursor in Result (0-basiert)
+  OutLen : Integer;
 begin
+  // Perf (2026-07-05): P1-strip-cache - TStringBuilder-Allokation pro Zeile
+  // vermeiden (Hot-Path: laeuft pro Quellzeile pro Strip). Der Output ist
+  // nie laenger als der Input (Strings werden 1:1 durch FillCh ersetzt,
+  // Kommentare entfernt) -> einmal SetLength(n), per PChar-Cursor schreiben,
+  // am Ende exakt auf OutLen trimmen. Ergebnis byte-identisch zum Builder.
   LineCommentCol := 0;
   InStr := False;
   n := Length(Line);
-  Buf := TStringBuilder.Create;
-  try
-    j := 1;
-    while j <= n do
+  SetLength(Result, n);
+  if n = 0 then Exit;
+  Dst := PChar(Result);
+  OutLen := 0;
+  j := 1;
+  while j <= n do
+  begin
+    if State.InBraceComment then
     begin
-      if State.InBraceComment then
-      begin
-        pClose := PosEx('}', Line, j);
-        if pClose = 0 then Break;             // Block laeuft in naechste Zeile
-        State.InBraceComment := False;
-        j := pClose + 1; Continue;
-      end;
-      if State.InParenComment then
-      begin
-        pClose := PosEx('*)', Line, j);
-        if pClose = 0 then Break;
-        State.InParenComment := False;
-        j := pClose + 2; Continue;
-      end;
-      c := Line[j];
-      if InStr then
-      begin
-        Buf.Append(FillCh);
-        if c = '''' then
-        begin
-          // Verdoppeltes Apostroph = escaptes Quote, bleibt im String.
-          if (j < n) and (Line[j + 1] = '''') then
-          begin Buf.Append(FillCh); Inc(j, 2); end
-          else begin InStr := False; Inc(j); end;
-        end
-        else Inc(j);
-        Continue;
-      end;
-      if c = '''' then
-      begin Buf.Append(FillCh); InStr := True; Inc(j); Continue; end;
-      if (c = '/') and (j < n) and (Line[j + 1] = '/') then
-      begin LineCommentCol := j; Break; end;  // Rest = Zeilenkommentar
-      if c = '{' then
-      begin
-        pClose := PosEx('}', Line, j + 1);
-        if pClose = 0 then begin State.InBraceComment := True; Break; end;
-        j := pClose + 1; Continue;
-      end;
-      if (c = '(') and (j < n) and (Line[j + 1] = '*') then
-      begin
-        pClose := PosEx('*)', Line, j + 2);
-        if pClose = 0 then begin State.InParenComment := True; Break; end;
-        j := pClose + 2; Continue;
-      end;
-      Buf.Append(c);
-      Inc(j);
+      pClose := PosEx('}', Line, j);
+      if pClose = 0 then Break;             // Block laeuft in naechste Zeile
+      State.InBraceComment := False;
+      j := pClose + 1; Continue;
     end;
-    Result := Buf.ToString;
-  finally
-    Buf.Free;
+    if State.InParenComment then
+    begin
+      pClose := PosEx('*)', Line, j);
+      if pClose = 0 then Break;
+      State.InParenComment := False;
+      j := pClose + 2; Continue;
+    end;
+    c := Line[j];
+    if InStr then
+    begin
+      Dst[OutLen] := FillCh; Inc(OutLen);
+      if c = '''' then
+      begin
+        // Verdoppeltes Apostroph = escaptes Quote, bleibt im String.
+        if (j < n) and (Line[j + 1] = '''') then
+        begin Dst[OutLen] := FillCh; Inc(OutLen); Inc(j, 2); end
+        else begin InStr := False; Inc(j); end;
+      end
+      else Inc(j);
+      Continue;
+    end;
+    if c = '''' then
+    begin
+      Dst[OutLen] := FillCh; Inc(OutLen);
+      InStr := True; Inc(j); Continue;
+    end;
+    if (c = '/') and (j < n) and (Line[j + 1] = '/') then
+    begin LineCommentCol := j; Break; end;  // Rest = Zeilenkommentar
+    if c = '{' then
+    begin
+      pClose := PosEx('}', Line, j + 1);
+      if pClose = 0 then begin State.InBraceComment := True; Break; end;
+      j := pClose + 1; Continue;
+    end;
+    if (c = '(') and (j < n) and (Line[j + 1] = '*') then
+    begin
+      pClose := PosEx('*)', Line, j + 2);
+      if pClose = 0 then begin State.InParenComment := True; Break; end;
+      j := pClose + 2; Continue;
+    end;
+    Dst[OutLen] := c; Inc(OutLen);
+    Inc(j);
   end;
+  SetLength(Result, OutLen);
 end;
 
 class function TDetectorUtils.StripStringsAndComments(Lines: TStrings;
   out LineForChar: TArray<Integer>; FillCh: Char): string;
+// Perf (2026-07-05): P1-strip-cache - LineForChar per SetLength+Index statt
+// TList<Integer>.Add pro Zeichen (+ ToArray-Kopie), Result einmal exakt
+// allokiert statt TStringBuilder. Zwei Phasen: erst alle Zeilen strippen
+// (Gesamtlaenge dann bekannt), dann in EINEM Durchlauf Text kopieren und
+// Zeilen-Map fuellen. Ergebnis byte-identisch zum alten Buf/Chars-Aufbau:
+// pro Zeile Part + #10, Map-Eintrag i fuer jedes Part-Zeichen UND das #10.
 var
-  Buf   : TStringBuilder;
-  Chars : TList<Integer>;
+  Parts : TArray<string>;
   State : TCommentScanState;
   i, k  : Integer;
-  Part  : string;
+  Total : Integer;
+  P, L  : Integer;
   Dummy : Integer;
+  Dst   : PChar;
 begin
-  Buf   := TStringBuilder.Create;
-  Chars := TList<Integer>.Create;
-  try
-    State := Default(TCommentScanState);
-    for i := 0 to Lines.Count - 1 do
-    begin
-      Part := ScanCodeLine(Lines[i], State, Dummy, FillCh);
-      Buf.Append(Part);
-      for k := 1 to Length(Part) do
-        Chars.Add(i);
-      // Zeilenumbruch ebenfalls auf die Quellzeile mappen, damit `\s`-Regex
-      // ueber das Zeilenende hinweg konsistent positioniert bleibt.
-      Buf.Append(#10);
-      Chars.Add(i);
-    end;
-    Result      := Buf.ToString;
-    LineForChar := Chars.ToArray;
-  finally
-    Chars.Free;
-    Buf.Free;
+  SetLength(Parts, Lines.Count);
+  State := Default(TCommentScanState);
+  Total := 0;
+  for i := 0 to Lines.Count - 1 do
+  begin
+    Parts[i] := ScanCodeLine(Lines[i], State, Dummy, FillCh);
+    Inc(Total, Length(Parts[i]) + 1);   // +1 fuer #10 pro Zeile
   end;
+
+  SetLength(Result, Total);
+  SetLength(LineForChar, Total);
+  if Total = 0 then Exit;               // 0 Zeilen -> '' + leere Map
+  Dst := PChar(Result);
+  P   := 0;                             // 0-basierter Schreibcursor
+  for i := 0 to High(Parts) do
+  begin
+    L := Length(Parts[i]);
+    if L > 0 then
+      Move(PChar(Parts[i])^, Dst[P], L * SizeOf(Char));
+    // Part-Zeichen UND den #10-Zeilenumbruch auf Quellzeile i mappen, damit
+    // `\s`-Regex ueber das Zeilenende hinweg konsistent positioniert bleibt.
+    for k := P to P + L do
+      LineForChar[k] := i;
+    Inc(P, L);
+    Dst[P] := #10;
+    Inc(P);
+  end;
+end;
+
+class function TDetectorUtils.StripStringsAndCommentsCached(Lines: TStrings;
+  out LineForChar: TArray<Integer>; AContext: TAnalyzeContext;
+  const FileName: string; FillCh: Char): string;
+begin
+  // Perf (2026-07-05): P1-strip-cache - Cache-Lookup im per-Scan-Context;
+  // ohne Context exakt das heutige Verhalten (direkt rechnen).
+  if (AContext <> nil) and
+     AContext.TryGetStrippedText(FileName, FillCh, Result, LineForChar) then
+    Exit;
+  Result := StripStringsAndComments(Lines, LineForChar, FillCh);
+  if AContext <> nil then
+    AContext.PutStrippedText(FileName, FillCh, Result, LineForChar);
 end;
 
 class function TDetectorUtils.LineForPos(const LineFor: TArray<Integer>;
