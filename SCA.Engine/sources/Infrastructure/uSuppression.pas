@@ -414,8 +414,18 @@ var
   FileWideKinds  : TSuppressedKinds;
   Match          : Boolean;
   TargetForMark  : Integer;
+  Drop           : TArray<Boolean>;
+  Dropped        : Integer;
+  r, w           : Integer;
+  OldOwns        : Boolean;
 begin
-  // Rueckwaerts iterieren - sicher beim Loeschen.
+  // Perf (2026-07-05): P5-postfilter-compact - die Entscheidungs-Schleife
+  // laeuft unveraendert rueckwaerts (Consumed-Tagging und Telemetrie-
+  // Reihenfolge bleiben damit exakt wie vorher), aber statt
+  // Findings.Delete(i) (memmoved den Tail, quadratisch bei ~700k Findings)
+  // wird nur Drop[i] markiert und danach single-pass kompaktiert.
+  SetLength(Drop, Findings.Count); // dyn array -> alles False
+  Dropped := 0;
   for i := Findings.Count - 1 downto 0 do
   begin
     F := Findings[i];
@@ -478,7 +488,34 @@ begin
     if Assigned(gSuppressionTelemetry) then
       gSuppressionTelemetry.Append(KindName(F.Kind), F.FileName,
         Line, ConsumedMarkerLine);
-    Findings.Delete(i);
+    Drop[i] := True;
+    Inc(Dropped);
+  end;
+
+  if Dropped = 0 then Exit; // nichts zu entfernen -> Kompaktierung sparen
+
+  // Kompaktierung: behaltene Findings nach vorne kopieren, gedroppte
+  // manuell freigeben, Count trimmen. OwnsObjects temporaer aus, sonst
+  // wuerde Items[w] := Items[r] das ueberschriebene Objekt freigeben
+  // (Notify). Reihenfolge der verbleibenden Findings bleibt exakt.
+  w := 0;
+  OldOwns := Findings.OwnsObjects;
+  Findings.OwnsObjects := False;
+  try
+    for r := 0 to Findings.Count - 1 do
+      if Drop[r] then
+      begin
+        if OldOwns then Findings[r].Free; // wie Delete bei owning-Liste
+      end
+      else
+      begin
+        if w <> r then Findings[w] := Findings[r];
+        Inc(w);
+      end;
+    // Tail = nur noch Duplikat-Referenzen; OwnsObjects=False -> kein Free.
+    Findings.Count := w;
+  finally
+    Findings.OwnsObjects := OldOwns;
   end;
 end;
 

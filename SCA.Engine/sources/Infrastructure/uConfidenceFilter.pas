@@ -40,21 +40,46 @@ class function TConfidenceFilter.ApplyToFindings(
   Findings: TObjectList<TLeakFinding>;
   MinConfidence: TFindingConfidence): Integer;
 var
-  i : Integer;
+  r, w    : Integer;
+  F       : TLeakFinding;
+  OldOwns : Boolean;
 begin
   Result := 0;
   if (Findings = nil) or (Findings.Count = 0) then Exit;
   if MinConfidence = fcLow then Exit; // kein Filter -> Schleife sparen
 
-  // Rueckwaerts iterieren - sicher beim Loeschen.
-  for i := Findings.Count - 1 downto 0 do
-  begin
-    if Findings[i].Kind = fkFileReadError then Continue; // Diagnose nie filtern
-    if Ord(Findings[i].Confidence) < Ord(MinConfidence) then
+  // Perf (2026-07-05): P5-postfilter-compact - Single-Pass-Kompaktierung
+  // statt Delete(i)-Schleife. Delete memmoved bei TObjectList jeweils den
+  // Tail; bei grossen Listen (Real-World-Scan ~700k Findings) wird das
+  // quadratisch. Stattdessen: Schreibindex w, behaltene Findings nach
+  // vorne kopieren, gedroppte manuell freigeben, Count trimmen.
+  // OwnsObjects muss dabei temporaer aus sein, sonst wuerde
+  // Items[w] := Items[r] das ueberschriebene Objekt freigeben (Notify).
+  // Reihenfolge der verbleibenden Findings bleibt exakt erhalten.
+  w := 0;
+  OldOwns := Findings.OwnsObjects;
+  Findings.OwnsObjects := False;
+  try
+    for r := 0 to Findings.Count - 1 do
     begin
-      Findings.Delete(i);
-      Inc(Result);
+      F := Findings[r];
+      if (F.Kind <> fkFileReadError) // Diagnose nie filtern
+         and (Ord(F.Confidence) < Ord(MinConfidence)) then
+      begin
+        if OldOwns then F.Free; // wie Delete bei owning-Liste
+        Inc(Result);
+      end
+      else
+      begin
+        if w <> r then Findings[w] := F;
+        Inc(w);
+      end;
     end;
+    // Tail abschneiden - enthaelt nur noch Duplikat-Referenzen der nach
+    // vorne kopierten Findings; OwnsObjects=False -> kein Free beim Trim.
+    Findings.Count := w;
+  finally
+    Findings.OwnsObjects := OldOwns;
   end;
 end;
 

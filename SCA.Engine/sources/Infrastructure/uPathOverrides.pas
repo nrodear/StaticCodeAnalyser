@@ -209,41 +209,66 @@ end;
 
 class procedure TPathOverrides.ApplyToFindings(Findings: TObjectList<TLeakFinding>);
 var
-  i    : Integer;
-  F    : TLeakFinding;
-  Rule : TPathOverrideRule;
-  RuleHit : Boolean;
+  r, w    : Integer;
+  F       : TLeakFinding;
+  Rule    : TPathOverrideRule;
+  DoDrop  : Boolean;
+  OldOwns : Boolean;
 begin
   if (GRules = nil) or (GRules.Count = 0) then Exit;
   if Findings = nil then Exit;
 
-  for i := Findings.Count - 1 downto 0 do  // rueckwaerts wegen Remove
-  begin
-    F := Findings[i];
-    if F.FileName = '' then Continue;
-
-    RuleHit := False;
-    for Rule in GRules do
+  // Perf (2026-07-05): P5-postfilter-compact - Single-Pass-Kompaktierung
+  // statt Delete(i)-Schleife (Delete memmoved den Tail, quadratisch bei
+  // ~700k Findings). Die Rule-Entscheidung ist pro Finding unabhaengig
+  // (erste Match-Rule gewinnt), daher identisches Ergebnis in Vorwaerts-
+  // Richtung; Reihenfolge der verbleibenden Findings bleibt exakt.
+  // OwnsObjects temporaer aus, sonst wuerde Items[w] := Items[r] das
+  // ueberschriebene Objekt freigeben (Notify).
+  w := 0;
+  OldOwns := Findings.OwnsObjects;
+  Findings.OwnsObjects := False;
+  try
+    for r := 0 to Findings.Count - 1 do
     begin
-      if not MatchesGlob(Rule.Glob, F.FileName) then Continue;
-      // Kinds-Filter
-      if not Rule.KindsAll then
-        if not (F.Kind in Rule.Kinds) then Continue;
+      F := Findings[r];
+      DoDrop := False;
 
-      RuleHit := True;
-      case Rule.Action of
-        poaDrop:
-          Findings.Delete(i);  // owns - das Objekt wird freigegeben
-        poaSeverityHint:
-          F.Severity := lsHint;
-        poaSeverityWarn:
-          F.Severity := lsWarning;
-        poaSeverityError:
-          F.Severity := lsError;
+      if F.FileName <> '' then
+        for Rule in GRules do
+        begin
+          if not MatchesGlob(Rule.Glob, F.FileName) then Continue;
+          // Kinds-Filter
+          if not Rule.KindsAll then
+            if not (F.Kind in Rule.Kinds) then Continue;
+
+          case Rule.Action of
+            poaDrop:
+              DoDrop := True;
+            poaSeverityHint:
+              F.Severity := lsHint;
+            poaSeverityWarn:
+              F.Severity := lsWarning;
+            poaSeverityError:
+              F.Severity := lsError;
+          end;
+          Break; // Erste Match-Rule gewinnt
+        end;
+
+      if DoDrop then
+      begin
+        if OldOwns then F.Free; // wie Delete bei owning-Liste
+      end
+      else
+      begin
+        if w <> r then Findings[w] := F;
+        Inc(w);
       end;
-      Break; // Erste Match-Rule gewinnt
     end;
-    if RuleHit and (Rule.Action = poaDrop) then Continue;
+    // Tail = nur noch Duplikat-Referenzen; OwnsObjects=False -> kein Free.
+    Findings.Count := w;
+  finally
+    Findings.OwnsObjects := OldOwns;
   end;
 end;
 
