@@ -6,7 +6,11 @@
         <MainSource>SCA.CLI.Demo.dpr</MainSource>
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Release</Config>
-        <Platform Condition="'$(Platform)'==''">Win64</Platform>
+        <!-- Win32 wie die restliche Projektgruppe: der Demo-Consumer linkt
+             gegen das SCA.Engine-PACKAGE, und das wird im Gruppen-Build nur
+             fuer die aktive Gruppen-Platform (Win32) erzeugt - ein Win64-
+             Default lief in E2202 (kein Win64-Engine-dcp). 2026-07-05 -->
+        <Platform Condition="'$(Platform)'==''">Win32</Platform>
         <TargetedPlatforms>3</TargetedPlatforms>
         <AppType>Console</AppType>
         <ProjectName Condition="'$(ProjectName)'==''">SCA.CLI.Demo</ProjectName>
