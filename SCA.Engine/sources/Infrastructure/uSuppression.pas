@@ -25,6 +25,7 @@ unit uSuppression;
 interface
 
 uses
+  Winapi.Windows,   // OutputDebugString (Diagnose bei nicht lesbaren Marker-Hosts)
   System.SysUtils, System.Classes, System.Generics.Collections,
   uSCAConsts, uMethodd12, uFileTextCache, uDetectorUtils,
   uSuppressionTelemetry;
@@ -67,13 +68,23 @@ type
       out FileWide: Boolean): Boolean; static;
     class function KindFromName(const Name: string;
       out Kind: TFindingKind): Boolean; static;
-    class function BuildMap(const FileName: string): TDictionary<Integer,
+    // AFailedFiles (optional): sammelt Marker-Host-Dateien, die trotz
+    // Existenz nicht lesbar waren (AcquireLines=nil) - ApplyToFindings
+    // emittiert dafuer fkFileReadError-Diagnose-Findings statt still
+    // fail-open zu laufen (Audit #10b).
+    class function BuildMap(const FileName: string;
+      AFailedFiles: TStrings = nil): TDictionary<Integer,
       TSuppressedKinds>; static;
     // Sammelt alle '// noinspection X'-Marker einer Datei. Wird komplementaer
     // zu BuildMap genutzt: BuildMap fuer den Filter-Lookup (O(1) Target->Kinds),
     // BuildMarkers fuer den Unused-Tracking-Output (Marker->Quell-Zeile).
     class procedure BuildMarkers(const FileName: string;
-      Markers: TList<TSuppressionMarker>); static;
+      Markers: TList<TSuppressionMarker>;
+      AFailedFiles: TStrings = nil); static;
+    // Traegt einen nicht lesbaren Marker-Host dedupliziert in AFailedFiles
+    // ein + OutputDebugString (Dev-Diagnose ohne UI/CLI-Abhaengigkeit).
+    class procedure NoteReadFailure(const AHostFile: string;
+      AFailedFiles: TStrings); static;
     // Phase 1 von ApplyToFindings: entfernt unterdrueckte Findings in-place
     // und markiert die zugehoerigen Marker als Consumed.
     class procedure RemoveSuppressedFindings(
@@ -81,7 +92,8 @@ type
       FileMaps: TObjectDictionary<string, TDictionary<Integer,
         TSuppressedKinds>>;
       FileMarkers: TObjectDictionary<string,
-        TList<TSuppressionMarker>>); static;
+        TList<TSuppressionMarker>>;
+      AFailedFiles: TStrings); static;
     // Phase 2: emittiert fkUnusedSuppression-Findings fuer alle Marker
     // die nichts unterdrueckt haben.
     class procedure EmitUnusedSuppressionFindings(
@@ -98,6 +110,15 @@ const
     '// noinspection-Marker suppresst nichts - Detektor wurde ' +
     'verbessert oder Target war falsch. Marker entfernen oder ' +
     'Target-Kind pruefen.';
+
+  // Diagnose-Befund (Audit_CodeReview #10b, 2026-07-05): der Marker-Host
+  // einer Datei konnte nicht gelesen werden (Encoding-/IO-Fehler, Lock).
+  // Frueher lief das STILL fail-open - alle Suppressions der Datei blieben
+  // unbemerkt wirkungslos und unterdrueckte Findings tauchten z.B. im
+  // CI-Baseline-Vergleich ploetzlich als "neu" auf.
+  MSG_SUPPRESSION_READ_ERROR =
+    'Suppression-Marker nicht auswertbar (Datei nicht lesbar) - ' +
+    'Findings dieser Datei bleiben ungefiltert.';
 
   // Kinds die per '// noinspection All' NICHT pauschal unterdrueckt
   // werden duerfen. Wer diese Befunde wirklich unterdruecken will,
@@ -243,7 +264,17 @@ begin
   end;
 end;
 
-class function TSuppression.BuildMap(const FileName: string):
+class procedure TSuppression.NoteReadFailure(const AHostFile: string;
+  AFailedFiles: TStrings);
+begin
+  OutputDebugString(PChar('[SCA] Suppression: Marker-Host nicht lesbar: ' +
+    AHostFile));
+  if (AFailedFiles <> nil) and (AFailedFiles.IndexOf(AHostFile) < 0) then
+    AFailedFiles.Add(AHostFile);
+end;
+
+class function TSuppression.BuildMap(const FileName: string;
+  AFailedFiles: TStrings):
   TDictionary<Integer, TSuppressedKinds>;
 var
   Lines      : TStringList;
@@ -282,7 +313,13 @@ begin
   // Perf: AcquireLines nutzt gFileTextCache - zweiter Aufruf (BuildMarkers
   // im selben Scan) wird zum Cache-Hit, kein doppeltes I/O.
   Lines := AcquireLines(HostFile, Cached);
-  if Lines = nil then Exit;
+  if Lines = nil then
+  begin
+    // Datei existiert, ist aber nicht lesbar (Encoding/IO/Lock) - NICHT
+    // still fail-open (Audit #10b): Diagnose sammeln, leere Map liefern.
+    NoteReadFailure(HostFile, AFailedFiles);
+    Exit;
+  end;
   try
     ScanState.InBraceComment := False;
     ScanState.InParenComment := False;
@@ -339,21 +376,31 @@ begin
 end;
 
 class procedure TSuppression.BuildMarkers(const FileName: string;
-  Markers: TList<TSuppressionMarker>);
+  Markers: TList<TSuppressionMarker>;
+  AFailedFiles: TStrings);
 var
-  Lines  : TStringList;
-  Kinds  : TSuppressedKinds;
-  i, j   : Integer;
-  L      : string;
-  M      : TSuppressionMarker;
-  Cached : Boolean;
+  Lines    : TStringList;
+  Kinds    : TSuppressedKinds;
+  i, j     : Integer;
+  L        : string;
+  M        : TSuppressionMarker;
+  Cached   : Boolean;
+  HostFile : string;
 begin
   // Perf: AcquireLines liefert dieselbe TStringList wie BuildMap (gFile-
   // TextCache) wenn beide im selben Scan fuer dasselbe File aufgerufen
   // werden - spart das zweite I/O.
   // .dfm-Findings nutzen die .pas im selben Verzeichnis als Marker-Host.
-  Lines := AcquireLines(ResolveMarkerHostFile(FileName), Cached);
-  if Lines = nil then Exit;
+  HostFile := ResolveMarkerHostFile(FileName);
+  Lines := AcquireLines(HostFile, Cached);
+  if Lines = nil then
+  begin
+    // Analog BuildMap (Audit #10b): existierende, aber nicht lesbare
+    // Hosts als Diagnose melden statt still keine Marker zu liefern.
+    if FileExists(HostFile) then
+      NoteReadFailure(HostFile, AFailedFiles);
+    Exit;
+  end;
   try
     var ScanState: TCommentScanState;
     var FileWide: Boolean;
@@ -403,7 +450,8 @@ end;
 class procedure TSuppression.RemoveSuppressedFindings(
   Findings: TObjectList<TLeakFinding>;
   FileMaps: TObjectDictionary<string, TDictionary<Integer, TSuppressedKinds>>;
-  FileMarkers: TObjectDictionary<string, TList<TSuppressionMarker>>);
+  FileMarkers: TObjectDictionary<string, TList<TSuppressionMarker>>;
+  AFailedFiles: TStrings);
 var
   i, j, Line     : Integer;
   F              : TLeakFinding;
@@ -433,7 +481,7 @@ begin
 
     if not FileMaps.TryGetValue(F.FileName, Map) then
     begin
-      Map := BuildMap(F.FileName);
+      Map := BuildMap(F.FileName, AFailedFiles);
       FileMaps.Add(F.FileName, Map);
     end;
 
@@ -464,7 +512,7 @@ begin
     if not FileMarkers.TryGetValue(F.FileName, Markers) then
     begin
       Markers := TList<TSuppressionMarker>.Create;
-      BuildMarkers(F.FileName, Markers);
+      BuildMarkers(F.FileName, Markers, AFailedFiles);
       FileMarkers.Add(F.FileName, Markers);
     end;
     // Marker als consumed markieren wenn TargetLine + Kind passen.
@@ -548,15 +596,36 @@ class procedure TSuppression.ApplyToFindings(
 var
   FileMaps    : TObjectDictionary<string, TDictionary<Integer, TSuppressedKinds>>;
   FileMarkers : TObjectDictionary<string, TList<TSuppressionMarker>>;
+  FailedFiles : TStringList;
+  i           : Integer;
+  Ferr        : TLeakFinding;
 begin
   if (Findings = nil) or (Findings.Count = 0) then Exit;
 
   FileMaps    := TObjectDictionary<string, TDictionary<Integer, TSuppressedKinds>>.Create([doOwnsValues]);
   FileMarkers := TObjectDictionary<string, TList<TSuppressionMarker>>.Create([doOwnsValues]);
+  FailedFiles := TStringList.Create;
   try
-    RemoveSuppressedFindings(Findings, FileMaps, FileMarkers);
+    FailedFiles.CaseSensitive := False;   // Windows-Pfade
+    RemoveSuppressedFindings(Findings, FileMaps, FileMarkers, FailedFiles);
     EmitUnusedSuppressionFindings(Findings, FileMarkers);
+
+    // Audit #10b (2026-07-05): nicht lesbare Marker-Hosts als Diagnose-
+    // Finding sichtbar machen (fkFileReadError laeuft an ConfidenceFilter
+    // und Baseline vorbei) - vorher stilles fail-open: Suppressions der
+    // Datei wirkten nicht, ohne jede Spur.
+    for i := 0 to FailedFiles.Count - 1 do
+    begin
+      Ferr            := TLeakFinding.Create;
+      Ferr.FileName   := FailedFiles[i];
+      Ferr.MethodName := '';
+      Ferr.LineNumber := '0';
+      Ferr.MissingVar := MSG_SUPPRESSION_READ_ERROR;
+      Ferr.SetKind(fkFileReadError);
+      Findings.Add(Ferr);
+    end;
   finally
+    FailedFiles.Free;
     FileMarkers.Free;
     FileMaps.Free;
   end;

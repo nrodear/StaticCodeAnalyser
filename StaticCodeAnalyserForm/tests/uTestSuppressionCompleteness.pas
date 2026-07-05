@@ -45,6 +45,12 @@ type
     // stale Marker dort werden NICHT gemeldet. Dieser Test schreibt den
     // Ist-Zustand fest - der kuenftige Fix MUSS ihn bewusst anfassen.
     [Test] procedure StaleMarkerOnly_KnownGap_NotReported;
+
+    // ---- Audit #10b (2026-07-05): Lesefehler ist kein stilles fail-open --
+    // Marker-Host existiert, ist aber nicht lesbar (exklusiver Lock):
+    // Original-Finding bleibt UNGEFILTERT stehen UND es gibt genau ein
+    // fkFileReadError-Diagnose-Finding mit MSG_SUPPRESSION_READ_ERROR.
+    [Test] procedure UnreadableMarkerHost_EmitsDiagnosticFinding;
   end;
 
 implementation
@@ -278,6 +284,61 @@ begin
       'Ist-Zustand (bekannte Luecke): ohne konsumierten Marker keine ' +
       'UnusedSuppression-Emission - Fix muss diesen Test bewusst drehen');
   finally F.Free; end;
+end;
+
+procedure TTestSuppressionCompleteness.UnreadableMarkerHost_EmitsDiagnosticFinding;
+// Audit #10b: BuildMap/BuildMarkers liefen bei AcquireLines=nil still
+// fail-open (leere Map, keine Spur). Jetzt: Original-Finding bleibt
+// stehen + genau 1 fkFileReadError-Diagnose auf der Datei.
+// Der Lesefehler wird ueber einen exklusiven Datei-Lock erzwungen
+// (fmShareExclusive verhindert das Open von TStringList.LoadFromFile).
+var
+  TmpPath  : string;
+  Lock     : TFileStream;
+  Findings : TObjectList<TLeakFinding>;
+  F        : TLeakFinding;
+  DiagCnt  : Integer;
+  LeakCnt  : Integer;
+begin
+  TmpPath := TPath.Combine(TPath.GetTempPath,
+    'sca_suppr_lock_' + TGUID.NewGuid.ToString + '.pas');
+  TFile.WriteAllText(TmpPath,
+    '// noinspection MemoryLeak'#13#10 +
+    'x := TStringList.Create;'#13#10);
+  try
+    Lock := TFileStream.Create(TmpPath, fmOpenRead or fmShareExclusive);
+    try
+      Findings := TObjectList<TLeakFinding>.Create(True);
+      try
+        Findings.Add(TLeakFinding.New(TmpPath, 'M', 2, 'x', fkMemoryLeak));
+        TSuppression.ApplyToFindings(Findings);
+
+        DiagCnt := 0; LeakCnt := 0;
+        for F in Findings do
+        begin
+          if F.Kind = fkFileReadError then
+          begin
+            Inc(DiagCnt);
+            Assert.AreEqual(TmpPath, F.FileName,
+              'Diagnose-Finding muss auf den Marker-Host zeigen');
+            Assert.AreEqual(MSG_SUPPRESSION_READ_ERROR, F.MissingVar,
+              'Diagnose-Message muss die Read-Error-Konstante sein');
+          end;
+          if F.Kind = fkMemoryLeak then Inc(LeakCnt);
+        end;
+        Assert.AreEqual<Integer>(1, DiagCnt,
+          'genau 1 fkFileReadError-Diagnose fuer den unlesbaren Host');
+        Assert.AreEqual<Integer>(1, LeakCnt,
+          'Original-Finding bleibt ungefiltert stehen (fail-open, aber sichtbar)');
+      finally
+        Findings.Free;
+      end;
+    finally
+      Lock.Free;
+    end;
+  finally
+    TFile.Delete(TmpPath);
+  end;
 end;
 
 initialization

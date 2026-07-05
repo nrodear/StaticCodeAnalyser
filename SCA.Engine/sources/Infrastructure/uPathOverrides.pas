@@ -234,7 +234,11 @@ begin
       F := Findings[r];
       DoDrop := False;
 
-      if F.FileName <> '' then
+      // fkFileReadError ist ein Diagnose-Befund (I/O-/Suppression-Lese-
+      // fehler) und darf von poaDrop-Rules nicht entfernt werden - sonst
+      // waere der Fehler wieder unsichtbar (Audit #10b; konsistent zur
+      // Ausnahme im ConfidenceFilter und in uBaseline).
+      if (F.FileName <> '') and (F.Kind <> fkFileReadError) then
         for Rule in GRules do
         begin
           if not MatchesGlob(Rule.Glob, F.FileName) then Continue;
