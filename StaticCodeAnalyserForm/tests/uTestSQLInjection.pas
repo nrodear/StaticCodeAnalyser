@@ -87,6 +87,25 @@ type
     [Test] procedure SQL_ExecuteFmtStringParamArgs_Reported;
     [Test] procedure SQL_VariableFromUserInput_Reported;
     [Test] procedure SQL_FormatStringMaskConcat_Reported;
+    // ---- ORM/SQL-Builder-Gate (Real-World-Audit Prio 6, 2026-07-05) ---------
+    // FP-Klassen orm-sql-builder / sql-builder-api: mORMot-Inline-Binding
+    // ':(%):' (Werte werden gebunden, nicht substituiert), ORM-Schema-
+    // Metadaten (SqlTableName/fTableName/NameUtf8 & Co. aus Compile-Zeit-
+    // Mapping) und komplette Quoting-Helfer-Aufrufe (GetFieldNameForSQL)
+    // sind kein Injection-Vektor; Folge-Arrays von FormatSql sind gebundene
+    // ?-Parameter.
+    [Test] procedure SQL_ExecuteFmtInlineBoundValue_NoFinding;
+    [Test] procedure SQL_FormatUtf8InlineBoundValue_NoFinding;
+    [Test] procedure SQL_ConcatRttiSqlTableName_NoFinding;
+    [Test] procedure SQL_BuilderAppendTableMapField_NoFinding;
+    [Test] procedure SQL_FormatUtf8MetadataArgs_NoFinding;
+    [Test] procedure SQL_FormatSequenceHelperArgs_NoFinding;
+    [Test] procedure SQL_FormatSqlBoundParamsArray_NoFinding;
+    // ...TP-Gegenkontrollen: rohe %-Substitution ohne ':(...):'  (Korpus-TP
+    // api.impl.pas:90/110) und Member-Pfade OHNE Metadaten-Endung bleiben.
+    [Test] procedure SQL_ExecuteFmtRawPercentUpdate_Reported;
+    [Test] procedure SQL_ConcatMemberPathNonMetadata_Reported;
+    [Test] procedure SQL_FormatUtf8NonMetadataMemberPath_Reported;
   end;
 
 implementation
@@ -863,6 +882,219 @@ begin
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSQLInjection),
       'Format mit %s-Maske bleibt SQL-Injection-Risiko');
+  finally F.Free; end;
+end;
+
+// =============================================================================
+// ORM/SQL-Builder-Gate (Real-World-Audit Prio 6, 2026-07-05)
+// =============================================================================
+
+procedure TTestSQLInjectionExt.SQL_ExecuteFmtInlineBoundValue_NoFinding;
+// Real-World FP (fpClass orm-sql-builder, mormot.orm.sqlite3.pas:2239
+// MainEngineUpdateField): mORMot-Inline-Binding ':(%):' - der Wert wird
+// von ExtractInlineParameters als Parameter GEBUNDEN, nicht roh
+// substituiert; die uebrigen %-Platzhalter sind RTTI-Tabellen-/Feldnamen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TFoo.UpdateField(const SetFieldName, SetValue: RawUtf8; ID: Int64): Boolean;'#13#10+
+  'begin'#13#10+
+  '  Result := ExecuteFmt(''UPDATE % SET %=:(%): WHERE RowID=:(%):'','#13#10+
+  '    [Props.SqlTableName, SetFieldName, SetValue, ID]);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    'mORMot-Inline-Binding :(%): bindet Werte - keine SQL-Injection');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_FormatUtf8InlineBoundValue_NoFinding;
+// Real-World FP (fpClass orm-sql-builder, mormot.orm.sqlite3.pas:1388
+// MemberExists): FormatUtf8 mit :(%):-gebundenem Wert + RTTI-Tabellenname.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.MemberExists(Table: TOrmClass; const KeyValue: RawUtf8);'#13#10+
+  'var sql: RawUtf8;'#13#10+
+  'begin'#13#10+
+  '  FormatUtf8(''select rowid from % where key=:(%): limit 1'','#13#10+
+  '    [Table.SqlTableName, KeyValue], sql);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    'FormatUtf8 mit :(%):-Inline-Binding ist keine SQL-Injection');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_ConcatRttiSqlTableName_NoFinding;
+// Real-World FP (fpClass orm-sql-builder, mormot.orm.sqlite3.pas:1371
+// TableMaxID, mormot.orm.storage.pas:1896/1898): einzige Konkat-Variable
+// ist der RTTI-Tabellenname der registrierten TOrm-Klasse (Member-Pfad
+// mit Metadaten-Endung SqlTableName) - Compile-Zeit-Mapping, kein Input.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.TableMaxID(Table: TOrmClass);'#13#10+
+  'var sql: RawUtf8;'#13#10+
+  'begin'#13#10+
+  '  sql := ''select rowid from '' + Table.SqlTableName +'#13#10+
+  '    '' order by rowid desc limit 1'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    'Konkat mit RTTI-Metadatum Table.SqlTableName ist keine SQL-Injection');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_BuilderAppendTableMapField_NoFinding;
+// Real-World FP (fpClass sql-builder-api, DMVC
+// MVCFramework.SQLGenerators.MSSQL.pas:117 CreateInsertSQL): INSERT-Aufbau
+// aus TableMap.fTableName ([MVCTable]-Attribut-Metadaten); Werte werden
+// spaeter als :params gebunden. Framework-Generator by design.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.CreateInsertSQL(const TableMap: TMVCTableMap);'#13#10+
+  'var lSB: TStringBuilder;'#13#10+
+  'begin'#13#10+
+  '  lSB.Append(''INSERT INTO '' + TableMap.fTableName + ''('');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    'TableMap.fTableName ist Mapping-Metadatum, keine SQL-Injection');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_FormatUtf8MetadataArgs_NoFinding;
+// Real-World FP (fpClass orm-sql-builder, mormot.orm.sql.pas:746
+// ComputeSql): vorberechnetes internes Statement, einziges Format-Argument
+// ist der RTTI-Tabellenname (Member-Pfad ...RecordProps.SqlTableName).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.ComputeSql;'#13#10+
+  'begin'#13#10+
+  '  fSelectTableHasRowsSQL := FormatUtf8(''select ID from % limit 1'','#13#10+
+  '    [StoredClassRecordProps.SqlTableName]);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    'FormatUtf8 mit reinen ORM-Metadaten-Argumenten ist keine SQL-Injection');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_FormatSequenceHelperArgs_NoFinding;
+// Real-World FP (fpClass sql-builder-api, DMVC
+// MVCFramework.SQLGenerators.Oracle.pas:259 GetSequenceValueSQL): ALLE
+// Format-Argumente sind komplette GetFieldNameForSQL-Aufrufe (Quoting-
+// Helfer, Get*ForSQL-Konvention) - Output ist escaped, kein Vektor.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TFoo.GetSequenceValueSQL(const SeqName, PKField: string): string;'#13#10+
+  'begin'#13#10+
+  '  Result := Format(''SELECT %s.NEXTVAL AS %s FROM DUAL'','#13#10+
+  '    [GetFieldNameForSQL(SeqName), GetFieldNameForSQL(PKField)]);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    'Format mit GetFieldNameForSQL-Argumenten ist keine SQL-Injection');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_FormatSqlBoundParamsArray_NoFinding;
+// Real-World FP (fpClass orm-sql-builder, mormot.orm.sqlite3.pas:2038
+// RetrieveBlobFields): FormatSql(Fmt, Args, Params) - das ERSTE Array sind
+// %-Args (hier bare ORM-Metadaten im with-Scope), das ZWEITE Array sind
+// gebundene ?-Parameter und darf die Pruefung nicht scharf schalten.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.RetrieveBlobFields(Value: TOrm);'#13#10+
+  'var sql: RawUtf8;'#13#10+
+  'begin'#13#10+
+  '  sql := FormatSql(''SELECT % FROM % WHERE ROWID=?'','#13#10+
+  '    [SqlTableRetrieveBlobFields, SqlTableName], [Value.ID]);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    'FormatSql mit Metadaten-Args + gebundenem Param-Array - kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_ExecuteFmtRawPercentUpdate_Reported;
+// TP-Gegenkontrolle (Korpus-TP mORMot dmvc-ai api.impl.pas:110
+// UpdateCustomer): rohe %-Substitution OHNE ':(...):'  von REST-
+// exponierten RawUtf8-Parametern - echte Injection. Beweist, dass das
+// Inline-Binding-Gate am AUSDRUCK haengt (kein Repo-/Unit-weites Gate).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.UpdateCustomer(id: Integer; const code, city: RawUtf8);'#13#10+
+  'begin'#13#10+
+  '  Server.Orm.ExecuteFmt(''UPDATE CustomerOrm SET Code=%, City=% '' +'#13#10+
+  '    ''WHERE RowID=%'', [code, city, id]);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSQLInjection),
+      'ExecuteFmt mit roher %-Substitution bleibt SQL-Injection-Risiko');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'ExecuteFmt'),
+      TFindingHelper.FirstOf(F, fkSQLInjection).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_ConcatMemberPathNonMetadata_Reported;
+// TP-Gegenkontrolle zum Metadaten-Pfad-Gate: Member-Pfad OHNE Metadaten-
+// Endung (Rec.UserText) bleibt Risiko - nur die enge ORM_META_IDENTS-
+// Liste (SqlTableName & Co.) wird unterdrueckt.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Run(Rec: TUserRec);'#13#10+
+  'begin'#13#10+
+  '  Query.SQL.Text := ''SELECT * FROM t WHERE name='' + Rec.UserText;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSQLInjection),
+      'Member-Pfad ohne Metadaten-Endung bleibt SQL-Injection-Risiko');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'WHERE name='),
+      TFindingHelper.FirstOf(F, fkSQLInjection).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_FormatUtf8NonMetadataMemberPath_Reported;
+// TP-Gegenkontrolle zum Format-Argument-Gate: Member-Pfad-Argument OHNE
+// Metadaten-Endung (Rec.UserInput) bleibt Risiko (Muster wie
+// mormot.db.sql.postgres GetServerSetting - dort bewusst NICHT gegatet).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Run(Rec: TSettings);'#13#10+
+  'var s: RawUtf8;'#13#10+
+  'begin'#13#10+
+  '  s := FormatUtf8(''select x from t where name=%'', [Rec.UserInput]);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSQLInjection),
+      'Format-Argument ohne Metadaten-Endung bleibt SQL-Injection-Risiko');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'FormatUtf8'),
+      TFindingHelper.FirstOf(F, fkSQLInjection).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 

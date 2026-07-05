@@ -29,6 +29,19 @@ unit uSQLInjection;
 //     kein Fund (IsIntOnlyFormatArg / AreFormatArgsInjectionSafe)
 //   * const-concat: Format-Familie mit reinen Literal-Argumenten
 //     (Seed-Daten) -> kein Fund (AreFormatArgsInjectionSafe)
+//
+// FP-Gates (2026-07-05, Real-World-Audit Prio 6 - ORM/SQL-Builder):
+//   * orm-sql-builder: mORMot-Inline-Binding ':(%):' im Format-Literal ->
+//     Werte werden von ExtractInlineParameters als Parameter GEBUNDEN,
+//     nicht roh substituiert -> kein Fund (Gate in IsFormatSqlRisk)
+//   * orm-sql-builder / sql-builder-api: Konkat-Term bzw. Format-Argument
+//     ist ein ORM-Schema-Metadatum (Table.SqlTableName, TableMap.fTableName,
+//     BlobField^.NameUtf8, ...) oder ein kompletter Quoting-Helfer-Aufruf
+//     (GetFieldNameForSQL(...)) -> kein Fund (IsOrmMetaIdent / IsOrmMetaPath
+//     / IsSafeSqlHelperCall)
+//   * sql-builder-api: Folge-Arrays der Format-Familie (FormatSql(Fmt,
+//     Args, Params)) sind gebundene ?-Parameter -> nur das ERSTE [..]-Array
+//     wird als %-Substitution geprueft (AreFormatArgsInjectionSafe)
 
 interface
 
@@ -115,9 +128,11 @@ type
     class function IsIntOnlyFormatArg(const RHS: string;
       OpenParen: Integer): Boolean; static;
     // FP-Gate (2026-07-04): int-format-concat + const-concat (Format-
-    // Familie H3) - True wenn JEDES Element ALLER [..]-Argument-Arrays ab
-    // StartAt entweder String-/Zahl-Literal oder ein lokal als Integer
-    // deklarierter Bezeichner ist. Integer koennen keine SQL-Syntax
+    // Familie H3) - True wenn JEDES Element des ERSTEN [..]-Argument-Arrays
+    // ab StartAt entweder String-/Zahl-Literal oder ein lokal als Integer
+    // deklarierter Bezeichner ist (seit 2026-07-05 auch ORM-Metadaten-
+    // Pfade und Quoting-Helfer-Aufrufe; Folge-Arrays = gebundene
+    // ?-Parameter werden ignoriert). Integer koennen keine SQL-Syntax
     // injizieren; Literale sind Entwickler-kontrolliert (Seed-INSERTs wie
     // mORMot dmvc-ai server.pas ['ACME', ..., 5]). String-VARIABLEN
     // (RawUtf8-Parameter, api.impl CreateCustomer) bleiben Risiko.
@@ -125,6 +140,23 @@ type
       const CallLow: string; StartAt: Integer): Boolean; static;
     class function IsSafeFormatArgElement(MethodNode: TAstNode;
       const ElemLow: string): Boolean; static;
+    // FP-Gate (2026-07-05): orm-sql-builder / sql-builder-api - True wenn
+    // IdentLow ein bekannter ORM-Schema-Metadaten-Name ist (RTTI-/Mapping-
+    // Properties wie SqlTableName/RowIDFieldName/NameUtf8, DMVC
+    // TableMap.fTableName/SequenceName). Solche Werte stammen aus Compile-
+    // Zeit-Metadaten der ORM-Frameworks, nicht aus externem Input. Bewusst
+    // ENGE Whole-Name-Liste aus dem Real-World-Korpus (ORM_META_IDENTS).
+    class function IsOrmMetaIdent(const IdentLow: string): Boolean; static;
+    // True wenn ElemLow ein reiner Bezeichner-/Member-Pfad ist (a.b^.c,
+    // Index-Zugriffe [..] erlaubt, keine Calls/Operatoren) dessen LETZTE
+    // Komponente ein ORM-Schema-Metadatum ist - z.B. props.SqlTableName,
+    // BlobField^.NameUtf8, Model.TableProps[i].Props.SqlTableName.
+    class function IsOrmMetaPath(const ElemLow: string): Boolean; static;
+    // True wenn ElemLow ein KOMPLETTER Aufruf eines Quoting-/Escape-/
+    // Cast-Helfers ist ('getfieldnameforsql(seq)') - SAFE_CASTS bzw. die
+    // quote*/escape*/get*forsql-Konvention (dieselben Regeln wie fuer
+    // Konkat-Terme in AllConcatTermsSafe, hier fuer Format-Argumente).
+    class function IsSafeSqlHelperCall(const ElemLow: string): Boolean; static;
     // True wenn IdentLow als Parameter/lokale Variable der Routine mit
     // Integer-Typ deklariert ist (Modifier out/var/const werden gestrippt).
     class function IsLocalIntegerIdent(MethodNode: TAstNode;
@@ -172,6 +204,34 @@ const
     'sql.add(', 'execsql(', 'execquery(', 'execproc(',
     'open(', 'commandtext',
     'macrobyname(', '.asraw'
+  );
+
+  // FP-Gate (2026-07-05): orm-sql-builder / sql-builder-api (Real-World-
+  // Audit Prio 6). ORM-Schema-Metadaten-Namen: Properties/Felder/Parameter,
+  // deren Wert aus Compile-Zeit-Mapping-Metadaten der ORM-Frameworks stammt:
+  //   * mORMot TOrmProperties: SqlTableName, SqlTableRetrieveBlobFields,
+  //     SqlTableUpdateBlobFields (mormot.orm.sqlite3 RetrieveBlobFields/
+  //     UpdateBlobFields, mormot.orm.storage TRestStorage.Create)
+  //   * mORMot ExternalDB-Mapping: fTableName, RowIDFieldName,
+  //     TableSimpleFields, InsertSet (mormot.orm.sql ComputeSql)
+  //   * mORMot RTTI-Props: NameUtf8 (BlobField^.NameUtf8)
+  //   * DMVC ActiveRecord: TableMap.fTableName (SQLGenerators.MSSQL),
+  //     SequenceName aus [MVCTable]-Attributen (SQLGenerators.PostgreSQL)
+  // Match: WHOLE Name der letzten Pfad-Komponente - bewusst eng, damit
+  // App-Variablen (code/city/lFilter...) NIE matchen.
+  ORM_META_IDENTS: array[0..8] of string = (
+    'sqltablename', 'ftablename', 'rowidfieldname',
+    'sqltableretrieveblobfields', 'sqltableupdateblobfields',
+    'tablesimplefields', 'insertset', 'nameutf8', 'sequencename'
+  );
+
+  // Safe-cast-/Escape-Funktionen: Output ist garantiert numerisch bzw.
+  // SQL-escaped. Genutzt fuer Konkat-Terme (AllConcatTermsSafe) und seit
+  // 2026-07-05 auch fuer komplette Format-Argumente (IsSafeSqlHelperCall);
+  // dafuer aus AllConcatTermsSafe hierher gehoben (Liste unveraendert).
+  SAFE_CASTS: array[0..7] of string = (
+    'inttostr', 'int64tostr', 'formatint', 'getenumname',
+    'quotedstr', 'quotedsql', 'quotedstrjson', 'sqlvartotext'
   );
 
 { ---- Heuristiken ---- }
@@ -243,11 +303,9 @@ class function TSQLInjectionDetector.AllConcatTermsSafe(MethodNode: TAstNode;
 //   ' WHERE NAME=' + QuotedStr(s) + ' OR'   -> True
 //   ' WHERE NAME=' + name                   -> False (bare Identifier)
 //   ' WHERE NAME=' + Format('%s',[name])    -> False (kein safe-cast)
-const
-  SAFE_CASTS : array[0..7] of string = (
-    'inttostr', 'int64tostr', 'formatint', 'getenumname',
-    'quotedstr', 'quotedsql', 'quotedstrjson', 'sqlvartotext'
-  );
+//
+// SAFE_CASTS steht seit 2026-07-05 im Unit-const-Block (auch von
+// IsSafeSqlHelperCall genutzt).
 var
   Stripped : string;
   i, j, p  : Integer;
@@ -256,6 +314,9 @@ var
   ident    : string;
   s        : string;
   isSafe   : Boolean;
+  LastComp : string;
+  PathOk   : Boolean;
+  Depth    : Integer;
 begin
   // 1) String-Literale durch Leerzeichen ersetzen (Position erhalten).
   //    '' innerhalb eines Strings ist Escape-Quote, weiter im String.
@@ -307,13 +368,80 @@ begin
       // Identifier vorhanden - muss safe-cast-Funktionsaufruf sein.
       // Pflicht: '(' direkt nach (ggf. Whitespace) dem Identifier.
       while (j <= Length(Stripped)) and (Stripped[j] <= ' ') do Inc(j);
+      // FP-Gate (2026-07-05): orm-sql-builder / sql-builder-api - Member-
+      // Pfad hinter '+', dessen LETZTE Komponente ein ORM-Schema-Metadatum
+      // ist ('select rowid from ' + Table.SqlTableName, mormot.orm.sqlite3
+      // TableMaxID; 'INSERT INTO ' + TableMap.fTableName, DMVC
+      // SQLGenerators.MSSQL). Metadaten stammen aus Compile-Zeit-Mapping,
+      // kein externer Input. Pfad ohne Metadaten-Endung bleibt unsicher.
+      if (j <= Length(Stripped)) and CharInSet(Stripped[j], ['.', '^', '[']) then
+      begin
+        LastComp := ident;
+        PathOk   := True;
+        while (j <= Length(Stripped)) and PathOk do
+        begin
+          case Stripped[j] of
+            '^':
+              Inc(j);
+            '.':
+              begin
+                Inc(j);
+                p := j;
+                while (j <= Length(Stripped)) and
+                      CharInSet(Stripped[j], ['a'..'z', '0'..'9', '_']) do
+                  Inc(j);
+                if j = p then
+                  PathOk := False // '.' ohne Identifier -> kein Member-Pfad
+                else
+                  LastComp := Copy(Stripped, p, j - p);
+              end;
+            '[':
+              begin
+                // Index-Zugriff: Inhalt irrelevant (der SELEKTIERTE Wert
+                // bleibt das durch den Property-Namen bestimmte Metadatum),
+                // nur balanciert konsumieren.
+                Depth := 1;
+                Inc(j);
+                while (j <= Length(Stripped)) and (Depth > 0) do
+                begin
+                  if Stripped[j] = '[' then
+                    Inc(Depth)
+                  else if Stripped[j] = ']' then
+                    Dec(Depth);
+                  Inc(j);
+                end;
+                if Depth > 0 then
+                  PathOk := False; // unbalanciert -> unklar, kein Gate
+              end;
+          else
+            Break; // Pfad-Ende (Whitespace/Operator/Klammer)
+          end;
+        end;
+        if PathOk and IsOrmMetaIdent(LastComp) then
+        begin
+          i := j; // Pfad (inkl. Index-Inhalt) ueberspringen
+          Continue;
+        end;
+        // Kein Metadaten-Pfad: wie vor 2026-07-05 zaehlt der FUEHRENDE
+        // Identifier - const-derived-Gate (2026-07-04) bleibt fuer Formen
+        // wie lVar[i] / lVar.ToLower einer Literal-Variablen erhalten.
+        if PathOk and IsConstDerivedLocal(MethodNode, ident) then
+        begin
+          i := j;
+          Continue;
+        end;
+        Exit(False); // Member-Pfad ohne Metadaten-Endung -> unsicher
+      end;
       if (j > Length(Stripped)) or (Stripped[j] <> '(') then
       begin
         // FP-Gate (2026-07-04): const-derived-variable - bare Identifier
         // ist doch sicher, wenn er in dieser Routine ausschliesslich aus
         // String-Literalen zugewiesen wird bzw. lokale Literal-Konstante
         // ist (geschlossene Wertemenge, kein externer Input erreichbar).
-        if not IsConstDerivedLocal(MethodNode, ident) then
+        // FP-Gate (2026-07-05): orm-sql-builder - ODER der Identifier ist
+        // ein bares ORM-Schema-Metadatum (with-Scope: 'FROM ' + SqlTableName).
+        if not (IsConstDerivedLocal(MethodNode, ident)
+                or IsOrmMetaIdent(ident)) then
           Exit(False); // bare Identifier -> Variable, unsicher
         Inc(i);
         Continue;
@@ -452,6 +580,130 @@ begin
   end;
 
   Result := Found;
+end;
+
+class function TSQLInjectionDetector.IsOrmMetaIdent(
+  const IdentLow: string): Boolean;
+// FP-Gate (2026-07-05): orm-sql-builder / sql-builder-api - WHOLE-Name-
+// Match gegen die enge Korpus-Liste ORM_META_IDENTS (s. const-Block).
+var
+  S : string;
+begin
+  Result := False;
+  for S in ORM_META_IDENTS do
+    if IdentLow = S then
+      Exit(True);
+end;
+
+class function TSQLInjectionDetector.IsOrmMetaPath(
+  const ElemLow: string): Boolean;
+// FP-Gate (2026-07-05): orm-sql-builder / sql-builder-api - Format-Argument
+// als reiner Bezeichner-/Member-Pfad: fuehrender Identifier, danach nur
+// '.'-Member, '^'-Deref und balancierte [..]-Indizes. Die LETZTE Komponente
+// entscheidet (props.SqlTableName, BlobField^.NameUtf8,
+// Model.TableProps[i].Props.SqlTableName). Alles andere (Calls, Operatoren,
+// Whitespace auf Top-Level) -> False, Fund bleibt.
+var
+  i, L, p : Integer;
+  Depth   : Integer;
+  LastComp: string;
+begin
+  Result := False;
+  L := Length(ElemLow);
+  if (L = 0) or not CharInSet(ElemLow[1], ['a'..'z', '_']) then Exit;
+  i := 1;
+  p := i;
+  while (i <= L) and CharInSet(ElemLow[i], ['a'..'z', '0'..'9', '_']) do
+    Inc(i);
+  LastComp := Copy(ElemLow, p, i - p);
+  while i <= L do
+  begin
+    case ElemLow[i] of
+      '^':
+        Inc(i);
+      '.':
+        begin
+          Inc(i);
+          p := i;
+          while (i <= L) and
+                CharInSet(ElemLow[i], ['a'..'z', '0'..'9', '_']) do
+            Inc(i);
+          if i = p then Exit; // '.' ohne Identifier -> kein Member-Pfad
+          LastComp := Copy(ElemLow, p, i - p);
+        end;
+      '[':
+        begin
+          // Index-Inhalt irrelevant (Property-Name bestimmt den Wert),
+          // nur balanciert konsumieren.
+          Depth := 1;
+          Inc(i);
+          while (i <= L) and (Depth > 0) do
+          begin
+            if ElemLow[i] = '[' then
+              Inc(Depth)
+            else if ElemLow[i] = ']' then
+              Dec(Depth);
+            Inc(i);
+          end;
+          if Depth > 0 then Exit; // unbalanciert -> unklar, kein Gate
+        end;
+    else
+      Exit; // Operator/Call/Whitespace -> kein reiner Member-Pfad
+    end;
+  end;
+  Result := IsOrmMetaIdent(LastComp);
+end;
+
+class function TSQLInjectionDetector.IsSafeSqlHelperCall(
+  const ElemLow: string): Boolean;
+// FP-Gate (2026-07-05): sql-builder-api - Format-Argument ist KOMPLETT ein
+// Aufruf eines Quoting-/Escape-/Cast-Helfers, z.B. DMVC SQLGenerators
+// Format('SELECT %s.NEXTVAL...', [GetFieldNameForSQL(SequenceName), ...]).
+// Der Helfer sanitisiert beliebigen Input -> Argumentinhalt irrelevant
+// (gleiche Konvention wie fuer Konkat-Terme in AllConcatTermsSafe:
+// SAFE_CASTS bzw. quote*/escape*/get*forsql).
+var
+  i, L, j : Integer;
+  Depth   : Integer;
+  InStr   : Boolean;
+  ident   : string;
+  S       : string;
+begin
+  Result := False;
+  L := Length(ElemLow);
+  i := 1;
+  while (i <= L) and CharInSet(ElemLow[i], ['a'..'z', '0'..'9', '_']) do
+    Inc(i);
+  ident := Copy(ElemLow, 1, i - 1);
+  if (ident = '') or (i > L) or (ElemLow[i] <> '(')
+     or (ElemLow[L] <> ')') then
+    Exit;
+  // Review-Fix (2026-07-05, tp-loss): die schliessende Klammer am Element-
+  // Ende muss die des HELFER-Aufrufs sein. Ohne Balance-Check galt auch
+  // 'quotedstr(a) + userinput + inttostr(b)' als komplett-safe, weil das
+  // Element mit 'quotedstr(' beginnt und zufaellig auf ')' endet.
+  // Depth-Scan (string-aware): faellt die Tiefe VOR dem letzten Zeichen
+  // auf 0, folgt nach dem Helfer-Call noch etwas -> kein reiner Call.
+  Depth := 0;
+  InStr := False;
+  for j := i to L do
+  begin
+    if ElemLow[j] = '''' then InStr := not InStr;
+    if InStr then Continue;
+    if ElemLow[j] = '(' then Inc(Depth)
+    else if ElemLow[j] = ')' then
+    begin
+      Dec(Depth);
+      if (Depth = 0) and (j < L) then Exit;   // Call endet vor Element-Ende
+    end;
+  end;
+  if Depth <> 0 then Exit;                    // unbalanciert -> nicht safe
+  for S in SAFE_CASTS do
+    if ident = S then
+      Exit(True);
+  Result := ident.StartsWith('quote')
+    or ident.StartsWith('escape')
+    or (ident.StartsWith('get') and ident.EndsWith('forsql'));
 end;
 
 class function TSQLInjectionDetector.IsIntFormatMask(
@@ -624,6 +876,15 @@ begin
 
   if (ElemLow = 'true') or (ElemLow = 'false') then Exit(True);
 
+  // FP-Gate (2026-07-05): sql-builder-api - kompletter Quoting-/Escape-
+  // Helfer-Aufruf als Element (GetFieldNameForSQL(Seq), QuotedStr(x)).
+  if IsSafeSqlHelperCall(ElemLow) then Exit(True);
+  // FP-Gate (2026-07-05): orm-sql-builder / sql-builder-api - Bezeichner/
+  // Member-Pfad dessen letzte Komponente ein ORM-Schema-Metadatum ist
+  // (props.SqlTableName, BlobField^.NameUtf8, bare SqlTableName im
+  // with-Scope). Enge Whole-Name-Liste, s. ORM_META_IDENTS.
+  if IsOrmMetaPath(ElemLow) then Exit(True);
+
   for i := 1 to Length(ElemLow) do
     if not CharInSet(ElemLow[i], ['a'..'z', '0'..'9', '_']) then Exit;
   Result := IsLocalIntegerIdent(MethodNode, ElemLow);
@@ -633,16 +894,35 @@ class function TSQLInjectionDetector.AreFormatArgsInjectionSafe(
   MethodNode: TAstNode; const CallLow: string; StartAt: Integer): Boolean;
 // FP-Gate (2026-07-04): int-format-concat / const-concat fuer die Format-
 // Familie (H3): scannt ab StartAt (hinter dem '(' der Format-Funktion)
-// alle [..]-Argument-Arrays und prueft jedes Element via
+// das ERSTE [..]-Argument-Array und prueft jedes Element via
 // IsSafeFormatArgElement. Kein Array gefunden -> False (Fund bleibt).
+// Seit 2026-07-05 (sql-builder-api) werden Folge-Arrays ignoriert -
+// FormatSql(Fmt, Args, Params)-Params sind gebundene ?-Parameter.
 var
   i, L     : Integer;
   inStr    : Boolean;
   Depth    : Integer;
+  IdxDepth : Integer;
   Elem     : string;
   FoundArr : Boolean;
   InArr    : Boolean;
   c        : Char;
+
+  // Review-Fix (2026-07-05, tp-loss): '[' zaehlt nur dann als Beginn des
+  // Argument-Arrays, wenn das letzte Nicht-Whitespace-Zeichen davor '('
+  // oder ',' ist (Scan-Beginn zaehlt als '('). Alles andere - z.B.
+  // 'Tables[i]' in einer konkat-gebauten Maske - ist ein INDEX-Ausdruck;
+  // der wurde vorher faelschlich als Args-Array konsumiert, wodurch der
+  // Folge-Array-Break das ECHTE [..]-Array nie mehr prueft (Fund weg).
+  function IsArgsArrayStart(APos: Integer): Boolean;
+  var
+    k: Integer;
+  begin
+    k := APos - 1;
+    while (k >= StartAt) and CharInSet(CallLow[k], [' ', #9]) do
+      Dec(k);
+    Result := (k < StartAt) or CharInSet(CallLow[k], ['(', ',']);
+  end;
 
   function FlushElem: Boolean;
   begin
@@ -657,6 +937,7 @@ begin
   inStr    := False;
   InArr    := False;
   Depth    := 0;
+  IdxDepth := 0;
   FoundArr := False;
   Elem     := '';
   i := StartAt;
@@ -671,6 +952,17 @@ begin
       Inc(i);
       Continue;
     end;
+    if IdxDepth > 0 then
+    begin
+      // Index-Ausdruck (kein Args-Array) balanciert ueberspringen.
+      case c of
+        '''': inStr := True;
+        '[' : Inc(IdxDepth);
+        ']' : Dec(IdxDepth);
+      end;
+      Inc(i);
+      Continue;
+    end;
     case c of
       '''':
         begin
@@ -680,10 +972,15 @@ begin
       '[':
         if not InArr then
         begin
-          InArr    := True;
-          FoundArr := True;
-          Depth    := 0;
-          Elem     := '';
+          if IsArgsArrayStart(i) then
+          begin
+            InArr    := True;
+            FoundArr := True;
+            Depth    := 0;
+            Elem     := '';
+          end
+          else
+            IdxDepth := 1;   // z.B. Tables[i] im Masken-Konkat
         end
         else
         begin
@@ -703,6 +1000,12 @@ begin
             if (Trim(Elem) <> '') and (not FlushElem) then Exit;
             Elem  := '';
             InArr := False;
+            // FP-Gate (2026-07-05): sql-builder-api - nur das ERSTE
+            // [..]-Array traegt %-Substitutions-Argumente; Folge-Arrays
+            // der mORMot-APIs (FormatSql(Fmt, Args, Params) in
+            // mormot.orm.sqlite3 RetrieveBlobFields) sind gebundene
+            // ?-Parameter und landen NIE im SQL-Text.
+            Break;
           end;
         end;
       '(':
@@ -957,6 +1260,22 @@ begin
     // Gate (Batch call "pfad" != SQL) s. HasSqlKwHit.
     if HasSqlKwHit(ArgsLow) and (Pos('%', ArgsLow) > 0) then
     begin
+      // FP-Gate (2026-07-05): orm-sql-builder - mORMot-Inline-Binding: das
+      // Muster ':(%):' im Format-Literal kennzeichnet Werte, die von
+      // ExtractInlineParameters als GEBUNDENE Parameter extrahiert werden
+      // ('UPDATE % SET %=:(%): WHERE RowID=:(%):', mormot.orm.sqlite3
+      // MainEngineUpdateField u.v.a.); die uebrigen %-Platzhalter dieser
+      // Framework-Statements sind RTTI-Tabellen-/Feldnamen (vertrauenswuerdig).
+      // Bewusst PAUSCHAL (jeder ':(%):'-Site gated den Call): ein bare '%'
+      // fuer einen RawUtf8-Feldnamen ist lexikalisch NICHT von einem rohen
+      // User-Wert unterscheidbar - eine positionale Auswertung erzeugte FPs
+      // auf legitimem ORM-Code (Test SQL_ExecuteFmtInlineBoundValue). Rohe
+      // %-Substitution OHNE ':(...):' (api.impl.pas CreateCustomer/Update-
+      // Customer, echter Korpus-TP) bleibt ein Fund. Bekannte, bewusst
+      // akzeptierte Luecke: ':(%):' gemischt mit einem rohen User-Wert an
+      // einem bare '%' - im Korpus ohne Beleg.
+      if Pos(':(%):', ArgsLow) > 0 then
+        Continue;
       // FP-Gate (2026-07-04): int-format-concat / const-concat - wenn ALLE
       // Argument-Array-Elemente Literale oder lokal deklarierte Integer-
       // Bezeichner sind (ExecuteFmt('...RowID=%', [id]) bzw. Seed-INSERT
