@@ -46,12 +46,10 @@ const
   // direkt im Constructor weil die nicht extern quick-readable sind.
   // ---------------------------------------------------------------------------
   DEF_SILENT_ENABLED         = True;
-  // True = das Editor-Annotation-Overlay faltet beim Hover automatisch auf
-  // volle Hoehe auf (Vorher/Nachher-Hints sichtbar). Vor dem opt-in-Refactor
-  // (45e5aeb) war das immer an; die Einfuehrung als Default-False liess das
-  // Overlay auf Titel-Hoehe kollabiert -> "zu klein fuer Vorher/Nachher".
-  // Wer das ruhigere Klick-zum-Auffalten will, setzt [UI] AutoExpandAnnotation=False.
-  DEF_AUTO_EXPAND_ANNOTATION = True;
+  // [UI] AutoExpandAnnotation wurde 2026-07-05 ENTFERNT: das Overlay faltet
+  // jetzt IMMER automatisch bis zur vollen Hint-Ansicht auf (UX-Entscheid,
+  // die Collapsed-Zwischenstufe mit Klick-zum-Auffalten ist entfallen).
+  // Ein evtl. noch vorhandener INI-Eintrag wird ignoriert.
   DEF_OVERLAY_SHOW_ON_HOVER  = False;
   DEF_EDITOR_COLOR_SCHEME    = 'default';
   DEF_LANGUAGE               = 'en';
@@ -91,12 +89,6 @@ type
     FDetectorReviewFilterEnabled : Boolean; // [Rules] EnableDetectorReviewFilter
                                             // (Default False, Debug-Build-Tool)
     FSilentEnabled     : Boolean;     // [Silent] Enabled (Default: True)
-    // [UI] AutoExpandAnnotation: kontrolliert ob das Hover-Overlay nach
-    // ~250ms automatisch von der Mini-Inline-Badge in die volle Detail-
-    // Ansicht aufklappt. False (Default) = nur Title-Bar; User muss aufs
-    // Title-Label klicken um den Desc/Fix-Block zu sehen. True = altes
-    // Pre-0.9.9-Verhalten (automatisch nach 250ms).
-    FAutoExpandAnnotation : Boolean;
     // [UI] OverlayShowOnHover: kontrolliert ob das Annotation-Overlay
     // bereits beim Hover ueber die markierte Zeile erscheint. False (Default)
     // = erst beim KLICK auf die markierte Zeile zeigt sich das Overlay -
@@ -294,8 +286,6 @@ type
     // (siehe uIDESCAOptions) oder per Hand in analyser.ini.
     property SilentEnabled:           Boolean     read FSilentEnabled
                                                   write FSilentEnabled;
-    property AutoExpandAnnotation:    Boolean     read FAutoExpandAnnotation
-                                                  write FAutoExpandAnnotation;
     property OverlayShowOnHover:      Boolean     read FOverlayShowOnHover
                                                   write FOverlayShowOnHover;
     property EditorColorScheme:       string      read FEditorColorScheme
@@ -760,7 +750,6 @@ begin
   FIdeMinSeverity := 'hint';          // IDE-Plugin: alle Severities (Subset deckt schon)
   FDetectorReviewFilterEnabled := False; // internes Review-Tool, default aus
   FSilentEnabled          := DEF_SILENT_ENABLED;
-  FAutoExpandAnnotation   := DEF_AUTO_EXPAND_ANNOTATION;
   FOverlayShowOnHover     := DEF_OVERLAY_SHOW_ON_HOVER;
   FEditorColorScheme      := DEF_EDITOR_COLOR_SCHEME;
   FLanguage               := DEF_LANGUAGE;
@@ -787,7 +776,7 @@ end;
 class function TRepoSettings.QuickReadBool(const ASection, AKey: string;
   ADefault: Boolean): Boolean;
 // Single-Property-Quick-Read. Loest die ehemals 3+ Boilerplate-Funktionen
-// (IsSilentEnabled, IsAutoExpandEnabled, IsShowOnHoverEnabled) in 1-Liner auf.
+// (z.B. IsSilentEnabled, IsShowOnHoverEnabled) in 1-Liner auf.
 //
 // Caller-Beispiel:
 //   if TRepoSettings.QuickReadBool('Silent', 'Enabled', True) then ...
@@ -1001,7 +990,6 @@ begin
     // Hotkey fuer den Silent-Mode an/aus. Konfigurierbar via Tools > Options
     // > Third Party > Static Code Analyser.
     FSilentEnabled        := Ini.ReadBool  ('Silent',  'Enabled',              DEF_SILENT_ENABLED);
-    FAutoExpandAnnotation := Ini.ReadBool  ('UI',      'AutoExpandAnnotation', DEF_AUTO_EXPAND_ANNOTATION);
     FOverlayShowOnHover   := Ini.ReadBool  ('UI',      'OverlayShowOnHover',   DEF_OVERLAY_SHOW_ON_HOVER);
     FEditorColorScheme    := Ini.ReadString('UI',      'EditorColorScheme',    DEF_EDITOR_COLOR_SCHEME);
 
@@ -1080,7 +1068,6 @@ begin
     Ini.WriteString('Rules', 'IdeMinSeverity',     FIdeMinSeverity);
     Ini.WriteBool  ('Rules', 'EnableDetectorReviewFilter', FDetectorReviewFilterEnabled);
     Ini.WriteBool  ('Silent', 'Enabled',           FSilentEnabled);
-    Ini.WriteBool  ('UI',     'AutoExpandAnnotation', FAutoExpandAnnotation);
     Ini.WriteBool  ('UI',     'OverlayShowOnHover',   FOverlayShowOnHover);
     Ini.WriteString('UI',     'EditorColorScheme',    FEditorColorScheme);
     // [Detectors]-Toggles: jetzt UI-aenderbar via Tools > Options.

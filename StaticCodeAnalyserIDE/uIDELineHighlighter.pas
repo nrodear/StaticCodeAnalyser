@@ -148,8 +148,8 @@ type
     // (EditorMouseDown, immer wenn der User auf eine markierte Zeile
     // klickt) genutzt. Setzt FHoveredLine + FHoverWatch-Timer.
     procedure ShowOverlayForLine(AHitLine: Integer);
-    // Settings frisch lesen (analog IsAutoExpandEnabled im Overlay). Damit
-    // wirkt ein Toggle in Tools > Options sofort, ohne Plugin-Reload.
+    // Settings frisch lesen - damit wirkt ein Toggle in Tools > Options
+    // sofort, ohne Plugin-Reload.
     function IsShowOnHoverEnabled: Boolean;
     // True wenn der Cursor (Screen-Koordinaten) gerade ueber dem
     // GAnnotationOverlay-Fenster steht. Wird vor jedem HideOverlay-Aufruf
@@ -1513,10 +1513,10 @@ procedure TFindingEditorEvents.EditorMouseDown(const Editor: TWinControl;
   Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
 // Click-Trigger fuer das Annotation-Overlay wenn die User-Option
 // ShowOnHover deaktiviert ist (Default). Linksklick auf eine markierte
-// Zeile zeigt das Overlay als Title-Bar; weiterer Klick aufs Title-Label
-// im Overlay expandiert die Detail-Ansicht (siehe TitleLblClick im
-// Overlay). Im ShowOnHover-True-Modus ist dieser Pfad no-op weil das
-// Overlay bereits beim Hover sichtbar wird.
+// Zeile zeigt das Overlay, das automatisch bis zur vollen Hint-Ansicht
+// auffaltet (UX-Entscheid 2026-07-05: die fruehere Collapsed-Zwischenstufe
+// mit Klick-zum-Auffalten ist entfallen). Im ShowOnHover-True-Modus ist
+// dieser Pfad no-op weil das Overlay bereits beim Hover sichtbar wird.
 var
   HitLine : Integer;
 begin

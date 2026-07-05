@@ -61,8 +61,6 @@ type
     lblOverlayPos           : TLabel;
     cboOverlayPos           : TComboBox;
     lblOverlayPosInfo       : TLabel;
-    chkAutoExpandAnnotation : TCheckBox;
-    lblAutoExpandInfo       : TLabel;
     chkOverlayShowOnHover   : TCheckBox;
     lblOverlayShowOnHoverInfo : TLabel;
     lblEditorColorScheme    : TLabel;
@@ -383,34 +381,13 @@ begin
     _('Where the hover annotation overlay anchors relative to the finding ' +
       'line. Takes effect after IDE restart.');
 
-  // Caption-Disambiguierung gegenueber chkOverlayShowOnHover unten - die
-  // beiden Checkboxen sind orthogonal (WAS zeigt das Overlay vs. WANN
-  // erscheint es). Frueher endeten beide auf "annotation overlay on hover".
-  chkAutoExpandAnnotation         := TCheckBox.Create(Self);
-  chkAutoExpandAnnotation.Parent  := grpDisplay;
-  chkAutoExpandAnnotation.Left    := INNER_LEFT;
-  chkAutoExpandAnnotation.Top     := lblOverlayPosInfo.Top + lblOverlayPosInfo.Height + 10;
-  chkAutoExpandAnnotation.Width   := GROUP_W - 2 * INNER_LEFT;
-  chkAutoExpandAnnotation.Caption :=
-    _('Auto-expand annotation overlay (otherwise show only title bar)');
-
-  lblAutoExpandInfo          := TLabel.Create(Self);
-  lblAutoExpandInfo.Parent   := grpDisplay;
-  lblAutoExpandInfo.AutoSize := False;
-  lblAutoExpandInfo.Left     := INNER_LEFT;
-  lblAutoExpandInfo.Top      := chkAutoExpandAnnotation.Top + chkAutoExpandAnnotation.Height + 4;
-  lblAutoExpandInfo.Width    := GROUP_W - 2 * INNER_LEFT;
-  lblAutoExpandInfo.Height   := 50;   // 30 + 20
-  lblAutoExpandInfo.WordWrap := True;
-  lblAutoExpandInfo.Caption  :=
-    _('When OFF (default): overlay stays as a compact title bar until ' +
-      'you click the title - keeps the editor uncluttered. When ON: ' +
-      'overlay auto-expands after ~250 ms.');
-
+  // Die fruehere Checkbox "Auto-expand annotation overlay" ist entfallen
+  // (UX-Entscheid 2026-07-05): das Overlay faltet jetzt IMMER automatisch
+  // bis zur vollen Hint-Ansicht auf - keine Collapsed-Zwischenstufe mehr.
   chkOverlayShowOnHover         := TCheckBox.Create(Self);
   chkOverlayShowOnHover.Parent  := grpDisplay;
   chkOverlayShowOnHover.Left    := INNER_LEFT;
-  chkOverlayShowOnHover.Top     := lblAutoExpandInfo.Top + lblAutoExpandInfo.Height + 8;
+  chkOverlayShowOnHover.Top     := lblOverlayPosInfo.Top + lblOverlayPosInfo.Height + 10;
   chkOverlayShowOnHover.Width   := GROUP_W - 2 * INNER_LEFT;
   chkOverlayShowOnHover.Caption :=
     _('Show annotation overlay on hover (otherwise click marked line)');
@@ -550,8 +527,6 @@ begin
     else
       cboOverlayPos.ItemIndex := 0;
   end;
-  if Assigned(chkAutoExpandAnnotation) then
-    chkAutoExpandAnnotation.Checked := ASettings.AutoExpandAnnotation;
   if Assigned(chkOverlayShowOnHover) then
     chkOverlayShowOnHover.Checked := ASettings.OverlayShowOnHover;
   if Assigned(cboEditorColorScheme) then
@@ -594,8 +569,6 @@ begin
     else
       ASettings.OverlayPosition := 'sameline';
   end;
-  if Assigned(chkAutoExpandAnnotation) then
-    ASettings.AutoExpandAnnotation := chkAutoExpandAnnotation.Checked;
   if Assigned(chkOverlayShowOnHover) then
     ASettings.OverlayShowOnHover := chkOverlayShowOnHover.Checked;
   if Assigned(cboEditorColorScheme) then
@@ -615,7 +588,6 @@ procedure TSCAOptionsFrame.ApplyHintStyleToAllInfoLabels;
 begin
   StyleAsHintLabel(lblSilentInfo);
   StyleAsHintLabel(lblOverlayPosInfo);
-  StyleAsHintLabel(lblAutoExpandInfo);
   StyleAsHintLabel(lblOverlayShowOnHoverInfo);
   StyleAsHintLabel(lblEditorColorSchemeInfo);
 end;
