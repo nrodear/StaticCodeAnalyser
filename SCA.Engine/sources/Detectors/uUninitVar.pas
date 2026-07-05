@@ -39,7 +39,8 @@ type
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
     class procedure AnalyzeMethod(MethodNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil;
+      ARecordTypes: TDictionary<string, Boolean> = nil);
   end;
 
 implementation
@@ -333,6 +334,20 @@ begin
   if DotPos > 0 then NameOnly := Copy(T, DotPos + 1, MaxInt) else NameOnly := T;
   for NT in NOINIT_RECORD_TYPES do
     if NameOnly = NT then Exit(True);
+end;
+
+function BaseTypeLow(const TypeLow: string): string;
+// Reduziert einen (bereits gelowerten) TypeRef auf den nackten Typnamen:
+// Generic-Parameter (< ... >) und Qualifier (unit.T) werden abgeschnitten.
+// 'system.rtti.trtticontext' -> 'trtticontext', 'tdynarray<byte>' -> 'tdynarray'.
+var
+  P : Integer;
+begin
+  Result := Trim(TypeLow);
+  P := Pos('<', Result);
+  if P > 0 then Result := Trim(Copy(Result, 1, P - 1));
+  P := LastDelimiter('.', Result);
+  if P > 0 then Result := Copy(Result, P + 1, MaxInt);
 end;
 
 function IsAsmMethod(MethodNode: TAstNode): Boolean;
@@ -918,7 +933,8 @@ end;
 // ============================================================
 
 class procedure TUninitVarDetector.AnalyzeMethod(MethodNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
+  const FileName: string; Results: TObjectList<TLeakFinding>;
+  AContext: TAnalyzeContext; ARecordTypes: TDictionary<string, Boolean>);
 var
   LocalVars        : TList<TAstNode>;
   Assigns, Calls, Fors : TList<TAstNode>;
@@ -1039,19 +1055,31 @@ var
     begin
       Receiver := LowerCase(Trim(Copy(FuncName, 1, DotPos - 1)));
       Method   := LowerCase(Trim(Copy(FuncName, DotPos + 1, MaxInt)));
-      // Stack-Init-Methoden am Receiver: Init*, oder Single-Word 'Start'
-      // (TPrecisionTimer.Start, TStopwatch.Start - mORMot/RTL Patterns).
-      // Real-World-Sweep 2026-06-13 iter 7: mORMot crypt records nutzen
-      // Full/Hash/Reset/Done als Init-/Compute-Konvention (TSha3.Full,
-      // TAesCrypto.Reset). Diese sind Method-Calls AM Record-Receiver
-      // die den Record's Felder schreiben (Stack-Record, kein Allokator-
-      // Bedarf). Trigger: mormot.crypt.ecc TSha3-Findings.
-      if StartsStr('init', Method) or (Method = 'start') or
-         (Method = 'full') or (Method = 'hash') or (Method = 'reset') or
-         (Method = 'done') then
+      Idx := VarIndexFor(Receiver);
+      if Idx >= 0 then
       begin
-        Idx := VarIndexFor(Receiver);
-        if Idx >= 0 then RegisterWrite(Idx, C.Line);
+        // Receiver ist eine lokale Variable. Zwei Faelle:
+        // (1) Ihr Typ ist ein in DIESER Unit deklarierter RECORD
+        //     (Value-Type, ARecordTypes). Dann ist Self bei jedem Methoden-
+        //     aufruf ein var-Parameter -> die Methode SCHREIBT die Record-
+        //     Felder. records-with-methods werden per Methode konstruiert
+        //     (mORMot TMatch.Prepare, TDynArray.Init, ...), daher zaehlt
+        //     JEDER Methodenaufruf als Init - nicht nur namens-gelistete.
+        //     Fuer KLASSEN (nkClass) gilt das NICHT: dort muss die Referenz
+        //     vorher zugewiesen sein, ein Aufruf auf einer uninitialisierten
+        //     Klassen-Var ist ein echter Read (Bug) und bleibt ein Fund.
+        // (2) Typ nicht als in-Unit-Record aufloesbar (Klasse, Interface,
+        //     cross-unit): konservative Init-Verb-Allowlist. Init*/Start/
+        //     Full/Hash/Reset/Done sind mORMot/RTL-Record-Init-Konventionen;
+        //     'prepare' ergaenzt fuer cross-unit records (mORMot TMatch aus
+        //     einer anderen Unit) das haeufigste fehlende Init-Verb.
+        if (ARecordTypes <> nil) and
+           ARecordTypes.ContainsKey(BaseTypeLow(VarList.List[Idx].TypeLow)) then
+          RegisterWrite(Idx, C.Line)
+        else if StartsStr('init', Method) or (Method = 'start') or
+                (Method = 'full') or (Method = 'hash') or (Method = 'reset') or
+                (Method = 'done') or (Method = 'prepare') then
+          RegisterWrite(Idx, C.Line);
       end;
     end;
     ArgsLow := LowerCase(TDetectorUtils.ExtractCallArgsRaw(C.Name));
@@ -1727,16 +1755,36 @@ end;
 class procedure TUninitVarDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
-  Methods : TList<TAstNode>;
-  M : TAstNode;
+  Methods  : TList<TAstNode>;
+  Recs     : TList<TAstNode>;
+  RecTypes : TDictionary<string, Boolean>;
+  M, R     : TAstNode;
 begin
   if UnitNode = nil then Exit;
-  Methods := UnitNode.FindAll(nkMethod);
+  // Value-Type-Records dieser Unit einsammeln: ein Methodenaufruf auf einer
+  // record-typisierten lokalen Variablen initialisiert deren Felder (Self ist
+  // var) - siehe ProcessCall. nkClass/Interface NICHT. Hinweis: das alte
+  // `object`-Idiom fuehrt der Parser nicht als nkRecord -> hier nicht erfasst
+  // (faellt auf die Init-Verb-Allowlist zurueck, konservativ).
+  RecTypes := TDictionary<string, Boolean>.Create;
   try
-    for M in Methods do
-      AnalyzeMethod(M, FileName, Results, AContext);
+    Recs := UnitNode.FindAll(nkRecord);
+    try
+      for R in Recs do
+        if R.Name <> '' then
+          RecTypes.AddOrSetValue(LowerCase(Trim(R.Name)), True);
+    finally
+      Recs.Free;
+    end;
+    Methods := UnitNode.FindAll(nkMethod);
+    try
+      for M in Methods do
+        AnalyzeMethod(M, FileName, Results, AContext, RecTypes);
+    finally
+      Methods.Free;
+    end;
   finally
-    Methods.Free;
+    RecTypes.Free;
   end;
 end;
 

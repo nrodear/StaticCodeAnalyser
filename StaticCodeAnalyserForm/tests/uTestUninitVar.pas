@@ -21,6 +21,8 @@ type
     [Test] procedure CaseWriteWithoutElse_ReadAfter_Flagged;
     [Test] procedure TryExceptWriteOnly_ReadAfter_Flagged;
     [Test] procedure ClassInstanceUsedBeforeCreate_Flagged;
+    // 2026-07-05 Gegenprobe: in-Unit-KLASSE wird NICHT breit gegated
+    [Test] procedure InUnitClassReceiverMethod_StillFlagged;
 
     // ---- NEGATIV (MUST NOT flag) ----
     [Test] procedure CleanAssignThenRead_NoFinding;
@@ -34,6 +36,10 @@ type
     [Test] procedure MultiLineVarDeclContinuation_NoFinding;
     [Test] procedure AbsoluteAlias_NoFinding;
     [Test] procedure ReceiverInitMethod_NoFinding;
+    // 2026-07-05: in-Unit-Record-Receiver -> JEDER Methodenaufruf initialisiert
+    [Test] procedure InUnitRecordReceiverMethod_AnyName_NoFinding;
+    // 2026-07-05: cross-unit record via Allowlist-Verb 'prepare' (mORMot TMatch)
+    [Test] procedure CrossUnitRecordPrepare_NoFinding;
     [Test] procedure FillCharInitialisesVar_NoFinding;
     [Test] procedure WriteBeforeRead_TryFinally_NoFinding;
     [Test] procedure DeclaredButNeverReferenced_NoFinding;
@@ -511,6 +517,101 @@ begin
   try
     Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
       'doc.InitJson(...) als erstes Statement = Init des Receivers');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.InUnitRecordReceiverMethod_AnyName_NoFinding;
+// Der Typ TMatch ist in DIESER Unit als record deklariert (nkRecord). Ein
+// Methodenaufruf am Record-Receiver initialisiert dessen Felder (Self ist
+// var) - das gilt fuer JEDEN Methodennamen, nicht nur die Init-Verb-
+// Allowlist. 'Configure' steht bewusst NICHT auf der Allowlist; allein der
+// Record-Typ-Check traegt. (Analog mORMot record-with-methods.)
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'type'#13#10 +
+    '  TMatch = record'#13#10 +
+    '    FData: Integer;'#13#10 +
+    '    procedure Configure(v: Integer);'#13#10 +
+    '    function Run: Boolean;'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    'procedure TMatch.Configure(v: Integer); begin FData := v; end;'#13#10 +
+    'function TMatch.Run: Boolean; begin Result := FData > 0; end;'#13#10 +
+    'function IsIt: Boolean;'#13#10 +
+    'var m: TMatch;'#13#10 +
+    'begin'#13#10 +
+    '  m.Configure(42);'#13#10 +
+    '  Result := m.Run;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+      'in-Unit-Record: Methodenaufruf initialisiert den Receiver (jeder Name)');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.CrossUnitRecordPrepare_NoFinding;
+// Exakter Real-World-FP: mORMot mormot.core.search.IsMatch. TMatch ist in
+// einer ANDEREN Unit deklariert (hier nicht sichtbar) -> faellt auf die
+// Init-Verb-Allowlist zurueck; 'prepare' ist jetzt drin. match.Prepare(...)
+// initialisiert den Record, match.Match(...) liest danach.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'function IsMatch(const Pattern, Text: RawUtf8; ci: boolean): boolean;'#13#10 +
+    'var match: TMatch;'#13#10 +
+    'begin'#13#10 +
+    '  match.Prepare(pointer(Pattern), length(Pattern), ci, false);'#13#10 +
+    '  result := match.Match(Text);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+      'match.Prepare(...) initialisiert den Record - kein UninitVar');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.InUnitClassReceiverMethod_StillFlagged;
+// Gegenprobe zum Record-Gate: TFoo ist in dieser Unit eine KLASSE (nkClass,
+// NICHT nkRecord). Der Record-Broad-Gate darf hier NICHT greifen - 'f.Go'
+// auf einer nie zugewiesenen Klassen-Referenz bleibt ein echter Fund
+// (Read vor Write). 'Go' ist zudem kein Allowlist-Verb.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'type'#13#10 +
+    '  TFoo = class'#13#10 +
+    '    procedure Go;'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    'procedure TFoo.Go; begin end;'#13#10 +
+    'procedure P;'#13#10 +
+    'var f: TFoo;'#13#10 +
+    'begin'#13#10 +
+    '  f.Go;'#13#10 +
+    '  f := TFoo.Create;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.IsTrue(CountKind(L, fkUninitVar) >= 1,
+      'in-Unit-Klasse: Methodenaufruf auf uninit. Referenz bleibt ein Fund');
   finally L.Free; end;
 end;
 
