@@ -187,6 +187,20 @@ var
   // pro Detector einzeln Pos zu rufen - der waere ~24x doppelt fuer
   // shared Tokens wie '.free' / 'tcriticalsection').
   gAllPrefilterTokensLow : TArray<string>;
+  // Perf (2026-07-05): P4-token-prefilter - Erstzeichen-Index (CSR-Layout)
+  // ueber gAllPrefilterTokensLow fuer den Single-Pass-Prefilter in
+  // RunAllDetectors.EnsureTokenSet. Fuer ein Erstzeichen c stehen die
+  // Token-Indizes in
+  //   gPrefilterBucketTokens[gPrefilterBucketStart[Ord(c)] ..
+  //                          gPrefilterBucketStart[Ord(c)+1] - 1].
+  // Wird einmalig in BuildAllDetectors gebaut, danach read-only fuer die
+  // Programm-Laufzeit (gleicher Lifecycle wie gDetectors). Leere Tokens
+  // werden NICHT einsortiert (Pos(''...)=0 -> matchen nie, Semantik
+  // erhalten); Tokens mit Erstzeichen > #255 (heute keine) laufen als
+  // Fallback weiter ueber Pos (gPrefilterTokensWideFirst).
+  gPrefilterBucketStart     : array[0..256] of Integer;
+  gPrefilterBucketTokens    : TArray<Integer>;
+  gPrefilterTokensWideFirst : TArray<Integer>;
 
 procedure BuildAllDetectors; forward;
 
@@ -232,6 +246,10 @@ procedure BuildAllDetectors;
 // TRuleCatalog gezogen und gecached.
 var
   Count : Integer;
+  // Perf (2026-07-05): P4-token-prefilter - Zaehl-/Cursor-Array fuer den
+  // Counting-Sort beim Aufbau des Erstzeichen-Index (s. Datei-Kopf,
+  // gPrefilterBucketStart).
+  CntPerFirst : array[0..255] of Integer;
 
   procedure AddD(const AName: string; AKind: TFindingKind; ARun: TDetectorRun);
   overload;
@@ -513,6 +531,46 @@ begin
   finally
     Seen.Free;
   end;
+
+  // Perf (2026-07-05): P4-token-prefilter - Erstzeichen-Index (CSR) ueber
+  // gAllPrefilterTokensLow aufbauen (Counting-Sort in zwei Durchlaeufen).
+  // EnsureTokenSet vergleicht damit pro Textposition nur noch die Tokens,
+  // deren Erstzeichen dem aktuellen Zeichen entspricht - EIN Durchlauf
+  // ueber den File-Text statt ~82 einzelner Pos()-Scans.
+  FillChar(CntPerFirst, SizeOf(CntPerFirst), 0);
+  SetLength(gPrefilterTokensWideFirst, 0);
+  for var t := 0 to High(gAllPrefilterTokensLow) do
+    if gAllPrefilterTokensLow[t] <> '' then  // leere Tokens: Pos('')=0 -> nie Match
+    begin
+      var FirstOrd := Ord(gAllPrefilterTokensLow[t][1]);
+      if FirstOrd <= 255 then
+        Inc(CntPerFirst[FirstOrd])
+      else
+      begin
+        // Erstzeichen ausserhalb Byte-Bereich: Pos-Fallback-Liste.
+        SetLength(gPrefilterTokensWideFirst,
+          Length(gPrefilterTokensWideFirst) + 1);
+        gPrefilterTokensWideFirst[High(gPrefilterTokensWideFirst)] := t;
+      end;
+    end;
+  gPrefilterBucketStart[0] := 0;
+  for var c := 0 to 255 do
+    gPrefilterBucketStart[c + 1] := gPrefilterBucketStart[c] + CntPerFirst[c];
+  SetLength(gPrefilterBucketTokens, gPrefilterBucketStart[256]);
+  // Zweiter Durchlauf: Token-Indizes einsortieren (CntPerFirst als Cursor
+  // recycelt).
+  FillChar(CntPerFirst, SizeOf(CntPerFirst), 0);
+  for var t := 0 to High(gAllPrefilterTokensLow) do
+    if gAllPrefilterTokensLow[t] <> '' then
+    begin
+      var FirstOrd := Ord(gAllPrefilterTokensLow[t][1]);
+      if FirstOrd <= 255 then
+      begin
+        gPrefilterBucketTokens[gPrefilterBucketStart[FirstOrd] +
+          CntPerFirst[FirstOrd]] := t;
+        Inc(CntPerFirst[FirstOrd]);
+      end;
+    end;
 end;
 
 procedure FillMissingMethodNames(Root: TAstNode;
@@ -610,8 +668,15 @@ var
 
   function EnsureTokenSet: Boolean;
   var
-    SrcLow : string;
-    k      : Integer;
+    SrcLow    : string;
+    PSrc      : PChar;
+    SrcLen    : Integer;
+    p, b, k   : Integer;
+    ChOrd     : Integer;
+    TokIdx    : Integer;
+    TokLen    : Integer;
+    Remaining : Integer;
+    FoundTok  : TArray<Boolean>;   // parallel zu gAllPrefilterTokensLow
   begin
     if TokenSetReady then Exit(TokenPresent.Count > 0);
     TokenSetReady := True;
@@ -623,11 +688,46 @@ var
       ReleaseLines(Lines, Cached);
     end;
     if SrcLow = '' then Exit(False);
-    // Genau EIN Pos-Scan pro UNIQUE-Token (statt pro Detector). Dedup
-    // ist in BuildAllDetectors gemacht (gAllPrefilterTokensLow).
-    for k := 0 to High(gAllPrefilterTokensLow) do
-      if Pos(gAllPrefilterTokensLow[k], SrcLow) > 0 then
-        TokenPresent.AddOrSetValue(gAllPrefilterTokensLow[k], True);
+    // Perf (2026-07-05): P4-token-prefilter - EIN Durchlauf ueber den
+    // gelowerten Text statt eines eigenen Pos()-Scans pro Unique-Token
+    // (~82 Full-Text-Scans pro File). An jeder Textposition werden nur
+    // die Tokens verglichen, deren Erstzeichen dem aktuellen Zeichen
+    // entspricht (Erstzeichen-Index aus BuildAllDetectors). Semantik
+    // EXAKT wie vorher: reiner Substring-Match auf dem gelowerten Text
+    // (kein Whole-Word) - das Ergebnis-Set ist identisch zu
+    // Pos(Token, SrcLow) > 0 pro Token.
+    SrcLen := Length(SrcLow);
+    PSrc   := PChar(SrcLow);        // 0-basiert indiziert
+    SetLength(FoundTok, Length(gAllPrefilterTokensLow));
+    Remaining := Length(gPrefilterBucketTokens);  // Early-Exit wenn alle gefunden
+    p := 0;
+    while (p < SrcLen) and (Remaining > 0) do
+    begin
+      ChOrd := Ord(PSrc[p]);
+      if ChOrd <= 255 then
+        for b := gPrefilterBucketStart[ChOrd]
+              to gPrefilterBucketStart[ChOrd + 1] - 1 do
+        begin
+          TokIdx := gPrefilterBucketTokens[b];
+          if FoundTok[TokIdx] then Continue;
+          TokLen := Length(gAllPrefilterTokensLow[TokIdx]);
+          if (p + TokLen <= SrcLen) and
+             CompareMem(@PSrc[p], Pointer(gAllPrefilterTokensLow[TokIdx]),
+               TokLen * SizeOf(Char)) then
+          begin
+            FoundTok[TokIdx] := True;
+            TokenPresent.AddOrSetValue(gAllPrefilterTokensLow[TokIdx], True);
+            Dec(Remaining);
+          end;
+        end;
+      Inc(p);
+    end;
+    // Fallback fuer Tokens mit Erstzeichen > #255 (heute keine): alte
+    // Pos-Semantik unveraendert.
+    for k := 0 to High(gPrefilterTokensWideFirst) do
+      if Pos(gAllPrefilterTokensLow[gPrefilterTokensWideFirst[k]], SrcLow) > 0 then
+        TokenPresent.AddOrSetValue(
+          gAllPrefilterTokensLow[gPrefilterTokensWideFirst[k]], True);
     Result := TokenPresent.Count > 0;
   end;
 
