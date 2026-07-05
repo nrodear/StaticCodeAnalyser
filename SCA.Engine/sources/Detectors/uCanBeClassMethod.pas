@@ -216,28 +216,44 @@ begin
     Result := MethName;
 end;
 
-// True wenn IRGENDWO in AllMeths eine andere nkMethod-Deklaration des
+// True wenn IRGENDWO in der Unit eine andere nkMethod-Deklaration des
 // gleichen Method-Namens existiert, die als polymorph markiert ist.
 // Interface-Decls tragen die Direktiven (`; virtual; override; abstract`),
 // die Implementations-Bodies haben sie nicht - wir muessen also den
 // passenden Interface-Eintrag finden.
-function HasPolymorphicSiblingDecl(M: TAstNode;
-  AllMeths: TList<TAstNode>): Boolean;
+//
+// Perf (2026-07-05): P6-canbeclassmethod - war ein O(Methoden^2)-Paarvergleich
+// (UnqualifiedMethodName-Alloc + SameText + IsPolymorphicMethod mit 6 Wort-
+// grenzen-Scans PRO PAAR). Jetzt: einmal pro Unit ein Set der unqualifizierten,
+// gelowerten Namen aller polymorph/class markierten Deklarationen bauen
+// (BuildPolymorphicSiblingNames), der Kandidaten-Check wird ein O(1)-Lookup.
+// Semantik identisch: SameText und LowerCase folden beide nur ASCII 'A'..'Z',
+// und das alte 'Other = M'-Skip ist abgedeckt, weil der Aufrufer
+// IsPolymorphicMethod(M)/IsAlreadyClassMethod(M) VOR dem Lookup prueft -
+// M selbst kann also nie als Set-Eintrag qualifizieren.
+procedure BuildPolymorphicSiblingNames(AllMeths: TList<TAstNode>;
+  Target: THashSet<string>);
 var
   Other : TAstNode;
-  MUnq, OUnq : string;
+  OUnq  : string;
 begin
-  Result := False;
-  MUnq := UnqualifiedMethodName(M.Name);
-  if MUnq = '' then Exit;
   for Other in AllMeths do
-  begin
-    if Other = M then Continue;
-    OUnq := UnqualifiedMethodName(Other.Name);
-    if not SameText(OUnq, MUnq) then Continue;
     if IsPolymorphicMethod(Other) or IsAlreadyClassMethod(Other) then
-      Exit(True);
-  end;
+    begin
+      OUnq := UnqualifiedMethodName(Other.Name);
+      if OUnq <> '' then
+        Target.Add(LowerCase(OUnq));
+    end;
+end;
+
+function HasPolymorphicSiblingDecl(M: TAstNode;
+  PolyNames: THashSet<string>): Boolean;
+var
+  MUnq : string;
+begin
+  MUnq := UnqualifiedMethodName(M.Name);
+  if MUnq = '' then Exit(False);
+  Result := PolyNames.Contains(LowerCase(MUnq));
 end;
 
 // --- Klassen-Member-Aufloesung gegen bare Instanz-Zugriffe -------------------
@@ -357,6 +373,7 @@ var
   M, C       : TAstNode;
   Members    : THashSet<string>;
   Key        : string;
+  PolyNames  : THashSet<string>;  // Perf (2026-07-05): P6 - lazy Lookup-Set
 
   // Stufe 2: Member-Set inkl. In-Unit-Vererbungskette aufloesen (memoized,
   // cycle-safe). Faengt bare Zugriffe auf geerbte Felder/Properties/Methoden
@@ -379,6 +396,7 @@ var
   end;
 
 begin
+  PolyNames := nil;  // lazy - erst beim ersten Kandidaten bauen
   Methods := UnitNode.FindAll(nkMethod);
   // Pro Klasse die deklarierten Member + Parent-Bezug sammeln (einmal pro Unit).
   MemberDict := TObjectDictionary<string, THashSet<string>>.Create([doOwnsValues]);
@@ -408,7 +426,14 @@ begin
       if IsPolymorphicMethod(M) then Continue;
       // Cross-Decl: Interface-Eintrag der Methode kann ;virtual/;override
       // tragen waehrend der Implementations-Header nur 'function' fuehrt.
-      if HasPolymorphicSiblingDecl(M, Methods) then Continue;
+      // Perf (2026-07-05): P6 - Lookup-Set einmalig lazy bauen statt
+      // O(n^2)-Paarvergleich ueber alle Methoden pro Kandidat.
+      if PolyNames = nil then
+      begin
+        PolyNames := THashSet<string>.Create;
+        BuildPolymorphicSiblingNames(Methods, PolyNames);
+      end;
+      if HasPolymorphicSiblingDecl(M, PolyNames) then Continue;
       if not HasBodyBlock(M) then Continue;
       // Skip Constructor/Destructor - die haben implizit anderen Vertrag.
       if LowerCase(Trim(M.TypeRef)).StartsWith('constructor') then Continue;
@@ -435,6 +460,7 @@ begin
         fkCanBeClassMethod));
     end;
   finally
+    PolyNames.Free;    // nil-safe wenn kein Kandidat den Lazy-Build erreicht hat
     Classes.Free;
     FullDict.Free;     // doOwnsValues -> gibt die THashSet-Werte mit frei
     ParentOf.Free;

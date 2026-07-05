@@ -97,85 +97,59 @@ begin
   Result := LowerCase(Trim(S));
 end;
 
-// Liefert die Methoden-Implementations als TList<TAstNode>, gefiltert auf
-// solche, deren Name mit ClassPrefix beginnt (case-insensitiv).
-procedure CollectMethodImplsFor(UnitNode: TAstNode;
-  const ClassPrefix: string; Dest: TList<TAstNode>);
+// Naive Wort-Grenzen-Suche (case-insensitiv, Body schon lowercase).
+// Perf (2026-07-05): P8 - aus dem alten Standalone-BodyReferences gehoisted,
+// damit die gecachte Variante in AnalyzeUnit exakt dieselbe Logik nutzt.
+function ContainsIdent(const Hay, Needle: string): Boolean;
 var
-  All : TList<TAstNode>;
-  M : TAstNode;
-  PrefixLow : string;
+  P, NL, HL : Integer;
+  Before, After : Char;
 begin
-  PrefixLow := LowerCase(ClassPrefix) + '.';
-  All := UnitNode.FindAll(nkMethod);
-  try
-    for M in All do
-      if LowerCase(M.Name).StartsWith(PrefixLow) then
-        Dest.Add(M);
-  finally
-    All.Free;
+  Result := False;
+  NL := Length(Needle);
+  HL := Length(Hay);
+  if (NL = 0) or (HL < NL) then Exit;
+  P := 1;
+  while True do
+  begin
+    P := Pos(Needle, Hay, P);
+    if P = 0 then Exit;
+    Before := #0;
+    if P > 1 then Before := Hay[P - 1];
+    After := #0;
+    if P + NL - 1 < HL then After := Hay[P + NL];
+    if not CharInSet(Before, ['a'..'z','0'..'9','_']) and
+       not CharInSet(After,  ['a'..'z','0'..'9','_']) then
+      Exit(True);
+    P := P + NL;
   end;
 end;
 
-// True, wenn Body irgendeine Referenz auf MemberLow enthaelt (nkCall,
-// nkAssign-LHS-Anteil, nkAssign-RHS in TypeRef).
-function BodyReferences(Body: TAstNode; const MemberLow: string): Boolean;
-var
-  Nodes : TList<TAstNode>;
-  N : TAstNode;
-  Text : string;
-
-  function ContainsIdent(const Hay, Needle: string): Boolean;
-  // Naive Wort-Grenzen-Suche (case-insensitiv, Body schon lowercase).
-  var
-    P, NL, HL : Integer;
-    Before, After : Char;
-  begin
-    Result := False;
-    NL := Length(Needle);
-    HL := Length(Hay);
-    if (NL = 0) or (HL < NL) then Exit;
-    P := 1;
-    while True do
-    begin
-      P := Pos(Needle, Hay, P);
-      if P = 0 then Exit;
-      Before := #0;
-      if P > 1 then Before := Hay[P - 1];
-      After := #0;
-      if P + NL - 1 < HL then After := Hay[P + NL];
-      if not CharInSet(Before, ['a'..'z','0'..'9','_']) and
-         not CharInSet(After,  ['a'..'z','0'..'9','_']) then
-        Exit(True);
-      P := P + NL;
-    end;
+type
+  // Perf (2026-07-05): P8 - pro Impl-Methode werden die relevanten Body-
+  // Strings (nkCall-Namen + nkAssign-Name/TypeRef) genau EINMAL gelowert
+  // und gecached; vorher lief FindAll+LowerCase pro (Member x Methode).
+  // Lebensdauer: ein AnalyzeUnit-Lauf (TObjectDictionary mit doOwnsValues).
+  TBodyTextCache = class
+  public
+    CallTexts   : TList<string>;  // LowerCase(nkCall.Name), FindAll-Reihenfolge
+    AssignTexts : TList<string>;  // interleaved: Name, TypeRef, Name, TypeRef, ...
+    constructor Create;
+    destructor Destroy; override;
   end;
 
+constructor TBodyTextCache.Create;
 begin
-  Result := False;
-  if Body = nil then Exit;
-  Nodes := Body.FindAll(nkCall);
-  try
-    for N in Nodes do
-    begin
-      Text := LowerCase(N.Name);
-      if ContainsIdent(Text, MemberLow) then Exit(True);
-    end;
-  finally
-    Nodes.Free;
-  end;
-  Nodes := Body.FindAll(nkAssign);
-  try
-    for N in Nodes do
-    begin
-      Text := LowerCase(N.Name);
-      if ContainsIdent(Text, MemberLow) then Exit(True);
-      Text := LowerCase(N.TypeRef);
-      if ContainsIdent(Text, MemberLow) then Exit(True);
-    end;
-  finally
-    Nodes.Free;
-  end;
+  inherited Create;
+  CallTexts   := TList<string>.Create;
+  AssignTexts := TList<string>.Create;
+end;
+
+destructor TBodyTextCache.Destroy;
+begin
+  AssignTexts.Free;
+  CallTexts.Free;
+  inherited;
 end;
 
 class procedure TVisibilityCheckDetector.AnalyzeUnit(UnitNode: TAstNode;
@@ -193,6 +167,21 @@ var
   AllUnitMethods : TList<TAstNode>;
   RefIdx : TSymbolReferenceIndex;
   DescendantsCache : TObjectDictionary<string, TList<string>>;
+  // Perf (2026-07-05): P8 - klassen-invariante Lookups einmal pro Unit:
+  //  * MethodsByClassLow: Impl-Methoden gruppiert nach Segment vor dem
+  //    ersten '.' des gelowerten Namens (Bucket enthaelt damit ALLE
+  //    Kandidaten fuer jeden StartsWith('<prefix>.')-Match).
+  //  * MethodNamesLow/-Norm: LowerCase(Name) bzw. NormalizeIdent(Name)
+  //    pro Methode genau einmal statt pro (Member x Methode).
+  //  * BodyCache: lazy gelowerte Body-Strings pro Methode (s. TBodyTextCache).
+  MethodsByClassLow : TObjectDictionary<string, TList<TAstNode>>;
+  MethodNamesLow : TDictionary<TAstNode, string>;
+  MethodNamesNorm : TDictionary<TAstNode, string>;
+  BodyCache : TObjectDictionary<TAstNode, TBodyTextCache>;
+  MethNode : TAstNode;
+  NameLow, KeyLow : string;
+  DotP : Integer;
+  Bucket : TList<TAstNode>;
 
   function DescendantsOfCached(const ClassLow: string): TList<string>;
   // Memoized BFS ueber den Vererbungs-Graphen. Cache lebt fuer die Dauer
@@ -230,6 +219,74 @@ var
       Q.Free;
     end;
     DescendantsCache.Add(ClassLow, Result);
+  end;
+
+  function BodyTextsOf(Body: TAstNode): TBodyTextCache;
+  // Perf (2026-07-05): P8 - lazy: nur Methoden, die tatsaechlich geprueft
+  // werden, zahlen den FindAll+LowerCase-Preis, und das genau einmal.
+  // Reihenfolge der Texte = FindAll-Reihenfolge der alten Direkt-Variante.
+  var
+    Nodes : TList<TAstNode>;
+    N : TAstNode;
+  begin
+    if BodyCache.TryGetValue(Body, Result) then Exit;
+    Result := TBodyTextCache.Create;
+    Nodes := Body.FindAll(nkCall);
+    try
+      for N in Nodes do
+        Result.CallTexts.Add(LowerCase(N.Name));
+    finally
+      Nodes.Free;
+    end;
+    Nodes := Body.FindAll(nkAssign);
+    try
+      for N in Nodes do
+      begin
+        Result.AssignTexts.Add(LowerCase(N.Name));
+        Result.AssignTexts.Add(LowerCase(N.TypeRef));
+      end;
+    finally
+      Nodes.Free;
+    end;
+    BodyCache.Add(Body, Result);
+  end;
+
+  // True, wenn Body irgendeine Referenz auf MemberLow enthaelt (nkCall,
+  // nkAssign-LHS-Anteil, nkAssign-RHS in TypeRef). Gleiche Pruef-Logik
+  // wie die alte Standalone-Variante, nur ueber den Text-Cache statt
+  // frischer FindAll-Listen - Boolean-Ergebnis identisch.
+  function BodyReferences(Body: TAstNode; const MemberLow: string): Boolean;
+  var
+    S : string;
+    C : TBodyTextCache;
+  begin
+    Result := False;
+    if Body = nil then Exit;
+    C := BodyTextsOf(Body);
+    for S in C.CallTexts do
+      if ContainsIdent(S, MemberLow) then Exit(True);
+    for S in C.AssignTexts do
+      if ContainsIdent(S, MemberLow) then Exit(True);
+  end;
+
+  // Liefert die Methoden-Implementations, deren Name mit ClassPrefix + '.'
+  // beginnt (case-insensitiv). Perf (2026-07-05): P8 - Nachschlag im
+  // Klassen-Bucket statt FindAll ueber die ganze Unit pro Member; der
+  // StartsWith-Filter ist identisch zur alten CollectMethodImplsFor-
+  // Schleife (jeder StartsWith-Match liegt zwingend im Bucket seines
+  // ersten Namens-Segments).
+  procedure ImplMethodsFor(const ClassPrefix: string; Dest: TList<TAstNode>);
+  var
+    PrefixLow : string;
+    B : TList<TAstNode>;
+    M : TAstNode;
+  begin
+    PrefixLow := LowerCase(ClassPrefix) + '.';
+    if not MethodsByClassLow.TryGetValue(
+      Copy(PrefixLow, 1, Pos('.', PrefixLow) - 1), B) then Exit;
+    for M in B do
+      if MethodNamesLow[M].StartsWith(PrefixLow) then
+        Dest.Add(M);
   end;
 
   // True wenn die Klasse das klassische Utility-/Namespace-Container-
@@ -319,10 +376,10 @@ var
     SubRefs   := 0;
     OtherRefs := 0;
 
-    // 1. Referenzen in Methods der eigenen Klasse
+    // 1. Referenzen in Methods der eigenen Klasse (P8: Bucket-Lookup)
     ImplList := TList<TAstNode>.Create;
     try
-      CollectMethodImplsFor(UnitNode, ClassNode.Name, ImplList);
+      ImplMethodsFor(ClassNode.Name, ImplList);
       for Impl in ImplList do
       begin
         if Impl = Member then Continue;      // Eigene Methode zaehlt nicht
@@ -340,7 +397,7 @@ var
       if not ClassNameByLow.TryGetValue(SubLow, OtherCls) then Continue;
       ImplList := TList<TAstNode>.Create;
       try
-        CollectMethodImplsFor(UnitNode, OtherCls.Name, ImplList);
+        ImplMethodsFor(OtherCls.Name, ImplList);
         for Impl in ImplList do
           if BodyReferences(Impl, MemberLow) then Inc(SubRefs);
       finally
@@ -354,7 +411,8 @@ var
     for Impl in AllUnitMethods do
     begin
       if Impl = Member then Continue;
-      var Lower := NormalizeIdent(Impl.Name);
+      // P8: gecachtes NormalizeIdent statt LowerCase+Trim pro Paar.
+      var Lower := MethodNamesNorm[Impl];
       // Skippen wenn zur eigenen Klasse oder einem Descendant
       if Lower.StartsWith(ClassLow + '.') then Continue;
       var Skip := False;
@@ -457,7 +515,37 @@ begin
   // mit jeweils TQueue+TDictionary-Allokation).
   DescendantsCache := TObjectDictionary<string, TList<string>>.Create(
     [doOwnsValues]);
+  MethodsByClassLow := TObjectDictionary<string, TList<TAstNode>>.Create(
+    [doOwnsValues]);
+  MethodNamesLow := TDictionary<TAstNode, string>.Create;
+  MethodNamesNorm := TDictionary<TAstNode, string>.Create;
+  BodyCache := TObjectDictionary<TAstNode, TBodyTextCache>.Create(
+    [doOwnsValues]);
   try
+    // Perf (2026-07-05): P8 - Phase 0: Methoden-Namen einmal pro Unit
+    // lowern + nach Klassen-Praefix (Segment vor dem ersten '.')
+    // gruppieren. ClassifyMember lief vorher pro public-Member (und
+    // nochmal pro Descendant) via FindAll+LowerCase ueber ALLE Unit-
+    // Methoden - klassen-invariant, also cachebar.
+    for MethNode in AllUnitMethods do
+    begin
+      NameLow := LowerCase(MethNode.Name);
+      MethodNamesLow.AddOrSetValue(MethNode, NameLow);
+      // Trim(LowerCase(S)) = LowerCase(Trim(S)) = NormalizeIdent(S)
+      MethodNamesNorm.AddOrSetValue(MethNode, Trim(NameLow));
+      DotP := Pos('.', NameLow);
+      if DotP > 0 then
+        KeyLow := Copy(NameLow, 1, DotP - 1)
+      else
+        KeyLow := NameLow;
+      if not MethodsByClassLow.TryGetValue(KeyLow, Bucket) then
+      begin
+        Bucket := TList<TAstNode>.Create;
+        MethodsByClassLow.Add(KeyLow, Bucket);
+      end;
+      Bucket.Add(MethNode);
+    end;
+
     // Phase 1: Klassen-Index + Vererbungs-Graph
     for ClassNode in Classes do
     begin
@@ -526,6 +614,10 @@ begin
     Classes.Free;
     AllUnitMethods.Free;
     DescendantsCache.Free;     // doOwnsValues -> innere TList<string> mit weg
+    BodyCache.Free;            // doOwnsValues -> TBodyTextCache mit weg
+    MethodNamesNorm.Free;
+    MethodNamesLow.Free;
+    MethodsByClassLow.Free;    // doOwnsValues -> Buckets mit weg
   end;
 end;
 

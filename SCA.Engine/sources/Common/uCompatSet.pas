@@ -3,7 +3,7 @@ unit uCompatSet;
 // Delphi-11-Kompatibilitaet: THashSet<T> gibt es erst seit Delphi 12
 // (System.Generics.Collections). Unter D11 (CompilerVersion 35) stellt
 // diese Unit einen minimalen Ersatz mit exakt der im Projekt genutzten
-// Oberflaeche bereit: Create / Free / Add / Contains / for-in.
+// Oberflaeche bereit: Create / Free / Add / Contains / Count / for-in.
 // Unter D12+ deklariert die Unit NICHTS - die Konsumenten (uCanBeClassMethod,
 // uConstructorWithoutInherited, uConstStringParameter, uSymbolReferenceIndex)
 // binden dann das native THashSet aus System.Generics.Collections; das
@@ -24,12 +24,15 @@ type
   THashSet<T> = class
   private
     FItems: TDictionary<T, Boolean>;
+    function GetCount: Integer;
   public
     constructor Create;
     destructor Destroy; override;
     function Add(const Value: T): Boolean;
     function Contains(const Value: T): Boolean;
     function GetEnumerator: TDictionary<T, Boolean>.TKeyEnumerator;
+    // Count wie D12-THashSet (Konsument: uCanBeClassMethod Members.Count).
+    property Count: Integer read GetCount;
   end;
 {$IFEND}
 
@@ -59,6 +62,11 @@ end;
 function THashSet<T>.Contains(const Value: T): Boolean;
 begin
   Result := FItems.ContainsKey(Value);
+end;
+
+function THashSet<T>.GetCount: Integer;
+begin
+  Result := FItems.Count;
 end;
 
 function THashSet<T>.GetEnumerator: TDictionary<T, Boolean>.TKeyEnumerator;

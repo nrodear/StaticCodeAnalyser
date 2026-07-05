@@ -54,11 +54,22 @@ type
     FPublicMembers : THashSet<string>;
     // Per-Scan-AST-Cache (D.2.3 Infra): von Build statt gAstFileCache-Global.
     FAstCache : TAstFileCache;
+    // Perf (2026-07-05): P9-symbolrefindex - 1-Slot-Memo fuer die OwnUnit-
+    // Normalisierung in ExternalReferencingUnitCount. Der Visibility-
+    // Detektor fragt pro Member derselben Datei mit identischem OwnUnit an;
+    // ExpandFileName+LowerCase laeuft nur noch bei Datei-Wechsel.
+    // Per-Instanz-State, Lifecycle = Index-Lebensdauer (per Scan gebaut).
+    FOwnUnitRaw  : string;
+    FOwnUnitNorm : string;
 
     procedure ScanUnitForMembers(const PasFileName: string);
     procedure ScanUnitForRefs(const PasFileName: string);
     procedure CollectPublicMembersFrom(RootNode: TAstNode);
     procedure AddRefsFromNode(RootNode: TAstNode; const SourceUnit: string);
+    // Perf (2026-07-05): P9-symbolrefindex - Hot-Path-Variante ohne Pfad-
+    // Re-Normalisierung; FromUnitNorm MUSS bereits durch NormalizeUnitPath
+    // gelaufen sein (AddRefsFromNode normalisiert einmal pro Datei).
+    procedure AddReferenceNormalized(const MemberName, FromUnitNorm: string);
   public
     constructor Create;
     destructor  Destroy; override;
@@ -125,14 +136,26 @@ end;
 
 procedure TSymbolReferenceIndex.AddReference(const MemberName,
   FromUnit: string);
+begin
+  // Oeffentlicher Pfad (Tests + spezielle Pipeline-Varianten): normalisiert
+  // selbst - Verhalten unveraendert.
+  AddReferenceNormalized(MemberName, NormalizeUnitPath(FromUnit));
+end;
+
+procedure TSymbolReferenceIndex.AddReferenceNormalized(const MemberName,
+  FromUnitNorm: string);
+// Perf (2026-07-05): P9-symbolrefindex - AddRefsFromNode ruft pro Datei
+// tausendfach mit konstantem SourceUnit; ExpandFileName+LowerCase liefe
+// dabei identisch pro Referenz. Hier keine Re-Normalisierung mehr;
+// nebenbei landet dieselbe String-Instanz (refcounted) im Index statt
+// je Aufruf einer frischen Kopie.
 var
-  Key, UnitLow : string;
+  Key : string;
   L : TStringList;
 begin
   Key := LowerCase(Trim(MemberName));
   if Key = '' then Exit;
-  UnitLow := NormalizeUnitPath(FromUnit);
-  if UnitLow = '' then Exit;
+  if FromUnitNorm = '' then Exit;
   if not FRefs.TryGetValue(Key, L) then
   begin
     L := TStringList.Create;
@@ -141,11 +164,18 @@ begin
     L.Duplicates    := dupIgnore;
     FRefs.Add(Key, L);
   end;
-  L.Add(UnitLow);
+  L.Add(FromUnitNorm);
 end;
 
 procedure TSymbolReferenceIndex.AddRefsFromNode(RootNode: TAstNode;
   const SourceUnit: string);
+var
+  // Perf (2026-07-05): P9-symbolrefindex - SourceUnit ist fuer ALLE Refs
+  // dieser Datei konstant; einmal normalisieren statt pro AddReference
+  // (ExpandFileName+LowerCase liefen sonst pro Referenz, repo-weit
+  // millionenfach). Deklaration VOR den nested Routinen, damit
+  // ScanExprForDottedRefs sie sieht.
+  SrcNorm : string;
 
   function ExtractRightOfDot(const S: string): string;
   // Bei 'Obj.Member(args)' -> 'Member'. Bei 'Bare(args)' -> 'Bare'.
@@ -224,7 +254,7 @@ procedure TSymbolReferenceIndex.AddRefsFromNode(RootNode: TAstNode;
       StartSecond := i;
       while (i <= L) and IsIdentCharLocal(Expr[i]) do Inc(i);
       MemberName := Copy(Expr, StartSecond, i - StartSecond);
-      AddReference(MemberName, SourceUnit);
+      AddReferenceNormalized(MemberName, SrcNorm);
     end;
   end;
 
@@ -233,6 +263,9 @@ var
   N : TAstNode;
   Target : string;
 begin
+  // Perf (2026-07-05): P9-symbolrefindex - einmal pro Datei normalisieren.
+  SrcNorm := NormalizeUnitPath(SourceUnit);
+
   // nkCall: jeder Call-Name ist ein Member-Aufruf. Wir extrahieren den
   // rightmost Identifier nach optionalem 'Obj.'.
   // A.3+ Punkt 3: bare-Calls werden registriert WENN ihr Name als
@@ -246,13 +279,13 @@ begin
       if HasLhsBeforeDot(N.Name) then
       begin
         Target := ExtractRightOfDot(N.Name);
-        AddReference(Target, SourceUnit);
+        AddReferenceNormalized(Target, SrcNorm);
       end
       else
       begin
         Target := ExtractRightOfDot(N.Name);  // strippt nur '(args)'
         if (Target <> '') and FPublicMembers.Contains(LowerCase(Target)) then
-          AddReference(Target, SourceUnit);
+          AddReferenceNormalized(Target, SrcNorm);
       end;
     end;
   finally
@@ -268,7 +301,7 @@ begin
       if HasLhsBeforeDot(N.Name) then
       begin
         Target := ExtractRightOfDot(N.Name);
-        AddReference(Target, SourceUnit);
+        AddReferenceNormalized(Target, SrcNorm);
       end;
       // RHS-Calls: 'X := Obj.GetValue()' -> 'GetValue' indexieren.
       if N.TypeRef <> '' then
@@ -466,7 +499,15 @@ begin
   // Selber Normalisierungs-Pfad wie AddReference - sonst zaehlt die
   // eigene Unit faelschlich als externe Referenz wenn Build mit absolutem
   // Pfad indizierte und der Caller einen relativen uebergibt.
-  OwnLow := NormalizeUnitPath(OwnUnit);
+  // Perf (2026-07-05): P9-symbolrefindex - 1-Slot-Memo: uVisibilityCheck
+  // ruft pro Member derselben Datei mit identischem OwnUnit (Vollpfad,
+  // siehe Doku dort); nur bei Wechsel neu normalisieren.
+  if OwnUnit <> FOwnUnitRaw then
+  begin
+    FOwnUnitRaw  := OwnUnit;
+    FOwnUnitNorm := NormalizeUnitPath(OwnUnit);
+  end;
+  OwnLow := FOwnUnitNorm;
   for i := 0 to L.Count - 1 do
     if L[i] <> OwnLow then Inc(Result);
 end;

@@ -122,6 +122,17 @@ begin
   Result := CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_']);
 end;
 
+type
+  // Perf (2026-07-05): P10 (b) - vorberechneter Method-Span fuer
+  // FindMethodForLine: (StartLine, EndLine inkl. NextStart-1-Korrektur,
+  // Node), einmal pro AnalyzeUnit sortiert aufgebaut statt Sort +
+  // CalcMethodEndLine-Subtree-Walk bei JEDEM Aufruf.
+  TMethodSpan = record
+    StartLine : Integer;
+    EndLine   : Integer;
+    Node      : TAstNode;
+  end;
+
 // Wortgrenze: davor und danach kein Ident-Char.
 function IsWholeWord(const Code: string; StartPos, EndPos: Integer): Boolean;
 begin
@@ -151,6 +162,15 @@ var
   // CFGs lazy bauen. CFGMap besitzt die TCFG-Instanzen (OwnsValues=True).
   Methods  : TList<TAstNode>;
   CFGMap   : TObjectDictionary<TAstNode, TCFG>;
+  // Perf (2026-07-05): P10 - per-File-Caches, lazy beim ersten Bedarf:
+  //   (a) BoundaryPositions = sortierte Start-Positionen aller Matches
+  //       von CachedReEndOfMethod ueber den GANZEN Code (statt pro
+  //       Free-Match Copy(Code, StartPos, Rest) + Regex auf der Kopie).
+  //   (b) MethodSpans = sortierte Method-Ranges fuer FindMethodForLine.
+  BoundaryPositions : TArray<Integer>;
+  BoundariesBuilt   : Boolean;
+  MethodSpans       : TArray<TMethodSpan>;
+  MethodSpansBuilt  : Boolean;
 
   function CalcMethodEndLine(N: TAstNode): Integer;
   var Stack : TStack<TAstNode>; Cur : TAstNode; Ch : TAstNode;
@@ -170,53 +190,77 @@ var
     finally Stack.Free; end;
   end;
 
-  function FindMethodForLine(ALine: Integer): TAstNode;
-  // Innerste Method die ALine umschliesst. Bei nested-Methods gewinnt
-  // die mit der kleinsten Range (= innerste).
-  //
-  // ROBUST gegen Parser-Headless-Method-Pattern: wenn der Parser keine
-  // Body-Children unter nkMethod ablegt (siehe base64func.pas Audit),
-  // gibt CalcMethodEndLine nur die Header-Line zurueck. Als 2.
-  // Heuristik nehmen wir NEXT-Method.Line - 1 als Approximation des
-  // Body-Endes. Methods.FindAll liefert in Reihenfolge der AST-
-  // Erkundung, was meist auch Source-Reihenfolge ist - sicherheits-
-  // halber sortieren wir nochmal nach Line.
+  procedure EnsureMethodSpansBuilt;
+  // Perf (2026-07-05): P10 (b) - Method-Spans EINMAL pro AnalyzeUnit
+  // aufbauen statt bei jedem FindMethodForLine-Aufruf die komplette
+  // Methodenliste zu sortieren und pro Kandidat den CalcMethodEndLine-
+  // Subtree-Walk zu laufen. Sortierung, NextStart-1-Korrektur und
+  // EndLine-Berechnung sind 1:1 die bisherige Logik (byte-identisch).
   var
-    Mth, Best : TAstNode;
-    BestSpan, Span : Integer;
-    SortedMethods : TArray<TAstNode>;
+    Sorted : TArray<TAstNode>;
     i, NextStart, EndL : Integer;
   begin
-    Best := nil;
-    BestSpan := MaxInt;
+    if MethodSpansBuilt then Exit;
+    MethodSpansBuilt := True;
+    SetLength(MethodSpans, 0);
+    if Methods = nil then Exit;
 
     // Methods nach Line sortieren (in-place auf einer Kopie).
-    SetLength(SortedMethods, Methods.Count);
-    for i := 0 to Methods.Count - 1 do SortedMethods[i] := Methods[i];
-    TArray.Sort<TAstNode>(SortedMethods,
+    // Methods.FindAll liefert in Reihenfolge der AST-Erkundung, was
+    // meist auch Source-Reihenfolge ist - sicherheitshalber sortieren
+    // wir nochmal nach Line.
+    SetLength(Sorted, Methods.Count);
+    for i := 0 to Methods.Count - 1 do Sorted[i] := Methods[i];
+    TArray.Sort<TAstNode>(Sorted,
       TComparer<TAstNode>.Construct(
         function(const L, R: TAstNode): Integer
         begin Result := L.Line - R.Line; end));
 
-    for i := 0 to High(SortedMethods) do
+    SetLength(MethodSpans, Length(Sorted));
+    for i := 0 to High(Sorted) do
     begin
-      Mth := SortedMethods[i];
-      EndL := CalcMethodEndLine(Mth);
-      // Heuristik 2: wenn AST-Range degeneriert ist (nur Header-Line),
-      // nutze NEXT-Method.Line - 1 als Body-End-Approximation.
-      if i < High(SortedMethods) then
-        NextStart := SortedMethods[i + 1].Line
+      EndL := CalcMethodEndLine(Sorted[i]);
+      // Heuristik 2 (ROBUST gegen Parser-Headless-Method-Pattern, siehe
+      // base64func.pas Audit): wenn AST-Range degeneriert ist (nur
+      // Header-Line), nutze NEXT-Method.Line - 1 als Body-End-Approximation.
+      if i < High(Sorted) then
+        NextStart := Sorted[i + 1].Line
       else
         NextStart := MaxInt;
-      if EndL <= Mth.Line then
+      if EndL <= Sorted[i].Line then
         EndL := NextStart - 1;
+      MethodSpans[i].StartLine := Sorted[i].Line;
+      MethodSpans[i].EndLine   := EndL;
+      MethodSpans[i].Node      := Sorted[i];
+    end;
+  end;
 
-      if (ALine >= Mth.Line) and (ALine <= EndL) then
+  function FindMethodForLine(ALine: Integer): TAstNode;
+  // Innerste Method die ALine umschliesst. Bei nested-Methods gewinnt
+  // die mit der kleinsten Range (= innerste).
+  //
+  // Perf (2026-07-05): P10 (b) - Lookup ueber das vorberechnete,
+  // nach StartLine sortierte MethodSpans-Array. Best-Span-Logik
+  // identisch zur frueheren Schleife (erste Method gewinnt bei
+  // Span-Gleichstand, wie zuvor durch '<'); Early-Break sobald
+  // StartLine > ALine ist verhaltensneutral, weil solche Spans die
+  // Containment-Bedingung ALine >= StartLine nie erfuellen koennen.
+  var
+    i, BestSpan, Span : Integer;
+    Best : TAstNode;
+  begin
+    EnsureMethodSpansBuilt;
+    Best := nil;
+    BestSpan := MaxInt;
+    for i := 0 to High(MethodSpans) do
+    begin
+      if MethodSpans[i].StartLine > ALine then Break;
+      if ALine <= MethodSpans[i].EndLine then
       begin
-        Span := EndL - Mth.Line;
+        Span := MethodSpans[i].EndLine - MethodSpans[i].StartLine;
         if Span < BestSpan then
         begin
-          Best := Mth;
+          Best := MethodSpans[i].Node;
           BestSpan := Span;
         end;
       end;
@@ -267,6 +311,71 @@ var
     Result := not CFG.CanReach(FreeBlk, UseBlk);
   end;
 
+  procedure EnsureBoundariesBuilt;
+  // Perf (2026-07-05): P10 (a) - Methoden-Boundaries EINMAL pro Datei
+  // via CachedReEndOfMethod.Matches(Code) in ein sortiertes Positions-
+  // Array, statt pro Free-Match Copy(Code, StartPos, Rest) + Regex auf
+  // der Kopie (O(K x N)-Churn bei vielen Free-Aufrufen im File).
+  // Match.Index ist 1-basiert im Volltext; Matches liefert aufsteigend.
+  var
+    Coll : TMatchCollection;
+    i    : Integer;
+  begin
+    if BoundariesBuilt then Exit;
+    BoundariesBuilt := True;
+    Coll := CachedReEndOfMethod.Matches(Code);
+    SetLength(BoundaryPositions, Coll.Count);
+    for i := 0 to Coll.Count - 1 do
+      BoundaryPositions[i] := Coll[i].Index;
+  end;
+
+  function FirstBoundaryAtOrAfter(APos: Integer): Integer;
+  // Binaersuche: kleinste Boundary-Position >= APos; 0 = keine.
+  var
+    Lo, Hi, Mid : Integer;
+  begin
+    Result := 0;
+    Lo := 0;
+    Hi := High(BoundaryPositions);
+    while Lo <= Hi do
+    begin
+      Mid := (Lo + Hi) div 2;
+      if BoundaryPositions[Mid] >= APos then
+      begin
+        Result := BoundaryPositions[Mid];
+        Hi := Mid - 1;
+      end
+      else
+        Lo := Mid + 1;
+    end;
+  end;
+
+  function SnippetStartEndMatch(APos: Integer): Boolean;
+  // Perf (2026-07-05): P10 (a) - repliziert den '^'-Anker-Sonderfall:
+  // frueher lief CachedReEndOfMethod auf einer Kopie ab StartPos; dort
+  // matchte '(?im)^\s*end\s*;' auch am Kopie-ANFANG, selbst wenn APos
+  // im Volltext mitten in einer Zeile liegt (z.B. 'finally X.Free end;').
+  // Das Volltext-Matches-Array enthaelt diese Position nicht, deshalb
+  // billiger manueller Check: Whitespace* + 'end' + Whitespace* + ';'.
+  // Whitespace wie PCRE-\s inkl. #11/#12; 'end' case-insensitive wie (?i).
+  // Der Keyword-Zweig des Patterns kann am Kopie-Anfang NICHT abweichend
+  // matchen: dessen fuehrendes \b wuerde einen Wort-Char an APos
+  // erfordern, den das trailing \b des Free-Regex ausschliesst, wenn
+  // Code[APos-1] ein Wort-Char ist (Free/Destroy/DisposeOf-Ende); nach
+  // FreeAndNil-')' stimmen Volltext- und Kopie-\b ohnehin ueberein.
+  var
+    q : Integer;
+  begin
+    Result := False;
+    q := APos;
+    while (q <= CodeLen) and CharInSet(Code[q], [' ', #9, #10, #11, #12, #13]) do Inc(q);
+    if q + 2 > CodeLen then Exit;
+    if not SameText(Copy(Code, q, 3), 'end') then Exit;
+    Inc(q, 3);
+    while (q <= CodeLen) and CharInSet(Code[q], [' ', #9, #10, #11, #12, #13]) do Inc(q);
+    Result := (q <= CodeLen) and (Code[q] = ';');
+  end;
+
   function FindUseOrReassign(StartPos: Integer): Integer;
   // Sucht ab StartPos im Code nach dem ersten relevanten Vorkommen von Ident.
   // Rueckgabe:
@@ -276,20 +385,25 @@ var
     p     : Integer;
     After : Char;
     EndP  : Integer;
-    Snippet : string;
-    EndM  : TMatch;
     EndOfMethodPos : Integer;
   begin
     Result := 0;
     // Method-Boundary grob: ` end;` auf Zeile oder Token `procedure`/`function`/
     // `destructor`/`constructor`/`class` vor naechstem Use. Wir limitieren
     // den Scan auf das naechste solche Vorkommen.
-    Snippet := Copy(Code, StartPos, CodeLen - StartPos + 1);
-    EndM := CachedReEndOfMethod.Match(Snippet);
-    if EndM.Success then
-      EndOfMethodPos := StartPos + EndM.Index - 1
+    // Perf (2026-07-05): P10 (a) - erst der Kopie-Anfang-Sonderfall
+    // (liefert StartPos = Minimum beider Kandidaten), sonst Binaersuche
+    // im einmal pro Datei gebauten Boundary-Array. Fenster byte-identisch
+    // zur frueheren Snippet-Kopie + Match-Variante.
+    if SnippetStartEndMatch(StartPos) then
+      EndOfMethodPos := StartPos
     else
-      EndOfMethodPos := CodeLen;
+    begin
+      EnsureBoundariesBuilt;
+      EndOfMethodPos := FirstBoundaryAtOrAfter(StartPos);
+      if EndOfMethodPos = 0 then
+        EndOfMethodPos := CodeLen;
+    end;
 
     p := StartPos;
     while p <= EndOfMethodPos do
@@ -348,6 +462,10 @@ var
 
 begin
   EnsureRegexCacheBuilt;
+  // Perf (2026-07-05): P10 - lokale Booleans sind NICHT auto-initialisiert
+  // (anders als die managed Arrays): Lazy-Flags explizit zuruecksetzen.
+  BoundariesBuilt  := False;
+  MethodSpansBuilt := False;
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   // CFG-Filter-Infrastruktur (A.4.6): Methods aus dem AST sammeln,
@@ -357,7 +475,10 @@ begin
   try
     // Fill-Char explizit ' ' (Space): die zentrale Version fuellt default
     // mit '~'; dieser Detektor erwartet Space (verhaltensneutrale Migration).
-    Code := TDetectorUtils.StripStringsAndComments(Lines, LineFor, ' ');
+    // Perf (2026-07-05): P1-strip-cache - Nachzuegler-Migration (war beim
+    // P1-Batch wegen paralleler P10-Edits an dieser Datei ausgeklammert).
+    Code := TDetectorUtils.StripStringsAndCommentsCached(Lines, LineFor,
+      AContext, FileName, ' ');
     CodeLen := Length(Code);
     if UnitNode <> nil then
     begin

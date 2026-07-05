@@ -929,6 +929,15 @@ var
   BodySB           : TStringBuilder;
   BodyLow          : string;
   NestedRanges     : TList<TLineRange>;
+  // Perf (2026-07-05): P7-uninitvar - Method-End einmal berechnen (vorher
+  // 2x kompletter AST-Walk: Orchestrator + PhaseC) und gestripptes,
+  // gelowertes Zeilen-Array fuer den Methodenbereich einmal fuellen
+  // (vorher strippten FindFirstSourceWriteLine + FindFirstReadLine pro
+  // Variable JEDE Zeile neu = 2xVxL statt L StripLineEx-Durchlaeufe).
+  MethodEndL       : Integer;
+  StrippedLow      : TArray<string>;
+  StrippedFrom0    : Integer;   // 0-basierter Lines-Index von StrippedLow[0]
+  StrippedBuilt    : Boolean;   // lazy: erst bauen wenn ein Finder laeuft
 
   procedure RegisterWrite(Idx: Integer; Line: Integer);
   var
@@ -1199,6 +1208,37 @@ var
     Result := HasIdent;
   end;
 
+  procedure BuildStrippedLowCache(MethodStartLine, MethodEndLine: Integer);
+  // Perf (2026-07-05): P7-uninitvar - EIN StripLineEx-Durchlauf ueber den
+  // Methodenbereich [From0..To0], Ergebnis gelowert in StrippedLow.
+  // FindFirstSourceWriteLine/FindFirstReadLine lesen nur noch aus dem
+  // Array; beide starteten bisher identisch mit frischem StripState bei
+  // MethodStartLine - das vorberechnete Array ist daher byte-identisch.
+  // FP-Fix-Semantik bleibt erhalten: State (InBrace/InParen) laeuft ueber
+  // alle Zeilen mit, damit Multi-Line-Block-Comments { ... \n ... } und
+  // (* ... \n ... *) korrekt geclipped werden. Annahme wie bisher: bei
+  // MethodStartLine ist kein Block-Comment offen.
+  var
+    i, From0, To0 : Integer;
+    StripState : TLineStripState;
+  begin
+    StrippedLow   := nil;
+    StrippedFrom0 := 0;
+    if Lines = nil then Exit;
+    if (MethodStartLine <= 0) or (MethodEndLine < MethodStartLine) then Exit;
+    From0 := MethodStartLine - 1;
+    To0   := MethodEndLine - 1;
+    if From0 < 0 then From0 := 0;
+    if To0 > Lines.Count - 1 then To0 := Lines.Count - 1;
+    if To0 < From0 then Exit;
+    StrippedFrom0 := From0;
+    SetLength(StrippedLow, To0 - From0 + 1);
+    StripState.InBrace := False;
+    StripState.InParen := False;
+    for i := From0 to To0 do
+      StrippedLow[i - From0] := LowerCase(StripLineEx(Lines[i], StripState));
+  end;
+
   function FindFirstSourceWriteLine(const NameLow: string;
     DeclLine, MethodStartLine, MethodEndLine: Integer): Integer;
   // FP-Fix Source-Line-Fallback fuer Write-Detection. Wird gerufen wenn
@@ -1211,7 +1251,6 @@ var
   var
     i, From0, To0 : Integer;
     L, Trimmed : string;
-    StripState : TLineStripState;
     TPos, NL : Integer;
   begin
     Result := 0;
@@ -1223,11 +1262,12 @@ var
     To0   := MethodEndLine - 1;
     if From0 < 0 then From0 := 0;
     if To0 > Lines.Count - 1 then To0 := Lines.Count - 1;
-    StripState.InBrace := False;
-    StripState.InParen := False;
     for i := From0 to To0 do
     begin
-      L := LowerCase(StripLineEx(Lines[i], StripState));
+      // Perf (2026-07-05): P7-uninitvar - vorberechnetes StrippedLow-Array
+      // (BuildStrippedLowCache, identische Bounds via PhaseC) statt
+      // StripLineEx pro Variable.
+      L := StrippedLow[i - StrippedFrom0];
       if i + 1 = DeclLine then Continue;
       if IsLineInRanges(i + 1, NestedRanges) then Continue;
       // Read-Family-Fill ('Stream.Read(Buf, Size)') fuellt den Buffer = Write.
@@ -1298,7 +1338,6 @@ var
     L : string;
     P, NL, LL, From0, To0 : Integer;
     Before, After : Char;
-    StripState : TLineStripState;
   begin
     Result := 0;
     if Lines = nil then Exit;
@@ -1309,17 +1348,13 @@ var
     To0   := MethodEndLine - 1;
     if From0 < 0 then From0 := 0;
     if To0 > Lines.Count - 1 then To0 := Lines.Count - 1;
-    // FP-Fix: State (InBrace/InParen) muss ueber alle Zeilen mitlaufen,
-    // damit Multi-Line-Block-Comments { ... \n ... } und (* ... \n ... *)
-    // korrekt geclipped werden. Annahme: bei MethodStartLine ist kein
-    // Block-Comment offen (sehr seltene Verletzung in pathologischen
-    // Files - akzeptabler Edge-Case).
-    StripState.InBrace := False;
-    StripState.InParen := False;
     for i := From0 to To0 do
     begin
-      // IMMER strippen - auch bei skip - damit State korrekt mitwandert.
-      L := LowerCase(StripLineEx(Lines[i], StripState));
+      // Perf (2026-07-05): P7-uninitvar - vorberechnetes StrippedLow-Array
+      // (BuildStrippedLowCache, identische Bounds via PhaseC) statt
+      // StripLineEx pro Variable. Multi-Line-Comment-State ist dort
+      // bereits ueber alle Zeilen mitgelaufen (FP-Fix-Semantik unveraendert).
+      L := StrippedLow[i - StrippedFrom0];
       if (i + 1 = DeclLine) or (i + 1 = FirstWriteLine) then Continue;
       if IsLineInRanges(i + 1, NestedRanges) then Continue;
       // Skip wenn Zeile eine reine Var-Decl ist (Multi-line-Decl-Fix)
@@ -1501,7 +1536,9 @@ var
     CollectBodyTokens(MethodNode, BodySB);
     BodyLow := LowerCase(BodySB.ToString);
     MethodStartLine := MethodNode.Line;
-    MethodEndLine   := CalcMethodEndLine(MethodNode);
+    // Perf (2026-07-05): P7-uninitvar - Method-End aus dem Orchestrator
+    // durchgereicht statt zweitem CalcMethodEndLine-AST-Walk.
+    MethodEndLine   := MethodEndL;
     for i := 0 to VarList.Count - 1 do
     begin
       P := @VarList.List[i];
@@ -1509,6 +1546,14 @@ var
                                               FirstMatchPos);
       // RefCount<=1 -> nur Deklaration = UnusedLocal-Domain (SCA019).
       if P.RefCount <= 1 then Continue;
+      // Perf (2026-07-05): P7-uninitvar - Stripped-Cache lazy bauen: nur
+      // wenn mindestens eine Variable die Finder wirklich erreicht
+      // (RefCount>1). Bounds identisch zu den Finder-Aufrufen darunter.
+      if not StrippedBuilt then
+      begin
+        BuildStrippedLowCache(MethodStartLine, MethodEndLine);
+        StrippedBuilt := True;
+      end;
       // FirstWrite = fruehester ECHTER Write. Den Source-Scan IMMER laufen
       // lassen (nicht nur bei FirstWriteLine=0):
       //   * AST-Walks koennen den Outer-Body-Assign missen (Parser-Headless-
@@ -1636,10 +1681,15 @@ begin
     NestedRanges := TList<TLineRange>.Create;
     Lines        := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
     try
+      // Perf (2026-07-05): P7-uninitvar - CalcMethodEndLine nur EINMAL
+      // walken (vorher hier + nochmal in PhaseC); Stripped-Cache-Flag
+      // initialisieren (lazy Build in PhaseC).
+      MethodEndL    := CalcMethodEndLine(MethodNode);
+      StrippedBuilt := False;
       // Phase 2.6: source-line-basierte Nested-Method-Detection.
       if Lines <> nil then
         CollectNestedMethodRangesViaSource(Lines, MethodNode.Line,
-          CalcMethodEndLine(MethodNode), NestedRanges);
+          MethodEndL, NestedRanges);
 
       // Phase 2.7: EXAKTE nkNestedRange-Marker vom Parser (verworfene nested
       // routines). Der Parser kennt deren Grenzen praezise; das ist robuster
