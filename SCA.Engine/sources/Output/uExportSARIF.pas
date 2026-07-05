@@ -19,6 +19,14 @@ unit uExportSARIF;
 // `partialFingerprints` ist optional aber HOCHEMPFOHLEN: GitHub nutzt das
 // fuer Cross-Commit-Deduplizierung, damit Findings nicht doppelt erscheinen
 // wenn ein File auf einer Branch in mehreren Commits vorkommt.
+//
+// Perf (2026-07-05): P12-sarif-streaming - der Export baut KEINEN JSON-DOM
+// (TJSONObject-Baum) plus Format(2)-Gesamtstring mehr, sondern streamt pro
+// Rule/Finding direkt ueber einen Chunk-Puffer (Datei-Modus: Flush in den
+// FileStream ab ~64K). Vorher lagen DOM + formatierter Gesamtstring +
+// UTF8-Byte-Array gleichzeitig im Speicher - bei Real-World-Scans (770k
+// Findings, ~900MB SARIF) mehrere GB Peak. Der Byte-Output ist EXAKT
+// identisch zur alten System.JSON-Serialisierung, siehe TSarifJsonEmitter.
 
 interface
 
@@ -49,11 +57,11 @@ type
 
 implementation
 
-// noinspection-file BeginEndRequired, CanBeStrictPrivate, ConcatToFormat, ConsecutiveSection, DuplicateString, GroupedDeclaration, LongMethod, TooLongLine, UnsortedUses, UnusedParameter
+// noinspection-file BeginEndRequired, CanBeStrictPrivate, ClassPerFile, ConcatToFormat, ConsecutiveSection, DuplicateString, GroupedDeclaration, LongMethod, TooLongLine, UnsortedUses, UnusedParameter
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  System.IOUtils, System.JSON, System.Hash, System.StrUtils,
+  System.Classes, System.IOUtils, System.Hash, System.StrUtils,
   uSCAConsts, uRuleCatalog, uFindingFingerprint;
 
 { ---- Helpers ---- }
@@ -112,146 +120,386 @@ begin
   Result := Hash;
 end;
 
-function BuildRulesArray: TJSONArray;
-// runs[0].tool.driver.rules[] - alle Catalog-Eintraege als SARIF-Rules.
-var
-  Arr : TJSONArray;
-begin
-  Arr := TJSONArray.Create;
+{ ---- Streaming-Emitter ---- }
 
+const
+  // Perf (2026-07-05): P12-sarif-streaming - Flush-Schwelle des Chunk-
+  // Puffers im Datei-Modus (in Zeichen; UTF-8-Bytes koennen mehr sein).
+  SARIF_FLUSH_CHARS = 64 * 1024;
+
+type
+  // Perf (2026-07-05): P12-sarif-streaming - Streaming-Serialisierer.
+  // Bildet die Byte-Ausgabe von System.JSON `Root.Format(2)` EXAKT nach
+  // (verifiziert gegen die Delphi-12-RTL-Quelle System.JSON.pas):
+  //   * String-Escapes wie TJSONString.ToChars mit Options=[] (der Pfad,
+  //     den TJSONValue.Format nimmt): NUR " \ / #8 #9 #10 #12 #13 werden
+  //     zu \" \\ \/ \b \t \n \f \r. KEIN \uXXXX - andere Steuerzeichen
+  //     und Nicht-ASCII bleiben roh. Gilt auch fuer Pair-NAMEN (deshalb
+  //     steht im Output "contextHash\/v1" und "https:\/\/...").
+  //   * Layout wie TJSONObject/TJSONArray.Format: '{' bzw. '[' + CRLF,
+  //     Items mit 2 Spaces Einrueckung pro offener Ebene, ': ' nach dem
+  //     Namen, Komma nach jedem Item ausser dem letzten, schliessende
+  //     Klammer auf eigener Zeile mit Parent-Einrueckung. Leerer
+  //     Container = '{' + CRLF + Parent-Einrueckung + '}'. CRLF kommt
+  //     von TStringBuilder.AppendLine (sLineBreak) - wie im RTL-Pfad.
+  //   * Zahlen wie TJSONNumber.Create(Integer) -> IntToStr.
+  //   * Datei-Modus: Chunks werden mit TEncoding.UTF8.GetBytes kodiert.
+  //     Chunk-Grenzen liegen immer auf Item-Grenzen (nie innerhalb eines
+  //     Strings), daher kann kein Surrogat-Paar zerschnitten werden und
+  //     die Byte-Folge ist identisch zur Ein-Stueck-Kodierung von
+  //     TFile.WriteAllText.
+  TSarifJsonEmitter = class
+  private
+    FSb      : TStringBuilder;   // Chunk-Puffer (String-Modus: Gesamttext)
+    FStream  : TStream;          // nil => String-Modus (ToJsonString)
+    FHasItem : TArray<Boolean>;  // pro offener Container-Ebene: schon Items?
+    FDepth   : Integer;          // Anzahl offener Container
+    // '"' + S mit den 8 RTL-Escapes + '"'. Unveraenderte Runs werden als
+    // Substring-Block appended (kein Char-fuer-Char im Normalfall).
+    procedure AppendEscaped(const S: string);
+    // Vor jedem Item: [Komma] + CRLF + Einrueckung. Entspricht exakt der
+    // RTL-Reihenfolge "Item, Komma-wenn-nicht-letztes, CRLF" - nur als
+    // Praefix des Folge-Items statt Suffix des Vorgaengers formuliert
+    // (gleiche Byte-Folge, aber ohne Lookahead moeglich).
+    procedure ItemSeparator;
+    procedure PushContainer;
+    // CRLF + Parent-Einrueckung + '}' bzw. ']'.
+    procedure CloseContainer(AClose: Char);
+  public
+    constructor Create(AStream: TStream);
+    destructor Destroy; override;
+
+    // '{' als Wert an aktueller Position (Root oder Array-Element).
+    procedure BeginObjValue;
+    // '"AName": {' - Objekt als Pair-Wert.
+    procedure BeginObjPair(const AName: string);
+    // '"AName": [' - Array als Pair-Wert.
+    procedure BeginArrPair(const AName: string);
+    procedure EndObj;
+    procedure EndArr;
+    // '"AName": "AValue"' (AValue escaped).
+    procedure PairStr(const AName, AValue: string);
+    // '"AName": 123' (wie TJSONNumber -> IntToStr).
+    procedure PairInt(const AName: string; AValue: Integer);
+    // String-Element in einem Array.
+    procedure ArrStr(const AValue: string);
+    // Datei-Modus: Puffer ab Schwelle (AForce: immer) UTF-8-kodiert in
+    // den Stream schreiben. String-Modus: No-op.
+    procedure FlushChunk(AForce: Boolean);
+    // String-Modus: kompletter akkumulierter JSON-Text.
+    function AsString: string;
+  end;
+
+constructor TSarifJsonEmitter.Create(AStream: TStream);
+begin
+  inherited Create;
+  FStream := AStream;
+  FSb     := TStringBuilder.Create(SARIF_FLUSH_CHARS + 4096);
+  SetLength(FHasItem, 16);
+  FDepth  := 0;
+end;
+
+destructor TSarifJsonEmitter.Destroy;
+begin
+  FSb.Free;
+  inherited;
+end;
+
+procedure TSarifJsonEmitter.AppendEscaped(const S: string);
+var
+  i, RunStart, L : Integer;
+begin
+  FSb.Append('"');
+  L := Length(S);
+  RunStart := 1;
+  for i := 1 to L do
+  begin
+    case S[i] of
+      '"', '\', '/', #8, #9, #10, #12, #13:
+      begin
+        // Unveraenderten Run vor dem Sonderzeichen als Block anhaengen
+        // (StartIndex des Append-Overloads ist 0-basiert).
+        if i > RunStart then
+          FSb.Append(S, RunStart - 1, i - RunStart);
+        case S[i] of
+          '"' : FSb.Append('\"');
+          '\' : FSb.Append('\\');
+          '/' : FSb.Append('\/');
+          #8  : FSb.Append('\b');
+          #9  : FSb.Append('\t');
+          #10 : FSb.Append('\n');
+          #12 : FSb.Append('\f');
+          #13 : FSb.Append('\r');
+        end;
+        RunStart := i + 1;
+      end;
+    end;
+  end;
+  if L >= RunStart then
+    FSb.Append(S, RunStart - 1, L - RunStart + 1);
+  FSb.Append('"');
+end;
+
+procedure TSarifJsonEmitter.ItemSeparator;
+begin
+  // Auf Root-Ebene (kein offener Container) steht kein Separator - der
+  // Root-'{' ist das erste Byte des Dokuments (wie im RTL-Format).
+  if FDepth > 0 then
+  begin
+    if FHasItem[FDepth - 1] then
+      FSb.Append(',');
+    FSb.AppendLine;
+    FSb.Append(' ', FDepth * 2);       // LIdent = 2 Spaces je offener Ebene
+    FHasItem[FDepth - 1] := True;
+  end;
+end;
+
+procedure TSarifJsonEmitter.PushContainer;
+begin
+  if FDepth = Length(FHasItem) then
+    SetLength(FHasItem, FDepth + 8);
+  FHasItem[FDepth] := False;
+  Inc(FDepth);
+end;
+
+procedure TSarifJsonEmitter.CloseContainer(AClose: Char);
+begin
+  Dec(FDepth);
+  FSb.AppendLine;
+  FSb.Append(' ', FDepth * 2);         // Parent-Einrueckung
+  FSb.Append(AClose);
+end;
+
+procedure TSarifJsonEmitter.BeginObjValue;
+begin
+  ItemSeparator;
+  FSb.Append('{');
+  PushContainer;
+end;
+
+procedure TSarifJsonEmitter.BeginObjPair(const AName: string);
+begin
+  ItemSeparator;
+  AppendEscaped(AName);
+  FSb.Append(': ');
+  FSb.Append('{');
+  PushContainer;
+end;
+
+procedure TSarifJsonEmitter.BeginArrPair(const AName: string);
+begin
+  ItemSeparator;
+  AppendEscaped(AName);
+  FSb.Append(': ');
+  FSb.Append('[');
+  PushContainer;
+end;
+
+procedure TSarifJsonEmitter.EndObj;
+begin
+  CloseContainer('}');
+end;
+
+procedure TSarifJsonEmitter.EndArr;
+begin
+  CloseContainer(']');
+end;
+
+procedure TSarifJsonEmitter.PairStr(const AName, AValue: string);
+begin
+  ItemSeparator;
+  AppendEscaped(AName);
+  FSb.Append(': ');
+  AppendEscaped(AValue);
+end;
+
+procedure TSarifJsonEmitter.PairInt(const AName: string; AValue: Integer);
+begin
+  ItemSeparator;
+  AppendEscaped(AName);
+  FSb.Append(': ');
+  FSb.Append(IntToStr(AValue));
+end;
+
+procedure TSarifJsonEmitter.ArrStr(const AValue: string);
+begin
+  ItemSeparator;
+  AppendEscaped(AValue);
+end;
+
+procedure TSarifJsonEmitter.FlushChunk(AForce: Boolean);
+var
+  Bytes : TBytes;
+begin
+  if (FStream = nil) or (FSb.Length = 0) then Exit;
+  if AForce or (FSb.Length >= SARIF_FLUSH_CHARS) then
+  begin
+    Bytes := TEncoding.UTF8.GetBytes(FSb.ToString);
+    if Length(Bytes) > 0 then
+      FStream.WriteBuffer(Bytes, Length(Bytes));
+    FSb.Clear;
+  end;
+end;
+
+function TSarifJsonEmitter.AsString: string;
+begin
+  Result := FSb.ToString;
+end;
+
+{ ---- Dokument-Emission ---- }
+
+procedure EmitSarifDocument(E: TSarifJsonEmitter;
+  const AFindings: TObjectList<TLeakFinding>;
+  const ABaseDir, AToolVersion, AToolName: string);
+// Emittiert das komplette SARIF-Dokument in exakt der Pair-Reihenfolge,
+// die vorher der TJSONObject-Aufbau (ToJsonString + BuildRulesArray +
+// BuildResultsArray) erzeugt hat.
+var
+  F       : TLeakFinding;
+  Meta    : TRuleMeta;
+  RelPath : string;
+  LineNo  : Integer;
+  Msg     : string;
+  RuleID  : string;
+  CtxHash : string;
+  CtxMemo : TDictionary<string, string>;
+begin
+  E.BeginObjValue;                                     // Root {
+  E.PairStr('$schema',
+    'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json');
+  E.PairStr('version', '2.1.0');
+  E.BeginArrPair('runs');
+  E.BeginObjValue;                                     // runs[0] {
+  E.BeginObjPair('tool');
+  E.BeginObjPair('driver');
+  E.PairStr('name',
+    IfThen(AToolName <> '', AToolName, TRuleCatalog.ToolName));
+  E.PairStr('version',
+    IfThen(AToolVersion <> '', AToolVersion, TRuleCatalog.ToolVersion));
+  if TRuleCatalog.ToolUri <> '' then
+    E.PairStr('informationUri', TRuleCatalog.ToolUri);
+
+  // runs[0].tool.driver.rules[] - alle Catalog-Eintraege als SARIF-Rules.
+  E.BeginArrPair('rules');
   TRuleCatalog.ForEach(
     procedure(M: TRuleMeta)
     var
-      ROut   : TJSONObject;
-      RShort : TJSONObject;
-      RFull  : TJSONObject;
-      RConf  : TJSONObject;
-      RProp  : TJSONObject;
-      Tags   : TJSONArray;
-      S      : string;
+      S : string;
     begin
-      ROut := TJSONObject.Create;
-      ROut.AddPair('id', M.ID);
-      ROut.AddPair('name', IfThen(M.Name <> '', M.Name, KindName(M.Kind)));
+      E.BeginObjValue;
+      E.PairStr('id', M.ID);
+      E.PairStr('name', IfThen(M.Name <> '', M.Name, KindName(M.Kind)));
 
-      RShort := TJSONObject.Create;
-      RShort.AddPair('text', IfThen(M.ShortDescription <> '',
-                                    M.ShortDescription, M.Name));
-      ROut.AddPair('shortDescription', RShort);
+      E.BeginObjPair('shortDescription');
+      E.PairStr('text', IfThen(M.ShortDescription <> '',
+                               M.ShortDescription, M.Name));
+      E.EndObj;
 
       if M.FullDescription <> '' then
       begin
-        RFull := TJSONObject.Create;
-        RFull.AddPair('text', M.FullDescription);
-        ROut.AddPair('fullDescription', RFull);
+        E.BeginObjPair('fullDescription');
+        E.PairStr('text', M.FullDescription);
+        E.EndObj;
       end;
 
       // Default-Configuration: Severity-Level
-      RConf := TJSONObject.Create;
-      RConf.AddPair('level',
-        SeverityToSarifLevel(M.DefaultSeverity, M.Kind));
-      ROut.AddPair('defaultConfiguration', RConf);
+      E.BeginObjPair('defaultConfiguration');
+      E.PairStr('level', SeverityToSarifLevel(M.DefaultSeverity, M.Kind));
+      E.EndObj;
 
       // Properties: tags + cwe + owasp
-      RProp := TJSONObject.Create;
-      Tags := TJSONArray.Create;
-      for S in M.Tags  do Tags.AddElement(TJSONString.Create(S));
-      for S in M.CWE   do Tags.AddElement(TJSONString.Create(S));
-      for S in M.OWASP do Tags.AddElement(TJSONString.Create(S));
-      RProp.AddPair('tags', Tags);
+      E.BeginObjPair('properties');
+      E.BeginArrPair('tags');
+      for S in M.Tags  do E.ArrStr(S);
+      for S in M.CWE   do E.ArrStr(S);
+      for S in M.OWASP do E.ArrStr(S);
+      E.EndArr;
       if M.DetectorUnit <> '' then
-        RProp.AddPair('detectorUnit', M.DetectorUnit);
+        E.PairStr('detectorUnit', M.DetectorUnit);
       if M.ConfigKey <> '' then
-        RProp.AddPair('configKey', M.ConfigKey);
-      ROut.AddPair('properties', RProp);
+        E.PairStr('configKey', M.ConfigKey);
+      E.EndObj;
 
       // Help-URI: GitHub zeigt das im Detail-Panel - Anker auf konsoli-
       // dierte docs/rules.md (per-file SCA001.md generiert tools/gen-rules-
       // docs.py wenn Python verfuegbar; bis dahin Anker-Links).
-      ROut.AddPair('helpUri', Format('%s/blob/main/docs/rules.md#%s',
+      E.PairStr('helpUri', Format('%s/blob/main/docs/rules.md#%s',
         [TRuleCatalog.ToolUri, LowerCase(M.ID)]));
 
-      Arr.AddElement(ROut);
+      E.EndObj;
+      E.FlushChunk(False);
     end);
+  E.EndArr;                                            // rules
+  E.EndObj;                                            // driver
+  E.EndObj;                                            // tool
 
-  Result := Arr;
-end;
+  // runs[0].results[] - pro Finding direkt streamen, kein DOM.
+  E.BeginArrPair('results');
+  // Perf (2026-07-05): P3 ContextHash-Memo - caller-scoped Memo fuer die
+  // Dauer dieses Exports (kein Global): identische (Datei,Zeile) wird nur
+  // einmal gelesen + gehasht.
+  CtxMemo := TDictionary<string, string>.Create;
+  try
+    if Assigned(AFindings) then
+      for F in AFindings do
+      begin
+        Meta    := TRuleCatalog.GetRule(F.Kind);
+        RelPath := MakeRelative(F.FileName, ABaseDir);
+        LineNo  := ParseLineNumber(F.LineNumber);
+        Msg     := F.MissingVar;
+        if Msg = '' then
+          Msg := Meta.ShortDescription;
+        // Custom-Rule-IDs (z.B. 'PROJ001') gewinnen gegen Catalog-Lookup -
+        // sonst built-in Rule-ID aus dem Catalog.
+        if F.RuleID <> '' then RuleID := F.RuleID
+        else RuleID := Meta.ID;
 
-function BuildResultsArray(const AFindings: TObjectList<TLeakFinding>;
-  const ABaseDir: string): TJSONArray;
-var
-  Arr     : TJSONArray;
-  F       : TLeakFinding;
-  ResObj  : TJSONObject;
-  MsgObj  : TJSONObject;
-  Locs    : TJSONArray;
-  Loc     : TJSONObject;
-  PhysLoc : TJSONObject;
-  ArtLoc  : TJSONObject;
-  Region  : TJSONObject;
-  FpObj   : TJSONObject;
-  RelPath : string;
-  LineNo  : Integer;
-  Meta    : TRuleMeta;
-  Msg     : string;
-  RuleID  : string;
-  CtxHash : string;
-begin
-  Arr := TJSONArray.Create;
-  for F in AFindings do
-  begin
-    Meta    := TRuleCatalog.GetRule(F.Kind);
-    RelPath := MakeRelative(F.FileName, ABaseDir);
-    LineNo  := ParseLineNumber(F.LineNumber);
-    Msg     := F.MissingVar;
-    if Msg = '' then
-      Msg := Meta.ShortDescription;
-    // Custom-Rule-IDs (z.B. 'PROJ001') gewinnen gegen Catalog-Lookup -
-    // sonst built-in Rule-ID aus dem Catalog.
-    if F.RuleID <> '' then RuleID := F.RuleID
-    else RuleID := Meta.ID;
+        E.BeginObjValue;                               // result {
+        E.PairStr('ruleId', RuleID);
+        E.PairStr('level', SeverityToSarifLevel(F.Severity, F.Kind));
 
-    ResObj := TJSONObject.Create;
-    ResObj.AddPair('ruleId', RuleID);
-    ResObj.AddPair('level', SeverityToSarifLevel(F.Severity, F.Kind));
+        E.BeginObjPair('message');
+        E.PairStr('text', Msg);
+        E.EndObj;
 
-    MsgObj := TJSONObject.Create;
-    MsgObj.AddPair('text', Msg);
-    ResObj.AddPair('message', MsgObj);
+        // physicalLocation/artifactLocation/region
+        E.BeginArrPair('locations');
+        E.BeginObjValue;
+        E.BeginObjPair('physicalLocation');
+        E.BeginObjPair('artifactLocation');
+        E.PairStr('uri', RelPath);
+        E.EndObj;
+        E.BeginObjPair('region');
+        E.PairInt('startLine', LineNo);
+        E.EndObj;
+        E.EndObj;                                      // physicalLocation
+        E.EndObj;                                      // location
+        E.EndArr;                                      // locations
 
-    // physicalLocation/artifactLocation/region
-    Region := TJSONObject.Create;
-    Region.AddPair('startLine', TJSONNumber.Create(LineNo));
+        // partialFingerprints fuer GitHub-Dedup
+        //   primaryLocationLineHash : line-dependent, fuer Cross-Commit-Dedup
+        //   contextHash/v1          : Code-Snippet-basiert (Konzept C.2), stabil
+        //                             gegen Line-Drift + Whitespace-Refactor
+        E.BeginObjPair('partialFingerprints');
+        E.PairStr('primaryLocationLineHash',
+          FingerprintHash(RuleID, RelPath, LineNo, Msg));
+        CtxHash := TFindingFingerprint.ContextHashMemo(F, CtxMemo);
+        if CtxHash <> '' then
+          E.PairStr('contextHash/' + CONTEXT_HASH_VERSION, CtxHash);
+        E.EndObj;
 
-    ArtLoc := TJSONObject.Create;
-    ArtLoc.AddPair('uri', RelPath);
-
-    PhysLoc := TJSONObject.Create;
-    PhysLoc.AddPair('artifactLocation', ArtLoc);
-    PhysLoc.AddPair('region', Region);
-
-    Loc := TJSONObject.Create;
-    Loc.AddPair('physicalLocation', PhysLoc);
-
-    Locs := TJSONArray.Create;
-    Locs.AddElement(Loc);
-    ResObj.AddPair('locations', Locs);
-
-    // partialFingerprints fuer GitHub-Dedup
-    //   primaryLocationLineHash : line-dependent, fuer Cross-Commit-Dedup
-    //   contextHash/v1          : Code-Snippet-basiert (Konzept C.2), stabil
-    //                             gegen Line-Drift + Whitespace-Refactor
-    FpObj := TJSONObject.Create;
-    FpObj.AddPair('primaryLocationLineHash',
-      FingerprintHash(RuleID, RelPath, LineNo, Msg));
-    CtxHash := TFindingFingerprint.ContextHash(F);
-    if CtxHash <> '' then
-      FpObj.AddPair('contextHash/' + CONTEXT_HASH_VERSION, CtxHash);
-    ResObj.AddPair('partialFingerprints', FpObj);
-
-    Arr.AddElement(ResObj);
+        E.EndObj;                                      // result
+        E.FlushChunk(False);
+      end;
+  finally
+    CtxMemo.Free;
   end;
-  Result := Arr;
+  E.EndArr;                                            // results
+
+  E.EndObj;                                            // runs[0]
+  E.EndArr;                                            // runs
+  E.EndObj;                                            // Root
+  E.FlushChunk(True);
 end;
 
 { ---- Public API ---- }
@@ -260,41 +508,14 @@ class function TSARIFWriter.ToJsonString(
   const AFindings: TObjectList<TLeakFinding>;
   const ABaseDir, AToolVersion, AToolName: string): string;
 var
-  Root   : TJSONObject;
-  Runs   : TJSONArray;
-  Run    : TJSONObject;
-  Tool   : TJSONObject;
-  Driver : TJSONObject;
+  E : TSarifJsonEmitter;
 begin
-  Root := TJSONObject.Create;
+  E := TSarifJsonEmitter.Create(nil);                  // String-Modus
   try
-    Root.AddPair('$schema',
-      'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json');
-    Root.AddPair('version', '2.1.0');
-
-    Driver := TJSONObject.Create;
-    Driver.AddPair('name',
-      IfThen(AToolName <> '', AToolName, TRuleCatalog.ToolName));
-    Driver.AddPair('version',
-      IfThen(AToolVersion <> '', AToolVersion, TRuleCatalog.ToolVersion));
-    if TRuleCatalog.ToolUri <> '' then
-      Driver.AddPair('informationUri', TRuleCatalog.ToolUri);
-    Driver.AddPair('rules', BuildRulesArray);
-
-    Tool := TJSONObject.Create;
-    Tool.AddPair('driver', Driver);
-
-    Run := TJSONObject.Create;
-    Run.AddPair('tool', Tool);
-    Run.AddPair('results', BuildResultsArray(AFindings, ABaseDir));
-
-    Runs := TJSONArray.Create;
-    Runs.AddElement(Run);
-    Root.AddPair('runs', Runs);
-
-    Result := Root.Format(2); // pretty-printed, 2 spaces
+    EmitSarifDocument(E, AFindings, ABaseDir, AToolVersion, AToolName);
+    Result := E.AsString;
   finally
-    Root.Free;
+    E.Free;
   end;
 end;
 
@@ -302,11 +523,37 @@ class procedure TSARIFWriter.WriteFile(const AFileName: string;
   const AFindings: TObjectList<TLeakFinding>;
   const ABaseDir, AToolVersion, AToolName: string);
 var
-  S : string;
+  FS       : TFileStream;
+  E        : TSarifJsonEmitter;
+  Preamble : TBytes;
 begin
-  S := ToJsonString(AFindings, ABaseDir, AToolVersion, AToolName);
-  // UTF-8 ohne BOM (GitHub bevorzugt das, parser sind toleranter ohne).
-  TFile.WriteAllText(AFileName, S, TEncoding.UTF8);
+  // Perf (2026-07-05): P12-sarif-streaming - direkt in den FileStream
+  // statt Gesamtstring + TFile.WriteAllText. Byte-identisch zum alten
+  // Verhalten: TFile.WriteAllText(..., TEncoding.UTF8) schrieb IMMER die
+  // UTF-8-Preamble (BOM) vor den Inhalt (System.IOUtils DoWriteAllText,
+  // WriteBOM=True) - der fruehere Kommentar "ohne BOM" war falsch.
+  // Exception-Kontrakt wie TFile.WriteAllText erhalten (Review 2026-07-05):
+  // dort kam bei nicht schreibbarem Pfad EInOutError an, TFileStream wirft
+  // roh EFCreateError - fuer Aufrufer-Kompat auf die alte Klasse mappen.
+  try
+    FS := TFileStream.Create(AFileName, fmCreate);
+  except
+    on Ex: EFCreateError do
+      raise EInOutError.Create(Ex.Message);
+  end;
+  try
+    Preamble := TEncoding.UTF8.GetPreamble;
+    if Length(Preamble) > 0 then
+      FS.WriteBuffer(Preamble, Length(Preamble));
+    E := TSarifJsonEmitter.Create(FS);
+    try
+      EmitSarifDocument(E, AFindings, ABaseDir, AToolVersion, AToolName);
+    finally
+      E.Free;
+    end;
+  finally
+    FS.Free;
+  end;
 end;
 
 end.
