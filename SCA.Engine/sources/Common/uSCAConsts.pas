@@ -640,6 +640,12 @@ type
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
   // weit unter dem 256-Element-Limit eines Delphi-Sets.
   TFindingKinds = set of TFindingKind;
+  // TD-1 Inkrement 2b (2026-07-06): optionaler Set-Zeiger fuer die Post-Scan-
+  // Filter. nil = Global-Fallback (uSCAConsts.DetectorEnabledKinds, Test-/
+  // Legacy-Aufrufer); non-nil = per-Scan-Wert (aus TAnalyzeContext.Config vor
+  // FreeAndNil(Ctx) gesnapshottet). Ein Set hat keinen "unset"-Sentinel
+  // ([] ist gueltig = "kein Filter"), daher Zeiger statt Wert+Flag.
+  PFindingKinds = ^TFindingKinds;
 
   // Suppression-Marker: '// noinspection X' an einer Quell-Zeile, das auf
   // eine Target-Zeile (naechste Code-Zeile danach; 0 = file-wide Marker

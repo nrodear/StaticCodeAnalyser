@@ -62,6 +62,8 @@ type
     // ROHE Detektor-Ausgabe erzeugen (irgendein Kind feuert vor dem
     // Confidence-Filter praktisch immer).
     [Test] procedure PreMarkers_EmptyFindingsList_StaleMarkersReported;
+    // TD-1 Inkrement 2b: Unused-Emission liest EnabledKinds per-Scan (Zeiger)
+    [Test] procedure PerScanEnabledKinds_GatesUnusedEmission;
     // Audit #2b: .dfm-Finding konsumiert einen Marker in der .pas-Host-
     // Datei; der stale Sibling-Marker dort wird mit FileName = .pas
     // gemeldet (vorher: FileName = .dfm bei MarkerLine aus der .pas -
@@ -415,6 +417,66 @@ begin
   finally
     Findings.Free;
     Pre.Free;                                // Caller behaelt Ownership
+  end;
+end;
+
+procedure TTestSuppressionCompleteness.PerScanEnabledKinds_GatesUnusedEmission;
+// TD-1 Inkrement 2b (2026-07-06): die Unused-Emission liest EnabledKinds jetzt
+// per-Scan ueber den AEnabledKinds-Zeiger statt vom Prozess-Global. Beweist
+// beide Richtungen, GLOBAL-UNABHAENGIG (AEnabledKinds<>nil ignoriert das
+// Global): Set MIT fkUnusedSuppression -> Gate offen, staler Marker gemeldet;
+// Set OHNE fkUnusedSuppression -> Gate schliesst, nichts gemeldet.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Pre      : TObjectDictionary<string, TList<TSuppressionMarker>>;
+  Kinds    : TFindingKinds;
+  HostPath : string;
+
+  function BuildPre: TObjectDictionary<string, TList<TSuppressionMarker>>;
+  var
+    LL : TList<TSuppressionMarker>;
+    MM : TSuppressionMarker;
+  begin
+    Result := TObjectDictionary<string, TList<TSuppressionMarker>>.Create([doOwnsValues]);
+    LL := TList<TSuppressionMarker>.Create;
+    MM.MarkerLine := 3;                       // staler file-wide-Marker
+    MM.TargetLine := 0;
+    MM.Kinds      := [fkGotoStatement];
+    MM.Consumed   := False;
+    LL.Add(MM);
+    Result.Add(HostPath, LL);                 // Ownership -> Result (doOwnsValues)
+  end;
+
+begin
+  HostPath := 'C:\virtuell\perscan.pas';
+
+  // Richtung 1: per-Scan-Set enthaelt fkUnusedSuppression + den Marker-Kind
+  // -> Gate offen -> staler Marker wird gemeldet.
+  Kinds    := [fkGotoStatement, fkUnusedSuppression];
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  Pre      := BuildPre;
+  try
+    TSuppression.ApplyToFindings(Findings, Pre, @Kinds);
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(Findings, fkUnusedSuppression),
+      'per-Scan-Set MIT fkUnusedSuppression -> staler Marker gemeldet');
+  finally
+    Findings.Free;
+    Pre.Free;
+  end;
+
+  // Richtung 2: per-Scan-Set OHNE fkUnusedSuppression -> Gate schliesst ->
+  // nichts gemeldet (Detektor in diesem Profil nicht aktiv), unabhaengig vom
+  // Prozess-Global.
+  Kinds    := [fkGotoStatement];
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  Pre      := BuildPre;
+  try
+    TSuppression.ApplyToFindings(Findings, Pre, @Kinds);
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(Findings, fkUnusedSuppression),
+      'per-Scan-Set OHNE fkUnusedSuppression -> Gate greift, nichts gemeldet');
+  finally
+    Findings.Free;
+    Pre.Free;
   end;
 end;
 

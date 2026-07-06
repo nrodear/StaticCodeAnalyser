@@ -959,6 +959,11 @@ var
   // entdeckten Klassen ueber wiederholte Scans (Server/IDE-Reuse) und
   // verfaelschen Folge-Scans. Im finally wird auf diesen Baseline restauriert.
   LeakySnapshot : TArray<string>;
+  // TD-1 Inkrement 2b (2026-07-06): per-Scan-Filter-Werte fuer die Post-Filter-
+  // Phase. Diese laeuft NACH FreeAndNil(Ctx) (Suppression/Confidence unten),
+  // darum werden die Werte - wie PreMarkers - vorher aus dem Context gerettet.
+  PostMinConf : TFindingConfidence;
+  PostEnKinds : TFindingKinds;
 
   procedure LogLine(const S: string);
   begin
@@ -1430,6 +1435,13 @@ begin
       PreMarkers := Ctx.SuppressionMarkers;
       Ctx.SuppressionMarkers := nil;
     end;
+    // TD-1 Inkrement 2b (2026-07-06): per-Scan-Filter-Werte VOR FreeAndNil(Ctx)
+    // retten - die Post-Filter-Phase (Suppression/Confidence unten) laeuft nach
+    // dem Context-Teardown, wuerde also sonst wieder die Prozess-Globals lesen.
+    // Cfg*(Ctx) ist nil-sicher (Global-Fallback). Byte-identisch, weil der
+    // Config-Snapshot == Global zur Scan-Zeit ist (Filter-Skalar mutiert nicht).
+    PostMinConf := CfgMinConfidence(Ctx);
+    PostEnKinds := CfgEnabledKinds(Ctx);
     FreeAndNil(Ctx);
     // Audit 2026-07-01 (Global-State): die in diesem Scan auto-entdeckten Klassen
     // wieder aus der GLOBALEN LeakyClasses entfernen -> zurueck auf die Caller-
@@ -1456,7 +1468,7 @@ begin
   // Das ENTFERNEN von Findings laeuft unveraendert ueber die lazy
   // BuildMap-Lookups - byte-identisch zum bisherigen Filter-Verhalten.
   try
-    TSuppression.ApplyToFindings(Results, PreMarkers);
+    TSuppression.ApplyToFindings(Results, PreMarkers, @PostEnKinds);
   except
     // Suppression-Fehler duerfen das Ergebnis nicht zerstoeren
   end;
@@ -1469,12 +1481,13 @@ begin
     // Path-Override-Fehler duerfen das Ergebnis nicht zerstoeren
   end;
 
-  // Konfidenz-Schwellwert anwenden (uSCAConsts.FindingMinConfidence).
+  // Konfidenz-Schwellwert anwenden (PostMinConf = per-Scan-Snapshot von
+  // FindingMinConfidence, vor FreeAndNil(Ctx) gerettet - TD-1 2b).
   // Verwirft heuristische Befunde unter der Schwelle (Default fcMedium ->
   // nur fcLow raus). Zuletzt in der Pipeline: Suppression/Path-Overrides
   // sollen unabhaengig von der Confidence greifen koennen.
   try
-    TConfidenceFilter.ApplyToFindings(Results, uSCAConsts.FindingMinConfidence);
+    TConfidenceFilter.ApplyToFindings(Results, PostMinConf);
   except
     // Filter-Fehler duerfen das Ergebnis nicht zerstoeren
   end;

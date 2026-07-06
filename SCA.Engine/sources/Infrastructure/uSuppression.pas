@@ -57,7 +57,10 @@ type
     class procedure ApplyToFindings(
       Findings: TObjectList<TLeakFinding>;
       APreMarkers: TObjectDictionary<string,
-        TList<TSuppressionMarker>> = nil); static;
+        TList<TSuppressionMarker>> = nil;
+      // TD-1 Inkrement 2b: per-Scan EnabledKinds fuer die Unused-Emission
+      // (nil = Global-Fallback, siehe PFindingKinds in uSCAConsts).
+      AEnabledKinds: PFindingKinds = nil); static;
 
     // Scan-Zeit-Collection (Audit #2a, 2026-07-05): sammelt die Marker
     // der gerade gescannten Datei in das per-Scan-Dictionary (Key =
@@ -133,7 +136,8 @@ type
     class procedure EmitUnusedSuppressionFindings(
       Findings: TObjectList<TLeakFinding>;
       FileMarkers: TObjectDictionary<string,
-        TList<TSuppressionMarker>>); static;
+        TList<TSuppressionMarker>>;
+      AEnabledKinds: PFindingKinds = nil); static;
   end;
 
 const
@@ -701,7 +705,8 @@ end;
 
 class procedure TSuppression.EmitUnusedSuppressionFindings(
   Findings: TObjectList<TLeakFinding>;
-  FileMarkers: TObjectDictionary<string, TList<TSuppressionMarker>>);
+  FileMarkers: TObjectDictionary<string, TList<TSuppressionMarker>>;
+  AEnabledKinds: PFindingKinds);
 // EIN Finding pro Marker (nicht pro nicht-getroffenes Kind im Set) -
 // sonst explodiert die Liste wenn ein Marker mehrere Kinds suppresst
 // und nur eines davon greift.
@@ -714,7 +719,17 @@ var
   M          : TSuppressionMarker;
   NewFinding : TLeakFinding;
   KindGate   : Boolean;
+  EnKinds    : TFindingKinds;
 begin
+  // TD-1 Inkrement 2b (2026-07-06): per-Scan EnabledKinds statt direktem
+  // Global-Read. AEnabledKinds<>nil = vom Scan durchgereichter Snapshot
+  // (thread-safe fuer parallele Scans); nil = Global-Fallback (Test-/
+  // Legacy-Aufrufer). Byte-identisch, weil der Snapshot == Global zur
+  // Scan-Zeit ist und der Filter-Skalar waehrend eines Scans nicht mutiert.
+  if AEnabledKinds <> nil then
+    EnKinds := AEnabledKinds^
+  else
+    EnKinds := DetectorEnabledKinds;
   // Review-Fix (2026-07-05, Profil-Rauschen): die Emission laeuft NACH dem
   // Kind-Filter von RunAllDetectors - ohne eigenes Gate wuerden Profil-
   // Scans (bugs-only/security/...), in denen fkUnusedSuppression gar nicht
@@ -725,14 +740,14 @@ begin
   // nur, wenn er mindestens einen im Profil AKTIVEN Kind suppresst -
   // Marker deaktivierter Detektoren KOENNEN nichts konsumieren und sind
   // in diesem Profil keine Aussage wert.
-  KindGate := DetectorEnabledKinds <> [];
-  if KindGate and not (fkUnusedSuppression in DetectorEnabledKinds) then
+  KindGate := EnKinds <> [];
+  if KindGate and not (fkUnusedSuppression in EnKinds) then
     Exit;
   for var Pair in FileMarkers do
     for M in Pair.Value do
       if not M.Consumed then
       begin
-        if KindGate and (M.Kinds * DetectorEnabledKinds = []) then
+        if KindGate and (M.Kinds * EnKinds = []) then
           Continue;
         NewFinding := TLeakFinding.Create;
         NewFinding.FileName   := Pair.Key;
@@ -746,7 +761,8 @@ end;
 
 class procedure TSuppression.ApplyToFindings(
   Findings: TObjectList<TLeakFinding>;
-  APreMarkers: TObjectDictionary<string, TList<TSuppressionMarker>>);
+  APreMarkers: TObjectDictionary<string, TList<TSuppressionMarker>>;
+  AEnabledKinds: PFindingKinds);
 var
   FileMaps    : TObjectDictionary<string, TDictionary<Integer, TSuppressedKinds>>;
   FileMarkers : TObjectDictionary<string, TList<TSuppressionMarker>>;
@@ -777,7 +793,7 @@ begin
     // Iteriert ALLE Dictionary-Eintraege - im PreMarkers-Modus also auch
     // Dateien, deren Findings alle unmatched blieben oder die gar keine
     // Findings hatten (Fix Audit #2a).
-    EmitUnusedSuppressionFindings(Findings, FileMarkers);
+    EmitUnusedSuppressionFindings(Findings, FileMarkers, AEnabledKinds);
 
     // Audit #10b (2026-07-05): nicht lesbare Marker-Hosts als Diagnose-
     // Finding sichtbar machen (fkFileReadError laeuft an ConfidenceFilter
