@@ -30,15 +30,18 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12, uLeakDetector2;
+  uAstNode, uSCAConsts, uMethodd12, uLeakDetector2, uAnalyzeContext;
 
 type
   TMissingFinallyDetector = class
   public
+    // AContext (TD-1 2c): bis in TLeakDetector2.IsLeakyType durchgereicht, damit
+    // MissingFinally dieselbe (Auto-Discovery-erweiterte) LeakyClasses-Liste
+    // sieht wie der Haupt-Leak-Detektor. Default =nil -> Global-Fallback.
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
     class procedure AnalyzeMethod(MethodNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
@@ -47,7 +50,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 class procedure TMissingFinallyDetector.AnalyzeMethod(MethodNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>;
+  AContext: TAnalyzeContext);
 var
   LocalVars  : TList<TAstNode>;
   V          : TAstNode;
@@ -92,7 +96,7 @@ begin
   try
     for V in LocalVars do
     begin
-      if not TLeakDetector2.IsLeakyType(V.TypeRef) then Continue;
+      if not TLeakDetector2.IsLeakyType(V.TypeRef, AContext) then Continue;
 
       VarNameLow := V.Name.ToLower;
 
@@ -133,7 +137,8 @@ begin
 end;
 
 class procedure TMissingFinallyDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>;
+  AContext: TAnalyzeContext);
 var
   Methods : TList<TAstNode>;
   M       : TAstNode;
@@ -141,7 +146,7 @@ begin
   Methods := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
-      AnalyzeMethod(M, FileName, Results);
+      AnalyzeMethod(M, FileName, Results, AContext);
   finally
     Methods.Free;
   end;

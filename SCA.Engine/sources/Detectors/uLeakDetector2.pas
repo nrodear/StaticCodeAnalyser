@@ -40,22 +40,30 @@ interface
 
 uses
   System.SysUtils, System.StrUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12, uDetectorUtils;
+  uAstNode, uSCAConsts, uMethodd12, uDetectorUtils, uAnalyzeContext;
 
 type
   TLeakDetector2 = class
   public
+    // TD-1 Inkrement 2c (2026-07-06): AContext durchgereicht bis in IsLeakyType
+    // (LeakyClasses aus dem Scan-Context). Default =nil -> Tests/Single-File
+    // (direkte Aufrufe) lesen weiter den uSCAConsts-Global. AddD (statt AddD3)
+    // in uStaticAnalyzer2 reicht den Scan-Ctx an AnalyzeUnit durch.
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
     class procedure AnalyzeMethod(UnitNode, MethodNode: TAstNode;
-      const FileName: string; Results: TObjectList<TLeakFinding>);
+      const FileName: string; Results: TObjectList<TLeakFinding>;
+      AContext: TAnalyzeContext = nil);
 
   // Hilfsmethoden (public fuer Wiederverwendung in anderen Detektoren)
   public
     class function IsIdentChar(C: Char): Boolean; static; inline;
     class function IsWholeWord(const Str, Pattern: string;
       Pos_: Integer): Boolean; static;
-    class function IsLeakyType(const TypeRef: string): Boolean; static;
+    // AContext (TD-1 2c): scannt LeakyClasses aus dem Scan-Context; =nil faellt
+    // auf den uSCAConsts-Global zurueck (via CtxLeakyClasses).
+    class function IsLeakyType(const TypeRef: string;
+      AContext: TAnalyzeContext = nil): Boolean; static;
     // Erkennt einen Konstruktor-Aufruf in der RHS einer Zuweisung:
     // sowohl `.Create(...)` als auch CamelCase-Varianten wie `.CreateUtf8`,
     // `.CreateFmt`, `.CreateFromFile`, `.CreateAfterAttach` (mORMot- / RTL-
@@ -142,18 +150,29 @@ end;
 
 { ---- Typ-Check ---- }
 
-class function TLeakDetector2.IsLeakyType(const TypeRef: string): Boolean;
+class function TLeakDetector2.IsLeakyType(const TypeRef: string;
+  AContext: TAnalyzeContext): Boolean;
 // LeakyClasses ist seit der Konvertierung auf TStringList eine sortierte,
 // case-insensitive Liste -> IndexOf liefert >= 0 wenn die Klasse bekannt ist.
 // Plus: LeakyClassExcludes-Check als zweites Sicherheitsnetz - falls eine
 // Klasse trotz Exclude in LeakyClasses gelandet ist (z.B. durch Discovery
 // in einer alten Plugin-Version), wird sie hier nochmal gefiltert.
+// TD-1 Inkrement 2c (2026-07-06): die getrackte Liste kommt jetzt via
+// CtxLeakyClasses aus dem Scan-Context (inkl. AutoDiscovery-Funde); AContext=nil
+// (Tests/Single-File) faellt auf den uSCAConsts-Global zurueck - byte-identisch,
+// weil Ctx.LeakyClasses zum Scan-Start == Global-Baseline ist und dieselben
+// List-Settings hat. LeakyClassExcludes bleibt vorerst Global (nur LeakyClasses
+// ist scan-zeit-mutiert -> Scope von Inkrement 2c).
 var
   Clean : string;
   lt    : Integer;
 begin
   Result := False;
-  if not Assigned(LeakyClasses) then Exit;
+  // CtxLeakyClasses inline statt lokaler TStringList-Variable: ein geborgter
+  // Listen-Verweis in einer lokalen TStringList-Var laesst den Leak-Detektor
+  // (dieser hier!) einen MemoryLeak-FP auf die Var melden. Der Helfer ist
+  // billig (nil-Check + Feld-Read), Doppelaufruf daher unkritisch.
+  if not Assigned(CtxLeakyClasses(AContext)) then Exit;
 
   Clean := Trim(TypeRef);
   lt    := Pos('<', Clean);
@@ -165,7 +184,7 @@ begin
   if Assigned(LeakyClassExcludes) and
      (LeakyClassExcludes.IndexOf(Clean) >= 0) then Exit;
 
-  Result := LeakyClasses.IndexOf(Clean) >= 0;
+  Result := CtxLeakyClasses(AContext).IndexOf(Clean) >= 0;
 end;
 
 { ---- Create-Erkennung ---- }
@@ -1025,7 +1044,8 @@ end;
 { ---- Öffentliche API ---- }
 
 class procedure TLeakDetector2.AnalyzeMethod(UnitNode, MethodNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>;
+  AContext: TAnalyzeContext);
 
   procedure AddFinding(const MissingVar: string; Sev: TLeakSeverity;
     VLine: Integer);
@@ -1056,7 +1076,7 @@ begin
     HasFinally := HasTryFinallyBlock(MethodNode);  // schleifeninvariant: einmal vor der Schleife statt pro Var
     for V in LocalVars do
     begin
-      if not IsLeakyType(V.TypeRef) then Continue;
+      if not IsLeakyType(V.TypeRef, AContext) then Continue;
 
       VarNameLow := V.Name.ToLower;
 
@@ -1107,7 +1127,8 @@ begin
 end;
 
 class procedure TLeakDetector2.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>;
+  AContext: TAnalyzeContext);
 var
   Methods  : TList<TAstNode>;
   M        : TAstNode;
@@ -1120,7 +1141,7 @@ begin
   Methods := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
-      AnalyzeMethod(UnitNode, M, FileName, Results);
+      AnalyzeMethod(UnitNode, M, FileName, Results, AContext);
   finally
     Methods.Free;
   end;

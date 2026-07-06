@@ -320,7 +320,7 @@ begin
   SetLength(gDetectors, DETECTOR_CAPACITY);
   Count := 0;
 
-  AddD3('Leak',            fkMemoryLeak,      TLeakDetector2.AnalyzeUnit);
+  AddD('Leak',             fkMemoryLeak,      TLeakDetector2.AnalyzeUnit);   // TD-1 2c: AContext-fuehrend (LeakyClasses aus Ctx)
   AddD3('EmptyExcept',     fkEmptyExcept,     TEmptyExceptDetector2.AnalyzeUnit);
   AddD3('SQLInjection',    fkSQLInjection,    TSQLInjectionDetector.AnalyzeUnit);
   AddD3('HardcodedSecret', fkHardcodedSecret, THardcodedSecretDetector.AnalyzeUnit);
@@ -491,7 +491,7 @@ begin
   // UsesCheck wiederverwendet werden kann.
   AddD3('UnusedUses',      fkUnusedUses,      TUnusedUsesDetector.AnalyzeUnit);
   AddD3('NilDeref',        fkNilDeref,        TNilDerefDetector.AnalyzeUnit);
-  AddD3('MissingFinally',  fkMissingFinally,  TMissingFinallyDetector.AnalyzeUnit);
+  AddD('MissingFinally',   fkMissingFinally,  TMissingFinallyDetector.AnalyzeUnit);   // TD-1 2c: AContext-fuehrend (LeakyClasses aus Ctx)
   AddD3('DivByZero',       fkDivByZero,       TDivByZeroDetector.AnalyzeUnit);
   AddD3('DeadCode',        fkDeadCode,        TDeadCodeDetector.AnalyzeUnit);
   // TD-1 (2026-07-06): jetzt AContext-fuehrend (Schwellen aus Ctx.Config) -> AddD statt AddD3.
@@ -506,7 +506,7 @@ begin
   AddD3('EmptyMethod',     fkEmptyMethod,     TEmptyMethodDetector.AnalyzeUnit);
   // FieldLeak: gleicher Kind wie LeakDetector (fkMemoryLeak) - Profile-
   // Filter behandelt beide identisch.
-  AddD3('FieldLeak',       fkMemoryLeak,      TFieldLeakDetector.AnalyzeUnit);
+  AddD('FieldLeak',        fkMemoryLeak,      TFieldLeakDetector.AnalyzeUnit);   // TD-1 2c: AContext-fuehrend (LeakyClasses aus Ctx)
   AddD('DuplicateBlock',  fkDuplicateBlock,  TDuplicateBlockDetector.AnalyzeUnit);
   AddD('CyclomaticComplexity', fkCyclomaticComplexity, TCyclomaticComplexityDetector.AnalyzeUnit);   // TD-1: AContext-fuehrend
   // DFM-Adapter: ruft intern ~20 DFM-Detektoren, jeder mit eigenem Kind.
@@ -1040,6 +1040,16 @@ begin
     // Schwellen/Filter/Flags aus Ctx.Config statt direkt vom Prozess-Global -
     // Voraussetzung fuer parallele Scans, byte-identisch weil Config==Globals.
     Ctx.SnapshotConfigFromGlobals;
+    // TD-1 Inkrement 2c (2026-07-06): LeakyClasses-Baseline in den Context
+    // kopieren. Der Global haelt hier bereits die per-Scan-Baseline
+    // (RegisterToLeakyClasses lief in ApplyConfig/SetupForRun VOR dem Scan);
+    // ab jetzt haengt die AutoDiscovery ihre Funde an Ctx.LeakyClasses statt an
+    // den Global (s.u.), und die Leak-Detektoren lesen via CtxLeakyClasses aus
+    // dem Context. Byte-identisch: gleicher Inhalt + gleiche List-Settings wie
+    // der Global, nur nicht mehr prozessweit geteilt. AddStrings auf die
+    // sortierte Ziel-Liste uebernimmt den Inhalt (Reihenfolge egal, dupIgnore).
+    if Assigned(LeakyClasses) then
+      Ctx.LeakyClasses.AddStrings(LeakyClasses);
 
     Ctx.AstFileCache := TAstFileCache.Create;
 
@@ -1255,8 +1265,11 @@ begin
           begin
             if Assigned(LeakyClassExcludes) and
                (LeakyClassExcludes.IndexOf(Cls) >= 0) then Continue;
-            if Assigned(LeakyClasses) then
-              LeakyClasses.Add(Cls);
+            // TD-1 Inkrement 2c: Discovery-Funde an die per-Scan-Kopie haengen
+            // (nicht mehr an den Prozess-Global). Ctx.LeakyClasses existiert
+            // immer (Constructor), der Guard bleibt als Spiegel des alten Codes.
+            if Assigned(Ctx.LeakyClasses) then
+              Ctx.LeakyClasses.Add(Cls);
             if Assigned(DiscoveredClasses) then
               DiscoveredClasses.Add(Cls);
           end;
@@ -1447,6 +1460,11 @@ begin
     // wieder aus der GLOBALEN LeakyClasses entfernen -> zurueck auf die Caller-
     // Baseline. Verhindert Akkumulation ueber wiederholte Scans (Server/IDE-
     // Reuse) und damit Detektions-Drift in Folge-Scans.
+    // TD-1 Inkrement 2c (2026-07-06): jetzt effektiv ein No-Op - seit die
+    // AutoDiscovery in Ctx.LeakyClasses schreibt (s.o.), wird der Global
+    // scan-zeit NICHT mehr mutiert; Clear+Re-Add stellt also dieselbe Baseline
+    // wieder her. BEWUSST BELASSEN (minimiert Diff/Risiko ohne Build und bleibt
+    // korrekt, falls je wieder etwas den Global scan-zeit anfasst).
     if AutoDiscoverCustomClasses and Assigned(LeakyClasses) then
     begin
       LeakyClasses.Clear;

@@ -98,6 +98,9 @@ type
     [Test] procedure Leak_CreateWithOwnerSelf_NoFinding;
     [Test] procedure Leak_CreateWithNilOwner_ReportsError;
     [Test] procedure Leak_CreateWithSelfDerivedExprArg_ReportsError;
+    // TD-1 Inkrement 2c: LeakyClasses aus dem TAnalyzeContext - context-driven
+    // Detection, AContext=nil folgt dem uSCAConsts-Global.
+    [Test] procedure Leak_ContextLeakyClasses_DrivesDetection;
   end;
 
   // ---- MemoryLeak Advanced - Wrong-Free / Pointer-Issues / Container-Ownership ----
@@ -174,6 +177,12 @@ type
 
 implementation
 
+uses
+  // TD-1 Inkrement 2c: direkter Parser-/Detektor-/Context-Zugriff fuer den
+  // context-driven LeakyClasses-Test (die uebrigen Tests laufen ueber
+  // TFindingHelper.FindingsOf, das den Detektor mit AContext=nil aufruft).
+  uParser2, uAstNode, uAnalyzeContext, uLeakDetector2;
+
 { ---- MemoryLeak ---- }
 
 procedure TTestMemoryLeak.Leak_CreateWithoutFree_ReportsError;
@@ -192,6 +201,65 @@ begin
     Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'list ohne Free soll als Error gemeldet werden');
   finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_ContextLeakyClasses_DrivesDetection;
+// TD-1 Inkrement 2c: LeakyClasses wurde vom uSCAConsts-Global in den
+// TAnalyzeContext gezogen. Dieser Test beweist beide Richtungen des
+// CtxLeakyClasses-Fallbacks:
+//   (a) mit gesetztem Ctx.LeakyClasses richtet sich IsLeakyType nach dem
+//       Context -> die Custom-Klasse wird als Leak erkannt;
+//   (b) bei AContext=nil faellt IsLeakyType auf den Global zurueck, der die
+//       Custom-Klasse NICHT kennt -> kein Befund.
+// 'TTd1LeakyProbe' steht bewusst in KEINER Default-LeakyClasses-Liste, damit
+// (b) unabhaengig von der globalen Konfiguration 0 liefert.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var thing: TTd1LeakyProbe;'#13#10+
+  'begin'#13#10+
+  '  thing := TTd1LeakyProbe.Create;'#13#10+
+  '  thing.DoWork;'#13#10+
+  'end;';
+var
+  Parser  : TParser2;
+  Root    : TAstNode;
+  Ctx     : TAnalyzeContext;
+  FCtx    : TObjectList<TLeakFinding>;
+  FGlobal : TObjectList<TLeakFinding>;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      // (a) Context kennt die Custom-Klasse -> Detection folgt dem Context.
+      Ctx  := TAnalyzeContext.Create;
+      FCtx := TObjectList<TLeakFinding>.Create(True);
+      try
+        Ctx.LeakyClasses.Add('TTd1LeakyProbe');
+        TLeakDetector2.AnalyzeUnit(Root, 'sample.pas', FCtx, Ctx);
+        Assert.AreEqual<Integer>(1, TFindingHelper.Count(FCtx, fkMemoryLeak),
+          'Custom-Klasse in Ctx.LeakyClasses -> Leak-Detection folgt dem Context');
+      finally
+        FCtx.Free;
+        Ctx.Free;
+      end;
+
+      // (b) AContext=nil -> Global-Fallback (kennt die Custom-Klasse nicht).
+      FGlobal := TObjectList<TLeakFinding>.Create(True);
+      try
+        TLeakDetector2.AnalyzeUnit(Root, 'sample.pas', FGlobal);
+        Assert.AreEqual<Integer>(0, TFindingHelper.Count(FGlobal, fkMemoryLeak),
+          'AContext=nil folgt dem Global (ohne Custom-Klasse) -> kein Befund');
+      finally
+        FGlobal.Free;
+      end;
+    finally
+      Root.Free;
+    end;
+  finally
+    Parser.Free;
+  end;
 end;
 
 procedure TTestMemoryLeak.Leak_CreateFreeInFinally_NoFinding;

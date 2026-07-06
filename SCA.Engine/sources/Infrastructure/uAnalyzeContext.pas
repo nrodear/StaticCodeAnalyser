@@ -29,7 +29,8 @@ unit uAnalyzeContext;
 interface
 
 uses
-  System.SysUtils, System.Generics.Collections, System.Generics.Defaults,
+  System.SysUtils, System.Classes,      // System.Classes: TStringList (LeakyClasses-Klon, TD-1 2c)
+  System.Generics.Collections, System.Generics.Defaults,
   uSCAConsts,        // TSuppressionMarker (UnusedSuppression-Collection, 2026-07-05)
   uAstFileCache, uFileTextCache, uSymbolReferenceIndex, uDfmRepoIndex;
 
@@ -102,6 +103,17 @@ type
     AstFileCache    : TAstFileCache;
     SymbolRefIndex  : TSymbolReferenceIndex;
     DfmRepoIndex    : TDfmRepoIndex;
+    // TD-1 Inkrement 2c (2026-07-06): per-Scan-Kopie der scan-zeit-MUTIERTEN
+    // Config-Liste LeakyClasses (uSCAConsts-Global). AutoDiscovery haengt die
+    // waehrend des Scans entdeckten Klassen an DIESE Instanz statt an den
+    // Prozess-Global -> parallele Scans teilen sich die Liste nicht mehr.
+    // Die List-Settings MUESSEN 1:1 die des Globals sein (CaseSensitive=False/
+    // Sorted/dupIgnore), sonst weichen IndexOf/Membership ab = Byte-Drift.
+    // BESESSEN (Create/Destroy); gefuellt in ParseLeaks direkt nach
+    // SnapshotConfigFromGlobals aus dem Global-Baseline. Die Scan-Leser
+    // (uLeakDetector2/uFieldLeak/uMissingFinally ueber IsLeakyType) lesen via
+    // CtxLeakyClasses mit Global-Fallback bei AContext=nil (Tests/Single-File).
+    LeakyClasses    : TStringList;
     // UnusedSuppression (Audit_CodeReview #2, 2026-07-05): per-Scan-Collection
     // der '// noinspection'-Marker, eingesammelt im ParseLeaks-Main-Loop
     // solange der Dateitext noch heiss im FileTextCache liegt. Key = Marker-
@@ -146,6 +158,14 @@ function CtxFileTextCache(AContext: TAnalyzeContext): TFileTextCache;
 function CtxSymbolRefIndex(AContext: TAnalyzeContext): TSymbolReferenceIndex;
 function CtxDfmRepoIndex(AContext: TAnalyzeContext): TDfmRepoIndex;
 function CtxAstFileCache(AContext: TAnalyzeContext): TAstFileCache;
+
+// TD-1 Inkrement 2c (2026-07-06): LeakyClasses-Leser mit Context-oder-Global-
+// Fallback. ABWEICHEND von den Ctx*-Index-Helfern oben faellt dieser NICHT auf
+// nil zurueck, sondern auf den uSCAConsts-Global: die scan-freien Aufrufer
+// (Tests/Single-File, AContext=nil) erwarten die global konfigurierte Liste,
+// exakt wie IsLeakyType sie bisher direkt gelesen hat. Innerhalb eines Scans
+// liefert er Ctx.LeakyClasses (Baseline + AutoDiscovery-Adds) -> byte-identisch.
+function CtxLeakyClasses(AContext: TAnalyzeContext): TStringList;
 
 // TD-1 (2026-07-06): Skalar-Config-Leser mit Context-oder-Global-Fallback.
 // Jede Funktion liefert den Context-Wert wenn AContext<>nil, sonst das
@@ -202,6 +222,17 @@ begin
     Result := AContext.AstFileCache
   else
     Result := nil;
+end;
+
+function CtxLeakyClasses(AContext: TAnalyzeContext): TStringList;
+begin
+  // Global-Fallback (nicht nil), damit AContext=nil das bisherige Verhalten von
+  // IsLeakyType erhaelt (liest direkt uSCAConsts.LeakyClasses). uSCAConsts ist
+  // im interface-uses -> der Global ist hier sichtbar.
+  if (AContext <> nil) and (AContext.LeakyClasses <> nil) then
+    Result := AContext.LeakyClasses
+  else
+    Result := uSCAConsts.LeakyClasses;
 end;
 
 // --- TD-1 Skalar-Config-Leser (Context-oder-Global-Fallback) ---------------
@@ -382,6 +413,14 @@ begin
   // nicht an Gross/Klein-Drift vorbeilaufen.
   SuppressionMarkers := TObjectDictionary<string, TList<TSuppressionMarker>>
     .Create([doOwnsValues], TIStringComparer.Ordinal);
+  // TD-1 Inkrement 2c (2026-07-06): LeakyClasses-Klon. Settings MUESSEN 1:1
+  // die des uSCAConsts-Globals sein (CreateEngineConfigLists) - sonst weichen
+  // IndexOf/Add-Semantik (Case-Fold + Sortierung + Dup-Handling) ab und die
+  // Membership-Pruefung driftet vom bisherigen Global-Verhalten weg.
+  LeakyClasses := TStringList.Create;
+  LeakyClasses.CaseSensitive := False;
+  LeakyClasses.Sorted        := True;
+  LeakyClasses.Duplicates    := dupIgnore;
 end;
 
 destructor TAnalyzeContext.Destroy;
@@ -391,6 +430,9 @@ begin
   // SuppressionMarkers ist nil-sicher, wenn ParseLeaks das Dictionary per
   // Ownership-Transfer fuer die Post-Scan-Suppression uebernommen hat.
   FreeAndNil(SuppressionMarkers);
+  // TD-1 Inkrement 2c: der LeakyClasses-Klon gehoert dem Context. Kein Bezug
+  // zur Index/AST-Cache-Reihenfolge (er referenziert keine der Instanzen).
+  FreeAndNil(LeakyClasses);
   FreeAndNil(DfmRepoIndex);
   FreeAndNil(SymbolRefIndex);
   FreeAndNil(AstFileCache);

@@ -41,13 +41,16 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12, uLeakDetector2;
+  uAstNode, uSCAConsts, uMethodd12, uLeakDetector2, uAnalyzeContext;
 
 type
   TFieldLeakDetector = class
   public
+    // AContext (TD-1 2c): an TLeakDetector2.IsLeakyType durchgereicht, damit
+    // FieldLeak dieselbe (Auto-Discovery-erweiterte) LeakyClasses-Liste sieht
+    // wie der Haupt-Leak-Detektor. Default =nil -> Global-Fallback (Single-File).
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   private
     class function FindMethod(UnitNode: TAstNode; const Kind: string;
       const ClassName: string): TAstNode; static;
@@ -199,7 +202,8 @@ begin
 end;
 
 class procedure TFieldLeakDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>;
+  AContext: TAnalyzeContext);
 var
   Classes      : TList<TAstNode>;
   ClassNode    : TAstNode;
@@ -227,7 +231,7 @@ begin
       try
         for Field in Fields do
         begin
-          if not TLeakDetector2.IsLeakyType(Field.TypeRef) then Continue;
+          if not TLeakDetector2.IsLeakyType(Field.TypeRef, AContext) then Continue;
           FieldNameLow := Field.Name.ToLower;
 
           // Feld muss im Konstruktor per .Create zugewiesen werden,
