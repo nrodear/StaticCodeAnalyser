@@ -13,13 +13,13 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TLongMethodDetector = class
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   private
     class function FindBodyBlock(MethodNode: TAstNode): TAstNode; static;
     class function FindLastLine(Node: TAstNode): Integer; static;
@@ -75,7 +75,7 @@ begin
 end;
 
 class procedure TLongMethodDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Methods   : TList<TAstNode>;
   M         : TAstNode;
@@ -83,7 +83,13 @@ var
   Lines     : Integer;
   Stmts     : Integer;
   F         : TLeakFinding;
+  MaxBody   : Integer;   // TD-1: Schwellen per-Scan aus AContext.Config
+  MaxStmts  : Integer;
 begin
+  // TD-1 (2026-07-06): beide Schwellen einmal aus dem Context lesen (byte-
+  // identisch - scan-konstant), dann pro Methode nur noch Local-Vergleich.
+  MaxBody  := CfgMaxBodyLines(AContext);
+  MaxStmts := CfgMaxStatements(AContext);
   Methods := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
@@ -98,7 +104,7 @@ begin
       // Nur melden wenn BEIDE Schwellen ueberschritten:
       // verhindert false positives bei langen Datentabellen oder
       // case-Statements mit vielen kurzen Armen.
-      if (Lines > DetectorMaxBodyLines) and (Stmts > DetectorMaxStatements) then
+      if (Lines > MaxBody) and (Stmts > MaxStmts) then
       begin
         F            := TLeakFinding.Create;
         F.FileName   := FileName;
@@ -106,7 +112,7 @@ begin
         F.LineNumber := IntToStr(M.Line);
         F.MissingVar := Format(
           '%d body lines, %d statements (limit: %d / %d)',
-          [Lines, Stmts, DetectorMaxBodyLines, DetectorMaxStatements]);
+          [Lines, Stmts, MaxBody, MaxStmts]);
         F.SetKind(fkLongMethod);
         Results.Add(F);
       end;

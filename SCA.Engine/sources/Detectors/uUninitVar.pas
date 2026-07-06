@@ -954,6 +954,7 @@ var
   StrippedLow      : TArray<string>;
   StrippedFrom0    : Integer;   // 0-basierter Lines-Index von StrippedLow[0]
   StrippedBuilt    : Boolean;   // lazy: erst bauen wenn ein Finder laeuft
+  MaxChildren      : Integer;   // TD-1: Hard-Cap per-Scan aus AContext.Config
 
   procedure RegisterWrite(Idx: Integer; Line: Integer);
   var
@@ -1695,13 +1696,15 @@ begin
   // Fast-Out 1: asm-Block - kein Body zum Parsen.
   if IsAsmMethod(MethodNode) then Exit;
   // Fast-Out 2: pathologisch grosse Methode - Hard-Cap.
-  ChildCount := CountChildrenRecursive(MethodNode, DetectorMaxChildrenRecursive);
-  if ChildCount > DetectorMaxChildrenRecursive then Exit;
+  // TD-1: einmal aus dem Context lesen (Arg + Vergleich derselbe Wert).
+  MaxChildren := CfgMaxChildrenRecursive(AContext);
+  ChildCount := CountChildrenRecursive(MethodNode, MaxChildren);
+  if ChildCount > MaxChildren then Exit;
 
   LocalVars := MethodNode.FindAll(nkLocalVar);
   try
     if LocalVars.Count = 0 then Exit;
-    if LocalVars.Count > DetectorMaxLocalVars then Exit;
+    if LocalVars.Count > CfgMaxLocalVars(AContext) then Exit;   // TD-1: per-Scan
 
     VarList      := TList<TVarInfo>.Create;
     VarMap       := TDictionary<string, Integer>.Create;

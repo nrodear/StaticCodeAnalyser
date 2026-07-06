@@ -8,13 +8,13 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TLongParamListDetector = class
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
@@ -26,7 +26,7 @@ implementation
 // LongParamListMaxParams). Default 5.
 
 class procedure TLongParamListDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Methods    : TList<TAstNode>;
   M          : TAstNode;
@@ -34,7 +34,10 @@ var
   Reported   : TDictionary<string, Boolean>;
   Key        : string;
   F          : TLeakFinding;
+  MaxParams  : Integer;   // TD-1: Schwelle per-Scan aus AContext.Config
 begin
+  // TD-1 (2026-07-06): Schwelle einmal aus dem Context lesen (scan-konstant).
+  MaxParams := CfgMaxParams(AContext);
   // Methoden koennen sowohl in Interface (Deklaration) als auch in
   // Implementation auftauchen → mit Methodennamen deduplizieren.
   Reported := TDictionary<string, Boolean>.Create;
@@ -43,7 +46,7 @@ begin
     for M in Methods do
     begin
       ParamCount := M.ChildCount(nkParam);
-      if ParamCount <= DetectorMaxParams then Continue;
+      if ParamCount <= MaxParams then Continue;
 
       Key := M.Name + ':' + IntToStr(ParamCount);
       if Reported.ContainsKey(Key) then Continue;
@@ -54,7 +57,7 @@ begin
       F.MethodName := M.Name;
       F.LineNumber := IntToStr(M.Line);
       F.MissingVar := Format('%d parameters (limit: %d)',
-        [ParamCount, DetectorMaxParams]);
+        [ParamCount, MaxParams]);
       F.SetKind(fkLongParamList);
       Results.Add(F);
     end;

@@ -211,11 +211,16 @@ begin
 end;
 
 function IsDetectorEnabled(const D: TDetectorEntry;
-  AIncludeUsesCheck: Boolean): Boolean;
+  AIncludeUsesCheck: Boolean; AContext: TAnalyzeContext): Boolean;
 // Filter-Eval pro Scan-Aufruf. Wandert hierhin aus dem alten Add()-
 // Helper, damit die Detector-Liste statisch gecached werden kann -
 // Filter-State (DetectorEnabledKinds, DetectorMinSeverity,
 // AIncludeUsesCheck) kann sich zwischen Scans aendern.
+// TD-1 (2026-07-06): Kind-/Severity-Filter jetzt aus AContext.Config (via
+// Cfg*-Helfer) statt direkt vom uSCAConsts-Global; AContext=nil faellt auf
+// das Global zurueck (byte-identisch, da Config==Globals gesnapshottet ist).
+var
+  EnKinds : TFindingKinds;
 begin
   // UnusedUses-Opt-out: laeuft nur bei explizit angeforderter Uses-Pruefung
   // (frueher: hartes Skip:=True nach dem Add, jetzt im Filter).
@@ -228,13 +233,14 @@ begin
   if D.Name = 'DfmAnalysis' then Exit(True);
 
   // Profile-Whitelist: leere Menge = kein Filter, sonst muss Kind drin sein.
-  if (uSCAConsts.DetectorEnabledKinds <> []) and
-     not (D.Kind in uSCAConsts.DetectorEnabledKinds) then Exit(False);
+  // Einmal in ein Local lesen (Hot-Path: ~145 Detektoren x N Dateien).
+  EnKinds := CfgEnabledKinds(AContext);
+  if (EnKinds <> []) and not (D.Kind in EnKinds) then Exit(False);
 
   // Severity-Schwellwert. lsError=0 < lsWarning=1 < lsHint=2 - groesserer
   // Ord = lockerer Schwellwert. Detector skippen wenn seine Default-
   // Severity strenger ist als der konfigurierte Min-Threshold.
-  if Ord(D.DefaultSeverity) > Ord(uSCAConsts.DetectorMinSeverity) then Exit(False);
+  if Ord(D.DefaultSeverity) > Ord(CfgMinSeverity(AContext)) then Exit(False);
 
   Result := True;
 end;
@@ -488,20 +494,21 @@ begin
   AddD3('MissingFinally',  fkMissingFinally,  TMissingFinallyDetector.AnalyzeUnit);
   AddD3('DivByZero',       fkDivByZero,       TDivByZeroDetector.AnalyzeUnit);
   AddD3('DeadCode',        fkDeadCode,        TDeadCodeDetector.AnalyzeUnit);
-  AddD3('LongMethod',      fkLongMethod,      TLongMethodDetector.AnalyzeUnit);
-  AddD3('LongParamList',   fkLongParamList,   TLongParamListDetector.AnalyzeUnit);
+  // TD-1 (2026-07-06): jetzt AContext-fuehrend (Schwellen aus Ctx.Config) -> AddD statt AddD3.
+  AddD('LongMethod',      fkLongMethod,      TLongMethodDetector.AnalyzeUnit);
+  AddD('LongParamList',   fkLongParamList,   TLongParamListDetector.AnalyzeUnit);
   AddD3('MagicNumber',     fkMagicNumber,     TMagicNumberDetector.AnalyzeUnit);
   AddD3('DuplicateString', fkDuplicateString, TDuplicateStringDetector.AnalyzeUnit);
   AddD3('HardcodedPath',   fkHardcodedPath,   THardcodedPathDetector.AnalyzeUnit);
   AddD3('DebugOutput',     fkDebugOutput,     TDebugOutputDetector.AnalyzeUnit);
-  AddD3('DeepNesting',     fkDeepNesting,     TDeepNestingDetector.AnalyzeUnit);
+  AddD('DeepNesting',     fkDeepNesting,     TDeepNestingDetector.AnalyzeUnit);   // TD-1: AContext-fuehrend
   AddD('TodoComment',     fkTodoComment,     TTodoCommentDetector.AnalyzeUnit, ['todo', 'fixme', 'hack', 'xxx']);
   AddD3('EmptyMethod',     fkEmptyMethod,     TEmptyMethodDetector.AnalyzeUnit);
   // FieldLeak: gleicher Kind wie LeakDetector (fkMemoryLeak) - Profile-
   // Filter behandelt beide identisch.
   AddD3('FieldLeak',       fkMemoryLeak,      TFieldLeakDetector.AnalyzeUnit);
   AddD('DuplicateBlock',  fkDuplicateBlock,  TDuplicateBlockDetector.AnalyzeUnit);
-  AddD3('CyclomaticComplexity', fkCyclomaticComplexity, TCyclomaticComplexityDetector.AnalyzeUnit);
+  AddD('CyclomaticComplexity', fkCyclomaticComplexity, TCyclomaticComplexityDetector.AnalyzeUnit);   // TD-1: AContext-fuehrend
   // DFM-Adapter: ruft intern ~20 DFM-Detektoren, jeder mit eigenem Kind.
   // Profile/Severity-Filter darf den Adapter NICHT skippen - die Filterung
   // passiert spaeter im Post-Filter auf Finding-Ebene. IsDetectorEnabled()
@@ -735,8 +742,8 @@ begin
   EnsureDetectorsBuilt;
 
   HasTimeCb    := Assigned(AOnTime);
-  FilterActive := (uSCAConsts.DetectorEnabledKinds <> []) or
-                  (uSCAConsts.DetectorMinSeverity <> lsHint);
+  FilterActive := (CfgEnabledKinds(AContext) <> []) or   // TD-1: per-Scan
+                  (CfgMinSeverity(AContext) <> lsHint);
   PrevCount    := Results.Count;
   TokenSetReady := False;
   TokenPresent := TDictionary<string, Boolean>.Create;
@@ -744,7 +751,7 @@ begin
 
   for i := 0 to High(gDetectors) do
   begin
-    if not IsDetectorEnabled(gDetectors[i], AIncludeUsesCheck) then Continue;
+    if not IsDetectorEnabled(gDetectors[i], AIncludeUsesCheck, AContext) then Continue;
 
     // Pre-Filter via RequiredTokensLow. TokenPresent enthaelt nach
     // EnsureTokenSet genau die Tokens die im File vorkommen - O(1)
@@ -793,16 +800,20 @@ begin
   // werden geprueft - frueher angelegte sind bereits Filter-validiert.
   if FilterActive then
   begin
+    // TD-1 (2026-07-06): Filter-Werte per-Scan aus AContext.Config, einmal
+    // vor der Schleife lesen (byte-identisch - Config ist scan-konstant).
+    var EnKinds := CfgEnabledKinds(AContext);
+    var MinSev  := CfgMinSeverity(AContext);
     for i := Results.Count - 1 downto PrevCount do
     begin
       if Results[i].Kind = fkFileReadError then Continue;
-      if (uSCAConsts.DetectorEnabledKinds <> []) and
-         not (Results[i].Kind in uSCAConsts.DetectorEnabledKinds) then
+      if (EnKinds <> []) and
+         not (Results[i].Kind in EnKinds) then
       begin
         Results.Delete(i);
         Continue;
       end;
-      if Ord(Results[i].Severity) > Ord(uSCAConsts.DetectorMinSeverity) then
+      if Ord(Results[i].Severity) > Ord(MinSev) then
         Results.Delete(i);
     end;
   end;
@@ -1018,6 +1029,12 @@ begin
     // freigibt. Keine Prozess-Globals mehr fuer diese drei -> jeder (auch
     // paralleler) Scan arbeitet auf eigenem State.
     Ctx := TAnalyzeContext.Create;
+    // TD-1 (2026-07-06): skalare Scan-Config JETZT aus den uSCAConsts-Globals
+    // in den Context snapshotten (Globals halten hier bereits die Scan-Config
+    // aus ApplyConfig/SetupForRun). Ab hier lesen die migrierten Scan-Pfade
+    // Schwellen/Filter/Flags aus Ctx.Config statt direkt vom Prozess-Global -
+    // Voraussetzung fuer parallele Scans, byte-identisch weil Config==Globals.
+    Ctx.SnapshotConfigFromGlobals;
 
     Ctx.AstFileCache := TAstFileCache.Create;
 
@@ -1122,7 +1139,7 @@ begin
         end;
       end;
 
-      if FileSize > DetectorMaxFileBytes then
+      if FileSize > Ctx.Config.MaxFileBytes then   // TD-1: per-Scan statt Global
       begin
         AddFileError(FileName, Format('Datei zu groß (%.1f MB) – Analyse übersprungen',
                                      [FileSize / (1024 * 1024)]));
@@ -1223,7 +1240,7 @@ begin
         // unangetastet; der User entscheidet handisch welche Klasse er in
         // [Detectors] LeakyClasses uebernimmt.
         LastPhase := Format('File %d/%d: AutoDiscovery', [i + 1, Total]);
-        if AutoDiscoverCustomClasses then
+        if Ctx.Config.AutoDiscover then   // TD-1: per-Scan-Gate statt Global
         try
           var Instantiable : TArray<string>;
           var StaticOnly   : TArray<string>;

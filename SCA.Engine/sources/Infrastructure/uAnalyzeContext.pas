@@ -34,6 +34,42 @@ uses
   uAstFileCache, uFileTextCache, uSymbolReferenceIndex, uDfmRepoIndex;
 
 type
+  // ==========================================================================
+  //  TD-1 Thread-Safety (Inkrement 1, 2026-07-06) — Per-Scan-Skalar-Config
+  // ==========================================================================
+  // Snapshot der SKALAREN Scan-Konfiguration, die heute in Prozess-Globals in
+  // uSCAConsts liegt (11 Schwellen + 3 Filter-Skalare + 2 Flags). Wird pro Scan
+  // EINMAL aus den Globals gesnapshottet (ParseLeaks, direkt nach Context-
+  // Create) und von den Scan-Pfaden aus IHREM Context gelesen - Voraussetzung
+  // fuer parallele Scans, die sich nicht mehr denselben Prozess-Global teilen.
+  // Byte-identisch, weil der Snapshot die Globals 1:1 kopiert solange (heute)
+  // genau ein Scan zur Zeit laeuft. Die Globals BLEIBEN als Fallback fuer
+  // AContext=nil (Tests/Single-File, s. Cfg*-Helfer unten).
+  // Bewusst NUR Skalare: die Config-LISTEN (LeakyClasses/Excludes/... ) sind
+  // AutoDiscover-mutiert und folgen in Inkrement 2.
+  TEngineScalarConfig = record
+    // --- 11 Detektor-Schwellen (Typen exakt wie die Globals in uSCAConsts) ---
+    MaxBodyLines         : Integer;   // uLongMethod
+    MaxStatements        : Integer;   // uLongMethod (sekundaere Schwelle)
+    MaxNesting           : Integer;   // uDeepNesting
+    MaxParams            : Integer;   // uLongParamList
+    MaxCyclomatic        : Integer;   // uCyclomaticComplexity
+    MaxLineLength        : Integer;   // uTooLongLine
+    MaxCaseBranches      : Integer;   // uCaseStatementSize
+    MaxLocalVars         : Integer;   // uUninitVar Hard-Cap
+    MaxChildrenRecursive : Integer;   // uUninitVar Hard-Cap
+    MinBlockLines        : Integer;   // uDuplicateBlock
+    MaxFileBytes         : Integer;   // uStaticAnalyzer2 per-File-Size-Gate
+    // --- 3 Filter-Skalare ---
+    EnabledKinds         : TFindingKinds;      // Profile-Whitelist ([] = alle)
+    MinSeverity          : TLeakSeverity;      // Severity-Schwelle
+    MinConfidence        : TFindingConfidence; // Konfidenz-Schwelle (Read-Site
+                                               // uConfidenceFilter = Inkrement 2)
+    // --- 2 Flags ---
+    AutoDiscover           : Boolean; // AutoDiscoverCustomClasses (Main-Loop-Gate)
+    UIMaxDisplayedFindings : Integer; // UI-Grid-Cap (Read-Site UI = Inkrement 2)
+  end;
+
   // Perf (2026-07-05): P1-strip-cache - EIN Cache-Eintrag fuer den Output
   // von TDetectorUtils.StripStringsAndComments (gestrippter Ganztext +
   // Char->Quellzeile-Map), pro FillCh-Variante (aktuell genau 2: '~' / ' ').
@@ -56,6 +92,12 @@ type
     FStripFile    : string;                    // Datei der Cache-Eintraege
     FStripEntries : TArray<TStripCacheEntry>;  // praktisch max. 2 Slots
   public
+    // TD-1 (2026-07-06): Per-Scan-Snapshot der skalaren Scan-Config (s.
+    // TEngineScalarConfig). Value-Record - lebt/stirbt mit dem Context.
+    // Wird von ParseLeaks DIREKT nach Create via SnapshotConfigFromGlobals aus
+    // den uSCAConsts-Globals gefuellt; davor (und bei AContext=nil) lesen die
+    // Cfg*-Helfer weiter das Prozess-Global.
+    Config          : TEngineScalarConfig;
     // --- vom Context besessen (Destroy gibt frei) ---
     AstFileCache    : TAstFileCache;
     SymbolRefIndex  : TSymbolReferenceIndex;
@@ -82,6 +124,13 @@ type
     procedure PutStrippedText(const FileName: string; FillCh: Char;
       const Code: string; const LineFor: TArray<Integer>);
 
+    // TD-1 (2026-07-06): Kopiert die skalare Scan-Config 1:1 aus den uSCAConsts-
+    // Prozess-Globals in Config. Aufruf in ParseLeaks DIREKT nach Create - zu
+    // dem Zeitpunkt halten die Globals bereits die fuer diesen Scan gueltige
+    // Config (ApplyConfig/SetupForRun lief davor), damit Config == Globals =
+    // beweisbar byte-identisches Verhalten.
+    procedure SnapshotConfigFromGlobals;
+
     constructor Create;
     destructor Destroy; override;
   end;
@@ -97,6 +146,29 @@ function CtxFileTextCache(AContext: TAnalyzeContext): TFileTextCache;
 function CtxSymbolRefIndex(AContext: TAnalyzeContext): TSymbolReferenceIndex;
 function CtxDfmRepoIndex(AContext: TAnalyzeContext): TDfmRepoIndex;
 function CtxAstFileCache(AContext: TAnalyzeContext): TAstFileCache;
+
+// TD-1 (2026-07-06): Skalar-Config-Leser mit Context-oder-Global-Fallback.
+// Jede Funktion liefert den Context-Wert wenn AContext<>nil, sonst das
+// uSCAConsts-Prozess-Global. Da SnapshotConfigFromGlobals Config==Globals
+// setzt (single-scan) liefern beide Pfade denselben Wert -> byte-identisch.
+// AContext=nil (Tests/Single-File) faellt exakt auf das heutige Global-
+// Verhalten zurueck. Explizit pro Wert statt generisch = am sichersten.
+function CfgMaxBodyLines(AContext: TAnalyzeContext): Integer;
+function CfgMaxStatements(AContext: TAnalyzeContext): Integer;
+function CfgMaxNesting(AContext: TAnalyzeContext): Integer;
+function CfgMaxParams(AContext: TAnalyzeContext): Integer;
+function CfgMaxCyclomatic(AContext: TAnalyzeContext): Integer;
+function CfgMaxLineLength(AContext: TAnalyzeContext): Integer;
+function CfgMaxCaseBranches(AContext: TAnalyzeContext): Integer;
+function CfgMaxLocalVars(AContext: TAnalyzeContext): Integer;
+function CfgMaxChildrenRecursive(AContext: TAnalyzeContext): Integer;
+function CfgMinBlockLines(AContext: TAnalyzeContext): Integer;
+function CfgMaxFileBytes(AContext: TAnalyzeContext): Integer;
+function CfgEnabledKinds(AContext: TAnalyzeContext): TFindingKinds;
+function CfgMinSeverity(AContext: TAnalyzeContext): TLeakSeverity;
+function CfgMinConfidence(AContext: TAnalyzeContext): TFindingConfidence;
+function CfgAutoDiscover(AContext: TAnalyzeContext): Boolean;
+function CfgUIMaxDisplayedFindings(AContext: TAnalyzeContext): Integer;
 
 implementation
 
@@ -130,6 +202,104 @@ begin
     Result := AContext.AstFileCache
   else
     Result := nil;
+end;
+
+// --- TD-1 Skalar-Config-Leser (Context-oder-Global-Fallback) ---------------
+
+function CfgMaxBodyLines(AContext: TAnalyzeContext): Integer;
+begin
+  if AContext <> nil then Result := AContext.Config.MaxBodyLines
+                     else Result := uSCAConsts.DetectorMaxBodyLines;
+end;
+
+function CfgMaxStatements(AContext: TAnalyzeContext): Integer;
+begin
+  if AContext <> nil then Result := AContext.Config.MaxStatements
+                     else Result := uSCAConsts.DetectorMaxStatements;
+end;
+
+function CfgMaxNesting(AContext: TAnalyzeContext): Integer;
+begin
+  if AContext <> nil then Result := AContext.Config.MaxNesting
+                     else Result := uSCAConsts.DetectorMaxNesting;
+end;
+
+function CfgMaxParams(AContext: TAnalyzeContext): Integer;
+begin
+  if AContext <> nil then Result := AContext.Config.MaxParams
+                     else Result := uSCAConsts.DetectorMaxParams;
+end;
+
+function CfgMaxCyclomatic(AContext: TAnalyzeContext): Integer;
+begin
+  if AContext <> nil then Result := AContext.Config.MaxCyclomatic
+                     else Result := uSCAConsts.DetectorMaxCyclomatic;
+end;
+
+function CfgMaxLineLength(AContext: TAnalyzeContext): Integer;
+begin
+  if AContext <> nil then Result := AContext.Config.MaxLineLength
+                     else Result := uSCAConsts.DetectorMaxLineLength;
+end;
+
+function CfgMaxCaseBranches(AContext: TAnalyzeContext): Integer;
+begin
+  if AContext <> nil then Result := AContext.Config.MaxCaseBranches
+                     else Result := uSCAConsts.DetectorMaxCaseBranches;
+end;
+
+function CfgMaxLocalVars(AContext: TAnalyzeContext): Integer;
+begin
+  if AContext <> nil then Result := AContext.Config.MaxLocalVars
+                     else Result := uSCAConsts.DetectorMaxLocalVars;
+end;
+
+function CfgMaxChildrenRecursive(AContext: TAnalyzeContext): Integer;
+begin
+  if AContext <> nil then Result := AContext.Config.MaxChildrenRecursive
+                     else Result := uSCAConsts.DetectorMaxChildrenRecursive;
+end;
+
+function CfgMinBlockLines(AContext: TAnalyzeContext): Integer;
+begin
+  if AContext <> nil then Result := AContext.Config.MinBlockLines
+                     else Result := uSCAConsts.DetectorMinBlockLines;
+end;
+
+function CfgMaxFileBytes(AContext: TAnalyzeContext): Integer;
+begin
+  if AContext <> nil then Result := AContext.Config.MaxFileBytes
+                     else Result := uSCAConsts.DetectorMaxFileBytes;
+end;
+
+function CfgEnabledKinds(AContext: TAnalyzeContext): TFindingKinds;
+begin
+  if AContext <> nil then Result := AContext.Config.EnabledKinds
+                     else Result := uSCAConsts.DetectorEnabledKinds;
+end;
+
+function CfgMinSeverity(AContext: TAnalyzeContext): TLeakSeverity;
+begin
+  if AContext <> nil then Result := AContext.Config.MinSeverity
+                     else Result := uSCAConsts.DetectorMinSeverity;
+end;
+
+function CfgMinConfidence(AContext: TAnalyzeContext): TFindingConfidence;
+begin
+  if AContext <> nil then Result := AContext.Config.MinConfidence
+                     else Result := uSCAConsts.FindingMinConfidence;
+end;
+
+function CfgAutoDiscover(AContext: TAnalyzeContext): Boolean;
+begin
+  if AContext <> nil then Result := AContext.Config.AutoDiscover
+                     else Result := uSCAConsts.AutoDiscoverCustomClasses;
+end;
+
+function CfgUIMaxDisplayedFindings(AContext: TAnalyzeContext): Integer;
+begin
+  if AContext <> nil then Result := AContext.Config.UIMaxDisplayedFindings
+                     else Result := uSCAConsts.UIMaxDisplayedFindings;
 end;
 
 function TAnalyzeContext.TryGetStrippedText(const FileName: string;
@@ -176,6 +346,29 @@ begin
   FStripEntries[n].FillCh  := FillCh;
   FStripEntries[n].Code    := Code;
   FStripEntries[n].LineFor := LineFor;
+end;
+
+procedure TAnalyzeContext.SnapshotConfigFromGlobals;
+// TD-1 (2026-07-06): 1:1-Kopie ALLER 16 Skalar-Config-Globals aus uSCAConsts.
+// Reihenfolge/Feldnamen spiegeln TEngineScalarConfig. Aufruf-Zeitpunkt (direkt
+// nach Create in ParseLeaks) garantiert Config == Globals -> byte-identisch.
+begin
+  Config.MaxBodyLines          := uSCAConsts.DetectorMaxBodyLines;
+  Config.MaxStatements         := uSCAConsts.DetectorMaxStatements;
+  Config.MaxNesting            := uSCAConsts.DetectorMaxNesting;
+  Config.MaxParams             := uSCAConsts.DetectorMaxParams;
+  Config.MaxCyclomatic         := uSCAConsts.DetectorMaxCyclomatic;
+  Config.MaxLineLength         := uSCAConsts.DetectorMaxLineLength;
+  Config.MaxCaseBranches       := uSCAConsts.DetectorMaxCaseBranches;
+  Config.MaxLocalVars          := uSCAConsts.DetectorMaxLocalVars;
+  Config.MaxChildrenRecursive  := uSCAConsts.DetectorMaxChildrenRecursive;
+  Config.MinBlockLines         := uSCAConsts.DetectorMinBlockLines;
+  Config.MaxFileBytes          := uSCAConsts.DetectorMaxFileBytes;
+  Config.EnabledKinds          := uSCAConsts.DetectorEnabledKinds;
+  Config.MinSeverity           := uSCAConsts.DetectorMinSeverity;
+  Config.MinConfidence         := uSCAConsts.FindingMinConfidence;
+  Config.AutoDiscover          := uSCAConsts.AutoDiscoverCustomClasses;
+  Config.UIMaxDisplayedFindings := uSCAConsts.UIMaxDisplayedFindings;
 end;
 
 constructor TAnalyzeContext.Create;

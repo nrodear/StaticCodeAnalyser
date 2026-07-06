@@ -160,13 +160,17 @@ var
   FirstLine   : Integer;
   Norm        : string;
   Cached      : Boolean;
+  MinBlk      : Integer;   // TD-1: Schwelle per-Scan aus AContext.Config
 begin
+  // TD-1 (2026-07-06): Min-Block-Lines einmal aus dem Context lesen (byte-
+  // identisch - scan-konstant) und in allen Fenster-/Format-Stellen nutzen.
+  MinBlk := CfgMinBlockLines(AContext);
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   Hashes   := TObjectDictionary<string, TList<Integer>>.Create([doOwnsValues]);
   Reported := TDictionary<Integer, Boolean>.Create;
   try
-    if Lines.Count < DetectorMinBlockLines * 2 then Exit;
+    if Lines.Count < MinBlk * 2 then Exit;
 
     // Pass 1: Normalisieren + triviale Zeilen rausfiltern
     SetLength(Normalized, Lines.Count);
@@ -181,13 +185,13 @@ begin
       Inc(NCount);
     end;
 
-    if NCount < DetectorMinBlockLines * 2 then Exit;
+    if NCount < MinBlk * 2 then Exit;
 
     // Pass 2: Sliding window, Hash je DetectorMinBlockLines-Tupel
-    for i := 0 to NCount - DetectorMinBlockLines do
+    for i := 0 to NCount - MinBlk do
     begin
       Window := '';
-      for var j := 0 to DetectorMinBlockLines - 1 do
+      for var j := 0 to MinBlk - 1 do
         Window := Window + Normalized[i + j] + #10;
 
       if not Hashes.TryGetValue(Window, Indices) then
@@ -211,7 +215,7 @@ begin
 
       // Original-Zeilenbereich des Erst-Vorkommens ermitteln und auf
       // if/end-Anteil pruefen. Bei zu viel Boilerplate skippen.
-      var EndIdx := Pair.Value[0] + DetectorMinBlockLines - 1;
+      var EndIdx := Pair.Value[0] + MinBlk - 1;
       if EndIdx >= NCount then EndIdx := NCount - 1;
       var OrigEndLine := LineIndex[EndIdx];
       if IsBranchingBoilerplate(Lines, FirstLine, OrigEndLine) then Continue;
@@ -222,7 +226,7 @@ begin
       F.LineNumber := IntToStr(FirstLine);
       F.MissingVar := Format(
         'Code block (%d lines) appears %dx in file - consider extracting a method',
-        [DetectorMinBlockLines, Pair.Value.Count]);
+        [MinBlk, Pair.Value.Count]);
       F.SetKind(fkDuplicateBlock);
       Results.Add(F);
     end;

@@ -32,13 +32,13 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TCyclomaticComplexityDetector = class
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   private
     class function CountInMethod(MethodNode: TAstNode): Integer; static;
     class procedure Walk(Node: TAstNode; var Count: Integer); static;
@@ -144,19 +144,22 @@ begin
 end;
 
 class procedure TCyclomaticComplexityDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Methods : TList<TAstNode>;
   M       : TAstNode;
   CC      : Integer;
   F       : TLeakFinding;
+  MaxCC   : Integer;   // TD-1: Schwelle per-Scan aus AContext.Config
 begin
+  // TD-1 (2026-07-06): Schwelle einmal aus dem Context lesen (scan-konstant).
+  MaxCC := CfgMaxCyclomatic(AContext);
   Methods := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
     begin
       CC := CountInMethod(M);
-      if CC > DetectorMaxCyclomatic then
+      if CC > MaxCC then
       begin
         F            := TLeakFinding.Create;
         F.FileName   := FileName;
@@ -165,7 +168,7 @@ begin
         F.MissingVar := Format(
           'Cyclomatic complexity %d (limit: %d) - viele Verzweigungen, '+
           'schwer zu testen',
-          [CC, DetectorMaxCyclomatic]);
+          [CC, MaxCC]);
         F.SetKind(fkCyclomaticComplexity);
         Results.Add(F);
       end;

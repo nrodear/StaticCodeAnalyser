@@ -25,13 +25,13 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TDeepNestingDetector = class
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   private
     class procedure Walk(Node: TAstNode; Depth: Integer;
       var DeepestLine, DeepestDepth: Integer;
@@ -117,7 +117,7 @@ begin
 end;
 
 class procedure TDeepNestingDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Methods       : TList<TAstNode>;
   M             : TAstNode;
@@ -125,7 +125,10 @@ var
   DeepestDepth  : Integer;
   DeepestKind   : TNodeKind;
   F             : TLeakFinding;
+  MaxNesting    : Integer;   // TD-1: Schwelle per-Scan aus AContext.Config
 begin
+  // TD-1 (2026-07-06): Schwelle einmal aus dem Context lesen (scan-konstant).
+  MaxNesting := CfgMaxNesting(AContext);
   Methods := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
@@ -135,7 +138,7 @@ begin
       DeepestKind  := nkUnknown;
       Walk(M, 0, DeepestLine, DeepestDepth, DeepestKind);
 
-      if DeepestDepth > DetectorMaxNesting then
+      if DeepestDepth > MaxNesting then
       begin
         F            := TLeakFinding.Create;
         F.FileName   := FileName;
@@ -144,7 +147,7 @@ begin
         F.MissingVar := Format(
           'Depth %d (%s from line %d, limit: %d)',
           [DeepestDepth, KindName(DeepestKind),
-           DeepestLine, DetectorMaxNesting]);
+           DeepestLine, MaxNesting]);
         F.SetKind(fkDeepNesting);
         Results.Add(F);
       end;

@@ -227,7 +227,7 @@ var
   F           : TLeakFinding;
 begin
   // Konfigurierbar via INI [Detectors] MaxCaseBranches=N, Default 10.
-  MaxBr := DetectorMaxCaseBranches;
+  MaxBr := CfgMaxCaseBranches(AContext);   // TD-1: per-Scan statt Global
   if MaxBr <= 0 then MaxBr := DEFAULT_MAX_BRANCH_FALLBACK;
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;

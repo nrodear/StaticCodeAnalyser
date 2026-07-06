@@ -50,7 +50,7 @@ var
 begin
   // Default 120, konfigurierbar via INI [Detectors] MaxLineLength=N
   // (gespiegelt in uSCAConsts.DetectorMaxLineLength von RepoSettings).
-  MaxLen := DetectorMaxLineLength;
+  MaxLen := CfgMaxLineLength(AContext);   // TD-1: per-Scan statt Global
   if MaxLen <= 0 then MaxLen := 120;
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
