@@ -62,10 +62,16 @@ type
     [Test] procedure CommaInsideStringArg_NoFinding;
     // Variablen-/Open-Array statt [...] -> nicht zaehlbar -> suppress
     [Test] procedure VariableArrayArg_NoFinding;
+    // Voll geklammertes Einzel-Argument (Kunden-Befund abar003.pas 2026-07-06):
+    // CountArrayArgs zaehlte '[(expr)]' als 0 -> falscher FormatMismatch.
+    [Test] procedure ParenthesizedSingleArg_NoFinding;
     // ---- TP-Kontrollen (muessen weiter feuern) ----
     [Test] procedure WidthPrecisionDeadArg_StillReports;
     [Test] procedure NoPlaceholderWithArg_StillReports;
     [Test] procedure TrailingLonePercent_StillReports;
+    // Gegenprobe zum Klammer-Fix: geklammertes Arg zaehlt als 1 (nicht 2),
+    // eine echte Fehlpaarung feuert weiter.
+    [Test] procedure ParenthesizedArgCountsAsOne_MismatchStillReports;
   end;
 
   // ---- Bare-Style (mORMot FormatUtf8/FormatString) -----------------------------------
@@ -649,6 +655,30 @@ begin
     'function Foo(n: Integer): string;'#13#10 +
     'begin Result := Format(''value %d%'', [n]); end;') >= 1,
     'Dangling % (ohne %%-Escape) verbraucht ein 2. Arg -> MUSS feuern');
+end;
+
+procedure TTestFormatMismatchRealWorldFP.ParenthesizedSingleArg_NoFinding;
+// Kunden-Befund abar003.pas:1851 (2026-07-06): ein EINZIGES, komplett
+// geklammertes Argument. CountArrayArgs zaehlte '[(...)]' als 0 Argumente
+// (kein Nicht-Klammer-Zeichen auf Depth=0 -> IsEmpty nie geloescht) und
+// meldete faelschlich "1 placeholders, 0 arguments". Nach dem Fix (Klammer
+// setzt IsEmpty:=False) -> 1 Platzhalter, 1 Argument -> kein Befund.
+begin
+  Assert.AreEqual<Integer>(0, FmtFP_Count(
+    'function Foo(g, s: Double): string;'#13#10 +
+    'begin Result := Format(''%.2f'', [(Abs(g / (100 + s)) * s)]); end;'),
+    'voll geklammertes Einzel-Argument -> 1 Platzhalter, 1 Argument -> kein Befund');
+end;
+
+procedure TTestFormatMismatchRealWorldFP.ParenthesizedArgCountsAsOne_MismatchStillReports;
+// Gegenprobe: der Klammer-Fix darf das geklammerte Arg als GENAU 1 zaehlen
+// (nicht 2). 2 Platzhalter vs. 1 geklammertes Argument -> echte Fehlpaarung
+// muss weiter feuern (schuetzt gegen versehentliches Ueber-Zaehlen).
+begin
+  Assert.IsTrue(FmtFP_Count(
+    'function Foo(x: Integer): string;'#13#10 +
+    'begin Result := Format(''%d %d'', [(x + 1)]); end;') >= 1,
+    '2 Platzhalter, 1 geklammertes Argument -> Fehlpaarung MUSS feuern');
 end;
 
 end.

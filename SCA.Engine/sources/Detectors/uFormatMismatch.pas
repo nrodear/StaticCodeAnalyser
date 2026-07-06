@@ -513,7 +513,12 @@ begin
     if InStr then begin Inc(i); Continue; end;
 
     case Text[i] of
-      '[', '(' : Inc(Depth);
+      // FP-Fix (2026-07-06): eine oeffnende Klammer IST Inhalt. Ohne das
+      // IsEmpty:=False wird ein EINZIGES, komplett geklammertes Argument
+      // (z.B. Format('%.2f',[(Abs(x/(100+y))*y)])) als 0 Argumente gezaehlt,
+      // weil dann kein Nicht-Klammer-Zeichen je auf Depth=0 steht und der
+      // else-Zweig (unten) IsEmpty nie loescht -> falscher FormatMismatch.
+      '[', '(' : begin Inc(Depth); IsEmpty := False; end;
       ')' : if Depth > 0 then Dec(Depth);
       ']' :
         begin
