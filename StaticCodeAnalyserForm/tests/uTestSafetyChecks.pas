@@ -54,6 +54,9 @@ type
     [Test] procedure Div_NonZeroLiteral_NoFinding;
     [Test] procedure Div_GuardedLocalVar_NoFinding;
     [Test] procedure Div_StringDivisor_NoFinding;
+    // FP-Gate Prio 7 (2026-07-06): "if n <= 0 then Exit"-Bail-Guard
+    [Test] procedure Div_LessEqualZeroGuardExit_NoFinding;
+    [Test] procedure Div_LessEqualZeroNoExit_StillReports;
   end;
 
   // ---- DeadCode Erweiterungen --------------------------------------------------------
@@ -451,6 +454,44 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero));
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_LessEqualZeroGuardExit_NoFinding;
+// FP-Gate Prio 7 (Real-World-Audit 2026-07-04, guarded-divisor): das haeufige
+// "if n <= 0 then Exit"-Bail-Idiom garantiert n > 0 danach - kein Fund.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(n: Integer);'#13#10+
+  'var x: Integer;'#13#10+
+  'begin'#13#10+
+  '  if n <= 0 then Exit;'#13#10+
+  '  x := 100 div n;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    'if n <= 0 then Exit -> n danach nachweislich > 0 -> kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_LessEqualZeroNoExit_StillReports;
+// Gegenprobe: "<= 0" OHNE Exit/Raise im then-Zweig ist KEIN Guard - n kann
+// danach noch <= 0 sein und im Divisor crashen -> Fund bleibt.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(n: Integer);'#13#10+
+  'var x: Integer;'#13#10+
+  'begin'#13#10+
+  '  if n <= 0 then x := 1;'#13#10+
+  '  x := 100 div n;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkDivByZero) >= 1,
+    '<= 0 ohne Exit/Raise ist kein Guard -> Fund muss bleiben');
   finally F.Free; end;
 end;
 

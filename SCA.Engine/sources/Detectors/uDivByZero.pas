@@ -168,12 +168,21 @@ begin
          TDetectorUtils.ContainsWholeWordLower('0<'    + VarLow, Low)  or
          TDetectorUtils.ContainsWholeWordLower('0 <> ' + VarLow, Low)  then
         Exit(True);
-      // Equality-Guard: 'if x = 0 then ...' schuetzt nur wenn der
-      // THEN-Zweig den Code-Pfad verlaesst (Exit oder Raise).
-      // 'if x = 0 then DoOther' ist KEIN Guard - x kann danach noch 0
-      // sein und im Divisor crashen.
+      // Exit-Guard: 'if x <bail-cond> then Exit/Raise' schuetzt nur wenn der
+      // THEN-Zweig den Code-Pfad verlaesst. Erfasst das haeufige "bail wenn
+      // nicht-positiv"-Idiom fuer Integer-Divisoren:
+      //   if x = 0 then Exit;        (x koennte 0 sein)
+      //   if x <= 0 then Exit;       (x koennte 0 oder negativ sein)
+      //   if x < 1 then raise ...;   (ganzzahlig aequivalent zu <= 0)
+      // Danach ist x nachweislich > 0. 'if x = 0 then DoOther' (ohne Exit/
+      // Raise) ist KEIN Guard - x kann danach noch 0 sein. FP-Gate Prio 7
+      // (Real-World-Audit 2026-07-04, guarded-divisor).
       if TDetectorUtils.ContainsWholeWordLower(VarLow + ' = 0',  Low)  or
-         TDetectorUtils.ContainsWholeWordLower(VarLow + '=0',    Low)  then
+         TDetectorUtils.ContainsWholeWordLower(VarLow + '=0',    Low)  or
+         TDetectorUtils.ContainsWholeWordLower(VarLow + ' <= 0', Low)  or
+         TDetectorUtils.ContainsWholeWordLower(VarLow + '<=0',   Low)  or
+         TDetectorUtils.ContainsWholeWordLower(VarLow + ' < 1',  Low)  or
+         TDetectorUtils.ContainsWholeWordLower(VarLow + '<1',    Low)  then
         if ThenBranchExitsOrRaises(IfN) then
           Exit(True);
     end;
