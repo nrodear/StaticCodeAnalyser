@@ -109,6 +109,17 @@ type
     class function SearchFree(Node: TAstNode; const VarNameLow: string;
       InFinally: Boolean; out FoundInFinally: Boolean): Boolean; static;
     class function HasTryFinallyBlock(MethodNode: TAstNode): Boolean; static;
+    // FP-Gate Prio 5 (2026-07-06, Real-World-Audit): das Idiom
+    //   try ... except VarName.Free; raise; end
+    // gibt VarName auf dem Ausnahme-Pfad frei und wirft weiter - fuer die
+    // Leak-Analyse aequivalent zu einem finally-Free (schuetzt gegen Leak
+    // bei Exception). Der Detektor kannte bisher nur try/finally und meldete
+    // faelschlich "Free ausserhalb finally". True wenn ein except-Handler
+    // SOWOHL einen Free von VarName ALS AUCH ein raise (Re-Raise) enthaelt.
+    class function HasExceptFreeRaise(MethodNode: TAstNode;
+      const VarNameLow: string): Boolean; static;
+    class function HasDescendantKind(Node: TAstNode;
+      Kind: TNodeKind): Boolean; static;
     // True wenn der Receiver eines '.Add(item)'-Aufrufs ein ownership-
     // bewusster Container ist (TObjectList, TObjectDictionary, ...) -
     // ODER wenn der Typ unbekannt ist (Default permissiv, vermeidet
@@ -1041,6 +1052,42 @@ begin
   Result := MethodNode.HasChild(nkTryFinally);
 end;
 
+class function TLeakDetector2.HasDescendantKind(Node: TAstNode;
+  Kind: TNodeKind): Boolean;
+var
+  Child : TAstNode;
+begin
+  Result := False;
+  if not Assigned(Node) then Exit;
+  for Child in Node.Children do
+    if (Child.Kind = Kind) or HasDescendantKind(Child, Kind) then
+      Exit(True);
+end;
+
+class function TLeakDetector2.HasExceptFreeRaise(MethodNode: TAstNode;
+  const VarNameLow: string): Boolean;
+// Prio-5-Gate: sucht einen except-Handler (nkExceptBlock; on-Handler liegen
+// als nkOnHandler DARIN und werden von SearchFree/HasDescendantKind rekursiv
+// miterfasst), der SOWOHL einen Free von VarName ALS AUCH ein raise enthaelt.
+// Beides im selben Handler = das Cleanup-und-weiterwerfen-Idiom; ein Free ganz
+// ohne Re-Raise wird bewusst NICHT als Schutz gewertet (konservativ).
+var
+  Handlers : TList<TAstNode>;
+  H        : TAstNode;
+  DummyFin : Boolean;
+begin
+  Result := False;
+  Handlers := MethodNode.FindAll(nkExceptBlock);
+  try
+    for H in Handlers do
+      if HasDescendantKind(H, nkRaise) and
+         SearchFree(H, VarNameLow, False, DummyFin) then
+        Exit(True);
+  finally
+    Handlers.Free;
+  end;
+end;
+
 { ---- Öffentliche API ---- }
 
 class procedure TLeakDetector2.AnalyzeMethod(UnitNode, MethodNode: TAstNode;
@@ -1100,7 +1147,11 @@ begin
 
         if not FreeFound then
           AddFinding(V.Name, lsError, ReportLine)
-        else if not FreeInFin and HasFinally then
+        else if not FreeInFin and HasFinally
+             and not HasExceptFreeRaise(MethodNode, VarNameLow) then
+          // Prio-5-Gate: der Free steckt in einem re-raisenden except-Handler
+          // (try..except VarName.Free; raise; end) - Ausnahme-Pfad-Cleanup,
+          // aequivalent zu finally -> kein "Free ausserhalb finally"-Befund.
           AddFinding(V.Name, lsWarning, ReportLine);
 
         Continue;

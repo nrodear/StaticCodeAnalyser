@@ -125,6 +125,8 @@ type
     [Test] procedure Leak_FreeOnFieldNotLocalVar_LocalLeaks;
     [Test] procedure Leak_DoubleFreeAndNilSameVar_NoFinding;
     [Test] procedure Leak_FreeInExceptOnly_KnownLimitation_NoFinding;
+    // FP-Gate Prio 5 (2026-07-06): except-Free-raise-Idiom mit finally anderswo
+    [Test] procedure Leak_ExceptFreeRaise_WithUnrelatedFinally_NoWarning;
     [Test] procedure Leak_FreeAndNilWhitespacePadded_NoFalsePositive;
     [Test] procedure Leak_ReassignedThenFree_KnownLimitation_NoFinding;
     [Test] procedure Leak_FreeOnlyInIfBranch_KnownLimitation_NoFinding;
@@ -2135,6 +2137,46 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Free-nur-im-except wird vom Detektor nicht erkannt (known limitation)');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_ExceptFreeRaise_WithUnrelatedFinally_NoWarning;
+// FP-Gate Prio 5 (Real-World-Audit 2026-07-04, z.B. MVCFramework.Middleware.
+// Compression.pas:138): b wird auf dem Erfolgspfad per Ownership-Transfer
+// weitergereicht (Setter - KEIN Add-Muster, IsPassedToOwner greift bewusst
+// nicht) und im re-raisenden except-Handler freigegeben. Weil die UNABHAENGIGE
+// Variable a ein finally hat (HasFinally=True), meldete der Detektor frueher
+// faelschlich "Free ausserhalb finally" (lsWarning) fuer b. except-Free-raise
+// ist Ausnahme-Pfad-Cleanup - aequivalent zu finally -> kein Befund.
+// Gegenstueck zu Leak_FreeInExceptOnly_KnownLimitation (dort ohne finally ->
+// schon vorher 0); zusammen decken sie beide HasFinally-Zweige ab.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var'#13#10+
+  '  a, b: TStringList;'#13#10+
+  'begin'#13#10+
+  '  a := TStringList.Create;'#13#10+
+  '  try'#13#10+
+  '    a.Add(''x'');'#13#10+
+  '  finally'#13#10+
+  '    a.Free;'#13#10+
+  '  end;'#13#10+
+  '  b := TStringList.Create;'#13#10+
+  '  try'#13#10+
+  '    Consumer.SetContentStream(b);'#13#10+
+  '  except'#13#10+
+  '    b.Free;'#13#10+
+  '    raise;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'except-Free-raise = geschuetzt wie finally; das finally von a darf ' +
+      'keinen lsWarning-FP fuer b ausloesen');
   finally F.Free; end;
 end;
 
