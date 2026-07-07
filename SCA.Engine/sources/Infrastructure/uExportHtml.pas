@@ -507,6 +507,24 @@ begin
     SB.AppendLine('    .health-panel.health-green  { background: #e8f0d8; border-color: #b8d088; }');
     SB.AppendLine('    .health-panel.health-yellow { background: #fff5d0; border-color: #e8cd7a; }');
     SB.AppendLine('    .health-panel.health-red    { background: #ffe5e5; border-color: #e0a0a0; }');
+    // #6: Uebersicht-Charts (Donut + Kategorie-Balken)
+    SB.AppendLine('    .chart-panel { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; margin: 0 0 14px 0; }');
+    SB.AppendLine('    .chart-box { background: #f8f8f8; border: 1px solid #e0e0e0; border-radius: 5px; padding: 10px 14px; }');
+    SB.AppendLine('    .chart-box h3 { font-size: 13px; margin: 0 0 8px 0; color: #444; font-weight: 600; }');
+    SB.AppendLine('    .donut-wrap { display: flex; align-items: center; gap: 14px; }');
+    SB.AppendLine('    .donut { width: 110px; height: 110px; }');
+    SB.AppendLine('    .donut-total { font-size: 26px; font-weight: 700; fill: #333; }');
+    SB.AppendLine('    .chart-legend { font-size: 12px; line-height: 1.7; }');
+    SB.AppendLine('    .chart-legend span { display: block; }');
+    SB.AppendLine('    .chart-legend i { display: inline-block; width: 10px; height: 10px;');
+    SB.AppendLine('       border-radius: 2px; margin-right: 6px; vertical-align: middle; }');
+    SB.AppendLine('    .chart-bars { min-width: 320px; flex: 1; }');
+    SB.AppendLine('    .cbar { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 1px 0; }');
+    SB.AppendLine('    .cbar-lbl { width: 160px; font-family: Consolas, "Courier New", monospace;');
+    SB.AppendLine('       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }');
+    SB.AppendLine('    .cbar-track { flex: 0 0 190px; background: #eee; border-radius: 2px; height: 12px; }');
+    SB.AppendLine('    .cbar-fill { display: block; height: 12px; background: #6aa0d8; border-radius: 2px; }');
+    SB.AppendLine('    .cbar-num { color: #666; font-variant-numeric: tabular-nums; }');
     SB.AppendLine('    .health-badge { display: flex; flex-direction: column; align-items: center;');
     SB.AppendLine('       min-width: 92px; }');
     SB.AppendLine('    .health-label { font-size: 10px; text-transform: uppercase;');
@@ -690,6 +708,74 @@ begin
     SB.Append    (HtmlEscape(TopCat));
     SB.AppendLine('</b></div>');
     SB.AppendLine('  </div>');
+
+    // #6: Uebersicht-Charts - Severity-Donut (Inline-SVG) + Kategorie-Balken.
+    // Serverseitig, DETERMINISTISCH (nur Integer via pathLength=100 -> keine
+    // Float/Locale-Dezimaltrenner-Fallen), self-contained (kein JS/CDN). Die
+    // Legende traegt die exakten Counts (Daten unabhaengig von der Geometrie).
+    if nTotal > 0 then
+    begin
+      var DoffWarn := Round(nErr / nTotal * 100);          // Start-% Warnungen
+      var DoffHint := Round((nErr + nWarn) / nTotal * 100); // Start-% Hinweise
+      var DdErr  := DoffWarn;               // Segment-Laenge Fehler (%)
+      var DdWarn := DoffHint - DoffWarn;    // Warnungen
+      var DdHint := 100 - DoffHint;         // Hinweise (Rest schliesst den Ring)
+      SB.AppendLine('  <div class="chart-panel">');
+      SB.AppendLine('    <div class="chart-box">');
+      SB.AppendLine('      <h3 data-i18n="chart-sev-title">Schweregrad-Verteilung</h3>');
+      SB.AppendLine('      <div class="donut-wrap">');
+      SB.AppendLine('      <svg viewBox="0 0 120 120" class="donut" role="img" aria-label="Severity">');
+      SB.AppendLine('        <circle cx="60" cy="60" r="45" fill="none" stroke="#eee" stroke-width="18"/>');
+      if nErr > 0 then
+      begin
+        SB.Append('        <circle cx="60" cy="60" r="45" fill="none" stroke="#E81123" stroke-width="18" pathLength="100" transform="rotate(-90 60 60)" stroke-dasharray="');
+        SB.Append(IntToStr(DdErr)); SB.Append(' '); SB.Append(IntToStr(100 - DdErr));
+        SB.AppendLine('" stroke-dashoffset="0"/>');
+      end;
+      if nWarn > 0 then
+      begin
+        SB.Append('        <circle cx="60" cy="60" r="45" fill="none" stroke="#FF8C00" stroke-width="18" pathLength="100" transform="rotate(-90 60 60)" stroke-dasharray="');
+        SB.Append(IntToStr(DdWarn)); SB.Append(' '); SB.Append(IntToStr(100 - DdWarn));
+        SB.Append('" stroke-dashoffset="-'); SB.Append(IntToStr(DoffWarn)); SB.AppendLine('"/>');
+      end;
+      if nHint > 0 then
+      begin
+        SB.Append('        <circle cx="60" cy="60" r="45" fill="none" stroke="#0078D4" stroke-width="18" pathLength="100" transform="rotate(-90 60 60)" stroke-dasharray="');
+        SB.Append(IntToStr(DdHint)); SB.Append(' '); SB.Append(IntToStr(100 - DdHint));
+        SB.Append('" stroke-dashoffset="-'); SB.Append(IntToStr(DoffHint)); SB.AppendLine('"/>');
+      end;
+      SB.Append('        <text x="60" y="66" text-anchor="middle" class="donut-total">');
+      SB.Append(IntToStr(nTotal)); SB.AppendLine('</text>');
+      SB.AppendLine('      </svg>');
+      SB.AppendLine('      <div class="chart-legend">');
+      SB.Append('        <span><i style="background:#E81123"></i><span data-i18n="sev-err">Fehler</span> '); SB.Append(IntToStr(nErr)); SB.AppendLine('</span>');
+      SB.Append('        <span><i style="background:#FF8C00"></i><span data-i18n="sev-warn">Warnungen</span> '); SB.Append(IntToStr(nWarn)); SB.AppendLine('</span>');
+      SB.Append('        <span><i style="background:#0078D4"></i><span data-i18n="sev-hint">Hinweise</span> '); SB.Append(IntToStr(nHint)); SB.AppendLine('</span>');
+      SB.AppendLine('      </div>');
+      SB.AppendLine('      </div>');
+      SB.AppendLine('    </div>');
+      if (KindPairs <> nil) and (KindPairs.Count > 0) then
+      begin
+        var MaxCnt := KindPairs[0].Value;   // KindPairs ist absteigend sortiert
+        if MaxCnt < 1 then MaxCnt := 1;
+        SB.AppendLine('    <div class="chart-box chart-bars">');
+        SB.AppendLine('      <h3 data-i18n="chart-cat-title">Top-Kategorien</h3>');
+        for i := 0 to Min(8, KindPairs.Count) - 1 do
+        begin
+          var W := Round(KindPairs[i].Value / MaxCnt * 180);
+          if W < 2 then W := 2;
+          SB.Append('      <div class="cbar"><span class="cbar-lbl">');
+          SB.Append(HtmlEscape(KindName(KindPairs[i].Key)));
+          SB.Append('</span><span class="cbar-track"><span class="cbar-fill" style="width:');
+          SB.Append(IntToStr(W));
+          SB.Append('px"></span></span><span class="cbar-num">');
+          SB.Append(IntToStr(KindPairs[i].Value));
+          SB.AppendLine('</span></div>');
+        end;
+        SB.AppendLine('    </div>');
+      end;
+      SB.AppendLine('  </div>');
+    end;
 
     // Audience-Hint: macht im Brief sichtbar fuer welche Rolle der Report
     // optimiert ist. Tech-Lead / Senior-Dev brauchen die Top-Detektoren
@@ -1239,6 +1325,8 @@ begin
     SB.AppendLine('        "sev-total": "Total",');
     SB.AppendLine('        "th-conf": "Confidence",');
     SB.AppendLine('        "rule-example-note": "Canonical rule example",');
+    SB.AppendLine('        "chart-sev-title": "Severity distribution",');
+    SB.AppendLine('        "chart-cat-title": "Top categories",');
     SB.AppendLine('        "conf-high": "high",');
     SB.AppendLine('        "conf-medium": "medium",');
     SB.AppendLine('        "conf-low": "low",');
@@ -1292,6 +1380,8 @@ begin
     SB.AppendLine('        "sev-total": "Gesamt",');
     SB.AppendLine('        "th-conf": "Konfidenz",');
     SB.AppendLine('        "rule-example-note": "Kanonisches Regel-Beispiel",');
+    SB.AppendLine('        "chart-sev-title": "Schweregrad-Verteilung",');
+    SB.AppendLine('        "chart-cat-title": "Top-Kategorien",');
     SB.AppendLine('        "conf-high": "hoch",');
     SB.AppendLine('        "conf-medium": "mittel",');
     SB.AppendLine('        "conf-low": "niedrig",');
@@ -1345,6 +1435,8 @@ begin
     SB.AppendLine('        "sev-total": "Total",');
     SB.AppendLine('        "th-conf": "Confiance",');
     SB.AppendLine('        "rule-example-note": "Exemple canonique de r\\u00e8gle",');
+    SB.AppendLine('        "chart-sev-title": "R\\u00e9partition par gravit\\u00e9",');
+    SB.AppendLine('        "chart-cat-title": "Cat\\u00e9gories principales",');
     SB.AppendLine('        "conf-high": "\\u00e9lev\\u00e9e",');
     SB.AppendLine('        "conf-medium": "moyenne",');
     SB.AppendLine('        "conf-low": "faible",');
