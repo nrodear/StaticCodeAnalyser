@@ -67,10 +67,12 @@ type
     // Trennern - ein Befund kann mit absolutem oder relativem Pfad
     // vorliegen, wir vergleichen den Basisnamen-Tail.
     class function SameSourceFile(const A, B: string): Boolean; static;
+    // JSON-String-Escaping - public, weil uExportHtml es fuer den
+    // sca-meta-Block (#10) braucht (wie KindToName/SameSourceFile).
+    class function JsonEscape(const S: string): string; static;
 
   private
     class function CsvEscape(const S: string): string; static;
-    class function JsonEscape(const S: string): string; static;
     class function JiraEscape(const S: string): string; static;
   end;
 

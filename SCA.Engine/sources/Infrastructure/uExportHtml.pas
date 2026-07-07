@@ -38,6 +38,11 @@ type
     // nil/leer oder AroundLine ungueltig.
     class function BuildCodeSnippet(SourceLines: TStringList;
       AroundLine, ContextSize: Integer): string; static;
+    // Report-Zeitstempel. Ist die Umgebungsvariable SCA_REPORT_TIMESTAMP
+    // gesetzt, wird deren Wert VERBATIM zurueckgegeben (deterministische
+    // CI-Builds -> byte-stabile Diffs), sonst FormatDateTime(AFmt, Now)
+    // wie bisher (Default-Verhalten unveraendert).
+    class function ReportTimestamp(const AFmt: string): string; static;
   end;
 
 implementation
@@ -49,6 +54,12 @@ implementation
 uses
   uExport, uFixHint, uRuleCatalog, uQuickFix;
 
+type
+  // Per-Datei-Aggregat fuer das Top-Dateien-Risiko-Ranking (#11).
+  TFileAgg = record
+    Err, Warn, Hint: Integer;
+  end;
+
 class function TExporterHtml.DefaultFileName(const SourceFile: string;
   const TargetDir: string): string;
 var
@@ -58,7 +69,7 @@ begin
     Base := 'analyse'
   else
     Base := ChangeFileExt(ExtractFileName(SourceFile), '');
-  DateStr := FormatDateTime('yyyy-mm-dd', Now);
+  DateStr := ReportTimestamp('yyyy-mm-dd');
   if TargetDir <> '' then
     Result := IncludeTrailingPathDelimiter(TargetDir) +
               Base + '_codereview_' + DateStr + '.html'
@@ -168,11 +179,35 @@ begin
   end;
 end;
 
+class function TExporterHtml.ReportTimestamp(const AFmt: string): string;
+var
+  Env : string;
+begin
+  // GetEnvironmentVariable liefert '' wenn die Variable nicht existiert.
+  Env := GetEnvironmentVariable('SCA_REPORT_TIMESTAMP');
+  if Env <> '' then
+    Result := Env
+  else
+    Result := FormatDateTime(AFmt, Now);
+end;
+
 class procedure TExporterHtml.Run(Findings: TObjectList<TLeakFinding>;
   const SourceFile: string; const FileName: string);
 const
   SNIPPET_CONTEXT = 3;  // Zeilen vor und nach der Befund-Zeile
   TOP_DETECTORS_N = 10; // Anzahl Eintraege in der Top-Liste und im "Top10"-Filter
+  TOP_FILES_N     = 10; // Anzahl Eintraege im Top-Dateien-Risiko-Ranking (#11)
+  TOOL_NAME       = 'StaticCodeAnalyser'; // Audit-Header + JSON-Meta (#10)
+  // Health-Score (#5): gewichteter Score + Ampel. Dokumentierte Schwellen:
+  //   Score = Err*100 + Warn*10 + Hint*1
+  //   gruen  : Score <=  49  (keine Fehler, hoechstens ein paar Warnungen)
+  //   gelb   : Score 50..499 (mind. 1 Fehler oder viele Warnungen)
+  //   rot    : Score >= 500  (>= 5 Fehler-Aequivalente)
+  HEALTH_W_ERR      = 100;
+  HEALTH_W_WARN     = 10;
+  HEALTH_W_HINT     = 1;
+  HEALTH_GREEN_MAX  = 49;
+  HEALTH_YELLOW_MAX = 499;
 var
   SB        : TStringBuilder;
   F         : TLeakFinding;
@@ -198,6 +233,17 @@ var
   CurKindCnt : Integer;
   Top10Set  : TStringList;  // KindName -> in Top10
   i         : Integer;
+  // Per-Datei-Aggregat (err/warn/hint) fuer das Risiko-Ranking (#11) und den
+  // Health-Score (#5). FileRank = daraus abgeleitete, nach Score absteigend
+  // sortierte Liste (Determinismus: stabiler Tiebreak ueber den Dateinamen).
+  FileAgg   : TDictionary<string, TFileAgg>;
+  FileRank  : TList<TPair<string, Integer>>;
+  Agg       : TFileAgg;
+  // Health-Score (#5) + deterministischer Report-Zeitstempel (#2/#10).
+  WhenStr     : string;
+  HealthScore : Integer;
+  HealthLevel : string;   // 'green' / 'yellow' / 'red'
+  TopCat      : string;   // Kind-Name des staerksten Detektors (Schwerpunkt)
 
   function GetSourceLines(const APath: string): TStringList;
   // Liest die Datei genau einmal, cached die Zeilen.
@@ -243,6 +289,8 @@ begin
   KindCount   := nil;
   KindPairs   := nil;
   Top10Set    := nil;
+  FileAgg     := nil;
+  FileRank    := nil;
   try
     Files := TStringList.Create;
     Files.Duplicates := dupIgnore;
@@ -251,6 +299,7 @@ begin
     FilesSev := TDictionary<string, Cardinal>.Create;
     SourceCache := TObjectDictionary<string, TStringList>.Create([doOwnsValues]);
     KindCount := TDictionary<TFindingKind, Integer>.Create;
+    FileAgg := TDictionary<string, TFileAgg>.Create;
     Top10Set := TStringList.Create;
     Top10Set.CaseSensitive := False;
     Top10Set.Sorted := True;
@@ -282,6 +331,17 @@ begin
             lsHint    : SevMask := SevMask or 4;
           end;
           FilesSev.AddOrSetValue(fnDisp, SevMask);
+          // Per-Datei-Aggregat fuer Top-Dateien-Risiko-Ranking (#11).
+          if not FileAgg.TryGetValue(fnDisp, Agg) then
+          begin
+            Agg.Err := 0; Agg.Warn := 0; Agg.Hint := 0;
+          end;
+          case F.Severity of
+            lsError   : Inc(Agg.Err);
+            lsWarning : Inc(Agg.Warn);
+            lsHint    : Inc(Agg.Hint);
+          end;
+          FileAgg.AddOrSetValue(fnDisp, Agg);
         end;
       end;
 
@@ -298,6 +358,36 @@ begin
       end));
     for i := 0 to Min(TOP_DETECTORS_N, KindPairs.Count) - 1 do
       Top10Set.Add(KindName(KindPairs[i].Key));
+
+    // Top-Dateien nach gewichtetem Risiko-Score (#11). Score = Err*100 +
+    // Warn*10 + Hint. DETERMINISMUS: FileAgg-Iteration ist Hash-Order, daher
+    // in eine Liste kopieren und mit TOTALEM Comparator sortieren (Score
+    // absteigend, Tiebreak Dateiname aufsteigend).
+    FileRank := TList<TPair<string, Integer>>.Create;
+    for var FA in FileAgg do
+      FileRank.Add(TPair<string, Integer>.Create(FA.Key,
+        FA.Value.Err * HEALTH_W_ERR + FA.Value.Warn * HEALTH_W_WARN +
+        FA.Value.Hint * HEALTH_W_HINT));
+    FileRank.Sort(TComparer<TPair<string, Integer>>.Construct(
+      function(const A, B: TPair<string, Integer>): Integer
+      begin
+        Result := B.Value - A.Value; // Score absteigend
+        if Result = 0 then
+          Result := CompareText(A.Key, B.Key); // Dateiname aufsteigend
+      end));
+
+    // Health-Score (#5): gewichteter Gesamt-Score -> Ampel + Schwerpunkt.
+    HealthScore := nErr * HEALTH_W_ERR + nWarn * HEALTH_W_WARN + nHint * HEALTH_W_HINT;
+    if HealthScore <= HEALTH_GREEN_MAX then
+      HealthLevel := 'green'
+    else if HealthScore <= HEALTH_YELLOW_MAX then
+      HealthLevel := 'yellow'
+    else
+      HealthLevel := 'red';
+    if (KindPairs <> nil) and (KindPairs.Count > 0) then
+      TopCat := KindName(KindPairs[0].Key)
+    else
+      TopCat := '-';
 
   SB := TStringBuilder.Create;
   try
@@ -402,6 +492,50 @@ begin
     SB.AppendLine('    .audience-hint { background: #eef5ff; border-left: 3px solid #3b73c4;');
     SB.AppendLine('       padding: 8px 12px; margin: 0 0 12px 0; font-size: 12px; color: #234; }');
     SB.AppendLine('    .audience-hint b { color: #1a3b6a; }');
+    SB.AppendLine('    /* Health-Score-Panel (#5): Ampel gruen/gelb/rot, reuse Severity-Farben */');
+    SB.AppendLine('    .health-panel { display: flex; align-items: center; gap: 16px;');
+    SB.AppendLine('       border-radius: 4px; padding: 10px 14px; margin: 0 0 12px 0;');
+    SB.AppendLine('       border: 1px solid #ddd; }');
+    SB.AppendLine('    .health-panel.health-green  { background: #e8f0d8; border-color: #b8d088; }');
+    SB.AppendLine('    .health-panel.health-yellow { background: #fff5d0; border-color: #e8cd7a; }');
+    SB.AppendLine('    .health-panel.health-red    { background: #ffe5e5; border-color: #e0a0a0; }');
+    SB.AppendLine('    .health-badge { display: flex; flex-direction: column; align-items: center;');
+    SB.AppendLine('       min-width: 92px; }');
+    SB.AppendLine('    .health-label { font-size: 10px; text-transform: uppercase;');
+    SB.AppendLine('       letter-spacing: 0.5px; color: #666; }');
+    SB.AppendLine('    .health-num { font-size: 26px; font-weight: 700; line-height: 1.1;');
+    SB.AppendLine('       font-variant-numeric: tabular-nums; }');
+    SB.AppendLine('    .health-status { font-size: 12px; font-weight: 600; }');
+    SB.AppendLine('    .health-green  .health-num, .health-green  .health-status { color: #305018; }');
+    SB.AppendLine('    .health-yellow .health-num, .health-yellow .health-status { color: #704000; }');
+    SB.AppendLine('    .health-red    .health-num, .health-red    .health-status { color: #800; }');
+    SB.AppendLine('    .health-line { font-size: 13px; color: #333; }');
+    SB.AppendLine('    /* Top-Dateien-Risiko-Ranking (#11): analog zu .top-detectors */');
+    SB.AppendLine('    .top-files { background: #f8f8f8; border: 1px solid #e0e0e0;');
+    SB.AppendLine('       border-radius: 4px; padding: 8px 12px; margin-bottom: 12px;');
+    SB.AppendLine('       font-size: 12px; }');
+    SB.AppendLine('    .top-files h2 { font-size: 13px; margin: 0 0 6px 0; color: #444;');
+    SB.AppendLine('       font-weight: 600; }');
+    SB.AppendLine('    .top-files ol { margin: 0; padding-left: 22px; columns: 2;');
+    SB.AppendLine('       column-gap: 24px; }');
+    SB.AppendLine('    .top-files li { padding: 2px 0; cursor: pointer; user-select: none; }');
+    SB.AppendLine('    .top-files li:hover { color: #06c; text-decoration: underline; }');
+    SB.AppendLine('    .top-files .tf-name { font-family: Consolas, "Courier New", monospace; }');
+    SB.AppendLine('    .top-files .tf-score { color: #333; font-weight: 600;');
+    SB.AppendLine('       font-variant-numeric: tabular-nums; margin-left: 4px; }');
+    SB.AppendLine('    .top-files .tf-counts { margin-left: 6px;');
+    SB.AppendLine('       font-variant-numeric: tabular-nums; }');
+    SB.AppendLine('    .top-files .tf-e { color: #b00000; font-weight: 600; }');
+    SB.AppendLine('    .top-files .tf-w { color: #b08000; font-weight: 600; }');
+    SB.AppendLine('    .top-files .tf-h { color: #5a8000; font-weight: 600; }');
+    SB.AppendLine('    /* Konfidenz-Badge (#1): reuse Severity-Farbwelt */');
+    SB.AppendLine('    .conf-badge { font-size: 10px; padding: 0 5px; border-radius: 2px;');
+    SB.AppendLine('       font-weight: 600; }');
+    SB.AppendLine('    .conf-high   { background: #e8f0d8; color: #305018; }');
+    SB.AppendLine('    .conf-medium { background: #fff5d0; color: #704000; }');
+    SB.AppendLine('    .conf-low    { background: #eee; color: #777; }');
+    SB.AppendLine('    .controls .conf-toggle { display: inline-flex; align-items: center;');
+    SB.AppendLine('       gap: 4px; color: #555; cursor: pointer; }');
     SB.AppendLine('    /* Header-Actions: Sprint-Export, Shortcuts-Help neben Titel */');
     SB.AppendLine('    .header-actions { display: flex; gap: 8px; margin: -8px 0 12px 0; }');
     SB.AppendLine('    .tl-btn { background: #3b73c4; color: white; border: none;');
@@ -450,11 +584,30 @@ begin
     // meta-Zeile mit zwei i18n-Spans + datums-Daten als Attribute, damit
     // applyLanguage die "Erstellt:" / "Datei:"-Labels neu rendern kann
     // (die Werte selbst sind dynamisch und stehen in data-* drin).
+    // Deterministischer Report-Zeitstempel (#2): einmal berechnen, fuer
+    // data-when, das lesbare Datum UND generatedAt im JSON-Meta-Block nutzen.
+    // Mit SCA_REPORT_TIMESTAMP kann CI den Wert pinnen (byte-stabiles Diff).
+    WhenStr := ReportTimestamp('yyyy-mm-dd hh:nn');
     SB.Append    ('  <div class="meta"><span data-i18n="meta-created" data-when="');
-    SB.Append    (HtmlEscape(FormatDateTime('yyyy-mm-dd hh:nn', Now)));
+    SB.Append    (HtmlEscape(WhenStr));
     SB.Append    ('">Erstellt: ');
-    SB.Append    (HtmlEscape(FormatDateTime('yyyy-mm-dd hh:nn', Now)));
+    SB.Append    (HtmlEscape(WhenStr));
     SB.Append    ('</span>');
+    // Audit-Header (#10): Tool + Version, dann Scope (Fund-/Datei-Zahl).
+    SB.Append    (' &middot; <span data-i18n="meta-tool" data-tool="');
+    SB.Append    (HtmlEscape(TOOL_NAME + ' ' + SCA_VERSION));
+    SB.Append    ('">Tool: ');
+    SB.Append    (HtmlEscape(TOOL_NAME + ' ' + SCA_VERSION));
+    SB.Append    ('</span>');
+    SB.Append    (' &middot; <span data-i18n="meta-scope" data-total="');
+    SB.Append    (IntToStr(nTotal));
+    SB.Append    ('" data-files="');
+    SB.Append    (IntToStr(Files.Count));
+    SB.Append    ('">');
+    SB.Append    (IntToStr(nTotal));
+    SB.Append    (' Befunde in ');
+    SB.Append    (IntToStr(Files.Count));
+    SB.Append    (' Dateien</span>');
     if SourceFile <> '' then
     begin
       SB.Append('  &middot; <span data-i18n="meta-file" data-file="');
@@ -464,6 +617,71 @@ begin
       SB.Append('</span>');
     end;
     SB.AppendLine('</div>');
+
+    // Maschinenlesbarer Meta-Block (#10) - kein Rendering (application/json),
+    // nur zum Parsen durch die Pipeline. generatedAt = derselbe deterministische
+    // Zeitstempel wie data-when. Werte via JsonEscape (RFC 8259).
+    SB.Append    ('  <script type="application/json" id="sca-meta">');
+    SB.Append    ('{"tool":"');
+    SB.Append    (TExporter.JsonEscape(TOOL_NAME));
+    SB.Append    ('","version":"');
+    SB.Append    (TExporter.JsonEscape(SCA_VERSION));
+    SB.Append    ('","generatedAt":"');
+    SB.Append    (TExporter.JsonEscape(WhenStr));
+    SB.Append    ('","profile":"');
+    SB.Append    (TExporter.JsonEscape(''));  // Profil nicht an Run uebergeben -> leer
+    SB.Append    ('","counts":{"total":');
+    SB.Append    (IntToStr(nTotal));
+    SB.Append    (',"error":');
+    SB.Append    (IntToStr(nErr));
+    SB.Append    (',"warning":');
+    SB.Append    (IntToStr(nWarn));
+    SB.Append    (',"hint":');
+    SB.Append    (IntToStr(nHint));
+    SB.Append    ('},"files":');
+    SB.Append    (IntToStr(Files.Count));
+    SB.AppendLine('}</script>');
+
+    // Health-Score-Panel (#5): grosse Kennzahl + Ampel + Klartext-Satz.
+    // Alles server-seitig (deterministisch); data-i18n laesst applyLanguage
+    // Label/Status/Satz spaeter uebersetzen (dynamische Werte in data-*).
+    SB.Append    ('  <div class="health-panel health-');
+    SB.Append    (HealthLevel);
+    SB.AppendLine('">');
+    SB.AppendLine('    <div class="health-badge">');
+    SB.AppendLine('      <span class="health-label" data-i18n="health-label">Gesundheitswert</span>');
+    SB.Append    ('      <span class="health-num">');
+    SB.Append    (IntToStr(HealthScore));
+    SB.AppendLine('</span>');
+    SB.Append    ('      <span class="health-status" data-i18n="health-');
+    SB.Append    (HealthLevel);
+    SB.Append    ('">');
+    if HealthLevel = 'green' then
+      SB.Append('Gesund')
+    else if HealthLevel = 'yellow' then
+      SB.Append('Achtung')
+    else
+      SB.Append('Kritisch');
+    SB.AppendLine('</span>');
+    SB.AppendLine('    </div>');
+    SB.Append    ('    <div class="health-line" data-i18n="health-summary" data-nerr="');
+    SB.Append    (IntToStr(nErr));
+    SB.Append    ('" data-nwarn="');
+    SB.Append    (IntToStr(nWarn));
+    SB.Append    ('" data-nfiles="');
+    SB.Append    (IntToStr(Files.Count));
+    SB.Append    ('" data-topcat="');
+    SB.Append    (HtmlEscape(TopCat));
+    SB.Append    ('">');
+    SB.Append    (IntToStr(nErr));
+    SB.Append    (' Fehler, ');
+    SB.Append    (IntToStr(nWarn));
+    SB.Append    (' Warnungen in ');
+    SB.Append    (IntToStr(Files.Count));
+    SB.Append    (' Dateien; Schwerpunkt <b>');
+    SB.Append    (HtmlEscape(TopCat));
+    SB.AppendLine('</b></div>');
+    SB.AppendLine('  </div>');
 
     // Audience-Hint: macht im Brief sichtbar fuer welche Rolle der Report
     // optimiert ist. Tech-Lead / Senior-Dev brauchen die Top-Detektoren
@@ -548,6 +766,51 @@ begin
       SB.AppendLine('  </div>');
     end;
 
+    // Top-Dateien-Risiko-Ranking (#11): analog zum Detektoren-Panel, aber
+    // absteigend nach gewichtetem Score (Err*100+Warn*10+Hint). Klick setzt
+    // den Datei-Filter (dispatch 'change' -> gleicher Handler wie das Dropdown).
+    // Nur im Repo-Modus (SourceFile=''); im Einzeldatei-Modus waere ein
+    // Datei-Ranking redundant. Ausgabe ueber die vorsortierte FileRank-Liste.
+    if (SourceFile = '') and (FileRank <> nil) and (FileRank.Count > 0) then
+    begin
+      SB.AppendLine('  <div class="top-files">');
+      SB.Append    ('    <h2 data-i18n="hdr-top-files" data-top-n="');
+      SB.Append    (IntToStr(Min(TOP_FILES_N, FileRank.Count)));
+      SB.Append    ('" data-top-total="');
+      SB.Append    (IntToStr(FileRank.Count));
+      SB.Append    ('">Top ');
+      SB.Append    (IntToStr(Min(TOP_FILES_N, FileRank.Count)));
+      SB.Append    (' Risiko-Dateien (von ');
+      SB.Append    (IntToStr(FileRank.Count));
+      SB.AppendLine(')</h2>');
+      SB.AppendLine('    <ol>');
+      for i := 0 to Min(TOP_FILES_N, FileRank.Count) - 1 do
+      begin
+        var FName := FileRank[i].Key;
+        var FSc   := FileRank[i].Value;
+        var FAg   : TFileAgg;
+        if not FileAgg.TryGetValue(FName, FAg) then
+        begin
+          FAg.Err := 0; FAg.Warn := 0; FAg.Hint := 0;
+        end;
+        SB.Append('      <li data-file="');
+        SB.Append(HtmlEscape(FName));
+        SB.Append('"><span class="tf-name">');
+        SB.Append(HtmlEscape(FName));
+        SB.Append('</span> <span class="tf-score">');
+        SB.Append(IntToStr(FSc));
+        SB.Append('</span> <span class="tf-counts"><span class="tf-e">');
+        SB.Append(IntToStr(FAg.Err));
+        SB.Append('</span> <span class="tf-w">');
+        SB.Append(IntToStr(FAg.Warn));
+        SB.Append('</span> <span class="tf-h">');
+        SB.Append(IntToStr(FAg.Hint));
+        SB.AppendLine('</span></span></li>');
+      end;
+      SB.AppendLine('    </ol>');
+      SB.AppendLine('  </div>');
+    end;
+
     // Controls-Bar mit Datei-Filter (zeigt alle eindeutigen Dateinamen).
     SB.AppendLine('  <div class="controls">');
     SB.AppendLine('    <label for="ruleFilter" data-i18n="lbl-profile">Profil:</label>');
@@ -610,11 +873,21 @@ begin
         BasesSev.AddOrSetValue(BaseName, Acc or Sev);
       end;
 
-      // Gruppen-Optionen zuerst (nur wenn mind. 2 Files mit gleichem Base)
-      for var BasePair in Bases do
-        if BasePair.Value >= 2 then
+      // Gruppen-Optionen zuerst (nur wenn mind. 2 Files mit gleichem Base).
+      // DETERMINISMUS: TDictionary-Iteration ist Hash-Order -> qualifizierende
+      // Basisnamen erst in eine sortierte Liste kopieren, dann stabil emittieren.
+      var GroupBases := TStringList.Create;
+      try
+        GroupBases.Sorted := True;
+        GroupBases.CaseSensitive := False;
+        GroupBases.Duplicates := dupIgnore;
+        for var BasePair in Bases do
+          if BasePair.Value >= 2 then
+            GroupBases.Add(BasePair.Key);
+        for var gi := 0 to GroupBases.Count - 1 do
         begin
-          var GAcc : Cardinal := 0; BasesSev.TryGetValue(BasePair.Key, GAcc);
+          var GBase := GroupBases[gi];
+          var GAcc : Cardinal := 0; BasesSev.TryGetValue(GBase, GAcc);
           DataSev := '';
           if (GAcc and 1) <> 0 then DataSev := DataSev + 'err,';
           if (GAcc and 2) <> 0 then DataSev := DataSev + 'warn,';
@@ -623,13 +896,16 @@ begin
             SetLength(DataSev, Length(DataSev) - 1);
 
           SB.Append('      <option value="base:');
-          SB.Append(HtmlEscape(BasePair.Key));
+          SB.Append(HtmlEscape(GBase));
           SB.Append('" data-sev="');
           SB.Append(DataSev);
           SB.Append('">[+] ');
-          SB.Append(HtmlEscape(BasePair.Key));
+          SB.Append(HtmlEscape(GBase));
           SB.Append(' (.pas + .dfm)</option>'#13#10);
         end;
+      finally
+        GroupBases.Free;
+      end;
     finally
       BasesSev.Free;
       Bases.Free;
@@ -666,6 +942,9 @@ begin
     // nicht filtert.
     SB.AppendLine('    <label for="searchInput" data-i18n="lbl-search">Suche:</label>');
     SB.AppendLine('    <input type="search" id="searchInput" placeholder="Methode, Datei, Detail..." data-i18n-placeholder="ph-search">');
+    // Konfidenz-Filter (#1): blendet fcLow-Befunde aus ("nur belastbare Funde").
+    // Haengt in das bestehende applyFilter-Modell ein (kein zweites System).
+    SB.AppendLine('    <label class="conf-toggle"><input type="checkbox" id="confFilter"> <span data-i18n="lbl-conf-filter">nur belastbare Funde</span></label>');
     SB.Append    ('    <span class="row-count" id="rowCount" data-i18n="row-count" data-count="');
     SB.Append    (IntToStr(nTotal));
     SB.Append    ('">');
@@ -682,6 +961,7 @@ begin
     if SourceFile = '' then
       SB.AppendLine('      <th class="sortable" data-col="file"><span data-i18n="th-file">Datei</span><span class="sort-ind"></span></th>');
     SB.AppendLine('      <th class="sortable" data-col="sev"><span data-i18n="th-sev">Severity</span><span class="sort-ind"></span></th>');
+    SB.AppendLine('      <th class="sortable" data-col="conf"><span data-i18n="th-conf">Konfidenz</span><span class="sort-ind"></span></th>');
     SB.AppendLine('      <th class="sortable" data-col="type"><span data-i18n="th-type">Typ</span><span class="sort-ind"></span></th>');
     SB.AppendLine('      <th class="sortable num" data-col="line"><span data-i18n="th-line">Zeile</span><span class="sort-ind"></span></th>');
     SB.AppendLine('      <th class="sortable" data-col="method"><span data-i18n="th-method">Methode</span><span class="sort-ind"></span></th>');
@@ -748,6 +1028,20 @@ begin
               LowerCase(FileShort)    + ' ' +
               LowerCase(F.MissingVar) + ' ' +
               LowerCase(KindNm);
+        // Konfidenz (#1): Name ('high'/'medium'/'low') als data-conf (Filter)
+        // + Rang als data-sort der Konfidenz-Spalte (0=high oben). data-qf
+        // dient als Tertiaer-Kriterium im Default-Sort (Severity->Konf->QF).
+        var ConfNm := ConfidenceName(F.Confidence);
+        var ConfRank : Integer;
+        case F.Confidence of
+          fcHigh:   ConfRank := 0;
+          fcMedium: ConfRank := 1;
+          fcLow:    ConfRank := 2;
+        else
+          ConfRank := 0;
+        end;
+        var RowQf : Integer;
+        if TQuickFix.HasProviderFor(F.Kind) then RowQf := 1 else RowQf := 0;
         SB.Append('      <tr class="finding ' + SevCl + '" data-file="');
         SB.Append(HtmlEscape(FileShort));
         SB.Append('" data-base="');
@@ -756,6 +1050,10 @@ begin
         SB.Append(HtmlEscape(KindNm));
         SB.Append('" data-search="');
         SB.Append(HtmlEscape(SearchBlob));
+        SB.Append('" data-conf="');
+        SB.Append(ConfNm);
+        SB.Append('" data-qf="');
+        SB.Append(IntToStr(RowQf));
         SB.Append('">');
         // Toggle-Indikator: Pfeil rechts (oder leer wenn kein Hint)
         if HasHint then
@@ -772,6 +1070,11 @@ begin
         SB.Append('<td class="sev" data-sort="' + IntToStr(SevRank) + '">');
         SB.Append(HtmlEscape(F.SeverityText));
         SB.Append('</td>');
+        // Konfidenz-Spalte (#1): data-sort = Rang, Badge via data-i18n lokalisiert.
+        SB.Append('<td class="conf" data-sort="' + IntToStr(ConfRank) + '">');
+        SB.Append('<span class="conf-badge conf-' + ConfNm + '" data-i18n="conf-' + ConfNm + '">');
+        SB.Append(ConfNm);
+        SB.Append('</span></td>');
         SB.Append('<td>'); SB.Append(HtmlEscape(F.TypeText)); SB.Append('</td>');
         // Zeile mit data-sort als rein numerischer Wert
         SB.Append('<td class="num" data-sort="' + F.LineNumber + '">');
@@ -785,9 +1088,10 @@ begin
         // Versteckte Hint-Zeile (wird per JS sichtbar geschaltet)
         if HasHint then
         begin
-          // colspan = 7 oder 8 je nachdem ob Datei-Spalte da ist
-          var Cols := 7;
-          if SourceFile = '' then Cols := 8;
+          // colspan = 8 oder 9 je nachdem ob Datei-Spalte da ist
+          // (Toggle + [Datei] + Sev + Konfidenz + Typ + Zeile + Methode + Regel + Detail)
+          var Cols := 8;
+          if SourceFile = '' then Cols := 9;
           SB.Append('      <tr class="finding-hint"><td colspan="' + IntToStr(Cols) + '">');
           if Hint.Description <> '' then
           begin
@@ -864,6 +1168,19 @@ begin
     SB.AppendLine('        "sev-warn": "Warnings",');
     SB.AppendLine('        "sev-hint": "Hints",');
     SB.AppendLine('        "sev-total": "Total",');
+    SB.AppendLine('        "th-conf": "Confidence",');
+    SB.AppendLine('        "conf-high": "high",');
+    SB.AppendLine('        "conf-medium": "medium",');
+    SB.AppendLine('        "conf-low": "low",');
+    SB.AppendLine('        "lbl-conf-filter": "reliable findings only",');
+    SB.AppendLine('        "health-label": "Health score",');
+    SB.AppendLine('        "health-green": "Healthy",');
+    SB.AppendLine('        "health-yellow": "Attention",');
+    SB.AppendLine('        "health-red": "Critical",');
+    SB.AppendLine('        "health-summary": "{0} errors, {1} warnings in {2} files; focus <b>{3}</b>",');
+    SB.AppendLine('        "hdr-top-files": "Top {0} risk files (of {1})",');
+    SB.AppendLine('        "meta-tool": "Tool: {0}",');
+    SB.AppendLine('        "meta-scope": "{0} findings in {1} files",');
     SB.AppendLine('        "btn-sprint": "&#128203; Copy sprint list",');
     SB.AppendLine('        "ttl-sprint": "Visible top findings as Markdown list to the clipboard",');
     SB.AppendLine('        "btn-share": "&#128279; Share view",');
@@ -903,6 +1220,19 @@ begin
     SB.AppendLine('        "sev-warn": "Warnungen",');
     SB.AppendLine('        "sev-hint": "Hinweise",');
     SB.AppendLine('        "sev-total": "Gesamt",');
+    SB.AppendLine('        "th-conf": "Konfidenz",');
+    SB.AppendLine('        "conf-high": "hoch",');
+    SB.AppendLine('        "conf-medium": "mittel",');
+    SB.AppendLine('        "conf-low": "niedrig",');
+    SB.AppendLine('        "lbl-conf-filter": "nur belastbare Funde",');
+    SB.AppendLine('        "health-label": "Gesundheitswert",');
+    SB.AppendLine('        "health-green": "Gesund",');
+    SB.AppendLine('        "health-yellow": "Achtung",');
+    SB.AppendLine('        "health-red": "Kritisch",');
+    SB.AppendLine('        "health-summary": "{0} Fehler, {1} Warnungen in {2} Dateien; Schwerpunkt <b>{3}</b>",');
+    SB.AppendLine('        "hdr-top-files": "Top {0} Risiko-Dateien (von {1})",');
+    SB.AppendLine('        "meta-tool": "Tool: {0}",');
+    SB.AppendLine('        "meta-scope": "{0} Befunde in {1} Dateien",');
     SB.AppendLine('        "btn-sprint": "&#128203; Sprint-Liste kopieren",');
     SB.AppendLine('        "ttl-sprint": "Sichtbare Top-Befunde als Markdown-Liste in die Zwischenablage",');
     SB.AppendLine('        "btn-share": "&#128279; Sicht teilen",');
@@ -942,6 +1272,19 @@ begin
     SB.AppendLine('        "sev-warn": "Avertissements",');
     SB.AppendLine('        "sev-hint": "Indices",');
     SB.AppendLine('        "sev-total": "Total",');
+    SB.AppendLine('        "th-conf": "Confiance",');
+    SB.AppendLine('        "conf-high": "\\u00e9lev\\u00e9e",');
+    SB.AppendLine('        "conf-medium": "moyenne",');
+    SB.AppendLine('        "conf-low": "faible",');
+    SB.AppendLine('        "lbl-conf-filter": "d\\u00e9tections fiables uniquement",');
+    SB.AppendLine('        "health-label": "Score de sant\\u00e9",');
+    SB.AppendLine('        "health-green": "Sain",');
+    SB.AppendLine('        "health-yellow": "Attention",');
+    SB.AppendLine('        "health-red": "Critique",');
+    SB.AppendLine('        "health-summary": "{0} erreurs, {1} avertissements dans {2} fichiers\\u00a0; point cl\\u00e9 <b>{3}</b>",');
+    SB.AppendLine('        "hdr-top-files": "Top {0} fichiers \\u00e0 risque (sur {1})",');
+    SB.AppendLine('        "meta-tool": "Outil\\u00a0: {0}",');
+    SB.AppendLine('        "meta-scope": "{0} d\\u00e9tections dans {1} fichiers",');
     SB.AppendLine('        "btn-sprint": "&#128203; Copier la liste sprint",');
     SB.AppendLine('        "ttl-sprint": "D\\u00e9tections visibles comme liste Markdown dans le presse-papiers",');
     SB.AppendLine('        "btn-share": "&#128279; Partager la vue",');
@@ -993,6 +1336,13 @@ begin
     SB.AppendLine('        else if (key === "meta-file")    el.textContent = T(key, el.dataset.file || "");');
     SB.AppendLine('        // src-snippet-Header: file + line stehen in data-file / data-line');
     SB.AppendLine('        else if (key === "src-snippet-hdr") el.textContent = T(key, el.dataset.file || "", el.dataset.line || "");');
+    SB.AppendLine('        // Audit-Header (#10): Tool + Scope stehen in data-*');
+    SB.AppendLine('        else if (key === "meta-tool")    el.textContent = T(key, el.dataset.tool || "");');
+    SB.AppendLine('        else if (key === "meta-scope")   el.textContent = T(key, el.dataset.total || "0", el.dataset.files || "0");');
+    SB.AppendLine('        // Top-Dateien-Heading (#11) analog zu hdr-top-detectors');
+    SB.AppendLine('        else if (key === "hdr-top-files") el.textContent = T(key, el.dataset.topN || "0", el.dataset.topTotal || "0");');
+    SB.AppendLine('        // Health-Klartext (#5): enthaelt <b>{3}</b> -> innerHTML');
+    SB.AppendLine('        else if (key === "health-summary") el.innerHTML = T(key, el.dataset.nerr || "0", el.dataset.nwarn || "0", el.dataset.nfiles || "0", el.dataset.topcat || "");');
     SB.AppendLine('        // audience-hint enthaelt eingebettetes Markup (<b>, <span>, &rarr;) -');
     SB.AppendLine('        // T() darf den Wert nicht escapen, T(key) liefert ihn 1:1 ins innerHTML.');
     SB.AppendLine('        else                            el.innerHTML = T(key);');
@@ -1109,20 +1459,21 @@ begin
     SB.AppendLine('    // Spalten-Index im finding-tr - Toggle-Spalte ist immer Index 0,');
     SB.AppendLine('    // die optionale Datei-Spalte (Multi-File-Modus) schiebt alles ab Sev');
     SB.AppendLine('    // um eins nach rechts.');
-    SB.AppendLine('    //   Multi-File:  Toggle=0, Datei=1, Sev=2, Typ=3, Zeile=4, Methode=5, Regel=6, Detail=7');
-    SB.AppendLine('    //   Single-File: Toggle=0,           Sev=1, Typ=2, Zeile=3, Methode=4, Regel=5, Detail=6');
+    SB.AppendLine('    //   Multi-File:  Toggle=0, Datei=1, Sev=2, Konf=3, Typ=4, Zeile=5, Methode=6, Regel=7, Detail=8');
+    SB.AppendLine('    //   Single-File: Toggle=0,           Sev=1, Konf=2, Typ=3, Zeile=4, Methode=5, Regel=6, Detail=7');
     SB.AppendLine('    var hasFile = !!table.querySelector(''th[data-col="file"]'');');
     SB.AppendLine('    var SEV_BASE = hasFile ? 2 : 1; // erste Spalte nach Toggle (+ ggf. Datei)');
     SB.AppendLine('    var colIndex = {');
     SB.AppendLine('      file:   1, // nur valide wenn hasFile - sortBy(''file'') wird nur wired wenn die Spalte existiert');
     SB.AppendLine('      sev:    SEV_BASE + 0,');
-    SB.AppendLine('      type:   SEV_BASE + 1,');
-    SB.AppendLine('      line:   SEV_BASE + 2,');
-    SB.AppendLine('      method: SEV_BASE + 3,');
-    SB.AppendLine('      rule:   SEV_BASE + 4,');
-    SB.AppendLine('      detail: SEV_BASE + 5');
+    SB.AppendLine('      conf:   SEV_BASE + 1,'); // Konfidenz-Spalte (#1) direkt nach Severity
+    SB.AppendLine('      type:   SEV_BASE + 2,');
+    SB.AppendLine('      line:   SEV_BASE + 3,');
+    SB.AppendLine('      method: SEV_BASE + 4,');
+    SB.AppendLine('      rule:   SEV_BASE + 5,');
+    SB.AppendLine('      detail: SEV_BASE + 6');
     SB.AppendLine('    };');
-    SB.AppendLine('    var numericCols = { line: true, sev: true };');
+    SB.AppendLine('    var numericCols = { line: true, sev: true, conf: true };');
     SB.AppendLine('    var currentSort = { col: null, desc: false };');
     SB.AppendLine('');
     SB.AppendLine('    function getKey(row, col) {');
@@ -1142,6 +1493,18 @@ begin
     SB.AppendLine('        cmp = (parseFloat(ka) || 0) - (parseFloat(kb) || 0);');
     SB.AppendLine('      } else {');
     SB.AppendLine('        cmp = ka.localeCompare(kb, ''de'', { sensitivity: ''base'' });');
+    SB.AppendLine('      }');
+    SB.AppendLine('      // Default-Prio-Sort (#1): beim Severity-Sort sekundaer nach Konfidenz');
+    SB.AppendLine('      // (hoch=0 zuerst), tertiaer nach Quick-Fix-Verfuegbarkeit (QF zuerst).');
+    SB.AppendLine('      if (cmp === 0 && col === ''sev'') {');
+    SB.AppendLine('        var ca = parseInt(getKey(a, ''conf''), 10); if (isNaN(ca)) ca = 0;');
+    SB.AppendLine('        var cb = parseInt(getKey(b, ''conf''), 10); if (isNaN(cb)) cb = 0;');
+    SB.AppendLine('        cmp = ca - cb;');
+    SB.AppendLine('        if (cmp === 0) {');
+    SB.AppendLine('          var qa = (a.getAttribute(''data-qf'') === ''1'') ? 0 : 1;');
+    SB.AppendLine('          var qb = (b.getAttribute(''data-qf'') === ''1'') ? 0 : 1;');
+    SB.AppendLine('          cmp = qa - qb;');
+    SB.AppendLine('        }');
     SB.AppendLine('      }');
     SB.AppendLine('      return desc ? -cmp : cmp;');
     SB.AppendLine('    }');
@@ -1212,6 +1575,7 @@ begin
     SB.AppendLine('    ALL_KINDS.forEach(function(k) { if (k.qf === 1) QF_KINDS[k.n] = 1; });');
     SB.AppendLine('');
     SB.AppendLine('    var searchInput = document.getElementById(''searchInput'');');
+    SB.AppendLine('    var confFilter  = document.getElementById(''confFilter''); // #1: "nur belastbare Funde"');
     SB.AppendLine('');
     SB.AppendLine('    function applyFilter() {');
     SB.AppendLine('      var fileVal = fileSel ? fileSel.value : '''';');
@@ -1226,6 +1590,7 @@ begin
     SB.AppendLine('      var profileName = (ruleVal.indexOf(''profile:'') === 0) ? ruleVal.substring(8) : '''';');
     SB.AppendLine('      var profileDef = profileName ? PROFILES[profileName] : null;');
     SB.AppendLine('      var q = searchInput ? searchInput.value.trim().toLowerCase() : '''';');
+    SB.AppendLine('      var confOn = confFilter && confFilter.checked; // fcLow ausblenden');
     SB.AppendLine('      var visible = 0;');
     SB.AppendLine('      // Master-Scope-Counts pro Severity. Werden in den Top-Kacheln');
     SB.AppendLine('      // angezeigt und reflektieren NUR Datei-+Rule-Filter, NICHT die');
@@ -1247,13 +1612,15 @@ begin
     SB.AppendLine('        else ruleOk = true; // ''all''');
     SB.AppendLine('        // Volltextsuche - matched gegen data-search (Methode + Datei + Detail + Regel).');
     SB.AppendLine('        var searchOk = !q || ((row.getAttribute(''data-search'') || '''').indexOf(q) !== -1);');
-    SB.AppendLine('        // Master-Scope = fileOk && ruleOk && searchOk (ohne sev). Daraus die Kacheln.');
-    SB.AppendLine('        if (fileOk && ruleOk && searchOk) {');
+    SB.AppendLine('        // Konfidenz-Filter (#1): blendet fcLow aus wenn aktiv.');
+    SB.AppendLine('        var confOk = !confOn || (row.getAttribute(''data-conf'') !== ''low'');');
+    SB.AppendLine('        // Master-Scope = fileOk && ruleOk && searchOk && confOk (ohne sev). Daraus die Kacheln.');
+    SB.AppendLine('        if (fileOk && ruleOk && searchOk && confOk) {');
     SB.AppendLine('          if      (row.classList.contains(''err''))  nErr++;');
     SB.AppendLine('          else if (row.classList.contains(''warn'')) nWarn++;');
     SB.AppendLine('          else if (row.classList.contains(''hint'')) nHint++;');
     SB.AppendLine('        }');
-    SB.AppendLine('        var match  = fileOk && sevOk && ruleOk && searchOk;');
+    SB.AppendLine('        var match  = fileOk && sevOk && ruleOk && searchOk && confOk;');
     SB.AppendLine('        row.style.display = match ? '''' : ''none'';');
     SB.AppendLine('        var hint = row.nextElementSibling;');
     SB.AppendLine('        if (hint && hint.classList.contains(''finding-hint'')) {');
@@ -1301,6 +1668,10 @@ begin
     SB.AppendLine('        searchTimer = setTimeout(applyFilter, 120);');
     SB.AppendLine('      });');
     SB.AppendLine('    }');
+    SB.AppendLine('    if (confFilter) confFilter.addEventListener(''change'', function() {');
+    SB.AppendLine('      collapseAll();');
+    SB.AppendLine('      applyFilter();');
+    SB.AppendLine('    });');
     SB.AppendLine('');
     SB.AppendLine('    // ---- Top-Detektoren-Liste live aus ALL_KINDS + Profile-Filter ----');
     SB.AppendLine('    // profile:<Name> reduziert den Pool auf die Profile-Kinds (Wildcard');
@@ -1361,6 +1732,22 @@ begin
     SB.AppendLine('      });');
     SB.AppendLine('    }');
     SB.AppendLine('    document.querySelectorAll(''.top-detectors li[data-kind]'').forEach(wireTopDetectorClick);');
+    SB.AppendLine('');
+    SB.AppendLine('    // ---- Klick auf Top-Datei setzt den Datei-Filter (#11) ----');
+    SB.AppendLine('    // Reuse des vorhandenen Dropdown-Handlers via dispatch(''change'') -');
+    SB.AppendLine('    // kein zweites Filtersystem. Falls die Option per Sev-Filter versteckt');
+    SB.AppendLine('    // ist, vorher sichtbar schalten, damit die Auswahl greift.');
+    SB.AppendLine('    function wireTopFileClick(li) {');
+    SB.AppendLine('      li.addEventListener(''click'', function() {');
+    SB.AppendLine('        if (!fileSel) return;');
+    SB.AppendLine('        var fn = li.getAttribute(''data-file'');');
+    SB.AppendLine('        var opt = fileSel.querySelector(''option[value="'' + fn.replace(/"/g, ''\\"'') + ''"]'');');
+    SB.AppendLine('        if (opt) opt.hidden = false;');
+    SB.AppendLine('        fileSel.value = fn;');
+    SB.AppendLine('        fileSel.dispatchEvent(new Event(''change''));');
+    SB.AppendLine('      });');
+    SB.AppendLine('    }');
+    SB.AppendLine('    document.querySelectorAll(''.top-files li[data-file]'').forEach(wireTopFileClick);');
     SB.AppendLine('');
     SB.AppendLine('    // ---- Datei-Dropdown auf Severity-Filter abstimmen ----');
     SB.AppendLine('    // Wenn ein Severity-Filter aktiv ist, blendet diese Funktion alle');
@@ -1477,6 +1864,7 @@ begin
     SB.AppendLine('        parts.push(''file='' + encodeURIComponent(fileSel.value));');
     SB.AppendLine('      if (searchInput && searchInput.value.trim())');
     SB.AppendLine('        parts.push(''q='' + encodeURIComponent(searchInput.value.trim()));');
+    SB.AppendLine('      if (confFilter && confFilter.checked) parts.push(''conf=1''); // #1');
     SB.AppendLine('      var hash = parts.length ? (''#'' + parts.join(''&'')) : ''#'';');
     SB.AppendLine('      // replaceState statt assign-to-hash, sonst rufen wir uns selbst');
     SB.AppendLine('      // via hashchange wieder auf.');
@@ -1518,6 +1906,7 @@ begin
     SB.AppendLine('          if (fopt) fileSel.value = params.file;');
     SB.AppendLine('        }');
     SB.AppendLine('        if (params.q && searchInput) searchInput.value = params.q;');
+    SB.AppendLine('        if (params.conf === ''1'' && confFilter) confFilter.checked = true; // #1');
     SB.AppendLine('      } finally {');
     SB.AppendLine('        suspendHashSync = false;');
     SB.AppendLine('      }');
@@ -1615,6 +2004,7 @@ begin
     SB.AppendLine('      if (ruleSel) ruleSel.value = ''all'';');
     SB.AppendLine('      if (fileSel) fileSel.value = '''';');
     SB.AppendLine('      if (searchInput) searchInput.value = '''';');
+    SB.AppendLine('      if (confFilter) confFilter.checked = false; // #1');
     SB.AppendLine('      activateSev('''');');
     SB.AppendLine('      rebuildTopDetectors();');
     SB.AppendLine('    }');
@@ -1706,6 +2096,8 @@ begin
     KindCount.Free;
     KindPairs.Free;
     Top10Set.Free;
+    FileAgg.Free;
+    FileRank.Free;
   end;
 end;
 
