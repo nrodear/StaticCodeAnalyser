@@ -434,6 +434,14 @@ begin
     SB.AppendLine('    tr.finding-hint > td { background: #fafafa; padding: 10px 16px;');
     SB.AppendLine('       border-bottom: 2px solid #ddd; }');
     SB.AppendLine('    .hint-desc { font-style: italic; color: #444; margin: 0 0 6px 0; }');
+    // #3/#4: Regel-Erklaerung-Fallback, CWE/OWASP-Badges, Regel-Beispiel-Note.
+    SB.AppendLine('    .hint-rule-desc { border-left: 3px solid #ccd; padding-left: 8px; }');
+    SB.AppendLine('    .sec-badges { margin: 0 0 6px 0; }');
+    SB.AppendLine('    .sec-badge { display: inline-block; font-size: 10px; font-weight: 600;');
+    SB.AppendLine('      padding: 1px 6px; border-radius: 3px; margin-right: 5px; }');
+    SB.AppendLine('    .cwe-badge { background: #fde8e8; color: #a02020; border: 1px solid #e8b0b0; }');
+    SB.AppendLine('    .owasp-badge { background: #fff0e0; color: #a06020; border: 1px solid #e8c090; }');
+    SB.AppendLine('    .rule-example-note { font-size: 11px; color: #888; font-style: italic; margin: 6px 0 2px 0; }');
     SB.AppendLine('    .code-pair { display: flex; gap: 8px; margin-top: 4px; }');
     SB.AppendLine('    .code-block { flex: 1; min-width: 0; }');
     SB.AppendLine('    .code-block h5 { margin: 0 0 2px 0; font-size: 11px; }');
@@ -824,6 +832,7 @@ begin
     // IDE-Plugin?". Liste der Quick-Fix-Kinds liefert TQuickFix.HasProviderFor;
     // konkretes Matching passiert im JS gegen ALL_KINDS[*].qf.
     SB.AppendLine('      <option value="qf">Quick-Wins (Quick-Fix verfuegbar)</option>');
+    SB.AppendLine('      <option value="sec">Security (CWE / OWASP)</option>');
     // Profile-Optionen aus rules/sca-rules.json (TRuleCatalog.ProfileNames).
     // Werte: "profile:<Name>", damit der JS-Filter Profile von "all"/"top10"
     // unterscheiden kann.
@@ -1007,9 +1016,18 @@ begin
           if SrcLines <> nil then
             Snippet := BuildCodeSnippet(SrcLines, LineNo, SNIPPET_CONTEXT);
         end;
+        // Regel-Metadaten (#3/#4): Fallback-Erklaerung (fullDescription) +
+        // kanonisches bad/good-Beispiel + CWE/OWASP aus dem RuleCatalog, falls
+        // der per-Finding-FixHint nichts liefert. GetRule liefert nie nil
+        // (MakeFallbackMeta), leere Felder werden unten einfach uebersprungen.
+        var Meta := TRuleCatalog.GetRule(F.Kind);
+        var HasCwe := (Length(Meta.CWE) > 0) or (Length(Meta.OWASP) > 0);
         var HasHint := (Hint.Description <> '') or
                        (Hint.Before <> '') or (Hint.After <> '') or
-                       (Snippet <> '');
+                       (Snippet <> '') or
+                       (Meta.FullDescription <> '') or
+                       (Meta.BadExample <> '') or (Meta.GoodExample <> '') or
+                       HasCwe;
         var FileShort := ExtractFileName(F.FileName);
         // data-base = Basename ohne Extension. Dient dem Gruppen-Filter
         // ('base:uMainForm') im Datei-Dropdown, der .pas und .dfm mit
@@ -1054,6 +1072,8 @@ begin
         SB.Append(ConfNm);
         SB.Append('" data-qf="');
         SB.Append(IntToStr(RowQf));
+        SB.Append('" data-sec="');       // #3: 1 = Regel hat CWE/OWASP -> Security-Filter
+        if HasCwe then SB.Append('1') else SB.Append('0');
         SB.Append('">');
         // Toggle-Indikator: Pfeil rechts (oder leer wenn kein Hint)
         if HasHint then
@@ -1098,6 +1118,34 @@ begin
             SB.Append('<div class="hint-desc">');
             SB.Append(HtmlEscape(Hint.Description));
             SB.Append('</div>');
+          end
+          else if Meta.FullDescription <> '' then
+          begin
+            // #4: Fallback auf die kanonische Regel-Erklaerung (WARUM), wenn
+            // der per-Finding-FixHint keine eigene Beschreibung liefert.
+            SB.Append('<div class="hint-desc hint-rule-desc">');
+            SB.Append(HtmlEscape(Meta.FullDescription));
+            SB.Append('</div>');
+          end;
+
+          // #3: CWE/OWASP-Badges (Standard-IDs, sprachneutral) - nur wenn die
+          // Regel klassifiziert ist. CWE/OWASP sind TArray<string>.
+          if HasCwe then
+          begin
+            SB.Append('<div class="sec-badges">');
+            for var CweId in Meta.CWE do
+            begin
+              SB.Append('<span class="sec-badge cwe-badge">');
+              SB.Append(HtmlEscape(CweId));
+              SB.Append('</span>');
+            end;
+            for var OwaspId in Meta.OWASP do
+            begin
+              SB.Append('<span class="sec-badge owasp-badge">');
+              SB.Append(HtmlEscape(OwaspId));
+              SB.Append('</span>');
+            end;
+            SB.Append('</div>');
           end;
 
           // Echter Code-Auszug aus der Quelldatei mit hervorgehobener Zeile.
@@ -1130,6 +1178,27 @@ begin
             begin
               SB.Append('<div class="code-block code-after"><h5 data-i18n="hint-after">Nachher (Loesung)</h5><pre>');
               SB.Append(HtmlEscape(Hint.After));
+              SB.Append('</pre></div>');
+            end;
+            SB.Append('</div>');
+          end
+          else if (Meta.BadExample <> '') or (Meta.GoodExample <> '') then
+          begin
+            // #4: Fallback auf das kanonische bad/good-Regel-Beispiel, wenn der
+            // FixHint kein per-Finding Vorher/Nachher hat. Note kennzeichnet es
+            // als generisches Regel-Beispiel (nicht auf diesen Fund zugeschnitten).
+            SB.Append('<div class="rule-example-note" data-i18n="rule-example-note">Kanonisches Regel-Beispiel</div>');
+            SB.Append('<div class="code-pair">');
+            if Meta.BadExample <> '' then
+            begin
+              SB.Append('<div class="code-block code-before"><h5 data-i18n="hint-before">Vorher (Problem)</h5><pre>');
+              SB.Append(HtmlEscape(Meta.BadExample));
+              SB.Append('</pre></div>');
+            end;
+            if Meta.GoodExample <> '' then
+            begin
+              SB.Append('<div class="code-block code-after"><h5 data-i18n="hint-after">Nachher (Loesung)</h5><pre>');
+              SB.Append(HtmlEscape(Meta.GoodExample));
               SB.Append('</pre></div>');
             end;
             SB.Append('</div>');
@@ -1169,6 +1238,7 @@ begin
     SB.AppendLine('        "sev-hint": "Hints",');
     SB.AppendLine('        "sev-total": "Total",');
     SB.AppendLine('        "th-conf": "Confidence",');
+    SB.AppendLine('        "rule-example-note": "Canonical rule example",');
     SB.AppendLine('        "conf-high": "high",');
     SB.AppendLine('        "conf-medium": "medium",');
     SB.AppendLine('        "conf-low": "low",');
@@ -1221,6 +1291,7 @@ begin
     SB.AppendLine('        "sev-hint": "Hinweise",');
     SB.AppendLine('        "sev-total": "Gesamt",');
     SB.AppendLine('        "th-conf": "Konfidenz",');
+    SB.AppendLine('        "rule-example-note": "Kanonisches Regel-Beispiel",');
     SB.AppendLine('        "conf-high": "hoch",');
     SB.AppendLine('        "conf-medium": "mittel",');
     SB.AppendLine('        "conf-low": "niedrig",');
@@ -1273,6 +1344,7 @@ begin
     SB.AppendLine('        "sev-hint": "Indices",');
     SB.AppendLine('        "sev-total": "Total",');
     SB.AppendLine('        "th-conf": "Confiance",');
+    SB.AppendLine('        "rule-example-note": "Exemple canonique de r\\u00e8gle",');
     SB.AppendLine('        "conf-high": "\\u00e9lev\\u00e9e",');
     SB.AppendLine('        "conf-medium": "moyenne",');
     SB.AppendLine('        "conf-low": "faible",');
@@ -1608,6 +1680,7 @@ begin
     SB.AppendLine('        if (pinnedKind)                     ruleOk = (rk === pinnedKind);');
     SB.AppendLine('        else if (ruleVal === ''top10'')      ruleOk = TOP10_KINDS[rk] === 1;');
     SB.AppendLine('        else if (ruleVal === ''qf'')         ruleOk = QF_KINDS[rk] === 1;');
+    SB.AppendLine('        else if (ruleVal === ''sec'')        ruleOk = row.getAttribute(''data-sec'') === ''1''; // #3 Security-Filter');
     SB.AppendLine('        else if (profileDef)                ruleOk = profileDef.all || (profileDef.kinds[rk] === 1);');
     SB.AppendLine('        else ruleOk = true; // ''all''');
     SB.AppendLine('        // Volltextsuche - matched gegen data-search (Methode + Datei + Detail + Regel).');
