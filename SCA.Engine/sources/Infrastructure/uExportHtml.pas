@@ -389,6 +389,17 @@ begin
     else
       TopCat := '-';
 
+    // #14 Security-Aggregation: Summe der Funde, deren Regel CWE/OWASP traegt
+    // (RuleCatalog) - Zahl fuer das Security-Uebersichts-Panel oben.
+    var SecCount := 0;
+    if Assigned(KindPairs) then
+      for KindEntry in KindPairs do
+      begin
+        var SM := TRuleCatalog.GetRule(KindEntry.Key);
+        if (Length(SM.CWE) > 0) or (Length(SM.OWASP) > 0) then
+          Inc(SecCount, KindEntry.Value);
+      end;
+
   SB := TStringBuilder.Create;
   try
     SB.AppendLine('<!DOCTYPE html>');
@@ -500,6 +511,13 @@ begin
     SB.AppendLine('    .audience-hint { background: #eef5ff; border-left: 3px solid #3b73c4;');
     SB.AppendLine('       padding: 8px 12px; margin: 0 0 12px 0; font-size: 12px; color: #234; }');
     SB.AppendLine('    .audience-hint b { color: #1a3b6a; }');
+    // #14 Security-Sektion-Panel
+    SB.AppendLine('    .sec-panel { background: #fff0f0; border-left: 3px solid #d04040; border-radius: 4px;');
+    SB.AppendLine('      padding: 8px 12px; margin: 0 0 12px 0; font-size: 13px; }');
+    SB.AppendLine('    .sec-panel-icon { font-size: 15px; }');
+    SB.AppendLine('    .sec-panel b { color: #b00000; }');
+    SB.AppendLine('    :root[data-theme="dark"] .sec-panel { background: #331e1e; border-color: #d04040; color: #e0c0c0; }');
+    SB.AppendLine('    :root[data-theme="dark"] .sec-panel b { color: #ff8080; }');
     SB.AppendLine('    /* Health-Score-Panel (#5): Ampel gruen/gelb/rot, reuse Severity-Farben */');
     SB.AppendLine('    .health-panel { display: flex; align-items: center; gap: 16px;');
     SB.AppendLine('       border-radius: 4px; padding: 10px 14px; margin: 0 0 12px 0;');
@@ -639,6 +657,28 @@ begin
     SB.AppendLine('    :root[data-theme="dark"] .donut-total { fill: #e0e0e0; }');
     SB.AppendLine('    :root[data-theme="dark"] input, :root[data-theme="dark"] select,');
     SB.AppendLine('      :root[data-theme="dark"] .tl-btn { background: #2c2c2c; color: #ddd; border-color: #555; }');
+    // #9b Dark-Mode Kontrast-Nachtrag: Elemente mit eigener dunkler Text-Farbe,
+    // die im Dark-Block bisher ungedeckt waren (dunkel-auf-dunkel) -> aufhellen.
+    SB.AppendLine('    :root[data-theme="dark"] .num { color: #b0b0b0; }');
+    SB.AppendLine('    :root[data-theme="dark"] tr.finding td.toggle { color: #999; }');
+    SB.AppendLine('    :root[data-theme="dark"] tr.finding.open td.toggle { color: #e0e0e0; }');
+    SB.AppendLine('    :root[data-theme="dark"] .controls label { color: #bbb; }');
+    SB.AppendLine('    :root[data-theme="dark"] .controls .hint { color: #999; }');
+    SB.AppendLine('    :root[data-theme="dark"] .controls .row-count { color: #e0e0e0; }');
+    SB.AppendLine('    :root[data-theme="dark"] th.sortable .sort-ind { color: #888; }');
+    SB.AppendLine('    :root[data-theme="dark"] th.sortable.sort-asc .sort-ind::before,');
+    SB.AppendLine('      :root[data-theme="dark"] th.sortable.sort-desc .sort-ind::before { color: #e0e0e0; }');
+    SB.AppendLine('    :root[data-theme="dark"] .top-detectors .td-count { color: #aaa; }');
+    SB.AppendLine('    :root[data-theme="dark"] .top-detectors .td-qf { color: #5ab0f0; }');
+    SB.AppendLine('    :root[data-theme="dark"] .cbar-num { color: #aaa; }');
+    SB.AppendLine('    :root[data-theme="dark"] .src-line-num { color: #8a8a8a; }');
+    SB.AppendLine('    :root[data-theme="dark"] .src-snippet-hdr { color: #aaa; }');
+    SB.AppendLine('    :root[data-theme="dark"] .rule-example-note { color: #a0a0a0; }');
+    SB.AppendLine('    :root[data-theme="dark"] .top-files .tf-score { color: #e0e0e0; }');
+    SB.AppendLine('    :root[data-theme="dark"] .kbd-help { background: #262626; color: #ddd; border-color: #555; }');
+    SB.AppendLine('    :root[data-theme="dark"] .kbd-help h3 { color: #6cb0ff; }');
+    SB.AppendLine('    :root[data-theme="dark"] .kbd-help kbd { background: #3a3a3a; color: #ddd; border-color: #666; }');
+    SB.AppendLine('    :root[data-theme="dark"] .kbd-help-close { color: #bbb; }');
     SB.AppendLine('  </style>');
     SB.AppendLine('</head>');
     SB.AppendLine('<body>');
@@ -811,6 +851,17 @@ begin
         SB.AppendLine('    </div>');
       end;
       SB.AppendLine('  </div>');
+    end;
+
+    // #14 Security-Sektion: hebt den sonst zwischen Code-Smells vergrabenen
+    // Sicherheits-Cluster hervor (nur wenn Security-Funde da sind). Der Button
+    // aktiviert den bestehenden sec-Filter (#3) im Regel-Dropdown.
+    if SecCount > 0 then
+    begin
+      SB.Append('  <div class="sec-panel"><span class="sec-panel-icon">&#128274;</span> ');
+      SB.Append('<span data-i18n="sec-panel-lbl">Security-relevante Funde</span>: <b>');
+      SB.Append(IntToStr(SecCount));
+      SB.AppendLine('</b> &middot; <button class="tl-btn" id="btnShowSec" data-i18n="sec-panel-btn">nur Security zeigen</button></div>');
     end;
 
     // Audience-Hint: macht im Brief sichtbar fuer welche Rolle der Report
@@ -1384,6 +1435,8 @@ begin
     SB.AppendLine('        "conf-low": "low",');
     SB.AppendLine('        "lbl-conf-filter": "reliable findings only",');
     SB.AppendLine('        "lbl-base-new": "new since baseline",');
+    SB.AppendLine('        "sec-panel-lbl": "Security-relevant findings",');
+    SB.AppendLine('        "sec-panel-btn": "show security only",');
     SB.AppendLine('        "health-label": "Health score",');
     SB.AppendLine('        "health-green": "Healthy",');
     SB.AppendLine('        "health-yellow": "Attention",');
@@ -1440,6 +1493,8 @@ begin
     SB.AppendLine('        "conf-low": "niedrig",');
     SB.AppendLine('        "lbl-conf-filter": "nur belastbare Funde",');
     SB.AppendLine('        "lbl-base-new": "nur NEU seit Baseline",');
+    SB.AppendLine('        "sec-panel-lbl": "Security-relevante Funde",');
+    SB.AppendLine('        "sec-panel-btn": "nur Security zeigen",');
     SB.AppendLine('        "health-label": "Gesundheitswert",');
     SB.AppendLine('        "health-green": "Gesund",');
     SB.AppendLine('        "health-yellow": "Achtung",');
@@ -1496,6 +1551,8 @@ begin
     SB.AppendLine('        "conf-low": "faible",');
     SB.AppendLine('        "lbl-conf-filter": "d\\u00e9tections fiables uniquement",');
     SB.AppendLine('        "lbl-base-new": "nouveaux depuis la r\\u00e9f\\u00e9rence",');
+    SB.AppendLine('        "sec-panel-lbl": "D\\u00e9tections li\\u00e9es \\u00e0 la s\\u00e9curit\\u00e9",');
+    SB.AppendLine('        "sec-panel-btn": "afficher uniquement la s\\u00e9curit\\u00e9",');
     SB.AppendLine('        "health-label": "Score de sant\\u00e9",');
     SB.AppendLine('        "health-green": "Sain",');
     SB.AppendLine('        "health-yellow": "Attention",');
@@ -2361,6 +2418,11 @@ begin
     SB.AppendLine('      });');
     SB.AppendLine('      var bnf = document.getElementById("baseNewFilter");');
     SB.AppendLine('      if (bnf) bnf.addEventListener("change", function(){ if (typeof applyFilters === "function") applyFilters(); });');
+    SB.AppendLine('    })();');
+    // #14 Security-Panel-Button: aktiviert den bestehenden sec-Filter (#3).
+    SB.AppendLine('    (function(){');
+    SB.AppendLine('      var b = document.getElementById("btnShowSec"); var rs = document.getElementById("ruleFilter");');
+    SB.AppendLine('      if (b && rs) b.addEventListener("click", function(){ rs.value = "sec"; rs.dispatchEvent(new Event("change")); });');
     SB.AppendLine('    })();');
     SB.AppendLine('  })();');
     SB.AppendLine('  </script>');
