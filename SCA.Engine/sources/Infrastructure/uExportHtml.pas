@@ -603,6 +603,37 @@ begin
     SB.AppendLine('       opacity: 0; transition: opacity 0.25s; pointer-events: none;');
     SB.AppendLine('       z-index: 1001; }');
     SB.AppendLine('    .toast.show { opacity: 1; }');
+    // #8 A11y: sichtbarer Fokus-Ring (Tastatur) + reduced-motion.
+    SB.AppendLine('    *:focus-visible { outline: 2px solid #4a90e2; outline-offset: 1px; border-radius: 2px; }');
+    SB.AppendLine('    @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }');
+    // #9 Dark-Mode: EIN Regelsatz; JS setzt data-theme aus localStorage bzw.
+    // prefers-color-scheme (keine @media-Duplikation). health-panel bleibt
+    // farbkodiert (Status). Nur Schluessel-Flaechen ueberschrieben.
+    SB.AppendLine('    :root[data-theme="dark"] body { background: #1e1e1e; color: #d6d6d6; }');
+    SB.AppendLine('    :root[data-theme="dark"] a { color: #6cb0ff; }');
+    SB.AppendLine('    :root[data-theme="dark"] .meta { color: #999; }');
+    SB.AppendLine('    :root[data-theme="dark"] th, :root[data-theme="dark"] td { border-bottom-color: #3a3a3a; }');
+    SB.AppendLine('    :root[data-theme="dark"] th { background: #2c2c2c; }');
+    SB.AppendLine('    :root[data-theme="dark"] tr.err  { background: #322020; }');
+    SB.AppendLine('    :root[data-theme="dark"] tr.warn { background: #322d1c; }');
+    SB.AppendLine('    :root[data-theme="dark"] tr.hint { background: #20301c; }');
+    SB.AppendLine('    :root[data-theme="dark"] tr.err  td.sev { color: #ff7373; }');
+    SB.AppendLine('    :root[data-theme="dark"] tr.warn td.sev { color: #e6b45a; }');
+    SB.AppendLine('    :root[data-theme="dark"] tr.hint td.sev { color: #a8d878; }');
+    SB.AppendLine('    :root[data-theme="dark"] tr.finding:hover { filter: brightness(1.25); }');
+    SB.AppendLine('    :root[data-theme="dark"] tr.finding-hint > td { background: #242424; }');
+    SB.AppendLine('    :root[data-theme="dark"] .code-block pre { background: #262626; color: #d0d0d0; }');
+    SB.AppendLine('    :root[data-theme="dark"] .code-before pre { background: #331e1e; color: #f0b0b0; }');
+    SB.AppendLine('    :root[data-theme="dark"] .code-after  pre { background: #1e301e; color: #b0e0a0; }');
+    SB.AppendLine('    :root[data-theme="dark"] .src-snippet { background: #262626; border-color: #444; }');
+    SB.AppendLine('    :root[data-theme="dark"] .chart-box, :root[data-theme="dark"] .top-detectors,');
+    SB.AppendLine('      :root[data-theme="dark"] .top-files, :root[data-theme="dark"] .audience-hint { background: #262626; border-color: #444; color: #cfcfcf; }');
+    SB.AppendLine('    :root[data-theme="dark"] .chart-box h3, :root[data-theme="dark"] .top-detectors h2, :root[data-theme="dark"] .top-files h2 { color: #ccc; }');
+    SB.AppendLine('    :root[data-theme="dark"] .cbar-track { background: #3a3a3a; }');
+    SB.AppendLine('    :root[data-theme="dark"] .hint-desc { color: #b8b8b8; }');
+    SB.AppendLine('    :root[data-theme="dark"] .donut-total { fill: #e0e0e0; }');
+    SB.AppendLine('    :root[data-theme="dark"] input, :root[data-theme="dark"] select,');
+    SB.AppendLine('      :root[data-theme="dark"] .tl-btn { background: #2c2c2c; color: #ddd; border-color: #555; }');
     SB.AppendLine('  </style>');
     SB.AppendLine('</head>');
     SB.AppendLine('<body>');
@@ -808,6 +839,8 @@ begin
     SB.AppendLine('    <button class="tl-btn secondary" id="btnKbdHelp" ' +
                   'data-i18n="btn-kbd" data-i18n-title="ttl-kbd" ' +
                   'title="Tastatur-Shortcuts anzeigen (?)">&#9000; Shortcuts</button>');
+    SB.AppendLine('    <button class="tl-btn secondary" id="btnTheme" ' +
+                  'title="Hell/Dunkel umschalten" aria-label="Theme">&#9681; Theme</button>');
     SB.AppendLine('  </div>');
 
     SB.AppendLine('  <div class="summary">');
@@ -2239,6 +2272,31 @@ begin
     SB.AppendLine('    applyLanguage(SCA_LANG);');
     SB.AppendLine('    var langSel = document.getElementById("langSelect");');
     SB.AppendLine('    if (langSel) langSel.addEventListener("change", function(){ applyLanguage(this.value); });');
+    // #9 Dark-Mode: gespeicherte Wahl oder OS-Praeferenz anwenden + Toggle.
+    SB.AppendLine('    (function(){');
+    SB.AppendLine('      var KEY = "sca-html-theme";');
+    SB.AppendLine('      function apply(t){ document.documentElement.setAttribute("data-theme", t); }');
+    SB.AppendLine('      var stored = null; try { stored = localStorage.getItem(KEY); } catch(e){}');
+    SB.AppendLine('      apply(stored || ((window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light"));');
+    SB.AppendLine('      var bt = document.getElementById("btnTheme");');
+    SB.AppendLine('      if (bt) bt.addEventListener("click", function(){');
+    SB.AppendLine('        var cur = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";');
+    SB.AppendLine('        apply(cur); try { localStorage.setItem(KEY, cur); } catch(e){}');
+    SB.AppendLine('      });');
+    SB.AppendLine('    })();');
+    // #8 A11y: Custom-Controls fokussierbar + Tastatur (Enter/Space) + aria-live.
+    SB.AppendLine('    (function(){');
+    SB.AppendLine('      var SEL = ".sev-filter, th.sortable, .top-detectors li[data-kind], .top-files li[data-file]";');
+    SB.AppendLine('      document.querySelectorAll(".sev-filter, .top-detectors li[data-kind], .top-files li[data-file]").forEach(function(el){');
+    SB.AppendLine('        el.setAttribute("tabindex","0"); el.setAttribute("role","button"); });');
+    SB.AppendLine('      document.querySelectorAll("th.sortable").forEach(function(el){ el.setAttribute("tabindex","0"); });');
+    SB.AppendLine('      document.addEventListener("keydown", function(e){');
+    SB.AppendLine('        if ((e.key === "Enter" || e.key === " ") && e.target && e.target.matches && e.target.matches(SEL)) {');
+    SB.AppendLine('          e.preventDefault(); e.target.click(); }');
+    SB.AppendLine('      });');
+    SB.AppendLine('      var rc = document.getElementById("rowCount");');
+    SB.AppendLine('      if (rc) { rc.setAttribute("aria-live","polite"); rc.setAttribute("role","status"); }');
+    SB.AppendLine('    })();');
     SB.AppendLine('  })();');
     SB.AppendLine('  </script>');
     SB.AppendLine('</body>');
