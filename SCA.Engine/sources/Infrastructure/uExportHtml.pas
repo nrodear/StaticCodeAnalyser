@@ -52,7 +52,7 @@ implementation
 // Findings-Liste ist klein (~100-500 Eintraege), kein Perf-Hot-Path.
 
 uses
-  uExport, uFixHint, uRuleCatalog, uQuickFix;
+  uExport, uFixHint, uRuleCatalog, uQuickFix, uBaseline;
 
 type
   // Per-Datei-Aggregat fuer das Top-Dateien-Risiko-Ranking (#11).
@@ -1228,11 +1228,12 @@ begin
               LowerCase(FileShort)    + ' ' +
               LowerCase(F.MissingVar) + ' ' +
               LowerCase(KindNm);
-        // #7 Baseline-Fingerprint: kind|datei|methode|detail - bewusst OHNE
-        // Zeilennummer, damit Zeilen-Verschiebungen keine Pseudo-"neu"-Funde
-        // erzeugen (client-seitiger Baseline-Diff neu/bestehend/behoben).
-        var Fpid := LowerCase(KindNm) + '|' + LowerCase(FileBase) + '|' +
-                    LowerCase(F.MethodName) + '|' + LowerCase(Trim(F.MissingVar));
+        // #7 Baseline-Fingerprint: JETZT der GETEILTE Engine-Fingerprint
+        // (TBaseline.Fingerprint = SHA2 aus datei|kind|methode|detail, ohne
+        // Zeilennummer) statt eines eigenen Ad-hoc-Strings. Damit ist eine im
+        // HTML gespeicherte Baseline mit dem CLI --baseline kompatibel und
+        // umgekehrt - EIN Fingerprint ueber CLI/HTML/(IDE).
+        var Fpid := TBaseline.Fingerprint(F);
         // Konfidenz (#1): Name ('high'/'medium'/'low') als data-conf (Filter)
         // + Rang als data-sort der Konfidenz-Spalte (0=high oben). data-qf
         // dient als Tertiaer-Kriterium im Default-Sort (Severity->Konf->QF).
@@ -2384,10 +2385,10 @@ begin
     // -> Set -> Zeilen als neu/bestehend markieren + Summary + "nur NEU"-Filter).
     // Rein client-seitig (Blob/FileReader/localStorage-frei) -> HTML deterministisch.
     SB.AppendLine('    (function(){');
-    SB.AppendLine('      function allFpids(){ var a=[]; document.querySelectorAll("tr.finding[data-fpid]").forEach(function(r){ a.push(r.getAttribute("data-fpid")); }); return a; }');
+    SB.AppendLine('      function collectFindings(){ var a=[]; document.querySelectorAll("tr.finding[data-fpid]").forEach(function(r){ a.push({ fingerprint: r.getAttribute("data-fpid"), file: r.getAttribute("data-file"), kind: r.getAttribute("data-rule") }); }); return a; }');
     SB.AppendLine('      var bs = document.getElementById("btnBaseSave");');
     SB.AppendLine('      if (bs) bs.addEventListener("click", function(){');
-    SB.AppendLine('        var data = JSON.stringify({ tool: "StaticCodeAnalyser", fpids: allFpids() });');
+    SB.AppendLine('        var fs = collectFindings(); var data = JSON.stringify({ version: "1", tool: "StaticCodeAnalyser", count: fs.length, findings: fs });');
     SB.AppendLine('        var blob = new Blob([data], { type: "application/json" });');
     SB.AppendLine('        var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "sca-baseline.json";');
     SB.AppendLine('        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(a.href);');
@@ -2399,7 +2400,7 @@ begin
     SB.AppendLine('        var rd = new FileReader();');
     SB.AppendLine('        rd.onload = function(){');
     SB.AppendLine('          var base; try { base = JSON.parse(rd.result); } catch(e){ return; }');
-    SB.AppendLine('          var arr = (base && base.fpids) ? base.fpids : (Array.isArray(base) ? base : []);');
+    SB.AppendLine('          var arr = (base && base.findings) ? base.findings.map(function(x){ return x.fingerprint; }) : (base && base.fpids) ? base.fpids : (Array.isArray(base) ? base : []);');
     SB.AppendLine('          var set = {}; arr.forEach(function(id){ set[id] = 1; });');
     SB.AppendLine('          var seenNow = {}, nNew = 0, nExist = 0;');
     SB.AppendLine('          document.querySelectorAll("tr.finding[data-fpid]").forEach(function(r){');
