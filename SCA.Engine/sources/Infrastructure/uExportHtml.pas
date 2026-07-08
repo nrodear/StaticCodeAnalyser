@@ -525,6 +525,11 @@ begin
     SB.AppendLine('    .cbar-track { flex: 0 0 190px; background: #eee; border-radius: 2px; height: 12px; }');
     SB.AppendLine('    .cbar-fill { display: block; height: 12px; background: #6aa0d8; border-radius: 2px; }');
     SB.AppendLine('    .cbar-num { color: #666; font-variant-numeric: tabular-nums; }');
+    // #7 Baseline-Diff: NEU-Zeilen mit gruenem Balken, bestehende leicht gedimmt.
+    SB.AppendLine('    .base-summary { font-size: 12px; color: #555; margin-left: 4px; align-self: center; }');
+    SB.AppendLine('    tr.finding[data-bstatus="new"] { box-shadow: inset 3px 0 0 #2a9d2a; }');
+    SB.AppendLine('    tr.finding[data-bstatus="seen"] { opacity: 0.7; }');
+    SB.AppendLine('    :root[data-theme="dark"] .base-summary { color: #aaa; }');
     SB.AppendLine('    .health-badge { display: flex; flex-direction: column; align-items: center;');
     SB.AppendLine('       min-width: 92px; }');
     SB.AppendLine('    .health-label { font-size: 10px; text-transform: uppercase;');
@@ -841,6 +846,11 @@ begin
                   'title="Tastatur-Shortcuts anzeigen (?)">&#9000; Shortcuts</button>');
     SB.AppendLine('    <button class="tl-btn secondary" id="btnTheme" ' +
                   'title="Hell/Dunkel umschalten" aria-label="Theme">&#9681; Theme</button>');
+    SB.AppendLine('    <button class="tl-btn secondary" id="btnBaseSave" ' +
+                  'title="Aktuelle Funde als Baseline-JSON speichern (Download)">&#128190; Baseline speichern</button>');
+    SB.AppendLine('    <label class="tl-btn secondary" id="btnBaseLoad" ' +
+                  'title="Baseline-JSON laden und Funde als neu/bestehend/behoben markieren">' +
+                  '&#128193; Baseline laden<input type="file" id="baseFile" accept=".json,application/json" style="display:none"></label>');
     SB.AppendLine('  </div>');
 
     SB.AppendLine('  <div class="summary">');
@@ -1073,6 +1083,8 @@ begin
     // Konfidenz-Filter (#1): blendet fcLow-Befunde aus ("nur belastbare Funde").
     // Haengt in das bestehende applyFilter-Modell ein (kein zweites System).
     SB.AppendLine('    <label class="conf-toggle"><input type="checkbox" id="confFilter"> <span data-i18n="lbl-conf-filter">nur belastbare Funde</span></label>');
+    SB.AppendLine('    <label class="conf-toggle"><input type="checkbox" id="baseNewFilter" disabled> <span data-i18n="lbl-base-new">nur NEU seit Baseline</span></label>');
+    SB.AppendLine('    <span id="baseSummary" class="base-summary"></span>');
     SB.Append    ('    <span class="row-count" id="rowCount" data-i18n="row-count" data-count="');
     SB.Append    (IntToStr(nTotal));
     SB.Append    ('">');
@@ -1165,6 +1177,11 @@ begin
               LowerCase(FileShort)    + ' ' +
               LowerCase(F.MissingVar) + ' ' +
               LowerCase(KindNm);
+        // #7 Baseline-Fingerprint: kind|datei|methode|detail - bewusst OHNE
+        // Zeilennummer, damit Zeilen-Verschiebungen keine Pseudo-"neu"-Funde
+        // erzeugen (client-seitiger Baseline-Diff neu/bestehend/behoben).
+        var Fpid := LowerCase(KindNm) + '|' + LowerCase(FileBase) + '|' +
+                    LowerCase(F.MethodName) + '|' + LowerCase(Trim(F.MissingVar));
         // Konfidenz (#1): Name ('high'/'medium'/'low') als data-conf (Filter)
         // + Rang als data-sort der Konfidenz-Spalte (0=high oben). data-qf
         // dient als Tertiaer-Kriterium im Default-Sort (Severity->Konf->QF).
@@ -1193,6 +1210,8 @@ begin
         SB.Append(IntToStr(RowQf));
         SB.Append('" data-sec="');       // #3: 1 = Regel hat CWE/OWASP -> Security-Filter
         if HasCwe then SB.Append('1') else SB.Append('0');
+        SB.Append('" data-fpid="');      // #7 Baseline-Fingerprint (zeilenunabhaengig)
+        SB.Append(HtmlEscape(Fpid));
         SB.Append('">');
         // Toggle-Indikator: Pfeil rechts (oder leer wenn kein Hint)
         if HasHint then
@@ -1364,6 +1383,7 @@ begin
     SB.AppendLine('        "conf-medium": "medium",');
     SB.AppendLine('        "conf-low": "low",');
     SB.AppendLine('        "lbl-conf-filter": "reliable findings only",');
+    SB.AppendLine('        "lbl-base-new": "new since baseline",');
     SB.AppendLine('        "health-label": "Health score",');
     SB.AppendLine('        "health-green": "Healthy",');
     SB.AppendLine('        "health-yellow": "Attention",');
@@ -1419,6 +1439,7 @@ begin
     SB.AppendLine('        "conf-medium": "mittel",');
     SB.AppendLine('        "conf-low": "niedrig",');
     SB.AppendLine('        "lbl-conf-filter": "nur belastbare Funde",');
+    SB.AppendLine('        "lbl-base-new": "nur NEU seit Baseline",');
     SB.AppendLine('        "health-label": "Gesundheitswert",');
     SB.AppendLine('        "health-green": "Gesund",');
     SB.AppendLine('        "health-yellow": "Achtung",');
@@ -1474,6 +1495,7 @@ begin
     SB.AppendLine('        "conf-medium": "moyenne",');
     SB.AppendLine('        "conf-low": "faible",');
     SB.AppendLine('        "lbl-conf-filter": "d\\u00e9tections fiables uniquement",');
+    SB.AppendLine('        "lbl-base-new": "nouveaux depuis la r\\u00e9f\\u00e9rence",');
     SB.AppendLine('        "health-label": "Score de sant\\u00e9",');
     SB.AppendLine('        "health-green": "Sain",');
     SB.AppendLine('        "health-yellow": "Attention",');
@@ -1773,6 +1795,7 @@ begin
     SB.AppendLine('');
     SB.AppendLine('    var searchInput = document.getElementById(''searchInput'');');
     SB.AppendLine('    var confFilter  = document.getElementById(''confFilter''); // #1: "nur belastbare Funde"');
+    SB.AppendLine('    var baseNewFilter = document.getElementById(''baseNewFilter''); // #7: nur NEU seit Baseline');
     SB.AppendLine('');
     SB.AppendLine('    function applyFilter() {');
     SB.AppendLine('      var fileVal = fileSel ? fileSel.value : '''';');
@@ -1788,6 +1811,7 @@ begin
     SB.AppendLine('      var profileDef = profileName ? PROFILES[profileName] : null;');
     SB.AppendLine('      var q = searchInput ? searchInput.value.trim().toLowerCase() : '''';');
     SB.AppendLine('      var confOn = confFilter && confFilter.checked; // fcLow ausblenden');
+    SB.AppendLine('      var baseOn = baseNewFilter && baseNewFilter.checked; // #7 nur NEU');
     SB.AppendLine('      var visible = 0;');
     SB.AppendLine('      // Master-Scope-Counts pro Severity. Werden in den Top-Kacheln');
     SB.AppendLine('      // angezeigt und reflektieren NUR Datei-+Rule-Filter, NICHT die');
@@ -1812,13 +1836,15 @@ begin
     SB.AppendLine('        var searchOk = !q || ((row.getAttribute(''data-search'') || '''').indexOf(q) !== -1);');
     SB.AppendLine('        // Konfidenz-Filter (#1): blendet fcLow aus wenn aktiv.');
     SB.AppendLine('        var confOk = !confOn || (row.getAttribute(''data-conf'') !== ''low'');');
-    SB.AppendLine('        // Master-Scope = fileOk && ruleOk && searchOk && confOk (ohne sev). Daraus die Kacheln.');
-    SB.AppendLine('        if (fileOk && ruleOk && searchOk && confOk) {');
+    SB.AppendLine('        // Baseline-Filter (#7): nur NEU-Zeilen wenn aktiv (data-bstatus=new).');
+    SB.AppendLine('        var baseOk = !baseOn || (row.getAttribute(''data-bstatus'') === ''new'');');
+    SB.AppendLine('        // Master-Scope = fileOk && ruleOk && searchOk && confOk && baseOk (ohne sev). Daraus die Kacheln.');
+    SB.AppendLine('        if (fileOk && ruleOk && searchOk && confOk && baseOk) {');
     SB.AppendLine('          if      (row.classList.contains(''err''))  nErr++;');
     SB.AppendLine('          else if (row.classList.contains(''warn'')) nWarn++;');
     SB.AppendLine('          else if (row.classList.contains(''hint'')) nHint++;');
     SB.AppendLine('        }');
-    SB.AppendLine('        var match  = fileOk && sevOk && ruleOk && searchOk && confOk;');
+    SB.AppendLine('        var match  = fileOk && sevOk && ruleOk && searchOk && confOk && baseOk;');
     SB.AppendLine('        row.style.display = match ? '''' : ''none'';');
     SB.AppendLine('        var hint = row.nextElementSibling;');
     SB.AppendLine('        if (hint && hint.classList.contains(''finding-hint'')) {');
@@ -2296,6 +2322,45 @@ begin
     SB.AppendLine('      });');
     SB.AppendLine('      var rc = document.getElementById("rowCount");');
     SB.AppendLine('      if (rc) { rc.setAttribute("aria-live","polite"); rc.setAttribute("role","status"); }');
+    SB.AppendLine('    })();');
+    // #7 Baseline-Diff: speichern (Download aller data-fpid) + laden (FileReader
+    // -> Set -> Zeilen als neu/bestehend markieren + Summary + "nur NEU"-Filter).
+    // Rein client-seitig (Blob/FileReader/localStorage-frei) -> HTML deterministisch.
+    SB.AppendLine('    (function(){');
+    SB.AppendLine('      function allFpids(){ var a=[]; document.querySelectorAll("tr.finding[data-fpid]").forEach(function(r){ a.push(r.getAttribute("data-fpid")); }); return a; }');
+    SB.AppendLine('      var bs = document.getElementById("btnBaseSave");');
+    SB.AppendLine('      if (bs) bs.addEventListener("click", function(){');
+    SB.AppendLine('        var data = JSON.stringify({ tool: "StaticCodeAnalyser", fpids: allFpids() });');
+    SB.AppendLine('        var blob = new Blob([data], { type: "application/json" });');
+    SB.AppendLine('        var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "sca-baseline.json";');
+    SB.AppendLine('        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(a.href);');
+    SB.AppendLine('      });');
+    SB.AppendLine('      var TPL = { en: "Baseline: {0} new, {1} existing, {2} fixed", de: "Baseline: {0} neu, {1} bestehend, {2} behoben", fr: "Base: {0} nouveaux, {1} existants, {2} corrig\\u00e9s" };');
+    SB.AppendLine('      var bf = document.getElementById("baseFile");');
+    SB.AppendLine('      if (bf) bf.addEventListener("change", function(){');
+    SB.AppendLine('        var f = bf.files && bf.files[0]; if (!f) return;');
+    SB.AppendLine('        var rd = new FileReader();');
+    SB.AppendLine('        rd.onload = function(){');
+    SB.AppendLine('          var base; try { base = JSON.parse(rd.result); } catch(e){ return; }');
+    SB.AppendLine('          var arr = (base && base.fpids) ? base.fpids : (Array.isArray(base) ? base : []);');
+    SB.AppendLine('          var set = {}; arr.forEach(function(id){ set[id] = 1; });');
+    SB.AppendLine('          var seenNow = {}, nNew = 0, nExist = 0;');
+    SB.AppendLine('          document.querySelectorAll("tr.finding[data-fpid]").forEach(function(r){');
+    SB.AppendLine('            var id = r.getAttribute("data-fpid"); seenNow[id] = 1;');
+    SB.AppendLine('            if (set[id]) { r.setAttribute("data-bstatus","seen"); nExist++; }');
+    SB.AppendLine('            else { r.setAttribute("data-bstatus","new"); nNew++; }');
+    SB.AppendLine('          });');
+    SB.AppendLine('          var nFixed = 0; arr.forEach(function(id){ if (!seenNow[id]) nFixed++; });');
+    SB.AppendLine('          var bn = document.getElementById("baseNewFilter"); if (bn) bn.disabled = false;');
+    SB.AppendLine('          var sm = document.getElementById("baseSummary");');
+    SB.AppendLine('          if (sm) { var lang = document.documentElement.lang || "de"; var tpl = TPL[lang] || TPL.de;');
+    SB.AppendLine('            sm.textContent = tpl.replace("{0}", nNew).replace("{1}", nExist).replace("{2}", nFixed); }');
+    SB.AppendLine('          if (typeof applyFilters === "function") applyFilters();');
+    SB.AppendLine('        };');
+    SB.AppendLine('        rd.readAsText(f);');
+    SB.AppendLine('      });');
+    SB.AppendLine('      var bnf = document.getElementById("baseNewFilter");');
+    SB.AppendLine('      if (bnf) bnf.addEventListener("change", function(){ if (typeof applyFilters === "function") applyFilters(); });');
     SB.AppendLine('    })();');
     SB.AppendLine('  })();');
     SB.AppendLine('  </script>');
