@@ -16,6 +16,7 @@ uses
   Vcl.Clipbrd, Vcl.Themes,
   DesignIntf, ToolsAPI, DockForm,    // DockForm: TDockableForm (Editor-Service-Notifier-Signatur)
   uStaticAnalyzer2, uEngineApi, uStaticFiles, uMethodd12, uSCAConsts, uExport,
+  uBaseline,
   uFixHint, uIgnoreList, uRepoSettings, uRuleCatalog, uClaudePrompt,
   uQuickFix,
   uAnalyserPalette, uAnalyserTypes, uAnalyserTheme, uIDEColors, uLocalization,
@@ -188,6 +189,11 @@ type
     // Repo-/VCS-Settings (BaseBranch, IncludeWorkingTree, exe-Pfade).
     // Wird aus %APPDATA%\StaticCodeAnalyser\analyser.ini geladen.
     FRepoSettings      : TRepoSettings;
+    // Baseline-Fingerprint-Set fuer den "nur neue Funde"-Filter (non-
+    // destruktiv). Wird pro Scan aus FRepoSettings.BaselineFile neu geladen
+    // (RefreshBaselineSet); ApplyFilter blendet Funde aus die drin stehen.
+    // Leeres Set / Filter aus -> keine Wirkung.
+    FBaselineSet       : TBaselineSet;
 
     // Grid-Tooltip-Subsystem (Per-Cell-CM_HINTSHOW + 100ms-HintPause-
     // Override "Maus ueber Grid") ist nach uIDEGridTooltip.
@@ -319,6 +325,12 @@ type
     procedure HamburgerClick(Sender: TObject);
     procedure HamburgerMenuPopup(Sender: TObject);
     procedure HamburgerExportClick(Sender: TObject);
+    // Schreibt die aktuellen (ungefilterten) Funde als Baseline-JSON
+    // (Format = CLI --write-baseline / HTML-Export).
+    procedure WriteBaselineClick(Sender: TObject);
+    // Laedt/leert FBaselineSet anhand FRepoSettings.BaselineOnlyNew +
+    // BaselineFile. Vor jedem ApplyFilter-Rebuild nach einem Scan gerufen.
+    procedure RefreshBaselineSet;
     procedure BuildHamburgerMenu;
     // DPI-Scaling fuer Layout-Konstanten. Liest TControl.CurrentPPI - falls
     // 0/uninit, fallback auf 96. Beispiel: ScaleW(28) liefert 28 bei 100%
@@ -500,6 +512,23 @@ type
   // Access-Class zum Setzen protected-deklarierter Properties (TControl.OnClick).
   // Lokal in der Unit gehalten - kein public API. Standard-VCL-Pattern.
   TControlAccess = class(TControl);
+
+function ResolveBaselinePath(const AConfigured, ABaseDir: string): string;
+// Absoluter Pfad bleibt unveraendert; ein relativer wird gegen das Projekt-
+// Verzeichnis (ABaseDir) aufgeloest. Kein System.IOUtils - rooted-Check von
+// Hand (Laufwerk C:\, UNC \\server, oder fuehrender Slash), damit diese
+// God-Unit sich keine TPath/TFile-Namensraeume einfaengt.
+begin
+  Result := Trim(AConfigured);
+  if Result = '' then Exit;
+  if (Length(Result) >= 2) and (Result[2] = ':') then Exit;               // C:\...
+  if (Length(Result) >= 2) and (Result[1] = '\') and (Result[2] = '\')    // \\server
+    then Exit;
+  if (Length(Result) >= 1) and ((Result[1] = '\') or (Result[1] = '/'))   // \abs /abs
+    then Exit;
+  if ABaseDir <> '' then
+    Result := IncludeTrailingPathDelimiter(ABaseDir) + Result;
+end;
 
 const
   // ---- 3-Stufen-Responsive-Layout (96-DPI-logisch, via ScaleW skaliert) -
@@ -787,6 +816,7 @@ begin
   Constraints.MinWidth    := ScaleW(FLOAT_MIN_WIDTH);
   FAllFindings       := TObjectList<TLeakFinding>.Create(True);
   FDisplayedFindings := TList<TLeakFinding>.Create;
+  FBaselineSet       := TBaselineSet.Create;
   // Ignore-Liste laden / Default-Datei anlegen falls nicht vorhanden
   FIgnoreList        := TIgnoreList.Create;
   try FIgnoreList.LoadDefault; except end;
@@ -1095,6 +1125,7 @@ begin
 
   FreeAndNil(FAllFindings);
   FreeAndNil(FDisplayedFindings);
+  FreeAndNil(FBaselineSet);
   FreeAndNil(FIgnoreList);
   FreeAndNil(FRepoSettings);
   inherited;
@@ -1714,14 +1745,22 @@ end;
 
 procedure TAnalyserFrame.ApplyFilter;
 var
-  i            : Integer;
-  Criteria     : TFindingFilterCriteria;
-  SortCfg      : TFindingSortConfig;
-  TotalMatched : Integer;
+  i              : Integer;
+  Criteria       : TFindingFilterCriteria;
+  SortCfg        : TFindingSortConfig;
+  TotalMatched   : Integer;
+  BaselineActive : Boolean;
 begin
   Criteria.Mode       := FFilterMode;
   Criteria.TypeFilter := FTypeFilter;
   Criteria.SearchLow  := Trim(FSearchEdit.Text).ToLower;
+
+  // Baseline "nur neue Funde": nur aktiv wenn eingeschaltet UND eine Baseline
+  // wirklich geladen wurde. Fail-open - eine leere/kaputte Baseline blendet
+  // NICHTS aus (Funde zu verstecken weil die Baseline-Datei fehlt waere
+  // gefaehrlich). FBaselineSet wird in RefreshBaselineSet (pro Scan) befuellt.
+  BaselineActive := Assigned(FRepoSettings) and FRepoSettings.BaselineOnlyNew
+                    and Assigned(FBaselineSet) and (not FBaselineSet.IsEmpty);
 
   SendMessage(FResultGrid.Handle, WM_SETREDRAW, 0, 0);
   try
@@ -1729,8 +1768,15 @@ begin
 
     // ---- Filter (Logik in uFindingFilter.TFindingFilter.Matches) ----
     for i := 0 to FAllFindings.Count - 1 do
+    begin
+      // Baseline-Filter zuerst: bereits akzeptierte Funde ausblenden.
+      // FAllFindings bleibt vollstaendig (Export + "Baseline schreiben"
+      // sehen weiter alle Funde).
+      if BaselineActive and FBaselineSet.Contains(FAllFindings[i]) then
+        Continue;
       if TFindingFilter.Matches(FAllFindings[i], Criteria) then
         FDisplayedFindings.Add(FAllFindings[i]);
+    end;
 
     // ---- DetectorReview-Stichprobe ----------------------------------
     // Pro Detector-Kind 1 zufaelligen Befund behalten. Wirkt NACH dem
@@ -2132,6 +2178,10 @@ begin
   for i := 0 to findings.Count - 1 do
     FAllFindings.Add(findings[i]);
   UpdateStats;
+  // Baseline-Set fuer den "nur neue Funde"-Filter frisch laden (basiert auf
+  // FRepoSettings, das PrepareAnalysis/SetupForRun vor dem Scan neu geladen
+  // hat) - vor ApplyFilter, damit der erste Rebuild schon filtert.
+  RefreshBaselineSet;
   // Filter-Combos auf Eintraege mit > 0 Treffern reduzieren - vor
   // ApplyFilter damit die anschliessende Filterung schon gegen die
   // ggf. zurueckgesetzte Auswahl arbeitet.
@@ -3018,6 +3068,12 @@ begin
   MI.OnClick := HamburgerExportClick;
   FHamburgerMenu.Items.Add(MI);
 
+  // ---- Baseline aus aktuellem Scan schreiben -------------------------
+  MI := TMenuItem.Create(FHamburgerMenu);
+  MI.Caption := _('Write baseline from current scan...');
+  MI.OnClick := WriteBaselineClick;
+  FHamburgerMenu.Items.Add(MI);
+
   MI := TMenuItem.Create(FHamburgerMenu);
   MI.Caption := '-';
   FHamburgerMenu.Items.Add(MI);
@@ -3072,6 +3128,75 @@ begin
   if not Assigned(FBtnHamburger) or not Assigned(FExportMenu) then Exit;
   P := FBtnHamburger.ClientToScreen(Point(0, FBtnHamburger.Height));
   FExportMenu.PopupAt(P.X, P.Y);
+end;
+
+procedure TAnalyserFrame.RefreshBaselineSet;
+// Laedt (oder leert) das Baseline-Fingerprint-Set anhand der aktuellen
+// Settings. FAllFindings/Export bleiben unberuehrt - nur der Anzeige-Filter
+// in ApplyFilter nutzt das Set. Relative Pfade werden gegen FCurrentBaseDir
+// (Projekt-Verzeichnis) aufgeloest.
+var
+  Path : string;
+begin
+  if not Assigned(FBaselineSet) then Exit;
+  if (not Assigned(FRepoSettings)) or (not FRepoSettings.BaselineOnlyNew)
+     or (Trim(FRepoSettings.BaselineFile) = '') then
+  begin
+    FBaselineSet.Clear;
+    Exit;
+  end;
+  Path := ResolveBaselinePath(FRepoSettings.BaselineFile, FCurrentBaseDir);
+  try
+    FBaselineSet.LoadFromFile(Path);
+  except
+    // Defensiv: ein Baseline-Lesefehler darf die Anzeige nicht kippen ->
+    // leeres Set = Filter wirkungslos (fail-open, alle Funde sichtbar).
+    FBaselineSet.Clear;
+  end;
+end;
+
+procedure TAnalyserFrame.WriteBaselineClick(Sender: TObject);
+// Schreibt die aktuellen (UNgefilterten) Funde als Baseline-JSON. Format ist
+// identisch zu CLI --write-baseline + HTML-Export -> die Datei kann als "nur
+// neue Funde"-Baseline (Tools > Options) gesetzt oder in CI/HTML weiter-
+// verwendet werden.
+var
+  Dlg : TFileSaveDialog;
+  Fn  : string;
+begin
+  if (not Assigned(FAllFindings)) or (FAllFindings.Count = 0) then
+  begin
+    MessageDlg(_('No findings to write. Run an analysis first.'),
+      mtInformation, [mbOK], 0);
+    Exit;
+  end;
+  Fn  := '';
+  Dlg := TFileSaveDialog.Create(nil);
+  try
+    Dlg.DefaultExtension := 'json';
+    with Dlg.FileTypes.Add do
+    begin
+      DisplayName := _('Baseline JSON');
+      FileMask    := '*.json';
+    end;
+    Dlg.FileName := 'sca.baseline.json';
+    if (FCurrentBaseDir <> '') and DirectoryExists(FCurrentBaseDir) then
+      Dlg.DefaultFolder := FCurrentBaseDir;
+    if Dlg.Execute then
+      Fn := Dlg.FileName;
+  finally
+    Dlg.Free;
+  end;
+  if Fn = '' then Exit;
+  try
+    TBaseline.Write(FAllFindings, Fn);
+    StatusMode(Format(_('Baseline written: %s (%d findings)'),
+      [ExtractFileName(Fn), FAllFindings.Count]));
+  except
+    on E: Exception do
+      MessageDlg(Format(_('Could not write baseline: %s'), [E.Message]),
+        mtError, [mbOK], 0);
+  end;
 end;
 
 // ---------------------------------------------------------------------------
@@ -3888,6 +4013,18 @@ begin
         Exit;
       end;
     end;
+
+    // Baseline "nur neue Funde" auch im Silent-Mode. Findings ist hier eine
+    // OWNED, transiente Liste -> das destruktive TBaseline.Apply ist ok
+    // (matchende Funde werden entfernt + freigegeben; uebrig bleibt "neu seit
+    // Baseline"). Kein Toggle noetig, deshalb kein TBaselineSet wie im Dock.
+    if Settings.BaselineOnlyNew and (Trim(Settings.BaselineFile) <> '') then
+      try
+        TBaseline.Apply(Findings,
+          ResolveBaselinePath(Settings.BaselineFile, ExtractFilePath(AFileName)));
+      except
+        // Baseline-Fehler darf den Silent-Scan nicht kippen (fail-open).
+      end;
 
     Entries := BuildMarkEntries(Findings);
     // ReplaceMarksForFile statt SetAllFindings: Marker anderer Dateien

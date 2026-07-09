@@ -46,6 +46,7 @@ const
   // direkt im Constructor weil die nicht extern quick-readable sind.
   // ---------------------------------------------------------------------------
   DEF_SILENT_ENABLED         = True;
+  DEF_BASELINE_ONLY_NEW      = False;
   // [UI] AutoExpandAnnotation wurde 2026-07-05 ENTFERNT: das Overlay faltet
   // jetzt IMMER automatisch bis zur vollen Hint-Ansicht auf (UX-Entscheid,
   // die Collapsed-Zwischenstufe mit Klick-zum-Auffalten ist entfallen).
@@ -89,6 +90,8 @@ type
     FDetectorReviewFilterEnabled : Boolean; // [Rules] EnableDetectorReviewFilter
                                             // (Default False, Debug-Build-Tool)
     FSilentEnabled     : Boolean;     // [Silent] Enabled (Default: True)
+    FBaselineFile      : string;      // [Baseline] File (Pfad zur Baseline-JSON)
+    FBaselineOnlyNew   : Boolean;     // [Baseline] OnlyNew (nur neue Funde zeigen)
     // [UI] OverlayShowOnHover: kontrolliert ob das Annotation-Overlay
     // bereits beim Hover ueber die markierte Zeile erscheint. False (Default)
     // = erst beim KLICK auf die markierte Zeile zeigt sich das Overlay -
@@ -290,6 +293,16 @@ type
                                                   write FOverlayShowOnHover;
     property EditorColorScheme:       string      read FEditorColorScheme
                                                   write FEditorColorScheme;
+
+    // [Baseline] File - Pfad zur Baseline-JSON (Format kompatibel mit CLI
+    // --write-baseline und dem HTML-Export). [Baseline] OnlyNew - wenn True
+    // blendet das IDE-Plugin Funde aus, deren Fingerprint in der Baseline
+    // steht (nur "neu seit Baseline" bleibt sichtbar). Non-destruktiv: die
+    // volle Findings-Liste + Export bleiben unberuehrt, nur die Anzeige filtert.
+    property BaselineFile:            string      read FBaselineFile
+                                                  write FBaselineFile;
+    property BaselineOnlyNew:         Boolean     read FBaselineOnlyNew
+                                                  write FBaselineOnlyNew;
 
     // UI-Sprache. '' bedeutet "use Default" (= deutsch beim aktuellen Build,
     // falls dxgettext jemals aktiviert wird, wuerde es OS-Locale nutzen).
@@ -993,6 +1006,12 @@ begin
     FOverlayShowOnHover   := Ini.ReadBool  ('UI',      'OverlayShowOnHover',   DEF_OVERLAY_SHOW_ON_HOVER);
     FEditorColorScheme    := Ini.ReadString('UI',      'EditorColorScheme',    DEF_EDITOR_COLOR_SCHEME);
 
+    // [Baseline] - non-destruktiver "nur neue Funde"-Filter im IDE-Editor.
+    // File = Pfad zur Baseline-JSON (kompatibel mit CLI --write-baseline und
+    // HTML-Export). OnlyNew=False (Default) -> Filter aus, alle Funde sichtbar.
+    FBaselineFile    := Trim(Ini.ReadString('Baseline', 'File',    ''));
+    FBaselineOnlyNew := Ini.ReadBool       ('Baseline', 'OnlyNew', DEF_BASELINE_ONLY_NEW);
+
     // [Hotkeys] Master-Toggle + Per-Feature-Toggle + Shortcut-Strings.
     FLanguage        := Trim(Ini.ReadString('UI', 'Language',        DEF_LANGUAGE)).ToLower;
     FOverlayPosition := Trim(Ini.ReadString('UI', 'OverlayPosition', DEF_OVERLAY_POSITION)).ToLower;
@@ -1070,6 +1089,8 @@ begin
     Ini.WriteBool  ('Silent', 'Enabled',           FSilentEnabled);
     Ini.WriteBool  ('UI',     'OverlayShowOnHover',   FOverlayShowOnHover);
     Ini.WriteString('UI',     'EditorColorScheme',    FEditorColorScheme);
+    Ini.WriteString('Baseline', 'File',              FBaselineFile);
+    Ini.WriteBool  ('Baseline', 'OnlyNew',           FBaselineOnlyNew);
     // [Detectors]-Toggles: jetzt UI-aenderbar via Tools > Options.
     Ini.WriteBool  ('Detectors', 'UsesCheck',           FUsesCheck);
     Ini.WriteBool  ('Detectors', 'IncludeTests',        FIncludeTests);

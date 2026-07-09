@@ -49,6 +49,32 @@ type
     class function Fingerprint(const F: TLeakFinding): string; static;
   end;
 
+  // Non-destruktiver Baseline-Filter fuer Live-Consumer (IDE-Editor): laedt
+  // die Fingerprints einmalig und beantwortet pro Finding, ob es bereits in
+  // der Baseline steht - OHNE die Findings-Liste zu veraendern. TBaseline.Apply
+  // LOESCHT matchende Findings; das eignet sich nicht fuer einen umschaltbaren
+  // "nur neue Funde"-Editor-Filter, bei dem die Vollmenge fuer Export/Toggle
+  // erhalten bleiben muss. Match ueber den zeilenunabhaengigen Fingerprint
+  // (KEIN contextHash - der Editor-Pfad soll nicht pro Finding eine Datei
+  // erneut lesen).
+  TBaselineSet = class
+  private
+    FFingerprints: TDictionary<string, Boolean>;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    // Ersetzt den Inhalt durch die Fingerprints aus BaselineFile. Tolerant
+    // gegen beide Formate ({..,"findings":[{"fingerprint"..}]} ODER ein bare
+    // Array) - exakt das was TBaseline.Write / CLI --write-baseline schreibt
+    // und der HTML-Export liest. Fehlende/leere/kaputte Datei -> leeres Set
+    // (Result 0), kein Fehler. Liefert die Anzahl geladener Fingerprints.
+    function LoadFromFile(const BaselineFile: string): Integer;
+    procedure Clear;
+    function IsEmpty: Boolean;
+    // True wenn F bereits in der Baseline steht (= KEIN neuer Fund).
+    function Contains(const F: TLeakFinding): Boolean;
+  end;
+
 implementation
 
 // noinspection-file ConcatToFormat, ConsecutiveSection, TooLongLine, UnsortedUses, UnusedPublicMember
@@ -252,6 +278,97 @@ begin
     CtxMemo.Free;
     Root.Free;
   end;
+end;
+
+{ TBaselineSet }
+
+constructor TBaselineSet.Create;
+begin
+  inherited Create;
+  FFingerprints := TDictionary<string, Boolean>.Create;
+end;
+
+destructor TBaselineSet.Destroy;
+begin
+  FFingerprints.Free;
+  inherited;
+end;
+
+procedure TBaselineSet.Clear;
+begin
+  FFingerprints.Clear;
+end;
+
+function TBaselineSet.IsEmpty: Boolean;
+begin
+  Result := FFingerprints.Count = 0;
+end;
+
+function TBaselineSet.Contains(const F: TLeakFinding): Boolean;
+begin
+  // Count-Guard spart bei leerem Set (Filter aus / Datei fehlt) das SHA2-
+  // Hashing pro Finding im heissen ApplyFilter-Loop.
+  Result := (FFingerprints.Count > 0)
+            and FFingerprints.ContainsKey(TBaseline.Fingerprint(F));
+end;
+
+function TBaselineSet.LoadFromFile(const BaselineFile: string): Integer;
+// Parst dieselbe Struktur wie TBaseline.Apply (Objekt-mit-'findings' ODER bare
+// Array) + dieselben Hardening-Caps, aber non-destruktiv: sammelt nur die
+// Fingerprints. Bewusst als eigener Parse gehalten statt Apply umzubauen -
+// Apply ist der verifizierte CI-Gating-Pfad und bleibt byte-neutral.
+var
+  Raw    : string;
+  Root   : TJSONValue;
+  Arr    : TJSONArray;
+  Obj    : TJSONValue;
+  FpJson : TJSONValue;
+  Loaded : Integer;
+begin
+  FFingerprints.Clear;
+  Result := 0;
+  if BaselineFile = '' then Exit;
+  if not FileExists(BaselineFile) then Exit;
+
+  try
+    Raw := TFile.ReadAllText(BaselineFile, TEncoding.UTF8);
+  except
+    Exit;   // nicht lesbar -> leeres Set (kein Fehler)
+  end;
+  Root := TJSONObject.ParseJSONValue(Raw);
+  if Root = nil then Exit;
+  try
+    if Root is TJSONObject then
+    begin
+      var FindingsVal := TJSONObject(Root).Values['findings'];
+      if FindingsVal is TJSONArray then
+        Arr := TJSONArray(FindingsVal)
+      else
+        Arr := nil;
+    end
+    else if Root is TJSONArray then
+      Arr := TJSONArray(Root)
+    else
+      Arr := nil;
+
+    if Arr <> nil then
+    begin
+      Loaded := 0;
+      for Obj in Arr do
+      begin
+        if Loaded >= MAX_BASELINE_ENTRIES then Break;
+        if not (Obj is TJSONObject) then Continue;
+        Inc(Loaded);
+        FpJson := TJSONObject(Obj).Values['fingerprint'];
+        if (FpJson <> nil) and not FpJson.Null
+           and (Length(FpJson.Value) <= MAX_FINGERPRINT_LEN) then
+          FFingerprints.AddOrSetValue(FpJson.Value, True);
+      end;
+    end;
+  finally
+    Root.Free;
+  end;
+  Result := FFingerprints.Count;
 end;
 
 end.

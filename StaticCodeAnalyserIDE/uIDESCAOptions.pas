@@ -24,7 +24,7 @@ uses
   Winapi.Messages,                                    // TMessage / CM_STYLECHANGED
   System.Classes, System.SysUtils, System.UITypes,    // clGrayText
   Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
+  Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Dialogs,
   ToolsAPI,
   uIDEAddInOptionsBase,          // gemeinsame Basis fuer INTAAddInOptions-Adapter
   uRepoSettings,
@@ -66,7 +66,15 @@ type
     lblEditorColorScheme    : TLabel;
     cboEditorColorScheme    : TComboBox;
     lblEditorColorSchemeInfo: TLabel;
+    // Baseline (non-destruktiver "nur neue Funde"-Filter)
+    grpBaseline             : TGroupBox;
+    chkBaselineOnlyNew      : TCheckBox;
+    lblBaselineFile         : TLabel;
+    edtBaselineFile         : TEdit;
+    btnBaselineBrowse       : TButton;
+    lblBaselineInfo         : TLabel;
   private
+    procedure BaselineBrowseClick(Sender: TObject);
     procedure BuildControls;
     // BuildControls als Orchestrator + Sektionen. Reihenfolge spiegelt den
     // Layout-Stapel: Silent / Rule-Set / Detectors / Display.
@@ -74,6 +82,7 @@ type
     procedure BuildRuleSetSection(AParent: TWinControl; var AY: Integer);
     procedure BuildDetectorsSection(AParent: TWinControl; var AY: Integer);
     procedure BuildDisplaySection(AParent: TWinControl; var AY: Integer);
+    procedure BuildBaselineSection(AParent: TWinControl; var AY: Integer);
     procedure PopulateProfileCombos;
     procedure PopulateMinSevCombo;
     // VCL-Style-Wechsel via Application.Broadcast - feuert zuverlaessiger
@@ -187,6 +196,7 @@ begin
   BuildRuleSetSection  (FScroll, Y);
   BuildDetectorsSection(FScroll, Y);
   BuildDisplaySection  (FScroll, Y);
+  BuildBaselineSection (FScroll, Y);
 end;
 
 procedure TSCAOptionsFrame.BuildSilentSection(AParent: TWinControl;
@@ -447,6 +457,96 @@ begin
                        lblEditorColorSchemeInfo.Height + 112;
 end;
 
+procedure TSCAOptionsFrame.BuildBaselineSection(AParent: TWinControl;
+  var AY: Integer);
+// "Nur neue Funde"-Filter: blendet Funde aus, deren Fingerprint in einer
+// Baseline-JSON steht (Format = CLI --write-baseline / HTML-Export). Non-
+// destruktiv - reiner Anzeige-Filter, Grid/Export behalten die Vollmenge.
+const
+  BTN_W = 32;
+begin
+  grpBaseline         := TGroupBox.Create(Self);
+  grpBaseline.Parent  := AParent;
+  grpBaseline.Left    := MARGIN_LEFT;
+  grpBaseline.Top     := AY;
+  grpBaseline.Width   := GROUP_W;
+  grpBaseline.Caption := _('Baseline (show only new findings)');
+
+  chkBaselineOnlyNew         := TCheckBox.Create(Self);
+  chkBaselineOnlyNew.Parent  := grpBaseline;
+  chkBaselineOnlyNew.Left    := INNER_LEFT;
+  chkBaselineOnlyNew.Top     := INNER_TOP;
+  chkBaselineOnlyNew.Width   := GROUP_W - 2 * INNER_LEFT;
+  chkBaselineOnlyNew.Caption :=
+    _('Show only findings new since the baseline (hide the legacy backlog)');
+
+  lblBaselineFile         := TLabel.Create(Self);
+  lblBaselineFile.Parent  := grpBaseline;
+  lblBaselineFile.Left    := INNER_LEFT;
+  lblBaselineFile.Top     := chkBaselineOnlyNew.Top + chkBaselineOnlyNew.Height + 12;
+  lblBaselineFile.Caption := _('Baseline file:');
+
+  edtBaselineFile         := TEdit.Create(Self);
+  edtBaselineFile.Parent  := grpBaseline;
+  edtBaselineFile.Left    := INNER_LEFT;
+  edtBaselineFile.Top     := lblBaselineFile.Top + lblBaselineFile.Height + 4;
+  edtBaselineFile.Width   := GROUP_W - 2 * INNER_LEFT - BTN_W - 6;
+
+  btnBaselineBrowse         := TButton.Create(Self);
+  btnBaselineBrowse.Parent  := grpBaseline;
+  btnBaselineBrowse.Left    := edtBaselineFile.Left + edtBaselineFile.Width + 6;
+  btnBaselineBrowse.Top     := edtBaselineFile.Top - 1;
+  btnBaselineBrowse.Width   := BTN_W;
+  btnBaselineBrowse.Height  := edtBaselineFile.Height + 2;
+  btnBaselineBrowse.Caption := '...';
+  btnBaselineBrowse.OnClick := BaselineBrowseClick;
+
+  lblBaselineInfo          := TLabel.Create(Self);
+  lblBaselineInfo.Parent   := grpBaseline;
+  lblBaselineInfo.AutoSize := False;
+  lblBaselineInfo.Left     := INNER_LEFT;
+  lblBaselineInfo.Top      := edtBaselineFile.Top + edtBaselineFile.Height + 8;
+  lblBaselineInfo.Width    := GROUP_W - 2 * INNER_LEFT;
+  lblBaselineInfo.Height   := 64;
+  lblBaselineInfo.WordWrap := True;
+  lblBaselineInfo.Caption  :=
+    _('Create a baseline from the current findings via the dock menu ' +
+      '"Write baseline from current scan...", or with the CLI ' +
+      '--write-baseline. The file is shared across CLI, IDE and HTML export. ' +
+      'Takes effect on the next analysis.');
+
+  grpBaseline.Height := lblBaselineInfo.Top + lblBaselineInfo.Height + 12;
+  Inc(AY, grpBaseline.Height + GROUP_GAP);
+end;
+
+procedure TSCAOptionsFrame.BaselineBrowseClick(Sender: TObject);
+var
+  Dlg : TFileOpenDialog;
+begin
+  Dlg := TFileOpenDialog.Create(nil);
+  try
+    Dlg.Options := [fdoFileMustExist, fdoForceFileSystem];
+    Dlg.Title   := _('Select baseline file');
+    with Dlg.FileTypes.Add do
+    begin
+      DisplayName := _('Baseline JSON');
+      FileMask    := '*.json';
+    end;
+    with Dlg.FileTypes.Add do
+    begin
+      DisplayName := _('All files');
+      FileMask    := '*.*';
+    end;
+    if (Trim(edtBaselineFile.Text) <> '')
+       and DirectoryExists(ExtractFilePath(edtBaselineFile.Text)) then
+      Dlg.DefaultFolder := ExtractFilePath(edtBaselineFile.Text);
+    if Dlg.Execute then
+      edtBaselineFile.Text := Dlg.FileName;
+  finally
+    Dlg.Free;
+  end;
+end;
+
 procedure TSCAOptionsFrame.PopulateProfileCombos;
 // Beide Profile-Combos werden aus TRuleCatalog.ProfileNames gefuellt
 // (default, ide-fast, strict, security, bugs-only, code-quality, dfm-only
@@ -532,6 +632,12 @@ begin
   if Assigned(cboEditorColorScheme) then
     cboEditorColorScheme.ItemIndex :=
       ComboIndexFromScheme(ParseEditorColorScheme(ASettings.EditorColorScheme));
+
+  // Baseline
+  if Assigned(chkBaselineOnlyNew) then
+    chkBaselineOnlyNew.Checked := ASettings.BaselineOnlyNew;
+  if Assigned(edtBaselineFile) then
+    edtBaselineFile.Text := ASettings.BaselineFile;
 end;
 
 procedure TSCAOptionsFrame.SaveToSettings(ASettings: TRepoSettings);
@@ -580,6 +686,12 @@ begin
     // komplett defensiv.
     RefreshEditorColorSchemeCache(ASettings.EditorColorScheme);
   end;
+
+  // Baseline
+  if Assigned(chkBaselineOnlyNew) then
+    ASettings.BaselineOnlyNew := chkBaselineOnlyNew.Checked;
+  if Assigned(edtBaselineFile) then
+    ASettings.BaselineFile := Trim(edtBaselineFile.Text);
 end;
 
 procedure TSCAOptionsFrame.ApplyHintStyleToAllInfoLabels;
@@ -590,6 +702,7 @@ begin
   StyleAsHintLabel(lblOverlayPosInfo);
   StyleAsHintLabel(lblOverlayShowOnHoverInfo);
   StyleAsHintLabel(lblEditorColorSchemeInfo);
+  StyleAsHintLabel(lblBaselineInfo);
 end;
 
 procedure TSCAOptionsFrame.CMStyleChanged(var Message: TMessage);
