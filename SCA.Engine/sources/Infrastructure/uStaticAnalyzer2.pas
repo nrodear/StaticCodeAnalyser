@@ -232,10 +232,11 @@ begin
   // Kind (fkDfmDefaultName) nur Repraesentant ist.
   if D.Name = 'DfmAnalysis' then Exit(True);
 
-  // SourceEncoding-Adapter: EIN Detektor emittiert 4 Encoding-/Security-Kinds
-  // (SourceUtf8NoBom/InvalidUtf8/ControlChar/BidiOverride). Der Read (eigener
-  // ReadAllBytes) wird nur getriggert wenn mind. EIN Encoding-Kind aktiv ist
-  // (Perf-Gate); die Post-Filter-Schleife dropt einzeln deaktivierte Kinds auf
+  // SourceEncoding-Adapter: EIN Detektor emittiert 9 Encoding-/Unicode-Sicherheit-
+  // Kinds (SCA185-193: Utf8NoBom/InvalidUtf8/ControlChar/BidiOverride/AnsiNonAscii/
+  // Utf16/Utf32/InvisibleChar/NonAsciiIdentifier). Der Read (eigener ReadAllBytes,
+  // + optional EIN Lex-Durchgang) wird nur getriggert wenn mind. EIN Kind aktiv
+  // ist (Perf-Gate); die Post-Filter-Schleife dropt einzeln deaktivierte Kinds auf
   // Finding-Ebene. Kind (fkSourceUtf8NoBom) ist nur Repraesentant fuer AddD.
   if D.Name = 'SourceEncoding' then
   begin
@@ -248,7 +249,8 @@ begin
           or (fkSourceAnsiNonAscii in EnKinds)
           or (fkSourceUtf16 in EnKinds)
           or (fkSourceUtf32 in EnKinds)
-          or (fkSourceInvisibleChar in EnKinds) );
+          or (fkSourceInvisibleChar in EnKinds)
+          or (fkSourceNonAsciiIdentifier in EnKinds) );
   end;
 
   // Profile-Whitelist: leere Menge = kein Filter, sonst muss Kind drin sein.

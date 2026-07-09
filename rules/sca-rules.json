@@ -3777,6 +3777,26 @@
       "impacts": [
         { "softwareQuality": "SECURITY", "severity": "MEDIUM" }
       ]
+    },
+    {
+      "id": "SCA193",
+      "kind": "SourceNonAsciiIdentifier",
+      "name": "Non-ASCII character in identifier",
+      "shortDescription": "Identifier contains a non-ASCII letter - homoglyph / confusable risk",
+      "fullDescription": "An identifier (variable, type, routine, ...) contains a non-ASCII character. This is the homoglyph / confusable-identifier vector of the Trojan Source family (CVE-2021-42694, CWE-1007): a letter such as Cyrillic U+043E looks like Latin 'o' but is a different identifier, so two identifiers can look identical yet bind differently. A legitimate Unicode identifier is also possible, so review before changing; prefer ASCII identifiers for portability and to avoid confusion.",
+      "defaultSeverity": "Warning",
+      "type": "Vulnerability",
+      "tags": ["security", "unicode", "trojan-source"],
+      "cwe": ["CWE-1007"],
+      "detectorUnit": "uSourceEncoding.pas",
+      "examples": {
+        "bad":  "var Login: string;  // one letter is a Cyrillic homoglyph (U+043E), not Latin 'o'",
+        "good": "var Login: string;  // all-ASCII identifier"
+      },
+      "cleanCodeAttribute": "TRUSTWORTHY",
+      "impacts": [
+        { "softwareQuality": "SECURITY", "severity": "MEDIUM" }
+      ]
     }
   ]
 }

@@ -1,6 +1,6 @@
 # StaticCodeAnalyser — Rule Catalog
 
-All 192 detector rules. Single source of truth: [`rules/sca-rules.json`](../rules/sca-rules.json).
+All 193 detector rules. Single source of truth: [`rules/sca-rules.json`](../rules/sca-rules.json).
 
 | ID | Name | Severity | Type | Detector |
 |---|---|---|---|---|
@@ -196,6 +196,7 @@ All 192 detector rules. Single source of truth: [`rules/sca-rules.json`](../rule
 | [SCA190](#sca190) | UTF-16 source file | Hint | Code Smell | `uSourceEncoding.pas` |
 | [SCA191](#sca191) | UTF-32 / UCS-4 source file | **Error** | File Error | `uSourceEncoding.pas` |
 | [SCA192](#sca192) | Invisible / zero-width character in source | Warning | Vulnerability | `uSourceEncoding.pas` |
+| [SCA193](#sca193) | Non-ASCII character in identifier | Warning | Vulnerability | `uSourceEncoding.pas` |
 
 ---
 
@@ -4970,6 +4971,30 @@ The file contains an invisible or zero-width Unicode character (U+200B ZWSP, U+2
 
 // GOOD
 // no zero-width / invisible characters in source
+```
+
+---
+
+## SCA193
+**Non-ASCII character in identifier**
+
+> Identifier contains a non-ASCII letter - homoglyph / confusable risk
+
+| Field | Value |
+|---|---|
+| Severity | Warning | Type | Vulnerability |
+| Tags | `security`, `unicode`, `trojan-source` |
+| CWE | [CWE-1007](https://cwe.mitre.org/data/definitions/1007.html) |
+| Detector | `uSourceEncoding.pas` |
+
+An identifier (variable, type, routine, ...) contains a non-ASCII character. This is the homoglyph / confusable-identifier vector of the Trojan Source family (CVE-2021-42694, CWE-1007): a letter such as Cyrillic U+043E looks like Latin 'o' but is a different identifier, so two identifiers can look identical yet bind differently. A legitimate Unicode identifier is also possible, so review before changing; prefer ASCII identifiers for portability and to avoid confusion.
+
+```pascal
+// BAD
+var Login: string;  // one letter is a Cyrillic homoglyph (U+043E), not Latin 'o'
+
+// GOOD
+var Login: string;  // all-ASCII identifier
 ```
 
 ---

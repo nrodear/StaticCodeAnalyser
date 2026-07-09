@@ -4230,6 +4230,20 @@ begin
         '// verify the context before removing it there.';
     end;
 
+    fkSourceNonAsciiIdentifier:
+    begin
+      Result.Description := _('Non-ASCII character in identifier - homoglyph / confusable risk');
+      Result.Before :=
+        '// An identifier contains a non-ASCII letter. A homoglyph such as'#13#10 +
+        '// Cyrillic U+043E looks exactly like Latin "o", so two identifiers'#13#10 +
+        '// can look identical to a reviewer yet bind to different symbols'#13#10 +
+        '// (Trojan Source homoglyph attack, CVE-2021-42694, CWE-1007).';
+      Result.After :=
+        '// Use ASCII identifiers. If a Unicode identifier is intentional,'#13#10 +
+        '// confirm every letter is from the expected script (no mixed'#13#10 +
+        '// Latin/Cyrillic/Greek) and consider transliterating for clarity.';
+    end;
+
   end;
 end;
 

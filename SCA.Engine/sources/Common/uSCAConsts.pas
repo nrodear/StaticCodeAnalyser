@@ -648,8 +648,10 @@ type
                                  //          Nicht-ASCII -> codepage-abhaengig.
     fkSourceUtf16,               // SCA190 - UTF-16-Quelltext (kompiliert, ungewoehnlich).
     fkSourceUtf32,               // SCA191 - UTF-32/UCS-4-Quelltext -> Compiler-Fehler F2438.
-    fkSourceInvisibleChar        // SCA192 - unsichtbares/Zero-Width-Zeichen (Unicode-
+    fkSourceInvisibleChar,       // SCA192 - unsichtbares/Zero-Width-Zeichen (Unicode-
                                  //          Abuse, CWE-1007): U+200B-200D/2060/mid-FEFF.
+    fkSourceNonAsciiIdentifier   // SCA193 - Nicht-ASCII in einem Identifier (Homoglyph/
+                                 //          Confusable, Trojan Source, CWE-1007).
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -921,7 +923,8 @@ const
     (Name: 'SourceAnsiNonAscii';         FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkSourceAnsiNonAscii
     (Name: 'SourceUtf16';                FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkSourceUtf16
     (Name: 'SourceUtf32';                FindingType: ftFileError;    DefaultSeverity: lsError),   // fkSourceUtf32
-    (Name: 'SourceInvisibleChar';        FindingType: ftVulnerability;DefaultSeverity: lsWarning)  // fkSourceInvisibleChar
+    (Name: 'SourceInvisibleChar';        FindingType: ftVulnerability;DefaultSeverity: lsWarning), // fkSourceInvisibleChar
+    (Name: 'SourceNonAsciiIdentifier';   FindingType: ftVulnerability;DefaultSeverity: lsWarning)  // fkSourceNonAsciiIdentifier
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.
@@ -1143,6 +1146,11 @@ begin
     // Delphi-Quelltext fast nie legitim; ZWJ (U+200D) kann aber in Emoji-String-
     // Literalen vorkommen -> nicht fcHigh. 0 Self-Scan-Treffer.
     fkSourceInvisibleChar: Result := fcMedium;
+    // SCA193 SourceNonAsciiIdentifier: fcMedium. Nicht-ASCII in einem Identifier
+    // ist der Homoglyph-/Confusable-Vektor (Trojan Source) - aber ein legitimer
+    // Unicode-Identifier (z.B. deutsche Umlaute) ist ebenfalls moeglich, daher
+    // nicht fcHigh. 0 Self-Scan-Treffer.
+    fkSourceNonAsciiIdentifier: Result := fcMedium;
 
     // --- Welle 4: reine FORMATIERUNGS-/Style-Regeln (2026-06-29) ---
     // Definitiv KEINE Bugs (Whitespace, Zeilenlaenge, Keyword-Casing, Deklara-

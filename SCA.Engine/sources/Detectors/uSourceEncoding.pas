@@ -18,12 +18,16 @@ unit uSourceEncoding;
 //                             Source, CVE-2021-42574 / CWE-1007). Error.
 //   S2 fkSourceInvisibleChar- unsichtbares/Zero-Width-Zeichen (U+200B-200D/2060/
 //                             mid-FEFF; Unicode-Abuse, CWE-1007). Warning.
+//   S3 fkSourceNonAsciiIdentifier - Nicht-ASCII in einem Identifier (Homoglyph/
+//                             Confusable, Trojan Source, CWE-1007). Warning.
 //
 // Gruppe A (Encoding) ist gegenseitig ausschliessend: genau EIN Fund pro Datei.
 // UTF-32/UTF-16 (E7/E4) sind BOM-bestimmte Ganzdatei-Verdikte (emittieren + RAUS,
 // kein Bidi-Scan auf UTF-16-Bytes). Fuer den Rest: Praezedenz E5 > E2 > E1 > E3.
-// Gruppe B (S1/S2) ist orthogonal und kann ZUSAETZLICH feuern - Bidi/Zero-Width
-// sind auch in korrektem UTF-8+BOM gefaehrlich.
+// Gruppe B (S1/S2/S3) ist orthogonal und kann ZUSAETZLICH feuern - Bidi/Zero-Width/
+// Homoglyph-Identifier sind auch in korrektem UTF-8+BOM gefaehrlich. S3 wird per
+// TLexer erkannt (nur wenn die Datei ueberhaupt Nicht-ASCII hat -> kein Lex-
+// Aufwand fuer reine ASCII-Dateien).
 //
 // Scope: nur Pascal-Quelltext (.pas/.dpr/.dpk/.inc). Kommentare zaehlen hier
 // BEWUSST mit - Encoding/Bidi ist datei-global, nicht code-lokal.
@@ -49,6 +53,10 @@ type
     // die E1-Confidence (String/Code = echtes Mojibake-Risiko = fcMedium; nur
     // Kommentar = vom Compiler verworfen = fcLow). Public fuer Tests.
     class function HasNonAsciiOutsideComments(const Source: string): Boolean; static;
+    // True wenn ein Nicht-ASCII-Zeichen in einem Identifier/Code-Token
+    // (tkIdent/tkUnknown) steht = Homoglyph-/Confusable-Vektor (S3). Public
+    // fuer Tests.
+    class function HasNonAsciiIdentifier(const Source: string): Boolean; static;
   end;
 
 implementation
@@ -71,28 +79,46 @@ begin
   if L > 0 then Result := L else Result := 1;
 end;
 
-class function TSourceEncodingDetector.HasNonAsciiOutsideComments(
-  const Source: string): Boolean;
-// Lexen: der TLexer verwirft Kommentare (//, { }, (* *), {$..}) und liefert nur
-// Code-/String-/Unknown-Tokens. Ein Nicht-ASCII-Zeichen im Value eines Tokens
-// steht also NICHT in einem Kommentar. (Randfall: der Lexer dekodiert #$nnnn-
-// Char-Literale zu echten Zeichen - fuer E1 irrelevant, weil E1 rohes Nicht-
-// ASCII voraussetzt; im schlimmsten Fall wird eine reine-Kommentar-Datei mit
-// #$nnnn-String als fcMedium statt fcLow gewertet, was vertretbar ist.)
+procedure ScanNonAsciiTokens(const Source: string;
+  out AnyOutside, InIdentifier: Boolean; out IdentLine: Integer);
+// EIN Lex-Durchgang. Der TLexer verwirft Kommentare (//, { }, (* *), {$..}) und
+// liefert nur Code-/String-/Unknown-Tokens - ein Nicht-ASCII-Zeichen im Token-
+// Value steht also NICHT in einem Kommentar.
+//   AnyOutside   = Nicht-ASCII in irgendeinem Token (String ODER Code) -> E1-
+//                  Confidence (fcMedium statt fcLow).
+//   InIdentifier = Nicht-ASCII in einem Identifier/Code-Token (tkIdent/tkUnknown)
+//                  -> Homoglyph-/Confusable-Vektor (S3); IdentLine = dessen Zeile.
+// (Randfall: der Lexer dekodiert #$nnnn-Char-Literale zu echten Zeichen - fuer
+// die Detektor-Nutzung irrelevant, weil beide Aufrufer rohes Nicht-ASCII per
+// AnalyzeFileEncoding.HasNonAscii voraussetzen.)
 var
-  Lex : TLexer;
-  Tok : TToken;
-  ch  : Char;
+  Lex      : TLexer;
+  Tok      : TToken;
+  ch       : Char;
+  TokHasNA : Boolean;
 begin
-  Result := False;
+  AnyOutside   := False;
+  InIdentifier := False;
+  IdentLine    := 0;
   if Source = '' then Exit;
   Lex := TLexer.Create(Source);
   try
     Tok := Lex.Next;
     while Tok.Kind <> tkEof do
     begin
+      TokHasNA := False;
       for ch in Tok.Value do
-        if Ord(ch) >= $80 then Exit(True);
+        if Ord(ch) >= $80 then begin TokHasNA := True; Break; end;
+      if TokHasNA then
+      begin
+        AnyOutside := True;
+        if (Tok.Kind in [tkIdent, tkUnknown]) and not InIdentifier then
+        begin
+          InIdentifier := True;
+          IdentLine    := Tok.Line;
+        end;
+      end;
+      if AnyOutside and InIdentifier then Break;   // beide Fakten gefunden
       Tok := Lex.Next;
     end;
   finally
@@ -100,14 +126,30 @@ begin
   end;
 end;
 
+class function TSourceEncodingDetector.HasNonAsciiOutsideComments(
+  const Source: string): Boolean;
+var Ident: Boolean; Ln: Integer;
+begin
+  ScanNonAsciiTokens(Source, Result, Ident, Ln);
+end;
+
+class function TSourceEncodingDetector.HasNonAsciiIdentifier(
+  const Source: string): Boolean;
+var Outside: Boolean; Ln: Integer;
+begin
+  ScanNonAsciiTokens(Source, Outside, Result, Ln);
+end;
+
 class procedure TSourceEncodingDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>;
   AContext: TAnalyzeContext);
 var
-  Info    : TFileEncodingInfo;
-  Lines   : TStringList;
-  Cached  : Boolean;
-  Outside : Boolean;
+  Info      : TFileEncodingInfo;
+  Lines     : TStringList;
+  Cached    : Boolean;
+  Outside   : Boolean;
+  Ident     : Boolean;
+  IdentLine : Integer;
 begin
   if not HasSourceExt(FileName) then Exit;
   Info := AnalyzeFileEncoding(FileName);
@@ -149,6 +191,33 @@ begin
       'appear in emoji string literals - verify before removing there).',
       fkSourceInvisibleChar));
 
+  // Token-basierte Analyse: EIN Lex-Durchgang, aber nur wenn die Datei ueberhaupt
+  // Nicht-ASCII enthaelt (reine ASCII-Dateien = kein Lex-Aufwand). Liefert Outside
+  // (Nicht-ASCII in String/Code -> E1-Confidence) und Ident (Nicht-ASCII in einem
+  // Identifier -> S3).
+  Outside := False; Ident := False; IdentLine := 0;
+  if Info.HasNonAscii then
+  begin
+    Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
+    if Lines <> nil then
+      try
+        ScanNonAsciiTokens(Lines.Text, Outside, Ident, IdentLine);
+      finally
+        ReleaseLines(Lines, Cached);
+      end;
+  end;
+
+  // S3 (Security, orthogonal): Homoglyph-/Confusable-Identifier. Feuert auch in
+  // korrektem UTF-8+BOM (ein Cyrillic-Homoglyph in einem Identifier ist dort
+  // genauso gefaehrlich).
+  if Ident then
+    Results.Add(TLeakFinding.New(FileName, '', LineOr1(IdentLine),
+      'Non-ASCII character in an identifier - homoglyph / confusable risk ' +
+      '(Trojan Source, CWE-1007): a letter such as Cyrillic U+043E looks like ' +
+      'Latin "o" but binds to a different symbol. Prefer ASCII identifiers; if a ' +
+      'Unicode identifier is intentional, avoid mixing scripts.',
+      fkSourceNonAsciiIdentifier));
+
   // ---- Gruppe A (Encoding): genau EIN Fund, Praezedenz E5 > E2 > E1 > E3 --
   if Info.HasNulCtrl then
     Results.Add(TLeakFinding.New(FileName, '', LineOr1(Info.FirstNulCtrlLine),
@@ -163,19 +232,9 @@ begin
       fkSourceInvalidUtf8))
   else if (Info.BomKind = sbkNone) and Info.HasNonAscii and Info.StrictUtf8 then
   begin
-    // E1: Nicht-ASCII ohne BOM. Confidence nach Position des Nicht-ASCII:
-    // String-Literal/Code = echtes Laufzeit-Mojibake (fcMedium); nur Kommentar =
-    // der Compiler verwirft Kommentare (fcLow, opt-in). Klassifikation via
-    // TLexer auf dem dekodierten Text (der Cache dekodiert die BOM-lose Datei
-    // bereits als UTF-8).
-    Outside := False;
-    Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
-    if Lines <> nil then
-      try
-        Outside := HasNonAsciiOutsideComments(Lines.Text);
-      finally
-        ReleaseLines(Lines, Cached);
-      end;
+    // E1: Nicht-ASCII ohne BOM. Outside (oben in EINEM Lex-Durchgang ermittelt)
+    // bestimmt die Confidence: String-Literal/Code = echtes Laufzeit-Mojibake
+    // (fcMedium); nur Kommentar = der Compiler verwirft Kommentare (fcLow, opt-in).
     if Outside then
       Results.Add(TLeakFinding.New(FileName, '', LineOr1(Info.FirstNonAsciiLine),
         'UTF-8 without BOM: non-ASCII in a string literal or identifier. The ' +

@@ -8,8 +8,8 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Changes since **v0.9.8**. Detector roster grows from 183 to **192 rules**
-(`SCA001`–`SCA192`); DFM detectors 22 → **23**.
+Changes since **v0.9.8**. Detector roster grows from 183 to **193 rules**
+(`SCA001`–`SCA193`); DFM detectors 22 → **23**.
 
 ### Added
 
@@ -34,6 +34,13 @@ Changes since **v0.9.8**. Detector roster grows from 183 to **192 rules**
     `F2438`.
   - `SCA192 SourceInvisibleChar` — invisible / zero-width chars
     (U+200B–200D, U+2060, mid-file U+FEFF; CWE-1007).
+  - `SCA193 SourceNonAsciiIdentifier` — non-ASCII character in an
+    identifier: the homoglyph / confusable vector of Trojan Source
+    (CVE-2021-42694, CWE-1007) — e.g. a Cyrillic U+043E that looks like
+    Latin `o`. Detected via `TLexer` (identifier/code tokens), only when
+    the file has non-ASCII at all (no lexing cost for pure-ASCII files);
+    fires even in correctly-encoded UTF-8+BOM. `fcMedium` (a legitimate
+    Unicode identifier is possible).
   - Ships with 32 unit tests (`uTestSourceEncoding.pas`) and German help
     texts (`de.po`). Scope: `.pas/.dpr/.dpk/.inc`.
 - **IDE plugin — baseline filter ("show only new findings")**: point the

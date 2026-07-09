@@ -69,6 +69,13 @@ type
     [Test] procedure Outside_PureAscii_False;
     [Test] procedure Detect_Utf8NoBom_InString_fcMedium;
     [Test] procedure Detect_Utf8NoBom_InComment_fcLow;
+    // ---- S3 Homoglyph / Non-ASCII-Identifier ------------------------------
+    [Test] procedure Ident_NonAscii_True;
+    [Test] procedure Ident_InString_False;
+    [Test] procedure Ident_InComment_False;
+    [Test] procedure Ident_PureAscii_False;
+    [Test] procedure Detect_NonAsciiIdentifier_S3;
+    [Test] procedure Detect_Utf8Bom_NonAsciiIdent_S3_NoEncodingFinding;
   end;
 
 implementation
@@ -382,10 +389,14 @@ end;
 procedure TTestSourceEncoding.Detect_Utf8Bom_NonAscii_NoFinding;
 var F: TObjectList<TLeakFinding>;
 begin
-  // Das Soll: UTF-8 MIT BOM + Umlaut -> korrekt, kein Fund.
+  // Das Soll: UTF-8 MIT BOM + Umlaut in einem STRING-Literal -> korrekt, kein
+  // Fund. (Nicht-ASCII muss in einem String stehen, nicht in Code-Position:
+  // ein Umlaut im Identifier wuerde zu Recht S3/SCA193 ausloesen.)
+  //   <BOM>S := 'e-acute';
   F := DetectBytes(Cat(TBytes.Create($EF, $BB, $BF),
-                       Cat(Ascii('unit x;'), TBytes.Create($C3, $A9))));
-  try Assert.AreEqual<Integer>(0, F.Count, 'UTF-8+BOM ist das Soll -> kein Fund');
+                       Cat(Ascii('S := '),
+                           Cat(TBytes.Create($27, $C3, $A9, $27), Ascii(';')))));
+  try Assert.AreEqual<Integer>(0, F.Count, 'UTF-8+BOM + Umlaut im String ist das Soll -> kein Fund');
   finally F.Free; end;
 end;
 
@@ -485,6 +496,58 @@ begin
     Fnd := FirstKind(F, fkSourceUtf8NoBom);
     Assert.IsNotNull(Fnd, 'E1 muss feuern');
     Assert.IsTrue(Fnd.Confidence = fcLow, 'Nicht-ASCII nur im Kommentar -> fcLow');
+  finally F.Free; end;
+end;
+
+{ ---- S3 Homoglyph / Non-ASCII-Identifier -------------------------------- }
+
+procedure TTestSourceEncoding.Ident_NonAscii_True;
+begin
+  // 'var <e-acute>x: Integer;' -> Nicht-ASCII in Identifier-/Code-Position
+  Assert.IsTrue(TSourceEncodingDetector.HasNonAsciiIdentifier(
+    'var ' + Chr($E9) + 'x: Integer;'));
+end;
+
+procedure TTestSourceEncoding.Ident_InString_False;
+begin
+  // Nicht-ASCII nur im String-Literal -> KEIN Identifier-Treffer
+  Assert.IsFalse(TSourceEncodingDetector.HasNonAsciiIdentifier(
+    'S := ' + Chr(39) + Chr($E9) + Chr(39) + ';'));
+end;
+
+procedure TTestSourceEncoding.Ident_InComment_False;
+begin
+  Assert.IsFalse(TSourceEncodingDetector.HasNonAsciiIdentifier('// ' + Chr($E9)));
+end;
+
+procedure TTestSourceEncoding.Ident_PureAscii_False;
+begin
+  Assert.IsFalse(TSourceEncodingDetector.HasNonAsciiIdentifier(
+    'var Login: string;'));
+end;
+
+procedure TTestSourceEncoding.Detect_NonAsciiIdentifier_S3;
+var F: TObjectList<TLeakFinding>;
+begin
+  // 'var <e-acute>x: Integer;' als UTF-8 ohne BOM -> S3 feuert (Identifier).
+  F := DetectBytes(Cat(Ascii('var '),
+                       Cat(TBytes.Create($C3, $A9), Ascii('x: Integer;'))));
+  try Assert.AreEqual<Integer>(1, CountKind(F, fkSourceNonAsciiIdentifier));
+  finally F.Free; end;
+end;
+
+procedure TTestSourceEncoding.Detect_Utf8Bom_NonAsciiIdent_S3_NoEncodingFinding;
+var F: TObjectList<TLeakFinding>;
+begin
+  // Korrektes UTF-8+BOM, aber Identifier mit Homoglyph -> S3 feuert, KEIN
+  // Encoding-Fund (die Datei-Encoding ist korrekt).
+  F := DetectBytes(Cat(TBytes.Create($EF, $BB, $BF),
+                       Cat(Ascii('var '),
+                           Cat(TBytes.Create($C3, $A9), Ascii('x: Integer;')))));
+  try
+    Assert.AreEqual<Integer>(1, CountKind(F, fkSourceNonAsciiIdentifier), 'S3 feuert auch in UTF-8+BOM');
+    Assert.AreEqual<Integer>(0, CountKind(F, fkSourceUtf8NoBom), 'kein E1 (hat BOM)');
+    Assert.AreEqual<Integer>(0, CountKind(F, fkSourceInvalidUtf8), 'kein E2');
   finally F.Free; end;
 end;
 
