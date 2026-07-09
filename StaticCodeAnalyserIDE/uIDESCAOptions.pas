@@ -22,7 +22,7 @@ interface
 
 uses
   Winapi.Messages,                                    // TMessage / CM_STYLECHANGED
-  System.Classes, System.SysUtils, System.UITypes,    // clGrayText
+  System.Classes, System.SysUtils, System.UITypes, System.Types,  // clGrayText / TPoint
   Vcl.Graphics,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Dialogs,
   ToolsAPI,
@@ -75,6 +75,14 @@ type
     lblBaselineInfo         : TLabel;
   private
     procedure BaselineBrowseClick(Sender: TObject);
+    // Mausrad-Scrolling: EIN Wheel-Handler wird rekursiv ALLEN Controls im
+    // FScroll zugewiesen (HookMouseWheel), damit das Rad ueberall auf der Seite
+    // den ScrollBox scrollt - nicht nur wenn der ScrollBox selbst den Fokus/die
+    // WM_MOUSEWHEEL-Message bekommt (Combos/Checkboxen wuerden sie sonst
+    // schlucken bzw. der fokussierte Options-Baum bekaeme das Rad).
+    procedure PanelMouseWheel(Sender: TObject; Shift: TShiftState;
+      WheelDelta: Integer; MousePos: TPoint; var Handled: Boolean);
+    procedure HookMouseWheel(AParent: TWinControl);
     procedure BuildControls;
     // BuildControls als Orchestrator + Sektionen. Reihenfolge spiegelt den
     // Layout-Stapel: Silent / Rule-Set / Detectors / Display.
@@ -125,6 +133,7 @@ implementation
 
 uses
   uIDETheme,         // TIDETheme.Apply + Subscribe
+  uIDEToolbar,       // ApplySegoeUI - Font-Pin (High-DPI-Fix, wie Dock/uMainForm)
   uIDEColors,        // IDE_FG_DIM - semantische Theme-Farbe (wie uIDESonarOptions)
   uAnalyserTheme;    // TEditorColorScheme + Parse/ToStr
 
@@ -159,7 +168,18 @@ constructor TSCAOptionsFrame.Create(AOwner: TComponent);
 begin
   inherited;
   Name    := '';       // keinen Komponenten-Namen fuer den Frame
+  // High-DPI-Font-Fix: Frame-Font auf Segoe UI 8pt pinnen (ParentFont:=False),
+  // damit die in Code erzeugten Controls (ParentFont=True) EINEN punktbasierten
+  // Font erben und genau EINMAL skalieren. Ohne diesen Pin erbt der Frame den
+  // bereits DPI-skalierten Host-Font UND wird beim Parenten in den 120-DPI-
+  // Options-Dialog nochmals ChangeScaled -> Text ~25% zu gross bei 125%.
+  // Identisches Muster wie Dock (uIDEAnalyserForm), uMainForm, Properties-Frame.
+  // VOR BuildControls, damit die Kind-Controls den gepinnten Font gleich erben.
+  TIDEToolbar.ApplySegoeUI(Self);
   BuildControls;
+  // Mausrad-Scrolling ueber die ganze Seite (nach BuildControls, wenn FScroll
+  // + alle Kind-Controls existieren).
+  HookMouseWheel(FScroll);
   // Background: semantische Konstante in uIDEColors - identisch zur Sonar-
   // Options-Page (beide Pages sollen visuell konsistent wirken).
   Self.ParentColor      := False;
@@ -190,6 +210,17 @@ begin
   FScroll.AutoScroll   := True;
   FScroll.VertScrollBar.Tracking  := True;
   FScroll.HorzScrollBar.Visible   := False;
+  // Die alClient-ScrollBox wuerde unter aktivem IDE-Style von ihrem
+  // TScrollBoxStyleHook mit GetStyleColor(scWindow) gemalt (Control.Color wird
+  // IGNORIERT) -> der Ton weicht von der Frame-Farbe ab. Fix: eigene Farbe
+  // setzen UND seClient entfernen, dann faellt das Erase auf
+  // TWinControl.WMEraseBkgnd = eigene Color zurueck. uIDETheme.ApplyStyleHook-
+  // PreserveSeClient haelt die seClient-Entfernung ueber ApplyTheme hinweg
+  // persistent (ApplyTheme wuerde seClient sonst wieder ergaenzen).
+  FScroll.ParentColor      := False;
+  FScroll.ParentBackground := False;
+  FScroll.Color            := IDE_BG_OPTIONS_FRAME;
+  FScroll.StyleElements    := FScroll.StyleElements - [seClient];
 
   Y := MARGIN_TOP;
   BuildSilentSection   (FScroll, Y);
@@ -544,6 +575,39 @@ begin
       edtBaselineFile.Text := Dlg.FileName;
   finally
     Dlg.Free;
+  end;
+end;
+
+type
+  // Cracker: TControl.OnMouseWheel ist protected und wird nur bei einzelnen
+  // Nachfahren published. Ueber diesen Cast erreichen wir es fuer jedes Control.
+  TWheelCtrl = class(TControl);
+
+procedure TSCAOptionsFrame.PanelMouseWheel(Sender: TObject; Shift: TShiftState;
+  WheelDelta: Integer; MousePos: TPoint; var Handled: Boolean);
+begin
+  if not Assigned(FScroll) then Exit;
+  // WheelDelta = +/-120 pro Rasterschritt; nach oben (positiv) -> Position
+  // verringern (Inhalt nach unten). VCL klemmt Position auf den gueltigen
+  // Bereich, kein Ueber-/Unterlauf noetig.
+  FScroll.VertScrollBar.Position := FScroll.VertScrollBar.Position - WheelDelta;
+  Handled := True;
+end;
+
+procedure TSCAOptionsFrame.HookMouseWheel(AParent: TWinControl);
+var
+  i : Integer;
+  C : TControl;
+begin
+  if AParent = nil then Exit;
+  TWheelCtrl(AParent).OnMouseWheel := PanelMouseWheel;
+  for i := 0 to AParent.ControlCount - 1 do
+  begin
+    C := AParent.Controls[i];
+    if C is TWinControl then
+      HookMouseWheel(TWinControl(C))            // setzt C.OnMouseWheel im rekursiven Aufruf
+    else
+      TWheelCtrl(C).OnMouseWheel := PanelMouseWheel;  // TGraphicControl (Label) - defensiv
   end;
 end;
 

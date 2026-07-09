@@ -404,24 +404,32 @@ end;
 procedure ApplyStyleHookPreserveSeClient(ATheming: IOTAIDEThemingServices;
   AC: TControl);
 // ApplyTheme registriert den IDE-Style-Hook auf AC. Sichert dabei den
-// "StyleElements - [seClient]"-Trick: Tile-Panels und der Help-Panel-Caption
-// werden so erzeugt, dass sie ihren Hintergrund vom Parent erben statt vom
-// Style. Falls ATheming.ApplyTheme intern StyleElements auf den Default
+// "StyleElements - [seClient]"-Trick: Controls, die ihren Hintergrund per
+// eigener Color (statt Style-Farbe) malen sollen, werden mit entferntem
+// seClient erzeugt (Tile-Panels, Help-Panel-Caption, die Options-ScrollBox).
+// Falls ATheming.ApplyTheme intern StyleElements auf den Default
 // [seBorder, seClient, seFont] zurueckschreibt, wuerde das den Trick brechen.
 // Snapshot + Restore garantiert die Persistenz ueber alle Theme-Switches.
+//
+// Gilt fuer JEDES TControl, nicht nur TCustomControl: eine TScrollBox
+// (TScrollingWinControl) wird von TScrollBoxStyleHook gemalt, dessen Brush
+// fest auf GetStyleColor(scWindow) steht und Control.Color IGNORIERT. Nur ohne
+// seClient lehnt der Hook WM_ERASEBKGND ab und das Erase faellt auf
+// TWinControl.WMEraseBkgnd = eigene Color zurueck (verifiziert an Vcl.Themes/
+// Vcl.Controls-Quelle). StyleElements ist auf TControl deklariert; der
+// TControlAccess-Cracker erreicht es fuer alle Control-Klassen. No-op fuer
+// Controls mit Default-seClient (HadSeClient=True -> kein Restore), also
+// unkritisch fuer die uebrigen bereits gethemten Controls.
 var
   HadSeClient : Boolean;
 begin
-  if AC is TCustomControl then
-    HadSeClient := seClient in TCustomControl(AC).StyleElements
-  else
-    HadSeClient := True;  // Default-Annahme, kein Restore noetig
+  HadSeClient := seClient in TControlAccess(AC).StyleElements;
 
   ATheming.ApplyTheme(AC);
 
-  if (AC is TCustomControl) and (not HadSeClient) then
-    TCustomControl(AC).StyleElements :=
-      TCustomControl(AC).StyleElements - [seClient];
+  if not HadSeClient then
+    TControlAccess(AC).StyleElements :=
+      TControlAccess(AC).StyleElements - [seClient];
 end;
 
 procedure ResolveDescendantColors(AC: TControl;

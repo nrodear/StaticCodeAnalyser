@@ -97,6 +97,7 @@ implementation
 uses
   System.IniFiles, System.IOUtils, Winapi.ShellAPI, Winapi.Windows,
   uIDETheme,    // TIDETheme.Apply + Subscribe
+  uIDEToolbar,  // ApplySegoeUI - Font-Pin (High-DPI-Fix, wie Dock/uMainForm)
   uIDEColors;   // semantische Palette (IDE_BG_CONTENT, IDE_FG_DIM)
 
 var
@@ -113,6 +114,11 @@ constructor TSonarOptionsFrame.Create(AOwner: TComponent);
 begin
   inherited;
   Name := '';
+  // High-DPI-Font-Fix: Frame-Font pinnen (Segoe UI 8pt, ParentFont:=False), damit
+  // die Code-Controls EINEN punktbasierten Font erben und einmal skalieren - sonst
+  // erbt der Frame den Host-Font UND wird beim Parenten in den 120-DPI-Options-
+  // Dialog nochmals skaliert -> Text zu gross bei 125%. Muster wie Dock/uMainForm.
+  TIDEToolbar.ApplySegoeUI(Self);
   BuildControls;
   // Background-Policy identisch zu TSCAOptionsFrame (uIDESCAOptions) -
   // beide Options-Pages sollen visuell konsistent wirken. Ohne dieses
