@@ -6,7 +6,8 @@ unit uSourceEncoding;
 // steckt nur in den Rohbytes). Siehe Konzept_FileEncodingDetector.
 //
 //   E1 fkSourceUtf8NoBom    - UTF-8 ohne BOM + Nicht-ASCII (Compiler liest ANSI
-//                             -> Mojibake). Warning/fcLow (opt-in, Kommentar-FP).
+//                             -> Mojibake). Confidence via TLexer: non-ASCII in
+//                             String/Code = fcMedium, nur in Kommentaren = fcLow.
 //   E2 fkSourceInvalidUtf8  - ungueltige UTF-8-Sequenz unter UTF-8-BOM. Error.
 //   E3 fkSourceAnsiNonAscii - ANSI (kein BOM, kein gueltiges UTF-8) + Nicht-ASCII
 //                             -> codepage-abhaengig. Warning/fcMedium.
@@ -42,6 +43,12 @@ type
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
+    // True wenn ein Nicht-ASCII-Zeichen AUSSERHALB von Kommentaren steht
+    // (String-Literal oder Code/Identifier). Via TLexer, der Kommentare
+    // verwirft - non-ASCII ueberlebt nur in String-/Unknown-Tokens. Bestimmt
+    // die E1-Confidence (String/Code = echtes Mojibake-Risiko = fcMedium; nur
+    // Kommentar = vom Compiler verworfen = fcLow). Public fuer Tests.
+    class function HasNonAsciiOutsideComments(const Source: string): Boolean; static;
   end;
 
 implementation
@@ -49,7 +56,7 @@ implementation
 // noinspection-file MultipleExit, TooLongLine, UnsortedUses, UnusedParameter
 
 uses
-  uFileTextCache;
+  System.Classes, uFileTextCache, uLexer;
 
 function HasSourceExt(const FileName: string): Boolean;
 var
@@ -64,11 +71,43 @@ begin
   if L > 0 then Result := L else Result := 1;
 end;
 
+class function TSourceEncodingDetector.HasNonAsciiOutsideComments(
+  const Source: string): Boolean;
+// Lexen: der TLexer verwirft Kommentare (//, { }, (* *), {$..}) und liefert nur
+// Code-/String-/Unknown-Tokens. Ein Nicht-ASCII-Zeichen im Value eines Tokens
+// steht also NICHT in einem Kommentar. (Randfall: der Lexer dekodiert #$nnnn-
+// Char-Literale zu echten Zeichen - fuer E1 irrelevant, weil E1 rohes Nicht-
+// ASCII voraussetzt; im schlimmsten Fall wird eine reine-Kommentar-Datei mit
+// #$nnnn-String als fcMedium statt fcLow gewertet, was vertretbar ist.)
+var
+  Lex : TLexer;
+  Tok : TToken;
+  ch  : Char;
+begin
+  Result := False;
+  if Source = '' then Exit;
+  Lex := TLexer.Create(Source);
+  try
+    Tok := Lex.Next;
+    while Tok.Kind <> tkEof do
+    begin
+      for ch in Tok.Value do
+        if Ord(ch) >= $80 then Exit(True);
+      Tok := Lex.Next;
+    end;
+  finally
+    Lex.Free;
+  end;
+end;
+
 class procedure TSourceEncodingDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>;
   AContext: TAnalyzeContext);
 var
-  Info : TFileEncodingInfo;
+  Info    : TFileEncodingInfo;
+  Lines   : TStringList;
+  Cached  : Boolean;
+  Outside : Boolean;
 begin
   if not HasSourceExt(FileName) then Exit;
   Info := AnalyzeFileEncoding(FileName);
@@ -123,17 +162,34 @@ begin
       'U+FFFD -> data corruption. Re-encode the file as clean UTF-8.',
       fkSourceInvalidUtf8))
   else if (Info.BomKind = sbkNone) and Info.HasNonAscii and Info.StrictUtf8 then
-    // E1 auf fcLow (KindDefaultConfidence -> opt-in): der reine Byte-Detektor
-    // kann Kommentar-Nicht-ASCII (harmlos - der Compiler verwirft Kommentare)
-    // nicht von String-Literal-Nicht-ASCII (echter Bug) trennen. Praezise
-    // Klassifikation braucht Token-/AST-Scope = spaetere Welle.
-    Results.Add(TLeakFinding.New(FileName, '', LineOr1(Info.FirstNonAsciiLine),
-      'UTF-8 without BOM with non-ASCII content. This analyser read it as ' +
-      'UTF-8, but the Delphi compiler reads BOM-less files as ANSI (GetACP, ' +
-      'e.g. CP-1252) -> mojibake at runtime IF the non-ASCII is in a string ' +
-      'literal (non-ASCII in comments is harmless). Fix: save as UTF-8 WITH ' +
-      'BOM, or build the project with --codepage:65001.',
-      fkSourceUtf8NoBom))
+  begin
+    // E1: Nicht-ASCII ohne BOM. Confidence nach Position des Nicht-ASCII:
+    // String-Literal/Code = echtes Laufzeit-Mojibake (fcMedium); nur Kommentar =
+    // der Compiler verwirft Kommentare (fcLow, opt-in). Klassifikation via
+    // TLexer auf dem dekodierten Text (der Cache dekodiert die BOM-lose Datei
+    // bereits als UTF-8).
+    Outside := False;
+    Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
+    if Lines <> nil then
+      try
+        Outside := HasNonAsciiOutsideComments(Lines.Text);
+      finally
+        ReleaseLines(Lines, Cached);
+      end;
+    if Outside then
+      Results.Add(TLeakFinding.New(FileName, '', LineOr1(Info.FirstNonAsciiLine),
+        'UTF-8 without BOM: non-ASCII in a string literal or identifier. The ' +
+        'Delphi compiler reads BOM-less files as ANSI (GetACP, e.g. CP-1252) -> ' +
+        'mojibake at runtime. Fix: save as UTF-8 WITH BOM, or build with ' +
+        '--codepage:65001.',
+        fkSourceUtf8NoBom, fcMedium))
+    else
+      Results.Add(TLeakFinding.New(FileName, '', LineOr1(Info.FirstNonAsciiLine),
+        'UTF-8 without BOM: non-ASCII only in comments (the compiler discards ' +
+        'comments, so no runtime effect), but the file still lacks a BOM. Save ' +
+        'as UTF-8 WITH BOM for consistency, or build with --codepage:65001.',
+        fkSourceUtf8NoBom, fcLow));
+  end
   else if (Info.BomKind = sbkNone) and Info.HasNonAscii and (not Info.StrictUtf8) then
     // E3: kein BOM, Nicht-ASCII, aber KEIN gueltiges UTF-8 -> echt 8-bit (ANSI).
     Results.Add(TLeakFinding.New(FileName, '', LineOr1(Info.FirstNonAsciiLine),

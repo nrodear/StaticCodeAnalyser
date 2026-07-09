@@ -17,9 +17,10 @@ Changes since **v0.9.8**. Detector roster grows from 183 to **192 rules**
   (`uSourceEncoding.pas`): whole-file, byte-level checks that read the raw
   bytes (the encoding truth the text cache discards after decoding).
   - `SCA185 SourceUtf8NoBom` — UTF-8 without BOM + non-ASCII → the Delphi
-    compiler reads it as ANSI (`GetACP`) → runtime mojibake. `fcLow`
-    (opt-in): a byte detector can't tell comment non-ASCII (harmless) from
-    string-literal non-ASCII (a bug) — that needs token scope (later wave).
+    compiler reads it as ANSI (`GetACP`) → runtime mojibake. Confidence is
+    set by lexing the file (`TLexer`): non-ASCII in a **string literal or
+    code** → `fcMedium` (real mojibake risk, shown by default); non-ASCII
+    **only in comments** → `fcLow` (the compiler discards comments; opt-in).
   - `SCA186 SourceInvalidUtf8` — malformed UTF-8 under a UTF-8 BOM
     (overlong / surrogate / out-of-range), via a strict RFC-3629 validator.
   - `SCA187 SourceControlChar` — NUL / disallowed control byte.

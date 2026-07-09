@@ -1122,15 +1122,14 @@ begin
     // Filter; Promotion erst nach Real-World-A/B.
     fkDfmComponentUnused: Result := fcLow;
 
-    // SCA185 SourceUtf8NoBom: fcLow (raus aus dem Default-Profil, opt-in). Ein
-    // reiner Byte-Detektor kann Nicht-ASCII in KOMMENTAREN (vom Compiler
-    // verworfen -> funktional harmlos) nicht von Nicht-ASCII in String-Literalen
-    // (echter Laufzeit-Bug) unterscheiden - das braucht Token-/AST-Scope
-    // (spaetere Welle). Auf einem realen Korpus (Self-Scan 74/472 Dateien) ist
-    // die Mehrheit Kommentar-Rauschen. Die UTF-8-vs-CP1252-Grenze ist zudem bei
-    // einer 2-Byte-Sequenz unentscheidbar (C3 A9 = UTF-8 'e-acute' UND gueltiges
-    // CP1252). fkSourceInvalidUtf8/ControlChar/BidiOverride bleiben fcHigh
-    // (else-Default) - deterministische, praezise Byte-Fakten, 0 Self-Scan.
+    // SCA185 SourceUtf8NoBom: Nur der FALLBACK-Default. Der Detektor
+    // (uSourceEncoding) setzt die Confidence per-Finding via TLexer: Nicht-ASCII
+    // in String-Literal/Code -> fcMedium (echtes Laufzeit-Mojibake, default-
+    // sichtbar); Nicht-ASCII nur in Kommentaren -> fcLow (der Compiler verwirft
+    // Kommentare, funktional harmlos, opt-in). Die UTF-8-vs-CP1252-Grenze bleibt
+    // bei einer isolierten 2-Byte-Sequenz unentscheidbar (C3 A9 = UTF-8 'e-acute'
+    // UND gueltiges CP1252), daher fcMedium (nicht fcHigh). fkSourceInvalidUtf8/
+    // ControlChar/BidiOverride bleiben fcHigh (else-Default).
     fkSourceUtf8NoBom: Result := fcLow;
     // SCA189 SourceAnsiNonAscii: fcMedium. Feuert nur bei Nicht-ASCII, das KEIN
     // gueltiges UTF-8 ist (also echt 8-bit-enkodiert) - staerkeres Signal als E1

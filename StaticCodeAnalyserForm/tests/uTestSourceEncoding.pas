@@ -60,6 +60,15 @@ type
     [Test] procedure Detect_Precedence_NulBeatsE1;
     [Test] procedure Detect_BidiInUtf8Bom_S1_NoEncodingFinding;
     [Test] procedure Detect_NonPascalExt_Skipped;
+    // ---- E1 Kommentar/String-Awareness (Confidence-Tiering) ---------------
+    [Test] procedure Outside_StringLiteral_True;
+    [Test] procedure Outside_Identifier_True;
+    [Test] procedure Outside_LineComment_False;
+    [Test] procedure Outside_BraceComment_False;
+    [Test] procedure Outside_ParenComment_False;
+    [Test] procedure Outside_PureAscii_False;
+    [Test] procedure Detect_Utf8NoBom_InString_fcMedium;
+    [Test] procedure Detect_Utf8NoBom_InComment_fcLow;
   end;
 
 implementation
@@ -99,6 +108,14 @@ begin
   Result := 0;
   for F in Findings do
     if F.Kind = Kind then Inc(Result);
+end;
+
+function FirstKind(Findings: TObjectList<TLeakFinding>; Kind: TFindingKind): TLeakFinding;
+var F: TLeakFinding;
+begin
+  Result := nil;
+  for F in Findings do
+    if F.Kind = Kind then Exit(F);
 end;
 
 // Schreibt Bytes in eine Temp-Datei, ruft den Detektor (UnitNode wird ignoriert),
@@ -404,6 +421,70 @@ begin
   // Nicht-Pascal-Endung (.txt) -> Detektor ueberspringt, selbst mit Bidi.
   F := DetectBytes(Cat(Ascii('a'), TBytes.Create($E2, $80, $AE)), '.txt');
   try Assert.AreEqual<Integer>(0, F.Count, '.txt wird nicht gescannt');
+  finally F.Free; end;
+end;
+
+{ ---- E1 Kommentar/String-Awareness (Confidence-Tiering) ------------------ }
+// Chr($E9) = 'e-acute' (U+00E9), zur Laufzeit erzeugt -> Test-Source bleibt ASCII.
+// Chr(39) = Apostroph (String-Quote).
+
+procedure TTestSourceEncoding.Outside_StringLiteral_True;
+begin
+  // S := '(e-acute)';  -> Nicht-ASCII im String-Literal (ausserhalb Kommentar)
+  Assert.IsTrue(TSourceEncodingDetector.HasNonAsciiOutsideComments(
+    'S := ' + Chr(39) + Chr($E9) + Chr(39) + ';'));
+end;
+
+procedure TTestSourceEncoding.Outside_Identifier_True;
+begin
+  // Nicht-ASCII in Code-/Identifier-Position (ausserhalb Kommentar)
+  Assert.IsTrue(TSourceEncodingDetector.HasNonAsciiOutsideComments(
+    'var ' + Chr($E9) + 'x: Integer;'));
+end;
+
+procedure TTestSourceEncoding.Outside_LineComment_False;
+begin
+  Assert.IsFalse(TSourceEncodingDetector.HasNonAsciiOutsideComments('// ' + Chr($E9)));
+end;
+
+procedure TTestSourceEncoding.Outside_BraceComment_False;
+begin
+  Assert.IsFalse(TSourceEncodingDetector.HasNonAsciiOutsideComments('{ ' + Chr($E9) + ' }'));
+end;
+
+procedure TTestSourceEncoding.Outside_ParenComment_False;
+begin
+  Assert.IsFalse(TSourceEncodingDetector.HasNonAsciiOutsideComments('(* ' + Chr($E9) + ' *)'));
+end;
+
+procedure TTestSourceEncoding.Outside_PureAscii_False;
+begin
+  Assert.IsFalse(TSourceEncodingDetector.HasNonAsciiOutsideComments(
+    'unit t; implementation end.'));
+end;
+
+procedure TTestSourceEncoding.Detect_Utf8NoBom_InString_fcMedium;
+var F: TObjectList<TLeakFinding>; Fnd: TLeakFinding;
+begin
+  // S := '(e-acute)';  als UTF-8 ohne BOM -> E1 fcMedium (Nicht-ASCII im String-Literal)
+  F := DetectBytes(Cat(Ascii('S := '),
+                       Cat(TBytes.Create($27, $C3, $A9, $27), Ascii(';'))));
+  try
+    Fnd := FirstKind(F, fkSourceUtf8NoBom);
+    Assert.IsNotNull(Fnd, 'E1 muss feuern');
+    Assert.IsTrue(Fnd.Confidence = fcMedium, 'Nicht-ASCII im String -> fcMedium');
+  finally F.Free; end;
+end;
+
+procedure TTestSourceEncoding.Detect_Utf8NoBom_InComment_fcLow;
+var F: TObjectList<TLeakFinding>; Fnd: TLeakFinding;
+begin
+  // "// (e-acute)"  als UTF-8 ohne BOM -> E1 fcLow (Nicht-ASCII nur im Kommentar)
+  F := DetectBytes(Cat(Ascii('// '), TBytes.Create($C3, $A9)));
+  try
+    Fnd := FirstKind(F, fkSourceUtf8NoBom);
+    Assert.IsNotNull(Fnd, 'E1 muss feuern');
+    Assert.IsTrue(Fnd.Confidence = fcLow, 'Nicht-ASCII nur im Kommentar -> fcLow');
   finally F.Free; end;
 end;
 
