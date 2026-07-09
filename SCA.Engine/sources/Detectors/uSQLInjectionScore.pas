@@ -1,4 +1,4 @@
-unit uSQLInjectionScore;
+﻿unit uSQLInjectionScore;
 
 // Bewertet den Behebungs-Aufwand einer SQL-Injection.
 //

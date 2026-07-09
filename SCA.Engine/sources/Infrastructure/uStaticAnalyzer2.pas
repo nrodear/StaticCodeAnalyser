@@ -1,4 +1,4 @@
-unit uStaticAnalyzer2;
+﻿unit uStaticAnalyzer2;
 
 interface
 

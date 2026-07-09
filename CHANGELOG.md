@@ -85,6 +85,14 @@ Changes since **v0.9.8**. Detector roster grows from 183 to **192 rules**
 
 ### Fixed
 
+- **Mojibake in own German user-facing strings** (surfaced by the new
+  `SCA185`): two engine units were saved as UTF-8 **without** a BOM and held
+  non-ASCII string literals, so the compiler read them as ANSI → garbled
+  output. Added a UTF-8 BOM to fix the rendered text:
+  `uSQLInjectionScore.pas` (the "Rückgabewert der Funktion…" fix suggestion)
+  and `uStaticAnalyzer2.pas` (the "Datei zu groß … Analyse übersprungen"
+  file-too-large message). Also BOM-stamped 10 test fixtures that carried
+  non-ASCII test data without a BOM.
 - **UnusedSuppression** — stale `// noinspection` markers in
   finding-free files are now reported; the finding points at the `.pas`
   host line for DFM findings; a file-wide + per-line marker covering the
