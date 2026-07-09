@@ -256,8 +256,8 @@ begin
         '//     (e.g. a .pas produced by a code generator)';
       Result.After :=
         '// Things to try:'#13#10 +
-        '//   - save the file as UTF-8 (with or without BOM)'#13#10 +
-        '//     or UTF-16 LE'#13#10 +
+        '//   - save the file as UTF-8 WITH BOM (recommended)'#13#10 +
+        '//     - see SCA185 (UTF-8 without BOM)'#13#10 +
         '//   - check the file is not held open by another tool'#13#10 +
         '//   - close the file in the IDE before re-running'#13#10 +
         '//   - exclude very large or generated files'#13#10 +
@@ -4121,6 +4121,66 @@ begin
         ''#13#10 +
         '// Stale-Suppression-Marker akkumulieren ueber Zeit und'#13#10 +
         '// verschleiern echte Befunde. Aufraeumen wie ungenutzten Code.';
+    end;
+
+    fkSourceUtf8NoBom:
+    begin
+      Result.Description := _('UTF-8 source without BOM - Delphi compiler reads it as ANSI (mojibake)');
+      Result.Before :=
+        '// file saved as UTF-8 WITHOUT a BOM, containing non-ASCII text.'#13#10 +
+        '// The compiler has no BOM, so it decodes the bytes as ANSI'#13#10 +
+        '// (GetACP / CP-1252) -> non-ASCII characters become mojibake at'#13#10 +
+        '// runtime, and the result differs per machine code page.';
+      Result.After :=
+        '// Fix (pick one):'#13#10 +
+        '//   - save the file as UTF-8 WITH BOM (EF BB BF) - RAD editor'#13#10 +
+        '//     default; the compiler then decodes UTF-8 correctly.'#13#10 +
+        '//   - build the project with --codepage:65001 (whole project).'#13#10 +
+        '// Note: Delphi has NO per-file {$CODEPAGE} directive (that is'#13#10 +
+        '// FreePascal).';
+    end;
+
+    fkSourceInvalidUtf8:
+    begin
+      Result.Description := _('Invalid UTF-8 sequence - compiler substitutes U+FFFD (data corruption)');
+      Result.Before :=
+        '// UTF-8 BOM present, but the bytes contain a sequence that is not'#13#10 +
+        '// valid RFC 3629 UTF-8 (overlong form, lone surrogate, or a code'#13#10 +
+        '// point above U+10FFFF). The compiler silently replaces it with'#13#10 +
+        '// U+FFFD (the replacement char) -> the character is lost.';
+      Result.After :=
+        '// Re-encode the file as clean UTF-8 (open in an editor that fixes'#13#10 +
+        '// the encoding, or regenerate the file). Inspect the reported line'#13#10 +
+        '// for the offending character.';
+    end;
+
+    fkSourceControlChar:
+    begin
+      Result.Description := _('NUL / control byte in source - binary file or mis-detected encoding');
+      Result.Before :=
+        '// The file contains a NUL (0x00) or another disallowed control'#13#10 +
+        '// byte. Common cause: a BOM-less UTF-16 file (every other byte is'#13#10 +
+        '// 0x00) that was mistaken for an 8-bit encoding, or a binary blob'#13#10 +
+        '// saved with a .pas extension.';
+      Result.After :=
+        '// Confirm the intended encoding and re-save as UTF-8 with BOM.'#13#10 +
+        '// If the file is not actually Pascal source, exclude it from the'#13#10 +
+        '// scan path or add it to the ignore list.';
+    end;
+
+    fkSourceBidiOverride:
+    begin
+      Result.Description := _('Bidirectional override char (Trojan Source) - code reads differently than it compiles');
+      Result.Before :=
+        '// A bidirectional override/isolate control character (U+202A-202E,'#13#10 +
+        '// U+2066-2069 or U+061C) is present. It can reorder how the source'#13#10 +
+        '// is DISPLAYED without changing how it COMPILES - the Trojan Source'#13#10 +
+        '// attack (CVE-2021-42574, CWE-1007). Even a clean UTF-8+BOM file'#13#10 +
+        '// can carry it.';
+      Result.After :=
+        '// Remove the control character. There is no legitimate use of bidi'#13#10 +
+        '// override/isolate controls in Delphi source. Review the commit'#13#10 +
+        '// that introduced it - this is a deliberate obfuscation vector.';
     end;
 
   end;

@@ -141,6 +141,35 @@ procedure ReleaseLines(Lines: TStringList; OwnedByCache: Boolean);
 function TryLoadLinesWithFallback(const FileName: string;
   Lines: TStringList): Boolean;
 
+type
+  // Byte-Level-Encoding-Fakten einer Quelldatei (fuer den Encoding-Detektor,
+  // Konzept_FileEncodingDetector). Auf der POST-BOM-Slice berechnet - die
+  // BOM-Bytes selbst zaehlen NICHT als "Nicht-ASCII".
+  TSourceBomKind = (sbkNone, sbkUtf8, sbkUtf16LE, sbkUtf16BE, sbkUtf32LE, sbkUtf32BE);
+  TFileEncodingInfo = record
+    Readable          : Boolean;   // Datei lesbar
+    BomKind           : TSourceBomKind;
+    HasNonAscii       : Boolean;   // Byte >= $80 nach der BOM
+    StrictUtf8        : Boolean;   // Post-BOM = striktes RFC-3629-UTF-8 (reines ASCII = True)
+    HasMultiByte3Up   : Boolean;   // >=1 Drei-/Vier-Byte-UTF-8-Sequenz (Evidenz fuer E1-High)
+    MultiByteRuns     : Integer;   // Anzahl Multi-Byte-Sequenzen (Evidenz)
+    HasNulCtrl        : Boolean;   // 0x00 / Ctrl<0x20 (ausser Tab/LF/FF/CR)
+    HasBidi           : Boolean;   // bidirektionales Override-Steuerzeichen (Trojan Source)
+    FirstNonAsciiLine : Integer;   // 1-basiert; 0 = keine
+    FirstInvalidLine  : Integer;
+    FirstNulCtrlLine  : Integer;
+    FirstBidiLine     : Integer;
+  end;
+
+// Byte-Level-Encoding-Analyse einer Datei. Eigener ReadAllBytes: der Text-
+// Cache haelt nur dekodierte Strings OHNE BOM, die Encoding-Wahrheit steckt
+// nur in den Rohbytes. Readable=False wenn nicht lesbar (dann greift der
+// FileReadError-Pfad). (Follow-up laut Konzept: Cache-Piggyback zur Vermeidung
+// des Zweit-Reads.)
+function AnalyzeFileEncoding(const FileName: string): TFileEncodingInfo;
+// Reiner Analyse-Kern (fuer Tests direkt mit TBytes aufrufbar).
+function ComputeFileEncodingInfo(const Bytes: TBytes): TFileEncodingInfo;
+
 implementation
 
 // noinspection-file BooleanParam, CanBeClassMethod, CanBeStrictPrivate, CanBeUnitPrivate, ClassPerFile, CyclomaticComplexity, DeepNesting, EmptyExcept, GroupedDeclaration, NestedTry, NilComparison, PublicField, PublicMemberWithoutDoc, RedundantJump, TooLongLine, UnsortedUses
@@ -236,6 +265,143 @@ begin
     // ANSI/Default kann nie werfen (jeder Byte-Wert ist gueltig in CP1252).
     // UTF-8 ist nach IsValidUtf8 geprueft. Hier nur als Belt-and-Suspenders.
   end;
+end;
+
+// ---------------------------------------------------------------------------
+// Encoding-Analyse fuer den Datei-Encoding-Detektor (Konzept_FileEncodingDetector).
+// STRIKT (RFC 3629) - anders als das lenient IsValidUtf8 oben, das ueberlange
+// Formen/Surrogate/>U+10FFFF durchlaesst.
+// ---------------------------------------------------------------------------
+
+function StrictUtf8SeqLen(const Bytes: TBytes; Idx, Len: Integer): Integer;
+// Laenge (2..4) einer STRIKT wohlgeformten UTF-8-Sequenz ab Idx, sonst 0.
+// Erwartet Bytes[Idx] >= $80 (Lead-Byte).
+var
+  b, b2      : Byte;
+  need, j    : Integer;
+  min2, max2 : Byte;
+begin
+  b := Bytes[Idx];
+  if (b and $E0) = $C0 then
+  begin
+    if (b = $C0) or (b = $C1) then Exit(0);                 // ueberlang 2-Byte
+    need := 1; min2 := $80; max2 := $BF;
+  end
+  else if (b and $F0) = $E0 then
+  begin
+    need := 2;
+    if b = $E0 then begin min2 := $A0; max2 := $BF; end      // E0 80-9F ueberlang
+    else if b = $ED then begin min2 := $80; max2 := $9F; end // ED A0-BF Surrogat
+    else begin min2 := $80; max2 := $BF; end;
+  end
+  else if (b and $F8) = $F0 then
+  begin
+    if b >= $F5 then Exit(0);                                // F5-F7 (> U+10FFFF)
+    need := 3;
+    if b = $F0 then begin min2 := $90; max2 := $BF; end      // F0 80-8F ueberlang
+    else if b = $F4 then begin min2 := $80; max2 := $8F; end // F4 90+ > U+10FFFF
+    else begin min2 := $80; max2 := $BF; end;
+  end
+  else
+    Exit(0);                                                 // Continuation / F8-FF
+
+  if Idx + need >= Len then Exit(0);                         // abgeschnitten
+  b2 := Bytes[Idx + 1];
+  if (b2 < min2) or (b2 > max2) then Exit(0);
+  for j := 2 to need do
+    if (Bytes[Idx + j] and $C0) <> $80 then Exit(0);
+  Result := need + 1;
+end;
+
+function IsBidiOverrideSeq(const Bytes: TBytes; Idx, SeqLen: Integer): Boolean;
+// True wenn die (bereits validierte) Sequenz ab Idx ein bidirektionales
+// Override/Isolate-Steuerzeichen ist (Trojan Source, CWE-1007):
+//   U+061C (D8 9C), U+202A..202E (E2 80 AA..AE), U+2066..2069 (E2 81 A6..A9).
+begin
+  if SeqLen = 2 then
+    Result := (Bytes[Idx] = $D8) and (Bytes[Idx + 1] = $9C)
+  else if SeqLen = 3 then
+    Result := (Bytes[Idx] = $E2) and
+      ( ((Bytes[Idx + 1] = $80) and (Bytes[Idx + 2] >= $AA) and (Bytes[Idx + 2] <= $AE))
+        or ((Bytes[Idx + 1] = $81) and (Bytes[Idx + 2] >= $A6) and (Bytes[Idx + 2] <= $A9)) )
+  else
+    Result := False;
+end;
+
+function ComputeFileEncodingInfo(const Bytes: TBytes): TFileEncodingInfo;
+var
+  Len, i, BomLen, Line, SeqLen : Integer;
+  b : Byte;
+begin
+  Result := Default(TFileEncodingInfo);
+  Result.StrictUtf8 := True;   // reines ASCII / leere Datei = gueltig
+  Len := Length(Bytes);
+
+  // BOM-Sniff NUR an Offset 0. UTF-32 VOR UTF-16 pruefen (FF FE 00 00 beginnt
+  // mit FF FE).
+  BomLen := 0;
+  if (Len >= 4) and (Bytes[0] = $FF) and (Bytes[1] = $FE)
+     and (Bytes[2] = $00) and (Bytes[3] = $00) then
+  begin Result.BomKind := sbkUtf32LE; BomLen := 4; end
+  else if (Len >= 4) and (Bytes[0] = $00) and (Bytes[1] = $00)
+     and (Bytes[2] = $FE) and (Bytes[3] = $FF) then
+  begin Result.BomKind := sbkUtf32BE; BomLen := 4; end
+  else if (Len >= 3) and (Bytes[0] = $EF) and (Bytes[1] = $BB)
+     and (Bytes[2] = $BF) then
+  begin Result.BomKind := sbkUtf8; BomLen := 3; end
+  else if (Len >= 2) and (Bytes[0] = $FE) and (Bytes[1] = $FF) then
+  begin Result.BomKind := sbkUtf16BE; BomLen := 2; end
+  else if (Len >= 2) and (Bytes[0] = $FF) and (Bytes[1] = $FE) then
+  begin Result.BomKind := sbkUtf16LE; BomLen := 2; end;
+
+  Line := 1;
+  i := BomLen;
+  while i < Len do
+  begin
+    b := Bytes[i];
+    if b = $0A then begin Inc(Line); Inc(i); Continue; end;
+    // NUL / verbotene Steuerzeichen (ausser Tab #9, LF #10, FF #12, CR #13)
+    if (b = 0) or ((b < $20) and (b <> 9) and (b <> 12) and (b <> 13)) then
+    begin
+      if not Result.HasNulCtrl then
+      begin Result.HasNulCtrl := True; Result.FirstNulCtrlLine := Line; end;
+      Inc(i); Continue;
+    end;
+    if b < $80 then begin Inc(i); Continue; end;   // ASCII
+    // Nicht-ASCII (>= $80)
+    if not Result.HasNonAscii then
+    begin Result.HasNonAscii := True; Result.FirstNonAsciiLine := Line; end;
+    SeqLen := StrictUtf8SeqLen(Bytes, i, Len);
+    if SeqLen = 0 then
+    begin
+      Result.StrictUtf8 := False;
+      if Result.FirstInvalidLine = 0 then Result.FirstInvalidLine := Line;
+      Inc(i);   // Resync um 1 Byte
+      Continue;
+    end;
+    Inc(Result.MultiByteRuns);
+    if SeqLen >= 3 then Result.HasMultiByte3Up := True;
+    if IsBidiOverrideSeq(Bytes, i, SeqLen) and (not Result.HasBidi) then
+    begin Result.HasBidi := True; Result.FirstBidiLine := Line; end;
+    // Continuation-Bytes koennen kein $0A sein -> keine Line-Zaehlung noetig.
+    Inc(i, SeqLen);
+  end;
+end;
+
+function AnalyzeFileEncoding(const FileName: string): TFileEncodingInfo;
+var
+  Bytes : TBytes;
+begin
+  Result := Default(TFileEncodingInfo);
+  Result.StrictUtf8 := True;
+  if not FileExists(FileName) then Exit;
+  try
+    Bytes := TFile.ReadAllBytes(FileName);
+  except
+    Exit;   // Readable bleibt False
+  end;
+  Result := ComputeFileEncodingInfo(Bytes);
+  Result.Readable := True;
 end;
 
 { TFileTextCacheEntry }

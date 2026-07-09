@@ -166,6 +166,7 @@
         <DCCReference Include="sources\Detectors\uEmptyArgumentList.pas"/>
         <DCCReference Include="sources\Detectors\uEmptyBlock.pas"/>
         <DCCReference Include="sources\Detectors\uEmptyFile.pas"/>
+        <DCCReference Include="sources\Detectors\uSourceEncoding.pas"/>
         <DCCReference Include="sources\Detectors\uEmptyFinallyBlock.pas"/>
         <DCCReference Include="sources\Detectors\uEmptyInterface.pas"/>
         <DCCReference Include="sources\Detectors\uEmptyMethod.pas"/>

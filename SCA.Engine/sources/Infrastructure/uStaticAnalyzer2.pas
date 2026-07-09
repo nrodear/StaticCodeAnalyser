@@ -85,7 +85,7 @@ uses
   uSuperfluousSemicolon, uEmptyFinallyBlock, uAssignedAndAssignedNil,
   uFreeAndNilHint, uAvoidOut, uEmptyVisibilitySection,
   uLegacyInitializationSection, uPublicField, uNestedTry,
-  uCaseStatementSize, uEmptyFile, uTwiceInheritedCalls,
+  uCaseStatementSize, uEmptyFile, uSourceEncoding, uTwiceInheritedCalls,
   uRedundantParentheses, uConsecutiveVisibility,
   uConstructorWithoutInherited, uDestructorWithoutInherited, uRedundantConditional,
   uIfElseBegin, uPointerName,
@@ -232,6 +232,21 @@ begin
   // Kind (fkDfmDefaultName) nur Repraesentant ist.
   if D.Name = 'DfmAnalysis' then Exit(True);
 
+  // SourceEncoding-Adapter: EIN Detektor emittiert 4 Encoding-/Security-Kinds
+  // (SourceUtf8NoBom/InvalidUtf8/ControlChar/BidiOverride). Der Read (eigener
+  // ReadAllBytes) wird nur getriggert wenn mind. EIN Encoding-Kind aktiv ist
+  // (Perf-Gate); die Post-Filter-Schleife dropt einzeln deaktivierte Kinds auf
+  // Finding-Ebene. Kind (fkSourceUtf8NoBom) ist nur Repraesentant fuer AddD.
+  if D.Name = 'SourceEncoding' then
+  begin
+    EnKinds := CfgEnabledKinds(AContext);
+    Exit( (EnKinds = [])
+          or (fkSourceUtf8NoBom in EnKinds)
+          or (fkSourceInvalidUtf8 in EnKinds)
+          or (fkSourceControlChar in EnKinds)
+          or (fkSourceBidiOverride in EnKinds) );
+  end;
+
   // Profile-Whitelist: leere Menge = kein Filter, sonst muss Kind drin sein.
   // Einmal in ein Local lesen (Hot-Path: ~145 Detektoren x N Dateien).
   EnKinds := CfgEnabledKinds(AContext);
@@ -360,6 +375,9 @@ begin
   AddD('NestedTry',       fkNestedTry,       TNestedTryDetector.AnalyzeUnit);
   AddD('CaseStatementSize',fkCaseStatementSize,TCaseStatementSizeDetector.AnalyzeUnit);
   AddD('EmptyFile',       fkEmptyFile,       TEmptyFileDetector.AnalyzeUnit);
+  // SourceEncoding: EIN Eintrag, 4 Kinds (siehe IsDetectorEnabled-Sonderfall).
+  // KEIN RequiredTokensLow - muss immer laufen (kein Token signalisiert Encoding).
+  AddD('SourceEncoding',  fkSourceUtf8NoBom, TSourceEncodingDetector.AnalyzeUnit);
   AddD3('TwiceInheritedCalls',fkTwiceInheritedCalls,TTwiceInheritedCallsDetector.AnalyzeUnit);
   AddD('RedundantParentheses',fkRedundantParentheses,TRedundantParenthesesDetector.AnalyzeUnit);
   AddD('ConsecutiveVisibility',fkConsecutiveVisibility,TConsecutiveVisibilityDetector.AnalyzeUnit);

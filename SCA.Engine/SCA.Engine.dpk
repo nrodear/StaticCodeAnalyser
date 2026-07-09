@@ -100,6 +100,7 @@ contains
   uEmptyArgumentList in 'sources\Detectors\uEmptyArgumentList.pas',
   uEmptyBlock in 'sources\Detectors\uEmptyBlock.pas',
   uEmptyFile in 'sources\Detectors\uEmptyFile.pas',
+  uSourceEncoding in 'sources\Detectors\uSourceEncoding.pas',
   uEmptyFinallyBlock in 'sources\Detectors\uEmptyFinallyBlock.pas',
   uEmptyInterface in 'sources\Detectors\uEmptyInterface.pas',
   uEmptyMethod in 'sources\Detectors\uEmptyMethod.pas',

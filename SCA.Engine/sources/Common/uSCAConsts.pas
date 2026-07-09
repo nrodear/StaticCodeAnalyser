@@ -632,9 +632,17 @@ type
     fkAttributeCategoryWithoutString, // SCA181 - [Category] ohne String-Arg.
     fkAttributeTestFixtureWithoutTests, // SCA182 - [TestFixture]-Klasse ohne [Test].
     fkAttributeMisalignment,     // SCA183 - Attribute mit Leerzeile zum Member.
-    fkDfmComponentUnused         // SCA184 - published DFM-Komponente die weder
+    fkDfmComponentUnused,        // SCA184 - published DFM-Komponente die weder
                                  // im Code, in anderen Units noch DFM-intern
                                  // referenziert wird (Refactoring-Rest). fcLow.
+    // Encoding-/Unicode-Sicherheit-Familie (Konzept_FileEncodingDetector, Welle 1):
+    fkSourceUtf8NoBom,           // SCA185 - UTF-8 ohne BOM + Nicht-ASCII (Compiler
+                                 //          liest ANSI -> Mojibake).
+    fkSourceInvalidUtf8,         // SCA186 - ungueltige UTF-8-Sequenz (ueberlang/
+                                 //          Surrogat/>U+10FFFF).
+    fkSourceControlChar,         // SCA187 - NUL/verbotenes Steuerzeichen im Quelltext.
+    fkSourceBidiOverride         // SCA188 - bidirektionales Override-Steuerzeichen
+                                 //          (Trojan Source, CVE-2021-42574 / CWE-1007).
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -898,7 +906,11 @@ const
     (Name: 'AttributeCategoryWithoutString';FindingType: ftBug;       DefaultSeverity: lsError),   // fkAttributeCategoryWithoutString
     (Name: 'AttributeTestFixtureWithoutTests';FindingType: ftCodeSmell;DefaultSeverity: lsWarning),// fkAttributeTestFixtureWithoutTests
     (Name: 'AttributeMisalignment';      FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkAttributeMisalignment
-    (Name: 'DfmComponentUnused';         FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkDfmComponentUnused
+    (Name: 'DfmComponentUnused';         FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkDfmComponentUnused
+    (Name: 'SourceUtf8NoBom';            FindingType: ftBug;          DefaultSeverity: lsWarning), // fkSourceUtf8NoBom
+    (Name: 'SourceInvalidUtf8';          FindingType: ftFileError;    DefaultSeverity: lsError),   // fkSourceInvalidUtf8
+    (Name: 'SourceControlChar';          FindingType: ftFileError;    DefaultSeverity: lsError),   // fkSourceControlChar
+    (Name: 'SourceBidiOverride';         FindingType: ftVulnerability;DefaultSeverity: lsError)    // fkSourceBidiOverride
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.
@@ -1098,6 +1110,17 @@ begin
     // Unit-Index, kein exaktes Binding). Bewusst unter dem fcMedium-Default-
     // Filter; Promotion erst nach Real-World-A/B.
     fkDfmComponentUnused: Result := fcLow;
+
+    // SCA185 SourceUtf8NoBom: fcLow (raus aus dem Default-Profil, opt-in). Ein
+    // reiner Byte-Detektor kann Nicht-ASCII in KOMMENTAREN (vom Compiler
+    // verworfen -> funktional harmlos) nicht von Nicht-ASCII in String-Literalen
+    // (echter Laufzeit-Bug) unterscheiden - das braucht Token-/AST-Scope
+    // (spaetere Welle). Auf einem realen Korpus (Self-Scan 74/472 Dateien) ist
+    // die Mehrheit Kommentar-Rauschen. Die UTF-8-vs-CP1252-Grenze ist zudem bei
+    // einer 2-Byte-Sequenz unentscheidbar (C3 A9 = UTF-8 'e-acute' UND gueltiges
+    // CP1252). fkSourceInvalidUtf8/ControlChar/BidiOverride bleiben fcHigh
+    // (else-Default) - deterministische, praezise Byte-Fakten, 0 Self-Scan.
+    fkSourceUtf8NoBom: Result := fcLow;
 
     // --- Welle 4: reine FORMATIERUNGS-/Style-Regeln (2026-06-29) ---
     // Definitiv KEINE Bugs (Whitespace, Zeilenlaenge, Keyword-Casing, Deklara-

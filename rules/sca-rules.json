@@ -3623,6 +3623,83 @@
       "impacts": [
         { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
       ]
+    },
+    {
+      "id": "SCA185",
+      "kind": "SourceUtf8NoBom",
+      "name": "UTF-8 source file without BOM",
+      "shortDescription": "UTF-8 file without BOM + non-ASCII - compiler reads it as ANSI (mojibake)",
+      "fullDescription": "A source file saved as UTF-8 without a byte-order mark and containing non-ASCII characters is read by the Delphi compiler as ANSI (system code page, GetACP) - producing mojibake in string literals and comments at runtime, and the result is machine-dependent. Fix: save as UTF-8 with BOM, or compile the project with --codepage:65001.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["encoding", "bom", "portability"],
+      "detectorUnit": "uSourceEncoding.pas",
+      "examples": {
+        "bad":  "// file saved as UTF-8 WITHOUT BOM, with non-ASCII text\nShowMessage('...non-ASCII...');  // compiler reads ANSI -> mojibake at runtime",
+        "good": "// same file saved as UTF-8 WITH BOM (EF BB BF), or build --codepage:65001\nShowMessage('...non-ASCII...');"
+      },
+      "cleanCodeAttribute": "TRUSTWORTHY",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA186",
+      "kind": "SourceInvalidUtf8",
+      "name": "Invalid UTF-8 sequence in source file",
+      "shortDescription": "Malformed UTF-8 (overlong / surrogate / out-of-range) under a UTF-8 BOM",
+      "fullDescription": "The file carries a UTF-8 BOM but contains byte sequences that are not valid RFC 3629 UTF-8 (overlong encodings, lone surrogates, or code points above U+10FFFF). The Delphi compiler silently substitutes U+FFFD, corrupting the affected characters. Re-encode the file as clean UTF-8.",
+      "defaultSeverity": "Error",
+      "type": "File Error",
+      "tags": ["encoding", "corruption"],
+      "detectorUnit": "uSourceEncoding.pas",
+      "examples": {
+        "bad":  "(UTF-8 BOM present, but bytes contain an overlong or surrogate sequence)",
+        "good": "(re-encode the file as valid UTF-8)"
+      },
+      "cleanCodeAttribute": "TRUSTWORTHY",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
+    },
+    {
+      "id": "SCA187",
+      "kind": "SourceControlChar",
+      "name": "NUL or control byte in source file",
+      "shortDescription": "NUL / disallowed control byte - binary file or mis-detected encoding",
+      "fullDescription": "The source file contains a NUL byte or a disallowed control character (below U+0020, excluding tab / newline / carriage-return / form-feed). This usually means the file is binary or has a mis-detected encoding (for example BOM-less UTF-16, where every other byte is 0x00). Inspect and re-encode the file.",
+      "defaultSeverity": "Error",
+      "type": "File Error",
+      "tags": ["encoding", "corruption"],
+      "detectorUnit": "uSourceEncoding.pas",
+      "examples": {
+        "bad":  "(file contains 0x00 bytes - e.g. BOM-less UTF-16)",
+        "good": "(save the file as UTF-8 with BOM)"
+      },
+      "cleanCodeAttribute": "TRUSTWORTHY",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
+    },
+    {
+      "id": "SCA188",
+      "kind": "SourceBidiOverride",
+      "name": "Bidirectional override control character (Trojan Source)",
+      "shortDescription": "Bidi override/isolate control char - source reads differently than it compiles",
+      "fullDescription": "The file contains a Unicode bidirectional override or isolate control character (U+202A-202E, U+2066-2069, U+061C). These can make source code display differently to a human reviewer than it is compiled - the Trojan Source attack (CVE-2021-42574, CWE-1007). There is no legitimate use in Delphi source; remove the control character.",
+      "defaultSeverity": "Error",
+      "type": "Vulnerability",
+      "tags": ["security", "unicode", "trojan-source"],
+      "cwe": ["CWE-1007"],
+      "detectorUnit": "uSourceEncoding.pas",
+      "examples": {
+        "bad":  "// a comment containing U+202E can visually reorder the code that follows",
+        "good": "// no bidirectional control characters anywhere in source"
+      },
+      "cleanCodeAttribute": "TRUSTWORTHY",
+      "impacts": [
+        { "softwareQuality": "SECURITY", "severity": "HIGH" }
+      ]
     }
   ]
 }
