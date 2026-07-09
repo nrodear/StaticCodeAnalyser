@@ -1,4 +1,4 @@
-unit uTestDfmParser;
+﻿unit uTestDfmParser;
 
 // Smoke-Tests für uDfmParser + uComponentGraph - Phase 1 Walking-Skeleton.
 // Fokus: Hierarchie korrekt aufgebaut, Properties sauber überlesen,

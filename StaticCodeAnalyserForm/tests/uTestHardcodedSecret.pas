@@ -1,4 +1,4 @@
-unit uTestHardcodedSecret;
+﻿unit uTestHardcodedSecret;
 
 // Tests fuer den THardcodedSecretDetector (Basis und Erweiterungen).
 

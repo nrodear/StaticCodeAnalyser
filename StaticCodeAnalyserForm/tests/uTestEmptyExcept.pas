@@ -1,4 +1,4 @@
-unit uTestEmptyExcept;
+﻿unit uTestEmptyExcept;
 
 // Tests fuer den TEmptyExceptDetector2 (Basis und Erweiterungen).
 

@@ -1,4 +1,4 @@
-unit uTestFormatMismatch;
+﻿unit uTestFormatMismatch;
 
 // Tests fuer den TFormatMismatchDetector (Basis und Erweiterungen).
 

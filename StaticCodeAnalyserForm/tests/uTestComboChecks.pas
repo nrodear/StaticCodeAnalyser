@@ -1,4 +1,4 @@
-unit uTestComboChecks;
+﻿unit uTestComboChecks;
 
 // Tests fuer den NilDeref/MissingFinally/DivByZero/DeadCode/LongMethod/
 // DeepNesting/Robust/Suppression-Komplex (TTestNewChecks).

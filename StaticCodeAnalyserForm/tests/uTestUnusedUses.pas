@@ -1,4 +1,4 @@
-unit uTestUnusedUses;
+﻿unit uTestUnusedUses;
 
 // Tests fuer den TUnusedUsesDetector.
 

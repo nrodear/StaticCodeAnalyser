@@ -1,4 +1,4 @@
-unit uTestPerformance;
+﻿unit uTestPerformance;
 
 // Performance-Tests für Lexer, Parser und Analyse-Pipeline.
 //

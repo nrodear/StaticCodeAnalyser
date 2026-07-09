@@ -1,4 +1,4 @@
-unit uTestDfmLexer;
+﻿unit uTestDfmLexer;
 
 // Smoke-Tests für uDfmLexer - Phase 1 Walking-Skeleton.
 // Fokus: Token-Sequenz fuer Hierarchie, String-Multi-Segment-Merging,

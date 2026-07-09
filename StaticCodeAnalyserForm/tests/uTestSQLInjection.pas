@@ -1,4 +1,4 @@
-unit uTestSQLInjection;
+﻿unit uTestSQLInjection;
 
 // Tests fuer den TSQLInjectionDetector (Basis und Erweiterungen).
 

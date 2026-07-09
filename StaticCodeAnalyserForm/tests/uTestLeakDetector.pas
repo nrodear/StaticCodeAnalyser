@@ -1,4 +1,4 @@
-unit uTestLeakDetector;
+﻿unit uTestLeakDetector;
 
 // Tests fuer den TLeakDetector2, TFieldLeakDetector und MemoryLeakAdvanced.
 
