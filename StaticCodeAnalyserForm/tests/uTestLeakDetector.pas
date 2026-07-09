@@ -101,7 +101,7 @@ type
     // TD-1 Inkrement 2c: LeakyClasses aus dem TAnalyzeContext - context-driven
     // Detection, AContext=nil folgt dem uSCAConsts-Global.
     [Test] procedure Leak_ContextLeakyClasses_DrivesDetection;
-    // Real-World FP-Repro (RHD-1181, TOnLogistManager.GetImportKz): class
+    // Real-World FP-Repro (TOnLogistManager.GetImportKz): class
     // function, Result-Zuweisung zwischen Create und try, TOracleQuery.Create(nil),
     // Freigabe per FreeAndNil im finally. Paar aus FP-Check (freigegeben -> 0) und
     // TP-Baseline (nicht freigegeben -> 1, beweist dass TOracleQuery im Setup
@@ -271,7 +271,7 @@ begin
   end;
 end;
 
-// Real-World-Repro RHD-1181 / TOnLogistManager.GetImportKz (2026-07):
+// Real-World-Repro TOnLogistManager.GetImportKz (2026-07):
 //   class function ...: string;
 //   var mQuery: TOracleQuery;
 //   begin
