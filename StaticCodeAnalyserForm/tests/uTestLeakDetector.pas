@@ -271,7 +271,6 @@ begin
   end;
 end;
 
-// Real-World-Repro TOnLogistManager.GetImportKz (2026-07):
 //   class function ...: string;
 //   var mQuery: TOracleQuery;
 //   begin
