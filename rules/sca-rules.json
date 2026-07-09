@@ -3700,6 +3700,63 @@
       "impacts": [
         { "softwareQuality": "SECURITY", "severity": "HIGH" }
       ]
+    },
+    {
+      "id": "SCA189",
+      "kind": "SourceAnsiNonAscii",
+      "name": "ANSI source file with non-ASCII content",
+      "shortDescription": "8-bit source (no BOM, not valid UTF-8) - code-page-dependent, non-portable",
+      "fullDescription": "The file has no BOM, contains non-ASCII bytes, and is not valid UTF-8 - so it is genuinely 8-bit (ANSI) encoded. The Delphi compiler reads it in the system code page (GetACP), which makes the non-ASCII characters depend on the machine/locale and non-portable. Save the file as UTF-8 with BOM.",
+      "defaultSeverity": "Warning",
+      "type": "Code Smell",
+      "tags": ["encoding", "portability"],
+      "detectorUnit": "uSourceEncoding.pas",
+      "examples": {
+        "bad":  "// file saved as Windows-1252 (ANSI) with non-ASCII text, no BOM",
+        "good": "// save the file as UTF-8 with BOM (EF BB BF)"
+      },
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }
+      ]
+    },
+    {
+      "id": "SCA190",
+      "kind": "SourceUtf16",
+      "name": "UTF-16 source file",
+      "shortDescription": "UTF-16 source - compiles, but unusual and text-tool-unfriendly",
+      "fullDescription": "The source file is UTF-16 (LE or BE). It compiles, but UTF-16 source is unusual and causes friction with text tooling (git diff, grep, external hooks, code review). The convention is UTF-8 with BOM.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["encoding", "convention"],
+      "detectorUnit": "uSourceEncoding.pas",
+      "examples": {
+        "bad":  "(file saved as UTF-16 LE / BE)",
+        "good": "(save the file as UTF-8 with BOM)"
+      },
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA191",
+      "kind": "SourceUtf32",
+      "name": "UTF-32 / UCS-4 source file",
+      "shortDescription": "UTF-32 source - Delphi compiler rejects it with fatal error F2438",
+      "fullDescription": "The source file is UTF-32 / UCS-4 (detected via its byte-order mark). The Delphi compiler does not support this encoding and aborts with fatal error F2438 (\"UCS-4 text encoding not supported. Convert to UCS-2 or UTF-8\"). Convert the file to UTF-8 (with BOM) or UTF-16.",
+      "defaultSeverity": "Error",
+      "type": "File Error",
+      "tags": ["encoding", "build-breaker"],
+      "detectorUnit": "uSourceEncoding.pas",
+      "examples": {
+        "bad":  "(file saved as UTF-32 LE / BE - will not compile, F2438)",
+        "good": "(convert to UTF-8 with BOM)"
+      },
+      "cleanCodeAttribute": "TRUSTWORTHY",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
     }
   ]
 }

@@ -641,8 +641,13 @@ type
     fkSourceInvalidUtf8,         // SCA186 - ungueltige UTF-8-Sequenz (ueberlang/
                                  //          Surrogat/>U+10FFFF).
     fkSourceControlChar,         // SCA187 - NUL/verbotenes Steuerzeichen im Quelltext.
-    fkSourceBidiOverride         // SCA188 - bidirektionales Override-Steuerzeichen
+    fkSourceBidiOverride,        // SCA188 - bidirektionales Override-Steuerzeichen
                                  //          (Trojan Source, CVE-2021-42574 / CWE-1007).
+    // Encoding-Familie Welle 2:
+    fkSourceAnsiNonAscii,        // SCA189 - ANSI (kein-BOM, kein gueltiges UTF-8) mit
+                                 //          Nicht-ASCII -> codepage-abhaengig.
+    fkSourceUtf16,               // SCA190 - UTF-16-Quelltext (kompiliert, ungewoehnlich).
+    fkSourceUtf32                // SCA191 - UTF-32/UCS-4-Quelltext -> Compiler-Fehler F2438.
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -910,7 +915,10 @@ const
     (Name: 'SourceUtf8NoBom';            FindingType: ftBug;          DefaultSeverity: lsWarning), // fkSourceUtf8NoBom
     (Name: 'SourceInvalidUtf8';          FindingType: ftFileError;    DefaultSeverity: lsError),   // fkSourceInvalidUtf8
     (Name: 'SourceControlChar';          FindingType: ftFileError;    DefaultSeverity: lsError),   // fkSourceControlChar
-    (Name: 'SourceBidiOverride';         FindingType: ftVulnerability;DefaultSeverity: lsError)    // fkSourceBidiOverride
+    (Name: 'SourceBidiOverride';         FindingType: ftVulnerability;DefaultSeverity: lsError),   // fkSourceBidiOverride
+    (Name: 'SourceAnsiNonAscii';         FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkSourceAnsiNonAscii
+    (Name: 'SourceUtf16';                FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkSourceUtf16
+    (Name: 'SourceUtf32';                FindingType: ftFileError;    DefaultSeverity: lsError)    // fkSourceUtf32
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.
@@ -1121,6 +1129,14 @@ begin
     // CP1252). fkSourceInvalidUtf8/ControlChar/BidiOverride bleiben fcHigh
     // (else-Default) - deterministische, praezise Byte-Fakten, 0 Self-Scan.
     fkSourceUtf8NoBom: Result := fcLow;
+    // SCA189 SourceAnsiNonAscii: fcMedium. Feuert nur bei Nicht-ASCII, das KEIN
+    // gueltiges UTF-8 ist (also echt 8-bit-enkodiert) - staerkeres Signal als E1
+    // und 0 Self-Scan-Treffer, daher default-sichtbar. Teilt aber E1s Kommentar-
+    // vs-String-Grenze; bei Real-World-Rauschen ggf. demoten.
+    // SCA190 SourceUtf16: fcLow (kompiliert, stilistisch/Tooling-Reibung, opt-in).
+    // SCA191 SourceUtf32 bleibt fcHigh (else-Default) - harter Compiler-Fehler F2438.
+    fkSourceAnsiNonAscii: Result := fcMedium;
+    fkSourceUtf16:        Result := fcLow;
 
     // --- Welle 4: reine FORMATIERUNGS-/Style-Regeln (2026-06-29) ---
     // Definitiv KEINE Bugs (Whitespace, Zeilenlaenge, Keyword-Casing, Deklara-

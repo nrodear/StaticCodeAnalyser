@@ -244,7 +244,10 @@ begin
           or (fkSourceUtf8NoBom in EnKinds)
           or (fkSourceInvalidUtf8 in EnKinds)
           or (fkSourceControlChar in EnKinds)
-          or (fkSourceBidiOverride in EnKinds) );
+          or (fkSourceBidiOverride in EnKinds)
+          or (fkSourceAnsiNonAscii in EnKinds)
+          or (fkSourceUtf16 in EnKinds)
+          or (fkSourceUtf32 in EnKinds) );
   end;
 
   // Profile-Whitelist: leere Menge = kein Filter, sonst muss Kind drin sein.

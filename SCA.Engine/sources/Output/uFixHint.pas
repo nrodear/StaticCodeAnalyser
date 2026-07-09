@@ -4183,6 +4183,39 @@ begin
         '// that introduced it - this is a deliberate obfuscation vector.';
     end;
 
+    fkSourceAnsiNonAscii:
+    begin
+      Result.Description := _('ANSI source (no BOM, not UTF-8) - code-page-dependent, non-portable');
+      Result.Before :=
+        '// file saved as Windows-1252 (ANSI): non-ASCII bytes, no BOM, and the'#13#10 +
+        '// bytes are NOT valid UTF-8, so it is genuinely 8-bit encoded. The'#13#10 +
+        '// compiler reads it in the system code page (GetACP) -> the characters'#13#10 +
+        '// differ on a machine with a different code page.';
+      Result.After :=
+        '// Save the file as UTF-8 WITH BOM (EF BB BF). The compiler then decodes'#13#10 +
+        '// it deterministically regardless of the machine code page.';
+    end;
+
+    fkSourceUtf16:
+    begin
+      Result.Description := _('UTF-16 source - compiles, but unusual and text-tool-unfriendly');
+      Result.Before :=
+        '// file saved as UTF-16 (LE or BE). Compiles, but every text tool'#13#10 +
+        '// (git diff, grep, review hooks) sees NUL-interleaved bytes.';
+      Result.After :=
+        '// Save the file as UTF-8 WITH BOM - the project-wide convention.';
+    end;
+
+    fkSourceUtf32:
+    begin
+      Result.Description := _('UTF-32 source - compiler rejects it with fatal error F2438');
+      Result.Before :=
+        '// file saved as UTF-32 / UCS-4. The Delphi compiler aborts with:'#13#10 +
+        '//   F2438 UCS-4 text encoding not supported. Convert to UCS-2 or UTF-8';
+      Result.After :=
+        '// Convert the file to UTF-8 (with BOM) or UTF-16.';
+    end;
+
   end;
 end;
 
