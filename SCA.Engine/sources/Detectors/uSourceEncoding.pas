@@ -15,12 +15,14 @@ unit uSourceEncoding;
 //   E7 fkSourceUtf32        - UTF-32/UCS-4 -> Compiler-Fehler F2438. Error.
 //   S1 fkSourceBidiOverride - bidirektionales Override-Steuerzeichen (Trojan
 //                             Source, CVE-2021-42574 / CWE-1007). Error.
+//   S2 fkSourceInvisibleChar- unsichtbares/Zero-Width-Zeichen (U+200B-200D/2060/
+//                             mid-FEFF; Unicode-Abuse, CWE-1007). Warning.
 //
 // Gruppe A (Encoding) ist gegenseitig ausschliessend: genau EIN Fund pro Datei.
 // UTF-32/UTF-16 (E7/E4) sind BOM-bestimmte Ganzdatei-Verdikte (emittieren + RAUS,
 // kein Bidi-Scan auf UTF-16-Bytes). Fuer den Rest: Praezedenz E5 > E2 > E1 > E3.
-// Gruppe B (S1) ist orthogonal und kann ZUSAETZLICH feuern - Bidi ist auch in
-// korrektem UTF-8+BOM gefaehrlich.
+// Gruppe B (S1/S2) ist orthogonal und kann ZUSAETZLICH feuern - Bidi/Zero-Width
+// sind auch in korrektem UTF-8+BOM gefaehrlich.
 //
 // Scope: nur Pascal-Quelltext (.pas/.dpr/.dpk/.inc). Kommentare zaehlen hier
 // BEWUSST mit - Encoding/Bidi ist datei-global, nicht code-lokal.
@@ -101,6 +103,12 @@ begin
       'risk (CVE-2021-42574): the code can read differently than it compiles. ' +
       'Remove the control character.',
       fkSourceBidiOverride));
+  if Info.HasZeroWidth then
+    Results.Add(TLeakFinding.New(FileName, '', LineOr1(Info.FirstZeroWidthLine),
+      'Invisible / zero-width character (e.g. U+200B) in source - hidden-text ' +
+      'abuse vector (CWE-1007). Almost never legitimate; remove it (U+200D can ' +
+      'appear in emoji string literals - verify before removing there).',
+      fkSourceInvisibleChar));
 
   // ---- Gruppe A (Encoding): genau EIN Fund, Praezedenz E5 > E2 > E1 > E3 --
   if Info.HasNulCtrl then

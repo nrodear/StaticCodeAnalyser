@@ -4216,6 +4216,20 @@ begin
         '// Convert the file to UTF-8 (with BOM) or UTF-16.';
     end;
 
+    fkSourceInvisibleChar:
+    begin
+      Result.Description := _('Invisible / zero-width character in source - hidden-text abuse');
+      Result.Before :=
+        '// An invisible / zero-width Unicode char is present (U+200B ZWSP,'#13#10 +
+        '// U+200C/200D, U+2060 word-joiner, or a mid-file U+FEFF ZWNBSP).'#13#10 +
+        '// It can hide or split identifiers so the code is not what it looks'#13#10 +
+        '// like (Trojan Source / invisible-char family, CWE-1007).';
+      Result.After :=
+        '// Remove the character. It is almost never legitimate in source.'#13#10 +
+        '// Exception: U+200D (ZWJ) can appear inside emoji string literals -'#13#10 +
+        '// verify the context before removing it there.';
+    end;
+
   end;
 end;
 

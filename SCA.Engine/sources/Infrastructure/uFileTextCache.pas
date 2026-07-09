@@ -155,10 +155,12 @@ type
     MultiByteRuns     : Integer;   // Anzahl Multi-Byte-Sequenzen (Evidenz)
     HasNulCtrl        : Boolean;   // 0x00 / Ctrl<0x20 (ausser Tab/LF/FF/CR)
     HasBidi           : Boolean;   // bidirektionales Override-Steuerzeichen (Trojan Source)
+    HasZeroWidth      : Boolean;   // unsichtbares / Zero-Width-Zeichen (Unicode-Abuse)
     FirstNonAsciiLine : Integer;   // 1-basiert; 0 = keine
     FirstInvalidLine  : Integer;
     FirstNulCtrlLine  : Integer;
     FirstBidiLine     : Integer;
+    FirstZeroWidthLine: Integer;
   end;
 
 // Byte-Level-Encoding-Analyse einer Datei. Eigener ReadAllBytes: der Text-
@@ -328,6 +330,22 @@ begin
     Result := False;
 end;
 
+function IsZeroWidthSeq(const Bytes: TBytes; Idx, SeqLen: Integer): Boolean;
+// True wenn die (bereits validierte) Sequenz ab Idx ein unsichtbares /
+// Zero-Width-Zeichen ist (Unicode-Abuse, CWE-1007): U+200B/200C/200D
+// (E2 80 8B/8C/8D), U+2060 Word-Joiner (E2 81 A0), sowie U+FEFF ZWNBSP
+// (EF BB BF) - Letzteres nur MITTEN in der Datei (der Walk startet hinter der
+// BOM, jedes EF BB BF hier ist also ein mid-file ZWNBSP, keine BOM). NBSP
+// (U+00A0) ist BEWUSST NICHT dabei (legitim in UI-String-Literalen).
+begin
+  if SeqLen <> 3 then Exit(False);
+  Result :=
+    ( (Bytes[Idx] = $E2) and (Bytes[Idx + 1] = $80)
+      and (Bytes[Idx + 2] >= $8B) and (Bytes[Idx + 2] <= $8D) )       // U+200B..200D
+    or ( (Bytes[Idx] = $E2) and (Bytes[Idx + 1] = $81) and (Bytes[Idx + 2] = $A0) ) // U+2060
+    or ( (Bytes[Idx] = $EF) and (Bytes[Idx + 1] = $BB) and (Bytes[Idx + 2] = $BF) ); // mid-file U+FEFF
+end;
+
 function ComputeFileEncodingInfo(const Bytes: TBytes): TFileEncodingInfo;
 var
   Len, i, BomLen, Line, SeqLen : Integer;
@@ -383,6 +401,8 @@ begin
     if SeqLen >= 3 then Result.HasMultiByte3Up := True;
     if IsBidiOverrideSeq(Bytes, i, SeqLen) and (not Result.HasBidi) then
     begin Result.HasBidi := True; Result.FirstBidiLine := Line; end;
+    if IsZeroWidthSeq(Bytes, i, SeqLen) and (not Result.HasZeroWidth) then
+    begin Result.HasZeroWidth := True; Result.FirstZeroWidthLine := Line; end;
     // Continuation-Bytes koennen kein $0A sein -> keine Line-Zaehlung noetig.
     Inc(i, SeqLen);
   end;
