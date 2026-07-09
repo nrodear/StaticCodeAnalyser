@@ -87,6 +87,7 @@ uses
   uTestSelfAssignment in 'uTestSelfAssignment.pas',
   uTestVirtualCallInCtor in 'uTestVirtualCallInCtor.pas',
   uTestLengthUnderflow in 'uTestLengthUnderflow.pas',
+  uTestSourceEncoding in 'uTestSourceEncoding.pas',
   uTestVisibilityCheck in 'uTestVisibilityCheck.pas',
   uTestSynchronizeInDestructor in 'uTestSynchronizeInDestructor.pas',
   uTestLockWithoutTryFinally in 'uTestLockWithoutTryFinally.pas',
