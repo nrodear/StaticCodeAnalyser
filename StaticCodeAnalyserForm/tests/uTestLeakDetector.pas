@@ -101,6 +101,13 @@ type
     // TD-1 Inkrement 2c: LeakyClasses aus dem TAnalyzeContext - context-driven
     // Detection, AContext=nil folgt dem uSCAConsts-Global.
     [Test] procedure Leak_ContextLeakyClasses_DrivesDetection;
+    // Real-World FP-Repro (RHD-1181, TOnLogistManager.GetImportKz): class
+    // function, Result-Zuweisung zwischen Create und try, TOracleQuery.Create(nil),
+    // Freigabe per FreeAndNil im finally. Paar aus FP-Check (freigegeben -> 0) und
+    // TP-Baseline (nicht freigegeben -> 1, beweist dass TOracleQuery im Setup
+    // ueberhaupt als leaky geprueft wird).
+    [Test] procedure Leak_OracleQuery_ClassFuncFreeAndNilInFinally_NoFinding;
+    [Test] procedure Leak_OracleQuery_ClassFuncNoFree_ReportsError;
   end;
 
   // ---- MemoryLeak Advanced - Wrong-Free / Pointer-Issues / Container-Ownership ----
@@ -258,6 +265,91 @@ begin
       end;
     finally
       Root.Free;
+    end;
+  finally
+    Parser.Free;
+  end;
+end;
+
+// Real-World-Repro RHD-1181 / TOnLogistManager.GetImportKz (2026-07):
+//   class function ...: string;
+//   var mQuery: TOracleQuery;
+//   begin
+//     mQuery := TOracleQuery.Create(nil);   // <-- Fund-Zeile
+//     Result := 'N';
+//     try ... finally FreeAndNil(mQuery); end;
+//   end;
+// TOracleQuery ist keine Default-LeakyClass -> per Ctx.LeakyClasses.Add
+// aktiviert, sonst wuerde der FP-Check trivial (weil ungeprueft) 0 liefern.
+const
+  ORACLE_SRC_HEAD =
+    'unit t; implementation'#13#10+
+    'class function TOnLogistManager.GetImportKz(aInvoiceid: string): string;'#13#10+
+    'var mQuery: TOracleQuery;'#13#10+
+    'begin'#13#10+
+    '  mQuery := TOracleQuery.Create(nil);'#13#10+
+    '  Result := ''N'';'#13#10;
+
+procedure TTestMemoryLeak.Leak_OracleQuery_ClassFuncFreeAndNilInFinally_NoFinding;
+const SRC = ORACLE_SRC_HEAD +
+  '  try'#13#10+
+  '    mQuery.Session := MainSessionData.OracleSession;'#13#10+
+  '    mQuery.SQL.Text := ''SELECT einlesenkz FROM onlogist_import'';'#13#10+
+  '    mQuery.Execute;'#13#10+
+  '    if not mQuery.Eof then Result := mQuery.Field(0).AsString;'#13#10+
+  '  finally'#13#10+
+  '    FreeAndNil(mQuery);'#13#10+
+  '  end;'#13#10+
+  'end;';
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  Ctx    : TAnalyzeContext;
+  F      : TObjectList<TLeakFinding>;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    Ctx  := TAnalyzeContext.Create;
+    F    := TObjectList<TLeakFinding>.Create(True);
+    try
+      Ctx.LeakyClasses.Add('TOracleQuery');
+      TLeakDetector2.AnalyzeUnit(Root, 'sample.pas', F, Ctx);
+      Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+        'Create(nil) vor try, FreeAndNil im finally -> kein Leak (FP-Regression)');
+    finally
+      F.Free; Ctx.Free; Root.Free;
+    end;
+  finally
+    Parser.Free;
+  end;
+end;
+
+procedure TTestMemoryLeak.Leak_OracleQuery_ClassFuncNoFree_ReportsError;
+const SRC = ORACLE_SRC_HEAD +
+  '  mQuery.Session := MainSessionData.OracleSession;'#13#10+
+  '  mQuery.SQL.Text := ''SELECT einlesenkz FROM onlogist_import'';'#13#10+
+  '  mQuery.Execute;'#13#10+
+  '  if not mQuery.Eof then Result := mQuery.Field(0).AsString;'#13#10+
+  'end;';
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  Ctx    : TAnalyzeContext;
+  F      : TObjectList<TLeakFinding>;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    Ctx  := TAnalyzeContext.Create;
+    F    := TObjectList<TLeakFinding>.Create(True);
+    try
+      Ctx.LeakyClasses.Add('TOracleQuery');
+      TLeakDetector2.AnalyzeUnit(Root, 'sample.pas', F, Ctx);
+      Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+        'TOracleQuery ohne Free -> Error (beweist: Klasse wird im Setup geprueft)');
+    finally
+      F.Free; Ctx.Free; Root.Free;
     end;
   finally
     Parser.Free;
