@@ -8,10 +8,41 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Changes since **v0.9.8**. Detector roster grows from 183 to **184 rules**
-(`SCA001`–`SCA184`); DFM detectors 22 → **23**.
+Changes since **v0.9.8**. Detector roster grows from 183 to **192 rules**
+(`SCA001`–`SCA192`); DFM detectors 22 → **23**.
 
 ### Added
+
+- **`SCA185`–`SCA192` — file-encoding & Unicode-safety detector family**
+  (`uSourceEncoding.pas`): whole-file, byte-level checks that read the raw
+  bytes (the encoding truth the text cache discards after decoding).
+  - `SCA185 SourceUtf8NoBom` — UTF-8 without BOM + non-ASCII → the Delphi
+    compiler reads it as ANSI (`GetACP`) → runtime mojibake. `fcLow`
+    (opt-in): a byte detector can't tell comment non-ASCII (harmless) from
+    string-literal non-ASCII (a bug) — that needs token scope (later wave).
+  - `SCA186 SourceInvalidUtf8` — malformed UTF-8 under a UTF-8 BOM
+    (overlong / surrogate / out-of-range), via a strict RFC-3629 validator.
+  - `SCA187 SourceControlChar` — NUL / disallowed control byte.
+  - `SCA188 SourceBidiOverride` — **Trojan Source** (CVE-2021-42574,
+    CWE-1007): bidirectional override/isolate control chars that make code
+    read differently than it compiles. Fires even in clean UTF-8+BOM.
+  - `SCA189 SourceAnsiNonAscii` — 8-bit/ANSI source (no BOM, not valid
+    UTF-8) → code-page-dependent, non-portable.
+  - `SCA190 SourceUtf16` — UTF-16 source (compiles, tooling friction).
+  - `SCA191 SourceUtf32` — UTF-32/UCS-4 source → compiler fatal error
+    `F2438`.
+  - `SCA192 SourceInvisibleChar` — invisible / zero-width chars
+    (U+200B–200D, U+2060, mid-file U+FEFF; CWE-1007).
+  - Ships with 32 unit tests (`uTestSourceEncoding.pas`) and German help
+    texts (`de.po`). Scope: `.pas/.dpr/.dpk/.inc`.
+- **IDE plugin — baseline filter ("show only new findings")**: point the
+  editor at a baseline JSON and the grid + editor markers hide the legacy
+  backlog, showing only findings new since the baseline. Uses the shared
+  `TBaseline` fingerprint, so the file is interchangeable with the CLI
+  `--write-baseline` and the HTML-export baseline. New dock-menu action
+  *"Write baseline from current scan"* and a *Baseline* section in
+  Tools ▸ Options. Non-destructive (the full finding set + export are
+  unaffected); fail-open (a missing/broken baseline hides nothing).
 
 - **SCA184 `DfmComponentUnused`** — new DFM detector: flags a component
   declared in a `.dfm` that is never referenced — not in the form's own

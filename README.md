@@ -11,8 +11,9 @@
 
 **Delphi static code analysis tool** and **linter** for **RAD Studio 12 (Athens)** —
 ships as an **IDE plugin** with a dockable tool window plus a **standalone Windows app**.
-AST-based analysis with **~166 detectors total**: ~143 Pascal checks for memory leaks,
-SQL injection, code smells, security vulnerabilities and code duplication
+AST-based analysis with **~174 detectors total**: ~151 Pascal checks for memory leaks,
+SQL injection, code smells, security vulnerabilities, file-encoding & Unicode safety
+(Trojan Source), and code duplication
 (including a **Sonar-Delphi-compatible** subset SCA060+), **plus a
 dedicated DFM scanner with 22 checks** built on its own DFM lexer + parser + component
 graph paired with the Pascal AST — dead event handlers, hard-coded DB credentials in
@@ -37,8 +38,8 @@ Sonar setup required, running inside the IDE, with a Claude AI hand-off.**
 
 | Capability | Details |
 |------------|---------|
-| 🐛 **Bug detection** | ~143 Pascal detectors run against every `.pas` file (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 23 DFM detectors against every `.dfm` (dead event handlers, hard-coded DB credentials, circular master-detail, unused components, …) — **~166 total** |
-| 🔐 **Security checks** | SQLInjection (score-based), HardcodedSecret, HardcodedPath |
+| 🐛 **Bug detection** | ~151 Pascal detectors run against every `.pas` file (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 23 DFM detectors against every `.dfm` (dead event handlers, hard-coded DB credentials, circular master-detail, unused components, …) — **~174 total** |
+| 🔐 **Security checks** | SQLInjection (score-based), HardcodedSecret, HardcodedPath; **Unicode safety** — Trojan Source / bidirectional-override (CVE-2021-42574), invisible / zero-width characters, BOM / UTF-8 encoding integrity |
 | 🧹 **Code smells** | LongMethod, MagicNumber, EmptyExcept, MissingFinally, DeadCode, DuplicateString/Block |
 | ⚡ **Incremental analysis** | "Branch-Changes" button: only the files modified in the Git/SVN branch — 200 ms instead of 60 s |
 | 🤖 **Claude AI prompt** | Click a finding → a complete Markdown block with code context + before/after is copied to the clipboard |
@@ -53,7 +54,7 @@ Sonar setup required, running inside the IDE, with a Claude AI hand-off.**
 
 ## Main features
 
-### 1. Static code analysis (~166 detectors total — ~143 Pascal + 23 DFM, Sonar taxonomy)
+### 1. Static code analysis (~174 detectors total — ~151 Pascal + 23 DFM, Sonar taxonomy)
 
 **Pascal AST checks (~130)**: **bugs** (MemoryLeak, NilDeref, DivByZero,
 FormatMismatch, ReversedForRange, SelfAssignment, VirtualCallInCtor,
@@ -203,7 +204,7 @@ reference: [docs/sonar-config.md](docs/sonar-config.md).
 
 ---
 
-## What is detected (~166 detectors — ~143 Pascal + 23 DFM)
+## What is detected (~174 detectors — ~151 Pascal + 23 DFM)
 
 Findings fall into one of **five Sonar categories**:
 
