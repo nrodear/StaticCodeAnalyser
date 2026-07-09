@@ -1581,3 +1581,27 @@ msgstr "▶ Analysieren"
 
 msgid "📄 File"
 msgstr "📄 Datei"
+
+msgid "UTF-8 source without BOM - Delphi compiler reads it as ANSI (mojibake)"
+msgstr "UTF-8-Quelltext ohne BOM - der Delphi-Compiler liest ihn als ANSI (Mojibake)"
+
+msgid "Invalid UTF-8 sequence - compiler substitutes U+FFFD (data corruption)"
+msgstr "Ungültige UTF-8-Sequenz - der Compiler ersetzt sie durch U+FFFD (Datenkorruption)"
+
+msgid "NUL / control byte in source - binary file or mis-detected encoding"
+msgstr "NUL-/Steuerzeichen im Quelltext - Binärdatei oder falsch erkanntes Encoding"
+
+msgid "Bidirectional override char (Trojan Source) - code reads differently than it compiles"
+msgstr "Bidi-Override-Zeichen (Trojan Source) - der Code liest sich anders als er kompiliert"
+
+msgid "ANSI source (no BOM, not UTF-8) - code-page-dependent, non-portable"
+msgstr "ANSI-Quelltext (kein BOM, kein UTF-8) - codepage-abhängig, nicht portabel"
+
+msgid "UTF-16 source - compiles, but unusual and text-tool-unfriendly"
+msgstr "UTF-16-Quelltext - kompiliert, aber ungewöhnlich und werkzeug-unfreundlich"
+
+msgid "UTF-32 source - compiler rejects it with fatal error F2438"
+msgstr "UTF-32-Quelltext - der Compiler bricht mit dem Fehler F2438 ab"
+
+msgid "Invisible / zero-width character in source - hidden-text abuse"
+msgstr "Unsichtbares / Zero-Width-Zeichen im Quelltext - Versteckter-Text-Angriff"
