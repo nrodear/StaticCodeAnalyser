@@ -114,13 +114,37 @@ begin
       // Scope dieses Detektors (vgl. Unit-Header, GetMem-im-Ctor/Free-im-Dtor).
       var Ai := AfterPos;                       // direkt nach '('
       while (Ai <= Length(Code)) and CharInSet(Code[Ai], [' ', #9]) do Inc(Ai);
-      if (Ai < Length(Code)) and (Code[Ai] = 'F')
-         and CharInSet(Code[Ai + 1], ['A'..'Z']) then Continue;   // Feld FXxx
+      // Feld-Konvention F<Upper> ODER f<Upper> (mORMot fBuf/fState).
+      if (Ai < Length(Code)) and CharInSet(Code[Ai], ['F', 'f'])
+         and CharInSet(Code[Ai + 1], ['A'..'Z']) then Continue;   // Feld FXxx/fXxx
       var Aj := Ai;
       while (Aj <= Length(Code)) and
             CharInSet(Code[Aj], ['A'..'Z', 'a'..'z', '0'..'9', '_', '.']) do Inc(Aj);
       if (Aj <= Length(Code)) and (Code[Aj] = '^') then Inc(Aj);
       if (Aj <= Length(Code)) and (Code[Aj] = '[') then Continue;  // Array-Element
+
+      // FP-Guard C (Real-World-FP-Audit 2026-07-10): Escape via Zuweisungs-Ziel.
+      // 'Result := AllocMem/GetMem(...)' (Allocator-Rueckgabe), 'FBuf := GetMem' /
+      // 'fState := AllocMem' (Feld), 'Self.X := ...' / 'p^ := ...' (Member/Deref)
+      // -> der Buffer verlaesst die Routine, FreeMem liegt beim Owner/Caller
+      // (returns-pointer / field-lifetime, dominante SCA156-FP-Klassen).
+      var Ci := M.Index - 1;
+      while (Ci >= 1) and CharInSet(CodeLow[Ci], [' ', #9, #10, #13]) do Dec(Ci);
+      if (Ci >= 2) and (CodeLow[Ci] = '=') and (CodeLow[Ci - 1] = ':') then
+      begin
+        var Le := Ci - 2;
+        while (Le >= 1) and CharInSet(CodeLow[Le], [' ', #9]) do Dec(Le);
+        var Ls := Le;
+        while (Ls >= 1) and
+              CharInSet(CodeLow[Ls], ['a'..'z', '0'..'9', '_', '.', '^']) do Dec(Ls);
+        var LhsLow  := Copy(CodeLow, Ls + 1, Le - Ls);
+        var LhsOrig := Copy(Code,    Ls + 1, Le - Ls);
+        var IsField := (Length(LhsOrig) >= 2) and CharInSet(LhsOrig[1], ['F', 'f'])
+                       and CharInSet(LhsOrig[2], ['A'..'Z']);
+        if (LhsLow = 'result') or (Pos('.', LhsLow) > 0)
+           or (Pos('^', LhsLow) > 0) or IsField then
+          Continue;
+      end;
 
       // Snippet nach dem Alloc (max 400 Zeichen) lowercased.
       Snippet := Copy(CodeLow, AfterPos, LOOK_AHEAD);

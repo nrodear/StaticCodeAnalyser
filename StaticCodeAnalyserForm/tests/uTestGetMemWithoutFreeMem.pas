@@ -16,6 +16,9 @@ type
     [Test] procedure GetMemIntoField_NoFinding;
     [Test] procedure GetMemLocalNoTry_StillReported;
     [Test] procedure Finding_KindAndSeverity;
+    // Real-World FP-Audit 2026-07-10: escape via Result / lowercase-Feld
+    [Test] procedure AllocMemToResult_NoFinding;
+    [Test] procedure AllocMemToLowercaseField_NoFinding;
   end;
 
 implementation
@@ -169,6 +172,49 @@ begin
       if Fnd.Kind = fkGetMemWithoutFreeMem then begin Hit := Fnd; Break; end;
     Assert.IsNotNull(Hit, 'fkGetMemWithoutFreeMem finding expected');
     Assert.AreEqual(lsWarning, Hit.Severity);
+  finally F.Free; end;
+end;
+
+procedure TTestGetMemWithoutFreeMem.AllocMemToResult_NoFinding;
+// Real-World FP-Audit 2026-07-10 'returns-pointer': 'Result := AllocMem(...)' ist
+// eine Allocator-Rueckgabe - der Buffer verlaesst die Routine, das (in einem
+// SEPARATEN Dispose-Proc liegende) FreeMem ist kein lokaler Leak.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Alloc: Pointer;'#13#10 +
+  'begin'#13#10 +
+  '  Result := AllocMem(256);'#13#10 +
+  'end;'#13#10 +
+  'procedure DisposeIt(P: Pointer);'#13#10 +
+  'begin'#13#10 +
+  '  FreeMem(P);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkGetMemWithoutFreeMem),
+    'Result := AllocMem -> Buffer escaped, kein lokaler Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestGetMemWithoutFreeMem.AllocMemToLowercaseField_NoFinding;
+// Real-World FP-Audit 2026-07-10 'field-lifetime': 'fBuf := AllocMem' (mORMot-
+// Feld-Konvention lowercase f) im Ctor, FreeMem im Dtor - RAII-Feld-Lifetime.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'constructor TFoo.Create;'#13#10 +
+  'begin'#13#10 +
+  '  fBuf := AllocMem(256);'#13#10 +
+  'end;'#13#10 +
+  'destructor TFoo.Destroy;'#13#10 +
+  'begin'#13#10 +
+  '  FreeMem(fBuf);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkGetMemWithoutFreeMem),
+    'fBuf := AllocMem -> Feld-Lifetime (RAII), kein lokaler Leak');
   finally F.Free; end;
 end;
 
