@@ -21,6 +21,10 @@ type
     [Test] procedure UnrelatedCall_NoFinding;
 
     [Test] procedure Finding_KindAndSeverity;
+    // Real-World FP-Audit 2026-07-10: Call nur in Kondition / pure Value-Arme
+    [Test] procedure IfThen_ConditionCallOnly_NoFinding;
+    [Test] procedure IfThen_PureBuiltinInBranch_NoFinding;
+    [Test] procedure IfThen_GroupingParenInBranch_NoFinding;
   end;
 
 implementation
@@ -138,6 +142,50 @@ begin
     Assert.IsNotNull(Hit, 'fkIfThenShortCircuit finding expected');
     Assert.AreEqual(fkIfThenShortCircuit, Hit.Kind);
     Assert.AreEqual(lsWarning,            Hit.Severity);
+  finally F.Free; end;
+end;
+
+procedure TTestIfThenShortCircuit.IfThen_ConditionCallOnly_NoFinding;
+// Real-World FP-Audit 2026-07-10: der Call steht in der KONDITION (1. Arg) - die
+// laeuft ohnehin genau einmal. Die Value-Arme (1 / -1) sind konstant -> harmlos.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(y: Integer);'#13#10 +
+  'begin x := IfThen(Check(y), 1, -1); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkIfThenShortCircuit),
+    'Call nur in der Kondition + konstante Value-Arme -> kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestIfThenShortCircuit.IfThen_PureBuiltinInBranch_NoFinding;
+// Pure RTL-Builtins (Ord/Copy/Length/...) in einem Value-Arm sind seiteneffekt-
+// frei - doppelte Auswertung ist harmlos.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(b: Boolean; c: Char);'#13#10 +
+  'begin x := IfThen(b, 0, Ord(c)); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkIfThenShortCircuit),
+    'pures Builtin Ord() im Value-Arm -> kein Seiteneffekt, kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestIfThenShortCircuit.IfThen_GroupingParenInBranch_NoFinding;
+// Klammer-Gruppierung '(a + 1)' ist kein Funktionsaufruf (kein Bezeichner vor '(').
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(b: Boolean; a: Integer);'#13#10 +
+  'begin x := IfThen(b, 0, (a + 1) * 2); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkIfThenShortCircuit),
+    'Grouping-Paren (a+1) ist kein Call -> kein Fund');
   finally F.Free; end;
 end;
 

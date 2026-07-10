@@ -107,17 +107,94 @@ begin
   Result := Copy(CallName, Open + 1, Close - Open - 1);
 end;
 
-// True wenn der Args-String (ausserhalb von String-Literalen) eine
-// '(' enthaelt - Hinweis auf einen verschachtelten Funktionsaufruf.
-function ArgsContainNestedCall(const Args: string): Boolean;
+// Splittet den Args-String an TOP-LEVEL-Kommas (respektiert nested Parens +
+// String-Literale). IfThen(cond, a, b) -> ['cond', ' a', ' b'].
+function SplitTopLevelArgs(const Args: string): TArray<string>;
 var
-  Cleaned : string;
-  i       : Integer;
+  parts : TList<string>;
+  i, depth, start : Integer;
+  inStr : Boolean;
+  c : Char;
 begin
-  Result  := False;
-  Cleaned := TDetectorUtils.StripStringLiterals(Args);
-  for i := 1 to Length(Cleaned) do
-    if Cleaned[i] = '(' then Exit(True);
+  parts := TList<string>.Create;
+  try
+    depth := 0; inStr := False; start := 1;
+    for i := 1 to Length(Args) do
+    begin
+      c := Args[i];
+      if inStr then
+      begin
+        if c = '''' then inStr := False;
+      end
+      else if c = '''' then inStr := True
+      else if c = '(' then Inc(depth)
+      else if c = ')' then Dec(depth)
+      else if (c = ',') and (depth = 0) then
+      begin
+        parts.Add(Copy(Args, start, i - start));
+        start := i + 1;
+      end;
+    end;
+    parts.Add(Copy(Args, start, Length(Args) - start + 1));
+    Result := parts.ToArray;
+  finally
+    parts.Free;
+  end;
+end;
+
+// Lowercased Identifier direkt vor '(' an ParenPos; '' bei Grouping-Paren
+// '(expr)' (dann steht kein Bezeichner unmittelbar davor).
+function IdentBeforeParen(const S: string; ParenPos: Integer): string;
+var
+  e, b : Integer;
+begin
+  Result := '';
+  e := ParenPos - 1;
+  while (e >= 1) and CharInSet(S[e], [' ', #9]) do Dec(e);
+  b := e;
+  while (b >= 1) and CharInSet(S[b], ['a'..'z', 'A'..'Z', '0'..'9', '_']) do Dec(b);
+  if e >= b + 1 then Result := LowerCase(Copy(S, b + 1, e - b));
+end;
+
+function IsPureBuiltin(const IdentLow: string): Boolean;
+const
+  PURE : array[0..23] of string = (
+    'copy', 'ord', 'chr', 'length', 'high', 'low', 'sizeof', 'abs', 'sqr',
+    'succ', 'pred', 'trunc', 'round', 'frac', 'int', 'inttostr', 'inttohex',
+    'floattostr', 'strtoint', 'uppercase', 'lowercase', 'trim', 'pos', 'assigned');
+var
+  S : string;
+begin
+  Result := False;
+  for S in PURE do
+    if IdentLow = S then Exit(True);
+end;
+
+// True wenn EIN VALUE-Branch (2./3. Argument, NICHT die Kondition) einen
+// SEITENEFFEKT-Call enthaelt: ein '(' das von einem Bezeichner (Call) angefuehrt
+// wird und KEIN reiner RTL-Builtin ist. Grouping-Parens '(expr)' und pure
+// Builtins (Copy/Ord/Length/...) zaehlen nicht. Real-World-FP-Audit 2026-07-10:
+// die Kondition laeuft ohnehin einmal, konstante/arithmetische Value-Arme sind
+// harmlos (dominante SCA131-FP-Klasse).
+function ValueBranchHasSideEffectCall(const Args: string): Boolean;
+var
+  parts : TArray<string>;
+  k, i  : Integer;
+  cleaned, id : string;
+begin
+  Result := False;
+  parts := SplitTopLevelArgs(Args);
+  if Length(parts) < 2 then Exit;   // keine Value-Branches
+  for k := 1 to High(parts) do      // Index 0 = Kondition, ausgeschlossen
+  begin
+    cleaned := TDetectorUtils.StripStringLiterals(parts[k]);
+    for i := 1 to Length(cleaned) do
+      if cleaned[i] = '(' then
+      begin
+        id := IdentBeforeParen(cleaned, i);
+        if (id <> '') and not IsPureBuiltin(id) then Exit(True);
+      end;
+  end;
 end;
 
 // Pruefen ob `Text` ein `IfThen(...)`-Call mit verschachteltem Call-
@@ -133,7 +210,7 @@ var
 begin
   if not IsIfThenCall(Text) then Exit;
   Args := ExtractOuterArgs(Text);
-  if not ArgsContainNestedCall(Args) then Exit;
+  if not ValueBranchHasSideEffectCall(Args) then Exit;
   if Assigned(CurrentMethod) then MethName := CurrentMethod.Name
   else MethName := '';
   F            := TLeakFinding.Create;
