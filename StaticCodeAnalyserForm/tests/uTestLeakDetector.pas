@@ -17,6 +17,8 @@ type
   TTestMemoryLeak = class
   public
     [Test] procedure Leak_CreateWithoutFree_ReportsError;
+    // Real-World FP-Audit 2026-07-10: CreateAnonymousThread = FreeOnTerminate
+    [Test] procedure Leak_AnonymousThreadCreate_NoFinding;
     [Test] procedure Leak_CreateFreeInFinally_NoFinding;
     [Test] procedure Leak_CustomFreeWrapper_NoFinding;
     [Test] procedure Leak_FreeOutsideFinally_ReportsWarning;
@@ -353,6 +355,26 @@ begin
   finally
     Parser.Free;
   end;
+end;
+
+procedure TTestMemoryLeak.Leak_AnonymousThreadCreate_NoFinding;
+// FP-Fix Real-World-FP-Audit 2026-07-10: 'th := TThread.CreateAnonymousThread(...)'
+// liefert einen FreeOnTerminate-Thread (self-freeing); ein try/finally-Free waere
+// ein Use-after-free. TThread ist Default-Leaky -> vorher als Leak gemeldet.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure P;'#13#10+
+  'var th: TThread;'#13#10+
+  'begin'#13#10+
+  '  th := TThread.CreateAnonymousThread(nil);'#13#10+
+  '  th.Start;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'CreateAnonymousThread = FreeOnTerminate, kein Leak');
+  finally F.Free; end;
 end;
 
 procedure TTestMemoryLeak.Leak_CreateFreeInFinally_NoFinding;

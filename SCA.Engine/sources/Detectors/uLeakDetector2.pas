@@ -820,6 +820,13 @@ begin
            (Pos('.addnode(',     TypeLow) > 0) or
            (Pos('.appendchild(', TypeLow) > 0) then
           Exit(True);
+        // Self-freeing thread: 'var := TThread.CreateAnonymousThread(...)' liefert
+        // einen FreeOnTerminate-Thread, der sich nach Ausfuehrung selbst freigibt -
+        // ein try/finally-Free durch den Caller waere ein Use-after-free-Bug.
+        // Allgemeine RTL-Tatsache (nicht framework-spezifisch). Real-World-FP-
+        // Audit 2026-07-10 (DMVC RESTClient th := TThread.CreateAnonymousThread).
+        if Pos('.createanonymousthread', TypeLow) > 0 then
+          Exit(True);
       end;
       // Var-zu-Field-Transfer:
       //   FField := varName              -> Klassen-Feld haelt jetzt Ownership
