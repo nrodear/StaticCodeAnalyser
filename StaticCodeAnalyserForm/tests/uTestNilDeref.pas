@@ -16,6 +16,8 @@ type
     [Test] procedure AssignedCheck_NotReported;
     [Test] procedure NotNilCheck_NotReported;
     [Test] procedure Finding_KindAndSeverity;
+    // Real-World FP-Audit 2026-07-10: out-param-Finder in der if-Bedingung
+    [Test] procedure OutParamFinderInIfCondition_NotReported;
   end;
 
 implementation
@@ -105,6 +107,29 @@ begin
       if Fnd.Kind = fkNilDeref then begin Hit := Fnd; Break; end;
     Assert.IsNotNull(Hit, 'fkNilDeref finding expected');
     Assert.AreEqual(fkNilDeref, Hit.Kind);
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.OutParamFinderInIfCondition_NotReported;
+// Real-World FP-Audit 2026-07-10 'out-param-assignment-guarded': die Variable
+// wird als var/out-Argument an einen Finder IN DER BEDINGUNG uebergeben
+// ('if FindProcessor(..., lProc) then'); der Deref im if-true-Zweig ist damit
+// gefuellt. Der Finder-Call steht als nkIfStmt.TypeRef, nicht als nkCall ->
+// vorher von IsPassedAsArgBetween verfehlt (DMVC ActiveRecordController).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(const APath: string);'#13#10 +
+  'var lProcessor: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  lProcessor := nil;'#13#10 +
+  '  if FindProcessor(APath, lProcessor) then'#13#10 +
+  '    lProcessor.Execute;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
+    'out-Param-Finder in der Bedingung fuellt die Variable - kein nil-Deref');
   finally F.Free; end;
 end;
 

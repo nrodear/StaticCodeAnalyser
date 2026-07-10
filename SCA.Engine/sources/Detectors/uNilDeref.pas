@@ -46,7 +46,8 @@ type
       VarLow: string): Boolean; static;
     // FP-Gate (2026-07-04): out-param-assign - Uebergabe als Argument
     // zwischen nil-Zuweisung und Zugriff zaehlt als Zuweisung
-    class function IsPassedAsArgBetween(Calls, Assigns: TList<TAstNode>;
+    class function IsPassedAsArgBetween(MethodNode: TAstNode;
+      Calls, Assigns: TList<TAstNode>;
       const VarLow: string; AfterLine, BeforeLine: Integer): Boolean; static;
     // FP-Gate (2026-07-04): for-in-loop-assign - Schleifenkopf weist VarLow zu
     class function IsForLoopAssigned(MethodNode: TAstNode;
@@ -169,12 +170,14 @@ end;
   sowohl Call-Statements als auch RHS-Ausdruecke fremder Zuweisungen
   (Stub := TFoo.Create(..., I)). FreeAndNil ist ausgenommen - es laesst
   die Variable nil. }
-class function TNilDerefDetector.IsPassedAsArgBetween(Calls,
-  Assigns: TList<TAstNode>; const VarLow: string;
+class function TNilDerefDetector.IsPassedAsArgBetween(MethodNode: TAstNode;
+  Calls, Assigns: TList<TAstNode>; const VarLow: string;
   AfterLine, BeforeLine: Integer): Boolean;
 var
   N       : TAstNode;
   TextLow : string;
+  Kind    : TNodeKind;
+  Conds   : TList<TAstNode>;
 begin
   Result := False;
   for N in Calls do
@@ -198,6 +201,30 @@ begin
       Continue;
     if HasBareArgUse(TextLow, VarLow) then Exit(True);
   end;
+
+  // FP-Gate (Real-World-FP-Audit 2026-07-10): out-param-Finder-Aufrufe in
+  // BEDINGUNGEN ('if FindProcessorByURLSegment(..., lProcessor) then') sind
+  // keine nkCall-Knoten, sondern TypeRef-Strings des nkIfStmt/nkWhileStmt/
+  // nkCaseStmt. Der Deref steht dann im if-true-Zweig -> die Variable IST vom
+  // Finder gefuellt. Dominante SCA008-FP-Klasse 'out-param-assignment-guarded'.
+  if MethodNode <> nil then
+    for Kind in [nkIfStmt, nkWhileStmt, nkCaseStmt] do
+    begin
+      Conds := MethodNode.FindAll(Kind);
+      try
+        for N in Conds do
+        begin
+          if N.Line <= AfterLine then Continue;
+          if N.Line >= BeforeLine then Continue;
+          TextLow := N.TypeRef.ToLower;
+          if TDetectorUtils.ContainsWholeWordLower('freeandnil', TextLow) then
+            Continue;
+          if HasBareArgUse(TextLow, VarLow) then Exit(True);
+        end;
+      finally
+        Conds.Free;
+      end;
+    end;
 end;
 
 { FP-Gate (2026-07-04): for-in-loop-assign - 'for X in ...' weist X bei
@@ -296,7 +323,7 @@ begin
 
         // FP-Gate (2026-07-04): out-param-assign - Variable wurde zwischen
         // nil und Zugriff als Argument uebergeben (var/out-Zuweisung)?
-        if IsPassedAsArgBetween(Calls, Assigns, VarLow, NA.Line, C.Line) then
+        if IsPassedAsArgBetween(MethodNode, Calls, Assigns, VarLow, NA.Line, C.Line) then
           Continue;
 
         // FP-Gate (2026-07-04): for-in-loop-assign - Variable ist
