@@ -94,6 +94,27 @@ begin
   end;
 end;
 
+function IsMethodDeclOrHeaderLine(Lines: TStringList; LineNo: Integer): Boolean;
+// True wenn die Quellzeile ein Methoden-Header/Deklaration ist: Klassen-Method-
+// Decl ('procedure Lock;'), Interface-Forward-Decl ('procedure
+// EnterCriticalSection(...); stdcall;'), Impl-Header ('procedure TFoo.Lock;')
+// oder property-Getter/Setter-Klausel. Dort ist Lock/Acquire/EnterCriticalSection
+// der METHODENNAME, kein Acquire-Aufruf -> der Regex matcht, ist aber keine
+// Lock-Acquisition. Dominante SCA153-FP-Klasse 'declaration-not-call'
+// (Real-World-FP-Audit 2026-07-10).
+var
+  S : string;
+begin
+  Result := False;
+  if (Lines = nil) or (LineNo <= 0) or (LineNo > Lines.Count) then Exit;
+  S := LowerCase(TrimLeft(Lines[LineNo - 1]));
+  Result := S.StartsWith('procedure ')         or S.StartsWith('function ')          or
+            S.StartsWith('constructor ')       or S.StartsWith('destructor ')        or
+            S.StartsWith('class procedure ')   or S.StartsWith('class function ')    or
+            S.StartsWith('class constructor ') or S.StartsWith('class destructor ')  or
+            S.StartsWith('operator ')          or S.StartsWith('property ');
+end;
+
 class procedure TUnpairedLockDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 const
@@ -174,6 +195,14 @@ begin
 
       LineNo := TDetectorUtils.LineForPos(LineFor, M.Index);
       if LineNo <= 0 then LineNo := 1;
+
+      // FP-Guard (Real-World-FP-Audit 2026-07-10): Deklarationen/Header sind
+      // KEIN Acquire-Aufruf. 'procedure Lock;' (Klassen-Decl, gefolgt von
+      // 'procedure UnLock;' -> sah wie bare-Lock aus), 'function Acquire(...)',
+      // Interface-Forward-Decl 'procedure EnterCriticalSection(...); stdcall;',
+      // Impl-Header 'procedure TFoo.Lock;' matchen den Regex, sind aber
+      // Methodennamen. Dominante SCA153-FP-Klasse 'declaration-not-call'.
+      if IsMethodDeclOrHeaderLine(Lines, LineNo) then Continue;
 
       Detail := Format(
         'Lock/Enter without surrounding try/finally - exception leaks the lock (%s)',

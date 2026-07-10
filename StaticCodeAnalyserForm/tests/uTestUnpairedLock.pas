@@ -16,6 +16,11 @@ type
     [Test] procedure Finding_KindAndSeverity;
     [Test] procedure TryEnclosesLock_NoFinding;
     [Test] procedure BareLockNoTry_StillReported;
+    // Real-World FP-Audit 2026-07-10: 'declaration-not-call' (15/19 FP)
+    [Test] procedure LockMethodDeclaration_NotReported;
+    [Test] procedure InterfaceForwardDecl_NotReported;
+    [Test] procedure AcquireFunctionDeclaration_NotReported;
+    [Test] procedure MethodNamedLockWithRealAcquire_StillReported;
   end;
 
 implementation
@@ -154,6 +159,88 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkUnpairedLock) >= 1);
+  finally F.Free; end;
+end;
+
+// ============================================================
+// Real-World FP-Audit 2026-07-10: 'declaration-not-call'
+// 'procedure Lock;' / 'function Acquire(...)' / Interface-Forward-Decls
+// matchen den Regex, sind aber Methodennamen, keine Acquire-Aufrufe.
+// ============================================================
+
+procedure TTestUnpairedLock.LockMethodDeclaration_NotReported;
+// 'procedure Lock;' gefolgt von 'procedure UnLock;' in der Klassen-Decl sah
+// wie ein bare-Lock aus (Lookahead fand 'unlock' im UnLock-Header).
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  public'#13#10 +
+  '    procedure Lock;'#13#10 +
+  '    procedure UnLock;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnpairedLock),
+    'procedure Lock; ist eine Deklaration, kein Acquire-Aufruf');
+  finally F.Free; end;
+end;
+
+procedure TTestUnpairedLock.InterfaceForwardDecl_NotReported;
+// Interface-Section-Forward-Decls von EnterCriticalSection/LeaveCriticalSection.
+const SRC =
+  'unit t; interface'#13#10 +
+  'procedure EnterCriticalSection(var cs: TRTLCriticalSection); stdcall;'#13#10 +
+  'procedure LeaveCriticalSection(var cs: TRTLCriticalSection); stdcall;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnpairedLock),
+    'EnterCriticalSection(...) Forward-Decl ist kein Aufruf');
+  finally F.Free; end;
+end;
+
+procedure TTestUnpairedLock.AcquireFunctionDeclaration_NotReported;
+// 'function Acquire(...): Boolean;' Method-Decl, gefolgt von 'procedure Release;'.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TConn = class'#13#10 +
+  '  public'#13#10 +
+  '    function Acquire(Op: TObject): Boolean;'#13#10 +
+  '    procedure Release;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnpairedLock),
+    'function Acquire(...) Deklaration ist kein Aufruf');
+  finally F.Free; end;
+end;
+
+procedure TTestUnpairedLock.MethodNamedLockWithRealAcquire_StillReported;
+// Gegenprobe: der Impl-Header 'procedure TFoo.Lock;' wird uebersprungen, ein
+// ECHTER bare-Acquire im Rumpf bleibt aber ein Fund (kein Over-Suppress).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Lock;'#13#10 +
+  'begin'#13#10 +
+  '  FInner.Lock;'#13#10 +
+  '  DoStuff;'#13#10 +
+  '  FInner.UnLock;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkUnpairedLock) >= 1,
+    'echter bare FInner.Lock im Rumpf bleibt SCA153');
   finally F.Free; end;
 end;
 
