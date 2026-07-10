@@ -94,6 +94,21 @@ var
       begin
         var Prev := NameLow[p - 1];
         if CharInSet(Prev, ['a'..'z', '0'..'9', '_']) then Continue;
+        // Real-World-FP-Audit 2026-07-10: member-qualifizierter Aufruf
+        // (Self.WriteLn / FConsoleWriter.WriteLn / AWriter.WriteLn) ist eine
+        // eigene Logging-/Writer-Methode der Klasse, KEIN RTL-Debug-Output.
+        // Ausnahme: Qualifier = 'System' (das IST System.WriteLn). Unqualifiziertes
+        // WriteLn/ShowMessage bleibt Befund. DUnitX-Console-Writer-FP-Cluster.
+        if Prev = '.' then
+        begin
+          var qEnd := p - 2;
+          var qStart := qEnd;
+          while (qStart >= 1) and
+                CharInSet(NameLow[qStart], ['a'..'z', '0'..'9', '_']) do
+            Dec(qStart);
+          if Copy(NameLow, qStart + 1, qEnd - qStart) <> 'system' then
+            Continue;
+        end;
       end;
       var EndPos := p;
       while (EndPos <= Length(NameLow)) and
