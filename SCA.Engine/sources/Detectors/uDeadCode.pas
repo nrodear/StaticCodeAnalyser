@@ -104,6 +104,18 @@ begin
               Inc(i); Continue;
             end;
 
+            // FP-Guard (Real-World-FP-Audit 2026-07-10, 'raise-at-clause'):
+            // 'raise E.Create(m) at ReturnAddress;' parst als nkRaise + separater
+            // Folgeknoten fuer die 'at <addr>'-Klausel auf DERSELBEN Quellzeile.
+            // Das ist kein toter Code, sondern Teil desselben raise-Statements.
+            // NUR fuer nkRaise + gleiche Zeile skippen - 'Exit; DoStuff;' (Exit,
+            // echter toter Code auf gleicher Zeile) bleibt bewusst ein Fund.
+            if (Child.Kind = nkRaise) and (Nxt.Line > 0)
+               and (Nxt.Line <= Child.Line) then
+            begin
+              Inc(i); Continue;
+            end;
+
             F            := TLeakFinding.Create;
             F.FileName   := FileName;
             F.MethodName := MethodName;

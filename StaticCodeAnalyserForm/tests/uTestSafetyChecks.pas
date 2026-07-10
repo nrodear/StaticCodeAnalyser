@@ -66,6 +66,8 @@ type
     [Test] procedure DeadCode_NoDeadCode_NoFinding;
     [Test] procedure DeadCode_TwoExitsBothFollowedByDead_BothReported;
     [Test] procedure DeadCode_ExitAtMethodEnd_NoFinding;
+    // Real-World FP-Audit 2026-07-10: 'raise ... at ReturnAddress' ist ein Statement
+    [Test] procedure DeadCode_RaiseAtReturnAddress_NoFinding;
   end;
 
 implementation
@@ -544,6 +546,24 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeadCode));
+  finally F.Free; end;
+end;
+
+procedure TTestDeadCodeExt.DeadCode_RaiseAtReturnAddress_NoFinding;
+// Real-World FP-Audit 2026-07-10 'raise-at-clause': 'raise E.Create(m) at
+// ReturnAddress;' parst als nkRaise + separater 'at'-Knoten auf DERSELBEN
+// Quellzeile - kein toter Code, sondern Teil des raise-Statements.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  raise Exception.Create(''x'') at ReturnAddress;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeadCode),
+    'at ReturnAddress ist Teil des raise, kein toter Code');
   finally F.Free; end;
 end;
 
