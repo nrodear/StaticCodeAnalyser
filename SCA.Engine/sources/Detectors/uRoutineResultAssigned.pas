@@ -270,6 +270,80 @@ begin
   end;
 end;
 
+function ExprWritesOrPassesResult(const SLow, FnNameLow: string): Boolean;
+// Prueft einen bereits lowercased Expression-/Condition-String auf Result-
+// Write-/Pass-Muster die die per-nkCall/nkAssign-Checks verfehlen (der Parser
+// legt Bedingungs-Calls + RHS als TypeRef-String ab):
+//   '@result'          -> Adresse genommen, Callee schreibt durch
+//   ',result'          -> Result als Argument in einer Argumentliste (out/var)
+//   'ident(result'     -> Result als erstes Call-Argument (out/var)
+//   'result :='        -> parser-verpasste Zuweisung (goto/nested-Body)
+// Word-bounded; '(result' aus reiner Gruppierung '(Result > 0)' wird NICHT
+// getroffen (davor steht kein Ident). Real-World-FP-Audit 2026-07-10:
+// 'result-out-param', 'result-addr-taken', teilweise 'result-assigned-parse'.
+var
+  n, i, k, q : Integer;
+  pc : Char;
+
+  function IsResultWordAt(pos: Integer): Boolean;
+  begin
+    Result := (Copy(SLow, pos, 6) = 'result')
+      and ((pos = 1) or not IsIdentChar(SLow[pos - 1]))
+      and ((pos + 6 > n) or not IsIdentChar(SLow[pos + 6]));
+  end;
+
+begin
+  Result := False;
+  n := Length(SLow);
+  if n < 6 then Exit;
+  for i := 1 to n - 5 do
+  begin
+    if (SLow[i] <> 'r') or not IsResultWordAt(i) then Continue;
+    // vorheriges Non-Space-Zeichen
+    k := i - 1;
+    while (k >= 1) and (SLow[k] = ' ') do Dec(k);
+    if k >= 1 then pc := SLow[k] else pc := #0;
+    if (pc = '@') or (pc = ',') then Exit(True);
+    if (pc = '(') and (k >= 2) and IsIdentChar(SLow[k - 1]) then Exit(True);
+    // 'result :='
+    q := i + 6;
+    while (q <= n) and (SLow[q] = ' ') do Inc(q);
+    if (q < n) and (SLow[q] = ':') and (SLow[q + 1] = '=') then Exit(True);
+  end;
+end;
+
+function AnyNodeStringWritesResult(MethodNode: TAstNode;
+  const FnNameLow: string): Boolean;
+// Iterativer Walk ueber alle Descendants; prueft Name + TypeRef jedes Knotens
+// mit ExprWritesOrPassesResult. Faengt Result-out-Param in Bedingungen
+// (nkIfStmt.TypeRef) und '@Result' in RHS (nkAssign.TypeRef), die FindAll(nkCall)
+// nicht als Call-Knoten sieht.
+var
+  Stack : TStack<TAstNode>;
+  Cur   : TAstNode;
+  i     : Integer;
+begin
+  Result := False;
+  Stack := TStack<TAstNode>.Create;
+  try
+    Stack.Push(MethodNode);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack.Pop;
+      if (Cur.TypeRef <> '')
+         and ExprWritesOrPassesResult(LowerCase(Cur.TypeRef), FnNameLow) then
+        Exit(True);
+      if (Cur.Name <> '')
+         and ExprWritesOrPassesResult(LowerCase(Cur.Name), FnNameLow) then
+        Exit(True);
+      for i := 0 to Cur.Children.Count - 1 do
+        Stack.Push(Cur.Children[i]);
+    end;
+  finally
+    Stack.Free;
+  end;
+end;
+
 class procedure TRoutineResultAssignedDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -409,6 +483,14 @@ begin
       Assigns.Free;
     end;
   end;
+
+  // Ergaenzung 3 (Real-World-FP-Audit 2026-07-10): Result als out/var-Argument
+  // eines Calls in einer BEDINGUNG ('if Supports(v, IFoo, Result) then'),
+  // '@Result' (Adresse an einen fuellenden Callee) oder eine parser-verpasste
+  // 'result :='-Zuweisung. Der Parser legt solche Ausdruecke als TypeRef-String
+  // ab, nicht als nkCall/nkAssign -> von den obigen Checks verfehlt.
+  if not HasResult and AnyNodeStringWritesResult(MethodNode, FnNameLow) then
+    HasResult := True;
 
   if HasResult then Exit;
 

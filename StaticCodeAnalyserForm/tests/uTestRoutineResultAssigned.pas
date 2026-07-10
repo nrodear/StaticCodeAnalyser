@@ -41,6 +41,11 @@ type
     [Test] procedure UnrelatedVarSimilarName_StillReported;
     [Test] procedure NestedRoutine_OuterResultAssigned_NoFinding;
     [Test] procedure NestedFunctionWithoutResult_NotAnalyzed_NoFinding;
+    // Real-World FP-Audit 2026-07-10: out/var-Param in Bedingung + @Result
+    [Test] procedure ResultOutParamInIfCondition_NoFinding;
+    [Test] procedure ResultAddressTaken_NoFinding;
+    // Gegenprobe: reiner Result-Read in Klammer-Gruppierung ist KEINE Zuweisung
+    [Test] procedure ResultReadInParenCondition_StillReported;
 
     // ---- Finding-Inhalt ----------------------------------------------------
     [Test] procedure Finding_KindAndSeverity;
@@ -497,6 +502,65 @@ begin
     Assert.IsNotNull(Hit, 'fkRoutineResultUnassigned finding expected');
     Assert.AreEqual(fkRoutineResultUnassigned, Hit.Kind);
     Assert.AreEqual(lsError,                   Hit.Severity);
+  finally F.Free; end;
+end;
+
+// ============================================================
+// Real-World FP-Audit 2026-07-10 (SCA121 68% FP, error-level)
+// ============================================================
+
+procedure TTestRoutineResultAssigned.ResultOutParamInIfCondition_NoFinding;
+// 'if Supports(x, IFoo, Result) then' - Result ist der out-Param des Calls IN
+// der Bedingung (nkIfStmt.TypeRef, kein nkCall) -> vorher verfehlt -> FP.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function GetFoo(const x: IInterface): Boolean;'#13#10 +
+  'begin'#13#10 +
+  '  if Supports(x, IFoo, Result) then'#13#10 +
+  '    DoLog;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRoutineResultUnassigned),
+    'Supports(..., Result) in der Bedingung schreibt Result (out-Param)');
+  finally F.Free; end;
+end;
+
+procedure TTestRoutineResultAssigned.ResultAddressTaken_NoFinding;
+// 'p := @Result' - die Adresse wird genommen und der Callee schreibt durch den
+// Zeiger; kein direktes 'Result :=' -> vorher FP.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Build: Integer;'#13#10 +
+  'var p: Pointer;'#13#10 +
+  'begin'#13#10 +
+  '  p := @Result;'#13#10 +
+  '  FillIt(p);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRoutineResultUnassigned),
+    '@Result -> Adresse genommen, Callee fuellt Result');
+  finally F.Free; end;
+end;
+
+procedure TTestRoutineResultAssigned.ResultReadInParenCondition_StillReported;
+// Gegenprobe: '(Result > 0)' ist eine reine Klammer-Gruppierung (Read), KEINE
+// Zuweisung und kein Call-Argument -> der Guard darf hier NICHT unterdruecken.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Compute: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  if (Result > 0) then'#13#10 +
+  '    DoLog;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkRoutineResultUnassigned) >= 1,
+    'reiner Result-Read in (Result > 0) ist keine Zuweisung - bleibt Fund');
   finally F.Free; end;
 end;
 
