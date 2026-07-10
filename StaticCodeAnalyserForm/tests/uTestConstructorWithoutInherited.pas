@@ -21,6 +21,9 @@ type
     [Test] procedure RecordConstructor_NoFinding;
     // Gegenprobe: ein echter Klassen-Konstruktor ohne `inherited` feuert weiter.
     [Test] procedure ClassConstructorNoInherited_StillReported;
+    // Real-World FP-Audit 2026-07-10: Sibling-Konstruktor-Delegation
+    [Test] procedure CtorWithSiblingCreate_NoFinding;
+    [Test] procedure CtorConstructsOtherObject_StillReported;
   end;
 
 implementation
@@ -216,6 +219,42 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkConstructorWithoutInherited) >= 1);
+  finally F.Free; end;
+end;
+
+procedure TTestConstructorWithoutInherited.CtorWithSiblingCreate_NoFinding;
+// Real-World FP-Audit 2026-07-10: Sibling-Konstruktor-Delegation - der ctor ruft
+// den unqualifizierten Geschwister-Create (der seinerseits inherited ruft), der
+// Parent wird also transitiv initialisiert.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'constructor TFoo.Create(A: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  Create;'#13#10 +
+  '  FA := A;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkConstructorWithoutInherited),
+    'unqualifizierter Create-Aufruf = Sibling-Delegation, kein fehlendes inherited');
+  finally F.Free; end;
+end;
+
+procedure TTestConstructorWithoutInherited.CtorConstructsOtherObject_StillReported;
+// Gegenprobe: 'TList.Create' konstruiert ein ANDERES Objekt (typ-qualifiziert),
+// keine Sibling-Delegation -> fehlendes inherited bleibt Befund.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'constructor TFoo.Create;'#13#10 +
+  'begin'#13#10 +
+  '  FList := TList.Create;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkConstructorWithoutInherited),
+    'TList.Create ist typ-qualifiziert, keine Sibling-Delegation - bleibt Fund');
   finally F.Free; end;
 end;
 

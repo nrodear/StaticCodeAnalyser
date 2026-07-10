@@ -82,6 +82,35 @@ begin
     if HasInheritedCall(Child) then Exit(True);
 end;
 
+function CallIsUnqualifiedCreate(const CallName: string): Boolean;
+// True wenn CallName ein UNQUALIFIZIERTER Create-Aufruf ist ('Create' / 'Create(...)')
+// oder 'Self.Create(...)'. Das ist Sibling-Konstruktor-Delegation: der aufgerufene
+// Konstruktor derselben Klasse ruft seinerseits 'inherited', der Parent wird also
+// transitiv initialisiert. NICHT typ-/feld-qualifiziert ('TIcon.Create',
+// 'FList.Create', 'TList<T>.Create') - die konstruieren ANDERE Objekte und zaehlen
+// weiter als fehlendes inherited. Real-World-FP-Audit 2026-07-10 (SCA096-FP-Klasse).
+var
+  Low, NameOnly : string;
+  ParenPos : Integer;
+begin
+  Low := LowerCase(Trim(CallName));
+  ParenPos := Pos('(', Low);
+  if ParenPos > 0 then NameOnly := Trim(Copy(Low, 1, ParenPos - 1))
+  else NameOnly := Low;
+  Result := (NameOnly = 'create') or (NameOnly = 'self.create');
+end;
+
+function HasSiblingCreateCall(Node: TAstNode): Boolean;
+var
+  Child : TAstNode;
+begin
+  Result := False;
+  if Node = nil then Exit;
+  if (Node.Kind = nkCall) and CallIsUnqualifiedCreate(Node.Name) then Exit(True);
+  for Child in Node.Children do
+    if HasSiblingCreateCall(Child) then Exit(True);
+end;
+
 class procedure TConstructorWithoutInheritedDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -129,6 +158,10 @@ begin
       // Signatur) haben kein nkBlock, dort gehoert `inherited` nicht hin.
       if FindBodyBlock(M) = nil then Continue;
       if HasInheritedCall(M) then Continue;
+      // Sibling-Konstruktor-Delegation ('begin Create(...); ... end;' /
+      // 'Self.Create(...)'): der aufgerufene Ctor ruft inherited -> Parent
+      // transitiv initialisiert. Real-World-FP-Audit 2026-07-10.
+      if HasSiblingCreateCall(M) then Continue;
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
       F.MethodName := M.Name;
