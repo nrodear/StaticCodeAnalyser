@@ -70,6 +70,16 @@ type
     // Real-World 2026-06-28: Nested-Closure unter Headless-Method-Pattern
     [Test] procedure OuterVarReadOnlyInNestedRoutine_NoFinding;
     [Test] procedure OuterVarUninitDespiteNestedRoutine_StillFlagged;
+    // Real-World FP-Audit 2026-07-10 (SCA166 100% FP im Korpus):
+    // (A) Typecast-Assignment-Target 'TFoo<T>(x) := y' schreibt x
+    [Test] procedure TypecastAssignTargetGeneric_NoFinding;
+    // (C) Receiver-Init auf assign-RHS: 'n := tmp.Init(...)' / '.From...(...)'
+    [Test] procedure ReceiverInitInAssignRHS_NoFinding;
+    [Test] procedure FromInitVerbReceiverInExpr_NoFinding;
+    // (E) low()/high() im for-Header sind kein Werte-Read
+    [Test] procedure LowHighInForHeader_NoFinding;
+    // Gegenprobe: echter uninitialisierter Read bleibt ein Fund (kein Over-Suppress)
+    [Test] procedure ReadBeforeTypecastAssign_StillFlagged;
   end;
 
 implementation
@@ -1225,6 +1235,139 @@ begin
   RunOn(SRC, L);
   try Assert.IsTrue(CountKind(L, fkUninitVar) >= 1,
     'Total nie geschrieben, im outer-body gelesen - bleibt UninitVar trotz nested routine');
+  finally L.Free; end;
+end;
+
+// ============================================================
+// Real-World FP-Audit 2026-07-10 (SCA166 war 100% FP im Korpus)
+// ============================================================
+
+procedure TTestUninitVar.TypecastAssignTargetGeneric_NoFinding;
+// FP-Klasse 'typecast-assignment-target': 'TFunc<Integer>(raw) := delegate'
+// schreibt raw (LHS-Cast). Der Read-Scan zaehlte raw faelschlich als Read,
+// der Write landete erst auf einer spaeteren Arg-Zeile -> 'read before write'.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(const delegate: IInterface);'#13#10 +
+    'var raw: TMethod;'#13#10 +
+    'begin'#13#10 +
+    '  TFunc<Integer>(raw) := delegate;'#13#10 +
+    '  WriteLn(raw.Data);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+      'TFunc<Integer>(raw) := ... schreibt raw (Typecast-Assign-Target)');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.ReceiverInitInAssignRHS_NoFinding;
+// FP-Klasse 'record-method-init' im Expression-Kontext: 'n := tmp.Init(...)'
+// initialisiert tmp (Self ist var). ProcessCall sah RHS-Calls nicht, weil der
+// Parser sie als TypeRef-String ablegt statt als nkCall.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(const data: string);'#13#10 +
+    'var tmp: TSynTempBuffer; n: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  n := tmp.Init(data);'#13#10 +
+    '  WriteLn(tmp.Len);'#13#10 +
+    '  WriteLn(n);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+      'n := tmp.Init(data) initialisiert tmp (Receiver-Init auf RHS)');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.FromInitVerbReceiverInExpr_NoFinding;
+// 'ok := d.FromText(s)' - From*-Verb initialisiert den Receiver d (mORMot
+// TSynDate.From... / T.FromHttpDate).
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(const s: string);'#13#10 +
+    'var d: TSynDate; ok: Boolean;'#13#10 +
+    'begin'#13#10 +
+    '  ok := d.FromText(s);'#13#10 +
+    '  WriteLn(d.Year);'#13#10 +
+    '  WriteLn(ok);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+      'd.FromText(s) initialisiert d (From*-Init-Verb)');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.LowHighInForHeader_NoFinding;
+// 'for i := Low(a) to High(a)' - Low/High sind Compile-time-/Typ-Queries und
+// lesen den Wert von a NICHT; a[i] := i ist ein Element-Write.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var i: Integer; a: array[0..3] of Integer;'#13#10 +
+    'begin'#13#10 +
+    '  for i := Low(a) to High(a) do'#13#10 +
+    '    a[i] := i;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+      'Low(a)/High(a) im for-Header sind kein Werte-Read von a');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.ReadBeforeTypecastAssign_StillFlagged;
+// Gegenprobe zu Fix A: ein echter Read VOR dem (spaeteren) Typecast-Write
+// bleibt ein Fund - der Fix loest nur auf, unterdrueckt nicht pauschal.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(src: Pointer);'#13#10 +
+    'var raw: NativeInt;'#13#10 +
+    'begin'#13#10 +
+    '  WriteLn(raw);'#13#10 +
+    '  Pointer(raw) := src;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.IsTrue(CountKind(L, fkUninitVar) >= 1,
+      'raw wird gelesen bevor der Typecast-Write erfolgt - bleibt SCA166');
   finally L.Free; end;
 end;
 

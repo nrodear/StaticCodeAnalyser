@@ -928,6 +928,89 @@ begin
   end;
 end;
 
+function IsInitVerb(const MethodLow: string): Boolean;
+// Konservative Init-Verb-Allowlist fuer record-/value-typisierte Receiver deren
+// Typ NICHT als in-Unit-Record aufloesbar ist (cross-unit). 'from' ergaenzt
+// From*-Initialiser (mORMot T.FromHttpDate / TSynDate.From) - From* ist ein
+// Init-Idiom das praktisch nie mit einem Value-Reader kollidiert.
+begin
+  Result := StartsStr('init', MethodLow) or StartsStr('from', MethodLow) or
+            (MethodLow = 'start') or (MethodLow = 'full') or
+            (MethodLow = 'hash')  or (MethodLow = 'reset') or
+            (MethodLow = 'done')  or (MethodLow = 'prepare');
+end;
+
+function LineWritesViaTypecastAssign(const LLow, NameLow: string): Boolean;
+// True wenn NameLow in der (bereits lowercase+stripped) Zeile als Ziel eines
+// Typecast-Assignments steht: 'TFoo(name) := ...' bzw. 'TFoo<T>(name) := ...'
+// (optional '^' Deref nach der Klammer). Das ist ein WRITE von name; der
+// '^name :='-Scan in FindFirstSourceWriteLine erfasst es nicht, weil name
+// nicht am Zeilenanfang steht -> dominante SCA166-FP-Klasse
+// 'typecast-assignment-target'.
+var
+  P, NL, LL, q : Integer;
+  Before2 : Char;
+begin
+  Result := False;
+  NL := Length(NameLow);
+  LL := Length(LLow);
+  if (NL = 0) or (LL < NL + 4) then Exit;
+  P := 1;
+  while True do
+  begin
+    P := PosEx(NameLow, LLow, P);
+    if P = 0 then Break;
+    // Wortgrenzen
+    if (P > 1) and IsIdentChar(LLow[P - 1]) then begin P := P + NL; Continue; end;
+    if (P + NL <= LL) and IsIdentChar(LLow[P + NL]) then begin P := P + NL; Continue; end;
+    // Vor name muss '(' stehen, und davor ein Ident-Char (Typname) oder '>'
+    // (Generic-Cast 'TFoo<T>(name)').
+    if (P >= 2) and (LLow[P - 1] = '(') then
+    begin
+      Before2 := #0;
+      if P >= 3 then Before2 := LLow[P - 2];
+      if IsIdentChar(Before2) or (Before2 = '>') then
+      begin
+        q := P + NL;                       // Position des schliessenden ')'
+        if (q <= LL) and (LLow[q] = ')') then
+        begin
+          Inc(q);
+          while (q <= LL) and (LLow[q] = ' ') do Inc(q);
+          if (q <= LL) and (LLow[q] = '^') then
+          begin
+            Inc(q);
+            while (q <= LL) and (LLow[q] = ' ') do Inc(q);
+          end;
+          if (q < LL) and (LLow[q] = ':') and (LLow[q + 1] = '=') then Exit(True);
+        end;
+      end;
+    end;
+    P := P + NL;
+  end;
+end;
+
+function PrecededByIntrinsicOpen(const LLow: string; NamePos: Integer): Boolean;
+// True wenn der Identifier an NamePos direkt Argument von low(/high(/sizeof(/
+// typeinfo( ist. Diese lesen den Wert NICHT (Compile-time bzw. Typ-Query),
+// zaehlen also nicht als Read (FP-Klasse 'low-high-not-read'). LLow lowercase.
+const
+  INTR : array[0..3] of string = ('low', 'high', 'sizeof', 'typeinfo');
+var
+  sp, ep, k : Integer;
+  kw : string;
+begin
+  Result := False;
+  if (NamePos < 2) or (LLow[NamePos - 1] <> '(') then Exit;
+  ep := NamePos - 2;                       // Char direkt vor '('
+  if ep < 1 then Exit;
+  sp := ep;
+  while (sp >= 1) and IsIdentChar(LLow[sp]) do Dec(sp);
+  if ep < sp + 1 then Exit;
+  kw := Copy(LLow, sp + 1, ep - sp);
+  for k := 0 to High(INTR) do
+    if kw = INTR[k] then Exit(True);
+end;
+
 // ============================================================
 // HAUPT-LOGIK
 // ============================================================
@@ -1016,6 +1099,26 @@ var
     end;
   end;
 
+  procedure ApplyReceiverInit(const ReceiverLow, MethodLow: string; Line: Integer);
+  // Receiver-Init-Pattern: ein Methodenaufruf auf einer record-/value-typisierten
+  // lokalen Var initialisiert deren Felder (Self ist var-Parameter). Fuer in-Unit-
+  // Records (ARecordTypes) zaehlt JEDER Methodenaufruf als Init; sonst konservative
+  // Init-Verb-Allowlist (IsInitVerb). Klassen sind ausgenommen - ein Aufruf auf
+  // einer uninitialisierten Klassen-Referenz ist ein echter Read (Bug) und wird
+  // hier NICHT als Write gewertet (Idx-Typ ist dann keine in-Unit-Record).
+  var
+    Idx : Integer;
+  begin
+    if (ReceiverLow = '') or (MethodLow = '') then Exit;
+    Idx := VarIndexFor(ReceiverLow);
+    if Idx < 0 then Exit;
+    if (ARecordTypes <> nil) and
+       ARecordTypes.ContainsKey(BaseTypeLow(VarList.List[Idx].TypeLow)) then
+      RegisterWrite(Idx, Line)
+    else if IsInitVerb(MethodLow) then
+      RegisterWrite(Idx, Line);
+  end;
+
   procedure ProcessCall(C: TAstNode);
   var
     ArgsLow  : string;
@@ -1023,7 +1126,6 @@ var
     DotPos   : Integer;
     Receiver : string;
     Method   : string;
-    Idx      : Integer;
   begin
     if C = nil then Exit;
     if IsLineInRanges(C.Line, NestedRanges) then Exit;
@@ -1056,32 +1158,12 @@ var
     begin
       Receiver := LowerCase(Trim(Copy(FuncName, 1, DotPos - 1)));
       Method   := LowerCase(Trim(Copy(FuncName, DotPos + 1, MaxInt)));
-      Idx := VarIndexFor(Receiver);
-      if Idx >= 0 then
-      begin
-        // Receiver ist eine lokale Variable. Zwei Faelle:
-        // (1) Ihr Typ ist ein in DIESER Unit deklarierter RECORD
-        //     (Value-Type, ARecordTypes). Dann ist Self bei jedem Methoden-
-        //     aufruf ein var-Parameter -> die Methode SCHREIBT die Record-
-        //     Felder. records-with-methods werden per Methode konstruiert
-        //     (mORMot TMatch.Prepare, TDynArray.Init, ...), daher zaehlt
-        //     JEDER Methodenaufruf als Init - nicht nur namens-gelistete.
-        //     Fuer KLASSEN (nkClass) gilt das NICHT: dort muss die Referenz
-        //     vorher zugewiesen sein, ein Aufruf auf einer uninitialisierten
-        //     Klassen-Var ist ein echter Read (Bug) und bleibt ein Fund.
-        // (2) Typ nicht als in-Unit-Record aufloesbar (Klasse, Interface,
-        //     cross-unit): konservative Init-Verb-Allowlist. Init*/Start/
-        //     Full/Hash/Reset/Done sind mORMot/RTL-Record-Init-Konventionen;
-        //     'prepare' ergaenzt fuer cross-unit records (mORMot TMatch aus
-        //     einer anderen Unit) das haeufigste fehlende Init-Verb.
-        if (ARecordTypes <> nil) and
-           ARecordTypes.ContainsKey(BaseTypeLow(VarList.List[Idx].TypeLow)) then
-          RegisterWrite(Idx, C.Line)
-        else if StartsStr('init', Method) or (Method = 'start') or
-                (Method = 'full') or (Method = 'hash') or (Method = 'reset') or
-                (Method = 'done') or (Method = 'prepare') then
-          RegisterWrite(Idx, C.Line);
-      end;
+      // Receiver-Init: in-Unit-Record -> jeder Methodenaufruf initialisiert
+      // (Self ist var-Parameter); sonst konservative Init-Verb-Allowlist.
+      // KLASSEN bleiben ausgenommen (Aufruf auf uninit Klassen-Ref = echter
+      // Read/Bug). Ausgelagert nach ApplyReceiverInit (auch im Expression-
+      // Kontext genutzt, siehe ProcessReceiverInitInExpr).
+      ApplyReceiverInit(Receiver, Method, C.Line);
     end;
     ArgsLow := LowerCase(TDetectorUtils.ExtractCallArgsRaw(C.Name));
     if ArgsLow = '' then Exit;
@@ -1121,6 +1203,61 @@ var
       end;
     finally
       Calls.Free;
+    end;
+  end;
+
+  procedure ProcessReceiverInitInExpr(Node: TAstNode);
+  // Receiver-Init fuer Calls in Expression-Strings (assign-RHS / conditions):
+  // 'int := temp.Init(...)' schreibt temp. ProcessCall sieht solche Calls NICHT
+  // (Parser legt sie als TypeRef-String ab, nicht als nkCall). Scannt
+  // <receiver>.<method>( Muster (inkl. generic <...>) und wendet
+  // ApplyReceiverInit an. Loest die dominante SCA166-FP-Klasse
+  // 'record-method-init' (mORMot temp.Init / T.From... auf der RHS).
+  var
+    L : string;
+    i, LL, ns, ne, rs : Integer;
+    Receiver, Method : string;
+  begin
+    if (Node = nil) or (Node.TypeRef = '') then Exit;
+    if IsLineInRanges(Node.Line, NestedRanges) then Exit;
+    L := LowerCase(Node.TypeRef);
+    LL := Length(L);
+    i := 1;
+    while i <= LL do
+    begin
+      if IsIdentChar(L[i]) and ((i = 1) or not IsIdentChar(L[i - 1])) then
+      begin
+        ns := i;
+        while (i <= LL) and IsIdentChar(L[i]) do Inc(i);
+        ne := i - 1;
+        if (i <= LL) and (L[i] = '.') then
+        begin
+          Receiver := Copy(L, ns, ne - ns + 1);
+          Inc(i);                                // hinter '.'
+          rs := i;
+          while (i <= LL) and IsIdentChar(L[i]) do Inc(i);
+          Method := Copy(L, rs, i - rs);
+          // optionales generic '<...>' vor dem '(' ueberspringen (Lookahead j)
+          var j : Integer := i;
+          while (j <= LL) and (L[j] = ' ') do Inc(j);
+          if (j <= LL) and (L[j] = '<') then
+          begin
+            var gd : Integer := 1;
+            Inc(j);
+            while (j <= LL) and (gd > 0) do
+            begin
+              if L[j] = '<' then Inc(gd) else if L[j] = '>' then Dec(gd);
+              Inc(j);
+            end;
+            while (j <= LL) and (L[j] = ' ') do Inc(j);
+          end;
+          // nur ein Methoden-Call (mit '('), kein Feld-Zugriff 'rec.field'
+          if (Method <> '') and (j <= LL) and (L[j] = '(') then
+            ApplyReceiverInit(Receiver, Method, Node.Line);
+        end;
+      end
+      else
+        Inc(i);
     end;
   end;
 
@@ -1301,6 +1438,10 @@ var
       if IsLineInRanges(i + 1, NestedRanges) then Continue;
       // Read-Family-Fill ('Stream.Read(Buf, Size)') fuellt den Buffer = Write.
       if LineFillsVarViaReadCall(L, NameLow) then Exit(i + 1);
+      // Typecast-Assignment-Target 'TFoo(name) := ...' / 'TFoo<T>(name) := ...'
+      // schreibt name; der '^name :='-Scan unten erfasst das nicht (name steht
+      // nicht am Zeilenanfang). FP-Klasse 'typecast-assignment-target'.
+      if LineWritesViaTypecastAssign(L, NameLow) then Exit(i + 1);
       Trimmed := TrimLeft(L);
       if Length(Trimmed) < NL + 2 then Continue;
       if not Trimmed.StartsWith(NameLow) then Continue;
@@ -1415,8 +1556,9 @@ var
             // Real-World-FP 2026-06-23: folgende Formen sind KEIN Werte-Read:
             // 1) `@name` (Address-of, oft WinAPI-out-Param der name FUELLT).
             if Before = '@' then begin P := P + NL; Continue; end;
-            // 2) `sizeof(name)` (Groessen-Query, kein Read).
-            if (P >= 8) and (Copy(L, P - 7, 7) = 'sizeof(') then
+            // 2) low(name)/high(name)/sizeof(name)/typeinfo(name): Compile-time-
+            //    bzw. Typ-Query, KEIN Werte-Read (FP-Klasse 'low-high-not-read').
+            if PrecededByIntrinsicOpen(L, P) then
               begin P := P + NL; Continue; end;
             // 3) Array-Element-Write `name[i] := ` / `name[i].F := ` ist
             //    Initialisierung (Element-Write), kein Read.
@@ -1544,6 +1686,14 @@ var
       for i := 0 to Cases.Count   - 1 do ProcessConditionCalls(Cases[i]);
       for i := 0 to Assigns.Count - 1 do ProcessConditionCalls(Assigns[i]);
       for i := 0 to Fors.Count    - 1 do ProcessConditionCalls(Fors[i]);
+      // Receiver-Init fuer Calls in Expression-Strings (assign-RHS/conditions):
+      // 'int := temp.Init(...)' schreibt temp - ProcessCall (nkCall) sieht das
+      // nicht, weil solche Calls als TypeRef-String abgelegt sind.
+      for i := 0 to Assigns.Count - 1 do ProcessReceiverInitInExpr(Assigns[i]);
+      for i := 0 to Fors.Count    - 1 do ProcessReceiverInitInExpr(Fors[i]);
+      for i := 0 to Ifs.Count     - 1 do ProcessReceiverInitInExpr(Ifs[i]);
+      for i := 0 to Whiles.Count  - 1 do ProcessReceiverInitInExpr(Whiles[i]);
+      for i := 0 to Cases.Count   - 1 do ProcessReceiverInitInExpr(Cases[i]);
     finally
       Cases.Free;
       Whiles.Free;
