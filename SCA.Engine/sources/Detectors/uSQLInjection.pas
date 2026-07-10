@@ -290,6 +290,31 @@ begin
   end;
 end;
 
+function IsScreamingSnakeConst(const S: string): Boolean;
+// SCREAMING_SNAKE_CASE-Bezeichner (TEST_TABLE_REFRESHABLE, MAX_ROWS) sind per
+// Delphi-Konvention Compile-Zeit-Konstanten - kein extern beeinflussbarer Wert,
+// also injection-sicher als Konkat-Term. Verlangt mind. einen Unterstrich +
+// ausschliesslich Grossbuchstaben/Ziffern/Unterstriche + mind. einen Buchstaben.
+// FP-Klasse 'constant-concat' (Real-World-FP-Audit 2026-07-10, EntGen-Tests).
+var
+  i : Integer;
+  hasUnderscore, hasAlpha : Boolean;
+begin
+  Result := False;
+  if Length(S) < 2 then Exit;
+  hasUnderscore := False;
+  hasAlpha      := False;
+  for i := 1 to Length(S) do
+    case S[i] of
+      'A'..'Z': hasAlpha := True;
+      '0'..'9': ;
+      '_':      hasUnderscore := True;
+    else
+      Exit;  // Kleinbuchstabe/anderes Zeichen -> kein SCREAMING_SNAKE_CASE
+    end;
+  Result := hasUnderscore and hasAlpha;
+end;
+
 class function TSQLInjectionDetector.AllConcatTermsSafe(MethodNode: TAstNode;
   const RHS: string): Boolean;
 // Strippt alle String-Literale (mit ''-Escape-Handling) raus, dann an
@@ -312,6 +337,7 @@ var
   inStr    : Boolean;
   c        : Char;
   ident    : string;
+  IdentOrig: string;
   s        : string;
   isSafe   : Boolean;
   LastComp : string;
@@ -359,6 +385,9 @@ begin
             CharInSet(Stripped[j], ['a'..'z', 'A'..'Z', '_', '0'..'9']) do
         Inc(j);
       ident := LowerCase(Copy(Stripped, p, j - p));
+      // Original-Case fuer die SCREAMING_SNAKE-Const-Heuristik (Stripped ist
+      // positionsgleich zu RHS, nur ge-lowert / Literale geleert).
+      IdentOrig := Copy(RHS, p, j - p);
       if ident = '' then
       begin
         // Position war ein gestripptes Literal -> ok.
@@ -441,7 +470,8 @@ begin
         // FP-Gate (2026-07-05): orm-sql-builder - ODER der Identifier ist
         // ein bares ORM-Schema-Metadatum (with-Scope: 'FROM ' + SqlTableName).
         if not (IsConstDerivedLocal(MethodNode, ident)
-                or IsOrmMetaIdent(ident)) then
+                or IsOrmMetaIdent(ident)
+                or IsScreamingSnakeConst(IdentOrig)) then
           Exit(False); // bare Identifier -> Variable, unsicher
         Inc(i);
         Continue;

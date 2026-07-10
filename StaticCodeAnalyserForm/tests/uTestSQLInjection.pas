@@ -106,6 +106,9 @@ type
     [Test] procedure SQL_ExecuteFmtRawPercentUpdate_Reported;
     [Test] procedure SQL_ConcatMemberPathNonMetadata_Reported;
     [Test] procedure SQL_FormatUtf8NonMetadataMemberPath_Reported;
+    // Real-World FP-Audit 2026-07-10: SCREAMING_SNAKE_CASE-Const-Konkat
+    [Test] procedure SQL_ScreamingSnakeConstConcat_NoFinding;
+    [Test] procedure SQL_CamelCaseVarConcat_StillReported;
   end;
 
 implementation
@@ -1111,6 +1114,45 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkSQLInjection));
+  finally F.Free; end;
+end;
+
+// ============================================================
+// Real-World FP-Audit 2026-07-10: constant-concat (SCREAMING_SNAKE_CASE)
+// ============================================================
+
+procedure TTestSQLInjectionExt.SQL_ScreamingSnakeConstConcat_NoFinding;
+// FP-Klasse 'constant-concat': 'DROP TABLE ' + TEST_TABLE_NAME - ein
+// SCREAMING_SNAKE_CASE-Bezeichner ist per Delphi-Konvention eine Compile-Zeit-
+// Konstante (kein User-Input), auch als Unit-Konstante die der lokale
+// const-derived-Walk nicht sieht.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  Q.SQL.Text := ''DROP TABLE '' + TEST_TABLE_NAME;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    'SCREAMING_SNAKE_CASE-Const-Konkat ist kein Injection-Vektor');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_CamelCaseVarConcat_StillReported;
+// Gegenprobe: eine camelCase-Variable ist KEINE Konstante -> bleibt Fund.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  Q.SQL.Text := ''DROP TABLE '' + tableName;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
+    'camelCase-Variable in SQL-Konkat bleibt SCA003');
   finally F.Free; end;
 end;
 
