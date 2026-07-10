@@ -14,6 +14,9 @@ type
     [Test] procedure FreeAtMethodEnd_NotReported;
     [Test] procedure FreeFollowedByNilAssign_NotReported;
     [Test] procedure FreeInDestructor_NotReported;
+    // Real-World FP-Audit 2026-07-10: class destructor + OnDestroy-Handler
+    [Test] procedure FreeInClassDestructor_NotReported;
+    [Test] procedure FreeInFormDestroy_NotReported;
     [Test] procedure MethodResultFree_NotReported;
     [Test] procedure ParamFree_NotReported;
     [Test] procedure IndexedElementFree_NotReported;
@@ -255,6 +258,59 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
       'Free eines Parameters ist kein Free-Without-Nil-Smell');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNil.FreeInClassDestructor_NotReported;
+// Real-World FP-Audit 2026-07-10: 'class destructor' (TypeRef 'class destructor')
+// wurde vom exakten SameText('destructor') verfehlt. Die class-var stirbt am
+// Klassen-Teardown -> Nil-Out wirkungslos.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    class var FList: TStringList;'#13#10 +
+  '    class destructor Destroy;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'class destructor TFoo.Destroy;'#13#10 +
+  'begin'#13#10 +
+  '  FList.Free;'#13#10 +
+  '  WriteLn(''done'');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'class destructor -> Nil-Out wirkungslos, kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNil.FreeInFormDestroy_NotReported;
+// Real-World FP-Audit 2026-07-10: OnDestroy-Handler 'FormDestroy' (ein normales
+// procedure) zerstoert die Form -> Feld-Free braucht kein Nil-Out.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TForm1 = class(TForm)'#13#10 +
+  '    FList: TStringList;'#13#10 +
+  '    procedure FormDestroy(Sender: TObject);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TForm1.FormDestroy(Sender: TObject);'#13#10 +
+  'begin'#13#10 +
+  '  FList.Free;'#13#10 +
+  '  WriteLn(''done'');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'FormDestroy (OnDestroy-Handler) -> Feld-Free ohne Nil-Out ok');
   finally F.Free; end;
 end;
 

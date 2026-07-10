@@ -214,7 +214,18 @@ begin
       // selbst wird gerade zerstoert, die Felder sterben mit ihm. Real-
       // World-FP-Cluster (2026-06-21): ein einziger Destruktor mit 8
       // Field.Free erzeugte 8 Findings. Komplett skippen.
-      if SameText(M.TypeRef, 'destructor') then Continue;
+      //
+      // Real-World-FP-Audit 2026-07-10 (SCA139 97% FP): auch 'class destructor'
+      // (TypeRef 'class destructor', vom exakten SameText verfehlt) UND
+      // OnDestroy-Handler ('FormDestroy'/'DataModuleDestroy'/'<X>.Destroy',
+      // ein normales procedure) zerstoeren die Instanz -> Nil-Out wirkungslos,
+      // keine UAF-Flaeche. TearDown/Reset-Methoden (enden NICHT auf 'destroy')
+      // bleiben bewusst Befund (dort kann ein spaeterer nil-Branch dangling sein).
+      if Pos('destructor', LowerCase(M.TypeRef)) > 0 then Continue;
+      var MNameLow := LowerCase(M.Name);
+      var MDotPos := LastDelimiter('.', MNameLow);
+      if MDotPos > 0 then MNameLow := Copy(MNameLow, MDotPos + 1, MaxInt);
+      if EndsText('destroy', MNameLow) then Continue;
 
       // Lokale Var-Namen einmal pro Methode sammeln. Free-Calls auf Locals
       // sind harmlos, weil die Variable beim Method-Ende sowieso aus dem
