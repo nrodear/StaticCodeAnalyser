@@ -322,6 +322,12 @@ begin
         TEmptyOnHandlerDetector.AnalyzeUnit(Root, TempPath, Result);
         TStringFromPointerDetector.AnalyzeUnit(Root, TempPath, Result);
         TPointerSubtractionDetector.AnalyzeUnit(Root, TempPath, Result);
+        // GodClass hat einen Lines-abhaengigen Guard (IsEmptyClassDeclLine liest
+        // die Quellzeile per AcquireLines) - MUSS im File-Harness laufen, sonst
+        // ist der Guard (Parser-Slurp-Artefakt-Unterdrueckung) ungetestet und
+        // FindingsOfFile-basierte GodClass-Tests liefen ins Leere (Detektor nie
+        // ausgefuehrt). Klassische Metrik-Tests bleiben auf FindingsOf.
+        TGodClassDetector.AnalyzeUnit(Root, TempPath, Result);
       finally
         Root.Free;
       end;
