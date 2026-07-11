@@ -78,8 +78,8 @@ class procedure TLargeClassDetector.AnalyzeUnit(UnitNode: TAstNode;
 var
   Classes  : TList<TAstNode>;
   AllMeths : TList<TAstNode>;
-  C, M     : TAstNode;
-  MinLine, MaxLine, Span : Integer;
+  C, M, C2 : TAstNode;
+  DeclMax, DeclSpan, MethSpan, Span, NextClassLine : Integer;
   ClassName : string;
   F        : TLeakFinding;
 begin
@@ -92,20 +92,39 @@ begin
       ClassName := C.Name;
       if ClassName = '' then Continue;
 
-      MinLine := C.Line;
-      MaxLine := DeepMaxLine(C);  // Class-Body voll abdecken
+      // FP-Fix 2026-07-11 (Real-World-FP-Audit, span-overcounts-sibling-classes):
+      // Zwei Bugs der alten max-min-Span:
+      //  (1) Bei nicht sauber geschlossenen interface-`type`-Sections haengt der
+      //      Parser nachfolgende Geschwister-Klassen als Descendants an die erste
+      //      Klasse -> DeepMaxLine(C) laeuft bis zum Unit-Ende. Deckel: die
+      //      Deklarations-Span endet spaetestens VOR der naechsten Klassen-Decl.
+      //  (2) max(Line)-min(Line) zaehlt eine winzige Klasse, deren einzige Methode
+      //      erst weit hinten (nach grossen Geschwistern) implementiert ist, als
+      //      "hunderte Zeilen". Korrekt (und im Header so dokumentiert) ist die
+      //      SUMME aus Deklarations-Span + je Methoden-Body-Span. Summe ist stets
+      //      <= altem max-min -> reduziert nur, erzeugt keinen neuen Fund.
+      DeclMax := DeepMaxLine(C);
+      NextClassLine := MaxInt;
+      for C2 in Classes do
+        if (C2 <> C) and (C2.Line > C.Line) and (C2.Line < NextClassLine) then
+          NextClassLine := C2.Line;
+      if (NextClassLine < MaxInt) and (DeclMax >= NextClassLine) then
+        DeclMax := NextClassLine - 1;
+      DeclSpan := DeclMax - C.Line + 1;
+      if DeclSpan < 1 then DeclSpan := 1;
 
-      // Implementation-Methoden mit `TClassName.`-Prefix mitzaehlen -
-      // jeweils inkl. Method-Body via DeepMaxLine.
+      Span := DeclSpan;
+
+      // Implementation-Methoden mit `TClassName.`-Prefix: je Body-Span aufsummieren
+      // (DeepMaxLine deckt den Method-Body ab; Header-Zeile in DeclSpan enthalten).
       for M in AllMeths do
         if SameText(ClassPrefix(M.Name), ClassName) then
         begin
-          if M.Line < MinLine then MinLine := M.Line;
-          var MethEnd := DeepMaxLine(M);
-          if MethEnd > MaxLine then MaxLine := MethEnd;
+          MethSpan := DeepMaxLine(M) - M.Line + 1;
+          if MethSpan < 1 then MethSpan := 1;
+          Inc(Span, MethSpan);
         end;
 
-      Span := MaxLine - MinLine + 1;
       if Span <= MAX_LINES then Continue;
 
       F            := TLeakFinding.Create;
