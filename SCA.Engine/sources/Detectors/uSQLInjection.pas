@@ -1028,8 +1028,8 @@ begin
           else
           begin
             if (Trim(Elem) <> '') and (not FlushElem) then Exit;
-            Elem  := '';
-            InArr := False;
+            // Elem/InArr-Reset hier entfernt: FlushElem leert Elem bereits und
+            // das folgende Break beendet die Schleife -> tote Zuweisungen (H2077).
             // FP-Gate (2026-07-05): sql-builder-api - nur das ERSTE
             // [..]-Array traegt %-Substitutions-Argumente; Folge-Arrays
             // der mORMot-APIs (FormatSql(Fmt, Args, Params) in
