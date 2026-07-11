@@ -18,9 +18,11 @@ type
   public
     [Test] procedure Debug_WriteLnCall_ReportsWarning;
     [Test] procedure Debug_ShowMessageCall_ReportsWarning;
-    [Test] procedure Debug_MessageDlgCall_ReportsWarning;
+    // Scope-Entscheidung 2026-07-11: MessageDlg + InputBox sind keine SCA017-
+    // Ziele mehr (bewusste UI bzw. Eingabe-Primitiv) -> NoFinding.
+    [Test] procedure Debug_MessageDlg_NoFinding;
     [Test] procedure Debug_OutputDebugStringCall_ReportsWarning;
-    [Test] procedure Debug_InputBoxCall_ReportsWarning;
+    [Test] procedure Debug_InputBox_NoFinding;
     [Test] procedure Debug_NormalCall_NoFinding;
     [Test] procedure Debug_PrefixedNameWordBoundary_NoFalsePositive;
     [Test] procedure Debug_LoggerWriteCall_NoFalsePositive;
@@ -61,7 +63,10 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestDebugOutput.Debug_MessageDlgCall_ReportsWarning;
+procedure TTestDebugOutput.Debug_MessageDlg_NoFinding;
+// Scope-Entscheidung 2026-07-11 (Real-World-FP-Audit): MessageDlg mit mt*-Typ +
+// [mb*]-Button-Set ist bewusste strukturierte UI, kein vergessenes Debug-Popup
+// -> kein Ziel mehr. (ShowMessage bleibt Ziel, s. Debug_ShowMessageCall.)
 const SRC =
   'unit t; implementation'#13#10+
   'procedure Foo;'#13#10+
@@ -69,7 +74,8 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDebugOutput));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDebugOutput),
+    'MessageDlg ist bewusste UI, kein SCA017-Ziel mehr');
   finally F.Free; end;
 end;
 
@@ -85,7 +91,9 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestDebugOutput.Debug_InputBoxCall_ReportsWarning;
+procedure TTestDebugOutput.Debug_InputBox_NoFinding;
+// Scope-Entscheidung 2026-07-11 (Real-World-FP-Audit): InputBox/InputQuery sind
+// Eingabe-Primitive (liefern einen Wert statt Output) -> kein SCA017-Ziel mehr.
 const SRC =
   'unit t; implementation'#13#10+
   'procedure Foo;'#13#10+
@@ -94,7 +102,8 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDebugOutput));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDebugOutput),
+    'InputBox ist Eingabe-Primitiv, kein SCA017-Ziel mehr');
   finally F.Free; end;
 end;
 

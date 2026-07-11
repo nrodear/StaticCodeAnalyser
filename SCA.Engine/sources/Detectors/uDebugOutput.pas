@@ -2,10 +2,15 @@ unit uDebugOutput;
 
 // Detektor fuer Debug-Ausgaben in Produktionscode.
 // Erkennt Aufrufe von:
-//   WriteLn / Write           (Console-Output – meist vergessen)
-//   ShowMessage / MessageDlg  (Dialog-Popups – stoeren in Produktion)
-//   OutputDebugString         (Debug-Ausgabe)
-//   InputBox / InputQuery     (modale Eingabe – nicht in Bibliotheken)
+//   WriteLn / Write      (Console-Output - meist vergessen)
+//   ShowMessage(Pos)     (Dialog-Popup - stoert in Produktion)
+//   OutputDebugString    (Debug-Ausgabe)
+//
+// Scope-Entscheidung 2026-07-11 (Real-World-FP-Audit, User): InputBox/InputQuery
+// (Eingabe-Primitive - liefern einen Wert statt Output) und MessageDlg/
+// MessageDlgPos (bewusste strukturierte UI: mt*-Dialogtyp + [mb*]-Button-Set)
+// sind KEINE vergessenen Debug-Ausgaben und wurden aus den Zielen entfernt.
+// ShowMessage bleibt als klassisches Quick-Debug-Popup ein Ziel.
 
 interface
 
@@ -26,12 +31,10 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 const
-  DEBUG_CALLS : array[0..7] of string = (
+  DEBUG_CALLS : array[0..4] of string = (
     'writeln(', 'writeln ',
     'showmessage(', 'showmessagepos(',
-    'messagedlg(', 'messagedlgpos(',
-    'outputdebugstring(',
-    'inputbox('
+    'outputdebugstring('
   );
 
 // True wenn die Position AtPos im Text innerhalb eines String-Literals
