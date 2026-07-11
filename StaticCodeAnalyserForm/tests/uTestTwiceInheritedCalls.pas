@@ -15,6 +15,9 @@ type
     [Test] procedure TwiceInheritedCalls_KindAndSeverity;
     [Test] procedure InheritedInIfElseBranches_NoFinding;
     [Test] procedure TwoSequentialInherited_StillReported;
+    // --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
+    [Test] procedure InheritedDifferentParentMethods_NotReported;
+    [Test] procedure InheritedSameMethodNameTwice_Reported;
   end;
 
 implementation
@@ -128,6 +131,49 @@ begin
   finally F.Free; end;
 end;
 
+
+// --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
+
+// Real-World-FP-Audit 2026-07-10 (SCA093, Fix ef3608e): zwei `inherited` die
+// VERSCHIEDENE Parent-Methoden aufrufen (`inherited Lock;` + `inherited Unlock;`)
+// verdoppeln KEINE Side-Effekte einer einzelnen Methode. Der fuehrende Bezeichner
+// (Lock/Unlock) ist nicht der Methoden-Name (Bar) -> QualifyingInheritedInBlock
+// zaehlt 0 -> darf NICHT gemeldet werden (frueher: DirectChildCount zaehlte 2).
+procedure TTestTwiceInheritedCalls.InheritedDifferentParentMethods_NotReported;
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Bar;'#13#10 +
+  'begin'#13#10 +
+  '  inherited Lock;'#13#10 +
+  '  inherited Unlock;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTwiceInheritedCalls),
+        'inherited Lock + inherited Unlock rufen verschiedene Parent-Methoden - kein Doppelaufruf, kein Bug');
+  finally F.Free; end;
+end;
+
+// Must-stay TP (SCA093 Fix-Branch b): zwei `inherited Bar;` im Rumpf von TFoo.Bar
+// rufen die GLEICHE Parent-Methode (Bar) erneut auf -> deren Side-Effekte laufen
+// zweimal. Der neue Guard zaehlt gleichnamiges `inherited <Methode>` weiterhin
+// (LeadingInheritedIdent = 'Bar' = ShortMethodName) -> muss gemeldet bleiben.
+procedure TTestTwiceInheritedCalls.InheritedSameMethodNameTwice_Reported;
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Bar;'#13#10 +
+  'begin'#13#10 +
+  '  inherited Bar;'#13#10 +
+  '  inherited Bar;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkTwiceInheritedCalls) >= 1,
+        'zweimal inherited Bar verdoppelt die Parent-Bar - echter Bug, muss gemeldet bleiben');
+  finally F.Free; end;
+end;
 initialization
   TDUnitX.RegisterTestFixture(TTestTwiceInheritedCalls);
 

@@ -1,4 +1,4 @@
-﻿unit uTestHardcodedSecret;
+unit uTestHardcodedSecret;
 
 // Tests fuer den THardcodedSecretDetector (Basis und Erweiterungen).
 
@@ -65,6 +65,9 @@ type
     // Reinzahl-Regel nur bis Laenge 6 -> echte Credentials feuern weiter
     [Test] procedure Secret_EmbeddedYearValue_StillReported;
     [Test] procedure Secret_LongNumericValue_StillReported;
+    // --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
+    [Test] procedure Secret_UrlEndpointValue_NotReported;
+    [Test] procedure Secret_ServiceAccountKeyWithUrl_StillReported;
   end;
 
 implementation
@@ -638,4 +641,55 @@ begin
   finally F.Free; end;
 end;
 
+
+// --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
+
+procedure TTestHardcodedSecretExt.Secret_UrlEndpointValue_NotReported;
+// Real-World-FP-Audit 2026-07-10/11 (IsNonSecretValueShape, Zweig a):
+// CEF4Delphi uCEFOAuth2Helper.pas:136 - der Wert ist der oeffentliche Google-
+// Token-ENDPOINT 'https://oauth2.googleapis.com/token', KEIN Token-Wert. Der
+// '://'-Zweig unterdrueckt URL-/Pfad-Werte, obwohl der LHS-Name ein Secret-
+// Keyword ('token') traegt. LHS 'FAccessToken' passiert IsSecretName und
+// entkommt IsSecretMetaField (Suffix '' ist kein Meta-Suffix), erreicht also
+// das WERT-Form-Gate, das hier greift. Gegenstueck unten: eingebetteter
+// Service-Account-Key mit URL bleibt Fund (harte Secret-Marker zuerst).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Init;'#13#10+
+  'begin'#13#10+
+  '  FAccessToken := ''https://oauth2.googleapis.com/token'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret),
+      'URL-Endpoint-Wert (://) ist kein Secret und darf nicht gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretExt.Secret_ServiceAccountKeyWithUrl_StillReported;
+// Gegenprobe zum URL-Zweig (a), Real-World-FP-Audit 2026-07-10/11:
+// Alcinoe ALFmxNotificationService Main.pas:112 - ein eingebetteter Service-
+// Account-Key enthaelt ZWAR eine token_uri-URL ('https://...'), ist aber ueber
+// den PEM-Marker '-----BEGIN PRIVATE KEY-----' ein echter Geheimwert. In
+// IsNonSecretValueShape werden die HARTEN Secret-Marker VOR dem '://'-Pfad-
+// zweig freigestellt (Zeilen 475-477 laufen vor 481) -> der Fund bleibt
+// bestehen und wird nicht faelschlich als URL geschluckt. Distinkt zu
+// Secret_PrivateKeyAssignedLiteral (blanker PEM ohne URL, stresst die
+// Zweig-Reihenfolge nicht).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Init;'#13#10+
+  'begin'#13#10+
+  '  FPrivateKey := ''https://oauth2.googleapis.com/token -----BEGIN PRIVATE KEY-----MIIEvQABC'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkHardcodedSecret) >= 1,
+      'Eingebetteter PEM-Key mit token_uri-URL muss trotz :// weiter gemeldet werden');
+  finally F.Free; end;
+end;
 end.

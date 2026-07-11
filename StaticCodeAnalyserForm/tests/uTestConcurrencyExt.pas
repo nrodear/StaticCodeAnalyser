@@ -43,6 +43,9 @@ type
     // den Detector nicht ausloesen - Strings werden via
     // TDetectorUtils.StripStringsAndComments wegmaskiert.
     [Test] procedure FreeAndNilInsideStringLiteral_NotReported;
+    // --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
+    [Test] procedure Resume_OnDeclHeader_NotReported;
+    [Test] procedure Resume_ThreadTypedReceiver_Reported;
   end;
 
 implementation
@@ -418,6 +421,57 @@ begin
   finally F.Free; end;
 end;
 
+
+// --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
+
+procedure TTestConcurrencyExt.Resume_OnDeclHeader_NotReported;
+// Real-World FP-Audit 2026-07-10 (Alcinoe.FMX.Ani.pas:1666): der Methoden-
+// HEADER 'procedure TALAnimation.Resume;' ist die Deklaration einer Animations-
+// State-Machine (Start/Stop/Pause/Resume via FPaused) - KEIN deprecated
+// TThread.Resume-Aufruf. Der neue Decl-Header-Guard (IsResumeNonCallContext
+// Fall a: vorheriges Token ist 'procedure'/'function') unterdrueckt das.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TALAnimation.Resume;'#13#10 +
+  'begin'#13#10 +
+  '  FPaused := False;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkThreadResumeDeprecated),
+    'Methoden-Deklarationsheader .Resume ist kein TThread.Resume-Aufruf');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.Resume_ThreadTypedReceiver_Reported;
+// Must-stay TP (Real-World tp_examples_must_stay: aBenchThread = TBenchThread,
+// ein TThread). Ein echter TThread.Resume-Aufruf, dessen Empfaenger-Typ in-file
+// auf einen TThread-Descendant aufloest, muss trotz der neuen Empfaenger-Typ-
+// Aufloesung weiter feuern (LooksLikeThreadType-Accept-Zweig). Gegenstueck zu
+// den unterdrueckten FMX-Animation/NSURLSessionTask-Empfaengern.
+const SRC =
+  'unit t; interface'#13#10 +
+  'uses System.Classes;'#13#10 +
+  'type'#13#10 +
+  '  TBenchThread = class(TThread)'#13#10 +
+  '  end;'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    aBenchThread: TBenchThread;'#13#10 +
+  '    procedure Run;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Run;'#13#10 +
+  'begin'#13#10 +
+  '  aBenchThread.Resume;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkThreadResumeDeprecated) >= 1,
+    'echter TThread.Resume-Aufruf (Empfaenger-Typ endet auf Thread) muss feuern');
+  finally F.Free; end;
+end;
 initialization
   TDUnitX.RegisterTestFixture(TTestConcurrencyExt);
 

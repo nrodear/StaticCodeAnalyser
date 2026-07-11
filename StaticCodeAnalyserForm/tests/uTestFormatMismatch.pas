@@ -1,4 +1,4 @@
-﻿unit uTestFormatMismatch;
+unit uTestFormatMismatch;
 
 // Tests fuer den TFormatMismatchDetector (Basis und Erweiterungen).
 
@@ -98,6 +98,9 @@ type
     // Positive (typisch fuer mehrzeilige SQL-Strings).
     [Test] procedure FormatUtf8_ConcatenatedLiteral_AllPlaceholdersCounted;
     [Test] procedure FormatUtf8_ConcatenatedLiteral_MismatchAcrossSplit_ReportsError;
+    // --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
+    [Test] procedure SameNameLocalConstInTwoRoutines_NotReported;
+    [Test] procedure LocalConstGenuineMismatch_Reported;
   end;
 
 implementation
@@ -681,4 +684,68 @@ begin
     '2 Platzhalter, 1 geklammertes Argument -> Fehlpaarung MUSS feuern');
 end;
 
+
+// --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
+
+procedure TTestFormatMismatchRealWorldFP.SameNameLocalConstInTwoRoutines_NotReported;
+// Real-World-FP-Audit 2026-07-10, FP-Klasse "const-name-collision"
+// (JvRichEdit.pas:2117, Fix ef3608e). Zwei Routinen deklarieren je eine
+// ROUTINE-LOKALE const gleichen Namens (CPrefix) mit UNTERSCHIEDLICHER
+// Platzhalter-Zahl (2 bzw. 4 %d). CollectStringConstants sammelt via
+// UnitNode.FindAll(nkConstSection) BEIDE lokalen const in EINE flache
+// Tabelle (AddOrSetValue = last-wins); Format(CPrefix, [..]) wurde dann in
+// der einen Routine gegen die FREMDE Definition der anderen aufgeloest ->
+// falscher "N placeholders, M arguments"-Mismatch. Fix: EffTable klont die
+// Unit-Tabelle und ueberlagert sie pro Routine mit den METHODEN-LOKALEN
+// const (Local-shadows-Unit). Jede Routine paart jetzt ihre EIGENE CPrefix
+// (BitmapToRTF: 2 %d/2 Args; BitmapToRTF2: 4 %d/4 Args) -> kein Befund.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure BitmapToRTF2;'#13#10+
+  'const'#13#10+
+  '  CPrefix = ''{\pict\picw%d\pich%d\dibx%d\diby%d '';'#13#10+
+  'var s: string;'#13#10+
+  'begin'#13#10+
+  '  s := Format(CPrefix, [W1, H1, W2, H2]);'#13#10+
+  'end;'#13#10+
+  'procedure BitmapToRTF;'#13#10+
+  'const'#13#10+
+  '  CPrefix = ''{\pict\picw%d\pich%d\dibitmap0 '';'#13#10+
+  'var s: string;'#13#10+
+  'begin'#13#10+
+  '  s := Format(CPrefix, [Width, Height]);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFormatMismatch),
+      'Gleichnamige routine-lokale const beschatten den Unit-Scope: jede ' +
+      'Routine paart ihre eigene CPrefix (2 bzw. 4 %d) -> kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchRealWorldFP.LocalConstGenuineMismatch_Reported;
+// Gegenprobe zum const-shadowing-Fix (ef3608e): der Fix loest routine-
+// lokale const jetzt gegen die EIGENE Definition auf - er darf sie NICHT
+// pauschal unterdruecken. Eine lokale const mit ECHTER Fehlpaarung
+// ('%s ... %d' = 2 Platzhalter, nur 1 Argument) muss weiter feuern.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure LogIt(Reason: string);'#13#10+
+  'const'#13#10+
+  '  SFmt = ''%s failed with code %d'';'#13#10+
+  'var s: string;'#13#10+
+  'begin'#13#10+
+  '  s := Format(SFmt, [Reason]);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkFormatMismatch) >= 1,
+      'Lokale const mit echter Fehlpaarung (2 Platzhalter, 1 Argument) ' +
+      'wird gegen die eigene Definition aufgeloest -> MUSS feuern');
+  finally F.Free; end;
+end;
 end.

@@ -34,6 +34,9 @@ type
     // zwischen Enter/Leave) braucht kein try/finally.
     [Test] procedure ExceptionFreeGetter_NotReported;
     [Test] procedure CallBetweenEnterLeave_StillReported;
+    // --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
+    [Test] procedure SplitLockWrapperNoRelease_NotReported;
+    [Test] procedure WrapperWithInScopeRelease_Reported;
   end;
 
 implementation
@@ -350,6 +353,55 @@ begin
   finally F.Free; end;
 end;
 
+
+// --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
+
+procedure TTestLockWithoutTryFinally.SplitLockWrapperNoRelease_NotReported;
+// FP-Fix (Real-World-FP-Audit 2026-07-10, Commit ef3608e / SplitLockWrapperNoReleaseInScope):
+// Split-Lock-Handoff-Wrapper. CEF4Delphi uWorkerThread.Lock holt das Enter
+// auf Wunsch des Callers; das matchende Release liegt in der paired Unlock-
+// Methode. Im Body existiert kein Enter..Leave-Paar auf demselben Lock ->
+// nichts, was ein try..finally hier schuetzen muesste -> SCA109 nicht
+// zustaendig, ein Fund waere ein FP. (Erreicht ausschliesslich den neuen
+// Guard: IsLockWrapperMethodTail greift NICHT, da nach dem Acquire noch
+// 'Result := True' vor dem 'end' steht.)
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function TWorkerThread.Lock: Boolean;'#13#10 +
+  'begin'#13#10 +
+  '  FCritSect.Acquire;'#13#10 +
+  '  Result := True;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLockWithoutTryFinally),
+    'Handoff-Wrapper (Acquire ohne matchendes Release im selben Body) ist kein Lock-Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestLockWithoutTryFinally.WrapperWithInScopeRelease_Reported;
+// TP-Gegenkontrolle zum Split-Lock-Guard: eine wrapper-foermige Boolean-
+// Funktion, die aber Acquire UND matchendes Release im SELBEN Body haelt
+// (kein Handoff) und dazwischen einen werfenden Call hat, bleibt ein echter
+// Fund (uJSDialogBrowser: Acquire..Release ohne try..finally, Body ruft).
+// Der neue SplitLockWrapperNoReleaseInScope-Guard darf hier NICHT
+// suppressen, weil FCS.Release im Scope vorhanden ist.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function TCache.TryReserve: Boolean;'#13#10 +
+  'begin'#13#10 +
+  '  FCS.Acquire;'#13#10 +
+  '  Result := Reserve(FSlot);'#13#10 +
+  '  FCS.Release;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkLockWithoutTryFinally) >= 1,
+    'Acquire+Release im selben Scope mit werfendem Call ohne try..finally bleibt ein Fund');
+  finally F.Free; end;
+end;
 initialization
   TDUnitX.RegisterTestFixture(TTestLockWithoutTryFinally);
 

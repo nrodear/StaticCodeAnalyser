@@ -29,6 +29,9 @@ type
     [Test] procedure FloatVarVsNonFloatIdent_NoFinding;
     // Gegenprobe: Float-Var gegen numerisches Literal bleibt ein Treffer.
     [Test] procedure FloatVarVsLiteral_StillReported;
+    // --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
+    [Test] procedure IntegerLocalWithFloatNameElsewhere_NotReported;
+    [Test] procedure FloatVarWithIntNameElsewhere_Reported;
   end;
 
 implementation
@@ -232,6 +235,56 @@ begin
   finally F.Free; end;
 end;
 
+
+// --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
+
+procedure TTestFloatEquality.IntegerLocalWithFloatNameElsewhere_NotReported;
+// FP-Regression (Real-World-FP-Audit 2026-07-10/11, Alcinoe.StringUtils.pas
+// Z.2872): `LResult <> 0` mit lokalem `var LResult: Integer` ist ein
+// Integer-gegen-Null-Test, KEIN Float-Vergleich. Weil derselbe Name
+// IRGENDWO im File als Double deklariert ist (scope-blinder FloatVars-
+// Namensindex), matchte der Detektor frueher faelschlich. Der Vergleich
+// ist gegen ein NUMERISCHES LITERAL (0) und passiert damit den Praezisions-
+// Guard; erst die Typ-Aufloesung des NAECHSTLIEGENDEN Decls (Integer via
+// OperandDeclaredNonFloat) unterdrueckt den FP.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'type TRec = record LResult: Double; end;'#13#10 +
+  'function Foo: Boolean;'#13#10 +
+  'var LResult: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  Result := LResult <> 0;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFloatEquality),
+        'Integer-lokale Var (nur namensgleich zu einer Float-Var) gegen 0 ist kein Float-Equality');
+  finally F.Free; end;
+end;
+
+procedure TTestFloatEquality.FloatVarWithIntNameElsewhere_Reported;
+// Gegenprobe zur Typ-Aufloesung (Real-World-FP-Audit 2026-07-10/11,
+// Alcinoe.Common.pas Z.1967 `if Ratio = 0`, Ratio: Single): derselbe Name
+// 'Ratio' ist IRGENDWO als Integer-Feld deklariert, aber die NAECHSTLIEGENDE
+// Deklaration zur Nutzung ist Single. OperandDeclaredNonFloat muss zum
+// Float-Typ aufloesen -> der echte IEEE-754-Bug bleibt gemeldet (keine
+// Ueber-Unterdrueckung / kein FN durch den 2026-07-11-Fix).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'type TRec = record Ratio: Integer; end;'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var Ratio: Single;'#13#10 +
+  'begin'#13#10 +
+  '  if Ratio = 0 then Exit;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkFloatEquality) >= 1,
+        'Float-Var mit naechstliegendem Single-Decl gegen 0 bleibt ein Float-Equality-Bug');
+  finally F.Free; end;
+end;
 initialization
   TDUnitX.RegisterTestFixture(TTestFloatEquality);
 

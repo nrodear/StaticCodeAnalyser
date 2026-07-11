@@ -44,6 +44,9 @@ type
     // ---- Finding-Inhalt ---------------------------------------------------
     [Test] procedure SqlDanger_Finding_KindAndSeverity;
     [Test] procedure SqlDanger_Multiple_AllReported;
+    // --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
+    [Test] procedure SqlDanger_UpdateDynamicWhereCall_NotReported;
+    [Test] procedure SqlDanger_UpdateWhereFieldNameIdent_Reported;
   end;
 
 implementation
@@ -446,6 +449,53 @@ begin
   finally F.Free; end;
 end;
 
+
+// --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
+
+procedure TTestSqlDangerousStatement.SqlDanger_UpdateDynamicWhereCall_NotReported;
+// FP-Regression Real-World-FP-Audit 2026-07-10 (delphimvcframework,
+// MVCFramework.ActiveRecord.pas ~Z.3310): das UPDATE-Literal ist nur ein
+// Builder-Fragment; die WHERE-Klausel wird per '+' aus dem Funktions-Aufruf
+// CreateSQLWhereByRQL() angehaengt (liefert laut Code-Kommentar ' WHERE ...').
+// Der Literal-Scan sieht kein ' where ', aber HasDynamicWhereCall erkennt den
+// WHERE-injizierenden Call ('...where...(') im literal-freien Code-Teil und
+// unterdrueckt den Fund. -> kein Bug.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var lSQL, lTable: string;'#13#10 +
+  'begin'#13#10 +
+  '  lSQL := ''UPDATE '' + lTable + '' SET locked=1 '' + CreateSQLWhereByRQL(lTable);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSqlDangerousStatement),
+    'dynamic-WHERE-concat: CreateSQLWhereByRQL() haengt die WHERE-Klausel an - kein unfiltered UPDATE');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_UpdateWhereFieldNameIdent_Reported;
+// TP-Guard-Grenze zum dynamic-WHERE-Fix (kein TP-Verlust): das per '+'
+// angehaengte Glied ist ein BLOSSER Bezeichner (WhereFieldName), KEIN Call mit
+// '(' - injiziert also keine WHERE-Klausel. HasDynamicWhereCall wertet nur
+// where/filter/rql/clause-Idents, die als Funktion '(' aufgerufen werden;
+// ein blosser Feld-/Table-Ident darf den echten unfiltered-UPDATE-Fund NICHT
+// verschlucken (vgl. mormot.orm.sql WhereFieldName='' Branch). -> muss feuern.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var lSQL, lTable, WhereFieldName: string;'#13#10 +
+  'begin'#13#10 +
+  '  lSQL := ''UPDATE '' + lTable + '' SET locked=1 '' + WhereFieldName;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkSqlDangerousStatement) >= 1,
+    'unfiltered UPDATE mit blossem WhereFieldName-Ident (kein Call) muss weiter als Bug feuern');
+  finally F.Free; end;
+end;
 initialization
   TDUnitX.RegisterTestFixture(TTestSqlDangerousStatement);
 

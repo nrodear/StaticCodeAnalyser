@@ -22,6 +22,9 @@ type
     [Test] procedure EmptyStringLiteralCast_NoFinding;
 
     [Test] procedure Finding_KindAndSeverity;
+    // --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
+    [Test] procedure AsciiStringLiteralCast_NotReported;
+    [Test] procedure MemberTextCast_Reported;
   end;
 
 implementation
@@ -162,6 +165,44 @@ begin
   finally F.Free; end;
 end;
 
+
+// --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
+
+procedure TTestUnicodeToAnsiCast.AsciiStringLiteralCast_NotReported;
+// Real-World-FP-Audit 2026-07-10 (Alcinoe.Cipher.pas:1175):
+// AnsiString('<reines ASCII base64url-Literal>') kann keinen Codepunkt >127
+// verlieren -> KEIN Datenverlust, kein Bug. IsAsciiStringLiteral unterdrueckt
+// den reinen ASCII-String-Literal-Operanden (Operand beginnt UND endet mit ').
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var a: AnsiString;'#13#10 +
+  'begin a := AnsiString(''eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9''); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnicodeToAnsiCast),
+    'ASCII-only string literal cast cannot drop any character - must not be flagged');
+  finally F.Free; end;
+end;
+
+procedure TTestUnicodeToAnsiCast.MemberTextCast_Reported;
+// tp_examples_must_stay (Alcinoe ALNNTPClient Unit1.pas:176):
+// AnsiString(Edit.Text) - TEdit.Text ist UnicodeString -> echter, verlust-
+// behafteter Cast. Der Member-Zugriff ist weder ASCII-Literal noch ein
+// ASCII-safe-Praefix, die neuen Guards duerfen ihn NICHT unterdruecken.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(Edit: TEdit);'#13#10 +
+  'var a: AnsiString;'#13#10 +
+  'begin a := AnsiString(Edit.Text); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkUnicodeToAnsiCast) >= 1,
+    'Unicode member (.Text) -> AnsiString is a genuine lossy cast - must still fire');
+  finally F.Free; end;
+end;
 initialization
   TDUnitX.RegisterTestFixture(TTestUnicodeToAnsiCast);
 

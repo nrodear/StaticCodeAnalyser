@@ -23,6 +23,9 @@ type
     [Test] procedure Test_MultipleMissing_AllReported;
     [Test] procedure Test_Finding_KindAndSeverity;
     [Test] procedure Test_Finding_MissingVarMentionsComponentAndClass;
+    // --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
+    [Test] procedure Test_KeywordNamedComponent_Exit_NotReported;
+    [Test] procedure Test_KeywordLikeName_NotSuppressed_Reported;
   end;
 
 implementation
@@ -298,6 +301,58 @@ begin
   finally F.Free; end;
 end;
 
+
+// --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
+
+procedure TTestDfmSchemaMismatch.Test_KeywordNamedComponent_Exit_NotReported;
+// Real-World-FP-Audit 2026-07-10 (fp_examples[0], jvcl JvPlayListMainFormU.dfm):
+// DFM-Komponente 'Exit' kollidiert mit dem Delphi-Schluesselwort 'exit'. Das
+// published Field 'Exit: TAction;' IST deklariert, aber der keyword-bewusste
+// Field-Lexer im .pas-Klassenkoerper reklassifiziert 'exit' und laesst es aus
+// PublishedFields fallen -> HasPublishedField('Exit') = False -> vor dem Fix
+// false-positiv 'no published field'. Der IsKeywordReclassifiedName-Guard
+// (uDfmSchemaMismatch.pas) unterdrueckt das jetzt konservativ. Kein Bug.
+const PAS =
+  'unit u; interface uses Vcl.Forms, Vcl.ActnList;'#13#10 +
+  'type TF = class(TForm)'#13#10 +
+  '  Exit: TAction;'#13#10 +
+  'end;'#13#10 +
+  'implementation end.';
+const DFM =
+  'object F: TF'#13#10 +
+  '  object Exit: TAction end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM, PAS);
+  try
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmSchemaMismatch),
+      'keyword-/direktiven-kollidierender Komponentenname (Exit) darf nicht flaggen');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmSchemaMismatch.Test_KeywordLikeName_NotSuppressed_Reported;
+// Diskriminierung des Fixes (analog tp_examples_must_stay = genuiner Field-los
+// Mismatch wie Panel150): 'ExitButton' ENTHAELT das Schluesselwort 'exit',
+// ist aber nicht exakt gleich. Der IsKeywordReclassifiedName-Guard matcht per
+// SameText (exakt), nicht per Substring -> 'ExitButton' bleibt ein echter Fund.
+// Kein published Field vorhanden -> genuiner Schema-Mismatch, muss feuern.
+// Schuetzt gegen eine zu breite Fassung des Fixes (Contains statt SameText).
+const PAS =
+  'unit u; interface uses Vcl.Forms; type TF = class(TForm) end;'#13#10 +
+  'implementation end.';
+const DFM =
+  'object F: TF'#13#10 +
+  '  object ExitButton: TButton end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM, PAS);
+  try
+    Assert.IsTrue(Count(F, fkDfmSchemaMismatch) >= 1,
+      'Name enthaelt nur ein Keyword als Praefix - exakter SameText-Guard darf ihn nicht unterdruecken');
+  finally F.Free; end;
+end;
 initialization
   TDUnitX.RegisterTestFixture(TTestDfmSchemaMismatch);
 
