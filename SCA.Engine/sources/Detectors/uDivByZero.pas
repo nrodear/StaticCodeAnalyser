@@ -19,7 +19,12 @@ unit uDivByZero;
 //   - varname >= 1
 //   - varname <> 0
 //   - varname = 0 then Exit
+//   - varname = 0 then varname := 1   (Fix-up auf nichtnull-Literal)
 //   - Assigned(varname)  (fuer Pointer-Divisor)
+//
+// Zusaetzlich provably-nonzero (ohne if): wenn der Divisor im ganzen
+// Methodenrumpf ausschliesslich nichtnull-Ganzzahl-Literale zugewiesen
+// bekommt und mindestens einmal VOR der Division, kann er dort nicht 0 sein.
 //
 // Einschraenkungen:
 //   - Floating-Point-Division (/) wird nicht geprueft
@@ -49,6 +54,15 @@ type
     // (ggf. via begin..end-Block). Wird gebraucht um 'if x = 0 then Exit'
     // (echter Guard) von 'if x = 0 then DoOther' (kein Guard) zu trennen.
     class function ThenBranchExitsOrRaises(IfN: TAstNode): Boolean; static;
+    // True wenn der THEN-Zweig VarLow ein nichtnull-Ganzzahl-Literal zuweist
+    // (Fix-up-Idiom 'if x = 0 then x := 1'). Zusammen mit der 0-Bedingung ist
+    // x danach auf beiden Pfaden nachweislich <> 0.
+    class function ThenBranchAssignsNonZeroTo(IfN: TAstNode;
+      const VarLow: string): Boolean; static;
+    // True wenn der Divisor im Rumpf NUR nichtnull-Ganzzahl-Literale zugewiesen
+    // bekommt und mindestens einmal vor der Division (provably-nonzero).
+    class function AllAssignmentsNonZeroLiteral(MethodNode: TAstNode;
+      const VarLow: string; BeforeLine: Integer): Boolean; static;
     class procedure CollectIntegerVars(MethodNode: TAstNode;
       Names: TStringList); static;
   end;
@@ -88,6 +102,48 @@ begin
       Result[i] := ' ';
     Inc(i);
   end;
+end;
+
+function IsNonZeroIntLiteral(const S: string): Boolean;
+// True wenn S (nach Trim) ein reines Ganzzahl-Literal ungleich 0 ist:
+// Dezimal ('1', '42', '+2') oder Hex ('$1', '$0a'). Alles andere - Ausdruecke,
+// Funktionsaufrufe, Variablen, das Literal '0'/'$0' - liefert False. So
+// akzeptieren wir nur nachweislich-nichtnull-Konstanten als Guard/Init und
+// bleiben TP-sicher (u.a. bleibt absichtliches 'x := 0' meldepflichtig).
+var
+  T       : string;
+  i       : Integer;
+  AllZero : Boolean;
+begin
+  Result := False;
+  T := Trim(S);
+  if T = '' then Exit;
+  // Fuehrendes '+' erlauben (kein '-': konservativ bleiben).
+  if T[1] = '+' then
+  begin
+    Delete(T, 1, 1);
+    T := Trim(T);
+    if T = '' then Exit;
+  end;
+  if T[1] = '$' then
+  begin
+    if Length(T) < 2 then Exit;
+    AllZero := True;
+    for i := 2 to Length(T) do
+    begin
+      if not CharInSet(T[i], ['0'..'9', 'a'..'f', 'A'..'F']) then Exit;
+      if T[i] <> '0' then AllZero := False;
+    end;
+    Result := not AllZero;
+    Exit;
+  end;
+  AllZero := True;
+  for i := 1 to Length(T) do
+  begin
+    if not CharInSet(T[i], ['0'..'9']) then Exit;
+    if T[i] <> '0' then AllZero := False;
+  end;
+  Result := not AllZero;
 end;
 
 class function TDivByZeroDetector.IsIntegerType(const TypeLow: string): Boolean;
@@ -183,8 +239,16 @@ begin
          TDetectorUtils.ContainsWholeWordLower(VarLow + '<=0',   Low)  or
          TDetectorUtils.ContainsWholeWordLower(VarLow + ' < 1',  Low)  or
          TDetectorUtils.ContainsWholeWordLower(VarLow + '<1',    Low)  then
+      begin
+        // (a) Bail: THEN-Zweig verlaesst den Pfad (Exit/Raise).
         if ThenBranchExitsOrRaises(IfN) then
           Exit(True);
+        // (b) Fix-up: THEN-Zweig weist VarLow ein nichtnull-Literal zu
+        //     (z.B. 'if elTime = 0 then elTime := 1'). Danach ist VarLow auf
+        //     beiden Pfaden <> 0 - guarded-nonzero (Real-World-Audit 2026-07-10).
+        if ThenBranchAssignsNonZeroTo(IfN, VarLow) then
+          Exit(True);
+      end;
     end;
   finally
     Ifs.Free;
@@ -234,6 +298,82 @@ begin
     // ueber Else-Branch hinaus).
     Break;
   end;
+end;
+
+class function TDivByZeroDetector.ThenBranchAssignsNonZeroTo(
+  IfN: TAstNode; const VarLow: string): Boolean;
+// Erfasst das Fix-up-Idiom:
+//   if elTime = 0 then elTime := 1;
+//   if n <= 0 then begin Log; n := 1; end;      (Block-Walk!)
+// Nur der THEN-Zweig zaehlt (nkElseBranch wird ignoriert); es genuegt EINE
+// Zuweisung 'VarLow := <nichtnull-Literal>' auf erster Ebene des THEN-Zweigs.
+var
+  i, j   : Integer;
+  Branch : TAstNode;
+  Stmt   : TAstNode;
+
+  function AssignsNonZero(N: TAstNode): Boolean;
+  begin
+    Result := (N.Kind = nkAssign)
+          and (N.Name.ToLower = VarLow)
+          and IsNonZeroIntLiteral(N.TypeRef);
+  end;
+
+begin
+  Result := False;
+  if IfN = nil then Exit;
+  for i := 0 to IfN.Children.Count - 1 do
+  begin
+    Branch := IfN.Children[i];
+    if Branch.Kind = nkElseBranch then Continue;
+    // Direkte Fix-up-Zuweisung ohne Block-Wrap.
+    if AssignsNonZero(Branch) then Exit(True);
+    // begin..end-Block: jedes direkte Kind pruefen.
+    if Branch.Kind = nkBlock then
+      for j := 0 to Branch.Children.Count - 1 do
+      begin
+        Stmt := Branch.Children[j];
+        if AssignsNonZero(Stmt) then Exit(True);
+      end;
+    // Nur das erste Then-Statement betrachten (analog ThenBranchExitsOrRaises).
+    Break;
+  end;
+end;
+
+class function TDivByZeroDetector.AllAssignmentsNonZeroLiteral(
+  MethodNode: TAstNode; const VarLow: string; BeforeLine: Integer): Boolean;
+// True wenn JEDE Zuweisung an VarLow im ganzen Methodenrumpf ein nichtnull-
+// Ganzzahl-Literal ist UND mindestens eine davon vor der Division liegt.
+// Dann ist VarLow an der Divisionsstelle nachweislich <> 0 (provably-nonzero:
+// const-init auf 1/2, spaeter nur weitere nichtnull-Literale - SevenZipDlg).
+//
+// TP-Sicherheit: sobald IRGENDEINE Zuweisung (auch nach der Division, wegen
+// moeglicher Schleifen-Rueckkanten) KEIN nichtnull-Literal ist - Null-Literal,
+// Funktionsaufruf, Ausdruck, andere Variable - brechen wir ab und melden
+// weiter. Damit bleiben echte Bugs und absichtliche 'x := 0'-Demos gemeldet.
+var
+  Assigns    : TList<TAstNode>;
+  A          : TAstNode;
+  FoundPrior : Boolean;
+begin
+  Result     := False;
+  FoundPrior := False;
+  Assigns := MethodNode.FindAll(nkAssign);
+  try
+    for A in Assigns do
+    begin
+      if A.Name.ToLower <> VarLow then Continue;
+      // Die Divisions-Zuweisung selbst (gleiche Zeile) tragt die 'div'-RHS -
+      // sie darf die Literal-Pruefung nicht scheitern lassen und zaehlt nicht
+      // als vorherige Init.
+      if A.Line = BeforeLine then Continue;
+      if not IsNonZeroIntLiteral(A.TypeRef) then Exit; // Result bleibt False
+      if A.Line < BeforeLine then FoundPrior := True;
+    end;
+  finally
+    Assigns.Free;
+  end;
+  Result := FoundPrior;
 end;
 
 class procedure TDivByZeroDetector.CollectIntegerVars(MethodNode: TAstNode;
@@ -332,6 +472,12 @@ begin
 
         // Gibt es einen Guard?
         if HasGuardingIf(MethodNode, Divisor, N.Line) then Continue;
+
+        // Provably-nonzero: Divisor wird ausschliesslich mit nichtnull-Literalen
+        // belegt (const-init auf 1/2 usw.) - kann an der Divisionsstelle nicht 0
+        // sein. TP-sicher, weil jede Nicht-Literal-Zuweisung die Suppression
+        // aufhebt (Real-World-Audit 2026-07-10, provably-nonzero).
+        if AllAssignmentsNonZeroLiteral(MethodNode, Divisor, N.Line) then Continue;
 
         var Key := IntToStr(N.Line) + ':' + Divisor;
         if Reported.ContainsKey(Key) then Continue;

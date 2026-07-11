@@ -57,6 +57,10 @@ type
     // FP-Gate Prio 7 (2026-07-06): "if n <= 0 then Exit"-Bail-Guard
     [Test] procedure Div_LessEqualZeroGuardExit_NoFinding;
     [Test] procedure Div_LessEqualZeroNoExit_StillReports;
+    // Real-World FP-Audit 2026-07-10 Regression (guarded/provably-nonzero)
+    [Test] procedure Div_ZeroThenFixupAssign_NoFinding;
+    [Test] procedure Div_ConstInitNonZeroLocal_NoFinding;
+    [Test] procedure Div_ZeroInitLocalDivisor_StillReports;
   end;
 
   // ---- DeadCode Erweiterungen --------------------------------------------------------
@@ -564,6 +568,71 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeadCode),
     'at ReturnAddress ist Teil des raise, kein toter Code');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_ZeroThenFixupAssign_NoFinding;
+// FP guarded-nonzero (Real-World-Audit 2026-07-10, ULZMABench.pas:357): das
+// Fix-up-Idiom 'if elapsed = 0 then elapsed := 1' garantiert elapsed <> 0 vor
+// der Division. Init aus GetElapsed haelt die provably-nonzero-Heuristik
+// bewusst draussen, damit NUR der Fix-up-Guard greift.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var elapsed, x: Integer;'#13#10+
+  'begin'#13#10+
+  '  elapsed := GetElapsed;'#13#10+
+  '  if elapsed = 0 then'#13#10+
+  '    elapsed := 1;'#13#10+
+  '  x := 1000 div elapsed;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    'if x = 0 then x := 1 -> x danach nachweislich <> 0 -> kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_ConstInitNonZeroLocal_NoFinding;
+// FP provably-nonzero (Real-World-Audit 2026-07-10, SevenZipDlg.pas:201):
+// numThreads wird nur mit nichtnull-Literalen belegt (init 1, ggf. 2) - kann
+// an der Division nicht 0 sein. Kein Fund.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var numThreads, x: Integer;'#13#10+
+  'begin'#13#10+
+  '  numThreads := 1;'#13#10+
+  '  if UseMulti then'#13#10+
+  '    numThreads := 2;'#13#10+
+  '  x := 1000 div numThreads;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    'Divisor nur mit nichtnull-Literalen belegt -> provably-nonzero -> kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_ZeroInitLocalDivisor_StillReports;
+// TP-Gegenprobe zur provably-nonzero-Heuristik: wird der Divisor mit dem
+// Null-Literal belegt (absichtliche Div-durch-Null / echter Bug), darf die
+// neue Suppression NICHT greifen - der Fund muss bleiben.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var n, x: Integer;'#13#10+
+  'begin'#13#10+
+  '  n := 0;'#13#10+
+  '  x := 100 div n;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkDivByZero) >= 1,
+    'Divisor := 0 ist kein nichtnull-Literal -> Suppression greift nicht -> Fund bleibt');
   finally F.Free; end;
 end;
 

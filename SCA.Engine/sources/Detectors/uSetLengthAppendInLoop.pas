@@ -74,6 +74,59 @@ begin
   CachedReInit := True;
 end;
 
+// Liefert das erste \w+-Token (Bezeichner ODER Zahl) in S, '' wenn keins.
+function FirstWordToken(const S: string): string;
+var M: TMatch;
+begin
+  M := TRegEx.Match(S, '\w+');
+  if M.Success then Result := M.Value else Result := '';
+end;
+
+// FP-Guard A (2026-07-11): Das flache 600-Zeichen-Fenster ab dem Schleifen-
+// Keyword erwischt auch SetLength-Calls in einer voellig anderen, schleifen-
+// losen Routine (Append-Prozeduren wie TAPETag.AppendField / AddSortFunction -
+// die naechste 'for'-Keyword liegt in einer VORHERIGEN Routine). Steht ein
+// benannter Routine-Header (procedure/function/constructor/destructor <Name>)
+// zwischen Schleife und SetLength, gehoert das SetLength zu einer anderen
+// Routine und ist kein O(n*n)-Realloc. Der negative Lookahead schliesst anonyme
+// Methoden ('procedure begin', 'procedure(Args)') aus.
+// Between = gestrippter Text zwischen Schleifen-Keyword und SetLength.
+//
+// (Der urspruengliche Guard B - Block-Tiefe fuer 'SetLength hinter dem
+// Schleifen-end;' - wurde nach adversarialem Review VERWORFEN: ein reiner
+// begin/end-Zaehler kann 'die Schleife selbst ist geschlossen' nicht von 'ein
+// innerer Block in einem beginless repeat/do-Body ist geschlossen' trennen und
+// unterdrueckte damit echte O(n*n)-Bugs wie 'repeat case..end; SetLength(..+1)
+// until'. Der WebSocket-JoinGroup-FP - Append hinter dem for-end; - bleibt
+// dadurch offen und muss ggf. spaeter praeziser adressiert werden.)
+function SetLengthInDifferentRoutine(const Between: string): Boolean;
+begin
+  Result := TRegEx.IsMatch(Between,
+    '(?i)\b(?:procedure|function|constructor|destructor)\s+(?!of\b|begin\b)[A-Za-z_]');
+end;
+
+// FP-Guard C (2026-07-11): room-guarded Block-Grow. Muster (MVCFramework
+// HttpSys):
+//   if Length(<arr>) - <written> < <CHUNK> then
+//     SetLength(<arr>, Length(<arr>) + <CHUNK>);
+// Das reallociert NUR wenn der freie Platz unter die Chunk-Groesse faellt ->
+// amortisiert O(n), KEIN O(n*n). Entscheidend fuer die TP-Sicherheit: dieselbe
+// Konstante <CHUNK> muss im Wachstum UND in der '<'-Bedingung vorkommen. Ein
+// echter Grow-by-1-Bug ('SetLength(a, Length(a)+1)') hat GrowAmount='1', das in
+// keiner sinnvollen 'if Length(a) ... < 1 then'-Bedingung steht - er bleibt
+// gemeldet. Ungeguardetes Block-Grow (kein vorangestelltes 'if Length(a)<CHUNK
+// then') bleibt ebenfalls gemeldet.
+function IsRoomGuardedBlockGrow(const Between, ArrayName, GrowAmount: string): Boolean;
+begin
+  if (GrowAmount = '') or (ArrayName = '') then Exit(False);
+  // ArrayName/GrowAmount sind \w+ (keine Regex-Metazeichen) - direkt einbettbar.
+  // '[^;]*' erlaubt keinen Statement-Trenner => der Guard muss unmittelbar vor
+  // dem SetLength stehen ('then' direkt vor dem Call, per \s*$ verankert).
+  Result := TRegEx.IsMatch(Between,
+    '(?i)\bif\b[^;]*\bLength\s*\(\s*' + ArrayName +
+    '\s*\)[^;]*<[^;]*\b' + GrowAmount + '\b[^;]*\bthen\s*$');
+end;
+
 class procedure TSetLengthAppendInLoopDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 const
@@ -89,6 +142,8 @@ var
   Snippet      : string;
   ArrayName    : string;
   GrowName     : string;
+  Between      : string;
+  GrowAmount   : string;
   LineNo       : Integer;
   F            : TLeakFinding;
   Detail       : string;
@@ -115,6 +170,16 @@ begin
         // Nur flaggen wenn das Array auf das gewachsen wird = dasselbe
         // Array dessen Length() abgefragt wurde.
         if not SameText(ArrayName, GrowName) then Continue;
+
+        // FP-Guard A: SetLength steht in einer anderen, schleifen-losen Routine
+        // (Routine-Header zwischen Schleifen-Keyword und SetLength).
+        Between := Copy(Snippet, 1, GrowM.Index - 1);
+        if SetLengthInDifferentRoutine(Between) then Continue;
+
+        // FP-Guard C: room-guarded Block-Grow (amortisiert-linear, kein O(n*n)).
+        GrowAmount := FirstWordToken(
+          Copy(Snippet, GrowM.Index + GrowM.Length, 48));
+        if IsRoomGuardedBlockGrow(Between, ArrayName, GrowAmount) then Continue;
 
         LineNo := TDetectorUtils.LineForPos(LineFor, AbsolutePos + GrowM.Index - 1);
         if LineNo <= 0 then LineNo := 1;
