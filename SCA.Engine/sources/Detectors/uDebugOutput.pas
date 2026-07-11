@@ -71,8 +71,20 @@ end;
 class procedure TDebugOutputDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
-  Calls : TList<TAstNode>;
-  N     : TAstNode;
+  Calls      : TList<TAstNode>;
+  N          : TAstNode;
+  CondRanges : TList<TAstNode>;   // Welle 2: nkConditionalRange (DEBUG-guarded {$IFDEF})
+
+  // Welle 2 (Core-Detektoren-Architektur): True wenn Line in einer DEBUG-guarded
+  // {$IFDEF DEBUG}-Range liegt (nkConditionalRange-Marker: Line=Start, TypeRef=Ende).
+  function LineInDebugRange(Line: Integer): Boolean;
+  var R: TAstNode;
+  begin
+    Result := False;
+    for R in CondRanges do
+      if (Line >= R.Line) and (Line <= StrToIntDef(R.TypeRef, R.Line)) then
+        Exit(True);
+  end;
 
   // Helper - prueft einen Call-/RHS-String gegen die DEBUG_CALLS-Liste
   // und emittiert ggf. einen Befund. Wird sowohl fuer nkCall.Name als
@@ -121,6 +133,10 @@ var
       Break;
     end;
     if Found = '' then Exit;
+    // Welle 2: Debug-Ausgabe in einem DEBUG-guarded {$IFDEF DEBUG}-Block ist
+    // Absicht (aus Release-Builds auskompiliert), kein vergessener Produktions-
+    // Debug -> unterdruecken. Additiv per nkConditionalRange-Marker.
+    if LineInDebugRange(Line) then Exit;
     Results.Add(TLeakFinding.New(FileName, '', Line,
       'Debug output: ' + Found.Trim, fkDebugOutput));
   end;
@@ -128,21 +144,26 @@ var
 var
   Assigns : TList<TAstNode>;
 begin
-  Calls := UnitNode.FindAll(nkCall);
+  CondRanges := UnitNode.FindAll(nkConditionalRange);   // Welle 2 (additiv)
   try
-    for N in Calls do
-      CheckCallText(N.Name, N.Line);
+    Calls := UnitNode.FindAll(nkCall);
+    try
+      for N in Calls do
+        CheckCallText(N.Name, N.Line);
+    finally
+      Calls.Free;
+    end;
+    // Auch nkAssign-RHS pruefen - Aufrufe wie 's := InputBox(...)' oder
+    // 'Result := WriteLnHelper(...)' leben im TypeRef der Zuweisung.
+    Assigns := UnitNode.FindAll(nkAssign);
+    try
+      for N in Assigns do
+        CheckCallText(N.TypeRef, N.Line);
+    finally
+      Assigns.Free;
+    end;
   finally
-    Calls.Free;
-  end;
-  // Auch nkAssign-RHS pruefen - Aufrufe wie 's := InputBox(...)' oder
-  // 'Result := WriteLnHelper(...)' leben im TypeRef der Zuweisung.
-  Assigns := UnitNode.FindAll(nkAssign);
-  try
-    for N in Assigns do
-      CheckCallText(N.TypeRef, N.Line);
-  finally
-    Assigns.Free;
+    CondRanges.Free;
   end;
 end;
 
