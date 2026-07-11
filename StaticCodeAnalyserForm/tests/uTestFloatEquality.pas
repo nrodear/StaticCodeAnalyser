@@ -32,6 +32,9 @@ type
     // --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
     [Test] procedure IntegerLocalWithFloatNameElsewhere_NotReported;
     [Test] procedure FloatVarWithIntNameElsewhere_Reported;
+    // Welle 1 (TTypeResolver): QWord fehlt in der Regex-NONFLOAT_ORDINAL-Liste -
+    // nur der scope-genaue AST-Resolver kennt es und unterdrueckt die Kollision.
+    [Test] procedure QWordScopeCollision_ResolverOnly_NotReported;
   end;
 
 implementation
@@ -285,6 +288,29 @@ begin
         'Float-Var mit naechstliegendem Single-Decl gegen 0 bleibt ein Float-Equality-Bug');
   finally F.Free; end;
 end;
+procedure TTestFloatEquality.QWordScopeCollision_ResolverOnly_NotReported;
+// Welle 1 - Beleg fuer den scope-genauen Typ-Resolver an SCA144. 'x' ist in GetF als
+// Single deklariert (-> FloatVars-Namensindex), in Use aber als QWord (Scope-Kollision).
+// Die lexikalische OperandDeclaredNonFloat kennt 'qword' NICHT (fehlt in NONFLOAT_
+// ORDINAL_TYPES) -> wuerde faelschlich melden. Der TTypeResolver loest x@Use -> qword
+// scope-genau auf (IsKnownNonFloatTypeName) und unterdrueckt. Zeigt den Resolver-Pfad.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function GetF(x: Single): Boolean;'#13#10 +
+  'begin Result := x > 0; end;'#13#10 +
+  'procedure Use;'#13#10 +
+  'var x: QWord;'#13#10 +
+  'begin'#13#10 +
+  '  if x = 5 then Exit;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFloatEquality),
+    'x@Use ist QWord - nur der AST-Resolver kennt qword -> kein Float-Equality-Fund');
+  finally F.Free; end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestFloatEquality);
 

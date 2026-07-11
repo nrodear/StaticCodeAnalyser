@@ -50,10 +50,16 @@ type
     // Bequem-Praedikate fuer Detektoren (VarName wird selbst gelowert/getrimmt).
     function IsNumericLhs(const VarName: string; Line: Integer): Boolean;
     function IsStringLhs(const VarName: string; Line: Integer): Boolean;
+    // True wenn VarName an Line scope-genau zu einem NACHWEISLICH Nicht-Float-Typ
+    // (Ganzzahl/Ordinal/String) aufloest. Unaufloesbar/unbekannter Alias -> False
+    // (TP-Schutz: koennte ein Float-Alias sein). Fuer SCA144-Scope-Genauigkeit.
+    function ResolvesToKnownNonFloat(const VarName: string; Line: Integer): Boolean;
   end;
 
 // Typ-Klassifikation (bare, bereits gelowerter Typname).
 function IsNumericTypeName(const TypeLow: string): Boolean;
+function IsFloatTypeName(const TypeLow: string): Boolean;
+function IsKnownNonFloatTypeName(const TypeLow: string): Boolean;
 function IsStringTypeName(const TypeLow: string): Boolean;
 // Reduziert einen TypeRef auf den nackten, gelowerten Typnamen (erstes
 // Ident-Token; schneidet '=Const', Array-/Klammer-Zusaetze, Whitespace ab).
@@ -62,23 +68,45 @@ function ReduceToBareTypeLow(const TypeRef: string): string;
 implementation
 
 const
-  NUMERIC_TYPES : array[0..33] of string = (
+  // Gleitkomma - fuer diese gilt Float-Equality-Unsicherheit (SCA144).
+  FLOAT_TYPES : array[0..9] of string = (
+    'single', 'double', 'extended', 'currency', 'comp', 'real', 'real48',
+    'tdatetime', 'tdate', 'ttime');
+  // Ganzzahl/Ordinal - numerisch, aber NICHT Gleitkomma.
+  INT_ORDINAL_TYPES : array[0..24] of string = (
     'integer', 'cardinal', 'int64', 'uint64', 'word', 'byte', 'smallint',
-    'shortint', 'longint', 'longword', 'nativeint', 'nativeuint', 'single',
-    'double', 'extended', 'currency', 'comp', 'real', 'real48', 'dword',
+    'shortint', 'longint', 'longword', 'nativeint', 'nativeuint', 'dword',
     'ptrint', 'ptruint', 'uint32', 'int32', 'uint16', 'int16', 'uint8',
-    'int8', 'tdatetime', 'tdate', 'ttime', 'qword', 'boolean', 'bytebool');
+    'int8', 'qword', 'boolean', 'bytebool', 'char');
   STRING_TYPES : array[0..10] of string = (
     'string', 'ansistring', 'unicodestring', 'widestring', 'shortstring',
     'rawbytestring', 'utf8string', 'pchar', 'pansichar', 'pwidechar',
     'rawutf8');
 
-function IsNumericTypeName(const TypeLow: string): Boolean;
+function InSet(const TypeLow: string; const Arr: array of string): Boolean;
 var T: string;
 begin
-  for T in NUMERIC_TYPES do
+  for T in Arr do
     if TypeLow = T then Exit(True);
   Result := False;
+end;
+
+function IsFloatTypeName(const TypeLow: string): Boolean;
+begin
+  Result := InSet(TypeLow, FLOAT_TYPES);
+end;
+
+function IsNumericTypeName(const TypeLow: string): Boolean;
+begin
+  Result := InSet(TypeLow, FLOAT_TYPES) or InSet(TypeLow, INT_ORDINAL_TYPES);
+end;
+
+function IsKnownNonFloatTypeName(const TypeLow: string): Boolean;
+// True NUR fuer nachweislich Nicht-Float-Typen (Ganzzahl/Ordinal/String).
+// Unbekannte Typen (Klassen, Aliase wie TFloat=Double) -> False, damit ein
+// Detektor sie NICHT faelschlich als Nicht-Float behandelt (TP-Schutz).
+begin
+  Result := InSet(TypeLow, INT_ORDINAL_TYPES) or InSet(TypeLow, STRING_TYPES);
 end;
 
 function IsStringTypeName(const TypeLow: string): Boolean;
@@ -256,6 +284,11 @@ end;
 function TTypeResolver.IsStringLhs(const VarName: string; Line: Integer): Boolean;
 begin
   Result := IsStringTypeName(ResolveTypeAt(LowerCase(Trim(VarName)), Line));
+end;
+
+function TTypeResolver.ResolvesToKnownNonFloat(const VarName: string; Line: Integer): Boolean;
+begin
+  Result := IsKnownNonFloatTypeName(ResolveTypeAt(LowerCase(Trim(VarName)), Line));
 end;
 
 end.

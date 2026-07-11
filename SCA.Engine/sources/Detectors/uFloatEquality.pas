@@ -63,7 +63,7 @@ implementation
 
 uses
   System.RegularExpressions,
-  uFileTextCache, uDetectorUtils;
+  uFileTextCache, uDetectorUtils, uTypeResolver;
 
 const
   FLOAT_TYPES : array[0..4] of string =
@@ -222,8 +222,10 @@ var
   IdentName : string;
   LineNo    : Integer;
   F         : TLeakFinding;
+  TR        : TTypeResolver;   // Welle 1: scope-genaue Typ-Aufloesung (SCA144-Opt-in)
 begin
   EnsureRegexCacheBuilt;
+  TR := nil;
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
@@ -242,6 +244,13 @@ begin
         if IsFloatType(M.Groups[2].Value) then
           FloatVars.Add(LowerCase(M.Groups[1].Value));
       if FloatVars.Count = 0 then Exit;
+      // Welle 1 (Core-Detektoren-Architektur): scope-genauer Typ-Resolver aus dem
+      // AST. FloatVars ist ein reiner Namensindex und scope-BLIND - ein Name, der
+      // IRGENDWO als Float deklariert ist, matcht auch dort, wo er lokal ein
+      // Ordinal/String/anderer Typ ist. Der Resolver loest den Operanden zur
+      // Nutzungs-Zeile scope-genau auf und unterdrueckt bei nachgewiesenem
+      // Nicht-Float-Skalar (ergaenzt die lexikalische OperandDeclaredNonFloat).
+      TR := TTypeResolver.Create(UnitNode);
 
       // Phase 2: scanne nach `<ident> = <token>` oder `<token> = <ident>`
       // sowie `<>`-Variante. Beide Operanden simple Identifier oder Zahlen.
@@ -301,17 +310,22 @@ begin
         // Nicht-Float-Typ deklariert ist (Integer/Cardinal/Int32-Param,
         // lokales Integer, Klassen-Feld TdwsJSONValue, Ordinal-Result),
         // ist der FloatVars-Treffer scope-blind -> FP unterdruecken.
-        if (FloatVars.IndexOf(LhsLow) >= 0) and
-           OperandDeclaredNonFloat(Code, Lhs, M.Index) then Continue;
-        if (FloatVars.IndexOf(RhsLow) >= 0) and
-           OperandDeclaredNonFloat(Code, Rhs, M.Index) then Continue;
+        LineNo := TDetectorUtils.LineForPos(LineFor, M.Index);
+        if LineNo <= 0 then LineNo := 1;
+        // Union (Welle 1): lexikalische Regex-Aufloesung ODER scope-genauer
+        // AST-Resolver. Der Resolver faengt Scope-Kollisionen, die die Regex-
+        // Naechstdeklaration verfehlt; TP-sicher (unbekannter Alias wie
+        // TFloat=Double -> ResolvesToKnownNonFloat=False -> keine Unterdrueckung).
+        if (FloatVars.IndexOf(LhsLow) >= 0)
+           and (OperandDeclaredNonFloat(Code, Lhs, M.Index)
+                or TR.ResolvesToKnownNonFloat(LhsLow, LineNo)) then Continue;
+        if (FloatVars.IndexOf(RhsLow) >= 0)
+           and (OperandDeclaredNonFloat(Code, Rhs, M.Index)
+                or TR.ResolvesToKnownNonFloat(RhsLow, LineNo)) then Continue;
 
         // Welche Seite ist die Float-Var (fuer Detail-Text).
         if FloatVars.IndexOf(LhsLow) >= 0 then IdentName := Lhs
                                           else IdentName := Rhs;
-
-        LineNo := TDetectorUtils.LineForPos(LineFor, M.Index);
-        if LineNo <= 0 then LineNo := 1;
 
         F            := TLeakFinding.Create;
         F.FileName   := FileName;
@@ -327,6 +341,7 @@ begin
       FloatVars.Free;
     end;
   finally
+    TR.Free;   // nil-safe; nil bei FloatVars.Count=0-Exit
     ReleaseLines(Lines, Cached);
   end;
 end;
