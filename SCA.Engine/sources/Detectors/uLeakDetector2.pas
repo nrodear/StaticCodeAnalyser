@@ -529,6 +529,63 @@ var
       if not CharInSet(S[i], ['a'..'z', '0'..'9', '_']) then Exit(False);
   end;
 
+  // FP-Gate (borrowed-reference, 2026-07-11, Real-World-Audit): die
+  // "Rueckgabewert"-Heuristik wertete JEDEN Funktionsaufruf mit '(' als
+  // Ownership-Return und meldete ihn als potentielles Leak. Getter wie
+  // CnOtaGetRootComponentFromEditor(...) oder Images.Bitmap(...) liefern
+  // aber GEBORGTE Objekte (IDE-Form-Root, ImageList-Cache), deren Free ein
+  // Bug waere. Ownership gibt nur ab, wer konstruktor-artig heisst (Wurzel
+  // Create/New/Clone/Make/Acquire - exakt, als CamelCase-Prefix 'MakeList'
+  // oder als CamelCase-Suffix 'DoCreate') ODER eine bewiesene lokale Factory
+  // ist (Body allokiert direkt in Result). Direkte '.Create' laufen ueber
+  // HasCreateAssign/Pfad 1 und bleiben Fund (die realen TPs sind alle .Create).
+  // RhsOrig ist die Original-Case-RHS (A.TypeRef) - die CamelCase-Grenze
+  // laesst sich nur im Original erkennen ('NewsFeed' != 'NewFeed').
+  function OwningReturnCall(const RhsOrig: string): Boolean;
+  const
+    ROOTS : array[0..4] of string = ('create', 'new', 'clone', 'make', 'acquire');
+  var
+    pp, dp, rl, sp : Integer;
+    Head, Callee, CalleeLow, root : string;
+  begin
+    Result := False;
+    pp := Pos('(', RhsOrig);
+    if pp <= 1 then Exit;
+    // Callee-Identifier (Original-Case) vor der ersten '(' isolieren;
+    // qualifizierten Prefix abstreifen ('images.bitmap(' -> 'bitmap').
+    Head := Copy(RhsOrig, 1, pp - 1);
+    dp := LastDelimiter('.', Head);
+    if dp > 0 then
+      Callee := Trim(Copy(Head, dp + 1, MaxInt))
+    else
+      Callee := Trim(Head);
+    CalleeLow := Callee.ToLower;
+    if CalleeLow = '' then Exit;
+    // (a) konstruktor-artiger Name: Wurzel exakt, als CamelCase-Prefix
+    //     ('MakeList'/'NewFoo') oder als CamelCase-Suffix ('DoCreate').
+    //     Die Grossbuchstaben-Grenze im Original schuetzt vor Substring-
+    //     Zufaellen ('NewsFeed', 'Remake') die keine echten Konstruktoren sind.
+    for root in ROOTS do
+    begin
+      rl := Length(root);
+      if CalleeLow = root then Exit(True);
+      if (Length(CalleeLow) > rl) and StartsStr(root, CalleeLow) and
+         CharInSet(Callee[rl + 1], ['A'..'Z', '0'..'9']) then
+        Exit(True);
+      if (Length(CalleeLow) > rl) and EndsStr(root, CalleeLow) then
+      begin
+        sp := Length(Callee) - rl + 1;
+        if (sp >= 1) and CharInSet(Callee[sp], ['A'..'Z']) then
+          Exit(True);
+      end;
+    end;
+    // (b) bewiesene lokale Factory DERSELBEN Klasse (Body: Result := X.Create).
+    //     Erhaelt die TP-Erkennung fuer named Factories die MIT Klammern
+    //     aufgerufen werden ('list := BuildList()' mit Result := TFoo.Create).
+    if IsCleanIdent(CalleeLow) and IsLocalFactory(CalleeLow) then
+      Exit(True);
+  end;
+
 var
   Assigns : TList<TAstNode>;
   A       : TAstNode;
@@ -557,7 +614,11 @@ begin
         // FP-Gate (2026-07-04): os-handle - socket()/accept()/CreateFile()
         // & Co. liefern OS-Handles, keine Delphi-Objekte -> kein SCA001.
         if IsOsHandleApiCall(RHS) then Continue;
-        Exit(True);
+        // FP-Gate (borrowed-reference, 2026-07-11): nur konstruktor-artige
+        // Callees / bewiesene lokale Factories geben Ownership ab; geborgte
+        // Getter (CnOtaGetRootComponentFromEditor, Images.Bitmap) NICHT.
+        if OwningReturnCall(A.TypeRef) then Exit(True);
+        Continue;
       end;
       // Ohne '(': normalerweise geliehene Referenz ('list := obj.FList'
       // / 'list := SomeProperty') - KEIN Ownership-Transfer. AUSNAHME:

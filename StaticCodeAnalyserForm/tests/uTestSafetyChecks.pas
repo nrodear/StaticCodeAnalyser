@@ -72,6 +72,12 @@ type
     [Test] procedure DeadCode_ExitAtMethodEnd_NoFinding;
     // Real-World FP-Audit 2026-07-10: 'raise ... at ReturnAddress' ist ein Statement
     [Test] procedure DeadCode_RaiseAtReturnAddress_NoFinding;
+    // Real-World FP-Audit 2026-07-10 'continue-as-local-variable':
+    // lokale var 'Continue'/'Break' ausserhalb jeder Schleife -> kein toter Code
+    [Test] procedure DeadCode_ContinueLocalVarOutsideLoop_NoFinding;
+    [Test] procedure DeadCode_ContinueLocalVarBeforeRepeatLoop_NoFinding;
+    // TP-Guard: echtes Continue im Schleifenrumpf + Folgecode bleibt Fund
+    [Test] procedure DeadCode_ContinueInForLoopFollowedByDead_Reported;
   end;
 
 implementation
@@ -568,6 +574,73 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeadCode),
     'at ReturnAddress ist Teil des raise, kein toter Code');
+  finally F.Free; end;
+end;
+
+procedure TTestDeadCodeExt.DeadCode_ContinueLocalVarOutsideLoop_NoFinding;
+// Real-World FP-Audit 2026-07-10 'continue-as-local-variable': eine lokale
+// Boolean-Variable 'Continue' mit 'Continue := True;' ausserhalb jeder
+// Schleife parst der Parser als nkContinue. Kein toter Code - ein echtes
+// Continue waere hier ausserdem ein Compilerfehler.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var Continue: Boolean;'#13#10+
+  'begin'#13#10+
+  '  Continue := True;'#13#10+
+  '  DoStuff;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeadCode),
+    'Continue-Zuweisung ausserhalb einer Schleife ist kein toter Code');
+  finally F.Free; end;
+end;
+
+procedure TTestDeadCodeExt.DeadCode_ContinueLocalVarBeforeRepeatLoop_NoFinding;
+// Wie Alcinoe.AVLBinaryTree.pas:400 - 'Continue := True;' steht VOR einer
+// spaeteren repeat-Schleife, also auf Methoden-Block-Ebene (Loop-Tiefe 0).
+// Muss auch dann unterdrueckt werden, wenn die Methode weiter unten eine
+// Schleife enthaelt (Loop-Tiefe pro Knoten, nicht pro Methode).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var Continue: Boolean;'#13#10+
+  'begin'#13#10+
+  '  Continue := True;'#13#10+
+  '  DoInit;'#13#10+
+  '  repeat'#13#10+
+  '    DoStuff;'#13#10+
+  '  until not Continue;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeadCode),
+    'Continue-Zuweisung vor einer Schleife ist kein toter Code');
+  finally F.Free; end;
+end;
+
+procedure TTestDeadCodeExt.DeadCode_ContinueInForLoopFollowedByDead_Reported;
+// TP-Guard: ein echtes Continue im Schleifenrumpf (Loop-Tiefe > 0) mit
+// Folgeanweisung bleibt echter toter Code und muss weiter feuern.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  for I := 0 to 9 do'#13#10+
+  '  begin'#13#10+
+  '    Continue;'#13#10+
+  '    DoDead;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkDeadCode) >= 1,
+    'Continue im Schleifenrumpf + Folgecode ist echter toter Code');
   finally F.Free; end;
 end;
 

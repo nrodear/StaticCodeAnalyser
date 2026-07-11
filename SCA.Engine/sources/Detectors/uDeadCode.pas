@@ -48,25 +48,37 @@ class procedure TDeadCodeDetector.CheckBlock(BlockNode: TAstNode;
 // pathologisch tiefen ASTs den Aufruf-Stack sprengen.
 var
   WorkStack    : TStack<TAstNode>;
+  DepthStack   : TStack<Integer>;
   Current      : TAstNode;
+  CurDepth     : Integer;
+  ChildDepth   : Integer;
   i            : Integer;
   Child, Nxt   : TAstNode;
   IsTerminator : Boolean;
   TermName     : string;
   F            : TLeakFinding;
 begin
-  WorkStack := TStack<TAstNode>.Create;
+  // DepthStack laeuft im Gleichschritt mit WorkStack und traegt die
+  // Loop-Verschachtelungstiefe des jeweiligen Knotens mit (0 = ausserhalb
+  // jeder Schleife). Break/Continue beziehen sich immer auf die innerste
+  // umschliessende Schleife und sind nur in deren Rumpf gueltig.
+  WorkStack  := TStack<TAstNode>.Create;
+  DepthStack := TStack<Integer>.Create;
   try
     WorkStack.Push(BlockNode);
+    DepthStack.Push(0);
     while WorkStack.Count > 0 do
     begin
-      Current := WorkStack.Pop;
+      Current  := WorkStack.Pop;
+      CurDepth := DepthStack.Pop;
       i := 0;
       while i < Current.Children.Count do
       begin
         Child := Current.Children[i];
 
-        // Verschachtelte Bloecke nicht rekursiv, sondern auf den Stack
+        // Verschachtelte Bloecke nicht rekursiv, sondern auf den Stack.
+        // nkFor/nkWhile/nkRepeat erhoehen die Loop-Tiefe fuer alle
+        // Nachkommen; jeder Push nimmt seine Tiefe auf den DepthStack mit.
         if Child.Kind in [nkBlock,
                           nkIfStmt, nkElseBranch,
                           nkCaseStmt, nkCaseArm,
@@ -74,17 +86,33 @@ begin
                           nkTryExcept, nkTryFinally,
                           nkExceptBlock, nkFinallyBlock,
                           nkOnHandler] then
+        begin
+          ChildDepth := CurDepth;
+          if Child.Kind in [nkForStmt, nkWhileStmt, nkRepeatStmt] then
+            Inc(ChildDepth);
           WorkStack.Push(Child);
+          DepthStack.Push(ChildDepth);
+        end;
 
         // Unbedingter Terminator als DIREKTES Kind dieses Blocks?
-        // nkBreak/nkContinue nur in Loop-Bodies, nkExit/nkRaise immer.
+        // nkExit/nkRaise sind immer Terminatoren. nkBreak/nkContinue nur,
+        // wenn wir tatsaechlich im Rumpf einer Schleife stehen (CurDepth>0).
+        // FP-Guard (Real-World-FP-Audit 2026-07-10,
+        // 'continue-as-local-variable'): 'continue := true;' bzw.
+        // 'break(...)' ausserhalb jeder Schleife ist eine lokale Variable/
+        // Routine, die der Parser als nkContinue/nkBreak fehlerkennt - kein
+        // toter Code. Ein echtes Break/Continue ausserhalb einer Schleife
+        // waere zudem ein Compilerfehler, kann also nie ein True Positive
+        // sein; das Unterdruecken hier ist TP-sicher.
         IsTerminator := False;
         TermName := '';
         case Child.Kind of
-          nkExit:     begin IsTerminator := True; TermName := 'Exit';     end;
-          nkRaise:    begin IsTerminator := True; TermName := 'raise';    end;
-          nkBreak:    begin IsTerminator := True; TermName := 'Break';    end;
-          nkContinue: begin IsTerminator := True; TermName := 'Continue'; end;
+          nkExit:     begin IsTerminator := True; TermName := 'Exit';  end;
+          nkRaise:    begin IsTerminator := True; TermName := 'raise'; end;
+          nkBreak:    if CurDepth > 0 then
+                      begin IsTerminator := True; TermName := 'Break';    end;
+          nkContinue: if CurDepth > 0 then
+                      begin IsTerminator := True; TermName := 'Continue'; end;
         end;
 
         if IsTerminator then
@@ -131,6 +159,7 @@ begin
       end;
     end;
   finally
+    DepthStack.Free;
     WorkStack.Free;
   end;
 end;

@@ -1011,6 +1011,57 @@ begin
     if kw = INTR[k] then Exit(True);
 end;
 
+function IsConstDeclLine(const LineLow: string): Boolean;
+// Erkennt eine Konstanten-Deklarationszeile (bereits lowercase+stripped):
+//   'szf=regcszd;'        (untypisiert)
+//   'szf = regcszd;'
+//   'szf: byte = 5;'      (typisierte Konstante)
+// FP-Klasse 'conditional-compilation-const' (Real-World-FP-Audit 2026-07-10,
+// DAsmUtil.pas:497/574): derselbe Bezeichner ist im einen {$IFDEF}-Zweig
+// 'var X: T' (nkLocalVar) und im anderen 'const X = Wert'. Der Lexer sieht
+// BEIDE Zweige; die const-Zeile des inaktiven Zweigs wurde als Read des
+// var-Zweig-Locals fehlgedeutet. Eine const-Deklaration ist NIE ein Read
+// einer lokalen Variable (ihr RHS muss ein Compile-time-Konstanten-Ausdruck
+// sein und kann daher keine Local lesen) -> blanket-skip ist TP-sicher.
+//
+// Mini-Parser: fuehrender EINZELNER Identifier, optional ': type', dann ein
+// einzelnes '=' (kein ':=' Assignment), Zeile endet mit ';'. Mehr-Ident-
+// Formen ohne Komma/Doppelpunkt (z.B. 'if a = b then ...;') werden bewusst
+// abgelehnt, damit keine echte Lese-Anweisung faelschlich uebersprungen wird.
+var
+  T : string;
+  i, L : Integer;
+begin
+  Result := False;
+  T := Trim(LineLow);
+  L := Length(T);
+  if L < 3 then Exit;
+  if T[L] <> ';' then Exit;
+  if not CharInSet(T[1], ['a'..'z', '_']) then Exit;
+  // 1) fuehrender Identifier
+  i := 1;
+  while (i <= L) and IsIdentChar(T[i]) do Inc(i);
+  // 2) Whitespace
+  while (i <= L) and CharInSet(T[i], [' ', #9]) do Inc(i);
+  if i > L then Exit;
+  // 3a) typisierte Konstante 'ident: type = value'
+  if T[i] = ':' then
+  begin
+    Inc(i);
+    if (i <= L) and (T[i] = '=') then Exit;      // ':=' Assignment, keine const-Decl
+    while (i <= L) and (T[i] <> '=') do
+    begin
+      // Type-Teil: nur Ident/Space/Punkt/Generic/Komma - KEIN Operator/Klammer.
+      if not CharInSet(T[i], ['a'..'z', '0'..'9', '_', ' ', #9, '.', '<', '>', ',']) then Exit;
+      Inc(i);
+    end;
+    if i > L then Exit;                           // kein '=' -> keine const-Decl
+  end;
+  // 3b) jetzt MUSS ein einzelnes '=' folgen
+  if (i > L) or (T[i] <> '=') then Exit;
+  Result := True;
+end;
+
 // ============================================================
 // HAUPT-LOGIK
 // ============================================================
@@ -1531,6 +1582,11 @@ var
       if IsVarDeclLine(L) then Continue;
       // Skip auch Multi-Line-var-Decl-Continuation ('byte1,' / 'b5, g5,')
       if IsVarDeclContinuationLine(L) then Continue;
+      // Skip Konstanten-Deklarationszeile ('szf=regcszd;'): FP-Klasse
+      // 'conditional-compilation-const' - im inaktiven {$IFDEF}-Zweig wird der
+      // Bezeichner als const deklariert, im anderen als var. Eine const-Decl
+      // liest NIE eine lokale Variable (RHS = Compile-time-Konstante).
+      if IsConstDeclLine(L) then Continue;
       // Read-Family-Fill-Zeile ('Stream.Read(Buf,...)'): Buffer wird hier
       // GESCHRIEBEN, nicht gelesen -> nicht als Read werten.
       if LineFillsVarViaReadCall(L, NameLow) then Continue;
@@ -1577,6 +1633,39 @@ var
               // Walk an '&Type' ab und der Write wird als Read fehlgedeutet
               // (FP-Klasse Real-World 2026-06-28, Alcinoe.ServiceUtils SC_ACTION).
               while (q <= LL) and CharInSet(L[q], ['.', '_', '&', 'a'..'z', '0'..'9']) do Inc(q);
+              while (q <= LL) and (L[q] = ' ') do Inc(q);
+              if (q < LL) and (L[q] = ':') and (L[q + 1] = '=') then
+                begin P := P + NL; Continue; end;
+            end;
+            // 3b) Member-Access-Write `name.field := ` / `name.a.b := ` /
+            //     `name.f[i] := ` ist ein (partieller) WRITE von name, kein Read
+            //     (FP-Klasse 'field-assignment-target', Real-World InlineOp.pas:2710).
+            //     Ein vorangehendes Label kann den AST-nkAssign-Write dieser Zeile
+            //     verschlucken; der Source-Read-Scan wertete `name.field :=` dann als
+            //     Read und die naechste `name.other :=`-Zeile als Write -> read-before-
+            //     write-FP. Qualifier-Kette (Punkte, escaped '&', balancierte '[...]')
+            //     bis zum '=' des ':=' ueberspringen.
+            if After = '.' then
+            begin
+              var q := P + NL;
+              while q <= LL do
+              begin
+                if L[q] = '[' then
+                begin
+                  var depth := 0;
+                  while q <= LL do
+                  begin
+                    if L[q] = '[' then Inc(depth)
+                    else if L[q] = ']' then
+                    begin Dec(depth); if depth = 0 then begin Inc(q); Break; end; end;
+                    Inc(q);
+                  end;
+                end
+                else if CharInSet(L[q], ['.', '_', '&', 'a'..'z', '0'..'9']) then
+                  Inc(q)
+                else
+                  Break;
+              end;
               while (q <= LL) and (L[q] = ' ') do Inc(q);
               if (q < LL) and (L[q] = ':') and (L[q + 1] = '=') then
                 begin P := P + NL; Continue; end;

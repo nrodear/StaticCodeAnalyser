@@ -36,6 +36,14 @@ type
     [Test] procedure Leak_TypecastIndexedItem_NoFinding;
     [Test] procedure Leak_TypecastBareIdent_NoFinding;
     [Test] procedure Leak_IndexedPropertyResult_NoFinding;
+    // FP-Gate (borrowed-reference, 2026-07-11): 'X := Func(...)' nur auf
+    // konstruktor-artige / lokale-Factory-Callees. Geborgte Getter
+    // (CnOtaGetRootComponentFromEditor, Images.Bitmap) duerfen nicht flaggen;
+    // konstruktor-artige Namen + bewiesene lokale Factories bleiben Fund.
+    [Test] procedure Leak_BorrowedGetterCallWithParens_NoFinding;
+    [Test] procedure Leak_BorrowedDottedGetterCallWithParens_NoFinding;
+    [Test] procedure Leak_ConstructorLikeCallReturn_NoFree_ReportsWarning;
+    [Test] procedure Leak_LocalFactoryCallWithParens_NoFree_ReportsWarning;
     [Test] procedure Leak_SimilarVarName_NoFalsePositive;
     [Test] procedure Leak_MultipleVars_BothReported;
     [Test] procedure Leak_NoFalsePositive_BlacklistFree;
@@ -559,7 +567,7 @@ const SRC =
   'procedure TFoo.Bar;'#13#10+
   'var list: TStringList;'#13#10+
   'begin'#13#10+
-  '  list := BuildList();'#13#10+
+  '  list := MakeList();'#13#10+
   '  list.Add(''x'');'#13#10+
   'end;';
 var F: TObjectList<TLeakFinding>;
@@ -680,7 +688,7 @@ const SRC =
   'procedure TFoo.Bar;'#13#10+
   'var list: TStringList;'#13#10+
   'begin'#13#10+
-  '  list := BuildList();'#13#10+
+  '  list := MakeList();'#13#10+
   '  try'#13#10+
   '    list.Add(''x'');'#13#10+
   '  finally'#13#10+
@@ -1025,6 +1033,100 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'geliehener Getter (Result := FCache) ist kein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_BorrowedGetterCallWithParens_NoFinding;
+// FP-Gate (borrowed-reference, 2026-07-11, Real-World-Audit): cnwizards
+// 'Keys := CnOtaGetVersionInfoKeys(FProject)' bzw. 'Root :=
+// CnOtaGetRootComponentFromEditor(...)'. Der Callee ist ein GETTER (liefert
+// ein IDE-eigenes, geborgtes Objekt), kein Konstruktor. Die "Rueckgabewert"-
+// Heuristik meldete das frueher als Leak; jetzt geben nur konstruktor-artige
+// Callees Ownership ab -> kein Befund.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var keys: TStringList;'#13#10+
+  'begin'#13#10+
+  '  keys := CnOtaGetVersionInfoKeys(FProject);'#13#10+
+  '  keys.Add(''x'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'geborgter Getter-Aufruf (kein Konstruktor) ist kein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_BorrowedDottedGetterCallWithParens_NoFinding;
+// FP-Gate (borrowed-reference, 2026-07-11): Alcinoe ALFmxImgList
+// 'aBitmap := Images.Bitmap(aSize, AIndex)' - ImageList-Cache-Getter, geborgt
+// (der Quell-Kommentar dort warnt sogar, dass die ImageList das Bitmap
+// zerstoeren kann). Callee 'Bitmap' ist kein Konstruktor -> kein Befund.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var bmp: TBitmap;'#13#10+
+  'begin'#13#10+
+  '  bmp := Images.Bitmap(ASize, AIndex);'#13#10+
+  '  bmp.SaveToFile(''x'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'dotted Getter Images.Bitmap(...) ist geborgt, kein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_ConstructorLikeCallReturn_NoFree_ReportsWarning;
+// TP-Guard fuer das borrowed-reference-Gate (2026-07-11): ein konstruktor-
+// artiger Callee (Wurzel Make/New/Clone/Create/Acquire) uebergibt Ownership.
+// 'list := MakeList()' ohne Free bleibt ein Leak-Befund (Rueckgabewert) -
+// die FP-Reduktion darf konstruktor-artige Factory-Returns nicht schlucken.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var list: TStringList;'#13#10+
+  'begin'#13#10+
+  '  list := MakeList();'#13#10+
+  '  list.Add(''x'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
+      'konstruktor-artiger Callee (MakeList) ohne Free bleibt ein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_LocalFactoryCallWithParens_NoFree_ReportsWarning;
+// TP-Guard: eine bewiesene lokale Factory DERSELBEN Klasse, MIT Klammern
+// aufgerufen ('list := BuildList()' mit 'Result := TStringList.Create' im
+// Body), ist Ownership-Transfer. Der IsLocalFactory-Fallback haelt die
+// Erkennung trotz nicht-konstruktor-artigem Namen ('Build...') aufrecht.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TFoo.BuildList: TStringList;'#13#10+
+  'begin'#13#10+
+  '  Result := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var list: TStringList;'#13#10+
+  'begin'#13#10+
+  '  list := BuildList();'#13#10+
+  '  list.Add(''x'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
+      'lokale Factory mit Klammern (BuildList) ohne Free bleibt ein Leak');
   finally F.Free; end;
 end;
 
@@ -1802,7 +1904,7 @@ const SRC =
   'procedure TFoo.Bar;'#13#10+
   'var list: TStringList;'#13#10+
   'begin'#13#10+
-  '  list := BuildList();'#13#10+
+  '  list := MakeList();'#13#10+
   '  try'#13#10+
   '    list.Add(''x'');'#13#10+
   '  finally'#13#10+

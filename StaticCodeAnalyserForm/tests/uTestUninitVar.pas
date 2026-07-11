@@ -80,6 +80,13 @@ type
     [Test] procedure LowHighInForHeader_NoFinding;
     // Gegenprobe: echter uninitialisierter Read bleibt ein Fund (kein Over-Suppress)
     [Test] procedure ReadBeforeTypecastAssign_StillFlagged;
+    // Real-World FP-Audit 2026-07-10, clean-Teilklassen:
+    // (Fund 10) Member-Access-LHS 'X.field := ...' ist partieller Write von X
+    [Test] procedure MemberAccessAssignAfterLabel_NoFinding;
+    [Test] procedure MemberReadBeforeWrite_StillFlagged;
+    // (Funde 6/8) {$IFDEF}-const-vs-var: const im inaktiven Zweig ist kein Read
+    [Test] procedure IfdefConstVsVarBranch_NoFinding;
+    [Test] procedure EqualityConditionNotConstDecl_StillFlagged;
   end;
 
 implementation
@@ -1368,6 +1375,135 @@ begin
   try
     Assert.IsTrue(CountKind(L, fkUninitVar) >= 1,
       'raw wird gelesen bevor der Typecast-Write erfolgt - bleibt SCA166');
+  finally L.Free; end;
+end;
+
+// ============================================================
+// Real-World FP-Audit 2026-07-10 - clean-Teilklassen SCA166
+// ============================================================
+
+procedure TTestUninitVar.MemberAccessAssignAfterLabel_NoFinding;
+// FP-Klasse 'field-assignment-target' (Real-World InlineOp.pas:2710):
+// 'Parms.ATag := Tag' ist ein (partieller) WRITE von Parms, kein Read.
+// Das vorangehende Label 'TagOk:' verschluckt den AST-nkAssign-Write dieser
+// Zeile; der Source-Read-Scan wertete 'Parms.ATag :=' faelschlich als Read
+// und die naechste 'Parms.Info :='-Zeile als ersten Write -> read-before-
+// write-FP. Der Member-Access-LHS-Skip loest das auf.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'type TParms = record ATag, Info, Id: Integer; end;'#13#10 +
+    'function Foo(Tag, Info, Id: Integer): Integer;'#13#10 +
+    'var Parms: TParms;'#13#10 +
+    'begin'#13#10 +
+    ' TagOk:'#13#10 +
+    '  Parms.ATag := Tag;'#13#10 +
+    '  Parms.Info := Info;'#13#10 +
+    '  Parms.Id := Id;'#13#10 +
+    '  Result := Parms.ATag;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+      'Parms.ATag := Tag ist ein Member-Write von Parms, kein uninit-Read');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.MemberReadBeforeWrite_StillFlagged;
+// TP-Gegenkontrolle zum Member-Access-Skip: ein ECHTER Werte-Read eines
+// Record-Feldes VOR jedem Write (WriteLn(r.a) vor r.b := 5) bleibt ein Fund.
+// Der Skip darf nur den Member-Write (':=' auf der LHS) entschaerfen, nicht
+// einen RHS-Feld-Read verschlucken.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'type TRec = record a, b: Integer; end;'#13#10 +
+    'procedure P;'#13#10 +
+    'var r: TRec;'#13#10 +
+    'begin'#13#10 +
+    '  WriteLn(r.a);'#13#10 +
+    '  r.b := 5;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.IsTrue(CountKind(L, fkUninitVar) >= 1,
+      'WriteLn(r.a) liest r vor jedem Write - bleibt ein UninitVar-Bug');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.IfdefConstVsVarBranch_NoFinding;
+// FP-Klasse 'conditional-compilation-const' (Real-World DAsmUtil.pas:497/574):
+// SzF ist im {$IFDEF I64}-Zweig 'var SzF: byte' und im {$ELSE}-Zweig
+// 'const SzF = 7'. Der Lexer sieht BEIDE Zweige; die const-Deklarationszeile
+// des inaktiven Zweigs wurde als Read des var-Zweig-Locals gewertet und lag
+// VOR dem echten Write 'SzF := 3' -> read-before-write-FP. Eine const-Decl
+// liest nie eine lokale Variable -> IsConstDeclLine-Skip loest das auf.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'function getEA(W: integer): boolean;'#13#10 +
+    'var'#13#10 +
+    '  CurB: Byte;'#13#10 +
+    '{$IFDEF I64}'#13#10 +
+    'var'#13#10 +
+    '  SzF: byte;'#13#10 +
+    '{$ELSE}'#13#10 +
+    'const'#13#10 +
+    '  SzF = 7;'#13#10 +
+    '{$ENDIF}'#13#10 +
+    'begin'#13#10 +
+    '  Result := false;'#13#10 +
+    '  SzF := 3;'#13#10 +
+    '  CurB := SzF;'#13#10 +
+    '  Result := CurB > 0;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+      'const SzF = 7 im inaktiven {$ELSE}-Zweig ist kein Read der var-Zweig-Local');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.EqualityConditionNotConstDecl_StillFlagged;
+// TP-Gegenkontrolle zum const-Decl-Skip: eine Gleichheits-BEDINGUNG
+// 'if n = 0 then ...' ist KEINE Konstanten-Deklaration und muss weiter als
+// Read von n zaehlen. Sichert ab dass IsConstDeclLine nicht zu breit greift.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var n: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  if n = 0 then WriteLn(''zero'');'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.IsTrue(CountKind(L, fkUninitVar) >= 1,
+      'if n = 0 liest n (uninit) - keine const-Decl, muss weiter flaggen');
   finally L.Free; end;
 end;
 

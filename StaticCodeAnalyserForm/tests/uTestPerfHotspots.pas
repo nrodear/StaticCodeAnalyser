@@ -18,6 +18,11 @@ type
     [Test] procedure StringConcat_DifferentVars_NotReported;
     // Real-World FP-Audit 2026-07-10: numerischer Akkumulator ist kein String-Concat
     [Test] procedure StringConcat_NumericAccumulator_NotReported;
+    // SCA110-FP-Audit 2026-07-11 (clean-lexical): Set-/Array-Literal-RHS + Loop-Scope
+    [Test] procedure StringConcat_SetUnionInLoop_NotReported;
+    [Test] procedure StringConcat_NonBracketRhsInLoop_Reported;
+    [Test] procedure StringConcat_SingleStmtLoopBleed_NotReported;
+    [Test] procedure StringConcat_SingleStmtLoop_Reported;
 
     // ParamByNameInLoop
     [Test] procedure ParamByName_InLoop_Reported;
@@ -215,6 +220,94 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkStringConcatInLoop),
     'numerischer Akkumulator (j: Integer) ist kein String-Concat');
+  finally F.Free; end;
+end;
+
+procedure TTestPerfHotspots.StringConcat_SetUnionInLoop_NotReported;
+// SCA110-FP-Audit 2026-07-11 (clean-lexical (a)): 'CharSet := CharSet + [C]' ist
+// Set-Union (bzw. Array-Concat), KEIN String-O(n^2)-Concat. Ein '+' direkt vor
+// '[' ist immer ein Set-/Array-Konstruktor -> unterdruecken. Vgl. real-world
+// Alcinoe.StringUtils.pas / Alcinoe.SMTP.Client.pas.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var CharSet: TSysCharSet; i: Integer; C: AnsiChar;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 0 to 10 do'#13#10 +
+  '  begin'#13#10 +
+  '    CharSet := CharSet + [C];'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkStringConcatInLoop),
+    'Set-Union ''x := x + [..]'' ist kein String-Concat');
+  finally F.Free; end;
+end;
+
+procedure TTestPerfHotspots.StringConcat_NonBracketRhsInLoop_Reported;
+// TP-Guard zu (a): gewoehnliches String-Concat (RHS beginnt NICHT mit '[')
+// muss weiter feuern - der Bracket-Guard darf nicht ueberschiessen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var s, t: string; i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 0 to 10 do'#13#10 +
+  '  begin'#13#10 +
+  '    s := s + Copy(t, i, 1);'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkStringConcatInLoop),
+    'gewoehnliches String-Concat in Schleife bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestPerfHotspots.StringConcat_SingleStmtLoopBleed_NotReported;
+// SCA110-FP-Audit 2026-07-11 (clean-lexical (b)): eine Einzelanweisungs-Schleife
+// 'while ... do stmt;' darf NICHT in nachfolgenden Straight-Line-Code ausbluten.
+// Frueher blieb der Loop-Header liegen und verschluckte das spaetere,
+// unabhaengige 'begin' des if -> der Concat wurde faelschlich als "in Schleife"
+// gemeldet (FP-Klasse not-in-loop, vgl. Alcinoe.XMLDoc/JSONDoc).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var s: string; p: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  while p < 10 do Inc(p);'#13#10 +
+  '  if s <> '''' then'#13#10 +
+  '  begin'#13#10 +
+  '    s := s + ''!'';'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkStringConcatInLoop),
+    'Concat NACH einer Einzelanweisungs-Schleife ist nicht in der Schleife');
+  finally F.Free; end;
+end;
+
+procedure TTestPerfHotspots.StringConcat_SingleStmtLoop_Reported;
+// TP-Guard zu (b): ein echtes String-Concat IN einer Einzelanweisungs-Schleife
+// 'for i ... do s := s + x;' ist der reale O(n^2)-Bug und muss feuern - der
+// Loop-Scope-Fix erkennt Einzelanweisungs-Bodies jetzt korrekt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var s: string; i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 0 to 10 do s := s + ''x'';'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkStringConcatInLoop),
+    'String-Concat in Einzelanweisungs-Schleife bleibt ein Fund');
   finally F.Free; end;
 end;
 
