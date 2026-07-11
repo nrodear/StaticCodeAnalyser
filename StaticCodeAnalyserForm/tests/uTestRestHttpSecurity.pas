@@ -15,6 +15,8 @@ type
     [Test] procedure HttpRemoteUrl_Reported;
     [Test] procedure HttpsRemoteUrl_NotReported;
     [Test] procedure HttpLocalhost_NotReported;
+    // Real-World FP-Audit 2026-07-10 Regression (local-ipc-uri)
+    [Test] procedure HttpUnixSocket_NotReported;
     [Test] procedure XmlNamespace_NotReported;
 
     // DisabledTlsVerification
@@ -67,6 +69,21 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHttpInsteadOfHttps),
     'Localhost-URLs sind in der Whitelist - kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestRestHttpSecurity.HttpUnixSocket_NotReported;
+// Real-World FP-Audit 2026-07-10 (mORMot mormot.net.sock.pas:5674): 'http://unix:'
+// ist das synthetische Layout eines UNIX-Domain-Sockets (lokales IPC), kein
+// Remote-Endpunkt - keine Plaintext-Netzwerk-MITM-Flaeche, kein Befund.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'const IPC = ''http://unix:/var/run/app.sock:/'';';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHttpInsteadOfHttps),
+    'http://unix: ist ein UNIX-Domain-Socket (lokales IPC), kein Remote-HTTP');
   finally F.Free; end;
 end;
 

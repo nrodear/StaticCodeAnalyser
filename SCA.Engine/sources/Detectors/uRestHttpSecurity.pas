@@ -145,8 +145,8 @@ begin
 end;
 
 function IsLocalhost(const Url: string): Boolean;
-// True wenn die URL klar auf den localhost-Stack zeigt - dann ist HTTP
-// fuer Dev-Workflows legitim, kein Befund.
+// True wenn die URL klar auf den localhost-Stack ODER lokales IPC zeigt - dann
+// ist HTTP legitim (Dev-Workflow bzw. kein Netz -> keine MITM-Flaeche), kein Befund.
 var
   L : string;
 begin
@@ -156,7 +156,11 @@ begin
     (Pos('http://127.',       L) > 0) or
     (Pos('http://[::1]',      L) > 0) or
     (Pos('http://0.0.0.0',    L) > 0) or
-    (Pos('http://host.docker.internal', L) > 0);
+    (Pos('http://host.docker.internal', L) > 0) or
+    // Real-World-FP-Audit 2026-07-10: mORMot's synthetisches 'http://unix:'-
+    // Layout bezeichnet einen UNIX-Domain-Socket (lokales IPC), keinen Remote-
+    // Endpunkt - kein Plaintext-Netzwerk-Transport.
+    (Pos('http://unix:',      L) > 0);
 end;
 
 class procedure TRestHttpSecurityDetector.AnalyzeUnit(UnitNode: TAstNode;
