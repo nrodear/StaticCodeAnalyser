@@ -159,9 +159,6 @@ var
   R         : TLoopRange;
   KeywordEnd: Integer;
   WordLen   : Integer;
-  HdrLen    : Integer;
-  DoPos     : Integer;
-  TokPos    : Integer;
 
   function MatchKeyword(const Kw: string; AtPos: Integer): Boolean;
   begin
@@ -175,78 +172,6 @@ var
     if SameText(Copy(L, AtPos, WordLen), Kw) and
        ((AtPos + WordLen > n) or not IsIdent(L[AtPos + WordLen])) then
       Result := True;
-  end;
-
-  function FindHeaderDoPos(FromPos: Integer): Integer;
-  // Sucht das Header-abschliessende 'do' eines for/while-Kopfes ab FromPos.
-  // Ueberspringt String-Literale und zaehlt ()/[]-Tiefe (ein 'do' in einem
-  // String oder in Klammern soll nicht faelschlich matchen). Stoppt defensiv
-  // an ';' auf Tiefe 0 - das kommt in einem gueltigen Loop-Header nie vor.
-  var
-    p, depth : Integer;
-    inStr    : Boolean;
-  begin
-    Result := 0;
-    p := FromPos;
-    depth := 0;
-    inStr := False;
-    while p <= n do
-    begin
-      if inStr then
-      begin
-        if L[p] = '''' then inStr := False;
-        Inc(p); Continue;
-      end;
-      case L[p] of
-        '''': begin inStr := True; Inc(p); Continue; end;
-        '(', '[': begin Inc(depth); Inc(p); Continue; end;
-        ')', ']': begin if depth > 0 then Dec(depth); Inc(p); Continue; end;
-      end;
-      if depth = 0 then
-      begin
-        if L[p] = ';' then Exit(0);
-        if MatchKeyword('do', p) then Exit(p);
-      end;
-      Inc(p);
-    end;
-  end;
-
-  function FirstSignificantPos(FromPos: Integer): Integer;
-  // Erste Nicht-Whitespace-Position ab FromPos.
-  var
-    p : Integer;
-  begin
-    p := FromPos;
-    while (p <= n) and CharInSet(L[p], [' ', #9, #10, #13]) do Inc(p);
-    Result := p;
-  end;
-
-  function FindStmtEndPos(FromPos: Integer): Integer;
-  // Ende einer Einzelanweisung: erste ';' auf Klammertiefe 0 ab FromPos
-  // (String-Literale uebersprungen). Fallback = Dateiende.
-  var
-    p, depth : Integer;
-    inStr    : Boolean;
-  begin
-    Result := n;
-    p := FromPos;
-    depth := 0;
-    inStr := False;
-    while p <= n do
-    begin
-      if inStr then
-      begin
-        if L[p] = '''' then inStr := False;
-        Inc(p); Continue;
-      end;
-      case L[p] of
-        '''': begin inStr := True; Inc(p); Continue; end;
-        '(', '[': Inc(depth);
-        ')', ']': if depth > 0 then Dec(depth);
-        ';': if depth = 0 then Exit(p);
-      end;
-      Inc(p);
-    end;
   end;
 
 begin
@@ -264,33 +189,9 @@ begin
       // dann die Body-Begin-End-Klammer.
       if MatchKeyword('for', i) or MatchKeyword('while', i) then
       begin
-        // Body-Form bestimmen: begin-Block (Stack-Mechanismus wie bisher)
-        // oder Einzelanweisung 'for/while ... do stmt;'. Frueher wurde IMMER
-        // gepusht - bei Einzelanweisungs-Loops blieb der Header liegen und
-        // verschluckte spaeter ein unabhaengiges 'begin' als vermeintlichen
-        // Loop-Body -> Concats in Straight-Line-Code wurden faelschlich als
-        // "in Schleife" gemeldet (FP-Klasse not-in-loop, SCA110-Audit).
-        HdrLen := WordLen;   // Keyword-Laenge sichern (Peek unten ueberschreibt WordLen)
-        DoPos := FindHeaderDoPos(i + HdrLen);
-        if DoPos > 0 then
-        begin
-          TokPos := FirstSignificantPos(DoPos + 2);   // 'do' ist 2 Zeichen
-          if (TokPos <= n) and MatchKeyword('begin', TokPos) then
-            // begin-Body: bestehender begin-Zweig erzeugt die Range beim
-            // Weiterscannen (Header-Position auf Stack).
-            Stack.Push(i)
-          else
-          begin
-            // Einzelanweisungs-Body -> Range exakt bis zum ersten ';' auf
-            // Klammertiefe 0. KEIN Stack-Push, damit der Header nicht
-            // liegenbleibt und nicht in Folgecode ausblutet.
-            R.StartPos := TokPos;
-            R.EndPos   := FindStmtEndPos(TokPos);
-            if R.EndPos >= R.StartPos then
-              RList.Add(R);
-          end;
-        end;
-        Inc(i, HdrLen);
+        // Position des Loop-Headers merken
+        Stack.Push(i);
+        Inc(i, WordLen);
         Continue;
       end;
       if MatchKeyword('repeat', i) then
@@ -378,24 +279,6 @@ begin
     if TypeLow = T then Exit(True);
 end;
 
-function RhsFirstOperandIsBracket(const Code: string; AfterPlusPos: Integer): Boolean;
-// FP-Gate (clean-lexical, SCA110-FP-Audit 2026-07-11): 'x := x + [...]' ist
-// Set-Union bzw. Array-Concat (`result := result + [TAuthType.Plain]`,
-// `CharSet := CharSet + [C]`), KEIN String-O(n^2)-Concat. Ein '+' unmittelbar
-// gefolgt von '[' kann in gueltigem Pascal nur ein Set-/Array-Konstruktor sein
-// (ein Array-Index haengt an einem Bezeichner, nie direkt hinter '+'). String-
-// Concat hat dort nie ein '[' -> kein TP-Verlust. AfterPlusPos = erstes Zeichen
-// HINTER dem '+' des Concat-Matches.
-var
-  p, len : Integer;
-begin
-  Result := False;
-  len := Length(Code);
-  p := AfterPlusPos;
-  while (p <= len) and CharInSet(Code[p], [' ', #9, #10, #13]) do Inc(p);
-  Result := (p <= len) and (Code[p] = '[');
-end;
-
 class procedure TPerfHotspotsDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
@@ -436,8 +319,7 @@ begin
     Matches := CachedReConcat.Matches(Code);
     for M in Matches do
       if PosInRanges(M.Index, Ranges)
-         and not LhsDeclaredNumeric(Code, M.Groups[1].Value, M.Index)
-         and not RhsFirstOperandIsBracket(Code, M.Index + M.Length) then
+         and not LhsDeclaredNumeric(Code, M.Groups[1].Value, M.Index) then
         Emit(fkStringConcatInLoop,
           Format('String-Concat ''%s := %s + ...'' in loop body - ' +
                  'O(n^2) reallocations. Prefer TStringBuilder.Append or ' +
