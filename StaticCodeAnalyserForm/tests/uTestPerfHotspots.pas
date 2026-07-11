@@ -18,6 +18,9 @@ type
     [Test] procedure StringConcat_DifferentVars_NotReported;
     // Real-World FP-Audit 2026-07-10: numerischer Akkumulator ist kein String-Concat
     [Test] procedure StringConcat_NumericAccumulator_NotReported;
+    // Welle 1 (TTypeResolver): QWord fehlt in der Regex-NUMTYPES, der AST-Resolver
+    // kennt es -> nur der Resolver-Pfad unterdrueckt diesen numerischen Akkumulator.
+    [Test] procedure StringConcat_QWordAccumulator_ResolverOnly_NotReported;
 
     // ParamByNameInLoop
     [Test] procedure ParamByName_InLoop_Reported;
@@ -215,6 +218,30 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkStringConcatInLoop),
     'numerischer Akkumulator (j: Integer) ist kein String-Concat');
+  finally F.Free; end;
+end;
+
+procedure TTestPerfHotspots.StringConcat_QWordAccumulator_ResolverOnly_NotReported;
+// Welle 1 - Beleg fuer die additive AST-Typ-Aufloesung (Core-Detektoren-Architektur).
+// 'q := q + i' mit q:QWord ist numerische Akkumulation, kein O(n^2)-String-Concat.
+// Die lexikalische LhsDeclaredNumeric kennt 'qword' NICHT (fehlt in ihrer NUMTYPES-
+// Liste) -> wuerde faelschlich melden. Der TTypeResolver loest q -> qword auf und
+// unterdrueckt (IsNumericTypeName). Zeigt, dass der Resolver-Pfad zusaetzlich greift.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: QWord; i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 0 to 10 do'#13#10 +
+  '  begin'#13#10 +
+  '    q := q + i;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkStringConcatInLoop),
+    'q: QWord ist numerisch - nur der AST-Resolver kennt qword -> kein Fund');
   finally F.Free; end;
 end;
 

@@ -43,7 +43,7 @@ implementation
 
 uses
   System.RegularExpressions, System.StrUtils,
-  uFileTextCache, uDetectorUtils;
+  uFileTextCache, uDetectorUtils, uTypeResolver;
 
 var
   // Lazy-Cache fuer die drei Module-konstanten Regex-Patterns. Spart 3x
@@ -291,6 +291,7 @@ var
   Matches  : TMatchCollection;
   LineNo   : Integer;
   F        : TLeakFinding;
+  TR       : TTypeResolver;   // Welle 1: additive AST-Typ-Aufloesung (SCA110-Opt-in)
 
   procedure Emit(K: TFindingKind; const Detail: string; AtPos: Integer);
   begin
@@ -307,19 +308,27 @@ var
 
 begin
   EnsureRegexCacheBuilt;
+  TR := nil;
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
     Code := StripFileComments(Lines, LineFor);
     FindLoopRanges(Code, Ranges);
     if Length(Ranges) = 0 then Exit;
+    // Welle 1 (Core-Detektoren-Architektur): scope-genaue Typ-Aufloesung aus dem
+    // AST. Ergaenzt die lexikalische LhsDeclaredNumeric additiv (Union) - faengt
+    // numerische Akkumulatoren, die die Regex durch Scope-/Feld-/Param-Blindheit
+    // verpasst. Nur nach dem Ranges-Check gebaut (kein Aufwand ohne Schleifen).
+    TR := TTypeResolver.Create(UnitNode);
 
     // 1) String-Concat in Loop:  <var> := <var> + <expr>
     //    Wortgrenzen, Variable beidseitig identisch (case-insensitiv).
     Matches := CachedReConcat.Matches(Code);
     for M in Matches do
       if PosInRanges(M.Index, Ranges)
-         and not LhsDeclaredNumeric(Code, M.Groups[1].Value, M.Index) then
+         and not LhsDeclaredNumeric(Code, M.Groups[1].Value, M.Index)
+         and not TR.IsNumericLhs(M.Groups[1].Value,
+                   TDetectorUtils.LineForPos(LineFor, M.Index)) then
         Emit(fkStringConcatInLoop,
           Format('String-Concat ''%s := %s + ...'' in loop body - ' +
                  'O(n^2) reallocations. Prefer TStringBuilder.Append or ' +
@@ -346,6 +355,7 @@ begin
           'Cache the TField reference once before the loop and reuse it.',
           M.Index);
   finally
+    TR.Free;   // nil-safe (TObject.Free); nil bei Ranges=0-Exit
     ReleaseLines(Lines, Cached);
   end;
 end;
