@@ -51,12 +51,19 @@ type
     // enthaelt. AHit = welcher Token gematched (Original-Casing aus Source).
     class function FindRandomCallInExpr(const Expr: string;
       out AHit: string): Boolean; static;
+    // FP-Guard Klasse A (Todo_FP_SCA167, 2026-07-11): scannt die Roh-Quelle
+    // (Strings ausgeblendet, Kommentare entfernt) case-insensitiv auf das
+    // ganze Wort 'randomize'. Faengt ein parameterloses 'Randomize;' in einer
+    // initialization-/finalization-Sektion, das der nkCall-Pass1 nicht sieht
+    // (uParser2 ueberspringt deren Body). Reine Verengung: nur True -> Exit.
+    class function SourceHasRandomize(const FileName: string): Boolean; static;
   end;
 
 implementation
 
 uses
-  System.RegularExpressions;
+  System.Classes, System.RegularExpressions,
+  uFileTextCache, uDetectorUtils;
 
 // True wenn das Random-Token an MatchIndex (1-basiert) ein Methoden-Aufruf auf
 // einem OBJEKT ist (Obj.Random) statt der globalen RTL-Random. Unqualified,
@@ -145,6 +152,32 @@ begin
   end;
 end;
 
+class function TInsecureRandomDetector.SourceHasRandomize(
+  const FileName: string): Boolean;
+var
+  Lines    : TStringList;
+  Cached   : Boolean;
+  LineFor  : TArray<Integer>;
+  Stripped : string;
+begin
+  Result := False;
+  // In-Memory-/Single-File-Pfade ohne Datei auf Platte (Tests: FindingsOf)
+  // liefern nil -> Guard neutral, der nkCall-Pass1 bleibt die Erkennung.
+  Lines := AcquireLines(FileName, Cached);
+  if Lines = nil then Exit;
+  try
+    // String-Literale werden zu FillCh ('~'), Kommentar-Inhalte entfernt -
+    // ein 'randomize' in einem String oder Kommentar zaehlt bewusst NICHT
+    // (Kommentar != Code-Use). ContainsWholeWordLower prueft Wortgrenzen
+    // links UND rechts (System.Randomize matched: '.' ist keine Ident-Grenze).
+    Stripped := TDetectorUtils.StripStringsAndComments(Lines, LineFor);
+    Result := TDetectorUtils.ContainsWholeWordLower('randomize',
+      LowerCase(Stripped));
+  finally
+    ReleaseLines(Lines, Cached);
+  end;
+end;
+
 class procedure TInsecureRandomDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -178,6 +211,14 @@ begin
         HasRandomize := True;
         Break;
       end;
+    // FP-Guard Klasse A (Todo_FP_SCA167, 2026-07-11): parameterloses
+    // 'Randomize;' in einer initialization-/finalization-Sektion emittiert
+    // uParser2 NICHT als nkCall (der Sektions-Body wird ge-skipt) -> Pass1
+    // verpasst es und flaggt trotzdem, obwohl der globale RTL-Seed gesetzt
+    // ist. Roh-Quelle nachladen und auf das ganze Wort 'randomize' scannen.
+    // Nur suppressierend (True -> Exit), nie zusaetzlich emittierend.
+    if not HasRandomize then
+      HasRandomize := SourceHasRandomize(FileName);
     if HasRandomize then Exit;
 
     // Pass 2a: nkCall mit Random*-Name (Statement-Level, result-verworfen).
