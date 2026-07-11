@@ -245,6 +245,40 @@ begin
     if (Pos >= R.StartPos) and (Pos <= R.EndPos) then Exit(True);
 end;
 
+function LhsDeclaredNumeric(const Code, VarName: string;
+  BeforePos: Integer): Boolean;
+// FP-Gate (Real-World-FP-Audit 2026-07-10): der Concat-Regex 'x := x + ...'
+// matcht JEDEN Akkumulator - auch numerische ('j := j + 3', 'YHeader2 :=
+// YHeader2 + Pad', 'ucs4 := ucs4 + n'). Nur STRING-Konkatenation ist der
+// O(n^2)-Bug. Wir loesen den deklarierten Typ von VarName aus der
+// naechstliegenden Deklaration VOR der Nutzung (var/param/Feld
+// 'name[, more]: Typ') auf und unterdruecken bei numerischem Typ. Nicht
+// aufloesbar oder String-Typ -> weiter melden (kein TP-Verlust).
+const
+  NUMTYPES : array[0..30] of string = (
+    'integer', 'cardinal', 'int64', 'uint64', 'word', 'byte', 'smallint',
+    'shortint', 'longint', 'longword', 'nativeint', 'nativeuint', 'single',
+    'double', 'extended', 'currency', 'comp', 'real', 'real48', 'dword',
+    'ptrint', 'ptruint', 'uint32', 'int32', 'uint16', 'int16', 'uint8',
+    'int8', 'tdatetime', 'tdate', 'ttime');
+var
+  Before, TypeLow, T : string;
+  RE : TRegEx;
+  MC : TMatchCollection;
+begin
+  Result := False;
+  if (VarName = '') or (BeforePos <= 1) then Exit;
+  Before := Copy(Code, 1, BeforePos);   // Deklaration steht VOR der Nutzung
+  RE := TRegEx.Create('(?i)\b' + VarName +
+        '\b\s*(?:,\s*[A-Za-z_]\w*\s*)*:\s*([A-Za-z_][A-Za-z0-9_]*)');
+  MC := RE.Matches(Before);
+  if MC.Count = 0 then Exit;
+  // naechstliegende (= letzte vor der Nutzung) Deklaration.
+  TypeLow := LowerCase(MC[MC.Count - 1].Groups[1].Value);
+  for T in NUMTYPES do
+    if TypeLow = T then Exit(True);
+end;
+
 class procedure TPerfHotspotsDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
@@ -284,7 +318,8 @@ begin
     //    Wortgrenzen, Variable beidseitig identisch (case-insensitiv).
     Matches := CachedReConcat.Matches(Code);
     for M in Matches do
-      if PosInRanges(M.Index, Ranges) then
+      if PosInRanges(M.Index, Ranges)
+         and not LhsDeclaredNumeric(Code, M.Groups[1].Value, M.Index) then
         Emit(fkStringConcatInLoop,
           Format('String-Concat ''%s := %s + ...'' in loop body - ' +
                  'O(n^2) reallocations. Prefer TStringBuilder.Append or ' +

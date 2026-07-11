@@ -16,6 +16,8 @@ type
     [Test] procedure StringConcat_OutsideLoop_NotReported;
     [Test] procedure StringConcat_InWhile_Reported;
     [Test] procedure StringConcat_DifferentVars_NotReported;
+    // Real-World FP-Audit 2026-07-10: numerischer Akkumulator ist kein String-Concat
+    [Test] procedure StringConcat_NumericAccumulator_NotReported;
 
     // ParamByNameInLoop
     [Test] procedure ParamByName_InLoop_Reported;
@@ -190,6 +192,29 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFieldByNameInLoop));
+  finally F.Free; end;
+end;
+
+procedure TTestPerfHotspots.StringConcat_NumericAccumulator_NotReported;
+// Real-World FP-Audit 2026-07-10: 'j := j + 3' mit j:Integer ist eine numerische
+// Akkumulation, KEIN String-Concat (kein O(n^2)-Realloc-Bug). Der LHS-Typ wird
+// aus der Deklaration aufgeloest -> numerisch -> kein Fund. Gegenstueck zum
+// bestehenden StringConcat_InForLoop_Reported (s:string bleibt Fund).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var j: Integer; i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 0 to 10 do'#13#10 +
+  '  begin'#13#10 +
+  '    j := j + 3;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkStringConcatInLoop),
+    'numerischer Akkumulator (j: Integer) ist kein String-Concat');
   finally F.Free; end;
 end;
 
