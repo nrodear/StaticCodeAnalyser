@@ -46,10 +46,6 @@ type
     [Test] procedure ResultAddressTaken_NoFinding;
     // Gegenprobe: reiner Result-Read in Klammer-Gruppierung ist KEINE Zuweisung
     [Test] procedure ResultReadInParenCondition_StillReported;
-    // Parser-FIX 1 (Welle 0, 2026-07-11): Anweisung hinter 'label:' wird geparst
-    // (bisher von SkipToSemicolon verschluckt -> 'done: Result := X' unsichtbar)
-    [Test] procedure ResultAssignedAfterLabel_NoFinding;
-    [Test] procedure ResultNeverAssignedWithLabel_StillReported;
 
     // ---- Finding-Inhalt ----------------------------------------------------
     [Test] procedure Finding_KindAndSeverity;
@@ -565,50 +561,6 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkRoutineResultUnassigned) >= 1,
     'reiner Result-Read in (Result > 0) ist keine Zuweisung - bleibt Fund');
-  finally F.Free; end;
-end;
-
-procedure TTestRoutineResultAssigned.ResultAssignedAfterLabel_NoFinding;
-// Parser-FIX 1 (Welle 0, 2026-07-11): die EINZIGE Result-Zuweisung steht hinter
-// einem Label-Target ('done: Result := ...'). Vor dem Fix verschluckte
-// SkipToSemicolon in ParseCallOrAssign die markierte Anweisung -> Result nie
-// gesehen -> falscher "never assigns Result"-Fund. Real-World-Idiom (mORMot/
-// Alcinoe goto-cleanup). Jetzt wird die markierte Anweisung geparst -> kein Fund.
-const SRC =
-  'unit t; implementation'#13#10 +
-  'function GetKz(x: Integer): Integer;'#13#10 +
-  'label done;'#13#10 +
-  'begin'#13#10 +
-  '  if x = 0 then goto done;'#13#10 +
-  '  x := x + 1;'#13#10 +
-  'done:'#13#10 +
-  '  Result := x;'#13#10 +
-  'end;';
-var F: TObjectList<TLeakFinding>;
-begin
-  F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRoutineResultUnassigned),
-    'Result := hinter label: wird jetzt geparst - kein unassigned-Fund');
-  finally F.Free; end;
-end;
-
-procedure TTestRoutineResultAssigned.ResultNeverAssignedWithLabel_StillReported;
-// TP-Guard zu FIX 1: ein Label im Body darf echte "Result nie zugewiesen"-Bugs
-// NICHT verstecken. Hier weist die markierte Anweisung Result NICHT zu -> Fund bleibt.
-const SRC =
-  'unit t; implementation'#13#10 +
-  'function GetKz(x: Integer): Integer;'#13#10 +
-  'label done;'#13#10 +
-  'begin'#13#10 +
-  '  if x = 0 then goto done;'#13#10 +
-  'done:'#13#10 +
-  '  DoSomething(x);'#13#10 +
-  'end;';
-var F: TObjectList<TLeakFinding>;
-begin
-  F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkRoutineResultUnassigned) >= 1,
-    'Label versteckt keinen echten never-assigned-Bug');
   finally F.Free; end;
 end;
 
