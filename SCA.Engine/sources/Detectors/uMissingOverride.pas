@@ -82,6 +82,39 @@ begin
   Result := (Pos(';override', Low) > 0) or (Pos(';reintroduce', Low) > 0);
 end;
 
+function IsQualifiedName(const MethName: string): Boolean;
+// Real-World-FP-Audit 2026-07-10: ein Punkt im Methoden-Namen heisst, dass
+// der Knoten eine Implementierungs-Rumpf-Definition ist
+// (`constructor TFoo.Create` in der implementation-Section) und KEINE
+// Redeklaration im Klassen-Body. Ein Rumpf versteckt nichts - W1010 entsteht
+// nur an der Deklaration. (Kastri DW.*/Indy IdException-FP-Cluster: der Parser
+// haengt solche Rumpf-Knoten faelschlich unter eine leere Nachfahr-Klasse.)
+begin
+  Result := Pos('.', MethName) > 0;
+end;
+
+function IsOverloadedDeclaration(const TypeRef: string): Boolean;
+// Real-World-FP-Audit 2026-07-10: eine `overload`-Methode kuendigt bewusst
+// eine zusaetzliche Signatur an und loest KEIN W1010 aus - die passende
+// gleich-signaturige Variante ist separat als override/reintroduce
+// deklariert (Alcinoe.MultiPartParser / MVCFramework-Overload-FP-Cluster).
+begin
+  Result := Pos(';overload', LowerCase(TypeRef)) > 0;
+end;
+
+function IsClassCtorOrDtor(const TypeRef: string): Boolean;
+// Real-World-FP-Audit 2026-07-10: `class constructor`/`class destructor` sind
+// statische Einmal-Initialisierer, die nicht am vtable-Dispatch teilnehmen und
+// nie W1010 ausloesen (MVCFramework.Session-FP). Der Parser markiert die
+// class-Methode mit ';class'; TypeRef beginnt bei ctor/dtor mit dem Kind-Wort.
+var
+  Low : string;
+begin
+  Low := LowerCase(TypeRef);
+  Result := (Pos(';class', Low) > 0) and
+            ((Pos('constructor', Low) = 1) or (Pos('destructor', Low) = 1));
+end;
+
 function UnqualifiedMethodName(const MethName: string): string;
 var
   i : Integer;
@@ -148,6 +181,15 @@ begin
         try
           for DM in DerivedMethods do
           begin
+            // Real-World-FP-Audit 2026-07-10: nur echte Redeklarationen im
+            // Klassen-Body pruefen. Qualifizierte Impl-Rumpf-Knoten,
+            // overload-Varianten (distinct signature) und
+            // class-constructor/-destructor koennen kein virtuelles Elternteil
+            // verstecken -> kein W1010 (kill 19/20 Real-World-FPs).
+            if IsQualifiedName(DM.Name) then Continue;
+            if IsOverloadedDeclaration(DM.TypeRef) then Continue;
+            if IsClassCtorOrDtor(DM.TypeRef) then Continue;
+
             MethName := LowerCase(UnqualifiedMethodName(DM.Name));
             if PolyNames.IndexOf(MethName) < 0 then Continue;
             if HasOverride(DM.TypeRef) then Continue;

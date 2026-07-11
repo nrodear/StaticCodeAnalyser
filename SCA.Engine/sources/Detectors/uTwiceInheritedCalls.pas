@@ -50,18 +50,68 @@ const
 // finally-Block - dort sind die Statements direkte Kinder von nkTryFinally/
 // nkTryExcept/nkRepeat/nkFinallyBlock statt nkBlock. Akzeptiert zugunsten
 // der FP-Reduktion; ggf. spaeter den Container-Kind-Set erweitern.
-function MaxSequentialInheritedInBlock(MethodNode: TAstNode): Integer;
+// Real-World-FP-Audit 2026-07-10: Liefert den fuehrenden Bezeichner eines
+// `inherited`-CallExpr (bis zum ersten '.', '(', '[' oder '^'). Beispiele:
+// 'Bitmap.Assign' -> 'Bitmap', 'Create(self.f)' -> 'Create', '' -> ''.
+function LeadingInheritedIdent(const CallExpr: string): string;
 var
-  Blocks : TList<TAstNode>;
-  B      : TAstNode;
-  C      : Integer;
+  i : Integer;
+begin
+  Result := '';
+  for i := 1 to Length(CallExpr) do
+  begin
+    if CharInSet(CallExpr[i], ['.', '(', '[', '^', ' ']) then Break;
+    Result := Result + CallExpr[i];
+  end;
+end;
+
+// Kurzer (unqualifizierter) Methoden-Name: nkMethod.Name ist 'TFoo.Bar'.
+function ShortMethodName(const AName: string): string;
+var p: Integer;
+begin
+  p := LastDelimiter('.', AName);
+  if p > 0 then Result := Copy(AName, p + 1, MaxInt) else Result := AName;
+end;
+
+// Real-World-FP-Audit 2026-07-10: Nur `inherited` das die GLEICHE
+// Parent-Methode ERNEUT aufruft verdoppelt deren Side-Effekte:
+//   (a) bare `inherited;` (leerer CallExpr) oder
+//   (b) `inherited <SelbeMethode>(...)` mit passendem Methoden-Namen.
+// Bisher zaehlte DirectChildCount(nkInherited) JEDES `inherited`-Token und
+// meldete damit qualifizierte Parent-Member-Zugriffe als Doppelaufruf:
+//   `inherited TabStop := False`, `inherited Bitmap.Assign`,
+//   `inherited ReadOnly := True`, oder verschiedene Parent-Methoden
+//   nebeneinander (`inherited Lock` + `inherited Unlock`). Keiner davon
+//   ruft die eigene Parent-Methode zweimal -> alle 30 gesampelten Funde FP.
+function QualifyingInheritedInBlock(Block: TAstNode;
+  const MethShortName: string): Integer;
+var
+  Child : TAstNode;
 begin
   Result := 0;
-  Blocks := MethodNode.FindAll(nkBlock);
+  for Child in Block.Children do
+  begin
+    if Child.Kind <> nkInherited then Continue;
+    if (Child.Name = '') or
+       SameText(LeadingInheritedIdent(Child.Name), MethShortName) then
+      Inc(Result);
+  end;
+end;
+
+function MaxSequentialInheritedInBlock(MethodNode: TAstNode): Integer;
+var
+  Blocks  : TList<TAstNode>;
+  B       : TAstNode;
+  C       : Integer;
+  ShortNm : string;
+begin
+  Result  := 0;
+  ShortNm := ShortMethodName(MethodNode.Name);
+  Blocks  := MethodNode.FindAll(nkBlock);
   try
     for B in Blocks do
     begin
-      C := B.DirectChildCount(nkInherited);
+      C := QualifyingInheritedInBlock(B, ShortNm);
       if C > Result then Result := C;
     end;
   finally

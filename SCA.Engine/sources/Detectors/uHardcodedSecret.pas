@@ -105,6 +105,18 @@ type
     // (Demo-User in ThirdPartyDemos) und rein numerische PIN-Platzhalter
     // ('1234'). Echte Secrets sind praktisch nie woertlich 'pass'.
     class function IsDummySecretValue(const Literal: string): Boolean; static;
+    // FP-Gate (Real-World-FP-Audit 2026-07-10): Wert-FORM statt LHS-Name.
+    // Der Detektor keyed auf dem Identifier-Namen und flaggt jeden String -
+    // aber viele Werte sind offensichtlich KEINE Secrets: URLs, Registry-/
+    // Datei-Pfade, GUIDs, Format-Templates, Prompt-Labels und identifier-
+    // artige Config-/Header-/Spalten-Namen. Liefert True (= unterdruecken)
+    // fuer solche Wert-Formen. Bewusst FP-avers: ein zufaellig aussehendes
+    // Secret ('Xk9#pQz7Lm') oder ein PEM-/SSH-Key matcht KEINE dieser Formen
+    // und bleibt meldepflichtig (harte Secret-Marker werden vorab freigestellt).
+    class function IsNonSecretValueShape(const Literal, LhsName: string): Boolean; static;
+    // Hilfs-Praedikat zu IsNonSecretValueShape: Wert ist ein einzelnes
+    // Identifier-Token (^[A-Za-z_][A-Za-z0-9_]*$, keine Spaces/Sonderzeichen).
+    class function IsIdentifierLikeToken(const S: string): Boolean; static;
   end;
 
 implementation
@@ -420,6 +432,89 @@ begin
     if (Body = D) or (Stem = D) then Exit(True);
 end;
 
+class function THardcodedSecretDetector.IsIdentifierLikeToken(
+  const S: string): Boolean;
+var
+  i : Integer;
+begin
+  Result := False;
+  if S = '' then Exit;
+  if not CharInSet(S[1], ['A'..'Z', 'a'..'z', '_']) then Exit;
+  for i := 2 to Length(S) do
+    if not CharInSet(S[i], ['A'..'Z', 'a'..'z', '0'..'9', '_']) then Exit;
+  Result := True;
+end;
+
+class function THardcodedSecretDetector.IsNonSecretValueShape(
+  const Literal, LhsName: string): Boolean;
+// Real-World-FP-Audit 2026-07-10: Der Detektor triggert auf dem LHS-Namen
+// (Password/Token/Key/...) und flaggt den zugewiesenen String ungeprueft.
+// Diese Funktion prueft die WERT-Form: URL/Pfad (://, \), Format-Template
+// (%s, =%), GUID, Prompt-Label (endet auf ':') und identifier-artige
+// Config-/Header-/Spalten-Namen werden als Nicht-Secret unterdrueckt.
+// Harte Secret-Marker (PEM-Bloecke, SSH-Keys) werden vorab freigestellt,
+// damit eingebettete Service-Account-Keys (JSON mit '\n' + 'https://'-
+// token_uri) NICHT faelschlich als Pfad/URL durchrutschen.
+const
+  KEY_SUFFIX: array[0..10] of string = (
+    '_string', '_field', '_column', '_col', '_expr',
+    '_name', '_type', '_id', '_ref', '_url', '_path'
+  );
+var
+  Body, BodyTrim, BodyLow, LhsLow, Suf : string;
+begin
+  Result := True;   // optimistisch; am Ende False, wenn keine Form greift
+  Body := ExtractLiteralBody(Literal);
+  BodyTrim := Trim(Body);
+  if BodyTrim = '' then Exit(False);
+  BodyLow := Body.ToLower;
+
+  // Harte Secret-Marker - NIEMALS unterdruecken (PEM/SSH-Keys). Schuetzt
+  // eingebettete RSA-/Service-Account-Keys, die als JSON mit '\n' und
+  // 'https://'-token_uri auftreten und sonst als Pfad/URL gelten wuerden.
+  if (Pos('-----begin', BodyLow) > 0) or (Pos('private key', BodyLow) > 0) or
+     (Pos('ssh-rsa', BodyLow) > 0) or (Pos('ssh-ed25519', BodyLow) > 0) then
+    Exit(False);
+
+  // (a) URL-Endpoint bzw. Registry-/Datei-Pfad - kein Geheimwert.
+  //     'https://oauth2.googleapis.com/token', 'Software\Policies\...'
+  if (Pos('://', Body) > 0) or (Pos('\', Body) > 0) then Exit;
+
+  // (b) Format-Template mit Platzhalter - z.B. OAuth-Request-Body
+  //     '...&assertion=%s'. Vorlagen, keine literalen Secrets.
+  if (Pos('%s', Body) > 0) or (Pos('%d', Body) > 0) or
+     (Pos('%u', Body) > 0) or (Pos('%g', Body) > 0) or
+     (Pos('%x', Body) > 0) or (Pos('=%', Body) > 0) then Exit;
+
+  // (c) GUID/IID-Literal (COM-Interface-Konstante) - kein Secret.
+  if TRegEx.IsMatch(BodyTrim,
+       '^\{?[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}?$') then Exit;
+
+  // (d) Prompt-/Feld-Label endet auf ':' - Protokoll-/UI-Beschriftung.
+  //     'AskP: ', 'Hotkey: '. Echte Secrets enden praktisch nie auf ':'.
+  if BodyTrim.EndsWith(':') then Exit;
+
+  // (e) Identifier-artiger Wert = Config-Key / Header- / Spalten-Name,
+  //     NICHT der Geheimwert. Nur unterdruecken, wenn der Wert zusaetzlich
+  //     (i) selbst ein Secret-Keyword traegt ('UsePassword',
+  //     'CurrentTokenHighlight'), ODER (ii) den LHS-Namen spiegelt
+  //     ('challengePassword' in 'LN_pkcs9_challengePassword'), ODER (iii)
+  //     auf einem Namens-/Spalten-Suffix endet ('authentication_string').
+  //     Ein zufaelliges Secret ('Xk9pQz7Lm') erfuellt keine der drei
+  //     Bedingungen und bleibt damit meldepflichtig.
+  if IsIdentifierLikeToken(BodyTrim) then
+  begin
+    BodyLow := BodyTrim.ToLower;
+    if IsSecretName(BodyTrim) then Exit;                                 // (i)
+    LhsLow := LhsName.ToLower;
+    if (Length(BodyTrim) >= 4) and (Pos(BodyLow, LhsLow) > 0) then Exit; // (ii)
+    for Suf in KEY_SUFFIX do                                            // (iii)
+      if BodyLow.EndsWith(Suf) then Exit;
+  end;
+
+  Result := False;
+end;
+
 class procedure THardcodedSecretDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 const
@@ -477,6 +572,10 @@ begin
       // dokumentierte Demo-/Platzhalterwerte ('masterkey', 'password',
       // 'pass1', ...) sind Beispiel-Credentials, keine echten Secrets.
       if IsDummySecretValue(A.TypeRef) then Continue;
+      // FP-Gate (Real-World-FP-Audit 2026-07-10): Wert-FORM ist offensichtlich
+      // kein Secret - URL/Pfad (://, \), Format-Template (%s), GUID, Label
+      // (endet ':') oder identifier-artiger Config-/Header-/Spalten-Name.
+      if IsNonSecretValueShape(A.TypeRef, A.Name) then Continue;
       // ConnectionString ohne Passwort-Anteil ist ein Template, kein Secret.
       if (Pos('connectionstring', A.Name.ToLower) > 0) and
          not ConnectionStringHasPassword(A.TypeRef) then Continue;
@@ -648,6 +747,10 @@ begin
       // FP-Gate (2026-07-04): test-fixture - Dummy-Beispielwerte, z.B.
       // `cPassword = 'masterkey'` (mORMot extdb-bench, Firebird-Default).
       if THardcodedSecretDetector.IsDummySecretValue(Literal) then Continue;
+      // FP-Gate (Real-World-FP-Audit 2026-07-10): Wert-FORM ist kein Secret
+      // (URL/Pfad/GUID/Format-Template/Label/Config-Key-Name) - analog
+      // AnalyzeMethod. Der Field-Name N.Name dient dem LHS-Spiegel-Check.
+      if THardcodedSecretDetector.IsNonSecretValueShape(Literal, N.Name) then Continue;
 
       if Length(Literal) > MAX_VAL_LEN then
         LitShort := Copy(Literal, 1, MAX_VAL_LEN - 4) + '...'''

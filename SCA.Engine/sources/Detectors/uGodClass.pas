@@ -57,12 +57,49 @@ type
 
 implementation
 
+uses
+  System.Classes, uFileTextCache;
+
 // noinspection-file CanBeClassMethod, ConsecutiveSection, CyclomaticComplexity, DeepNesting, GroupedDeclaration, LongMethod, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 const
   MAX_METHODS = 20;
   MAX_FIELDS  = 15;
+
+// Real-World-FP-Audit 2026-07-10: Erkennt die leere Einzeiler-Klassen-
+// deklaration `EFoo = class(EBar);` (typische Exception-/Forward-Klasse
+// ohne Body). Der Parser kennt fuer `class(...)` KEINEN Semikolon-Abbruch
+// (nur `class;` / `class of` sind als Forward gefuehrt), schluckt daher
+// mangels `end` die nachfolgenden Unit-Level-Routinen und Typ-/Enum-
+// Deklarationen faelschlich als Member -> absurde God-Class-Counts
+// (EALOpenOfficeException 22m/23f, EALExprEvalError 17m/42f usw.).
+// Kennzeichen: die Quellzeile der Klasse endet - nach Strippen eines
+// Zeilenkommentars - auf `);`. Echte God-Klassen haben immer einen
+// mehrzeiligen Body (private/protected/public) vor `end;`, ihre
+// Header-Zeile endet auf `)` bzw. dem Klassennamen, nie auf `);`.
+function IsEmptyClassDeclLine(const AFileName: string; ALine: Integer): Boolean;
+var
+  Lines  : TStringList;
+  Cached : Boolean;
+  S      : string;
+  P      : Integer;
+begin
+  Result := False;
+  if ALine <= 0 then Exit;
+  Lines := AcquireLines(AFileName, Cached);
+  if Lines = nil then Exit;
+  try
+    if ALine > Lines.Count then Exit;
+    S := Lines[ALine - 1];
+    P := Pos('//', S);
+    if P > 0 then S := Copy(S, 1, P - 1);
+    S := TrimRight(S);
+    Result := (Length(S) >= 2) and (Copy(S, Length(S) - 1, 2) = ');');
+  finally
+    ReleaseLines(Lines, Cached);
+  end;
+end;
 
 class procedure TGodClassDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
@@ -125,6 +162,12 @@ begin
 
       if (MethodCount <= MAX_METHODS) and (FieldCount <= MAX_FIELDS) then
         Continue;
+
+      // Real-World-FP-Audit 2026-07-10: leere `class(...);`-Einzeiler
+      // ueberspringen - deren Counts sind reine Parser-Slurp-Artefakte
+      // (siehe IsEmptyClassDeclLine). Erst nach dem Schwellwert-Check, damit
+      // der Source-Lookup nur fuer die wenigen Schwellwert-Ueberschreiter laeuft.
+      if IsEmptyClassDeclLine(FileName, C.Line) then Continue;
 
       Detail := Format('Class %s is a god class (%d methods, %d fields; ' +
                        'thresholds %d / %d) - split into focused units',

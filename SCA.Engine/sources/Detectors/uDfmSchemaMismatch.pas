@@ -52,6 +52,36 @@ var
   I     : Integer;
   F     : TLeakFinding;
 
+  function IsKeywordReclassifiedName(const AName: string): Boolean;
+  // Real-World-FP-Audit 2026-07-10: DFM-Komponenten, deren Name mit einem
+  // Delphi-Schluesselwort / einer Property-Direktive kollidiert
+  // (Exit/Read/Write/Name/Message/Index/Default...), werden vom
+  // keyword-bewussten Field-Lexer im .pas-Klassenkoerper reklassifiziert.
+  // Dadurch faellt das existierende published Field ('Exit: TAction;',
+  // 'Read: TSpeedButton;') aus TFormBinding.PublishedFields heraus und
+  // HasPublishedField liefert faelschlich False -> False-Positive
+  // 'no published field'. Weil der Field-Set fuer solche Namen nachweislich
+  // unzuverlaessig ist, unterdruecken wir hier konservativ die Meldung.
+  // TP-Namen (Panel150, Bevel1, FileMenu, cbVolumeID...) kollidieren nie
+  // mit dieser Liste und bleiben unveraendert Funde.
+  const
+    ReclassNames: array[0..44] of string = (
+      'exit', 'read', 'write', 'name', 'message', 'index', 'default',
+      'stored', 'nodefault', 'implements', 'result', 'on', 'out',
+      'add', 'remove', 'contains', 'requires', 'operator', 'reference',
+      'strict', 'sealed', 'final', 'helper', 'delayed', 'experimental',
+      'deprecated', 'platform', 'unsafe', 'varargs', 'winapi', 'register',
+      'stdcall', 'cdecl', 'safecall', 'pascal', 'export', 'external',
+      'overload', 'override', 'virtual', 'dynamic', 'abstract',
+      'reintroduce', 'dispid', 'readonly');
+  var
+    R: string;
+  begin
+    for R in ReclassNames do
+      if SameText(AName, R) then Exit(True);
+    Result := False;
+  end;
+
   function HasInlineAncestorOrSelf(Node: TComponentNode): Boolean;
   // 'inline Foo: ...'-Bloecke (VCL/LCL Frame- bzw. Collection-Subtrees) und
   // ALLE ihre Nachfahren sind Laufzeit-Sub-Objekte des inline-Parents, keine
@@ -104,6 +134,11 @@ begin
       if Cur.IsInherited then Continue;
       // inline-Sub-Komponenten (und deren Nachfahren) sind keine Felder.
       if HasInlineAncestorOrSelf(Cur) then Continue;
+      // Real-World-FP-Audit 2026-07-10: Keyword-/Direktiven-kollidierende
+      // Komponentennamen (Exit/Read/Write...) - der Field-Lexer laesst das
+      // published Field fallen, HasPublishedField ist hier nicht
+      // vertrauenswuerdig. Konservativ nicht melden (siehe Helper oben).
+      if IsKeywordReclassifiedName(Cur.Name) then Continue;
 
       F            := TLeakFinding.Create;
       F.FileName   := FileName;

@@ -673,6 +673,16 @@ var
   // Reported wird im outer-body initialisiert; CheckCallText (nested)
   // greift erst nach dem Create darauf zu - FP des Nested-Closure-Pattern.
   Reported : TDictionary<string, Boolean>;
+  // Real-World-FP-Audit 2026-07-10 (FP-Klasse const-name-collision):
+  // CollectStringConstants sammelt via rekursivem FindAll ALLE
+  // nkConstSection der Unit - inkl. Routinen-lokaler const - in EINE flache
+  // Tabelle (AddOrSetValue = letzter gewinnt). Zwei gleichnamige lokale
+  // const in verschiedenen Routinen (z.B. CPrefix / SOURCE) ueberschreiben
+  // sich dann gegenseitig, und Format(CPrefix, [..]) wird gegen die fremde
+  // Definition mit anderer Platzhalter-Zahl gemeldet. EffTable ueberlagert
+  // die Unit-Tabelle mit den Methoden-lokalen const, sodass - wie in Pascal
+  // ueblich - der Routinen-Scope den Unit-Scope beschattet.
+  EffTable : TDictionary<string, string>;
 
   procedure CheckCallText(const CallText: string; Line: Integer);
   var
@@ -687,7 +697,9 @@ var
     Key         : string;
   begin
     if not TryExtractCall(CallText, FirstArg, FuncEnd, ArgsStart, MatchedFunc) then Exit;
-    if not ResolveFormatString(FirstArg, ConstTable, FmtStr) then Exit;
+    // Real-World-FP-Audit 2026-07-10: gegen die Routinen-lokal ueberlagerte
+    // EffTable aufloesen (Local-shadows-Unit), NICHT gegen die rohe ConstTable.
+    if not ResolveFormatString(FirstArg, EffTable, FmtStr) then Exit;
     PlaceCount := CountPlaceholders(FmtStr, IsBareStyle(MatchedFunc));
     ArgCount   := CountArrayArgs(CallText, ArgsStart);
 
@@ -739,6 +751,13 @@ var
   N       : TAstNode;
 begin
   Reported := TDictionary<string, Boolean>.Create;
+  // Unit-Scope klonen und mit den Methoden-lokalen const ueberlagern
+  // (AddOrSetValue in CollectStringConstants -> lokale const gewinnt).
+  if Assigned(ConstTable) then
+    EffTable := TDictionary<string, string>.Create(ConstTable)
+  else
+    EffTable := TDictionary<string, string>.Create;
+  CollectStringConstants(MethodNode, EffTable);
   try
     // Walk nkCall (eigenstaendige Format-Aufrufe wie 'Format(...)').
     Calls := MethodNode.FindAll(nkCall);
@@ -761,6 +780,7 @@ begin
     end;
   finally
     Reported.Free;
+    EffTable.Free;
   end;
 end;
 

@@ -516,6 +516,79 @@ begin
   end;
 end;
 
+function SplitLockWrapperNoReleaseInScope(const Code: string; M: TMatch): Boolean;
+// Real-World-FP-Audit 2026-07-10: Split-Lock-Handoff-Wrapper-FP-Killer.
+// True, wenn im SELBEN Routinen-Body NACH dem Acquire KEIN passendes Release
+// (.Leave/.Release/.Unlock/.EndWrite/.LeaveCriticalSection) auf DENSELBEN
+// Lock-Bezeichner existiert. Fehlt es, ist das Release absichtlich an eine
+// paired Sibling-Methode (Unlock/_Release/RWUnLock/EndWrite) delegiert - der
+// Method-Body ist ein reiner Handoff (FLock.Enter; Result := True; end).
+// Dann gibt es gar kein Enter..Leave-Paar in EINEM Scope, das ein
+// try..finally schuetzen muesste -> SCA109 ist nicht zustaendig, der Fund
+// waere ein FP (dwsUtils.TThread<T>.Lock, uWorkerThread.Lock,
+// uCEFComponentIdList.Lock, uCEFWorkSchedulerQueueThread.Lock, ...).
+// Der Vorwaerts-Scan endet an der naechsten Routinen-Deklaration (dort
+// beginnt die evtl. paired Unlock-Methode), damit deren Release NICHT
+// faelschlich als in-scope zaehlt.
+const
+  KEYS : array[0..3] of string = ('procedure', 'function', 'constructor', 'destructor');
+var
+  ident, lident, seg, segLow, w : string;
+  p, n, wStart, wEnd, bodyEnd, q, k : Integer;
+  isHeader, hasRelease : Boolean;
+begin
+  Result := False;
+  // Nur fuer die '<ident>.Enter/.Acquire/.BeginWrite'-Form; die
+  // EnterCriticalSection(...)-Form traegt keinen isolierbaren Bezeichner.
+  ident := M.Value;
+  if Pos('.', ident) = 0 then Exit;
+  ident := Copy(ident, 1, Pos('.', ident) - 1);
+  if ident = '' then Exit;
+  lident := LowerCase(ident);
+  n := Length(Code);
+  // Body-Ende = naechste Routinen-Deklaration nach dem Acquire (nur am
+  // Zeilenanfang, damit ein 'function'-Typ in einer var-Deklaration das
+  // Fenster nicht faelschlich kappt).
+  bodyEnd := n;
+  p := M.Index + M.Length;
+  while p <= n do
+  begin
+    if CharInSet(Code[p], ['A'..'Z', 'a'..'z', '0'..'9', '_']) then
+    begin
+      wStart := p;
+      wEnd := p + 1;
+      while (wEnd <= n) and
+            CharInSet(Code[wEnd], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do Inc(wEnd);
+      w := LowerCase(Copy(Code, wStart, wEnd - wStart));
+      isHeader := False;
+      for k := 0 to High(KEYS) do
+        if w = KEYS[k] then begin isHeader := True; Break; end;
+      if isHeader then
+      begin
+        q := wStart - 1;
+        while (q >= 1) and CharInSet(Code[q], [' ', #9]) do Dec(q);
+        if (q < 1) or (Code[q] = #10) then begin bodyEnd := wStart - 1; Break; end;
+      end;
+      p := wEnd;
+    end
+    else
+      Inc(p);
+  end;
+  // Im Body-Fenster (ab Acquire bis Body-Ende) ein Release auf DEMSELBEN
+  // Bezeichner suchen. Grosszuegig, was als Release zaehlt -> minimiert
+  // FN-Risiko (echte Acquire+Release-ohne-try-Paare bleiben Fund).
+  if bodyEnd < M.Index then Exit;
+  seg := Copy(Code, M.Index, bodyEnd - M.Index + 1);
+  segLow := LowerCase(seg);
+  hasRelease :=
+    (Pos(lident + '.leave', segLow) > 0) or
+    (Pos(lident + '.release', segLow) > 0) or
+    (Pos(lident + '.unlock', segLow) > 0) or
+    (Pos(lident + '.endwrite', segLow) > 0) or
+    (Pos(lident + '.leavecriticalsection', segLow) > 0);
+  Result := not hasRelease;
+end;
+
 class procedure TLockWithoutTryFinallyDetector.AnalyzeUnit(
   UnitNode: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
@@ -584,6 +657,11 @@ begin
       // Exception-freier Body (nur Zuweisungen, kein Call/Index/raise) zwischen
       // Enter und Leave -> Lock kann nicht haengen (triviale Getter/Setter).
       if LockBodyIsExceptionFree(Code, EndOfStmt) then Continue;
+      // Split-Lock-Handoff-Wrapper: Acquire ohne passendes Release im selben
+      // Routinen-Body -> Release ist an eine paired Sibling-Methode delegiert,
+      // kein Enter..Leave-Paar in einem Scope -> SCA109 nicht zustaendig (FP).
+      // Real-World-FP-Audit 2026-07-10.
+      if SplitLockWrapperNoReleaseInScope(Code, M) then Continue;
 
       LineNo := TDetectorUtils.LineForPos(LineFor, M.Index);
       if LineNo <= 0 then LineNo := 1;
