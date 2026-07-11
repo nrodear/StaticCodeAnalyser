@@ -27,6 +27,16 @@ type
     // Gegenprobe: ohne jegliches Settings-Argument bleibt es ein Treffer.
     [Test] procedure StrToFloatNoSettings_StillReported;
 
+    // FP-Regression (SCA128-Audit 2026-07-11): Locale-Funktionsnamen die nur
+    // als Text in einem String-Literal (Code-Gen-Template / PascalScript-
+    // Signatur) oder als @-Funktionszeiger-Referenz vorkommen, sind kein
+    // Aufruf und keine Konvertierung -> kein Finding.
+    [Test] procedure LocaleNameInStringLiteralOrAddressOf_NoFinding;
+    // TP-Guard: ein echter FloatToStr-Aufruf, der in derselben Anweisung neben
+    // einem String-Literal steht, muss weiter feuern - die String-Strip-
+    // Haertung darf reale Aufrufe nicht verschlucken.
+    [Test] procedure RealCallBesideStringLiteral_StillReported;
+
     [Test] procedure Finding_KindAndSeverity;
   end;
 
@@ -119,6 +129,49 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDateFormatSettings));
+  finally F.Free; end;
+end;
+
+procedure TTestDateFormatSettings.LocaleNameInStringLiteralOrAddressOf_NoFinding;
+// FP-Regression (SCA128-Audit 2026-07-11): Deckt alle drei dokumentierten
+// FP-Klassen ab -
+//  (1) PascalScript-Signatur:  AddDelphiFunction('function DateToStr(...)')
+//      (geerdet in cnwizards/.../uPSC_dateutils.pas:29)
+//  (2) @-Funktionszeiger-Referenz: RegisterDelphiFunction(@DateToStr, ...)
+//      (geerdet in cnwizards/.../uPSR_dateutils.pas:58)
+//  (3) Code-Gen-Template: Result := 'DateToStr(' + AValue + ')'
+//      (geerdet in cnwizards/.../CnIniFilerWizard.pas:914)
+// An keiner dieser Stellen findet ein Aufruf statt -> Count = 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Emit(const AValue: string; s: TScript): string;'#13#10 +
+  'begin'#13#10 +
+  '  s.AddDelphiFunction(''function DateToStr(D: TDateTime): String;'');'#13#10 +
+  '  s.RegisterDelphiFunction(@DateToStr, ''DATETOSTR'', cdRegister);'#13#10 +
+  '  Result := ''DateToStr('' + AValue + '')'';'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDateFormatSettings),
+        'Locale-Name nur im String-Literal / als @-Referenz ist kein Aufruf');
+  finally F.Free; end;
+end;
+
+procedure TTestDateFormatSettings.RealCallBesideStringLiteral_StillReported;
+// TP-Guard (SCA128-Audit 2026-07-11): Echter FloatToStr-Aufruf in einer
+// Anweisung, die auch ein String-Literal enthaelt (JSON-/Log-Serialisierung,
+// dwsJSON:2612-Muster). Die String-Strip-FP-Haertung darf den realen Aufruf
+// NICHT verschlucken -> mindestens ein Finding.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Emit(v: Double);'#13#10 +
+  'begin Log(''value='' + FloatToStr(v)); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkDateFormatSettings) >= 1,
+        'FloatToStr neben String-Literal muss weiter gemeldet werden');
   finally F.Free; end;
 end;
 

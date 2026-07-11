@@ -97,8 +97,22 @@ begin
       Cur := Stack[Stack.Count - 1];
       Stack.Delete(Stack.Count - 1);
 
-      // raise; (bare re-raise) ist eine Form von Leave - Exception
-      // propagiert nach oben.
+      // Bare Re-Raise (`raise;` ohne Exception-Operand) IRGENDWO im
+      // Handler-Subtree - inklusive `if cond then raise;`. Bedeutet: der
+      // Handler gibt die urspruengliche Exception unveraendert WEITER und
+      // verschluckt nichts. Damit trifft die Detektor-Praemisse ("catches
+      // every error / swallows system errors") nicht mehr zu -> eigen-
+      // staendiges Suppress-Kriterium, UNABHAENGIG von HasLog. Deckt beide
+      // dominanten FP-Klassen ab: reraise-cleanup (`Rollback; raise;`) und
+      // log-reraise-helper (`if Helper(...) then raise;`, CEF-WndProc-Idiom).
+      // Parser legt bare `raise;` als nkRaise mit Name='raise' ab; ein
+      // `raise ENew.Create(...)` (echte Translation zu neuer Exception, KEIN
+      // Weitergeben) ueberschreibt Name mit dem Ausdruck und faellt hier
+      // NICHT durch - dessen Swallow-Semantik bleibt via HasLog+HasLeave.
+      if (Cur.Kind = nkRaise) and SameText(Trim(Cur.Name), 'raise') then
+        Exit(True);
+      // raise <expr>; (Translation) ist Leave-Pattern, aber kein Weitergeben
+      // der Original-Exception - nur zusammen mit HasLog akzeptieren.
       if Cur.Kind = nkRaise then HasLeave := True;
       if Cur.Kind = nkExit  then HasLeave := True;
       // Result := exit-code im Handler ist auch Leave-Pattern: Funktion

@@ -22,6 +22,9 @@ type
     [Test] procedure IndexedElementFree_NotReported;
     [Test] procedure TypecastFree_NotReported;
     [Test] procedure Finding_KindAndSeverity;
+    // --- Real-World FP-Audit Runde 4 (2026-07-11) Regression ---
+    [Test] procedure ReassignedAfterFree_NotReported;
+    [Test] procedure ReassignAfterUseAfterFree_Reported;
   end;
 
 implementation
@@ -314,6 +317,69 @@ begin
   finally F.Free; end;
 end;
 
+
+// --- Real-World FP-Audit Runde 4 (2026-07-11) Regression ---
+
+procedure TTestFreeWithoutNil.ReassignedAfterFree_NotReported;
+// FP-Fix (Real-World-FP-Audit 2026-07-11, dominante Klasse reassigned-after-free):
+// FPopUpBitmap.Free; FPopUpBitmap := TBitmap.Create - das Feld wird vor jedem
+// Read neu belegt -> kein Dangling-Pointer (CEF4Delphi-FPopUpBitmap-Idiom, 13 FPs).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  private'#13#10 +
+  '    FBmp: TBitmap;'#13#10 +
+  '  public'#13#10 +
+  '    procedure Resize;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Resize;'#13#10 +
+  'begin'#13#10 +
+  '  FBmp.Free;'#13#10 +
+  '  FBmp := TBitmap.Create;'#13#10 +
+  '  FBmp.SetSize(10, 10);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
+      'Free direkt gefolgt von Reassign (FBmp := TBitmap.Create) ist kein Dangling-Pointer');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNil.ReassignAfterUseAfterFree_Reported;
+// TP-Guard zur Reassign-FP-Fix: liegt zwischen Free und Reassignment ein READ
+// des Feldes, ist es ein echtes Use-After-Free -> Befund MUSS bleiben.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  private'#13#10 +
+  '    FBmp: TBitmap;'#13#10 +
+  '  public'#13#10 +
+  '    procedure Resize;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Resize;'#13#10 +
+  'begin'#13#10 +
+  '  FBmp.Free;'#13#10 +
+  '  FBmp.SetSize(10, 10);'#13#10 +
+  '  FBmp := TBitmap.Create;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkFreeWithoutNil) >= 1,
+      'Read zwischen Free und Reassign = Use-After-Free -> Befund bleibt');
+  finally F.Free; end;
+end;
 initialization
   TDUnitX.RegisterTestFixture(TTestFreeWithoutNil);
 

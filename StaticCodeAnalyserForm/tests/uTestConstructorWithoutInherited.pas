@@ -24,6 +24,9 @@ type
     // Real-World FP-Audit 2026-07-10: Sibling-Konstruktor-Delegation
     [Test] procedure CtorWithSiblingCreate_NoFinding;
     [Test] procedure CtorConstructsOtherObject_StillReported;
+    // Real-World FP-Audit 2026-07-11: raises-only-Konstruktor (blockierter Singleton)
+    [Test] procedure CtorRaisesOnly_NoFinding;
+    [Test] procedure CtorConditionalRaise_StillReported;
   end;
 
 implementation
@@ -255,6 +258,45 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkConstructorWithoutInherited),
     'TList.Create ist typ-qualifiziert, keine Sibling-Delegation - bleibt Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestConstructorWithoutInherited.CtorRaisesOnly_NoFinding;
+// Real-World FP-Audit 2026-07-11 (Grijjy.ErrorReporting.pas:347): der ctor
+// besteht ausschliesslich aus einem unbedingten `raise` (blockierter Singleton-
+// Konstruktor). Es entsteht NIE eine Instanz - fehlendes inherited kann keinen
+// Folgefehler ausloesen, also KEIN Bug.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'constructor TgoExceptionReporter.Create;'#13#10 +
+  'begin'#13#10 +
+  '  raise EInvalidOperation.Create(''Invalid singleton constructor call'');'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkConstructorWithoutInherited),
+    'raises-only-Konstruktor erzeugt nie eine Instanz - kein fehlendes inherited');
+  finally F.Free; end;
+end;
+
+procedure TTestConstructorWithoutInherited.CtorConditionalRaise_StillReported;
+// Gegenprobe zum raises-only-Guard: der raise ist BEDINGT (Guard-Clause). Ist
+// die Bedingung falsch, wird das Objekt real und ohne inherited konstruiert ->
+// echter Bug. Erste Anweisung ist ein if (kein unbedingtes raise), der Fund bleibt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'constructor TFoo.Create;'#13#10 +
+  'begin'#13#10 +
+  '  if not Assigned(FConfig) then'#13#10 +
+  '    raise EInvalidOperation.Create(''no config'');'#13#10 +
+  '  FX := 0;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkConstructorWithoutInherited) >= 1,
+    'bedingter raise rettet den fehlenden inherited nicht - Fund bleibt');
   finally F.Free; end;
 end;
 

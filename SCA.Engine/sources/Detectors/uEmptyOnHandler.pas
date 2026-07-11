@@ -88,12 +88,24 @@ begin
     // Group 1: optional 'E:' prefix (eats up `Name : `).
     // Group 2: Exception class name.
     // Lookahead matches semicolon or empty begin/end.
+    // FP-Fix (2026-07-11): Wortgrenze nach `end`. Ohne \b matchte `begin\s*end`
+    // auch einen Body der mit einem End-praefigierten Identifier beginnt
+    // (z.B. `begin EndLogin := ...`) - `End` aus `EndLogin` wurde als leerer
+    // Block fehlgelesen. \b nach `end` verlangt eine Wort/Nichtwort-Grenze
+    // (`end;`, `end `, `end` am Ende) und schliesst `endXxx` aus.
     RE := TRegEx.Create(
-      '(?is)\bon\s+(?:\w+\s*:\s*)?(\w+)\s+do\s*(?:;|begin\s*end\s*;?)');
+      '(?is)\bon\s+(?:\w+\s*:\s*)?(\w+)\s+do\s*(?:;|begin\s*end\b\s*;?)');
 
     for M in RE.Matches(Code) do
     begin
       ExName := M.Groups[1].Value;
+
+      // FP-Fix (2026-07-11): EAbort still zu schlucken ist das
+      // bestimmungsgemaesse VCL-Abbruch-Signal (Abort / OnProgress-Cancel),
+      // kein Silent-Failure-Bug -> Fund verwerfen.
+      if SameText(ExName, 'EAbort') then
+        Continue;
+
       LineNo := TDetectorUtils.LineForPos(LineFor, M.Index);
       if LineNo <= 0 then LineNo := 1;
 

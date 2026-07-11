@@ -109,12 +109,51 @@ begin
   Result := (Pos('formatsettings', Low) > 0) or (Pos('fmtsettings', Low) > 0);
 end;
 
+// True wenn `Needle` als echter Aufruf-Bezeichner in `LowText` steht:
+//   * ganze Wortgrenze (kein Identifier-Zeichen links/rechts) UND
+//   * NICHT unmittelbar von '@' (Adress-Operator) angefuehrt.
+// `LowText` muss bereits lower-case UND string-literal-befreit sein.
+// FP-Haertung (2026-07-11, SCA128-Audit): '@DateToStr' in
+// RegisterDelphiFunction(@DateToStr, 'DATETOSTR', ...) ist eine Funktions-
+// zeiger-Referenz (Registrierung), kein Aufruf und keine Konvertierung -
+// darf daher nicht feuern. Wortgrenzen-Logik identisch zu
+// TDetectorUtils.FindWholeWordLower, nur mit zusaetzlichem @-Ausschluss und
+// Weitersuche ueber alle Vorkommen (ein echter Aufruf derselben Funktion
+// kann neben einer @-Referenz stehen).
+function CallHitOutsideAddressOf(const Needle, LowText: string): Boolean;
+var
+  NLen, HLen, i   : Integer;
+  LeftOK, RightOK : Boolean;
+begin
+  Result := False;
+  NLen := Length(Needle);
+  HLen := Length(LowText);
+  if (NLen = 0) or (HLen < NLen) then Exit;
+  i := Pos(Needle, LowText, 1);
+  while i > 0 do
+  begin
+    LeftOK  := (i = 1) or not TDetectorUtils.IsIdentChar(LowText[i - 1]);
+    RightOK := (i + NLen - 1 >= HLen)
+            or not TDetectorUtils.IsIdentChar(LowText[i + NLen]);
+    if LeftOK and RightOK and
+       ((i = 1) or (LowText[i - 1] <> '@')) then
+      Exit(True);
+    i := Pos(Needle, LowText, i + 1);
+  end;
+end;
+
 // Pruefen ob `Text` (nkCall.Name oder nkAssign.TypeRef) IRGENDWO einen
 // locale-abhaengigen Call ohne explizite TFormatSettings enthaelt. Frueher
 // wurde nur der aeusserste Call-Name (`CallFuncName`) geprueft - damit
 // fielen verschachtelte Calls wie `LogIt(StrToDate(s))` durch, weil der
 // Outer-Name "LogIt" nicht in der LOCALE_DEPENDENT-Liste steht. Jetzt
 // wird mit Wortgrenzen-Suche im gesamten Text gescannt.
+// FP-Haertung (2026-07-11, SCA128-Audit): Vor der Suche werden String-
+// Literale entfernt, damit Funktionsnamen die NUR als Text vorkommen nicht
+// als Aufruf zaehlen - z.B. Code-Gen-Templates ('StrToDateTime(''' + v +
+// ''')') oder PascalScript-Signaturen (AddDelphiFunction('function
+// DateToStr(...)')). Zusaetzlich schliesst CallHitOutsideAddressOf
+// @-Funktionszeiger-Referenzen aus.
 procedure CheckCallText(const Text: string; Node, CurrentMethod: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -124,10 +163,10 @@ var
   HitName  : string;
 begin
   if Text = '' then Exit;
-  LowText := LowerCase(Text);
+  LowText := LowerCase(TDetectorUtils.StripStringLiterals(Text));
   HitName := '';
   for Name in LOCALE_DEPENDENT do
-    if TDetectorUtils.ContainsWholeWordLower(Name, LowText) then
+    if CallHitOutsideAddressOf(Name, LowText) then
     begin
       HitName := Name;
       Break;

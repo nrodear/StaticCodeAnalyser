@@ -111,6 +111,33 @@ begin
     if HasSiblingCreateCall(Child) then Exit(True);
 end;
 
+function BodyStartsWithRaise(BodyBlock: TAstNode): Boolean;
+// True wenn die ERSTE ausfuehrbare Anweisung des Konstruktor-Rumpfs ein
+// unbedingtes `raise` ist (direkt im Block, NICHT in if/try/case verschachtelt).
+// Solche Ctors sind blockierte Singleton-/Factory-Konstruktoren, z.B.
+//   constructor Create; begin raise EInvalidOperation.Create('...'); end;
+// Sie erzeugen NIE eine Instanz - es gibt kein Objekt, dessen geerbter State
+// uninitialisiert bleiben und einen Folgefehler ausloesen koennte. Fehlendes
+// `inherited` ist hier folgenlos -> kein Bug. Real-World-FP-Audit 2026-07-11
+// (SCA096-FP-Klasse raises-only-constructor).
+//
+// TP-Sicherheit: Nur die erste Anweisung zaehlt. Steht davor echter Init-Code
+// (Feld-Zuweisung, anderer Aufruf), bleibt der fehlende inherited ein Befund -
+// dann konstruiert der Ctor real und ein bedingter/spaeterer raise rettet ihn
+// nicht. Fuehrende Inline-Var-Deklarationen (nkLocalVar) sind keine
+// ausfuehrbaren Anweisungen und werden uebersprungen.
+var
+  Stmt : TAstNode;
+begin
+  Result := False;
+  if BodyBlock = nil then Exit;
+  for Stmt in BodyBlock.Children do
+  begin
+    if Stmt.Kind = nkLocalVar then Continue;
+    Exit(Stmt.Kind = nkRaise);
+  end;
+end;
+
 class procedure TConstructorWithoutInheritedDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -156,12 +183,18 @@ begin
       if RecordNames.Contains(Trim(Qual)) then Continue;
       // Nur echte Implementierungen pruefen - Forward-Decls (Class-Body-
       // Signatur) haben kein nkBlock, dort gehoert `inherited` nicht hin.
-      if FindBodyBlock(M) = nil then Continue;
+      var Body := FindBodyBlock(M);
+      if Body = nil then Continue;
       if HasInheritedCall(M) then Continue;
       // Sibling-Konstruktor-Delegation ('begin Create(...); ... end;' /
       // 'Self.Create(...)'): der aufgerufene Ctor ruft inherited -> Parent
       // transitiv initialisiert. Real-World-FP-Audit 2026-07-10.
       if HasSiblingCreateCall(M) then Continue;
+      // Raises-only-Konstruktor: erste ausfuehrbare Anweisung ist ein
+      // unbedingtes `raise` -> blockierter Singleton/Factory-Ctor, der nie
+      // eine Instanz erzeugt, fehlendes inherited ist folgenlos.
+      // Real-World-FP-Audit 2026-07-11 (SCA096-FP-Klasse raises-only-constructor).
+      if BodyStartsWithRaise(Body) then Continue;
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
       F.MethodName := M.Name;
