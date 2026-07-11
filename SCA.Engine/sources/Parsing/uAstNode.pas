@@ -76,6 +76,10 @@ type
                                     // (Line=Start, TypeRef=IntToStr(EndLine)). Traegt
                                     // KEINEN Body - nur die Quell-Range, damit Detektoren
                                     // (SCA166) Reads in nested procs exakt skippen koennen.
+    nkConditionalRange,             // Welle 2: Marker fuer {$IFDEF}-Range am Unit-Node.
+                                    // Name=Direktiven-Body (z.B. 'IFDEF DEBUG'),
+                                    // Line=Start, TypeRef='EndLine|DebugFlag' (1=DEBUG-
+                                    // guarded). Additiv - nur opt-in-Detektoren lesen es.
     nkUnknown
   );
 
@@ -192,6 +196,7 @@ const
     'Ident','Literal','BinaryOp','UnaryOp',
     'Index','Dot','Deref',
     'NestedRange',
+    'ConditionalRange',
     'Unknown'
   );
 

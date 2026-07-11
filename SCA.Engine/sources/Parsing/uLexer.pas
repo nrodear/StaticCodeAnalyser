@@ -84,6 +84,12 @@ type
     DirectiveLine : Integer;  // Zeile des oeffnenden {$IFDEF
   end;
 
+  // Welle 2 (Core-Detektoren-Architektur): DEBUG-guarded Quell-Range [S..E].
+  TSrcRange = record S, E: Integer; end;
+  // Interner Tracking-Frame fuer DEBUG-guarded {$IFDEF}-Bloecke (read-only,
+  // beruehrt die bestehende FConditionalStack-Logik NICHT).
+  TDbgFrame = record Start: Integer; Debug: Boolean; end;
+
   TLexer = class
   private
     FSource  : string;
@@ -109,6 +115,13 @@ type
     FConditionalSkipEnabled : Boolean;
     // Statistik: wieviele Tokens wurden uebersprungen (fuer Telemetrie).
     FConditionalSkippedTokens : Integer;
+
+    // Welle 2: separater read-only Tracker fuer DEBUG-guarded {$IFDEF}-Ranges.
+    // Voellig unabhaengig von FConditionalStack (dort keine Aenderung).
+    FDbgStack          : TArray<TDbgFrame>;
+    FConditionalRanges : TArray<TSrcRange>;
+    procedure TrackDbgRange(const ABody: string; ALine: Integer);
+    procedure RecordDbgRange(S, E: Integer);
 
     class var FKeywords: TDictionary<string, TTokenKind>;
     class procedure InitKeywords; static;
@@ -164,6 +177,9 @@ type
     // A.5 Phase 1a: Read-only-Zugriff fuer Tests und Telemetrie.
     function ConditionalDepth: Integer;
     function ConditionalMaxDepth: Integer;
+    // Welle 2: die im Lexer-Lauf gesammelten DEBUG-guarded Quell-Ranges
+    // ({$IFDEF DEBUG}..{$ENDIF} bzw. ..{$ELSE}). Fuer nkConditionalRange-Marker.
+    function ConditionalDebugRanges: TArray<TSrcRange>;
 
     // A.5 Phase 1b: Defines + Skip-Steuerung.
     // Default-Konstruktor laesst FConditionalSkipEnabled=False -
@@ -799,6 +815,7 @@ var
   ParentActive : Boolean;
   NewActive    : Boolean;
 begin
+  TrackDbgRange(ABody, ALine);  // Welle 2: read-only DEBUG-Range-Tracking (unabh.)
   i := 2;  // skip '$'
   Verb := ParseDirectiveIdent(ABody, i);
   ParentActive := CurrentlyActive;
@@ -870,6 +887,72 @@ begin
     end;
   end;
   // Andere Direktiven ($R, $WARN, $INCLUDE, etc.) ignorieren.
+end;
+
+procedure TLexer.RecordDbgRange(S, E: Integer);
+var L: Integer;
+begin
+  if E < S then E := S;
+  L := Length(FConditionalRanges);
+  SetLength(FConditionalRanges, L + 1);
+  FConditionalRanges[L].S := S;
+  FConditionalRanges[L].E := E;
+end;
+
+procedure TLexer.TrackDbgRange(const ABody: string; ALine: Integer);
+// Welle 2: rein READ-ONLY Tracking DEBUG-guarded {$IFDEF}-Ranges, voellig
+// getrennt von FConditionalStack. Re-parst Verb/Ident lokal (kein Seiteneffekt).
+// Nur {$IFDEF DEBUG}/{$IF ...DEBUG...} (und Nested darin) gelten als DEBUG-guarded;
+// der else-Zweig eines IFDEF DEBUG ist NICHT debug (nur wenn Parent debug).
+// Konservativ: IFNDEF/andere -> nur debug wenn Parent debug. TP-sicher fuer SCA017.
+var
+  i          : Integer;
+  Verb       : string;
+  ParentDbg  : Boolean;
+  ThisDbg    : Boolean;
+  L          : Integer;
+begin
+  i := 2;  // '$' ueberspringen
+  Verb := UpperCase(ParseDirectiveIdent(ABody, i));
+  ParentDbg := (Length(FDbgStack) > 0) and FDbgStack[High(FDbgStack)].Debug;
+
+  if (Verb = 'IFDEF') or (Verb = 'IFNDEF') or (Verb = 'IF') then
+  begin
+    ThisDbg := ParentDbg;
+    if Verb = 'IFDEF' then
+      ThisDbg := ThisDbg or SameText(ParseDirectiveIdent(ABody, i), 'DEBUG')
+    else if Verb = 'IF' then
+      ThisDbg := ThisDbg or (Pos('DEBUG', UpperCase(ABody)) > 0);
+    L := Length(FDbgStack);
+    SetLength(FDbgStack, L + 1);
+    FDbgStack[L].Start := ALine;
+    FDbgStack[L].Debug := ThisDbg;
+  end
+  else if (Verb = 'ELSE') or (Verb = 'ELSEIF') then
+  begin
+    if Length(FDbgStack) > 0 then
+    begin
+      L := High(FDbgStack);
+      if FDbgStack[L].Debug then RecordDbgRange(FDbgStack[L].Start, ALine);
+      // Zweig-Wechsel: debug nur noch, wenn ein Parent debug ist.
+      FDbgStack[L].Debug := (L > 0) and FDbgStack[L - 1].Debug;
+      FDbgStack[L].Start := ALine;
+    end;
+  end
+  else if (Verb = 'ENDIF') or (Verb = 'IFEND') then
+  begin
+    if Length(FDbgStack) > 0 then
+    begin
+      L := High(FDbgStack);
+      if FDbgStack[L].Debug then RecordDbgRange(FDbgStack[L].Start, ALine);
+      SetLength(FDbgStack, L);
+    end;
+  end;
+end;
+
+function TLexer.ConditionalDebugRanges: TArray<TSrcRange>;
+begin
+  Result := FConditionalRanges;
 end;
 
 procedure TLexer.PushConditional(AActive: Boolean; ALine: Integer);

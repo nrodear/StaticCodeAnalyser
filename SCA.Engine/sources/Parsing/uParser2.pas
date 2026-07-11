@@ -239,6 +239,12 @@ begin
     Root := TAstNode.Create(nkUnit, '', 1, 1);
     try
       ParseUnit(Root);
+      // Welle 2 (Core-Detektoren-Architektur): DEBUG-guarded {$IFDEF}-Quell-Ranges
+      // als additive nkConditionalRange-Marker am Unit-Node ablegen (Line=Start,
+      // TypeRef=EndLine). Rein additiv - nur opt-in-Detektoren (SCA017) lesen sie;
+      // A/B byte-identisch bis zum Opt-in.
+      for var Rg in FLex.ConditionalDebugRanges do
+        Root.Add(nkConditionalRange, '', Rg.S, 0).TypeRef := IntToStr(Rg.E);
     except
       // Parser-Fehler NIE schlucken: frueher wurde nur die Watchdog-Exception
       // re-raised (per fragilem Pos('Parser-Watchdog')-Match), jeder echte
