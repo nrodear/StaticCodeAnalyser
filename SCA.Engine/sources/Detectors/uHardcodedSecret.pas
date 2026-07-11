@@ -490,6 +490,13 @@ begin
   if TRegEx.IsMatch(BodyTrim,
        '^\{?[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}?$') then Exit;
 
+  // (c2) ASN.1-OBJECT-IDENTIFIER (dotted-decimal, z.B. '1.2.840.113549.1.9.7').
+  //      Real-World-FP-Audit 2026-07-12: szOID_RSA_challengePwd /
+  //      szOID_TIMESTAMP_TOKEN tragen 'pwd'/'token' im NAMEN, der Wert ist aber
+  //      eine reine Punkt-getrennte Ziffernfolge (OID) - niemals ein Geheimwert.
+  //      TP-sicher: ein echtes Credential ist nie eine bare dotted-numeric-OID.
+  if TRegEx.IsMatch(BodyTrim, '^[0-9]+(\.[0-9]+)+$') then Exit;
+
   // (d) Prompt-/Feld-Label endet auf ':' - Protokoll-/UI-Beschriftung.
   //     'AskP: ', 'Hotkey: '. Echte Secrets enden praktisch nie auf ':'.
   if BodyTrim.EndsWith(':') then Exit;
@@ -679,11 +686,15 @@ begin
   Result :=
     (Pos('/tests/',    Norm) > 0) or
     (Pos('/test/',     Norm) > 0) or
+    (Pos('/unittest',  Norm) > 0) or    // Real-World-FP-Audit 2026-07-12:
+                                        // /unittest/ + /unittests/ (dmvcframework)
     (Pos('/spec/',     Norm) > 0) or
     (Pos('/fixtures/', Norm) > 0) or
     (Pos('/utest',     Norm) > 0) or    // uTestXxx.pas Konvention
     Norm.EndsWith('test.pas') or
     Norm.EndsWith('tests.pas') or
+    Norm.EndsWith('testu.pas')  or      // DUnit(X)-Konvention *TestU.pas
+    Norm.EndsWith('testsu.pas') or      // *TestsU.pas (FrameworkTestsU/ValidationTestsU)
     Norm.EndsWith('spec.pas');
 end;
 

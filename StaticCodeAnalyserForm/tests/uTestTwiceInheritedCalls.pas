@@ -18,6 +18,9 @@ type
     // --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
     [Test] procedure InheritedDifferentParentMethods_NotReported;
     [Test] procedure InheritedSameMethodNameTwice_Reported;
+    // --- Real-World FP-Audit 2026-07-12 (Welle 3, nkConditionalRange) ---
+    [Test] procedure InheritedInIfdefElseBranches_NoFinding;
+    [Test] procedure TwoInheritedSameIfdefBlock_StillReported;
   end;
 
 implementation
@@ -174,6 +177,50 @@ begin
         'zweimal inherited Bar verdoppelt die Parent-Bar - echter Bug, muss gemeldet bleiben');
   finally F.Free; end;
 end;
+procedure TTestTwiceInheritedCalls.InheritedInIfdefElseBranches_NoFinding;
+// Welle 3 (Real-World-FP-Audit 2026-07-12, 'ifdef-else-mutually-exclusive'):
+// Der Parser inlined {$IFDEF}/{$ELSE} in denselben nkBlock; die zwei `inherited`
+// laufen aber NIE beide (nur EIN Zweig kompiliert). Die {$ELSE}-Direktivenzeile
+// liegt strikt zwischen den Calls -> nkConditionalRange-Guard -> kein Befund.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Bar;'#13#10 +
+  'begin'#13#10 +
+  '{$IFDEF MACOSX}'#13#10 +
+  '  inherited;'#13#10 +
+  '{$ELSE}'#13#10 +
+  '  inherited;'#13#10 +
+  '{$ENDIF}'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTwiceInheritedCalls),
+    'zwei inherited in {$IFDEF}/{$ELSE}-Zweigen laufen nie beide - kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestTwiceInheritedCalls.TwoInheritedSameIfdefBlock_StillReported;
+// TP-Gegenkontrolle: zwei `inherited` im SELBEN {$IFDEF}-Block (Direktive nur
+// davor/danach, NICHT dazwischen) laufen beide -> muss weiter Befund sein.
+// Sichert ab dass der Guard nur bei Direktive ZWISCHEN den Calls greift.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Bar;'#13#10 +
+  'begin'#13#10 +
+  '{$IFDEF WIN32}'#13#10 +
+  '  inherited;'#13#10 +
+  '  inherited;'#13#10 +
+  '{$ENDIF}'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTwiceInheritedCalls),
+    'zwei inherited im selben {$IFDEF}-Block laufen beide - bleibt Befund');
+  finally F.Free; end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestTwiceInheritedCalls);
 

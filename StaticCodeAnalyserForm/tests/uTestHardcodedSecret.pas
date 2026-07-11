@@ -68,6 +68,8 @@ type
     // --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
     [Test] procedure Secret_UrlEndpointValue_NotReported;
     [Test] procedure Secret_ServiceAccountKeyWithUrl_StillReported;
+    // --- Real-World FP-Audit 2026-07-12 (OID-Konstante) ---
+    [Test] procedure Secret_OidDottedNumericValue_NotReported;
   end;
 
 implementation
@@ -690,6 +692,28 @@ begin
   try
     Assert.IsTrue(TFindingHelper.Count(F, fkHardcodedSecret) >= 1,
       'Eingebetteter PEM-Key mit token_uri-URL muss trotz :// weiter gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretExt.Secret_OidDottedNumericValue_NotReported;
+// Real-World-FP-Audit 2026-07-12 (IsNonSecretValueShape, Zweig c2):
+// szOID_RSA_challengePwd / szOID_TIMESTAMP_TOKEN (Alcinoe.WinApi.WinCrypt.pas)
+// tragen 'pwd'/'token' im NAMEN, der Wert ist aber eine ASN.1-OID (reine
+// Punkt-getrennte Ziffernfolge) - niemals ein Geheimwert. Der LHS 'FTokenOid'
+// passiert IsSecretName, der Wert '1.2.840...' wird durch die neue OID-Klausel
+// als Nicht-Secret erkannt.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Init;'#13#10+
+  'begin'#13#10+
+  '  FTokenOid := ''1.2.840.113549.1.9.7'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret),
+      'ASN.1-OID (dotted-numeric) ist kein Secret und darf nicht gemeldet werden');
   finally F.Free; end;
 end;
 end.

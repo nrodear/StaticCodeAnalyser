@@ -73,6 +73,17 @@ begin
   if p > 0 then Result := Copy(AName, p + 1, MaxInt) else Result := AName;
 end;
 
+// Welle 3 (Core-Detektoren-Architektur, 4. nkConditionalRange-Opt-in): True
+// wenn eine {$IFDEF}-Direktiven-Zeile STRIKT zwischen A und B liegt. Identisch
+// zu uDeadCode/uUninitVar.DirLineBetween (bewusst dupliziert, additiv/isoliert).
+function DirLineBetween(const Lines: TArray<Integer>; A, B: Integer): Boolean;
+var d: Integer;
+begin
+  for d in Lines do
+    if (d > A) and (d < B) then Exit(True);
+  Result := False;
+end;
+
 // Real-World-FP-Audit 2026-07-10: Nur `inherited` das die GLEICHE
 // Parent-Methode ERNEUT aufruft verdoppelt deren Side-Effekte:
 //   (a) bare `inherited;` (leerer CallExpr) oder
@@ -83,22 +94,45 @@ end;
 //   `inherited ReadOnly := True`, oder verschiedene Parent-Methoden
 //   nebeneinander (`inherited Lock` + `inherited Unlock`). Keiner davon
 //   ruft die eigene Parent-Methode zweimal -> alle 30 gesampelten Funde FP.
+//
+// Welle 3 (Real-World-FP-Audit 2026-07-12, 'ifdef-else-mutually-exclusive'):
+// Der Parser inlined beide {$IFDEF}/{$ELSE}-Zweige in DENSELBEN nkBlock, daher
+// werden zwei `inherited` in gegenseitig ausschliessenden Zweigen (nur EINER
+// kompiliert) faelschlich zusammengezaehlt. Statt der reinen Anzahl den
+// laengsten LAUF qualifizierender `inherited` zaehlen, der NICHT durch eine
+// {$IFDEF}-Direktivenzeile getrennt ist: liegt eine Direktive zwischen zwei
+// aufeinanderfolgenden Calls, beginnt ein neuer Zweig-Lauf (Zaehler -> 1).
+// TP-sicher: der Kanonik-Bug `inherited; inherited;` OHNE Direktive dazwischen
+// bleibt Lauf=2 -> Befund. Konservativer FN nur bei getrennten, stets-aktiven
+// {$IFDEF}-Bloecken (selten) - akzeptiert wie bei SCA011/017/166.
 function QualifyingInheritedInBlock(Block: TAstNode;
-  const MethShortName: string): Integer;
+  const MethShortName: string; const ADirLines: TArray<Integer>): Integer;
 var
-  Child : TAstNode;
+  Child    : TAstNode;
+  Run      : Integer;
+  PrevLine : Integer;
 begin
-  Result := 0;
+  Result   := 0;
+  Run      := 0;
+  PrevLine := -1;
   for Child in Block.Children do
   begin
     if Child.Kind <> nkInherited then Continue;
-    if (Child.Name = '') or
-       SameText(LeadingInheritedIdent(Child.Name), MethShortName) then
-      Inc(Result);
+    if (Child.Name <> '') and
+       not SameText(LeadingInheritedIdent(Child.Name), MethShortName) then
+      Continue;
+    // qualifizierender inherited-Call
+    if (PrevLine >= 0) and DirLineBetween(ADirLines, PrevLine, Child.Line) then
+      Run := 1   // Direktive dazwischen -> anderer Zweig -> neuer Lauf
+    else
+      Inc(Run);
+    if Run > Result then Result := Run;
+    PrevLine := Child.Line;
   end;
 end;
 
-function MaxSequentialInheritedInBlock(MethodNode: TAstNode): Integer;
+function MaxSequentialInheritedInBlock(MethodNode: TAstNode;
+  const ADirLines: TArray<Integer>): Integer;
 var
   Blocks  : TList<TAstNode>;
   B       : TAstNode;
@@ -111,7 +145,7 @@ begin
   try
     for B in Blocks do
     begin
-      C := QualifyingInheritedInBlock(B, ShortNm);
+      C := QualifyingInheritedInBlock(B, ShortNm, ADirLines);
       if C > Result then Result := C;
     end;
   finally
@@ -133,18 +167,37 @@ end;
 class procedure TTwiceInheritedCallsDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
-  Methods : TList<TAstNode>;
-  M       : TAstNode;
-  Count   : Integer;
-  F       : TLeakFinding;
+  Methods  : TList<TAstNode>;
+  M        : TAstNode;
+  Count    : Integer;
+  F        : TLeakFinding;
+  CondR    : TList<TAstNode>;
+  DirLines : TArray<Integer>;
+  R        : TAstNode;
+  n        : Integer;
 begin
+  // Welle 3: {$IFDEF}-Direktiven-Zeilen aus den nkConditionalRange-Markern
+  // (Start=Node.Line, Ende=TypeRef) fuer den ifdef-else-mutually-exclusive-Guard.
+  CondR := UnitNode.FindAll(nkConditionalRange);
+  try
+    n := 0;
+    SetLength(DirLines, CondR.Count * 2);
+    for R in CondR do
+    begin
+      DirLines[n] := R.Line; Inc(n);
+      DirLines[n] := StrToIntDef(R.TypeRef, R.Line); Inc(n);
+    end;
+  finally
+    CondR.Free;
+  end;
+
   Methods := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
     begin
       // Nur echte Implementierungen - Forward-Decls haben keinen Body.
       if FindBodyBlock(M) = nil then Continue;
-      Count := MaxSequentialInheritedInBlock(M);
+      Count := MaxSequentialInheritedInBlock(M, DirLines);
       if Count < 2 then Continue;
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
