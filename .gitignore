@@ -168,6 +168,16 @@ tools/perf_analyse.md
 # Scratch-TSVs aus interaktiven Analyse-Sessions.
 /tmp-*.tsv
 
+# ---- FP-Audit Arbeits-Artefakte (dev-only, Konzept_RealWorldFpAudit) ----
+# byDetector-Gruppierung, Stichproben-Verzeichnisse + Verdicts - Zwischenstufen
+# der tools/fp_audit_*.py-Pipeline. Ergebnis landet in Todo_*/Audit_* (schon
+# ignoriert); die Rohstufen bleiben ebenfalls lokal.
+/sca-*byDetector.json
+/sca-sample*/
+/sca-audit*/
+/sca-rw-audit*/
+/sca-rw-sample*/
+
 # Performance-Memos (interne Doku, vergleichbar mit Konzept_*).
 /timings*.md
 
