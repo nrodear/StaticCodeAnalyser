@@ -87,6 +87,12 @@ type
     // (Funde 6/8) {$IFDEF}-const-vs-var: const im inaktiven Zweig ist kein Read
     [Test] procedure IfdefConstVsVarBranch_NoFinding;
     [Test] procedure EqualityConditionNotConstDecl_StillFlagged;
+    // Welle 3 (dritter nkConditionalRange-Opt-in): Read im {$IFDEF}-Zweig,
+    // Write nach dem {$ENDIF} -> verschiedene bedingte Zweige, Phantom-Read.
+    [Test] procedure ReadInIfdefBranchWriteAfter_NoFinding;
+    // Gegenprobe: Direktive im Method-Body aber NICHT zwischen Read/Write
+    // -> echter Read-vor-Write bleibt ein Fund (Guard darf nicht zu breit sein).
+    [Test] procedure ReadBeforeWriteDirectiveElsewhere_StillFlagged;
   end;
 
 implementation
@@ -1504,6 +1510,69 @@ begin
   try
     Assert.IsTrue(CountKind(L, fkUninitVar) >= 1,
       'if n = 0 liest n (uninit) - keine const-Decl, muss weiter flaggen');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.ReadInIfdefBranchWriteAfter_NoFinding;
+// Welle 3 (Core-Detektoren-Architektur, dritter nkConditionalRange-Opt-in):
+// n wird im {$IFDEF LOGGING}-Zweig gelesen (WriteLn(n)) und ERST NACH dem
+// {$ENDIF} geschrieben. Der Lexer sieht beide Positionen; die Read-Zeile liegt
+// vor der Write-Zeile -> read-before-write-FP. Auf jeder realen Uebersetzung
+// existiert aber nur EIN Zweig (LOGGING an: Read compiliert, aber dann ist der
+// Write drunter auch aktiv; LOGGING aus: der Read verschwindet komplett).
+// Die {$ENDIF}-Direktivenzeile liegt strikt zwischen Read und Write -> Guard.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var n: Integer;'#13#10 +
+    'begin'#13#10 +
+    '{$IFDEF LOGGING}'#13#10 +
+    '  WriteLn(n);'#13#10 +
+    '{$ENDIF}'#13#10 +
+    '  n := 5;'#13#10 +
+    '  WriteLn(n);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+      'Read im {$IFDEF}-Zweig + Write nach {$ENDIF} = Preprocessor-Phantom, kein Fund');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.ReadBeforeWriteDirectiveElsewhere_StillFlagged;
+// TP-Gegenkontrolle zum nkConditionalRange-Guard: eine {$IFDEF}-Direktive im
+// selben Method-Body, die aber NICHT strikt zwischen Read und Write liegt, darf
+// den echten read-before-write NICHT unterdruecken. Sichert ab dass
+// DirLineBetween praezise ist (nur die Direktive genau dazwischen zaehlt).
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var n: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  WriteLn(n);'#13#10 +
+    '  n := 5;'#13#10 +
+    '{$IFDEF LOGGING}'#13#10 +
+    '  WriteLn(n);'#13#10 +
+    '{$ENDIF}'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.IsTrue(CountKind(L, fkUninitVar) >= 1,
+      'echter Read-vor-Write (Direktive erst danach) muss weiter flaggen');
   finally L.Free; end;
 end;
 

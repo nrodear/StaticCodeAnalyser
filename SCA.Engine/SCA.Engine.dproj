@@ -308,6 +308,7 @@
         <DCCReference Include="sources\Infrastructure\uSuppression.pas"/>
         <DCCReference Include="sources\Infrastructure\uSuppressionTelemetry.pas"/>
         <DCCReference Include="sources\Infrastructure\uSymbolReferenceIndex.pas"/>
+        <DCCReference Include="sources\Infrastructure\uTypeResolver.pas"/>
         <DCCReference Include="sources\Infrastructure\uVcsChanges.pas"/>
         <DCCReference Include="sources\Output\uClaudePrompt.pas"/>
         <DCCReference Include="sources\Output\uExportSARIF.pas"/>

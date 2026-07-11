@@ -40,7 +40,8 @@ type
       Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
     class procedure AnalyzeMethod(MethodNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil;
-      ARecordTypes: TDictionary<string, Boolean> = nil);
+      ARecordTypes: TDictionary<string, Boolean> = nil;
+      const ADirLines: TArray<Integer> = nil);
   end;
 
 implementation
@@ -1062,13 +1063,27 @@ begin
   Result := True;
 end;
 
+// Welle 3 (Core-Detektoren-Architektur): True wenn eine {$IFDEF}-Direktiven-
+// Zeile STRIKT zwischen A und B liegt. Dann stehen die beiden Positionen (hier
+// Read/Write einer Variablen) in verschiedenen bedingten Kompilierungs-Zweigen.
+// Identische Logik wie uDeadCode.DirLineBetween (bewusst dupliziert, damit der
+// Opt-in additiv/isoliert bleibt - keine neue Shared-Unit-Abhaengigkeit).
+function DirLineBetween(const Lines: TArray<Integer>; A, B: Integer): Boolean;
+var d: Integer;
+begin
+  for d in Lines do
+    if (d > A) and (d < B) then Exit(True);
+  Result := False;
+end;
+
 // ============================================================
 // HAUPT-LOGIK
 // ============================================================
 
 class procedure TUninitVarDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>;
-  AContext: TAnalyzeContext; ARecordTypes: TDictionary<string, Boolean>);
+  AContext: TAnalyzeContext; ARecordTypes: TDictionary<string, Boolean>;
+  const ADirLines: TArray<Integer>);
 var
   LocalVars        : TList<TAstNode>;
   Assigns, Calls, Fors : TList<TAstNode>;
@@ -1907,6 +1922,18 @@ var
 
       if P.FirstReadLine < P.FirstWriteLine then
       begin
+        // Welle 3 (Core-Detektoren-Architektur, dritter nkConditionalRange-
+        // Opt-in): liegt eine {$IFDEF}-Direktiven-Grenze STRIKT zwischen Read
+        // und Write, stehen beide in verschiedenen bedingten Kompilierungs-
+        // Zweigen (klassisch: Read im {$IFDEF LOGGING}-Block, Write danach).
+        // Auf jeder realen Uebersetzung existiert nur EIN Zweig -> der 'Read
+        // vor Write' ist ein Preprocessor-Phantom. Konservativ suppress'en
+        // (matcht die Real-World-FP-Audit-Einstufung fuer conditional-
+        // compilation). TP-sicher: nur Suppression, nie neuer Befund; ein
+        // echtes Read-vor-Write OHNE Direktive dazwischen bleibt Befund.
+        if DirLineBetween(ADirLines, P.FirstReadLine, P.FirstWriteLine) then
+          Continue;
+
         // Read vor Write - konservativ fcMedium (Phase 2.1 Sibling-
         // Write-Check obsolet weil pessimistic-Write sowieso jeden
         // Write registriert, kein Confidence-Downgrade-Pfad).
@@ -2001,8 +2028,26 @@ var
   Recs     : TList<TAstNode>;
   RecTypes : TDictionary<string, Boolean>;
   M, R     : TAstNode;
+  CondR    : TList<TAstNode>;
+  DirLines : TArray<Integer>;
+  n        : Integer;
 begin
   if UnitNode = nil then Exit;
+
+  // Welle 3: {$IFDEF}-Direktiven-Zeilen aus den nkConditionalRange-Markern
+  // (Start=Node.Line, Ende=TypeRef) fuer den Read-vor-Write-Preprocessor-Guard.
+  CondR := UnitNode.FindAll(nkConditionalRange);
+  try
+    n := 0;
+    SetLength(DirLines, CondR.Count * 2);
+    for R in CondR do
+    begin
+      DirLines[n] := R.Line; Inc(n);
+      DirLines[n] := StrToIntDef(R.TypeRef, R.Line); Inc(n);
+    end;
+  finally
+    CondR.Free;
+  end;
   // Value-Type-Records dieser Unit einsammeln: ein Methodenaufruf auf einer
   // record-typisierten lokalen Variablen initialisiert deren Felder (Self ist
   // var) - siehe ProcessCall. nkClass/Interface NICHT. Hinweis: das alte
@@ -2021,7 +2066,7 @@ begin
     Methods := UnitNode.FindAll(nkMethod);
     try
       for M in Methods do
-        AnalyzeMethod(M, FileName, Results, AContext, RecTypes);
+        AnalyzeMethod(M, FileName, Results, AContext, RecTypes, DirLines);
     finally
       Methods.Free;
     end;
