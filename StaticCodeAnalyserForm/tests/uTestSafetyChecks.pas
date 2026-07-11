@@ -78,6 +78,8 @@ type
     [Test] procedure DeadCode_ContinueLocalVarBeforeRepeatLoop_NoFinding;
     // TP-Guard: echtes Continue im Schleifenrumpf + Folgecode bleibt Fund
     [Test] procedure DeadCode_ContinueInForLoopFollowedByDead_Reported;
+    // Welle 3 (nkConditionalRange): Exit + Folgecode in verschiedenen {$IFDEF}-Zweigen
+    [Test] procedure DeadCode_IfdefElseBranch_NoFinding;
   end;
 
 implementation
@@ -706,6 +708,30 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkDivByZero) >= 1,
     'Divisor := 0 ist kein nichtnull-Literal -> Suppression greift nicht -> Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestDeadCodeExt.DeadCode_IfdefElseBranch_NoFinding;
+// Welle 3 (Core-Detektoren-Architektur): 'Exit' im {$IFDEF A}-Zweig, Folgecode im
+// {$ELSE}-Zweig. Bei gemergten Branches (kein Token-Skip) sieht der Parser
+// 'Exit; DoStuff;', aber die {$IFDEF}-Grenze ({$ELSE}) liegt dazwischen ->
+// verschiedene bedingte Kompilierungs-Zweige -> kein toter Code. Der
+// nkConditionalRange-Marker laesst SCA011 den FP unterdruecken.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '{$IFDEF A}'#13#10 +
+  '  Exit;'#13#10 +
+  '{$ELSE}'#13#10 +
+  '  DoStuff;'#13#10 +
+  '{$ENDIF}'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeadCode),
+    'Exit und Folgecode in verschiedenen {$IFDEF}-Zweigen sind kein toter Code');
   finally F.Free; end;
 end;
 

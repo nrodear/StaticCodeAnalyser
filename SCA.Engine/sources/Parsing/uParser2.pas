@@ -244,7 +244,11 @@ begin
       // TypeRef=EndLine). Rein additiv - nur opt-in-Detektoren (SCA017) lesen sie;
       // A/B byte-identisch bis zum Opt-in.
       for var Rg in FLex.ConditionalDebugRanges do
-        Root.Add(nkConditionalRange, '', Rg.S, 0).TypeRef := IntToStr(Rg.E);
+      begin
+        var Nm := '';
+        if Rg.Debug then Nm := 'DEBUG';  // SCA017 filtert auf 'DEBUG'; SCA011 nutzt alle
+        Root.Add(nkConditionalRange, Nm, Rg.S, 0).TypeRef := IntToStr(Rg.E);
+      end;
     except
       // Parser-Fehler NIE schlucken: frueher wurde nur die Watchdog-Exception
       // re-raised (per fragilem Pos('Parser-Watchdog')-Match), jeder echte

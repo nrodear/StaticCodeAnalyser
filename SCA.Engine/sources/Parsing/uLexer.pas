@@ -84,8 +84,10 @@ type
     DirectiveLine : Integer;  // Zeile des oeffnenden {$IFDEF
   end;
 
-  // Welle 2 (Core-Detektoren-Architektur): DEBUG-guarded Quell-Range [S..E].
-  TSrcRange = record S, E: Integer; end;
+  // Welle 2/3 (Core-Detektoren-Architektur): {$IFDEF}-Quell-Range [S..E].
+  // Debug=True wenn DEBUG-guarded (fuer SCA017); alle Ranges auch fuer
+  // preprocessor-branch-Guards (SCA011/SCA166).
+  TSrcRange = record S, E: Integer; Debug: Boolean; end;
   // Interner Tracking-Frame fuer DEBUG-guarded {$IFDEF}-Bloecke (read-only,
   // beruehrt die bestehende FConditionalStack-Logik NICHT).
   TDbgFrame = record Start: Integer; Debug: Boolean; end;
@@ -121,7 +123,7 @@ type
     FDbgStack          : TArray<TDbgFrame>;
     FConditionalRanges : TArray<TSrcRange>;
     procedure TrackDbgRange(const ABody: string; ALine: Integer);
-    procedure RecordDbgRange(S, E: Integer);
+    procedure RecordDbgRange(S, E: Integer; ADebug: Boolean);
 
     class var FKeywords: TDictionary<string, TTokenKind>;
     class procedure InitKeywords; static;
@@ -889,7 +891,7 @@ begin
   // Andere Direktiven ($R, $WARN, $INCLUDE, etc.) ignorieren.
 end;
 
-procedure TLexer.RecordDbgRange(S, E: Integer);
+procedure TLexer.RecordDbgRange(S, E: Integer; ADebug: Boolean);
 var L: Integer;
 begin
   if E < S then E := S;
@@ -897,6 +899,7 @@ begin
   SetLength(FConditionalRanges, L + 1);
   FConditionalRanges[L].S := S;
   FConditionalRanges[L].E := E;
+  FConditionalRanges[L].Debug := ADebug;
 end;
 
 procedure TLexer.TrackDbgRange(const ABody: string; ALine: Integer);
@@ -933,7 +936,7 @@ begin
     if Length(FDbgStack) > 0 then
     begin
       L := High(FDbgStack);
-      if FDbgStack[L].Debug then RecordDbgRange(FDbgStack[L].Start, ALine);
+      RecordDbgRange(FDbgStack[L].Start, ALine, FDbgStack[L].Debug);
       // Zweig-Wechsel: debug nur noch, wenn ein Parent debug ist.
       FDbgStack[L].Debug := (L > 0) and FDbgStack[L - 1].Debug;
       FDbgStack[L].Start := ALine;
@@ -944,7 +947,7 @@ begin
     if Length(FDbgStack) > 0 then
     begin
       L := High(FDbgStack);
-      if FDbgStack[L].Debug then RecordDbgRange(FDbgStack[L].Start, ALine);
+      RecordDbgRange(FDbgStack[L].Start, ALine, FDbgStack[L].Debug);
       SetLength(FDbgStack, L);
     end;
   end;

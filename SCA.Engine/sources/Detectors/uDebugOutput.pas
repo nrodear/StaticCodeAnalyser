@@ -82,7 +82,8 @@ var
   begin
     Result := False;
     for R in CondRanges do
-      if (Line >= R.Line) and (Line <= StrToIntDef(R.TypeRef, R.Line)) then
+      if SameText(R.Name, 'DEBUG')   // nur DEBUG-guarded Ranges (Welle 3: es gibt jetzt auch non-DEBUG)
+         and (Line >= R.Line) and (Line <= StrToIntDef(R.TypeRef, R.Line)) then
         Exit(True);
   end;
 

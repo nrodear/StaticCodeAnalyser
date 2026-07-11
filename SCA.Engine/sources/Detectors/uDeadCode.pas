@@ -30,10 +30,11 @@ type
       Results: TObjectList<TLeakFinding>);
   private
     class procedure AnalyzeMethod(MethodNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; const ADirLines: TArray<Integer>);
     class procedure CheckBlock(BlockNode: TAstNode;
       const MethodName, FileName: string;
-      Results: TObjectList<TLeakFinding>); static;
+      Results: TObjectList<TLeakFinding>;
+      const ADirLines: TArray<Integer>); static;
   end;
 
 implementation
@@ -41,8 +42,20 @@ implementation
 // noinspection-file CyclomaticComplexity, DeepNesting, GroupedDeclaration, LongMethod, RedundantJump, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+function DirLineBetween(const Lines: TArray<Integer>; A, B: Integer): Boolean;
+// Welle 3: True wenn eine {$IFDEF}-Direktiven-Zeile strikt zwischen A und B liegt.
+// Dann stehen Terminator (A) und Folgeanweisung (B) in verschiedenen bedingten
+// Kompilierungs-Zweigen -> die Folgeanweisung ist NICHT unbedingt tot (FP).
+var d: Integer;
+begin
+  for d in Lines do
+    if (d > A) and (d < B) then Exit(True);
+  Result := False;
+end;
+
 class procedure TDeadCodeDetector.CheckBlock(BlockNode: TAstNode;
-  const MethodName, FileName: string; Results: TObjectList<TLeakFinding>);
+  const MethodName, FileName: string; Results: TObjectList<TLeakFinding>;
+  const ADirLines: TArray<Integer>);
 // Iterativ via Work-Stack - analog zu uAstNode.CollectAll. Vorher
 // rekursiver Descent (Detectors/uDeadCode.pas alte Form) konnte bei
 // pathologisch tiefen ASTs den Aufruf-Stack sprengen.
@@ -144,6 +157,15 @@ begin
               Inc(i); Continue;
             end;
 
+            // Welle 3 (Core-Detektoren-Architektur): liegt eine {$IFDEF}-
+            // Direktiven-Grenze zwischen Terminator und Folgeanweisung, stehen
+            // beide in verschiedenen bedingten Kompilierungs-Zweigen -> die
+            // Folgeanweisung ist NICHT unbedingt tot (preprocessor-branch-FP).
+            if DirLineBetween(ADirLines, Child.Line, Nxt.Line) then
+            begin
+              Inc(i); Continue;
+            end;
+
             F            := TLeakFinding.Create;
             F.FileName   := FileName;
             F.MethodName := MethodName;
@@ -165,7 +187,8 @@ begin
 end;
 
 class procedure TDeadCodeDetector.AnalyzeMethod(MethodNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>;
+  const ADirLines: TArray<Integer>);
 var
   i : Integer;
 begin
@@ -179,19 +202,39 @@ begin
   // der Recursion vom outer-block durch nkForStmt).
   for i := 0 to MethodNode.Children.Count - 1 do
     if MethodNode.Children[i].Kind = nkBlock then
-      CheckBlock(MethodNode.Children[i], MethodNode.Name, FileName, Results);
+      CheckBlock(MethodNode.Children[i], MethodNode.Name, FileName, Results, ADirLines);
 end;
 
 class procedure TDeadCodeDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
-  Methods : TList<TAstNode>;
-  M       : TAstNode;
+  Methods  : TList<TAstNode>;
+  M        : TAstNode;
+  CondR    : TList<TAstNode>;
+  DirLines : TArray<Integer>;
+  R        : TAstNode;
+  n        : Integer;
 begin
+  // Welle 3: {$IFDEF}-Direktiven-Zeilen aus den nkConditionalRange-Markern
+  // sammeln (Start=Node.Line, Ende=TypeRef). Preprocessor-branch-Guard fuer
+  // 'Code nach Exit/Raise steht in einem anderen bedingten Zweig'.
+  CondR := UnitNode.FindAll(nkConditionalRange);
+  try
+    n := 0;
+    SetLength(DirLines, CondR.Count * 2);
+    for R in CondR do
+    begin
+      DirLines[n] := R.Line; Inc(n);
+      DirLines[n] := StrToIntDef(R.TypeRef, R.Line); Inc(n);
+    end;
+  finally
+    CondR.Free;
+  end;
+
   Methods := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
-      AnalyzeMethod(M, FileName, Results);
+      AnalyzeMethod(M, FileName, Results, DirLines);
   finally
     Methods.Free;
   end;
