@@ -84,6 +84,8 @@ var
   HasTerminate : Boolean;
   Ident        : string;
   DeclaredType : string;
+  Recv         : string;
+  RecvType     : string;
 
   function StripGenerics(const S: string): string;
   // 'TDictionary<TThreadID, TThreadContextInfo>' -> 'TDictionary'. Ohne das
@@ -175,6 +177,64 @@ var
     Result := Hit;
   end;
 
+  function IsResumeNonCallContext(AMatchIndex: Integer): Boolean;
+  // FP-Gate (Real-World-FP-Audit 2026-07-10): unterdrueckt Nicht-Aufruf-
+  // Kontexte von '<X>.Resume'. Deprecated TThread.Resume ist IMMER ein
+  // Statement-Aufruf 'X.Resume;'. Drei sichere Nicht-Aufruf-Faelle, die nie
+  // ein TThread.Resume-Aufruf sind (daher kein TP-Verlust):
+  //   (a) Methoden-Header 'procedure|function <Klasse>.Resume'  (Deklaration)
+  //       -> killt die 6 Deklarations-FPs (TALAnimation.Resume, ...).
+  //   (b) R-Wert-Lesen 'x := <recv>.Resume' bzw. Vergleich '= <Typ>.Resume'
+  //       -> Resume ist eine Prozedur ohne Rueckgabewert, kann nie r-value
+  //       oder Vergleichsoperand sein (killt 'if Cmd = TEnum.Resume then').
+  // AMatchIndex zeigt (1-basiert) auf das erste Zeichen des Empfaengers, da
+  // das Regex mit zero-width '\b(\w+)' beginnt.
+  var
+    p, q : Integer;
+    Tok  : string;
+  begin
+    Result := False;
+    p := AMatchIndex - 1;
+    while (p >= 1) and CharInSet(Code[p], [' ', #9, #10, #13]) do Dec(p);
+    if p < 1 then Exit;
+    // (b): unmittelbar davor ein '='-Ende (':=', '=', '<=', '>=') -> Read/Vergleich
+    if Code[p] = '=' then Exit(True);
+    // (a): vorheriges Wort-Token = 'procedure' / 'function'
+    if CharInSet(Code[p], ['A'..'Z', 'a'..'z', '0'..'9', '_']) then
+    begin
+      q := p;
+      while (q >= 1) and CharInSet(Code[q], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
+        Dec(q);
+      Tok := LowerCase(Copy(Code, q + 1, p - q));
+      if (Tok = 'procedure') or (Tok = 'function') then Exit(True);
+    end;
+  end;
+
+  function ResolveResumeReceiverType(const AIdent: string): string;
+  // FP-Gate (Real-World-FP-Audit 2026-07-10): loest den deklarierten Typ des
+  // Resume-Empfaengers in-file auf - '<Ident>: <Typ>' oder Konstruktor-Call
+  // '<Ident> := T<Typ>.Create'. Liefert '' wenn nichts passt (dann weiter
+  // melden, kein FN). Spiegelt die FreeAndNil-Typaufloesung weiter unten.
+  var
+    Re : TRegEx;
+    Mt : TMatch;
+  begin
+    Result := '';
+    if AIdent = '' then Exit;
+    Re := TRegEx.Create(
+      '(?i)\b' + AIdent + '\s*:\s*([A-Za-z0-9_<>,\s.]+?)\s*(?:;|\)|=)');
+    Mt := Re.Match(Code);
+    if Mt.Success then
+      Result := Mt.Groups[1].Value
+    else
+    begin
+      Re := TRegEx.Create('(?i)\b' + AIdent + '\s*:=\s*(T\w+)\s*\.\s*Create\b');
+      Mt := Re.Match(Code);
+      if Mt.Success then
+        Result := Mt.Groups[1].Value;
+    end;
+  end;
+
   procedure Emit(K: TFindingKind; const Detail: string; AtPos: Integer);
   begin
     LineNo := TDetectorUtils.LineForPos(LineFor, AtPos);
@@ -204,13 +264,27 @@ begin
     //    sowieso schon als deprecated.
     Matches := CachedReResume.Matches(Code);
     for M in Matches do
+    begin
+      Recv := M.Groups[1].Value;
+      // FP-Gate (Real-World-FP-Audit 2026-07-10): Nicht-Aufruf-Kontexte
+      // ('procedure TX.Resume'-Header, 'x := r.Resume'-Read, '= TEnum.Resume'-
+      // Vergleich) sind nie ein deprecated TThread.Resume-Aufruf.
+      if IsResumeNonCallContext(M.Index) then Continue;
+      // FP-Gate (Real-World-FP-Audit 2026-07-10): Empfaenger-Typ in-file
+      // aufloesbar UND nicht nach TThread aussehend (FMX-Animation, TTimer,
+      // TProcess, NSURLSessionTask) -> unterdruecken. Unaufloesbar -> weiter
+      // melden (kein FN; die echten TThread.Resume-TPs tragen 'Thread' im
+      // Namen bzw. loesen auf einen '...Thread'-Typ auf).
+      RecvType := ResolveResumeReceiverType(Recv);
+      if (RecvType <> '') and not LooksLikeThreadType(RecvType) then Continue;
       Emit(fkThreadResumeDeprecated,
         Format('%s.Resume is deprecated since Delphi 2010 - prefer ' +
                '%s.Start or pass CreateSuspended=False to the constructor. ' +
                'Suppress per line if this is not a TThread reference: ' +
                '// noinspection ThreadResumeDeprecated',
-               [M.Groups[1].Value, M.Groups[1].Value]),
+               [Recv, Recv]),
         M.Index);
+    end;
 
     // 2) FreeAndNil(<ident>) oder <ident>.Free auf einer Zeile, davor
     //    KEIN <ident>.Terminate (in den letzten ~10 Zeilen).

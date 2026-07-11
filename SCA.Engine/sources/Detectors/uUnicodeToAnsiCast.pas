@@ -65,6 +65,25 @@ const
     'ansistring(', 'utf8string(', 'rawbytestring(', 'shortstring('
   ];
 
+  // Real-World-FP-Audit 2026-07-10: Operand-Praefixe bei denen KEIN
+  // Codepage-Verlust moeglich ist, daher unterdruecken.
+  //  * ASCII-only-Produzenten der RTL (IntToStr/IntToHex liefern nur
+  //    Ziffern/Minus/Hex -> immer <=127).
+  //  * Alcinoe-A-Suffix-Helfer (ALIntToStrA/... liefern bereits AnsiString
+  //    aus reinen ASCII-Ziffern).
+  //  * Operand ist bereits ein 8-bit-/byte-orientierter Typ (AnsiString,
+  //    UTF8String, RawByteString, ShortString, PAnsiChar, AnsiChar) - der
+  //    Cast ist dann ein No-op / Byte-Copy ohne DefaultSystemCodePage-
+  //    Konversion (z.B. AnsiString(PAnsiChar(@x[0])), AnsiString(ALIntToStrA(n))).
+  ASCII_SAFE_OPERAND_PREFIXES: array of string = [
+    'inttostr(', 'inttohex(',
+    'alinttostra(', 'alinttohexa(', 'aluinttostra(', 'aluinttohexa(',
+    // Review-Fix 2026-07-11: nur echte Byte-No-Ops. utf8string(/rawbytestring(/
+    // shortstring( ENTFERNT - AnsiString(UTF8String(u)) mit non-ASCII u IST eine
+    // verlustbehaftete CP_ACP-Konversion, kein ASCII-No-Op (sonst FN).
+    'ansistring(', 'pansichar(', 'ansichar(', 'pansistring('
+  ];
+
 // Liefert den Cast-Typ-Namen wenn der Call-Name mit einem der 8-bit-String-
 // Casts beginnt, sonst leer.
 function DetectAnsiCast(const CallName: string): string;
@@ -106,6 +125,87 @@ begin
   Result := (Length(Body) = 2) and (Body[1] = '''') and (Body[2] = '''');
 end;
 
+// Real-World-FP-Audit 2026-07-10: Extrahiert das Operand-Argument eines
+// 8-bit-String-Casts, d.h. den Text zwischen der ersten oeffnenden Klammer
+// und der zugehoerigen schliessenden Klammer (Klammer-Tiefe getrackt,
+// String-Literale werden uebersprungen damit '(' / ')' darin nicht zaehlen).
+function ExtractCastOperand(const CallText: string): string;
+var
+  i, n, depth, startIdx : Integer;
+  inStr                 : Boolean;
+  c                     : Char;
+begin
+  Result := '';
+  n := Length(CallText);
+  i := Pos('(', CallText);
+  if i <= 0 then Exit;
+  startIdx := i + 1;
+  depth    := 1;
+  inStr    := False;
+  Inc(i);
+  while i <= n do
+  begin
+    c := CallText[i];
+    if inStr then
+    begin
+      if c = '''' then inStr := False;
+    end
+    else
+    begin
+      case c of
+        '''': inStr := True;
+        '(':  Inc(depth);
+        ')':
+          begin
+            Dec(depth);
+            if depth = 0 then
+            begin
+              Result := Trim(Copy(CallText, startIdx, i - startIdx));
+              Exit;
+            end;
+          end;
+      end;
+    end;
+    Inc(i);
+  end;
+  // Keine schliessende Klammer im Text -> Rest ab Operand-Start.
+  Result := Trim(Copy(CallText, startIdx, n - startIdx + 1));
+end;
+
+// Real-World-FP-Audit 2026-07-10: True wenn der Operand ein reines
+// String-Literal ist dessen Codepunkte alle <=127 sind. ASCII kann bei
+// keiner Codepage verlorengehen -> kein Datenverlust, kein Finding.
+// (Konservativ: Operand muss mit Apostroph beginnen UND enden; damit
+// bleibt z.B. AnsiString('a' + UnicodeVar) - endet nicht auf Apostroph -
+// als echter Befund erhalten.)
+function IsAsciiStringLiteral(const Operand: string): Boolean;
+var
+  i : Integer;
+begin
+  Result := False;
+  if Length(Operand) < 2 then Exit;
+  if (Operand[1] <> '''') or (Operand[Length(Operand)] <> '''') then Exit;
+  for i := 1 to Length(Operand) do
+    if Ord(Operand[i]) > 127 then Exit;
+  Result := True;
+end;
+
+// Real-World-FP-Audit 2026-07-10: True wenn der Operand mit einem
+// ASCII-sicheren Praefix beginnt (RTL-Zahlkonversion, Alcinoe-A-Helfer
+// oder bereits 8-bit-Typ). In diesen Faellen ist kein Codepage-Verlust
+// moeglich.
+function OperandIsAsciiSafe(const Operand: string): Boolean;
+var
+  Lower : string;
+  P     : string;
+begin
+  Result := False;
+  Lower := LowerCase(TrimLeft(Operand));
+  for P in ASCII_SAFE_OPERAND_PREFIXES do
+    if (Length(Lower) >= Length(P)) and (Copy(Lower, 1, Length(P)) = P) then
+      Exit(True);
+end;
+
 // Pruefen ob `Text` einen AnsiString/AnsiChar/UTF8String/RawByteString/
 // ShortString-Cast enthaelt und entsprechend Befund anlegen. Wird sowohl
 // fuer nkCall (bare call) als auch nkAssign.TypeRef (typische Form
@@ -118,10 +218,17 @@ var
   F        : TLeakFinding;
   MethName : string;
   CastType : string;
+  Operand  : string;
 begin
   CastType := DetectAnsiCast(Text);
   if CastType = '' then Exit;
   if ArgIsEmptyLiteral(Text) then Exit;
+  // Real-World-FP-Audit 2026-07-10: Operand aufloesen und drei FP-Klassen
+  // unterdruecken (ASCII-Literal / ASCII-Produzent / bereits-8-bit-Operand).
+  // Loest der Operand nicht klar auf -> weiter melden (kein TP-Verlust).
+  Operand := ExtractCastOperand(Text);
+  if IsAsciiStringLiteral(Operand) then Exit;
+  if OperandIsAsciiSafe(Operand) then Exit;
   if Assigned(CurrentMethod) then MethName := CurrentMethod.Name
   else MethName := '';
   F            := TLeakFinding.Create;

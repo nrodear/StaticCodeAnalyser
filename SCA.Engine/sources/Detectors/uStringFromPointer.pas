@@ -68,6 +68,41 @@ uses
   System.RegularExpressions,
   uFileTextCache, uDetectorUtils;
 
+function OperandIsManagedString(const Code, VarName: string;
+  BeforePos: Integer): Boolean;
+// FP-Gate (Real-World-FP-Audit 2026-07-10): der Cast-Regex matcht JEDEN
+// Bezeichner der mit 'P'/'p' + Buchstabe beginnt - auch echte Managed-
+// Strings deren Name nur zufaellig mit P anfaengt (ProcName, PrevS,
+// PngFile, ParamName, ParamValue, Path, PathName). String(managedStr) ist
+// eine sichere Wert-Konvertierung, KEIN Raw-Pointer-Overread - kein #0-
+// Terminator wird angenommen. Wir loesen den deklarierten Typ von VarName
+// aus der naechstliegenden Deklaration VOR der Nutzung auf ('name[, more]:
+// Typ', inkl. const/var/out-Parameter) und unterdruecken NUR bei Managed-
+// String-Typ. Pointer-Typ (LPWSTR/PChar/PAnsiChar/PWideChar/POleStr/
+// Record-Pointer) oder nicht aufloesbar -> weiter melden (kein TP-Verlust,
+// FP-avers). Adaptiert von uPerfHotspots.LhsDeclaredNumeric.
+const
+  STRTYPES : array[0..8] of string = (
+    'string', 'unicodestring', 'ansistring', 'widestring', 'utf8string',
+    'rawutf8', 'rawbytestring', 'shortstring', 'openstring');
+var
+  Before, TypeLow, T : string;
+  RE : TRegEx;
+  MC : TMatchCollection;
+begin
+  Result := False;
+  if (VarName = '') or (BeforePos <= 1) then Exit;
+  Before := Copy(Code, 1, BeforePos);   // Deklaration steht VOR der Nutzung
+  RE := TRegEx.Create('(?i)\b' + VarName +
+        '\b\s*(?:,\s*[A-Za-z_]\w*\s*)*:\s*([A-Za-z_][A-Za-z0-9_]*)');
+  MC := RE.Matches(Before);
+  if MC.Count = 0 then Exit;
+  // naechstliegende (= letzte vor der Nutzung) Deklaration.
+  TypeLow := LowerCase(MC[MC.Count - 1].Groups[1].Value);
+  for T in STRTYPES do
+    if TypeLow = T then Exit(True);
+end;
+
 class procedure TStringFromPointerDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
@@ -99,6 +134,10 @@ begin
     begin
       CastName := M.Groups[1].Value;
       VarName  := M.Groups[2].Value;
+      // FP-Gate (Real-World-FP-Audit 2026-07-10): Managed-String-Operand
+      // ueberspringen - String(x) ist dann sichere Wert-Konvertierung, kein
+      // Heap-Overread. Bei Pointer-Typ / nicht aufloesbar weiter melden.
+      if OperandIsManagedString(Code, VarName, M.Index) then Continue;
       LineNo := TDetectorUtils.LineForPos(LineFor, M.Index);
       if LineNo <= 0 then LineNo := 1;
 

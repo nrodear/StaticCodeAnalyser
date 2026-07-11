@@ -46,6 +46,11 @@ type
     // SQL-Statement und liefert den Action-Verb-Token zurueck.
     class function FindDangerousVerb(const Low: string;
       out Verb: string): Boolean; static;
+    // Real-World-FP-Audit 2026-07-10: True wenn im literal-freien Code-Teil
+    // des Fragments ein WHERE-injizierender Funktions-Aufruf per '+'-Konkat
+    // angehaengt wird (CreateSQLWhereByRQL(), SqlFromWhere(),
+    // GetWhereClause()). Nur fuer UPDATE/DELETE ausgewertet.
+    class function HasDynamicWhereCall(const Frag: string): Boolean; static;
   end;
 
 implementation
@@ -138,13 +143,85 @@ begin
     // UPDATE/DELETE FROM: WHERE fehlt -> Treffer. DROP-Statements und
     // TRUNCATE: kein WHERE moeglich, immer Treffer.
     if (V = '''update ') or (V = '''delete from ') then
+    begin
       if Pos(' where ', Fragment) > 0 then Continue;
+      // Real-World-FP-Audit 2026-07-10: dynamic-WHERE-concat FP-Klasse.
+      // Das UPDATE/DELETE-Literal ist nur ein Builder-Fragment; die
+      // WHERE-Klausel kommt aus einem per '+' angehaengten Funktions-
+      // Aufruf (CreateSQLWhereByRQL()/SqlFromWhere()/GetWhereClause()),
+      // den der Literal-Scan als ' where ' nicht sieht. Ist so ein Call
+      // im Fragment praesent -> unterdruecken. Nur Aufrufe mit '(' zaehlen,
+      // damit blosse Table-/Feld-Idents (FilterTable, WhereFieldName) den
+      // echten unfiltered-UPDATE-Fund NICHT verschlucken (kein TP-Verlust).
+      if HasDynamicWhereCall(Fragment) then Continue;
+    end;
 
     Verb := Trim(V);
     if (Length(Verb) > 0) and (Verb[1] = '''') then
       Verb := Copy(Verb, 2, MaxInt);
     Verb := UpperCase(Verb);
     Exit(True);
+  end;
+end;
+
+class function TSqlDangerousStatementDetector.HasDynamicWhereCall(
+  const Frag: string): Boolean;
+// Real-World-FP-Audit 2026-07-10: siehe Deklarations-Kommentar. Frag ist
+// bereits lowercased. Ablauf: (1) String-Literal-Inhalt entfernen -> nur
+// Code-Tokens (Ident/Call/Operator) bleiben; (2) jedes WHERE-Needle suchen
+// und nur werten, wenn der umgebende Bezeichner als Funktions-Aufruf '('
+// benutzt wird. Nicht-aufloesbar/kein Call -> weiter melden (kein FN).
+const
+  NEEDLES : array[0..3] of string = ('where', 'filter', 'rql', 'clause');
+var
+  Sb          : TStringBuilder;
+  i, n, p, q  : Integer;
+  InStr       : Boolean;
+  Code, Nd    : string;
+begin
+  Result := False;
+  Sb := TStringBuilder.Create;
+  try
+    n := Length(Frag);
+    InStr := False;
+    i := 1;
+    while i <= n do
+    begin
+      if InStr then
+      begin
+        if Frag[i] = '''' then
+        begin
+          // Verdoppeltes Apostroph = Escape, im String bleiben.
+          if (i < n) and (Frag[i + 1] = '''') then begin Inc(i, 2); Continue; end;
+          InStr := False;
+        end;
+        Inc(i);
+        Continue;
+      end;
+      if Frag[i] = '''' then begin InStr := True; Inc(i); Continue; end;
+      Sb.Append(Frag[i]);
+      Inc(i);
+    end;
+    Code := Sb.ToString;
+  finally
+    Sb.Free;
+  end;
+
+  n := Length(Code);
+  for Nd in NEEDLES do
+  begin
+    p := Pos(Nd, Code);
+    while p > 0 do
+    begin
+      // Rest des umgebenden Bezeichners ueberspringen ...
+      q := p + Length(Nd);
+      while (q <= n) and CharInSet(Code[q],
+              ['a'..'z', 'A'..'Z', '0'..'9', '_']) do Inc(q);
+      // ... dann Whitespace bis zum naechsten signifikanten Zeichen.
+      while (q <= n) and CharInSet(Code[q], [' ', #9, #13, #10]) do Inc(q);
+      if (q <= n) and (Code[q] = '(') then Exit(True);
+      p := Pos(Nd, Code, p + Length(Nd));
+    end;
   end;
 end;
 

@@ -82,6 +82,18 @@ const
   NEVER_FLOAT_TOKENS : array[0..2] of string =
     ('nil', 'true', 'false');
 
+  // Real-World-FP-Audit 2026-07-10: bekannte NICHT-Float-Typen (Ordinal/
+  // Integer/Boolean/String/Pointer). Wenn ein Float-benannter Operand zur
+  // Nutzung NAECHSTLIEGEND als einer dieser Typen deklariert ist, ist der
+  // FloatVars-Namenstreffer scope-blind (Kollision) und der '='/'<>'-Fund
+  // ein FP.
+  NONFLOAT_ORDINAL_TYPES : array[0..29] of string = (
+    'integer', 'cardinal', 'int64', 'uint64', 'word', 'byte', 'smallint',
+    'shortint', 'longint', 'longword', 'nativeint', 'nativeuint', 'int8',
+    'int16', 'int32', 'uint8', 'uint16', 'uint32', 'dword', 'boolean',
+    'bytebool', 'wordbool', 'longbool', 'char', 'ansichar', 'widechar',
+    'string', 'ansistring', 'widestring', 'pointer');
+
 var
   // Lazy-Cache (Round 11): konstante Patterns einmalig kompilieren.
   CachedReDecl  : TRegEx;
@@ -114,6 +126,86 @@ begin
   for T in NEVER_FLOAT_TOKENS do
     if TokenLow = T then Exit(True);
   Result := False;
+end;
+
+// Real-World-FP-Audit 2026-07-10: klassifiziert einen aufgeloesten
+// Deklarationstyp. Exakter Float-Typ -> False (weiter melden). Bekannter
+// Ordinal-/Boolean-/String-/Pointer-Typ ODER Delphi-Namenskonvention T*
+// (Klasse/Record) / I* (Interface) / P* (Pointer) -> True (unterdruecken).
+// Unbekannt (z.B. Nutzertyp-Alias) -> False, damit kein TP verlorengeht.
+function ResolvedTypeIsNonFloat(const TypeName: string): Boolean;
+var
+  Low, T : string;
+begin
+  Result := False;
+  Low := LowerCase(Trim(TypeName));
+  if Low = '' then Exit;
+  for T in FLOAT_TYPES do
+    if Low = T then Exit(False);
+  for T in NONFLOAT_ORDINAL_TYPES do
+    if Low = T then Exit(True);
+  // Review-Fix 2026-07-11: die T/I/P-Praefix-Heuristik ENTFERNT - sie
+  // unterdrueckte auch Float-Aliase wie 'TFloat' (T-Praefix) -> FN auf echter
+  // Float-Gleichheit. Nur exakte NONFLOAT_ORDINAL_TYPES gelten jetzt als
+  // Nicht-Float; unaufgeloest/sonstiges -> weiter melden (kein TP-Verlust).
+end;
+
+// Real-World-FP-Audit 2026-07-10: FloatVars ist ein reiner Namensindex und
+// damit scope-blind - eine Kennung die IRGENDWO als Single/Double deklariert
+// ist matcht auch dort, wo dieselbe Kennung lokal als Integer/Cardinal/Int32,
+// als Klassen-/Interface-Feld (z.B. TdwsJSONValue) oder als Result eines
+// Ordinaltyps auftritt. Wir loesen den zur Nutzung NAECHSTLIEGENDEN
+// deklarierten Typ auf (Muster 'name[, more]: Typ'; fuer 'Result' den
+// Rueckgabetyp der umschliessenden function). Loest er zu einem
+// NICHT-Float-Typ auf -> unterdruecken. Nicht aufloesbar oder exakter
+// Float-Typ -> weiter melden (kein TP-Verlust / kein FN).
+function OperandDeclaredNonFloat(const Code, VarName: string;
+  BeforePos: Integer): Boolean;
+var
+  Before, TypeStr : string;
+  RE : TRegEx;
+  MC : TMatchCollection;
+begin
+  Result := False;
+  if (VarName = '') or (BeforePos <= 1) or (Pos('.', VarName) > 0) then Exit;
+  if not CharInSet(VarName[1], ['A'..'Z', 'a'..'z', '_']) then Exit;
+  if BeforePos > Length(Code) then BeforePos := Length(Code);
+  Before := Copy(Code, 1, BeforePos);   // Deklaration steht VOR der Nutzung
+  TypeStr := '';
+  // 1) var/param/Feld-Deklaration 'VarName[, weitere]: Typ' - naechstliegende.
+  RE := TRegEx.Create('(?i)\b' + VarName +
+        '\b\s*(?:,\s*[A-Za-z_]\w*\s*)*:\s*([A-Za-z_][A-Za-z0-9_]*)');
+  MC := RE.Matches(Before);
+  if MC.Count > 0 then
+    TypeStr := MC[MC.Count - 1].Groups[1].Value
+  else if SameText(VarName, 'result') then
+  begin
+    // 2) Result -> Rueckgabetyp der naechstliegenden function-Signatur.
+    RE := TRegEx.Create(
+      '(?i)\bfunction\s+[\w.]+\s*(?:\([^)]*\))?\s*:\s*([A-Za-z_][A-Za-z0-9_]*)');
+    MC := RE.Matches(Before);
+    if MC.Count > 0 then
+      TypeStr := MC[MC.Count - 1].Groups[1].Value;
+  end;
+  if TypeStr = '' then Exit;   // nicht aufloesbar -> weiter melden (kein FN)
+  Result := ResolvedTypeIsNonFloat(TypeStr);
+end;
+
+// Real-World-FP-Audit 2026-07-10: liefert True wenn direkt vor der Kennung
+// an IdentStart das Keyword 'const' steht. Eine Inline-/Sektions-Konstante
+// 'const deltaT = 1/(...)' bindet einen Wert und ist KEIN '='-Vergleich.
+function PrecededByConstKeyword(const Code: string; IdentStart: Integer): Boolean;
+var
+  p, wEnd : Integer;
+begin
+  Result := False;
+  p := IdentStart - 1;
+  while (p >= 1) and CharInSet(Code[p], [' ', #9, #10, #13]) do Dec(p);
+  if p < 1 then Exit;
+  wEnd := p;
+  while (p >= 1) and CharInSet(Code[p], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
+    Dec(p);
+  Result := SameText(Copy(Code, p + 1, wEnd - p), 'const');
 end;
 
 class procedure TFloatEqualityDetector.AnalyzeUnit(UnitNode: TAstNode;
@@ -199,6 +291,21 @@ begin
              and (FloatVars.IndexOf(OtherLow) < 0) then
             Continue;
         end;
+        // Const-Deklaration ist kein Vergleich (Real-World-FP-Audit
+        // 2026-07-10): 'const deltaT = 1/(...)' bindet eine Konstante -
+        // es gibt hier keinen '='-Operator.
+        if PrecededByConstKeyword(Code, M.Index) then Continue;
+
+        // Typ-Aufloesung (Real-World-FP-Audit 2026-07-10): wenn der zum
+        // Float-Namen passende Operand zur Nutzung NAECHSTLIEGEND als
+        // Nicht-Float-Typ deklariert ist (Integer/Cardinal/Int32-Param,
+        // lokales Integer, Klassen-Feld TdwsJSONValue, Ordinal-Result),
+        // ist der FloatVars-Treffer scope-blind -> FP unterdruecken.
+        if (FloatVars.IndexOf(LhsLow) >= 0) and
+           OperandDeclaredNonFloat(Code, Lhs, M.Index) then Continue;
+        if (FloatVars.IndexOf(RhsLow) >= 0) and
+           OperandDeclaredNonFloat(Code, Rhs, M.Index) then Continue;
+
         // Welche Seite ist die Float-Var (fuer Detail-Text).
         if FloatVars.IndexOf(LhsLow) >= 0 then IdentName := Lhs
                                           else IdentName := Rhs;
