@@ -48,6 +48,8 @@ type
     [Test] procedure Secret_UpperSnakeConst_NotReported;
     [Test] procedure Secret_QualifiedUpperSnake_NotReported;
     [Test] procedure Secret_MixedCaseField_StillReported;
+    // Real-World-FP-Audit 2026-07-10 (e-i): CamelCase-Config-Name als Wert
+    [Test] procedure Secret_CamelCaseConfigValue_NotReported;
     // ---- FP-Gates 2026-07-04 (Audit_RealWorldBugs 3.5: 14 FP / 0 TP) --------
     // Wert-Plausibilitaet: kein Fund bei Werten ohne alphanumerischen Kern
     [Test] procedure Secret_TemplateDelimiterValue_NoFinding;
@@ -579,6 +581,22 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkHardcodedSecret),
     'Mixed-Case-Field ist echte Secret-Zuweisung');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretExt.Secret_CamelCaseConfigValue_NotReported;
+// Real-World-FP-Audit 2026-07-10 (e-i): ein CamelCase-Config-/Property-Name als
+// WERT ('UsePassword') ist kein Geheimwert -> unterdrueckt. Gegenstueck zu
+// Secret_MultipleHits (snake_case 'pw_secret' bleibt Fund, kein interior-Cap).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Init;'#13#10+
+  'begin FPassword := ''UsePassword''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret),
+    'CamelCase-Config-Name als Wert ist kein Secret');
   finally F.Free; end;
 end;
 

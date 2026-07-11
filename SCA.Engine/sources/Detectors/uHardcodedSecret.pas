@@ -505,7 +505,16 @@ begin
   if IsIdentifierLikeToken(BodyTrim) then
   begin
     BodyLow := BodyTrim.ToLower;
-    if IsSecretName(BodyTrim) then Exit;                                 // (i)
+    // (i) NUR fuer CamelCase-Config-/Property-Identifier (UsePassword,
+    // challengePassword, CurrentTokenHighlight) - ein interior-Grossbuchstabe
+    // kennzeichnet den Config-Namen. snake_case-Platzhalter-Secrets
+    // (pw_secret, ak_secret, tk_secret) haben KEINEN interior-Cap und bleiben
+    // meldepflichtig (Fix Test-Regression Secret_MultipleHits, 2026-07-11).
+    var HasInteriorCap := False;
+    for var Ci := 2 to Length(BodyTrim) do
+      if CharInSet(BodyTrim[Ci], ['A'..'Z']) then
+      begin HasInteriorCap := True; Break; end;
+    if IsSecretName(BodyTrim) and HasInteriorCap then Exit;             // (i)
     LhsLow := LhsName.ToLower;
     if (Length(BodyTrim) >= 4) and (Pos(BodyLow, LhsLow) > 0) then Exit; // (ii)
     for Suf in KEY_SUFFIX do                                            // (iii)
