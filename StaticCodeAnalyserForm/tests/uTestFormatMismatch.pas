@@ -72,6 +72,9 @@ type
     // Gegenprobe zum Klammer-Fix: geklammertes Arg zaehlt als 1 (nicht 2),
     // eine echte Fehlpaarung feuert weiter.
     [Test] procedure ParenthesizedArgCountsAsOne_MismatchStillReports;
+    // --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
+    [Test] procedure SameNameLocalConstInTwoRoutines_NotReported;
+    [Test] procedure LocalConstGenuineMismatch_Reported;
   end;
 
   // ---- Bare-Style (mORMot FormatUtf8/FormatString) -----------------------------------
@@ -98,9 +101,6 @@ type
     // Positive (typisch fuer mehrzeilige SQL-Strings).
     [Test] procedure FormatUtf8_ConcatenatedLiteral_AllPlaceholdersCounted;
     [Test] procedure FormatUtf8_ConcatenatedLiteral_MismatchAcrossSplit_ReportsError;
-    // --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
-    [Test] procedure SameNameLocalConstInTwoRoutines_NotReported;
-    [Test] procedure LocalConstGenuineMismatch_Reported;
   end;
 
 implementation
