@@ -3,7 +3,7 @@ unit uTestConcatToFormat;
 // Tests fuer den TConcatToFormatDetector (AST-basiert).
 //
 // Heuristik unter Test (vgl. uConcatToFormat.pas):
-//   * Mindestens MIN_NON_LITERAL_PLUS (=2) echte '+' Operatoren auf RHS
+//   * Mindestens MIN_NON_LITERAL_PLUS (=3) '+' Operatoren auf RHS (>=4 Terme)
 //   * Mindestens ein Literal und ein Non-Literal-Term in der Kette
 //   * SQL-LHS (z.B. '.sql.text') wird ausgeklammert (uSQLInjection-Domain)
 //   * RHS mit bereits vorhandenem 'Format(' / 'FormatUtf8(' -> kein Hint
@@ -19,11 +19,12 @@ type
   TTestConcatToFormat = class
   public
     // ---- Positive Varianten ------------------------------------------------
-    [Test] procedure Concat_TwoPluses_LiteralAndVar_Reported;
     [Test] procedure Concat_ThreePluses_MixedTerms_Reported;
     [Test] procedure Concat_WithIntToStrCall_Reported;
 
     // ---- Negative Varianten / Guards --------------------------------------
+    // Schwelle 2026-07-11 von 2 auf 3: 2 '+' (3 Terme) ist kein Fund mehr.
+    [Test] procedure Concat_TwoPluses_BelowThreshold_NoFinding;
     [Test] procedure Concat_SinglePlus_BelowThreshold_NoFinding;
     [Test] procedure Concat_OnlyLiterals_NoFinding;
     [Test] procedure Concat_OnlyVariables_NoFinding;
@@ -45,8 +46,9 @@ uses
 
 // ---- Positive Varianten ------------------------------------------------------
 
-procedure TTestConcatToFormat.Concat_TwoPluses_LiteralAndVar_Reported;
-// 'a' + x + 'b'  -> 2 echte '+', Literal + Variable -> Treffer.
+procedure TTestConcatToFormat.Concat_TwoPluses_BelowThreshold_NoFinding;
+// 'a' + x + 'b' -> 2 '+' (3 Terme). Schwelle 2026-07-11 von 2 auf 3 angehoben:
+// diese Idiom-Kette ist kein Format-Kandidat mehr, kein Fund.
 const SRC =
   'unit t; implementation'#13#10 +
   'procedure Foo;'#13#10 +
@@ -55,7 +57,8 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkConcatToFormat));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkConcatToFormat),
+    '2 ''+'' (3 Terme) liegen unter der angehobenen Schwelle 3');
   finally F.Free; end;
 end;
 
@@ -74,12 +77,13 @@ begin
 end;
 
 procedure TTestConcatToFormat.Concat_WithIntToStrCall_Reported;
-// Call-Expression IntToStr(Age) zaehlt als Non-Literal-Term.
+// Call-Expression IntToStr(Age) zaehlt als Non-Literal-Term. 3 '+' (4 Terme)
+// -> ueber der 2026-07-11-Schwelle 3.
 const SRC =
   'unit t; implementation'#13#10 +
   'procedure Foo;'#13#10 +
-  'var Age: Integer; r: string;'#13#10 +
-  'begin r := ''Alter='' + IntToStr(Age) + ''.''; end;';
+  'var Age: Integer; Name: string; r: string;'#13#10 +
+  'begin r := ''Alter='' + IntToStr(Age) + '', Name='' + Name; end;';
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
@@ -166,8 +170,8 @@ procedure TTestConcatToFormat.Concat_Finding_KindAndSeverity;
 const SRC =
   'unit t; implementation'#13#10 +
   'procedure Foo;'#13#10 +
-  'var x: string; r: string;'#13#10 +
-  'begin r := ''a'' + x + ''b''; end;';
+  'var x: string; y: string; r: string;'#13#10 +
+  'begin r := ''a'' + x + ''b'' + y; end;';
 var
   F   : TObjectList<TLeakFinding>;
   Fnd : TLeakFinding;

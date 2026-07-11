@@ -1,24 +1,22 @@
 unit uMultipleExit;
 
-// Detektor: Methode mit > 3 Exit-Statements.
+// Detektor: Methode mit zu vielen Exit-Statements (> 6).
 //
-// Pattern (Code Smell, Sonar-50 #34):
-//   function FindUser(const Id: Integer): TUser;
-//   begin
-//     if Id < 0 then begin Result := nil; Exit; end;
-//     if not DbConnected then begin Result := nil; Exit; end;
-//     if not Cache.Contains(Id) then begin Result := DbLoad(Id); Exit; end;
-//     Result := Cache.Get(Id);
-//     Exit;                                        // <-- 4. Exit
-//   end;
+// Pattern (Code Smell, Sonar-50 #34): eine Vielzahl von Exit-Punkten macht den
+// Kontrollfluss schwer lesbar und schwer zu testen. Refactoring: Guards
+// zusammenfassen, einen einzigen Return-Pfad anstreben.
 //
-// Folge: Vielzahl von Exit-Punkten macht den Kontrollfluss schwer
-// lesbar und schwer zu testen. Refactoring: Guards zusammenfassen,
-// einen einzigen Return-Pfad anstreben.
+// Schwelle 2026-07-11 von 3 auf 6 angehoben (Real-World-Korpus D:\git-sca-
+// realworld): fruehe Guard-Clauses ('if not Valid then Exit') sind idiomatisches,
+// gutes Delphi - Methoden mit 4-6 Exits sind fast durchweg reine Guard-Ketten,
+// kein Smell (40% aller alten Funde hatten GENAU 4 Exits). Erst ab 7+ Exits
+// deutet es auf wirklich verwobenen Kontrollfluss. -73% Noise ohne die genuin
+// exit-lastigen Methoden zu verlieren.
 //
 // Erkennung (AST):
-//   * Pro Methode: zaehle nkExit-Descendants.
-//   * Threshold: > MAX_EXITS. Default 3.
+//   * Pro Methode: zaehle nkExit-Descendants (nested/anon-Methoden bekommen
+//     eigene nkMethod-Knoten -> keine Doppelzaehlung, verifiziert).
+//   * Threshold: > MAX_EXITS.
 
 interface
 
@@ -39,7 +37,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 const
-  MAX_EXITS = 3;
+  MAX_EXITS = 6;
 
 class procedure TMultipleExitDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);

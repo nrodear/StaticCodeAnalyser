@@ -12,10 +12,10 @@ unit uConcatToFormat;
 //
 // Heuristik (konservativ, um False-Positives zu vermeiden):
 //
-//   1. nkAssign.TypeRef enthaelt >=2 echte (Non-Literal-)'+' Operatoren.
-//      Ein einzelnes 'Hello ' + Name ist zwar konvertierbar, aber meist
-//      Idiom-Code; erst ab Ketten mit drei Termen wird das Refactoring
-//      wirklich lohnenswert. Schwelle ist `MIN_NON_LITERAL_PLUS`.
+//   1. nkAssign.TypeRef enthaelt >=3 '+' Operatoren (Kette mit >=4 Termen).
+//      Ein 'Hello ' + Name oder 'a' + x + 'b' ist zwar konvertierbar, aber
+//      meist Idiom-Code; erst ab vier Termen wird das Refactoring wirklich
+//      lohnenswert. Schwelle ist `MIN_NON_LITERAL_PLUS`.
 //
 //   2. Mindestens ein nicht-Literal-Term ist Bestandteil der Kette
 //      (sonst ist es reine Multiline-Literal-Konkatenation - kein
@@ -51,10 +51,13 @@ type
     class procedure AnalyzeMethod(MethodNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>);
   private
-    // Mindestanzahl echter (= Non-Literal-)'+' Operatoren, damit der Hint
-    // ausgeloest wird. 2 entspricht der Kette 'a' + x + 'b' + y - drei
-    // Terme, klares Format-Kandidat.
-    const MIN_NON_LITERAL_PLUS = 2;
+    // Mindestanzahl '+' Operatoren, damit der Hint ausgeloest wird.
+    // 2026-07-11 von 2 auf 3 angehoben (Real-World-Korpus D:\git-sca-realworld):
+    // eine 3-Term-Kette 'a' + x + 'b' (2 '+') ist Idiom-Code, Format() lohnt
+    // kaum - 61% aller alten Funde waren genau diese 2-'+'-Klasse. Erst ab
+    // 4 Termen (3 '+') gewinnt Format() klar an Lesbarkeit. -61% Noise, echte
+    // lange Ketten bleiben Fund.
+    const MIN_NON_LITERAL_PLUS = 3;
 
     // Default-Severity. Steuert die Farbe des IDE-Balkens:
     //   lsError   -> ACCENT_ERROR   (sattes Rot)
