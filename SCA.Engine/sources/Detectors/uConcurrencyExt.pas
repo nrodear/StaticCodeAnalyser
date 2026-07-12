@@ -231,7 +231,26 @@ var
       Re := TRegEx.Create('(?i)\b' + AIdent + '\s*:=\s*(T\w+)\s*\.\s*Create\b');
       Mt := Re.Match(Code);
       if Mt.Success then
-        Result := Mt.Groups[1].Value;
+        Result := Mt.Groups[1].Value
+      else
+      begin
+        // Real-World-FP-Audit 2026-07-12, FP-Klasse 'wrong-type-receiver':
+        // moderne Inline-Deklaration 'var X: <Typ> := <init>;' - der Typ steht
+        // zwischen ':' und ':='. Der klassische Decl-Regex oben scheitert hier,
+        // weil das ':' des ':=' die Terminator-Alternation (?:;|\)|=) blockt
+        // (ein ':' steht vor dem '='), sodass der Typ unbekannt blieb und
+        // Nicht-Thread-Empfaenger wie 'var LNewTask: NSURLSessionTask := nil'
+        // bzw. 'var LProc: TProcess := ...' faelschlich als TThread gemeldet
+        // wurden. Diese Variante kappt vor dem ':=' und loest den Typ auf,
+        // damit NSURLSessionTask/TProcess (wie im Detektor beabsichtigt)
+        // unterdrueckt werden. TP-sicher: 'var LWorker: TMyThread := ...'
+        // loest weiter auf einen '...Thread'-Typ auf und feuert weiter.
+        Re := TRegEx.Create(
+          '(?i)\b' + AIdent + '\s*:\s*([A-Za-z0-9_<>,\s.]+?)\s*:=');
+        Mt := Re.Match(Code);
+        if Mt.Success then
+          Result := Mt.Groups[1].Value;
+      end;
     end;
   end;
 

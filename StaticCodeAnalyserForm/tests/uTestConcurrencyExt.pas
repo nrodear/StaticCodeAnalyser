@@ -46,6 +46,12 @@ type
     // --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
     [Test] procedure Resume_OnDeclHeader_NotReported;
     [Test] procedure Resume_ThreadTypedReceiver_Reported;
+    // --- Real-World FP-Audit 2026-07-12, FP-Klasse 'wrong-type-receiver' ---
+    // Inline-var-Deklaration 'var X: <Typ> := <init>;' - Empfaenger-Typ wird
+    // jetzt zwischen ':' und ':=' aufgeloest.
+    [Test] procedure Resume_InlineVarNonThreadReceiver_NotReported;
+    [Test] procedure Resume_InlineVarProcessReceiver_NotReported;
+    [Test] procedure Resume_InlineVarThreadReceiver_Reported;
   end;
 
 implementation
@@ -472,6 +478,71 @@ begin
     'echter TThread.Resume-Aufruf (Empfaenger-Typ endet auf Thread) muss feuern');
   finally F.Free; end;
 end;
+// --- Real-World FP-Audit 2026-07-12, FP-Klasse 'wrong-type-receiver' ---
+
+procedure TTestConcurrencyExt.Resume_InlineVarNonThreadReceiver_NotReported;
+// Real-World FP-Audit 2026-07-12 (Alcinoe.HTTP.Worker.pas:519): der Empfaenger
+// ist per moderner Inline-var deklariert - 'var LNewTask: NSURLSessionTask :=
+// nil;' - und 'LNewTask.Resume' ist der NSURLSessionTask-Aufruf (KEIN
+// deprecated TThread.Resume). Vor dem Fix scheiterte der Empfaenger-Typ-
+// Resolver an der ':='-Form (das ':' vor dem '=' blockte den Decl-Regex), der
+// Typ blieb unbekannt und wurde faelschlich als TThread gemeldet. Jetzt loest
+// der Inline-var-Zweig 'NSURLSessionTask' auf -> Nicht-Thread -> unterdrueckt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  var LNewTask: NSURLSessionTask := nil;'#13#10 +
+  '  LNewTask.Resume;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkThreadResumeDeprecated),
+    'Inline-var Nicht-Thread-Empfaenger (NSURLSessionTask) darf nicht flaggen');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.Resume_InlineVarProcessReceiver_NotReported;
+// Real-World FP-Audit 2026-07-12 (Schwester-Fall TProcess): ein per Inline-var
+// deklarierter TProcess ('var LProc: TProcess := TProcess.Create(nil);') hat
+// eine eigene, nicht-deprecatete Resume-Methode. Der Inline-var-Resolver
+// liefert 'TProcess' -> Nicht-Thread -> unterdrueckt (kein TThread.Resume-FP).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  var LProc: TProcess := TProcess.Create(nil);'#13#10 +
+  '  LProc.Resume;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkThreadResumeDeprecated),
+    'Inline-var TProcess-Empfaenger darf nicht flaggen');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.Resume_InlineVarThreadReceiver_Reported;
+// TP-Gegenprobe zum Inline-var-Resolver: loest der Empfaenger-Typ per
+// 'var X: <Typ> := ...' auf einen echten TThread-Descendant auf, MUSS der
+// deprecated Resume-Aufruf weiter feuern (LooksLikeThreadType-Accept). Sonst
+// waere die neue Inline-var-Aufloesung ein Detektions-Verlust.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  var LWorker: TMyWorkerThread := TMyWorkerThread.Create(True);'#13#10 +
+  '  LWorker.Resume;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkThreadResumeDeprecated) >= 1,
+    'Inline-var TThread-Descendant-Empfaenger (endet auf Thread) muss feuern');
+  finally F.Free; end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestConcurrencyExt);
 

@@ -160,9 +160,24 @@ begin
     P := Pos(Tok, Low);
     while P > 0 do
     begin
-      // Left boundary: Anfang oder Nicht-Ident-Char davor
+      // Left boundary: Anfang oder Nicht-Ident-Char davor.
+      //
+      // Real-World-FP-Audit 2026-07-12, FP-Klasse 'hyphen-compound-word-
+      // boundary': ein Bindestrich '-' DIREKT VOR dem Algo-Namen zaehlt NICHT
+      // als gueltige Wortgrenze. Sonst matcht der Name als Ende eines
+      // Bindestrich-Verbundtokens, das KEIN Krypto-Use ist:
+      //   'Content-MD5' (HTTP-Header), 'CRAM-MD5'/'CRAM-SHA1' (SASL-
+      //   Mechanismus-Name), 'X-...-MD5'. Der eigentliche Krypto-Einsatz
+      //   laeuft dort ueber Klassen-Wrapper (TIdHMACMD5 -> FindWeakClass) bzw.
+      //   MD5(...)-Calls, nicht ueber diese Namens-Strings.
+      //
+      // Nur die PRAEFIX-Richtung ('wort-ALGO') wird geschlossen. Ein '-' NACH
+      // dem Namen ('ALGO-wort') bleibt bewusst ein Treffer: 'DES-CBC',
+      // 'DES-EDE3', 'RC4-MD5' etc. sind Cipher-Suite-/Modus-Angaben und damit
+      // echte Weak-Crypto-Referenzen (TP-erhaltend, konservativ).
       if (P = 1)
-         or not CharInSet(Low[P - 1], ['a'..'z', '0'..'9', '_']) then
+         or (not CharInSet(Low[P - 1], ['a'..'z', '0'..'9', '_'])
+             and (Low[P - 1] <> '-')) then
       begin
         PRight := P + Length(Tok);
         // Right boundary: Ende oder Nicht-Ident-Char danach.

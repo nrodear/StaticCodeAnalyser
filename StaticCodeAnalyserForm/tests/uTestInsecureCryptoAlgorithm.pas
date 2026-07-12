@@ -34,6 +34,14 @@ type
     // ---- Negative: Natur-Sprach-Kontext (FP-Regression) -----------------
     [Test] procedure InsecureCrypto_DesInGermanSentence_NoFinding;
     [Test] procedure InsecureCrypto_DesInLongerString_NoFinding;
+    // ---- Negative: Bindestrich-Verbund (Real-World-FP-Audit 2026-07-12,
+    //      FP-Klasse 'hyphen-compound-word-boundary') --------------------
+    [Test] procedure InsecureCrypto_ContentMD5Header_NoFinding;
+    [Test] procedure InsecureCrypto_CramMD5Mechanism_NoFinding;
+    [Test] procedure InsecureCrypto_CramSHA1Mechanism_NoFinding;
+    // ---- Positive-Gegenprobe: Suffix-Bindestrich bleibt Treffer ----------
+    [Test] procedure InsecureCrypto_DesCbcSuffix_Reported;
+    [Test] procedure InsecureCrypto_MD5Standalone_StillReported;
 
     // ---- Finding-Inhalt --------------------------------------------------
     [Test] procedure InsecureCrypto_Finding_KindAndSeverity;
@@ -297,6 +305,96 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm));
+  finally F.Free; end;
+end;
+
+procedure TTestInsecureCryptoAlgorithm.InsecureCrypto_ContentMD5Header_NoFinding;
+// FP-Regression (Real-World-FP-Audit 2026-07-12, 'hyphen-compound-word-
+// boundary'): Alcinoe.HTTP.pas Z.829 / .HttpSys.pas Z.309:
+//   Result := 'Content-MD5';
+// 'Content-MD5' ist ein HTTP-Header-Name, kein Krypto-Use. Das 'MD5' steht
+// als Ende eines Bindestrich-Verbundtokens - der Bindestrich davor darf
+// nicht als gueltige Wortgrenze zaehlen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var h: string;'#13#10 +
+  'begin h := ''Content-MD5''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm),
+        '''Content-MD5''-Header darf nicht als MD5-Krypto geflagged sein');
+  finally F.Free; end;
+end;
+
+procedure TTestInsecureCryptoAlgorithm.InsecureCrypto_CramMD5Mechanism_NoFinding;
+// FP-Regression (Real-World-FP-Audit 2026-07-12): IdSASL_CRAM_MD5.pas Z.108:
+//   result := 'CRAM-MD5';
+// SASL-Mechanismus-Name (Bindestrich vor 'MD5') - kein Krypto-Use.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var m: string;'#13#10 +
+  'begin m := ''CRAM-MD5''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm),
+        '''CRAM-MD5''-SASL-Mechanismus darf nicht als MD5-Krypto geflagged sein');
+  finally F.Free; end;
+end;
+
+procedure TTestInsecureCryptoAlgorithm.InsecureCrypto_CramSHA1Mechanism_NoFinding;
+// FP-Regression (Real-World-FP-Audit 2026-07-12): IdSASL_CRAM_SHA1.pas Z.100:
+//   result := 'CRAM-SHA1';
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var m: string;'#13#10 +
+  'begin m := ''CRAM-SHA1''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm),
+        '''CRAM-SHA1''-SASL-Mechanismus darf nicht als SHA1-Krypto geflagged sein');
+  finally F.Free; end;
+end;
+
+procedure TTestInsecureCryptoAlgorithm.InsecureCrypto_DesCbcSuffix_Reported;
+// TP-Gegenprobe: nur die PRAEFIX-Richtung ('wort-ALGO') wird unterdrueckt.
+// Ein Bindestrich NACH dem Namen ('ALGO-wort') bleibt bewusst ein Treffer -
+// 'DES-CBC' ist eine echte Cipher-Suite-/Modus-Angabe (Weak-Crypto).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var algo: string;'#13#10 +
+  'begin algo := ''DES-CBC''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm),
+      '''DES-CBC'' (Suffix-Bindestrich) muss weiterhin als DES-Krypto gefunden werden');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, '''DES-CBC'''),
+      TFindingHelper.FirstOf(F, fkInsecureCryptoAlgorithm).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
+  finally F.Free; end;
+end;
+
+procedure TTestInsecureCryptoAlgorithm.InsecureCrypto_MD5Standalone_StillReported;
+// TP-Gegenprobe: ein freistehendes 'MD5' (kein Bindestrich-Verbund) bleibt
+// unveraendert ein Treffer - der Fix schliesst NUR die Bindestrich-Klasse.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var algo: string;'#13#10 +
+  'begin algo := ''MD5''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm),
+        'freistehendes ''MD5'' muss weiterhin gefunden werden');
   finally F.Free; end;
 end;
 

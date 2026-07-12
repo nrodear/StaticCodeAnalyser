@@ -27,6 +27,7 @@ type
   private
     class function LooksLikePath(const S: string): Boolean; static;
     class procedure ExtractStrings(const Text: string; Lst: TStringList); static;
+    class function IsAssertionCall(const CallText: string): Boolean; static;
   end;
 
 implementation
@@ -104,6 +105,45 @@ begin
   end;
 end;
 
+// Real-World-FP-Audit 2026-07-12 (FP-Klasse 'test-vector-/expected-value-
+// Pfadliteral'): True, wenn der Callee dieses Aufrufs eine Test-Assertion ist
+// (DUnitX Assert.* inkl. Assert.AreEqual/WillRaiseWithMessage, klassisches
+// DUnit Check/CheckEquals/... oder ein AreEqual/AreNotEqual eines Fremd-
+// Frameworks). Pfad-Literale in solchen Aufrufen sind Erwartungs-/Vergleichs-
+// werte (oder Eingabe-Vektoren fuer Assertions) und beruehren nie das
+// Dateisystem - im Gegensatz zu echten Datei-Operationen (SaveToFile,
+// LoadFromFile, System.Assign, ...Create, ...), deren Callee hier NICHT matcht
+// und die daher Fund bleiben. TP-sicher: greift nur bei nkCall, nie bei
+// nkAssign ('FPath := ''C:\...''' bleibt Fund).
+class function THardcodedPathDetector.IsAssertionCall(
+  const CallText: string): Boolean;
+var
+  Callee : string;
+  P      : Integer;
+begin
+  Result := False;
+  P := Pos('(', CallText);
+  if P = 0 then Exit;                        // kein Aufruf mit Argumentliste
+  Callee := Copy(CallText, 1, P - 1).Trim.ToLower;
+  if Callee = '' then Exit;
+
+  // DUnitX: 'Assert.AreEqual', 'Assert.Contains', 'Assert.WillRaise...' u.a.,
+  // sowie Delphis eingebautes 'Assert(...)'.
+  if (Callee = 'assert') or Callee.StartsWith('assert.') then Exit(True);
+
+  // Klassisches DUnit (TTestCase): unqualifiziertes Check / CheckEquals / ...
+  // Exakt-Match (KEIN Praefix!) - Produktions-Helfer wie 'CheckFileExists'
+  // duerfen NICHT matchen (TP-Schutz).
+  for var A in ['check', 'checkequals', 'checknotequals',
+                'checkequalsstring', 'checkequalswidestring',
+                'checkequalsmem'] do
+    if Callee = A then Exit(True);
+
+  // Fremd-Framework mit AreEqual/AreNotEqual-Methode (defensiv).
+  if Callee.EndsWith('.areequal') or Callee.EndsWith('.arenotequal') then
+    Exit(True);
+end;
+
 class procedure THardcodedPathDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -126,6 +166,16 @@ begin
       try
         for N in AllNodes do
         begin
+          // Real-World-FP-Audit 2026-07-12 - FP-Klasse 'test-vector-/expected-
+          // value-Pfadliteral': ein pfadfoermiges Literal, das nur als
+          // Erwartungs-/Vergleichswert eines Assertions-Aufrufs dient
+          // (Assert.AreEqual / Check / CheckEquals / Assert.WillRaise...),
+          // beruehrt nie das Dateisystem. Additive Suppression NUR fuer nkCall
+          // mit Assertions-Callee - ein echter Hardcode in Produktions-Code
+          // (SaveToFile/LoadFromFile/Assign/... nkCall mit anderem Callee, oder
+          // die Zuweisung 'FPath := ''C:\...''' als nkAssign) bleibt Fund.
+          if (Kind = nkCall) and IsAssertionCall(N.Name) then Continue;
+
           Lst.Clear;
           if Kind = nkAssign then
             ExtractStrings(N.TypeRef, Lst)

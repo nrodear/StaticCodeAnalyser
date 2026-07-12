@@ -32,6 +32,10 @@ type
     [Test] procedure Path_Finding_KindAndSeverity;
     [Test] procedure Path_Finding_MissingVarMentionsPath;
     [Test] procedure Path_MultipleHitsInSameMethod_AllReported;
+    // ---- Real-World-FP-Audit 2026-07-12: test-vector/expected-value -------
+    [Test] procedure Path_AssertAreEqualExpectedValue_NoFinding;
+    [Test] procedure Path_DUnitCheckComparison_NoFinding;
+    [Test] procedure Path_NonAssertionCallWithPath_StillReported;
   end;
 
 implementation
@@ -278,6 +282,65 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkHardcodedPath));
+  finally F.Free; end;
+end;
+
+// =============================================================================
+// Real-World-FP-Audit 2026-07-12 - FP-Klasse 'test-vector-/expected-value-
+// Pfadliteral': pfadfoermige Literale, die nur als Erwartungs-/Vergleichswert
+// eines Assertions-Aufrufs dienen, beruehren nie das Dateisystem.
+// =============================================================================
+
+procedure TTestHardcodedPath.Path_AssertAreEqualExpectedValue_NoFinding;
+// FP-Suppression: Pfad als Erwartungswert in Assert.AreEqual (DUnitX). Wie im
+// Real-World-Sample ALDUnitXTestStringUtils.pas (Assert.AreEqual('C:\Temp\File',
+// actual)) - kein Datei-Zugriff, daher kein Fund.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string;'#13#10+
+  'begin'#13#10+
+  '  Assert.AreEqual(''C:\Temp\File'', s);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedPath));
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedPath.Path_DUnitCheckComparison_NoFinding;
+// FP-Suppression: Pfad als Vergleichs-Operand in klassischem DUnit Check(...).
+// Wie im Real-World-Sample TestJclDebug.pas (Check((s = 'C:\TEST\FOO.OBJ') ...)).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string;'#13#10+
+  'begin'#13#10+
+  '  Check(s = ''C:\TEST\FOO.OBJ'', ''mismatch'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedPath));
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedPath.Path_NonAssertionCallWithPath_StillReported;
+// TP-Gegenprobe: derselbe Pfad-Literal in einem echten Datei-Aufruf
+// (kein Assertions-Callee) bleibt Fund - die Assertions-Suppression darf
+// Produktions-Datei-Operationen NICHT verschlucken.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var sl: TStringList;'#13#10+
+  'begin'#13#10+
+  '  sl.SaveToFile(''C:\Temp\File'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkHardcodedPath));
   finally F.Free; end;
 end;
 
