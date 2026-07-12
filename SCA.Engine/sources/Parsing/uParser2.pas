@@ -1620,7 +1620,12 @@ begin
     tkKwUntil, tkEof: ; // Blockgrenzen – nichts tun
 
   else
-    if T.Kind in [tkIdent, tkKwResult] then
+    // Track B1 (Konzept_StrukturellePhase 2026-07-12): 'write'/'read' sind
+    // Standard-Routinen die der Lexer als tkKwWrite/tkKwRead klassifiziert.
+    // Am Statement-Anfang sind sie ein Call (Write(A,B,C);) - ohne Dispatch wurde
+    // nur das erste Arg als Bogus-nkCall geparst, der Rest via SkipToSemicolon
+    // verschluckt (Body-Attachment-Luecke -> SCA054/SCA166-Blindstellen).
+    if T.Kind in [tkIdent, tkKwResult, tkKwWrite, tkKwRead] then
       ParseCallOrAssign(Parent)
     else
     begin
@@ -2070,7 +2075,8 @@ begin
   S := '';
 
   if Tok.Kind in [tkIdent, tkKwResult, tkKwInherited,
-                  tkKwNil, tkKwTrue, tkKwFalse, tkKwString] then
+                  tkKwNil, tkKwTrue, tkKwFalse, tkKwString,
+                  tkKwWrite, tkKwRead] then   // Track B1: Write/Read als Call-Primary
     S := Next.Value
   else if Tok.Kind in [tkIntLit, tkFloatLit] then
     S := Next.Value

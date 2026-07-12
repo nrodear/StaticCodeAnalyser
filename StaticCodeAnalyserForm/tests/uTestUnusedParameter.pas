@@ -27,8 +27,9 @@ type
     // ---- Finding-Inhalt ---------------------------------------------------
     [Test] procedure Param_Finding_KindAndSeverity;
     [Test] procedure Param_Finding_MissingVarMentionsParamName;
-    // Real-World FP-Audit 2026-07-12 (SCA028-Follow-up)
-    [Test] procedure Param_KeywordNamedMethod_Skipped;
+    // Track B1 (2026-07-12): Write/Read-Statement-Call parst jetzt -> Param-Uses sichtbar
+    [Test] procedure Param_UsedViaWriteCall_NotReported;
+    [Test] procedure Param_KeywordNamedMethodUnused_Reported;
   end;
 
 implementation
@@ -221,11 +222,27 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestUnusedParameter.Param_KeywordNamedMethod_Skipped;
-// Real-World FP-Audit 2026-07-12 (SCA028-Follow-up): keyword-benannte Methoden
-// (Read/Write/Exit/...) haben seit dem SCA028-Parser-Fix zwar einen nkMethod,
-// aber ihr Body haengt nicht zuverlaessig am Method-Node -> Param-Uses
-// unsichtbar -> falsches 'unused parameter'. Der Guard skippt sie konservativ.
+procedure TTestUnusedParameter.Param_UsedViaWriteCall_NotReported;
+// Track B1 (2026-07-12): der Body ruft 'Write(Buf)' auf Statement-Ebene. Vor dem
+// Parser-Fix wurde dieser keyword-Call NICHT als nkCall geparst -> Buf-Nutzung
+// unsichtbar -> falsches 'unused parameter'. Jetzt parst 'Write(Buf)' als Call
+// -> Buf ist benutzt -> kein Fund. (Ersetzt den entfernten IsKeywordRoutineName-Guard.)
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Send(Buf: Integer);'#13#10 +
+  'begin Write(Buf); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
+    'Buf ist via Write(Buf)-Call benutzt - kein unused-parameter-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.Param_KeywordNamedMethodUnused_Reported;
+// Track B1 TP-Gegenprobe: eine keyword-benannte Methode 'Write' mit ECHT
+// ungenutztem Param wird jetzt korrekt gemeldet (der fruehere Guard hatte diesen
+// echten TP faelschlich unterdrueckt).
 const SRC =
   'unit t; implementation'#13#10 +
   'procedure TFoo.Write(Buf: Integer);'#13#10 +
@@ -233,8 +250,8 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
-    'keyword-benannte Methode (Write) wird uebersprungen - Body-Attachment unsicher');
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter),
+    'keyword-benannte Methode mit echt ungenutztem Param -> Fund (Guard entfernt)');
   finally F.Free; end;
 end;
 
