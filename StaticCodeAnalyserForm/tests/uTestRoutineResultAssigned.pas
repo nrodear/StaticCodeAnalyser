@@ -46,6 +46,9 @@ type
     [Test] procedure ResultAddressTaken_NoFinding;
     // Gegenprobe: reiner Result-Read in Klammer-Gruppierung ist KEINE Zuweisung
     [Test] procedure ResultReadInParenCondition_StillReported;
+    // Track B2 (2026-07-12): Label-Target 'done: Result := X' parst jetzt
+    [Test] procedure LabelTargetResultAssign_NoFinding;
+    [Test] procedure LabelTargetNoResultAssign_StillReported;
 
     // ---- Finding-Inhalt ----------------------------------------------------
     [Test] procedure Finding_KindAndSeverity;
@@ -561,6 +564,45 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkRoutineResultUnassigned) >= 1,
     'reiner Result-Read in (Result > 0) ist keine Zuweisung - bleibt Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestRoutineResultAssigned.LabelTargetResultAssign_NoFinding;
+// Track B2 (2026-07-12): 'done: Result := X' - das Label-Target. Vor dem Fix
+// machte ParseCallOrAssign nkCall('done') + SkipToSemicolon verschluckte die
+// markierte Zuweisung 'Result := X' -> Result galt als nie zugewiesen (FP).
+// Jetzt wird das ':' konsumiert und die markierte Anweisung normal geparst.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Foo(x: Integer): Integer;'#13#10 +
+  'label done;'#13#10 +
+  'begin'#13#10 +
+  '  done: Result := x + 1;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRoutineResultUnassigned),
+    'Result-Zuweisung hinter Label-Target zaehlt - kein unassigned');
+  finally F.Free; end;
+end;
+
+procedure TTestRoutineResultAssigned.LabelTargetNoResultAssign_StillReported;
+// TP-Gegenprobe: Label-Target OHNE Result-Zuweisung ('done: Beep;') -> Result
+// bleibt unzugewiesen -> Fund bleibt. Sichert ab, dass der Label-Parse nicht
+// faelschlich eine Result-Zuweisung vortaeuscht.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Foo(x: Integer): Integer;'#13#10 +
+  'label done;'#13#10 +
+  'begin'#13#10 +
+  '  done: Beep;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkRoutineResultUnassigned) >= 1,
+    'Label-Target ohne Result-Zuweisung bleibt unassigned-Fund');
   finally F.Free; end;
 end;
 

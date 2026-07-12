@@ -2018,6 +2018,19 @@ end;
 { ---- Zuweisung oder Prozeduraufruf ---- }
 
 procedure TParser2.ParseCallOrAssign(Parent: TAstNode);
+
+  function IsSimpleLabelName(const S: string): Boolean;
+  // True wenn S ein reiner Label-Bezeichner ist (Ident oder Ganzzahl), also
+  // KEIN Member-/Index-/Deref-/Call-Ausdruck (kein . [ ^ ( im Text). Nur dann
+  // ist ein folgendes ':' ein Label-Target und keine andere Konstruktion.
+  var i: Integer;
+  begin
+    Result := S <> '';
+    for i := 1 to Length(S) do
+      if not CharInSet(S[i], ['A'..'Z', 'a'..'z', '0'..'9', '_']) then
+        Exit(False);
+  end;
+
 var
   T    : TToken;
   LHS  : string;
@@ -2025,6 +2038,21 @@ var
 begin
   T   := Tok;
   LHS := ParsePrimary;
+
+  // Track B2 (Konzept_StrukturellePhase, re-apply 5039b68): Label-Target
+  // 'done:' / '1:' in Anweisungsposition. Sonst liefert ParsePrimary LHS='done',
+  // Tok=tkColon (nicht tkAssign) -> else-Zweig macht nkCall('done') + das
+  // folgende SkipToSemicolon verschluckt die MARKIERTE Folgeanweisung restlos
+  // ('done: Result := X;' verliert 'Result := X' -> SCA121/166/011 feuern auf
+  // gedroppter Sicht). Jetzt: ':' konsumieren, markierte Anweisung normal parsen.
+  // Eindeutig: ':=' ist tkAssign; case-Arms laufen ueber ParseCaseStmt -> ein
+  // tkColon nach reinem Ident/IntLit ist hier ein Label.
+  if (Tok.Kind = tkColon) and IsSimpleLabelName(LHS) then
+  begin
+    Next;                    // ':' konsumieren
+    ParseStatement(Parent);  // markierte Anweisung parsen (behandelt eigenes ';')
+    Exit;
+  end;
 
   if Tok.Kind = tkAssign then
   begin
