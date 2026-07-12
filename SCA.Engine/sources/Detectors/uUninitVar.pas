@@ -112,8 +112,13 @@ const
 
   // Managed types die Pascal auto-initialisiert. Wir flaggen sie nur,
   // wenn der User explizit `UninitVarFlagManagedTypes` aktiviert.
-  MANAGED_TYPE_PREFIXES : array[0..5] of string = (
+  MANAGED_TYPE_PREFIXES : array[0..11] of string = (
     'string', 'unicodestring', 'ansistring', 'rawbytestring',
+    // Real-World-FP-Audit 2026-07-12: mORMot-/RTL-Stringtypen + Variant sind
+    // ebenfalls compiler-auto-initialisiert (auto '', Unassigned) -> ein
+    // read-without-write ist nie ein echter uninit-Bug.
+    'rawutf8', 'rawjson', 'synunicode', 'widestring',
+    'variant', 'olevariant',
     'tarray<',              // TArray<T> generic dynamic array
     'iinterface'            // sehr defensive Annaehrung an ALLE Interfaces
   );
@@ -310,14 +315,21 @@ end;
 
 function IsManagedType(const TypeRef: string): Boolean;
 var
-  T : string;
+  T, Orig : string;
   Prefix : string;
 begin
   Result := False;
-  T := LowerCase(Trim(TypeRef));
+  Orig := Trim(TypeRef);
+  T := LowerCase(Orig);
   if T = '' then Exit;
   for Prefix in MANAGED_TYPE_PREFIXES do
     if T.StartsWith(Prefix) then Exit(True);
+  // Real-World-FP-Audit 2026-07-12: JEDES Interface (Delphi-Konvention 'I' +
+  // Grossbuchstabe, z.B. ISynLog/ISmsSender) ist refcounted + auto-nil ->
+  // managed -> read-without-write nie ein echter uninit-Bug. 'Integer'/'Int64'
+  // (I + Kleinbuchstabe) matchen NICHT.
+  if (Length(Orig) >= 2) and (Orig[1] = 'I') and CharInSet(Orig[2], ['A'..'Z']) then
+    Exit(True);
 end;
 
 function IsNoInitRecordType(const TypeRef: string): Boolean;
@@ -1199,6 +1211,7 @@ var
   // uebersprungen -> localVar bleibt ein Read -> echter uninit-Bug bleibt Fund.
   var
     S          : string;
+    GroupBody  : string;
     i, L, GroupStart, Depth, j : Integer;
     AfterClose : Char;
   begin
@@ -1229,9 +1242,14 @@ var
         if j <= L then AfterClose := S[j];
         // Cast-/Receiver-Praefix ')^' / ').' / ')[' -> Operand ist ein Read,
         // NICHT als Write registrieren (FN-Schutz gegen Typecast-Operand-Reads).
-        if not CharInSet(AfterClose, ['.', '^', '[']) then
-          RegisterArgVarsAsWrites(
-            LowerCase(Copy(S, GroupStart, i - GroupStart)), Line);
+        // ABER: hat die Gruppe ein Komma, ist es ein Multi-Arg-CALL (verkettet,
+        // z.B. 'EnterLocal(log, self, x).Log(...)'), KEIN Typecast (der hat
+        // genau EINEN Operanden) -> die var/out-Args doch registrieren.
+        // Verify-Concern 2026-07-12: chained-call-Kante (sonst 8 neue mORMot-FPs);
+        // Single-Operand-Casts 'PFoo(x)^' bleiben uebersprungen (FN-Schutz intakt).
+        GroupBody := Copy(S, GroupStart, i - GroupStart);
+        if (not CharInSet(AfterClose, ['.', '^', '['])) or (Pos(',', GroupBody) > 0) then
+          RegisterArgVarsAsWrites(LowerCase(GroupBody), Line);
         Inc(i);
       end
       else

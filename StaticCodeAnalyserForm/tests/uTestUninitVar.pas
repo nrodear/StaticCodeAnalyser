@@ -101,6 +101,9 @@ type
     // FN-Gegenproben (muessen weiter feuern):
     [Test] procedure CastOperandOnlyRead_StillFlagged;            // FN-Edge Kat. A
     [Test] procedure CaseSelectorPlainVarNoCall_StillFlagged;     // Over-Suppress-Guard Kat. C
+    // Verify-Nachschaerfung 2026-07-12 (Drop-Stichprobe: chained-call + managed):
+    [Test] procedure ChainedCallMultiArgOutArg_NoFinding;         // Komma-Heuristik
+    [Test] procedure ManagedInterfaceVarReceiver_NoFinding;       // IsManagedType-Interface
   end;
 
 implementation
@@ -1742,6 +1745,60 @@ begin
   try
     Assert.IsTrue(CountKind(L, fkUninitVar) >= 1,
       'case-Selektor ohne Call darf die Selektor-Var nicht als geschrieben werten');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.ChainedCallMultiArgOutArg_NoFinding;
+// Verify-Nachschaerfung (Drop-Stichprobe mORMot EnterLocal): ein verketteter
+// Multi-Arg-Call 'AddLog(n, self, x).Log(...)' fuellt 'n' als var/out-Arg des
+// INNEREN Calls. Die Gruppe ist von '.' gefolgt (chained), hat aber ein Komma
+// -> Multi-Arg-Call, kein Typecast -> Komma-Heuristik registriert den Write.
+// (Ohne die Nachschaerfung wuerde skip-by-suffix 'n' faelschlich ueberspringen
+// -> neuer FP; non-managed Typ, damit der managed-Skip das nicht maskiert.)
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var n: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  Builder.AddLog(n, Self, 42).Log(''done'');'#13#10 +
+    '  if n > 0 then Exit;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+      'var/out-Arg eines verketteten Multi-Arg-Calls (Komma) muss Write bekommen');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.ManagedInterfaceVarReceiver_NoFinding;
+// Verify-Nachschaerfung (Drop-Stichprobe mORMot ISynLog): eine Interface-
+// typisierte Var (I + Grossbuchstabe) ist managed (refcounted, auto-nil) ->
+// read-without-write ist kein SCA166-uninit-Bug (nil-Interface-Deref waere
+// SCA008-Territorium). IsManagedType-Interface-Heuristik skippt sie.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var log: ISomeLog;'#13#10 +
+    'begin'#13#10 +
+    '  log.WriteLn(''a'');'#13#10 +
+    '  log.WriteLn(''b'');'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+      'Interface-Var (managed, auto-nil) ist kein SCA166-uninit-Fall');
   finally L.Free; end;
 end;
 
