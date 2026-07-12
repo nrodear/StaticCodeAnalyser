@@ -61,6 +61,24 @@ type
     [Test] procedure Div_ZeroThenFixupAssign_NoFinding;
     [Test] procedure Div_ConstInitNonZeroLocal_NoFinding;
     [Test] procedure Div_ZeroInitLocalDivisor_StillReports;
+    // Real-World FP-Audit 2026-07-12 (SCA010 5/23 Sample-FP), neue Guards:
+    // G1 for-Schleifenvariable mit nichtnull-Unterschranke
+    [Test] procedure Div_ForLoopVarNonZeroStart_NoFinding;
+    [Test] procedure Div_ForLoopVarInlineTyped_NoFinding;
+    // TP-Gegenprobe: 'for i := 0 to' -> i startet bei 0 -> bleibt Fund
+    [Test] procedure Div_ForLoopVarZeroStart_StillReports;
+    // G2 Break/Continue-Bail-Guard im selben Schleifenrumpf
+    [Test] procedure Div_BreakGuardSameLoop_NoFinding;
+    [Test] procedure Div_ContinueGuardSameLoop_NoFinding;
+    // TP-Gegenprobe: Division NACH der Schleife wird vom Break nicht geschuetzt
+    [Test] procedure Div_BreakGuardOutsideLoop_StillReports;
+    // G3 Clamp-Divisor Max(1,..) / Round(Max(1,..))
+    [Test] procedure Div_MaxClampDivisor_NoFinding;
+    [Test] procedure Div_RoundMaxClampDivisor_NoFinding;
+    // TP-Gegenprobe: Max(0,..) kann 0 sein -> bleibt Fund
+    [Test] procedure Div_MaxZeroClampDivisor_StillReports;
+    // TP-Gegenprobe (Verify 2026-07-12): zusammengesetzter Max-Ausdruck kann 0 sein
+    [Test] procedure Div_CompositeMaxDivisor_StillReports;
   end;
 
   // ---- DeadCode Erweiterungen --------------------------------------------------------
@@ -708,6 +726,229 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkDivByZero) >= 1,
     'Divisor := 0 ist kein nichtnull-Literal -> Suppression greift nicht -> Fund bleibt');
+  finally F.Free; end;
+end;
+
+// -----------------------------------------------------------------------------
+// G1 - for-Schleifenvariable mit nichtnull-Unterschranke
+// (Real-World-FP-Audit 2026-07-12, CnImageListEditorFrm.pas:1547)
+// -----------------------------------------------------------------------------
+
+procedure TTestDivByZeroExt.Div_ForLoopVarNonZeroStart_NoFinding;
+// 'for i := 2 to cnt' -> im Rumpf immer i >= 2 -> 'cnt div i' nie durch 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var i, cnt, x: Integer;'#13#10+
+  'begin'#13#10+
+  '  for i := 2 to cnt do'#13#10+
+  '    x := cnt div i;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    'aufsteigende for-Var mit Startwert 2 ist im Rumpf immer >= 2 -> kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_ForLoopVarInlineTyped_NoFinding;
+// Inline-typisierte Schleifenvariable: 'for var i: Integer := 2 to cnt'.
+// Exerziert den nkLocalVar-Zweig von TryGetAscendingForLoopVar (die Var steht
+// NICHT im Header, sondern als Kind-Knoten) - ohne Guard waere i (Typ Integer)
+// als Divisor gemeldet.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var cnt, x: Integer;'#13#10+
+  'begin'#13#10+
+  '  for var i: Integer := 2 to cnt do'#13#10+
+  '    x := cnt div i;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    'inline-typisierte aufsteigende for-Var mit Start 2 -> kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_ForLoopVarZeroStart_StillReports;
+// TP-Gegenprobe: 'for i := 0 to cnt' -> i startet bei 0 -> erste Iteration
+// 'cnt div 0' crasht. Der Guard darf NICHT greifen (Startwert 0).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var i, cnt, x: Integer;'#13#10+
+  'begin'#13#10+
+  '  for i := 0 to cnt do'#13#10+
+  '    x := cnt div i;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkDivByZero) >= 1,
+    'Startwert 0 -> i kann 0 sein -> Fund muss bleiben');
+  finally F.Free; end;
+end;
+
+// -----------------------------------------------------------------------------
+// G2 - Break/Continue-Bail-Guard im selben Schleifenrumpf
+// (Real-World-FP-Audit 2026-07-12, VirtualTrees.Header.pas:2639)
+// -----------------------------------------------------------------------------
+
+procedure TTestDivByZeroExt.Div_BreakGuardSameLoop_NoFinding;
+// 'if x = 0 then Break;' vor 'y := z div x' im selben Schleifenrumpf ->
+// an der Division ist x nachweislich <> 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var x, y, z: Integer;'#13#10+
+  'begin'#13#10+
+  '  while z > 0 do'#13#10+
+  '  begin'#13#10+
+  '    x := GetNext;'#13#10+
+  '    if x = 0 then Break;'#13#10+
+  '    y := z div x;'#13#10+
+  '    Dec(z);'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    'if x = 0 then Break im selben Loop vor der Division -> kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_ContinueGuardSameLoop_NoFinding;
+// Wie Break, aber mit Continue: 'if x = 0 then Continue;' ueberspringt die
+// Division bei x = 0 -> im Divisor immer x <> 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var x, y, z: Integer;'#13#10+
+  'begin'#13#10+
+  '  while z > 0 do'#13#10+
+  '  begin'#13#10+
+  '    x := GetNext;'#13#10+
+  '    if x = 0 then Continue;'#13#10+
+  '    y := z div x;'#13#10+
+  '    Dec(z);'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    'if x = 0 then Continue im selben Loop vor der Division -> kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_BreakGuardOutsideLoop_StillReports;
+// TP-Gegenprobe: die Division steht NACH der Schleife. Der Break garantiert x
+// nur INNERHALB der Schleife <> 0; danach (Loop via Break/gar nicht gelaufen)
+// kann x 0 sein -> Fund muss bleiben.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var x, y, z: Integer;'#13#10+
+  'begin'#13#10+
+  '  while z > 0 do'#13#10+
+  '  begin'#13#10+
+  '    x := GetNext;'#13#10+
+  '    if x = 0 then Break;'#13#10+
+  '    Dec(z);'#13#10+
+  '  end;'#13#10+
+  '  y := 100 div x;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkDivByZero) >= 1,
+    'Division ausserhalb der Schleife -> Break schuetzt nicht -> Fund bleibt');
+  finally F.Free; end;
+end;
+
+// -----------------------------------------------------------------------------
+// G3 - Clamp-Divisor Max(1,..) / Round(Max(1,..))
+// (Real-World-FP-Audit 2026-07-12, VirtualTrees.BaseTree.pas:8256)
+// -----------------------------------------------------------------------------
+
+procedure TTestDivByZeroExt.Div_MaxClampDivisor_NoFinding;
+// 'd := Max(1, GetCount)' -> d >= 1 -> '100 div d' nie durch 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var d, x: Integer;'#13#10+
+  'begin'#13#10+
+  '  d := Max(1, GetCount);'#13#10+
+  '  x := 100 div d;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    'Divisor := Max(1, ...) ist immer >= 1 -> kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_RoundMaxClampDivisor_NoFinding;
+// 'd := Round(Max(1, a / b))' -> Max(1,..) >= 1.0, Round(>=1.0) >= 1.
+// (Die Float-Division a / b prueft SCA010 bewusst nicht.)
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var d, x, a, b: Integer;'#13#10+
+  'begin'#13#10+
+  '  d := Round(Max(1, a / b));'#13#10+
+  '  x := 100 div d;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    'Divisor := Round(Max(1, ...)) ist immer >= 1 -> kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_MaxZeroClampDivisor_StillReports;
+// TP-Gegenprobe: 'd := Max(0, GetCount)' kann 0 sein (kein nichtnull-Literal-
+// Argument) -> Clamp-Guard darf NICHT greifen -> Fund bleibt.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var d, x: Integer;'#13#10+
+  'begin'#13#10+
+  '  d := Max(0, GetCount);'#13#10+
+  '  x := 100 div d;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkDivByZero) >= 1,
+    'Max(0, ...) kann 0 sein -> Clamp-Guard greift nicht -> Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_CompositeMaxDivisor_StillReports;
+// TP-Gegenprobe (Verify 2026-07-12, G3-FN-Fix): 'd := Max(1,a) - Max(1,b)' beginnt
+// mit 'max(' und endet mit ')', kann aber 0 sein (a=b). Der matching-paren-Check
+// erkennt, dass die erste 'max('-Klammer VOR dem Ende schliesst -> zusammengesetzt
+// -> Clamp-Guard greift NICHT -> Fund bleibt (sonst verschluckter div-by-zero).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var d, a, b, x: Integer;'#13#10+
+  'begin'#13#10+
+  '  d := Max(1, a) - Max(1, b);'#13#10+
+  '  x := 100 div d;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkDivByZero) >= 1,
+    'zusammengesetzter Max-Ausdruck (Max(1,a)-Max(1,b)) kann 0 sein -> Fund bleibt');
   finally F.Free; end;
 end;
 

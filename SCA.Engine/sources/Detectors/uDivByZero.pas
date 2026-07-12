@@ -18,18 +18,57 @@ unit uDivByZero;
 //   - varname > 0
 //   - varname >= 1
 //   - varname <> 0
-//   - varname = 0 then Exit
-//   - varname = 0 then varname := 1   (Fix-up auf nichtnull-Literal)
+//   - varname = 0 then Exit                (auch Raise)
+//   - varname = 0 then varname := 1        (Fix-up auf nichtnull-Literal)
 //   - Assigned(varname)  (fuer Pointer-Divisor)
 //
+// Weitere provably-nonzero-Guards (Real-World-FP-Audit 2026-07-12, SCA010
+// 5/23 Sample-FP: Divisor beweisbar <> 0 ueber einen Mechanismus, den die
+// obigen if-Guards nicht modellieren):
+//
+//   G1 - for-Schleifenvariable mit nichtnull-Unterschranke:
+//        'for I := <nichtnull-Literal> to ... do ... x div I'
+//        In einer AUFSTEIGENDEN (to, nicht downto) for-Schleife gilt im Rumpf
+//        immer I >= Startwert. Ist der Startwert ein nichtnull-Ganzzahl-Literal
+//        (>=1), kann I dort nie 0 sein. Nur Divisionen INNERHALB des Rumpfs
+//        werden unterdrueckt (Knoten-Enthaltensein, nicht nur Zeilenbereich) -
+//        eine Nutzung von I ausserhalb der Schleife bleibt gemeldet.
+//        TP-sicher: 'for I := 0 to ...' (Startwert 0) wird NICHT unterdrueckt.
+//
+//   G2 - Break/Continue-Bail-Guard:
+//        'if <divisor> = 0 then Break/Continue' (bzw. <=0 / <1) VOR der Division
+//        IM SELBEN innersten Schleifenrumpf. Exit/Raise deckt HasGuardingIf
+//        bereits methodenweit ab; Break/Continue schuetzen nur innerhalb der
+//        Schleife, deshalb die Schleifen-Enthaltenseins-Pruefung (Guard-if und
+//        Division muessen dieselbe innerste Schleife teilen). Blindstellen (bewusst,
+//        lexikalisch): Dominanz (Guard in verschachteltem 'if a then ...'),
+//        Divisor-Reassignment zwischen Guard und Division, sowie AND-Struktur
+//        ('if (x=0) and (y=0)'). Mechanik identisch zum bestehenden Exit/Raise-
+//        Guard; Break/Continue als Guard sind aber NEU -> schmale neue FN-Instanzen
+//        derselben (akzeptierten, seltenen + smell-nahen) Klasse.
+//
+//   G3 - Clamp auf >= 1:
+//        Divisor wird (ausschliesslich) mit 'Max(1, ...)' bzw.
+//        'Round/Trunc/Floor/Ceil(Max(1, ...))' belegt. Math.Max liefert >= jedes
+//        Arguments; ist ein Argument ein nichtnull-Ganzzahl-Literal, ist das
+//        Ergebnis >= 1. Round/Trunc/Floor/Ceil eines Werts >= 1.0 bleibt >= 1.
+//        Sehr konservativ: der GESAMTE RHS muss exakt diese Form haben.
+//
 // Zusaetzlich provably-nonzero (ohne if): wenn der Divisor im ganzen
-// Methodenrumpf ausschliesslich nichtnull-Ganzzahl-Literale zugewiesen
-// bekommt und mindestens einmal VOR der Division, kann er dort nicht 0 sein.
+// Methodenrumpf ausschliesslich beweisbar-nichtnulle Ausdruecke zugewiesen
+// bekommt (nichtnull-Ganzzahl-Literale ODER Clamp G3) und mindestens einmal
+// VOR der Division, kann er dort nicht 0 sein.
 //
 // Einschraenkungen:
 //   - Floating-Point-Division (/) wird nicht geprueft
 //   - Felder (Self.FCount) ohne klare Initialisierung nicht analysiert
 //   - Komplexe Ausdruecke als Divisor werden uebersprungen
+//   - while-guarded-copy ('Temp := B' in 'while B <> 0 do ... x div Temp')
+//     wird BEWUSST NICHT modelliert: sicher waere sie nur mit einer
+//     Nicht-Reassignment-Pruefung von B/Temp zwischen Kopie und Division
+//     (Ordnungs-/Datenfluss-Analyse, die der lexikalische Detektor nicht hat).
+//     Ohne diese Pruefung droht das Verschlucken echter Bugs (FN) - deshalb
+//     ausgelassen (siehe Real-World-FP-Audit 2026-07-12, FastcodeGCDUnit.pas).
 
 interface
 
@@ -54,15 +93,42 @@ type
     // (ggf. via begin..end-Block). Wird gebraucht um 'if x = 0 then Exit'
     // (echter Guard) von 'if x = 0 then DoOther' (kein Guard) zu trennen.
     class function ThenBranchExitsOrRaises(IfN: TAstNode): Boolean; static;
+    // Wie ThenBranchExitsOrRaises, aber fuer Break/Continue (G2). Getrennt
+    // gehalten, weil Break/Continue - anders als Exit/Raise - nur INNERHALB der
+    // Schleife schuetzen und deshalb eine Schleifen-Enthaltenseins-Pruefung
+    // brauchen (siehe HasBreakContinueGuard).
+    class function ThenBranchBreaksOrContinues(IfN: TAstNode): Boolean; static;
     // True wenn der THEN-Zweig VarLow ein nichtnull-Ganzzahl-Literal zuweist
     // (Fix-up-Idiom 'if x = 0 then x := 1'). Zusammen mit der 0-Bedingung ist
     // x danach auf beiden Pfaden nachweislich <> 0.
     class function ThenBranchAssignsNonZeroTo(IfN: TAstNode;
       const VarLow: string): Boolean; static;
-    // True wenn der Divisor im Rumpf NUR nichtnull-Ganzzahl-Literale zugewiesen
-    // bekommt und mindestens einmal vor der Division (provably-nonzero).
-    class function AllAssignmentsNonZeroLiteral(MethodNode: TAstNode;
+    // True wenn der Divisor im Rumpf NUR beweisbar-nichtnulle Ausdruecke
+    // zugewiesen bekommt (nichtnull-Ganzzahl-Literale ODER Clamp G3) und
+    // mindestens einmal vor der Division (provably-nonzero).
+    class function AllAssignmentsProvablyNonZero(MethodNode: TAstNode;
       const VarLow: string; BeforeLine: Integer): Boolean; static;
+    // True wenn Target im Subtree von Root liegt (Knoten-Identitaet, nicht
+    // Zeilenbereich). Basis fuer die Schleifen-Enthaltenseins-Pruefungen.
+    class function NodeInSubtree(Root, Target: TAstNode): Boolean; static;
+    // Innerste Schleife (for/while/repeat) im MethodNode, die Target enthaelt,
+    // oder nil. "Innerste" = groesste Start-Zeile unter den enthaltenden
+    // Schleifen (bei korrekter Verschachtelung eindeutig).
+    class function InnermostLoopContaining(MethodNode,
+      Target: TAstNode): TAstNode; static;
+    // Extrahiert aus einer AUFSTEIGENDEN ('to') for-Schleife die (lowercase)
+    // Schleifenvariable und den Startwert-Text. False bei downto / for-in /
+    // fehlendem ':='. Fuer G1.
+    class function TryGetAscendingForLoopVar(ForN: TAstNode;
+      out LoopVarLow, StartVal: string): Boolean; static;
+    // G1: Divisor ist die Variable einer aufsteigenden for-Schleife mit
+    // nichtnull-Literal-Startwert und die Division liegt in deren Rumpf.
+    class function IsGuardedByForLoopVar(MethodNode, DivNode: TAstNode;
+      const VarLow: string): Boolean; static;
+    // G2: 'if <divisor>=0 then Break/Continue' im selben innersten Schleifen-
+    // rumpf VOR der Division.
+    class function HasBreakContinueGuard(MethodNode, DivNode: TAstNode;
+      const VarLow: string): Boolean; static;
     class procedure CollectIntegerVars(MethodNode: TAstNode;
       Names: TStringList); static;
   end;
@@ -144,6 +210,70 @@ begin
     if T[i] <> '0' then AllZero := False;
   end;
   Result := not AllZero;
+end;
+
+function IsClampedNonZero(const S: string): Boolean;
+// G3: True wenn der Ausdruck S nachweislich >= 1 ist, weil er die Form
+//   Max(<..>, <nichtnull-int-literal>, <..>)
+// hat - optional umschlossen von genau einem Round/Trunc/Floor/Ceil. Math.Max
+// liefert >= jedes Arguments; ist EIN Top-Level-Argument ein nichtnull-Ganzzahl-
+// Literal (>=1), ist das Ergebnis >= 1. Round/Trunc/Floor/Ceil eines Werts
+// >= 1.0 bleibt >= 1. SEHR konservativ: der GESAMTE (getrimmte) RHS muss exakt
+// diese Form haben - ein nachgestelltes '- 1', '* 0', '+ x' o.ae. laesst die
+// Pruefung scheitern (Ergebnis koennte dann 0/negativ werden). TP-sicher.
+var
+  T, Inner, Arg : string;
+  i, Depth, ArgStart : Integer;
+begin
+  Result := False;
+  T := Trim(StripStringLiterals(S).ToLower);
+  // Optionalen numerischen Wrapper abschaelen (genau eine Ebene). Alle vier
+  // Rundungsfunktionen bilden v >= 1.0 auf einen Wert >= 1 ab.
+  for var W in ['round', 'trunc', 'floor', 'ceil'] do
+    if T.StartsWith(W + '(') and T.EndsWith(')') then
+    begin
+      T := Trim(Copy(T, Length(W) + 2, Length(T) - Length(W) - 2));
+      Break;
+    end;
+  // Danach muss der Rest EXAKT ein Max(...)-Aufruf sein.
+  if not (T.StartsWith('max(') and T.EndsWith(')')) then Exit;
+  // FN-Schutz (adversariale Verify 2026-07-12): sicherstellen, dass die von
+  // 'max(' geoeffnete Klammer ERST am letzten Zeichen schliesst. Sonst ist T ein
+  // ZUSAMMENGESETZTER Ausdruck ('Max(1,a) - Max(1,b)', 'Max(1,a) mod f(b)',
+  // 'Max(1,a) * f(b)'), der trotz 'max('-Praefix + ')'-Suffix 0 werden kann ->
+  // NICHT unterdruecken (sonst verschluckter div-by-zero-Crash = FN).
+  Depth := 0;
+  for i := 4 to Length(T) do            // ab dem '(' in 'max('
+  begin
+    if T[i] = '(' then Inc(Depth)
+    else if T[i] = ')' then
+    begin
+      Dec(Depth);
+      if Depth = 0 then
+      begin
+        if i <> Length(T) then Exit;    // schliesst vor Ende -> zusammengesetzt
+        Break;
+      end;
+    end;
+  end;
+  Inner := Copy(T, 5, Length(T) - 5);   // zwischen 'max(' und schliessender ')'
+  // Top-Level-Argumente per Komma trennen (verschachtelte Klammern beachten);
+  // genuegt EIN nichtnull-Ganzzahl-Literal.
+  Depth    := 0;
+  ArgStart := 1;
+  for i := 1 to Length(Inner) + 1 do
+  begin
+    if (i > Length(Inner)) or ((Inner[i] = ',') and (Depth = 0)) then
+    begin
+      Arg := Trim(Copy(Inner, ArgStart, i - ArgStart));
+      if IsNonZeroIntLiteral(Arg) then Exit(True);
+      ArgStart := i + 1;
+    end
+    else if Inner[i] = '(' then
+      Inc(Depth)
+    else if Inner[i] = ')' then
+      Dec(Depth);
+  end;
 end;
 
 class function TDivByZeroDetector.IsIntegerType(const TypeLow: string): Boolean;
@@ -300,6 +430,43 @@ begin
   end;
 end;
 
+class function TDivByZeroDetector.ThenBranchBreaksOrContinues(
+  IfN: TAstNode): Boolean;
+// Wie ThenBranchExitsOrRaises, aber fuer Break/Continue. Getrennte Kopie statt
+// Refactor der getesteten Exit/Raise-Variante (kein Compiler als Netz).
+// Akzeptierte Formen:
+//   if x = 0 then Break;
+//   if x = 0 then Continue;
+//   if x = 0 then begin LogIt; Break; end;          (Block-Walk!)
+var
+  i, j   : Integer;
+  Branch : TAstNode;
+  Stmt   : TAstNode;
+begin
+  Result := False;
+  if IfN = nil then Exit;
+  for i := 0 to IfN.Children.Count - 1 do
+  begin
+    Branch := IfN.Children[i];
+    if Branch.Kind = nkElseBranch then Continue;
+    // Direkter Break/Continue ohne Block-Wrap.
+    if (Branch.Kind = nkBreak) or (Branch.Kind = nkContinue) then
+      Exit(True);
+    // begin..end-Block: jedes direkte Kind pruefen.
+    if Branch.Kind = nkBlock then
+    begin
+      for j := 0 to Branch.Children.Count - 1 do
+      begin
+        Stmt := Branch.Children[j];
+        if (Stmt.Kind = nkBreak) or (Stmt.Kind = nkContinue) then
+          Exit(True);
+      end;
+    end;
+    // Nur das erste Then-Statement betrachten.
+    Break;
+  end;
+end;
+
 class function TDivByZeroDetector.ThenBranchAssignsNonZeroTo(
   IfN: TAstNode; const VarLow: string): Boolean;
 // Erfasst das Fix-up-Idiom:
@@ -340,17 +507,23 @@ begin
   end;
 end;
 
-class function TDivByZeroDetector.AllAssignmentsNonZeroLiteral(
+class function TDivByZeroDetector.AllAssignmentsProvablyNonZero(
   MethodNode: TAstNode; const VarLow: string; BeforeLine: Integer): Boolean;
-// True wenn JEDE Zuweisung an VarLow im ganzen Methodenrumpf ein nichtnull-
-// Ganzzahl-Literal ist UND mindestens eine davon vor der Division liegt.
-// Dann ist VarLow an der Divisionsstelle nachweislich <> 0 (provably-nonzero:
-// const-init auf 1/2, spaeter nur weitere nichtnull-Literale - SevenZipDlg).
+// True wenn JEDE Zuweisung an VarLow im ganzen Methodenrumpf beweisbar <> 0 ist
+// (nichtnull-Ganzzahl-Literal ODER Clamp G3 wie 'Max(1,..)') UND mindestens eine
+// davon vor der Division liegt. Dann ist VarLow an der Divisionsstelle
+// nachweislich <> 0 (provably-nonzero: const-init auf 1/2 - SevenZipDlg; oder
+// StepSize := Round(Max(1, ...)) - VirtualTrees.BaseTree).
 //
 // TP-Sicherheit: sobald IRGENDEINE Zuweisung (auch nach der Division, wegen
-// moeglicher Schleifen-Rueckkanten) KEIN nichtnull-Literal ist - Null-Literal,
-// Funktionsaufruf, Ausdruck, andere Variable - brechen wir ab und melden
-// weiter. Damit bleiben echte Bugs und absichtliche 'x := 0'-Demos gemeldet.
+// moeglicher Schleifen-Rueckkanten) NICHT beweisbar-nichtnull ist - Null-
+// Literal, gewoehnlicher Funktionsaufruf, Ausdruck, andere Variable - brechen
+// wir ab und melden weiter. Damit bleiben echte Bugs und absichtliche
+// 'x := 0'-Demos gemeldet.
+// Bekannte (mit dem bestehenden Verhalten geteilte) Grenze: Inc/Dec via Aufruf
+// sind KEINE nkAssign und werden nicht betrachtet - ein Inc haelt den Divisor
+// nur groesser (unkritisch), ein hypothetisches 'Dec(x)' bis 0 saehe der
+// Detektor nicht (wie schon vor dieser Aenderung).
 var
   Assigns    : TList<TAstNode>;
   A          : TAstNode;
@@ -364,16 +537,165 @@ begin
     begin
       if A.Name.ToLower <> VarLow then Continue;
       // Die Divisions-Zuweisung selbst (gleiche Zeile) tragt die 'div'-RHS -
-      // sie darf die Literal-Pruefung nicht scheitern lassen und zaehlt nicht
-      // als vorherige Init.
+      // sie darf die Pruefung nicht scheitern lassen und zaehlt nicht als
+      // vorherige Init.
       if A.Line = BeforeLine then Continue;
-      if not IsNonZeroIntLiteral(A.TypeRef) then Exit; // Result bleibt False
+      if not (IsNonZeroIntLiteral(A.TypeRef) or IsClampedNonZero(A.TypeRef)) then
+        Exit; // Result bleibt False
       if A.Line < BeforeLine then FoundPrior := True;
     end;
   finally
     Assigns.Free;
   end;
   Result := FoundPrior;
+end;
+
+class function TDivByZeroDetector.NodeInSubtree(Root, Target: TAstNode): Boolean;
+// Knoten-Identitaets-Enthaltensein: True wenn Target im Subtree von Root liegt.
+// Nutzt den (gecachten) FindAll-Walk fuer Target.Kind - exakt und robust gegen
+// Zeilenbereich-Artefakte.
+var
+  Lst : TList<TAstNode>;
+begin
+  Result := False;
+  if (Root = nil) or (Target = nil) then Exit;
+  Lst := Root.FindAll(Target.Kind);
+  try
+    Result := Lst.IndexOf(Target) >= 0;
+  finally
+    Lst.Free;
+  end;
+end;
+
+class function TDivByZeroDetector.InnermostLoopContaining(
+  MethodNode, Target: TAstNode): TAstNode;
+var
+  Best : TAstNode;
+
+  procedure ConsiderKind(K: TNodeKind);
+  var
+    Loops : TList<TAstNode>;
+    L     : TAstNode;
+  begin
+    Loops := MethodNode.FindAll(K);
+    try
+      for L in Loops do
+        if (L <> Target) and TDivByZeroDetector.NodeInSubtree(L, Target) then
+          // Bei korrekter Verschachtelung hat die innerste enthaltende Schleife
+          // die groesste Start-Zeile (Vorfahren beginnen frueher).
+          if (Best = nil) or (L.Line > Best.Line) then
+            Best := L;
+    finally
+      Loops.Free;
+    end;
+  end;
+
+begin
+  Best := nil;
+  ConsiderKind(nkForStmt);
+  ConsiderKind(nkWhileStmt);
+  ConsiderKind(nkRepeatStmt);
+  Result := Best;
+end;
+
+class function TDivByZeroDetector.TryGetAscendingForLoopVar(ForN: TAstNode;
+  out LoopVarLow, StartVal: string): Boolean;
+// Zerlegt den for-Header (ForN.TypeRef; Tokens per Space gejoint vom Parser).
+//   klassisch : 'i := 2 to floor ( sqrt ( cnt ) )'  -> LoopVar vor ':='
+//   inline var: ':= 1 to 10'  (+ nkLocalVar-Kind 'i') -> LoopVar aus dem Kind
+// NUR aufsteigend ('to'): ' downto ' enthaelt kein ' to ' (Space-Grenzen) und
+// faellt korrekt durch -> bei downto/for-in liefert die Funktion False.
+var
+  H, Rest  : string;
+  LocalVar : TAstNode;
+  pAssign, pTo : Integer;
+begin
+  Result     := False;
+  LoopVarLow := '';
+  StartVal   := '';
+  H := ForN.TypeRef.ToLower;
+  pAssign := Pos(':=', H);
+  if pAssign = 0 then Exit;                  // for-in oder unklar -> raus
+  Rest := Copy(H, pAssign + 2, MaxInt);
+  pTo := Pos(' to ', Rest);
+  if pTo = 0 then Exit;                       // downto / kein 'to' -> raus
+  StartVal := Trim(Copy(Rest, 1, pTo - 1));
+  if StartVal = '' then Exit;
+  // Schleifenvariable: inline 'for var X' -> nkLocalVar-Kind; sonst vor ':='.
+  LocalVar := ForN.FindFirstChild(nkLocalVar);
+  if LocalVar <> nil then
+    LoopVarLow := LocalVar.Name.ToLower
+  else
+    LoopVarLow := Trim(Copy(H, 1, pAssign - 1));
+  if LoopVarLow = '' then Exit;
+  Result := True;
+end;
+
+class function TDivByZeroDetector.IsGuardedByForLoopVar(
+  MethodNode, DivNode: TAstNode; const VarLow: string): Boolean;
+// G1: Divisor ist die Variable einer aufsteigenden for-Schleife mit nichtnull-
+// Literal-Startwert und die Division liegt in deren Rumpf (Knoten-Enthaltensein).
+var
+  Fors : TList<TAstNode>;
+  ForN : TAstNode;
+  LoopVarLow, StartVal : string;
+begin
+  Result := False;
+  Fors := MethodNode.FindAll(nkForStmt);
+  try
+    for ForN in Fors do
+    begin
+      if not TryGetAscendingForLoopVar(ForN, LoopVarLow, StartVal) then Continue;
+      if LoopVarLow <> VarLow then Continue;
+      if not IsNonZeroIntLiteral(StartVal) then Continue;  // 'for i := 0 to' bleibt Fund
+      if NodeInSubtree(ForN, DivNode) then Exit(True);
+    end;
+  finally
+    Fors.Free;
+  end;
+end;
+
+class function TDivByZeroDetector.HasBreakContinueGuard(
+  MethodNode, DivNode: TAstNode; const VarLow: string): Boolean;
+// G2: 'if <divisor> = 0 then Break/Continue' (bzw. <=0 / <1) VOR der Division
+// und im SELBEN innersten Schleifenrumpf. Ohne die Schleifen-Gleichheit waere
+// die Suppression unsound (ein Break einer inneren/anderen Schleife schuetzt die
+// Division nicht).
+var
+  LoopOfDiv : TAstNode;
+  Ifs : TList<TAstNode>;
+  IfN : TAstNode;
+  Low : string;
+begin
+  Result := False;
+  LoopOfDiv := InnermostLoopContaining(MethodNode, DivNode);
+  if LoopOfDiv = nil then Exit;   // Division nicht in einer Schleife -> kein Break-Schutz
+  Ifs := MethodNode.FindAll(nkIfStmt);
+  try
+    for IfN in Ifs do
+    begin
+      if IfN.Line >= DivNode.Line then Continue;
+      Low := IfN.TypeRef.ToLower;
+      if Low = '' then Continue;
+      // Bail-Bedingung auf dem Divisor (dieselbe Menge wie im Exit/Raise-Zweig
+      // von HasGuardingIf).
+      if not (
+         TDetectorUtils.ContainsWholeWordLower(VarLow + ' = 0',  Low) or
+         TDetectorUtils.ContainsWholeWordLower(VarLow + '=0',    Low) or
+         TDetectorUtils.ContainsWholeWordLower(VarLow + ' <= 0', Low) or
+         TDetectorUtils.ContainsWholeWordLower(VarLow + '<=0',   Low) or
+         TDetectorUtils.ContainsWholeWordLower(VarLow + ' < 1',  Low) or
+         TDetectorUtils.ContainsWholeWordLower(VarLow + '<1',    Low) ) then
+        Continue;
+      if not ThenBranchBreaksOrContinues(IfN) then Continue;
+      // Der Guard muss zur SELBEN innersten Schleife gehoeren wie die Division -
+      // sonst schuetzt sein Break/Continue die Division nicht.
+      if InnermostLoopContaining(MethodNode, IfN) = LoopOfDiv then
+        Exit(True);
+    end;
+  finally
+    Ifs.Free;
+  end;
 end;
 
 class procedure TDivByZeroDetector.CollectIntegerVars(MethodNode: TAstNode;
@@ -473,11 +795,19 @@ begin
         // Gibt es einen Guard?
         if HasGuardingIf(MethodNode, Divisor, N.Line) then Continue;
 
-        // Provably-nonzero: Divisor wird ausschliesslich mit nichtnull-Literalen
-        // belegt (const-init auf 1/2 usw.) - kann an der Divisionsstelle nicht 0
-        // sein. TP-sicher, weil jede Nicht-Literal-Zuweisung die Suppression
-        // aufhebt (Real-World-Audit 2026-07-10, provably-nonzero).
-        if AllAssignmentsNonZeroLiteral(MethodNode, Divisor, N.Line) then Continue;
+        // G1: aufsteigende for-Schleifenvariable mit nichtnull-Literal-Start -
+        // im Rumpf immer >= Start >= 1 (Real-World-FP-Audit 2026-07-12).
+        if IsGuardedByForLoopVar(MethodNode, N, Divisor) then Continue;
+
+        // G2: 'if divisor = 0 then Break/Continue' im selben Schleifenrumpf vor
+        // der Division (Real-World-FP-Audit 2026-07-12).
+        if HasBreakContinueGuard(MethodNode, N, Divisor) then Continue;
+
+        // Provably-nonzero: Divisor wird ausschliesslich mit beweisbar-nichtnullen
+        // Ausdruecken belegt (nichtnull-Literale ODER Clamp 'Max(1,..)' G3) - kann
+        // an der Divisionsstelle nicht 0 sein. TP-sicher, weil jede nicht-beweisbare
+        // Zuweisung die Suppression aufhebt (Real-World-Audit 2026-07-10/-12).
+        if AllAssignmentsProvablyNonZero(MethodNode, Divisor, N.Line) then Continue;
 
         var Key := IntToStr(N.Line) + ':' + Divisor;
         if Reported.ContainsKey(Key) then Continue;
