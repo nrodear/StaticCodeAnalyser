@@ -157,6 +157,11 @@ type
     // quote*/escape*/get*forsql-Konvention (dieselben Regeln wie fuer
     // Konkat-Terme in AllConcatTermsSafe, hier fuer Format-Argumente).
     class function IsSafeSqlHelperCall(const ElemLow: string): Boolean; static;
+    // True wenn NameLow der NAME eines Quoting-/Escape-/Cast-Helfers ist:
+    // SAFE_CASTS (QuotedStr/...) bzw. die quote*/escape*/get*forsql-Konvention.
+    // Zentral fuer bare Calls UND Member-Pfad-Call-Endungen in
+    // AllConcatTermsSafe (Recharakterisierung after30 2026-07-12).
+    class function IsSafeSqlHelperName(const NameLow: string): Boolean; static;
     // True wenn IdentLow als Parameter/lokale Variable der Routine mit
     // Integer-Typ deklariert ist (Modifier out/var/const werden gestrippt).
     class function IsLocalIntegerIdent(MethodNode: TAstNode;
@@ -315,6 +320,23 @@ begin
   Result := hasUnderscore and hasAlpha;
 end;
 
+class function TSQLInjectionDetector.IsSafeSqlHelperName(
+  const NameLow: string): Boolean;
+// Sanitizer-Namenskonvention (DMVC/mORMot): SAFE_CASTS (QuotedStr/QuotedSQL/...)
+// bzw. quote*/escape*/get*forsql. NUR der NAME (nicht der volle Call) - fuer
+// bare Calls und Member-Pfad-Endungen in AllConcatTermsSafe wiederverwendet.
+var
+  s : string;
+begin
+  Result := False;
+  if NameLow = '' then Exit;
+  for s in SAFE_CASTS do
+    if NameLow = s then Exit(True);
+  Result := NameLow.StartsWith('quote')
+         or NameLow.StartsWith('escape')
+         or (NameLow.StartsWith('get') and NameLow.EndsWith('forsql'));
+end;
+
 class function TSQLInjectionDetector.AllConcatTermsSafe(MethodNode: TAstNode;
   const RHS: string): Boolean;
 // Strippt alle String-Literale (mit ''-Escape-Handling) raus, dann an
@@ -338,7 +360,6 @@ var
   c        : Char;
   ident    : string;
   IdentOrig: string;
-  s        : string;
   isSafe   : Boolean;
   LastComp : string;
   PathOk   : Boolean;
@@ -459,6 +480,17 @@ begin
           i := j;
           Continue;
         end;
+        // Recharakterisierung after30 (2026-07-12): Sanitizer-Helfer-CALL als
+        // LETZTE Pfad-Komponente (Conn.QuoteIdent(x) / Obj.GetTableNameForSQL(..))
+        // ist ebenso sicher wie ein barer Sanitizer-Call (unten) - der Helfer
+        // escaped den Input. Pflicht: '(' folgt direkt -> Aufruf, keine Property.
+        // TP-Risiko identisch zur bereits vertrauten bare-Call-Konvention.
+        if PathOk and (j <= Length(Stripped)) and (Stripped[j] = '(')
+           and IsSafeSqlHelperName(LastComp) then
+        begin
+          i := j;
+          Continue;
+        end;
         Exit(False); // Member-Pfad ohne Metadaten-Endung -> unsicher
       end;
       if (j > Length(Stripped)) or (Stripped[j] <> '(') then
@@ -476,18 +508,11 @@ begin
         Inc(i);
         Continue;
       end;
-      isSafe := False;
-      for s in SAFE_CASTS do
-        if ident = s then begin isSafe := True; Break; end;
-      // Pattern-based safe-cast: Schema-Sanitizer-Helfer aus DMVCFramework
-      // / mORMot folgen Konvention 'Get<X>ForSql' bzw. 'Quote<X>' bzw.
-      // 'Escape<X>'. Z.B. lSB.Append('INSERT INTO ' + GetTableNameForSQL(...))
-      // ist Schema-Builder, kein User-Input-Concat.
-      if (not isSafe)
-         and (ident.StartsWith('quote')
-              or ident.StartsWith('escape')
-              or (ident.StartsWith('get') and ident.EndsWith('forsql'))) then
-        isSafe := True;
+      // SAFE_CASTS bzw. Schema-Sanitizer-Konvention (Get<X>ForSql / Quote<X> /
+      // Escape<X>) - DMVC/mORMot Schema-Builder, kein User-Input-Concat. Seit
+      // 2026-07-12 in IsSafeSqlHelperName zentralisiert (verhaltensidentisch,
+      // auch vom Member-Pfad-Zweig oben genutzt).
+      isSafe := IsSafeSqlHelperName(ident);
       // FP-Gate (2026-07-04): int-format-concat - Format(...) dessen Maske
       // nur Integer-Platzhalter (%d/%u/%x) traegt, kann nur Ziffern
       // erzeugen (DMVC PeopleModuleU: 'ORDER BY ... ' +

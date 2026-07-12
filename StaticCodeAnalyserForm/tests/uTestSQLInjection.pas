@@ -109,6 +109,11 @@ type
     // Real-World FP-Audit 2026-07-10: SCREAMING_SNAKE_CASE-Const-Konkat
     [Test] procedure SQL_ScreamingSnakeConstConcat_NoFinding;
     [Test] procedure SQL_CamelCaseVarConcat_StillReported;
+    // Recharakterisierung after30 2026-07-12: Sanitizer-Helfer-CALL als LETZTE
+    // Member-Pfad-Komponente (Conn.QuoteIdent(x)) ist sicher; Nicht-Sanitizer-
+    // Member-Call bleibt Fund.
+    [Test] procedure SQL_MemberPathSanitizerCall_NoFinding;
+    [Test] procedure SQL_MemberPathNonSanitizerCall_StillReported;
   end;
 
 implementation
@@ -1153,6 +1158,42 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
     'camelCase-Variable in SQL-Konkat bleibt SCA003');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_MemberPathSanitizerCall_NoFinding;
+// Recharakterisierung after30: die LETZTE Komponente eines Member-Pfad-CALLS ist
+// ein Sanitizer (Conn.QuoteIdent(x)) - dieselbe quote*/escape*/get*forsql-
+// Konvention wie fuer bare Calls, nur am Pfad-Ende. Der Helfer escaped den Input.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Run(userId: string);'#13#10 +
+  'begin'#13#10 +
+  '  Query.SQL.Text := ''SELECT * FROM t WHERE id='' + Conn.QuoteIdent(userId);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    'Conn.QuoteIdent(x) am Pfad-Ende ist Sanitizer-Call -> kein SCA003');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_MemberPathNonSanitizerCall_StillReported;
+// TP-Gegenprobe: ein Member-Pfad-CALL dessen Endung KEIN Sanitizer ist
+// (Obj.GetUserName(x) - Get* aber nicht *ForSql) bleibt ein Fund. Beweist,
+// dass das '('-gegatete Helfer-Gate nicht ueber alle Member-Calls streut.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Run2(x: string);'#13#10 +
+  'begin'#13#10 +
+  '  Query.SQL.Text := ''SELECT * FROM t WHERE name='' + Obj.GetUserName(x);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
+    'Obj.GetUserName(x) ist kein Sanitizer -> bleibt SCA003-Fund');
   finally F.Free; end;
 end;
 
