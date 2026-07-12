@@ -93,6 +93,14 @@ type
     // Gegenprobe: Direktive im Method-Body aber NICHT zwischen Read/Write
     // -> echter Read-vor-Write bleibt ein Fund (Guard darf nicht zu breit sein).
     [Test] procedure ReadBeforeWriteDirectiveElsewhere_StillFlagged;
+    // --- Real-World FP-Audit 2026-07-12: var-param-out-write (Kat. A/C/D) ---
+    [Test] procedure ReceiverTypecastCallOutArg_NoFinding;        // Kat. A '.'
+    [Test] procedure ReceiverDerefTypecastCallOutArg_NoFinding;   // Kat. A '^'
+    [Test] procedure CaseSelectorCallOutArg_NoFinding;            // Kat. C
+    [Test] procedure CallArgWithStringLiteralParen_NoFinding;     // Kat. D
+    // FN-Gegenproben (muessen weiter feuern):
+    [Test] procedure CastOperandOnlyRead_StillFlagged;            // FN-Edge Kat. A
+    [Test] procedure CaseSelectorPlainVarNoCall_StillFlagged;     // Over-Suppress-Guard Kat. C
   end;
 
 implementation
@@ -1573,6 +1581,167 @@ begin
   try
     Assert.IsTrue(CountKind(L, fkUninitVar) >= 1,
       'echter Read-vor-Write (Direktive erst danach) muss weiter flaggen');
+  finally L.Free; end;
+end;
+
+// ============================================================
+// Real-World FP-Audit 2026-07-12: var-param-out-write (Kat. A/C/D)
+// ============================================================
+
+procedure TTestUninitVar.ReceiverTypecastCallOutArg_NoFinding;
+// Kat. A ('.'-Form, Alcinoe TransactionStart): der Receiver-Typecast
+// 'TForm(Sender)' ist die ERSTE Klammer-Gruppe - das alte ExtractCallArgsRaw
+// lieferte 'Sender' statt des echten var/out-Args 'h'. Jetzt werden ALLE
+// Arg-Gruppen gescannt (Cast-Praefix uebersprungen) -> h bekommt pessimistic-Write.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(Sender: TObject);'#13#10 +
+    'var h: NativeUInt;'#13#10 +
+    'begin'#13#10 +
+    '  TForm(Sender).StartTx(h);'#13#10 +
+    '  if h > 0 then Exit;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+      'var/out-Arg nach Receiver-Typecast (.) muss pessimistic-Write bekommen');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.ReceiverDerefTypecastCallOutArg_NoFinding;
+// Kat. A ('^'-Form, CEF4Delphi get_components): 'PUpd(FData)^.get_components(
+// PUpd(FData), cnt, comp)' - erstes '(' ist der Cast. cnt (2. Real-Arg) muss
+// erkannt werden; der Cast-Operand-Deref '(FData)^' wird uebersprungen.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var cnt: NativeUInt;'#13#10 +
+    'begin'#13#10 +
+    '  PUpd(FData)^.get_components(PUpd(FData), cnt, comp);'#13#10 +
+    '  if cnt > 0 then Exit;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+      'var/out-Arg im Method-Call nach Deref-Typecast (^) muss Write bekommen');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.CaseSelectorCallOutArg_NoFinding;
+// Kat. C (dominant, Abbrevia/HeidiSQL GetTimeZoneInformation): der Parser
+// verwirft den case-Selektor -> 'GetTZI(tzi)' war unsichtbar -> tzi als
+// uninitialisiert gemeldet. Der Source-Selektor-Scan registriert jetzt den
+// pessimistic-Write fuer tzi.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(out Res: Integer);'#13#10 +
+    'var tzi: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  case GetTZI(tzi) of'#13#10 +
+    '    0: Res := tzi;'#13#10 +
+    '  else Res := 0;'#13#10 +
+    '  end;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+      'var/out-Arg im case-Selektor-Call muss pessimistic-Write bekommen');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.CallArgWithStringLiteralParen_NoFinding;
+// Kat. D (Indy ParseMessageFlagString): ein String-Literal ')' im verschachtelten
+// Arg brach die Paren-Zaehlung ab -> flags (nach dem Literal) wurde verfehlt.
+// Nach String-Stripping zaehlen die Klammern korrekt -> flags bekommt Write.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(const s: string);'#13#10 +
+    'var flags: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  ParseFlags(Copy(s, 1, PosIdx('')'', s)), flags);'#13#10 +
+    '  if flags > 0 then Exit;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+      'Arg nach String-Literal ) muss trotz Fehl-Klammer erkannt werden');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.CastOperandOnlyRead_StillFlagged;
+// FN-GEGENPROBE (kritisch): 'raw' kommt NUR als Typecast-Operand 'PFoo(raw)^'
+// vor (ein READ), wird nie geschrieben. Der skip-by-suffix-Guard ueberspringt
+// diese Gruppe -> raw bekommt KEINEN Write -> echter uninitialisierter Read
+// bleibt ein Fund. Beweist dass der Fix Cast-Operanden nicht als Write wertet.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var raw: Pointer;'#13#10 +
+    'begin'#13#10 +
+    '  PFoo(raw)^.DoA();'#13#10 +
+    '  PBar(raw)^.DoB();'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.IsTrue(CountKind(L, fkUninitVar) >= 1,
+      'nur als Cast-Operand gelesene, nie geschriebene Var bleibt uninit-Fund');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.CaseSelectorPlainVarNoCall_StillFlagged;
+// OVER-SUPPRESS-GEGENPROBE: der case-Selektor ist die Variable SELBST (kein
+// Call) -> der Selektor-Scan darf x NICHT als geschrieben werten. x wird nur
+// gelesen, nie geschrieben -> bleibt Fund.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(out Res: Integer);'#13#10 +
+    'var x: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  case x of'#13#10 +
+    '    0: Res := x;'#13#10 +
+    '  else Res := 2;'#13#10 +
+    '  end;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try
+    Assert.IsTrue(CountKind(L, fkUninitVar) >= 1,
+      'case-Selektor ohne Call darf die Selektor-Var nicht als geschrieben werten');
   finally L.Free; end;
 end;
 

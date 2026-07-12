@@ -1185,9 +1185,62 @@ var
       RegisterWrite(Idx, Line);
   end;
 
+  procedure RegisterCallArgWrites(const CallName: string; Line: Integer);
+  // Real-World-FP-Audit 2026-07-12, FP-Klasse 'var-param-out-write' (Kat. A+D):
+  // Ersetzt das alte ExtractCallArgsRaw (nahm nur die ERSTE Klammer-Gruppe).
+  //   Kat. A: Receiver-/Cast-Praefix 'PFoo(x)^.Method(outVar)' lieferte 'x'
+  //           statt 'outVar' -> outVar bekam keinen pessimistic-Write -> FP.
+  //   Kat. D: String-Literal ')' im Arg brach die Paren-Zaehlung ab.
+  // Fix: ueber ALLE Klammer-Gruppen des (string-gestrippten) Ausdrucks laufen
+  // und pro Gruppe die Arg-Idents als pessimistic-Write registrieren - ABER
+  // Gruppen ueberspringen, deren ')' direkt von '.'/'^'/'[' gefolgt wird: das
+  // ist ein Cast-/Receiver-Operand (ein READ), kein var/out-Arg.
+  // FN-SCHUTZ: 'PFoo(localVar)^.M()' -> Gruppe '(localVar)' von '^' gefolgt ->
+  // uebersprungen -> localVar bleibt ein Read -> echter uninit-Bug bleibt Fund.
+  var
+    S          : string;
+    i, L, GroupStart, Depth, j : Integer;
+    AfterClose : Char;
+  begin
+    S := StripCommentsAndStrings(CallName);   // Kat. D: ')' in Literalen raus
+    L := Length(S);
+    i := 1;
+    while i <= L do
+    begin
+      if S[i] = '(' then
+      begin
+        GroupStart := i + 1;
+        Depth := 1;
+        Inc(i);
+        while (i <= L) and (Depth > 0) do
+        begin
+          if S[i] = '(' then Inc(Depth)
+          else if S[i] = ')' then
+          begin
+            Dec(Depth);
+            if Depth = 0 then Break;
+          end;
+          Inc(i);
+        end;
+        // i steht auf dem schliessenden ')' (oder L+1 bei unbalanciert).
+        j := i + 1;
+        while (j <= L) and (S[j] = ' ') do Inc(j);
+        AfterClose := #0;
+        if j <= L then AfterClose := S[j];
+        // Cast-/Receiver-Praefix ')^' / ').' / ')[' -> Operand ist ein Read,
+        // NICHT als Write registrieren (FN-Schutz gegen Typecast-Operand-Reads).
+        if not CharInSet(AfterClose, ['.', '^', '[']) then
+          RegisterArgVarsAsWrites(
+            LowerCase(Copy(S, GroupStart, i - GroupStart)), Line);
+        Inc(i);
+      end
+      else
+        Inc(i);
+    end;
+  end;
+
   procedure ProcessCall(C: TAstNode);
   var
-    ArgsLow  : string;
     FuncName : string;
     DotPos   : Integer;
     Receiver : string;
@@ -1231,33 +1284,30 @@ var
       // Kontext genutzt, siehe ProcessReceiverInitInExpr).
       ApplyReceiverInit(Receiver, Method, C.Line);
     end;
-    ArgsLow := LowerCase(TDetectorUtils.ExtractCallArgsRaw(C.Name));
-    if ArgsLow = '' then Exit;
-    RegisterArgVarsAsWrites(ArgsLow, C.Line);
+    // Real-World-FP-Audit 2026-07-12: pessimistic-Write ueber ALLE Arg-Gruppen
+    // (nicht nur die erste) - Receiver-/Cast-Praefixe uebersprungen (Kat. A+D).
+    RegisterCallArgWrites(C.Name, C.Line);
   end;
 
-  procedure ProcessConditionCalls(Node: TAstNode);
-  // Phase 2.2 + 2.3: Calls innerhalb von Expression-tragenden Knoten
-  // (nkIfStmt/nkWhileStmt/nkCaseStmt fuer Conditions, nkAssign/nkForStmt
-  // fuer RHS-Ausdruecke) sind im Parser nicht als nkCall-Knoten abgelegt
-  // sondern als TypeRef-String. Wir tokenisieren den String, finden alle
-  // 'name(args)'-Pattern und behandeln sie wie ProcessCall
-  // (READ_ALLOWLIST -> kein Write; sonst pessimistic-Write pro
-  // Var-Identifier in den Args).
+  procedure ProcessCallsInExprText(const ExprRaw: string; Line: Integer);
+  // Kernlogik (Real-World-FP-Audit 2026-07-12 faktorisiert aus
+  // ProcessConditionCalls): alle Calls in einem Expression-String tokenisieren
+  // und pro var/out-Arg pessimistic-Write registrieren (READ_ALLOWLIST-Calls
+  // ausgenommen). Genutzt von ProcessConditionCalls (TypeRef-Strings) UND
+  // ProcessCaseSelectorWrites (case-Selektor aus der Quelle - der Parser
+  // verwirft ihn, siehe Kat. C).
   //
-  // Nested-procedure statt anonymous-method (greift auf Outer-Scope
-  // VarList und RegisterWrite zu - anonymous procs koennen das nicht
-  // erfassen, siehe E2555).
+  // Nested-procedure statt anonymous-method (greift auf Outer-Scope VarList
+  // und RegisterWrite zu - anonymous procs koennen das nicht, siehe E2555).
   var
     Calls   : TList<TExprCall>;
     Call    : TExprCall;
     ArgsLow : string;
   begin
-    if (Node = nil) or (Node.TypeRef = '') then Exit;
-    if IsLineInRanges(Node.Line, NestedRanges) then Exit;
+    if ExprRaw = '' then Exit;
     Calls := TList<TExprCall>.Create;
     try
-      TDetectorUtils.ParseCallsInExpr(Node.TypeRef, Calls);
+      TDetectorUtils.ParseCallsInExpr(ExprRaw, Calls);
       for Call in Calls do
       begin
         // IsReadOnlyCall erwartet 'FuncName(...)' - wir bauen Stub.
@@ -1265,11 +1315,55 @@ var
         ArgsLow := LowerCase(Call.ArgsRaw);
         if ArgsLow = '' then Continue;
         // P2: Single-Pass-Tokenizer + Dict-Lookup statt O(N) Inner-Loop.
-        RegisterArgVarsAsWrites(ArgsLow, Node.Line);
+        RegisterArgVarsAsWrites(ArgsLow, Line);
       end;
     finally
       Calls.Free;
     end;
+  end;
+
+  procedure ProcessConditionCalls(Node: TAstNode);
+  // Phase 2.2 + 2.3: Calls innerhalb von Expression-tragenden Knoten
+  // (nkIfStmt/nkWhileStmt/nkCaseStmt-Conditions, nkAssign/nkForStmt-RHS) legt
+  // der Parser als TypeRef-String ab (nicht als nkCall). Delegiert an
+  // ProcessCallsInExprText.
+  begin
+    if (Node = nil) or (Node.TypeRef = '') then Exit;
+    if IsLineInRanges(Node.Line, NestedRanges) then Exit;
+    ProcessCallsInExprText(Node.TypeRef, Node.Line);
+  end;
+
+  procedure ProcessCaseSelectorWrites(CaseNode: TAstNode);
+  // Real-World-FP-Audit 2026-07-12, FP-Klasse 'var-param-out-write' (Kat. C,
+  // dominant): 'case SomeCall(outVar) of' - der Parser verwirft den case-
+  // Selektor (ParseCaseStmt: SkipTo([tkKwOf]), nkCaseStmt.TypeRef bleibt leer),
+  // daher lief ProcessConditionCalls(Cases) leer und outVar bekam keinen
+  // pessimistic-Write -> FP. Da der Selektor NICHT im AST steht, lesen wir ihn
+  // string-gestrippt aus der Quelle ('case <sel> of', max 5 Zeilen fuer
+  // mehrzeilige Selektoren) und behandeln ihn wie eine Condition.
+  var
+    n, endLine, casePos, ofPos, dummy : Integer;
+    accLow, sel : string;
+  begin
+    if (CaseNode = nil) or (Lines = nil) then Exit;
+    if IsLineInRanges(CaseNode.Line, NestedRanges) then Exit;
+    if (CaseNode.Line < 1) or (CaseNode.Line > Lines.Count) then Exit;
+    accLow := '';
+    n := CaseNode.Line;
+    endLine := n + 4;
+    if endLine > Lines.Count then endLine := Lines.Count;
+    while n <= endLine do
+    begin
+      accLow := accLow + ' ' + LowerCase(StripCommentsAndStrings(Lines[n - 1]));
+      if CountWholeWordOccurrences('of', accLow, dummy) > 0 then Break;
+      Inc(n);
+    end;
+    if CountWholeWordOccurrences('case', accLow, casePos) = 0 then Exit;
+    if CountWholeWordOccurrences('of', accLow, ofPos) = 0 then Exit;
+    if ofPos <= casePos + 4 then Exit;      // 'of' muss NACH 'case <sel>' stehen
+    // Selektor = Text zwischen dem 'case'-Wort und dem 'of'-Wort.
+    sel := Copy(accLow, casePos + 4, ofPos - (casePos + 4));
+    ProcessCallsInExprText(sel, CaseNode.Line);
   end;
 
   procedure ProcessReceiverInitInExpr(Node: TAstNode);
@@ -1788,6 +1882,10 @@ var
       for i := 0 to Ifs.Count     - 1 do ProcessConditionCalls(Ifs[i]);
       for i := 0 to Whiles.Count  - 1 do ProcessConditionCalls(Whiles[i]);
       for i := 0 to Cases.Count   - 1 do ProcessConditionCalls(Cases[i]);
+      // Kat. C (var-param-out-write): case-Selektor aus der Quelle, da der
+      // Parser ihn verwirft (nkCaseStmt.TypeRef leer -> ProcessConditionCalls
+      // oben ist fuer Cases ein No-Op).
+      for i := 0 to Cases.Count   - 1 do ProcessCaseSelectorWrites(Cases[i]);
       for i := 0 to Assigns.Count - 1 do ProcessConditionCalls(Assigns[i]);
       for i := 0 to Fors.Count    - 1 do ProcessConditionCalls(Fors[i]);
       // Receiver-Init fuer Calls in Expression-Strings (assign-RHS/conditions):
