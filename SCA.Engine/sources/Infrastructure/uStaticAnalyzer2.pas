@@ -101,7 +101,7 @@ uses
   uHardcodedPath, uDebugOutput, uDeepNesting,
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
   uCyclomaticComplexity, uCustomRuleDetector,
-  uDfmAnalysisRunner, uDfmRepoIndex, uSymbolReferenceIndex, uAstFileCache,
+  uDfmAnalysisRunner, uDfmRepoIndex, uSymbolReferenceIndex, uTypeIndex, uAstFileCache,
   uFileTextCache, uAnalyzeContext,
   uSuppression, uCustomClassDiscovery, uPathOverrides, uConfidenceFilter,
   uSynchronizeInDestructor, uLockWithoutTryFinally,
@@ -1132,6 +1132,20 @@ begin
     except
       FreeAndNil(Ctx.SymbolRefIndex);     // ggf. nil (Build-Fehler) - ok
     end;
+
+    // Track C (Konzept_StrukturellePhase): Cross-Unit-Typ-Index. Additiv/
+    // inert - noch kein Detektor konsumiert ihn (nil-Fallback via
+    // CtxTypeIndex), Scan-Verhalten bleibt byte-identisch. Baut aus demselben
+    // AstFileCache (kein Doppel-Parse). Build-Fehler schluckt der Index bzw.
+    // FreeAndNil hier -> Analyse laeuft ohne Typ-Index weiter.
+    LastPhase := 'Pre-Index: TypeIndex.Build';
+    Ctx.TypeIndex := TTypeIndex.Create;
+    try
+      Ctx.TypeIndex.Build(IndexFiles, Ctx.AstFileCache);
+    except
+      FreeAndNil(Ctx.TypeIndex);          // ggf. nil (Build-Fehler) - ok
+    end;
+
     Ctx.DetectorTimings := gDetectorTimings;    // nur referenziert (Caller-owned)
 
     LastPhase := 'Parser.Create + Main-Loop start';

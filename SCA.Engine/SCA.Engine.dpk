@@ -242,6 +242,7 @@ contains
   uSuppression in 'sources\Infrastructure\uSuppression.pas',
   uSuppressionTelemetry in 'sources\Infrastructure\uSuppressionTelemetry.pas',
   uSymbolReferenceIndex in 'sources\Infrastructure\uSymbolReferenceIndex.pas',
+  uTypeIndex in 'sources\Infrastructure\uTypeIndex.pas',
   uTypeResolver in 'sources\Infrastructure\uTypeResolver.pas',
   uVcsChanges in 'sources\Infrastructure\uVcsChanges.pas',
   uClaudePrompt in 'sources\Output\uClaudePrompt.pas',

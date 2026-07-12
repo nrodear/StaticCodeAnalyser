@@ -32,7 +32,8 @@ uses
   System.SysUtils, System.Classes,      // System.Classes: TStringList (LeakyClasses-Klon, TD-1 2c)
   System.Generics.Collections, System.Generics.Defaults,
   uSCAConsts,        // TSuppressionMarker (UnusedSuppression-Collection, 2026-07-05)
-  uAstFileCache, uFileTextCache, uSymbolReferenceIndex, uDfmRepoIndex;
+  uAstFileCache, uFileTextCache, uSymbolReferenceIndex, uDfmRepoIndex,
+  uTypeIndex;
 
 type
   // ==========================================================================
@@ -103,6 +104,11 @@ type
     AstFileCache    : TAstFileCache;
     SymbolRefIndex  : TSymbolReferenceIndex;
     DfmRepoIndex    : TDfmRepoIndex;
+    // Track C (Konzept_StrukturellePhase): Cross-Unit-Typ-Index (Typ-Kind +
+    // Klassen-Elternkette). Additiv/inert - noch von keinem Detektor gelesen
+    // (nil-Fallback via CtxTypeIndex). Wie SymbolRefIndex vom Context BESESSEN
+    // -> in Destroy freigegeben (Indizes vor dem AstFileCache, den sie nutzen).
+    TypeIndex       : TTypeIndex;
     // TD-1 Inkrement 2c (2026-07-06): per-Scan-Kopie der scan-zeit-MUTIERTEN
     // Config-Liste LeakyClasses (uSCAConsts-Global). AutoDiscovery haengt die
     // waehrend des Scans entdeckten Klassen an DIESE Instanz statt an den
@@ -158,6 +164,9 @@ function CtxFileTextCache(AContext: TAnalyzeContext): TFileTextCache;
 function CtxSymbolRefIndex(AContext: TAnalyzeContext): TSymbolReferenceIndex;
 function CtxDfmRepoIndex(AContext: TAnalyzeContext): TDfmRepoIndex;
 function CtxAstFileCache(AContext: TAnalyzeContext): TAstFileCache;
+// Track C: Cross-Unit-Typ-Index. nil -> Detektor faellt auf Single-Unit-
+// Verhalten zurueck (kein Cross-Unit-Typ-Wissen), exakt wie heute.
+function CtxTypeIndex(AContext: TAnalyzeContext): TTypeIndex;
 
 // TD-1 Inkrement 2c (2026-07-06): LeakyClasses-Leser mit Context-oder-Global-
 // Fallback. ABWEICHEND von den Ctx*-Index-Helfern oben faellt dieser NICHT auf
@@ -220,6 +229,14 @@ function CtxAstFileCache(AContext: TAnalyzeContext): TAstFileCache;
 begin
   if AContext <> nil then
     Result := AContext.AstFileCache
+  else
+    Result := nil;
+end;
+
+function CtxTypeIndex(AContext: TAnalyzeContext): TTypeIndex;
+begin
+  if AContext <> nil then
+    Result := AContext.TypeIndex
   else
     Result := nil;
 end;
@@ -435,6 +452,8 @@ begin
   FreeAndNil(LeakyClasses);
   FreeAndNil(DfmRepoIndex);
   FreeAndNil(SymbolRefIndex);
+  // Track C: TypeIndex vor dem AstFileCache freigeben (nutzt ihn in Build).
+  FreeAndNil(TypeIndex);
   FreeAndNil(AstFileCache);
   inherited;
 end;

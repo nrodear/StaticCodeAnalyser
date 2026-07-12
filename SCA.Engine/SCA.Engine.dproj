@@ -6,7 +6,7 @@
         <FrameworkType>None</FrameworkType>
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Release</Config>
-        <Platform Condition="'$(Platform)'==''">Win32</Platform>
+        <Platform Condition="'$(Platform)'==''">Win64</Platform>
         <ProjectName Condition="'$(ProjectName)'==''">SCA.Engine</ProjectName>
         <TargetedPlatforms>3</TargetedPlatforms>
         <AppType>Package</AppType>
@@ -308,6 +308,7 @@
         <DCCReference Include="sources\Infrastructure\uSuppression.pas"/>
         <DCCReference Include="sources\Infrastructure\uSuppressionTelemetry.pas"/>
         <DCCReference Include="sources\Infrastructure\uSymbolReferenceIndex.pas"/>
+        <DCCReference Include="sources\Infrastructure\uTypeIndex.pas"/>
         <DCCReference Include="sources\Infrastructure\uTypeResolver.pas"/>
         <DCCReference Include="sources\Infrastructure\uVcsChanges.pas"/>
         <DCCReference Include="sources\Output\uClaudePrompt.pas"/>
