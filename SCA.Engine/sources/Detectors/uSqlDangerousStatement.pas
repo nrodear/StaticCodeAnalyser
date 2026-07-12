@@ -130,6 +130,12 @@ begin
     if EndPos <= 0 then EndPos := Length(Merged);
     Fragment := Copy(Merged, P, EndPos - P + 1);
 
+    // DROP ... IF EXISTS ist deliberate idempotente DDL (Migrationen, Test-
+    // Setup/Teardown, Export-Builder) - analog dem ALTER-TABLE-IF-EXISTS-Gate
+    // oben (Recharakterisierung after30 2026-07-12: 5/26 SCA058-Sample-FPs).
+    // Nur DROP-Verben; TRUNCATE/UPDATE/DELETE kennen kein IF EXISTS.
+    if V.StartsWith('''drop ') and (Pos(' if exists', Fragment) > 0) then Continue;
+
     // SQL-Shape-Validierung: UPDATE braucht ' set ' im Fragment, sonst ist
     // es ein englisches Error-Message-Literal.
     if (V = '''update ') and (Pos(' set ', Fragment) = 0) then Continue;

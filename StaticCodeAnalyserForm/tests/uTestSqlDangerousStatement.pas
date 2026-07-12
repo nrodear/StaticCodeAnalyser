@@ -47,6 +47,9 @@ type
     // --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
     [Test] procedure SqlDanger_UpdateDynamicWhereCall_NotReported;
     [Test] procedure SqlDanger_UpdateWhereFieldNameIdent_Reported;
+    // --- Recharakterisierung after30 2026-07-12: DROP ... IF EXISTS ---
+    [Test] procedure SqlDanger_DropTableIfExists_NoFinding;
+    [Test] procedure SqlDanger_DropTablePlain_StillReported;
   end;
 
 implementation
@@ -496,6 +499,39 @@ begin
     'unfiltered UPDATE mit blossem WhereFieldName-Ident (kein Call) muss weiter als Bug feuern');
   finally F.Free; end;
 end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_DropTableIfExists_NoFinding;
+// Recharakterisierung after30: DROP TABLE IF EXISTS ist deliberate idempotente
+// DDL (Migration/Test-Cleanup) - analog dem bestehenden ALTER-IF-EXISTS-Gate.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TFDQuery;'#13#10 +
+  'begin q.SQL.Text := ''DROP TABLE IF EXISTS temp_import''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSqlDangerousStatement),
+    'DROP TABLE IF EXISTS ist deliberate idempotente DDL -> kein SCA058-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_DropTablePlain_StillReported;
+// TP-Gegenprobe: ein DROP TABLE OHNE IF EXISTS bleibt destruktiv -> Fund. Beweist,
+// dass das Gate IF-EXISTS-spezifisch ist und nicht alle DROPs unterdrueckt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TFDQuery;'#13#10 +
+  'begin q.SQL.Text := ''DROP TABLE customers''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkSqlDangerousStatement) >= 1,
+    'DROP TABLE ohne IF EXISTS bleibt destruktiv -> SCA058-Fund');
+  finally F.Free; end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestSqlDangerousStatement);
 
