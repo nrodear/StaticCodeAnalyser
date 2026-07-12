@@ -20,6 +20,9 @@ type
     [Test] procedure BareRaise_InsideExcept_NotReported;
     [Test] procedure BareRaise_InsideOnHandler_NotReported;
     [Test] procedure RaiseWithClass_NeverFlagged;
+    // Real-World FP-Audit 2026-07-12 (SCA133): except-'else'-Default-Handler
+    [Test] procedure BareRaise_InsideExceptElse_NotReported;
+    [Test] procedure BareRaise_AfterExceptElse_TopLevel_StillReported;
 
     // Finding-Inhalt
     [Test] procedure Finding_KindAndSeverity;
@@ -137,6 +140,44 @@ begin
     Assert.IsNotNull(Hit, 'fkRaiseOutsideExcept finding expected');
     Assert.AreEqual(fkRaiseOutsideExcept, Hit.Kind);
     Assert.AreEqual(lsError,              Hit.Severity);
+  finally F.Free; end;
+end;
+
+procedure TTestRaiseOutsideExcept.BareRaise_InsideExceptElse_NotReported;
+// Real-World FP-Audit 2026-07-12 (SCA133): der 'else'-Default-Handler eines
+// except-Blocks IST Teil des Handlers - die aktuelle Exception ist aktiv, ein
+// bare 'raise;' dort ist ein gueltiger Re-Raise, kein NIL-Raise. Frueher
+// entkamen die else-Statements dem nkExceptBlock (Parser stoppte bei tkKwElse).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  try Bar; except on E: EConvertError do Log(''x''); else raise; end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRaiseOutsideExcept),
+    'bare raise im except-else-Default-Handler ist gueltiger Re-Raise');
+  finally F.Free; end;
+end;
+
+procedure TTestRaiseOutsideExcept.BareRaise_AfterExceptElse_TopLevel_StillReported;
+// TP-Gegenkontrolle: ein bare 'raise;' NACH dem try (im Methoden-Rumpf, kein
+// Handler) muss weiter feuern. Sichert ab, dass der else-Zweig-Parse GENAU den
+// else-Block + sein 'end' konsumiert und den trailing raise nicht verschluckt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  try Bar; except on E: EConvertError do Log(''x''); else Baz; end;'#13#10 +
+  '  raise;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkRaiseOutsideExcept),
+    'bare raise nach dem try (kein Handler) bleibt Fund');
   finally F.Free; end;
 end;
 

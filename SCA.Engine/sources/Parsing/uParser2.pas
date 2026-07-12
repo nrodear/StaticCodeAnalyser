@@ -1866,6 +1866,22 @@ begin
           ParseStatement(ExNode);
         GuardAdvance(ExceptStart);
       end;
+      // Real-World-FP-Audit 2026-07-12 (SCA133): der 'else'-Default-Handler eines
+      // except-Blocks ('except on..do..; else <stmts> end') gehoert ZUM Handler -
+      // die aktuelle Exception ist dort aktiv, ein bare 'raise;' ist ein gueltiger
+      // Re-Raise. Frueher stoppte die Schleife bei tkKwElse -> die else-Statements
+      // entkamen dem nkExceptBlock in den umschliessenden Block (InHandler=False
+      // -> SCA133-FP + Folge-Fehlparse des 'end'). Jetzt als ExNode-Kinder parsen.
+      if Tok.Kind = tkKwElse then
+      begin
+        Next;  // 'else'
+        while not (Tok.Kind in [tkKwEnd, tkKwFinally, tkKwUntil, tkEof]) do
+        begin
+          var ElseStart := FNextCount;
+          ParseStatement(ExNode);
+          GuardAdvance(ElseStart);
+        end;
+      end;
     end
     else if Tok.Kind = tkKwFinally then
     begin
