@@ -104,6 +104,13 @@ type
     // Verify-Nachschaerfung 2026-07-12 (Drop-Stichprobe: chained-call + managed):
     [Test] procedure ChainedCallMultiArgOutArg_NoFinding;         // Komma-Heuristik
     [Test] procedure ManagedInterfaceVarReceiver_NoFinding;       // IsManagedType-Interface
+    // --- Recharakterisierung after30 (2026-07-12): 4 detector-lokale FP-Klassen ---
+    [Test] procedure HexLiteralSingleLetterVar_NoFinding;         // '$F' ist kein Read von var F
+    [Test] procedure HexLiteralNotMaskingRealRead_StillFlagged;   // FN-Gegenprobe zu '$'-Guard
+    [Test] procedure LengthOnArrayNotValueRead_NoFinding;         // Length(arr) ist Groessen-Query
+    [Test] procedure LengthGuardArrayElementRead_StillFlagged;    // FN-Gegenprobe zu Length-INTR
+    [Test] procedure ManagedAliasTbtString_NoFinding;             // tbtString = managed AnsiString
+    [Test] procedure IdentToIntVarArgWrite_NoFinding;             // IdentToInt fuellt var-Arg
   end;
 
 implementation
@@ -1799,6 +1806,151 @@ begin
   try
     Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
       'Interface-Var (managed, auto-nil) ist kein SCA166-uninit-Fall');
+  finally L.Free; end;
+end;
+
+// ============================================================
+// Recharakterisierung after30 (2026-07-12): detector-lokale FP-Klassen
+// ============================================================
+
+procedure TTestUninitVar.HexLiteralSingleLetterVar_NoFinding;
+// FP-Klasse 'hex-literal-digit': in 'D := B1 and $F;' matcht das 'F' in der
+// Hex-Literal-Ziffernfolge $F wortgrenzengenau die gleichnamige Ein-Buchstaben-
+// Var F. Ein '$' direkt davor -> Hex, kein Read (Bezeichner beginnen nie mit '$').
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var F, B1, D: Byte;'#13#10 +
+    'begin'#13#10 +
+    '  B1 := 2;'#13#10 +
+    '  D := B1 and $F;'#13#10 +
+    '  WriteLn(D);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+    '$F ist ein Hex-Literal, kein Read der Var F');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.HexLiteralNotMaskingRealRead_StillFlagged;
+// FN-Gegenprobe zum '$'-Guard: ein ECHTER Read von f (vor '$FF', nicht dahinter)
+// bleibt ein Fund. Beweist, dass der Guard nur das $-praefigierte Match skippt.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var f, d: Byte;'#13#10 +
+    'begin'#13#10 +
+    '  d := f and $FF;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try Assert.IsTrue(CountKind(L, fkUninitVar) >= 1,
+    'f wird vor jeder Zuweisung real gelesen (d := f ...) -> bleibt SCA166-Fund');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.LengthOnArrayNotValueRead_NoFinding;
+// FP-Klasse 'length-not-value-read': Length(Buf) ist eine Groessen-Query, die
+// die Element-Inhalte NICHT liest (dynarray/String -> 0 bei nil; statisches
+// Array -> compile-time). Kein uninit-Read.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var Buf: array[0..15] of Byte; n: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  n := Length(Buf);'#13#10 +
+    '  WriteLn(n);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+    'Length(Buf) liest keine Element-Inhalte -> kein uninit-Read');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.LengthGuardArrayElementRead_StillFlagged;
+// FN-Gegenprobe zum Length-INTR: ein echter Element-Read Buf[0] (Inhalt gelesen)
+// bleibt ein Fund. Der Length-Guard darf nur Length(...) entschaerfen.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var Buf: array[0..15] of Byte; x: Byte;'#13#10 +
+    'begin'#13#10 +
+    '  x := Buf[0];'#13#10 +
+    '  WriteLn(x);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try Assert.IsTrue(CountKind(L, fkUninitVar) >= 1,
+    'Buf[0] liest echten Element-Inhalt vor jedem Write -> bleibt SCA166-Fund');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.ManagedAliasTbtString_NoFinding;
+// FP-Klasse 'managed-alias' (PascalScript): tbtString = AnsiString (compiler-
+// managed, auto ''). Read-without-write ist kein uninit-Bug -> managed-Skip.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var s: tbtString;'#13#10 +
+    'begin'#13#10 +
+    '  WriteLn(s);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+    'tbtString ist ein managed AnsiString-Alias (auto '''') -> kein uninit-Bug');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.IdentToIntVarArgWrite_NoFinding;
+// FP-Klasse 'var-out-param-write': IdentToInt(const Ident; var Int; const Map)
+// FUELLT sein 2. Arg (var). Es stand faelschlich in READ_ALLOWLIST -> das
+// gefuellte n galt als uninit-Read. Ohne den Eintrag registriert der pessimistic-
+// Write-Default den Write von n vor dem spaeteren Read.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var n: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  IdentToInt(''Foo'', n, SomeMap);'#13#10 +
+    '  WriteLn(n);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
+    'IdentToInt fuellt var-Arg n -> Write registriert -> kein uninit-Read');
   finally L.Free; end;
 end;
 

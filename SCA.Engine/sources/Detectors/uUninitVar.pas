@@ -87,14 +87,19 @@ const
   // als Read (= Variable muss VORHER assigned sein).
   // Default fuer alle ANDEREN Calls (z.B. 'Helper.Init(X)') ist
   // pessimistic-Write - akzeptiert FNs zugunsten weniger FPs.
-  READ_ALLOWLIST : array[0..57] of string = (
+  // Hinweis: 'identtoint' bewusst NICHT hier - IdentToInt(const Ident; var Int;
+  // const Map) SCHREIBT sein 2. Arg (var) -> gehoert nicht zu den read-only-
+  // Calls (Recharakterisierung after30 2026-07-12: sonst gilt das gefuellte
+  // Int-Arg als uninit-Read = FP). Ohne Eintrag faellt der Call auf den
+  // pessimistic-Write-Default (ProcessCall/RegisterCallArgWrites) -> Write.
+  READ_ALLOWLIST : array[0..56] of string = (
     // --- Output ---
     'write', 'writeln', 'showmessage', 'showmessagefmt',
     'outputdebugstring', 'outputdebugstringa', 'outputdebugstringw',
     // --- Typ-Konvertierung / Inspektion (gibt nur einen Wert zurueck) ---
     'inttostr', 'inttohex', 'floattostr', 'datetostr', 'timetostr',
     'datetimetostr', 'formatfloat', 'formatdatetime', 'format',
-    'inttoidentstr', 'identtoint', 'strtoint', 'strtointdef',
+    'inttoidentstr', 'strtoint', 'strtointdef',
     'strtofloat', 'strtofloatdef', 'strtodatetime', 'strtodate',
     // --- String/Array-Inspektion ---
     'length', 'sizeof', 'high', 'low', 'ord', 'chr',
@@ -112,7 +117,7 @@ const
 
   // Managed types die Pascal auto-initialisiert. Wir flaggen sie nur,
   // wenn der User explizit `UninitVarFlagManagedTypes` aktiviert.
-  MANAGED_TYPE_PREFIXES : array[0..11] of string = (
+  MANAGED_TYPE_PREFIXES : array[0..13] of string = (
     'string', 'unicodestring', 'ansistring', 'rawbytestring',
     // Real-World-FP-Audit 2026-07-12: mORMot-/RTL-Stringtypen + Variant sind
     // ebenfalls compiler-auto-initialisiert (auto '', Unassigned) -> ein
@@ -120,7 +125,12 @@ const
     'rawutf8', 'rawjson', 'synunicode', 'widestring',
     'variant', 'olevariant',
     'tarray<',              // TArray<T> generic dynamic array
-    'iinterface'            // sehr defensive Annaehrung an ALLE Interfaces
+    'iinterface',           // sehr defensive Annaehrung an ALLE Interfaces
+    // Recharakterisierung after30 (2026-07-12): PascalScript-String-Aliase
+    // (tbtString = AnsiString, tbtWideString = WideString). Beide sind
+    // compiler-managed (auto '') -> read-without-write nie ein echter
+    // uninit-Bug (analog den mORMot-Aliasen oben; 3/26 der SCA166-Sample-FPs).
+    'tbtstring', 'tbtwidestring'
   );
 
   // Auto-init-Record-Typen: Records mit Initialize/Finalize-Management-
@@ -1004,10 +1014,14 @@ end;
 
 function PrecededByIntrinsicOpen(const LLow: string; NamePos: Integer): Boolean;
 // True wenn der Identifier an NamePos direkt Argument von low(/high(/sizeof(/
-// typeinfo( ist. Diese lesen den Wert NICHT (Compile-time bzw. Typ-Query),
-// zaehlen also nicht als Read (FP-Klasse 'low-high-not-read'). LLow lowercase.
+// typeinfo(/length( ist. Diese lesen den WERT NICHT (Compile-time, Typ- bzw.
+// Groessen-Query), zaehlen also nicht als Read (FP-Klasse 'low-high-not-read').
+// Recharakterisierung after30 (2026-07-12): Length(arr) ist eine Groessen-Query
+// - fuer dynamische Arrays/Strings liefert sie 0 bei nil OHNE die Element-Inhalte
+// zu lesen, fuer statische Arrays ist sie compile-time -> nie ein uninit-Read.
+// LLow lowercase.
 const
-  INTR : array[0..3] of string = ('low', 'high', 'sizeof', 'typeinfo');
+  INTR : array[0..4] of string = ('low', 'high', 'sizeof', 'typeinfo', 'length');
 var
   sp, ep, k : Integer;
   kw : string;
@@ -1739,6 +1753,12 @@ var
             // Real-World-FP 2026-06-23: folgende Formen sind KEIN Werte-Read:
             // 1) `@name` (Address-of, oft WinAPI-out-Param der name FUELLT).
             if Before = '@' then begin P := P + NL; Continue; end;
+            // 1b) `$F` / `$A`.. (Hex-Literal): ein '$' direkt davor macht das
+            //     Match zu einer Hex-Ziffernfolge, nicht zum Lesen einer
+            //     gleichnamigen Ein-Buchstaben-Var A..F (Recharakterisierung
+            //     after30 2026-07-12, DCU32/op.pas 'D := B1 and $F;'). Bezeichner
+            //     koennen nie mit '$' beginnen -> TP-sicher.
+            if Before = '$' then begin P := P + NL; Continue; end;
             // 2) low(name)/high(name)/sizeof(name)/typeinfo(name): Compile-time-
             //    bzw. Typ-Query, KEIN Werte-Read (FP-Klasse 'low-high-not-read').
             if PrecededByIntrinsicOpen(L, P) then
