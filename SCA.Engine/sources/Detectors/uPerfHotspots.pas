@@ -279,6 +279,109 @@ begin
     if TypeLow = T then Exit(True);
 end;
 
+function RhsIsProvablyNonString(const Code: string; AfterPlusPos: Integer): Boolean;
+// Track A (Konzept_StrukturellePhase 2026-07-12): True wenn die RHS eines
+// 'x := x + <RHS>' STRUKTURELL kein String sein KANN. Ein Delphi-String-'+'-
+// Ausdruck enthaelt ausschliesslich String/Char-Operanden, verknuepft mit '+'.
+// Jede Klausel ist damit ein BEWEIS fuer Nicht-String (keine Heuristik):
+//   N1  RHS beginnt (nach Whitespace) mit '['      -> Set-/Array-Konstruktor
+//   N2  Depth-0-Operand ist Zahl-Literal ('123' / '$1F')
+//   N3  Depth-0-Operator aus {*, /, -, div, mod, shl, shr, xor}
+//   N4  Depth-0-Operand ist numerischer Cast/Func 'NumFn(...)' OHNE trailing '.'
+// MONOTON: fuegt nur eine Suppression hinzu -> Fund-Zahl kann nur sinken; ein
+// echtes String-Concat (nur String/Char-Operanden + '+') erfuellt KEINE Klausel
+// -> 0 TP-Verlust. Scan bis Statement-Ende (';'/EOL) auf Paren-/Bracket-Tiefe 0;
+// String-'..' und Char-#..-Literale werden uebersprungen. Bracket-Tiefe wird
+// mitgezaehlt, damit 's + x[0]' (Char-Zugriff = echtes Concat) NICHT als N2/N3 zaehlt.
+const
+  NUMFN : array[0..14] of string = (
+    'integer', 'int64', 'cardinal', 'word', 'byte', 'length', 'ord', 'trunc',
+    'round', 'ceil', 'floor', 'abs', 'high', 'low', 'sizeof');
+var
+  i, L, depth, st, j, k, d2 : Integer;
+  c : Char;
+  firstSig, isNumFn : Boolean;
+  w, nf : string;
+begin
+  Result := False;
+  L := Length(Code);
+  i := AfterPlusPos;
+  depth := 0;
+  firstSig := False;
+  while i <= L do
+  begin
+    c := Code[i];
+    if (depth = 0) and ((c = ';') or (c = #10) or (c = #13)) then Break;
+    if CharInSet(c, [' ', #9]) then begin Inc(i); Continue; end;
+    if c = '''' then                              // String-Literal ueberspringen
+    begin
+      firstSig := True; Inc(i);
+      while (i <= L) and (Code[i] <> '''') do Inc(i);
+      Inc(i); Continue;
+    end;
+    if c = '#' then                               // Char-Literal #NN / #$hex
+    begin
+      firstSig := True; Inc(i);
+      if (i <= L) and (Code[i] = '$') then Inc(i);
+      while (i <= L) and CharInSet(Code[i], ['0'..'9', 'a'..'f', 'A'..'F']) do Inc(i);
+      Continue;
+    end;
+    if c = '(' then begin firstSig := True; Inc(depth); Inc(i); Continue; end;
+    if c = ')' then begin if depth > 0 then Dec(depth); Inc(i); Continue; end;
+    if c = '[' then
+    begin
+      if (depth = 0) and (not firstSig) then Exit(True);   // N1
+      firstSig := True; Inc(depth); Inc(i); Continue;
+    end;
+    if c = ']' then begin if depth > 0 then Dec(depth); Inc(i); Continue; end;
+    if depth = 0 then
+    begin
+      if CharInSet(c, ['0'..'9']) or (c = '$') then Exit(True);      // N2
+      if CharInSet(c, ['*', '/', '-']) then Exit(True);             // N3 (Symbol)
+      if CharInSet(c, ['a'..'z', 'A'..'Z', '_']) then
+      begin
+        st := i;
+        while (i <= L) and CharInSet(Code[i], ['a'..'z', 'A'..'Z', '0'..'9', '_']) do
+          Inc(i);
+        w := LowerCase(Copy(Code, st, i - st));
+        if (w = 'div') or (w = 'mod') or (w = 'shl') or (w = 'shr') or (w = 'xor') then
+          Exit(True);                                                // N3 (Wort)
+        j := i;                                    // N4: NumFn '(' ... ')' ohne trailing '.'
+        while (j <= L) and CharInSet(Code[j], [' ', #9]) do Inc(j);
+        if (j <= L) and (Code[j] = '(') then
+        begin
+          isNumFn := False;
+          // '.'-Praefix -> Member-Call (obj.High(x)), NICHT die Builtin-NumFn ->
+          // kein N4 (koennte String liefern).
+          if (st = 1) or (Code[st - 1] <> '.') then
+            for nf in NUMFN do if w = nf then begin isNumFn := True; Break; end;
+          if isNumFn then
+          begin
+            d2 := 1; k := j + 1;
+            while (k <= L) and (d2 > 0) do
+            begin
+              if Code[k] = '''' then            // String-Literal im Arg skippen
+              begin                             // (sonst faelscht '(' die Paren-Zaehlung)
+                Inc(k);
+                while (k <= L) and (Code[k] <> '''') do Inc(k);
+              end
+              else if Code[k] = '(' then Inc(d2)
+              else if Code[k] = ')' then Dec(d2);
+              Inc(k);
+            end;
+            while (k <= L) and CharInSet(Code[k], [' ', #9]) do Inc(k);
+            if (k > L) or (Code[k] <> '.') then Exit(True);          // N4
+          end;
+        end;
+        firstSig := True;
+        Continue;
+      end;
+      firstSig := True;
+    end;
+    Inc(i);
+  end;
+end;
+
 class procedure TPerfHotspotsDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
@@ -328,7 +431,11 @@ begin
       if PosInRanges(M.Index, Ranges)
          and not LhsDeclaredNumeric(Code, M.Groups[1].Value, M.Index)
          and not TR.IsNumericLhs(M.Groups[1].Value,
-                   TDetectorUtils.LineForPos(LineFor, M.Index)) then
+                   TDetectorUtils.LineForPos(LineFor, M.Index))
+         // Track A (2026-07-12): RHS strukturell beweisbar kein String -> kein
+         // O(n^2)-String-Concat, sondern numerischer/Set-Akkumulator (monotoner
+         // Suppress-Konjunkt, 0 TP-Verlust). M.Index+M.Length = Pos nach dem '+'.
+         and not RhsIsProvablyNonString(Code, M.Index + M.Length) then
         Emit(fkStringConcatInLoop,
           Format('String-Concat ''%s := %s + ...'' in loop body - ' +
                  'O(n^2) reallocations. Prefer TStringBuilder.Append or ' +
