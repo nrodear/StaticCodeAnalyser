@@ -27,6 +27,8 @@ type
     // ---- Finding-Inhalt ---------------------------------------------------
     [Test] procedure Param_Finding_KindAndSeverity;
     [Test] procedure Param_Finding_MissingVarMentionsParamName;
+    // Real-World FP-Audit 2026-07-12 (SCA028-Follow-up)
+    [Test] procedure Param_KeywordNamedMethod_Skipped;
   end;
 
 implementation
@@ -216,6 +218,23 @@ begin
       end;
     Assert.IsNotNull(Hit);
     Assert.Contains(Hit.MissingVar, 'orphan');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.Param_KeywordNamedMethod_Skipped;
+// Real-World FP-Audit 2026-07-12 (SCA028-Follow-up): keyword-benannte Methoden
+// (Read/Write/Exit/...) haben seit dem SCA028-Parser-Fix zwar einen nkMethod,
+// aber ihr Body haengt nicht zuverlaessig am Method-Node -> Param-Uses
+// unsichtbar -> falsches 'unused parameter'. Der Guard skippt sie konservativ.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Write(Buf: Integer);'#13#10 +
+  'begin DoSomething; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
+    'keyword-benannte Methode (Write) wird uebersprungen - Body-Attachment unsicher');
   finally F.Free; end;
 end;
 

@@ -187,6 +187,25 @@ begin
   end;
 end;
 
+function IsKeywordRoutineName(const AName: string): Boolean;
+// Real-World-FP-Audit 2026-07-12 (SCA028-Follow-up): keyword-benannte Methoden
+// (Read/Write/Exit/Result/Break/Continue - nicht-reservierte Standard-Routinen)
+// parst der Parser seit SCA028 zwar als nkMethod, aber ihr Body haengt noch
+// nicht zuverlaessig am Method-Node (Statement-Level-Calls auf keyword-Routinen
+// wie 'Write(...)' / 'Read(...)' werden noch nicht als Call geparst). Dadurch
+// sieht CollectAllTokens die Param-NUTZUNG nicht -> falsches 'unused parameter'.
+// Konservativ ueberspringen, bis das Body-Attachment tiefer gefixt ist.
+var
+  Bare : string;
+  p    : Integer;
+begin
+  p := LastDelimiter('.', AName);
+  if p > 0 then Bare := Copy(AName, p + 1, MaxInt) else Bare := AName;
+  Bare := LowerCase(Trim(Bare));
+  Result := (Bare = 'read') or (Bare = 'write') or (Bare = 'exit') or
+            (Bare = 'result') or (Bare = 'break') or (Bare = 'continue');
+end;
+
 class procedure TUnusedParameterDetector.AnalyzeMethod(UnitNode, MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -205,6 +224,9 @@ begin
 
   if IsInheritanceHook(UnitNode, MethodNode) then Exit;
   if IsLikelyEventHandler(MethodNode) then Exit;
+  // SCA028-Follow-up: keyword-benannte Methoden haben (noch) kein zuverlaessiges
+  // Body-Attachment -> Param-Uses unsichtbar -> FP. Konservativ skippen.
+  if IsKeywordRoutineName(MethodNode.Name) then Exit;
 
   Params := MethodNode.FindAll(nkParam);
   BodySB := TStringBuilder.Create;
