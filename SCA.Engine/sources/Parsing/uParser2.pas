@@ -977,6 +977,20 @@ end;
 
 { ---- Methoden-Signatur (Deklaration ohne Rumpf) ---- }
 
+function IsRoutineNameKeyword(Kind: TTokenKind): Boolean;
+// Real-World-FP-Audit 2026-07-12 (SCA028): einige Standard-Routinen sind KEINE
+// reservierten Woerter und duerfen Methoden-/Event-Handler-Namen sein (z.B.
+// 'procedure Exit(Sender: TObject)'), werden vom Lexer aber als Keyword
+// tokenisiert. An der Methoden-Namen-Position (direkt nach procedure/function)
+// ist ein solches Token der NAME -> als Ident behandeln, damit der Binder die
+// Methode findet (sonst SCA028-FP 'DFM-Event referenziert fehlende Methode').
+// Nur nicht-reservierte Standard-Routinen; echte Keywords (begin/if/...) koennen
+// an dieser Position in gueltigem Code nie stehen.
+begin
+  Result := Kind in [tkKwExit, tkKwResult, tkKwRead, tkKwWrite,
+                     tkKwBreak, tkKwContinue];
+end;
+
 procedure TParser2.ParseMethodSignature(Parent: TAstNode);
 var
   T        : TToken;
@@ -1001,7 +1015,7 @@ begin
   begin
     T        := Next; // procedure / function / constructor / destructor
     MethName := '';
-    if Tok.Kind = tkIdent then
+    if (Tok.Kind = tkIdent) or IsRoutineNameKeyword(Tok.Kind) then
       MethName := Next.Value;
   end;
   MethKind := T.Value;
@@ -1014,7 +1028,7 @@ begin
     if Tok.Kind = tkDot then
     begin
       Next;
-      if Tok.Kind = tkIdent then
+      if (Tok.Kind = tkIdent) or IsRoutineNameKeyword(Tok.Kind) then
         MethName := MethName + '.' + Next.Value;
       // Methoden-Generic-Param nach qualifiziertem Namen:
       //   procedure TFoo<T>.Bar<U>: U;

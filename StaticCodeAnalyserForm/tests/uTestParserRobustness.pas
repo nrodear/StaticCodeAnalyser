@@ -57,6 +57,10 @@ type
     [Test] procedure Parser_LegalNestedRoutine_NotHoistedToTopLevel;
     [Test] procedure Parser_AnonymousMethodInBody_NoTopLevelMethod;
     [Test] procedure Parser_LocalProcTypeVar_NoFalseRecovery;
+    // Real-World FP-Audit 2026-07-12 (SCA028): nicht-reservierte Standard-Routine
+    // als Methoden-/Event-Handler-Name (Lexer -> tkKwExit)
+    [Test] procedure Parser_KeywordMethodNameUnqualified_Captured;
+    [Test] procedure Parser_KeywordMethodNameQualified_Captured;
   end;
 
 implementation
@@ -1091,6 +1095,61 @@ begin
         'Body von TFoo.Test muss erhalten bleiben');
       Assert.AreEqual<Integer>(1, FirstM.DescendantCount(nkAssign),
         'CB := nil muss als Zuweisung im Body stehen');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_KeywordMethodNameUnqualified_Captured;
+// Real-World FP-Audit 2026-07-12 (SCA028): 'Exit' ist eine Standard-Routine,
+// KEIN reserviertes Wort -> darf Methoden-/Event-Handler-Name sein. Der Lexer
+// tokenisiert 'exit' als tkKwExit; der Parser muss es an der Namens-Position
+// (direkt nach 'procedure') dennoch als Methoden-Namen erfassen.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Exit(Sender: TObject);'#13#10+
+  'begin'#13#10+
+  '  Beep;'#13#10+
+  'end;'#13#10+
+  'end.';
+var Parser: TParser2; Root, ImplN: TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      ImplN := ImplNodeOf(Root);
+      Assert.IsNotNull(ImplN, 'implementation-Node fehlt');
+      Assert.AreEqual('Exit', TopLevelMethodNames(ImplN),
+        'keyword-benannte Methode Exit muss als nkMethod erfasst werden');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_KeywordMethodNameQualified_Captured;
+// Qualifizierte Implementierung 'procedure TForm1.Exit(...)': nach dem '.' steht
+// wieder tkKwExit -> muss ebenfalls als Namensteil erfasst werden (der Binder
+// braucht 'TForm1.Exit', damit das DFM-Event 'Exit' aufloest -> kein SCA028-FP).
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure TForm1.Exit(Sender: TObject);'#13#10+
+  'begin'#13#10+
+  '  Beep;'#13#10+
+  'end;'#13#10+
+  'end.';
+var Parser: TParser2; Root, ImplN: TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      ImplN := ImplNodeOf(Root);
+      Assert.IsNotNull(ImplN, 'implementation-Node fehlt');
+      Assert.AreEqual('TForm1.Exit', TopLevelMethodNames(ImplN),
+        'qualifizierte keyword-benannte Methode muss als nkMethod erfasst werden');
     finally Root.Free; end;
   finally Parser.Free; end;
 end;
