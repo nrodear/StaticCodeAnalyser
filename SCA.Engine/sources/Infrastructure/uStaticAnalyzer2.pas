@@ -404,7 +404,9 @@ begin
   AddD3('RoutineResultUnassigned', fkRoutineResultUnassigned, TRoutineResultAssignedDetector.AnalyzeUnit);
   AddD3('ReRaiseException', fkReRaiseException, TReRaiseExceptionDetector.AnalyzeUnit);
   AddD3('CastAndFree',     fkCastAndFree,     TCastAndFreeDetector.AnalyzeUnit);
-  AddD3('InstanceInvokedConstructor', fkInstanceInvokedConstructor, TInstanceInvokedConstructorDetector.AnalyzeUnit);
+  // Track C Opt-in (Runde 3): AContext-fuehrend (record-value-type-Gegenprobe
+  // via CtxTypeIndex) -> AddD statt AddD3, damit der Ctx durchgereicht wird.
+  AddD('InstanceInvokedConstructor', fkInstanceInvokedConstructor, TInstanceInvokedConstructorDetector.AnalyzeUnit);
   AddD3('InheritedMethodEmpty', fkInheritedMethodEmpty, TInheritedMethodEmptyDetector.AnalyzeUnit);
   AddD3('NilComparison',   fkNilComparison,   TNilComparisonDetector.AnalyzeUnit);
   AddD3('RaisingRawException', fkRaisingRawException, TRaisingRawExceptionDetector.AnalyzeUnit);
@@ -461,7 +463,9 @@ begin
   // SCA173 VariantTypeMisuse: Pre-Filter 'variant' damit Files ohne komplett geskippt werden.
   AddD3('VariantTypeMisuse', fkVariantTypeMisuse, TVariantTypeMisuseDetector.AnalyzeUnit, ['variant']);
   // SCA174 TObjectListWithoutOwnership: Pre-Filter 'tlist<' faengt Generic-Pattern.
-  AddD3('TObjectListWithoutOwnership', fkTObjectListWithoutOwnership, TTObjectListWithoutOwnershipDetector.AnalyzeUnit, ['tlist<']);
+  // Track C Opt-in (Runde 3): AContext-fuehrend (record-value-type-Gegenprobe via
+  // CtxTypeIndex) -> AddD statt AddD3, damit der Ctx durchgereicht wird.
+  AddD('TObjectListWithoutOwnership', fkTObjectListWithoutOwnership, TTObjectListWithoutOwnershipDetector.AnalyzeUnit, ['tlist<']);
   // SCA175 AnonMethodCaptureLoopVar: Pre-Filter 'procedure' (anonymous-Marker).
   AddD3('AnonMethodCaptureLoopVar', fkAnonMethodCaptureLoopVar, TAnonMethodCaptureLoopVarDetector.AnalyzeUnit, ['procedure']);
   // SCA176 CognitiveComplexity: kein Pre-Filter (jede Method gepruft).

@@ -30,6 +30,16 @@ type
 
     // ---- Finding-Inhalt ----------------------------------------------------
     [Test] procedure Finding_KindAndSeverity;
+
+    // ---- Track C (Cross-Unit-TypeIndex) Opt-in, Runde 3 --------------------
+    // FP-Klasse 'record-value-type': `r.Create` wo r eine Var/Param eines
+    // WERTTYP-RECORDS ist (TRegEx/... , Seed oder in-source 'record') ist kein
+    // Instanz-statt-Klassen-Ctor-Bug. TypeIndex nur im Pipeline-Weg gebaut;
+    // FindingsOf ruft mit AContext=nil auf -> Opt-in inaktiv (nil-Fallback).
+    [Test] procedure RecordReceiver_InSource_ViaPipeline_Suppressed;
+    [Test] procedure RecordReceiver_SeedRegEx_ViaPipeline_Suppressed;
+    [Test] procedure ClassReceiver_ViaPipeline_Reported;
+    [Test] procedure RecordReceiver_NoContext_StillReported;
   end;
 
 implementation
@@ -240,6 +250,101 @@ begin
     Assert.IsNotNull(Hit, 'fkInstanceInvokedConstructor finding expected');
     Assert.AreEqual(fkInstanceInvokedConstructor, Hit.Kind);
     Assert.AreEqual(lsError,                      Hit.Severity);
+  finally F.Free; end;
+end;
+
+// --- Track C (Cross-Unit-TypeIndex) Opt-in, Runde 3 -------------------------
+// FP-Klasse 'record-value-type' (SCA124): `r.Create` auf einer lokalen Var/
+// Param eines WERTTYP-RECORDS (System.RegularExpressions.TRegEx, TRttiContext,
+// ...) allokiert nichts und ueberschreibt keine Instanzfelder - kein Instanz-
+// statt-Klassen-Ctor-Bug. Der Detektor loest den Empfaenger-Typ aus den
+// nkLocalVar/nkParam-Deklarationen der Methode auf und fragt den repo-weiten
+// TTypeIndex nach dem Kind (nkRecord bzw. RTL-Seed). WICHTIG: der TypeIndex
+// wird NUR im Pipeline-Weg (FindingsViaPipeline) gebaut; FindingsOf ruft den
+// Detektor mit AContext=nil auf -> CtxTypeIndex nil, Opt-in inaktiv.
+
+procedure TTestInstanceInvokedConstructor.RecordReceiver_InSource_ViaPipeline_Suppressed;
+// FP-Suppression A: Empfaenger 'r' ist eine lokale Var eines im File
+// deklarierten RECORDS. TypeKindOf(trec)=tkiRecord -> unterdrueckt.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TRec = record'#13#10 +
+  '    class function Create: TRec; static;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var r: TRec;'#13#10 +
+  'begin'#13#10 +
+  '  r.Create;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkInstanceInvokedConstructor),
+    'TypeIndex beweist r als Werttyp-Record -> SCA124 unterdrueckt');
+  finally F.Free; end;
+end;
+
+procedure TTestInstanceInvokedConstructor.RecordReceiver_SeedRegEx_ViaPipeline_Suppressed;
+// FP-Suppression B (Seed-Pfad, KEIN in-source Decl): 'reg' ist vom RTL-Value-
+// Record TRegEx (System.RegularExpressions, nicht im Scan-Scope, per Seed
+// vorbelegt). TypeKindOf(tregex)=tkiRecord -> unterdrueckt.
+const SRC =
+  'unit t; interface'#13#10 +
+  'uses System.RegularExpressions;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var reg: TRegEx;'#13#10 +
+  'begin'#13#10 +
+  '  reg.Create;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkInstanceInvokedConstructor),
+    'Seed-Record TRegEx -> tkiRecord -> SCA124 unterdrueckt (beweist Seed-Pfad)');
+  finally F.Free; end;
+end;
+
+procedure TTestInstanceInvokedConstructor.ClassReceiver_ViaPipeline_Reported;
+// TP-Gegenprobe: 'f' ist eine echte KLASSEN-Instanz (TypeKindOf=tkiClass) -
+// `f.Create` bleibt ein Instanz-statt-Klassen-Ctor-Bug -> Fund BLEIBT trotz
+// aktivem TypeIndex. Beweist zugleich, dass SCA124 im Pipeline-Weg laeuft.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Bar;'#13#10 +
+  'var f: TFoo;'#13#10 +
+  'begin'#13#10 +
+  '  f.Create;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkInstanceInvokedConstructor) >= 1,
+    'Klassen-Empfaenger bleibt trotz TypeIndex SCA124-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestInstanceInvokedConstructor.RecordReceiver_NoContext_StillReported;
+// Gegenprobe/Doku: DIESELBE Record-Quelle ueber FindingsOf (AContext=nil, kein
+// TypeIndex) -> Opt-in inaktiv, die bisherige Lowercase-Heuristik meldet den
+// Fund. Belegt, dass der nil-Fallback das bisherige Verhalten unveraendert laesst.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'type TRec = record class function Create: TRec; static; end;'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var r: TRec;'#13#10 +
+  'begin r.Create; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkInstanceInvokedConstructor),
+    'ohne TypeIndex (AContext=nil) bleibt das bisherige Verhalten erhalten');
   finally F.Free; end;
 end;
 

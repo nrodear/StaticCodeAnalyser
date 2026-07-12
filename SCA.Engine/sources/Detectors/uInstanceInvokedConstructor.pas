@@ -56,18 +56,21 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TInstanceInvokedConstructorDetector = class
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
     class procedure AnalyzeMethod(MethodNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
+
+uses
+  uTypeIndex;
 
 // noinspection-file CanBeStrictPrivate, CyclomaticComplexity, LongMethod, MultipleExit, RedundantJump, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
@@ -159,19 +162,77 @@ end;
 
 class procedure TInstanceInvokedConstructorDetector.AnalyzeMethod(
   MethodNode: TAstNode; const FileName: string;
-  Results: TObjectList<TLeakFinding>);
+  Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
-  Calls : TList<TAstNode>;
-  N     : TAstNode;
-  Recv  : string;
-  F     : TLeakFinding;
+  Calls    : TList<TAstNode>;
+  Decls    : TList<TAstNode>;
+  N, D     : TAstNode;
+  Recv     : string;
+  RecvType : string;
+  F        : TLeakFinding;
+  Idx      : TTypeIndex;
+  VarTypes : TDictionary<string, string>;
+
+  function BareIdent(const AName: string): string;
+  // nkParam-Namen koennen einen Modifier tragen ('const r' -> 'r'); nkLocalVar
+  // nie. Das letzte space-getrennte Token ist der eigentliche Bezeichner.
+  var
+    P : Integer;
+  begin
+    Result := Trim(AName);
+    P := LastDelimiter(' ', Result);
+    if P > 0 then Result := Copy(Result, P + 1, MaxInt);
+  end;
+
 begin
+  // Track C Opt-in (Konzept_StrukturellePhase, Runde 3): Cross-Unit-Typ-Index-
+  // Gegenprobe. Nur wenn der repo-weite TTypeIndex verfuegbar & nicht leer ist,
+  // bauen wir eine Empfaenger-Typ-Map (lokale Vars + Params dieser Methode) auf.
+  // Damit unterscheiden wir WERTTYP-RECORDS (TRegEx/TRttiContext/TStopwatch/...,
+  // Seed oder in-source 'record'-Deklaration) von echten Klassen-Instanzen:
+  // `r.Create` auf einem Record allokiert nichts und ist kein Instanz-statt-
+  // Klassen-Ctor-Bug. nil/leerer Index (Tests/Single-File, AContext=nil) ->
+  // Map bleibt nil -> bisheriges Verhalten, byte-identisch.
+  Idx      := CtxTypeIndex(AContext);
+  VarTypes := nil;
   Calls := MethodNode.FindAll(nkCall);
   try
+    if (Idx <> nil) and (not Idx.IsEmpty) then
+    begin
+      VarTypes := TDictionary<string, string>.Create;
+      Decls := MethodNode.FindAll(nkLocalVar);
+      try
+        for D in Decls do
+          if Trim(D.TypeRef) <> '' then
+            VarTypes.AddOrSetValue(LowerCase(BareIdent(D.Name)), Trim(D.TypeRef));
+      finally
+        Decls.Free;
+      end;
+      Decls := MethodNode.FindAll(nkParam);
+      try
+        for D in Decls do
+          if Trim(D.TypeRef) <> '' then
+            VarTypes.AddOrSetValue(LowerCase(BareIdent(D.Name)), Trim(D.TypeRef));
+      finally
+        Decls.Free;
+      end;
+    end;
+
     for N in Calls do
     begin
       Recv := ExtractCreateReceiver(N.Name);
       if not LooksLikeInstance(Recv) then Continue;
+
+      // Track C Opt-in: Empfaenger ist eine lokale Var/Param, deren deklarierter
+      // Typ der TypeIndex beweisbar als RECORD kennt -> Werttyp, keine Instanz-
+      // Ctor-Fehlbenutzung, keine Allokation -> unterdruecken. nil-Map /
+      // unbekannt / Klasse -> Fund bleibt (bisheriges Verhalten, TP-safe).
+      // tkiRecord ist ein DIREKTER Fakt (record -> nkRecord/Seed), keine
+      // Ketten-Ambiguitaet wie bei Vererbung -> kein FN-Risiko.
+      if (VarTypes <> nil) and
+         VarTypes.TryGetValue(LowerCase(Recv), RecvType) and
+         (Idx.TypeKindOf(RecvType) = tkiRecord) then
+        Continue;
 
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
@@ -185,12 +246,13 @@ begin
     end;
   finally
     Calls.Free;
+    VarTypes.Free;
   end;
 end;
 
 class procedure TInstanceInvokedConstructorDetector.AnalyzeUnit(
   UnitNode: TAstNode; const FileName: string;
-  Results: TObjectList<TLeakFinding>);
+  Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Methods : TList<TAstNode>;
   M       : TAstNode;
@@ -198,7 +260,7 @@ begin
   Methods := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
-      AnalyzeMethod(M, FileName, Results);
+      AnalyzeMethod(M, FileName, Results, AContext);
   finally
     Methods.Free;
   end;

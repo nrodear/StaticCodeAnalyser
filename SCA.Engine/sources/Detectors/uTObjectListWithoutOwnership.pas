@@ -37,19 +37,20 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TTObjectListWithoutOwnershipDetector = class
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
 
 uses
-  System.RegularExpressions;
+  System.RegularExpressions,
+  uTypeIndex;
 
 const
   // `TList<T>.Create` aber NICHT `TObjectList<T>.Create`. Negative
@@ -64,7 +65,7 @@ const
 
 class procedure TTObjectListWithoutOwnershipDetector.AnalyzeUnit(
   UnitNode: TAstNode; const FileName: string;
-  Results: TObjectList<TLeakFinding>);
+  Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Methods : TList<TAstNode>;
   Assigns : TList<TAstNode>;
@@ -124,6 +125,22 @@ begin
               Mtch := AddRE.Match(N.Name);
               if not Mtch.Success then Continue;
               var AddedType := Mtch.Groups[1].Value;
+
+              // Track C Opt-in (Konzept_StrukturellePhase, Runde 3): Cross-Unit-
+              // Typ-Index-Gegenprobe. Ist der hinzugefuegte Typ ein WERTTYP-
+              // RECORD (TRegEx/TNameValuePair/TSizeF/... , Seed oder in-source
+              // 'record'-Deklaration), dann ist `T.Create` KEINE Heap-Allokation
+              // -> das Item leakt nicht, wenn die Liste freigegeben wird, und der
+              // TObjectList-Rat waere falsch. NUR bei beweisbar tkiRecord
+              // unterdruecken; nil/leerer Index (Tests/Single-File, AContext=nil),
+              // unbekannter Typ oder Klasse -> Fund bleibt (bisheriges Verhalten,
+              // TP-safe). tkiRecord ist ein DIREKTER Fakt (record -> nkRecord bzw.
+              // Seed), keine Ketten-Ambiguitaet wie bei Vererbung -> kein FN-Risiko.
+              var Idx := CtxTypeIndex(AContext);
+              if (Idx <> nil) and (not Idx.IsEmpty) and
+                 (Idx.TypeKindOf(LowerCase(AddedType)) = tkiRecord) then
+                Continue;
+
               F            := TLeakFinding.Create;
               F.FileName   := FileName;
               F.MethodName := M.Name;
