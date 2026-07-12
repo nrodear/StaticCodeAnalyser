@@ -49,6 +49,11 @@ type
     // Track B2 (2026-07-12): Label-Target 'done: Result := X' parst jetzt
     [Test] procedure LabelTargetResultAssign_NoFinding;
     [Test] procedure LabelTargetNoResultAssign_StillReported;
+    // Recharakterisierung after30 (2026-07-12): managed-Return + leerer Body
+    [Test] procedure ManagedStringReturnEmptyBody_NoFinding;
+    [Test] procedure ManagedInterfaceReturnEmptyBody_NoFinding;
+    // KRITISCHE Gegenprobe: managed-Return MIT Statements bleibt „forgot Result:="
+    [Test] procedure ManagedStringReturnWithStatements_StillReported;
 
     // ---- Finding-Inhalt ----------------------------------------------------
     [Test] procedure Finding_KindAndSeverity;
@@ -603,6 +608,55 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkRoutineResultUnassigned) >= 1,
     'Label-Target ohne Result-Zuweisung bleibt unassigned-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestRoutineResultAssigned.ManagedStringReturnEmptyBody_NoFinding;
+// Recharakterisierung after30: managed-Return (string, auto-init '') + leerer
+// Body -> Return NICHT "undefined", sondern definierter Leerwert -> kein SCA121.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function GetName: string;'#13#10 +
+  'begin end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRoutineResultUnassigned),
+    'string-Return (auto '''') + leerer Body -> kein undefined-Return-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestRoutineResultAssigned.ManagedInterfaceReturnEmptyBody_NoFinding;
+// managed-Return (Interface, auto-nil) + leerer Body -> definierter Leerwert nil.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function GetLogger: ILogger;'#13#10 +
+  'begin end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRoutineResultUnassigned),
+    'Interface-Return (auto-nil) + leerer Body -> kein undefined-Return-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestRoutineResultAssigned.ManagedStringReturnWithStatements_StillReported;
+// KRITISCHE TP-Gegenprobe: managed-Return ABER Body hat Statements (rechnet,
+// vergisst aber Result:=) -> echter "forgot Result:="-Bug -> bleibt Fund. Der
+// managed-Skip darf NUR bei EFFEKTIV LEEREM Body greifen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function BuildName(a, b: string): string;'#13#10 +
+  'var tmp: string;'#13#10 +
+  'begin'#13#10 +
+  '  tmp := a + b;'#13#10 +
+  '  DoLog(tmp);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkRoutineResultUnassigned) >= 1,
+    'managed-Return mit Statements (Result nie gesetzt) bleibt echter SCA121-Bug');
   finally F.Free; end;
 end;
 

@@ -344,6 +344,74 @@ begin
   end;
 end;
 
+// True wenn der Function-Body effektiv leer ist (`function Foo: T; begin end;`).
+// Genutzt fuer den File-Wide-Stub-Skip (AnalyzeUnit) UND den managed-Return-
+// Empty-Body-Skip (AnalyzeMethod). Deshalb hier VOR AnalyzeMethod definiert.
+function IsEffectivelyEmptyBody(MethodNode: TAstNode): Boolean;
+var
+  Child : TAstNode;
+  GrandChild : TAstNode;
+begin
+  Result := True;
+  for Child in MethodNode.Children do
+  begin
+    case Child.Kind of
+      nkBlock:
+        for GrandChild in Child.Children do
+          if GrandChild.Kind in [nkAssign, nkCall, nkIfStmt, nkCaseStmt,
+                                  nkForStmt, nkWhileStmt, nkRepeatStmt,
+                                  nkTryExcept, nkTryFinally, nkRaise, nkExit,
+                                  nkBreak, nkContinue, nkInherited] then
+            Exit(False);
+      nkAssign, nkCall, nkIfStmt, nkCaseStmt, nkForStmt, nkWhileStmt,
+      nkRepeatStmt, nkTryExcept, nkTryFinally, nkRaise, nkExit,
+      nkBreak, nkContinue, nkInherited:
+        Exit(False);
+    end;
+  end;
+end;
+
+// Extrahiert den Return-Typ aus dem Kind-String 'function:RetType[;direktive...]'.
+function ExtractReturnType(const TypeRef: string): string;
+var
+  c, s : Integer;
+begin
+  Result := '';
+  c := Pos(':', TypeRef);
+  if c = 0 then Exit;
+  Result := Copy(TypeRef, c + 1, MaxInt);
+  s := Pos(';', Result);
+  if s > 0 then Result := Copy(Result, 1, s - 1);
+  Result := Trim(Result);
+end;
+
+// True wenn der Return-Typ ein compiler-MANAGED Typ ist (auto-init ''/nil/
+// Unassigned): dann ist der Return-Wert bei fehlendem Result:= NICHT "undefined"
+// (der Kern-Claim von SCA121), sondern der definierte Leerwert. Analog
+// uUninitVar.MANAGED_TYPE_PREFIXES + Interface-Heuristik (I+Grossbuchstabe) +
+// dynamisches Array (TArray<...>).
+function IsManagedReturnType(const TypeRef: string): Boolean;
+const
+  MGD : array[0..12] of string = (
+    'string', 'unicodestring', 'ansistring', 'rawbytestring', 'widestring',
+    'rawutf8', 'rawjson', 'synunicode', 'variant', 'olevariant',
+    'tbtstring', 'tbtwidestring', 'tarray<');
+var
+  RetType, Low, P : string;
+begin
+  Result := False;
+  RetType := ExtractReturnType(TypeRef);
+  if RetType = '' then Exit;
+  Low := LowerCase(RetType);
+  for P in MGD do
+    if Low.StartsWith(P) then Exit(True);
+  // Interface: 'I' + Grossbuchstabe (refcounted, auto-nil). 'Integer'/'Int64'
+  // (I + Kleinbuchstabe) matchen NICHT.
+  if (Length(RetType) >= 2) and (RetType[1] = 'I') and
+     CharInSet(RetType[2], ['A'..'Z']) then
+    Exit(True);
+end;
+
 class procedure TRoutineResultAssignedDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -363,6 +431,14 @@ begin
   // Interface-Method-Deklaration / Klassen-Method-Deklaration im Typ-Section
   // -> kein Body, Implementation kommt anderswo. Nicht flaggen.
   if not HasBodyStatement(MethodNode) then Exit;
+
+  // Recharakterisierung after30 (2026-07-12): MANAGED-Return-Typ (auto-init
+  // ''/nil/Unassigned) + EFFEKTIV LEERER Body -> der Return-Wert ist NICHT
+  // "undefined" (der Kern-Claim von SCA121), sondern der definierte Leerwert;
+  // ein leerer Stub/abstract-Default ist idiomatisch (CnSelectionCodeTool u.a.).
+  // KRITISCH TP-safe: nur bei LEEREM Body. Ein managed-Return MIT Statements
+  // (rechnet, vergisst aber Result:=) bleibt ein echter "forgot Result:="-Bug.
+  if IsManagedReturnType(TypeRef) and IsEffectivelyEmptyBody(MethodNode) then Exit;
 
   // 'absolute Result'-Alias: Schreibzugriffe laufen ueber den Alias-Namen,
   // nie ueber 'Result' -> sonst FP.
@@ -503,32 +579,6 @@ begin
     [UnqualifiedName(MethodNode.Name)]);
   F.SetKind(fkRoutineResultUnassigned);
   Results.Add(F);
-end;
-
-// True wenn der Function-Body effektiv leer ist (`function Foo: T; begin end;`).
-// Wird unten fuer den File-Wide-Stub-Skip benutzt.
-function IsEffectivelyEmptyBody(MethodNode: TAstNode): Boolean;
-var
-  Child : TAstNode;
-  GrandChild : TAstNode;
-begin
-  Result := True;
-  for Child in MethodNode.Children do
-  begin
-    case Child.Kind of
-      nkBlock:
-        for GrandChild in Child.Children do
-          if GrandChild.Kind in [nkAssign, nkCall, nkIfStmt, nkCaseStmt,
-                                  nkForStmt, nkWhileStmt, nkRepeatStmt,
-                                  nkTryExcept, nkTryFinally, nkRaise, nkExit,
-                                  nkBreak, nkContinue, nkInherited] then
-            Exit(False);
-      nkAssign, nkCall, nkIfStmt, nkCaseStmt, nkForStmt, nkWhileStmt,
-      nkRepeatStmt, nkTryExcept, nkTryFinally, nkRaise, nkExit,
-      nkBreak, nkContinue, nkInherited:
-        Exit(False);
-    end;
-  end;
 end;
 
 class procedure TRoutineResultAssignedDetector.AnalyzeUnit(UnitNode: TAstNode;
