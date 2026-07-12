@@ -38,7 +38,7 @@ implementation
 
 uses
   System.RegularExpressions, System.StrUtils,
-  uFileTextCache, uDetectorUtils;
+  uFileTextCache, uDetectorUtils, uTypeIndex;
 
 var
   // Lazy-Cache (Round 11): die 3 KONSTANTEN Patterns einmalig kompilieren.
@@ -147,6 +147,46 @@ var
     if SameText(Base, 'TThread') or EndsStr('thread', Low) then
       Exit(True);
     Result := ResolveIsThreadByBaseClass(Base);
+  end;
+
+  function IsProvablyNotThread(const ATypeName: string): Boolean;
+  // Track C Opt-in (Konzept_StrukturellePhase, Runde 2): Cross-Unit-Typ-Index-
+  // Gegenprobe fuer den SCA114-Kandidaten. Die lexikalische Suffix-Heuristik
+  // LooksLikeThreadType stuft z.B. TJvThread=class(TJvComponent) ALLEIN wegen
+  // des '...thread'-Namens als Thread ein -> FP.
+  // FN-SICHER (Verify-Concern Runde 2): 'IsDescendantOf(x,tthread)=False' allein
+  // ist MEHRDEUTIG - die Elternkette kann bei einem out-of-scope-Vorfahren
+  // abbrechen, der in Wahrheit ein TThread ist (TSyncThread=class(TCustomBase),
+  // TCustomBase=class(TThread) ungescannt). Deshalb wird NUR suppressed, wenn die
+  // Kette (a) NICHT ueber TThread laeuft UND (b) beweisbar einen BEKANNTEN
+  // Nicht-Thread-Root erreicht (TObject/TComponent/...). Bricht sie bei einem
+  // unbekannten Vorfahren ab -> kein Root erreicht -> False -> Fallback (der
+  // echte Fund bleibt). IsDescendantOf matcht Roots per Parent-Name, also greift
+  // das auch wenn der Root selbst (RTL) nicht im Scan-Scope deklariert ist,
+  // solange eine gescannte Zwischenklasse 'class(TComponent)' etc. deklariert.
+  //   * Index nil/leer / Typ unbekannt / echter TThread-Nachfahre -> False (Fallback)
+  //   * NICHT-TThread UND erreicht bekannten Nicht-Thread-Root      -> True (suppress)
+  //   * Kette bricht bei Unbekanntem ab (kein Root)                 -> False (Fallback)
+  const
+    NON_THREAD_ROOTS : array[0..4] of string = (
+      'tobject', 'tcomponent', 'tpersistent', 'tinterfacedobject',
+      'tinterfacedpersistent');
+  var
+    Idx     : TTypeIndex;
+    NameLow, Root : string;
+  begin
+    Result := False;
+    NameLow := LowerCase(StripGenerics(ATypeName));
+    if NameLow = '' then Exit;
+    Idx := CtxTypeIndex(AContext);
+    if (Idx = nil) or Idx.IsEmpty then Exit;            // kein Index -> Fallback
+    if Idx.TypeKindOf(NameLow) = tkiUnknown then Exit;  // Typ unbekannt -> Fallback
+    if Idx.IsDescendantOf(NameLow, 'tthread') then Exit; // echter Thread -> Fund bleibt
+    // Nur suppressen wenn die Kette einen BEKANNTEN Nicht-Thread-Root erreicht
+    // (sonst koennte sie bei einem ungescannten TThread-Vorfahren abgebrochen sein).
+    for Root in NON_THREAD_ROOTS do
+      if Idx.IsDescendantOf(NameLow, Root) then Exit(True);
+    // kein Root erreicht -> Kette unvollstaendig -> Fallback (kein FN)
   end;
 
   function ResolveResultType(AtPos: Integer): string;
@@ -358,6 +398,16 @@ begin
            or ((DeclaredType = '') and (Pos('thread', LowerCase(Ident)) > 0))
          ) then
         Continue;
+
+      // Track C Opt-in (Konzept_StrukturellePhase, Runde 2): Cross-Unit-
+      // Gegenprobe zur lexikalischen Suffix-Heuristik oben. Kennt der repo-
+      // weite TTypeIndex den aufgeloesten DeclaredType und ist er beweisbar
+      // KEIN TThread-Nachfahre (z.B. TJvThread=class(TJvComponent)), war das
+      // ein FP -> ueberspringen. nil/leerer Index oder unbekannter Typ ->
+      // kein Eingriff (bestehendes Verhalten, TP-safe). Greift nur fuer den
+      // aufgeloesten Typ-Zweig; der reine Ident-Name-Fallback (DeclaredType='')
+      // liefert '' -> keine Suppression.
+      if IsProvablyNotThread(DeclaredType) then Continue;
 
       LookBack := M.Index - 500;
       if LookBack < 1 then LookBack := 1;

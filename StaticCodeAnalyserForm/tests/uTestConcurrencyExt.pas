@@ -52,6 +52,15 @@ type
     [Test] procedure Resume_InlineVarNonThreadReceiver_NotReported;
     [Test] procedure Resume_InlineVarProcessReceiver_NotReported;
     [Test] procedure Resume_InlineVarThreadReceiver_Reported;
+    // --- Track C (Cross-Unit-TypeIndex) Opt-in, Runde 2 ---
+    // FP-Klasse 'not-a-tthread': '...thread'-benannter Nicht-Thread. Der
+    // TypeIndex wird NUR im vollen Pipeline-Weg (FindingsViaPipeline) gebaut;
+    // FindingsOf/FindingsOfFile rufen den Detektor mit AContext=nil auf, dort
+    // ist das Opt-in inaktiv (nil-Fallback = bisheriges Verhalten).
+    [Test] procedure FreeAndNilJvThreadChain_ViaPipeline_Suppressed;
+    [Test] procedure FreeAndNilJvThreadChain_NoContext_StillReported;
+    [Test] procedure FreeAndNilRealThreadDescendant_ViaPipeline_Reported;
+    [Test] procedure FreeAndNilThreadOutOfScopeBase_ViaPipeline_StillReported;
   end;
 
 implementation
@@ -540,6 +549,140 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkThreadResumeDeprecated) >= 1,
     'Inline-var TThread-Descendant-Empfaenger (endet auf Thread) muss feuern');
+  finally F.Free; end;
+end;
+
+// --- Track C (Cross-Unit-TypeIndex) Opt-in, Runde 2 -------------------------
+// FP-Klasse 'not-a-tthread' (SCA114): die lexikalische Suffix-Heuristik stuft
+// jeden '...thread'-Typnamen als TThread ein. Der repo-weite TTypeIndex loest
+// die Vererbungskette auf und beweist Nicht-Thread-Typen (TJvThread=class(
+// TComponent)). WICHTIG: Der TypeIndex wird NUR im vollen Pipeline-Weg
+// (TAnalysisSession.Run, ssSource -> FindingsViaPipeline) aufgebaut.
+// FindingsOf/FindingsOfFile rufen TConcurrencyExtDetector direkt mit
+// AContext=nil auf -> CtxTypeIndex ist nil, das Opt-in ist inaktiv (Fallback).
+
+procedure TTestConcurrencyExt.FreeAndNilJvThreadChain_ViaPipeline_Suppressed;
+// TMyThread erbt (in-file) von TJvThread=class(TComponent) - der Name endet auf
+// 'Thread', der Typ ist aber KEIN TThread. Der Pipeline-Scan baut den TypeIndex
+// aus derselben Quelle: TypeKindOf(TMyThread)=Class UND NOT IsDescendantOf(
+// tmythread, tthread) -> beweisbar kein Thread -> SCA114 unterdrueckt.
+// Das 'FCtl: TThread'-Feld erfuellt nur den 'tthread'-Prefilter-Token, damit
+// der Detektor im Pipeline-Lauf ueberhaupt anlaeuft; es wird nie freigegeben.
+const SRC =
+  'unit t; interface'#13#10 +
+  'uses System.Classes;'#13#10 +
+  'type'#13#10 +
+  '  TJvThread = class(TComponent)'#13#10 +
+  '  end;'#13#10 +
+  '  TMyThread = class(TJvThread)'#13#10 +
+  '  end;'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    FWorker: TMyThread;'#13#10 +
+  '    FCtl: TThread;'#13#10 +
+  '    procedure Do_;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Do_;'#13#10 +
+  'begin'#13#10 +
+  '  FreeAndNil(FWorker);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
+    'TypeIndex beweist TMyThread als Nicht-TThread -> SCA114 unterdrueckt');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.FreeAndNilJvThreadChain_NoContext_StillReported;
+// Gegenprobe/Doku: DIESELBE Quelle ueber FindingsOfFile (AContext=nil, kein
+// TypeIndex) -> das Opt-in ist inaktiv, die lexikalische Suffix-Heuristik
+// greift wie bisher und meldet den '...thread'-Namen. Belegt, dass der
+// FindingsOf/FindingsOfFile-Harness KEINEN TypeIndex baut und das bisherige
+// (nil-Fallback-)Verhalten unveraendert bleibt.
+const SRC =
+  'unit t; interface'#13#10 +
+  'uses System.Classes;'#13#10 +
+  'type'#13#10 +
+  '  TJvThread = class(TComponent)'#13#10 +
+  '  end;'#13#10 +
+  '  TMyThread = class(TJvThread)'#13#10 +
+  '  end;'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    FWorker: TMyThread;'#13#10 +
+  '    FCtl: TThread;'#13#10 +
+  '    procedure Do_;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Do_;'#13#10 +
+  'begin'#13#10 +
+  '  FreeAndNil(FWorker);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
+    'ohne TypeIndex (AContext=nil) bleibt das lexikalische Verhalten erhalten');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.FreeAndNilRealThreadDescendant_ViaPipeline_Reported;
+// TP-Gegenprobe: ein ECHTER TThread-Nachfahre (TWorker=class(TThread)) muss
+// auch mit aktivem TypeIndex Kandidat bleiben - IsDescendantOf(tworker, tthread)
+// =True -> IsProvablyNotThread=False -> KEINE Suppression. Sonst waere das
+// Opt-in ein Detektions-Verlust.
+const SRC =
+  'unit t; interface'#13#10 +
+  'uses System.Classes;'#13#10 +
+  'type'#13#10 +
+  '  TWorker = class(TThread)'#13#10 +
+  '  end;'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    FWorker: TWorker;'#13#10 +
+  '    procedure Do_;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Do_;'#13#10 +
+  'begin'#13#10 +
+  '  FreeAndNil(FWorker);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate) >= 1,
+    'echter TThread-Nachfahre bleibt trotz TypeIndex SCA114-Kandidat');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.FreeAndNilThreadOutOfScopeBase_ViaPipeline_StillReported;
+// FN-GUARD (Verify-Concern Runde 2): TSyncThread=class(TCustomSyncBase), wobei
+// TCustomSyncBase NICHT im Scan-Scope deklariert ist (koennte dort ein TThread
+// sein). Die Elternkette bricht bei tcustomsyncbase ab -> erreicht KEINEN
+// bekannten Nicht-Thread-Root -> IsProvablyNotThread=False -> KEINE Suppression,
+// der echte Fund bleibt. (Mit der alten 'not IsDescendantOf(x,tthread)'-Logik
+// waere das faelschlich suppressed worden = TP-Verlust.) FCtl:TThread nur als
+// Prefilter-Token 'tthread'.
+const SRC =
+  'unit t; interface'#13#10 +
+  'uses System.Classes;'#13#10 +
+  'type'#13#10 +
+  '  TSyncThread = class(TCustomSyncBase)'#13#10 +
+  '  end;'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    FSync: TSyncThread;'#13#10 +
+  '    FCtl: TThread;'#13#10 +
+  '    procedure Do_;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Do_;'#13#10 +
+  'begin'#13#10 +
+  '  FreeAndNil(FSync);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate) >= 1,
+    'Thread-Subklasse mit out-of-scope-Basis bleibt Fund (Kette erreicht keinen Root)');
   finally F.Free; end;
 end;
 
