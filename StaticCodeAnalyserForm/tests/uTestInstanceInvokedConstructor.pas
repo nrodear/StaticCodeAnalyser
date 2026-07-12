@@ -40,6 +40,14 @@ type
     [Test] procedure RecordReceiver_SeedRegEx_ViaPipeline_Suppressed;
     [Test] procedure ClassReceiver_ViaPipeline_Reported;
     [Test] procedure RecordReceiver_NoContext_StillReported;
+
+    // ---- Track C Feld-Receiver-Erweiterung (2026-07-12) --------------------
+    // Empfaenger ist ein KLASSEN-FELD (nicht Local/Param); Typ per Klassen-Feld-
+    // Map + TypeIndex aufgeloest. Record-Feld -> unterdrueckt; Klassen-Feld ->
+    // Fund bleibt; Local shadowt gleichnamiges Feld -> Local-Typ entscheidet.
+    [Test] procedure FieldRecordReceiver_ViaPipeline_Suppressed;
+    [Test] procedure FieldClassReceiver_ViaPipeline_Reported;
+    [Test] procedure FieldShadowedByClassLocal_ViaPipeline_Reported;
   end;
 
 implementation
@@ -345,6 +353,91 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkInstanceInvokedConstructor),
     'ohne TypeIndex (AContext=nil) bleibt das bisherige Verhalten erhalten');
+  finally F.Free; end;
+end;
+
+procedure TTestInstanceInvokedConstructor.FieldRecordReceiver_ViaPipeline_Suppressed;
+// Feld-Receiver-Erweiterung: 'myrec' ist ein lowercase KLASSEN-FELD von TOwner
+// (kein Local/Param), dessen Typ TRec der TypeIndex als Record kennt. Die in
+// AnalyzeUnit vorgebaute Klassen-Feld-Map ('towner.myrec'->'TRec') greift ->
+// record-value-type -> unterdrueckt.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TRec = record'#13#10 +
+  '    class function Create: TRec; static;'#13#10 +
+  '  end;'#13#10 +
+  '  TOwner = class'#13#10 +
+  '    myrec: TRec;'#13#10 +
+  '    procedure Foo;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TOwner.Foo;'#13#10 +
+  'begin'#13#10 +
+  '  myrec.Create;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkInstanceInvokedConstructor),
+    'Record-Feld-Receiver -> Klassen-Feld-Map + tkiRecord -> SCA124 unterdrueckt');
+  finally F.Free; end;
+end;
+
+procedure TTestInstanceInvokedConstructor.FieldClassReceiver_ViaPipeline_Reported;
+// TP-Gegenprobe: 'myfoo' ist ein lowercase Feld einer echten KLASSE (TFoo,
+// tkiClass). `myfoo.Create` bleibt ein Instanz-statt-Klassen-Ctor-Bug -> Fund
+// BLEIBT trotz aktiver Feld-Map (nur Records werden unterdrueckt).
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  end;'#13#10 +
+  '  TOwner = class'#13#10 +
+  '    myfoo: TFoo;'#13#10 +
+  '    procedure Bar;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TOwner.Bar;'#13#10 +
+  'begin'#13#10 +
+  '  myfoo.Create;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkInstanceInvokedConstructor) >= 1,
+    'Klassen-Feld-Receiver bleibt trotz Feld-Map SCA124-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestInstanceInvokedConstructor.FieldShadowedByClassLocal_ViaPipeline_Reported;
+// FN-Schutz/Praezedenz: eine lokale Var 'dup' (KLASSE TFoo) shadowt das
+// gleichnamige Record-Feld 'dup'. Der echte Bug ist auf der lokalen Klassen-
+// Instanz -> muss GEMELDET bleiben. Beweist, dass Local/Param das Feld shadowt
+// (kein Rueckfall auf die Feld-Map, sonst faelschliche Unterdrueckung).
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TRec = record'#13#10 +
+  '    class function Create: TRec; static;'#13#10 +
+  '  end;'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  end;'#13#10 +
+  '  TOwner = class'#13#10 +
+  '    dup: TRec;'#13#10 +
+  '    procedure Baz;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TOwner.Baz;'#13#10 +
+  'var dup: TFoo;'#13#10 +
+  'begin'#13#10 +
+  '  dup.Create;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkInstanceInvokedConstructor) >= 1,
+    'lokale Klassen-Var shadowt Record-Feld -> Bug bleibt gemeldet');
   finally F.Free; end;
 end;
 
