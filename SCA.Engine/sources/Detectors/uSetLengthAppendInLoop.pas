@@ -117,14 +117,49 @@ end;
 // gemeldet. Ungeguardetes Block-Grow (kein vorangestelltes 'if Length(a)<CHUNK
 // then') bleibt ebenfalls gemeldet.
 function IsRoomGuardedBlockGrow(const Between, ArrayName, GrowAmount: string): Boolean;
+var
+  CapRef: string;
 begin
   if (GrowAmount = '') or (ArrayName = '') then Exit(False);
   // ArrayName/GrowAmount sind \w+ (keine Regex-Metazeichen) - direkt einbettbar.
   // '[^;]*' erlaubt keinen Statement-Trenner => der Guard muss unmittelbar vor
   // dem SetLength stehen ('then' direkt vor dem Call, per \s*$ verankert).
+  //
+  // Original-Form (2026-07-11): freier-Platz-Check 'Length(arr) ... < CHUNK' mit
+  // derselben Konstante <CHUNK> in Bedingung UND Wachstum (MVCFramework HttpSys).
+  // Kapazitaetsreferenz LINKS, Operator '<'. Unveraendert.
+  if TRegEx.IsMatch(Between,
+       '(?i)\bif\b[^;]*\bLength\s*\(\s*' + ArrayName +
+       '\s*\)[^;]*<[^;]*\b' + GrowAmount + '\b[^;]*\bthen\s*$') then
+    Exit(True);
+
+  // Real-World-FP-Audit 2026-07-12, FP-Klasse 'capacity-guarded Block-Grow':
+  // Kapazitaetspruefungen, die die Original-'<CHUNK'-Form verpasst, weil sie
+  // '=', '>=', '>' oder 'High(...)' benutzen und die Kapazitaet des Arrays auf
+  // der RECHTEN Seite des Vergleichs steht (Overflow-Ordnung), z.B.:
+  //   if <Index/Count> >= Length(<arr>) then SetLength(<arr>, Length(<arr>)+CHUNK)
+  //   if <Index>       >  High(<arr>)   then ...
+  //   if <Count>       =  Length(<arr>) then ...
+  // Der Realloc feuert nur bei Kapazitaets-Ueberlauf, d.h. alle CHUNK Iterationen
+  // -> amortisiert O(n), kein O(n*n).
+  //
+  // TP-Schutz 1: Grow-by-1 bleibt IMMER Fund - ein Guard mit Wachstum um genau 1
+  // reallociert trotzdem jede Iteration (High(arr) waechst mit dem Index mit) und
+  // ist echtes O(n*n); nur Block-Grow (>1) ist amortisiert-linear.
+  // TP-Schutz 2: der Vergleichsoperator muss VOR der Kapazitaetsreferenz DESSELBEN
+  // Arrays stehen (Overflow-Ordnung). Damit gilt ein reiner Nichtleer-Check
+  // 'if Length(arr) > 0 then' (Kapazitaet links) NICHT als Guard, und ein echtes
+  // ungeguardetes Per-Iteration-Grow wird nicht faelschlich unterdrueckt.
+  // (Die '(?<![<>:])='-Lookbehind verhindert, dass das '=' aus '<=' / ':=' als
+  // Gleichheits-Operator zaehlt - '<= Length(arr)' ist kein Overflow-Guard.)
+  if GrowAmount = '1' then Exit(False);
+  CapRef := '(?:Length\s*\(\s*' + ArrayName + '\s*\)|High\s*\(\s*' +
+            ArrayName + '\s*\))';
+  // (?<!<) vor '>=?' verhindert, dass das '>' aus dem Ungleich-Operator '<>'
+  // als Overflow-Vergleich zaehlt (Real-World-FP-Audit 2026-07-12 Verify-Concern:
+  // 'if x <> Length(arr) then blockGrow' ist KEIN Kapazitaets-Guard).
   Result := TRegEx.IsMatch(Between,
-    '(?i)\bif\b[^;]*\bLength\s*\(\s*' + ArrayName +
-    '\s*\)[^;]*<[^;]*\b' + GrowAmount + '\b[^;]*\bthen\s*$');
+    '(?i)\bif\b[^;]*(?:(?<!<)>=?|(?<![<>:])=)[^;]*' + CapRef + '[^;]*\bthen\s*$');
 end;
 
 class procedure TSetLengthAppendInLoopDetector.AnalyzeUnit(UnitNode: TAstNode;

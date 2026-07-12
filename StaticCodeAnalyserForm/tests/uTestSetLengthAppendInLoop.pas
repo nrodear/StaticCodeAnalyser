@@ -18,6 +18,14 @@ type
     [Test] procedure AppendInDifferentLooplessRoutine_NotReported;
     [Test] procedure RoomGuardedBlockGrowInLoop_NotReported;
     [Test] procedure UnguardedBlockGrowInLoop_Reported;
+    // Real-World FP-Audit 2026-07-12 (Guard C: capacity-guarded Block-Grow,
+    // Overflow-Formen '=' / '>=' / '>' / High())
+    [Test] procedure CapacityGuardGeBlockGrow_NotReported;
+    [Test] procedure CapacityGuardHighBlockGrow_NotReported;
+    [Test] procedure CapacityGuardEqBlockGrow_NotReported;
+    [Test] procedure CapacityGuardedGrowByOne_Reported;
+    // Verify-Concern 2026-07-12: '<>' darf NICHT als Overflow-Guard zaehlen
+    [Test] procedure NotEqualLenCheckBlockGrow_Reported;
   end;
 
 implementation
@@ -198,6 +206,135 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkSetLengthAppendInLoop) >= 1,
     'ungeguardetes Block-Grow in Schleife bleibt O(n*n)-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestSetLengthAppendInLoop.CapacityGuardGeBlockGrow_NotReported;
+// Real-World FP-Audit 2026-07-12 (capacity-guarded Block-Grow, '>='-Overflow-Form,
+// Alcinoe.Common): der Realloc feuert nur bei Kapazitaets-Ueberlauf
+// 'if i >= Length(arr) then SetLength(arr, Length(arr)+100)' -> nur alle 100
+// Iterationen = amortisiert O(n), kein O(n*n). Guard C matchte bisher nur die
+// '<CHUNK'-Form; die '>='-Overflow-Form (Kapazitaet rechts) rutschte durch.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Grow(N: Integer);'#13#10 +
+  'var i: Integer; arr: TArray<Byte>;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 0 to N - 1 do'#13#10 +
+  '  begin'#13#10 +
+  '    if i >= Length(arr) then'#13#10 +
+  '      SetLength(arr, Length(arr) + 100);'#13#10 +
+  '    arr[i] := 0;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSetLengthAppendInLoop),
+    'capacity-guarded Block-Grow (>=) ist amortisiert-linear, kein O(n*n)');
+  finally F.Free; end;
+end;
+
+procedure TTestSetLengthAppendInLoop.CapacityGuardHighBlockGrow_NotReported;
+// Real-World FP-Audit 2026-07-12 (capacity-guarded Block-Grow, High()-Form,
+// Abbrevia AbCompnd-FAT): 'if i > High(arr) then SetLength(arr, Length(arr)+256)'
+// - Realloc nur bei Index-Ueberlauf, in 256er-Bloecken = amortisiert-linear.
+// Guard C erkennt jetzt auch die 'High(...)'-Kapazitaetsreferenz.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Grow(N: Integer);'#13#10 +
+  'var i: Integer; arr: TArray<Byte>;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 0 to N - 1 do'#13#10 +
+  '  begin'#13#10 +
+  '    if i > High(arr) then'#13#10 +
+  '      SetLength(arr, Length(arr) + 256);'#13#10 +
+  '    arr[i] := 0;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSetLengthAppendInLoop),
+    'capacity-guarded Block-Grow (High/>) ist amortisiert-linear, kein O(n*n)');
+  finally F.Free; end;
+end;
+
+procedure TTestSetLengthAppendInLoop.CapacityGuardEqBlockGrow_NotReported;
+// Real-World FP-Audit 2026-07-12 (capacity-guarded Block-Grow, '='-Form, TES5Edit
+// BSArch/frmMain): 'if Count = Length(arr) then SetLength(arr, Length(arr)+4096)'
+// mit Count als Schreibposition - Realloc nur wenn voll, alle 4096 Elemente =
+// amortisiert-linear. Guard C erkennt jetzt auch die '='-Overflow-Form.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Grow(N: Integer);'#13#10 +
+  'var i, Count: Integer; arr: TArray<Byte>;'#13#10 +
+  'begin'#13#10 +
+  '  Count := 0;'#13#10 +
+  '  for i := 0 to N - 1 do'#13#10 +
+  '  begin'#13#10 +
+  '    if Count = Length(arr) then'#13#10 +
+  '      SetLength(arr, Length(arr) + 4096);'#13#10 +
+  '    arr[Count] := 0;'#13#10 +
+  '    Inc(Count);'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSetLengthAppendInLoop),
+    'capacity-guarded Block-Grow (=) ist amortisiert-linear, kein O(n*n)');
+  finally F.Free; end;
+end;
+
+procedure TTestSetLengthAppendInLoop.CapacityGuardedGrowByOne_Reported;
+// TP-Gegenprobe (Real-World-FP-Audit 2026-07-12): ein Kapazitaets-Guard macht NUR
+// Block-Grow (>1) amortisiert-linear. Wachstum um genau 1 reallociert trotz
+// 'if i > High(arr) then' JEDE Iteration (High(arr) waechst mit i mit) -> bleibt
+// O(n*n) und muss feuern. Grenzt die neue Guard-C-Erweiterung praezise vom echten
+// Grow-by-1-Bug ab (GrowAmount='1' wird nicht als Kapazitaets-Guard akzeptiert).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure BuildOne(N: Integer);'#13#10 +
+  'var i: Integer; arr: TArray<Byte>;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 0 to N - 1 do'#13#10 +
+  '  begin'#13#10 +
+  '    if i > High(arr) then'#13#10 +
+  '      SetLength(arr, Length(arr) + 1);'#13#10 +
+  '    arr[i] := 0;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkSetLengthAppendInLoop) >= 1,
+    'kapazitaets-geguardetes Grow-by-1 bleibt O(n*n)-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestSetLengthAppendInLoop.NotEqualLenCheckBlockGrow_Reported;
+// TP-Gegenprobe (Verify-Concern 2026-07-12): '<>' ist KEIN Overflow-/Kapazitaets-
+// Guard. 'if x <> Length(arr) then SetLength(arr, Length(arr)+100)' schuetzt nicht
+// vor Per-Iteration-Realloc -> muss weiter feuern. Sichert ab, dass die '(?<!<)>=?'-
+// Lookbehind das '>' aus '<>' nicht faelschlich als Overflow-Vergleich matcht.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Grow(N: Integer);'#13#10 +
+  'var i, x: Integer; arr: TArray<Byte>;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 0 to N - 1 do'#13#10 +
+  '  begin'#13#10 +
+  '    if x <> Length(arr) then'#13#10 +
+  '      SetLength(arr, Length(arr) + 100);'#13#10 +
+  '    arr[i] := 0;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkSetLengthAppendInLoop) >= 1,
+    '<> ist kein Kapazitaets-Guard - Block-Grow bleibt Fund');
   finally F.Free; end;
 end;
 

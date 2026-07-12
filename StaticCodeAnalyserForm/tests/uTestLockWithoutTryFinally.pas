@@ -37,6 +37,18 @@ type
     // --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
     [Test] procedure SplitLockWrapperNoRelease_NotReported;
     [Test] procedure WrapperWithInScopeRelease_Reported;
+    // --- Real-World FP-Audit 2026-07-12 ---
+    // FP-Klasse 'exception-free-body-parens': not(x)/Set-Membership/Vergleiche
+    // koennen nicht werfen (CEF4Delphi GetInitialized).
+    [Test] procedure ExceptionFreeSetMembership_NotReported;
+    [Test] procedure ArrayIndexBetweenEnterLeave_StillReported;
+    // FP-Klasse 'split-wrapper-winapi-form': EnterCriticalSection(handle) mit
+    // Leave in paired Geschwister-Methode (mORMot RWLock, jcl _AddRef).
+    [Test] procedure SplitLockWinApiWrapper_NotReported;
+    [Test] procedure SplitLockWinApiWithLeaveInScope_Reported;
+    // Verify-Concern 2026-07-12: 'as'-Cast (EInvalidCast) darf NICHT als
+    // exception-frei gelten (FN = Deadlock).
+    [Test] procedure CastBetweenEnterLeave_StillReported;
   end;
 
 implementation
@@ -402,6 +414,121 @@ begin
     'Acquire+Release im selben Scope mit werfendem Call ohne try..finally bleibt ein Fund');
   finally F.Free; end;
 end;
+// --- Real-World FP-Audit 2026-07-12 ---
+
+procedure TTestLockWithoutTryFinally.ExceptionFreeSetMembership_NotReported;
+// FP-Fix (Real-World-FP-Audit 2026-07-12, FP-Klasse 'exception-free-body-parens'):
+// CEF4Delphi ucefbrowserthread GetInitialized. Zwischen Acquire und Release steht
+// nur 'Result := not(Terminated) and (FStatus in [tsIdle, tsLoading])' - reine
+// Feld-Reads, Set-Membership, boolesche Operatoren; kann NICHT werfen. Frueher
+// brach LockBodyIsExceptionFree bei jedem '(' / '[' ab und meldete einen FP.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function TCEFBrowserThread.GetInitialized: boolean;'#13#10 +
+  'begin'#13#10 +
+  '  FBrowserCS.Acquire;'#13#10 +
+  '  Result := not(Terminated) and (FStatus in [tsIdle, tsLoading]);'#13#10 +
+  '  FBrowserCS.Release;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLockWithoutTryFinally),
+    'not()/Set-Membership zwischen Enter/Leave kann nicht werfen - kein try/finally noetig');
+  finally F.Free; end;
+end;
+
+procedure TTestLockWithoutTryFinally.ArrayIndexBetweenEnterLeave_StillReported;
+// TP-Gegenkontrolle zur exception-free-body-parens-Relaxierung: ein Array-Index
+// ('[' nach Bezeichner) kann per Range-Check werfen -> das Lock kann haengen ->
+// bleibt ein Fund. StatementCannotThrow darf hier NICHT suppressen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function TFoo.GetItem: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  FLock.Enter;'#13#10 +
+  '  Result := FItems[Index];'#13#10 +
+  '  FLock.Leave;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkLockWithoutTryFinally) >= 1,
+    'Array-Index (Range-Check kann werfen) zwischen Enter/Leave bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestLockWithoutTryFinally.SplitLockWinApiWrapper_NotReported;
+// FP-Fix (Real-World-FP-Audit 2026-07-12, FP-Klasse 'split-wrapper-winapi-form'):
+// jcl TJclIntfCriticalSection._AddRef / mORMot TSynLocker.RWLock. Die WinAPI-Form
+// EnterCriticalSection(handle) haelt hier KEIN LeaveCriticalSection(handle) im
+// selben Body - das Release ist an eine paired Geschwister-Methode (_Release /
+// RWUnLock) delegiert. Kein Enter..Leave-Paar in EINEM Scope -> SCA109 nicht
+// zustaendig. IsLockWrapperMethodTail greift nicht (nach dem Enter folgt noch
+// 'Result := 0' vor dem 'end').
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function TJclIntfCriticalSection._AddRef: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  EnterCriticalSection(FCriticalSection);'#13#10 +
+  '  Result := 0;'#13#10 +
+  'end;'#13#10 +
+  'function TJclIntfCriticalSection._Release: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  LeaveCriticalSection(FCriticalSection);'#13#10 +
+  '  Result := 0;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLockWithoutTryFinally),
+    'WinAPI-Split-Wrapper (Leave in paired Geschwister-Methode) ist kein Lock-Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestLockWithoutTryFinally.SplitLockWinApiWithLeaveInScope_Reported;
+// TP-Gegenkontrolle zum WinAPI-Split-Guard: sind EnterCriticalSection(handle)
+// UND LeaveCriticalSection(handle) im SELBEN Body (kein Handoff) und dazwischen
+// ein werfender Call ohne try..finally, bleibt es ein echter Fund. Der neue
+// HasLeaveCriticalSectionForHandle-Check darf hier NICHT suppressen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Update;'#13#10 +
+  'begin'#13#10 +
+  '  EnterCriticalSection(FCS);'#13#10 +
+  '  DoWork;'#13#10 +
+  '  LeaveCriticalSection(FCS);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkLockWithoutTryFinally) >= 1,
+    'Enter+Leave desselben Handle im selben Scope mit werfendem Call bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestLockWithoutTryFinally.CastBetweenEnterLeave_StillReported;
+// TP-Gegenkontrolle (Verify-Concern 2026-07-12): ein 'as'-Typecast wirft
+// EInvalidCast. 'Result := (FObj as TBar).Value' zwischen Enter/Leave ohne
+// try/finally kann das Lock haengen lassen -> muss weiter feuern.
+// Sichert ab, dass StatementCannotThrow den 'as'-Operator NICHT als safe wertet
+// (die '(...)'-Gruppierung darf den Cast nicht durchrutschen lassen).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function TFoo.GetVal: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  FLock.Enter;'#13#10 +
+  '  Result := (FObj as TBar).Value;'#13#10 +
+  '  FLock.Leave;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkLockWithoutTryFinally) >= 1,
+    '(X as Y)-Cast (EInvalidCast) zwischen Enter/Leave bleibt ein Fund');
+  finally F.Free; end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestLockWithoutTryFinally);
 

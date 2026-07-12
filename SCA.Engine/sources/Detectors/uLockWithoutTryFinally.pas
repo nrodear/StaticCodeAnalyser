@@ -457,6 +457,84 @@ begin
   end;
 end;
 
+function StatementCannotThrow(const Stmt: string): Boolean;
+// Real-World-FP-Audit 2026-07-12, FP-Klasse 'exception-free-body-parens'.
+// True wenn eine EINZELNE ;-getrennte Anweisung (die bereits ':=' enthaelt)
+// beweisbar nicht werfen kann. Frueher lehnte LockBodyIsExceptionFree jede
+// '(' und jedes '[' pauschal ab und wertete den Body als potenziell werfend.
+// Aber not(x), Set-Membership 'x in [...]', reine Vergleiche und die nicht-
+// werfenden Intrinsics (abs/length/ord/high/low/succ/pred/sizeof) koennen NICHT
+// werfen (z.B. GetInitialized: Result := not(Terminated) and (FStatus in [...])).
+// Regeln:
+//   * 'raise' irgendwo -> kann werfen -> False.
+//   * jede '(' muss GRUPPIERUNG sein (steht nach Operator/Keyword/':='/','/'(')
+//     ODER nach einem der nicht-werfenden Intrinsic-Namen; steht sie direkt
+//     nach einem anderen Bezeichner, ist es ein (potenziell werfender)
+//     benutzerdefinierter Call ident(...) -> False.
+//   * jede '[' muss Set-Literal / Set-Membership sein (nach 'in' oder nach
+//     Operator/':='/'('); steht sie nach Bezeichner/')'/']', ist es ein Array-
+//     Index (Range-Check kann werfen) -> False.
+// Konservativ: im Zweifel False -> Fund BLEIBT (kein FN-Risiko).
+const
+  SAFE_WORDS : array[0..24] of string = (
+    'not', 'abs', 'length', 'ord', 'high', 'low', 'succ', 'pred', 'sizeof',
+    'and', 'or', 'xor', 'div', 'mod', 'shl', 'shr', 'in',
+    'then', 'do', 'of', 'to', 'downto', 'else', 'case', 'if');
+var
+  low    : string;
+  i, j, wStart, k : Integer;
+  w      : string;
+  isSafe : Boolean;
+begin
+  Result := False;
+  low := LowerCase(Stmt);
+  if Pos('raise', low) > 0 then Exit;    // enthaelt raise -> kann werfen
+  // Real-World-FP-Audit 2026-07-12 (Verify-Concern): der 'as'-Cast wirft
+  // EInvalidCast, der 'is'-Typtest ist harmlos - beide aber konservativ
+  // ablehnen (FN = verpasstes Lock-Leak = Deadlock, teuer). Wortgrenzen via
+  // \b (matcht NICHT 'has'/'this'/'basis'). '(X as Y)' -> Fund BLEIBT.
+  if TRegEx.IsMatch(low, '\b(as|is)\b') then Exit;
+  i := 1;
+  while i <= Length(low) do
+  begin
+    if low[i] = '(' then
+    begin
+      j := i - 1;
+      while (j >= 1) and CharInSet(low[j], [' ', #9, #10, #13]) do Dec(j);
+      if (j >= 1) and CharInSet(low[j], ['a'..'z', '0'..'9', '_']) then
+      begin
+        wStart := j;
+        while (wStart >= 1) and
+              CharInSet(low[wStart], ['a'..'z', '0'..'9', '_']) do Dec(wStart);
+        w := Copy(low, wStart + 1, j - wStart);
+        isSafe := False;
+        for k := 0 to High(SAFE_WORDS) do
+          if w = SAFE_WORDS[k] then begin isSafe := True; Break; end;
+        if not isSafe then Exit(False);  // benutzerdef. Call -> kann werfen
+      end;
+      // '(' nach Operator/':='/','/'(' -> Gruppierung -> unbedenklich
+    end
+    else if low[i] = '[' then
+    begin
+      j := i - 1;
+      while (j >= 1) and CharInSet(low[j], [' ', #9, #10, #13]) do Dec(j);
+      if (j >= 1) and CharInSet(low[j], ['a'..'z', '0'..'9', '_']) then
+      begin
+        wStart := j;
+        while (wStart >= 1) and
+              CharInSet(low[wStart], ['a'..'z', '0'..'9', '_']) do Dec(wStart);
+        w := Copy(low, wStart + 1, j - wStart);
+        if w <> 'in' then Exit(False);   // Array-Index -> Range-Check kann werfen
+      end
+      else if (j >= 1) and CharInSet(low[j], [')', ']']) then
+        Exit(False);                     // indexed nach Call/Index -> kann werfen
+      // '[' nach Operator/':='/'(' -> Set-/Array-Literal -> unbedenklich
+    end;
+    Inc(i);
+  end;
+  Result := True;
+end;
+
 function LockBodyIsExceptionFree(const Code: string; AfterAcquirePos: Integer): Boolean;
 // True wenn zwischen dem Acquire-';' und dem naechsten Leave/Release/Exit/
 // EndWrite/LeaveCriticalSection NUR reine Zuweisungen stehen: KEIN Call '(',
@@ -510,9 +588,45 @@ begin
     t := Trim(stmt);
     if t = '' then Continue;
     if Pos(':=', t) = 0 then Exit(False);  // keine Zuweisung -> evtl. (paren-loser) Call
-    if Pos('(', t) > 0 then Exit(False);   // Call auf der RHS -> kann werfen
-    if Pos('[', t) > 0 then Exit(False);   // Array-Index -> Range-Check kann werfen
-    if Pos('raise', LowerCase(t)) > 0 then Exit(False);
+    // Real-World-FP-Audit 2026-07-12, FP-Klasse 'exception-free-body-parens':
+    // '(' / '[' nicht mehr pauschal ablehnen - not(x), Set-Membership
+    // 'x in [...]', reine Vergleiche und nicht-werfende Intrinsics koennen
+    // nicht werfen. StatementCannotThrow entscheidet konservativ (raise,
+    // benutzerdef. Call, Array-Index -> False -> Fund bleibt).
+    if not StatementCannotThrow(t) then Exit(False);
+  end;
+end;
+
+function HasLeaveCriticalSectionForHandle(const SegLow, LHandle: string): Boolean;
+// Real-World-FP-Audit 2026-07-12, FP-Klasse 'split-wrapper-winapi-form'.
+// True wenn im (bereits lowercased) Segment ein LeaveCriticalSection(<LHandle>)
+// mit demselben fuehrenden Handle-Bezeichner steht - dann liegt das Release im
+// SELBEN Scope (kein Split-Wrapper, echter Enter/Leave-Kandidat -> Fund BLEIBT).
+// Konservativ ueber den fuehrenden Handle-Identifier; Namespace-Praefixe wie
+// 'mormot.core.os.LeaveCriticalSection' werden per Substring-Suche ignoriert.
+const
+  TOK = 'leavecriticalsection';
+var
+  p, q, hs : Integer;
+begin
+  Result := False;
+  p := Pos(TOK, SegLow);
+  while p > 0 do
+  begin
+    q := p + Length(TOK);
+    while (q <= Length(SegLow)) and
+          CharInSet(SegLow[q], [' ', #9, #10, #13]) do Inc(q);
+    if (q <= Length(SegLow)) and (SegLow[q] = '(') then
+    begin
+      Inc(q);
+      while (q <= Length(SegLow)) and
+            CharInSet(SegLow[q], [' ', #9, #10, #13]) do Inc(q);
+      hs := q;
+      while (q <= Length(SegLow)) and
+            CharInSet(SegLow[q], ['a'..'z', '0'..'9', '_']) do Inc(q);
+      if Copy(SegLow, hs, q - hs) = LHandle then Exit(True);
+    end;
+    p := PosEx(TOK, SegLow, p + 1);
   end;
 end;
 
@@ -533,18 +647,38 @@ function SplitLockWrapperNoReleaseInScope(const Code: string; M: TMatch): Boolea
 const
   KEYS : array[0..3] of string = ('procedure', 'function', 'constructor', 'destructor');
 var
-  ident, lident, seg, segLow, w : string;
+  ident, lident, seg, segLow, w, handle, lhandle : string;
   p, n, wStart, wEnd, bodyEnd, q, k : Integer;
-  isHeader, hasRelease : Boolean;
+  isHeader, hasRelease, isWinApi : Boolean;
 begin
   Result := False;
-  // Nur fuer die '<ident>.Enter/.Acquire/.BeginWrite'-Form; die
-  // EnterCriticalSection(...)-Form traegt keinen isolierbaren Bezeichner.
+  // Real-World-FP-Audit 2026-07-12, FP-Klasse 'split-wrapper-winapi-form':
+  // Neben der dotted '<ident>.Enter/.Acquire/.BeginWrite'-Form wird jetzt auch
+  // die WinAPI-Form EnterCriticalSection(handle) behandelt, deren Leave in einer
+  // paired Geschwister-Methode steht (mORMot RWLock/RWUnLock, jcl _AddRef/_Release).
   ident := M.Value;
-  if Pos('.', ident) = 0 then Exit;
-  ident := Copy(ident, 1, Pos('.', ident) - 1);
-  if ident = '' then Exit;
-  lident := LowerCase(ident);
+  isWinApi := (ident <> '') and (ident[Length(ident)] = '(');
+  if isWinApi then
+  begin
+    // Handle aus den Klammern lesen (M.Value endet mit '(', der erste
+    // Bezeichner direkt dahinter ist der Critical-Section-Handle).
+    p := M.Index + M.Length;
+    while (p <= Length(Code)) and CharInSet(Code[p], [' ', #9]) do Inc(p);
+    q := p;
+    while (q <= Length(Code)) and
+          CharInSet(Code[q], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do Inc(q);
+    handle := Copy(Code, p, q - p);
+    if handle = '' then Exit;         // kein isolierbarer Handle -> nicht skippen
+    lhandle := LowerCase(handle);
+  end
+  else
+  begin
+    // dotted Form: der Lock-Bezeichner steht vor dem '.'.
+    if Pos('.', ident) = 0 then Exit;
+    ident := Copy(ident, 1, Pos('.', ident) - 1);
+    if ident = '' then Exit;
+    lident := LowerCase(ident);
+  end;
   n := Length(Code);
   // Body-Ende = naechste Routinen-Deklaration nach dem Acquire (nur am
   // Zeilenanfang, damit ein 'function'-Typ in einer var-Deklaration das
@@ -580,12 +714,17 @@ begin
   if bodyEnd < M.Index then Exit;
   seg := Copy(Code, M.Index, bodyEnd - M.Index + 1);
   segLow := LowerCase(seg);
-  hasRelease :=
-    (Pos(lident + '.leave', segLow) > 0) or
-    (Pos(lident + '.release', segLow) > 0) or
-    (Pos(lident + '.unlock', segLow) > 0) or
-    (Pos(lident + '.endwrite', segLow) > 0) or
-    (Pos(lident + '.leavecriticalsection', segLow) > 0);
+  if isWinApi then
+    // WinAPI-Split-Wrapper: kein LeaveCriticalSection(<selber Handle>) im selben
+    // Routinen-Body -> Release an paired Geschwister-Methode delegiert (FP).
+    hasRelease := HasLeaveCriticalSectionForHandle(segLow, lhandle)
+  else
+    hasRelease :=
+      (Pos(lident + '.leave', segLow) > 0) or
+      (Pos(lident + '.release', segLow) > 0) or
+      (Pos(lident + '.unlock', segLow) > 0) or
+      (Pos(lident + '.endwrite', segLow) > 0) or
+      (Pos(lident + '.leavecriticalsection', segLow) > 0);
   Result := not hasRelease;
 end;
 

@@ -18,6 +18,10 @@ type
     [Test] procedure Finding_KindAndSeverity;
     // Real-World FP-Audit 2026-07-10: out-param-Finder in der if-Bedingung
     [Test] procedure OutParamFinderInIfCondition_NotReported;
+    // Real-World FP-Audit 2026-07-12: nil-Zuweisung und Deref in sich
+    // ausschliessenden {$IFDEF}/{$ELSE}-Zweigen (preprocessor-branch)
+    [Test] procedure PreprocessorSiblingBranch_NotReported;
+    [Test] procedure PreprocessorSameBranch_StillReported;
   end;
 
 implementation
@@ -130,6 +134,57 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
     'out-Param-Finder in der Bedingung fuellt die Variable - kein nil-Deref');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.PreprocessorSiblingBranch_NotReported;
+// Real-World FP-Audit 2026-07-12 'preprocessor-branch' (Teilklasse von
+// mutually-exclusive-branches, verifiziertes Vorbild Indy IdSync.pas:744):
+// x:=nil steht im {$IFDEF}-Zweig, der Deref x.DoStuff im {$ELSE}-Schwester-
+// Zweig. Auf jeder realen Uebersetzung existiert nur EIN Zweig - der Detektor
+// (rein zeilenbasiert, ohne Branch-Scope) flaggte das faelschlich. Der
+// nkConditionalRange-Guard erkennt die {$ELSE}-Direktivenzeile strikt zwischen
+// nil-Zuweisung und Deref und unterdrueckt den Fund.
+const SRC =
+  'unit t; implementation'#13#10 +   // 1
+  'procedure Foo;'#13#10 +           // 2
+  'var x: TObject;'#13#10 +          // 3
+  'begin'#13#10 +                    // 4
+  '{$IFDEF SOMEFLAG}'#13#10 +        // 5
+  '  x := nil;'#13#10 +              // 6  nil-Zuweisung (IFDEF-Zweig)
+  '{$ELSE}'#13#10 +                  // 7  Direktive STRIKT zwischen 6 und 8
+  '  x.DoStuff;'#13#10 +            // 8  Deref (ELSE-Schwesterzweig)
+  '{$ENDIF}'#13#10 +                 // 9
+  'end;';                            // 10
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
+    'nil-Zuweisung und Deref in sich ausschliessenden {$IFDEF}/{$ELSE}-Zweigen - kein nil-Deref');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.PreprocessorSameBranch_StillReported;
+// TP-Gegenprobe zu PreprocessorSiblingBranch_NotReported: nil-Zuweisung UND
+// Deref stehen im SELBEN {$IFDEF}-Zweig - keine Direktivenzeile strikt
+// dazwischen. Der Guard darf hier NICHT greifen; der echte nil-Deref bleibt
+// ein Fund (beweist, dass die Suppression scope-genau auf 'Direktive strikt
+// zwischen nil und Deref' begrenzt ist, nicht 'Direktive irgendwo in Methode').
+const SRC =
+  'unit t; implementation'#13#10 +   // 1
+  'procedure Foo;'#13#10 +           // 2
+  'var x: TObject;'#13#10 +          // 3
+  'begin'#13#10 +                    // 4
+  '{$IFDEF SOMEFLAG}'#13#10 +        // 5
+  '  x := nil;'#13#10 +              // 6  nil-Zuweisung
+  '  x.DoStuff;'#13#10 +            // 7  Deref - selber Zweig, keine Direktive dazwischen
+  '{$ENDIF}'#13#10 +                 // 8
+  'end;';                            // 9
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+    'nil-Deref im selben {$IFDEF}-Zweig bleibt ein echter Fund');
   finally F.Free; end;
 end;
 

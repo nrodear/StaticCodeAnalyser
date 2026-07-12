@@ -32,7 +32,7 @@ type
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>);
     class procedure AnalyzeMethod(MethodNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; const ADirLines: TArray<Integer>);
   private
     // Pruefung ob ein If-Block der Methode einen Guard fuer VarLow enthaelt
     class function HasGuardingIf(MethodNode: TAstNode;
@@ -58,6 +58,21 @@ implementation
 
 // noinspection-file CanBeStrictPrivate, ConcatToFormat, ConsecutiveSection, CyclomaticComplexity, LongMethod, RedundantJump, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
+function DirLineBetween(const Lines: TArray<Integer>; A, B: Integer): Boolean;
+// Real-World-FP-Audit 2026-07-12, FP-Klasse 'preprocessor-branch' (Teilklasse
+// der 'mutually-exclusive-branches'): True wenn eine {$IFDEF}-Direktiven-Zeile
+// STRIKT zwischen A und B liegt. Dann stehen nil-Zuweisung (A) und Deref (B) in
+// verschiedenen bedingten Kompilierungs-Zweigen ({$IFDEF}/{$ELSE}) - auf jeder
+// realen Uebersetzung existiert nur EIN Zweig, es kann also keinen nil-Deref
+// geben. Identisch zu uDeadCode/uUninitVar/uTwiceInheritedCalls.DirLineBetween
+// (bewusst dupliziert, additiv/isoliert - nkConditionalRange-Muster).
+var d: Integer;
+begin
+  for d in Lines do
+    if (d > A) and (d < B) then Exit(True);
+  Result := False;
+end;
 
 { Hilfsfunktion: prueft ob in der Bedingung ein Guard fuer varname steht.
   Verwendet TDetectorUtils.ContainsWholeWordLower fuer korrekte Wortgrenzen -
@@ -259,7 +274,8 @@ begin
 end;
 
 class procedure TNilDerefDetector.AnalyzeMethod(MethodNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>;
+  const ADirLines: TArray<Integer>);
 var
   Assigns : TList<TAstNode>;
   Calls   : TList<TAstNode>;
@@ -331,6 +347,17 @@ begin
         if IsForLoopAssigned(MethodNode, VarLow, NA.Line, C.Line) then
           Continue;
 
+        // FP-Gate (Real-World-FP-Audit 2026-07-12): preprocessor-branch -
+        // liegt eine {$IFDEF}-Direktiven-Grenze STRIKT zwischen nil-Zuweisung
+        // und Deref, stehen beide in sich ausschliessenden Kompilierungs-
+        // Zweigen ({$IFDEF x} var := nil {$ELSE} var.Method {$ENDIF}). Nur
+        // die conditional-compilation-Teilklasse der mutually-exclusive-
+        // branches-FPs; die runtime-if/else-Teilklasse bleibt bewusst offen
+        // (braucht then/else-Scope). TP-sicher: ohne Direktive dazwischen
+        // bleibt jeder Fund erhalten.
+        if DirLineBetween(ADirLines, NA.Line, C.Line) then
+          Continue;
+
         // Befund: nil-Zuweisung ohne Guard, dann Punkt-Zugriff
         F            := TLeakFinding.Create;
         F.FileName   := FileName;
@@ -351,13 +378,34 @@ end;
 class procedure TNilDerefDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
-  Methods : TList<TAstNode>;
-  M       : TAstNode;
+  Methods  : TList<TAstNode>;
+  M        : TAstNode;
+  CondR    : TList<TAstNode>;
+  DirLines : TArray<Integer>;
+  R        : TAstNode;
+  n        : Integer;
 begin
+  // Real-World-FP-Audit 2026-07-12 (preprocessor-branch): {$IFDEF}-Direktiven-
+  // Zeilen aus den nkConditionalRange-Markern sammeln (Start=Node.Line,
+  // Ende=TypeRef). Marker liegen am Unit-Node (nicht pro Methode) - hier einmal
+  // sammeln und in AnalyzeMethod durchreichen. Muster analog uDeadCode.
+  CondR := UnitNode.FindAll(nkConditionalRange);
+  try
+    n := 0;
+    SetLength(DirLines, CondR.Count * 2);
+    for R in CondR do
+    begin
+      DirLines[n] := R.Line; Inc(n);
+      DirLines[n] := StrToIntDef(R.TypeRef, R.Line); Inc(n);
+    end;
+  finally
+    CondR.Free;
+  end;
+
   Methods := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
-      AnalyzeMethod(M, FileName, Results);
+      AnalyzeMethod(M, FileName, Results, DirLines);
   finally
     Methods.Free;
   end;
