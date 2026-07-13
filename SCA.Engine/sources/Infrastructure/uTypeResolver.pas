@@ -197,7 +197,7 @@ var
   Sc    : TMethodScope;
   Nodes : TList<TAstNode>;
   N     : TAstNode;
-  Id, T : string;
+  Id    : string;
 begin
   Sc := TMethodScope.Create;
   Sc.LineStart := M.Line;
