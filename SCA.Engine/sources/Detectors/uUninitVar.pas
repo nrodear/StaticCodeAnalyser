@@ -379,6 +379,34 @@ begin
         and (Pos(ASM_MARKER, LowerCase(MethodNode.TypeRef)) > 0);
 end;
 
+function MethodHasAsmBlock(Lines: TStringList; StartLine, EndLine: Integer): Boolean;
+// True wenn im Zeilenbereich [StartLine..EndLine] eine Zeile den asm-Block-Start
+// traegt (getrimmt 'asm' bzw. 'asm '/'asm;'). Fuer EMBEDDED asm-Bloecke
+// ('begin ... asm mov Local, eax end ... end'), die IsAsmMethod (';asm'-Marker =
+// GANZE asm-Methode) nicht erfasst: der Parser skippt tkKwAsm ohne Knoten, die im
+// asm per Register/Memory-Ref geschriebenen Locals sind unsichtbar -> read-vor-
+// write-FP (Real-World: CnWizFeedbackFrm GetCPUSpeed RDTSC 'mov TimerLo, eax').
+// Kommentare (// UND {..}/(*..*) cross-line via StripLineEx) + String-Literale
+// werden geblankt -> ein AUSKOMMENTIERTER 'asm'-Block matcht NICHT (wichtig, da
+// SCA166 error-level ist - ein Fehl-Skip wuerde einen echten uninit maskieren).
+// 'asm' ist reserviert -> eine sonst leere gestrippte Zeile mit 'asm' ist immer
+// der Block-Start. TP-sicher: kein False-Positive.
+var
+  i     : Integer;
+  T     : string;
+  State : TLineStripState;
+begin
+  Result := False;
+  if Lines = nil then Exit;
+  State := Default(TLineStripState);
+  for i := StartLine to EndLine do
+  begin
+    if (i < 1) or (i > Lines.Count) then Continue;
+    T := LowerCase(Trim(StripLineEx(Lines[i - 1], State)));
+    if (T = 'asm') or T.StartsWith('asm ') or T.StartsWith('asm;') then Exit(True);
+  end;
+end;
+
 type
   TLineRange = record
     StartLine, EndLine : Integer;
@@ -2119,6 +2147,14 @@ begin
       // initialisieren (lazy Build in PhaseC).
       MethodEndL    := CalcMethodEndLine(MethodNode);
       StrippedBuilt := False;
+      // asm-Body-Skip (2026-07-13): eine Methode mit EINGEBETTETEM asm-Block
+      // schreibt ihre Locals oft per Register/Memory-Ref (unsichtbar fuer den
+      // Parser, tkKwAsm wird ohne Knoten geskippt) -> read-vor-write-FP. Der
+      // ';asm'-Marker (IsAsmMethod, Fast-Out oben) fasst nur GANZE asm-Methoden.
+      // Konservativ die ganze Methode ueberspringen (asm selten -> FN akzeptabel,
+      // TP-sicher). Exit loest das umgebende finally (Lines/Ranges freigeben).
+      if (Lines <> nil) and MethodHasAsmBlock(Lines, MethodNode.Line, MethodEndL) then
+        Exit;
       // Phase 2.6: source-line-basierte Nested-Method-Detection.
       if Lines <> nil then
         CollectNestedMethodRangesViaSource(Lines, MethodNode.Line,

@@ -48,6 +48,9 @@ type
 
     // ---- EDGE CASES ----
     [Test] procedure AsmBlock_NoCrash;
+    // Recharakterisierung after34 (2026-07-13): EINGEBETTETER asm-Block schreibt
+    // Local per Register/Memory-Ref -> Methode ueberspringen (kein read-vor-write-FP)
+    [Test] procedure EmbeddedAsmWritesLocal_NoFinding;
     [Test] procedure EmptyMethod_NoCrash;
     [Test] procedure MultipleVarsSomeClean_OnlyDirtyFlagged;
     // Real-World 2026-06-23: Array-Element-Write + @/SizeOf kein Read
@@ -814,6 +817,33 @@ begin
   RunOn(SRC, L);
   try
     Assert.Pass('asm-Block - kein Crash');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.EmbeddedAsmWritesLocal_NoFinding;
+// EMBEDDED asm (begin-Body mit asm-Block, KEINE ;asm-Marker-Methode): 'v' wird im
+// asm-Block per 'mov v, eax' geschrieben (fuer den Parser unsichtbar) und danach
+// gelesen -> ohne asm-Body-Skip ein read-vor-write-FP. MethodHasAsmBlock findet
+// die 'asm'-Zeile im Method-Range -> Methode uebersprungen -> kein Fund.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var v: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  asm'#13#10 +
+    '    mov v, eax'#13#10 +
+    '  end;'#13#10 +
+    '  WriteLn(v);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(L, fkUninitVar),
+    'eingebetteter asm-Block schreibt v -> Methode uebersprungen -> kein uninit-FP');
   finally L.Free; end;
 end;
 
