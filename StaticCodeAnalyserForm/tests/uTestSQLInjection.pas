@@ -114,6 +114,10 @@ type
     // Member-Call bleibt Fund.
     [Test] procedure SQL_MemberPathSanitizerCall_NoFinding;
     [Test] procedure SQL_MemberPathNonSanitizerCall_StillReported;
+    // Recharakterisierung after30 2026-07-13: EOL-Konstante (sLineBreak/CRLF)
+    // als Konkat-Term ist sicher; ein echter Var-Term bleibt Fund.
+    [Test] procedure SQL_EolConstConcat_NoFinding;
+    [Test] procedure SQL_EolConstWithVarConcat_StillReported;
   end;
 
 implementation
@@ -1194,6 +1198,40 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
     'Obj.GetUserName(x) ist kein Sanitizer -> bleibt SCA003-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_EolConstConcat_NoFinding;
+// Recharakterisierung after30: 'SELECT ...' + sLineBreak + '...' - sLineBreak ist
+// eine RTL-Zeilenumbruch-Konstante (kein Input) -> alle Konkat-Terme sicher.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  Query.SQL.Text := ''SELECT * FROM t '' + sLineBreak + ''WHERE x = 1'';'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    'sLineBreak ist EOL-Konstante -> Literal+EOL-Konkat ist kein SCA003');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_EolConstWithVarConcat_StillReported;
+// TP-Gegenprobe: eine echte Variable im selben Konkat bleibt Fund - die EOL-
+// Konstante entschaerft nur ihren eigenen Term, nicht den ganzen Ausdruck.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P(userInput: string);'#13#10 +
+  'begin'#13#10 +
+  '  Query.SQL.Text := ''SELECT * FROM t WHERE x = '' + userInput + sLineBreak;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
+    'echte Var (userInput) neben sLineBreak bleibt SCA003-Fund');
   finally F.Free; end;
 end;
 

@@ -320,6 +320,17 @@ begin
   Result := hasUnderscore and hasAlpha;
 end;
 
+function IsWellKnownEolConst(const IdentLow: string): Boolean;
+// RTL-/Konvention-EOL-Konstanten (System.sLineBreak, sCRLF, CRLF) sind Compile-
+// Zeit-Zeilenumbruch-Strings - kein extern beeinflussbarer Wert -> injection-
+// sicher als Konkat-Term ('SELECT ...' + sLineBreak + Indent + ...). Konservativ:
+// nur eindeutige Namen; kurze 'cr'/'lf'/'eol' bewusst NICHT (koennten lokale
+// Variablen sein). FP-Klasse 'eol-const-concat' (Recharakterisierung after30).
+begin
+  Result := (IdentLow = 'slinebreak') or (IdentLow = 'scrlf') or
+            (IdentLow = 'crlf');
+end;
+
 class function TSQLInjectionDetector.IsSafeSqlHelperName(
   const NameLow: string): Boolean;
 // Sanitizer-Namenskonvention (DMVC/mORMot): SAFE_CASTS (QuotedStr/QuotedSQL/...)
@@ -501,8 +512,11 @@ begin
         // ist (geschlossene Wertemenge, kein externer Input erreichbar).
         // FP-Gate (2026-07-05): orm-sql-builder - ODER der Identifier ist
         // ein bares ORM-Schema-Metadatum (with-Scope: 'FROM ' + SqlTableName).
+        // FP-Gate (Recharakterisierung after30 2026-07-13): ODER eine bekannte
+        // EOL-Konstante (sLineBreak/CRLF) - Compile-Zeit-Zeilenumbruch, kein Input.
         if not (IsConstDerivedLocal(MethodNode, ident)
                 or IsOrmMetaIdent(ident)
+                or IsWellKnownEolConst(ident)
                 or IsScreamingSnakeConst(IdentOrig)) then
           Exit(False); // bare Identifier -> Variable, unsicher
         Inc(i);

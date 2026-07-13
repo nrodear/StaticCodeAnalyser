@@ -143,7 +143,9 @@ begin
               // unterdruecken; nil/leerer Index (Tests/Single-File, AContext=nil),
               // unbekannter Typ oder Klasse -> Fund bleibt (bisheriges Verhalten,
               // TP-safe). tkiRecord ist ein DIREKTER Fakt (record -> nkRecord bzw.
-              // Seed), keine Ketten-Ambiguitaet wie bei Vererbung -> kein FN-Risiko.
+              // Seed), keine Ketten-Ambiguitaet wie bei Vererbung. FN-Risiko gering,
+              // aber NICHT null (gleichnamiges Homonym "letzte gewinnt" / Shadowing /
+              // qualifizierter TypeRef koennen den Kind verfehlen -> Fund bleibt).
               var Idx := CtxTypeIndex(AContext);
               if (Idx <> nil) and (not Idx.IsEmpty) and
                  (Idx.TypeKindOf(LowerCase(AddedType)) = tkiRecord) then

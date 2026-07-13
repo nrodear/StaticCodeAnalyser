@@ -190,7 +190,11 @@ var
   function IsRecordType(const ATypeRef: string): Boolean;
   // Zentraler Werttyp-Test: nur wenn der Cross-Unit-Index den Typ BEWEISBAR als
   // record kennt. tkiRecord ist ein direkter Fakt (record/Seed), keine Ketten-
-  // Ambiguitaet -> kein FN-Risiko. Idx=nil -> immer False (bisheriges Verhalten).
+  // Ambiguitaet wie bei Vererbung. FN-Risiko ist gering, aber NICHT null:
+  // gleichnamiges Homonym (record in Datei A, Klasse in Datei B -> "letzte
+  // gewinnt"), lokales Shadowing oder ein qualifizierter/aliasierter TypeRef
+  // koennen den Kind verfehlen -> dann bleibt der Fund (TP-safe, kein Leak).
+  // Idx=nil -> immer False (bisheriges Verhalten, byte-identisch).
   begin
     Result := (Idx <> nil) and (Idx.TypeKindOf(ATypeRef) = tkiRecord);
   end;
