@@ -741,6 +741,16 @@ begin
         // wird - die GESAMTE Implementation einer Unit wird verloren
         // (Audit ftpsend.pas: 52 Method-Headers im Source -> 1 nkMethod
         // im AST).
+        // Enumerationstyp erkennen: NUR ein Enum beginnt im Typ-Rumpf mit '('
+        // ('TColor = (clRed, clGreen, ...)'). Proc-Typen ('procedure'/'function'),
+        // Sets ('set of'), Arrays ('array'), Subranges ('a..b'), Pointer ('^T')
+        // und Klartext-Aliase (Ident) beginnen anders -> tkLParen == Enum.
+        // 2026-07-13: als nkEnumType statt nkTypeAlias emittieren, damit der
+        // (bereits vorhandene) TTypeIndex-nkEnumType-Walk TypeKindOf=tkiEnum
+        // liefert. Ripple ~0: KEIN Detektor konsumiert nkTypeAlias/tkiAlias,
+        // und CollectText (uUnusedUses) addiert TypeRef fuer JEDE Knotenart
+        // (nur nkUsesItem ausgenommen) -> Usage-Zaehlung unveraendert.
+        var IsEnum       := (Tok.Kind = tkLParen);
         var AliasContent := '';
         var Depth        := 0;
         while not (Tok.Kind in [tkKwEnd, tkEof]) do
@@ -757,7 +767,9 @@ begin
           end;
           Next;
         end;
-        var ANode := SecNode.Add(nkTypeAlias, Name, T.Line, T.Col);
+        var AliasKind := nkTypeAlias;
+        if IsEnum then AliasKind := nkEnumType;
+        var ANode := SecNode.Add(AliasKind, Name, T.Line, T.Col);
         ANode.TypeRef := AliasContent;
         Eat(tkSemicolon);
       end;

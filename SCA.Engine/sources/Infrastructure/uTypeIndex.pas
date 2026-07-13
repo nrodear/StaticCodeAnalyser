@@ -182,15 +182,20 @@ begin
     Nodes.Free;
   end;
 
-  // Enums. Der aktuelle Parser produziert keine nkEnumType-Knoten (Enums
-  // landen als nkTypeAlias, s. Unit-Kopf) - dieser Walk ist heute leer,
-  // aber strukturell korrekt fuer den Fall spaeterer Parser-Erweiterung.
+  // Enums (seit 2026-07-13 emittiert der Parser nkEnumType fuer 'T = (a, b, ..)').
+  // GUARDED-Add wie beim Alias-Walk unten: nur eintragen, wenn der Name nicht
+  // schon als Klasse/Record bekannt ist. So gewinnt eine echte Klassen-/Record-
+  // Deklaration bei einem cross-unit-Homonym weiterhin (Verhalten identisch zur
+  // Aera, in der Enums als nkTypeAlias liefen -> KEIN Ripple auf die tkiRecord-
+  // Gates in uInstanceInvokedConstructor/uTObjectListWithoutOwnership). Enums
+  // gewinnen aber ueber den nachfolgenden Alias-Fallback.
   Nodes := RootNode.FindAll(nkEnumType);
   try
     for N in Nodes do
     begin
       NameLow := LowerCase(Trim(N.Name));
-      if NameLow <> '' then FKinds.AddOrSetValue(NameLow, tkiEnum);
+      if (NameLow <> '') and not FKinds.ContainsKey(NameLow) then
+        FKinds.Add(NameLow, tkiEnum);
     end;
   finally
     Nodes.Free;

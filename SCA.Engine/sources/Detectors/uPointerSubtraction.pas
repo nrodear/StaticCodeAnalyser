@@ -65,10 +65,10 @@ implementation
 
 uses
   System.RegularExpressions,
-  uFileTextCache, uDetectorUtils;
+  uFileTextCache, uDetectorUtils, uTypeIndex;
 
 function OperandDeclaredNonPointer(const Code, VarName: string;
-  BeforePos: Integer): Boolean;
+  BeforePos: Integer; Idx: TTypeIndex): Boolean;
 // FP-Gate (Real-World-FP-Audit 2026-07-10): der Cast-Subtraktions-Regex
 // matcht JEDES Paar '(Cast)(a) - (Cast)(b)' - auch wenn a und b GAR KEINE
 // Pointer sind, sondern Ordinal-Skalare, die legitim auf Integer/Cardinal
@@ -105,6 +105,15 @@ begin
   TypeLow := LowerCase(MC[MC.Count - 1].Groups[1].Value);
   for T in NONPTRTYPES do
     if TypeLow = T then Exit(True);
+  // SCA161-enum Cross-Unit-Opt-in (2026-07-13): der deklarierte Typ ist ein
+  // benutzerdefinierter ENUM (auch aus einer anderen Unit, ueber den repo-weiten
+  // TTypeIndex aufgeloest). Enums sind Ordinaltypen -> 'Integer(e1)-Integer(e2)'
+  // ist valide Ordinalarithmetik, KEINE 64-Bit-Adress-Trunkierung. tkiEnum ist
+  // ein direkter Fakt (Parser nkEnumType / Seed), kein Vererbungs-Ambiguitaet
+  // -> kein FN-Risiko. nil/leerer Index (Tests/Single-File) -> uebersprungen,
+  // bisheriges Verhalten (byte-identisch).
+  if (Idx <> nil) and (Idx.TypeKindOf(TypeLow) = tkiEnum) then
+    Exit(True);
 end;
 
 class procedure TPointerSubtractionDetector.AnalyzeUnit(UnitNode: TAstNode;
@@ -122,7 +131,9 @@ var
   CastB    : string;
   OperA    : string;
   OperB    : string;
+  Idx      : TTypeIndex;
 begin
+  Idx := CtxTypeIndex(AContext);   // SCA161-enum Cross-Unit-Opt-in (nil ohne Pipeline)
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
@@ -152,8 +163,8 @@ begin
       // Cardinal/Integer/...), kann keine 64-Bit-Pointer-Adresse trunkiert
       // werden -> unterdruecken. Loest EIN Operand nicht auf oder ist ein
       // Pointer/Klasse/Enum -> weiter melden (kein TP-Verlust, kein FN).
-      if OperandDeclaredNonPointer(Code, OperA, M.Index)
-         and OperandDeclaredNonPointer(Code, OperB, M.Index) then
+      if OperandDeclaredNonPointer(Code, OperA, M.Index, Idx)
+         and OperandDeclaredNonPointer(Code, OperB, M.Index, Idx) then
         Continue;
 
       LineNo := TDetectorUtils.LineForPos(LineFor, M.Index);
