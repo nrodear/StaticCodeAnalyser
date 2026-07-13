@@ -23,6 +23,9 @@ type
     [Test] procedure RecordItem_SeedRegEx_ViaPipeline_Suppressed;
     [Test] procedure ClassItem_ViaPipeline_Reported;
     [Test] procedure RecordItem_NoContext_StillReported;
+    // Tooling-Haertung (SCA006-Crash 2026-07-13): indizierter LHS darf den
+    // Regex-Bau nicht crashen; normaler Fund muss trotzdem kommen.
+    [Test] procedure IndexedLhsListVar_NoCrash_NormalStillReported;
   end;
 
 implementation
@@ -234,6 +237,32 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkTObjectListWithoutOwnership) >= 1,
     'ohne TypeIndex (AContext=nil) bleibt das bisherige Verhalten erhalten');
+  finally F.Free; end;
+end;
+
+procedure TTestTObjectListWithoutOwnership.IndexedLhsListVar_NoCrash_NormalStillReported;
+// SCA006-Crash-Repro: ein indizierter LHS ('Data[0] := TList<TFoo>.Create')
+// erzeugt einen ListVars-Key 'data[0]'. Ohne TRegEx.Escape verschluckt das '['
+// das ']' der Zeichenklasse [A-Za-z_] und das folgende ')' bleibt unmatched ->
+// TRegEx.Create wirft 'unmatched parentheses' -> die ganze Methoden-Analyse
+// bricht ab und der normale Fund (L) geht verloren. Mit Escape kein Crash ->
+// der L-Fund muss weiter kommen (beweist: Analyse lief durch).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var L: TList<TFoo>; Data: array of TList<TFoo>;'#13#10 +
+  'begin'#13#10 +
+  '  L := TList<TFoo>.Create;'#13#10 +
+  '  L.Add(TFoo.Create);'#13#10 +
+  '  Data[0] := TList<TFoo>.Create;'#13#10 +
+  '  Data[0].Add(TFoo.Create);'#13#10 +
+  '  L.Free;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkTObjectListWithoutOwnership) >= 1,
+    'indizierter LHS darf nicht crashen -> normaler L-Fund muss weiter kommen');
   finally F.Free; end;
 end;
 

@@ -118,8 +118,16 @@ begin
           begin
             // ADD_CREATE_TMPL hat nur EINEN %s (VarName); der hinzugefuegte
             // Typ wird als Capture-Group 1 erfasst.
+            // Tooling-Haertung (SCA006-Crash, 2026-07-13): Pair.Key ist die LHS
+            // der Zuweisung nach Qualifier-Strip - meist ein Identifier, aber
+            // Parse-Edges liefern indizierte/gecastete Formen ('Data[Index]',
+            // 'Arr(i)'). Deren Regex-Metazeichen ('['/'(') erzeugen ein invalides
+            // Pattern -> TRegEx.Create wirft 'unmatched parentheses' -> die GANZE
+            // Datei-Analyse bricht ab. TRegEx.Escape macht den VarName literal
+            // (Matching fuer normale Identifier unveraendert; '.' war vorher
+            // any-char, jetzt literal - kein Real-World-Unterschied).
             AddRE := TRegEx.Create(Format(ADD_CREATE_TMPL,
-              [Pair.Key]), [roIgnoreCase]);
+              [TRegEx.Escape(Pair.Key)]), [roIgnoreCase]);
             for N in Calls do
             begin
               Mtch := AddRE.Match(N.Name);
