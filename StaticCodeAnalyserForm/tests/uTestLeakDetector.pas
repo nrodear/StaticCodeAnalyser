@@ -85,6 +85,9 @@ type
     [Test] procedure Leak_PassedToClassCreate_NoFinding;
     [Test] procedure Leak_MultipleTypes_EachLeaking_AllReported;
     [Test] procedure Leak_FreeAfterTryFinally_ReportsWarning;
+    // finally-Mis-Attachment-Fix (2026-07-13): Region-Grenze mit nested begin/end
+    // im finally darf den Source-Check nicht verwirren -> Free ausserhalb bleibt Warning.
+    [Test] procedure Leak_NestedBlockInFinally_FreeOutside_StillWarns;
     [Test] procedure Leak_TwoFreeAndNil_BothVars_NoFinding;
     [Test] procedure Leak_LargeMethod_OneVarLeaks_OneError;
     [Test] procedure Leak_NestedTryFinally_InnerVarHasOwnFinally_NoFinding;
@@ -455,6 +458,35 @@ begin
       'list.Free außerhalb finally – Warning');
     Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'other korrekt freigegeben – kein Error');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_NestedBlockInFinally_FreeOutside_StillWarns;
+// finally-Mis-Attachment-Fix TP-Gegenprobe: der neue Source-basierte finally-
+// Region-Check muss die try-Region trotz nested 'begin/end' IM finally korrekt
+// begrenzen. 'list.Free' steht NACH dem try/finally -> ausserhalb der Region ->
+// muss weiter Warning liefern (der Fix darf nicht ueber die Region hinaus-
+// suppressen). 'other' wird im finally freigegeben -> kein Fund.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var list, other: TStringList;'#13#10+
+  'begin'#13#10+
+  '  list  := TStringList.Create;'#13#10+
+  '  other := TStringList.Create;'#13#10+
+  '  try'#13#10+
+  '    other.Add(''x'');'#13#10+
+  '  finally'#13#10+
+  '    if other.Count > 0 then begin other.Free; end;'#13#10+
+  '  end;'#13#10+
+  '  list.Free;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+      'list.Free ausserhalb finally (mit nested begin/end im finally) bleibt Warning');
   finally F.Free; end;
 end;
 

@@ -40,7 +40,7 @@ interface
 
 uses
   System.SysUtils, System.StrUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12, uDetectorUtils, uAnalyzeContext;
+  uAstNode, uSCAConsts, uMethodd12, uDetectorUtils, uAnalyzeContext, uFileTextCache;
 
 type
   TLeakDetector2 = class
@@ -128,6 +128,12 @@ type
     // TSynList etc. haben kein OwnsObjects).
     class function AddReceiverOwnsItems(MethodNode: TAstNode;
       const ReceiverNameLow: string): Boolean; static;
+    // finally-Mis-Attachment-Fix (2026-07-13): Source-basierter finally-Schutz-
+    // Check. True wenn eine Freigabe von VarName in der QUELLE innerhalb einer
+    // finally-Region liegt (unabhaengig von der AST-Attachierung des .Free).
+    // NUR fuer den lsWarning-Zweig - kann nie einen Leak (lsError) maskieren.
+    class function FreeInFinallyRegionBySource(MethodNode: TAstNode;
+      const StrippedLines: TArray<string>; const VarNameLow: string): Boolean; static;
   end;
 
 implementation
@@ -1156,6 +1162,112 @@ begin
   end;
 end;
 
+class function TLeakDetector2.FreeInFinallyRegionBySource(MethodNode: TAstNode;
+  const StrippedLines: TArray<string>; const VarNameLow: string): Boolean;
+// Bestimmt die finally-Regionen rein aus der QUELLE: Anker sind die AST-finally-
+// Startzeilen (nkFinallyBlock.Line - die kennt der Parser zuverlaessig), das Ende
+// per Vorwaerts-Balancierung (begin/try/case/asm/record/object +1, end -1; erstes
+// 'end', das die Tiefe unter 0 bringt = try-Ende). Dann: liegt eine Freigabe von
+// VarName (VarName.Free/.Destroy/FreeAndNil([Self.]VarName)) in einer Region?
+// Damit ist der Check unabhaengig davon, WIE der Parser den .Free-Knoten
+// attachiert hat (Fix fuer nested-/cond-comp-/'F:=nil;try'-Mis-Attachment).
+// Konservativ: bei Unklarheit False (Warnung bleibt). StrippedLines sind bereits
+// string-/kommentar-gestrippt; Index k-1 == Quellzeile k.
+var
+  FinBlocks : TList<TAstNode>;
+  FB        : TAstNode;
+  StartL, EndL, li : Integer;
+
+  function TryEndLine(FinLine1: Integer): Integer;
+  const
+    OPENERS : array[0..5] of string = ('begin','try','case','asm','record','object');
+  var
+    depth, k, j, p, len : Integer;
+    low, w : string;
+    isOpener : Boolean;
+    oi : Integer;
+  begin
+    depth := 0;
+    for k := FinLine1 to Length(StrippedLines) do
+    begin
+      low := LowerCase(StrippedLines[k - 1]);
+      len := Length(low);
+      j := 1;
+      while j <= len do
+      begin
+        if CharInSet(low[j], ['a'..'z','_']) then
+        begin
+          p := j;
+          while (j <= len) and CharInSet(low[j], ['a'..'z','0'..'9','_']) do Inc(j);
+          w := Copy(low, p, j - p);
+          isOpener := False;
+          for oi := 0 to High(OPENERS) do
+            if w = OPENERS[oi] then begin isOpener := True; Break; end;
+          if isOpener then Inc(depth)
+          else if w = 'end' then
+          begin
+            Dec(depth);
+            if depth < 0 then Exit(k);   // dieses 'end' schliesst das try
+          end;
+        end
+        else
+          Inc(j);
+      end;
+    end;
+    Result := Length(StrippedLines);      // Fallback: bis Dateiende
+  end;
+
+  function BoundedLeft(const Low, Needle: string; NeedRightBreak: Boolean): Boolean;
+  var q, rr : Integer;
+  begin
+    Result := False;
+    q := Pos(Needle, Low);
+    while q > 0 do
+    begin
+      if (q = 1) or not TLeakDetector2.IsIdentChar(Low[q - 1]) then
+      begin
+        if NeedRightBreak then
+        begin
+          rr := q + Length(Needle);
+          if (rr > Length(Low)) or not TLeakDetector2.IsIdentChar(Low[rr]) then Exit(True);
+        end
+        else
+          Exit(True);
+      end;
+      q := PosEx(Needle, Low, q + 1);
+    end;
+  end;
+
+  function LineFreesVar(const S: string): Boolean;
+  var Low : string;
+  begin
+    Low := LowerCase(S);
+    Result := BoundedLeft(Low, VarNameLow + '.free', False)
+           or BoundedLeft(Low, VarNameLow + '.destroy', False)
+           or BoundedLeft(Low, 'freeandnil(' + VarNameLow, True)
+           or BoundedLeft(Low, 'freeandnil(self.' + VarNameLow, True);
+  end;
+
+begin
+  Result := False;
+  if Length(StrippedLines) = 0 then Exit;
+  FinBlocks := MethodNode.FindAll(nkFinallyBlock);
+  try
+    for FB in FinBlocks do
+    begin
+      StartL := FB.Line;
+      if (StartL < 1) or (StartL > Length(StrippedLines)) then Continue;
+      EndL := TryEndLine(StartL);
+      for li := StartL to EndL do
+        if (li >= 1) and (li <= Length(StrippedLines))
+           and LineFreesVar(StrippedLines[li - 1]) then
+          Exit(True);
+    end;
+  finally
+    FinBlocks.Free;
+  end;
+end;
+
 { ---- Öffentliche API ---- }
 
 class procedure TLeakDetector2.AnalyzeMethod(UnitNode, MethodNode: TAstNode;
@@ -1179,13 +1291,37 @@ class procedure TLeakDetector2.AnalyzeMethod(UnitNode, MethodNode: TAstNode;
   end;
 
 var
-  LocalVars  : TList<TAstNode>;
-  V          : TAstNode;
-  VarNameLow : string;
-  FreeFound  : Boolean;
-  FreeInFin  : Boolean;
-  HasFinally : Boolean;
+  LocalVars    : TList<TAstNode>;
+  V            : TAstNode;
+  VarNameLow   : string;
+  FreeFound    : Boolean;
+  FreeInFin    : Boolean;
+  HasFinally   : Boolean;
+  StrippedLines: TArray<string>;   // finally-Mis-Attachment-Fix (lazy)
+  StrippedReady: Boolean;
+  SrcLines     : TStringList;
+  SrcOwned     : Boolean;
+
+  procedure EnsureStripped;
+  // Lazy: erst wenn eine lsWarning ('Free ausserhalb finally') anstehen wuerde.
+  // Nutzt den geteilten Strip-Cache (einmal pro Datei) und splittet in Zeilen.
+  var
+    Code    : string;
+    LineFor : TArray<Integer>;
+  begin
+    if StrippedReady then Exit;
+    StrippedReady := True;   // auch bei Fehlschlag nicht erneut versuchen
+    SrcLines := AcquireLines(FileName, SrcOwned, CtxFileTextCache(AContext));
+    if SrcLines = nil then Exit;
+    Code := TDetectorUtils.StripStringsAndCommentsCached(
+      SrcLines, LineFor, AContext, FileName, ' ');
+    StrippedLines := Code.Split([#10]);
+  end;
+
 begin
+  StrippedReady := False;
+  SrcLines      := nil;
+  SrcOwned      := False;
   LocalVars := MethodNode.FindAll(nkLocalVar);
   try
     HasFinally := HasTryFinallyBlock(MethodNode);  // schleifeninvariant: einmal vor der Schleife statt pro Var
@@ -1217,10 +1353,19 @@ begin
           AddFinding(V.Name, lsError, ReportLine)
         else if not FreeInFin and HasFinally
              and not HasExceptFreeRaise(MethodNode, VarNameLow) then
+        begin
           // Prio-5-Gate: der Free steckt in einem re-raisenden except-Handler
           // (try..except VarName.Free; raise; end) - Ausnahme-Pfad-Cleanup,
           // aequivalent zu finally -> kein "Free ausserhalb finally"-Befund.
-          AddFinding(V.Name, lsWarning, ReportLine);
+          // finally-Mis-Attachment-Fix (2026-07-13): der AST sagt "nicht im
+          // finally", aber in der QUELLE liegt der Free doch in einer finally-
+          // Region (nested-/cond-comp-/'F:=nil;try'-Parser-Fehlattachierung) ->
+          // dann ebenfalls kein Befund. NUR dieser lsWarning-Zweig; der Leak-
+          // (lsError-)Pfad oben ist unberuehrt -> kann nie einen Leak maskieren.
+          EnsureStripped;
+          if not FreeInFinallyRegionBySource(MethodNode, StrippedLines, VarNameLow) then
+            AddFinding(V.Name, lsWarning, ReportLine);
+        end;
 
         Continue;
       end;
@@ -1242,6 +1387,7 @@ begin
     end;
   finally
     LocalVars.Free;
+    if SrcLines <> nil then ReleaseLines(SrcLines, SrcOwned);
   end;
 end;
 
