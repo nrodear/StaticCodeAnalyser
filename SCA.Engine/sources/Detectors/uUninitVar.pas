@@ -2235,6 +2235,15 @@ var
 begin
   if UnitNode = nil then Exit;
 
+  // Option C (2026-07-15, User-Scope-Entscheidung): SCA166 ueberspringt Test-
+  // Fixture-Dateien komplett. Solche Files (Formatter-/Parser-TestCases,
+  // *Test.pas, /test/ /tests/ /demos/ /samples/-Ordner) enthalten ABSICHTLICH
+  // uninitialisierte Variablen als Edge-Case-Input - read-vor-write ist dort
+  // kein produktiver Bug. Real-World-Baseline after38: 95 SCA166-Funde in 50
+  // solchen Dateien (cnwizards/Test/.../TestCases, jvcl/tests, mORMot/test).
+  // Nutzt die projektweite Fixture-Definition (TDetectorUtils.IsTestFixturePath).
+  if TDetectorUtils.IsTestFixturePath(FileName, '') then Exit;
+
   // Welle 3: {$IFDEF}-Direktiven-Zeilen aus den nkConditionalRange-Markern
   // (Start=Node.Line, Ende=TypeRef) fuer den Read-vor-Write-Preprocessor-Guard.
   CondR := UnitNode.FindAll(nkConditionalRange);
