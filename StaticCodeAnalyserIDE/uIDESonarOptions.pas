@@ -120,13 +120,13 @@ begin
   // Dialog nochmals skaliert -> Text zu gross bei 125%. Muster wie Dock/uMainForm.
   TIDEToolbar.ApplySegoeUI(Self);
   BuildControls;
-  // Background-Policy identisch zu TSCAOptionsFrame (uIDESCAOptions) -
-  // beide Options-Pages sollen visuell konsistent wirken. Ohne dieses
-  // Override uebernahm der Frame die hellgraue Container-Farbe des
-  // Options-Dialogs, was neben der dunklen SCA-Page inkonsistent aussah.
+  // Background-Policy identisch zu TSCAOptionsFrame (uIDESCAOptions) - beide
+  // Options-Pages sollen visuell konsistent wirken: theme-abhaengig via
+  // TIDETheme.OptionsFrameBg (Dark = kuratierter Ton, Light = System-Window).
+  // Bugfix 2026-07-15: vorher hartcodiert dunkel -> im hellen Theme falsch.
   Self.ParentColor      := False;
   Self.ParentBackground := False;
-  Self.Color            := IDE_BG_OPTIONS_FRAME;
+  Self.Color            := TIDETheme.OptionsFrameBg;
 end;
 
 procedure TSonarOptionsFrame.BuildControls;
@@ -338,6 +338,9 @@ begin
   // Belt-and-suspenders zum TIDETheme-Subscribe; Apply ist idempotent.
   if csDestroying in ComponentState then Exit;
   TIDETheme.Apply(Self);
+  // Theme-abhaengigen Options-Hintergrund nach dem Style-Wechsel neu setzen,
+  // sonst bliebe die alte Farbe nach einem Hell<->Dunkel-Wechsel stehen.
+  Self.Color := TIDETheme.OptionsFrameBg;
 end;
 
 procedure TSonarOptionsFrame.DetectProjectClick(Sender: TObject);

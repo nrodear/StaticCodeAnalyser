@@ -180,11 +180,12 @@ begin
   // Mausrad-Scrolling ueber die ganze Seite (nach BuildControls, wenn FScroll
   // + alle Kind-Controls existieren).
   HookMouseWheel(FScroll);
-  // Background: semantische Konstante in uIDEColors - identisch zur Sonar-
-  // Options-Page (beide Pages sollen visuell konsistent wirken).
+  // Background: theme-abhaengig via TIDETheme.OptionsFrameBg (Dark = kuratierter
+  // Ton, Light = System-Window-Farbe) - identisch zur Sonar-Options-Page. Bugfix
+  // 2026-07-15: vorher hartcodiert dunkel -> Page im hellen Theme faelschlich dunkel.
   Self.ParentColor      := False;
   Self.ParentBackground := False;
-  Self.Color            := IDE_BG_OPTIONS_FRAME;
+  Self.Color            := TIDETheme.OptionsFrameBg;
   ApplyHintStyleToAllInfoLabels;
 end;
 
@@ -219,7 +220,7 @@ begin
   // persistent (ApplyTheme wuerde seClient sonst wieder ergaenzen).
   FScroll.ParentColor      := False;
   FScroll.ParentBackground := False;
-  FScroll.Color            := IDE_BG_OPTIONS_FRAME;
+  FScroll.Color            := TIDETheme.OptionsFrameBg;
   FScroll.StyleElements    := FScroll.StyleElements - [seClient];
 
   Y := MARGIN_TOP;
@@ -778,6 +779,12 @@ begin
   // andere es ab. Apply ist idempotent.
   if csDestroying in ComponentState then Exit;
   TIDETheme.Apply(Self);
+  // Theme-abhaengigen Options-Hintergrund nach dem Style-Wechsel neu setzen
+  // (OptionsFrameBg spiegelt jetzt das neue Theme). Sonst bliebe die alte Farbe
+  // stehen und die Page waere nach einem Hell<->Dunkel-Wechsel falsch.
+  Self.Color := TIDETheme.OptionsFrameBg;
+  if Assigned(FScroll) then
+    FScroll.Color := TIDETheme.OptionsFrameBg;
 end;
 
 { TSCAAddInOptions }

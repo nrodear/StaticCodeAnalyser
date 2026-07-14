@@ -51,11 +51,13 @@ const
   // teilweise auf den gleichen RGB-Wert wie clBtnFace und verschwindet.
   IDE_SEPARATOR    : TColor = clBtnShadow;
 
-  // Tools>Options-Page Frame-Hintergrund. Hartcodierter dunkler Ton mit
-  // leichtem Blau-Hauch (2026-06-19 User-Wahl); explizit NICHT system-color,
-  // weil clBtnFace/clWindow vom Theme-Service nicht zum gewuenschten Look
-  // remapped. TColor-Konvention BGR: #2A2D32 (R=2A G=2D B=32) -> $00322D2A.
-  // Konsumenten: uIDESCAOptions.TSCAOptionsFrame, uIDESonarOptions.TSonarOptionsFrame.
+  // Tools>Options-Page Frame-Hintergrund - NUR der DARK-Theme-Ton. Kuratierter
+  // dunkler Ton mit leichtem Blau-Hauch (2026-06-19 User-Wahl); explizit NICHT
+  // system-color, weil clWindow im Dark-Theme nicht zum gewuenschten Look remapped.
+  // TColor-Konvention BGR: #2A2D32 (R=2A G=2D B=32) -> $00322D2A.
+  // Konsument: TIDETheme.OptionsFrameBg - waehlt im DARK-Theme diese Konstante,
+  // im LIGHT-Theme dagegen TIDETheme.FrameBg (Bugfix 2026-07-15: bedingungsloses
+  // Setzen dieser Dunkelfarbe machte die Options-Page im hellen Theme falsch dunkel).
   IDE_BG_OPTIONS_FRAME : TColor = TColor($00322D2A);
 
 // Wendet den "Hint-Label-Style" (IDE_FG_DIM, 8pt, ParentFont aus) auf das
