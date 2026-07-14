@@ -846,6 +846,31 @@ begin
   if IsLabelKeywordLine(S) then Exit(False);
 end;
 
+function IsParserArtifactTypeRef(const TypeRef: string): Boolean;
+// SCA166-Scope-Mis-Attribution (2026-07-14, per AST-Dump von 18 realen Korpus-
+// Faellen verifiziert). Der Parser emittiert fuer fehl-geparste Konstrukte
+// nkLocalVar-Knoten mit MALFORMEDEM TypeRef, der ')' oder '=' enthaelt:
+//   - Nested-Routine-Parameter        -> ') ' / ') : Typ'  (z.B. 'Boolean )',
+//                                        'PByte ) : Int64')  [CnWizIdeUtils:2950,
+//                                        mormot.core.buffers:3185]
+//   - Function-Pointer-Typ-Return-Tail -> '):HRESULT'       (z.B.
+//                                        'TSHStockIconInfo):HRESULT')  [ushlobjadditional:165]
+//   - Feld-`if X = nil then`-Statement -> '= nil'            (z.B.
+//                                        'TCnPaletteWrapper = nil')  [CnWizIdeUtils:3188/3971/4108]
+// TP-SICHER by construction:
+//   ')' : ein echter Local hat nie ein SCHLIESSENDES ')' im Typ - der Parser
+//         zerlegt Prozedur-Pointer-Typen (Dump #3), sodass der VAR-NAME-Knoten
+//         nur '(' (offen) traegt; ')' erscheint ausschliesslich in geleakten
+//         Parameter-/Return-Tail-Fragmenten (keine echten Vars). Ein echter
+//         uninit-Proz-Pointer-Read (Var-Name-Knoten, '(' offen) bleibt erhalten.
+//   '=' : waere 'X: T = wert' ein echter initialisierter Local, ist er
+//         GESCHRIEBEN -> ohnehin kein uninit-Read.
+// Dump-Beleg: beruehrte 0 echte Locals + 0 Inline-Vars. Bare-'(' (Proz-Pointer-
+// Var-Name) bewusst NICHT gefiltert, um echte Proz-Pointer-TPs nicht zu maskieren.
+begin
+  Result := (Pos(')', TypeRef) > 0) or (Pos('=', TypeRef) > 0);
+end;
+
 // ExtractCallFunctionName + ExtractCallArgsRaw wurden nach
 // uDetectorUtils verschoben (Block 1b - geteilte Expression-Helper).
 // Aufrufe via TDetectorUtils.ExtractCallFunctionName / .ExtractCallArgsRaw.
@@ -1896,6 +1921,10 @@ var
       if Trim(LV.Name) = '' then Continue;
       if LV.Name.StartsWith('_') then Continue;
       if not LooksLikeRealLocalVar(Lines, LV.Line) then Continue;
+      // SCA166-Scope: Parser-Artefakt-Phantoms (nested-Proc-Param / Function-
+      // Pointer-Typ-Var / Feld-`if X=nil`) tragen '(' ')' '=' im TypeRef -
+      // nie ein echter uninit-Local. TP-sicher (AST-Dump-verifiziert 2026-07-14).
+      if IsParserArtifactTypeRef(LV.TypeRef) then Continue;
       // 'absolute'-Aliase ueberspringen: 'c1: TARGB absolute color1;' macht
       // c1 zum Alias der bestehenden Variable color1 - eigene Storage gibt
       // es nicht, daher auch keine 'init'-Pflicht. Audit-Trigger Img32.Extra
