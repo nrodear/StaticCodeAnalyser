@@ -19,20 +19,34 @@ PRINZIP
   * Kontroll-Kopie je Mutant: gescored wird die DIFFERENZ Mutant-vs-Kontrolle, damit
     bereits vorhandene Funde derselben Regel nicht als Treffer fehlzaehlen.
 
-!!! WICHTIGE LIMITATION - ISOLIERTE MUTANTEN (Messfehler-Falle, 2026-07-15) !!!
-  Der Mutanten-Ordner enthaelt NUR die mutierte Datei, NICHT ihre Abhaengigkeiten.
-  Fuer datei-lokale Detektoren ist das egal (M097/M096: "ruft dieser Ctor/Dtor
-  'inherited'?" braucht keinen Cross-Unit-Kontext) -> deren Recall ist belastbar.
-  Detektoren mit CROSS-UNIT-Wissen messen so aber FALSCH ZU NIEDRIG:
-    * SCA001 (uLeakDetector2) flaggt nur Klassen aus `LeakyClasses` - einer Liste
-      mit AutoDiscovery AUS DEM SCAN-CONTEXT. Steht die deklarierende Unit nicht im
-      Scan (z.B. Alcinoe.XmlDoc.pas fuer TALXmlDocument), kann die Klasse nicht
-      entdeckt werden -> kein Fund -> scheinbar schlechter Recall.
-    * Erstmessung 2026-07-15 ergab M001 = 18 % - diese Zahl ist NICHT belastbar,
-      der Anteil Artefakt vs. echte Allowlist-Luecke ist damit nicht trennbar.
-  KORREKTE MESSUNG fuer solche Detektoren: Mutationen in einer VOLL-KORPUS-Kopie
-  anwenden (4,5 GB) und gegen die unmutierte Baseline-SARIF diffen - dann sind die
-  Abhaengigkeiten im Scan. TODO: --in-corpus-Modus.
+ZWEI MODI - WELCHER WANN (wichtig, sonst misst man Artefakte)
+  DEFAULT (isolierte Mutanten-Ordner): je Mutant nur die mutierte Datei + eine
+    Kontroll-Kopie. Nur gueltig fuer DATEI-LOKALE Detektoren (M097/M096: "ruft
+    dieser Ctor/Dtor 'inherited'?" braucht keinen Cross-Unit-Kontext).
+  --in-corpus (Korpus-Spiegel): Mutationen in einer Kopie des ganzen Korpus
+    (.pas/.dfm, ~16k Dateien). PFLICHT fuer Detektoren mit CROSS-UNIT-Wissen -
+    z.B. SCA001, das nur Klassen aus `LeakyClasses` flaggt (Liste + AutoDiscovery
+    aus dem Scan-Context): fehlt die deklarierende Unit im Scan, kann die Klasse
+    nicht entdeckt werden und der Recall waere kuenstlich zu niedrig.
+    Gescored wird gegen die unmutierte Baseline-SARIF (gleiche rel. Pfade).
+    Selbst-Validierung: Baseline vs Mutanten-Scan darf sich AUSSCHLIESSLICH in den
+    mutierten Dateien unterscheiden (2026-07-15 verifiziert: 30/30, 0 Fremd-Diffs).
+  Hinweis: {$I}/{$INCLUDE} loest der Lexer NICHT auf (uLexer: "Andere Direktiven
+  ignorieren") -> .inc-Dateien muessen nicht gespiegelt werden.
+
+ERGEBNIS DER ERSTMESSUNG (2026-07-15, 50 Mutanten je Klasse)
+  M097 SCA097  47/50 = 94 %
+  M096 SCA096  39/50 = 78 %   (Misses haeufen sich bei nested classes TFoo.TBar.Create)
+  M001 SCA001   9/50 = 18 %   <- MIT vollem Cross-Unit-Kontext bestaetigt, KEIN Artefakt.
+     URSACHE: `DEF_AUTO_DISCOVER_CLASSES = False` - die Custom-Class-AutoDiscovery
+     ist per DEFAULT AUS (Aktivierung: [Detectors]/AutoDiscoverClasses=1 in
+     analyser.ini). Ohne sie kennt SCA001 nur die hartcodierte RTL/VCL-Baseline:
+     die 9 Treffer sind ausnahmslos RTL/VCL (TBitmap/TFileStream/TStringList/
+     TIniFile), die 41 Misses ausnahmslos Bibliotheks-Klassen (TAL*).
+     Das ist kein Detektor-Bug, sondern der bisher UNSICHTBARE Preis einer
+     precision-first-Voreinstellung - jetzt beziffert. Naechstes Experiment:
+     mit AutoDiscoverClasses=1 erneut messen (Recall-Gewinn) UND den normalen
+     Korpus scannen (FP-Kosten) -> der Trade-off wird zweiseitig messbar.
 
 Usage:
   python tools/recall_mutate.py --corpus D:\\git-sca-realworld --out mutants --per-kind 50
@@ -169,13 +183,110 @@ def iter_pas(corpus, limit_files=None):
                     return
 
 
+def mirror_sources(corpus, out):
+    """Spiegelt NUR .pas/.dfm des Korpus nach out (Baum-erhaltend).
+
+    Fuer den --in-corpus-Modus: der Scan braucht die Abhaengigkeiten (sonst kann
+    z.B. SCA001's LeakyClasses-AutoDiscovery die deklarierende Unit nicht sehen).
+    Andere Dateitypen (Bilder, .dcu, Doku) sind fuer den Scan irrelevant -> 13k
+    statt 73k Dateien.
+    """
+    skip = re.compile(r'[\\/](\.git|__history|__recovery)[\\/]', re.I)
+    n = 0
+    for root, dirs, files in os.walk(corpus):
+        if skip.search(root + os.sep):
+            continue
+        for f in files:
+            if not f.lower().endswith(('.pas', '.dfm')):
+                continue
+            src = os.path.join(root, f)
+            rel = os.path.relpath(src, corpus)
+            dst = os.path.join(out, rel)
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.copy2(src, dst)
+            n += 1
+            if n % 2000 == 0:
+                print(f"  ... {n} Dateien gespiegelt", flush=True)
+    return n
+
+
+def run_in_corpus(args):
+    """Mutationen in einer KORPUS-KOPIE anwenden -> Cross-Unit-Kontext bleibt.
+
+    Gescored wird spaeter gegen die unmutierte Baseline-SARIF des ECHTEN Korpus
+    (gleiche relative Pfade, weil Spiegel). Kontroll-Kopien sind hier unnoetig -
+    die Baseline IST die Kontrolle.
+    """
+    print(f"Spiegle {args.corpus} -> {args.out} (nur .pas/.dfm) ...", flush=True)
+    n = mirror_sources(args.corpus, args.out)
+    print(f"  {n} Dateien gespiegelt.\n")
+
+    only = set(x.strip().upper() for x in args.only.split(',')) if args.only else None
+    want = {mid: args.per_kind for mid, _, _, _ in MUTATIONS
+            if (only is None or mid in only)}
+    manifest = []
+    seq = 0
+    for path in iter_pas(args.out, None):     # ueber die KOPIE laufen
+        if all(v <= 0 for v in want.values()):
+            break
+        lines, enc = read_lines(path)
+        if not lines or len(lines) > 6000:
+            continue
+        for mid, rule, fn, desc in MUTATIONS:
+            if want.get(mid, 0) <= 0:
+                continue
+            try:
+                cands = fn(lines)
+            except Exception:
+                continue
+            if not cands:
+                continue
+            mut_lines, detail = cands[0]
+            seq += 1
+            with open(path, 'w', encoding='utf-8') as fh:   # IN-PLACE in der Kopie
+                fh.write("\n".join(mut_lines) + "\n")
+            rel = os.path.relpath(path, args.out).replace('\\', '/')
+            manifest.append({
+                'id': f"m{seq:04d}_{mid}",
+                'mutation': mid,
+                'expected_rule': rule,
+                'what': desc,
+                'rel': rel,                 # gleiche rel. Pfade wie in der Baseline
+                'basename': os.path.basename(path),
+                'detail': detail,
+            })
+            want[mid] -= 1
+            break        # nur EINE Mutation pro Datei
+
+    with open(os.path.join(args.out, '_manifest.json'), 'w', encoding='utf-8') as fh:
+        json.dump(manifest, fh, ensure_ascii=False, indent=1)
+    print(f"Mutanten (in-corpus): {len(manifest)}")
+    for mid in want:
+        print(f"  {mid}: {sum(1 for m in manifest if m['mutation'] == mid)}")
+    print(f"\nNaechste Schritte:")
+    print(f"  1) scannen:  --path {args.out} --full --profile strict --report-sarif sca-mutant-corpus.sarif")
+    print(f"  2) scoren :  tools/recall_score.py --sarif sca-mutant-corpus.sarif "
+          f"--baseline <baseline.sarif> --manifest {args.out}/_manifest.json")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--corpus', required=True)
     ap.add_argument('--out', required=True)
     ap.add_argument('--per-kind', type=int, default=50)
     ap.add_argument('--scan-limit', type=int, default=4000, help='max. Korpus-Files absuchen')
+    ap.add_argument('--in-corpus', action='store_true',
+                    help='Mutationen in einer Korpus-KOPIE anwenden (noetig fuer Detektoren '
+                         'mit Cross-Unit-Wissen, z.B. SCA001/LeakyClasses)')
+    ap.add_argument('--only', default=None, help='nur diese Mutationen, z.B. M001')
     args = ap.parse_args()
+
+    if args.in_corpus:
+        if os.path.exists(args.out):
+            shutil.rmtree(args.out)
+        os.makedirs(args.out)
+        run_in_corpus(args)
+        return
 
     if os.path.exists(args.out):
         shutil.rmtree(args.out)

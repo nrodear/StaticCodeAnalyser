@@ -22,8 +22,13 @@ def norm(p):
     return p.replace("\\/", "/").replace("\\", "/")
 
 
-def load_sarif(path):
-    """-> {(ruleId, dirname): count}. dirname = der Mutanten-/Kontroll-Ordner."""
+def load_sarif(path, key='folder'):
+    """-> {(ruleId, key): count}.
+
+    key='folder' : Ordnername (isolierter Mutanten-Modus, 1 Datei je Ordner)
+    key='rel'    : voller relativer Pfad (--in-corpus-Modus; Mutanten-Kopie und
+                   Baseline haben identische rel. Pfade, weil Spiegel)
+    """
     counts = collections.Counter()
     cur = uri = None
     for ln in open(path, encoding='utf-8-sig', errors='replace'):
@@ -37,9 +42,11 @@ def load_sarif(path):
             uri = norm(mu.group(1)); continue
         if LNR.search(ln):
             if uri:
-                parts = uri.split('/')
-                folder = parts[-2] if len(parts) >= 2 else ''
-                counts[(cur, folder)] += 1
+                if key == 'rel':
+                    counts[(cur, uri.lstrip('./'))] += 1
+                else:
+                    parts = uri.split('/')
+                    counts[(cur, parts[-2] if len(parts) >= 2 else '')] += 1
             cur = None
     return counts
 
@@ -48,19 +55,29 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--sarif', required=True)
     ap.add_argument('--manifest', required=True)
+    ap.add_argument('--baseline', default=None,
+                    help='--in-corpus-Modus: SARIF des UNMUTIERTEN Korpus. Dann wird pro '
+                         'relativem Pfad Mutant-vs-Baseline verglichen (statt Kontroll-Kopie).')
     ap.add_argument('--show-missed', type=int, default=6)
     args = ap.parse_args()
 
-    counts = load_sarif(args.sarif)
+    in_corpus = args.baseline is not None
+    counts = load_sarif(args.sarif, 'rel' if in_corpus else 'folder')
+    base = load_sarif(args.baseline, 'rel') if in_corpus else None
     man = json.load(open(args.manifest, encoding='utf-8'))
 
     per = collections.defaultdict(lambda: {'n': 0, 'hit': 0, 'missed': []})
     for e in man:
         rule = e['expected_rule']
-        mf = e['mutant'].split('/')[0]        # Ordnername des Mutanten
-        cf = e['control'].split('/')[0]       # Ordnername der Kontrolle
-        cm = counts[(rule, mf)]
-        cc = counts[(rule, cf)]
+        if in_corpus:
+            rel = e['rel'].lstrip('./')
+            cm = counts[(rule, rel)]
+            cc = base[(rule, rel)]
+            src = rel
+        else:
+            cm = counts[(rule, e['mutant'].split('/')[0])]
+            cc = counts[(rule, e['control'].split('/')[0])]
+            src = e['source']
         rec = per[e['mutation']]
         rec['n'] += 1
         rec['rule'] = rule
@@ -68,7 +85,7 @@ def main():
         if cm > cc:
             rec['hit'] += 1
         else:
-            rec['missed'].append((e['id'], e['source'], e['detail'], cm, cc))
+            rec['missed'].append((e['id'], src, e['detail'], cm, cc))
 
     print("=" * 82)
     print("RECALL (Mutation Testing) - injizierte Bugs, die der Scanner findet")
