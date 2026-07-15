@@ -47,6 +47,13 @@ type
     // StartCount keine Bewegung war. Schuetzt Outer-Loops vor Endlos-Loops
     // wenn ein Sub-Parser keinen Token konsumiert hat.
     procedure GuardAdvance(StartCount: Integer);
+    // Boundary-Recovery-Praedikat ({$ifdef}-Straddle-Merge, 2026-07-16):
+    // True wenn Tok ein TOP-LEVEL-Routine-Header ist (Spalte 1). Im
+    // Statement-Kontext ist das illegales Delphi -> der umgebende Block/Frame
+    // wurde nie geschlossen. Alle Statement-Loops (ParseBlock/Case/Repeat/Try)
+    // nutzen es als zusaetzliche Abbruch-Bedingung, damit die Recovery auch
+    // durch offene try/case/repeat-Frames nach oben unwinden kann.
+    function AtTopLevelRoutineHead: Boolean;
     // Konsumiert optionale Generic-Parameter `<...>` einschliesslich nested
     // Klammern (z.B. `<TList<TFoo>>`). Falls Tok nicht `<` ist: no-op.
     // Wird nach Typname (in ParseTypeSection) und nach Methodenname (in
@@ -293,6 +300,31 @@ procedure TParser2.GuardAdvance(StartCount: Integer);
 begin
   if (FNextCount = StartCount) and not FLex.AtEnd then
     Next;
+end;
+
+function TParser2.AtTopLevelRoutineHead: Boolean;
+// Boundary-Recovery ({$ifdef}-Straddle-Merge). Ein Routine-Header auf SPALTE 1
+// kann im Statement-Kontext nicht legal auftreten: Routine-Header sind
+// DEKLARATIONEN, keine Statements. Steht er trotzdem da, wurde der umgebende
+// Block nie geschlossen - typisch wenn ein {$ifdef}/{$else} ein `begin`
+// straddelt (Lexer emittiert BEIDE Zweige -> zwei `begin`, ein `end`).
+//
+// SPALTE-1-GATE (kritisch): anonyme Methoden (`x := procedure begin ... end`)
+// und nested routines stehen EINGERUECKT und duerfen nie recovern - wuerden sie
+// als Top-Level-Methoden gesurfacet, kostet das laut Messung +170k Findings
+// (siehe ParseMethodImpl). Zusaetzlich erreichen sie den Statement-Kopf ohnehin
+// nicht (ParseCallOrAssign schluckt sie per NestDepth; nested routines werden
+// VOR dem Body konsumiert). Das Gate ist die zweite Sicherung.
+//
+// Fehlverhalten ist sicher: greift das Praedikat nicht, bleibt nur der bisherige
+// Merge bestehen - es kann nichts abschneiden was vorher heil war.
+var
+  T : TToken;
+begin
+  T := Tok;
+  Result := (T.Col <= 1) and
+            (T.Kind in [tkKwProcedure, tkKwFunction, tkKwConstructor,
+                        tkKwDestructor, tkKwOperator, tkKwClass]);
 end;
 
 procedure TParser2.SkipGenericParams;
@@ -1461,33 +1493,19 @@ begin
   begin
     StartCount := FNextCount;
     T := Tok;
+    // Boundary-Recovery ({$ifdef}-Straddle-Merge, 2026-07-16): ein Top-Level-
+    // Routine-Header auf Spalte 1 bedeutet, dass DIESER Block nie geschlossen
+    // wurde (der Lexer emittiert beide {$ifdef}-Zweige -> zwei `begin`, ein
+    // `end` -> der Body frisst sonst die Folge-Routinen, mormot FromVarUInt64
+    // span 2407 statt ~35). Verlassen OHNE zu konsumieren: weil ParseBlock
+    // REKURSIV ist, unwinden alle offenen Bloecke aufwaerts, danach parst
+    // ParseImplementationSection die Routine regulaer. Begruendung + Spalte-1-
+    // Gate (Schutz vor anonymen Methoden/nested routines): AtTopLevelRoutineHead.
+    if AtTopLevelRoutineHead then Exit;
     case T.Kind of
       tkKwEnd                              : begin Next; Eat(tkSemicolon); Exit; end;
       tkKwElse, tkKwExcept, tkKwFinally,
       tkKwUntil, tkEof                     : Exit; // Blockgrenze – nicht konsumieren
-      // Boundary-Recovery (2026-07-16): ein TOP-LEVEL-Routine-Header (Spalte 1)
-      // im Statement-Kontext ist in Delphi illegal -> dieser Block wurde nie
-      // geschlossen. Ursache (am Korpus belegt): {$ifdef}/{$else}-Zweige, die
-      // ein `begin` STRADDELN - der Lexer emittiert BEIDE Zweige, also zwei
-      // `begin`, aber es gibt nur ein `end` -> der Methoden-Body bleibt offen
-      // und frisst die Folge-Routinen (mormot.core.buffers FromVarUInt64:
-      // span 2407 statt ~35; deren Params/Globals wurden Phantom-"Locals"
-      // -> SCA166-FPs). Recovery: Block beenden OHNE den Header zu konsumieren.
-      // Weil ParseBlock REKURSIV ist, unwinden dabei alle offenen Bloecke
-      // aufwaerts; ParseImplementationSection parst die Routine dann regulaer.
-      //
-      // SPALTE-1-GATE (kritisch): anonyme Methoden (`x := procedure begin`)
-      // und nested routines stehen EINGERUECKT. Wuerde die Recovery auf sie
-      // feuern, wuerden sie als Top-Level-Methoden gesurfacet - laut Messung
-      // +170k Findings (siehe ParseMethodImpl). Fehlverhalten ist damit sicher:
-      // greift die Recovery nicht, bleibt nur der bisherige Merge bestehen.
-      tkKwProcedure, tkKwFunction,
-      tkKwConstructor, tkKwDestructor,
-      tkKwOperator                         :
-        begin
-          if T.Col <= 1 then Exit;
-          ParseStatement(Block);
-        end;
     else
       ParseStatement(Block);
     end;
@@ -1733,8 +1751,11 @@ begin
   SkipTo([tkKwOf, tkEof]);
   Eat(tkKwOf);
 
-  while not (Tok.Kind in [tkKwEnd, tkKwElse, tkKwExcept, tkKwFinally,
-                          tkKwUntil, tkEof]) do
+  // AtTopLevelRoutineHead: Boundary-Recovery muss auch durch einen offenen
+  // case-Frame nach oben unwinden koennen (sonst greift sie bei {$ifdef}-
+  // Straddle-Merges nicht, deren Body ein case enthaelt).
+  while not ((Tok.Kind in [tkKwEnd, tkKwElse, tkKwExcept, tkKwFinally,
+                           tkKwUntil, tkEof]) or AtTopLevelRoutineHead) do
   begin
     ArmStart := FNextCount;
     ArmNode := CaseNode.Add(nkCaseArm, '', Tok.Line, Tok.Col);
@@ -1747,8 +1768,8 @@ begin
   if Eat(tkKwElse) then
   begin
     var ElseArm := CaseNode.Add(nkCaseArm, 'else', Tok.Line, Tok.Col);
-    while not (Tok.Kind in [tkKwEnd, tkKwExcept, tkKwFinally,
-                            tkKwUntil, tkEof]) do
+    while not ((Tok.Kind in [tkKwEnd, tkKwExcept, tkKwFinally,
+                             tkKwUntil, tkEof]) or AtTopLevelRoutineHead) do
     begin
       var ElseStart := FNextCount;
       ParseStatement(ElseArm);
@@ -1847,13 +1868,24 @@ var
 begin
   T          := Next; // 'repeat'
   RepeatNode := Parent.Add(nkRepeatStmt, 'repeat', T.Line, T.Col);
-  while not (Tok.Kind in [tkKwUntil, tkKwEnd, tkKwElse,
-                           tkKwExcept, tkKwFinally, tkEof]) do
+  // AtTopLevelRoutineHead: Boundary-Recovery auch durch einen offenen repeat-
+  // Frame nach oben unwinden lassen (sonst greift sie bei Straddle-Merges nicht,
+  // deren Body ein repeat enthaelt - z.B. mormot FromVarUInt64).
+  while not ((Tok.Kind in [tkKwUntil, tkKwEnd, tkKwElse,
+                           tkKwExcept, tkKwFinally, tkEof])
+             or AtTopLevelRoutineHead) do
   begin
     BodyStart := FNextCount;
     ParseStatement(RepeatNode);
     GuardAdvance(BodyStart);
   end;
+  // Boundary-Recovery: hat die Loop wegen AtTopLevelRoutineHead abgebrochen,
+  // MUSS hier ohne Konsum raus. SkipToSemicolon stoppt NICHT an Routine-
+  // Keywords und wuerde den recoverten Header samt halber Folge-Routine bis
+  // zum naechsten ';' fressen -> die Routine verschwaende ganz aus dem AST
+  // (schlechter als ohne Recovery). Der Aufrufer (ParseBlock/Frame-Loop)
+  // sieht den Header dann selbst und unwindet weiter.
+  if AtTopLevelRoutineHead then Exit;
   Eat(tkKwUntil);
   SkipToSemicolon;
   Eat(tkSemicolon);
@@ -1872,8 +1904,14 @@ begin
   // Try-Rumpf in temporären Block lesen
   TmpBlk := TAstNode.Create(nkBlock, '__try_body__', T.Line, T.Col);
   try
-    while not (Tok.Kind in [tkKwExcept, tkKwFinally,
-                             tkKwEnd, tkKwElse, tkKwUntil, tkEof]) do
+    // AtTopLevelRoutineHead: Boundary-Recovery muss auch durch einen offenen
+    // try-Frame unwinden. Hinweis: feuert sie hier, folgt weder except noch
+    // finally -> TmpBlk wird (wie bei jedem malformed try) verworfen. Das ist
+    // akzeptiert: die Methode war durch den Straddle-Merge ohnehin kaputt, und
+    // ohne Unwind wuerden ALLE Folge-Routinen mit-korrumpiert.
+    while not ((Tok.Kind in [tkKwExcept, tkKwFinally,
+                             tkKwEnd, tkKwElse, tkKwUntil, tkEof])
+               or AtTopLevelRoutineHead) do
     begin
       var TryBodyStart := FNextCount;
       ParseStatement(TmpBlk);
@@ -1888,8 +1926,9 @@ begin
       var ExTok  := Next; // 'except' – Zeile des except-Schlüsselworts
       var ExNode := TryNode.Add(nkExceptBlock, 'except', ExTok.Line, ExTok.Col);
 
-      while not (Tok.Kind in [tkKwEnd, tkKwElse, tkKwFinally,
-                               tkKwUntil, tkEof]) do
+      while not ((Tok.Kind in [tkKwEnd, tkKwElse, tkKwFinally,
+                               tkKwUntil, tkEof])
+                 or AtTopLevelRoutineHead) do   // Boundary-Recovery unwinden
       begin
         var ExceptStart := FNextCount;
         if Tok.Kind = tkKwOn then
@@ -1929,7 +1968,8 @@ begin
       if Tok.Kind = tkKwElse then
       begin
         Next;  // 'else'
-        while not (Tok.Kind in [tkKwEnd, tkKwFinally, tkKwUntil, tkEof]) do
+        while not ((Tok.Kind in [tkKwEnd, tkKwFinally, tkKwUntil, tkEof])
+                   or AtTopLevelRoutineHead) do   // Boundary-Recovery unwinden
         begin
           var ElseStart := FNextCount;
           ParseStatement(ExNode);
@@ -1944,13 +1984,27 @@ begin
 
       var FinTok  := Next; // 'finally' – Zeile des finally-Schlüsselworts
       var FinNode := TryNode.Add(nkFinallyBlock, 'finally', FinTok.Line, FinTok.Col);
-      while not (Tok.Kind in [tkKwEnd, tkKwElse, tkKwExcept,
-                               tkKwUntil, tkEof]) do
+      while not ((Tok.Kind in [tkKwEnd, tkKwElse, tkKwExcept,
+                               tkKwUntil, tkEof])
+                 or AtTopLevelRoutineHead) do   // Boundary-Recovery unwinden
       begin
         var FinStart := FNextCount;
         ParseStatement(FinNode);
         GuardAdvance(FinStart);
       end;
+    end
+    else
+    begin
+      // Weder except noch finally: der try-Frame ist abgebrochen - entweder
+      // malformed try, oder (haeufiger) die Boundary-Recovery hat die Body-
+      // Schleife wegen AtTopLevelRoutineHead verlassen. Die bereits geparsten
+      // Body-Statements NICHT verwerfen, sondern in den umgebenden Block
+      // adoptieren: sonst verschwindet realer Code aus dem AST und Statement-
+      // Detektoren hoeren still auf zu feuern (A/B-Fund Runde 2: SCA139
+      // 'List.Free' in CnWizIdeUtils.GetLibraryPath, SCA126 u.a. - der reine
+      // Zaehler-Delta verdeckte das). Verlust ist immer schlechter als eine
+      // ungenaue Zuordnung: die Statements sind real und gehoeren analysiert.
+      Parent.AdoptChildrenFrom(TmpBlk);
     end;
   finally
     TmpBlk.Free;
