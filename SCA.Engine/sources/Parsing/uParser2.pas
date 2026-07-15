@@ -118,10 +118,17 @@ end;
 // nkBlock-Child, base64func.OpenArchiveW war der Audit-Trigger).
 function IsMethodDirectiveIdent(const Value: string): Boolean;
 const
-  KnownConventions: array[0..14] of string = (
+  // 'noreturn' (Delphi 12) ist KEINE Calling-Convention, wird aber wie eine als
+  // tkIdent geparst und MUSS hier stehen: sonst bleibt Tok auf 'noreturn' haengen
+  // und die Routine wird headless (Body fehlt komplett im AST - genau das oben
+  // beschriebene Muster). Real-World-Trigger: Alcinoe.JSONDoc
+  // 'procedure AlJSONDocErrorA(const Msg: String); noreturn;' - deren `raise`
+  // war unsichtbar, was u.a. SCA121-FPs bei den Aufrufern erzeugte.
+  KnownConventions: array[0..15] of string = (
     'stdcall',  'cdecl',     'register',  'pascal',    'safecall',
     'winapi',   'delphicall','mwpascal',  'dcpcall',   'export',
-    'varargs',  'assembler', 'local',     'far',       'near'
+    'varargs',  'assembler', 'local',     'far',       'near',
+    'noreturn'
   );
 var
   Lower : string;

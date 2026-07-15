@@ -58,8 +58,14 @@ type
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>);
+    // ANoReturnLow: lowercase, unqualifizierte Namen aller Routinen DIESER Unit,
+    // die als `noreturn` deklariert sind (Delphi-12-Direktive). Ein Body-Call auf
+    // eine solche Routine ist semantisch ein `raise` - die Funktion kehrt nie
+    // regulaer zurueck, ein fehlendes `Result :=` ist dann KEIN Bug. AnalyzeUnit
+    // fuellt das Set; nil => Guard inaktiv (Verhalten wie vorher).
     class procedure AnalyzeMethod(MethodNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>;
+      ANoReturnLow: TDictionary<string, Boolean> = nil);
   end;
 
 implementation
@@ -413,7 +419,8 @@ begin
 end;
 
 class procedure TRoutineResultAssignedDetector.AnalyzeMethod(MethodNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>;
+  ANoReturnLow: TDictionary<string, Boolean>);
 var
   TypeRef    : string;
   FnNameLow  : string;
@@ -480,7 +487,10 @@ begin
       if (CallNameLow = 'abort') or
          (CallNameLow = 'raiselastoserror') or
          (CallNameLow = 'notimplemented') or
-         StartsText('raise', CallNameLow) then
+         StartsText('raise', CallNameLow) or
+         // `noreturn`-Routine dieser Unit: der Compiler garantiert, dass sie nie
+         // zurueckkehrt -> raise-aequivalent, kein "vergessenes Result:=".
+         ((ANoReturnLow <> nil) and ANoReturnLow.ContainsKey(CallNameLow)) then
         Exit;
     end;
   finally
@@ -599,6 +609,7 @@ var
   Methods           : TList<TAstNode>;
   M                 : TAstNode;
   EmptyCount, Total : Integer;
+  NoReturnLow       : TDictionary<string, Boolean>;
 begin
   Methods := UnitNode.FindAll(nkMethod);
   try
@@ -616,8 +627,26 @@ begin
        (EmptyCount / Total > STUB_FILE_RATIO_LIMIT) then
       Exit;  // PScript-Stub-File - keine Findings emittieren
 
-    for M in Methods do
-      AnalyzeMethod(M, FileName, Results);
+    // `noreturn`-Routinen dieser Unit einsammeln (Delphi-12-Direktive; landet via
+    // ParseMethodDirectives als ';noreturn' im TypeRef). Ein Body-Call darauf ist
+    // raise-aequivalent -> die aufrufende Funktion kehrt nie regulaer zurueck.
+    // Praezise statt namens-heuristisch: der Compiler garantiert die Semantik.
+    // Real-World-Trigger: Alcinoe.JSONDoc `AlJSONDocErrorA(...); noreturn;` -
+    // 62 SCA121-FPs allein in dieser Unit.
+    NoReturnLow := TDictionary<string, Boolean>.Create;
+    try
+      for M in Methods do
+        if Pos(';noreturn', LowerCase(M.TypeRef)) > 0 then
+        begin
+          var NmLow := LowerCase(UnqualifiedName(M.Name));
+          if NmLow <> '' then NoReturnLow.AddOrSetValue(NmLow, True);
+        end;
+
+      for M in Methods do
+        AnalyzeMethod(M, FileName, Results, NoReturnLow);
+    finally
+      NoReturnLow.Free;
+    end;
   finally
     Methods.Free;
   end;
