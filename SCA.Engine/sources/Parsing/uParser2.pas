@@ -1465,6 +1465,29 @@ begin
       tkKwEnd                              : begin Next; Eat(tkSemicolon); Exit; end;
       tkKwElse, tkKwExcept, tkKwFinally,
       tkKwUntil, tkEof                     : Exit; // Blockgrenze – nicht konsumieren
+      // Boundary-Recovery (2026-07-16): ein TOP-LEVEL-Routine-Header (Spalte 1)
+      // im Statement-Kontext ist in Delphi illegal -> dieser Block wurde nie
+      // geschlossen. Ursache (am Korpus belegt): {$ifdef}/{$else}-Zweige, die
+      // ein `begin` STRADDELN - der Lexer emittiert BEIDE Zweige, also zwei
+      // `begin`, aber es gibt nur ein `end` -> der Methoden-Body bleibt offen
+      // und frisst die Folge-Routinen (mormot.core.buffers FromVarUInt64:
+      // span 2407 statt ~35; deren Params/Globals wurden Phantom-"Locals"
+      // -> SCA166-FPs). Recovery: Block beenden OHNE den Header zu konsumieren.
+      // Weil ParseBlock REKURSIV ist, unwinden dabei alle offenen Bloecke
+      // aufwaerts; ParseImplementationSection parst die Routine dann regulaer.
+      //
+      // SPALTE-1-GATE (kritisch): anonyme Methoden (`x := procedure begin`)
+      // und nested routines stehen EINGERUECKT. Wuerde die Recovery auf sie
+      // feuern, wuerden sie als Top-Level-Methoden gesurfacet - laut Messung
+      // +170k Findings (siehe ParseMethodImpl). Fehlverhalten ist damit sicher:
+      // greift die Recovery nicht, bleibt nur der bisherige Merge bestehen.
+      tkKwProcedure, tkKwFunction,
+      tkKwConstructor, tkKwDestructor,
+      tkKwOperator                         :
+        begin
+          if T.Col <= 1 then Exit;
+          ParseStatement(Block);
+        end;
     else
       ParseStatement(Block);
     end;
