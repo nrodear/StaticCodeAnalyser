@@ -41,7 +41,8 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12, uLeakDetector2, uAnalyzeContext;
+  uAstNode, uSCAConsts, uMethodd12, uLeakDetector2, uAnalyzeContext,
+  uDetectorUtils;   // ContainsWholeWordLower fuer IsHandedToOwner
 
 type
   TFieldLeakDetector = class
@@ -64,6 +65,15 @@ type
     // FComponents-Liste des Owners; inherited Destroy => DestroyComponents
     // gibt es automatisch frei. Free im Destruktor waere redundant.
     class function IsCreatedWithComponentOwner(MethodNode: TAstNode;
+      const FieldNameLow: string): Boolean; static;
+    // True wenn das Feld im Konstruktor als ARGUMENT an einen Call uebergeben
+    // wird ('AddAttribute(FField)', 'FList.Add(FField)', 'Register(FField)').
+    // Der Empfaenger kann die Ownership uebernehmen und das Feld in SEINEM
+    // Destruktor freigeben - ein fehlendes Free im eigenen Destroy ist dann
+    // kein Leck. Genau die im Unit-Kopf dokumentierte FP-Quelle
+    // ("Wird das Feld an einen ObjectList-Owner uebergeben, koennen wir das
+    // nicht erkennen").
+    class function IsHandedToOwner(MethodNode: TAstNode;
       const FieldNameLow: string): Boolean; static;
   end;
 
@@ -127,6 +137,56 @@ begin
     end;
   finally
     Assigns.Free;
+  end;
+end;
+
+class function TFieldLeakDetector.IsHandedToOwner(
+  MethodNode: TAstNode; const FieldNameLow: string): Boolean;
+// Ownership-Transfer im Konstruktor. Wird das erzeugte Feld an einen Call
+// UEBERGEBEN, kann der Empfaenger die Ownership nehmen und es selbst freigeben;
+// dann ist ein fehlendes Free im eigenen Destruktor KEIN Leak. Der Unit-Kopf
+// fuehrt genau das als bekannte FP-Quelle ("an einen ObjectList-Owner
+// uebergeben ... koennen wir nicht erkennen") - bislang unvermeidbar.
+//
+// Real-World-Beleg (Recall-Messung 2026-07-15, tools/recall_mutate.py): mit
+// aktiver Custom-Class-Discovery ([Detectors]/AutoDiscoverClasses=1) explodierte
+// genau diese Klasse auf +2410 SCA001-Funde. Kanonisch die SynEdit-Highlighter:
+//   fSpaceAttri := TSynHighlighterAttributes.Create(...);
+//   AddAttribute(fSpaceAttri);          // -> fAttributes.AddObject(Name, Attri)
+// und TSynCustomHighlighter.Destroy raeumt via FreeHighlighterAttributes auf.
+// Kein Leck - der Fund war ein FP.
+//
+// NUR Argument-Vorkommen zaehlen, NICHT der Receiver: 'FField.Style := x' oder
+// 'FField.DoIt(y)' sind keine Uebergabe. Darum wird ausschliesslich der Text AB
+// der ersten '(' geprueft. Wortgrenzen-Match, damit 'FList' nicht in
+// 'FListView' trifft.
+//
+// KONSERVATIV (precision-first, konsistent mit dem restlichen Detektor): wir
+// koennen nicht beweisen, DASS der Empfaenger die Ownership nimmt - aber wir
+// koennen das Leak dann auch nicht mehr beweisen. Im Zweifel nicht melden.
+// Preis: ein echtes Leck, dessen Feld zufaellig irgendwo als Arg auftaucht,
+// entgeht uns (FN). Das ist derselbe Handel wie bei IsCreatedWithComponentOwner.
+var
+  Calls  : TList<TAstNode>;
+  C      : TAstNode;
+  ArgsLow: string;
+  P      : Integer;
+begin
+  Result := False;
+  if FieldNameLow = '' then Exit;
+  Calls := MethodNode.FindAll(nkCall);
+  try
+    for C in Calls do
+    begin
+      ArgsLow := C.Name.ToLower;
+      P := Pos('(', ArgsLow);
+      if P = 0 then Continue;                        // Call ohne Klammer -> kein Arg
+      ArgsLow := Copy(ArgsLow, P + 1, MaxInt);       // nur die Argument-Seite
+      if TDetectorUtils.ContainsWholeWordLower(FieldNameLow, ArgsLow) then
+        Exit(True);
+    end;
+  finally
+    Calls.Free;
   end;
 end;
 
@@ -244,6 +304,13 @@ begin
           //   FTimer  := TTimer.Create(Self);    -- VCL TComponent-Tree
           //   FAction := TAction.Create(AOwner); -- weitergereichter Owner
           if IsCreatedWithComponentOwner(Ctor, FieldNameLow) then Continue;
+
+          // Ownership-Transfer: Feld wird im Ctor als ARG weitergereicht
+          // ('AddAttribute(FField)', 'FList.Add(FField)') -> der Empfaenger kann
+          // es freigeben, ein fehlendes Free hier ist dann kein Leak. Die im
+          // Unit-Kopf dokumentierte FP-Quelle; mit Custom-Class-Discovery
+          // dominierte sie die Funde (Recall-Messung 2026-07-15: +2410).
+          if IsHandedToOwner(Ctor, FieldNameLow) then Continue;
 
           // Pruefen ob im Destruktor ein .Free / .Destroy / FreeAndNil
           // fuer das Feld vorkommt. Reuse von SearchFree aus uLeakDetector2.
