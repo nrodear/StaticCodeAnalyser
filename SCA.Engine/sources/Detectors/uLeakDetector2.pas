@@ -999,22 +999,34 @@ begin
       //       inferred var) - hier bleibt das alte permissive
       //       Verhalten als Default, damit keine Regression in den
       //       haeufigen Frame-FList.Add(item)-Mustern entsteht.
-      var pAdd := Pos('.add(', NameLow);
-      if (pAdd > 0) and VarInArgs(NameLow, pAdd + 5) then
+      // A2 2026-07-16: neben '.add(' auch die uebrigen Container-Add-Methoden
+      // im ARG-Fall behandeln. '.addnode/.addchild/.appendchild(' galten bereits
+      // im borrowed-RETURN-Fall oben (~Z.908) als ownership-uebernehmend, fehlten
+      // aber hier -> 'FTree.AddNode(node)' auf custom Bin-Trees/Pools war ein
+      // Discovery-FP (X lokal erzeugt, an Container uebergeben, Container besitzt).
+      // Receiver-Ownership-Pruefung (AddReceiverOwnsItems) bleibt identisch:
+      // aufloesbarer Typ -> RTL-Whitelist; Field/unaufloesbar -> permissiv (wie
+      // beim bestehenden '.add(' - keine neue TP-Annahme).
+      for var AddMarker in ['.add(', '.addnode(', '.addchild(', '.appendchild('] do
       begin
-        var receiverLow := Copy(NameLow, 1, pAdd - 1);
-        // 'self.flist' -> 'flist': Self-Praefix abstreifen, sonst matched
-        // der Receiver-Name nie ein Local-Var/Param. Nur das Praefix
-        // entfernen, dotted Sub-Expressions ('foo.bar.add') bleiben
-        // intentional unaufloesbar (Default permissiv).
-        if receiverLow.StartsWith('self.') then
-          receiverLow := Copy(receiverLow, 6, MaxInt);
-        if AddReceiverOwnsItems(MethodNode, receiverLow) then
-          Exit(True);
+        var pAdd := Pos(AddMarker, NameLow);
+        if (pAdd > 0) and VarInArgs(NameLow, pAdd + Length(AddMarker)) then
+        begin
+          var receiverLow := Copy(NameLow, 1, pAdd - 1);
+          // 'self.flist' -> 'flist': Self-Praefix abstreifen, sonst matched der
+          // Receiver-Name nie ein Local-Var/Param. Dotted Sub-Expressions
+          // ('foo.bar.add') bleiben intentional unaufloesbar (Default permissiv).
+          if receiverLow.StartsWith('self.') then
+            receiverLow := Copy(receiverLow, 6, MaxInt);
+          if AddReceiverOwnsItems(MethodNode, receiverLow) then
+            Exit(True);
+        end;
       end;
 
       // TStringList.AddObject(text, obj) - klassisches Object-Owner-Pattern
-      pAdd := Pos('.addobject(', NameLow);
+      // (var-Deklaration hier: der fruehere gemeinsame 'pAdd' ist seit A2 in den
+      // Add-Familie-for-Loop gewandert und dort scope-lokal.)
+      var pAdd := Pos('.addobject(', NameLow);
       if (pAdd > 0) and VarInArgs(NameLow, pAdd + 11) then
         Exit(True);
 
