@@ -322,11 +322,34 @@ begin
       end;
       if depth <> 0 then Continue;
       ArgLow := Trim(Copy(TypeLow, ArgStart, idx - ArgStart));
-      // Kanonische Owner-Bezeichner (TComponent-Konvention). Exakter
-      // Ganz-Argument-Vergleich - Teilausdruecke wie '8 * self.degree'
-      // oder 'self.owner.tag' matchen NICHT.
-      if (ArgLow = 'self') or (ArgLow = 'owner') or (ArgLow = 'aowner') or
-         (ArgLow = 'application') or (ArgLow = 'self.owner') then
+      // Owner steht per TComponent-Konvention an ERSTER Stelle:
+      // Create(AOwner[, weitere Args]). Frueher wurde das GESAMTE Argument
+      // exakt verglichen -> 'Create(self, id, caption)' (Multi-Arg-Ctor)
+      // rutschte durch = FP. Jetzt nur das ERSTE Top-Level-Argument.
+      // TP-sicher: dieselbe TComponent-Owner-Annahme wie im Single-Arg-Fall,
+      // nur auf Multi-Arg-Konstruktoren erweitert. Verifiziert an
+      // TBrowserTab.Create(AOwner: TComponent; id; caption)
+      // (class(TTabSheet) -> TComponent -> Owner verwaltet das Lifetime).
+      // Erstes Arg extrahieren (Top-Level-Komma; Klammern-Tiefe zaehlen, damit
+      // 'Create(TFoo.Create(a,b), c)' nicht am inneren Komma splittet).
+      var FirstArg := ArgLow;
+      var cp := 1; var d2 := 0;
+      while cp <= Length(ArgLow) do
+      begin
+        if ArgLow[cp] = '(' then Inc(d2)
+        else if ArgLow[cp] = ')' then Dec(d2)
+        else if (ArgLow[cp] = ',') and (d2 = 0) then
+        begin
+          FirstArg := Trim(Copy(ArgLow, 1, cp - 1));
+          Break;
+        end;
+        Inc(cp);
+      end;
+      // Kanonische Owner-Bezeichner - exakter Vergleich des ersten Arguments,
+      // damit Teilausdruecke ('8 * self.degree', 'self.owner.tag', 'datei')
+      // NICHT matchen.
+      if (FirstArg = 'self') or (FirstArg = 'owner') or (FirstArg = 'aowner') or
+         (FirstArg = 'application') or (FirstArg = 'self.owner') then
         Exit(True);
     end;
   finally
