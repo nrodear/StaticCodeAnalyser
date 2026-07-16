@@ -151,10 +151,69 @@ def mut_001(lines):
     return out
 
 
+RE_FORMAT = re.compile(r"\bformat\s*\(\s*'([^'\n]*)'\s*,\s*\[", re.I)
+RE_PCT = re.compile(r'%[-0-9.*]*[sdgfexubpn]', re.I)
+
+
+def mut_005(lines):
+    """Einen balancierten Format('...%s...', [args])-Aufruf um einen zusaetzlichen
+    '%d'-Platzhalter im Formatstring erweitern (ohne Argument) -> Platzhalter >
+    Argumente = SCA005-Mismatch. Datei-lokal."""
+    out = []
+    for i, ln in enumerate(lines):
+        m = RE_FORMAT.search(ln)
+        if not m:
+            continue
+        fmt = m.group(1)
+        if '%%' in fmt or ':' in fmt:      # Escapes / indizierte %0:s -> Zaehlung unsicher
+            continue
+        if not RE_PCT.search(fmt):          # kein einfacher Platzhalter im Original
+            continue
+        qend = m.start(1) + len(fmt)        # Position des schliessenden '
+        mut_line = ln[:qend] + ' %d' + ln[qend:]
+        out.append((lines[:i] + [mut_line] + lines[i + 1:],
+                    f"Format-String +' %d' (Platzhalter>Args): '{fmt[:34]}'"))
+    return out
+
+
+def mut_011(lines):
+    """Nach der ERSTEN einfachen Anweisung eines Methoden-Bodys ein 'Exit;'
+    einfuegen -> die Folge-Anweisungen werden unerreichbar (SCA011 Dead-Code).
+    Konservativ: nur wenn die erste Body-Zeile eine simple Assignment ist und
+    danach noch echter Code kommt."""
+    out = []
+    hdr = re.compile(r'^\s*(function|procedure|constructor|destructor)\s+\w', re.I)
+    for i, ln in enumerate(lines):
+        if not hdr.match(ln):
+            continue
+        body = _routine_body(lines, i)
+        if not body:
+            continue
+        b, e = body
+        if e - b < 3:                       # braucht >= 2 Anweisungen
+            continue
+        j = b + 1
+        while j < e and re.sub(r'//.*$', '', lines[j]).strip() == '':
+            j += 1
+        s = re.sub(r'//.*$', '', lines[j]).strip()
+        if (':=' in s) and s.endswith(';') and \
+           not re.match(r'^(if|for|while|with|case|try|begin|inherited)\b', s, re.I):
+            k = j + 1
+            while k < e and re.sub(r'//.*$', '', lines[k]).strip() == '':
+                k += 1
+            if k < e:                        # es folgt noch echter Code -> wird dead
+                indent = lines[j][:len(lines[j]) - len(lines[j].lstrip())]
+                mut = lines[:j + 1] + [indent + 'Exit;'] + lines[j + 1:]
+                out.append((mut, f"'Exit;' nach erster Anweisung (Z.{j+1}) -> Folgecode unerreichbar"))
+    return out
+
+
 MUTATIONS = [
     ('M097', 'SCA097', mut_097, 'Destructor without inherited call'),
     ('M096', 'SCA096', mut_096, 'Constructor without inherited call'),
     ('M001', 'SCA001', mut_001, 'Object created without try/finally'),
+    ('M005', 'SCA005', mut_005, 'Format() placeholder count mismatch'),
+    ('M011', 'SCA011', mut_011, 'Code after Exit/Raise is unreachable'),
 ]
 
 
