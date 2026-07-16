@@ -899,6 +899,15 @@ begin
       // Parent-Assign: LHS-Match
       if N.Name.ToLower = ParentLHS then
         Exit(True);
+      // Self-freeing Thread (explizit): 'X.FreeOnTerminate := True' -> der Thread
+      // gibt sich nach Execute selbst frei; ein Free durch den Caller waere ein
+      // Use-after-free. Analog zum CreateAnonymousThread-Fall unten (der liefert
+      // implizit einen FreeOnTerminate-Thread). NUR literal 'true' (nicht eine
+      // Bedingung) -> konservativ. Real-World: Discovery-Residuum 2026-07-16,
+      // Alcinoe/mORMot Benchmark-Threads in Loops ('LThread.FreeOnTerminate:=True').
+      if (N.Name.ToLower = VarNameLow + '.freeonterminate') and
+         (Trim(N.TypeRef.ToLower) = 'true') then
+        Exit(True);
       // Borrowed-Return: LHS == VarName, RHS enthaelt eine der Tree-API-
       // Patterns. Pattern endet auf '(' damit '.add(' nicht in '.address('
       // o.ae. matched (rechte Wortgrenze ist garantiert).
