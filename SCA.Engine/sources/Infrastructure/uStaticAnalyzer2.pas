@@ -144,7 +144,13 @@ type
     Results: TObjectList<TLeakFinding>);
   TDetectorEntry = record
     Name            : string;
-    Kind            : TFindingKind;       // fuer Profile-/Severity-Filter
+    Kind            : TFindingKind;       // Anker-/Repraesentant-Kind fuer Profile-/Severity-Filter
+    // [23] (Core-Audit 2026-07-17): weitere Kinds, die dieser EINE Detektor
+    // emittiert (Multi-Kind-Detektoren, z.B. PerfHotspots = SCA110 + SCA111 +
+    // SCA112). Bei Single-Kind-Detektoren leer ([]) -> Filter byte-identisch
+    // zu vorher. Verhindert, dass ein Profil, das nur einen Neben-Kind
+    // aktiviert, den ganzen Detektor am Anker-Kind vorbei skippt.
+    ExtraKinds      : TFindingKinds;
     Run             : TDetectorRun;
     DefaultSeverity : TLeakSeverity;      // gecached aus TRuleCatalog -
                                           // Catalog-Lookup nur EINMAL beim
@@ -256,12 +262,31 @@ begin
   // Profile-Whitelist: leere Menge = kein Filter, sonst muss Kind drin sein.
   // Einmal in ein Local lesen (Hot-Path: ~145 Detektoren x N Dateien).
   EnKinds := CfgEnabledKinds(AContext);
-  if (EnKinds <> []) and not (D.Kind in EnKinds) then Exit(False);
+  // [23] (Core-Audit 2026-07-17): Multi-Kind-Detektoren nicht am Anker-Kind
+  // vorbei skippen - der Detektor laeuft, wenn ANKER ODER ein Neben-Kind im
+  // Profil aktiv ist. ExtraKinds ist bei Single-Kind-Detektoren [] -> die
+  // Bedingung ist dann identisch zu vorher (D.ExtraKinds * EnKinds = []).
+  if (EnKinds <> []) and not ((D.Kind in EnKinds) or (D.ExtraKinds * EnKinds <> [])) then
+    Exit(False);
 
   // Severity-Schwellwert. lsError=0 < lsWarning=1 < lsHint=2 - groesserer
   // Ord = lockerer Schwellwert. Detector skippen wenn seine Default-
   // Severity strenger ist als der konfigurierte Min-Threshold.
-  if Ord(D.DefaultSeverity) > Ord(CfgMinSeverity(AContext)) then Exit(False);
+  // [23]: Bei Multi-Kind-Detektoren zaehlt die STRENGSTE (kleinster Ord)
+  // Severity ueber alle Kinds - so wird der Detektor nicht gedroppt, wenn
+  // sein Anker-Kind zwar zu schwach, ein Neben-Kind aber streng genug ist
+  // (z.B. Anker=Hint, Neben-Kind=Error). Die Post-Filter-Schleife verwirft
+  // die zu-schwachen Kinds anschliessend pro Finding. Single-Kind: no-op.
+  var SevOrd := Ord(D.DefaultSeverity);
+  if D.ExtraKinds <> [] then
+  begin
+    var ek : TFindingKind;
+    for ek := Low(TFindingKind) to High(TFindingKind) do
+      if (ek in D.ExtraKinds) and
+         (Ord(TRuleCatalog.GetRule(ek).DefaultSeverity) < SevOrd) then
+        SevOrd := Ord(TRuleCatalog.GetRule(ek).DefaultSeverity);
+  end;
+  if SevOrd > Ord(CfgMinSeverity(AContext)) then Exit(False);
 
   Result := True;
 end;
@@ -289,6 +314,7 @@ var
         'Konstante erhoehen', [Length(gDetectors)]);
     gDetectors[Count].Name            := AName;
     gDetectors[Count].Kind            := AKind;
+    gDetectors[Count].ExtraKinds      := [];   // [23]: Default Single-Kind (Multi-Kind opt-in nach dem AddD-Aufruf)
     gDetectors[Count].Run             := ARun;
     gDetectors[Count].DefaultSeverity := TRuleCatalog.GetRule(AKind).DefaultSeverity;
     SetLength(gDetectors[Count].RequiredTokensLow, 0);
@@ -499,6 +525,11 @@ begin
   AddD('ConcurrencyExt',     fkThreadResumeDeprecated, TConcurrencyExtDetector.AnalyzeUnit, ['tthread', '.synchronize', '.resume', '.queue', 'parambyname', 'fieldbyname']);
   // Performance-Hotspots (SCA110-112)
   AddD('PerfHotspots',       fkStringConcatInLoop,     TPerfHotspotsDetector.AnalyzeUnit);
+  // [23] (Core-Audit 2026-07-17): PerfHotspots emittiert 3 Kinds - Anker
+  // fkStringConcatInLoop (SCA110) + fkParamByNameInLoop (SCA111) +
+  // fkFieldByNameInLoop (SCA112). Ohne diese Neben-Kinds skippt ein Profil,
+  // das nur SCA111/112 aktiviert, den Detektor komplett am Anker vorbei.
+  gDetectors[Count - 1].ExtraKinds := [fkParamByNameInLoop, fkFieldByNameInLoop];
   // REST/HTTP-Security (SCA115-116)
   AddD('RestHttpSecurity',   fkHttpInsteadOfHttps,     TRestHttpSecurityDetector.AnalyzeUnit, ['http://', 'https://', 'tls', 'ssl', 'thttp', 'idhttp', 'rest.client', '.securityprotocol']);
   // Doc-Luecken (SCA117)
