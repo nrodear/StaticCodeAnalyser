@@ -34,10 +34,14 @@ unit uTypeIndex;
 //     implementierte Interfaces (`class(TBase, IFoo)`) werden fuer die Kette
 //     ignoriert.
 //
-// INERTE INFRA (Runde 1): KEIN Detektor liest diesen Index. Der Build-Block
-// in TStaticAnalyzer2 ist rein additiv (nil-Fallback via CtxTypeIndex) -> das
-// Scan-Verhalten bleibt byte-identisch. Detektor-Opt-ins + Tests folgen in
-// Runde 2/3.
+// AKTIVE INFRA (Runde 2/3, Stand 2026-07-17): mehrere Detektoren konsumieren
+// den Index produktiv ueber CtxTypeIndex/IsDescendantOf - u.a. uConcurrencyExt,
+// uInstanceInvokedConstructor, uPointerSubtraction (SCA161-enum) und
+// uTObjectListWithoutOwnership. Aenderungen an der Parent-/Kind-Aufloesung
+// (z.B. BaseClassNameLow) sind daher NICHT mehr scan-verhaltensneutral und
+// muessen ueber A/B verifiziert werden. Der Build-Block in TStaticAnalyzer2
+// bleibt additiv (nil-Fallback via CtxTypeIndex), aber die Konsumenten sind
+// jetzt real.
 //
 // Single-File-Pfad: wird Build nie aufgerufen (AContext=nil, Tests/Single-
 // File), ist der Index leer (IsEmpty=True); TypeKindOf liefert tkiUnknown und
@@ -124,6 +128,12 @@ begin
   if P > 0 then S := Trim(Copy(S, 1, P - 1));
   P := Pos(' ', S);
   if P > 0 then S := Trim(Copy(S, 1, P - 1));
+  // [16] (Core-Audit 2026-07-17): qualifizierte Basisklasse auf den letzten
+  // Segment-Namen reduzieren ('Vcl.Forms.TForm' -> 'TForm'). ParseClassBody
+  // haelt dotted-Parents jetzt zusammen; ohne dieses Kappen stuende in
+  // FParents 'vcl.forms.tform' und IsDescendantOf/Seed matchte nie 'tform'.
+  P := LastDelimiter('.', S);
+  if P > 0 then S := Copy(S, P + 1, MaxInt);
   Result := LowerCase(S);
 end;
 

@@ -917,9 +917,19 @@ begin
     begin
       if Tok.Kind = tkIdent then
       begin
-        if Parents <> '' then Parents := Parents + ' ';
+        // [16] (Core-Audit 2026-07-17): qualifizierte Basisklasse zusammen-
+        // halten. 'class(Vcl.Forms.TForm)' liefert die Tokens Vcl . Forms .
+        // TForm; frueher wurde der '.' verworfen und space-getrennt zu
+        // 'Vcl Forms TForm' - BaseClassNameLow nahm dann 'Vcl' als Basisklasse
+        // und IsDescendantOf brach an der Unit-Grenze ab. Jetzt: nach einem
+        // '.' direkt anhaengen (dotted-Name), sonst neuer space-getrennter
+        // Parent (Interfaces). BaseClassNameLow kappt den Unit-Qualifier.
+        if (Parents <> '') and not Parents.EndsWith('.') then
+          Parents := Parents + ' ';
         Parents := Parents + Tok.Value;
-      end;
+      end
+      else if Tok.Kind = tkDot then
+        Parents := Parents + '.';
       Next;
     end;
     if Parents <> '' then
@@ -2083,7 +2093,13 @@ begin
       while not FLex.AtEnd do
       begin
         case Tok.Kind of
-          tkLParen, tkLBracket, tkKwBegin : Inc(NestDepth);
+          // [8] (Core-Audit 2026-07-17): case/try/asm oeffnen einen mit 'end'
+          // schliessenden Block und muessen wie 'begin' die Tiefe erhoehen -
+          // sonst zieht ihr 'end' NestDepth unter die Block-Ebene und der
+          // Initializer-Scan bricht bei anonymer Methode mit case/try-Body
+          // vorzeitig ab (RHS-Truncation -> Folge-Tokens werden fehl-geparst).
+          tkLParen, tkLBracket, tkKwBegin,
+          tkKwCase, tkKwTry, tkKwAsm      : Inc(NestDepth);
           tkRParen, tkRBracket            : if NestDepth > 0 then Dec(NestDepth);
           tkKwEnd:
             if NestDepth > 0 then Dec(NestDepth) else Break;
@@ -2160,7 +2176,12 @@ begin
     while not FLex.AtEnd do
     begin
       case Tok.Kind of
-        tkLParen, tkLBracket, tkKwBegin : Inc(NestDepth);
+        // [8] (Core-Audit 2026-07-17): case/try/asm oeffnen einen mit 'end'
+        // schliessenden Block - wie 'begin' Tiefe erhoehen, sonst bricht der
+        // RHS-Scan bei anonymen Methoden mit case/try-Body vorzeitig ab
+        // (das case-'end' zog NestDepth unter die begin-Ebene -> Truncation).
+        tkLParen, tkLBracket, tkKwBegin,
+        tkKwCase, tkKwTry, tkKwAsm      : Inc(NestDepth);
         tkRParen, tkRBracket            : if NestDepth > 0 then Dec(NestDepth);
         // 'end' schliesst entweder einen offenen Block (Anonyme Methode:
         //   x := function: T begin ... end;) oder beendet die RHS auf
@@ -2236,28 +2257,36 @@ begin
           Next; // '(' konsumieren
           var Args  := '';
           var Depth := 1;
+          // [7] (Core-Audit 2026-07-17): JoinTokInto statt roher Konkatenation.
+          // Der RHS-Scanner in ParseCallOrAssign trennt Wortgrenzen korrekt,
+          // dieser Argument-Scanner tat es NICHT - 'DoIt(a div b)' kollabierte
+          // zu 'DoIt(adivb)', 'Check(x as IFoo)' zu 'Check(xasIFoo)'. Detektoren
+          // die via Pos(' div ', ...) / Pos(' as ', ...) auf nkCall.Name pruefen
+          // (uDivByZero/uSQLInjection) verloren dadurch den Treffer. JoinTokInto
+          // setzt nur zwischen zwei Ident-Zeichen ein Space - Klammern/Operatoren
+          // bleiben unveraendert, also identisch fuer die '('/')'-Tokens.
           while not FLex.AtEnd do
           begin
             var ArgTok := Tok;
             if ArgTok.Kind = tkLParen then
             begin
               Inc(Depth);
-              Args := Args + ArgTok.Value;
+              JoinTokInto(Args, ArgTok.Value);
               Next;
             end
             else if ArgTok.Kind = tkRParen then
             begin
               Dec(Depth);
               if Depth = 0 then begin Next; Break; end;
-              Args := Args + ArgTok.Value;
+              JoinTokInto(Args, ArgTok.Value);
               Next;
             end
             else
             begin
               if ArgTok.Kind = tkStrLit then
-                Args := Args + QuoteStrLit(ArgTok.Value)
+                JoinTokInto(Args, QuoteStrLit(ArgTok.Value))
               else
-                Args := Args + ArgTok.Value;
+                JoinTokInto(Args, ArgTok.Value);
               Next;
             end;
           end;

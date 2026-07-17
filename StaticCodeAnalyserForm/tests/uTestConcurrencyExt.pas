@@ -61,6 +61,11 @@ type
     [Test] procedure FreeAndNilJvThreadChain_NoContext_StillReported;
     [Test] procedure FreeAndNilRealThreadDescendant_ViaPipeline_Reported;
     [Test] procedure FreeAndNilThreadOutOfScopeBase_ViaPipeline_StillReported;
+    // --- Core-Audit [16] 2026-07-17: qualifizierte (dotted) Basisklasse ---
+    // ParseClassBody haelt jetzt 'System.Classes.TComponent' zusammen und
+    // BaseClassNameLow kappt den Unit-Qualifier -> IsDescendantOf loest die
+    // Kette bis zum bekannten Nicht-Thread-Root auf.
+    [Test] procedure FreeAndNilQualifiedNonThreadParent_ViaPipeline_Suppressed;
   end;
 
 implementation
@@ -683,6 +688,42 @@ begin
   F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
   try Assert.IsTrue(TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate) >= 1,
     'Thread-Subklasse mit out-of-scope-Basis bleibt Fund (Kette erreicht keinen Root)');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.FreeAndNilQualifiedNonThreadParent_ViaPipeline_Suppressed;
+// Core-Audit [16] 2026-07-17: TFooThread traegt den 'thread'-Suffix (LooksLike-
+// ThreadType-Kandidat), erbt aber von einem QUALIFIZIERTEN Nicht-Thread-Parent
+// 'System.Classes.TComponent'. Vor Fix [16] kollabierte ParseClassBody den
+// dotted-Parent zu 'System Classes TComponent' und BaseClassNameLow nahm 'system'
+// -> IsDescendantOf erreichte KEINEN bekannten Nicht-Thread-Root -> IsProvably-
+// NotThread=False -> FALSCH gemeldet (FP). Nach [16] haelt der Parser
+// 'System.Classes.TComponent' zusammen, BaseClassNameLow kappt auf 'tcomponent',
+// IsDescendantOf(tfoothread, tcomponent)=True -> beweisbar kein Thread ->
+// SCA114 unterdrueckt. (Gegenstueck zu ...JvThreadChain_ViaPipeline_Suppressed,
+// dort mit UNqualifiziertem class(TComponent).) FCtl:TThread nur als
+// 'tthread'-Prefilter-Token, damit der Detektor im Pipeline-Lauf anlaeuft.
+const SRC =
+  'unit t; interface'#13#10 +
+  'uses System.Classes;'#13#10 +
+  'type'#13#10 +
+  '  TFooThread = class(System.Classes.TComponent)'#13#10 +
+  '  end;'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    FWorker: TFooThread;'#13#10 +
+  '    FCtl: TThread;'#13#10 +
+  '    procedure Do_;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Do_;'#13#10 +
+  'begin'#13#10 +
+  '  FreeAndNil(FWorker);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
+    'qualifizierter Nicht-Thread-Parent (System.Classes.TComponent) -> SCA114 unterdrueckt');
   finally F.Free; end;
 end;
 
