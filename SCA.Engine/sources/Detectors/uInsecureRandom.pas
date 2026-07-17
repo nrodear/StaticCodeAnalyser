@@ -133,19 +133,30 @@ const
   // werden (in PCRE-Backtracking-Modus eigentlich egal, aber klarer).
   RANDOM_RE = '\b(RandomRange|RandomFrom|Random)\s*\(';
 var
-  M : TMatch;
+  M    : TMatch;
+  Code : string;
 begin
   Result := False;
   AHit   := '';
   if Expr = '' then Exit;
-  M := TRegEx.Match(Expr, RANDOM_RE, [roIgnoreCase]);
+  // Core-Audit 2026-07-17 (SCA167): String-Literale ausblenden, bevor auf
+  // `\bRandom(` gematcht wird - sonst meldet ein `random(` das NUR im Inhalt
+  // eines Delphi-String-Literals steht (z.B. Result := '...chr(random(...))...')
+  // faelschlich einen Aufruf. StripStringLiterals entfernt den String-Inhalt
+  // (inkl. Quotes); der Code-Text bleibt erhalten -> echte Aufrufe bleiben.
+  // Match UND IsObjectQualifiedRandom arbeiten auf DERSELBEN Kopie (Code),
+  // daher sind die M.Index-Positionen in sich stimmig (auch wenn die Offsets
+  // gegenueber Expr verschoben sind). Qualifier ('.') stehen im Code, nie im
+  // String -> erhalten. Casing des Codes bleibt -> AHit korrekt.
+  Code := TDetectorUtils.StripStringLiterals(Expr);
+  M := TRegEx.Match(Code, RANDOM_RE, [roIgnoreCase]);
   while M.Success do
   begin
     // Objekt-qualifizierte Custom-RNG-Methoden (FRng.Random(..)) ueberspringen -
     // nur globale RTL-Random (unqualified / System. / Math.) ist deterministisch.
-    if not IsObjectQualifiedRandom(Expr, M.Index) then
+    if not IsObjectQualifiedRandom(Code, M.Index) then
     begin
-      AHit   := M.Groups[1].Value;  // Original-Casing
+      AHit   := M.Groups[1].Value;  // Original-Casing (Code erhaelt Code-Zeichen)
       Exit(True);
     end;
     M := M.NextMatch;

@@ -26,6 +26,9 @@ type
     // ist KEIN Code-Use und darf den echten Bug NICHT unterdruecken.
     [Test] procedure RandomizeInComment_StillReported;
     [Test] procedure RandomizeInStringLiteral_StillReported;
+    // Core-Audit 2026-07-17 (SCA167): 'random(' NUR im String-Literal-Inhalt
+    // (kein echter Aufruf) darf Pass 2b nicht als Aufruf melden.
+    [Test] procedure RandomOnlyInStringLiteral_NoFinding;
     // TP-Kontrolle auf dem file-basierten Pfad: ohne jedes Randomize feuert es.
     [Test] procedure RandomWithoutRandomize_FileBased_Reported;
   end;
@@ -301,6 +304,30 @@ begin
   try
     Assert.IsTrue(TFindingHelper.Count(F, fkInsecureRandom) >= 1,
       'Random(100) ohne jedes Randomize muss auch file-basiert feuern');
+  finally F.Free; end;
+end;
+
+procedure TTestInsecureRandom.RandomOnlyInStringLiteral_NoFinding;
+// Regression Core-Audit 2026-07-17: 'random(' steht NUR im Inhalt eines
+// String-Literals (kein echter Aufruf, kein Randomize noetig). Vor dem Fix
+// matchte Pass 2b '\bRandom(' im rohen nkAssign.TypeRef inklusive String-Inhalt
+// und meldete faelschlich einen Aufruf. Jetzt blendet StripStringLiterals den
+// String-Inhalt aus -> kein Fund. Spiegelt den realen FP aus
+// SynHighlighterProgress.GetSampleSource.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'function GetSample: string;'#13#10 +
+  'begin'#13#10 +
+  '  Result := ''demo: chr(random(255)) sample'';'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := Sca167FindingsFromFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkInsecureRandom),
+      'random( nur im String-Literal ist kein Aufruf');
   finally F.Free; end;
 end;
 
