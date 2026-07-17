@@ -117,11 +117,13 @@ var
   inStr    : Boolean;
   c        : Char;
   prev, nxt: Char;
+  depth    : Integer;
 begin
   PlusCount     := 0;
   HasLiteral    := False;
   HasNonLiteral := False;
   inStr := False;
+  depth := 0;
   i := 1;
   while i <= Length(S) do
   begin
@@ -136,21 +138,39 @@ begin
       end;
       inStr := not inStr;
     end
-    else if (not inStr) and (c = '+') then
+    else if not inStr then
     begin
-      // Nachbarn (Whitespace ueberspringen)
-      prev := #0;
-      for j := i - 1 downto 1 do
-        if S[j] > ' ' then begin prev := S[j]; Break; end;
-      nxt := #0;
-      for j := i + 1 to Length(S) do
-        if S[j] > ' ' then begin nxt := S[j]; Break; end;
+      // [Core-Audit 2026-07-17] Nur TOP-LEVEL-Konkat-'+' zaehlen (Klammer-/
+      // Bracket-Tiefe 0). '+' innerhalb von (...)/[...] sind Argument-/Index-/
+      // Arithmetik-'+' und gehoeren NICHT zur Statement-Ebenen-Konkatenation -
+      // z.B. 's := ''a'' + IntToStr(x + y) + ''b''' zaehlte das arithmetische
+      // 'x + y' als dritten Konkat-'+' mit und schob die 3-Term-Kette (2 echte
+      // '+') faelschlich ueber die 4-Term-Schwelle (Miscount-FP-Klasse).
+      // MONOTON: depth-0-Zaehlung <= alte Gesamt-Zaehlung -> Fund-Zahl kann nur
+      // sinken; eine echte Top-Level-Kette (''a''+b+''c''+d, alle '+' auf
+      // Tiefe 0) bleibt unveraendert gezaehlt -> 0 TP-Verlust.
+      if (c = '(') or (c = '[') then
+        Inc(depth)
+      else if (c = ')') or (c = ']') then
+      begin
+        if depth > 0 then Dec(depth);
+      end
+      else if (c = '+') and (depth = 0) then
+      begin
+        // Nachbarn (Whitespace ueberspringen)
+        prev := #0;
+        for j := i - 1 downto 1 do
+          if S[j] > ' ' then begin prev := S[j]; Break; end;
+        nxt := #0;
+        for j := i + 1 to Length(S) do
+          if S[j] > ' ' then begin nxt := S[j]; Break; end;
 
-      Inc(PlusCount);
-      if prev = '''' then HasLiteral := True
-      else if prev <> #0 then HasNonLiteral := True;
-      if nxt = '''' then HasLiteral := True
-      else if nxt <> #0 then HasNonLiteral := True;
+        Inc(PlusCount);
+        if prev = '''' then HasLiteral := True
+        else if prev <> #0 then HasNonLiteral := True;
+        if nxt = '''' then HasLiteral := True
+        else if nxt <> #0 then HasNonLiteral := True;
+      end;
     end;
     Inc(i);
   end;

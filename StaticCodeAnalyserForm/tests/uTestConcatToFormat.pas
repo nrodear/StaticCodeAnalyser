@@ -21,6 +21,10 @@ type
     // ---- Positive Varianten ------------------------------------------------
     [Test] procedure Concat_ThreePluses_MixedTerms_Reported;
     [Test] procedure Concat_WithIntToStrCall_Reported;
+    // Core-Audit 2026-07-17 (SCA044 Miscount): arithmetisches '+' in Arg-Klammern
+    // zaehlt nicht mehr als Konkat-'+'; Kontroll-TP mit Arithmetik-Arg bleibt Fund.
+    [Test] procedure Concat_ArithmeticInArgs_Miscount_NoFinding;
+    [Test] procedure Concat_LongChainWithArithmeticArg_StillReported;
 
     // ---- Negative Varianten / Guards --------------------------------------
     // Schwelle 2026-07-11 von 2 auf 3: 2 '+' (3 Terme) ist kein Fund mehr.
@@ -88,6 +92,43 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkConcatToFormat));
+  finally F.Free; end;
+end;
+
+procedure TTestConcatToFormat.Concat_ArithmeticInArgs_Miscount_NoFinding;
+// Regression Core-Audit 2026-07-17 (SCA044 Miscount): nur ZWEI echte Top-Level-
+// Konkat-'+' (''sum='' + IntToStr(...) + ''!''), plus EIN arithmetisches '+' in
+// den Argument-Klammern (x + y). Vor dem Tiefen-Fix zaehlte ScanConcat das
+// arithmetische '+' mit -> PlusCount=3 >= Schwelle -> faelschlicher Fund. Jetzt
+// werden nur '+' auf Klammer-Tiefe 0 gezaehlt -> PlusCount=2 < 3 -> kein Fund
+// (konsistent mit der 4-Term-Schwellen-Policy).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var x, y: Integer; r: string;'#13#10 +
+  'begin r := ''sum='' + IntToStr(x + y) + ''!''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkConcatToFormat),
+    'arithmetisches ''+'' in Arg-Klammern ist kein Konkat-''+'' (Miscount-FP)');
+  finally F.Free; end;
+end;
+
+procedure TTestConcatToFormat.Concat_LongChainWithArithmeticArg_StillReported;
+// Kontroll-TP: eine ECHTE lange Top-Level-Kette (5 Konkat-'+') bleibt Fund,
+// auch wenn ein Argument zusaetzlich ein arithmetisches '+' enthaelt. Beweist,
+// dass der Tiefen-Fix NUR die miscounted-'+' entfernt, nicht echte lange Ketten.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var x, y: Integer; b, c, r: string;'#13#10 +
+  'begin r := ''a='' + IntToStr(x + y) + '', b='' + b + '', c='' + c; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkConcatToFormat) >= 1,
+    'echte lange Top-Level-Kette bleibt trotz Arithmetik-Arg ein Fund');
   finally F.Free; end;
 end;
 
