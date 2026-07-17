@@ -70,6 +70,34 @@ implementation
 // noinspection-file BeginEndRequired, CanBeStrictPrivate, CyclomaticComplexity, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+function CallIdLooksLikeLogger(const NameLow: string): Boolean;
+// True wenn der Callee-Identifier (der Teil VOR der Klammer) auf 'log'
+// endet - deckt praefigierte Logger ab, die StartsWith('log') NICHT
+// erwischt: Alcinoe 'ALLog', sowie 'WriteLog'/'AppLog'/'TraceLog'/...
+// Nur der Identifier wird geprueft (Argumente abgeschnitten), damit ein
+// 'log'-Vorkommen im Argument (z.B. DoWork(catalog)) kein HasLog setzt.
+// Bekannte Nicht-Logger-Woerter, die zufaellig auf 'log' enden (Dialog,
+// Catalog, Backlog, ...), werden ausgeschlossen, damit kein echter
+// Swallow-Handler faelschlich als 'legitim' unterdrueckt wird (TP-safe).
+const
+  NonLoggers: array[0..7] of string =
+    ('dialog', 'catalog', 'backlog', 'analog', 'prolog', 'blog', 'epilog', 'weblog');
+var
+  Id : string;
+  p  : Integer;
+  nl : string;
+begin
+  Result := False;
+  Id := NameLow;
+  p  := Pos('(', Id);
+  if p > 0 then Id := Copy(Id, 1, p - 1);
+  Id := Trim(Id);
+  if not Id.EndsWith('log') then Exit;
+  for nl in NonLoggers do
+    if Id.EndsWith(nl) then Exit(False);
+  Result := True;
+end;
+
 function IsLegitTopLevelHandler(OnNode: TAstNode): Boolean;
 // True wenn der Handler-Body sowohl LOGGT (WriteLn/Write/Log*/OutputDebug*)
 // als auch BEENDET/RAISE'T (Exit/Halt/raise). Dann ist es kein blindes
@@ -139,7 +167,8 @@ begin
            NameLow.StartsWith('outputdebug')   or
            NameLow.StartsWith('log')           or
            NameLow.StartsWith('showmessage(')  or
-           NameLow.StartsWith('savetofile(')   then
+           NameLow.StartsWith('savetofile(')   or
+           CallIdLooksLikeLogger(NameLow)       then
           HasLog := True;
         // Leave-Pattern: Halt(...) / Exit(...)
         if NameLow.StartsWith('halt(')         or

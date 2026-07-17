@@ -20,6 +20,9 @@ type
     [Test] procedure ReraiseAfterCleanup_NotReported;
     [Test] procedure ConditionalReraiseViaHelper_NotReported;
     [Test] procedure TranslateToNewException_StillReported;
+    // Core-Audit 2026-07-17 (SCA132): praefigierter Logger (ALLog/WriteLog)
+    // + Leave = legitimer Top-Level-Handler, kein Finding.
+    [Test] procedure PrefixedLoggerWithLeave_NotReported;
   end;
 
 implementation
@@ -210,6 +213,35 @@ begin
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkExceptionTooGeneral));
   finally F.Free; end;
 end;
+procedure TTestExceptionTooGeneral.PrefixedLoggerWithLeave_NotReported;
+// Core-Audit 2026-07-17 (SCA132): ein Top-Level-Handler, der ueber einen
+// PRAEFIGIERTEN Logger loggt (Alcinoe 'ALLog', auch 'WriteLog'/'AppLog') UND
+// beendet (Result-Zuweisung), ist legitim. Vor dem CallIdLooksLikeLogger-Guard
+// erkannte HasLog nur StartsWith('log') und verpasste 'ALLog' -> der Handler
+// wurde faelschlich als 'zu generisch' gemeldet. Geerdet in
+// Alcinoe.FMX.Dynamic.Controls.pas:1652 (ALLog(...) + Result := ...).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Foo: Boolean;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    Result := DoWork;'#13#10 +
+  '  except'#13#10 +
+  '    on E: Exception do'#13#10 +
+  '    begin'#13#10 +
+  '      ALLog(''Foo'', E);'#13#10 +
+  '      Result := False;'#13#10 +
+  '    end;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkExceptionTooGeneral),
+    'praefigierter Logger (ALLog) + Leave ist ein legitimer Top-Level-Handler');
+  finally F.Free; end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestExceptionTooGeneral);
 
