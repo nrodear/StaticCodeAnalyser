@@ -89,13 +89,16 @@ class procedure TAnonMethodCaptureLoopVarDetector.AnalyzeUnit(
   UnitNode: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>);
 const
-  // uParser2 konkateniert Tokens in ParsePrimary ohne Whitespace -
-  // aus `procedure begin ... end` wird im Call-Expression-String
-  // `procedurebegin...end`. Daher KEIN `\b` nach 'procedure'/'function'
-  // sondern Lookahead auf das was anonymous-method-Marker einleitet:
-  //   procedure(...)    procedurebegin    procedure:RetType
-  //   function(...)     functionbegin     function:RetType
-  ANON_RE = '\b(procedure|function)(begin|function|\(|:)';
+  // uParser2.ParsePrimary trennt Call-Argument-Tokens seit dem Core-Fix [7]
+  // (2026-07-17) per JoinTokInto an Wortgrenzen - aus `procedure begin ... end`
+  // wird im Call-Expression-String jetzt `procedure begin...end` (mit Space),
+  // frueher `procedurebegin...end` (ohne). `\s*` deckt BEIDE Formen ab (0..n
+  // Spaces), Lookahead auf das anonymous-method-einleitende Token:
+  //   procedure(...)   'procedure begin'   procedure:RetType
+  //   function(...)    'function begin'    function:RetType
+  // (zwischen 'procedure' und '(' bzw. ':' setzt JoinTokInto keinen Space, da
+  //  '(' / ':' Nicht-Ident-Zeichen sind - `\s*` matcht dort null Spaces.)
+  ANON_RE = '\b(procedure|function)\s*(begin|function|\(|:)';
   // Synchron ausgefuehrte Closures: laufen WAEHREND der Iteration und
   // lesen die Loop-Var beim korrekten Wert - kein Capture-Bug. Nur
   // DEFERRED Closures (Thread/Queue/Task) sehen am Ende denselben Wert.

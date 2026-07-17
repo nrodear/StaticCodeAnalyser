@@ -22,6 +22,9 @@ type
 
     // ---- Negative Varianten / Guards --------------------------------------
     [Test] procedure RaisedException_NoFinding;
+    // Core-Audit [7]/[SCA120] 2026-07-17: raise INNERHALB einer anonymen
+    // Methode, die als Call-Argument uebergeben wird (Flachtext im nkCall.Name).
+    [Test] procedure RaiseInsideAnonMethodArg_NoFinding;
     [Test] procedure NonExceptionCreate_NoFinding;
     [Test] procedure EditCreate_NotMisidentified_NoFinding;
     [Test] procedure EncodingClass_NotMisidentified_NoFinding;
@@ -104,6 +107,34 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMissingRaise));
+  finally F.Free; end;
+end;
+
+procedure TTestMissingRaise.RaiseInsideAnonMethodArg_NoFinding;
+// Regression Core-Audit 2026-07-17: eine anonyme Methode, die als Argument an
+// einen Aufruf uebergeben wird, landet als FLACHER Text im nkCall.Name des
+// aeusseren Aufrufs (der Parser legt hier KEINEN nkRaise-Knoten an). Ein 'raise
+// EFoo.Create(...)' im Body wird also von SCA120 als nkCall-Text gesehen. Seit
+// dem JoinTokInto-Fix [7] steht dort 'raise Exception' (mit Space) statt
+// verklebt 'raiseException' -> ExtractCreateTarget extrahiert 'Exception' sauber
+// und muss am vorangehenden 'raise' erkennen, dass die Exception GERAIST wird
+// (sonst FP "constructed but never raised"). Spiegelt den realen FP aus
+// delphimvcframework RoutesU.MapGet('/throw', function begin raise ... end).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  Router.MapGet(''/throw'','#13#10 +
+  '    function: Integer'#13#10 +
+  '    begin'#13#10 +
+  '      raise Exception.Create(''boom'');'#13#10 +
+  '    end);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMissingRaise),
+    'raise innerhalb einer Anon-Method-Arg-Closure ist geraist - kein Missing-Raise');
   finally F.Free; end;
 end;
 

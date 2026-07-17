@@ -142,6 +142,22 @@ begin
   //               (Handler/Logger/raise-Helper), kein statement-level
   //               Missing-Raise. Real-World 2026-06-27 (praeventiv).
   if (i >= 1) and CharInSet(CallName[i], ['.', '(', ',']) then Exit;
+  // [Core-Audit 2026-07-17] 'raise <Exc>.Create(...)' im FLACHTEXT: ein raise
+  // als STATEMENT legt der Parser als nkRaise ab (fuer SCA120 unsichtbar) -
+  // ABER in einer anonymen Methode als Call-Argument
+  // (z.B. MapGet('/x', function begin raise EFoo.Create(...) end)) steckt das
+  // 'raise EFoo.Create(...)' als flacher Text im nkCall.Name des aeusseren
+  // Aufrufs. Seit dem JoinTokInto-Fix [7] steht dort 'raise EFoo' (mit Space)
+  // statt verklebt 'raiseEFoo' -> ExtractCreateTarget wuerde 'EFoo' sauber
+  // extrahieren und die GERAISETE Exception faelschlich als "never raised"
+  // melden. Daher: ist das Wort direkt vor dem Exception-Ident 'raise', wird
+  // die Exception geraist -> kein Fund. (i zeigt auf das Zeichen VOR dem Ident.)
+  var jr := i;
+  while (jr >= 1) and (CallName[jr] = ' ') do Dec(jr);
+  if (jr >= 5) and SameText(Copy(CallName, jr - 4, 5), 'raise') and
+     ((jr - 5 < 1) or
+      not CharInSet(CallName[jr - 5], ['A'..'Z', 'a'..'z', '0'..'9', '_'])) then
+    Exit;
   Result := Copy(CallName, i + 1, PosDot - i - 1);
 end;
 
