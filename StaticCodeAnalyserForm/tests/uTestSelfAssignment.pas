@@ -23,6 +23,9 @@ type
     [Test] procedure NoSelf_ExpressionWithSameVar_NoFinding;
     [Test] procedure NoSelf_DifferentFieldOnSameObject_NoFinding;
     [Test] procedure NoSelf_AssignFromCall_NoFinding;
+    // Core-Audit 2026-07-17 (SCA047): Keyword-Operator-RHS an Wortgrenze
+    // ('not Ready') darf nicht mit gleichnamiger LHS ('NotReady') kollabieren.
+    [Test] procedure NoSelf_KeywordOperatorRHS_NoFinding;
     [Test] procedure Self_MultipleHits_AllReported;
 
     // ---- Finding-Inhalt ----------------------------------------------------
@@ -128,6 +131,25 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSelfAssignment));
+  finally F.Free; end;
+end;
+
+procedure TTestSelfAssignment.NoSelf_KeywordOperatorRHS_NoFinding;
+// Regression Core-Audit 2026-07-17: 'NotReady := not Ready;' ist KEINE
+// Selbstzuweisung. Der Parser legt den RHS via JoinTokInto als 'not Ready'
+// (mit Wortgrenzen-Space) ab. Vor dem Fix kollabierte Normalize das zu
+// 'notready' und verglich es mit der LHS 'NotReady'->'notready' -> falscher
+// Treffer. Normalize erhaelt jetzt die Wortgrenze -> 'not ready' <> 'notready'.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var NotReady, Ready: Boolean;'#13#10 +
+  'begin NotReady := not Ready; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSelfAssignment),
+    'Keyword-Operator an Wortgrenze darf nicht als Selbstzuweisung kollabieren');
   finally F.Free; end;
 end;
 

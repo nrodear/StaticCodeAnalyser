@@ -39,19 +39,51 @@ implementation
 const
   EMIT_SEVERITY = lsWarning;
 
+function IsWordCh(const C: Char): Boolean; inline;
+begin
+  Result := ((C >= 'a') and (C <= 'z')) or
+            ((C >= 'A') and (C <= 'Z')) or
+            ((C >= '0') and (C <= '9')) or
+            (C = '_');
+end;
+
 function Normalize(const S: string): string;
-// Whitespace komplett raus + lowercase, damit `Obj . Field` und
-// `Obj.Field` gleich sind.
+// Whitespace raus + lowercase, damit `Obj . Field` und `Obj.Field` gleich
+// sind. ABER (Core-Audit 2026-07-17, SCA047): eine echte Wortgrenze - ein
+// Space ZWISCHEN ZWEI Bezeichner-Zeichen, z.B. das Space in `not SaxMode` -
+// MUSS als EIN Space erhalten bleiben. Sonst kollabiert
+// `NotSaxMode := not SaxMode;` zu `notsaxmode` = `notsaxmode` und der Detektor
+// meldet eine falsche Selbstzuweisung (betrifft auch and/or/div/mod/in/as/
+// shl/shr/xor an Wortgrenzen). Der Parser (JoinTokInto) setzt Spaces ohnehin
+// nur genau an solchen Wortgrenzen; an `.`/`[`/`(` faellt das Space weg, womit
+// die Dot-Aequivalenz (`Obj . Field` = `Obj.Field`) erhalten bleibt.
 var
-  i : Integer;
-  C : Char;
+  i   : Integer;
+  C   : Char;
+  Nxt : Integer;
 begin
   Result := '';
-  for i := 1 to Length(S) do
+  i := 1;
+  while i <= Length(S) do
   begin
     C := S[i];
     if C > ' ' then
+    begin
       Result := Result + LowerCase(C);
+      Inc(i);
+    end
+    else
+    begin
+      // Whitespace-Lauf ueberspringen; nur wenn er zwei Ident-Zeichen trennt,
+      // ein einzelnes Space als Wortgrenze setzen.
+      Nxt := i;
+      while (Nxt <= Length(S)) and (S[Nxt] <= ' ') do
+        Inc(Nxt);
+      if (Result <> '') and (Nxt <= Length(S)) and
+         IsWordCh(Result[Length(Result)]) and IsWordCh(S[Nxt]) then
+        Result := Result + ' ';
+      i := Nxt;
+    end;
   end;
 end;
 

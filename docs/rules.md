@@ -1127,7 +1127,7 @@ for i := 10 downto 1 do DoStuff(i);
 | Tags | `typo`, `no-op` |
 | Detector | `uSelfAssignment.pas` |
 
-Detector excludes property setters with documented side effects. A bare `x := x` is almost always a typo where one side should be a different variable.
+A bare `x := x` is almost always a typo where one side should be a different variable. The detector does not special-case property setters; the rare legitimate cases (a setter with side effects, or `Result := Result;` to silence a compiler hint) must be suppressed with a `// noinspection` comment directly above the line.
 
 ---
 
