@@ -138,7 +138,18 @@ begin
     begin
       Cur := Stack[Stack.Count - 1];
       Stack.Delete(Stack.Count - 1);
-      if ContainsNilCompare(Cur.N.Name) or ContainsNilCompare(Cur.N.TypeRef) then
+      // SCA126-Guard (Core-Audit 2026-07-18, Welle 1 des 5%-FP-Konzepts):
+      // '= nil' in einer DEKLARATION ist ein INITIALIZER, kein Nil-Vergleich.
+      // Der Parser legt Default-Parameter (`const X: T = nil`) in nkParam.TypeRef
+      // und typisierte Konstanten/Feld-Inits (`const X: T = nil;` / Feld) in
+      // nkField.TypeRef ab (Format 'Type=nil' bzw. 'Type = nil') -> ContainsNil-
+      // Compare hielt das faelschlich fuer einen '= nil'-Vergleich (~2162 FP im
+      // Real-World-Korpus, groesster Actionable-Hebel). Ein echter Nil-VERGLEICH
+      // (`if x = nil`) lebt IMMER in einem Statement-/Ausdrucks-Knoten (nkIfStmt/
+      // nkWhileStmt/nkAssign/nkCall), NIE als Name/TypeRef einer Param-/Feld-
+      // Deklaration -> der Skip ist monoton (nur Suppression) und TP-safe.
+      if (Cur.N.Kind <> nkParam) and (Cur.N.Kind <> nkField) and
+         (ContainsNilCompare(Cur.N.Name) or ContainsNilCompare(Cur.N.TypeRef)) then
       begin
         if Assigned(Cur.M) then MethName := Cur.M.Name else MethName := '';
         Find             := TLeakFinding.Create;

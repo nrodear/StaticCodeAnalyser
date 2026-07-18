@@ -22,6 +22,10 @@ type
     [Test] procedure AssignmentToNil_NoFinding;
     [Test] procedure NilInsideStringLiteral_NoFinding;
     [Test] procedure NilSuffixIdentifier_NoFinding;
+    // Core-Audit 2026-07-18 (SCA126 Welle 1): '= nil' im Deklarations-Kontext
+    // (Default-Parameter, typisierte Konstante) ist Initializer, kein Vergleich.
+    [Test] procedure DefaultParamNil_NoFinding;
+    [Test] procedure TypedConstNil_NoFinding;
 
     // ---- Finding-Inhalt ----------------------------------------------------
     [Test] procedure Finding_KindAndSeverity;
@@ -160,6 +164,41 @@ begin
     Assert.IsNotNull(Hit, 'fkNilComparison finding expected');
     Assert.AreEqual(fkNilComparison, Hit.Kind);
     Assert.AreEqual(lsHint,          Hit.Severity);
+  finally F.Free; end;
+end;
+
+procedure TTestNilComparison.DefaultParamNil_NoFinding;
+// Core-Audit 2026-07-18 (SCA126 Welle 1, 5%-FP-Konzept): '= nil' als
+// Default-Parameterwert ist ein Initializer, KEIN Nil-Vergleich. Der Parser
+// legt den Default in nkParam.TypeRef ab ('TObject = nil'); der Node-Kind-Guard
+// (Skip nkParam) unterdrueckt den frueheren FP. Groesster Actionable-Hebel des
+// Konzepts (~2162 FP im Real-World-Korpus).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(const AObj: TObject = nil);'#13#10 +
+  'begin end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilComparison),
+    'Default-Parameter = nil ist kein Nil-Vergleich');
+  finally F.Free; end;
+end;
+
+procedure TTestNilComparison.TypedConstNil_NoFinding;
+// Core-Audit 2026-07-18 (SCA126 Welle 1): typisierte Konstante '= nil' ist ein
+// Initializer, kein Vergleich. Der Parser legt Const-Items als nkField mit
+// TypeRef 'TObject=nil' ab; der Node-Kind-Guard (Skip nkField) unterdrueckt den FP.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'const DefObj: TObject = nil;'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilComparison),
+    'typisierte Konstante = nil ist kein Nil-Vergleich');
   finally F.Free; end;
 end;
 
