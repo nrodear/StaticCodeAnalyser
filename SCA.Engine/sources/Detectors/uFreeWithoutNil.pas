@@ -397,6 +397,23 @@ begin
           RootLow := FreeReceiverRootLow(N.Name);
           if (RootLow <> '') and LocalNames.ContainsKey(RootLow) then Continue;
 
+          // Real-World-FP-Audit 2026-07-18 (non-lvalue Methoden-/Member-Ergebnis-
+          // Receiver): FMsgQueue.Pop.Free / FIfStack.Pop.Free / FProcStack.Pop.Free.
+          // Ein MEHRSEGMENTIGER, klammerloser Receiver (>=2 Punkte im Call-Namen)
+          // friert das ERGEBNIS eines Member-/Methodenaufrufs auf einer Nicht-
+          // Local-Wurzel ein - KEIN zuweisbares lvalue: 'FMsgQueue.Pop := nil' /
+          // FreeAndNil(FMsgQueue.Pop) sind syntaktisch unmoeglich -> Empfehlung
+          // sinnlos, ueberspringen. Der Detektor legt hier ohnehin nur das letzte
+          // Segment (Recv='Pop') als Nil-Out-Ident ab -> falsch adressierte Meldung.
+          // Cast/Index sind oben (Recv-Check '('/'['/')'/']') bereits raus; das
+          // einsegmentige Feld 'FList.Free' hat genau 1 Punkt und bleibt Befund.
+          // AUSNAHME 'self': 'Self.FField.Free' ist ein echtes nil-outbares Feld
+          // (Self.FField := nil legal) -> bleibt Befund.
+          var DotCount := 0;
+          for var ci := 1 to Length(N.Name) do
+            if N.Name[ci] = '.' then Inc(DotCount);
+          if (DotCount >= 2) and (RootLow <> 'self') then Continue;
+
           if HasNilOutAfter(M, N, RecvLow) then Continue;
           // Reassigned-after-free (FPopUpBitmap.Free; FPopUpBitmap := TBitmap.Create):
           // Feld vor jedem Read neu belegt -> kein Dangling-Pointer.

@@ -25,6 +25,10 @@ type
     // --- Real-World FP-Audit Runde 4 (2026-07-11) Regression ---
     [Test] procedure ReassignedAfterFree_NotReported;
     [Test] procedure ReassignAfterUseAfterFree_Reported;
+    // --- Welle 1 5%-FP-Konzept 2026-07-18 (non-lvalue method-result receiver) ---
+    [Test] procedure MethodResultFreeOnField_NotReported;
+    [Test] procedure SelfFieldFree_StillReported;    // TP-Gegenprobe (Self-Ausnahme)
+    [Test] procedure PlainFieldFree_StillReported;    // TP-Regression (1 Punkt)
   end;
 
 implementation
@@ -380,6 +384,95 @@ begin
       'Read zwischen Free und Reassign = Use-After-Free -> Befund bleibt');
   finally F.Free; end;
 end;
+procedure TTestFreeWithoutNil.MethodResultFreeOnField_NotReported;
+// FP-Fix (Real-World 2026-07-18): FMsgQueue.Pop.Free / FIfStack.Pop.Free -
+// mehrsegmentiger, klammerloser Receiver mit FELD-Wurzel. 'FMsgQueue.Pop' ist
+// das Ergebnis eines Aufrufs, kein nil-outbares lvalue -> kein Befund.
+// (Feld-Wurzel, damit NICHT schon der Local/Param-Skip greift.)
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  private'#13#10 +
+  '    FMsgQueue: TStack;'#13#10 +
+  '  public'#13#10 +
+  '    procedure Drain;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Drain;'#13#10 +
+  'begin'#13#10 +
+  '  FMsgQueue.Pop.Free;'#13#10 +
+  '  WriteLn(''after'');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
+      'X.Pop.Free (Methoden-Ergebnis, Feld-Wurzel) ist kein Free-Without-Nil');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNil.SelfFieldFree_StillReported;
+// TP-Gegenprobe: 'Self.FList.Free' hat zwar 2 Punkte, ist aber ueber Self ein
+// echtes nil-outbares Feld (Self.FList := nil) -> Befund MUSS bleiben.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  private'#13#10 +
+  '    FList: TStringList;'#13#10 +
+  '  public'#13#10 +
+  '    procedure DoStuff;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.DoStuff;'#13#10 +
+  'begin'#13#10 +
+  '  Self.FList.Free;'#13#10 +
+  '  WriteLn(''after'');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkFreeWithoutNil) >= 1,
+      'Self.FField.Free ist ein echtes nil-outbares Feld -> Befund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNil.PlainFieldFree_StillReported;
+// TP-Regression: einsegmentiges Feld 'FList.Free' (1 Punkt) darf der Guard NIE
+// treffen.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  private'#13#10 +
+  '    FList: TStringList;'#13#10 +
+  '  public'#13#10 +
+  '    procedure DoStuff;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.DoStuff;'#13#10 +
+  'begin'#13#10 +
+  '  FList.Free;'#13#10 +
+  '  WriteLn(''after'');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFreeWithoutNil),
+      'Einsegmentiges Feld FList.Free bleibt Befund');
+  finally F.Free; end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestFreeWithoutNil);
 
