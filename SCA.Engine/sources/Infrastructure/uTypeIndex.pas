@@ -286,12 +286,62 @@ const
     'tstopwatch',      // System.Diagnostics
     'tguid'            // System (record type)
   );
+
+  // Track C / Architektur-Thread (Core-Audit 2026-07-18): kuratierte Klassen-
+  // Elternketten fuer verbreitete RTL/VCL/FMX/JVCL-Basisklassen, die ueblicher-
+  // weise NICHT im Scan-Scope liegen. Ohne diese Kanten bricht IsDescendantOf
+  // ab, sobald ein Parent selbst eine ungescannte Basis ist (z.B.
+  // TMyThing=class(TJvComponent) -> Kette endet bei tjvcomponent). EINZIGER
+  // FParents-Konsument ist uConcurrencyExt.IsProvablyNotThread (SCA114); die
+  // uebrigen Index-Konsumenten (SCA124/161/174) lesen nur FKinds -> FParents-
+  // neutral. SICHERHEIT (adversarial verifiziert): jede Kante ist faktisch aus
+  // RTL/VCL/JVCL belegt; Thread-Hierarchien zeigen auf 'tthread' (tjvbasethread),
+  // Nicht-Thread-Hierarchien auf einen NON_THREAD_ROOT - KEINE Kante leitet einen
+  // echten TThread-Nachfahren auf einen Nicht-Thread-Root (sonst FN). tjvthread
+  // ist eine JVCL-KOMPONENTE (kein Thread) -> tjvcomponent -> tcomponent. Alcinoe
+  // + FMX-Homonyme (tcontrol/tcustomform kollidieren mit VCL im FParents-Dict)
+  // bewusst weggelassen (konservativ). Nur additiv: scan-data-wins (nur setzen
+  // wenn der Name nicht schon aus einer gescannten Unit bekannt ist).
+  SEED_PARENTS : array[0..21, 0..1] of string = (
+    // --- RTL (System.Classes) ---
+    ('tpersistent',           'tobject'),
+    ('tcomponent',            'tpersistent'),
+    ('tinterfacedobject',     'tobject'),
+    ('tinterfacedpersistent', 'tpersistent'),
+    ('tstream',               'tobject'),
+    ('tstrings',              'tpersistent'),
+    ('tstringlist',           'tstrings'),
+    ('tcollection',           'tpersistent'),
+    ('tdatamodule',           'tcomponent'),
+    ('tthread',               'tobject'),
+    // --- VCL (Vcl.Controls / Vcl.Forms) ---
+    ('tcontrol',              'tcomponent'),
+    ('twincontrol',           'tcontrol'),
+    ('tcustomcontrol',        'twincontrol'),
+    ('tgraphiccontrol',       'tcontrol'),
+    ('tscrollingwincontrol',  'twincontrol'),
+    ('tcustomform',           'tscrollingwincontrol'),
+    ('tform',                 'tcustomform'),
+    ('tframe',                'tscrollingwincontrol'),
+    // --- FMX (nur eindeutiger Name) ---
+    ('tfmxobject',            'tcomponent'),
+    // --- JVCL: TJvThread ist KOMPONENTE (kein Thread), TJvBaseThread IST Thread ---
+    ('tjvcomponent',          'tcomponent'),
+    ('tjvthread',             'tjvcomponent'),
+    ('tjvbasethread',         'tthread')
+  );
 var
   i : Integer;
 begin
   for i := Low(SEED_RECORDS) to High(SEED_RECORDS) do
     if not FKinds.ContainsKey(SEED_RECORDS[i]) then
       FKinds.Add(SEED_RECORDS[i], tkiRecord);
+  // Klassen-Elternketten vorbelegen (FParents-only; IsDescendantOf walkt nur
+  // FParents). Scan-Daten gewinnen: eine gescannte Unit-Deklaration ueberschreibt
+  // den Seed nie (schuetzt gegen lokale Homonym-Redefinitionen).
+  for i := Low(SEED_PARENTS) to High(SEED_PARENTS) do
+    if not FParents.ContainsKey(SEED_PARENTS[i][0]) then
+      FParents.Add(SEED_PARENTS[i][0], SEED_PARENTS[i][1]);
 end;
 
 procedure TTypeIndex.Build(FileList: TStringList; ACache: TAstFileCache);

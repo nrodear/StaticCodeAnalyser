@@ -66,6 +66,10 @@ type
     // BaseClassNameLow kappt den Unit-Qualifier -> IsDescendantOf loest die
     // Kette bis zum bekannten Nicht-Thread-Root auf.
     [Test] procedure FreeAndNilQualifiedNonThreadParent_ViaPipeline_Suppressed;
+    // --- Architektur-Thread Track C: VCL/FMX/JVCL-Seed in TTypeIndex (2026-07-18) ---
+    // Basisklasse NICHT im Scan-Scope -> Elternkette kommt aus der Seed-Tabelle.
+    [Test] procedure FreeAndNilSeededNonThreadBase_ViaPipeline_Suppressed;
+    [Test] procedure FreeAndNilSeededThreadBase_ViaPipeline_StillReported;
   end;
 
 implementation
@@ -724,6 +728,68 @@ begin
   F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
     'qualifizierter Nicht-Thread-Parent (System.Classes.TComponent) -> SCA114 unterdrueckt');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.FreeAndNilSeededNonThreadBase_ViaPipeline_Suppressed;
+// Architektur-Thread Track C 2026-07-18: TMyThread erbt von TJvComponent, das
+// NICHT im Scan-Scope deklariert ist. Vor dem VCL/JVCL-Seed brach die Kette bei
+// 'tjvcomponent' ab -> IsProvablyNotThread konnte keinen Nicht-Thread-Root
+// beweisen -> der '...thread'-benannte Nicht-Thread wurde faelschlich gemeldet.
+// Der Seed liefert tjvcomponent->tcomponent (NON_THREAD_ROOT) -> IsDescendantOf(
+// tmythread, tcomponent)=True, IsDescendantOf(tmythread, tthread)=False ->
+// beweisbar kein Thread -> SCA114 unterdrueckt. FCtl:TThread nur als Prefilter.
+const SRC =
+  'unit t; interface'#13#10 +
+  'uses System.Classes;'#13#10 +
+  'type'#13#10 +
+  '  TMyThread = class(TJvComponent)'#13#10 +
+  '  end;'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    FWorker: TMyThread;'#13#10 +
+  '    FCtl: TThread;'#13#10 +
+  '    procedure Do_;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Do_;'#13#10 +
+  'begin'#13#10 +
+  '  FreeAndNil(FWorker);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
+    'Seed (tjvcomponent->tcomponent) beweist TMyThread als Nicht-Thread -> unterdrueckt');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.FreeAndNilSeededThreadBase_ViaPipeline_StillReported;
+// TP-GEGENPROBE zum Seed: TWorker erbt von TJvBaseThread (nicht im Scan-Scope),
+// das der Seed korrekt als ECHTEN Thread (->tthread) verdrahtet. IsDescendantOf(
+// tworker, tthread)=True -> IsProvablyNotThread bricht VOR der Root-Pruefung ab
+// (Fund bleibt). Beweist, dass die Seed-Kante tjvbasethread->tthread einen echten
+// Thread NICHT faelschlich unterdrueckt (kein FN durch den Seed).
+const SRC =
+  'unit t; interface'#13#10 +
+  'uses System.Classes;'#13#10 +
+  'type'#13#10 +
+  '  TWorker = class(TJvBaseThread)'#13#10 +
+  '  end;'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    FWorker: TWorker;'#13#10 +
+  '    FCtl: TThread;'#13#10 +   // nur Prefilter-Token 'tthread' (TJvBaseThread enthaelt es nicht); nie freigegeben
+  '    procedure Do_;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Do_;'#13#10 +
+  'begin'#13#10 +
+  '  FreeAndNil(FWorker);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate) >= 1,
+    'Seed (tjvbasethread->tthread) haelt einen echten Thread-Nachfahren als Fund');
   finally F.Free; end;
 end;
 
