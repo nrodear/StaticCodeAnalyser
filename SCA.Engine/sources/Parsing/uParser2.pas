@@ -1776,7 +1776,23 @@ var
 begin
   T        := Next; // 'case'
   CaseNode := Parent.Add(nkCaseStmt, 'case', T.Line, T.Col);
-  SkipTo([tkKwOf, tkEof]);
+  // Ist-Messung 2026-07-18 (SCA054-FP-Klasse 'case-Selector unsichtbar'):
+  // frueher `SkipTo([tkKwOf, tkEof])` - der Selektor-Ausdruck zwischen `case`
+  // und `of` wurde verworfen und stand im AST nirgends. Parameter, die NUR als
+  // case-Selektor gelesen werden ('case AFontWeight of'), waren fuer SCA054/
+  // SCA166 unsichtbar. Jetzt joinen wir die Tokens in CaseNode.TypeRef -
+  // exakt analog zur while-Condition (Z.1875-1884). Additiv: TypeRef war
+  // bisher immer leer; strukturell -> Voll-A/B ist der Gate.
+  var Sel := '';
+  while not (Tok.Kind in [tkKwOf, tkEof]) do
+  begin
+    if Tok.Kind = tkStrLit then
+      JoinTokInto(Sel, QuoteStrLit(Tok.Value))
+    else
+      JoinTokInto(Sel, Tok.Value);
+    Next;
+  end;
+  CaseNode.TypeRef := Sel;
   Eat(tkKwOf);
 
   // AtTopLevelRoutineHead: Boundary-Recovery muss auch durch einen offenen

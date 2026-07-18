@@ -1441,12 +1441,14 @@ var
 
   procedure ProcessCaseSelectorWrites(CaseNode: TAstNode);
   // Real-World-FP-Audit 2026-07-12, FP-Klasse 'var-param-out-write' (Kat. C,
-  // dominant): 'case SomeCall(outVar) of' - der Parser verwirft den case-
-  // Selektor (ParseCaseStmt: SkipTo([tkKwOf]), nkCaseStmt.TypeRef bleibt leer),
-  // daher lief ProcessConditionCalls(Cases) leer und outVar bekam keinen
-  // pessimistic-Write -> FP. Da der Selektor NICHT im AST steht, lesen wir ihn
-  // string-gestrippt aus der Quelle ('case <sel> of', max 5 Zeilen fuer
-  // mehrzeilige Selektoren) und behandeln ihn wie eine Condition.
+  // dominant): 'case SomeCall(outVar) of' - der Selektor bekam keinen
+  // pessimistic-Write -> FP. HISTORIE: urspruenglich verwarf der Parser den
+  // case-Selektor komplett (SkipTo), daher dieser Quell-Fallback. SEIT der
+  // Ist-Messung 2026-07-18 legt ParseCaseStmt den Selektor als Flachtext in
+  // nkCaseStmt.TypeRef ab -> ProcessConditionCalls/ProcessReceiverInitInExpr
+  // sehen ihn jetzt AUCH via AST. Dieser Quell-Pfad bleibt als redundante,
+  // idempotente Absicherung bestehen (mehrzeilige Selektoren, Registrierung
+  // auf derselben Zeile -> doppelt schadet nicht).
   var
     n, endLine, casePos, ofPos, dummy : Integer;
     accLow, sel : string;
@@ -2006,9 +2008,10 @@ var
       for i := 0 to Ifs.Count     - 1 do ProcessConditionCalls(Ifs[i]);
       for i := 0 to Whiles.Count  - 1 do ProcessConditionCalls(Whiles[i]);
       for i := 0 to Cases.Count   - 1 do ProcessConditionCalls(Cases[i]);
-      // Kat. C (var-param-out-write): case-Selektor aus der Quelle, da der
-      // Parser ihn verwirft (nkCaseStmt.TypeRef leer -> ProcessConditionCalls
-      // oben ist fuer Cases ein No-Op).
+      // Kat. C (var-param-out-write): case-Selektor zusaetzlich aus der Quelle.
+      // Seit 2026-07-18 fuellt der Parser nkCaseStmt.TypeRef (ProcessCondition-
+      // Calls oben sieht den Selektor jetzt auch) - dieser Quell-Pfad bleibt
+      // als idempotente Absicherung (mehrzeilige Selektoren).
       for i := 0 to Cases.Count   - 1 do ProcessCaseSelectorWrites(Cases[i]);
       for i := 0 to Assigns.Count - 1 do ProcessConditionCalls(Assigns[i]);
       for i := 0 to Fors.Count    - 1 do ProcessConditionCalls(Fors[i]);

@@ -28,6 +28,10 @@ type
     [Test] procedure Param_BareInherited_Skipped;
     [Test] procedure Param_InheritedNoParens_Skipped;
     [Test] procedure Param_InheritedWithExplicitArgs_StillReported;
+    // Ist-Messung 2026-07-18: die zwei Parser-Blindstellen der SCA054-FP-Klasse
+    [Test] procedure Param_UsedAsCaseSelector_NotReported;
+    [Test] procedure Param_UsedOnlyInNestedProc_NotReported;
+    [Test] procedure Param_UnusedDespiteNestedProc_StillReported;   // TP-Gegenprobe
 
     // ---- Finding-Inhalt ---------------------------------------------------
     [Test] procedure Param_Finding_KindAndSeverity;
@@ -305,6 +309,73 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter),
     'inherited Run(0) mit expliziten Args reicht nicht weiter -> Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.Param_UsedAsCaseSelector_NotReported;
+// Ist-Messung 2026-07-18: Parameter, der NUR als case-Selektor gelesen wird
+// ('case AWeight of'). Der Parser verwarf den Selektor frueher via
+// SkipTo(tkKwOf) -> unsichtbar -> FP. Jetzt landet er in nkCaseStmt.TypeRef
+// und zaehlt als Nutzung (CollectAllTokens).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Map(AWeight: Integer): string;'#13#10 +
+  'begin'#13#10 +
+  '  case AWeight of'#13#10 +
+  '    1: Result := ''thin'';'#13#10 +
+  '    2: Result := ''bold'';'#13#10 +
+  '  else Result := ''normal'';'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
+    'case-Selektor ist eine Nutzung des Parameters');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.Param_UsedOnlyInNestedProc_NotReported;
+// Ist-Messung 2026-07-18: Parameter wird NUR in einer nested proc gelesen.
+// Der Parser verwirft nested-Bodies (nkNestedRange-Marker bleibt) -> frueher
+// FP. Jetzt scannt der Detektor die Marker-Ranges in der gestrippten Quelle.
+// FindingsOfFile noetig (echte Datei -> AcquireLines).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Outer(AStream: TObject);'#13#10 +
+  '  procedure Inner;'#13#10 +
+  '  begin'#13#10 +
+  '    Process(AStream);'#13#10 +
+  '  end;'#13#10 +
+  'begin'#13#10 +
+  '  Inner;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
+    'Nutzung in nested proc (nkNestedRange-Quelle) ist eine Nutzung');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.Param_UnusedDespiteNestedProc_StillReported;
+// TP-Gegenprobe: Methode HAT eine nested proc, aber der Parameter kommt darin
+// NICHT vor -> bleibt ein echter unused-Param-Fund (Fallback matcht nicht).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Outer(AOrphan: Integer);'#13#10 +
+  '  procedure Inner;'#13#10 +
+  '  begin'#13#10 +
+  '    DoStuff;'#13#10 +
+  '  end;'#13#10 +
+  'begin'#13#10 +
+  '  Inner;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter),
+    'Param ohne Vorkommen in der nested-Range bleibt ungenutzt -> Fund');
   finally F.Free; end;
 end;
 

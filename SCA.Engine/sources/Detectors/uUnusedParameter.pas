@@ -23,8 +23,8 @@ unit uUnusedParameter;
 interface
 
 uses
-  System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  System.SysUtils, System.Classes, System.Generics.Collections,
+  uAstNode, uSCAConsts, uMethodd12, uDetectorUtils, uFileTextCache;
 
 type
   TUnusedParameterDetector = class
@@ -230,6 +230,65 @@ var
   BodyLow : string;
   RefCount : Integer;
   F : TLeakFinding;
+  // Ist-Messung 2026-07-18 (SCA054-FP-Klasse 'nested-routine-Nutzung', 3/5 der
+  // Sample-FPs): der Parser verwirft nested-routine-Bodies aus dem Method-AST
+  // (nur nkNestedRange-Marker bleiben, Line=Start/TypeRef=EndLine) -> ein Param,
+  // der NUR in einer nested proc gelesen wird, war unsichtbar. Lazy-Fallback:
+  // die Quell-Zeilen der Marker-Ranges (kommentar-/string-gestrippt - Kommentare
+  // zaehlen NIE als Use) wort-gebunden nach dem Param-Namen scannen. Monoton
+  // (nur zusaetzlicher Skip). Rest-Risiko Shadowing (gleichnamige nested-lokale
+  // Var) unterdrueckt einen echten Fund - akzeptiert fuer lsHint, konsistent
+  // mit der Text-Zaehlung des Detektors.
+  NestedMarks   : TList<TAstNode>;
+  StrippedLines : TArray<string>;
+  StrippedReady : Boolean;
+  SrcLines      : TStringList;
+  SrcOwned      : Boolean;
+
+  procedure EnsureStripped;
+  var
+    Code    : string;
+    LineFor : TArray<Integer>;
+  begin
+    if StrippedReady then Exit;
+    StrippedReady := True;
+    SrcLines := AcquireLines(FileName, SrcOwned, nil);
+    if SrcLines = nil then Exit;
+    Code := TDetectorUtils.StripStringsAndCommentsCached(
+      SrcLines, LineFor, nil, FileName, ' ');
+    StrippedLines := Code.Split([#10]);
+  end;
+
+  function UsedInNestedRanges(const NameLow: string): Boolean;
+  var
+    M : TAstNode;
+    li, EndL, q, NL : Integer;
+    L : string;
+  begin
+    Result := False;
+    if NestedMarks.Count = 0 then Exit;
+    EnsureStripped;
+    if Length(StrippedLines) = 0 then Exit;
+    NL := Length(NameLow);
+    for M in NestedMarks do
+    begin
+      EndL := StrToIntDef(M.TypeRef, M.Line);
+      for li := M.Line to EndL do
+      begin
+        if (li < 1) or (li > Length(StrippedLines)) then Continue;
+        L := LowerCase(StrippedLines[li - 1]);
+        q := Pos(NameLow, L);
+        while q > 0 do
+        begin
+          if ((q = 1) or not IsIdentChar(L[q - 1])) and
+             ((q + NL > Length(L)) or not IsIdentChar(L[q + NL])) then
+            Exit(True);
+          q := Pos(NameLow, L, q + 1);
+        end;
+      end;
+    end;
+  end;
+
 begin
   // Declarations (in nkClass) skippen - die haben keinen Body und keine
   // sinnvolle Reference-Count. Ihre Modifier konsultieren wir aber von
@@ -243,10 +302,18 @@ begin
   // ist entfernt - der Parser-Fix (Write/Read-Statement-Dispatch) haengt jetzt
   // die Bodies keyword-benannter Methoden korrekt an, Param-Uses sind sichtbar.
 
+  StrippedReady := False;
+  SrcLines      := nil;
+  SrcOwned      := False;
+  NestedMarks   := TList<TAstNode>.Create;
   Params := MethodNode.FindAll(nkParam);
   BodySB := TStringBuilder.Create;
   try
     if Params.Count = 0 then Exit;
+    // nkNestedRange-Marker der verworfenen nested routines einsammeln
+    // (direkte MethodNode-Children, siehe uParser2 ~Z.1319).
+    for var NR in MethodNode.Children do
+      if NR.Kind = nkNestedRange then NestedMarks.Add(NR);
     CollectAllTokens(MethodNode, BodySB);
     BodyLow := LowerCase(BodySB.ToString);
 
@@ -282,6 +349,9 @@ begin
 
       if RefCount <= 1 then
       begin
+        // Nested-Routine-Fallback (s. Kommentar oben): Param wird in einer vom
+        // Parser verworfenen nested proc gelesen -> benutzt, kein Fund.
+        if UsedInNestedRanges(LowName) then Continue;
         F            := TLeakFinding.Create;
         F.FileName   := FileName;
         F.MethodName := MethodNode.Name;
@@ -295,6 +365,8 @@ begin
   finally
     BodySB.Free;
     Params.Free;
+    NestedMarks.Free;
+    if SrcLines <> nil then ReleaseLines(SrcLines, SrcOwned);
   end;
 end;
 

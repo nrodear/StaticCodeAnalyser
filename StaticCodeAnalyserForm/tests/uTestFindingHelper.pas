@@ -328,6 +328,11 @@ begin
         // FindingsOfFile-basierte GodClass-Tests liefen ins Leere (Detektor nie
         // ausgefuehrt). Klassische Metrik-Tests bleiben auf FindingsOf.
         TGodClassDetector.AnalyzeUnit(Root, TempPath, Result);
+        // Ist-Messung 2026-07-18: UnusedParameter hat jetzt einen Lines-
+        // abhaengigen Fallback (UsedInNestedRanges liest die nkNestedRange-
+        // Quellzeilen per AcquireLines) - MUSS wie UnusedLocal/GodClass auch
+        // im File-Harness laufen, sonst sind die nested-Range-Tests inert.
+        TUnusedParameterDetector.AnalyzeUnit(Root, TempPath, Result);
       finally
         Root.Free;
       end;
