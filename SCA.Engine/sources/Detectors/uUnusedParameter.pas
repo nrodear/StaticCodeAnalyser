@@ -6,6 +6,9 @@ unit uUnusedParameter;
 //   * Methode ist `override`/`virtual`/`abstract` -> Signature-Konformitaet
 //     wichtig, Param-Existenz kann von Basisklasse vorgegeben sein.
 //   * Methode hat genau einen `Sender: TObject`-Param (Event-Handler-Pattern).
+//   * Body enthaelt bare `inherited;` oder klammerloses `inherited Foo;` ->
+//     Delphi reicht die aktuellen Parameter implizit an die Elternmethode weiter
+//     (Signatur vom Parent vorgegeben, Param nicht wirklich ungenutzt).
 //   * Param-Name beginnt mit `_` (intentional convention).
 //   * Body ist asm-Block oder leer.
 //
@@ -164,6 +167,36 @@ begin
   end;
 end;
 
+// True, wenn der Body ein parameter-implizit-weiterreichendes 'inherited'
+// enthaelt. Delphi reicht die AKTUELLEN Methodenparameter automatisch an die
+// Elternmethode weiter bei
+//   * bare  'inherited;'      -> Parser: nkInherited mit LEEREM Name
+//   * klammerlos 'inherited Foo;' -> nkInherited.Name = 'Foo' (kein '(')
+// In beiden Formen ist ein "ungenutzter" Parameter in Wahrheit weitergeleitet
+// (Signatur vom Parent vorgegeben) -> KEIN echter unused-Param. Nur
+// 'inherited Foo(args)' (Name enthaelt '(') reicht NICHT implizit weiter, dort
+// kann ein Param genuin ungenutzt sein -> nicht skippen.
+// Wichtig: der Parser konsumiert das Keyword 'inherited' und speichert nur den
+// Call-Ausdruck als Name; ein Text-Scan nach "inherited" wuerde daher genau den
+// dominanten bare-Fall (leerer Name) verfehlen -> Erkennung MUSS ueber den
+// nkInherited-Knotentyp laufen. (Core-Audit 2026-07-18, Welle 1 5%-FP-Konzept:
+// ~7.950 FP, groesste absolute FP-Klasse, monoton + TP-safe.)
+function ForwardsParamsViaInherited(MethodNode: TAstNode): Boolean;
+var
+  Inh : TList<TAstNode>;
+  N : TAstNode;
+begin
+  Result := False;
+  Inh := MethodNode.FindAll(nkInherited);
+  try
+    for N in Inh do
+      if Pos('(', N.Name) = 0 then   // '' (bare) oder 'Name' ohne Klammern
+        Exit(True);
+  finally
+    Inh.Free;
+  end;
+end;
+
 procedure CollectAllTokens(Root: TAstNode; SB: TStringBuilder);
 var
   Stack : TStack<TAstNode>;
@@ -205,6 +238,7 @@ begin
 
   if IsInheritanceHook(UnitNode, MethodNode) then Exit;
   if IsLikelyEventHandler(MethodNode) then Exit;
+  if ForwardsParamsViaInherited(MethodNode) then Exit;
   // Track B1 (2026-07-12): der SCA028-Follow-up-Guard (IsKeywordRoutineName)
   // ist entfernt - der Parser-Fix (Write/Read-Statement-Dispatch) haengt jetzt
   // die Bodies keyword-benannter Methoden korrekt an, Param-Uses sind sichtbar.

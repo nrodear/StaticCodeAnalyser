@@ -23,6 +23,11 @@ type
     [Test] procedure Param_MultiParamEventHandler_Skipped;
     [Test] procedure Param_UnderscorePrefix_Skipped;
     [Test] procedure Param_VirtualMethod_AllParamsSkipped;
+    // Core-Audit 2026-07-18 (SCA054 Welle 1): bare/klammerloses 'inherited'
+    // reicht Params implizit an den Parent weiter -> nicht ungenutzt.
+    [Test] procedure Param_BareInherited_Skipped;
+    [Test] procedure Param_InheritedNoParens_Skipped;
+    [Test] procedure Param_InheritedWithExplicitArgs_StillReported;
 
     // ---- Finding-Inhalt ---------------------------------------------------
     [Test] procedure Param_Finding_KindAndSeverity;
@@ -252,6 +257,54 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter),
     'keyword-benannte Methode mit echt ungenutztem Param -> Fund (Guard entfernt)');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.Param_BareInherited_Skipped;
+// Core-Audit 2026-07-18 (SCA054 Welle 1, 5%-FP-Konzept): bare 'inherited;'
+// reicht die aktuellen Parameter implizit an die Elternmethode weiter -> der
+// Parameter ist NICHT ungenutzt (Parser: nkInherited mit leerem Namen).
+// Groesste absolute FP-Klasse (~7.950).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Run(LogLevel: Integer);'#13#10 +
+  'begin inherited; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
+    'bare inherited; reicht Params weiter -> kein unused-Param');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.Param_InheritedNoParens_Skipped;
+// Klammerloses 'inherited Create;' reicht die aktuellen Parameter ebenfalls
+// implizit weiter (Delphi-Semantik) -> nkInherited.Name='Create' ohne '('.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'constructor TFoo.Create(AOwner: TComponent);'#13#10 +
+  'begin inherited Create; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
+    'klammerloses inherited Create reicht Params weiter -> kein unused-Param');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.Param_InheritedWithExplicitArgs_StillReported;
+// TP-Gegenprobe: 'inherited Run(0)' MIT expliziten Args reicht die aktuellen
+// Parameter NICHT implizit weiter (nkInherited.Name enthaelt '(') -> ein hier
+// ungenutzter Parameter bleibt ein echter Fund.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Run(LogLevel: Integer);'#13#10 +
+  'begin inherited Run(0); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter),
+    'inherited Run(0) mit expliziten Args reicht nicht weiter -> Fund bleibt');
   finally F.Free; end;
 end;
 
