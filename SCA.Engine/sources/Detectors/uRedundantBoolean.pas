@@ -63,7 +63,17 @@ end;
 // Liefert Spalte des `=` / `<>` wenn ein redundanter Boolean-Vergleich
 // auf der Zeile gefunden wurde, sonst 0.
 function FindRedundantBool(const Line: string; var InBlockComm: Boolean;
-  var InParenStarComm: Boolean): Integer;
+  var InParenStarComm: Boolean; var InConstSection: Boolean): Integer;
+
+  // Ist W das erste Wort von S (Wortgrenze dahinter)?
+  function StartsWithWord(const S, W: string): Boolean;
+  var L: Integer;
+  begin
+    L := Length(W);
+    Result := (Copy(S, 1, L) = W) and
+              ((Length(S) = L) or not IsIdent(S[L + 1]));
+  end;
+
 var
   i, n, j : Integer;
   InStr   : Boolean;
@@ -76,11 +86,36 @@ var
   Trim1   : string;
 begin
   Result := 0;
-  // Deklarations-Zeilen ausschliessen.
   Trim1 := TrimLeft(Line);
   LineLow := LowerCase(Trim1);
+  // const-Section-Tracker (Ist-Messung 2026-07-18, SCA072 100% FP im Sample):
+  // untypisierte Konstanten auf FOLGE-Zeilen eines const-Blocks ('X = True;')
+  // sind Deklarationen, kein Vergleich. Der bisherige Zeilenanfangs-Check
+  // ('const'/'type') sah nur die Kopfzeile. Eine const-Section enthaelt keinen
+  // ausfuehrbaren Code -> Skip ist TP-safe-by-construction. Section endet am
+  // naechsten Abschnitts-Keyword. State nur ausserhalb von Kommentaren pflegen.
+  if not (InBlockComm or InParenStarComm) then
+  begin
+    if StartsWithWord(LineLow, 'const') or StartsWithWord(LineLow, 'resourcestring') then
+      InConstSection := True
+    else if StartsWithWord(LineLow, 'type') or StartsWithWord(LineLow, 'var')
+         or StartsWithWord(LineLow, 'threadvar') or StartsWithWord(LineLow, 'label')
+         or StartsWithWord(LineLow, 'procedure') or StartsWithWord(LineLow, 'function')
+         or StartsWithWord(LineLow, 'constructor') or StartsWithWord(LineLow, 'destructor')
+         or StartsWithWord(LineLow, 'operator') or StartsWithWord(LineLow, 'class')
+         or StartsWithWord(LineLow, 'property') or StartsWithWord(LineLow, 'begin')
+         or StartsWithWord(LineLow, 'end') or StartsWithWord(LineLow, 'implementation')
+         or StartsWithWord(LineLow, 'interface') or StartsWithWord(LineLow, 'initialization')
+         or StartsWithWord(LineLow, 'finalization') or StartsWithWord(LineLow, 'uses')
+         or StartsWithWord(LineLow, 'exports') or StartsWithWord(LineLow, 'public')
+         or StartsWithWord(LineLow, 'private') or StartsWithWord(LineLow, 'protected')
+         or StartsWithWord(LineLow, 'published') or StartsWithWord(LineLow, 'strict') then
+      InConstSection := False;
+  end;
+  // Deklarations-Zeilen ausschliessen.
   if (Copy(LineLow, 1, 5) = 'const')
-     or (Copy(LineLow, 1, 4) = 'type') then Exit;
+     or (Copy(LineLow, 1, 4) = 'type')
+     or InConstSection then Exit;
   InStr := False;
   i := 1;
   n := Length(Line);
@@ -149,6 +184,23 @@ begin
     begin
       Inc(i, OpLen); Continue;
     end;
+    // Colon-Rule (Ist-Messung 2026-07-18, dominante SCA072-FP-Klasse 14/15):
+    // steht VOR dem LHS-Identifikator ein nacktes ':', ist das Muster
+    // 'name: Typ = True' - ein DEFAULT-PARAMETER ('X: Boolean = True'), eine
+    // typisierte Konstante oder ein initialisiertes Global. Das '=' ist dort
+    // Initializer, kein Vergleich. TP-safe-by-construction: vor dem LHS eines
+    // ECHTEN Vergleichs steht nie ein nacktes ':' - bei 'r := x = True' ist
+    // das Zeichen direkt vor dem LHS-Ident das '=' aus ':=', nicht ':'.
+    if IsIdent(prev) then
+    begin
+      var bk := j;
+      while (bk >= 1) and IsIdent(Line[bk]) do Dec(bk);   // LHS-Ident rueckwaerts
+      while (bk >= 1) and CharInSet(Line[bk], [' ', #9]) do Dec(bk);
+      if (bk >= 1) and (Line[bk] = ':') then
+      begin
+        Inc(i, OpLen); Continue;                          // Deklarations-Initializer
+      end;
+    end;
     // Rechte Seite: skip whitespace, dann ein Wort scannen
     j := i + OpLen;
     while (j <= n) and CharInSet(Line[j], [' ', #9]) do Inc(j);
@@ -172,7 +224,7 @@ class procedure TRedundantBooleanDetector.AnalyzeUnit(UnitNode: TAstNode;
 var
   Lines  : TStringList;
   i, Col : Integer;
-  InBlk, InParen : Boolean;
+  InBlk, InParen, InConst : Boolean;
   F      : TLeakFinding;
   Cached : Boolean;
 begin
@@ -181,9 +233,10 @@ begin
   try
     InBlk   := False;
     InParen := False;
+    InConst := False;
     for i := 0 to Lines.Count - 1 do
     begin
-      Col := FindRedundantBool(Lines[i], InBlk, InParen);
+      Col := FindRedundantBool(Lines[i], InBlk, InParen, InConst);
       if Col <= 0 then Continue;
       F            := TLeakFinding.Create;
       F.FileName   := FileName;

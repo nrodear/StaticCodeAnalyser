@@ -137,6 +137,10 @@ begin
     p := PosEx(Kw, Lwr, p);
     if p = 0 then Break;
     if (p > 1) and IsIdent(Code[p - 1]) then begin Inc(p); Continue; end;
+    // Qualifizierter Methodenaufruf 'pV8Context.Exit;' ist KEIN Jump-Statement
+    // (Ist-Messung 2026-07-18: CEF-V8-Context .Enter/.Exit-Paar als FP gemeldet).
+    // '&Exit' (escaped ident) ebenfalls kein Keyword.
+    if (p > 1) and CharInSet(Code[p - 1], ['.', '&']) then begin Inc(p); Continue; end;
     if (p + KwLen <= Length(Code)) and IsIdent(Code[p + KwLen]) then
     begin Inc(p); Continue; end;
     // Nach dem Keyword: optional whitespace, dann `;`
@@ -152,32 +156,73 @@ begin
        ((q + 3 > Length(Code)) or not IsIdent(Code[q + 3])) then
     begin
       // FP-Schutz: das `end` kann ein INNERER Block-End sein (if/case/with),
-      // nicht das Method-/Loop-Body-End. Look-Ahead: NACH `end;` muss der
-      // naechste sinnvolle Token wieder ein Block-End sein (`end`/`until`/
-      // `end.`/end-of-file). Sonst folgt mehr Code im umschliessenden Block
-      // und der Jump war NICHT redundant.
-      //   * Beispiel TP:  `Exit; end; end;`     -> Method-Body-End folgt -> redundant
-      //   * Beispiel FP:  `Continue; end; X;`   -> mehr Loop-Body-Code -> nicht redundant
-      //   * Beispiel FP:  `Exit; end else ...`  -> else-Branch folgt -> nicht redundant
+      // nicht das Method-/Loop-Body-End.
+      //
+      // END-CHAIN-WALK (Ist-Messung 2026-07-18, ersetzt den Ein-Token-Look-Ahead):
+      // Der alte Look-Ahead prueft nur EIN Token hinter dem ersten `end` - bei
+      // `Exit; end; end; <mehr Code>` (Exit in if-in-for-Suchschleife, 2 Ebenen
+      // tief) sah er `end` und meldete faelschlich "redundant", obwohl die
+      // Prozedur/Schleife nach der end-Kette weiterlaeuft (12/15-FP-Klasse).
+      // Jetzt: die GESAMTE `end[;]`-Kette konsumieren und den Token DANACH
+      // pruefen. MONOTONIE-DISZIPLIN (Compile-Review 2026-07-18): die neue
+      // Bedingung ist eine STRIKTE Teilmenge der alten -
+      //   * Ketten-Laenge 1 (kein 2. `end`): exakt das ALTE Terminator-Set
+      //     {EOF, `end.`, `until`} - Routine-Keywords hier NICHT akzeptieren
+      //     (waeren NEUE Funde = nicht monoton; und `var` waere sogar ein neuer
+      //     FP, weil Delphi-12-inline-`var` AUSFUEHRBARER Code ist:
+      //     'Exit; end; var h := ...' -> Exit ueberspringt ihn, nicht redundant).
+      //   * Ketten-Laenge >=2: ALT meldete hier IMMER (Token nach end#1 war
+      //     `end`); NEU nur wenn der Ketten-Terminator EOF/`end.`/`until` oder
+      //     eine Routinen-Grenze (procedure/function/...) ist. Identifier/if/
+      //     else/finally/var/... heisst: ein umschliessender Block hat noch
+      //     Code -> NICHT redundant (die 12/15-FP-Klasse der Ist-Messung).
       var Look := q + 3;                                          // direkt nach `end`
-      // ueberspringen: whitespace + optional `;`
-      while (Look <= Length(Code)) and CharInSet(Code[Look], [' ', #9, #10, #13]) do Inc(Look);
-      if (Look <= Length(Code)) and (Code[Look] = ';') then Inc(Look);
-      while (Look <= Length(Code)) and CharInSet(Code[Look], [' ', #9, #10, #13]) do Inc(Look);
-      // True wenn nach `end;` wieder ein Block-Terminator kommt (`end`, `until`,
-      // `end.`, Datei-Ende) - dann war das matchte `end;` wirklich der Method-/
-      // Loop-Body-End und der Jump davor IST redundant.
-      var NextIsBlockTerminator: Boolean :=
-        (Look > Length(Code)) or                                   // EOF
-        (Code[Look] = '.') or                                      // `end.` Unit-Ende
-        (SameText(Copy(Code, Look, 3), 'end') and
-         ((Look + 3 > Length(Code)) or not IsIdent(Code[Look + 3]))) or
-        (SameText(Copy(Code, Look, 5), 'until') and
-         ((Look + 5 > Length(Code)) or not IsIdent(Code[Look + 5])));
-      if not NextIsBlockTerminator then
+      var ChainOk := False;
+      var ExtraEnds := 0;                                         // ends NACH dem ersten
+      while True do
       begin
-        // Irgendetwas anderes folgt (else, Identifier, Keyword) -> das `end;`
-        // war ein innerer Block-End, der Jump ist NICHT redundant.
+        // whitespace + optional `;` hinter dem konsumierten `end`
+        while (Look <= Length(Code)) and CharInSet(Code[Look], [' ', #9, #10, #13]) do Inc(Look);
+        if (Look <= Length(Code)) and (Code[Look] = ';') then Inc(Look);
+        while (Look <= Length(Code)) and CharInSet(Code[Look], [' ', #9, #10, #13]) do Inc(Look);
+        // naechstes `end` in der Kette?
+        if (Look + 2 <= Length(Code)) and SameText(Copy(Code, Look, 3), 'end') and
+           ((Look + 3 > Length(Code)) or not IsIdent(Code[Look + 3])) then
+        begin
+          Inc(Look, 3);
+          Inc(ExtraEnds);
+          Continue;                                               // Kette fortsetzen
+        end;
+        Break;                                                    // Look steht auf Terminator
+      end;
+      if Look > Length(Code) then
+        ChainOk := True                                           // EOF
+      else if Code[Look] = '.' then
+        ChainOk := True                                           // `end.`
+      else if SameText(Copy(Code, Look, 5), 'until') and
+              ((Look + 5 > Length(Code)) or not IsIdent(Code[Look + 5])) then
+        ChainOk := True                                           // repeat-Ende
+      else if ExtraEnds >= 1 then
+      begin
+        // Nur bei Ketten-Laenge >=2 (ALT haette gemeldet): Routinen-Grenze
+        // akzeptieren. var/const/type/label BEWUSST NICHT in der Liste -
+        // inline-var/const sind ausfuehrbarer Code (waere FP), label/decl-
+        // Sections zu mehrdeutig.
+        var TermStart := Look;
+        var TermEnd := TermStart;
+        while (TermEnd <= Length(Code)) and IsIdent(Code[TermEnd]) do Inc(TermEnd);
+        var TermWord := LowerCase(Copy(Code, TermStart, TermEnd - TermStart));
+        if (TermWord = 'procedure') or (TermWord = 'function')
+           or (TermWord = 'constructor') or (TermWord = 'destructor')
+           or (TermWord = 'operator') or (TermWord = 'class')
+           or (TermWord = 'initialization') or (TermWord = 'finalization')
+           or (TermWord = 'implementation') or (TermWord = 'exports')
+           or (TermWord = 'resourcestring') or (TermWord = 'threadvar') then
+          ChainOk := True;
+      end;
+      if not ChainOk then
+      begin
+        // Ein umschliessender Block hat noch Code -> Jump NICHT redundant.
         Inc(p);
         Continue;
       end;
