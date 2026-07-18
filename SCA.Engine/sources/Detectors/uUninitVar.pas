@@ -31,7 +31,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext, uTypeIndex;
 
 type
   TUninitVarDetector = class
@@ -1253,6 +1253,7 @@ var
   // hier NICHT als Write gewertet (Idx-Typ ist dann keine in-Unit-Record).
   var
     Idx : Integer;
+    TI  : TTypeIndex;
   begin
     if (ReceiverLow = '') or (MethodLow = '') then Exit;
     Idx := VarIndexFor(ReceiverLow);
@@ -1260,8 +1261,28 @@ var
     if (ARecordTypes <> nil) and
        ARecordTypes.ContainsKey(BaseTypeLow(VarList.List[Idx].TypeLow)) then
       RegisterWrite(Idx, Line)
-    else if IsInitVerb(MethodLow) then
-      RegisterWrite(Idx, Line);
+    else
+    begin
+      // Welle 2 strukturell (2026-07-18): cross-unit value-RECORD. Eine Record-
+      // Methode bekommt Self implizit per var -> JEDER Aufruf initialisiert die
+      // Felder (Delphi emittiert dafuer NIE einen uninit-Hint -> FN-neutral ggue.
+      // dem Compiler, dessen Verhalten SCA166 spiegelt). In-Unit-Records deckt
+      // ARecordTypes oben ab; diese Branch schliesst die cross-unit-Luecke via
+      // TTypeIndex (dieselbe Infra die SCA114/124/161/174 konsumieren).
+      // BEWUSST NUR tkiRecord, NICHT tkiEnum: Enum-Type-Helper sind ueberwiegend
+      // READER (ToString/ToInteger/ToRoman) - 'e.ToString(f)' liest den Enum,
+      // initialisiert ihn NICHT; als Write zu werten wuerde einen echten uninit-
+      // Read maskieren (FN auf error-Tier, kein Enum-FP-Klasse-Beleg). Record-
+      // Methoden dagegen mutieren das Aggregat = etablierte FP-Klasse.
+      // TI=nil/leer im Single-File -> No-Op (nur per Korpus-A/B verifizierbar).
+      // Monoton: registriert nur einen Write -> Fund-Zahl kann nur sinken.
+      TI := CtxTypeIndex(AContext);
+      if (TI <> nil) and (not TI.IsEmpty) and
+         (TI.TypeKindOf(BaseTypeLow(VarList.List[Idx].TypeLow)) = tkiRecord) then
+        RegisterWrite(Idx, Line)
+      else if IsInitVerb(MethodLow) then
+        RegisterWrite(Idx, Line);
+    end;
   end;
 
   procedure RegisterCallArgWrites(const CallName: string; Line: Integer);
@@ -1475,10 +1496,18 @@ var
         ns := i;
         while (i <= LL) and IsIdentChar(L[i]) do Inc(i);
         ne := i - 1;
+        // optionale Spaces vor dem '.' ueberspringen: nkIfStmt/nkWhileStmt-
+        // Conditions sind space-separiert ('reg . readopen ( ... )'), nur
+        // nkAssign-RHS ist via JoinTokInto space-los ('temp.init(...)'). Ohne
+        // diese Toleranz blieb Record-Init IN einer Bedingung ('if reg.ReadOpen')
+        // unerkannt -> spaeterer statement-level Call wurde als First-Write
+        // gewertet -> read-before-write-FP auf der Init-Zeile (mORMot reg/hasher).
+        while (i <= LL) and (L[i] = ' ') do Inc(i);
         if (i <= LL) and (L[i] = '.') then
         begin
           Receiver := Copy(L, ns, ne - ns + 1);
           Inc(i);                                // hinter '.'
+          while (i <= LL) and (L[i] = ' ') do Inc(i);   // Spaces nach '.'
           rs := i;
           while (i <= LL) and IsIdentChar(L[i]) do Inc(i);
           Method := Copy(L, rs, i - rs);
