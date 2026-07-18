@@ -869,6 +869,49 @@ var
       Result := IsWholeWord(CallName, VarNameLow, p);
   end;
 
+  function CondPassesToOwnerAdd(const CondLow: string): Boolean;
+  // A2/Ownership-Sink (Core-Audit 2026-07-18): Container-Add im BEDINGUNGS-
+  // Kontext. Der Parser legt Calls INNERHALB einer if/while-Bedingung NICHT als
+  // nkCall ab, sondern als Flachtext in <Stmt>.TypeRef -> der nkCall-Arg-Fall
+  // unten verpasst sie. Muster: `if not FTree.AddNode(aNode) then aNode.Free`
+  // (aNode ist entweder im Baum registriert = owned, ODER im else/then per Free
+  // freigegeben - kein Leak). Nur die EINDEUTIG ownership-uebernehmenden Tree/
+  // DOM-Add-Methoden (.addnode/.addchild/.appendchild) + dieselbe Receiver-
+  // Ownership-Pruefung wie im nkCall-Fall. '.add(' bewusst NICHT (mehrdeutig -
+  // TList.Add uebernimmt kein Ownership und liefert einen Index, kein Bool, taucht
+  // in Bedingungen praktisch nicht auf) -> monoton + kein neues TP-Risiko.
+  var
+    Compact, AddMarker, receiverLow : string;
+    pAdd, rs : Integer;
+  begin
+    Result := False;
+    // WICHTIG: ParseIfStmt legt die Bedingung mit einem Space um JEDES Token ab
+    // ('not ftree . addnode ( anode )'), waehrend ParseWhileStmt via JoinTokInto
+    // nur an Wortgrenzen trennt ('not ftree.addnode(anode)'). Damit der Marker
+    // '.addnode(' in BEIDEN Formen matcht, den Whitespace komplett entfernen.
+    // VarInArgs' Wortgrenzen-Pruefung bleibt gueltig ('anode' ist von '('/')'
+    // begrenzt); der Receiver-Rueckwaerts-Scan liefert bei if 'notftree' - ein
+    // unaufloesbares Feld -> permissiver AddReceiverOwnsItems-Pfad, wie gehabt.
+    Compact := StringReplace(CondLow, ' ', '', [rfReplaceAll]);
+    for AddMarker in ['.addnode(', '.addchild(', '.appendchild('] do
+    begin
+      pAdd := Pos(AddMarker, Compact);
+      if (pAdd > 0) and VarInArgs(Compact, pAdd + Length(AddMarker)) then
+      begin
+        // Receiver = ident/dot-Kette unmittelbar vor dem AddMarker.
+        rs := pAdd;
+        while (rs > 1) and
+              CharInSet(Compact[rs - 1], ['a'..'z', '0'..'9', '_', '.']) do
+          Dec(rs);
+        receiverLow := Copy(Compact, rs, pAdd - rs);
+        if receiverLow.StartsWith('self.') then
+          receiverLow := Copy(receiverLow, 6, MaxInt);
+        if AddReceiverOwnsItems(MethodNode, receiverLow) then
+          Exit(True);
+      end;
+    end;
+  end;
+
 begin
   Result := False;
 
@@ -1054,6 +1097,21 @@ begin
     end;
   finally
     Calls.Free;
+  end;
+
+  // Container-Add im BEDINGUNGS-Kontext (if/while): Calls INNERHALB einer
+  // Bedingung sind keine nkCall-Knoten, sondern Flachtext in <Stmt>.TypeRef.
+  // Deckt 'if not FTree.AddNode(aNode) then aNode.Free' (Core-Audit 2026-07-18).
+  for var CondKind in [nkIfStmt, nkWhileStmt] do
+  begin
+    var Conds := MethodNode.FindAll(CondKind);
+    try
+      for N in Conds do
+        if CondPassesToOwnerAdd(N.TypeRef.ToLower) then
+          Exit(True);
+    finally
+      Conds.Free;
+    end;
   end;
 end;
 

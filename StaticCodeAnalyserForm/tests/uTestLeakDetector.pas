@@ -177,6 +177,8 @@ type
     [Test] procedure Leak_TObjectDictionaryAdd_OwnershipRecognized;
     [Test] procedure Leak_AddObjectMethod_OwnershipRecognized;
     [Test] procedure Leak_TStackPush_OwnershipRecognized;
+    // Ownership-Sink Core-Audit 2026-07-18: Container-Add im BEDINGUNGS-Kontext.
+    [Test] procedure Leak_AddNodeInCondition_OwnershipRecognized;
   end;
 
   // ---- FieldLeak (TFieldLeakDetector) ------------------------------------------------
@@ -2700,6 +2702,37 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Borrowed-Return aus .AddChild(...) ist kein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_AddNodeInCondition_OwnershipRecognized;
+// Ownership-Sink Core-Audit 2026-07-18: das Item wird in einer if-BEDINGUNG an
+// eine ownership-uebernehmende Tree-Add-Methode uebergeben. Calls INNERHALB einer
+// Bedingung sind keine nkCall-Knoten (Flachtext in nkIfStmt.TypeRef), daher
+// verpasste der nkCall-Arg-Guard sie -> CondPassesToOwnerAdd deckt sie ab. Bei
+// Erfolg besitzt FTree das Item, bei Misserfolg wird es freigegeben - kein Leak.
+// FTree ist ein Feld (Typ unaufloesbar) -> permissive Receiver-Ownership wie beim
+// bestehenden .AddNode-Arg-Fall im Statement-Kontext. Geerdet in
+// Alcinoe/ALWebSpider Unit1.pas (FPageNotYetDownloadedBinTree.AddNode).
+// BEWUSST ohne Free und ohne try/finally: so kann NUR IsPassedToOwner (via
+// CondPassesToOwnerAdd) den Befund unterdruecken -> der Test isoliert den Fix
+// (ohne ihn wuerde SCA001 hier feuern). Der Call steht in der if-BEDINGUNG,
+// deren TypeRef der Parser space-separiert ablegt ('ftree . addnode ( anode )') -
+// die Whitespace-Kompaktierung im Detektor deckt genau das ab.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var aNode: TStringList;'#13#10+
+  'begin'#13#10+
+  '  aNode := TStringList.Create;'#13#10+
+  '  if FTree.AddNode(aNode) then Exit;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'Item in if-Bedingung an Tree-AddNode uebergeben (Ownership-Transfer) - kein Leak');
   finally F.Free; end;
 end;
 
