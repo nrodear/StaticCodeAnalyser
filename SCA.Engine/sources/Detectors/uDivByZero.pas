@@ -129,6 +129,12 @@ type
     // rumpf VOR der Division.
     class function HasBreakContinueGuard(MethodNode, DivNode: TAstNode;
       const VarLow: string): Boolean; static;
+    // G4: 'while <divisor> <> 0 do ... x div <divisor>' (bzw. > 0 / >= 1). Der
+    // Divisor ist im while-KOPF direkt gegen 0 geschuetzt und die Division liegt
+    // in dessen Rumpf. Sound nur, wenn der Divisor zwischen Kopf und Division
+    // nicht per nkAssign umgeschrieben und nicht per Dec(..) dekrementiert wird.
+    class function IsGuardedByWhileCond(MethodNode, DivNode: TAstNode;
+      const VarLow: string): Boolean; static;
     class procedure CollectIntegerVars(MethodNode: TAstNode;
       Names: TStringList); static;
   end;
@@ -698,6 +704,97 @@ begin
   end;
 end;
 
+class function TDivByZeroDetector.IsGuardedByWhileCond(
+  MethodNode, DivNode: TAstNode; const VarLow: string): Boolean;
+// G4: Der Divisor ist in der Bedingung einer while-Schleife direkt gegen 0
+// geschuetzt ('while x <> 0', '> 0', '>= 1', '0 < x') UND die Division liegt in
+// deren Rumpf (Knoten-Enthaltensein). Die Bedingung garantiert den Nichtnull-
+// Wert nur am SchleifenKOPF - an der Division nur dann noch, wenn der Divisor
+// zwischen Kopf und Division nicht veraendert wird. Deshalb TP-sicher nur, wenn
+// im selben Rumpf VOR der Division:
+//   - keine nkAssign an den Divisor (Reassign auf moeglichen 0-Wert), und
+//   - kein Dec(divisor)-Aufruf (kann den Wert auf/unter 0 ziehen; Inc waechst
+//     nur -> unkritisch).
+// Reassign/Dec NACH der Division ist unkritisch: die Kopf-Bedingung greift bei
+// der naechsten Iteration erneut. Ohne diese Pruefung droht ein maskierter
+// echter div-by-zero (FN).
+//
+// AST-Form (uParser2.pas ParseWhileStmt): die Bedingung wird via JoinTokInto
+// abgelegt - Operatoren stehen OHNE umgebende Leerzeichen ('x>0','x<>0'); die
+// gespaceten Formen sind defensiv mitgeprueft.
+var
+  Whiles     : TList<TAstNode>;
+  WhileN     : TAstNode;
+  Low        : string;
+  Lst        : TList<TAstNode>;
+  N          : TAstNode;
+  Reassigned : Boolean;
+begin
+  Result := False;
+  Whiles := MethodNode.FindAll(nkWhileStmt);
+  try
+    for WhileN in Whiles do
+    begin
+      if not NodeInSubtree(WhileN, DivNode) then Continue;
+      Low := WhileN.TypeRef.ToLower;
+      if Low = '' then Continue;
+      // Disjunktion ('while (x>0) or (y>0)') garantiert den Divisor NICHT ->
+      // konservativ ueberspringen (strikt enger als der bestehende if-Guard).
+      if TDetectorUtils.ContainsWholeWordLower('or', Low) then Continue;
+      // Direkter Nichtnull-Guard auf dem Divisor im while-Kopf.
+      if not (
+         TDetectorUtils.ContainsWholeWordLower(VarLow + '>0',    Low) or
+         TDetectorUtils.ContainsWholeWordLower(VarLow + ' > 0',  Low) or
+         TDetectorUtils.ContainsWholeWordLower(VarLow + '>=1',   Low) or
+         TDetectorUtils.ContainsWholeWordLower(VarLow + ' >= 1', Low) or
+         TDetectorUtils.ContainsWholeWordLower(VarLow + '<>0',   Low) or
+         TDetectorUtils.ContainsWholeWordLower(VarLow + ' <> 0', Low) or
+         TDetectorUtils.ContainsWholeWordLower('0<'    + VarLow, Low) or
+         TDetectorUtils.ContainsWholeWordLower('0 < '  + VarLow, Low) or
+         TDetectorUtils.ContainsWholeWordLower('0<>'   + VarLow, Low) or
+         TDetectorUtils.ContainsWholeWordLower('0 <> ' + VarLow, Low) ) then
+        Continue;
+      // Reassign-Pruefung: nkAssign an den Divisor im Rumpf VOR der Division.
+      Reassigned := False;
+      Lst := MethodNode.FindAll(nkAssign);
+      try
+        for N in Lst do
+          if (N.Line < DivNode.Line) and (N.Name.ToLower = VarLow)
+             and NodeInSubtree(WhileN, N) then
+          begin
+            Reassigned := True;
+            Break;
+          end;
+      finally
+        Lst.Free;
+      end;
+      // Dec(divisor)-Pruefung: liberaler Wort-Match ('dec' + Divisorname). Ein
+      // Fehltreffer UNTERdrueckt nur NICHT (residualer FP) - maskiert nie einen
+      // Bug. Inc(..) waechst nur und ist unkritisch.
+      if not Reassigned then
+      begin
+        Lst := MethodNode.FindAll(nkCall);
+        try
+          for N in Lst do
+            if (N.Line < DivNode.Line)
+               and TDetectorUtils.ContainsWholeWordLower('dec', N.Name.ToLower)
+               and TDetectorUtils.ContainsWholeWordLower(VarLow, N.Name.ToLower)
+               and NodeInSubtree(WhileN, N) then
+            begin
+              Reassigned := True;
+              Break;
+            end;
+        finally
+          Lst.Free;
+        end;
+      end;
+      if not Reassigned then Exit(True);
+    end;
+  finally
+    Whiles.Free;
+  end;
+end;
+
 class procedure TDivByZeroDetector.CollectIntegerVars(MethodNode: TAstNode;
   Names: TStringList);
 
@@ -802,6 +899,12 @@ begin
         // G2: 'if divisor = 0 then Break/Continue' im selben Schleifenrumpf vor
         // der Division (Real-World-FP-Audit 2026-07-12).
         if HasBreakContinueGuard(MethodNode, N, Divisor) then Continue;
+
+        // G4: 'while divisor <> 0 do ... x div divisor' (bzw. > 0 / >= 1) - der
+        // Divisor ist im while-Kopf direkt gegen 0 geschuetzt, die Division liegt
+        // im Rumpf und der Divisor wird davor nicht veraendert (FP-Klasse SCA010
+        // while-guarded-divisor, Welle 1 5%-FP-Konzept 2026-07-18).
+        if IsGuardedByWhileCond(MethodNode, N, Divisor) then Continue;
 
         // Provably-nonzero: Divisor wird ausschliesslich mit beweisbar-nichtnullen
         // Ausdruecken belegt (nichtnull-Literale ODER Clamp 'Max(1,..)' G3) - kann

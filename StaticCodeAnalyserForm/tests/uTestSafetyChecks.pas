@@ -79,6 +79,10 @@ type
     [Test] procedure Div_MaxZeroClampDivisor_StillReports;
     // TP-Gegenprobe (Verify 2026-07-12): zusammengesetzter Max-Ausdruck kann 0 sein
     [Test] procedure Div_CompositeMaxDivisor_StillReports;
+    // --- G4 while-Kopf-Guard (Welle 1 5%-FP-Konzept 2026-07-18) ---
+    [Test] procedure Div_WhileGuardNonZero_NoFinding;
+    [Test] procedure Div_WhileGuardReassignBeforeDiv_StillReports;   // TP-Gegenprobe
+    [Test] procedure Div_WhileGuardDecBeforeDiv_StillReports;        // TP-Gegenprobe
   end;
 
   // ---- DeadCode Erweiterungen --------------------------------------------------------
@@ -524,6 +528,74 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkDivByZero) >= 1,
     '<= 0 ohne Exit/Raise ist kein Guard -> Fund muss bleiben');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_WhileGuardNonZero_NoFinding;
+// 'while n > 0 do begin x := total div n; Dec(n); end' -> im Rumpf ist n am
+// Divisionspunkt nachweislich > 0 (Dec liegt NACH der Division). Kein Fund.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var n, x, total: Integer;'#13#10+
+  'begin'#13#10+
+  '  n := GetCount;'#13#10+
+  '  while n > 0 do'#13#10+
+  '  begin'#13#10+
+  '    x := total div n;'#13#10+
+  '    Dec(n);'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    'while n > 0 schuetzt n im Rumpf, Dec erst nach der Division -> kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_WhileGuardReassignBeforeDiv_StillReports;
+// TP-Gegenprobe: 'n := GetNext' im Rumpf VOR der Division hebt die Kopf-Garantie
+// auf - n kann dort 0 sein -> Fund muss bleiben.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var n, x, total: Integer;'#13#10+
+  'begin'#13#10+
+  '  n := GetCount;'#13#10+
+  '  while n > 0 do'#13#10+
+  '  begin'#13#10+
+  '    n := GetNext;'#13#10+
+  '    x := total div n;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkDivByZero) >= 1,
+    'Reassign des Divisors vor der Division -> Guard greift nicht -> Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_WhileGuardDecBeforeDiv_StillReports;
+// TP-Gegenprobe: 'Dec(n)' VOR der Division kann n auf 0 ziehen -> Fund bleibt.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var n, x, total: Integer;'#13#10+
+  'begin'#13#10+
+  '  n := GetCount;'#13#10+
+  '  while n > 0 do'#13#10+
+  '  begin'#13#10+
+  '    Dec(n);'#13#10+
+  '    x := total div n;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkDivByZero) >= 1,
+    'Dec(n) vor der Division -> Guard greift nicht -> Fund bleibt');
   finally F.Free; end;
 end;
 
