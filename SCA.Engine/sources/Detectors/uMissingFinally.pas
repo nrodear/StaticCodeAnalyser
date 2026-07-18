@@ -29,8 +29,9 @@ unit uMissingFinally;
 interface
 
 uses
-  System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12, uLeakDetector2, uAnalyzeContext;
+  System.SysUtils, System.Classes, System.Generics.Collections,
+  uAstNode, uSCAConsts, uMethodd12, uLeakDetector2, uAnalyzeContext,
+  uDetectorUtils, uFileTextCache;
 
 type
   TMissingFinallyDetector = class
@@ -53,17 +54,42 @@ class procedure TMissingFinallyDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>;
   AContext: TAnalyzeContext);
 var
-  LocalVars  : TList<TAstNode>;
-  V          : TAstNode;
-  VarNameLow : string;
-  FreeFound  : Boolean;
-  FreeInFin  : Boolean;
-  HasExcept  : Boolean;
-  HasReraise : Boolean;
-  RaiseNodes : TList<TAstNode>;
-  R          : TAstNode;
-  F          : TLeakFinding;
+  LocalVars    : TList<TAstNode>;
+  V            : TAstNode;
+  VarNameLow   : string;
+  FreeFound    : Boolean;
+  FreeInFin    : Boolean;
+  HasExcept    : Boolean;
+  HasReraise   : Boolean;
+  RaiseNodes   : TList<TAstNode>;
+  R            : TAstNode;
+  F            : TLeakFinding;
+  StrippedLines: TArray<string>;   // finally-Mis-Attachment-Fix (lazy, Port aus uLeakDetector2)
+  StrippedReady: Boolean;
+  SrcLines     : TStringList;
+  SrcOwned     : Boolean;
+
+  procedure EnsureStripped;
+  // Lazy: erst wenn ein MissingFinally-Befund anstehen wuerde. Nutzt den
+  // geteilten Strip-Cache (einmal pro Datei) und splittet in Zeilen.
+  // 1:1 aus TLeakDetector2.AnalyzeMethod (finally-Region-by-Source).
+  var
+    Code    : string;
+    LineFor : TArray<Integer>;
+  begin
+    if StrippedReady then Exit;
+    StrippedReady := True;   // auch bei Fehlschlag nicht erneut versuchen
+    SrcLines := AcquireLines(FileName, SrcOwned, CtxFileTextCache(AContext));
+    if SrcLines = nil then Exit;
+    Code := TDetectorUtils.StripStringsAndCommentsCached(
+      SrcLines, LineFor, AContext, FileName, ' ');
+    StrippedLines := Code.Split([#10]);
+  end;
+
 begin
+  StrippedReady := False;
+  SrcLines      := nil;
+  SrcOwned      := False;
   HasExcept  := MethodNode.HasChild(nkTryExcept);
 
   // Re-raise-Cleanup-Idiom erkennen: `try Build; except Obj.Free; raise; end`
@@ -103,6 +129,11 @@ begin
       if not TLeakDetector2.HasCreateAssign(MethodNode, VarNameLow) then Continue;
       if TLeakDetector2.IsReturnedAsResult(MethodNode, VarNameLow) then Continue;
       if TLeakDetector2.IsPassedToOwner(MethodNode, VarNameLow)    then Continue;
+      // Konsistenz-Port (Welle 2, 2026-07-18): uLeakDetector2 Pfad 1 hat dieses
+      // Owner-Param-Gate (Z.1444), MissingFinally fehlte es. TKlasse.Create(Self/
+      // Owner/AOwner/Application) uebergibt Ownership per TComponent-Konvention an
+      // den Owner -> kein manuelles try/finally noetig -> kein Befund. Monoton.
+      if TLeakDetector2.IsOwnerParamCreate(MethodNode, VarNameLow) then Continue;
 
       // Free muss vorhanden sein – sonst meldet TLeakDetector2 als lsError
       FreeFound := TLeakDetector2.SearchFree(MethodNode, VarNameLow,
@@ -113,6 +144,18 @@ begin
       // try/except MIT bare re-raise = Cleanup-und-Reraise-Idiom (s.o.) ->
       // funktional try/finally fuer den Fehlerpfad, kein MissingFinally.
       if HasExcept and HasReraise then Continue;
+
+      // finally-Mis-Attachment-Fix (Konsistenz-Port aus uLeakDetector2 Z.1467-1469,
+      // Welle 2 2026-07-18): der AST-FreeInFin sagt "nicht im finally", aber in der
+      // QUELLE liegt der Free doch in einer finally-Region - der Parser attachiert
+      // den .Free-Knoten bei nested try/except, {$IFDEF} im try-Body oder 'F:=nil;try'
+      // fehl. FreeInFinallyRegionBySource bestimmt die Region rein aus der Quelle
+      // (verankert an nkFinallyBlock.Line) -> dann kein MissingFinally. Monoton
+      // (nur ein zusaetzliches Skip), TP-safe: suppressed nur bei bewiesenem
+      // Region-Containment eines echten nkFinallyBlock (kein finally -> False).
+      EnsureStripped;
+      if TLeakDetector2.FreeInFinallyRegionBySource(
+           MethodNode, StrippedLines, VarNameLow) then Continue;
 
       // Create + Free vorhanden, aber kein try/finally.
       // Emit auf der Create-Zeile (statt var-decl): bessere UX und
@@ -133,6 +176,7 @@ begin
     end;
   finally
     LocalVars.Free;
+    if SrcLines <> nil then ReleaseLines(SrcLines, SrcOwned);
   end;
 end;
 
