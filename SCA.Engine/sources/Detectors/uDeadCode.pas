@@ -30,11 +30,13 @@ type
       Results: TObjectList<TLeakFinding>);
   private
     class procedure AnalyzeMethod(MethodNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>; const ADirLines: TArray<Integer>);
+      Results: TObjectList<TLeakFinding>; const ADirLines: TArray<Integer>;
+      const ALabelLines: TArray<Integer>);
     class procedure CheckBlock(BlockNode: TAstNode;
       const MethodName, FileName: string;
       Results: TObjectList<TLeakFinding>;
-      const ADirLines: TArray<Integer>); static;
+      const ADirLines: TArray<Integer>;
+      const ALabelLines: TArray<Integer>); static;
   end;
 
 implementation
@@ -53,9 +55,20 @@ begin
   Result := False;
 end;
 
+function LineInArray(const Lines: TArray<Integer>; L: Integer): Boolean;
+// SCA011-Goto-Guard: True wenn L eine der Label-Target-Zeilen ist. Eine
+// Anweisung auf einer solchen Zeile ist per 'goto lbl' erreichbar -> nie
+// unbedingt tot (FP-Klasse 'goto-label-target').
+var v: Integer;
+begin
+  for v in Lines do
+    if v = L then Exit(True);
+  Result := False;
+end;
+
 class procedure TDeadCodeDetector.CheckBlock(BlockNode: TAstNode;
   const MethodName, FileName: string; Results: TObjectList<TLeakFinding>;
-  const ADirLines: TArray<Integer>);
+  const ADirLines: TArray<Integer>; const ALabelLines: TArray<Integer>);
 // Iterativ via Work-Stack - analog zu uAstNode.CollectAll. Vorher
 // rekursiver Descent (Detectors/uDeadCode.pas alte Form) konnte bei
 // pathologisch tiefen ASTs den Aufruf-Stack sprengen.
@@ -166,6 +179,17 @@ begin
               Inc(i); Continue;
             end;
 
+            // FP-Guard (Welle 1 5%-FP-Konzept 2026-07-18, 'goto-label-target'):
+            // Steht die Folgeanweisung auf der Zeile eines Label-Targets
+            // ('lbl: stmt;'), ist sie per 'goto lbl' erreichbar -> kein toter
+            // Code. FastCode/mORMot/BrainMM-Hotpaths nutzen das massiv
+            // (exit; Ret0: Result := False;). Die Label-Zeilen kommen als
+            // nkLabelMark-Marker aus dem Parser (uParser2 ParseCallOrAssign).
+            if LineInArray(ALabelLines, Nxt.Line) then
+            begin
+              Inc(i); Continue;
+            end;
+
             F            := TLeakFinding.Create;
             F.FileName   := FileName;
             F.MethodName := MethodName;
@@ -188,7 +212,7 @@ end;
 
 class procedure TDeadCodeDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>;
-  const ADirLines: TArray<Integer>);
+  const ADirLines: TArray<Integer>; const ALabelLines: TArray<Integer>);
 var
   i : Integer;
 begin
@@ -202,18 +226,21 @@ begin
   // der Recursion vom outer-block durch nkForStmt).
   for i := 0 to MethodNode.Children.Count - 1 do
     if MethodNode.Children[i].Kind = nkBlock then
-      CheckBlock(MethodNode.Children[i], MethodNode.Name, FileName, Results, ADirLines);
+      CheckBlock(MethodNode.Children[i], MethodNode.Name, FileName, Results,
+                 ADirLines, ALabelLines);
 end;
 
 class procedure TDeadCodeDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
-  Methods  : TList<TAstNode>;
-  M        : TAstNode;
-  CondR    : TList<TAstNode>;
-  DirLines : TArray<Integer>;
-  R        : TAstNode;
-  n        : Integer;
+  Methods    : TList<TAstNode>;
+  M          : TAstNode;
+  CondR      : TList<TAstNode>;
+  DirLines   : TArray<Integer>;
+  LblN       : TList<TAstNode>;
+  LabelLines : TArray<Integer>;
+  R          : TAstNode;
+  n          : Integer;
 begin
   // Welle 3: {$IFDEF}-Direktiven-Zeilen aus den nkConditionalRange-Markern
   // sammeln (Start=Node.Line, Ende=TypeRef). Preprocessor-branch-Guard fuer
@@ -231,10 +258,25 @@ begin
     CondR.Free;
   end;
 
+  // SCA011-Goto-Guard: Quellzeilen von Label-Targets aus den nkLabelMark-
+  // Markern sammeln (analog DirLines). Anweisungen auf diesen Zeilen sind per
+  // 'goto lbl' erreichbar -> kein toter Code.
+  LblN := UnitNode.FindAll(nkLabelMark);
+  try
+    SetLength(LabelLines, LblN.Count);
+    n := 0;
+    for R in LblN do
+    begin
+      LabelLines[n] := R.Line; Inc(n);
+    end;
+  finally
+    LblN.Free;
+  end;
+
   Methods := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
-      AnalyzeMethod(M, FileName, Results, DirLines);
+      AnalyzeMethod(M, FileName, Results, DirLines, LabelLines);
   finally
     Methods.Free;
   end;

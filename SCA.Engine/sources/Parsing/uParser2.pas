@@ -35,6 +35,10 @@ type
     FResumeHeaderPending : Boolean;
     FResumeKwTok         : TToken;
     FResumeName1         : string;
+    // SCA011-Goto-Guard: Quellzeilen von Label-Targets ('lbl: stmt;'). Werden
+    // nach ParseUnit als nkLabelMark-Marker am Unit-Node abgelegt (analog dem
+    // nkConditionalRange-Flush). Rein additiv - nur SCA011 liest sie.
+    FLabelLines          : TList<Integer>;
 
     // ---- Lexer-Hilfsmethoden ----
     function  Tok: TToken;
@@ -232,6 +236,7 @@ var
 begin
   Root := nil;
   FLex := TLexer.Create(Source);
+  FLabelLines := TList<Integer>.Create;   // SCA011-Goto-Guard (per-Datei)
   // A.5 Phase 1b-Wiring: globale CLI-Config auf den Lexer anwenden.
   // Wenn gLexerIfdefSkipEnabled gesetzt ist (via --ifdef-aware-Flag),
   // werden die globalen Defines uebernommen und Skip aktiviert.
@@ -263,6 +268,11 @@ begin
         if Rg.Debug then Nm := 'DEBUG';  // SCA017 filtert auf 'DEBUG'; SCA011 nutzt alle
         Root.Add(nkConditionalRange, Nm, Rg.S, 0).TypeRef := IntToStr(Rg.E);
       end;
+      // SCA011-Goto-Guard: Label-Target-Zeilen als additive nkLabelMark-Marker
+      // am Unit-Node ablegen (analog nkConditionalRange). Rein additiv - nur
+      // SCA011 liest sie; A/B byte-identisch bis zum Opt-in.
+      for var LblLine in FLabelLines do
+        Root.Add(nkLabelMark, '', LblLine, 0);
     except
       // Parser-Fehler NIE schlucken: frueher wurde nur die Watchdog-Exception
       // re-raised (per fragilem Pos('Parser-Watchdog')-Match), jeder echte
@@ -275,6 +285,7 @@ begin
     end;
   finally
     FreeAndNil(FLex);
+    FreeAndNil(FLabelLines);
   end;
   Result := Root;
 end;
@@ -2162,6 +2173,12 @@ begin
   if (Tok.Kind = tkColon) and IsSimpleLabelName(LHS) then
   begin
     Next;                    // ':' konsumieren
+    // SCA011-Goto-Guard: Zeile der MARKIERTEN Anweisung merken. 'lbl: stmt;' ist
+    // ein goto-Sprungziel -> stmt ist per 'goto lbl' erreichbar, also KEIN toter
+    // Code, auch wenn davor ein Exit/Raise steht. Tok.Line (nach dem ':') ist die
+    // Zeile der Folgeanweisung = exakt die Nxt.Line, die SCA011 prueft.
+    if Assigned(FLabelLines) then
+      FLabelLines.Add(Tok.Line);
     ParseStatement(Parent);  // markierte Anweisung parsen (behandelt eigenes ';')
     Exit;
   end;

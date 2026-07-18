@@ -102,6 +102,10 @@ type
     [Test] procedure DeadCode_ContinueInForLoopFollowedByDead_Reported;
     // Welle 3 (nkConditionalRange): Exit + Folgecode in verschiedenen {$IFDEF}-Zweigen
     [Test] procedure DeadCode_IfdefElseBranch_NoFinding;
+    // --- Welle 1 5%-FP-Konzept 2026-07-18: goto-label-target ---
+    [Test] procedure DeadCode_GotoLabelTargetAfterExit_NoFinding;
+    [Test] procedure DeadCode_GotoLabelSameLineAfterExit_NoFinding;
+    [Test] procedure DeadCode_ExitThenPlainStmtNoLabel_StillReported;   // TP-Gegenprobe
   end;
 
 implementation
@@ -1045,6 +1049,63 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeadCode),
     'Exit und Folgecode in verschiedenen {$IFDEF}-Zweigen sind kein toter Code');
+  finally F.Free; end;
+end;
+
+procedure TTestDeadCodeExt.DeadCode_GotoLabelTargetAfterExit_NoFinding;
+// FastCode/mORMot-Muster: 'Exit;' gefolgt von einer 'Ret0:'-markierten Zeile.
+// 'Result := False;' ist per 'goto Ret0' erreichbar -> kein toter Code. Der
+// Parser legt die Label-Zeile als nkLabelMark-Marker ab.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Foo: Boolean;'#13#10+
+  'label Ret0;'#13#10+
+  'begin'#13#10+
+  '  Result := True;'#13#10+
+  '  Exit;'#13#10+
+  'Ret0:'#13#10+
+  '  Result := False;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeadCode),
+    'Anweisung auf einer Label-Zeile ist per goto erreichbar - kein toter Code');
+  finally F.Free; end;
+end;
+
+procedure TTestDeadCodeExt.DeadCode_GotoLabelSameLineAfterExit_NoFinding;
+// Label und Anweisung auf DERSELBEN Zeile ('Test3: DoStuff;').
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'label Test3;'#13#10+
+  'begin'#13#10+
+  '  Exit;'#13#10+
+  '  Test3: DoStuff;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeadCode),
+    'Label-Target auf gleicher Zeile ist per goto erreichbar - kein toter Code');
+  finally F.Free; end;
+end;
+
+procedure TTestDeadCodeExt.DeadCode_ExitThenPlainStmtNoLabel_StillReported;
+// TP-Gegenprobe: Folgeanweisung OHNE Label bleibt echter toter Code.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  Exit;'#13#10+
+  '  DoDead;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkDeadCode) >= 1,
+    'Anweisung nach Exit ohne Label ist echter toter Code');
   finally F.Free; end;
 end;
 

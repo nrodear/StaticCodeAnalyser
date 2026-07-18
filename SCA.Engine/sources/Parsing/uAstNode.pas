@@ -80,6 +80,10 @@ type
                                     // Name=Direktiven-Body (z.B. 'IFDEF DEBUG'),
                                     // Line=Start, TypeRef='EndLine|DebugFlag' (1=DEBUG-
                                     // guarded). Additiv - nur opt-in-Detektoren lesen es.
+    nkLabelMark,                    // SCA011-Goto-Guard: Marker am Unit-Node. Line =
+                                    // Quellzeile einer 'lbl:'-markierten Anweisung
+                                    // (goto-Sprungziel). Rein additiv - nur SCA011
+                                    // liest es via FindAll(nkLabelMark).
     nkUnknown
   );
 
@@ -197,6 +201,7 @@ const
     'Index','Dot','Deref',
     'NestedRange',
     'ConditionalRange',
+    'LabelMark',
     'Unknown'
   );
 
