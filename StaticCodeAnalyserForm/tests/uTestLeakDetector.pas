@@ -179,6 +179,13 @@ type
     [Test] procedure Leak_TStackPush_OwnershipRecognized;
     // Ownership-Sink Core-Audit 2026-07-18: Container-Add im BEDINGUNGS-Kontext.
     [Test] procedure Leak_AddNodeInCondition_OwnershipRecognized;
+    // --- SCA001-Gross-Triage 2026-07-18 (free-missed-Bucket, SearchFree-Haertung) ---
+    [Test] procedure Leak_DisposeOf_NoFinding;
+    [Test] procedure Leak_TypecastFree_NoFinding;
+    [Test] procedure Leak_WithDoFree_NoFinding;
+    // Werttyp-Return-Gate ('Rueckgabewert'-Pfad)
+    [Test] procedure Leak_ValueTypeReturnCall_NoFinding;
+    [Test] procedure Leak_ObjectReturnMakeCall_StillReported;   // TP-Gegenprobe
   end;
 
   // ---- FieldLeak (TFieldLeakDetector) ------------------------------------------------
@@ -2733,6 +2740,118 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'Item in if-Bedingung an Tree-AddNode uebergeben (Ownership-Transfer) - kein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_DisposeOf_NoFinding;
+// SCA001-Gross-Triage 2026-07-18 (free-missed 22/101): '.DisposeOf' ist das
+// ARC-/NextGen-Idiom (auf Classic Alias fuer Free) - SearchFree kannte es
+// nicht -> "nie freigegeben"-FP (FMX LBitmap.DisposeOf / Str.DisposeOf).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var list: TStringList;'#13#10+
+  'begin'#13#10+
+  '  list := TStringList.Create;'#13#10+
+  '  list.Add(''x'');'#13#10+
+  '  list.DisposeOf;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'DisposeOf ist eine Freigabe - kein "nie freigegeben"-Error');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_TypecastFree_NoFinding;
+// free-missed: 'TStringList(list).Free' - der Cast schiebt ')' zwischen
+// Var-Namen und '.free' -> das 'varname.free'-Muster verfehlte es (JvUIB
+// TStringList(FParams).Free im Destroy).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var list: TObject;'#13#10+
+  'begin'#13#10+
+  '  list := TStringList.Create;'#13#10+
+  '  TStringList(list).Free;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'Typecast-Free ist eine Freigabe - kein "nie freigegeben"-Error');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_WithDoFree_NoFinding;
+// free-missed: 'with bm do begin ...; Free; end' - das bare Free im with-Body
+// meint das with-Objekt; der Parser haengt den Body als Children unter das
+// with-nkCall(bm) (DropTarget 'with bm do ... free').
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var bm: TBitmap;'#13#10+
+  'begin'#13#10+
+  '  bm := TBitmap.Create;'#13#10+
+  '  with bm do'#13#10+
+  '  begin'#13#10+
+  '    SetSize(4, 4);'#13#10+
+  '    Free;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'bare Free im with-Body des Objekts ist eine Freigabe');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_ValueTypeReturnCall_NoFinding;
+// Werttyp-Return-Gate ('other'-Bucket, 3x MakePath): der 'Rueckgabewert'-Pfad
+// meldete Calls von in-unit-Funktionen mit WERT-Return (TFileName=String).
+// Werttypen koennen nie leaken -> Signatur-Lookup unterdrueckt den Fund.
+// (Local bewusst leaky-typisiert, damit der Pfad ueberhaupt erreicht wird.)
+const SRC =
+  'unit t; implementation'#13#10+
+  'function MakePath(const A: string): TFileName;'#13#10+
+  'begin Result := A; end;'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var list: TStringList;'#13#10+
+  'begin'#13#10+
+  '  list := MakePath(''x'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'in-unit-Funktion mit Werttyp-Return kann nicht leaken - kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_ObjectReturnMakeCall_StillReported;
+// TP-Gegenprobe zum Werttyp-Gate: MakeList liefert laut in-unit-Signatur ein
+// OBJEKT (TStringList) - der 'Rueckgabewert'-Fund muss bleiben.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function MakeList(N: Integer): TStringList;'#13#10+
+  'begin Result := TStringList.Create; end;'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var list: TStringList;'#13#10+
+  'begin'#13#10+
+  '  list := MakeList(5);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
+      'Objekt-Return-Factory ohne Free bleibt ein Fund');
   finally F.Free; end;
 end;
 

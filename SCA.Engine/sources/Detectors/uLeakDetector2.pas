@@ -40,7 +40,8 @@ interface
 
 uses
   System.SysUtils, System.StrUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12, uDetectorUtils, uAnalyzeContext, uFileTextCache;
+  uAstNode, uSCAConsts, uMethodd12, uDetectorUtils, uAnalyzeContext,
+  uFileTextCache, uTypeIndex;
 
 type
   TLeakDetector2 = class
@@ -558,6 +559,82 @@ var
       if not CharInSet(S[i], ['a'..'z', '0'..'9', '_']) then Exit(False);
   end;
 
+  // SCA001-Gross-Triage 2026-07-18 ('other'-Bucket, 3x MakePath): die
+  // 'Rueckgabewert'-Heuristik meldete Aufrufe von IN-UNIT-Funktionen, deren
+  // Return-Typ ein WERT-Typ ist (TFileName=String) - Werttypen koennen nie
+  // leaken. Loest den Callee gegen die Unit-Signaturen auf (nkMethod.TypeRef
+  // Format 'kind[:ret];dir..', uParser2 ~Z.1180) und prueft den Return-Typ
+  // gegen die Werttyp-Liste. Konservativ: nur unqualifizierte/Self-Callees;
+  // bei Overloads muessen ALLE Treffer Werttypen liefern; nicht aufloesbar
+  // -> False (Fund bleibt). TP-safe-by-construction.
+  function ReturnsValueType(const RhsLower: string): Boolean;
+    function IsValueTypeName(const R: string): Boolean;
+    const
+      // EXPLIZITE Listen statt EndsStr('string',..): eine KLASSE 'TMyString'
+      // endet auch auf 'string' und wuerde faelschlich als Wert gelten ->
+      // maskierter Leak (Review-Fang 2026-07-18). Exotische Aliase (tbtstring)
+      // bleiben dann eben gemeldet - FP statt FN, richtiger Trade auf error-Tier.
+      VALS : array[0..32] of string = (
+        'integer','cardinal','int64','uint64','boolean','byte','word',
+        'smallint','shortint','longint','longword','nativeint','nativeuint',
+        'single','double','extended','currency','real',
+        'tdatetime','tdate','ttime','char','widechar','variant','tfilename',
+        'string','ansistring','widestring','unicodestring',
+        'rawbytestring','utf8string','shortstring','openstring');
+    var i : Integer;
+    begin
+      if R = '' then Exit(False);
+      for i := Low(VALS) to High(VALS) do
+        if R = VALS[i] then Exit(True);
+      Result := False;
+    end;
+  var
+    Head, Callee, TRef, Ret : string;
+    pp, dp, cp, sp : Integer;
+    Methods : TList<TAstNode>;
+    Mth : TAstNode;
+    Found : Boolean;
+  begin
+    Result := False;
+    pp := Pos('(', RhsLower);
+    if pp <= 1 then Exit;
+    Head := Trim(Copy(RhsLower, 1, pp - 1));
+    dp := LastDelimiter('.', Head);
+    if dp > 0 then
+    begin
+      // Nur 'self.'-Qualifier zulassen - fremd-qualifizierte Calls koennten
+      // eine gleichnamige Funktion einer ANDEREN Unit meinen (Fehl-Resolve).
+      if Copy(Head, 1, dp - 1) <> 'self' then Exit;
+      Callee := Copy(Head, dp + 1, MaxInt);
+    end
+    else
+      Callee := Head;
+    if not IsCleanIdent(Callee) then Exit;
+    Found := False;
+    Methods := UnitNode.FindAll(nkMethod);
+    try
+      for Mth in Methods do
+      begin
+        var MLow := Mth.Name.ToLower;
+        if (MLow <> Callee) and not EndsStr('.' + Callee, MLow) then Continue;
+        TRef := Mth.TypeRef.ToLower;
+        cp := Pos(':', TRef);
+        if cp = 0 then Continue;                 // procedure-Homonym: kein Ret-Typ
+        sp := Pos(';', TRef);
+        if sp = 0 then sp := Length(TRef) + 1;
+        if sp <= cp then Continue;               // ':' gehoert zu Direktiven-Teil
+        Ret := Trim(Copy(TRef, cp + 1, sp - cp - 1));
+        if IsValueTypeName(Ret) then
+          Found := True
+        else
+          Exit(False);                           // Objekt-Overload existiert -> unsicher
+      end;
+    finally
+      Methods.Free;
+    end;
+    Result := Found;
+  end;
+
   // FP-Gate (borrowed-reference, 2026-07-11, Real-World-Audit): die
   // "Rueckgabewert"-Heuristik wertete JEDEN Funktionsaufruf mit '(' als
   // Ownership-Return und meldete ihn als potentielles Leak. Getter wie
@@ -643,6 +720,9 @@ begin
         // FP-Gate (2026-07-04): os-handle - socket()/accept()/CreateFile()
         // & Co. liefern OS-Handles, keine Delphi-Objekte -> kein SCA001.
         if IsOsHandleApiCall(RHS) then Continue;
+        // Werttyp-Return (Gross-Triage 2026-07-18): in-unit-Funktion liefert
+        // String/Ordinal/Record-Wert ('MakePath: TFileName') - kann nie leaken.
+        if ReturnsValueType(RHS) then Continue;
         // FP-Gate (borrowed-reference, 2026-07-11): nur konstruktor-artige
         // Callees / bewiesene lokale Factories geben Ownership ab; geborgte
         // Getter (CnOtaGetRootComponentFromEditor, Images.Bitmap) NICHT.
@@ -1157,6 +1237,86 @@ begin
       end;
     end;
 
+    // varName.DisposeOf - ARC-/NextGen-Idiom, auf Classic-Compilern Alias fuer
+    // Free. SCA001-Gross-Triage 2026-07-18 (free-missed-Bucket 22/101): 2 reale
+    // Faelle (FMX LBitmap.DisposeOf / Str.DisposeOf) als "nie freigegeben"
+    // gemeldet, weil SearchFree DisposeOf nicht kannte.
+    pMatch := Pos(VarNameLow + '.disposeof', NameLow);
+    if pMatch > 0 then
+    begin
+      if (pMatch = 1) or not IsIdentChar(NameLow[pMatch - 1]) then
+      begin
+        Result := True; FoundInFinally := InFinally; Exit;
+      end;
+    end;
+
+    // Typecast-Free: 'TStringList(FParams).Free' / '(varName).Destroy' - der
+    // Cast schiebt ')' zwischen Var-Namen und '.free', das 'varname.free'-
+    // Muster oben verfehlt das (Gross-Triage: JvUIB TStringList(FParams).Free
+    // im Destroy -> FP "nie freigegeben"). Linke Grenze '(' garantiert, dass
+    // varName das GANZE Cast-Argument ist (kein 'foo(x.varname)'). ZUSATZ-
+    // Guard: der Kopf vor '(' muss ein TYP sein (t-Praefix-Konvention) -
+    // 'GetWrapper(list).Free' gibt das RESULT frei, nicht list (waere FN).
+    // Dokumentiertes Rest-Risiko: t-praefixierte FUNKTIONEN ('Transform(x).Free')
+    // passieren den Guard (selten; SearchFree hat keinen AContext fuer einen
+    // echten Typ-Check via TTypeIndex - bewusst akzeptiert).
+    pMatch := Pos('(' + VarNameLow + ').free', NameLow);
+    if pMatch = 0 then pMatch := Pos('(' + VarNameLow + ').destroy', NameLow);
+    if pMatch = 0 then pMatch := Pos('(' + VarNameLow + ').disposeof', NameLow);
+    if pMatch > 1 then
+    begin
+      // Kopf-Ident vor der '(' rueckwaerts einsammeln; muss mit 't' beginnen.
+      var hS := pMatch - 1;
+      while (hS >= 1) and IsIdentChar(NameLow[hS]) do Dec(hS);
+      if (hS + 1 < pMatch) and (NameLow[hS + 1] = 't') then
+      begin
+        Result := True; FoundInFinally := InFinally; Exit;
+      end;
+    end;
+
+    // 'with varName do ... Free' - der Parser legt with als nkCall(withExpr)
+    // ab und haengt den Body-Block als SUBTREE darunter (uParser2 tkKwWith-
+    // Zweig; 'begin..end' erzeugt einen nkBlock-Zwischenknoten). Ein bare
+    // 'Free'/'Destroy'/'DisposeOf'-Call in diesem Subtree meint das with-
+    // Objekt. Nur wenn der Node-Name EXAKT der Var-Name ist (single-target-
+    // with; ein gewoehnlicher Call-nkCall traegt Klammern im Namen und hat
+    // keine Children). Iterativer Walk (Hardening-v4-Stil).
+    // (Gross-Triage: DropTarget 'with bm do ... free' -> FP.)
+    if (NameLow = VarNameLow) and (Node.Children.Count > 0) then
+    begin
+      var WStack := TList<TAstNode>.Create;
+      try
+        for Child in Node.Children do WStack.Add(Child);
+        while WStack.Count > 0 do
+        begin
+          var W := WStack[WStack.Count - 1];
+          WStack.Delete(WStack.Count - 1);
+          if W.Kind = nkCall then
+          begin
+            var WLow := W.Name.ToLower;
+            if (WLow = 'free') or (WLow = 'free()')
+               or (WLow = 'destroy') or (WLow = 'disposeof') then
+            begin
+              Result := True; FoundInFinally := InFinally;
+              Exit;   // finally gibt WStack frei
+            end;
+            // NESTED with ('with bm do with other do Free') NICHT betreten:
+            // dessen bare Free gehoert zum INNEREN Objekt, nicht zu varName
+            // (Review-Fang 2026-07-18: sonst maskierter Leak von varName).
+            // Ein inneres with sieht aus wie dieses: klammerloser nicht-leerer
+            // nkCall MIT Children. nkBlock-Zwischenknoten sind kein nkCall
+            // und werden normal betreten.
+            if (W.Children.Count > 0) and (W.Name <> '')
+               and (Pos('(', W.Name) = 0) then
+              Continue;
+          end;
+          for var WC in W.Children do WStack.Add(WC);
+        end;
+      finally
+        WStack.Free;
+      end;
+    end;
+
     // FreeAndNil(varName) und FreeAndNil(Self.varName) - Match auf beide
     // Varianten. Rechte Grenze: kein Bezeichner-Zeichen nach varName.
     pMatch := Pos('freeandnil(' + VarNameLow, NameLow);
@@ -1430,6 +1590,15 @@ begin
     for V in LocalVars do
     begin
       if not IsLeakyType(V.TypeRef, AContext) then Continue;
+
+      // Werttyp-Gate (Gross-Triage 2026-07-18): eine record-typisierte Local
+      // ('sz := TSizeF.Create(..)' / TRegEx) ist ein WERT auf dem Stack -
+      // Record-Konstruktoren allokieren nichts Freigebbares -> kann nie leaken.
+      // Cross-unit via TTypeIndex (tkiRecord, inkl. RTL-Seeds); TI=nil im
+      // Single-File -> No-Op. TP-safe-by-construction, monoton.
+      var TI := CtxTypeIndex(AContext);
+      if (TI <> nil) and (not TI.IsEmpty) and
+         (TI.TypeKindOf(Trim(V.TypeRef.ToLower)) = tkiRecord) then Continue;
 
       VarNameLow := V.Name.ToLower;
 

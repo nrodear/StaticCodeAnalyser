@@ -71,6 +71,7 @@ type
 
     procedure ScanUnitForTypes(const PasFileName: string);
     procedure AddTypesFromNode(RootNode: TAstNode);
+    procedure AddKindStrong(const NameLow: string; K: TTypeIndexKind);
     procedure SeedKnownTypes;
   public
     constructor Create;
@@ -151,6 +152,34 @@ begin
   inherited;
 end;
 
+procedure TTypeIndex.AddKindStrong(const NameLow: string; K: TTypeIndexKind);
+// Kollisions-sichere Kind-Registrierung fuer die STARKEN Kinds (Klasse/Record).
+// SCA001-Root-Cause 2026-07-19: der Korpus enthaelt cross-repo-Homonyme mit
+// UNTERSCHIEDLICHEM Kind (HeidiSQL TDBObject=class vs mORMot TDBObject=record;
+// TFileInfo class vs record; TGridValue class vs JvDBGridExport packed record;
+// TPSType class in uPSCompiler vs packed record in uPSRuntime DERSELBEN Lib).
+// Das fruehere AddOrSetValue (last-wins, scan-reihenfolge-abhaengig!) klassifi-
+// zierte dann eine KLASSE als tkiRecord -> Werttyp-Gates (SCA001/SCA166/124/174)
+// maskierten ECHTE Funde (2 bewiesene Leak-FNs in HeidiSQL table_editor).
+// Regel: gleicher Kind -> idempotent (Repo-Kopien); echte Decl schlaegt den
+// schwachen Alias-/Enum-Fallback; class<->record-Kollision (oder bereits
+// vergiftet) -> tkiUnknown DAUERHAFT - kein Konsument darf sich auf einen
+// mehrdeutigen Namen stuetzen (konservativ: Fund bleibt lieber als FP stehen).
+var
+  Existing : TTypeIndexKind;
+begin
+  if FKinds.TryGetValue(NameLow, Existing) then
+  begin
+    if Existing = K then Exit;
+    if Existing in [tkiAlias, tkiEnum] then
+      FKinds.AddOrSetValue(NameLow, K)
+    else
+      FKinds.AddOrSetValue(NameLow, tkiUnknown);
+  end
+  else
+    FKinds.Add(NameLow, K);
+end;
+
 procedure TTypeIndex.AddTypesFromNode(RootNode: TAstNode);
 var
   Nodes : TList<TAstNode>;
@@ -167,7 +196,7 @@ begin
     begin
       NameLow := LowerCase(Trim(N.Name));
       if NameLow = '' then Continue;
-      FKinds.AddOrSetValue(NameLow, tkiClass);
+      AddKindStrong(NameLow, tkiClass);
       ParentLow := BaseClassNameLow(N.TypeRef);
       if ParentLow <> '' then
         FParents.AddOrSetValue(NameLow, ParentLow)
@@ -186,7 +215,7 @@ begin
     for N in Nodes do
     begin
       NameLow := LowerCase(Trim(N.Name));
-      if NameLow <> '' then FKinds.AddOrSetValue(NameLow, tkiRecord);
+      if NameLow <> '' then AddKindStrong(NameLow, tkiRecord);
     end;
   finally
     Nodes.Free;
