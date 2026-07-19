@@ -145,14 +145,16 @@ begin
       // funktional try/finally fuer den Fehlerpfad, kein MissingFinally.
       if HasExcept and HasReraise then Continue;
 
-      // finally-Mis-Attachment-Fix (Konsistenz-Port aus uLeakDetector2 Z.1467-1469,
-      // Welle 2 2026-07-18): der AST-FreeInFin sagt "nicht im finally", aber in der
-      // QUELLE liegt der Free doch in einer finally-Region - der Parser attachiert
-      // den .Free-Knoten bei nested try/except, {$IFDEF} im try-Body oder 'F:=nil;try'
-      // fehl. FreeInFinallyRegionBySource bestimmt die Region rein aus der Quelle
-      // (verankert an nkFinallyBlock.Line) -> dann kein MissingFinally. Monoton
-      // (nur ein zusaetzliches Skip), TP-safe: suppressed nur bei bewiesenem
-      // Region-Containment eines echten nkFinallyBlock (kein finally -> False).
+      // finally-Mis-Attachment-Fix (Konsistenz-Port aus uLeakDetector2, Welle 2
+      // 2026-07-18; Auto-Runde 2026-07-19: Anker von nkFinallyBlock auf QUELLE
+      // umgestellt): der AST-FreeInFin sagt "nicht im finally", aber in der
+      // QUELLE liegt der Free doch in einer finally-Region - der Parser
+      // attachiert bei nested try / {$IFDEF} / 'F:=nil;try' sogar den AEUSSEREN
+      // nkFinallyBlock fehl (der AST-Anker war deshalb fuer die realen Faelle
+      // ein No-Op). FreeInFinallyRegionBySource scannt jetzt die 'finally'-
+      // Keywords der gestrippten Quelle innerhalb der Methodenspanne. Monoton,
+      // TP-safe: suppressed nur bei bewiesenem Region-Containment (kein
+      // finally in der Quelle -> False).
       EnsureStripped;
       if TLeakDetector2.FreeInFinallyRegionBySource(
            MethodNode, StrippedLines, VarNameLow) then Continue;

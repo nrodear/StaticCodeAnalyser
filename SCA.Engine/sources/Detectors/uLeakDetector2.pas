@@ -1498,19 +1498,21 @@ end;
 
 class function TLeakDetector2.FreeInFinallyRegionBySource(MethodNode: TAstNode;
   const StrippedLines: TArray<string>; const VarNameLow: string): Boolean;
-// Bestimmt die finally-Regionen rein aus der QUELLE: Anker sind die AST-finally-
-// Startzeilen (nkFinallyBlock.Line - die kennt der Parser zuverlaessig), das Ende
-// per Vorwaerts-Balancierung (begin/try/case/asm/record/object +1, end -1; erstes
-// 'end', das die Tiefe unter 0 bringt = try-Ende). Dann: liegt eine Freigabe von
-// VarName (VarName.Free/.Destroy/FreeAndNil([Self.]VarName)) in einer Region?
-// Damit ist der Check unabhaengig davon, WIE der Parser den .Free-Knoten
-// attachiert hat (Fix fuer nested-/cond-comp-/'F:=nil;try'-Mis-Attachment).
-// Konservativ: bei Unklarheit False (Warnung bleibt). StrippedLines sind bereits
-// string-/kommentar-gestrippt; Index k-1 == Quellzeile k.
+// Source-basierte finally-Regionen. ANKER SEIT 2026-07-19: die 'finally'-
+// Schluesselwoerter in der (gestrippten) QUELLE innerhalb der Methoden-Zeilen-
+// spanne - NICHT mehr die AST-nkFinallyBlock-Knoten. Grund (Auto-Runde-Triage):
+// bei Mis-Parse des AEUSSEREN try/finally (nested try im Body / {$IFDEF} /
+// 'F:=nil;try') FEHLT der aeussere nkFinallyBlock im Method-Subtree - der
+// fruehere AST-verankerte Scan fand die Region dann NIE; der Port aus 4ae5e7a
+// war fuer die realen Faelle (CnFeedWizard:1020/1021, CnObjInspectorCommentFrm:
+// 1192, CnSrcEditorBlockTools:1485) ein No-Op. Der Source-Anker ist von der
+// AST-Attachierung unabhaengig. Region-Ende per Vorwaerts-Balancierung ab der
+// finally-Zeile (TryEndLine unveraendert), auf die Methodenspanne geklammert
+// (SubtreeMaxLine). Monoton (nur zusaetzliche Suppression); TP-safe: greift nur
+// bei bewiesenem VarName-Free innerhalb einer balancierten finally..end-Region
+// INNERHALB der Methode. StrippedLines: Index k-1 == Quellzeile k.
 var
-  FinBlocks : TList<TAstNode>;
-  FB        : TAstNode;
-  StartL, EndL, li : Integer;
+  StartL, EndL, li, MethStart, MethEnd : Integer;
 
   function TryEndLine(FinLine1: Integer): Integer;
   const
@@ -1582,23 +1584,71 @@ var
            or BoundedLeft(Low, 'freeandnil(self.' + VarNameLow, True);
   end;
 
+  // 'finally' als eigenstaendiges Wort in einer (gestrippten) Zeile?
+  function LineHasFinally(const S: string): Boolean;
+  var
+    Low : string;
+    p, rr : Integer;
+  begin
+    Result := False;
+    Low := LowerCase(S);
+    p := Pos('finally', Low);
+    while p > 0 do
+    begin
+      if (p = 1) or not IsIdentChar(Low[p - 1]) then
+      begin
+        rr := p + 7;                          // hinter 'finally'
+        if (rr > Length(Low)) or not IsIdentChar(Low[rr]) then
+          Exit(True);
+      end;
+      p := PosEx('finally', Low, p + 1);
+    end;
+  end;
+
+  // Groesste Quellzeile im Method-Subtree (iterative DFS, Hardening-v4-Stil).
+  // Obergrenze der Scan-Spanne - verhindert, dass finally-Regionen NACH der
+  // Methode (naechste Routine) mitgescannt werden.
+  function SubtreeMaxLine(Root: TAstNode): Integer;
+  var
+    Stack : TList<TAstNode>;
+    N, C : TAstNode;
+  begin
+    Result := 0;
+    if Root = nil then Exit;
+    Stack := TList<TAstNode>.Create;
+    try
+      Stack.Add(Root);
+      while Stack.Count > 0 do
+      begin
+        N := Stack[Stack.Count - 1];
+        Stack.Delete(Stack.Count - 1);
+        if N.Line > Result then Result := N.Line;
+        for C in N.Children do Stack.Add(C);
+      end;
+    finally
+      Stack.Free;
+    end;
+  end;
+
 begin
   Result := False;
-  if Length(StrippedLines) = 0 then Exit;
-  FinBlocks := MethodNode.FindAll(nkFinallyBlock);
-  try
-    for FB in FinBlocks do
-    begin
-      StartL := FB.Line;
-      if (StartL < 1) or (StartL > Length(StrippedLines)) then Continue;
-      EndL := TryEndLine(StartL);
-      for li := StartL to EndL do
-        if (li >= 1) and (li <= Length(StrippedLines))
-           and LineFreesVar(StrippedLines[li - 1]) then
-          Exit(True);
-    end;
-  finally
-    FinBlocks.Free;
+  if (MethodNode = nil) or (Length(StrippedLines) = 0) then Exit;
+
+  MethStart := MethodNode.Line;
+  if MethStart < 1 then MethStart := 1;
+  MethEnd := SubtreeMaxLine(MethodNode);
+  if MethEnd > Length(StrippedLines) then MethEnd := Length(StrippedLines);
+  if MethEnd < MethStart then Exit;
+
+  for StartL := MethStart to MethEnd do
+  begin
+    if not LineHasFinally(StrippedLines[StartL - 1]) then Continue;
+    EndL := TryEndLine(StartL);
+    if EndL > MethEnd then EndL := MethEnd;    // Region auf die Methode klammern
+    for li := StartL to EndL do
+      if (li >= 1) and (li <= Length(StrippedLines))
+         and LineFreesVar(StrippedLines[li - 1]) then
+        Exit(True);
   end;
 end;
 

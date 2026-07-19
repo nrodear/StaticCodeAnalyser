@@ -23,13 +23,19 @@ type
     [Test] procedure OwnerParamCreate_NoFinding;
     // TP-Gegenprobe: Create(nil) = caller owns -> Befund bleibt
     [Test] procedure CreateNilOwnerNoFinally_StillReported;
+    // --- Auto-Runde 2026-07-19: Source-Anker fuer FreeInFinallyRegionBySource ---
+    // Direkt-Tests gegen die Routine (manuelle ASTs simulieren den Parser-
+    // Mis-Attach; der FindingsOf-Harness kann das nicht scharf).
+    [Test] procedure SourceGuard_FreeInOuterFinally_MisAttach_True;
+    [Test] procedure SourceGuard_ForLoopFreeThenVarFree_True;
+    [Test] procedure SourceGuard_FreeOutsideFinally_False;   // TP-Gegenprobe
   end;
 
 implementation
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uSCAConsts, uMethodd12,
+  uSCAConsts, uMethodd12, uAstNode, uLeakDetector2,
   uTestFindingHelper;
 
 procedure TTestMissingFinally.CreateWithoutTryFinally_Reported;
@@ -185,6 +191,97 @@ begin
   try Assert.IsTrue(TFindingHelper.Count(F, fkMissingFinally) >= 1,
     'Create(nil) ohne try/finally -> Befund bleibt (owner-param-Gate greift nicht)');
   finally F.Free; end;
+end;
+
+procedure TTestMissingFinally.SourceGuard_FreeInOuterFinally_MisAttach_True;
+// Auto-Runde 2026-07-19: Mis-Attach simuliert - KEIN nkFinallyBlock im Subtree
+// (der alte AST-Anker liefe leer = No-Op des 4ae5e7a-Ports), aber die QUELLE
+// hat 'finally' + 'sl.free' -> der neue Source-Anker liefert True.
+// Geerdet: CnObjInspectorCommentFrm:1192 / CnFeedWizard:1020.
+var
+  M, Blk : TAstNode;
+  Stripped : TArray<string>;
+begin
+  M := TAstNode.Create(nkMethod, 'foo', 1, 1);
+  try
+    Blk := M.Add(nkBlock, 'begin', 2, 1);
+    Blk.Add(nkAssign, 'sl', 3, 1).TypeRef := 'tstringlist.create';
+    Blk.Add(nkCall, 'sl.free', 7, 1);   // mis-attachter Free als Sibling
+    Stripped := TArray<string>.Create(
+      'procedure foo;',                  // 1
+      'begin',                           // 2
+      '  sl := tstringlist.create;',     // 3
+      '  try',                           // 4
+      '    sl.savetofile(x);',           // 5
+      '  finally',                       // 6
+      '    sl.free;',                    // 7
+      '  end; end;');                    // 8 (max Subtree-Line=7 -> Region geklammert)
+    Assert.IsTrue(
+      TLeakDetector2.FreeInFinallyRegionBySource(M, Stripped, 'sl'),
+      'SL.Free quell-basiert im finally trotz fehlendem nkFinallyBlock');
+  finally
+    M.Free;
+  end;
+end;
+
+procedure TTestMissingFinally.SourceGuard_ForLoopFreeThenVarFree_True;
+// CnSrcEditorBlockTools-Muster: for-Loop-Free der ITEMS im finally, dann
+// List.Free ebenfalls im finally - beide in derselben Source-Region.
+var
+  M, Blk : TAstNode;
+  Stripped : TArray<string>;
+begin
+  M := TAstNode.Create(nkMethod, 'bar', 1, 1);
+  try
+    Blk := M.Add(nkBlock, 'begin', 2, 1);
+    Blk.Add(nkAssign, 'list', 3, 1).TypeRef := 'tlist.create';
+    Blk.Add(nkCall, 'list.free', 8, 1);
+    Stripped := TArray<string>.Create(
+      'procedure bar;',                                   // 1
+      'begin',                                            // 2
+      '  list := tlist.create;',                          // 3
+      '  try',                                            // 4
+      '    x;',                                           // 5
+      '  finally',                                        // 6
+      '    for i := 0 to n do tholder(list[i]).free;',    // 7
+      '    list.free; end; end;');                        // 8
+    Assert.IsTrue(
+      TLeakDetector2.FreeInFinallyRegionBySource(M, Stripped, 'list'),
+      'List.Free im finally trotz vorangehendem Item-Free');
+  finally
+    M.Free;
+  end;
+end;
+
+procedure TTestMissingFinally.SourceGuard_FreeOutsideFinally_False;
+// TP-Gegenprobe (uDOMVisitor TempSL): die Methode HAT ein finally, das aber
+// eine ANDERE Var behandelt; TempSL.Free liegt AUSSERHALB der Region ->
+// der Guard darf NICHT greifen (Fund bleibt).
+var
+  M, Blk : TAstNode;
+  Stripped : TArray<string>;
+begin
+  M := TAstNode.Create(nkMethod, 'baz', 1, 1);
+  try
+    Blk := M.Add(nkBlock, 'begin', 2, 1);
+    Blk.Add(nkAssign, 'tempsl', 3, 1).TypeRef := 'tstringlist.create';
+    Blk.Add(nkCall, 'tempsl.free', 9, 1);
+    Stripped := TArray<string>.Create(
+      'procedure baz;',                      // 1
+      'begin',                               // 2
+      '  tempsl := tstringlist.create;',     // 3
+      '  if c then',                         // 4
+      '    try foo;',                        // 5
+      '    finally',                         // 6
+      '      tempmsg := nil;',               // 7
+      '    end;',                            // 8
+      '  tempsl.free; end;');                // 9
+    Assert.IsFalse(
+      TLeakDetector2.FreeInFinallyRegionBySource(M, Stripped, 'tempsl'),
+      'TempSL.Free ausserhalb der finally-Region -> TP bleibt');
+  finally
+    M.Free;
+  end;
 end;
 
 initialization
