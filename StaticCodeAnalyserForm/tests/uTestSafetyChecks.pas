@@ -31,6 +31,11 @@ type
     [Test] procedure NilDeref_ForInLoopVar_NoFinding;
     // Gegenprobe: Call ohne die Variable (nur im String-Literal) gated NICHT
     [Test] procedure NilDeref_UnrelatedCallBetween_StillReports;
+    // --- Auto-Runde 2026-07-19: mutually-exclusive if/else-Schwesterzweige ---
+    [Test] procedure NilDeref_SiblingIfElseBranch_NotReported;
+    [Test] procedure NilDeref_SameThenBranchDeref_StillReported;   // TP-Gegenprobe
+    [Test] procedure NilDeref_TwoSeparateIfs_StillReported;        // Scoping-Beweis
+    [Test] procedure NilDeref_MemberAccessCollision_NotReported;   // '.'-Prev-Guard
   end;
 
   // ---- MissingFinally Erweiterungen --------------------------------------------------
@@ -298,6 +303,95 @@ begin
     Assert.AreEqual(TFindingHelper.LineOf(SRC, 'lst.Add'),
       TFindingHelper.FirstOf(F, fkNilDeref).LineNumber,
       'Fund muss auf der Deref-Zeile liegen');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDerefExt.NilDeref_SiblingIfElseBranch_NotReported;
+// Auto-Runde 2026-07-19 (FP-Vorbilder JvChangeNotify:432 / Alcinoe.Common:4344):
+// x:=nil im then-Zweig, x.DoStuff im else-Zweig DESSELBEN if. Auf jeder
+// Ausfuehrung laeuft nur ein Zweig - die nil-Zuweisung erreicht den Deref nie.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(b: Boolean);'#13#10+
+  'var x: TObject;'#13#10+
+  'begin'#13#10+
+  '  if b then'#13#10+
+  '  begin'#13#10+
+  '    x.Free;'#13#10+
+  '    x := nil;'#13#10+
+  '  end'#13#10+
+  '  else'#13#10+
+  '    x.DoStuff;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
+    'nil-Zuweisung then / Deref else desselben if - kein nil-Deref');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDerefExt.NilDeref_SameThenBranchDeref_StillReported;
+// TP-Gegenprobe: nil-Zuweisung UND Deref im SELBEN then-Zweig (keine
+// Exklusivitaet; Vorbild echter TP doublecmd uplaysound.pas:47).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(b: Boolean);'#13#10+
+  'var x: TObject;'#13#10+
+  'begin'#13#10+
+  '  if b then'#13#10+
+  '  begin'#13#10+
+  '    x := nil;'#13#10+
+  '    x.DoStuff;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+    'nil-Deref im selben then-Zweig bleibt ein echter Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDerefExt.NilDeref_TwoSeparateIfs_StillReported;
+// Scoping-Beweis: zwei SEPARATE ifs (nicht else-verkettet) - kein einzelnes if
+// trennt Zuweisung und Deref in then vs else -> Gate darf NICHT greifen
+// (die korrelierte Separat-if-Klasse bleibt bewusst offen = Mini-CFG).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(b, c: Boolean);'#13#10+
+  'var x: TObject;'#13#10+
+  'begin'#13#10+
+  '  if b then'#13#10+
+  '    x := nil;'#13#10+
+  '  if c then'#13#10+
+  '    x.DoStuff;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+    'zwei separate ifs sind nicht exklusiv - Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDerefExt.NilDeref_MemberAccessCollision_NotReported;
+// '.'-Prev-Guard (Vorbild Project.pas:1060): 'fUnits[0].Editor.Activate' -
+// 'Editor' dort ist MEMBER eines anderen Objekts, nicht die lokale (genilte)
+// Var gleichen Namens.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var Editor: TObject;'#13#10+
+  'begin'#13#10+
+  '  Editor := nil;'#13#10+
+  '  fUnits[0].Editor.Activate;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
+    'Member-Zugriff mit fuehrendem Punkt ist nicht die lokale Var');
   finally F.Free; end;
 end;
 

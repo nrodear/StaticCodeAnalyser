@@ -50,6 +50,12 @@ type
       Calls, Assigns: TList<TAstNode>;
       const VarLow: string; AfterLine, BeforeLine: Integer): Boolean; static;
     // FP-Gate (2026-07-04): for-in-loop-assign - Schleifenkopf weist VarLow zu
+    // FP-Gate (Auto-Runde 2026-07-19): mutually-exclusive-branches (syntactic-
+    // sibling) - nil-Zuweisung und Deref in then/else-Schwesterzweigen DESSELBEN
+    // if koennen auf keiner realen Ausfuehrung gemeinsam laufen. Runtime-
+    // Gegenstueck zur preprocessor-Teilklasse von DirLineBetween.
+    class function IsInExclusiveBranch(MethodNode, AssignNode,
+      DerefNode: TAstNode): Boolean; static;
     class function IsForLoopAssigned(MethodNode: TAstNode;
       const VarLow: string; AfterLine, BeforeLine: Integer): Boolean; static;
   end;
@@ -273,6 +279,72 @@ begin
   end;
 end;
 
+function NodeContainsRef(Root, Target: TAstNode): Boolean;
+// Subtree-Containment per OBJEKT-Identitaet (TAstNode hat keinen Parent-
+// Pointer). Iterative DFS (Hardening-v4-Stil).
+var
+  Stack : TList<TAstNode>;
+  Cur   : TAstNode;
+  i     : Integer;
+begin
+  Result := False;
+  if (Root = nil) or (Target = nil) then Exit;
+  Stack := TList<TAstNode>.Create;
+  try
+    Stack.Add(Root);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack[Stack.Count - 1];
+      Stack.Delete(Stack.Count - 1);
+      if Cur = Target then Exit(True);
+      for i := 0 to Cur.Children.Count - 1 do
+        Stack.Add(Cur.Children[i]);
+    end;
+  finally
+    Stack.Free;
+  end;
+end;
+
+class function TNilDerefDetector.IsInExclusiveBranch(MethodNode, AssignNode,
+  DerefNode: TAstNode): Boolean;
+// FP-Gate (Auto-Runde 2026-07-19, Triage 15/18 FP - Sub-Klasse 'syntactic-
+// sibling-if-else' 3/18 + JvLookOut): steht die nil-Zuweisung im then-Zweig
+// eines if und der Deref im zugehoerigen else-Zweig (oder umgekehrt), laufen
+// beide auf keiner realen Ausfuehrung gemeinsam - die nil-Zuweisung erreicht
+// den Deref nie. AST-verifiziert: ParseIfStmt legt then-Statements als
+// Descendants des nkIfStmt ab, else-Statements unter ein nkElseBranch-
+// Direktkind (uParser2 ~Z.1751-1758). Rein strukturell, additiv, monoton:
+// ohne trennendes if/else bleibt jeder Fund. Vorbild-FPs: Alcinoe.Common
+// (Temp.DisposeOf), JvChangeNotify (FThread.WaitFor), JvGIF, JvLookOut.
+// Die KORRELIERTE Separat-if-Klasse (2 verschiedene ifs mit gekoppelten
+// Bedingungen) bleibt bewusst offen - braucht Mini-CFG (strukturell hart).
+var
+  Ifs   : TList<TAstNode>;
+  IfN   : TAstNode;
+  ElseN : TAstNode;
+  NAInElse, CInElse, NAInThen, CInThen : Boolean;
+begin
+  Result := False;
+  if MethodNode = nil then Exit;
+  Ifs := MethodNode.FindAll(nkIfStmt);
+  try
+    for IfN in Ifs do
+    begin
+      ElseN := IfN.FindFirstChild(nkElseBranch);
+      if ElseN = nil then Continue;           // ohne else keine Schwester-Zweige
+      // then-Zweig = im if-Subtree, aber NICHT im else-Subtree.
+      NAInElse := NodeContainsRef(ElseN, AssignNode);
+      CInElse  := NodeContainsRef(ElseN, DerefNode);
+      NAInThen := NodeContainsRef(IfN, AssignNode) and not NAInElse;
+      CInThen  := NodeContainsRef(IfN, DerefNode)  and not CInElse;
+      if (NAInThen and CInElse) or (NAInElse and CInThen) then
+        Exit(True);
+    end;
+  finally
+    Ifs.Free;
+  end;
+end;
+
 class procedure TNilDerefDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>;
   const ADirLines: TArray<Integer>);
@@ -312,7 +384,11 @@ begin
         if p > 1 then
         begin
           var Prev := NameLow[p - 1];
-          if CharInSet(Prev, ['a'..'z', '0'..'9', '_']) then Continue;
+          // Auto-Runde 2026-07-19: '.' in der Prev-Menge - 'fUnits[0].Editor.
+          // Activate' matcht sonst die LOKALE Var 'Editor', obwohl dort der
+          // MEMBER eines anderen Objekts steht (Namenskollision; analog
+          // HasBareArgUse). Bei fuehrendem '.' ist es nie die lokale Var.
+          if CharInSet(Prev, ['a'..'z', '0'..'9', '_', '.']) then Continue;
         end;
 
         // .Free / .Destroy sind nil-sicher
@@ -356,6 +432,12 @@ begin
         // (braucht then/else-Scope). TP-sicher: ohne Direktive dazwischen
         // bleibt jeder Fund erhalten.
         if DirLineBetween(ADirLines, NA.Line, C.Line) then
+          Continue;
+
+        // FP-Gate (Auto-Runde 2026-07-19): mutually-exclusive-branches
+        // (syntactic-sibling-if-else) - nil-Zuweisung (NA) und Deref (C) in
+        // then/else-Schwesterzweigen desselben if -> nie gemeinsam ausgefuehrt.
+        if IsInExclusiveBranch(MethodNode, NA, C) then
           Continue;
 
         // Befund: nil-Zuweisung ohne Guard, dann Punkt-Zugriff
