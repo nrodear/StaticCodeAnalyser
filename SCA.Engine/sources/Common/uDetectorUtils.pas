@@ -137,6 +137,25 @@ type
       out LineForChar: TArray<Integer>; AContext: TAnalyzeContext;
       const FileName: string; FillCh: Char = '~'): string; static;
 
+    // Perf P7 (Konzept_Performance25, 2026-07-19): string-ERHALTENDER
+    // Kommentar-Strip - Strings bleiben verbatim (inkl. ''-Escape),
+    // //-, {..}- und (*..*)-Kommentare (auch {$-Direktiven) werden
+    // ERSATZLOS entfernt, pro Quellzeile genau ein #10, LineForChar =
+    // 0-basierter Quellzeilen-Index pro Ergebnis-Zeichen.
+    // Byte-identische Zentralisierung der bis dahin in 9 Detektoren
+    // kopierten lokalen StripFileComments-Routine (uPerfHotspots-Familie;
+    // MD5-Beweis der Zwillinge, siehe Konzept §6-Follow-up). NICHT
+    // verwechseln mit StripStringsAndComments (blankt Strings mit FillCh).
+    class function StripFileCommentsKeepStrings(Lines: TStrings;
+      out LineForChar: TArray<Integer>): string; static;
+
+    // Cached-Variante analog StripStringsAndCommentsCached, eigener
+    // Ein-Datei-Slot im Context (TryGetKeepStringsText). AContext=nil ->
+    // direkt rechnen (Tests/Single-File).
+    class function StripFileCommentsKeepStringsCached(Lines: TStrings;
+      out LineForChar: TArray<Integer>; AContext: TAnalyzeContext;
+      const FileName: string): string; static;
+
     // Rueckrechnung Match-Position -> 1-basierte Quellzeile ueber die
     // LineForChar-Map aus StripStringsAndComments (dort: 0-basierter
     // Zeilenindex pro Zeichen). 0 wenn APos ausserhalb der Map liegt.
@@ -545,6 +564,97 @@ begin
   Result := StripStringsAndComments(Lines, LineForChar, FillCh);
   if AContext <> nil then
     AContext.PutStrippedText(FileName, FillCh, Result, LineForChar);
+end;
+
+class function TDetectorUtils.StripFileCommentsKeepStrings(Lines: TStrings;
+  out LineForChar: TArray<Integer>): string;
+// Perf P7: EXAKTE Kopie der uPerfHotspots.StripFileComments-Familie
+// (9 MD5-identische Zwillinge) - jede Abweichung hier waere Ergebnis-Drift
+// in 9 Detektoren. Semantik siehe Interface-Kommentar.
+var
+  Buf            : TStringBuilder;
+  i, n, j        : Integer;
+  Line           : string;
+  InBlk, InParen : Boolean;
+  InStr          : Boolean;
+  c              : Char;
+  pClose         : Integer;
+  Chars          : TList<Integer>;
+begin
+  Buf := TStringBuilder.Create;
+  Chars := TList<Integer>.Create;
+  try
+    InBlk := False; InParen := False;
+    for i := 0 to Lines.Count - 1 do
+    begin
+      Line := Lines[i];
+      InStr := False;
+      j := 1; n := Length(Line);
+      while j <= n do
+      begin
+        if InBlk then
+        begin
+          pClose := PosEx('}', Line, j);
+          if pClose = 0 then Break;
+          InBlk := False; j := pClose + 1; Continue;
+        end;
+        if InParen then
+        begin
+          pClose := PosEx('*)', Line, j);
+          if pClose = 0 then Break;
+          InParen := False; j := pClose + 2; Continue;
+        end;
+        c := Line[j];
+        if InStr then
+        begin
+          Buf.Append(c); Chars.Add(i);
+          if c = '''' then
+          begin
+            if (j < n) and (Line[j + 1] = '''') then
+            begin Buf.Append(''''); Chars.Add(i); Inc(j, 2); end
+            else begin InStr := False; Inc(j); end;
+          end
+          else Inc(j);
+          Continue;
+        end;
+        if c = '''' then
+        begin Buf.Append(c); Chars.Add(i); InStr := True; Inc(j); Continue; end;
+        if (c = '/') and (j < n) and (Line[j + 1] = '/') then Break;
+        if c = '{' then
+        begin
+          pClose := PosEx('}', Line, j + 1);
+          if pClose = 0 then begin InBlk := True; Break; end;
+          j := pClose + 1; Continue;
+        end;
+        if (c = '(') and (j < n) and (Line[j + 1] = '*') then
+        begin
+          pClose := PosEx('*)', Line, j + 2);
+          if pClose = 0 then begin InParen := True; Break; end;
+          j := pClose + 2; Continue;
+        end;
+        Buf.Append(c); Chars.Add(i);
+        Inc(j);
+      end;
+      Buf.Append(#10); Chars.Add(i);
+    end;
+    Result := Buf.ToString;
+    LineForChar := Chars.ToArray;
+  finally
+    Chars.Free; Buf.Free;
+  end;
+end;
+
+class function TDetectorUtils.StripFileCommentsKeepStringsCached(
+  Lines: TStrings; out LineForChar: TArray<Integer>;
+  AContext: TAnalyzeContext; const FileName: string): string;
+begin
+  // Perf P7: Cache-Lookup im per-Scan-Context; ohne Context direkt rechnen.
+  if (AContext <> nil) and
+     AContext.TryGetKeepStringsText(FileName, Result, LineForChar) then
+    Exit;
+  Result := StripFileCommentsKeepStrings(Lines, LineForChar);
+  if AContext <> nil then
+    AContext.PutKeepStringsText(FileName, Result, LineForChar);
 end;
 
 class function TDetectorUtils.LineForPos(const LineFor: TArray<Integer>;

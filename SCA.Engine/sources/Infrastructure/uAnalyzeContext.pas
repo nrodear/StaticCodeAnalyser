@@ -93,6 +93,13 @@ type
     // Lifecycle: Eintraege sind managed Types -> sterben mit dem Context.
     FStripFile    : string;                    // Datei der Cache-Eintraege
     FStripEntries : TArray<TStripCacheEntry>;  // praktisch max. 2 Slots
+    // Perf P7 (Konzept_Performance25, 2026-07-19): eigener Ein-Datei-Slot
+    // fuer die Keep-Strings-Strip-Semantik (Strings verbatim, Kommentare
+    // ersatzlos entfernt) - bewusst NICHT im FillCh-Entry-Array, weil es
+    // eine ANDERE Funktion ist, kein anderes Fuellzeichen.
+    FKeepStripFile : string;
+    FKeepStripCode : string;
+    FKeepStripMap  : TArray<Integer>;
   public
     // TD-1 (2026-07-06): Per-Scan-Snapshot der skalaren Scan-Config (s.
     // TEngineScalarConfig). Value-Record - lebt/stirbt mit dem Context.
@@ -140,6 +147,15 @@ type
     function  TryGetStrippedText(const FileName: string; FillCh: Char;
       out Code: string; out LineFor: TArray<Integer>): Boolean;
     procedure PutStrippedText(const FileName: string; FillCh: Char;
+      const Code: string; const LineFor: TArray<Integer>);
+
+    // Perf P7 (2026-07-19): Lookup/Store fuer
+    // TDetectorUtils.StripFileCommentsKeepStringsCached (Strings verbatim,
+    // Kommentare ersatzlos weg). Ein-Datei-Slot wie der FillCh-Cache;
+    // FileName='' wird nie gecacht (In-Memory-Pfade).
+    function  TryGetKeepStringsText(const FileName: string;
+      out Code: string; out LineFor: TArray<Integer>): Boolean;
+    procedure PutKeepStringsText(const FileName: string;
       const Code: string; const LineFor: TArray<Integer>);
 
     // TD-1 (2026-07-06): Kopiert die skalare Scan-Config 1:1 aus den uSCAConsts-
@@ -394,6 +410,28 @@ begin
   FStripEntries[n].FillCh  := FillCh;
   FStripEntries[n].Code    := Code;
   FStripEntries[n].LineFor := LineFor;
+end;
+
+function TAnalyzeContext.TryGetKeepStringsText(const FileName: string;
+  out Code: string; out LineFor: TArray<Integer>): Boolean;
+// Perf P7 (2026-07-19): siehe Interface-Kommentar. Exakter Key-Match auf den
+// FileName (wie der FillCh-Cache: innerhalb eines Scans bekommt jeder
+// Detektor denselben FileName-String); FileName='' cached nie.
+begin
+  Result := False;
+  if (FileName = '') or (FKeepStripFile <> FileName) then Exit;
+  Code    := FKeepStripCode;
+  LineFor := FKeepStripMap;
+  Result  := True;
+end;
+
+procedure TAnalyzeContext.PutKeepStringsText(const FileName: string;
+  const Code: string; const LineFor: TArray<Integer>);
+begin
+  if FileName = '' then Exit;
+  FKeepStripFile := FileName;
+  FKeepStripCode := Code;
+  FKeepStripMap  := LineFor;
 end;
 
 procedure TAnalyzeContext.SnapshotConfigFromGlobals;
