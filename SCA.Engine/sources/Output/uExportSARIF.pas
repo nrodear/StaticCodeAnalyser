@@ -496,7 +496,10 @@ begin
         E.BeginObjPair('partialFingerprints');
         E.PairStr('primaryLocationLineHash',
           FingerprintHash(RuleID, RelPath, LineNo, Msg));
-        CtxHash := TFindingFingerprint.ContextHashMemo(F, CtxMemo);
+        // Perf P3: AForceStat=False - der Export laeuft im Scan-Prozess,
+        // die Dateien sind seit dem Einlesen unveraendert; der Cache-
+        // Snapshot spart die 2 Stat-Syscalls pro Finding-Zeile.
+        CtxHash := TFindingFingerprint.ContextHashMemo(F, CtxMemo, False);
         if CtxHash <> '' then
           E.PairStr('contextHash/' + CONTEXT_HASH_VERSION, CtxHash);
         E.EndObj;

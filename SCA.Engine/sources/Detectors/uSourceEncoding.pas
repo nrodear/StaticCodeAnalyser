@@ -152,7 +152,10 @@ var
   IdentLine : Integer;
 begin
   if not HasSourceExt(FileName) then Exit;
-  Info := AnalyzeFileEncoding(FileName);
+  // Perf P2 (Konzept_Performance25, 2026-07-19): Verdikt aus dem Text-Cache
+  // (beim Load aus den Rohbytes berechnet) statt kompletter Zweit-Read;
+  // ohne Cache-Eintrag identischer AnalyzeFileEncoding-Pfad wie bisher.
+  Info := AcquireEncodingInfo(FileName, CtxFileTextCache(AContext));
   if not Info.Readable then Exit;   // Read-Fehler -> FileReadError deckt das ab
 
   // UTF-32/UTF-16-Quelltext: BOM-bestimmter Ganzdatei-Verdikt -> emittieren und

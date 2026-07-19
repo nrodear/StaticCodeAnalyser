@@ -38,6 +38,30 @@ uses
   System.SysUtils, System.Classes, System.Generics.Collections;
 
 type
+  // Byte-Level-Encoding-Fakten einer Quelldatei (fuer den Encoding-Detektor,
+  // Konzept_FileEncodingDetector). Auf der POST-BOM-Slice berechnet - die
+  // BOM-Bytes selbst zaehlen NICHT als "Nicht-ASCII".
+  // (Perf P2, 2026-07-19: vor TFileTextCacheEntry gezogen - der Entry
+  // traegt das Verdikt jetzt als Load-Piggyback.)
+  TSourceBomKind = (sbkNone, sbkUtf8, sbkUtf16LE, sbkUtf16BE, sbkUtf32LE, sbkUtf32BE);
+  TFileEncodingInfo = record
+    Readable          : Boolean;   // Datei lesbar
+    BomKind           : TSourceBomKind;
+    HasNonAscii       : Boolean;   // Byte >= $80 nach der BOM
+    StrictUtf8        : Boolean;   // Post-BOM = striktes RFC-3629-UTF-8 (reines ASCII = True)
+    HasMultiByte3Up   : Boolean;   // >=1 Drei-/Vier-Byte-UTF-8-Sequenz (Evidenz fuer E1-High)
+    MultiByteRuns     : Integer;   // Anzahl Multi-Byte-Sequenzen (Evidenz)
+    HasNulCtrl        : Boolean;   // 0x00 / Ctrl<0x20 (ausser Tab/LF/FF/CR)
+    HasBidi           : Boolean;   // bidirektionales Override-Steuerzeichen (Trojan Source)
+    HasZeroWidth      : Boolean;   // unsichtbares / Zero-Width-Zeichen (Unicode-Abuse)
+    FirstNonAsciiLine : Integer;   // 1-basiert; 0 = keine
+    FirstInvalidLine  : Integer;
+    FirstNulCtrlLine  : Integer;
+    FirstBidiLine     : Integer;
+    FirstZeroWidthLine: Integer;
+  end;
+  PFileEncodingInfo = ^TFileEncodingInfo;
+
   TFileTextCacheEntry = class
   public
     Lines : TStringList;
@@ -47,8 +71,15 @@ type
     // Disk-Stat-Checks dieses Eintrags. Solange die Generation des Caches
     // unveraendert ist, skippt GetLines den Stat (siehe dort).
     StatGeneration : Integer;
+    // Perf P2 (Konzept_Performance25, 2026-07-19): Encoding-Verdikt aus den
+    // Rohbytes des Load-Reads (ComputeFileEncodingInfo lief auf den Bytes,
+    // BEVOR sie dekodiert/verworfen wurden) - erspart dem SourceEncoding-
+    // Detektor den kompletten Zweit-Read der Datei. Beim Cache-Load immer
+    // befuellt (Readable=True); der AcquireLines-Fallback ohne Cache
+    // berechnet es nicht.
+    EncInfo : TFileEncodingInfo;
     constructor Create(ALines: TStringList; AMTime: TDateTime; ASize: Int64;
-      AStatGeneration: Integer);
+      AStatGeneration: Integer; const AEncInfo: TFileEncodingInfo);
     destructor Destroy; override;
   end;
 
@@ -97,6 +128,12 @@ type
     function GetLines(const FileName: string;
       AForceStat: Boolean = False): TStringList;
 
+    // Perf P2 (Konzept_Performance25, 2026-07-19): Encoding-Verdikt des
+    // Cache-Eintrags. Laedt die Datei bei Bedarf (GetLines-Semantik inkl.
+    // Snapshot-/Stat-Modell); False nur bei Read-Fehler.
+    function TryGetEncodingInfo(const FileName: string;
+      out Info: TFileEncodingInfo): Boolean;
+
     procedure Clear;
   end;
 
@@ -141,34 +178,18 @@ procedure ReleaseLines(Lines: TStringList; OwnedByCache: Boolean);
 function TryLoadLinesWithFallback(const FileName: string;
   Lines: TStringList): Boolean;
 
-type
-  // Byte-Level-Encoding-Fakten einer Quelldatei (fuer den Encoding-Detektor,
-  // Konzept_FileEncodingDetector). Auf der POST-BOM-Slice berechnet - die
-  // BOM-Bytes selbst zaehlen NICHT als "Nicht-ASCII".
-  TSourceBomKind = (sbkNone, sbkUtf8, sbkUtf16LE, sbkUtf16BE, sbkUtf32LE, sbkUtf32BE);
-  TFileEncodingInfo = record
-    Readable          : Boolean;   // Datei lesbar
-    BomKind           : TSourceBomKind;
-    HasNonAscii       : Boolean;   // Byte >= $80 nach der BOM
-    StrictUtf8        : Boolean;   // Post-BOM = striktes RFC-3629-UTF-8 (reines ASCII = True)
-    HasMultiByte3Up   : Boolean;   // >=1 Drei-/Vier-Byte-UTF-8-Sequenz (Evidenz fuer E1-High)
-    MultiByteRuns     : Integer;   // Anzahl Multi-Byte-Sequenzen (Evidenz)
-    HasNulCtrl        : Boolean;   // 0x00 / Ctrl<0x20 (ausser Tab/LF/FF/CR)
-    HasBidi           : Boolean;   // bidirektionales Override-Steuerzeichen (Trojan Source)
-    HasZeroWidth      : Boolean;   // unsichtbares / Zero-Width-Zeichen (Unicode-Abuse)
-    FirstNonAsciiLine : Integer;   // 1-basiert; 0 = keine
-    FirstInvalidLine  : Integer;
-    FirstNulCtrlLine  : Integer;
-    FirstBidiLine     : Integer;
-    FirstZeroWidthLine: Integer;
-  end;
-
 // Byte-Level-Encoding-Analyse einer Datei. Eigener ReadAllBytes: der Text-
 // Cache haelt nur dekodierte Strings OHNE BOM, die Encoding-Wahrheit steckt
 // nur in den Rohbytes. Readable=False wenn nicht lesbar (dann greift der
-// FileReadError-Pfad). (Follow-up laut Konzept: Cache-Piggyback zur Vermeidung
-// des Zweit-Reads.)
+// FileReadError-Pfad).
 function AnalyzeFileEncoding(const FileName: string): TFileEncodingInfo;
+
+// Perf P2: Encoding-Analyse mit Cache-Piggyback (das Verdikt entstand beim
+// Load aus denselben Rohbytes, die AnalyzeFileEncoding erneut lesen wuerde).
+// ACache=nil -> gFileTextCache; ohne verfuegbaren Cache oder bei Read-
+// Fehler frischer AnalyzeFileEncoding-Read wie bisher.
+function AcquireEncodingInfo(const FileName: string;
+  ACache: TFileTextCache = nil): TFileEncodingInfo;
 // Reiner Analyse-Kern (fuer Tests direkt mit TBytes aufrufbar).
 function ComputeFileEncodingInfo(const Bytes: TBytes): TFileEncodingInfo;
 
@@ -214,11 +235,17 @@ begin
   Result := True;
 end;
 
-function LoadFileSmart(const FileName: string; SL: TStringList): Boolean;
+function LoadFileSmart(const FileName: string; SL: TStringList;
+  AEncInfo: PFileEncodingInfo = nil): Boolean;
 // Encoding-Erkennung in drei Stufen:
 //   1. BOM vorhanden? → Encoding aus BOM (UTF-8/UTF-16 LE/UTF-16 BE).
 //   2. Kein BOM, aber alle Bytes wohlgeformt UTF-8? → UTF-8.
 //   3. Sonst → TEncoding.Default (Windows-1252/Active-CP).
+//
+// AEncInfo <> nil (Perf P2): zusaetzlich das Byte-Level-Encoding-Verdikt
+// aus den ohnehin gelesenen Rohbytes berechnen (identische Funktion wie
+// AnalyzeFileEncoding, identische Bytes -> identisches Verdikt) - der
+// Cache-Entry traegt es dann fuer den SourceEncoding-Detektor.
 //
 // Fixt Mojibake bei ANSI-Dateien mit Umlauten in den ersten Zeilen
 // (Unit-Header, Copyright-Kommentare) - Delphi's LoadFromFile(F, UTF-8)
@@ -262,6 +289,11 @@ begin
     // BOM-Bytes ueberspringen (wenn BOM erkannt war). GetString auf den
     // Rest. SL.Text setzt automatisch Lines auf.
     SL.Text := Enc.GetString(Bytes, BomLen, Length(Bytes) - BomLen);
+    if AEncInfo <> nil then
+    begin
+      AEncInfo^ := ComputeFileEncodingInfo(Bytes);
+      AEncInfo^.Readable := True;
+    end;
     Result := True;
   except
     // ANSI/Default kann nie werfen (jeder Byte-Wert ist gueltig in CP1252).
@@ -427,13 +459,14 @@ end;
 { TFileTextCacheEntry }
 
 constructor TFileTextCacheEntry.Create(ALines: TStringList; AMTime: TDateTime;
-  ASize: Int64; AStatGeneration: Integer);
+  ASize: Int64; AStatGeneration: Integer; const AEncInfo: TFileEncodingInfo);
 begin
   inherited Create;
   Lines := ALines;
   MTime := AMTime;
   Size  := ASize;
   StatGeneration := AStatGeneration;
+  EncInfo := AEncInfo;
 end;
 
 destructor TFileTextCacheEntry.Destroy;
@@ -514,6 +547,7 @@ var
   Entry     : TFileTextCacheEntry;
   CurrMTime : TDateTime;
   CurrSize  : Int64;
+  EncInfo   : TFileEncodingInfo;
 begin
   Result := nil;
   K := Key(FileName);
@@ -551,7 +585,15 @@ begin
 
   SL := TStringList.Create;
   try
-    if not LoadFileSmart(FileName, SL) then
+    // Perf P2: Encoding-Verdikt aus den Load-Rohbytes mitnehmen. Bewusster
+    // Trade-off: Post-Scan-Reloads (Suppression/ContextHash fuellen den
+    // Cache nach dem per-File-Clear lazy nach) zahlen den Walk mit, obwohl
+    // dort niemand das Verdikt liest - er ist aber nur EIN zusaetzlicher
+    // RAM-Pass neben ReadAllBytes+IsValidUtf8+Decode, waehrend der Detektor-
+    // Pfad einen KOMPLETTEN Zweit-Read pro Quelldatei spart. Falls die
+    // Timings-Messung das je kippt: Phase-Flag am Cache (Walk nur waehrend
+    // der Detektor-Phase) statt hier zu raten.
+    if not LoadFileSmart(FileName, SL, @EncInfo) then
       FreeAndNil(SL);
   except
     FreeAndNil(SL);
@@ -561,8 +603,24 @@ begin
   SafeGetFileStat(FileName, CurrMTime, CurrSize);
   // Perf (2026-07-05): P2-filetextcache-stat - der frische Eintrag traegt die
   // aktuelle Generation: der Stat ist hiermit fuer diese Generation erledigt.
-  FCache.Add(K, TFileTextCacheEntry.Create(SL, CurrMTime, CurrSize, FGeneration));
+  FCache.Add(K,
+    TFileTextCacheEntry.Create(SL, CurrMTime, CurrSize, FGeneration, EncInfo));
   Result := SL;
+end;
+
+function TFileTextCache.TryGetEncodingInfo(const FileName: string;
+  out Info: TFileEncodingInfo): Boolean;
+// Perf P2: GetLines validiert/laedt den Eintrag (zentrale Snapshot-/Stat-
+// Logik, kein zweiter Staleness-Pfad hier); danach ist der Entry-Lookup
+// ein garantierter Hit.
+var
+  Entry : TFileTextCacheEntry;
+begin
+  Result := False;
+  if GetLines(FileName) = nil then Exit;
+  if not FCache.TryGetValue(Key(FileName), Entry) then Exit;
+  Info := Entry.EncInfo;
+  Result := True;
 end;
 
 procedure TFileTextCache.Clear;
@@ -607,6 +665,20 @@ begin
   except
     FreeAndNil(Result);
   end;
+end;
+
+function AcquireEncodingInfo(const FileName: string;
+  ACache: TFileTextCache): TFileEncodingInfo;
+// Perf P2: siehe Interface-Kommentar. Identisches Verdikt wie
+// AnalyzeFileEncoding (gleiche ComputeFileEncodingInfo-Funktion, gleicher
+// Datei-Snapshot); der Cache-Pfad spart nur den zweiten Disk-Read.
+var
+  Cache : TFileTextCache;
+begin
+  Cache := ACache;
+  if Cache = nil then Cache := gFileTextCache;
+  if (Cache <> nil) and Cache.TryGetEncodingInfo(FileName, Result) then Exit;
+  Result := AnalyzeFileEncoding(FileName);
 end;
 
 procedure ReleaseLines(Lines: TStringList; OwnedByCache: Boolean);

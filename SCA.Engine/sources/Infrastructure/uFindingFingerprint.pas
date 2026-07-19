@@ -42,8 +42,15 @@ type
       Radius: Integer = CONTEXT_HASH_RADIUS): string; static;
 
     // Variante mit expliziten Parametern - fuer Tests + direkte Aufrufer.
+    // AForceStat: Default True (mtime+Size-Recheck pro Zugriff) - Kontrakt
+    // fuer Baseline-Drift-Matching ueber Datei-Ueberschreibungen hinweg.
+    // Perf P3 (Konzept_Performance25, 2026-07-19): der SARIF-Export im
+    // Scan-Prozess (Dateien seit dem Einlesen unveraendert) darf False
+    // uebergeben und den Cache-Snapshot nutzen (spart 2 Syscalls pro
+    // Finding-Zeile, ~0,6-1 Mio Stats pro Korpus-Export).
     class function ContextHashFor(const FileName: string; LineNo: Integer;
-      Radius: Integer = CONTEXT_HASH_RADIUS): string; static;
+      Radius: Integer = CONTEXT_HASH_RADIUS;
+      AForceStat: Boolean = True): string; static;
 
     // Perf (2026-07-05): P3 ContextHash-Memo - memoisierte Variante fuer
     // Schleifen ueber viele Findings (SARIF-Export, Baseline Write/Apply).
@@ -56,8 +63,12 @@ type
     // Verhaltensneutral: ContextHashFor ist deterministisch in
     // (Datei,Zeile) bei stabilem Datei-Inhalt - dieselbe Annahme, die der
     // bestehende gFileTextCache-Snapshot bereits macht.
+    // AForceStat wird an ContextHashFor durchgereicht (siehe dort);
+    // Baseline Write/Apply lassen den Default True, SARIF-Export gibt
+    // False (Perf P3).
     class function ContextHashMemo(const F: TLeakFinding;
-      AMemo: TDictionary<string, string>): string; static;
+      AMemo: TDictionary<string, string>;
+      AForceStat: Boolean = True): string; static;
 
     // Normalisierungs-Helper (public fuer Tests):
     // Tabs -> Space, kollabiert Whitespace-Runs zu einem Space, trim,
@@ -114,30 +125,49 @@ class function TFindingFingerprint.Normalize(const Snippet: string): string;
 //   - Trailing-WS-Cleanup
 //   - Leerzeilen-Cleanup
 //   - CRLF vs LF
+// Perf P9 (Konzept_Performance25, 2026-07-19): direkter Ein-Pass-Split statt
+// 2x TStringList + ToStringArray + Join pro Aufruf (~300-500k Aufrufe pro
+// Korpus-Export). Byte-identisch zum frueheren TStringList.Text-Split:
+// CR, LF und CRLF trennen Zeilen; Randfaelle (LF+CR, trailing Umbruch)
+// erzeugen dort nur zusaetzliche LEERE Zeilen - und leere Zeilen werden
+// hier ohnehin verworfen.
 var
-  InputLines  : TStringList;
-  OutputLines : TStringList;
-  Sb          : TStringBuilder;
-  i           : Integer;
-  Line        : string;
+  OutSb : TStringBuilder;
+  Sb    : TStringBuilder;
+  i, n  : Integer;
+  s     : Integer;
+  Line  : string;
 begin
   if Snippet = '' then Exit('');
-  InputLines  := TStringList.Create;
-  OutputLines := TStringList.Create;
-  Sb          := TStringBuilder.Create;
+  Sb    := TStringBuilder.Create;
+  OutSb := TStringBuilder.Create;
   try
-    InputLines.Text := Snippet;
-    for i := 0 to InputLines.Count - 1 do
+    n := Length(Snippet);
+    i := 1;
+    while i <= n do
     begin
-      Line := CollapseWhitespace(InputLines[i], Sb);
+      s := i;
+      while (i <= n) and (Snippet[i] <> #10) and (Snippet[i] <> #13) do
+        Inc(i);
+      Line := CollapseWhitespace(Copy(Snippet, s, i - s), Sb);
       if Line <> '' then
-        OutputLines.Add(Line);
+      begin
+        if OutSb.Length > 0 then OutSb.Append(#10);
+        OutSb.Append(Line);
+      end;
+      // Zeilenumbruch konsumieren: CRLF zaehlt als EIN Umbruch.
+      if (i <= n) and (Snippet[i] = #13) then
+      begin
+        Inc(i);
+        if (i <= n) and (Snippet[i] = #10) then Inc(i);
+      end
+      else if (i <= n) and (Snippet[i] = #10) then
+        Inc(i);
     end;
-    Result := string.Join(#10, OutputLines.ToStringArray);
+    Result := OutSb.ToString;
   finally
+    OutSb.Free;
     Sb.Free;
-    OutputLines.Free;
-    InputLines.Free;
   end;
 end;
 
@@ -148,7 +178,7 @@ begin
 end;
 
 class function TFindingFingerprint.ContextHashFor(const FileName: string;
-  LineNo, Radius: Integer): string;
+  LineNo, Radius: Integer; AForceStat: Boolean): string;
 var
   Lines     : TStringList;
   Cached    : Boolean;
@@ -160,13 +190,13 @@ begin
   Result := '';
   if (FileName = '') or (LineNo < 1) or (Radius < 0) then Exit;
 
-  // AForceStat=True: der contextHash MUSS auf dem AKTUELLEN Datei-Inhalt
-  // rechnen - Baseline-Drift-Matching vergleicht Kontexte UEBER Datei-
-  // Ueberschreibungen hinweg, auch ohne zwischenzeitliches Cache-Clear
-  // (Kontrakt-Test: Baseline_MatchesViaContextHashAfterLineDrift). Das
-  // P2-Generation-Skip gilt hier deshalb nicht; die Kosten deckelt das
-  // P3-Memo (1x pro Datei|Zeile).
-  Lines := AcquireLines(FileName, Cached, nil, True);
+  // AForceStat=True (Default): der contextHash MUSS auf dem AKTUELLEN
+  // Datei-Inhalt rechnen - Baseline-Drift-Matching vergleicht Kontexte
+  // UEBER Datei-Ueberschreibungen hinweg, auch ohne zwischenzeitliches
+  // Cache-Clear (Kontrakt-Test: Baseline_MatchesViaContextHashAfterLine-
+  // Drift). Nur der SARIF-Export im Scan-Prozess reicht False durch
+  // (Perf P3) - dort sind die Dateien seit dem Einlesen unveraendert.
+  Lines := AcquireLines(FileName, Cached, nil, AForceStat);
   if Lines = nil then Exit;
   try
     if Lines.Count = 0 then Exit;
@@ -206,7 +236,7 @@ begin
 end;
 
 class function TFindingFingerprint.ContextHashMemo(const F: TLeakFinding;
-  AMemo: TDictionary<string, string>): string;
+  AMemo: TDictionary<string, string>; AForceStat: Boolean): string;
 // Perf (2026-07-05): P3 ContextHash-Memo - siehe Interface-Kommentar.
 // Key-Bildung: LineNumber wird wie in ContextHash geparst (unparsbar -> 0,
 // liefert dann wie bisher ''), damit '7' und '07' denselben Eintrag
@@ -221,7 +251,7 @@ begin
   if not TryStrToInt(F.LineNumber, LineNo) then LineNo := 0;
   Key := LowerCase(F.FileName) + '|' + IntToStr(LineNo);
   if AMemo.TryGetValue(Key, Result) then Exit;
-  Result := ContextHashFor(F.FileName, LineNo, CONTEXT_HASH_RADIUS);
+  Result := ContextHashFor(F.FileName, LineNo, CONTEXT_HASH_RADIUS, AForceStat);
   AMemo.Add(Key, Result);
 end;
 
