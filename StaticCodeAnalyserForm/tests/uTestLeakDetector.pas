@@ -193,6 +193,10 @@ type
     [Test] procedure Leak_InstanceFactoryCreate_NoFinding;
     [Test] procedure Leak_TypeCreateSuffix_StillError;          // TP-Gegenprobe
     [Test] procedure Leak_MetaclassCreateNew_StillError;        // TP-Gegenprobe
+    // --- Inkr.3 (2026-07-19): Custom-Add-/Insert-/Put-Familie ---
+    [Test] procedure Leak_CustomAddMethod_OwnershipRecognized;
+    [Test] procedure Leak_InsertNodeCastArg_OwnershipRecognized;
+    [Test] procedure Leak_AddressCall_StillReported;            // TP-Gegenprobe
   end;
 
   // ---- FieldLeak (TFieldLeakDetector) ------------------------------------------------
@@ -2982,6 +2986,70 @@ begin
   try
     Assert.IsTrue(TFindingHelper.CountSev(F, fkMemoryLeak, lsError) >= 1,
       'Metaclass-Local.CreateNew bleibt eine echte Konstruktion - Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_CustomAddMethod_OwnershipRecognized;
+// Inkr.3 (add-call 27/101): 'FOptions.AddOption(sl)' - custom Add-Methode
+// registriert das Objekt in einer owning-Struktur des Consumers. Marker
+// '.add' + CamelCase-Suffix ('O' gross im Original) + Var als Arg;
+// Feld-Receiver -> permissiver AddReceiverOwnsItems-Pfad.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var sl: TStringList;'#13#10+
+  'begin'#13#10+
+  '  sl := TStringList.Create;'#13#10+
+  '  FOptions.AddOption(sl);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'custom AddOption uebernimmt Ownership - kein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_InsertNodeCastArg_OwnershipRecognized;
+// Inkr.3: 'FTree.InsertNode(..., PFileInfo(fi))' - Insert-Familie mit dem
+// Objekt in einem CAST-Argument (VarInArgs matcht wortgebunden im Cast).
+// Geerdet: HeidiSQL insertfiles.pas ListFiles.InsertNode(PFileInfo(FileInfo)).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var fi: TStringList;'#13#10+
+  'begin'#13#10+
+  '  fi := TStringList.Create;'#13#10+
+  '  FTree.InsertNode(FTree.FocusedNode, amInsertAfter, PFileInfo(fi));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'InsertNode mit Cast-Arg uebernimmt Ownership - kein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_AddressCall_StillReported;
+// TP-Gegenprobe zur Camel-Regel: '.Address(obj)' ist KEINE Add-Familie
+// (Buchstabe nach '.add' ist 'r' und im Original KLEIN) -> kein Ownership-
+// Transfer -> das nie freigegebene Objekt bleibt ein Leak-Fund.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var obj: TStringList;'#13#10+
+  'begin'#13#10+
+  '  obj := TStringList.Create;'#13#10+
+  '  FLog.Address(obj);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.CountSev(F, fkMemoryLeak, lsError) >= 1,
+      '.Address ist keine Add-Familie - Leak bleibt gemeldet');
   finally F.Free; end;
 end;
 

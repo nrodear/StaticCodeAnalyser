@@ -959,14 +959,22 @@ var
   ParentLHS : string;
 
   function VarInArgs(const CallName: string; AfterPos: Integer): Boolean;
-  // Prüft ob VarNameLow als Wort nach Position AfterPos in CallName vorkommt
+  // Prüft ob VarNameLow als Wort nach Position AfterPos in CallName vorkommt.
+  // Inkr.3-Fix: ALLE Substring-Treffer pruefen, nicht nur den ersten - bei
+  // 'insertnode(..., pfileinfo(fi))' liegt der erste 'fi'-Treffer INNERHALB
+  // von 'pfileinfo' (keine Wortgrenze) und das echte Cast-Arg '(fi)' wurde
+  // verpasst. Nur in Ownership-Gates genutzt -> mehr Treffer = nur mehr
+  // Suppression (monoton).
   var
     p: Integer;
   begin
     Result := False;
     p := PosEx(VarNameLow, CallName, AfterPos);
-    if p > 0 then
-      Result := IsWholeWord(CallName, VarNameLow, p);
+    while p > 0 do
+    begin
+      if IsWholeWord(CallName, VarNameLow, p) then Exit(True);
+      p := PosEx(VarNameLow, CallName, p + 1);
+    end;
   end;
 
   function CondPassesToOwnerAdd(const CondLow: string): Boolean;
@@ -1180,6 +1188,50 @@ begin
       // Add-Familie-for-Loop gewandert und dort scope-lokal.)
       var pAdd := Pos('.addobject(', NameLow);
       if (pAdd > 0) and VarInArgs(NameLow, pAdd + 11) then
+        Exit(True);
+
+      // Inkr.3 (Gross-Triage add-call-Bucket 27/101, groesster Rest): CUSTOM
+      // Add-/Insert-/Put-Familie - 'Cfg.AddOption(sl)', 'Enc.AddStream(...,s,..)',
+      // 'Tree.InsertNode(..., PFileInfo(fi))', 'Cont.Put(key, obj)'. Der Consumer
+      // registriert das Objekt in einer eigenen owning-Struktur (Triage: 27/27
+      // solcher Uebergaben fremd-owned). Marker: '.add'/'.insert'/'.put' +
+      // optionales CamelCase-Suffix - der Buchstabe DIREKT nach dem Praefix muss
+      // im ORIGINAL-Case GROSS sein ('.AddStream' ja, '.address(' nein) - dann
+      // '(' + Var als bare Wort-Arg (VarInArgs matcht auch in Cast-Argumenten
+      // 'PFileInfo(fi)'). Receiver-Pruefung identisch permissiv wie '.add('.
+      for var Fam in ['.add', '.insert', '.put'] do
+      begin
+        var pF := Pos(Fam, NameLow);
+        while pF > 0 do
+        begin
+          var sf := pF + Length(Fam);
+          var ef := sf;
+          if (sf <= Length(NameLow)) and IsIdentChar(NameLow[sf]) then
+          begin
+            if CharInSet(N.Name[sf], ['A'..'Z']) then
+            begin
+              while (ef <= Length(NameLow)) and IsIdentChar(NameLow[ef]) do Inc(ef);
+            end
+            else
+              ef := 0;      // lowercase-Fortsetzung ('.address') -> keine Familie
+          end;
+          if (ef > 0) and (ef <= Length(NameLow)) and (NameLow[ef] = '(')
+             and VarInArgs(NameLow, ef + 1) then
+          begin
+            var recvLow := Copy(NameLow, 1, pF - 1);
+            if recvLow.StartsWith('self.') then
+              recvLow := Copy(recvLow, 6, MaxInt);
+            if AddReceiverOwnsItems(MethodNode, recvLow) then
+              Exit(True);
+          end;
+          pF := PosEx(Fam, NameLow, pF + 1);
+        end;
+      end;
+
+      // mORMot-kuratiert: 'ObjArrayAdd(fOwnedList, x)' haengt x an ein dyn-Array,
+      // dessen Owner es freigibt (Triage Batch 3: Rtti.ObjArrayAdd(fOwnedRtti)).
+      if (Pos('objarrayadd(', NameLow) > 0) and
+         VarInArgs(NameLow, Pos('objarrayadd(', NameLow) + 12) then
         Exit(True);
 
       // TList/TQueue/TStack.Insert(index, item) - Ownership-Transfer
