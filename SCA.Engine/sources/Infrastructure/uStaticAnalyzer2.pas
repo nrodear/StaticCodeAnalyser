@@ -475,7 +475,7 @@ begin
   AddD3('CommandInjection', fkCommandInjection, TCommandInjectionDetector.AnalyzeUnit, ['shellexecute', 'createprocess', 'winexec']);
   // SCA167 InsecureRandom: file-Pre-Filter auf 'random' (Substring) skippt
   // grosse Files die das Wort nicht enthalten.
-  AddD3('InsecureRandom', fkInsecureRandom, TInsecureRandomDetector.AnalyzeUnit, ['random']);
+  AddD('InsecureRandom', fkInsecureRandom, TInsecureRandomDetector.AnalyzeUnit, ['random']);   // P7-minimal: Ctx fuer Strip-Cache
   // SCA168 DefaultCaseInCaseStatement: brauchen nur nkCaseStmt; Pre-Filter 'case'.
   AddD3('DefaultCaseInCaseStatement', fkDefaultCaseInCaseStatement, TDefaultCaseInCaseStatementDetector.AnalyzeUnit, ['case ']);
   // SCA169 AssertWithSideEffect: Pre-Filter 'assert'.

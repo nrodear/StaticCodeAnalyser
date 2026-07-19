@@ -317,64 +317,60 @@ var
   ArgLow  : string;
 begin
   Result  := False;
-  Assigns := MethodNode.FindAll(nkAssign);
-  try
-    for A in Assigns do
+  Assigns := MethodNode.FindAllRef(nkAssign);
+  for A in Assigns do
+  begin
+    if A.Name.ToLower <> VarNameLow then Continue;
+    TypeLow := A.TypeRef.ToLower;
+    if not MatchesCreate(A.TypeRef, TypeLow, CreatePos) then Continue;
+    // Hinter '.create' evtl. CamelCase-Suffix ('createnew') ueberspringen,
+    // dann Whitespace - danach muss die Argumentklammer folgen.
+    idx := CreatePos + 7;  // direkt hinter 'create'
+    while (idx <= Length(TypeLow)) and IsIdentChar(TypeLow[idx]) do Inc(idx);
+    while (idx <= Length(TypeLow)) and (TypeLow[idx] = ' ') do Inc(idx);
+    if (idx > Length(TypeLow)) or (TypeLow[idx] <> '(') then Continue;
+    // Argumentliste bis zur passenden schliessenden Klammer extrahieren
+    // (Tiefenzaehlung, bounds-safe; unbalancierte RHS -> kein Match).
+    ArgStart := idx + 1;
+    depth    := 1;
+    Inc(idx);
+    while (idx <= Length(TypeLow)) and (depth > 0) do
     begin
-      if A.Name.ToLower <> VarNameLow then Continue;
-      TypeLow := A.TypeRef.ToLower;
-      if not MatchesCreate(A.TypeRef, TypeLow, CreatePos) then Continue;
-      // Hinter '.create' evtl. CamelCase-Suffix ('createnew') ueberspringen,
-      // dann Whitespace - danach muss die Argumentklammer folgen.
-      idx := CreatePos + 7;  // direkt hinter 'create'
-      while (idx <= Length(TypeLow)) and IsIdentChar(TypeLow[idx]) do Inc(idx);
-      while (idx <= Length(TypeLow)) and (TypeLow[idx] = ' ') do Inc(idx);
-      if (idx > Length(TypeLow)) or (TypeLow[idx] <> '(') then Continue;
-      // Argumentliste bis zur passenden schliessenden Klammer extrahieren
-      // (Tiefenzaehlung, bounds-safe; unbalancierte RHS -> kein Match).
-      ArgStart := idx + 1;
-      depth    := 1;
-      Inc(idx);
-      while (idx <= Length(TypeLow)) and (depth > 0) do
-      begin
-        if TypeLow[idx] = '(' then Inc(depth)
-        else if TypeLow[idx] = ')' then Dec(depth);
-        if depth > 0 then Inc(idx);
-      end;
-      if depth <> 0 then Continue;
-      ArgLow := Trim(Copy(TypeLow, ArgStart, idx - ArgStart));
-      // Owner steht per TComponent-Konvention an ERSTER Stelle:
-      // Create(AOwner[, weitere Args]). Frueher wurde das GESAMTE Argument
-      // exakt verglichen -> 'Create(self, id, caption)' (Multi-Arg-Ctor)
-      // rutschte durch = FP. Jetzt nur das ERSTE Top-Level-Argument.
-      // TP-sicher: dieselbe TComponent-Owner-Annahme wie im Single-Arg-Fall,
-      // nur auf Multi-Arg-Konstruktoren erweitert. Verifiziert an
-      // TBrowserTab.Create(AOwner: TComponent; id; caption)
-      // (class(TTabSheet) -> TComponent -> Owner verwaltet das Lifetime).
-      // Erstes Arg extrahieren (Top-Level-Komma; Klammern-Tiefe zaehlen, damit
-      // 'Create(TFoo.Create(a,b), c)' nicht am inneren Komma splittet).
-      var FirstArg := ArgLow;
-      var cp := 1; var d2 := 0;
-      while cp <= Length(ArgLow) do
-      begin
-        if ArgLow[cp] = '(' then Inc(d2)
-        else if ArgLow[cp] = ')' then Dec(d2)
-        else if (ArgLow[cp] = ',') and (d2 = 0) then
-        begin
-          FirstArg := Trim(Copy(ArgLow, 1, cp - 1));
-          Break;
-        end;
-        Inc(cp);
-      end;
-      // Kanonische Owner-Bezeichner - exakter Vergleich des ersten Arguments,
-      // damit Teilausdruecke ('8 * self.degree', 'self.owner.tag', 'datei')
-      // NICHT matchen.
-      if (FirstArg = 'self') or (FirstArg = 'owner') or (FirstArg = 'aowner') or
-         (FirstArg = 'application') or (FirstArg = 'self.owner') then
-        Exit(True);
+      if TypeLow[idx] = '(' then Inc(depth)
+      else if TypeLow[idx] = ')' then Dec(depth);
+      if depth > 0 then Inc(idx);
     end;
-  finally
-    Assigns.Free;
+    if depth <> 0 then Continue;
+    ArgLow := Trim(Copy(TypeLow, ArgStart, idx - ArgStart));
+    // Owner steht per TComponent-Konvention an ERSTER Stelle:
+    // Create(AOwner[, weitere Args]). Frueher wurde das GESAMTE Argument
+    // exakt verglichen -> 'Create(self, id, caption)' (Multi-Arg-Ctor)
+    // rutschte durch = FP. Jetzt nur das ERSTE Top-Level-Argument.
+    // TP-sicher: dieselbe TComponent-Owner-Annahme wie im Single-Arg-Fall,
+    // nur auf Multi-Arg-Konstruktoren erweitert. Verifiziert an
+    // TBrowserTab.Create(AOwner: TComponent; id; caption)
+    // (class(TTabSheet) -> TComponent -> Owner verwaltet das Lifetime).
+    // Erstes Arg extrahieren (Top-Level-Komma; Klammern-Tiefe zaehlen, damit
+    // 'Create(TFoo.Create(a,b), c)' nicht am inneren Komma splittet).
+    var FirstArg := ArgLow;
+    var cp := 1; var d2 := 0;
+    while cp <= Length(ArgLow) do
+    begin
+      if ArgLow[cp] = '(' then Inc(d2)
+      else if ArgLow[cp] = ')' then Dec(d2)
+      else if (ArgLow[cp] = ',') and (d2 = 0) then
+      begin
+        FirstArg := Trim(Copy(ArgLow, 1, cp - 1));
+        Break;
+      end;
+      Inc(cp);
+    end;
+    // Kanonische Owner-Bezeichner - exakter Vergleich des ersten Arguments,
+    // damit Teilausdruecke ('8 * self.degree', 'self.owner.tag', 'datei')
+    // NICHT matchen.
+    if (FirstArg = 'self') or (FirstArg = 'owner') or (FirstArg = 'aowner') or
+       (FirstArg = 'application') or (FirstArg = 'self.owner') then
+      Exit(True);
   end;
 end;
 
@@ -387,18 +383,14 @@ var
   Dummy    : Integer;
 begin
   Result  := False;
-  Assigns := MethodNode.FindAll(nkAssign);
-  try
-    for A in Assigns do
-    begin
-      // Exakter Namensvergleich (A.Name ist immer der vollständige LHS-Ausdruck)
-      if A.Name.ToLower <> VarNameLow then Continue;
-      TypeLow := A.TypeRef.ToLower;
-      if MatchesCreate(A.TypeRef, TypeLow, Dummy) then
-        Exit(True);
-    end;
-  finally
-    Assigns.Free;
+  Assigns := MethodNode.FindAllRef(nkAssign);
+  for A in Assigns do
+  begin
+    // Exakter Namensvergleich (A.Name ist immer der vollständige LHS-Ausdruck)
+    if A.Name.ToLower <> VarNameLow then Continue;
+    TypeLow := A.TypeRef.ToLower;
+    if MatchesCreate(A.TypeRef, TypeLow, Dummy) then
+      Exit(True);
   end;
 end;
 
@@ -410,21 +402,17 @@ var
   TypeLow : string;
 begin
   Result  := 0;
-  Assigns := MethodNode.FindAll(nkAssign);
-  try
-    for A in Assigns do
+  Assigns := MethodNode.FindAllRef(nkAssign);
+  for A in Assigns do
+  begin
+    if A.Name.ToLower <> VarNameLow then Continue;
+    TypeLow := A.TypeRef.ToLower;
+    var Dummy : Integer;
+    if MatchesCreate(A.TypeRef, TypeLow, Dummy) then
     begin
-      if A.Name.ToLower <> VarNameLow then Continue;
-      TypeLow := A.TypeRef.ToLower;
-      var Dummy : Integer;
-      if MatchesCreate(A.TypeRef, TypeLow, Dummy) then
-      begin
-        Result := A.Line;
-        Exit;
-      end;
+      Result := A.Line;
+      Exit;
     end;
-  finally
-    Assigns.Free;
   end;
 end;
 
@@ -436,26 +424,22 @@ var
   RHS     : string;
 begin
   Result  := 0;
-  Assigns := MethodNode.FindAll(nkAssign);
-  try
-    for A in Assigns do
+  Assigns := MethodNode.FindAllRef(nkAssign);
+  for A in Assigns do
+  begin
+    if A.Name.ToLower <> VarNameLow then Continue;
+    RHS := A.TypeRef.ToLower;
+    if Pos('.create', RHS) > 0 then Continue;
+    if (RHS = 'nil') or (RHS = '') then Continue;
+    // FP-Gate (2026-07-04): os-handle - dieselben Assigns ueberspringen,
+    // die HasFunctionCallAssign nicht als Fund wertet, damit die
+    // Befund-Zeile konsistent auf dem echten Ausloeser landet.
+    if IsOsHandleApiCall(RHS) then Continue;
+    if Pos('(', RHS) > 0 then
     begin
-      if A.Name.ToLower <> VarNameLow then Continue;
-      RHS := A.TypeRef.ToLower;
-      if Pos('.create', RHS) > 0 then Continue;
-      if (RHS = 'nil') or (RHS = '') then Continue;
-      // FP-Gate (2026-07-04): os-handle - dieselben Assigns ueberspringen,
-      // die HasFunctionCallAssign nicht als Fund wertet, damit die
-      // Befund-Zeile konsistent auf dem echten Ausloeser landet.
-      if IsOsHandleApiCall(RHS) then Continue;
-      if Pos('(', RHS) > 0 then
-      begin
-        Result := A.Line;
-        Exit;
-      end;
+      Result := A.Line;
+      Exit;
     end;
-  finally
-    Assigns.Free;
   end;
 end;
 
@@ -481,25 +465,17 @@ var
     Result := False;
     if (ThisClassLow = '') or (CalleeLow = '') then Exit;
     TargetLow := ThisClassLow + '.' + CalleeLow;
-    Methods := UnitNode.FindAll(nkMethod);
-    try
-      for Mth in Methods do
+    Methods := UnitNode.FindAllRef(nkMethod);
+    for Mth in Methods do
+    begin
+      if Mth.Name.ToLower <> TargetLow then Continue;
+      Assigns := Mth.FindAllRef(nkAssign);
+      for A in Assigns do
       begin
-        if Mth.Name.ToLower <> TargetLow then Continue;
-        Assigns := Mth.FindAll(nkAssign);
-        try
-          for A in Assigns do
-          begin
-            LhsLow := A.Name.ToLower;
-            if (LhsLow = 'result') or (LhsLow = CalleeLow) then
-              if Pos('.create', A.TypeRef.ToLower) > 0 then Exit(True);
-          end;
-        finally
-          Assigns.Free;
-        end;
+        LhsLow := A.Name.ToLower;
+        if (LhsLow = 'result') or (LhsLow = CalleeLow) then
+          if Pos('.create', A.TypeRef.ToLower) > 0 then Exit(True);
       end;
-    finally
-      Methods.Free;
     end;
   end;
 
@@ -631,26 +607,22 @@ var
       Callee := Head;
     if not IsCleanIdent(Callee) then Exit;
     Found := False;
-    Methods := UnitNode.FindAll(nkMethod);
-    try
-      for Mth in Methods do
-      begin
-        var MLow := Mth.Name.ToLower;
-        if (MLow <> Callee) and not EndsStr('.' + Callee, MLow) then Continue;
-        TRef := Mth.TypeRef.ToLower;
-        cp := Pos(':', TRef);
-        if cp = 0 then Continue;                 // procedure-Homonym: kein Ret-Typ
-        sp := Pos(';', TRef);
-        if sp = 0 then sp := Length(TRef) + 1;
-        if sp <= cp then Continue;               // ':' gehoert zu Direktiven-Teil
-        Ret := Trim(Copy(TRef, cp + 1, sp - cp - 1));
-        if IsValueTypeName(Ret) then
-          Found := True
-        else
-          Exit(False);                           // Objekt-Overload existiert -> unsicher
-      end;
-    finally
-      Methods.Free;
+    Methods := UnitNode.FindAllRef(nkMethod);
+    for Mth in Methods do
+    begin
+      var MLow := Mth.Name.ToLower;
+      if (MLow <> Callee) and not EndsStr('.' + Callee, MLow) then Continue;
+      TRef := Mth.TypeRef.ToLower;
+      cp := Pos(':', TRef);
+      if cp = 0 then Continue;                 // procedure-Homonym: kein Ret-Typ
+      sp := Pos(';', TRef);
+      if sp = 0 then sp := Length(TRef) + 1;
+      if sp <= cp then Continue;               // ':' gehoert zu Direktiven-Teil
+      Ret := Trim(Copy(TRef, cp + 1, sp - cp - 1));
+      if IsValueTypeName(Ret) then
+        Found := True
+      else
+        Exit(False);                           // Objekt-Overload existiert -> unsicher
     end;
     Result := Found;
   end;
@@ -724,45 +696,41 @@ begin
   DotP := LastDelimiter('.', MethodNode.Name);
   if DotP > 0 then ThisClassLow := LowerCase(Copy(MethodNode.Name, 1, DotP - 1));
 
-  Assigns := MethodNode.FindAll(nkAssign);
-  try
-    for A in Assigns do
+  Assigns := MethodNode.FindAllRef(nkAssign);
+  for A in Assigns do
+  begin
+    if A.Name.ToLower <> VarNameLow then Continue;
+    RHS := A.TypeRef.ToLower;
+    if Pos('.create', RHS) > 0 then Continue;  // durch HasCreateAssign abgedeckt
+    if (RHS = 'nil') or (RHS = '') then Continue;
+    // Expliziter Aufruf mit Klammern: GetList()
+    if Pos('(', RHS) > 0 then
     begin
-      if A.Name.ToLower <> VarNameLow then Continue;
-      RHS := A.TypeRef.ToLower;
-      if Pos('.create', RHS) > 0 then Continue;  // durch HasCreateAssign abgedeckt
-      if (RHS = 'nil') or (RHS = '') then Continue;
-      // Expliziter Aufruf mit Klammern: GetList()
-      if Pos('(', RHS) > 0 then
-      begin
-        // Non-Ownership-Calls (Ensure*/Get*/Find*/...) ueberspringen.
-        if IsBorrowedReferenceCall(RHS) then Continue;
-        // FP-Gate (2026-07-04): os-handle - socket()/accept()/CreateFile()
-        // & Co. liefern OS-Handles, keine Delphi-Objekte -> kein SCA001.
-        if IsOsHandleApiCall(RHS) then Continue;
-        // Werttyp-Return (Gross-Triage 2026-07-18): in-unit-Funktion liefert
-        // String/Ordinal/Record-Wert ('MakePath: TFileName') - kann nie leaken.
-        if ReturnsValueType(RHS) then Continue;
-        // FP-Gate (borrowed-reference, 2026-07-11): nur konstruktor-artige
-        // Callees / bewiesene lokale Factories geben Ownership ab; geborgte
-        // Getter (CnOtaGetRootComponentFromEditor, Images.Bitmap) NICHT.
-        if OwningReturnCall(A.TypeRef) then Exit(True);
-        Continue;
-      end;
-      // Ohne '(': normalerweise geliehene Referenz ('list := obj.FList'
-      // / 'list := SomeProperty') - KEIN Ownership-Transfer. AUSNAHME:
-      // ein klammerloser Aufruf einer parameterlosen Schwester-FACTORY
-      // DERSELBEN Klasse ('list := MeineFactory;' mit
-      // `Result := TFoo.Create` im Body) IST ein Leak. Wir loesen nur
-      // bare bzw. `Self.`-qualifizierte Identifier auf (eindeutig eigene
-      // Klasse); echte Fields/Properties/externe Getter matchen nicht.
-      var RhsId := Trim(RHS);
-      if StartsStr('self.', RhsId) then RhsId := Copy(RhsId, 6, MaxInt);
-      if IsCleanIdent(RhsId) and IsLocalFactory(RhsId) then
-        Exit(True);
+      // Non-Ownership-Calls (Ensure*/Get*/Find*/...) ueberspringen.
+      if IsBorrowedReferenceCall(RHS) then Continue;
+      // FP-Gate (2026-07-04): os-handle - socket()/accept()/CreateFile()
+      // & Co. liefern OS-Handles, keine Delphi-Objekte -> kein SCA001.
+      if IsOsHandleApiCall(RHS) then Continue;
+      // Werttyp-Return (Gross-Triage 2026-07-18): in-unit-Funktion liefert
+      // String/Ordinal/Record-Wert ('MakePath: TFileName') - kann nie leaken.
+      if ReturnsValueType(RHS) then Continue;
+      // FP-Gate (borrowed-reference, 2026-07-11): nur konstruktor-artige
+      // Callees / bewiesene lokale Factories geben Ownership ab; geborgte
+      // Getter (CnOtaGetRootComponentFromEditor, Images.Bitmap) NICHT.
+      if OwningReturnCall(A.TypeRef) then Exit(True);
+      Continue;
     end;
-  finally
-    Assigns.Free;
+    // Ohne '(': normalerweise geliehene Referenz ('list := obj.FList'
+    // / 'list := SomeProperty') - KEIN Ownership-Transfer. AUSNAHME:
+    // ein klammerloser Aufruf einer parameterlosen Schwester-FACTORY
+    // DERSELBEN Klasse ('list := MeineFactory;' mit
+    // `Result := TFoo.Create` im Body) IST ein Leak. Wir loesen nur
+    // bare bzw. `Self.`-qualifizierte Identifier auf (eindeutig eigene
+    // Klasse); echte Fields/Properties/externe Getter matchen nicht.
+    var RhsId := Trim(RHS);
+    if StartsStr('self.', RhsId) then RhsId := Copy(RhsId, 6, MaxInt);
+    if IsCleanIdent(RhsId) and IsLocalFactory(RhsId) then
+      Exit(True);
   end;
 end;
 
@@ -814,28 +782,24 @@ begin
       FuncNameLow := Copy(FuncNameLow, DotPos + 1, MaxInt);
   end;
 
-  Assigns := MethodNode.FindAll(nkAssign);
-  try
-    for A in Assigns do
-    begin
-      LhsLow := A.Name.ToLower;
-      if not IsResultLhs(LhsLow) then Continue;
-      Trimmed := Trim(A.TypeRef.ToLower);
-      // Exakter Match: 'Result := varname'
-      if Trimmed = VarNameLow then Exit(True);
-      // Explicit cast: 'Result := varname as IFoo' (mit/ohne Whitespace
-      // - JoinTokInto produziert ' as ', aber legacy-Parser-Output kann
-      // weiterhin 'asIFoo' liefern - beide tolerieren).
-      if Trimmed.StartsWith(VarNameLow + ' as ') then Exit(True);
-      if Trimmed.StartsWith(VarNameLow) and
-         (Length(Trimmed) >= Length(VarNameLow) + 3) and
-         (Trimmed[Length(VarNameLow) + 1] = 'a') and
-         (Trimmed[Length(VarNameLow) + 2] = 's') and
-         CharInSet(Trimmed[Length(VarNameLow) + 3], ['a'..'z', '_']) then
-        Exit(True);
-    end;
-  finally
-    Assigns.Free;
+  Assigns := MethodNode.FindAllRef(nkAssign);
+  for A in Assigns do
+  begin
+    LhsLow := A.Name.ToLower;
+    if not IsResultLhs(LhsLow) then Continue;
+    Trimmed := Trim(A.TypeRef.ToLower);
+    // Exakter Match: 'Result := varname'
+    if Trimmed = VarNameLow then Exit(True);
+    // Explicit cast: 'Result := varname as IFoo' (mit/ohne Whitespace
+    // - JoinTokInto produziert ' as ', aber legacy-Parser-Output kann
+    // weiterhin 'asIFoo' liefern - beide tolerieren).
+    if Trimmed.StartsWith(VarNameLow + ' as ') then Exit(True);
+    if Trimmed.StartsWith(VarNameLow) and
+       (Length(Trimmed) >= Length(VarNameLow) + 3) and
+       (Trimmed[Length(VarNameLow) + 1] = 'a') and
+       (Trimmed[Length(VarNameLow) + 2] = 's') and
+       CharInSet(Trimmed[Length(VarNameLow) + 3], ['a'..'z', '_']) then
+      Exit(True);
   end;
 
   // A: modernes 'Exit(varname)' = Result-Transfer + Sprung. Parser legt
@@ -843,18 +807,14 @@ begin
   // Quelle: doublecmd-Audit, 825 Exit-Calls.
   var Exits : TList<TAstNode>;
   var ArgLow : string;
-  Exits := MethodNode.FindAll(nkExit);
-  try
-    for A in Exits do
-    begin
-      ArgLow := LowerCase(Trim(A.TypeRef));
-      if ArgLow = '' then Continue;  // 'Exit;' ohne Argument
-      if ArgLow = VarNameLow then Exit(True);
-      // Exit(list as IFoo) - explicit cast wie bei Result := list as IFoo
-      if ArgLow.StartsWith(VarNameLow + ' as ') then Exit(True);
-    end;
-  finally
-    Exits.Free;
+  Exits := MethodNode.FindAllRef(nkExit);
+  for A in Exits do
+  begin
+    ArgLow := LowerCase(Trim(A.TypeRef));
+    if ArgLow = '' then Continue;  // 'Exit;' ohne Argument
+    if ArgLow = VarNameLow then Exit(True);
+    // Exit(list as IFoo) - explicit cast wie bei Result := list as IFoo
+    if ArgLow.StartsWith(VarNameLow + ' as ') then Exit(True);
   end;
 end;
 
@@ -908,25 +868,21 @@ const
   begin
     Result := False;
     TypeLow := '';
-    Lst := MethodNode.FindAll(Kind);
-    try
-      for N in Lst do
+    Lst := MethodNode.FindAllRef(Kind);
+    for N in Lst do
+    begin
+      NameRaw := N.Name;
+      // Param-Knoten koennen 'var x'/'const x'/'out x' als Name haben.
+      // Wir wollen den nackten Identifier vergleichen.
+      for var Mod_ in ['var ', 'const ', 'out '] do
+        if NameRaw.ToLower.StartsWith(Mod_) then
+          NameRaw := Copy(NameRaw, Length(Mod_) + 1, MaxInt);
+      NameLow := NameRaw.ToLower;
+      if NameLow = ReceiverNameLow then
       begin
-        NameRaw := N.Name;
-        // Param-Knoten koennen 'var x'/'const x'/'out x' als Name haben.
-        // Wir wollen den nackten Identifier vergleichen.
-        for var Mod_ in ['var ', 'const ', 'out '] do
-          if NameRaw.ToLower.StartsWith(Mod_) then
-            NameRaw := Copy(NameRaw, Length(Mod_) + 1, MaxInt);
-        NameLow := NameRaw.ToLower;
-        if NameLow = ReceiverNameLow then
-        begin
-          TypeLow := N.TypeRef.ToLower;
-          Exit(True);
-        end;
+        TypeLow := N.TypeRef.ToLower;
+        Exit(True);
       end;
-    finally
-      Lst.Free;
     end;
   end;
 
@@ -1043,212 +999,200 @@ begin
   // durch den Caller wuerde Double-Free im Container-Destroy verursachen.
   // Beispiel: ENode := Parent.Add(nkX, ...) im AST-Builder.
   ParentLHS := VarNameLow + '.parent';
-  Assigns := MethodNode.FindAll(nkAssign);
-  try
-    for N in Assigns do
+  Assigns := MethodNode.FindAllRef(nkAssign);
+  for N in Assigns do
+  begin
+    // Parent-Assign: LHS-Match
+    if N.Name.ToLower = ParentLHS then
+      Exit(True);
+    // Self-freeing Thread (explizit): 'X.FreeOnTerminate := True' -> der Thread
+    // gibt sich nach Execute selbst frei; ein Free durch den Caller waere ein
+    // Use-after-free. Analog zum CreateAnonymousThread-Fall unten (der liefert
+    // implizit einen FreeOnTerminate-Thread). NUR literal 'true' (nicht eine
+    // Bedingung) -> konservativ. Real-World: Discovery-Residuum 2026-07-16,
+    // Alcinoe/mORMot Benchmark-Threads in Loops ('LThread.FreeOnTerminate:=True').
+    if (N.Name.ToLower = VarNameLow + '.freeonterminate') and
+       (Trim(N.TypeRef.ToLower) = 'true') then
+      Exit(True);
+    // Borrowed-Return: LHS == VarName, RHS enthaelt eine der Tree-API-
+    // Patterns. Pattern endet auf '(' damit '.add(' nicht in '.address('
+    // o.ae. matched (rechte Wortgrenze ist garantiert).
+    if N.Name.ToLower = VarNameLow then
     begin
-      // Parent-Assign: LHS-Match
-      if N.Name.ToLower = ParentLHS then
+      var TypeLow := N.TypeRef.ToLower;
+      if (Pos('.add(',         TypeLow) > 0) or
+         (Pos('.addchild(',    TypeLow) > 0) or
+         (Pos('.addnode(',     TypeLow) > 0) or
+         (Pos('.appendchild(', TypeLow) > 0) then
         Exit(True);
-      // Self-freeing Thread (explizit): 'X.FreeOnTerminate := True' -> der Thread
-      // gibt sich nach Execute selbst frei; ein Free durch den Caller waere ein
-      // Use-after-free. Analog zum CreateAnonymousThread-Fall unten (der liefert
-      // implizit einen FreeOnTerminate-Thread). NUR literal 'true' (nicht eine
-      // Bedingung) -> konservativ. Real-World: Discovery-Residuum 2026-07-16,
-      // Alcinoe/mORMot Benchmark-Threads in Loops ('LThread.FreeOnTerminate:=True').
-      if (N.Name.ToLower = VarNameLow + '.freeonterminate') and
-         (Trim(N.TypeRef.ToLower) = 'true') then
+      // Self-freeing thread: 'var := TThread.CreateAnonymousThread(...)' liefert
+      // einen FreeOnTerminate-Thread, der sich nach Ausfuehrung selbst freigibt -
+      // ein try/finally-Free durch den Caller waere ein Use-after-free-Bug.
+      // Allgemeine RTL-Tatsache (nicht framework-spezifisch). Real-World-FP-
+      // Audit 2026-07-10 (DMVC RESTClient th := TThread.CreateAnonymousThread).
+      if Pos('.createanonymousthread', TypeLow) > 0 then
         Exit(True);
-      // Borrowed-Return: LHS == VarName, RHS enthaelt eine der Tree-API-
-      // Patterns. Pattern endet auf '(' damit '.add(' nicht in '.address('
-      // o.ae. matched (rechte Wortgrenze ist garantiert).
-      if N.Name.ToLower = VarNameLow then
-      begin
-        var TypeLow := N.TypeRef.ToLower;
-        if (Pos('.add(',         TypeLow) > 0) or
-           (Pos('.addchild(',    TypeLow) > 0) or
-           (Pos('.addnode(',     TypeLow) > 0) or
-           (Pos('.appendchild(', TypeLow) > 0) then
-          Exit(True);
-        // Self-freeing thread: 'var := TThread.CreateAnonymousThread(...)' liefert
-        // einen FreeOnTerminate-Thread, der sich nach Ausfuehrung selbst freigibt -
-        // ein try/finally-Free durch den Caller waere ein Use-after-free-Bug.
-        // Allgemeine RTL-Tatsache (nicht framework-spezifisch). Real-World-FP-
-        // Audit 2026-07-10 (DMVC RESTClient th := TThread.CreateAnonymousThread).
-        if Pos('.createanonymousthread', TypeLow) > 0 then
-          Exit(True);
-      end;
-      // Var-zu-Field-Transfer:
-      //   FField := varName              -> Klassen-Feld haelt jetzt Ownership
-      //   FField := varName as ISome     -> Interface-Refcount haelt Lifetime
-      //   Self.FField := varName         -> mit explizitem Self-Praefix
-      // In allen Faellen verlaesst die Ownership den Method-Scope. Ob das
-      // Feld spaeter freigegeben wird, ist Aufgabe des FieldLeakDetectors.
-      // Heuristik fuer "ist LHS ein Feld": Delphi-Konvention F<Grossbuchstabe>
-      // oder explizites 'self.'-Praefix. Lokale Variablen heissen klein/
-      // camelCase, daher kein Match.
-      //
-      // Parser inseriert seit JoinTokInto Spaces zwischen Identifier-
-      // Tokens, daher 'notifier as IInterface' -> 'notifier as iinterface'.
-      // Wir akzeptieren beide Varianten (mit/ohne Whitespace) damit der
-      // Detektor robust gegen Parser-Aenderungen bleibt.
-      var RHSLow := Trim(N.TypeRef.ToLower);
-      var IsTransferShape := False;
-      if RHSLow = VarNameLow then
-        IsTransferShape := True
-      else if RHSLow.StartsWith(VarNameLow) then
-      begin
-        var Rest := Trim(Copy(RHSLow, Length(VarNameLow) + 1, MaxInt));
-        // 'as <typename>' ODER 'as<typename>' (legacy Parser-Output).
-        if Rest.StartsWith('as ') then
-          IsTransferShape := True
-        else if (Length(Rest) >= 3) and (Rest[1] = 'a') and (Rest[2] = 's') and
-                CharInSet(Rest[3], ['a'..'z', '_']) then
-          IsTransferShape := True;
-      end;
-      if IsTransferShape then
-      begin
-        var LHSOrig := N.Name;
-        if SameText(Copy(LHSOrig, 1, 5), 'self.') then
-          Exit(True);
-        if (Length(LHSOrig) >= 2) and (LHSOrig[1] = 'F') and
-           (LHSOrig[2] >= 'A') and (LHSOrig[2] <= 'Z') then
-          Exit(True);
-      end;
     end;
-  finally
-    Assigns.Free;
+    // Var-zu-Field-Transfer:
+    //   FField := varName              -> Klassen-Feld haelt jetzt Ownership
+    //   FField := varName as ISome     -> Interface-Refcount haelt Lifetime
+    //   Self.FField := varName         -> mit explizitem Self-Praefix
+    // In allen Faellen verlaesst die Ownership den Method-Scope. Ob das
+    // Feld spaeter freigegeben wird, ist Aufgabe des FieldLeakDetectors.
+    // Heuristik fuer "ist LHS ein Feld": Delphi-Konvention F<Grossbuchstabe>
+    // oder explizites 'self.'-Praefix. Lokale Variablen heissen klein/
+    // camelCase, daher kein Match.
+    //
+    // Parser inseriert seit JoinTokInto Spaces zwischen Identifier-
+    // Tokens, daher 'notifier as IInterface' -> 'notifier as iinterface'.
+    // Wir akzeptieren beide Varianten (mit/ohne Whitespace) damit der
+    // Detektor robust gegen Parser-Aenderungen bleibt.
+    var RHSLow := Trim(N.TypeRef.ToLower);
+    var IsTransferShape := False;
+    if RHSLow = VarNameLow then
+      IsTransferShape := True
+    else if RHSLow.StartsWith(VarNameLow) then
+    begin
+      var Rest := Trim(Copy(RHSLow, Length(VarNameLow) + 1, MaxInt));
+      // 'as <typename>' ODER 'as<typename>' (legacy Parser-Output).
+      if Rest.StartsWith('as ') then
+        IsTransferShape := True
+      else if (Length(Rest) >= 3) and (Rest[1] = 'a') and (Rest[2] = 's') and
+              CharInSet(Rest[3], ['a'..'z', '_']) then
+        IsTransferShape := True;
+    end;
+    if IsTransferShape then
+    begin
+      var LHSOrig := N.Name;
+      if SameText(Copy(LHSOrig, 1, 5), 'self.') then
+        Exit(True);
+      if (Length(LHSOrig) >= 2) and (LHSOrig[1] = 'F') and
+         (LHSOrig[2] >= 'A') and (LHSOrig[2] <= 'Z') then
+        Exit(True);
+    end;
   end;
 
   // inherited Create(varName, …) — Elternkonstruktor übernimmt Ownership
-  Inh := MethodNode.FindAll(nkInherited);
-  try
-    for N in Inh do
-    begin
-      NameLow := N.Name.ToLower;
-      if (Pos('create', NameLow) > 0) and
-         VarInArgs(NameLow, 1) then
-        Exit(True);
-    end;
-  finally
-    Inh.Free;
+  Inh := MethodNode.FindAllRef(nkInherited);
+  for N in Inh do
+  begin
+    NameLow := N.Name.ToLower;
+    if (Pos('create', NameLow) > 0) and
+       VarInArgs(NameLow, 1) then
+      Exit(True);
   end;
 
-  Calls := MethodNode.FindAll(nkCall);
-  try
-    for N in Calls do
+  Calls := MethodNode.FindAllRef(nkCall);
+  for N in Calls do
+  begin
+    NameLow := N.Name.ToLower;
+
+    // AnyClass.Create(varName, …)
+    pCreate := Pos('.create(', NameLow);
+    if (pCreate > 0) and VarInArgs(NameLow, pCreate + 8) then
+      Exit(True);
+
+    // Container.Add(varName) bzw. Container.Add(key, varName)
+    // Vorher: jede '.add('-Methode wurde als ownership-uebernehmend
+    // gewertet. Das produzierte False-Negatives auf legitime Leaks
+    // bei TList.Add / TStringList.Add / TSynList.Add (mORMot) -
+    // diese Listen uebernehmen KEIN Ownership.
+    //
+    // Jetzt: nur dann ownership annehmen, wenn entweder
+    //   (a) der Receiver-Typ aus Local-Var/Parameter-Deklaration
+    //       bekannt ist und auf ein ownership-bewusstes Container-
+    //       Pattern matched (TObjectList, TObjectDictionary, ...),
+    //   (b) der Typ NICHT aufloesbar ist (Field, dotted access,
+    //       inferred var) - hier bleibt das alte permissive
+    //       Verhalten als Default, damit keine Regression in den
+    //       haeufigen Frame-FList.Add(item)-Mustern entsteht.
+    // A2 2026-07-16: neben '.add(' auch die uebrigen Container-Add-Methoden
+    // im ARG-Fall behandeln. '.addnode/.addchild/.appendchild(' galten bereits
+    // im borrowed-RETURN-Fall oben (~Z.908) als ownership-uebernehmend, fehlten
+    // aber hier -> 'FTree.AddNode(node)' auf custom Bin-Trees/Pools war ein
+    // Discovery-FP (X lokal erzeugt, an Container uebergeben, Container besitzt).
+    // Receiver-Ownership-Pruefung (AddReceiverOwnsItems) bleibt identisch:
+    // aufloesbarer Typ -> RTL-Whitelist; Field/unaufloesbar -> permissiv (wie
+    // beim bestehenden '.add(' - keine neue TP-Annahme).
+    for var AddMarker in ['.add(', '.addnode(', '.addchild(', '.appendchild('] do
     begin
-      NameLow := N.Name.ToLower;
-
-      // AnyClass.Create(varName, …)
-      pCreate := Pos('.create(', NameLow);
-      if (pCreate > 0) and VarInArgs(NameLow, pCreate + 8) then
-        Exit(True);
-
-      // Container.Add(varName) bzw. Container.Add(key, varName)
-      // Vorher: jede '.add('-Methode wurde als ownership-uebernehmend
-      // gewertet. Das produzierte False-Negatives auf legitime Leaks
-      // bei TList.Add / TStringList.Add / TSynList.Add (mORMot) -
-      // diese Listen uebernehmen KEIN Ownership.
-      //
-      // Jetzt: nur dann ownership annehmen, wenn entweder
-      //   (a) der Receiver-Typ aus Local-Var/Parameter-Deklaration
-      //       bekannt ist und auf ein ownership-bewusstes Container-
-      //       Pattern matched (TObjectList, TObjectDictionary, ...),
-      //   (b) der Typ NICHT aufloesbar ist (Field, dotted access,
-      //       inferred var) - hier bleibt das alte permissive
-      //       Verhalten als Default, damit keine Regression in den
-      //       haeufigen Frame-FList.Add(item)-Mustern entsteht.
-      // A2 2026-07-16: neben '.add(' auch die uebrigen Container-Add-Methoden
-      // im ARG-Fall behandeln. '.addnode/.addchild/.appendchild(' galten bereits
-      // im borrowed-RETURN-Fall oben (~Z.908) als ownership-uebernehmend, fehlten
-      // aber hier -> 'FTree.AddNode(node)' auf custom Bin-Trees/Pools war ein
-      // Discovery-FP (X lokal erzeugt, an Container uebergeben, Container besitzt).
-      // Receiver-Ownership-Pruefung (AddReceiverOwnsItems) bleibt identisch:
-      // aufloesbarer Typ -> RTL-Whitelist; Field/unaufloesbar -> permissiv (wie
-      // beim bestehenden '.add(' - keine neue TP-Annahme).
-      for var AddMarker in ['.add(', '.addnode(', '.addchild(', '.appendchild('] do
+      var pAdd := Pos(AddMarker, NameLow);
+      if (pAdd > 0) and VarInArgs(NameLow, pAdd + Length(AddMarker)) then
       begin
-        var pAdd := Pos(AddMarker, NameLow);
-        if (pAdd > 0) and VarInArgs(NameLow, pAdd + Length(AddMarker)) then
+        var receiverLow := Copy(NameLow, 1, pAdd - 1);
+        // 'self.flist' -> 'flist': Self-Praefix abstreifen, sonst matched der
+        // Receiver-Name nie ein Local-Var/Param. Dotted Sub-Expressions
+        // ('foo.bar.add') bleiben intentional unaufloesbar (Default permissiv).
+        if receiverLow.StartsWith('self.') then
+          receiverLow := Copy(receiverLow, 6, MaxInt);
+        if AddReceiverOwnsItems(MethodNode, receiverLow) then
+          Exit(True);
+      end;
+    end;
+
+    // TStringList.AddObject(text, obj) - klassisches Object-Owner-Pattern
+    // (var-Deklaration hier: der fruehere gemeinsame 'pAdd' ist seit A2 in den
+    // Add-Familie-for-Loop gewandert und dort scope-lokal.)
+    var pAdd := Pos('.addobject(', NameLow);
+    if (pAdd > 0) and VarInArgs(NameLow, pAdd + 11) then
+      Exit(True);
+
+    // Inkr.3 (Gross-Triage add-call-Bucket 27/101, groesster Rest): CUSTOM
+    // Add-/Insert-/Put-Familie - 'Cfg.AddOption(sl)', 'Enc.AddStream(...,s,..)',
+    // 'Tree.InsertNode(..., PFileInfo(fi))', 'Cont.Put(key, obj)'. Der Consumer
+    // registriert das Objekt in einer eigenen owning-Struktur (Triage: 27/27
+    // solcher Uebergaben fremd-owned). Marker: '.add'/'.insert'/'.put' +
+    // optionales CamelCase-Suffix - der Buchstabe DIREKT nach dem Praefix muss
+    // im ORIGINAL-Case GROSS sein ('.AddStream' ja, '.address(' nein) - dann
+    // '(' + Var als bare Wort-Arg (VarInArgs matcht auch in Cast-Argumenten
+    // 'PFileInfo(fi)'). Receiver-Pruefung identisch permissiv wie '.add('.
+    for var Fam in ['.add', '.insert', '.put'] do
+    begin
+      var pF := Pos(Fam, NameLow);
+      while pF > 0 do
+      begin
+        var sf := pF + Length(Fam);
+        var ef := sf;
+        if (sf <= Length(NameLow)) and IsIdentChar(NameLow[sf]) then
         begin
-          var receiverLow := Copy(NameLow, 1, pAdd - 1);
-          // 'self.flist' -> 'flist': Self-Praefix abstreifen, sonst matched der
-          // Receiver-Name nie ein Local-Var/Param. Dotted Sub-Expressions
-          // ('foo.bar.add') bleiben intentional unaufloesbar (Default permissiv).
-          if receiverLow.StartsWith('self.') then
-            receiverLow := Copy(receiverLow, 6, MaxInt);
-          if AddReceiverOwnsItems(MethodNode, receiverLow) then
+          if CharInSet(N.Name[sf], ['A'..'Z']) then
+          begin
+            while (ef <= Length(NameLow)) and IsIdentChar(NameLow[ef]) do Inc(ef);
+          end
+          else
+            ef := 0;      // lowercase-Fortsetzung ('.address') -> keine Familie
+        end;
+        if (ef > 0) and (ef <= Length(NameLow)) and (NameLow[ef] = '(')
+           and VarInArgs(NameLow, ef + 1) then
+        begin
+          var recvLow := Copy(NameLow, 1, pF - 1);
+          if recvLow.StartsWith('self.') then
+            recvLow := Copy(recvLow, 6, MaxInt);
+          if AddReceiverOwnsItems(MethodNode, recvLow) then
             Exit(True);
         end;
+        pF := PosEx(Fam, NameLow, pF + 1);
       end;
-
-      // TStringList.AddObject(text, obj) - klassisches Object-Owner-Pattern
-      // (var-Deklaration hier: der fruehere gemeinsame 'pAdd' ist seit A2 in den
-      // Add-Familie-for-Loop gewandert und dort scope-lokal.)
-      var pAdd := Pos('.addobject(', NameLow);
-      if (pAdd > 0) and VarInArgs(NameLow, pAdd + 11) then
-        Exit(True);
-
-      // Inkr.3 (Gross-Triage add-call-Bucket 27/101, groesster Rest): CUSTOM
-      // Add-/Insert-/Put-Familie - 'Cfg.AddOption(sl)', 'Enc.AddStream(...,s,..)',
-      // 'Tree.InsertNode(..., PFileInfo(fi))', 'Cont.Put(key, obj)'. Der Consumer
-      // registriert das Objekt in einer eigenen owning-Struktur (Triage: 27/27
-      // solcher Uebergaben fremd-owned). Marker: '.add'/'.insert'/'.put' +
-      // optionales CamelCase-Suffix - der Buchstabe DIREKT nach dem Praefix muss
-      // im ORIGINAL-Case GROSS sein ('.AddStream' ja, '.address(' nein) - dann
-      // '(' + Var als bare Wort-Arg (VarInArgs matcht auch in Cast-Argumenten
-      // 'PFileInfo(fi)'). Receiver-Pruefung identisch permissiv wie '.add('.
-      for var Fam in ['.add', '.insert', '.put'] do
-      begin
-        var pF := Pos(Fam, NameLow);
-        while pF > 0 do
-        begin
-          var sf := pF + Length(Fam);
-          var ef := sf;
-          if (sf <= Length(NameLow)) and IsIdentChar(NameLow[sf]) then
-          begin
-            if CharInSet(N.Name[sf], ['A'..'Z']) then
-            begin
-              while (ef <= Length(NameLow)) and IsIdentChar(NameLow[ef]) do Inc(ef);
-            end
-            else
-              ef := 0;      // lowercase-Fortsetzung ('.address') -> keine Familie
-          end;
-          if (ef > 0) and (ef <= Length(NameLow)) and (NameLow[ef] = '(')
-             and VarInArgs(NameLow, ef + 1) then
-          begin
-            var recvLow := Copy(NameLow, 1, pF - 1);
-            if recvLow.StartsWith('self.') then
-              recvLow := Copy(recvLow, 6, MaxInt);
-            if AddReceiverOwnsItems(MethodNode, recvLow) then
-              Exit(True);
-          end;
-          pF := PosEx(Fam, NameLow, pF + 1);
-        end;
-      end;
-
-      // mORMot-kuratiert: 'ObjArrayAdd(fOwnedList, x)' haengt x an ein dyn-Array,
-      // dessen Owner es freigibt (Triage Batch 3: Rtti.ObjArrayAdd(fOwnedRtti)).
-      if (Pos('objarrayadd(', NameLow) > 0) and
-         VarInArgs(NameLow, Pos('objarrayadd(', NameLow) + 12) then
-        Exit(True);
-
-      // TList/TQueue/TStack.Insert(index, item) - Ownership-Transfer
-      pAdd := Pos('.insert(', NameLow);
-      if (pAdd > 0) and VarInArgs(NameLow, pAdd + 8) then
-        Exit(True);
-
-      // TStack.Push(item) / TQueue.Enqueue(item) - Ownership-Transfer
-      pAdd := Pos('.push(', NameLow);
-      if (pAdd > 0) and VarInArgs(NameLow, pAdd + 6) then
-        Exit(True);
-      pAdd := Pos('.enqueue(', NameLow);
-      if (pAdd > 0) and VarInArgs(NameLow, pAdd + 9) then
-        Exit(True);
     end;
-  finally
-    Calls.Free;
+
+    // mORMot-kuratiert: 'ObjArrayAdd(fOwnedList, x)' haengt x an ein dyn-Array,
+    // dessen Owner es freigibt (Triage Batch 3: Rtti.ObjArrayAdd(fOwnedRtti)).
+    if (Pos('objarrayadd(', NameLow) > 0) and
+       VarInArgs(NameLow, Pos('objarrayadd(', NameLow) + 12) then
+      Exit(True);
+
+    // TList/TQueue/TStack.Insert(index, item) - Ownership-Transfer
+    pAdd := Pos('.insert(', NameLow);
+    if (pAdd > 0) and VarInArgs(NameLow, pAdd + 8) then
+      Exit(True);
+
+    // TStack.Push(item) / TQueue.Enqueue(item) - Ownership-Transfer
+    pAdd := Pos('.push(', NameLow);
+    if (pAdd > 0) and VarInArgs(NameLow, pAdd + 6) then
+      Exit(True);
+    pAdd := Pos('.enqueue(', NameLow);
+    if (pAdd > 0) and VarInArgs(NameLow, pAdd + 9) then
+      Exit(True);
   end;
 
   // Container-Add im BEDINGUNGS-Kontext (if/while): Calls INNERHALB einer
@@ -1256,14 +1200,10 @@ begin
   // Deckt 'if not FTree.AddNode(aNode) then aNode.Free' (Core-Audit 2026-07-18).
   for var CondKind in [nkIfStmt, nkWhileStmt] do
   begin
-    var Conds := MethodNode.FindAll(CondKind);
-    try
-      for N in Conds do
-        if CondPassesToOwnerAdd(N.TypeRef.ToLower) then
-          Exit(True);
-    finally
-      Conds.Free;
-    end;
+    var Conds := MethodNode.FindAllRef(CondKind);
+    for N in Conds do
+      if CondPassesToOwnerAdd(N.TypeRef.ToLower) then
+        Exit(True);
   end;
 end;
 
@@ -1485,15 +1425,11 @@ var
   DummyFin : Boolean;
 begin
   Result := False;
-  Handlers := MethodNode.FindAll(nkExceptBlock);
-  try
-    for H in Handlers do
-      if HasDescendantKind(H, nkRaise) and
-         SearchFree(H, VarNameLow, False, DummyFin) then
-        Exit(True);
-  finally
-    Handlers.Free;
-  end;
+  Handlers := MethodNode.FindAllRef(nkExceptBlock);
+  for H in Handlers do
+    if HasDescendantKind(H, nkRaise) and
+       SearchFree(H, VarNameLow, False, DummyFin) then
+      Exit(True);
 end;
 
 class function TLeakDetector2.FreeInFinallyRegionBySource(MethodNode: TAstNode;
@@ -1704,20 +1640,12 @@ var
 
 begin
   Result := False;
-  Nodes := MethodNode.FindAll(nkAssign);
-  try
-    for N in Nodes do
-      if TextHands(N.TypeRef) then Exit(True);
-  finally
-    Nodes.Free;
-  end;
-  Nodes := MethodNode.FindAll(nkCall);
-  try
-    for N in Nodes do
-      if TextHands(N.Name) then Exit(True);
-  finally
-    Nodes.Free;
-  end;
+  Nodes := MethodNode.FindAllRef(nkAssign);
+  for N in Nodes do
+    if TextHands(N.TypeRef) then Exit(True);
+  Nodes := MethodNode.FindAllRef(nkCall);
+  for N in Nodes do
+    if TextHands(N.Name) then Exit(True);
 end;
 
 class function TLeakDetector2.IsRaisedAsException(MethodNode: TAstNode;
@@ -1730,13 +1658,9 @@ var
   R : TAstNode;
 begin
   Result := False;
-  Raises := MethodNode.FindAll(nkRaise);
-  try
-    for R in Raises do
-      if Trim(R.Name.ToLower) = VarNameLow then Exit(True);
-  finally
-    Raises.Free;
-  end;
+  Raises := MethodNode.FindAllRef(nkRaise);
+  for R in Raises do
+    if Trim(R.Name.ToLower) = VarNameLow then Exit(True);
 end;
 
 class function TLeakDetector2.AllCreatesAreInstanceFactory(MethodNode: TAstNode;
@@ -1771,55 +1695,43 @@ begin
   CreateCount := 0; FactoryCount := 0;
   LocalTypes := TDictionary<string, string>.Create;
   try
-    Decls := MethodNode.FindAll(nkLocalVar);
-    try
-      for D in Decls do
-        LocalTypes.AddOrSetValue(Trim(D.Name.ToLower), FirstWordLow(D.TypeRef));
-    finally
-      Decls.Free;
-    end;
-    Decls := MethodNode.FindAll(nkParam);
-    try
-      for D in Decls do
-        LocalTypes.AddOrSetValue(LastWordLow(D.Name), FirstWordLow(D.TypeRef));
-    finally
-      Decls.Free;
-    end;
+    Decls := MethodNode.FindAllRef(nkLocalVar);
+    for D in Decls do
+      LocalTypes.AddOrSetValue(Trim(D.Name.ToLower), FirstWordLow(D.TypeRef));
+    Decls := MethodNode.FindAllRef(nkParam);
+    for D in Decls do
+      LocalTypes.AddOrSetValue(LastWordLow(D.Name), FirstWordLow(D.TypeRef));
 
-    Assigns := MethodNode.FindAll(nkAssign);
-    try
-      for A in Assigns do
+    Assigns := MethodNode.FindAllRef(nkAssign);
+    for A in Assigns do
+    begin
+      if A.Name.ToLower <> VarNameLow then Continue;
+      TypeLow := A.TypeRef.ToLower;
+      if not MatchesCreate(A.TypeRef, TypeLow, CreatePos) then Continue;
+      Inc(CreateCount);
+      // Nur 'CreateXxx' (nicht-leeres CamelCase-Suffix) kann Factory sein -
+      // bare '.Create' ist IMMER eine Konstruktion (auch Metaclass-Local).
+      pRight := CreatePos + 7;
+      if (pRight > Length(TypeLow)) or not IsIdentChar(TypeLow[pRight]) then
+        Continue;
+      RecvLow := Trim(Copy(TypeLow, 1, CreatePos - 1));
+      if RecvLow = '' then Continue;
+      // Fall b: '(x as IFoo)'-Ausdrucks-Receiver = sicher eine Instanz
+      // (Metaclass-Casts 'TComponentClass(arr[i])' enthalten KEIN ' as ').
+      if (RecvLow[Length(RecvLow)] = ')') and (Pos(' as ', RecvLow) > 0) then
       begin
-        if A.Name.ToLower <> VarNameLow then Continue;
-        TypeLow := A.TypeRef.ToLower;
-        if not MatchesCreate(A.TypeRef, TypeLow, CreatePos) then Continue;
-        Inc(CreateCount);
-        // Nur 'CreateXxx' (nicht-leeres CamelCase-Suffix) kann Factory sein -
-        // bare '.Create' ist IMMER eine Konstruktion (auch Metaclass-Local).
-        pRight := CreatePos + 7;
-        if (pRight > Length(TypeLow)) or not IsIdentChar(TypeLow[pRight]) then
-          Continue;
-        RecvLow := Trim(Copy(TypeLow, 1, CreatePos - 1));
-        if RecvLow = '' then Continue;
-        // Fall b: '(x as IFoo)'-Ausdrucks-Receiver = sicher eine Instanz
-        // (Metaclass-Casts 'TComponentClass(arr[i])' enthalten KEIN ' as ').
-        if (RecvLow[Length(RecvLow)] = ')') and (Pos(' as ', RecvLow) > 0) then
-        begin
-          Inc(FactoryCount);
-          Continue;
-        end;
-        // Fall a: einfacher Ident, der eine bekannte Local/Param-INSTANZ ist
-        // und dessen Typname nicht auf 'class' endet (Metaclass-Konvention
-        // TFormClass/TComponentClass -> deren CreateXxx ist echte Konstruktion).
-        IsClean := True;
-        for i := 1 to Length(RecvLow) do
-          if not IsIdentChar(RecvLow[i]) then begin IsClean := False; Break; end;
-        if IsClean and LocalTypes.TryGetValue(RecvLow, DeclType)
-           and (DeclType <> '') and not EndsStr('class', DeclType) then
-          Inc(FactoryCount);
+        Inc(FactoryCount);
+        Continue;
       end;
-    finally
-      Assigns.Free;
+      // Fall a: einfacher Ident, der eine bekannte Local/Param-INSTANZ ist
+      // und dessen Typname nicht auf 'class' endet (Metaclass-Konvention
+      // TFormClass/TComponentClass -> deren CreateXxx ist echte Konstruktion).
+      IsClean := True;
+      for i := 1 to Length(RecvLow) do
+        if not IsIdentChar(RecvLow[i]) then begin IsClean := False; Break; end;
+      if IsClean and LocalTypes.TryGetValue(RecvLow, DeclType)
+         and (DeclType <> '') and not EndsStr('class', DeclType) then
+        Inc(FactoryCount);
     end;
   finally
     LocalTypes.Free;
@@ -1881,7 +1793,7 @@ begin
   StrippedReady := False;
   SrcLines      := nil;
   SrcOwned      := False;
-  LocalVars := MethodNode.FindAll(nkLocalVar);
+  LocalVars := MethodNode.FindAllRef(nkLocalVar);
   try
     HasFinally := HasTryFinallyBlock(MethodNode);  // schleifeninvariant: einmal vor der Schleife statt pro Var
     for V in LocalVars do
@@ -1967,7 +1879,6 @@ begin
       end;
     end;
   finally
-    LocalVars.Free;
     if SrcLines <> nil then ReleaseLines(SrcLines, SrcOwned);
   end;
 end;
@@ -1984,13 +1895,9 @@ var
   Key      : string;
 begin
   StartIdx := Results.Count;
-  Methods := UnitNode.FindAll(nkMethod);
-  try
-    for M in Methods do
-      AnalyzeMethod(UnitNode, M, FileName, Results, AContext);
-  finally
-    Methods.Free;
-  end;
+  Methods := UnitNode.FindAllRef(nkMethod);
+  for M in Methods do
+    AnalyzeMethod(UnitNode, M, FileName, Results, AContext);
 
   // Dedup (2026-07-04): Bei conditional-compilation-lastigen Units (z.B.
   // Synapse blcksock mit {$IFDEF CIL}) verschachtelt der Parser Methoden

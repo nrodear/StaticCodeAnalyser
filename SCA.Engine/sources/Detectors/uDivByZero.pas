@@ -341,53 +341,49 @@ var
   Low : string;
 begin
   Result := False;
-  Ifs := MethodNode.FindAll(nkIfStmt);
-  try
-    for IfN in Ifs do
+  Ifs := MethodNode.FindAllRef(nkIfStmt);
+  for IfN in Ifs do
+  begin
+    if IfN.Line >= BeforeLine then Continue;
+    Low := IfN.TypeRef.ToLower;
+    if Low = '' then Continue;
+    // Strikte Guards: die Bedingung selbst schuetzt direkt vor 0.
+    // Wortgrenzen-Pruefung verhindert dass z.B. 'myvar > 0' faelschlich
+    // auch 'myvariant' schuetzt.
+    if TDetectorUtils.ContainsWholeWordLower(VarLow + ' > 0',  Low)  or
+       TDetectorUtils.ContainsWholeWordLower(VarLow + '>0',    Low)  or
+       TDetectorUtils.ContainsWholeWordLower(VarLow + ' >= 1', Low)  or
+       TDetectorUtils.ContainsWholeWordLower(VarLow + ' <> 0', Low)  or
+       TDetectorUtils.ContainsWholeWordLower(VarLow + '<>0',   Low)  or
+       TDetectorUtils.ContainsWholeWordLower('0 < '  + VarLow, Low)  or
+       TDetectorUtils.ContainsWholeWordLower('0<'    + VarLow, Low)  or
+       TDetectorUtils.ContainsWholeWordLower('0 <> ' + VarLow, Low)  then
+      Exit(True);
+    // Exit-Guard: 'if x <bail-cond> then Exit/Raise' schuetzt nur wenn der
+    // THEN-Zweig den Code-Pfad verlaesst. Erfasst das haeufige "bail wenn
+    // nicht-positiv"-Idiom fuer Integer-Divisoren:
+    //   if x = 0 then Exit;        (x koennte 0 sein)
+    //   if x <= 0 then Exit;       (x koennte 0 oder negativ sein)
+    //   if x < 1 then raise ...;   (ganzzahlig aequivalent zu <= 0)
+    // Danach ist x nachweislich > 0. 'if x = 0 then DoOther' (ohne Exit/
+    // Raise) ist KEIN Guard - x kann danach noch 0 sein. FP-Gate Prio 7
+    // (Real-World-Audit 2026-07-04, guarded-divisor).
+    if TDetectorUtils.ContainsWholeWordLower(VarLow + ' = 0',  Low)  or
+       TDetectorUtils.ContainsWholeWordLower(VarLow + '=0',    Low)  or
+       TDetectorUtils.ContainsWholeWordLower(VarLow + ' <= 0', Low)  or
+       TDetectorUtils.ContainsWholeWordLower(VarLow + '<=0',   Low)  or
+       TDetectorUtils.ContainsWholeWordLower(VarLow + ' < 1',  Low)  or
+       TDetectorUtils.ContainsWholeWordLower(VarLow + '<1',    Low)  then
     begin
-      if IfN.Line >= BeforeLine then Continue;
-      Low := IfN.TypeRef.ToLower;
-      if Low = '' then Continue;
-      // Strikte Guards: die Bedingung selbst schuetzt direkt vor 0.
-      // Wortgrenzen-Pruefung verhindert dass z.B. 'myvar > 0' faelschlich
-      // auch 'myvariant' schuetzt.
-      if TDetectorUtils.ContainsWholeWordLower(VarLow + ' > 0',  Low)  or
-         TDetectorUtils.ContainsWholeWordLower(VarLow + '>0',    Low)  or
-         TDetectorUtils.ContainsWholeWordLower(VarLow + ' >= 1', Low)  or
-         TDetectorUtils.ContainsWholeWordLower(VarLow + ' <> 0', Low)  or
-         TDetectorUtils.ContainsWholeWordLower(VarLow + '<>0',   Low)  or
-         TDetectorUtils.ContainsWholeWordLower('0 < '  + VarLow, Low)  or
-         TDetectorUtils.ContainsWholeWordLower('0<'    + VarLow, Low)  or
-         TDetectorUtils.ContainsWholeWordLower('0 <> ' + VarLow, Low)  then
+      // (a) Bail: THEN-Zweig verlaesst den Pfad (Exit/Raise).
+      if ThenBranchExitsOrRaises(IfN) then
         Exit(True);
-      // Exit-Guard: 'if x <bail-cond> then Exit/Raise' schuetzt nur wenn der
-      // THEN-Zweig den Code-Pfad verlaesst. Erfasst das haeufige "bail wenn
-      // nicht-positiv"-Idiom fuer Integer-Divisoren:
-      //   if x = 0 then Exit;        (x koennte 0 sein)
-      //   if x <= 0 then Exit;       (x koennte 0 oder negativ sein)
-      //   if x < 1 then raise ...;   (ganzzahlig aequivalent zu <= 0)
-      // Danach ist x nachweislich > 0. 'if x = 0 then DoOther' (ohne Exit/
-      // Raise) ist KEIN Guard - x kann danach noch 0 sein. FP-Gate Prio 7
-      // (Real-World-Audit 2026-07-04, guarded-divisor).
-      if TDetectorUtils.ContainsWholeWordLower(VarLow + ' = 0',  Low)  or
-         TDetectorUtils.ContainsWholeWordLower(VarLow + '=0',    Low)  or
-         TDetectorUtils.ContainsWholeWordLower(VarLow + ' <= 0', Low)  or
-         TDetectorUtils.ContainsWholeWordLower(VarLow + '<=0',   Low)  or
-         TDetectorUtils.ContainsWholeWordLower(VarLow + ' < 1',  Low)  or
-         TDetectorUtils.ContainsWholeWordLower(VarLow + '<1',    Low)  then
-      begin
-        // (a) Bail: THEN-Zweig verlaesst den Pfad (Exit/Raise).
-        if ThenBranchExitsOrRaises(IfN) then
-          Exit(True);
-        // (b) Fix-up: THEN-Zweig weist VarLow ein nichtnull-Literal zu
-        //     (z.B. 'if elTime = 0 then elTime := 1'). Danach ist VarLow auf
-        //     beiden Pfaden <> 0 - guarded-nonzero (Real-World-Audit 2026-07-10).
-        if ThenBranchAssignsNonZeroTo(IfN, VarLow) then
-          Exit(True);
-      end;
+      // (b) Fix-up: THEN-Zweig weist VarLow ein nichtnull-Literal zu
+      //     (z.B. 'if elTime = 0 then elTime := 1'). Danach ist VarLow auf
+      //     beiden Pfaden <> 0 - guarded-nonzero (Real-World-Audit 2026-07-10).
+      if ThenBranchAssignsNonZeroTo(IfN, VarLow) then
+        Exit(True);
     end;
-  finally
-    Ifs.Free;
   end;
 end;
 
@@ -537,21 +533,17 @@ var
 begin
   Result     := False;
   FoundPrior := False;
-  Assigns := MethodNode.FindAll(nkAssign);
-  try
-    for A in Assigns do
-    begin
-      if A.Name.ToLower <> VarLow then Continue;
-      // Die Divisions-Zuweisung selbst (gleiche Zeile) tragt die 'div'-RHS -
-      // sie darf die Pruefung nicht scheitern lassen und zaehlt nicht als
-      // vorherige Init.
-      if A.Line = BeforeLine then Continue;
-      if not (IsNonZeroIntLiteral(A.TypeRef) or IsClampedNonZero(A.TypeRef)) then
-        Exit; // Result bleibt False
-      if A.Line < BeforeLine then FoundPrior := True;
-    end;
-  finally
-    Assigns.Free;
+  Assigns := MethodNode.FindAllRef(nkAssign);
+  for A in Assigns do
+  begin
+    if A.Name.ToLower <> VarLow then Continue;
+    // Die Divisions-Zuweisung selbst (gleiche Zeile) tragt die 'div'-RHS -
+    // sie darf die Pruefung nicht scheitern lassen und zaehlt nicht als
+    // vorherige Init.
+    if A.Line = BeforeLine then Continue;
+    if not (IsNonZeroIntLiteral(A.TypeRef) or IsClampedNonZero(A.TypeRef)) then
+      Exit; // Result bleibt False
+    if A.Line < BeforeLine then FoundPrior := True;
   end;
   Result := FoundPrior;
 end;
@@ -565,12 +557,8 @@ var
 begin
   Result := False;
   if (Root = nil) or (Target = nil) then Exit;
-  Lst := Root.FindAll(Target.Kind);
-  try
-    Result := Lst.IndexOf(Target) >= 0;
-  finally
-    Lst.Free;
-  end;
+  Lst := Root.FindAllRef(Target.Kind);
+  Result := Lst.IndexOf(Target) >= 0;
 end;
 
 class function TDivByZeroDetector.InnermostLoopContaining(
@@ -583,17 +571,13 @@ var
     Loops : TList<TAstNode>;
     L     : TAstNode;
   begin
-    Loops := MethodNode.FindAll(K);
-    try
-      for L in Loops do
-        if (L <> Target) and TDivByZeroDetector.NodeInSubtree(L, Target) then
-          // Bei korrekter Verschachtelung hat die innerste enthaltende Schleife
-          // die groesste Start-Zeile (Vorfahren beginnen frueher).
-          if (Best = nil) or (L.Line > Best.Line) then
-            Best := L;
-    finally
-      Loops.Free;
-    end;
+    Loops := MethodNode.FindAllRef(K);
+    for L in Loops do
+      if (L <> Target) and TDivByZeroDetector.NodeInSubtree(L, Target) then
+        // Bei korrekter Verschachtelung hat die innerste enthaltende Schleife
+        // die groesste Start-Zeile (Vorfahren beginnen frueher).
+        if (Best = nil) or (L.Line > Best.Line) then
+          Best := L;
   end;
 
 begin
@@ -647,17 +631,13 @@ var
   LoopVarLow, StartVal : string;
 begin
   Result := False;
-  Fors := MethodNode.FindAll(nkForStmt);
-  try
-    for ForN in Fors do
-    begin
-      if not TryGetAscendingForLoopVar(ForN, LoopVarLow, StartVal) then Continue;
-      if LoopVarLow <> VarLow then Continue;
-      if not IsNonZeroIntLiteral(StartVal) then Continue;  // 'for i := 0 to' bleibt Fund
-      if NodeInSubtree(ForN, DivNode) then Exit(True);
-    end;
-  finally
-    Fors.Free;
+  Fors := MethodNode.FindAllRef(nkForStmt);
+  for ForN in Fors do
+  begin
+    if not TryGetAscendingForLoopVar(ForN, LoopVarLow, StartVal) then Continue;
+    if LoopVarLow <> VarLow then Continue;
+    if not IsNonZeroIntLiteral(StartVal) then Continue;  // 'for i := 0 to' bleibt Fund
+    if NodeInSubtree(ForN, DivNode) then Exit(True);
   end;
 end;
 
@@ -676,31 +656,27 @@ begin
   Result := False;
   LoopOfDiv := InnermostLoopContaining(MethodNode, DivNode);
   if LoopOfDiv = nil then Exit;   // Division nicht in einer Schleife -> kein Break-Schutz
-  Ifs := MethodNode.FindAll(nkIfStmt);
-  try
-    for IfN in Ifs do
-    begin
-      if IfN.Line >= DivNode.Line then Continue;
-      Low := IfN.TypeRef.ToLower;
-      if Low = '' then Continue;
-      // Bail-Bedingung auf dem Divisor (dieselbe Menge wie im Exit/Raise-Zweig
-      // von HasGuardingIf).
-      if not (
-         TDetectorUtils.ContainsWholeWordLower(VarLow + ' = 0',  Low) or
-         TDetectorUtils.ContainsWholeWordLower(VarLow + '=0',    Low) or
-         TDetectorUtils.ContainsWholeWordLower(VarLow + ' <= 0', Low) or
-         TDetectorUtils.ContainsWholeWordLower(VarLow + '<=0',   Low) or
-         TDetectorUtils.ContainsWholeWordLower(VarLow + ' < 1',  Low) or
-         TDetectorUtils.ContainsWholeWordLower(VarLow + '<1',    Low) ) then
-        Continue;
-      if not ThenBranchBreaksOrContinues(IfN) then Continue;
-      // Der Guard muss zur SELBEN innersten Schleife gehoeren wie die Division -
-      // sonst schuetzt sein Break/Continue die Division nicht.
-      if InnermostLoopContaining(MethodNode, IfN) = LoopOfDiv then
-        Exit(True);
-    end;
-  finally
-    Ifs.Free;
+  Ifs := MethodNode.FindAllRef(nkIfStmt);
+  for IfN in Ifs do
+  begin
+    if IfN.Line >= DivNode.Line then Continue;
+    Low := IfN.TypeRef.ToLower;
+    if Low = '' then Continue;
+    // Bail-Bedingung auf dem Divisor (dieselbe Menge wie im Exit/Raise-Zweig
+    // von HasGuardingIf).
+    if not (
+       TDetectorUtils.ContainsWholeWordLower(VarLow + ' = 0',  Low) or
+       TDetectorUtils.ContainsWholeWordLower(VarLow + '=0',    Low) or
+       TDetectorUtils.ContainsWholeWordLower(VarLow + ' <= 0', Low) or
+       TDetectorUtils.ContainsWholeWordLower(VarLow + '<=0',   Low) or
+       TDetectorUtils.ContainsWholeWordLower(VarLow + ' < 1',  Low) or
+       TDetectorUtils.ContainsWholeWordLower(VarLow + '<1',    Low) ) then
+      Continue;
+    if not ThenBranchBreaksOrContinues(IfN) then Continue;
+    // Der Guard muss zur SELBEN innersten Schleife gehoeren wie die Division -
+    // sonst schuetzt sein Break/Continue die Division nicht.
+    if InnermostLoopContaining(MethodNode, IfN) = LoopOfDiv then
+      Exit(True);
   end;
 end;
 
@@ -731,67 +707,55 @@ var
   Reassigned : Boolean;
 begin
   Result := False;
-  Whiles := MethodNode.FindAll(nkWhileStmt);
-  try
-    for WhileN in Whiles do
-    begin
-      if not NodeInSubtree(WhileN, DivNode) then Continue;
-      Low := WhileN.TypeRef.ToLower;
-      if Low = '' then Continue;
-      // Disjunktion ('while (x>0) or (y>0)') garantiert den Divisor NICHT ->
-      // konservativ ueberspringen (strikt enger als der bestehende if-Guard).
-      if TDetectorUtils.ContainsWholeWordLower('or', Low) then Continue;
-      // Direkter Nichtnull-Guard auf dem Divisor im while-Kopf.
-      if not (
-         TDetectorUtils.ContainsWholeWordLower(VarLow + '>0',    Low) or
-         TDetectorUtils.ContainsWholeWordLower(VarLow + ' > 0',  Low) or
-         TDetectorUtils.ContainsWholeWordLower(VarLow + '>=1',   Low) or
-         TDetectorUtils.ContainsWholeWordLower(VarLow + ' >= 1', Low) or
-         TDetectorUtils.ContainsWholeWordLower(VarLow + '<>0',   Low) or
-         TDetectorUtils.ContainsWholeWordLower(VarLow + ' <> 0', Low) or
-         TDetectorUtils.ContainsWholeWordLower('0<'    + VarLow, Low) or
-         TDetectorUtils.ContainsWholeWordLower('0 < '  + VarLow, Low) or
-         TDetectorUtils.ContainsWholeWordLower('0<>'   + VarLow, Low) or
-         TDetectorUtils.ContainsWholeWordLower('0 <> ' + VarLow, Low) ) then
-        Continue;
-      // Reassign-Pruefung: nkAssign an den Divisor im Rumpf VOR der Division.
-      Reassigned := False;
-      Lst := MethodNode.FindAll(nkAssign);
-      try
-        for N in Lst do
-          if (N.Line < DivNode.Line) and (N.Name.ToLower = VarLow)
-             and NodeInSubtree(WhileN, N) then
-          begin
-            Reassigned := True;
-            Break;
-          end;
-      finally
-        Lst.Free;
-      end;
-      // Dec(divisor)-Pruefung: liberaler Wort-Match ('dec' + Divisorname). Ein
-      // Fehltreffer UNTERdrueckt nur NICHT (residualer FP) - maskiert nie einen
-      // Bug. Inc(..) waechst nur und ist unkritisch.
-      if not Reassigned then
+  Whiles := MethodNode.FindAllRef(nkWhileStmt);
+  for WhileN in Whiles do
+  begin
+    if not NodeInSubtree(WhileN, DivNode) then Continue;
+    Low := WhileN.TypeRef.ToLower;
+    if Low = '' then Continue;
+    // Disjunktion ('while (x>0) or (y>0)') garantiert den Divisor NICHT ->
+    // konservativ ueberspringen (strikt enger als der bestehende if-Guard).
+    if TDetectorUtils.ContainsWholeWordLower('or', Low) then Continue;
+    // Direkter Nichtnull-Guard auf dem Divisor im while-Kopf.
+    if not (
+       TDetectorUtils.ContainsWholeWordLower(VarLow + '>0',    Low) or
+       TDetectorUtils.ContainsWholeWordLower(VarLow + ' > 0',  Low) or
+       TDetectorUtils.ContainsWholeWordLower(VarLow + '>=1',   Low) or
+       TDetectorUtils.ContainsWholeWordLower(VarLow + ' >= 1', Low) or
+       TDetectorUtils.ContainsWholeWordLower(VarLow + '<>0',   Low) or
+       TDetectorUtils.ContainsWholeWordLower(VarLow + ' <> 0', Low) or
+       TDetectorUtils.ContainsWholeWordLower('0<'    + VarLow, Low) or
+       TDetectorUtils.ContainsWholeWordLower('0 < '  + VarLow, Low) or
+       TDetectorUtils.ContainsWholeWordLower('0<>'   + VarLow, Low) or
+       TDetectorUtils.ContainsWholeWordLower('0 <> ' + VarLow, Low) ) then
+      Continue;
+    // Reassign-Pruefung: nkAssign an den Divisor im Rumpf VOR der Division.
+    Reassigned := False;
+    Lst := MethodNode.FindAllRef(nkAssign);
+    for N in Lst do
+      if (N.Line < DivNode.Line) and (N.Name.ToLower = VarLow)
+         and NodeInSubtree(WhileN, N) then
       begin
-        Lst := MethodNode.FindAll(nkCall);
-        try
-          for N in Lst do
-            if (N.Line < DivNode.Line)
-               and TDetectorUtils.ContainsWholeWordLower('dec', N.Name.ToLower)
-               and TDetectorUtils.ContainsWholeWordLower(VarLow, N.Name.ToLower)
-               and NodeInSubtree(WhileN, N) then
-            begin
-              Reassigned := True;
-              Break;
-            end;
-        finally
-          Lst.Free;
-        end;
+        Reassigned := True;
+        Break;
       end;
-      if not Reassigned then Exit(True);
+    // Dec(divisor)-Pruefung: liberaler Wort-Match ('dec' + Divisorname). Ein
+    // Fehltreffer UNTERdrueckt nur NICHT (residualer FP) - maskiert nie einen
+    // Bug. Inc(..) waechst nur und ist unkritisch.
+    if not Reassigned then
+    begin
+      Lst := MethodNode.FindAllRef(nkCall);
+      for N in Lst do
+        if (N.Line < DivNode.Line)
+           and TDetectorUtils.ContainsWholeWordLower('dec', N.Name.ToLower)
+           and TDetectorUtils.ContainsWholeWordLower(VarLow, N.Name.ToLower)
+           and NodeInSubtree(WhileN, N) then
+        begin
+          Reassigned := True;
+          Break;
+        end;
     end;
-  finally
-    Whiles.Free;
+    if not Reassigned then Exit(True);
   end;
 end;
 
@@ -816,19 +780,11 @@ var
   Lst: TList<TAstNode>;
 begin
   // Parameter
-  Lst := MethodNode.FindAll(nkParam);
-  try
-    for var N in Lst do AddIntegerNode(N);
-  finally
-    Lst.Free;
-  end;
+  Lst := MethodNode.FindAllRef(nkParam);
+  for var N in Lst do AddIntegerNode(N);
   // Lokale Variablen
-  Lst := MethodNode.FindAll(nkLocalVar);
-  try
-    for var N in Lst do AddIntegerNode(N);
-  finally
-    Lst.Free;
-  end;
+  Lst := MethodNode.FindAllRef(nkLocalVar);
+  for var N in Lst do AddIntegerNode(N);
 end;
 
 class procedure TDivByZeroDetector.AnalyzeMethod(MethodNode: TAstNode;
@@ -861,85 +817,77 @@ begin
     CollectIntegerVars(MethodNode, IntVars);
 
     // ---- Pruefe nkAssign-Knoten ----
-    Nodes := MethodNode.FindAll(nkAssign);
-    try
-      for var N in Nodes do
+    Nodes := MethodNode.FindAllRef(nkAssign);
+    for var N in Nodes do
+    begin
+      ExprLow := N.TypeRef.ToLower;
+      // String-Literale strippen vor den Pos-Checks - 's := ''10 div 0'''
+      // soll keinen H1-Treffer geben (Inhalt ist Text, nicht Code).
+      // QuoteStrLit klammert Literale mit '...' - der Stripper ersetzt
+      // alles zwischen Quotes durch Spaces (laesst die Quotes als
+      // Marker, damit der Index-Pos stimmt).
+      ExprLow := StripStringLiterals(ExprLow);
+
+      // H1: Literal 0
+      if (Pos(' div 0', ExprLow) > 0) or (Pos(' mod 0', ExprLow) > 0) then
       begin
-        ExprLow := N.TypeRef.ToLower;
-        // String-Literale strippen vor den Pos-Checks - 's := ''10 div 0'''
-        // soll keinen H1-Treffer geben (Inhalt ist Text, nicht Code).
-        // QuoteStrLit klammert Literale mit '...' - der Stripper ersetzt
-        // alles zwischen Quotes durch Spaces (laesst die Quotes als
-        // Marker, damit der Index-Pos stimmt).
-        ExprLow := StripStringLiterals(ExprLow);
-
-        // H1: Literal 0
-        if (Pos(' div 0', ExprLow) > 0) or (Pos(' mod 0', ExprLow) > 0) then
+        var Key := IntToStr(N.Line) + ':lit';
+        if not Reported.ContainsKey(Key) then
         begin
-          var Key := IntToStr(N.Line) + ':lit';
-          if not Reported.ContainsKey(Key) then
-          begin
-            Reported.Add(Key, True);
-            Report('Division durch Literal 0', N.Line, lsError);
-          end;
-          Continue;
+          Reported.Add(Key, True);
+          Report('Division durch Literal 0', N.Line, lsError);
         end;
-
-        // H2/H3: Variable als Divisor
-        Divisor := ExtractDivisor(ExprLow);
-        if (Divisor = '') or (IntVars.IndexOf(Divisor) < 0) then Continue;
-
-        // Gibt es einen Guard?
-        if HasGuardingIf(MethodNode, Divisor, N.Line) then Continue;
-
-        // G1: aufsteigende for-Schleifenvariable mit nichtnull-Literal-Start -
-        // im Rumpf immer >= Start >= 1 (Real-World-FP-Audit 2026-07-12).
-        if IsGuardedByForLoopVar(MethodNode, N, Divisor) then Continue;
-
-        // G2: 'if divisor = 0 then Break/Continue' im selben Schleifenrumpf vor
-        // der Division (Real-World-FP-Audit 2026-07-12).
-        if HasBreakContinueGuard(MethodNode, N, Divisor) then Continue;
-
-        // G4: 'while divisor <> 0 do ... x div divisor' (bzw. > 0 / >= 1) - der
-        // Divisor ist im while-Kopf direkt gegen 0 geschuetzt, die Division liegt
-        // im Rumpf und der Divisor wird davor nicht veraendert (FP-Klasse SCA010
-        // while-guarded-divisor, Welle 1 5%-FP-Konzept 2026-07-18).
-        if IsGuardedByWhileCond(MethodNode, N, Divisor) then Continue;
-
-        // Provably-nonzero: Divisor wird ausschliesslich mit beweisbar-nichtnullen
-        // Ausdruecken belegt (nichtnull-Literale ODER Clamp 'Max(1,..)' G3) - kann
-        // an der Divisionsstelle nicht 0 sein. TP-sicher, weil jede nicht-beweisbare
-        // Zuweisung die Suppression aufhebt (Real-World-Audit 2026-07-10/-12).
-        if AllAssignmentsProvablyNonZero(MethodNode, Divisor, N.Line) then Continue;
-
-        var Key := IntToStr(N.Line) + ':' + Divisor;
-        if Reported.ContainsKey(Key) then Continue;
-        Reported.Add(Key, True);
-        Report('Division durch "' + Divisor + '" ohne Pruefung auf 0',
-               N.Line, lsWarning);
+        Continue;
       end;
-    finally
-      Nodes.Free;
+
+      // H2/H3: Variable als Divisor
+      Divisor := ExtractDivisor(ExprLow);
+      if (Divisor = '') or (IntVars.IndexOf(Divisor) < 0) then Continue;
+
+      // Gibt es einen Guard?
+      if HasGuardingIf(MethodNode, Divisor, N.Line) then Continue;
+
+      // G1: aufsteigende for-Schleifenvariable mit nichtnull-Literal-Start -
+      // im Rumpf immer >= Start >= 1 (Real-World-FP-Audit 2026-07-12).
+      if IsGuardedByForLoopVar(MethodNode, N, Divisor) then Continue;
+
+      // G2: 'if divisor = 0 then Break/Continue' im selben Schleifenrumpf vor
+      // der Division (Real-World-FP-Audit 2026-07-12).
+      if HasBreakContinueGuard(MethodNode, N, Divisor) then Continue;
+
+      // G4: 'while divisor <> 0 do ... x div divisor' (bzw. > 0 / >= 1) - der
+      // Divisor ist im while-Kopf direkt gegen 0 geschuetzt, die Division liegt
+      // im Rumpf und der Divisor wird davor nicht veraendert (FP-Klasse SCA010
+      // while-guarded-divisor, Welle 1 5%-FP-Konzept 2026-07-18).
+      if IsGuardedByWhileCond(MethodNode, N, Divisor) then Continue;
+
+      // Provably-nonzero: Divisor wird ausschliesslich mit beweisbar-nichtnullen
+      // Ausdruecken belegt (nichtnull-Literale ODER Clamp 'Max(1,..)' G3) - kann
+      // an der Divisionsstelle nicht 0 sein. TP-sicher, weil jede nicht-beweisbare
+      // Zuweisung die Suppression aufhebt (Real-World-Audit 2026-07-10/-12).
+      if AllAssignmentsProvablyNonZero(MethodNode, Divisor, N.Line) then Continue;
+
+      var Key := IntToStr(N.Line) + ':' + Divisor;
+      if Reported.ContainsKey(Key) then Continue;
+      Reported.Add(Key, True);
+      Report('Division durch "' + Divisor + '" ohne Pruefung auf 0',
+             N.Line, lsWarning);
     end;
 
     // ---- Pruefe nkCall-Knoten (z.B. SetField(x div y)) ----
-    Nodes := MethodNode.FindAll(nkCall);
-    try
-      for var N in Nodes do
+    Nodes := MethodNode.FindAllRef(nkCall);
+    for var N in Nodes do
+    begin
+      ExprLow := StripStringLiterals(N.Name.ToLower);
+      if (Pos(' div 0', ExprLow) > 0) or (Pos(' mod 0', ExprLow) > 0) then
       begin
-        ExprLow := StripStringLiterals(N.Name.ToLower);
-        if (Pos(' div 0', ExprLow) > 0) or (Pos(' mod 0', ExprLow) > 0) then
+        var Key := IntToStr(N.Line) + ':lit';
+        if not Reported.ContainsKey(Key) then
         begin
-          var Key := IntToStr(N.Line) + ':lit';
-          if not Reported.ContainsKey(Key) then
-          begin
-            Reported.Add(Key, True);
-            Report('Division durch Literal 0', N.Line, lsError);
-          end;
+          Reported.Add(Key, True);
+          Report('Division durch Literal 0', N.Line, lsError);
         end;
       end;
-    finally
-      Nodes.Free;
     end;
   finally
     IntVars.Free;
@@ -953,13 +901,9 @@ var
   Methods : TList<TAstNode>;
   M       : TAstNode;
 begin
-  Methods := UnitNode.FindAll(nkMethod);
-  try
-    for M in Methods do
-      AnalyzeMethod(M, FileName, Results);
-  finally
-    Methods.Free;
-  end;
+  Methods := UnitNode.FindAllRef(nkMethod);
+  for M in Methods do
+    AnalyzeMethod(M, FileName, Results);
 end;
 
 end.

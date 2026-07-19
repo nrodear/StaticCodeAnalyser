@@ -37,13 +37,15 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TInsecureRandomDetector = class
   public
+    // AContext (Perf P7-minimal, 2026-07-19): fuer den geteilten Strip-
+    // Cache in SourceHasRandomize; nil (Tests/Single-File) = wie bisher.
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   private
     // Liefert das letzte Punkt-Segment in Lower-Case ('Self.Random' -> 'random').
     class function BareNameLower(const FullName: string): string; static;
@@ -56,7 +58,8 @@ type
     // ganze Wort 'randomize'. Faengt ein parameterloses 'Randomize;' in einer
     // initialization-/finalization-Sektion, das der nkCall-Pass1 nicht sieht
     // (uParser2 ueberspringt deren Body). Reine Verengung: nur True -> Exit.
-    class function SourceHasRandomize(const FileName: string): Boolean; static;
+    class function SourceHasRandomize(const FileName: string;
+      AContext: TAnalyzeContext = nil): Boolean; static;
   end;
 
 implementation
@@ -164,7 +167,7 @@ begin
 end;
 
 class function TInsecureRandomDetector.SourceHasRandomize(
-  const FileName: string): Boolean;
+  const FileName: string; AContext: TAnalyzeContext): Boolean;
 var
   Lines    : TStringList;
   Cached   : Boolean;
@@ -174,14 +177,17 @@ begin
   Result := False;
   // In-Memory-/Single-File-Pfade ohne Datei auf Platte (Tests: FindingsOf)
   // liefern nil -> Guard neutral, der nkCall-Pass1 bleibt die Erkennung.
-  Lines := AcquireLines(FileName, Cached);
+  Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
     // String-Literale werden zu FillCh ('~'), Kommentar-Inhalte entfernt -
     // ein 'randomize' in einem String oder Kommentar zaehlt bewusst NICHT
     // (Kommentar != Code-Use). ContainsWholeWordLower prueft Wortgrenzen
     // links UND rechts (System.Randomize matched: '.' ist keine Ident-Grenze).
-    Stripped := TDetectorUtils.StripStringsAndComments(Lines, LineFor);
+    // Perf P7-minimal (2026-07-19): geteilter '~'-Strip via Context-Cache
+    // statt lokalem Voll-Pass; ohne Context identisch zur alten Variante.
+    Stripped := TDetectorUtils.StripStringsAndCommentsCached(
+      Lines, LineFor, AContext, FileName);
     Result := TDetectorUtils.ContainsWholeWordLower('randomize',
       LowerCase(Stripped));
   finally
@@ -190,7 +196,8 @@ begin
 end;
 
 class procedure TInsecureRandomDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>;
+  AContext: TAnalyzeContext);
 var
   Calls, Assigns : TList<TAstNode>;
   N              : TAstNode;
@@ -229,7 +236,7 @@ begin
     // ist. Roh-Quelle nachladen und auf das ganze Wort 'randomize' scannen.
     // Nur suppressierend (True -> Exit), nie zusaetzlich emittierend.
     if not HasRandomize then
-      HasRandomize := SourceHasRandomize(FileName);
+      HasRandomize := SourceHasRandomize(FileName, AContext);
     if HasRandomize then Exit;
 
     // Pass 2a: nkCall mit Random*-Name (Statement-Level, result-verworfen).

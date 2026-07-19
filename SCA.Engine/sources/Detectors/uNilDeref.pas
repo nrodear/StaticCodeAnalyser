@@ -118,19 +118,15 @@ var
   Low : string;
 begin
   Result := False;
-  Ifs := MethodNode.FindAll(nkIfStmt);
-  try
-    for IfN in Ifs do
-    begin
-      // Nur If-Statements zwischen den relevanten Zeilen
-      if IfN.Line < AfterLine then Continue;
-      if IfN.Line > BeforeLine then Continue;
-      Low := IfN.TypeRef.ToLower;
-      if Low = '' then Continue;
-      if CondHasGuard(Low, VarLow) then Exit(True);
-    end;
-  finally
-    Ifs.Free;
+  Ifs := MethodNode.FindAllRef(nkIfStmt);
+  for IfN in Ifs do
+  begin
+    // Nur If-Statements zwischen den relevanten Zeilen
+    if IfN.Line < AfterLine then Continue;
+    if IfN.Line > BeforeLine then Continue;
+    Low := IfN.TypeRef.ToLower;
+    if Low = '' then Continue;
+    if CondHasGuard(Low, VarLow) then Exit(True);
   end;
 end;
 
@@ -231,19 +227,15 @@ begin
   if MethodNode <> nil then
     for Kind in [nkIfStmt, nkWhileStmt, nkCaseStmt] do
     begin
-      Conds := MethodNode.FindAll(Kind);
-      try
-        for N in Conds do
-        begin
-          if N.Line <= AfterLine then Continue;
-          if N.Line >= BeforeLine then Continue;
-          TextLow := N.TypeRef.ToLower;
-          if TDetectorUtils.ContainsWholeWordLower('freeandnil', TextLow) then
-            Continue;
-          if HasBareArgUse(TextLow, VarLow) then Exit(True);
-        end;
-      finally
-        Conds.Free;
+      Conds := MethodNode.FindAllRef(Kind);
+      for N in Conds do
+      begin
+        if N.Line <= AfterLine then Continue;
+        if N.Line >= BeforeLine then Continue;
+        TextLow := N.TypeRef.ToLower;
+        if TDetectorUtils.ContainsWholeWordLower('freeandnil', TextLow) then
+          Continue;
+        if HasBareArgUse(TextLow, VarLow) then Exit(True);
       end;
     end;
 end;
@@ -263,19 +255,15 @@ var
   Head : string;
 begin
   Result := False;
-  Fors := MethodNode.FindAll(nkForStmt);
-  try
-    for FN in Fors do
-    begin
-      if FN.Line <= AfterLine then Continue;
-      if FN.Line > BeforeLine then Continue; // Deref darf im Loop-Body liegen
-      Head := FN.TypeRef.ToLower;
-      if Head.StartsWith(VarLow + ' in ') or
-         Head.StartsWith(VarLow + ' := ') then
-        Exit(True);
-    end;
-  finally
-    Fors.Free;
+  Fors := MethodNode.FindAllRef(nkForStmt);
+  for FN in Fors do
+  begin
+    if FN.Line <= AfterLine then Continue;
+    if FN.Line > BeforeLine then Continue; // Deref darf im Loop-Body liegen
+    Head := FN.TypeRef.ToLower;
+    if Head.StartsWith(VarLow + ' in ') or
+       Head.StartsWith(VarLow + ' := ') then
+      Exit(True);
   end;
 end;
 
@@ -326,22 +314,18 @@ var
 begin
   Result := False;
   if MethodNode = nil then Exit;
-  Ifs := MethodNode.FindAll(nkIfStmt);
-  try
-    for IfN in Ifs do
-    begin
-      ElseN := IfN.FindFirstChild(nkElseBranch);
-      if ElseN = nil then Continue;           // ohne else keine Schwester-Zweige
-      // then-Zweig = im if-Subtree, aber NICHT im else-Subtree.
-      NAInElse := NodeContainsRef(ElseN, AssignNode);
-      CInElse  := NodeContainsRef(ElseN, DerefNode);
-      NAInThen := NodeContainsRef(IfN, AssignNode) and not NAInElse;
-      CInThen  := NodeContainsRef(IfN, DerefNode)  and not CInElse;
-      if (NAInThen and CInElse) or (NAInElse and CInThen) then
-        Exit(True);
-    end;
-  finally
-    Ifs.Free;
+  Ifs := MethodNode.FindAllRef(nkIfStmt);
+  for IfN in Ifs do
+  begin
+    ElseN := IfN.FindFirstChild(nkElseBranch);
+    if ElseN = nil then Continue;           // ohne else keine Schwester-Zweige
+    // then-Zweig = im if-Subtree, aber NICHT im else-Subtree.
+    NAInElse := NodeContainsRef(ElseN, AssignNode);
+    CInElse  := NodeContainsRef(ElseN, DerefNode);
+    NAInThen := NodeContainsRef(IfN, AssignNode) and not NAInElse;
+    CInThen  := NodeContainsRef(IfN, DerefNode)  and not CInElse;
+    if (NAInThen and CInElse) or (NAInElse and CInThen) then
+      Exit(True);
   end;
 end;
 
@@ -355,105 +339,98 @@ var
   VarLow  : string;
   F       : TLeakFinding;
 begin
-  Assigns := nil;
-  Calls   := nil;
-  try
-    Assigns := MethodNode.FindAll(nkAssign);
-    Calls   := MethodNode.FindAll(nkCall);
-    for NA in Assigns do
+  Assigns := MethodNode.FindAllRef(nkAssign);
+  Calls   := MethodNode.FindAllRef(nkCall);
+  for NA in Assigns do
+  begin
+    // Nur direkte nil-Zuweisungen: 'varname := nil'
+    if NA.TypeRef.ToLower <> 'nil' then Continue;
+    // Feldwerte (obj.field := nil) ueberspringen – Cleanup-Muster
+    if Pos('.', NA.Name) > 0 then Continue;
+
+    VarLow := NA.Name.ToLower;
+    if VarLow = '' then Continue;
+    // Self oder Result als Variablenname ueberspringen
+    if (VarLow = 'self') or (VarLow = 'result') then Continue;
+
+    for var C in Calls do
     begin
-      // Nur direkte nil-Zuweisungen: 'varname := nil'
-      if NA.TypeRef.ToLower <> 'nil' then Continue;
-      // Feldwerte (obj.field := nil) ueberspringen – Cleanup-Muster
-      if Pos('.', NA.Name) > 0 then Continue;
+      if C.Line <= NA.Line then Continue;
 
-      VarLow := NA.Name.ToLower;
-      if VarLow = '' then Continue;
-      // Self oder Result als Variablenname ueberspringen
-      if (VarLow = 'self') or (VarLow = 'result') then Continue;
-
-      for var C in Calls do
+      var NameLow := C.Name.ToLower;
+      // Punkt-Zugriff 'varname.' im Call-Namen?
+      // Wortgrenze pruefen: muss am Anfang oder nach Nicht-Bezeichner stehen
+      var p := Pos(VarLow + '.', NameLow);
+      if p = 0 then Continue;
+      if p > 1 then
       begin
-        if C.Line <= NA.Line then Continue;
-
-        var NameLow := C.Name.ToLower;
-        // Punkt-Zugriff 'varname.' im Call-Namen?
-        // Wortgrenze pruefen: muss am Anfang oder nach Nicht-Bezeichner stehen
-        var p := Pos(VarLow + '.', NameLow);
-        if p = 0 then Continue;
-        if p > 1 then
-        begin
-          var Prev := NameLow[p - 1];
-          // Auto-Runde 2026-07-19: '.' in der Prev-Menge - 'fUnits[0].Editor.
-          // Activate' matcht sonst die LOKALE Var 'Editor', obwohl dort der
-          // MEMBER eines anderen Objekts steht (Namenskollision; analog
-          // HasBareArgUse). Bei fuehrendem '.' ist es nie die lokale Var.
-          if CharInSet(Prev, ['a'..'z', '0'..'9', '_', '.']) then Continue;
-        end;
-
-        // .Free / .Destroy sind nil-sicher
-        if IsNilSafeCall(NameLow, VarLow) then Continue;
-
-        // Neuzuweisung zwischen nil und Zugriff?
-        var Reassigned := False;
-        for var A in Assigns do
-        begin
-          if A = NA then Continue;
-          if A.Line <= NA.Line then Continue;
-          if A.Line >= C.Line  then Break;
-          if A.Name.ToLower <> VarLow then Continue;
-          if A.TypeRef.ToLower <> 'nil' then
-          begin
-            Reassigned := True;
-            Break;
-          end;
-        end;
-        if Reassigned then Continue;
-
-        // Guard via If-Bedingung zwischen nil und Zugriff?
-        if HasGuardingIf(MethodNode, VarLow, NA.Line, C.Line) then Continue;
-
-        // FP-Gate (2026-07-04): out-param-assign - Variable wurde zwischen
-        // nil und Zugriff als Argument uebergeben (var/out-Zuweisung)?
-        if IsPassedAsArgBetween(MethodNode, Calls, Assigns, VarLow, NA.Line, C.Line) then
-          Continue;
-
-        // FP-Gate (2026-07-04): for-in-loop-assign - Variable ist
-        // Schleifenvariable eines for zwischen nil und Zugriff?
-        if IsForLoopAssigned(MethodNode, VarLow, NA.Line, C.Line) then
-          Continue;
-
-        // FP-Gate (Real-World-FP-Audit 2026-07-12): preprocessor-branch -
-        // liegt eine {$IFDEF}-Direktiven-Grenze STRIKT zwischen nil-Zuweisung
-        // und Deref, stehen beide in sich ausschliessenden Kompilierungs-
-        // Zweigen ({$IFDEF x} var := nil {$ELSE} var.Method {$ENDIF}). Nur
-        // die conditional-compilation-Teilklasse der mutually-exclusive-
-        // branches-FPs; die runtime-if/else-Teilklasse bleibt bewusst offen
-        // (braucht then/else-Scope). TP-sicher: ohne Direktive dazwischen
-        // bleibt jeder Fund erhalten.
-        if DirLineBetween(ADirLines, NA.Line, C.Line) then
-          Continue;
-
-        // FP-Gate (Auto-Runde 2026-07-19): mutually-exclusive-branches
-        // (syntactic-sibling-if-else) - nil-Zuweisung (NA) und Deref (C) in
-        // then/else-Schwesterzweigen desselben if -> nie gemeinsam ausgefuehrt.
-        if IsInExclusiveBranch(MethodNode, NA, C) then
-          Continue;
-
-        // Befund: nil-Zuweisung ohne Guard, dann Punkt-Zugriff
-        F            := TLeakFinding.Create;
-        F.FileName   := FileName;
-        F.MethodName := MethodNode.Name;
-        F.LineNumber := IntToStr(C.Line);
-        F.MissingVar := NA.Name + ' := nil (line ' + IntToStr(NA.Line) + ')';
-        F.SetKind(fkNilDeref);
-        Results.Add(F);
-        Break; // Pro nil-Zuweisung nur einmal melden
+        var Prev := NameLow[p - 1];
+        // Auto-Runde 2026-07-19: '.' in der Prev-Menge - 'fUnits[0].Editor.
+        // Activate' matcht sonst die LOKALE Var 'Editor', obwohl dort der
+        // MEMBER eines anderen Objekts steht (Namenskollision; analog
+        // HasBareArgUse). Bei fuehrendem '.' ist es nie die lokale Var.
+        if CharInSet(Prev, ['a'..'z', '0'..'9', '_', '.']) then Continue;
       end;
+
+      // .Free / .Destroy sind nil-sicher
+      if IsNilSafeCall(NameLow, VarLow) then Continue;
+
+      // Neuzuweisung zwischen nil und Zugriff?
+      var Reassigned := False;
+      for var A in Assigns do
+      begin
+        if A = NA then Continue;
+        if A.Line <= NA.Line then Continue;
+        if A.Line >= C.Line  then Break;
+        if A.Name.ToLower <> VarLow then Continue;
+        if A.TypeRef.ToLower <> 'nil' then
+        begin
+          Reassigned := True;
+          Break;
+        end;
+      end;
+      if Reassigned then Continue;
+
+      // Guard via If-Bedingung zwischen nil und Zugriff?
+      if HasGuardingIf(MethodNode, VarLow, NA.Line, C.Line) then Continue;
+
+      // FP-Gate (2026-07-04): out-param-assign - Variable wurde zwischen
+      // nil und Zugriff als Argument uebergeben (var/out-Zuweisung)?
+      if IsPassedAsArgBetween(MethodNode, Calls, Assigns, VarLow, NA.Line, C.Line) then
+        Continue;
+
+      // FP-Gate (2026-07-04): for-in-loop-assign - Variable ist
+      // Schleifenvariable eines for zwischen nil und Zugriff?
+      if IsForLoopAssigned(MethodNode, VarLow, NA.Line, C.Line) then
+        Continue;
+
+      // FP-Gate (Real-World-FP-Audit 2026-07-12): preprocessor-branch -
+      // liegt eine {$IFDEF}-Direktiven-Grenze STRIKT zwischen nil-Zuweisung
+      // und Deref, stehen beide in sich ausschliessenden Kompilierungs-
+      // Zweigen ({$IFDEF x} var := nil {$ELSE} var.Method {$ENDIF}). Nur
+      // die conditional-compilation-Teilklasse der mutually-exclusive-
+      // branches-FPs; die runtime-if/else-Teilklasse bleibt bewusst offen
+      // (braucht then/else-Scope). TP-sicher: ohne Direktive dazwischen
+      // bleibt jeder Fund erhalten.
+      if DirLineBetween(ADirLines, NA.Line, C.Line) then
+        Continue;
+
+      // FP-Gate (Auto-Runde 2026-07-19): mutually-exclusive-branches
+      // (syntactic-sibling-if-else) - nil-Zuweisung (NA) und Deref (C) in
+      // then/else-Schwesterzweigen desselben if -> nie gemeinsam ausgefuehrt.
+      if IsInExclusiveBranch(MethodNode, NA, C) then
+        Continue;
+
+      // Befund: nil-Zuweisung ohne Guard, dann Punkt-Zugriff
+      F            := TLeakFinding.Create;
+      F.FileName   := FileName;
+      F.MethodName := MethodNode.Name;
+      F.LineNumber := IntToStr(C.Line);
+      F.MissingVar := NA.Name + ' := nil (line ' + IntToStr(NA.Line) + ')';
+      F.SetKind(fkNilDeref);
+      Results.Add(F);
+      Break; // Pro nil-Zuweisung nur einmal melden
     end;
-  finally
-    Assigns.Free;
-    Calls.Free;
   end;
 end;
 
@@ -471,26 +448,18 @@ begin
   // Zeilen aus den nkConditionalRange-Markern sammeln (Start=Node.Line,
   // Ende=TypeRef). Marker liegen am Unit-Node (nicht pro Methode) - hier einmal
   // sammeln und in AnalyzeMethod durchreichen. Muster analog uDeadCode.
-  CondR := UnitNode.FindAll(nkConditionalRange);
-  try
-    n := 0;
-    SetLength(DirLines, CondR.Count * 2);
-    for R in CondR do
-    begin
-      DirLines[n] := R.Line; Inc(n);
-      DirLines[n] := StrToIntDef(R.TypeRef, R.Line); Inc(n);
-    end;
-  finally
-    CondR.Free;
+  CondR := UnitNode.FindAllRef(nkConditionalRange);
+  n := 0;
+  SetLength(DirLines, CondR.Count * 2);
+  for R in CondR do
+  begin
+    DirLines[n] := R.Line; Inc(n);
+    DirLines[n] := StrToIntDef(R.TypeRef, R.Line); Inc(n);
   end;
 
-  Methods := UnitNode.FindAll(nkMethod);
-  try
-    for M in Methods do
-      AnalyzeMethod(M, FileName, Results, DirLines);
-  finally
-    Methods.Free;
-  end;
+  Methods := UnitNode.FindAllRef(nkMethod);
+  for M in Methods do
+    AnalyzeMethod(M, FileName, Results, DirLines);
 end;
 
 end.

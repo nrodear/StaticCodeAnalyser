@@ -130,6 +130,14 @@ type
 
     // Liste mit Ownership-Transfer - Caller MUSS Result.Free aufrufen.
     function FindAll(AKind: TNodeKind): TList<TAstNode>;
+    // Perf P6 (Konzept_Performance25, 2026-07-19): non-owning Sicht auf die
+    // Kind-Cache-Liste - KEIN Copy pro Aufruf. Kontrakt fuer Caller:
+    //   * NIEMALS Free aufrufen (die Liste gehoert dem Node-Cache),
+    //   * NIEMALS mutieren (Add/Remove/Sort/... - es ist die Cache-Quelle),
+    //   * Referenz nicht ueber die Lebensdauer des AST hinaus halten.
+    // Nur fuer auditierte read-only Hot-Paths (Detektoren, die pro Kandidat
+    // dieselben FindAll-Ergebnisse wiederholt nur iterieren).
+    function FindAllRef(AKind: TNodeKind): TList<TAstNode>;
     function FindFirst(AKind: TNodeKind): TAstNode;
 
     // Subtree-wide trotz "Child"-Namen (Legacy-API, 250+ Aufrufer).
@@ -435,6 +443,12 @@ begin
   // Reihenfolge identisch (Pre-Order-DFS der Quell-Liste) -> byte-identisch.
   Result.Capacity := Source.Count;
   Result.AddRange(Source);
+end;
+
+function TAstNode.FindAllRef(AKind: TNodeKind): TList<TAstNode>;
+// Perf P6: siehe Interface-Kommentar - non-owning, Cache-Liste direkt.
+begin
+  Result := EnsureCacheFor(AKind);
 end;
 
 function TAstNode.FindFirst(AKind: TNodeKind): TAstNode;

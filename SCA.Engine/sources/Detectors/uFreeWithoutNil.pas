@@ -204,25 +204,17 @@ var
     S     : TAstNode;
   begin
     Result := False;
-    Stmts := MethodNode.FindAll(nkAssign);
-    try
-      for S in Stmts do
-      begin
-        if S.Line <= FreeCall.Line then Continue;
-        if IsNilAssignTo(S, IdentLow) then Exit(True);
-      end;
-    finally
-      Stmts.Free;
+    Stmts := MethodNode.FindAllRef(nkAssign);
+    for S in Stmts do
+    begin
+      if S.Line <= FreeCall.Line then Continue;
+      if IsNilAssignTo(S, IdentLow) then Exit(True);
     end;
-    Stmts := MethodNode.FindAll(nkCall);
-    try
-      for S in Stmts do
-      begin
-        if S.Line <= FreeCall.Line then Continue;
-        if IsFreeAndNilOf(S, IdentLow) then Exit(True);
-      end;
-    finally
-      Stmts.Free;
+    Stmts := MethodNode.FindAllRef(nkCall);
+    for S in Stmts do
+    begin
+      if S.Line <= FreeCall.Line then Continue;
+      if IsFreeAndNilOf(S, IdentLow) then Exit(True);
     end;
   end;
 
@@ -247,19 +239,15 @@ var
     Result := False;
     // 1) Fruehste sichere Reassignment nach dem Free finden.
     ReLine := MaxInt;
-    Nodes := MethodNode.FindAll(nkAssign);
-    try
-      for S in Nodes do
-      begin
-        if S.Line <= FreeCall.Line then Continue;
-        if not IsAssignLhs(S, IdentLow) then Continue;
-        // RHS darf den freigegebenen Ident nicht selbst lesen
-        // (z.B. `L := L.Next` -> Use-After-Free, kein sicherer Reassign).
-        if MentionsIdent(S.TypeRef, IdentLow) then Continue;
-        if S.Line < ReLine then ReLine := S.Line;
-      end;
-    finally
-      Nodes.Free;
+    Nodes := MethodNode.FindAllRef(nkAssign);
+    for S in Nodes do
+    begin
+      if S.Line <= FreeCall.Line then Continue;
+      if not IsAssignLhs(S, IdentLow) then Continue;
+      // RHS darf den freigegebenen Ident nicht selbst lesen
+      // (z.B. `L := L.Next` -> Use-After-Free, kein sicherer Reassign).
+      if MentionsIdent(S.TypeRef, IdentLow) then Continue;
+      if S.Line < ReLine then ReLine := S.Line;
     end;
     if ReLine = MaxInt then Exit; // keine Reassignment -> Standard-Pfad
 
@@ -275,16 +263,12 @@ var
     Kinds[10] := nkExit;
     for K in Kinds do
     begin
-      Nodes := MethodNode.FindAll(K);
-      try
-        for S in Nodes do
-        begin
-          if (S.Line <= FreeCall.Line) or (S.Line >= ReLine) then Continue;
-          if MentionsIdent(S.Name, IdentLow)
-             or MentionsIdent(S.TypeRef, IdentLow) then Exit; // Read dazwischen
-        end;
-      finally
-        Nodes.Free;
+      Nodes := MethodNode.FindAllRef(K);
+      for S in Nodes do
+      begin
+        if (S.Line <= FreeCall.Line) or (S.Line >= ReLine) then Continue;
+        if MentionsIdent(S.Name, IdentLow)
+           or MentionsIdent(S.TypeRef, IdentLow) then Exit; // Read dazwischen
       end;
     end;
     Result := True;
@@ -295,14 +279,10 @@ var
     AllCalls : TList<TAstNode>;
   begin
     Result := False;
-    AllCalls := MethodNode.FindAll(nkCall);
-    try
-      // Wenn Free der letzte nkCall im Method-Body ist, kein Folge-Use moeglich.
-      if (AllCalls.Count > 0) and (AllCalls[AllCalls.Count - 1] = FreeCall) then
-        Result := True;
-    finally
-      AllCalls.Free;
-    end;
+    AllCalls := MethodNode.FindAllRef(nkCall);
+    // Wenn Free der letzte nkCall im Method-Body ist, kein Folge-Use moeglich.
+    if (AllCalls.Count > 0) and (AllCalls[AllCalls.Count - 1] = FreeCall) then
+      Result := True;
   end;
 
 var
@@ -310,135 +290,119 @@ var
   LV         : TAstNode;
   LVs        : TList<TAstNode>;
 begin
-  Methods := UnitNode.FindAll(nkMethod);
-  try
-    for M in Methods do
-    begin
-      // Destruktor: Free eines Feldes braucht KEIN Nil-Out - das Objekt
-      // selbst wird gerade zerstoert, die Felder sterben mit ihm. Real-
-      // World-FP-Cluster (2026-06-21): ein einziger Destruktor mit 8
-      // Field.Free erzeugte 8 Findings. Komplett skippen.
-      //
-      // Real-World-FP-Audit 2026-07-10 (SCA139 97% FP): auch 'class destructor'
-      // (TypeRef 'class destructor', vom exakten SameText verfehlt) UND
-      // OnDestroy-Handler ('FormDestroy'/'DataModuleDestroy'/'<X>.Destroy',
-      // ein normales procedure) zerstoeren die Instanz -> Nil-Out wirkungslos,
-      // keine UAF-Flaeche. TearDown/Reset-Methoden (enden NICHT auf 'destroy')
-      // bleiben bewusst Befund (dort kann ein spaeterer nil-Branch dangling sein).
-      if Pos('destructor', LowerCase(M.TypeRef)) > 0 then Continue;
-      var MNameLow := LowerCase(M.Name);
-      var MDotPos := LastDelimiter('.', MNameLow);
-      if MDotPos > 0 then MNameLow := Copy(MNameLow, MDotPos + 1, MaxInt);
-      if EndsText('destroy', MNameLow) then Continue;
+  Methods := UnitNode.FindAllRef(nkMethod);
+  for M in Methods do
+  begin
+    // Destruktor: Free eines Feldes braucht KEIN Nil-Out - das Objekt
+    // selbst wird gerade zerstoert, die Felder sterben mit ihm. Real-
+    // World-FP-Cluster (2026-06-21): ein einziger Destruktor mit 8
+    // Field.Free erzeugte 8 Findings. Komplett skippen.
+    //
+    // Real-World-FP-Audit 2026-07-10 (SCA139 97% FP): auch 'class destructor'
+    // (TypeRef 'class destructor', vom exakten SameText verfehlt) UND
+    // OnDestroy-Handler ('FormDestroy'/'DataModuleDestroy'/'<X>.Destroy',
+    // ein normales procedure) zerstoeren die Instanz -> Nil-Out wirkungslos,
+    // keine UAF-Flaeche. TearDown/Reset-Methoden (enden NICHT auf 'destroy')
+    // bleiben bewusst Befund (dort kann ein spaeterer nil-Branch dangling sein).
+    if Pos('destructor', LowerCase(M.TypeRef)) > 0 then Continue;
+    var MNameLow := LowerCase(M.Name);
+    var MDotPos := LastDelimiter('.', MNameLow);
+    if MDotPos > 0 then MNameLow := Copy(MNameLow, MDotPos + 1, MaxInt);
+    if EndsText('destroy', MNameLow) then Continue;
 
-      // Lokale Var-Namen einmal pro Methode sammeln. Free-Calls auf Locals
-      // sind harmlos, weil die Variable beim Method-Ende sowieso aus dem
-      // Scope faellt - kein Dangling-Pointer-Risiko. FreeAndNil ist primaer
-      // fuer FELDER relevant (cross-method state). Self-Test fand
-      // ~100 FPs durch Locals (uAbstractNotImpl.Methods, uDetectorUtils.Chars, etc).
-      LocalNames := TDictionary<string, Boolean>.Create;
-      try
-        LVs := M.FindAll(nkLocalVar);
-        try
-          for LV in LVs do
-            if LV.Name <> '' then
-              LocalNames.AddOrSetValue(LowerCase(Trim(LV.Name)), True);
-        finally
-          LVs.Free;
-        end;
-        // Parameter zaehlen wie Locals: method-scoped, Nil-Out beim
-        // Method-Ende sinnlos. `Findings.Free` (Param der Ownership uebernimmt)
-        // ist kein Free-Without-Nil-Smell.
-        LVs := M.FindAll(nkParam);
-        try
-          for LV in LVs do
-            if LV.Name <> '' then
-              LocalNames.AddOrSetValue(LowerCase(Trim(LV.Name)), True);
-        finally
-          LVs.Free;
-        end;
+    // Lokale Var-Namen einmal pro Methode sammeln. Free-Calls auf Locals
+    // sind harmlos, weil die Variable beim Method-Ende sowieso aus dem
+    // Scope faellt - kein Dangling-Pointer-Risiko. FreeAndNil ist primaer
+    // fuer FELDER relevant (cross-method state). Self-Test fand
+    // ~100 FPs durch Locals (uAbstractNotImpl.Methods, uDetectorUtils.Chars, etc).
+    LocalNames := TDictionary<string, Boolean>.Create;
+    try
+      LVs := M.FindAllRef(nkLocalVar);
+      for LV in LVs do
+        if LV.Name <> '' then
+          LocalNames.AddOrSetValue(LowerCase(Trim(LV.Name)), True);
+      // Parameter zaehlen wie Locals: method-scoped, Nil-Out beim
+      // Method-Ende sinnlos. `Findings.Free` (Param der Ownership uebernimmt)
+      // ist kein Free-Without-Nil-Smell.
+      LVs := M.FindAllRef(nkParam);
+      for LV in LVs do
+        if LV.Name <> '' then
+          LocalNames.AddOrSetValue(LowerCase(Trim(LV.Name)), True);
 
-      Calls := M.FindAll(nkCall);
-      try
-        for N in Calls do
-        begin
-          Recv := ExtractFreeReceiver(N.Name);
-          if Recv = '' then Continue;
-          RecvLow := LowerCase(Recv);
-          // Indexed-Element (Objects[i].Free / Items[i].Free / Controls[i].Free)
-          // oder Typecast/Call (TFoo(FItems[i]).Free / TObject(List[i]).Free):
-          // kein simpler Var/Field-Receiver -> die "var := nil"-Empfehlung
-          // trifft nicht zu (Collection-Item-Free-Idiom bzw. Cast, oft im
-          // Clear/Destroy-Loop). Real-World-FP 2026-06-23 (~100+ Treffer).
-          //
-          // Real-World-FP-Audit 2026-07-11 (non-lvalue-receiver): bei
-          // Typecast eines Index-/Ergebnis-Ausdrucks liefert der Parser den
-          // Receiver als Fragment MIT schliessender Klammer/Bracket, z.B.
-          //   TCnWizMenuAction(FWizMenuActions[i]).Free -> Recv 'Count])'
-          //   TCnCompDirectivePair(FStack.Pop).Free     -> Recv 'Pop)'
-          // Das oeffnende '('/'[' faellt dabei aus dem letzten Segment heraus,
-          // die schliessende ')'/']' bleibt. Ein sauberes zuweisbares lvalue
-          // (reiner Ident / Feld-Kette) enthaelt NIE eine dieser vier Klammern
-          // -> FreeAndNil ist syntaktisch unmoeglich, daher ueberspringen.
-          if (Pos('[', Recv) > 0) or (Pos('(', Recv) > 0)
-             or (Pos(']', Recv) > 0) or (Pos(')', Recv) > 0) then Continue;
-          // Receiver darf kein Self/Result/Inherited sein - Free auf Self
-          // wird selten von Nil-Out gefolgt (Owner-Pattern).
-          if (RecvLow = 'self') or (RecvLow = 'result')
-             or (RecvLow = 'inherited') then Continue;
-          // WURZEL des Receivers pruefen statt nur des letzten Segments:
-          // ist sie eine lokale Var ODER ein Parameter, faellt das Objekt
-          // beim Method-Ende aus dem Scope -> Nil-Out sinnlos/unmoeglich.
-          // Deckt ab: bare Local (L.Free), Methoden-Ergebnis
-          // (PushStack.Pop.Free -> Wurzel pushstack), lokales Record-Feld
-          // (Slot.DataTags.Free -> Wurzel slot), Parameter (Findings.Free).
-          // Echte Feld-Frees (FField.Free / Self.FField.Free) haben eine
-          // Nicht-Local-Wurzel und bleiben Befund.
-          RootLow := FreeReceiverRootLow(N.Name);
-          if (RootLow <> '') and LocalNames.ContainsKey(RootLow) then Continue;
+      Calls := M.FindAllRef(nkCall);
+      for N in Calls do
+      begin
+        Recv := ExtractFreeReceiver(N.Name);
+        if Recv = '' then Continue;
+        RecvLow := LowerCase(Recv);
+        // Indexed-Element (Objects[i].Free / Items[i].Free / Controls[i].Free)
+        // oder Typecast/Call (TFoo(FItems[i]).Free / TObject(List[i]).Free):
+        // kein simpler Var/Field-Receiver -> die "var := nil"-Empfehlung
+        // trifft nicht zu (Collection-Item-Free-Idiom bzw. Cast, oft im
+        // Clear/Destroy-Loop). Real-World-FP 2026-06-23 (~100+ Treffer).
+        //
+        // Real-World-FP-Audit 2026-07-11 (non-lvalue-receiver): bei
+        // Typecast eines Index-/Ergebnis-Ausdrucks liefert der Parser den
+        // Receiver als Fragment MIT schliessender Klammer/Bracket, z.B.
+        //   TCnWizMenuAction(FWizMenuActions[i]).Free -> Recv 'Count])'
+        //   TCnCompDirectivePair(FStack.Pop).Free     -> Recv 'Pop)'
+        // Das oeffnende '('/'[' faellt dabei aus dem letzten Segment heraus,
+        // die schliessende ')'/']' bleibt. Ein sauberes zuweisbares lvalue
+        // (reiner Ident / Feld-Kette) enthaelt NIE eine dieser vier Klammern
+        // -> FreeAndNil ist syntaktisch unmoeglich, daher ueberspringen.
+        if (Pos('[', Recv) > 0) or (Pos('(', Recv) > 0)
+           or (Pos(']', Recv) > 0) or (Pos(')', Recv) > 0) then Continue;
+        // Receiver darf kein Self/Result/Inherited sein - Free auf Self
+        // wird selten von Nil-Out gefolgt (Owner-Pattern).
+        if (RecvLow = 'self') or (RecvLow = 'result')
+           or (RecvLow = 'inherited') then Continue;
+        // WURZEL des Receivers pruefen statt nur des letzten Segments:
+        // ist sie eine lokale Var ODER ein Parameter, faellt das Objekt
+        // beim Method-Ende aus dem Scope -> Nil-Out sinnlos/unmoeglich.
+        // Deckt ab: bare Local (L.Free), Methoden-Ergebnis
+        // (PushStack.Pop.Free -> Wurzel pushstack), lokales Record-Feld
+        // (Slot.DataTags.Free -> Wurzel slot), Parameter (Findings.Free).
+        // Echte Feld-Frees (FField.Free / Self.FField.Free) haben eine
+        // Nicht-Local-Wurzel und bleiben Befund.
+        RootLow := FreeReceiverRootLow(N.Name);
+        if (RootLow <> '') and LocalNames.ContainsKey(RootLow) then Continue;
 
-          // Real-World-FP-Audit 2026-07-18 (non-lvalue Methoden-/Member-Ergebnis-
-          // Receiver): FMsgQueue.Pop.Free / FIfStack.Pop.Free / FProcStack.Pop.Free.
-          // Ein MEHRSEGMENTIGER, klammerloser Receiver (>=2 Punkte im Call-Namen)
-          // friert das ERGEBNIS eines Member-/Methodenaufrufs auf einer Nicht-
-          // Local-Wurzel ein - KEIN zuweisbares lvalue: 'FMsgQueue.Pop := nil' /
-          // FreeAndNil(FMsgQueue.Pop) sind syntaktisch unmoeglich -> Empfehlung
-          // sinnlos, ueberspringen. Der Detektor legt hier ohnehin nur das letzte
-          // Segment (Recv='Pop') als Nil-Out-Ident ab -> falsch adressierte Meldung.
-          // Cast/Index sind oben (Recv-Check '('/'['/')'/']') bereits raus; das
-          // einsegmentige Feld 'FList.Free' hat genau 1 Punkt und bleibt Befund.
-          // AUSNAHME 'self': 'Self.FField.Free' ist ein echtes nil-outbares Feld
-          // (Self.FField := nil legal) -> bleibt Befund.
-          var DotCount := 0;
-          for var ci := 1 to Length(N.Name) do
-            if N.Name[ci] = '.' then Inc(DotCount);
-          if (DotCount >= 2) and (RootLow <> 'self') then Continue;
+        // Real-World-FP-Audit 2026-07-18 (non-lvalue Methoden-/Member-Ergebnis-
+        // Receiver): FMsgQueue.Pop.Free / FIfStack.Pop.Free / FProcStack.Pop.Free.
+        // Ein MEHRSEGMENTIGER, klammerloser Receiver (>=2 Punkte im Call-Namen)
+        // friert das ERGEBNIS eines Member-/Methodenaufrufs auf einer Nicht-
+        // Local-Wurzel ein - KEIN zuweisbares lvalue: 'FMsgQueue.Pop := nil' /
+        // FreeAndNil(FMsgQueue.Pop) sind syntaktisch unmoeglich -> Empfehlung
+        // sinnlos, ueberspringen. Der Detektor legt hier ohnehin nur das letzte
+        // Segment (Recv='Pop') als Nil-Out-Ident ab -> falsch adressierte Meldung.
+        // Cast/Index sind oben (Recv-Check '('/'['/')'/']') bereits raus; das
+        // einsegmentige Feld 'FList.Free' hat genau 1 Punkt und bleibt Befund.
+        // AUSNAHME 'self': 'Self.FField.Free' ist ein echtes nil-outbares Feld
+        // (Self.FField := nil legal) -> bleibt Befund.
+        var DotCount := 0;
+        for var ci := 1 to Length(N.Name) do
+          if N.Name[ci] = '.' then Inc(DotCount);
+        if (DotCount >= 2) and (RootLow <> 'self') then Continue;
 
-          if HasNilOutAfter(M, N, RecvLow) then Continue;
-          // Reassigned-after-free (FPopUpBitmap.Free; FPopUpBitmap := TBitmap.Create):
-          // Feld vor jedem Read neu belegt -> kein Dangling-Pointer.
-          if HasSafeReassignAfter(M, N, RecvLow) then Continue;
-          if IsLastStmtOfMethod(M, N) then Continue;
+        if HasNilOutAfter(M, N, RecvLow) then Continue;
+        // Reassigned-after-free (FPopUpBitmap.Free; FPopUpBitmap := TBitmap.Create):
+        // Feld vor jedem Read neu belegt -> kein Dangling-Pointer.
+        if HasSafeReassignAfter(M, N, RecvLow) then Continue;
+        if IsLastStmtOfMethod(M, N) then Continue;
 
-          F            := TLeakFinding.Create;
-          F.FileName   := FileName;
-          F.MethodName := M.Name;
-          F.LineNumber := IntToStr(N.Line);
-          F.MissingVar := Format(
-            '%s.Free without subsequent %s := nil - prefer FreeAndNil(%s)',
-            [Recv, Recv, Recv]);
-          F.SetKind(fkFreeWithoutNil);
-          Results.Add(F);
-        end;
-      finally
-        Calls.Free;
+        F            := TLeakFinding.Create;
+        F.FileName   := FileName;
+        F.MethodName := M.Name;
+        F.LineNumber := IntToStr(N.Line);
+        F.MissingVar := Format(
+          '%s.Free without subsequent %s := nil - prefer FreeAndNil(%s)',
+          [Recv, Recv, Recv]);
+        F.SetKind(fkFreeWithoutNil);
+        Results.Add(F);
       end;
-      finally
-        LocalNames.Free;
-      end;
+    finally
+      LocalNames.Free;
     end;
-  finally
-    Methods.Free;
   end;
 end;
 
