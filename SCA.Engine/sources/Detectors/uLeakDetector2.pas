@@ -135,6 +135,26 @@ type
     // NUR fuer den lsWarning-Zweig - kann nie einen Leak (lsError) maskieren.
     class function FreeInFinallyRegionBySource(MethodNode: TAstNode;
       const StrippedLines: TArray<string>; const VarNameLow: string): Boolean; static;
+    // SCA001-Inkr.2 (Gross-Triage 2026-07-19, iface-cast-Bucket 15/101): das
+    // Objekt wird per Interface-Cast an die Refcount abgegeben ('v := IFoo(b)'
+    // bzw. 'Intf := b as IFoo') - der Release gibt es frei, kein Leak.
+    // Konvention: Interface-Ident = 'I' + Grossbuchstabe im ORIGINAL-Case
+    // (schliesst 'IntToStr(b)' aus).
+    class function IsHandedToInterface(MethodNode: TAstNode;
+      const VarNameLow: string): Boolean; static;
+    // 'E := ECustom.Create; ... raise E;' - raise uebernimmt Ownership, die
+    // RTL gibt das Exception-Objekt im Handler frei (Gross-Triage Batch 8).
+    class function IsRaisedAsException(MethodNode: TAstNode;
+      const VarNameLow: string): Boolean; static;
+    // factory-Bucket 13/101: '<instanz>.CreateXxx(...)' ist eine FACTORY-
+    // Methode (Receiver = lokale Var/Param-INSTANZ oder '(x as IFoo)'-Ausdruck),
+    // keine direkte Konstruktion - das Result ist typisch fremd-owned. True
+    // wenn ALLE Create-Assigns der Var solche Instanz-Factories sind; die Var
+    // laeuft dann ueber Pfad 2 ('Rueckgabewert', lsWarning) statt Pfad 1
+    // (lsError). bare '.Create' und Metaclass-Receiver (TypeLow endet auf
+    // 'class': TFormClass.CreateNew) bleiben Pfad 1.
+    class function AllCreatesAreInstanceFactory(MethodNode: TAstNode;
+      const VarNameLow: string): Boolean; static;
   end;
 
 implementation
@@ -1530,6 +1550,181 @@ begin
   end;
 end;
 
+class function TLeakDetector2.IsHandedToInterface(MethodNode: TAstNode;
+  const VarNameLow: string): Boolean;
+// Scannt nkAssign.TypeRef (RHS) und nkCall.Name im ORIGINAL-Case nach
+//   '<IIdent>(varname)'   - Interface-Hard-Cast  (IBoxedJSONValue(b))
+//   'varname as I<Ident>' - as-Cast              (obj as IMyIntf)
+// I-Konvention nur im Original-Case pruefbar: 'I' + GROSSBUCHSTABE
+// ('IntToStr(b)' hat 'n' klein -> kein Interface). Ein Interface-Cast gibt
+// das Objekt an die Refcount ab - der letzte Release gibt es frei.
+var
+  Nodes : TList<TAstNode>;
+  N : TAstNode;
+
+  function TextHands(const Orig: string): Boolean;
+  var
+    Low : string;
+    p, pr, hS : Integer;
+  begin
+    Result := False;
+    if Orig = '' then Exit;
+    Low := Orig.ToLower;
+    // Muster 1: '<IIdent>(varname' mit rechter Wortgrenze
+    p := Pos('(' + VarNameLow, Low);
+    while p > 0 do
+    begin
+      pr := p + 1 + Length(VarNameLow);
+      if (pr > Length(Low)) or not IsIdentChar(Low[pr]) then
+      begin
+        hS := p - 1;
+        while (hS >= 1) and IsIdentChar(Low[hS]) do Dec(hS);
+        if (hS + 2 <= p - 1) and (Orig[hS + 1] = 'I')
+           and CharInSet(Orig[hS + 2], ['A'..'Z']) then
+          Exit(True);
+      end;
+      p := PosEx('(' + VarNameLow, Low, p + 1);
+    end;
+    // Muster 2: 'varname as i<ident>' mit linker Wortgrenze
+    p := Pos(VarNameLow + ' as i', Low);
+    while p > 0 do
+    begin
+      if (p = 1) or not IsIdentChar(Low[p - 1]) then
+      begin
+        pr := p + Length(VarNameLow) + 4;   // Position des 'i' hinter ' as '
+        if (pr < Length(Orig)) and (Orig[pr] = 'I')
+           and CharInSet(Orig[pr + 1], ['A'..'Z']) then
+          Exit(True);
+      end;
+      p := PosEx(VarNameLow + ' as i', Low, p + 1);
+    end;
+  end;
+
+begin
+  Result := False;
+  Nodes := MethodNode.FindAll(nkAssign);
+  try
+    for N in Nodes do
+      if TextHands(N.TypeRef) then Exit(True);
+  finally
+    Nodes.Free;
+  end;
+  Nodes := MethodNode.FindAll(nkCall);
+  try
+    for N in Nodes do
+      if TextHands(N.Name) then Exit(True);
+  finally
+    Nodes.Free;
+  end;
+end;
+
+class function TLeakDetector2.IsRaisedAsException(MethodNode: TAstNode;
+  const VarNameLow: string): Boolean;
+// 'raise E;' -> nkRaise.Name = geraister Ausdruck (uParser2 ParseRaiseStmt).
+// Exakter Var-Match: raise uebernimmt Ownership, die RTL gibt das Objekt im
+// Exception-Handler frei.
+var
+  Raises : TList<TAstNode>;
+  R : TAstNode;
+begin
+  Result := False;
+  Raises := MethodNode.FindAll(nkRaise);
+  try
+    for R in Raises do
+      if Trim(R.Name.ToLower) = VarNameLow then Exit(True);
+  finally
+    Raises.Free;
+  end;
+end;
+
+class function TLeakDetector2.AllCreatesAreInstanceFactory(MethodNode: TAstNode;
+  const VarNameLow: string): Boolean;
+var
+  Assigns, Decls : TList<TAstNode>;
+  A, D : TAstNode;
+  LocalTypes : TDictionary<string, string>;   // name-low -> typ-low (1. Wort)
+  TypeLow, RecvLow, DeclType : string;
+  CreatePos, pRight, i : Integer;
+  CreateCount, FactoryCount : Integer;
+  IsClean : Boolean;
+
+  function FirstWordLow(const S: string): string;
+  var T: string; k: Integer;
+  begin
+    T := Trim(LowerCase(S)); Result := '';
+    for k := 1 to Length(T) do
+      if IsIdentChar(T[k]) then Result := Result + T[k] else Break;
+  end;
+
+  function LastWordLow(const S: string): string;
+  var T: string; sp: Integer;
+  begin
+    T := Trim(LowerCase(S));
+    sp := LastDelimiter(' ', T);
+    if sp > 0 then Result := Copy(T, sp + 1, MaxInt) else Result := T;
+  end;
+
+begin
+  Result := False;
+  CreateCount := 0; FactoryCount := 0;
+  LocalTypes := TDictionary<string, string>.Create;
+  try
+    Decls := MethodNode.FindAll(nkLocalVar);
+    try
+      for D in Decls do
+        LocalTypes.AddOrSetValue(Trim(D.Name.ToLower), FirstWordLow(D.TypeRef));
+    finally
+      Decls.Free;
+    end;
+    Decls := MethodNode.FindAll(nkParam);
+    try
+      for D in Decls do
+        LocalTypes.AddOrSetValue(LastWordLow(D.Name), FirstWordLow(D.TypeRef));
+    finally
+      Decls.Free;
+    end;
+
+    Assigns := MethodNode.FindAll(nkAssign);
+    try
+      for A in Assigns do
+      begin
+        if A.Name.ToLower <> VarNameLow then Continue;
+        TypeLow := A.TypeRef.ToLower;
+        if not MatchesCreate(A.TypeRef, TypeLow, CreatePos) then Continue;
+        Inc(CreateCount);
+        // Nur 'CreateXxx' (nicht-leeres CamelCase-Suffix) kann Factory sein -
+        // bare '.Create' ist IMMER eine Konstruktion (auch Metaclass-Local).
+        pRight := CreatePos + 7;
+        if (pRight > Length(TypeLow)) or not IsIdentChar(TypeLow[pRight]) then
+          Continue;
+        RecvLow := Trim(Copy(TypeLow, 1, CreatePos - 1));
+        if RecvLow = '' then Continue;
+        // Fall b: '(x as IFoo)'-Ausdrucks-Receiver = sicher eine Instanz
+        // (Metaclass-Casts 'TComponentClass(arr[i])' enthalten KEIN ' as ').
+        if (RecvLow[Length(RecvLow)] = ')') and (Pos(' as ', RecvLow) > 0) then
+        begin
+          Inc(FactoryCount);
+          Continue;
+        end;
+        // Fall a: einfacher Ident, der eine bekannte Local/Param-INSTANZ ist
+        // und dessen Typname nicht auf 'class' endet (Metaclass-Konvention
+        // TFormClass/TComponentClass -> deren CreateXxx ist echte Konstruktion).
+        IsClean := True;
+        for i := 1 to Length(RecvLow) do
+          if not IsIdentChar(RecvLow[i]) then begin IsClean := False; Break; end;
+        if IsClean and LocalTypes.TryGetValue(RecvLow, DeclType)
+           and (DeclType <> '') and not EndsStr('class', DeclType) then
+          Inc(FactoryCount);
+      end;
+    finally
+      Assigns.Free;
+    end;
+  finally
+    LocalTypes.Free;
+  end;
+  Result := (CreateCount > 0) and (CreateCount = FactoryCount);
+end;
+
 { ---- Öffentliche API ---- }
 
 class procedure TLeakDetector2.AnalyzeMethod(UnitNode, MethodNode: TAstNode;
@@ -1603,7 +1798,12 @@ begin
       VarNameLow := V.Name.ToLower;
 
       // ── Pfad 1: direkte .Create-Zuweisung ──────────────────────────────────
-      if HasCreateAssign(MethodNode, VarNameLow) then
+      // Inkr.2: Instanz-Factory ('mgr.CreateOptionFromFile' / '(x as IFoo).
+      // CreateY') ist KEINE direkte Konstruktion. Pfad 2 skippt '.create'-RHS
+      // ebenfalls -> die Var wird komplett uebersprungen (Triage: 13/13
+      // Instanz-Factory-Results waren fremd-owned; IDE/Container besitzen).
+      if HasCreateAssign(MethodNode, VarNameLow)
+         and not AllCreatesAreInstanceFactory(MethodNode, VarNameLow) then
       begin
         if IsReturnedAsResult(MethodNode, VarNameLow) then Continue;
         if IsPassedToOwner(MethodNode, VarNameLow)    then Continue;
@@ -1611,6 +1811,10 @@ begin
         // Owner/AOwner/Application) uebergibt Ownership an den Owner
         // (TComponent-Konvention) -> kein Fund. Create(nil) meldet weiter.
         if IsOwnerParamCreate(MethodNode, VarNameLow) then Continue;
+        // Inkr.2: Interface-Cast-Uebergabe / raise-Ownership (Gross-Triage
+        // iface-cast-Bucket 15/101 + Batch 8 'raise LException').
+        if IsHandedToInterface(MethodNode, VarNameLow) then Continue;
+        if IsRaisedAsException(MethodNode, VarNameLow) then Continue;
 
         FreeFound := SearchFree(MethodNode, VarNameLow, False, FreeInFin);
 
@@ -1646,6 +1850,10 @@ begin
 
       if IsReturnedAsResult(MethodNode, VarNameLow) then Continue;
       if IsPassedToOwner(MethodNode, VarNameLow)    then Continue;
+      // Inkr.2: Interface-Cast-Uebergabe / raise-Ownership auch fuer den
+      // Rueckgabewert-Pfad (dasselbe Ownership-Argument).
+      if IsHandedToInterface(MethodNode, VarNameLow) then Continue;
+      if IsRaisedAsException(MethodNode, VarNameLow) then Continue;
 
       FreeFound := SearchFree(MethodNode, VarNameLow, False, FreeInFin);
 

@@ -186,6 +186,13 @@ type
     // Werttyp-Return-Gate ('Rueckgabewert'-Pfad)
     [Test] procedure Leak_ValueTypeReturnCall_NoFinding;
     [Test] procedure Leak_ObjectReturnMakeCall_StillReported;   // TP-Gegenprobe
+    // --- Inkr.2 (2026-07-19): iface-cast / raise / Instanz-Factory ---
+    [Test] procedure Leak_InterfaceHardCast_NoFinding;
+    [Test] procedure Leak_AsInterfaceCast_NoFinding;
+    [Test] procedure Leak_RaisedVar_NoFinding;
+    [Test] procedure Leak_InstanceFactoryCreate_NoFinding;
+    [Test] procedure Leak_TypeCreateSuffix_StillError;          // TP-Gegenprobe
+    [Test] procedure Leak_MetaclassCreateNew_StillError;        // TP-Gegenprobe
   end;
 
   // ---- FieldLeak (TFieldLeakDetector) ------------------------------------------------
@@ -2852,6 +2859,129 @@ begin
   try
     Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
       'Objekt-Return-Factory ohne Free bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_InterfaceHardCast_NoFinding;
+// Inkr.2 (iface-cast 15/101): 'IBoxedValue(b)' - Interface-Hard-Cast gibt das
+// Objekt an die Refcount ab; der letzte Release gibt es frei. I-Konvention im
+// Original-Case ('I'+Grossbuchstabe; 'IntToStr(b)' matcht NICHT).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var b: TStringList; v: IBoxedValue;'#13#10+
+  'begin'#13#10+
+  '  b := TStringList.Create;'#13#10+
+  '  v := IBoxedValue(b);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'Interface-Hard-Cast uebergibt an Refcount - kein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_AsInterfaceCast_NoFinding;
+// Inkr.2: 'obj as IMyIntf' - as-Cast an Interface-Refcount.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var obj: TStringList; Intf: IMyIntf;'#13#10+
+  'begin'#13#10+
+  '  obj := TStringList.Create;'#13#10+
+  '  Intf := obj as IMyIntf;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'as-Interface-Cast uebergibt an Refcount - kein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_RaisedVar_NoFinding;
+// Inkr.2 (Batch 8 'raise LException'): 'raise E' uebernimmt Ownership -
+// die RTL gibt das Objekt im Exception-Handler frei.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var E: TStringList;'#13#10+
+  'begin'#13#10+
+  '  E := TStringList.Create;'#13#10+
+  '  raise E;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'geraiste Var gehoert der RTL - kein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_InstanceFactoryCreate_NoFinding;
+// Inkr.2 (factory 13/101): 'mgr.CreateOptionFromFile(..)' - Receiver 'mgr' ist
+// eine lokale INSTANZ (kein Typname, TypeLow endet nicht auf 'class') -> das
+// ist eine Factory-Methode, keine direkte Konstruktion; Result fremd-owned
+// (Triage 13/13). Kein lsError.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var mgr: TManager; opt: TStringList;'#13#10+
+  'begin'#13#10+
+  '  mgr := GetManager;'#13#10+
+  '  opt := mgr.CreateOptionFromFile(''x'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'Instanz-Factory-CreateXxx ist keine direkte Konstruktion - kein lsError');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_TypeCreateSuffix_StillError;
+// TP-Gegenprobe: 'TSQLQuery.CreateNew(nil)' - Receiver ist ein TYPNAME (keine
+// Local/kein Param) -> direkte Konstruktion, Create(nil) ohne Free = Leak.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var q: TSQLQuery;'#13#10+
+  'begin'#13#10+
+  '  q := TSQLQuery.CreateNew(nil);'#13#10+
+  '  q.Open;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.CountSev(F, fkMemoryLeak, lsError) >= 1,
+      'Typname.CreateNew ohne Free bleibt ein Leak-Error');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_MetaclassCreateNew_StillError;
+// TP-Gegenprobe Metaclass: Receiver 'C' IST eine Local, aber ihr Typ endet auf
+// 'class' (TFormClass-Konvention) -> C.CreateNew ist eine ECHTE Konstruktion
+// ueber die Metaklasse -> Fund bleibt.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var C: TFormClass; f: TStringList;'#13#10+
+  'begin'#13#10+
+  '  C := GetFormClass;'#13#10+
+  '  f := C.CreateNew(nil);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.CountSev(F, fkMemoryLeak, lsError) >= 1,
+      'Metaclass-Local.CreateNew bleibt eine echte Konstruktion - Fund bleibt');
   finally F.Free; end;
 end;
 
