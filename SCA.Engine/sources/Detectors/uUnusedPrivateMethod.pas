@@ -137,9 +137,11 @@ var
   Lines      : TStringList;
   Cached     : Boolean;
   Code       : string;
-  RE         : TRegEx;
+  // Perf P1 (Konzept_Performance25, 2026-07-19): Wort-Positions-Index einmal
+  // pro File statt TRegEx-Volltext-Scan PRO Private-Methode.
+  WordIdx    : TObjectDictionary<string, TList<Integer>>;
+  PosList    : TList<Integer>;
   Count      : Integer;
-  M          : TMatch;
   MethName   : string;
   MethLow    : string;
   F          : TLeakFinding;
@@ -148,6 +150,7 @@ var
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
+  WordIdx := nil;   // Perf P1: nil-sicher im finally
   try
     // 2026-07-04: lokale Strip-Kopie durch zentrale TDetectorUtils-Fassung
     // ersetzt (Audit Duplikations-Rest). Verhaltensgleich zur alten Variante:
@@ -157,6 +160,9 @@ begin
     // Perf (2026-07-05): P1-strip-cache - geteilter Strip via Context-Cache.
     Code := LowerCase(TDetectorUtils.StripStringsAndCommentsCached(
       Lines, LineFor, AContext, FileName, ' '));
+    // Perf P1: einmaliger Index (Code ist bereits lowercase -> Keys identisch
+    // zum frueheren case-sensitiven '\b'+methlow+'\b'-Match).
+    WordIdx := TDetectorUtils.BuildWordPositionIndex(Code);
     // DFM-Event-Handler-Set fuer diese .pas/.dfm-Paarung.
     DfmHandlers := BuildDfmHandlerSet(FileName);
     try
@@ -184,14 +190,13 @@ begin
               // referenziert und kein Unused-Kandidat.
               if DfmHandlers.ContainsKey(MethLow) then Continue;
 
-              // Text-Scan: wie oft taucht das Wort im File-Body auf?
-              RE := TRegEx.Create('\b' + MethLow + '\b');
-              Count := 0;
-              for M in RE.Matches(Code) do
-              begin
-                Inc(Count);
-                if Count > 2 then Break; // genug Belege fuer Use
-              end;
+              // Text-Scan via Wort-Index (Perf P1): Vorkommens-Anzahl ist
+              // die Laenge der Positions-Liste - identisch zur frueheren
+              // Regex-Zaehlung ('\b'+methlow+'\b' auf lowercase-Code).
+              if WordIdx.TryGetValue(MethLow, PosList) then
+                Count := PosList.Count
+              else
+                Count := 0;
               if Count > 2 then Continue;
 
               F            := TLeakFinding.Create;
@@ -213,6 +218,7 @@ begin
       DfmHandlers.Free;
     end;
   finally
+    WordIdx.Free;
     ReleaseLines(Lines, Cached);
   end;
 end;

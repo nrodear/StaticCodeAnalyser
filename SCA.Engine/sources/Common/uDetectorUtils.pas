@@ -145,6 +145,18 @@ type
     class function LineForPos(const LineFor: TArray<Integer>;
       APos: Integer): Integer; static;
 
+    // Perf P1 (Konzept_Performance25, 2026-07-19): EIN O(N)-Scan ueber den
+    // (gestrippten) Code sammelt fuer jedes Ident-Wort ([A-Za-z0-9_]+-Run)
+    // die 1-basierten STARTPOSITIONEN unter dem lowercase-Key. Ersetzt in
+    // uUnusedRoutine/uUnusedPrivateMethod das O(Kandidaten x Filegroesse)-
+    // Muster 'TRegEx pro Kandidat + Volltext-Matches'. Semantik-identisch zu
+    // '\b<ident>\b' (roIgnoreCase): PCRE-\w ohne UCP = ASCII [A-Za-z0-9_] =
+    // IsIdentChar; ein Ganzwort-Match == ein kompletter Run gleichen (lower)
+    // Texts; Woerter ueberlappen nicht. Caller besitzt das Dictionary
+    // ([doOwnsValues] gibt die Positions-Listen frei).
+    class function BuildWordPositionIndex(const Code: string):
+      TObjectDictionary<string, TList<Integer>>; static;
+
     // Faltet Pascal-Konkatenations-Sequenzen von String-Literalen zu einem
     // einzigen virtuellen Literal zusammen:
     //   'foo' + 'bar'       -> 'foobar'
@@ -542,6 +554,35 @@ begin
     Result := LineFor[APos - 1] + 1
   else
     Result := 0;
+end;
+
+class function TDetectorUtils.BuildWordPositionIndex(const Code: string):
+  TObjectDictionary<string, TList<Integer>>;
+var
+  i, n, ws : Integer;
+  W : string;
+  L : TList<Integer>;
+begin
+  Result := TObjectDictionary<string, TList<Integer>>.Create([doOwnsValues]);
+  n := Length(Code);
+  i := 1;
+  while i <= n do
+  begin
+    if IsIdentChar(Code[i]) then
+    begin
+      ws := i;
+      while (i <= n) and IsIdentChar(Code[i]) do Inc(i);
+      W := LowerCase(Copy(Code, ws, i - ws));
+      if not Result.TryGetValue(W, L) then
+      begin
+        L := TList<Integer>.Create;
+        Result.Add(W, L);
+      end;
+      L.Add(ws);
+    end
+    else
+      Inc(i);
+  end;
 end;
 
 class function TDetectorUtils.MergeAdjacentStringLiterals(

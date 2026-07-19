@@ -70,11 +70,13 @@ var
   Graph       : TComponentGraph;
   PasParser   : TParser2;
   UnitNode    : TAstNode;
+  OwnsUnitNode: Boolean;      // Perf P8: Cache-AST wird nur geliehen
   Binding     : TFormBinding;
   RepoIdx     : TDfmRepoIndex;
 begin
   RepoIdx := CtxDfmRepoIndex(AContext);
   if PasFileName = '' then Exit;
+  OwnsUnitNode := False;
 
   // Phase-1-Filename-Konvention: u<X>.pas -> u<X>.dfm im gleichen Ordner.
   DfmFileName := TPath.ChangeExtension(PasFileName, '.dfm');
@@ -128,20 +130,36 @@ begin
     TDfmCrossFormCouplingDetector.Analyze(Binding, RepoIdx,
       DfmFileName, Results);
 
-    // 3) Pascal-AST der zugehoerigen .pas parsen (Iteration 3). Fehler
+    // 3) Pascal-AST der zugehoerigen .pas holen (Iteration 3). Fehler
     //    werden geschluckt - DFM-only Detektoren haben bereits gefeuert,
     //    AST-basierte Detektoren skippen wenn UnitNode=nil.
+    // Perf P8 (Konzept_Performance25, 2026-07-19): der Main-Loop hat die .pas
+    // BEREITS geparst und im Ctx.AstFileCache (DfmAnalysis laeuft in
+    // RunAllDetectors VOR der Eviction) - der fruehere ParseFile hier war ein
+    // kompletter Re-Parse pro DFM-tragender Datei. Cache-AST wird nur GELESEN
+    // (Binder mutiert nicht) und NICHT freigegeben (OwnsUnitNode=False).
+    // Fallback (AContext/Cache nil = Single-File-/Test-Pfad): eigener Parse
+    // wie bisher, dann OwnsUnitNode=True.
     if TFile.Exists(PasFileName) then
     begin
-      try
-        PasParser := TParser2.Create;
+      if (CtxAstFileCache(AContext) <> nil) then
+      begin
+        UnitNode := CtxAstFileCache(AContext).Acquire(PasFileName);
+        OwnsUnitNode := False;
+      end;
+      if UnitNode = nil then
+      begin
         try
-          UnitNode := PasParser.ParseFile(PasFileName);
-        finally
-          PasParser.Free;
+          PasParser := TParser2.Create;
+          try
+            UnitNode := PasParser.ParseFile(PasFileName);
+            OwnsUnitNode := True;
+          finally
+            PasParser.Free;
+          end;
+        except
+          UnitNode := nil;
         end;
-      except
-        UnitNode := nil;
       end;
     end;
 
@@ -173,7 +191,8 @@ begin
   end;
 
   Binding.Free;
-  UnitNode.Free;
+  if OwnsUnitNode then
+    UnitNode.Free;            // Cache-ASTs gibt der AstFileCache/Evict frei
   Graph.Free;
 end;
 

@@ -429,7 +429,12 @@ var
 begin
   Source := EnsureCacheFor(AKind);
   Result := TList<TAstNode>.Create;
-  Result.AddRange(Source.ToArray);
+  // Perf P5 (Konzept_Performance25, 2026-07-19): AddRange(TEnumerable) direkt
+  // von der Quell-Liste statt Source.ToArray - das dyn-Array war eine reine
+  // Zwischenkopie (2 Kopien + 2 Allokationen pro Call bei ~Mio Calls/Scan).
+  // Reihenfolge identisch (Pre-Order-DFS der Quell-Liste) -> byte-identisch.
+  Result.Capacity := Source.Count;
+  Result.AddRange(Source);
 end;
 
 function TAstNode.FindFirst(AKind: TNodeKind): TAstNode;

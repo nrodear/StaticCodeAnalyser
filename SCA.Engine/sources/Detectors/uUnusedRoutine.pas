@@ -86,7 +86,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  System.RegularExpressions, System.StrUtils,
+  System.StrUtils,
   uFileTextCache, uDetectorUtils;
 
 const
@@ -147,6 +147,9 @@ var
   Cached      : Boolean;
   Code        : string;
   LineForChar : TArray<Integer>;  // Char-Pos -> 0-basierter Quell-Zeilenindex
+  // Perf P1 (Konzept_Performance25, 2026-07-19): EIN Wort-Positions-Index
+  // pro File statt TRegEx-Volltext-Scan PRO Routine (O(Kandidaten x N) -> O(N)).
+  WordIdx     : TObjectDictionary<string, TList<Integer>>;
   InterfaceMethods : TStringList; // alle nkMethod-Namen unter nkInterface
   i           : Integer;
   IFList      : TList<TAstNode>;
@@ -181,21 +184,22 @@ var
 
   function HasExternalCaller(const MethName: string;
     const OwnStart, OwnEnd: Integer): Boolean;
+  // Perf P1: Lookup im per-File-Wort-Index statt '\b'+Name+'\b'-Regex ueber
+  // den Volltext PRO Routine. Positionen sind 1-basiert (wie M.Index frueher),
+  // Semantik identisch (ASCII-\w-Grenzen, case-insensitiv via lowercase-Key).
   var
-    RE        : TRegEx;
-    M         : TMatch;
+    PosList   : TList<Integer>;
+    p         : Integer;
     MatchLine : Integer;
   begin
     Result := False;
     if MethName = '' then Exit;
-    // Case-insensitive regex statt Lowercase-Kopie + Lower-Comparison.
-    RE := TRegEx.Create('\b' + MethName + '\b', [roIgnoreCase]);
-    for M in RE.Matches(Code) do
+    if not WordIdx.TryGetValue(LowerCase(MethName), PosList) then Exit;
+    for p in PosList do
     begin
       // O(1) Zeilen-Lookup ueber das TDetectorUtils-LineForChar-Array.
-      // M.Index ist 1-basiert (Delphi), Array 0-basiert, Source-Line
-      // 0-basiert -> +1 fuer 1-basierten Output (Mth.Line ist 1-basiert).
-      MatchLine := LineForChar[M.Index - 1] + 1;
+      // p ist 1-basiert, Array 0-basiert, Source-Line 0-basiert -> +1.
+      MatchLine := LineForChar[p - 1] + 1;
       // Match in der eigenen Routine (Header- oder Body-Zeile) = self-Call,
       // nicht als Verwendung zaehlen.
       if (MatchLine >= OwnStart) and (MatchLine < OwnEnd) then Continue;
@@ -211,6 +215,7 @@ var
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
+  WordIdx := nil;   // Perf P1: erst nach dem Strip gebaut; nil-sicher im finally
   try
     // Strippt Strings + Kommentare und liefert die Char->Quellzeile-Map mit -
     // ersetzt den Zwilling von uUnusedPrivateMethod und sparte das O(n)-pro-
@@ -218,6 +223,10 @@ begin
     // Perf (2026-07-05): P1-strip-cache - geteilter Strip via Context-Cache.
     Code := TDetectorUtils.StripStringsAndCommentsCached(
       Lines, LineForChar, AContext, FileName);
+
+    // Perf P1: einmaliger Wort-Positions-Index ueber den gestrippten Code -
+    // HasExternalCaller macht danach nur noch O(Vorkommen)-Lookups.
+    WordIdx := TDetectorUtils.BuildWordPositionIndex(Code);
 
     // Interface-Method-Namen EINMAL einsammeln statt pro Routine die ganze
     // AST mit FindAll(nkInterface) zu traversieren.
@@ -291,6 +300,7 @@ begin
       InterfaceMethods.Free;
     end;
   finally
+    WordIdx.Free;
     ReleaseLines(Lines, Cached);
   end;
 end;

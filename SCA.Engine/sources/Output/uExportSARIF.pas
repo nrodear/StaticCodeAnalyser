@@ -363,6 +363,11 @@ var
   RuleID  : string;
   CtxHash : string;
   CtxMemo : TDictionary<string, string>;
+  // Perf P4 (Konzept_Performance25, 2026-07-19): MakeRelative machte 2x
+  // TPath.GetFullPath PRO FINDING (~1,5 Mio Aufrufe bei 770k Findings),
+  // obwohl ABaseDir konstant ist und nur ~10k eindeutige FileNames existieren.
+  // Caller-scoped Memo FileName->RelPath (reine Funktion -> byte-identisch).
+  RelMemo : TDictionary<string, string>;
 begin
   E.BeginObjValue;                                     // Root {
   E.PairStr('$schema',
@@ -438,13 +443,21 @@ begin
   // Perf (2026-07-05): P3 ContextHash-Memo - caller-scoped Memo fuer die
   // Dauer dieses Exports (kein Global): identische (Datei,Zeile) wird nur
   // einmal gelesen + gehasht.
+  // RelMemo-Create INNERHALB des try: wirft es (OOM), freed das finally
+  // CtxMemo trotzdem; Free auf RelMemo=nil ist no-op.
+  RelMemo := nil;
   CtxMemo := TDictionary<string, string>.Create;
   try
+    RelMemo := TDictionary<string, string>.Create;
     if Assigned(AFindings) then
       for F in AFindings do
       begin
         Meta    := TRuleCatalog.GetRule(F.Kind);
-        RelPath := MakeRelative(F.FileName, ABaseDir);
+        if not RelMemo.TryGetValue(F.FileName, RelPath) then
+        begin
+          RelPath := MakeRelative(F.FileName, ABaseDir);
+          RelMemo.Add(F.FileName, RelPath);
+        end;
         LineNo  := ParseLineNumber(F.LineNumber);
         Msg     := F.MissingVar;
         if Msg = '' then
@@ -493,6 +506,7 @@ begin
       end;
   finally
     CtxMemo.Free;
+    RelMemo.Free;
   end;
   E.EndArr;                                            // results
 
