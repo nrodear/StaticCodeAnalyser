@@ -40,6 +40,11 @@ type
   private
     FScopes  : TObjectList<TMethodScope>;
     FGlobals : TDictionary<string, string>;      // Felder + Unit-Globals
+    // Auto-Runde 2026-07-19 (SCA144, AddKindStrong-Lehre): Typnamen, die in
+    // DIESER Unit als class/record deklariert sind (lower). Ein Operand, der
+    // scope-genau zu so einem Namen aufloest, ist Referenz-/Werttyp - nie
+    // IEEE-754-Float.
+    FClassRecordNames : TDictionary<string, Boolean>;
     procedure AddMethodScope(M: TAstNode);
     procedure BuildFrom(UnitNode: TAstNode);
   public
@@ -54,6 +59,11 @@ type
     // (Ganzzahl/Ordinal/String) aufloest. Unaufloesbar/unbekannter Alias -> False
     // (TP-Schutz: koennte ein Float-Alias sein). Fuer SCA144-Scope-Genauigkeit.
     function ResolvesToKnownNonFloat(const VarName: string; Line: Integer): Boolean;
+    // True wenn VarName an Line scope-genau zu einem in DIESER Unit als class/
+    // record deklarierten Typ aufloest ('='/'<>' darauf = Referenz-/Werttyp-
+    // Vergleich, kein Float; SCA144-FP dwsJSON 'FItems^[i].Value = aValue').
+    // Aliase (TFloat=Double) sind NICHT enthalten -> bleiben gemeldet (TP-Schutz).
+    function ResolvesToLocalClassOrRecord(const VarName: string; Line: Integer): Boolean;
   end;
 
 // Typ-Klassifikation (bare, bereits gelowerter Typname).
@@ -181,6 +191,7 @@ begin
   inherited Create;
   FScopes  := TObjectList<TMethodScope>.Create(True);
   FGlobals := TDictionary<string, string>.Create;
+  FClassRecordNames := TDictionary<string, Boolean>.Create;
   if UnitNode <> nil then
     BuildFrom(UnitNode);
 end;
@@ -189,7 +200,25 @@ destructor TTypeResolver.Destroy;
 begin
   FScopes.Free;
   FGlobals.Free;
+  FClassRecordNames.Free;
   inherited;
+end;
+
+function ExtractReturnTypeLow(const MethodTypeRef: string): string;
+// nkMethod.TypeRef = 'kind[:rettype][;dir1;dir2]' (uParser2 ParseMethodSignature
+// ~Z.1180). Extrahiert den nackten, gelowerten Rueckgabetyp; '' fuer
+// procedure/constructor/destructor (kein ':').
+var
+  ColonPos, SemiPos : Integer;
+  Raw : string;
+begin
+  Result := '';
+  ColonPos := Pos(':', MethodTypeRef);
+  if ColonPos = 0 then Exit;
+  Raw := Copy(MethodTypeRef, ColonPos + 1, MaxInt);
+  SemiPos := Pos(';', Raw);
+  if SemiPos > 0 then Raw := Copy(Raw, 1, SemiPos - 1);
+  Result := ReduceToBareTypeLow(Raw);
 end;
 
 procedure TTypeResolver.AddMethodScope(M: TAstNode);
@@ -224,6 +253,16 @@ begin
     end;
   finally Nodes.Free; end;
 
+  // Auto-Runde 2026-07-19 (SCA144 Fix B): 'Result' ist KEIN nkParam/nkLocalVar,
+  // sondern der implizite Funktionswert. Ohne Scope-Eintrag gewinnt der scope-
+  // blinde FloatVars-Namensindex (ein 'var Result: Double' IRGENDWO im File) ->
+  // FP auf 'if Result = 0' in einer Ordinal-Funktion (dwsUtils SimpleByteHash:
+  // Cardinal). Method-lokal registriert schlaegt der Rueckgabetyp den globalen
+  // Index (innerster Scope gewinnt) - immun gegen die lexikalische Vergiftung.
+  var RetLow := ExtractReturnTypeLow(M.TypeRef);
+  if RetLow <> '' then
+    Sc.Idents.AddOrSetValue('result', RetLow);
+
   FScopes.Add(Sc);
 end;
 
@@ -242,6 +281,26 @@ begin
       Id := LowerCase(Trim(N.Name));
       if (Id <> '') and not FGlobals.ContainsKey(Id) then
         FGlobals.Add(Id, ReduceToBareTypeLow(N.TypeRef));
+    end;
+  finally Nodes.Free; end;
+
+  // Auto-Runde 2026-07-19 (SCA144 Fix A, AddKindStrong-Lehre): in DIESER Unit
+  // als class/record deklarierte Typnamen sammeln. Interfaces fuehrt der Parser
+  // ebenfalls als nkClass - auch die sind nie IEEE-754-Floats.
+  Nodes := UnitNode.FindAll(nkClass);
+  try
+    for N in Nodes do
+    begin
+      Id := LowerCase(Trim(N.Name));
+      if Id <> '' then FClassRecordNames.AddOrSetValue(Id, True);
+    end;
+  finally Nodes.Free; end;
+  Nodes := UnitNode.FindAll(nkRecord);
+  try
+    for N in Nodes do
+    begin
+      Id := LowerCase(Trim(N.Name));
+      if Id <> '' then FClassRecordNames.AddOrSetValue(Id, True);
     end;
   finally Nodes.Free; end;
 
@@ -289,6 +348,15 @@ end;
 function TTypeResolver.ResolvesToKnownNonFloat(const VarName: string; Line: Integer): Boolean;
 begin
   Result := IsKnownNonFloatTypeName(ResolveTypeAt(LowerCase(Trim(VarName)), Line));
+end;
+
+function TTypeResolver.ResolvesToLocalClassOrRecord(const VarName: string;
+  Line: Integer): Boolean;
+var
+  T : string;
+begin
+  T := ResolveTypeAt(LowerCase(Trim(VarName)), Line);
+  Result := (T <> '') and FClassRecordNames.ContainsKey(T);
 end;
 
 end.

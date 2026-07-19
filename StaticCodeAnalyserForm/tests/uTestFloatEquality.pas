@@ -35,6 +35,11 @@ type
     // Welle 1 (TTypeResolver): QWord fehlt in der Regex-NONFLOAT_ORDINAL-Liste -
     // nur der scope-genaue AST-Resolver kennt es und unterdrueckt die Kollision.
     [Test] procedure QWordScopeCollision_ResolverOnly_NotReported;
+    // --- Auto-Runde 2026-07-19: class/record-Operanden + Result-Rueckgabetyp ---
+    [Test] procedure ClassRefOperandWithFloatNameElsewhere_NotReported;
+    [Test] procedure FloatVarInUnitWithClasses_StillReported;        // TP-Gegenprobe A
+    [Test] procedure ResultOrdinalReturnWithFloatNameElsewhere_NotReported;
+    [Test] procedure ResultFloatReturn_StillReported;                // TP-Gegenprobe B
   end;
 
 implementation
@@ -308,6 +313,88 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFloatEquality),
     'x@Use ist QWord - nur der AST-Resolver kennt qword -> kein Float-Equality-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestFloatEquality.ClassRefOperandWithFloatNameElsewhere_NotReported;
+// Auto-Runde 2026-07-19 Fix A / Real-World dwsJSON.pas:2144: 'Value = aValue'
+// vergleicht zwei OBJEKTE. 'Value'/'aValue' sind ANDERSWO als Double-Param
+// deklariert (FloatVars-Namenskollision), loesen aber scope-genau auf eine
+// lokal deklarierte KLASSE auf -> Referenzvergleich, kein Float.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'type TVal = class end;'#13#10 +
+  'procedure AddF(const Value: Double; const aValue: Double);'#13#10 +
+  'begin end;'#13#10 +
+  'function IndexOf(const aValue: TVal): Boolean;'#13#10 +
+  'var Value: TVal;'#13#10 +
+  'begin'#13#10 +
+  '  Result := Value = aValue;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFloatEquality),
+    'Klassen-Referenzvergleich (nur namensgleich zu Float-Params) ist kein Float-Equality');
+  finally F.Free; end;
+end;
+
+procedure TTestFloatEquality.FloatVarInUnitWithClasses_StillReported;
+// TP-Gegenprobe A: die class/record-Unterdrueckung darf einen ECHTEN Float-
+// Operanden nicht treffen - 'Ratio: Double' loest NICHT zu einer Klasse auf.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'type TVal = class end;'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var Ratio: Double;'#13#10 +
+  'begin'#13#10 +
+  '  if Ratio = 0.5 then Exit;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkFloatEquality) >= 1,
+    'echter Double-Vergleich bleibt trotz Klassen in der Unit gemeldet');
+  finally F.Free; end;
+end;
+
+procedure TTestFloatEquality.ResultOrdinalReturnWithFloatNameElsewhere_NotReported;
+// Auto-Runde 2026-07-19 Fix B / Real-World dwsUtils.pas:1408: 'if Result = 0'
+// in einer Cardinal-Funktion. 'var Result: Double' steht TEXTUELL VOR der
+// Nutzung und vergiftete die lexikalische Naechstdeklarations-Regex; der
+// scope-genaue Resolver (Result -> Rueckgabetyp Cardinal) rettet den FP.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Poison;'#13#10 +
+  'var Result: Double;'#13#10 +
+  'begin Result := 0.0; end;'#13#10 +
+  'function H: Cardinal;'#13#10 +
+  'begin'#13#10 +
+  '  if Result = 0 then Result := 1;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFloatEquality),
+    'Result einer Ordinal-Funktion (nur namensgleich zu Float-Var) ist kein Float-Equality');
+  finally F.Free; end;
+end;
+
+procedure TTestFloatEquality.ResultFloatReturn_StillReported;
+// TP-Gegenprobe B: liefert die Funktion einen FLOAT-Typ, bleibt 'if Result = X'
+// ein echter IEEE-754-Vergleich (kein FN durch die Result-Registrierung).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Poison; var Result: Double; begin Result := 0.0; end;'#13#10 +
+  'function H: Double;'#13#10 +
+  'begin'#13#10 +
+  '  if Result = 0.5 then Exit;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkFloatEquality) >= 1,
+    'Result einer Double-Funktion gegen Literal bleibt Float-Equality');
   finally F.Free; end;
 end;
 

@@ -316,12 +316,18 @@ begin
         // AST-Resolver. Der Resolver faengt Scope-Kollisionen, die die Regex-
         // Naechstdeklaration verfehlt; TP-sicher (unbekannter Alias wie
         // TFloat=Double -> ResolvesToKnownNonFloat=False -> keine Unterdrueckung).
+        // Auto-Runde 2026-07-19 (Fix A): Operand loest scope-genau zu einem in
+        // DIESER Unit deklarierten class/record-Typ auf -> Referenz-/Werttyp-
+        // Vergleich, kein IEEE-754-Float (dwsJSON 'FItems^[i].Value = aValue',
+        // beide TdwsJSONValue, nur namensgleich zu Double-Params anderswo).
         if (FloatVars.IndexOf(LhsLow) >= 0)
            and (OperandDeclaredNonFloat(Code, Lhs, M.Index)
-                or TR.ResolvesToKnownNonFloat(LhsLow, LineNo)) then Continue;
+                or TR.ResolvesToKnownNonFloat(LhsLow, LineNo)
+                or TR.ResolvesToLocalClassOrRecord(LhsLow, LineNo)) then Continue;
         if (FloatVars.IndexOf(RhsLow) >= 0)
            and (OperandDeclaredNonFloat(Code, Rhs, M.Index)
-                or TR.ResolvesToKnownNonFloat(RhsLow, LineNo)) then Continue;
+                or TR.ResolvesToKnownNonFloat(RhsLow, LineNo)
+                or TR.ResolvesToLocalClassOrRecord(RhsLow, LineNo)) then Continue;
 
         // Welche Seite ist die Float-Var (fuer Detail-Text).
         if FloatVars.IndexOf(LhsLow) >= 0 then IdentName := Lhs
