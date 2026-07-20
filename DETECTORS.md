@@ -7,7 +7,7 @@ specific to this tool.
 
 Status legend: ✅ implemented · 🟡 partial · 🔲 open
 
-**Summary:** 44 / 50 Sonar-rule slots complete (Critical + Reliability + Maintainability + Minor sections largely done) + 1 partial + 3 bonus + **23 DFM** detectors + **32 SonarDelphi-migration** (SCA120-152) + **9 mORMot-cluster** (SCA153-161) + ~60 SonarDelphi-compatible naming/formatting checks (SCA060-119) + **SCA164/165/166** (UnusedRoutine + UnusedSuppression + UninitVar-MVP) = **~166 detector kinds total** (delivered by ~158 pipeline classes; several classes emit multiple kinds — e.g. `uVisibilityCheck` → 4 kinds, `uDfmAnalysisRunner` → 23 DFM kinds).
+**Summary (2026-07-19):** All **193 rule kinds** from the canonical roster [`rules/sca-rules.json`](rules/sca-rules.json) are implemented and enumerated in this file (delivered by ~150 pipeline detector classes; several classes emit multiple kinds — e.g. `uVisibilityCheck` → 3 visibility kinds, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 DFM kinds). 44 / 50 Sonar-rule slots complete; the 4 open slots (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) need type-inference / cross-unit resolution and have no SCA-ID yet.
 
 Remaining 4 open slots all need type-inference / flow-analysis / cross-unit symbol resolution: #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI. **#16 UninitVar** has a conservative MVP (`SCA166`) — full path-sensitivity remains open for Phase 3.
 
@@ -17,10 +17,9 @@ specific and do not appear in the Sonar catalogue — they operate on
 the DFM lexer + parser + component graph (and FormBinder for
 Pascal-AST coupling) introduced with v0.10.0. The **SonarDelphi-
 migration cluster (SCA120-131)** below covers Delphi-specific
-correctness checks that SonarDelphi ships and we ported. The bulk
-of the SCA060-119 naming / formatting / structural checks is not
-enumerated here yet — see [`rules/sca-rules.json`](rules/sca-rules.json)
-for the canonical roster.
+correctness checks that SonarDelphi ships and we ported. The SCA060-119 naming / formatting / structural checks are enumerated
+in their own section below (added 2026-07-19); [`rules/sca-rules.json`](rules/sca-rules.json)
+remains the canonical machine-readable roster.
 
 🇩🇪 [Deutsche Version](DETECTORS_de.md)
 
@@ -150,7 +149,7 @@ Sonar-50 catalogue
 📐 DFM detectors:                  23 (all complete)
 🛡 SonarDelphi-migration:          12 (SCA120-131, all complete)
 🏛 mORMot-cluster:                  9 (SCA153-161, all complete)
-🧩 SonarDelphi naming/formatting:  ~60 (SCA060-119, see sca-rules.json)
+🧩 SonarDelphi naming/formatting:  59 (SCA060-119, section below)
 
 🎯 Grand total: 162 detector kinds (~130 pipeline classes).
 ```
@@ -167,59 +166,61 @@ help panel and DUnitX tests.
 
 ### Dead-Wiring cluster (3) — events / handlers / form↔code coupling
 
-| # | Rule (`fk…` id) | Description | Type | Unit |
-|---|-----------------|-------------|------|------|
-| D1 | **DfmDeadEvent** | `OnClick` in the DFM points to a method name that doesn't exist in the form's published section | Bug | `uDfmDeadEvent` |
-| D2 | **DfmOrphanHandler** | Published method with `Sender: TObject` signature that no DFM component binds to | Code Smell | `uDfmOrphanHandler` |
-| D3 | **DfmEmptyBoundEvent** | Event is bound, target method exists, but the body is empty / `inherited`-only | Code Smell | `uDfmEmptyBoundEvent` |
+| # | SCA | Rule (`fk…` id) | Description | Type | Unit |
+|---|-----|-----------------|-------------|------|------|
+| D1 | SCA028 | **DfmDeadEvent** | `OnClick` in the DFM points to a method name that doesn't exist in the form's published section | Bug | `uDfmDeadEvent` |
+| D2 | SCA029 | **DfmOrphanHandler** | Published method with `Sender: TObject` signature that no DFM component binds to | Code Smell | `uDfmOrphanHandler` |
+| D3 | SCA030 | **DfmEmptyBoundEvent** | Event is bound, target method exists, but the body is empty / `inherited`-only | Code Smell | `uDfmEmptyBoundEvent` |
 
 ### Data-Access cluster (4) — datasets, fields, master-detail
 
-| # | Rule (`fk…` id) | Description | Type | Unit |
-|---|-----------------|-------------|------|------|
-| D4 | **DfmSchemaMismatch** | DFM `TField`/`TDataSource` has no matching published field in the form class | Bug | `uDfmSchemaMismatch` |
-| D5 | **DfmCircularDataSource** | Cycle in `DataSource.DataSet` / `MasterSource` graph — runtime infinite loop / stack overflow | Bug | `uDfmCircularDataSource` |
-| D6 | **DfmFieldTypeMismatch** | UI control class doesn't match the `TField` data type (e.g. `TDBEdit` bound to `ftBlob`) | Code Smell | `uDfmFieldTypeMismatch` |
-| D7 | **DfmRequiredFieldUnbound / NotVisible** | `TField` with `Required=True` has no UI binding at all (Unbound) — or only on a hidden tab (NotVisible) | Bug | `uDfmRequiredField` |
+| # | SCA | Rule (`fk…` id) | Description | Type | Unit |
+|---|-----|-----------------|-------------|------|------|
+| D4 | SCA031 | **DfmSchemaMismatch** | DFM `TField`/`TDataSource` has no matching published field in the form class | Bug | `uDfmSchemaMismatch` |
+| D5 | SCA032 | **DfmCircularDataSource** | Cycle in `DataSource.DataSet` / `MasterSource` graph — runtime infinite loop / stack overflow | Bug | `uDfmCircularDataSource` |
+| D6 | SCA036 | **DfmFieldTypeMismatch** | UI control class doesn't match the `TField` data type (e.g. `TDBEdit` bound to `ftBlob`) | Code Smell | `uDfmFieldTypeMismatch` |
+| D7 | SCA034/SCA035 | **DfmRequiredFieldUnbound / NotVisible** | `TField` with `Required=True` has no UI binding at all (Unbound) — or only on a hidden tab (NotVisible) | Bug | `uDfmRequiredField` |
 
 ### Security cluster (2) — credentials and SQL injection in DFMs
 
-| # | Rule (`fk…` id) | Description | Type | Unit |
-|---|-----------------|-------------|------|------|
-| D8 | **DfmHardcodedDbCreds** | Plaintext credentials on a `TADOConnection` / `TFDConnection` `ConnectionString` / `Params` property | Vulnerability | `uDfmHardcodedDbCreds` |
-| D9 | **DfmSqlFromUserInput** | SQL property of a DB-query is built (in `Pascal`) by concatenating `TEdit.Text` or other UI input — DFM smell that pulls the analyser back into Pascal AST | Vulnerability | `uDfmSqlFromUserInput` |
+| # | SCA | Rule (`fk…` id) | Description | Type | Unit |
+|---|-----|-----------------|-------------|------|------|
+| D8 | SCA026 | **DfmHardcodedDbCreds** | Plaintext credentials on a `TADOConnection` / `TFDConnection` `ConnectionString` / `Params` property | Vulnerability | `uDfmHardcodedDbCreds` |
+| D9 | SCA033 | **DfmSqlFromUserInput** | SQL property of a DB-query is built (in `Pascal`) by concatenating `TEdit.Text` or other UI input — DFM smell that pulls the analyser back into Pascal AST | Vulnerability | `uDfmSqlFromUserInput` |
 
 ### Layering / Architecture cluster (4) — separation of concerns
 
-| # | Rule (`fk…` id) | Description | Type | Unit |
-|---|-----------------|-------------|------|------|
-| D10 | **DfmDbInUiForm** | DB component (`TADOConnection`, `TFDQuery`, `TClientDataSet`, …) sits directly on a UI form instead of a data-module | Code Smell | `uDfmDbInUiForm` |
-| D11 | **DfmCrossFormCoupling** | Code in `Form1` reaches into `Form2.<field>` via the global form variable | Bug | `uDfmCrossFormCoupling` |
-| D12 | **DfmLayerViolation** | Input control sits directly on `TForm` instead of a Panel / `TFrame` / `TGroupBox` container | Code Smell | `uDfmLayerViolation` |
-| D13 | **DfmForbiddenClass** | Component class listed in `analyser.ini → [DfmDetectors] ForbiddenClasses=` is used in a DFM | Code Smell | `uDfmForbiddenClass` |
+| # | SCA | Rule (`fk…` id) | Description | Type | Unit |
+|---|-----|-----------------|-------------|------|------|
+| D10 | SCA039 | **DfmDbInUiForm** | DB component (`TADOConnection`, `TFDQuery`, `TClientDataSet`, …) sits directly on a UI form instead of a data-module | Code Smell | `uDfmDbInUiForm` |
+| D11 | SCA040 | **DfmCrossFormCoupling** | Code in `Form1` reaches into `Form2.<field>` via the global form variable | Bug | `uDfmCrossFormCoupling` |
+| D12 | SCA041 | **DfmLayerViolation** | Input control sits directly on `TForm` instead of a Panel / `TFrame` / `TGroupBox` container | Code Smell | `uDfmLayerViolation` |
+| D13 | SCA038 | **DfmForbiddenClass** | Component class listed in `analyser.ini → [DfmDetectors] ForbiddenClasses=` is used in a DFM | Code Smell | `uDfmForbiddenClass` |
 
 ### UI/UX cluster (4) — interaction smells in the form definition
 
-| # | Rule (`fk…` id) | Description | Type | Unit |
-|---|-----------------|-------------|------|------|
-| D14 | **DfmDuplicateBinding** | Multiple components bind the same `OnClick` / same `DataField` etc. — usually a copy-paste bug | Bug | `uDfmDuplicateBinding` |
-| D15 | **DfmTabOrderConflict** | Two sibling controls on the same parent share the same `TabOrder` value | Code Smell | `uDfmTabOrderConflict` |
-| D16 | **DfmGodHandler** | One method bound to ≥ N components' events — a god-handler that should be split per concern | Code Smell | `uDfmGodHandler` |
-| D17 | **DfmActionMismatch** | Component has both `Action=` and `OnClick=` set — the explicit `OnClick` silently wins and the `TAction` glue is wasted | Bug | `uDfmActionMismatch` |
+| # | SCA | Rule (`fk…` id) | Description | Type | Unit |
+|---|-----|-----------------|-------------|------|------|
+| D14 | SCA027 | **DfmDuplicateBinding** | Multiple components bind the same `OnClick` / same `DataField` etc. — usually a copy-paste bug | Bug | `uDfmDuplicateBinding` |
+| D15 | SCA037 | **DfmTabOrderConflict** | Two sibling controls on the same parent share the same `TabOrder` value | Code Smell | `uDfmTabOrderConflict` |
+| D16 | SCA042 | **DfmGodHandler** | One method bound to ≥ N components' events — a god-handler that should be split per concern | Code Smell | `uDfmGodHandler` |
+| D17 | SCA043 | **DfmActionMismatch** | Component has both `Action=` and `OnClick=` set — the explicit `OnClick` silently wins and the `TAction` glue is wasted | Bug | `uDfmActionMismatch` |
 
 ### Naming / Localisation cluster (3) — hygiene
 
-| # | Rule (`fk…` id) | Description | Type | Unit |
-|---|-----------------|-------------|------|------|
-| D18 | **DfmDefaultName** | Component still has its default name (`Button1`, `Edit2`, …) | Code Smell | `uDfmDefaultName` |
-| D19 | **DfmHardcodedCaption** | UI-visible string (`Caption`, `Hint`, `Text`, …) is a literal in the DFM instead of going through `resourcestring` / dxgettext | Code Smell | `uDfmHardcodedCaption` |
-| D20 | **DfmHardcodedDbCreds extras** | _(see D8 — same detector, separate finding kind for parameter values vs. ConnectionString)_ | Vulnerability | `uDfmHardcodedDbCreds` |
+| # | SCA | Rule (`fk…` id) | Description | Type | Unit |
+|---|-----|-----------------|-------------|------|------|
+| D18 | SCA024 | **DfmDefaultName** | Component still has its default name (`Button1`, `Edit2`, …) | Code Smell | `uDfmDefaultName` |
+| D19 | SCA025 | **DfmHardcodedCaption** | UI-visible string (`Caption`, `Hint`, `Text`, …) is a literal in the DFM instead of going through `resourcestring` / dxgettext | Code Smell | `uDfmHardcodedCaption` |
+| D20 | SCA026 | **DfmHardcodedDbCreds extras** | _(see D8 — same detector, separate finding kind for parameter values vs. ConnectionString)_ | Vulnerability | `uDfmHardcodedDbCreds` |
 
 ### Dead-component cluster (1) — unreferenced components
 
-| # | Rule (`fk…` id) | Description | Type | Unit |
-|---|-----------------|-------------|------|------|
-| D21 | **DfmComponentUnused** (SCA184) | Component declared in the DFM is never referenced — not in the form's own code, not by another unit via the global form variable (`Form1.Comp`, resolved through `TSymbolReferenceIndex`), and not by another component inside the DFM (`DataSource=`, `Action=`, …). Likely dead after refactoring. Ships at `fcLow` (below the default `fcMedium` confidence filter — opt-in via `--min-confidence low`); emits nothing without the repo-wide symbol index. Persistent `TField`s, embedded frames, and `FindComponent`-by-name units are deliberately skipped in v1. Known v1 gap: cross-unit **mutations** where the component is a middle chain token (`Form.Comp.Prop := x` / `.Method`) are not yet recognised. | Code Smell | `uDfmComponentUnused` |
+| # | SCA | Rule (`fk…` id) | Description | Type | Unit |
+|---|-----|-----------------|-------------|------|------|
+| D21 | SCA184 | **DfmComponentUnused** | Component declared in the DFM is never referenced — not in the form's own code, not by another unit via the global form variable (`Form1.Comp`, resolved through `TSymbolReferenceIndex`), and not by another component inside the DFM (`DataSource=`, `Action=`, …). Likely dead after refactoring. Ships at `fcLow` (below the default `fcMedium` confidence filter — opt-in via `--min-confidence low`); emits nothing without the repo-wide symbol index. Persistent `TField`s, embedded frames, and `FindComponent`-by-name units are deliberately skipped in v1. Known v1 gap: cross-unit **mutations** where the component is a middle chain token (`Form.Comp.Prop := x` / `.Method`) are not yet recognised. | Code Smell | `uDfmComponentUnused` |
+| D24 | SCA056 | **DfmMasterDetailUnlinked** | `TDataSet` has `MasterSource` set but no `MasterFields` / `IndexFieldNames` — detail set never filters | Bug | `uDfmMasterDetailUnlinked` |
+| D25 | SCA057 | **DfmDataModuleSplitHint** | Aggregated hint: form holds ≥ N DB components — consider extracting a data module | Code Smell | `uDfmDataModuleSplitHint` |
 
 ---
 
@@ -286,3 +287,151 @@ DFM Phase 2 (done)  : Layering / UI-UX / Naming clusters
 DFM Phase 3 (open)  : data-module split suggestion, designtime-prop drift,
                       master-detail-without-LinkField, frame-instance prop overrides
 ```
+
+---
+
+## 🧩 Style, Structure & Correctness — first-generation cluster (21 rules, SCA006–SCA059 remainder)
+
+Checks from the original build-out that predate the Sonar-slot tables above; mostly structural/style rules plus pipeline-level kinds (`SCA006` is emitted by the analyzer itself on unreadable files). DFM-kinds from this ID range live in the DFM section above.
+
+| SCA | Rule | Description | Severity | Type | Status | Unit |
+|-----|------|-------------|----------|------|--------|------|
+| SCA006 | **FileReadError** | Parser/IO error - source file unreadable or syntactically broken | Error | File Error | ✅ | `uStaticAnalyzer2` |
+| SCA007 | **UnusedUses** | Uses-entry possibly unused (no identifier from it referenced) | Hint | Code Smell | ✅ | `uUnusedUses` |
+| SCA013 | **LongParamList** | Method has more parameters than configured maximum (default 7) | Hint | Code Smell | ✅ | `uLongParamList` |
+| SCA015 | **DuplicateString** | Same string literal appears N+ times - extract to constant | Hint | Code Duplication | ✅ | `uDuplicateString` |
+| SCA016 | **HardcodedPath** | Hardcoded C:\ / UNC / Linux path in source | Warning | Security Hotspot | ✅ | `uHardcodedPath` |
+| SCA017 | **DebugOutput** | Debug output statement found in production unit | Warning | Code Smell | ✅ | `uDebugOutput` |
+| SCA023 | **CustomRule** | Pattern matched by a rule loaded from analyser-rules.yml | Warning | Code Smell | ✅ | `uCustomRuleDetector` |
+| SCA044 | **ConcatToFormat** | Multi-segment string concatenation - extract to a Format() call | Warning | Code Smell | ✅ | `uConcatToFormat` |
+| SCA045 | **WithStatement** | with statement - scope-shadowing trap the compiler does not warn about | Warning | Code Smell | ✅ | `uWithStatement` |
+| SCA046 | **ReversedForRange** | for i := 10 to 1 do - loop body never executes | Error | Bug | ✅ | `uReversedForRange` |
+| SCA047 | **SelfAssignment** | Self-assignment - no-op or copy-paste typo | Warning | Bug | ✅ | `uSelfAssignment` |
+| SCA048 | **VirtualCallInCtor** | Virtual method invoked from constructor - subclass override sees half-initialised Self | Error | Bug | ✅ | `uVirtualCallInCtor` |
+| SCA049 | **LengthUnderflow** | Length / .Count with subtraction - native-uint underflow when empty | Hint | Bug | ✅ | `uLengthUnderflow` |
+| SCA050 | **CanBeUnitPrivate** | Public member is referenced only within the current unit - Delphi-classic `private` (unit-scope) suffices | Hint | Code Smell | ✅ | `uVisibilityCheck` |
+| SCA051 | **CanBeProtected** | Public member referenced only from subclasses, never externally | Hint | Code Smell | ✅ | `uVisibilityCheck` |
+| SCA052 | **UnusedPublicMember** | Public member is never referenced from any subclass or cross-unit path | Hint | Code Smell | ✅ | `uStaticAnalyzer2` |
+| SCA053 | **UnusedLocalVar** | Local var declared but never referenced in method body | Hint | Code Smell | ✅ | `uUnusedLocal` |
+| SCA054 | **UnusedParameter** | Method parameter is never used in the body | Hint | Code Smell | ✅ | `uUnusedParameter` |
+| SCA055 | **TautologicalBoolExpr** | Binary operator with identical LHS and RHS: x = x, a and a, (p <> p) | Error | Bug | ✅ | `uTautologicalExpr` |
+| SCA058 | **SqlDangerousStatement** | SQL statement modifies every row - missing WHERE clause | Error | Bug | ✅ | `uSqlDangerousStatement` |
+| SCA059 | **FormatLocaleHint** | %.2f / %.3f without explicit TFormatSettings - comma vs dot decimal trap | Hint | Bug | ✅ | `uFormatMismatch` |
+
+---
+
+## 🔤 Naming, Formatting & Convention — SonarDelphi-compatible cluster (59 rules, SCA060–SCA119)
+
+Formerly only referenced via [`rules/sca-rules.json`](rules/sca-rules.json); now enumerated. Multi-kind classes: `uVisibilityCheck` (SCA050/051/107), `uPerfHotspots` (SCA110–112), `uRestHttpSecurity` (SCA115/116), `uConcurrencyExt` (SCA113/114).
+
+| SCA | Rule | Description | Severity | Type | Status | Unit |
+|-----|------|-------------|----------|------|--------|------|
+| SCA061 | **TabulationCharacter** | Tab characters render inconsistently across editors - use spaces | Hint | Code Smell | ✅ | `uTabulationCharacter` |
+| SCA062 | **TooLongLine** | Line exceeds 120 characters - wrap or extract subexpression | Hint | Code Smell | ✅ | `uTooLongLine` |
+| SCA063 | **TrailingWhitespace** | Line ends with space or tab - hygiene for diffs | Hint | Code Smell | ✅ | `uTrailingWhitespace` |
+| SCA064 | **LowercaseKeyword** | Pascal keywords (`begin`/`end`/`procedure`/...) should be lowercase | Hint | Code Smell | ✅ | `uLowercaseKeyword` |
+| SCA065 | **NoSonarMarker** | `// NOSONAR` marker should not silence findings - audit usage | Hint | Code Smell | ✅ | `uNoSonarMarker` |
+| SCA066 | **EmptyArgumentList** | `Foo()` should be `Foo;` - drop empty parens | Hint | Code Smell | ✅ | `uEmptyArgumentList` |
+| SCA067 | **InlineAssembly** | `asm...end` block - prefer Pascal + compiler intrinsics | Warning | Code Smell | ✅ | `uInlineAssembly` |
+| SCA068 | **TrailingCommaArgList** | `Foo(A, B,)` - drop the comma or add the missing argument | Hint | Code Smell | ✅ | `uTrailingCommaArgList` |
+| SCA069 | **DigitGrouping** | Large integer literals should use `_` separator | Hint | Code Smell | ✅ | `uDigitGrouping` |
+| SCA070 | **CommentedOutCode** | Comment looks like Pascal code - delete or document | Hint | Code Smell | ✅ | `uCommentedOutCode` |
+| SCA071 | **UnitLevelKeywordIndent** | `unit`/`interface`/`implementation`/`initialization`/`finalization` should start at column 1 | Hint | Code Smell | ✅ | `uUnitLevelKeywordIndent` |
+| SCA072 | **RedundantBoolean** | `X = True` should be `X` (and `X <> False` likewise) | Hint | Code Smell | ✅ | `uRedundantBoolean` |
+| SCA073 | **EmptyInterface** | Interface with no methods/properties carries no contract | Hint | Code Smell | ✅ | `uEmptyInterface` |
+| SCA074 | **AssertMessage** | `Assert(cond);` - add a `'why'` message for diagnosis | Hint | Code Smell | ✅ | `uAssertMessage` |
+| SCA075 | **ExplicitTObjectInheritance** | `class(TObject)` is redundant - drop the parens | Hint | Code Smell | ✅ | `uExplicitTObjectInheritance` |
+| SCA076 | **GroupedDeclaration** | Split `A, B: Type` into one declaration per line | Hint | Code Smell | ✅ | `uGroupedDeclaration` |
+| SCA077 | **EmptyBlock** | Empty `begin..end` - delete it or fill in the statement | Hint | Code Smell | ✅ | `uEmptyBlock` |
+| SCA078 | **ExceptOnException** | `on E: Exception do` swallows everything including AV/OOM | Warning | Bug | ✅ | `uExceptOnException` |
+| SCA079 | **ConsecutiveSection** | Two `const`/`type`/`var` blocks in a row should be merged | Hint | Code Smell | ✅ | `uConsecutiveSection` |
+| SCA080 | **RedundantJump** | `Exit;` / `Continue;` / `Break;` directly before `end` is a no-op | Hint | Code Smell | ✅ | `uRedundantJump` |
+| SCA081 | **ClassPerFile** | One class per unit makes refactoring easier | Hint | Code Smell | ✅ | `uClassPerFile` |
+| SCA082 | **SuperfluousSemicolon** | `;;` - drop the extra semicolon | Hint | Code Smell | ✅ | `uSuperfluousSemicolon` |
+| SCA083 | **EmptyFinallyBlock** | `try ... finally end;` has no cleanup - either add it or drop the finally | Warning | Bug | ✅ | `uEmptyFinallyBlock` |
+| SCA084 | **AssignedAndAssignedNil** | `Assigned(X) and (X <> nil)` - drop the nil check | Hint | Code Smell | ✅ | `uAssignedAndAssignedNil` |
+| SCA085 | **FreeAndNilHint** | Use `FreeAndNil(X)` instead of `X.Free; X := nil;` | Hint | Code Smell | ✅ | `uFreeAndNilHint` |
+| SCA086 | **AvoidOut** | Prefer `var` over `out` (out has surprising semantics) | Hint | Code Smell | ✅ | `uAvoidOut` |
+| SCA087 | **EmptyVisibilitySection** | `public`/`private`/... section header with no members | Hint | Code Smell | ✅ | `uEmptyVisibilitySection` |
+| SCA088 | **LegacyInitializationSection** | Use `initialization..end.` instead of legacy `begin..end.` | Hint | Code Smell | ✅ | `uLegacyInitializationSection` |
+| SCA089 | **PublicField** | Public field breaks encapsulation - use a property | Hint | Code Smell | ✅ | `uPublicField` |
+| SCA090 | **NestedTry** | Nested `try..end` - consider extracting inner try into a method | Hint | Code Smell | ✅ | `uNestedTry` |
+| SCA091 | **CaseStatementSize** | `case` with >= 10 branches - consider polymorphism / dispatch table | Hint | Code Smell | ✅ | `uCaseStatementSize` |
+| SCA092 | **EmptyFile** | Unit has no type/const/var/procedure/function - delete or fill in | Hint | Code Smell | ✅ | `uEmptyFile` |
+| SCA093 | **TwiceInheritedCalls** | Two or more `inherited;` in the same method - parent side-effects run twice | Warning | Bug | ✅ | `uTwiceInheritedCalls` |
+| SCA094 | **RedundantParentheses** | `((Ident))` - drop the outer parens | Hint | Code Smell | ✅ | `uRedundantParentheses` |
+| SCA095 | **ConsecutiveVisibility** | Same `public`/`private`/etc. section appears twice in one class | Hint | Code Smell | ✅ | `uConsecutiveVisibility` |
+| SCA096 | **ConstructorWithoutInherited** | Constructor missing `inherited Create` - parent stays uninitialized | Warning | Bug | ✅ | `uConstructorWithoutInherited` |
+| SCA097 | **DestructorWithoutInherited** | Destructor missing `inherited Destroy` - parent cleanup is skipped (leak risk) | Error | Bug | ✅ | `uDestructorWithoutInherited` |
+| SCA098 | **RedundantConditional** | `if Cond then X := True else X := False` should be `X := Cond` | Hint | Code Smell | ✅ | `uRedundantConditional` |
+| SCA099 | **IfElseBegin** | then-branch uses `begin..end` but else-branch is a single statement | Hint | Code Smell | ✅ | `uIfElseBegin` |
+| SCA100 | **PointerName** | `Foo = ^Bar` should be `PBar = ^Bar` (P-prefix convention) | Hint | Code Smell | ✅ | `uPointerName` |
+| SCA101 | **BeginEndRequired** | `then`/`else`/`do <stmt>` - prefer explicit `begin..end` | Hint | Code Smell | ✅ | `uBeginEndRequired` |
+| SCA102 | **NestedRoutine** | Local nested procedure/function - extract to unit-level | Hint | Code Smell | ✅ | `uNestedRoutines` |
+| SCA103 | **FieldName** | Class fields should follow `F<Name>` convention | Hint | Code Smell | ✅ | `uFieldName` |
+| SCA104 | **TypeName** | Class and record type aliases should start with `T` | Hint | Code Smell | ✅ | `uTypeName` |
+| SCA105 | **InterfaceName** | Interface aliases should start with `I` (`IFoo = interface`) | Hint | Code Smell | ✅ | `uInterfaceName` |
+| SCA106 | **MethodName** | Methods should start with an uppercase letter (PascalCase) | Hint | Code Smell | ✅ | `uMethodName` |
+| SCA107 | **CanBeStrictPrivate** | Public member is referenced ONLY by methods of its declaring class - `strict private` reaches the strongest encapsulation | Hint | Code Smell | ✅ | `uVisibilityCheck` |
+| SCA108 | **SynchronizeInDestructor** | Synchronize() called from destructor Destroy - classic deadlock between worker and UI thread | Error | Bug | ✅ | `uSynchronizeInDestructor` |
+| SCA109 | **LockWithoutTryFinally** | TCriticalSection / Monitor / WinAPI lock taken without enclosing try..finally - exception leaves the lock held | Error | Bug | ✅ | `uLockWithoutTryFinally` |
+| SCA110 | **StringConcatInLoop** | `s := s + x` inside for/while/repeat - quadratic reallocations | Warning | Code Smell | ✅ | `uPerfHotspots` |
+| SCA111 | **ParamByNameInLoop** | `Query.ParamByName('x').AsXxx := ...` inside a loop - linear lookup per iteration | Hint | Code Smell | ✅ | `uPerfHotspots` |
+| SCA112 | **FieldByNameInLoop** | `DataSet.FieldByName('x').AsXxx` inside a loop - linear lookup per row | Hint | Code Smell | ✅ | `uPerfHotspots` |
+| SCA113 | **ThreadResumeDeprecated** | `MyThread.Resume` - use `MyThread.Start` (since Delphi 2010) | Warning | Code Smell | ✅ | `uConcurrencyExt` |
+| SCA114 | **TThreadDestroyWithoutTerminate** | `FreeAndNil(MyThread)` without prior `Terminate; WaitFor` - worker may still run | Error | Bug | ✅ | `uConcurrencyExt` |
+| SCA115 | **HttpInsteadOfHttps** | `'http://...'` literal for a remote endpoint - MITM-vulnerable | Warning | Security Hotspot | ✅ | `uRestHttpSecurity` |
+| SCA116 | **DisabledTlsVerification** | Empty `SecureProtocols`, `IgnoreCertificateErrors := True`, or `OnVerifyPeer := nil` | Error | Vulnerability | ✅ | `uRestHttpSecurity` |
+| SCA117 | **PublicMemberWithoutDoc** | Public method or property in `interface` section with no doc comment directly above | Hint | Code Smell | ✅ | `uPublicMemberWithoutDoc` |
+| SCA118 | **ExceptionName** | `class(Exception)`-Descendant should follow Delphi-RTL `E<Name>` convention | Hint | Code Smell | ✅ | `uNamingExt` |
+| SCA119 | **LocalConstantName** | `const X = 42;` inside a method - prefer UPPER_SNAKE_CASE for numeric constants | Hint | Code Smell | ✅ | `uNamingExt` |
+
+---
+
+## 🚀 Post-1.0 additions (22 rules — SCA133, SCA147, SCA162–SCA183)
+
+Later waves: security/injection, suppression machinery, the unused-code family and the attribute cluster (SCA180–183).
+
+| SCA | Rule | Description | Severity | Type | Status | Unit |
+|-----|------|-------------|----------|------|--------|------|
+| SCA133 | **RaiseOutsideExcept** | `raise;` without an exception expression only works *inside* an except handler (re-raise) - outside it raises NIL and produces an Access Violation | Error | Bug | ✅ | `uRaiseOutsideExcept` |
+| SCA147 | **UnusedPrivateMethod** | A private method that is never referenced from any other method in the same unit is dead code - delete it or wire it up | Hint | Code Smell | ✅ | `uUnusedPrivateMethod` |
+| SCA162 | **InsecureCryptoAlgorithm** | Algorithm name ('MD5', 'SHA1', 'DES', 'RC4', 'TLS1.0', 'SSLv3') or wrapper class (THashMD5, TIdHashSHA1, ...) referenced - vulnerable to collision / known-plaintext attacks | Warning | Vulnerability | ✅ | `uInsecureCryptoAlgorithm` |
+| SCA163 | **CommandInjection** | ShellExecute / CreateProcess / WinExec with `+` in the arguments - if any operand is user-controlled it becomes a command-injection vector | Error | Vulnerability | ✅ | `uCommandInjection` |
+| SCA164 | **UnusedRoutine** | Standalone procedure/function in the implementation section is never called (word-index based since 2026-07-19) | Hint | Code Smell | ✅ | `uUnusedRoutine` |
+| SCA165 | **UnusedSuppression** | A `// noinspection X` marker does not suppress any finding at its target line - either the detector improved (suppression no longer needed) or the suppression target was wrong | Hint | Code Smell | ✅ | `uSuppression` |
+| SCA167 | **InsecureRandom** | Random / RandomRange / RandomFrom used without Randomize - Seed=0 yields a deterministic sequence on every run | Warning | Bug | ✅ | `uInsecureRandom` |
+| SCA168 | **DefaultCaseInCaseStatement** | case statement has no else branch - unhandled values fall through silently | Hint | CodeSmell | ✅ | `uDefaultCaseInCaseStatement` |
+| SCA169 | **AssertWithSideEffect** | Assert(SomeCall) - the call disappears in Release builds and its side effect is silently lost | Warning | Bug | ✅ | `uAssertWithSideEffect` |
+| SCA170 | **ConstStringParameter** | string parameter declared without const - causes refcount bump on every call | Hint | CodeSmell | ✅ | `uConstStringParameter` |
+| SCA171 | **CompilerDirectiveScope** | {$WARNINGS OFF} (or HINTS/RANGECHECKS/...) without a closing ON - leaks into following units | Warning | CodeSmell | ✅ | `uCompilerDirectiveScope` |
+| SCA172 | **BooleanPropertyNaming** | Boolean property name reads as a noun - prefer a verb prefix that scans as a question | Hint | CodeSmell | ✅ | `uBooleanPropertyNaming` |
+| SCA173 | **VariantTypeMisuse** | Variant variable inside a method that contains a loop - each Variant operation pays a 10-100x COM dispatch tax | Hint | CodeSmell | ✅ | `uVariantTypeMisuse` |
+| SCA174 | **TObjectListWithoutOwnership** | TList<TFoo>.Create + Add(TFoo.Create) - the list does not own its items, every TFoo instance leaks | Warning | Bug | ✅ | `uTObjectListWithoutOwnership` |
+| SCA175 | **AnonMethodCaptureLoopVar** | Anonymous method inside `for i := ... do` references i - all closures see the same final value | Error | Bug | ✅ | `uAnonMethodCaptureLoopVar` |
+| SCA176 | **CognitiveComplexity** | Sonar-style cognitive-complexity exceeds 15 - nested if/for/while/case is hard to follow mentally | Warning | CodeSmell | ✅ | `uCognitiveComplexity` |
+| SCA177 | **ThreadFreeOnTerminateWithRef** | After T.FreeOnTerminate := True, any subsequent T.Field/T.Method access risks Access-Violation if the thread has already self-destructed | Error | Bug | ✅ | `uThreadFreeOnTerminateWithRef` |
+| SCA178 | **PathTraversal** | File-open call (TFileStream.Create, AssignFile, ...) with a path expression that concatenates user input (Edit.Text, Request.Params, ...) - path-traversal risk | Error | Vulnerability | ✅ | `uPathTraversal` |
+| SCA179 | **AttributeIgnoreWithoutReason** | [Ignore] (no string arg) skips the test silently - add a message explaining why the test is disabled | Hint | CodeSmell | ✅ | `uAttributeIgnoreWithoutReason` |
+| SCA180 | **AttributeDuplicate** | Two identical [X] attributes on the same member - copy-paste leftover, no effect | Warning | CodeSmell | ✅ | `uAttributeDuplicate` |
+| SCA181 | **AttributeCategoryWithoutString** | [Category] (no arg) is a compile-time error in DUnitX - always pass a category name | Error | Bug | ✅ | `uAttributeCategoryWithoutString` |
+| SCA182 | **AttributeTestFixtureWithoutTests** | Class is marked [TestFixture] but contains no [Test] methods - zombie fixture visible in TestInsight but executes nothing | Warning | CodeSmell | ✅ | `uAttributeTestFixtureWithoutTests` |
+| SCA183 | **AttributeMisalignment** | Attribute line followed by a blank line - visually loose, often a refactoring leftover | Hint | CodeSmell | ✅ | `uAttributeMisalignment` |
+
+---
+
+## 🔡 Encoding & Trojan-Source family (9 rules, SCA185–SCA193)
+
+Byte-level file-encoding verdicts (computed from the raw file bytes at load time, cached in the text cache since the 2026-07 perf work) plus Trojan-Source / Unicode-abuse checks (CVE-2021-42574).
+
+| SCA | Rule | Description | Severity | Type | Status | Unit |
+|-----|------|-------------|----------|------|--------|------|
+| SCA185 | **SourceUtf8NoBom** | UTF-8 file without BOM + non-ASCII - compiler reads it as ANSI (mojibake) | Warning | Bug | ✅ | `uSourceEncoding` |
+| SCA186 | **SourceInvalidUtf8** | Malformed UTF-8 (overlong / surrogate / out-of-range) under a UTF-8 BOM | Error | File Error | ✅ | `uSourceEncoding` |
+| SCA187 | **SourceControlChar** | NUL / disallowed control byte - binary file or mis-detected encoding | Error | File Error | ✅ | `uSourceEncoding` |
+| SCA188 | **SourceBidiOverride** | Bidi override/isolate control char - source reads differently than it compiles | Error | Vulnerability | ✅ | `uSourceEncoding` |
+| SCA189 | **SourceAnsiNonAscii** | 8-bit source (no BOM, not valid UTF-8) - code-page-dependent, non-portable | Warning | Code Smell | ✅ | `uSourceEncoding` |
+| SCA190 | **SourceUtf16** | UTF-16 source - compiles, but unusual and text-tool-unfriendly | Hint | Code Smell | ✅ | `uSourceEncoding` |
+| SCA191 | **SourceUtf32** | UTF-32 source - Delphi compiler rejects it with fatal error F2438 | Error | File Error | ✅ | `uSourceEncoding` |
+| SCA192 | **SourceInvisibleChar** | Zero-width/invisible Unicode char - hidden-text / homoglyph abuse vector | Warning | Vulnerability | ✅ | `uSourceEncoding` |
+| SCA193 | **SourceNonAsciiIdentifier** | Identifier contains a non-ASCII letter - homoglyph / confusable risk | Warning | Vulnerability | ✅ | `uSourceEncoding` |
