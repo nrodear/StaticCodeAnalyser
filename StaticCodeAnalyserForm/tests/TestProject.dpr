@@ -1,4 +1,3 @@
-
 program TestProject;
 
 // CLI-Lauf: Console-Subsystem (DUnitX-Console-Logger braucht stdout).
