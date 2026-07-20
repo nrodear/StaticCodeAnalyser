@@ -87,6 +87,7 @@ uses
   uTestVirtualCallInCtor in 'uTestVirtualCallInCtor.pas',
   uTestLengthUnderflow in 'uTestLengthUnderflow.pas',
   uTestSourceEncoding in 'uTestSourceEncoding.pas',
+  uTestProjectFiles in 'uTestProjectFiles.pas',
   uTestVisibilityCheck in 'uTestVisibilityCheck.pas',
   uTestSynchronizeInDestructor in 'uTestSynchronizeInDestructor.pas',
   uTestLockWithoutTryFinally in 'uTestLockWithoutTryFinally.pas',

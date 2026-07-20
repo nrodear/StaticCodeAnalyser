@@ -28,7 +28,8 @@ package SCA.Engine;
 {$IMPLICITBUILD ON}
 
 requires
-  rtl;
+  rtl,
+  xmlrtl;   // Xml.XMLDoc/IXMLDocument fuer uProjectFiles (Scan-Scope 2026-07-20)
 
 contains
   uAnalyserTypes in 'sources\Common\uAnalyserTypes.pas',
@@ -238,6 +239,7 @@ contains
   uSonarConfig in 'sources\Infrastructure\uSonarConfig.pas',
   uSonarPull in 'sources\Infrastructure\uSonarPull.pas',
   uStaticAnalyzer2 in 'sources\Infrastructure\uStaticAnalyzer2.pas',
+  uProjectFiles in 'sources\Infrastructure\uProjectFiles.pas',
   uStaticFiles in 'sources\Infrastructure\uStaticFiles.pas',
   uSuppression in 'sources\Infrastructure\uSuppression.pas',
   uSuppressionTelemetry in 'sources\Infrastructure\uSuppressionTelemetry.pas',

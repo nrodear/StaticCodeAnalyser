@@ -34,9 +34,14 @@ type
 
     // Analysiert eine bereits ermittelte Datei-Liste (z.B. aus VCS-Diff).
     // Nimmt KEINE Ownership der Liste, kopiert sie intern.
+    // AIndexRoot (Scan-Scope-Konzept 2026-07-20, optional): Verzeichnis fuer
+    // den Cross-Unit-Index (SymbolRef/Typ/DFM) - Analyse bleibt auf AFiles,
+    // der Index sieht das Superset (gleiche Mechanik wie ssSingleFile+
+    // ProjectRoot). Leer/ungueltig -> Index ueber AFiles wie bisher.
     class function AnalyzeLeaksFromList(AFiles: TStringList;
       AProgress: TProc<Integer, Integer> = nil;
-      AIncludeUsesCheck: Boolean = False): TObjectList<TLeakFinding>;
+      AIncludeUsesCheck: Boolean = False;
+      const AIndexRoot: string = ''): TObjectList<TLeakFinding>;
 
   private
     class procedure ParseFiles(FileList: TStringList; var Results: TStringList);
@@ -71,6 +76,7 @@ implementation
 // im scan.log dokumentiert die Ursache.
 
 uses
+  Winapi.Windows,   // OutputDebugString (IndexRoot-Warnung, Scan-Scope 2026-07-20)
   System.IOUtils, System.Diagnostics,
   uStaticFiles, uParser2, uAstNode,
   uLeakDetector2, uCodeSmells2, uSQLInjection, uHardcodedSecret,
@@ -1797,7 +1803,7 @@ end;
 
 class function TStaticAnalyzer2.AnalyzeLeaksFromList(AFiles: TStringList;
   AProgress: TProc<Integer, Integer>;
-  AIncludeUsesCheck: Boolean): TObjectList<TLeakFinding>;
+  AIncludeUsesCheck: Boolean; const AIndexRoot: string): TObjectList<TLeakFinding>;
 // Analysiert eine vorgefertigte Datei-Liste (z.B. aus uVcsChanges).
 // Eingangsliste wird kopiert - der Aufrufer behaelt seine Ownership.
 
@@ -1814,7 +1820,9 @@ class function TStaticAnalyzer2.AnalyzeLeaksFromList(AFiles: TStringList;
   end;
 
 var
-  Copy: TStringList;
+  Copy      : TStringList;
+  IndexList : TStringList;
+  IndexErr  : string;
 begin
   Result := TObjectList<TLeakFinding>.Create(True);
   if (AFiles = nil) or (AFiles.Count = 0) then
@@ -1824,10 +1832,31 @@ begin
   end;
 
   Copy := TStringList.Create;
+  IndexList := nil;   // VOR dem try - das finally ruft IndexList.Free
   try
     Copy.AddStrings(AFiles);
+    // Optionales Index-Superset (Scan-Scope-Konzept 2026-07-20): Fehler bei
+    // der Index-Sammlung sind NICHT fatal - dann faellt ParseLeaks intern
+    // auf die Analyse-Liste zurueck (IndexFileList=nil).
+    if (AIndexRoot <> '') and DirectoryExists(AIndexRoot) then
+    begin
+      IndexList := TStaticFiles.TryGetAllPasFiles(AIndexRoot, IndexErr);
+      if IndexErr <> '' then
+        OutputDebugString(PChar('SCA IndexRoot: ' + IndexErr));
+      if IndexList <> nil then
+      begin
+        // Union: Analyse-Dateien AUSSERHALB des IndexRoot gehoeren trotzdem
+        // in den Index (z.B. '..'-Includes ausserhalb des Common-Root).
+        IndexList.CaseSensitive := False;
+        IndexList.Sorted := True;
+        IndexList.Duplicates := dupIgnore;
+        IndexList.AddStrings(Copy);
+        if IndexList.Count = 0 then
+          FreeAndNil(IndexList);
+      end;
+    end;
     try
-      ParseLeaks(Copy, Result, AProgress, AIncludeUsesCheck);
+      ParseLeaks(Copy, Result, AProgress, AIncludeUsesCheck, IndexList);
     except
       on EAbort do
       begin
@@ -1838,6 +1867,7 @@ begin
         AddError('Analyseabbruch: ' + E.Message);
     end;
   finally
+    IndexList.Free;
     Copy.Free;
   end;
 end;

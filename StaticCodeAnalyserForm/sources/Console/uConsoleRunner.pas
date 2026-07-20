@@ -46,6 +46,11 @@ type
     ShowVersion   : Boolean;        // --version
     Path          : string;         // --path <dir>
     SingleFile    : string;         // --file <path>
+    // ---- Scan-Scope-Variation (Konzept_ScanScope_2026-07-20) ----
+    ProjectFile   : string;         // --project <file.dproj>        DCCReference-Liste
+    GroupFile     : string;         // --project-group <file.groupproj>  Union aller Projekte
+    IndexRoot     : string;         // --index-root <dir>  Cross-Unit-Index-Superset
+                                    //   (mit --project/--project-group/--branch/--diff)
     Full          : Boolean;        // --full      (rekursiv ab Path)
     Branch        : Boolean;        // --branch    (nur VCS-geaenderte)
     Diff          : string;         // --diff <sha1>..<sha2>  PR-Review-Mode
@@ -220,6 +225,12 @@ begin
       GetValue(Result.Path, '--path')
     else if A = '--file' then
       GetValue(Result.SingleFile, '--file')
+    else if A = '--project' then
+      GetValue(Result.ProjectFile, '--project')
+    else if A = '--project-group' then
+      GetValue(Result.GroupFile, '--project-group')
+    else if A = '--index-root' then
+      GetValue(Result.IndexRoot, '--index-root')
     else if A = '--report-sarif' then
       GetValue(Result.ReportSarif, '--report-sarif')
     else if A = '--report-html' then
@@ -305,16 +316,37 @@ begin
   if Result.SonarTest or Result.SonarInit then Exit;
 
   // Konsistenz-Pruefung: genau eine Eingabe-Quelle muss gesetzt sein.
-  if (Result.Path = '') and (Result.SingleFile = '') and
-     not Result.Help and not Result.ShowVersion then
+  var SourceCount := 0;
+  if Result.Path <> ''        then Inc(SourceCount);
+  if Result.SingleFile <> ''  then Inc(SourceCount);
+  if Result.ProjectFile <> '' then Inc(SourceCount);
+  if Result.GroupFile <> ''   then Inc(SourceCount);
+  if (SourceCount = 0) and not Result.Help and not Result.ShowVersion then
   begin
-    Result.ParseError := 'Weder --path noch --file angegeben';
+    Result.ParseError :=
+      'Keine Eingabe-Quelle: --path, --file, --project oder --project-group angeben';
+    Exit;
+  end;
+  if SourceCount > 1 then
+  begin
+    Result.ParseError :=
+      '--path, --file, --project und --project-group sind exklusiv';
     Exit;
   end;
 
-  if (Result.Path <> '') and (Result.SingleFile <> '') then
+  // --index-root nur dort, wo ein Listen-Scope existiert (Projekt/Gruppe/
+  // Branch/Diff); bei --path ist der Index ohnehin der ganze Baum.
+  if (Result.IndexRoot <> '') and (Result.ProjectFile = '') and
+     (Result.GroupFile = '') and not Result.Branch and (Result.Diff = '') then
   begin
-    Result.ParseError := '--path und --file sind exklusiv';
+    Result.ParseError :=
+      '--index-root braucht --project, --project-group, --branch oder --diff';
+    Exit;
+  end;
+  if (Result.IndexRoot <> '') and not DirectoryExists(Result.IndexRoot) then
+  begin
+    Result.ParseError := Format(
+      '--index-root Verzeichnis nicht gefunden: %s', [Result.IndexRoot]);
     Exit;
   end;
 
@@ -349,7 +381,10 @@ begin
   if (Result.Path <> '') and not Result.Full and not Result.Branch then
     Result.Full := True;
 
-  // BaseDir defaulten auf Path bzw. Dir der SingleFile
+  // BaseDir defaulten auf Path bzw. Dir der SingleFile. Fuer --project/
+  // --project-group bleibt er leer - dort liefert der Engine-Dispatch den
+  // gemeinsamen Wurzelpfad der aufgeloesten Liste (CommonRoot) als BaseDir,
+  // was '..'-Includes ausserhalb des Projektverzeichnisses korrekt abdeckt.
   if Result.BaseDir = '' then
   begin
     if Result.Path <> '' then
@@ -383,6 +418,15 @@ begin
   WriteLn('Input:');
   WriteLn('  --path <dir>          Project root, recursive scan (default mode = --full)');
   WriteLn('  --file <pas>          Single .pas file');
+  WriteLn('  --project <dproj>     Scan the project''s DCCReference file list');
+  WriteLn('                        (search-path units are NOT included - the list');
+  WriteLn('                        is exactly what the .dproj references)');
+  WriteLn('  --project-group <groupproj>');
+  WriteLn('                        Scan all projects of the group (deduplicated)');
+  WriteLn('  --index-root <dir>    Build the cross-unit index over this directory');
+  WriteLn('                        while analysing only the file list (default for');
+  WriteLn('                        --project/--project-group: common root of the');
+  WriteLn('                        resolved list). Also valid with --branch/--diff.');
   WriteLn('');
   WriteLn('Scope (mit --path):');
   WriteLn('  --full                Recursive (default if neither flag set)');
@@ -833,6 +877,7 @@ begin
         Req.Scope := ssFileList;
         Req.Files := Files.ToStringArray;
         Req.Path  := Args.Path;
+        Req.IndexRoot := Args.IndexRoot;
       end
       // Branch-Mode: VCS-geaenderte Dateien ermitteln, dann analysieren
       else if Args.Branch then
@@ -849,6 +894,25 @@ begin
         Req.Scope := ssFileList;
         Req.Files := Files.ToStringArray;
         Req.Path  := Args.Path;
+        Req.IndexRoot := Args.IndexRoot;
+      end
+      // Projekt-Mode (Scan-Scope-Konzept 2026-07-20): .dproj-Dateiliste
+      else if Args.ProjectFile <> '' then
+      begin
+        if not Args.Quiet then
+          WriteLn('Analyzing project: ', Args.ProjectFile);
+        Req.Scope     := ssProject;
+        Req.Path      := Args.ProjectFile;
+        Req.IndexRoot := Args.IndexRoot;
+      end
+      // Projektgruppen-Mode: .groupproj -> Union aller Projekt-Listen
+      else if Args.GroupFile <> '' then
+      begin
+        if not Args.Quiet then
+          WriteLn('Analyzing project group: ', Args.GroupFile);
+        Req.Scope     := ssProjectGroup;
+        Req.Path      := Args.GroupFile;
+        Req.IndexRoot := Args.IndexRoot;
       end
       // Single-File-Mode
       else if Args.SingleFile <> '' then

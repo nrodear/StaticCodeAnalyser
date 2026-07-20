@@ -162,6 +162,16 @@ type
     procedure ApplyDetectorConfig(Settings: TRepoSettings;
       AClearDiscovery: Boolean);
     procedure AnalyseAllClasses(Sender: TObject; const path: string);
+    // Scan-Scope-Variation (Konzept_ScanScope_2026-07-20, Phase 3):
+    // Smart-Path - endet der Combo-Text auf .dproj/.groupproj (Datei
+    // existiert), faehrt der Analyse-Button ssProject/ssProjectGroup.
+    function  ScopeForPath(const APath: string): TScanScope;
+    // Verzeichnis-Sicht auf den Combo-Text fuer Verzeichnis-Konsumenten
+    // (Branch, InitialDir): bei Projektdatei-Text deren Verzeichnis.
+    function  DirOfProjectPath(const APath: string): string;
+    procedure ProjectpathChangedScope(Sender: TObject);
+    procedure HamburgerAnalyseProjectClick(Sender: TObject);
+    procedure HamburgerAnalyseGroupClick(Sender: TObject);
     procedure AnalyseSingleFile(const AFilePath: string);
     procedure FillGridFromFindings(Findings: TObjectList<TLeakFinding>;
       const ABaseDir: string);
@@ -492,6 +502,11 @@ begin
   if Assigned(Panel3) then Panel3.Color := IDE_BG_CHROME;
 
   LoadRecentPaths;
+
+  // Scan-Scope Smart-Path (Konzept par.4.3): Button-Caption folgt dem
+  // Combo-Inhalt (Verzeichnis vs .dproj vs .groupproj). Initial syncen.
+  Projectpath.OnChange := ProjectpathChangedScope;
+  ProjectpathChangedScope(nil);
 end;
 
 procedure TForm2.BtnCancelClick(Sender: TObject);
@@ -791,7 +806,7 @@ begin
       Settings.MinSeverity := MinSevCombo.Items[MinSevCombo.ItemIndex];
     // ProjectRoot durchreichen damit relative CustomRulesFile-Pfade
     // (z.B. 'analyser-rules.yml' im Projekt-Wurzelverzeichnis) gefunden werden.
-    Settings.ApplyDetectorThresholds(Trim(Projectpath.Text));
+    Settings.ApplyDetectorThresholds(DirOfProjectPath(Projectpath.Text));
     AutoDiscoverCustomClasses := Settings.AutoDiscoverClasses;
     if AClearDiscovery then
     begin
@@ -809,6 +824,74 @@ begin
         [Settings.Profile, Settings.MinSeverity]);
   except
     // INI-Wert defekt darf den Lauf nicht abbrechen.
+  end;
+end;
+
+function TForm2.ScopeForPath(const APath: string): TScanScope;
+var
+  P : string;
+begin
+  Result := ssRecursive;
+  P := Trim(APath);
+  if not FileExists(P) then Exit;
+  if SameText(ExtractFileExt(P), '.dproj') then
+    Result := ssProject
+  else if SameText(ExtractFileExt(P), '.groupproj') then
+    Result := ssProjectGroup;
+end;
+
+function TForm2.DirOfProjectPath(const APath: string): string;
+begin
+  Result := Trim(APath);
+  if ScopeForPath(Result) <> ssRecursive then
+    Result := ExcludeTrailingPathDelimiter(ExtractFilePath(Result));
+end;
+
+procedure TForm2.ProjectpathChangedScope(Sender: TObject);
+// Sichtbarer Modus-Indikator (Review-Auflage Konzept par.4.3): der Analyse-
+// Button sagt, was er tun wird.
+begin
+  case ScopeForPath(Projectpath.Text) of
+    ssProject:      Button6.Caption := _('Analyse project');
+    ssProjectGroup: Button6.Caption := _('Analyse group');
+  else
+    Button6.Caption := _('Analyse directory');
+  end;
+end;
+
+procedure TForm2.HamburgerAnalyseProjectClick(Sender: TObject);
+var
+  Dlg : TOpenDialog;
+begin
+  Dlg := TOpenDialog.Create(Self);
+  try
+    Dlg.Title  := _('Select Delphi project');
+    Dlg.Filter := _('Delphi project (*.dproj)|*.dproj|Project group (*.groupproj)|*.groupproj');
+    Dlg.InitialDir := DirOfProjectPath(Projectpath.Text);
+    if not Dlg.Execute(Handle) then Exit;
+    Projectpath.Text := Dlg.FileName;
+    SaveRecentPath(Projectpath.Text);
+    AnalyseAllClasses(Sender, Projectpath.Text);
+  finally
+    Dlg.Free;
+  end;
+end;
+
+procedure TForm2.HamburgerAnalyseGroupClick(Sender: TObject);
+var
+  Dlg : TOpenDialog;
+begin
+  Dlg := TOpenDialog.Create(Self);
+  try
+    Dlg.Title  := _('Select Delphi project group');
+    Dlg.Filter := _('Project group (*.groupproj)|*.groupproj');
+    Dlg.InitialDir := DirOfProjectPath(Projectpath.Text);
+    if not Dlg.Execute(Handle) then Exit;
+    Projectpath.Text := Dlg.FileName;
+    SaveRecentPath(Projectpath.Text);
+    AnalyseAllClasses(Sender, Projectpath.Text);
+  finally
+    Dlg.Free;
   end;
 end;
 
@@ -848,7 +931,11 @@ begin
           Ignore.SkipTests := not Settings.IncludeTests;
           var Req := TScanRequest.Init;
           Req.SkipConfig := True;
-          Req.Scope      := ssRecursive;
+          // Smart-Path (Konzept par.4.3): .dproj/.groupproj im Combo-Text
+          // -> Projekt-/Gruppen-Scope; IgnoreList wirkt dort ueber den
+          // Engine-Dispatch (Aufloesungs-Filter), Auto-IndexRoot haelt die
+          // Cross-Unit-Indizes auf Verzeichnis-Breite (Engine-Default).
+          Req.Scope      := ScopeForPath(path);
           Req.Path       := path;
           Req.UsesCheck  := Settings.UsesCheck;
           Req.IgnoreList := Ignore;
@@ -865,7 +952,9 @@ begin
         finally
           Ignore.Free;
         end;
-        FillGridFromFindings(findings, path);
+        // Verzeichnis-Sicht fuer alle Relativpfad-Konsumenten (Grid,
+        // Export, Doppelklick) - bei Smart-Path waere 'path' ein Dateipfad.
+        FillGridFromFindings(findings, DirOfProjectPath(path));
       except
         on EAbort do
           // User-Cancel oder MAX_SCAN_FILES-Limit. StatusBar wurde im
@@ -926,7 +1015,7 @@ begin
         Req.SkipConfig            := True;
         Req.Scope                 := ssSingleFile;
         Req.Path                  := AFilePath;
-        Req.SingleFileProjectRoot := Trim(Projectpath.Text);
+        Req.SingleFileProjectRoot := DirOfProjectPath(Projectpath.Text);
         Req.UsesCheck             := Settings.UsesCheck;
         var Ses := TAnalysisSession.Create;
         var Res: TScanResult := nil;
@@ -1515,7 +1604,9 @@ var
   Info     : string;
   StartDir : string;
 begin
-  StartDir := Trim(Projectpath.Text);
+  // Verzeichnis-Konsument (Review-Auflage par.4.3): bei Projektdatei-Text
+  // im Combo deren Verzeichnis als Repo-Detection-Startpunkt verwenden.
+  StartDir := DirOfProjectPath(Projectpath.Text);
   if StartDir = '' then
   begin
     StatusBar1.Panels[2].Text := _('Project path is empty.');
@@ -1606,6 +1697,17 @@ begin
   MI := TMenuItem.Create(FHamburgerMenu);
   MI.Caption := _('Export') + '...';
   MI.OnClick := HamburgerExportClick;
+  FHamburgerMenu.Items.Add(MI);
+
+  // ---- Scan-Scope (Konzept_ScanScope_2026-07-20, Phase 3) ----
+  MI := TMenuItem.Create(FHamburgerMenu);
+  MI.Caption := _('Analyse project (.dproj)') + '...';
+  MI.OnClick := HamburgerAnalyseProjectClick;
+  FHamburgerMenu.Items.Add(MI);
+
+  MI := TMenuItem.Create(FHamburgerMenu);
+  MI.Caption := _('Analyse project group (.groupproj)') + '...';
+  MI.OnClick := HamburgerAnalyseGroupClick;
   FHamburgerMenu.Items.Add(MI);
 
   MI := TMenuItem.Create(FHamburgerMenu);

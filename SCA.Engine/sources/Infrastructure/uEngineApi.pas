@@ -60,7 +60,10 @@ type
     ssSingleFile,   // Path = eine .pas-Datei
     ssFileList,     // Files = explizite Datei-Liste (Path = optionaler BaseDir)
     ssVcsChanged,   // nur per VCS geaenderte .pas/.dfm (Path = Repo, VcsRange optional)
-    ssSource        // Source = In-Memory-Quelltext (kein Datei-Pfad; Path = optionaler Logical-Name)
+    ssSource,       // Source = In-Memory-Quelltext (kein Datei-Pfad; Path = optionaler Logical-Name)
+    // Scan-Scope-Variation (Konzept_ScanScope_2026-07-20):
+    ssProject,      // Path = .dproj -> DCCReference-Dateiliste (uProjectFiles)
+    ssProjectGroup  // Path = .groupproj -> Union aller Projekt-Listen
   );
 
   // Vollstaendige Scan-Anfrage. Statt globale Variablen zu setzen, fuellt der
@@ -93,6 +96,13 @@ type
     SkipConfig     : Boolean;           // true: Run wendet KEINE Config an - der Consumer hat den
                                         // globalen Detektor-/Schwellen-State bereits selbst gesetzt
                                         // (z.B. IDE via TIDEAnalysisPrep.SetupForRun). Nur Scope->Scan->Baseline.
+    // ssProject/ssProjectGroup/ssFileList (optional): Verzeichnis-Wurzel,
+    // ueber die die Cross-Unit-Indizes (SymbolRef/Typ/DFM) gebaut werden,
+    // waehrend die ANALYSE auf der Liste bleibt (Unused-FP-Vermeidung,
+    // Konzept Par.5). Leer bei ssProject/ssProjectGroup = automatisch der
+    // gemeinsame Wurzelpfad der aufgeloesten Liste (Index-Breiten-Parity
+    // zum Verzeichnis-Scan); leer bei ssFileList = Index ueber die Liste.
+    IndexRoot      : string;
     SingleFileProjectRoot: string;      // nur ssSingleFile: ProjectRoot fuer den projektweiten
                                         // Symbol-Referenz-Index (AnalyzeLeaks(File, ProjectRoot, UsesCheck)).
                                         // '' -> Single-File ohne Cross-Unit-Index (1-arg-Ueberladung).
@@ -171,10 +181,12 @@ function AnalyzeSource(const Source: string;
 implementation
 
 uses
+  Winapi.Windows,   // OutputDebugString (ProjectScope-Warnungen)
   System.IOUtils, System.SyncObjs,
   uStaticAnalyzer2, uRuleCatalog, uLexer, uCustomRuleDetector, uVcsChanges,
   uRepoSettings, uBaseline, uExportSARIF, uExportSonarGeneric, uExportHtml,
-  uPathOverrides;   // TPathOverrides.Clear im Direkt-Modus (Config-Riegel 2026-07-04)
+  uPathOverrides,   // TPathOverrides.Clear im Direkt-Modus (Config-Riegel 2026-07-04)
+  uProjectFiles;    // ssProject/ssProjectGroup (Konzept_ScanScope_2026-07-20)
 
 var
   // Serialisiert ALLE Engine-Scans prozessweit. Der Engine-State ist global
@@ -223,6 +235,7 @@ begin
   Result.MinSeverityName   := '';
   Result.ConfigRoot        := '';
   Result.SkipConfig        := False;
+  Result.IndexRoot := '';
   Result.SingleFileProjectRoot := '';
   Result.IgnoreList        := nil;
   Result.Progress        := nil;
@@ -388,11 +401,83 @@ begin
 end;
 
 function TAnalysisSession.Run(const Req: TScanRequest): TScanResult;
+
+  // ssProject/ssProjectGroup: harter Aufloesungs-Fehler -> Ergebnis mit
+  // genau einem fkFileReadError-Finding (Muster AnalyzeLeaksFromList.AddError;
+  // Exit-Code-Pfad 4 wie bei jedem Read-Error).
+  // Gemeinsamer Wurzelpfad der aufgeloesten Dateiliste - Basis fuer
+  // relative Export-Pfade UND fuer den Default-IndexRoot. Reale .dproj
+  // referenzieren via '..'-Includes regelmaessig Dateien AUSSERHALB des
+  // .dproj-Verzeichnisses; das dproj-Dir waere dann ein falscher BaseDir
+  // (Review-Gap, Konzept Par.8). Fallback: Verzeichnis der Projektdatei.
+  function CommonRootOf(AFiles: TStringList; const AFallback: string): string;
+  // Verifikations-Fix (2026-07-20): der fruehere 'Length<=3'-Break konnte
+  // die LAUFWERKSWURZEL (oder das drive-relative 'C:') als Root liefern -
+  // TryGetAllPasFiles haette dann das GESAMTE Laufwerk indiziert und
+  // Cross-Drive-Listen bekaemen einen Root, der gar kein Prefix aller
+  // Dateien ist. Jetzt: sauberer Aufstieg mit Fixpunkt-Erkennung, und ein
+  // Ergebnis ist nur gueltig, wenn es UNTER der Laufwerkswurzel liegt und
+  // Prefix ALLER Verzeichnisse ist - sonst Fallback (Projektdatei-Dir).
+  var
+    Root, Dir, Prev : string;
+    i               : Integer;
+  begin
+    Result := ExtractFilePath(AFallback);
+    if (AFiles = nil) or (AFiles.Count = 0) then Exit;
+    Root := ExtractFilePath(AFiles[0]);
+    for i := 1 to AFiles.Count - 1 do
+    begin
+      Dir := ExtractFilePath(AFiles[i]);
+      while (Root <> '') and
+            not SameText(Copy(Dir, 1, Length(Root)), Root) do
+      begin
+        Prev := Root;
+        // eine Ebene hoch (Root endet immer mit Backslash)
+        Root := ExtractFilePath(ExcludeTrailingPathDelimiter(Root));
+        if SameText(Root, Prev) then
+        begin
+          Root := '';   // Fixpunkt (Wurzel/drive-relativ) - kein gemeinsamer Root
+          Break;
+        end;
+      end;
+      if Root = '' then Break;
+    end;
+    // Gueltig nur unterhalb der Laufwerkswurzel ('C:\' hat Laenge 3;
+    // UNC-Wurzeln wie '\\srv\share\' akzeptieren wir ab einer Ebene tiefer).
+    if (Root = '') or (Length(ExcludeTrailingPathDelimiter(Root)) <= 2) or
+       (Length(Root) <= 3) then
+      Exit;
+    // Finaler Prefix-Check ueber ALLE (deckt den Abbruch-Pfad ab).
+    for i := 0 to AFiles.Count - 1 do
+      if not SameText(Copy(ExtractFilePath(AFiles[i]), 1, Length(Root)), Root) then
+        Exit;
+    Result := Root;
+  end;
+
+  function MakeSingleErrorList(const AMsg: string): TObjectList<TLeakFinding>;
+  var
+    F : TLeakFinding;
+  begin
+    Result := TObjectList<TLeakFinding>.Create(True);
+    F            := TLeakFinding.Create;
+    F.FileName   := '';
+    F.MethodName := '';
+    F.LineNumber := '0';
+    F.MissingVar := AMsg;
+    F.SetKind(fkFileReadError);
+    Result.Add(F);
+  end;
+
 var
   Findings : TObjectList<TLeakFinding>;
   Files    : TStringList;
   Info     : string;
   BaseDir  : string;
+  Warnings : TStringList;
+  ProjList : TStringList;
+  ProjErr  : string;
+  W        : string;
+  EffIndexRoot : string;
 begin
   // Prozessweite Scan-Serialisierung gegen den nicht-thread-safen globalen
   // Engine-State (s. GEngineLock). Deckt ApplyConfig + Scan + Baseline ab.
@@ -422,12 +507,64 @@ begin
         Files := TStringList.Create;
         try
           Files.AddStrings(Req.Files);
+          // IndexRoot gilt auch fuer explizite Listen (--branch/--diff):
+          // Cross-Unit-Index ueber das Superset, Analyse auf der Liste.
           Findings := TStaticAnalyzer2.AnalyzeLeaksFromList(
-                        Files, Req.Progress, Req.UsesCheck);
+                        Files, Req.Progress, Req.UsesCheck, Req.IndexRoot);
         finally
           Files.Free;
         end;
         BaseDir := Req.Path;   // optionaler Basis-Root fuer relative Export-Pfade
+      end;
+
+    ssProject, ssProjectGroup:
+      begin
+        // Scan-Scope-Variation (Konzept_ScanScope_2026-07-20): Projektdatei
+        // bzw. Projektgruppe -> explizite Dateiliste. Warnungen (fehlende
+        // Referenzen, Makro-Includes) werden als Hint-artiges
+        // fkFileReadError-Finding sichtbar gemacht; ein harter Parse-Fehler
+        // liefert wie ueberall ein Fehler-Finding statt einer Exception.
+        Files := TStringList.Create;
+        Warnings := TStringList.Create;
+        try
+          if Req.Scope = ssProject then
+            ProjList := TProjectFiles.FromDproj(Req.Path, ProjErr, Warnings)
+          else
+            ProjList := TProjectFiles.FromGroupproj(Req.Path, ProjErr, Warnings);
+          try
+            Files.AddStrings(ProjList);
+          finally
+            ProjList.Free;
+          end;
+          // ignore.txt-Parity zum Verzeichnis-Walk (Review-Gap Par.8):
+          // automatisch ermittelte Projektlisten respektieren Req.IgnoreList.
+          if (Req.IgnoreList <> nil) and (Files.Count > 0) then
+            for var fi := Files.Count - 1 downto 0 do
+              if Req.IgnoreList.IsIgnored(Files[fi]) then
+                Files.Delete(fi);
+          BaseDir := CommonRootOf(Files, Req.Path);
+          // Default-IndexRoot = CommonRoot (Review-Gap Par.8): sonst waeren
+          // die Cross-Unit-Indizes SCHWAECHER als beim Verzeichnis-Scan
+          // (DCCReference-Listen sind oft enger als der Quellbaum) -> neue
+          // Unused-/Cross-Unit-FPs. Req.IndexRoot ueberschreibt.
+          EffIndexRoot := Req.IndexRoot;
+          if EffIndexRoot = '' then
+            EffIndexRoot := BaseDir;
+          if ProjErr <> '' then
+            Findings := MakeSingleErrorList(ProjErr)
+          else
+            Findings := TStaticAnalyzer2.AnalyzeLeaksFromList(
+                          Files, Req.Progress, Req.UsesCheck, EffIndexRoot);
+          // Warnungen (fehlende Referenzen, Makro-Skips) nicht als Findings
+          // (fkFileReadError wuerde Exit-Code 4 erzwingen). v1: NUR Debug-
+          // Kanal (OutputDebugString) - ein stderr-Kanal braeuchte einen
+          // Warnings-Rueckgabeweg ueber TScanResult (Konzept par.9, offen).
+          for W in Warnings do
+            OutputDebugString(PChar('SCA ProjectScope: ' + W));
+        finally
+          Warnings.Free;
+          Files.Free;
+        end;
       end;
 
     ssVcsChanged:

@@ -229,6 +229,12 @@ type
     procedure AnalyseClick(Sender: TObject);
     procedure AnalyseCurrentFileClick(Sender: TObject);
     procedure AnalyseChangedFilesClick(Sender: TObject);
+    // Scan-Scope Phase 4 (Konzept_ScanScope_2026-07-20): aktives IDE-Projekt
+    // bzw. gesamte Projektgruppe via ToolsAPI scannen. Sammlung laeuft im
+    // UI-Thread (ToolsAPI ist nicht threadsicher), Analyse im Worker
+    // (Runner.RunFileList -> ssFileList + IndexRoot).
+    procedure AnalyseActiveProjectClick(Sender: TObject);
+    procedure AnalyseProjectGroupClick(Sender: TObject);
     procedure FilterChange(Sender: TObject);
     procedure GridDblClick(Sender: TObject);
     procedure GridSelectCell(Sender: TObject; ACol, ARow: Integer;
@@ -2764,6 +2770,101 @@ begin
     FAnalyseRunner.RunCurrent(FilePath);
 end;
 
+procedure CollectProjectPasFiles(const AProject: IOTAProject;
+  ASeen, AInto: TStringList);
+// ToolsAPI-Modul-Liste eines Projekts -> .pas-Pfade, dedupliziert via ASeen
+// (case-insensitiv sorted). GetModule liefert auch .dfm/.res-Eintraege -
+// Extension-Filter noetig.
+var
+  i    : Integer;
+  Info : IOTAModuleInfo;
+  F    : string;
+begin
+  if AProject = nil then Exit;
+  for i := 0 to AProject.GetModuleCount - 1 do
+  begin
+    Info := AProject.GetModule(i);
+    if Info = nil then Continue;
+    F := Info.FileName;
+    if F = '' then Continue;
+    if not SameText(ExtractFileExt(F), '.pas') then Continue;
+    if ASeen.IndexOf(F) >= 0 then Continue;
+    ASeen.Add(F);
+    AInto.Add(F);
+  end;
+end;
+
+procedure TAnalyserFrame.AnalyseActiveProjectClick(Sender: TObject);
+var
+  ModSvc : IOTAModuleServices;
+  PG     : IOTAProjectGroup;
+  Proj   : IOTAProject;
+  Seen   : TStringList;
+  Files  : TStringList;
+begin
+  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
+  PG := ModSvc.MainProjectGroup;
+  if (PG = nil) or (PG.ActiveProject = nil) then
+  begin
+    StatusMode(_('No active project in the IDE.'));
+    Exit;
+  end;
+  Proj := PG.ActiveProject;
+  Seen := TStringList.Create;
+  Files := TStringList.Create;
+  try
+    Seen.CaseSensitive := False;
+    Seen.Sorted := True;
+    Seen.Duplicates := dupIgnore;
+    CollectProjectPasFiles(Proj, Seen, Files);
+    PrepareAnalysis;
+    if Assigned(FAnalyseRunner) then
+      // IndexRoot = Projektverzeichnis: haelt die Cross-Unit-Indizes auf
+      // Verzeichnis-Breite (Konzept par.5); Listen-Dateien ausserhalb
+      // deckt die Union-Mechanik in AnalyzeLeaksFromList ab.
+      FAnalyseRunner.RunFileList(bkProject,
+        ExtractFilePath(Proj.FileName), Files.ToStringArray,
+        ExtractFilePath(Proj.FileName));
+  finally
+    Files.Free;
+    Seen.Free;
+  end;
+end;
+
+procedure TAnalyserFrame.AnalyseProjectGroupClick(Sender: TObject);
+var
+  ModSvc : IOTAModuleServices;
+  PG     : IOTAProjectGroup;
+  Seen   : TStringList;
+  Files  : TStringList;
+  i      : Integer;
+begin
+  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
+  PG := ModSvc.MainProjectGroup;
+  if (PG = nil) or (PG.ProjectCount = 0) then
+  begin
+    StatusMode(_('No project group in the IDE.'));
+    Exit;
+  end;
+  Seen := TStringList.Create;
+  Files := TStringList.Create;
+  try
+    Seen.CaseSensitive := False;
+    Seen.Sorted := True;
+    Seen.Duplicates := dupIgnore;
+    for i := 0 to PG.ProjectCount - 1 do
+      CollectProjectPasFiles(PG.Projects[i], Seen, Files);
+    PrepareAnalysis;
+    if Assigned(FAnalyseRunner) then
+      FAnalyseRunner.RunFileList(bkGroup,
+        ExtractFilePath(PG.FileName), Files.ToStringArray,
+        ExtractFilePath(PG.FileName));
+  finally
+    Files.Free;
+    Seen.Free;
+  end;
+end;
+
 procedure TAnalyserFrame.AnalyseChangedFilesClick(Sender: TObject);
 // Branch-Aenderungen via Git oder SVN. Verwendet den aktuellen Projektpfad
 // als Startpunkt fuer die Repo-Erkennung.
@@ -3055,6 +3156,17 @@ begin
   FMICancel.Caption := _('Cancel Analysis');
   FMICancel.OnClick := CancelAnalyseClick;
   FHamburgerMenu.Items.Add(FMICancel);
+
+  // ---- Scan-Scope Phase 4 (Konzept_ScanScope_2026-07-20) ----
+  MI := TMenuItem.Create(FHamburgerMenu);
+  MI.Caption := _('Analyse active project (IDE)');
+  MI.OnClick := AnalyseActiveProjectClick;
+  FHamburgerMenu.Items.Add(MI);
+
+  MI := TMenuItem.Create(FHamburgerMenu);
+  MI.Caption := _('Analyse project group (IDE)');
+  MI.OnClick := AnalyseProjectGroupClick;
+  FHamburgerMenu.Items.Add(MI);
 
   // ---- Clear all hover-marker (Enabled-Sync ueber GHighlighter.HasMarks)
   FMIClearMarks := TMenuItem.Create(FHamburgerMenu);
