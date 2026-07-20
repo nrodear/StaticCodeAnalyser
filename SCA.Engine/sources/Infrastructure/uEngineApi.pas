@@ -319,6 +319,19 @@ begin
       try Settings.Load; except end;
       if Req.Profile         <> '' then Settings.Profile     := Req.Profile;
       if Req.MinSeverityName <> '' then Settings.MinSeverity := Req.MinSeverityName;
+      // BUGFIX 2026-07-15: [Detectors]/AutoDiscoverClasses aus der INI anwenden.
+      // Vorher wurde die Einstellung im INI-Zweig NIE gesetzt: ResetEngineConfig-
+      // Defaults (oben) stellt sie auf DEF_AUTO_DISCOVER_CLASSES=False und nur der
+      // DIREKT-Zweig (Req.AutoDiscover) bzw. die GUI (uMainForm) setzten sie. Die in
+      // uCustomClassDiscovery dokumentierte Aktivierung war damit im CLI-/INI-Pfad
+      // WIRKUNGSLOS - dieselbe analyser.ini ergab in GUI und CLI unterschiedliche
+      // SCA001-Ergebnisse (die GUI ehrte sie, die CLI verschluckte sie still).
+      // Aufgedeckt durch die Recall-Messung (tools/recall_mutate.py): ohne Discovery
+      // fand SCA001 nur 9/50 = 18 % injizierter Leaks - ausschliesslich RTL/VCL-
+      // Klassen, jede Bibliotheks-Klasse (TAL*) war unsichtbar.
+      // Kein Vereinheitlichen der 3 Config-Pfade: nur diese eine dokumentierte
+      // Einstellung wirkt jetzt dort, wo sie laut Doku wirken soll.
+      uSCAConsts.AutoDiscoverCustomClasses := Settings.AutoDiscoverClasses;
       if Req.ConfigRoot <> '' then
         Settings.ApplyDetectorThresholds(Req.ConfigRoot)
       else
