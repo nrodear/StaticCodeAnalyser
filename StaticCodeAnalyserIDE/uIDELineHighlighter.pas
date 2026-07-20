@@ -107,6 +107,11 @@ type
     // Editor der zuletzt markierte Zeilen gemalt hat — nur dieser Editor
     // bekommt Hover-Behandlung. (Andere Editoren werden ignoriert.)
     FSavedEditor     : TWinControl;
+    // HWND-Snapshot des EditControls (Welle 1, 2026-07-20): der 200ms-
+    // HoverWatch-Timer darf FSavedEditor NICHT dereferenzieren (rohes
+    // TWinControl; ein geschlossenes Floating-Edit-Window feuert KEIN
+    // ofnFileClosing) - er prueft stattdessen IsWindow(FSavedEditorWnd).
+    FSavedEditorWnd  : HWND;
     FSavedCharHeight : Integer;      // DPI-aware Zeilenhoehe aus Context.EditorState
     // Pro markierter Zeile der zuletzt gerenderte CodeRect (Editor-Client-
     // Koordinaten). Wird in BeginPaint geleert (nur bei ForceFullRepaint),
@@ -347,6 +352,12 @@ type
 
 var
   GHighlighter : TFindingHighlighter = nil;
+  // Zusaetzlicher ofnFileClosing-Abonnent (Welle 1, 2026-07-20):
+  // uIDEWatchMode haengt sich hier ein, ohne dass diese Unit uIDEWatchMode
+  // kennen muss (kein uses-Zyklus). Der TFileClosingNotifier ruft ihn NACH
+  // GHighlighter.HandleFileClosing; Setzen/Nilen uebernimmt
+  // RegisterWatchMode/UnregisterWatchMode.
+  GFileClosingSubscriber : TProc<string> = nil;
 
 procedure RegisterLineHighlighter;
 procedure UnregisterLineHighlighter;
@@ -1439,6 +1450,7 @@ end;
 procedure TFindingEditorEvents.ResetState;
 begin
   FSavedEditor     := nil;
+  FSavedEditorWnd  := 0;
   FSavedCharHeight := 0;
   FHoveredLine     := -1;
   // FLastPaintedFile leeren, damit der naechste PaintLine-Tick als
@@ -1494,7 +1506,12 @@ var
 begin
   // Wenn keine Marker mehr gerendert sind oder der Editor verschwunden ist,
   // Timer abschalten — kein Hover-Kontext mehr.
-  if (FRenderedRects.Count = 0) or not Assigned(FSavedEditor) then
+  // Welle 1 (2026-07-20): FSavedEditor NIE dereferenzieren - das Control
+  // kann mit einem geschlossenen (Floating-)Edit-Window bereits zerstoert
+  // sein, ohne dass ofnFileClosing/ResetState lief. IsWindow auf den
+  // HWND-Snapshot ist der einzig sichere Liveness-Check im Timer.
+  if (FRenderedRects.Count = 0) or not Assigned(FSavedEditor) or
+     (FSavedEditorWnd = 0) or not IsWindow(FSavedEditorWnd) then
   begin
     FHoverWatch.Enabled := False;
     FHoveredLine := -1;
@@ -1506,7 +1523,7 @@ begin
   // gerenderten Marker-Rects testen.
   if not GetCursorPos(CursorPos) then Exit;
   EditorPt := CursorPos;
-  Winapi.Windows.ScreenToClient(FSavedEditor.Handle, EditorPt);
+  Winapi.Windows.ScreenToClient(FSavedEditorWnd, EditorPt);
   if HitTestLine(EditorPt.X, EditorPt.Y) < 0 then
   begin
     // Cursor verlaesst die markierte Zeile - aber NICHT verstecken wenn er
@@ -1834,6 +1851,7 @@ begin
   GHighlighter.EnsureLineTracker(Context.FileName);
 
   FSavedEditor     := Context.EditControl;
+  FSavedEditorWnd  := Context.EditControl.Handle;  // im Paint sicher allokiert
   CodeRect         := Context.LineState.CodeRect;
   // CharHeight fuer DPI-bewusstes Overlay-Sizing in EditorMouseMove verwenden.
   FSavedCharHeight := Context.EditorState.CharHeight;
@@ -1947,11 +1965,17 @@ procedure TFileClosingNotifier.FileNotification(
   NotifyCode: TOTAFileNotification; const FileName: string;
   var Cancel: Boolean);
 begin
-  if (NotifyCode = ofnFileClosing) and Assigned(GHighlighter) then
+  if NotifyCode <> ofnFileClosing then Exit;
+  if Assigned(GHighlighter) then
     try
       GHighlighter.HandleFileClosing(FileName);
     except
       // IDE-Teardown-Pfad: nie eine Exception in die IDE propagieren.
+    end;
+  if Assigned(GFileClosingSubscriber) then
+    try
+      GFileClosingSubscriber(FileName);
+    except
     end;
 end;
 

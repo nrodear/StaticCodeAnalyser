@@ -493,8 +493,8 @@ function BuildFindingTitle(F: TLeakFinding;
 // die aktive Datei automatisch zu re-analysieren. ACenterOnFirstFinding=False
 // unterdrueckt das Editor-Auto-Scroll auf den ersten Befund (sonst springt
 // der Editor bei jedem Tab-Wechsel unerwartet zur Line des ersten Findings).
-procedure RunSilentAnalysisForFile(const AFileName: string;
-  ACenterOnFirstFinding: Boolean = True);
+function RunSilentAnalysisForFile(const AFileName: string;
+  ACenterOnFirstFinding: Boolean = True): Boolean;
 
 implementation
 
@@ -1086,6 +1086,12 @@ begin
   // bereits halb-zerstoerte Frame-Felder.
   if GLiveAnalyserFrame = Pointer(Self) then
     GLiveAnalyserFrame := nil;
+
+  // Welle 1b (2026-07-20): Dock-Wrapper-Rueckverweis kappen - FFrame wurde
+  // nie genilt, GDockableForm.Frame war nach Dock-Close ein dangling
+  // Pointer (Read-UAF im Silent-Pfad, Write-UAF im Unload-Pfad).
+  if Assigned(GDockableForm) and (GDockableForm.FFrame = Self) then
+    GDockableForm.FFrame := nil;
 
   // Help-Panel-Timer ist jetzt in TFindingHintPanel.Destroy gekapselt
   // (wird auto-gestoppt wenn Owner=Self den Helper freigibt).
@@ -2422,6 +2428,13 @@ begin
   // Clipboard-Write laeuft - Windows-Clipboard-Listener koennen
   // Clipboard.AsText 50-200ms abwuergen, das Panel soll vorher sichtbar sein.
   Application.ProcessMessages;
+  // Welle 1 (2026-07-20): waehrend des Pumpens kann der Frame zerstoert
+  // (Dock-Close) oder FDisplayedFindings von einem fertig werdenden
+  // Async-Scan ersetzt worden sein - Sentinel + Bounds rechecken und die
+  // Finding-Referenz FRISCH holen (die alte kann freed sein).
+  if GLiveAnalyserFrame <> Pointer(Self) then Exit;
+  if (idx < 0) or (idx >= FDisplayedFindings.Count) then Exit;
+  Finding := FDisplayedFindings[idx];
   CopyFindingToClipboard(Finding);
 
   // Editor-Line-Highlights: alle Befunde der gleichen Datei mit Stripe
@@ -3941,8 +3954,11 @@ begin
   SetLength(Result, Count);
 end;
 
-procedure RunSilentAnalysisForFile(const AFileName: string;
-  ACenterOnFirstFinding: Boolean = True);
+// Welle 1b (2026-07-20): Boolean-Result - False bei jedem Skip (busy,
+// Datei fehlt, kein Highlighter), damit Caller (Properties-Auto-Scan)
+// ihren Scan-Zeit-Cache NICHT stempeln und spaeter nachholen.
+function RunSilentAnalysisForFile(const AFileName: string;
+  ACenterOnFirstFinding: Boolean = True): Boolean;
 // Silent-Mode-Entrypoint: analysiert AFileName + setzt Marker direkt am
 // GHighlighter. Kein Frame, kein Dock-Open. Fehler still an
 // OutputDebugString. Settings + Profile werden frisch geladen (analog zu
@@ -3955,6 +3971,7 @@ var
   Findings : TObjectList<TLeakFinding>;
   Entries  : TArray<TFindingMarkEntry>;
 begin
+  Result := False;
   if AFileName = '' then Exit;
   if not Assigned(GHighlighter) then Exit;
   if not FileExists(AFileName) then
@@ -3963,6 +3980,23 @@ begin
       'SCA Silent: file not found: %s', [AFileName])));
     Exit;
   end;
+
+  // Welle 1 (2026-07-20): NIE blockierend auf den Engine-Lock im UI-Thread
+  // warten - ein laufender Bulk-/Watch-Run haelt ihn potenziell minutenlang
+  // (IDE-Freeze beim Tab-Wechsel). Nicht-blockierende Probe: besetzt ->
+  // Silent-Scan still skippen; der naechste Tab-Wechsel/Save holt ihn nach.
+  if not TAnalysisSession.TryAcquireEngineLock then
+  begin
+    OutputDebugString(PChar(Format(
+      'SCA Silent: engine busy - skipping %s', [AFileName])));
+    Exit;
+  end;
+  // Lock wird GEHALTEN (rekursiv: SetupForRun/Run re-entern problemlos) -
+  // schliesst das Probe-Release-Race, in dem ein frisch gespawnter Worker
+  // den Lock zwischen Probe und Run schnappt und die UI doch einfriert.
+  // Der Silent-Pfad ist komplett synchron (kein ProcessMessages/Synchronize
+  // unter dem Lock).
+  try
 
   Settings := TRepoSettings.Create;
   Findings := nil;
@@ -4056,9 +4090,13 @@ begin
       end;
     if ACenterOnFirstFinding and (FirstLine < MaxInt) then
       TIDEEditor.CenterCurrentViewOnLine(FirstLine);
+    Result := True;
   finally
     Findings.Free;
     Settings.Free;
+  end;
+  finally
+    TAnalysisSession.ReleaseEngineLock;
   end;
 end;
 
@@ -4533,6 +4571,11 @@ begin
   UnregisterEditorContextMenuHook;
   UnregisterSCAAddInOptions;
   UnregisterSonarAddInOptions;
+  // Welle 1b (2026-07-20): BPL-Unload - ALLE lebenden Bulk-Worker joinen
+  // (inkl. Dock-Close-Orphans), BEVOR Frame und Package sterben. Bewusst
+  // ueber die unit-globale Liste statt ueber GDockableForm.Frame - der
+  // Frame-Pointer kann nach einem Dock-Close dangling sein.
+  JoinAllBulkWorkers;
   if Assigned(GDockableForm) then
   begin
     // GDockableForm ist ein TInterfacedObject -> wird ueber den

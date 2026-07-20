@@ -151,6 +151,11 @@ type
     // hinweg halten (Deadlock-Gefahr mit blockierten UI-Thread-Wartenden).
     class procedure AcquireEngineLock; static;
     class procedure ReleaseEngineLock; static;
+    // Nicht-blockierende Probe (Welle 1, 2026-07-20): fuer UI-Thread-
+    // Aufrufer, die bei besetztem Lock skippen statt einfrieren muessen
+    // (Silent-Scan vs. laufender Bulk-/Watch-Run). True = Lock gehalten,
+    // Caller MUSS ReleaseEngineLock rufen.
+    class function TryAcquireEngineLock: Boolean; static;
   end;
 
 // Bequemlichkeit: Ein-Zeilen-Rekursiv-Scan ohne explizite Session.
@@ -505,6 +510,11 @@ end;
 class procedure TAnalysisSession.ReleaseEngineLock;
 begin
   GEngineLock.Leave;
+end;
+
+class function TAnalysisSession.TryAcquireEngineLock: Boolean;
+begin
+  Result := GEngineLock.TryEnter;
 end;
 
 { Convenience }

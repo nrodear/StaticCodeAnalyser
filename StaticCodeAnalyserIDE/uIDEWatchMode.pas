@@ -157,6 +157,12 @@ type
     FAttachedModule     : IOTAModule;            // strong ref
     FAttachedNotifier   : IOTAModuleNotifier;    // strong ref
     FAttachedNotifIdx   : Integer;
+    // Welle 1b (2026-07-20): der TATSAECHLICH attachte Pfad des Primary-
+    // Slots. Im DFM-Fallback (AttachToWatchedFile) haengt der Primary am
+    // COMPANION-Modul - HandleModuleDestroyed/HandleFileClosing muessen
+    // gegen diesen Pfad matchen, nicht gegen FWatchedFile, sonst bleiben
+    // die strong refs beim Teardown stehen.
+    FAttachedPath       : string;
     // Optionaler Companion-Slot: wenn FWatchedFile eine .pas ist und das
     // zugehoerige .dfm als EIGENES IOTAModule offen ist (Close-and-Reopen-
     // Pattern: User hat das DFM "as Text" im Code-Editor), attachen wir
@@ -171,6 +177,13 @@ type
     FCompanionModule    : IOTAModule;            // strong ref
     FCompanionNotifier  : IOTAModuleNotifier;    // strong ref
     FCompanionNotifIdx  : Integer;
+    FCompanionPath      : string;   // Welle 1b: attachter Companion-Pfad
+    // Welle 1 (2026-07-20): lebende Watch-Worker. FreeOnTerminate ist AUS -
+    // der Manager besitzt die Threads: SpawnAnalyzer reapt fertige, der
+    // Destruktor joint laufende (Terminate+WaitFor), damit beim BPL-Unload
+    // kein Thread mehr in entladenen Engine-Code-Pages laeuft. Zugriff
+    // ausschliesslich im Main-Thread (Spawn/Reap/Destroy).
+    FLiveWorkers        : TList<TThread>;
     // Save-Debounce-Timer: bei rascher Save-Folge nur letzten Stand analysieren.
     FDebounceTimer      : TTimer;
     FPendingFileName    : string;
@@ -209,6 +222,10 @@ type
     function  FindModuleByPath(const APath: string;
                                out SrcEditor: IOTASourceEditor): IOTAModule;
     procedure DetachWatched;
+    // Welle 1 (2026-07-20): fertige Worker freigeben (vor jedem Spawn)
+    // bzw. laufende joinen (Destroy/BPL-Unload) - siehe FLiveWorkers.
+    procedure ReapFinishedWorkers;
+    procedure JoinAllWorkers;
     procedure RegisterEditServicesNotifier;
     procedure UnregisterEditServicesNotifier;
     // Normalisiert Pfade fuer SameText-Vergleiche: Pfade kommen aus
@@ -272,6 +289,21 @@ type
     procedure NotifyFileSaved(const AFileName: string);
     procedure NotifyFileEdited(const AFileName: string);
 
+    // BUGFIX Welle 1 (2026-07-20, Zwilling des e2c73d4-Crashs): die strong
+    // IOTAModule-Refs der Watch-Slots muessen beim Modul-/File-Close fallen,
+    // sonst raist TOTAClass.BeforeDestruction beim ProjectGroup-Close.
+    // HandleModuleDestroyed = SOFT-Release aus IOTAModuleNotifier.Destroyed
+    // (KEIN RemoveNotifier - das Modul raeumt seine Notifier gerade selbst
+    // ab); HandleFileClosing = harter Detach aus dem zentralen
+    // ofnFileClosing-Hook (via GFileClosingSubscriber, s. RegisterWatchMode).
+    procedure HandleModuleDestroyed(const AFileName: string);
+    procedure HandleFileClosing(const AFileName: string);
+    // Welle 1b: Rename/Save-As-Propagation - haelt Watch-Keys und
+    // Attach-Pfad-Snapshots aktuell, sonst verfehlen HandleFileClosing/
+    // HandleModuleDestroyed nach einem Rename die Slots (Refcount-Crash
+    // beim Close der umbenannten Datei).
+    procedure HandleModuleRenamed(const AOldFileName, ANewFileName: string);
+
     // Vom Worker (via Synchronize) gerufen um zu pruefen ob das Ergebnis
     // noch aktuell ist (d.h. Generation hat sich nicht geaendert).
     function IsCurrentGeneration(AGen: Integer): Boolean;
@@ -296,7 +328,8 @@ implementation
 
 uses
   System.StrUtils, Vcl.Forms, uStaticAnalyzer2, uEngineApi, uStaticFiles, uLocalization,
-  uPathNormalize;   // SPOT fuer Pfad-Normalisierung
+  uPathNormalize,   // SPOT fuer Pfad-Normalisierung
+  uIDELineHighlighter;  // GFileClosingSubscriber (zentraler ofnFileClosing-Hook)
 
 const
   DEBOUNCE_MS      = 300;   // Save-Trigger: schnelle Reaktion erwuenscht
@@ -386,7 +419,15 @@ begin
 end;
 
 procedure TFindingModuleNotifier.BeforeSave;       begin end;
-procedure TFindingModuleNotifier.Destroyed;        begin end;
+
+procedure TFindingModuleNotifier.Destroyed;
+// BUGFIX Welle 1 (2026-07-20): war ein leerer Stub - die Watch-Slots
+// hielten ihre IOTAModule-Refs ueber den Modul-Teardown hinaus (gleicher
+// Refcount-Crash-Mechanismus wie e2c73d4, nur ueber den Watch-Slot).
+begin
+  if Assigned(GWatchMode) then
+    GWatchMode.HandleModuleDestroyed(FFileName);
+end;
 
 procedure TFindingModuleNotifier.Modified;
 // Wird bei jeder Aenderung der Editor-Inhalte vom IDE gerufen. Notifier
@@ -398,6 +439,10 @@ begin
 end;
 procedure TFindingModuleNotifier.ModuleRenamed(const NewName: string);
 begin
+  // Welle 1b: Manager-Keys VOR dem eigenen Update umziehen (FFileName
+  // ist hier noch der alte Pfad).
+  if Assigned(GWatchMode) then
+    GWatchMode.HandleModuleRenamed(FFileName, NewName);
   FFileName := TWatchModeManager.NormalizePath(NewName);
 end;
 
@@ -428,6 +473,9 @@ begin end;
 procedure TFindingModuleNotifier.AfterRename(
   const OldFileName, NewFileName: string);
 begin
+  // Welle 1b: siehe ModuleRenamed - Keys/Snapshots im Manager umziehen.
+  if Assigned(GWatchMode) then
+    GWatchMode.HandleModuleRenamed(OldFileName, NewFileName);
   FFileName := TWatchModeManager.NormalizePath(NewFileName);
 end;
 
@@ -480,7 +528,10 @@ constructor TWatchAnalyzer.Create(const AFileName: string; AUsesCheck: Boolean;
   AStartGen: Integer);
 begin
   inherited Create(False); // CreateSuspended=False -> sofort starten
-  FreeOnTerminate := True;
+  // Welle 1 (2026-07-20): FreeOnTerminate AUS - der Manager trackt und
+  // besitzt den Thread (Reap in SpawnAnalyzer, Join im Destruktor). Ein
+  // FreeOnTerminate-Thread waere beim BPL-Unload nicht joinbar.
+  FreeOnTerminate := False;
   FFileName  := AFileName;
   FUsesCheck := AUsesCheck;
   FStartGen  := AStartGen;
@@ -507,6 +558,15 @@ begin
       Req.Path                  := FFileName;
       Req.SingleFileProjectRoot := TStaticFiles.FindProjectRoot(FFileName);
       Req.UsesCheck             := FUsesCheck;
+      // Welle 1b (2026-07-20): Minimal-Progress NUR fuer Terminate-
+      // Responsivitaet - JoinAllWorkers (BPL-Unload) bricht den Lauf damit
+      // am naechsten Engine-Tick ab, statt die volle Analyse abzuwarten.
+      Req.Progress :=
+        procedure(Current, Total: Integer)
+        begin
+          if TThread.CheckTerminated then
+            Abort;
+        end;
       var Ses := TAnalysisSession.Create;
       var Res: TScanResult := nil;
       try
@@ -585,6 +645,7 @@ begin
   FEditSvcNotifierIdx := -1;
   FUsesCheck          := False;
   FSubscribers        := TList<TObject>.Create;
+  FLiveWorkers        := TList<TThread>.Create;
 
   FDebounceTimer := TTimer.Create(nil);
   FDebounceTimer.Enabled  := False;
@@ -599,7 +660,12 @@ end;
 
 destructor TWatchModeManager.Destroy;
 begin
-  Deactivate;
+  Deactivate;               // bumpt Generation -> spaete Results werden gedroppt
+  // Welle 1b: unconditional - Deactivate exitet bei FActive=False frueh,
+  // der EditSvc-Notifier darf den BPL-Unload aber NIE ueberleben.
+  UnregisterEditServicesNotifier;
+  JoinAllWorkers;           // Welle 1: kein Worker ueberlebt den Manager
+  FreeAndNil(FLiveWorkers);
   // Subscriber-Liste vor allen Timern freed - falls noch Subscriptions
   // leben, ihre Destroy-Pfade rufen RemoveSubscriber zurueck. Wir setzen
   // die Liste auf nil VOR Free, damit RemoveSubscriber den nil-Guard
@@ -922,7 +988,45 @@ begin
   // (Single-Point-of-Truth ueber TIDEAnalysisPrep). Default beim ersten
   // Activate ohne Argument: False (Backward-Compat-Default des Parameters).
   DoStatus(Format(_('Analysing: %s'), [ExtractFileName(AFileName)]));
-  TWatchAnalyzer.Create(AFileName, FUsesCheck, FGeneration);
+  ReapFinishedWorkers;
+  FLiveWorkers.Add(TWatchAnalyzer.Create(AFileName, FUsesCheck, FGeneration));
+end;
+
+procedure TWatchModeManager.ReapFinishedWorkers;
+// Fertige Worker einsammeln (Free ist nach Finished gefahrlos). Laeuft
+// vor jedem Spawn - die Liste bleibt damit klein (praktisch 0-2 Eintraege).
+var
+  i : Integer;
+begin
+  for i := FLiveWorkers.Count - 1 downto 0 do
+    if FLiveWorkers[i].Finished then
+    begin
+      FLiveWorkers[i].Free;
+      FLiveWorkers.Delete(i);
+    end;
+end;
+
+procedure TWatchModeManager.JoinAllWorkers;
+// BPL-Unload-/Destroy-Pfad: laufende Worker MUESSEN beendet sein, bevor
+// der Package-Code entladen wird (sonst laeuft der Thread-EIP in freien
+// Code-Pages). TThread.WaitFor pumpt im Main-Thread CheckSynchronize -
+// ein im Worker haengendes Synchronize(DeliverResults) deadlockt nicht;
+// dessen Ergebnisse droppt der Generation-Check (Deactivate lief vorher).
+var
+  i : Integer;
+begin
+  for i := 0 to FLiveWorkers.Count - 1 do
+    FLiveWorkers[i].Terminate;
+  for i := FLiveWorkers.Count - 1 downto 0 do
+  begin
+    try
+      FLiveWorkers[i].WaitFor;
+    except
+      // Thread evtl. schon beendet/degeneriert - Free trotzdem versuchen.
+    end;
+    FLiveWorkers[i].Free;
+    FLiveWorkers.Delete(i);
+  end;
 end;
 
 procedure TWatchModeManager.DoStatus(const S: string);
@@ -1000,6 +1104,7 @@ begin
           FAttachedNotifIdx := MComp.AddNotifier(Notif);
           FAttachedModule   := MComp;
           FAttachedNotifier := Notif;
+          FAttachedPath     := NormalizePath(SEComp.FileName);
           Exit(True);
         except
           Exit(False);
@@ -1014,6 +1119,7 @@ begin
     FAttachedNotifIdx := M.AddNotifier(Notif);
     FAttachedModule   := M;
     FAttachedNotifier := Notif;
+    FAttachedPath     := NormalizePath(SE.FileName);
     Result := True;
   except
     Exit(False);
@@ -1036,6 +1142,7 @@ begin
         FCompanionNotifIdx := MComp.AddNotifier(NComp);
         FCompanionModule   := MComp;
         FCompanionNotifier := NComp;
+        FCompanionPath     := NormalizePath(SEComp.FileName);
       except
         FCompanionNotifIdx := -1;
         FCompanionNotifier := nil;
@@ -1061,6 +1168,7 @@ begin
   FCompanionNotifIdx := -1;
   FCompanionNotifier := nil;
   FCompanionModule   := nil;
+  FCompanionPath     := '';
 
   if Assigned(FAttachedModule) and (FAttachedNotifIdx <> -1) then
   begin
@@ -1073,6 +1181,67 @@ begin
   FAttachedNotifIdx := -1;
   FAttachedNotifier := nil; // dropt Ref, Notifier-Objekt wird frei
   FAttachedModule   := nil;
+  FAttachedPath     := '';
+end;
+
+procedure TWatchModeManager.HandleModuleDestroyed(const AFileName: string);
+// SOFT-Release (siehe Interface-Kommentar): nur die strong refs des
+// betroffenen Slots fallen lassen, KEIN RemoveNotifier.
+begin
+  // Welle 1b: gegen die ATTACH-Pfade matchen (nicht FWatchedFile) - im
+  // DFM-Fallback haengt der Primary-Slot am Companion-Modul.
+  if (FCompanionPath <> '') and SameText(AFileName, FCompanionPath) then
+  begin
+    FCompanionNotifIdx := -1;
+    FCompanionNotifier := nil;
+    FCompanionModule   := nil;
+    FCompanionPath     := '';
+  end;
+  if (FAttachedPath <> '') and SameText(AFileName, FAttachedPath) then
+  begin
+    FAttachedNotifIdx := -1;
+    FAttachedNotifier := nil;
+    FAttachedModule   := nil;
+    FAttachedPath     := '';
+  end;
+end;
+
+procedure TWatchModeManager.HandleFileClosing(const AFileName: string);
+// Harter Detach (siehe Interface-Kommentar): ofnFileClosing feuert VOR dem
+// Modul-Teardown, RemoveNotifier ist hier noch gefahrlos. DetachWatched
+// loest beide Slots (Single-File-Watch: der Companion haengt am Watched).
+var
+  Key : string;
+begin
+  Key := NormalizePath(AFileName);
+  if SameText(Key, FWatchedFile) or SameText(Key, FCompanionFile) or
+     ((FAttachedPath <> '') and SameText(Key, FAttachedPath)) or
+     ((FCompanionPath <> '') and SameText(Key, FCompanionPath)) then
+  begin
+    DetachWatched;
+    // Welle 1b: VOLLES Deactivate statt manuellem FActive-Reset - nur
+    // Deactivate meldet auch den EditServices-Notifier ab. Ein nackter
+    // FActive:=False wuerde den 'if not FActive then Exit'-Guard in
+    // Deactivate fuer immer scharf schalten -> der INTAEditServices-
+    // Notifier ueberlebte den BPL-Unload (AV beim naechsten Editor-Event).
+    // DetachWatched davor ist idempotent (Deactivate detacht erneut).
+    if FActive then
+      Deactivate;
+  end;
+end;
+
+procedure TWatchModeManager.HandleModuleRenamed(const AOldFileName,
+  ANewFileName: string);
+var
+  OldKey, NewKey : string;
+begin
+  OldKey := NormalizePath(AOldFileName);
+  NewKey := NormalizePath(ANewFileName);
+  if OldKey = '' then Exit;
+  if SameText(FWatchedFile, OldKey)   then FWatchedFile   := NewKey;
+  if SameText(FCompanionFile, OldKey) then FCompanionFile := NewKey;
+  if SameText(FAttachedPath, OldKey)  then FAttachedPath  := NewKey;
+  if SameText(FCompanionPath, OldKey) then FCompanionPath := NewKey;
 end;
 
 { ---- Public Register/Unregister ---- }
@@ -1081,10 +1250,19 @@ procedure RegisterWatchMode;
 begin
   if Assigned(GWatchMode) then Exit;
   GWatchMode := TWatchModeManager.Create;
+  // BUGFIX Welle 1 (2026-07-20): am zentralen ofnFileClosing-Hook des
+  // Highlighters anmelden (kein uses-Zyklus: nur diese Unit kennt beide).
+  GFileClosingSubscriber :=
+    procedure(AFileName: string)
+    begin
+      if Assigned(GWatchMode) then
+        GWatchMode.HandleFileClosing(AFileName);
+    end;
 end;
 
 procedure UnregisterWatchMode;
 begin
+  GFileClosingSubscriber := nil;   // vor dem Free - kein Dispatch auf Leiche
   if Assigned(GWatchMode) then
     FreeAndNil(GWatchMode);
 end;

@@ -515,8 +515,11 @@ begin
   if ShouldSkipScan(AFileName) then Exit;
 
   try
-    RunSilentAnalysisForFile(AFileName, {ACenterOnFirstFinding=}False);
-    RecordScanTime(AFileName);
+    // Welle 1b: Scan-Zeit nur bei ECHTEM Lauf stempeln - ein busy-Skip
+    // (Engine-Lock belegt) darf den Cache nicht fuellen, sonst bleibt die
+    // Datei bis zum naechsten Edit unanalysiert.
+    if RunSilentAnalysisForFile(AFileName, {ACenterOnFirstFinding=}False) then
+      RecordScanTime(AFileName);
   except
     // Detector-Crash darf den Tab-Wechsel-Hook nicht reissen.
   end;

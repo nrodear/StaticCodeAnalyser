@@ -140,6 +140,12 @@ type
     function IsBusy: Boolean;
   end;
 
+// Welle 1b (2026-07-20): joint ALLE lebenden Bulk-Worker (auch beim
+// Dock-Close detachte "Orphans") - Pflichtaufruf im BPL-Unload-Pfad
+// (UnregisterAnalyserDockableForm), BEVOR die Package-Code-Pages entladen
+// werden. Main-Thread-only; WaitFor pumpt CheckSynchronize.
+procedure JoinAllBulkWorkers;
+
 implementation
 
 // noinspection-file BeginEndRequired, ClassPerFile, ConcatToFormat, CyclomaticComplexity, DigitGrouping, DuplicateString, ExceptionTooGeneral, ExceptOnException, LongParamList, NestedTry, PublicField, PublicMemberWithoutDoc, RedundantJump, TooLongLine, UnsortedUses
@@ -158,6 +164,45 @@ uses
 const
   MAX_SCAN_FILES = 20000; // Hardlimit - schuetzt vor Endlos-Scan
 
+var
+  // Welle 1b (2026-07-20): ALLE Bulk-Worker (FreeOnTerminate ist AUS, die
+  // Unit besitzt die Threads). Reap bei jedem StartWorker; JoinAllBulkWorkers
+  // im BPL-Unload-Pfad. Deckt auch Dock-Close-Orphans (frueherer Detach lief
+  // ohne Join) und schliesst das Selbst-Free-Epilog-Fenster (kein
+  // FreeOnTerminate-Destroy in Package-Code mehr). Main-Thread-only.
+  GBulkWorkers : TList<TThread> = nil;
+
+procedure ReapBulkWorkers;
+var
+  i : Integer;
+begin
+  if not Assigned(GBulkWorkers) then Exit;
+  for i := GBulkWorkers.Count - 1 downto 0 do
+    if GBulkWorkers[i].Finished then
+    begin
+      GBulkWorkers[i].Free;
+      GBulkWorkers.Delete(i);
+    end;
+end;
+
+procedure JoinAllBulkWorkers;
+var
+  i : Integer;
+begin
+  if not Assigned(GBulkWorkers) then Exit;
+  for i := 0 to GBulkWorkers.Count - 1 do
+    GBulkWorkers[i].Terminate;
+  for i := GBulkWorkers.Count - 1 downto 0 do
+  begin
+    try
+      GBulkWorkers[i].WaitFor;   // pumpt CheckSynchronize im Main-Thread
+    except
+    end;
+    GBulkWorkers[i].Free;
+    GBulkWorkers.Delete(i);
+  end;
+end;
+
 { ---- TBulkScanWorker ---- }
 
 constructor TBulkScanWorker.Create(ARunner: TAnalyseRunner;
@@ -165,7 +210,10 @@ constructor TBulkScanWorker.Create(ARunner: TAnalyseRunner;
   AUsesCheck: Boolean; AIgnoreCopy: TIgnoreList);
 begin
   inherited Create(False);  // sofort starten
-  FreeOnTerminate := True;
+  // Welle 1b (2026-07-20): FreeOnTerminate AUS - GBulkWorkers besitzt den
+  // Thread (Reap in StartWorker, Join beim BPL-Unload). Selbst-Free wuerde
+  // den Destruktor-Epilog in Package-Code legen, der beim Unload weg ist.
+  FreeOnTerminate := False;
   FRunner    := ARunner;
   FKind      := AKind;
   FPath      := APath;
@@ -228,8 +276,17 @@ begin
         ; // alle TBulkScanKind-Werte oben abgedeckt
       end;
 
-      // Progress nur fuer die Lang-Laeufer; Single-File ist zu kurz.
-      if FKind <> bkCurrent then
+      // Progress fuer die Lang-Laeufer; Single-File (bkCurrent) bekommt
+      // eine Minimal-Closure, damit Terminate/Join den Lauf am naechsten
+      // Engine-Tick abbrechen kann (Welle 1b - vorher lief bkCurrent trotz
+      // Terminate immer komplett durch).
+      if FKind = bkCurrent then
+        Req.Progress :=
+          procedure(Current, Total: Integer)
+          begin
+            if TThread.CheckTerminated then Abort;
+          end
+      else
         Req.Progress :=
           procedure(Current, Total: Integer)
           // Laeuft im WORKER-Thread (Engine-Callback). Kein UI-Zugriff -
@@ -334,7 +391,7 @@ begin
     FWorker.FRunner := nil;
     FWorker.Terminate;
     TThread.RemoveQueuedEvents(FWorker);
-    FWorker := nil;   // FreeOnTerminate - der Worker gibt sich selbst frei
+    FWorker := nil;   // Objekt bleibt in GBulkWorkers - Reap/Join raeumt
   end;
   inherited;
 end;
@@ -382,8 +439,10 @@ begin
       if Assigned(FRepoSettings) then
         IgnoreCopy.SkipTests := not FRepoSettings.IncludeTests;
     end;
+    ReapBulkWorkers;
     FWorker := TBulkScanWorker.Create(Self, AKind, APath, AFiles,
       Assigned(FRepoSettings) and FRepoSettings.UsesCheck, IgnoreCopy);
+    GBulkWorkers.Add(FWorker);
   except
     IgnoreCopy.Free;
     if Assigned(FProgress) then FProgress.EndRun;
@@ -433,7 +492,7 @@ procedure TAnalyseRunner.HandleScanDone(AWorker: TBulkScanWorker;
 // UI-Thread (via Synchronize). Schliesst den Lauf ab: Ergebnis-Delivery,
 // Status-Meldung, UI zurueck in Ruhe-Zustand, FinishAnalysis-Callback.
 begin
-  FWorker := nil;   // Slot frei - der Worker beendet sich selbst
+  FWorker := nil;   // Slot frei - Objekt bleibt in GBulkWorkers (Reap)
 
   try
     if AWorker.FErrorMsg <> '' then
@@ -505,5 +564,13 @@ begin
     files.Free;
   end;
 end;
+
+initialization
+  GBulkWorkers := TList<TThread>.Create;
+
+finalization
+  // Defensiv: falls der Unload-Pfad den Join verpasst hat.
+  JoinAllBulkWorkers;
+  FreeAndNil(GBulkWorkers);
 
 end.
