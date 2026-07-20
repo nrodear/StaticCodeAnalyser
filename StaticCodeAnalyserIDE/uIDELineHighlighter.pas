@@ -214,7 +214,10 @@ type
   // einem unserer Tags passt - das ueberlebt Foreign-Plugin-Edits in
   // demselben Tracker.
   TLineTrackerSlot = record
-    Buffer       : IOTAEditBuffer;
+    // KEIN IOTAEditBuffer-Feld (2026-07-20): der Buffer wird nur beim
+    // Attach lokal gebraucht (GetEditLineTracker); ihn persistent zu
+    // halten verlaengerte die Editor-Buffer-Lebensdauer ueber den
+    // ProjectGroup-Close hinaus (TOTAClass.BeforeDestruction-Risiko).
     Tracker      : IOTAEditLineTracker;
     Notifier     : IOTAEditLineNotifier;
     NotifierIdx  : Integer;
@@ -287,11 +290,20 @@ type
     procedure EnsureLineTracker(const AFileName: string);
     // Wird vom Save-Notifier (IOTAModuleNotifier.Destroyed) gerufen wenn ein
     // Modul zerstoert wird - Tab-Close ODER Projektgruppen-Close beim IDE-
-    // Beenden. Gibt unsere gehaltenen Editor-Referenzen (IOTAEditBuffer im
-    // Line-Tracker-Slot, IOTAModule im Save-Slot) SOFORT frei, damit beim
+    // Beenden. Gibt unsere gehaltenen Editor-Referenzen (Tracker/Notifier
+    // im Line-Tracker-Slot, IOTAModule im Save-Slot) SOFORT frei, damit beim
     // anschliessenden TEditBuffer.Destroy der IDE-interne "TEditSource
     // Referenzzaehler = 1"-Assert nicht feuert (Crash beim IDE-Schliessen).
     procedure OnModuleDestroyed(const AKey: string);
+    // BUGFIX 2026-07-20: Wird vom zentralen IOTAIDENotifier bei
+    // ofnFileClosing gerufen (feuert pro Modul AUCH beim ProjectGroup-
+    // Close/-Wechsel via WMCopyData). Loest die per-File-OTA-Anhaenge
+    // (Line-Tracker + Save-Notifier) SOFORT, bevor der EditBuffer stirbt,
+    // und raeumt die VCL-Seite (Hover-Timer/EditControl-Pointer, Overlay-
+    // Parent) fuer Dateien mit Marks. Belt-and-Suspenders zusaetzlich zu
+    // OnModuleDestroyed - deckt auch Pfade, in denen die per-File-
+    // Destroyed-Callbacks bereits abgemeldet wurden.
+    procedure HandleFileClosing(const AFileName: string);
     constructor Create;
     destructor Destroy; override;
 
@@ -580,7 +592,7 @@ procedure TSaveAutoClearNotifier.BeforeSave; begin end;
 procedure TSaveAutoClearNotifier.Destroyed;
 begin
   // Modul wird zerstoert (Tab-Close ODER Projektgruppen-Close beim IDE-
-  // Beenden). Unsere gehaltene IOTAEditBuffer-/IOTAModule-Referenz fuer
+  // Beenden). Unsere gehaltenen Tracker-/IOTAModule-Referenzen fuer
   // diese Datei JETZT freigeben - sonst feuert beim TEditBuffer.Destroy
   // der IDE-interne "TEditSource Referenzzaehler = 1"-Assert (Crash beim
   // IDE-Schliessen nach Navigation). GHighlighter koennte beim Plugin-
@@ -741,7 +753,6 @@ begin
   end;
   if not Assigned(Buffer) then Exit;
 
-  Slot.Buffer  := Buffer;
   Slot.Tracker := Buffer.GetEditLineTracker;
   if not Assigned(Slot.Tracker) then Exit;   // Buffer kann temporaer kein
                                              // Tracker liefern (Designer-Tab,
@@ -821,7 +832,7 @@ procedure TFindingHighlighter.OnModuleDestroyed(const AKey: string);
 // KEIN Tracker.RemoveNotifier und KEIN Module.RemoveNotifier - das Modul
 // raeumt seine Notifier gerade selbst ab, ein RemoveNotifier von hier waere
 // re-entrant/gefaehrlich. Wir lassen nur unsere Dictionary-Slots fallen,
-// damit die gehaltenen strong refs (IOTAEditBuffer/Tracker/Notifier im
+// damit die gehaltenen strong refs (Tracker/Notifier im
 // Line-Slot, IOTAModule im Save-Slot) SOFORT sinken - noch vor dem
 // TEditBuffer.Destroy, das sonst "TEditSource Refcount=1" asserted.
 var
@@ -830,10 +841,32 @@ begin
   if Assigned(FLineTrackers) and FLineTrackers.TryGetValue(AKey, LT) then
   begin
     if Assigned(LT.DataTags) then LT.DataTags.Free;
-    FLineTrackers.Remove(AKey);   // IOTAEditBuffer/Tracker/Notifier-Refs sinken
+    FLineTrackers.Remove(AKey);   // Tracker/Notifier-Refs sinken
   end;
   if Assigned(FSaveNotifiers) then
     FSaveNotifiers.Remove(AKey);  // IOTAModule/Notifier-Refs sinken
+end;
+
+procedure TFindingHighlighter.HandleFileClosing(const AFileName: string);
+// BUGFIX 2026-07-20: siehe Interface-Kommentar. Anders als OnModuleDestroyed
+// laeuft dieser Hook VOR dem Modul-Teardown (ofnFileClosing) - der harte
+// Detach inkl. Tracker.RemoveNotifier/Module.RemoveNotifier ist hier noch
+// gefahrlos und raeumt vollstaendig (kein Soft-Release noetig).
+var
+  Key : string;
+begin
+  Key := NormalizePath(AFileName);
+  DetachLineTracker(Key);    // idempotent: unbekannter Key = no-op
+  DetachSaveNotifier(Key);
+  if FMarksByFile.ContainsKey(Key) then
+  begin
+    // VCL-Seite: der Hover-Timer haelt einen rohen EditControl-Pointer,
+    // das Overlay ist ggf. ins sterbende Editor-HWND geparentet.
+    if Assigned(FEditorEventsObj) then
+      FEditorEventsObj.ResetState;
+    if Assigned(GAnnotationOverlay) then
+      GAnnotationOverlay.HideOverlay;
+  end;
 end;
 
 procedure TFindingHighlighter.RebuildLineTracker(const AKey: string);
@@ -859,7 +892,7 @@ begin
   if FLineTrackers.ContainsKey(Key) then Exit;   // schon attached
   if not FMarksByFile.ContainsKey(Key) then Exit; // keine Marker -> kein Tracker noetig
   // Save-Notifier MIT-anhaengen (idempotent): nur er liefert via Destroyed
-  // den Modul-Teardown-Hook, der die IOTAEditBuffer-Ref rechtzeitig
+  // den Modul-Teardown-Hook, der die Tracker-/Notifier-Refs rechtzeitig
   // freigibt (sonst "TEditSource Refcount=1"-Crash beim IDE-Schliessen fuer
   // lazy-attachte Dateien, die SetAllFindings noch nicht erfasst hatte).
   AttachSaveNotifier(Key);
@@ -1274,6 +1307,15 @@ begin
     FEditorEventsObj.ResetState;
   InvalidateAllLines;
   FMarksByFile.Clear;
+  // BUGFIX 2026-07-20 (IDE-Crash beim ProjectGroup-Close): Line-Tracker
+  // ZUERST detachen - jeder Slot haelt strong refs auf IOTAEditLineTracker/
+  // IOTAEditLineNotifier (die den EditBuffer IDE-intern am Leben halten). Ohne diesen Aufruf blieben
+  // die Refs nach Clear stehen, und mit DetachAllSaveNotifiers starb
+  // gleichzeitig der einzige Teardown-Hook (TSaveAutoClearNotifier.
+  // Destroyed -> OnModuleDestroyed), der sie beim Modul-Close rechtzeitig
+  // freigab -> TOTAClass.BeforeDestruction-Raise in TEditBuffer.Destroy.
+  // Invariante seither: kein FLineTrackers-Slot ohne FSaveNotifiers-Slot.
+  DetachAllLineTrackers;
   // Save-Notifiers fuer alle Dateien abmelden (kein Auto-Clear mehr).
   DetachAllSaveNotifiers;
 end;
@@ -1883,9 +1925,49 @@ end;
 
 { ---- Register/Unregister ---- }
 
+type
+  // BUGFIX 2026-07-20: zentraler IDE-Notifier - die IDE feuert
+  // ofnFileClosing pro Modul auch beim ProjectGroup-Close/-Wechsel
+  // (WMCopyData-Szenario). Wir loesen dann die per-File-OTA-Anhaenge
+  // SOFORT, statt uns allein auf die per-File-Destroyed-Callbacks zu
+  // verlassen (die z.B. nach einem 'Clear' bereits abgemeldet waren ->
+  // TOTAClass.BeforeDestruction-Crash in TEditBuffer.Destroy).
+  TFileClosingNotifier = class(TNotifierObject, IOTANotifier, IOTAIDENotifier)
+  public
+    procedure FileNotification(NotifyCode: TOTAFileNotification;
+      const FileName: string; var Cancel: Boolean);
+    procedure BeforeCompile(const Project: IOTAProject; var Cancel: Boolean);
+    procedure AfterCompile(Succeeded: Boolean);
+  end;
+
+var
+  GFileClosingIdx : Integer = -1;
+
+procedure TFileClosingNotifier.FileNotification(
+  NotifyCode: TOTAFileNotification; const FileName: string;
+  var Cancel: Boolean);
+begin
+  if (NotifyCode = ofnFileClosing) and Assigned(GHighlighter) then
+    try
+      GHighlighter.HandleFileClosing(FileName);
+    except
+      // IDE-Teardown-Pfad: nie eine Exception in die IDE propagieren.
+    end;
+end;
+
+procedure TFileClosingNotifier.BeforeCompile(const Project: IOTAProject;
+  var Cancel: Boolean);
+begin
+end;
+
+procedure TFileClosingNotifier.AfterCompile(Succeeded: Boolean);
+begin
+end;
+
 procedure RegisterLineHighlighter;
 var
-  Svc: INTACodeEditorServices;
+  Svc    : INTACodeEditorServices;
+  IdeSvc : IOTAServices;
 begin
   if Assigned(GHighlighter) then Exit;
   GHighlighter := TFindingHighlighter.Create;
@@ -1895,13 +1977,29 @@ begin
         Svc.AddEditorEventsNotifier(GHighlighter.FEditorEvents);
   except
   end;
+  try
+    if (GFileClosingIdx < 0) and
+       Supports(BorlandIDEServices, IOTAServices, IdeSvc) then
+      GFileClosingIdx := IdeSvc.AddNotifier(TFileClosingNotifier.Create);
+  except
+  end;
 end;
 
 procedure UnregisterLineHighlighter;
 var
-  Svc: INTACodeEditorServices;
+  Svc    : INTACodeEditorServices;
+  IdeSvc : IOTAServices;
 begin
   if not Assigned(GHighlighter) then Exit;
+  try
+    if (GFileClosingIdx >= 0) and
+       Supports(BorlandIDEServices, IOTAServices, IdeSvc) then
+    begin
+      IdeSvc.RemoveNotifier(GFileClosingIdx);
+      GFileClosingIdx := -1;
+    end;
+  except
+  end;
   try
     if (GHighlighter.FEditorEventsIdx >= 0) and
        Supports(BorlandIDEServices, INTACodeEditorServices, Svc) then

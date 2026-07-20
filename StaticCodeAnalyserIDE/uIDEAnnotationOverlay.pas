@@ -495,7 +495,15 @@ begin
   // Hot-swap des Window-Styles: WS_POPUP -> WS_CHILD. Win32 erlaubt das
   // explizit zur Laufzeit (siehe MSDN SetWindowLongPtr GWL_STYLE).
   // Erforderlich: SWP_FRAMECHANGED damit der Style-Cache invalidiert wird.
-  if AEditorHandle = FCurrentParent then Exit;  // bereits eingebettet
+  //
+  // Stale-Guard (2026-07-20): FCurrentParent kann auf ein bereits von
+  // Windows zerstoertes Editor-HWND zeigen (ProjectGroup-Close zerstoert
+  // das Editor-Fenster samt unserem Child, ohne dass die VCL es merkt).
+  // Dann darf der "bereits eingebettet"-Shortcut NICHT greifen - wir
+  // muessen frisch einbetten (HandleNeeded erzeugt unser HWND neu).
+  if (AEditorHandle = FCurrentParent) and
+     (FCurrentParent <> 0) and IsWindow(FCurrentParent) and
+     HandleAllocated and IsWindow(Handle) then Exit;
 
   if not HandleAllocated then HandleNeeded;
 
