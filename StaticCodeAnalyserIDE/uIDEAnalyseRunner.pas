@@ -58,11 +58,11 @@ type
   TAnalyseRunner = class;
 
   // Art des Laufs - steuert Request-Aufbau + Progress-UI-Verhalten.
-  // bkProject/bkGroup (Scan-Scope-Konzept 2026-07-20, Phase 4): Dateiliste
-  // kommt via ToolsAPI aus dem AKTIVEN IDE-Projekt bzw. der Projektgruppe -
-  // im UI-Thread gesammelt (ToolsAPI ist nicht threadsicher), Worker faehrt
-  // ssFileList + IndexRoot (Verzeichnis-Superset fuer die Cross-Unit-Indizes).
-  TBulkScanKind = (bkAll, bkCurrent, bkChanged, bkProject, bkGroup);
+  // bkAll deckt seit dem Smart-Path (2026-07-22) auch .dproj/.groupproj ab:
+  // der Worker leitet aus der Pfad-Endung ssRecursive/ssProject/ssProjectGroup
+  // ab (frueheres ToolsAPI-bkProject/bkGroup entfernt, da der '...'-Dialog
+  // die Projekt-/Gruppen-Datei liefert).
+  TBulkScanKind = (bkAll, bkCurrent, bkChanged);
 
   // Worker-Thread fuer genau einen Scan-Request. Selbstfreigebend
   // (FreeOnTerminate); nach Detach durch den Runner laeuft er ins Leere.
@@ -74,7 +74,6 @@ type
     FKind      : TBulkScanKind;
     FPath      : string;
     FFiles     : TArray<string>;
-    FIndexRoot : string;   // bkProject/bkGroup: Cross-Unit-Index-Superset
     FUsesCheck : Boolean;
     FIgnore    : TIgnoreList;   // eigene Deep-Copy, Ownership hier
     FLastTick  : Cardinal;      // Throttle-State (nur Worker-Thread)
@@ -92,8 +91,7 @@ type
     // AIgnoreCopy: Ownership geht an den Worker ueber (auch im Fehlerfall).
     constructor Create(ARunner: TAnalyseRunner; AKind: TBulkScanKind;
       const APath: string; const AFiles: TArray<string>;
-      AUsesCheck: Boolean; AIgnoreCopy: TIgnoreList;
-      const AIndexRoot: string = '');
+      AUsesCheck: Boolean; AIgnoreCopy: TIgnoreList);
     destructor Destroy; override;
   end;
 
@@ -113,8 +111,7 @@ type
     // Aktiver Worker-Slot; nil = idle. Nur UI-Thread.
     FWorker       : TBulkScanWorker;
     function  StartWorker(AKind: TBulkScanKind; const APath: string;
-      const AFiles: TArray<string>; ATotalKnown: Integer;
-      const AIndexRoot: string = ''): Boolean;
+      const AFiles: TArray<string>; ATotalKnown: Integer): Boolean;
     // Vom Worker via TThread.Queue: UI-Progress (Marquee/Normal, Texte,
     // Cancel-Poll).
     procedure HandleProgressUI(ACurrent, ATotal: Integer);
@@ -138,11 +135,6 @@ type
     procedure RunAll(const APath: string);
     procedure RunCurrent(const AFilePath: string);
     procedure RunChanged(const AStartPath: string);
-    // Phase 4 (Scan-Scope): vorab (UI-Thread!) gesammelte ToolsAPI-Dateiliste.
-    // AIndexRoot = Verzeichnis-Superset fuer die Cross-Unit-Indizes
-    // (typisch das Projekt-/Gruppenverzeichnis); ABasePath fuer Export-Pfade.
-    procedure RunFileList(AKind: TBulkScanKind; const ABasePath: string;
-      const AFiles: TArray<string>; const AIndexRoot: string);
 
     // Direkter Abbruch (zusaetzlich zum FProgress.Cancelled-Poll):
     // terminiert den Worker sofort - die Engine bricht am naechsten
@@ -219,8 +211,7 @@ end;
 
 constructor TBulkScanWorker.Create(ARunner: TAnalyseRunner;
   AKind: TBulkScanKind; const APath: string; const AFiles: TArray<string>;
-  AUsesCheck: Boolean; AIgnoreCopy: TIgnoreList;
-  const AIndexRoot: string = '');
+  AUsesCheck: Boolean; AIgnoreCopy: TIgnoreList);
 begin
   inherited Create(False);  // sofort starten
   // Welle 1b (2026-07-20): FreeOnTerminate AUS - GBulkWorkers besitzt den
@@ -233,7 +224,6 @@ begin
   FFiles     := AFiles;
   FUsesCheck := AUsesCheck;
   FIgnore    := AIgnoreCopy;
-  FIndexRoot := AIndexRoot;
 end;
 
 destructor TBulkScanWorker.Destroy;
@@ -297,26 +287,10 @@ begin
             Req.SingleFileProjectRoot := TStaticFiles.FindProjectRoot(FPath);
             FBaseDir                  := ExtractFilePath(FPath);
           end;
-        bkChanged, bkProject, bkGroup:
+        bkChanged:
           begin
-            // bkProject/bkGroup: Liste per IgnoreCopy vorfiltern (der
-            // Engine-ssFileList-Zweig wendet keine IgnoreList an; explizite
-            // bkChanged-Listen bleiben bewusst ungefiltert = User-Wille).
-            if (FKind <> bkChanged) and Assigned(FIgnore) then
-            begin
-              var Keep := TStringList.Create;
-              try
-                for var FN in FFiles do
-                  if not FIgnore.IsIgnored(FN) then
-                    Keep.Add(FN);
-                FFiles := Keep.ToStringArray;
-              finally
-                Keep.Free;
-              end;
-            end;
             Req.Scope := ssFileList;
             Req.Files := FFiles;
-            Req.IndexRoot := FIndexRoot;   // leer bei bkChanged
             FBaseDir  := FPath;
           end;
       else
@@ -455,8 +429,7 @@ begin
 end;
 
 function TAnalyseRunner.StartWorker(AKind: TBulkScanKind; const APath: string;
-  const AFiles: TArray<string>; ATotalKnown: Integer;
-  const AIndexRoot: string): Boolean;
+  const AFiles: TArray<string>; ATotalKnown: Integer): Boolean;
 var
   IgnoreCopy: TIgnoreList;
 begin
@@ -479,11 +452,12 @@ begin
   // freed nur nil).
   IgnoreCopy := nil;
   try
-    if AKind in [bkAll, bkProject, bkGroup] then
+    if AKind = bkAll then
     begin
-      // bkProject/bkGroup (Verifikations-Fix 2026-07-20): ignore.txt +
-      // SkipTests gelten auch fuer ToolsAPI-Projektlisten - Parity zu
-      // bkAll und zur Standalone (deren ssProject-Dispatch filtert).
+      // Smart-Path (2026-07-22): bkAll deckt Verzeichnis UND .dproj/
+      // .groupproj ab - ignore.txt + SkipTests gelten fuer alle drei
+      // (ssRecursive filtert im Walk, ssProject/ssProjectGroup im Engine-
+      // Dispatch ueber diese IgnoreList).
       IgnoreCopy := TIgnoreList.Create;
       if Assigned(FIgnoreList) then
         IgnoreCopy.CopyFrom(FIgnoreList);
@@ -492,8 +466,7 @@ begin
     end;
     ReapBulkWorkers;
     FWorker := TBulkScanWorker.Create(Self, AKind, APath, AFiles,
-      Assigned(FRepoSettings) and FRepoSettings.UsesCheck, IgnoreCopy,
-      AIndexRoot);
+      Assigned(FRepoSettings) and FRepoSettings.UsesCheck, IgnoreCopy);
     GBulkWorkers.Add(FWorker);
   except
     IgnoreCopy.Free;
@@ -586,34 +559,6 @@ begin
     DisplayName := DisplayName + ' + ' + ExtractFileName(DfmPath);
   FOnStatusProgress(_('Analysing: ') + DisplayName);
   StartWorker(bkCurrent, AFilePath, nil, 0);
-end;
-
-procedure TAnalyseRunner.RunFileList(AKind: TBulkScanKind;
-  const ABasePath: string; const AFiles: TArray<string>;
-  const AIndexRoot: string);
-// Phase 4 (Scan-Scope-Konzept): Liste kommt fertig vom UI-Thread
-// (ToolsAPI-Sammlung in uIDEAnalyserForm) - hier nur Checks + Spawn.
-// Expliziter Count-Check statt MAX_SCAN_FILES-Progress-Cap: der greift
-// bei ssFileList nie (Review-Gap G1 im Konzept).
-begin
-  if Assigned(FWorker) then
-  begin
-    FOnStatusMode(_('An analysis is already running.'));
-    Exit;
-  end;
-  if Length(AFiles) = 0 then
-  begin
-    FOnStatusMode(_('No .pas files in the selected project scope.'));
-    Exit;
-  end;
-  if Length(AFiles) > MAX_SCAN_FILES then
-  begin
-    FOnStatusMode(Format(
-      _('More than %d files in scope - scan cancelled.'), [MAX_SCAN_FILES]));
-    Exit;
-  end;
-  FOnStatusProgress(Format(_('%d file(s) - running...'), [Length(AFiles)]));
-  StartWorker(AKind, ABasePath, AFiles, Length(AFiles), AIndexRoot);
 end;
 
 procedure TAnalyseRunner.RunChanged(const AStartPath: string);

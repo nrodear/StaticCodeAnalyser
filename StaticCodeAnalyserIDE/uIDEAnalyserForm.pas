@@ -226,15 +226,13 @@ type
     procedure OnWatchStatus(const Status: string);
 
     procedure BrowseClick(Sender: TObject);
+    // Start-Verzeichnis fuer den '...'-Dialog (User 2026-07-22): aktives
+    // IDE-Projekt bzw. gespeicherte Projektgruppe hat Vorrang, damit der
+    // Dialog sofort im Projektkontext aufgeht; sonst der Combo-Text.
+    function  InitialScanDir: string;
     procedure AnalyseClick(Sender: TObject);
     procedure AnalyseCurrentFileClick(Sender: TObject);
     procedure AnalyseChangedFilesClick(Sender: TObject);
-    // Scan-Scope Phase 4 (Konzept_ScanScope_2026-07-20): aktives IDE-Projekt
-    // bzw. gesamte Projektgruppe via ToolsAPI scannen. Sammlung laeuft im
-    // UI-Thread (ToolsAPI ist nicht threadsicher), Analyse im Worker
-    // (Runner.RunFileList -> ssFileList + IndexRoot).
-    procedure AnalyseActiveProjectClick(Sender: TObject);
-    procedure AnalyseProjectGroupClick(Sender: TObject);
     procedure FilterChange(Sender: TObject);
     procedure GridDblClick(Sender: TObject);
     procedure GridSelectCell(Sender: TObject; ACol, ARow: Integer;
@@ -2429,10 +2427,10 @@ begin
   idx := ARow - 1; // Zeile 0 = Header
   if (idx < 0) or (idx >= FDisplayedFindings.Count) then Exit;
 
-  Finding := FDisplayedFindings[idx];
   // Help-Panel-Repaint flushen, bevor der (potenziell blockierende)
   // Clipboard-Write laeuft - Windows-Clipboard-Listener koennen
   // Clipboard.AsText 50-200ms abwuergen, das Panel soll vorher sichtbar sein.
+  // (Finding wird BEWUSST erst nach dem Pump frisch geholt - siehe unten.)
   Application.ProcessMessages;
   // Welle 1 (2026-07-20): waehrend des Pumpens kann der Frame zerstoert
   // (Dock-Close) oder FDisplayedFindings von einem fertig werdenden
@@ -2630,15 +2628,42 @@ end;
 // ---------------------------------------------------------------------------
 // Ordner auswaehlen
 // ---------------------------------------------------------------------------
+function TAnalyserFrame.InitialScanDir: string;
+// Start-Verzeichnis-Vorschlag fuer den '...'-Dialog (User 2026-07-22):
+//   1. aktives IDE-Projekt geladen -> dessen .dproj-Verzeichnis
+//   2. sonst gespeicherte Projektgruppe -> deren .groupproj-Verzeichnis
+//   3. sonst der aktuelle Combo-Text (letzte User-Wahl)
+// SelectScanTarget nimmt auch einen DATEIpfad und nutzt dessen Verzeichnis -
+// wir koennen den .dproj/.groupproj-Pfad also direkt durchreichen.
+var
+  ModSvc : IOTAModuleServices;
+  PG     : IOTAProjectGroup;
+begin
+  Result := '';
+  if Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then
+  begin
+    PG := ModSvc.MainProjectGroup;
+    if PG <> nil then
+    begin
+      if Assigned(PG.ActiveProject) and (PG.ActiveProject.FileName <> '') then
+        Result := PG.ActiveProject.FileName
+      else if PG.FileName <> '' then
+        Result := PG.FileName;
+    end;
+  end;
+  if Result = '' then
+    Result := Trim(FProjectPath.Text);
+end;
+
 procedure TAnalyserFrame.BrowseClick(Sender: TObject);
 // '...'-Button (User 2026-07-22): EIN Dialog Ordner/.dproj/.groupproj -
-// derselbe geteilte SelectScanTarget wie in der Standalone. Der Combo-Pfad
-// wird vom Analyse-Button als Scope erkannt (Smart-Path im bkAll-Zweig
-// des TBulkScanWorker, uIDEAnalyseRunner).
+// derselbe geteilte SelectScanTarget wie in der Standalone. Startet im
+// Projektkontext (InitialScanDir). Der gewaehlte Pfad wird vom Analyse-
+// Button als Scope erkannt (Smart-Path im bkAll-Zweig, uIDEAnalyseRunner).
 var
   Target : string;
 begin
-  Target := SelectScanTarget(FProjectPath.Text);
+  Target := SelectScanTarget(InitialScanDir);
   if Target <> '' then
     FProjectPath.Text := Target;
 end;
@@ -2766,101 +2791,6 @@ begin
   // Asynchron - FinishAnalysis via OnRunDone (s. AnalyseClick).
   if Assigned(FAnalyseRunner) then
     FAnalyseRunner.RunCurrent(FilePath);
-end;
-
-procedure CollectProjectPasFiles(const AProject: IOTAProject;
-  ASeen, AInto: TStringList);
-// ToolsAPI-Modul-Liste eines Projekts -> .pas-Pfade, dedupliziert via ASeen
-// (case-insensitiv sorted). GetModule liefert auch .dfm/.res-Eintraege -
-// Extension-Filter noetig.
-var
-  i    : Integer;
-  Info : IOTAModuleInfo;
-  F    : string;
-begin
-  if AProject = nil then Exit;
-  for i := 0 to AProject.GetModuleCount - 1 do
-  begin
-    Info := AProject.GetModule(i);
-    if Info = nil then Continue;
-    F := Info.FileName;
-    if F = '' then Continue;
-    if not SameText(ExtractFileExt(F), '.pas') then Continue;
-    if ASeen.IndexOf(F) >= 0 then Continue;
-    ASeen.Add(F);
-    AInto.Add(F);
-  end;
-end;
-
-procedure TAnalyserFrame.AnalyseActiveProjectClick(Sender: TObject);
-var
-  ModSvc : IOTAModuleServices;
-  PG     : IOTAProjectGroup;
-  Proj   : IOTAProject;
-  Seen   : TStringList;
-  Files  : TStringList;
-begin
-  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
-  PG := ModSvc.MainProjectGroup;
-  if (PG = nil) or (PG.ActiveProject = nil) then
-  begin
-    StatusMode(_('No active project in the IDE.'));
-    Exit;
-  end;
-  Proj := PG.ActiveProject;
-  Seen := TStringList.Create;
-  Files := TStringList.Create;
-  try
-    Seen.CaseSensitive := False;
-    Seen.Sorted := True;
-    Seen.Duplicates := dupIgnore;
-    CollectProjectPasFiles(Proj, Seen, Files);
-    PrepareAnalysis;
-    if Assigned(FAnalyseRunner) then
-      // IndexRoot = Projektverzeichnis: haelt die Cross-Unit-Indizes auf
-      // Verzeichnis-Breite (Konzept par.5); Listen-Dateien ausserhalb
-      // deckt die Union-Mechanik in AnalyzeLeaksFromList ab.
-      FAnalyseRunner.RunFileList(bkProject,
-        ExtractFilePath(Proj.FileName), Files.ToStringArray,
-        ExtractFilePath(Proj.FileName));
-  finally
-    Files.Free;
-    Seen.Free;
-  end;
-end;
-
-procedure TAnalyserFrame.AnalyseProjectGroupClick(Sender: TObject);
-var
-  ModSvc : IOTAModuleServices;
-  PG     : IOTAProjectGroup;
-  Seen   : TStringList;
-  Files  : TStringList;
-  i      : Integer;
-begin
-  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
-  PG := ModSvc.MainProjectGroup;
-  if (PG = nil) or (PG.ProjectCount = 0) then
-  begin
-    StatusMode(_('No project group in the IDE.'));
-    Exit;
-  end;
-  Seen := TStringList.Create;
-  Files := TStringList.Create;
-  try
-    Seen.CaseSensitive := False;
-    Seen.Sorted := True;
-    Seen.Duplicates := dupIgnore;
-    for i := 0 to PG.ProjectCount - 1 do
-      CollectProjectPasFiles(PG.Projects[i], Seen, Files);
-    PrepareAnalysis;
-    if Assigned(FAnalyseRunner) then
-      FAnalyseRunner.RunFileList(bkGroup,
-        ExtractFilePath(PG.FileName), Files.ToStringArray,
-        ExtractFilePath(PG.FileName));
-  finally
-    Files.Free;
-    Seen.Free;
-  end;
 end;
 
 procedure TAnalyserFrame.AnalyseChangedFilesClick(Sender: TObject);
@@ -3154,17 +3084,6 @@ begin
   FMICancel.Caption := _('Cancel Analysis');
   FMICancel.OnClick := CancelAnalyseClick;
   FHamburgerMenu.Items.Add(FMICancel);
-
-  // ---- Scan-Scope Phase 4 (Konzept_ScanScope_2026-07-20) ----
-  MI := TMenuItem.Create(FHamburgerMenu);
-  MI.Caption := _('Analyse active project (IDE)');
-  MI.OnClick := AnalyseActiveProjectClick;
-  FHamburgerMenu.Items.Add(MI);
-
-  MI := TMenuItem.Create(FHamburgerMenu);
-  MI.Caption := _('Analyse project group (IDE)');
-  MI.OnClick := AnalyseProjectGroupClick;
-  FHamburgerMenu.Items.Add(MI);
 
   // ---- Clear all hover-marker (Enabled-Sync ueber GHighlighter.HasMarks)
   FMIClearMarks := TMenuItem.Create(FHamburgerMenu);
