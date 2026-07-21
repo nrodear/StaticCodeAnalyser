@@ -266,10 +266,27 @@ begin
       case FKind of
         bkAll:
           begin
-            Req.Scope      := ssRecursive;
+            // Smart-Path (User 2026-07-22): der ▶-Button-Pfad kann ein
+            // Verzeichnis ODER eine .dproj/.groupproj sein (der '...'-Dialog
+            // laesst beides zu). Endung entscheidet den Engine-Scope; die
+            // .dproj/.groupproj-Aufloesung inkl. Auto-IndexRoot/BaseDir macht
+            // der Engine-Dispatch (uEngineApi). IgnoreList wirkt bei
+            // ssRecursive im Walk, bei ssProject/ssProjectGroup im Dispatch.
+            if SameText(ExtractFileExt(FPath), '.dproj') then
+              Req.Scope := ssProject
+            else if SameText(ExtractFileExt(FPath), '.groupproj') then
+              Req.Scope := ssProjectGroup
+            else
+              Req.Scope := ssRecursive;
             Req.Path       := FPath;
             Req.IgnoreList := FIgnore;
-            FBaseDir       := FPath;
+            // FBaseDir (Plugin-lokal fuer Marker/Export): bei Projektdatei
+            // deren Verzeichnis; die Engine liefert intern zusaetzlich den
+            // CommonRoot fuer die Findings-Pfade.
+            if Req.Scope in [ssProject, ssProjectGroup] then
+              FBaseDir := ExtractFilePath(FPath)
+            else
+              FBaseDir := FPath;
           end;
         bkCurrent:
           begin

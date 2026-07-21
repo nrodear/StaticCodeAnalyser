@@ -20,7 +20,7 @@ uses
   uFixHint, uIgnoreList, uRepoSettings, uRuleCatalog, uClaudePrompt,
   uQuickFix,
   uAnalyserPalette, uAnalyserTypes, uAnalyserTheme, uIDEColors, uLocalization,
-  uRecentPaths,
+  uRecentPaths, uScanTargetDialog,
   uIDELineHighlighter, uIDEMessages, uIDEWatchMode, uIDEStatsTiles,
   uIDEHelpPanel, uExportMenu, uIDEEditorIntegration, uIDEStatusBar,
   uIDETheme, uIDEToolbar, uIDEAnalyseProgress, uIDEGridTooltip,
@@ -2631,18 +2631,16 @@ end;
 // Ordner auswaehlen
 // ---------------------------------------------------------------------------
 procedure TAnalyserFrame.BrowseClick(Sender: TObject);
+// '...'-Button (User 2026-07-22): EIN Dialog Ordner/.dproj/.groupproj -
+// derselbe geteilte SelectScanTarget wie in der Standalone. Der Combo-Pfad
+// wird vom Analyse-Button als Scope erkannt (Smart-Path im bkAll-Zweig
+// des TBulkScanWorker, uIDEAnalyseRunner).
 var
-  Dlg: TFileOpenDialog;
+  Target : string;
 begin
-  Dlg := TFileOpenDialog.Create(nil);
-  try
-    Dlg.Options := [fdoPickFolders, fdoPathMustExist, fdoForceFileSystem];
-    Dlg.Title   := _('Select project folder');
-    if Dlg.Execute then
-      FProjectPath.Text := Dlg.FileName;
-  finally
-    Dlg.Free;
-  end;
+  Target := SelectScanTarget(FProjectPath.Text);
+  if Target <> '' then
+    FProjectPath.Text := Target;
 end;
 
 // ---------------------------------------------------------------------------

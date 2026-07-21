@@ -46,6 +46,7 @@ contains
   uExportMenu in 'sources\uExportMenu.pas',
   uIDEColors in 'sources\uIDEColors.pas',
   uPathNormalize in 'sources\uPathNormalize.pas',
-  uRecentPaths in 'sources\uRecentPaths.pas';
+  uRecentPaths in 'sources\uRecentPaths.pas',
+  uScanTargetDialog in 'sources\uScanTargetDialog.pas';
 
 end.

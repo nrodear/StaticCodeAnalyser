@@ -12,7 +12,7 @@ uses
   uStaticAnalyzer2, uEngineApi,
   uMethodd12, uSCAConsts, uFixHint, uClaudePrompt, uLocalization,
   uAnalyserTypes,  // SeverityFromKindLevel, TFindingSeverity (Grid-Renderer-Callback)
-  uRepoSettings, uRecentPaths, uFindingGridRenderer, uDfmTextViewer,
+  uRepoSettings, uRecentPaths, uScanTargetDialog, uFindingGridRenderer, uDfmTextViewer,
   uIDEHelpPanel,                  // TFindingHintPanel (im class-Feld referenziert)
   uExportMenu,                    // TFindingExportMenu (Class-Field-Reference)
   uFindingFilter,                 // TFilterComboItem (Snapshot-Felder)
@@ -170,13 +170,10 @@ type
     // (Branch, InitialDir): bei Projektdatei-Text deren Verzeichnis.
     function  DirOfProjectPath(const APath: string): string;
     procedure ProjectpathChangedScope(Sender: TObject);
-    procedure HamburgerAnalyseProjectClick(Sender: TObject);
-    procedure HamburgerAnalyseGroupClick(Sender: TObject);
     procedure AnalyseSingleFile(const AFilePath: string);
     procedure FillGridFromFindings(Findings: TObjectList<TLeakFinding>;
       const ABaseDir: string);
     function  BuildClaudePrompt(F: TLeakFinding): string;
-    function SelectFolder: string;
     function SelectPasFile: string;
     procedure LoadRecentPaths;
     procedure SaveRecentPath(const APath: string);
@@ -747,8 +744,15 @@ begin
 end;
 
 procedure TForm2.Button2Click(Sender: TObject);
+// '...'-Button (User 2026-07-22): EIN Dialog fuer Ordner ODER .dproj ODER
+// .groupproj. Der gewaehlte Pfad landet in der Combo; der Analyse-Button
+// erkennt den Scope daran (Smart-Path) und zeigt ihn in der Caption.
+var
+  Target : string;
 begin
-  Projectpath.Text := SelectFolder;
+  Target := SelectScanTarget(Projectpath.Text);
+  if Target <> '' then
+    Projectpath.Text := Target;   // Caption-Sync via OnChange (Smart-Path)
 end;
 
 procedure TForm2.Button6Click(Sender: TObject);
@@ -856,42 +860,6 @@ begin
     ssProjectGroup: Button6.Caption := _('Analyse group');
   else
     Button6.Caption := _('Analyse directory');
-  end;
-end;
-
-procedure TForm2.HamburgerAnalyseProjectClick(Sender: TObject);
-var
-  Dlg : TOpenDialog;
-begin
-  Dlg := TOpenDialog.Create(Self);
-  try
-    Dlg.Title  := _('Select Delphi project');
-    Dlg.Filter := _('Delphi project (*.dproj)|*.dproj|Project group (*.groupproj)|*.groupproj');
-    Dlg.InitialDir := DirOfProjectPath(Projectpath.Text);
-    if not Dlg.Execute(Handle) then Exit;
-    Projectpath.Text := Dlg.FileName;
-    SaveRecentPath(Projectpath.Text);
-    AnalyseAllClasses(Sender, Projectpath.Text);
-  finally
-    Dlg.Free;
-  end;
-end;
-
-procedure TForm2.HamburgerAnalyseGroupClick(Sender: TObject);
-var
-  Dlg : TOpenDialog;
-begin
-  Dlg := TOpenDialog.Create(Self);
-  try
-    Dlg.Title  := _('Select Delphi project group');
-    Dlg.Filter := _('Project group (*.groupproj)|*.groupproj');
-    Dlg.InitialDir := DirOfProjectPath(Projectpath.Text);
-    if not Dlg.Execute(Handle) then Exit;
-    Projectpath.Text := Dlg.FileName;
-    SaveRecentPath(Projectpath.Text);
-    AnalyseAllClasses(Sender, Projectpath.Text);
-  finally
-    Dlg.Free;
   end;
 end;
 
@@ -1487,22 +1455,6 @@ begin
   Result := TClaudePrompt.Build(F);
 end;
 
-function TForm2.SelectFolder: string;
-var
-  OpenDialog: TFileOpenDialog;
-begin
-  Result := '';
-  OpenDialog := TFileOpenDialog.Create(nil);
-  try
-    OpenDialog.Options := [fdoPickFolders, fdoPathMustExist, fdoForceFileSystem];
-    OpenDialog.Title := _('Choose folder');
-    if OpenDialog.Execute then
-      Result := OpenDialog.FileName;
-  finally
-    OpenDialog.Free;
-  end;
-end;
-
 // Recent Paths -- duenne Wrapper um TRecentPaths (Common/uRecentPaths.pas).
 // Pinned-Eintrag = App-Pfad neben der EXE, Position end.
 function TForm2.AppPath: string;
@@ -1697,21 +1649,6 @@ begin
   MI := TMenuItem.Create(FHamburgerMenu);
   MI.Caption := _('Export') + '...';
   MI.OnClick := HamburgerExportClick;
-  FHamburgerMenu.Items.Add(MI);
-
-  // ---- Scan-Scope (Konzept_ScanScope_2026-07-20, Phase 3) ----
-  MI := TMenuItem.Create(FHamburgerMenu);
-  MI.Caption := _('Analyse project (.dproj)') + '...';
-  MI.OnClick := HamburgerAnalyseProjectClick;
-  FHamburgerMenu.Items.Add(MI);
-
-  MI := TMenuItem.Create(FHamburgerMenu);
-  MI.Caption := _('Analyse project group (.groupproj)') + '...';
-  MI.OnClick := HamburgerAnalyseGroupClick;
-  FHamburgerMenu.Items.Add(MI);
-
-  MI := TMenuItem.Create(FHamburgerMenu);
-  MI.Caption := '-';
   FHamburgerMenu.Items.Add(MI);
 
   // ---- Konfig-Block: Settings + Ignore ----
