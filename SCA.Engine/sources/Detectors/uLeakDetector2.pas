@@ -1691,7 +1691,8 @@ var
   end;
 
 begin
-  Result := False;
+  // Result wird am Ende unbedingt aus CreateCount/FactoryCount gesetzt -
+  // keine Vorab-Initialisierung noetig (H2077).
   CreateCount := 0; FactoryCount := 0;
   LocalTypes := TDictionary<string, string>.Create;
   try
