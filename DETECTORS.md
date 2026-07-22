@@ -445,3 +445,29 @@ Not an AST/per-file detector: runs only for `.dproj`/`.groupproj` scans (CLI `--
 | SCA | Rule | Description | Severity | Type | Status | Unit |
 |-----|------|-------------|----------|------|--------|------|
 | SCA194 | **NotIncludedInProject** | .pas/.dfm in the project folder but not referenced by the project (.dproj/.groupproj) - orphaned / dead source | Hint | Code Smell | ✅ | `uNotIncludedInProject` |
+
+## ⚙️ Configuration — SCA001 OwnershipSinks (memory-leak whitelist)
+
+Some codebases hand a freshly-created object to a routine that **takes ownership** of it (registers it in an owning container, serialises-and-frees it, adds it to a builder tree). SCA001 cannot see across the call boundary, so it reports these as leaks even though the callee frees the object. Whitelist such routines per project in `analyser.ini`:
+
+```ini
+[Detectors]
+OwnershipSinks=Render,RegisterInstance
+```
+
+Passing a tracked object to a listed routine (`Render(obj)`, `Foo.RegisterInstance(obj)`) then counts as an ownership transfer → no SCA001 finding. Matching is by routine name (the part before `(`), receiver-independent, with a left word-boundary so `Owner` never matches `PreOwner(`.
+
+**The default is empty — and deliberately so.** A real-world audit of 1262 SCA001 findings across 24 repos showed that genuine ownership sinks are **100 % framework-specific** — no routine name transfers ownership across codebases. Ship-wide defaults were rejected because the tempting candidates are dangerous:
+
+- ❌ **Never list `LoadFromStream` / `SaveToStream` / `Assign` / any RTL name.** These *borrow* their argument — they do not take ownership. Whitelisting them masks genuine leaks. (The audit found real, unfreed `TMemoryStream` leaks that such a whitelist would have hidden.)
+- ✅ Only list routines you **know** take ownership, and only for the framework that defines them.
+
+Recommended opt-in sets by framework (add only what your project uses):
+
+| Framework | Ownership-taking routines | Example |
+|-----------|---------------------------|---------|
+| DelphiMVCFramework | `Render` (serialises the object then frees it) | `OwnershipSinks=Render` |
+| JVCL inspector / DI | `RegisterInstance` | `OwnershipSinks=RegisterInstance` |
+| SwagDoc builders | `AddParameter,AddType,AddLocalVariable` (parent node owns the child) | `OwnershipSinks=AddParameter,AddType,AddLocalVariable` |
+
+Rule of thumb: if you cannot point at the line in the callee that frees the argument, do **not** list it.

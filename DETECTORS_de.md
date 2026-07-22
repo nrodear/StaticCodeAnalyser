@@ -445,3 +445,29 @@ Kein AST-/per-Datei-Detektor: läuft nur bei `.dproj`/`.groupproj`-Scans (CLI `-
 | SCA | Regel | Beschreibung | Severity | Typ | Status | Unit |
 |-----|-------|--------------|----------|-----|--------|------|
 | SCA194 | **NotIncludedInProject** | .pas/.dfm im Projektordner, aber nicht im Projekt (.dproj/.groupproj) referenziert - verwaiste / tote Quelldatei | Hint | Code Smell | ✅ | `uNotIncludedInProject` |
+
+## ⚙️ Konfiguration — SCA001 OwnershipSinks (MemoryLeak-Whitelist)
+
+Manche Codebasen übergeben ein frisch erzeugtes Objekt an eine Routine, die die **Ownership übernimmt** (registriert es in einem besitzenden Container, serialisiert-und-gibt-frei, hängt es in einen Builder-Baum). SCA001 kann nicht über die Aufrufgrenze schauen und meldet das als Leak, obwohl der Aufgerufene das Objekt freigibt. Solche Routinen pro Projekt in `analyser.ini` whitelisten:
+
+```ini
+[Detectors]
+OwnershipSinks=Render,RegisterInstance
+```
+
+Die Übergabe eines getrackten Objekts an eine gelistete Routine (`Render(obj)`, `Foo.RegisterInstance(obj)`) gilt dann als Ownership-Transfer → keine SCA001-Meldung. Der Abgleich erfolgt über den Routinennamen (Teil vor `(`), receiver-unabhängig, mit linker Wortgrenze (`Owner` matcht nie `PreOwner(`).
+
+**Der Default ist leer — bewusst so.** Ein Real-World-Audit von 1262 SCA001-Funden über 24 Repos zeigte: echte Ownership-Sinks sind **zu 100 % framework-spezifisch** — kein Routinenname überträgt Ownership codebasen-übergreifend. Ein ausliefernder Default wurde verworfen, weil die verlockenden Kandidaten gefährlich sind:
+
+- ❌ **Nie `LoadFromStream` / `SaveToStream` / `Assign` / einen RTL-Namen listen.** Diese *borgen* ihr Argument — sie übernehmen kein Ownership. Sie zu whitelisten maskiert echte Leaks. (Das Audit fand echte, nicht freigegebene `TMemoryStream`-Leaks, die so eine Whitelist verdeckt hätte.)
+- ✅ Nur Routinen listen, von denen du **weißt**, dass sie Ownership übernehmen — und nur für das Framework, das sie definiert.
+
+Empfohlene Opt-in-Sätze nach Framework (nur ergänzen, was das Projekt nutzt):
+
+| Framework | Ownership-übernehmende Routinen | Beispiel |
+|-----------|---------------------------------|----------|
+| DelphiMVCFramework | `Render` (serialisiert das Objekt und gibt es frei) | `OwnershipSinks=Render` |
+| JVCL Inspector / DI | `RegisterInstance` | `OwnershipSinks=RegisterInstance` |
+| SwagDoc-Builder | `AddParameter,AddType,AddLocalVariable` (Elternknoten besitzt das Kind) | `OwnershipSinks=AddParameter,AddType,AddLocalVariable` |
+
+Faustregel: Wenn du nicht die Zeile im Aufgerufenen zeigen kannst, die das Argument freigibt, dann liste es **nicht**.
