@@ -97,6 +97,7 @@
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
         <DCCReference Include="rtl.dcp"/>
+        <DCCReference Include="xmlrtl.dcp"/>
         <DCCReference Include="sources\Common\uAnalyserTypes.pas"/>
         <DCCReference Include="sources\Common\uCollectValues.pas"/>
         <DCCReference Include="sources\Common\uCompatSet.pas"/>
@@ -304,6 +305,7 @@
         <DCCReference Include="sources\Infrastructure\uSonarConfig.pas"/>
         <DCCReference Include="sources\Infrastructure\uSonarPull.pas"/>
         <DCCReference Include="sources\Infrastructure\uStaticAnalyzer2.pas"/>
+        <DCCReference Include="sources\Infrastructure\uProjectFiles.pas"/>
         <DCCReference Include="sources\Infrastructure\uStaticFiles.pas"/>
         <DCCReference Include="sources\Infrastructure\uSuppression.pas"/>
         <DCCReference Include="sources\Infrastructure\uSuppressionTelemetry.pas"/>

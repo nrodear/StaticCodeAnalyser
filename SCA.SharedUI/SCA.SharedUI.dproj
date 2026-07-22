@@ -98,6 +98,7 @@
         <DCCReference Include="sources\uIDEColors.pas"/>
         <DCCReference Include="sources\uPathNormalize.pas"/>
         <DCCReference Include="sources\uRecentPaths.pas"/>
+        <DCCReference Include="sources\uScanTargetDialog.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
