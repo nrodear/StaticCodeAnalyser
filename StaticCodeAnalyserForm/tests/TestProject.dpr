@@ -88,6 +88,7 @@ uses
   uTestLengthUnderflow in 'uTestLengthUnderflow.pas',
   uTestSourceEncoding in 'uTestSourceEncoding.pas',
   uTestProjectFiles in 'uTestProjectFiles.pas',
+  uTestNotIncludedInProject in 'uTestNotIncludedInProject.pas',
   uTestVisibilityCheck in 'uTestVisibilityCheck.pas',
   uTestSynchronizeInDestructor in 'uTestSynchronizeInDestructor.pas',
   uTestLockWithoutTryFinally in 'uTestLockWithoutTryFinally.pas',

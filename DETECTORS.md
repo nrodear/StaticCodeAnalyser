@@ -7,7 +7,7 @@ specific to this tool.
 
 Status legend: ✅ implemented · 🟡 partial · 🔲 open
 
-**Summary (2026-07-19):** All **193 rule kinds** from the canonical roster [`rules/sca-rules.json`](rules/sca-rules.json) are implemented and enumerated in this file (delivered by ~150 pipeline detector classes; several classes emit multiple kinds — e.g. `uVisibilityCheck` → 3 visibility kinds, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 DFM kinds). 44 / 50 Sonar-rule slots complete; the 4 open slots (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) need type-inference / cross-unit resolution and have no SCA-ID yet.
+**Summary (2026-07-22):** All **194 rule kinds** from the canonical roster [`rules/sca-rules.json`](rules/sca-rules.json) are implemented and enumerated in this file (delivered by ~151 pipeline detector classes; several classes emit multiple kinds — e.g. `uVisibilityCheck` → 3 visibility kinds, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 DFM kinds; **SCA194 is project-scope, not AST-based** — emitted from the project/group scan dispatch, not the per-file detector registry). 44 / 50 Sonar-rule slots complete; the 4 open slots (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) need type-inference / cross-unit resolution and have no SCA-ID yet.
 
 Remaining 4 open slots all need type-inference / flow-analysis / cross-unit symbol resolution: #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI. **#16 UninitVar** has a conservative MVP (`SCA166`) — full path-sensitivity remains open for Phase 3.
 
@@ -435,3 +435,13 @@ Byte-level file-encoding verdicts (computed from the raw file bytes at load time
 | SCA191 | **SourceUtf32** | UTF-32 source - Delphi compiler rejects it with fatal error F2438 | Error | File Error | ✅ | `uSourceEncoding` |
 | SCA192 | **SourceInvisibleChar** | Zero-width/invisible Unicode char - hidden-text / homoglyph abuse vector | Warning | Vulnerability | ✅ | `uSourceEncoding` |
 | SCA193 | **SourceNonAsciiIdentifier** | Identifier contains a non-ASCII letter - homoglyph / confusable risk | Warning | Vulnerability | ✅ | `uSourceEncoding` |
+
+---
+
+## 🗂️ Project-scope (SCA194) — 1 rule
+
+Not an AST/per-file detector: runs only for `.dproj`/`.groupproj` scans (CLI `--project`/`--project-group`, or the `...` dialog) and compares the project's referenced file list against the `.pas`/`.dfm` files physically in the project folder. Emitted from the scan dispatch (`TAnalysisSession.Run`), gated by profile + min-severity.
+
+| SCA | Rule | Description | Severity | Type | Status | Unit |
+|-----|------|-------------|----------|------|--------|------|
+| SCA194 | **NotIncludedInProject** | .pas/.dfm in the project folder but not referenced by the project (.dproj/.groupproj) - orphaned / dead source | Hint | Code Smell | ✅ | `uNotIncludedInProject` |

@@ -240,6 +240,7 @@ contains
   uSonarPull in 'sources\Infrastructure\uSonarPull.pas',
   uStaticAnalyzer2 in 'sources\Infrastructure\uStaticAnalyzer2.pas',
   uProjectFiles in 'sources\Infrastructure\uProjectFiles.pas',
+  uNotIncludedInProject in 'sources\Detectors\uNotIncludedInProject.pas',
   uStaticFiles in 'sources\Infrastructure\uStaticFiles.pas',
   uSuppression in 'sources\Infrastructure\uSuppression.pas',
   uSuppressionTelemetry in 'sources\Infrastructure\uSuppressionTelemetry.pas',

@@ -650,8 +650,14 @@ type
     fkSourceUtf32,               // SCA191 - UTF-32/UCS-4-Quelltext -> Compiler-Fehler F2438.
     fkSourceInvisibleChar,       // SCA192 - unsichtbares/Zero-Width-Zeichen (Unicode-
                                  //          Abuse, CWE-1007): U+200B-200D/2060/mid-FEFF.
-    fkSourceNonAsciiIdentifier   // SCA193 - Nicht-ASCII in einem Identifier (Homoglyph/
+    fkSourceNonAsciiIdentifier,  // SCA193 - Nicht-ASCII in einem Identifier (Homoglyph/
                                  //          Confusable, Trojan Source, CWE-1007).
+    fkNotIncludedInProject       // SCA194 - .pas/.dfm liegt im Projektordner, ist
+                                 //          aber NICHT im .dproj/.groupproj referenziert
+                                 //          (verwaiste/tote Quelldatei). Nur im
+                                 //          ssProject/ssProjectGroup-Scan (Projekt-
+                                 //          Mitgliedschaft noetig); scan-uebergreifend
+                                 //          im Engine-Dispatch emittiert, nicht per AST.
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -924,7 +930,8 @@ const
     (Name: 'SourceUtf16';                FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkSourceUtf16
     (Name: 'SourceUtf32';                FindingType: ftFileError;    DefaultSeverity: lsError),   // fkSourceUtf32
     (Name: 'SourceInvisibleChar';        FindingType: ftVulnerability;DefaultSeverity: lsWarning), // fkSourceInvisibleChar
-    (Name: 'SourceNonAsciiIdentifier';   FindingType: ftVulnerability;DefaultSeverity: lsWarning)  // fkSourceNonAsciiIdentifier
+    (Name: 'SourceNonAsciiIdentifier';   FindingType: ftVulnerability;DefaultSeverity: lsWarning), // fkSourceNonAsciiIdentifier
+    (Name: 'NotIncludedInProject';       FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkNotIncludedInProject
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

@@ -186,7 +186,8 @@ uses
   uStaticAnalyzer2, uRuleCatalog, uLexer, uCustomRuleDetector, uVcsChanges,
   uRepoSettings, uBaseline, uExportSARIF, uExportSonarGeneric, uExportHtml,
   uPathOverrides,   // TPathOverrides.Clear im Direkt-Modus (Config-Riegel 2026-07-04)
-  uProjectFiles;    // ssProject/ssProjectGroup (Konzept_ScanScope_2026-07-20)
+  uProjectFiles,    // ssProject/ssProjectGroup (Konzept_ScanScope_2026-07-20)
+  uNotIncludedInProject;   // SCA194 - verwaiste .pas/.dfm im Projektordner
 
 var
   // Serialisiert ALLE Engine-Scans prozessweit. Der Engine-State ist global
@@ -553,8 +554,30 @@ begin
           if ProjErr <> '' then
             Findings := MakeSingleErrorList(ProjErr)
           else
+          begin
             Findings := TStaticAnalyzer2.AnalyzeLeaksFromList(
                           Files, Req.Progress, Req.UsesCheck, EffIndexRoot);
+            // SCA194 NotIncludedInProject: verwaiste .pas/.dfm im Projekt-
+            // ordner markieren. Scan-uebergreifend (Projektliste vs. Platte),
+            // daher hier statt in der gDetectors-Registry. Selbst-Gating auf
+            // Profile (DetectorEnabledKinds) + MinSeverity, weil dieser Pfad
+            // den ParseLeaks-Post-Filter nicht durchlaeuft. Walk-Root =
+            // Verzeichnis der Projekt-/Gruppendatei.
+            if (Files.Count > 0) and
+               ((uSCAConsts.DetectorEnabledKinds = []) or
+                (fkNotIncludedInProject in uSCAConsts.DetectorEnabledKinds)) and
+               (Ord(lsHint) <= Ord(uSCAConsts.DetectorMinSeverity)) then
+              // Walk-Root = BaseDir (CommonRoot der AUFGELOESTEN Projektliste),
+              // NICHT das .dproj-Verzeichnis (Real-World-Scan 2026-07-22:
+              // reale Projekte legen die .dproj oft in packages\ und die Units
+              // in ..\source\ - ein .dproj-Dir-Walk faende dann fast nichts).
+              // BaseDir ist bereits GetFullPath-kanonisch (aus den Files
+              // abgeleitet) -> loest zugleich die frueher noetige Req.Path-
+              // Kanonisierung. Files.Count>0-Guard: bei leerer Projektliste
+              // (0 DCCReferences) NICHT den ganzen Ordner als verwaist melden.
+              TNotIncludedInProjectDetector.Detect(
+                Files, BaseDir, Findings, Req.IgnoreList);
+          end;
           // Warnungen (fehlende Referenzen, Makro-Skips) nicht als Findings
           // (fkFileReadError wuerde Exit-Code 4 erzwingen). v1: NUR Debug-
           // Kanal (OutputDebugString) - ein stderr-Kanal braeuchte einen
