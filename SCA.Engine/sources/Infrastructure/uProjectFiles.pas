@@ -19,7 +19,7 @@ unit uProjectFiles;
 //     (bzw. bei Gruppen: wenn KEIN Projekt aufloesbar war).
 //   * COM-Guard: MSXML braucht CoInitialize im rufenden Thread. Der Guard
 //     ist lokal und tolerant gegen bereits initialisierte Threads
-//     (S_FALSE -> mit CoUninitialize balancieren; RPC_E_CHANGED_MODE ->
+//     (S_FALSE -> Host besitzt COM, NICHT uninitialisieren; RPC_E_CHANGED_MODE ->
 //     Thread ist schon anders initialisiert, NICHT uninitialisieren).
 //     Damit ist die Unit sowohl im CLI-Main-Thread als auch in kuenftigen
 //     Worker-Threads (Plugin Phase 4) nutzbar.
@@ -55,29 +55,33 @@ uses
   Xml.XMLDoc, Xml.XMLIntf;
 
 type
-  // COM-Init-Guard (siehe Unit-Header). Record mit Init/Done statt
-  // Interface-Magie - explizit und im finally balancierbar.
+  // COM-Init-Guard (siehe Unit-Header). Init stellt sicher, dass COM auf dem
+  // Thread oben ist; Done ist bewusst ein NO-OP.
+  //
+  // WARUM NIE CoUninitialize (AV-Fix 2026-07-22): dieser Helper laeuft in
+  // Hosts, die COM selbst nutzen (VCL-GUI, TestInsight/DUnitX-Runner via
+  // IPC, IDE-Plugin/ToolsAPI). CoUninitialize per From*-Aufruf reisst - bei
+  // wiederholten Aufrufen (Testsuite: 12x FromDproj) oder wenn der Host COM
+  // zwischen Aufrufen nutzt - die COM-Apartment ab -> AccessViolation in
+  // fremdem Code (TestProject.exe c0000005). COM einmal hochziehen und bis
+  // Prozessende oben lassen ist fuer Library-Helper das robuste Muster; die
+  // eine Init-Ref gibt das OS beim Prozessende ohnehin frei. RPC_E_CHANGED_MODE
+  // (Host im anderen Apartment-Modus) ist egal - MSXML/IXMLDocument arbeiten
+  // in beiden Modi.
   TComGuard = record
-    NeedUninit : Boolean;
     procedure Init;
     procedure Done;
   end;
 
 procedure TComGuard.Init;
-var
-  hr : HRESULT;
 begin
-  hr := CoInitializeEx(nil, COINIT_APARTMENTTHREADED);
-  // S_OK/S_FALSE: Zaehler erhoeht -> wir balancieren mit CoUninitialize.
-  // RPC_E_CHANGED_MODE: Thread laeuft bereits im anderen Modus - MSXML
-  // funktioniert trotzdem, aber wir duerfen NICHT uninitialisieren.
-  NeedUninit := (hr = S_OK) or (hr = S_FALSE);
+  CoInitializeEx(nil, COINIT_APARTMENTTHREADED);   // Ergebnis bewusst ignoriert
 end;
 
 procedure TComGuard.Done;
 begin
-  if NeedUninit then
-    CoUninitialize;
+  // Bewusst NO-OP: COM bleibt fuer die Prozess-Lebensdauer oben (siehe
+  // TComGuard-Kommentar) - nie per-Aufruf abbauen.
 end;
 
 function ResolveInclude(const ABaseDir, AInclude: string;
@@ -168,8 +172,8 @@ begin
       end;
     end;
   finally
-    // Doc-Interface VOR CoUninitialize freigeben (COM-Objekt haengt am
-    // Apartment dieses Threads).
+    // Doc-Interface hier freigeben (COM-Objekt haengt am Apartment); Com.Done
+    // ist ein No-op (COM bleibt prozessweit oben, s. TComGuard-Kommentar).
     Doc := nil;
     Com.Done;
   end;
