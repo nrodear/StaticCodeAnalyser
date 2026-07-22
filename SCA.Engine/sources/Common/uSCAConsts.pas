@@ -41,6 +41,12 @@ var
   // zu registrieren.
   LeakyClasses: TStringList = nil;
 
+  // #5 Dataflow-Ownership (Konzept_EngineArchitektur_FpReduktion): konfigurier-
+  // bare Ownership-Sink-Routinen ([Detectors] OwnershipSinks). Ein Objekt, das
+  // an eine gelistete Routine uebergeben wird, gilt als ownership-transferiert
+  // -> kein SCA001-Leak. Leerer Default = keine Wirkung (opt-in via ini).
+  OwnershipSinks: TStringList = nil;
+
   // Auto-Discovery-Flag: wenn True, scannt der Analyzer pro Datei das AST
   // auf 'class(...)' Deklarationen und ergaenzt LeakyClasses um Custom-
   // Klassen die NICHT von TForm/TFrame/TComponent/TInterfacedObject erben.
@@ -1317,6 +1323,11 @@ begin
   LeakyClasses.Sorted        := True;
   LeakyClasses.Duplicates    := dupIgnore;
 
+  OwnershipSinks := TStringList.Create;
+  OwnershipSinks.CaseSensitive := False;
+  OwnershipSinks.Sorted        := True;
+  OwnershipSinks.Duplicates    := dupIgnore;
+
   LeakyClassExcludes := TStringList.Create;
   LeakyClassExcludes.CaseSensitive := False;
   LeakyClassExcludes.Sorted        := True;
@@ -1422,6 +1433,8 @@ begin
     LeakyClasses.Clear;
     LeakyClasses.AddStrings(DEFAULT_LEAKY_CLASSES);
   end;
+  if Assigned(OwnershipSinks) then
+    OwnershipSinks.Clear;   // #5: leerer Default (byte/TP-safe; opt-in via ini)
   if Assigned(LeakyClassExcludes) then
     LeakyClassExcludes.Clear;
   if Assigned(DetectorMagicTrivials) then
@@ -1450,6 +1463,8 @@ initialization
 finalization
   if Assigned(LeakyClasses) then
     FreeAndNil(LeakyClasses);
+  if Assigned(OwnershipSinks) then
+    FreeAndNil(OwnershipSinks);
   if Assigned(LeakyClassExcludes) then
     FreeAndNil(LeakyClassExcludes);
   if Assigned(DiscoveredClasses) then

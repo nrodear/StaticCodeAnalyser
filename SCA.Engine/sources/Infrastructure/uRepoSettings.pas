@@ -65,6 +65,7 @@ type
     FSvnExePath        : string;
     FConfigPath        : string;
     FLeakyClasses      : TStringList; // Custom-Eintraege aus [Detectors]
+    FOwnershipSinks    : TStringList; // [Detectors] OwnershipSinks (#5)
     FExcludeLeaky      : TStringList; // [Detectors] ExcludeLeakyClasses
     FAutoDiscover      : Boolean;     // [Detectors] AutoDiscoverClasses
     FUsesCheck         : Boolean;     // [Detectors] UsesCheck
@@ -156,6 +157,11 @@ type
     // ruft RegisterToLeakyClasses() um sie an uSCAConsts.LeakyClasses
     // anzuhaengen, bevor die Analyse startet.
     property LeakyClasses: TStringList read FLeakyClasses;
+
+    // #5: [Detectors] OwnershipSinks - Routinen, die Ownership eines
+    // uebergebenen Objekts uebernehmen. RegisterToLeakyClasses haengt sie
+    // an uSCAConsts.OwnershipSinks (SCA001-FP-Suppression, opt-in).
+    property OwnershipSinks: TStringList read FOwnershipSinks;
 
     // Klassen die NICHT getrackt werden sollen (z.B. TComponent wenn das
     // Projekt durchgaengig auf Owner-Pattern setzt). Aus [Detectors]
@@ -729,6 +735,8 @@ begin
   FConfigPath         := '';
   FLeakyClasses       := TStringList.Create;
   FLeakyClasses.CaseSensitive := False;
+  FOwnershipSinks     := TStringList.Create;
+  FOwnershipSinks.CaseSensitive := False;
   FExcludeLeaky       := TStringList.Create;
   FExcludeLeaky.CaseSensitive := False;
   FAutoDiscover       := False;
@@ -780,6 +788,7 @@ end;
 destructor TRepoSettings.Destroy;
 begin
   FLeakyClasses.Free;
+  FOwnershipSinks.Free;
   FExcludeLeaky.Free;
   FMagicTrivials.Free;
   FFormatFunctions.Free;
@@ -915,6 +924,19 @@ begin
       end;
     end;
 
+    // [Detectors] OwnershipSinks=Routine1,Routine2,... -> FOwnershipSinks (#5)
+    RawList := Trim(Ini.ReadString('Detectors', 'OwnershipSinks', ''));
+    FOwnershipSinks.Clear;
+    if RawList <> '' then
+    begin
+      Items := RawList.Split([',', ';']);
+      for Item in Items do
+      begin
+        Trimmed := Trim(Item);
+        if Trimmed <> '' then FOwnershipSinks.Add(Trimmed);
+      end;
+    end;
+
     // [Detectors] ExcludeLeakyClasses=Klasse1,... -> FExcludeLeaky
     RawList := Trim(Ini.ReadString('Detectors', 'ExcludeLeakyClasses', ''));
     FExcludeLeaky.Clear;
@@ -1044,6 +1066,12 @@ begin
   // 1) Customs hinzufuegen (Sorted+dupIgnore -> idempotent)
   for i := 0 to FLeakyClasses.Count - 1 do
     uSCAConsts.LeakyClasses.Add(FLeakyClasses[i]);
+
+  // #5: Ownership-Sinks in die globale Live-Liste spiegeln (ResetEngineConfig-
+  // Defaults hat sie zuvor geleert -> Add reicht, dupIgnore idempotent).
+  if Assigned(uSCAConsts.OwnershipSinks) then
+    for i := 0 to FOwnershipSinks.Count - 1 do
+      uSCAConsts.OwnershipSinks.Add(FOwnershipSinks[i]);
 
   // 2) Excludes in die globale Exclude-Liste schreiben. Auto-Discovery
   //    konsultiert sie pro File-Pass, sonst wuerden Discovered-Classes

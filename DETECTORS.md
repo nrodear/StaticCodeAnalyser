@@ -29,7 +29,7 @@ remains the canonical machine-readable roster.
 
 | # | SCA | Rule | Description | Status | Unit |
 |---|-----|------|-------------|--------|------|
-| 1 | SCA001 | **MemoryLeak — object never freed** | Object created with `.Create` but no `Free`/`FreeAndNil`/`Destroy` anywhere in the method body | ✅ | `uLeakDetector2` |
+| 1 | SCA001 | **MemoryLeak — object never freed** | Object created with `.Create` but no `Free`/`FreeAndNil`/`Destroy` anywhere in the method body. Routines that take ownership of a passed object can be whitelisted via `[Detectors] OwnershipSinks=Routine1,Routine2` (passing the object to such a routine counts as an ownership transfer → no leak) | ✅ | `uLeakDetector2` |
 | 2 | SCA002 | **EmptyExcept — empty except block** | `except` block without an executable statement — exceptions are silently swallowed | ✅ | `uCodeSmells2` |
 | 3 | SCA008 | **NilDeref — nil pointer without check** | Object field or parameter dereferenced without a prior `Assigned()` check | ✅ | `uNilDeref` |
 | 4 | SCA003 | **SQLInjection — string concatenation in SQL** | SQL command built by `+` concatenation with user input — no parameterised query | ✅ | `uSQLInjection` |

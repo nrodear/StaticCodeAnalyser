@@ -89,6 +89,7 @@ uses
   uTestSourceEncoding in 'uTestSourceEncoding.pas',
   uTestProjectFiles in 'uTestProjectFiles.pas',
   uTestNotIncludedInProject in 'uTestNotIncludedInProject.pas',
+  uTestOwnershipSinks in 'uTestOwnershipSinks.pas',
   uTestVisibilityCheck in 'uTestVisibilityCheck.pas',
   uTestSynchronizeInDestructor in 'uTestSynchronizeInDestructor.pas',
   uTestLockWithoutTryFinally in 'uTestLockWithoutTryFinally.pas',

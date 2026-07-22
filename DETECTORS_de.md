@@ -29,7 +29,7 @@ bleibt die kanonische maschinenlesbare Liste.
 
 | # | SCA | Regel | Beschreibung | Status | Unit |
 |---|-----|-------|-------------|--------|------|
-| 1 | SCA001 | **MemoryLeak: Objekt nie freigegeben** | Objekt per `.Create` erzeugt, kein `Free`/`FreeAndNil`/`Destroy` im gesamten Methodenrumpf | ✅ | `uLeakDetector2` |
+| 1 | SCA001 | **MemoryLeak: Objekt nie freigegeben** | Objekt per `.Create` erzeugt, kein `Free`/`FreeAndNil`/`Destroy` im gesamten Methodenrumpf. Routinen, die die Ownership eines übergebenen Objekts übernehmen, lassen sich per `[Detectors] OwnershipSinks=Routine1,Routine2` whitelisten (Übergabe an eine solche Routine gilt als Ownership-Transfer → kein Leak) | ✅ | `uLeakDetector2` |
 | 2 | SCA002 | **EmptyExcept: Leerer except-Block** | `except`-Block ohne ausführbare Anweisung – Exception wird stillschweigend verschluckt | ✅ | `uCodeSmells2` |
 | 3 | SCA008 | **NilDeref: Nil-Zeiger ohne Prüfung** | Objekt-Feld oder Parameter wird ohne vorherige `Assigned()`-Prüfung dereferenziert | ✅ | `uNilDeref` |
 | 4 | SCA003 | **SQLInjection: String-Konkatenation in SQL** | SQL-Befehl durch `+`-Verkettung mit Benutzereingabe – kein parametrisiertes Query | ✅ | `uSQLInjection` |

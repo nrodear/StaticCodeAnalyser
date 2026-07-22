@@ -1137,6 +1137,23 @@ begin
     if (pAdd > 0) and VarInArgs(NameLow, pAdd + 11) then
       Exit(True);
 
+    // #5 (Konzept_EngineArch): konfigurierbare Ownership-Sinks aus
+    // [Detectors] OwnershipSinks. Aufruf einer Sink-Routine mit unserer Var
+    // als Argument = Ownership-Transfer -> kein Leak. Leerer Default => keine
+    // Iteration => byte-/TP-identisch (nur ini-opt-in wirkt). Wortgrenze links
+    // (Start/Nicht-Ident) verhindert Substring-Treffer ('add' in 'myadd(').
+    if Assigned(uSCAConsts.OwnershipSinks) then
+      for var si := 0 to uSCAConsts.OwnershipSinks.Count - 1 do
+      begin
+        var sinkLow := LowerCase(uSCAConsts.OwnershipSinks[si]);
+        if sinkLow = '' then Continue;
+        var pS := Pos(sinkLow + '(', NameLow);
+        if (pS > 0) and
+           ((pS = 1) or not IsIdentChar(NameLow[pS - 1])) and
+           VarInArgs(NameLow, pS + Length(sinkLow) + 1) then
+          Exit(True);
+      end;
+
     // Inkr.3 (Gross-Triage add-call-Bucket 27/101, groesster Rest): CUSTOM
     // Add-/Insert-/Put-Familie - 'Cfg.AddOption(sl)', 'Enc.AddStream(...,s,..)',
     // 'Tree.InsertNode(..., PFileInfo(fi))', 'Cont.Put(key, obj)'. Der Consumer

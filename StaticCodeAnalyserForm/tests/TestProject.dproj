@@ -170,6 +170,9 @@
         <DCCReference Include="uTestVirtualCallInCtor.pas"/>
         <DCCReference Include="uTestLengthUnderflow.pas"/>
         <DCCReference Include="uTestSourceEncoding.pas"/>
+        <DCCReference Include="uTestProjectFiles.pas"/>
+        <DCCReference Include="uTestNotIncludedInProject.pas"/>
+        <DCCReference Include="uTestOwnershipSinks.pas"/>
         <DCCReference Include="uTestVisibilityCheck.pas"/>
         <DCCReference Include="uTestSynchronizeInDestructor.pas"/>
         <DCCReference Include="uTestLockWithoutTryFinally.pas"/>
