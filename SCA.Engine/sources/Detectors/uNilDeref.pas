@@ -332,6 +332,286 @@ begin
   end;
 end;
 
+function IsPlainIdentLower(const S: string): Boolean;
+// Einfacher Bezeichner (bereits gelowert): [a-z_][a-z0-9_]*. Bewusst KEINE
+// dotted-/indizierten Formen - die Korrelations-Gates (#6 Inkr.3) arbeiten
+// nur auf nebenwirkungsfreien, exakt trackbaren Bedingungen.
+var
+  i : Integer;
+begin
+  Result := False;
+  if S = '' then Exit;
+  if not CharInSet(S[1], ['a'..'z', '_']) then Exit;
+  for i := 2 to Length(S) do
+    if not CharInSet(S[i], ['a'..'z', '0'..'9', '_']) then Exit;
+  Result := True;
+end;
+
+function CondNormNoWs(const S: string): string;
+// lowercase + saemtliche Whitespaces entfernt - eindeutig fuer Operator-/
+// Klammer-Formen ('x = nil' == 'x=nil'). NICHT fuer bare/'not x'-Formen
+// verwenden ('not a' wuerde zum Ident 'nota' verschmelzen).
+var
+  i : Integer;
+begin
+  Result := '';
+  for i := 1 to Length(S) do
+    if not CharInSet(S[i], [' ', #9]) then
+      Result := Result + S[i];
+  Result := LowerCase(Result);
+end;
+
+function ParseCorrelatedCond(const ARaw: string; out ACore: string;
+  out APos: Boolean): Boolean;
+// #6 Inkr.3 (Form c): zerlegt eine if-Bedingung in (Kern-Ident, kanonische
+// Polaritaet). Kanonisch True = 'Flag wahr' bzw. 'Var assigned'. NUR die
+// exakte Whitelist nebenwirkungsfreier Formen (Lehre SCA001-XL: Konventions-
+// Checks nur im Original-Wortlaut; alles andere => nicht korrelierbar):
+//   a            -> (a, True)      not a           -> (a, False)
+//   v <> nil     -> (v, True)      v = nil         -> (v, False)
+//   nil <> v     -> (v, True)      nil = v         -> (v, False)
+//   Assigned(v)  -> (v, True)      not Assigned(v) -> (v, False)
+var
+  S1, S2    : string;
+  i         : Integer;
+  Ch        : Char;
+  PrevSpace : Boolean;
+begin
+  Result := False;
+  ACore  := '';
+  APos   := True;
+  // S1: lower + Whitespace-Runs zu EINEM Blank kollabiert + getrimmt
+  S1 := '';
+  PrevSpace := True;
+  for i := 1 to Length(ARaw) do
+  begin
+    Ch := ARaw[i];
+    if CharInSet(Ch, [' ', #9]) then
+    begin
+      if not PrevSpace then S1 := S1 + ' ';
+      PrevSpace := True;
+    end
+    else
+    begin
+      S1 := S1 + Ch;
+      PrevSpace := False;
+    end;
+  end;
+  S1 := LowerCase(Trim(S1));
+  if S1 = '' then Exit;
+  // bare Ident / 'not <ident>' auf der Blank-kollabierten Form
+  if IsPlainIdentLower(S1) then
+  begin
+    ACore := S1;
+    APos  := True;
+    Exit(True);
+  end;
+  if S1.StartsWith('not ') and IsPlainIdentLower(Copy(S1, 5, MaxInt)) then
+  begin
+    ACore := Copy(S1, 5, MaxInt);
+    APos  := False;
+    Exit(True);
+  end;
+  // Operator-/Klammer-Formen auf der vollgestrippten Form
+  S2 := CondNormNoWs(S1);
+  if S2.StartsWith('assigned(') and S2.EndsWith(')') then
+  begin
+    ACore := Copy(S2, 10, Length(S2) - 10);
+    APos  := True;
+  end
+  else if S2.StartsWith('notassigned(') and S2.EndsWith(')') then
+  begin
+    ACore := Copy(S2, 13, Length(S2) - 13);
+    APos  := False;
+  end
+  else if S2.StartsWith('nil<>') then
+  begin
+    ACore := Copy(S2, 6, MaxInt);
+    APos  := True;
+  end
+  else if S2.StartsWith('nil=') then
+  begin
+    ACore := Copy(S2, 5, MaxInt);
+    APos  := False;
+  end
+  else if S2.EndsWith('<>nil') then
+  begin
+    ACore := Copy(S2, 1, Length(S2) - 5);
+    APos  := True;
+  end
+  else if S2.EndsWith('=nil') then
+  begin
+    ACore := Copy(S2, 1, Length(S2) - 4);
+    APos  := False;
+  end
+  else
+    Exit(False);
+  Result := IsPlainIdentLower(ACore);
+end;
+
+function HasNilTestEarlyExitBetween(MethodNode: TAstNode;
+  const VarLow: string; AfterLine, BeforeLine: Integer): Boolean;
+// #6 Inkr.3 (SCA008 Form d): 'x := nil; ... if x = nil then Exit; ... x.Foo'.
+// Der Header behauptete diese Abdeckung schon immer, CondHasGuard hatte das
+// '= nil'-Pattern aber nie (Leser-Audit 2026-07-23). Ein nil-Test zwischen
+// nil-Zuweisung und Deref, dessen then-Teil GARANTIERT terminiert (Exit/
+// raise direkt oder als Direktkind des then-Blocks), toetet die nil-
+// Definition auf dem Fall-through-Pfad - der Deref laeuft nur mit x <> nil.
+// Konservativ: zusammengesetzte Bedingungen ('(x=nil) and ...') und nur
+// MOEGLICHERWEISE terminierende then-Teile korrelieren nicht -> kein Drop.
+// SOUNDNESS (Selbst-Review 2026-07-24): der Guard toetet die Definition nur,
+// wenn er auf JEDEM Pfad NA->C liegt. Ein Guard, der selbst in einem anderen
+// if/case/Loop geschachtelt ist, laeuft nicht auf jedem Pfad ('if y then
+// begin if x = nil then Exit; end; x.Foo' - bei y=False faellt der nil-Wert
+// durch; 'while c do if x = nil then Exit;' - 0 Iterationen moeglich).
+// Solche geschachtelten Guards werden uebersprungen -> kein Drop.
+var
+  Ifs        : TList<TAstNode>;
+  IfN        : TAstNode;
+  SubCh      : TAstNode;
+  GrandCh    : TAstNode;
+  ThenChild  : TAstNode;
+  Cond       : string;
+  Terminates : Boolean;
+  Nested     : Boolean;
+  Kind       : TNodeKind;
+  Containers : TList<TAstNode>;
+  Cont       : TAstNode;
+begin
+  Result := False;
+  if MethodNode = nil then Exit;
+  Ifs := MethodNode.FindAllRef(nkIfStmt);
+  for IfN in Ifs do
+  begin
+    if IfN.Line <= AfterLine then Continue;
+    if IfN.Line >= BeforeLine then Continue;
+    Cond := CondNormNoWs(IfN.TypeRef);
+    if (Cond <> VarLow + '=nil') and (Cond <> 'nil=' + VarLow) and
+       (Cond <> 'notassigned(' + VarLow + ')') then Continue;
+    // Guard darf nicht selbst in einem Branch/Loop geschachtelt sein.
+    Nested := False;
+    for Kind in [nkIfStmt, nkCaseStmt, nkWhileStmt, nkForStmt, nkRepeatStmt] do
+    begin
+      Containers := MethodNode.FindAllRef(Kind);
+      for Cont in Containers do
+        if (Cont <> IfN) and NodeContainsRef(Cont, IfN) then
+        begin
+          Nested := True;
+          Break;
+        end;
+      if Nested then Break;
+    end;
+    if Nested then Continue;
+    ThenChild := nil;
+    for SubCh in IfN.Children do
+      if SubCh.Kind <> nkElseBranch then
+      begin
+        ThenChild := SubCh;
+        Break;
+      end;
+    if ThenChild = nil then Continue;
+    Terminates := ThenChild.Kind in [nkExit, nkRaise];
+    if (not Terminates) and (ThenChild.Kind = nkBlock) then
+      for GrandCh in ThenChild.Children do
+        if GrandCh.Kind in [nkExit, nkRaise] then
+        begin
+          Terminates := True;
+          Break;
+        end;
+    if Terminates then Exit(True);
+  end;
+end;
+
+function IsInCorrelatedExclusiveIfs(MethodNode: TAstNode;
+  Calls, Assigns: TList<TAstNode>; AssignNode, DerefNode: TAstNode): Boolean;
+// #6 Inkr.3 (SCA008 Form c): korrelierte SEPARAT-ifs - 'if a then x := nil;
+// ... if not a then x.Foo'. War in IsInExclusiveBranch explizit als 'braucht
+// Mini-CFG' vorgemerkt; AST-Loesung ist praeziser als CFG-Dominanz: das
+// innerste einschliessende if liefert Bedingung UND Arm-Polaritaet direkt.
+// Drop nur wenn ALLE Bedingungen erfuellt:
+//   * NA und C haben verschiedene einschliessende ifs (gleiches if =
+//     IsInExclusiveBranch), if(NA) wird VOR if(C) ausgewertet;
+//   * beide Bedingungen sind exakt korrelierbar (ParseCorrelatedCond-
+//     Whitelist) mit demselben Kern-Ident;
+//   * die effektiven Ausfuehrungs-Polaritaeten schliessen sich aus
+//     (ExecX = Pos xor InElse; exklusiv gdw. ExecA <> ExecB);
+//   * die Korrelations-Variable mutiert nicht zwischen den ifs - kein
+//     Assign und keine var/out-Uebergabe im Fenster; umschliesst eine
+//     SCHLEIFE beide ifs, gilt das Fenster bis Methodenende (sonst wuerde
+//     'a := not a' am Schleifenende einen echten Cross-Iteration-Bug
+//     maskieren).
+var
+  Ifs          : TList<TAstNode>;
+  Loops        : TList<TAstNode>;
+  IfN, ElseN   : TAstNode;
+  IfA, IfB     : TAstNode;
+  AInElse      : Boolean;
+  BInElse      : Boolean;
+  CoreA, CoreB : string;
+  PosA, PosB   : Boolean;
+  ExecA, ExecB : Boolean;
+  WindowEnd    : Integer;
+  Kind         : TNodeKind;
+  N            : TAstNode;
+  NmLow        : string;
+begin
+  Result := False;
+  if MethodNode = nil then Exit;
+  IfA := nil;
+  IfB := nil;
+  AInElse := False;
+  BInElse := False;
+  Ifs := MethodNode.FindAllRef(nkIfStmt);
+  for IfN in Ifs do
+  begin
+    ElseN := IfN.FindFirstChild(nkElseBranch);
+    // innerstes einschliessendes if = das mit der GROESSTEN Startzeile
+    // (Vorfahren beginnen frueher als ihre geschachtelten Kinder)
+    if NodeContainsRef(IfN, AssignNode) and
+       ((IfA = nil) or (IfN.Line > IfA.Line)) then
+    begin
+      IfA := IfN;
+      AInElse := (ElseN <> nil) and NodeContainsRef(ElseN, AssignNode);
+    end;
+    if NodeContainsRef(IfN, DerefNode) and
+       ((IfB = nil) or (IfN.Line > IfB.Line)) then
+    begin
+      IfB := IfN;
+      BInElse := (ElseN <> nil) and NodeContainsRef(ElseN, DerefNode);
+    end;
+  end;
+  if (IfA = nil) or (IfB = nil) or (IfA = IfB) then Exit;
+  if IfA.Line >= IfB.Line then Exit;
+  if not ParseCorrelatedCond(IfA.TypeRef, CoreA, PosA) then Exit;
+  if not ParseCorrelatedCond(IfB.TypeRef, CoreB, PosB) then Exit;
+  if CoreA <> CoreB then Exit;
+  ExecA := PosA xor AInElse;
+  ExecB := PosB xor BInElse;
+  if ExecA = ExecB then Exit;   // gleiche Seite -> gemeinsam ausfuehrbar
+  // Mutations-Fenster bestimmen (Schleife um beide ifs -> bis Methodenende)
+  WindowEnd := IfB.Line;
+  for Kind in [nkWhileStmt, nkForStmt, nkRepeatStmt] do
+  begin
+    Loops := MethodNode.FindAllRef(Kind);
+    for N in Loops do
+      if NodeContainsRef(N, IfA) and NodeContainsRef(N, IfB) then
+      begin
+        WindowEnd := MaxInt;
+        Break;
+      end;
+    if WindowEnd = MaxInt then Break;
+  end;
+  for N in Assigns do
+    if (N.Line > IfA.Line) and (N.Line < WindowEnd) then
+    begin
+      NmLow := N.Name.ToLower;
+      if (NmLow = CoreA) or NmLow.EndsWith('.' + CoreA) then Exit;
+    end;
+  if TNilDerefDetector.IsPassedAsArgBetween(MethodNode, Calls, Assigns,
+       CoreA, IfA.Line, WindowEnd) then Exit;
+  Result := True;
+end;
+
 function CfgDropsNilDeref(MethodNode: TAstNode; var ACfg: TCFG;
   ANilAssign, ADeref: TAstNode): Boolean;
 // #6 Inkr.2 (SCA008 Q1, CFG Shared Service): Drop, wenn der Deref im CFG
@@ -479,6 +759,17 @@ begin
         // (syntactic-sibling-if-else) - nil-Zuweisung (NA) und Deref (C) in
         // then/else-Schwesterzweigen desselben if -> nie gemeinsam ausgefuehrt.
         if IsInExclusiveBranch(MethodNode, NA, C) then
+          Continue;
+
+        // FP-Gate #6 Inkr.3 (Form d): nil-Test-Early-Exit zwischen nil
+        // und Deref ('if x = nil then Exit;') toetet die nil-Definition
+        // auf dem Fall-through-Pfad.
+        if HasNilTestEarlyExitBetween(MethodNode, VarLow, NA.Line, C.Line) then
+          Continue;
+
+        // FP-Gate #6 Inkr.3 (Form c): korrelierte Separat-ifs mit exakt
+        // negierten/gleichen Bedingungen auf exklusiven Seiten.
+        if IsInCorrelatedExclusiveIfs(MethodNode, Calls, Assigns, NA, C) then
           Continue;
 
         // FP-Gate #6 Inkr.2 (2026-07-23): CFG-Erreichbarkeit (Q1) - die

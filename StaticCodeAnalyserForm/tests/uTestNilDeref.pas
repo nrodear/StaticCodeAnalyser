@@ -27,6 +27,13 @@ type
     [Test] procedure CfgBranchWithoutExit_StillReported;
     [Test] procedure CfgCaseArmSiblings_NotReported;
     [Test] procedure CfgSameCaseArm_StillReported;
+    // #6 Inkr.3 (SCA008 Formen c+d): Korrelations-Gates
+    [Test] procedure NilTestEarlyExit_NotReported;
+    [Test] procedure NilTestWithoutExit_StillReported;
+    [Test] procedure CorrelatedNegatedIfs_NotReported;
+    [Test] procedure CorrelatedSameCondition_StillReported;
+    [Test] procedure CorrelatedButFlagMutated_StillReported;
+    [Test] procedure NestedNilTestGuard_StillReported;
   end;
 
 implementation
@@ -286,6 +293,149 @@ begin
   try
     Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
       'nil+Deref im selben case-Arm bleibt ein echter Fund');
+  finally F.Free; end;
+end;
+
+{ #6 Inkr.3 (SCA008 Formen c+d): Korrelations-Gates }
+
+procedure TTestNilDeref.NilTestEarlyExit_NotReported;
+// Form (d): der nil-Test mit terminierendem then toetet die nil-Definition
+// auf dem Fall-through-Pfad - x ist am Deref garantiert <> nil. Der Header
+// behauptete diese Abdeckung schon immer, CondHasGuard hatte das
+// '= nil'-Pattern aber nie (vor Inkr.3 gemeldet).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  x := nil;'#13#10 +
+  '  if x = nil then'#13#10 +
+  '    Exit;'#13#10 +
+  '  x.DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
+      'nil-Test mit Exit zwischen nil und Deref -> Fall-through ist nil-frei');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.NilTestWithoutExit_StillReported;
+// TP-Gegenprobe zu Form (d): then-Teil terminiert NICHT (nur Logging) ->
+// der Fall-through kann weiterhin mit x = nil laufen -> Fund bleibt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  x := nil;'#13#10 +
+  '  if x = nil then'#13#10 +
+  '    DoLog;'#13#10 +
+  '  x.DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+      'nil-Test ohne Terminierung schuetzt den Fall-through nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.CorrelatedNegatedIfs_NotReported;
+// Form (c): exakt negierte Bedingungen ('a' vs 'not a') auf gleicher
+// Arm-Seite -> die Zweige schliessen sich aus, nil erreicht den Deref nie.
+// War in IsInExclusiveBranch explizit als 'braucht Mini-CFG' vorgemerkt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(a: Boolean);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  if a then'#13#10 +
+  '    x := nil;'#13#10 +
+  '  if not a then'#13#10 +
+  '    x.DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
+      'negiert-korrelierte Separat-ifs sind exklusiv -> kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.CorrelatedSameCondition_StillReported;
+// TP-Gegenprobe zu Form (c): GLEICHE Bedingung auf gleicher Seite -> beide
+// Zweige laufen gemeinsam (a=True) -> echter nil-Deref, Fund MUSS bleiben.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(a: Boolean);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  if a then'#13#10 +
+  '    x := nil;'#13#10 +
+  '  if a then'#13#10 +
+  '    x.DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+      'gleiche Bedingung = gemeinsamer Pfad -> Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.CorrelatedButFlagMutated_StillReported;
+// TP-Gegenprobe zu Form (c): das Flag mutiert ZWISCHEN den ifs -> die
+// Korrelation ist gebrochen (a=True: erst nil, dann a=False -> Deref
+// laeuft MIT nil). Das Mutations-Fenster muss den Drop verhindern.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(a: Boolean);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  if a then'#13#10 +
+  '    x := nil;'#13#10 +
+  '  a := False;'#13#10 +
+  '  if not a then'#13#10 +
+  '    x.DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+      'Flag-Mutation zwischen den ifs bricht die Korrelation -> Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.NestedNilTestGuard_StillReported;
+// TP-Gegenprobe zu Form (d), Soundness-Fix 2026-07-24: der nil-Test liegt
+// selbst in einem anderen Branch - bei y=False laeuft der Fall-through OHNE
+// Guard mit x = nil in den Deref -> Fund MUSS bleiben.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(y: Boolean);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  x := nil;'#13#10 +
+  '  if y then'#13#10 +
+  '  begin'#13#10 +
+  '    if x = nil then'#13#10 +
+  '      Exit;'#13#10 +
+  '  end;'#13#10 +
+  '  x.DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+      'geschachtelter Guard liegt nicht auf jedem Pfad -> Fund bleibt');
   finally F.Free; end;
 end;
 
