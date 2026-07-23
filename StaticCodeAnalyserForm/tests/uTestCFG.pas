@@ -52,6 +52,22 @@ type
     [Test] procedure TryExcept_BothPathsReachMerge;
     [Test] procedure TryFinally_FinallyRunsOnBothPaths;
     [Test] procedure TryExceptWithExitInTry_ExitReachable;
+    // Roadmap #6: Dominates + CanReachAvoiding (Reaching-Defs-Query)
+    [Test] procedure Dominates_SelfAlwaysTrue;
+    [Test] procedure Dominates_EntryDominatesAllReachable;
+    [Test] procedure Dominates_LinearChain;
+    [Test] procedure Dominates_DiamondBranchesDominateNothing;
+    [Test] procedure Dominates_UnreachableTarget_False;
+    [Test] procedure Dominates_GuardBeforeUse_True;
+    [Test] procedure CanReachAvoiding_BlockedSinglePath_False;
+    [Test] procedure CanReachAvoiding_AlternatePathSurvives_True;
+    [Test] procedure CanReachAvoiding_EndpointsExemptFromAvoid;
+    [Test] procedure CanReachAvoiding_EmptyAvoid_EqualsCanReach;
+    [Test] procedure CanReachAvoiding_LoopBackEdge_ReachesEarlierBlock;
+    // #6 Inkr.1b: Builder-Fidelity (try-Cross-Edges + CondNode)
+    [Test] procedure TryFinally_ExitInTry_FinallyReachableFromExitBlock;
+    [Test] procedure TryExcept_MidTryBlock_ReachesExceptHandler;
+    [Test] procedure CondNode_SetOnBranchAndLoopHeads;
   end;
 
 implementation
@@ -670,10 +686,20 @@ begin
       for var B in CFG.Blocks do
         if B.Kind = ckException then begin FinallyStart := B; Break; end;
       Assert.IsNotNull(FinallyStart);
-      // 2 Predecessors: TryBodyStart (Cross-Edge bei Exception) +
-      // If-Merge (Normal-End nach if-Verzweigung)
-      Assert.AreEqual<Integer>(2, FinallyStart.Predecessors.Count,
+      // Seit #6 Inkr.1b bekommt JEDER Try-Body-Block die Cross-Edge zum
+      // finally (vorher nur TryBodyStart) - die exakte Predecessor-Zahl
+      // haengt damit von der Blockzahl des Try-Bodys ab (hier 5: TryBody-
+      // Start + Branch + Then + Else + Merge). Die INVARIANTE bleibt:
+      // Cross-Edge- UND Normal-End-Pfad muenden im finally ...
+      Assert.IsTrue(FinallyStart.Predecessors.Count >= 2,
         'Finally erreicht aus Cross-Edge UND Normal-End-Pfad');
+      // ... und NEU (1b): auch ein mitten im Try erzeugter Block (der
+      // if-Branch) haengt an der Exception-Kante.
+      var HasBranchPred := False;
+      for var P in FinallyStart.Predecessors do
+        if P.Kind = ckBranch then HasBranchPred := True;
+      Assert.IsTrue(HasBranchPred,
+        'Inkr.1b: if-Branch im Try hat die Cross-Edge zum finally');
     finally CFG.Free; end;
   finally Meth.Free; end;
 end;
@@ -690,6 +716,337 @@ begin
     CFG := TCFGBuilder.BuildFromMethod(Meth);
     try
       Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_));
+    finally CFG.Free; end;
+  finally Meth.Free; end;
+end;
+
+{ Roadmap #6: Dominates + CanReachAvoiding }
+
+procedure TTestCFG.Dominates_SelfAlwaysTrue;
+var
+  CFG : TCFG;
+  B1  : uCFG.TCFGBlock;
+begin
+  CFG := TCFG.Create;
+  try
+    B1 := CFG.NewBlock(ckStatement);
+    CFG.Connect(CFG.Entry, B1);
+    Assert.IsTrue(CFG.Dominates(B1, B1), 'jeder Block dominiert sich selbst');
+  finally CFG.Free; end;
+end;
+
+procedure TTestCFG.Dominates_EntryDominatesAllReachable;
+var
+  CFG : TCFG;
+  B1, B2 : uCFG.TCFGBlock;
+begin
+  // Entry -> B1 -> B2
+  CFG := TCFG.Create;
+  try
+    B1 := CFG.NewBlock(ckStatement);
+    B2 := CFG.NewBlock(ckStatement);
+    CFG.Connect(CFG.Entry, B1);
+    CFG.Connect(B1, B2);
+    Assert.IsTrue(CFG.Dominates(CFG.Entry, B1));
+    Assert.IsTrue(CFG.Dominates(CFG.Entry, B2));
+  finally CFG.Free; end;
+end;
+
+procedure TTestCFG.Dominates_LinearChain;
+var
+  CFG : TCFG;
+  B1, B2, B3 : uCFG.TCFGBlock;
+begin
+  // Entry -> B1 -> B2 -> B3: B1 dominiert B2+B3, B2 dominiert B3,
+  // aber B3 dominiert B2 NICHT (Dominanz ist gerichtet).
+  CFG := TCFG.Create;
+  try
+    B1 := CFG.NewBlock(ckStatement);
+    B2 := CFG.NewBlock(ckStatement);
+    B3 := CFG.NewBlock(ckStatement);
+    CFG.Connect(CFG.Entry, B1);
+    CFG.Connect(B1, B2);
+    CFG.Connect(B2, B3);
+    Assert.IsTrue(CFG.Dominates(B1, B3), 'B1 dominiert B3');
+    Assert.IsTrue(CFG.Dominates(B2, B3), 'B2 dominiert B3');
+    Assert.IsFalse(CFG.Dominates(B3, B2), 'Rueckrichtung nie');
+  finally CFG.Free; end;
+end;
+
+procedure TTestCFG.Dominates_DiamondBranchesDominateNothing;
+var
+  CFG : TCFG;
+  Branch, T, E, Merge : uCFG.TCFGBlock;
+begin
+  // Diamant: Entry -> Branch -> {T | E} -> Merge.
+  // Branch dominiert Merge; T/E dominieren Merge NICHT (jeweils
+  // Alternativpfad ueber den anderen Arm).
+  CFG := TCFG.Create;
+  try
+    Branch := CFG.NewBlock(ckBranch);
+    T      := CFG.NewBlock(ckStatement);
+    E      := CFG.NewBlock(ckStatement);
+    Merge  := CFG.NewBlock(ckStatement);
+    CFG.Connect(CFG.Entry, Branch);
+    CFG.Connect(Branch, T);
+    CFG.Connect(Branch, E);
+    CFG.Connect(T, Merge);
+    CFG.Connect(E, Merge);
+    Assert.IsTrue(CFG.Dominates(Branch, Merge), 'Branch dominiert Merge');
+    Assert.IsFalse(CFG.Dominates(T, Merge), 'Then-Arm dominiert Merge nicht');
+    Assert.IsFalse(CFG.Dominates(E, Merge), 'Else-Arm dominiert Merge nicht');
+  finally CFG.Free; end;
+end;
+
+procedure TTestCFG.Dominates_UnreachableTarget_False;
+var
+  CFG : TCFG;
+  B1, Island : uCFG.TCFGBlock;
+begin
+  // Island haengt nicht am Entry -> Dominanz-Query konservativ False.
+  CFG := TCFG.Create;
+  try
+    B1     := CFG.NewBlock(ckStatement);
+    Island := CFG.NewBlock(ckStatement);
+    CFG.Connect(CFG.Entry, B1);
+    Assert.IsFalse(CFG.Dominates(B1, Island), 'unerreichbares Ziel -> False');
+    Assert.IsFalse(CFG.Dominates(CFG.Entry, Island), 'auch fuer Entry');
+  finally CFG.Free; end;
+end;
+
+procedure TTestCFG.Dominates_GuardBeforeUse_True;
+var
+  Meth : TAstNode;
+  CFG  : TCFG;
+  GuardBranch, UseBlk : uCFG.TCFGBlock;
+  B    : uCFG.TCFGBlock;
+begin
+  // Builder-basiert (SCA010-Zielmuster): if <cond> then Exit; x := 1;
+  // Der Guard-Branch dominiert das nachfolgende Statement - genau die
+  // Query, mit der der DivByZero-Postfilter '<=0-Guard dominiert Division'
+  // erkennen soll.
+  Meth := MakeMethod([ StmtIf(StmtExit, nil), StmtAssign ]);
+  try
+    CFG := TCFGBuilder.BuildFromMethod(Meth);
+    try
+      GuardBranch := nil;
+      UseBlk      := nil;
+      for B in CFG.Blocks do
+      begin
+        if (B.Kind = ckBranch) and (GuardBranch = nil) then
+          GuardBranch := B;
+        // Use-Block = Statement-Block MIT AstNodes NACH dem Branch
+        // (der Merge sammelt das Assign ein).
+        if (B.Kind = ckStatement) and (B.AstNodes.Count > 0) and
+           (GuardBranch <> nil) and (B <> GuardBranch) and
+           (B.Id > GuardBranch.Id) then
+          UseBlk := B;
+      end;
+      Assert.IsNotNull(GuardBranch, 'Branch-Block existiert');
+      Assert.IsNotNull(UseBlk, 'Use-Block existiert');
+      Assert.IsTrue(CFG.Dominates(GuardBranch, UseBlk),
+        'Guard-Branch dominiert das Statement nach dem if');
+    finally CFG.Free; end;
+  finally Meth.Free; end;
+end;
+
+procedure TTestCFG.CanReachAvoiding_BlockedSinglePath_False;
+var
+  CFG : TCFG;
+  B1, B2, B3 : uCFG.TCFGBlock;
+begin
+  // Entry -> B1 -> B2 -> B3: einziger Pfad B1->B3 laeuft ueber B2.
+  CFG := TCFG.Create;
+  try
+    B1 := CFG.NewBlock(ckStatement);
+    B2 := CFG.NewBlock(ckStatement);
+    B3 := CFG.NewBlock(ckStatement);
+    CFG.Connect(CFG.Entry, B1);
+    CFG.Connect(B1, B2);
+    CFG.Connect(B2, B3);
+    Assert.IsFalse(CFG.CanReachAvoiding(B1, B3, [B2]),
+      'einziger Pfad blockiert -> False (Re-Def faengt die Def ab)');
+  finally CFG.Free; end;
+end;
+
+procedure TTestCFG.CanReachAvoiding_AlternatePathSurvives_True;
+var
+  CFG : TCFG;
+  Branch, T, E, Merge : uCFG.TCFGBlock;
+begin
+  // Diamant: Avoid auf dem Then-Arm, der Else-Arm bleibt als Pfad.
+  CFG := TCFG.Create;
+  try
+    Branch := CFG.NewBlock(ckBranch);
+    T      := CFG.NewBlock(ckStatement);
+    E      := CFG.NewBlock(ckStatement);
+    Merge  := CFG.NewBlock(ckStatement);
+    CFG.Connect(CFG.Entry, Branch);
+    CFG.Connect(Branch, T);
+    CFG.Connect(Branch, E);
+    CFG.Connect(T, Merge);
+    CFG.Connect(E, Merge);
+    Assert.IsTrue(CFG.CanReachAvoiding(Branch, Merge, [T]),
+      'Else-Arm ueberlebt als alternativer Pfad');
+    Assert.IsFalse(CFG.CanReachAvoiding(Branch, Merge, [T, E]),
+      'beide Arme blockiert -> kein Pfad');
+  finally CFG.Free; end;
+end;
+
+procedure TTestCFG.CanReachAvoiding_EndpointsExemptFromAvoid;
+var
+  CFG : TCFG;
+  B1, B2 : uCFG.TCFGBlock;
+begin
+  // From/To_ duerfen selbst im Avoid stehen (Def-Block ist zugleich
+  // "Re-Def"-Kandidat): die Query zaehlt nur ZWISCHEN-Stationen.
+  CFG := TCFG.Create;
+  try
+    B1 := CFG.NewBlock(ckStatement);
+    B2 := CFG.NewBlock(ckStatement);
+    CFG.Connect(CFG.Entry, B1);
+    CFG.Connect(B1, B2);
+    Assert.IsTrue(CFG.CanReachAvoiding(B1, B2, [B1]),
+      'From im Avoid -> trotzdem expandiert');
+    Assert.IsTrue(CFG.CanReachAvoiding(B1, B2, [B2]),
+      'To_ im Avoid -> trotzdem als erreicht erkannt');
+  finally CFG.Free; end;
+end;
+
+procedure TTestCFG.CanReachAvoiding_EmptyAvoid_EqualsCanReach;
+var
+  CFG : TCFG;
+  B1, B2, Island : uCFG.TCFGBlock;
+begin
+  CFG := TCFG.Create;
+  try
+    B1     := CFG.NewBlock(ckStatement);
+    B2     := CFG.NewBlock(ckStatement);
+    Island := CFG.NewBlock(ckStatement);
+    CFG.Connect(CFG.Entry, B1);
+    CFG.Connect(B1, B2);
+    Assert.IsTrue(CFG.CanReach(B1, B2) = CFG.CanReachAvoiding(B1, B2, []),
+      'leeres Avoid == CanReach (erreichbarer Fall)');
+    Assert.IsTrue(CFG.CanReach(B1, Island) = CFG.CanReachAvoiding(B1, Island, []),
+      'leeres Avoid == CanReach (unerreichbarer Fall)');
+  finally CFG.Free; end;
+end;
+
+procedure TTestCFG.CanReachAvoiding_LoopBackEdge_ReachesEarlierBlock;
+var
+  CFG : TCFG;
+  Head, Body, Next : uCFG.TCFGBlock;
+begin
+  // Schleife: Head -> Body -> Head (Back-Edge), Head -> Next.
+  // Vom Body aus ist Next NUR ueber den Head erreichbar; Avoid[Head]
+  // muss die Back-Edge mit abschneiden (SCA166-Zielmuster: Def in
+  // Iteration 1 erreicht Read in Iteration 2 ueber die Back-Edge).
+  CFG := TCFG.Create;
+  try
+    Head := CFG.NewBlock(ckLoop);
+    Body := CFG.NewBlock(ckStatement);
+    Next := CFG.NewBlock(ckStatement);
+    CFG.Connect(CFG.Entry, Head);
+    CFG.Connect(Head, Body);
+    CFG.Connect(Body, Head);   // Back-Edge
+    CFG.Connect(Head, Next);
+    Assert.IsTrue(CFG.CanReachAvoiding(Body, Body, []),
+      'Self-Query trivial True (From=To_)');
+    Assert.IsTrue(CFG.CanReach(Body, Next), 'ueber Back-Edge erreichbar');
+    Assert.IsFalse(CFG.CanReachAvoiding(Body, Next, [Head]),
+      'Head blockiert -> Back-Edge-Pfad abgeschnitten');
+  finally CFG.Free; end;
+end;
+
+{ #6 Inkr.1b: Builder-Fidelity }
+
+procedure TTestCFG.TryFinally_ExitInTry_FinallyReachableFromExitBlock;
+var
+  Meth : TAstNode;
+  CFG  : TCFG;
+  B, ExitBlk, FinallyBlk : uCFG.TCFGBlock;
+  N    : TAstNode;
+begin
+  // try if c then Exit; finally y := 1; end;
+  // Delphi fuehrt den finally-Block AUCH beim Exit aus. Vor Inkr.1b verband
+  // der Exit-Block nur zu Exit_ -> finally war von dort unerreichbar und ein
+  // CanReach-Drop-Filter haette Funde im finally over-gedroppt.
+  Meth := MakeMethod([ StmtTryFinally(StmtIf(StmtExit, nil), StmtAssign) ]);
+  try
+    CFG := TCFGBuilder.BuildFromMethod(Meth);
+    try
+      ExitBlk    := nil;
+      FinallyBlk := nil;
+      for B in CFG.Blocks do
+      begin
+        if B.Kind = ckException then FinallyBlk := B;
+        for N in B.AstNodes do
+          if N.Kind = nkExit then ExitBlk := B;
+      end;
+      Assert.IsNotNull(ExitBlk, 'Exit-Block existiert');
+      Assert.IsNotNull(FinallyBlk, 'Finally-Block (ckException) existiert');
+      Assert.IsTrue(CFG.CanReach(ExitBlk, FinallyBlk),
+        'Exit im Try erreicht den finally-Block (Cross-Edge Inkr.1b)');
+    finally CFG.Free; end;
+  finally Meth.Free; end;
+end;
+
+procedure TTestCFG.TryExcept_MidTryBlock_ReachesExceptHandler;
+var
+  Meth : TAstNode;
+  CFG  : TCFG;
+  B, BranchBlk, ExceptBlk : uCFG.TCFGBlock;
+begin
+  // try if c then x := 1; except y := 2; end;
+  // Der if-Branch entsteht WAEHREND des Try-Walks - vor Inkr.1b hatte nur
+  // TryBodyStart die Cross-Edge, der Branch konnte den Handler nie erreichen
+  // (Exception nach dem ersten Statement war im Graph unsichtbar).
+  Meth := MakeMethod([ StmtTryExcept(StmtIf(StmtAssign, nil), StmtAssign) ]);
+  try
+    CFG := TCFGBuilder.BuildFromMethod(Meth);
+    try
+      BranchBlk := nil;
+      ExceptBlk := nil;
+      for B in CFG.Blocks do
+      begin
+        if B.Kind = ckBranch then BranchBlk := B;
+        if B.Kind = ckException then ExceptBlk := B;
+      end;
+      Assert.IsNotNull(BranchBlk, 'Branch im Try existiert');
+      Assert.IsNotNull(ExceptBlk, 'Except-Block existiert');
+      Assert.IsTrue(CFG.CanReach(BranchBlk, ExceptBlk),
+        'Block mitten im Try erreicht den Handler (Mark-Range-Edges Inkr.1b)');
+    finally CFG.Free; end;
+  finally Meth.Free; end;
+end;
+
+procedure TTestCFG.CondNode_SetOnBranchAndLoopHeads;
+var
+  Meth : TAstNode;
+  CFG  : TCFG;
+  B    : uCFG.TCFGBlock;
+  BranchCond, LoopCond : TAstNode;
+begin
+  // if c then x := 1; while c do x := 2;
+  // ckBranch traegt das nkIfStmt, ckLoop das nkWhileStmt - Konsumenten
+  // (SCA008 Q3 / SCA010 G5) lesen darueber den Bedingungstext.
+  Meth := MakeMethod([ StmtIf(StmtAssign, nil), StmtWhile(StmtAssign) ]);
+  try
+    CFG := TCFGBuilder.BuildFromMethod(Meth);
+    try
+      BranchCond := nil;
+      LoopCond   := nil;
+      for B in CFG.Blocks do
+      begin
+        if (B.Kind = ckBranch) and (B.CondNode <> nil) then
+          BranchCond := B.CondNode;
+        if (B.Kind = ckLoop) and (B.CondNode <> nil) then
+          LoopCond := B.CondNode;
+      end;
+      Assert.IsNotNull(BranchCond, 'Branch-CondNode gesetzt');
+      Assert.IsTrue(BranchCond.Kind = nkIfStmt, 'Branch-CondNode = nkIfStmt');
+      Assert.IsNotNull(LoopCond, 'Loop-CondNode gesetzt');
+      Assert.IsTrue(LoopCond.Kind = nkWhileStmt, 'Loop-CondNode = nkWhileStmt');
     finally CFG.Free; end;
   finally Meth.Free; end;
 end;

@@ -1,6 +1,9 @@
 unit uCFG;
 
-// Control-Flow-Graph (CFG) fuer SCA134 UseAfterFree (Konzept_A4_CFG.md).
+// Control-Flow-Graph (CFG) - Shared Service fuer flussbasierte Detektoren.
+// Historie: gebaut fuer SCA134 UseAfterFree (Konzept_A4_CFG.md); seit
+// Roadmap #6 (Konzept_EngineArchitektur_FpReduktion) mit Dominates- und
+// Reaching-Defs-Queries (CanReachAvoiding) fuer SCA008/166/010/011.
 //
 // Phasen-Stand:
 //   A.4.1 Datenstruktur + leerer Builder              -- DONE
@@ -42,6 +45,12 @@ type
     Successors   : TList<TCFGBlock>;      // 1..N Nachfolger (nicht-besitzend)
     Predecessors : TList<TCFGBlock>;      // Reverse-Edges (nicht-besitzend)
     Line         : Integer;
+    // #6 Inkr.1b: bei ckBranch/ckLoop der ausloesende AST-Knoten (nkIfStmt/
+    // nkCaseStmt/nkWhileStmt/nkForStmt/nkRepeatStmt, nicht-besitzend, nil bei
+    // Entry/Exit/Statement-Bloecken). Konsumenten (SCA008 Q3, SCA010 G5)
+    // lesen darueber den Bedingungstext (TypeRef) fuer Guard-/Negations-
+    // Korrelation - Line-Matching waere bei mehreren ifs pro Zeile ambig.
+    CondNode     : TAstNode;
     constructor Create(AId: Integer; AKind: TCFGNodeKind);
     destructor Destroy; override;
   end;
@@ -67,6 +76,25 @@ type
     // Reachability via Forward-DFS. O(V+E) - Method-typische CFGs
     // sind < 100 Blocks, daher unbedenklich.
     function CanReach(From, To_: TCFGBlock): Boolean;
+
+    // Roadmap #6 (Konzept_EngineArchitektur_FpReduktion): Reaching-Defs in
+    // Query-Form. Existiert ein Pfad From -> To_, der KEINEN Avoid-Block als
+    // Zwischenstation passiert? Endpunkte sind vom Avoid ausgenommen (From
+    // darf selbst in Avoid liegen, To_ zaehlt als erreicht bevor Avoid
+    // greift) - genau die Def-Use-Frage: "erreicht die Def in From den Use
+    // in To_, ohne dass eine der Re-Defs in Avoid dazwischenliegt?".
+    // Intra-Block-Reihenfolge (Def und Use im SELBEN Block) muss der
+    // Konsument ueber die AstNodes-Reihenfolge des Blocks klaeren.
+    function CanReachAvoiding(From, To_: TCFGBlock;
+      const Avoid: array of TCFGBlock): Boolean;
+
+    // Roadmap #6: Dominanz-Query ohne Dominator-Baum (Anti-Goldplating,
+    // Konzept-Vorgabe). A dominiert B gdw. JEDER Pfad Entry -> B durch A
+    // fuehrt. Implementierung: DFS von Entry, der A nie betritt - wird B
+    // trotzdem erreicht, dominiert A nicht. Konventionen: Dominates(A,A) =
+    // True; ist B von Entry aus gar nicht erreichbar, liefert die Query
+    // False (konservativ: Postfilter droppen dann NICHT). O(V+E) pro Query.
+    function Dominates(A, B: TCFGBlock): Boolean;
 
     property Entry: TCFGBlock read FEntry;
     property Exit_: TCFGBlock read FExit;
@@ -98,6 +126,7 @@ begin
   Successors   := TList<TCFGBlock>.Create;
   Predecessors := TList<TCFGBlock>.Create;
   Line         := 0;
+  CondNode     := nil;
 end;
 
 destructor TCFGBlock.Destroy;
@@ -141,34 +170,68 @@ begin
 end;
 
 function TCFG.CanReach(From, To_: TCFGBlock): Boolean;
+begin
+  // Delegiert an die Avoid-Variante mit leerem Avoid-Set - eine
+  // DFS-Implementierung fuer beide Queries (#6: vorher TList.IndexOf-
+  // Visited = O(V^2), jetzt Id-indiziertes Visited-Array = O(V+E);
+  // Block.Id ist per NewBlock sequentiell 0..FNextId-1).
+  Result := CanReachAvoiding(From, To_, []);
+end;
+
+function TCFG.CanReachAvoiding(From, To_: TCFGBlock;
+  const Avoid: array of TCFGBlock): Boolean;
 var
-  Visited : TList<TCFGBlock>;
+  Visited : TArray<Boolean>;   // Index = Block.Id; True = besucht ODER gemieden
   Stack   : TStack<TCFGBlock>;
   Current : TCFGBlock;
   Succ    : TCFGBlock;
+  i       : Integer;
 begin
   if (From = nil) or (To_ = nil) then Exit(False);
   if From = To_ then Exit(True);
-  Visited := TList<TCFGBlock>.Create;
-  Stack   := TStack<TCFGBlock>.Create;
+  SetLength(Visited, FNextId);   // initialisiert False (managed Array)
+  // Avoid-Blocks als "besucht" vormerken -> DFS betritt sie nie. From wird
+  // ohnehin nur expandiert (nie gegen Avoid geprueft), To_ wird VOR dem
+  // Visited-Check erkannt -> Endpunkte sind wie dokumentiert ausgenommen.
+  for i := Low(Avoid) to High(Avoid) do
+    if Avoid[i] <> nil then
+      Visited[Avoid[i].Id] := True;
+  Stack := TStack<TCFGBlock>.Create;
   try
     Stack.Push(From);
+    Visited[From.Id] := True;
     while Stack.Count > 0 do
     begin
       Current := Stack.Pop;
-      if Visited.IndexOf(Current) >= 0 then Continue;
-      Visited.Add(Current);
       for Succ in Current.Successors do
       begin
         if Succ = To_ then Exit(True);
-        if Visited.IndexOf(Succ) < 0 then Stack.Push(Succ);
+        if not Visited[Succ.Id] then
+        begin
+          Visited[Succ.Id] := True;
+          Stack.Push(Succ);
+        end;
       end;
     end;
     Result := False;
   finally
     Stack.Free;
-    Visited.Free;
   end;
+end;
+
+function TCFG.Dominates(A, B: TCFGBlock): Boolean;
+begin
+  if (A = nil) or (B = nil) then Exit(False);
+  if A = B then Exit(True);
+  // Dominanz ist nur fuer erreichbare Blocks definiert; unerreichbares B
+  // -> False (konservativ, Postfilter droppt dann nicht).
+  if not CanReach(FEntry, B) then Exit(False);
+  // Entry dominiert jeden erreichbaren Block (A=Entry ist oben nicht per
+  // CanReachAvoiding abbildbar, weil From vom Avoid ausgenommen ist).
+  if A = FEntry then Exit(True);
+  // B erreichbar, aber jeder Pfad laeuft durch A? Dann ist Entry -> B
+  // OHNE A unmoeglich.
+  Result := not CanReachAvoiding(FEntry, B, [A]);
 end;
 
 { TCFGBuilder }
@@ -312,6 +375,7 @@ var
 
           BranchBlk := CFG.NewBlock(ckBranch);
           BranchBlk.Line := S.Line;
+          BranchBlk.CondNode := S;   // #6 1b: Bedingung fuer Guard-Queries
           CFG.Connect(Current, BranchBlk);
 
           // Then-Pfad
@@ -361,6 +425,7 @@ var
 
           BranchBlk := CFG.NewBlock(ckBranch);
           BranchBlk.Line := S.Line;
+          BranchBlk.CondNode := S;   // #6 1b: case-Selector fuer Guard-Queries
           CFG.Connect(Current, BranchBlk);
           // KRITISCH: distinkte inline-Variable CaseMerge statt der
           // function-level 'Merge'. WalkStatements(SubCh.Children) im
@@ -414,6 +479,7 @@ var
 
           var LoopHead := CFG.NewBlock(ckLoop);
           LoopHead.Line := S.Line;
+          LoopHead.CondNode := S;   // #6 1b: Schleifenkopf fuer Guard-Queries
           var NextBlk  := CFG.NewBlock(ckStatement);
           CFG.Connect(Current, LoopHead);
 
@@ -466,6 +532,7 @@ var
           var BodyStart := CFG.NewBlock(ckStatement);
           BodyStart.Line := S.Line;
           var UntilHead := CFG.NewBlock(ckLoop);
+          UntilHead.CondNode := S;   // #6 1b: until-Bedingung fuer Guard-Queries
           var NextBlk   := CFG.NewBlock(ckStatement);
           CFG.Connect(Current, BodyStart);
 
@@ -499,10 +566,9 @@ var
           //   ExceptTail   -> Merge        (Handler beendet, weiter)
           //   Result = Merge
           //
-          // Vereinfachung: Cross-Edge nur am START vom Try-Body. Genauer
-          // waere "jeder Statement im Try kann throwen" (= Cross-Edge von
-          // JEDEM TryBody-Block). Fuer SCA134-Reachability reicht der
-          // Start-Edge - ExceptStart wird damit erreichbar markiert.
+          // Seit #6 Inkr.1b: Cross-Edge von JEDEM TryBody-Block (Mark-Range
+          // nach dem Walk, s.u.) - "jedes Statement im Try kann throwen".
+          // Der explizite Start-Edge bleibt fuer den Fall leerer Try-Bodies.
           Current.AstNodes.Add(S);
           if Current.Line = 0 then Current.Line := S.Line;
 
@@ -533,9 +599,25 @@ var
                 TryStmts.Add(SubCh);
             end;
 
+            // #6 Inkr.1b: JEDER Block des Try-Koerpers bekommt die Exception-
+            // Cross-Edge zum Handler (vorher nur TryBodyStart -> ExceptStart).
+            // Grund (Leser-Audit 2026-07-23): eine Exception kann nach JEDEM
+            // Statement im Try fliegen; ohne die Kanten waere z.B. eine
+            // nil-Zuweisung mitten im Try aus Sicht von CanReach nie im
+            // Handler sichtbar -> ein CanReach-Drop-Filter (SCA008 Q1) wuerde
+            // echte Funde over-droppen. Mark-Range: NewBlock haengt sequen-
+            // tiell an FBlocks, also sind GENAU die waehrend des Try-Walks
+            // erzeugten Bloecke (inkl. nested Strukturen - auch deren
+            // Exceptions propagieren hierher) die Indizes [TryMark, Count).
+            // Rein Kanten-ADDITIV -> Reachability kann nur zunehmen ->
+            // SCA134-A/B kann nur ADDs zeigen (vorher zu unrecht gedroppte
+            // Funde), nie neue Drops.
+            var TryMark := CFG.Blocks.Count;
             var TryBodyTail := WalkStatements(TryStmts, CFG, TryBodyStart);
             if TryBodyTail <> nil then
               CFG.Connect(TryBodyTail, TryMerge);
+            for var bi := TryMark to CFG.Blocks.Count - 1 do
+              CFG.Connect(CFG.Blocks[bi], ExceptStart);
 
             // Except-Body walken (alle Children inkl. on-Handler).
             var ExceptTail : TCFGBlock := ExceptStart;
@@ -587,9 +669,18 @@ var
                 TryStmts.Add(SubCh);
             end;
 
+            // #6 Inkr.1b: analog nkTryExcept - JEDER Try-Koerper-Block
+            // bekommt die Cross-Edge zum Finally (Exception ODER Exit/raise/
+            // Break/Continue mitten im Try laufen in Delphi IMMER durch den
+            // finally-Block; vorher verband nkExit direkt zu Exit_ und der
+            // finally war von dort unerreichbar -> Over-Drop-Risiko fuer
+            // CanReach-Filter bei Use-im-finally). Kanten-additiv, s.o.
+            var TryMark := CFG.Blocks.Count;
             var TryBodyTail := WalkStatements(TryStmts, CFG, TryBodyStart);
             if TryBodyTail <> nil then
               CFG.Connect(TryBodyTail, FinallyStart);
+            for var bi := TryMark to CFG.Blocks.Count - 1 do
+              CFG.Connect(CFG.Blocks[bi], FinallyStart);
 
             var FinallyTail : TCFGBlock := FinallyStart;
             if FinallyNode <> nil then
