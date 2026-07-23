@@ -306,6 +306,7 @@
         <DCCReference Include="sources\Infrastructure\uSonarPull.pas"/>
         <DCCReference Include="sources\Infrastructure\uStaticAnalyzer2.pas"/>
         <DCCReference Include="sources\Infrastructure\uProjectFiles.pas"/>
+        <DCCReference Include="sources\Detectors\uNotIncludedInProject.pas"/>
         <DCCReference Include="sources\Infrastructure\uStaticFiles.pas"/>
         <DCCReference Include="sources\Infrastructure\uSuppression.pas"/>
         <DCCReference Include="sources\Infrastructure\uSuppressionTelemetry.pas"/>

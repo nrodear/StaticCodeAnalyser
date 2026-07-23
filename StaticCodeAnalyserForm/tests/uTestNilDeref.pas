@@ -22,6 +22,11 @@ type
     // ausschliessenden {$IFDEF}/{$ELSE}-Zweigen (preprocessor-branch)
     [Test] procedure PreprocessorSiblingBranch_NotReported;
     [Test] procedure PreprocessorSameBranch_StillReported;
+    // #6 Inkr.2 (SCA008 Q1): CFG-Erreichbarkeits-Postfilter
+    [Test] procedure CfgTerminatedBranch_NotReported;
+    [Test] procedure CfgBranchWithoutExit_StillReported;
+    [Test] procedure CfgCaseArmSiblings_NotReported;
+    [Test] procedure CfgSameCaseArm_StillReported;
   end;
 
 implementation
@@ -185,6 +190,102 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
     'nil-Deref im selben {$IFDEF}-Zweig bleibt ein echter Fund');
+  finally F.Free; end;
+end;
+
+{ #6 Inkr.2 (SCA008 Q1): CFG-Erreichbarkeits-Postfilter }
+
+procedure TTestNilDeref.CfgTerminatedBranch_NotReported;
+// Form (a): nil-Zuweisung in terminierendem Zweig - der Exit beendet den
+// Pfad, der Deref nach dem if laeuft nur ueber den Nicht-nil-Pfad. Vor
+// Inkr.2 gemeldet (kein lexikalisches Gate greift: kein else, Bedingung
+// ohne Assigned/<>nil-Pattern, kein Reassign).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(Fail: Boolean);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  if Fail then'#13#10 +
+  '  begin'#13#10 +
+  '    x := nil;'#13#10 +
+  '    Exit;'#13#10 +
+  '  end;'#13#10 +
+  '  x.DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
+      'nil+Exit im Zweig: Deref ist vom nil-Block unerreichbar -> kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.CfgBranchWithoutExit_StillReported;
+// TP-Gegenprobe zu Form (a): OHNE Exit fliesst der nil-Pfad zum Merge und
+// erreicht den Deref -> der Fund MUSS bleiben (Ueberreichweite-Schutz).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(Fail: Boolean);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  if Fail then'#13#10 +
+  '    x := nil;'#13#10 +
+  '  x.DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+      'ohne Exit erreicht der nil-Pfad den Deref -> Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.CfgCaseArmSiblings_NotReported;
+// Form (b): case-Arm-Geschwister sind nie gemeinsam ausfuehrbar;
+// IsInExclusiveBranch deckt nur then/else desselben if -> vor Inkr.2
+// wurde das gemeldet.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(k: Integer);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  case k of'#13#10 +
+  '    0: x := nil;'#13#10 +
+  '    1: x.DoStuff;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
+      'case-Arm-Geschwister: kein gemeinsamer Pfad -> kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.CfgSameCaseArm_StillReported;
+// TP-Gegenprobe zu Form (b): nil und Deref im SELBEN Arm laufen
+// sequentiell -> der Fund MUSS bleiben (Same-Block => kein Drop).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(k: Integer);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  case k of'#13#10 +
+  '    0: begin'#13#10 +
+  '         x := nil;'#13#10 +
+  '         x.DoStuff;'#13#10 +
+  '       end;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+      'nil+Deref im selben case-Arm bleibt ein echter Fund');
   finally F.Free; end;
 end;
 

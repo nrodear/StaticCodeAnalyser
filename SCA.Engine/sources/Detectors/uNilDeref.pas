@@ -65,6 +65,9 @@ implementation
 // noinspection-file CanBeStrictPrivate, ConcatToFormat, ConsecutiveSection, CyclomaticComplexity, LongMethod, RedundantJump, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  uCFG;   // #6 Inkr.2: CFG-Erreichbarkeits-Postfilter (Q1)
+
 function DirLineBetween(const Lines: TArray<Integer>; A, B: Integer): Boolean;
 // Real-World-FP-Audit 2026-07-12, FP-Klasse 'preprocessor-branch' (Teilklasse
 // der 'mutually-exclusive-branches'): True wenn eine {$IFDEF}-Direktiven-Zeile
@@ -329,6 +332,60 @@ begin
   end;
 end;
 
+function CfgDropsNilDeref(MethodNode: TAstNode; var ACfg: TCFG;
+  ANilAssign, ADeref: TAstNode): Boolean;
+// #6 Inkr.2 (SCA008 Q1, CFG Shared Service): Drop, wenn der Deref im CFG
+// vom nil-Block aus UNERREICHBAR ist. Killt die zwei Formen, die die
+// lexikalischen Gates nicht sehen (Leser-Audit 2026-07-23):
+//   (a) nil-Zuweisung in terminierendem Zweig - 'if Fail then begin
+//       x := nil; Exit; end; ... x.Foo': der nil-Block verbindet nur zu
+//       Exit_ (bzw. Handler), nie zum Deref;
+//   (b) case-Arm-Geschwister - 'case k of 0: x := nil; 1: x.Foo; end':
+//       Arme sind nie gemeinsam ausfuehrbar; IsInExclusiveBranch deckt
+//       nur then/else DESSELBEN if ab.
+// Rezept = SCA134 (uUseAfterFree.CfgFilterDropsFinding), aber Block-Lookup
+// primaer per AST-Node-IDENTITAET (der Builder legt exakt dieselben
+// nkAssign-/nkCall-Instanzen in Block.AstNodes ab, uCFG A.4.2); Zeilen-
+// Fallback nur fuer den Deref (ein nkCall als RHS-Ausdruck ist kein
+// eigenes CFG-Statement, nur der umgebende nkAssign liegt im Block).
+// KONSERVATIV: Lookup-Fehlschlag oder Same-Block (sequentiell erreichbar)
+// => False = kein Drop. ACfg wird LAZY gebaut - erst wenn ein Kandidat
+// alle billigen Gates ueberlebt hat - und gehoert dem Aufrufer (Free).
+var
+  B        : TCFGBlock;
+  N        : TAstNode;
+  NilBlk   : TCFGBlock;
+  DerefBlk : TCFGBlock;
+begin
+  Result := False;
+  if (MethodNode = nil) or (ANilAssign = nil) or (ADeref = nil) then Exit;
+  if ACfg = nil then
+    ACfg := TCFGBuilder.BuildFromMethod(MethodNode);
+  NilBlk   := nil;
+  DerefBlk := nil;
+  for B in ACfg.Blocks do
+    for N in B.AstNodes do
+    begin
+      if N = ANilAssign then NilBlk   := B;
+      if N = ADeref     then DerefBlk := B;
+    end;
+  if DerefBlk = nil then
+    // Zeilen-Fallback (erster Treffer, wie uUseAfterFree.FindBlockForLine).
+    for B in ACfg.Blocks do
+    begin
+      for N in B.AstNodes do
+        if N.Line = ADeref.Line then
+        begin
+          DerefBlk := B;
+          Break;
+        end;
+      if DerefBlk <> nil then Break;
+    end;
+  if (NilBlk = nil) or (DerefBlk = nil) then Exit;
+  if NilBlk = DerefBlk then Exit;
+  Result := not ACfg.CanReach(NilBlk, DerefBlk);
+end;
+
 class procedure TNilDerefDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>;
   const ADirLines: TArray<Integer>);
@@ -338,99 +395,113 @@ var
   NA      : TAstNode;
   VarLow  : string;
   F       : TLeakFinding;
+  CfgGraph: TCFG;      // lazy (CfgDropsNilDeref), Free im finally
 begin
   Assigns := MethodNode.FindAllRef(nkAssign);
   Calls   := MethodNode.FindAllRef(nkCall);
-  for NA in Assigns do
-  begin
-    // Nur direkte nil-Zuweisungen: 'varname := nil'
-    if NA.TypeRef.ToLower <> 'nil' then Continue;
-    // Feldwerte (obj.field := nil) ueberspringen – Cleanup-Muster
-    if Pos('.', NA.Name) > 0 then Continue;
-
-    VarLow := NA.Name.ToLower;
-    if VarLow = '' then Continue;
-    // Self oder Result als Variablenname ueberspringen
-    if (VarLow = 'self') or (VarLow = 'result') then Continue;
-
-    for var C in Calls do
+  CfgGraph := nil;
+  try
+    for NA in Assigns do
     begin
-      if C.Line <= NA.Line then Continue;
+      // Nur direkte nil-Zuweisungen: 'varname := nil'
+      if NA.TypeRef.ToLower <> 'nil' then Continue;
+      // Feldwerte (obj.field := nil) ueberspringen – Cleanup-Muster
+      if Pos('.', NA.Name) > 0 then Continue;
 
-      var NameLow := C.Name.ToLower;
-      // Punkt-Zugriff 'varname.' im Call-Namen?
-      // Wortgrenze pruefen: muss am Anfang oder nach Nicht-Bezeichner stehen
-      var p := Pos(VarLow + '.', NameLow);
-      if p = 0 then Continue;
-      if p > 1 then
+      VarLow := NA.Name.ToLower;
+      if VarLow = '' then Continue;
+      // Self oder Result als Variablenname ueberspringen
+      if (VarLow = 'self') or (VarLow = 'result') then Continue;
+
+      for var C in Calls do
       begin
-        var Prev := NameLow[p - 1];
-        // Auto-Runde 2026-07-19: '.' in der Prev-Menge - 'fUnits[0].Editor.
-        // Activate' matcht sonst die LOKALE Var 'Editor', obwohl dort der
-        // MEMBER eines anderen Objekts steht (Namenskollision; analog
-        // HasBareArgUse). Bei fuehrendem '.' ist es nie die lokale Var.
-        if CharInSet(Prev, ['a'..'z', '0'..'9', '_', '.']) then Continue;
-      end;
+        if C.Line <= NA.Line then Continue;
 
-      // .Free / .Destroy sind nil-sicher
-      if IsNilSafeCall(NameLow, VarLow) then Continue;
-
-      // Neuzuweisung zwischen nil und Zugriff?
-      var Reassigned := False;
-      for var A in Assigns do
-      begin
-        if A = NA then Continue;
-        if A.Line <= NA.Line then Continue;
-        if A.Line >= C.Line  then Break;
-        if A.Name.ToLower <> VarLow then Continue;
-        if A.TypeRef.ToLower <> 'nil' then
+        var NameLow := C.Name.ToLower;
+        // Punkt-Zugriff 'varname.' im Call-Namen?
+        // Wortgrenze pruefen: muss am Anfang oder nach Nicht-Bezeichner stehen
+        var p := Pos(VarLow + '.', NameLow);
+        if p = 0 then Continue;
+        if p > 1 then
         begin
-          Reassigned := True;
-          Break;
+          var Prev := NameLow[p - 1];
+          // Auto-Runde 2026-07-19: '.' in der Prev-Menge - 'fUnits[0].Editor.
+          // Activate' matcht sonst die LOKALE Var 'Editor', obwohl dort der
+          // MEMBER eines anderen Objekts steht (Namenskollision; analog
+          // HasBareArgUse). Bei fuehrendem '.' ist es nie die lokale Var.
+          if CharInSet(Prev, ['a'..'z', '0'..'9', '_', '.']) then Continue;
         end;
+
+        // .Free / .Destroy sind nil-sicher
+        if IsNilSafeCall(NameLow, VarLow) then Continue;
+
+        // Neuzuweisung zwischen nil und Zugriff?
+        var Reassigned := False;
+        for var A in Assigns do
+        begin
+          if A = NA then Continue;
+          if A.Line <= NA.Line then Continue;
+          if A.Line >= C.Line  then Break;
+          if A.Name.ToLower <> VarLow then Continue;
+          if A.TypeRef.ToLower <> 'nil' then
+          begin
+            Reassigned := True;
+            Break;
+          end;
+        end;
+        if Reassigned then Continue;
+
+        // Guard via If-Bedingung zwischen nil und Zugriff?
+        if HasGuardingIf(MethodNode, VarLow, NA.Line, C.Line) then Continue;
+
+        // FP-Gate (2026-07-04): out-param-assign - Variable wurde zwischen
+        // nil und Zugriff als Argument uebergeben (var/out-Zuweisung)?
+        if IsPassedAsArgBetween(MethodNode, Calls, Assigns, VarLow, NA.Line, C.Line) then
+          Continue;
+
+        // FP-Gate (2026-07-04): for-in-loop-assign - Variable ist
+        // Schleifenvariable eines for zwischen nil und Zugriff?
+        if IsForLoopAssigned(MethodNode, VarLow, NA.Line, C.Line) then
+          Continue;
+
+        // FP-Gate (Real-World-FP-Audit 2026-07-12): preprocessor-branch -
+        // liegt eine {$IFDEF}-Direktiven-Grenze STRIKT zwischen nil-Zuweisung
+        // und Deref, stehen beide in sich ausschliessenden Kompilierungs-
+        // Zweigen ({$IFDEF x} var := nil {$ELSE} var.Method {$ENDIF}). Nur
+        // die conditional-compilation-Teilklasse der mutually-exclusive-
+        // branches-FPs; die runtime-if/else-Teilklasse bleibt bewusst offen
+        // (braucht then/else-Scope). TP-sicher: ohne Direktive dazwischen
+        // bleibt jeder Fund erhalten.
+        if DirLineBetween(ADirLines, NA.Line, C.Line) then
+          Continue;
+
+        // FP-Gate (Auto-Runde 2026-07-19): mutually-exclusive-branches
+        // (syntactic-sibling-if-else) - nil-Zuweisung (NA) und Deref (C) in
+        // then/else-Schwesterzweigen desselben if -> nie gemeinsam ausgefuehrt.
+        if IsInExclusiveBranch(MethodNode, NA, C) then
+          Continue;
+
+        // FP-Gate #6 Inkr.2 (2026-07-23): CFG-Erreichbarkeit (Q1) - die
+        // nil-Zuweisung erreicht den Deref im Kontrollfluss nie (termi-
+        // nierter Zweig / case-Arm-Geschwister). Bewusst LETZTES Gate:
+        // der CFG wird nur fuer Kandidaten gebaut, die alle billigen
+        // Gates ueberlebt haben (Perf-Regel der -25%-Kampagne).
+        if CfgDropsNilDeref(MethodNode, CfgGraph, NA, C) then
+          Continue;
+
+        // Befund: nil-Zuweisung ohne Guard, dann Punkt-Zugriff
+        F            := TLeakFinding.Create;
+        F.FileName   := FileName;
+        F.MethodName := MethodNode.Name;
+        F.LineNumber := IntToStr(C.Line);
+        F.MissingVar := NA.Name + ' := nil (line ' + IntToStr(NA.Line) + ')';
+        F.SetKind(fkNilDeref);
+        Results.Add(F);
+        Break; // Pro nil-Zuweisung nur einmal melden
       end;
-      if Reassigned then Continue;
-
-      // Guard via If-Bedingung zwischen nil und Zugriff?
-      if HasGuardingIf(MethodNode, VarLow, NA.Line, C.Line) then Continue;
-
-      // FP-Gate (2026-07-04): out-param-assign - Variable wurde zwischen
-      // nil und Zugriff als Argument uebergeben (var/out-Zuweisung)?
-      if IsPassedAsArgBetween(MethodNode, Calls, Assigns, VarLow, NA.Line, C.Line) then
-        Continue;
-
-      // FP-Gate (2026-07-04): for-in-loop-assign - Variable ist
-      // Schleifenvariable eines for zwischen nil und Zugriff?
-      if IsForLoopAssigned(MethodNode, VarLow, NA.Line, C.Line) then
-        Continue;
-
-      // FP-Gate (Real-World-FP-Audit 2026-07-12): preprocessor-branch -
-      // liegt eine {$IFDEF}-Direktiven-Grenze STRIKT zwischen nil-Zuweisung
-      // und Deref, stehen beide in sich ausschliessenden Kompilierungs-
-      // Zweigen ({$IFDEF x} var := nil {$ELSE} var.Method {$ENDIF}). Nur
-      // die conditional-compilation-Teilklasse der mutually-exclusive-
-      // branches-FPs; die runtime-if/else-Teilklasse bleibt bewusst offen
-      // (braucht then/else-Scope). TP-sicher: ohne Direktive dazwischen
-      // bleibt jeder Fund erhalten.
-      if DirLineBetween(ADirLines, NA.Line, C.Line) then
-        Continue;
-
-      // FP-Gate (Auto-Runde 2026-07-19): mutually-exclusive-branches
-      // (syntactic-sibling-if-else) - nil-Zuweisung (NA) und Deref (C) in
-      // then/else-Schwesterzweigen desselben if -> nie gemeinsam ausgefuehrt.
-      if IsInExclusiveBranch(MethodNode, NA, C) then
-        Continue;
-
-      // Befund: nil-Zuweisung ohne Guard, dann Punkt-Zugriff
-      F            := TLeakFinding.Create;
-      F.FileName   := FileName;
-      F.MethodName := MethodNode.Name;
-      F.LineNumber := IntToStr(C.Line);
-      F.MissingVar := NA.Name + ' := nil (line ' + IntToStr(NA.Line) + ')';
-      F.SetKind(fkNilDeref);
-      Results.Add(F);
-      Break; // Pro nil-Zuweisung nur einmal melden
     end;
+  finally
+    CfgGraph.Free;   // nil-sicher; lazy gebaut in CfgDropsNilDeref
   end;
 end;
 
