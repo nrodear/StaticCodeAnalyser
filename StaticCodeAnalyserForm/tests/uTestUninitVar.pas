@@ -114,6 +114,18 @@ type
     [Test] procedure LengthGuardArrayElementRead_StillFlagged;    // FN-Gegenprobe zu Length-INTR
     [Test] procedure ManagedAliasTbtString_NoFinding;             // tbtString = managed AnsiString
     [Test] procedure IdentToIntVarArgWrite_NoFinding;             // IdentToInt fuellt var-Arg
+    // #6 Inkr.4: CFG-Postfilter (Zyklus-Regel + ReachingDefs)
+    [Test] procedure CfgLoopAccumulatorGuarded_NoFinding;         // Back-Edge-Drop (Regel B)
+    [Test] procedure CfgStraightLineReadBeforeWrite_StillFlagged; // Same-Block = plausibler TP
+    [Test] procedure CfgSiblingArmsWithoutLoop_StillFlagged;      // bewusst v1-offen
+    // KEIN goto-Guard-Test: Methoden mit label/goto erzeugen empirisch GAR
+    // KEINE fcMedium-Funde (label-Sektion stoert die lexikalische Pipeline,
+    // CLI-verifiziert 2026-07-24 an 2 Formen) - der BodyHasGotoOrLabel-Guard
+    // im Filter ist reine Defense-in-Depth und end-to-end nicht testbar.
+    // Inkr.4b (Drop-Sampling-Fixes: 37 Stellen, 1 MASKED_BUG)
+    [Test] procedure CfgUnguardedLoopConditionRead_StillFlagged;  // bson-Muster: Regel B braucht Guard
+    [Test] procedure DeclInitializedLocal_NoFinding;              // FPC 'V: Integer = 1' = Write
+    [Test] procedure DeclCommentEquals_StillFlagged;              // '=' im Kommentar != Initializer
   end;
 
 implementation
@@ -1982,6 +1994,189 @@ begin
   try Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
     'IdentToInt fuellt var-Arg n -> Write registriert -> kein uninit-Read');
   finally L.Free; end;
+end;
+
+// ============================================================
+// #6 Inkr.4: CFG-Postfilter (Zyklus-Regel + ReachingDefs)
+// ============================================================
+
+procedure TTestUninitVar.CfgLoopAccumulatorGuarded_NoFinding;
+// Regel B (Back-Edge): geguardeter Accumulator - 'Prev' wird in Iteration N
+// geschrieben und in Iteration N+1 (im First-geguardeten Arm) gelesen. Der
+// lexikalische Vergleich Read < Write meldete das vor Inkr.4 als fcMedium.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(Count: Integer);'#13#10 +
+    'var Prev, Cur, Diff, i: Integer; First: Boolean;'#13#10 +
+    'begin'#13#10 +
+    '  First := True;'#13#10 +
+    '  Diff := 0;'#13#10 +
+    '  for i := 1 to Count do'#13#10 +
+    '  begin'#13#10 +
+    '    Cur := i * 2;'#13#10 +
+    '    if not First then'#13#10 +
+    '      Diff := Cur - Prev;'#13#10 +
+    '    Prev := Cur;'#13#10 +
+    '    First := False;'#13#10 +
+    '  end;'#13#10 +
+    '  WriteLn(Diff);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'Def erreicht den geguardeten Read ueber die Loop-Back-Edge -> kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.CfgStraightLineReadBeforeWrite_StillFlagged;
+// TP-Gegenprobe (Same-Block-Entscheidung): ungeguardetes Read-vor-Write im
+// selben Block ist auch im Loop-Fall ein plausibler Iteration-1-Bug und
+// MUSS gemeldet bleiben.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var A, B: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  B := A;'#13#10 +
+    '  A := 1;'#13#10 +
+    '  WriteLn(B);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'straight-line Read-vor-Write bleibt ein Fund (Same-Block kein Drop)');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.CfgSiblingArmsWithoutLoop_StillFlagged;
+// Pin der bewussten v1-Entscheidung: exklusive Arme OHNE Loop droppen wir
+// NICHT (Read-Arm kann beim ersten Durchlauf mit uninit V laufen - der
+// Wert-Korrelations-Beweis fehlt). Aendert sich die Politik, faellt dieser
+// Test bewusst rot.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(c: Boolean);'#13#10 +
+    'var V, X: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  if c then'#13#10 +
+    '    X := V'#13#10 +
+    '  else'#13#10 +
+    '    V := 1;'#13#10 +
+    '  WriteLn(X, V);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'Sibling-Arme ohne Loop: Fund bleibt (v1-Politik, kein Wert-Beweis)');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.CfgUnguardedLoopConditionRead_StillFlagged;
+// Inkr.4b (MASKED_BUG-Fix aus dem Drop-Sampling, destilliert aus mormot
+// bson BsonItemsToDocVariant): der Read steht UNGEGUARDET in der Schleifen-
+// Bedingung - in Iteration 1 laeuft er auf der uninitialisierten Variable,
+// KEIN Guard schuetzt. Die Zyklus-Regel (Write im Body <-> Read im Kopf)
+// darf hier NICHT droppen.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var V: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  while V < 10 do'#13#10 +
+    '    V := V + 1;'#13#10 +
+    '  WriteLn(V);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'ungeguardeter Read in der Schleifenbedingung bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.DeclInitializedLocal_NoFinding;
+// Inkr.4b: FPC-Deklarations-Initializer laeuft bei jedem Routineneintritt
+// und dominiert jeden Read (im Drop-Sampling der wahre Sicherheits-
+// mechanismus hinter ~der Haelfte der doublecmd-Drops). Der AST-Write-Scan
+// sieht ihn nicht (kein ':='), Regel 0 des Filters schon.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var V: Integer = 1;'#13#10 +
+    '    X: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  X := V;'#13#10 +
+    '  V := 2;'#13#10 +
+    '  WriteLn(X, V);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'Decl-Initializer = Write bei Eintritt -> kein read-before-write');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.DeclCommentEquals_StillFlagged;
+// Inkr.4b-Haertung (Re-Scan-Audit: mormot cache x4): ein '=' im KOMMENTAR
+// der Decl-Zeile ist KEIN Initializer - Regel 0 matcht auf der gestrippten
+// Zeile. Sonst wuerde ein echter (dort sogar absichtlicher) Uninit-Read
+// maskiert.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var V: Integer; // default = 1'#13#10 +
+    '    X: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  X := V;'#13#10 +
+    '  V := 2;'#13#10 +
+    '  WriteLn(X, V);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'Kommentar-= auf der Decl-Zeile ist kein Initializer -> Fund bleibt');
+  finally F.Free; end;
 end;
 
 initialization

@@ -31,7 +31,8 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext, uTypeIndex;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext, uTypeIndex,
+  uCFG;   // #6 Inkr.4: CFG-Postfilter fuer read-before-write
 
 type
   TUninitVarDetector = class
@@ -159,6 +160,11 @@ type
     FirstReadLine    : Integer;     // 0 = nie gelesen (= Variable ist UnusedLocal-Domain)
     RefCount         : Integer;     // Anzahl Wortgrenzen-Matches im Body inkl. Decl
     IsManaged        : Boolean;
+    // #6 Inkr.4: ALLE registrierten Write-Zeilen (AST-Walks + Source-
+    // Rescan) fuer den CFG-Postfilter - FirstWriteLine allein verliert
+    // die uebrigen Def-Sites. Cap 64: darueber wird der Filter nur
+    // KONSERVATIVER (weniger bekannte Defs -> weniger Drops).
+    WriteLines       : TArray<Integer>;
   end;
   PVarInfo = ^TVarInfo;
 
@@ -1183,6 +1189,7 @@ var
   StrippedFrom0    : Integer;   // 0-basierter Lines-Index von StrippedLow[0]
   StrippedBuilt    : Boolean;   // lazy: erst bauen wenn ein Finder laeuft
   MaxChildren      : Integer;   // TD-1: Hard-Cap per-Scan aus AContext.Config
+  MethodCfg        : TCFG;      // #6 Inkr.4: lazy im PhaseD-CFG-Postfilter
 
   procedure RegisterWrite(Idx: Integer; Line: Integer);
   var
@@ -1192,6 +1199,9 @@ var
     P := @VarList.List[Idx];
     if (P.FirstWriteLine = 0) or (Line < P.FirstWriteLine) then
       P.FirstWriteLine := Line;
+    // #6 Inkr.4: Def-Site fuer den CFG-Postfilter merken (Cap s. TVarInfo).
+    if Length(P.WriteLines) < 64 then
+      P.WriteLines := P.WriteLines + [Line];
   end;
 
   function VarIndexFor(const NameLow: string): Integer;
@@ -2079,10 +2089,166 @@ var
       if (SrcWrite > 0)
          and ((P.FirstWriteLine = 0) or (SrcWrite < P.FirstWriteLine)) then
         P.FirstWriteLine := SrcWrite;
+      // #6 Inkr.4: der Source-Write ist eine Def-Site fuer den CFG-
+      // Postfilter - unabhaengig davon, ob er das Minimum unterbietet.
+      if (SrcWrite > 0) and (Length(P.WriteLines) < 64) then
+        P.WriteLines := P.WriteLines + [SrcWrite];
       P.FirstReadLine := FindFirstReadLine(P.NameLow, P.DeclLine,
                                            P.FirstWriteLine,
                                            MethodStartLine, MethodEndLine);
     end;
+  end;
+
+  function CfgBlockForLine(ALine: Integer): TCFGBlock;
+  // #6 Inkr.4: Zeile -> CFG-Block (SCA134-Rezept FindBlockForLine): erster
+  // Block, dessen AstNodes die Zeile tragen; Fallback Block.Line. nil wenn
+  // nicht mappbar - der Read-Anker kann eine reine Source-Zeile aus dem
+  // Raw-Rescan sein (Headless-Pattern), dort versagt auch das Mapping ->
+  // der Aufrufer droppt dann NICHT (monoton).
+  var
+    B : TCFGBlock;
+    N : TAstNode;
+  begin
+    Result := nil;
+    if (MethodCfg = nil) or (ALine <= 0) then Exit;
+    for B in MethodCfg.Blocks do
+      for N in B.AstNodes do
+        if N.Line = ALine then Exit(B);
+    for B in MethodCfg.Blocks do
+      if B.Line = ALine then Exit(B);
+  end;
+
+  function BodyHasGotoOrLabel: Boolean;
+  // #6 Inkr.4: goto/label sind im CFG nicht modelliert (Sprungziele nur als
+  // nkLabelMark am Unit-Node) - der Postfilter ist dann komplett inaktiv.
+  // Scan auf dem gestrippten Zeilencache aus PhaseC.
+  // Hinweis (CLI-verifiziert 2026-07-24): label-Methoden erzeugen aktuell
+  // ohnehin keine fcMedium-Funde (label-Sektion stoert die lexikalische
+  // Pipeline) - dieser Guard ist reine Defense-in-Depth fuer den Fall, dass
+  // sich das aendert. Deshalb existiert kein End-to-End-Test dafuer.
+  var
+    i, p : Integer;
+    L    : string;
+  begin
+    Result := False;
+    if not StrippedBuilt then Exit(True);   // kein Cache -> konservativ inaktiv
+    for i := 0 to High(StrippedLow) do
+    begin
+      L := StrippedLow[i];
+      if L = '' then Continue;
+      if L.StartsWith('label ') or (L = 'label') then Exit(True);
+      p := Pos('goto', L);
+      if (p > 0) and
+         ((p = 1) or not IsIdentChar(L[p - 1])) and
+         ((p + 4 > Length(L)) or not IsIdentChar(L[p + 4])) then Exit(True);
+    end;
+  end;
+
+  function HasDeclInitializer(const AInfo: TVarInfo): Boolean;
+  // #6 Inkr.4b: FPC-Deklarations-Initializer ('StartPos: Integer = 1;') -
+  // laeuft bei JEDEM Routineneintritt, dominiert also jeden Read. Der
+  // AST-/Source-Write-Scan sieht ihn nicht (kein ':='), aber er war laut
+  // Drop-Sampling 2026-07-24 der wahre Sicherheitsmechanismus hinter ~der
+  // Haelfte der Zyklus-Drops (doublecmd = FPC-Code). SOUND und billig:
+  // auf der bekannten Decl-Zeile nach '=' hinter dem ':' suchen (':='
+  // ausgeschlossen; auf einer Decl-Zeile gibt es sonst kein '=').
+  var
+    L        : string;
+    Idx      : Integer;
+    p, colon : Integer;
+  begin
+    Result := False;
+    // KRITISCH (Re-Scan-Audit 2026-07-24, mormot cache x4): auf der GE-
+    // STRIPPTEN Zeile matchen, nie auf der rohen - ein '=' im Zeilen-
+    // kommentar ('cache: array[..] of cardinal; // 16KB+16KB=32KB') wuerde
+    // sonst als Initializer fehlgedeutet und einen echten (dort sogar
+    // absichtlichen) Uninit-Read maskieren.
+    if not StrippedBuilt then Exit;
+    Idx := (AInfo.DeclLine - 1) - StrippedFrom0;
+    if (Idx < 0) or (Idx > High(StrippedLow)) then Exit;
+    L := StrippedLow[Idx];   // bereits gelowert + kommentarfrei
+    p := Pos(AInfo.NameLow, L);
+    if p <= 0 then Exit;
+    colon := Pos(':', L, p);
+    if colon <= 0 then Exit;
+    p := Pos('=', L, colon);
+    // ':=' waere ein Assignment, kein Initializer - auf einer echten
+    // Decl-Zeile steht ': <Typ> = <Wert>' (mind. 1 Zeichen dazwischen).
+    Result := (p > colon + 1);
+  end;
+
+  function CfgFilterDropsReadBeforeWrite(const AInfo: TVarInfo): Boolean;
+  // #6 Inkr.4 (SCA166 read-before-write, CFG Shared Service). Drei Regeln:
+  //   0 (Decl-Initializer, sound): s. HasDeclInitializer.
+  //   B (Zyklus/Back-Edge, der Ertragstreiber): Read-Block und ein Def-
+  //     Block liegen im SELBEN Zyklus (beidseitiges CanReach) -> die Def
+  //     der Iteration N erreicht den Read der Iteration N+1 ueber die
+  //     Back-Edge. NUR fuer GEGUARDETE Reads (ReadBlk haengt an einem
+  //     ckBranch = 'if not First then ...'-Arm): das Iteration-1-Risiko
+  //     ist dort wert-korreliert (First-Guard). Inkr.4b-Verschaerfung nach
+  //     Drop-Sampling (37 Stellen, 1 MASKED_BUG mormot bson): ein UN-
+  //     geguardeter Read (Schleifenbedingung/gerader Body) laeuft in
+  //     Iteration 1 ungeschuetzt -> kein Drop.
+  //   A (ReachingDefs, sound): existiert KEIN def-freier Pfad Entry->Read,
+  //     ist die Variable auf jedem Weg geschrieben -> sicherer Drop.
+  // BEWUSST NICHT gedroppt (Selbst-Review 2026-07-24):
+  //   * Same-Block-Defs ('D := Prev; Prev := Cur;' UNGEGUARDET im selben
+  //     Block eines Loops): Iteration 1 liest echt uninitialisiert -
+  //     plausibler TP; nur die GEGUARDETE Form (Read in eigenem Arm-Block)
+  //     ist die FP-Klasse.
+  //   * Sibling-Arme OHNE Loop ('if c then X := V else V := 1'): moeglicher
+  //     Iteration-unabhaengiger TP, v1 laesst den Fund stehen.
+  // Konservative Guards: goto/label -> Filter inaktiv; Read-/Def-Anker
+  // nicht mappbar -> kein Drop.
+  var
+    ReadBlk : TCFGBlock;
+    DefBlk  : TCFGBlock;
+    PredB   : TCFGBlock;
+    Defs    : TArray<TCFGBlock>;
+    WL, k   : Integer;
+    Dup     : Boolean;
+    Guarded : Boolean;
+  begin
+    Result := False;
+    // Regel 0: Decl-Initializer dominiert jeden Read (kein CFG noetig).
+    if HasDeclInitializer(AInfo) then Exit(True);
+    if Length(AInfo.WriteLines) = 0 then Exit;
+    if BodyHasGotoOrLabel then Exit;
+    if MethodCfg = nil then
+      MethodCfg := TCFGBuilder.BuildFromMethod(MethodNode);
+    ReadBlk := CfgBlockForLine(AInfo.FirstReadLine);
+    if ReadBlk = nil then Exit;
+    Defs := nil;
+    for WL in AInfo.WriteLines do
+    begin
+      DefBlk := CfgBlockForLine(WL);
+      if (DefBlk = nil) or (DefBlk = ReadBlk) then Continue;
+      Dup := False;
+      for k := 0 to High(Defs) do
+        if Defs[k] = DefBlk then
+        begin
+          Dup := True;
+          Break;
+        end;
+      if not Dup then Defs := Defs + [DefBlk];
+    end;
+    if Length(Defs) = 0 then Exit;
+    // Regel B: gemeinsamer Zyklus - NUR wenn der Read geguardet ist
+    // (ReadBlk ist Arm eines ckBranch, Inkr.4b s.o.).
+    Guarded := False;
+    for PredB in ReadBlk.Predecessors do
+      if PredB.Kind = ckBranch then
+      begin
+        Guarded := True;
+        Break;
+      end;
+    if Guarded then
+      for k := 0 to High(Defs) do
+        if MethodCfg.CanReach(Defs[k], ReadBlk) and
+           MethodCfg.CanReach(ReadBlk, Defs[k]) then Exit(True);
+    // Regel A: kein def-freier Pfad Entry->Read
+    if not MethodCfg.CanReachAvoiding(MethodCfg.Entry, ReadBlk, Defs) then
+      Exit(True);
   end;
 
   procedure PhaseD_Emit;
@@ -2159,6 +2325,13 @@ var
         if DirLineBetween(ADirLines, P.FirstReadLine, P.FirstWriteLine) then
           Continue;
 
+        // FP-Gate #6 Inkr.4 (2026-07-24): CFG-Postfilter - Def erreicht
+        // den Read ueber die Loop-Back-Edge (Zyklus-Regel) oder jeder
+        // Pfad zum Read passiert eine Def (ReachingDefs). Konservativ:
+        // goto/label oder nicht mappbare Anker -> kein Drop.
+        if CfgFilterDropsReadBeforeWrite(P^) then
+          Continue;
+
         // Read vor Write - konservativ fcMedium (Phase 2.1 Sibling-
         // Write-Check obsolet weil pessimistic-Write sowieso jeden
         // Write registriert, kein Confidence-Downgrade-Pfad).
@@ -2202,6 +2375,7 @@ begin
     BodySB       := TStringBuilder.Create;
     NestedRanges := TList<TLineRange>.Create;
     Lines        := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
+    MethodCfg    := nil;   // #6 Inkr.4: lazy gebaut im PhaseD-Postfilter
     try
       // Perf (2026-07-05): P7-uninitvar - CalcMethodEndLine nur EINMAL
       // walken (vorher hier + nochmal in PhaseC); Stripped-Cache-Flag
@@ -2243,6 +2417,7 @@ begin
       PhaseC_BodyTokenAndReads;
       PhaseD_Emit;
     finally
+      MethodCfg.Free;   // #6 Inkr.4 (nil-sicher)
       ReleaseLines(Lines, Cached);
       NestedRanges.Free;
       BodySB.Free;
