@@ -1225,6 +1225,7 @@ var
   StrippedBuilt    : Boolean;   // lazy: erst bauen wenn ein Finder laeuft
   MaxChildren      : Integer;   // TD-1: Hard-Cap per-Scan aus AContext.Config
   MethodCfg        : TCFG;      // #6 Inkr.4: lazy im PhaseD-CFG-Postfilter
+  AbsAliases       : TDictionary<string,string>; // A3: aliasLow -> zielLow ('absolute')
 
   procedure RegisterWrite(Idx: Integer; Line: Integer);
   var
@@ -1242,7 +1243,18 @@ var
   function VarIndexFor(const NameLow: string): Integer;
   var
     Tmp : Integer;
+    Tgt : string;
   begin
+    // A3 (Triage 2026-07-24, absolute-Alias-Klasse ~21/180): eine per
+    // 'absolute' ueberlagerte Alias-Var wird in PhaseA nicht getrackt -
+    // ihre Writes ('ta[j] := ...', var-Arg-Uebergabe) MUESSEN aber dem
+    // ZIEL zugutekommen (isaac tl/ta, IdStackVCLPosix LAddrStore/LAddr).
+    // Ein-Punkt-Fix: alle Registrierungs-Pfade laufen ueber VarIndexFor.
+    if (AbsAliases <> nil) and AbsAliases.TryGetValue(NameLow, Tgt) then
+    begin
+      Result := VarIndexFor(Tgt);
+      Exit;
+    end;
     if VarMap.TryGetValue(NameLow, Tmp) then Result := Tmp else Result := -1;
   end;
 
@@ -2005,7 +2017,20 @@ var
       // c1 zum Alias der bestehenden Variable color1 - eigene Storage gibt
       // es nicht, daher auch keine 'init'-Pflicht. Audit-Trigger Img32.Extra
       // BlendAverage/AlphaAverage und mORMot crypt.ecc 'absolute Result'.
-      if Pos('absolute', LowerCase(LV.TypeRef)) > 0 then Continue;
+      if Pos('absolute', LowerCase(LV.TypeRef)) > 0 then
+      begin
+        // A3: Ziel-Ident hinter 'absolute' merken, damit Writes UEBER den
+        // Alias dem Ziel zugerechnet werden (VarIndexFor-Fallback).
+        var TR0 := LowerCase(LV.TypeRef);
+        var pAbs := Pos('absolute', TR0) + Length('absolute');
+        while (pAbs <= Length(TR0)) and (TR0[pAbs] = ' ') do Inc(pAbs);
+        var eAbs := pAbs;
+        while (eAbs <= Length(TR0)) and IsIdentChar(TR0[eAbs]) do Inc(eAbs);
+        if eAbs > pAbs then
+          AbsAliases.AddOrSetValue(LowerCase(LV.Name),
+                                   Copy(TR0, pAbs, eAbs - pAbs));
+        Continue;
+      end;
       // Auto-init-Record-Typen (TRttiContext u.a.): bare-Verwendung ist das
       // Standard-RTTI-Idiom, niemals explizit zugewiesen -> read-without-write
       // ist kein Bug. Aus der Inventur entfernen (Real-World 2026-06-28).
@@ -2060,6 +2085,13 @@ var
       for i := 0 to Cases.Count   - 1 do ProcessCaseSelectorWrites(Cases[i]);
       for i := 0 to Assigns.Count - 1 do ProcessConditionCalls(Assigns[i]);
       for i := 0 to Fors.Count    - 1 do ProcessConditionCalls(Fors[i]);
+      // A3 (Triage 2026-07-24, Call-Fill-Klasse): 'Exit(TryStrToX(S, v))'
+      // legt der Parser als nkExit mit Arg-Text in TypeRef ab - KEINER
+      // der Expression-Pfade sah das bisher -> v galt als never-written
+      // (MinimalAPI lInt64/lFloat/lDate). Gleicher pessimistic-Write-Weg
+      // wie if/while/case/assign-RHS.
+      var Exits := MethodNode.FindAllRef(nkExit);
+      for i := 0 to Exits.Count - 1 do ProcessConditionCalls(Exits[i]);
       // Receiver-Init fuer Calls in Expression-Strings (assign-RHS/conditions):
       // 'int := temp.Init(...)' schreibt temp - ProcessCall (nkCall) sieht das
       // nicht, weil solche Calls als TypeRef-String abgelegt sind.
@@ -2128,6 +2160,45 @@ var
       // Postfilter - unabhaengig davon, ob er das Minimum unterbietet.
       if (SrcWrite > 0) and (Length(P.WriteLines) < 64) then
         P.WriteLines := P.WriteLines + [SrcWrite];
+      // A3b (Triage-Klasse @-Adressnahme, nachgezogen wegen Kategorien-
+      // Verschiebung im A/B): ein Vorkommen von @varname im Methodenkoerper
+      // bedeutet, dass die Variable ueber einen Pointer gefuellt werden kann
+      // (LMsg.msg_name := @LAddr; RecvMsg fuellt) - konservativ als Write an
+      // der @-Zeile werten (FN-tolerant, spiegelt Compiler-Verhalten; ein
+      // reiner @-Leser ohne jeden Fill ist eine akzeptierte FN-Klasse).
+      if StrippedBuilt then
+      begin
+        // A3b-Fix: auch @<alias> zaehlt fuers ZIEL (Indy: LMsg.msg_name
+        // := AT-LAddr fuellt LAddrStore ueber den absolute-Alias).
+        var AtPats := TStringList.Create;
+        try
+        AtPats.Add(chr(64) + P.NameLow);
+        for var AliasPair in AbsAliases do
+          if AliasPair.Value = P.NameLow then
+            AtPats.Add(chr(64) + AliasPair.Key);
+        for var api := 0 to AtPats.Count - 1 do
+        begin
+        var AtPat := AtPats[api];
+        for var li := 0 to High(StrippedLow) do
+        begin
+          var ap := Pos(AtPat, StrippedLow[li]);
+          if (ap > 0) and
+             ((ap + Length(AtPat) > Length(StrippedLow[li])) or
+              not IsIdentChar(StrippedLow[li][ap + Length(AtPat)])) then
+          begin
+            var AtLine := StrippedFrom0 + li + 1;
+            if (P.FirstWriteLine = 0) or (AtLine < P.FirstWriteLine) then
+              P.FirstWriteLine := AtLine;
+            if Length(P.WriteLines) < 64 then
+              P.WriteLines := P.WriteLines + [AtLine];
+            Break;
+          end;
+        end;
+        end;
+        finally
+          AtPats.Free;
+        end;
+      end;
       P.FirstReadLine := FindFirstReadLine(P.NameLow, P.DeclLine,
                                            P.FirstWriteLine,
                                            MethodStartLine, MethodEndLine);
@@ -2411,6 +2482,7 @@ begin
     NestedRanges := TList<TLineRange>.Create;
     Lines        := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
     MethodCfg    := nil;   // #6 Inkr.4: lazy gebaut im PhaseD-Postfilter
+    AbsAliases   := TDictionary<string,string>.Create;   // A3
     try
       // Perf (2026-07-05): P7-uninitvar - CalcMethodEndLine nur EINMAL
       // walken (vorher hier + nochmal in PhaseC); Stripped-Cache-Flag
@@ -2452,6 +2524,7 @@ begin
       PhaseC_BodyTokenAndReads;
       PhaseD_Emit;
     finally
+      AbsAliases.Free;  // A3
       MethodCfg.Free;   // #6 Inkr.4 (nil-sicher)
       ReleaseLines(Lines, Cached);
       NestedRanges.Free;

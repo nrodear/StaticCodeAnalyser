@@ -126,6 +126,11 @@ type
     [Test] procedure CfgUnguardedLoopConditionRead_StillFlagged;  // bson-Muster: Regel B braucht Guard
     [Test] procedure DeclInitializedLocal_NoFinding;              // FPC 'V: Integer = 1' = Write
     [Test] procedure DeclCommentEquals_StillFlagged;              // '=' im Kommentar != Initializer
+    // Inkrement A3 (Triage 2026-07-24): Exit-Arg-Calls + absolute-Alias
+    [Test] procedure ExitArgOutParamCall_NoFinding;
+    [Test] procedure ExitArgPlainVar_StillFlagged;
+    [Test] procedure AbsoluteAliasWrite_NoFinding;
+    [Test] procedure AddressOfFill_NoFinding;
     // Managed-Alias 2026-07-24: Hersteller-Praefix-Interfaces (IwbX)
     [Test] procedure VendorPrefixInterfaceLocal_NoFinding;
     [Test] procedure VendorPrefixButClass_StillFlagged;
@@ -2238,6 +2243,110 @@ begin
   try
     Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
       'TypeIndex kennt IwbFake als Klasse -> Konvention geblockt, Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.ExitArgOutParamCall_NoFinding;
+// A3: 'Exit(TryStrToInt64(S, v))' - der Parser legt das Exit-Argument als
+// nkExit.TypeRef ab; KEINER der Expression-Call-Pfade sah das bisher ->
+// v galt als never-written (MinimalAPI-Klasse lInt64/lFloat/lDate).
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'function P(const S: string): Boolean;'#13#10 +
+    'var v: Int64;'#13#10 +
+    'begin'#13#10 +
+    '  Exit(TryStrToInt64(S, v));'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'TryStrTo*-out-Param im Exit-Arg zaehlt als Write');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.ExitArgPlainVar_StillFlagged;
+// TP-Gegenprobe: 'Exit(v)' ohne Call schreibt nichts - der neue Pfad
+// registriert nur CALL-Argumente, der reine Var-Read bleibt ein Fund.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'function P: Integer;'#13#10 +
+    'var v: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  Exit(v);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'Exit(v) ohne fuellenden Call bleibt ein uninit-Read');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.AbsoluteAliasWrite_NoFinding;
+// A3: Writes UEBER einen absolute-Alias muessen dem Ziel zugerechnet
+// werden (isaac-Muster: ta[j] := ... fuellt tl byteweise).
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var tl: LongWord;'#13#10 +
+    '    ta: array[0..3] of Byte absolute tl;'#13#10 +
+    '    i: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  for i := 0 to 3 do'#13#10 +
+    '    ta[i] := i;'#13#10 +
+    '  WriteLn(tl);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'Alias-Writes (ta[i] :=) zaehlen fuer das absolute-Ziel tl');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.AddressOfFill_NoFinding;
+// A3b: @v im Koerper = Variable kann ueber den Pointer gefuellt werden
+// (Indy-Muster: LMsg.msg_name := @LAddr; RecvMsg fuellt). Konservativ
+// als Write an der @-Zeile gewertet (dokumentiert FN-tolerant).
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var v: Integer; pp: Pointer;'#13#10 +
+    'begin'#13#10 +
+    '  pp := @v;'#13#10 +
+    '  FillThing(pp);'#13#10 +
+    '  WriteLn(v);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'Adressnahme @v zaehlt als potentieller Fill -> kein Fund');
   finally F.Free; end;
 end;
 
