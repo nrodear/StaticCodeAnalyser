@@ -144,6 +144,9 @@ implementation
 // noinspection-file BeginEndRequired, ConsecutiveSection, CyclomaticComplexity, GroupedDeclaration, NestedTry, NilComparison, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  uCFG;   // G5 (#6 CFG-Schlussstueck): Dominanz der Else-Kante
+
 // Ersetzt jeden Char zwischen single-quotes (inkl. ''-Escape-Handling)
 // durch Leerzeichen. Quotes selbst bleiben stehen, damit String-Positionen
 // 1:1 bleiben. Brauchen wir damit Pseudo-Code in String-Literalen (z.B.
@@ -787,6 +790,113 @@ begin
   for var N in Lst do AddIntegerNode(N);
 end;
 
+function DivCondNoWs(const S: string): string;
+// lowercase + saemtliche Whitespaces raus - eindeutiger Vergleich der
+// if-Bedingung gegen die exakten Zero-Test-Formen ('n = 0' == 'n=0').
+var
+  i : Integer;
+begin
+  Result := '';
+  for i := 1 to Length(S) do
+    if not CharInSet(S[i], [' ', #9]) then
+      Result := Result + S[i];
+  Result := LowerCase(Result);
+end;
+
+function DivDominatedByNonZeroElseEdge(MethodNode: TAstNode; var ACfg: TCFG;
+  DivNode: TAstNode; const DivisorLow: string): Boolean;
+// G5 (#6 CFG-Schlussstueck 2026-07-24, Magnitude vor-validiert: 5 Korpus-
+// Funde der Form): 'if n = 0 then Handle else x := a div n'. Die Bail-
+// Bedingungen (=0/<=0/<1) zaehlen im lexikalischen Guard nur mit Exit/
+// raise/Fix-up im then-Zweig - hat das if stattdessen einen ELSE-Zweig
+// und DOMINIERT dessen Start-Block die Division, ist der Divisor dort
+// beweisbar <> 0 (die im Unit-Header dokumentierte Dominanz-Blindstelle).
+// SOUNDNESS-GATE (zwingend, nicht optional): JEDE Divisor-Zuweisung, die
+// von der Else-Kante erreichbar ist und die Division erreicht, hebt die
+// Suppression auf ('if n <> 0 ... n := m; x := a div n') - konservativ
+// ohne Nichtnull-Literal-Ausnahme. Lookups per AST-Node-IDENTITAET;
+// jeder Fehlschlag => False (kein Drop). ACfg lazy, Aufrufer besitzt.
+var
+  Blk      : TCFGBlock;
+  Scan     : TCFGBlock;
+  N        : TAstNode;
+  N2       : TAstNode;
+  A        : TAstNode;
+  DivBlk   : TCFGBlock;
+  SafeEdge : TCFGBlock;
+  DefBlk   : TCFGBlock;
+  Cond     : string;
+  Assigns  : TList<TAstNode>;
+  Unsound  : Boolean;
+begin
+  Result := False;
+  if (MethodNode = nil) or (DivNode = nil) or (DivisorLow = '') then Exit;
+  if ACfg = nil then
+    ACfg := TCFGBuilder.BuildFromMethod(MethodNode);
+  DivBlk := nil;
+  for Blk in ACfg.Blocks do
+  begin
+    for N in Blk.AstNodes do
+      if N = DivNode then
+      begin
+        DivBlk := Blk;
+        Break;
+      end;
+    if DivBlk <> nil then Break;
+  end;
+  if DivBlk = nil then Exit;
+  Assigns := MethodNode.FindAllRef(nkAssign);
+  for Blk in ACfg.Blocks do
+  begin
+    if (Blk.Kind <> ckBranch) or (Blk.CondNode = nil) then Continue;
+    if Blk.CondNode.Kind <> nkIfStmt then Continue;
+    // Die Form braucht einen echten else-Zweig: ohne else existiert keine
+    // False-KANTE (Builder verbindet Branch dann direkt zum Merge) und
+    // der Fall-through ist NICHT geschuetzt -> kein Drop.
+    if Blk.CondNode.FindFirstChild(nkElseBranch) = nil then Continue;
+    if Blk.Successors.Count < 2 then Continue;
+    Cond := DivCondNoWs(Blk.CondNode.TypeRef);
+    if (Cond <> DivisorLow + '=0')  and (Cond <> '0=' + DivisorLow)  and
+       (Cond <> DivisorLow + '<=0') and (Cond <> '0>=' + DivisorLow) and
+       (Cond <> DivisorLow + '<1')  and (Cond <> '1>' + DivisorLow) then
+      Continue;
+    // Builder-Invariante nkIfStmt: Successors[0] = ThenStart,
+    // Successors[1] = ElseStart (nur bei vorhandenem else - oben geprueft).
+    SafeEdge := Blk.Successors[1];
+    if not ACfg.Dominates(SafeEdge, DivBlk) then Continue;
+    // Soundness: keine Divisor-Def zwischen Else-Kante und Division.
+    Unsound := False;
+    for A in Assigns do
+    begin
+      if not SameText(A.Name, DivisorLow) then Continue;
+      DefBlk := nil;
+      for Scan in ACfg.Blocks do
+      begin
+        for N2 in Scan.AstNodes do
+          if N2 = A then
+          begin
+            DefBlk := Scan;
+            Break;
+          end;
+        if DefBlk <> nil then Break;
+      end;
+      // Nicht mappbare Def (z.B. in vom Builder nicht modelliertem
+      // Konstrukt): konservativ als potentiell dazwischenliegend werten.
+      if DefBlk = nil then
+      begin
+        Unsound := True;
+        Break;
+      end;
+      if ACfg.CanReach(SafeEdge, DefBlk) and ACfg.CanReach(DefBlk, DivBlk) then
+      begin
+        Unsound := True;
+        Break;
+      end;
+    end;
+    if not Unsound then Exit(True);
+  end;
+end;
+
 class procedure TDivByZeroDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 
@@ -810,7 +920,9 @@ var
   ExprLow : string;
   Divisor : string;
   Reported : TDictionary<string, Boolean>;
+  MethodCfg : TCFG;      // G5: lazy gebaut, Free im finally
 begin
+  MethodCfg := nil;
   IntVars := TStringList.Create;
   Reported := TDictionary<string, Boolean>.Create;
   try
@@ -867,6 +979,13 @@ begin
       // Zuweisung die Suppression aufhebt (Real-World-Audit 2026-07-10/-12).
       if AllAssignmentsProvablyNonZero(MethodNode, Divisor, N.Line) then Continue;
 
+      // G5 (#6 CFG-Schlussstueck 2026-07-24): 'if n = 0 then Handle
+      // else x := a div n' - die Else-Kante dominiert die Division,
+      // dort ist n beweisbar <> 0. Letztes Gate, CFG nur fuer
+      // Ueberlebende aller billigen Gates (Perf-Regel).
+      if DivDominatedByNonZeroElseEdge(MethodNode, MethodCfg, N, Divisor) then
+        Continue;
+
       var Key := IntToStr(N.Line) + ':' + Divisor;
       if Reported.ContainsKey(Key) then Continue;
       Reported.Add(Key, True);
@@ -890,6 +1009,7 @@ begin
       end;
     end;
   finally
+    MethodCfg.Free;   // G5 (nil-sicher)
     IntVars.Free;
     Reported.Free;
   end;

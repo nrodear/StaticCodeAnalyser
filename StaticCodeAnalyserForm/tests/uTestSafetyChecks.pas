@@ -61,6 +61,10 @@ type
     [Test] procedure Div_StringDivisor_NoFinding;
     // FP-Gate Prio 7 (2026-07-06): "if n <= 0 then Exit"-Bail-Guard
     [Test] procedure Div_LessEqualZeroGuardExit_NoFinding;
+    // G5 (#6 CFG-Schlussstueck 2026-07-24): Else-Kanten-Dominanz
+    [Test] procedure Div_ElseBranchOfZeroCheck_NoFinding;
+    [Test] procedure Div_AfterMergeOfZeroCheck_StillReports;
+    [Test] procedure Div_ElseBranchButReassigned_StillReports;
     [Test] procedure Div_LessEqualZeroNoExit_StillReports;
     // Real-World FP-Audit 2026-07-10 Regression (guarded/provably-nonzero)
     [Test] procedure Div_ZeroThenFixupAssign_NoFinding;
@@ -1200,6 +1204,75 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkDeadCode) >= 1,
     'Anweisung nach Exit ohne Label ist echter toter Code');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_ElseBranchOfZeroCheck_NoFinding;
+// G5: der else-Zweig eines Zero-Checks wird nur betreten, wenn die
+// Bedingung FALSE ist - dort ist n beweisbar <> 0. Vor G5 gemeldet
+// (then-Zweig hat weder Exit/raise noch Fix-up).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(n: Integer);'#13#10+
+  'var x: Integer;'#13#10+
+  'begin'#13#10+
+  '  if n = 0 then'#13#10+
+  '    WriteLn(''zero'')'#13#10+
+  '  else'#13#10+
+  '    x := 100 div n;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    'Division im else-Zweig des Zero-Checks: n dort beweisbar <> 0');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_AfterMergeOfZeroCheck_StillReports;
+// TP-Gegenprobe: NACH dem if (Merge) laufen beide Pfade zusammen - der
+// then-Zweig terminiert nicht, n kann dort 0 sein -> Fund bleibt.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(n: Integer);'#13#10+
+  'var x: Integer;'#13#10+
+  'begin'#13#10+
+  '  if n = 0 then'#13#10+
+  '    WriteLn(''zero'')'#13#10+
+  '  else'#13#10+
+  '    WriteLn(''ok'');'#13#10+
+  '  x := 100 div n;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkDivByZero) >= 1,
+    'Merge nach dem if wird von der Else-Kante NICHT dominiert -> Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_ElseBranchButReassigned_StillReports;
+// TP-Gegenprobe (Soundness-Gate): Divisor wird IM else-Zweig neu
+// zugewiesen, bevor dividiert wird - die Dominanz-Suppression muss
+// aufgehoben sein (m kann 0 sein).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(n, m: Integer);'#13#10+
+  'var x: Integer;'#13#10+
+  'begin'#13#10+
+  '  if n = 0 then'#13#10+
+  '    WriteLn(''zero'')'#13#10+
+  '  else'#13#10+
+  '  begin'#13#10+
+  '    n := m;'#13#10+
+  '    x := 100 div n;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkDivByZero) >= 1,
+    'Re-Zuweisung zwischen Else-Kante und Division hebt die Suppression auf');
   finally F.Free; end;
 end;
 
