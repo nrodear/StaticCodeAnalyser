@@ -208,6 +208,30 @@ begin
   Result := SameText(Copy(Code, p + 1, wEnd - p), 'const');
 end;
 
+
+// Triage 2026-07-24 (Inkrement A1): Name der zur Position naechstliegend
+// DAVOR deklarierten Routine (lowercase, letztes Namens-Segment ohne
+// Klassen-Qualifier); '' wenn keine. Fuer die Idiom-Gates IsStored/Set*.
+function EnclosingRoutineSigLow(const Code: string; BeforePos: Integer;
+  out AIsFunction: Boolean): string;
+var
+  RE : TRegEx;
+  MC : TMatchCollection;
+  p  : Integer;
+begin
+  Result := '';
+  AIsFunction := False;
+  if BeforePos > Length(Code) then BeforePos := Length(Code);
+  if BeforePos < 1 then Exit;
+  RE := TRegEx.Create('(?i)\b(function|procedure)\s+([\w.]+)');
+  MC := RE.Matches(Copy(Code, 1, BeforePos));
+  if MC.Count = 0 then Exit;
+  Result := LowerCase(MC[MC.Count - 1].Groups[2].Value);
+  AIsFunction := SameText(MC[MC.Count - 1].Groups[1].Value, 'function');
+  p := LastDelimiter('.', Result);
+  if p > 0 then Result := Copy(Result, p + 1, MaxInt);
+end;
+
 class procedure TFloatEqualityDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
@@ -304,6 +328,49 @@ begin
         // 2026-07-10): 'const deltaT = 1/(...)' bindet eine Konstante -
         // es gibt hier keinen '='-Operator.
         if PrecededByConstKeyword(Code, M.Index) then Continue;
+
+        // G-Sent-1 (Triage 2026-07-24, Inkrement A1): DFM-IsStored-Idiom.
+        // 'function Is<Prop>Stored: Boolean' vergleicht die Property gegen
+        // ihren EXAKTEN Literal-Default - das DFM-Streaming vergleicht
+        // selbst exakt, der Vergleich ist dort semantisch korrekt und kein
+        // IEEE-754-Bug. Gate: umschliessende Routine ist eine function mit
+        // Namens-Suffix 'stored' UND eine Seite ist ein numerisches Literal.
+        var RoutIsFunc := False;
+        var RoutLow := EnclosingRoutineSigLow(Code, M.Index, RoutIsFunc);
+        var LhsIsLit := (LhsLow <> '') and CharInSet(LhsLow[1], ['0'..'9']);
+        var RhsIsLit := (RhsLow <> '') and CharInSet(RhsLow[1], ['0'..'9']);
+        if RoutIsFunc and RoutLow.EndsWith('stored')
+           and (LhsIsLit or RhsIsLit) then Continue;
+
+        // Setter-Change-Guard (Triage 2026-07-24, Inkrement A1): das
+        // universelle VCL-Idiom 'if FXxx <> Value then ... FXxx := Value'
+        // in 'procedure Set*'. Beide Seiten werden nur direkt zugewiesen,
+        // der exakte Vergleich ist gewollt (Worst Case: ein redundantes
+        // Invalidate). Bedingungen ENG: procedure Set*, eine Seite ist
+        // Value/NewValue/AValue, die andere ein F-Feld, und das Feld wird
+        // kurz danach zugewiesen (Change-Detection-Beleg).
+        if (not RoutIsFunc) and RoutLow.StartsWith('set') then
+        begin
+          var ParamSide := '';
+          var FieldSide := '';
+          if (LhsLow = 'value') or (LhsLow = 'newvalue') or (LhsLow = 'avalue') then
+          begin
+            ParamSide := LhsLow;
+            FieldSide := RhsLow;
+          end
+          else if (RhsLow = 'value') or (RhsLow = 'newvalue') or (RhsLow = 'avalue') then
+          begin
+            ParamSide := RhsLow;
+            FieldSide := LhsLow;
+          end;
+          if (ParamSide <> '') and (Length(FieldSide) > 1)
+             and (FieldSide[1] = 'f') then
+          begin
+            var Tail := LowerCase(Copy(Code, M.Index, 400));
+            if (Pos(FieldSide + ' :=', Tail) > 0)
+               or (Pos(FieldSide + ':=', Tail) > 0) then Continue;
+          end;
+        end;
 
         // Typ-Aufloesung (Real-World-FP-Audit 2026-07-10): wenn der zum
         // Float-Namen passende Operand zur Nutzung NAECHSTLIEGEND als

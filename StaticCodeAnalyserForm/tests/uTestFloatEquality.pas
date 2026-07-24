@@ -27,6 +27,11 @@ type
     // Var-Vergleich gegen einen gewoehnlichen Nicht-Float-Identifier (Boolean-
     // Feld o.ae., nur NAMENSGLEICH) ist Scope-Blindheit -> kein Treffer.
     [Test] procedure FloatVarVsNonFloatIdent_NoFinding;
+    // Inkrement A1 (Triage 2026-07-24): Idiom-Gates
+    [Test] procedure IsStoredIdiom_NotReported;
+    [Test] procedure StoredCompareOutsideIdiom_StillReported;
+    [Test] procedure SetterChangeGuard_NotReported;
+    [Test] procedure SetterWithoutFollowupAssign_StillReported;
     // Gegenprobe: Float-Var gegen numerisches Literal bleibt ein Treffer.
     [Test] procedure FloatVarVsLiteral_StillReported;
     // --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
@@ -395,6 +400,107 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkFloatEquality) >= 1,
     'Result einer Double-Funktion gegen Literal bleibt Float-Equality');
+  finally F.Free; end;
+end;
+
+procedure TTestFloatEquality.IsStoredIdiom_NotReported;
+// A1/G-Sent-1: 'function Is*Stored: Boolean' vergleicht die Property gegen
+// ihren exakten Literal-Default - DFM-Streaming vergleicht selbst exakt,
+// der Vergleich ist semantisch korrekt (Triage: 3/26 der Stichprobe).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type TFoo = class'#13#10 +
+  '  FScale: Double;'#13#10 +
+  '  function IsScaleStored: Boolean;'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'function TFoo.IsScaleStored: Boolean;'#13#10 +
+  'begin'#13#10 +
+  '  Result := FScale <> 1.0;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFloatEquality),
+    'IsStored-Idiom: exakter Default-Vergleich ist dort korrekt');
+  finally F.Free; end;
+end;
+
+procedure TTestFloatEquality.StoredCompareOutsideIdiom_StillReported;
+// TP-Gegenprobe: derselbe Vergleich in einer NICHT-*Stored-Funktion
+// bleibt ein Fund (Gate haengt am Routinen-Namen, nicht am Muster).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type TFoo = class'#13#10 +
+  '  FScale: Double;'#13#10 +
+  '  function CheckScale: Boolean;'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'function TFoo.CheckScale: Boolean;'#13#10 +
+  'begin'#13#10 +
+  '  Result := FScale <> 1.0;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkFloatEquality) >= 1,
+    'ausserhalb des IsStored-Idioms bleibt der Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestFloatEquality.SetterChangeGuard_NotReported;
+// A1: 'if FScale <> Value then ... FScale := Value' in SetScale =
+// VCL-Change-Detection; beide Seiten nur direkt zugewiesen.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type TFoo = class'#13#10 +
+  '  FScale: Double;'#13#10 +
+  '  procedure SetScale(const Value: Double);'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.SetScale(const Value: Double);'#13#10 +
+  'begin'#13#10 +
+  '  if FScale <> Value then'#13#10 +
+  '  begin'#13#10 +
+  '    FScale := Value;'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFloatEquality),
+    'Setter-Change-Guard mit Follow-up-Assign ist idiomatisch korrekt');
+  finally F.Free; end;
+end;
+
+procedure TTestFloatEquality.SetterWithoutFollowupAssign_StillReported;
+// TP-Gegenprobe: ohne nachfolgende Feld-Zuweisung fehlt der Change-
+// Detection-Beleg - das Gate darf NICHT greifen.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type TFoo = class'#13#10 +
+  '  FScale: Double;'#13#10 +
+  '  procedure SetScale(const Value: Double);'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.SetScale(const Value: Double);'#13#10 +
+  'begin'#13#10 +
+  '  if FScale <> Value then'#13#10 +
+  '    Beep;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkFloatEquality) >= 1,
+    'Set*-Routine ohne Follow-up-Assign: Gate greift nicht, Fund bleibt');
   finally F.Free; end;
 end;
 
