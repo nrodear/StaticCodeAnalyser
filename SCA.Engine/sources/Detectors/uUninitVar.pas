@@ -329,7 +329,8 @@ begin
   end;
 end;
 
-function IsManagedType(const TypeRef: string): Boolean;
+function IsManagedType(const TypeRef: string;
+  AContext: TAnalyzeContext): Boolean;
 var
   T, Orig : string;
   Prefix : string;
@@ -346,6 +347,40 @@ begin
   // (I + Kleinbuchstabe) matchen NICHT.
   if (Length(Orig) >= 2) and (Orig[1] = 'I') and CharInSet(Orig[2], ['A'..'Z']) then
     Exit(True);
+  // SCA166-Managed-Alias (Drop-Sampling-Erkenntnis 2026-07-24): Hersteller-
+  // Praefix-Interfaces wie 'IwbMainRecord' (TES5Edit: 'I' + Projektkuerzel
+  // in Kleinbuchstaben + CamelCase-Name) fielen durch die strikte
+  // I-Grossbuchstaben-Konvention - ihre FPs ueberlebten nur zufaellig via
+  // Zyklus-Regel des CFG-Postfilters. Muster: 'I' + >=1 Kleinbuchstabe +
+  // Grossbuchstabe ('IwbX' ja; 'Integer'/'Int64' nein - nach deren
+  // Kleinlauf folgt kein Grossbuchstabe). NEGATIV-GATE ueber den Cross-
+  // Unit-TypeIndex: kennt er den Namen als Klasse/Record/Enum, ist es
+  // KEIN Interface -> nicht managed (eine uninitialisiert gelesene
+  // KLASSEN-Referenz ist ein echter Bug und bleibt Fund). Korpus-Beleg
+  // fuer die Strenge: IntUserFieldVTable/InstException = class,
+  // ImageCodecInfo & Co. = record - das Muster trifft reale Werttypen.
+  // REICHWEITEN-GRENZE (byte-identisch im Selbst-Scan-Korpus, A/B
+  // after77/78): der Parser legt Interfaces als nkClass ab, der Index
+  // fuehrt sie als tkiClass - liegt die Interface-DECL im Scan-Umfang,
+  // blockt das Gate auch echte Interfaces. Die Konvention wirkt damit
+  // fuer FREMD-Interfaces ohne mitgescannte Decl (der typische Kunden-
+  // Scan). Volle Wirkung braeuchte tkiInterface im Index (Parser-
+  // Marker an nkClass = eigenes risikobehaftetes Inkrement, Backlog).
+  if (Length(Orig) >= 3) and (Orig[1] = 'I') and CharInSet(Orig[2], ['a'..'z']) then
+  begin
+    var i := 2;
+    while (i <= Length(Orig)) and CharInSet(Orig[i], ['a'..'z']) do
+      Inc(i);
+    if (i <= Length(Orig)) and CharInSet(Orig[i], ['A'..'Z']) then
+    begin
+      // CtxTypeIndex kann nil sein (Tests/Single-File ohne Kontext) -
+      // dann greift die Konvention ohne Gate (gleiche Vertrauensstufe
+      // wie die bestehende I-Grossbuchstaben-Regel).
+      var TI := CtxTypeIndex(AContext);
+      if (TI = nil) or (TI.TypeKindOf(T) in [tkiUnknown, tkiAlias]) then
+        Exit(True);
+    end;
+  end;
 end;
 
 function IsNoInitRecordType(const TypeRef: string): Boolean;
@@ -1982,7 +2017,7 @@ var
       VarRec.FirstWriteLine := 0;
       VarRec.FirstReadLine  := 0;
       VarRec.RefCount       := 0;
-      VarRec.IsManaged      := IsManagedType(LV.TypeRef);
+      VarRec.IsManaged      := IsManagedType(LV.TypeRef, AContext);
       // Duplikate (same name in nested-scope - selten, defensive skip)
       if VarMap.ContainsKey(VarRec.NameLow) then Continue;
       VarMap.Add(VarRec.NameLow, VarList.Count);

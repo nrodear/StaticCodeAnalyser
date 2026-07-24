@@ -126,6 +126,9 @@ type
     [Test] procedure CfgUnguardedLoopConditionRead_StillFlagged;  // bson-Muster: Regel B braucht Guard
     [Test] procedure DeclInitializedLocal_NoFinding;              // FPC 'V: Integer = 1' = Write
     [Test] procedure DeclCommentEquals_StillFlagged;              // '=' im Kommentar != Initializer
+    // Managed-Alias 2026-07-24: Hersteller-Praefix-Interfaces (IwbX)
+    [Test] procedure VendorPrefixInterfaceLocal_NoFinding;
+    [Test] procedure VendorPrefixButClass_StillFlagged;
   end;
 
 implementation
@@ -2176,6 +2179,65 @@ begin
   try
     Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
       'Kommentar-= auf der Decl-Zeile ist kein Initializer -> Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.VendorPrefixInterfaceLocal_NoFinding;
+// Managed-Alias: 'IwbThing' (I + Kleinpraefix + CamelCase) ist nach Delphi-
+// Konvention ein Interface -> compiler-nil-initialisiert -> nie ein echter
+// uninit-Read. Vor dem Fix fiel das Muster durch die I-GROSSbuchstaben-
+// Konvention (Drop-Sampling TES5Edit: IwbGroupRecord & Co.).
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var G: IwbThing; X: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  X := G.Count;'#13#10 +
+    '  WriteLn(X);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'Hersteller-Praefix-Interface ist managed -> kein uninit-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.VendorPrefixButClass_StillFlagged;
+// TP-Gegenprobe (Negativ-Gate): der Name sieht aus wie ein Vendor-
+// Interface, ist laut TypeIndex aber eine KLASSE - uninitialisiert
+// gelesene Klassen-Referenz bleibt ein echter Fund. Voller Pipeline-
+// Weg, damit der Cross-Unit-TypeIndex die in-unit-Klasse kennt.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'type'#13#10 +
+    '  IwbFake = class'#13#10 +
+    '  public'#13#10 +
+    '    Count: Integer;'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var G: IwbFake; X: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  X := G.Count;'#13#10 +
+    '  WriteLn(X);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'TypeIndex kennt IwbFake als Klasse -> Konvention geblockt, Fund bleibt');
   finally F.Free; end;
 end;
 
