@@ -28,13 +28,20 @@ type
     [Test] procedure SubfolderOrphan_Found;
     [Test] procedure CaseInsensitive_Match;
     [Test] procedure EmptyProject_AllDiskFilesOrphan;
+    // Impl-Review 2026-07-24 (5 bestaetigte Testluecken; Cap-Verhalten bleibt
+    // bewusst ungetestet - 20k-Fixtures sind Unit-Test-untauglich):
+    [Test] procedure IgnoreList_FileAndDirParity;
+    [Test] procedure RelativeWalkRoot_CanonicalMatch;
+    [Test] procedure DfmAndPasMessages_Distinct;
+    [Test] procedure Findings_SortedByPath;
+    [Test] procedure CompanionDfm_OtherDirectory_StillOrphan;
   end;
 
 implementation
 
 uses
   System.SysUtils, System.Classes, System.IOUtils, System.Generics.Collections,
-  uMethodd12, uSCAConsts, uNotIncludedInProject;
+  uMethodd12, uSCAConsts, uIgnoreList, uNotIncludedInProject;
 
 procedure TTestNotIncludedInProject.Setup;
 begin
@@ -61,7 +68,7 @@ end;
 
 // --- Helfer: Detect ausfuehren, verwaiste FileNames zurueckgeben ---
 function RunDetect(const AProjList: array of string; const AWalkRoot: string;
-  out ACount: Integer): TStringList;
+  out ACount: Integer; AIgnore: TIgnoreList = nil): TStringList;
 var
   Proj : TStringList;
   Res  : TObjectList<TLeakFinding>;
@@ -74,7 +81,7 @@ begin
   Res  := TObjectList<TLeakFinding>.Create(True);
   try
     for s in AProjList do Proj.Add(s);
-    ACount := TNotIncludedInProjectDetector.Detect(Proj, AWalkRoot, Res);
+    ACount := TNotIncludedInProjectDetector.Detect(Proj, AWalkRoot, Res, AIgnore);
     for i := 0 to Res.Count - 1 do
     begin
       Assert.AreEqual(Ord(fkNotIncludedInProject), Ord(Res[i].Kind),
@@ -220,6 +227,154 @@ begin
   found := RunDetect([], FDir, cnt);
   try
     Assert.AreEqual(2, cnt);
+  finally
+    found.Free;
+  end;
+end;
+
+// --- Impl-Review 2026-07-24: die 5 bestaetigten Testluecken ---
+
+procedure TTestNotIncludedInProject.IgnoreList_FileAndDirParity;
+// ignore.txt-Parity war explizite Review-Anforderung des Unit-Headers,
+// aber KEIN Test uebergab je eine TIgnoreList: Datei-Skip (Detect ~Z.143)
+// und Verzeichnis-Skip via dummy.pas-Trick (~Z.134) waren beide ungedeckt.
+var
+  incl, orphReal, ignFile : string;
+  Proj : TStringList;
+  Res  : TObjectList<TLeakFinding>;
+  Ign  : TIgnoreList;
+begin
+  incl     := W('uMain.pas');
+  orphReal := W('uReal.pas');            // Kontroll-Orphan: bleibt gemeldet
+  W('uSkipped.pas');                     // per Datei-Pattern ignoriert
+  W('legacy\uOld.pas');                  // per Verzeichnis-Pattern ignoriert
+  ignFile := TPath.Combine(FDir, 'ignore.txt');
+  TFile.WriteAllText(ignFile, 'uSkipped.pas'#13#10 + 'legacy/'#13#10);
+  Proj := TStringList.Create;
+  Res  := TObjectList<TLeakFinding>.Create(True);
+  Ign  := TIgnoreList.Create;
+  try
+    Ign.SkipTests := False;
+    Ign.LoadFromFile(ignFile);
+    Proj.Add(incl);
+    Assert.AreEqual(1,
+      TNotIncludedInProjectDetector.Detect(Proj, FDir, Res, Ign),
+      'nur uReal.pas bleibt Orphan - Datei- UND Verzeichnis-Ignore greifen');
+    Assert.AreEqual(orphReal, Res[0].FileName);
+  finally
+    Ign.Free;
+    Res.Free;
+    Proj.Free;
+  end;
+end;
+
+procedure TTestNotIncludedInProject.RelativeWalkRoot_CanonicalMatch;
+// NormKey-Kanonisierung (GetFullPath beidseitig): ein Walk-Root mit
+// '..'-Segment liefert nicht-kanonische Walk-Pfade - ohne GetFullPath in
+// NormKey matcht keine Projektdatei mehr und ALLES wird Orphan (der
+// dokumentierte FP-Storm aus dem Review 2026-07-22). Alle bisherigen
+// Tests nutzten bereits kanonische Pfade und haetten das nie bemerkt.
+var
+  incl, subPas, walkRoot : string;
+  cnt : Integer;
+  found : TStringList;
+begin
+  incl     := W('uMain.pas');
+  subPas   := W('sub\uSub.pas');
+  walkRoot := TPath.Combine(FDir, 'sub') + '\..';
+  found := RunDetect([incl, subPas], walkRoot, cnt);
+  try
+    Assert.AreEqual(0, cnt,
+      'nicht-kanonischer Walk-Root (..-Segment) darf keine FPs erzeugen');
+  finally
+    found.Free;
+  end;
+end;
+
+procedure TTestNotIncludedInProject.DfmAndPasMessages_Distinct;
+// Tag-Message-Kopplung: die Object-Tags (0=.pas/1=.dfm) wandern beim Sort
+// mit und steuern die Message. Bisher pruefte kein Test die Messages -
+// eine vertauschte Zuordnung waere unbemerkt geblieben. Diskriminator:
+// 'form' kommt NUR in der .dfm-Message vor.
+var
+  Proj : TStringList;
+  Res  : TObjectList<TLeakFinding>;
+  i : Integer;
+  msgLow : string;
+begin
+  W('uForm.pas');
+  W('uForm.dfm');
+  Proj := TStringList.Create;
+  Res  := TObjectList<TLeakFinding>.Create(True);
+  try
+    Assert.AreEqual(2, TNotIncludedInProjectDetector.Detect(Proj, FDir, Res));
+    for i := 0 to Res.Count - 1 do
+    begin
+      msgLow := Res[i].MissingVar.ToLower;
+      if Res[i].FileName.ToLower.EndsWith('.dfm') then
+        Assert.IsTrue(msgLow.Contains('form'),
+          '.dfm-Orphan traegt die Form-Message')
+      else
+        Assert.IsFalse(msgLow.Contains('form file'),
+          '.pas-Orphan traegt NICHT die Form-Message');
+    end;
+  finally
+    Res.Free;
+    Proj.Free;
+  end;
+end;
+
+procedure TTestNotIncludedInProject.Findings_SortedByPath;
+// Sort-Determinismus (SARIF-Byte-Stabilitaet): die Ausgabe muss exakt der
+// TStringList-Sortierung (case-insensitiv) entsprechen - unabhaengig von
+// der FS-abhaengigen FindFirst-Reihenfolge. Fixture so gewaehlt, dass die
+// Walk-Reihenfolge (Verzeichnis 'a' vor Datei 'a!.pas') von der sortierten
+// Pfad-Reihenfolge abweichen kann.
+var
+  Proj     : TStringList;
+  Res      : TObjectList<TLeakFinding>;
+  Expected : TStringList;
+  i : Integer;
+begin
+  W('a\x.pas');
+  W('a!.pas');
+  W('m.pas');
+  Proj     := TStringList.Create;
+  Res      := TObjectList<TLeakFinding>.Create(True);
+  Expected := TStringList.Create;
+  Expected.CaseSensitive := False;
+  try
+    Assert.AreEqual(3, TNotIncludedInProjectDetector.Detect(Proj, FDir, Res));
+    for i := 0 to Res.Count - 1 do
+      Expected.Add(Res[i].FileName);
+    Expected.Sort;
+    for i := 0 to Res.Count - 1 do
+      Assert.AreEqual(Expected[i], Res[i].FileName,
+        'Findings exakt in sortierter Pfad-Reihenfolge (Index ' +
+        IntToStr(i) + ')');
+  finally
+    Expected.Free;
+    Res.Free;
+    Proj.Free;
+  end;
+end;
+
+procedure TTestNotIncludedInProject.CompanionDfm_OtherDirectory_StillOrphan;
+// Companion-Match ist VOLLPFAD-basiert: eine namensgleiche .dfm in einem
+// anderen Verzeichnis als die referenzierte .pas ist KEIN Companion und
+// bleibt Orphan. Bisher war nur der Gleiches-Verzeichnis-Fall getestet.
+var
+  incl, dfm : string;
+  cnt : Integer;
+  found : TStringList;
+begin
+  incl := W('uForm.pas');
+  dfm  := W('sub\uForm.dfm');
+  found := RunDetect([incl], FDir, cnt);
+  try
+    Assert.AreEqual(1, cnt,
+      'namensgleiche .dfm in anderem Verzeichnis ist kein Companion');
+    Assert.IsTrue(found.IndexOf(dfm) >= 0);
   finally
     found.Free;
   end;
