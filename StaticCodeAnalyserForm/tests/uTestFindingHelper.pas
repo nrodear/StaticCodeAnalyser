@@ -333,6 +333,13 @@ begin
         // Quellzeilen per AcquireLines) - MUSS wie UnusedLocal/GodClass auch
         // im File-Harness laufen, sonst sind die nested-Range-Tests inert.
         TUnusedParameterDetector.AnalyzeUnit(Root, TempPath, Result);
+        // A2 2026-07-25: LeakDetector2 + MissingFinally haben Lines-abhaengige
+        // Source-Guards (EnsureStripped/FreeInFinallyRegionBySource liest die
+        // Datei) - MUESSEN im File-Harness laufen, sonst sind with-Free-/
+        // finally-Region-Tests inert (WithDoBareFreeNoTry_StillReported war
+        // rot, weil der Detektor hier schlicht nie ausgefuehrt wurde).
+        TLeakDetector2.AnalyzeUnit(Root, TempPath, Result);
+        TMissingFinallyDetector.AnalyzeUnit(Root, TempPath, Result);
       finally
         Root.Free;
       end;

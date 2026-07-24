@@ -29,6 +29,11 @@ type
     [Test] procedure SourceGuard_FreeInOuterFinally_MisAttach_True;
     [Test] procedure SourceGuard_ForLoopFreeThenVarFree_True;
     [Test] procedure SourceGuard_FreeOutsideFinally_False;   // TP-Gegenprobe
+    // --- A2 (Triage 2026-07-24): with-Free-Idiom (bare Free ohne Receiver) ---
+    [Test] procedure WithDoTryFinallyBareFree_NotReported;
+    [Test] procedure WithDoBareFreeNoTry_StillReported;      // TP-Gegenprobe
+    [Test] procedure SourceGuard_WithBareFree_SingleWith_True;
+    [Test] procedure SourceGuard_BareFree_TwoWiths_False;    // TP-Gegenprobe
   end;
 
 implementation
@@ -279,6 +284,131 @@ begin
     Assert.IsFalse(
       TLeakDetector2.FreeInFinallyRegionBySource(M, Stripped, 'tempsl'),
       'TempSL.Free ausserhalb der finally-Region -> TP bleibt');
+  finally
+    M.Free;
+  end;
+end;
+
+procedure TTestMissingFinally.WithDoTryFinallyBareFree_NotReported;
+// A2: klassisches Dialog-Idiom - der Free steht OHNE Receiver im finally des
+// with-Bodys. BEHAVIOR-LOCK: die Produktion war fuer das reine Idiom schon
+// vor A2 still (CLI-Probe 2026-07-25); A2 haertet die dahinterliegenden
+// Mechanismen (SearchFree-WFin-Stack + bare-Free-Source-Gate) fuer die
+// Varianten, in denen die Rettung NICHT greift (Mis-Attach, {$IFDEF}).
+// FindingsOfFile: Quelle liegt auf Platte, damit laeuft der Source-Guard.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var L: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  with L do'#13#10 +
+  '  try'#13#10 +
+  '    Add(''x'');'#13#10 +
+  '  finally'#13#10 +
+  '    Free;'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMissingFinally),
+      'bare Free im with-finally ist geschuetzt -> kein MissingFinally');
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'auch kein Leak-/Free-ausserhalb-finally-Befund fuer L');
+  finally F.Free; end;
+end;
+
+procedure TTestMissingFinally.WithDoBareFreeNoTry_StillReported;
+// TP-Gegenprobe: with-Body OHNE try - der bare Free schuetzt nicht vor
+// Exceptions zwischen Create und Free -> Befund bleibt. Weder das AST-Gate
+// (kein nkFinallyBlock) noch das Source-Gate (verlangt do-try-Idiom +
+// finally-Region) duerfen greifen.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var L: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  with L do'#13#10 +
+  '  begin'#13#10 +
+  '    Add(''x'');'#13#10 +
+  '    Free;'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkMissingFinally) >= 1,
+      'with-Body ohne try: bare Free ungeschuetzt -> MissingFinally bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestMissingFinally.SourceGuard_WithBareFree_SingleWith_True;
+// A2-Source-Guard direkt (Mis-Attach simuliert: kein nkFinallyBlock im
+// Subtree): genau EIN 'with dlg do' + 'try'-Body -> bare 'free' in der
+// finally-Region NACH der with-Zeile zaehlt als dlg-Free.
+var
+  M, Blk : TAstNode;
+  Stripped : TArray<string>;
+begin
+  M := TAstNode.Create(nkMethod, 'foo', 1, 1);
+  try
+    Blk := M.Add(nkBlock, 'begin', 2, 1);
+    Blk.Add(nkAssign, 'dlg', 3, 1).TypeRef := 'topendialog.create';
+    Blk.Add(nkCall, 'execute', 8, 1);   // Subtree-Spanne bis Zeile 8
+    Stripped := TArray<string>.Create(
+      'procedure foo;',                        // 1
+      'begin',                                 // 2
+      '  dlg := topendialog.create(nil);',     // 3
+      '  with dlg do',                         // 4
+      '  try',                                 // 5
+      '    execute;',                          // 6
+      '  finally',                             // 7
+      '    free; end; end;');                  // 8
+    Assert.IsTrue(
+      TLeakDetector2.FreeInFinallyRegionBySource(M, Stripped, 'dlg'),
+      'bare Free unter single-with-do-try zaehlt als dlg.Free');
+  finally
+    M.Free;
+  end;
+end;
+
+procedure TTestMissingFinally.SourceGuard_BareFree_TwoWiths_False;
+// Gegenprobe: ZWEI with-Statements -> Gate aus. Der bare Free waere nicht
+// mehr eindeutig zuordenbar (koennte das andere with-Objekt oder Self
+// meinen) -> kein Suppress-Beweis, Fund bleibt.
+var
+  M, Blk : TAstNode;
+  Stripped : TArray<string>;
+begin
+  M := TAstNode.Create(nkMethod, 'foo', 1, 1);
+  try
+    Blk := M.Add(nkBlock, 'begin', 2, 1);
+    Blk.Add(nkAssign, 'dlg', 3, 1).TypeRef := 'topendialog.create';
+    Blk.Add(nkCall, 'execute', 10, 1);
+    Stripped := TArray<string>.Create(
+      'procedure foo;',                        // 1
+      'begin',                                 // 2
+      '  dlg := topendialog.create(nil);',     // 3
+      '  with dlg do',                         // 4
+      '  try',                                 // 5
+      '    execute;',                          // 6
+      '  finally',                             // 7
+      '    free;',                             // 8
+      '  end;',                                // 9
+      '  with other do bar; end;');            // 10
+    Assert.IsFalse(
+      TLeakDetector2.FreeInFinallyRegionBySource(M, Stripped, 'dlg'),
+      'zwei withs -> bare-Free-Gate aus, kein Suppress-Beweis');
   finally
     M.Free;
   end;

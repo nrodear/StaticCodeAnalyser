@@ -1314,20 +1314,33 @@ begin
     if (NameLow = VarNameLow) and (Node.Children.Count > 0) then
     begin
       var WStack := TList<TAstNode>.Create;
+      // A2 (SCA009-Triage 2026-07-24): finally-Kontext JE STACK-EINTRAG
+      // mitfuehren. Vorher galt fuer bare Free im with-Subtree pauschal der
+      // Kontext des WITH-Knotens (auf Methodenebene False) - beim Idiom
+      // 'with L do try .. finally Free end' kam FoundInFinally=False zurueck
+      // und uMissingFinally meldete trotz korrektem Schutz (FP). Alle
+      // Konsumenten nutzen FoundInFinally nur zur Unterdrueckung -> monoton.
+      var WFins := TList<Boolean>.Create;
       try
-        for Child in Node.Children do WStack.Add(Child);
+        for Child in Node.Children do
+        begin
+          WStack.Add(Child);
+          WFins.Add(InFinally or (Child.Kind = nkFinallyBlock));
+        end;
         while WStack.Count > 0 do
         begin
-          var W := WStack[WStack.Count - 1];
+          var W    := WStack[WStack.Count - 1];
+          var WFin := WFins[WFins.Count - 1];
           WStack.Delete(WStack.Count - 1);
+          WFins.Delete(WFins.Count - 1);
           if W.Kind = nkCall then
           begin
             var WLow := W.Name.ToLower;
             if (WLow = 'free') or (WLow = 'free()')
                or (WLow = 'destroy') or (WLow = 'disposeof') then
             begin
-              Result := True; FoundInFinally := InFinally;
-              Exit;   // finally gibt WStack frei
+              Result := True; FoundInFinally := WFin;
+              Exit;   // finally gibt WStack/WFins frei
             end;
             // NESTED with ('with bm do with other do Free') NICHT betreten:
             // dessen bare Free gehoert zum INNEREN Objekt, nicht zu varName
@@ -1339,10 +1352,15 @@ begin
                and (Pos('(', W.Name) = 0) then
               Continue;
           end;
-          for var WC in W.Children do WStack.Add(WC);
+          for var WC in W.Children do
+          begin
+            WStack.Add(WC);
+            WFins.Add(WFin or (WC.Kind = nkFinallyBlock));
+          end;
         end;
       finally
         WStack.Free;
+        WFins.Free;
       end;
     end;
 
@@ -1466,6 +1484,7 @@ class function TLeakDetector2.FreeInFinallyRegionBySource(MethodNode: TAstNode;
 // INNERHALB der Methode. StrippedLines: Index k-1 == Quellzeile k.
 var
   StartL, EndL, li, MethStart, MethEnd : Integer;
+  WithTryLine : Integer;   // A2: Zeile des einzigen 'with <var> do try' (0 = Gate aus)
 
   function TryEndLine(FinLine1: Integer): Integer;
   const
@@ -1537,6 +1556,104 @@ var
            or BoundedLeft(Low, 'freeandnil(self.' + VarNameLow, True);
   end;
 
+  // A2 (SCA009-Triage 2026-07-24): das klassische Dialog-Idiom
+  //   L := TDlg.Create(nil); with L do try ... finally Free; end;
+  // schreibt den Free OHNE Receiver - 'varname.free' verfehlt ihn. Gate:
+  // genau EIN 'with' in der Methodenspanne, dessen Ziel EXAKT VarName ist
+  // und dessen Body ein try-Statement ist ('do try' auf derselben oder
+  // 'try' auf der naechsten nicht-leeren Zeile). Liefert die with-Zeile,
+  // sonst 0. Streng nach Triage-Spez ("genau EIN with"), damit ein bare
+  // Free nie einem fremden with-Objekt oder Self zugerechnet wird.
+  function SingleWithDoTryLine: Integer;
+  var
+    k, p, rr, nk2 : Integer;
+    Low, T : string;
+    Cnt, CandLine : Integer;
+  begin
+    Result := 0; Cnt := 0; CandLine := 0;
+    for k := MethStart to MethEnd do
+    begin
+      Low := LowerCase(StrippedLines[k - 1]);
+      p := Pos('with', Low);
+      while p > 0 do
+      begin
+        if ((p = 1) or not IsIdentChar(Low[p - 1])) and
+           ((p + 4 > Length(Low)) or not IsIdentChar(Low[p + 4])) then
+        begin
+          Inc(Cnt);
+          if Cnt > 1 then Exit(0);
+          rr := p + 4;
+          while (rr <= Length(Low)) and (Low[rr] = ' ') do Inc(rr);
+          if Copy(Low, rr, Length(VarNameLow)) = VarNameLow then
+          begin
+            rr := rr + Length(VarNameLow);
+            if (rr > Length(Low)) or not IsIdentChar(Low[rr]) then
+            begin
+              while (rr <= Length(Low)) and (Low[rr] = ' ') do Inc(rr);
+              if (Copy(Low, rr, 2) = 'do') and
+                 ((rr + 2 > Length(Low)) or not IsIdentChar(Low[rr + 2])) then
+              begin
+                rr := rr + 2;
+                while (rr <= Length(Low)) and (Low[rr] = ' ') do Inc(rr);
+                if rr > Length(Low) then
+                begin
+                  // 'do' am Zeilenende -> 'try' muss die naechste nicht-leere
+                  // Zeile eroeffnen ('tryxyz'-Idents via Wortgrenze verworfen).
+                  nk2 := k + 1;
+                  while (nk2 <= MethEnd) and (Trim(StrippedLines[nk2 - 1]) = '') do
+                    Inc(nk2);
+                  if nk2 <= MethEnd then
+                  begin
+                    T := LowerCase(Trim(StrippedLines[nk2 - 1]));
+                    if (T = 'try') or ((Copy(T, 1, 3) = 'try') and
+                       (Length(T) > 3) and not IsIdentChar(T[4])) then
+                      CandLine := k;
+                  end;
+                end
+                else if (Copy(Low, rr, 3) = 'try') and
+                        ((rr + 3 > Length(Low)) or not IsIdentChar(Low[rr + 3])) then
+                  CandLine := k;
+              end;
+            end;
+          end;
+        end;
+        p := PosEx('with', Low, p + 1);
+      end;
+    end;
+    if Cnt = 1 then Result := CandLine;
+  end;
+
+  // A2: bare 'Free'/'Free()' als eigenes Statement - Wortgrenzen beidseits,
+  // und davor darf (auch ueber Leerraum) kein '.' stehen ('X.Free' gehoert
+  // zu X, nicht zum with-Objekt). 'freeandnil(' faellt durch die rechte
+  // Wortgrenze ('a' ist Ident-Zeichen).
+  function LineHasBareFree(const S: string): Boolean;
+  var
+    Low : string;
+    p, q, rr : Integer;
+  begin
+    Result := False;
+    Low := LowerCase(S);
+    p := Pos('free', Low);
+    while p > 0 do
+    begin
+      if (p = 1) or not IsIdentChar(Low[p - 1]) then
+      begin
+        q := p - 1;
+        while (q >= 1) and (Low[q] = ' ') do Dec(q);
+        if (q < 1) or (Low[q] <> '.') then
+        begin
+          rr := p + 4;
+          if (rr < Length(Low)) and (Low[rr] = '(') and (Low[rr + 1] = ')') then
+            Inc(rr, 2);
+          if (rr > Length(Low)) or not IsIdentChar(Low[rr]) then
+            Exit(True);
+        end;
+      end;
+      p := PosEx('free', Low, p + 1);
+    end;
+  end;
+
   // 'finally' als eigenstaendiges Wort in einer (gestrippten) Zeile?
   function LineHasFinally(const S: string): Boolean;
   var
@@ -1593,15 +1710,27 @@ begin
   if MethEnd > Length(StrippedLines) then MethEnd := Length(StrippedLines);
   if MethEnd < MethStart then Exit;
 
+  WithTryLine := SingleWithDoTryLine;
+
   for StartL := MethStart to MethEnd do
   begin
     if not LineHasFinally(StrippedLines[StartL - 1]) then Continue;
     EndL := TryEndLine(StartL);
     if EndL > MethEnd then EndL := MethEnd;    // Region auf die Methode klammern
     for li := StartL to EndL do
-      if (li >= 1) and (li <= Length(StrippedLines))
-         and LineFreesVar(StrippedLines[li - 1]) then
-        Exit(True);
+      if (li >= 1) and (li <= Length(StrippedLines)) then
+      begin
+        if LineFreesVar(StrippedLines[li - 1]) then Exit(True);
+        // A2: bare 'Free' zaehlt NUR unter dem strengen with-Gate (genau EIN
+        // with in der Methode, Ziel = VarName, Body ist ein try) und nur in
+        // finally-Regionen NACH der with-Zeile - dann ist der Receiver
+        // beweisbar das with-Objekt. Rest-Risiko Self.Free in einem SPAETEREN
+        // fremden finally derselben Methode: braeuchte zusaetzlich das
+        // do-try-Idiom auf genau dieser Var - bewusst akzeptiert.
+        if (WithTryLine > 0) and (StartL > WithTryLine)
+           and LineHasBareFree(StrippedLines[li - 1]) then
+          Exit(True);
+      end;
   end;
 end;
 
