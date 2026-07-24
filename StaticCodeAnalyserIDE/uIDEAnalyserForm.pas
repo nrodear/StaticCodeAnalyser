@@ -58,6 +58,7 @@ type
     // gueltigen Klick.
     FLastNonSeparatorMode : Integer;
     FFilterMode     : TFilterMode;
+    FFilterKind     : TFindingKind; // gueltig wenn FFilterMode = fmSingleKind
     FCurrentBaseDir : string;
     FFilterCombo       : TComboBox;
     // Hilfe-Panel rechts (Vorher/Nachher-Code-Beispiele) inklusive
@@ -1219,99 +1220,13 @@ begin
   Add('Warnings (all)', fmWarnings);
   Add('Hints (all)',    fmHints);
 
-  // ---- Errors (einzeln) ----
-  Sep('--- Errors ---');
-  Add('Memory Leak',                       fmMemoryLeak);
-  Add('SQL Injection',                     fmSQLInjection);
-  Add('Hardcoded Secrets',                 fmHardcodedSecret);
-  Add('Format()',                          fmFormatMismatch);
-  Add('Nil-Deref',                         fmNilDeref);
-  Add('Div by Zero',                       fmDivByZero);
-  Add('Missing Raise',                     fmMissingRaise);
-  Add('Result Unassigned',                 fmRoutineResultUnassigned);
-  Add('Instance-Invoked Constructor',      fmInstanceInvokedConstructor);
-  Add('Char -> PChar Cast',                fmCharToCharPointerCast);
-  Add('Raise outside except',              fmRaiseOutsideExcept);
-  Add('Use After Free',                    fmUseAfterFree);
-  Add('Abstract method not implemented',   fmAbstractNotImpl);
-  Add('Leak in constructor',               fmLeakInConstructor);
-  Add('Integer overflow (Int64 mul)',      fmIntegerOverflow);
-  Add('God Class',                         fmGodClass);
-  Add('Free without nil-out',              fmFreeWithoutNil);
-  Add('Multiple Exit',                     fmMultipleExit);
-  Add('Large Class',                       fmLargeClass);
-  Add('Unsorted uses clause',              fmUnsortedUses);
-  Add('Missing unit header',               fmMissingUnitHeader);
-  Add('Float equality',                    fmFloatEquality);
-  Add('Raise in destructor',               fmExceptInDestructor);
-  Add('Boolean parameter as flag',         fmBooleanParam);
-  Add('Unused private method',             fmUnusedPrivateMethod);
-  Add('Could be class method',             fmCanBeClassMethod);
-  Add('Missing override',                  fmMissingOverride);
-  Add('Boolean always true / false',       fmBoolAlwaysTrue);
-  Add('Constant return value',             fmConstantReturn);
-  Add('Hardcoded user string',             fmHardcodedString);
-  Add('Command Injection',                 fmCommandInjection);
-
-  // ---- Warnings (einzeln) ----
-  Sep('--- Warnings ---');
-  Add('Empty Except',          fmEmptyExcept);
-  Add('Missing Finally',       fmMissingFinally);
-  Add('Dead Code',             fmDeadCode);
-  Add('Unused Uses',           fmUnusedUses);
-  Add('Debug Output',          fmDebugOutput);
-  Add('Hardcoded Path',        fmHardcodedPath);
-  Add('Read Error',            fmFileReadError);
-  Add('Re-Raise Exception',    fmReRaiseException);
-  Add('Raising Raw Exception', fmRaisingRawException);
-  Add('Date Format Settings',  fmDateFormatSettings);
-  Add('Unicode -> Ansi Cast',  fmUnicodeToAnsiCast);
-  Add('IfThen Short-Circuit',  fmIfThenShortCircuit);
-  Add('Exception Too General', fmExceptionTooGeneral);
-  Add('Insecure Crypto Algo',  fmInsecureCryptoAlgorithm);
-
-  // ---- Hints (einzeln) ----
-  Sep('--- Hints ---');
-  Add('Long Method',             fmLongMethod);
-  Add('Many Parameters',         fmLongParamList);
-  Add('Magic Number',            fmMagicNumber);
-  Add('Duplicate Strings',       fmDuplicateString);
-  Add('Duplicate Code Blocks',   fmDuplicateBlock);
-  Add('Deep Nesting',            fmDeepNesting);
-  Add('Cyclomatic Complexity',   fmCyclomaticComplexity);
-  Add('TODO/FIXME',              fmTodoComment);
-  Add('Empty Methods',           fmEmptyMethod);
-  Add('Can Be Unit Private',     fmCanBeUnitPrivate);
-  Add('Can Be Strict Private',   fmCanBeStrictPrivate);
-  Add('Can Be Protected',        fmCanBeProtected);
-  Add('Unused Public Member',    fmUnusedPublicMember);
-  Add('Unused Local Var',        fmUnusedLocalVar);
-  Add('Unused Parameter',        fmUnusedParameter);
-  Add('Tautological Expression', fmTautologicalBoolExpr);
-  Add('Master-Detail Unlinked',  fmDfmMasterDetailUnlinked);
-  Add('Data Module Split Hint',  fmDfmDataModuleSplitHint);
-  Add('Dangerous SQL Statement', fmSqlDangerousStatement);
-  Add('Format Locale Hint',      fmFormatLocaleHint);
-  Add('Cast And Free',           fmCastAndFree);
-  Add('Inherited (empty)',       fmInheritedMethodEmpty);
-  Add('Nil Comparison',          fmNilComparison);
-  // mORMot-Cluster (SCA153-155)
-  Add('Unpaired Lock',                            fmUnpairedLock);
-  Add('Move/FillChar SizeOf(Pointer)',            fmMoveSizeOfPointer);
-  Add('with on multiple targets',                 fmWithMultipleTargets);
-  // mORMot-Cluster Phase 2 (SCA156-158)
-  Add('GetMem without try/finally',               fmGetMemWithoutFreeMem);
-  Add('SetLength grow in loop',                   fmSetLengthAppendInLoop);
-  Add('PChar arithmetic without empty-check',     fmPointerArithmeticOnString);
-  // mORMot-Cluster Phase 3 (SCA159-161)
-  Add('Empty typed exception handler',            fmEmptyOnHandler);
-  Add('String cast from raw pointer',             fmStringFromPointer);
-  Add('Pointer subtraction (Win64 truncation)',   fmPointerSubtraction);
-  // Audit-Nachzug (Todo_neuerdetector-Checkliste)
-  Add('Unused Routine',                           fmUnusedRoutine);
-  Add('NOSONAR Marker (legacy)',                  fmNoSonarMarker);
-  // SCA165 - Unused-Suppression-Marker
-  Add('Unused noinspection Marker',               fmUnusedSuppression);
+  // Checklist-Drift-Fix 2026-07-24 (Dedup-Runde): Hand-Sektionen
+  // (--- Errors --- usw. mit Einzel-Detektoren) ENTFERNT - die
+  // generierte Liste unten ist die einzige Quelle fuer Einzel-
+  // Eintraege (SCAxxx-Praefix, korrekt gruppiert, driftfrei).
+  // Checklist-Drift-Fix 2026-07-24: komplette, generierte Detektor-
+  // Liste anhaengen (s. TFindingFilter.AppendKindFilterItems).
+  TFindingFilter.AppendKindFilterItems(FFilterCombo.Items);
 
   FFilterCombo.ItemIndex := 0; // "All"
 end;
@@ -1639,7 +1554,10 @@ begin
       finally
         FFilterCombo.OnChange := OldOnChange;
       end;
-      FFilterMode := TFilterMode(tag);
+      if TFindingFilter.KindFromTag(tag, FFilterKind) then
+        FFilterMode := fmSingleKind
+      else
+        FFilterMode := TFilterMode(tag);
       FLastNonSeparatorMode := tag;
       ApplyFilter;
       Exit;
@@ -1663,7 +1581,10 @@ begin
     end;
     Exit;
   end;
-  FFilterMode := TFilterMode(tag);
+  if TFindingFilter.KindFromTag(tag, FFilterKind) then
+    FFilterMode := fmSingleKind
+  else
+    FFilterMode := TFilterMode(tag);
   FLastNonSeparatorMode := tag;  // Anker fuer den naechsten Separator-Klick
   ApplyFilter;
 end;
@@ -1762,6 +1683,7 @@ var
   BaselineActive : Boolean;
 begin
   Criteria.Mode       := FFilterMode;
+  Criteria.SingleKind := FFilterKind;
   Criteria.TypeFilter := FTypeFilter;
   Criteria.SearchLow  := Trim(FSearchEdit.Text).ToLower;
 
@@ -2112,8 +2034,7 @@ begin
       if (Item.ModeOrd = -1)                    // Separator: vorlaeufig behalten
          or (Item.ModeOrd = Ord(fmAll))
          or (Item.ModeOrd = Ord(fmDetectorReview))
-         or (TFindingFilter.CountForMode(FAllFindings,
-                                         TFilterMode(Item.ModeOrd)) > 0) then
+         or (TFindingFilter.CountForTag(FAllFindings, Item.ModeOrd) > 0) then
         Tmp.Add(Item);
     end;
     // Pass 2: orphan separators entfernen (Separator gefolgt von Separator

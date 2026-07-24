@@ -176,7 +176,7 @@ def main() -> int:
         print(f"ERROR: rules file not found: {args.rules}", file=sys.stderr)
         return 2
 
-    with args.rules.open(encoding="utf-8") as f:
+    with args.rules.open(encoding="utf-8-sig") as f:  # BOM-tolerant (Fix 2026-07-24)
         catalog = json.load(f)
 
     rules: list[dict[str, Any]] = catalog.get("rules", [])

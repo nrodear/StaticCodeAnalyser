@@ -18,9 +18,11 @@ unit uFindingFilter;
 interface
 
 uses
+  System.Classes,    // TStrings (AppendKindFilterItems)
   System.Generics.Collections,
   uMethodd12,        // TLeakFinding
-  uSCAConsts;        // TFindingKind, TFindingType, TLeakSeverity
+  uSCAConsts,        // TFindingKind, TFindingType, TLeakSeverity
+  uRuleCatalog;      // SCA-IDs fuer die generierten Filter-Labels
 
 type
   // Welche Befund-Auswahl die Combo "Filter" zeigt.
@@ -129,7 +131,12 @@ type
                  fmCommandInjection, fmInsecureCryptoAlgorithm,
                  fmUnusedRoutine, fmNoSonarMarker,
                  // SCA165 - Unused-Suppression-Marker
-                 fmUnusedSuppression);
+                 fmUnusedSuppression,
+                 // Checklist-Drift-Fix 2026-07-24: generischer Einzel-
+                 // Kind-Filter. Das konkrete Kind steht in Criteria.
+                 // SingleKind; Combo-Items kodieren es als Tag
+                 // KIND_TAG_BASE+Ord(Kind) (AppendKindFilterItems).
+                 fmSingleKind);
 
   // Zweiter Filter (orthogonal zu Schweregrad): Sonar-Typ-Kategorie.
   TTypeFilter = (tfAll, tfBug, tfCodeSmell, tfVulnerability,
@@ -140,6 +147,7 @@ type
   // der Predicate-Aufruf bleibt billig).
   TFindingFilterCriteria = record
     Mode       : TFilterMode;
+    SingleKind : TFindingKind;  // nur bei Mode = fmSingleKind relevant
     TypeFilter : TTypeFilter;
     SearchLow  : string;
   end;
@@ -174,6 +182,19 @@ type
     // nach einem Scan auszublenden. tfAll als zweiter Filter offen
     // (CountForMode) bzw. fmAll als erster Filter offen (CountForType),
     // damit jeder Eintrag isoliert gegen die volle Befund-Liste zaehlt.
+    // Checklist-Drift-Fix 2026-07-24: generische Kind-Filter-Eintraege.
+    // Combo-Items fuer einzelne Detektoren tragen Tag = KIND_TAG_BASE +
+    // Ord(Kind); AppendKindFilterItems generiert die komplette, nach
+    // KIND_META.DefaultSeverity gruppierte Liste (neue Detektoren
+    // erscheinen automatisch, Sektionen koennen nicht mehr driften).
+    const KIND_TAG_BASE = 10000;
+    class function KindFromTag(ATag: Integer;
+      out AKind: TFindingKind): Boolean; static;
+    // Trefferzahl fuer ein Combo-Tag: Kind-Tags zaehlen per Kind,
+    // Mode-Tags delegieren an CountForMode, Separatoren (-1) -> 0.
+    class function CountForTag(AFindings: TList<TLeakFinding>;
+      ATag: Integer): Integer; static;
+    class procedure AppendKindFilterItems(Items: TStrings); static;
     class function CountForMode(AFindings: TList<TLeakFinding>;
       AMode: TFilterMode): Integer; static;
     class function CountForType(AFindings: TList<TLeakFinding>;
@@ -442,6 +463,7 @@ begin
     fmErrors:          Result := Sev = fsError;
     fmWarnings:        Result := Sev = fsWarning;
     fmHints:           Result := Sev = fsHint;
+    fmSingleKind:      Result := F.Kind = C.SingleKind;
     fmMemoryLeak:      Result := F.Kind = fkMemoryLeak;
     fmCanBeUnitPrivate:    Result := F.Kind = fkCanBeUnitPrivate;
     fmCanBeStrictPrivate:  Result := F.Kind = fkCanBeStrictPrivate;
@@ -758,6 +780,81 @@ begin
 end;
 
 { TFindingFilter - Count-Helpers }
+
+class function TFindingFilter.KindFromTag(ATag: Integer;
+  out AKind: TFindingKind): Boolean;
+begin
+  Result := (ATag >= KIND_TAG_BASE) and
+            (ATag <= KIND_TAG_BASE + Ord(High(TFindingKind)));
+  if Result then
+    AKind := TFindingKind(ATag - KIND_TAG_BASE);
+end;
+
+class function TFindingFilter.CountForTag(AFindings: TList<TLeakFinding>;
+  ATag: Integer): Integer;
+var
+  K : TFindingKind;
+  F : TLeakFinding;
+begin
+  Result := 0;
+  if AFindings = nil then Exit;
+  if KindFromTag(ATag, K) then
+  begin
+    for F in AFindings do
+      if F.Kind = K then Inc(Result);
+  end
+  else if ATag >= 0 then
+    Result := CountForMode(AFindings, TFilterMode(ATag));
+end;
+
+class procedure TFindingFilter.AppendKindFilterItems(Items: TStrings);
+// Generierte Einzel-Detektor-Sektionen: pro Severity-Stufe ein
+// Separator ('--- Errors (A-Z) ---', Tag -1) + alle Kinds dieser
+// DefaultSeverity, sortiert nach SCA-ID. Labels 'SCAxxx  KindName'
+// (KindName = KIND_META.Name = noinspection-Name, bewusst technisch
+// und unlokalisiert). Quelle ist KIND_META + Regel-Katalog - damit
+// ist die Liste IMMER vollstaendig und die Severity-Zuordnung kann
+// nicht mehr von Demote-Wellen abgehaengt werden (Audit 2026-07-24:
+// 20/20 der juengsten Detektoren fehlten, 4 Alt-Eintraege standen
+// unter falscher Sektion).
+const
+  SECTION_CAPTION : array[TLeakSeverity] of string = (
+    '--- Errors (A-Z) ---', '--- Warnings (A-Z) ---',
+    '--- Hints (A-Z) ---');
+var
+  Sev    : TLeakSeverity;
+  K      : TFindingKind;
+  Meta   : TRuleMeta;
+  Sorted : TStringList;
+  Lbl    : string;
+  i      : Integer;
+begin
+  if Items = nil then Exit;
+  for Sev := Low(TLeakSeverity) to High(TLeakSeverity) do
+  begin
+    Sorted := TStringList.Create;
+    try
+      Sorted.Sorted := True;
+      Sorted.Duplicates := dupAccept;
+      for K := Low(TFindingKind) to High(TFindingKind) do
+      begin
+        if KIND_META[K].DefaultSeverity <> Sev then Continue;
+        Meta := TRuleCatalog.GetRule(K);
+        if Meta.ID <> '' then
+          Lbl := Meta.ID + '  ' + KIND_META[K].Name
+        else
+          Lbl := KIND_META[K].Name;   // Katalog-Fallback ohne ID
+        Sorted.AddObject(Lbl, TObject(KIND_TAG_BASE + Ord(K)));
+      end;
+      if Sorted.Count = 0 then Continue;
+      Items.AddObject(SECTION_CAPTION[Sev], TObject(-1));
+      for i := 0 to Sorted.Count - 1 do
+        Items.AddObject(Sorted[i], Sorted.Objects[i]);
+    finally
+      Sorted.Free;
+    end;
+  end;
+end;
 
 class function TFindingFilter.CountForMode(AFindings: TList<TLeakFinding>;
   AMode: TFilterMode): Integer;

@@ -197,6 +197,7 @@ All 193 detector rules. Single source of truth: [`rules/sca-rules.json`](../rule
 | [SCA191](#sca191) | UTF-32 / UCS-4 source file | **Error** | File Error | `uSourceEncoding.pas` |
 | [SCA192](#sca192) | Invisible / zero-width character in source | Warning | Vulnerability | `uSourceEncoding.pas` |
 | [SCA193](#sca193) | Non-ASCII character in identifier | Warning | Vulnerability | `uSourceEncoding.pas` |
+| [SCA194](#sca194) | Source file not part of the project | Hint | Code Smell | `uNotIncludedInProject.pas` |
 
 ---
 
@@ -4999,4 +5000,28 @@ var Login: string;  // all-ASCII identifier
 
 ---
 
-_For richer per-rule pages with badges and full examples, install Python and run `python tools/gen-rules-docs.py`. Generated files land in `docs/rules/SCA001.md`...`SCA192.md`._
+## SCA194
+**Source file not part of the project**
+
+> A .pas/.dfm file lies in the project folder but is not referenced by the project (.dproj/.groupproj) - likely an orphaned / dead source file
+
+| Field | Value |
+|---|---|
+| Severity | Hint | Type | Code Smell |
+| Tags | `dead-code`, `project`, `maintainability` |
+| Detector | `uNotIncludedInProject.pas` |
+| Scope | only `.dproj`/`.groupproj` scans (CLI `--project`/`--project-group`, IDE `...` dialog) |
+
+Runs only for project- and project-group scans (--project / --project-group, or picking a .dproj/.groupproj via the '...' dialog), where the exact project file list (DCCReferences) is known. The detector walks the project file's directory recursively for .pas and .dfm files and flags every one the project does not reference. A .dfm counts as included when its companion .pas is referenced. Typical hits: units left behind after a refactor, experimental copies, or files removed from the project but not from disk. Limitation v1: only files INSIDE the project folder tree are checked - units referenced from outside via '..' relative DCCReferences, and search-path units, are neither walked nor flagged. Directory-recursive and single-file scans do not run this check (no project-membership concept). Fix: remove the file, add it to the project, or move it out of the project folder.
+
+```pascal
+// BAD
+MyProject.dproj references uMain, uData - but the folder also contains uOldHelper.pas (not referenced) -> flagged
+
+// GOOD
+Remove uOldHelper.pas, add it to the project, or move it out of the project folder
+```
+
+---
+
+_For richer per-rule pages with badges and full examples, install Python and run `python tools/gen-rules-docs.py`. Generated files land in `docs/rules/SCA001.md`...`SCA194.md`._

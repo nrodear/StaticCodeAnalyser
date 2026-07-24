@@ -316,71 +316,13 @@ begin
   SeverityFilterCombo.Items.AddObject(_('Errors (all)'),           TObject(Ord(fmErrors)));
   SeverityFilterCombo.Items.AddObject(_('Warnings (all)'),         TObject(Ord(fmWarnings)));
   SeverityFilterCombo.Items.AddObject(_('Hints (all)'),            TObject(Ord(fmHints)));
-  SeverityFilterCombo.Items.AddObject(_('Memory Leaks (all)'),     TObject(Ord(fmMemoryLeak)));
-  SeverityFilterCombo.Items.AddObject(_('Can Be Unit Private'),    TObject(Ord(fmCanBeUnitPrivate)));
-  SeverityFilterCombo.Items.AddObject(_('Can Be Strict Private'),  TObject(Ord(fmCanBeStrictPrivate)));
-  SeverityFilterCombo.Items.AddObject(_('Can Be Protected'),       TObject(Ord(fmCanBeProtected)));
-  SeverityFilterCombo.Items.AddObject(_('Unused Public Member'),   TObject(Ord(fmUnusedPublicMember)));
-  SeverityFilterCombo.Items.AddObject(_('Unused Local Var'),       TObject(Ord(fmUnusedLocalVar)));
-  SeverityFilterCombo.Items.AddObject(_('Unused Parameter'),       TObject(Ord(fmUnusedParameter)));
-  SeverityFilterCombo.Items.AddObject(_('Tautological Expression'),TObject(Ord(fmTautologicalBoolExpr)));
-  SeverityFilterCombo.Items.AddObject(_('Master-Detail Unlinked'), TObject(Ord(fmDfmMasterDetailUnlinked)));
-  SeverityFilterCombo.Items.AddObject(_('Data Module Split Hint'), TObject(Ord(fmDfmDataModuleSplitHint)));
-  SeverityFilterCombo.Items.AddObject(_('Dangerous SQL Statement'),TObject(Ord(fmSqlDangerousStatement)));
-  SeverityFilterCombo.Items.AddObject(_('Format Locale Hint'),     TObject(Ord(fmFormatLocaleHint)));
-  // SonarDelphi-Migration (SCA120-131)
-  SeverityFilterCombo.Items.AddObject(_('Missing Raise'),                TObject(Ord(fmMissingRaise)));
-  SeverityFilterCombo.Items.AddObject(_('Result Unassigned'),            TObject(Ord(fmRoutineResultUnassigned)));
-  SeverityFilterCombo.Items.AddObject(_('Re-Raise Exception'),           TObject(Ord(fmReRaiseException)));
-  SeverityFilterCombo.Items.AddObject(_('Cast And Free'),                TObject(Ord(fmCastAndFree)));
-  SeverityFilterCombo.Items.AddObject(_('Instance-Invoked Constructor'), TObject(Ord(fmInstanceInvokedConstructor)));
-  SeverityFilterCombo.Items.AddObject(_('Inherited (empty)'),            TObject(Ord(fmInheritedMethodEmpty)));
-  SeverityFilterCombo.Items.AddObject(_('Nil Comparison'),               TObject(Ord(fmNilComparison)));
-  SeverityFilterCombo.Items.AddObject(_('Raising Raw Exception'),        TObject(Ord(fmRaisingRawException)));
-  SeverityFilterCombo.Items.AddObject(_('Date Format Settings'),         TObject(Ord(fmDateFormatSettings)));
-  SeverityFilterCombo.Items.AddObject(_('Unicode -> Ansi Cast'),         TObject(Ord(fmUnicodeToAnsiCast)));
-  SeverityFilterCombo.Items.AddObject(_('Char -> PChar Cast'),           TObject(Ord(fmCharToCharPointerCast)));
-  SeverityFilterCombo.Items.AddObject(_('IfThen Short-Circuit'),         TObject(Ord(fmIfThenShortCircuit)));
-  // Sonar-50 Critical (SCA132-137)
-  SeverityFilterCombo.Items.AddObject(_('Exception Too General'),        TObject(Ord(fmExceptionTooGeneral)));
-  SeverityFilterCombo.Items.AddObject(_('Raise outside except'),         TObject(Ord(fmRaiseOutsideExcept)));
-  SeverityFilterCombo.Items.AddObject(_('Use After Free'),               TObject(Ord(fmUseAfterFree)));
-  SeverityFilterCombo.Items.AddObject(_('Abstract method not implemented'), TObject(Ord(fmAbstractNotImpl)));
-  SeverityFilterCombo.Items.AddObject(_('Leak in constructor'),          TObject(Ord(fmLeakInConstructor)));
-  SeverityFilterCombo.Items.AddObject(_('Integer overflow (Int64 mul)'), TObject(Ord(fmIntegerOverflow)));
-  SeverityFilterCombo.Items.AddObject(_('God Class'),                    TObject(Ord(fmGodClass)));
-  SeverityFilterCombo.Items.AddObject(_('Free without nil-out'),         TObject(Ord(fmFreeWithoutNil)));
-  SeverityFilterCombo.Items.AddObject(_('Multiple Exit'),                TObject(Ord(fmMultipleExit)));
-  SeverityFilterCombo.Items.AddObject(_('Large Class'),                  TObject(Ord(fmLargeClass)));
-  SeverityFilterCombo.Items.AddObject(_('Unsorted uses clause'),         TObject(Ord(fmUnsortedUses)));
-  SeverityFilterCombo.Items.AddObject(_('Missing unit header'),          TObject(Ord(fmMissingUnitHeader)));
-  SeverityFilterCombo.Items.AddObject(_('Float equality'),               TObject(Ord(fmFloatEquality)));
-  SeverityFilterCombo.Items.AddObject(_('Raise in destructor'),          TObject(Ord(fmExceptInDestructor)));
-  SeverityFilterCombo.Items.AddObject(_('Boolean parameter as flag'),    TObject(Ord(fmBooleanParam)));
-  SeverityFilterCombo.Items.AddObject(_('Unused private method'),        TObject(Ord(fmUnusedPrivateMethod)));
-  SeverityFilterCombo.Items.AddObject(_('Could be class method'),        TObject(Ord(fmCanBeClassMethod)));
-  SeverityFilterCombo.Items.AddObject(_('Missing override'),             TObject(Ord(fmMissingOverride)));
-  SeverityFilterCombo.Items.AddObject(_('Boolean always true / false'),  TObject(Ord(fmBoolAlwaysTrue)));
-  SeverityFilterCombo.Items.AddObject(_('Constant return value'),        TObject(Ord(fmConstantReturn)));
-  SeverityFilterCombo.Items.AddObject(_('Hardcoded user string'),        TObject(Ord(fmHardcodedString)));
-  // mORMot-Cluster (SCA153-155)
-  SeverityFilterCombo.Items.AddObject(_('Unpaired Lock'),                TObject(Ord(fmUnpairedLock)));
-  SeverityFilterCombo.Items.AddObject(_('Move/FillChar SizeOf(Pointer)'),TObject(Ord(fmMoveSizeOfPointer)));
-  SeverityFilterCombo.Items.AddObject(_('with on multiple targets'),     TObject(Ord(fmWithMultipleTargets)));
-  // mORMot-Cluster Phase 2 (SCA156-158)
-  SeverityFilterCombo.Items.AddObject(_('GetMem without try/finally'),        TObject(Ord(fmGetMemWithoutFreeMem)));
-  SeverityFilterCombo.Items.AddObject(_('SetLength grow in loop'),            TObject(Ord(fmSetLengthAppendInLoop)));
-  SeverityFilterCombo.Items.AddObject(_('PChar arithmetic without empty-check'),  TObject(Ord(fmPointerArithmeticOnString)));
-  // mORMot-Cluster Phase 3 (SCA159-161)
-  SeverityFilterCombo.Items.AddObject(_('Empty typed exception handler'),     TObject(Ord(fmEmptyOnHandler)));
-  SeverityFilterCombo.Items.AddObject(_('String cast from raw pointer'),      TObject(Ord(fmStringFromPointer)));
-  SeverityFilterCombo.Items.AddObject(_('Pointer subtraction (Win64 truncation)'), TObject(Ord(fmPointerSubtraction)));
-  // Audit-Nachzug (Todo_neuerdetector-Checkliste)
-  SeverityFilterCombo.Items.AddObject(_('Command Injection'),            TObject(Ord(fmCommandInjection)));
-  SeverityFilterCombo.Items.AddObject(_('Insecure Crypto Algo'),         TObject(Ord(fmInsecureCryptoAlgorithm)));
-  SeverityFilterCombo.Items.AddObject(_('Unused Routine'),               TObject(Ord(fmUnusedRoutine)));
-  SeverityFilterCombo.Items.AddObject(_('NOSONAR Marker (legacy)'),      TObject(Ord(fmNoSonarMarker)));
-  SeverityFilterCombo.Items.AddObject(_('Unused noinspection Marker'),   TObject(Ord(fmUnusedSuppression)));
+
+  // Checklist-Drift-Fix 2026-07-24 (Dedup-Runde): die fruehere Hand-
+  // Liste einzelner Detektoren ist ENTFERNT - Einzel-Eintraege kommen
+  // jetzt ausschliesslich aus der generierten, nach Severity gruppierten
+  // Liste (SCAxxx-Praefix, TFindingFilter.AppendKindFilterItems). Die
+  // fmXxx-Enum-Werte bleiben fuer Kompatibilitaet bestehen (tot).
+  TFindingFilter.AppendKindFilterItems(SeverityFilterCombo.Items);
   SeverityFilterCombo.ItemIndex := 0;
 
   // TypeFilterCombo: Items.Objects tragen Ord(TTypeFilter) damit
@@ -1100,8 +1042,7 @@ begin
     begin
       if (Item.ModeOrd = Ord(fmAll))
          or (Item.ModeOrd = Ord(fmDetectorReview))
-         or (TFindingFilter.CountForMode(FAllFindings,
-                                         TFilterMode(Item.ModeOrd)) > 0) then
+         or (TFindingFilter.CountForTag(FAllFindings, Item.ModeOrd) > 0) then
         SeverityFilterCombo.Items.AddObject(Item.Display,
                                             TObject(Item.ModeOrd));
     end;
@@ -1224,7 +1165,15 @@ begin
      and Assigned(SeverityFilterCombo.Items.Objects[SeverityFilterCombo.ItemIndex]) then
   begin
     var Tag := Integer(SeverityFilterCombo.Items.Objects[SeverityFilterCombo.ItemIndex]);
-    if Tag >= 0 then Criteria.Mode := TFilterMode(Tag);
+    // Kind-Tags (>= KIND_TAG_BASE) sind generierte Einzel-Detektor-
+    // Eintraege (Checklist-Drift-Fix 2026-07-24).
+    var KTag : TFindingKind;
+    if TFindingFilter.KindFromTag(Tag, KTag) then
+    begin
+      Criteria.Mode       := fmSingleKind;
+      Criteria.SingleKind := KTag;
+    end
+    else if Tag >= 0 then Criteria.Mode := TFilterMode(Tag);
   end;
   // TypeFilterCombo nutzt jetzt Items.Objects = Ord(TTypeFilter) -
   // robust gegen Item-Removal in RebuildFilterCombos. tfAll = 0 ist als

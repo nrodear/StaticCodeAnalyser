@@ -46,6 +46,9 @@ implementation
 // noinspection-file CaseStatementSize, ClassPerFile, CyclomaticComplexity, DateFormatSettings, DuplicateBlock, DuplicateString, FieldByNameInLoop, HttpInsteadOfHttps, LargeClass, LongMethod, NilComparison, ParamByNameInLoop, RedundantConditional, StringConcatInLoop, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  uRuleCatalog;   // Katalog-Fallback (Checklist-Drift-Fix 2026-07-24)
+
 class function TFixHintResolver.FixHint(const Finding: TLeakFinding): TFixHint;
 var
   Key : Integer;
@@ -4244,6 +4247,22 @@ begin
         '// Latin/Cyrillic/Greek) and consider transliterating for clarity.';
     end;
 
+  end;
+
+  // Checklist-Drift-Fix 2026-07-24 (Audit SCA175-194: 11 Kinds ohne Branch):
+  // Kinds ohne handgepflegten case-Zweig fallen auf den Regel-Katalog
+  // zurueck - examples.bad/good aus rules/sca-rules.json existieren fuer
+  // ALLE Kinds (uTestRuleCatalog erzwingt den Katalog-Eintrag) und sind
+  // englisch, wie es die Before/After-Konvention verlangt. Description
+  // nutzt die ShortDescription; _() greift, wenn die .po den String kennt.
+  // Damit geht uFixHint bei neuen Detektoren nie wieder leer aus; ein
+  // Hand-Branch bleibt fuer kuratierte Hints jederzeit moeglich.
+  if Result.Description = '' then
+  begin
+    var Meta := TRuleCatalog.GetRule(Finding.Kind);
+    Result.Description := _(Meta.ShortDescription);
+    Result.Before      := Meta.BadExample;
+    Result.After       := Meta.GoodExample;
   end;
 end;
 

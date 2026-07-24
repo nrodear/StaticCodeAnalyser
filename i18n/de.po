@@ -1605,3 +1605,44 @@ msgstr "UTF-32-Quelltext - der Compiler bricht mit dem Fehler F2438 ab"
 
 msgid "Invisible / zero-width character in source - hidden-text abuse"
 msgstr "Unsichtbares / Zero-Width-Zeichen im Quelltext - Versteckter-Text-Angriff"
+
+# --- Checklist-Drift-Fix 2026-07-24: Katalog-Fallback-Beschreibungen ---
+# uFixHint faellt fuer Kinds ohne Hand-Branch auf die Katalog-
+# ShortDescription zurueck; diese Eintraege lokalisieren den Fallback.
+
+msgid "Anonymous method inside `for i := ... do` references i - all closures see the same final value"
+msgstr "Anonyme Methode in `for i := ... do` referenziert i - alle Closures sehen denselben Endwert"
+
+msgid "Sonar-style cognitive-complexity exceeds 15 - nested if/for/while/case is hard to follow mentally"
+msgstr "Kognitive Komplexitaet ueber 15 (Sonar-Stil) - verschachtelte if/for/while/case sind mental schwer zu folgen"
+
+msgid "After T.FreeOnTerminate := True, any subsequent T.Field/T.Method access risks Access-Violation if the thread has already self-destructed"
+msgstr "Nach T.FreeOnTerminate := True riskiert jeder weitere T.-Zugriff eine Access-Violation, wenn der Thread bereits beendet ist"
+
+msgid "File-open call (TFileStream.Create, AssignFile, ...) with a path expression that concatenates user input (Edit.Text, Request.Params, ...) - path-traversal risk"
+msgstr "Datei-Open mit Pfad aus Benutzereingabe zusammengesetzt - Path-Traversal-Risiko; Eingabe validieren/normalisieren"
+
+msgid "[Ignore] (no string arg) skips the test silently - add a message explaining why the test is disabled"
+msgstr "[Ignore] ohne Begruendungs-String ueberspringt den Test stillschweigend - Nachricht ergaenzen, warum er deaktiviert ist"
+
+msgid "Two identical [X] attributes on the same member - copy-paste leftover, no effect"
+msgstr "Zwei identische [X]-Attribute am selben Member - Copy-Paste-Rest ohne Wirkung"
+
+msgid "[Category] (no arg) is a compile-time error in DUnitX - always pass a category name"
+msgstr "[Category] ohne Argument ist in DUnitX ein Compile-Fehler - immer einen Kategorienamen uebergeben"
+
+msgid "Class is marked [TestFixture] but contains no [Test] methods - zombie fixture visible in TestInsight but executes nothing"
+msgstr "Klasse ist [TestFixture], enthaelt aber keine [Test]-Methoden - Zombie-Fixture: sichtbar in TestInsight, wird aber nie ausgefuehrt"
+
+msgid "Attribute line followed by a blank line - visually loose, often a refactoring leftover"
+msgstr "Attributzeile gefolgt von einer Leerzeile - optisch losgeloest, oft ein Refactoring-Rest"
+
+msgid "DFM component is never referenced in code, other units, or the DFM itself - possibly a refactoring leftover"
+msgstr "DFM-Komponente wird weder im Code noch in anderen Units noch im DFM referenziert - vermutlich ein Refactoring-Rest"
+
+msgid "A .pas/.dfm file lies in the project folder but is not referenced by the project (.dproj/.groupproj) - likely an orphaned / dead source file"
+msgstr "Eine .pas-/.dfm-Datei liegt im Projektordner, ist aber nicht im Projekt (.dproj/.groupproj) referenziert - vermutlich verwaist"
+
+msgid "Non-ASCII character in identifier - homoglyph / confusable risk"
+msgstr "Nicht-ASCII-Zeichen im Bezeichner - Homoglyphen-/Verwechslungsrisiko"
+
