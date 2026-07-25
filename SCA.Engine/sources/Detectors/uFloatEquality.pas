@@ -232,6 +232,293 @@ begin
   if p > 0 then Result := Copy(Result, p + 1, MaxInt);
 end;
 
+// G-Sent-2 (Triage 2026-07-25): Literal-0-Erkennung fuer den Sentinel-Zero-
+// DEMOTE ('0', '00', '0.0', '0.00' - auch die 0.0-Schreibweise zaehlt).
+function IsZeroLiteralToken(const TokLow: string): Boolean;
+begin
+  Result := (TokLow <> '') and TRegEx.IsMatch(TokLow, '^0+(\.0+)?$');
+end;
+
+// G-Sent-2 (Triage 2026-07-25): Sentinel-Zero-DEMOTE. Vergleich '<var> = 0' /
+// '<var> <> 0', wobei <var> BEWEISBAR ein LOKALES var der umschliessenden
+// Routine ist (Float-Decl im var-Block des Routinen-Kopfs) und SAEMTLICHE
+// Zuweisungen an <var> in der Routinen-Spanne DIREKTE einfache Zuweisungen
+// sind ('v := 0;', 'v := 1.5;', 'v := beweisbarAnderesLokal;' - KEINE
+// Berechnung, kein Call, keine Arithmetik auf der RHS; ein Ident als RHS
+// zaehlt nur, wenn er selbst im var-Block des Kopfs deklariert ist, s.u.).
+// Sentinel-Semantik: der exakte Vergleich gegen den direkt zugewiesenen
+// Wert ist dort korrekt -> Fund NICHT droppen, sondern nur auf fcLow
+// demoten (monoton).
+// HART konservativ:
+//   * NIE fuer Parameter/Felder/Globals (Herkunft nur beim Caller sichtbar) -
+//     der Nachweis verlangt die Decl im var-Block des Kopfs; die Parameter-
+//     Klammern werden vorher geblankt und zaehlen damit nie als var-Block.
+//   * mind. 1 Zuweisung; jede nicht klar klassifizierbare Zuweisung sowie
+//     eine Arg-Uebergabe der Var an einen Call ('F(v)', 'F(a, v)' - var/out
+//     ist lexikalisch nicht unterscheidbar) oder Adressnahme '@v' -> KEIN
+//     Demote.
+//   * Block-Tiefen-Check: die Fundstelle muss im noch OFFENEN Body der
+//     Routine liegen (Tiefe >= 1) - sonst gehoert sie z.B. zum Outer-Body
+//     NACH einer nested routine, deren var-Block nicht der der Fundstelle
+//     ist -> KEIN Demote.
+// Arbeitet auf dem gestrippten Code (Kommentare/Strings zaehlen NIE).
+function SentinelZeroLocalDemote(const Code: string; AtPos: Integer;
+  const IdentLow: string): Boolean;
+var
+  MC         : TMatchCollection;
+  Mm         : TMatch;
+  i          : Integer;
+  SpanStart  : Integer;
+  SpanEnd    : Integer;
+  RelPos     : Integer;
+  BeginPos   : Integer;
+  Depth      : Integer;
+  BodyOpen   : Boolean;
+  ParenDepth : Integer;
+  KwLow      : string;
+  Routine    : string;
+  Header     : string;
+  RhsTrim    : string;
+  HasAssign  : Boolean;
+begin
+  Result := False;
+  if (IdentLow = '') or (AtPos < 1) or (AtPos > Length(Code)) then Exit;
+
+  // Routinen-Spanne: letzte function/procedure-Signatur VOR der Fundstelle
+  // bis zur naechsten Routinen-/Sektions-Grenze danach. initialization/
+  // finalization als Grenzen, damit Unit-Level-Code nie in die Spanne faellt;
+  // constructor/destructor als Grenzen, damit deren Fundstellen nicht dem
+  // var-Block einer davorstehenden Routine zugeschlagen werden.
+  MC := TRegEx.Matches(Code,
+    '(?i)\b(function|procedure|constructor|destructor|initialization|finalization)\b');
+  SpanStart := 0;
+  SpanEnd   := Length(Code) + 1;
+  KwLow     := '';
+  for i := 0 to MC.Count - 1 do
+    if MC[i].Index <= AtPos then
+    begin
+      SpanStart := MC[i].Index;
+      KwLow     := LowerCase(MC[i].Groups[1].Value);
+    end
+    else
+    begin
+      SpanEnd := MC[i].Index;
+      Break;
+    end;
+  if (SpanStart = 0) or ((KwLow <> 'function') and (KwLow <> 'procedure')) then Exit;
+  Routine := Copy(Code, SpanStart, SpanEnd - SpanStart);
+  RelPos  := AtPos - SpanStart + 1;
+
+  // Erstes begin = Ende des Deklarations-Kopfs; Fundstelle muss danach liegen.
+  Mm := TRegEx.Match(Routine, '(?i)\bbegin\b');
+  if (not Mm.Success) or (Mm.Index >= RelPos) then Exit;
+  BeginPos := Mm.Index;
+
+  // Block-Tiefe an der Fundstelle (begin/case/try/asm/record oeffnen, end
+  // schliesst). Tiefe 0 = die Routine ist vor der Fundstelle bereits zu Ende
+  // (nested-routine-Grenzfall) -> kein sicherer var-Block-Bezug, kein Demote.
+  // Scoping-Fix (2026-07-25, analog dwsUtils nearest-decl-wins): faellt die
+  // Tiefe nach dem ersten Opener ZWISCHENZEITLICH auf 0 zurueck, ist der Body
+  // der Routine, deren Kopf/var-Block unten als Nachweis dient, VOR der
+  // Fundstelle bereits GESCHLOSSEN - typisch: die Spanne beginnt an einer
+  // nested routine, deren begin/end endet, und die Fundstelle liegt im danach
+  // wieder oeffnenden OUTER-Body (Tiefe erneut 1). Der var-Block der nested
+  // routine gilt dort NICHT (Shadowing-Fehlattribution: an der Fundstelle
+  // kann derselbe Name ein Outer-Param/Feld sein) -> kein Demote.
+  // Zaehlung erst AB dem ersten begin: Tokens davor gehoeren zum
+  // Deklarations-Kopf (lokale record-Typen etc.); balancierte Paare dort
+  // netto 0, unbalancierte (variant-record-'case') verzerrten frueher nur
+  // die Tiefe nach oben - beide duerfen den Body-geschlossen-Check nicht
+  // ausloesen.
+  Depth    := 0;
+  BodyOpen := False;
+  for Mm in TRegEx.Matches(Routine, '(?i)\b(begin|case|try|asm|record|end)\b') do
+  begin
+    if Mm.Index >= RelPos then Break;
+    if Mm.Index < BeginPos then Continue;   // Deklarations-Kopf: nicht zaehlen
+    if SameText(Mm.Groups[1].Value, 'end') then
+    begin
+      if Depth > 0 then Dec(Depth);
+      if BodyOpen and (Depth = 0) then Exit;   // Body vor Fundstelle geschlossen
+    end
+    else
+    begin
+      Inc(Depth);
+      BodyOpen := True;
+    end;
+  end;
+  if Depth < 1 then Exit;
+
+  // Lokaler var-Block-Nachweis: Kopf = alles vor dem ersten begin; Parameter-
+  // Klammern blanken, damit '(var X: Double)' NIE als lokaler var-Block
+  // durchgeht (HART: Parameter demoten wir niemals).
+  Header := Copy(Routine, 1, BeginPos - 1);
+  ParenDepth := 0;
+  for i := 1 to Length(Header) do
+    case Header[i] of
+      '(': begin Inc(ParenDepth); Header[i] := ' '; end;
+      ')': begin if ParenDepth > 0 then Dec(ParenDepth); Header[i] := ' '; end;
+    else
+      if ParenDepth > 0 then Header[i] := ' ';
+    end;
+  if not TRegEx.IsMatch(Header,
+       '(?i)\bvar\b[\s\S]*?(?<![\w.])' + IdentLow +
+       '\b\s*(?:,\s*[A-Za-z_]\w*\s*)*:\s*(Single|Double|Extended|Real|Currency)\b') then
+    Exit;
+
+  // Saemtliche Zuweisungen an die Var in der Spanne muessen DIREKT und
+  // einfach sein: numerisches Literal (auch negativ/Exponent) oder ein
+  // nackter Ident. Alles andere (Arithmetik, Call, Index, Cast) -> unklar,
+  // Exit.
+  // Korpus-Fix (jvcl JvgUtils.pas:1516, 2026-07-25): ein nackter Ident als
+  // RHS ist textuell NICHT von einem PARAMETERLOSEN Function-Call zu
+  // unterscheiden - 'Denominator := DigitsToValue;' ruft die SIBLING-nested
+  // 'function DigitsToValue: Single' auf, der Wert ist BERECHNET, und
+  // 'Denominator <> 0' als Divisions-Guard ist genau die Kernklasse des
+  // Detektors (echter TP, darf nicht demotet werden). Bare-Ident-RHS wird
+  // deshalb nur noch akzeptiert, wenn der Ident BEWEISBAR eine lokale
+  // Variable DERSELBEN Routine ist: Decl im (geblankten) var-Block des
+  // Kopfs. Der Header enthaelt nie nested-var-Bloecke (die Spanne startet
+  // an der innersten Routine vor der Fundstelle) und keine Parameter
+  // (Klammern geblankt) - Funktionsnamen/Properties/Parameter/Felder sind
+  // dort nicht auffindbar -> KEIN Demote. Numerische Literale wie bisher.
+  HasAssign := False;
+  for Mm in TRegEx.Matches(Routine,
+              '(?i)(?<![\w.])' + IdentLow + '\s*:=\s*([^;]*)') do
+  begin
+    RhsTrim := Trim(Mm.Groups[1].Value);
+    if not TRegEx.IsMatch(RhsTrim, '(?i)^-?\d+(\.\d+)?(e[+-]?\d+)?$') then
+    begin
+      if not TRegEx.IsMatch(RhsTrim, '(?i)^[a-z_]\w*$') then Exit;
+      if not TRegEx.IsMatch(Header,
+           '(?i)\bvar\b[\s\S]*?(?<![\w.])' + LowerCase(RhsTrim) +
+           '\b\s*(?:,\s*[A-Za-z_]\w*\s*)*:\s*[A-Za-z_]\w*') then Exit;
+    end;
+    HasAssign := True;
+  end;
+  if not HasAssign then Exit;   // nie zugewiesen -> keine Sentinel-Semantik
+
+  // Arg-Uebergabe an Calls (var/out lexikalisch nicht unterscheidbar) oder
+  // Adressnahme -> Wert-Herkunft unklar, kein Demote.
+  if TRegEx.IsMatch(Routine, '(?i)[(,]\s*' + IdentLow + '\s*[,)]')
+     or TRegEx.IsMatch(Routine, '(?i)@\s*' + IdentLow + '\b') then Exit;
+
+  Result := True;
+end;
+
+// Typluecken (Triage 2026-07-25, Massnahme 2): Alias-Ketten-Walk, als eigener
+// Baustein extrahiert (Scoping-Fix 2026-07-25, unveraenderte Regeln). True nur
+// wenn TypeLow beweisbar Variant/OleVariant oder bekannter Nicht-Float-Typ ist
+// - ggf. ueber eine in-Unit-Alias-Kette ('TColor32 = type Cardinal;', max.
+// 3 Hops; nur zeilen-anfaengige Typ-Decls, damit kein '='-VERGLEICH im Code
+// als Decl missdeutet wird). Float-Aliase (TFloat = Double) und alles
+// Unaufgeloeste -> False (Fund bleibt, kein TP-Verlust).
+function TypeChainProvesOrdinalAliasOrVariant(const Code: string;
+  TypeLow: string): Boolean;
+var
+  Target : string;
+  Hop : Integer;
+  Mm  : TMatch;
+begin
+  Result := False;
+  for Hop := 1 to 3 do
+  begin
+    if TypeLow = '' then Exit;
+    if IsFloatTypeName(TypeLow) then Exit;   // Float(-Alias) -> Fund bleibt
+    if (TypeLow = 'variant') or (TypeLow = 'olevariant') then Exit(True);
+    if IsKnownNonFloatTypeName(TypeLow) then Exit(True);
+    Mm := TRegEx.Match(Code, '(?im)^[ \t]*(?:type\s+)?' + TypeLow +
+          '\s*=\s*(?:type\s+)?([A-Za-z_]\w*)\s*;');
+    if not Mm.Success then Exit;             // kein in-Unit-Alias -> Fund bleibt
+    Target := LowerCase(Mm.Groups[1].Value);
+    if Target = TypeLow then Exit;           // Selbstbezug-Schutz
+    TypeLow := Target;
+  end;
+end;
+
+// Scoping-Fix (Korpus dwsUtils.pas:2776, 2026-07-25): Typtext der NAECHST-
+// GELEGENEN Deklarationsstelle des Idents VOR AtPos (lower; '' wenn keine
+// auffindbar). Sucht das Param-Listen-/var-Block-/Feld-Muster
+// 'ident[, weitere]: Typ'; fuer 'Result' zaehlt auch die naechstliegende
+// function-Signatur als Deklarationsstelle (Result ist dort implizit
+// deklariert) - es gewinnt die textuell LETZTE Stelle vor der Fundstelle.
+// Nearest-decl-wins: nested-Routinen-Signaturen und innere var-Bloecke
+// SHADOWEN aeussere Deklarationen; weil die Rueckwaertssuche die LETZTE
+// Deklaration nimmt, kann zwischen dem gelieferten Beweis und der Fundstelle
+// per Konstruktion keine andere Deklaration desselben Idents mehr liegen.
+function NearestDeclTypeLowBefore(const Code, IdentLow: string;
+  AtPos: Integer): string;
+var
+  Before  : string;
+  MC      : TMatchCollection;
+  BestPos : Integer;
+begin
+  Result := '';
+  if (IdentLow = '') or (AtPos <= 1) then Exit;
+  if AtPos > Length(Code) then AtPos := Length(Code);
+  Before := Copy(Code, 1, AtPos);   // Deklaration steht VOR der Nutzung
+  BestPos := 0;
+  MC := TRegEx.Matches(Before, '(?i)\b' + IdentLow +
+          '\b\s*(?:,\s*[A-Za-z_]\w*\s*)*:\s*([A-Za-z_][A-Za-z0-9_]*)');
+  if MC.Count > 0 then
+  begin
+    BestPos := MC[MC.Count - 1].Index;
+    Result  := LowerCase(MC[MC.Count - 1].Groups[1].Value);
+  end;
+  if SameText(IdentLow, 'result') then
+  begin
+    // Result ist durch die function-Signatur deklariert; liegt eine Signatur
+    // NAEHER an der Fundstelle als eine explizite 'Result: Typ'-Zeile (etwa
+    // die Vergiftung durch 'var Result: Double' einer FRUEHEREN Routine),
+    // gewinnt die Signatur - nearest-decl-wins auch hier.
+    MC := TRegEx.Matches(Before,
+      '(?i)\bfunction\s+[\w.]+\s*(?:\([^)]*\))?\s*:\s*([A-Za-z_][A-Za-z0-9_]*)');
+    if (MC.Count > 0) and (MC[MC.Count - 1].Index > BestPos) then
+      Result := LowerCase(MC[MC.Count - 1].Groups[1].Value);
+  end;
+end;
+
+// Typluecken (Triage 2026-07-25, Massnahme 2): der Operand loest scope-genau
+// zu einem Typnamen auf, der kein Basistyp ist (z.B. 'TColor32'). Ist dieser
+// Typ IN DIESER UNIT beweisbar als Ordinal-/String-Alias deklariert
+// ('TColor32 = type Cardinal;') oder ist er Variant/OleVariant, dann ist
+// '='/'<>' darauf kein IEEE-754-Float-Vergleich -> unterdruecken.
+// KONSERVATIV: Float-Aliase (TFloat = Double) und alles Unaufgeloeste
+// bleiben Fund (kein TP-Verlust).
+//
+// Scoping-Fix (Korpus dwsUtils.pas:2776, 2026-07-25): die fruehere Annahme
+// "die scope-genaue Decl an der Nutzung ist Variant, also nicht die Float-Var
+// selbst" war fuer GESCHACHTELTE Routinen falsch. uParser2 verwirft nested
+// routines aus dem AST (nur nkNestedRange bleibt), der TTypeResolver kennt
+// deren Params/Locals also NICHT und loeste fuer die nested
+// 'function CompareDoubles(const left, right: Double)' die AEUSSERE
+// Variant-Deklaration von 'VarCompareSafe(const left, right: Variant)' auf
+// -> der ECHTE Double-Vergleich 'left = right' wurde gedroppt (Shadowing
+// kann so ueberall Float-TPs maskieren). Deshalb nearest-decl-wins-Gate:
+// der Drop ist nur zulaessig, wenn ZUSAETZLICH die textuell naechstgelegene
+// Deklaration des Idents VOR der Fundstelle (nested-Signatur / innerer
+// var-Block gewinnt per Shadowing) beweisbar Ordinal-Alias/Variant ist.
+// Keine Deklaration auffindbar oder Kette nicht beweisbar -> im Zweifel
+// KEIN Drop (Fund bleibt). Streng monoton: das Gate kann Drops nur
+// verhindern, nie neue erzeugen.
+function ResolvesToInUnitOrdinalAliasOrVariant(const Code: string;
+  TR: TTypeResolver; const IdentLow: string; LineNo, AtPos: Integer): Boolean;
+var
+  NearestLow : string;
+begin
+  Result := False;
+  if TR = nil then Exit;
+  // 1) Resolver-Pfad wie bisher: der laut AST aufgeloeste Typ muss beweisbar
+  //    Ordinal-Alias/Variant sein.
+  if not TypeChainProvesOrdinalAliasOrVariant(Code,
+       TR.ResolveTypeAt(LowerCase(Trim(IdentLow)), LineNo)) then Exit;
+  // 2) Nearest-decl-wins-Gate (Scoping-Fix): auch die naechstgelegene
+  //    lexikalische Deklaration muss den Beweis liefern.
+  NearestLow := NearestDeclTypeLowBefore(Code, LowerCase(Trim(IdentLow)), AtPos);
+  if NearestLow = '' then Exit;
+  Result := TypeChainProvesOrdinalAliasOrVariant(Code, NearestLow);
+end;
+
 class procedure TFloatEqualityDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
@@ -387,18 +674,39 @@ begin
         // DIESER Unit deklarierten class/record-Typ auf -> Referenz-/Werttyp-
         // Vergleich, kein IEEE-754-Float (dwsJSON 'FItems^[i].Value = aValue',
         // beide TdwsJSONValue, nur namensgleich zu Double-Params anderswo).
+        // Typluecken (Triage 2026-07-25): 4. Disjunkt - Operand loest scope-
+        // genau zu einem in-Unit-Ordinal-/String-Alias ('TColor32 = type
+        // Cardinal') oder Variant/OleVariant auf -> beweisbar kein Float,
+        // reiner FloatVars-Namenskollisions-FP. Unbekannte Typen bleiben Fund.
         if (FloatVars.IndexOf(LhsLow) >= 0)
            and (OperandDeclaredNonFloat(Code, Lhs, M.Index)
                 or TR.ResolvesToKnownNonFloat(LhsLow, LineNo)
-                or TR.ResolvesToLocalClassOrRecord(LhsLow, LineNo)) then Continue;
+                or TR.ResolvesToLocalClassOrRecord(LhsLow, LineNo)
+                or ResolvesToInUnitOrdinalAliasOrVariant(Code, TR, LhsLow, LineNo, M.Index)) then Continue;
         if (FloatVars.IndexOf(RhsLow) >= 0)
            and (OperandDeclaredNonFloat(Code, Rhs, M.Index)
                 or TR.ResolvesToKnownNonFloat(RhsLow, LineNo)
-                or TR.ResolvesToLocalClassOrRecord(RhsLow, LineNo)) then Continue;
+                or TR.ResolvesToLocalClassOrRecord(RhsLow, LineNo)
+                or ResolvesToInUnitOrdinalAliasOrVariant(Code, TR, RhsLow, LineNo, M.Index)) then Continue;
 
         // Welche Seite ist die Float-Var (fuer Detail-Text).
         if FloatVars.IndexOf(LhsLow) >= 0 then IdentName := Lhs
                                           else IdentName := Rhs;
+
+        // G-Sent-2 (Triage 2026-07-25): Sentinel-Zero-DEMOTE - '<var> = 0' /
+        // '<> 0' auf einem LOKALEN var, das in der Routine ausschliesslich
+        // DIREKT einfach zugewiesen wird ('v := 0;'). Exakter Vergleich gegen
+        // den direkt zugewiesenen Sentinel ist korrekt -> Fund bleibt, aber
+        // Confidence fcLow (monoton, kein Drop). Parameter/Felder/Globals
+        // werden NIE demotet (Herkunft nur beim Caller sichtbar).
+        var DemoteLow := False;
+        var SentVar := '';
+        if IsZeroLiteralToken(RhsLow) and (FloatVars.IndexOf(LhsLow) >= 0) then
+          SentVar := LhsLow
+        else if IsZeroLiteralToken(LhsLow) and (FloatVars.IndexOf(RhsLow) >= 0) then
+          SentVar := RhsLow;
+        if SentVar <> '' then
+          DemoteLow := SentinelZeroLocalDemote(Code, M.Index, SentVar);
 
         F            := TLeakFinding.Create;
         F.FileName   := FileName;
@@ -407,7 +715,10 @@ begin
         F.MissingVar := Format(
           'Float equality (%s %s %s) is unreliable due to IEEE-754 rounding - use SameValue/Math.IsZero',
           [Lhs, Op, Rhs]);
-        F.SetKind(fkFloatEquality);
+        if DemoteLow then
+          F.SetKind(fkFloatEquality, fcLow)   // G-Sent-2: DEMOTE statt Drop
+        else
+          F.SetKind(fkFloatEquality);
         Results.Add(F);
       end;
     finally
