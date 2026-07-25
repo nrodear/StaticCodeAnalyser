@@ -1402,6 +1402,52 @@ var
     end;
   end;
 
+  procedure ProcessCallsInExprText(const ExprRaw: string; Line: Integer);
+  // Kernlogik (Real-World-FP-Audit 2026-07-12 faktorisiert aus
+  // ProcessConditionCalls): alle Calls in einem Expression-String tokenisieren
+  // und pro var/out-Arg pessimistic-Write registrieren (READ_ALLOWLIST-Calls
+  // ausgenommen). Genutzt von ProcessConditionCalls (TypeRef-Strings),
+  // ProcessCaseSelectorWrites (case-Selektor aus der Quelle), ProcessCall
+  // (Statement-Wrapper) und dem PhaseC-Inline-const-Scan - deshalb VOR
+  // ProcessCall deklariert (nested Procs kennen kein forward).
+  //
+  // Nested-procedure statt anonymous-method (greift auf Outer-Scope VarList
+  // und RegisterWrite zu - anonymous procs koennen das nicht, siehe E2555).
+  var
+    Calls   : TList<TExprCall>;
+    Call    : TExprCall;
+    ArgsLow : string;
+  begin
+    if ExprRaw = '' then Exit;
+    Calls := TList<TExprCall>.Create;
+    try
+      TDetectorUtils.ParseCallsInExpr(ExprRaw, Calls);
+      for Call in Calls do
+      begin
+        // IsReadOnlyCall erwartet 'FuncName(...)' - wir bauen Stub.
+        if IsReadOnlyCall(Call.FuncNameLow + '(') then
+        begin
+          // B Hook 2 (Triage 2026-07-25): 'W := Trim(GetWordOnPos2(S, X,
+          // iBeg, iEnd))' - ParseCallsInExpr emittiert NUR den Outer-Call;
+          // ein read-only Wrapper versteckte damit die var-Args des INNEREN
+          // Nicht-Allowlist-Calls (jvcl JvEditor iBeg). In die Argliste
+          // rekurrieren (terminiert: Argtext strikt kuerzer); die nackten
+          // Idents des read-only Calls selbst bleiben Reads ('Trim(v)' /
+          // 'WriteLn(u)' unveraendert Fund).
+          if Pos('(', Call.ArgsRaw) > 0 then
+            ProcessCallsInExprText(Call.ArgsRaw, Line);
+          Continue;
+        end;
+        ArgsLow := LowerCase(Call.ArgsRaw);
+        if ArgsLow = '' then Continue;
+        // P2: Single-Pass-Tokenizer + Dict-Lookup statt O(N) Inner-Loop.
+        RegisterArgVarsAsWrites(ArgsLow, Line);
+      end;
+    finally
+      Calls.Free;
+    end;
+  end;
+
   procedure ProcessCall(C: TAstNode);
   var
     FuncName : string;
@@ -1418,7 +1464,21 @@ var
     //   2. WRITE_ALLOWLIST (ReadLn, FillChar, ...) -> Write registrieren.
     //   3. UNKNOWN-Calls (Helper.Init, MyProc, ...) -> pessimistic-Write
     //      registrieren (akzeptiert FNs, reduziert FPs bei OOP-Code).
-    if IsReadOnlyCall(C.Name) then Exit;
+    if IsReadOnlyCall(C.Name) then
+    begin
+      // B Hook 2 symmetrisch: Statement-Wrapper 'WriteLn(GetX(v))' -
+      // geschachtelte Nicht-Allowlist-Calls registrieren ihre pessimistic-
+      // Writes trotzdem. Rekursion nur bei '(' IM Argtext; 'WriteLn(u)'
+      // (Golden-Corpus-TP) bleibt reiner Read.
+      var WrapP := Pos('(', C.Name);
+      if WrapP > 0 then
+      begin
+        var InnerArgs := Copy(C.Name, WrapP + 1, MaxInt);
+        if Pos('(', InnerArgs) > 0 then
+          ProcessCallsInExprText(InnerArgs, C.Line);
+      end;
+      Exit;
+    end;
     // Receiver-Init-Pattern: 'doc.InitJson(...)', 'rec.Init(...)' - der
     // Receiver wird durch die Methode INITIALISIERT (mORMot/Spring
     // record-Init-Convention). Pessimistic-Write fuer den Receiver
@@ -1450,39 +1510,6 @@ var
     // Real-World-FP-Audit 2026-07-12: pessimistic-Write ueber ALLE Arg-Gruppen
     // (nicht nur die erste) - Receiver-/Cast-Praefixe uebersprungen (Kat. A+D).
     RegisterCallArgWrites(C.Name, C.Line);
-  end;
-
-  procedure ProcessCallsInExprText(const ExprRaw: string; Line: Integer);
-  // Kernlogik (Real-World-FP-Audit 2026-07-12 faktorisiert aus
-  // ProcessConditionCalls): alle Calls in einem Expression-String tokenisieren
-  // und pro var/out-Arg pessimistic-Write registrieren (READ_ALLOWLIST-Calls
-  // ausgenommen). Genutzt von ProcessConditionCalls (TypeRef-Strings) UND
-  // ProcessCaseSelectorWrites (case-Selektor aus der Quelle - der Parser
-  // verwirft ihn, siehe Kat. C).
-  //
-  // Nested-procedure statt anonymous-method (greift auf Outer-Scope VarList
-  // und RegisterWrite zu - anonymous procs koennen das nicht, siehe E2555).
-  var
-    Calls   : TList<TExprCall>;
-    Call    : TExprCall;
-    ArgsLow : string;
-  begin
-    if ExprRaw = '' then Exit;
-    Calls := TList<TExprCall>.Create;
-    try
-      TDetectorUtils.ParseCallsInExpr(ExprRaw, Calls);
-      for Call in Calls do
-      begin
-        // IsReadOnlyCall erwartet 'FuncName(...)' - wir bauen Stub.
-        if IsReadOnlyCall(Call.FuncNameLow + '(') then Continue;
-        ArgsLow := LowerCase(Call.ArgsRaw);
-        if ArgsLow = '' then Continue;
-        // P2: Single-Pass-Tokenizer + Dict-Lookup statt O(N) Inner-Loop.
-        RegisterArgVarsAsWrites(ArgsLow, Line);
-      end;
-    finally
-      Calls.Free;
-    end;
   end;
 
   procedure ProcessConditionCalls(Node: TAstNode);
@@ -2138,6 +2165,30 @@ var
       begin
         BuildStrippedLowCache(MethodStartLine, MethodEndLine);
         StrippedBuilt := True;
+        // B Hook 1 (Triage 2026-07-25, dominante Sub-Klasse 4/5): Inline-
+        // const-Initializer 'const Ok = ReadPE(F, OptHeader64, ...);' hat
+        // der Parser verschluckt (kein tkKwConst-Arm; SkipToSemicolon frisst
+        // die RHS restlos) -> die var/out-Args bekamen NIE den pessimistic-
+        // Write, der Ident auf der const-Zeile zaehlte aber als Read ->
+        // fcHigh-FP (issrc OptHeader64/VersionHandle/FindData). Source-
+        // seitig nachziehen: RHS jeder const-Zeile durch das bestehende
+        // 3-Klassen-Modell (ProcessCallsInExprText inkl. READ_ALLOWLIST-
+        // Skip). Registriert ausschliesslich Writes -> monoton. Klassische
+        // const-SEKTIONS-Zeilen matchen mit: deren Arg-Idents sind Compile-
+        // time-Konstanten, VarIndexFor=-1 -> No-Op.
+        for var cli := 0 to High(StrippedLow) do
+        begin
+          var CLine := StrippedLow[cli].TrimLeft;
+          if CLine.StartsWith('const ') and (Pos(':=', CLine) = 0)
+             and (Pos('(', CLine) > 0) then
+          begin
+            var CSrcLine := StrippedFrom0 + cli + 1;
+            if IsLineInRanges(CSrcLine, NestedRanges) then Continue;
+            var EqP := Pos('=', CLine);
+            if EqP > 0 then
+              ProcessCallsInExprText(Copy(CLine, EqP + 1, MaxInt), CSrcLine);
+          end;
+        end;
       end;
       // FirstWrite = fruehester ECHTER Write. Den Source-Scan IMMER laufen
       // lassen (nicht nur bei FirstWriteLine=0):
@@ -2402,6 +2453,15 @@ var
 
       if P.FirstWriteLine = 0 then
       begin
+        // B Hook 3 (Triage 2026-07-25): FPC-Decl-Initializer ('size: Int64
+        // = 0;') dominiert jeden Read - Rule 0 galt bisher NUR im fcMedium-
+        // Zweig (via CfgFilterDropsReadBeforeWrite), der fcHigh-Zweig
+        // emittierte davor (doublecmd size/DenySym). HasDeclInitializer ist
+        // stripped-basiert (Kommentar-'=' sicher, DeclCommentEquals-Test)
+        // und fail-safe: ohne Stripped-Cache Exit(False) -> keine
+        // Suppression.
+        if HasDeclInitializer(P^) then
+          Continue;
         // Referenced + never written - UninitVar fcHigh.
         F            := TLeakFinding.Create;
         F.FileName   := FileName;

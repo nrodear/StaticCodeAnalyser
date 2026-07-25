@@ -131,6 +131,12 @@ type
     [Test] procedure ExitArgPlainVar_StillFlagged;
     [Test] procedure AbsoluteAliasWrite_NoFinding;
     [Test] procedure AddressOfFill_NoFinding;
+    // Inkrement B (Triage 2026-07-25): Inline-const-RHS, Allowlist-Wrapper, Decl-Init-fcHigh
+    [Test] procedure ConstInlineCallVarArg_NoFinding;
+    [Test] procedure ConstInlineReadOnlyCall_StillFlagged;
+    [Test] procedure AllowlistWrapperInnerCall_NoFinding;
+    [Test] procedure AllowlistBareArg_StillFlagged;
+    [Test] procedure FpcDeclInitializer_NoHighFinding;
     // Managed-Alias 2026-07-24: Hersteller-Praefix-Interfaces (IwbX)
     [Test] procedure VendorPrefixInterfaceLocal_NoFinding;
     [Test] procedure VendorPrefixButClass_StillFlagged;
@@ -2347,6 +2353,135 @@ begin
   try
     Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
       'Adressnahme @v zaehlt als potentieller Fill -> kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.ConstInlineCallVarArg_NoFinding;
+// B Hook 1: 'const Ok = TryParseIt(S, v);' - der Parser verschluckt die
+// RHS von Inline-const komplett (kein tkKwConst-Arm) -> v bekam nie den
+// pessimistic-Write und galt als never-written (issrc-Klasse).
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'function P(const S: string): Boolean;'#13#10 +
+    'var v: Int64;'#13#10 +
+    'begin'#13#10 +
+    '  const Ok = TryParseIt(S, v);'#13#10 +
+    '  Result := Ok and (v > 0);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'unbekannter Call in Inline-const-RHS = pessimistic-Write auf v');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.ConstInlineReadOnlyCall_StillFlagged;
+// TP-Gegenprobe zu Hook 1: Copy ist READ_ALLOWLIST - die const-RHS
+// registriert dann KEINEN Write, v bleibt uninit-Read (Fund bleibt).
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'function P(const S: string): Integer;'#13#10 +
+    'var v: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  const L = Copy(S, 1, v);'#13#10 +
+    '  Result := Length(L) + v;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'read-only const-RHS (Copy) schreibt nichts - Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.AllowlistWrapperInnerCall_NoFinding;
+// B Hook 2: 'W := Trim(GetWordAt(S, iBeg))' - der read-only Wrapper
+// versteckte den inneren Nicht-Allowlist-Call; jetzt Rekursion in die
+// Argliste -> GetWordAt registriert den pessimistic-Write auf iBeg.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(const S: string);'#13#10 +
+    'var iBeg: Integer;'#13#10 +
+    '    W: string;'#13#10 +
+    'begin'#13#10 +
+    '  W := Trim(GetWordAt(S, iBeg));'#13#10 +
+    '  if iBeg > 0 then WriteLn(W);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'innerer Nicht-Allowlist-Call im Trim-Wrapper schreibt iBeg');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.AllowlistBareArg_StillFlagged;
+// TP-Gegenprobe zu Hook 2: Allowlist-in-Allowlist ('Trim(IntToStr(v))')
+// - beide read-only, die Rekursion endet ohne Write -> v bleibt Fund.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var v: Integer;'#13#10 +
+    '    W: string;'#13#10 +
+    'begin'#13#10 +
+    '  W := Trim(IntToStr(v));'#13#10 +
+    '  WriteLn(W);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'read-only-Kette schreibt nie - uninit-Read von v bleibt Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.FpcDeclInitializer_NoHighFinding;
+// B Hook 3: 'size: Int64 = 0;' (FPC-Decl-Initializer) laeuft bei jedem
+// Routineneintritt - Rule 0 galt bisher nur im fcMedium-Zweig, der
+// fcHigh-never-written-Zweig meldete trotzdem (doublecmd-Klasse).
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var size: Int64 = 0;'#13#10 +
+    'begin'#13#10 +
+    '  WriteLn(size);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'Decl-Initializer dominiert jeden Read - kein fcHigh-Fund');
   finally F.Free; end;
 end;
 
