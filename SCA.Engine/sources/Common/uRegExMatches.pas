@@ -38,15 +38,27 @@ implementation
 // war race-anfaellig, sobald WatchMode-Worker und Main-Analyzer parallel
 // laufen. Jetzt wird FCache schon im `initialization`-Block angelegt, und
 // TryGetValue+Add sind durch TMonitor auf FCache serialisiert.
+//
+// Perf Stufe 2 (2026-07-25): der Cache-Key traegt zusaetzlich die Thread-ID.
+// Grund: TRegEx ist ein Record um EINE geteilte TPerlRegEx-Instanz - ein
+// gleichzeitiges Match() zweier Threads auf DEMSELBEN kompilierten Objekt
+// mutiert dessen Subject/Offset-State (Race). Mit Thread-ID im Key bekommt
+// jeder Worker-Thread seine eigene kompilierte Instanz pro Pattern; das
+// Match-ERGEBNIS ist identisch, nur die Kompilierung faellt einmal pro
+// Thread an. Seriell (ein Thread) verhaelt sich der Cache exakt wie vorher.
+// Pool-Threads werden wiederverwendet -> die Eintragszahl bleibt begrenzt.
 // ---------------------------------------------------------------------------
 class function TRegExMatches.Cached(const pattern: string): TRegEx;
+var
+  CacheKey: string;
 begin
+  CacheKey := IntToStr(TThread.Current.ThreadID) + '|' + pattern;
   TMonitor.Enter(FCache);
   try
-    if not FCache.TryGetValue(pattern, Result) then
+    if not FCache.TryGetValue(CacheKey, Result) then
     begin
       Result := TRegEx.Create(pattern, [roIgnoreCase]);
-      FCache.Add(pattern, Result);
+      FCache.Add(CacheKey, Result);
     end;
   finally
     TMonitor.Exit(FCache);

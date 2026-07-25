@@ -108,7 +108,19 @@ type
                                         // '' -> Single-File ohne Cross-Unit-Index (1-arg-Ueberladung).
     IgnoreList     : TIgnoreList;       // nur ssRecursive: Ignore-/Test-Filter waehrend des rekursiven
                                         // Scans (IDE reicht ihre FIgnoreList durch). nil -> kein Filter.
-    Progress       : TProc<Integer, Integer>;  // (current, total); EAbort darin bricht ab
+    // Perf Stufe 2 (2026-07-25): Per-File-Parallelisierung des Scan-Main-
+    // Loops (opt-in, Default False; CLI-Flag --parallel). Die Engine faellt
+    // trotz True still auf seriell zurueck, wenn ein nicht parallel-sicherer
+    // Modus aktiv ist (AutoDiscovery, Custom-Rules, --time-detectors) -
+    // Gate + Global-State-Audit in uStaticAnalyzer2. Ergebnis-Reihenfolge
+    // ist per deterministischem Merge identisch zum seriellen Lauf (SARIF-
+    // Byte-Gate seriell vs. parallel ist der Beweis-Pfad).
+    Parallel       : Boolean;
+    // 0 = automatisch (TThread.ProcessorCount); nur mit Parallel=True.
+    ParallelWorkers: Integer;
+    Progress       : TProc<Integer, Integer>;  // (current, total); EAbort darin bricht ab.
+                                        // Im Parallel-Modus wird der Callback erst in der
+                                        // Merge-Phase (auf dem Aufrufer-Thread) nachgereicht.
     // Liefert ein Request mit sinnvollen Defaults (ssRecursive, alle Detektoren,
     // loseste Schwellen, Engine-Default-Limits).
     class function Init: TScanRequest; static;
@@ -239,6 +251,8 @@ begin
   Result.IndexRoot := '';
   Result.SingleFileProjectRoot := '';
   Result.IgnoreList        := nil;
+  Result.Parallel          := False;   // Perf Stufe 2: opt-in, Default AUS
+  Result.ParallelWorkers   := 0;       // 0 = auto (ProcessorCount)
   Result.Progress        := nil;
 end;
 
@@ -379,6 +393,13 @@ begin
     // Overrides ohnehin frisch.
     TPathOverrides.Clear;
   end;
+
+  // 1b) Perf Stufe 2 (2026-07-25): Parallel-Flags - Request-Feld, KEIN
+  //     INI-Setting; gilt fuer beide Modi. ResetEngineConfigDefaults (oben)
+  //     hat beide bereits auf die Defaults gestellt, hier wird nur der
+  //     explizite Request-Wunsch draufgelegt (Default False/0 = no-op).
+  uSCAConsts.DetectorParallelScan    := Req.Parallel;
+  uSCAConsts.DetectorParallelWorkers := Req.ParallelWorkers;
 
   // 2) {$IFDEF}-aware Parsing (beide Modi - Request-Level statt globaler Fummelei)
   LexerIfdefClear;

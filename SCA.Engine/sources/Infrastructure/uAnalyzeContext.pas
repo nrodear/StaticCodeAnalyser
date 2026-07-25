@@ -70,6 +70,9 @@ type
     // --- 2 Flags ---
     AutoDiscover           : Boolean; // AutoDiscoverCustomClasses (Main-Loop-Gate)
     UIMaxDisplayedFindings : Integer; // UI-Grid-Cap (Read-Site UI = Inkrement 2)
+    // --- Perf Stufe 2 (2026-07-25): Per-File-Parallelisierung ---
+    ParallelScan           : Boolean; // DetectorParallelScan (opt-in, Default AUS)
+    ParallelWorkers        : Integer; // DetectorParallelWorkers (0 = auto)
   end;
 
   // Perf (2026-07-05): P1-strip-cache - EIN Cache-Eintrag fuer den Output
@@ -455,6 +458,9 @@ begin
   Config.MinConfidence         := uSCAConsts.FindingMinConfidence;
   Config.AutoDiscover          := uSCAConsts.AutoDiscoverCustomClasses;
   Config.UIMaxDisplayedFindings := uSCAConsts.UIMaxDisplayedFindings;
+  // Perf Stufe 2 (2026-07-25): Parallel-Flags in den per-Scan-Snapshot.
+  Config.ParallelScan          := uSCAConsts.DetectorParallelScan;
+  Config.ParallelWorkers       := uSCAConsts.DetectorParallelWorkers;
 end;
 
 constructor TAnalyzeContext.Create;

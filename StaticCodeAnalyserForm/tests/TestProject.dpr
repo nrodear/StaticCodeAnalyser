@@ -25,6 +25,7 @@ uses
   uTestConfidencePipeline in 'uTestConfidencePipeline.pas',
   uTestPathOverrides in 'uTestPathOverrides.pas',
   uTestCFG in 'uTestCFG.pas',
+  uTestParallelScan in 'uTestParallelScan.pas',
   uTestTAstNode in 'uTestTAstNode.pas',
   uTestDfmLexer in 'uTestDfmLexer.pas',
   uTestDfmParser in 'uTestDfmParser.pas',

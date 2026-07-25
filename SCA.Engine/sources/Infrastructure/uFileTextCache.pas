@@ -35,7 +35,8 @@ unit uFileTextCache;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.Generics.Collections;
+  System.SysUtils, System.Classes, System.Generics.Collections,
+  System.SyncObjs;   // Perf Stufe 2 (2026-07-25): FLock fuer Parallel-Worker
 
 type
   // Byte-Level-Encoding-Fakten einer Quelldatei (fuer den Encoding-Detektor,
@@ -101,6 +102,12 @@ type
     // nicht memoisiert.
     FLastName : string;
     FLastKey  : string;
+    // Perf Stufe 2 (2026-07-25): serialisiert FCache/Key-Memo/FGeneration -
+    // im Parallel-Modus greifen mehrere Worker-Threads gleichzeitig auf den
+    // (weiterhin prozessweiten) Cache zu. Der Datei-Load laeuft ausserhalb
+    // des Locks (paralleles I/O); seriell ist der Lock unkontent und damit
+    // verhaltens- und praktisch kostenneutral.
+    FLock     : TCriticalSection;
     function Key(const FileName: string): string;
   public
     constructor Create;
@@ -135,6 +142,13 @@ type
       out Info: TFileEncodingInfo): Boolean;
 
     procedure Clear;
+
+    // Perf Stufe 2 (2026-07-25): entfernt NUR den Eintrag dieser Datei -
+    // das per-File-Pendant zum seriellen Clear fuer den Parallel-Modus.
+    // Ein globales Clear wuerde dort die Eintraege ANDERER Worker zerstoeren
+    // (deren gerade benutzte Lines-Instanzen waeren use-after-free).
+    // Kein Generation-Bump: die uebrigen Eintraege bleiben Snapshot-gueltig.
+    procedure RemoveFile(const FileName: string);
   end;
 
 var
@@ -481,11 +495,13 @@ constructor TFileTextCache.Create;
 begin
   inherited;
   FCache := TObjectDictionary<string, TFileTextCacheEntry>.Create([doOwnsValues]);
+  FLock  := TCriticalSection.Create;   // Perf Stufe 2 (2026-07-25)
 end;
 
 destructor TFileTextCache.Destroy;
 begin
   FCache.Free;
+  FLock.Free;
   inherited;
 end;
 
@@ -550,35 +566,45 @@ var
   EncInfo   : TFileEncodingInfo;
 begin
   Result := nil;
-  K := Key(FileName);
+  // Perf Stufe 2 (2026-07-25): Lookup/Stale-Check unter FLock - der Cache
+  // wird im Parallel-Modus von mehreren Worker-Threads gleichzeitig benutzt
+  // (Key mutiert zudem das 1-Slot-Memo). Der Datei-Load selbst laeuft
+  // BEWUSST ausserhalb des Locks (paralleles I/O); da jeder Worker nur
+  // seine eigene Datei anfragt, laedt praktisch nie jemand doppelt.
+  FLock.Enter;
+  try
+    K := Key(FileName);
 
-  if FCache.TryGetValue(K, Entry) then
-  begin
-    // Perf (2026-07-05): P2-filetextcache-stat - innerhalb EINER Generation
-    // ist der Cache ein Snapshot: kein FileAge/GetFileAttributesEx pro Hit.
-    // Cross-Scan-Staleness ist ueber Clear am Scan-Start abgedeckt
-    // (Generation-Bump + Eintraege weg -> frischer Load).
-    // AForceStat=True (Fingerprint/Baseline-Drift-Pfad): Snapshot-Shortcut
-    // ueberspringen - dieser Konsument MUSS Datei-Ueberschreibungen auch
-    // OHNE zwischenzeitliches Clear sehen (Kontrakt: contextHash rechnet
-    // auf dem aktuellen Datei-Inhalt; Regressionstest
-    // Baseline_MatchesViaContextHashAfterLineDrift).
-    if (Entry.StatGeneration = FGeneration) and not AForceStat then
-      Exit(Entry.Lines);
-
-    SafeGetFileStat(FileName, CurrMTime, CurrSize);
-    // Cache-Hit nur wenn mtime UND Size identisch sind. Bei sub-Sekunden-
-    // Re-Writes der gleichen Datei aendert sich oft nur die Size (FileAge
-    // hat ~1s Granularitaet), daher beide vergleichen.
-    if (CurrMTime <> 0)
-       and (CurrMTime = Entry.MTime)
-       and (CurrSize = Entry.Size) then
+    if FCache.TryGetValue(K, Entry) then
     begin
-      Entry.StatGeneration := FGeneration;  // Stat fuer diese Generation erledigt
-      Exit(Entry.Lines);
+      // Perf (2026-07-05): P2-filetextcache-stat - innerhalb EINER Generation
+      // ist der Cache ein Snapshot: kein FileAge/GetFileAttributesEx pro Hit.
+      // Cross-Scan-Staleness ist ueber Clear am Scan-Start abgedeckt
+      // (Generation-Bump + Eintraege weg -> frischer Load).
+      // AForceStat=True (Fingerprint/Baseline-Drift-Pfad): Snapshot-Shortcut
+      // ueberspringen - dieser Konsument MUSS Datei-Ueberschreibungen auch
+      // OHNE zwischenzeitliches Clear sehen (Kontrakt: contextHash rechnet
+      // auf dem aktuellen Datei-Inhalt; Regressionstest
+      // Baseline_MatchesViaContextHashAfterLineDrift).
+      if (Entry.StatGeneration = FGeneration) and not AForceStat then
+        Exit(Entry.Lines);
+
+      SafeGetFileStat(FileName, CurrMTime, CurrSize);
+      // Cache-Hit nur wenn mtime UND Size identisch sind. Bei sub-Sekunden-
+      // Re-Writes der gleichen Datei aendert sich oft nur die Size (FileAge
+      // hat ~1s Granularitaet), daher beide vergleichen.
+      if (CurrMTime <> 0)
+         and (CurrMTime = Entry.MTime)
+         and (CurrSize = Entry.Size) then
+      begin
+        Entry.StatGeneration := FGeneration;  // Stat fuer diese Generation erledigt
+        Exit(Entry.Lines);
+      end;
+      // Stale - aus Cache raus, danach neu laden.
+      FCache.Remove(K);
     end;
-    // Stale - aus Cache raus, danach neu laden.
-    FCache.Remove(K);
+  finally
+    FLock.Leave;
   end;
 
   if not FileExists(FileName) then Exit;
@@ -601,10 +627,23 @@ begin
 
   if SL = nil then Exit;
   SafeGetFileStat(FileName, CurrMTime, CurrSize);
-  // Perf (2026-07-05): P2-filetextcache-stat - der frische Eintrag traegt die
-  // aktuelle Generation: der Stat ist hiermit fuer diese Generation erledigt.
-  FCache.Add(K,
-    TFileTextCacheEntry.Create(SL, CurrMTime, CurrSize, FGeneration, EncInfo));
+  FLock.Enter;
+  try
+    // Perf Stufe 2 (2026-07-25): Defensiv-Zweig - sollte ein anderer Thread
+    // denselben Key inzwischen geladen haben (kommt im Per-File-Modell nicht
+    // vor), gewinnt dessen Eintrag und der eigene Load wird verworfen.
+    if FCache.TryGetValue(K, Entry) then
+    begin
+      SL.Free;
+      Exit(Entry.Lines);
+    end;
+    // Perf (2026-07-05): P2-filetextcache-stat - der frische Eintrag traegt die
+    // aktuelle Generation: der Stat ist hiermit fuer diese Generation erledigt.
+    FCache.Add(K,
+      TFileTextCacheEntry.Create(SL, CurrMTime, CurrSize, FGeneration, EncInfo));
+  finally
+    FLock.Leave;
+  end;
   Result := SL;
 end;
 
@@ -618,8 +657,14 @@ var
 begin
   Result := False;
   if GetLines(FileName) = nil then Exit;
-  if not FCache.TryGetValue(Key(FileName), Entry) then Exit;
-  Info := Entry.EncInfo;
+  // Perf Stufe 2 (2026-07-25): Zweit-Lookup unter FLock (s. GetLines).
+  FLock.Enter;
+  try
+    if not FCache.TryGetValue(Key(FileName), Entry) then Exit;
+    Info := Entry.EncInfo;
+  finally
+    FLock.Leave;
+  end;
   Result := True;
 end;
 
@@ -630,8 +675,25 @@ begin
   // werden. Praktisch zerstoert FCache.Clear ohnehin alle Eintraege; der
   // Bump haelt die Invariante "Eintrag mit fremder Generation => Stat"
   // auch fuer kuenftige partielle Invalidierungen (Remove o.ae.) korrekt.
-  Inc(FGeneration);
-  FCache.Clear;
+  FLock.Enter;   // Perf Stufe 2 (2026-07-25)
+  try
+    Inc(FGeneration);
+    FCache.Clear;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TFileTextCache.RemoveFile(const FileName: string);
+// Perf Stufe 2 (2026-07-25): per-File-Entlastung im Parallel-Modus -
+// Doku am Interface-Prototyp.
+begin
+  FLock.Enter;
+  try
+    FCache.Remove(Key(FileName));
+  finally
+    FLock.Leave;
+  end;
 end;
 
 // --- Wrapper-Funktionen ---

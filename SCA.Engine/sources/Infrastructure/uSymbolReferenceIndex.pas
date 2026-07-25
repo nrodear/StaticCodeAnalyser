@@ -502,12 +502,21 @@ begin
   // Perf (2026-07-05): P9-symbolrefindex - 1-Slot-Memo: uVisibilityCheck
   // ruft pro Member derselben Datei mit identischem OwnUnit (Vollpfad,
   // siehe Doku dort); nur bei Wechsel neu normalisieren.
-  if OwnUnit <> FOwnUnitRaw then
-  begin
-    FOwnUnitRaw  := OwnUnit;
-    FOwnUnitNorm := NormalizeUnitPath(OwnUnit);
+  // Perf Stufe 2 (2026-07-25): Memo unter TMonitor - der Index wird im
+  // Parallel-Modus von mehreren Worker-Threads gleichzeitig abgefragt
+  // (der uebrige Index-State ist nach Build read-only, nur dieses 1-Slot-
+  // Memo mutiert im Query-Pfad). Seriell unkontent -> kostenneutral.
+  TMonitor.Enter(Self);
+  try
+    if OwnUnit <> FOwnUnitRaw then
+    begin
+      FOwnUnitRaw  := OwnUnit;
+      FOwnUnitNorm := NormalizeUnitPath(OwnUnit);
+    end;
+    OwnLow := FOwnUnitNorm;
+  finally
+    TMonitor.Exit(Self);
   end;
-  OwnLow := FOwnUnitNorm;
   for i := 0 to L.Count - 1 do
     if L[i] <> OwnLow then Inc(Result);
 end;

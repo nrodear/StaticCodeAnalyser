@@ -76,6 +76,11 @@ type
     SonarBranch   : string;         // --sonar-branch <name>
     SonarInsecure : Boolean;        // --sonar-insecure           accept self-signed TLS
     SonarConfig   : string;         // --sonar-config <path>      alternative INI
+    // ---- Perf Stufe 2 (2026-07-25) ----
+    Parallel      : Boolean;        // --parallel                 Per-File-Parallelisierung (opt-in;
+                                    //   faellt bei AutoDiscovery/Custom-Rules/--time-detectors still
+                                    //   auf seriell zurueck - Gate in uStaticAnalyzer2)
+    ParallelWorkers : string;       // --parallel-workers <n>     Worker-Anzahl (0/leer = auto)
     // ---- Perf-Diagnostik ----
     TimeDetectors : Boolean;        // --time-detectors           pro-Detektor-Timing-Tabelle nach Scan
     TimeDetectorsOut : string;      // --time-detectors-out <file> schreibt die Markdown-Tabelle in
@@ -271,6 +276,10 @@ begin
       Result.SonarInsecure := True
     else if A = '--sonar-config' then
       GetValue(Result.SonarConfig, '--sonar-config')
+    else if A = '--parallel' then
+      Result.Parallel := True
+    else if A = '--parallel-workers' then
+      GetValue(Result.ParallelWorkers, '--parallel-workers')
     else if A = '--time-detectors' then
       Result.TimeDetectors := True
     else if A = '--time-detectors-out' then
@@ -485,6 +494,17 @@ begin
   WriteLn('  --sonar-branch <b>    Override Sonar branch name');
   WriteLn('  --sonar-insecure      Accept self-signed TLS certificates');
   WriteLn('  --sonar-config <ini>  Alternative analyser.ini path for Sonar lookup');
+  WriteLn('');
+  WriteLn('Performance:');
+  WriteLn('  --parallel            Per-File-Parallelisierung des Scans (opt-in,');
+  WriteLn('                        Perf Stufe 2). Ergebnis/SARIF ist byte-identisch');
+  WriteLn('                        zum seriellen Lauf (deterministischer Merge in');
+  WriteLn('                        Dateilisten-Reihenfolge). Faellt bei AutoDiscovery,');
+  WriteLn('                        Custom-Rules oder --time-detectors still auf');
+  WriteLn('                        seriell zurueck.');
+  WriteLn('  --parallel-workers <n>');
+  WriteLn('                        Worker-Anzahl fuer --parallel (0/weggelassen =');
+  WriteLn('                        automatisch: CPU-Kerne, gedeckelt auf Dateianzahl).');
   WriteLn('');
   WriteLn('Perf-Diagnostik:');
   WriteLn('  --time-detectors      Aggregiert per-Detektor TotalMs + CallCount');
@@ -858,6 +878,11 @@ begin
       Req.ConfigRoot      := Args.Path;
       Req.Profile         := Args.Profile;
       Req.MinSeverityName := Args.MinSeverity;
+      // Perf Stufe 2 (2026-07-25): opt-in Per-File-Parallelisierung.
+      // Gate-Rueckfall auf seriell (AutoDiscovery/Custom-Rules/Timings)
+      // entscheidet die Engine selbst (uStaticAnalyzer2).
+      Req.Parallel        := Args.Parallel;
+      Req.ParallelWorkers := StrToIntDef(Args.ParallelWorkers, 0);
       if EffectiveIfdefAware and (EffectiveIfdefDefines <> '') then
         Req.IfdefDefines := EffectiveIfdefDefines.Split([',', ';']);
       // Custom-Rules hat der CLI oben bereits geladen -> Req.CustomRulesPath leer.

@@ -78,6 +78,8 @@ implementation
 uses
   Winapi.Windows,   // OutputDebugString (IndexRoot-Warnung, Scan-Scope 2026-07-20)
   System.IOUtils, System.Diagnostics,
+  // Perf Stufe 2 (2026-07-25): Per-File-Parallelisierung des Main-Loops.
+  System.Threading, System.SyncObjs, uParallelScan,
   uStaticFiles, uParser2, uAstNode,
   uLeakDetector2, uCodeSmells2, uSQLInjection, uHardcodedSecret,
   uFormatMismatch, uConcatToFormat, uUnusedUses, uWithStatement,
@@ -752,7 +754,10 @@ var
   begin
     if TokenSetReady then Exit(TokenPresent.Count > 0);
     TokenSetReady := True;
-    Lines := AcquireLines(FileName, Cached);
+    // Perf Stufe 2 (2026-07-25): Cache aus dem Context statt implizit dem
+    // Prozess-Global. Seriell byte-identisch (Ctx.FileTextCache aliast das
+    // Global; AContext=nil faellt in AcquireLines aufs Global zurueck).
+    Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
     if Lines = nil then Exit(False);
     try
       SrcLow := LowerCase(Lines.Text);
@@ -889,6 +894,362 @@ begin
 
   finally
     TokenPresent.Free;
+  end;
+end;
+
+// ============================================================================
+//  Perf Stufe 2 (2026-07-25) — Per-File-Parallelisierung des Main-Loops
+// ============================================================================
+//
+// Opt-in (uSCAConsts.DetectorParallelScan, Default AUS - CLI --parallel bzw.
+// TScanRequest.Parallel). ParseLeaks schaltet zusaetzlich hart auf seriell
+// zurueck, wenn ein nicht parallel-sicherer Modus aktiv ist (Gate-Kommentar
+// in ParseLeaks). Determinismus: jeder Worker schreibt in den Slot SEINES
+// Datei-Index; der Merge (uParallelScan.MergeSlotsDeterministic) laeuft
+// strikt in Dateilisten-Reihenfolge -> SARIF bleibt byte-identisch zur
+// seriellen Reihenfolge.
+//
+// Audit der globalen Zustaende (Pflichtliste Stufe 2, Stand 2026-07-25):
+//   * gFileTextCache (G1)      -> TFileTextCache intern gelockt; Parallel-
+//                                 Worker raeumen per RemoveFile (NICHT Clear,
+//                                 das wuerde fremde Eintraege zerstoeren).
+//   * TAstFileCache.FParser(G2)-> Cache intern gelockt, Miss-Parse unter dem
+//                                 Lock (nach Pre-Indizes praktisch nur Hits).
+//   * gDetectorTimings (G3)    -> Parallel-Modus deaktiviert (Gate: bei
+//                                 --time-detectors laeuft der Scan seriell,
+//                                 damit die Messwerte vergleichbar bleiben).
+//   * TSymbolReferenceIndex    -> Query-Memo (FOwnUnitNorm) unter TMonitor;
+//                                 restlicher Index-State nach Build read-only.
+//   * TTypeIndex/TDfmRepoIndex -> nach Build read-only (reine TryGetValue-
+//                                 Lookups), gemeinsam nutzbar ohne Lock.
+//   * TRegExMatches.FCache     -> Cache-Key traegt jetzt die Thread-ID
+//                                 (TRegEx-Instanzen sind nicht concurrent-
+//                                 safe); Dictionary war bereits TMonitor-
+//                                 serialisiert.
+//   * TCustomRuleDetector      -> vorkompilierte PatternRegex-Instanzen sind
+//                                 nicht concurrent-safe -> Gate: HasRules
+//                                 erzwingt seriell.
+//   * AutoDiscovery            -> kumulativ ueber die DATEIREIHENFOLGE
+//                                 (Fund in Datei i wirkt auf Datei i+1) ->
+//                                 prinzipiell nicht parallel-deterministisch,
+//                                 Gate erzwingt seriell.
+//   * Ctx.LeakyClasses         -> pro Worker-Kontext eine eigene Kopie der
+//                                 Scan-Baseline (ohne AutoDiscovery konstant).
+//   * TAnalyzeContext-Sharing  -> Worker-Kontexte LEIHEN die read-only-
+//                                 Indizes des Master-Kontexts (vor Free
+//                                 wieder ausgeklinkt); Strip-Caches und
+//                                 SuppressionMarker sind worker-/slot-lokal.
+//   * TRuleCatalog/uLexer-Keywords/gDetectors/Prefilter-Index/uLocalization
+//                              -> beim Unit-/Config-Load gebaut, waehrend
+//                                 des Scans read-only -> kein Schutz noetig.
+//   * uFixHint/uQuickFix/uSuppressionTelemetry/uBaseline/uPathOverrides/
+//     uConfidenceFilter        -> laufen ausschliesslich in der seriellen
+//                                 Post-Scan-Phase -> unveraendert.
+
+procedure ProcessOneFileParallel(const AFileName: string;
+  AFileIdx, ATotal: Integer; ASlot: TParallelFileSlot;
+  AWorkerCtx: TAnalyzeContext; AIncludeUsesCheck: Boolean; AHasLog: Boolean);
+// Spiegelt den seriellen Per-File-Block aus ParseLeaks 1:1 (Pre-Checks,
+// Acquire, Detektoren, Marker-Collection, Evict) - nur dass Findings/Log/
+// Marker in den Slot dieses Datei-Index gepuffert werden statt direkt in
+// die Master-Strukturen. Fehlertexte MUESSEN wortgleich zum seriellen Pfad
+// bleiben (Byte-Gate). AutoDiscovery + CustomRules fehlen hier bewusst:
+// beide sind per Parallel-Gate ausgeschlossen (s. Audit oben) - im
+// Parallel-Modus waeren die Bloecke ohnehin garantierte No-ops.
+
+  procedure SlotLog(const S: string);
+  begin
+    // Worker duerfen nicht in den (nicht thread-safen) TStreamWriter
+    // schreiben - Zeilen werden gepuffert und beim Merge in Datei-
+    // Reihenfolge ausgegeben. AHasLog spiegelt Assigned(LogStream).
+    if AHasLog then ASlot.LogLines.Add(S);
+  end;
+
+  procedure AddSlotError(const AFile, AMsg: string);
+  var F: TLeakFinding;
+  begin
+    F            := TLeakFinding.Create;
+    F.FileName   := AFile;
+    F.MethodName := '';
+    F.LineNumber := '0';
+    F.MissingVar := AMsg;
+    F.SetKind(fkFileReadError);
+    ASlot.Findings.Add(F);
+  end;
+
+var
+  FileSize : Int64;
+  Watch    : TStopwatch;
+  Root     : TAstNode;
+  FailMsg  : string;
+begin
+  // ---- Pre-Checks: Reihenfolge + Texte identisch zum seriellen Loop ----
+  if Trim(AFileName) = '' then
+  begin
+    AddSlotError('(leer)', 'Leerer Dateiname in der Liste');
+    Exit;
+  end;
+
+  try
+    if not TFile.Exists(AFileName) then
+    begin
+      AddSlotError(AFileName, 'Datei nicht gefunden');
+      Exit;
+    end;
+  except
+    on E: Exception do
+    begin
+      AddSlotError(AFileName, 'Datei-Existenzpruefung fehlgeschlagen: ' + E.Message);
+      Exit;
+    end;
+  end;
+
+  try
+    FileSize := TFile.GetSize(AFileName);
+  except
+    on E: Exception do
+    begin
+      AddSlotError(AFileName, 'Dateigroesse nicht ermittelbar: ' + E.Message);
+      Exit;
+    end;
+  end;
+
+  if FileSize > AWorkerCtx.Config.MaxFileBytes then
+  begin
+    AddSlotError(AFileName, Format('Datei zu groß (%.1f MB) – Analyse übersprungen',
+                                   [FileSize / (1024 * 1024)]));
+    Exit;
+  end;
+
+  if FileSize = 0 then Exit;
+
+  SlotLog(Format('[%d/%d] %s (%d KB)',
+                 [AFileIdx + 1, ATotal, AFileName, FileSize div 1024]));
+  Watch := TStopwatch.StartNew;
+
+  try
+    try
+      // Parallel-Pfad laeuft NUR mit AstFileCache (Gate) - die Pre-Indizes
+      // haben das Root bereits erzeugt, Acquire ist praktisch immer ein Hit.
+      // (Kein 'Root := nil'-Vorinit: Acquire weist auf jedem Lese-Pfad zu
+      //  oder der except-Zweig steigt via Exit aus - H2077-frei.)
+      Root := AWorkerCtx.AstFileCache.Acquire(AFileName);
+    except
+      on E: Exception do
+      begin
+        SlotLog('  PARSER-FEHLER: ' + E.Message);
+        AddSlotError(AFileName, 'Lesefehler: ' + E.Message);
+        Exit;
+      end;
+    end;
+
+    if Root = nil then
+    begin
+      FailMsg := AWorkerCtx.AstFileCache.GetFailMessage(AFileName);
+      if FailMsg = '' then FailMsg := 'Parser lieferte kein Ergebnis';
+      SlotLog('  PARSER-FEHLER: ' + FailMsg);
+      AddSlotError(AFileName, FailMsg);
+      Exit;
+    end;
+
+    if AHasLog then
+      SlotLog(Format('  Acquire: %d ms (cache)', [Watch.ElapsedMilliseconds]));
+
+    // Capture-Locals fuer die AOnError-Closure (anonyme Methoden duerfen
+    // keine nested procs referenzieren - gleiches Muster wie im seriellen
+    // Loop, E2555).
+    var CaptSlot   := ASlot;
+    var CaptFile   := AFileName;
+    var CaptHasLog := AHasLog;
+
+    RunAllDetectors(Root, AFileName, ASlot.Findings, AIncludeUsesCheck,
+      AWorkerCtx,
+      // AOnTime = nil: per-Detektor-Timings + Slow-Detector-Logzeilen sind
+      // im Parallel-Modus deaktiviert (G3; --time-detectors laeuft seriell).
+      nil,
+      procedure(const Name, ErrMsg: string)
+      begin
+        if CaptHasLog then
+          CaptSlot.LogLines.Add(Format('  DETEKTOR %s FEHLER: %s',
+            [Name, ErrMsg]));
+        // entspricht AddSlotError - inlined wegen Capture-Limits
+        var F := TLeakFinding.Create;
+        F.FileName   := CaptFile;
+        F.MethodName := '';
+        F.LineNumber := '0';
+        F.MissingVar := Format('Detector %s failed: %s', [Name, ErrMsg]);
+        F.SetKind(fkFileReadError);
+        CaptSlot.Findings.Add(F);
+      end);
+
+    // Suppression-Marker JETZT einsammeln - der Dateitext liegt noch heiss
+    // im (thread-safen) FileTextCache; das finally raeumt ihn gleich ab.
+    // Ziel ist das SLOT-Dictionary: der Merge uebertraegt es in Datei-
+    // Reihenfolge in Ctx.SuppressionMarkers (Determinismus der Unused-
+    // Suppression-Emission, s. uParallelScan-Header).
+    try
+      TSuppression.CollectMarkersForScan(AFileName, ASlot.Markers);
+    except
+      on EAbort do raise;
+      on Exception do ;
+    end;
+  finally
+    // Pendant zum seriellen finally: AST-Evict + Text-Cache-Entlastung.
+    // RemoveFile statt Clear - ein Clear wuerde die Eintraege der ANDEREN
+    // Worker zerstoeren (deren Lines-Referenzen waeren use-after-free).
+    AWorkerCtx.AstFileCache.Evict(AFileName);
+    if AWorkerCtx.FileTextCache <> nil then
+      AWorkerCtx.FileTextCache.RemoveFile(AFileName);
+  end;
+end;
+
+procedure RunParallelMainLoop(FileList: TStringList;
+  Results: TObjectList<TLeakFinding>; MasterCtx: TAnalyzeContext;
+  AIncludeUsesCheck: Boolean; AProgress: TProc<Integer, Integer>;
+  LogStream: TStreamWriter);
+// Ersetzt den seriellen ParseLeaks-Main-Loop, wenn das Parallel-Gate offen
+// ist. Work-Stealing ueber einen Interlocked-Cursor; ein Worker-Kontext pro
+// Thread (leiht die read-only-Indizes des Master-Kontexts); Ergebnis-Merge
+// deterministisch in Dateilisten-Reihenfolge. Progress wird erst waehrend
+// des Merges auf dem AUFRUFER-Thread nachgereicht (UI-Callbacks duerfen
+// nicht aus Workern feuern); EAbort daraus bricht wie im seriellen Pfad
+// den Scan ab.
+var
+  Slots       : TObjectList<TParallelFileSlot>;
+  Tasks       : TArray<ITask>;
+  Total       : Integer;
+  WorkerCount : Integer;
+  t           : Integer;
+  NextIdx     : Integer;   // Interlocked-Cursor (Increment-1 = Datei-Index)
+  CancelFlag  : Integer;   // 1 = Worker sollen stoppen
+  AbortSeen   : Integer;   // 1 = EAbort in einem Worker
+  FirstErr    : string;    // erste Nicht-EAbort-Worker-Exception
+  ErrLock     : TCriticalSection;
+begin
+  Total := FileList.Count;
+
+  WorkerCount := MasterCtx.Config.ParallelWorkers;
+  if WorkerCount <= 0 then
+    WorkerCount := TThread.ProcessorCount;
+  if WorkerCount > Total then WorkerCount := Total;
+  if WorkerCount < 1 then WorkerCount := 1;
+
+  Slots   := TObjectList<TParallelFileSlot>.Create(True);
+  ErrLock := TCriticalSection.Create;
+  try
+    for t := 0 to Total - 1 do
+      Slots.Add(TParallelFileSlot.Create);
+
+    NextIdx    := 0;
+    CancelFlag := 0;
+    AbortSeen  := 0;
+    FirstErr   := '';
+
+    SetLength(Tasks, WorkerCount);
+    for t := 0 to WorkerCount - 1 do
+      Tasks[t] := TTask.Run(
+        procedure
+        var
+          WCtx : TAnalyzeContext;
+          Idx  : Integer;
+        begin
+          // Worker-eigener Kontext: Config-Snapshot + LeakyClasses-Kopie;
+          // Indizes/FileTextCache nur GELIEHEN (vor Free ausgeklinkt, sonst
+          // wuerde TAnalyzeContext.Destroy die Master-Instanzen freigeben).
+          // Strip-Caches (P1/P7) leben damit pro Worker - genau das macht
+          // sie ohne Lock thread-sicher.
+          WCtx := TAnalyzeContext.Create;
+          try
+            WCtx.Config := MasterCtx.Config;
+            if MasterCtx.LeakyClasses <> nil then
+              WCtx.LeakyClasses.AddStrings(MasterCtx.LeakyClasses);
+            WCtx.AstFileCache    := MasterCtx.AstFileCache;
+            WCtx.SymbolRefIndex  := MasterCtx.SymbolRefIndex;
+            WCtx.DfmRepoIndex    := MasterCtx.DfmRepoIndex;
+            WCtx.TypeIndex       := MasterCtx.TypeIndex;
+            WCtx.FileTextCache   := MasterCtx.FileTextCache;
+            WCtx.DetectorTimings := nil;   // G3: keine Timings im Parallel-Modus
+
+            while CancelFlag = 0 do
+            begin
+              Idx := TInterlocked.Increment(NextIdx) - 1;
+              if Idx >= Total then Break;
+              try
+                ProcessOneFileParallel(FileList[Idx], Idx, Total, Slots[Idx],
+                  WCtx, AIncludeUsesCheck, Assigned(LogStream));
+              except
+                // Exceptions duerfen den Task NIE verlassen (WaitForAll
+                // wuerde sie als EAggregateException re-raisen). Stattdessen
+                // ersten Fehler merken + alle Worker stoppen; der Haupt-
+                // Thread re-raist nach dem Merge - gleiche Aussenwirkung
+                // wie der Abbruch des seriellen Loops.
+                on EAbort do
+                begin
+                  TInterlocked.Exchange(AbortSeen, 1);
+                  TInterlocked.Exchange(CancelFlag, 1);
+                  Break;
+                end;
+                on E: Exception do
+                begin
+                  ErrLock.Enter;
+                  try
+                    if FirstErr = '' then
+                      FirstErr := E.ClassName + ': ' + E.Message;
+                  finally
+                    ErrLock.Leave;
+                  end;
+                  TInterlocked.Exchange(CancelFlag, 1);
+                  Break;
+                end;
+              end;
+            end;
+          finally
+            // Geliehene Referenzen ausklinken BEVOR der Kontext stirbt.
+            WCtx.AstFileCache    := nil;
+            WCtx.SymbolRefIndex  := nil;
+            WCtx.DfmRepoIndex    := nil;
+            WCtx.TypeIndex       := nil;
+            WCtx.FileTextCache   := nil;
+            WCtx.Free;
+          end;
+        end);
+
+    TTask.WaitForAll(Tasks);
+
+    // ---- Deterministischer Merge in Dateilisten-Reihenfolge ----
+    MergeSlotsDeterministic(Slots, Results, MasterCtx.SuppressionMarkers,
+      procedure(S: string)
+      begin
+        // Gleiches Schreibmuster wie das serielle LogLine (Flush pro Zeile,
+        // best-effort). LogStream=nil -> Sink wird nie gerufen, weil die
+        // Worker dann gar keine Zeilen gepuffert haben; der Guard bleibt
+        // trotzdem (defensiv).
+        if Assigned(LogStream) then
+          try LogStream.WriteLine(S); LogStream.Flush; except end;
+      end,
+      procedure(Index: Integer)
+      begin
+        // Progress nachgereicht auf dem Aufrufer-Thread (Semantik wie
+        // SafeProgress: EAbort bricht ab, andere Callback-Fehler nicht).
+        if Assigned(AProgress) then
+          try
+            AProgress(Index + 1, Total);
+          except
+            on EAbort do raise;
+            on Exception do ;
+          end;
+      end);
+
+    // Abbruch-Semantik des seriellen Pfads nachbilden: EAbort geht durch
+    // (Caller raeumt auf), eine Worker-Exception wird als Scan-Abbruch
+    // re-raist (Caller erzeugt sein 'Analyseabbruch: ...'-Finding).
+    if AbortSeen <> 0 then
+      Abort;
+    if FirstErr <> '' then
+      raise Exception.Create(FirstErr);
+  finally
+    Slots.Free;      // gibt nur frei, was der Merge nicht uebernommen hat
+    ErrLock.Free;
   end;
 end;
 
@@ -1029,6 +1390,9 @@ var
   // darum werden die Werte - wie PreMarkers - vorher aus dem Context gerettet.
   PostMinConf : TFindingConfidence;
   PostEnKinds : TFindingKinds;
+  // Perf Stufe 2 (2026-07-25): True wenn der Main-Loop parallel laeuft
+  // (Gate-Auswertung s.u.; Default AUS, opt-in via DetectorParallelScan).
+  UseParallel : Boolean;
 
   procedure LogLine(const S: string);
   begin
@@ -1192,6 +1556,38 @@ begin
     LastPhase := 'Parser.Create + Main-Loop start';
     Parser := TParser2.Create;
     Total  := FileList.Count;
+
+    // ---- Perf Stufe 2 (2026-07-25): Parallel-Gate -------------------------
+    // Per-File-Parallelisierung nur wenn ALLE Bedingungen erfuellt sind;
+    // sonst laeuft der (unveraenderte) serielle Loop unten - byte-identisch
+    // zum Stand vor Stufe 2. Gruende pro Bedingung im Audit-Kommentar bei
+    // RunParallelMainLoop:
+    //   * ParallelScan: opt-in Flag (CLI --parallel / TScanRequest.Parallel).
+    //   * Total > 1: Single-File/ssSource lohnt und braucht keinen Pool.
+    //   * AstFileCache: der Parallel-Worker hat keinen eigenen Parser-Pfad.
+    //   * not AutoDiscover: Discovery wirkt kumulativ ueber die DATEI-
+    //     REIHENFOLGE (Fund in Datei i beeinflusst Datei i+1) - parallel
+    //     nicht deterministisch abbildbar.
+    //   * not HasRules: vorkompilierte Custom-Rule-Regexe (TRegEx) sind
+    //     nicht concurrent-safe.
+    //   * DetectorTimings = nil: --time-detectors misst seriell (G3).
+    UseParallel := Ctx.Config.ParallelScan
+      and (Total > 1)
+      and Assigned(Ctx.AstFileCache)
+      and (not Ctx.Config.AutoDiscover)
+      and (not TCustomRuleDetector.HasRules)
+      and (Ctx.DetectorTimings = nil);
+
+    if UseParallel then
+    begin
+      LastPhase := Format('Parallel-Main-Loop (%d Dateien)', [Total]);
+      LogLine(Format('=== Parallel-Modus aktiv (%d Dateien) ===', [Total]));
+      RunParallelMainLoop(FileList, Results, Ctx, AIncludeUsesCheck,
+        AProgress, LogStream);
+    end
+    else
+    // Serieller Main-Loop - unveraendert (die for-Schleife ist das
+    // else-Statement; bewusst kein Re-Indent des Bestands).
     for i := 0 to Total - 1 do
     begin
       SafeProgress(i + 1, Total);

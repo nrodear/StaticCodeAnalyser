@@ -24,11 +24,21 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
+  System.SyncObjs,   // Perf Stufe 2 (2026-07-25): FLock fuer Parallel-Worker
   uAstNode, uParser2;
 
 type
   TAstFileCache = class
   private
+    // Perf Stufe 2 (2026-07-25): serialisiert FCache/FFailed UND die eine
+    // FParser-Instanz (Blocker G2 aus Konzept_Performance25). Im Parallel-
+    // Modus rufen Worker-Threads Acquire/Evict/GetFailMessage gleichzeitig;
+    // nach den Pre-Index-Passes sind Acquire-Aufrufe praktisch immer Hits,
+    // ein Miss-Parse unter dem Lock serialisiert also nur den Ausnahmefall.
+    // Die zurueckgegebenen TAstNode-Baeume brauchen keinen Schutz: pro Datei
+    // arbeitet genau EIN Worker, und Evict ruft nur der Besitzer-Worker
+    // seiner eigenen Datei. Seriell ist der Lock unkontent (kostenneutral).
+    FLock   : TCriticalSection;
     FParser : TParser2;
     // Key = LowerCase(ExpandFileName(Path)) - normalisiert damit
     // 'foo.pas', '.\foo.pas', 'C:\...\foo.pas' alle denselben Cache-Slot
@@ -70,6 +80,7 @@ implementation
 constructor TAstFileCache.Create;
 begin
   inherited;
+  FLock   := TCriticalSection.Create;   // Perf Stufe 2 (2026-07-25)
   FParser := TParser2.Create;
   // doOwnsValues: das Dictionary freed die TAstNode-Instanzen bei
   // Remove/Clear/Destroy.
@@ -82,6 +93,7 @@ begin
   FCache.Free;
   FFailed.Free;
   FParser.Free;
+  FLock.Free;
   inherited;
 end;
 
@@ -97,31 +109,44 @@ var
 begin
   Result := nil;
   K := Key(FileName);
-  if FFailed.ContainsKey(K) then Exit;
-  if FCache.TryGetValue(K, Existing) then Exit(Existing);
-  // Erst-Parse - bei Fehler in Fail-Liste merken, damit kein Retry-Loop.
-  // Die Exception-Message wird festgehalten, damit der Caller im
-  // Cache-Pfad ueber GetFailMessage einen sinnvollen Log-Eintrag schreiben
-  // kann (im Fallback-Pfad faengt der Caller die Exception direkt ab).
+  // Perf Stufe 2 (2026-07-25): kompletter Acquire (inkl. Miss-Parse mit der
+  // einen FParser-Instanz) unter FLock - s. Klassen-Kommentar. Nach den
+  // Pre-Index-Passes ist der Miss-Parse der seltene Ausnahmefall.
+  FLock.Enter;
   try
-    Result := FParser.ParseFile(FileName);
-  except
-    on E: Exception do
-    begin
-      FFailed.AddOrSetValue(K, E.Message);
-      Exit(nil);
+    if FFailed.ContainsKey(K) then Exit;
+    if FCache.TryGetValue(K, Existing) then Exit(Existing);
+    // Erst-Parse - bei Fehler in Fail-Liste merken, damit kein Retry-Loop.
+    // Die Exception-Message wird festgehalten, damit der Caller im
+    // Cache-Pfad ueber GetFailMessage einen sinnvollen Log-Eintrag schreiben
+    // kann (im Fallback-Pfad faengt der Caller die Exception direkt ab).
+    try
+      Result := FParser.ParseFile(FileName);
+    except
+      on E: Exception do
+      begin
+        FFailed.AddOrSetValue(K, E.Message);
+        Exit(nil);
+      end;
     end;
+    if Result <> nil then
+      FCache.Add(K, Result)
+    else
+      FFailed.AddOrSetValue(K, 'Parser lieferte kein Ergebnis');
+  finally
+    FLock.Leave;
   end;
-  if Result <> nil then
-    FCache.Add(K, Result)
-  else
-    FFailed.AddOrSetValue(K, 'Parser lieferte kein Ergebnis');
 end;
 
 function TAstFileCache.GetFailMessage(const FileName: string): string;
 begin
-  if not FFailed.TryGetValue(Key(FileName), Result) then
-    Result := '';
+  FLock.Enter;   // Perf Stufe 2 (2026-07-25)
+  try
+    if not FFailed.TryGetValue(Key(FileName), Result) then
+      Result := '';
+  finally
+    FLock.Leave;
+  end;
 end;
 
 procedure TAstFileCache.Evict(const FileName: string);
@@ -129,20 +154,35 @@ var
   K : string;
 begin
   K := Key(FileName);
-  FCache.Remove(K);
+  FLock.Enter;   // Perf Stufe 2 (2026-07-25)
+  try
+    FCache.Remove(K);
+  finally
+    FLock.Leave;
+  end;
   // Failed-Eintraege behalten - sonst koennte ein dauerhaft kaputter
   // Path mehrfach Re-Parsed werden.
 end;
 
 procedure TAstFileCache.Clear;
 begin
-  FCache.Clear;
-  FFailed.Clear;
+  FLock.Enter;   // Perf Stufe 2 (2026-07-25)
+  try
+    FCache.Clear;
+    FFailed.Clear;
+  finally
+    FLock.Leave;
+  end;
 end;
 
 function TAstFileCache.Count: Integer;
 begin
-  Result := FCache.Count;
+  FLock.Enter;   // Perf Stufe 2 (2026-07-25)
+  try
+    Result := FCache.Count;
+  finally
+    FLock.Leave;
+  end;
 end;
 
 initialization

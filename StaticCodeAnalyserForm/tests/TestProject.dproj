@@ -5,7 +5,7 @@
         <FrameworkType>None</FrameworkType>
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Release</Config>
-        <Platform Condition="'$(Platform)'==''">Win32</Platform>
+        <Platform Condition="'$(Platform)'==''">Win64</Platform>
         <ProjectName Condition="'$(ProjectName)'==''">TestProject</ProjectName>
         <TargetedPlatforms>3</TargetedPlatforms>
         <AppType>Console</AppType>
@@ -108,6 +108,7 @@
         <DCCReference Include="uTestConfidencePipeline.pas"/>
         <DCCReference Include="uTestPathOverrides.pas"/>
         <DCCReference Include="uTestCFG.pas"/>
+        <DCCReference Include="uTestParallelScan.pas"/>
         <DCCReference Include="uTestTAstNode.pas"/>
         <DCCReference Include="uTestDfmLexer.pas"/>
         <DCCReference Include="uTestDfmParser.pas"/>

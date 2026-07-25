@@ -26,6 +26,13 @@ const
   DEF_MAX_CASE_BRANCHES         = 10;
   DEF_UI_MAX_DISPLAYED_FINDINGS = 0;
   DEF_AUTO_DISCOVER_CLASSES     = False;
+  // Perf Stufe 2 (2026-07-25): Per-File-Parallelisierung des Scan-Main-Loops.
+  // Default AUS - opt-in via CLI --parallel bzw. TScanRequest.Parallel, damit
+  // das Korrektheits-Gate (SARIF byte-identisch seriell vs. parallel) explizit
+  // bewiesen werden kann, bevor jemand den Modus produktiv einschaltet.
+  DEF_PARALLEL_SCAN             = False;
+  // 0 = automatisch (TThread.ProcessorCount, gedeckelt auf die Dateianzahl).
+  DEF_PARALLEL_WORKERS          = 0;
 
 var
   Flags: Byte;
@@ -52,6 +59,16 @@ var
   // Klassen die NICHT von TForm/TFrame/TComponent/TInterfacedObject erben.
   // Wird vom Aufrufer gesetzt (z.B. UI aus RepoSettings.AutoDiscoverClasses).
   AutoDiscoverCustomClasses: Boolean = DEF_AUTO_DISCOVER_CLASSES;
+
+  // Perf Stufe 2 (2026-07-25): Per-File-Parallelisierung des ParseLeaks-
+  // Main-Loops. Opt-in (Default AUS); gesetzt von uEngineApi.ApplyConfig aus
+  // TScanRequest.Parallel (CLI --parallel). Der Scan faellt trotz True auf
+  // seriell zurueck, wenn ein nicht-parallelisierbarer Modus aktiv ist
+  // (AutoDiscovery, Custom-Rules, --time-detectors) - s. uStaticAnalyzer2.
+  DetectorParallelScan   : Boolean = DEF_PARALLEL_SCAN;
+  // Worker-Anzahl fuer den Parallel-Modus. 0 = automatisch
+  // (TThread.ProcessorCount); wird immer auf die Dateianzahl gedeckelt.
+  DetectorParallelWorkers: Integer = DEF_PARALLEL_WORKERS;
 
   // Globale Exclude-Liste: Klassen die der MemoryLeak-Detektor NICHT melden
   // soll, auch wenn sie in LeakyClasses landen wuerden. Wird vom Aufrufer
@@ -1430,6 +1447,10 @@ begin
   DetectorMinSeverity       := DEF_DETECTOR_MIN_SEVERITY;
   FindingMinConfidence      := DEF_FINDING_MIN_CONFIDENCE;
   AutoDiscoverCustomClasses := DEF_AUTO_DISCOVER_CLASSES;
+  // Perf Stufe 2 (2026-07-25): Parallel-Modus ist strikt per-Request opt-in
+  // und darf nie still aus einem Vorlauf nachwirken.
+  DetectorParallelScan      := DEF_PARALLEL_SCAN;
+  DetectorParallelWorkers   := DEF_PARALLEL_WORKERS;
 
   // Konfigurations-Listen: Clear + Basisbefuellung. Assigned-Guards, damit
   // der Aufruf auch vor CreateEngineConfigLists (bzw. nach finalization)

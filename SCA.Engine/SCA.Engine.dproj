@@ -6,7 +6,7 @@
         <FrameworkType>None</FrameworkType>
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Release</Config>
-        <Platform Condition="'$(Platform)'==''">Win32</Platform>
+        <Platform Condition="'$(Platform)'==''">Win64</Platform>
         <ProjectName Condition="'$(ProjectName)'==''">SCA.Engine</ProjectName>
         <TargetedPlatforms>3</TargetedPlatforms>
         <AppType>Package</AppType>
@@ -305,6 +305,7 @@
         <DCCReference Include="sources\Infrastructure\uSonarConfig.pas"/>
         <DCCReference Include="sources\Infrastructure\uSonarPull.pas"/>
         <DCCReference Include="sources\Infrastructure\uStaticAnalyzer2.pas"/>
+        <DCCReference Include="sources\Infrastructure\uParallelScan.pas"/>
         <DCCReference Include="sources\Infrastructure\uProjectFiles.pas"/>
         <DCCReference Include="sources\Detectors\uNotIncludedInProject.pas"/>
         <DCCReference Include="sources\Infrastructure\uStaticFiles.pas"/>
