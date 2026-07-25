@@ -140,6 +140,28 @@ type
     // Managed-Alias 2026-07-24: Hersteller-Praefix-Interfaces (IwbX)
     [Test] procedure VendorPrefixInterfaceLocal_NoFinding;
     [Test] procedure VendorPrefixButClass_StillFlagged;
+    // Inkrement B2 (Triage 2026-07-25): 7-Hook-Runde (Hook 5 Enum-Helper-
+    // Receiver bewusst uebersprungen - kollidiert mit der dokumentierten
+    // tkiEnum-Ausnahme in ApplyReceiverInit).
+    // Hook 1: Call-LHS-Assign 'Fn(Buf, X)^ := ...' registriert Arg-Writes
+    [Test] procedure CallLhsAssignMultiArg_NoFinding;
+    [Test] procedure CallLhsAssignUnrelatedVar_StillFlagged;
+    // Hook 2: Intrinsic-Guard (SizeOf/Length/...) whitespace-tolerant
+    [Test] procedure SizeOfWithSpaces_NoFinding;
+    [Test] procedure WriteLnWithSpaceParen_StillFlagged;
+    // Hook 3: lokale resourcestring-/const-Eintraege als Pseudo-Vars
+    [Test] procedure LocalResourceStringEntry_NoFinding;
+    [Test] procedure PlainVarDeclOwnLine_StillFlagged;
+    // Hook 4: param-misparse (proc-Typ-Parameter / Signatur-Schlusszeilen)
+    [Test] procedure ProcTypeMidParamLeak_NoFinding;
+    [Test] procedure SignatureTailTypeLeak_NoFinding;
+    [Test] procedure ProcPointerVarReadBeforeWrite_StillFlagged;
+    // Hook 6: 'with <var> do' = konservativer Basis-Write (Klassen-Gate)
+    [Test] procedure WithRecordBasis_NoFinding;
+    [Test] procedure WithClassBasis_StillFlagged;
+    // Hook 7: Decay-RHS auf psz/lp-Zielfeld (PFLICHT-Gate)
+    [Test] procedure DecayRhsPszField_NoFinding;
+    [Test] procedure DecayRhsPlainField_StillFlagged;
   end;
 
 implementation
@@ -2482,6 +2504,385 @@ begin
   try
     Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
       'Decl-Initializer dominiert jeden Read - kein fcHigh-Fund');
+  finally F.Free; end;
+end;
+
+// ============================================================
+// Inkrement B2 (Triage 2026-07-25): 7-Hook-Runde
+// ============================================================
+
+procedure TTestUninitVar.CallLhsAssignMultiArg_NoFinding;
+// B2 Hook 1: 'UpperCopy255Buf(Buf, S)^ := #0' - der Parser legt den ganzen
+// Call-Ausdruck als nkAssign.Name ab; ExtractBareIdent lieferte nur den
+// Funktionsnamen -> Buf bekam keinen pessimistic-Write und galt als
+// never-written (mormot PropNameUpper). RegisterCallArgWrites auf dem LHS
+// registriert die Multi-Arg-Gruppe (Komma-Regel).
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(const S: string);'#13#10 +
+    'var Buf: array[0..255] of AnsiChar;'#13#10 +
+    'begin'#13#10 +
+    '  UpperCopy255Buf(Buf, S)^ := #0;'#13#10 +
+    '  WriteLn(Buf[0]);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'Call-LHS-Assign fuellt Buf als var/out-Arg - kein uninit-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.CallLhsAssignUnrelatedVar_StillFlagged;
+// TP-Gegenprobe zu Hook 1: der Hook registriert NUR die Args der LHS-
+// Klammergruppe - eine unbeteiligte, nie geschriebene Var im selben Body
+// bleibt ein Fund (keine Pauschal-Suppression durch Call-LHS-Zeilen).
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(const S: string);'#13#10 +
+    'var Buf: array[0..7] of AnsiChar; u: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  FillBuf(Buf, S)^ := #0;'#13#10 +
+    '  WriteLn(u);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'u ist kein Arg des Call-LHS - bleibt never-written-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.SizeOfWithSpaces_NoFinding;
+// B2 Hook 2: 'SizeOf ( Buf )' - der Intrinsic-Guard verlangte Null-Abstand
+// in beide Richtungen; Spaces zwischen Intrinsic, '(' und Ident (auch von
+// StripLineEx-geblankten Kommentaren erzeugt) liessen den Match als Read
+// durchfallen -> never-written-FP auf reine Groessenabfragen.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var Buf: array[0..15] of Byte; n: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  n := SizeOf ( Buf );'#13#10 +
+    '  WriteLn(n);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'SizeOf ( Buf ) mit Spaces ist eine Groessen-Query, kein Werte-Read');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.WriteLnWithSpaceParen_StillFlagged;
+// TP-Gegenprobe zu Hook 2: die Whitespace-Toleranz gilt NUR fuer die 5
+// Intrinsics (low/high/sizeof/typeinfo/length), NICHT fuer die
+// READ_ALLOWLIST - 'WriteLn (u)' liest u real und bleibt ein Fund.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var u: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  WriteLn (u);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'WriteLn (u) mit Space liest u - kein Intrinsic, Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.LocalResourceStringEntry_NoFinding;
+// B2 Hook 3: 'resourcestring' ist kein Lexer-Keyword - ab dem zweiten
+// Eintrag wird jede Zeile 'SSecond = ''...'';' als Var-Decl geparst
+// (TypeRef leer) und der Name landete als never-written-Pseudo-Var in der
+// Inventur (issrc-Klasse). IsConstDeclLine auf der gestrippten Decl-Zeile
+// skippt den Eintrag in PhaseA.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'resourcestring'#13#10 +
+    '  SFirst = ''one'';'#13#10 +
+    '  SSecond = ''two'';'#13#10 +
+    'begin'#13#10 +
+    '  WriteLn(SSecond);'#13#10 +
+    '  WriteLn(SSecond);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'lokaler resourcestring-Eintrag ist keine Var - kein uninit-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.PlainVarDeclOwnLine_StillFlagged;
+// TP-Gegenprobe zu Hook 3: eine echte Decl-Zeile 'n: Integer;' (Var-Section,
+// Name auf eigener Zeile) matcht IsConstDeclLine NICHT (kein '=') - die Var
+// bleibt in der Inventur und der uninit-Read bleibt ein Fund.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var'#13#10 +
+    '  n: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  WriteLn(n);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'echte var-Decl-Zeile darf der Inventur-Skip nicht fressen');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.ProcTypeMidParamLeak_NoFinding;
+// B2 Hook 4 Form (a): ParseLocalVarSection stoppt die TypeName-Sammlung am
+// ERSTEN ';' in der Parameterliste des proc-Typs - der Mittel-Parameter
+// 'uFlags' wird als eigenstaendige Var-Decl geparst (TypeRef 'Cardinal',
+// kein ')'/'=') und jede Body-Erwaehnung zaehlte als uninit-Read. Netto-
+// offenes '(' VOR dem Namens-Match auf der Decl-Zeile -> Inventur-Skip.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var'#13#10 +
+    '  CB: procedure(a: Integer; uFlags: Cardinal; c: Byte) of object;'#13#10 +
+    'begin'#13#10 +
+    '  if uFlags > 0 then'#13#10 +
+    '    WriteLn(1);'#13#10 +
+    '  if uFlags > 2 then'#13#10 +
+    '    WriteLn(2);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'proc-Typ-Mittel-Parameter ist keine Local - kein uninit-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.SignatureTailTypeLeak_NoFinding;
+// B2 Hook 4 Form (b): bei keyword-benannten Params ('out result: TPayload')
+// frisst der Parser 'out'/'result'/':' einzeln weg und sammelt den TYP-
+// Ident als Var-NAMEN ein (TypeRef leer -> passiert alle Filter); Body-
+// Erwaehnungen des Typs ('Obj is TPayload') zaehlten als uninit-Read
+// (mormot 'out result: RawUtf8);'-Klasse). ')'-Ueberschuss ohne
+// oeffnendes '(' auf der Decl-Zeile -> Inventur-Skip.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(Obj: TObject);'#13#10 +
+    'var'#13#10 +
+    '  Setter: procedure(const V: string;'#13#10 +
+    '    out result: TPayload);'#13#10 +
+    'begin'#13#10 +
+    '  if Obj is TPayload then'#13#10 +
+    '    WriteLn(1);'#13#10 +
+    '  if Obj is TPayload then'#13#10 +
+    '    WriteLn(2);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'Signatur-Schlusszeilen-Typ-Ident ist keine Local - kein uninit-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.ProcPointerVarReadBeforeWrite_StillFlagged;
+// TP-Gegenprobe zu Hook 4: die proc-Pointer-Var CB SELBST (Name VOR der
+// Klammer, Zeile paren-balanciert) bleibt in der Inventur - der Aufruf
+// 'CB(1, 2)' vor der Zuweisung bleibt ein echter read-before-write-Fund.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var CB: procedure(a: Integer; b: Byte) of object;'#13#10 +
+    'begin'#13#10 +
+    '  CB(1, 2);'#13#10 +
+    '  CB := GetHandler();'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'proc-Pointer-Var vor Zuweisung aufgerufen - Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.WithRecordBasis_NoFinding;
+// B2 Hook 6: 'with r do begin Left := 1; ... end' fuellt Felder der Basis,
+// die Feld-Writes sind r aber nicht zuordenbar -> r galt als never-written
+// obwohl der with-Body initialisiert. Konservativer Write an der with-
+// Zeile (analog @-Scan; single-target, wortgebunden).
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var r: TSettingsRec;'#13#10 +
+    'begin'#13#10 +
+    '  with r do'#13#10 +
+    '  begin'#13#10 +
+    '    Left := 1;'#13#10 +
+    '    Top := 2;'#13#10 +
+    '  end;'#13#10 +
+    '  WriteLn(r.Left);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'with-Body fuellt die Record-Basis - kein never-written-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.WithClassBasis_StillFlagged;
+// TP-Gegenprobe zu Hook 6 (Klassen-Gate): der TypeIndex kennt TBox als
+// KLASSE - 'with b do' ist der echte Deref einer uninitialisierten
+// Referenz, der with-Write darf NICHT registriert werden; der Folge-Read
+// b.Left bleibt ein never-written-Fund. Voller Pipeline-Weg, damit der
+// Cross-Unit-TypeIndex die in-unit-Klasse kennt.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'type'#13#10 +
+    '  TBox = class'#13#10 +
+    '  public'#13#10 +
+    '    Left: Integer;'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var b: TBox;'#13#10 +
+    'begin'#13#10 +
+    '  with b do'#13#10 +
+    '    Left := 1;'#13#10 +
+    '  WriteLn(b.Left);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'with auf uninitialisierter Klassen-Referenz bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.DecayRhsPszField_NoFinding;
+// B2 Hook 7: 'Info.pszDisplayName := NameBuffer' nimmt die Adresse des
+// statischen Char-Arrays (Decay ohne '@'); SHBrowseForFolder & Co. fuellen
+// den Buffer spaeter ueber den gespeicherten Pointer -> NameBuffer galt
+// als never-written. psz/lp-Zielfeld + Char-Array-RHS = konservativer
+// Write an der Decay-Zeile (Semantik des @-Scans).
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var NameBuffer: array[0..259] of AnsiChar;'#13#10 +
+    '    Info: TBrowseInfo;'#13#10 +
+    'begin'#13#10 +
+    '  Info.pszDisplayName := NameBuffer;'#13#10 +
+    '  ShowFolder(Info);'#13#10 +
+    '  WriteLn(NameBuffer[0]);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'Decay auf psz-Feld = Adressnahme, Buffer wird via Pointer gefuellt');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.DecayRhsPlainField_StillFlagged;
+// TP-Gegenprobe zu Hook 7 (PFLICHT-psz-Gate, Reviewer-Fall): 'Obj.Name :=
+// Buf' ist ein echter WERT-Read des uninitialisierten Char-Arrays
+// (String-Property/Ganz-Array-Copy) - das Zielfeld beginnt nicht mit
+// psz/lp, der Hook darf keinen Write registrieren, der Garbage-Read
+// bleibt ein Fund.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(Obj: TThing);'#13#10 +
+    'var Buf: array[0..15] of AnsiChar;'#13#10 +
+    'begin'#13#10 +
+    '  Obj.Name := Buf;'#13#10 +
+    '  Obj.Caption := Buf;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'Obj.Name := Buf liest den uninit. Buffer - psz-Gate haelt den Fund');
   finally F.Free; end;
 end;
 

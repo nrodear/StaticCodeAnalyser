@@ -1117,12 +1117,27 @@ function PrecededByIntrinsicOpen(const LLow: string; NamePos: Integer): Boolean;
 const
   INTR : array[0..4] of string = ('low', 'high', 'sizeof', 'typeinfo', 'length');
 var
-  sp, ep, k : Integer;
+  sp, ep, k, pp : Integer;
   kw : string;
 begin
   Result := False;
-  if (NamePos < 2) or (LLow[NamePos - 1] <> '(') then Exit;
-  ep := NamePos - 2;                       // Char direkt vor '('
+  // B2 Hook 2 (Triage 2026-07-25): Whitespace-tolerant. 'SizeOf (Buf)' /
+  // 'SizeOf( nfo )' / 'SizeOf {n} (x)' fielen durch die Null-Abstand-
+  // Pruefung - StripLineEx blankt Kommentar-/String-Inhalt zu SPACES und
+  // erzeugt solche Luecken sogar selbst. Rueckwaerts Spaces vor dem Namen
+  // skippen, dann '(' verlangen, davor erneut Spaces skippen, dann der
+  // Keyword-Walk wie bisher. Reine Read-Suppression (FirstReadLine kann
+  // nur 0 werden oder spaeter ruecken) -> monoton, nie neue Funde. Das
+  // Restrisiko user-definierter Routinen namens SizeOf/Length/... ist fuer
+  // die Null-Abstand-Form seit after30 akzeptiert (s.o.); die Toleranz
+  // verbreitert es nur marginal (Shadowing der 5 RTL-Intrinsics ist
+  // praktisch inexistent). NICHT fuer die READ_ALLOWLIST: 'writeln (u)'
+  // bleibt ein Read.
+  pp := NamePos - 1;
+  while (pp >= 1) and (LLow[pp] = ' ') do Dec(pp);
+  if (pp < 1) or (LLow[pp] <> '(') then Exit;
+  ep := pp - 1;                            // Char vor '(' (Spaces tolerieren)
+  while (ep >= 1) and (LLow[ep] = ' ') do Dec(ep);
   if ep < 1 then Exit;
   sp := ep;
   while (sp >= 1) and IsIdentChar(LLow[sp]) do Dec(sp);
@@ -1181,6 +1196,49 @@ begin
   // 3b) jetzt MUSS ein einzelnes '=' folgen
   if (i > L) or (T[i] <> '=') then Exit;
   Result := True;
+end;
+
+function IsParamMisparseDeclLine(const DeclLow, NameLow: string): Boolean;
+// B2 Hook 4 (Triage 2026-07-25): ParseLocalVarSection laeuft in die
+// Parameterlisten lokaler proc-Typen/Signaturen HINEIN und liefert deren
+// Parameter (bzw. den TYP-Ident bei keyword-benannten Params wie
+// 'out result: RawUtf8') als nkLocalVar-Phantome. IsParserArtifactTypeRef
+// faengt nur Fragmente MIT ')' im TypeRef - Mittel-Parameter ('uFlags:
+// UINT;') und Typ-Ident-Leaks (TypeRef leer) rutschen durch. Zwei
+// Zeilenformen, die eine ECHTE var-Decl nie hat (Parens im Typteil stehen
+// NACH dem Namen und sind auf der Namenszeile balanciert bzw. nur nach
+// rechts offen):
+//   (a) netto-offenes '(' VOR dem ersten Wort-Match des Var-Namens
+//       ('CB: procedure(a: X; uFlags: UINT; ...' - Mittel-Parameter),
+//   (b) ')'-Ueberschuss ohne oeffnendes '(' auf der Zeile
+//       ('out result: RawUtf8);' / 'c: Z) of object;' - Schlusszeilen
+//       mehrzeiliger Parameterlisten).
+// DeclLow muss bereits lowercase + comment/string-stripped sein (Kommentare
+// zaehlen nie). Reine Inventur-Suppression -> monoton, nie neue Funde.
+// Restrisiko exotischer Formatierung ('arg2); var x: Integer;' auf EINER
+// Zeile) bewusst akzeptiert; der Mittel-Parameter ALLEIN auf eigener Zeile
+// bleibt lexikalisch von einer echten Decl ununterscheidbar (Residual-FP,
+// nur per Parser-Fix mit Paren-Depth-Tracking loesbar - Backlog).
+var
+  i, Bal, FirstPos : Integer;
+begin
+  Result := False;
+  if (DeclLow = '') or (NameLow = '') then Exit;
+  // (b) Netto-')'-Ueberschuss der ganzen Zeile
+  Bal := 0;
+  for i := 1 to Length(DeclLow) do
+    if DeclLow[i] = '(' then Inc(Bal)
+    else if DeclLow[i] = ')' then Dec(Bal);
+  if Bal < 0 then Exit(True);
+  // (a) netto-offenes '(' vor dem ersten Wort-Match des Namens. Kein
+  // Match auf der Zeile (Multi-Line-Decl, DeclLine zeigt auf die Typzeile)
+  // -> konservativ NICHT skippen.
+  if CountWholeWordOccurrences(NameLow, DeclLow, FirstPos) = 0 then Exit;
+  Bal := 0;
+  for i := 1 to FirstPos - 1 do
+    if DeclLow[i] = '(' then Inc(Bal)
+    else if DeclLow[i] = ')' then Dec(Bal);
+  Result := Bal > 0;
 end;
 
 // Welle 3 (Core-Detektoren-Architektur): True wenn eine {$IFDEF}-Direktiven-
@@ -1256,22 +1314,6 @@ var
       Exit;
     end;
     if VarMap.TryGetValue(NameLow, Tmp) then Result := Tmp else Result := -1;
-  end;
-
-  procedure ProcessAssign(A: TAstNode);
-  var
-    LhsBare : string;
-    Idx     : Integer;
-  begin
-    if A = nil then Exit;
-    // Phase 2.4: Hits aus nested-Methods ignorieren - die haben ihren
-    // eigenen AnalyzeMethod-Aufruf, dort wird die Vars-Inventur korrekt
-    // gemacht.
-    if IsLineInRanges(A.Line, NestedRanges) then Exit;
-    LhsBare := ExtractBareIdent(A.Name);
-    if LhsBare = '' then Exit;
-    Idx := VarIndexFor(LowerCase(LhsBare));
-    if Idx >= 0 then RegisterWrite(Idx, A.Line);
   end;
 
   procedure RegisterArgVarsAsWrites(const ArgsLow: string; Line: Integer);
@@ -1399,6 +1441,76 @@ var
       end
       else
         Inc(i);
+    end;
+  end;
+
+  procedure ProcessAssign(A: TAstNode);
+  // B2 (Triage 2026-07-25): hinter RegisterCallArgWrites verschoben -
+  // Hook 1 unten braucht die Prozedur (nested Procs kennen kein forward).
+  var
+    LhsBare : string;
+    Idx     : Integer;
+  begin
+    if A = nil then Exit;
+    // Phase 2.4: Hits aus nested-Methods ignorieren - die haben ihren
+    // eigenen AnalyzeMethod-Aufruf, dort wird die Vars-Inventur korrekt
+    // gemacht.
+    if IsLineInRanges(A.Line, NestedRanges) then Exit;
+    // B2 Hook 1 (Triage 2026-07-25): Call-LHS-Assign. Fuer
+    // 'UpperCopy255Buf(Buf, X)^ := #0' legt der Parser den KOMPLETTEN
+    // Call-Ausdruck als nkAssign.Name ab; ExtractBareIdent extrahiert nur
+    // den Funktionsnamen -> die var/out-Args bekamen keinen pessimistic-
+    // Write (mormot PropNameUpper, fcHigh-FP). RegisterCallArgWrites
+    // reuse't den bestehenden Guard 'Klammergruppe+Komma' 1:1: Single-
+    // Operand-Casts ('PInteger(p)^ :=') bleiben uebersprungen (FN-Schutz
+    // fuer Cast-Operand-Reads intakt), Multi-Arg-Gruppen registrieren.
+    // Nur zusaetzliche Write-Registrierung -> monoton, nie neue Funde.
+    if Pos('(', A.Name) > 0 then
+      RegisterCallArgWrites(A.Name, A.Line);
+    LhsBare := ExtractBareIdent(A.Name);
+    if LhsBare = '' then Exit;
+    Idx := VarIndexFor(LowerCase(LhsBare));
+    if Idx >= 0 then RegisterWrite(Idx, A.Line);
+    // B2 Hook 7 (Triage 2026-07-25): Array-Decay-RHS auf ein Pointer-Feld.
+    // 'BrowseInfo.pszDisplayName := NameBuffer' nimmt die ADRESSE des
+    // statischen Char-Arrays (Decay OHNE '@'); der spaetere API-Call fuellt
+    // den Buffer ueber den gespeicherten Pointer - fuer alle Write-Pfade
+    // unsichtbar -> never-written-FP. Semantik identisch zum A3b-@-Scan:
+    // Adressnahme = konservativer Write an der Decay-Zeile. PFLICHT-Gate
+    // (Reviewer 2026-07-25): das Zielfeld-Segment MUSS mit 'psz'/'lpsz'/
+    // 'lp' beginnen (Hungarian-Pointer-Konvention; 'lpsz' ist von 'lp'
+    // abgedeckt) - OHNE Gate wuerde 'Obj.Name := Buf' (String-Property
+    // LIEST den Buffer / Ganz-Array-Copy) echte Garbage-Reads maskieren.
+    // Nur Write-Registrierung -> monoton.
+    var RhsBare := Trim(A.TypeRef);
+    if (RhsBare <> '') and (Pos('.', A.Name) > 0) then
+    begin
+      var IsBareIdent := True;
+      for var ci := 1 to Length(RhsBare) do
+        if not IsIdentChar(RhsBare[ci]) then
+        begin
+          IsBareIdent := False;
+          Break;
+        end;
+      if IsBareIdent then
+      begin
+        var Idx2 := VarIndexFor(LowerCase(RhsBare));
+        if Idx2 >= 0 then
+        begin
+          // Entspacter TypeLow: der Parser konkateniert Tokens mal mit,
+          // mal ohne Spaces ('array [ 0 .. 259 ] of ansichar' vs.
+          // 'array[0..259]ofansichar') - beide Formen abdecken.
+          var TL := StringReplace(VarList.List[Idx2].TypeLow, ' ', '',
+                                  [rfReplaceAll]);
+          if TL.StartsWith('array[') and TL.EndsWith('char') then
+          begin
+            var SegP := LastDelimiter('.', A.Name);
+            var Seg := LowerCase(Copy(A.Name, SegP + 1, MaxInt));
+            if Seg.StartsWith('psz') or Seg.StartsWith('lp') then
+              RegisterWrite(Idx2, A.Line);
+          end;
+        end;
+      end;
     end;
   end;
 
@@ -2040,6 +2152,29 @@ var
       // Pointer-Typ-Var / Feld-`if X=nil`) tragen '(' ')' '=' im TypeRef -
       // nie ein echter uninit-Local. TP-sicher (AST-Dump-verifiziert 2026-07-14).
       if IsParserArtifactTypeRef(LV.TypeRef) then Continue;
+      // B2 Hook 3+4 (Triage 2026-07-25): zwei weitere Inventur-Phantom-
+      // Klassen, beide auf der GESTRIPPTEN Decl-Zeile erkannt (Kommentare
+      // zaehlen nie; stateless Strip reicht, Decl-Zeilen liegen nie in
+      // einem Multi-Line-Block-Kommentar - der Parser hat sie gesehen).
+      if (Lines <> nil) and (LV.Line >= 1) and (LV.Line <= Lines.Count) then
+      begin
+        var DeclLow := LowerCase(StripCommentsAndStrings(Lines[LV.Line - 1]));
+        // Hook 3: lokale resourcestring-/const-Eintraege. 'resourcestring'
+        // ist KEIN Lexer-Keyword -> ab dem zweiten Eintrag wird jede Zeile
+        // 'SUnknown = ''...'';' als Var-Decl geparst (TypeRef leer, kein
+        // ')'/'='). Eine Zeile der Form 'ident = wert;' bzw. 'ident: typ =
+        // wert;' ist nie eine ECHTE var-Decl, sondern const/resourcestring
+        // (bzw. FPC-initialisiert -> ohnehin kein uninit-Read moeglich).
+        // Restrisiko {$IFDEF}-Twin (aktiver Zweig 'var X: T', inaktiver
+        // 'const X = w', nkLocalVar am const-Zweig verankert): der echte
+        // var-Zweig wuerde mit-suppressed - dieselbe Richtung ist fuer die
+        // Read-Seite bereits als TP-sicher eingestuft (FP-Klasse
+        // 'conditional-compilation-const', s. FindFirstReadLine).
+        if IsConstDeclLine(DeclLow) then Continue;
+        // Hook 4: param-misparse (Signatur-/proc-Typ-Parameter als Locals),
+        // s. IsParamMisparseDeclLine.
+        if IsParamMisparseDeclLine(DeclLow, LowerCase(LV.Name)) then Continue;
+      end;
       // 'absolute'-Aliase ueberspringen: 'c1: TARGB absolute color1;' macht
       // c1 zum Alias der bestehenden Variable color1 - eigene Storage gibt
       // es nicht, daher auch keine 'init'-Pflicht. Audit-Trigger Img32.Extra
@@ -2248,6 +2383,50 @@ var
         end;
         finally
           AtPats.Free;
+        end;
+      end;
+      // B2 Hook 6 (Triage 2026-07-25): 'with <var> do' als konservativer
+      // Write an der with-Zeile. Der with-Body fuellt Felder der Basis
+      // ('with rec do begin Left := 0; ... end'), die Feld-Writes sind der
+      // Basis aber nicht zuordenbar -> never-written-FP. Analog @-Scan:
+      // FN-Toleranz fuer reine read-only-withs bewusst akzeptiert (ein
+      // with, das nur liest, gilt faelschlich als Write - dieselbe dort
+      // dokumentierte, akzeptierte Klasse). NUR single-target und wort-
+      // gebunden: 'with a, b do' und 'with a.b do' matchen NICHT (nach dem
+      // Namen darf bis 'do' nur Whitespace stehen). KLASSEN-Gate: loest
+      // der Cross-Unit-TypeIndex den Typ als tkiClass auf, ist 'with obj
+      // do' der echte Deref einer uninitialisierten Referenz -> KEIN
+      // Write, Fund bleibt. Ohne TypeIndex (nil/leer: Single-File/Tests)
+      // greift der Write fuer ALLE Typen - Begruendung: die with-FP-Klasse
+      // ist record-/API-Struct-dominiert, die with-Zeile selbst war im
+      // Read-Scan schon immer uebersprungen (Regel 4), und ohne Index ist
+      // die Klassen-Eigenschaft nicht beweisbar - dieselbe Vertrauensstufe
+      // wie beim @-Scan. Nur Write-Registrierung -> monoton.
+      if StrippedBuilt then
+      begin
+        var TIw := CtxTypeIndex(AContext);
+        if (TIw = nil) or TIw.IsEmpty or
+           (TIw.TypeKindOf(BaseTypeLow(P.TypeLow)) <> tkiClass) then
+        begin
+          for var wli := 0 to High(StrippedLow) do
+          begin
+            var WT := TrimLeft(StrippedLow[wli]);
+            if not WT.StartsWith('with ') then Continue;
+            var wp := 6;
+            while (wp <= Length(WT)) and (WT[wp] = ' ') do Inc(wp);
+            if Copy(WT, wp, Length(P.NameLow)) <> P.NameLow then Continue;
+            var wq := wp + Length(P.NameLow);
+            if (wq <= Length(WT)) and IsIdentChar(WT[wq]) then Continue;
+            while (wq <= Length(WT)) and (WT[wq] = ' ') do Inc(wq);
+            if Copy(WT, wq, 2) <> 'do' then Continue;
+            if (wq + 2 <= Length(WT)) and IsIdentChar(WT[wq + 2]) then Continue;
+            var WithLine := StrippedFrom0 + wli + 1;
+            if (P.FirstWriteLine = 0) or (WithLine < P.FirstWriteLine) then
+              P.FirstWriteLine := WithLine;
+            if Length(P.WriteLines) < 64 then
+              P.WriteLines := P.WriteLines + [WithLine];
+            Break;
+          end;
         end;
       end;
       P.FirstReadLine := FindFirstReadLine(P.NameLow, P.DeclLine,
