@@ -135,6 +135,12 @@ TODO.md
 Audit_*.md
 # Governance-/Anweisungs-Docs (CleanCode/Dokumente/TechnischeSchulden) - lokal, nie push.
 Anweisung_*.md
+# Arbeitsvorrat-Reports (FP-/TP-Triage-Aggregate, Welle 1 2026-07-25) - lokal, nie push.
+Arbeitsvorrat_*.md
+# Konsolidierte interne Doku (182 Konzept/Todo/Audit -> 10 Kategorien, 2026-07-25)
+# + Zip-Backup der Originale - beides intern, nie push.
+Doku_[0-9][0-9]_*.md
+Archiv_DokuKonsolidierung_*.zip
 I18N.md
 # Ausnahmen: setup-relevante HowTos die jeder Contributor braucht.
 !HowTo_Tests.md
