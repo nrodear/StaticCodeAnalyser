@@ -60,6 +60,24 @@ type
     // --- Scoping-Fix nearest-decl-wins (Korpus dwsUtils.pas:2776) ---
     [Test] procedure NestedDoubleShadowsVariantParam_StillReported;  // TP-Gegenprobe
     [Test] procedure SentinelZeroNestedVarBlock_OuterUse_NotDemoted; // TP-Gegenprobe
+    // --- Welle 1 (2026-07-25): nearest-decl-Gate auf den Resolver-
+    //     Disjunkten; der Komma-Listen-Decl-Fix wurde zurueckgebaut
+    //     (Entscheid 2026-07-25, siehe CommaListDecl_KnownFnNotReported) ---
+    [Test] procedure CommaListDecl_KnownFnNotReported;               // bewusste FN-Klasse
+    [Test] procedure NestedDoubleShadowsIntegerParam_StillReported;  // TP-Gegenprobe
+    // --- ADD-Sampling Welle 1b (2026-07-25): Zusatz-Gates aus dem Komma-
+    //     Listen-FN-Close (+222 ADDs; FN-Close zurueckgebaut, die Gates
+    //     bleiben), alle rein suppressiv ---
+    [Test] procedure IntDomainAllIntAssigns_NotReported;             // Gate 1
+    [Test] procedure IntDomainFieldAccessRhs_StillReported;          // TP-Gegenprobe
+    [Test] procedure ComparatorPrimitiveSameFunc_NotReported;        // Gate 2a
+    [Test] procedure ComparatorNameWithoutPrimitiveBody_StillReported; // TP-Gegenprobe
+    [Test] procedure NonComparatorNamePrimitiveBody_StillReported;   // TP-Gegenprobe
+    // Review-Fix Gate 2a (2026-07-25): ignorierter Epsilon-Parameter beweist
+    // Toleranz-Absicht - kaputte SameValue-Nachbauten bleiben Fund.
+    [Test] procedure SameValueRebuildIgnoredEpsilon_StillReported;   // TP-Gegenprobe
+    [Test] procedure MaxMinIdentity_NotReported;                     // Gate 2b
+    [Test] procedure MaxMinWithoutOtherOperand_StillReported;        // TP-Gegenprobe
   end;
 
 implementation
@@ -531,12 +549,11 @@ procedure TTestFloatEquality.SentinelZeroLocalSimpleAssigns_DemotedToLow;
 // als Local IM SELBEN var-Block deklariert - nur so ist sie beweisbar KEIN
 // parameterloser Function-Call, und der Demote-Accept-Pfad fuer beweisbare
 // Local-Ident-RHS bleibt abgedeckt.
-// WICHTIG (Fixture-Form): KEINE Komma-Liste 'var Best, Seed: Double;' -
-// Phase 1 des Detektors (CachedReDecl) faengt in Komma-Listen nur den
-// kolon-adjazenten Ident (dokumentierte Bestands-Limitation), 'Best' kaeme
-// nie in FloatVars und das Float-Var-Gate wuerde den Fund VOR dem
-// Demote-Pfad droppen. Getrennte Deklarationen (weiterhin EIN var-Block)
-// treffen ausschliesslich den Sentinel-Zero-Demote-Pfad.
+// Fixture-Form: getrennte Deklarationen (weiterhin EIN var-Block) - Komma-
+// Listen-Decls sind seit dem Rueckbau des Decl-Fixes bewusste FN-Klasse
+// (Entscheid 2026-07-25, siehe CommaListDecl_KnownFnNotReported); dieser
+// Test ist damit die Abdeckung des Demote-Accept-Pfads inkl. beweisbarer
+// Local-Ident-RHS ('Seed').
 const SRC =
   'unit t; implementation'#13#10 +
   'procedure Foo;'#13#10 +
@@ -806,6 +823,266 @@ begin
     Assert.AreEqual<TFindingConfidence>(fcHigh, Hit.Confidence,
       'var-Block der nested routine darf den Outer-Fund nicht demoten ' +
       '(Shadowing-Fehlattribution) - volle Confidence bleibt');
+  finally F.Free; end;
+end;
+
+// --- Welle 1 (2026-07-25): Komma-Listen-Rueckbau + nearest-decl-Gate ---
+
+procedure TTestFloatEquality.CommaListDecl_KnownFnNotReported;
+// Bewusste FN-Klasse (Entscheid 2026-07-25): Komma-Listen-Decls werden
+// NICHT erfasst - in 'var Best, Seed: Double;' landet nur der kolon-
+// adjazente Ident ('Seed') in FloatVars, 'Best = 0.5' ist ein BEKANNTES,
+// akzeptiertes False Negative. Der FN-Close (Welle 1) erzeugte +222
+// Korpus-Funde mit 0/16 Hart-TP-Sample und 69% Klassik-FP (Kette after88
+// 440 -> after89 662 -> after90 654, die Zusatz-Gates holten nur -8) und
+// wurde deshalb zurueckgebaut; Begruendung am Decl-Regex in
+// uFloatEquality.EnsureRegexCacheBuilt. Der Test pinnt den Entscheid:
+// schlaegt er fehl, wurde die FN-Klasse ohne die geforderte Wertedomaenen-
+// Analyse re-geoeffnet.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var Best, Seed: Double;'#13#10 +
+  'begin'#13#10 +
+  '  if Best = 0.5 then Exit;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFloatEquality),
+        'Komma-Listen-Ident (Best) ist bewusste FN-Klasse (Entscheid ' +
+        '2026-07-25) - kein Fund ohne Wertedomaenen-Analyse');
+  finally F.Free; end;
+end;
+
+procedure TTestFloatEquality.NestedDoubleShadowsIntegerParam_StillReported;
+// Welle 1 (2026-07-25), nearest-decl-Gate auf den Resolver-Disjunkten:
+// uParser2 verwirft nested routines aus dem AST, der TTypeResolver loeste
+// fuer den Double-Param der GESCHACHTELTEN 'function Inner' die AEUSSERE
+// Integer-Deklaration von Outer auf -> ResolvesToKnownNonFloat droppte den
+// ECHTEN Double-Vergleich (dieselbe Shadowing-Blindheit wie beim Variant-
+// Disjunkt, Korpus dwsUtils.pas:2776). Nearest-decl-wins: die naechst-
+// gelegene Deklaration vor der Fundstelle ist 'Ratio: Double' (nested
+// Signatur) -> beweisbar Float, der Drop wird blockiert, der Fund bleibt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Outer(const Ratio: Integer): Integer;'#13#10 +
+  '  function Inner(const Ratio: Double): Boolean;'#13#10 +
+  '  begin'#13#10 +
+  '    Result := Ratio = 0.5;'#13#10 +
+  '  end;'#13#10 +
+  'begin'#13#10 +
+  '  Result := 0;'#13#10 +
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkFloatEquality) >= 1,
+      'nested Double-Param shadowt den aeusseren Integer-Param - der echte ' +
+      'Double-Vergleich darf nicht ueber die Outer-Deklaration gedroppt werden');
+    Hit := TFindingHelper.FirstOf(F, fkFloatEquality);
+    Assert.AreEqual<TFindingConfidence>(fcHigh, Hit.Confidence,
+      '0.5 ist kein Sentinel-Zero - volle Confidence bleibt');
+  finally F.Free; end;
+end;
+
+// --- ADD-Sampling Welle 1b (2026-07-25): Zusatz-Gates (aus dem Komma-
+//     Listen-FN-Close; dieser wurde zurueckgebaut, die Gates bleiben) ---
+
+procedure TTestFloatEquality.IntDomainAllIntAssigns_NotReported;
+// Gate 1 (ADD-Sampling Welle 1b, 2026-07-25, JvDrawImage-Klasse): 'dx' ist
+// ein lokales Double, dessen EINZIGE Zuweisung 'dx := X - Y' nur aus den
+// Integer-Params X, Y besteht -> die Wertedomaene ist beweisbar ganzzahlig,
+// jeder Wert exakt darstellbar, 'dx = 0' ist zuverlaessig -> Suppress
+// (kein IEEE-754-Rundungsrisiko, kein Fund).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(X, Y: Integer);'#13#10 +
+  'var dx: Double;'#13#10 +
+  'begin'#13#10 +
+  '  dx := X - Y;'#13#10 +
+  '  if dx = 0 then Exit;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFloatEquality),
+        'beweisbare Integer-Wertedomaene (nur Integer-Params/-Literale, ' +
+        'kein "/", keine Calls) -> exakter Vergleich zuverlaessig, kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestFloatEquality.IntDomainFieldAccessRhs_StillReported;
+// TP-Gegenprobe Gate 1 (ADD-Sampling Welle 1b, 2026-07-25): 'myorigin.X'
+// ist ein FELD-Zugriff - Feld-Typen sind lexikalisch nicht beweisbar (das
+// Feld koennte selbst Single sein). Die RHS ist damit unklar -> KEIN
+// Suppress, der Fund bleibt mit voller Confidence (lieber weniger Drops
+// als ein maskierter TP).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(X: Integer);'#13#10 +
+  'var dx: Double;'#13#10 +
+  'begin'#13#10 +
+  '  dx := X - myorigin.X;'#13#10 +
+  '  if dx = 0 then Exit;'#13#10 +
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkFloatEquality) >= 1,
+      'Feld-Zugriff in der RHS ist nicht beweisbar integer-wertig - der Fund bleibt');
+    Hit := TFindingHelper.FirstOf(F, fkFloatEquality);
+    Assert.AreEqual<TFindingConfidence>(fcHigh, Hit.Confidence,
+      'berechnete RHS -> auch kein Sentinel-Demote, volle Confidence bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestFloatEquality.ComparatorPrimitiveSameFunc_NotReported;
+// Gate 2a (ADD-Sampling Welle 1b, 2026-07-25, JclAlgorithms-Klasse):
+// 'function SameScale' traegt 'Same' im Namen und ihr Body ist im Kern
+// GENAU 'Result := A = B;' - Gleichheit ist hier die vertragliche SEMANTIK
+// der Funktion, kein versehentlicher IEEE-754-Bug -> Suppress.
+// Einzel-Decls: Komma-Listen sind seit dem Capture-Revert bewusste FN-Klasse
+// (sonst waere der Test vakuum-gruen: 0 Funde, weil 'A' nie in FloatVars
+// landet und der Praezisions-Guard schon VOR Gate 2a droppt).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function SameScale(const A: Double; const B: Double): Boolean;'#13#10 +
+  'begin'#13#10 +
+  '  Result := A = B;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFloatEquality),
+        'Comparator-Primitiv (Same*-Funktion, Body = Result := A = B) ist ' +
+        'die Gleichheits-Semantik selbst, kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestFloatEquality.ComparatorNameWithoutPrimitiveBody_StillReported;
+// TP-Gegenprobe Gate 2a (ADD-Sampling Welle 1b, 2026-07-25): der Name
+// traegt zwar 'Same', aber der Body ist KEIN 1-2-Statement-Primitiv mehr
+// (mehrere Statements vor dem Vergleich) - der '='-Vergleich ist dort
+// nicht mehr die blosse Funktions-Semantik, der Fund bleibt.
+// Einzel-Decls: Komma-Listen sind seit dem Capture-Revert bewusste FN-Klasse.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function SameState(const A: Double; const B: Double): Boolean;'#13#10 +
+  'var T: Double;'#13#10 +
+  'begin'#13#10 +
+  '  T := A;'#13#10 +
+  '  T := B;'#13#10 +
+  '  Beep;'#13#10 +
+  '  Result := A = B;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkFloatEquality) >= 1,
+        'Same*-Name allein reicht nicht - ohne Primitiv-Body bleibt der Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestFloatEquality.NonComparatorNamePrimitiveBody_StillReported;
+// TP-Gegenprobe Gate 2a (ADD-Sampling Welle 1b, 2026-07-25): identisches
+// Primitiv 'Result := A = B;', aber der Funktionsname enthaelt weder
+// Compare noch Same noch Equal - das Gate haengt an der per NAMEN
+// deklarierten Vergleichs-Semantik und darf hier nicht greifen.
+// Einzel-Decls: Komma-Listen sind seit dem Capture-Revert bewusste FN-Klasse.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function CheckVals(const A: Double; const B: Double): Boolean;'#13#10 +
+  'begin'#13#10 +
+  '  Result := A = B;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkFloatEquality) >= 1,
+        'ohne Compare/Same/Equal im Namen bleibt das Primitiv ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestFloatEquality.SameValueRebuildIgnoredEpsilon_StillReported;
+// Review-Fix Gate 2a (2026-07-25): kaputter SameValue-Nachbau. Der
+// Epsilon-Parameter in der Signatur BEWEIST, dass Toleranz gewollt war -
+// der Body 'Result := A = B' IGNORIERT ihn aber. Genau diese Klasse ist
+// Kernbeute des Detektors; das Comparator-Primitiv-Gate darf hier trotz
+// Same*-Name und Primitiv-Body NICHT unterdruecken.
+// Einzel-Decls: Komma-Listen sind seit dem Capture-Revert bewusste FN-Klasse.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function SameValue(const A: Double; const B: Double; const Epsilon: Double): Boolean;'#13#10 +
+  'begin'#13#10 +
+  '  Result := A = B;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkFloatEquality) >= 1,
+        'ignorierter Epsilon-Parameter widerlegt den Exakt-Vergleichs-' +
+        'Vertrag - der kaputte SameValue-Nachbau bleibt Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestFloatEquality.MaxMinIdentity_NotReported;
+// Gate 2b (ADD-Sampling Welle 1b, 2026-07-25, HSL/HSV-Klasse): 'cmax' wird
+// ausschliesslich als REINER Max(...)-Call zugewiesen, dessen Argliste 'r'
+// als nacktes Argument enthaelt (auch geschachtelt: Max(r, Max(g, b))).
+// Max SELEKTIERT bit-identisch (keine Arithmetik) - 'cmax = r' fragt exakt
+// 'war r das Maximum?' und ist zuverlaessig -> Suppress.
+// Einzel-Decls: Komma-Listen sind seit dem Capture-Revert bewusste FN-Klasse
+// (sonst waere der Test vakuum-gruen: 'r' fehlte in FloatVars, der
+// Praezisions-Guard droppte schon VOR Gate 2b).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(r: Double; g: Double; b: Double);'#13#10 +
+  'var cmax: Double;'#13#10 +
+  'begin'#13#10 +
+  '  cmax := Max(r, Max(g, b));'#13#10 +
+  '  if cmax = r then Exit;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFloatEquality),
+        'Max/Min-Selektions-Identitaet (cmax = r mit cmax := Max(r, ...)) ' +
+        'ist ein zuverlaessiger Vergleich, kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestFloatEquality.MaxMinWithoutOtherOperand_StillReported;
+// TP-Gegenprobe Gate 2b (ADD-Sampling Welle 1b, 2026-07-25): die Argliste
+// des Max-Calls enthaelt 'r' NICHT ('cmax := Max(g, b)') - es gibt keine
+// Selektions-Identitaet zwischen cmax und r, der exakte Vergleich zweier
+// unabhaengiger Floats bleibt ein echter IEEE-754-Kandidat.
+// Einzel-Decls: Komma-Listen sind seit dem Capture-Revert bewusste FN-Klasse.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(r: Double; g: Double; b: Double);'#13#10 +
+  'var cmax: Double;'#13#10 +
+  'begin'#13#10 +
+  '  cmax := Max(g, b);'#13#10 +
+  '  if cmax = r then Exit;'#13#10 +
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkFloatEquality) >= 1,
+      'ohne den anderen Operanden in der Max-Argliste bleibt der Fund');
+    Hit := TFindingHelper.FirstOf(F, fkFloatEquality);
+    Assert.AreEqual<TFindingConfidence>(fcHigh, Hit.Confidence,
+      'kein Zero-Literal, kein Sentinel-Demote - volle Confidence bleibt');
   finally F.Free; end;
 end;
 
