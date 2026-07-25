@@ -162,6 +162,27 @@ type
     // Hook 7: Decay-RHS auf psz/lp-Zielfeld (PFLICHT-Gate)
     [Test] procedure DecayRhsPszField_NoFinding;
     [Test] procedure DecayRhsPlainField_StillFlagged;
+    // Zensus-Triage 2026-07-25: Hook 1a/1b + Kleinserie H2/H3/H4/H5.
+    // Hook 1a: PARENLOSER Record-Init im Expression-Kontext
+    // (Zensus mormot.lib.sspi:2211 'sz := tmp.Init shr 1')
+    [Test] procedure ParenlessReceiverInitRHS_NoFinding;
+    [Test] procedure ParenlessNonInitMemberRead_StillFlagged;
+    // Hook 1b: Same-File-Signatur-Aufloesung fuer var/out-Args
+    [Test] procedure SameFileVarOutArgCall_NoFinding;
+    [Test] procedure ReadBeforeVarOutArgCall_StillFlagged;
+    // H2: Inline-const-Ident SELBST ist nie uninit
+    [Test] procedure InlineConstSelfIdent_NoFinding;
+    [Test] procedure ConstWordInComment_StillFlagged;
+    // H3: FPC-'{%H-}'-Suppression adjazent an der Decl
+    [Test] procedure FpcHideMarkerAdjacent_NoFinding;
+    [Test] procedure HMarkerOtherVar_StillFlagged;
+    // H4: '@X := GetProcAddress(...)' (Befund: bereits via A3b-@-Scan
+    // abgedeckt - Tests sichern die Zusage ab, kein neuer Code)
+    [Test] procedure GetProcAddressAtLhs_NoFinding;
+    [Test] procedure ReadBeforeAtLhsAssign_StillFlagged;
+    // H5: Symptom-Gate keyword-misparse (Var-Name == in-File-Typname)
+    [Test] procedure TypeNamePhantomLocal_NoFinding;
+    [Test] procedure NameEqualsConstNotType_StillFlagged;
   end;
 
 implementation
@@ -2883,6 +2904,365 @@ begin
   try
     Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
       'Obj.Name := Buf liest den uninit. Buffer - psz-Gate haelt den Fund');
+  finally F.Free; end;
+end;
+
+// ============================================================
+// Zensus-Triage 2026-07-25: Hook 1a/1b + Kleinserie H2/H3/H4/H5
+// ============================================================
+
+procedure TTestUninitVar.ParenlessReceiverInitRHS_NoFinding;
+// Hook 1a (Zensus mormot.lib.sspi:2211): 'sz := tmp.Init shr 1' ruft den
+// PARAMETERLOSEN Record-Init auf (TSynTempBuffer.Init; Self ist var) -
+// die '('-Pflicht in ProcessReceiverInitInExpr liess tmp an dieser Zeile
+// als Read zaehlen, der pessimistic-Write kam erst mit dem API-Call der
+// Folgezeile -> read-before-write-FP. Parenlos gilt NUR die Init-Verb-
+// Allowlist (Feld-Read lexikalisch nicht unterscheidbar).
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'function P(H: Cardinal): Cardinal;'#13#10 +
+    'var'#13#10 +
+    '  tmp: TTempBuf;'#13#10 +
+    '  sz, res: Cardinal;'#13#10 +
+    'begin'#13#10 +
+    '  sz := tmp.Init shr 1;'#13#10 +
+    '  res := ApiRead(H, tmp.buf, sz);'#13#10 +
+    '  WriteLn(res);'#13#10 +
+    '  Result := sz;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'tmp.Init (parenlos) initialisiert den Receiver - kein read-before-write');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.ParenlessNonInitMemberRead_StillFlagged;
+// TP-Gegenprobe zu Hook 1a: ein parenloser Member-Zugriff mit NICHT-Init-
+// Verb ('rec.Value') ist ein normaler Feld-READ des uninitialisierten
+// Records - das Init-Verb-Gate darf ihn nicht als Write werten, der
+// read-before-write-Fund bleibt.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var'#13#10 +
+    '  rec: TCrossRec;'#13#10 +
+    '  n: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  n := rec.Value + 1;'#13#10 +
+    '  Prepare(rec);'#13#10 +
+    '  WriteLn(n);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'rec.Value ist Feld-Read vor dem ersten Write - Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.SameFileVarOutArgCall_NoFinding;
+// Hook 1b: Headless-Method-Pattern (nested routine + zweite var-Section)
+// verliert die Outer-Body-nkCalls - 'Decode(S, Value)' registrierte keinen
+// pessimistic-Write, Value galt als never-written (fcHigh-FP). Die Same-
+// File-Signatur-Aufloesung sieht 'var Value: Integer' an Position 2 der
+// Decode-Signatur -> Write an der Call-Zeile.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure Decode(const S: string; var Value: Integer);'#13#10 +
+    'begin'#13#10 +
+    '  Value := Length(S);'#13#10 +
+    'end;'#13#10 +
+    'procedure P(const S: string);'#13#10 +
+    'var'#13#10 +
+    '  Value: Integer;'#13#10 +
+    ''#13#10 +
+    '  procedure Helper;'#13#10 +
+    '  begin'#13#10 +
+    '    WriteLn(''hi'');'#13#10 +
+    '  end;'#13#10 +
+    ''#13#10 +
+    'var'#13#10 +
+    '  C: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  Helper;'#13#10 +
+    '  Decode(S, Value);'#13#10 +
+    '  C := Value + 1;'#13#10 +
+    '  WriteLn(C);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'Decode fuellt Value (var-Param, same-file Signatur) - kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.ReadBeforeVarOutArgCall_StillFlagged;
+// TP-Gegenprobe zu Hook 1b: der var/out-Write zaehlt nur AN der Call-Zeile
+// - ein Read VOR dem Fill-Call bleibt ein echter read-before-write-Fund
+// (die Aufloesung darf den Read-Anker nicht rueckwirkend loeschen).
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure Fill(var N: Integer);'#13#10 +
+    'begin'#13#10 +
+    '  N := 1;'#13#10 +
+    'end;'#13#10 +
+    'procedure P;'#13#10 +
+    'var Value: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  WriteLn(Value);'#13#10 +
+    '  Fill(Value);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'Read VOR dem var-Arg-Call - Fund bleibt trotz Signatur-Aufloesung');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.InlineConstSelfIdent_NoFinding;
+// H2: 'const Half = X div 2;' im Body deklariert eine KONSTANTE - Half
+// SELBST ist ab der Decl initialisiert, ein uninit-Fund darauf ist
+// kategorisch falsch (die RHS-Args deckt der PhaseC-const-Scan von
+// Inkrement B bereits ab).
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(X: Integer);'#13#10 +
+    'var Y: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  const Half = X div 2;'#13#10 +
+    '  Y := Half;'#13#10 +
+    '  WriteLn(Y);'#13#10 +
+    '  WriteLn(Half);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'Inline-const-Ident ist immer initialisiert - kein uninit-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.ConstWordInComment_StillFlagged;
+// TP-Gegenprobe zu H2 (Kommentar-Konvention): 'const' im ZEILENKOMMENTAR
+// der Decl macht die Zeile nicht zur const-Decl - der H2-Check laeuft auf
+// der GESTRIPPTEN Zeile, der echte read-before-write bleibt Fund.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var'#13#10 +
+    '  n: Integer; // const tuning knob'#13#10 +
+    'begin'#13#10 +
+    '  WriteLn(n);'#13#10 +
+    '  n := 1;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      '''const'' im Kommentar ist keine const-Decl - Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.FpcHideMarkerAdjacent_NoFinding;
+// H3: '{%H-}' direkt am Var-Namen der Decl = explizite FPC-/Lazarus-
+// Autor-Suppression. BEWUSSTE Ausnahme der 'Kommentare zaehlen nie'-
+// Regel: der Marker IST ein Kommentar und wird deshalb auf der ROHEN
+// Zeile geprueft (s. HasAdjacentFpcHideMarker).
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var'#13#10 +
+    '  {%H-}Buf: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  WriteLn(Buf);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      '{%H-} an der Decl = Autor-Intent, nie melden');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.HMarkerOtherVar_StillFlagged;
+// TP-Gegenprobe zu H3 (Adjazenz-Pflicht): der Marker an einer ANDEREN
+// Variable suppresst nicht mit - N bleibt ein never-written-Fund.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var'#13#10 +
+    '  {%H-}Tmp: Integer;'#13#10 +
+    '  N: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  WriteLn(Tmp);'#13#10 +
+    '  WriteLn(N);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      '{%H-} gilt nur fuer die markierte Var - N bleibt Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.GetProcAddressAtLhs_NoFinding;
+// H4 (Befund-Absicherung): '@MyProc := GetProcAddress(...)' ist ein Write
+// auf MyProc an der Zeile - bereits durch den A3b-@-Scan abgedeckt (die
+// LHS-Adressnahme registriert, der Read-Scan skippt '@'-Vorkommen). Der
+// Test sichert die Zusage ohne neuen Code ab.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(H: THandle);'#13#10 +
+    'var MyProc: TProcFn;'#13#10 +
+    'begin'#13#10 +
+    '  @MyProc := GetProcAddress(H, ''x'');'#13#10 +
+    '  if Assigned(MyProc) then'#13#10 +
+    '    WriteLn(1);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      '@X := GetProcAddress(...) schreibt X - kein uninit-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.ReadBeforeAtLhsAssign_StillFlagged;
+// TP-Gegenprobe zu H4: ein Read VOR der '@X :='-Zeile bleibt ein echter
+// read-before-write-Fund (der @-Write zaehlt nur an seiner Zeile).
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(H: THandle);'#13#10 +
+    'var MyProc: TProcFn;'#13#10 +
+    'begin'#13#10 +
+    '  WriteLn(Assigned(MyProc));'#13#10 +
+    '  @MyProc := GetProcAddress(H, ''x'');'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'Read vor @X := ... - Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.TypeNamePhantomLocal_NoFinding;
+// H5 (Symptom-Gate keyword-misparse): traegt der gemeldete Var-NAME im
+// File eine eigene TYP-Deklaration ('TPhantom = class'), ist der
+// nkLocalVar-Knoten eine fehlgeparste Decl - der Typname wurde als Local
+// eingesammelt. Emit-Skip statt Fund.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'type'#13#10 +
+    '  TPhantom = class'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var TPhantom: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  WriteLn(TPhantom);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'Var-Name == in-File-Typname -> fehlgeparste Decl, kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.NameEqualsConstNotType_StillFlagged;
+// TP-Gegenprobe zu H5: 'Limit = 5' ist eine KONSTANTE, keine Typ-Decl -
+// das Gate verlangt class/record/... hinter dem '=' und darf die echte
+// never-written-Local Limit nicht suppressen.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'const'#13#10 +
+    '  Limit = 5;'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var Limit: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  WriteLn(Limit);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'Namensgleiche Konstante ist kein Typ - Fund bleibt');
   finally F.Free; end;
 end;
 

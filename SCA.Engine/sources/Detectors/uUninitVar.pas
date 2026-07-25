@@ -42,7 +42,11 @@ type
     class procedure AnalyzeMethod(MethodNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil;
       ARecordTypes: TDictionary<string, Boolean> = nil;
-      const ADirLines: TArray<Integer> = nil);
+      const ADirLines: TArray<Integer> = nil;
+      // Zensus-Triage 2026-07-25, Hook 1b: Same-File-Signaturindex
+      // Name -> var/out-Flag je Parameterposition (baut AnalyzeUnit einmal
+      // pro File; nil = Aufloesung aus, z.B. Direkt-Aufrufe in Tests).
+      ASigVarOut: TDictionary<string, TArray<Boolean>> = nil);
   end;
 
 implementation
@@ -1255,13 +1259,395 @@ begin
 end;
 
 // ============================================================
+// Zensus-Triage 2026-07-25, Hook 1b: Same-File-Signatur-Aufloesung
+// fuer var/out-Parameter.
+//
+// Zensus-Klasse 'var-out-arg-write': der Fund-Read ankert auf einer
+// Zeile, die in Wahrheit ein CALL einer im SELBEN File deklarierten
+// Routine mit var/out-Formalparameter an genau dieser Arg-Position
+// ist - der Call FUELLT die Variable. Das 3-Klassen-Modell haette den
+// pessimistic-Write laengst registriert, wenn der Call im AST laege;
+// die Zensus-FPs sind die Faelle, in denen der Call-Pfad FEHLT
+// (Headless-Method-Pattern verliert Outer-Body-nkCalls; repeat/until-
+// Bedingungen liegen gar nicht als Knoten vor). Die Signatur-
+// Aufloesung ist STRENGER als der pessimistic-Write (sie verlangt den
+// var/out-BEWEIS aus allen gleichnamigen Signaturen) und bleibt damit
+// innerhalb der etablierten Policy - keine neue FN-Klasse.
+// Konservativ per Konstruktion:
+//   * nur BARE Args (Argtext == Var-Name; 'x[i]'/'@x'/casts nie),
+//   * nur UNqualifizierte Calls ('obj.Foo(' koennte eine namensgleiche
+//     Fremdklassen-Methode sein -> nicht aufloesen),
+//   * Overloads AND-gemergt: die Position muss in ALLEN gleichnamigen
+//     Signaturen var/out sein; parameterlose Redecls ('function X;
+//     external ...') mergen auf leer = Name unaufloesbar,
+//   * cross-unit/unaufloesbar -> kein Write, Fund bleibt.
+// Reine Write-Registrierung -> monoton, nie neue Funde.
+// ============================================================
+
+function ParseSigParamFlags(const ParamsLow: string;
+  out Flags: TArray<Boolean>): Boolean;
+// Zerlegt den Klammer-Inhalt einer Signatur '(a: X; var b, c: Y; out d: Z)'
+// (bereits lowercase + comment/string-stripped) in Formalparameter-
+// Positionen: Flags[i] = True wenn Position i var/out ist. Result=False ->
+// unparsbar (z.B. '[ref] const'-Attribut) - der Aufrufer merged den Namen
+// dann auf leer (unaufloesbar, Fund bleibt).
+var
+  i, L, Depth, GStart : Integer;
+
+  function AppendGroup(const G: string): Boolean;
+  var
+    T, NamesPart : string;
+    IsVO : Boolean;
+    cp, n, k : Integer;
+  begin
+    Result := True;
+    T := Trim(G);
+    if T = '' then Exit;                       // '()' -> 0 Positionen
+    if T[1] = '[' then Exit(False);            // '[ref] const ...' -> unparsbar
+    IsVO := T.StartsWith('var ') or T.StartsWith('out ');
+    // Namens-Teil = vor dem ':' (untypisiertes 'var buf' = ganze Gruppe).
+    // Modifier-Woerter enthalten kein Komma -> Zaehlung bleibt korrekt.
+    cp := Pos(':', T);
+    if cp > 0 then NamesPart := Copy(T, 1, cp - 1) else NamesPart := T;
+    n := 1;
+    for k := 1 to Length(NamesPart) do
+      if NamesPart[k] = ',' then Inc(n);
+    for k := 1 to n do
+      Flags := Flags + [IsVO];
+  end;
+
+begin
+  Flags := nil;
+  Result := True;
+  L := Length(ParamsLow);
+  Depth := 0;
+  GStart := 1;
+  for i := 1 to L do
+    case ParamsLow[i] of
+      '(', '[': Inc(Depth);
+      ')', ']': Dec(Depth);
+      ';': if Depth = 0 then
+           begin
+             if not AppendGroup(Copy(ParamsLow, GStart, i - GStart)) then
+               Exit(False);
+             GStart := i + 1;
+           end;
+    end;
+  if not AppendGroup(Copy(ParamsLow, GStart, L - GStart + 1)) then
+    Exit(False);
+end;
+
+function BuildSameFileVarOutIndex(Lines: TStringList)
+  : TDictionary<string, TArray<Boolean>>;
+// Scannt die GESTRIPPTE Quelle (Interface + Implementation, Multi-Line-
+// Kommentare via StripLineEx-State) nach Routinen-Headern und baut
+// Name -> var/out-Flag je Parameterposition. Key = letztes Namenssegment
+// ('TFoo.Bar' -> 'bar', so wie der Call im Body lautet); Generics im
+// Namen ('TFoo<T>.Bar') werden uebersprungen. Mehrzeilige Parameterlisten
+// werden bis zur schliessenden Klammer eingesammelt (Cap 40 Zeilen).
+const
+  KWS : array[0..3] of string =
+    ('procedure ', 'function ', 'constructor ', 'destructor ');
+var
+  State : TLineStripState;
+  i, k, p, e, Depth, Guard : Integer;
+  S, T, Name, Params : string;
+  Flags, Old, Merged : TArray<Boolean>;
+  Matched : Boolean;
+
+  procedure Merge(const AName: string; const AFlags: TArray<Boolean>);
+  // Overload-Merge: AND je Position, gekappt auf die kuerzere Liste.
+  // Leere Liste (parameterlose Redecl / unparsbare Signatur) macht den
+  // Namen damit dauerhaft unaufloesbar - konservativ (Fund bleibt).
+  var
+    NewLen, m : Integer;
+  begin
+    if AName = '' then Exit;
+    if Result.TryGetValue(AName, Old) then
+    begin
+      NewLen := Length(Old);
+      if Length(AFlags) < NewLen then NewLen := Length(AFlags);
+      SetLength(Merged, NewLen);
+      for m := 0 to NewLen - 1 do
+        Merged[m] := Old[m] and AFlags[m];
+      Result.AddOrSetValue(AName, Merged);
+    end
+    else
+      Result.Add(AName, Copy(AFlags));
+  end;
+
+begin
+  Result := TDictionary<string, TArray<Boolean>>.Create;
+  if Lines = nil then Exit;
+  State := Default(TLineStripState);
+  i := 0;
+  while i < Lines.Count do
+  begin
+    S := LowerCase(StripLineEx(Lines[i], State));
+    Inc(i);
+    T := TrimLeft(S);
+    if T.StartsWith('class ') then T := TrimLeft(Copy(T, 7, MaxInt));
+    Matched := False;
+    for k := 0 to High(KWS) do
+      if T.StartsWith(KWS[k]) then
+      begin
+        T := TrimLeft(Copy(T, Length(KWS[k]) + 1, MaxInt));
+        Matched := True;
+        Break;
+      end;
+    if not Matched then Continue;
+    // Namenskette: Idents + '.' + optionale Generics; letztes Segment zaehlt.
+    p := 1;
+    Name := '';
+    while p <= Length(T) do
+    begin
+      if IsIdentChar(T[p]) then
+      begin
+        e := p;
+        while (e <= Length(T)) and IsIdentChar(T[e]) do Inc(e);
+        Name := Copy(T, p, e - p);
+        p := e;
+      end
+      else if T[p] = '<' then
+      begin
+        Depth := 1;
+        Inc(p);
+        while (p <= Length(T)) and (Depth > 0) do
+        begin
+          if T[p] = '<' then Inc(Depth)
+          else if T[p] = '>' then Dec(Depth);
+          Inc(p);
+        end;
+      end
+      else if T[p] = '.' then
+        Inc(p)
+      else
+        Break;
+    end;
+    while (p <= Length(T)) and (T[p] = ' ') do Inc(p);
+    if Name = '' then Continue;
+    if (p > Length(T)) or (T[p] <> '(') then
+    begin
+      // Parameterlose Decl bzw. Headless-Redecl ('function X; external') ->
+      // Konflikt-Merge auf leer: Name unaufloesbar, Funde bleiben.
+      Merge(Name, nil);
+      Continue;
+    end;
+    // Parameter-Text einsammeln, ggf. ueber Folgezeilen (Cap 40).
+    Params := '';
+    Depth := 1;
+    Inc(p);
+    Guard := 0;
+    repeat
+      while (p <= Length(T)) and (Depth > 0) do
+      begin
+        if T[p] = '(' then Inc(Depth)
+        else if T[p] = ')' then
+        begin
+          Dec(Depth);
+          if Depth = 0 then Break;
+        end;
+        Params := Params + T[p];
+        Inc(p);
+      end;
+      if Depth > 0 then
+      begin
+        if (i >= Lines.Count) or (Guard >= 40) then Break;
+        T := LowerCase(StripLineEx(Lines[i], State));
+        Inc(i);
+        Inc(Guard);
+        Params := Params + ' ';
+        p := 1;
+      end;
+    until Depth = 0;
+    if Depth <> 0 then Continue;               // unbalanciert -> ignorieren
+    if ParseSigParamFlags(Params, Flags) then
+      Merge(Name, Flags)
+    else
+      Merge(Name, nil);                        // unparsbar -> unaufloesbar
+  end;
+end;
+
+function LineHasVarOutArgWriteFor(const LLow, NameLow: string;
+  SigIdx: TDictionary<string, TArray<Boolean>>;
+  Shadow: TDictionary<string, Integer>): Boolean;
+// True wenn die (gestrippte, gelowerte) Zeile einen UNqualifizierten Call
+// '<name>(args)' enthaelt, dessen Name via SigIdx aufgeloest ist und
+// NameLow dort BARE an einer Position steht, die in ALLEN gleichnamigen
+// Signaturen var/out ist. Shadow = VarMap der Methode: ist der Call-Name
+// selbst eine getrackte Local (proc-Pointer-Var 'CB(1, 2)'), wird NICHT
+// aufgeloest - der Call geht an die Variable, nicht an die Routine.
+// Mehrzeilige Calls: nur die auf DIESER Zeile abgeschlossenen Args
+// (Komma bzw. ')') werden gewertet - das letzte, unvollstaendige Arg
+// bewusst nicht (konservativ).
+var
+  i, e, j, k, L, Depth, ArgIdx, ArgStart : Integer;
+  Token : string;
+  Flags : TArray<Boolean>;
+  Prev : Char;
+
+  function ArgHit(AStart, AEnd, AIdx: Integer): Boolean;
+  begin
+    Result := (AIdx <= High(Flags)) and Flags[AIdx]
+          and (Trim(Copy(LLow, AStart, AEnd - AStart)) = NameLow);
+  end;
+
+begin
+  Result := False;
+  if (LLow = '') or (NameLow = '') or (SigIdx = nil) then Exit;
+  L := Length(LLow);
+  i := 1;
+  while i <= L do
+  begin
+    if IsIdentChar(LLow[i]) and ((i = 1) or not IsIdentChar(LLow[i - 1])) then
+    begin
+      e := i;
+      while (e <= L) and IsIdentChar(LLow[e]) do Inc(e);
+      Token := Copy(LLow, i, e - i);
+      Prev := #0;
+      j := i - 1;
+      while (j >= 1) and (LLow[j] = ' ') do Dec(j);
+      if j >= 1 then Prev := LLow[j];
+      j := e;
+      while (j <= L) and (LLow[j] = ' ') do Inc(j);
+      if (Prev <> '.') and (j <= L) and (LLow[j] = '(')
+         and ((Shadow = nil) or not Shadow.ContainsKey(Token))
+         and SigIdx.TryGetValue(Token, Flags) and (Length(Flags) > 0) then
+      begin
+        Depth := 1;
+        ArgIdx := 0;
+        k := j + 1;
+        ArgStart := k;
+        while (k <= L) and (Depth > 0) do
+        begin
+          case LLow[k] of
+            '(', '[': Inc(Depth);
+            ']': Dec(Depth);
+            ')': begin
+                   Dec(Depth);
+                   if (Depth = 0) and ArgHit(ArgStart, k, ArgIdx) then
+                     Exit(True);
+                 end;
+            ',': if Depth = 1 then
+                 begin
+                   if ArgHit(ArgStart, k, ArgIdx) then Exit(True);
+                   Inc(ArgIdx);
+                   ArgStart := k + 1;
+                 end;
+          end;
+          Inc(k);
+        end;
+      end;
+      i := e;
+    end
+    else
+      Inc(i);
+  end;
+end;
+
+function HasAdjacentFpcHideMarker(const RawLine, NameLow: string): Boolean;
+// Zensus-Triage 2026-07-25, H3: FPC-'{%H-}'-Suppression an der Deklaration.
+// ACHTUNG, bewusste Ausnahme von der 'Kommentare zaehlen nie'-Regel:
+// '{%H-}' IST ein Kommentar (FPC-Direktive 'Hint an dieser Stelle
+// unterdruecken') - genau deshalb wird hier die ROHE Quellzeile geprueft,
+// nicht die gestrippte (dort ist der Marker weggeblankt). Der Autor hat
+// den Hint an dieser Decl EXPLIZIT unterdrueckt (Lazarus-Konvention,
+// z.B. 'FillChar-gefuellte' Puffer) - SCA166 respektiert den Intent.
+// Adjazenz-Pflicht: der Marker muss (Spaces toleriert) DIREKT vor oder
+// nach dem Var-Namen stehen - ein '{%H-}' an einer ANDEREN Var derselben
+// Zeile suppresst nicht mit (H3-Gegenprobe HMarkerOtherVar_StillFlagged).
+var
+  L : string;
+  P, NL, LL, q : Integer;
+begin
+  Result := False;
+  if (RawLine = '') or (NameLow = '') then Exit;
+  L := LowerCase(RawLine);
+  if Pos('{%h-}', L) = 0 then Exit;
+  NL := Length(NameLow);
+  LL := Length(L);
+  P := 1;
+  while True do
+  begin
+    P := PosEx(NameLow, L, P);
+    if P = 0 then Exit;
+    if ((P = 1) or not IsIdentChar(L[P - 1])) and
+       ((P + NL > LL) or not IsIdentChar(L[P + NL])) then
+    begin
+      // Marker direkt VOR dem Namen ('{%H-}Buf: ...')
+      q := P - 1;
+      while (q >= 1) and (L[q] = ' ') do Dec(q);
+      if (q >= 5) and (Copy(L, q - 4, 5) = '{%h-}') then Exit(True);
+      // Marker direkt NACH dem Namen ('Buf{%H-}: ...')
+      q := P + NL;
+      while (q <= LL) and (L[q] = ' ') do Inc(q);
+      if Copy(L, q, 5) = '{%h-}' then Exit(True);
+    end;
+    P := P + NL;
+  end;
+end;
+
+function IsFileDeclaredTypeName(Lines: TStringList;
+  const NameLow: string): Boolean;
+// Zensus-Triage 2026-07-25, H5 (Symptom-Gate keyword-misparse): traegt der
+// gemeldete Var-NAME im selben File eine TYP-Deklaration ('<name> =
+// class/record/...'), ist der nkLocalVar-Knoten mit hoher Sicherheit eine
+// fehlgeparste Decl (der Parser hat einen Typnamen als Local eingesammelt)
+// - nie eine echte Variable. Gestrippte Zeilen (Kommentare zaehlen nie),
+// optionale Generics ('TFoo<T> = class'). Restrisiko einer ECHTEN Local,
+// die exakt wie ein in-File-Typ heisst ('var Data: X' + 'Data = record'):
+// bewusst akzeptiert - solches Shadowing ist in realem Code praktisch
+// inexistent und das Symptom (Typname als Var gemeldet) dominiert.
+const
+  TYPE_KWS : array[0..6] of string =
+    ('class', 'record', 'packed', 'object', 'interface', 'dispinterface',
+     'type');
+var
+  i, p, e, Depth : Integer;
+  T, Kw : string;
+begin
+  Result := False;
+  if (Lines = nil) or (NameLow = '') then Exit;
+  for i := 0 to Lines.Count - 1 do
+  begin
+    if Pos(NameLow, LowerCase(Lines[i])) = 0 then Continue;   // Quick-Reject
+    T := TrimLeft(LowerCase(StripCommentsAndStrings(Lines[i])));
+    if not T.StartsWith(NameLow) then Continue;
+    p := Length(NameLow) + 1;
+    if (p <= Length(T)) and IsIdentChar(T[p]) then Continue;  // Wortgrenze
+    while (p <= Length(T)) and (T[p] = ' ') do Inc(p);
+    if (p <= Length(T)) and (T[p] = '<') then                 // Generics
+    begin
+      Depth := 1;
+      Inc(p);
+      while (p <= Length(T)) and (Depth > 0) do
+      begin
+        if T[p] = '<' then Inc(Depth)
+        else if T[p] = '>' then Dec(Depth);
+        Inc(p);
+      end;
+      while (p <= Length(T)) and (T[p] = ' ') do Inc(p);
+    end;
+    if (p > Length(T)) or (T[p] <> '=') then Continue;
+    Inc(p);
+    while (p <= Length(T)) and (T[p] = ' ') do Inc(p);
+    e := p;
+    while (e <= Length(T)) and IsIdentChar(T[e]) do Inc(e);
+    Kw := Copy(T, p, e - p);
+    for var kk := 0 to High(TYPE_KWS) do
+      if Kw = TYPE_KWS[kk] then Exit(True);
+  end;
+end;
+
+// ============================================================
 // HAUPT-LOGIK
 // ============================================================
 
 class procedure TUninitVarDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>;
   AContext: TAnalyzeContext; ARecordTypes: TDictionary<string, Boolean>;
-  const ADirLines: TArray<Integer>);
+  const ADirLines: TArray<Integer>;
+  ASigVarOut: TDictionary<string, TArray<Boolean>>);
 var
   LocalVars        : TList<TAstNode>;
   Assigns, Calls, Fors : TList<TAstNode>;
@@ -1725,6 +2111,23 @@ var
           end;
           // nur ein Methoden-Call (mit '('), kein Feld-Zugriff 'rec.field'
           if (Method <> '') and (j <= LL) and (L[j] = '(') then
+            ApplyReceiverInit(Receiver, Method, Node.Line)
+          // Zensus-Triage 2026-07-25, Hook 1a: PARAMETERLOSER Record-Init
+          // im Expression-Kontext. 'sz := tmp.Init shr 1' (mormot
+          // TSynTempBuffer, Zensus mormot.lib.sspi:2211) initialisiert tmp
+          // via Init-Methode OHNE Klammern - Self ist var-Parameter, der
+          // Call FUELLT den Receiver. Die '('-Pflicht oben liess den Read
+          // an dieser Zeile zaehlen, waehrend der pessimistic-Write erst
+          // auf der Folgezeile lag -> read-before-write-FP. Parenlos ist
+          // ein Member-Zugriff lexikalisch nicht von einem Feld-READ
+          // unterscheidbar, deshalb GILT hier - anders als im '('-Zweig -
+          // NUR die Init-Verb-Allowlist (dieselbe Vertrauensstufe wie das
+          // bestehende cross-unit-Gate in ApplyReceiverInit). Restrisiko
+          // eines FELDES namens init/done/reset/..., das gelesen wird:
+          // bewusst akzeptiert (Gegenprobe ParenlessNonInitMemberRead_
+          // StillFlagged sichert, dass normale Feld-Reads Fund bleiben).
+          // Nur Write-Registrierung -> monoton, nie neue Funde.
+          else if (Method <> '') and IsInitVerb(Method) then
             ApplyReceiverInit(Receiver, Method, Node.Line);
         end;
       end
@@ -2174,6 +2577,30 @@ var
         // Hook 4: param-misparse (Signatur-/proc-Typ-Parameter als Locals),
         // s. IsParamMisparseDeclLine.
         if IsParamMisparseDeclLine(DeclLow, LowerCase(LV.Name)) then Continue;
+        // Zensus-Triage 2026-07-25, H2: Inline-const-Ident. 'const X =
+        // expr;' im BODY deklariert eine KONSTANTE - X ist ab der Decl
+        // immer initialisiert, ein uninit-Read ist kategorisch unmoeglich.
+        // Der PhaseC-const-Scan (Inkrement B) registriert bereits die
+        // var/out-Writes der RHS-Args - hier geht es um X SELBST, falls
+        // der Parser es als nkLocalVar einsammelt (die 'const X ='-Zeile
+        // matcht IsConstDeclLine oben NICHT, weil 'const' selbst als
+        // fuehrender Ident gelesen wird). Namens-Gate: der Ident direkt
+        // hinter 'const' muss der Var-Name sein - 'const c = 1; var x'
+        // auf einer Zeile suppresst x nicht mit.
+        var DeclT := TrimLeft(DeclLow);
+        if DeclT.StartsWith('const ') then
+        begin
+          var cp := 7;
+          while (cp <= Length(DeclT)) and (DeclT[cp] = ' ') do Inc(cp);
+          var ce := cp;
+          while (ce <= Length(DeclT)) and IsIdentChar(DeclT[ce]) do Inc(ce);
+          if Copy(DeclT, cp, ce - cp) = LowerCase(LV.Name) then Continue;
+        end;
+        // Zensus-Triage 2026-07-25, H3: FPC-'{%H-}'-Marker adjazent zum
+        // Var-Namen auf der ROHEN Decl-Zeile = explizite Autor-Suppression
+        // (Begruendung + Kommentar-Ausnahme s. HasAdjacentFpcHideMarker).
+        if HasAdjacentFpcHideMarker(Lines[LV.Line - 1], LowerCase(LV.Name)) then
+          Continue;
       end;
       // 'absolute'-Aliase ueberspringen: 'c1: TARGB absolute color1;' macht
       // c1 zum Alias der bestehenden Variable color1 - eigene Storage gibt
@@ -2352,6 +2779,12 @@ var
       // (LMsg.msg_name := @LAddr; RecvMsg fuellt) - konservativ als Write an
       // der @-Zeile werten (FN-tolerant, spiegelt Compiler-Verhalten; ein
       // reiner @-Leser ohne jeden Fill ist eine akzeptierte FN-Klasse).
+      // Zensus-Triage 2026-07-25, H4: dieser Scan deckt auch das
+      // GetProcAddress-Idiom '@X := GetProcAddress(...)' ab (LHS-
+      // Adressnahme = Write auf X an der Zeile; der Read-Scan skippt
+      // '@'-Vorkommen ohnehin) - kein eigener Hook noetig, per Tests
+      // GetProcAddressAtLhs_NoFinding / ReadBeforeAtLhsAssign_StillFlagged
+      // abgesichert.
       if StrippedBuilt then
       begin
         // A3b-Fix: auch @<alias> zaehlt fuers ZIEL (Indy: LMsg.msg_name
@@ -2425,6 +2858,35 @@ var
               P.FirstWriteLine := WithLine;
             if Length(P.WriteLines) < 64 then
               P.WriteLines := P.WriteLines + [WithLine];
+            Break;
+          end;
+        end;
+      end;
+      // Zensus-Triage 2026-07-25, Hook 1b: Same-File-Signatur-Aufloesung.
+      // Steht die Variable BARE an einer Arg-Position eines unqualifizierten
+      // Calls, dessen Formalparameter in ALLEN gleichnamigen Signaturen des
+      // Files var/out ist, FUELLT der Call die Variable -> Write an der
+      // Call-Zeile. Greift genau dort, wo der AST-Call-Pfad fehlt (Headless-
+      // Pattern, repeat/until) - liegt der Call im AST, hat der pessimistic-
+      // Write laengst registriert (Doppel-Registrierung ist idempotent).
+      // VarMap als Shadow-Gate: 'CB(1, 2)' auf eine getrackte proc-Pointer-
+      // Local loest NICHT auf (der Call geht an die Variable - ihr Read
+      // bleibt Fund, s. ProcPointerVarReadBeforeWrite_StillFlagged).
+      // Nur Write-Registrierung -> monoton, nie neue Funde.
+      if StrippedBuilt and (ASigVarOut <> nil) and (ASigVarOut.Count > 0) then
+      begin
+        for var svi := 0 to High(StrippedLow) do
+        begin
+          if Pos(P.NameLow, StrippedLow[svi]) = 0 then Continue;
+          var SvLine := StrippedFrom0 + svi + 1;
+          if IsLineInRanges(SvLine, NestedRanges) then Continue;
+          if LineHasVarOutArgWriteFor(StrippedLow[svi], P.NameLow,
+                                      ASigVarOut, VarMap) then
+          begin
+            if (P.FirstWriteLine = 0) or (SvLine < P.FirstWriteLine) then
+              P.FirstWriteLine := SvLine;
+            if Length(P.WriteLines) < 64 then
+              P.WriteLines := P.WriteLines + [SvLine];
             Break;
           end;
         end;
@@ -2630,6 +3092,15 @@ var
       if IsVarReadInNestedRoutineFromSource(Lines, P.DeclLine, P.NameLow) then
         Continue;
 
+      // Zensus-Triage 2026-07-25, H5 (Symptom-Gate keyword-misparse): der
+      // gemeldete Var-NAME traegt im File eine eigene TYP-Deklaration
+      // ('<name> = class/record/...') -> fehlgeparste Decl, kein echter
+      // Local (Details s. IsFileDeclaredTypeName). Emit-seitig statt in
+      // der Inventur, damit der File-Scan nur fuer die wenigen Emit-
+      // Kandidaten laeuft (Perf) - fuer die Fundmenge aequivalent.
+      if IsFileDeclaredTypeName(Lines, P.NameLow) then
+        Continue;
+
       if P.FirstWriteLine = 0 then
       begin
         // B Hook 3 (Triage 2026-07-25): FPC-Decl-Initializer ('size: Int64
@@ -2786,6 +3257,9 @@ var
   CondR    : TList<TAstNode>;
   DirLines : TArray<Integer>;
   n        : Integer;
+  SigVarOut : TDictionary<string, TArray<Boolean>>;
+  SigLines  : TStringList;
+  SigCached : Boolean;
 begin
   if UnitNode = nil then Exit;
 
@@ -2812,6 +3286,19 @@ begin
   finally
     CondR.Free;
   end;
+  // Zensus-Triage 2026-07-25, Hook 1b: Same-File-Signaturindex EINMAL pro
+  // File bauen (Interface + Implementation der gestrippten Quelle) und an
+  // alle AnalyzeMethod-Aufrufe durchreichen. Lines kommen aus demselben
+  // Cache, den auch AnalyzeMethod nutzt.
+  SigVarOut := nil;
+  SigLines := AcquireLines(FileName, SigCached, CtxFileTextCache(AContext));
+  try
+    if SigLines <> nil then
+      SigVarOut := BuildSameFileVarOutIndex(SigLines);
+  finally
+    ReleaseLines(SigLines, SigCached);
+  end;
+  try
   // Value-Type-Records dieser Unit einsammeln: ein Methodenaufruf auf einer
   // record-typisierten lokalen Variablen initialisiert deren Felder (Self ist
   // var) - siehe ProcessCall. nkClass/Interface NICHT. Hinweis: das alte
@@ -2830,12 +3317,16 @@ begin
     Methods := UnitNode.FindAll(nkMethod);
     try
       for M in Methods do
-        AnalyzeMethod(M, FileName, Results, AContext, RecTypes, DirLines);
+        AnalyzeMethod(M, FileName, Results, AContext, RecTypes, DirLines,
+                      SigVarOut);
     finally
       Methods.Free;
     end;
   finally
     RecTypes.Free;
+  end;
+  finally
+    SigVarOut.Free;
   end;
 end;
 
