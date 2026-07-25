@@ -239,6 +239,7 @@ contains
   uSonarConfig in 'sources\Infrastructure\uSonarConfig.pas',
   uSonarPull in 'sources\Infrastructure\uSonarPull.pas',
   uStaticAnalyzer2 in 'sources\Infrastructure\uStaticAnalyzer2.pas',
+  uParallelScan in 'sources\Infrastructure\uParallelScan.pas',
   uProjectFiles in 'sources\Infrastructure\uProjectFiles.pas',
   uNotIncludedInProject in 'sources\Detectors\uNotIncludedInProject.pas',
   uStaticFiles in 'sources\Infrastructure\uStaticFiles.pas',
