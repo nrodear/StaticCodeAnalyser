@@ -25,7 +25,10 @@ unit uGetMemWithoutFreeMem;
 // Erkennung (lexisch, narrow):
 //   * Strip Strings + Kommentare.
 //   * Pro Vorkommen von GetMem|AllocMem|ReallocMem:
-//     - 400 Zeichen Lookahead-Fenster nach dem Call.
+//     - 400 Zeichen Lookahead-Fenster nach dem Call, hart geclampt am
+//       naechsten Routinen-Header (procedure/function/constructor/
+//       destructor) - FreeMem in der Nachbar-Routine zaehlt NICHT als
+//       lokales Pairing (Doku-Quickwins 2026-07-25).
 //     - Erwarte FreeMem|FreeMemAndNil im Fenster.
 //     - Erwarte `try` VOR dem FreeMem (try kommt VOR FreeMem im Snippet).
 //     - Wenn FreeMem fehlt -> Skip (custom Allocator oder Ownership-Transfer).
@@ -67,6 +70,11 @@ class procedure TGetMemWithoutFreeMemDetector.AnalyzeUnit(UnitNode: TAstNode;
 const
   LOOK_AHEAD = 400;  // groesseres Fenster als UnpairedLock - Buffer-Code
                      // hat oft mehr Zeilen zwischen Acquire und Release.
+  // Doku-Quickwins 2026-07-25: lexikalische Routinen-Grenzen fuer den
+  // FreeMem-Lookahead - ein Header-Keyword im Fenster bedeutet, dass die
+  // aktuelle Routine vorher endet.
+  ROUTINE_HEADERS: array[0..3] of string =
+    ('procedure', 'function', 'constructor', 'destructor');
 var
   Lines    : TStringList;
   Cached   : Boolean;
@@ -148,6 +156,23 @@ begin
 
       // Snippet nach dem Alloc (max 400 Zeichen) lowercased.
       Snippet := Copy(CodeLow, AfterPos, LOOK_AHEAD);
+
+      // FP-Guard D (Doku-Quickwins 2026-07-25): Routinen-Grenzen-Clamp.
+      // Das Lookahead-Fenster lief bisher ueber das Routinen-Ende hinaus:
+      // ein FreeMem in der NACHBAR-Routine (Allocator/Factory- bzw.
+      // ctor/dtor-Paare) galt faelschlich als lokales Pairing und loeste
+      // den Fund aus (dominante FP-Klasse, ~87 % Sample-FP). Fenster daher
+      // am naechsten Routinen-Header abschneiden - FreeMem jenseits der
+      // Grenze zaehlt wie "kein Folge-FreeMem" und faellt in den
+      // Ownership-Transfer-Skip. Rein monoton: der Clamp kann nur Funde
+      // entfernen (ein try VOR der Grenze bleibt sichtbar; try UND FreeMem
+      // NACH der Grenze -> beide weg -> Skip statt Fund).
+      for var Kw in ROUTINE_HEADERS do
+      begin
+        var Kp := TDetectorUtils.FindWholeWordLower(Kw, Snippet);
+        if Kp > 0 then
+          Snippet := Copy(Snippet, 1, Kp - 1);
+      end;
       // Audit 2026-07-01: 'try' als GANZES WORT (Substring-Pos matchte
       // 'retry'/'entry' -> ein Wort davor liess einen echten GetMem-Leak
       // faelschlich als geschuetzt durchgehen, False-Negative). 'freemem'

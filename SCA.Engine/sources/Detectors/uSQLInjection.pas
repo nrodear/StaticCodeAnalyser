@@ -74,6 +74,17 @@ type
     // uebersehen das. Severity = lsError, gleiche Kind wie sonstige SQL-Risks.
     class function IsFormatSqlRisk(MethodNode: TAstNode;
       const CallName: string): Boolean; static;
+    // FP-Gate (Doku-Quickwins 2026-07-25, Audit E-1): Positiv-Anker fuer den
+    // LOSEN Keyword-Zweig in IsCallRisk. Die SQL_KW-Patterns ankern zwar
+    // schon am Literal-ANFANG (fuehrendes Quote = Pos-1-Anker auf Literal-
+    // Ebene), aber JEDER Callee qualifizierte sich bisher - Prosa-Literale
+    // in beliebigen Helfern ('SomeFn(''SELECT example'' + x)') wurden
+    // geflaggt. True wenn der literal-befreite Call-Text die SQL-API-
+    // Namenskonvention traegt (sql/query/exec/select als Substring, z.B.
+    // Alcinoe SelectData, ExecuteDirect, RunQuery, BuildSQLWhere). Bewusst
+    // Substring statt WholeWord: Konventions-Match auf zusammengesetzte
+    // Bezeichner. Der Exec-Methoden-Zweig (SQL_CALL_METHODS) bleibt ungated.
+    class function HasSqlApiConvention(const LowNoLit: string): Boolean; static;
     // True wenn ein SQL_KW im Text vorkommt. Sonderfall 'call': der Windows-
     // Batch-Befehl  call "pfad"  (z.B. BuildLogStats RunMSBuild:
     // Format('call "%s"', [...])) kollidiert mit dem SQL-Stored-Proc-CALL.
@@ -1235,6 +1246,20 @@ begin
   Result := True;
 end;
 
+class function TSQLInjectionDetector.HasSqlApiConvention(
+  const LowNoLit: string): Boolean;
+// FP-Gate (Doku-Quickwins 2026-07-25, Audit E-1): der lose Keyword-Zweig
+// darf nur noch feuern, wenn der Call-Code selbst (Callee-Name/Argument-
+// Ausdruecke, String-Literale bereits gestrippt) nach SQL-API aussieht.
+// Konventions-Token aus dem Real-World-Korpus: 'sql' (ExecSQL/BuildSQL...),
+// 'query' (RunQuery/OpenQuery), 'exec' (Execute/ExecuteDirect), 'select'
+// (Alcinoe SelectData). Reine Log-/Util-Helfer (Log, SomeFn, Check) tragen
+// keins davon -> Prosa-Literal mit fuehrendem SQL-Verb bleibt unbeflaggt.
+begin
+  Result := (Pos('sql', LowNoLit) > 0) or (Pos('query', LowNoLit) > 0)
+         or (Pos('exec', LowNoLit) > 0) or (Pos('select', LowNoLit) > 0);
+end;
+
 class function TSQLInjectionDetector.HasSqlKwHit(const Hay: string): Boolean;
 var
   Kw : string;
@@ -1290,6 +1315,12 @@ begin
   // (LogMsg/ShowMessage/...). Der Exec-Methoden-Zweig oben bleibt ungated,
   // damit ein echtes ExecSQL mit Sink-Wort im Text nicht verloren geht.
   if IsNonSqlSink(CallName) then Exit;
+  // FP-Gate (Doku-Quickwins 2026-07-25, Audit E-1): zusaetzlicher Positiv-
+  // Anker - ohne SQL-API-Namenskonvention im literal-befreiten Call-Text
+  // (SelectData/ExecuteDirect/RunQuery/...) ist ein fuehrendes SQL-Verb im
+  // Argument-Literal Prosa ('Log(''SELECT something'' + x)'), kein SQL-Aufbau.
+  // Die Sink-Blockliste oben bleibt als zweite Verteidigungslinie bestehen.
+  if not HasSqlApiConvention(LowNoLit) then Exit;
   // SQL-Schlüsselwort als Stringliteral im Argument (Patterns mit fuehrendem '
   // sind selbst-abgrenzend, brauchen kein WholeWord). 'call'-Sonder-Gate s.
   // HasSqlKwHit (Batch call "pfad" != SQL).

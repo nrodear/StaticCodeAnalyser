@@ -34,7 +34,7 @@ All 194 detector rules. Click an ID for full details.
 | [SCA028](SCA028.md) | DFM event handler references missing method | Error | Bug | `uDfmDeadEvent.pas` |
 | [SCA029](SCA029.md) | Orphan event handler | Hint | Code Smell | `uDfmOrphanHandler.pas` |
 | [SCA030](SCA030.md) | Empty bound event handler | Hint | Code Smell | `uDfmEmptyBoundEvent.pas` |
-| [SCA031](SCA031.md) | DFM component without published field | Error | Bug | `uDfmSchemaMismatch.pas` |
+| [SCA031](SCA031.md) | DFM component without published field | Hint | Code Smell | `uDfmSchemaMismatch.pas` |
 | [SCA032](SCA032.md) | Circular DataSource / Master-Detail loop | Error | Bug | `uDfmCircularDataSource.pas` |
 | [SCA033](SCA033.md) | SQL property built from UI input | Error | Vulnerability | `uDfmSqlFromUserInput.pas` |
 | [SCA034](SCA034.md) | Required field has no UI binding | Warning | Bug | `uDfmRequiredField.pas` |
@@ -127,7 +127,7 @@ All 194 detector rules. Click an ID for full details.
 | [SCA121](SCA121.md) | Function never assigns Result | Error | Bug | `uRoutineResultAssigned.pas` |
 | [SCA122](SCA122.md) | Re-raise of bound exception variable | Warning | Bug | `uReRaiseException.pas` |
 | [SCA123](SCA123.md) | Type-cast immediately before Free / Destroy | Hint | Code Smell | `uCastAndFree.pas` |
-| [SCA124](SCA124.md) | Constructor invoked on instance instead of class | Error | Bug | `uInstanceInvokedConstructor.pas` |
+| [SCA124](SCA124.md) | Constructor invoked on instance instead of class | Warning | Bug | `uInstanceInvokedConstructor.pas` |
 | [SCA125](SCA125.md) | Override whose entire body is `inherited;` | Hint | Code Smell | `uInheritedMethodEmpty.pas` |
 | [SCA126](SCA126.md) | Use Assigned() instead of `= nil` / `<> nil` | Hint | Code Smell | `uNilComparison.pas` |
 | [SCA127](SCA127.md) | Raise the bare `Exception` base class instead of a specific subclass | Warning | Code Smell | `uRaisingRawException.pas` |

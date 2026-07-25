@@ -76,6 +76,11 @@ type
     [Test] procedure Ident_PureAscii_False;
     [Test] procedure Detect_NonAsciiIdentifier_S3;
     [Test] procedure Detect_Utf8Bom_NonAsciiIdent_S3_NoEncodingFinding;
+    // ---- S3 Letter-only-Guard (Doku-Quickwins 2026-07-25) -----------------
+    [Test] procedure Ident_NonLetterEllipsis_False;
+    [Test] procedure Ident_HomoglyphGreekMu_True;
+    [Test] procedure Ident_HomoglyphCyrillic_True;
+    [Test] procedure Detect_NonLetterSymbol_NoS3_ButE1;
   end;
 
 implementation
@@ -548,6 +553,53 @@ begin
     Assert.AreEqual<Integer>(1, CountKind(F, fkSourceNonAsciiIdentifier), 'S3 feuert auch in UTF-8+BOM');
     Assert.AreEqual<Integer>(0, CountKind(F, fkSourceUtf8NoBom), 'kein E1 (hat BOM)');
     Assert.AreEqual<Integer>(0, CountKind(F, fkSourceInvalidUtf8), 'kein E2');
+  finally F.Free; end;
+end;
+
+{ ---- S3 Letter-only-Guard (Doku-Quickwins 2026-07-25) -------------------- }
+// Nur Unicode-LETTER (Kategorie L*) in Code-Position zaehlen als Homoglyph-
+// Kandidat; Symbole/Punktuation (Ellipsis U+2026, Dreiecke U+25B2/25B3) in
+// Identifier-Nachbarschaft sind FPs. Homoglyphen (griech. My, Kyrillisch)
+// MUESSEN weiter feuern.
+
+procedure TTestSourceEncoding.Ident_NonLetterEllipsis_False;
+begin
+  // Fix-Test: Ellipsis U+2026 (Kategorie Po) in Code-Position -> KEIN S3.
+  Assert.IsFalse(TSourceEncodingDetector.HasNonAsciiIdentifier(
+    'X := A ' + Chr($2026) + ' B;'),
+    'U+2026 (Punktuation) darf nicht als Identifier-Homoglyph zaehlen');
+end;
+
+procedure TTestSourceEncoding.Ident_HomoglyphGreekMu_True;
+begin
+  // TP-Gegenprobe: griechisches My U+03BC (Kategorie Ll) im Identifier.
+  Assert.IsTrue(TSourceEncodingDetector.HasNonAsciiIdentifier(
+    'var ' + Chr($03BC) + 'Sec: Integer;'),
+    'griechisches My ist ein Letter -> Homoglyph-TP muss erhalten bleiben');
+end;
+
+procedure TTestSourceEncoding.Ident_HomoglyphCyrillic_True;
+begin
+  // TP-Gegenprobe: kyrillisches o U+043E (Kategorie Ll) im Identifier -
+  // der klassische Confusable zu lateinischem "o".
+  Assert.IsTrue(TSourceEncodingDetector.HasNonAsciiIdentifier(
+    'var L' + Chr($043E) + 'gin: string;'),
+    'kyrillisches o ist ein Letter -> Homoglyph-TP muss erhalten bleiben');
+end;
+
+procedure TTestSourceEncoding.Detect_NonLetterSymbol_NoS3_ButE1;
+var F: TObjectList<TLeakFinding>;
+begin
+  // Detektor-Ebene: U+2026 (UTF-8: E2 80 A6) in Code-Position ohne BOM ->
+  // KEIN S3 (Letter-only-Guard), aber E1 fcMedium bleibt (AnyOutside ist
+  // BEWUSST ungefiltert - Mojibake-Risiko gilt fuer jedes Nicht-ASCII).
+  F := DetectBytes(Cat(Ascii('X := A '),
+                       Cat(TBytes.Create($E2, $80, $A6), Ascii(' B;'))));
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkSourceNonAsciiIdentifier),
+      'Symbol in Code-Position darf S3 nicht ausloesen');
+    Assert.AreEqual<Integer>(1, CountKind(F, fkSourceUtf8NoBom),
+      'E1 muss weiter feuern (Guard ist S3-lokal, monoton)');
   finally F.Free; end;
 end;
 

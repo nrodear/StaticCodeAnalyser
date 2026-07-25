@@ -53,9 +53,10 @@ type
     // die E1-Confidence (String/Code = echtes Mojibake-Risiko = fcMedium; nur
     // Kommentar = vom Compiler verworfen = fcLow). Public fuer Tests.
     class function HasNonAsciiOutsideComments(const Source: string): Boolean; static;
-    // True wenn ein Nicht-ASCII-Zeichen in einem Identifier/Code-Token
-    // (tkIdent/tkUnknown) steht = Homoglyph-/Confusable-Vektor (S3). Public
-    // fuer Tests.
+    // True wenn ein Nicht-ASCII-BUCHSTABE (Unicode-Kategorie L*, Letter-only-
+    // Guard, Doku-Quickwins 2026-07-25) in einem Identifier/Code-Token
+    // (tkIdent/tkUnknown) steht = Homoglyph-/Confusable-Vektor (S3). Symbole/
+    // Punktuation (Ellipsis, Dreiecke) zaehlen NICHT. Public fuer Tests.
     class function HasNonAsciiIdentifier(const Source: string): Boolean; static;
   end;
 
@@ -64,7 +65,7 @@ implementation
 // noinspection-file MultipleExit, TooLongLine, UnsortedUses, UnusedParameter
 
 uses
-  System.Classes, uFileTextCache, uLexer;
+  System.Classes, System.Character, uFileTextCache, uLexer;
 
 function HasSourceExt(const FileName: string): Boolean;
 var
@@ -86,16 +87,24 @@ procedure ScanNonAsciiTokens(const Source: string;
 // Value steht also NICHT in einem Kommentar.
 //   AnyOutside   = Nicht-ASCII in irgendeinem Token (String ODER Code) -> E1-
 //                  Confidence (fcMedium statt fcLow).
-//   InIdentifier = Nicht-ASCII in einem Identifier/Code-Token (tkIdent/tkUnknown)
-//                  -> Homoglyph-/Confusable-Vektor (S3); IdentLine = dessen Zeile.
+//   InIdentifier = Nicht-ASCII-BUCHSTABE in einem Identifier/Code-Token
+//                  (tkIdent/tkUnknown) -> Homoglyph-/Confusable-Vektor (S3);
+//                  IdentLine = dessen Zeile. Letter-only-Guard (Doku-Quickwins
+//                  2026-07-25): nur Unicode-Kategorie L* (TCharacter.IsLetter)
+//                  zaehlt - Symbole/Punktuation in Code-Nachbarschaft (U+2026
+//                  Ellipsis, U+25B2/25B3 Dreiecke) sind keine Homoglyphen-
+//                  Vektoren (FPs); echte Homoglyphen (griech. My, Kyrillisch)
+//                  SIND Letter und bleiben erhalten. AnyOutside bleibt bewusst
+//                  ungefiltert (E1-Mojibake-Risiko gilt fuer JEDES Nicht-ASCII).
 // (Randfall: der Lexer dekodiert #$nnnn-Char-Literale zu echten Zeichen - fuer
 // die Detektor-Nutzung irrelevant, weil beide Aufrufer rohes Nicht-ASCII per
 // AnalyzeFileEncoding.HasNonAscii voraussetzen.)
 var
-  Lex      : TLexer;
-  Tok      : TToken;
-  ch       : Char;
-  TokHasNA : Boolean;
+  Lex        : TLexer;
+  Tok        : TToken;
+  ch         : Char;
+  TokHasNA   : Boolean;
+  TokHasNALt : Boolean;   // Nicht-ASCII-Zeichen ist ein Unicode-LETTER (L*)
 begin
   AnyOutside   := False;
   InIdentifier := False;
@@ -106,13 +115,21 @@ begin
     Tok := Lex.Next;
     while Tok.Kind <> tkEof do
     begin
-      TokHasNA := False;
+      TokHasNA   := False;
+      TokHasNALt := False;
       for ch in Tok.Value do
-        if Ord(ch) >= $80 then begin TokHasNA := True; Break; end;
+        if Ord(ch) >= $80 then
+        begin
+          TokHasNA := True;
+          // Letter-only-Guard fuer S3 (Doku-Quickwins 2026-07-25): weiter-
+          // suchen bis ein Nicht-ASCII-LETTER gefunden ist - erst der macht
+          // das Token zum Homoglyphen-Kandidaten.
+          if ch.IsLetter then begin TokHasNALt := True; Break; end;
+        end;
       if TokHasNA then
       begin
         AnyOutside := True;
-        if (Tok.Kind in [tkIdent, tkUnknown]) and not InIdentifier then
+        if TokHasNALt and (Tok.Kind in [tkIdent, tkUnknown]) and not InIdentifier then
         begin
           InIdentifier := True;
           IdentLine    := Tok.Line;

@@ -205,7 +205,7 @@ type
     fkDfmEmptyBoundEvent,  // Event ist gebunden, Methode existiert, aber
                            // Body leer -> wahrscheinlich vergessener Stub
     fkDfmSchemaMismatch,   // DFM-Komponente hat kein published Field in
-                           // der Form-Klasse -> Streaming-Fehler/Smell
+                           // der Form-Klasse -> toter DFM-Eintrag (Smell)
     fkDfmCircularDataSource, // Zyklus in DataSource.DataSet /
                            // DataSet.MasterSource Kanten -> Endlos-Loop
                            // bei BeforeOpen / Master-Detail-Refresh
@@ -774,7 +774,13 @@ const
     (Name: 'DfmDeadEvent';        FindingType: ftBug;             DefaultSeverity: lsError),   // fkDfmDeadEvent
     (Name: 'DfmOrphanHandler';    FindingType: ftCodeSmell;       DefaultSeverity: lsHint),    // fkDfmOrphanHandler
     (Name: 'DfmEmptyBoundEvent';  FindingType: ftCodeSmell;       DefaultSeverity: lsHint),    // fkDfmEmptyBoundEvent
-    (Name: 'DfmSchemaMismatch';      FindingType: ftBug;          DefaultSeverity: lsError),   // fkDfmSchemaMismatch
+    // Doku-Quickwins 2026-07-25: von ftBug/lsError herabgestuft. Die alte
+    // Kern-Praemisse 'Streaming-Crash' ist faktisch falsch: fehlt das
+    // published Field, liefert FieldAddress nil und der DFM-Streamer laesst
+    // die Komponente stillschweigend eigentuemerlos - KEIN EReadError zur
+    // Laufzeit. Uebrig bleibt ein veralteter/toter DFM-Eintrag = Code-Smell.
+    // (FP-Audit 2026-07-11: 0 TP auf dem gesamten Korpus bei Severity=Error.)
+    (Name: 'DfmSchemaMismatch';      FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkDfmSchemaMismatch
     (Name: 'DfmCircularDataSource';  FindingType: ftBug;          DefaultSeverity: lsError),   // fkDfmCircularDataSource
     (Name: 'DfmSqlFromUserInput';        FindingType: ftVulnerability; DefaultSeverity: lsError),   // fkDfmSqlFromUserInput
     (Name: 'DfmRequiredFieldUnbound';    FindingType: ftBug;          DefaultSeverity: lsWarning), // fkDfmRequiredFieldUnbound
@@ -867,7 +873,7 @@ const
     (Name: 'RoutineResultUnassigned';    FindingType: ftBug;          DefaultSeverity: lsError),   // fkRoutineResultUnassigned
     (Name: 'ReRaiseException';           FindingType: ftBug;          DefaultSeverity: lsWarning), // fkReRaiseException
     (Name: 'CastAndFree';                FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkCastAndFree
-    (Name: 'InstanceInvokedConstructor'; FindingType: ftBug;          DefaultSeverity: lsError),   // fkInstanceInvokedConstructor
+    (Name: 'InstanceInvokedConstructor'; FindingType: ftBug;          DefaultSeverity: lsWarning), // fkInstanceInvokedConstructor - Interim-Demote Error->Warning (SCA124-Backlog: 100 % FP bei Severity=Error auf gesamtem Korpus, bis strukturelle Guards greifen)
     (Name: 'InheritedMethodEmpty';       FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkInheritedMethodEmpty
     (Name: 'NilComparison';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkNilComparison
     (Name: 'RaisingRawException';        FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkRaisingRawException

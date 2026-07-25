@@ -26,6 +26,9 @@ type
     // --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
     [Test] procedure Test_KeywordNamedComponent_Exit_NotReported;
     [Test] procedure Test_KeywordLikeName_NotSuppressed_Reported;
+    // --- Doku-Quickwins 2026-07-25: dekorative Klassen unterdrueckt ---
+    [Test] procedure Test_DecorativeClasses_NotReported;
+    [Test] procedure Test_DecorativeSuppression_RealMismatch_StillReported;
   end;
 
 implementation
@@ -282,7 +285,10 @@ begin
   F := RunOn(DFM, PAS);
   try
     Assert.AreEqual(fkDfmSchemaMismatch, F[0].Kind);
-    Assert.AreEqual(lsError,             F[0].Severity);
+    // Doku-Quickwins 2026-07-25: von lsError herabgestuft - fehlendes
+    // published Field crasht nicht (Streamer skippt still), Schema-
+    // Abweichung ist ein Hint/Code-Smell.
+    Assert.AreEqual(lsHint,              F[0].Severity);
   finally F.Free; end;
 end;
 
@@ -353,6 +359,58 @@ begin
       'Name enthaelt nur ein Keyword als Praefix - exakter SameText-Guard darf ihn nicht unterdruecken');
   finally F.Free; end;
 end;
+// --- Doku-Quickwins 2026-07-25: dekorative Klassen unterdrueckt ---
+
+procedure TTestDfmSchemaMismatch.Test_DecorativeClasses_NotReported;
+// FP-Audit 2026-07-11 (~80 % FP): Label/Bevel/Shape/Image-artige Klassen
+// werden idiomatisch nur im Designer platziert und nie aus Code
+// angesprochen - fehlendes published Field ist dort Absicht. Deckt sowohl
+// die VCL-Basisklassen als auch Library-Descendants (Suffix-Match,
+// z. B. TJvLabel/TDBImage) ab. Kein Field deklariert -> trotzdem 0 Funde.
+const PAS =
+  'unit u; interface uses Vcl.Forms; type TF = class(TForm) end;'#13#10 +
+  'implementation end.';
+const DFM =
+  'object F: TF'#13#10 +
+  '  object lblInfo: TLabel end'#13#10 +
+  '  object bvlTop: TBevel end'#13#10 +
+  '  object shpDot: TShape end'#13#10 +
+  '  object imgLogo: TImage end'#13#10 +
+  '  object lblJv: TJvLabel end'#13#10 +
+  '  object imgDb: TDBImage end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM, PAS);
+  try
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmSchemaMismatch),
+      'dekorative Klassen (Label/Bevel/Shape/Image-artig) duerfen nicht flaggen');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmSchemaMismatch.Test_DecorativeSuppression_RealMismatch_StillReported;
+// TP-Gegenprobe zur dekorativen Suppression: ein Label (unterdrueckt)
+// NEBEN einem echten field-losen TButton - nur der Button zaehlt. Schuetzt
+// gegen eine zu breite Fassung des Suffix-Matches (interaktive Klassen
+// wie TButton enden nicht auf Label/Bevel/Shape/Image).
+const PAS =
+  'unit u; interface uses Vcl.Forms; type TF = class(TForm) end;'#13#10 +
+  'implementation end.';
+const DFM =
+  'object F: TF'#13#10 +
+  '  object lblInfo: TLabel end'#13#10 +
+  '  object btnGo: TButton end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM, PAS);
+  try
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmSchemaMismatch),
+      'echter Mismatch (TButton ohne Field) muss trotz Label-Suppression feuern');
+    Assert.Contains(F[0].MissingVar, 'btnGo');
+  finally F.Free; end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestDfmSchemaMismatch);
 

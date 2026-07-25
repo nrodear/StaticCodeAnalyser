@@ -662,19 +662,19 @@
       "id": "SCA031",
       "kind": "DfmSchemaMismatch",
       "name": "DFM component without published field",
-      "shortDescription": "Component in DFM has no matching published field in the form class",
-      "fullDescription": "DFM streaming requires every named component to have a corresponding published field in the host class. A missing field crashes form construction with EReadError.",
-      "defaultSeverity": "Error",
-      "type": "Bug",
+      "shortDescription": "Component in DFM has no matching published field in the form class - stale DFM entry (schema drift)",
+      "fullDescription": "A named DFM component without a corresponding published field is a schema deviation, not a runtime error: the streamer resolves the field via FieldAddress, gets nil and silently skips the assignment (no EReadError). The component is still created but unreachable from code - a stale/dead DFM entry worth cleaning up.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
       "tags": ["dfm", "streaming"],
       "detectorUnit": "uDfmSchemaMismatch.pas",
       "examples": {
         "bad":  "// .dfm contains object btnSave: TButton, but TForm1 has no btnSave: TButton field",
-        "good": "(add the field to the published section of TForm1)"
+        "good": "(add the field to the published section of TForm1, or remove the stale component from the .dfm)"
       },
       "cleanCodeAttribute": "COMPLETE",
       "impacts": [
-        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
       ]
     },
     {
@@ -2444,8 +2444,8 @@
       "kind": "InstanceInvokedConstructor",
       "name": "Constructor invoked on instance instead of class",
       "shortDescription": "`obj.Create` - invokes constructor as method on an existing instance, skips allocation and re-runs field initialisation over live data",
-      "fullDescription": "Delphi allows a constructor to be invoked on an instance, e.g. `obj.Create;`, but the result is almost never what was intended. When called as a class-method (`TFoo.Create`), the runtime first allocates a fresh memory block via `TObject.NewInstance`, sets up the VMT pointer, and then runs the constructor body. When called on an existing instance, the allocation path is skipped entirely - only the constructor body runs, which re-initialises fields (`FList := TList.Create;` overwrites the previous `FList` without freeing it, managed-type refs get stomped, default values clobber whatever the caller had set). The result is at best a logic bug, at worst memory corruption. Detector heuristic (no type-resolver available): match `nkCall.Name` against `<Ident>.Create[(<args>)][;]` where `<Ident>` starts with a lowercase letter (clearly a variable by Delphi convention, since types use the `T<Upper>` / `I<Upper>` prefix). Skips `Self`, `Result`, `Inherited`, multi-dot paths (`A.B.Create` - ambiguous), cast forms (`T(x).Create`) and class names. Accepts a small known false-positive risk for `TClass`-typed lowercase variables (rare in practice). Maps to Sonar-Delphi `InstanceInvokedConstructorCheck`.",
-      "defaultSeverity": "Error",
+      "fullDescription": "Delphi allows a constructor to be invoked on an instance, e.g. `obj.Create;`, but the result is almost never what was intended. When called as a class-method (`TFoo.Create`), the runtime first allocates a fresh memory block via `TObject.NewInstance`, sets up the VMT pointer, and then runs the constructor body. When called on an existing instance, the allocation path is skipped entirely - only the constructor body runs, which re-initialises fields (`FList := TList.Create;` overwrites the previous `FList` without freeing it, managed-type refs get stomped, default values clobber whatever the caller had set). The result is at best a logic bug, at worst memory corruption. Detector heuristic (no type-resolver available): match `nkCall.Name` against `<Ident>.Create[(<args>)][;]` where `<Ident>` starts with a lowercase letter (clearly a variable by Delphi convention, since types use the `T<Upper>` / `I<Upper>` prefix). Skips `Self`, `Result`, `Inherited`, multi-dot paths (`A.B.Create` - ambiguous), cast forms (`T(x).Create`), class names and receivers following the metaclass naming convention (identifier suffix `Class`, e.g. `itemClass: TFooClass`). Accepts a small known false-positive risk for otherwise-named `TClass`-typed lowercase variables (rare in practice). Interim severity demotion Error -> Warning (2026-07-25): full-corpus audit measured 100 % false positives at Error tier; stays Warning until structural type-resolution guards land. Maps to Sonar-Delphi `InstanceInvokedConstructorCheck`.",
+      "defaultSeverity": "Warning",
       "type": "Bug",
       "tags": ["constructor", "memory", "lifecycle", "sonardelphi"],
       "detectorUnit": "uInstanceInvokedConstructor.pas",

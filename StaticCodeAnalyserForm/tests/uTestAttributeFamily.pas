@@ -37,6 +37,9 @@ type
   public
     [Test] procedure FixtureNoTests_Reported;
     [Test] procedure FixtureWithTest_NotReported;
+    // FP-Fix 2026-07-25 (Doku-Quickwins 2026-07-25): DUnitX-Auto-Discovery.
+    [Test] procedure FixturePublishedProcNoAttr_NotReported;
+    [Test] procedure FixtureWithoutAnyMethod_Reported;
   end;
 
   [TestFixture]
@@ -226,6 +229,51 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkAttributeTestFixtureWithoutTests));
+  finally F.Free; end;
+end;
+
+procedure TTestAttributeTestFixtureWithoutTests.FixturePublishedProcNoAttr_NotReported;
+// FP-Fix 2026-07-25 (Doku-Quickwins 2026-07-25): DUnitX-Auto-Discovery
+// fuehrt published-Methoden auch OHNE [Test]-Attribut aus - Fixture mit
+// published-Prozedur ist kein Zombie.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  [TestFixture]'#13#10 +
+  '  TFooTests = class'#13#10 +
+  '  private'#13#10 +
+  '    FHelper: Integer;'#13#10 +
+  '  published'#13#10 +
+  '    procedure DoesXWithoutAttr;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkAttributeTestFixtureWithoutTests),
+    'published-Prozedur ohne [Test] wird von DUnitX auto-discovered - kein Zombie');
+  finally F.Free; end;
+end;
+
+procedure TTestAttributeTestFixtureWithoutTests.FixtureWithoutAnyMethod_Reported;
+// TP-Gegenprobe (2026-07-25): Fixture ganz ohne Methoden (auch keine
+// published-Sektion) bleibt eine Zombie-Fixture und wird gemeldet.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  [TestFixture]'#13#10 +
+  '  TEmptyTests = class'#13#10 +
+  '  private'#13#10 +
+  '    FData: Integer;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkAttributeTestFixtureWithoutTests) >= 1,
+    'Fixture ohne jede Methode bleibt Zombie-Fund');
   finally F.Free; end;
 end;
 

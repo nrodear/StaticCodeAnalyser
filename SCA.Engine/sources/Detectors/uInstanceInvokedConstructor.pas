@@ -44,8 +44,10 @@ unit uInstanceInvokedConstructor;
 //
 // Bewusste False-Positives (akzeptabel selten):
 //   * `cls.Create` wenn `cls: TFooClass` (class-reference Typ) -> dann
-//     ist der Aufruf legitim. Class-reference-Typen sind in Delphi-Code
-//     sehr selten; Trade-off zugunsten der Lesbarkeit der Heuristik.
+//     ist der Aufruf legitim. Teil-Guard (Doku-Quickwins 2026-07-25):
+//     Receiver-Bezeichner mit Suffix 'Class' (Metaclass-Namenskonvention,
+//     z.B. `itemClass`) werden geskippt; anders benannte class-of-Variablen
+//     bleiben eine bekannte, seltene Rest-FP-Klasse.
 //
 // Sonar-Pendant: InstanceInvokedConstructorCheck
 // https://github.com/integrated-application-development/sonar-delphi/blob/
@@ -153,11 +155,22 @@ function LooksLikeInstance(const Ident: string): Boolean;
 // True wenn Ident mit Lowercase beginnt UND keiner der reservierten Bezeichner
 // (Self/Result/Inherited) ist. Konservative Heuristik - faengt die
 // haeufigste Bug-Form ohne Type-Resolver-Aufwand.
+const
+  METACLASS_SUFFIX = 'Class';
 begin
   if Ident = '' then Exit(False);
   if SameText(Ident, 'Self')      then Exit(False);
   if SameText(Ident, 'Result')    then Exit(False);
   if SameText(Ident, 'Inherited') then Exit(False);
+  // Metaclass-Guard (Doku-Quickwins 2026-07-25, SCA124-Backlog): Bezeichner
+  // mit Suffix 'Class' folgen der class-of-Konvention (`lClass: TFooClass`);
+  // `lClass.Create` ist dann ein LEGITIMER Klassen-Referenz-Ctor-Aufruf und
+  // kein Instanz-statt-Klassen-Bug -> skip. Monotone Suppression: entfernt
+  // ausschliesslich Funde, erzeugt keine neuen Pfade.
+  if (Length(Ident) > Length(METACLASS_SUFFIX)) and
+     SameText(Copy(Ident, Length(Ident) - Length(METACLASS_SUFFIX) + 1,
+       Length(METACLASS_SUFFIX)), METACLASS_SUFFIX) then
+    Exit(False);
   Result := (Ident[1] >= 'a') and (Ident[1] <= 'z');
 end;
 

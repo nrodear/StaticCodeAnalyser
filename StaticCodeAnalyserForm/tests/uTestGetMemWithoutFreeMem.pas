@@ -19,6 +19,10 @@ type
     // Real-World FP-Audit 2026-07-10: escape via Result / lowercase-Feld
     [Test] procedure AllocMemToResult_NoFinding;
     [Test] procedure AllocMemToLowercaseField_NoFinding;
+    // Doku-Quickwins 2026-07-25: Routinen-Grenzen-Clamp fuer den Lookahead
+    [Test] procedure FreeMemOnlyInNextRoutine_NoFinding;
+    [Test] procedure FreeMemFarApartSameRoutine_NoFinding;
+    [Test] procedure PairedNoTryBeforeNextRoutine_StillReported;
   end;
 
 implementation
@@ -215,6 +219,86 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkGetMemWithoutFreeMem),
     'fBuf := AllocMem -> Feld-Lifetime (RAII), kein lokaler Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestGetMemWithoutFreeMem.FreeMemOnlyInNextRoutine_NoFinding;
+// FP-Guard D (Doku-Quickwins 2026-07-25): Das Lookahead-Fenster lief bisher
+// ueber das Routinen-Ende hinaus - das FreeMem der NACHBAR-Routine (hier ein
+// Allocator/Disposer-Paar) galt als lokales Pairing und triggerte den Fund.
+// Mit Routinen-Grenzen-Clamp: FreeMem jenseits des naechsten Routinen-Headers
+// zaehlt nicht -> Ownership-Transfer-Skip, kein Fund.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Alloc;'#13#10 +
+  'var p: PByte;'#13#10 +
+  'begin'#13#10 +
+  '  GetMem(p, 64);'#13#10 +
+  '  Stash(p);'#13#10 +
+  'end;'#13#10 +
+  'procedure DisposeIt(q: Pointer);'#13#10 +
+  'begin'#13#10 +
+  '  FreeMem(q);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkGetMemWithoutFreeMem),
+    'FreeMem in der Nachbar-Routine ist kein lokales Pairing -> kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestGetMemWithoutFreeMem.FreeMemFarApartSameRoutine_NoFinding;
+// Doku-Quickwins 2026-07-25: GetMem und FreeMem liegen in DERSELBEN Routine,
+// aber weiter als das Lookahead-Fenster (400 Zeichen) auseinander -> das
+// FreeMem wird nicht gesehen, der Detektor faellt bewusst in den
+// Ownership-Transfer-Skip (lieber False-Negative als 87 % FP-Quote).
+var
+  SRC: string;
+  i  : Integer;
+  F  : TObjectList<TLeakFinding>;
+begin
+  SRC := 'unit t; implementation'#13#10 +
+         'procedure Foo;'#13#10 +
+         'var p: PByte;'#13#10 +
+         'begin'#13#10 +
+         '  GetMem(p, 1024);'#13#10;
+  for i := 1 to 40 do                       // > 400 Zeichen Fuellcode
+    SRC := SRC + '  DoStuff(p, ' + IntToStr(i) + ');'#13#10;
+  SRC := SRC + '  FreeMem(p);'#13#10'end;';
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkGetMemWithoutFreeMem),
+    'FreeMem ausserhalb des Fensters -> Skip, kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestGetMemWithoutFreeMem.PairedNoTryBeforeNextRoutine_StillReported;
+// TP-Gegenprobe zum Routinen-Grenzen-Clamp: GetMem+FreeMem OHNE try/finally
+// in derselben Routine, DIREKT gefolgt von einer weiteren Routine - der
+// Clamp darf das FreeMem VOR der Grenze nicht wegschneiden, der echte
+// Leak-Treffer muss bleiben.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var p: PByte;'#13#10 +
+  'begin'#13#10 +
+  '  GetMem(p, 1024);'#13#10 +
+  '  DoStuff(p);'#13#10 +
+  '  FreeMem(p);'#13#10 +
+  'end;'#13#10 +
+  'procedure Bar;'#13#10 +
+  'begin'#13#10 +
+  '  Beep;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkGetMemWithoutFreeMem),
+      'FreeMem vor der Routinen-Grenze bleibt ein echter Treffer');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'GetMem(p, 1024'),
+      TFindingHelper.FirstOf(F, fkGetMemWithoutFreeMem).LineNumber,
+      'Fund muss auf der Trigger-Zeile liegen');
   finally F.Free; end;
 end;
 

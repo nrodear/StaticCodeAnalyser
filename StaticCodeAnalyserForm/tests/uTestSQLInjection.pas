@@ -118,6 +118,11 @@ type
     // als Konkat-Term ist sicher; ein echter Var-Term bleibt Fund.
     [Test] procedure SQL_EolConstConcat_NoFinding;
     [Test] procedure SQL_EolConstWithVarConcat_StillReported;
+    // Doku-Quickwins 2026-07-25 (Audit E-1): loser Keyword-Zweig braucht die
+    // SQL-API-Namenskonvention im literal-befreiten Call-Text - Prosa-Literal
+    // mit fuehrendem SQL-Verb in beliebigem Helfer ist kein Fund mehr.
+    [Test] procedure SQL_PlainHelperSelectLiteralConcat_NoFinding;
+    [Test] procedure SQL_SqlTextSelectConcat_StillReported;
   end;
 
 implementation
@@ -1232,6 +1237,46 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
     'echte Var (userInput) neben sLineBreak bleibt SCA003-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_PlainHelperSelectLiteralConcat_NoFinding;
+// Fix-Test (Doku-Quickwins 2026-07-25, Audit E-1): 'Log' ist weder eine
+// bekannte Sink-Funktion (SINK_NAMES kennt nur logmsg/loginfo/...) noch
+// traegt der Call die SQL-API-Namenskonvention (sql/query/exec/select).
+// Das Prosa-Literal mit fuehrendem 'SELECT ' darf den losen Keyword-Zweig
+// nicht mehr feuern lassen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Run(Name: string);'#13#10+
+  'begin'#13#10+
+  '  Log(''SELECT something '' + Name);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+      'Prosa-Literal in Nicht-SQL-Helfer darf kein SQL-Injection-Fund sein');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_SqlTextSelectConcat_StillReported;
+// TP-Gegenprobe zum SQL-API-Konventions-Gate: echtes SQL-Ziel (SQL.Text,
+// H1-Property-Zweig) mit Variablen-Konkat bleibt ein Fund - das neue Gate
+// betrifft ausschliesslich den losen Keyword-Zweig in IsCallRisk.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Run(s: string);'#13#10+
+  'begin'#13#10+
+  '  Query.SQL.Text := ''SELECT * FROM u WHERE id='' + s;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSQLInjection),
+      'SQL.Text mit Variablen-Konkat bleibt SQL-Injection-Fund');
   finally F.Free; end;
 end;
 

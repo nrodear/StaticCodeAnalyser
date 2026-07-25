@@ -28,6 +28,10 @@ type
     [Test] procedure NonCreateCall_NoFinding;
     [Test] procedure MultiDotPath_NoFinding;
 
+    // ---- Metaclass-Guard + Interim-Demote (Doku-Quickwins 2026-07-25) -----
+    [Test] procedure MetaclassSuffixReceiver_NoFinding;
+    [Test] procedure InstanceReceiver_StillReported_AsWarning;
+
     // ---- Finding-Inhalt ----------------------------------------------------
     [Test] procedure Finding_KindAndSeverity;
 
@@ -257,7 +261,55 @@ begin
       end;
     Assert.IsNotNull(Hit, 'fkInstanceInvokedConstructor finding expected');
     Assert.AreEqual(fkInstanceInvokedConstructor, Hit.Kind);
-    Assert.AreEqual(lsError,                      Hit.Severity);
+    // Interim-Demote (SCA124-Backlog 2026-07-25): 100 % FP bei Severity=Error
+    // auf gesamtem Korpus -> Default ist bis zu strukturellen Guards Warning.
+    Assert.AreEqual(lsWarning,                    Hit.Severity);
+  finally F.Free; end;
+end;
+
+procedure TTestInstanceInvokedConstructor.MetaclassSuffixReceiver_NoFinding;
+// Metaclass-Guard (Doku-Quickwins 2026-07-25): 'itemClass' folgt der
+// class-of-Namenskonvention (`itemClass: TFooClass`) - `itemClass.Create`
+// ist ein legitimer Klassen-Referenz-Ctor-Aufruf, kein Instanz-Bug -> skip.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var itemClass: TStringListClass;'#13#10 +
+  'begin itemClass.Create; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkInstanceInvokedConstructor),
+    'Receiver mit Suffix ''Class'' (Metaclass-Konvention) wird nicht geflaggt');
+  finally F.Free; end;
+end;
+
+procedure TTestInstanceInvokedConstructor.InstanceReceiver_StillReported_AsWarning;
+// TP-Gegenprobe zum Metaclass-Guard + Demote: ein echter Instanz-Receiver
+// OHNE 'Class'-Suffix bleibt ein Fund - und traegt die demotete Severity
+// Warning (nicht mehr Error).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var obj: TStringList;'#13#10 +
+  'begin obj.Create; end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := nil;
+    for Fnd in F do
+      if Fnd.Kind = fkInstanceInvokedConstructor then
+      begin
+        Hit := Fnd;
+        Break;
+      end;
+    Assert.IsNotNull(Hit, 'echter Instanz-Ctor-Call bleibt trotz Guard ein Fund');
+    Assert.AreEqual(lsWarning, Hit.Severity,
+      'Interim-Demote: SCA124 meldet als Warning, nicht Error');
   finally F.Free; end;
 end;
 

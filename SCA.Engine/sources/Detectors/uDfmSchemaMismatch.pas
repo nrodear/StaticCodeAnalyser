@@ -15,17 +15,24 @@ unit uDfmSchemaMismatch;
 // ist meist der Trigger, dass der User das Field geloescht hat. Wenn
 // danach im DFM stehen geblieben, hat das DFM einen toten Eintrag.
 //
+// Doku-Quickwins 2026-07-25: Das ist eine Schema-Abweichung, KEIN sicherer
+// Laufzeit-Bug - FieldAddress liefert nil und der Streamer ueberspringt
+// das Field-Setzen stillschweigend (kein EReadError). Deshalb herabgestuft
+// (siehe KIND_META in uSCAConsts) und dekorative Klassen (Label/Bevel/
+// Shape/Image-artige) unterdrueckt: die werden idiomatisch nie aus Code
+// angesprochen, ein fehlendes Field ist dort gaengige Absicht.
+//
 // Phase 1 meldet bewusst NUR die Richtung 'Komponente ohne Field' -
 // die umgekehrte Richtung 'Field ohne Komponente' braucht eine
 // typisierte Property-/Type-Filterung (TNotifyEvent-Properties sind
 // kein DFM-Smell), die fuer Phase 2 ansteht.
 //
-// Schweregrad: lsError, FindingType: ftBug.
+// Schweregrad: lsHint, FindingType: ftCodeSmell (Doku-Quickwins 2026-07-25).
 
 interface
 
 uses
-  System.SysUtils, System.Generics.Collections,
+  System.SysUtils, System.StrUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uComponentGraph, uFormBinder;
 
@@ -79,6 +86,28 @@ var
   begin
     for R in ReclassNames do
       if SameText(AName, R) then Exit(True);
+    Result := False;
+  end;
+
+  function IsDecorativeClass(const AClassRef: string): Boolean;
+  // Doku-Quickwins 2026-07-25 (FP-Audit 2026-07-11, ~80 % FP / 0 TP):
+  // dekorative/reine Anzeige-Klassen (TLabel, TBevel, TShape, TImage und
+  // ihre Library-Varianten TJvLabel/TcxLabel/TDBImage/...) werden
+  // idiomatisch nur im Designer platziert und nie aus Code angesprochen.
+  // Ein fehlendes published Field ist dort gaengige, bewusste Aufraeum-
+  // Praxis, kein Schema-Problem -> komplett unterdruecken. Suffix-Match
+  // (EndsText) statt Exakt-Match, damit die ueblichen Descendant-Namens-
+  // konventionen der Fremd-Libs mitgefangen werden; interaktive Klassen
+  // (TButton, TEdit, TPanel...) enden nie auf diese Suffixe und bleiben
+  // unveraendert Funde.
+  const
+    DecorativeSuffixes: array[0..3] of string = (
+      'Label', 'Bevel', 'Shape', 'Image');
+  var
+    S: string;
+  begin
+    for S in DecorativeSuffixes do
+      if EndsText(S, AClassRef) then Exit(True);
     Result := False;
   end;
 
@@ -139,13 +168,21 @@ begin
       // published Field fallen, HasPublishedField ist hier nicht
       // vertrauenswuerdig. Konservativ nicht melden (siehe Helper oben).
       if IsKeywordReclassifiedName(Cur.Name) then Continue;
+      // Dekorative Anzeige-Klassen (Label/Bevel/Shape/Image-artig) werden
+      // nie aus Code referenziert - fehlendes Field ist dort Absicht.
+      if IsDecorativeClass(Cur.ClassRef) then Continue;
 
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
       F.MethodName := Binding.FormClass.Name;
       F.LineNumber := IntToStr(Cur.Line);
+      // Doku-Quickwins 2026-07-25: Message benennt die Schema-Abweichung
+      // als toten DFM-Eintrag - bewusst OHNE Crash-Behauptung, denn der
+      // Streamer ueberspringt fehlende Fields stillschweigend.
       F.MissingVar := Format(
-        '%s: %s exists in DFM but %s has no published field for it',
+        '%s: %s exists in DFM but %s has no published field for it - '
+        + 'stale DFM entry (schema drift, streamed without error; '
+        + 'component is unreachable from code)',
         [Cur.Name, Cur.ClassRef, Binding.FormClass.Name]);
       F.SetKind(fkDfmSchemaMismatch);
       Results.Add(F);
