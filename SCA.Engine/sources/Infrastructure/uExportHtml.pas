@@ -1522,63 +1522,71 @@ begin
     SB.AppendLine('        "hint-before": "Vorher (Problem)",');
     SB.AppendLine('        "hint-after":  "Nachher (Loesung)"');
     SB.AppendLine('      },');
+    // FR-Block: Nicht-ASCII-Zeichen als JS-Unicode-Escapes (\uXXXX), damit die
+    // Pascal-Quelle ASCII-rein bleibt. ACHTUNG: Delphi-Strings kennen KEIN
+    // Backslash-Escaping - im Literal steht deshalb genau EIN Backslash
+    // ('\u00e9'). Ein doppelter Backslash ('\\u00e9') landet 1:1 im JS und
+    // wird dort zum literalen Text "\u00e9" im Report (Bug FR-i18n,
+    // Doku_06_CLI_LSP_Reporting.md #21, behoben 2026-07-25).
+    // Verifikation: Report erzeugen, Sprache FR waehlen bzw. Output auf
+    // '\\u00' greppen - es darf kein Treffer mit Doppel-Backslash existieren.
     SB.AppendLine('      fr: {');
-    SB.AppendLine('        "lbl-lang": "Langue\\u00a0:",');
-    SB.AppendLine('        "lbl-profile": "Profil\\u00a0:",');
-    SB.AppendLine('        "lbl-file": "Fichier\\u00a0:",');
-    SB.AppendLine('        "lbl-search": "Rechercher\\u00a0:",');
-    SB.AppendLine('        "ph-search": "M\\u00e9thode, fichier, d\\u00e9tail...",');
+    SB.AppendLine('        "lbl-lang": "Langue\u00a0:",');
+    SB.AppendLine('        "lbl-profile": "Profil\u00a0:",');
+    SB.AppendLine('        "lbl-file": "Fichier\u00a0:",');
+    SB.AppendLine('        "lbl-search": "Rechercher\u00a0:",');
+    SB.AppendLine('        "ph-search": "M\u00e9thode, fichier, d\u00e9tail...",');
     SB.AppendLine('        "opt-all": "Tous",');
     SB.AppendLine('        "opt-all-files": "Tous ({0} fichiers)",');
-    SB.AppendLine('        "row-count": "{0} d\\u00e9tections",');
-    SB.AppendLine('        "hint-bar": "Cliquez sur une colonne pour trier &middot; ligne ouvre l\\u2019indice &middot; <kbd>?</kbd> raccourcis",');
+    SB.AppendLine('        "row-count": "{0} d\u00e9tections",');
+    SB.AppendLine('        "hint-bar": "Cliquez sur une colonne pour trier &middot; ligne ouvre l\u2019indice &middot; <kbd>?</kbd> raccourcis",');
     SB.AppendLine('        "th-file": "Fichier",');
-    SB.AppendLine('        "th-sev": "S\\u00e9v\\u00e9rit\\u00e9",');
+    SB.AppendLine('        "th-sev": "S\u00e9v\u00e9rit\u00e9",');
     SB.AppendLine('        "th-type": "Type",');
     SB.AppendLine('        "th-line": "Ligne",');
-    SB.AppendLine('        "th-method": "M\\u00e9thode",');
-    SB.AppendLine('        "th-rule": "R\\u00e8gle",');
-    SB.AppendLine('        "th-detail": "D\\u00e9tail",');
+    SB.AppendLine('        "th-method": "M\u00e9thode",');
+    SB.AppendLine('        "th-rule": "R\u00e8gle",');
+    SB.AppendLine('        "th-detail": "D\u00e9tail",');
     SB.AppendLine('        "sev-err": "Erreurs",');
     SB.AppendLine('        "sev-warn": "Avertissements",');
     SB.AppendLine('        "sev-hint": "Indices",');
     SB.AppendLine('        "sev-total": "Total",');
     SB.AppendLine('        "th-conf": "Confiance",');
-    SB.AppendLine('        "rule-example-note": "Exemple canonique de r\\u00e8gle",');
-    SB.AppendLine('        "chart-sev-title": "R\\u00e9partition par gravit\\u00e9",');
-    SB.AppendLine('        "chart-cat-title": "Cat\\u00e9gories principales",');
-    SB.AppendLine('        "conf-high": "\\u00e9lev\\u00e9e",');
+    SB.AppendLine('        "rule-example-note": "Exemple canonique de r\u00e8gle",');
+    SB.AppendLine('        "chart-sev-title": "R\u00e9partition par gravit\u00e9",');
+    SB.AppendLine('        "chart-cat-title": "Cat\u00e9gories principales",');
+    SB.AppendLine('        "conf-high": "\u00e9lev\u00e9e",');
     SB.AppendLine('        "conf-medium": "moyenne",');
     SB.AppendLine('        "conf-low": "faible",');
-    SB.AppendLine('        "lbl-conf-filter": "d\\u00e9tections fiables uniquement",');
-    SB.AppendLine('        "lbl-base-new": "nouveaux depuis la r\\u00e9f\\u00e9rence",');
-    SB.AppendLine('        "sec-panel-lbl": "D\\u00e9tections li\\u00e9es \\u00e0 la s\\u00e9curit\\u00e9",');
-    SB.AppendLine('        "sec-panel-btn": "afficher uniquement la s\\u00e9curit\\u00e9",');
-    SB.AppendLine('        "health-label": "Score de sant\\u00e9",');
+    SB.AppendLine('        "lbl-conf-filter": "d\u00e9tections fiables uniquement",');
+    SB.AppendLine('        "lbl-base-new": "nouveaux depuis la r\u00e9f\u00e9rence",');
+    SB.AppendLine('        "sec-panel-lbl": "D\u00e9tections li\u00e9es \u00e0 la s\u00e9curit\u00e9",');
+    SB.AppendLine('        "sec-panel-btn": "afficher uniquement la s\u00e9curit\u00e9",');
+    SB.AppendLine('        "health-label": "Score de sant\u00e9",');
     SB.AppendLine('        "health-green": "Sain",');
     SB.AppendLine('        "health-yellow": "Attention",');
     SB.AppendLine('        "health-red": "Critique",');
-    SB.AppendLine('        "health-summary": "{0} erreurs, {1} avertissements dans {2} fichiers\\u00a0; point cl\\u00e9 <b>{3}</b>",');
-    SB.AppendLine('        "hdr-top-files": "Top {0} fichiers \\u00e0 risque (sur {1})",');
-    SB.AppendLine('        "meta-tool": "Outil\\u00a0: {0}",');
-    SB.AppendLine('        "meta-scope": "{0} d\\u00e9tections dans {1} fichiers",');
+    SB.AppendLine('        "health-summary": "{0} erreurs, {1} avertissements dans {2} fichiers\u00a0; point cl\u00e9 <b>{3}</b>",');
+    SB.AppendLine('        "hdr-top-files": "Top {0} fichiers \u00e0 risque (sur {1})",');
+    SB.AppendLine('        "meta-tool": "Outil\u00a0: {0}",');
+    SB.AppendLine('        "meta-scope": "{0} d\u00e9tections dans {1} fichiers",');
     SB.AppendLine('        "btn-sprint": "&#128203; Copier la liste sprint",');
-    SB.AppendLine('        "ttl-sprint": "D\\u00e9tections visibles comme liste Markdown dans le presse-papiers",');
+    SB.AppendLine('        "ttl-sprint": "D\u00e9tections visibles comme liste Markdown dans le presse-papiers",');
     SB.AppendLine('        "btn-share": "&#128279; Partager la vue",');
-    SB.AppendLine('        "ttl-share": "Vue de filtre actuelle comme URL dans le presse-papiers (\\u00e0 partager)",');
+    SB.AppendLine('        "ttl-share": "Vue de filtre actuelle comme URL dans le presse-papiers (\u00e0 partager)",');
     SB.AppendLine('        "btn-kbd":   "&#9000; Raccourcis",');
     SB.AppendLine('        "ttl-kbd":   "Afficher les raccourcis clavier (?)",');
-    SB.AppendLine('        "hdr-top-detectors": "Top {0} d\\u00e9tecteurs (sur {1})",');
+    SB.AppendLine('        "hdr-top-detectors": "Top {0} d\u00e9tecteurs (sur {1})",');
     SB.AppendLine('        "kbd-help-title": "Raccourcis clavier",');
     SB.AppendLine('        "kbd-help-close": "Fermer",');
-    SB.AppendLine('        "sprint-header": "Visibles au total\\u00a0: {0} d\\u00e9tections. Top {1} priorit\\u00e9s\\u00a0:",');
-    SB.AppendLine('        "meta-created": "G\\u00e9n\\u00e9r\\u00e9\\u00a0: {0}",');
-    SB.AppendLine('        "meta-file":    "Fichier\\u00a0: {0}",');
-    SB.AppendLine('        "audience-hint": "<b>Optimis\\u00e9 pour la revue Tech-Lead / Senior-Dev</b> &middot; ' +
-      'priorisation du refactoring. Commencez par les Top D\\u00e9tecteurs (volume le plus important, <span class=\"td-qf\">QF</span> = quick-fix disponible)\\u00a0; le tableau est tri\\u00e9 par s\\u00e9v\\u00e9rit\\u00e9 (erreurs &rarr; indices).",');
-    SB.AppendLine('        "src-snippet-hdr": "Source\\u00a0: {0}, ligne {1}",');
-    SB.AppendLine('        "hint-before": "Avant (probl\\u00e8me)",');
-    SB.AppendLine('        "hint-after":  "Apr\\u00e8s (solution)"');
+    SB.AppendLine('        "sprint-header": "Visibles au total\u00a0: {0} d\u00e9tections. Top {1} priorit\u00e9s\u00a0:",');
+    SB.AppendLine('        "meta-created": "G\u00e9n\u00e9r\u00e9\u00a0: {0}",');
+    SB.AppendLine('        "meta-file":    "Fichier\u00a0: {0}",');
+    SB.AppendLine('        "audience-hint": "<b>Optimis\u00e9 pour la revue Tech-Lead / Senior-Dev</b> &middot; ' +
+      'priorisation du refactoring. Commencez par les Top D\u00e9tecteurs (volume le plus important, <span class=\"td-qf\">QF</span> = quick-fix disponible)\u00a0; le tableau est tri\u00e9 par s\u00e9v\u00e9rit\u00e9 (erreurs &rarr; indices).",');
+    SB.AppendLine('        "src-snippet-hdr": "Source\u00a0: {0}, ligne {1}",');
+    SB.AppendLine('        "hint-before": "Avant (probl\u00e8me)",');
+    SB.AppendLine('        "hint-after":  "Apr\u00e8s (solution)"');
     SB.AppendLine('      }');
     SB.AppendLine('    };');
     SB.AppendLine('    var SCA_LANG = (function() {');
@@ -2393,7 +2401,7 @@ begin
     SB.AppendLine('        var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "sca-baseline.json";');
     SB.AppendLine('        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(a.href);');
     SB.AppendLine('      });');
-    SB.AppendLine('      var TPL = { en: "Baseline: {0} new, {1} existing, {2} fixed", de: "Baseline: {0} neu, {1} bestehend, {2} behoben", fr: "Base: {0} nouveaux, {1} existants, {2} corrig\\u00e9s" };');
+    SB.AppendLine('      var TPL = { en: "Baseline: {0} new, {1} existing, {2} fixed", de: "Baseline: {0} neu, {1} bestehend, {2} behoben", fr: "Base: {0} nouveaux, {1} existants, {2} corrig\u00e9s" };');
     SB.AppendLine('      var bf = document.getElementById("baseFile");');
     SB.AppendLine('      if (bf) bf.addEventListener("change", function(){');
     SB.AppendLine('        var f = bf.files && bf.files[0]; if (!f) return;');

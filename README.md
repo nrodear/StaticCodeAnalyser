@@ -428,6 +428,45 @@ switching themes.
 
 ---
 
+## Scan scope: folder, project or project group (CLI)
+
+Besides the recursive folder scan (`--path <dir>`), the CLI can scan
+exactly what a Delphi project file references. The input flags
+`--path`, `--file`, `--project` and `--project-group` are mutually
+exclusive (invalid combinations exit with code 99):
+
+- `--project <file.dproj>` — analyses exactly the `.pas` files listed
+  in the `.dproj` (its DCCReference list). Units that are only
+  reachable via search paths are **not** included.
+- `--project-group <file.groupproj>` — analyses the union of all
+  projects in the group, deduplicated.
+- `--index-root <dir>` — builds the cross-unit index (used by the
+  unused-/reference-family of detectors) over this directory while
+  still analysing only the resolved file list. Default: the common
+  root of the resolved list. Also valid with `--branch`/`--diff`.
+
+```powershell
+analyser.d12.exe --project D:\repo\MyApp\MyApp.dproj --report-sarif sca.sarif
+analyser.d12.exe --project-group D:\repo\All.groupproj --report-sarif sca.sarif
+
+# Project-only analysis, but index the whole repo so "unused" verdicts
+# see consumers outside the project:
+analyser.d12.exe --project D:\repo\MyApp\MyApp.dproj --index-root D:\repo
+```
+
+Two things to know:
+
+- **IDE plugin and CLI may report different finding counts for the
+  "same" project — by design.** The plugin reads the live project state
+  from the ToolsAPI (including unsaved membership changes), the CLI
+  parses the `.dproj` on disk; consumer configuration differs as well.
+  Do not expect the numbers to match, and do not tune one to the other.
+- **Baselines are bound to the scan scope.** A baseline written from a
+  folder scan does not fit a project scan (different file set →
+  different fingerprint set). Keep one baseline per scope you gate on.
+
+---
+
 ## Using the analyser with Git and SVN
 
 The analyser **auto-detects** the VCS system based on the project

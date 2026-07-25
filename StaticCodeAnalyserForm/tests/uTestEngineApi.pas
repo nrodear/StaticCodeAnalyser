@@ -17,7 +17,7 @@ interface
 
 uses
   DUnitX.TestFramework,
-  uEngineApi;
+  uEngineApi, uIgnoreList;
 
 type
   [TestFixture]
@@ -25,6 +25,9 @@ type
   private
     FDir: string;
     function RunSingle(const ASrc, AProfile: string): TScanResult;
+    // IgnoreList-Facade-Tests (ssProject): 2 Bug-Units + minimale .dproj.
+    function BuildIgnoreFixture: string;
+    function RunProject(const ADproj: string; AIgnore: TIgnoreList): TScanResult;
     procedure ResetEngineGlobals;
   public
     [Setup]    procedure Setup;
@@ -41,6 +44,8 @@ type
     [Test] procedure ReleaseFindings_TransfersOwnership;
     [Test] procedure Baseline_FiltersKnownFindings;
     [Test] procedure SkipConfig_RespectsPresetConfig;
+    [Test] procedure IgnoreList_NilDefault_ScansAllProjectFiles;
+    [Test] procedure IgnoreList_SkipsMatchingFile;
   end;
 
 implementation
@@ -88,6 +93,67 @@ begin
   Req.Scope   := ssSingleFile;
   Req.Path    := Fn;
   Req.Profile := AProfile;
+  Ses := TAnalysisSession.Create;
+  try
+    Result := Ses.Run(Req);
+  finally
+    Ses.Free;
+  end;
+end;
+
+function TTestEngineApi.BuildIgnoreFixture: string;
+// Schreibt zwei Bug-Units (je ein garantierter lsError-Befund, Muster BUG_SRC)
+// plus eine minimale .dproj, die BEIDE als DCCReference listet. Liefert den
+// .dproj-Pfad. Namen bewusst OHNE Test-Schema (uTest*/_Test), damit der
+// eingebaute SkipTests-Filter der TIgnoreList hier nie mitspielt.
+const
+  DPROJ_XML =
+    '<?xml version="1.0" encoding="utf-8"?>'#13#10 +
+    '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">'#13#10 +
+    '  <ItemGroup>'#13#10 +
+    '    <DCCReference Include="KeptBug.pas"/>'#13#10 +
+    '    <DCCReference Include="SkippedBug.pas"/>'#13#10 +
+    '  </ItemGroup>'#13#10 +
+    '</Project>'#13#10;
+
+  function BugUnit(const AName: string): string;
+  begin
+    Result :=
+      'unit ' + AName + ';'#13#10 +
+      'interface'#13#10 +
+      'implementation'#13#10 +
+      'procedure Run(const UserId: string);'#13#10 +
+      'begin'#13#10 +
+      '  Query.SQL.Text := ''SELECT * FROM users WHERE id='' + UserId;'#13#10 +
+      'end;'#13#10 +
+      'end.';
+  end;
+
+begin
+  TFile.WriteAllText(TPath.Combine(FDir, 'KeptBug.pas'),
+    BugUnit('KeptBug'), TEncoding.UTF8);
+  TFile.WriteAllText(TPath.Combine(FDir, 'SkippedBug.pas'),
+    BugUnit('SkippedBug'), TEncoding.UTF8);
+  Result := TPath.Combine(FDir, 'Fixture.dproj');
+  TFile.WriteAllText(Result, DPROJ_XML, TEncoding.UTF8);
+end;
+
+function TTestEngineApi.RunProject(const ADproj: string;
+  AIgnore: TIgnoreList): TScanResult;
+// Facade-Scan ueber die Projektliste (ssProject). BEWUSST nicht ssRecursive:
+// der rekursive Pfad ist im residenten Test-Prozess tabu (s. Unit-Header).
+// Der Listen-Pfad wendet dieselbe Req.IgnoreList an (uEngineApi, ignore.txt-
+// Parity zum Verzeichnis-Walk) und ist als IDE-Bulk-Produktionspfad erprobt;
+// FromDproj laeuft bereits 12x pro Suite (COM-Guard-Kommentar uProjectFiles).
+// Die Facade uebernimmt KEINE Ownership an AIgnore - Caller gibt frei.
+var
+  Req : TScanRequest;
+  Ses : TAnalysisSession;
+begin
+  Req := TScanRequest.Init;
+  Req.Scope      := ssProject;
+  Req.Path       := ADproj;
+  Req.IgnoreList := AIgnore;   // nil = Init-Default = bisheriges Verhalten
   Ses := TAnalysisSession.Create;
   try
     Result := Ses.Run(Req);
@@ -330,6 +396,71 @@ begin
         'SkipConfig laesst [fkTodoComment]-Filter stehen -> SQL-Bug nicht gefunden');
     finally Res.Free; end;
   finally Ses.Free; end;
+end;
+
+procedure TTestEngineApi.IgnoreList_NilDefault_ScansAllProjectFiles;
+// TP-Gegenprobe fuer das additive Facade-Feld Req.IgnoreList: Init liefert
+// nil, und ein Request OHNE IgnoreList verhaelt sich unveraendert - BEIDE
+// Projekt-Dateien werden gescannt und liefern ihren SQL-Injection-Befund.
+var
+  Res  : TScanResult;
+  F    : TLeakFinding;
+  Kept, Skipped : Integer;
+begin
+  Assert.IsNull(TScanRequest.Init.IgnoreList,
+    'Init-Default = nil (kein Filter, bisheriges Verhalten)');
+  Res := RunProject(BuildIgnoreFixture, nil);
+  try
+    Kept := 0; Skipped := 0;
+    for F in Res.Findings do
+    begin
+      if F.FileName.EndsWith('KeptBug.pas', True)    then Inc(Kept);
+      if F.FileName.EndsWith('SkippedBug.pas', True) then Inc(Skipped);
+    end;
+    Assert.IsTrue(Kept >= 1,    'KeptBug.pas liefert seinen Befund');
+    Assert.IsTrue(Skipped >= 1, 'ohne IgnoreList wird SkippedBug.pas mitgescannt');
+  finally
+    Res.Free;
+  end;
+end;
+
+procedure TTestEngineApi.IgnoreList_SkipsMatchingFile;
+// Fix-Test: Req.IgnoreList wird an den Scan-Pfad durchgereicht - die
+// gematchte Datei faellt KOMPLETT aus dem Ergebnis (auch kein SCA194-
+// Orphan: der ssProject-Pfad reicht dieselbe Liste an Detect weiter).
+// Die nicht gematchte Datei liefert weiterhin ihren Befund (Monotonie:
+// der Filter unterdrueckt nur, er erzeugt nichts Neues).
+var
+  Res   : TScanResult;
+  F     : TLeakFinding;
+  Ign   : TIgnoreList;
+  IgnFn : string;
+  Kept, Skipped : Integer;
+begin
+  IgnFn := TPath.Combine(FDir, 'ignore.txt');
+  TFile.WriteAllText(IgnFn, 'SkippedBug.pas'#13#10, TEncoding.UTF8);
+  Ign := TIgnoreList.Create;
+  try
+    Ign.SkipTests := False;        // nur das explizite Muster soll wirken
+    Ign.LoadFromFile(IgnFn);
+    Res := RunProject(BuildIgnoreFixture, Ign);
+    try
+      Kept := 0; Skipped := 0;
+      for F in Res.Findings do
+      begin
+        if F.FileName.EndsWith('KeptBug.pas', True)    then Inc(Kept);
+        if F.FileName.EndsWith('SkippedBug.pas', True) then Inc(Skipped);
+      end;
+      Assert.IsTrue(Kept >= 1,
+        'nicht gematchte Datei liefert weiterhin ihren Befund');
+      Assert.AreEqual<Integer>(0, Skipped,
+        'gematchte Datei wird uebersprungen - kein einziges Finding');
+    finally
+      Res.Free;
+    end;
+  finally
+    Ign.Free;
+  end;
 end;
 
 initialization

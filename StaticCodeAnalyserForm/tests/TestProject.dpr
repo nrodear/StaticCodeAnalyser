@@ -73,6 +73,7 @@ uses
   uTestExportSARIF in 'uTestExportSARIF.pas',
   uTestFindingFingerprint in 'uTestFindingFingerprint.pas',
   uTestExportSonarGeneric in 'uTestExportSonarGeneric.pas',
+  uTestExportHtml in 'uTestExportHtml.pas',
   uTestSonarConfig in 'uTestSonarConfig.pas',
   uTestYamlSubsetParser in 'uTestYamlSubsetParser.pas',
   uTestCustomRuleDetector in 'uTestCustomRuleDetector.pas',

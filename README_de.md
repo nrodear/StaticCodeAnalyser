@@ -427,6 +427,49 @@ und erneut öffnen.
 
 ---
 
+## Scan-Scope: Ordner, Projekt oder Projektgruppe (CLI)
+
+Neben dem rekursiven Ordner-Scan (`--path <dir>`) kann die CLI genau
+das scannen, was eine Delphi-Projektdatei referenziert. Die
+Eingabe-Flags `--path`, `--file`, `--project` und `--project-group`
+schließen sich gegenseitig aus (ungültige Kombinationen beenden mit
+Exit-Code 99):
+
+- `--project <file.dproj>` — analysiert exakt die `.pas`-Dateien aus
+  der `.dproj` (deren DCCReference-Liste). Units, die nur über
+  Suchpfade erreichbar sind, sind **nicht** enthalten.
+- `--project-group <file.groupproj>` — analysiert die Vereinigung
+  aller Projekte der Gruppe, dedupliziert.
+- `--index-root <dir>` — baut den Cross-Unit-Index (genutzt von der
+  Unused-/Referenz-Detektor-Familie) über dieses Verzeichnis, während
+  weiterhin nur die aufgelöste Dateiliste analysiert wird. Default:
+  die gemeinsame Wurzel der aufgelösten Liste. Auch mit
+  `--branch`/`--diff` kombinierbar.
+
+```powershell
+analyser.d12.exe --project D:\repo\MeineApp\MeineApp.dproj --report-sarif sca.sarif
+analyser.d12.exe --project-group D:\repo\Alle.groupproj --report-sarif sca.sarif
+
+# Nur das Projekt analysieren, aber das ganze Repo indizieren, damit
+# "unused"-Urteile auch Nutzer ausserhalb des Projekts sehen:
+analyser.d12.exe --project D:\repo\MeineApp\MeineApp.dproj --index-root D:\repo
+```
+
+Zwei Dinge sollte man wissen:
+
+- **IDE-Plugin und CLI können für das „gleiche" Projekt unterschiedliche
+  Fundzahlen melden — by design.** Das Plugin liest den lebenden
+  Projektzustand aus der ToolsAPI (inklusive ungespeicherter
+  Mitgliedschafts-Änderungen), die CLI parst die `.dproj` auf der
+  Platte; zusätzlich unterscheidet sich die Consumer-Konfiguration.
+  Die Zahlen müssen nicht übereinstimmen — nicht gegeneinander tunen.
+- **Baselines sind an den Scan-Scope gebunden.** Eine Baseline aus
+  einem Ordner-Scan passt nicht zu einem Projekt-Scan (andere
+  Dateimenge → andere Fingerprint-Menge). Pro Scope, auf den ein Gate
+  läuft, eine eigene Baseline führen.
+
+---
+
 ## Verwendung unter Git und SVN
 
 Der Analyser erkennt das VCS-System **automatisch** anhand des Projekt-
