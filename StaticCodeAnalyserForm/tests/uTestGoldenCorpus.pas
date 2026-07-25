@@ -35,6 +35,11 @@ type
     // --- FP-Schutz (gefixte Klassen) ---
     [Test] procedure CanBeClassMethod_InstanceAccess_NoneFlagged;
     [Test] procedure NestedRoutines_OuterStateRecovered_NoUninitNoResult;
+    // --- SCA144 (FloatEquality) Regressions-Anker 2026-07-25/26 ---
+    [Test] procedure NestedDoubleShadowsOuter_FloatEqualityStillDetected;
+    [Test] procedure SentinelRhsParameterlessNestedFunc_NotDemoted;
+    // --- SCA009 (MissingFinally) Regressions-Anker 2026-07-25 ---
+    [Test] procedure WithFreeIdiom_NoMissingFinally;
     // --- FN-Schutz (echte Bugs muessen weiter gefunden werden) ---
     [Test] procedure RealBugs_StillDetected;
   end;
@@ -138,6 +143,145 @@ begin
     'Total wird im Outer-Body gesetzt; nested-proc-Read darf kein uninit ausloesen');
   Assert.AreEqual<Integer>(0, CountCurated(SRC, fkRoutineResultUnassigned),
     'Result wird im (recoverten) Outer-Body zugewiesen - kein Finding');
+end;
+
+// ===========================================================================
+// FP-/FN-Schutz: SCA144 nearest-decl-Gate (Commit 9660ca8 "Welle 1b" +
+// Scoping-Fix dwsUtils.pas:2776 in uFloatEquality.NearestDeclTypeLowBefore).
+// Eine geschachtelte function mit Double-Parametern shadowt die aeusseren
+// Parameter GLEICHEN Namens. uParser2 verwirft nested routines aus dem AST,
+// daher entscheidet der SOURCE-basierte nearest-decl-Walk, welche Deklaration
+// den Operanden-Typ liefert. Bricht der Walk (oder faellt auf die aeussere
+// Decl zurueck), maskiert das Shadowing einen echten Float-TP:
+//   * outer Variant / nested Double  (dws-Klasse VarCompareSafe/CompareDoubles)
+//   * outer Integer  / nested Double  (Ordinal-Shadow-Variante)
+// Beide nested 'a = b'-Vergleiche MUESSEN als FloatEquality gefunden werden -
+// die naechstliegende Decl vor der Fundstelle ist jeweils Double.
+// FloatEquality lebt im FindingsOfFile-Buendel -> CountFile.
+// ===========================================================================
+procedure TTestGoldenCorpus.NestedDoubleShadowsOuter_FloatEqualityStillDetected;
+const SRC =
+  'unit golden_sca144_shadow;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  // Fall 1: aeussere Variant-Params, nested Double-Params gleichen Namens.
+  'function VarCompareSafe(const left: Variant; const right: Variant): Integer;'#13#10 +
+  '  function CompareDoubles(const left: Double; const right: Double): Integer;'#13#10 +
+  '  begin'#13#10 +
+  '    if left = right then Exit(0);'#13#10 +      // nearest decl = Double -> TP
+  '    Result := 1;'#13#10 +
+  '  end;'#13#10 +
+  'begin'#13#10 +
+  '  Result := CompareDoubles(0, 0);'#13#10 +
+  'end;'#13#10 +
+  // Fall 2: aeussere Integer-Params, nested Double-Params gleichen Namens.
+  'function IntCompareSafe(const a: Integer; const b: Integer): Integer;'#13#10 +
+  '  function CmpVals(const a: Double; const b: Double): Integer;'#13#10 +
+  '  begin'#13#10 +
+  '    if a = b then Exit(0);'#13#10 +            // nearest decl = Double -> TP
+  '    Result := 1;'#13#10 +
+  '  end;'#13#10 +
+  'begin'#13#10 +
+  '  Result := CmpVals(0, 0);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+begin
+  Assert.IsTrue(CountFile(SRC, fkFloatEquality) >= 2,
+    'nested Double-Params shadowen aeussere Variant-/Integer-Params - beide ' +
+    'Double-Vergleiche muessen ueber nearest-decl weiter gefunden werden');
+end;
+
+// ===========================================================================
+// FP-Schutz: SCA144 Sentinel-Zero-DEMOTE (Commit jvcl JvgUtils.pas:1516 -
+// uFloatEquality.SentinelZeroLocalDemote, bare-Ident-RHS-Nachweis). Eine
+// parameterlose nested function als RHS ('Denominator := DigitsToValue;')
+// ist textuell von einem Local-Read nicht zu unterscheiden, liefert aber
+// einen BERECHNETEN Wert -> der Divisions-Guard 'Denominator <> 0' ist ein
+// echter TP und darf NICHT auf fcLow demotet werden (sonst filtert der
+// Auslieferungs-Default ihn weg). Confidence MUSS fcHigh bleiben.
+// ===========================================================================
+procedure TTestGoldenCorpus.SentinelRhsParameterlessNestedFunc_NotDemoted;
+const SRC =
+  'unit golden_sca144_sentinel;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'function Calc: Single;'#13#10 +
+  '  function DigitsToValue: Single;'#13#10 +
+  '  begin'#13#10 +
+  '    Result := 3.7;'#13#10 +
+  '  end;'#13#10 +
+  '  function TestForMulDiv: Single;'#13#10 +
+  '  var Denominator: Single;'#13#10 +
+  '  begin'#13#10 +
+  '    Denominator := DigitsToValue;'#13#10 +     // parameterloser Call, KEIN Local
+  '    if Denominator <> 0 then'#13#10 +          // Divisions-Guard = TP
+  '      Result := 1 / Denominator;'#13#10 +
+  '  end;'#13#10 +
+  'begin'#13#10 +
+  '  Result := TestForMulDiv;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkFloatEquality) >= 1,
+      'Divisions-Guard auf berechnetem Wert bleibt ein Fund');
+    Hit := TFindingHelper.FirstOf(F, fkFloatEquality);
+    Assert.AreEqual<TFindingConfidence>(fcHigh, Hit.Confidence,
+      'parameterloser nested-Function-Call als RHS ist kein beweisbares Local ' +
+      '-> KEIN Sentinel-Demote, volle Confidence bleibt');
+  finally F.Free; end;
+end;
+
+// ===========================================================================
+// FP-/FN-Schutz: SCA009 with-Free-Idiom (Commit 56eb854 "Inkrement A2" -
+// uMissingFinally SearchFree-WFin-Stack + bare-Free-Source-Gate). Das
+// klassische Dialog-Idiom 'with L do try..finally Free end' schuetzt das
+// Objekt korrekt -> KEIN MissingFinally. Gegenprobe: 'with L do begin ..Free
+// end' OHNE try schuetzt nicht und MUSS weiter gemeldet werden (keine
+// Ueber-Suppression). MissingFinally hat Lines-abhaengige Source-Guards ->
+// FindingsOfFile / CountFile (im In-Memory-Harness inert).
+// ===========================================================================
+procedure TTestGoldenCorpus.WithFreeIdiom_NoMissingFinally;
+const SRC_OK =           // FP-Schutz: geschuetztes with-try-finally-Free
+  'unit golden_sca009_withfree;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var L: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  with L do'#13#10 +
+  '  try'#13#10 +
+  '    Add(''x'');'#13#10 +
+  '  finally'#13#10 +
+  '    Free;'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+const SRC_TP =           // FN-Schutz: with-Body OHNE try -> ungeschuetzt
+  'unit golden_sca009_notry;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Bar;'#13#10 +
+  'var L: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  with L do'#13#10 +
+  '  begin'#13#10 +
+  '    Add(''x'');'#13#10 +
+  '    Free;'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+begin
+  Assert.AreEqual<Integer>(0, CountFile(SRC_OK, fkMissingFinally),
+    'bare Free im with-finally ist geschuetzt -> kein SCA009');
+  Assert.IsTrue(CountFile(SRC_TP, fkMissingFinally) >= 1,
+    'with-Body ohne try: bare Free ungeschuetzt -> SCA009 bleibt (keine Ueber-Suppression)');
 end;
 
 // ===========================================================================
