@@ -38,6 +38,11 @@ type
     [Test] procedure SafeSpanContainer_NotReported;
     [Test] procedure SafeSpanForeignCall_StillReported;      // TP-Gegenprobe
     [Test] procedure SafeSpanLoadFromFile_StillReported;     // TP-Gegenprobe
+    // --- C2 (Triage 2026-07-24, umgesetzt 2026-07-25): except-swallow ---
+    // Handler schluckt die Exception -> Free auf beiden Pfaden erreichbar.
+    [Test] procedure ExceptSwallow_NotReported;
+    [Test] procedure ExceptSwallowHandlerRaise_StillReported; // TP-Gegenprobe
+    [Test] procedure ExceptSwallowExitInTry_StillReported;    // TP-Gegenprobe
   end;
 
 implementation
@@ -488,6 +493,94 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkMissingFinally) >= 1,
     'LoadFromFile im Span -> IO-Verbot, Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestMissingFinally.ExceptSwallow_NotReported;
+// C2 (Triage 2026-07-24, umgesetzt 2026-07-25): der except-Handler schluckt
+// die Exception (kein raise/Exit/goto) -> q.Free wird auf BEIDEN Pfaden
+// erreicht, kein Leak-Fenster -> die try/finally-Forderung ist ein FP.
+// TSQLQuery ist bewusst KEIN SafeSpan-Typ (Open wirft!) - der Suppress hier
+// kommt beweisbar aus dem C2-Gate, nicht aus C1. FindingsOfFile: Quelle
+// liegt auf Platte, damit laeuft der Source-Guard (StrippedLines).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TSQLQuery;'#13#10 +
+  'begin'#13#10 +
+  '  q := TSQLQuery.Create(nil);'#13#10 +
+  '  try'#13#10 +
+  '    q.Open;'#13#10 +
+  '  except'#13#10 +
+  '    Log(''db down'');'#13#10 +
+  '  end;'#13#10 +
+  '  q.Free;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMissingFinally),
+    'Handler schluckt die Exception -> Free auf beiden Pfaden -> kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestMissingFinally.ExceptSwallowHandlerRaise_StillReported;
+// TP-Gegenprobe: der Handler re-raist (raise <expr> - bewusst NICHT bare
+// 'raise;', das deckt schon das alte HasReraise-Gate ab). Der Fehlerpfad
+// verlaesst die Methode VOR q.Free -> Leak-Fenster bleibt -> Befund bleibt.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TSQLQuery;'#13#10 +
+  'begin'#13#10 +
+  '  q := TSQLQuery.Create(nil);'#13#10 +
+  '  try'#13#10 +
+  '    q.Open;'#13#10 +
+  '  except'#13#10 +
+  '    raise Exception.Create(''db down'');'#13#10 +
+  '  end;'#13#10 +
+  '  q.Free;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMissingFinally) >= 1,
+    'raise <expr> im Handler -> kein Swallow-Beweis, Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestMissingFinally.ExceptSwallowExitInTry_StillReported;
+// TP-Gegenprobe: Exit IM try-Teil wird vom except NICHT gefangen - es
+// verlaesst die Methode am q.Free vorbei -> Leak-Fenster bleibt -> Befund
+// bleibt (raise im try-Teil waere ok, Exit ausdruecklich nicht).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TSQLQuery;'#13#10 +
+  'begin'#13#10 +
+  '  q := TSQLQuery.Create(nil);'#13#10 +
+  '  try'#13#10 +
+  '    if Skip then Exit;'#13#10 +
+  '    q.Open;'#13#10 +
+  '  except'#13#10 +
+  '    Log(''db down'');'#13#10 +
+  '  end;'#13#10 +
+  '  q.Free;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMissingFinally) >= 1,
+    'Exit im try-Teil umgeht den Free -> C2-Gate greift nicht, Fund bleibt');
   finally F.Free; end;
 end;
 

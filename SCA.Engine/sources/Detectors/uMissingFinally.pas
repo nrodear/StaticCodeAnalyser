@@ -164,6 +164,134 @@ var
     Result := True;
   end;
 
+  function ExceptSwallowSuppresses(const AVarLow: string;
+    ACreateLine: Integer): Boolean;
+  // C2 (Triage 2026-07-24, umgesetzt 2026-07-25): except-SWALLOW-Fall.
+  // Muster:
+  //   Obj := TFoo.Create;
+  //   try ... except <Handler ohne raise/Exit/goto> end;
+  //   Obj.Free;
+  // Der Handler SCHLUCKT die Exception -> die Ausfuehrung erreicht Obj.Free
+  // auf BEIDEN Pfaden -> kein Leak-Fenster, die try/finally-Forderung ist
+  // ein FP. Ergaenzt das bestehende 'HasExcept and HasReraise'-Gate, das
+  // nur den RE-RAISE-Fall abdeckt. Quell-basiert auf StrippedLines
+  // (Kommentare/Strings zaehlen nie); STRENG und fail-safe wie
+  // SafeSpanSuppresses:
+  //   * Create-Zeile = genau ein Statement; direkt danach (nur Leer-/begin-
+  //     Zeilen dazwischen) ein alleinstehendes 'try'.
+  //   * Balancierte begin/case-end-Zaehlung; bei JEDEM nested 'try' (oder
+  //     'finally'/'asm') im Bereich -> kein Drop (konservativ).
+  //   * try-TEIL: 'raise' ist ok (wird ja gefangen), aber 'exit'/'goto'
+  //     sind verboten (umgehen den Free). except-TEIL: 'raise*' (auch
+  //     RaiseOuterException), 'exit', 'goto', 'break', 'continue' verboten
+  //     (alles davon verlaesst den Handler, ohne den Free zu erreichen).
+  //   * Der except-Block muss mit purem 'end;' schliessen; danach (nur
+  //     Leerzeilen dazwischen) unkonditional '<var>.free;' bzw.
+  //     'freeandnil(<var>);' als naechstes Statement.
+  // Kein Stripped-Cache (In-Memory-Harness) -> kein Drop (fail-safe).
+  var
+    i, j, k  : Integer;
+    L, Tok   : string;
+    TryLine  : Integer;
+    EndLine  : Integer;
+    Depth    : Integer;
+    InExcept : Boolean;
+  begin
+    Result := False;
+    if (ACreateLine <= 0) or (Length(StrippedLines) = 0)
+       or (ACreateLine > Length(StrippedLines)) then Exit;
+    // Create-Zeile: Einzelstatement '<var> := ...;'
+    L := LowerCase(Trim(StrippedLines[ACreateLine - 1]));
+    if not (L.StartsWith(AVarLow + ' :=') or L.StartsWith(AVarLow + ':=')) then
+      Exit;
+    i := Pos(';', L);
+    if (i = 0) or (Trim(Copy(L, i + 1, MaxInt)) <> '') then Exit;
+    // Direkt folgend (nur Leer-/begin-Zeilen dazwischen): alleinstehendes 'try'
+    TryLine := 0;
+    for i := ACreateLine + 1 to Length(StrippedLines) do
+    begin
+      L := LowerCase(Trim(StrippedLines[i - 1]));
+      if (L = '') or (L = 'begin') then Continue;
+      if L = 'try' then TryLine := i;
+      Break;
+    end;
+    if TryLine = 0 then Exit;
+    // try..except..end; abschreiten (tokenweise, balanciert)
+    Depth    := 0;
+    InExcept := False;
+    EndLine  := 0;
+    for i := TryLine + 1 to Length(StrippedLines) do
+    begin
+      L := LowerCase(Trim(StrippedLines[i - 1]));
+      j := 1;
+      while j <= Length(L) do
+      begin
+        if CharInSet(L[j], ['a'..'z', '_']) then
+        begin
+          k := j;
+          while (k <= Length(L)) and CharInSet(L[k], ['a'..'z', '0'..'9', '_']) do
+            Inc(k);
+          Tok := Copy(L, j, k - j);
+          // Member-Zugriffe ('obj.free', 'e.classname') sind KEINE
+          // Schluesselwoerter - Tokens mit '.'-Vorgaenger ueberspringen.
+          if (j > 1) and (L[j - 1] = '.') then Tok := '';
+          j := k;
+          if Tok <> '' then
+          begin
+            // Nested try (auch try/finally) oder asm im Bereich: die
+            // Kontrollfluss-Analyse waere nicht mehr trivial -> kein Drop.
+            if (Tok = 'try') or (Tok = 'finally') or (Tok = 'asm') then Exit;
+            if (Tok = 'begin') or (Tok = 'case') then
+              Inc(Depth)
+            else if Tok = 'end' then
+            begin
+              if Depth > 0 then
+                Dec(Depth)
+              else
+              begin
+                // Schliessendes end des try..except: muss NACH except liegen
+                // und als pures 'end;' schliessen (kein Code dahinter).
+                if not InExcept then Exit;
+                if Trim(Copy(L, j, MaxInt)) <> ';' then Exit;
+                EndLine := i;
+              end;
+            end
+            else if Tok = 'except' then
+            begin
+              if (Depth > 0) or InExcept then Exit;
+              InExcept := True;
+            end
+            // Exit/goto im try-Teil umgehen den Free (Exit wird NICHT
+            // gefangen!) und sind im except-Teil ebenso toedlich -> aus.
+            else if (Tok = 'exit') or (Tok = 'goto') then
+              Exit
+            // Handler darf nicht re-raisen (raise/raise <expr>/E.RaiseOuter-
+            // Exception via raise*-Praefix) und nicht per break/continue aus
+            // einer umgebenden Schleife springen -> sonst kein Swallow-Beweis.
+            else if InExcept and ((Copy(Tok, 1, 5) = 'raise')
+                    or (Tok = 'break') or (Tok = 'continue')) then
+              Exit;
+          end;
+        end
+        else
+          Inc(j);
+      end;
+      if EndLine > 0 then Break;
+    end;
+    if EndLine = 0 then Exit;
+    // Nach dem 'end;' (nur Leerzeilen dazwischen): unkonditionaler Free als
+    // ganzes Statement - strenger als SafeSpan (exaktes Match statt Praefix).
+    for i := EndLine + 1 to Length(StrippedLines) do
+    begin
+      L := LowerCase(Trim(StrippedLines[i - 1]));
+      if L = '' then Continue;
+      if (L = AVarLow + '.free;')
+         or (L = 'freeandnil(' + AVarLow + ');') then
+        Result := True;
+      Exit;   // erste Nicht-Leerzeile entscheidet
+    end;
+  end;
+
 begin
   StrippedReady := False;
   SrcLines      := nil;
@@ -246,6 +374,12 @@ begin
       // C1: SafeSpan - nur harmloser Container-Code zwischen Create und
       // Free -> kein actionabler Befund (EnsureStripped lief oben schon).
       if SafeSpanSuppresses(VarNameLow, LowerCase(V.TypeRef), ReportLine) then
+        Continue;
+
+      // C2: except-swallow - der Handler schluckt die Exception, Obj.Free
+      // wird auf beiden Pfaden erreicht -> kein Leak-Fenster (Triage
+      // 2026-07-24, umgesetzt 2026-07-25; EnsureStripped lief oben schon).
+      if ExceptSwallowSuppresses(VarNameLow, ReportLine) then
         Continue;
 
       F            := TLeakFinding.Create;
