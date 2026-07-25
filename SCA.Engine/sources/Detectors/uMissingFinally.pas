@@ -86,6 +86,84 @@ var
     StrippedLines := Code.Split([#10]);
   end;
 
+  function SafeSpanSuppresses(const AVarLow, ATypeRefLow: string;
+    ACreateLine: Integer): Boolean;
+  // C1 (Triage 2026-07-24, groesste SCA009-FP-Klasse 'kein riskanter Code
+  // dazwischen'): zwischen Create und Free steht AUSSCHLIESSLICH nicht-
+  // werfender Code auf dem Objekt selbst -> die try/finally-Forderung ist
+  // nicht actionable (FP). STRENG:
+  //   * Typ-Gate: nur bekannte speicherbasierte RTL-Container (IO-Member
+  //     zusaetzlich per loadfrom/saveto-Verbot ausgeschlossen); TSQLQuery &
+  //     Co. (Open wirft!) sind NICHT in der Liste -> Gate aus.
+  //   * Create-Zeile = genau ein Statement; Free-Zeile unkonditional
+  //     (beginnt mit '<var>.free'/'freeandnil(<var>').
+  //   * Jede Span-Zeile: '<var>.member ...' oder 'lokal := <var>.member'
+  //     oder begin/end - ALLES andere (if/for/try/with/exit/raise/goto,
+  //     fremde Calls, Fortsetzungszeilen) -> kein Drop.
+  // Kein Stripped-Cache (In-Memory-Harness) -> kein Drop (fail-safe).
+  const
+    SAFE_TYPES : array[0..9] of string = (
+      'tstringlist', 'tlist', 'tobjectlist', 'tstringstream',
+      'tmemorystream', 'tstringbuilder', 'tqueue', 'tstack',
+      'tdictionary', 'tobjectdictionary');
+  var
+    TypeBase : string;
+    i, FreeIdx : Integer;
+    L : string;
+    OK : Boolean;
+  begin
+    Result := False;
+    if (ACreateLine <= 0) or (Length(StrippedLines) = 0)
+       or (ACreateLine > Length(StrippedLines)) then Exit;
+    TypeBase := Trim(ATypeRefLow);
+    i := Pos('<', TypeBase);
+    if i > 0 then TypeBase := Trim(Copy(TypeBase, 1, i - 1));
+    OK := False;
+    for var st in SAFE_TYPES do
+      if TypeBase = st then begin OK := True; Break; end;
+    if not OK then Exit;
+    L := LowerCase(Trim(StrippedLines[ACreateLine - 1]));
+    if not (L.StartsWith(AVarLow + ' :=') or L.StartsWith(AVarLow + ':=')) then
+      Exit;
+    i := Pos(';', L);
+    if (i = 0) or (Trim(Copy(L, i + 1, MaxInt)) <> '') then Exit;
+    FreeIdx := 0;
+    for i := ACreateLine + 1 to Length(StrippedLines) do
+    begin
+      L := LowerCase(Trim(StrippedLines[i - 1]));
+      if L.StartsWith(AVarLow + '.free') or L.StartsWith(AVarLow + '.destroy')
+         or L.StartsWith('freeandnil(' + AVarLow) then
+      begin
+        FreeIdx := i;
+        Break;
+      end;
+    end;
+    if FreeIdx = 0 then Exit;
+    for i := ACreateLine + 1 to FreeIdx - 1 do
+    begin
+      L := LowerCase(Trim(StrippedLines[i - 1]));
+      if (L = '') or (L = 'begin') or (L = 'end') or (L = 'end;') then Continue;
+      if (Pos('loadfrom', L) > 0) or (Pos('saveto', L) > 0) then Exit;
+      if L.StartsWith(AVarLow + '.') then Continue;
+      var pAss := Pos(':=', L);
+      if pAss > 0 then
+      begin
+        var LHS := Trim(Copy(L, 1, pAss - 1));
+        var RHS := Trim(Copy(L, pAss + 2, MaxInt));
+        var LhsPlain := LHS <> '';
+        for var k := 1 to Length(LHS) do
+          if not CharInSet(LHS[k], ['a'..'z', '0'..'9', '_']) then
+          begin
+            LhsPlain := False;
+            Break;
+          end;
+        if LhsPlain and RHS.StartsWith(AVarLow + '.') then Continue;
+      end;
+      Exit;   // alles andere: kein Drop
+    end;
+    Result := True;
+  end;
+
 begin
   StrippedReady := False;
   SrcLines      := nil;
@@ -164,6 +242,11 @@ begin
       // // noinspection-Marker direkt ueber dem Create greifen jetzt.
       var ReportLine := TLeakDetector2.FindCreateLine(MethodNode, VarNameLow);
       if ReportLine = 0 then ReportLine := V.Line;
+
+      // C1: SafeSpan - nur harmloser Container-Code zwischen Create und
+      // Free -> kein actionabler Befund (EnsureStripped lief oben schon).
+      if SafeSpanSuppresses(VarNameLow, LowerCase(V.TypeRef), ReportLine) then
+        Continue;
 
       F            := TLeakFinding.Create;
       F.FileName   := FileName;

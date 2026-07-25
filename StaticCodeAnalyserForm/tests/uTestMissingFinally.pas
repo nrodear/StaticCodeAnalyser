@@ -34,6 +34,10 @@ type
     [Test] procedure WithDoBareFreeNoTry_StillReported;      // TP-Gegenprobe
     [Test] procedure SourceGuard_WithBareFree_SingleWith_True;
     [Test] procedure SourceGuard_BareFree_TwoWiths_False;    // TP-Gegenprobe
+    // --- C1 (Triage 2026-07-24): SafeSpan - harmloser Container-Code ---
+    [Test] procedure SafeSpanContainer_NotReported;
+    [Test] procedure SafeSpanForeignCall_StillReported;      // TP-Gegenprobe
+    [Test] procedure SafeSpanLoadFromFile_StillReported;     // TP-Gegenprobe
   end;
 
 implementation
@@ -412,6 +416,79 @@ begin
   finally
     M.Free;
   end;
+end;
+
+procedure TTestMissingFinally.SafeSpanContainer_NotReported;
+// C1: sicherer RTL-Container + ausschliesslich Member-Zugriffe auf die Var
+// selbst zwischen Create und Free -> try/finally-Forderung nicht actionable.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var SL: TStringList;'#13#10 +
+  '    n: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  SL := TStringList.Create;'#13#10 +
+  '  SL.Add(''x'');'#13#10 +
+  '  SL.Sorted := True;'#13#10 +
+  '  n := SL.Count;'#13#10 +
+  '  SL.Free;'#13#10 +
+  '  WriteLn(n);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMissingFinally),
+    'reiner Container-Span -> SafeSpan unterdrueckt');
+  finally F.Free; end;
+end;
+
+procedure TTestMissingFinally.SafeSpanForeignCall_StillReported;
+// TP-Gegenprobe: ein fremder Call im Span kann werfen -> Fund bleibt.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var SL: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  SL := TStringList.Create;'#13#10 +
+  '  SL.Add(''x'');'#13#10 +
+  '  Process(SL);'#13#10 +
+  '  SL.Free;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMissingFinally) >= 1,
+    'fremder Call im Span -> SafeSpan greift nicht, Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestMissingFinally.SafeSpanLoadFromFile_StillReported;
+// TP-Gegenprobe: IO-Member auf dem sicheren Container (LoadFromFile wirft
+// EFOpenError) -> Verbotsliste greift, Fund bleibt.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var SL: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  SL := TStringList.Create;'#13#10 +
+  '  SL.LoadFromFile(''c:\a.txt'');'#13#10 +
+  '  SL.Free;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMissingFinally) >= 1,
+    'LoadFromFile im Span -> IO-Verbot, Fund bleibt');
+  finally F.Free; end;
 end;
 
 initialization
