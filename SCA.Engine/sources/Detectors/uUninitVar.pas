@@ -418,6 +418,73 @@ begin
   if P > 0 then Result := Copy(Result, P + 1, MaxInt);
 end;
 
+function IsDynArrayDeclLine(Lines: TStringList; DeclLine: Integer;
+  const NameLow, TypeLow: string): Boolean;
+// Welle 1 (2026-07-25), Hook 1 managed-autoinit: strukturell als
+// 'array of T' deklarierte Locals sind DYNAMISCHE Arrays - der Compiler
+// initialisiert sie auf nil (managed wie string/Interface-Refs), ein
+// read-without-write ist nie ein echter uninit-Bug -> IsManaged.
+// BEWEIS-QUELLE ist die gestrippte Decl-QUELLZEILE (Kommentare zaehlen
+// nie): der Parser konkateniert TypeRef-Tokens OHNE Spaces
+// (ParseLocalVarSection, 'arrayofbyte') - dort waere ein dynamisches
+// Array NICHT von einem NAMENSTYP 'ArrayOfByte' unterscheidbar, dessen
+// Fremd-Decl ('array[0..7] of Byte'?) wir nicht kennen. Genau das ist
+// die Homonym-Maskierungs-Falle der HeidiSQL-Lehre; ein AddKindStrong-/
+// TypeIndex-Gate braucht es hier trotzdem NICHT, weil am Ende reine
+// strukturelle SYNTAX gematcht wird ('array' + PFLICHT-Whitespace +
+// 'of' auf der Quellzeile) - die kann kein Bezeichner tragen, ein
+// Homonym ist damit konstruktiv unmoeglich. Konservative Ausfall-
+// richtung: mehrzeilige Decls, 'packed array of', unerreichbare Zeile
+// -> False -> Fund bleibt. Wirkung ist ausschliesslich zusaetzliche
+// IsManaged-Suppression -> monoton, nie neue Funde.
+var
+  L       : string;
+  P, q, NL : Integer;
+begin
+  Result := False;
+  // Vorfilter aus dem AST: der Token-konkatenierte TypeRef muss mit
+  // 'array' beginnen ('arrayof...' bzw. Space-Variante) - alles andere
+  // kann keine 'array of'-Decl sein (spart den Zeilen-Scan).
+  if not TypeLow.StartsWith('array') then Exit;
+  if (Lines = nil) or (DeclLine < 1) or (DeclLine > Lines.Count) then Exit;
+  L := LowerCase(StripCommentsAndStrings(Lines[DeclLine - 1]));
+  NL := Length(NameLow);
+  if NL = 0 then Exit;
+  // Ersten WORTGEBUNDENEN Match des Var-Namens suchen ('a' matcht nicht
+  // in 'var'/'byte').
+  P := 1;
+  while True do
+  begin
+    P := PosEx(NameLow, L, P);
+    if P = 0 then Exit;
+    if ((P = 1) or not IsIdentChar(L[P - 1])) and
+       ((P + NL > Length(L)) or not IsIdentChar(L[P + NL])) then
+      Break;
+    P := P + NL;
+  end;
+  // Zwischen Name und ':' nur weitere Idents der Komma-Liste/Whitespace
+  // zulassen - so suppresst 'a: Integer; b: array of Byte;' die Var a
+  // NICHT mit (deren Typteil beginnt am EIGENEN ':').
+  q := P + NL;
+  while (q <= Length(L))
+        and CharInSet(L[q], ['a'..'z', '0'..'9', '_', ',', ' ', #9]) do
+    Inc(q);
+  if (q > Length(L)) or (L[q] <> ':') then Exit;
+  Inc(q);
+  while (q <= Length(L)) and (L[q] <= ' ') do Inc(q);
+  // 'array' + PFLICHT-Whitespace + wortgebundenes 'of': exakt die Form,
+  // die ein Bezeichner nie haben kann. 'array[0..3] of' (statisch,
+  // NICHT managed) scheitert am Whitespace-Muss nach 'array'.
+  if Copy(L, q, 5) <> 'array' then Exit;
+  Inc(q, 5);
+  if (q > Length(L)) or (L[q] > ' ') then Exit;
+  while (q <= Length(L)) and (L[q] <= ' ') do Inc(q);
+  if Copy(L, q, 2) <> 'of' then Exit;
+  Inc(q, 2);
+  if (q <= Length(L)) and IsIdentChar(L[q]) then Exit;
+  Result := True;
+end;
+
 function IsAsmMethod(MethodNode: TAstNode): Boolean;
 begin
   Result := (MethodNode <> nil)
@@ -2128,7 +2195,30 @@ var
           // StillFlagged sichert, dass normale Feld-Reads Fund bleiben).
           // Nur Write-Registrierung -> monoton, nie neue Funde.
           else if (Method <> '') and IsInitVerb(Method) then
-            ApplyReceiverInit(Receiver, Method, Node.Line);
+          begin
+            // Welle 1 (2026-07-25), Hook 3 (Review-Follow-up zu Hook 1a):
+            // tkiClass-Gate spiegeln (Vorlage: with-Scan-Gate in PhaseC).
+            // Ein parenloser Member-Zugriff wie 'b := c.Initialized' auf
+            // einem KLASSEN-Receiver ist ein Property-/Feld-READ der
+            // uninitialisierten Referenz - ihn als Init-Write zu werten
+            // wuerde den echten Bug maskieren (im '('-Zweig unproblema-
+            // tisch: dort entscheidet ApplyReceiverInit record-seitig).
+            // Loest der Cross-Unit-TypeIndex den Receiver-Typ BEWEISBAR
+            // als tkiClass auf -> KEIN Write, Fund bleibt. tkiUnknown/
+            // tkiAlias/tkiRecord bzw. ohne Index (nil/leer, Tests/Single-
+            // File) -> Verhalten wie bisher, die Hook-1a-Suppression fuer
+            // Record-/Fremdtyp-Receiver bleibt erhalten (Gegenprobe
+            // ParenlessInitRecordReceiver_NoFinding). Interfaces fuehrt
+            // der Index ebenfalls als tkiClass - deren Locals sind aber
+            // IsManaged und werden in PhaseD ohnehin nie gemeldet, das
+            // Gate erzeugt dort also keinen neuen Fund.
+            var IdxPl := VarIndexFor(Receiver);
+            var TIpl  := CtxTypeIndex(AContext);
+            if (IdxPl < 0) or (TIpl = nil) or TIpl.IsEmpty or
+               (TIpl.TypeKindOf(BaseTypeLow(VarList.List[IdxPl].TypeLow))
+                  <> tkiClass) then
+              ApplyReceiverInit(Receiver, Method, Node.Line);
+          end;
         end;
       end
       else
@@ -2632,6 +2722,14 @@ var
       VarRec.FirstReadLine  := 0;
       VarRec.RefCount       := 0;
       VarRec.IsManaged      := IsManagedType(LV.TypeRef, AContext);
+      // Welle 1 (2026-07-25), Hook 1 managed-autoinit: strukturell dekla-
+      // riertes dynamisches Array 'array of T' ist compiler-initialisiert
+      // (auto-nil) -> managed. Beweis kommt aus der Decl-QUELLZEILE, weil
+      // der Token-konkatenierte TypeRef ('arrayofbyte') homonym-ambig zu
+      // einem Namenstyp 'ArrayOfByte' waere - s. IsDynArrayDeclLine.
+      if not VarRec.IsManaged then
+        VarRec.IsManaged := IsDynArrayDeclLine(Lines, LV.Line,
+                                               VarRec.NameLow, VarRec.TypeLow);
       // Duplikate (same name in nested-scope - selten, defensive skip)
       if VarMap.ContainsKey(VarRec.NameLow) then Continue;
       VarMap.Add(VarRec.NameLow, VarList.Count);

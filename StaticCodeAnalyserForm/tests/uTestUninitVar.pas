@@ -183,6 +183,15 @@ type
     // H5: Symptom-Gate keyword-misparse (Var-Name == in-File-Typname)
     [Test] procedure TypeNamePhantomLocal_NoFinding;
     [Test] procedure NameEqualsConstNotType_StillFlagged;
+    // Welle 1 (2026-07-25): managed-autoinit + tkiClass-Gate im parenlosen
+    // 1a-Zweig (73er-Zensus, Rest 67).
+    // Hook 1: strukturelles dynamisches Array 'array of T' ist managed
+    [Test] procedure DynArrayBareLocal_NoFinding;
+    [Test] procedure DynArrayHomonymNamedType_StillFlagged;
+    // Hook 3: '.Initialized'-Property-Read auf Klassen-Receiver ist KEIN
+    // Init-Write (tkiClass-Gate, Vorlage with-Scan-Gate)
+    [Test] procedure ParenlessInitVerbClassReceiver_StillFlagged;
+    [Test] procedure ParenlessInitRecordReceiver_NoFinding;
   end;
 
 implementation
@@ -3263,6 +3272,138 @@ begin
   try
     Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
       'Namensgleiche Konstante ist kein Typ - Fund bleibt');
+  finally F.Free; end;
+end;
+
+// ============================================================
+// Welle 1 (2026-07-25): managed-autoinit + tkiClass-Gate 1a-Zweig
+// ============================================================
+
+procedure TTestUninitVar.DynArrayBareLocal_NoFinding;
+// Hook 1 (managed-autoinit): 'var a: array of Byte' ist ein DYNAMISCHES
+// Array - der Compiler initialisiert es auf nil (managed wie string) ->
+// read-without-write ist nie ein echter uninit-Bug. Beweis kommt aus der
+// Decl-Quellzeile ('array' + Whitespace + 'of'), nicht aus dem homonym-
+// ambigen Token-konkatenierten TypeRef ('arrayofbyte').
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var'#13#10 +
+    '  a: array of Byte;'#13#10 +
+    '  n: Byte;'#13#10 +
+    'begin'#13#10 +
+    '  n := a[0];'#13#10 +
+    '  WriteLn(n);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'array of T ist compiler-initialisiert (nil) - kein uninit-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.DynArrayHomonymNamedType_StillFlagged;
+// TP-Gegenprobe zu Hook 1 (die HeidiSQL-Homonym-Lehre): der NAMENSTYP
+// 'ArrayOfByte' liefert im AST denselben TypeRef wie ein echtes
+// 'array of Byte' (Token-Konkat ohne Spaces) - seine Fremd-Decl koennte
+// ein STATISCHES Array sein, dessen Garbage-Read ein echter Bug ist.
+// Das Quellzeilen-Gate (Pflicht-Whitespace in 'array of') darf weder
+// den Namenstyp noch das statische 'array[0..3] of Byte' suppressen.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var'#13#10 +
+    '  a: ArrayOfByte;'#13#10 +
+    '  b: array[0..3] of Byte;'#13#10 +
+    '  n: Byte;'#13#10 +
+    'begin'#13#10 +
+    '  n := a[0];'#13#10 +
+    '  n := n + b[0];'#13#10 +
+    '  WriteLn(n);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 2,
+      'Namenstyp-Homonym + statisches Array bleiben beide Funde');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.ParenlessInitVerbClassReceiver_StillFlagged;
+// Hook 3 (Review-Follow-up zu Hook 1a): 'b := c.Initialized' auf einem
+// KLASSEN-Receiver ist ein Property-/Feld-READ der uninitialisierten
+// Referenz - das parenlose Init-Verb-Gate darf ihn NICHT als Init-Write
+// werten (sonst waere der echte Bug maskiert). Voller Pipeline-Weg,
+// damit der Cross-Unit-TypeIndex TConn als tkiClass beweist.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'type'#13#10 +
+    '  TConn = class'#13#10 +
+    '  public'#13#10 +
+    '    Initialized: Boolean;'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var c: TConn; b: Boolean;'#13#10 +
+    'begin'#13#10 +
+    '  b := c.Initialized;'#13#10 +
+    '  WriteLn(b);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'Property-Read auf beweisbarer Klasse zaehlt nicht als Init-Write');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.ParenlessInitRecordReceiver_NoFinding;
+// Gegenprobe zu Hook 3 (Suppression bleibt): auf einem beweisbaren
+// RECORD-Receiver initialisiert der parenlose Init-Verb-Zugriff den
+// Receiver weiterhin (Self ist var-Parameter) - das tkiClass-Gate darf
+// die Hook-1a-Suppression fuer Records/Fremdtypen nicht mitreissen.
+// Voller Pipeline-Weg (TypeIndex kennt TTmp als tkiRecord).
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'type'#13#10 +
+    '  TTmp = record'#13#10 +
+    '    buf: Integer;'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    'function P: Integer;'#13#10 +
+    'var tmp: TTmp; sz: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  sz := tmp.Init shr 1;'#13#10 +
+    '  Result := sz + tmp.buf;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'Record-Receiver: parenloses tmp.Init bleibt Init-Write, kein Fund');
   finally F.Free; end;
 end;
 
