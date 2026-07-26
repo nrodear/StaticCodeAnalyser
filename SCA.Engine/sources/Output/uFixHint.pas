@@ -29,14 +29,21 @@ type
 
   TFixHintResolver = class
   private
-    // Memoize-Cache: Key = (Ord(Kind) shl 8) or Ord(Severity).
+    // Memoize-Cache: Key = Kind shl 9 | Severity shl 1 | Variantenbit.
     // Notwendig fuer IDE-Plugin auf Riesen-Scans (>100k Findings):
     // HighlightAllFindingsInFile rief FixHint() pro Finding, jedes Mal
     // mit _() Gettext-Lookup + ~3 KB String-Allokation -> Win32-OOM.
-    // Mit Cache: 165 unique Slots statt N-mal-Allokation; Result-Strings
+    // Mit Cache: ~166 unique Slots statt N-mal-Allokation; Result-Strings
     // sind ref-counted, downstream-Entries teilen sich Heap-Speicher.
+    //
+    // Das Variantenbit (HintVariant) ist Teil des Keys, weil Build fuer
+    // fkMemoryLeak nicht nur Kind/Severity, sondern zusaetzlich MissingVar
+    // auswertet - ohne das Bit wuerde der erste SCA001-Treffer eines Scans
+    // seinen Hint an alle weiteren SCA001-Treffer derselben Severity
+    // vererben (Memoize-Bug, Fix 2026-07-26).
     class var FCache : TDictionary<Integer, TFixHint>;
     class function Build(const Finding: TLeakFinding): TFixHint; static;
+    class function HintVariant(const Finding: TLeakFinding): Integer; static;
   public
     class function FixHint(const Finding: TLeakFinding): TFixHint; static;
   end;
@@ -49,13 +56,52 @@ implementation
 uses
   uRuleCatalog;   // Katalog-Fallback (Checklist-Drift-Fix 2026-07-24)
 
+const
+  // Suffix, den uLeakDetector2 an MissingVar haengt, wenn der Leak am
+  // Rueckgabewert einer Funktion haengt (list := BuildList(...) ohne Free).
+  // Bewusst als SPOT: der Build-Zweig UND die Cache-Diskriminante
+  // HintVariant lesen dasselbe Literal - so koennen sie nicht driften.
+  SFX_RETURN_VALUE = ' - R'#$FC'ckgabewert';
+
+class function TFixHintResolver.HintVariant(const Finding: TLeakFinding): Integer;
+// Diskriminante fuer Build-Zweige, die ausser Kind und Severity noch
+// WEITERE Finding-Felder auswerten.
+//
+// fkMemoryLeak (SCA001) ist aktuell der einzige der Hand-Branches, der das
+// tut: er bildet aus MissingVar eine dritte Variante ("Rueckgabewert")
+// neben dem lsError-Leak und "Free ausserhalb finally". lsError und
+// lsWarning trennt der Severity-Anteil des Keys bereits; die beiden
+// lsWarning-Varianten kollidieren dagegen ohne dieses Bit - der erste
+// SCA001-Treffer eines Scans wuerde den Slot fuellen und jeder weitere
+// bekaeme Description/Before/After der falschen Variante.
+//
+// Die lsError-Vorbedingung spiegelt die Zweig-Reihenfolge in Build: dort
+// gewinnt der Leak-Zweig, MissingVar wird gar nicht gelesen. Damit bleiben
+// alle lsError-Befunde auf Variante 0 und belegen nur einen Slot.
+//
+// WICHTIG bei Erweiterungen: wer in Build einen Zweig ergaenzt, der ein
+// anderes Feld als Kind/Severity auswertet, MUSS ihn hier abbilden -
+// sonst entsteht exakt derselbe Memoize-Bug erneut.
+begin
+  Result := 0;
+  if (Finding.Kind = fkMemoryLeak) and (Finding.Severity <> lsError) and
+     (Pos(SFX_RETURN_VALUE, Finding.MissingVar) > 0) then
+    Result := 1;
+end;
+
 class function TFixHintResolver.FixHint(const Finding: TLeakFinding): TFixHint;
 var
   Key : Integer;
 begin
   if FCache = nil then
     FCache := TDictionary<Integer, TFixHint>.Create;
-  Key := (Ord(Finding.Kind) shl 8) or Ord(Finding.Severity);
+  // Kind shl 9 laesst 9 Bit frei: 8 Bit Severity (Ord <= 2) plus 1 Bit
+  // Variante. Bewusst KEIN Ausklammern von fkMemoryLeak aus dem Memoize:
+  // SCA001 ist der volumenstaerkste Detektor, ein Build()-Aufruf pro Fund
+  // waere genau die Gettext-plus-3-KB-Allokation, gegen die der Cache
+  // ueberhaupt eingefuehrt wurde. Ein zusaetzlicher Slot ist billiger.
+  Key := (Ord(Finding.Kind) shl 9) or (Ord(Finding.Severity) shl 1)
+         or HintVariant(Finding);
   if FCache.TryGetValue(Key, Result) then Exit;
   Result := Build(Finding);
   FCache.AddOrSetValue(Key, Result);
@@ -90,7 +136,9 @@ begin
           '// Tip: enable ReportMemoryLeaksOnShutdown := True'#13#10 +
           '//      during development to surface leaks at exit.';
       end
-      else if Pos(' - R'#$FC'ckgabewert', Finding.MissingVar) > 0 then
+      // Achtung: dieser Zweig liest MissingVar - er ist der Grund fuer das
+      // Variantenbit in HintVariant. Bedingung dort mitpflegen!
+      else if Pos(SFX_RETURN_VALUE, Finding.MissingVar) > 0 then
       begin
         Result.Description := _('Function return value is not freed by the caller');
         Result.Before :=

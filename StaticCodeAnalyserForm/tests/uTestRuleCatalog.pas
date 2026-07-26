@@ -34,10 +34,25 @@ type
     // MQR-Klassifikation in den Sonar-Generic-Issue-Export rutschen
     // (P1 in todo-sonar.md).
     [Test] procedure EveryFindingKindHasMqrMapping;
+    // Pro Kind muessen BadExample UND GoodExample befuellt sein - der
+    // Fallback am Ende von uFixHint.BuildFixHint behauptet diese Garantie
+    // ausdruecklich ("examples.bad/good ... existieren fuer ALLE Kinds"),
+    // erzwungen hat sie bisher aber kein Test.
+    [Test] procedure EveryFindingKindHasExamples;
+    // ID == Ordinalzahl des Kinds. Schuetzt gegen ein Enum-Insert in der
+    // MITTE von TFindingKind (verschiebt alle Folge-IDs).
+    [Test] procedure RuleIDMatchesOrdinal;
     // ID-Konvention: 'SCA' + 3-stellige Nummer.
     [Test] procedure RuleIDsFollowConvention;
     // IDs muessen unique sein.
     [Test] procedure RuleIDsAreUnique;
+    // name-Feld muss ueber alle Rules eindeutig sein (analog zu den IDs).
+    [Test] procedure RuleNamesAreUnique;
+    // shortDescription muss ueber alle Rules eindeutig sein.
+    [Test] procedure ShortDescriptionsAreUnique;
+    // JSON type-Feld muss zu KIND_META.FindingType passen (Gegenstueck zu
+    // JsonSeverityMatchesKindMeta).
+    [Test] procedure JsonTypeMatchesKindMeta;
     // Kind-Name in JSON muss zu KindName(K) matchen.
     [Test] procedure KindNameMatchesCatalog;
     // Tool-Info muss gesetzt sein (fuer SARIF tool.driver-Block).
@@ -143,6 +158,31 @@ begin
   end;
 end;
 
+procedure TTestRuleCatalog.JsonTypeMatchesKindMeta;
+// Gegenstueck zu JsonSeverityMatchesKindMeta, nur fuer das type-Feld:
+// JSON type == KIND_META.FindingType. Die Kategorie steuert den
+// Sonar-/SARIF-Export und die UI-Gruppierung; driftet sie, sehen User
+// denselben Befund in der IDE als Bug und im CI-Report als Code Smell.
+// Zusatznutzen: TRuleCatalog.ParseFindingType faellt bei unbekannter
+// Schreibweise still auf ftCodeSmell zurueck - ein Tippfehler im
+// type-Feld einer Bug-/Vulnerability-Rule wird damit hier sichtbar,
+// statt lautlos zum Code Smell zu werden.
+var
+  K    : TFindingKind;
+  Meta : TRuleMeta;
+begin
+  for K := Low(TFindingKind) to High(TFindingKind) do
+  begin
+    Meta := TRuleCatalog.GetRule(K);
+    Assert.AreEqual<TFindingType>(
+      Meta.FindingType,
+      KindFindingType(K),
+      Format('FindingType-Drift fuer %s: JSON=%d, KIND_META=%d - ' +
+             'rules/sca-rules.json type-Feld oder uSCAConsts.KIND_META anpassen',
+        [KindName(K), Ord(Meta.FindingType), Ord(KindFindingType(K))]));
+  end;
+end;
+
 procedure TTestRuleCatalog.EveryFindingKindHasMqrMapping;
 // Sonar MQR-Mode braucht pro Rule cleanCodeAttribute + Impacts. Test
 // faellt sofort wenn jemand einen neuen TFindingKind hinzufuegt, ohne
@@ -184,6 +224,103 @@ begin
   end;
 end;
 
+procedure TTestRuleCatalog.EveryFindingKindHasExamples;
+// Pro Kind muessen examples.bad UND examples.good in
+// rules/sca-rules.json stehen und echten Inhalt haben.
+//
+// Warum das ein eigener Test ist: der Fallback am Ende von
+// uFixHint.BuildFixHint (Checklist-Drift-Fix 2026-07-24) setzt
+// Before/After direkt aus Meta.BadExample/Meta.GoodExample und
+// kommentiert dazu, examples.bad/good existierten fuer ALLE Kinds.
+// Erzwungen hat das bisher nichts - EveryFindingKindHasRichMetadata
+// prueft nur Name/ShortDescription/DetectorUnit. Ein neuer Detektor
+// ohne examples-Block haette also stumm einen Fix-Hint mit leerem
+// Before/After produziert.
+//
+// Platzhalter-Guard: geprueft wird, ob das GANZE Feld nur aus einem
+// Stub-Token besteht ('TBD', 'TODO', '...', 'xxx', 'n/a', '-'),
+// optional hinter einem //-Kommentarmarker. Ein Substring-Test waere
+// hier falsch und wuerde vier legitime Beispiele rot faerben:
+// SCA019 (TodoComment) demonstriert im Bad-Example eine echte
+// TODO-Zeile, SCA070 (CommentedOutCode) im Good-Example ebenso,
+// SCA179 (AttributeIgnoreWithoutReason) zeigt ein Ignore-Attribut mit
+// 'TBD ticket #1234', und SCA021 (DuplicateBlock) nennt im
+// Good-Example eine 'ValidateXxx'-Prozedur.
+const
+  PLACEHOLDERS: array[0..5] of string = (
+    'TBD', 'TODO', '...', 'xxx', 'n/a', '-'
+  );
+var
+  K    : TFindingKind;
+  Meta : TRuleMeta;
+
+  function IsPlaceholder(const S: string): Boolean;
+  var
+    T : string;
+    P : string;
+  begin
+    Result := True;
+    T := Trim(S);
+    // fuehrende Kommentarmarker abstreifen - '// TBD' ist genauso ein Stub
+    while T.StartsWith('//') do
+      T := Trim(T.Substring(2));
+    if T = '' then Exit;
+    for P in PLACEHOLDERS do
+      if SameText(P, T) then Exit;
+    Result := False;
+  end;
+
+begin
+  for K := Low(TFindingKind) to High(TFindingKind) do
+  begin
+    Meta := TRuleCatalog.GetRule(K);
+
+    Assert.IsNotEmpty(Meta.BadExample,
+      Format('Kind %s (%s) hat kein examples.bad in rules/sca-rules.json - ' +
+             'uFixHint-Fallback liefert dann einen leeren Before-Block',
+        [KindName(K), Meta.ID]));
+    Assert.IsNotEmpty(Meta.GoodExample,
+      Format('Kind %s (%s) hat kein examples.good in rules/sca-rules.json - ' +
+             'uFixHint-Fallback liefert dann einen leeren After-Block',
+        [KindName(K), Meta.ID]));
+
+    Assert.IsFalse(IsPlaceholder(Meta.BadExample),
+      Format('Kind %s (%s): examples.bad ist ein Platzhalter ("%s")',
+        [KindName(K), Meta.ID, Meta.BadExample]));
+    Assert.IsFalse(IsPlaceholder(Meta.GoodExample),
+      Format('Kind %s (%s): examples.good ist ein Platzhalter ("%s")',
+        [KindName(K), Meta.ID, Meta.GoodExample]));
+  end;
+end;
+
+procedure TTestRuleCatalog.RuleIDMatchesOrdinal;
+// Strenger als RuleIDsFollowConvention: die ID MUSS die 1-basierte
+// Ordinalzahl des Kinds sein (fkMemoryLeak = Ord 0 -> 'SCA001').
+//
+// Schutzzweck: wird ein neuer TFindingKind in der MITTE des Enums
+// eingefuegt (statt am Ende), verschieben sich alle Folge-IDs um eins.
+// KIND_META, sca-rules.json und die Detektoren wandern in dem Fall
+// mit - die gesamte Doku, alle Baselines, gespeicherte
+// Suppression-Marker und jeder extern archivierte SARIF-Report zeigen
+// danach aber auf die falsche Regel, ohne dass irgendein Bestandstest
+// rot wird (Uniqueness + SCAxxx-Konvention bleiben ja erfuellt).
+var
+  K        : TFindingKind;
+  Meta     : TRuleMeta;
+  Expected : string;
+begin
+  for K := Low(TFindingKind) to High(TFindingKind) do
+  begin
+    Meta     := TRuleCatalog.GetRule(K);
+    Expected := Format('SCA%.3d', [Ord(K) + 1]);
+    Assert.AreEqual(Expected, Meta.ID,
+      Format('Kind %s (Ordinal %d) hat ID "%s", erwartet "%s" - neuer ' +
+             'TFindingKind in der Mitte des Enums eingefuegt? Neue Kinds ' +
+             'gehoeren ans ENDE von TFindingKind',
+        [KindName(K), Ord(K), Meta.ID, Expected]));
+  end;
+end;
+
 procedure TTestRuleCatalog.RuleIDsFollowConvention;
 var
   K    : TFindingKind;
@@ -214,6 +351,87 @@ begin
         Format('Doppelte Rule-ID: %s', [Meta.ID]));
       Seen.Add(Meta.ID, True);
     end;
+  finally
+    Seen.Free;
+  end;
+end;
+
+procedure TTestRuleCatalog.RuleNamesAreUnique;
+// Das name-Feld ist der Titel, den User in IDE-Liste, HTML-Report und
+// SARIF-Rule-Block sehen. Zwei Rules mit identischem Namen sind dort
+// nicht auseinanderzuhalten - "welche der beiden Regeln hat gefeuert?"
+// laesst sich nur noch ueber die ID beantworten, die im HTML-Report
+// aber nicht immer mitlaeuft. Verglichen wird case-insensitiv: eine
+// Kollision, die sich nur in der Gross-/Kleinschreibung unterscheidet,
+// ist fuer den Leser genauso eine Dublette.
+var
+  K     : TFindingKind;
+  Meta  : TRuleMeta;
+  Owner : string;
+  Seen  : TDictionary<string, string>; // LowerCase(Name) -> erste Rule-ID
+begin
+  Seen := TDictionary<string, string>.Create;
+  try
+    for K := Low(TFindingKind) to High(TFindingKind) do
+    begin
+      Meta := TRuleCatalog.GetRule(K);
+      if Seen.TryGetValue(LowerCase(Trim(Meta.Name)), Owner) then
+        Assert.Fail(
+          Format('Doppelter Rule-Name "%s": %s und %s - ' +
+                 'name in rules/sca-rules.json eindeutig machen',
+            [Meta.Name, Owner, Meta.ID]));
+      Seen.Add(LowerCase(Trim(Meta.Name)), Meta.ID);
+    end;
+    // Abschluss-Assertion (DUnitX 'No assertions were made'): der
+    // Kollisionszweig oben feuert im Gutfall NIE, daher hier ein
+    // positiver Nachweis - er belegt zugleich, dass wirklich JEDES
+    // Kind eingetragen wurde (Seen.Count == Anzahl Kinds; ein
+    // Duplikat haette die Zahl gesenkt, ohne den Zweig zu treffen,
+    // falls dieser je umgebaut wird).
+    Assert.AreEqual<Integer>(
+      Ord(High(TFindingKind)) - Ord(Low(TFindingKind)) + 1, Seen.Count,
+      'Es wurden nicht alle Rule-Namen geprueft - erwartet je Kind ' +
+      'einen Eintrag (Feld name aus rules/sca-rules.json)');
+  finally
+    Seen.Free;
+  end;
+end;
+
+procedure TTestRuleCatalog.ShortDescriptionsAreUnique;
+// shortDescription ist die einzeilige Erklaerung in Tooltip, Fix-Hint
+// (uFixHint-Fallback setzt Description daraus) und SARIF. Aktuell sind
+// alle 194 sauber verschieden - dieser Test friert den Zustand ein,
+// damit eine per Copy&Paste angelegte neue Rule nicht mit dem Text
+// ihrer Vorlage stehen bleibt. Case-insensitiv, gleiche Begruendung
+// wie bei RuleNamesAreUnique.
+var
+  K     : TFindingKind;
+  Meta  : TRuleMeta;
+  Owner : string;
+  Seen  : TDictionary<string, string>; // LowerCase(Desc) -> erste Rule-ID
+begin
+  Seen := TDictionary<string, string>.Create;
+  try
+    for K := Low(TFindingKind) to High(TFindingKind) do
+    begin
+      Meta := TRuleCatalog.GetRule(K);
+      if Seen.TryGetValue(LowerCase(Trim(Meta.ShortDescription)), Owner) then
+        Assert.Fail(
+          Format('Doppelte shortDescription "%s": %s und %s - ' +
+                 'Copy&Paste beim Anlegen der neuen Rule?',
+            [Meta.ShortDescription, Owner, Meta.ID]));
+      Seen.Add(LowerCase(Trim(Meta.ShortDescription)), Meta.ID);
+    end;
+    // Abschluss-Assertion (DUnitX 'No assertions were made'): der
+    // Kollisionszweig oben feuert im Gutfall NIE, daher hier ein
+    // positiver Nachweis - er belegt zugleich, dass wirklich JEDES
+    // Kind eingetragen wurde (Seen.Count == Anzahl Kinds; ein
+    // Duplikat haette die Zahl gesenkt, ohne den Zweig zu treffen,
+    // falls dieser je umgebaut wird).
+    Assert.AreEqual<Integer>(
+      Ord(High(TFindingKind)) - Ord(Low(TFindingKind)) + 1, Seen.Count,
+      'Es wurden nicht alle shortDescriptions geprueft - erwartet je Kind ' +
+      'einen Eintrag (Feld shortDescription aus rules/sca-rules.json)');
   finally
     Seen.Free;
   end;

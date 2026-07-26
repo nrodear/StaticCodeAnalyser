@@ -1147,6 +1147,11 @@ begin
       lsError   : Inc(Errors);
       lsWarning : Inc(Warnings);
       lsHint    : Inc(Hints);
+    else
+      ; // TLeakSeverity kennt exakt lsError/lsWarning/lsHint - alle Werte
+        // sind oben abgedeckt. Der leere else-Zweig ist nur da, um SCA168
+        // (DefaultCaseInCaseStatement) zu bedienen, das die Vollstaendigkeit
+        // des case nicht prueft; am Verhalten aendert er nichts.
     end;
   end;
 end;

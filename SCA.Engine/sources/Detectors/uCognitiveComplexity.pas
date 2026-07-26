@@ -17,6 +17,15 @@ unit uCognitiveComplexity;
 //           for ... do         (+1+1 = +2, depth=1)
 //             if ... then      (+1+2 = +3, depth=2)
 //       Cyclomatic waere: +1+1+1 = 3. Cognitive: +1+2+3 = 6.
+//       AUSNAHME 'else if' (Sonar: "else if" ist +1 OHNE Nesting-
+//       Zuschlag): der Parser haengt den else-Zweig als nkElseBranch
+//       UNTER das nkIfStmt (uParser2.ParseIfStmt), ein 'else if' liegt
+//       also strukturell eine Ebene tiefer als die Kette semantisch ist.
+//       Ohne Korrektur kostete eine FLACHE else-if-Kette der Laenge N
+//       nicht N sondern N*(N+1)/2 (uUnusedUses.pas:139 mit 121 else-if:
+//       Score 7575 statt 121) - eine reine Metrik-Verfaelschung. Siehe
+//       CountInMethod: direkte nkIfStmt-Kinder eines nkElseBranch erben
+//       die Tiefe des UMGEBENDEN if, nicht die erhoehte.
 //   B3: +1 pro boolean-Operator-Sequenz (and/or/xor) in if-Bedingung.
 //
 // Schwellwert: DetectorMaxCognitive (Default 15 - Sonar-Industry-
@@ -108,6 +117,7 @@ var
   Entry, Child : TStackEntry;
   i     : Integer;
   ChildDepth : Integer;
+  ElseIfDepth : Integer;   // Tiefe fuer ein direktes nkIfStmt-Kind (else if)
   IsControlFlow : Boolean;
 begin
   Result := 0;
@@ -149,10 +159,26 @@ begin
       if IsControlFlow then ChildDepth := Entry.Depth + 1
       else                  ChildDepth := Entry.Depth;
 
+      // 'else if'-Korrektur (2026-07-26): nkElseBranch haengt UNTER dem
+      // nkIfStmt und traegt dessen bereits erhoehte Tiefe. Ein DIREKT
+      // darin liegendes nkIfStmt ist aber kein verschachteltes if,
+      // sondern das naechste Glied einer flachen else-if-Kette und
+      // bekommt nach Sonar +1 OHNE Nesting-Zuschlag. Es erbt daher die
+      // Tiefe des umgebenden if (ChildDepth-1), womit jedes Kettenglied
+      // denselben Level wie das erste if bekommt -> Kosten N statt
+      // N*(N+1)/2. Bewusst NUR fuer das direkte Kind: ein 'else begin
+      // if ... end' liegt unter einem nkBlock, behaelt also seinen
+      // Nesting-Zuschlag (Sonar-konform). Der Eingriff kann Scores
+      // ausschliesslich SENKEN - nichts wird neu gezaehlt.
+      ElseIfDepth := ChildDepth;
+      if (Entry.Node.Kind = nkElseBranch) and (ChildDepth > 0) then
+        ElseIfDepth := ChildDepth - 1;
+
       for i := Entry.Node.Children.Count - 1 downto 0 do
       begin
         Child.Node  := Entry.Node.Children[i];
-        Child.Depth := ChildDepth;
+        if Child.Node.Kind = nkIfStmt then Child.Depth := ElseIfDepth
+        else                               Child.Depth := ChildDepth;
         Stack.Add(Child);
       end;
     end;

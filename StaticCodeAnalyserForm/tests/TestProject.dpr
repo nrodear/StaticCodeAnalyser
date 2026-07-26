@@ -71,6 +71,7 @@ uses
   uTestLexerConditionals in 'uTestLexerConditionals.pas',
   uTestPerformance in 'uTestPerformance.pas',
   uTestRuleCatalog in 'uTestRuleCatalog.pas',
+  uTestFixHint in 'uTestFixHint.pas',
   uTestExportSARIF in 'uTestExportSARIF.pas',
   uTestFindingFingerprint in 'uTestFindingFingerprint.pas',
   uTestExportSonarGeneric in 'uTestExportSonarGeneric.pas',
