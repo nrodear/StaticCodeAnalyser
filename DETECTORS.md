@@ -176,7 +176,7 @@ help panel and DUnitX tests.
 
 | # | SCA | Rule (`fk…` id) | Description | Type | Unit |
 |---|-----|-----------------|-------------|------|------|
-| D4 | SCA031 | **DfmSchemaMismatch** | DFM `TField`/`TDataSource` has no matching published field in the form class | Bug | `uDfmSchemaMismatch` |
+| D4 | SCA031 | **DfmSchemaMismatch** | DFM `TField`/`TDataSource` has no matching published field in the form class | Code Smell | `uDfmSchemaMismatch` |
 | D5 | SCA032 | **DfmCircularDataSource** | Cycle in `DataSource.DataSet` / `MasterSource` graph — runtime infinite loop / stack overflow | Bug | `uDfmCircularDataSource` |
 | D6 | SCA036 | **DfmFieldTypeMismatch** | UI control class doesn't match the `TField` data type (e.g. `TDBEdit` bound to `ftBlob`) | Code Smell | `uDfmFieldTypeMismatch` |
 | D7 | SCA034/SCA035 | **DfmRequiredFieldUnbound / NotVisible** | `TField` with `Required=True` has no UI binding at all (Unbound) — or only on a hidden tab (NotVisible) | Bug | `uDfmRequiredField` |
@@ -239,7 +239,7 @@ in the help panel and a DUnitX test fixture.
 | SCA121 | **RoutineResultUnassigned** | Function body finishes without writing `Result` (or `<FunctionName> := ...`) — return value is undefined | Error | Bug | `uRoutineResultAssigned` |
 | SCA122 | **ReRaiseException** | `on E: T do ... raise E;` discards the original stack trace — use bare `raise;` to keep it | Warning | Bug | `uReRaiseException` |
 | SCA123 | **CastAndFree** | `TFoo(x).Free` — the type-cast has no effect on which `Destroy` runs (`Destroy` is virtual) | Hint | Code Smell | `uCastAndFree` |
-| SCA124 | **InstanceInvokedConstructor** | `obj.Create` — invokes constructor as method on an existing instance, skips allocation and re-runs field initialisation over live data | Error | Bug | `uInstanceInvokedConstructor` |
+| SCA124 | **InstanceInvokedConstructor** | `obj.Create` — invokes constructor as method on an existing instance, skips allocation and re-runs field initialisation over live data | Warning | Bug | `uInstanceInvokedConstructor` |
 | SCA125 | **InheritedMethodEmpty** | Override whose entire body is `inherited;` — serves no purpose, remove it | Hint | Code Smell | `uInheritedMethodEmpty` |
 | SCA126 | **NilComparison** | Use `Assigned(x)` / `not Assigned(x)` instead of `x = nil` / `x <> nil` — Pascal convention | Hint | Code Smell | `uNilComparison` |
 | SCA127 | **RaisingRawException** | `raise Exception.Create('...')` — base class carries no semantic information, callers cannot filter selectively | Warning | Code Smell | `uRaisingRawException` |

@@ -1,6 +1,6 @@
 # StaticCodeAnalyser — Rule Catalog
 
-All 193 detector rules. Single source of truth: [`rules/sca-rules.json`](../rules/sca-rules.json).
+All 194 detector rules. Single source of truth: [`rules/sca-rules.json`](../rules/sca-rules.json).
 
 | ID | Name | Severity | Type | Detector |
 |---|---|---|---|---|
@@ -34,7 +34,7 @@ All 193 detector rules. Single source of truth: [`rules/sca-rules.json`](../rule
 | [SCA028](#sca028) | DFM event handler references missing method | **Error** | Bug | `uDfmDeadEvent.pas` |
 | [SCA029](#sca029) | Orphan event handler | Hint | Code Smell | `uDfmOrphanHandler.pas` |
 | [SCA030](#sca030) | Empty bound event handler | Hint | Code Smell | `uDfmEmptyBoundEvent.pas` |
-| [SCA031](#sca031) | DFM component without published field | **Error** | Bug | `uDfmSchemaMismatch.pas` |
+| [SCA031](#sca031) | DFM component without published field | Hint | Code Smell | `uDfmSchemaMismatch.pas` |
 | [SCA032](#sca032) | Circular DataSource / Master-Detail loop | **Error** | Bug | `uDfmCircularDataSource.pas` |
 | [SCA033](#sca033) | SQL property built from UI input | **Error** | Vulnerability | `uDfmSqlFromUserInput.pas` |
 | [SCA034](#sca034) | Required field has no UI binding | Warning | Bug | `uDfmRequiredField.pas` |
@@ -53,7 +53,7 @@ All 193 detector rules. Single source of truth: [`rules/sca-rules.json`](../rule
 | [SCA047](#sca047) | x := x | Warning | Bug | `uSelfAssignment.pas` |
 | [SCA048](#sca048) | Virtual call in constructor | **Error** | Bug | `uVirtualCallInCtor.pas` |
 | [SCA049](#sca049) | Length(s) - N without guard | Hint | Bug | `uLengthUnderflow.pas` |
-| [SCA050](#sca050) | Public member could be private | Hint | Code Smell | `uVisibilityCheck.pas` |
+| [SCA050](#sca050) | Public member could be unit-private | Hint | Code Smell | `uVisibilityCheck.pas` |
 | [SCA051](#sca051) | Public member could be protected | Hint | Code Smell | `uVisibilityCheck.pas` |
 | [SCA052](#sca052) | Unused public member (dead API) | Hint | Code Smell | `uVisibilityCheck.pas` |
 | [SCA053](#sca053) | Unused local variable | Hint | Code Smell | `uUnusedLocal.pas` |
@@ -127,7 +127,7 @@ All 193 detector rules. Single source of truth: [`rules/sca-rules.json`](../rule
 | [SCA121](#sca121) | Function never assigns Result | **Error** | Bug | `uRoutineResultAssigned.pas` |
 | [SCA122](#sca122) | Re-raise of bound exception variable | Warning | Bug | `uReRaiseException.pas` |
 | [SCA123](#sca123) | Type-cast immediately before Free / Destroy | Hint | Code Smell | `uCastAndFree.pas` |
-| [SCA124](#sca124) | Constructor invoked on instance instead of class | **Error** | Bug | `uInstanceInvokedConstructor.pas` |
+| [SCA124](#sca124) | Constructor invoked on instance instead of class | Warning | Bug | `uInstanceInvokedConstructor.pas` |
 | [SCA125](#sca125) | Override whose entire body is `inherited;` | Hint | Code Smell | `uInheritedMethodEmpty.pas` |
 | [SCA126](#sca126) | Use Assigned() instead of `= nil` / `<> nil` | Hint | Code Smell | `uNilComparison.pas` |
 | [SCA127](#sca127) | Raise the bare `Exception` base class instead of a specific subclass | Warning | Code Smell | `uRaisingRawException.pas` |
@@ -156,7 +156,7 @@ All 193 detector rules. Single source of truth: [`rules/sca-rules.json`](../rule
 | [SCA150](#sca150) | Boolean comparison is always true / always false | Warning | Bug | `uBoolAlwaysTrue.pas` |
 | [SCA151](#sca151) | Function always returns the same literal | Hint | Code Smell | `uConstantReturn.pas` |
 | [SCA152](#sca152) | User-visible string assigned as literal | Hint | Code Smell | `uHardcodedString.pas` |
-| [SCA153](#sca153) | Lock acquired without try/finally release | Warning | Bug | `uUnpairedLock.pas` |
+| [SCA153](#sca153) | Lock/Unlock pair without try/finally | Warning | Bug | `uUnpairedLock.pas` |
 | [SCA154](#sca154) | Move/FillChar with SizeOf(pointer-type) | Warning | Bug | `uMoveSizeOfPointer.pas` |
 | [SCA155](#sca155) | with statement on multiple targets | Hint | Code Smell | `uWithMultipleTargets.pas` |
 | [SCA156](#sca156) | GetMem / AllocMem without try/finally | Warning | Bug | `uGetMemWithoutFreeMem.pas` |
@@ -171,22 +171,22 @@ All 193 detector rules. Single source of truth: [`rules/sca-rules.json`](../rule
 | [SCA165](#sca165) | Unused noinspection marker | Hint | Code Smell | `uSuppression.pas` |
 | [SCA166](#sca166) | Uninitialised local variable | **Error** | Bug | `uUninitVar.pas` |
 | [SCA167](#sca167) | Random call without prior Randomize | Warning | Bug | `uInsecureRandom.pas` |
-| [SCA168](#sca168) | case statement without else branch | Hint | CodeSmell | `uDefaultCaseInCaseStatement.pas` |
+| [SCA168](#sca168) | case statement without else branch | Hint | Code Smell | `uDefaultCaseInCaseStatement.pas` |
 | [SCA169](#sca169) | Assert argument contains a function call with side effects | Warning | Bug | `uAssertWithSideEffect.pas` |
-| [SCA170](#sca170) | string parameter without const modifier | Hint | CodeSmell | `uConstStringParameter.pas` |
-| [SCA171](#sca171) | Compiler switch OFF without matching ON in same file | Warning | CodeSmell | `uCompilerDirectiveScope.pas` |
-| [SCA172](#sca172) | Boolean property without Is / Has / Can / Should prefix | Hint | CodeSmell | `uBooleanPropertyNaming.pas` |
-| [SCA173](#sca173) | Variant in performance-sensitive method (contains a loop) | Hint | CodeSmell | `uVariantTypeMisuse.pas` |
+| [SCA170](#sca170) | string parameter without const modifier | Hint | Code Smell | `uConstStringParameter.pas` |
+| [SCA171](#sca171) | Compiler switch OFF without matching ON in same file | Warning | Code Smell | `uCompilerDirectiveScope.pas` |
+| [SCA172](#sca172) | Boolean property without Is / Has / Can / Should prefix | Hint | Code Smell | `uBooleanPropertyNaming.pas` |
+| [SCA173](#sca173) | Variant in performance-sensitive method (contains a loop) | Hint | Code Smell | `uVariantTypeMisuse.pas` |
 | [SCA174](#sca174) | TList<T> filled with T.Create - items leak when list is freed | Warning | Bug | `uTObjectListWithoutOwnership.pas` |
 | [SCA175](#sca175) | Anonymous method captures for-loop variable by reference | **Error** | Bug | `uAnonMethodCaptureLoopVar.pas` |
-| [SCA176](#sca176) | Method has high cognitive complexity (nested control flow) | Warning | CodeSmell | `uCognitiveComplexity.pas` |
+| [SCA176](#sca176) | Method has high cognitive complexity (nested control flow) | Warning | Code Smell | `uCognitiveComplexity.pas` |
 | [SCA177](#sca177) | Thread variable accessed after FreeOnTerminate := True | **Error** | Bug | `uThreadFreeOnTerminateWithRef.pas` |
 | [SCA178](#sca178) | File-open API receives concatenated user input | **Error** | Vulnerability | `uPathTraversal.pas` |
-| [SCA179](#sca179) | DUnitX [Ignore] attribute without reason argument | Hint | CodeSmell | `uAttributeIgnoreWithoutReason.pas` |
-| [SCA180](#sca180) | Same attribute applied twice to one member | Warning | CodeSmell | `uAttributeDuplicate.pas` |
+| [SCA179](#sca179) | DUnitX [Ignore] attribute without reason argument | Hint | Code Smell | `uAttributeIgnoreWithoutReason.pas` |
+| [SCA180](#sca180) | Same attribute applied twice to one member | Warning | Code Smell | `uAttributeDuplicate.pas` |
 | [SCA181](#sca181) | DUnitX [Category] without category-name string | **Error** | Bug | `uAttributeCategoryWithoutString.pas` |
-| [SCA182](#sca182) | [TestFixture] class without any [Test] method | Warning | CodeSmell | `uAttributeTestFixtureWithoutTests.pas` |
-| [SCA183](#sca183) | Attribute with blank line before target member | Hint | CodeSmell | `uAttributeMisalignment.pas` |
+| [SCA182](#sca182) | [TestFixture] class without any [Test] method | Warning | Code Smell | `uAttributeTestFixtureWithoutTests.pas` |
+| [SCA183](#sca183) | Attribute with blank line before target member | Hint | Code Smell | `uAttributeMisalignment.pas` |
 | [SCA184](#sca184) | Unused DFM component | Hint | Code Smell | `uDfmComponentUnused.pas` |
 | [SCA185](#sca185) | UTF-8 source file without BOM | Warning | Bug | `uSourceEncoding.pas` |
 | [SCA186](#sca186) | Invalid UTF-8 sequence in source file | **Error** | File Error | `uSourceEncoding.pas` |
@@ -837,11 +837,11 @@ An empty handler with a live DFM binding is almost always a stub forgotten after
 
 | Field | Value |
 |---|---|
-| Severity | **Error** | Type | Bug |
+| Severity | Hint | Type | Code Smell |
 | Tags | `dfm`, `streaming` |
 | Detector | `uDfmSchemaMismatch.pas` |
 
-DFM streaming requires every named component to have a corresponding `published` field in the host class. A missing field crashes form construction with `EReadError`.
+A named DFM component without a corresponding published field is a schema deviation, not a runtime error: the streamer resolves the field via FieldAddress, gets nil and silently skips the assignment (no EReadError). The component is still created but unreachable from code - a stale/dead DFM entry worth cleaning up.
 
 ---
 
@@ -1178,7 +1178,7 @@ end;
 ---
 
 ## SCA050
-**Public member could be private**
+**Public member could be unit-private**
 
 > Public/protected member referenced only inside its own unit
 
@@ -3056,7 +3056,7 @@ end;
 
 | Field | Value |
 |---|---|
-| Severity | **Error** | Type | Bug |
+| Severity | Warning | Type | Bug |
 | Tags | `constructor`, `memory`, `lifecycle`, `sonardelphi` |
 | Detector | `uInstanceInvokedConstructor.pas` |
 
@@ -3927,7 +3927,7 @@ ShowMessage(SSavedMsg);
 
 ---
 ## SCA153
-**Lock acquired without try/finally release**
+**Lock/Unlock pair without try/finally**
 
 > <ident>.Lock / EnterCriticalSection / TMonitor.Enter followed by a matching UnLock/Leave/Exit in the same routine without an enclosing try/finally - exception path leaks the lock and deadlocks the next caller
 
@@ -4340,7 +4340,7 @@ end;
 
 | Field | Value |
 |---|---|
-| Severity | Hint | Type | CodeSmell |
+| Severity | Hint | Type | Code Smell |
 | Tags | `control-flow`, `default-case` |
 | Config | `[Detectors] DefaultCaseInCaseStatementEnabled` |
 | Detector | `uDefaultCaseInCaseStatement.pas` |
@@ -4395,7 +4395,7 @@ Assert(Ok, 'subsystem init failed');
 
 | Field | Value |
 |---|---|
-| Severity | Hint | Type | CodeSmell |
+| Severity | Hint | Type | Code Smell |
 | Tags | `performance`, `string`, `refcount` |
 | Config | `[Detectors] ConstStringParameterEnabled` |
 | Detector | `uConstStringParameter.pas` |
@@ -4418,7 +4418,7 @@ function Hash(const s: string): Integer;
 
 | Field | Value |
 |---|---|
-| Severity | Warning | Type | CodeSmell |
+| Severity | Warning | Type | Code Smell |
 | Tags | `compiler-directive`, `scope`, `switch` |
 | Config | `[Detectors] CompilerDirectiveScopeEnabled` |
 | Detector | `uCompilerDirectiveScope.pas` |
@@ -4448,7 +4448,7 @@ end;
 
 | Field | Value |
 |---|---|
-| Severity | Hint | Type | CodeSmell |
+| Severity | Hint | Type | Code Smell |
 | Tags | `naming`, `convention`, `boolean` |
 | Config | `[Detectors] BooleanPropertyNamingEnabled` |
 | Detector | `uBooleanPropertyNaming.pas` |
@@ -4471,7 +4471,7 @@ property IsReady: Boolean;
 
 | Field | Value |
 |---|---|
-| Severity | Hint | Type | CodeSmell |
+| Severity | Hint | Type | Code Smell |
 | Tags | `performance`, `variant`, `com` |
 | Config | `[Detectors] VariantTypeMisuseEnabled` |
 | Detector | `uVariantTypeMisuse.pas` |
@@ -4560,7 +4560,7 @@ end;
 
 | Field | Value |
 |---|---|
-| Severity | Warning | Type | CodeSmell |
+| Severity | Warning | Type | Code Smell |
 | Tags | `complexity`, `cognitive`, `maintainability` |
 | Config | `[Detectors] CognitiveLimit` |
 | Detector | `uCognitiveComplexity.pas` |
@@ -4648,7 +4648,7 @@ Stream := TFileStream.Create(SafePath, fmOpenRead);
 
 | Field | Value |
 |---|---|
-| Severity | Hint | Type | CodeSmell |
+| Severity | Hint | Type | Code Smell |
 | Tags | `test`, `dunitx`, `documentation` |
 | Config | `[Detectors] AttributeIgnoreWithoutReasonEnabled` |
 | Detector | `uAttributeIgnoreWithoutReason.pas` |
@@ -4673,7 +4673,7 @@ procedure SomeTest;
 
 | Field | Value |
 |---|---|
-| Severity | Warning | Type | CodeSmell |
+| Severity | Warning | Type | Code Smell |
 | Tags | `attribute`, `duplication` |
 | Config | `[Detectors] AttributeDuplicateEnabled` |
 | Detector | `uAttributeDuplicate.pas` |
@@ -4724,7 +4724,7 @@ procedure Foo;
 
 | Field | Value |
 |---|---|
-| Severity | Warning | Type | CodeSmell |
+| Severity | Warning | Type | Code Smell |
 | Tags | `test`, `dunitx`, `dead-code` |
 | Config | `[Detectors] AttributeTestFixtureWithoutTestsEnabled` |
 | Detector | `uAttributeTestFixtureWithoutTests.pas` |
@@ -4753,7 +4753,7 @@ end;
 
 | Field | Value |
 |---|---|
-| Severity | Hint | Type | CodeSmell |
+| Severity | Hint | Type | Code Smell |
 | Tags | `attribute`, `readability` |
 | Config | `[Detectors] AttributeMisalignmentEnabled` |
 | Detector | `uAttributeMisalignment.pas` |

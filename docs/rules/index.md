@@ -156,7 +156,7 @@ All 194 detector rules. Click an ID for full details.
 | [SCA150](SCA150.md) | Boolean comparison is always true / always false | Warning | Bug | `uBoolAlwaysTrue.pas` |
 | [SCA151](SCA151.md) | Function always returns the same literal | Hint | Code Smell | `uConstantReturn.pas` |
 | [SCA152](SCA152.md) | User-visible string assigned as literal | Hint | Code Smell | `uHardcodedString.pas` |
-| [SCA153](SCA153.md) | Lock acquired without try/finally release | Warning | Bug | `uUnpairedLock.pas` |
+| [SCA153](SCA153.md) | Lock/Unlock pair without try/finally | Warning | Bug | `uUnpairedLock.pas` |
 | [SCA154](SCA154.md) | Move/FillChar with SizeOf(pointer-type) | Warning | Bug | `uMoveSizeOfPointer.pas` |
 | [SCA155](SCA155.md) | with statement on multiple targets | Hint | Code Smell | `uWithMultipleTargets.pas` |
 | [SCA156](SCA156.md) | GetMem / AllocMem without try/finally | Warning | Bug | `uGetMemWithoutFreeMem.pas` |
@@ -171,22 +171,22 @@ All 194 detector rules. Click an ID for full details.
 | [SCA165](SCA165.md) | Unused noinspection marker | Hint | Code Smell | `uSuppression.pas` |
 | [SCA166](SCA166.md) | Uninitialised local variable | Error | Bug | `uUninitVar.pas` |
 | [SCA167](SCA167.md) | Random call without prior Randomize | Warning | Bug | `uInsecureRandom.pas` |
-| [SCA168](SCA168.md) | case statement without else branch | Hint | CodeSmell | `uDefaultCaseInCaseStatement.pas` |
+| [SCA168](SCA168.md) | case statement without else branch | Hint | Code Smell | `uDefaultCaseInCaseStatement.pas` |
 | [SCA169](SCA169.md) | Assert argument contains a function call with side effects | Warning | Bug | `uAssertWithSideEffect.pas` |
-| [SCA170](SCA170.md) | string parameter without const modifier | Hint | CodeSmell | `uConstStringParameter.pas` |
-| [SCA171](SCA171.md) | Compiler switch OFF without matching ON in same file | Warning | CodeSmell | `uCompilerDirectiveScope.pas` |
-| [SCA172](SCA172.md) | Boolean property without Is / Has / Can / Should prefix | Hint | CodeSmell | `uBooleanPropertyNaming.pas` |
-| [SCA173](SCA173.md) | Variant in performance-sensitive method (contains a loop) | Hint | CodeSmell | `uVariantTypeMisuse.pas` |
+| [SCA170](SCA170.md) | string parameter without const modifier | Hint | Code Smell | `uConstStringParameter.pas` |
+| [SCA171](SCA171.md) | Compiler switch OFF without matching ON in same file | Warning | Code Smell | `uCompilerDirectiveScope.pas` |
+| [SCA172](SCA172.md) | Boolean property without Is / Has / Can / Should prefix | Hint | Code Smell | `uBooleanPropertyNaming.pas` |
+| [SCA173](SCA173.md) | Variant in performance-sensitive method (contains a loop) | Hint | Code Smell | `uVariantTypeMisuse.pas` |
 | [SCA174](SCA174.md) | TList<T> filled with T.Create - items leak when list is freed | Warning | Bug | `uTObjectListWithoutOwnership.pas` |
 | [SCA175](SCA175.md) | Anonymous method captures for-loop variable by reference | Error | Bug | `uAnonMethodCaptureLoopVar.pas` |
-| [SCA176](SCA176.md) | Method has high cognitive complexity (nested control flow) | Warning | CodeSmell | `uCognitiveComplexity.pas` |
+| [SCA176](SCA176.md) | Method has high cognitive complexity (nested control flow) | Warning | Code Smell | `uCognitiveComplexity.pas` |
 | [SCA177](SCA177.md) | Thread variable accessed after FreeOnTerminate := True | Error | Bug | `uThreadFreeOnTerminateWithRef.pas` |
 | [SCA178](SCA178.md) | File-open API receives concatenated user input | Error | Vulnerability | `uPathTraversal.pas` |
-| [SCA179](SCA179.md) | DUnitX [Ignore] attribute without reason argument | Hint | CodeSmell | `uAttributeIgnoreWithoutReason.pas` |
-| [SCA180](SCA180.md) | Same attribute applied twice to one member | Warning | CodeSmell | `uAttributeDuplicate.pas` |
+| [SCA179](SCA179.md) | DUnitX [Ignore] attribute without reason argument | Hint | Code Smell | `uAttributeIgnoreWithoutReason.pas` |
+| [SCA180](SCA180.md) | Same attribute applied twice to one member | Warning | Code Smell | `uAttributeDuplicate.pas` |
 | [SCA181](SCA181.md) | DUnitX [Category] without category-name string | Error | Bug | `uAttributeCategoryWithoutString.pas` |
-| [SCA182](SCA182.md) | [TestFixture] class without any [Test] method | Warning | CodeSmell | `uAttributeTestFixtureWithoutTests.pas` |
-| [SCA183](SCA183.md) | Attribute with blank line before target member | Hint | CodeSmell | `uAttributeMisalignment.pas` |
+| [SCA182](SCA182.md) | [TestFixture] class without any [Test] method | Warning | Code Smell | `uAttributeTestFixtureWithoutTests.pas` |
+| [SCA183](SCA183.md) | Attribute with blank line before target member | Hint | Code Smell | `uAttributeMisalignment.pas` |
 | [SCA184](SCA184.md) | Unused DFM component | Hint | Code Smell | `uDfmComponentUnused.pas` |
 | [SCA185](SCA185.md) | UTF-8 source file without BOM | Warning | Bug | `uSourceEncoding.pas` |
 | [SCA186](SCA186.md) | Invalid UTF-8 sequence in source file | Error | File Error | `uSourceEncoding.pas` |

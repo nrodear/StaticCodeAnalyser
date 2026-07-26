@@ -176,7 +176,7 @@ Fix-Hints im Hilfe-Panel und haben DUnitX-Tests.
 
 | # | SCA | Regel (`fk…`-ID) | Beschreibung | Typ | Unit |
 |---|-----|------------------|--------------|-----|------|
-| D4 | SCA031 | **DfmSchemaMismatch** | DFM-`TField`/`TDataSource` hat kein passendes published-Field in der Form-Klasse | Bug | `uDfmSchemaMismatch` |
+| D4 | SCA031 | **DfmSchemaMismatch** | DFM-`TField`/`TDataSource` hat kein passendes published-Field in der Form-Klasse | Code Smell | `uDfmSchemaMismatch` |
 | D5 | SCA032 | **DfmCircularDataSource** | Zyklus in `DataSource.DataSet` / `MasterSource` — Endlosschleife / Stack-Overflow zur Laufzeit | Bug | `uDfmCircularDataSource` |
 | D6 | SCA036 | **DfmFieldTypeMismatch** | UI-Control-Klasse passt nicht zum `TField`-Datentyp (z.B. `TDBEdit` auf `ftBlob`) | Code Smell | `uDfmFieldTypeMismatch` |
 | D7 | SCA034/SCA035 | **DfmRequiredFieldUnbound / NotVisible** | `TField` mit `Required=True` hat keine UI-Bindung (Unbound) — oder nur auf einem versteckten Tab (NotVisible) | Bug | `uDfmRequiredField` |
@@ -239,7 +239,7 @@ Fix-Hints im Hilfe-Panel und eine DUnitX-Test-Fixture mit.
 | SCA121 | **RoutineResultUnassigned** | Function-Body endet ohne `Result`-Zuweisung (oder `<FunctionName> := ...`) — Rückgabewert undefiniert | Error | Bug | `uRoutineResultAssigned` |
 | SCA122 | **ReRaiseException** | `on E: T do ... raise E;` verwirft den Original-Stack-Trace — `raise;` ohne Argument behält ihn | Warning | Bug | `uReRaiseException` |
 | SCA123 | **CastAndFree** | `TFoo(x).Free` — der Typ-Cast hat keinen Effekt auf welches `Destroy` läuft (`Destroy` ist virtual) | Hint | Code Smell | `uCastAndFree` |
-| SCA124 | **InstanceInvokedConstructor** | `obj.Create` — Constructor wird als Methode auf bestehender Instanz aufgerufen, keine Allokation, Felder werden über Live-Daten neu initialisiert | Error | Bug | `uInstanceInvokedConstructor` |
+| SCA124 | **InstanceInvokedConstructor** | `obj.Create` — Constructor wird als Methode auf bestehender Instanz aufgerufen, keine Allokation, Felder werden über Live-Daten neu initialisiert | Warning | Bug | `uInstanceInvokedConstructor` |
 | SCA125 | **InheritedMethodEmpty** | Override, dessen kompletter Rumpf nur `inherited;` ist — bringt keinen Mehrwert, entfernen | Hint | Code Smell | `uInheritedMethodEmpty` |
 | SCA126 | **NilComparison** | `Assigned(x)` / `not Assigned(x)` statt `x = nil` / `x <> nil` — Pascal-Konvention | Hint | Code Smell | `uNilComparison` |
 | SCA127 | **RaisingRawException** | `raise Exception.Create('...')` — die Basisklasse trägt keine Semantik, Aufrufer können nicht selektiv filtern | Warning | Code Smell | `uRaisingRawException` |

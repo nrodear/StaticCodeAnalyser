@@ -199,6 +199,7 @@
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["dead-code", "uses-cleanup"],
+      "configKey": "[Detectors] UsesCheck",
       "detectorUnit": "uUnusedUses.pas",
       "examples": {
         "bad":  "uses ..., MyUnusedHelper, ...;",
@@ -297,7 +298,7 @@
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["maintainability", "complexity"],
-      "configKey": "[Detectors] LongMethodMax",
+      "configKey": "[Detectors] LongMethodMaxBodyLines, LongMethodMaxStatements",
       "detectorUnit": "uLongMethod.pas",
       "examples": {
         "bad":  "(150-line procedure doing parsing + validation + persistence)",
@@ -317,7 +318,7 @@
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["api-design"],
-      "configKey": "[Detectors] LongParamMax",
+      "configKey": "[Detectors] LongParamListMaxParams",
       "detectorUnit": "uLongParamList.pas",
       "examples": {
         "bad":  "procedure SaveOrder(id, customer, address, city, zip, country, total, tax, shipping: ...);",
@@ -337,6 +338,7 @@
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["maintainability"],
+      "configKey": "[Detectors] MagicNumberTrivials",
       "detectorUnit": "uMagicNumbers.pas",
       "examples": {
         "bad":  "if RetryCount > 3 then ...",
@@ -356,7 +358,7 @@
       "defaultSeverity": "Hint",
       "type": "Code Duplication",
       "tags": ["maintainability"],
-      "configKey": "[Detectors] DuplicateStringMin",
+      "configKey": "",
       "detectorUnit": "uDuplicateString.pas",
       "examples": {
         "bad":  "ShowMessage('File not found');\n... \nLogError('File not found');",
@@ -414,7 +416,7 @@
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["complexity"],
-      "configKey": "[Detectors] DeepNestingMax",
+      "configKey": "[Detectors] DeepNestingMaxDepth",
       "detectorUnit": "uDeepNesting.pas",
       "examples": {
         "bad":  "if a then\n  if b then\n    if c then\n      if d then DoStuff;",
@@ -512,7 +514,7 @@
       "defaultSeverity": "Warning",
       "type": "Code Smell",
       "tags": ["custom", "user-defined"],
-      "configKey": "analyser-rules.yml",
+      "configKey": "[Detectors] CustomRulesFile",
       "detectorUnit": "uCustomRuleDetector.pas",
       "examples": {
         "bad":  "(pattern from analyser-rules.yml matches)",
@@ -802,7 +804,7 @@
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["dfm", "style-guide"],
-      "configKey": "[Components] ForbiddenClasses",
+      "configKey": "",
       "detectorUnit": "uDfmForbiddenClass.pas",
       "examples": {
         "bad":  "object Query1: TQuery   // ForbiddenClasses=TQuery",
@@ -879,7 +881,7 @@
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["dfm", "design"],
-      "configKey": "[Detectors] DfmGodHandlerMaxEvents",
+      "configKey": "",
       "detectorUnit": "uDfmGodHandler.pas",
       "examples": {
         "bad":  "btn1.OnClick = HandleEverything\nbtn2.OnClick = HandleEverything\nbtn3.OnClick = HandleEverything\nbtn4.OnClick = HandleEverything\nbtn5.OnClick = HandleEverything",
@@ -1166,7 +1168,7 @@
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["dfm", "architecture"],
-      "configKey": "[Detectors] DfmDataModuleSplitMin",
+      "configKey": "",
       "detectorUnit": "uDfmDataModuleSplitHint.pas",
       "examples": {
         "bad":  "(TForm with 5+ TFDQuery/TFDConnection components)",
@@ -1263,6 +1265,7 @@
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["formatting", "style"],
+      "configKey": "[Detectors] MaxLineLength",
       "detectorUnit": "uTooLongLine.pas",
       "examples": {
         "bad":  "result := SomeReallyLongFunction(ArgumentOne, ArgumentTwo, ArgumentThree, ArgumentFour, ArgumentFive);",
@@ -1814,6 +1817,7 @@
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["complexity", "open-closed"],
+      "configKey": "[Detectors] MaxCaseBranches",
       "detectorUnit": "uCaseStatementSize.pas",
       "examples": {
         "bad":  "case Op of\n  opA: ...; opB: ...; opC: ...; opD: ...; opE: ...;\n  opF: ...; opG: ...; opH: ...; opI: ...; opJ: ...;\nend;",
@@ -2993,7 +2997,7 @@
     {
       "id": "SCA153",
       "kind": "UnpairedLock",
-      "name": "Lock acquired without try/finally release",
+      "name": "Lock/Unlock pair without try/finally",
       "shortDescription": "<ident>.Lock / EnterCriticalSection / TMonitor.Enter followed by a matching UnLock/Leave/Exit in the same routine without an enclosing try/finally - exception path leaks the lock and deadlocks the next caller",
       "fullDescription": "Scans each source line lexically (comments + strings stripped) for the acquire token `<ident>.Lock`, `Acquire`, `EnterCriticalSection`, or bare `EnterCriticalSection(...)`. A 200-character lookahead window then searches for the matching release token (`UnLock`, `LeaveCriticalSection`, `Release`). When BOTH are present in the window but no `try` keyword precedes the release, the pair is reported - acquiring a lock and then raising before the release causes a deadlock for every subsequent waiter. mORMot-tuned: matches TSynLocker, TRWLock, TLightLock, and the bare-Windows EnterCriticalSection/LeaveCriticalSection pair. Patterns where the release is missing entirely are skipped (likely a lock-helper RAII style with the release in a destructor).",
       "defaultSeverity": "Warning",
@@ -3254,7 +3258,7 @@
       "defaultSeverity": "Error",
       "type": "Bug",
       "tags": ["reliability", "memory-safety", "uninit"],
-      "configKey": "[Detectors] UninitVarEnabled",
+      "configKey": "",
       "detectorUnit": "uUninitVar.pas",
       "examples": {
         "bad":  "procedure Foo;\nvar L: TStringList;\nbegin\n  if Cond then L := TStringList.Create;\n  L.Add('x');   // L undefined if Cond was false -> AV\nend;",
@@ -3274,7 +3278,7 @@
       "defaultSeverity": "Warning",
       "type": "Bug",
       "tags": ["reliability", "randomness", "seed"],
-      "configKey": "[Detectors] InsecureRandomEnabled",
+      "configKey": "",
       "detectorUnit": "uInsecureRandom.pas",
       "examples": {
         "bad":  "procedure DealCards;\nvar i: Integer;\nbegin\n  for i := 1 to 5 do\n    Players[i].Card := Random(52);\nend;",
@@ -3292,9 +3296,9 @@
       "shortDescription": "case statement has no else branch - unhandled values fall through silently",
       "fullDescription": "A case statement without an else branch silently ignores all values that are not explicitly listed. When the case expression takes one of these unhandled values, no action is taken and no error is raised, which can mask logic bugs (especially when new enum values are added later and the case statements are not updated). Add `else ;` for an intentional no-op (which documents the decision) or a default handler that raises an exception / logs / asserts.",
       "defaultSeverity": "Hint",
-      "type": "CodeSmell",
+      "type": "Code Smell",
       "tags": ["control-flow", "default-case"],
-      "configKey": "[Detectors] DefaultCaseInCaseStatementEnabled",
+      "configKey": "",
       "detectorUnit": "uDefaultCaseInCaseStatement.pas",
       "examples": {
         "bad":  "case Status of\n  stNew    : DoNew;\n  stActive : DoActive;\nend;",
@@ -3314,7 +3318,7 @@
       "defaultSeverity": "Warning",
       "type": "Bug",
       "tags": ["reliability", "assert", "side-effect"],
-      "configKey": "[Detectors] AssertWithSideEffectEnabled",
+      "configKey": "",
       "detectorUnit": "uAssertWithSideEffect.pas",
       "examples": {
         "bad":  "Assert(InitializeSubsystem);   // Release build skips Init entirely",
@@ -3332,9 +3336,9 @@
       "shortDescription": "string parameter declared without const - causes refcount bump on every call",
       "fullDescription": "Delphi increments the string's reference count on every call when the parameter is declared without `const`. With `const`, the compiler passes a pure reference and skips the refcount roundtrip. The compiler also forbids assignment to a `const` parameter, which makes the no-mutation contract explicit. For non-mutating string parameters (the overwhelming majority), prefer `const`. The detector flags parameters whose type is `string`/`AnsiString`/`UnicodeString`/`WideString`/`RawByteString`/`ShortString` without `const`/`var`/`out`.",
       "defaultSeverity": "Hint",
-      "type": "CodeSmell",
+      "type": "Code Smell",
       "tags": ["performance", "string", "refcount"],
-      "configKey": "[Detectors] ConstStringParameterEnabled",
+      "configKey": "",
       "detectorUnit": "uConstStringParameter.pas",
       "examples": {
         "bad":  "function Hash(s: string): Integer;",
@@ -3352,9 +3356,9 @@
       "shortDescription": "{$WARNINGS OFF} (or HINTS/RANGECHECKS/...) without a closing ON - leaks into following units",
       "fullDescription": "Delphi compiler-state directives like {$WARNINGS OFF}, {$HINTS OFF}, {$RANGECHECKS OFF}, {$BOOLEVAL OFF}, {$OVERFLOWCHECKS OFF} change the compiler state for everything compiled after them. If the OFF is not paired with a closing ON in the same file, the switch leaks into all subsequent compilation units in the same build, suppressing warnings/hints/checks far outside the intended scope. The detector counts OFF and ON per directive name in the file and reports any directive whose OFF outnumbers ON at end-of-file.",
       "defaultSeverity": "Warning",
-      "type": "CodeSmell",
+      "type": "Code Smell",
       "tags": ["compiler-directive", "scope", "switch"],
-      "configKey": "[Detectors] CompilerDirectiveScopeEnabled",
+      "configKey": "",
       "detectorUnit": "uCompilerDirectiveScope.pas",
       "examples": {
         "bad":  "{$WARNINGS OFF}\nprocedure Foo;\nbegin\nend;",
@@ -3372,9 +3376,9 @@
       "shortDescription": "Boolean property name reads as a noun - prefer a verb prefix that scans as a question",
       "fullDescription": "A Boolean property named like a noun reads ambiguously at call sites (`if X.Active then` vs. `if X.IsActive then`). Prefer a verb-style prefix (`Is`/`Has`/`Can`/`Should`/`Will`) which makes the call site read naturally as a question. The detector flags Boolean properties whose name does not start with one of these prefixes, with a built-in whitelist of established VCL conventions (Enabled, Visible, Active, Checked, Modified, ReadOnly, Selected, Focused, Loaded, Modified, Dirty, ...).",
       "defaultSeverity": "Hint",
-      "type": "CodeSmell",
+      "type": "Code Smell",
       "tags": ["naming", "convention", "boolean"],
-      "configKey": "[Detectors] BooleanPropertyNamingEnabled",
+      "configKey": "",
       "detectorUnit": "uBooleanPropertyNaming.pas",
       "examples": {
         "bad":  "property Ready: Boolean;",
@@ -3392,9 +3396,9 @@
       "shortDescription": "Variant variable inside a method that contains a loop - each Variant operation pays a 10-100x COM dispatch tax",
       "fullDescription": "Variant operations route through the COM VarType dispatcher (VarAdd, VarCmp, VarCast, ...) which adds a typing-system roundtrip on every read, write, comparison and conversion. Inside a hot loop this multiplies the cost by the iteration count and can dominate the method's runtime. The detector flags every Variant / OleVariant local variable and parameter in methods that contain at least one for/while/repeat loop. Accepted use cases (COM/OLE bridges, JSON-Variant adapters, Excel automation) are reachable via suppression marker `// noinspection VariantTypeMisuse`.",
       "defaultSeverity": "Hint",
-      "type": "CodeSmell",
+      "type": "Code Smell",
       "tags": ["performance", "variant", "com"],
-      "configKey": "[Detectors] VariantTypeMisuseEnabled",
+      "configKey": "",
       "detectorUnit": "uVariantTypeMisuse.pas",
       "examples": {
         "bad":  "procedure SumRows;\nvar v: Variant; i: Integer;\nbegin\n  for i := 0 to N do v := v + Rows[i];\nend;",
@@ -3414,7 +3418,7 @@
       "defaultSeverity": "Warning",
       "type": "Bug",
       "tags": ["memory-safety", "leak", "container"],
-      "configKey": "[Detectors] TObjectListWithoutOwnershipEnabled",
+      "configKey": "",
       "detectorUnit": "uTObjectListWithoutOwnership.pas",
       "examples": {
         "bad":  "L := TList<TFoo>.Create;\nL.Add(TFoo.Create);\nL.Free; // TFoo instance leaks",
@@ -3434,7 +3438,7 @@
       "defaultSeverity": "Error",
       "type": "Bug",
       "tags": ["concurrency", "closure", "loop", "capture"],
-      "configKey": "[Detectors] AnonMethodCaptureLoopVarEnabled",
+      "configKey": "",
       "detectorUnit": "uAnonMethodCaptureLoopVar.pas",
       "examples": {
         "bad":  "for i := 0 to 9 do\n  TThread.CreateAnonymousThread(procedure\n  begin WriteLn(i); end).Start;",
@@ -3452,13 +3456,13 @@
       "shortDescription": "Sonar-style cognitive-complexity exceeds 15 - nested if/for/while/case is hard to follow mentally",
       "fullDescription": "Cyclomatic complexity (SCA022) counts independent paths linearly - ten flat if-statements weigh the same as one triply-nested if. Cognitive complexity, introduced by Sonar in 2017, multiplies the cost of nesting: each control-flow construct adds 1 + nesting-depth. Three nested loops thus score 1+2+3=6 instead of 3. The detector walks each method with an explicit stack (stack-overflow-safe per Audit_jvcl_segfault) tracking current depth and the running sum. Boolean operators (and/or/xor) in if-conditions add +1 each. Threshold: 15 (Sonar default), configurable via INI [Detectors] CognitiveLimit.",
       "defaultSeverity": "Warning",
-      "type": "CodeSmell",
+      "type": "Code Smell",
       "tags": ["complexity", "cognitive", "maintainability"],
       "configKey": "[Detectors] CognitiveLimit",
       "detectorUnit": "uCognitiveComplexity.pas",
       "examples": {
-        "bad":  "procedure Foo;\nbegin\n  if A then\n    if B then\n      while C do\n        if D then ...\nend;",
-        "good": "procedure Foo;\nbegin\n  if not A then Exit;\n  if not B then Exit;\n  while C do\n    if D then ...\nend;"
+        "bad":  "procedure ProcessOrder(const AOrder: TOrder);\nbegin\n  if AOrder.IsValid and AOrder.HasItems then        // +1 (depth 0), +1 'and'  = 2\n    for var I := 0 to AOrder.Count - 1 do           // +1+1 (depth 1)          = 2\n      while AOrder[I].NeedsRetry do                 // +1+2 (depth 2)          = 3\n        if AOrder[I].InStock or AllowBackorder then // +1+3 (depth 3), +1 'or' = 5\n          case AOrder[I].Kind of                    // +1+4 (depth 4)          = 5\n            ikPhysical:\n              if AOrder[I].Weight > 0 then          // +1+5 (depth 5)          = 6\n                Ship(AOrder[I]);\n          end;\nend;\n// Cognitive complexity = 2+2+3+5+5+6 = 23 (limit 15)",
+        "good": "procedure ShipItem(const AItem: TOrderItem);\nbegin\n  if not (AItem.InStock or AllowBackorder) then Exit;  // +1, +1 'or' = 2\n  if AItem.Kind <> ikPhysical then Exit;               // +1\n  if AItem.Weight <= 0 then Exit;                      // +1\n  Ship(AItem);\nend;\n\nprocedure ProcessOrder(const AOrder: TOrder);\nbegin\n  if not AOrder.IsValid then Exit;                     // +1\n  if not AOrder.HasItems then Exit;                    // +1\n  for var I := 0 to AOrder.Count - 1 do                // +1 (depth 0)\n    while AOrder[I].NeedsRetry do                      // +1+1 (depth 1)\n      ShipItem(AOrder[I]);\nend;\n// ShipItem = 4, ProcessOrder = 5 - beide klar unter 15"
       },
       "cleanCodeAttribute": "FOCUSED",
       "impacts": [
@@ -3474,7 +3478,7 @@
       "defaultSeverity": "Error",
       "type": "Bug",
       "tags": ["concurrency", "lifetime", "thread"],
-      "configKey": "[Detectors] ThreadFreeOnTerminateWithRefEnabled",
+      "configKey": "",
       "detectorUnit": "uThreadFreeOnTerminateWithRef.pas",
       "examples": {
         "bad":  "T := TMyThread.Create(True);\nT.FreeOnTerminate := True;\nT.Start;\nT.Resume;   // T may be freed",
@@ -3494,7 +3498,7 @@
       "defaultSeverity": "Error",
       "type": "Vulnerability",
       "tags": ["security", "owasp-a01", "cwe-22", "path-traversal"],
-      "configKey": "[Detectors] PathTraversalEnabled",
+      "configKey": "",
       "detectorUnit": "uPathTraversal.pas",
       "examples": {
         "bad":  "Stream := TFileStream.Create(BaseDir + edPath.Text, fmOpenRead);",
@@ -3512,9 +3516,9 @@
       "shortDescription": "[Ignore] (no string arg) skips the test silently - add a message explaining why the test is disabled",
       "fullDescription": "DUnitX accepts [Ignore] both as a marker attribute and as [Ignore('reason')]. The marker form skips the test without surfacing WHY it was disabled - the test then drifts unmaintained, often forgotten. Always add a reason string referencing a ticket / external dependency / known limitation so the disable can be triaged.",
       "defaultSeverity": "Hint",
-      "type": "CodeSmell",
+      "type": "Code Smell",
       "tags": ["test", "dunitx", "documentation"],
-      "configKey": "[Detectors] AttributeIgnoreWithoutReasonEnabled",
+      "configKey": "",
       "detectorUnit": "uAttributeIgnoreWithoutReason.pas",
       "examples": {
         "bad":  "[Ignore]\nprocedure SomeTest;",
@@ -3532,9 +3536,9 @@
       "shortDescription": "Two identical [X] attributes on the same member - copy-paste leftover, no effect",
       "fullDescription": "Delphi's attribute model accepts repeated attributes (some, like [TestCase], are intentionally multi-applied with different args). Duplicates with IDENTICAL args are not — they are usually copy-paste leftovers from refactoring. The detector compares (attribute-name, argument-text) pairs and flags identical occurrences in the same attribute group (lines max. 2 apart). Multi-applied attributes with different args (different [TestCase('A','1')] / [TestCase('B','2')]) are correctly NOT flagged.",
       "defaultSeverity": "Warning",
-      "type": "CodeSmell",
+      "type": "Code Smell",
       "tags": ["attribute", "duplication"],
-      "configKey": "[Detectors] AttributeDuplicateEnabled",
+      "configKey": "",
       "detectorUnit": "uAttributeDuplicate.pas",
       "examples": {
         "bad":  "[Test]\n[Test]\nprocedure Foo;",
@@ -3554,7 +3558,7 @@
       "defaultSeverity": "Error",
       "type": "Bug",
       "tags": ["test", "dunitx", "compile-error"],
-      "configKey": "[Detectors] AttributeCategoryWithoutStringEnabled",
+      "configKey": "",
       "detectorUnit": "uAttributeCategoryWithoutString.pas",
       "examples": {
         "bad":  "[Category]\nprocedure Foo;",
@@ -3572,9 +3576,9 @@
       "shortDescription": "Class is marked [TestFixture] but contains no [Test] methods - zombie fixture visible in TestInsight but executes nothing",
       "fullDescription": "DUnitX discovers test classes by scanning for [TestFixture] attributes. A fixture without any [Test] method appears in the test tree but contributes zero executable tests - typically a leftover from refactoring (tests deleted, fixture not). The detector walks file text with a simple state machine: enters fixture-window on [TestFixture] line, watches for [Test] inside, exits on the next top-level `end;`. If no [Test] was seen, the [TestFixture] line is flagged. [SetupFixture]-only fixtures (used to prepare shared state for other fixtures) are a known false-positive case - suppress with `// noinspection AttributeTestFixtureWithoutTests`.",
       "defaultSeverity": "Warning",
-      "type": "CodeSmell",
+      "type": "Code Smell",
       "tags": ["test", "dunitx", "dead-code"],
-      "configKey": "[Detectors] AttributeTestFixtureWithoutTestsEnabled",
+      "configKey": "",
       "detectorUnit": "uAttributeTestFixtureWithoutTests.pas",
       "examples": {
         "bad":  "[TestFixture]\nTFooTests = class\n  procedure Helper;\nend;",
@@ -3592,9 +3596,9 @@
       "shortDescription": "Attribute line followed by a blank line - visually loose, often a refactoring leftover",
       "fullDescription": "The Delphi compiler attaches an attribute to the syntactically next member regardless of intervening blank lines. Visually however, an attribute separated from its member by a blank line is easy to overlook - the reader may not realize the attribute applies to the member below. This is also a frequent symptom of refactoring where a member was moved/deleted but the attribute was left behind. The detector flags attribute lines whose next non-blank line is more than one line away.",
       "defaultSeverity": "Hint",
-      "type": "CodeSmell",
+      "type": "Code Smell",
       "tags": ["attribute", "readability"],
-      "configKey": "[Detectors] AttributeMisalignmentEnabled",
+      "configKey": "",
       "detectorUnit": "uAttributeMisalignment.pas",
       "examples": {
         "bad":  "[Test]\n\nprocedure Foo;",
