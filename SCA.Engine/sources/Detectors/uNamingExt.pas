@@ -102,8 +102,20 @@ begin
   try
     for M in Methods do
     begin
-      var Sections := M.FindAll(nkConstSection);
+      // NUR die const-Sektion des DEKLARATIONSTEILS (direktes Kind der
+      // Methode), nicht rekursiv. Seit der Inline-const-Unterstuetzung
+      // (2026-07-26, uParser2.ParseInlineConstStmt) legt der Parser auch
+      // 'const X = 42;' MITTEN IM RUMPF als nkConstSection ab - die liegt
+      // aber im nkBlock, also tiefer. FindAll haette sie mitgezaehlt:
+      // im Real-World-Korpus schlug das mit +523 Funden auf (deltaT,
+      // interpolated, CPartBase ...). Inline-Konstanten schreibt man in
+      // Delphi 10.3+ wie lokale Variablen (camelCase/PascalCase);
+      // UPPER_SNAKE_CASE ist die Konvention der Unit-/Klassen-Ebene, auf
+      // die diese Regel zielt. Sie hier zu fordern waere reines Rauschen.
+      var Sections := TList<TAstNode>.Create;
       try
+        for var Cand in M.Children do
+          if Cand.Kind = nkConstSection then Sections.Add(Cand);
         for var Section in Sections do
           for i := 0 to Section.Children.Count - 1 do
           begin

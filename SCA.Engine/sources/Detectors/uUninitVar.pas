@@ -2779,6 +2779,25 @@ var
       // wie if/while/case/assign-RHS.
       var Exits := MethodNode.FindAllRef(nkExit);
       for i := 0 to Exits.Count - 1 do ProcessConditionCalls(Exits[i]);
+      // Inline-const im Rumpf (seit uParser2.ParseInlineConstStmt, 2026-07-26):
+      // 'const Ok = OpenArchive(Name, Pwd, clsid, numItems);' legt der Parser
+      // als nkConstSection -> nkField mit TypeRef '<Typ>=<RHS>' ab. Die var/
+      // out-Args darin brauchen denselben pessimistic-Write wie ueberall sonst.
+      // ERGAENZT den textuellen const-Zeilen-Scan aus Inkrement B (PhaseC):
+      // der sieht nur die 'const'-ZEILE und verpasst MEHRZEILIGE Aufrufe -
+      // genau daran entstand der FP issrc SevenZipDLLDecoder:1088 ('numItems'
+      // auf der Fortsetzungszeile). Der TypeRef traegt die RHS vollstaendig,
+      // also auch ueber Zeilengrenzen. Beide Pfade registrieren nur Writes
+      // und sind damit idempotent; der Quell-Pfad bleibt als Absicherung
+      // fuer das Headless-Method-Muster (Parser verliert dort den Rumpf).
+      var ConstFields := MethodNode.FindAllRef(nkField);
+      for i := 0 to ConstFields.Count - 1 do
+      begin
+        var FRef := ConstFields[i].TypeRef;
+        var pEq  := Pos('=', FRef);
+        if pEq > 0 then
+          ProcessCallsInExprText(Copy(FRef, pEq + 1, MaxInt), ConstFields[i].Line);
+      end;
       // Receiver-Init fuer Calls in Expression-Strings (assign-RHS/conditions):
       // 'int := temp.Init(...)' schreibt temp - ProcessCall (nkCall) sieht das
       // nicht, weil solche Calls als TypeRef-String abgelegt sind.

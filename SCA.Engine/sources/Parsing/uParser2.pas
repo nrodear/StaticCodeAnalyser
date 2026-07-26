@@ -90,6 +90,7 @@ type
     procedure ParseTryStmt(Parent: TAstNode);
     procedure ParseRaiseStmt(Parent: TAstNode);
     procedure ParseInlineVarStmt(Parent: TAstNode);
+    procedure ParseInlineConstStmt(Parent: TAstNode);
     procedure ParseCallOrAssign(Parent: TAstNode);
     function  ParsePrimary: string;
   end;
@@ -1570,6 +1571,22 @@ begin
     tkKwTry      : ParseTryStmt(Parent);
     tkKwRaise    : ParseRaiseStmt(Parent);
     tkKwVar      : ParseInlineVarStmt(Parent);
+    // Parser Mechanismus A (2026-07-26): Inline-'const X = expr;' im Rumpf
+    // (Delphi 10.3+). Vorher gab es KEINEN Dispatch - das 'const' fiel in den
+    // else-Zweig (nur 'Next; Eat(tkSemicolon)'), der Rest der Deklaration
+    // wurde als normale Anweisung fehlgedeutet. Zwei belegte Schaeden:
+    //   * UNTYPISIERT ('const X = 5;'): der Folge-Durchlauf sah 'X' als
+    //     tkIdent, ParseCallOrAssign fand tkEq statt tkAssign und legte einen
+    //     Phantom-nkCall('X') an.
+    //   * TYPISIERT ('const X: Integer = 5;'): ParsePrimary stoppt vor dem
+    //     Doppelpunkt, Tok ist tkColon und IsSimpleLabelName trifft zu -> es
+    //     griff der LABEL-Pfad und schrieb die Zeile in FLabelLines. Ueber
+    //     nkLabelMark hielt uDeadCode (SCA011) sie fuer ein goto-Sprungziel
+    //     und unterdrueckte dort ECHTE Dead-Code-Funde.
+    // (Der Token-Strom selbst blieb synchron: der Lexer faltet String-
+    //  Literale in EIN tkStrLit, und SkipToSemicolon ueberspringt Klammern
+    //  balanciert - ein ';' im RHS war nie das Problem.)
+    tkKwConst    : ParseInlineConstStmt(Parent);
 
     tkKwExit:
       begin
@@ -2145,6 +2162,106 @@ begin
       begin
         var ANode := Parent.Add(nkAssign, Names[0], T.Line, T.Col);
         ANode.TypeRef := FullRHS;
+      end;
+    end;
+
+    Eat(tkSemicolon);
+  finally
+    Names.Free;
+  end;
+end;
+
+{ ---- Inline-Const-Anweisung (Delphi 10.3+: 'const X[: T] = expr;' im Rumpf) ---- }
+
+procedure TParser2.ParseInlineConstStmt(Parent: TAstNode);
+// Parser Mechanismus A (2026-07-26): Mid-block-const, analog
+// ParseInlineVarStmt - struktureller Unterschied: der Initializer folgt auf
+// '=' (tkEq) statt ':=' (tkAssign) und ist PFLICHT.
+//
+// REPRAESENTATION: bewusst dieselbe Form wie eine lokale const-SEKTION
+// (ParseVarLikeSection, s.o.): nkConstSection -> nkField mit
+// TypeRef = '<Typ>=<Wert>'. Gruende:
+//   * Paritaet - Konsumenten, die Konstanten aufloesen (uFormatMismatch ueber
+//     FindAll(nkConstSection) + '='-Split, uNamingExt fkLocalConstantName),
+//     sehen Inline-Consts damit AUTOMATISCH; als nkAssign blieben sie
+//     unsichtbar, obwohl es dieselbe Sprachkonstruktion ist.
+//   * FP-Vermeidung - uDuplicateString iteriert nkAssign/nkCall und zoege das
+//     Literal einer Konstanten als Dubletten-Vorkommen mit. Ein Literal in
+//     eine Konstante zu benennen ist aber genau die ABHILFE dieser Regel;
+//     als nkAssign haetten wir die Behebung selbst angekreidet.
+// Bewusst KEIN nkLocalVar: eine Konstante ist keine Variable (wuerde
+// Naming-/Uninit-Konsumenten falsch klassifizieren).
+var
+  T        : TToken;
+  Names    : TStringList;
+  TypeName : string;
+  FullRef  : string;
+  SecNode  : TAstNode;
+  N        : string;
+begin
+  T := Next; // 'const' konsumieren
+
+  Names := TStringList.Create;
+  try
+    while Tok.Kind = tkIdent do
+    begin
+      Names.Add(Next.Value);
+      if not Eat(tkComma) then Break;
+    end;
+
+    // Optional ': Typname' - bis '=' / Statement-Ende einsammeln (typisierte
+    // Konstante, z.B. 'const A: TBytes = [1, 2];'). Der Typtext wandert vor
+    // das '=' in TypeRef, exakt wie im Sektionspfad.
+    TypeName := '';
+    if Eat(tkColon) then
+      while not (Tok.Kind in [tkEq, tkSemicolon, tkKwEnd,
+                              tkKwElse, tkKwUntil, tkKwExcept,
+                              tkKwFinally, tkEof]) do
+      begin
+        if TypeName <> '' then TypeName := TypeName + ' ';
+        TypeName := TypeName + Tok.Value;
+        Next;
+      end;
+
+    // Pflicht-Initializer nach '='. Gleicher Depth-Scanner wie in
+    // ParseInlineVarStmt: Klammern/begin/case/try/asm erhoehen die Tiefe, damit
+    // ein ';' innerhalb von Record-/Array-Konstanten oder anonymen Methoden den
+    // Scan nicht vorzeitig beendet (genau die fruehere Desync-Quelle).
+    if Eat(tkEq) then
+    begin
+      var FullRHS   := '';
+      var NestDepth := 0;
+      while not FLex.AtEnd do
+      begin
+        case Tok.Kind of
+          tkLParen, tkLBracket, tkKwBegin,
+          tkKwCase, tkKwTry, tkKwAsm      : Inc(NestDepth);
+          tkRParen, tkRBracket            : if NestDepth > 0 then Dec(NestDepth);
+          tkKwEnd:
+            if NestDepth > 0 then Dec(NestDepth) else Break;
+          tkSemicolon, tkKwElse, tkKwUntil,
+          tkKwExcept, tkKwFinally, tkEof:
+            if NestDepth = 0 then Break;
+        end;
+        if Tok.Kind = tkStrLit then
+          JoinTokInto(FullRHS, QuoteStrLit(Tok.Value))
+        else
+          JoinTokInto(FullRHS, Tok.Value);
+        Next;
+      end;
+
+      // Sektions-Form wie ParseVarLikeSection: EIN nkConstSection-Knoten,
+      // darunter je Bezeichner ein nkField mit Typ=Wert (Typ darf leer sein,
+      // dann beginnt TypeRef mit dem Gleichheitszeichen - identisch zum
+      // Sektionspfad, damit const-aufloesende Detektoren automatisch greifen).
+      if Names.Count > 0 then
+      begin
+        FullRef := TypeName;
+        if FullRHS <> '' then
+          FullRef := FullRef + '=' + FullRHS;
+        SecNode := Parent.Add(nkConstSection, '', T.Line, T.Col);
+        for N in Names do
+          SecNode.Add(nkField, N, T.Line, T.Col).TypeRef := FullRef;
       end;
     end;
 

@@ -61,6 +61,14 @@ type
     // als Methoden-/Event-Handler-Name (Lexer -> tkKwExit)
     [Test] procedure Parser_KeywordMethodNameUnqualified_Captured;
     [Test] procedure Parser_KeywordMethodNameQualified_Captured;
+    // --- Parser Mechanismus A (2026-07-26): Inline-const im Rumpf ---
+    [Test] procedure Parser_InlineConst_EmitsConstSectionField;
+    [Test] procedure Parser_InlineConst_TypedEmitsTypeAndValue;
+    [Test] procedure Parser_InlineConst_SemicolonInStringKeepsSync;
+    [Test] procedure Parser_InlineConst_ParenAndArrayKeepSync;
+    [Test] procedure Parser_InlineConst_MissingEqualsIsBounded;
+    [Test] procedure Parser_InlineConst_TypedNoLongerHidesDeadCode;
+    [Test] procedure Parser_LocalConstSection_StillParsedAsBefore;
   end;
 
 implementation
@@ -1152,6 +1160,224 @@ begin
         'qualifizierte keyword-benannte Methode muss als nkMethod erfasst werden');
     finally Root.Free; end;
   finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_InlineConst_EmitsConstSectionField;
+// Mechanismus A: 'const X = 42;' im Anweisungsteil wird jetzt geparst und -
+// wie eine lokale const-SEKTION - als nkConstSection -> nkField abgelegt
+// (TypeRef '=42', Typ leer). Vorher entstand ein Phantom-nkCall('X').
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  const Limit = 42;'#13#10+
+  '  Beep;'#13#10+
+  'end;'#13#10+
+  'end.';
+var
+  P    : TParser2;
+  Root : TAstNode;
+  Secs : TList<TAstNode>;
+  Fld  : TAstNode;
+begin
+  P := TParser2.Create;
+  try
+    Root := P.ParseSource(SRC);
+    try
+      Secs := Root.FindAll(nkConstSection);
+      try
+        Assert.IsTrue(Secs.Count >= 1,
+          'Inline-const muss eine nkConstSection erzeugen');
+        Fld := nil;
+        for var S in Secs do
+          for var C in S.Children do
+            if (C.Kind = nkField) and SameText(C.Name, 'Limit') then Fld := C;
+        Assert.IsNotNull(Fld, 'nkField Limit erwartet');
+        Assert.IsTrue(Pos('42', Fld.TypeRef) > 0,
+          'TypeRef muss den Wert tragen, ist: ' + Fld.TypeRef);
+      finally Secs.Free; end;
+      // Der Folge-Call darf NICHT verschluckt worden sein (Token-Sync).
+      Assert.IsTrue(Root.DescendantCount(nkCall) >= 1,
+        'Anweisung nach der Inline-const fehlt im AST');
+    finally Root.Free; end;
+  finally P.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_InlineConst_TypedEmitsTypeAndValue;
+// Typisierte Form: TypeRef traegt '<Typ>=<Wert>' - dieselbe Konvention wie
+// im Sektionspfad (ParseVarLikeSection), damit const-aufloesende Detektoren
+// (uFormatMismatch, uNamingExt) Inline-Consts automatisch sehen.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  const Max: Integer = 7;'#13#10+
+  'end;'#13#10+
+  'end.';
+var
+  P    : TParser2;
+  Root : TAstNode;
+  Secs : TList<TAstNode>;
+  Ref  : string;
+begin
+  P := TParser2.Create;
+  try
+    Root := P.ParseSource(SRC);
+    try
+      Ref := '';
+      Secs := Root.FindAll(nkConstSection);
+      try
+        for var S in Secs do
+          for var C in S.Children do
+            if (C.Kind = nkField) and SameText(C.Name, 'Max') then Ref := C.TypeRef;
+      finally Secs.Free; end;
+      Assert.IsTrue(Pos('=', Ref) > 0,
+        'TypeRef muss Typ und Wert per Gleichheitszeichen trennen, ist: ' + Ref);
+      Assert.IsTrue(Pos('Integer', Ref) > 0,
+        'Typtext fehlt in TypeRef, ist: ' + Ref);
+      Assert.IsTrue(Pos('7', Ref) > 0,
+        'Wert fehlt in TypeRef, ist: ' + Ref);
+    finally Root.Free; end;
+  finally P.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_InlineConst_SemicolonInStringKeepsSync;
+// Semikolon IM String-Literal darf den RHS-Scan nicht beenden. End-to-End:
+// der Leak NACH der Inline-const muss weiterhin gefunden werden.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var L: TStringList;'#13#10+
+  'begin'#13#10+
+  '  const Sep = ''a;b'';'#13#10+
+  '  L := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'Leak nach Inline-const mit Semikolon im String muss gefunden werden');
+  finally F.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_InlineConst_ParenAndArrayKeepSync;
+// Klammer- und Array-Initializer (die ';'-in-Klammern-Faelle) duerfen den
+// Scan ebenfalls nicht abschneiden - Folgeanweisung bleibt sichtbar.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var L: TStringList;'#13#10+
+  'begin'#13#10+
+  '  const A: array[0..1] of Integer = (1, 2);'#13#10+
+  '  L := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'Leak nach Array-Inline-const muss gefunden werden');
+  finally F.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_InlineConst_MissingEqualsIsBounded;
+// Kaputte Quelle (kein '='): der Arm darf nicht haengen und nicht den Rest
+// der Routine schreddern - der Leak danach bleibt auffindbar.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var L: TStringList;'#13#10+
+  'begin'#13#10+
+  '  const Broken 5;'#13#10+
+  '  L := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'kaputte Inline-const darf den Parser nicht desynchronisieren');
+  finally F.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_InlineConst_TypedNoLongerHidesDeadCode;
+// DER EIGENTLICHE VORHER-SCHADEN (Review 2026-07-26): eine TYPISIERTE
+// Inline-const lief in den Label-Pfad (ParsePrimary stoppt vor ':',
+// IsSimpleLabelName trifft) und schrieb die Zeile in FLabelLines. Ueber
+// nkLabelMark hielt uDeadCode (SCA011) sie fuer ein goto-Sprungziel und
+// unterdrueckte ECHTE Dead-Code-Funde. Jetzt muss der Code nach Exit
+// wieder gemeldet werden.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  const Flag: Integer = 1;'#13#10+
+  '  Exit;'#13#10+
+  '  Beep;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkDeadCode) >= 1,
+      'toter Code nach Exit muss trotz typisierter Inline-const gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_LocalConstSection_StillParsedAsBefore;
+// Nicht-Regressions-Anker: eine echte const-SEKTION im Deklarationsteil
+// laeuft weiterhin ueber ParseLocalVarSection (nicht ueber den neuen Arm) -
+// beide Eintraege muessen als nkField unter nkConstSection erscheinen.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'const'#13#10+
+  '  Alpha = 1;'#13#10+
+  '  Beta = 2;'#13#10+
+  'begin'#13#10+
+  '  Beep;'#13#10+
+  'end;'#13#10+
+  'end.';
+var
+  P    : TParser2;
+  Root : TAstNode;
+  Secs : TList<TAstNode>;
+  Cnt  : Integer;
+begin
+  P := TParser2.Create;
+  try
+    Root := P.ParseSource(SRC);
+    try
+      Cnt := 0;
+      Secs := Root.FindAll(nkConstSection);
+      try
+        for var S in Secs do
+          for var C in S.Children do
+            if C.Kind = nkField then Inc(Cnt);
+      finally Secs.Free; end;
+      Assert.AreEqual<Integer>(2, Cnt,
+        'const-Sektion muss weiterhin beide Eintraege liefern');
+    finally Root.Free; end;
+  finally P.Free; end;
 end;
 
 end.

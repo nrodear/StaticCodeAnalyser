@@ -21,6 +21,8 @@ type
     [Test] procedure UpperSnakeNumericConst_NotReported;
     [Test] procedure ShortConstName_NotReported;
     [Test] procedure StringConst_NotReported;
+    // 2026-07-26: Inline-const im RUMPF ist keine Deklarations-Konstante
+    [Test] procedure InlineConstInBody_NotReported;
   end;
 
 implementation
@@ -143,6 +145,33 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLocalConstantName));
+  finally F.Free; end;
+end;
+
+procedure TTestNamingExt.InlineConstInBody_NotReported;
+// Seit uParser2.ParseInlineConstStmt (2026-07-26) landet auch
+// "const X = 42;" MITTEN IM RUMPF als nkConstSection im AST. SCA119 zielt
+// aber auf die Konvention der Deklarations-/Unit-Ebene (UPPER_SNAKE_CASE);
+// Inline-Konstanten schreibt man in Delphi 10.3+ wie lokale Variablen.
+// Ohne die Direkt-Kind-Einschraenkung schlug das im Korpus mit +523 Funden
+// auf (deltaT, interpolated, CPartBase ...) - reines Rauschen.
+// GEGENPROBE steckt in PascalCaseNumericConst_Reported: die echte
+// const-SEKTION im Deklarationsteil bleibt ein Fund.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  const deltaT = 42;'#13#10 +
+  '  Beep;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLocalConstantName),
+    'Inline-const im Rumpf darf SCA119 nicht ausloesen');
   finally F.Free; end;
 end;
 
