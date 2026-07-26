@@ -379,6 +379,24 @@ begin
   Result := True;
 end;
 
+function IsLocalFloatVarInHeader(const Header, IdentLow: string): Boolean;
+// SPOT-Extraktion (2026-07-26, Befund des eigenen Self-Scans - SCA021 meldete
+// den Block 4x in dieser Unit): der Nachweis "IdentLow ist eine LOKALE
+// Float-Variable der umschliessenden Routine" stand wortgleich an drei
+// Stellen (G-Sent-2-Demote, Integer-Wertedomaenen-Gate, MaxMin-Identitaets-
+// Gate). Ein Regex an einem Ort statt drei - driftet sonst beim naechsten
+// Typ-Zusatz auseinander.
+//
+// Header ist der GEBLANKTE Routinen-Kopf aus TryRoutineSpanWithOpenBody:
+// die Parameter-Klammern sind dort ausgeblankt, ein Treffer kann also nur
+// aus einem var-Block stammen. Genau darauf beruht die harte Projektregel
+// "NIE fuer Parameter" (deren Wert-Herkunft ist nur beim Caller sichtbar).
+begin
+  Result := TRegEx.IsMatch(Header,
+    '(?i)\bvar\b[\s\S]*?(?<![\w.])' + IdentLow +
+    '\b\s*(?:,\s*[A-Za-z_]\w*\s*)*:\s*(Single|Double|Extended|Real|Currency)\b');
+end;
+
 // G-Sent-2 (Triage 2026-07-25): Sentinel-Zero-DEMOTE. Vergleich '<var> = 0' /
 // '<var> <> 0', wobei <var> BEWEISBAR ein LOKALES var der umschliessenden
 // Routine ist (Float-Decl im var-Block des Routinen-Kopfs) und SAEMTLICHE
@@ -426,10 +444,7 @@ begin
 
   // Lokaler var-Block-Nachweis im geblankten Kopf (HART: Parameter demoten
   // wir niemals - die Parameter-Klammern sind geblankt).
-  if not TRegEx.IsMatch(Header,
-       '(?i)\bvar\b[\s\S]*?(?<![\w.])' + IdentLow +
-       '\b\s*(?:,\s*[A-Za-z_]\w*\s*)*:\s*(Single|Double|Extended|Real|Currency)\b') then
-    Exit;
+  if not IsLocalFloatVarInHeader(Header, IdentLow) then Exit;
 
   // Saemtliche Zuweisungen an die Var in der Spanne muessen DIREKT und
   // einfach sein: numerisches Literal (auch negativ/Exponent) oder ein
@@ -596,10 +611,7 @@ begin
        RawHeader, Header) then Exit;
 
   // Lokaler var-Block-Nachweis (geblankter Kopf, wie G-Sent-2).
-  if not TRegEx.IsMatch(Header,
-       '(?i)\bvar\b[\s\S]*?(?<![\w.])' + IdentLow +
-       '\b\s*(?:,\s*[A-Za-z_]\w*\s*)*:\s*(Single|Double|Extended|Real|Currency)\b') then
-    Exit;
+  if not IsLocalFloatVarInHeader(Header, IdentLow) then Exit;
 
   // with-Block: Feld-Aufloesung kann Kopf-Idents shadowen ('with myorigin
   // do dx := X' liest das FELD X, nicht den Integer-Param X) -> unklar.
@@ -796,10 +808,7 @@ begin
   if Pos('.', OtherLow) > 0 then Exit;
   if not TryRoutineSpanWithOpenBody(Code, AtPos, Routine, RelPos, BeginPos,
        RawHeader, Header) then Exit;
-  if not TRegEx.IsMatch(Header,
-       '(?i)\bvar\b[\s\S]*?(?<![\w.])' + IdentLow +
-       '\b\s*(?:,\s*[A-Za-z_]\w*\s*)*:\s*(Single|Double|Extended|Real|Currency)\b') then
-    Exit;
+  if not IsLocalFloatVarInHeader(Header, IdentLow) then Exit;
   if TRegEx.IsMatch(Routine, '(?i)\bwith\b') then Exit;
   if TRegEx.IsMatch(Routine, '(?i)[(,]\s*' + IdentLow + '\s*[,)]')
      or TRegEx.IsMatch(Routine, '(?i)@\s*' + IdentLow + '\b') then Exit;
