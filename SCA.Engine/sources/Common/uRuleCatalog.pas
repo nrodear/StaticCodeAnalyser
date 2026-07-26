@@ -144,6 +144,19 @@ uses
   Winapi.Windows,                  // OutputDebugString
   System.IOUtils, System.JSON;
 
+type
+  // Einkompilierte Katalog-Texte (2026-07-26). Traeger fuer
+  // uRuleCatalogData.inc - siehe dortigen Kopf und MakeFallbackMeta.
+  TRuleFallbackData = record
+    RuleID    : string;
+    Name      : string;
+    ShortDesc : string;
+    BadEx     : string;
+    GoodEx    : string;
+  end;
+
+{$I uRuleCatalogData.inc}
+
 { ---- Setup ---- }
 
 class procedure TRuleCatalog.Init;
@@ -465,8 +478,24 @@ end;
 
 class function TRuleCatalog.MakeFallbackMeta(K: TFindingKind): TRuleMeta;
 // Gemeinsamer Kern der Fallback-Metadaten (2026-07-04 dedupliziert aus
-// LoadFallback + GetRule-Notfallpfad). Alle nicht gesetzten Felder bleiben
-// auf Default() (leere Strings/Arrays).
+// LoadFallback + GetRule-Notfallpfad).
+//
+// 2026-07-26: Beispiele/Texte kommen jetzt aus der EINKOMPILIERTEN Tabelle
+// RULE_CATALOG_DATA (uRuleCatalogData.inc, generiert aus rules/sca-rules.json).
+// Vorher blieben BadExample/GoodExample hier LEER - und weil 19 Kinds
+// (SCA167-SCA184, SCA194, u.a. SCA176) ihren Vorher/Nachher-Hinweis
+// AUSSCHLIESSLICH ueber den Katalog beziehen (uFixHint-Fallback), zeigte das
+// IDE-Plugin bei ihnen gar keinen Hinweis, sobald die JSON zur Laufzeit nicht
+// gefunden wurde. Genau das ist im Plugin der Normalfall: die BPL liegt im
+// Embarcadero-BPL-Verzeichnis, das Repo auf einem anderen Laufwerk - der
+// 8-Ebenen-Aufwaertswalk der Pfadsuche kann die Datei dort nie erreichen.
+//
+// Defensiv: die Tabelle wird nur genutzt, wenn Index UND RuleID zum Kind
+// passen. Bei Drift (neues Kind in der Enum-MITTE eingefuegt, .inc nicht
+// regeneriert) faellt alles auf das alte Verhalten zurueck, statt falsche
+// Texte zu zeigen.
+var
+  Idx : Integer;
 begin
   Result := Default(TRuleMeta);
   Result.ID              := Format('SCA%.3d', [Ord(K) + 1]);
@@ -474,6 +503,17 @@ begin
   Result.Name            := KindName(K);
   Result.DefaultSeverity := lsWarning;
   Result.FindingType     := KindFindingType(K);
+
+  Idx := Ord(K);
+  if (Idx >= Low(RULE_CATALOG_DATA)) and (Idx <= High(RULE_CATALOG_DATA))
+     and SameText(RULE_CATALOG_DATA[Idx].RuleID, Result.ID) then
+  begin
+    if RULE_CATALOG_DATA[Idx].Name <> '' then
+      Result.Name := RULE_CATALOG_DATA[Idx].Name;
+    Result.ShortDescription := RULE_CATALOG_DATA[Idx].ShortDesc;
+    Result.BadExample       := RULE_CATALOG_DATA[Idx].BadEx;
+    Result.GoodExample      := RULE_CATALOG_DATA[Idx].GoodEx;
+  end;
 end;
 
 class procedure TRuleCatalog.LoadFallback;
@@ -491,9 +531,12 @@ begin
   for K := Low(TFindingKind) to High(TFindingKind) do
   begin
     Meta := MakeFallbackMeta(K);
-    // ShortDescription nur hier im Katalog-Fallback setzen - der GetRule-
-    // Notfallpfad liess das Feld schon immer leer (Verhalten beibehalten).
-    Meta.ShortDescription := KindName(K);
+    // ShortDescription: MakeFallbackMeta liefert sie seit 2026-07-26 aus der
+    // einkompilierten Tabelle. Nur wenn die nichts hergibt (Drift-Guard hat
+    // abgelehnt), auf den Kind-Namen zurueckfallen - vorher stand hier eine
+    // unbedingte Zuweisung, die den Katalogtext ueberschrieben haette.
+    if Meta.ShortDescription = '' then
+      Meta.ShortDescription := KindName(K);
     FRules.AddOrSetValue(K, Meta);
     FRulesByID.AddOrSetValue(Meta.ID, Meta);
   end;

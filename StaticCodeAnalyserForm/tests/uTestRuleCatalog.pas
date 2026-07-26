@@ -9,7 +9,7 @@ interface
 
 uses
   DUnitX.TestFramework,
-  System.SysUtils, System.Classes,
+  System.SysUtils, System.Classes, System.IOUtils,
   uSCAConsts, uRuleCatalog;
 
 type
@@ -53,6 +53,9 @@ type
     // JSON type-Feld muss zu KIND_META.FindingType passen (Gegenstueck zu
     // JsonSeverityMatchesKindMeta).
     [Test] procedure JsonTypeMatchesKindMeta;
+    // Regressions-Anker 2026-07-26: Katalog-Fallback muss INHALTLICH
+    // vollstaendig sein (IDE-Plugin findet die JSON oft nicht).
+    [Test] procedure FallbackStillProvidesExamples;
     // Kind-Name in JSON muss zu KindName(K) matchen.
     [Test] procedure KindNameMatchesCatalog;
     // Tool-Info muss gesetzt sein (fuer SARIF tool.driver-Block).
@@ -637,6 +640,56 @@ begin
     IsDfm := KindName(K).StartsWith('Dfm');
     Assert.IsTrue(IsDfm,
       Format('dfm-only enthaelt Nicht-DFM-Kind "%s"', [KindName(K)]));
+  end;
+end;
+
+procedure TTestRuleCatalog.FallbackStillProvidesExamples;
+// ROOT-CAUSE-ANKER (2026-07-26): 19 Kinds (SCA167-SCA184, SCA194 - u.a.
+// SCA176 CognitiveComplexity) haben KEINEN Hand-Branch in uFixHint und
+// beziehen ihren Vorher/Nachher-Hinweis ausschliesslich ueber den Katalog.
+// Findet TRuleCatalog rules/sca-rules.json zur Laufzeit nicht (im IDE-Plugin
+// der Normalfall: BPL im Embarcadero-BPL-Verzeichnis, Repo auf anderem
+// Laufwerk), griff LoadFallback - und liess Bad/GoodExample LEER. Seit der
+// einkompilierten Tabelle (uRuleCatalogData.inc) darf das nicht mehr sein.
+// Der Fallback wird hier erzwungen, indem eine KAPUTTE JSON untergeschoben
+// wird (Datei existiert -> Pfadsuche nimmt sie -> Parser scheitert ->
+// LoadFallback).
+var
+  TmpFile : string;
+  OldPath : string;
+  Meta    : TRuleMeta;
+  K       : TFindingKind;
+  Leer    : Integer;
+begin
+  OldPath := TRuleCatalog.JsonFilePath;
+  TmpFile := TPath.Combine(TPath.GetTempPath,
+    'sca_broken_rules_' + TGuid.NewGuid.ToString.Replace('{', '').Replace('}', '') + '.json');
+  TFile.WriteAllText(TmpFile, '{ das ist kein gueltiger Regelkatalog');
+  try
+    TRuleCatalog.JsonFilePath := TmpFile;
+    TRuleCatalog.Reload;
+
+    // Stellvertretend der gemeldete Fall - und danach ALLE Kinds.
+    Meta := TRuleCatalog.GetRule(fkCognitiveComplexity);
+    Assert.IsNotEmpty(Meta.BadExample,
+      'SCA176: BadExample fehlt im Fallback - im IDE-Plugin sieht der User dann keinen Vorher-Block');
+    Assert.IsNotEmpty(Meta.GoodExample,
+      'SCA176: GoodExample fehlt im Fallback');
+    Assert.IsNotEmpty(Meta.ShortDescription,
+      'SCA176: ShortDescription fehlt im Fallback');
+
+    Leer := 0;
+    for K := Low(TFindingKind) to High(TFindingKind) do
+    begin
+      Meta := TRuleCatalog.GetRule(K);
+      if (Meta.BadExample = '') or (Meta.GoodExample = '') then Inc(Leer);
+    end;
+    Assert.AreEqual<Integer>(0, Leer,
+      'Kinds ohne Beispiel im Fallback (erwartet 0) - uRuleCatalogData.inc regenerieren');
+  finally
+    TRuleCatalog.JsonFilePath := OldPath;
+    TRuleCatalog.Reload;   // echten Katalog fuer die Folgetests wiederherstellen
+    if TFile.Exists(TmpFile) then TFile.Delete(TmpFile);
   end;
 end;
 
