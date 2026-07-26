@@ -72,6 +72,7 @@ uses
   uTestPerformance in 'uTestPerformance.pas',
   uTestRuleCatalog in 'uTestRuleCatalog.pas',
   uTestFixHint in 'uTestFixHint.pas',
+  uTestLocalization in 'uTestLocalization.pas',
   uTestExportSARIF in 'uTestExportSARIF.pas',
   uTestFindingFingerprint in 'uTestFindingFingerprint.pas',
   uTestExportSonarGeneric in 'uTestExportSonarGeneric.pas',
