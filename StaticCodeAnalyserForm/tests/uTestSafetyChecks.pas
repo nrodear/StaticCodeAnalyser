@@ -115,6 +115,18 @@ type
     [Test] procedure DeadCode_GotoLabelTargetAfterExit_NoFinding;
     [Test] procedure DeadCode_GotoLabelSameLineAfterExit_NoFinding;
     [Test] procedure DeadCode_ExitThenPlainStmtNoLabel_StillReported;   // TP-Gegenprobe
+    // --- multi-line-Exit-Guard 2026-07-26 (quell-abhaengig -> FindingsOfFile) ---
+    // Mehrzeiliges 'Exit( <Ausdruck ueber mehrere Zeilen> )': der Parser leckt
+    // die Fortsetzungszeile als Geschwister neben dem nkExit -> FP. Der Klammer-
+    // Balance-Guard unterdrueckt ihn (nur wenn die Folgezeile in einer offenen
+    // Klammer liegt).
+    [Test] procedure DeadCode_MultilineExitArg_NoFinding;
+    // TP-Gegenproben: der Guard darf echten toten Code NICHT verschlucken.
+    [Test] procedure DeadCode_SingleLineExitArgThenStmt_StillReported;
+    [Test] procedure DeadCode_MultilineExitThenStmtNoParen_StillReported;
+    // Mehrzeiliges 'raise E.Create( ... )': Code NACH der schliessenden Klammer
+    // bleibt Fund (symmetrische Balance-Logik, kein over-suppress).
+    [Test] procedure DeadCode_MultilineRaiseThenCode_StillReported;
   end;
 
 implementation
@@ -1204,6 +1216,90 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkDeadCode) >= 1,
     'Anweisung nach Exit ohne Label ist echter toter Code');
+  finally F.Free; end;
+end;
+
+procedure TTestDeadCodeExt.DeadCode_MultilineExitArg_NoFinding;
+// multi-line-Exit-Guard 2026-07-26 (verifizierter FP, uStaticAnalyzer2.pas:255-268):
+// 'Exit( (A = 1)'#13#10'  or (B = 2) )' - der Exit-Arg-Scanner in uParser2
+// stoppt an der ERSTEN ')' (nach '(A = 1)'), 'or (B = 2))' leckt als
+// Geschwister-Knoten auf der Folgezeile heraus. Diese liegt noch innerhalb der
+// auf der Exit-Zeile geoeffneten Klammer -> Teil des Exit-Arguments, kein toter
+// Code. QUELL-ABHAENGIG: FindingsOfFile (der Balance-Guard braucht die Datei;
+// im In-Memory-FindingsOf ist AcquireLines = nil -> Guard inert).
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Foo: Boolean;'#13#10+
+  'begin'#13#10+
+  '  Exit((A = 1)'#13#10+
+  '       or (B = 2));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeadCode),
+    'Fortsetzungszeile eines mehrzeiligen Exit-Arguments ist kein toter Code');
+  finally F.Free; end;
+end;
+
+procedure TTestDeadCodeExt.DeadCode_SingleLineExitArgThenStmt_StillReported;
+// TP-Gegenprobe: einzeiliges 'Exit(5); DoDead;' - die Klammer ist auf der Zeile
+// balanciert (Bereich Child.Line..Nxt.Line-1 leer, Bilanz 0), DoDead bleibt
+// echter toter Code. Beweist, dass der Guard den Ein-Zeilen-Fall nicht anfasst.
+// Gleicher Harness wie der Fix-Test (FindingsOfFile, Guard aktiv).
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Foo: Boolean;'#13#10+
+  'begin'#13#10+
+  '  Exit(5); DoDead;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkDeadCode) >= 1,
+    'Anweisung nach einzeiligem Exit(x) ist echter toter Code');
+  finally F.Free; end;
+end;
+
+procedure TTestDeadCodeExt.DeadCode_MultilineExitThenStmtNoParen_StillReported;
+// TP-Gegenprobe: 'Exit;'#13#10'DoDead;' ueber zwei Zeilen OHNE offene Klammer -
+// die Bilanz der Exit-Zeile ist 0, der Guard darf hier NICHT unterdruecken.
+// Beweist, dass der Balance-Guard nur bei offener Klammer greift, nicht bei
+// jedem Zeilensprung. FindingsOfFile (Guard aktiv).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  Exit;'#13#10+
+  '  DoDead;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkDeadCode) >= 1,
+    'Anweisung nach parameterlosem Exit ueber Zeilengrenze ist toter Code');
+  finally F.Free; end;
+end;
+
+procedure TTestDeadCodeExt.DeadCode_MultilineRaiseThenCode_StillReported;
+// multi-line-Exit-Guard 2026-07-26 (symmetrisch fuer nkRaise): der Code NACH
+// der schliessenden Klammer eines mehrzeiligen 'raise E.Create( ... )' bleibt
+// ein Fund - die Klammer-Bilanz ueber die raise-Zeilen ist 0, wenn DoDead
+// erreicht wird (die Fortsetzungszeile 'msg' INNERHALB der Klammer wird vom
+// Parser als Teil des raise-Arguments absorbiert, nicht als Geschwister).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  raise Exception.Create('#13#10+
+  '    ''msg'');'#13#10+
+  '  DoDead;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkDeadCode) >= 1,
+    'Code nach der schliessenden Klammer eines mehrzeiligen raise ist toter Code');
   finally F.Free; end;
 end;
 

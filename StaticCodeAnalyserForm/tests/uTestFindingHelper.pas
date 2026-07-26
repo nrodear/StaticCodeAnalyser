@@ -340,6 +340,12 @@ begin
         // rot, weil der Detektor hier schlicht nie ausgefuehrt wurde).
         TLeakDetector2.AnalyzeUnit(Root, TempPath, Result);
         TMissingFinallyDetector.AnalyzeUnit(Root, TempPath, Result);
+        // multi-line-Exit-Guard 2026-07-26: DeadCode hat jetzt einen Lines-
+        // abhaengigen Klammer-Balance-Guard (AcquireLines + StripStrings...)
+        // fuer mehrzeilige Exit/raise-Argumente - MUSS im File-Harness laufen,
+        // sonst ist der Guard inert (im In-Memory-FindingsOf ist AcquireLines
+        // = nil -> Fail-Safe, der Guard wird dort nie getestet).
+        TDeadCodeDetector.AnalyzeUnit(Root, TempPath, Result);
       finally
         Root.Free;
       end;

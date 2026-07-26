@@ -560,7 +560,7 @@ begin
   AddD3('NilDeref',        fkNilDeref,        TNilDerefDetector.AnalyzeUnit);
   AddD('MissingFinally',   fkMissingFinally,  TMissingFinallyDetector.AnalyzeUnit);   // TD-1 2c: AContext-fuehrend (LeakyClasses aus Ctx)
   AddD3('DivByZero',       fkDivByZero,       TDivByZeroDetector.AnalyzeUnit);
-  AddD3('DeadCode',        fkDeadCode,        TDeadCodeDetector.AnalyzeUnit);
+  AddD('DeadCode',         fkDeadCode,        TDeadCodeDetector.AnalyzeUnit);   // multi-line-Exit-Guard 2026-07-26: AContext-fuehrend (gestrippte Quellzeilen fuer Klammer-Balance)
   // TD-1 (2026-07-06): jetzt AContext-fuehrend (Schwellen aus Ctx.Config) -> AddD statt AddD3.
   AddD('LongMethod',      fkLongMethod,      TLongMethodDetector.AnalyzeUnit);
   AddD('LongParamList',   fkLongParamList,   TLongParamListDetector.AnalyzeUnit);

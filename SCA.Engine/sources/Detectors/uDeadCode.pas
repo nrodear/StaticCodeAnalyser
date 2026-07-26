@@ -21,28 +21,33 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TDeadCodeDetector = class
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   private
     class procedure AnalyzeMethod(MethodNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>; const ADirLines: TArray<Integer>;
-      const ALabelLines: TArray<Integer>);
+      const ALabelLines: TArray<Integer>;
+      const AStrippedLines: TArray<string>);
     class procedure CheckBlock(BlockNode: TAstNode;
       const MethodName, FileName: string;
       Results: TObjectList<TLeakFinding>;
       const ADirLines: TArray<Integer>;
-      const ALabelLines: TArray<Integer>); static;
+      const ALabelLines: TArray<Integer>;
+      const AStrippedLines: TArray<string>); static;
   end;
 
 implementation
 
-// noinspection-file CyclomaticComplexity, DeepNesting, GroupedDeclaration, LongMethod, RedundantJump, TooLongLine, UnsortedUses
+// noinspection-file CyclomaticComplexity, DeepNesting, GroupedDeclaration, LongMethod, LongParamList, RedundantJump, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
+uses
+  System.Classes, uDetectorUtils, uFileTextCache;
 
 function DirLineBetween(const Lines: TArray<Integer>; A, B: Integer): Boolean;
 // Welle 3: True wenn eine {$IFDEF}-Direktiven-Zeile strikt zwischen A und B liegt.
@@ -66,9 +71,39 @@ begin
   Result := False;
 end;
 
+function ExitArgStillOpen(const AStrippedLines: TArray<string>;
+  AFromLine, AToLine: Integer): Boolean;
+// multi-line-Exit-Guard 2026-07-26: kumuliert '(' minus ')' der GESTRIPPTEN
+// Quellzeilen von AFromLine bis AToLine (beide 1-basiert, inklusive). True,
+// wenn die Bilanz > 0 ist - dann steht die naechste Anweisung noch INNERHALB
+// einer auf der Exit-/raise-Zeile geoeffneten, noch nicht geschlossenen
+// Klammer und gehoert damit zum Argument des Terminators (kein toter Code).
+// Gestrippte Quelle (String-Literale durch '~' ersetzt, Kommentare entfernt)
+// stellt sicher, dass ein '(' in einem String/Kommentar NICHT mitzaehlt -
+// sonst maskierte es echten toten Code (falsches Skip). Ohne Zeilen-Array
+// (nil/leer, z.B. In-Memory-Test-Harness ohne Datei auf Platte) bleibt die
+// Bilanz 0 -> False -> kein Skip (Fail-Safe, Bestandsverhalten).
+var
+  ln, idx : Integer;
+  ch      : Char;
+  Balance : Integer;
+begin
+  Balance := 0;
+  for ln := AFromLine to AToLine do
+  begin
+    idx := ln - 1;                       // 1-basierte Quellzeile -> 0-basiert
+    if (idx < 0) or (idx > High(AStrippedLines)) then Continue;
+    for ch in AStrippedLines[idx] do
+      if ch = '(' then Inc(Balance)
+      else if ch = ')' then Dec(Balance);
+  end;
+  Result := Balance > 0;
+end;
+
 class procedure TDeadCodeDetector.CheckBlock(BlockNode: TAstNode;
   const MethodName, FileName: string; Results: TObjectList<TLeakFinding>;
-  const ADirLines: TArray<Integer>; const ALabelLines: TArray<Integer>);
+  const ADirLines: TArray<Integer>; const ALabelLines: TArray<Integer>;
+  const AStrippedLines: TArray<string>);
 // Iterativ via Work-Stack - analog zu uAstNode.CollectAll. Vorher
 // rekursiver Descent (Detectors/uDeadCode.pas alte Form) konnte bei
 // pathologisch tiefen ASTs den Aufruf-Stack sprengen.
@@ -190,6 +225,24 @@ begin
               Inc(i); Continue;
             end;
 
+            // FP-Guard (multi-line-Exit-Guard 2026-07-26): bei einem
+            // MEHRZEILIGEN 'Exit( <Ausdruck> )' bzw. 'raise E.Create( ... )'
+            // leckt der Parser die Fortsetzungszeilen des Arguments als
+            // Geschwister-Knoten neben dem Terminator heraus - der Exit-Arg-
+            // Scanner in uParser2 stoppt an der ERSTEN ')', nicht klammer-
+            // balanciert. Steht die Folgeanweisung noch innerhalb einer auf
+            // der Terminator-Zeile geoeffneten, unbalancierten Klammer, ist
+            // sie Teil des Terminator-Arguments -> kein toter Code. Quell-
+            // basierte Klammer-Bilanz Child.Line..Nxt.Line-1 (gestrippt).
+            // MONOTON: nur nkExit/nkRaise und nur bei echtem Zeilensprung
+            // (Nxt.Line > Child.Line); der Ein-Zeilen-Fall 'Exit(x); DoStuff;'
+            // hat einen leeren Bereich (Bilanz 0) und bleibt bewusst ein Fund.
+            if (Child.Kind in [nkExit, nkRaise]) and (Nxt.Line > Child.Line)
+               and ExitArgStillOpen(AStrippedLines, Child.Line, Nxt.Line - 1) then
+            begin
+              Inc(i); Continue;
+            end;
+
             F            := TLeakFinding.Create;
             F.FileName   := FileName;
             F.MethodName := MethodName;
@@ -212,7 +265,8 @@ end;
 
 class procedure TDeadCodeDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>;
-  const ADirLines: TArray<Integer>; const ALabelLines: TArray<Integer>);
+  const ADirLines: TArray<Integer>; const ALabelLines: TArray<Integer>;
+  const AStrippedLines: TArray<string>);
 var
   i : Integer;
 begin
@@ -227,11 +281,12 @@ begin
   for i := 0 to MethodNode.Children.Count - 1 do
     if MethodNode.Children[i].Kind = nkBlock then
       CheckBlock(MethodNode.Children[i], MethodNode.Name, FileName, Results,
-                 ADirLines, ALabelLines);
+                 ADirLines, ALabelLines, AStrippedLines);
 end;
 
 class procedure TDeadCodeDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>;
+  AContext: TAnalyzeContext);
 var
   Methods    : TList<TAstNode>;
   M          : TAstNode;
@@ -241,7 +296,29 @@ var
   LabelLines : TArray<Integer>;
   R          : TAstNode;
   n          : Integer;
+  Lines      : TStringList;
+  Cached     : Boolean;
+  LineFor    : TArray<Integer>;
+  StripText  : string;
+  StripLines : TArray<string>;
 begin
+  // multi-line-Exit-Guard 2026-07-26: gestrippte Quellzeilen EINMAL besorgen
+  // (String-Literale '~'-blankiert, Kommentare entfernt) fuer den Klammer-
+  // Balance-Guard in CheckBlock. Wie alle Lines-abhaengigen Detektoren:
+  // AcquireLines + StripStringsAndCommentsCached (per-Scan-Cache ueber
+  // AContext). Ohne Datei auf Platte (AcquireLines = nil, z.B. In-Memory-
+  // Test-Harness FindingsOf) bleibt StripLines leer -> Guard inert
+  // (Fail-Safe, Bestandsverhalten unveraendert).
+  Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
+  if Lines <> nil then
+  try
+    StripText  := TDetectorUtils.StripStringsAndCommentsCached(
+      Lines, LineFor, AContext, FileName);
+    StripLines := StripText.Split([#10]);
+  finally
+    ReleaseLines(Lines, Cached);
+  end;
+
   // Welle 3: {$IFDEF}-Direktiven-Zeilen aus den nkConditionalRange-Markern
   // sammeln (Start=Node.Line, Ende=TypeRef). Preprocessor-branch-Guard fuer
   // 'Code nach Exit/Raise steht in einem anderen bedingten Zweig'.
@@ -276,7 +353,7 @@ begin
   Methods := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
-      AnalyzeMethod(M, FileName, Results, DirLines, LabelLines);
+      AnalyzeMethod(M, FileName, Results, DirLines, LabelLines, StripLines);
   finally
     Methods.Free;
   end;
