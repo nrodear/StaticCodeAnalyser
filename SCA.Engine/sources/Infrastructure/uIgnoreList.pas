@@ -211,6 +211,17 @@ end;
 function TIgnoreList.IsTestPath(const FileName: string): Boolean;
 // Erkennt typische DUnit/DUnitX-Test-Namensschemata. Konservativ gehalten,
 // damit normale Dateien mit "test" im Namen NICHT versehentlich rausfliegen.
+//
+// ABSICHTLICH EIGENE LISTE (Fund 3, Restschulden-Audit 2026-07-26):
+// Die zentrale Auswerte-Liste liegt in TDetectorUtils.IsTestFixturePath
+// (uDetectorUtils.pas, TEST_PATH_RULES) und wird von den Post-Filtern und
+// von THardcodedSecretDetector benutzt. DIESE Funktion steht auf der
+// anderen Seite der Grenze: sie entscheidet, WAS ueberhaupt gescannt wird.
+// Ein Muster hier hinzuzunehmen LOESCHT Funde aus dem Korpus (die Datei
+// wird nie geparst), waehrend dasselbe Muster dort nur Befunde einer
+// bereits gescannten Datei ausblendet. Deshalb NICHT zusammenlegen und
+// Erweiterungen hier nur mit Korpus-A/B-Messung.
+// Nur hier bekannt: 'dunit-tests', 'TestProject*.dpr/.dpk', '*Tests.dpr'.
 const
   // Strikte Datei-Glob-Patterns - matcht den Basisnamen.
   TEST_FILE_PATTERNS: array[0..6] of string = (

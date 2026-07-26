@@ -34,6 +34,28 @@ type
     InParenComment : Boolean;   // innerhalb (* ... *)
   end;
 
+  // === TEST-PFAD-ERKENNUNG: Strenge-Stufe ==============================
+  // Fund 3 (Restschulden-Audit 2026-07-26): es gab DREI konkurrierende
+  // "ist Testdatei"-Definitionen mit disjunkten Musterlisten, sodass
+  // dieselbe Datei je nach Konsument anders bewertet wurde. Die Muster
+  // liegen jetzt in EINER Liste (TEST_PATH_RULES, Implementation) und
+  // jede Regel traegt die Stufen, in denen sie gilt. Die Stufe steuert
+  // NUR die Auswahl aus dieser Liste - nicht mehr eine eigene Kopie.
+  //
+  //   tplFixture - Post-Filter-Sicht (Console-Runner, uUninitVar):
+  //                Test-Files UND Demo-/Sample-/Resources-Fixtures.
+  //                Breit, weil dort nur Heuristik-Befunde ausgeblendet
+  //                werden. = das bisherige IsTestFixturePath-Verhalten.
+  //   tplSecret  - Secret-Sicht (THardcodedSecretDetector): NUR Test-/
+  //                Spec-Konventionen. Bewusst ENGER als tplFixture: in
+  //                einem Demo-/Sample-File ist ein echtes hardcodiertes
+  //                Secret weiterhin meldepflichtig.
+  //
+  // NICHT hierher gehoert TIgnoreList.IsTestPath (uIgnoreList.pas): das
+  // steuert, WAS ueberhaupt gescannt wird - eine Erweiterung dort loescht
+  // Funde aus dem Korpus. Bewusst separat gelassen.
+  TTestPathLevel = (tplFixture, tplSecret);
+
   TDetectorUtils = class
      public
       // True, wenn Ch zu einem Identifier gehoert (a..z, 0..9, _).
@@ -46,24 +68,36 @@ type
     // Files optional ausblenden - die enthalten meist absichtliche Bugs
     // fuer Detektor-Tests bzw. Demo-Code mit nicht-produktiven Patterns.
     //
-    // Patterns:
-    //   * Basename matched 'uTest*.pas', '*_Test.pas', '*_Tests.pas',
-    //     '*TestSuite*.pas', '*Sample.pas', '*Demo.pas', '*Sample_*.pas',
-    //     '*_Demo_*.pas'
-    //   * Pfad-Komponente innerhalb der REPO-RELATIVEN Pfad-Segmente
-    //     (relativ zu BaseDir) ist 'test', 'tests', 'unittest', 'samples',
-    //     'demos', 'resources'. Wenn BaseDir leer ist, faellt der
-    //     Detektor auf eine konservative Substring-Suche zurueck mit
-    //     dem Caveat dass externe Pfade ('D:\projects\company-tests\...')
-    //     dann auch matchen koennen.
-    //   * Spezifische bekannte Demo-Files: 'MeineUnit.pas', 'uOrderForm.pas',
-    //     'uCustomerForm.pas' (im SCA-Repo intentionally-buggy Beispiele)
+    // SINGLE SOURCE OF TRUTH fuer "ist Testdatei" auf der Auswerte-Seite
+    // (Fund 3, Restschulden-Audit 2026-07-26). Alle Muster stehen in
+    // TEST_PATH_RULES (Implementation); Level waehlt daraus aus.
     //
-    // Komplementaer zu TIgnoreList.IsTestPath (nur Test-Files): erweitert
-    // um Demo-/Sample-Patterns und ist als Post-Filter-Heuristik gedacht,
-    // NICHT als Scan-Exclusion-Mechanismus (TIgnoreList).
+    // Level = tplFixture (Default, unveraendertes Alt-Verhalten):
+    //   * Basename matched 'uTest*.pas', '*_Test.pas', '*_Tests.pas',
+    //     '*TestSuite*.pas', '*Sample.pas', '*Demo.pas', '*_Sample_*.pas',
+    //     '*_Demo_*.pas', 'MeineUnit.pas', '*Demo.dfm'
+    //   * Pfad-Segment ist 'test', 'tests', 'unittest', 'unittests',
+    //     'samples', 'demos', 'resources'
+    // Level = tplSecret (THardcodedSecretDetector):
+    //   * Basename matched 'uTest*.pas', '*test.pas', '*tests.pas',
+    //     '*testu.pas', '*testsu.pas', '*spec.pas'
+    //   * Pfad-Segment ist 'test', 'tests', 'spec', 'fixtures', 'utest',
+    //     'utests' bzw. beginnt mit 'unittest'
+    //   KEINE Demo-/Sample-Muster: ein echtes Secret in einer Demo-Unit
+    //   bleibt meldepflichtig.
+    //
+    // Pfad-Anchoring: mit BaseDir werden NUR Segmente RELATIV zu BaseDir
+    // geprueft - so wird '/test/' in einem externen Repo-Pfad wie
+    // 'D:\projects\company-tests\src\auth.pas' nicht mehr als Fixture
+    // erkannt. Ohne BaseDir gilt die konservative Substring-Suche mit
+    // diesem dokumentierten Caveat.
+    //
+    // Komplementaer zu TIgnoreList.IsTestPath (uIgnoreList.pas): das ist
+    // der SCAN-EXCLUSION-Mechanismus (entscheidet, was ueberhaupt geparst
+    // wird) und bleibt bewusst getrennt - siehe Kommentar dort.
     class function IsTestFixturePath(const FileName: string;
-      const BaseDir: string = ''): Boolean; static;
+      const BaseDir: string = '';
+      Level: TTestPathLevel = tplFixture): Boolean; static;
 
     // Sucht Needle in Haystack, beide bereits lower-case, mit Wortgrenzen-
     // Pruefung links UND rechts. Liefert 1-basierte Position oder 0.
@@ -90,7 +124,8 @@ type
     class function FindTokenBoundedLower(const Needle, HaystackLower: string)
       : Integer; static;
 
-    // Entfernt Pascal-String-Literale aus einem Ausdrucks-Text.
+    // ENTFERNT Pascal-String-Literale aus einem Ausdrucks-Text - die
+    // Zeichen fallen WEG, alle Positionen dahinter VERSCHIEBEN sich.
     // Pascal escaped einfache Apostrophe in Strings durch Verdoppelung
     // (`'don''t'`), aber der Parser-AST hat sie bereits als zusammenhaengen-
     // den Literal-Token konsumiert; die Funktion arbeitet daher auf einer
@@ -98,7 +133,27 @@ type
     // Verwendet von Detektoren, die nach Operator-Pattern (z.B. `= nil`,
     // `IfThen(...,A(),B())`) suchen und dabei Treffer in String-Literalen
     // ('= nil als String') ausschliessen muessen.
+    //
+    // ACHTUNG - NAMENSFALLE (Fund 4, Restschulden-Audit 2026-07-26):
+    // Das Gegenstueck BlankStringLiterals (siehe unten) heisst fast gleich,
+    // tut aber das GEGENTEIL beim Layout: es ERHAELT die Laenge. Wer einen
+    // Aufruf blind gegen den anderen tauscht, bekommt still falsche
+    // Zeilen-/Spalten-Rueckrechnungen. Auswahlregel:
+    //   Positionen egal (reine Pos()-Suche im Ergebnis) -> diese Funktion
+    //   Positionen zaehlen (Spalten/Offsets)            -> BlankStringLiterals
     class function StripStringLiterals(const S: string): string; static;
+
+    // POSITIONSERHALTENDE Schwester von StripStringLiterals: ersetzt jedes
+    // Zeichen ZWISCHEN einfachen Anfuehrungszeichen durch ein Leerzeichen
+    // (inkl. ''-Escape-Handling), laesst die Quotes selbst stehen. Laenge
+    // und damit JEDE Zeichenposition bleiben 1:1 erhalten.
+    //
+    // Fuer Detektoren, die Match-Positionen auf Spalten/Offsets der Quelle
+    // zurueckrechnen (uDivByZero) - dort waere das entfernende
+    // StripStringLiterals ein stiller Positions-Versatz.
+    // Hochgezogen aus uDivByZero (Fund 4, Restschulden-Audit 2026-07-26);
+    // die Kopien waren namensgleich, aber semantisch gegensaetzlich.
+    class function BlankStringLiterals(const S: string): string; static;
 
     // === ZEILEN-SCANNER (Strings + Kommentare) =========================
     // Single source of truth fuer die String-/Kommentar-Zustandsmaschine.
@@ -163,6 +218,32 @@ type
     // hier zentralisiert (Konsumenten rufen TDetectorUtils.LineForPos).
     class function LineForPos(const LineFor: TArray<Integer>;
       APos: Integer): Integer; static;
+
+    // === QUALIFIZIERTE NAMEN ==========================================
+    // Letztes Segment eines gepunkteten Bezeichners:
+    //   'TFoo.Bar'           -> 'Bar'
+    //   'TOuter.TInner.DoIt' -> 'DoIt'   (nested type: der LETZTE Punkt zaehlt)
+    //   'Bar'                -> 'Bar'    (kein Punkt -> unveraendert)
+    //   'TFoo.'              -> ''       (Punkt am Ende -> leeres Segment)
+    //   ''                   -> ''
+    //
+    // Restschulden-Audit 2026-07-26: die Routine war in ACHT Detektoren
+    // lokal kopiert - siebenmal als Rueckwaerts-Scan auf den LETZTEN Punkt
+    // (uMissingOverride, uAbstractNotImpl, uConstantReturn,
+    //  uInheritedMethodEmpty, uRoutineResultAssigned, uUnusedPrivateMethod,
+    //  uConstStringParameter via LastDelimiter) und EINMAL abweichend in
+    // uCanBeClassMethod als Pos('.') = ERSTER Punkt. Die Pos-Fassung liefert
+    // bei mehr als einem Punkt 'TInner.DoIt' statt 'DoIt'; der Decl<->Impl-
+    // Abgleich in SCA148 (CanBeClassMethod) scheitert dann STILL - kein
+    // Fehler, nur ein nicht gefundener Partner. Diese zentrale Fassung ist
+    // die Rueckwaerts-Semantik; uCanBeClassMethod folgt ihr jetzt ebenfalls.
+    class function UnqualifiedNameLast(const AName: string): string; static;
+
+    // Wie UnqualifiedNameLast, zusaetzlich lowercase - fuer Detektoren, die
+    // das Ergebnis ausschliesslich als case-insensitiven Match-Key nutzen
+    // (uConstStringParameter: Decl<->Impl-Matching ueber ein TStringList-Set).
+    class function UnqualifiedNameLastLower(const AName: string)
+      : string; static;
 
     // Perf P1 (Konzept_Performance25, 2026-07-19): EIN O(N)-Scan ueber den
     // (gestrippten) Code sammelt fuer jedes Ident-Wort ([A-Za-z0-9_]+-Run)
@@ -256,6 +337,18 @@ uses
   System.StrUtils,               // PosEx
   System.RegularExpressions;     // TRegEx fuer IsLikelyAttributePosition
 
+type
+  // Match-Modus einer Regel der zentralen Test-Pfad-Liste (Fund 3,
+  // Restschulden-Audit 2026-07-26) - Bedeutung siehe TEST_PATH_RULES
+  // im Kopf von IsTestFixturePath.
+  TTestPathMatchMode = (tmBaseName, tmDirSegment, tmSegmentStart);
+  TTestPathLevels    = set of TTestPathLevel;
+  TTestPathRule = record
+    Pattern : string;
+    Mode    : TTestPathMatchMode;
+    Levels  : TTestPathLevels;
+  end;
+
 class function TDetectorUtils.IsIdentChar(Ch: Char): Boolean;
 begin
   Result := ((Ch >= 'a') and (Ch <= 'z'))
@@ -265,35 +358,73 @@ begin
 end;
 
 class function TDetectorUtils.IsTestFixturePath(const FileName: string;
-  const BaseDir: string): Boolean;
+  const BaseDir: string; Level: TTestPathLevel): Boolean;
+// Fund 3 (Restschulden-Audit 2026-07-26): EINE Musterliste fuer alle
+// Auswerte-Konsumenten. Jede Regel traegt (a) ihren Match-Modus und (b)
+// die Strenge-Stufen, in denen sie gilt - die Stufen bleiben damit
+// unterschiedlich streng, lesen aber aus derselben Quelle.
+//
+// Match-Modi (bewusst getrennt, weil die Herkunftslisten unterschiedlich
+// scharf waren und ein Vereinheitlichen Funde verschoben haette):
+//   tmBaseName     - Glob gegen den Dateinamen OHNE Pfad (MatchesMask ist
+//                    laut System.Masks case-insensitiv: die Masken-Literale
+//                    und das Eingabezeichen laufen beide durch UpCase).
+//   tmDirSegment   - VOLLES Pfad-Segment: '/<pattern>/' bzw. Segment-
+//                    Gleichheit im BaseDir-relativen Teil. Beidseitig
+//                    verankert.
+//   tmSegmentStart - Segment-ANFANG: '/<pattern>'. Bewusst unscharf und
+//                    nur noch fuer das Alt-Muster '/unittest' (deckt
+//                    '/unittest/' + '/unittests/' + '/unittesting/' ab).
+//                    Neue Regeln bitte NICHT in diesem Modus anlegen.
 const
-  // Basename-Globs - matcht den File-Namen ohne Pfad.
-  FIXTURE_FILE_PATTERNS : array[0..9] of string = (
-    'uTest*.pas',       // DUnit-Tests
-    '*_Test.pas',
-    '*_Tests.pas',
-    '*TestSuite*.pas',
-    '*Sample.pas',      // Sample-Demos
-    '*_Sample_*.pas',
-    '*Demo.pas',        // Generische Demos
-    '*_Demo_*.pas',
-    'MeineUnit.pas',    // SCA-Repo intentionally-buggy demo
-    '*Demo.dfm'         // Form-Designer-Demos
-  );
-  // Pfad-Substring (normalisiert mit /), case-insensitive.
-  FIXTURE_DIR_PARTS : array[0..6] of string = (
-    'test',          // Singular: /test/
-    'tests',         // Plural: /tests/
-    'unittest',
-    'unittests',
-    'samples',
-    'demos',
-    'resources'      // /resources/-Folder enthalten Form-Templates
+  TEST_PATH_RULES : array[0..27] of TTestPathRule = (
+    // ---- Basename ----------------------------------------------------
+    (Pattern: 'uTest*.pas';      Mode: tmBaseName;     Levels: [tplFixture, tplSecret]),
+    (Pattern: '*_Test.pas';      Mode: tmBaseName;     Levels: [tplFixture]),
+    (Pattern: '*_Tests.pas';     Mode: tmBaseName;     Levels: [tplFixture]),
+    (Pattern: '*TestSuite*.pas'; Mode: tmBaseName;     Levels: [tplFixture]),
+    (Pattern: '*Sample.pas';     Mode: tmBaseName;     Levels: [tplFixture]),
+    (Pattern: '*_Sample_*.pas';  Mode: tmBaseName;     Levels: [tplFixture]),
+    (Pattern: '*Demo.pas';       Mode: tmBaseName;     Levels: [tplFixture]),
+    (Pattern: '*_Demo_*.pas';    Mode: tmBaseName;     Levels: [tplFixture]),
+    (Pattern: 'MeineUnit.pas';   Mode: tmBaseName;     Levels: [tplFixture]),
+    (Pattern: '*Demo.dfm';       Mode: tmBaseName;     Levels: [tplFixture]),
+    // aus uHardcodedSecret.IsTestFilePath (dort frueher EndsWith auf dem
+    // normalisierten Gesamtpfad - basename-aequivalent, weil '.pas' nie
+    // einen Pfadtrenner enthaelt):
+    (Pattern: '*test.pas';       Mode: tmBaseName;     Levels: [tplSecret]),
+    (Pattern: '*tests.pas';      Mode: tmBaseName;     Levels: [tplSecret]),
+    (Pattern: '*testu.pas';      Mode: tmBaseName;     Levels: [tplSecret]),   // DUnit(X) *TestU.pas
+    (Pattern: '*testsu.pas';     Mode: tmBaseName;     Levels: [tplSecret]),   // *TestsU.pas
+    (Pattern: '*spec.pas';       Mode: tmBaseName;     Levels: [tplSecret]),
+    // Delta-Vermeidung zum alten Pos('/utest'): das traf auch 'uTestX.dfm'.
+    // Praktisch irrelevant (der Secret-Detektor sieht nur geparste .pas),
+    // aber so bleibt die Aenderung auf die utestimonials-Klasse begrenzt.
+    (Pattern: 'uTest*.dfm';      Mode: tmBaseName;     Levels: [tplSecret]),
+    // ---- Pfad-Segmente -----------------------------------------------
+    (Pattern: 'test';            Mode: tmDirSegment;   Levels: [tplFixture, tplSecret]),
+    (Pattern: 'tests';           Mode: tmDirSegment;   Levels: [tplFixture, tplSecret]),
+    (Pattern: 'unittest';        Mode: tmDirSegment;   Levels: [tplFixture]),
+    (Pattern: 'unittests';       Mode: tmDirSegment;   Levels: [tplFixture]),
+    (Pattern: 'samples';         Mode: tmDirSegment;   Levels: [tplFixture]),
+    (Pattern: 'demos';           Mode: tmDirSegment;   Levels: [tplFixture]),
+    (Pattern: 'resources';       Mode: tmDirSegment;   Levels: [tplFixture]),  // Form-Templates
+    (Pattern: 'spec';            Mode: tmDirSegment;   Levels: [tplSecret]),
+    (Pattern: 'fixtures';        Mode: tmDirSegment;   Levels: [tplSecret]),
+    // FP-Fix Fund 3: frueher Pos('/utest', Norm) - das traf auch
+    // '/utestimonials/'. Die Konvention meint (a) das Verzeichnis 'utest'/
+    // 'utests' und (b) den Dateinamen 'uTestXxx.pas' (Regel 0). Beide sind
+    // jetzt an Pfadgrenzen verankert.
+    (Pattern: 'utest';           Mode: tmDirSegment;   Levels: [tplSecret]),
+    (Pattern: 'utests';          Mode: tmDirSegment;   Levels: [tplSecret]),
+    // ---- Segment-Anfang (Alt-Semantik, siehe Kopf) --------------------
+    (Pattern: 'unittest';        Mode: tmSegmentStart; Levels: [tplSecret])
   );
 var
   Bare, FullLow, BaseLow, RelLow : string;
-  Pat, DirPart, Segment          : string;
+  Segment                        : string;
   Segments                       : TArray<string>;
+  Rule                           : TTestPathRule;
 begin
   Result := False;
   if FileName = '' then Exit;
@@ -301,8 +432,9 @@ begin
 
   // 1. Basename-Pattern matched unabhaengig vom Pfad-Anchoring -
   //    'uTest*.pas' ist projekt-uebergreifend ein Test-File-Indikator.
-  for Pat in FIXTURE_FILE_PATTERNS do
-    if MatchesMask(Bare, Pat) then Exit(True);
+  for Rule in TEST_PATH_RULES do
+    if (Rule.Mode = tmBaseName) and (Level in Rule.Levels)
+       and MatchesMask(Bare, Rule.Pattern) then Exit(True);
 
   // 2. Pfad-Komponenten-Match. Wenn BaseDir gegeben, matchen wir NUR
   //    Segmente des Pfads RELATIV zu BaseDir - so wird '/test/' in einem
@@ -323,14 +455,26 @@ begin
     begin
       Segments := RelLow.Split(['/']);
       for Segment in Segments do
-        for DirPart in FIXTURE_DIR_PARTS do
-          if Segment = DirPart then Exit(True);
+        for Rule in TEST_PATH_RULES do
+        begin
+          if not (Level in Rule.Levels) then Continue;
+          if (Rule.Mode = tmDirSegment) and (Segment = Rule.Pattern) then
+            Exit(True);
+          if (Rule.Mode = tmSegmentStart) and Segment.StartsWith(Rule.Pattern) then
+            Exit(True);
+        end;
     end;
   end
   else
   begin
-    for DirPart in FIXTURE_DIR_PARTS do
-      if Pos('/' + DirPart + '/', FullLow) > 0 then Exit(True);
+    for Rule in TEST_PATH_RULES do
+    begin
+      if not (Level in Rule.Levels) then Continue;
+      if (Rule.Mode = tmDirSegment)
+         and (Pos('/' + Rule.Pattern + '/', FullLow) > 0) then Exit(True);
+      if (Rule.Mode = tmSegmentStart)
+         and (Pos('/' + Rule.Pattern, FullLow) > 0) then Exit(True);
+    end;
   end;
 end;
 
@@ -410,6 +554,8 @@ begin
 end;
 
 class function TDetectorUtils.StripStringLiterals(const S: string): string;
+// ENTFERNEND: Literal-Inhalt UND Quotes fallen weg, Length(Result) < Length(S).
+// Positionsempfindliche Aufrufer brauchen BlankStringLiterals (siehe dort).
 var
   i     : Integer;
   C     : Char;
@@ -424,6 +570,43 @@ begin
       InStr := not InStr
     else if not InStr then
       Result := Result + C;
+  end;
+end;
+
+class function TDetectorUtils.BlankStringLiterals(const S: string): string;
+// POSITIONSERHALTEND: ersetzt jeden Char zwischen einfachen Anfuehrungs-
+// zeichen (inkl. ''-Escape-Handling) durch ein Leerzeichen. Die Quotes
+// selbst bleiben stehen, damit Length(Result) = Length(S) gilt und JEDE
+// Position 1:1 auf die Eingabe zurueckrechenbar bleibt.
+//
+// Gegenstueck zu StripStringLiterals (ENTFERNT die Zeichen und verschiebt
+// alles dahinter) - die beiden sind NICHT austauschbar. Herkunft: lokale
+// Kopie in uDivByZero; hochgezogen mit Fund 4 (Restschulden-Audit
+// 2026-07-26), weil die namensgleiche, aber gegensaetzliche Kopie zum
+// stillen Loeschen "der Redundanz" einlud.
+var
+  i     : Integer;
+  inStr : Boolean;
+begin
+  Result := S;
+  inStr  := False;
+  i := 1;
+  while i <= Length(Result) do
+  begin
+    if Result[i] = '''' then
+    begin
+      if inStr and (i < Length(Result)) and (Result[i + 1] = '''') then
+      begin
+        Result[i]     := ' ';
+        Result[i + 1] := ' ';
+        Inc(i, 2);
+        Continue;
+      end;
+      inStr := not inStr;
+    end
+    else if inStr then
+      Result[i] := ' ';
+    Inc(i);
   end;
 end;
 
@@ -664,6 +847,28 @@ begin
     Result := LineFor[APos - 1] + 1
   else
     Result := 0;
+end;
+
+class function TDetectorUtils.UnqualifiedNameLast(const AName: string): string;
+// Byte-identische Uebernahme der 7-fach gleichen Detektor-Fassung:
+// rueckwaerts bis zum ersten gefundenen Punkt (= der LETZTE im String),
+// danach alles ab Punkt+1. Ohne Punkt bleibt der Name unveraendert.
+var
+  i : Integer;
+begin
+  Result := AName;
+  for i := Length(AName) downto 1 do
+    if AName[i] = '.' then
+    begin
+      Result := Copy(AName, i + 1, MaxInt);
+      Exit;
+    end;
+end;
+
+class function TDetectorUtils.UnqualifiedNameLastLower(
+  const AName: string): string;
+begin
+  Result := LowerCase(UnqualifiedNameLast(AName));
 end;
 
 class function TDetectorUtils.BuildWordPositionIndex(const Code: string):

@@ -47,7 +47,8 @@ type
 implementation
 
 uses
-  System.StrUtils;
+  System.StrUtils,
+  uDetectorUtils;  // UnqualifiedNameLast (Restschulden-Audit 2026-07-26)
 
 const
   STRING_TYPES : array[0..5] of string = (
@@ -111,14 +112,10 @@ begin
             MethodHasDirective(TypeRefLow, 'abstract') or MethodHasDirective(TypeRefLow, 'reintroduce');
 end;
 
-function UnqualifiedName(const N: string): string;
-// 'TFoo.Bar' -> 'bar', 'Bar' -> 'bar' (lowercase, fuer Decl<->Impl-Matching).
-var Dot : Integer;
-begin
-  Dot := LastDelimiter('.', N);
-  if Dot > 0 then Result := LowerCase(Copy(N, Dot + 1, MaxInt))
-             else Result := LowerCase(N);
-end;
+// Restschulden-Audit 2026-07-26: lokale UnqualifiedName-Kopie entfernt -
+// jetzt TDetectorUtils.UnqualifiedNameLastLower. LastDelimiter('.') und der
+// Rueckwaerts-Scan der zentralen Fassung liefern denselben (letzten) Punkt,
+// das LowerCase steckt in der Lower-Variante. Verhalten unveraendert.
 
 function IsEventHandlerMethod(M: TAstNode): Boolean;
 // Event-Handler-Form: erster Param 'Sender' bzw. Typ TObject - per Event-Typ
@@ -153,13 +150,13 @@ begin
     //    Namen matchen, damit beide Seiten als vertrags-fixiert gelten.
     for M in Methods do
       if MethodHasAnyContractDirective(LowerCase(M.TypeRef)) then
-        PolyNames.Add(UnqualifiedName(M.Name));
+        PolyNames.Add(TDetectorUtils.UnqualifiedNameLastLower(M.Name));
 
     for M in Methods do
     begin
       // Vertrags-fixierte Signaturen (polymorph via Name-Match / Event-Handler)
       // ueberspringen - dort ist const nicht lokal umstellbar (dominante FP-Klasse).
-      if PolyNames.Contains(UnqualifiedName(M.Name)) then Continue;
+      if PolyNames.Contains(TDetectorUtils.UnqualifiedNameLastLower(M.Name)) then Continue;
       if IsEventHandlerMethod(M) then Continue;
       for P in M.Children do
       begin

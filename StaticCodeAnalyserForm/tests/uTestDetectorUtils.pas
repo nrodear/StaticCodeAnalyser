@@ -28,6 +28,17 @@ type
     [Test] procedure Strip_LineForCharMapsToSourceLine;
     [Test] procedure Strip_EmptyStringKeepsFollowingKeyword;
     [Test] procedure Strip_NewlinePerSourceLine;
+    // ---- BlankStringLiterals vs. StripStringLiterals (Fund 4) ----
+    [Test] procedure Blank_KeepsLengthAndPositions;
+    [Test] procedure Blank_EscapedQuoteBlankedAndLengthKept;
+    [Test] procedure Strip_ShiftsPositions_GegenprobeZuBlank;
+    // ---- IsTestFixturePath / Strenge-Stufen (Fund 3) ----
+    [Test] procedure TestPath_SecretLevel_SpecDirIsTest;
+    [Test] procedure TestPath_SecretLevel_UtestimonialsIsNotTest;
+    [Test] procedure TestPath_SecretLevel_UtestDirAndUtestFileStillTest;
+    [Test] procedure TestPath_SecretLevel_TestSuffixFilesStillTest;
+    [Test] procedure TestPath_LevelsStayDifferent_SampleAndDemo;
+    [Test] procedure TestPath_FixtureLevel_UnchangedPatterns;
     // ---- MergeAdjacentStringLiterals ----
     [Test] procedure Merge_SimpleConcat;
     [Test] procedure Merge_NoSpaceAroundPlus;
@@ -35,6 +46,12 @@ type
     [Test] procedure Merge_EscapedQuotePreservedInsideLiteral;
     [Test] procedure Merge_PlusOutsideLiterals_Untouched;
     [Test] procedure Merge_NoLiterals_Unchanged;
+    // ---- UnqualifiedNameLast (Restschulden-Audit 2026-07-26) ----
+    [Test] procedure Unqualified_SimpleQualified_LastSegment;
+    [Test] procedure Unqualified_NestedType_TakesLastDotNotFirst;
+    [Test] procedure Unqualified_NoDot_Unchanged;
+    [Test] procedure Unqualified_EmptyAndTrailingDot;
+    [Test] procedure Unqualified_LowerVariant_LowercasesLastSegment;
   end;
 
 implementation
@@ -232,6 +249,159 @@ begin
   end;
 end;
 
+{ ---- BlankStringLiterals vs. StripStringLiterals (Fund 4) ---- }
+
+// Fund 4 (Restschulden-Audit 2026-07-26): die beiden Funktionen heissen fast
+// gleich, tun aber beim Layout das GEGENTEIL. Genau diese Differenz wird hier
+// festgenagelt - wer eine der beiden fuer redundant haelt und den Aufruf
+// tauscht, bekommt sonst still verschobene Zeilen-/Spaltenangaben.
+// Quelltext-Beispiel (Pascal): a := 'lit' + b;
+
+procedure TTestDetectorUtils.Blank_KeepsLengthAndPositions;
+const
+  SRC = 'a := ''lit'' + b;';   // = Pascal-Text:  a := 'lit' + b;
+var
+  Blanked : string;
+begin
+  Blanked := TDetectorUtils.BlankStringLiterals(SRC);
+  Assert.AreEqual<Integer>(Length(SRC), Length(Blanked),
+    'BlankStringLiterals MUSS die Laenge erhalten');
+  Assert.AreEqual<Integer>(Pos('b', SRC), Pos('b', Blanked),
+    'Position hinter dem Literal bleibt unveraendert');
+  Assert.AreEqual<Integer>(0, Pos('lit', Blanked),
+    'Literal-Inhalt ist ausgeblendet');
+  Assert.AreEqual<Integer>(2, Length(SRC) - Length(SRC.Replace('''', '')),
+    'Selbstpruefung des Testdatums: genau zwei Quotes im Quelltext');
+  Assert.AreEqual<Integer>(6, Pos('''', Blanked),
+    'die Quotes selbst bleiben als Positions-Marker stehen');
+end;
+
+procedure TTestDetectorUtils.Blank_EscapedQuoteBlankedAndLengthKept;
+const
+  // Pascal-Text:  s := 'it''s' ; b
+  SRC = 's := ''it''''s'' ; b';
+var
+  Blanked : string;
+begin
+  Blanked := TDetectorUtils.BlankStringLiterals(SRC);
+  Assert.AreEqual<Integer>(Length(SRC), Length(Blanked),
+    'auch mit ''''-Escape bleibt die Laenge gleich');
+  Assert.AreEqual<Integer>(0, Pos('it', Blanked),
+    'Literal-Inhalt inkl. Escape ausgeblendet');
+  Assert.AreEqual<Integer>(Pos('b', SRC), Pos('b', Blanked),
+    'Code hinter dem Literal behaelt seine Position');
+end;
+
+procedure TTestDetectorUtils.Strip_ShiftsPositions_GegenprobeZuBlank;
+// GEGENPROBE zur Namensfalle: die entfernende Variante verschiebt alles
+// hinter dem Literal. Das ist KEIN Bug - es ist der dokumentierte
+// Unterschied, und dieser Test verhindert, dass jemand die beiden
+// Funktionen fuer austauschbar haelt.
+const
+  SRC = 'a := ''lit'' + b;';
+var
+  Stripped : string;
+begin
+  Stripped := TDetectorUtils.StripStringLiterals(SRC);
+  Assert.IsTrue(Length(Stripped) < Length(SRC),
+    'StripStringLiterals ENTFERNT Zeichen');
+  Assert.IsTrue(Pos('b', Stripped) < Pos('b', SRC),
+    'Positionen hinter dem Literal verschieben sich - deshalb ist Strip fuer '
+    + 'positionsempfindliche Detektoren (uDivByZero) verboten');
+end;
+
+{ ---- IsTestFixturePath / Strenge-Stufen (Fund 3) ---- }
+
+// Fund 3 (Restschulden-Audit 2026-07-26): eine Musterliste, zwei Stufen.
+// THardcodedSecretDetector.IsTestFilePath ist nur noch ein duenner Aufrufer
+// von IsTestFixturePath(.., tplSecret) - deshalb pinnen diese Tests die
+// Secret-Sicht direkt an der zentralen Funktion.
+
+procedure TTestDetectorUtils.TestPath_SecretLevel_SpecDirIsTest;
+begin
+  Assert.IsTrue(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\spec\uConfig.pas', '', tplSecret),
+    '/spec/ ist eine Test-Konvention (rspec-Stil)');
+  Assert.IsTrue(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\fixtures\uConfig.pas', '', tplSecret),
+    '/fixtures/ ebenso');
+end;
+
+procedure TTestDetectorUtils.TestPath_SecretLevel_UtestimonialsIsNotTest;
+// FP-FIX: frueher Pos('/utest', Norm) ohne Verankerung - '/utestimonials/'
+// traf zu und der Secret-Detektor schwieg dort komplett.
+begin
+  Assert.IsFalse(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\utestimonials\uConfig.pas', '', tplSecret),
+    '/utestimonials/ ist KEIN Testverzeichnis - der unverankerte /utest-'
+    + 'Match war ein False-Positive der Test-Erkennung');
+  Assert.IsFalse(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\utestimonials\uConfig.pas', '', tplFixture),
+    'auch in der Fixture-Stufe nicht');
+end;
+
+procedure TTestDetectorUtils.TestPath_SecretLevel_UtestDirAndUtestFileStillTest;
+// GEGENPROBE zum FP-Fix: die gemeinte Konvention bleibt erkannt - als
+// Verzeichnis 'utest'/'utests' und als Dateiname 'uTestXxx.pas'.
+begin
+  Assert.IsTrue(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\utest\uConfig.pas', '', tplSecret), 'Verzeichnis /utest/');
+  Assert.IsTrue(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\utests\uConfig.pas', '', tplSecret), 'Verzeichnis /utests/');
+  Assert.IsTrue(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\src\uTestHelpers.pas', '', tplSecret), 'Dateiname uTestXxx.pas');
+end;
+
+procedure TTestDetectorUtils.TestPath_SecretLevel_TestSuffixFilesStillTest;
+// Die aus uHardcodedSecret uebernommenen Muster gelten unveraendert weiter.
+// MatchesMask vergleicht case-insensitiv, deshalb reichen Kleinschreib-Masken.
+begin
+  Assert.IsTrue(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\src\FrameworkTestsU.pas', '', tplSecret), '*TestsU.pas');
+  Assert.IsTrue(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\src\AuthSpec.pas', '', tplSecret), '*Spec.pas');
+  Assert.IsTrue(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\src\LoginTest.pas', '', tplSecret), '*Test.pas');
+  Assert.IsTrue(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\unittests\uConfig.pas', '', tplSecret), 'Segment-Anfang unittest*');
+end;
+
+procedure TTestDetectorUtils.TestPath_LevelsStayDifferent_SampleAndDemo;
+// Kern der Strenge-Stufe: EINE Liste, aber die Konsumenten bleiben
+// unterschiedlich streng. Demo-/Sample-Files sind Fixtures (Post-Filter),
+// aber KEIN Freibrief fuer hardcodierte Secrets.
+begin
+  Assert.IsTrue(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\src\uOrderSample.pas', '', tplFixture),
+    'Sample ist ein Fixture-Pattern');
+  Assert.IsFalse(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\src\uOrderSample.pas', '', tplSecret),
+    'in der Secret-Sicht ist ein Sample-File KEIN Test - ein echtes Secret '
+    + 'dort bleibt meldepflichtig');
+  Assert.IsTrue(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\demos\uMain.pas', '', tplFixture), '/demos/ ist Fixture');
+  Assert.IsFalse(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\demos\uMain.pas', '', tplSecret), '/demos/ ist kein Secret-Skip');
+end;
+
+procedure TTestDetectorUtils.TestPath_FixtureLevel_UnchangedPatterns;
+// Regressions-Anker: die Default-Stufe muss sich exakt wie vor der
+// Zusammenlegung verhalten (Konsumenten: Console-Runner, uUninitVar).
+begin
+  Assert.IsTrue(TDetectorUtils.IsTestFixturePath('d:\repo\src\uTestFoo.pas'),
+    'uTest*.pas');
+  Assert.IsTrue(TDetectorUtils.IsTestFixturePath('d:\repo\src\Foo_Tests.pas'),
+    '*_Tests.pas');
+  Assert.IsTrue(TDetectorUtils.IsTestFixturePath('d:\repo\resources\uFoo.pas'),
+    '/resources/');
+  Assert.IsFalse(TDetectorUtils.IsTestFixturePath('d:\repo\src\uOrders.pas'),
+    'normale Unit ist kein Fixture');
+  // BaseDir-Anchoring bleibt: '/tests/' ausserhalb der Repo-Wurzel zaehlt nicht.
+  Assert.IsFalse(TDetectorUtils.IsTestFixturePath(
+    'd:\projects\company-tests\src\auth.pas', 'd:\projects\company-tests'),
+    'Segment ausserhalb von BaseDir darf nicht matchen');
+end;
+
 { ---- MergeAdjacentStringLiterals ---- }
 
 procedure TTestDetectorUtils.Merge_SimpleConcat;
@@ -291,6 +461,53 @@ const Expected = 'a + b + c';
 begin
   Assert.AreEqual(Expected,
     TDetectorUtils.MergeAdjacentStringLiterals(Source));
+end;
+
+{ ---- UnqualifiedNameLast ---- }
+// Restschulden-Audit 2026-07-26: die Routine war in 8 Detektoren kopiert -
+// 7x als Rueckwaerts-Scan (LETZTER Punkt), 1x in uCanBeClassMethod als
+// Pos('.') (ERSTER Punkt). Diese Tests pinnen die zentrale Semantik fest,
+// damit die Abweichung nicht ueber eine neue Kopie zurueckkommt.
+
+procedure TTestDetectorUtils.Unqualified_SimpleQualified_LastSegment;
+begin
+  Assert.AreEqual('Bar', TDetectorUtils.UnqualifiedNameLast('TFoo.Bar'));
+end;
+
+procedure TTestDetectorUtils.Unqualified_NestedType_TakesLastDotNotFirst;
+// DER Bugfix-Fall: bei mehr als einem Punkt (nested type) lieferte die
+// Pos-Fassung 'TInner.DoIt'. Erwartet ist das LETZTE Segment.
+begin
+  Assert.AreEqual('DoIt',
+    TDetectorUtils.UnqualifiedNameLast('TOuter.TInner.DoIt'),
+    'nested type: es zaehlt der LETZTE Punkt, nicht der erste');
+  Assert.AreEqual('Bar',
+    TDetectorUtils.UnqualifiedNameLast('TUnit.TOuter.TInner.Bar'));
+end;
+
+procedure TTestDetectorUtils.Unqualified_NoDot_Unchanged;
+// Gegenprobe: ohne Punkt bleibt der Name unveraendert (Interface-Decls
+// tragen den blanken Member-Namen).
+begin
+  Assert.AreEqual('Bar', TDetectorUtils.UnqualifiedNameLast('Bar'));
+end;
+
+procedure TTestDetectorUtils.Unqualified_EmptyAndTrailingDot;
+// Randfaelle: Leerstring bleibt leer, Punkt am Ende ergibt ein leeres
+// Segment (die Aufrufer pruefen deshalb auf '' bevor sie indizieren).
+begin
+  Assert.AreEqual('', TDetectorUtils.UnqualifiedNameLast(''));
+  Assert.AreEqual('', TDetectorUtils.UnqualifiedNameLast('TFoo.'));
+end;
+
+procedure TTestDetectorUtils.Unqualified_LowerVariant_LowercasesLastSegment;
+// Lower-Variante = LowerCase(UnqualifiedNameLast) - ersetzt die
+// LastDelimiter+LowerCase-Fassung aus uConstStringParameter 1:1.
+begin
+  Assert.AreEqual('bar', TDetectorUtils.UnqualifiedNameLastLower('TFoo.Bar'));
+  Assert.AreEqual('doit',
+    TDetectorUtils.UnqualifiedNameLastLower('TOuter.TInner.DoIt'));
+  Assert.AreEqual('bar', TDetectorUtils.UnqualifiedNameLastLower('Bar'));
 end;
 
 initialization

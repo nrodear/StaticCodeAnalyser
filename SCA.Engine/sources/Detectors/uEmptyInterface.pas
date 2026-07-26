@@ -13,6 +13,15 @@ unit uEmptyInterface;
 // gesucht. Zwischen `interface`-Eroeffnung und `end` darf nur
 // Whitespace stehen.
 //
+// Der Strip laeuft ueber TDetectorUtils.StripFileCommentsKeepStringsCached
+// (Strings verbatim, Kommentare ersatzlos weg, pro Quellzeile ein #10 +
+// LineForChar-Map) - Restschulden-Audit 2026-07-26: bis dahin lag hier
+// eine gedriftete lokale Kopie (StripCommentsFile), die bei einer Zeile
+// KOMPLETT innerhalb eines `{..}`/`(*..*)`-Blocks zusaetzlich ein
+// Leerzeichen ausgab. Fund-neutral (das Zeichen stand immer zwischen zwei
+// #10 und ist wie diese Whitespace), aber es kostete pro Datei einen
+// eigenen Voll-Strip am gemeinsamen Per-Scan-Cache vorbei.
+//
 // Schweregrad: lsHint.
 
 interface
@@ -35,7 +44,7 @@ implementation
 
 uses
   System.StrUtils,
-  uFileTextCache;
+  uFileTextCache, uDetectorUtils;
 
 const
   EMIT_SEVERITY = lsHint;
@@ -43,87 +52,6 @@ const
 function IsIdent(C: Char): Boolean; inline;
 begin
   Result := CharInSet(C, ['A'..'Z','a'..'z','0'..'9','_']);
-end;
-
-// Entfernt //, {...}, (*..*) Kommentare aus einer Source. Ersetzt sie
-// durch ein Leerzeichen, damit Spalten-Position grob erhalten bleibt.
-// Linebreak bleibt #10.
-function StripCommentsFile(Lines: TStringList; out LineForChar: TArray<Integer>): string;
-var
-  Buf            : TStringBuilder;
-  i, n, j        : Integer;
-  Line           : string;
-  InBlk, InParen : Boolean;
-  InStr          : Boolean;
-  c              : Char;
-  pClose         : Integer;
-  Chars          : TList<Integer>;
-begin
-  Buf := TStringBuilder.Create;
-  Chars := TList<Integer>.Create;
-  try
-    InBlk := False; InParen := False;
-    for i := 0 to Lines.Count - 1 do
-    begin
-      Line := Lines[i];
-      InStr := False;
-      j := 1;
-      n := Length(Line);
-      while j <= n do
-      begin
-        if InBlk then
-        begin
-          pClose := PosEx('}', Line, j);
-          if pClose = 0 then begin Buf.Append(' '); Chars.Add(i); Break; end;
-          InBlk := False;
-          j := pClose + 1; Continue;
-        end;
-        if InParen then
-        begin
-          pClose := PosEx('*)', Line, j);
-          if pClose = 0 then begin Buf.Append(' '); Chars.Add(i); Break; end;
-          InParen := False;
-          j := pClose + 2; Continue;
-        end;
-        c := Line[j];
-        if InStr then
-        begin
-          Buf.Append(c); Chars.Add(i);
-          if c = '''' then
-          begin
-            if (j < n) and (Line[j + 1] = '''') then
-            begin Buf.Append(''''); Chars.Add(i); Inc(j, 2); end
-            else begin InStr := False; Inc(j); end;
-          end
-          else Inc(j);
-          Continue;
-        end;
-        if c = '''' then
-        begin Buf.Append(c); Chars.Add(i); InStr := True; Inc(j); Continue; end;
-        if (c = '/') and (j < n) and (Line[j + 1] = '/') then Break;
-        if c = '{' then
-        begin
-          pClose := PosEx('}', Line, j + 1);
-          if pClose = 0 then begin InBlk := True; Break; end;
-          j := pClose + 1; Continue;
-        end;
-        if (c = '(') and (j < n) and (Line[j + 1] = '*') then
-        begin
-          pClose := PosEx('*)', Line, j + 2);
-          if pClose = 0 then begin InParen := True; Break; end;
-          j := pClose + 2; Continue;
-        end;
-        Buf.Append(c); Chars.Add(i);
-        Inc(j);
-      end;
-      Buf.Append(#10); Chars.Add(i);
-    end;
-    Result := Buf.ToString;
-    LineForChar := Chars.ToArray;
-  finally
-    Chars.Free;
-    Buf.Free;
-  end;
 end;
 
 class procedure TEmptyInterfaceDetector.AnalyzeUnit(UnitNode: TAstNode;
@@ -146,7 +74,8 @@ begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
-    Code := StripCommentsFile(Lines, LineFor);
+    Code := TDetectorUtils.StripFileCommentsKeepStringsCached(
+      Lines, LineFor, AContext, FileName);
     Lwr := LowerCase(Code);
     pInt := 1;
     while True do

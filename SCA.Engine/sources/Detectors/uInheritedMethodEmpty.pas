@@ -60,6 +60,9 @@ implementation
 // noinspection-file CanBeStrictPrivate, CyclomaticComplexity, LongMethod, MultipleExit, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  uDetectorUtils;  // UnqualifiedNameLast (Restschulden-Audit 2026-07-26)
+
 // Hat das Method-TypeRef ';override' als Direktive?
 function IsOverride(const TypeRef: string): Boolean;
 begin
@@ -77,18 +80,9 @@ begin
             (Pos(';dispid',   Low) > 0);
 end;
 
-// Unqualifiziertes Letzt-Segment - 'TFoo.Bar' -> 'Bar'.
-function UnqualifiedName(const MethName: string): string;
-var i: Integer;
-begin
-  Result := MethName;
-  for i := Length(MethName) downto 1 do
-    if MethName[i] = '.' then
-    begin
-      Result := Copy(MethName, i + 1, MaxInt);
-      Exit;
-    end;
-end;
+// Restschulden-Audit 2026-07-26: lokale UnqualifiedName-Kopie entfernt -
+// jetzt TDetectorUtils.UnqualifiedNameLast (war in 8 Detektoren dupliziert,
+// eine Kopie mit abweichender Semantik). Verhalten hier unveraendert.
 
 // Liefert den ersten Identifier aus einem Call-Ausdruck.
 // 'Foo' -> 'Foo'; 'Foo(args)' -> 'Foo'; '' -> ''.
@@ -162,7 +156,7 @@ begin
   // inherited mit leerem Argument ODER inherited <selber Method-Name>:
   // beides bedeutet "nur Bypass".
   InheritArg := Trim(TheOnly.Name);
-  MethShort  := UnqualifiedName(MethodNode.Name);
+  MethShort  := TDetectorUtils.UnqualifiedNameLast(MethodNode.Name);
   if InheritArg <> '' then
   begin
     var ArgIdent := FirstIdent(InheritArg);

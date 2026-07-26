@@ -24,6 +24,11 @@ type
     [Test] procedure InheritedMemberAccess_NotReported;
     [Test] procedure OnlyParams_WithClassDecl_StillReported;
     [Test] procedure Finding_KindAndSeverity;
+    // Restschulden-Audit 2026-07-26 (UnqualifiedName-Konsolidierung):
+    // Decl<->Impl-Abgleich bei mehrfach qualifizierten Methodennamen.
+    [Test] procedure NestedTypeMethod_MatchesVirtualDecl_NotReported;
+    [Test] procedure SimpleQualifiedMethod_MatchesVirtualDecl_NotReported;
+    [Test] procedure SimpleQualifiedMethod_WithoutPolyDecl_StillReported;
   end;
 
 implementation
@@ -31,7 +36,60 @@ implementation
 uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
+  uAstNode, uCanBeClassMethod,   // AST-Direkttests (s. RunDetectorOnDeclImpl)
   uTestFindingHelper;
+
+// --- AST-Direkteinstieg fuer den Decl<->Impl-Abgleich ----------------------
+// Die folgenden drei Tests bauen den AST von Hand statt ueber
+// TFindingHelper.FindingsOf(SRC). Grund: uParser2.ParseMethodSignature
+// konsumiert im Implementierungs-Header GENAU EINEN Punkt (`if Tok.Kind =
+// tkDot`, kein Loop) - aus `procedure TOuter.TInner.DoIt;` wird deshalb
+// heute der nkMethod-Name 'TOuter.TInner'. Ein quelltextbasierter Test
+// wuerde also gar nicht den Pfad treffen, den dieser Fix repariert
+// (er waere gruen/rot aus dem falschen Grund). Der Detektor selbst
+// arbeitet ausschliesslich auf Node.Name - der AST-Einstieg prueft ihn
+// exakt an der Stelle, an der die Semantik haengt. Die Parser-Luecke
+// selbst ist separate Restschuld und hier bewusst NICHT angefasst.
+//
+// Aufbau:
+//   nkUnit
+//     nkInterface / nkTypeSection / nkClass(AOuterCls)
+//        [nkClass(AInnerCls)] / nkMethod(ADeclName) TypeRef=ADeclTypeRef
+//     nkImplementation / nkMethod(AImplName) TypeRef='procedure'
+//        nkBlock / nkCall('WriteLn')      <- Body ohne Self-/Member-Bezug
+function RunDetectorOnDeclImpl(const AOuterCls, AInnerCls, ADeclName,
+  ADeclTypeRef, AImplName: string): Integer;
+var
+  Root, Impl, Cls, Inner, Meth, Blk : TAstNode;
+  Res : TObjectList<TLeakFinding>;
+begin
+  Root := TAstNode.Create(nkUnit, 't');
+  try
+    Cls := Root.Add(nkInterface).Add(nkTypeSection).Add(nkClass, AOuterCls);
+    if AInnerCls <> '' then
+      Inner := Cls.Add(nkClass, AInnerCls)   // nested type
+    else
+      Inner := Cls;
+    Meth         := Inner.Add(nkMethod, ADeclName, 3);
+    Meth.TypeRef := ADeclTypeRef;            // z.B. 'procedure;virtual'
+
+    Impl         := Root.Add(nkImplementation);
+    Meth         := Impl.Add(nkMethod, AImplName, 10);
+    Meth.TypeRef := 'procedure';             // Impl-Header traegt nie Direktiven
+    Blk          := Meth.Add(nkBlock, '', 11);
+    Blk.Add(nkCall, 'WriteLn', 12);
+
+    Res := TObjectList<TLeakFinding>.Create(True);
+    try
+      TCanBeClassMethodDetector.AnalyzeUnit(Root, 'sample.pas', Res);
+      Result := TFindingHelper.Count(Res, fkCanBeClassMethod);
+    finally
+      Res.Free;
+    end;
+  finally
+    Root.Free;
+  end;
+end;
 
 procedure TTestCanBeClassMethod.NoSelfAccess_Reported;
 const SRC =
@@ -341,6 +399,42 @@ begin
     // bleibt opt-in. Lock gegen versehentliches Re-Promote.
     Assert.AreEqual(fcLow, Hit.Confidence);
   finally F.Free; end;
+end;
+
+procedure TTestCanBeClassMethod.NestedTypeMethod_MatchesVirtualDecl_NotReported;
+// FIX-TEST (Restschulden-Audit 2026-07-26): Methode eines NESTED TYPE, deren
+// Deklaration ';virtual' traegt. Der Implementierungs-Name hat ZWEI Punkte
+// ('TOuter.TInner.DoIt'). Die frueher lokale UnqualifiedMethodName-Fassung
+// nahm Pos('.') = den ERSTEN Punkt und lieferte 'TInner.DoIt'; der Lookup
+// gegen das Set der polymorphen Deklarations-Namen ('doit') schlug damit
+// STILL fehl, der ';virtual'-Skip lief ins Leere und SCA148 meldete die
+// Methode. Mit TDetectorUtils.UnqualifiedNameLast ('DoIt') greift der Skip.
+begin
+  Assert.AreEqual<Integer>(0,
+    RunDetectorOnDeclImpl('TOuter', 'TInner', 'DoIt', 'procedure;virtual',
+                          'TOuter.TInner.DoIt'),
+    'nested-type-Impl muss seine virtuelle Deklaration finden - kein Finding');
+end;
+
+procedure TTestCanBeClassMethod.SimpleQualifiedMethod_MatchesVirtualDecl_NotReported;
+// GEGENPROBE 1: der einfache Fall 'TFoo.Bar' (genau EIN Punkt) verhaelt sich
+// unveraendert - erster und letzter Punkt sind hier derselbe, der Skip greift
+// vor wie nach der Umstellung.
+begin
+  Assert.AreEqual<Integer>(0,
+    RunDetectorOnDeclImpl('TFoo', '', 'Bar', 'procedure;virtual', 'TFoo.Bar'),
+    'einfach qualifizierte virtuelle Methode bleibt unterdrueckt');
+end;
+
+procedure TTestCanBeClassMethod.SimpleQualifiedMethod_WithoutPolyDecl_StillReported;
+// GEGENPROBE 2 (gegen Ueber-Suppression): dieselbe Konstellation OHNE
+// Polymorphie-Direktive an der Deklaration und ohne Member-Zugriff im Body
+// bleibt ein echtes Finding - der neue Helfer darf nichts zusaetzlich
+// wegschlucken.
+begin
+  Assert.AreEqual<Integer>(1,
+    RunDetectorOnDeclImpl('TFoo', '', 'Bar', 'procedure', 'TFoo.Bar'),
+    'ohne Polymorphie-Direktive bleibt der class-method-Kandidat gemeldet');
 end;
 
 initialization

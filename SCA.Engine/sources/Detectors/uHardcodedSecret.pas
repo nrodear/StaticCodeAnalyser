@@ -54,9 +54,13 @@ type
     // (Char/Ref/Name/Length/Size/Mask/Header/Label/Caption/Hash).
     class function IsSecretMetaField(const Name: string): Boolean; static;
     // FP-Reduktion 2026-06-18 (Audit_ErrorDetectors E-2): erkennt Test-
-    // Files anhand des Pfads (tests/, /utest, *test.pas etc.). Tests
+    // Files anhand des Pfads (tests/, utest/, *test.pas etc.). Tests
     // enthalten per Definition keine produktiven Secrets - Mock-Tokens,
     // Fixture-Passwoerter etc. werden hier nicht geflaggt.
+    // Seit Fund 3 (Restschulden-Audit 2026-07-26) nur noch ein duenner
+    // Aufrufer von TDetectorUtils.IsTestFixturePath(.., tplSecret) - die
+    // Muster liegen zentral, damit nicht jeder Konsument eine eigene
+    // "ist Testdatei"-Definition mitschleppt. Details in der Impl.
     class function IsTestFilePath(const AFileName: string): Boolean; static;
     // 2026-06-18 (Audit_ErrorDetectors E-2 P2): Pattern-Match auf
     // String-Inhalt. Findet Secrets unabhaengig vom Variablen-Namen -
@@ -123,6 +127,9 @@ implementation
 
 // noinspection-file BeginEndRequired, CanBeClassMethod, ConsecutiveSection, CyclomaticComplexity, GroupedDeclaration, RedundantJump, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
+uses
+  uDetectorUtils;   // Fund 3: zentrale Test-Pfad-Muster (IsTestFixturePath)
 
 const
   SECRET_KW: array[0..11] of string = (
@@ -675,27 +682,30 @@ end;
 class function THardcodedSecretDetector.IsTestFilePath(
   const AFileName: string): Boolean;
 // Erkennt Test-Files anhand des Pfads. Convention-based:
-//   tests/ test/ spec/ fixtures/ im Pfad
-//   uTestXxx.pas / *test.pas / *tests.pas / *spec.pas Dateinamen
+//   tests/ test/ spec/ fixtures/ utest(s)/ im Pfad, Segment-Anfang unittest*
+//   uTestXxx.pas / *test.pas / *tests.pas / *testu.pas / *spec.pas Dateinamen
 // FP-Reduktion (Audit_ErrorDetectors E-2): Mock-Secrets in Tests
 // sind keine echten Secrets, sollen nicht geflaggt werden.
-var
-  Norm : string;
+//
+// Fund 3 (Restschulden-Audit 2026-07-26): duenner Aufrufer der ZENTRALEN
+// Musterliste. Diese Funktion hatte frueher eine eigene, zu den anderen
+// beiden "ist Testdatei"-Definitionen disjunkte Liste - dieselbe Datei
+// wurde je nach Konsument anders bewertet. Die Muster stehen jetzt in
+// TDetectorUtils (TEST_PATH_RULES); tplSecret waehlt genau die Test-/
+// Spec-Konventionen aus und bleibt damit ENGER als die Fixture-Sicht:
+// ein echtes Secret in einer Demo-/Sample-Unit bleibt meldepflichtig.
+//
+// FP-Fix im selben Zug: der frueher UNVERANKERTE Pos('/utest', Norm)
+// traf auch Pfade wie '/utestimonials/' (und dort wurden Secrets still
+// verschluckt). Die Konvention meint das Verzeichnis 'utest'/'utests'
+// bzw. den Dateinamen 'uTestXxx.pas' - beides ist in der zentralen Liste
+// an Pfadgrenzen verankert.
+//
+// BaseDir bleibt leer: der Detektor kennt die Repo-Wurzel nicht, also
+// gilt bewusst weiter die konservative Substring-Suche ueber den ganzen
+// Pfad (unveraendert zum Alt-Verhalten).
 begin
-  Norm := LowerCase(StringReplace(AFileName, '\', '/', [rfReplaceAll]));
-  Result :=
-    (Pos('/tests/',    Norm) > 0) or
-    (Pos('/test/',     Norm) > 0) or
-    (Pos('/unittest',  Norm) > 0) or    // Real-World-FP-Audit 2026-07-12:
-                                        // /unittest/ + /unittests/ (dmvcframework)
-    (Pos('/spec/',     Norm) > 0) or
-    (Pos('/fixtures/', Norm) > 0) or
-    (Pos('/utest',     Norm) > 0) or    // uTestXxx.pas Konvention
-    Norm.EndsWith('test.pas') or
-    Norm.EndsWith('tests.pas') or
-    Norm.EndsWith('testu.pas')  or      // DUnit(X)-Konvention *TestU.pas
-    Norm.EndsWith('testsu.pas') or      // *TestsU.pas (FrameworkTestsU/ValidationTestsU)
-    Norm.EndsWith('spec.pas');
+  Result := TDetectorUtils.IsTestFixturePath(AFileName, '', tplSecret);
 end;
 
 // 2026-06-18 (Audit_ErrorDetectors E-2 Premium): nkField-Pass fuer

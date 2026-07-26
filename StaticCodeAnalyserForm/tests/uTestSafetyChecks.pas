@@ -92,6 +92,9 @@ type
     [Test] procedure Div_WhileGuardNonZero_NoFinding;
     [Test] procedure Div_WhileGuardReassignBeforeDiv_StillReports;   // TP-Gegenprobe
     [Test] procedure Div_WhileGuardDecBeforeDiv_StillReports;        // TP-Gegenprobe
+    // --- Fund 4 (Restschulden-Audit 2026-07-26): positionserhaltendes
+    // Ausblenden der String-Literale (TDetectorUtils.BlankStringLiterals) ---
+    [Test] procedure Div_StringLiteralBeforeDivision_NoLiteralHitAndCorrectLine;
   end;
 
   // ---- DeadCode Erweiterungen --------------------------------------------------------
@@ -591,6 +594,49 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero));
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_StringLiteralBeforeDivision_NoLiteralHitAndCorrectLine;
+// Fund 4 (Restschulden-Audit 2026-07-26): uDivByZero blendet String-Literale
+// POSITIONSERHALTEND aus (TDetectorUtils.BlankStringLiterals - Inhalt wird zu
+// Blanks, Quotes und damit alle Positionen bleiben stehen). Hier steht ein
+// Literal mit dem Text " div 0" VOR der echten Division im SELBEN Ausdruck:
+//   1. der Literal-Text darf keinen H1-Treffer ("Division durch Literal 0",
+//      lsError) erzeugen,
+//   2. der echte Divisor dahinter muss trotzdem korrekt extrahiert und
+//      auf der richtigen Zeile gemeldet werden (lsWarning).
+// Wer hier auf das entfernende TDetectorUtils.StripStringLiterals umstellt,
+// verschiebt jede Position hinter dem Literal.
+// FIXTURE-HINWEIS (CLI-verifiziert 2026-07-26): Literal UND Division
+// stehen bewusst auf DERSELBEN Zeile - nur so wuerde ein entfernender
+// Strip die Spalte von ''div n'' verschieben. Die urspruenglich
+// gewaehlte Form ''x := Pos('''' div 0'''', s) div n'' taugt NICHT: der
+// Detektor meldet Divisionen mit einem Funktionsaufruf links vom ''div''
+// generell nicht (CLI-Probe: 0 Funde, mit und ohne diese Aenderung) -
+// eine eigene Detektor-Luecke, nicht Gegenstand von Fund 4.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var'#13#10+
+  '  x, n: Integer;'#13#10+
+  '  s: string;'#13#10+
+  'begin'#13#10+
+  '  s := '' div 0''; x := 100 div n;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.CountSev(F, fkDivByZero, lsError),
+      '" div 0" im String-Literal ist Text, keine Division durch Literal 0');
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.CountSev(F, fkDivByZero, lsWarning),
+      'die echte Division durch den ungeprueften Divisor bleibt ein Fund');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'div n'),
+      TFindingHelper.FirstOf(F, fkDivByZero).LineNumber,
+      'Fundzeile muss trotz vorangehendem String-Literal stimmen');
   finally F.Free; end;
 end;
 

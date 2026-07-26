@@ -60,20 +60,12 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  System.StrUtils;
+  System.StrUtils,
+  uDetectorUtils;  // UnqualifiedNameLast (Restschulden-Audit 2026-07-26)
 
-function UnqualifiedName(const MethName: string): string;
-var
-  i : Integer;
-begin
-  Result := MethName;
-  for i := Length(MethName) downto 1 do
-    if MethName[i] = '.' then
-    begin
-      Result := Copy(MethName, i + 1, MaxInt);
-      Exit;
-    end;
-end;
+// Restschulden-Audit 2026-07-26: lokale UnqualifiedName-Kopie entfernt -
+// jetzt TDetectorUtils.UnqualifiedNameLast (war in 8 Detektoren dupliziert,
+// eine Kopie mit abweichender Semantik). Verhalten hier unveraendert.
 
 function IsFunctionMethod(const TypeRef: string): Boolean;
 // Parser legt MethKind + optional Returntyp + Direktiven in TypeRef ab:
@@ -147,7 +139,7 @@ begin
     for M in Methods do
     begin
       if not IsFunctionMethod(M.TypeRef) then Continue;
-      FnNameLow := LowerCase(UnqualifiedName(M.Name));
+      FnNameLow := LowerCase(TDetectorUtils.UnqualifiedNameLast(M.Name));
 
       // nil-init vor dem try (uDuplicateString-Muster): wirft M.FindAll,
       // gibt das finally ein bereits erzeugtes RhsSet sauber frei statt es
@@ -185,7 +177,7 @@ begin
         Results.Add(TLeakFinding.New(FileName, M.Name, M.Line,
           Format('Function %s always returns %s on every code path - use ' +
                  'a named constant',
-            [UnqualifiedName(M.Name), RhsSet[0]]),
+            [TDetectorUtils.UnqualifiedNameLast(M.Name), RhsSet[0]]),
           fkConstantReturn));
       finally
         Assigns.Free;

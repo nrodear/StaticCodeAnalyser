@@ -107,18 +107,9 @@ begin
   end;
 end;
 
-function UnqualifiedName(const MethName: string): string;
-var
-  i : Integer;
-begin
-  Result := MethName;
-  for i := Length(MethName) downto 1 do
-    if MethName[i] = '.' then
-    begin
-      Result := Copy(MethName, i + 1, MaxInt);
-      Exit;
-    end;
-end;
+// Restschulden-Audit 2026-07-26: lokale UnqualifiedName-Kopie entfernt -
+// jetzt TDetectorUtils.UnqualifiedNameLast (war in 8 Detektoren dupliziert,
+// eine Kopie mit abweichender Semantik). Verhalten hier unveraendert.
 
 function IsPrivateSection(const Name: string): Boolean;
 var
@@ -181,7 +172,7 @@ begin
             for Mth in S.Children do
             begin
               if Mth.Kind <> nkMethod then Continue;
-              MethName := UnqualifiedName(Mth.Name);
+              MethName := TDetectorUtils.UnqualifiedNameLast(Mth.Name);
               if MethName = '' then Continue;
               MethLow := LowerCase(MethName);
 

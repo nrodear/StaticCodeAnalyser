@@ -70,9 +70,21 @@ type
     [Test] procedure Secret_ServiceAccountKeyWithUrl_StillReported;
     // --- Real-World FP-Audit 2026-07-12 (OID-Konstante) ---
     [Test] procedure Secret_OidDottedNumericValue_NotReported;
+    // --- Fund 3 (Restschulden-Audit 2026-07-26): Test-Pfad-Gate ---
+    // IsTestFilePath ist jetzt ein duenner Aufrufer der zentralen
+    // Musterliste; die Pfad-Entscheidung wird hier End-to-End gepinnt
+    // (der Helper-Harness benutzt einen festen Dateinamen, deshalb rufen
+    // diese drei AnalyzeUnit direkt mit eigenem Pfad auf).
+    [Test] procedure Secret_SpecFolderPath_SkippedAsTest;
+    [Test] procedure Secret_UtestimonialsFolderPath_StillReported;
+    [Test] procedure Secret_UtestFolderAndUtestFile_SkippedAsTest;
   end;
 
 implementation
+
+uses
+  uAstNode, uParser2,          // direkter AnalyzeUnit-Aufruf mit eigenem Pfad
+  uHardcodedSecret;            // Fund 3: Test-Pfad-Gate End-to-End
 
 { ---- HardcodedSecret ---- }
 
@@ -716,4 +728,72 @@ begin
       'ASN.1-OID (dotted-numeric) ist kein Secret und darf nicht gemeldet werden');
   finally F.Free; end;
 end;
+
+{ ---- Fund 3: Test-Pfad-Gate (Restschulden-Audit 2026-07-26) ---------------- }
+
+// Gemeinsame Quelle der drei Pfad-Tests: ein unstrittiges Secret. Ob es
+// gemeldet wird, haengt AUSSCHLIESSLICH am Dateipfad.
+const
+  SECRET_SRC =
+    'unit t; implementation'#13#10+
+    'procedure TFoo.Init;'#13#10+
+    'begin'#13#10+
+    '  FPassword := ''Xk9#pQz7Lm'';'#13#10+
+    'end;';
+
+// Parst SECRET_SRC und laesst NUR den Secret-Detektor unter APath laufen.
+function SecretCountForPath(const APath: string): Integer;
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  F      : TObjectList<TLeakFinding>;
+begin
+  F := TObjectList<TLeakFinding>.Create(True);
+  try
+    Parser := TParser2.Create;
+    try
+      Root := Parser.ParseSource(SECRET_SRC);
+      try
+        THardcodedSecretDetector.AnalyzeUnit(Root, APath, F);
+      finally
+        Root.Free;
+      end;
+    finally
+      Parser.Free;
+    end;
+    Result := TFindingHelper.Count(F, fkHardcodedSecret);
+  finally
+    F.Free;
+  end;
+end;
+
+procedure TTestHardcodedSecretExt.Secret_SpecFolderPath_SkippedAsTest;
+// '/spec/' war bisher NUR in uHardcodedSecret bekannt - der Fund darf durch
+// die Zusammenlegung auf die zentrale Liste nicht verloren gehen.
+begin
+  Assert.AreEqual<Integer>(0, SecretCountForPath('d:\repo\spec\uConfig.pas'),
+    'Datei unter /spec/ ist ein Test-File - Mock-Secrets werden nicht gemeldet');
+end;
+
+procedure TTestHardcodedSecretExt.Secret_UtestimonialsFolderPath_StillReported;
+// FP-FIX Fund 3: der frueher unverankerte Pos('/utest', Norm) hat auch
+// '/utestimonials/' getroffen und dort JEDES Secret verschluckt. Mit der
+// Verankerung an Pfadgrenzen wird wieder gemeldet.
+begin
+  Assert.AreEqual<Integer>(1,
+    SecretCountForPath('d:\repo\utestimonials\uConfig.pas'),
+    'utestimonials ist kein Testverzeichnis - das Secret muss gemeldet werden');
+end;
+
+procedure TTestHardcodedSecretExt.Secret_UtestFolderAndUtestFile_SkippedAsTest;
+// GEGENPROBE zum FP-Fix: die gemeinte uTest-Konvention (Verzeichnis bzw.
+// Dateiname) bleibt unveraendert unterdrueckt.
+begin
+  Assert.AreEqual<Integer>(0, SecretCountForPath('d:\repo\utest\uConfig.pas'),
+    'Verzeichnis /utest/ bleibt Test-Pfad');
+  Assert.AreEqual<Integer>(0,
+    SecretCountForPath('d:\repo\src\uTestConfig.pas'),
+    'Dateiname uTestXxx.pas bleibt Test-Pfad');
+end;
+
 end.

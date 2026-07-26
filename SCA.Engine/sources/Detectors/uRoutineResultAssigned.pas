@@ -73,6 +73,9 @@ implementation
 // noinspection-file BeginEndRequired, ConsecutiveSection, GroupedDeclaration, MultipleExit, NestedRoutine, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  uDetectorUtils;  // UnqualifiedNameLast (Restschulden-Audit 2026-07-26)
+
 // Liefert True wenn TypeRef einen Return-Type enthaelt (Format
 // 'function:RetType[;direktive...]'). Procedures haben keinen ':' im
 // Kind-Teil. Robust gegen Direktiven-Suffix.
@@ -127,20 +130,9 @@ begin
   Result := False;
 end;
 
-// Letztes Segment eines qualifizierten Methodennamens.
-// 'TFoo.Bar' -> 'Bar'; 'Bar' -> 'Bar'; 'TFoo<T>.Bar' -> 'Bar'.
-function UnqualifiedName(const MethName: string): string;
-var
-  i : Integer;
-begin
-  Result := MethName;
-  for i := Length(MethName) downto 1 do
-    if MethName[i] = '.' then
-    begin
-      Result := Copy(MethName, i + 1, MaxInt);
-      Exit;
-    end;
-end;
+// Restschulden-Audit 2026-07-26: lokale UnqualifiedName-Kopie entfernt -
+// jetzt TDetectorUtils.UnqualifiedNameLast (war in 8 Detektoren dupliziert,
+// eine Kopie mit abweichender Semantik). Verhalten hier unveraendert.
 
 // Normalisiert eine LHS-String fuer Vergleich: lowercase, Whitespace raus.
 function NormalizeLhs(const S: string): string;
@@ -498,7 +490,7 @@ begin
   end;
 
   // Pruefe alle nkAssign auf LHS = 'result' oder <FunctionName>.
-  FnNameLow := LowerCase(UnqualifiedName(MethodNode.Name));
+  FnNameLow := LowerCase(TDetectorUtils.UnqualifiedNameLast(MethodNode.Name));
   HasResult := False;
 
   Assigns := MethodNode.FindAll(nkAssign);
@@ -586,7 +578,7 @@ begin
   F.LineNumber := IntToStr(MethodNode.Line);
   F.MissingVar := Format(
     'Function %s never assigns Result (return value undefined)',
-    [UnqualifiedName(MethodNode.Name)]);
+    [TDetectorUtils.UnqualifiedNameLast(MethodNode.Name)]);
   F.SetKind(fkRoutineResultUnassigned);
   Results.Add(F);
 end;
@@ -638,7 +630,7 @@ begin
       for M in Methods do
         if Pos(';noreturn', LowerCase(M.TypeRef)) > 0 then
         begin
-          var NmLow := LowerCase(UnqualifiedName(M.Name));
+          var NmLow := LowerCase(TDetectorUtils.UnqualifiedNameLast(M.Name));
           if NmLow <> '' then NoReturnLow.AddOrSetValue(NmLow, True);
         end;
 

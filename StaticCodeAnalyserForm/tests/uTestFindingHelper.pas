@@ -112,6 +112,11 @@ implementation
 // (uHardcodedSecret.pas) skipt diese Pfade als "ist ein Test-File, enthaelt
 // nur Mock-Secrets". 'sample.pas' triggert keine der Heuristiken.
 // 2026-06-19: Regression aus fa15ae4/f263c19 (Test-File-Skip eingefuehrt).
+// 2026-07-26 (Fund 3): die massgebliche Musterliste steht jetzt zentral in
+// TDetectorUtils.IsTestFixturePath (TEST_PATH_RULES); IsTestFilePath ist nur
+// noch der Aufrufer mit Stufe tplSecret. 'sample.pas' bleibt bewusst
+// unauffaellig: '*Sample.pas' gehoert NUR zur Fixture-Stufe (Post-Filter),
+// nicht zur Secret-Stufe - sonst waeren alle Secret-Tests hier stumm.
 const
   SAMPLE_FILENAME = 'sample.pas';
 

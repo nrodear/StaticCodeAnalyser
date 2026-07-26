@@ -68,7 +68,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  System.StrUtils;
+  System.StrUtils,
+  uDetectorUtils;   // UnqualifiedNameLast (Restschulden-Audit 2026-07-26)
 
 function IsAlreadyClassMethod(MethodNode: TAstNode): Boolean;
 begin
@@ -205,16 +206,19 @@ begin
   Result := Pos('.', MethodNode.Name) > 0;
 end;
 
-function UnqualifiedMethodName(const MethName: string): string;
-var
-  Dot : Integer;
-begin
-  Dot := Pos('.', MethName);
-  if Dot > 0 then
-    Result := Copy(MethName, Dot + 1, MaxInt)
-  else
-    Result := MethName;
-end;
+// Restschulden-Audit 2026-07-26: die lokale Kopie ist entfallen; der Aufruf
+// geht jetzt auf TDetectorUtils.UnqualifiedNameLast.
+//
+// ACHTUNG - das ist eine gewollte VERHALTENSAENDERUNG (Bugfix): die hier
+// entfernte Fassung nahm Pos('.') = den ERSTEN Punkt, die anderen sieben
+// Kopien im Repo nehmen den LETZTEN. Bei mehr als einem Punkt im Namen -
+// nested types ('TOuter.TInner.DoIt') - lieferte sie 'TInner.DoIt' statt
+// 'DoIt'. Folge: der Decl<->Impl-Abgleich (HasPolymorphicSiblingDecl gegen
+// BuildPolymorphicSiblingNames) fand den zugehoerigen Interface-Eintrag
+// nicht mehr und der ';virtual'/';override'/';class'-Skip lief ins Leere -
+// still, ohne Exception. Mit der Rueckwaerts-Semantik greift der Skip
+// wieder; SCA148 kann dadurch nur noch WENIGER melden, nie mehr (siehe
+// Kommentar an BuildPolymorphicSiblingNames).
 
 // True wenn IRGENDWO in der Unit eine andere nkMethod-Deklaration des
 // gleichen Method-Namens existiert, die als polymorph markiert ist.
@@ -223,7 +227,7 @@ end;
 // passenden Interface-Eintrag finden.
 //
 // Perf (2026-07-05): P6-canbeclassmethod - war ein O(Methoden^2)-Paarvergleich
-// (UnqualifiedMethodName-Alloc + SameText + IsPolymorphicMethod mit 6 Wort-
+// (UnqualifiedNameLast-Alloc + SameText + IsPolymorphicMethod mit 6 Wort-
 // grenzen-Scans PRO PAAR). Jetzt: einmal pro Unit ein Set der unqualifizierten,
 // gelowerten Namen aller polymorph/class markierten Deklarationen bauen
 // (BuildPolymorphicSiblingNames), der Kandidaten-Check wird ein O(1)-Lookup.
@@ -240,7 +244,7 @@ begin
   for Other in AllMeths do
     if IsPolymorphicMethod(Other) or IsAlreadyClassMethod(Other) then
     begin
-      OUnq := UnqualifiedMethodName(Other.Name);
+      OUnq := TDetectorUtils.UnqualifiedNameLast(Other.Name);
       if OUnq <> '' then
         Target.Add(LowerCase(OUnq));
     end;
@@ -251,7 +255,7 @@ function HasPolymorphicSiblingDecl(M: TAstNode;
 var
   MUnq : string;
 begin
-  MUnq := UnqualifiedMethodName(M.Name);
+  MUnq := TDetectorUtils.UnqualifiedNameLast(M.Name);
   if MUnq = '' then Exit(False);
   Result := PolyNames.Contains(LowerCase(MUnq));
 end;
@@ -300,7 +304,7 @@ begin
     case Child.Kind of
       nkField, nkProperty, nkMethod:
         if Child.Name <> '' then
-          Target.Add(LowerCase(UnqualifiedMethodName(Child.Name)));
+          Target.Add(TDetectorUtils.UnqualifiedNameLastLower(Child.Name));
       nkVisibilitySection:
         CollectClassMembers(Child, Target);  // Member liegen in den Sektionen
     end;

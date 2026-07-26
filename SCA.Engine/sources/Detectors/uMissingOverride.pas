@@ -57,6 +57,9 @@ implementation
 // noinspection-file BeginEndRequired, CyclomaticComplexity, GroupedDeclaration, LongMethod, NestedTry, RedundantJump, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  uDetectorUtils;  // UnqualifiedNameLast (Restschulden-Audit 2026-07-26)
+
 function ExtractParentName(const TypeRef: string): string;
 var
   Comma : Integer;
@@ -115,18 +118,9 @@ begin
             ((Pos('constructor', Low) = 1) or (Pos('destructor', Low) = 1));
 end;
 
-function UnqualifiedMethodName(const MethName: string): string;
-var
-  i : Integer;
-begin
-  Result := MethName;
-  for i := Length(MethName) downto 1 do
-    if MethName[i] = '.' then
-    begin
-      Result := Copy(MethName, i + 1, MaxInt);
-      Exit;
-    end;
-end;
+// Restschulden-Audit 2026-07-26: lokale UnqualifiedName-Kopie entfernt -
+// jetzt TDetectorUtils.UnqualifiedNameLast (war in 8 Detektoren dupliziert,
+// eine Kopie mit abweichender Semantik). Verhalten hier unveraendert.
 
 class procedure TMissingOverrideDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
@@ -170,7 +164,7 @@ begin
         try
           for PM in ParentMethods do
             if IsPolymorphicDeclaration(PM.TypeRef) then
-              PolyNames.Add(LowerCase(UnqualifiedMethodName(PM.Name)));
+              PolyNames.Add(LowerCase(TDetectorUtils.UnqualifiedNameLast(PM.Name)));
         finally
           ParentMethods.Free;
         end;
@@ -190,7 +184,7 @@ begin
             if IsOverloadedDeclaration(DM.TypeRef) then Continue;
             if IsClassCtorOrDtor(DM.TypeRef) then Continue;
 
-            MethName := LowerCase(UnqualifiedMethodName(DM.Name));
+            MethName := LowerCase(TDetectorUtils.UnqualifiedNameLast(DM.Name));
             if PolyNames.IndexOf(MethName) < 0 then Continue;
             if HasOverride(DM.TypeRef) then Continue;
 
@@ -200,8 +194,8 @@ begin
             F.LineNumber := IntToStr(DM.Line);
             F.MissingVar := Format(
               'Method %s.%s shadows virtual %s.%s - missing `override` (W1010)',
-              [C.Name, UnqualifiedMethodName(DM.Name),
-               Parent.Name, UnqualifiedMethodName(DM.Name)]);
+              [C.Name, TDetectorUtils.UnqualifiedNameLast(DM.Name),
+               Parent.Name, TDetectorUtils.UnqualifiedNameLast(DM.Name)]);
             F.SetKind(fkMissingOverride);
             Results.Add(F);
           end;

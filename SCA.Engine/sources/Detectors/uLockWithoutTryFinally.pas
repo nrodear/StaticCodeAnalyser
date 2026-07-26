@@ -58,95 +58,6 @@ uses
   System.RegularExpressions, System.StrUtils,
   uFileTextCache, uDetectorUtils;
 
-// Lokale Kopie von StripFileComments (in den Lexer-Detektoren konventionell
-// inline statt aus einer Library exportiert - vermeidet zyklische uses).
-// Quelle: uEmptyBlock.pas und Geschwister-Detektoren.
-function StripFileComments(Lines: TStringList; out LineForChar: TArray<Integer>): string;
-var
-  Buf            : TStringBuilder;
-  i, n, j        : Integer;
-  Line           : string;
-  InBlk, InParen : Boolean;
-  InStr          : Boolean;
-  c              : Char;
-  pClose         : Integer;
-  Chars          : TList<Integer>;
-begin
-  Buf := TStringBuilder.Create;
-  Chars := TList<Integer>.Create;
-  try
-    InBlk := False; InParen := False;
-    for i := 0 to Lines.Count - 1 do
-    begin
-      Line := Lines[i];
-      InStr := False;
-      j := 1;
-      n := Length(Line);
-      while j <= n do
-      begin
-        if InBlk then
-        begin
-          pClose := PosEx('}', Line, j);
-          if pClose = 0 then Break;
-          InBlk := False;
-          j := pClose + 1; Continue;
-        end;
-        if InParen then
-        begin
-          pClose := PosEx('*)', Line, j);
-          if pClose = 0 then Break;
-          InParen := False;
-          j := pClose + 2; Continue;
-        end;
-        c := Line[j];
-        if InStr then
-        begin
-          // String-INHALT durch Blanks ersetzen (Positionen erhalten,
-          // damit LineFor weiterhin stimmt). Quote-Zeichen bleiben, damit
-          // die String-Grenze erkennbar bleibt - aber zwischen den Quotes
-          // findet keine Regex mehr ein Identifier-Token.
-          if c = '''' then
-          begin
-            Buf.Append(c); Chars.Add(i);
-            if (j < n) and (Line[j + 1] = '''') then
-            begin Buf.Append(''''); Chars.Add(i); Inc(j, 2); end
-            else begin InStr := False; Inc(j); end;
-          end
-          else
-          begin
-            Buf.Append(' '); Chars.Add(i);
-            Inc(j);
-          end;
-          Continue;
-        end;
-        if c = '''' then
-        begin Buf.Append(c); Chars.Add(i); InStr := True; Inc(j); Continue; end;
-        if (c = '/') and (j < n) and (Line[j + 1] = '/') then Break;
-        if c = '{' then
-        begin
-          pClose := PosEx('}', Line, j + 1);
-          if pClose = 0 then begin InBlk := True; Break; end;
-          j := pClose + 1; Continue;
-        end;
-        if (c = '(') and (j < n) and (Line[j + 1] = '*') then
-        begin
-          pClose := PosEx('*)', Line, j + 2);
-          if pClose = 0 then begin InParen := True; Break; end;
-          j := pClose + 2; Continue;
-        end;
-        Buf.Append(c); Chars.Add(i);
-        Inc(j);
-      end;
-      Buf.Append(#10); Chars.Add(i);
-    end;
-    Result := Buf.ToString;
-    LineForChar := Chars.ToArray;
-  finally
-    Chars.Free;
-    Buf.Free;
-  end;
-end;
-
 const
   // Regex matched Enter/Acquire/BeginWrite-Stellen:
   //   <identifier>.Enter
@@ -749,8 +660,23 @@ begin
   if Lines = nil then Exit;
   try
     // Strings + Kommentare durch Blanks ersetzen, damit Pattern in
-    // Strings keine False-Positives produziert.
-    Code := StripFileComments(Lines, LineFor);
+    // Strings keine False-Positives produziert (Regression
+    // EnterInString_NotReported: ein 'FLock.Enter;' im Stringliteral darf
+    // SCA109 NICHT ausloesen). Deshalb bewusst StripStringsAndComments mit
+    // FillCh=' ' und NICHT StripFileCommentsKeepStrings - diese Variante
+    // liesse Literal-Inhalte verbatim stehen und der Regex saehe sie.
+    // Restschulden-Audit 2026-07-26: bis dahin lag hier eine lokale Kopie,
+    // deren Begruendung ("vermeidet zyklische uses") stale war - uDetectorUtils
+    // ist oben laengst importiert. Der Unterschied zur zentralen Fassung war
+    // NUR das Fuellzeichen der Quote-Zeichen selbst (lokal: Apostroph blieb
+    // stehen, Inhalt wurde geblankt; zentral: beides ' '). Laenge, Positionen
+    // und LineFor-Map sind Zeichen fuer Zeichen identisch, und der Apostroph
+    // ist wie ' ' weder Ident- noch Wortzeichen - fuer Regex-Wortgrenzen und
+    // alle FP-Gates unten also aequivalent. Zusatznutzen: teilt sich jetzt den
+    // Per-Scan-Strip-Cache mit den ~16 anderen FillCh=' '-Detektoren
+    // (u.a. dem Schwester-Detektor uUnpairedLock).
+    Code := TDetectorUtils.StripStringsAndCommentsCached(
+      Lines, LineFor, AContext, FileName, ' ');
 
     Matches := CachedLockRe.Matches(Code);
 

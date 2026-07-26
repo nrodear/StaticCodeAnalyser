@@ -147,37 +147,17 @@ implementation
 uses
   uCFG;   // G5 (#6 CFG-Schlussstueck): Dominanz der Else-Kante
 
-// Ersetzt jeden Char zwischen single-quotes (inkl. ''-Escape-Handling)
-// durch Leerzeichen. Quotes selbst bleiben stehen, damit String-Positionen
-// 1:1 bleiben. Brauchen wir damit Pseudo-Code in String-Literalen (z.B.
-// ''10 div 0'' als Konstanten-Init oder Doku-String) nicht als echte
-// Division gewertet wird.
-function StripStringLiterals(const S: string): string;
-var
-  i     : Integer;
-  inStr : Boolean;
-begin
-  Result := S;
-  inStr  := False;
-  i := 1;
-  while i <= Length(Result) do
-  begin
-    if Result[i] = '''' then
-    begin
-      if inStr and (i < Length(Result)) and (Result[i + 1] = '''') then
-      begin
-        Result[i]     := ' ';
-        Result[i + 1] := ' ';
-        Inc(i, 2);
-        Continue;
-      end;
-      inStr := not inStr;
-    end
-    else if inStr then
-      Result[i] := ' ';
-    Inc(i);
-  end;
-end;
+// Fund 4 (Restschulden-Audit 2026-07-26): die frueher hier lokale,
+// POSITIONSERHALTENDE Fassung ist jetzt TDetectorUtils.BlankStringLiterals.
+// Sie ersetzt den Literal-Inhalt durch Leerzeichen und laesst die Quotes
+// stehen - damit bleibt Length() gleich und jede Match-Position rechnet
+// weiterhin 1:1 auf die Quell-Spalte zurueck. Brauchen wir, damit
+// Pseudo-Code in String-Literalen (z.B. ''10 div 0'' als Konstanten-Init
+// oder Doku-String) nicht als echte Division gewertet wird.
+//
+// ACHTUNG - NAMENSFALLE: TDetectorUtils.StripStringLiterals heisst fast
+// gleich, ENTFERNT aber die Zeichen (alle Positionen dahinter
+// verschieben sich). In diesem Detektor NICHT einsetzen.
 
 function IsNonZeroIntLiteral(const S: string): Boolean;
 // True wenn S (nach Trim) ein reines Ganzzahl-Literal ungleich 0 ist:
@@ -235,7 +215,7 @@ var
   i, Depth, ArgStart : Integer;
 begin
   Result := False;
-  T := Trim(StripStringLiterals(S).ToLower);
+  T := Trim(TDetectorUtils.BlankStringLiterals(S).ToLower);
   // Optionalen numerischen Wrapper abschaelen (genau eine Ebene). Alle vier
   // Rundungsfunktionen bilden v >= 1.0 auf einen Wert >= 1 ab.
   for var W in ['round', 'trunc', 'floor', 'ceil'] do
@@ -938,7 +918,7 @@ begin
       // QuoteStrLit klammert Literale mit '...' - der Stripper ersetzt
       // alles zwischen Quotes durch Spaces (laesst die Quotes als
       // Marker, damit der Index-Pos stimmt).
-      ExprLow := StripStringLiterals(ExprLow);
+      ExprLow := TDetectorUtils.BlankStringLiterals(ExprLow);
 
       // H1: Literal 0
       if (Pos(' div 0', ExprLow) > 0) or (Pos(' mod 0', ExprLow) > 0) then
@@ -997,7 +977,7 @@ begin
     Nodes := MethodNode.FindAllRef(nkCall);
     for var N in Nodes do
     begin
-      ExprLow := StripStringLiterals(N.Name.ToLower);
+      ExprLow := TDetectorUtils.BlankStringLiterals(N.Name.ToLower);
       if (Pos(' div 0', ExprLow) > 0) or (Pos(' mod 0', ExprLow) > 0) then
       begin
         var Key := IntToStr(N.Line) + ':lit';

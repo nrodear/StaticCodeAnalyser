@@ -49,6 +49,16 @@ type
     // Verify-Concern 2026-07-12: 'as'-Cast (EInvalidCast) darf NICHT als
     // exception-frei gelten (FN = Deadlock).
     [Test] procedure CastBetweenEnterLeave_StillReported;
+    // --- Restschulden-Audit 2026-07-26: Strip-Zentralisierung ---
+    // Der Detektor lief bis dahin auf einer lokalen StripFileComments-Kopie
+    // (Begruendung "vermeidet zyklische uses" war stale). Ersetzt durch
+    // TDetectorUtils.StripStringsAndCommentsCached(FillCh=' '), das die
+    // String-INHALTE genauso blankt - nur die Apostrophe selbst werden
+    // ebenfalls zu ' '. Diese beiden Tests halten die Kante fest:
+    // Lock-Name im Literal (inkl. verdoppeltem Apostroph) bleibt unsichtbar,
+    // echter Lock dahinter bleibt sichtbar UND auf der richtigen Zeile.
+    [Test] procedure EnterInStringWithEscapedQuote_NotReported;
+    [Test] procedure RealEnterAfterStringLiteral_ReportedOnCodeLine;
   end;
 
 implementation
@@ -526,6 +536,56 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkLockWithoutTryFinally) >= 1,
     '(X as Y)-Cast (EInvalidCast) zwischen Enter/Leave bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestLockWithoutTryFinally.EnterInStringWithEscapedQuote_NotReported;
+// FIX-TEST zur Strip-Zentralisierung (Restschulden-Audit 2026-07-26).
+// Schaerfer als EnterInString_NotReported: das Literal enthaelt einen
+// VERDOPPELTEN Apostroph. Genau dort unterschied sich die geloeschte lokale
+// Kopie von der zentralen Fassung (Apostroph blieb stehen statt ' ' zu
+// werden). Wuerde der Escape falsch behandelt, endete das Literal zu frueh
+// und '.Enter' aus dem Text waere fuer den Regex sichtbar -> FP.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure LogIt;'#13#10 +
+  'begin'#13#10 +
+  '  WriteLn(''don''''t call FLock.Enter; here'');'#13#10 +
+  '  DoWork;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLockWithoutTryFinally),
+    'Lock-Name im Stringliteral (mit ''''-Escape) darf SCA109 nicht ausloesen');
+  finally F.Free; end;
+end;
+
+procedure TTestLockWithoutTryFinally.RealEnterAfterStringLiteral_ReportedOnCodeLine;
+// GEGENPROBE zum Fix-Test: dasselbe Literal, aber dahinter steht ein
+// ECHTER, ungeschuetzter Lock. Haelt beide Richtungen fest -
+//   * genau 1 Fund (das '.Enter' im Literal zaehlt nicht mit),
+//   * und er liegt auf der CODE-Zeile: die zentrale Fassung ersetzt
+//     Literal-Inhalt UND Apostrophe 1:1 laengenerhaltend, die LineFor-Map
+//     darf also nicht verrutschen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Process;'#13#10 +
+  'begin'#13#10 +
+  '  WriteLn(''don''''t call FOther.Enter; now'');'#13#10 +
+  '  FLock.Enter;'#13#10 +
+  '  DoWork;'#13#10 +
+  '  FLock.Leave;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkLockWithoutTryFinally),
+      'nur der echte Lock zaehlt - genau 1 Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'FLock.Enter'),
+      TFindingHelper.FirstOf(F, fkLockWithoutTryFinally).LineNumber,
+      'Fund muss auf der Code-Zeile liegen, nicht auf der Literal-Zeile');
   finally F.Free; end;
 end;
 

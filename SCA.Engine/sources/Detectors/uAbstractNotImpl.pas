@@ -56,6 +56,9 @@ implementation
 // noinspection-file BeginEndRequired, CyclomaticComplexity, LongMethod, NestedTry, RedundantJump, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  uDetectorUtils;  // UnqualifiedNameLast (Restschulden-Audit 2026-07-26)
+
 // Extrahiert den direkten Parent-Klassennamen aus `TFoo = class(TBar, IFoo)`.
 // TypeRef der nkClass-Node sieht typisch so aus: 'TBar' oder 'TBar,IFoo' oder
 // leer (kein expliziter Parent).
@@ -73,19 +76,9 @@ begin
   Result := Pos(';abstract', LowerCase(MethodTypeRef)) > 0;
 end;
 
-// Letztes Segment eines qualifizierten Method-Namens. 'TFoo.Bar' -> 'Bar'.
-function UnqualifiedName(const MethName: string): string;
-var
-  i : Integer;
-begin
-  Result := MethName;
-  for i := Length(MethName) downto 1 do
-    if MethName[i] = '.' then
-    begin
-      Result := Copy(MethName, i + 1, MaxInt);
-      Exit;
-    end;
-end;
+// Restschulden-Audit 2026-07-26: lokale UnqualifiedName-Kopie entfernt -
+// jetzt TDetectorUtils.UnqualifiedNameLast (war in 8 Detektoren dupliziert,
+// eine Kopie mit abweichender Semantik). Verhalten hier unveraendert.
 
 class procedure TAbstractNotImplDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
@@ -146,7 +139,7 @@ begin
         try
           for M in Methods do
             if IsAbstractMethod(M.TypeRef) then
-              AbstractMethods.Add(LowerCase(UnqualifiedName(M.Name)));
+              AbstractMethods.Add(LowerCase(TDetectorUtils.UnqualifiedNameLast(M.Name)));
         finally
           Methods.Free;
         end;
@@ -163,7 +156,7 @@ begin
           try
             for M in Methods do
             begin
-              DerivedMethods.Add(LowerCase(UnqualifiedName(M.Name)));
+              DerivedMethods.Add(LowerCase(TDetectorUtils.UnqualifiedNameLast(M.Name)));
               if IsAbstractMethod(M.TypeRef) then DerivedHasAbstract := True;
             end;
           finally
