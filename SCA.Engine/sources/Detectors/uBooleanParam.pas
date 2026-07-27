@@ -55,7 +55,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  System.StrUtils;
+  System.StrUtils,
+  uDetectorUtils;                 // Backlog-Welle 1, 2026-07-26
 
 function IsBooleanType(const TypeText: string): Boolean;
 var
@@ -96,7 +97,11 @@ var
   Before, After : Char;
   function IsIdentChar(c: Char): Boolean;
   begin
-    Result := CharInSet(c, ['A'..'Z', 'a'..'z', '0'..'9', '_']);
+    // Backlog-Welle 1, 2026-07-26: Zeichenklasse zentralisiert - die
+    // lokale Fassung war zeichenweise identisch zu
+    // TDetectorUtils.IsIdentChar (a..z, A..Z, 0..9, _). Der Wrapper
+    // bleibt, damit die Aufrufer in dieser Unit unveraendert bleiben.
+    Result := TDetectorUtils.IsIdentChar(c);
   end;
 begin
   Result := False;

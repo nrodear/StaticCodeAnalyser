@@ -148,6 +148,17 @@ def main():
         a("  );")
         a("")
 
+    a("// Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle")
+    a("// fuer uLocalization.AvailableLanguages - damit die Sprachauswahl in")
+    a("// der UI aus den tatsaechlich vorhandenen Uebersetzungen kommt und")
+    a("// nicht aus einer von Hand gepflegten Liste (die zwangslaeufig driftet).")
+    a("function EmbeddedLanguages: TArray<string>;")
+    a("begin")
+    a("  Result := TArray<string>.Create(%s);"
+      % ", ".join("'%s'" % lang for lang, _, _, _ in langs))
+    a("end;")
+    a("")
+
     a("// Liefert den eingebetteten .po-Text zu einem normalisierten Sprach-")
     a("// kuerzel, oder '' wenn zu der Sprache nichts eingebettet ist.")
     a("function EmbeddedPoText(const ALang: string): string;")

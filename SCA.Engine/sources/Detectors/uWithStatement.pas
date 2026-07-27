@@ -30,7 +30,8 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext,
+  uDetectorUtils;   // H2445: inline-Expansion braucht iface-Sichtbarkeit
 
 type
   TWithStatementDetector = class
@@ -56,7 +57,11 @@ const
 
 function IsIdent(C: Char): Boolean; inline;
 begin
-  Result := CharInSet(C, ['A'..'Z','a'..'z','0'..'9','_']);
+  // Backlog-Welle 1, 2026-07-26: Zeichenklasse zentralisiert - die
+  // lokale Fassung war zeichenweise identisch zu
+  // TDetectorUtils.IsIdentChar (a..z, A..Z, 0..9, _). Der Wrapper
+  // bleibt, damit die Aufrufer in dieser Unit unveraendert bleiben.
+  Result := TDetectorUtils.IsIdentChar(C);
 end;
 
 // Findet die 1-basierte Spalte des ersten Top-Level `with`-Keywords in der

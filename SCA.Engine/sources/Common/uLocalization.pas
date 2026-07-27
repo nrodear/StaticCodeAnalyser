@@ -64,6 +64,18 @@ procedure SetLanguage(const Lang: string);
 // Liefert die zuletzt gesetzte Sprache unveraendert zurueck (oder '').
 function CurrentLanguage: string;
 
+// Alle auswaehlbaren UI-Sprachen als normalisierte Kuerzel, sortiert und
+// dublettenfrei (Backlog-Welle 1, 2026-07-26 - Speisung der Sprachauswahl
+// in den Optionen). Zusammengesetzt aus:
+//   * den eingebetteten .po aus uLocalizationPo.inc (EmbeddedLanguages -
+//     generiert, driftet also nicht gegen i18n\*.po)
+//   * jeder zusaetzlichen i18n\<code>.po neben dem eigenen Modul
+//     (Uebersetzer-Workflow ohne Recompile - dieselbe Quelle die
+//     ReadExternalPo im Ladepfad bevorzugt)
+//   * 'en' als Quellsprache, die auch ohne jede .po immer waehlbar ist
+// Reine Verzeichnis-/Konstanten-Abfrage: laedt oder parst nichts.
+function AvailableLanguages: TArray<string>;
+
 // Anzahl der aktuell geladenen Uebersetzungspaare (0 = Identity/Englisch).
 // Diagnose- und Test-Hilfe, kein Hot-Path.
 function TranslationCount: Integer;
@@ -514,6 +526,69 @@ end;
 function CurrentLanguage: string;
 begin
   Result := GCurrentLang;
+end;
+
+function AvailableLanguages: TArray<string>;
+var
+  List     : TStringList;
+  Dir      : string;
+  SR       : TSearchRec;
+  I        : Integer;
+  Embedded : TArray<string>;
+
+  // Normalisiert und sammelt ein Kuerzel ein. Sorted+dupIgnore uebernimmt
+  // Sortierung und Dublettenschutz (eine externe de.po neben der EXE
+  // erzeugt denselben Eintrag wie die eingebettete - genau einmal).
+  procedure AddCode(const ACode: string);
+  var
+    Norm : string;
+  begin
+    Norm := NormalizeLangCode(ACode);
+    if Norm <> '' then
+      List.Add(Norm);
+  end;
+
+begin
+  List := TStringList.Create;
+  try
+    List.Sorted     := True;
+    List.Duplicates := dupIgnore;
+
+    // 1. eingebettete Sprachen (generiert aus i18n\*.po)
+    Embedded := EmbeddedLanguages;
+    for I := Low(Embedded) to High(Embedded) do
+      AddCode(Embedded[I]);
+
+    // 2. externe i18n\*.po neben dem eigenen Modul (EXE bzw. BPL). Kein
+    //    try/except noetig: DirectoryExists liefert bei jedem Problem
+    //    False, FindFirst einen Fehlercode - beides ist hier ein
+    //    Nicht-Ereignis und endet in "keine zusaetzliche Sprache".
+    Dir := IncludeTrailingPathDelimiter(
+             ExtractFilePath(GetModuleName(HInstance))) + 'i18n';
+    if DirectoryExists(Dir) then
+      if FindFirst(IncludeTrailingPathDelimiter(Dir) + '*.po',
+                   faAnyFile, SR) = 0 then
+        try
+          repeat
+            // Verzeichnisse mit .po-Endung ausschliessen - FindFirst
+            // liefert sie bei faAnyFile mit.
+            if (SR.Attr and faDirectory) = 0 then
+              AddCode(ChangeFileExt(SR.Name, ''));
+          until FindNext(SR) <> 0;
+        finally
+          FindClose(SR);
+        end;
+
+    // 3. Englisch ist die Quellsprache der _()-Aufrufe und braucht kein
+    //    Dictionary - darf daher nie aus der Auswahl fallen.
+    AddCode('en');
+
+    SetLength(Result, List.Count);
+    for I := 0 to List.Count - 1 do
+      Result[I] := List[I];
+  finally
+    List.Free;
+  end;
 end;
 
 function TranslationCount: Integer;

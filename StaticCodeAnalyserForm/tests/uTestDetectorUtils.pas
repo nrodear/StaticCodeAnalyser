@@ -52,6 +52,11 @@ type
     [Test] procedure Unqualified_NoDot_Unchanged;
     [Test] procedure Unqualified_EmptyAndTrailingDot;
     [Test] procedure Unqualified_LowerVariant_LowercasesLastSegment;
+    // ---- IsIdentChar / Zeichenklasse (Backlog-Welle 1, 2026-07-26) ----
+    [Test] procedure IdentChar_LettersAndDigitsAndUnderscore;
+    [Test] procedure IdentChar_RangeNeighboursAreNoIdent;
+    [Test] procedure IdentChar_DotAndDollarAreNoIdent;
+    [Test] procedure IdentChar_UmlautAndNonAsciiAreNoIdent;
   end;
 
 implementation
@@ -508,6 +513,80 @@ begin
   Assert.AreEqual('doit',
     TDetectorUtils.UnqualifiedNameLastLower('TOuter.TInner.DoIt'));
   Assert.AreEqual('bar', TDetectorUtils.UnqualifiedNameLastLower('Bar'));
+end;
+
+{ ---- IsIdentChar / Zeichenklasse (Backlog-Welle 1, 2026-07-26) ---- }
+// Diese vier Tests pinnen die Zeichenklasse fest, auf die in dieser Welle
+// 46 lokale Ausrollungen in Detektor-Units zusammengefuehrt wurden. Jede
+// spaetere Erweiterung der Klasse (z.B. Punkt oder Umlaute) verschiebt
+// Wortgrenzen und damit Fundgrenzen in ALLEN diesen Detektoren - die Tests
+// sind dafuer die Reissleine.
+
+procedure TTestDetectorUtils.IdentChar_LettersAndDigitsAndUnderscore;
+// Positivfall inkl. der Bereichsgrenzen selbst.
+//
+// EHRLICHE EINORDNUNG (Review-Fund A-2, Backlog-Welle 1): diese Tests waren
+// auch VOR der Zentralisierung gruen - sie pruefen TDetectorUtils.IsIdentChar,
+// und genau diese Funktion wurde nicht angefasst. Sie beweisen also NICHT,
+// dass die 46 ersetzten Wrapper-Rueumpfe korrekt sind; dieser Nachweis lief
+// ueber den erschoepfenden Zeichenmengen-Vergleich aller 46 Ausgangsformen
+// gegen HEAD (6 verschiedene Schreibweisen, alle mengengleich) plus das
+// byte-identische Korpus-A/B.
+// Ihr Wert ist ein anderer und seit der Welle GROESSER: die Zeichenklasse
+// dieser einen Funktion traegt jetzt 46 Units. Wer sie hier um '.' oder '$'
+// erweitert, verschiebt Wortgrenzen in allen 46 gleichzeitig - deshalb sind
+// die Grenzfaelle unten festgenagelt. Die lokalen Wrapper selbst sind
+// implementation-level und von aussen nicht testbar.
+begin
+  Assert.IsTrue(TDetectorUtils.IsIdentChar('a'), 'a');
+  Assert.IsTrue(TDetectorUtils.IsIdentChar('z'), 'z');
+  Assert.IsTrue(TDetectorUtils.IsIdentChar('A'), 'A');
+  Assert.IsTrue(TDetectorUtils.IsIdentChar('Z'), 'Z');
+  Assert.IsTrue(TDetectorUtils.IsIdentChar('0'), 'Ziffer 0');
+  Assert.IsTrue(TDetectorUtils.IsIdentChar('9'), 'Ziffer 9');
+  Assert.IsTrue(TDetectorUtils.IsIdentChar('5'), 'Ziffer mittendrin');
+  Assert.IsTrue(TDetectorUtils.IsIdentChar('_'),
+    'Unterstrich gehoert zum Identifier');
+end;
+
+procedure TTestDetectorUtils.IdentChar_RangeNeighboursAreNoIdent;
+// Off-by-one-Gegenprobe: das Zeichen direkt VOR und direkt HINTER jedem
+// Bereich muss False liefern. Bewusst als Ordinal-Literale notiert, damit
+// der Test nicht von der Quelltext-Codierung abhaengt.
+begin
+  Assert.IsFalse(TDetectorUtils.IsIdentChar(#47), 'vor 0');
+  Assert.IsFalse(TDetectorUtils.IsIdentChar(#58), 'hinter 9');
+  Assert.IsFalse(TDetectorUtils.IsIdentChar(#64), 'vor A');
+  Assert.IsFalse(TDetectorUtils.IsIdentChar(#91), 'hinter Z');
+  Assert.IsFalse(TDetectorUtils.IsIdentChar(#94), 'vor _');
+  Assert.IsFalse(TDetectorUtils.IsIdentChar(#96), 'hinter _ bzw. vor a');
+  Assert.IsFalse(TDetectorUtils.IsIdentChar(#123), 'hinter z');
+end;
+
+procedure TTestDetectorUtils.IdentChar_DotAndDollarAreNoIdent;
+// Der Punkt ist der wichtigste Fall: er zaehlt NICHT mit, damit in
+// 'mytable.sql' rechts vom Punkt eine Wortgrenze erkannt wird. Das
+// Dollarzeichen (Hex-Praefix) gehoert ebenfalls nicht zum Identifier.
+begin
+  Assert.IsFalse(TDetectorUtils.IsIdentChar('.'),
+    'Punkt ist Qualifier-Trenner, kein Identifier-Zeichen');
+  Assert.IsFalse(TDetectorUtils.IsIdentChar('$'), 'Dollar');
+  Assert.IsFalse(TDetectorUtils.IsIdentChar(' '), 'Leerzeichen');
+  Assert.IsFalse(TDetectorUtils.IsIdentChar('('), 'Klammer auf');
+end;
+
+procedure TTestDetectorUtils.IdentChar_UmlautAndNonAsciiAreNoIdent;
+// Umlaute sind in Delphi zwar gueltige Identifier-Zeichen, die zentrale
+// Fassung ist aber bewusst ASCII-only - genau wie alle 46 zusammen-
+// gefuehrten lokalen Fassungen (CharInSet liefert fuer WideChar > #255
+// ebenfalls False). Diese Gleichheit ist die Neutralitaets-Zusicherung
+// der Zusammenfuehrung und wird hier festgenagelt.
+begin
+  Assert.IsFalse(TDetectorUtils.IsIdentChar(#$00E4), 'kleines a-Umlaut');
+  Assert.IsFalse(TDetectorUtils.IsIdentChar(#$00C4), 'grosses A-Umlaut');
+  Assert.IsFalse(TDetectorUtils.IsIdentChar(#$00DF), 'scharfes s');
+  Assert.IsFalse(TDetectorUtils.IsIdentChar(#$0100), 'Latin Extended-A');
+  Assert.IsFalse(TDetectorUtils.IsIdentChar(#$20AC), 'Euro-Zeichen');
 end;
 
 initialization

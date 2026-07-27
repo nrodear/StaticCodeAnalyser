@@ -22,6 +22,11 @@ type
     [Test] procedure ParsePo_BrokenInput_DoesNotRaise;
     [Test] procedure SetLanguage_Unknown_IsIdentity;
     [Test] procedure SetLanguage_German_IsStableWhenRepeated;
+    // Sprachauswahl in der UI (Backlog-Welle 1, 2026-07-26)
+    [Test] procedure AvailableLanguages_ContainsEmbeddedCodes;
+    [Test] procedure AvailableLanguages_SortedAndFreeOfDuplicates;
+    [Test] procedure SetLanguage_UnknownIniValue_FallsBackToEnglish;
+    [Test] procedure SetLanguage_RegionalIniValue_LoadsBaseLanguage;
   end;
 
 implementation
@@ -150,6 +155,93 @@ begin
       'zweimal SetLanguage(de) muss denselben Bestand liefern');
     Assert.IsTrue(N1 > 100,
       'eingebettete de-Uebersetzungen fehlen (erwartet mehrere hundert)');
+  finally
+    SetLanguage(Old);
+  end;
+end;
+
+// Hilfs-Praedikat fuer die AvailableLanguages-Tests. Bewusst kein
+// TArray.Contains<string> - das braeuchte einen IComparer und macht die
+// Assertion-Meldung unleserlich.
+function HasCode(const ACodes: TArray<string>; const ACode: string): Boolean;
+var
+  I : Integer;
+begin
+  for I := Low(ACodes) to High(ACodes) do
+    if ACodes[I] = ACode then
+      Exit(True);
+  Result := False;
+end;
+
+procedure TTestLocalization.AvailableLanguages_ContainsEmbeddedCodes;
+// Speisung der Sprachauswahl in den Optionen: die eingebetteten .po
+// (uLocalizationPo.inc, generiert aus i18n\*.po) muessen alle auftauchen.
+// 'en' ist die Quellsprache und darf nie fehlen, auch ohne .po.
+var
+  Codes : TArray<string>;
+begin
+  Codes := AvailableLanguages;
+  Assert.IsTrue(HasCode(Codes, 'de'), 'de fehlt in AvailableLanguages');
+  Assert.IsTrue(HasCode(Codes, 'en'), 'en fehlt in AvailableLanguages');
+  Assert.IsTrue(HasCode(Codes, 'fr'), 'fr fehlt in AvailableLanguages');
+end;
+
+procedure TTestLocalization.AvailableLanguages_SortedAndFreeOfDuplicates;
+// Die Liste geht 1:1 in Combo bzw. Menue - sie muss stabil sortiert und
+// dublettenfrei sein. Eine externe i18n\de.po neben der EXE darf 'de'
+// nicht ein zweites Mal erzeugen.
+var
+  Codes : TArray<string>;
+  I     : Integer;
+begin
+  Codes := AvailableLanguages;
+  Assert.IsTrue(Length(Codes) >= 3, 'mindestens de/en/fr erwartet');
+  for I := Low(Codes) + 1 to High(Codes) do
+    Assert.IsTrue(Codes[I - 1] < Codes[I],
+      Format('nicht sortiert oder doppelt: %s vor %s', [Codes[I - 1], Codes[I]]));
+end;
+
+procedure TTestLocalization.SetLanguage_UnknownIniValue_FallsBackToEnglish;
+// [UI] Language kann jeden beliebigen Text enthalten. Weder ein unbekanntes
+// Kuerzel noch Muell darf etwas anderes bewirken als "Englisch": keine
+// Exception, keine geladene Tabelle, Identity-Uebersetzung.
+var
+  Old : string;
+begin
+  Old := CurrentLanguage;
+  try
+    SetLanguage('kl');
+    Assert.AreEqual<Integer>(0, TranslationCount,
+      'unbekanntes Kuerzel darf keine Tabelle aktivieren');
+    Assert.AreEqual('Errors', _('Errors'),
+      'unbekanntes Kuerzel muss den englischen Ausgangstext liefern');
+
+    SetLanguage('..\..\boese');
+    Assert.AreEqual<Integer>(0, TranslationCount,
+      'kein Sprachkuerzel -> keine Tabelle (und kein Pfad-Ausbruch)');
+
+    SetLanguage('');
+    Assert.AreEqual<Integer>(0, TranslationCount,
+      'leerer INI-Wert = Englisch');
+  finally
+    SetLanguage(Old);
+  end;
+end;
+
+procedure TTestLocalization.SetLanguage_RegionalIniValue_LoadsBaseLanguage;
+// Traegt der User 'de-DE' (oder 'de_AT') in die INI ein, soll das die
+// Basissprache laden statt still auf Englisch zu fallen.
+var
+  Old : string;
+begin
+  Old := CurrentLanguage;
+  try
+    SetLanguage('de-DE');
+    Assert.IsTrue(TranslationCount > 100,
+      'de-DE muss die de-Tabelle laden');
+    SetLanguage('DE_at');
+    Assert.IsTrue(TranslationCount > 100,
+      'Gross-/Kleinschreibung und Unterstrich muessen egal sein');
   finally
     SetLanguage(Old);
   end;

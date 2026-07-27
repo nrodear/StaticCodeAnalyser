@@ -20,7 +20,8 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12,
+  uDetectorUtils;   // H2445: inline-Expansion braucht iface-Sichtbarkeit
 
 type
   TSelfAssignmentDetector = class
@@ -41,10 +42,11 @@ const
 
 function IsWordCh(const C: Char): Boolean; inline;
 begin
-  Result := ((C >= 'a') and (C <= 'z')) or
-            ((C >= 'A') and (C <= 'Z')) or
-            ((C >= '0') and (C <= '9')) or
-            (C = '_');
+  // Backlog-Welle 1, 2026-07-26: Zeichenklasse zentralisiert - die
+  // lokale Fassung war zeichenweise identisch zu
+  // TDetectorUtils.IsIdentChar (a..z, A..Z, 0..9, _). Der Wrapper
+  // bleibt, damit die Aufrufer in dieser Unit unveraendert bleiben.
+  Result := TDetectorUtils.IsIdentChar(C);
 end;
 
 function Normalize(const S: string): string;

@@ -213,6 +213,15 @@ var
     Result := Pos('.', Trimmed) > 0;
   end;
 
+  // AUSNAHME von der Zentralisierung (Backlog-Welle 1, 2026-07-26): diese
+  // Unit behaelt den lokalen Rumpf. Delegieren an TDetectorUtils.IsIdentChar
+  // wuerde H2445 ausloesen (eine inline-Routine kann keine Inline-Funktion
+  // expandieren, deren Unit nur implementation-seitig sichtbar ist), und der
+  // uebliche Ausweg - uDetectorUtils in die interface-uses - scheidet hier
+  // aus: uDetectorUtils zieht ueber uAnalyzeContext genau diese Unit wieder
+  // herein, das waere ein zirkulaerer Unit-Verweis (F2047). Ohne Expansion
+  // waere es ein echter Aufruf pro Zeichen - und das hier ist der heisseste
+  // Scanner im Projekt (jeder Ausdruck jeder Datei).
   function IsIdentCharLocal(C: Char): Boolean; inline;
   begin
     Result := CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_']);

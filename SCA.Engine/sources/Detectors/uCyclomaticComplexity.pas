@@ -50,6 +50,9 @@ implementation
 // noinspection-file ConsecutiveSection, RedundantJump, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedParameter
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  uDetectorUtils;                 // Backlog-Welle 1, 2026-07-26
+
 class function TCyclomaticComplexityDetector.CountBooleanOpsInCond(
   const CondText: string): Integer;
 // Zaehlt and/or/xor als ganze Woerter (case-insensitive). Wort-Boundary
@@ -60,7 +63,11 @@ var
 
   function IsWordChar(C: Char): Boolean;
   begin
-    Result := CharInSet(C, ['a'..'z', 'A'..'Z', '0'..'9', '_']);
+    // Backlog-Welle 1, 2026-07-26: Zeichenklasse zentralisiert - die
+    // lokale Fassung war zeichenweise identisch zu
+    // TDetectorUtils.IsIdentChar (a..z, A..Z, 0..9, _). Der Wrapper
+    // bleibt, damit die Aufrufer in dieser Unit unveraendert bleiben.
+    Result := TDetectorUtils.IsIdentChar(C);
   end;
 
   function IsBoundaryAt(Pos: Integer): Boolean;

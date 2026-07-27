@@ -66,6 +66,13 @@ type
     lblEditorColorScheme    : TLabel;
     cboEditorColorScheme    : TComboBox;
     lblEditorColorSchemeInfo: TLabel;
+    // Sprache der Plugin-Oberflaeche (Backlog-Welle 1, 2026-07-26).
+    // Werte kommen aus uLocalization.AvailableLanguages - KEINE Liste
+    // im Code, sonst driftet sie gegen i18n\*.po.
+    grpLanguage             : TGroupBox;
+    lblLanguage             : TLabel;
+    cboLanguage             : TComboBox;
+    lblLanguageInfo         : TLabel;
     // Baseline (non-destruktiver "nur neue Funde"-Filter)
     grpBaseline             : TGroupBox;
     chkBaselineOnlyNew      : TCheckBox;
@@ -90,9 +97,11 @@ type
     procedure BuildRuleSetSection(AParent: TWinControl; var AY: Integer);
     procedure BuildDetectorsSection(AParent: TWinControl; var AY: Integer);
     procedure BuildDisplaySection(AParent: TWinControl; var AY: Integer);
+    procedure BuildLanguageSection(AParent: TWinControl; var AY: Integer);
     procedure BuildBaselineSection(AParent: TWinControl; var AY: Integer);
     procedure PopulateProfileCombos;
     procedure PopulateMinSevCombo;
+    procedure PopulateLanguageCombo;
     // VCL-Style-Wechsel via Application.Broadcast - feuert zuverlaessiger
     // als der TIDETheme-Subscribe in manchen IDE-Versionen. Beide Pfade
     // rufen Apply auf das Frame; Apply ist idempotent.
@@ -228,6 +237,7 @@ begin
   BuildRuleSetSection  (FScroll, Y);
   BuildDetectorsSection(FScroll, Y);
   BuildDisplaySection  (FScroll, Y);
+  BuildLanguageSection (FScroll, Y);
   BuildBaselineSection (FScroll, Y);
 end;
 
@@ -489,6 +499,63 @@ begin
                        lblEditorColorSchemeInfo.Height + 112;
 end;
 
+procedure TSCAOptionsFrame.BuildLanguageSection(AParent: TWinControl;
+  var AY: Integer);
+// Sprache der Plugin-Oberflaeche. Persistiert nach [UI] Language - derselbe
+// Schluessel den uIDEAnalyserForm beim Frame-Aufbau via SetLanguage liest.
+//
+// SOFORTWIRKUNG: SaveToSettings ruft SetLanguage direkt, damit alles was ab
+// dem OK NEU gebaut wird (Popup-Menues, Dialoge, Statusmeldungen) sofort in
+// der neuen Sprache kommt. Bereits gesetzte Captions bleiben stehen - die
+// werden im Plugin genau einmal beim Control-Aufbau zugewiesen, es gibt
+// keinen Re-Caption-Pass ueber Dock-Frame, Overlay, Grid-Header und
+// Properties-Panel. Einen solchen Pass nachzuruesten ist ein eigenes
+// Vorhaben (jede Caption braucht eine benannte Refresh-Stelle) - darum
+// hier der ehrliche Hinweis im Info-Label statt einer halb
+// funktionierenden Live-Umschaltung.
+begin
+  grpLanguage         := TGroupBox.Create(Self);
+  grpLanguage.Parent  := AParent;
+  grpLanguage.Left    := MARGIN_LEFT;
+  grpLanguage.Top     := AY;
+  grpLanguage.Width   := GROUP_W;
+  grpLanguage.Caption := _('Language (analyser.ini [UI])');
+
+  lblLanguage         := TLabel.Create(Self);
+  lblLanguage.Parent  := grpLanguage;
+  lblLanguage.Left    := INNER_LEFT;
+  lblLanguage.Top     := INNER_TOP + 3;
+  lblLanguage.Width   := LBL_W;
+  lblLanguage.Caption := _('UI language:');
+
+  cboLanguage         := TComboBox.Create(Self);
+  cboLanguage.Parent  := grpLanguage;
+  cboLanguage.Left    := INNER_LEFT + LBL_W;
+  cboLanguage.Top     := INNER_TOP;
+  cboLanguage.Width   := CMB_W;
+  cboLanguage.Style   := csDropDownList;
+
+  lblLanguageInfo          := TLabel.Create(Self);
+  lblLanguageInfo.Parent   := grpLanguage;
+  lblLanguageInfo.AutoSize := False;
+  lblLanguageInfo.Left     := INNER_LEFT;
+  lblLanguageInfo.Top      := cboLanguage.Top + cboLanguage.Height + 8;
+  lblLanguageInfo.Width    := GROUP_W - 2 * INNER_LEFT;
+  lblLanguageInfo.Height   := 64;
+  lblLanguageInfo.WordWrap := True;
+  lblLanguageInfo.Caption  :=
+    _('Applies to the plugin user interface only - detector messages, ' +
+      'findings and exports are never translated. The list holds the ' +
+      'built-in translations plus every i18n\<code>.po file placed next ' +
+      'to the plugin BPL. Captions already on screen switch after an ' +
+      'IDE restart.');
+
+  grpLanguage.Height := lblLanguageInfo.Top + lblLanguageInfo.Height + 12;
+  Inc(AY, grpLanguage.Height + GROUP_GAP);
+
+  PopulateLanguageCombo;
+end;
+
 procedure TSCAOptionsFrame.BuildBaselineSection(AParent: TWinControl;
   var AY: Integer);
 // "Nur neue Funde"-Filter: blendet Funde aus, deren Fingerprint in einer
@@ -647,6 +714,32 @@ begin
   cboMinSev.ItemIndex := 0;
 end;
 
+procedure TSCAOptionsFrame.PopulateLanguageCombo;
+// Werte kommen ausschliesslich aus uLocalization.AvailableLanguages:
+// eingebettete .po (generiert aus i18n\*.po) + externe i18n\*.po neben der
+// BPL + 'en'. Bewusst keine Liste im Code - eine neue Uebersetzung soll
+// ohne UI-Aenderung auftauchen. Angezeigt wird das nackte ISO-639-1-
+// Kuerzel; ein Klarnamen-Mapping waere wieder eine Handliste, die bei der
+// naechsten Sprache stillschweigend veraltet.
+var
+  Codes : TArray<string>;
+  I     : Integer;
+begin
+  if not Assigned(cboLanguage) then Exit;
+  Codes := AvailableLanguages;
+  cboLanguage.Items.BeginUpdate;
+  try
+    cboLanguage.Items.Clear;
+    for I := Low(Codes) to High(Codes) do
+      cboLanguage.Items.Add(Codes[I]);
+  finally
+    cboLanguage.Items.EndUpdate;
+  end;
+  cboLanguage.ItemIndex := cboLanguage.Items.IndexOf('en');
+  if cboLanguage.ItemIndex < 0 then
+    cboLanguage.ItemIndex := 0;
+end;
+
 procedure TSCAOptionsFrame.LoadFromSettings(ASettings: TRepoSettings);
 
   procedure SelectComboBy(ACombo: TComboBox; const AValue: string;
@@ -697,6 +790,13 @@ begin
   if Assigned(cboEditorColorScheme) then
     cboEditorColorScheme.ItemIndex :=
       ComboIndexFromScheme(ParseEditorColorScheme(ASettings.EditorColorScheme));
+
+  // Sprache: unbekannter/leerer INI-Wert -> 'en' (identisch zur Laufzeit-
+  // Semantik von uLocalization.SetLanguage, das genau dann auf Identity =
+  // Englisch faellt). SelectComboBy vergleicht case-sensitiv, die Combo
+  // fuehrt normalisierte Kleinbuchstaben-Kuerzel.
+  if Assigned(cboLanguage) then
+    SelectComboBy(cboLanguage, LowerCase(Trim(ASettings.Language)), 'en');
 
   // Baseline
   if Assigned(chkBaselineOnlyNew) then
@@ -752,6 +852,17 @@ begin
     RefreshEditorColorSchemeCache(ASettings.EditorColorScheme);
   end;
 
+  // Sprache: Combo-Text ist bereits ein normalisiertes Kuerzel (kommt aus
+  // AvailableLanguages). SetLanguage direkt hinterher, damit alles was ab
+  // jetzt neu gebaut wird sofort uebersetzt ist - der Rest folgt beim
+  // IDE-Neustart (siehe Kommentar an BuildLanguageSection). SetLanguage
+  // ist defensiv: unbekanntes Kuerzel bedeutet Englisch, kein Fehler.
+  if Assigned(cboLanguage) and (cboLanguage.ItemIndex >= 0) then
+  begin
+    ASettings.Language := cboLanguage.Items[cboLanguage.ItemIndex];
+    SetLanguage(ASettings.Language);
+  end;
+
   // Baseline
   if Assigned(chkBaselineOnlyNew) then
     ASettings.BaselineOnlyNew := chkBaselineOnlyNew.Checked;
@@ -767,6 +878,7 @@ begin
   StyleAsHintLabel(lblOverlayPosInfo);
   StyleAsHintLabel(lblOverlayShowOnHoverInfo);
   StyleAsHintLabel(lblEditorColorSchemeInfo);
+  StyleAsHintLabel(lblLanguageInfo);
   StyleAsHintLabel(lblBaselineInfo);
 end;
 

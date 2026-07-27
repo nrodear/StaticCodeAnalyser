@@ -27,7 +27,8 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext,
+  uDetectorUtils;   // H2445: inline-Expansion braucht iface-Sichtbarkeit
 
 type
   TPerfHotspotsDetector = class
@@ -43,7 +44,7 @@ implementation
 
 uses
   System.RegularExpressions, System.StrUtils,
-  uFileTextCache, uDetectorUtils, uTypeResolver;
+  uFileTextCache, uTypeResolver;
 
 var
   // Lazy-Cache fuer die drei Module-konstanten Regex-Patterns. Spart 3x
@@ -64,7 +65,11 @@ end;
 
 function IsIdent(c: Char): Boolean; inline;
 begin
-  Result := CharInSet(c, ['A'..'Z', 'a'..'z', '0'..'9', '_']);
+  // Backlog-Welle 1, 2026-07-26: Zeichenklasse zentralisiert - die
+  // lokale Fassung war zeichenweise identisch zu
+  // TDetectorUtils.IsIdentChar (a..z, A..Z, 0..9, _). Der Wrapper
+  // bleibt, damit die Aufrufer in dieser Unit unveraendert bleiben.
+  Result := TDetectorUtils.IsIdentChar(c);
 end;
 
 // Findet Loop-Bloecke (for/while/repeat..end-of-block) und liefert ihre

@@ -126,9 +126,17 @@ type
     FHamburgerMenu  : TPopupMenu;
     // Dynamisch ge-Enable/Disable'd in HamburgerMenuPopup.
     FMICancel       : TMenuItem;
+    // Untermenue "Language" (Backlog-Welle 1, 2026-07-26). Die Form hat
+    // keinen Options-Dialog - Settings heisst hier "analyser.ini im Editor
+    // oeffnen". Das Hamburger-Menue ist damit der einzige UI-Ort, an dem
+    // eine Sprachauswahl ohne neues Formular Platz hat.
+    FMILanguage     : TMenuItem;
     procedure HamburgerClick(Sender: TObject);
     procedure HamburgerMenuPopup(Sender: TObject);
     procedure BuildHamburgerMenu;
+    // Fuellt das Sprach-Untermenue aus uLocalization.AvailableLanguages.
+    procedure BuildLanguageMenu(AParent: TMenuItem);
+    procedure LanguageItemClick(Sender: TObject);
     procedure HamburgerExportClick(Sender: TObject);
     procedure HamburgerSettingsClick(Sender: TObject);
     procedure HamburgerIgnoreListClick(Sender: TObject);
@@ -1610,6 +1618,90 @@ begin
   MI.Caption := _('Ignore list...');
   MI.OnClick := HamburgerIgnoreListClick;
   FHamburgerMenu.Items.Add(MI);
+
+  // ---- Sprache (Untermenue, Werte aus AvailableLanguages) ----
+  FMILanguage := TMenuItem.Create(FHamburgerMenu);
+  FMILanguage.Caption := _('Language');
+  FHamburgerMenu.Items.Add(FMILanguage);
+  BuildLanguageMenu(FMILanguage);
+end;
+
+procedure TForm2.BuildLanguageMenu(AParent: TMenuItem);
+// Ein Radio-Item pro verfuegbarer Sprache. Die Liste kommt aus
+// uLocalization.AvailableLanguages (eingebettete .po + externe i18n\*.po
+// neben der EXE + 'en') - im Code steht KEIN Sprachkuerzel, damit eine
+// neue Uebersetzung ohne UI-Aenderung auftaucht.
+// Caption ist das nackte ISO-639-1-Kuerzel; das Kuerzel liegt zusaetzlich
+// im Hint, damit der Click-Handler nicht von der Caption abhaengt.
+var
+  Codes : TArray<string>;
+  Cur   : string;
+  MI    : TMenuItem;
+  I     : Integer;
+begin
+  if not Assigned(AParent) then Exit;
+  // CurrentLanguage ist der zuletzt via SetLanguage gesetzte Wert -
+  // FormCreate hat den INI-Wert bereits durchgereicht. Leer = Englisch.
+  Cur := LowerCase(Trim(CurrentLanguage));
+  if Cur = '' then Cur := 'en';
+
+  Codes := AvailableLanguages;
+  for I := Low(Codes) to High(Codes) do
+  begin
+    MI            := TMenuItem.Create(AParent);
+    MI.Caption    := Codes[I];
+    MI.Hint       := Codes[I];
+    MI.RadioItem  := True;
+    // Eigener GroupIndex fuer den Radio-Kreis. Alle anderen Items des
+    // Hamburger-Menues liegen auf dem Default 0 - damit ist der Kreis
+    // auf das Sprach-Untermenue begrenzt.
+    MI.GroupIndex := 7;
+    MI.Checked    := SameText(Codes[I], Cur);
+    MI.OnClick    := LanguageItemClick;
+    AParent.Add(MI);
+  end;
+end;
+
+procedure TForm2.LanguageItemClick(Sender: TObject);
+// Schreibt die Auswahl nach [UI] Language und stellt die Laufzeit sofort um.
+//
+// SOFORTWIRKUNG: SetLanguage wirkt auf alles was ab jetzt NEU gebaut wird
+// (Statusmeldungen, Dialoge, Export-/Hamburger-Captions beim naechsten
+// Aufbau). Die bereits gesetzten Captions von Form, Toolbar, Grid-Header
+// und Hint-Panel bleiben auf der alten Sprache: sie werden genau einmal
+// beim Control-Aufbau zugewiesen, ein Re-Caption-Pass existiert nicht.
+// Darum der ehrliche Hinweis in der Statusleiste statt einer halb
+// funktionierenden Live-Umschaltung.
+//
+// Detektor-Meldungen sind NICHT lokalisiert - die Auswahl beruehrt
+// Fundzahlen, Grid-Inhalte und Exporte nicht.
+var
+  MI       : TMenuItem;
+  Code     : string;
+  Settings : TRepoSettings;
+begin
+  if not (Sender is TMenuItem) then Exit;
+  MI   := TMenuItem(Sender);
+  Code := LowerCase(Trim(MI.Hint));
+  if Code = '' then Exit;
+
+  Settings := TRepoSettings.Create;
+  try
+    // Load vor Save: sonst wuerde Save die uebrigen Sections mit den
+    // Constructor-Defaults ueberschreiben (gleiches Muster wie die
+    // Options-Page des IDE-Plugins).
+    try Settings.Load; except end;
+    Settings.Language := Code;
+    try Settings.Save; except end;
+  finally
+    Settings.Free;
+  end;
+
+  SetLanguage(Code);
+  MI.Checked := True;
+  StatusBar1.Panels[2].Text := Format(
+    _('UI language: %s - captions already on screen switch after a restart.'),
+    [Code]);
 end;
 
 procedure TForm2.HamburgerMenuPopup(Sender: TObject);

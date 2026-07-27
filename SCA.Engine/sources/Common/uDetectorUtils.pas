@@ -15,6 +15,10 @@ interface
 
 uses
   System.Classes, System.Generics.Collections, // TStrings, TList<>
+  System.SysUtils,                             // TStringBuilder und CharInSet
+    // CharInSet ist eine Inline-Funktion. Die inline deklarierten Routinen
+    // dieser Unit koennen sie nur expandieren, wenn System.SysUtils
+    // interface-seitig sichtbar ist - sonst H2445, siehe ParseCallsInExpr.
   uAnalyzeContext;                             // Perf (2026-07-05): P1-strip-cache
 
 type
@@ -332,7 +336,6 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  System.SysUtils,               // TStringBuilder
   System.Masks,                  // MatchesMask fuer Test-Fixture-Patterns
   System.StrUtils,               // PosEx
   System.RegularExpressions;     // TRegEx fuer IsLikelyAttributePosition
@@ -351,10 +354,14 @@ type
 
 class function TDetectorUtils.IsIdentChar(Ch: Char): Boolean;
 begin
-  Result := ((Ch >= 'a') and (Ch <= 'z'))
-         or ((Ch >= 'A') and (Ch <= 'Z'))
-         or ((Ch >= '0') and (Ch <= '9'))
-         or (Ch = '_');
+  // Bewusst CharInSet und nicht die Vergleichskette: 56 der 59 lokalen
+  // Rumpffassungen, die diese Funktion 2026-07-26 abgeloest hat, waren
+  // genau dieses Mengen-Konstrukt (nur uCastAndFree, uSelfAssignment und
+  // uInstanceInvokedConstructor hatten eine Kette). Die Zentralisierung war
+  // als verhaltens- UND codegen-neutral gedacht; eine Kette waere eine
+  // dritte Variante gewesen, die so nie irgendwo stand. Semantisch sind
+  // beide identisch (Ch > #255 faellt in beiden Faellen raus).
+  Result := CharInSet(Ch, ['A'..'Z', 'a'..'z', '0'..'9', '_']);
 end;
 
 class function TDetectorUtils.IsTestFixturePath(const FileName: string;

@@ -32,7 +32,8 @@ interface
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext, uTypeIndex,
-  uCFG;   // #6 Inkr.4: CFG-Postfilter fuer read-before-write
+  uCFG,             // #6 Inkr.4: CFG-Postfilter fuer read-before-write
+  uDetectorUtils;   // H2445: inline-Expansion braucht iface-Sichtbarkeit
 
 type
   TUninitVarDetector = class
@@ -57,7 +58,7 @@ implementation
 
 uses
   System.StrUtils,
-  uFileTextCache, uDetectorUtils;
+  uFileTextCache;
 
 // Hard-Caps werden zur Laufzeit aus uSCAConsts.DetectorMaxLocalVars /
 // DetectorMaxChildrenRecursive gelesen (konfigurierbar via analyser.ini
@@ -174,7 +175,11 @@ type
 
 function IsIdentChar(C: Char): Boolean; inline;
 begin
-  Result := CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_']);
+  // Backlog-Welle 1, 2026-07-26: Zeichenklasse zentralisiert - die
+  // lokale Fassung war zeichenweise identisch zu
+  // TDetectorUtils.IsIdentChar (a..z, A..Z, 0..9, _). Der Wrapper
+  // bleibt, damit die Aufrufer in dieser Unit unveraendert bleiben.
+  Result := TDetectorUtils.IsIdentChar(C);
 end;
 
 type

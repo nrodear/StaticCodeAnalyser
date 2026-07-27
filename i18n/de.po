@@ -1585,3 +1585,22 @@ msgstr "UsesCheck - ungenutzte Einträge in uses-Klausel melden (kann False-Posi
 
 msgid "AutoDiscoverClasses - extend LeakyClasses with project-specific classes"
 msgstr "AutoDiscoverClasses - LeakyClasses um projektspezifische Klassen erweitern"
+
+#
+# Sprachauswahl in den Optionen (Backlog-Welle 1, 2026-07-26).
+#
+
+msgid "Language (analyser.ini [UI])"
+msgstr "Sprache (analyser.ini [UI])"
+
+msgid "UI language:"
+msgstr "Oberflächensprache:"
+
+msgid "Applies to the plugin user interface only - detector messages, findings and exports are never translated. The list holds the built-in translations plus every i18n\\<code>.po file placed next to the plugin BPL. Captions already on screen switch after an IDE restart."
+msgstr "Betrifft nur die Oberfläche des Plugins - Detektor-Meldungen, Befunde und Exporte werden nie übersetzt. Die Liste enthält die eingebauten Übersetzungen sowie jede i18n\\<code>.po neben der Plugin-BPL. Bereits angezeigte Beschriftungen wechseln erst nach einem IDE-Neustart."
+
+msgid "Language"
+msgstr "Sprache"
+
+msgid "UI language: %s - captions already on screen switch after a restart."
+msgstr "Oberflächensprache: %s - bereits angezeigte Beschriftungen wechseln erst nach einem Neustart."

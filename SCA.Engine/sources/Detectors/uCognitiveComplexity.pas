@@ -57,7 +57,10 @@ type
 implementation
 
 uses
-  uRepoSettings;
+  uDetectorUtils,                 // Backlog-Welle 1, 2026-07-26
+  uRepoSettings;                  // alphabetisch: diese Unit hat als einzige
+                                  // der Welle keinen noinspection-Marker,
+                                  // unsortiert waere hier ein echter SCA142
 
 function QuickReadIntDef(const ASection, AKey: string; ADefault: Integer): Integer;
 var
@@ -82,7 +85,13 @@ var
   Lo : string;
   i  : Integer;
   function IsWordChar(C: Char): Boolean;
-  begin Result := CharInSet(C, ['a'..'z', 'A'..'Z', '0'..'9', '_']); end;
+  begin
+    // Backlog-Welle 1, 2026-07-26: Zeichenklasse zentralisiert - die
+    // lokale Fassung war zeichenweise identisch zu
+    // TDetectorUtils.IsIdentChar (a..z, A..Z, 0..9, _). Der Wrapper
+    // bleibt, damit die Aufrufer in dieser Unit unveraendert bleiben.
+    Result := TDetectorUtils.IsIdentChar(C);
+  end;
   function IsBoundaryAt(Pos: Integer): Boolean;
   begin
     Result := (Pos < 1) or (Pos > Length(Lo)) or (not IsWordChar(Lo[Pos]));

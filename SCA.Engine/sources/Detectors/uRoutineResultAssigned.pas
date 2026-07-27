@@ -51,7 +51,8 @@ interface
 
 uses
   System.SysUtils, System.StrUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12,
+  uDetectorUtils;   // H2445: inline-Expansion braucht iface-Sichtbarkeit
 
 type
   TRoutineResultAssignedDetector = class
@@ -72,9 +73,6 @@ implementation
 
 // noinspection-file BeginEndRequired, ConsecutiveSection, GroupedDeclaration, MultipleExit, NestedRoutine, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
-
-uses
-  uDetectorUtils;  // UnqualifiedNameLast (Restschulden-Audit 2026-07-26)
 
 // Liefert True wenn TypeRef einen Return-Type enthaelt (Format
 // 'function:RetType[;direktive...]'). Procedures haben keinen ':' im
@@ -184,7 +182,11 @@ end;
 
 function IsIdentChar(c: Char): Boolean; inline;
 begin
-  Result := CharInSet(c, ['A'..'Z', 'a'..'z', '0'..'9', '_']);
+  // Backlog-Welle 1, 2026-07-26: Zeichenklasse zentralisiert - die
+  // lokale Fassung war zeichenweise identisch zu
+  // TDetectorUtils.IsIdentChar (a..z, A..Z, 0..9, _). Der Wrapper
+  // bleibt, damit die Aufrufer in dieser Unit unveraendert bleiben.
+  Result := TDetectorUtils.IsIdentChar(c);
 end;
 
 // Word-boundary-Lookup von Needle in Haystack. Beide bereits lowercased.

@@ -154,3 +154,1465 @@ msgstr "git introuvable. Installez Git pour Windows."
 
 msgid "svn not found. Install TortoiseSVN with command line tools."
 msgstr "svn introuvable. Installez TortoiseSVN avec les outils en ligne de commande."
+
+# ---- Quality-Score / Notenskala --------------------------------------------
+msgid "No findings - clean baseline"
+msgstr "Aucun résultat - base saine"
+
+msgid "Clean - minor smells only"
+msgstr "Propre - seulement des smells mineurs"
+
+msgid "Visible tech debt, no critical bugs"
+msgstr "Dette technique visible, aucun bug critique"
+
+msgid "Multiple errors/vulnerabilities - refactor advised"
+msgstr "Plusieurs erreurs/vulnérabilités - refactoring conseillé"
+
+msgid "Refactor needed - many critical findings"
+msgstr "Refactoring nécessaire - nombreux résultats critiques"
+
+msgid "Raw score: %d"
+msgstr "Score brut : %d"
+
+msgid "Errors: %d, Warnings: %d, Hints: %d"
+msgstr "Erreurs : %d, Avertissements : %d, Conseils : %d"
+
+msgid "Vulnerabilities: %d, Hotspots: %d, File errors: %d"
+msgstr "Vulnérabilités : %d, Hotspots : %d, Erreurs de fichier : %d"
+
+msgid "Grade scale: A=0, B<=%d, C<=%d, D<=%d, E>%d"
+msgstr "Échelle de notes : A=0, B<=%d, C<=%d, D<=%d, E>%d"
+
+msgid "Weights: Vuln 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2"
+msgstr "Poids : Vuln 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2"
+
+msgid "Click: reset filters (show everything)"
+msgstr "Clic : réinitialiser les filtres (tout afficher)"
+
+# ---- Detektor-Kurzbeschreibungen -------------------------------------------
+msgid "// NOSONAR suppression marker found - audit it"
+msgstr "Marqueur de suppression // NOSONAR trouvé - à vérifier"
+
+msgid "A single method handles too many component events - split it up"
+msgstr "Une seule méthode gère trop d'événements de composants - la scinder"
+
+msgid "Assert() without explanatory message"
+msgstr "Assert() sans message explicatif"
+
+msgid "Assigned(X) and (X <> nil) - one check is enough"
+msgstr "Assigned(X) and (X <> nil) - une seule vérification suffit"
+
+msgid "Asymmetric begin/end in if/else - format consistently"
+msgstr "begin/end asymétriques dans if/else - formater de manière cohérente"
+
+msgid "Binary expression has identical left and right side - copy-paste bug?"
+msgstr "Expression binaire dont les deux côtés sont identiques - erreur de copier-coller ?"
+
+msgid "Boolean compared to True/False - redundant"
+msgstr "Booléen comparé à True/False - redondant"
+
+msgid "Branch body without begin..end - add explicit block"
+msgstr "Corps de branche sans begin..end - ajouter un bloc explicite"
+
+msgid "Class field without \"F\" prefix"
+msgstr "Champ de classe sans préfixe \"F\""
+
+msgid "Class/record type without \"T\" prefix"
+msgstr "Type class/record sans préfixe \"T\""
+
+msgid "Comment contains Pascal-code markers - delete it or restore it"
+msgstr "Le commentaire contient du code Pascal - le supprimer ou le réactiver"
+
+msgid "Component class is on the project-defined forbidden list"
+msgstr "La classe de composant figure sur la liste interdite définie par le projet"
+
+msgid "Component event is wired but the handler body is empty"
+msgstr "L'événement du composant est relié mais le corps du gestionnaire est vide"
+
+msgid "Component has both Action and OnClick - the OnClick handler is dead code"
+msgstr "Le composant a à la fois Action et OnClick - le gestionnaire OnClick est du code mort"
+
+msgid "Component uses the IDE default name - rename for clarity"
+msgstr "Le composant utilise le nom par défaut de l'IDE - renommer pour plus de clarté"
+
+msgid "Constructor does not call inherited - parent state uninitialized"
+msgstr "Le constructeur n'appelle pas inherited - l'état de la classe parente n'est pas initialisé"
+
+msgid "Create without try/finally - exception path leaks the object"
+msgstr "Create sans try/finally - le chemin d'exception laisse fuir l'objet"
+
+msgid "Custom rule defined in analyser-rules.yml matched this code"
+msgstr "Une règle personnalisée définie dans analyser-rules.yml correspond à ce code"
+
+msgid "Cyclomatic complexity too high - too many branches; extract methods or simplify conditions"
+msgstr "Complexité cyclomatique trop élevée - trop de branches ; extraire des méthodes ou simplifier les conditions"
+
+msgid "DB-control class does not fit the field data type"
+msgstr "La classe du contrôle DB ne correspond pas au type de données du champ"
+
+msgid "DFM declares a component but the form class has no published field for it"
+msgstr "Le DFM déclare un composant mais la classe de la fiche n'a aucun champ published correspondant"
+
+msgid "Database component sits on a Form/Frame - move to a TDataModule"
+msgstr "Composant base de données placé sur une Form/Frame - le déplacer dans un TDataModule"
+
+msgid "Database credentials sit in the form file - move them out"
+msgstr "Les identifiants de base de données sont dans le fichier de fiche - les externaliser"
+
+msgid "Dead code: statements after Exit / raise are unreachable"
+msgstr "Code mort : les instructions après Exit / raise sont inatteignables"
+
+msgid "Debug output left in production code"
+msgstr "Sortie de débogage laissée dans le code de production"
+
+msgid "Destructor does not call inherited - resource leak"
+msgstr "Le destructeur n'appelle pas inherited - fuite de ressources"
+
+msgid "Division by zero: EZeroDivide or EDivByZero possible"
+msgstr "Division par zéro : EZeroDivide ou EDivByZero possible"
+
+msgid "Double semicolon \";;\" - one is enough"
+msgstr "Point-virgule doublé \";;\" - un seul suffit"
+
+msgid "Doubled parentheses around a simple expression"
+msgstr "Parenthèses doublées autour d'une expression simple"
+
+msgid "Empty argument list \"()\" - drop the parentheses"
+msgstr "Liste d'arguments vide \"()\" - supprimer les parenthèses"
+
+msgid "Empty begin..end block"
+msgstr "Bloc begin..end vide"
+
+msgid "Empty except block silently swallows every exception"
+msgstr "Un bloc except vide avale silencieusement toutes les exceptions"
+
+msgid "Empty finally block - either drop the try or add cleanup"
+msgstr "Bloc finally vide - supprimer le try ou ajouter le nettoyage"
+
+msgid "Empty visibility section in class - delete it"
+msgstr "Section de visibilité vide dans la classe - la supprimer"
+
+msgid "Event handler in DFM points to a method that no longer exists"
+msgstr "Le gestionnaire d'événement du DFM pointe vers une méthode qui n'existe plus"
+
+msgid "Exception class without E-prefix"
+msgstr "Classe d'exception sans préfixe E"
+
+msgid "Exit/Continue/Break directly before end - redundant"
+msgstr "Exit/Continue/Break juste avant end - redondant"
+
+msgid "FieldByName in loop - cache the TField reference outside"
+msgstr "FieldByName dans une boucle - mettre en cache la référence TField à l'extérieur"
+
+msgid "File could not be read or parsed"
+msgstr "Le fichier n'a pas pu être lu ou analysé"
+
+msgid "Float format spec without TFormatSettings - locale-dependent decimal separator"
+msgstr "Format flottant sans TFormatSettings - séparateur décimal dépendant de la locale"
+
+msgid "Format() placeholder count does not match argument count"
+msgstr "Le nombre d'espaces réservés de Format() ne correspond pas au nombre d'arguments"
+
+msgid "Free is outside the protecting finally block"
+msgstr "Free se trouve en dehors du bloc finally protecteur"
+
+msgid "Function return value is not freed by the caller"
+msgstr "La valeur de retour de la fonction n'est pas libérée par l'appelant"
+
+msgid "Grouped variable/field declaration - one per line"
+msgstr "Déclaration groupée de variables/champs - une par ligne"
+
+msgid "Hardcoded path - load it from configuration instead"
+msgstr "Chemin en dur - le charger depuis la configuration"
+
+msgid "Input control sits directly on the form - wrap it in a panel"
+msgstr "Le contrôle de saisie est directement sur la fiche - l'englober dans un panneau"
+
+msgid "Interface declaration has no methods"
+msgstr "La déclaration d'interface ne contient aucune méthode"
+
+msgid "Interface type without \"I\" prefix"
+msgstr "Type interface sans préfixe \"I\""
+
+msgid "Large integer literal without digit grouping"
+msgstr "Grand littéral entier sans séparateur de milliers"
+
+msgid "Length()/.Count minus a constant can underflow on empty input"
+msgstr "Length() / .Count moins une constante peut passer sous zéro si l'entrée est vide"
+
+msgid "Line ends with whitespace - diff hygiene"
+msgstr "La ligne se termine par des espaces - hygiène des diffs"
+
+msgid "Local constant should be UPPER_SNAKE_CASE"
+msgstr "Une constante locale devrait être en UPPER_SNAKE_CASE"
+
+msgid "Local variable declared but never read or written"
+msgstr "Variable locale déclarée mais jamais lue ni écrite"
+
+msgid "Lock acquired without try..finally release - exception leaves the lock held"
+msgstr "Lock acquis sans libération dans try..finally - une exception laisse le lock verrouillé"
+
+msgid "Long string concatenation - prefer Format() for readability"
+msgstr "Longue concaténation de chaînes - préférer Format() pour la lisibilité"
+
+msgid "Magic number - replace literal with a named constant"
+msgstr "Nombre magique - remplacer le littéral par une constante nommée"
+
+msgid "Many DB components on one form - extract into a TDataModule"
+msgstr "Beaucoup de composants DB sur une seule fiche - les extraire dans un TDataModule"
+
+msgid "Master-detail wiring forms a cycle - opening the dataset will loop endlessly"
+msgstr "Le câblage maître-détail forme un cycle - l'ouverture du dataset bouclera indéfiniment"
+
+msgid "MasterSource set without MasterFields/IndexFieldNames - silent cross-join"
+msgstr "MasterSource défini sans MasterFields/IndexFieldNames - produit croisé silencieux"
+
+msgid "Method body is empty - forgotten stub or unintentional?"
+msgstr "Le corps de la méthode est vide - ébauche oubliée ou involontaire ?"
+
+msgid "Method calls inherited more than once"
+msgstr "La méthode appelle inherited plusieurs fois"
+
+msgid "Method name not in PascalCase"
+msgstr "Nom de méthode qui n'est pas en PascalCase"
+
+msgid "Method too long - splitting it improves readability and testability"
+msgstr "Méthode trop longue - la scinder améliore la lisibilité et la testabilité"
+
+msgid "Multiple class declarations in one unit"
+msgstr "Plusieurs déclarations de classes dans une même unit"
+
+msgid "Multiple components bind the same DataSource and DataField"
+msgstr "Plusieurs composants sont liés au même DataSource et DataField"
+
+msgid "Multiple identical code blocks - extract a method (DRY)"
+msgstr "Plusieurs blocs de code identiques - extraire une méthode (DRY)"
+
+msgid "Nested procedure/function - consider extracting"
+msgstr "procedure/function imbriquée - envisager de l'extraire"
+
+msgid "Nested try block - consider extracting a procedure"
+msgstr "Bloc try imbriqué - envisager d'extraire une procédure"
+
+msgid "Nesting too deep - use early exit (guard clauses) or extract a method"
+msgstr "Imbrication trop profonde - utiliser des sorties anticipées (guard clauses) ou extraire une méthode"
+
+msgid "Nil dereference: access through a possibly nil reference"
+msgstr "Déréférencement nil : accès via une référence potentiellement nil"
+
+msgid "Object created but never freed (memory leak)"
+msgstr "Objet créé mais jamais libéré (fuite mémoire)"
+
+msgid "Open marker (TODO / FIXME / HACK / XXX) - resolve before release"
+msgstr "Marqueur ouvert (TODO / FIXME / HACK / XXX) - à traiter avant la livraison"
+
+msgid "ParamByName in loop - cache the TParam reference outside"
+msgstr "ParamByName dans une boucle - mettre en cache la référence TParam à l'extérieur"
+
+msgid "Parameter never read in method body"
+msgstr "Paramètre jamais lu dans le corps de la méthode"
+
+msgid "Pascal keyword not in lowercase"
+msgstr "Mot-clé Pascal qui n'est pas en minuscules"
+
+msgid "Password / token literal in source code"
+msgstr "Mot de passe / token en littéral dans le code source"
+
+msgid "Plaintext HTTP URL - prefer https:// for remote endpoints"
+msgstr "URL HTTP en clair - préférer https:// pour les points de terminaison distants"
+
+msgid "Pointer type alias should start with \"P\""
+msgstr "Un alias de type pointeur devrait commencer par \"P\""
+
+msgid "Public field - expose a property instead"
+msgstr "Champ public - exposer plutôt une property"
+
+msgid "Public member has no callers anywhere - dead API"
+msgstr "Ce membre public n'est appelé nulle part - API morte"
+
+msgid "Public member is referenced only within the current unit - Delphi-classic `private` (unit-scope) suffices"
+msgstr "Ce membre public n'est référencé que dans l'unit courante - le `private` classique de Delphi (portée unit) suffit"
+
+msgid "Public member is used only by methods of its own class - `strict private` reaches the strongest encapsulation"
+msgstr "Ce membre public n'est utilisé que par les méthodes de sa propre classe - `strict private` offre l'encapsulation la plus forte"
+
+msgid "Public member is used only by subclasses - protected is tighter"
+msgstr "Ce membre public n'est utilisé que par les sous-classes - protected est plus restrictif"
+
+msgid "Public member missing doc comment"
+msgstr "Membre public sans commentaire de documentation"
+
+msgid "Published method looks like an event handler but no component binds it"
+msgstr "Cette méthode published ressemble à un gestionnaire d'événement mais aucun composant ne l'utilise"
+
+msgid "Required dataset field has no DB-control binding it"
+msgstr "Ce champ obligatoire du dataset n'est lié à aucun contrôle DB"
+
+msgid "Required field is bound only to invisible controls"
+msgstr "Ce champ obligatoire n'est lié qu'à des contrôles invisibles"
+
+msgid "SQL command built with \"+\" - SQL injection risk"
+msgstr "Commande SQL construite avec \"+\" - risque d'injection SQL"
+
+msgid "SQL query is built from a UI input field - parameterize instead of concatenating"
+msgstr "La requête SQL est construite à partir d'un champ de saisie - utiliser des paramètres au lieu de concaténer"
+
+msgid "Self-assignment is a no-op - usually a copy-paste mistake"
+msgstr "Une auto-affectation ne fait rien - généralement une erreur de copier-coller"
+
+msgid "Source line exceeds 120 characters - wrap or extract"
+msgstr "La ligne dépasse 120 caractères - la couper ou extraire une sous-expression"
+
+msgid "String concatenation in loop - quadratic reallocations"
+msgstr "Concaténation de chaînes dans une boucle - réallocations quadratiques"
+
+msgid "String literal repeated - extract to a constant or resourcestring"
+msgstr "Littéral chaîne répété - l'extraire dans une constante ou une resourcestring"
+
+msgid "Synchronize() in a destructor - worker and UI thread deadlock each other"
+msgstr "Synchronize() dans un destructeur - le thread de travail et le thread UI se bloquent mutuellement"
+
+msgid "TLS verification disabled - MITM-attack surface"
+msgstr "Vérification TLS désactivée - surface d'attaque MITM"
+
+msgid "TThread destroyed without Terminate+WaitFor - worker may still be running"
+msgstr "TThread détruit sans Terminate+WaitFor - le worker tourne peut-être encore"
+
+msgid "TThread.Resume is deprecated - use TThread.Start (since Delphi 2010)"
+msgstr "TThread.Resume est deprecated - utiliser TThread.Start (depuis Delphi 2010)"
+
+msgid "Tab character in source - use spaces for indentation"
+msgstr "Caractère de tabulation dans le source - indenter avec des espaces"
+
+msgid "Too many parameters - introduce a parameter object / record"
+msgstr "Trop de paramètres - introduire un objet / record de paramètres"
+
+msgid "Trailing comma in argument list"
+msgstr "Virgule finale dans la liste d'arguments"
+
+msgid "Two consecutive const/type/var sections - merge them"
+msgstr "Deux sections const/type/var consécutives - les fusionner"
+
+msgid "Two sibling controls share the same TabOrder - tab navigation is undefined"
+msgstr "Deux contrôles voisins partagent le même TabOrder - l'ordre de tabulation est indéfini"
+
+msgid "Two visibility sections with the same keyword - merge them"
+msgstr "Deux sections de visibilité avec le même mot-clé - les fusionner"
+
+msgid "UI text in DFM is a literal string - route it through the localization layer"
+msgstr "Le texte d'interface dans le DFM est un littéral - le faire passer par la couche de localisation"
+
+msgid "UPDATE/DELETE/TRUNCATE without WHERE - affects ALL rows"
+msgstr "UPDATE/DELETE/TRUNCATE sans WHERE - affecte TOUTES les lignes"
+
+msgid "Unit ends with begin..end. - use initialization section"
+msgstr "L'unit se termine par begin..end. - utiliser une section initialization"
+
+msgid "Unit has no declarations - delete it or fill it"
+msgstr "Unit sans aucune déclaration - la supprimer ou la remplir"
+
+msgid "Unit-level keyword not at column 1"
+msgstr "Mot-clé de section d'unit qui n'est pas en colonne 1"
+
+msgid "Uses entry may be unused - remove to reduce coupling"
+msgstr "Entrée uses peut-être inutilisée - la retirer réduit le couplage"
+
+msgid "Virtual method called from constructor - override sees half-initialized Self"
+msgstr "Méthode virtuelle appelée depuis le constructeur - la redéfinition voit un Self à moitié initialisé"
+
+msgid "X.Free; X := nil; -> use FreeAndNil(X)"
+msgstr "X.Free; X := nil; -> utiliser FreeAndNil(X)"
+
+msgid "asm..end block - platform-specific, hard to port"
+msgstr "Bloc asm..end - spécifique à la plate-forme, difficile à porter"
+
+msgid "case statement has many branches - consider dispatch table"
+msgstr "Instruction case avec de nombreuses branches - envisager une table de dispatch"
+
+msgid "class(TObject) - TObject is the default base, drop it"
+msgstr "class(TObject) - TObject est la classe de base par défaut, redondant"
+
+msgid "for-loop range is reversed - the loop body never runs"
+msgstr "La plage de la boucle for est inversée - le corps ne s'exécute jamais"
+
+msgid "goto weakens structured control flow"
+msgstr "goto affaiblit le flux de contrôle structuré"
+
+msgid "if X then Y := True else Y := False - assign expression directly"
+msgstr "if X then Y := True else Y := False - affecter directement l'expression"
+
+msgid "on E: Exception catches everything - too broad"
+msgstr "on E: Exception intercepte tout - trop large"
+
+msgid "out parameter - prefer Result or var"
+msgstr "Paramètre out - préférer Result ou var"
+
+msgid "with statement can silently rebind identifiers - avoid it"
+msgstr "L'instruction with peut redéfinir silencieusement des identificateurs - à éviter"
+
+msgid "Exception is constructed but never raised"
+msgstr "L'exception est construite mais jamais levée"
+
+msgid "Function never assigns Result - return value undefined"
+msgstr "La fonction n'affecte jamais Result - valeur de retour indéfinie"
+
+msgid "Re-raise of bound variable loses the original stack trace"
+msgstr "Relancer l'exception via la variable liée perd la pile d'appels d'origine"
+
+msgid "Type-cast before Free / Destroy has no effect (Destroy is virtual)"
+msgstr "Un transtypage avant Free / Destroy est sans effet (Destroy est virtual)"
+
+msgid "Constructor invoked on instance - no allocation, fields re-initialised over live data"
+msgstr "Constructeur appelé sur une instance - aucune allocation, les champs sont réinitialisés par-dessus des données vivantes"
+
+msgid "Override whose body is just \"inherited\" adds nothing"
+msgstr "Une redéfinition dont le corps se limite à \"inherited\" n'apporte rien"
+
+msgid "Prefer Assigned() over \"= nil\" / \"<> nil\""
+msgstr "Préférer Assigned() à \"= nil\" / \"<> nil\""
+
+msgid "Raise a specific exception class, not the base Exception"
+msgstr "Lever une classe d'exception spécifique, pas la classe de base Exception"
+
+msgid "Locale-dependent conversion without explicit TFormatSettings"
+msgstr "Conversion dépendante de la locale sans TFormatSettings explicite"
+
+msgid "8-bit string cast silently drops non-codepage characters"
+msgstr "Un transtypage vers une chaîne 8 bits supprime silencieusement les caractères hors de la page de codes"
+
+msgid "PChar(Char) reinterprets the codepoint as a pointer - undefined behaviour"
+msgstr "PChar(Char) réinterprète le point de code comme un pointeur - comportement indéfini"
+
+msgid "IfThen() evaluates both branches - no short-circuit semantics"
+msgstr "IfThen() évalue les deux branches - pas d'évaluation en court-circuit"
+
+# ---- Filter-Presets --------------------------------------------------------
+msgid "Errors (all)"
+msgstr "Erreurs (toutes)"
+
+msgid "Warnings (all)"
+msgstr "Avertissements (tous)"
+
+msgid "Hints (all)"
+msgstr "Conseils (tous)"
+
+msgid "Memory Leaks (all)"
+msgstr "Fuites mémoire (toutes)"
+
+msgid "--- Errors ---"
+msgstr "--- Erreurs ---"
+
+msgid "--- Warnings ---"
+msgstr "--- Avertissements ---"
+
+msgid "--- Hints ---"
+msgstr "--- Conseils ---"
+
+# ---- Regel-Kurznamen (Grid-Spalte Rule) ------------------------------------
+msgid "Memory Leak"
+msgstr "Fuite mémoire"
+
+msgid "SQL Injection"
+msgstr "Injection SQL"
+
+msgid "Hardcoded Secrets"
+msgstr "Secrets en dur"
+
+msgid "Format()"
+msgstr "Format()"
+
+msgid "Nil-Deref"
+msgstr "Déréférencement nil"
+
+msgid "Div by Zero"
+msgstr "Division par zéro"
+
+msgid "Empty Except"
+msgstr "except vide"
+
+msgid "Missing Finally"
+msgstr "finally manquant"
+
+msgid "Dead Code"
+msgstr "Code mort"
+
+msgid "Unused Uses"
+msgstr "uses inutilisés"
+
+msgid "Debug Output"
+msgstr "Sortie de débogage"
+
+msgid "Hardcoded Path"
+msgstr "Chemin en dur"
+
+msgid "Read Error"
+msgstr "Erreur de lecture"
+
+msgid "Long Method"
+msgstr "Méthode longue"
+
+msgid "Many Parameters"
+msgstr "Trop de paramètres"
+
+msgid "Magic Number"
+msgstr "Nombre magique"
+
+msgid "Duplicate Strings"
+msgstr "Chaînes dupliquées"
+
+msgid "Duplicate Code Blocks"
+msgstr "Blocs de code dupliqués"
+
+msgid "Deep Nesting"
+msgstr "Imbrication profonde"
+
+msgid "Cyclomatic Complexity"
+msgstr "Complexité cyclomatique"
+
+msgid "TODO/FIXME"
+msgstr "TODO/FIXME"
+
+msgid "Empty Methods"
+msgstr "Méthodes vides"
+
+msgid "Can Be Unit Private"
+msgstr "Peut être privé à l'unit"
+
+msgid "Can Be Strict Private"
+msgstr "Peut être strict private"
+
+msgid "Can Be Protected"
+msgstr "Peut être protected"
+
+msgid "Unused Public Member"
+msgstr "Membre public inutilisé"
+
+msgid "Unused Local Var"
+msgstr "Variable locale inutilisée"
+
+msgid "Unused Parameter"
+msgstr "Paramètre inutilisé"
+
+msgid "Tautological Expression"
+msgstr "Expression tautologique"
+
+msgid "Master-Detail Unlinked"
+msgstr "Maître-détail non lié"
+
+msgid "Data Module Split Hint"
+msgstr "Proposition de scission en DataModule"
+
+msgid "Dangerous SQL Statement"
+msgstr "Instruction SQL dangereuse"
+
+msgid "Format Locale Hint"
+msgstr "Conseil de locale pour Format"
+
+msgid "Missing Raise"
+msgstr "raise manquant"
+
+msgid "Result Unassigned"
+msgstr "Result non affecté"
+
+msgid "Re-Raise Exception"
+msgstr "Relancer l'exception"
+
+msgid "Cast And Free"
+msgstr "Transtypage avant Free"
+
+msgid "Instance-Invoked Constructor"
+msgstr "Constructeur appelé sur une instance"
+
+msgid "Inherited (empty)"
+msgstr "Inherited (vide)"
+
+msgid "Nil Comparison"
+msgstr "Comparaison à nil"
+
+msgid "Raising Raw Exception"
+msgstr "Levée de l'exception de base"
+
+msgid "Date Format Settings"
+msgstr "Paramètres de format de date"
+
+msgid "Unicode -> Ansi Cast"
+msgstr "Transtypage Unicode -> Ansi"
+
+msgid "Char -> PChar Cast"
+msgstr "Transtypage Char -> PChar"
+
+msgid "IfThen Short-Circuit"
+msgstr "IfThen sans court-circuit"
+
+msgid "Float equality"
+msgstr "Égalité de flottants"
+
+msgid "Raise in destructor"
+msgstr "raise dans un destructeur"
+
+msgid "Boolean parameter as flag"
+msgstr "Paramètre booléen utilisé comme drapeau"
+
+msgid "Float equality is unreliable due to IEEE-754 rounding - use SameValue/Math.IsZero"
+msgstr "L'égalité de flottants n'est pas fiable à cause des arrondis IEEE-754 - utiliser SameValue/Math.IsZero"
+
+msgid "Raise inside destructor without try/except - cleanup is aborted"
+msgstr "raise dans un destructeur sans try/except - le nettoyage est interrompu"
+
+msgid "Boolean parameter drives internal branching - consider two methods with descriptive names"
+msgstr "Un paramètre booléen pilote le branchement interne - envisager deux méthodes aux noms explicites"
+
+msgid "Unused private method"
+msgstr "Méthode privée inutilisée"
+
+msgid "Could be class method"
+msgstr "Pourrait être une méthode de classe"
+
+msgid "Missing override"
+msgstr "override manquant"
+
+msgid "Private method has no caller in the unit - dead code"
+msgstr "Cette méthode privée n'a aucun appelant dans l'unit - code mort"
+
+msgid "Method never accesses Self or instance fields - could be `class function`"
+msgstr "La méthode n'accède ni à Self ni aux champs d'instance - pourrait être une `class function`"
+
+msgid "Method shadows a virtual parent method - add `override` directive"
+msgstr "La méthode masque une méthode virtuelle de la classe parente - ajouter la directive `override`"
+
+msgid "Boolean always true / false"
+msgstr "Booléen toujours vrai / faux"
+
+msgid "Constant return value"
+msgstr "Valeur de retour constante"
+
+msgid "Hardcoded user string"
+msgstr "Chaîne utilisateur en dur"
+
+msgid "Boolean comparison is always true / always false"
+msgstr "La comparaison booléenne est toujours vraie / toujours fausse"
+
+msgid "Function always returns the same literal on every code path"
+msgstr "La fonction renvoie le même littéral sur tous les chemins d'exécution"
+
+msgid "User-visible string is hardcoded - move to resourcestring / i18n"
+msgstr "Chaîne visible par l'utilisateur en dur - la déplacer dans une resourcestring / i18n"
+
+msgid "Unpaired Lock"
+msgstr "Lock sans UnLock correspondant"
+
+msgid "Move/FillChar SizeOf(Pointer)"
+msgstr "Move/FillChar avec SizeOf(Pointer)"
+
+msgid "with on multiple targets"
+msgstr "`with` avec plusieurs cibles"
+
+msgid "Lock acquired without try/finally - an exception leaks the lock and deadlocks the next caller"
+msgstr "Lock acquis sans try/finally - une exception laisse le lock verrouillé et bloque l'appelant suivant"
+
+msgid "Move / FillChar uses SizeOf(pointer-type) - copies only 4/8 bytes, not the target buffer"
+msgstr "Move / FillChar utilise SizeOf(type pointeur) - ne copie que 4/8 octets, pas le tampon cible"
+
+msgid "with statement names multiple targets - ambiguous member lookup"
+msgstr "L'instruction with désigne plusieurs cibles - résolution des membres ambiguë"
+
+msgid "GetMem without try/finally"
+msgstr "GetMem sans try/finally"
+
+msgid "SetLength grow in loop"
+msgstr "Croissance par SetLength dans une boucle"
+
+msgid "PChar arithmetic without empty-check"
+msgstr "Arithmétique PChar sans contrôle de chaîne vide"
+
+msgid "GetMem / AllocMem without try/finally - an exception leaks the heap buffer"
+msgstr "GetMem / AllocMem sans try/finally - une exception laisse fuir le tampon alloué sur le tas"
+
+msgid "SetLength growing by 1 inside a loop - O(n^2) reallocation; grow once before the loop"
+msgstr "SetLength augmenté de 1 dans une boucle - réallocation en O(n^2) ; allouer une seule fois avant la boucle"
+
+msgid "PChar(s) arithmetic without empty-check - PChar('') is nil, arithmetic triggers AV"
+msgstr "Arithmétique sur PChar(s) sans contrôle de chaîne vide - PChar('') vaut nil, l'arithmétique déclenche une AV"
+
+msgid "Empty typed exception handler"
+msgstr "Gestionnaire d'exception typé vide"
+
+msgid "String cast from raw pointer"
+msgstr "Transtypage en chaîne depuis un pointeur brut"
+
+msgid "Pointer subtraction (Win64 truncation)"
+msgstr "Soustraction de pointeurs (troncature Win64)"
+
+msgid "Typed exception handler is empty - swallows a specific exception silently"
+msgstr "Le gestionnaire d'exception typé est vide - il avale silencieusement une exception précise"
+
+msgid "String cast from raw pointer assumes a null-terminator - heap overread if missing"
+msgstr "Le transtypage d'un pointeur brut en chaîne suppose un terminateur nul - lecture hors tampon s'il manque"
+
+msgid "Cardinal/Integer subtraction on pointers truncates upper 32 bits on Win64"
+msgstr "Une soustraction Cardinal/Integer sur des pointeurs tronque les 32 bits de poids fort en Win64"
+
+msgid "Weak/deprecated crypto algorithm in use"
+msgstr "Algorithme cryptographique faible ou obsolète utilisé"
+
+msgid "Shell API called with string concatenation in arguments"
+msgstr "API shell appelée avec une concaténation de chaînes en argument"
+
+msgid "Top-level routine appears unused (dead code)"
+msgstr "Cette routine de premier niveau semble inutilisée (code mort)"
+
+msgid "Detector Review (1 per detector, random)"
+msgstr "Revue des détecteurs (1 résultat aléatoire par détecteur)"
+
+msgid "Exception Too General"
+msgstr "Exception trop générale"
+
+msgid "Raise outside except"
+msgstr "raise en dehors d'un except"
+
+msgid "except on E: Exception catches every error - prefer a specific subclass"
+msgstr "`except on E: Exception` intercepte toutes les erreurs - préférer une sous-classe spécifique"
+
+msgid "Bare raise; outside an except/on handler raises NIL - Access Violation"
+msgstr "Un `raise;` nu en dehors d'un gestionnaire except/on lève NIL - Access Violation"
+
+msgid "Use After Free"
+msgstr "Utilisation après Free"
+
+msgid "Abstract method not implemented"
+msgstr "Méthode abstraite non implémentée"
+
+msgid "Leak in constructor"
+msgstr "Fuite dans le constructeur"
+
+msgid "Integer overflow (Int64 mul)"
+msgstr "Débordement d'entier (multiplication Int64)"
+
+msgid "Variable used after Free / FreeAndNil - dangling pointer, AV likely"
+msgstr "Variable utilisée après Free / FreeAndNil - pointeur invalide, AV probable"
+
+msgid "Class inherits an abstract method but does not override it - EAbstractError"
+msgstr "La classe hérite d'une méthode abstraite sans la redéfinir - EAbstractError à l'exécution"
+
+msgid "Constructor allocates fields and raises - partially-initialized fields leak"
+msgstr "Le constructeur alloue des champs puis lève une exception - les champs partiellement initialisés fuient"
+
+msgid "Int64 target gets product of two ints - multiplication overflows in 32-bit"
+msgstr "Une cible Int64 reçoit le produit de deux Integer - la multiplication déborde en 32 bits"
+
+msgid "God Class"
+msgstr "God Class"
+
+msgid "Class has too many methods or fields - split into focused units"
+msgstr "La classe a trop de méthodes ou de champs - la scinder en units ciblées"
+
+msgid "Free without nil-out"
+msgstr "Free sans mise à nil"
+
+msgid "Multiple Exit"
+msgstr "Sorties Exit multiples"
+
+msgid "Large Class"
+msgstr "Classe volumineuse"
+
+msgid "Unsorted uses clause"
+msgstr "Clause uses non triée"
+
+msgid "Missing unit header"
+msgstr "En-tête d'unit manquant"
+
+msgid "Free without nil-out - prefer FreeAndNil for dangling-pointer safety"
+msgstr "Free sans mise à nil - FreeAndNil protège mieux des pointeurs invalides"
+
+msgid "Method has too many Exit statements - consolidate guards / single return"
+msgstr "La méthode contient trop d'instructions Exit - regrouper les gardes ou n'avoir qu'une seule sortie"
+
+msgid "Class spans too many lines - split responsibilities into focused units"
+msgstr "La classe s'étend sur trop de lignes - répartir les responsabilités sur des units ciblées"
+
+msgid "uses clause is not in alphabetical order"
+msgstr "La clause uses n'est pas dans l'ordre alphabétique"
+
+msgid "Unit has no descriptive header comment"
+msgstr "L'unit n'a pas de commentaire d'en-tête descriptif"
+
+# ---- Uebrige UI-Texte (Reihenfolge exakt wie de.po) ------------------------
+msgid " - no changed .pas files"
+msgstr " - aucun fichier .pas modifié"
+
+msgid " · "
+msgstr " · "
+
+msgid "%d file(s) - running..."
+msgstr "%d fichier(s) - en cours..."
+
+msgid "%d findings"
+msgstr "%d résultats"
+
+msgid "%d findings on this line"
+msgstr "%d résultats sur cette ligne"
+
+msgid "..."
+msgstr "..."
+
+msgid "1-2 sentences why the rule fires on THIS specific code (not the generic explanation above)."
+msgstr "1-2 phrases expliquant pourquoi la règle se déclenche sur CE code précis (pas l'explication générique ci-dessus)."
+
+msgid "AI prompt copied to clipboard: %s, line %s (%s)"
+msgstr "Prompt IA copié dans le presse-papiers : %s, ligne %s (%s)"
+
+msgid "Actions menu: Branch-Changes, Cancel, Export, Settings, Ignore"
+msgstr "Menu Actions : modifications de branche, annuler, exporter, paramètres, ignorer"
+
+msgid "After"
+msgstr "Après"
+
+msgid "After:"
+msgstr "Après :"
+
+msgid "All toolbar actions (Analyse, Browse, Export, Settings, ...)"
+msgstr "Toutes les actions de la barre d'outils (Analyser, Parcourir, Exporter, Paramètres, ...)"
+
+msgid "Analyse Branch-Changes"
+msgstr "Analyser les modifications de branche"
+
+msgid "Analyse current file (silent)"
+msgstr "Analyser le fichier courant (silencieux)"
+
+msgid "Analysing %d changed file(s). %s"
+msgstr "Analyse de %d fichier(s) modifié(s). %s"
+
+msgid "Analysing: "
+msgstr "Analyse : "
+
+msgid "Analysing: %s"
+msgstr "Analyse : %s"
+
+msgid "Analysis cancelled - no new findings loaded"
+msgstr "Analyse annulée - aucun nouveau résultat chargé"
+
+msgid "Analysis error: "
+msgstr "Erreur d'analyse : "
+
+msgid "Analysis running - searching for files..."
+msgstr "Analyse en cours - recherche des fichiers..."
+
+msgid "Anti-pattern"
+msgstr "Anti-pattern"
+
+msgid "As of: "
+msgstr "État au : "
+
+msgid "Before:"
+msgstr "Avant :"
+
+msgid "Branch changes: please provide a valid project path (for repo detection)."
+msgstr "Modifications de branche : veuillez indiquer un chemin de projet valide (pour la détection du dépôt)."
+
+msgid "Bug"
+msgstr "Bug"
+
+msgid "CSV export"
+msgstr "Export CSV"
+
+msgid "CSV export failed: "
+msgstr "Échec de l'export CSV : "
+
+msgid "CSV file (*.csv)|*.csv"
+msgstr "Fichier CSV (*.csv)|*.csv"
+
+msgid "CSV files|*.csv|Log files|*.log"
+msgstr "Fichiers CSV|*.csv|Fichiers log|*.log"
+
+msgid "CSV saved: %s (%d entries)"
+msgstr "CSV enregistré : %s (%d entrées)"
+
+msgid "Cancel Analysis"
+msgstr "Annuler l'analyse"
+
+msgid "Cancelling analysis..."
+msgstr "Annulation de l'analyse..."
+
+msgid "Clear all markers"
+msgstr "Effacer tous les marqueurs"
+
+msgid "All markers cleared."
+msgstr "Tous les marqueurs ont été effacés."
+
+msgid "Cause"
+msgstr "Cause"
+
+msgid "Checking all classes..."
+msgstr "Vérification de toutes les classes..."
+
+msgid "Choose folder"
+msgstr "Choisir un dossier"
+
+msgid "Click: filter grid to Bug type"
+msgstr "Clic : filtrer la grille sur le type Bug"
+
+msgid "Click: filter grid to Cyclomatic"
+msgstr "Clic : filtrer la grille sur la complexité cyclomatique"
+
+msgid "Click: filter grid to Duplicate type"
+msgstr "Clic : filtrer la grille sur le type Duplicate"
+
+msgid "Click: filter grid to Errors"
+msgstr "Clic : filtrer la grille sur les erreurs"
+
+msgid "Click: filter grid to Hints"
+msgstr "Clic : filtrer la grille sur les conseils"
+
+msgid "Click: filter grid to Vulnerability type"
+msgstr "Clic : filtrer la grille sur le type Vulnerability"
+
+msgid "Click: filter grid to Warnings"
+msgstr "Clic : filtrer la grille sur les avertissements"
+
+msgid "Click: filter grid to read errors"
+msgstr "Clic : filtrer la grille sur les erreurs de lecture"
+
+msgid "Clipboard: please select a row first (file not unambiguous)."
+msgstr "Presse-papiers : veuillez d'abord sélectionner une ligne (fichier ambigu)."
+
+msgid "Code (>>> marks the line that triggered the rule)"
+msgstr "Code (>>> marque la ligne qui a déclenché la règle)"
+
+msgid "Code Duplication"
+msgstr "Duplication de code"
+
+msgid "Code Smell"
+msgstr "Code Smell"
+
+msgid "Code analysis: "
+msgstr "Analyse de code : "
+
+msgid "Code review request - Delphi static analysis finding"
+msgstr "Demande de revue de code - résultat d'analyse statique Delphi"
+
+msgid "Code smells / style. Refactoring candidates."
+msgstr "Code smells / style. Candidats au refactoring."
+
+msgid "Copied code (strings, blocks). Extract Method/Constant candidates."
+msgstr "Code copié (chaînes, blocs). Candidats à Extract Method / Extract Constant."
+
+msgid "Could not open editor. File: "
+msgstr "Impossible d'ouvrir l'éditeur. Fichier : "
+
+msgid "Crosses severities - Bugs can be Errors OR Warnings."
+msgstr "Transversal aux sévérités - un bug peut être une erreur OU un avertissement."
+
+msgid "Current file is not a Pascal file."
+msgstr "Le fichier courant n'est pas un fichier Pascal."
+
+msgid "Cyclomatic"
+msgstr "Complexité"
+
+msgid "DFM as text: %s  Line: %d"
+msgstr "DFM en texte : %s  Ligne : %d"
+
+msgid "DFM finding at line %d - .pas is modified, press Alt+F12 to view DFM as text"
+msgstr "Résultat DFM à la ligne %d - le .pas a été modifié, Alt+F12 affiche le DFM en texte"
+
+msgid "DFM viewer: %s  Line: %d"
+msgstr "Visionneuse DFM : %s  Ligne : %d"
+
+msgid "Detail"
+msgstr "Détail"
+
+msgid "Detectors (analyser.ini [Detectors])"
+msgstr "Détecteurs (analyser.ini [Detectors])"
+
+msgid "Dismiss this finding (remove marker)"
+msgstr "Écarter ce résultat (supprimer le marqueur)"
+
+msgid "Done. No findings."
+msgstr "Terminé. Aucun résultat."
+
+msgid "ERROR"
+msgstr "ERREUR"
+
+msgid "Enable silent analysis (editor right-click menu)"
+msgstr "Activer l'analyse silencieuse (menu contextuel de l'éditeur)"
+
+msgid "Errors+warnings for %s copied to clipboard."
+msgstr "Erreurs+avertissements de %s copiés dans le presse-papiers."
+
+msgid "Export: HTML, JSON, CSV, Jira markup, plain text"
+msgstr "Export : HTML, JSON, CSV, markup Jira, texte brut"
+
+msgid "Field"
+msgstr "Champ"
+
+msgid "File %d"
+msgstr "Fichier %d"
+
+msgid "File %d / %d"
+msgstr "Fichier %d / %d"
+
+msgid "File %d / %d (%d%%)"
+msgstr "Fichier %d / %d (%d%%)"
+
+msgid "File could not be read / parsed. Check path/encoding."
+msgstr "Le fichier n'a pas pu être lu / analysé. Vérifiez le chemin et l'encodage."
+
+msgid "File not found: "
+msgstr "Fichier introuvable : "
+
+msgid "Filter: %s%s"
+msgstr "Filtre : %s%s"
+
+msgid "Filtered: %d of %d findings"
+msgstr "Filtré : %d résultats sur %d"
+
+msgid "Filtered: 0 of %d findings"
+msgstr "Filtré : 0 résultat sur %d"
+
+msgid "Finding"
+msgstr "Résultat"
+
+msgid "Findings in detail"
+msgstr "Résultats en détail"
+
+msgid "Findings of type Bug (wrong behaviour, crash, wrong result)."
+msgstr "Résultats de type Bug (comportement erroné, plantage, résultat faux)."
+
+msgid "Fix"
+msgstr "Correction"
+
+msgid "Git diff %s: %d file(s) to analyse"
+msgstr "Git diff %s : %d fichier(s) à analyser"
+
+msgid "Git: branch vs "
+msgstr "Git : branche vs "
+
+msgid "Git: no base branch - working tree only"
+msgstr "Git : pas de branche de base - working tree uniquement"
+
+msgid "HINT"
+msgstr "CONSEIL"
+
+msgid "HTML export failed: "
+msgstr "Échec de l'export HTML : "
+
+msgid "HTML file (*.html)|*.html"
+msgstr "Fichier HTML (*.html)|*.html"
+
+msgid "HTML report (all findings)..."
+msgstr "Rapport HTML (tous les résultats)..."
+
+msgid "HTML report saved: %s"
+msgstr "Rapport HTML enregistré : %s"
+
+msgid "Hard to test - refactor into smaller methods."
+msgstr "Difficile à tester - refactorer en méthodes plus petites."
+
+msgid "Hint: "
+msgstr "Conseil : "
+
+msgid "IDE Profile:"
+msgstr "Profil IDE :"
+
+msgid "IDE editor service not available."
+msgstr "Le service d'éditeur de l'IDE n'est pas disponible."
+
+msgid "If the finding is a false positive, say so and explain why - then suggest a `// noinspection %s` suppression marker on the affected line."
+msgstr "Si le résultat est un faux positif, dites-le et expliquez pourquoi - proposez ensuite un marqueur de suppression `// noinspection %s` sur la ligne concernée."
+
+msgid "Ignore list..."
+msgstr "Liste d'exclusions..."
+
+msgid "IncludeTests - analyse DUnit/DUnitX test units too"
+msgstr "IncludeTests - analyser aussi les units de test DUnit/DUnitX"
+
+msgid "Info"
+msgstr "Info"
+
+msgid "JSON export"
+msgstr "Export JSON"
+
+msgid "JSON export failed: "
+msgstr "Échec de l'export JSON : "
+
+msgid "JSON file (*.json)|*.json"
+msgstr "Fichier JSON (*.json)|*.json"
+
+msgid "JSON saved: %s (%d entries)"
+msgstr "JSON enregistré : %s (%d entrées)"
+
+msgid "Jira export: please select a row first (file not unambiguous)."
+msgstr "Export Jira : veuillez d'abord sélectionner une ligne (fichier ambigu)."
+
+msgid "Jira markup -> Clipboard"
+msgstr "Markup Jira -> presse-papiers"
+
+msgid "Jira wiki markup for %s copied to clipboard (errors+warnings)."
+msgstr "Markup wiki Jira de %s copié dans le presse-papiers (erreurs+avertissements)."
+
+msgid "L. "
+msgstr "L. "
+
+msgid "Likely bugs / risky patterns. Review before merge."
+msgstr "Bugs probables / motifs risqués. À vérifier avant le merge."
+
+msgid "Methods with McCabe complexity > threshold (default 10)."
+msgstr "Méthodes dont la complexité de McCabe dépasse le seuil (10 par défaut)."
+
+msgid "Min-Severity:"
+msgstr "Sévérité min. :"
+
+msgid "MinSeverity \"%s\" - active on next analysis run"
+msgstr "MinSeverity \"%s\" - actif au prochain lancement de l'analyse"
+
+msgid "More than %d files found - scan cancelled."
+msgstr "Plus de %d fichiers trouvés - scan annulé."
+
+msgid "No file opened."
+msgstr "Aucun fichier ouvert."
+
+msgid "No findings."
+msgstr "Aucun résultat."
+
+msgid "No matches."
+msgstr "Aucune correspondance."
+
+msgid "Nothing to export - filter returns 0 entries."
+msgstr "Rien à exporter - le filtre ne renvoie aucune entrée."
+
+msgid "Open analyser.ini (BaseBranch, git/svn paths, custom LeakyClasses)"
+msgstr "Ouvrir analyser.ini (BaseBranch, chemins git/svn, LeakyClasses personnalisées)"
+
+msgid "Open ignore list (which files are NOT analysed)"
+msgstr "Ouvrir la liste d'exclusions (quels fichiers ne sont PAS analysés)"
+
+msgid "Opened: %s  Line: %d"
+msgstr "Ouvert : %s  Ligne : %d"
+
+msgid "Pascal file (*.pas)|*.pas|All files|*.*"
+msgstr "Fichier Pascal (*.pas)|*.pas|Tous les fichiers|*.*"
+
+msgid "Path:"
+msgstr "Chemin :"
+
+msgid "Plain text -> Clipboard"
+msgstr "Texte brut -> presse-papiers"
+
+msgid "Please provide a valid project path."
+msgstr "Veuillez indiquer un chemin de projet valide."
+
+msgid "Please respond with three sections"
+msgstr "Merci de répondre en trois sections"
+
+msgid "Profile \"%s\" - active on next analysis run"
+msgstr "Profil \"%s\" - actif au prochain lancement de l'analyse"
+
+msgid "Profile (CLI/Form):"
+msgstr "Profil (CLI/Form) :"
+
+msgid "Profile:"
+msgstr "Profil :"
+
+msgid "Project path is empty."
+msgstr "Le chemin du projet est vide."
+
+msgid "Quality"
+msgstr "Qualité"
+
+msgid "Quick-Fix + AI prompt copied to clipboard: %s, line %s (%s)"
+msgstr "Quick-Fix + prompt IA copiés dans le presse-papiers : %s, ligne %s (%s)"
+
+msgid "Quick-Fix applied: %s"
+msgstr "Quick-Fix appliqué : %s"
+
+msgid "Quick-Fix: cannot locate source line"
+msgstr "Quick-Fix : ligne source introuvable"
+
+msgid "Quick-Fix: editor write failed (file not in IDE?)"
+msgstr "Quick-Fix : échec de l'écriture dans l'éditeur (fichier non ouvert dans l'IDE ?)"
+
+msgid "Quick-Fix: line out of range"
+msgstr "Quick-Fix : numéro de ligne hors du fichier"
+
+msgid "Quick-Fix: pattern not matched on line %d - manual fix required"
+msgstr "Quick-Fix : motif non reconnu à la ligne %d - correction manuelle nécessaire"
+
+msgid "Real bugs / security holes (severity Error). Fix immediately."
+msgstr "Vrais bugs / failles de sécurité (sévérité Error). À corriger immédiatement."
+
+msgid "Recommended fix"
+msgstr "Correction recommandée"
+
+msgid "Rule description"
+msgstr "Description de la règle"
+
+msgid "Rule-Set (analyser.ini [Rules])"
+msgstr "Jeu de règles (analyser.ini [Rules])"
+
+msgid "Rule-set: Profile=%s, MinSeverity=%s"
+msgstr "Jeu de règles : Profile=%s, MinSeverity=%s"
+
+msgid "SVN call failed (exit code = %d)"
+msgstr "Échec de l'appel SVN (code de sortie = %d)"
+
+msgid "Save results"
+msgstr "Enregistrer les résultats"
+
+msgid "Saved, queueing analysis: %s"
+msgstr "Enregistré, analyse lancée : %s"
+
+msgid "Saved: "
+msgstr "Enregistré : "
+
+msgid "Scanning... %d found"
+msgstr "Scan en cours... %d trouvé(s)"
+
+msgid "Search: "
+msgstr "Recherche : "
+
+msgid "Security Hotspot"
+msgstr "Hotspot de sécurité"
+
+msgid "Security holes (SQL injection, hardcoded secrets ...)."
+msgstr "Failles de sécurité (injection SQL, secrets en dur ...)."
+
+msgid "Select Pascal file to analyse"
+msgstr "Choisir le fichier Pascal à analyser"
+
+msgid "Select project folder"
+msgstr "Sélectionner le dossier du projet"
+
+msgid "Settings..."
+msgstr "Paramètres..."
+
+msgid "Settings: %s - changes take effect on the next analysis run."
+msgstr "Paramètres : %s - les modifications prennent effet au prochain lancement de l'analyse."
+
+msgid "Severity"
+msgstr "Sévérité"
+
+msgid "Silent Mode"
+msgstr "Mode silencieux"
+
+msgid "Sonar export failed: "
+msgstr "Échec de l'export Sonar : "
+
+msgid "Sonar push failed: "
+msgstr "Échec du push Sonar : "
+
+msgid "Sonar push needs a project directory (run analysis first)."
+msgstr "Le push Sonar nécessite un répertoire de projet (lancer d'abord une analyse)."
+
+msgid "Sonar push: select at least one finding first."
+msgstr "Push Sonar : sélectionnez d'abord au moins un résultat."
+
+msgid "Sonar push: wrote %d issue file(s) to .sonar\\external\\"
+msgstr "Push Sonar : %d fichier(s) d'issue écrit(s) dans .sonar\\external\\"
+
+msgid "Sonar report saved: %s"
+msgstr "Rapport Sonar enregistré : %s"
+
+msgid "Sonar report saved: %s (%d findings)"
+msgstr "Rapport Sonar enregistré : %s (%d résultats)"
+
+msgid "Sonar: send selected as external issue"
+msgstr "Sonar : envoyer la sélection comme external issue"
+
+msgid "Sonar: write Generic Issue report (all findings)..."
+msgstr "Sonar : écrire un rapport Generic Issue (tous les résultats)..."
+
+msgid "Sonar: write Generic Issue report..."
+msgstr "Sonar : écrire un rapport Generic Issue..."
+
+msgid "Static Code Analyser: analyse this file, no dock opens"
+msgstr "Static Code Analyser : analyser ce fichier, aucune fenêtre ancrée ne s'ouvre"
+
+msgid "Static Code Analysis"
+msgstr "Analyse statique de code"
+
+msgid "Summary"
+msgstr "Résumé"
+
+msgid "Suppress inserted: %s"
+msgstr "Suppression insérée : %s"
+
+msgid "Suppress: cannot locate source line"
+msgstr "Suppression : ligne source introuvable"
+
+msgid "Suppress: editor write failed (file not in IDE?)"
+msgstr "Suppression : échec de l'écriture dans l'éditeur (fichier non ouvert dans l'IDE ?)"
+
+msgid "Type"
+msgstr "Type"
+
+msgid "Unexpected error: "
+msgstr "Erreur inattendue : "
+
+msgid "Value"
+msgstr "Valeur"
+
+msgid "Verify"
+msgstr "Vérification"
+
+msgid "Vulnerability"
+msgstr "Vulnérabilité"
+
+msgid "WARNING"
+msgstr "AVERTISSEMENT"
+
+msgid "Watch: could not attach to %s"
+msgstr "Watch : impossible de s'attacher à %s"
+
+msgid "Watching: %s"
+msgstr "Surveillance : %s"
+
+msgid "Weighted quality score (lower = better)."
+msgstr "Score de qualité pondéré (plus bas = meilleur)."
+
+msgid "Weights: Vulnerability 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2."
+msgstr "Poids : Vulnerability 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2."
+
+msgid "analyse only files changed in current branch"
+msgstr "n'analyser que les fichiers modifiés dans la branche courante"
+
+# Profilname aus rules/sca-rules.json bzw. Fallback der Profil-ComboBox; der
+# ausgewaehlte Text wandert 1:1 nach FRepoSettings.IdeProfile. Uebersetzen
+# wuerde den Config-Roundtrip brechen -> bewusst leer (Fallback = 'default').
+msgid "default"
+msgstr ""
+
+msgid "h2. Code analysis: "
+msgstr "h2. Analyse de code : "
+
+msgid "in"
+msgstr "dans"
+
+msgid "no findings"
+msgstr "aucun résultat"
+
+msgid "text"
+msgstr "texte"
+
+msgid "the modified code as a Pascal block. Keep diff minimal: only the lines that need to change. Match surrounding indentation and naming style."
+msgstr "le code modifié sous forme de bloc Pascal. Garder le diff minimal : uniquement les lignes qui doivent changer. Respecter l'indentation et le style de nommage environnants."
+
+msgid "what to test or check after the fix to confirm the issue is gone (and no regressions)."
+msgstr "ce qu'il faut tester ou vérifier après la correction pour confirmer que le problème a disparu (et qu'il n'y a pas de régression)."
+
+msgid "▶ Analyse"
+msgstr "▶ Analyser"
+
+msgid "📄 File"
+msgstr "📄 Fichier"
+
+# ---- Encoding-/Unicode-Familie + neuere Detektoren -------------------------
+msgid "UTF-8 source without BOM - Delphi compiler reads it as ANSI (mojibake)"
+msgstr "Source UTF-8 sans BOM - le compilateur Delphi le lit comme de l'ANSI (mojibake)"
+
+msgid "Invalid UTF-8 sequence - compiler substitutes U+FFFD (data corruption)"
+msgstr "Séquence UTF-8 invalide - le compilateur la remplace par U+FFFD (corruption de données)"
+
+msgid "NUL / control byte in source - binary file or mis-detected encoding"
+msgstr "Octet NUL / de contrôle dans le source - fichier binaire ou encodage mal détecté"
+
+msgid "Bidirectional override char (Trojan Source) - code reads differently than it compiles"
+msgstr "Caractère de forçage bidirectionnel (Trojan Source) - le code ne se lit pas comme il se compile"
+
+msgid "ANSI source (no BOM, not UTF-8) - code-page-dependent, non-portable"
+msgstr "Source ANSI (pas de BOM, pas d'UTF-8) - dépendant de la page de codes, non portable"
+
+msgid "UTF-16 source - compiles, but unusual and text-tool-unfriendly"
+msgstr "Source UTF-16 - compile, mais inhabituel et peu commode pour les outils texte"
+
+msgid "UTF-32 source - compiler rejects it with fatal error F2438"
+msgstr "Source UTF-32 - le compilateur le rejette avec l'erreur fatale F2438"
+
+msgid "Invisible / zero-width character in source - hidden-text abuse"
+msgstr "Caractère invisible / de largeur nulle dans le source - abus de texte caché"
+
+msgid "Anonymous method inside `for i := ... do` references i - all closures see the same final value"
+msgstr "Une méthode anonyme dans `for i := ... do` référence i - toutes les closures voient la même valeur finale"
+
+msgid "Sonar-style cognitive-complexity exceeds 15 - nested if/for/while/case is hard to follow mentally"
+msgstr "La complexité cognitive (style Sonar) dépasse 15 - les if/for/while/case imbriqués sont difficiles à suivre mentalement"
+
+msgid "After T.FreeOnTerminate := True, any subsequent T.Field/T.Method access risks Access-Violation if the thread has already self-destructed"
+msgstr "Après T.FreeOnTerminate := True, tout accès ultérieur à T.Field/T.Method risque une Access Violation si le thread s'est déjà auto-détruit"
+
+msgid "File-open call (TFileStream.Create, AssignFile, ...) with a path expression that concatenates user input (Edit.Text, Request.Params, ...) - path-traversal risk"
+msgstr "Ouverture de fichier (TFileStream.Create, AssignFile, ...) avec un chemin construit à partir d'une saisie utilisateur (Edit.Text, Request.Params, ...) - risque de path traversal"
+
+msgid "[Ignore] (no string arg) skips the test silently - add a message explaining why the test is disabled"
+msgstr "[Ignore] sans argument chaîne ignore le test silencieusement - ajouter un message expliquant pourquoi il est désactivé"
+
+msgid "Two identical [X] attributes on the same member - copy-paste leftover, no effect"
+msgstr "Deux attributs [X] identiques sur le même membre - reste de copier-coller, sans effet"
+
+msgid "[Category] (no arg) is a compile-time error in DUnitX - always pass a category name"
+msgstr "[Category] sans argument est une erreur de compilation dans DUnitX - toujours passer un nom de catégorie"
+
+msgid "Class is marked [TestFixture] but contains no [Test] methods - zombie fixture visible in TestInsight but executes nothing"
+msgstr "La classe est marquée [TestFixture] mais ne contient aucune méthode [Test] - fixture zombie, visible dans TestInsight mais qui n'exécute rien"
+
+msgid "Attribute line followed by a blank line - visually loose, often a refactoring leftover"
+msgstr "Ligne d'attribut suivie d'une ligne vide - visuellement détachée, souvent un reste de refactoring"
+
+msgid "DFM component is never referenced in code, other units, or the DFM itself - possibly a refactoring leftover"
+msgstr "Le composant DFM n'est référencé ni dans le code, ni dans d'autres units, ni dans le DFM lui-même - probablement un reste de refactoring"
+
+msgid "A .pas/.dfm file lies in the project folder but is not referenced by the project (.dproj/.groupproj) - likely an orphaned / dead source file"
+msgstr "Un fichier .pas/.dfm se trouve dans le dossier du projet mais n'est pas référencé par le projet (.dproj/.groupproj) - probablement un fichier source orphelin"
+
+msgid "Non-ASCII character in identifier - homoglyph / confusable risk"
+msgstr "Caractère non ASCII dans un identificateur - risque d'homoglyphe / de confusion"
+
+msgid "File not found:"
+msgstr "Fichier introuvable :"
+
+msgid "More actions (Settings, Ignore list, Branch-Changes)"
+msgstr "Autres actions (paramètres, liste d'exclusions, modifications de branche)"
+
+msgid "Quick-Fix: no provider for '%s' - manual fix required"
+msgstr "Quick-Fix : aucun fournisseur pour '%s' - correction manuelle nécessaire"
+
+msgid "Done. %d findings. Click a row -> AI prompt on clipboard."
+msgstr "Terminé. %d résultats. Cliquez sur une ligne -> prompt IA dans le presse-papiers."
+
+msgid "git not found. Install Git for Windows (git-scm.com) or set the path to git.exe in analyser.ini."
+msgstr "git introuvable. Installez Git for Windows (git-scm.com) ou indiquez le chemin de git.exe dans analyser.ini."
+
+msgid "svn not found. Install TortoiseSVN WITH the option \"command line client tools\" or set the path to svn.exe in analyser.ini."
+msgstr "svn introuvable. Installez TortoiseSVN AVEC l'option \"command line client tools\" ou indiquez le chemin de svn.exe dans analyser.ini."
+
+msgid "You are a senior Delphi developer reviewing the output of a static code analyser. Target version: Delphi 12 Athens (RTL/VCL). Suggest minimal, idiomatic fixes - no sweeping refactors, no style overhauls, no new dependencies unless strictly required."
+msgstr "Vous êtes un développeur Delphi expérimenté et vous relisez la sortie d'un analyseur de code statique. Version cible : Delphi 12 Athens (RTL/VCL). Proposez des corrections minimales et idiomatiques - pas de refactoring massif, pas de refonte de style, pas de nouvelle dépendance sauf nécessité absolue."
+
+msgid "Reference pattern (generic example for this rule, NOT the user's code)"
+msgstr "Motif de référence (exemple générique pour cette règle, PAS le code de l'utilisateur)"
+
+msgid "Editor right-click triggers a single-file analysis; findings appear as stripes + hover overlays in the editor (no dock)."
+msgstr "Un clic droit dans l'éditeur lance l'analyse d'un seul fichier ; les résultats apparaissent sous forme de marques et d'infobulles dans l'éditeur (sans fenêtre ancrée)."
+
+msgid "UsesCheck - report unused entries in uses clause (may produce false positives)"
+msgstr "UsesCheck - signaler les entrées inutilisées de la clause uses (peut produire des faux positifs)"
+
+msgid "AutoDiscoverClasses - extend LeakyClasses with project-specific classes"
+msgstr "AutoDiscoverClasses - étendre LeakyClasses avec des classes spécifiques au projet"
+
+#
+# Sprachauswahl in den Optionen (Backlog-Welle 1, 2026-07-26).
+#
+
+msgid "Language (analyser.ini [UI])"
+msgstr "Langue (analyser.ini [UI])"
+
+msgid "UI language:"
+msgstr "Langue de l'interface :"
+
+msgid "Applies to the plugin user interface only - detector messages, findings and exports are never translated. The list holds the built-in translations plus every i18n\\<code>.po file placed next to the plugin BPL. Captions already on screen switch after an IDE restart."
+msgstr "Ne concerne que l'interface du plugin - les messages des détecteurs, les résultats et les exports ne sont jamais traduits. La liste contient les traductions intégrées ainsi que chaque fichier i18n\\<code>.po placé à côté de la BPL du plugin. Les libellés déjà affichés changent après un redémarrage de l'IDE."
+
+msgid "Language"
+msgstr "Langue"
+
+msgid "UI language: %s - captions already on screen switch after a restart."
+msgstr "Langue de l'interface : %s - les libellés déjà affichés changent après un redémarrage."

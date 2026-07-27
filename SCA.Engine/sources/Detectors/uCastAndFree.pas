@@ -46,7 +46,8 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12,
+  uDetectorUtils;   // H2445: inline-Expansion braucht iface-Sichtbarkeit
 
 type
   TCastAndFreeDetector = class
@@ -62,15 +63,19 @@ implementation
 // noinspection-file CanBeStrictPrivate, CyclomaticComplexity, GroupedDeclaration, LongMethod, MultipleExit, RedundantJump, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
-function IsIdentStart(C: Char): Boolean; inline;
-begin
-  Result := ((C >= 'A') and (C <= 'Z')) or
-            ((C >= 'a') and (C <= 'z')) or (C = '_');
-end;
-
+// IsIdentStart wurde mit der Zentralisierung (Backlog-Welle 1, 2026-07-26)
+// entfernt: ihr EINZIGER Aufrufer war der Rumpf von IsIdentChar, der jetzt an
+// TDetectorUtils delegiert. Stehen geblieben waere sie ein neuer Selbst-Fund
+// (SCA164 UnusedRoutine) - genau die Art stiller ADD, die diese Welle
+// vermeiden soll. Wer sie wieder braucht: TDetectorUtils hat keine
+// Start-Variante, die 13 anderen Units halten ihre eigene.
 function IsIdentChar(C: Char): Boolean; inline;
 begin
-  Result := IsIdentStart(C) or ((C >= '0') and (C <= '9'));
+  // Backlog-Welle 1, 2026-07-26: Zeichenklasse zentralisiert - die
+  // lokale Fassung war zeichenweise identisch zu
+  // TDetectorUtils.IsIdentChar (a..z, A..Z, 0..9, _). Der Wrapper
+  // bleibt, damit die Aufrufer in dieser Unit unveraendert bleiben.
+  Result := TDetectorUtils.IsIdentChar(C);
 end;
 
 function IsUpperLetter(C: Char): Boolean; inline;

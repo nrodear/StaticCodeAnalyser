@@ -310,9 +310,13 @@ type
     property BaselineOnlyNew:         Boolean     read FBaselineOnlyNew
                                                   write FBaselineOnlyNew;
 
-    // UI-Sprache. '' bedeutet "use Default" (= deutsch beim aktuellen Build,
-    // falls dxgettext jemals aktiviert wird, wuerde es OS-Locale nutzen).
-    // Aus [UI] Language gelesen. Erlaubte Werte: 'de', 'en', ''.
+    // UI-Sprache als ISO-639-1-Kuerzel, aus [UI] Language (kleingeschrieben).
+    // Seit dem .po-Cutover 2026-07-26 nicht mehr auf 'de'/'en' begrenzt:
+    // gueltig ist jedes Kuerzel aus uLocalization.AvailableLanguages
+    // (eingebettete .po + externe i18n\*.po neben dem Modul). '' oder ein
+    // unbekanntes Kuerzel bedeutet Englisch - SetLanguage faellt dann auf
+    // Identity zurueck, ohne Fehler. Betrifft ausschliesslich die
+    // Oberflaeche; Detektor-Meldungen sind nicht lokalisiert.
     property Language: string read FLanguage write FLanguage;
 
     // Position des Hover-AnnotationOverlay zur Befund-Zeile. Aus [UI]
@@ -667,10 +671,16 @@ const
     '[UI]'#13#10 +
     ''#13#10 +
     '; Language (string, default: en)'#13#10 +
-    '; UI-Sprache. Aktuell unterstuetzt:'#13#10 +
-    ';   en = English (Default - Source-Sprache, kein Dictionary-Lookup)'#13#10 +
-    ';   de = Deutsch (eingebautes Dictionary in uLocalization)'#13#10 +
-    ';   '''' (leer) = wie ''en'''#13#10 +
+    '; UI-Sprache als ISO-639-1-Kuerzel. Gueltig ist jedes Kuerzel, zu'#13#10 +
+    '; dem eine Uebersetzung vorliegt:'#13#10 +
+    ';   en = English (Default - Source-Sprache, kein Lookup noetig)'#13#10 +
+    ';   eingebettete .po (aktuell de, fr) - siehe i18n\ im Repo'#13#10 +
+    ';   eigene i18n\<code>.po neben der EXE bzw. der Plugin-BPL'#13#10 +
+    ';   '''' (leer) oder unbekanntes Kuerzel = wie ''en'''#13#10 +
+    '; Betrifft NUR die Oberflaeche - Detektor-Meldungen, Befunde und'#13#10 +
+    '; Exporte sind nie uebersetzt.'#13#10 +
+    '; Auch waehlbar via Tools > Options > Third Party > Static Code'#13#10 +
+    '; Analyser (IDE) bzw. Hamburger-Menue > Language (Form).'#13#10 +
     'Language=en'#13#10 +
     ';Language=de'#13#10 +
     ''#13#10 +
