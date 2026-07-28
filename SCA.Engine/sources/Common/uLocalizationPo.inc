@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 1606 Zeilen, 56121 Bytes
-  CPoLines_de: array[0..1605] of string = (
+  // i18n\de.po - 1609 Zeilen, 56484 Bytes
+  CPoLines_de: array[0..1608] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1566,6 +1566,9 @@ const
     '',
     'msgid "A .pas/.dfm file lies in the project folder but is not referenced by the project (.dproj/.groupproj) - likely an orphaned / dead source file"',
     'msgstr "Eine .pas-/.dfm-Datei liegt im Projektordner, ist aber nicht im Projekt (.dproj/.groupproj) referenziert - vermutlich verwaist"',
+    '',
+    'msgid "A .pas file is referenced via uses by project units (it compiles through the search path) but is not listed in the project file (.dproj/.groupproj) - add it to the project"',
+    'msgstr "Eine .pas-Datei wird von Projekt-Units per uses gezogen (kompiliert ueber den Suchpfad), steht aber nicht in der Projektdatei (.dproj/.groupproj) - ins Projekt aufnehmen"',
     '',
     'msgid "Non-ASCII character in identifier - homoglyph / confusable risk"',
     'msgstr "Nicht-ASCII-Zeichen im Bezeichner - Homoglyphen-/Verwechslungsrisiko"',

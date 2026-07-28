@@ -13,7 +13,7 @@
 const
   // Index == Ord(TFindingKind) - die JSON ist positionsgleich zum Enum
   // (Test RuleIDMatchesOrdinal sichert das ab).
-  RULE_CATALOG_DATA : array[0..193] of TRuleFallbackData = (
+  RULE_CATALOG_DATA : array[0..194] of TRuleFallbackData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -1814,6 +1814,14 @@ const
       ShortDesc: 'A .pas/.dfm file lies in the project folder but is not referenced by the project (.dproj/.groupproj) - likely an orphaned / dead source file';
       BadEx    : 'MyProject.dproj references uMain, uData - but the folder also contains uOldHelper.pas (not referenced) -> flagged';
       GoodEx   : 'Remove uOldHelper.pas, add it to the project, or move it out of the project folder'
+    ),
+    // SCA195
+    (
+      RuleID   : 'SCA195';
+      Name     : 'Unit used by the project but not included in it';
+      ShortDesc: 'A .pas file is referenced via uses by project units (it compiles through the search path) but is not listed in the project file (.dproj/.groupproj) - add it to the project';
+      BadEx    : 'MyProject.dproj references uMain - uMain uses uHelper, but uHelper.pas is not in the .dproj -> flagged: add uHelper.pas to the project';
+      GoodEx   : 'Every unit reachable via uses from project units is listed as a DCCReference in the .dproj'
     )
   );
 

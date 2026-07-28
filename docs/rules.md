@@ -1,6 +1,6 @@
 # StaticCodeAnalyser — Rule Catalog
 
-All 194 detector rules. Single source of truth: [`rules/sca-rules.json`](../rules/sca-rules.json).
+All 195 detector rules. Single source of truth: [`rules/sca-rules.json`](../rules/sca-rules.json).
 
 | ID | Name | Severity | Type | Detector |
 |---|---|---|---|---|
@@ -198,6 +198,7 @@ All 194 detector rules. Single source of truth: [`rules/sca-rules.json`](../rule
 | [SCA192](#sca192) | Invisible / zero-width character in source | Warning | Vulnerability | `uSourceEncoding.pas` |
 | [SCA193](#sca193) | Non-ASCII character in identifier | Warning | Vulnerability | `uSourceEncoding.pas` |
 | [SCA194](#sca194) | Source file not part of the project | Hint | Code Smell | `uNotIncludedInProject.pas` |
+| [SCA195](#sca195) | Unit used by the project but not included in it | Hint | Code Smell | `uNotIncludedInProject.pas` |
 
 ---
 
@@ -5012,16 +5013,38 @@ var Login: string;  // all-ASCII identifier
 | Detector | `uNotIncludedInProject.pas` |
 | Scope | only `.dproj`/`.groupproj` scans (CLI `--project`/`--project-group`, IDE `...` dialog) |
 
-Runs only for project- and project-group scans (--project / --project-group, or picking a .dproj/.groupproj via the '...' dialog), where the exact project file list (DCCReferences) is known. The detector walks the project file's directory recursively for .pas and .dfm files and flags every one the project does not reference. A .dfm counts as included when its companion .pas is referenced. Typical hits: units left behind after a refactor, experimental copies, or files removed from the project but not from disk. Limitation v1: only files INSIDE the project folder tree are checked - units referenced from outside via '..' relative DCCReferences, and search-path units, are neither walked nor flagged. Directory-recursive and single-file scans do not run this check (no project-membership concept). Fix: remove the file, add it to the project, or move it out of the project folder.
+Runs only for project- and project-group scans (--project / --project-group, or picking a .dproj/.groupproj via the '...' dialog), where the exact project file list (DCCReferences) is known. The detector walks the project file's directory recursively for .pas and .dfm files and flags every one the project does not reference. A .dfm counts as included when its companion .pas is referenced. Files that ARE pulled in via uses are reported as SCA195 instead (they are not dead). Typical hits: units left behind after a refactor, experimental copies, or files removed from the project but not from disk. Limitation v1: only files INSIDE the project folder tree are checked - units referenced from outside via '..' relative DCCReferences, and search-path units, are neither walked nor flagged. Directory-recursive and single-file scans do not run this check (no project-membership concept). Fix: remove the file, or move it out of the project folder (if it is actually used, SCA195 tells you to add it instead).
 
 ```pascal
 // BAD
-MyProject.dproj references uMain, uData - but the folder also contains uOldHelper.pas (not referenced) -> flagged
+MyProject.dproj references uMain, uData - but the folder also contains uOldHelper.pas (not referenced anywhere) -> flagged
 
 // GOOD
-Remove uOldHelper.pas, add it to the project, or move it out of the project folder
+Remove uOldHelper.pas or move it out of the project folder
+```
+
+## SCA195
+**Unit used by the project but not included in it**
+
+> A .pas file is referenced via uses by project units (it compiles through the search path) but is not listed in the project file (.dproj/.groupproj) - add it to the project
+
+| Field | Value |
+|---|---|
+| Severity | Hint | Type | Code Smell |
+| Tags | `project`, `maintainability` |
+| Detector | `uNotIncludedInProject.pas` |
+| Scope | only `.dproj`/`.groupproj` scans; split off SCA194 - the uses-reference (transitive, comments/strings never count) decides used-but-unlisted vs. orphaned |
+
+Split off SCA194: a file that IS pulled in via uses - directly, transitively through other such units, or from the program's own .dpr/.dpk uses clause - is not dead code. It compiles through the search path, but stays invisible to project management: no IDE project navigation, easy to miss in reviews, deployments and version pinning, and a rename/move breaks the build only at the next full compile. Comments and string literals never count as a uses reference; both branches of an {$IFDEF} count (which one is active depends on defines). Fix: add the file to the project.
+
+```pascal
+// BAD
+MyProject.dproj references uMain - uMain uses uHelper, but uHelper.pas is not in the .dproj -> flagged: add uHelper.pas to the project
+
+// GOOD
+Every unit reachable via uses from project units is listed as a DCCReference in the .dproj
 ```
 
 ---
 
-_For richer per-rule pages with badges and full examples, install Python and run `python tools/gen-rules-docs.py`. Generated files land in `docs/rules/SCA001.md`...`SCA194.md`._
+_For richer per-rule pages with badges and full examples, install Python and run `python tools/gen-rules-docs.py`. Generated files land in `docs/rules/SCA001.md`...`SCA195.md`._

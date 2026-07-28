@@ -6,7 +6,7 @@ Orientiert sich am Sonar-50er-Katalog plus eigene Bonus-Detektoren.
 
 Status: ✅ implementiert | 🟡 teilweise | 🔲 offen
 
-**Zusammenfassung (2026-07-22):** Alle **194 Regel-Kinds** des kanonischen Rosters [`rules/sca-rules.json`](rules/sca-rules.json) sind implementiert und in dieser Datei aufgeführt (geliefert von ~151 Pipeline-Detektor-Klassen; einige Klassen emittieren mehrere Kinds — z. B. `uVisibilityCheck` → 3 Visibility-Kinds, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 DFM-Kinds; **SCA194 ist projekt-weit, nicht AST-basiert** — emittiert aus dem Projekt-/Gruppen-Scan-Dispatch, nicht der per-Datei-Detektor-Registry). 44 / 50 Sonar-Regel-Slots vollständig; die 4 offenen Slots (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) brauchen Typ-Inferenz / Cross-Unit-Auflösung und haben noch keine SCA-ID.
+**Zusammenfassung (2026-07-22):** Alle **195 Regel-Kinds** des kanonischen Rosters [`rules/sca-rules.json`](rules/sca-rules.json) sind implementiert und in dieser Datei aufgeführt (geliefert von ~151 Pipeline-Detektor-Klassen; einige Klassen emittieren mehrere Kinds — z. B. `uVisibilityCheck` → 3 Visibility-Kinds, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 DFM-Kinds; **SCA194/SCA195 sind projekt-weit, nicht AST-basiert** — emittiert aus dem Projekt-/Gruppen-Scan-Dispatch, nicht der per-Datei-Detektor-Registry). 44 / 50 Sonar-Regel-Slots vollständig; die 4 offenen Slots (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) brauchen Typ-Inferenz / Cross-Unit-Auflösung und haben noch keine SCA-ID.
 
 Verbleibende 4 offene Slots brauchen Typ-Inferenz / Flow-Analyse / Cross-Unit-Symbol-Resolution: #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI. **#16 UninitVar** ist als konservativer MVP (`SCA166`) ausgeliefert — Full Path-Sensitivity bleibt fuer Phase 3 offen.
 
@@ -438,13 +438,14 @@ Byte-Level-Encoding-Verdikte der Quelldateien (aus den Rohbytes beim Laden berec
 
 ---
 
-## 🗂️ Projekt-weit (SCA194) — 1 Regel
+## 🗂️ Projekt-weit (SCA194–SCA195) — 2 Regeln
 
 Kein AST-/per-Datei-Detektor: läuft nur bei `.dproj`/`.groupproj`-Scans (CLI `--project`/`--project-group` oder der `...`-Dialog) und vergleicht die referenzierte Projekt-Dateiliste mit den `.pas`/`.dfm`-Dateien, die physisch im Projektordner liegen. Emittiert aus dem Scan-Dispatch (`TAnalysisSession.Run`), gegated über Profil + Min-Severity.
 
 | SCA | Regel | Beschreibung | Severity | Typ | Status | Unit |
 |-----|-------|--------------|----------|-----|--------|------|
 | SCA194 | **NotIncludedInProject** | .pas/.dfm im Projektordner, aber nicht im Projekt (.dproj/.groupproj) referenziert - verwaiste / tote Quelldatei | Hint | Code Smell | ✅ | `uNotIncludedInProject` |
+| SCA195 | **UsedButNotInProject** | .pas wird von Projekt-Units per uses gezogen (kompiliert ueber den Suchpfad), fehlt aber im .dproj - ins Projekt aufnehmen | Hint | Code Smell | ✅ | `uNotIncludedInProject` |
 
 ## ⚙️ Konfiguration — SCA001 OwnershipSinks (MemoryLeak-Whitelist)
 

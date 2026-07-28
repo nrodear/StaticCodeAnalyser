@@ -3807,7 +3807,7 @@
       "kind": "NotIncludedInProject",
       "name": "Source file not part of the project",
       "shortDescription": "A .pas/.dfm file lies in the project folder but is not referenced by the project (.dproj/.groupproj) - likely an orphaned / dead source file",
-      "fullDescription": "Runs only for project- and project-group scans (--project / --project-group, or picking a .dproj/.groupproj via the '...' dialog), where the exact project file list (DCCReferences) is known. The detector walks the project file's directory recursively for .pas and .dfm files and flags every one the project does not reference. A .dfm counts as included when its companion .pas is referenced. Typical hits: units left behind after a refactor, experimental copies, or files removed from the project but not from disk. Limitation v1: only files INSIDE the project folder tree are checked - units referenced from outside via '..' relative DCCReferences, and search-path units, are neither walked nor flagged. Directory-recursive and single-file scans do not run this check (no project-membership concept). Fix: remove the file, add it to the project, or move it out of the project folder.",
+      "fullDescription": "Runs only for project- and project-group scans (--project / --project-group, or picking a .dproj/.groupproj via the '...' dialog), where the exact project file list (DCCReferences) is known. The detector walks the project file's directory recursively for .pas and .dfm files and flags every one the project does not reference. A .dfm counts as included when its companion .pas is referenced. Typical hits: units left behind after a refactor, experimental copies, or files removed from the project but not from disk. Limitation v1: only files INSIDE the project folder tree are checked - units referenced from outside via '..' relative DCCReferences, and search-path units, are neither walked nor flagged. Directory-recursive and single-file scans do not run this check (no project-membership concept). Fix: remove the file or move it out of the project folder. Files that ARE pulled in via uses are reported as SCA195 instead - for those, add the file to the project.",
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["dead-code", "project", "maintainability"],
@@ -3820,6 +3820,23 @@
       "impacts": [
         { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
       ]
+    },
+    {
+      "id": "SCA195",
+      "kind": "UsedButNotInProject",
+      "name": "Unit used by the project but not included in it",
+      "shortDescription": "A .pas file is referenced via uses by project units (it compiles through the search path) but is not listed in the project file (.dproj/.groupproj) - add it to the project",
+      "fullDescription": "Runs only for project- and project-group scans (--project / --project-group, or picking a .dproj/.groupproj via the '...' dialog). Split off SCA194 (which flags truly orphaned files): a file that IS pulled in via uses - directly or transitively through other such units - is not dead code. It compiles through the search path, but stays invisible to project management: no IDE project navigation, easy to miss in reviews, deployments and version pinning, and a rename/move breaks the build only at the next full compile. The fix is to add the file to the project. Comments and string literals never count as a uses reference; the match is the file name without extension against the (possibly dotted) unit names in uses clauses.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["project", "maintainability"],
+      "detectorUnit": "uNotIncludedInProject.pas",
+      "examples": {
+        "bad": "MyProject.dproj references uMain - uMain uses uHelper, but uHelper.pas is not in the .dproj -> flagged: add uHelper.pas to the project",
+        "good": "Every unit reachable via uses from project units is listed as a DCCReference in the .dproj"
+      },
+      "cleanCodeAttribute": "COMPLETE",
+      "impacts": [{"softwareQuality": "MAINTAINABILITY", "severity": "LOW"}]
     }
   ]
 }

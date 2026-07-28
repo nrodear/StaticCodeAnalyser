@@ -675,12 +675,20 @@ type
                                  //          Abuse, CWE-1007): U+200B-200D/2060/mid-FEFF.
     fkSourceNonAsciiIdentifier,  // SCA193 - Nicht-ASCII in einem Identifier (Homoglyph/
                                  //          Confusable, Trojan Source, CWE-1007).
-    fkNotIncludedInProject       // SCA194 - .pas/.dfm liegt im Projektordner, ist
+    fkNotIncludedInProject,      // SCA194 - .pas/.dfm liegt im Projektordner, ist
                                  //          aber NICHT im .dproj/.groupproj referenziert
                                  //          (verwaiste/tote Quelldatei). Nur im
                                  //          ssProject/ssProjectGroup-Scan (Projekt-
                                  //          Mitgliedschaft noetig); scan-uebergreifend
                                  //          im Engine-Dispatch emittiert, nicht per AST.
+    fkUsedButNotInProject        // SCA195 - .pas liegt im Projektordner, ist NICHT im
+                                 //          .dproj referenziert, wird aber von Projekt-
+                                 //          Units (transitiv) per uses gezogen: die Unit
+                                 //          kompiliert ueber den Suchpfad mit, fehlt aber
+                                 //          in der Projektverwaltung -> ins Projekt
+                                 //          aufnehmen. Abspaltung von SCA194 (2026-07-29):
+                                 //          vorher wurden solche Dateien faelschlich als
+                                 //          verwaist gemeldet. Gleicher Dispatch wie 194.
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -960,7 +968,8 @@ const
     (Name: 'SourceUtf32';                FindingType: ftFileError;    DefaultSeverity: lsError),   // fkSourceUtf32
     (Name: 'SourceInvisibleChar';        FindingType: ftVulnerability;DefaultSeverity: lsWarning), // fkSourceInvisibleChar
     (Name: 'SourceNonAsciiIdentifier';   FindingType: ftVulnerability;DefaultSeverity: lsWarning), // fkSourceNonAsciiIdentifier
-    (Name: 'NotIncludedInProject';       FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkNotIncludedInProject
+    (Name: 'NotIncludedInProject';       FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkNotIncludedInProject
+    (Name: 'UsedButNotInProject';        FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkUsedButNotInProject
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

@@ -578,15 +578,19 @@ begin
           begin
             Findings := TStaticAnalyzer2.AnalyzeLeaksFromList(
                           Files, Req.Progress, Req.UsesCheck, EffIndexRoot);
-            // SCA194 NotIncludedInProject: verwaiste .pas/.dfm im Projekt-
-            // ordner markieren. Scan-uebergreifend (Projektliste vs. Platte),
-            // daher hier statt in der gDetectors-Registry. Selbst-Gating auf
-            // Profile (DetectorEnabledKinds) + MinSeverity, weil dieser Pfad
-            // den ParseLeaks-Post-Filter nicht durchlaeuft. Walk-Root =
-            // Verzeichnis der Projekt-/Gruppendatei.
+            // SCA194 NotIncludedInProject + SCA195 UsedButNotInProject:
+            // Dateien im Projektordner ohne .dproj-Referenz - 194 = tot,
+            // 195 = per uses benutzt (nur nicht projektverwaltet). Scan-
+            // uebergreifend (Projektliste vs. Platte), daher hier statt in
+            // der gDetectors-Registry. Selbst-Gating auf Profile
+            // (DetectorEnabledKinds) + MinSeverity, weil dieser Pfad den
+            // ParseLeaks-Post-Filter nicht durchlaeuft; die PER-KIND-
+            // Entscheidung faellt in Detect selbst - hier nur "mindestens
+            // eines an". Walk-Root = Verzeichnis der Projekt-/Gruppendatei.
             if (Files.Count > 0) and
                ((uSCAConsts.DetectorEnabledKinds = []) or
-                (fkNotIncludedInProject in uSCAConsts.DetectorEnabledKinds)) and
+                (fkNotIncludedInProject in uSCAConsts.DetectorEnabledKinds) or
+                (fkUsedButNotInProject in uSCAConsts.DetectorEnabledKinds)) and
                (Ord(lsHint) <= Ord(uSCAConsts.DetectorMinSeverity)) then
               // Walk-Root = BaseDir (CommonRoot der AUFGELOESTEN Projektliste),
               // NICHT das .dproj-Verzeichnis (Real-World-Scan 2026-07-22:
@@ -596,8 +600,11 @@ begin
               // abgeleitet) -> loest zugleich die frueher noetige Req.Path-
               // Kanonisierung. Files.Count>0-Guard: bei leerer Projektliste
               // (0 DCCReferences) NICHT den ganzen Ordner als verwaist melden.
+              // Req.Path = .dproj/.groupproj: Detect liest daraus die
+              // gleichnamige .dpr/.dpk (uses-Wurzel des Kompilats; bei
+              // .groupproj existiert keine - No-Op).
               TNotIncludedInProjectDetector.Detect(
-                Files, BaseDir, Findings, Req.IgnoreList);
+                Files, BaseDir, Findings, Req.IgnoreList, Req.Path);
           end;
           // Warnungen (fehlende Referenzen, Makro-Skips) nicht als Findings
           // (fkFileReadError wuerde Exit-Code 4 erzwingen). v1: NUR Debug-

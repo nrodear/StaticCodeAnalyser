@@ -95,6 +95,7 @@ object Form2: TForm2
         Width = 110
         Height = 23
         Style = csDropDownList
+        DropDownCount = 16
         TabOrder = 0
         OnChange = SeverityFilterComboChange
       end

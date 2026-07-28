@@ -1550,6 +1550,9 @@ msgstr "DFM-Komponente wird weder im Code noch in anderen Units noch im DFM refe
 msgid "A .pas/.dfm file lies in the project folder but is not referenced by the project (.dproj/.groupproj) - likely an orphaned / dead source file"
 msgstr "Eine .pas-/.dfm-Datei liegt im Projektordner, ist aber nicht im Projekt (.dproj/.groupproj) referenziert - vermutlich verwaist"
 
+msgid "A .pas file is referenced via uses by project units (it compiles through the search path) but is not listed in the project file (.dproj/.groupproj) - add it to the project"
+msgstr "Eine .pas-Datei wird von Projekt-Units per uses gezogen (kompiliert ueber den Suchpfad), steht aber nicht in der Projektdatei (.dproj/.groupproj) - ins Projekt aufnehmen"
+
 msgid "Non-ASCII character in identifier - homoglyph / confusable risk"
 msgstr "Nicht-ASCII-Zeichen im Bezeichner - Homoglyphen-/Verwechslungsrisiko"
 

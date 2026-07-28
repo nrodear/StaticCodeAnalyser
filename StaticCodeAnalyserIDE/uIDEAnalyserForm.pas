@@ -915,6 +915,12 @@ begin
   // Severity-Filter (filtert bereits erzeugte Befunde).
   FFilterCombo := TIDEToolbar.CreateLabelCombo(Self, PanelFilters,
     _('Severity:'), ScaleW(LBL_W_FILTER), ScaleW(CMB_W_FILTER), FLblFilter);
+  // Aufgeklappte Liste doppelt so hoch wie der VCL-Default (8): die Combo
+  // traegt seit den generierten Einzel-Detektor-Sektionen eine LANGE,
+  // severity-gruppierte Liste - 8 sichtbare Zeilen hiessen Dauer-Scrollen.
+  // Pendant in der Standalone-App: uMainForm.dfm/SeverityFilterCombo
+  // (User-Anforderung 2026-07-29).
+  FFilterCombo.DropDownCount := 16;
   FFilterCombo.OnChange := FilterChange;
   FPanelSev := FFilterCombo.Parent as TPanel;
   PopulateFilterCombo;
