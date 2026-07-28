@@ -685,7 +685,7 @@ begin
     begin
       // Nur direkte nil-Zuweisungen: 'varname := nil'
       if NA.TypeRef.ToLower <> 'nil' then Continue;
-      // Feldwerte (obj.field := nil) ueberspringen – Cleanup-Muster
+      // Feldwerte (obj.field := nil) ueberspringen - Cleanup-Muster
       if Pos('.', NA.Name) > 0 then Continue;
 
       VarLow := NA.Name.ToLower;

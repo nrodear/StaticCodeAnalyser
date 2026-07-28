@@ -75,7 +75,11 @@ type
     procedure ParseUses(Parent: TAstNode);
     procedure ParseTypeSection(Parent: TAstNode);
     procedure ParseVarLikeSection(Parent: TAstNode; AKind: TNodeKind);
-    procedure ParseClassBody(ClassNode: TAstNode);
+    // ASiblingTarget = die Typsektion, in der ClassNode selbst haengt.
+    // Verschachtelte Typen werden DORT abgelegt, nicht unter ClassNode -
+    // Begruendung am Rumpf.
+    procedure ParseClassBody(ClassNode: TAstNode;
+      ASiblingTarget: TAstNode = nil);
     procedure ParseMethodSignature(Parent: TAstNode);
     procedure ParseMethodDirectives(MNode: TAstNode = nil);
     procedure ParseMethodImpl(Parent: TAstNode);
@@ -741,7 +745,7 @@ begin
             // class helper for TFoo - die Praeambel ueberspringen
             SkipHelperFor;
             var CNode := SecNode.Add(nkClass, Name, T.Line, T.Col);
-            ParseClassBody(CNode);
+            ParseClassBody(CNode, SecNode);
             Eat(tkSemicolon);
           end;
         end;
@@ -751,7 +755,7 @@ begin
           // record helper for string - Praeambel ueberspringen
           SkipHelperFor;
           var RNode := SecNode.Add(nkRecord, Name, T.Line, T.Col);
-          ParseClassBody(RNode);
+          ParseClassBody(RNode, SecNode);
           Eat(tkSemicolon);
         end;
       tkKwInterface:
@@ -770,7 +774,7 @@ begin
             // die optionale Parent-Liste werden in ParseClassBody durch
             // den Else-Next-Pfad benignly geskippt.
             var INode := SecNode.Add(nkClass, Name, T.Line, T.Col);
-            ParseClassBody(INode);
+            ParseClassBody(INode, SecNode);
             Eat(tkSemicolon);
           end;
         end;
@@ -911,14 +915,178 @@ end;
 
 { ---- Klassen-Rumpf ---- }
 
-procedure TParser2.ParseClassBody(ClassNode: TAstNode);
+procedure TParser2.ParseClassBody(ClassNode: TAstNode;
+  ASiblingTarget: TAstNode);
 var
   VisNode    : TAstNode;
   T          : TToken;
   FName      : string;
   FType      : string;
   StartCount : Integer;
+  // True solange wir in einer expliziten type-Sektion DIESES Klassenrumpfs
+  // stehen. Nur dort erlaubt die Grammatik verschachtelte Typdeklarationen -
+  // und nur dort darf die Rekursion unten laufen (Begruendung dort).
+  InTypeSection : Boolean;
+
+  // Verschachtelte Typdeklaration im Klassenrumpf, erkannt am '=' hinter
+  // einem Bezeichner:  type TInner = class ... end;
+  //
+  // Ohne diesen Zweig (bis 2026-07-28) wurde 'TInner' als Feld verdaut und
+  // das innere 'end' traf auf den tkKwEnd-Zweig der Outer-Loop - es beendete
+  // also den AEUSSEREN Klassenrumpf. Folge: die Member des inneren Typs
+  // galten als Member der Aussenklasse, und alle danach deklarierten
+  // Outer-Member gingen ganz verloren. Korpus: 356 Stellen in 132 Dateien.
+  //
+  // Der Knoten haengt BEWUSST nicht unter ClassNode, sondern als GESCHWISTER
+  // in derselben Typsektion. Neun Detektoren laufen mit FindAll rekursiv ueber
+  // einen Klassenknoten; unter ClassNode wuerden die Member des inneren Typs
+  // erneut der Aussenklasse zugerechnet - dieselbe Fehlzuordnung, nur an
+  // anderer Stelle (steht so auch im SCA149-Backlog). Die Schachtelungs-
+  // beziehung nutzt heute kein Detektor; der qualifizierte Methodenname
+  // ('TOuter.TInner.DoIt') traegt sie ohnehin.
+  procedure ParseNestedTypeDecl(const AName: string; const AT: TToken);
+
+    // Bis zum ';' der Deklaration konsumieren, aber STRUKTURBEWUSST:
+    // Klammern balancieren (Prozedurtyp-Parameterlisten tragen ';' IN den
+    // Klammern: 'TCb = procedure(a: X; b: Y);') und record/object..end
+    // balancieren ('TArr = array of record A: Integer; end;'). Der blinde
+    // SkipToSemicolon stoppte am ersten ';' MITTEN im Konstrukt; das
+    // zurueckbleibende innere 'end' schloss dann den aeusseren Klassenrumpf
+    // (quickjs-Kaskade 2026-07-29: variantes Record-Feld, -30 Deklarationen).
+    // Ein 'end' auf Tiefe 0 gehoert dem AUFRUFER - stehen lassen.
+    procedure SkipDeclBalancedToSemicolon;
+    var
+      ParenDepth, RecDepth : Integer;
+      PrevKind : TTokenKind;
+    begin
+      ParenDepth := 0;
+      RecDepth   := 0;
+      PrevKind   := tkEof;
+      while Tok.Kind <> tkEof do
+      begin
+        case Tok.Kind of
+          tkLParen, tkLBracket: Inc(ParenDepth);
+          tkRParen, tkRBracket: Dec(ParenDepth);
+          tkKwRecord: Inc(RecDepth);
+          tkKwObject:
+            // 'of object' (Methodenzeiger-Typ: 'procedure(...) of object;')
+            // oeffnet KEINEN Rumpf - es folgt nie ein 'end'. Wuerde es
+            // mitgezaehlt, terminierte das ';' nie mehr und der Skip fraesse
+            // bis zu einem fremden 'end' (after109: 70 Dateien mit
+            // Totalverlust, Alcinoe.Localization 647->0 - jede nested
+            // Event-Typ-Deklaration riss ihre Klasse mit). Ein RUMPF-
+            // oeffnendes 'object' steht dagegen nie in einem Typ-WERT,
+            // sondern nur als eigener Kopf ('X = object') - der laeuft
+            // durch den Typ-Zweig, nicht durch diesen Skip. Nach 'of'
+            // deshalb nie zaehlen, standalone defensiv weiter schon.
+            if PrevKind <> tkKwOf then
+              Inc(RecDepth);
+          tkKwEnd:
+            begin
+              if RecDepth = 0 then Exit;   // fremdes 'end' - nicht anfassen
+              Dec(RecDepth);
+            end;
+          tkSemicolon:
+            if (ParenDepth <= 0) and (RecDepth = 0) then Exit;
+        end;
+        PrevKind := Tok.Kind;
+        Next;
+      end;
+    end;
+
+  var
+    Node : TAstNode;
+    Kind : TNodeKind;
+    Depth : Integer;
+  begin
+    Eat(tkKwPacked);
+    if not (Tok.Kind in [tkKwClass, tkKwRecord, tkKwInterface,
+                         tkKwObject]) then
+    begin
+      // Alias, Enum, Set, Array, Pointer, Prozedurtyp - und ebenso eine
+      // Konstante aus einer const-Sektion im Klassenrumpf. Kein eigener
+      // Knoten noetig, nur sauber bis zum Semikolon konsumieren.
+      SkipDeclBalancedToSemicolon;
+      Eat(tkSemicolon);
+      Exit;
+    end;
+    // Interface-Typen werden wie am Unit-Level als nkClass gefuehrt;
+    // Turbo-Pascal-'object' (mORMot-USERECORDWITHMETHODS-Twin!) wie record.
+    if Tok.Kind in [tkKwRecord, tkKwObject] then Kind := nkRecord
+                                            else Kind := nkClass;
+    Next;
+    if Tok.Kind in [tkKwOf, tkSemicolon] then
+    begin
+      // 'TFoo = class;' (Vorwaerts) bzw. 'TFoo = class of TBar;'
+      SkipToSemicolon;
+      Eat(tkSemicolon);
+      Exit;
+    end;
+    // STRUKTUR-WAECHTER (2026-07-28, zweite Entgleisungs-Quelle): rekursiv
+    // geparst wird NUR innerhalb einer expliziten type-Sektion des
+    // Klassenrumpfs - die Grammatik erlaubt nested types nirgendwo sonst.
+    // Ein 'Ident = class(...)'-Kopf OHNE vorangehendes 'type' ist kein
+    // verschachtelter Typ, sondern ein Artefakt: konkret der IFDEF-Twin
+    // ({$ifdef} TVTEdit = class(TTntEdit) {$else} TVTEdit =
+    // class(TCustomEdit) {$endif} - der Lexer emittiert BEIDE Zweige,
+    // der zweite Kopf steht dann scheinbar im Rumpf des ersten). Wuerde
+    // hier rekursiv geparst, schluckte die Rekursion den ECHTEN Rumpf samt
+    // 'end;', und der aeussere Phantom-Rumpf fraesse bis zur
+    // Implementation (VirtualTrees.pas, after107: weiterhin 0 rumpfbasierte
+    // Funde trotz Rumpflos-Fix). Ohne Rekursion endet der Schaden wie vor
+    // Welle 2b am naechsten echten 'end' - begrenzt und selbstheilend.
+    if not InTypeSection then
+    begin
+      // NUR den Kopf konsumieren: optionale Elternliste, sonst nichts.
+      // Der Twin teilt sich seinen Rumpf mit dem AEUSSEREN Typ - die
+      // aeussere Body-Schleife absorbiert ihn (Felder/Methoden landen im
+      // aeusseren Knoten, das echte 'end' schliesst ihn), exakt die
+      // Vor-Welle-2b-Semantik. Ein Skip-to-Semikolon stattdessen stoppte
+      // am ersten ';' im gemeinsamen Rumpf - beim quickjs-Muster mitten im
+      // varianten Record-Feld, dessen inneres 'end' dann den aeusseren Typ
+      // schloss und die restliche Interface-Sektion in die Kaskade riss.
+      if Tok.Kind = tkLParen then
+      begin
+        Depth := 0;
+        repeat
+          case Tok.Kind of
+            tkLParen: Inc(Depth);
+            tkRParen: Dec(Depth);
+          end;
+          Next;
+        until (Depth = 0) or (Tok.Kind = tkEof);
+      end;
+      Exit;   // bewusst KEIN Eat(tkSemicolon) - es gibt hier keins
+    end;
+    SkipHelperFor;
+    if ASiblingTarget <> nil then
+      ParseClassBody(ASiblingTarget.Add(Kind, AName, AT.Line, AT.Col),
+                     ASiblingTarget)
+    else
+    begin
+      // Kein Ablageziel (anonymer/eingebetteter Kontext): den Rumpf trotzdem
+      // BALANCIERT konsumieren, sonst schliesst sein 'end' den aeusseren -
+      // genau der Fehler, den dieser Zweig behebt.
+      Node := TAstNode.Create(Kind, AName, AT.Line, AT.Col);
+      try
+        ParseClassBody(Node, nil);
+      finally
+        Node.Free;
+      end;
+    end;
+    Eat(tkSemicolon);
+  end;
+
 begin
+  // Optionale Klassen-Modifier VOR der Elternliste. Achtung, ungleiche
+  // Tokenisierung: 'abstract' ist ein ECHTES Keyword (tkKwAbstract, steht in
+  // der Lexer-Tabelle fuer die Methoden-Direktive), 'sealed' dagegen kommt
+  // als tkIdent (wie 'strict'). Ohne Konsum landete der Modifier als
+  // Pseudo-Feld und die Elternliste im Else-Churn - TypeRef blieb leer.
+  if (Tok.Kind = tkKwAbstract) or
+     ((Tok.Kind = tkIdent) and SameText(Tok.Value, 'sealed')) then
+    Next;
+
   // Elternklasse(n): class(TForm) oder class(TObject, IInterface)
   // Bezeichner werden in ClassNode.TypeRef gespeichert, damit der
   // UnusedUses-Detektor sie als Verwendungsnachweis zaehlen kann.
@@ -949,25 +1117,60 @@ begin
     Eat(tkRParen);
   end;
 
+  // Rumpflose Klasse: 'EFoo = class(Exception);' - legale Kurzform ohne
+  // Member und ohne 'end'. Das ';' bleibt fuer den Aufrufer liegen.
+  //
+  // KRITISCH (Korpus-Befund 2026-07-28, -37k-Entgleisung): ohne diesen
+  // Ausstieg parst die Schleife unten einen PHANTOM-Rumpf. Frueher heilte
+  // sich das am ERSTEN fremden 'end;' (Folgetypen wurden flach als Felder
+  // verdaut, deren 'end' beendete den Phantom). Seit ParseNestedTypeDecl
+  // 'Ident = record/class ... end' REKURSIV und balanciert konsumiert,
+  // verbraucht die Rekursion genau diese 'end's - der Phantom-Rumpf frass
+  // dann das gesamte Interface bis zum ersten Methoden-'end' der
+  // Implementation (VirtualTrees.pas: alle 105 SCA126-Funde weg, korpusweit
+  // -37164 in 642 Dateien, weil 'EFoo = class(EBar);' das Standard-Idiom
+  // fuer Exception-Ableitungen ist).
+  if Tok.Kind = tkSemicolon then Exit;
+
   VisNode := ClassNode.Add(nkVisibilitySection, 'published', Tok.Line, Tok.Col);
+  InTypeSection := False;
 
   while not FLex.AtEnd do
   begin
     StartCount := FNextCount;
     T := Tok;
     case T.Kind of
+      tkKwType:
+        begin
+          // Beginn einer type-Sektion im Klassenrumpf - erst ab hier duerfen
+          // nested types rekursiv geparst werden (siehe ParseNestedTypeDecl).
+          Next;
+          InTypeSection := True;
+        end;
+      tkKwVar, tkKwConst:
+        begin
+          // var-/const-Sektion beendet eine laufende type-Sektion. Die
+          // Deklarationen selbst laufen wie bisher durch den tkIdent-Zweig.
+          Next;
+          InTypeSection := False;
+        end;
       tkKwPublic, tkKwPrivate, tkKwProtected, tkKwPublished:
         begin
           Next;
           Eat(tkKwClass); // 'strict' kommt schon als Ident
           VisNode := ClassNode.Add(nkVisibilitySection, T.Value, T.Line, T.Col);
+          InTypeSection := False;
         end;
       tkKwProcedure, tkKwFunction,
       tkKwConstructor, tkKwDestructor, tkKwOperator:
-        ParseMethodSignature(VisNode);
+        begin
+          ParseMethodSignature(VisNode);
+          InTypeSection := False;
+        end;
       tkKwClass:
         begin
           Next; // 'class' konsumieren
+          InTypeSection := False;   // 'class var/const/function' = neue Sektion
           // class procedure / class function / class operator: die folgende
           // Methoden-Signatur parsen und im TypeRef mit ';class' markieren.
           // Class-Var/-Const/-Property werden ignoriert (kein Methoden-
@@ -989,6 +1192,7 @@ begin
       tkKwProperty:
         begin
           Next;
+          InTypeSection := False;
           var PropName := '';
           if Tok.Kind = tkIdent then PropName := Next.Value;
           VisNode.Add(nkProperty, PropName, T.Line, T.Col);
@@ -999,8 +1203,16 @@ begin
         begin Next; Exit; end;
       tkIdent :
         begin
-          // Feld-Deklaration
+          // Feld-Deklaration - ODER eine Typ-/Konstantendeklaration, erkennbar
+          // am '=' statt ':'. Der Lexer bietet nur 1-Token-Peek, deshalb wird
+          // der Bezeichner zuerst konsumiert und danach entschieden.
           FName := Next.Value;
+          SkipGenericParams;          // TInner<T> = class ...
+          if Eat(tkEq) then
+          begin
+            ParseNestedTypeDecl(FName, T);
+            Continue;
+          end;
           if Eat(tkComma) then
           begin
             // mehrere Felder in einer Zeile — einfach überspringen

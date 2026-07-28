@@ -79,6 +79,20 @@ type
     [Test] procedure Parser_SingleQualifier_StillUnchanged;
     [Test] procedure Parser_DotWithoutIdent_IsBounded;
     [Test] procedure Parser_ProcTypeLocalWithCallingConv_NoPhantomVar;
+
+    // --- Verschachtelte Typen im Klassenrumpf (2026-07-28) ---
+    [Test] procedure Parser_NestedTypeInClassBody_BecomesOwnClassNode;
+    [Test] procedure Parser_NestedTypeInClassBody_OuterMembersSurvive;
+    [Test] procedure Parser_NestedTypeMembers_NotAttributedToOuter;
+    [Test] procedure Parser_TwoNestedTypes_BothResolvable;
+    [Test] procedure Parser_NestedRecordAndAlias_AreHandled;
+    [Test] procedure Parser_BodylessClass_DoesNotSwallowFollowers;
+    [Test] procedure Parser_BodylessClassNested_OuterSurvives;
+    [Test] procedure Parser_ClassAbstractWithParents_MembersParsed;
+    [Test] procedure Parser_IfdefTwinClassHeader_IsBounded;
+    [Test] procedure Parser_NestedTypeWithoutTypeKeyword_IsBounded;
+    [Test] procedure Parser_ObjectTwinWithVariantRecord_IsBounded;
+    [Test] procedure Parser_NestedProcTypeOfObject_DoesNotEatClass;
   end;
 
 implementation
@@ -1649,6 +1663,562 @@ begin
         end;
       Assert.AreEqual('LBlock,LReal', Names,
         'Aufrufkonvention darf keine Phantom-Variable erzeugen, Ist: ' + Names);
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+{ ---- Verschachtelte Typen im Klassenrumpf (2026-07-28) ----
+
+  'type TInner = class ... end;' innerhalb eines Klassenrumpfs. Bis zu diesem
+  Fix wurde 'TInner' als Feld verdaut, und das innere 'end' beendete den
+  AEUSSEREN Klassenrumpf: Member des inneren Typs galten als Member der
+  Aussenklasse, alle danach deklarierten Outer-Member gingen verloren.
+  Korpus-Zensus 2026-07-28: 356 Stellen in 132 Dateien.                     }
+
+const
+  SRC_NESTED =
+    'unit t;'#13#10+
+    'interface'#13#10+
+    'type'#13#10+
+    '  TOuter = class'#13#10+
+    '  public'#13#10+
+    '    type'#13#10+
+    '      TInner = class'#13#10+
+    '      public'#13#10+
+    '        procedure InnerProc;'#13#10+
+    '      end;'#13#10+
+    '    procedure OuterProc;'#13#10+
+    '    FOuterField: Integer;'#13#10+
+    '  end;'#13#10+
+    'implementation'#13#10+
+    'end.';
+
+// Liefert die Namen aller nkClass-Knoten, komma-getrennt und sortiert wie
+// gefunden.
+function ClassNames(Root: TAstNode): string;
+var
+  L : TList<TAstNode>;
+  N : TAstNode;
+begin
+  Result := '';
+  L := Root.FindAll(nkClass);
+  try
+    for N in L do
+    begin
+      if Result <> '' then Result := Result + ',';
+      Result := Result + N.Name;
+    end;
+  finally L.Free; end;
+end;
+
+// Sucht den nkClass-Knoten mit dem gegebenen Namen.
+function ClassByName(Root: TAstNode; const AName: string): TAstNode;
+var
+  L : TList<TAstNode>;
+  N : TAstNode;
+begin
+  Result := nil;
+  L := Root.FindAll(nkClass);
+  try
+    for N in L do
+      if SameText(N.Name, AName) then Exit(N);
+  finally L.Free; end;
+end;
+
+// Methodennamen eines Klassenknotens (rekursiv, wie es die Detektoren tun).
+function MethodNamesOf(Cls: TAstNode): string;
+var
+  L : TList<TAstNode>;
+  N : TAstNode;
+begin
+  Result := '';
+  if Cls = nil then Exit;
+  L := Cls.FindAll(nkMethod);
+  try
+    for N in L do
+    begin
+      if Result <> '' then Result := Result + ',';
+      Result := Result + N.Name;
+    end;
+  finally L.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_NestedTypeInClassBody_BecomesOwnClassNode;
+// Der innere Typ muss ein eigener nkClass-Knoten sein - sonst findet ihn
+// keine Klassenaufloesung, und mehrere Detektor-Guards laufen ins Leere.
+var Parser: TParser2; Root: TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC_NESTED);
+    try
+      Assert.IsNotNull(ClassByName(Root, 'TInner'),
+        'verschachtelter Typ muss als eigener nkClass-Knoten erscheinen, '
+        + 'gefunden: ' + ClassNames(Root));
+      Assert.IsNotNull(ClassByName(Root, 'TOuter'), 'Aussenklasse fehlt');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_NestedTypeInClassBody_OuterMembersSurvive;
+// Der eigentliche Schaden: das innere 'end' beendete den aeusseren Rumpf,
+// wodurch ALLES danach verloren ging.
+var Parser: TParser2; Root: TAstNode; Outer: TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC_NESTED);
+    try
+      Outer := ClassByName(Root, 'TOuter');
+      Assert.IsNotNull(Outer, 'Aussenklasse fehlt');
+      Assert.IsTrue(Pos('OuterProc', MethodNamesOf(Outer)) > 0,
+        'nach dem verschachtelten Typ deklarierte Methode fehlt, Ist: '
+        + MethodNamesOf(Outer));
+      // BEWUSST auf den Namen pruefen, nicht auf HasDescendant(nkField):
+      // der ALTE Parser machte den Bezeichner 'TInner' selbst zum nkField
+      // von TOuter - ein anonymer Feld-Existenz-Check waere also auch vor
+      // dem Fix gruen gewesen (vakuum-gruen, 5-Tage-Review 2026-07-28).
+      var HasNamed := False;
+      var Flds := Outer.FindAll(nkField);
+      try
+        for var FN in Flds do
+          if SameText(FN.Name, 'FOuterField') then HasNamed := True;
+      finally Flds.Free; end;
+      Assert.IsTrue(HasNamed,
+        'nach dem verschachtelten Typ deklariertes Feld FOuterField fehlt');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_NestedTypeMembers_NotAttributedToOuter;
+// Gegenprobe zum Ablageort: der innere Typ haengt als GESCHWISTER in der
+// Typsektion, nicht unter der Aussenklasse. Sonst zaehlten neun Detektoren,
+// die rekursiv ueber einen Klassenknoten laufen, InnerProc als Member von
+// TOuter.
+var Parser: TParser2; Root: TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC_NESTED);
+    try
+      Assert.AreEqual<Integer>(0,
+        Pos('InnerProc', MethodNamesOf(ClassByName(Root, 'TOuter'))),
+        'Member des inneren Typs duerfen der Aussenklasse nicht zugerechnet '
+        + 'werden, Ist: ' + MethodNamesOf(ClassByName(Root, 'TOuter')));
+      Assert.IsTrue(Pos('InnerProc', MethodNamesOf(ClassByName(Root, 'TInner'))) > 0,
+        'InnerProc muss beim inneren Typ liegen');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_TwoNestedTypes_BothResolvable;
+// Vor dem Fix existierte der ERSTE verschachtelte Typ gar nicht und alle
+// FOLGENDEN landeten versehentlich auf Unit-Ebene. Genau diese Asymmetrie
+// hat einen Detektor-Guard der Vorwelle unterlaufen - beide muessen jetzt
+// gleich behandelt werden.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TOuter = class'#13#10+
+  '  public'#13#10+
+  '    type'#13#10+
+  '      TFirst = class'#13#10+
+  '        procedure Alpha;'#13#10+
+  '      end;'#13#10+
+  '    type'#13#10+
+  '      TSecond = class'#13#10+
+  '        procedure Beta;'#13#10+
+  '      end;'#13#10+
+  '    procedure OuterProc;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'end.';
+var Parser: TParser2; Root: TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Assert.IsNotNull(ClassByName(Root, 'TFirst'),
+        'erster verschachtelter Typ fehlt, gefunden: ' + ClassNames(Root));
+      Assert.IsNotNull(ClassByName(Root, 'TSecond'),
+        'zweiter verschachtelter Typ fehlt, gefunden: ' + ClassNames(Root));
+      Assert.IsTrue(Pos('OuterProc', MethodNamesOf(ClassByName(Root, 'TOuter'))) > 0,
+        'Outer-Methode nach zwei verschachtelten Typen fehlt');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_NestedRecordAndAlias_AreHandled;
+// record als verschachtelter Typ -> nkRecord; ein blosser Alias erzeugt
+// keinen Knoten, darf den Rumpf aber auch nicht zerlegen.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TOuter = class'#13#10+
+  '  public'#13#10+
+  '    type'#13#10+
+  '      TRec = record'#13#10+
+  '        A: Integer;'#13#10+
+  '      end;'#13#10+
+  '      TAlias = Integer;'#13#10+
+  '    procedure OuterProc;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'end.';
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  Recs   : TList<TAstNode>;
+  Found  : Boolean;
+  N      : TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Found := False;
+      Recs := Root.FindAll(nkRecord);
+      try
+        for N in Recs do
+          if SameText(N.Name, 'TRec') then Found := True;
+      finally Recs.Free; end;
+      Assert.IsTrue(Found, 'verschachtelter record muss ein nkRecord werden');
+      Assert.IsTrue(Pos('OuterProc', MethodNamesOf(ClassByName(Root, 'TOuter'))) > 0,
+        'Alias oder record duerfen den Klassenrumpf nicht abschneiden');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_BodylessClass_DoesNotSwallowFollowers;
+// 'EFoo = class(Exception);' - rumpflose Klasse, Standard-Idiom fuer
+// Exception-Ableitungen. Ohne den Semikolon-Ausstieg parste ParseClassBody
+// einen Phantom-Rumpf; seit der nested-type-Rekursion frass der das gesamte
+// Interface bis zum ersten Methoden-'end' (Korpus 2026-07-28: -37164 Funde
+// in 642 Dateien, VirtualTrees.pas verlor ALLE rumpfbasierten Funde).
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  EProbeError = class(Exception);'#13#10+
+  '  PInt = ^Integer;'#13#10+
+  '  TRec = record'#13#10+
+  '    A: Integer;'#13#10+
+  '  end;'#13#10+
+  '  TWorker = class'#13#10+
+  '  public'#13#10+
+  '    procedure Run(P: TObject);'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'procedure TWorker.Run(P: TObject);'#13#10+
+  'begin'#13#10+
+  '  Beep;'#13#10+
+  'end;'#13#10+
+  'end.';
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  ImplN, M, C : TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Assert.IsNotNull(ClassByName(Root, 'EProbeError'),
+        'rumpflose Klasse muss als nkClass existieren');
+      Assert.IsNotNull(ClassByName(Root, 'TWorker'),
+        'Folgeklasse wurde vom Phantom-Rumpf verschluckt, gefunden: '
+        + ClassNames(Root));
+      // Und die Implementation muss ihren Rumpf behalten haben.
+      ImplN := ImplNodeOf(Root);
+      Assert.IsNotNull(ImplN, 'implementation-Node fehlt');
+      M := nil;
+      for C in ImplN.Children do
+        if (C.Kind = nkMethod) and SameText(C.Name, 'TWorker.Run') then M := C;
+      Assert.IsNotNull(M, 'Methoden-Implementierung fehlt im AST');
+      Assert.IsTrue(M.HasChild(nkBlock),
+        'Methodenrumpf fehlt - Interface-Entgleisung frisst die Implementation');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_BodylessClassNested_OuterSurvives;
+// Dieselbe Kurzform als verschachtelter Typ im Klassenrumpf.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TOuter = class'#13#10+
+  '  public'#13#10+
+  '    type'#13#10+
+  '      EInnerError = class(Exception);'#13#10+
+  '    procedure OuterProc;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'end.';
+var Parser: TParser2; Root: TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Assert.IsNotNull(ClassByName(Root, 'EInnerError'),
+        'rumpflose nested class muss als nkClass existieren');
+      Assert.IsTrue(Pos('OuterProc', MethodNamesOf(ClassByName(Root, 'TOuter'))) > 0,
+        'Outer-Member nach der rumpflosen nested class fehlt');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_ClassAbstractWithParents_MembersParsed;
+// 'class abstract(TBase)' / 'class sealed(TBase)' - die Modifier stehen VOR
+// der Elternliste und sind UNGLEICH tokenisiert: 'abstract' ist ein echtes
+// Keyword (tkKwAbstract), 'sealed' ein tkIdent. Beide Pfade muessen den
+// Modifier konsumieren, sonst wird er zum Pseudo-Feld und die Elternliste
+// landet im Else-Churn (TypeRef leer). Der erste Wurf dieses Fixes pruefte
+// nur tkIdent - der Test hier war prompt rot.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TBase = class'#13#10+
+  '  end;'#13#10+
+  '  TAbs = class abstract(TBase)'#13#10+
+  '  public'#13#10+
+  '    procedure Muss;'#13#10+
+  '  end;'#13#10+
+  '  TSeal = class sealed(TBase)'#13#10+
+  '  public'#13#10+
+  '    procedure Auch;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'end.';
+var Parser: TParser2; Root: TAstNode; Cls: TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Cls := ClassByName(Root, 'TAbs');
+      Assert.IsNotNull(Cls, 'class abstract fehlt als nkClass');
+      Assert.IsTrue(Pos('TBase', Cls.TypeRef) > 0,
+        'Elternklasse muss trotz abstract-Modifier in TypeRef stehen, Ist: '
+        + Cls.TypeRef);
+      Assert.IsTrue(Pos('Muss', MethodNamesOf(Cls)) > 0,
+        'Member der abstract-Klasse fehlen');
+      Cls := ClassByName(Root, 'TSeal');
+      Assert.IsNotNull(Cls, 'class sealed fehlt als nkClass');
+      Assert.IsTrue(Pos('TBase', Cls.TypeRef) > 0,
+        'Elternklasse muss trotz sealed-Modifier in TypeRef stehen, Ist: '
+        + Cls.TypeRef);
+      Assert.IsTrue(Pos('Auch', MethodNamesOf(Cls)) > 0,
+        'Member der sealed-Klasse fehlen');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_IfdefTwinClassHeader_IsBounded;
+// IFDEF-Twin-Klassenkopf (VirtualTrees.pas-Muster): der Lexer emittiert
+// BEIDE Zweige, der zweite Kopf steht scheinbar im Rumpf des ersten. Die
+// nested-type-Rekursion darf ihn NICHT schlucken (sie schluckte sonst den
+// echten Rumpf samt 'end;' und der Phantom-Rumpf frass bis zur
+// Implementation). Der Struktur-Waechter (Rekursion nur nach 'type')
+// begrenzt den Schaden aufs Vor-Welle-2b-Niveau: EIN gemergter Twin-Knoten,
+// die Folgeklasse und die Implementation bleiben intakt.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  {$IFDEF X}'#13#10+
+  '  TVTEdit = class(TFirstBase)'#13#10+
+  '  {$ELSE}'#13#10+
+  '  TVTEdit = class(TSecondBase)'#13#10+
+  '  {$ENDIF}'#13#10+
+  '  private'#13#10+
+  '    FRef: Integer;'#13#10+
+  '  end;'#13#10+
+  '  TAfterTwin = class'#13#10+
+  '  public'#13#10+
+  '    procedure Danach;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'procedure TAfterTwin.Danach;'#13#10+
+  'begin'#13#10+
+  '  if Self <> nil then'#13#10+
+  '    Beep;'#13#10+
+  'end;'#13#10+
+  'end.';
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  ImplN, M, C : TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Assert.IsNotNull(ClassByName(Root, 'TAfterTwin'),
+        'Klasse nach dem IFDEF-Twin fehlt - Phantom-Rumpf hat gefressen, '
+        + 'gefunden: ' + ClassNames(Root));
+      ImplN := ImplNodeOf(Root);
+      Assert.IsNotNull(ImplN, 'implementation-Node fehlt');
+      M := nil;
+      for C in ImplN.Children do
+        if (C.Kind = nkMethod) and SameText(C.Name, 'TAfterTwin.Danach') then
+          M := C;
+      Assert.IsNotNull(M, 'Implementierung nach dem Twin fehlt im AST');
+      Assert.IsTrue(M.HasChild(nkBlock), 'Methodenrumpf nach dem Twin fehlt');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_NestedTypeWithoutTypeKeyword_IsBounded;
+// Gegenprobe zum Struktur-Waechter: ein 'Ident = class'-Kopf im Klassenrumpf
+// OHNE vorangehendes 'type' (grammatisch dort unmoeglich, praktisch ein
+// Twin- oder Fehlerartefakt) darf KEINEN Geschwister-Typknoten erzeugen -
+// und den Rumpf trotzdem nicht zerlegen.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TOuter = class'#13#10+
+  '  public'#13#10+
+  '    FEcht: Integer;'#13#10+
+  '    TPhantom = class(TBase)'#13#10+
+  '    procedure OuterProc;'#13#10+
+  '  end;'#13#10+
+  '  TDanach = class'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'end.';
+var Parser: TParser2; Root: TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Assert.IsNull(ClassByName(Root, 'TPhantom'),
+        'ohne type-Sektion darf kein Geschwister-Typknoten entstehen');
+      Assert.IsNotNull(ClassByName(Root, 'TDanach'),
+        'Folgeklasse fehlt - der Waechter hat den Schaden nicht begrenzt, '
+        + 'gefunden: ' + ClassNames(Root));
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_ObjectTwinWithVariantRecord_IsBounded;
+// Das mORMot-quickjs-Muster (USERECORDWITHMETHODS), das after108 noch
+// zerlegte: record/object-IFDEF-Twin, dessen gemeinsamer Rumpf mit einem
+// VARIANTEN anonymen Record-Feld beginnt. Der Twin-Skip war token-blind,
+// stoppte am ';' in der ersten Variantenklammer, und deren inneres 'end'
+// schloss den aeusseren Typ - die restliche Interface-Sektion (im Original
+// -30 externe Deklarationen) riss mit. Jetzt: Twin-Kopf wird nur noch als
+// Kopf konsumiert, der Rumpf gehoert der aeusseren Schleife.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  JSValueRaw = record'#13#10+
+  '    u: Double;'#13#10+
+  '  end;'#13#10+
+  '  {$ifdef USERECORDWITHMETHODS}'#13#10+
+  '  JSValue = record'#13#10+
+  '  {$else}'#13#10+
+  '  JSValue = object'#13#10+
+  '  {$endif}'#13#10+
+  '  private'#13#10+
+  '    u: record'#13#10+
+  '      case byte of'#13#10+
+  '        0:'#13#10+
+  '          (i32,'#13#10+
+  '           tag: integer);'#13#10+
+  '        1:'#13#10+
+  '          (f64: Double);'#13#10+
+  '      end;'#13#10+
+  '  public'#13#10+
+  '    function TagInt: integer;'#13#10+
+  '  end;'#13#10+
+  'function js_lowercase_probe(ctx: integer): integer;'#13#10+
+  '  cdecl; external ''qj.dll'';'#13#10+
+  'implementation'#13#10+
+  'function JSValue.TagInt: integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  'end;'#13#10+
+  'end.';
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  Meths  : TList<TAstNode>;
+  M      : TAstNode;
+  DeclOk, ImplOk : Boolean;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      DeclOk := False;
+      ImplOk := False;
+      Meths := Root.FindAll(nkMethod);
+      try
+        for M in Meths do
+        begin
+          if SameText(M.Name, 'js_lowercase_probe') then DeclOk := True;
+          if SameText(M.Name, 'JSValue.TagInt') and M.HasChild(nkBlock) then
+            ImplOk := True;
+        end;
+      finally Meths.Free; end;
+      Assert.IsTrue(DeclOk,
+        'Deklaration nach dem object-Twin fehlt - Varianten-end hat den '
+        + 'Typ vorzeitig geschlossen');
+      Assert.IsTrue(ImplOk,
+        'Methodenrumpf der Twin-Struktur fehlt im AST');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_NestedProcTypeOfObject_DoesNotEatClass;
+// Methodenzeiger-Typ in einer nested type-Sektion:
+//   type TEvent = function(const A: TObject): Boolean of object;
+// 'of object' oeffnet KEINEN Rumpf. Der balancierte Wert-Skip zaehlte
+// 'object' zunaechst als Rumpf-Oeffner - das ';' terminierte nie, der Skip
+// frass bis zu einem fremden 'end' und riss die Klasse mit (after109:
+// 70 Dateien, Alcinoe.Localization 647->0). Alcinoe-Muster.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TOuter = class'#13#10+
+  '  public'#13#10+
+  '    type'#13#10+
+  '      TCheckEvent = function(const Sender: TObject): Boolean of object;'#13#10+
+  '      TInner = class'#13#10+
+  '      public'#13#10+
+  '        procedure InnerProc;'#13#10+
+  '      end;'#13#10+
+  '    procedure OuterProc;'#13#10+
+  '  end;'#13#10+
+  '  TDanach = class'#13#10+
+  '  public'#13#10+
+  '    procedure Folge;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'end.';
+var Parser: TParser2; Root: TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Assert.IsTrue(Pos('OuterProc', MethodNamesOf(ClassByName(Root, 'TOuter'))) > 0,
+        'Member nach dem of-object-Alias fehlt - Skip hat die Klasse gefressen');
+      Assert.IsNotNull(ClassByName(Root, 'TInner'),
+        'nested class nach dem of-object-Alias fehlt, gefunden: '
+        + ClassNames(Root));
+      Assert.IsNotNull(ClassByName(Root, 'TDanach'),
+        'Folgeklasse fehlt, gefunden: ' + ClassNames(Root));
     finally Root.Free; end;
   finally Parser.Free; end;
 end;

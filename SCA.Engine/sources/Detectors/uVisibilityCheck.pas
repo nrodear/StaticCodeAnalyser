@@ -71,7 +71,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uSymbolReferenceIndex;
+  uSymbolReferenceIndex,
+  uDetectorUtils;   // OwnerTypeNameLower (nested-type-Bucketing, 2026-07-28)
 
 const
   EMIT_SEVERITY = lsHint;
@@ -180,7 +181,6 @@ var
   BodyCache : TObjectDictionary<TAstNode, TBodyTextCache>;
   MethNode : TAstNode;
   NameLow, KeyLow : string;
-  DotP : Integer;
   Bucket : TList<TAstNode>;
 
   function DescendantsOfCached(const ClassLow: string): TList<string>;
@@ -273,19 +273,19 @@ var
   // beginnt (case-insensitiv). Perf (2026-07-05): P8 - Nachschlag im
   // Klassen-Bucket statt FindAll ueber die ganze Unit pro Member; der
   // StartsWith-Filter ist identisch zur alten CollectMethodImplsFor-
-  // Schleife (jeder StartsWith-Match liegt zwingend im Bucket seines
-  // ersten Namens-Segments).
+  // Schleife. Die Buckets sind nach BESITZERTYP geschluesselt (vorletztes
+  // Namens-Segment, siehe Aufbau unten); der Gleichheits-Filter siebt freie
+  // Routinen aus, die namensgleich mit einem Typ im selben Bucket liegen.
   procedure ImplMethodsFor(const ClassPrefix: string; Dest: TList<TAstNode>);
   var
     PrefixLow : string;
     B : TList<TAstNode>;
     M : TAstNode;
   begin
-    PrefixLow := LowerCase(ClassPrefix) + '.';
-    if not MethodsByClassLow.TryGetValue(
-      Copy(PrefixLow, 1, Pos('.', PrefixLow) - 1), B) then Exit;
+    PrefixLow := LowerCase(ClassPrefix);
+    if not MethodsByClassLow.TryGetValue(PrefixLow, B) then Exit;
     for M in B do
-      if MethodNamesLow[M].StartsWith(PrefixLow) then
+      if TDetectorUtils.OwnerTypeNameLower(M.Name) = PrefixLow then
         Dest.Add(M);
   end;
 
@@ -533,11 +533,16 @@ begin
       MethodNamesLow.AddOrSetValue(MethNode, NameLow);
       // Trim(LowerCase(S)) = LowerCase(Trim(S)) = NormalizeIdent(S)
       MethodNamesNorm.AddOrSetValue(MethNode, Trim(NameLow));
-      DotP := Pos('.', NameLow);
-      if DotP > 0 then
-        KeyLow := Copy(NameLow, 1, DotP - 1)
-      else
-        KeyLow := NameLow;
+      // Besitzertyp statt erstem Segment (2026-07-28): seit der Parser
+      // nested-type-Header vollstaendig liest, tragen deren Methoden zwei
+      // Qualifizierer. Der Bucket muss bei dem Typ liegen, den
+      // ImplMethodsFor nachschlaegt ('tinner'), nicht beim aeussersten
+      // ('touter') - sonst ist OwnRefs fuer nested Klassen immer 0 und die
+      // Sichtbarkeits-Kategorie kippt (SCA050: unit-private statt
+      // strict private). Bei einem Qualifizierer identisch zu vorher.
+      KeyLow := TDetectorUtils.OwnerTypeNameLower(NameLow);
+      if KeyLow = '' then
+        KeyLow := NameLow;   // freie Routine: wie bisher unter eigenem Namen
       if not MethodsByClassLow.TryGetValue(KeyLow, Bucket) then
       begin
         Bucket := TList<TAstNode>.Create;

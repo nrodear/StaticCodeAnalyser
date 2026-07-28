@@ -898,7 +898,7 @@ begin
 end;
 
 // ============================================================================
-//  Perf Stufe 2 (2026-07-25) — Per-File-Parallelisierung des Main-Loops
+//  Perf Stufe 2 (2026-07-25) - Per-File-Parallelisierung des Main-Loops
 // ============================================================================
 //
 // Opt-in (uSCAConsts.DetectorParallelScan, Default AUS - CLI --parallel bzw.

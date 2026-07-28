@@ -1,7 +1,7 @@
 ﻿unit uParallelScan;
 
 // ============================================================================
-//  Perf Stufe 2 (2026-07-25) — Per-File-Parallelisierung: Slot-Puffer + Merge
+//  Perf Stufe 2 (2026-07-25) - Per-File-Parallelisierung: Slot-Puffer + Merge
 // ============================================================================
 //
 // Infrastruktur fuer den parallelen ParseLeaks-Main-Loop (uStaticAnalyzer2):
@@ -31,10 +31,10 @@
 interface
 
 uses
-  System.SysUtils, System.Classes,
-  System.Generics.Collections, System.Generics.Defaults,
-  uSCAConsts,      // TSuppressionMarker
-  uMethodd12;      // TLeakFinding
+  System.Classes, System.Generics.Collections,
+  System.Generics.Defaults, System.SysUtils,
+  uMethodd12,      // TLeakFinding
+  uSCAConsts;      // TSuppressionMarker
 
 type
   // Ergebnis-Puffer fuer GENAU EINE Datei des Scans. Wird ausschliesslich
