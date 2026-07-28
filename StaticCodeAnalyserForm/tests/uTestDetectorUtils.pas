@@ -57,6 +57,13 @@ type
     [Test] procedure IdentChar_RangeNeighboursAreNoIdent;
     [Test] procedure IdentChar_DotAndDollarAreNoIdent;
     [Test] procedure IdentChar_UmlautAndNonAsciiAreNoIdent;
+
+    // --- Besitzertyp einer Methode (2026-07-27) ---
+    [Test] procedure OwnerType_SingleQualifier_IsTheClass;
+    [Test] procedure OwnerType_NestedType_IsTheInnerType;
+    [Test] procedure OwnerType_Unqualified_IsEmpty;
+    [Test] procedure OwnerType_EdgeCases_AreBounded;
+    [Test] procedure IsNestedTypeMethodName_CountsQualifiers;
   end;
 
 implementation
@@ -587,6 +594,67 @@ begin
   Assert.IsFalse(TDetectorUtils.IsIdentChar(#$00DF), 'scharfes s');
   Assert.IsFalse(TDetectorUtils.IsIdentChar(#$0100), 'Latin Extended-A');
   Assert.IsFalse(TDetectorUtils.IsIdentChar(#$20AC), 'Euro-Zeichen');
+end;
+
+{ ---- Besitzertyp einer Methode (2026-07-27) ----
+
+  OwnerTypeName liefert das VORLETZTE Segment eines qualifizierten
+  Methodennamens. Der Unterschied zu 'alles vor dem letzten Punkt' zeigt sich
+  erst bei nested types - und genau dort liefen vier Detektor-Guards ins
+  Leere, weil sie einen gepunkteten String als Typnamen nachschlugen.        }
+
+procedure TTestDetectorUtils.OwnerType_SingleQualifier_IsTheClass;
+// Der Normalfall - hier sind beide Semantiken gleich, das muss so bleiben.
+begin
+  Assert.AreEqual('TFoo', TDetectorUtils.OwnerTypeName('TFoo.Bar'),
+    'bei einem Qualifizierer ist der Besitzer die Klasse');
+  Assert.AreEqual('tfoo', TDetectorUtils.OwnerTypeNameLower('TFoo.Bar'),
+    'Lower-Variante muss kleinschreiben');
+end;
+
+procedure TTestDetectorUtils.OwnerType_NestedType_IsTheInnerType;
+// Der Kern: Besitzer ist der INNERE Typ, nicht der aeussere und nicht der
+// gepunktete Pfad.
+begin
+  Assert.AreEqual('TInner', TDetectorUtils.OwnerTypeName('TOuter.TInner.DoIt'),
+    'Besitzer einer nested-type-Methode ist der innere Typ');
+  Assert.AreEqual('TC', TDetectorUtils.OwnerTypeName('TA.TB.TC.Run'),
+    'bei drei Qualifizierern zaehlt ebenfalls das vorletzte Segment');
+  Assert.AreNotEqual('TOuter.TInner',
+    TDetectorUtils.OwnerTypeName('TOuter.TInner.DoIt'),
+    'ein gepunkteter Pfad matcht gegen keinen Typnamen - genau der Fehler');
+end;
+
+procedure TTestDetectorUtils.OwnerType_Unqualified_IsEmpty;
+// Freistehende Routine: kein Besitzertyp.
+begin
+  Assert.AreEqual('', TDetectorUtils.OwnerTypeName('FreieRoutine'),
+    'ohne Qualifizierer gibt es keinen Besitzertyp');
+end;
+
+procedure TTestDetectorUtils.OwnerType_EdgeCases_AreBounded;
+// Kaputte/entartete Eingaben duerfen nicht ueberlaufen.
+begin
+  Assert.AreEqual('', TDetectorUtils.OwnerTypeName(''),
+    'leerer Name');
+  Assert.AreEqual('', TDetectorUtils.OwnerTypeName('.Foo'),
+    'fuehrender Punkt hat kein vorletztes Segment');
+  Assert.AreEqual('TFoo', TDetectorUtils.OwnerTypeName('TFoo.'),
+    'nachgestellter Punkt: davor steht der Besitzer');
+  Assert.AreEqual('', TDetectorUtils.OwnerTypeName('..'),
+    'nur Punkte ergeben keinen Namen');
+end;
+
+procedure TTestDetectorUtils.IsNestedTypeMethodName_CountsQualifiers;
+begin
+  Assert.IsFalse(TDetectorUtils.IsNestedTypeMethodName('FreieRoutine'),
+    'ohne Punkt kein nested type');
+  Assert.IsFalse(TDetectorUtils.IsNestedTypeMethodName('TFoo.Bar'),
+    'ein Qualifizierer ist der Normalfall, kein nested type');
+  Assert.IsTrue(TDetectorUtils.IsNestedTypeMethodName('TOuter.TInner.DoIt'),
+    'zwei Qualifizierer = nested type');
+  Assert.IsTrue(TDetectorUtils.IsNestedTypeMethodName('TA.TB.TC.Run'),
+    'drei Qualifizierer ebenfalls');
 end;
 
 initialization

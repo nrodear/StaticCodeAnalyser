@@ -1098,13 +1098,28 @@ begin
     // Klassen-Generic-Param zwischen Klassen-Name und Methoden-Name:
     //   procedure TFoo<T>.Bar;     <- nach 'TFoo' kommt '<T>' vor '.'
     SkipGenericParams;
-    if Tok.Kind = tkDot then
+    // Beliebig viele Qualifizierer (2026-07-27). Nested types erzeugen ZWEI:
+    //   procedure TOuter.TInner.DoIt(const A: string);
+    // Korpus-Zensus: 2951 solcher Header in 91 Dateien (Alcinoe, skia4delphi,
+    // FMX-Wrapper). Frueher konsumierte hier ein einzelnes `if` nur den ERSTEN
+    // Punkt. Die Methode hiess dann 'TOuter.TInner', und '.DoIt(...)' blieb im
+    // Tokenstrom stehen - mit zwei Folgeschaeden: das anschliessende
+    // Eat(tkLParen) sah einen tkDot statt der Klammer, also gingen saemtliche
+    // PARAMETER verloren, und alle Methoden derselben nested class trugen
+    // denselben Namen. Die Schleife terminiert, weil jede Runde mindestens
+    // den Punkt konsumiert.
+    while Tok.Kind = tkDot do
     begin
       Next;
-      if (Tok.Kind = tkIdent) or IsRoutineNameKeyword(Tok.Kind) then
-        MethName := MethName + '.' + Next.Value;
-      // Methoden-Generic-Param nach qualifiziertem Namen:
-      //   procedure TFoo<T>.Bar<U>: U;
+      if not ((Tok.Kind = tkIdent) or IsRoutineNameKeyword(Tok.Kind)) then
+      begin
+        // Kaputte Quelle: Punkt ohne Bezeichner - wie bisher nicht anhaengen.
+        SkipGenericParams;
+        Break;
+      end;
+      MethName := MethName + '.' + Next.Value;
+      // Generic-Param nach jedem Qualifizierer:
+      //   procedure TFoo<T>.Bar<U>: U;   procedure TFoo<T>.TInner<U>.Baz;
       SkipGenericParams;
     end;
   end;
@@ -1492,6 +1507,27 @@ begin
             TypeName := TypeName + Tok.Value;
             Next;
           end;
+
+        // Aufrufkonvention hinter einem prozeduralen Variablentyp ist KEINE
+        // weitere Variable:
+        //   LBlock: procedure(policy: TFoo); cdecl;
+        // Der Typ-Scan endet am ';' vor 'cdecl'; die naechste Runde sah dann
+        // 'cdecl' als Bezeichner und legte eine TYPLOSE Variable dieses
+        // Namens an. SCA166 meldete sie prompt als uninitialisiert - drei
+        // Error-Tier-Funde im Korpus (2026-07-27). Der Bug ist alt, wurde
+        // aber erst sichtbar, als Methoden verschachtelter Typen ueberhaupt
+        // eine lokale var-Sektion bekamen; vorher lief dieser Code fuer sie
+        // nie. Ohne Typ UND mit Direktiven-Namen ist es keine Deklaration -
+        // in gueltigem Delphi hat jede Variable einen Typ, ein typloser
+        // 'cdecl'/'stdcall'/... kann also nur die Direktive sein.
+        if (TypeName = '') and (VarNames.Count = 1) and
+           IsMethodDirectiveIdent(VarNames[0]) then
+        begin
+          SkipToSemicolon;
+          Eat(tkSemicolon);
+          GuardAdvance(SkipStart);
+          Continue;
+        end;
 
         for VN in VarNames do
           Parent.Add(nkLocalVar, VN, T.Line, T.Col).TypeRef := TypeName;

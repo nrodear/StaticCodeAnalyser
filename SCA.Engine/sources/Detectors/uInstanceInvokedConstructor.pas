@@ -218,9 +218,10 @@ var
 begin
   // Klassen-Praefix der aktuellen Methode ('TFoo.Bar' -> 'tfoo'); leer bei
   // freistehenden Routinen. Nur fuer die Feld-Receiver-Aufloesung (Track C).
-  ClassKey := '';
-  var DotP := LastDelimiter('.', MethodNode.Name);
-  if DotP > 1 then ClassKey := LowerCase(Copy(MethodNode.Name, 1, DotP - 1));
+  // Vorletztes Segment: bei nested types ('TOuter.TInner.DoIt') liefert
+  // alles-vor-dem-letzten-Punkt den gepunkteten Key 'touter.tinner', der
+  // gegen keinen Typnamen matcht (2026-07-27).
+  ClassKey := TDetectorUtils.OwnerTypeNameLower(MethodNode.Name);
   // Track C Opt-in (Konzept_StrukturellePhase, Runde 3): Cross-Unit-Typ-Index-
   // Gegenprobe. Nur wenn der repo-weite TTypeIndex verfuegbar & nicht leer ist,
   // bauen wir eine Empfaenger-Typ-Map (lokale Vars + Params dieser Methode) auf.

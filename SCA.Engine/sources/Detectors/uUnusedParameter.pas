@@ -60,21 +60,21 @@ begin
 end;
 
 // Methodennamen `TFoo.Bar` -> Klasse `TFoo`, MethodenName `Bar`.
+//
+// Bis 2026-07-27 wurde am ERSTEN Punkt getrennt. Bei nested types
+// ('TOuter.TInner.PaintBackground') ergab das Klasse='TOuter' und Name=
+// 'TInner.PaintBackground'; FindDeclaration suchte danach in der AEUSSEREN
+// Klasse nach einer woertlich so heissenden Methode und fand nie etwas. Der
+// override/virtual-Skip in IsInheritanceHook lief damit ins Leere - still,
+// ohne Fehler. Sauberer A/B-Beleg im selben File (Vcl.Styles.Utils.ComCtrls):
+// die Methode mit zwei Qualifizierern wurde gemeldet, die daneben liegende
+// mit einem und identisch leerem Rumpf nicht.
 function SplitQualified(const MethodName: string;
   out ClassName, BareName: string): Boolean;
-var
-  DotPos : Integer;
 begin
-  DotPos := Pos('.', MethodName);
-  if DotPos <= 0 then
-  begin
-    ClassName := '';
-    BareName  := MethodName;
-    Exit(False);
-  end;
-  ClassName := Copy(MethodName, 1, DotPos - 1);
-  BareName  := Copy(MethodName, DotPos + 1, MaxInt);
-  Result := True;
+  ClassName := TDetectorUtils.OwnerTypeName(MethodName);
+  BareName  := TDetectorUtils.UnqualifiedNameLast(MethodName);
+  Result    := ClassName <> '';
 end;
 
 // Sucht im Unit-Tree die Class-Declaration, die zu einer Implementation
@@ -300,6 +300,35 @@ begin
   if not MethodNode.HasChild(nkBlock) then Exit;
 
   if IsInheritanceHook(UnitNode, MethodNode) then Exit;
+
+  // Methoden verschachtelter Typen: bis auf Weiteres komplett schweigen.
+  //
+  // Zwei Gruende, und der zweite ist der wichtigere:
+  //
+  // 1. Solche Typen sind in der Praxis fast immer Bridge-Delegates -
+  //    class(TOCLocal, WKNavigationDelegate), class(TJavaLocal,
+  //    JALWebViewListener). Ihre Parameterliste erzwingt der Compiler
+  //    (E2291 bei Abweichung), ein 'unused parameter' ist dort per
+  //    Definition nicht behebbar. Der Detektor kennt den Skip nur fuer
+  //    override/virtual/abstract/dynamic, nicht fuer
+  //    Interface-Implementierung.
+  //
+  // 2. Die Klassenaufloesung ist hier NICHT VERTRAUENSWUERDIG. ParseClassBody
+  //    hat keinen tkKwType-Zweig; das innere 'end' des ersten verschachtelten
+  //    Typs beendet den aeusseren Klassenrumpf vorzeitig, weshalb die
+  //    FOLGENDEN verschachtelten Typen versehentlich als Unit-Ebene-Klassen
+  //    im Baum landen. FindDeclaration findet sie dann - aber dieser Treffer
+  //    ist ein Nebenprodukt des Parserfehlers, kein Beleg. Ein Guard, der
+  //    darauf aufbaut, greift genau bei dem Typ, der zufaellig als erster
+  //    deklariert wurde, nicht.
+  //
+  // Korpus-Messung 2026-07-27: von 282 solchen Funden waren 279 falsch, 259
+  // davon Muster 1. Ein Guard, der nur bei fehlgeschlagener Aufloesung
+  // schwieg, liess wegen Grund 2 noch 161 stehen. Entfaellt, sobald der
+  // Parser verschachtelte Typen als eigene Typknoten fuehrt - dann ist die
+  // Vorfahrenliste auswertbar und der Interface-Skip praezise moeglich.
+  if TDetectorUtils.IsNestedTypeMethodName(MethodNode.Name) then Exit;
+
   if IsLikelyEventHandler(MethodNode) then Exit;
   if ForwardsParamsViaInherited(MethodNode) then Exit;
   // Track B1 (2026-07-12): der SCA028-Follow-up-Guard (IsKeywordRoutineName)

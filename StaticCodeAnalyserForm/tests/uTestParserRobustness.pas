@@ -69,6 +69,16 @@ type
     [Test] procedure Parser_InlineConst_MissingEqualsIsBounded;
     [Test] procedure Parser_InlineConst_TypedNoLongerHidesDeadCode;
     [Test] procedure Parser_LocalConstSection_StillParsedAsBefore;
+
+    // --- Nested-Type-Implementierungs-Header (2026-07-27) ---
+    [Test] procedure Parser_NestedTypeImplHeader_FullNameCaptured;
+    [Test] procedure Parser_NestedTypeImplHeader_ParamsCaptured;
+    [Test] procedure Parser_NestedTypeSiblings_HaveDistinctNames;
+    [Test] procedure Parser_TripleQualifier_FullNameCaptured;
+    [Test] procedure Parser_NestedTypeWithGenerics_QualifiersCaptured;
+    [Test] procedure Parser_SingleQualifier_StillUnchanged;
+    [Test] procedure Parser_DotWithoutIdent_IsBounded;
+    [Test] procedure Parser_ProcTypeLocalWithCallingConv_NoPhantomVar;
   end;
 
 implementation
@@ -1378,6 +1388,269 @@ begin
         'const-Sektion muss weiterhin beide Eintraege liefern');
     finally Root.Free; end;
   finally P.Free; end;
+end;
+
+{ ---- Nested-Type-Implementierungs-Header (2026-07-27) ----
+
+  Delphi erlaubt Typen innerhalb von Typen. Deren Implementierungs-Header
+  tragen ZWEI Qualifizierer: 'procedure TOuter.TInner.DoIt;'. Der Parser
+  konsumierte frueher nur den ersten Punkt - die Methode hiess dann
+  'TOuter.TInner' und der Rest blieb im Tokenstrom liegen. Korpus-Zensus
+  2026-07-27: 2951 solcher Header in 91 Dateien.                          }
+
+// Liefert die Anzahl der nkParam-Kinder der ersten Methode der impl-Sektion.
+function FirstMethodParamCount(ImplN: TAstNode): Integer;
+var
+  C, P : TAstNode;
+begin
+  Result := -1;
+  if ImplN = nil then Exit;
+  for C in ImplN.Children do
+    if C.Kind = nkMethod then
+    begin
+      Result := 0;
+      for P in C.Children do
+        if P.Kind = nkParam then Inc(Result);
+      Exit;
+    end;
+end;
+
+procedure TTestParserRobustness.Parser_NestedTypeImplHeader_FullNameCaptured;
+// Der Methodenname muss ALLE Qualifizierer tragen. Sonst greift der
+// Decl-gegen-Impl-Abgleich in uCanBeClassMethod ins Leere (SCA148).
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure TOuter.TInner.DoIt;'#13#10+
+  'begin'#13#10+
+  '  Beep;'#13#10+
+  'end;'#13#10+
+  'end.';
+var Parser: TParser2; Root, ImplN: TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      ImplN := ImplNodeOf(Root);
+      Assert.IsNotNull(ImplN, 'implementation-Node fehlt');
+      Assert.AreEqual('TOuter.TInner.DoIt', TopLevelMethodNames(ImplN),
+        'beide Qualifizierer muessen im Methodennamen stehen');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_NestedTypeImplHeader_ParamsCaptured;
+// Der zweite, unauffaelligere Schaden: weil nach dem abgebrochenen Namen ein
+// tkDot statt der Klammer stand, lief Eat(tkLParen) ins Leere und SAEMTLICHE
+// Parameter fehlten im AST. 16 Detektoren lesen nkParam.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure TOuter.TInner.DoIt(const A: string; B: Integer);'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  'end.';
+var Parser: TParser2; Root: TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Assert.AreEqual<Integer>(2, FirstMethodParamCount(ImplNodeOf(Root)),
+        'Parameter einer nested-type-Methode muessen im AST landen');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_NestedTypeSiblings_HaveDistinctNames;
+// Frueher trugen ALLE Methoden derselben nested class denselben Namen
+// ('TOuter.TInner') - Namens-basierte Zuordnungen kollidierten dadurch.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure TOuter.TInner.First;'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  'procedure TOuter.TInner.Second;'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  'end.';
+var Parser: TParser2; Root: TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Assert.AreEqual('TOuter.TInner.First,TOuter.TInner.Second',
+        TopLevelMethodNames(ImplNodeOf(Root)),
+        'Geschwister einer nested class muessen unterscheidbar bleiben');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_TripleQualifier_FullNameCaptured;
+// Zwei Ebenen Schachtelung kommen real vor (Korpus: 539 Header mit drei
+// Punkten, 96 mit vier).
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure TA.TB.TC.Run;'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  'end.';
+var Parser: TParser2; Root: TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Assert.AreEqual('TA.TB.TC.Run', TopLevelMethodNames(ImplNodeOf(Root)),
+        'auch drei Qualifizierer muessen vollstaendig erfasst werden');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_NestedTypeWithGenerics_QualifiersCaptured;
+// Generic-Parameter duerfen an JEDEM Qualifizierer stehen und gehoeren nicht
+// in den Namen.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure TOuter<T>.TInner.DoIt(A: T);'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  'end.';
+var Parser: TParser2; Root: TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Assert.AreEqual('TOuter.TInner.DoIt',
+        TopLevelMethodNames(ImplNodeOf(Root)),
+        'Generic-Parameter gehoeren nicht in den Methodennamen');
+      Assert.AreEqual<Integer>(1, FirstMethodParamCount(ImplNodeOf(Root)),
+        'Parameter muessen auch mit Generic-Qualifizierer ankommen');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_SingleQualifier_StillUnchanged;
+// Regressionswaechter: der Normalfall (ein Qualifizierer) muss sich exakt
+// wie vorher verhalten - er ist 268570 von 271521 Headern im Korpus.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'function TFoo.Bar(X: Integer): string;'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  'end.';
+var Parser: TParser2; Root: TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Assert.AreEqual('TFoo.Bar', TopLevelMethodNames(ImplNodeOf(Root)),
+        'einfach qualifizierter Header darf sich nicht veraendern');
+      Assert.AreEqual<Integer>(1, FirstMethodParamCount(ImplNodeOf(Root)),
+        'Parameter des Normalfalls muessen erhalten bleiben');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_DotWithoutIdent_IsBounded;
+// Kaputte Quelle: Punkt ohne folgenden Bezeichner. Die Schleife darf nicht
+// haengen und den Rest der Unit nicht schreddern.
+//
+// BEWUSST mit ZWEI Punkten formuliert. Die einfache Form 'procedure TOuter.;'
+// waere vakuum-gruen: alter und neuer Code konsumieren dort exakt dieselben
+// Tokens (if-Zweig bzw. erste Schleifenrunde, beide ohne Ident, beide
+// SkipGenericParams, beide raus), der AST ist identisch - der Test haette also
+// auch VOR dem Fix bestanden und nichts abgesichert. Erst der zweite
+// Qualifizierer unterscheidet die Fassungen.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure TOuter.TInner.;'#13#10+
+  'begin'#13#10+
+  '  Beep;'#13#10+
+  'end;'#13#10+
+  'procedure TOther.Works;'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  'end.';
+var Parser: TParser2; Root: TAstNode; Names: string;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Names := TopLevelMethodNames(ImplNodeOf(Root));
+      // Der kaputte Header darf den Namen bis zum letzten gueltigen
+      // Bezeichner tragen - und die FOLGENDE Methode muss ankommen.
+      Assert.IsTrue(Pos('TOuter.TInner', Names) > 0,
+        'gueltiger Namensteil vor dem kaputten Punkt fehlt, Ist: ' + Names);
+      Assert.IsTrue(Pos('TOther.Works', Names) > 0,
+        'Methode nach dem kaputten Header fehlt, Ist: ' + Names);
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_ProcTypeLocalWithCallingConv_NoPhantomVar;
+// Eine lokale Variable mit prozeduralem Typ traegt die Aufrufkonvention
+// HINTER dem Semikolon des Typs:
+//   LBlock: procedure(p: Integer); cdecl;
+// Der Typ-Scan endet an diesem ';', und die naechste Runde der var-Sektion
+// sah 'cdecl' als Bezeichner - es entstand eine typlose Phantom-Variable
+// dieses Namens, die SCA166 als uninitialisiert meldete (Korpuslauf
+// 2026-07-27: drei Error-Tier-Funde in Alcinoe.FMX.WebBrowser).
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var'#13#10+
+  '  LBlock: procedure(policy: Integer); cdecl;'#13#10+
+  '  LReal: Integer;'#13#10+
+  'begin'#13#10+
+  '  LReal := 1;'#13#10+
+  'end;'#13#10+
+  'end.';
+var
+  Parser : TParser2;
+  Root, ImplN, M, C : TAstNode;
+  Names  : string;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      ImplN := ImplNodeOf(Root);
+      Assert.IsNotNull(ImplN, 'implementation-Node fehlt');
+      M := nil;
+      for C in ImplN.Children do
+        if C.Kind = nkMethod then begin M := C; Break; end;
+      Assert.IsNotNull(M, 'Methode fehlt');
+      Names := '';
+      for C in M.Children do
+        if C.Kind = nkLocalVar then
+        begin
+          if Names <> '' then Names := Names + ',';
+          Names := Names + C.Name;
+        end;
+      Assert.AreEqual('LBlock,LReal', Names,
+        'Aufrufkonvention darf keine Phantom-Variable erzeugen, Ist: ' + Names);
+    finally Root.Free; end;
+  finally Parser.Free; end;
 end;
 
 end.

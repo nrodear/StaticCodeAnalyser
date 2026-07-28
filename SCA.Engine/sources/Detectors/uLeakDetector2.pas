@@ -688,13 +688,14 @@ var
   Assigns : TList<TAstNode>;
   A       : TAstNode;
   RHS     : string;
-  DotP    : Integer;
 begin
   Result  := False;
   // Klasse der analysierten Methode ('tmeineklasse.foo' -> 'tmeineklasse').
-  ThisClassLow := '';
-  DotP := LastDelimiter('.', MethodNode.Name);
-  if DotP > 0 then ThisClassLow := LowerCase(Copy(MethodNode.Name, 1, DotP - 1));
+  // Vorletztes Segment, nicht alles-vor-dem-letzten-Punkt: bei nested types
+  // ('TOuter.TInner.DoIt') ergaebe Letzteres den gepunkteten Key
+  // 'touter.tinner', der gegen keinen Typnamen matcht - der darauf gestuetzte
+  // Ownership-Guard fiele still aus (2026-07-27).
+  ThisClassLow := TDetectorUtils.OwnerTypeNameLower(MethodNode.Name);
 
   Assigns := MethodNode.FindAllRef(nkAssign);
   for A in Assigns do

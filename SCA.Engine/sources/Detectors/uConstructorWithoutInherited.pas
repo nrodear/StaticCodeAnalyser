@@ -30,7 +30,8 @@ interface
 uses
   System.SysUtils, System.Generics.Collections,
   uCompatSet,  // D11: THashSet<T>-Ersatz (D12: leere Unit, natives THashSet)
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12,
+  uDetectorUtils;   // OwnerTypeNameLower / IsNestedTypeMethodName
 
 type
   TConstructorWithoutInheritedDetector = class
@@ -177,10 +178,23 @@ begin
       // (z.B. 'TFoo.Create'), die werden weiter geprueft.
       if Pos('.', M.Name) = 0 then Continue;
       // Record-Konstruktor (Qualifier ist ein record-Typname) -> kein inherited.
-      var Qual := LowerCase(Copy(M.Name, 1, Pos('.', M.Name) - 1));
+      // Vorletztes Segment statt ERSTEM Punkt: bei nested types
+      // ('TALStyleManager.TTextStyleInfo.Create') lieferte Pos('.') den
+      // AEUSSEREN Typ, also eine Klasse, waehrend der Konstruktor dem inneren
+      // Record gehoert. RecordNames traf dann nicht, 'inherited' fehlt im
+      // Record-Ctor zwangslaeufig - der Fund war garantiert falsch.
+      // Korpus-Messung 2026-07-27: 390 nested Ctors/Dtors, 47 ohne
+      // 'inherited', davon 32 mit einem Record als Owner.
+      var Qual := TDetectorUtils.OwnerTypeNameLower(M.Name);
       var QLt := Pos('<', Qual);
       if QLt > 0 then Qual := Copy(Qual, 1, QLt - 1);
       if RecordNames.Contains(Trim(Qual)) then Continue;
+      // Nested type: der Owner-Typ ist im Klassenrumpf deklariert, und
+      // ParseClassBody hat keinen tkKwType-Zweig - RecordNames (aus
+      // FindAll(nkRecord) gebaut) kann ihn also gar nicht enthalten. Ob
+      // 'inherited' hier zulaessig waere, ist damit nicht entscheidbar:
+      // bewusst schweigen statt raten. Entfaellt mit dem Parser-Ausbau.
+      if TDetectorUtils.IsNestedTypeMethodName(M.Name) then Continue;
       // Nur echte Implementierungen pruefen - Forward-Decls (Class-Body-
       // Signatur) haben kein nkBlock, dort gehoert `inherited` nicht hin.
       var Body := FindBodyBlock(M);

@@ -340,13 +340,16 @@ begin
 end;
 
 function ClassKeyOf(const MethName: string): string;
-var
-  Dot : Integer;
+// Schluessel fuer MemberDict/FullDict. Die Dicts sind ueber LowerCase(C.Name)
+// der nkClass-Knoten gefuellt, also ueber EINFACHE Typnamen. Der Key muss
+// daher das vorletzte Segment sein, nicht alles vor dem letzten Punkt:
+// bei 'TOuter.TInner.DoIt' liefert Letzteres 'touter.tinner' und findet
+// garantiert nichts (2026-07-27, nachdem der Parser mehrfach qualifizierte
+// Namen zu liefern begann). Bei einem Qualifizierer sind beide identisch.
 begin
-  Dot := LastDelimiter('.', MethName);
-  if Dot > 0 then Result := LowerCase(Copy(MethName, 1, Dot - 1))
-             else Result := '';
+  Result := TDetectorUtils.OwnerTypeNameLower(MethName);
 end;
+
 
 function FirstTypeRefToken(const S: string): string;
 // Erstes Identifier-Token aus ClassNode.TypeRef = die Parent-Klasse.
@@ -449,8 +452,21 @@ begin
       // Bare Instanz-Member-Zugriff (Feld/Property/Sibling-Call) ueber die
       // Member-Liste der Klasse inkl. In-Unit-Vorfahren - faengt RHS-Blob-,
       // Sibling- und vererbte-Member-FPs.
-      if FullDict.TryGetValue(ClassKeyOf(M.Name), Members) and
-         BodyRefsInstanceMember(M, Members) then Continue;
+      if FullDict.TryGetValue(ClassKeyOf(M.Name), Members) then
+      begin
+        if BodyRefsInstanceMember(M, Members) then Continue;
+      end
+      else if TDetectorUtils.IsNestedTypeMethodName(M.Name) then
+        // Klasse nicht aufloesbar UND nested type: ParseClassBody kennt keinen
+        // tkKwType-Zweig, fuer 'TOuter.TInner' entsteht also kein nkClass
+        // 'TInner'. Ohne den Lookup laeuft der Member-Guard nicht - und das ist
+        // laut Header-Kommentar der Filter, der ~87 % der SCA148-FPs abfaengt.
+        // Hier deshalb bewusst schweigen: lieber ein FN als ein FP. Die
+        // Einschraenkung entfaellt, sobald der Parser nested types als eigene
+        // Typknoten fuehrt. Bewusst NUR fuer nested types - bei einfach
+        // qualifizierten Namen bleibt das Verhalten unveraendert, damit der
+        // A/B-Delta dieser Welle eindeutig zuzuordnen bleibt.
+        Continue;
 
       // Message-Suffix: 'class function' fuer Funktionen, 'class procedure'
       // fuer Prozeduren. TypeRef beginnt mit 'procedure'/'function'/etc.

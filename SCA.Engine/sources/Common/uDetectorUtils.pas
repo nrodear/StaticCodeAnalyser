@@ -249,6 +249,32 @@ type
     class function UnqualifiedNameLastLower(const AName: string)
       : string; static;
 
+    // Der TYP, dem eine Methoden-Implementierung gehoert - das vorletzte
+    // Segment ihres qualifizierten Namens:
+    //   'TFoo.Bar'              -> 'TFoo'
+    //   'TOuter.TInner.DoIt'    -> 'TInner'      <- der innere Typ, nicht der aeussere
+    //   'FreeRoutine'           -> ''            (kein Qualifizierer)
+    //
+    // Nicht zu verwechseln mit 'alles vor dem letzten Punkt': das liefert bei
+    // nested types 'TOuter.TInner' - einen gepunkteten String, der als
+    // Klassen-Key nirgends matcht und den betreffenden Guard STILL ausfallen
+    // laesst (2026-07-27 in uLeakDetector2, uInstanceInvokedConstructor und
+    // uCanBeClassMethod gefunden, nachdem der Parser mehrfach qualifizierte
+    // Namen zu liefern begann).
+    class function OwnerTypeName(const AName: string): string; static;
+
+    // Wie OwnerTypeName, zusaetzlich lowercase (Match-Key-Nutzung).
+    class function OwnerTypeNameLower(const AName: string): string; static;
+
+    // True, wenn der Methodenname zwei oder mehr Qualifizierer traegt, die
+    // Methode also einem in einem anderen Typ deklarierten Typ gehoert
+    // ('TOuter.TInner.DoIt'). Solange ParseClassBody keinen tkKwType-Zweig
+    // hat, existiert fuer diesen inneren Typ KEIN eigener AST-Knoten - jeder
+    // Guard, der ueber den Typnamen aufloest, laeuft dort ins Leere. Mehrere
+    // Detektoren schweigen deshalb bewusst fuer solche Methoden.
+    class function IsNestedTypeMethodName(const AName: string)
+      : Boolean; static;
+
     // Perf P1 (Konzept_Performance25, 2026-07-19): EIN O(N)-Scan ueber den
     // (gestrippten) Code sammelt fuer jedes Ident-Wort ([A-Za-z0-9_]+-Run)
     // die 1-basierten STARTPOSITIONEN unter dem lowercase-Key. Ersetzt in
@@ -876,6 +902,49 @@ class function TDetectorUtils.UnqualifiedNameLastLower(
   const AName: string): string;
 begin
   Result := LowerCase(UnqualifiedNameLast(AName));
+end;
+
+class function TDetectorUtils.OwnerTypeName(const AName: string): string;
+// Vorletztes Segment: vom LETZTEN Punkt aus weiter rueckwaerts bis zum
+// vorletzten. Bei genau einem Punkt ist das Ergebnis identisch mit
+// 'alles vor dem Punkt' - der Normalfall (268570 von 271521 Headern im
+// Korpus) verhaelt sich also unveraendert.
+var
+  i, LastDot : Integer;
+begin
+  Result  := '';
+  LastDot := 0;
+  for i := Length(AName) downto 1 do
+    if AName[i] = '.' then
+    begin
+      LastDot := i;
+      Break;
+    end;
+  if LastDot = 0 then Exit;                 // unqualifiziert
+  for i := LastDot - 1 downto 1 do
+    if AName[i] = '.' then
+      Exit(Copy(AName, i + 1, LastDot - i - 1));
+  Result := Copy(AName, 1, LastDot - 1);    // genau ein Punkt
+end;
+
+class function TDetectorUtils.OwnerTypeNameLower(const AName: string): string;
+begin
+  Result := LowerCase(OwnerTypeName(AName));
+end;
+
+class function TDetectorUtils.IsNestedTypeMethodName(
+  const AName: string): Boolean;
+var
+  i, Dots : Integer;
+begin
+  Dots := 0;
+  for i := 1 to Length(AName) do
+    if AName[i] = '.' then
+    begin
+      Inc(Dots);
+      if Dots >= 2 then Exit(True);
+    end;
+  Result := False;
 end;
 
 class function TDetectorUtils.BuildWordPositionIndex(const Code: string):
