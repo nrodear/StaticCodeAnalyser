@@ -34,6 +34,12 @@ type
     [Test] procedure CorrelatedSameCondition_StillReported;
     [Test] procedure CorrelatedButFlagMutated_StillReported;
     [Test] procedure NestedNilTestGuard_StillReported;
+    // T1-Fensterfix (Review 2026-07-28, umgesetzt 2026-07-29): Schleife um
+    // EIN if genuegt fuer Ganz-Methoden-Fenster; Zeilenvergleiche inklusiv.
+    [Test] procedure CorrelatedLoopAroundDeref_MutationAfter_StillReported;
+    [Test] procedure CorrelatedLoopAroundAssign_MutationBefore_StillReported;
+    [Test] procedure CorrelatedSameLineMutation_StillReported;
+    [Test] procedure CorrelatedNoLoopNoMutation_StillDropped;
   end;
 
 implementation
@@ -436,6 +442,106 @@ begin
   try
     Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
       'geschachtelter Guard liegt nicht auf jedem Pfad -> Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.CorrelatedLoopAroundDeref_MutationAfter_StillReported;
+// DER Review-Fall: Schleife nur um das Deref-if, Flag-Mutation NACH dessen
+// Zeile. Iteration 2 dereferenziert x = nil. Vor dem Fix verlangte das
+// Fenster eine Schleife um BEIDE ifs - die Mutation lag hinter WindowEnd
+// und der echte Bug wurde gedroppt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(a, c: Boolean);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  if a then'#13#10 +
+  '    x := nil;'#13#10 +
+  '  while c do'#13#10 +
+  '  begin'#13#10 +
+  '    if not a then'#13#10 +
+  '      x.DoStuff;'#13#10 +
+  '    a := not a;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+      'Cross-Iteration-nil-Deref darf nicht gedroppt werden');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.CorrelatedLoopAroundAssign_MutationBefore_StillReported;
+// Spiegelfall: Schleife nur um das Assign-if, Mutation VOR dessen Zeile -
+// gehoert im naechsten Durchlauf ZWISCHEN die Auswertungen. Braucht die
+// Fenster-START-Erweiterung, nicht nur das Ende.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(a, c: Boolean);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  while c do'#13#10 +
+  '  begin'#13#10 +
+  '    a := not a;'#13#10 +
+  '    if a then'#13#10 +
+  '      x := nil;'#13#10 +
+  '  end;'#13#10 +
+  '  if not a then'#13#10 +
+  '    x.DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+      'Mutation vor IfA in der Schleife darf die Exklusivitaet nicht retten');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.CorrelatedSameLineMutation_StillReported;
+// Einzeiler: Mutation AUF der IfA-Zeile. Der alte exklusive Vergleich
+// (N.Line > IfA.Line) uebersah sie.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(a: Boolean);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  if a then begin x := nil; a := False; end;'#13#10 +
+  '  if not a then'#13#10 +
+  '    x.DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+      'Mutation auf der IfA-Zeile macht die Zweige gemeinsam erreichbar');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.CorrelatedNoLoopNoMutation_StillDropped;
+// Regressionswaechter: der urspruengliche FP-Fall (exklusive ifs, KEINE
+// Schleife, KEINE Mutation) muss weiterhin gedroppt bleiben - der Fix darf
+// das Gate nur verengen, wo Iteration/Mutation im Spiel ist.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(a: Boolean);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  if a then'#13#10 +
+  '    x := nil;'#13#10 +
+  '  Beep;'#13#10 +
+  '  if not a then'#13#10 +
+  '    x.DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
+      'ohne Schleife und ohne Mutation bleibt der Drop bestehen');
   finally F.Free; end;
 end;
 

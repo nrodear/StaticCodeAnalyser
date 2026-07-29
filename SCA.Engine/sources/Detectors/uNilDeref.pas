@@ -535,11 +535,11 @@ function IsInCorrelatedExclusiveIfs(MethodNode: TAstNode;
 //     Whitelist) mit demselben Kern-Ident;
 //   * die effektiven Ausfuehrungs-Polaritaeten schliessen sich aus
 //     (ExecX = Pos xor InElse; exklusiv gdw. ExecA <> ExecB);
-//   * die Korrelations-Variable mutiert nicht zwischen den ifs - kein
-//     Assign und keine var/out-Uebergabe im Fenster; umschliesst eine
-//     SCHLEIFE beide ifs, gilt das Fenster bis Methodenende (sonst wuerde
-//     'a := not a' am Schleifenende einen echten Cross-Iteration-Bug
-//     maskieren).
+//   * die Korrelations-Variable mutiert nicht im Fenster - kein Assign
+//     und keine var/out-Uebergabe; umschliesst eine SCHLEIFE auch nur
+//     EINES der ifs, gilt die GANZE Methode als Fenster (je Iteration
+//     neu ausgewertet - eine Mutation vor IfA/nach IfB liegt im
+//     naechsten Durchlauf ZWISCHEN den Auswertungen; Review 2026-07-28).
 var
   Ifs          : TList<TAstNode>;
   Loops        : TList<TAstNode>;
@@ -550,6 +550,7 @@ var
   CoreA, CoreB : string;
   PosA, PosB   : Boolean;
   ExecA, ExecB : Boolean;
+  WindowStart  : Integer;
   WindowEnd    : Integer;
   Kind         : TNodeKind;
   N            : TAstNode;
@@ -588,27 +589,48 @@ begin
   ExecA := PosA xor AInElse;
   ExecB := PosB xor BInElse;
   if ExecA = ExecB then Exit;   // gleiche Seite -> gemeinsam ausfuehrbar
-  // Mutations-Fenster bestimmen (Schleife um beide ifs -> bis Methodenende)
-  WindowEnd := IfB.Line;
+  // Mutations-Fenster bestimmen. Umschliesst eine Schleife AUCH NUR EINES
+  // der beiden ifs, wird je Iteration neu ausgewertet - dann zaehlt die
+  // GANZE Methode als Fenster: eine Mutation VOR IfA oder NACH IfB gehoert
+  // im naechsten Durchlauf ZWISCHEN die beiden Auswertungen.
+  //
+  // Review-Fund 2026-07-28 (5-Tage-Review, bestaetigt): die alte
+  // AND-Verknuepfung verlangte die Schleife um BEIDE ifs, und die
+  // Zeilenvergleiche waren exklusiv. Beides maskierte echte
+  // Cross-Iteration-Bugs:
+  //   if a then x := nil;
+  //   while c do begin
+  //     if not a then x.Foo;   // Iteration 2: x = nil
+  //     a := not a;            // lag NACH IfB.Line -> unsichtbar
+  //   end;
+  // sowie die Einzeiler-Mutation 'if a then begin x := nil; a := False;
+  // end;' (Mutation AUF IfA.Line, von '> IfA.Line' ausgeschlossen).
+  WindowStart := IfA.Line;
+  WindowEnd   := IfB.Line;
   for Kind in [nkWhileStmt, nkForStmt, nkRepeatStmt] do
   begin
     Loops := MethodNode.FindAllRef(Kind);
     for N in Loops do
-      if NodeContainsRef(N, IfA) and NodeContainsRef(N, IfB) then
+      if NodeContainsRef(N, IfA) or NodeContainsRef(N, IfB) then
       begin
-        WindowEnd := MaxInt;
+        WindowStart := 0;
+        WindowEnd   := MaxInt;
         Break;
       end;
     if WindowEnd = MaxInt then Break;
   end;
   for N in Assigns do
-    if (N.Line > IfA.Line) and (N.Line < WindowEnd) then
+    if (N.Line >= WindowStart) and (N.Line <= WindowEnd) then
     begin
       NmLow := N.Name.ToLower;
       if (NmLow = CoreA) or NmLow.EndsWith('.' + CoreA) then Exit;
     end;
+  // IsPassedAsArgBetween prueft mit OFFENEN Grenzen (> AfterLine,
+  // < BeforeLine): Start deshalb um 1 vorziehen; das Ende bleibt exklusiv -
+  // WindowEnd+1 wuerde bei MaxInt ueberlaufen, und der var/out-Fall auf
+  // exakt der IfB-Zeile ist vom Assign-Scan oben mit abgedeckt.
   if TNilDerefDetector.IsPassedAsArgBetween(MethodNode, Calls, Assigns,
-       CoreA, IfA.Line, WindowEnd) then Exit;
+       CoreA, WindowStart - 1, WindowEnd) then Exit;
   Result := True;
 end;
 
