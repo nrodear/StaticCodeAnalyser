@@ -452,21 +452,16 @@ begin
       // Bare Instanz-Member-Zugriff (Feld/Property/Sibling-Call) ueber die
       // Member-Liste der Klasse inkl. In-Unit-Vorfahren - faengt RHS-Blob-,
       // Sibling- und vererbte-Member-FPs.
-      if FullDict.TryGetValue(ClassKeyOf(M.Name), Members) then
-      begin
-        if BodyRefsInstanceMember(M, Members) then Continue;
-      end
-      else if TDetectorUtils.IsNestedTypeMethodName(M.Name) then
-        // Klasse nicht aufloesbar UND nested type: ParseClassBody kennt keinen
-        // tkKwType-Zweig, fuer 'TOuter.TInner' entsteht also kein nkClass
-        // 'TInner'. Ohne den Lookup laeuft der Member-Guard nicht - und das ist
-        // laut Header-Kommentar der Filter, der ~87 % der SCA148-FPs abfaengt.
-        // Hier deshalb bewusst schweigen: lieber ein FN als ein FP. Die
-        // Einschraenkung entfaellt, sobald der Parser nested types als eigene
-        // Typknoten fuehrt. Bewusst NUR fuer nested types - bei einfach
-        // qualifizierten Namen bleibt das Verhalten unveraendert, damit der
-        // A/B-Delta dieser Welle eindeutig zuzuordnen bleibt.
-        Continue;
+      // T2-Guards-Ruecknahme (2026-07-29): der fruehere nested-type-Blanket-
+      // Skip ist entfallen. Seit dem tkKwType-Zweig (8d36052) stehen nested
+      // classes als eigene nkClass-Knoten im Baum, MemberDict/FullDict
+      // schluesseln sie ueber ihren einfachen Namen ('tinner'), und
+      // ClassKeyOf (Besitzertyp) findet sie - der Member-Guard laeuft also
+      // auch fuer sie. Nicht aufloesbare Besitzer (z.B. nested RECORDS,
+      // die nicht im MemberDict stehen) verhalten sich damit exakt wie
+      // Top-Level-Records seit jeher: Analyse ohne Member-Guard, Paritaet.
+      if FullDict.TryGetValue(ClassKeyOf(M.Name), Members) and
+         BodyRefsInstanceMember(M, Members) then Continue;
 
       // Message-Suffix: 'class function' fuer Funktionen, 'class procedure'
       // fuer Prozeduren. TypeRef beginnt mit 'procedure'/'function'/etc.

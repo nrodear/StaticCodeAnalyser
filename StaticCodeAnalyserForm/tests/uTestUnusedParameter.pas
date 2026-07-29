@@ -39,6 +39,9 @@ type
     // Track B1 (2026-07-12): Write/Read-Statement-Call parst jetzt -> Param-Uses sichtbar
     [Test] procedure Param_UsedViaWriteCall_NotReported;
     [Test] procedure Param_KeywordNamedMethodUnused_Reported;
+    // T2-Guards-Ruecknahme (2026-07-29): nested types praezise statt pauschal.
+    [Test] procedure NestedBridgeDelegate_UnusedParam_NotFlagged;
+    [Test] procedure NestedPlainClass_UnusedParam_Flagged;
   end;
 
 implementation
@@ -376,6 +379,67 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter),
     'Param ohne Vorkommen in der nested-Range bleibt ungenutzt -> Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.NestedBridgeDelegate_UnusedParam_NotFlagged;
+// Bridge-Delegate: nested class implementiert ein Interface (2. Eintrag
+// der class(...)-Liste). Signatur compiler-erzwungen (E2291) - der
+// ungenutzte Parameter ist nicht behebbar, kein Fund.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TOuter = class'#13#10 +
+  '  public'#13#10 +
+  '    type'#13#10 +
+  '      TDelegate = class(TObject, IInterface)'#13#10 +
+  '      public'#13#10 +
+  '        procedure onTokenUpdated(oldToken: JToken);'#13#10 +
+  '      end;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TOuter.TDelegate.onTokenUpdated(oldToken: JToken);'#13#10 +
+  'begin'#13#10 +
+  '  Beep;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
+      'Interface-implementierende nested class: Signatur erzwungen');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.NestedPlainClass_UnusedParam_Flagged;
+// Nested class OHNE Interfaces: normale Analyse - der Fall der drei
+// TP-belegten Shift-Parameter, die der Blanket-Skip geopfert hatte.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TOuter = class'#13#10 +
+  '  public'#13#10 +
+  '    type'#13#10 +
+  '      TView = class'#13#10 +
+  '      public'#13#10 +
+  '        procedure InternalMouseDown(Shift: Integer);'#13#10 +
+  '      end;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TOuter.TView.InternalMouseDown(Shift: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  Beep;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter),
+      'nested class ohne Interfaces: ungenutzter Param muss gemeldet werden');
   finally F.Free; end;
 end;
 

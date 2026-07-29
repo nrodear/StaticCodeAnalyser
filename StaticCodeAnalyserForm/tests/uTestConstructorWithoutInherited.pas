@@ -27,6 +27,9 @@ type
     // Real-World FP-Audit 2026-07-11: raises-only-Konstruktor (blockierter Singleton)
     [Test] procedure CtorRaisesOnly_NoFinding;
     [Test] procedure CtorConditionalRaise_StillReported;
+    // T2-Guards-Ruecknahme (2026-07-29):
+    [Test] procedure NestedRecordCtor_NotFlagged;
+    [Test] procedure NestedClassCtor_WithoutInherited_Flagged;
   end;
 
 implementation
@@ -297,6 +300,67 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkConstructorWithoutInherited) >= 1,
     'bedingter raise rettet den fehlenden inherited nicht - Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestConstructorWithoutInherited.NestedRecordCtor_NotFlagged;
+// Record-Ctor kennt kein inherited. Der nested record steht seit dem
+// tkKwType-Zweig als nkRecord im Baum - die Record-Ausnahme greift.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TMgr = class'#13#10 +
+  '  public'#13#10 +
+  '    type'#13#10 +
+  '      TInfo = record'#13#10 +
+  '        A: Integer;'#13#10 +
+  '        constructor Create(AA: Integer);'#13#10 +
+  '      end;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'constructor TMgr.TInfo.Create(AA: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  A := AA;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkConstructorWithoutInherited),
+      'nested record muss die Record-Ausnahme treffen');
+  finally F.Free; end;
+end;
+
+procedure TTestConstructorWithoutInherited.NestedClassCtor_WithoutInherited_Flagged;
+// Nested-CLASS-Ctor ohne inherited: seit der Ruecknahme normal gemeldet.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TMgr = class'#13#10 +
+  '  public'#13#10 +
+  '    type'#13#10 +
+  '      TWorker = class'#13#10 +
+  '        FA: Integer;'#13#10 +
+  '        constructor Create(AA: Integer);'#13#10 +
+  '      end;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'constructor TMgr.TWorker.Create(AA: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  FA := AA;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkConstructorWithoutInherited),
+      'nested-class-Ctor ohne inherited muss gemeldet werden');
   finally F.Free; end;
 end;
 

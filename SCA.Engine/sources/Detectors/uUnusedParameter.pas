@@ -112,6 +112,74 @@ begin
   end;
 end;
 
+// T2 (2026-07-29): Besitzertyp einer nested-type-Methode im Unit-Baum
+// finden (nkClass ODER nkRecord - nested records mit Methoden existieren).
+// Liefert False, wenn KEIN Typknoten mit dem Besitzernamen existiert -
+// oder MEHRERE (Review 2026-07-29): nested types existieren gerade,
+// damit Namen wiederverwendbar sind; ein Top-Level-Homonym wuerde den
+// echten Besitzer shadowen und den Interface-Skip fehlleiten (FP auf
+// compiler-erzwungenen Delegate-Parametern). Ambiguitaet -> defensiv
+// False, der Aufrufer schweigt dann wie beim Nicht-Finden.
+function TryFindOwnerType(UnitNode: TAstNode; const MethName: string;
+  out OwnerCls: TAstNode): Boolean;
+var
+  OwnerLow : string;
+  Kind     : TNodeKind;
+  L        : TList<TAstNode>;
+  C        : TAstNode;
+begin
+  Result   := False;
+  OwnerCls := nil;
+  OwnerLow := TDetectorUtils.OwnerTypeNameLower(MethName);
+  if OwnerLow = '' then Exit;
+  for Kind in [nkClass, nkRecord] do
+  begin
+    L := UnitNode.FindAllRef(Kind);
+    for C in L do
+      if LowerCase(C.Name) = OwnerLow then
+      begin
+        if OwnerCls <> nil then
+        begin
+          OwnerCls := nil;          // Homonym - nicht entscheidbar
+          Exit(False);
+        end;
+        OwnerCls := C;
+      end;
+  end;
+  Result := OwnerCls <> nil;
+end;
+
+// True wenn die class(...)-Liste des Knotens Interfaces traegt.
+// ParseClassBody legt die Eltern space-getrennt in TypeRef ab (gepunktete
+// Namen bleiben EIN Eintrag). BEKANNTE UNSCHAERFE (Review 2026-07-29,
+// bewusste FN-Restklasse): der Eltern-Loop des Parsers kennt keine
+// Generics - 'class(TObjectList<TItem>)' ergibt TypeRef
+// 'TObjectList TItem', und IFDEF-Twins emittieren beide Zweige
+// ('TX TY'). Beides wird hier faelschlich als Basis+Interface gelesen
+// -> Skip (kein Fund). Nur-FN-Richtung, nie FP. Der Parser-Fix
+// (Generic-Depth im Eltern-Loop) aendert TypeRef fuer ALLE Konsumenten
+// korpusweit und ist ein eigenes Inkrement (T2b). Gleiches gilt fuer
+// die I-Gross-Konvention beim Ein-Eintrag-Fall (IPCServer/IOThread
+// waeren falsch-positiv fuer den SKIP, also ebenfalls nur-FN). Zusaetzlich der
+// Ein-Eintrag-Fall 'class(IFoo)' (implizite TObject-Basis): dort
+// entscheidet die I-Grossbuchstabe-Konvention - 'IdFtp...' (Indy) faellt
+// durch das Kleinbuchstaben-d nicht darauf herein.
+function OwnerHasInterfaceParents(OwnerCls: TAstNode): Boolean;
+var
+  P : string;
+begin
+  Result := False;
+  if OwnerCls = nil then Exit;
+  P := Trim(OwnerCls.TypeRef);
+  if P = '' then Exit;
+  if Pos(' ', P) > 0 then Exit(True);      // Basis + mind. ein Interface
+  // Einziger Eintrag: Interface nach Namenskonvention I<Gross>?
+  // Unit-Qualifizierer abstreifen (System.IInterface -> IInterface).
+  P := TDetectorUtils.UnqualifiedNameLast(P);
+  Result := (Length(P) >= 2) and (P[1] = 'I') and
+            CharInSet(P[2], ['A'..'Z']);
+end;
+
 // Inheritance-Hook-Check: an der Implementation selbst (selten) ODER an
 // ihrer zugehoerigen Class-Declaration (Default-Fall - Parser legt die
 // Modifier nur an der Declaration ab).
@@ -234,6 +302,7 @@ var
   BodyLow : string;
   RefCount : Integer;
   F : TLeakFinding;
+  OwnerCls : TAstNode;   // T2: Besitzertyp fuer den Interface-Skip
   // Ist-Messung 2026-07-18 (SCA054-FP-Klasse 'nested-routine-Nutzung', 3/5 der
   // Sample-FPs): der Parser verwirft nested-routine-Bodies aus dem Method-AST
   // (nur nkNestedRange-Marker bleiben, Line=Start/TypeRef=EndLine) -> ein Param,
@@ -301,33 +370,35 @@ begin
 
   if IsInheritanceHook(UnitNode, MethodNode) then Exit;
 
-  // Methoden verschachtelter Typen: bis auf Weiteres komplett schweigen.
+  // Methoden verschachtelter Typen (T2-Guards-Ruecknahme 2026-07-29):
+  // Seit der Parser nested types als eigene nkClass-/nkRecord-Knoten fuehrt
+  // (tkKwType-Zweig, 8d36052), ist die Vorfahrenliste auswertbar und der
+  // fruehere Blanket-Exit einem PRAEZISEN Skip gewichen:
   //
-  // Zwei Gruende, und der zweite ist der wichtigere:
+  //   * Besitzertyp implementiert Interfaces (2.+ Eintrag der
+  //     class(...)-Liste - Delphi kennt keine Klassen-Mehrfachvererbung,
+  //     alles nach dem ersten Eintrag ist ein Interface): Signatur ist
+  //     potenziell compiler-erzwungen (E2291), 'unused parameter' dort
+  //     nicht behebbar. Das ist das Bridge-Delegate-Muster
+  //     (class(TOCLocal, WKNavigationDelegate) / class(TJavaLocal,
+  //     JALWebViewListener)) - 259 von 282 FPs der Korpus-Messung
+  //     2026-07-27.
+  //   * Besitzertyp nicht auffindbar: defensiv schweigen (sollte seit dem
+  //     tkKwType-Zweig nicht mehr vorkommen).
+  //   * Sonst - nested class ohne Interfaces, nested record - laeuft die
+  //     normale Analyse: das holt die bewusst geopferten ECHTEN Funde
+  //     zurueck (3x Shift-Parameter in Alcinoe.FMX.Dynamic.ListBox,
+  //     TP-belegt in der ADD-Stichprobe).
   //
-  // 1. Solche Typen sind in der Praxis fast immer Bridge-Delegates -
-  //    class(TOCLocal, WKNavigationDelegate), class(TJavaLocal,
-  //    JALWebViewListener). Ihre Parameterliste erzwingt der Compiler
-  //    (E2291 bei Abweichung), ein 'unused parameter' ist dort per
-  //    Definition nicht behebbar. Der Detektor kennt den Skip nur fuer
-  //    override/virtual/abstract/dynamic, nicht fuer
-  //    Interface-Implementierung.
-  //
-  // 2. Die Klassenaufloesung ist hier NICHT VERTRAUENSWUERDIG. ParseClassBody
-  //    hat keinen tkKwType-Zweig; das innere 'end' des ersten verschachtelten
-  //    Typs beendet den aeusseren Klassenrumpf vorzeitig, weshalb die
-  //    FOLGENDEN verschachtelten Typen versehentlich als Unit-Ebene-Klassen
-  //    im Baum landen. FindDeclaration findet sie dann - aber dieser Treffer
-  //    ist ein Nebenprodukt des Parserfehlers, kein Beleg. Ein Guard, der
-  //    darauf aufbaut, greift genau bei dem Typ, der zufaellig als erster
-  //    deklariert wurde, nicht.
-  //
-  // Korpus-Messung 2026-07-27: von 282 solchen Funden waren 279 falsch, 259
-  // davon Muster 1. Ein Guard, der nur bei fehlgeschlagener Aufloesung
-  // schwieg, liess wegen Grund 2 noch 161 stehen. Entfaellt, sobald der
-  // Parser verschachtelte Typen als eigene Typknoten fuehrt - dann ist die
-  // Vorfahrenliste auswertbar und der Interface-Skip praezise moeglich.
-  if TDetectorUtils.IsNestedTypeMethodName(MethodNode.Name) then Exit;
+  // BEWUSST nur fuer nested-type-Methoden: ein Interface-Skip fuer ALLE
+  // Klassen wuerde bestehende Funde normaler Klassen korpusweit droppen -
+  // eigenes Vorhaben mit eigenem A/B, nicht Beifang dieser Ruecknahme.
+  if TDetectorUtils.IsNestedTypeMethodName(MethodNode.Name) then
+  begin
+    if not TryFindOwnerType(UnitNode, MethodNode.Name, OwnerCls) then Exit;
+    if (OwnerCls.Kind = nkClass) and OwnerHasInterfaceParents(OwnerCls) then
+      Exit;
+  end;
 
   if IsLikelyEventHandler(MethodNode) then Exit;
   if ForwardsParamsViaInherited(MethodNode) then Exit;

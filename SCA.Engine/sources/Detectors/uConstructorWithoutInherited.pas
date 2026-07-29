@@ -31,7 +31,7 @@ uses
   System.SysUtils, System.Generics.Collections,
   uCompatSet,  // D11: THashSet<T>-Ersatz (D12: leere Unit, natives THashSet)
   uAstNode, uSCAConsts, uMethodd12,
-  uDetectorUtils;   // OwnerTypeNameLower / IsNestedTypeMethodName
+  uDetectorUtils;   // OwnerTypeNameLower (Record-Ausnahme, Besitzertyp)
 
 type
   TConstructorWithoutInheritedDetector = class
@@ -189,12 +189,12 @@ begin
       var QLt := Pos('<', Qual);
       if QLt > 0 then Qual := Copy(Qual, 1, QLt - 1);
       if RecordNames.Contains(Trim(Qual)) then Continue;
-      // Nested type: der Owner-Typ ist im Klassenrumpf deklariert, und
-      // ParseClassBody hat keinen tkKwType-Zweig - RecordNames (aus
-      // FindAll(nkRecord) gebaut) kann ihn also gar nicht enthalten. Ob
-      // 'inherited' hier zulaessig waere, ist damit nicht entscheidbar:
-      // bewusst schweigen statt raten. Entfaellt mit dem Parser-Ausbau.
-      if TDetectorUtils.IsNestedTypeMethodName(M.Name) then Continue;
+      // T2-Guards-Ruecknahme (2026-07-29): der nested-type-Blanket-Skip ist
+      // entfallen. Seit dem tkKwType-Zweig (8d36052) landen auch im
+      // Klassenrumpf deklarierte Records als nkRecord im Baum - RecordNames
+      // enthaelt sie, die Record-Ausnahme oben greift fuer sie regulaer.
+      // Nested-CLASS-Konstruktoren ohne 'inherited' werden ab jetzt normal
+      // gemeldet (Korpus-Zensus 2026-07-27: ~15 erwartete ADDs).
       // Nur echte Implementierungen pruefen - Forward-Decls (Class-Body-
       // Signatur) haben kein nkBlock, dort gehoert `inherited` nicht hin.
       var Body := FindBodyBlock(M);

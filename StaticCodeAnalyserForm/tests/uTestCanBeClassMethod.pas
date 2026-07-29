@@ -29,6 +29,10 @@ type
     [Test] procedure NestedTypeMethod_MatchesVirtualDecl_NotReported;
     [Test] procedure SimpleQualifiedMethod_MatchesVirtualDecl_NotReported;
     [Test] procedure SimpleQualifiedMethod_WithoutPolyDecl_StillReported;
+    // T2-Guards-Ruecknahme (2026-07-29):
+    [Test] procedure NestedMethod_UsingOwnField_NotFlagged;
+    [Test] procedure NestedMethod_NoSelfUse_Flagged;
+    [Test] procedure NestedRecordMethod_NoSelfUse_Flagged;
   end;
 
 implementation
@@ -435,6 +439,100 @@ begin
   Assert.AreEqual<Integer>(1,
     RunDetectorOnDeclImpl('TFoo', '', 'Bar', 'procedure', 'TFoo.Bar'),
     'ohne Polymorphie-Direktive bleibt der class-method-Kandidat gemeldet');
+end;
+
+procedure TTestCanBeClassMethod.NestedMethod_UsingOwnField_NotFlagged;
+// Member-Guard muss nested classes aufloesen: FullDict ist ueber den
+// einfachen Namen geschluesselt, ClassKeyOf liefert den Besitzertyp.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TOuter = class'#13#10 +
+  '  public'#13#10 +
+  '    type'#13#10 +
+  '      TInner = class'#13#10 +
+  '        Data: Integer;'#13#10 +
+  '        procedure Bump;'#13#10 +
+  '      end;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TOuter.TInner.Bump;'#13#10 +
+  'begin'#13#10 +
+  '  Data := Data + 1;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeClassMethod),
+      'bare Feldzugriff der nested class muss den Member-Guard treffen');
+  finally F.Free; end;
+end;
+
+procedure TTestCanBeClassMethod.NestedMethod_NoSelfUse_Flagged;
+// Gegenprobe: nested Methode ohne Instanzbezug wird regulaer gemeldet
+// (Paritaet zu Top-Level-Klassen).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TOuter = class'#13#10 +
+  '  public'#13#10 +
+  '    type'#13#10 +
+  '      TInner = class'#13#10 +
+  '        FData: Integer;'#13#10 +
+  '        procedure Util;'#13#10 +
+  '      end;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TOuter.TInner.Util;'#13#10 +
+  'begin'#13#10 +
+  '  Beep;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkCanBeClassMethod) >= 1,
+      'nested Methode ohne Instanzbezug: Fund wie bei Top-Level');
+  finally F.Free; end;
+end;
+
+procedure TTestCanBeClassMethod.NestedRecordMethod_NoSelfUse_Flagged;
+// Die eigentliche Verhaltensaenderung der Ruecknahme: nested-RECORD-
+// Methoden (Besitzer steht nicht im MemberDict) verhalten sich jetzt wie
+// Top-Level-Records - Analyse ohne Member-Guard, Fund bei fehlendem
+// Instanzbezug. Der NoSelfUse-Klassen-Test war schon vor der Ruecknahme
+// gruen (der else-Zweig war fuer aufloesbare nested classes seit 8d36052
+// toter Code) - DIESER Fall hier war der real unterdrueckte.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TOuter = class'#13#10 +
+  '  public'#13#10 +
+  '    type'#13#10 +
+  '      TRec = record'#13#10 +
+  '        A: Integer;'#13#10 +
+  '        procedure Util;'#13#10 +
+  '      end;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TOuter.TRec.Util;'#13#10 +
+  'begin'#13#10 +
+  '  Beep;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkCanBeClassMethod) >= 1,
+      'nested-record-Methode ohne Instanzbezug: Fund wie bei Top-Level-Records');
+  finally F.Free; end;
 end;
 
 initialization
