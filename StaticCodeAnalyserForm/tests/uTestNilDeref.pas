@@ -40,6 +40,12 @@ type
     [Test] procedure CorrelatedLoopAroundAssign_MutationBefore_StillReported;
     [Test] procedure CorrelatedSameLineMutation_StillReported;
     [Test] procedure CorrelatedNoLoopNoMutation_StillDropped;
+    // Review 2026-07-30: IfA/IfB duerfen sich im Conds-Scan nicht selbst
+    // vetoen - die Assigned()-Form der Whitelist traegt Klammern und
+    // matchte als vermeintliche var/out-Uebergabe (T1-Regression).
+    [Test] procedure CorrelatedAssignedForm_NoMutation_Dropped;
+    [Test] procedure CorrelatedAssignedForm_FlagMutated_StillReported;
+    [Test] procedure CorrelatedAssignedForm_VarOutCondBetween_StillReported;
   end;
 
 implementation
@@ -542,6 +548,88 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
       'ohne Schleife und ohne Mutation bleibt der Drop bestehen');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.CorrelatedAssignedForm_NoMutation_Dropped;
+// Review 2026-07-30 (T1-Regression): WindowStart-1 zog IfA selbst in den
+// Conds-Scan von IsPassedAsArgBetween; dessen eigenes 'assigned ( a )'
+// matchte in HasBareArgUse als var/out-Uebergabe -> das Gate vetote sich
+// selbst und die Assigned()-Form (idiomatischste Whitelist-Form) wurde
+// nie gedroppt. IfA/IfB sind jetzt per Referenz ausgenommen - ihre
+// Bedingungen haben ParseCorrelatedCond passiert, sind also
+// nebenwirkungsfrei. Bare-Flag-Formen ('a'/'not a') sahen den Defekt
+// nicht: ohne Klammer bricht HasBareArgUse sofort ab.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(a: TObject);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  if Assigned(a) then'#13#10 +
+  '    x := nil;'#13#10 +
+  '  Beep;'#13#10 +
+  '  if not Assigned(a) then'#13#10 +
+  '    x.DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
+      'Assigned()-korrelierte Separat-ifs ohne Mutation muessen droppen');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.CorrelatedAssignedForm_FlagMutated_StillReported;
+// TP-Gegenprobe: Mutation der Korrelations-Variable ZWISCHEN den ifs
+// bricht die Exklusivitaet (a zunaechst assigned: erst x := nil, dann
+// a := nil -> IfB-Zweig laeuft MIT x = nil). Der Assign-Scan des
+// Fensters muss den Drop weiterhin verhindern - die IfA/IfB-Ausnahme
+// darf NUR die eigenen Bedingungen betreffen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(a: TObject);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  if Assigned(a) then'#13#10 +
+  '    x := nil;'#13#10 +
+  '  a := nil;'#13#10 +
+  '  if not Assigned(a) then'#13#10 +
+  '    x.DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+      'Flag-Mutation zwischen Assigned()-ifs bricht die Korrelation');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.CorrelatedAssignedForm_VarOutCondBetween_StillReported;
+// TP-Gegenprobe: ein DRITTES if zwischen dem Paar uebergibt die
+// Korrelations-Variable als potentielles var/out-Argument
+// ('if TryMutate(a) then') - dieses Veto muss erhalten bleiben; die
+// Referenz-Ausnahme gilt ausschliesslich fuer IfA und IfB selbst.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function TryMutate(var o: TObject): Boolean; forward;'#13#10 +
+  'procedure Foo(a: TObject);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  if Assigned(a) then'#13#10 +
+  '    x := nil;'#13#10 +
+  '  if TryMutate(a) then'#13#10 +
+  '    Beep;'#13#10 +
+  '  if not Assigned(a) then'#13#10 +
+  '    x.DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+      'var/out-Uebergabe in fremder Bedingung muss weiter vetoen');
   finally F.Free; end;
 end;
 

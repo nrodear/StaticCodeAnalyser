@@ -45,10 +45,16 @@ type
     class function HasBareArgUse(const TextLow,
       VarLow: string): Boolean; static;
     // FP-Gate (2026-07-04): out-param-assign - Uebergabe als Argument
-    // zwischen nil-Zuweisung und Zugriff zaehlt als Zuweisung
+    // zwischen nil-Zuweisung und Zugriff zaehlt als Zuweisung.
+    // AExcludeCondA/B (Review 2026-07-30): if-Knoten, deren EIGENE
+    // Bedingung nicht als var/out-Uebergabe zaehlen darf - das
+    // Korrelations-Paar aus IsInCorrelatedExclusiveIfs hat die
+    // ParseCorrelatedCond-Whitelist passiert und ist nebenwirkungsfrei.
     class function IsPassedAsArgBetween(MethodNode: TAstNode;
       Calls, Assigns: TList<TAstNode>;
-      const VarLow: string; AfterLine, BeforeLine: Integer): Boolean; static;
+      const VarLow: string; AfterLine, BeforeLine: Integer;
+      AExcludeCondA: TAstNode = nil;
+      AExcludeCondB: TAstNode = nil): Boolean; static;
     // FP-Gate (2026-07-04): for-in-loop-assign - Schleifenkopf weist VarLow zu
     // FP-Gate (Auto-Runde 2026-07-19): mutually-exclusive-branches (syntactic-
     // sibling) - nil-Zuweisung und Deref in then/else-Schwesterzweigen DESSELBEN
@@ -192,7 +198,8 @@ end;
   die Variable nil. }
 class function TNilDerefDetector.IsPassedAsArgBetween(MethodNode: TAstNode;
   Calls, Assigns: TList<TAstNode>; const VarLow: string;
-  AfterLine, BeforeLine: Integer): Boolean;
+  AfterLine, BeforeLine: Integer;
+  AExcludeCondA: TAstNode; AExcludeCondB: TAstNode): Boolean;
 var
   N       : TAstNode;
   TextLow : string;
@@ -233,6 +240,11 @@ begin
       Conds := MethodNode.FindAllRef(Kind);
       for N in Conds do
       begin
+        // Korrelations-Paar-Ausnahme (Review 2026-07-30): die eigenen
+        // Bedingungen von IfA/IfB LESEN die Variable nur ('assigned ( a )').
+        // Ohne die Ausnahme vetote IfA sich selbst, sobald AfterLine vor
+        // der IfA-Zeile liegt - das Gate droppte die Assigned()-Form nie.
+        if (N = AExcludeCondA) or (N = AExcludeCondB) then Continue;
         if N.Line <= AfterLine then Continue;
         if N.Line >= BeforeLine then Continue;
         TextLow := N.TypeRef.ToLower;
@@ -626,11 +638,17 @@ begin
       if (NmLow = CoreA) or NmLow.EndsWith('.' + CoreA) then Exit;
     end;
   // IsPassedAsArgBetween prueft mit OFFENEN Grenzen (> AfterLine,
-  // < BeforeLine): Start deshalb um 1 vorziehen; das Ende bleibt exklusiv -
-  // WindowEnd+1 wuerde bei MaxInt ueberlaufen, und der var/out-Fall auf
-  // exakt der IfB-Zeile ist vom Assign-Scan oben mit abgedeckt.
+  // < BeforeLine): Start um 1 vorziehen, damit Call-Mutationen AUF der
+  // IfA-Zeile zaehlen. IfA/IfB selbst sind per Referenz ausgenommen: ihre
+  // Bedingungen haben die ParseCorrelatedCond-Whitelist passiert und sind
+  // nebenwirkungsfrei - ohne die Ausnahme vetote IfAs eigenes
+  // 'assigned ( a )' den Drop, die Assigned()-Form wurde nie gedroppt
+  // (Review-Fund 2026-07-30). Das Ende bleibt exklusiv (WindowEnd+1
+  // ueberliefe bei MaxInt); bekannter konservativer Rest: eine CALL-
+  // Mutation exakt auf der IfB-Zeile (Mehrfach-Statement-Einzeiler)
+  // bleibt unsichtbar - der Assign-Scan oben deckt nur nkAssign ab.
   if TNilDerefDetector.IsPassedAsArgBetween(MethodNode, Calls, Assigns,
-       CoreA, WindowStart - 1, WindowEnd) then Exit;
+       CoreA, WindowStart - 1, WindowEnd, IfA, IfB) then Exit;
   Result := True;
 end;
 

@@ -52,6 +52,10 @@ type
     [Test] procedure OrphanCycle_WithoutProjectRef_StaysDead;
     [Test] procedure IfdefAdjacentUses_BothBranchesCount;
     [Test] procedure DprOnlyUsedUnit_Flagged195;
+    // Review 2026-07-30: Namensvetter einer PROJEKT-Unit ist eine tote
+    // Kopie und bleibt 194 - inkl. Kaskaden-Stopp (ihre uses zaehlen nicht).
+    [Test] procedure StaleCopyOfProjectUnit_Stays194;
+    [Test] procedure StaleCopyCascade_NotPulledTo195;
   end;
 
 implementation
@@ -741,6 +745,66 @@ begin
     Assert.AreEqual<Integer>(1, cnt, 'genau ein Fund');
     Assert.IsTrue(found.IndexOf(K195(orph)) >= 0,
       'nur vom .dpr gezogene Unit muss 195 sein, Ist: ' + found.Text);
+  finally
+    found.Free;
+  end;
+end;
+
+procedure TTestNotIncludedInProject.StaleCopyOfProjectUnit_Stays194;
+var
+  app, main, copy : string;
+  cnt : Integer;
+  found : TStringList;
+begin
+  // Review 2026-07-30: backup\uMain.pas ist Namensvetter der PROJEKT-Unit
+  // src\uMain.pas. Der Compiler kompiliert die im Projekt referenzierte
+  // Datei - die Kopie ist tot (194). Ohne das ProjBase-Gate kippte sie
+  // auf 195 'add it to the project' (Duplicate-Unit-Rat), weil 'umain'
+  // ueber die uses-Klausel von uApp in UsedNames steht.
+  app := WriteWithContent(FDir, 'uApp.pas',
+    'unit uApp;'#13#10'interface'#13#10'uses uMain;'#13#10 +
+    'implementation'#13#10'end.');
+  main := WriteWithContent(FDir, 'src\uMain.pas',
+    'unit uMain;'#13#10'interface'#13#10'implementation'#13#10'end.');
+  copy := WriteWithContent(FDir, 'backup\uMain.pas',
+    'unit uMain;'#13#10'interface'#13#10'implementation'#13#10'end.');
+  found := RunDetectKinds([app, main], FDir, cnt);
+  try
+    Assert.AreEqual<Integer>(1, cnt, 'genau ein Fund (die tote Kopie)');
+    Assert.IsTrue(found.IndexOf(K194(copy)) >= 0,
+      'Namensvetter einer Projekt-Unit muss 194 bleiben, Ist: ' + found.Text);
+  finally
+    found.Free;
+  end;
+end;
+
+procedure TTestNotIncludedInProject.StaleCopyCascade_NotPulledTo195;
+var
+  app, main, copy, oldh : string;
+  cnt : Integer;
+  found : TStringList;
+begin
+  // Kaskaden-Stopp: die tote Kopie zieht per uses uOldHelper - da die
+  // Kopie nie als 'benutzt' klassifiziert wird, duerfen ihre uses NICHT
+  // in den Fixpunkt einfliessen; der ganze Backup-Cluster bleibt 194.
+  app := WriteWithContent(FDir, 'uApp.pas',
+    'unit uApp;'#13#10'interface'#13#10'uses uMain;'#13#10 +
+    'implementation'#13#10'end.');
+  main := WriteWithContent(FDir, 'src\uMain.pas',
+    'unit uMain;'#13#10'interface'#13#10'implementation'#13#10'end.');
+  copy := WriteWithContent(FDir, 'backup\uMain.pas',
+    'unit uMain;'#13#10'interface'#13#10'uses uOldHelper;'#13#10 +
+    'implementation'#13#10'end.');
+  oldh := WriteWithContent(FDir, 'backup\uOldHelper.pas',
+    'unit uOldHelper;'#13#10'interface'#13#10'implementation'#13#10'end.');
+  found := RunDetectKinds([app, main], FDir, cnt);
+  try
+    Assert.AreEqual<Integer>(2, cnt, 'beide Backup-Dateien sind Funde');
+    Assert.IsTrue(found.IndexOf(K194(copy)) >= 0,
+      'tote Kopie bleibt 194, Ist: ' + found.Text);
+    Assert.IsTrue(found.IndexOf(K194(oldh)) >= 0,
+      'transitiv nur von der Kopie gezogene Unit bleibt 194, Ist: '
+      + found.Text);
   finally
     found.Free;
   end;

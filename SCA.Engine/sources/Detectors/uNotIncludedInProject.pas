@@ -33,11 +33,18 @@ unit uNotIncludedInProject;
 // (Kommentare/Strings vorher geblankt - Projektregel: Kommentare zaehlen
 // NIE als Code-Use); der Match laeuft ueber den Dateinamen ohne Endung,
 // der bei Delphi dem (ggf. gepunkteten) Unit-Namen entspricht.
+// Namensvetter einer PROJEKT-Unit (Review 2026-07-30): eine Orphan-Datei,
+// deren Name bereits durch eine Datei der Projektliste gedeckt ist
+// (backup\uMain.pas neben der referenzierten src\uMain.pas), bleibt 194 -
+// die DCCReference/'in'-Klausel pinnt den Pfad, der Compiler kompiliert
+// die Projekt-Datei, die Kopie ist tot ('experimental copies' sind ein
+// 194-Kernszenario). Sie speist auch ihre uses NICHT in den Fixpunkt.
 // v1-Grenzen:
 //   * Eine Orphan-Datei, die namensgleich mit einer benutzten RTL-/Fremd-
 //     Unit ist (z.B. eine lokale Windows.pas), wird als 195 gemeldet,
 //     obwohl der Compiler je nach Suchpfad die andere nehmen kann -
-//     Namensgleichheit im Projektbaum ist aber selbst ein Befund wert.
+//     Namensgleichheit im Projektbaum ist aber selbst ein Befund wert
+//     (nur fuer NICHT-Projekt-Namen; Projekt-Namensvetter siehe oben).
 //   * Whitespace INNERHALB eines gepunkteten uses-Namens ('System .
 //     SysUtils' - legal, aber exotisch) zerreisst den Match; die Unit
 //     bliebe 194.
@@ -284,12 +291,14 @@ class function TNotIncludedInProjectDetector.Detect(
   const AProjectFile: string): Integer;
 var
   ProjSet     : TDictionary<string, Boolean>;
+  ProjBase    : TDictionary<string, Boolean>;
   UsedNames   : TDictionary<string, Boolean>;
   UsedOrphans : TDictionary<string, Boolean>;
   DiskPas     : TStringList;
   DiskDfm     : TStringList;
   Orphans     : TStringList;
   F, Comp     : string;
+  Base        : string;
   i           : Integer;
   Aborted     : Boolean;
   Changed     : Boolean;
@@ -361,6 +370,7 @@ begin
   if not (Emit194 or Emit195) then Exit;
 
   ProjSet     := TDictionary<string, Boolean>.Create;
+  ProjBase    := TDictionary<string, Boolean>.Create;
   UsedNames   := TDictionary<string, Boolean>.Create;
   UsedOrphans := TDictionary<string, Boolean>.Create;
   DiskPas     := TStringList.Create;
@@ -368,7 +378,15 @@ begin
   Orphans     := TStringList.Create;
   try
     for i := 0 to AProjectPasList.Count - 1 do
+    begin
       ProjSet.AddOrSetValue(NormKey(AProjectPasList[i]), True);
+      // Basename-Set der Projektliste (Review 2026-07-30): Unit-Namen,
+      // die bereits durch eine PROJEKT-Datei gedeckt sind - Namensvetter
+      // im Walk-Baum sind tote Kopien und bleiben 194.
+      ProjBase.AddOrSetValue(
+        LowerCase(ChangeFileExt(ExtractFileName(AProjectPasList[i]), '')),
+        True);
+    end;
 
     Aborted := False;
     Walk(AWalkRoot, 0);
@@ -400,8 +418,16 @@ begin
       begin
         if ProjSet.ContainsKey(NormKey(F)) then Continue;
         if UsedOrphans.ContainsKey(NormKey(F)) then Continue;
-        if UsedNames.ContainsKey(
-             LowerCase(ChangeFileExt(ExtractFileName(F), ''))) then
+        Base := LowerCase(ChangeFileExt(ExtractFileName(F), ''));
+        // Namensvetter einer PROJEKT-Unit (Review 2026-07-30): der
+        // Compiler kompiliert die im Projekt referenzierte Datei - die
+        // Kopie hier ist tot und bleibt 194. Ohne dieses Gate kippte
+        // jede stale Kopie (backup\uMain.pas) auf 195, der Fix-Rat
+        // 'add it to the project' waere ein Duplicate-Unit-Konflikt,
+        // und CollectUsesNames zoege ihre uses transitiv in weitere
+        // 195-Fehlklassifikationen (Backup-Ordner-Kaskade).
+        if ProjBase.ContainsKey(Base) then Continue;
+        if UsedNames.ContainsKey(Base) then
         begin
           UsedOrphans.AddOrSetValue(NormKey(F), True);
           CollectUsesNames(F, UsedNames);
@@ -482,6 +508,7 @@ begin
     DiskPas.Free;
     UsedOrphans.Free;
     UsedNames.Free;
+    ProjBase.Free;
     ProjSet.Free;
   end;
 end;
