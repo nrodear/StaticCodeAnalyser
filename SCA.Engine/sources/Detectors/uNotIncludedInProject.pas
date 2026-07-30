@@ -89,15 +89,21 @@ type
     //   sortiert): fkUsedButNotInProject wenn per uses gezogen, sonst
     //   fkNotIncludedInProject. Liefert die Anzahl der Funde.
     // AProjectFile (opt.): Pfad der .dproj - Detect liest zusaetzlich die
-    // uses-Klausel der gleichnamigen .dpr/.dpk (die Programm-Hauptdatei
-    // steht NIE in der DCCReference-Liste; ohne sie blieben Units, die nur
-    // das .dpr zieht, faelschlich SCA194 statt SCA195 - Review 2026-07-29).
-    // Bei .groupproj existiert keine gleichnamige .dpr - harmloser No-Op.
+    // uses-Klausel der gleichnamigen .dpr bzw. die uses+contains-Klausel
+    // der gleichnamigen .dpk (die Programm-Hauptdatei steht NIE in der
+    // DCCReference-Liste; ohne sie blieben Units, die nur das .dpr zieht,
+    // faelschlich SCA194 statt SCA195 - Review 2026-07-29).
+    // AMemberProjects (opt., Review 2026-07-30): bei .groupproj existiert
+    // keine gleichnamige .dpr - die uses-Wurzeln liegen in den MEMBER-
+    // Projekten. Der Dispatch uebergibt deren .dproj-Pfade, Detect zieht
+    // pro Member die .dpr/.dpk nach; ohne sie bekaeme eine nur vom
+    // Member-.dpr gezogene Unit im Gruppen-Scan 194 statt 195.
     class function Detect(AProjectPasList: TStringList;
       const AWalkRoot: string;
       AResults: TObjectList<TLeakFinding>;
       AIgnore: TIgnoreList = nil;
-      const AProjectFile: string = ''): Integer; static;
+      const AProjectFile: string = '';
+      AMemberProjects: TStrings = nil): Integer; static;
   end;
 
 implementation
@@ -144,6 +150,49 @@ function StripForUsesScan(const Raw: string): string;
 var
   SB   : TStringBuilder;
   i, n : Integer;
+
+  // Delphi-12-Multiline-Literal (Review 2026-07-30): drei Apostrophe, nach
+  // denen bis zum Zeilenende nur Whitespace folgt, eroeffnen ein '''-Literal;
+  // es endet an der ersten Zeile, deren erster Nicht-Whitespace wieder '''
+  // ist. Ohne diese Behandlung liefen alle Folgezeilen des Literals als
+  // Code in den uses-Scan - eingebettetes 'uses uGhost;' haette eine tote
+  // Orphan-Datei auf 195 gekippt (String-Inhalte zaehlen NIE als Code).
+  // 5+-Quote-Varianten (Literal enthaelt selbst ''') fallen auf die
+  // Einzeiler-Logik zurueck - nicht schlechter als vorher, dokumentierte
+  // Restluecke.
+  function IsMultilineOpener(p: Integer): Boolean;
+  begin
+    if (p + 2 > n) or (Raw[p + 1] <> '''') or (Raw[p + 2] <> '''') then
+      Exit(False);
+    p := p + 3;
+    while (p <= n) and CharInSet(Raw[p], [' ', #9, #13]) do Inc(p);
+    Result := (p > n) or (Raw[p] = #10);
+  end;
+
+  procedure SkipMultilineLiteral;   // i steht auf dem ersten der drei Quotes
+  var
+    AtLineStart : Boolean;
+  begin
+    Inc(i, 3);
+    AtLineStart := False;           // Rest der Startzeile ist nur Whitespace
+    while i <= n do
+    begin
+      if Raw[i] = #10 then
+        AtLineStart := True
+      else if not CharInSet(Raw[i], [' ', #9, #13]) then
+      begin
+        if AtLineStart and (i + 2 <= n) and (Raw[i] = '''') and
+           (Raw[i + 1] = '''') and (Raw[i + 2] = '''') then
+        begin
+          Inc(i, 3);                // Abschluss-''' konsumieren
+          Exit;
+        end;
+        AtLineStart := False;
+      end;
+      Inc(i);
+    end;                            // unterminiert -> Rest der Datei geblankt
+  end;
+
 begin
   SB := TStringBuilder.Create(Length(Raw));
   try
@@ -154,23 +203,28 @@ begin
       case Raw[i] of
         '''':
           begin
-            Inc(i);
-            while i <= n do
+            if IsMultilineOpener(i) then
+              SkipMultilineLiteral
+            else
             begin
-              if Raw[i] = '''' then
+              Inc(i);
+              while i <= n do
               begin
-                if (i < n) and (Raw[i + 1] = '''') then
-                  Inc(i, 2)          // verdoppeltes Apostroph im Literal
-                else
+                if Raw[i] = '''' then
                 begin
+                  if (i < n) and (Raw[i + 1] = '''') then
+                    Inc(i, 2)          // verdoppeltes Apostroph im Literal
+                  else
+                  begin
+                    Inc(i);
+                    Break;
+                  end;
+                end
+                else if Raw[i] = #10 then
+                  Break                // Delphi-Literal endet an der Zeile
+                else
                   Inc(i);
-                  Break;
-                end;
-              end
-              else if Raw[i] = #10 then
-                Break                // Delphi-Literal endet an der Zeile
-              else
-                Inc(i);
+              end;
             end;
             SB.Append(' ');
           end;
@@ -217,7 +271,13 @@ begin
 end;
 
 procedure CollectUsesNames(const AFile: string;
-  ANames: TDictionary<string, Boolean>);
+  ANames: TDictionary<string, Boolean>;
+  AIncludeContains: Boolean = False);
+// AIncludeContains (Review 2026-07-30): .dpk-Packages haben keine uses-
+// Klausel - die Kompilat-Wurzel ist dort 'contains'. Der Wort-Walk
+// behandelt 'contains' dann wie 'uses' ('in'-Pfad-Skip greift identisch).
+// Bewusst OPT-IN nur fuer .dpk-Wurzeln: in .pas-Dateien ist 'contains'
+// kein reserviertes Wort und koennte als Bezeichner Phantom-Namen sammeln.
 var
   Lines  : TStringList;
   Owned  : Boolean;
@@ -254,7 +314,8 @@ begin
       if not InUses then
       begin
         // '&uses' waere ein escaped Ident, kein Schluesselwort.
-        if (W = 'uses') and ((Start = 1) or (Text[Start - 1] <> '&')) then
+        if ((W = 'uses') or (AIncludeContains and (W = 'contains'))) and
+           ((Start = 1) or (Text[Start - 1] <> '&')) then
           InUses := True;
       end
       else if (W <> 'in') and (W <> '') then
@@ -288,7 +349,7 @@ end;
 class function TNotIncludedInProjectDetector.Detect(
   AProjectPasList: TStringList; const AWalkRoot: string;
   AResults: TObjectList<TLeakFinding>; AIgnore: TIgnoreList;
-  const AProjectFile: string): Integer;
+  const AProjectFile: string; AMemberProjects: TStrings): Integer;
 var
   ProjSet     : TDictionary<string, Boolean>;
   ProjBase    : TDictionary<string, Boolean>;
@@ -404,9 +465,25 @@ begin
     begin
       F := ChangeFileExt(AProjectFile, '.dpr');
       if FileExists(F) then CollectUsesNames(F, UsedNames);
+      // .dpk: Kompilat-Wurzel ist die contains-Klausel (uses gibt es in
+      // Packages nicht) - Review 2026-07-30, vorher garantierter No-Op.
       F := ChangeFileExt(AProjectFile, '.dpk');
-      if FileExists(F) then CollectUsesNames(F, UsedNames);
+      if FileExists(F) then CollectUsesNames(F, UsedNames, True);
     end;
+
+    // Gruppen-Scan (Review 2026-07-30): die Wurzeln der MEMBER-Projekte
+    // nachziehen - bei .groupproj existiert keine gleichnamige .dpr; eine
+    // nur vom Member-.dpr gezogene Unit bekaeme sonst im Gruppen-Scan 194
+    // ('verwaist - loeschen?') statt 195, im Einzel-Scan desselben
+    // Projekts aber 195 - widerspruechlicher Rat je Scan-Modus.
+    if AMemberProjects <> nil then
+      for i := 0 to AMemberProjects.Count - 1 do
+      begin
+        F := ChangeFileExt(AMemberProjects[i], '.dpr');
+        if FileExists(F) then CollectUsesNames(F, UsedNames);
+        F := ChangeFileExt(AMemberProjects[i], '.dpk');
+        if FileExists(F) then CollectUsesNames(F, UsedNames, True);
+      end;
 
     // Verwaiste .pas klassifizieren: benutzt (fkUsedButNotInProject) oder
     // tot (fkNotIncludedInProject). TRANSITIVER Fixpunkt: eine als benutzt

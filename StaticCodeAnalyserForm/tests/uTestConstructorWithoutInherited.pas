@@ -30,6 +30,10 @@ type
     // T2-Guards-Ruecknahme (2026-07-29):
     [Test] procedure NestedRecordCtor_NotFlagged;
     [Test] procedure NestedClassCtor_WithoutInherited_Flagged;
+    // Review 2026-07-30: Record-Namensvetter darf den Klassen-Ctor nicht
+    // supprimieren - die Decl-Aufloesung entscheidet, wem der Ctor gehoert.
+    [Test] procedure HomonymRecordClass_CtorDeclResolved_Flagged;
+    [Test] procedure HomonymBothDeclareCtor_Suppressed;
   end;
 
 implementation
@@ -361,6 +365,84 @@ begin
     Assert.AreEqual<Integer>(1,
       TFindingHelper.Count(F, fkConstructorWithoutInherited),
       'nested-class-Ctor ohne inherited muss gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestConstructorWithoutInherited.HomonymRecordClass_CtorDeclResolved_Flagged;
+// Review 2026-07-30: Top-Level-Record TNode (OHNE Ctor-Decl) + nested
+// class TNode (MIT Ctor-Decl). Vor dem Fix traf die Record-Ausnahme rein
+// per Namen und supprimierte den Klassen-Ctor (FN). Die Decl-Aufloesung
+// stellt fest: nur die KLASSE deklariert Create -> normal pruefen ->
+// fehlendes inherited wird gemeldet.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TNode = record'#13#10 +
+  '    X: Integer;'#13#10 +
+  '  end;'#13#10 +
+  '  TOuter = class'#13#10 +
+  '  public'#13#10 +
+  '    type'#13#10 +
+  '      TNode = class'#13#10 +
+  '        FA: Integer;'#13#10 +
+  '        constructor Create(AA: Integer);'#13#10 +
+  '      end;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'constructor TOuter.TNode.Create(AA: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  FA := AA;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkConstructorWithoutInherited),
+      'Record-Namensvetter darf den nested-class-Ctor nicht supprimieren');
+  finally F.Free; end;
+end;
+
+procedure TTestConstructorWithoutInherited.HomonymBothDeclareCtor_Suppressed;
+// Gegenprobe: deklarieren BEIDE Namensvettern einen Create, ist der
+// Besitzer nicht entscheidbar (nested Typen stehen als Geschwister mit
+// einfachem Namen im Baum) - konservativ supprimieren, FN statt FP.
+// Praezise Aufloesung braucht Parser-Elternkanten (T2b).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TNode = record'#13#10 +
+  '    X: Integer;'#13#10 +
+  '    constructor Create(AX: Integer);'#13#10 +
+  '  end;'#13#10 +
+  '  TOuter = class'#13#10 +
+  '  public'#13#10 +
+  '    type'#13#10 +
+  '      TNode = class'#13#10 +
+  '        FA: Integer;'#13#10 +
+  '        constructor Create(AA: Integer);'#13#10 +
+  '      end;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'constructor TNode.Create(AX: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  X := AX;'#13#10 +
+  'end;'#13#10 +
+  'constructor TOuter.TNode.Create(AA: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  FA := AA;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkConstructorWithoutInherited),
+      'beidseitige Ctor-Decl = nicht entscheidbar -> konservativ still');
   finally F.Free; end;
 end;
 

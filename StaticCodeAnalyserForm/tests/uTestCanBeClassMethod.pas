@@ -33,6 +33,9 @@ type
     [Test] procedure NestedMethod_UsingOwnField_NotFlagged;
     [Test] procedure NestedMethod_NoSelfUse_Flagged;
     [Test] procedure NestedRecordMethod_NoSelfUse_Flagged;
+    // Review 2026-07-30: homonyme Klassennamen (top-level vs. nested)
+    // duerfen weder Member mischen noch die Vererbungskette verlieren.
+    [Test] procedure HomonymClasses_ConservativeSkip;
   end;
 
 implementation
@@ -45,15 +48,16 @@ uses
 
 // --- AST-Direkteinstieg fuer den Decl<->Impl-Abgleich ----------------------
 // Die folgenden drei Tests bauen den AST von Hand statt ueber
-// TFindingHelper.FindingsOf(SRC). Grund: uParser2.ParseMethodSignature
-// konsumiert im Implementierungs-Header GENAU EINEN Punkt (`if Tok.Kind =
-// tkDot`, kein Loop) - aus `procedure TOuter.TInner.DoIt;` wird deshalb
-// heute der nkMethod-Name 'TOuter.TInner'. Ein quelltextbasierter Test
-// wuerde also gar nicht den Pfad treffen, den dieser Fix repariert
-// (er waere gruen/rot aus dem falschen Grund). Der Detektor selbst
-// arbeitet ausschliesslich auf Node.Name - der AST-Einstieg prueft ihn
-// exakt an der Stelle, an der die Semantik haengt. Die Parser-Luecke
-// selbst ist separate Restschuld und hier bewusst NICHT angefasst.
+// TFindingHelper.FindingsOf(SRC). HISTORISCHER Grund (Stand 2026-07-26):
+// ParseMethodSignature konsumierte damals nur EINEN Punkt, quelltext-
+// basierte nested-Tests trafen den Node.Name-Pfad nicht. Seit der
+// Multi-Dot-Schleife (uParser2 'Beliebig viele Qualifizierer', Commit
+// ab14fed) traegt der nkMethod-Knoten den VOLLEN Namen
+// ('TOuter.TInner.DoIt') - die quelltextbasierten nested-Tests weiter
+// unten (T2-Ruecknahme 2026-07-29) beruhen genau darauf und sind NICHT
+// vakuum-gruen. Die drei AST-Direkttests bleiben trotzdem: sie pruefen
+// den Node.Name-Pfad isoliert von Parser-Aenderungen (Review 2026-07-30:
+// Kommentar war stale und widersprach den Tests im selben File).
 //
 // Aufbau:
 //   nkUnit
@@ -532,6 +536,68 @@ begin
   try
     Assert.IsTrue(TFindingHelper.Count(F, fkCanBeClassMethod) >= 1,
       'nested-record-Methode ohne Instanzbezug: Fund wie bei Top-Level-Records');
+  finally F.Free; end;
+end;
+
+procedure TTestCanBeClassMethod.HomonymClasses_ConservativeSkip;
+// Review 2026-07-30: 'TItem' existiert top-level (erbt in-Unit von TBase,
+// nutzt NUR das geerbte Feld Lexer) UND als nested class in TOuter. Vor
+// dem Fix ueberschrieb der Namensvetter per last-wins die Parent-Kette
+// ('titem' -> '') - Lexer fehlte im FullDict-Set, TItem.DoIt wurde
+// faelschlich gemeldet (FP), obwohl InheritedMemberAccess_NotReported
+// genau dieses Muster schuetzt. Homonym-Keys werden jetzt konservativ
+// uebersprungen - auch entlang der VORFAHRENKETTE: TChild = class(TItem)
+// nutzt dasselbe doppelt geerbte Feld, seine Kette laeuft durch den
+// Homonym-Key und waere genauso verarmt (Pre-Build-Review 2026-07-30).
+// Die Gegenprobe TWorker.Util (eindeutiger Name, kein Instanzbezug)
+// muss weiter gemeldet werden - genau EIN Fund.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TBase = class'#13#10 +
+  '    Lexer: TObject;'#13#10 +
+  '  end;'#13#10 +
+  '  TItem = class(TBase)'#13#10 +
+  '  public'#13#10 +
+  '    procedure DoIt;'#13#10 +
+  '  end;'#13#10 +
+  '  TOuter = class'#13#10 +
+  '  public'#13#10 +
+  '    type'#13#10 +
+  '      TItem = class'#13#10 +
+  '      end;'#13#10 +
+  '  end;'#13#10 +
+  '  TChild = class(TItem)'#13#10 +
+  '  public'#13#10 +
+  '    procedure DoChild;'#13#10 +
+  '  end;'#13#10 +
+  '  TWorker = class'#13#10 +
+  '  public'#13#10 +
+  '    procedure Util;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TItem.DoIt;'#13#10 +
+  'begin'#13#10 +
+  '  Lexer.Free;'#13#10 +
+  'end;'#13#10 +
+  'procedure TChild.DoChild;'#13#10 +
+  'begin'#13#10 +
+  '  Lexer.Free;'#13#10 +
+  'end;'#13#10 +
+  'procedure TWorker.Util;'#13#10 +
+  'begin'#13#10 +
+  '  Beep;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCanBeClassMethod),
+      'nur TWorker.Util darf gemeldet werden - Homonym-Key TItem und ' +
+      'seine Ableitung TChild werden konservativ uebersprungen (kein FP ' +
+      'trotz verlorener Parent-Kette)');
   finally F.Free; end;
 end;
 

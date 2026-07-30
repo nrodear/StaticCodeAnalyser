@@ -574,7 +574,12 @@ begin
      fkDfmDefaultName, fkDfmHardcodedCaption, fkDfmOrphanHandler,
      fkDfmEmptyBoundEvent, fkDfmFieldTypeMismatch, fkDfmTabOrderConflict,
      fkDfmForbiddenClass, fkDfmDbInUiForm, fkDfmLayerViolation,
-     fkDfmGodHandler]);
+     fkDfmGodHandler,
+     // Review 2026-07-30: beide Projekt-Hygiene-Kinds - die JSON fuehrte
+     // NotIncludedInProject schon, der Fallback keines von beiden; seit
+     // dem 194/195-Split verschwand ein per uses gezogener Orphan unter
+     // diesem Profil sonst ersatzlos (Emit195=False frisst den Fund).
+     fkNotIncludedInProject, fkUsedButNotInProject]);
   FProfiles.AddOrSetValue('dfm-only',
     [fkDfmDefaultName, fkDfmHardcodedCaption, fkDfmHardcodedDbCreds,
      fkDfmDuplicateBinding, fkDfmDeadEvent, fkDfmOrphanHandler,

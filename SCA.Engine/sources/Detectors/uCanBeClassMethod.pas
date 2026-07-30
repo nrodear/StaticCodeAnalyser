@@ -381,6 +381,7 @@ var
   Members    : THashSet<string>;
   Key        : string;
   PolyNames  : THashSet<string>;  // Perf (2026-07-05): P6 - lazy Lookup-Set
+  AmbigKeys  : THashSet<string>;  // Review 2026-07-30: homonyme Klassennamen
 
   // Stufe 2: Member-Set inkl. In-Unit-Vererbungskette aufloesen (memoized,
   // cycle-safe). Faengt bare Zugriffe auf geerbte Felder/Properties/Methoden
@@ -409,6 +410,7 @@ begin
   MemberDict := TObjectDictionary<string, THashSet<string>>.Create([doOwnsValues]);
   ParentOf   := TDictionary<string, string>.Create;
   FullDict   := TObjectDictionary<string, THashSet<string>>.Create([doOwnsValues]);
+  AmbigKeys  := THashSet<string>.Create;
   Classes    := UnitNode.FindAll(nkClass);
   try
     for C in Classes do
@@ -419,7 +421,19 @@ begin
       begin
         Members := THashSet<string>.Create;
         MemberDict.Add(Key, Members);
-      end;
+      end
+      else
+        // Homonym-Defensive (Review 2026-07-30): zwei Klassen gleichen
+        // einfachen Namens in einer Unit (seit 8d36052 stehen nested
+        // classes als Geschwister mit einfachem Namen im Baum - z.B.
+        // TTree.TNode + TList.TNode, oder top-level vs. nested). Die
+        // Dicts wuerden Member MISCHEN (falscher Continue = FN) und
+        // ParentOf per last-wins die Vererbungskette VERLIEREN (Methode
+        // nutzt nur geerbte Member -> falscher Fund = FP). Kandidaten
+        // dieser Keys werden unten uebersprungen - bewusst FN statt FP
+        // (Hint-Tier); praezise Aufloesung braucht Parser-Elternkanten
+        // (T2b).
+        AmbigKeys.Add(Key);
       CollectClassMembers(C, Members);
       ParentOf.AddOrSetValue(Key, FirstTypeRefToken(C.TypeRef));
     end;
@@ -460,7 +474,35 @@ begin
       // auch fuer sie. Nicht aufloesbare Besitzer (z.B. nested RECORDS,
       // die nicht im MemberDict stehen) verhalten sich damit exakt wie
       // Top-Level-Records seit jeher: Analyse ohne Member-Guard, Paritaet.
-      if FullDict.TryGetValue(ClassKeyOf(M.Name), Members) and
+      // Das gilt nur fuer EINDEUTIGE Namen - Homonym-Keys sind oben in
+      // AmbigKeys gelandet und werden hier konservativ uebersprungen.
+      // Auch die In-Unit-VORFAHRENKETTE darf keinen Homonym-Key enthalten
+      // (Pre-Build-Review 2026-07-30): ParentOf ist last-wins - bei
+      // TChild = class(TItem) mit homonymem TItem waere die Kette
+      // verloren/gemischt, das geerbte Feld fehlte im Full-Set und
+      // TChild.DoIt wuerde faelschlich gemeldet (FP). Hop-Limit statt
+      // Seen-Set: in-Unit-Ketten sind kurz, 32 reicht zyklussicher.
+      // Restluecke NUR noch in FN-Richtung: die Member-MISCHUNG in
+      // ResolveFull kann fremde Namen enthalten und zusaetzlich
+      // supprimieren - Hint-Tier-toleriert; praezise Aufloesung = T2b.
+      Key := ClassKeyOf(M.Name);
+      if AmbigKeys.Contains(Key) then Continue;
+      var ChainKey := Key;
+      var ChainAmbig := False;
+      var NextKey := '';
+      for var Hop := 1 to 32 do
+      begin
+        if not ParentOf.TryGetValue(ChainKey, NextKey) or (NextKey = '') then
+          Break;
+        if AmbigKeys.Contains(NextKey) then
+        begin
+          ChainAmbig := True;
+          Break;
+        end;
+        ChainKey := NextKey;
+      end;
+      if ChainAmbig then Continue;
+      if FullDict.TryGetValue(Key, Members) and
          BodyRefsInstanceMember(M, Members) then Continue;
 
       // Message-Suffix: 'class function' fuer Funktionen, 'class procedure'
@@ -480,6 +522,7 @@ begin
     FullDict.Free;     // doOwnsValues -> gibt die THashSet-Werte mit frei
     ParentOf.Free;
     MemberDict.Free;   // doOwnsValues -> gibt die THashSet-Werte mit frei
+    AmbigKeys.Free;
     Methods.Free;
   end;
 end;

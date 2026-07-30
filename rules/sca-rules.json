@@ -37,7 +37,7 @@
       "DfmDefaultName", "DfmHardcodedCaption", "DfmOrphanHandler",
       "DfmEmptyBoundEvent", "DfmFieldTypeMismatch", "DfmTabOrderConflict",
       "DfmForbiddenClass", "DfmDbInUiForm", "DfmLayerViolation",
-      "DfmGodHandler", "NotIncludedInProject"
+      "DfmGodHandler", "NotIncludedInProject", "UsedButNotInProject"
     ],
     "dfm-only": [
       "DfmDefaultName", "DfmHardcodedCaption", "DfmHardcodedDbCreds",
@@ -3814,7 +3814,7 @@
       "detectorUnit": "uNotIncludedInProject.pas",
       "examples": {
         "bad":  "MyProject.dproj references uMain, uData - but the folder also contains uOldHelper.pas (not referenced) -> flagged",
-        "good": "Remove uOldHelper.pas, add it to the project, or move it out of the project folder"
+        "good": "Remove uOldHelper.pas or move it out of the project folder - since the SCA194/SCA195 split this finding means the file is not referenced by any uses; a unit that IS used but unlisted is reported as SCA195 (add it to the project) instead"
       },
       "cleanCodeAttribute": "CLEAR",
       "impacts": [

@@ -112,6 +112,58 @@ begin
     if HasSiblingCreateCall(Child) then Exit(True);
 end;
 
+function CtorSimpleNameLow(const AMethodName: string): string;
+// Letztes Namenssegment (lowercase) - 'TOuter.TNode.Create' -> 'create'.
+var
+  p : Integer;
+begin
+  Result := LowerCase(Trim(AMethodName));
+  p := Result.LastIndexOf('.');            // 0-basiert
+  if p >= 0 then Result := Copy(Result, p + 2, MaxInt);
+end;
+
+function TypeDeclaresNamedCtor(UnitNode: TAstNode; AKind: TNodeKind;
+  const ATypeLow, ACtorLow: string): Boolean;
+// True wenn irgendein Typknoten der Art AKind mit (Generics-gestripptem)
+// Namen ATypeLow einen Konstruktor namens ACtorLow DEKLARIERT.
+// Grundlage der Homonym-Aufloesung Review 2026-07-30. WICHTIG: der Parser
+// legt fuer jeden Typ mit Rumpf eine (implizite 'published')
+// nkVisibilitySection an - die nkMethod-Signaturen sind ENKEL des
+// Typknotens, nicht Kinder (Pre-Build-Review 2026-07-30; gleiche
+// Rekursion wie CollectClassMembers in uCanBeClassMethod).
+var
+  Nodes   : TList<TAstNode>;
+  T, Ch   : TAstNode;
+  Sub     : TAstNode;
+  NmLow   : string;
+  Lt      : Integer;
+begin
+  Result := False;
+  Nodes := UnitNode.FindAll(AKind);
+  try
+    for T in Nodes do
+    begin
+      NmLow := LowerCase(Trim(T.Name));
+      Lt := Pos('<', NmLow);
+      if Lt > 0 then NmLow := Trim(Copy(NmLow, 1, Lt - 1));
+      if NmLow <> ATypeLow then Continue;
+      for Ch in T.Children do
+      begin
+        if (Ch.Kind = nkMethod) and IsConstructor(Ch) and
+           SameText(Trim(Ch.Name), ACtorLow) then
+          Exit(True);
+        if Ch.Kind = nkVisibilitySection then
+          for Sub in Ch.Children do
+            if (Sub.Kind = nkMethod) and IsConstructor(Sub) and
+               SameText(Trim(Sub.Name), ACtorLow) then
+              Exit(True);
+      end;
+    end;
+  finally
+    Nodes.Free;
+  end;
+end;
+
 function BodyStartsWithRaise(BodyBlock: TAstNode): Boolean;
 // True wenn die ERSTE ausfuehrbare Anweisung des Konstruktor-Rumpfs ein
 // unbedingtes `raise` ist (direkt im Block, NICHT in if/try/case verschachtelt).
@@ -144,7 +196,9 @@ class procedure TConstructorWithoutInheritedDetector.AnalyzeUnit(UnitNode: TAstN
 var
   Methods : TList<TAstNode>;
   Recs    : TList<TAstNode>;
+  Cls     : TList<TAstNode>;
   RecordNames : THashSet<string>;
+  ClassNames  : THashSet<string>;
   M       : TAstNode;
   F       : TLeakFinding;
 begin
@@ -153,6 +207,7 @@ begin
   // unmoeglich. 'TMyRec.Create' ohne inherited ist daher KEIN Bug. Dominante
   // SCA096-FP-Klasse (Real-World ~30-50% FP).
   RecordNames := THashSet<string>.Create;
+  ClassNames  := THashSet<string>.Create;
   Recs := UnitNode.FindAll(nkRecord);
   try
     for var R in Recs do
@@ -165,6 +220,22 @@ begin
       end;
   finally
     Recs.Free;
+  end;
+  // Klassennamen fuer die Homonym-Defensive (Review 2026-07-30): nur wenn
+  // ein Record-Name AUCH als Klasse existiert, ist die Record-Ausnahme
+  // per Namen nicht entscheidbar und braucht die Decl-Aufloesung unten.
+  Cls := UnitNode.FindAll(nkClass);
+  try
+    for var CN in Cls do
+      if CN.Name <> '' then
+      begin
+        var KN := LowerCase(Trim(CN.Name));
+        var KLt := Pos('<', KN);
+        if KLt > 0 then KN := Trim(Copy(KN, 1, KLt - 1));
+        if KN <> '' then ClassNames.Add(KN);
+      end;
+  finally
+    Cls.Free;
   end;
 
   Methods := UnitNode.FindAll(nkMethod);
@@ -188,7 +259,25 @@ begin
       var Qual := TDetectorUtils.OwnerTypeNameLower(M.Name);
       var QLt := Pos('<', Qual);
       if QLt > 0 then Qual := Copy(Qual, 1, QLt - 1);
-      if RecordNames.Contains(Trim(Qual)) then Continue;
+      Qual := Trim(Qual);
+      if RecordNames.Contains(Qual) then
+      begin
+        // Homonym-Defensive (Review 2026-07-30): existiert derselbe Name
+        // AUCH als Klasse (nested Typen stehen seit 8d36052 als
+        // Geschwister mit einfachem Namen im Baum), ist der Besitzer per
+        // Namen nicht entscheidbar - ein Record-Namensvetter darf den
+        // Klassen-Ctor nicht supprimieren. Es entscheidet, welche Seite
+        // den Konstruktor DEKLARIERT: nur die Klasse -> normal pruefen;
+        // nur der Record, beide oder keine -> konservativ supprimieren
+        // (FN statt FP; praezise Aufloesung braucht Parser-Elternkanten,
+        // T2b).
+        if not ClassNames.Contains(Qual) then Continue;   // rein Record
+        var CtorLow := CtorSimpleNameLow(M.Name);
+        if not (TypeDeclaresNamedCtor(UnitNode, nkClass, Qual, CtorLow) and
+                not TypeDeclaresNamedCtor(UnitNode, nkRecord, Qual, CtorLow))
+        then
+          Continue;
+      end;
       // T2-Guards-Ruecknahme (2026-07-29): der nested-type-Blanket-Skip ist
       // entfallen. Seit dem tkKwType-Zweig (8d36052) landen auch im
       // Klassenrumpf deklarierte Records als nkRecord im Baum - RecordNames
@@ -221,6 +310,7 @@ begin
     end;
   finally
     Methods.Free;
+    ClassNames.Free;
     RecordNames.Free;
   end;
 end;

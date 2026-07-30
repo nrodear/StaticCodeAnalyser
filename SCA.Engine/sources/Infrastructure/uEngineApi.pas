@@ -497,6 +497,7 @@ var
   BaseDir  : string;
   Warnings : TStringList;
   ProjList : TStringList;
+  MemberProjs : TStringList;   // Gruppen-Member-.dproj (Review 2026-07-30)
   ProjErr  : string;
   W        : string;
   EffIndexRoot : string;
@@ -548,11 +549,17 @@ begin
         // liefert wie ueberall ein Fehler-Finding statt einer Exception.
         Files := TStringList.Create;
         Warnings := TStringList.Create;
+        // Member-.dproj-Pfade der Gruppe (Review 2026-07-30): der SCA194/
+        // 195-Detektor zieht daraus die .dpr/.dpk-uses-Wurzeln nach - bei
+        // .groupproj existiert keine gleichnamige .dpr, und eine nur vom
+        // Member-.dpr gezogene Unit bekaeme sonst 194 statt 195.
+        MemberProjs := TStringList.Create;
         try
           if Req.Scope = ssProject then
             ProjList := TProjectFiles.FromDproj(Req.Path, ProjErr, Warnings)
           else
-            ProjList := TProjectFiles.FromGroupproj(Req.Path, ProjErr, Warnings);
+            ProjList := TProjectFiles.FromGroupproj(Req.Path, ProjErr,
+              Warnings, MemberProjs);
           try
             Files.AddStrings(ProjList);
           finally
@@ -601,10 +608,12 @@ begin
               // Kanonisierung. Files.Count>0-Guard: bei leerer Projektliste
               // (0 DCCReferences) NICHT den ganzen Ordner als verwaist melden.
               // Req.Path = .dproj/.groupproj: Detect liest daraus die
-              // gleichnamige .dpr/.dpk (uses-Wurzel des Kompilats; bei
-              // .groupproj existiert keine - No-Op).
+              // gleichnamige .dpr/.dpk (uses- bzw. contains-Wurzel des
+              // Kompilats); bei .groupproj kommen die Wurzeln stattdessen
+              // aus den Member-.dproj (MemberProjs, Review 2026-07-30).
               TNotIncludedInProjectDetector.Detect(
-                Files, BaseDir, Findings, Req.IgnoreList, Req.Path);
+                Files, BaseDir, Findings, Req.IgnoreList, Req.Path,
+                MemberProjs);
           end;
           // Warnungen (fehlende Referenzen, Makro-Skips) nicht als Findings
           // (fkFileReadError wuerde Exit-Code 4 erzwingen). v1: NUR Debug-
@@ -613,6 +622,7 @@ begin
           for W in Warnings do
             OutputDebugString(PChar('SCA ProjectScope: ' + W));
         finally
+          MemberProjs.Free;
           Warnings.Free;
           Files.Free;
         end;

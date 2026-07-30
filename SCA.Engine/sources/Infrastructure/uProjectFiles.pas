@@ -41,8 +41,13 @@ type
     // .groupproj -> Union der Projekt-Listen, case-insensitiv dedupliziert
     // (shared Units nur 1x). Einzelne kaputte Projekte -> Warnung; Fehler
     // nur wenn gar nichts aufloesbar war.
+    // AMemberProjects (opt., Review 2026-07-30): sammelt die aufgeloesten
+    // .dproj-Vollpfade der ERFOLGREICH gelesenen Member - der SCA194/195-
+    // Detektor zieht daraus die .dpr/.dpk-uses-Wurzeln nach (bei
+    // .groupproj existiert keine gleichnamige .dpr).
     class function FromGroupproj(const AGroupFile: string;
-      out AErrorMsg: string; AWarnings: TStrings = nil): TStringList; static;
+      out AErrorMsg: string; AWarnings: TStrings = nil;
+      AMemberProjects: TStrings = nil): TStringList; static;
   end;
 
 implementation
@@ -220,7 +225,8 @@ begin
 end;
 
 class function TProjectFiles.FromGroupproj(const AGroupFile: string;
-  out AErrorMsg: string; AWarnings: TStrings): TStringList;
+  out AErrorMsg: string; AWarnings: TStrings;
+  AMemberProjects: TStrings): TStringList;
 var
   Projects  : TStringList;
   Seen      : TStringList;
@@ -256,6 +262,8 @@ begin
           Continue;
         end;
         Inc(OkCount);
+        if Assigned(AMemberProjects) then
+          AMemberProjects.Add(ProjFull);
         for F in ProjFiles do
           if Seen.IndexOf(F) < 0 then
           begin

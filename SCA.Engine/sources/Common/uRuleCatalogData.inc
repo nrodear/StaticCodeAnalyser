@@ -1813,7 +1813,7 @@ const
       Name     : 'Source file not part of the project';
       ShortDesc: 'A .pas/.dfm file lies in the project folder but is not referenced by the project (.dproj/.groupproj) - likely an orphaned / dead source file';
       BadEx    : 'MyProject.dproj references uMain, uData - but the folder also contains uOldHelper.pas (not referenced) -> flagged';
-      GoodEx   : 'Remove uOldHelper.pas, add it to the project, or move it out of the project folder'
+      GoodEx   : 'Remove uOldHelper.pas or move it out of the project folder - since the SCA194/SCA195 split this finding means the file is not referenced by any uses; a unit that IS used but unlisted is reported as SCA195 (add it to the project) instead'
     ),
     // SCA195
     (

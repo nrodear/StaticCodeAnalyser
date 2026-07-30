@@ -56,6 +56,11 @@ type
     // Kopie und bleibt 194 - inkl. Kaskaden-Stopp (ihre uses zaehlen nicht).
     [Test] procedure StaleCopyOfProjectUnit_Stays194;
     [Test] procedure StaleCopyCascade_NotPulledTo195;
+    // Review-Rest 2026-07-30: Gruppen-Member-Wurzeln, Multiline-Strings,
+    // .dpk-contains.
+    [Test] procedure GroupMemberDprRoot_UsedUnit_Flagged195;
+    [Test] procedure UsesInMultilineString_DoesNotCount;
+    [Test] procedure DpkContainsUnit_Flagged195;
   end;
 
 implementation
@@ -417,25 +422,34 @@ end;
 // Liefert 'K|Pfad' je Fund, K = Ord(TFindingKind).
 function RunDetectKinds(const AProjList: array of string;
   const AWalkRoot: string; out ACount: Integer;
-  const AProjectFile: string = ''): TStringList;
+  const AProjectFile: string = '';
+  const AMemberProject: string = ''): TStringList;
 var
-  Proj : TStringList;
-  Res  : TObjectList<TLeakFinding>;
-  s    : string;
-  i    : Integer;
+  Proj    : TStringList;
+  Members : TStringList;
+  Res     : TObjectList<TLeakFinding>;
+  s       : string;
+  i       : Integer;
 begin
   Result := TStringList.Create;
   Result.CaseSensitive := False;
   Proj := TStringList.Create;
+  Members := nil;
   Res  := TObjectList<TLeakFinding>.Create(True);
   try
     for s in AProjList do Proj.Add(s);
+    if AMemberProject <> '' then
+    begin
+      Members := TStringList.Create;
+      Members.Add(AMemberProject);
+    end;
     ACount := TNotIncludedInProjectDetector.Detect(Proj, AWalkRoot, Res, nil,
-      AProjectFile);
+      AProjectFile, Members);
     for i := 0 to Res.Count - 1 do
       Result.Add(IntToStr(Ord(Res[i].Kind)) + '|' + Res[i].FileName);
   finally
     Res.Free;
+    Members.Free;
     Proj.Free;
   end;
 end;
@@ -805,6 +819,96 @@ begin
     Assert.IsTrue(found.IndexOf(K194(oldh)) >= 0,
       'transitiv nur von der Kopie gezogene Unit bleibt 194, Ist: '
       + found.Text);
+  finally
+    found.Free;
+  end;
+end;
+
+procedure TTestNotIncludedInProject.GroupMemberDprRoot_UsedUnit_Flagged195;
+var
+  member, main, orph : string;
+  cnt : Integer;
+  found : TStringList;
+begin
+  // Review 2026-07-30: im Gruppen-Scan existiert keine Group.dpr - die
+  // uses-Wurzeln liegen in den MEMBER-.dpr. Eine nur dort gezogene Unit
+  // muss 195 sein (im Einzel-Scan desselben Projekts war sie es schon);
+  // ohne Member-Nachzug kaeme 194 'verwaist - loeschen?'.
+  member := TPath.Combine(FDir, 'sub\P1.dproj');   // Datei selbst optional
+  WriteWithContent(FDir, 'sub\P1.dpr',
+    'program P1;'#13#10'uses uOnlyDpr;'#13#10'begin'#13#10'end.');
+  main := WriteWithContent(FDir, 'src\uMain.pas',
+    'unit uMain;'#13#10'interface'#13#10'implementation'#13#10'end.');
+  orph := WriteWithContent(FDir, 'sub\uOnlyDpr.pas',
+    'unit uOnlyDpr;'#13#10'interface'#13#10'implementation'#13#10'end.');
+  found := RunDetectKinds([main], FDir, cnt, '', member);
+  try
+    Assert.AreEqual<Integer>(1, cnt, 'genau ein Fund');
+    Assert.IsTrue(found.IndexOf(K195(orph)) >= 0,
+      'nur vom Member-.dpr gezogene Unit muss 195 sein, Ist: ' + found.Text);
+  finally
+    found.Free;
+  end;
+end;
+
+procedure TTestNotIncludedInProject.UsesInMultilineString_DoesNotCount;
+const
+  Q3 = #39#39#39;   // drei Apostrophe: Delphi-12-Multiline-Literal
+var
+  main, ghost : string;
+  cnt : Integer;
+  found : TStringList;
+begin
+  // Review 2026-07-30: der Inhalt eines '''-Multiline-Literals lief ab
+  // Zeile 2 als Code durch den uses-Scan - eingebettetes 'uses uGhost;'
+  // kippte eine tote Orphan-Datei auf 195 (String-Inhalte zaehlen NIE).
+  main := WriteWithContent(FDir, 'uMain.pas',
+    'unit uMain;'#13#10'interface'#13#10 +
+    'const S ='#13#10 +
+    '  ' + Q3 + #13#10 +
+    '  uses uGhost;'#13#10 +
+    '  ' + Q3 + ';'#13#10 +
+    'implementation'#13#10'end.');
+  ghost := WriteWithContent(FDir, 'uGhost.pas',
+    'unit uGhost;'#13#10'interface'#13#10'implementation'#13#10'end.');
+  found := RunDetectKinds([main], FDir, cnt);
+  try
+    Assert.AreEqual<Integer>(1, cnt, 'genau ein Fund');
+    Assert.IsTrue(found.IndexOf(K194(ghost)) >= 0,
+      'uses im Multiline-Literal darf nicht zaehlen - 194, Ist: '
+      + found.Text);
+  finally
+    found.Free;
+  end;
+end;
+
+procedure TTestNotIncludedInProject.DpkContainsUnit_Flagged195;
+var
+  dproj, main, reg : string;
+  cnt : Integer;
+  found : TStringList;
+begin
+  // Review 2026-07-30: Packages haben keine uses-Klausel - die Kompilat-
+  // Wurzel der .dpk ist 'contains'. Eine contains-only-Unit ist 195
+  // ('kompiliert ins Package, fehlt im .dproj'), nicht 194; vorher war
+  // der .dpk-Zweig ein garantierter No-Op. 'requires rtl' darf dabei
+  // NICHT als Unit-Name zaehlen.
+  dproj := TPath.Combine(FDir, 'Demo.dproj');
+  TFile.WriteAllText(dproj, '<Project/>');
+  WriteWithContent(FDir, 'Demo.dpk',
+    'package Demo;'#13#10 +
+    'requires'#13#10'  rtl;'#13#10 +
+    'contains'#13#10'  uReg in ' + #39 + 'uReg.pas' + #39 + ';'#13#10 +
+    'end.');
+  main := WriteWithContent(FDir, 'uMain.pas',
+    'unit uMain;'#13#10'interface'#13#10'implementation'#13#10'end.');
+  reg := WriteWithContent(FDir, 'uReg.pas',
+    'unit uReg;'#13#10'interface'#13#10'implementation'#13#10'end.');
+  found := RunDetectKinds([main], FDir, cnt, dproj);
+  try
+    Assert.AreEqual<Integer>(1, cnt, 'genau ein Fund');
+    Assert.IsTrue(found.IndexOf(K195(reg)) >= 0,
+      'contains-Unit der .dpk muss 195 sein, Ist: ' + found.Text);
   finally
     found.Free;
   end;
