@@ -180,14 +180,23 @@ var
   function ExtractRightOfDot(const S: string): string;
   // Bei 'Obj.Member(args)' -> 'Member'. Bei 'Bare(args)' -> 'Bare'.
   // Bei 'Obj.A.B' -> 'B' (tiefster Member-Access).
+  // T3 (Review 2026-07-31): zusaetzlich am '<' kappen - seit dem
+  // Generic-Suffix-Zweig traegt ein Statement-Call den Namen
+  // 'TJsonUtil.Deserialize<TCustomer>(S)'; ohne den Cut entstuende der
+  // tote Key 'deserialize<tcustomer>' und die einzige externe Referenz
+  // des Members verschwaende aus dem Index (SCA052-Familie meldete
+  // faelschlich 'Dead public API').
   var
     Trimmed : string;
-    ParenPos, LastDot : Integer;
+    ParenPos, LtPos, LastDot : Integer;
   begin
     Trimmed := Trim(S);
     ParenPos := Pos('(', Trimmed);
     if ParenPos > 0 then
       Trimmed := Copy(Trimmed, 1, ParenPos - 1);
+    LtPos := Pos('<', Trimmed);
+    if LtPos > 0 then
+      Trimmed := Copy(Trimmed, 1, LtPos - 1);
     LastDot := -1;
     for var i := Length(Trimmed) downto 1 do
       if Trimmed[i] = '.' then

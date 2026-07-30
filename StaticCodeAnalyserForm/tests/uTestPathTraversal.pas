@@ -13,6 +13,11 @@ type
     [Test] procedure FileOpenWithLiteral_NotReported;
     [Test] procedure FileStreamWithoutConcat_NotReported;
     [Test] procedure ConstWithTextSubstring_NotReported;
+    // T3-Gate 2026-07-31: User-Input+Concat muessen im ARGUMENTFENSTER
+    // der File-API stehen - Mehrstatement-Blobs (Generic-Call mit
+    // anonymer Methode) duerfen nicht cross-statement korrelieren.
+    [Test] procedure CrossStatementBlob_NotReported;
+    [Test] procedure InputInsideApiArgs_StillReported;
   end;
 
 implementation
@@ -21,6 +26,52 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+procedure TTestPathTraversal.CrossStatementBlob_NotReported;
+// T3-Gate 2026-07-31: seit Statement-Generic-Calls ihren vollen Text
+// tragen, enthaelt der nkCall-Name hier ZWEI Statements (anonyme
+// Methode als Argument). Das Zuweisungsziel 'LLabel.Text :=' stammt
+// aus einem ANDEREN Statement als der ReadAllText-Aufruf mit
+// literal-basiertem Pfad - keine Korrelation, kein Fund (die 4
+// skia4delphi-FPs des T3-Gates, Error-Tier).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  ChildForm<TfrmDemo>.Show(''Label'','#13#10 +
+  '    procedure (const AForm: TfrmDemo)'#13#10 +
+  '    begin'#13#10 +
+  '      AForm.lblText.Text := TFile.ReadAllText(AssetsPath + ''lorem.txt'');'#13#10 +
+  '    end);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkPathTraversal),
+      'Zuweisungsziel .Text eines fremden Statements darf nicht mit ' +
+      'der File-API korrelieren');
+  finally F.Free; end;
+end;
+
+procedure TTestPathTraversal.InputInsideApiArgs_StillReported;
+// Gegenprobe zum Argumentfenster: steht der User-Input IM Argument der
+// File-API, muss der Fund erhalten bleiben - auch im Blob-Kontext.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var s: string;'#13#10 +
+  'begin'#13#10 +
+  '  s := TFile.ReadAllText(BaseDir + edPath.Text);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkPathTraversal) >= 1,
+      'User-Input im API-Argument muss weiter gemeldet werden');
+  finally F.Free; end;
+end;
 
 procedure TTestPathTraversal.FileStreamWithEditText_Reported;
 const SRC =

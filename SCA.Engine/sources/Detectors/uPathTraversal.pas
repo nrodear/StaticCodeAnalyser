@@ -125,11 +125,49 @@ var
   N              : TAstNode;
   HitAPI, HitInp : string;
 
+  function ApiArgWindow(const Expr, API: string): string;
+  // Liefert den Teilstring von der File-API bis zur BALANCIERT
+  // schliessenden Klammer ihrer Argumentliste. Review 2026-07-31
+  // (T3-Gate): seit Statement-Generic-Calls ihren vollen Text tragen,
+  // kann ein nkCall-Name MEHRERE Statements enthalten (anonyme Methode
+  // als Argument) - ohne Fenster korrelierte das Zuweisungsziel
+  // 'LLabel.Text :=' eines ANDEREN Statements cross-statement mit
+  // 'TFile.ReadAllText(AssetsPath + ...)' (4 Error-Tier-FPs,
+  // skia4delphi-Sample-Forms). Fallback ohne Klammerfund: Rest ab API
+  // (schneidet zumindest alles VOR der API weg).
+  var
+    P, i, Depth : Integer;
+  begin
+    P := TDetectorUtils.FindTokenBoundedLower(LowerCase(API),
+      LowerCase(Expr));
+    if P <= 0 then Exit(Expr);
+    i := P + Length(API);
+    while (i <= Length(Expr)) and (Expr[i] = ' ') do Inc(i);
+    if (i > Length(Expr)) or (Expr[i] <> '(') then
+      Exit(Copy(Expr, P, MaxInt));
+    Depth := 0;
+    while i <= Length(Expr) do
+    begin
+      case Expr[i] of
+        '(': Inc(Depth);
+        ')':
+          begin
+            Dec(Depth);
+            if Depth = 0 then
+              Exit(Copy(Expr, P, i - P + 1));
+          end;
+      end;
+      Inc(i);
+    end;
+    Result := Copy(Expr, P, MaxInt);   // unbalanciert -> Rest ab API
+  end;
+
   procedure Check(N: TAstNode; const Expr: string);
   var L: TLeakFinding;
   begin
     if not ContainsFileOpenAPI(Expr, HitAPI) then Exit;
-    if not ContainsUserInputAndConcat(Expr, HitInp) then Exit;
+    if not ContainsUserInputAndConcat(ApiArgWindow(Expr, HitAPI),
+         HitInp) then Exit;
     L            := TLeakFinding.Create;
     L.FileName   := FileName;
     L.MethodName := '';

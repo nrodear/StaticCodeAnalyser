@@ -2695,6 +2695,56 @@ begin
           Eat(tkRBracket);
           S := S + '[]';
         end;
+      tkLt:
+        begin
+          // T3 (2026-07-31): explizite Generic-Instanziierung -
+          // 'SetValue<TAlphaColor>(FColor, AValue);' / 'TList<T>.Create'.
+          // In ALLEN ParsePrimary-Kontexten (Statement-LHS, inherited-,
+          // raise-Ausdruck) kann '<' kein Vergleich sein - ein Vergleich
+          // ist dort kein legales Delphi. Balanciert konsumieren und als
+          // Text anhaengen; danach greifen tkDot/tkLParen regulaer und
+          // die ARGUMENTE landen im nkCall-Namen. Vorher beendete tkLt
+          // die Suffix-Schleife, der Aufrufer legte ein argumentloses
+          // nkCall an und SkipToSemicolon frass den Rest - 'AValue' galt
+          // als ungelesen (8 belegte SCA054-FPs, FMX./Vcl.Skia-Setter).
+          // Statement-Grenzen als Abbruch: bei Malformed-Code endet der
+          // Schaden exakt dort, wo ihn SkipToSemicolon ohnehin beendet
+          // haette (kein Rollback noetig).
+          var GDepth := 1;
+          // Explizit string: ein EIN-Zeichen-Literal inferiert als Char,
+          // und JoinTokInto verlangt einen var-string (E2033).
+          var GText: string := '<';
+          Next; // '<'
+          // Abbruch-Set = SkipToSemicolon-Paritaet (Review 2026-07-31):
+          // auch until/except/finally muessen stoppen, sonst adoptiert
+          // ein unbalanciertes '<' am Rumpfende Blockschluessel-Woerter
+          // und ParseRepeat-/ParseTryStmt verlieren ihre Recovery.
+          while (GDepth > 0) and
+                not (Tok.Kind in [tkEof, tkSemicolon, tkKwEnd, tkKwThen,
+                                  tkKwDo, tkKwElse, tkKwBegin, tkKwUntil,
+                                  tkKwExcept, tkKwFinally]) do
+          begin
+            case Tok.Kind of
+              tkLt         : Inc(GDepth);
+              tkGt, tkGtEq : Dec(GDepth);
+            end;
+            // QuoteStrLit wie in allen Sammel-Loops (RHS/Args/Const):
+            // unquoted Stringinhalt waere fuer StripStringLiterals
+            // unsichtbar und wirkte als Phantom-Code-Evidenz (Review
+            // 2026-07-31). tkDot wird NICHT angehaengt: ein dotted
+            // Typargument ('<Data.DB.TField>') truege sonst 'data.' in
+            // den nkCall-Namen - fuer Deref-Scanner (SCA008 sucht
+            // 'varlow.') ein Phantom-Deref einer gleichnamigen lokalen
+            // Variable. Als Wort-Evidenz ('Data DB TField') bleiben die
+            // Idents fuer uUnusedUses vollwertig erhalten.
+            if Tok.Kind = tkStrLit then
+              JoinTokInto(GText, QuoteStrLit(Tok.Value))
+            else if Tok.Kind <> tkDot then
+              JoinTokInto(GText, Tok.Value);
+            Next;
+          end;
+          S := S + GText;
+        end;
       tkCaret:
         begin Next; S := S + '^'; end;
       tkLParen:

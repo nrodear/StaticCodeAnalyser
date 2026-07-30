@@ -46,6 +46,9 @@ type
     // die Generics-FN-Restklasse aus 86cd02f ist geschlossen.
     [Test] procedure NestedGenericBase_UnusedParam_Flagged;
     [Test] procedure NestedGenericBasePlusInterface_NotFlagged;
+    // T3 (2026-07-31): Generic-Call-Statement verlor seine Argumente -
+    // der Param im Aufruf galt als ungelesen (Skia-Setter-FP-Klasse).
+    [Test] procedure GenericCallArgument_ParamNotFlagged;
   end;
 
 implementation
@@ -512,6 +515,35 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
       'Basis+Interface: Signatur compiler-erzwungen, Skip muss halten');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.GenericCallArgument_ParamNotFlagged;
+// T3 (2026-07-31): 'SetValue<TAlphaColor>(FColor, AValue);' verlor im
+// Parser die Argumente (ParsePrimary brach an tkLt ab) - AValue galt
+// als ungelesen und der Setter wurde gemeldet (8 belegte FPs in den
+// FMX./Vcl.Skia-Settern). Mit dem Generic-Suffix-Zweig traegt der
+// nkCall die Argumente und der Parameter zaehlt als gelesen.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TPaint = class'#13#10 +
+  '  private'#13#10 +
+  '    procedure SetColor(const AValue: Integer);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TPaint.SetColor(const AValue: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  SetValue<TAlphaColor>(FColor, AValue);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
+      'AValue wird im Generic-Call gelesen - kein Fund');
   finally F.Free; end;
 end;
 

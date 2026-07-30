@@ -96,6 +96,9 @@ type
     // T2b (Review 2026-07-30): Generic-Argumente der Elternliste gehoeren
     // NICHT in TypeRef - 'TObjectList TItem' sah aus wie Basis+Interface.
     [Test] procedure Parser_GenericParentArgs_NotInTypeRef;
+    // T3 (2026-07-31): Generic-Call-Statement darf seine Argumente nicht
+    // verlieren - 'SetValue<T>(FColor, AValue);' brach an tkLt ab.
+    [Test] procedure Parser_GenericCallStatement_KeepsArgs;
   end;
 
 implementation
@@ -2283,6 +2286,65 @@ begin
       Assert.AreEqual<string>('|TList TItem|TItem', GArgs,
         'TMulti: je <...>-Block ein Marker mit den Ident-Args ' +
         '(string ist Keyword, kein Ident)');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_GenericCallStatement_KeepsArgs;
+// T3 (2026-07-31): ParsePrimary brach die Suffix-Schleife an tkLt ab -
+// 'SetValue<TAlphaColor>(FColor, AValue);' wurde ein argumentloses
+// nkCall('SetValue') und SkipToSemicolon frass den Rest. Detektoren
+// sahen 'AValue' nie als gelesen (8 belegte SCA054-FPs in den
+// FMX./Vcl.Skia-Settern). Jetzt konsumiert der tkLt-Zweig das
+// Generic-Suffix balanciert und der tkLParen-Zweig haengt die
+// Argumente regulaer an den nkCall-Namen.
+const SRC =
+  'unit t;'#13#10+
+  'implementation'#13#10+
+  'procedure Foo(const AValue: Integer);'#13#10+
+  'begin'#13#10+
+  '  SetValue<TAlphaColor>(FColor, AValue);'#13#10+
+  '  ProcessFields<Data.DB.TField>(List);'#13#10+
+  'end;'#13#10+
+  'end.';
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  Calls  : TList<TAstNode>;
+  Names  : string;
+  Hit    : Boolean;
+  DotHit : Boolean;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Calls := Root.FindAll(nkCall);
+      try
+        Hit := False;
+        DotHit := False;
+        Names := '';
+        for var C in Calls do
+        begin
+          Names := Names + ' | ' + C.Name;
+          if (Pos('SetValue', C.Name) > 0) and
+             (Pos('AValue', C.Name) > 0) and
+             (Pos('TAlphaColor', C.Name) > 0) then
+            Hit := True;
+          // Dotted Typargumente werden ENTPUNKTET angehaengt ('Data DB
+          // TField'): 'data.' im Namen waere fuer Deref-Scanner ein
+          // Phantom-Deref einer lokalen Variable Data (Review 2026-07-31).
+          if (Pos('ProcessFields', C.Name) > 0) and
+             (Pos('TField', C.Name) > 0) and
+             (Pos('Data.', C.Name) = 0) then
+            DotHit := True;
+        end;
+        Assert.IsTrue(Hit,
+          'nkCall muss Generic-Suffix UND Argumente tragen, Ist:' + Names);
+        Assert.IsTrue(DotHit,
+          'dotted Typargument muss entpunktet im Namen stehen, Ist:'
+          + Names);
+      finally Calls.Free; end;
     finally Root.Free; end;
   finally Parser.Free; end;
 end;
