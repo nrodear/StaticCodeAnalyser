@@ -151,14 +151,14 @@ end;
 
 // True wenn die class(...)-Liste des Knotens Interfaces traegt.
 // ParseClassBody legt die Eltern space-getrennt in TypeRef ab (gepunktete
-// Namen bleiben EIN Eintrag). BEKANNTE UNSCHAERFE (Review 2026-07-29,
-// bewusste FN-Restklasse): der Eltern-Loop des Parsers kennt keine
-// Generics - 'class(TObjectList<TItem>)' ergibt TypeRef
-// 'TObjectList TItem', und IFDEF-Twins emittieren beide Zweige
-// ('TX TY'). Beides wird hier faelschlich als Basis+Interface gelesen
-// -> Skip (kein Fund). Nur-FN-Richtung, nie FP. Der Parser-Fix
-// (Generic-Depth im Eltern-Loop) aendert TypeRef fuer ALLE Konsumenten
-// korpusweit und ist ein eigenes Inkrement (T2b). Gleiches gilt fuer
+// Namen bleiben EIN Eintrag; Generic-Argumente werden seit T2b
+// balanciert uebersprungen - 'class(TObjectList<TItem>)' ist wieder EIN
+// Eintrag 'TObjectList', die fruehere Generics-FN-Restklasse aus
+// Review 2026-07-29 ist damit geschlossen). VERBLIEBENE UNSCHAERFE
+// (bewusste FN-Restklasse): IFDEF-Twins emittieren beide Zweige
+// ('TX TY') und werden hier faelschlich als Basis+Interface gelesen
+// -> Skip (kein Fund). Nur-FN-Richtung, nie FP; Twin-Adoption ist ein
+// T3-Backlog-Posten (Twin-Kopf mergen statt skippen). Gleiches gilt fuer
 // die I-Gross-Konvention beim Ein-Eintrag-Fall (IPCServer/IOThread
 // waeren falsch-positiv fuer den SKIP, also ebenfalls nur-FN). Zusaetzlich der
 // Ein-Eintrag-Fall 'class(IFoo)' (implizite TObject-Basis): dort

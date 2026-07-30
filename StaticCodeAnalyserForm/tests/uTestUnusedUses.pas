@@ -58,6 +58,11 @@ type
     [Test] procedure Uses_TypeParam_Generic_NoFinding;
     [Test] procedure Uses_InterfaceAndImpl_OnlyOnceReported;
     [Test] procedure Uses_AllUnused_AllReported;
+    // T2b (Review 2026-07-30): Generic-Argumente der Elternliste stehen
+    // nicht mehr in TypeRef - der nkGenericArgs-Marker MUSS sie als
+    // Verwendungsnachweis erhalten (Waechter gegen 'Vereinfachung' des
+    // Eltern-Loop-Zweigs auf SkipGenericParams).
+    [Test] procedure Uses_GenericParentArg_H2_NoFinding;
   end;
 
 implementation
@@ -703,6 +708,33 @@ begin
   try
     Assert.AreEqual<Integer>(3, TFindingHelper.Count(F, fkUnusedUses),
       'Drei ungenutzte Units – alle drei als Warning');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedUses.Uses_GenericParentArg_H2_NoFinding;
+// T2b (Review 2026-07-30): 'TIniFile' kommt AUSSCHLIESSLICH als
+// Generic-Argument der Elternliste vor. Der Eltern-Loop haelt die
+// Argumente seit T2b aus TypeRef heraus - der Verwendungsnachweis
+// kommt jetzt aus dem nkGenericArgs-Marker, den CollectText wie jeden
+// Knoten erntet (H2 matcht 'tinifile'). Wuerde der Generic-Zweig auf
+// einen puren SkipGenericParams-Aufruf 'vereinfacht', verschwaende die
+// Evidenz und dieser Test wird ROT (System.IniFiles faelschlich
+// unused) - exakt die im Review dokumentierte Wartungsfalle.
+const SRC =
+  'unit t;'#13#10+
+  'uses System.IniFiles;'#13#10+
+  'implementation'#13#10+
+  'type'#13#10+
+  '  TIniList = class(TObjectList<TIniFile>)'#13#10+
+  '  end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
+      'Generic-Argument der Elternliste ist ein Verwendungsnachweis - ' +
+      'System.IniFiles darf nicht als unused gemeldet werden');
   finally F.Free; end;
 end;
 

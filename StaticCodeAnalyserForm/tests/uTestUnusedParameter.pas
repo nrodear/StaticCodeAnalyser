@@ -42,6 +42,10 @@ type
     // T2-Guards-Ruecknahme (2026-07-29): nested types praezise statt pauschal.
     [Test] procedure NestedBridgeDelegate_UnusedParam_NotFlagged;
     [Test] procedure NestedPlainClass_UnusedParam_Flagged;
+    // T2b (Review 2026-07-30): generische Basis ist EIN Parent-Eintrag -
+    // die Generics-FN-Restklasse aus 86cd02f ist geschlossen.
+    [Test] procedure NestedGenericBase_UnusedParam_Flagged;
+    [Test] procedure NestedGenericBasePlusInterface_NotFlagged;
   end;
 
 implementation
@@ -440,6 +444,74 @@ begin
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter),
       'nested class ohne Interfaces: ungenutzter Param muss gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.NestedGenericBase_UnusedParam_Flagged;
+// T2b (Review 2026-07-30): 'class(TObjectList<TItem>)' ergab vor dem
+// Parser-Fix TypeRef 'TObjectList TItem' - zwei Eintraege, von
+// OwnerHasInterfaceParents als Basis+Interface gelesen -> Skip -> der
+// ungenutzte Parameter blieb ungemeldet (FN-Restklasse aus 86cd02f).
+// Seit dem Generic-Zweig des Eltern-Loops (balanciert konsumieren +
+// nkGenericArgs-Marker) ist die Basis EIN Eintrag und die nested class
+// wird normal analysiert.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TOuter = class'#13#10 +
+  '  public'#13#10 +
+  '    type'#13#10 +
+  '      TView = class(TObjectList<TItem>)'#13#10 +
+  '      public'#13#10 +
+  '        procedure InternalMouseDown(Shift: Integer);'#13#10 +
+  '      end;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TOuter.TView.InternalMouseDown(Shift: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  Beep;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter),
+      'generische Basis allein ist KEIN Interface - Param muss gemeldet ' +
+      'werden');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.NestedGenericBasePlusInterface_NotFlagged;
+// Waechter gegen Ueberdrehen des Parser-Fixes: generische Basis PLUS
+// echtes Interface muss weiterhin als Interface-Implementierer gelesen
+// werden (Signatur compiler-erzwungen, E2291) - kein Fund. Wuerde der
+// Eltern-Loop versehentlich ', IHandler' mitfressen, kippte dieser Test.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TOuter = class'#13#10 +
+  '  public'#13#10 +
+  '    type'#13#10 +
+  '      TDelegate = class(TBaseGen<TItem>, IHandler)'#13#10 +
+  '      public'#13#10 +
+  '        procedure onFire(AArg: JEvent);'#13#10 +
+  '      end;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TOuter.TDelegate.onFire(AArg: JEvent);'#13#10 +
+  'begin'#13#10 +
+  '  Beep;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
+      'Basis+Interface: Signatur compiler-erzwungen, Skip muss halten');
   finally F.Free; end;
 end;
 

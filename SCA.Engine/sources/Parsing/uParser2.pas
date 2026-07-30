@@ -1109,7 +1109,54 @@ begin
         Parents := Parents + Tok.Value;
       end
       else if Tok.Kind = tkDot then
-        Parents := Parents + '.';
+        Parents := Parents + '.'
+      else if Tok.Kind = tkLt then
+      begin
+        // T2b (Review 2026-07-30): Generic-Argumente der Basis balanciert
+        // konsumieren statt sie als eigene Parents einzusammeln.
+        // 'class(TObjectList<TItem>)' wurde sonst zu TypeRef
+        // 'TObjectList TItem' - ZWEI Eintraege, fuer Konsumenten nicht
+        // unterscheidbar von 'Basis + Interface' (uUnusedParameter las
+        // das als compiler-erzwungene Signatur und schwieg = FN;
+        // dokumentierte Restklasse aus 86cd02f). ABER: die Argument-
+        // Idents bleiben als USES-NACHWEIS erhalten - uUnusedUses erntet
+        // Name/TypeRef ALLER Knoten, und 'uses uCustomer' kann seinen
+        // einzigen Beleg in 'class(TObjectList<TCustomer>)' haben.
+        // Ablage als additiver nkGenericArgs-Marker am ClassNode
+        // (Muster nkNestedRange/nkLabelMark: nur opt-in-Leser; alle
+        // Body-Konsumenten filtern auf nkVisibilitySection).
+        var GLine := Tok.Line;
+        var GCol  := Tok.Col;
+        Next; // '<'
+        var GDepth := 1;
+        var GArgs  := '';
+        // Recovery-Grenzen wie der Aussen-Loop (Pre-Build-Review
+        // 2026-07-30): in LEGALEN Generic-Args einer Elternliste kommen
+        // ')' ';' 'end' nicht vor - ein unbalanciertes '<' (halb
+        // getippter IDE-Puffer, IFDEF-Twin-Straddle) darf nicht bis zum
+        // ersten unpaarigen '>' der Implementation fressen. Das
+        // Grenz-Token bleibt fuer den Aussen-Loop liegen.
+        while (GDepth > 0) and
+              not (Tok.Kind in [tkEof, tkRParen, tkSemicolon, tkKwEnd]) do
+        begin
+          case Tok.Kind of
+            tkLt   : Inc(GDepth);
+            tkGt   : Dec(GDepth);
+            tkGtEq : Dec(GDepth);   // Lexer-Edgecase, wie SkipGenericParams
+            tkDot  : GArgs := GArgs + '.';
+            tkIdent:
+              begin
+                if (GArgs <> '') and not GArgs.EndsWith('.') then
+                  GArgs := GArgs + ' ';
+                GArgs := GArgs + Tok.Value;
+              end;
+          end;
+          Next;
+        end;
+        if GArgs <> '' then
+          ClassNode.Add(nkGenericArgs, GArgs, GLine, GCol);
+        Continue;   // steht bereits HINTER dem '>' - kein doppeltes Next
+      end;
       Next;
     end;
     if Parents <> '' then

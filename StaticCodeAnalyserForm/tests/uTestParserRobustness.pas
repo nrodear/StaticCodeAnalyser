@@ -93,6 +93,9 @@ type
     [Test] procedure Parser_NestedTypeWithoutTypeKeyword_IsBounded;
     [Test] procedure Parser_ObjectTwinWithVariantRecord_IsBounded;
     [Test] procedure Parser_NestedProcTypeOfObject_DoesNotEatClass;
+    // T2b (Review 2026-07-30): Generic-Argumente der Elternliste gehoeren
+    // NICHT in TypeRef - 'TObjectList TItem' sah aus wie Basis+Interface.
+    [Test] procedure Parser_GenericParentArgs_NotInTypeRef;
   end;
 
 implementation
@@ -2219,6 +2222,67 @@ begin
         + ClassNames(Root));
       Assert.IsNotNull(ClassByName(Root, 'TDanach'),
         'Folgeklasse fehlt, gefunden: ' + ClassNames(Root));
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_GenericParentArgs_NotInTypeRef;
+// T2b (Review 2026-07-30): der Eltern-Loop sammelte Generic-Argumente als
+// eigene space-getrennte Eintraege - 'class(TObjectList<TItem>)' wurde
+// TypeRef 'TObjectList TItem' und war fuer Konsumenten nicht von
+// 'Basis + Interface' unterscheidbar (uUnusedParameter-FN-Restklasse aus
+// 86cd02f). Jetzt konsumiert der Generic-Zweig des Eltern-Loops die
+// Argumente balanciert (BEWUSST kein SkipGenericParams: die Idents
+// muessen als nkGenericArgs-Marker erhalten bleiben, siehe unten) -
+// auch verschachtelt ('TDictionary<string, TList<TItem>>', '>>' sind
+// ZWEI tkGt) und bei generischen Interfaces ('IComparer<TItem>').
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TGen = class(TObjectList<TItem>)'#13#10+
+  '  public'#13#10+
+  '    procedure MussEins;'#13#10+
+  '  end;'#13#10+
+  '  TMulti = class(TDictionary<string, TList<TItem>>, IComparer<TItem>)'#13#10+
+  '  public'#13#10+
+  '    procedure MussZwei;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'end.';
+var Parser: TParser2; Root: TAstNode; Cls: TAstNode; GArgs: string;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Cls := ClassByName(Root, 'TGen');
+      Assert.IsNotNull(Cls, 'TGen fehlt als nkClass');
+      Assert.AreEqual<string>('TObjectList', Cls.TypeRef,
+        'Generic-Args duerfen nicht als eigene Parents auftauchen');
+      Assert.IsTrue(Pos('MussEins', MethodNamesOf(Cls)) > 0,
+        'Member nach generischer Elternliste fehlen');
+      // Uses-Nachweis: die Argument-Idents muessen als nkGenericArgs-
+      // Marker erhalten bleiben (uUnusedUses erntet Name aller Knoten -
+      // sonst verloere 'uses uX' seinen Beleg, wenn TItem nur hier steht).
+      GArgs := '';
+      for var Ch in Cls.Children do
+        if Ch.Kind = nkGenericArgs then GArgs := GArgs + '|' + Ch.Name;
+      Assert.AreEqual<string>('|TItem', GArgs,
+        'TGen: Argument-Ident muss als nkGenericArgs-Marker haengen');
+      Cls := ClassByName(Root, 'TMulti');
+      Assert.IsNotNull(Cls, 'TMulti fehlt als nkClass');
+      Assert.AreEqual<string>('TDictionary IComparer', Cls.TypeRef,
+        'verschachtelte Args + generisches Interface muessen zu genau ' +
+        'zwei Eintraegen kollabieren');
+      Assert.IsTrue(Pos('MussZwei', MethodNamesOf(Cls)) > 0,
+        'Member nach mehrteiliger generischer Elternliste fehlen');
+      GArgs := '';
+      for var Ch in Cls.Children do
+        if Ch.Kind = nkGenericArgs then GArgs := GArgs + '|' + Ch.Name;
+      Assert.AreEqual<string>('|TList TItem|TItem', GArgs,
+        'TMulti: je <...>-Block ein Marker mit den Ident-Args ' +
+        '(string ist Keyword, kein Ident)');
     finally Root.Free; end;
   finally Parser.Free; end;
 end;

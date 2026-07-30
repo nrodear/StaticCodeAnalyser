@@ -84,6 +84,15 @@ type
                                     // Quellzeile einer 'lbl:'-markierten Anweisung
                                     // (goto-Sprungziel). Rein additiv - nur SCA011
                                     // liest es via FindAll(nkLabelMark).
+    nkGenericArgs,                  // T2b (2026-07-30): Marker am nkClass-Knoten.
+                                    // Name = Ident-Liste der Generic-Argumente der
+                                    // ELTERNLISTE ('TItem' / 'TList TItem'), die der
+                                    // Generic-Zweig des Eltern-Loops aus TypeRef
+                                    // heraushaelt. ACHTUNG: der Zweig ist BEWUSST
+                                    // KEIN SkipGenericParams-Aufruf - er MUSS die
+                                    // Idents sammeln, sonst verliert uUnusedUses
+                                    // (rekursiver Name/TypeRef-Harvester) den
+                                    // Verwendungsnachweis der Argument-Typen.
     nkUnknown
   );
 
@@ -210,6 +219,7 @@ const
     'NestedRange',
     'ConditionalRange',
     'LabelMark',
+    'GenericArgs',
     'Unknown'
   );
 
