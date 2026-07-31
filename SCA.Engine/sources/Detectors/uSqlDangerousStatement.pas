@@ -39,6 +39,26 @@ unit uSqlDangerousStatement;
 //     WHERE-Klausel ankonkateniert (Result := Result + ' where ...') - das
 //     Mutationsfenster des Literal-Scans war zu kurz (HasLaterWhereAppend).
 //
+// ZUSATZHUERDE fuer die beiden Nicht-Exec-Gates (2026-07-31 Nachtrag,
+// Drop-Sampling after119->after120, 3 belegte TP-VERLUSTE im Error-Tier):
+// die Praemisse "Platzhalter an der Objekt-Position = Baustein" stimmt nur
+// fuer Bausteine, die JEMAND ANDERS erst zusammensetzt. Bei Format-
+// ausfuehrenden DB-APIs sind Format-String und Argumente EIN Aufruf, der
+// das Statement SOFORT ausfuehrt:
+//   mormot.orm.sqlite3.pas:2269  result := ExecuteFmt('UPDATE % SET %=%',
+//                                  [props.SqlTableName, SetFieldName, SetValue])
+//                                (Quellkommentar: "update ALL with no inline")
+//   mormot.orm.sql.pas:1601      result := ExecuteInlined(
+//                                  'update % set %=:(%):', [...], false) <> nil
+//   mormot.orm.sql.pas:2448      result := ExecuteDirect('drop table %',
+//                                  [fTableName], [], false) <> nil
+// Das bisherige IsExecSinkTarget sieht davon nichts: es prueft nur den
+// ZUWEISUNGS-ZIELNAMEN, und der ist hier 'result' - die Ausfuehrung steckt
+// im RHS. HasExecSinkCall schliesst diese Luecke und prueft zusaetzlich den
+// RHS-AUFRUFNAMEN (Exec/ExecSQL/Execute*/EngineExecute/...). Wenn der Aufruf
+// selbst ausfuehrt, ist der Format-String kein Baustein mehr und die beiden
+// Nicht-Exec-Gates (sql-template, sql-builder-fragment) bleiben AUS.
+//
 // ZURUECKGESTELLT (2026-07-31, Pre-Build-Review-Fund 'Severity-Abstufung
 // ADDIERT im Warning-/Note-Tier'): eine Abstufung DROP -> lsWarning bzw.
 // Test-/Fixture-Pfad -> lsHint war Teil dieses Inkrements und wurde
@@ -93,6 +113,13 @@ type
     // ein Statement das direkt in eine Exec-Property geschrieben wird, wird
     // auch ausgefuehrt und bleibt unveraendert meldepflichtig.
     class function IsExecSinkTarget(const TargetLow: string): Boolean; static;
+    // ZUSATZHUERDE zu IsExecSinkTarget (2026-07-31 Nachtrag, 3 belegte
+    // TP-Verluste in mORMot2): True wenn im RHS ein AUFRUF steht, dessen
+    // Callee-Name die Exec-Familie trifft (Exec/ExecSQL/Execute/ExecuteFmt/
+    // ExecuteInlined/ExecuteDirect/EngineExecute/InternalExecute). Dann wird
+    // das Statement SOFORT ausgefuehrt - egal wie das Zuweisungsziel heisst -
+    // und ist damit kein Baustein. RhsLow muss bereits lowercased sein.
+    class function HasExecSinkCall(const RhsLow: string): Boolean; static;
     // True wenn S ein '+' AUSSERHALB von Stringliteralen enthaelt, dessen
     // eine Seite KEIN Literal ist (also echte Konkatenation mit Bezeichner/
     // Aufruf). 'a'+'b' allein ist nur Multi-Line-Literal-Aufbau und zaehlt
@@ -270,6 +297,77 @@ begin
   for S in SINK_TOKENS do
     if Pos(S, TargetLow) > 0 then Exit;
   Result := False;
+end;
+
+class function TSqlDangerousStatementDetector.HasExecSinkCall(
+  const RhsLow: string): Boolean;
+// ZUSATZHUERDE (2026-07-31 Nachtrag zum 30%-Audit, Drop-Sampling
+// after119->after120): macht die beiden Nicht-Exec-Gates ENGER. Mechanismus:
+// scannt den RHS nach Bezeichnern, die als FUNKTION benutzt werden (direkt
+// gefolgt von '('), und trifft der Callee-Name die Exec-Familie, fuehrt der
+// RHS selbst aus. Details:
+//   * String-Literale werden uebersprungen - ein SQL-Text der zufaellig
+//     'exec(' enthaelt ist kein Aufruf.
+//   * Gewertet wird nur das LETZTE Glied einer Punkt-Kette: bei
+//     'fConn.Props.ExecuteFmt(' sind 'fconn'/'props' nicht von '(' gefolgt,
+//     nur 'executefmt' ist es. Damit zaehlt der tatsaechliche Callee.
+//   * Needle ist bewusst 'exec' (Teilstring des Callee) - das deckt
+//     Exec/ExecSQL/Execute/ExecuteFmt/ExecuteInlined/ExecuteDirect/
+//     ExecuteNoResult/EngineExecute/InternalExecute in einem ab.
+//   * Bewusst NICHT die Substring-Liste von IsExecSinkTarget: deren 'sql'
+//     wuerde 'GetTableNameForSQL('/'CreateDeleteAllSQL(' (MVCFramework
+//     ActiveRecord 5228/5278/5330) treffen und damit korrekt unterdrueckte
+//     Builder-Fragmente wieder hochspuelen.
+const
+  EXEC_CALLEE_NEEDLE = 'exec';
+var
+  i, j, n, IdentStart : Integer;
+  InStr : Boolean;
+  Ident : string;
+begin
+  Result := False;
+  n      := Length(RhsLow);
+  InStr  := False;
+  i      := 1;
+  while i <= n do
+  begin
+    if InStr then
+    begin
+      if RhsLow[i] = '''' then
+      begin
+        // Verdoppeltes Apostroph = Escape, im String bleiben.
+        if (i < n) and (RhsLow[i + 1] = '''') then
+        begin
+          Inc(i, 2);
+          Continue;
+        end;
+        InStr := False;
+      end;
+      Inc(i);
+      Continue;
+    end;
+    if RhsLow[i] = '''' then
+    begin
+      InStr := True;
+      Inc(i);
+      Continue;
+    end;
+    if CharInSet(RhsLow[i], ['a'..'z', 'A'..'Z', '_']) then
+    begin
+      IdentStart := i;
+      while (i <= n) and CharInSet(RhsLow[i],
+              ['a'..'z', 'A'..'Z', '0'..'9', '_']) do Inc(i);
+      Ident := Copy(RhsLow, IdentStart, i - IdentStart);
+      // Whitespace zwischen Bezeichner und '(' zulassen - der Parser fuegt
+      // beim RHS-Zusammenbau zwar keinen ein, Quelltext-naher Input aber schon.
+      j := i;
+      while (j <= n) and CharInSet(RhsLow[j], [' ', #9, #13, #10]) do Inc(j);
+      if (j <= n) and (RhsLow[j] = '(')
+         and (Pos(EXEC_CALLEE_NEEDLE, Ident) > 0) then Exit(True);
+      Continue;   // i steht bereits hinter dem Bezeichner
+    end;
+    Inc(i);
+  end;
 end;
 
 class function TSqlDangerousStatementDetector.HasNonLiteralConcat(
@@ -464,10 +562,16 @@ begin
       Low := LowerCase(N.TypeRef);
       if not FindDangerousVerb(Low, Verb, AfterVerb) then Continue;
 
-      // FP-Gates (2026-07-31) nur fuer NICHT-Exec-Ziele: eine Zuweisung an
+      // FP-Gates (2026-07-31) nur fuer NICHT-Exec-Faelle: eine Zuweisung an
       // SQL.Text/CommandText wird ausgefuehrt, ein Result-/Builder-String
       // erst vom Aufrufer vervollstaendigt.
-      if not IsExecSinkTarget(LowerCase(N.Name)) then
+      // ZUSATZHUERDE (2026-07-31 Nachtrag): "Exec-Fall" ist nicht nur das
+      // ZIEL, sondern auch der RHS-AUFRUF. 'result := ExecuteFmt(...)' traegt
+      // am Ziel 'result' kein Sink-Token, fuehrt aber sofort aus (mORMot2
+      // ExecuteFmt/ExecuteInlined/ExecuteDirect). Beide Nicht-Exec-Gates
+      // bleiben dann aus.
+      if (not IsExecSinkTarget(LowerCase(N.Name))) and
+         (not HasExecSinkCall(Low)) then
       begin
         // sql-template: 'DELETE FROM %s' & Co. (HeidiSQL-Provider).
         if IsPlaceholderObject(AfterVerb) then Continue;

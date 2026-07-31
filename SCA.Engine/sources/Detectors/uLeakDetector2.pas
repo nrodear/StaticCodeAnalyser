@@ -20,6 +20,10 @@ unit uLeakDetector2;
 //   AnyClass.Create(var, …)     anderer Konstruktor übernimmt
 //   Container.Add(...var...)     TObjectList/TObjectDictionary/...
 //   Container.AddObject(t, var)  TStringList mit Objekten
+//                                AUSNAHME (2026-07-31): '<X>.Items/.Lines/
+//                                .Objects/.Strings/.Data/.Nodes.AddObject(...)'
+//                                ist KEIN Transfer - TStrings besitzt Objects[]
+//                                nie, TTreeNode.Data ist ein roher Pointer.
 //   Container.Insert(i, var)     TList.Insert
 //   Container.Push(var)          TStack.Push
 //   Container.Enqueue(var)       TQueue.Enqueue
@@ -2163,6 +2167,97 @@ end;
 const
   SINK_FAMS : array[0..4] of string = ('add', 'insert', 'append', 'push', 'enqueue');
 
+// Kanonisch NICHT-besitzende Container-Zugaenge. Das LETZTE Segment einer
+// gepunkteten Empfaengerkette ('AlarmListBox.Items', 'Memo.Lines',
+// 'Node.Data'). Diese Properties liefern Container, die ein uebergebenes
+// Objekt per Definition NICHT besitzen:
+//   * TStrings.Objects[] - AddObject/InsertObject speichern nur die Referenz,
+//     TStrings.Destroy raeumt sie NIE ab (deshalb die verbreiteten
+//     'for i := 0 to Count-1 do Objects[i].Free'-Schleifen in Clear/Destroy).
+//   * TTreeNodes / TTreeNode.Data - untypisierter Pointer, ebenfalls ohne
+//     Ownership.
+const
+  NONOWNING_ACCESSORS : array[0..5] of string = (
+    'items', 'objects', 'lines', 'strings', 'data', 'nodes');
+
+// True wenn ReceiverNameLow in AScope als Local-Var oder Parameter DEKLARIERT
+// ist (Typ egal). Spiegelt exakt die Namensaufloesung von
+// AddReceiverOwnsItems.FindReceiverType inkl. der 'var '/'const '/'out '-
+// Praefixe, die der Parser an Parameter-Namen haengt.
+function ScopeDeclaresIdent(AScope: TAstNode; const NameLow: string): Boolean;
+var
+  Kind    : TNodeKind;
+  N       : TAstNode;
+  NameRaw : string;
+begin
+  Result := False;
+  if (AScope = nil) or (NameLow = '') then Exit;
+  for Kind in [nkLocalVar, nkParam] do
+    for N in AScope.FindAllRef(Kind) do
+    begin
+      NameRaw := N.Name;
+      for var Mod_ in ['var ', 'const ', 'out '] do
+        if NameRaw.ToLower.StartsWith(Mod_) then
+          NameRaw := Copy(NameRaw, Length(Mod_) + 1, MaxInt);
+      if NameRaw.ToLower = NameLow then Exit(True);
+    end;
+end;
+
+// ZUSATZHUERDE 2026-07-31 (TP-Verlust-Cluster SCA001 aus dem Drop-Sampling
+// after119->after120, 7 belegte Error-Tier-Lecks):
+//   AlarmListBox.ItemIndex := AlarmListBox.Items.AddObject('New', TObject(Al));
+//   Result := ATreeView.Items.AddChildObject(ParentNode, S, ATreeMenuItem);
+// Beides sind ECHTE Lecks (keine Freigabe in der ganzen Unit), wurden aber vom
+// Sink-Gate stillgestellt: eine gepunktete Kette ist in der Routine nie
+// aufloesbar -> permissiver Pfad -> die Senke galt als besitzend. Genau dort
+// liegt das Gate aber systematisch falsch, denn '<X>.Items/.Lines/.Objects'
+// sind die kanonisch NICHT besitzenden VCL/LCL-Container.
+//
+// Das Veto greift nur bei BEIDEN Merkmalen zugleich:
+//   (1) letztes Empfaenger-Segment ist ein nicht-besitzender Container-Zugang,
+//   (2) der Sink-Name gehoert zur *Object*-Familie (AddObject, AddChildObject,
+//       InsertObject, ...). Nur diese Ueberladungen nehmen ueberhaupt ein
+//       OBJEKT entgegen - 'Items.Add(S)'/'Lines.Add(S)' nehmen einen String.
+// Huerde (2) ist nicht kosmetisch, sondern haelt einen belegten korrekten Drop:
+// mORMot src/ui/mormot.ui.report.pas:5191 ('M2 := NewPopupMenuItem(...)') wird
+// ueber den Callee-Rumpf TGdiPages.NewPopupMenuItem (Z.5051) gedroppt, und der
+// endet auf 'PopupMenu.Items.Add(result)'. Dort ist 'Items' ein TMenuItem, der
+// seine Kinder sehr wohl freigibt - und der Ctor 'TMenuItem.Create(PopupMenu)'
+// hat den Owner ohnehin schon gesetzt. Mit einer reinen Receiver-Regel ohne
+// Huerde (2) waere dieser korrekte Drop als FP zurueckgekommen.
+//
+// Bei einem BAREN Empfaenger ('Items.AddObject(...)' als Self-Property) wird
+// zuvor geprueft, ob der Name doch eine Local/Param ist - dann entscheidet
+// weiterhin allein die RTL-Ownership-Whitelist ('Data: TObjectList' bleibt
+// besitzend). Gepunktete Ketten koennen per Konstruktion nie aufloesen.
+//
+// BEWUSST NICHT UMGESETZT (geprueft, verworfen): den Typecast-Auspack-Pfad in
+// SinkArgIsVar fuer 'TObject(...)' generell zu sperren. Am Korpus bringt das
+// NULL zusaetzliche Rueckkehrer (alle 6 TObject-Cast-Faelle sind schon ueber
+// das Receiver-Veto abgedeckt), waehrend 'ObjList.Add(TObject(x))' auf einem
+// nachweislich besitzenden TObjectList dadurch faelschlich wieder gemeldet
+// wuerde - reines FP-Risiko ohne Ertrag.
+function ReceiverIsNonOwningAccessor(AScope: TAstNode;
+  const ReceiverNameLow, SinkNameLow: string): Boolean;
+var
+  Seg : string;
+  dp  : Integer;
+begin
+  Result := False;
+  if (ReceiverNameLow = '') or (Pos('object', SinkNameLow) = 0) then Exit;
+  dp := LastDelimiter('.', ReceiverNameLow);
+  if dp > 0 then
+    Seg := Copy(ReceiverNameLow, dp + 1, MaxInt)
+  else
+  begin
+    Seg := ReceiverNameLow;
+    // Barer Empfaenger: koennte eine echte Local/Param sein - dann bleibt die
+    // strikte RTL-Whitelist zustaendig.
+    if ScopeDeclaresIdent(AScope, Seg) then Exit;
+  end;
+  Result := MatchStr(Seg, NONOWNING_ACCESSORS);
+end;
+
 // Receiver-Veto fuer die Sink-Familien.
 //
 // Review-Fund 2026-07-31 ("ReceiverIsProvenNonOwning kehrt die bisherige strikte
@@ -2184,14 +2279,21 @@ const
 // fpjson) sind damit bewusst NICHT mehr pauschal abgedeckt - dafuer ist die
 // konfigurierbare OwnershipSinks-Registry ([Detectors] OwnershipSinks) da; ein
 // globaler Seed wurde 2026-07 bewusst verworfen.
+//
+// 2026-07-31 ZUSATZHUERDE: der bisher permissive Zweig (Receiver nicht
+// aufloesbar) bekommt eine Ausnahme - ist der Empfaenger ein nachweislich
+// nicht-besitzender Container-Zugang UND die Senke eine *Object*-Ueberladung,
+// wird trotzdem veto't (siehe ReceiverIsNonOwningAccessor). Das Gate wird
+// dadurch ausschliesslich ENGER: es kann nur noch WENIGER Funde unterdruecken.
 function ReceiverVetoesSink(AScope: TAstNode;
-  const ReceiverNameLow: string): Boolean;
+  const ReceiverNameLow, SinkNameLow: string): Boolean;
 begin
   // Leerer Empfaenger = unqualifizierter Aufruf der eigenen Klasse; der ist
   // per Definition nicht aufloesbar -> kein Veto (und kein Fehl-Match gegen
   // einen namenlosen Deklarationsknoten).
   Result := (AScope <> nil) and (ReceiverNameLow <> '') and
-            not TLeakDetector2.AddReceiverOwnsItems(AScope, ReceiverNameLow);
+            (ReceiverIsNonOwningAccessor(AScope, ReceiverNameLow, SinkNameLow) or
+             not TLeakDetector2.AddReceiverOwnsItems(AScope, ReceiverNameLow));
 end;
 
 // True wenn ATextOrig einen Sink-Aufruf enthaelt, der VarNameLow als eigenes
@@ -2200,7 +2302,7 @@ end;
 function SinkCallPassesVar(AScope: TAstNode;
   const ATextOrig, VarNameLow: string): Boolean;
 var
-  Low, Orig, fam, recv, argsAny : string;
+  Low, Orig, fam, recv, argsAny, sinkName : string;
   p, ef, ce, depth, argStart, rs : Integer;
   ok : Boolean;
 begin
@@ -2239,6 +2341,11 @@ begin
         end;
         if ok then
         begin
+          // Voller Senken-Bezeichner ab der Familie bis vor die '(' -
+          // 'add', 'addobject', 'addchildobject', 'insertobject', ...
+          // (2026-07-31: das Receiver-Veto unterscheidet die *Object*-
+          // Ueberladungen von den String-Ueberladungen.)
+          sinkName := Copy(Low, p, ef - p);
           // Argumentliste balanciert einlesen (bounds-safe; unbalanciert -> skip)
           argStart := ef + 1;
           depth    := 1;
@@ -2265,7 +2372,7 @@ begin
             if EndsStr('.', recv) then SetLength(recv, Length(recv) - 1);
             if StartsStr('self.', recv) then recv := Copy(recv, 6, MaxInt);
             if (recv <> VarNameLow) and not StartsStr(VarNameLow + '.', recv) and
-               not ReceiverVetoesSink(AScope, recv) and
+               not ReceiverVetoesSink(AScope, recv, sinkName) and
                SinkArgIsVar(argsAny, VarNameLow) then
               Exit(True);
           end;

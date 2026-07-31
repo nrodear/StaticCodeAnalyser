@@ -62,6 +62,19 @@ type
     [Test] procedure SqlDanger_LaterWhereAppend_NoFinding;
     [Test] procedure SqlDanger_LaterOrderByAppend_StillReported;
     [Test] procedure SqlDanger_LaterUnrelatedStatementShortTarget_StillReported;
+    // --- TP-Rueckholung 2026-07-31 (Drop-Sampling after119->after120) ---
+    // Format-ausfuehrende DB-APIs: Format-String + Argumente sind EIN Aufruf,
+    // der SOFORT ausfuehrt. Das Platzhalter-/Builder-Gate darf dort nicht
+    // greifen. Alle drei Tests sind ohne HasExecSinkCall ROT.
+    [Test] procedure SqlDanger_ExecuteFmtPlaceholderUpdate_Reported;
+    [Test] procedure SqlDanger_ExecuteInlinedPlaceholderUpdate_Reported;
+    [Test] procedure SqlDanger_ExecuteDirectPlaceholderDrop_Reported;
+    // Gegenproben: die 20 weiterhin korrekt gedroppten Muster
+    [Test] procedure SqlDanger_ExecuteFmtWithWhere_NoFinding;
+    [Test] procedure SqlDanger_SqlSuffixedCalleeIsNoExecSink_NoFinding;
+    [Test] procedure SqlDanger_NonExecBuilderCallInRhs_NoFinding;
+    [Test] procedure SqlDanger_ExecTokenInsideLiteral_NoFinding;
+
     // --- Monotonie-Pins 2026-07-31 (Pre-Build-Review): KEINE Abstufung ---
     // Die zurueckgenommene Severity-Abstufung (DROP -> lsWarning,
     // Fixture-Pfad -> lsHint) darf nicht unangekuendigt zurueckkehren -
@@ -721,6 +734,167 @@ begin
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSqlDangerousStatement),
     'ein unabhaengiges spaeteres Statement ist keine WHERE-Anhaengung - ' +
     'der DELETE-ohne-WHERE-Fund muss bleiben');
+  finally F.Free; end;
+end;
+
+// --- TP-Rueckholung 2026-07-31 (Drop-Sampling after119->after120) ---
+
+procedure TTestSqlDangerousStatement.SqlDanger_ExecuteFmtPlaceholderUpdate_Reported;
+// TP-Verlust 1 (mORMot2-2.4-stable/src/orm/mormot.orm.sqlite3.pas:2269,
+// TRestOrmServerDB.UpdateField): 'UPDATE % SET %=%' geht als Format-String an
+// ExecuteFmt - der Quellkommentar sagt selbst "update ALL with no inline".
+// Das Statement wird SOFORT ausgefuehrt und trifft jede Zeile der Tabelle.
+// Das Zuweisungsziel ist 'result' und traegt kein Sink-Token, die Ausfuehrung
+// liegt im RHS -> nur HasExecSinkCall sieht sie.
+// Ohne den Fix ist dieser Test ROT (IsPlaceholderObject unterdrueckt).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function TRestOrmServerDB.UpdateField(const SetFieldName, SetValue: string): Boolean;'#13#10 +
+  'begin'#13#10 +
+  '  Result := ExecuteFmt(''UPDATE % SET %=%'', [SqlTableName, SetFieldName, SetValue]);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkSqlDangerousStatement) >= 1,
+      'ExecuteFmt fuehrt den Format-String sofort aus - ' +
+      'ein UPDATE ohne WHERE bleibt hier ein Production-Disaster');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'UPDATE % SET %=%'),
+      TFindingHelper.FirstOf(F, fkSqlDangerousStatement).LineNumber,
+      'Fund muss auf der ExecuteFmt-Zeile liegen');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_ExecuteInlinedPlaceholderUpdate_Reported;
+// TP-Verlust 2 (mORMot2-2.4-stable/src/orm/mormot.orm.sql.pas:1601,
+// TRestStorageExternal.EngineUpdateField, Zweig WhereFieldName = ''): genau
+// der Zweig OHNE WHERE-Feld setzt das Feld in ALLEN Zeilen. Der Callee heisst
+// ExecuteInlined (nicht ExecuteFmt) - das Needle muss die ganze Exec-Familie
+// abdecken, nicht nur einen Namen.
+// Ohne den Fix ist dieser Test ROT.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function TRestStorageExternal.EngineUpdateField(const SetFieldName, SetValue: string): Boolean;'#13#10 +
+  'begin'#13#10 +
+  '  Result := ExecuteInlined(''update % set %=:(%):'', [FTableName, SetFieldName, SetValue], False) <> nil;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkSqlDangerousStatement) >= 1,
+      'ExecuteInlined ohne WHERE-Feld aktualisiert alle Zeilen -> Fund');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'update % set %=:(%):'),
+      TFindingHelper.FirstOf(F, fkSqlDangerousStatement).LineNumber,
+      'Fund muss auf der ExecuteInlined-Zeile liegen');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_ExecuteDirectPlaceholderDrop_Reported;
+// TP-Verlust 3 (mORMot2-2.4-stable/src/orm/mormot.orm.sql.pas:2448,
+// TOrmVirtualTableExternal.Drop): 'drop table %' wird per ExecuteDirect
+// abgesetzt - DDL, sofort, ohne IF EXISTS. Deckt zusaetzlich ab, dass die
+// Rueckholung nicht UPDATE-spezifisch ist, sondern fuer die DROP-Familie
+// genauso gilt.
+// Ohne den Fix ist dieser Test ROT.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function TOrmVirtualTableExternal.Drop: Boolean;'#13#10 +
+  'begin'#13#10 +
+  '  Result := ExecuteDirect(''drop table %'', [FTableName], [], False) <> nil;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkSqlDangerousStatement) >= 1,
+      'ExecuteDirect setzt das DROP TABLE sofort ab -> Fund');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'drop table %'),
+      TFindingHelper.FirstOf(F, fkSqlDangerousStatement).LineNumber,
+      'Fund muss auf der ExecuteDirect-Zeile liegen');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_ExecuteFmtWithWhere_NoFinding;
+// Ober-Grenze der Rueckholung: derselbe Aufruf, aber MIT WHERE-Klausel im
+// Format-String - das ist die Schwester-Zeile mormot.orm.sqlite3.pas:2271
+// ('update WHERE'). Die Exec-Erkennung schaltet nur die beiden
+// Nicht-Exec-Gates ab, sie darf die WHERE-Pruefung NICHT aushebeln, sonst
+// wuerde jeder ExecuteFmt-Aufruf zum Fund.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function TRestOrmServerDB.UpdateField(const SetFieldName, SetValue: string): Boolean;'#13#10 +
+  'begin'#13#10 +
+  '  Result := ExecuteFmt(''UPDATE % SET %=:(%): WHERE %=:(%):'', [SqlTableName, SetFieldName, SetValue]);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSqlDangerousStatement),
+    'ExecuteFmt MIT WHERE ist gefiltert - die Exec-Erkennung darf die ' +
+    'WHERE-Pruefung nicht aushebeln');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_SqlSuffixedCalleeIsNoExecSink_NoFinding;
+// Gegenprobe zu den 20 weiterhin korrekt gedroppten Mustern, scharfe Kante
+// (delphimvcframework MVCFramework.ActiveRecord.pas:5228/5278/5330): der
+// RHS-Callee heisst GetTableNameForSQL - er ENTHAELT 'sql', fuehrt aber
+// nichts aus. Haette man fuer den RHS die Substring-Liste von
+// IsExecSinkTarget wiederverwendet, kaeme dieses Builder-Fragment sofort
+// wieder hoch. Das Exec-Needle ist deshalb 'exec', nicht 'sql'.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function TGen.CreateDeleteAllSQL(const TableName: string): string;'#13#10 +
+  'begin'#13#10 +
+  '  Result := Format(''DELETE FROM %s'', [GetTableNameForSQL(TableName)]);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSqlDangerousStatement),
+    'Format()/GetTableNameForSQL() fuehren nichts aus - das Template bleibt ' +
+    'ein Baustein und bleibt unterdrueckt');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_NonExecBuilderCallInRhs_NoFinding;
+// Gegenprobe (HeidiSQL exportgrid.pas:954): im RHS steht ein Aufruf
+// (QuoteIdent), aber kein Exec-Aufruf - das sql-builder-fragment-Gate muss
+// weiter greifen. Beweist, dass die Rueckholung an den Callee-NAMEN
+// gebunden ist und nicht an "im RHS steht irgendein Aufruf".
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TExporter.AddRow(const TableName: string);'#13#10 +
+  'var tmp: string;'#13#10 +
+  'begin'#13#10 +
+  '  tmp := tmp + ''UPDATE '' + Conn.QuoteIdent(TableName) + '' SET '';'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSqlDangerousStatement),
+    'QuoteIdent() ist kein Exec-Sink - das Builder-Fragment bleibt unterdrueckt');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_ExecTokenInsideLiteral_NoFinding;
+// Gegenprobe zur Literal-Blindheit (HeidiSQL dbstructures*-Provider): das
+// Exec-Needle steht NUR im SQL-Text selbst, nicht als Pascal-Aufruf. Ein
+// Provider-Baustein bleibt ein Baustein, auch wenn sein Text zufaellig
+// 'exec(' enthaelt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function TProvider.GetSql(AId: TQueryId): string;'#13#10 +
+  'begin'#13#10 +
+  '  Result := ''TRUNCATE %s -- exec(all)'';'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSqlDangerousStatement),
+    'exec( im String-Literal ist kein Aufruf - Provider-Template bleibt unterdrueckt');
   finally F.Free; end;
 end;
 

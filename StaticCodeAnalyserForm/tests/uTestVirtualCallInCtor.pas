@@ -38,6 +38,15 @@ type
     [Test] procedure InheritedAssign_RhsCallWithArgs_StillReported;
     [Test] procedure InheritedEventAssign_TrailingCall_StillReported;
 
+    // ---- Nachschaerfung 2026-07-31: H1 (Event-Ziel) + H2 (RHS-Signatur) ----
+    // Drop-Sampling after119->after120: 3 von 8 Drops waren TP-Verluste.
+    [Test] procedure InheritedValueAssign_ParameterlessVirtualFunc_StillReported;
+    [Test] procedure InheritedValueAssign_ParameterlessFunc_HelperChain_StillReported;
+    [Test] procedure InheritedEventAssign_RhsParameterlessFunc_StillReported;
+    // Gegenproben: die korrekt gedroppten FP-Muster bleiben gedroppt.
+    [Test] procedure InheritedEventAssign_HandlerWithTwoParams_NoFinding;
+    [Test] procedure InheritedEventAssign_ParameterlessProcedure_NoFinding;
+
     // ---- Finding-Inhalt ----------------------------------------------------
     [Test] procedure VCall_Finding_KindAndSeverity;
   end;
@@ -593,6 +602,178 @@ begin
   F := FindingsOfRealFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkVirtualCallInCtor),
     'nur der zugewiesene Handler wird verworfen, Init bleibt ein Treffer');
+  finally F.Free; end;
+end;
+
+// ---------------------------------------------------------------------------
+// Nachschaerfung 2026-07-31 - Drop-Sampling des Gates (after119 -> after120)
+// belegte 3 TP-VERLUSTE bei nur 8 Drops. Wurzel: die einzige Rueckfalltuer war
+// 'Pos(''('') > 0'; eine PARAMETERLOSE virtuelle Funktion auf der RHS ist davon
+// lexikalisch nicht zu trennen. Das Gate braucht jetzt zusaetzlich
+//   H1: das Zuweisungsziel sieht aus wie ein Event ('On' + Grossbuchstabe)
+//   H2: der RHS ist KEINE parameterlose Funktion (die liefert einen Wert und
+//       kann kein Event-Handler sein)
+//
+// Beleg (drei byte-gleiche Kopien):
+//   jvcl/tests/RxLib/Source/JvCombos.pas:672
+//   jvcl/tests/archive/jvcl/Archive/JvCombos.pas:672
+//   jvcl/tests/restructured/Archive/JvCombos.pas:672
+// ---------------------------------------------------------------------------
+
+procedure TTestVirtualCallInCtor.InheritedValueAssign_ParameterlessVirtualFunc_StillReported;
+// TP-Rueckholer, Direkt-Pfad. 1:1 die Struktur von JvCombos.pas:672:
+//   function MinItemHeight: Integer; virtual;     (TJvOwnerDrawComboBox)
+//   function MinItemHeight: Integer; override;    (TJvxFontComboBox)
+//   constructor TJvxFontComboBox.Create ... inherited ItemHeight := MinItemHeight;
+// Ohne H1/H2 liefert diese Eingabe 0 (Gate schluckt den echten Aufruf) = ROT.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type TCombo = class(TCustomComboBox)'#13#10 +
+  '  constructor Create(AOwner: TComponent);'#13#10 +
+  '  function MinItemHeight: Integer; override;'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'constructor TCombo.Create(AOwner: TComponent);'#13#10 +
+  'begin'#13#10 +
+  '  inherited Create(AOwner);'#13#10 +
+  '  inherited ItemHeight := MinItemHeight;'#13#10 +
+  'end;'#13#10 +
+  'function TCombo.MinItemHeight: Integer; begin Result := 1; end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := FindingsOfRealFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkVirtualCallInCtor),
+    'parameterlose virtuelle Funktion auf der RHS eines Wert-Propertys ' +
+    'ist ein echter Aufruf (JvCombos.pas:672)');
+  finally F.Free; end;
+end;
+
+procedure TTestVirtualCallInCtor.InheritedValueAssign_ParameterlessFunc_HelperChain_StillReported;
+// TP-Rueckholer, Helper-Chain-Pfad (zweite Gate-Aufrufstelle im Detektor).
+// Der RHS ist selbst nicht virtual, ruft aber eine virtuelle Methode - und er
+// wird als WERT gebraucht, also wirklich ausgefuehrt. Ohne H1/H2: 0 = ROT.
+//
+// Der Kettenschritt ist bewusst ein FREISTEHENDER Aufruf ('RefreshMetrics;'):
+// uParser2 legt fuer 'Result := RefreshMetrics;' einen nkAssign mit dem RHS im
+// TypeRef an, KEINEN nkCall (uParser2.pas:2649) - FindVirtualInChain iteriert
+// aber nkCall. Mit einer Zuweisung als Kettenschritt waere der Test vakuum-rot.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type TCombo = class(TCustomComboBox)'#13#10 +
+  '  constructor Create(AOwner: TComponent);'#13#10 +
+  '  function ComputeHeight: Integer;'#13#10 +
+  '  procedure RefreshMetrics; virtual;'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'constructor TCombo.Create(AOwner: TComponent);'#13#10 +
+  'begin'#13#10 +
+  '  inherited ItemHeight := ComputeHeight;'#13#10 +
+  'end;'#13#10 +
+  'function TCombo.ComputeHeight: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  RefreshMetrics;'#13#10 +
+  '  Result := 1;'#13#10 +
+  'end;'#13#10 +
+  'procedure TCombo.RefreshMetrics; begin end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := FindingsOfRealFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkVirtualCallInCtor),
+    'Helper-Kette hinter einem Wert-Property bleibt ein Treffer');
+  finally F.Free; end;
+end;
+
+procedure TTestVirtualCallInCtor.InheritedEventAssign_RhsParameterlessFunc_StillReported;
+// H2 isoliert: das Ziel SIEHT aus wie ein Event, der RHS ist aber eine
+// parameterlose Funktion. In Delphi ruft 'OnShow := MakeHandler' die Funktion
+// auf und weist ihr ERGEBNIS zu - ein echter Aufruf im Ctor. Ohne H2 (nur H1)
+// waere das weiterhin gegatet = ROT.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type TBase = class(TForm)'#13#10 +
+  '  constructor Create(AOwner: TComponent);'#13#10 +
+  '  function MakeHandler: TNotifyEvent; virtual;'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'constructor TBase.Create(AOwner: TComponent);'#13#10 +
+  'begin'#13#10 +
+  '  inherited OnShow := MakeHandler;'#13#10 +
+  'end;'#13#10 +
+  'function TBase.MakeHandler: TNotifyEvent; begin Result := nil; end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := FindingsOfRealFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkVirtualCallInCtor),
+    'parameterlose Funktion liefert einen WERT - auch an ein Event zugewiesen ' +
+    'ist das ein Aufruf');
+  finally F.Free; end;
+end;
+
+procedure TTestVirtualCallInCtor.InheritedEventAssign_HandlerWithTwoParams_NoFinding;
+// Gegenprobe zum belegten FP, korpus-treu nachgebaut:
+//   jvcl/jvcl/run/JvPageListTreeView.pas:726/727
+//   jvcl/tests/p3/source/JvPageListTreeView.pas:1613/1614
+//     inherited OnGetImageIndex := DoGetImageIndex;
+//     procedure DoGetImageIndex(Sender: TObject; Node: TTreeNode);   // NICHT virtual
+// Anders als InheritedEventAssign_NoFinding ist der Handler hier - wie im
+// Original - nicht virtual, der Fund kam ueber die Helper-Kette. H1 trifft
+// ('OnGetImageIndex'), H2 trifft (Prozedur mit 2 Parametern) -> bleibt gedroppt.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type TTree = class(TTreeView)'#13#10 +
+  '  constructor Create(AOwner: TComponent);'#13#10 +
+  '  procedure DoGetImageIndex(Sender: TObject; Node: TTreeNode);'#13#10 +
+  '  procedure RefreshImages; virtual;'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'constructor TTree.Create(AOwner: TComponent);'#13#10 +
+  'begin'#13#10 +
+  '  inherited OnGetImageIndex := DoGetImageIndex;'#13#10 +
+  'end;'#13#10 +
+  'procedure TTree.DoGetImageIndex(Sender: TObject; Node: TTreeNode);'#13#10 +
+  'begin'#13#10 +
+  '  RefreshImages;'#13#10 +
+  'end;'#13#10 +
+  'procedure TTree.RefreshImages; begin end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := FindingsOfRealFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkVirtualCallInCtor),
+    'Event-Handler mit Parametern bleibt eine Zuweisung, kein Aufruf');
+  finally F.Free; end;
+end;
+
+procedure TTestVirtualCallInCtor.InheritedEventAssign_ParameterlessProcedure_NoFinding;
+// Gegenprobe zur H2-Grenze: H2 nimmt NUR parameterlose FUNKTIONEN aus. Eine
+// parameterlose PROZEDUR ist ein gueltiger Handler eines parameterlosen
+// Event-Typs ('procedure of object') - das Gate muss weiter greifen.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type TBase = class(TCustomControl)'#13#10 +
+  '  constructor Create(AOwner: TComponent);'#13#10 +
+  '  procedure DoIt; virtual;'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'constructor TBase.Create(AOwner: TComponent);'#13#10 +
+  'begin'#13#10 +
+  '  inherited OnClickHook := DoIt;'#13#10 +
+  'end;'#13#10 +
+  'procedure TBase.DoIt; begin end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := FindingsOfRealFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkVirtualCallInCtor),
+    'parameterlose PROZEDUR bleibt ein Methodenzeiger');
   finally F.Free; end;
 end;
 

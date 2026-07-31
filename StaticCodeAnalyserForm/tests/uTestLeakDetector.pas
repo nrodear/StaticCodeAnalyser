@@ -211,6 +211,16 @@ type
     // stillgestellt.
     [Test] procedure Leak_SinkResolvedNonOwningReceiver_StillReported;
     [Test] procedure Leak_SinkHelperCallArgNotUnwrapped_StillReported;
+    // --- Drop-Sampling after119->after120 (2026-07-31): TP-Verlust-Cluster
+    //     "gepunkteter Empfaenger auf nicht-besitzendem Container-Zugang".
+    //     Die beiden ersten Tests sind ohne die Zusatzhuerde ROT. ---
+    [Test] procedure Leak_SinkDottedItemsAddObject_StillReported;     // TP JvAlarmsForm:106
+    [Test] procedure Leak_SinkDottedItemsAddChildObject_StillReported;// TP ftreeviewmenu:230
+    // Gegenproben: diese Drops muessen gedroppt BLEIBEN.
+    [Test] procedure Leak_SinkDottedItemsPlainAdd_NoFinding;          // mORMot ui.report:5191
+    [Test] procedure Leak_SinkBareAddObjectSelfCollection_NoFinding;  // GX_ToDo:265
+    [Test] procedure Leak_SinkBareFieldAddObject_NoFinding;           // JvSAL:608
+    [Test] procedure Leak_SinkResolvedOwningAccessorName_NoFinding;
     [Test] procedure Leak_TpPenAssignedBack_StillReported;         // TP JvUtils.pas:1854
     [Test] procedure Leak_TpStringsUsedAfterForeignAdd_StillReported; // TP Indy:88
     // --- FP-Klasse 2: TComponent-/Owner-Ownership + Factory-Rueckgaben ---
@@ -3297,6 +3307,164 @@ begin
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'Helferfunktions-Argument ist kein Typecast - der Leak bleibt gemeldet');
+  finally F.Free; end;
+end;
+
+{ --- Drop-Sampling after119->after120 (2026-07-31): TP-Verlust-Cluster SCA001 --
+  Das Sink-Gate stellte 7 echte Error-Tier-Lecks still, weil eine GEPUNKTETE
+  Empfaengerkette ('AlarmListBox.Items', 'ATreeView.Items') in der Routine nicht
+  aufloesbar ist und damit auf den permissiven Zweig faellt. Genau diese Ketten
+  sind aber die kanonisch NICHT besitzenden VCL/LCL-Container: TStrings besitzt
+  Objects[] nie, TTreeNode.Data ist ein untypisierter Pointer.
+  Die Zusatzhuerde veto't deshalb, wenn das LETZTE Segment des Empfaengers ein
+  nicht-besitzender Container-Zugang ist UND der Senkenname zur *Object*-Familie
+  gehoert. }
+
+procedure TTestMemoryLeakAdvanced.Leak_SinkDottedItemsAddObject_StillReported;
+// TP jvcl/jvcl/archive/JvAlarmsForm.pas:106 (und 5 baugleiche JVCL-Stellen):
+// 'Al' wird erzeugt, per TStrings.AddObject in die Listbox gehaengt und in der
+// GANZEN Unit nie freigegeben - TStrings.Destroy raeumt Objects[] nicht ab.
+// Ohne die Zusatzhuerde ist dieser Test ROT (0 Funde): 'alarmlistbox.items' ist
+// nicht aufloesbar -> permissiver Pfad -> die Senke galt als besitzend.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFormAlarm.AddBtnClick(Sender: TObject);'#13#10+
+  'var Al: TStringList;'#13#10+
+  'begin'#13#10+
+  '  Al := TStringList.Create;'#13#10+
+  '  Al.Sorted := True;'#13#10+
+  '  AlarmListBox.ItemIndex := AlarmListBox.Items.AddObject(''New'', TObject(Al));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'TStrings.AddObject auf einer gepunkteten .Items-Kette ist KEIN '+
+      'Ownership-Transfer - das Leck muss gemeldet bleiben');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_SinkDottedItemsAddChildObject_StillReported;
+// TP doublecmd-master/src/ftreeviewmenu.pas:230: das TTreeMenuItem landet als
+// TTreeNode.Data (untypisierter Pointer, kein Ownership) und wird nirgends
+// freigegeben. Empfaenger 'ATreeView.Items' ist dotted -> ohne die Zusatzhuerde
+// ROT. TStringList statt TTreeMenuItem, damit der Typ ohne Auto-Discovery als
+// leaky gilt; die Form des Aufrufs ist identisch.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TMenuHolder.AddTreeViewMenuItem(ATreeView: TTreeView; ParentNode: TTreeNode; const S: string): TTreeNode;'#13#10+
+  'var ATreeMenuItem: TStringList;'#13#10+
+  'begin'#13#10+
+  '  ATreeMenuItem := TStringList.Create;'#13#10+
+  '  ATreeMenuItem.Sorted := True;'#13#10+
+  '  Result := ATreeView.Items.AddChildObject(ParentNode, S, ATreeMenuItem);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'TTreeNodes.AddChildObject speichert nur den Data-Pointer - das Leck '+
+      'muss gemeldet bleiben');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_SinkDottedItemsPlainAdd_NoFinding;
+// GEGENPROBE (korrekter Drop, muss gedroppt bleiben): mORMot
+// src/ui/mormot.ui.report.pas:5051/5191 - 'PopupMenu.Items.Add(Item)'. Hier ist
+// 'Items' ein TMenuItem und der gibt seine Kinder frei. Unterschied zu den
+// beiden Tests oben ist AUSSCHLIESSLICH der Senkenname: '.Add' nimmt bei
+// TStrings/TTreeNodes einen String, nur die *Object*-Ueberladungen nehmen ein
+// Objekt. Faellt die Object-Huerde weg, wird dieser Test ROT.
+// Zuweisungs-RHS, damit der aeltere nkCall-Pfad (IsPassedToOwner) nicht schon
+// vorher greift und der Test das neue Gate wirklich prueft.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TGdiPages.NewPopupMenuItem(const aCaption: string);'#13#10+
+  'var LItem: TStringList;'#13#10+
+  'begin'#13#10+
+  '  LItem := TStringList.Create;'#13#10+
+  '  LItem.Text := aCaption;'#13#10+
+  '  FLastIndex := PopupMenu.Items.Add(LItem);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'schlichtes .Items.Add bleibt Ownership-Transfer - nur die '+
+      '*Object*-Ueberladungen sind nachweislich nicht besitzend');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_SinkBareAddObjectSelfCollection_NoFinding;
+// GEGENPROBE (korrekter Drop): gexperts Src/GX_ToDo.pas:265 bzw. jvcl
+// JvParameterList.pas:716 - unqualifiziertes 'AddObject(Token, TokenInfo)' der
+// eigenen TStringList-ABLEITUNG, die ihre Objects[] in Clear/Destroy selbst
+// freigibt. Leerer Empfaenger darf nie als Container-Zugang gelten.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TTokenList.AddToken(Token: string);'#13#10+
+  'var TokenInfo: TStringList;'#13#10+
+  'begin'#13#10+
+  '  TokenInfo := TStringList.Create;'#13#10+
+  '  TokenInfo.Sorted := True;'#13#10+
+  '  AddObject(Token, TokenInfo);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'unqualifiziertes AddObject der eigenen Collection bleibt '+
+      'Ownership-Transfer');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_SinkBareFieldAddObject_NoFinding;
+// GEGENPROBE (korrekter Drop): jvcl/jvcl/run/JvSAL.pas:608 -
+// 'Result := Atoms.AddObject(Op, AAtom)'. Der Empfaenger ist ein FELD mit
+// fachlichem Namen, kein Container-Zugang - das Veto darf nicht greifen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TJvSAL.APO(Op: string): Integer;'#13#10+
+  'var AAtom: TStringList;'#13#10+
+  'begin'#13#10+
+  '  AAtom := TStringList.Create;'#13#10+
+  '  AAtom.Sorted := True;'#13#10+
+  '  Result := Atoms.AddObject(Op, AAtom);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'Feld-Empfaenger ohne Container-Zugangs-Namen bleibt permissiv');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_SinkResolvedOwningAccessorName_NoFinding;
+// GEGENPROBE zum Local/Param-Probe-Zweig: der Empfaenger heisst zwar wie ein
+// Container-Zugang ('Data'), ist hier aber ein AUFLOESBARER Parameter vom Typ
+// TObjectList und trifft damit die RTL-Ownership-Whitelist. Ohne die
+// ScopeDeclaresIdent-Pruefung wuerde die Namensliste blind veto'en und dieser
+// Test ROT.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar(Data: TObjectList);'#13#10+
+  'var Item: TStringList;'#13#10+
+  'begin'#13#10+
+  '  Item := TStringList.Create;'#13#10+
+  '  Item.Sorted := True;'#13#10+
+  '  FIndex := Data.AddObject(''k'', Item);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'aufloesbarer TObjectList-Parameter schlaegt die Accessor-Namensliste');
   finally F.Free; end;
 end;
 
