@@ -39,6 +39,20 @@ unit uUnusedPrivateMethod;
 //     Suppression-Marker `// noinspection UnusedPrivateMethod` als
 //     Escape-Hatch.
 //
+// KEIN FFI-GATE (gemessen, Backlog 4e-3 / 30%-Audit 2026-07-31):
+//   SCA138 GodClass und SCA141 LargeClass haben ein Gate gegen ObjC-/JNI-
+//   Bridge-Typen bekommen (TDetectorUtils.CollectFfiBindingTypes). Fuer
+//   SCA147 waere es WIRKUNGSLOS und wurde deshalb bewusst NICHT gebaut:
+//   von 3.325 Korpusfunden (sca-rw-after123) liegt genau EINER auf einem
+//   FFI-Typ - TToast.DestroyClass in Kastri/Core/DW.Toast.Android.pas.
+//   Der Mechanismus dahinter ist strukturell und kein Zufall der
+//   Stichprobe: generierte Bridge-Interfaces haben ueberhaupt keine
+//   Visibility-Sections (Phase 1 findet dort nichts), und die
+//   TJavaGenericImport-/TOCGenericImport-Begleitklassen sind leere
+//   Einzeiler. Der eine Treffer ist zudem ein FP AUS ANDEREM GRUND
+//   (`class destructor` wird nie namentlich gerufen) - ein FFI-Gate wuerde
+//   ihn nur zufaellig mit erwischen und die echte Ursache verdecken.
+//
 // DFM-EVENT-BINDINGS (seit 2026-06-20):
 //   Wenn neben der .pas eine gleichnamige .dfm liegt (Standard-VCL-
 //   Konvention), wird sie mitgescannt: alle Event-Property-Werte

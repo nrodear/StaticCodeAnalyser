@@ -234,6 +234,28 @@ type
     [Test] procedure Leak_FactoryReturnsOwnership_StillReported;   // TP-Gegenprobe
     // Review 2026-07-31: Callee-Aufloesung ist klassen-qualifiziert.
     [Test] procedure Leak_FactoryHomonymInForeignClass_StillReported;
+    // --- Parser-Gate-Backlog 2026-07-31 (Konzept 4e/1+4e/2) -------------
+    // (a) Der Callee-Ctor DERSELBEN Unit haengt sich per '<Param>.Add(Self)'
+    //     in eine besitzende Liste des uebergebenen Parents (jvcl
+    //     JvInspector.pas 4130/11876).
+    [Test] procedure Leak_CtorRegistersSelfWithParent_NoFinding;
+    [Test] procedure Leak_CtorDoesNotRegisterSelf_StillReported;   // TP-Gegenprobe
+    // Review-Blocker 1 (2026-07-31): Overload-Mehrdeutigkeit darf NICHT zum
+    // Vorfahren klettern - sonst entscheidet der Ctor des Vorfahren ueber eine
+    // Ueberladung, die er nicht kennt.
+    [Test] procedure Leak_CtorOverloadsAncestorRegisters_StillReported;
+    [Test] procedure Leak_CtorUniqueOwnRegisters_NoFinding;        // Gegenprobe
+    // Review-Blocker 2 (2026-07-31): 'Self.<Member>' ist KEINE
+    // Selbstregistrierung - uebergeben wird ein Feld, nicht Self.
+    [Test] procedure Leak_CtorAddsSelfMemberNotSelf_StillReported;
+    [Test] procedure Leak_CtorRegistersSelfViaTypecast_NoFinding;  // Gegenprobe
+    [Test] procedure Leak_CtorRegistersSelfAsTrailingArg_NoFinding;// Gegenprobe
+    // (b) REGRESSIONSFALL: Empfaengertyp ist ein Unit-Alias bzw. eine
+    //     Ableitung eines besitzenden Containers ('TPeople =
+    //     TObjectList<TPerson>', delphimvcframework DAL.pas:136).
+    [Test] procedure Leak_AddReceiverIsUnitAliasOfObjectList_NoFinding;
+    [Test] procedure Leak_AddReceiverIsUnitClassOfObjectList_NoFinding;
+    [Test] procedure Leak_AddReceiverIsUnitAliasOfTList_StillReported; // TP-Gegenprobe
   end;
 
   // ---- FieldLeak (TFieldLeakDetector) ------------------------------------------------
@@ -265,6 +287,15 @@ type
     //     (Reader/Writer/Zip) besitzen ihren Quellstream NICHT. ---
     [Test] procedure Field_ConsumerOverSiblingStream_StillReported;
     [Test] procedure Field_OwnerFieldIsDataClass_StillReported;
+    // --- Parser-Gate-Backlog 2026-07-31 (Konzept 4e/1) -------------------
+    // (a) Freigabe in BeforeDestruction statt Destroy (jvcl JvInspector).
+    [Test] procedure Field_FreedInBeforeDestruction_NoFinding;
+    [Test] procedure Field_BeforeDestructionFreesOther_StillReported; // TP-Gegenprobe
+    // (b) Transitive Component-Ownership ohne Destruktor (jvcl
+    //     JvGammaPanel 61/63/64, JvCombobox 261).
+    [Test] procedure Field_OwnerChainReachesSelf_NoFinding;
+    [Test] procedure Field_OwnerChainEndsAtNil_StillReported;         // TP-Gegenprobe
+    [Test] procedure Field_OwnerChainOnPlainObjectClass_StillReported; // TP-Gegenprobe
   end;
 
 implementation
@@ -3725,6 +3756,369 @@ begin
   finally F.Free; end;
 end;
 
+{ --- Parser-Gate-Backlog 2026-07-31 (Konzept 4e/1 + 4e/2) ------------------ }
+
+procedure TTestMemoryLeakAdvanced.Leak_CtorRegistersSelfWithParent_NoFinding;
+// jvcl JvInspector.pas 4130/11876: 'TJvInspectorCustomCategoryItem.Create(
+// AParent, nil)'. Die Klasse hat keinen eigenen Ctor; der geerbte
+// TJvCustomInspectorItem.Create haengt sich per 'AParent.Add(Self)' in die
+// besitzende FItems-Liste des Parents. Weder IsOwnerParamCreate (kennt nur
+// Self/Owner/AOwner/Application) noch IsComponentOwnerCreate (TComponent-Linie;
+// die Items sind TPersistent) sehen das -> ohne den Fix ROT.
+// Der Test prueft zugleich die Ahnenkette IN DER UNIT (TSynList erbt den Ctor).
+const SRC =
+  'unit t; interface'#13#10+
+  'type'#13#10+
+  '  TSynObjectList = class'#13#10+
+  '  public'#13#10+
+  '    constructor Create(AParent: TSynObjectList);'#13#10+
+  '    function Add(AItem: TSynObjectList): Integer;'#13#10+
+  '  end;'#13#10+
+  '  TSynList = class(TSynObjectList)'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'constructor TSynObjectList.Create(AParent: TSynObjectList);'#13#10+
+  'begin'#13#10+
+  '  inherited Create;'#13#10+
+  '  if AParent <> nil then'#13#10+
+  '    AParent.Add(Self);'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Build(AParent: TSynObjectList);'#13#10+
+  'var Item: TSynList;'#13#10+
+  'begin'#13#10+
+  '  Item := TSynList.Create(AParent);'#13#10+
+  '  Item.Tag := 1;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'Der Ctor haengt Self in die Liste des Parents - kein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_CtorDoesNotRegisterSelf_StillReported;
+// TP-Gegenprobe: identische Form, aber der Ctor MERKT sich den Parent nur
+// (Rueckwaerts-Referenz) statt sich in dessen Liste zu haengen. Dann uebernimmt
+// niemand die Ownership und der Fund muss stehen bleiben.
+const SRC =
+  'unit t; interface'#13#10+
+  'type'#13#10+
+  '  TSynObjectList = class'#13#10+
+  '  public'#13#10+
+  '    FParent: TSynObjectList;'#13#10+
+  '    constructor Create(AParent: TSynObjectList);'#13#10+
+  '  end;'#13#10+
+  '  TSynList = class(TSynObjectList)'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'constructor TSynObjectList.Create(AParent: TSynObjectList);'#13#10+
+  'begin'#13#10+
+  '  inherited Create;'#13#10+
+  '  FParent := AParent;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Build(AParent: TSynObjectList);'#13#10+
+  'var Item: TSynList;'#13#10+
+  'begin'#13#10+
+  '  Item := TSynList.Create(AParent);'#13#10+
+  '  Item.Tag := 1;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    'Ohne Selbst-Registrierung bleibt Item ein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_CtorOverloadsAncestorRegisters_StillReported;
+// REVIEW-BLOCKER 1 (2026-07-31), ohne den Fix ROT:
+// 'TSynList' hat ZWEI ueberladene Konstruktoren, der Vorfahr 'TSynObjectList' genau
+// einen - und DER haengt sich per 'AParent.Add(Self)' in die Liste des Parents.
+// Vorher lieferte UniqueCtorOf bei Overloads dasselbe nil wie bei "kein Ctor
+// gefunden"; die Schleife kletterte darum auch bei Mehrdeutigkeit zum Vorfahren
+// und beurteilte 'TSynList.Create(AParent, ''x'')' nach TSynObjectList.Create - obwohl
+// nicht entscheidbar ist, welche Ueberladung gemeint war und ob sie den Parent
+// ueberhaupt weiterreicht (die zweite tut es nicht: 'inherited Create(nil)').
+// Tri-State: Mehrdeutigkeit bricht ab -> kein Gate -> der Fund bleibt.
+const SRC =
+  'unit t; interface'#13#10+
+  'type'#13#10+
+  '  TSynObjectList = class'#13#10+
+  '  public'#13#10+
+  '    constructor Create(AParent: TSynObjectList);'#13#10+
+  '    function Add(AItem: TSynObjectList): Integer;'#13#10+
+  '  end;'#13#10+
+  '  TSynList = class(TSynObjectList)'#13#10+
+  '  public'#13#10+
+  '    FName: string;'#13#10+
+  '    constructor Create(AParent: TSynObjectList; const AName: string); overload;'#13#10+
+  '    constructor Create(const AName: string); overload;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'constructor TSynObjectList.Create(AParent: TSynObjectList);'#13#10+
+  'begin'#13#10+
+  '  inherited Create;'#13#10+
+  '  if AParent <> nil then'#13#10+
+  '    AParent.Add(Self);'#13#10+
+  'end;'#13#10+
+  'constructor TSynList.Create(AParent: TSynObjectList; const AName: string);'#13#10+
+  'begin'#13#10+
+  '  inherited Create(AParent);'#13#10+
+  '  FName := AName;'#13#10+
+  'end;'#13#10+
+  'constructor TSynList.Create(const AName: string);'#13#10+
+  'begin'#13#10+
+  '  inherited Create(nil);'#13#10+
+  '  FName := AName;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Build(AParent: TSynObjectList);'#13#10+
+  'var Leaf: TSynList;'#13#10+
+  'begin'#13#10+
+  '  Leaf := TSynList.Create(AParent, ''x'');'#13#10+
+  '  Leaf.Tag := 1;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    'Overloads sind kein Beweis - der Vorfahren-Ctor darf nicht gaten');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_CtorUniqueOwnRegisters_NoFinding;
+// Gegenprobe zu Blocker 1: dieselbe Form, aber die Klasse hat GENAU EINEN
+// eigenen Ctor - und der registriert sich per 'AParent.Add(Self)'. Eindeutig
+// = beweisbar, das Gate muss weiter greifen (der Tri-State darf nicht
+// pauschal abschalten).
+const SRC =
+  'unit t; interface'#13#10+
+  'type'#13#10+
+  '  TSynObjectList = class'#13#10+
+  '  public'#13#10+
+  '    function Add(AItem: TSynObjectList): Integer;'#13#10+
+  '  end;'#13#10+
+  '  TSynList = class(TSynObjectList)'#13#10+
+  '  public'#13#10+
+  '    FName: string;'#13#10+
+  '    constructor Create(AParent: TSynObjectList; const AName: string);'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'constructor TSynList.Create(AParent: TSynObjectList; const AName: string);'#13#10+
+  'begin'#13#10+
+  '  inherited Create;'#13#10+
+  '  AParent.Add(Self);'#13#10+
+  '  FName := AName;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Build(AParent: TSynObjectList);'#13#10+
+  'var Leaf: TSynList;'#13#10+
+  'begin'#13#10+
+  '  Leaf := TSynList.Create(AParent, ''x'');'#13#10+
+  '  Leaf.Tag := 1;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'Eindeutiger Ctor mit AParent.Add(Self) - der Parent besitzt Leaf');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_CtorAddsSelfMemberNotSelf_StillReported;
+// REVIEW-BLOCKER 2 (2026-07-31), ohne den Fix ROT:
+// Der Ctor uebergibt 'Self.FCaption' - ein FELD von Self, nicht Self. Die
+// alte Pruefung (TDetectorUtils.ContainsWholeWordLower) akzeptierte '.' als
+// rechte Wortgrenze und zaehlte 'self.fcaption' als Selbstregistrierung; damit
+// waere 'C := TSynList.Create(MyList)' stillgestellt worden, obwohl niemand C
+// besitzt. Der explizite Scan (ArgsContainBareSelf) verwirft den Punkt.
+const SRC =
+  'unit t; interface'#13#10+
+  'type'#13#10+
+  '  TSynObjectList = class'#13#10+
+  '  public'#13#10+
+  '    function Add(AItem: TObject): Integer;'#13#10+
+  '  end;'#13#10+
+  '  TSynList = class'#13#10+
+  '  public'#13#10+
+  '    FCaption: TObject;'#13#10+
+  '    constructor Create(AItems: TSynObjectList);'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'constructor TSynList.Create(AItems: TSynObjectList);'#13#10+
+  'begin'#13#10+
+  '  inherited Create;'#13#10+
+  '  AItems.Add(Self.FCaption);'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Build(MyList: TSynObjectList);'#13#10+
+  'var C: TSynList;'#13#10+
+  'begin'#13#10+
+  '  C := TSynList.Create(MyList);'#13#10+
+  '  C.Tag := 1;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    'Uebergeben wird ein Feld von Self - C bleibt ein echtes Leck');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_CtorRegistersSelfViaTypecast_NoFinding;
+// Gegenprobe zu Blocker 2: 'AItems.Add(TObject(Self))' ist eine echte
+// Selbstregistrierung - die Klammer ist eine gueltige rechte Wortgrenze und
+// muss weiter matchen.
+const SRC =
+  'unit t; interface'#13#10+
+  'type'#13#10+
+  '  TSynObjectList = class'#13#10+
+  '  public'#13#10+
+  '    function Add(AItem: TObject): Integer;'#13#10+
+  '  end;'#13#10+
+  '  TSynList = class'#13#10+
+  '  public'#13#10+
+  '    constructor Create(AItems: TSynObjectList);'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'constructor TSynList.Create(AItems: TSynObjectList);'#13#10+
+  'begin'#13#10+
+  '  inherited Create;'#13#10+
+  '  AItems.Add(TObject(Self));'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Build(MyList: TSynObjectList);'#13#10+
+  'var C: TSynList;'#13#10+
+  'begin'#13#10+
+  '  C := TSynList.Create(MyList);'#13#10+
+  '  C.Tag := 1;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'Typecast-Self ist eine Selbstregistrierung - die Liste besitzt C');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_CtorRegistersSelfAsTrailingArg_NoFinding;
+// Gegenprobe zu Blocker 2: 'AItems.Insert(0, Self)' - Self hinter einem Komma
+// und am Ende der Argumentliste. Beide Grenzen (Komma links, Stringende
+// rechts) muessen weiter als Wortgrenze gelten.
+const SRC =
+  'unit t; interface'#13#10+
+  'type'#13#10+
+  '  TSynObjectList = class'#13#10+
+  '  public'#13#10+
+  '    procedure Insert(AIndex: Integer; AItem: TObject);'#13#10+
+  '  end;'#13#10+
+  '  TSynList = class'#13#10+
+  '  public'#13#10+
+  '    constructor Create(AItems: TSynObjectList);'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'constructor TSynList.Create(AItems: TSynObjectList);'#13#10+
+  'begin'#13#10+
+  '  inherited Create;'#13#10+
+  '  AItems.Insert(0, Self);'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Build(MyList: TSynObjectList);'#13#10+
+  'var C: TSynList;'#13#10+
+  'begin'#13#10+
+  '  C := TSynList.Create(MyList);'#13#10+
+  '  C.Tag := 1;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'Self als letztes Argument bleibt eine Selbstregistrierung');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_AddReceiverIsUnitAliasOfObjectList_NoFinding;
+// REGRESSIONSFALL des Parser-Inkrements (Konzept 4e/2), delphimvcframework
+// contrib/serversideviews_sempare/DAL.pas:136: 'TPeople = TObjectList<TPerson>'.
+// Vor dem Parser-Fix war 'TPeople' unaufloesbar -> AddReceiverOwnsItems lief in
+// den permissiven Zweig -> kein Fund. Mit aufloesbarem Typ matchte er die
+// Whitelist nicht mehr -> das Gate veto-te und erzeugte den FP. Mehr Typwissen
+// machte das Ergebnis schlechter; die Alias-Aufloesung stellt es richtig.
+const SRC =
+  'unit t; interface'#13#10+
+  'type'#13#10+
+  '  TPeople = TObjectList<TStringList>;'#13#10+
+  'implementation'#13#10+
+  'procedure TFoo.AddPerson;'#13#10+
+  'var'#13#10+
+  '  lPeople: TPeople;'#13#10+
+  '  lPerson: TStringList;'#13#10+
+  'begin'#13#10+
+  '  lPeople := GetPeople;'#13#10+
+  '  lPerson := TStringList.Create;'#13#10+
+  '  lPeople.Add(lPerson);'#13#10+
+  '  lPerson.Add(''x'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    'TPeople ist ein Alias auf TObjectList - der Container besitzt lPerson');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_AddReceiverIsUnitClassOfObjectList_NoFinding;
+// Zweite Auspraegung derselben Klasse (delphimvcframework samples/*/DAL.pas):
+// 'TPeople = class(TObjectList<TPerson>)' - Ableitung statt Alias. Auch hier
+// steht der besitzende Container erst in der Unit-lokalen Deklaration.
+const SRC =
+  'unit t; interface'#13#10+
+  'type'#13#10+
+  '  TPeople = class(TObjectList<TStringList>)'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'procedure TFoo.AddPerson;'#13#10+
+  'var'#13#10+
+  '  lPeople: TPeople;'#13#10+
+  '  lPerson: TStringList;'#13#10+
+  'begin'#13#10+
+  '  lPeople := GetPeople;'#13#10+
+  '  lPerson := TStringList.Create;'#13#10+
+  '  lPeople.Add(lPerson);'#13#10+
+  '  lPerson.Add(''x'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    'TPeople erbt von TObjectList - der Container besitzt lPerson');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_AddReceiverIsUnitAliasOfTList_StillReported;
+// TP-Gegenprobe: derselbe Alias-Mechanismus, aber auf TList - das ist KEIN
+// besitzender Container (kein OwnsObjects, kein Free auf Items). Die
+// Aufloesung darf die strikte Whitelist nicht aushebeln; der Fund bleibt.
+// (Spiegelt Leak_TListAddNonOwning_ReportsError durch die Alias-Ebene.)
+const SRC =
+  'unit t; interface'#13#10+
+  'type'#13#10+
+  '  TPeople = TList<TStringList>;'#13#10+
+  'implementation'#13#10+
+  'procedure TFoo.AddPerson;'#13#10+
+  'var'#13#10+
+  '  lPeople: TPeople;'#13#10+
+  '  lPerson: TStringList;'#13#10+
+  'begin'#13#10+
+  '  lPeople := GetPeople;'#13#10+
+  '  lPerson := TStringList.Create;'#13#10+
+  '  lPeople.Add(lPerson);'#13#10+
+  '  lPerson.Add(''x'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    'TList besitzt seine Items nicht - lPerson bleibt ein Leak');
+  finally F.Free; end;
+end;
+
 // --- C: Try/Finally Edge Cases (7 Tests) ---
 
 procedure TTestMemoryLeakAdvanced.Leak_CreateInsideTryBeginFinally_NoFinding;
@@ -4583,6 +4977,163 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
     'Stream-Feld als Owner ist keine Ownership - FLog bleibt ein Leak');
+  finally F.Free; end;
+end;
+
+{ --- Parser-Gate-Backlog 2026-07-31 (Konzept 4e/1) ------------------------- }
+
+procedure TTestFieldLeak.Field_FreedInBeforeDestruction_NoFinding;
+// jvcl JvInspector.pas 302/303/307/311/317/325/332/817/1057/1242/1385 und
+// JvInspExtraEditors 118/119: die Klassen raeumen ihre Felder AUSSCHLIESSLICH
+// in BeforeDestruction auf. Delphi ruft BeforeDestruction garantiert vor
+// Destroy (TObject.Free -> BeforeDestruction -> Destroy), das Feld ist also
+// aufgeraeumt. Vor dem Fix sah FindMethod nur TypeRef='destructor' -> ROT.
+const SRC =
+  'unit t; interface'#13#10+
+  'type TJvCustomInspector = class'#13#10+
+  '  FRoot: TStringList;'#13#10+
+  'public'#13#10+
+  '  constructor Create;'#13#10+
+  '  procedure BeforeDestruction; override;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TJvCustomInspector.Create;'#13#10+
+  'begin'#13#10+
+  '  FRoot := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'procedure TJvCustomInspector.BeforeDestruction;'#13#10+
+  'begin'#13#10+
+  '  inherited BeforeDestruction;'#13#10+
+  '  FRoot.Free;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'FRoot wird in BeforeDestruction freigegeben - kein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeak.Field_BeforeDestructionFreesOther_StillReported;
+// TP-Gegenprobe: die Klasse HAT ein BeforeDestruction, gibt darin aber ein
+// ANDERES Feld frei. Der neue Suchraum darf nicht pauschal entschaerfen.
+const SRC =
+  'unit t; interface'#13#10+
+  'type TJvCustomInspector = class'#13#10+
+  '  FRoot: TStringList;'#13#10+
+  '  FOther: TStringList;'#13#10+
+  'public'#13#10+
+  '  constructor Create;'#13#10+
+  '  procedure BeforeDestruction; override;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TJvCustomInspector.Create;'#13#10+
+  'begin'#13#10+
+  '  FRoot := TStringList.Create;'#13#10+
+  '  FOther := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'procedure TJvCustomInspector.BeforeDestruction;'#13#10+
+  'begin'#13#10+
+  '  FOther.Free;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    'Nur FOther wird freigegeben - FRoot bleibt ein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeak.Field_OwnerChainReachesSelf_NoFinding;
+// jvcl JvGammaPanel.pas 61/63/64: 'FGamma := TImage.Create(FPanel2)', FPanel2
+// gehoert FPanel1, FPanel1 = 'TPanel.Create(Self)'. Die Klasse hat GAR KEINEN
+// Destruktor - IsOwnedByFreedSiblingField (verlangt Dtor <> nil) kann dort
+// strukturell nie feuern. Der Component-Tree unter Self raeumt alles ab.
+// Ohne die Kettenaufloesung ROT (1 statt 0).
+const SRC =
+  'unit t; interface'#13#10+
+  'type TJvGammaPanel = class'#13#10+
+  '  FPanel1: TPanel;'#13#10+
+  '  FPanel2: TPanel;'#13#10+
+  '  FGamma: TTimer;'#13#10+
+  'public'#13#10+
+  '  constructor Create(AOwner: TComponent);'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TJvGammaPanel.Create(AOwner: TComponent);'#13#10+
+  'begin'#13#10+
+  '  FPanel1 := TPanel.Create(Self);'#13#10+
+  '  FPanel2 := TPanel.Create(FPanel1);'#13#10+
+  '  FGamma := TTimer.Create(FPanel2);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'FGamma haengt transitiv unter Self - der Component-Tree raeumt ab');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeak.Field_OwnerChainEndsAtNil_StillReported;
+// TP-Gegenprobe: die Kette endet bei 'nil' statt bei Self/AOwner - dann gibt
+// es keinen Component-Tree, der aufraeumt, und ohne Destruktor leakt FGamma.
+const SRC =
+  'unit t; interface'#13#10+
+  'type TJvGammaPanel = class'#13#10+
+  '  FPanel1: TPanel;'#13#10+
+  '  FGamma: TTimer;'#13#10+
+  'public'#13#10+
+  '  constructor Create(AOwner: TComponent);'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TJvGammaPanel.Create(AOwner: TComponent);'#13#10+
+  'begin'#13#10+
+  '  FPanel1 := TPanel.Create(nil);'#13#10+
+  '  FGamma := TTimer.Create(FPanel1);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    'Kette endet bei nil - kein Owner-Nachweis, FGamma bleibt gemeldet');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeak.Field_OwnerChainOnPlainObjectClass_StillReported;
+// TP-Gegenprobe fuer Huerde H4, belegt an gexperts EII/D3/EIPanel.pas:238:
+// 'TSplitterControl = class' (direkter TObject-Nachfahre) mit
+// 'Create(ASplitControl, ATargetControl: TControl)'. Das erste Argument SIEHT
+// aus wie ein Owner, ist aber keiner - ein TObject haengt in keinem
+// Component-Tree, und das Feld wird nirgends freigegeben = echtes Leck.
+// Ohne die H4-Sperre waere dieser TP verschwunden.
+const SRC =
+  'unit t; interface'#13#10+
+  'type'#13#10+
+  '  TSynList = class'#13#10+
+  '  public'#13#10+
+  '    constructor Create(ASplit: TPanel);'#13#10+
+  '  end;'#13#10+
+  '  TEIPanel = class'#13#10+
+  '    FPanel: TPanel;'#13#10+
+  '    FSplit: TSynList;'#13#10+
+  '  public'#13#10+
+  '    constructor Create(AOwner: TComponent);'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'constructor TSynList.Create(ASplit: TPanel);'#13#10+
+  'begin'#13#10+
+  '  inherited Create;'#13#10+
+  'end;'#13#10+
+  'constructor TEIPanel.Create(AOwner: TComponent);'#13#10+
+  'begin'#13#10+
+  '  FPanel := TPanel.Create(Self);'#13#10+
+  '  FSplit := TSynList.Create(FPanel);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    'TSynList ist ein direkter TObject-Nachfahre - kein Component-Tree, FSplit leakt');
   finally F.Free; end;
 end;
 

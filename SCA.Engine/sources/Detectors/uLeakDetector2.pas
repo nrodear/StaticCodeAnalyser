@@ -96,8 +96,14 @@ type
       const VarNameLow: string): Integer; static;
     class function IsReturnedAsResult(MethodNode: TAstNode;
       const VarNameLow: string): Boolean; static;
+    // AUnitNode (2026-07-31, Parser-Gate-Backlog 4e/2) ist OPTIONAL und
+    // steuert AUSSCHLIESSLICH die Alias-Aufloesung des Add-Empfaengers in
+    // AddReceiverOwnsItems. Default nil = exakt das bisherige Verhalten -
+    // wichtig, weil TMissingFinallyDetector (SCA008) diese Funktion mitbenutzt
+    // und sich NICHT bewegen darf. Nur TLeakDetector2.AnalyzeMethod (SCA001)
+    // reicht den Unit-Knoten durch.
     class function IsPassedToOwner(MethodNode: TAstNode;
-      const VarNameLow: string): Boolean; static;
+      const VarNameLow: string; AUnitNode: TAstNode = nil): Boolean; static;
     // FP-Gate (2026-07-04): os-handle - True wenn die RHS ein Aufruf einer
     // bekannten OS-Handle-API ist (socket/accept/CreateFile/CreateEvent/...).
     // Deren Rueckgaben sind Integer-Handles (ggf. in Handle-Wrapper wie
@@ -131,8 +137,16 @@ type
     // Regression bei FList.Add-Mustern). False nur wenn der Typ
     // aufloesbar ist UND nicht zur Whitelist passt (TList, TStringList,
     // TSynList etc. haben kein OwnsObjects).
+    // AUnitNode (2026-07-31, Parser-Gate-Backlog 4e/2 - der REGRESSIONSFALL):
+    // ist der Empfaengertyp aufloesbar, aber nur weil die Unit ihn als ALIAS
+    // bzw. ABLEITUNG eines besitzenden Containers deklariert
+    // ('TPeople = TObjectList<TPerson>' / 'TPeople = class(TObjectList<TPerson>)'),
+    // dann trifft er die Whitelist nicht und das Gate veto-te faelschlich -
+    // mehr Typwissen (Parser-Fix) machte das Ergebnis SCHLECHTER. Mit
+    // AUnitNode wird die Unit-lokale Deklarationskette aufgeloest. Default nil
+    // = bisheriges Verhalten (SCA008-Pfad bleibt unberuehrt).
     class function AddReceiverOwnsItems(MethodNode: TAstNode;
-      const ReceiverNameLow: string): Boolean; static;
+      const ReceiverNameLow: string; AUnitNode: TAstNode = nil): Boolean; static;
     // finally-Mis-Attachment-Fix (2026-07-13): Source-basierter finally-Schutz-
     // Check. True wenn eine Freigabe von VarName in der QUELLE innerhalb einer
     // finally-Region liegt (unabhaengig von der AST-Attachierung des .Free).
@@ -966,12 +980,13 @@ begin
   end;
 end;
 
-class function TLeakDetector2.AddReceiverOwnsItems(MethodNode: TAstNode;
-  const ReceiverNameLow: string): Boolean;
-// Pflicht-Whitelist: Receiver-Typ matched einen ownership-bewussten
-// Container. Liste praktisch begrenzt - die Default-RTL-Container
-// die wirklich Free auf Items rufen.
+{ ---- Ownership-Container: Whitelist + Unit-lokale Alias-Aufloesung -------- }
+
 const
+  // Ownership-bewusste RTL-/VCL-Container - die Default-Container, die
+  // wirklich Free auf ihre Items rufen. Bis 2026-07-31 lokal in
+  // AddReceiverOwnsItems; hochgezogen, damit die Alias-Aufloesung
+  // (UnitTypeIsOwningContainer) GENAU DIESELBE Liste benutzt.
   OWNING_PREFIXES : array[0..6] of string = (
     'tobjectlist',         // TObjectList<T>(True), TObjectList(True)
     'tobjectdictionary',   // TObjectDictionary
@@ -982,31 +997,99 @@ const
     'tinterfacelist'       // refcount-managed - effektiv ownership-aequiv
   );
 
-  function TypeMatches(const TypeLow: string): Boolean;
-  // Strenge Word-Boundary-Pruefung: 'tobjectlist' matched 'tobjectlist',
-  // 'tobjectlist<tfoo>' und 'tobjectlist(true)' aber NICHT 'tobjectlistview'
-  // oder 'tobjectlisthelper' (gibt es z.B. in Spring4D / mORMot Erweiterungen).
-  // Vorher Pos-Match-am-Anfang ohne Boundary -> false-positive Ownership-
-  // Annahme bei jeder Klasse die mit Prefix anfaengt.
-  var
-    prefix : string;
-    pLen   : Integer;
-    NextCh : Char;
+function OwningContainerTypeLow(const TypeLow: string): Boolean;
+// Strenge Word-Boundary-Pruefung: 'tobjectlist' matched 'tobjectlist',
+// 'tobjectlist<tfoo>' und 'tobjectlist(true)' aber NICHT 'tobjectlistview'
+// oder 'tobjectlisthelper' (gibt es z.B. in Spring4D / mORMot Erweiterungen).
+// Vorher Pos-Match-am-Anfang ohne Boundary -> false-positive Ownership-
+// Annahme bei jeder Klasse die mit Prefix anfaengt.
+var
+  prefix : string;
+  pLen   : Integer;
+  NextCh : Char;
+begin
+  Result := False;
+  for prefix in OWNING_PREFIXES do
   begin
-    Result := False;
-    for prefix in OWNING_PREFIXES do
+    if Pos(prefix, TypeLow) <> 1 then Continue;
+    pLen := Length(prefix);
+    if Length(TypeLow) = pLen then Exit(True); // exakter Match
+    NextCh := TypeLow[pLen + 1];
+    // Nach dem Prefix muss ein Nicht-Identifier-Char stehen (Generic-
+    // Bracket, Klammer, Whitespace, etc.) - sonst ist's ein laengerer
+    // Klassenname.
+    if not CharInSet(NextCh, ['a'..'z', '0'..'9', '_']) then
+      Exit(True);
+  end;
+end;
+
+// Erstes Ident einer Typ-Referenz, lowercase, ohne Unit-Qualifier und ohne
+// Generic-Suffix. Deckt BEIDE Ablageformen des Parsers ab:
+//   * nkTypeAlias.TypeRef  = space-separierte IDENT-Kette der rechten Seite
+//     ('TPeople = TObjectList<TPerson>' -> 'TObjectList TPerson'),
+//   * nkClass.TypeRef      = space-separierte Elternliste, Basisklasse zuerst
+//     ('class(TObjectList<TPerson>)' -> 'TObjectList'; Generic-Args liegen im
+//     additiven nkGenericArgs-Marker, nicht im TypeRef).
+// REICHWEITENGRENZE: bei einem QUALIFIZIERTEN Alias
+// ('TPeople = System.Generics.Collections.TObjectList<TPerson>') verwirft der
+// Parser die Punkte, das erste Ident ist dann der Unit-Qualifier - die
+// Aufloesung scheitert und der Fund bleibt stehen (FN-freundlich, nie ein
+// zusaetzlicher Fund).
+function FirstTypeIdentLow(const ATypeRef: string): string;
+var
+  p : Integer;
+begin
+  Result := Trim(ATypeRef);
+  p := Pos('<', Result);
+  if p > 0 then Result := Trim(Copy(Result, 1, p - 1));
+  p := Pos(' ', Result);
+  if p > 0 then Result := Trim(Copy(Result, 1, p - 1));
+  p := LastDelimiter('.', Result);
+  if p > 0 then Result := Trim(Copy(Result, p + 1, MaxInt));
+  Result := Result.ToLower;
+end;
+
+// True wenn ANameLow in DIESER Unit (transitiv, max. ADepth Stufen) auf einen
+// besitzenden Container zurueckgefuehrt werden kann - egal ob per Alias
+// ('X = TObjectList<T>') oder per Ableitung ('X = class(TObjectList<T>)').
+//
+// HOMONYME: nur Deklarationen DER GESCANNTEN UNIT zaehlen (kein
+// TTypeIndex - der ist korpusweit und 'TPeople' existiert dort dreifach:
+// Alias, class(TObjectList<TPerson>), class(TMVCActiveRecord)). Innerhalb
+// einer Unit ist der Name eindeutig; sollte eine Unit ihn dennoch mehrfach
+// fuehren (IFDEF-Zwillinge), genuegt EIN besitzender Treffer - das ist die
+// konservativ-permissive Richtung des Gates (mehr Unterdrueckung, nie ein
+// zusaetzlicher Fund).
+function UnitTypeIsOwningContainer(AUnitNode: TAstNode;
+  const ANameLow: string; ADepth: Integer): Boolean;
+const
+  DECL_KINDS : array[0..1] of TNodeKind = (nkTypeAlias, nkClass);
+var
+  Lst  : TList<TAstNode>;
+  N    : TAstNode;
+  Base : string;
+  k    : Integer;
+begin
+  Result := False;
+  if (AUnitNode = nil) or (ANameLow = '') or (ADepth <= 0) then Exit;
+  for k := Low(DECL_KINDS) to High(DECL_KINDS) do
+  begin
+    Lst := AUnitNode.FindAllRef(DECL_KINDS[k]);
+    for N in Lst do
     begin
-      if Pos(prefix, TypeLow) <> 1 then Continue;
-      pLen := Length(prefix);
-      if Length(TypeLow) = pLen then Exit(True); // exakter Match
-      NextCh := TypeLow[pLen + 1];
-      // Nach dem Prefix muss ein Nicht-Identifier-Char stehen (Generic-
-      // Bracket, Klammer, Whitespace, etc.) - sonst ist's ein laengerer
-      // Klassenname.
-      if not CharInSet(NextCh, ['a'..'z', '0'..'9', '_']) then
-        Exit(True);
+      if N.Name.ToLower <> ANameLow then Continue;
+      Base := FirstTypeIdentLow(N.TypeRef);
+      if (Base = '') or (Base = ANameLow) then Continue;   // Selbstbezug
+      if OwningContainerTypeLow(Base) then Exit(True);
+      if UnitTypeIsOwningContainer(AUnitNode, Base, ADepth - 1) then Exit(True);
     end;
   end;
+end;
+
+class function TLeakDetector2.AddReceiverOwnsItems(MethodNode: TAstNode;
+  const ReceiverNameLow: string; AUnitNode: TAstNode): Boolean;
+// Pflicht-Whitelist: Receiver-Typ matched einen ownership-bewussten
+// Container (OWNING_PREFIXES) ODER loest in der Unit auf einen solchen auf.
 
   function FindReceiverType(Kind: TNodeKind; out TypeLow: string): Boolean;
   var
@@ -1046,13 +1129,23 @@ begin
   if FindReceiverType(nkLocalVar, TypeLow) or
      FindReceiverType(nkParam, TypeLow) then
   begin
-    if TypeLow = '' then Exit;       // sollte nicht passieren, defensiv
-    Result := TypeMatches(TypeLow);  // strikte Pruefung gegen Whitelist
+    if TypeLow = '' then Exit;                    // sollte nicht passieren, defensiv
+    Result := OwningContainerTypeLow(TypeLow);    // strikte Pruefung gegen Whitelist
+    // REGRESSIONSFALL 2026-07-31 (Parser-Gate-Backlog 4e/2): der Typ ist
+    // aufloesbar, matcht die Whitelist aber nicht, weil die Unit ihn als
+    // Alias/Ableitung eines besitzenden Containers fuehrt
+    // ('TPeople = TObjectList<TPerson>', delphimvcframework DAL.pas).
+    // Vor dem Parser-Fix war der Typ unbekannt -> permissiver Pfad -> kein
+    // Fund; erst das MEHR an Typwissen erzeugte den FP. Nur bei uebergebenem
+    // Unit-Knoten (SCA001-Pfad), damit SCA008 unveraendert bleibt.
+    if not Result then
+      Result := UnitTypeIsOwningContainer(AUnitNode,
+                  FirstTypeIdentLow(TypeLow), 6);
   end;
 end;
 
 class function TLeakDetector2.IsPassedToOwner(MethodNode: TAstNode;
-  const VarNameLow: string): Boolean;
+  const VarNameLow: string; AUnitNode: TAstNode): Boolean;
 var
   Assigns : TList<TAstNode>;
   Calls   : TList<TAstNode>;
@@ -1118,7 +1211,7 @@ var
         receiverLow := Copy(Compact, rs, pAdd - rs);
         if receiverLow.StartsWith('self.') then
           receiverLow := Copy(receiverLow, 6, MaxInt);
-        if AddReceiverOwnsItems(MethodNode, receiverLow) then
+        if AddReceiverOwnsItems(MethodNode, receiverLow, AUnitNode) then
           Exit(True);
       end;
     end;
@@ -1273,7 +1366,7 @@ begin
         // ('foo.bar.add') bleiben intentional unaufloesbar (Default permissiv).
         if receiverLow.StartsWith('self.') then
           receiverLow := Copy(receiverLow, 6, MaxInt);
-        if AddReceiverOwnsItems(MethodNode, receiverLow) then
+        if AddReceiverOwnsItems(MethodNode, receiverLow, AUnitNode) then
           Exit(True);
       end;
     end;
@@ -1333,7 +1426,7 @@ begin
           var recvLow := Copy(NameLow, 1, pF - 1);
           if recvLow.StartsWith('self.') then
             recvLow := Copy(recvLow, 6, MaxInt);
-          if AddReceiverOwnsItems(MethodNode, recvLow) then
+          if AddReceiverOwnsItems(MethodNode, recvLow, AUnitNode) then
             Exit(True);
         end;
         pF := PosEx(Fam, NameLow, pF + 1);
@@ -2683,6 +2776,265 @@ begin
   end;
 end;
 
+{ ---- FP-Gate Parser-Gate-Backlog 2026-07-31 (4e/1) ------------------------ }
+//
+// "Der Ctor registriert sich beim Parent".
+//   InspCat := TJvInspectorCustomCategoryItem.Create(Self.Root, nil);
+//   ...
+//   constructor TJvCustomInspectorItem.Create(const AParent: ...);
+//   begin
+//     ...
+//     if AParent <> nil then AParent.Add(Self);     // <-- Ownership-Uebergabe
+//   end;
+// (jvcl JvInspector.pas 4130 und 11876 plus die zwei vendorierten Zwillinge.)
+// Das Objekt haengt nach dem Konstruktoraufruf in der besitzenden Liste des
+// Parents; TJvCustomInspectorItem.BeforeDestruction/Destroy des Parents raeumt
+// es ab. Weder IsOwnerParamCreate (kennt nur Self/Owner/AOwner/Application)
+// noch IsComponentOwnerCreate (verlangt TComponent-Linie; die Inspector-Items
+// sind TPersistent) koennen das sehen.
+//
+// STRENGE:
+//   (1) erstes Ctor-Argument ist ein nicht-nil OBJEKT-Ausdruck (Ident oder
+//       dotted Kette) und nicht die Variable selbst,
+//   (2) der Callee-Ctor wird in DIESER Unit aufgeloest - entweder direkt oder
+//       ueber die in DIESER Unit deklarierte Ahnenkette (max. 8 Stufen).
+//       Cross-Unit gibt es keinen Rumpf, also auch keinen Beweis -> Fund
+//       bleibt (die 6 Instanzen in JvInspectorDemo/InspectorExampleMain.pas
+//       sind genau dieser dokumentierte Rest),
+//   (3) der Ctor muss auf dieser Aufloesungsstufe EINDEUTIG sein (Overloads =
+//       kein Beweis, welche Ueberladung gemeint war),
+//   (4) im Ctor-Rumpf steht '<ErsterParameter>.Add/Insert/AddChild/AddNode(
+//       ... Self ...)' - Self als GANZES Wort in der balanciert gelesenen
+//       Argumentliste.
+// Monoton: das Gate kann einen Fund nur unterdruecken.
+
+// True wenn AArgsLow das ganze Wort 'self' enthaelt - und zwar SELF SELBST,
+// nicht ein Member davon.
+//
+// REVIEW-BLOCKER 2026-07-31: TDetectorUtils.ContainsWholeWordLower reicht hier
+// NICHT. Dessen Wortgrenze prueft ausschliesslich IsIdentChar, und '.' ist kein
+// Identifier-Zeichen - fuer 'self.fcaption' galt die rechte Grenze als erfuellt
+// und der Treffer zaehlte. Damit haette
+//   AItems.Add(Self.FCaption)
+// als "der Ctor haengt Self in die besitzende Liste" gegolten; uebergeben wird
+// aber ein FELD von Self. Folge waere gewesen: 'C := TColumn.Create(MyList)'
+// stillgestellt, obwohl es ein echtes Leck ist.
+//
+// Erhalten bleiben muessen (alle drei sind echte Selbstregistrierungen):
+//   '.add(self)'            - Self als Einzelargument,
+//   '.add(self,x)' / '(0,self)' - Self in einer Argumentliste,
+//   '.add(tfoo(self))'      - Typecast.
+// Regel: links kein Identifier-Zeichen, rechts kein Identifier-Zeichen UND
+// kein '.'. AArgsLow ist bereits lowercase und whitespace-frei (Compact).
+function ArgsContainBareSelf(const AArgsLow: string): Boolean;
+const
+  SELF_LEN = 4;   // Length('self')
+var
+  p, rightIdx : Integer;
+  LeftOK, RightOK : Boolean;
+begin
+  Result := False;
+  if AArgsLow = '' then Exit;
+  p := Pos('self', AArgsLow);
+  while p > 0 do
+  begin
+    LeftOK   := (p = 1) or not TLeakDetector2.IsIdentChar(AArgsLow[p - 1]);
+    rightIdx := p + SELF_LEN;
+    RightOK  := (rightIdx > Length(AArgsLow)) or
+                (not TLeakDetector2.IsIdentChar(AArgsLow[rightIdx]) and
+                 (AArgsLow[rightIdx] <> '.'));
+    if LeftOK and RightOK then Exit(True);
+    p := PosEx('self', AArgsLow, p + 1);
+  end;
+end;
+
+// True wenn AText einen Aufruf '<AParamLow>.<Add-Familie>(... self ...)'
+// enthaelt. Whitespace wird entfernt, weil der Parser Bedingungs- und
+// Anweisungstexte unterschiedlich normalisiert (ParseIfStmt setzt Spaces um
+// jedes Token, JoinTokInto nur an Wortgrenzen) - dieselbe Vorsichtsmassnahme
+// wie in CondPassesToOwnerAdd.
+function RegisterCallPassesSelf(const AText, AParamLow: string): Boolean;
+const
+  REG_MARKERS : array[0..3] of string = (
+    '.add(', '.insert(', '.addchild(', '.addnode(');
+var
+  Compact, Marker, Needle, ArgsLow : string;
+  p, i, depth, argStart : Integer;
+begin
+  Result := False;
+  if (AText = '') or (AParamLow = '') then Exit;
+  Compact := StringReplace(AText.ToLower, ' ', '', [rfReplaceAll]);
+  for Marker in REG_MARKERS do
+  begin
+    Needle := AParamLow + Marker;
+    p := Pos(Needle, Compact);
+    while p > 0 do
+    begin
+      // Linke Wortgrenze: 'faparent.add(' darf nicht fuer 'aparent' zaehlen.
+      if (p = 1) or not TLeakDetector2.IsIdentChar(Compact[p - 1]) then
+      begin
+        argStart := p + Length(Needle);
+        i        := argStart;
+        depth    := 1;
+        while (i <= Length(Compact)) and (depth > 0) do
+        begin
+          if Compact[i] = '(' then Inc(depth)
+          else if Compact[i] = ')' then Dec(depth);
+          if depth > 0 then Inc(i);
+        end;
+        if depth = 0 then
+        begin
+          ArgsLow := Copy(Compact, argStart, i - argStart);
+          // NICHT ContainsWholeWordLower - das zaehlte 'self.fcaption' mit
+          // (Review-Blocker 2026-07-31), siehe ArgsContainBareSelf.
+          if ArgsContainBareSelf(ArgsLow) then
+            Exit(True);
+        end;
+      end;
+      p := PosEx(Needle, Compact, p + 1);
+    end;
+  end;
+end;
+
+function CtorRegistersSelfWithFirstArg(AUnitNode, MethodNode: TAstNode;
+  const VarNameLow: string): Boolean;
+const
+  MAX_ANCESTOR_HOPS = 8;
+var
+  Assigns : TList<TAstNode>;
+  A       : TAstNode;
+  ClassLow, FirstArg, FirstArgOrig : string;
+
+  function ClassParentLow(const AClassLow: string): string;
+  var
+    Lst : TList<TAstNode>;
+    N   : TAstNode;
+  begin
+    Result := '';
+    Lst := AUnitNode.FindAllRef(nkClass);
+    for N in Lst do
+      if (N.Name.ToLower = AClassLow) and (Trim(N.TypeRef) <> '') then
+        Exit(FirstTypeIdentLow(N.TypeRef));
+  end;
+
+  function CtorOf(const AClassLow: string; out AAmbiguous: Boolean): TAstNode;
+  // Ctor-IMPLEMENTIERUNG '<Klasse>.Create' dieser Unit, TRI-STATE:
+  //   Result <> nil                 - genau ein Ctor, aufgeloest,
+  //   Result = nil, AAmbiguous=False - kein Ctor auf dieser Stufe (der
+  //                                    Aufrufer darf zum Vorfahren klettern),
+  //   Result = nil, AAmbiguous=True  - Overloads; welche Ueberladung gemeint
+  //                                    war, ist nicht entscheidbar.
+  // REVIEW-BLOCKER 2026-07-31: vorher lieferte die Funktion in BEIDEN nil-
+  // Faellen dasselbe, und die Aufrufschleife kletterte auch bei Overloads zum
+  // Vorfahren weiter. Eine Klasse mit ueberladenen Konstruktoren wurde dann
+  // nach dem registrierenden Ctor des VORFAHREN beurteilt - genau das, was
+  // Strenge-Regel (3) ausschliessen soll.
+  // Class-Konstruktoren (Parser-Marker ';class' im TypeRef) sind KEINE
+  // Instanz-Ctoren: 'TFoo.Create(AParent)' kann sie nie meinen, sie duerfen
+  // die Aufloesung also weder tragen noch mehrdeutig machen.
+  var
+    Lst : TList<TAstNode>;
+    N   : TAstNode;
+    TR  : string;
+    Cnt : Integer;
+  begin
+    Result     := nil;
+    AAmbiguous := False;
+    Cnt        := 0;
+    Lst := AUnitNode.FindAllRef(nkMethod);
+    for N in Lst do
+    begin
+      TR := N.TypeRef.ToLower;
+      if StartsStr('constructor', TR) and (Pos(';class', TR) = 0) and
+         (N.Name.ToLower = AClassLow + '.create') then
+      begin
+        Inc(Cnt);
+        Result := N;
+      end;
+    end;
+    if Cnt <> 1 then
+    begin
+      AAmbiguous := Cnt > 1;
+      Result     := nil;
+    end;
+  end;
+
+  function FirstParamNameLow(ACtor: TAstNode): string;
+  var
+    P   : TAstNode;
+    S   : string;
+    Mod_: string;
+  begin
+    Result := '';
+    // NUR direkte Kinder - FindAllRef waere subtree-weit und fischte die
+    // Parameter verschachtelter Routinen mit.
+    for P in ACtor.Children do
+    begin
+      if P.Kind <> nkParam then Continue;
+      S := Trim(P.Name.ToLower);
+      for Mod_ in ['var ', 'const ', 'out '] do
+        if StartsStr(Mod_, S) then S := Trim(Copy(S, Length(Mod_) + 1, MaxInt));
+      Exit(S);
+    end;
+  end;
+
+  function CtorHandsSelfToFirstParam(const AClassLow: string): Boolean;
+  var
+    Cur, ParamLow : string;
+    Ctor, N, C    : TAstNode;
+    Stack         : TList<TAstNode>;
+    hop           : Integer;
+    Ambiguous     : Boolean;
+  begin
+    Result := False;
+    Cur    := AClassLow;
+    Ctor   := nil;
+    for hop := 1 to MAX_ANCESTOR_HOPS do
+    begin
+      if Cur = '' then Exit;
+      Ctor := CtorOf(Cur, Ambiguous);
+      // Overloads auf DIESER Stufe: Abbruch statt Klettern. Der Vorfahren-Ctor
+      // beweist nichts ueber die hier gewaehlte Ueberladung -> kein Gate, der
+      // Fund bleibt stehen (konservative Richtung).
+      if Ambiguous then Exit;
+      if Ctor <> nil then Break;
+      Cur := ClassParentLow(Cur);
+    end;
+    if Ctor = nil then Exit;
+    ParamLow := FirstParamNameLow(Ctor);
+    if ParamLow = '' then Exit;
+    Stack := TList<TAstNode>.Create;
+    try
+      Stack.Add(Ctor);
+      while Stack.Count > 0 do
+      begin
+        N := Stack[Stack.Count - 1];
+        Stack.Delete(Stack.Count - 1);
+        if RegisterCallPassesSelf(N.Name, ParamLow) or
+           RegisterCallPassesSelf(N.TypeRef, ParamLow) then
+          Exit(True);                  // finally gibt Stack frei
+        for C in N.Children do Stack.Add(C);
+      end;
+    finally
+      Stack.Free;
+    end;
+  end;
+
+begin
+  Result := False;
+  if (AUnitNode = nil) or (MethodNode = nil) then Exit;
+  Assigns := MethodNode.FindAllRef(nkAssign);
+  for A in Assigns do
+  begin
+    if A.Name.ToLower <> VarNameLow then Continue;
+    if not SplitCreateCall(A.TypeRef, ClassLow, FirstArg, FirstArgOrig) then Continue;
+    if ClassLow = '' then Continue;
+    if not IsPlainObjectExprLow(FirstArg) then Continue;
+    if (FirstArg = VarNameLow) or StartsStr(VarNameLow + '.', FirstArg) then Continue;
+    if CtorHandsSelfToFirstParam(ClassLow) then Exit(True);
+  end;
+end;
+
 { ---- Öffentliche API ---- }
 
 class procedure TLeakDetector2.AnalyzeMethod(UnitNode, MethodNode: TAstNode;
@@ -2764,7 +3116,9 @@ begin
          and not AllCreatesAreInstanceFactory(MethodNode, VarNameLow) then
       begin
         if IsReturnedAsResult(MethodNode, VarNameLow) then Continue;
-        if IsPassedToOwner(MethodNode, VarNameLow)    then Continue;
+        // UnitNode (2026-07-31): schaltet die Unit-lokale Alias-Aufloesung des
+        // Add-Empfaengers frei (Regressionsfall 'TPeople = TObjectList<TPerson>').
+        if IsPassedToOwner(MethodNode, VarNameLow, UnitNode) then Continue;
         // FP-Gate (2026-07-04): owner-parameter - TKlasse.Create(Self/
         // Owner/AOwner/Application) uebergibt Ownership an den Owner
         // (TComponent-Konvention) -> kein Fund. Create(nil) meldet weiter.
@@ -2778,6 +3132,11 @@ begin
         // erstem Argument = Component-Ownership, der Owner raeumt ab.
         if IsComponentOwnerCreate(MethodNode, VarNameLow,
              Trim(V.TypeRef.ToLower), AContext) then Continue;
+        // FP-Gate (2026-07-31, Parser-Gate-Backlog 4e/1): der Callee-Ctor
+        // DERSELBEN Unit haengt sich per '<ErsterParam>.Add(Self)' in eine
+        // besitzende Liste des uebergebenen Parents (jvcl JvInspector).
+        if CtorRegistersSelfWithFirstArg(UnitNode, MethodNode, VarNameLow) then
+          Continue;
 
         FreeFound := SearchFree(MethodNode, VarNameLow, False, FreeInFin);
 
@@ -2821,7 +3180,7 @@ begin
       if not HasFunctionCallAssign(UnitNode, MethodNode, VarNameLow) then Continue;
 
       if IsReturnedAsResult(MethodNode, VarNameLow) then Continue;
-      if IsPassedToOwner(MethodNode, VarNameLow)    then Continue;
+      if IsPassedToOwner(MethodNode, VarNameLow, UnitNode) then Continue;
       // Inkr.2: Interface-Cast-Uebergabe / raise-Ownership auch fuer den
       // Rueckgabewert-Pfad (dasselbe Ownership-Argument).
       if IsHandedToInterface(MethodNode, VarNameLow) then Continue;

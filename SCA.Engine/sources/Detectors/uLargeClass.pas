@@ -22,6 +22,22 @@ unit uLargeClass;
 // Linien (anhand Min/Max-Line jedes Method-Nodes); plus die Spanne der
 // Class-Deklaration. Schwellwert konstant 500. Komplettes LOC-Counting
 // waere genauer, aber unnoetig fuer einen Smell-Detektor.
+//
+// AUSNAHME FFI-BINDINGS (Backlog 4e-3, 30%-Audit 2026-07-31):
+// generierte ObjC-/JNI-Bridge-Typen und COM-Typelib-Importe werden nicht
+// gemeldet - dieselbe Begruendung wie bei SCA138 GodClass: der
+// Zeilenumfang ist der Umfang der importierten Java-Klasse bzw. des
+// ObjC-Protokolls, "split responsibilities" ist dort keine ausfuehrbare
+// Empfehlung (Beispiel: JBarcodeReaderClass in
+// DW.Androidapi.JNI.DataCollection.pas, ~600 Zeilen reine
+// {class}-Getter). Gate = TDetectorUtils.CollectFfiBindingTypes /
+// IsFfiBindingTypeName (+ IsGeneratedTypelibFile), Kriterien dort
+// dokumentiert. Der TYP entscheidet, nicht die Datei - eigene grosse
+// Klassen in einer Bridge-nutzenden App-Unit bleiben Fund.
+// MESSUNG (sca-rw-after123): korpusweit trifft das GENAU EINEN von 1.822
+// Funden. Das Gate steht trotzdem, weil es derselbe Shared Service ist
+// und der Ertrag mit dem JNI-Anteil einer Codebasis mitwaechst; wer die
+// Zahl sucht: die FFI-Masse dieser Regelfamilie liegt in SCA138 (-432).
 
 interface
 
@@ -40,6 +56,10 @@ implementation
 
 // noinspection-file BeginEndRequired, GroupedDeclaration, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
+uses
+  System.Classes,                // TStringList fuer das FFI-Typ-Set
+  uDetectorUtils;                // FFI-Binding-Gate (Shared Service, Hebel A)
 
 const
   MAX_LINES = 500;
@@ -82,7 +102,15 @@ var
   DeclMax, DeclSpan, MethSpan, Span, NextClassLine : Integer;
   ClassName : string;
   F        : TLeakFinding;
+  // FFI-Gate: LAZY wie in uGodClass/uInterfaceName - erst beim ersten
+  // Schwellwert-Ueberschreiter gebaut, damit Units ohne Kandidat den
+  // zusaetzlichen FindAll-Walk nicht bezahlen.
+  FfiTypes : TStringList;
 begin
+  // Gate 1: generierte COM-Typelib-Importe komplett ausnehmen (vor dem
+  // AST-Walk - dort ist kein Typ handgeschrieben).
+  if TDetectorUtils.IsGeneratedTypelibFile(FileName) then Exit;
+  FfiTypes := nil;
   Classes := UnitNode.FindAll(nkClass);
   AllMeths := UnitNode.FindAll(nkMethod);
   try
@@ -127,6 +155,12 @@ begin
 
       if Span <= MAX_LINES then Continue;
 
+      // Gate 2: ObjC-/JNI-Bridge-Typ. Nachschlag ueber den TYPNAMEN, nicht
+      // ueber die Datei - Nachbarklassen derselben Unit bleiben Fund.
+      if FfiTypes = nil then
+        FfiTypes := TDetectorUtils.CollectFfiBindingTypes(UnitNode);
+      if TDetectorUtils.IsFfiBindingTypeName(FfiTypes, ClassName) then Continue;
+
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
       F.MethodName := ClassName;
@@ -138,6 +172,7 @@ begin
       Results.Add(F);
     end;
   finally
+    FfiTypes.Free;
     AllMeths.Free;
     Classes.Free;
   end;

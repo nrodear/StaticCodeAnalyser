@@ -55,6 +55,14 @@ type
   private
     class function FindMethod(UnitNode: TAstNode; const Kind: string;
       const ClassName: string): TAstNode; static;
+    // Parser-Gate-Backlog 2026-07-31 (4e/1): Freigabe in 'BeforeDestruction'
+    // statt in 'Destroy'. Delphi ruft BeforeDestruction GARANTIERT vor Destroy
+    // (TObject.Free -> BeforeDestruction -> Destroy), ein dort freigegebenes
+    // Feld ist also genauso aufgeraeumt. Sucht die Implementierung
+    // '<Klasse>.<MethodNameLow>' ueber EXAKTEN Namensvergleich (nicht ueber
+    // TypeRef, denn BeforeDestruction ist eine procedure, kein destructor).
+    class function FindMethodNamed(UnitNode: TAstNode;
+      const ClassName, MethodNameLow: string): TAstNode; static;
     class function HasFieldCreate(MethodNode: TAstNode;
       const FieldNameLow: string): Boolean; static;
     // True wenn das Feld via TComponent-Owner-Pattern erzeugt wird:
@@ -105,6 +113,30 @@ begin
     for M in Methods do
       if SameText(M.TypeRef, Kind) and
          M.Name.ToLower.StartsWith(ClsLow) then
+        Exit(M);
+  finally
+    Methods.Free;
+  end;
+end;
+
+class function TFieldLeakDetector.FindMethodNamed(UnitNode: TAstNode;
+  const ClassName, MethodNameLow: string): TAstNode;
+// Implementations-Methode '<ClassName>.<MethodNameLow>' (exakter Name,
+// case-insensitiv). nil wenn nicht vorhanden. Gegenstueck zu FindMethod, das
+// ueber den TypeRef ('constructor'/'destructor') sucht - fuer
+// BeforeDestruction gibt es keinen eigenen TypeRef.
+var
+  Methods : TList<TAstNode>;
+  M       : TAstNode;
+  Target  : string;
+begin
+  Result := nil;
+  if (UnitNode = nil) or (ClassName = '') then Exit;
+  Target := ClassName.ToLower + '.' + MethodNameLow;
+  Methods := UnitNode.FindAll(nkMethod);
+  try
+    for M in Methods do
+      if M.Name.ToLower = Target then
         Exit(M);
   finally
     Methods.Free;
@@ -467,6 +499,181 @@ begin
   end;
 end;
 
+{ ---- FP-Gate Parser-Gate-Backlog 2026-07-31 (4e/1, FP-Klasse 4) ------------ }
+//
+// "Transitive Component-Ownership OHNE Destruktor".
+//   FPanel1 := TPanel.Create(Self);      // Wurzel = Self
+//   FPanel2 := TPanel.Create(FPanel1);   // haengt unter FPanel1
+//   FGamma  := TImage.Create(FPanel2);   // haengt unter FPanel2
+// (jvcl JvGammaPanel.pas 61/63/64; die Klasse hat GAR KEINEN Destruktor, das
+// Schwester-Feld-Gate IsOwnedByFreedSiblingField kann dort strukturell nie
+// feuern, weil es Dtor <> nil verlangt.)
+// Zweiter belegter Fall ohne Feld-Bezug: jvcl JvCombobox.pas:261
+//   FPopup   := TJvPrivForm.Create(Self);       // FPopup ist ein GEERBTES Feld
+//   FListBox := TJvCheckListBox.Create(FPopup); // Owner nicht in dieser Klasse
+// Die Kette braucht deshalb KEINE Feldzugehoerigkeit - der Beweis steckt
+// vollstaendig in den Zuweisungen DESSELBEN Konstruktors: wer unter einem
+// Objekt haengt, das seinerseits Self (bzw. AOwner/Owner/Application) als
+// Owner hat, wird vom Component-Tree der Wurzel mit freigegeben.
+//
+// STRENGE (jede Huerde hat einen belegten Grund):
+//   (H1) mindestens EIN Zwischenobjekt - der direkte Fall
+//        'F := X.Create(Self)' gehoert IsCreatedWithComponentOwner und bleibt
+//        unveraendert (keine Bewegung ausserhalb des belegten Mechanismus),
+//   (H2) jedes Kettenglied muss ein '<Typ>.Create(<barer Ident>)' sein,
+//   (H3) keine bekannte Datenklasse in der Kette (FL_DATA_CLASSES) -
+//        'TStreamReader.Create(FStream)' ist Konsum, keine Ownership,
+//   (H4) keine Klasse, die die Unit selbst als DIREKTEN TObject-Nachfahren
+//        deklariert ('TFoo = class' ohne Elternliste) - ein TObject kann in
+//        keinem Component-Tree haengen. TP-Schutz, belegt an gexperts
+//        EII/D3/EIPanel.pas:238: 'TSplitterControl = class' mit
+//        'Create(ASplitControl, ATargetControl: TControl)' sieht wie ein
+//        Owner-Ctor aus, das Feld wird aber NIRGENDS freigegeben = echtes Leck,
+//   (H5) kein Typ, den der Cross-Unit-Typindex BEWEISBAR ausserhalb der
+//        TComponent-Linie fuehrt (TPersistent/TStream/TInterfacedObject/
+//        TThread ohne TComponent). Ein bloss unbekannter Typ vetot NICHT -
+//        die VCL-Basisklassen liegen ueblicherweise ausserhalb des Scan-Scope.
+
+const
+  // Beweisbar NICHT-Component-Wurzeln. Nur POSITIVE Treffer vetoen; eine
+  // abgerissene Ahnenkette (Basisklasse ausserhalb des Scan-Scope) darf das
+  // Gate nicht abschalten - sonst faellt es real nie an.
+  FL_NON_COMPONENT_ROOTS : array[0..3] of string = (
+    'tpersistent', 'tstream', 'tinterfacedobject', 'tthread');
+
+function ProvablyNonComponent(ATypeIndex: TTypeIndex;
+  const ATypeLow: string): Boolean;
+var
+  i : Integer;
+begin
+  Result := False;
+  if (ATypeIndex = nil) or ATypeIndex.IsEmpty or (ATypeLow = '') then Exit;
+  if ATypeIndex.IsDescendantOf(ATypeLow, 'tcomponent') then Exit;
+  for i := Low(FL_NON_COMPONENT_ROOTS) to High(FL_NON_COMPONENT_ROOTS) do
+    if ATypeIndex.IsDescendantOf(ATypeLow, FL_NON_COMPONENT_ROOTS[i]) then
+      Exit(True);
+end;
+
+// True wenn die Unit AClassLow deklariert UND jede ihrer Deklarationen ohne
+// Elternliste auskommt ('TFoo = class;' Forward + 'TFoo = class' Rumpf).
+// Dann ist die Klasse ein direkter TObject-Nachfahre - sie kann nie Teil
+// eines Component-Trees sein (Huerde H4).
+function UnitDeclaresPlainObjectClass(UnitNode: TAstNode;
+  const AClassLow: string): Boolean;
+var
+  Classes : TList<TAstNode>;
+  N       : TAstNode;
+  Seen    : Boolean;
+begin
+  Result := False;
+  if (UnitNode = nil) or (AClassLow = '') then Exit;
+  Seen := False;
+  Classes := UnitNode.FindAll(nkClass);
+  try
+    for N in Classes do
+      if N.Name.ToLower = AClassLow then
+      begin
+        Seen := True;
+        if Trim(N.TypeRef) <> '' then Exit;   // Elternliste vorhanden -> kein Veto
+      end;
+  finally
+    Classes.Free;
+  end;
+  Result := Seen;
+end;
+
+// Huerden H3-H5 gebuendelt: darf ATypeLow ueberhaupt ein Kettenglied sein?
+function ChainClassIsIneligible(ATypeIndex: TTypeIndex; UnitNode: TAstNode;
+  const AClassLow: string): Boolean;
+begin
+  Result := (AClassLow = '') or
+            IsDataClassLow(AClassLow) or
+            UnitDeclaresPlainObjectClass(UnitNode, AClassLow) or
+            ProvablyNonComponent(ATypeIndex, AClassLow);
+end;
+
+// Kanonische Owner-Bezeichner (identisch zu IsCreatedWithComponentOwner bzw.
+// TLeakDetector2.IsOwnerParamCreate). 'self.owner' kommt hier nie an -
+// FirstCreateArgLow streift das 'self.'-Praefix bereits ab.
+function IsCanonicalOwnerLow(const S: string): Boolean;
+begin
+  Result := (S = 'self') or (S = 'owner') or (S = 'aowner') or
+            (S = 'application');
+end;
+
+// Erste '<Typ>.Create(...)'-Zuweisung an TargetLow im Konstruktor.
+function CtorCreateOf(Ctor: TAstNode; const TargetLow: string;
+  out AClassLow, AOwnerLow: string): Boolean;
+var
+  Assigns : TList<TAstNode>;
+  A       : TAstNode;
+  LHSLow, RhsLow : string;
+begin
+  Result    := False;
+  AClassLow := '';
+  AOwnerLow := '';
+  if (Ctor = nil) or (TargetLow = '') then Exit;
+  Assigns := Ctor.FindAll(nkAssign);
+  try
+    for A in Assigns do
+    begin
+      LHSLow := A.Name.ToLower;
+      if (LHSLow <> TargetLow) and
+         (LHSLow <> 'self.' + TargetLow) then Continue;
+      RhsLow := A.TypeRef.ToLower;
+      if Pos('.create(', RhsLow) = 0 then Continue;
+      AClassLow := CreateClassLow(RhsLow);
+      AOwnerLow := FirstCreateArgLow(RhsLow);
+      Exit(True);                    // finally gibt Assigns frei
+    end;
+  finally
+    Assigns.Free;
+  end;
+end;
+
+function IsOwnedByComponentChain(UnitNode, Ctor: TAstNode;
+  const FieldNameLow: string; AContext: TAnalyzeContext): Boolean;
+const
+  MAX_HOPS = 8;
+var
+  TI      : TTypeIndex;
+  // Zyklus-Schutz ohne TStringList - die Unit soll ihre uses-Liste behalten
+  // (kein System.Classes) und die Kette ist per MAX_HOPS ohnehin winzig.
+  Visited : array[0..MAX_HOPS] of string;
+  Cur, ClassLow, OwnerLow : string;
+  Hops, i : Integer;
+  Clean, Seen : Boolean;
+begin
+  Result := False;
+  if (Ctor = nil) or (FieldNameLow = '') then Exit;
+  TI := CtxTypeIndex(AContext);      // nil im Single-File-/Testpfad
+  Cur  := FieldNameLow;
+  Hops := 0;
+  while Hops < MAX_HOPS do
+  begin
+    Seen := False;
+    for i := 0 to Hops - 1 do
+      if Visited[i] = Cur then begin Seen := True; Break; end;
+    if Seen then Exit;                                   // Zyklus
+    Visited[Hops] := Cur;
+    if not CtorCreateOf(Ctor, Cur, ClassLow, OwnerLow) then Exit;
+    if ChainClassIsIneligible(TI, UnitNode, ClassLow) then Exit;
+    if (OwnerLow = '') or (OwnerLow = 'nil') then Exit;
+    if IsCanonicalOwnerLow(OwnerLow) then
+    begin
+      Result := Hops >= 1;           // H1: mindestens ein Zwischenobjekt
+      Exit;
+    end;
+    Clean := True;
+    for i := 1 to Length(OwnerLow) do
+      if not TLeakDetector2.IsIdentChar(OwnerLow[i]) then
+      begin Clean := False; Break; end;
+    if not Clean then Exit;          // H2: nur bare Identifier
+    Cur := OwnerLow;
+    Inc(Hops);
+  end;
+end;
+
 // FP-Klasse 3b: das Free steckt in einer Helper-Methode DERSELBEN Klasse, die
 // der Destruktor aufruft ('FreeBlockList;' -> 'FreeAndNil(FBlocks)', pyscripter
 // JvDockVSNetStyle.pas:180). Der Dtor-Scan prueft sonst nur direkte Frees im
@@ -521,6 +728,12 @@ var
   Fields       : TList<TAstNode>;
   Field        : TAstNode;
   Ctor, Dtor   : TAstNode;
+  // Parser-Gate-Backlog 2026-07-31 (4e/1): zweiter Aufraeum-Ort. BEWUSST eine
+  // eigene Variable statt einer Zuweisung an Dtor - der Befundtext haengt an
+  // 'Dtor = nil' ("no destructor exists" vs. "not freed in Destroy"). Wuerde
+  // BeforeDestruction den Destruktor ersetzen, aenderte sich der Text
+  // ueberlebender Funde (= Identitaetswechsel im SARIF-Diff).
+  Cleanup      : TAstNode;
   FieldNameLow : string;
   FreeFound    : Boolean;
   FreeInFin    : Boolean;
@@ -537,6 +750,10 @@ begin
       if Ctor = nil then Continue; // ohne Konstruktor nichts zu pruefen
 
       Dtor := FindMethod(UnitNode, 'destructor', ClassNode.Name);
+      // BeforeDestruction laeuft garantiert VOR Destroy (TObject.Free ->
+      // BeforeDestruction -> Destroy). jvcl JvInspector/JvInspExtraEditors
+      // raeumen ihre Felder ausschliesslich dort auf.
+      Cleanup := FindMethodNamed(UnitNode, ClassNode.Name, 'beforedestruction');
 
       Fields := ClassNode.FindAll(nkField);
       try
@@ -569,14 +786,25 @@ begin
           if Dtor <> nil then
             FreeFound := TLeakDetector2.SearchFree(Dtor, FieldNameLow,
                                                    False, FreeInFin);
+          // FP-Gate (2026-07-31, Parser-Gate-Backlog 4e/1): dieselbe
+          // Freigabe-Pruefung auf BeforeDestruction. Reine Erweiterung des
+          // Suchraums - kann einen Fund nur unterdruecken.
+          if not FreeFound and (Cleanup <> nil) then
+            FreeFound := TLeakDetector2.SearchFree(Cleanup, FieldNameLow,
+                                                   False, FreeInFin);
           // Alias-Free-Idiom (L := FField; FField := nil; L.Free) erkennen.
           if not FreeFound then
             FreeFound := IsFreedViaAlias(Dtor, FieldNameLow);
+          if not FreeFound then
+            FreeFound := IsFreedViaAlias(Cleanup, FieldNameLow);
 
           // FP-Gate (2026-07-31, FP-Klasse 3b): Free steckt in einer vom
           // Destroy gerufenen Helper-Methode DERSELBEN Klasse (FreeBlockList).
           if not FreeFound then
             FreeFound := IsFreedViaOwnHelper(UnitNode, Dtor,
+                           ClassNode.Name.ToLower, FieldNameLow);
+          if not FreeFound then
+            FreeFound := IsFreedViaOwnHelper(UnitNode, Cleanup,
                            ClassNode.Name.ToLower, FieldNameLow);
 
           // FP-Gate (2026-07-31, FP-Klasse 3a): Owner ist ein Schwester-FELD,
@@ -588,6 +816,22 @@ begin
           if not FreeFound and
              IsOwnedByFreedSiblingField(Ctor, Dtor, ClassNode, FieldNameLow,
                                         AContext) then Continue;
+          // Dasselbe Gate mit BeforeDestruction als Freigabe-Ort.
+          if not FreeFound and (Cleanup <> nil) and
+             IsOwnedByFreedSiblingField(Ctor, Cleanup, ClassNode, FieldNameLow,
+                                        AContext) then Continue;
+
+          // FP-Gate (2026-07-31, Parser-Gate-Backlog 4e/1, FP-Klasse 4):
+          // transitive Component-Ownership. Der Owner-Ausdruck ist selbst ein
+          // im SELBEN Konstruktor erzeugtes Objekt, dessen Kette bei
+          // Self/AOwner/Owner/Application endet - der Component-Tree der
+          // Wurzel raeumt alles mit ab. Braucht KEINEN Destruktor (jvcl
+          // JvGammaPanel hat gar keinen) und KEINE Feldzugehoerigkeit des
+          // Owners (jvcl JvCombobox: FPopup ist in der Vorfahrenklasse
+          // deklariert).
+          if not FreeFound and
+             IsOwnedByComponentChain(UnitNode, Ctor, FieldNameLow,
+                                     AContext) then Continue;
 
           if not FreeFound then
           begin

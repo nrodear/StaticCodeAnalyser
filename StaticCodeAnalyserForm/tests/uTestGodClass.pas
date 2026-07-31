@@ -17,14 +17,63 @@ type
     // --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
     [Test] procedure EmptyExceptionClassDecl_NotReported;
     [Test] procedure FormWithManyControls_Reported;
+    // --- FFI-/Typelib-Gate (Backlog 4e-3, 30%-Audit 2026-07-31) ---
+    [Test] procedure JniBridgeInterface_NotReported;
+    [Test] procedure ObjCProtocolDelegateClass_NotReported;
+    [Test] procedure GenericImportArgument_NotReported;
+    [Test] procedure MixedUnit_OnlyAppClassReported;
+    [Test] procedure TypelibFile_NotReported;
+    [Test] procedure NonTypelibFile_Gegenprobe_Reported;
   end;
 
 implementation
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
+  System.IOUtils,
+  uAstNode, uParser2, uGodClass,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+// Laeuft NUR SCA138 gegen eine temporaere Datei mit KONTROLLIERTEM
+// Basisnamen - der gemeinsame Harness (FindingsOfFile) vergibt einen
+// zufaelligen Namen, das *_TLB.pas-Gate ist damit nicht testbar.
+// Muster uebernommen aus uTestInterfaceName (SCA105).
+function GodClassFindingsForFile(const ASource, ANameSuffix: string)
+  : TObjectList<TLeakFinding>;
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  Path   : string;
+  SL     : TStringList;
+begin
+  Result := TObjectList<TLeakFinding>.Create(True);
+  Path := TPath.Combine(TPath.GetTempPath,
+    'sca_god_' + TGuid.NewGuid.ToString.Replace('{', '').Replace('}', '')
+      .Replace('-', '') + ANameSuffix);
+  SL := TStringList.Create;
+  try
+    SL.Text := ASource;
+    SL.SaveToFile(Path, TEncoding.UTF8);
+  finally
+    SL.Free;
+  end;
+  try
+    Parser := TParser2.Create;
+    try
+      Root := Parser.ParseFile(Path);
+      try
+        TGodClassDetector.AnalyzeUnit(Root, Path, Result);
+      finally
+        Root.Free;
+      end;
+    finally
+      Parser.Free;
+    end;
+  finally
+    if TFile.Exists(Path) then TFile.Delete(Path);
+  end;
+end;
 
 procedure TTestGodClass.ManyMethods_Reported;
 // 25 Methoden in einer Klasse > MAX_METHODS = 20.
@@ -238,6 +287,208 @@ begin
     'Form mit 17 Control-Feldern (> 15) ist eine God-Klasse und muss weiter melden');
   finally F.Free; end;
 end;
+
+{ ---- FFI-/Typelib-Gate (Backlog 4e-3, 30%-Audit 2026-07-31) ----
+  Nach dem Parser-Inkrement (92dd5c9/3a3e711) sind die generierten
+  ObjC-/JNI-Bridge-Units erstmals vollstaendig lesbar; 432 der 5.051
+  SCA138-Korpusfunde liegen seitdem auf Binding-Typen. Alle Tests unten
+  waeren OHNE das Gate rot (die Klassen/Interfaces reissen die
+  20-Methoden-Schwelle deutlich). }
+
+procedure TTestGodClass.JniBridgeInterface_NotReported;
+// Kriterium (1) Anker-Vererbung + transitive Kette: JCameraController erbt
+// von JObject (RTL-Bridge-Wurzel), JCameraControllerEx erbt davon. Der
+// Member-Satz IST die Java-Klasse - "split into focused units" ist dort
+// keine ausfuehrbare Empfehlung (real: DW.Androidapi.JNI.AndroidX.Camera).
+var
+  SB : TStringBuilder;
+  i  : Integer;
+  F  : TObjectList<TLeakFinding>;
+begin
+  SB := TStringBuilder.Create;
+  try
+    SB.AppendLine('unit t; interface');
+    SB.AppendLine('uses Androidapi.JNIBridge;');
+    SB.AppendLine('type');
+    SB.AppendLine('  JCameraController = interface(JObject)');
+    for i := 1 to 25 do
+      SB.AppendLine(Format('    procedure setZoom%d; cdecl;', [i]));
+    SB.AppendLine('  end;');
+    SB.AppendLine('  JCameraControllerEx = interface(JCameraController)');
+    for i := 1 to 25 do
+      SB.AppendLine(Format('    procedure setTorch%d; cdecl;', [i]));
+    SB.AppendLine('  end;');
+    SB.AppendLine('implementation');
+    SB.AppendLine('end.');
+    F := TFindingHelper.FindingsOfFile(SB.ToString);
+    try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkGodClass),
+      'JNI-Bridge-Interfaces (auch transitiv geerbte) sind keine God-Klassen');
+    finally F.Free; end;
+  finally
+    SB.Free;
+  end;
+end;
+
+procedure TTestGodClass.ObjCProtocolDelegateClass_NotReported;
+// Gleiches Kriterium, andere TYPART: eine handgeschriebene Delphi-KLASSE,
+// die ueber TOCLocal ein ObjC-Protokoll implementiert. Ihre Methodenliste
+// ist vom Protokoll diktiert, nicht vom Entwickler (real: Alcinoe
+// TTextViewDelegate, 26 UITextViewDelegate-Callbacks). Der Parser fuehrt
+// class und interface beide als nkClass - das Gate muss beide treffen.
+var
+  SB : TStringBuilder;
+  i  : Integer;
+  F  : TObjectList<TLeakFinding>;
+begin
+  SB := TStringBuilder.Create;
+  try
+    SB.AppendLine('unit t; interface');
+    SB.AppendLine('uses Macapi.ObjectiveC;');
+    SB.AppendLine('type');
+    SB.AppendLine('  TTextViewDelegate = class(TOCLocal, UITextViewDelegate)');
+    SB.AppendLine('  public');
+    for i := 1 to 25 do
+      SB.AppendLine(Format('    procedure textViewDidChange%d; cdecl;', [i]));
+    SB.AppendLine('  end;');
+    SB.AppendLine('implementation');
+    SB.AppendLine('end.');
+    F := TFindingHelper.FindingsOfFile(SB.ToString);
+    try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkGodClass),
+      'TOCLocal-Protokoll-Implementierung ist keine God-Klasse');
+    finally F.Free; end;
+  finally
+    SB.Free;
+  end;
+end;
+
+procedure TTestGodClass.GenericImportArgument_NotReported;
+// Kriterium (2) Generic-Import-Argumente: JBarcodeReader erbt von einem
+// Typ aus einer FREMDEN Unit (JParcelable), der Anker ist hier also nicht
+// erreichbar. Belegt wird der Typ ueber TJavaGenericImport<...>, das ihn
+// als Import-Interface benennt. Ohne dieses Kriterium bliebe der Fund.
+var
+  SB : TStringBuilder;
+  i  : Integer;
+  F  : TObjectList<TLeakFinding>;
+begin
+  SB := TStringBuilder.Create;
+  try
+    SB.AppendLine('unit t; interface');
+    SB.AppendLine('uses Androidapi.JNIBridge;');
+    SB.AppendLine('type');
+    SB.AppendLine('  JBarcodeReader = interface(JParcelable)');
+    for i := 1 to 25 do
+      SB.AppendLine(Format('    function getSymbology%d: Integer; cdecl;', [i]));
+    SB.AppendLine('  end;');
+    SB.AppendLine('  TJBarcodeReader = class(TJavaGenericImport<JBarcodeReaderClass, JBarcodeReader>) end;');
+    SB.AppendLine('implementation');
+    SB.AppendLine('end.');
+    F := TFindingHelper.FindingsOfFile(SB.ToString);
+    try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkGodClass),
+      'ueber TJavaGenericImport belegter Bridge-Typ ist keine God-Klasse');
+    finally F.Free; end;
+  finally
+    SB.Free;
+  end;
+end;
+
+procedure TTestGodClass.MixedUnit_OnlyAppClassReported;
+// KERN-GEGENPROBE (Muss-bleiben): das Gate entscheidet am TYP, nicht an
+// der Datei. Eine App-Unit, die nebenbei Androidapi.JNI nutzt und einen
+// Bridge-Typ deklariert, behaelt ihre eigenen God-Klassen. Real belegt:
+// Alcinoe.FMX.Common.pas hat EINEN Bridge-Typ
+// (TALFMXViewBaseAccessPrivate) und 14 eigene God-Klassen, die alle
+// weitermelden muessen.
+var
+  SB  : TStringBuilder;
+  i   : Integer;
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+begin
+  SB := TStringBuilder.Create;
+  try
+    SB.AppendLine('unit t; interface');
+    SB.AppendLine('uses Androidapi.JNIBridge;');
+    SB.AppendLine('type');
+    SB.AppendLine('  JCameraController = interface(JObject)');
+    for i := 1 to 25 do
+      SB.AppendLine(Format('    procedure setZoom%d; cdecl;', [i]));
+    SB.AppendLine('  end;');
+    SB.AppendLine('  TBigForm = class(TForm)');
+    for i := 1 to 17 do
+      SB.AppendLine(Format('    E%d: TEdit;', [i]));
+    SB.AppendLine('  end;');
+    SB.AppendLine('implementation');
+    SB.AppendLine('end.');
+    F := TFindingHelper.FindingsOfFile(SB.ToString);
+    try
+      Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkGodClass),
+        'genau die eigene Klasse wird gemeldet, nicht der Bridge-Typ');
+      Fnd := TFindingHelper.FirstOf(F, fkGodClass);
+      Assert.IsNotNull(Fnd);
+      Assert.AreEqual('TBigForm', Fnd.MethodName,
+        'gemeldet wird TBigForm, nicht JCameraController');
+    finally F.Free; end;
+  finally
+    SB.Free;
+  end;
+end;
+
+procedure TTestGodClass.TypelibFile_NotReported;
+// Generierte COM-Typelib-Importe: der Importer regeneriert die Datei bei
+// jedem Refresh, KEIN Typ darin ist handgeschrieben. Einzige Datei-Regel
+// des Gates (alle anderen Entscheidungen fallen am Typ).
+var
+  SB : TStringBuilder;
+  i  : Integer;
+  F  : TObjectList<TLeakFinding>;
+begin
+  SB := TStringBuilder.Create;
+  try
+    SB.AppendLine('unit t; interface');
+    SB.AppendLine('type');
+    SB.AppendLine('  TZipItem = class(TAutoObject)');
+    for i := 1 to 17 do
+      SB.AppendLine(Format('    FProp%d: Integer;', [i]));
+    SB.AppendLine('  end;');
+    SB.AppendLine('implementation');
+    SB.AppendLine('end.');
+    F := GodClassFindingsForFile(SB.ToString, '_TLB.pas');
+    try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkGodClass),
+      'in *_TLB.pas ist kein Refactoring umsetzbar - die Datei wird generiert');
+    finally F.Free; end;
+  finally
+    SB.Free;
+  end;
+end;
+
+procedure TTestGodClass.NonTypelibFile_Gegenprobe_Reported;
+// Derselbe Quelltext unter normalem Dateinamen MUSS melden - sonst waere
+// der Test oben auch bei einem kaputten Detektor gruen.
+var
+  SB : TStringBuilder;
+  i  : Integer;
+  F  : TObjectList<TLeakFinding>;
+begin
+  SB := TStringBuilder.Create;
+  try
+    SB.AppendLine('unit t; interface');
+    SB.AppendLine('type');
+    SB.AppendLine('  TZipItem = class(TAutoObject)');
+    for i := 1 to 17 do
+      SB.AppendLine(Format('    FProp%d: Integer;', [i]));
+    SB.AppendLine('  end;');
+    SB.AppendLine('implementation');
+    SB.AppendLine('end.');
+    F := GodClassFindingsForFile(SB.ToString, '.pas');
+    try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkGodClass),
+      'ohne Typelib-Namensmuster bleibt der Fund');
+    finally F.Free; end;
+  finally
+    SB.Free;
+  end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestGodClass);
 

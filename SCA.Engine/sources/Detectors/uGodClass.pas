@@ -39,6 +39,22 @@ unit uGodClass;
 //   * Forward-Deklarationen (kein Body) - keine Children, kein Count.
 //   * Klassen mit `class abstract` - sind Designintent, kein Refactoring-
 //     Bedarf. (Heuristik: TypeRef enthaelt ';abstract'.)
+//   * FFI-BINDINGS (Backlog 4e-3, 30%-Audit 2026-07-31): generierte
+//     ObjC-/JNI-Bridge-Typen und COM-Typelib-Importe. Nach dem
+//     Parser-Inkrement (92dd5c9/3a3e711) sind diese Dateien erstmals
+//     vollstaendig lesbar - seitdem meldet der Detektor dort massenhaft.
+//     Ein God-Class-Hinweis auf `JCameraController` oder `EKEventStore`
+//     ist formal richtig und praktisch wertlos: der Member-Satz ist die
+//     Java-Klasse bzw. das ObjC-Protokoll, nichts davon ist aufteilbar.
+//     Gate = TDetectorUtils.CollectFfiBindingTypes / IsFfiBindingTypeName
+//     (Shared Service aus Hebel A, Kriterien dort dokumentiert) plus
+//     IsGeneratedTypelibFile. Entscheidend ist der TYP, nicht die Datei -
+//     eine App-Unit, die nebenbei Androidapi.JNI nutzt und daneben eigene
+//     fette Klassen deklariert, behaelt ihre Funde (Regressionstest
+//     MixedUnit_OnlyAppClassReported; real: Alcinoe.FMX.Common.pas hat
+//     EINEN Bridge-Typ und 14 eigene God-Klassen). Einzige Datei-Regel
+//     bleibt *_TLB.pas - dort ist der GESAMTE Inhalt maschinell erzeugt
+//     und wird bei jedem Refresh ueberschrieben.
 //
 // Sonar-Pendant: Sonar-50 #31 / Java "S2972".
 
@@ -58,7 +74,8 @@ type
 implementation
 
 uses
-  System.Classes, uFileTextCache;
+  System.Classes, uFileTextCache,
+  uDetectorUtils;   // FFI-Binding-Gate (Shared Service, Hebel A)
 
 // noinspection-file CanBeClassMethod, ConsecutiveSection, CyclomaticComplexity, DeepNesting, GroupedDeclaration, LongMethod, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
@@ -110,7 +127,18 @@ var
   F : TLeakFinding;
   Detail : string;
   TR : string;
+  // FFI-Gate (Backlog 4e-3): Binding-Typnamen der Unit. LAZY - erst beim
+  // ersten Schwellwert-Ueberschreiter gebaut. CollectFfiBindingTypes kostet
+  // einen zweiten FindAll(nkClass)-Walk; unbedingt gebaut wuerde ihn JEDE
+  // Unit mit Klassen bezahlen, obwohl korpusweit nur ~2 % der Dateien
+  // ueberhaupt einen God-Class-Kandidaten haben (Muster wie uInterfaceName).
+  FfiTypes : TStringList;
 begin
+  // Gate 1: generierte COM-Typelib-Importe komplett ausnehmen. Steht VOR
+  // dem AST-Walk - in diesen (durchweg riesigen) Units ist kein einziger
+  // Typ handgeschrieben.
+  if TDetectorUtils.IsGeneratedTypelibFile(FileName) then Exit;
+  FfiTypes := nil;
   Classes := UnitNode.FindAll(nkClass);
   try
     for C in Classes do
@@ -163,6 +191,14 @@ begin
       if (MethodCount <= MAX_METHODS) and (FieldCount <= MAX_FIELDS) then
         Continue;
 
+      // Gate 2 (Backlog 4e-3): ObjC-/JNI-Bridge-Typ. Der Nachschlag laeuft
+      // ueber den TYPNAMEN, nicht ueber die Datei - Nachbarklassen in
+      // derselben Unit bleiben unangetastet. Deckt auch verschachtelte
+      // Typen ab (IsFfiBindingTypeName vergleicht das letzte Namenssegment).
+      if FfiTypes = nil then
+        FfiTypes := TDetectorUtils.CollectFfiBindingTypes(UnitNode);
+      if TDetectorUtils.IsFfiBindingTypeName(FfiTypes, C.Name) then Continue;
+
       // Real-World-FP-Audit 2026-07-10: leere `class(...);`-Einzeiler
       // ueberspringen - deren Counts sind reine Parser-Slurp-Artefakte
       // (siehe IsEmptyClassDeclLine). Erst nach dem Schwellwert-Check, damit
@@ -183,6 +219,7 @@ begin
       Results.Add(F);
     end;
   finally
+    FfiTypes.Free;
     Classes.Free;
   end;
 end;
