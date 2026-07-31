@@ -31,6 +31,9 @@ unit uThreadFreeOnTerminateWithRef;
 //     Sicherheits-Massnahme erkannt - FP wenn User das macht.
 //     Suppression-Marker als Escape.
 //   * FreeOnTerminate := False (explizit) wird NICHT geflagt.
+//   * Branch-Exklusivitaet (Gate 2026-07-31): FoT-Zuweisung im then-Zweig
+//     und Zugriff im else-Zweig DESSELBEN if wird NICHT geflagt - die
+//     Pfade schliessen sich aus (Indy-Scheduler-Muster).
 //
 // Severity: lsError, Type: ftBug.
 
@@ -60,6 +63,12 @@ type
     // ist - der Punkt ab dem der Thread LEBT (und sich selbst zerstoeren
     // kann). Resume ist der pre-XE2-Start.
     class function IsActivationCall(const Expr, VarName: string): Boolean; static;
+    // FP-Gate 2026-07-31: True wenn FoTNode und AccessNode in den beiden
+    // ZWEIGEN desselben if stehen (then vs. else) - dann laufen sie nie
+    // gemeinsam. Analog zu uNilDeref.IsInExclusiveBranch (bewusst lokal
+    // nachgebaut statt importiert - uNilDeref ist eine fremde Detektor-Unit).
+    class function IsInExclusiveBranch(MethodNode, FoTNode,
+      AccessNode: TAstNode): Boolean; static;
   end;
 
 implementation
@@ -131,6 +140,69 @@ begin
   Result := (Sub = 'start') or (Sub = 'resume');
 end;
 
+function NodeContainsRef(Root, Target: TAstNode): Boolean;
+// Subtree-Containment per OBJEKT-Identitaet (TAstNode hat keinen Parent-
+// Pointer). Iterative DFS. Lokale Kopie des Musters aus uNilDeref - geteilte
+// Units bleiben unangetastet.
+var
+  Stack : TList<TAstNode>;
+  Cur   : TAstNode;
+  i     : Integer;
+begin
+  Result := False;
+  if (Root = nil) or (Target = nil) then Exit;
+  Stack := TList<TAstNode>.Create;
+  try
+    Stack.Add(Root);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack[Stack.Count - 1];
+      Stack.Delete(Stack.Count - 1);
+      if Cur = Target then Exit(True);
+      for i := 0 to Cur.Children.Count - 1 do
+        Stack.Add(Cur.Children[i]);
+    end;
+  finally
+    Stack.Free;
+  end;
+end;
+
+class function TThreadFreeOnTerminateWithRefDetector.IsInExclusiveBranch(
+  MethodNode, FoTNode, AccessNode: TAstNode): Boolean;
+// FP-Gate (Real-World-Audit 2026-07-31, FP-Klasse 'mutually-exclusive-
+// branches'): steht `<T>.FreeOnTerminate := True` im then-Zweig eines if und
+// der geflaggte Zugriff im zugehoerigen else-Zweig (oder umgekehrt), koennen
+// beide auf keiner realen Ausfuehrung gemeinsam laufen - der Ownership-
+// Transfer erreicht den Zugriff nie. Vorbild-FPs: Indy
+// IdSchedulerOfThreadDefault/IdSchedulerOfThreadPool ('if IsCurrentThread(L)
+// then L.FreeOnTerminate := True else begin L.WaitFor; L.Free; end').
+// AST-verifiziert: ParseIfStmt legt then-Statements als Descendants des
+// nkIfStmt ab, else-Statements unter ein nkElseBranch-Direktkind. Rein
+// strukturell und monoton: ohne trennendes if/else bleibt jeder Fund.
+var
+  Ifs   : TList<TAstNode>;
+  IfN   : TAstNode;
+  ElseN : TAstNode;
+  FInElse, AInElse, FInThen, AInThen : Boolean;
+begin
+  Result := False;
+  if (MethodNode = nil) or (FoTNode = nil) or (AccessNode = nil) then Exit;
+  Ifs := MethodNode.FindAllRef(nkIfStmt);
+  if Ifs = nil then Exit;
+  for IfN in Ifs do
+  begin
+    ElseN := IfN.FindFirstChild(nkElseBranch);
+    if ElseN = nil then Continue;           // ohne else keine Schwester-Zweige
+    // then-Zweig = im if-Subtree, aber NICHT im else-Subtree.
+    FInElse := NodeContainsRef(ElseN, FoTNode);
+    AInElse := NodeContainsRef(ElseN, AccessNode);
+    FInThen := NodeContainsRef(IfN, FoTNode) and not FInElse;
+    AInThen := NodeContainsRef(IfN, AccessNode) and not AInElse;
+    if (FInThen and AInElse) or (FInElse and AInThen) then
+      Exit(True);
+  end;
+end;
+
 class procedure TThreadFreeOnTerminateWithRefDetector.AnalyzeUnit(
   UnitNode: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>);
@@ -140,6 +212,10 @@ var
   M, N    : TAstNode;
   // Var-Name -> Line der FreeOnTerminate-Zuweisung
   FoTLine : TDictionary<string, Integer>;
+  // Var-Name -> Knoten der FreeOnTerminate-Zuweisung (Branch-Exklusivitaets-
+  // Gate 2026-07-31 braucht den Knoten, nicht nur die Zeile)
+  FoTNode : TDictionary<string, TAstNode>;
+  FoTN    : TAstNode;
   // Var-Name -> Line des Start/Resume-Calls (Thread wird ab hier "lebendig")
   ActLine : TDictionary<string, Integer>;
   VarName : string;
@@ -152,6 +228,7 @@ begin
     for M in Methods do
     begin
       FoTLine := TDictionary<string, Integer>.Create;
+      FoTNode := TDictionary<string, TAstNode>.Create;
       ActLine := TDictionary<string, Integer>.Create;
       try
         // Pass 1: FreeOnTerminate := True finden.
@@ -163,6 +240,8 @@ begin
             if VarName = '' then Continue;
             if not IsTrueLiteral(N.TypeRef) then Continue;
             FoTLine.AddOrSetValue(LowerCase(VarName), N.Line);
+            // Knoten parallel merken (Branch-Exklusivitaets-Gate 2026-07-31).
+            FoTNode.AddOrSetValue(LowerCase(VarName), N);
           end;
         finally
           Assigns.Free;
@@ -190,6 +269,7 @@ begin
         for Pair in FoTLine do
         begin
           if not ActLine.TryGetValue(Pair.Key, GateLine) then Continue;
+          if not FoTNode.TryGetValue(Pair.Key, FoTN) then FoTN := nil;
           Assigns := M.FindAll(nkAssign);
           try
             for N in Assigns do
@@ -199,6 +279,11 @@ begin
               // (`<var>.Name := x`) sind Config, kein gefaehrlicher Read.
               if HasDangerousMemberAccess(N.TypeRef, Pair.Key) then
               begin
+                // FP-Gate 2026-07-31 (mutually-exclusive-branches): FoT-
+                // Zuweisung und Zugriff in then- bzw. else-Zweig desselben
+                // if -> nie gemeinsam ausgefuehrt. Erst NACH dem Access-Match
+                // pruefen (nur fuer echte Kandidaten, Hot-Path-schonend).
+                if IsInExclusiveBranch(M, FoTN, N) then Continue;
                 F            := TLeakFinding.Create;
                 F.FileName   := FileName;
                 F.MethodName := M.Name;
@@ -222,6 +307,8 @@ begin
               if N.Line <= GateLine then Continue;
               if HasDangerousMemberAccess(N.Name, Pair.Key) then
               begin
+                // FP-Gate 2026-07-31 (mutually-exclusive-branches), s.o.
+                if IsInExclusiveBranch(M, FoTN, N) then Continue;
                 F            := TLeakFinding.Create;
                 F.FileName   := FileName;
                 F.MethodName := M.Name;
@@ -240,6 +327,7 @@ begin
         end;
       finally
         FoTLine.Free;
+        FoTNode.Free;
         ActLine.Free;
       end;
     end;

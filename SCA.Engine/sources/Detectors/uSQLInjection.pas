@@ -42,6 +42,33 @@ unit uSQLInjection;
 //   * sql-builder-api: Folge-Arrays der Format-Familie (FormatSql(Fmt,
 //     Args, Params)) sind gebundene ?-Parameter -> nur das ERSTE [..]-Array
 //     wird als %-Substitution geprueft (AreFormatArgsInjectionSafe)
+//
+// FP-Gates (2026-07-31, 30%-Real-World-Audit sca-rw-after119: 87% FP im
+// Error-Tier; der Detektor war sanitizer- und taint-blind):
+//   * escaped-at-source: die Sanitizer-Whitelist kennt jetzt auch 'esc',
+//     ALQuotedStr*/ALEscape*, *ToStrA und get*sql (IsSafeSqlHelperName);
+//     zusaetzlich gilt ein Term als sicher, wenn er ein KOMPLETTER
+//     Sanitizer-Aufruf inklusive Empfaenger-Pfad ist
+//     (FConnection.EscapeString(x), IsSanitizerCallTerm).
+//   * escaped-at-source (1-Ebenen-Datenfluss): ein barer Bezeichner ist
+//     sicher, wenn JEDE seiner Zuweisungen in der Routine nur aus sicheren
+//     Operanden besteht - inkl. Selbst-Akkumulation x := x + Safe
+//     (IsSanitizerDerivedLocal/IsSanitizedExpr). Ein Parameter OHNE sichtbare
+//     Zuweisung faellt bewusst NICHT darunter (Fremd-Input bleibt Fund).
+//   * literal-array-local: Array, das in der Routine nur mit String-
+//     Literalen befuellt wird (SoundexValues[i]) - als Konkat-Term und als
+//     Format-Argument untainted (IsLiteralArrayLocal).
+//   * query-builder-role: in *SQLGenerator*/*QueryBuilder*-Klassen bzw.
+//     Create/Build/Make/Get...SQL-Methoden sind MAPPING-Aufrufe als Operand
+//     Schema-Fragmente; ebenso Calls auf einem SQL-Generator-Empfaenger
+//     (lAR.SQLGenerator.BuildX(...)). Bare Bezeichner/Parameter bleiben
+//     unsicher (IsSqlBuilderRoutine/IsSqlBuilderReceiver).
+//     Verengung 2026-07-31 (Pre-Build-Review, Fund 'Builder-Rolle
+//     whitelistet JEDEN baren Aufruf'): die Rolle allein reicht nicht mehr -
+//     der Callee muss nach Metadaten aussehen (IsMappingCalleeName) UND darf
+//     keinen Routine-PARAMETER als Argument tragen (CallArgUsesRoutineParam).
+//     Sonst waere '+ Trim(AFilter)' in einer Get*SQL-Routine stumm gewesen -
+//     die Kern-Injection der Regel.
 
 interface
 
@@ -173,6 +200,60 @@ type
     // Zentral fuer bare Calls UND Member-Pfad-Call-Endungen in
     // AllConcatTermsSafe (Recharakterisierung after30 2026-07-12).
     class function IsSafeSqlHelperName(const NameLow: string): Boolean; static;
+    // FP-Gate (2026-07-31, 30%-Real-World-Audit, FP-Klasse 'escaped-at-source'):
+    // sanitizer-derived-local - 1-Ebenen-Datenfluss. True wenn JEDE Zuweisung
+    // an IdentLow in dieser Routine ausschliesslich aus sicheren Operanden
+    // besteht (Literale, Sanitizer-Aufrufe, ORM-Metadaten, const-derived
+    // Locals, Selbst-Akkumulation). HeidiSQL usermanager baut UserHost aus
+    // FConnection.EscapeString(...) und konkateniert ihn erst danach ins SQL -
+    // der Detektor sah nur den baren Bezeichner. Kein Fund heisst hier:
+    // 'der Wert ist an der Quelle entschaerft'.
+    class function IsSanitizerDerivedLocal(MethodNode: TAstNode;
+      const IdentLow: string): Boolean; static;
+    // Hilfsfunktion zu IsSanitizerDerivedLocal: prueft eine komplette
+    // Konkatenations-Expression Term fuer Term. SelfIdentLow (darf '' sein)
+    // ist der Akkumulator-Bezeichner, der rechts auftauchen darf
+    // (x := x + Safe). Rekursionsfrei: bare Bezeichner werden NUR ueber die
+    // nicht-rekursiven Gates (const-derived/ORM-Meta/...) geprueft.
+    class function IsSanitizedExpr(MethodNode: TAstNode;
+      const Expr, SelfIdentLow: string): Boolean; static;
+    // True wenn TermLow KOMPLETT ein Sanitizer-Aufruf ist - inklusive
+    // Member-Pfad-Empfaenger (FConnection.EscapeString(x), Conn.QuoteIdent(y)).
+    // Ergaenzt IsSafeSqlHelperCall, das nur bare Aufrufe kennt.
+    class function IsSanitizerCallTerm(const TermLow: string): Boolean; static;
+    // FP-Gate (2026-07-31, FP-Klasse 'Konstanten/Metadaten'): literal-array-
+    // local - True wenn BaseIdentLow in dieser Routine ein Array ist, dessen
+    // Elemente AUSSCHLIESSLICH aus String-Literalen befuellt werden
+    // (SoundexValues[0] := 'bonjour'; ... , mORMot test.orm.sqlite3). Ein
+    // solches Array kann kein Angreifer beeinflussen.
+    class function IsLiteralArrayLocal(MethodNode: TAstNode;
+      const BaseIdentLow: string): Boolean; static;
+    // FP-Gate (2026-07-31, FP-Klasse 'ORM/SQL-Generator-Code'): True wenn die
+    // umgebende Routine die Query-Builder-Rolle traegt - Klasse/Methode heisst
+    // *SQLGenerator*/*QueryBuilder*/*SqlBuilder* ODER die Methode heisst
+    // Create/Build/Make/Compose/Gen/Get...SQL. In solchen Routinen sind
+    // MAPPING-Aufrufe als Konkat-Term Schema-Fragmente (TableFieldsDelimited,
+    // GetTableNameForSQL); bare Bezeichner/Parameter bleiben unsicher.
+    // Die Rolle allein gibt seit der Verengung 2026-07-31 NICHTS mehr frei -
+    // sie ist nur noch Vorbedingung fuer IsMappingCalleeName +
+    // CallArgUsesRoutineParam (s. dort).
+    class function IsSqlBuilderRoutine(MethodNode: TAstNode): Boolean; static;
+    // Gegenstueck fuer den Empfaenger-Pfad eines Member-Calls: True wenn der
+    // Pfad VOR dem Callee auf einen SQL-Generator zeigt
+    // (lAR.SQLGenerator.BuildSoftDeleteSetRestored(...), DMVC).
+    class function IsSqlBuilderReceiver(const PathLow: string): Boolean; static;
+    // Verengung 2026-07-31 (Review-Fund 'Query-Builder-Rolle whitelistet
+    // JEDEN baren Aufruf'): True wenn der AUFGERUFENE Name selbst nach
+    // Schema-/Mapping-Metadaten aussieht (table/field/column/map/sql/name).
+    // Nur solche Callees darf die Builder-Rolle freigeben - Trim/Copy/
+    // VarToStr um Fremd-Input bleiben Fund.
+    class function IsMappingCalleeName(const NameLow: string): Boolean; static;
+    // Verengung 2026-07-31 (derselbe Review-Fund): True wenn im Klammer-
+    // inhalt des Aufrufs, dessen oeffnende Klammer in S an OpenParen steht,
+    // ein Bezeichner vorkommt, der PARAMETER der Routine ist. Solche Terme
+    // darf die Builder-Rolle NIE freigeben.
+    class function CallArgUsesRoutineParam(MethodNode: TAstNode;
+      const S: string; OpenParen: Integer): Boolean; static;
     // True wenn IdentLow als Parameter/lokale Variable der Routine mit
     // Integer-Typ deklariert ist (Modifier out/var/const werden gestrippt).
     class function IsLocalIntegerIdent(MethodNode: TAstNode;
@@ -347,6 +428,20 @@ class function TSQLInjectionDetector.IsSafeSqlHelperName(
 // Sanitizer-Namenskonvention (DMVC/mORMot): SAFE_CASTS (QuotedStr/QuotedSQL/...)
 // bzw. quote*/escape*/get*forsql. NUR der NAME (nicht der volle Call) - fuer
 // bare Calls und Member-Pfad-Endungen in AllConcatTermsSafe wiederverwendet.
+//
+// FP-Gate-Erweiterung (2026-07-31, 30%-Real-World-Audit, FP-Klasse
+// 'escaped-at-source' - 11 von 24 Sample-Funden):
+//   * 'esc'          - HeidiSQL-Kurzform des Escapers (tabletools esc(...)).
+//   * al*quote*/     - Alcinoe-Konvention: ALQuotedStr/ALQuotedStrA sind die
+//     al*escape*       ANSI-Pendants zu QuotedStr/EscapeString.
+//   * *tostra        - Alcinoe-Zahl-/Wert-Casts (ALIntToStrA, ALFloatToStrA):
+//                      Output ist eine Zahl bzw. ein fest formatierter Wert.
+//   * get*sql        - Mapping-/Provider-Getter, die ein FERTIGES SQL-Fragment
+//                      aus Compile-Zeit-Metadaten liefern (HeidiSQL
+//                      SqlProvider.GetSql(qFuncCeil), DMVC GetTableNameForSQL).
+//                      Erweitert die bisherige get*forsql-Regel.
+// Bewusst NICHT per Contains('quote') o.ae. - 'UnquotedStr' waere das
+// Gegenteil eines Sanitizers.
 var
   s : string;
 begin
@@ -354,9 +449,14 @@ begin
   if NameLow = '' then Exit;
   for s in SAFE_CASTS do
     if NameLow = s then Exit(True);
+  if (NameLow = 'esc') or (NameLow = 'uinttostr') or (NameLow = 'inttohex') then
+    Exit(True);
   Result := NameLow.StartsWith('quote')
          or NameLow.StartsWith('escape')
-         or (NameLow.StartsWith('get') and NameLow.EndsWith('forsql'));
+         or NameLow.StartsWith('alquote')
+         or NameLow.StartsWith('alescape')
+         or NameLow.EndsWith('tostra')
+         or (NameLow.StartsWith('get') and NameLow.EndsWith('sql'));
 end;
 
 class function TSQLInjectionDetector.AllConcatTermsSafe(MethodNode: TAstNode;
@@ -386,7 +486,12 @@ var
   LastComp : string;
   PathOk   : Boolean;
   Depth    : Integer;
+  TermStart: Integer;   // Start des Terms hinter '+' (fuer Empfaenger-Pfad)
+  Builder  : Boolean;   // umgebende Routine hat Query-Builder-Rolle
 begin
+  // FP-Gate (2026-07-31): Query-Builder-Rolle einmal pro Ausdruck bestimmen.
+  Builder := IsSqlBuilderRoutine(MethodNode);
+
   // 1) String-Literale durch Leerzeichen ersetzen (Position erhalten).
   //    '' innerhalb eines Strings ist Escape-Quote, weiter im String.
   Stripped := RHS;
@@ -431,6 +536,9 @@ begin
       // Original-Case fuer die SCREAMING_SNAKE-Const-Heuristik (Stripped ist
       // positionsgleich zu RHS, nur ge-lowert / Literale geleert).
       IdentOrig := Copy(RHS, p, j - p);
+      // Term-Anfang merken: das Empfaenger-Pfad-Gate (2026-07-31) braucht den
+      // Pfad VOR dem Callee (lAR.SQLGenerator. ...).
+      TermStart := p;
       if ident = '' then
       begin
         // Position war ein gestripptes Literal -> ok.
@@ -502,6 +610,17 @@ begin
           i := j;
           Continue;
         end;
+        // FP-Gate (2026-07-31, FP-Klasse 'Konstanten/Metadaten'):
+        // literal-array-local - 'SoundexValues[i1]' zeigt auf ein Array, das
+        // in dieser Routine nur mit String-Literalen befuellt wurde. Der
+        // '['-Vorfilter haelt den Assign-Walk aus allen reinen Member-Pfaden
+        // raus (Perf).
+        if PathOk and (Pos('[', Copy(Stripped, TermStart, j - TermStart)) > 0)
+           and IsLiteralArrayLocal(MethodNode, ident) then
+        begin
+          i := j;
+          Continue;
+        end;
         // Recharakterisierung after30 (2026-07-12): Sanitizer-Helfer-CALL als
         // LETZTE Pfad-Komponente (Conn.QuoteIdent(x) / Obj.GetTableNameForSQL(..))
         // ist ebenso sicher wie ein barer Sanitizer-Call (unten) - der Helfer
@@ -509,6 +628,29 @@ begin
         // TP-Risiko identisch zur bereits vertrauten bare-Call-Konvention.
         if PathOk and (j <= Length(Stripped)) and (Stripped[j] = '(')
            and IsSafeSqlHelperName(LastComp) then
+        begin
+          i := j;
+          Continue;
+        end;
+        // FP-Gate (2026-07-31, FP-Klasse 'ORM/SQL-Generator-Code'):
+        // Query-Builder-Rolle. Ein Member-CALL zaehlt als Mapping-Fragment,
+        // wenn (a) der Empfaenger-Pfad auf einen SQL-Generator zeigt
+        // (lAR.SQLGenerator.BuildSoftDeleteSetRestored(...), DMVC
+        // MVCFramework.ActiveRecord) oder (b) die umgebende Routine selbst
+        // die Builder-Rolle traegt (TMVCSQLGenerator.CreateSelectSQL) UND
+        // der Callee nach Schema-/Mapping-Metadaten aussieht.
+        // Pflicht bleibt das '(' - eine blosse Property (Obj.UserText) ist
+        // weiterhin unsicher, damit echte Laufzeitdaten Fund bleiben.
+        //
+        // Verengung 2026-07-31 (Review-Fund 'Query-Builder-Rolle whitelistet
+        // JEDEN baren Aufruf'): Zweig (b) verlangt jetzt IsMappingCalleeName,
+        // und BEIDE Zweige sind gesperrt, sobald ein Routine-PARAMETER im
+        // Argument steht - 'GetOrderSQL(const AFilter)' mit
+        // '+ Obj.Fetch(AFilter)' ist genau die Kern-Injection der Regel.
+        if PathOk and (j <= Length(Stripped)) and (Stripped[j] = '(')
+           and (IsSqlBuilderReceiver(Copy(Stripped, TermStart, j - TermStart))
+                or (Builder and IsMappingCalleeName(LastComp)))
+           and not CallArgUsesRoutineParam(MethodNode, Stripped, j) then
         begin
           i := j;
           Continue;
@@ -525,10 +667,17 @@ begin
         // ein bares ORM-Schema-Metadatum (with-Scope: 'FROM ' + SqlTableName).
         // FP-Gate (Recharakterisierung after30 2026-07-13): ODER eine bekannte
         // EOL-Konstante (sLineBreak/CRLF) - Compile-Zeit-Zeilenumbruch, kein Input.
+        // FP-Gate (2026-07-31, FP-Klasse 'escaped-at-source'): ODER die
+        // Variable wird in dieser Routine ausschliesslich aus Sanitizer-
+        // Aufrufen/Literalen gefuellt (HeidiSQL usermanager: UserHost :=
+        // FConnection.EscapeString(...) + '@' + FConnection.EscapeString(...),
+        // danach 'CREATE USER ' + UserHost). Ein Parameter ohne sichtbare
+        // Zuweisung faellt NICHT darunter -> echter Fremd-Input bleibt Fund.
         if not (IsConstDerivedLocal(MethodNode, ident)
                 or IsOrmMetaIdent(ident)
                 or IsWellKnownEolConst(ident)
-                or IsScreamingSnakeConst(IdentOrig)) then
+                or IsScreamingSnakeConst(IdentOrig)
+                or IsSanitizerDerivedLocal(MethodNode, ident)) then
           Exit(False); // bare Identifier -> Variable, unsicher
         Inc(i);
         Continue;
@@ -545,6 +694,22 @@ begin
       // Stripped ist positionsgleich zu RHS, j zeigt auf das '(' des Calls.
       if (not isSafe) and (ident = 'format') then
         isSafe := IsIntOnlyFormatArg(RHS, j);
+      // FP-Gate (2026-07-31, FP-Klasse 'ORM/SQL-Generator-Code'): in einer
+      // Query-Builder-Routine (TMVCSQLGenerator.CreateSelectSQL) liefern
+      // MAPPING-Aufrufe Schema-Fragmente (TableFieldsDelimited) -
+      // konstruktiv nicht parametrisierbar. Bare Bezeichner/Parameter der
+      // Routine bleiben davon unberuehrt und unsicher.
+      //
+      // Verengung 2026-07-31 (Review-Fund 'Query-Builder-Rolle whitelistet
+      // JEDEN baren Aufruf - Trim(AFilter) in einer Get*SQL-Routine ist
+      // stumm'): frueher galt hier JEDER Aufruf als sicher, sobald die
+      // Routine die Builder-Rolle trug. Jetzt zwei Pflichtbedingungen -
+      // (1) der Callee sieht selbst nach Metadaten/Mapping aus, (2) im
+      // Argument steht kein Routine-PARAMETER. Damit bleibt
+      // 'SELECT ... note=' + Trim(AFilter) ein Error-Tier-Fund.
+      if (not isSafe) and Builder and IsMappingCalleeName(ident)
+         and not CallArgUsesRoutineParam(MethodNode, Stripped, j) then
+        isSafe := True;
       if not isSafe then Exit(False); // andere Funktion -> unsicher
     end;
     Inc(i);
@@ -747,7 +912,6 @@ var
   Depth   : Integer;
   InStr   : Boolean;
   ident   : string;
-  S       : string;
 begin
   Result := False;
   L := Length(ElemLow);
@@ -778,12 +942,365 @@ begin
     end;
   end;
   if Depth <> 0 then Exit;                    // unbalanciert -> nicht safe
-  for S in SAFE_CASTS do
-    if ident = S then
-      Exit(True);
-  Result := ident.StartsWith('quote')
-    or ident.StartsWith('escape')
-    or (ident.StartsWith('get') and ident.EndsWith('forsql'));
+  // 2026-07-31: die Konventions-Pruefung war hier byte-gleich dupliziert.
+  // Jetzt ueber IsSafeSqlHelperName - eine Quelle, und die Sanitizer-
+  // Erweiterungen (esc/alquote*/*tostra/get*sql) gelten auch fuer
+  // Format-Argumente.
+  Result := IsSafeSqlHelperName(ident);
+end;
+
+function IsPlainIdentLow(const S: string): Boolean;
+// True wenn S ein reiner Bezeichner ist (a..z, 0..9, _) - kein Pfad, kein
+// Aufruf, kein Operator. Hilfsfunktion der 2026-07-31-Gates.
+var
+  i : Integer;
+begin
+  Result := False;
+  if S = '' then Exit;
+  if not CharInSet(S[1], ['a'..'z', '_']) then Exit;
+  for i := 2 to Length(S) do
+    if not CharInSet(S[i], ['a'..'z', '0'..'9', '_']) then Exit;
+  Result := True;
+end;
+
+function IsPlainMemberPrefix(const S: string): Boolean;
+// True wenn S ein reiner Member-Pfad-PRAEFIX ist ('fconnection.',
+// 'lar.sqlgenerator.', 'model.tableprops[i].'): nur Bezeichner-Zeichen,
+// '.', '^' und balancierte Indizes, und er endet auf '.'. Damit ist
+// sichergestellt, dass vor dem Callee kein Operator/Ausdruck steht.
+var
+  i, Depth : Integer;
+begin
+  Result := False;
+  if (S = '') or (S[Length(S)] <> '.') then Exit;
+  Depth := 0;
+  for i := 1 to Length(S) do
+  begin
+    case S[i] of
+      'a'..'z', '0'..'9', '_', '.', '^': ;
+      '[': Inc(Depth);
+      ']': Dec(Depth);
+    else
+      Exit;
+    end;
+    if Depth < 0 then Exit;
+  end;
+  Result := Depth = 0;
+end;
+
+class function TSQLInjectionDetector.IsSanitizerCallTerm(
+  const TermLow: string): Boolean;
+// FP-Gate (2026-07-31, FP-Klasse 'escaped-at-source'): der ganze Term ist ein
+// Sanitizer-AUFRUF, auch mit Empfaenger-Pfad - FConnection.EscapeString(x),
+// DBObj.Connection.QuoteIdent(y), esc(z). Bedingungen: Term endet auf ')',
+// die Klammer-Tiefe faellt erst am Term-ENDE auf 0 (sonst folgt nach dem Call
+// noch ein Ausdruck), das Praefix vor dem Callee ist ein reiner Member-Pfad
+// und der Callee traegt die Sanitizer-Konvention.
+var
+  L, p, q, k, Depth : Integer;
+  InStr             : Boolean;
+  Callee, Prefix    : string;
+begin
+  Result := False;
+  L := Length(TermLow);
+  if (L < 3) or (TermLow[L] <> ')') then Exit;
+  p := Pos('(', TermLow);
+  if p < 2 then Exit;
+
+  Depth := 0;
+  InStr := False;
+  for k := p to L do
+  begin
+    if TermLow[k] = '''' then InStr := not InStr;
+    if InStr then Continue;
+    if TermLow[k] = '(' then
+      Inc(Depth)
+    else if TermLow[k] = ')' then
+    begin
+      Dec(Depth);
+      if (Depth = 0) and (k < L) then Exit;  // Call endet vor Term-Ende
+    end;
+  end;
+  if Depth <> 0 then Exit;
+
+  q := p - 1;
+  while (q >= 1) and CharInSet(TermLow[q], ['a'..'z', '0'..'9', '_']) do Dec(q);
+  Callee := Copy(TermLow, q + 1, p - 1 - q);
+  if Callee = '' then Exit;
+  Prefix := Copy(TermLow, 1, q);
+  if (Prefix <> '') and not IsPlainMemberPrefix(Prefix) then Exit;
+  Result := IsSafeSqlHelperName(Callee);
+end;
+
+class function TSQLInjectionDetector.IsSanitizedExpr(MethodNode: TAstNode;
+  const Expr, SelfIdentLow: string): Boolean;
+// FP-Gate (2026-07-31): zerlegt Expr an den '+' der OBERSTEN Ebene (ausserhalb
+// von Stringliteralen und Klammern/Indizes) und prueft jeden Term. Anders als
+// AllConcatTermsSafe wird auch der FUEHRENDE Term geprueft - hier geht es um
+// die Frage 'ist der WERT der Variablen sauber', nicht 'ist die Konkatenation
+// an dieser Stelle sauber'. Rekursionsfrei (bare Bezeichner nur ueber die
+// nicht-rekursiven Gates), damit x := x + y keine Endlosschleife baut.
+var
+  i, L, Depth, Start : Integer;
+  InStr              : Boolean;
+  c                  : Char;
+
+  function TermOk(const RawTerm: string): Boolean;
+  var
+    T, TLow : string;
+  begin
+    Result := True;
+    T := Trim(RawTerm);
+    if T = '' then Exit;
+    TLow := T.ToLower;
+    if IsPureLiteralText(T) then Exit;
+    // Selbst-Akkumulation: sqlCols := sqlCols + QuoteIdent(x)
+    if (SelfIdentLow <> '') and (TLow = SelfIdentLow) then Exit;
+    if IsSanitizerCallTerm(TLow) then Exit;
+    if IsOrmMetaPath(TLow) then Exit;
+    if IsScreamingSnakeConst(T) then Exit;
+    if IsWellKnownEolConst(TLow) then Exit;
+    if IsPlainIdentLow(TLow) and IsConstDerivedLocal(MethodNode, TLow) then Exit;
+    Result := False;
+  end;
+
+begin
+  Result := False;
+  L := Length(Expr);
+  if L = 0 then Exit;
+  Depth := 0;
+  InStr := False;
+  Start := 1;
+  for i := 1 to L do
+  begin
+    c := Expr[i];
+    if InStr then
+    begin
+      // Verdoppeltes Apostroph: erstes schliesst, zweites oeffnet wieder -
+      // fuer die Term-Trennung unschaedlich.
+      if c = '''' then InStr := False;
+      Continue;
+    end;
+    case c of
+      '''': InStr := True;
+      '(', '[': Inc(Depth);
+      ')', ']': Dec(Depth);
+      '+':
+        if Depth = 0 then
+        begin
+          if not TermOk(Copy(Expr, Start, i - Start)) then Exit;
+          Start := i + 1;
+        end;
+    end;
+  end;
+  Result := TermOk(Copy(Expr, Start, L - Start + 1));
+end;
+
+class function TSQLInjectionDetector.IsSanitizerDerivedLocal(
+  MethodNode: TAstNode; const IdentLow: string): Boolean;
+// FP-Gate (2026-07-31, FP-Klasse 'escaped-at-source'): alle Zuweisungen an
+// IdentLow in dieser Routine bestehen nur aus sicheren Operanden. Konservativ:
+// KEINE sichtbare Zuweisung (Parameter, Feld, Property) -> False, der Fund
+// bleibt. Eine einzige unsichere Zuweisung schaltet das Gate ab.
+var
+  Nodes : TList<TAstNode>;
+  N     : TAstNode;
+  Found : Boolean;
+begin
+  Result := False;
+  if (MethodNode = nil) or (IdentLow = '') then Exit;
+  Found := False;
+  Nodes := MethodNode.FindAll(nkAssign);
+  try
+    for N in Nodes do
+    begin
+      if not SameText(Trim(N.Name), IdentLow) then Continue;
+      if not IsSanitizedExpr(MethodNode, N.TypeRef, IdentLow) then Exit;
+      Found := True;
+    end;
+  finally
+    Nodes.Free;
+  end;
+  Result := Found;
+end;
+
+class function TSQLInjectionDetector.IsLiteralArrayLocal(MethodNode: TAstNode;
+  const BaseIdentLow: string): Boolean;
+// FP-Gate (2026-07-31, FP-Klasse 'Konstanten/Metadaten'): das Array wird in
+// dieser Routine ausschliesslich mit String-/Zahl-Literalen befuellt
+// (SoundexValues[0] := 'bonjour'; ...). Eine einzige nicht-literale
+// Element-Zuweisung ODER eine nicht-literale Ganz-Array-Zuweisung schaltet
+// das Gate ab. Ohne jede sichtbare Zuweisung -> False (Fund bleibt).
+var
+  Nodes   : TList<TAstNode>;
+  N       : TAstNode;
+  NameLow : string;
+  Found   : Boolean;
+begin
+  Result := False;
+  if (MethodNode = nil) or (BaseIdentLow = '') then Exit;
+  Found := False;
+  Nodes := MethodNode.FindAll(nkAssign);
+  try
+    for N in Nodes do
+    begin
+      NameLow := Trim(N.Name).ToLower;
+      if (NameLow <> BaseIdentLow)
+         and not NameLow.StartsWith(BaseIdentLow + '[') then Continue;
+      if not IsPureLiteralText(N.TypeRef) then Exit;
+      Found := True;
+    end;
+  finally
+    Nodes.Free;
+  end;
+  Result := Found;
+end;
+
+class function TSQLInjectionDetector.IsSqlBuilderRoutine(
+  MethodNode: TAstNode): Boolean;
+// FP-Gate (2026-07-31, FP-Klasse 'ORM/SQL-Generator-Code'): der Generator,
+// der parametrisierte Queries BAUT, wurde selbst als Injection gemeldet
+// (DMVC TMVCSQLGenerator.CreateSelectSQL: 'SELECT ' +
+// TableFieldsDelimited(Map,...) + ' FROM ' + GetTableNameForSQL(TableName)).
+// Rollen-Erkennung ueber den (ggf. qualifizierten) Routine-Namen. Bewusst
+// eng: nur *SQLGenerator*/*QueryBuilder*/*SqlBuilder* bzw. die
+// Create/Build/Make/Compose/Gen/Get...SQL-Namenskonvention.
+var
+  NameLow, LastComp : string;
+  p                 : Integer;
+begin
+  Result := False;
+  if MethodNode = nil then Exit;
+  NameLow := MethodNode.Name.ToLower;
+  if NameLow = '' then Exit;
+  if (Pos('sqlgenerator', NameLow) > 0) or (Pos('querybuilder', NameLow) > 0)
+     or (Pos('sqlbuilder', NameLow) > 0) then Exit(True);
+  p := LastDelimiter('.', NameLow);
+  if p > 0 then
+    LastComp := Copy(NameLow, p + 1, MaxInt)
+  else
+    LastComp := NameLow;
+  Result := LastComp.EndsWith('sql')
+        and (LastComp.StartsWith('create') or LastComp.StartsWith('build')
+          or LastComp.StartsWith('make')   or LastComp.StartsWith('compose')
+          or LastComp.StartsWith('gen')    or LastComp.StartsWith('get'));
+end;
+
+class function TSQLInjectionDetector.IsSqlBuilderReceiver(
+  const PathLow: string): Boolean;
+// FP-Gate (2026-07-31): der Empfaenger-Pfad eines Member-Calls zeigt auf einen
+// SQL-Generator (DMVC lAR.SQLGenerator.BuildSoftDeleteSetRestored(...)). Der
+// Rueckgabewert solcher Aufrufe ist ein Mapping-Fragment, kein Fremd-Input.
+begin
+  Result := (Pos('sqlgenerator', PathLow) > 0)
+         or (Pos('querybuilder', PathLow) > 0)
+         or (Pos('sqlbuilder', PathLow) > 0);
+end;
+
+class function TSQLInjectionDetector.IsMappingCalleeName(
+  const NameLow: string): Boolean;
+// Verengung 2026-07-31 (Review-Fund 'Query-Builder-Rolle whitelistet JEDEN
+// baren Aufruf: in einer Get*SQL-Routine wird + Trim(AFilter) stumm'):
+// Die Builder-Rolle darf nur Callees freigeben, deren NAME selbst nach
+// Schema-/Mapping-Metadaten aussieht. Positive Belege aus dem Korpus:
+// TableFieldsDelimited, GetTableNameForSQL, FieldsForInsert, ColumnList,
+// SqlFragmentFor, MapToSql. Negativ und damit weiterhin Fund: Trim, Copy,
+// VarToStr, Normalize - beliebige Wrapper um Fremd-Input.
+//
+// Ausgenommen bleiben Laufzeit-DATEN-Zugriffe, deren Name zwar 'field'/
+// 'name' traegt, deren Rueckgabewert aber ein Zeilen-/Eingabewert der
+// Datenbank ist (Query.FieldByName('n').AsString, FindField(..),
+// FieldValues[..]). Ohne diese Ausnahme liesse ausgerechnet die Verengung
+// den zweiten im Review genannten Injection-Vektor durch.
+const
+  MAPPING_TOKENS : array[0..5] of string = (
+    'table', 'field', 'column', 'map', 'sql', 'name');
+  DATA_ACCESSORS : array[0..3] of string = (
+    'byname', 'bynumber', 'findfield', 'fieldvalues');
+var
+  s : string;
+begin
+  Result := False;
+  if NameLow = '' then Exit;
+  for s in DATA_ACCESSORS do
+    if Pos(s, NameLow) > 0 then Exit;
+  for s in MAPPING_TOKENS do
+    if Pos(s, NameLow) > 0 then Exit(True);
+end;
+
+class function TSQLInjectionDetector.CallArgUsesRoutineParam(
+  MethodNode: TAstNode; const S: string; OpenParen: Integer): Boolean;
+// Verengung 2026-07-31 (derselbe Review-Fund): True wenn im Klammerinhalt
+// des Aufrufs, dessen oeffnende Klammer in S an OpenParen steht, ein
+// Bezeichner vorkommt, der als PARAMETER der Routine deklariert ist. Ein
+// solcher Term darf NIE ueber die Builder-Rolle freigegeben werden - der
+// Parameter ist genau der Fremd-Input, den SCA003 meldet.
+//
+// S ist die literal-geleerte, ge-lowerte Fassung des RHS (AllConcatTermsSafe
+// Schritt 1), deshalb reicht eine reine Klammerzaehlung ohne String-State.
+// Konservativ: unbalanciert -> True (Gate aus, Fund bleibt); JEDER Bezeichner
+// im Argumenttext zaehlt, auch Komponenten eines Member-Pfads.
+var
+  Lst            : TList<TAstNode>;
+  N              : TAstNode;
+  NameLow, Ident : string;
+  k, p, L, Depth, ArgEnd : Integer;
+begin
+  Result := False;
+  if (MethodNode = nil) or (OpenParen < 1) or (OpenParen > Length(S))
+     or (S[OpenParen] <> '(') then Exit;
+
+  // 1) Argument-Bereich balanciert bestimmen.
+  L      := Length(S);
+  Depth  := 0;
+  ArgEnd := 0;
+  for k := OpenParen to L do
+  begin
+    if S[k] = '(' then
+      Inc(Depth)
+    else if S[k] = ')' then
+    begin
+      Dec(Depth);
+      if Depth = 0 then
+      begin
+        ArgEnd := k - 1;
+        Break;
+      end;
+    end;
+  end;
+  if ArgEnd = 0 then Exit(True);         // unbalanciert -> kein Gate
+  if ArgEnd < OpenParen + 1 then Exit;   // leere Argumentliste
+
+  // 2) Jeden Bezeichner im Argumenttext gegen die Parameter-Deklarationen
+  //    pruefen. nkParam.Name traegt den Modifier als Praefix ('const afilter',
+  //    s. uParser2.ParseMethodSignature) - deshalb abstreifen.
+  Lst := MethodNode.FindAll(nkParam);
+  try
+    if Lst.Count = 0 then Exit;
+    k := OpenParen + 1;
+    while k <= ArgEnd do
+    begin
+      if CharInSet(S[k], ['a'..'z', '_']) then
+      begin
+        p := k;
+        while (k <= ArgEnd) and CharInSet(S[k], ['a'..'z', '0'..'9', '_']) do
+          Inc(k);
+        Ident := Copy(S, p, k - p);
+        for N in Lst do
+        begin
+          NameLow := N.Name.ToLower;
+          for var Mod_ in ['out ', 'var ', 'const '] do
+            if NameLow.StartsWith(Mod_) then
+              NameLow := Copy(NameLow, Length(Mod_) + 1, MaxInt);
+          if Trim(NameLow) = Ident then Exit(True);
+        end;
+      end
+      else
+        Inc(k);
+    end;
+  finally
+    Lst.Free;
+  end;
 end;
 
 class function TSQLInjectionDetector.IsIntFormatMask(
@@ -935,9 +1452,11 @@ class function TSQLInjectionDetector.IsSafeFormatArgElement(
 //   * Zahlen-Literal        -> sicher (nur Ziffern im Output)
 //   * true/false            -> sicher
 //   * reiner Bezeichner     -> nur sicher wenn lokal als Integer deklariert
+//                              bzw. sanitizer-derived (2026-07-31)
 //   * alles andere (Calls, Member-Zugriffe, Ausdruecke) -> unsicher
 var
-  i : Integer;
+  i          : Integer;
+  BracketPos : Integer;
 begin
   Result := False;
   if ElemLow = '' then Exit(True); // leeres Array [] ist trivial sicher
@@ -964,6 +1483,19 @@ begin
   // (props.SqlTableName, BlobField^.NameUtf8, bare SqlTableName im
   // with-Scope). Enge Whole-Name-Liste, s. ORM_META_IDENTS.
   if IsOrmMetaPath(ElemLow) then Exit(True);
+  // FP-Gate (2026-07-31, FP-Klasse 'Konstanten/Metadaten'): Element ist ein
+  // Zugriff auf ein Array, das in dieser Routine nur mit String-Literalen
+  // befuellt wurde (mORMot test.orm.sqlite3: SoundexValues[i1]).
+  BracketPos := Pos('[', ElemLow);
+  if (BracketPos > 1) and ElemLow.EndsWith(']')
+     and IsPlainIdentLow(Copy(ElemLow, 1, BracketPos - 1))
+     and IsLiteralArrayLocal(MethodNode, Copy(ElemLow, 1, BracketPos - 1)) then
+    Exit(True);
+  // FP-Gate (2026-07-31, FP-Klasse 'escaped-at-source'): sanitizer-derived-
+  // local als Format-Argument - gleiche 1-Ebenen-Datenfluss-Regel wie fuer
+  // Konkat-Terme. Parameter ohne sichtbare Zuweisung bleiben unsicher.
+  if IsPlainIdentLow(ElemLow)
+     and IsSanitizerDerivedLocal(MethodNode, ElemLow) then Exit(True);
 
   for i := 1 to Length(ElemLow) do
     if not CharInSet(ElemLow[i], ['a'..'z', '0'..'9', '_']) then Exit;

@@ -71,8 +71,12 @@ type
 
 implementation
 
-// noinspection-file BeginEndRequired, ConsecutiveSection, GroupedDeclaration, MultipleExit, NestedRoutine, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses
+// noinspection-file BeginEndRequired, ConsecutiveSection, CyclomaticComplexity, DeepNesting, GroupedDeclaration, LongMethod, MultipleExit, NestedRoutine, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
+uses
+  System.Classes,    // TStringList fuer die Quelltext-Gates (2026-07-31)
+  uFileTextCache;    // AcquireLines/ReleaseLines - Lazy-Load, nur bei Kandidaten
 
 // Liefert True wenn TypeRef einen Return-Type enthaelt (Format
 // 'function:RetType[;direktive...]'). Procedures haben keinen ':' im
@@ -125,6 +129,33 @@ begin
   if N.Kind in BODY_KINDS then Exit(True);
   for Child in N.Children do
     if HasBodyStatement(Child) then Exit(True);
+  Result := False;
+end;
+
+// FP-Gate 2026-07-31 (30%-Real-World-Audit, FP-Klasse "Interface-Deklaration
+// statt Implementation geankert"): True nur wenn die Routine einen EIGENEN,
+// tatsaechlich geparsten `begin..end`-Rumpf hat (direktes nkBlock-Kind; nur
+// ParseBlock haengt eines an den Methodenknoten).
+//
+// Mechanismus des FPs: eine Routinen-DEKLARATION im Deklarationsteil (z.B.
+// mormot.lib.gssapi ServerForceKeytab, Z.616 - der Lexer sieht wegen
+// '{$ifdef OSWINDOWS} implementation {$else}' bereits die Implementation-
+// Sektion) hat keinen Rumpf. ParseMethodImpl zieht danach die FOLGENDEN
+// unit-level const/var-Sektionen als vermeintlich lokale Deklarationen an den
+// Knoten; die nkLocalVar-Kinder liessen HasBodyStatement True werden und der
+// Detektor meldete eine Deklaration, deren echte Implementation Result sehr
+// wohl zuweist. Dieselbe Lage entsteht bei jedem Parse-Schaden, der den Rumpf
+// verliert - ohne Rumpf hat der Detektor keine Beweisgrundlage.
+//
+// Nebeneffekt (gewollt): eine Routine mit reinem `asm ... end;`-Rumpf ohne
+// vorangehendes `begin` bekommt vom Parser ebenfalls kein nkBlock (der
+// tkKwAsm-Zweig skippt bloss) - Result kommt dort per Register.
+function HasOwnBodyBlock(N: TAstNode): Boolean;
+var
+  Child : TAstNode;
+begin
+  for Child in N.Children do
+    if Child.Kind = nkBlock then Exit(True);
   Result := False;
 end;
 
@@ -429,9 +460,24 @@ begin
   TypeRef := MethodNode.TypeRef;
   if not IsFunctionMethod(TypeRef) then Exit;     // procedure -> skip
   if IsBodyless(TypeRef) then Exit;               // abstract/forward/external
+
+  // FP-Gate 2026-07-31 (30%-Real-World-Audit, FP-Klasse "asm-/assembler-
+  // Routinen"): 'assembler'-Direktive -> der Rueckgabewert wird per Register
+  // (EAX bzw. DX:AX) gesetzt, eine textuelle Result-Zuweisung existiert
+  // naturgemaess nie. Die Direktive landet als ';assembler' im TypeRef
+  // (uParser2.ParseMethodDirectives, KnownConventions). Trigger: RxDBExplorer
+  // HexDump.LongMulDiv - reiner asm-Rumpf mit lokaler var-Sektion, die
+  // HasBodyStatement True machte.
+  if Pos(';assembler', LowerCase(TypeRef)) > 0 then Exit;
+
   // Interface-Method-Deklaration / Klassen-Method-Deklaration im Typ-Section
   // -> kein Body, Implementation kommt anderswo. Nicht flaggen.
   if not HasBodyStatement(MethodNode) then Exit;
+
+  // FP-Gate 2026-07-31 (FP-Klasse "Interface-Deklaration statt Implementation
+  // geankert"): nur Routinen mit eigenem geparsten begin..end-Rumpf pruefen -
+  // Begruendung siehe HasOwnBodyBlock.
+  if not HasOwnBodyBlock(MethodNode) then Exit;
 
   // Recharakterisierung after30 (2026-07-12): MANAGED-Return-Typ (auto-init
   // ''/nil/Unassigned) + EFFEKTIV LEERER Body -> der Return-Wert ist NICHT
@@ -585,6 +631,302 @@ begin
   Results.Add(F);
 end;
 
+// ===========================================================================
+// Quelltext-Gates (30%-Real-World-Audit, 2026-07-31)
+// ---------------------------------------------------------------------------
+// Drei der Audit-FP-Klassen tragen ihre Evidenz NICHT im AST - dort ist sie
+// strukturell nicht vorhanden, nicht bloss schlecht erreichbar:
+//   (1) asm-Rumpf: uParser2 emittiert fuer `asm ... end` KEINE Knoten (der
+//       tkKwAsm-Zweig skippt bis zum `end`); Result kommt per Register.
+//   (2) Result als var/out-Argument: `Stream.Read(Result, SizeOf(Result))` -
+//       `Read` ist ein Keyword-Token, ParsePrimary bricht die Suffix-Kette
+//       hinter dem Punkt ab, die Argumentliste landet nie im nkCall-Namen.
+//   (4) IFDEF-Twin im if-Kopf: `... then {$ELSE} ... then {$ENDIF}` ergibt
+//       nach dem Direktiven-Strip ZWEI `then` zu EINEM `if`; der Parser
+//       verliert dabei die Zweige mit den Result-Zuweisungen.
+// Deshalb prueft AnalyzeUnit die Kandidaten am Ende gegen den Quelltext.
+// SCAN-BEREICH (Fix 2026-07-31, Review-Fund Z.922): Kopfzeile bis zum naechsten
+// TOP-LEVEL-Routinenkopf, ABZUEGLICH der nkNestedRange-Spans - ein `Result` in
+// einer verschachtelten Routine ist das Result JENER Routine und darf den Fund
+// der aeusseren Funktion nicht stillstellen.
+// Streng additiv: die Gates koennen nur unterdruecken, nie melden. Der
+// Datei-Zugriff passiert LAZY - nur wenn ueberhaupt ein Kandidat existiert
+// (Real-World: 156 Funde auf 12821 Dateien) - und laeuft ueber den
+// Prozess-Text-Cache, ist im Scan also praktisch kostenlos.
+// AUSGEKLAMMERT: die FP-Klasse "Label-Statements/goto im Body" braucht einen
+// nkLabel-Knoten im Parser (eigenes Inkrement, Hebel D).
+// ===========================================================================
+
+// Fix 2026-07-31 (Pre-Build-Review-Fund Z.922 "Quelltext-Gates scannen den
+// Bereich verschachtelter Routinen mit"): uParser2.ParseMethodImpl (Z.1566ff)
+// parst nested routines, verwirft sie aus dem AST und haengt fuer jede einen
+// nkNestedRange-Marker an den Methodenknoten (Line = Startzeile, TypeRef =
+// Endzeile). Ohne diese Grenzen reichte der Quelltext-Bereich einer Routine vom
+// Kopf bis zum naechsten TOP-LEVEL-Kopf und schloss den ganzen Deklarationsteil
+// samt nested routines ein - ein `Inc(Result)` DORT gehoert der nested function
+// und stellte den echten Bug der AEUSSEREN Funktion still (TES5Edit
+// Sniff/Proc/ProcFindDrawCalls.pas:77 u.a.: Error-Tier-TP-Verlust).
+procedure CollectNestedSpans(AMethod: TAstNode;
+  var AStarts, AEnds: TArray<Integer>);
+var
+  Ch  : TAstNode;
+  Cnt : Integer;
+begin
+  AStarts := nil;
+  AEnds   := nil;
+  if AMethod = nil then Exit;
+  Cnt := 0;
+  for Ch in AMethod.Children do
+    if Ch.Kind = nkNestedRange then
+    begin
+      Inc(Cnt);
+      SetLength(AStarts, Cnt);
+      SetLength(AEnds,   Cnt);
+      AStarts[Cnt - 1] := Ch.Line;
+      AEnds[Cnt - 1]   := StrToIntDef(Ch.TypeRef, Ch.Line);
+      if AEnds[Cnt - 1] < AStarts[Cnt - 1] then
+        AEnds[Cnt - 1] := AStarts[Cnt - 1];
+    end;
+end;
+
+function LineIsInNestedSpan(ALine: Integer;
+  const AStarts, AEnds: TArray<Integer>): Boolean;
+var
+  k : Integer;
+begin
+  for k := 0 to High(AStarts) do
+    if (ALine >= AStarts[k]) and (ALine <= AEnds[k]) then Exit(True);
+  Result := False;
+end;
+
+// True wenn die bereits bereinigte, lowercase Zeile wie ein Routinen-KOPF
+// aussieht (`procedure|function|constructor|destructor|operator` + Whitespace +
+// Bezeichner). Prozedur-TYPEN (`procedure of object`, `function(...)`) treffen
+// bewusst nicht.
+// Fix 2026-07-31 (Review-Fund Z.922, Sicherungsnetz): steht im Scan-Bereich ein
+// solcher Kopf, den KEIN nkNestedRange-Marker abdeckt (Parser-Desync, nested
+// forward-Deklaration), laesst sich der eigene Rumpf nicht sicher abgrenzen ->
+// die Gates werden fuer diesen Kandidaten abgeschaltet statt zu raten. Der
+// Aufrufer wertet nur Zeilen HINTER der Kopfzeile aus.
+function CleanLineLooksLikeRoutineHead(const ALineLow: string): Boolean;
+const
+  KW : array[0..4] of string =
+    ('procedure', 'function', 'constructor', 'destructor', 'operator');
+var
+  T, Rest : string;
+  k, p    : Integer;
+begin
+  Result := False;
+  T := TrimLeft(ALineLow);
+  if StartsStr('class ', T) then T := TrimLeft(Copy(T, 7, MaxInt));
+  for k := 0 to High(KW) do
+    if StartsStr(KW[k] + ' ', T) then
+    begin
+      Rest := TrimLeft(Copy(T, Length(KW[k]) + 1, MaxInt));
+      if (Rest = '') or not IsIdentChar(Rest[1]) then Exit(False);
+      p := 1;
+      while (p <= Length(Rest)) and IsIdentChar(Rest[p]) do Inc(p);
+      // `procedure of object` / `function of object` = Typ, kein Routinen-Kopf
+      if Copy(Rest, 1, p - 1) = 'of' then Exit(False);
+      Exit(True);
+    end;
+end;
+
+// Liefert die Zeilen [AFrom..ATo] (1-basiert, inklusiv) als EINEN lowercase-
+// String, in dem Kommentare, Compiler-Direktiven ({$IFDEF} ist fuer den Lexer
+// ein Kommentar) und String-Literale durch ein Leerzeichen ersetzt sind.
+// Zeilenwechsel werden zu Leerzeichen, damit zeilenuebergreifende
+// Argumentlisten (`Foo(` / newline / `Result, ...`) zusammenhaengend pruefbar
+// sind. Bewusst dieselbe Zeichen-/Kommentarklassifikation wie uInlineAssembly.
+// Fix 2026-07-31 (Review-Fund Z.922): Zeilen innerhalb der nkNestedRange-Spans
+// [ASkipStarts..ASkipEnds] gehoeren zu einer verschachtelten Routine und werden
+// NICHT in den Text uebernommen - ihre Zeichen laufen trotzdem durch die
+// Kommentar-Statemachine, damit ein zeilenuebergreifender Kommentar korrekt
+// bleibt. AUncoveredNested meldet einen Routinen-Kopf hinter AFrom, den kein
+// Span abdeckt (dann kann der Aufrufer die Abgrenzung nicht garantieren).
+function CleanRangeText(Lines: TStringList; AFrom, ATo: Integer;
+  const ASkipStarts, ASkipEnds: TArray<Integer>;
+  out AUncoveredNested: Boolean): string;
+var
+  SB, LineSB  : TStringBuilder;
+  i, j, n, p  : Integer;
+  Line, Clean : string;
+  InBlock     : Boolean;   // offener {...}-Kommentar ueber Zeilengrenze
+  InParenStar : Boolean;   // offener (*...*)-Kommentar ueber Zeilengrenze
+  C           : Char;
+begin
+  Result           := '';
+  AUncoveredNested := False;
+  if Lines = nil then Exit;
+  if AFrom < 1 then AFrom := 1;
+  if ATo > Lines.Count then ATo := Lines.Count;
+  if ATo < AFrom then Exit;
+
+  SB     := TStringBuilder.Create;
+  LineSB := TStringBuilder.Create;
+  try
+    InBlock     := False;
+    InParenStar := False;
+    for i := AFrom to ATo do
+    begin
+      LineSB.Clear;
+      Line := Lines[i - 1];
+      n    := Length(Line);
+      j    := 1;
+      while j <= n do
+      begin
+        if InBlock then
+        begin
+          p := PosEx('}', Line, j);
+          if p = 0 then Break;
+          InBlock := False;
+          j := p + 1;
+          Continue;
+        end;
+        if InParenStar then
+        begin
+          p := PosEx('*)', Line, j);
+          if p = 0 then Break;
+          InParenStar := False;
+          j := p + 2;
+          Continue;
+        end;
+        C := Line[j];
+        if C = '{' then
+        begin
+          p := PosEx('}', Line, j + 1);
+          if p = 0 then begin InBlock := True; Break; end;
+          LineSB.Append(' ');
+          j := p + 1;
+          Continue;
+        end;
+        if (C = '(') and (j < n) and (Line[j + 1] = '*') then
+        begin
+          p := PosEx('*)', Line, j + 2);
+          if p = 0 then begin InParenStar := True; Break; end;
+          LineSB.Append(' ');
+          j := p + 2;
+          Continue;
+        end;
+        if (C = '/') and (j < n) and (Line[j + 1] = '/') then Break;  // Zeilenrest
+        if C = '''' then
+        begin
+          Inc(j);                                   // oeffnendes Quote
+          while j <= n do
+            if Line[j] = '''' then
+            begin
+              if (j < n) and (Line[j + 1] = '''') then Inc(j, 2)      // '' im Literal
+              else begin Inc(j); Break; end;
+            end
+            else
+              Inc(j);
+          LineSB.Append(' ');
+          Continue;
+        end;
+        LineSB.Append(C);
+        Inc(j);
+      end;
+      // Verschachtelte Routine -> Zeile verwerfen (Kommentar-Status ist oben
+      // trotzdem fortgeschrieben worden). Kein Trennzeichen noetig: jede
+      // uebernommene Zeile endet bereits mit einem Leerzeichen.
+      if LineIsInNestedSpan(i, ASkipStarts, ASkipEnds) then Continue;
+      Clean := LowerCase(LineSB.ToString);
+      if (i > AFrom) and CleanLineLooksLikeRoutineHead(Clean) then
+        AUncoveredNested := True;
+      SB.Append(Clean);
+      SB.Append(' ');                               // Zeilenende = Wortgrenze
+    end;
+    Result := SB.ToString;                          // bereits lowercase
+  finally
+    LineSB.Free;
+    SB.Free;
+  end;
+end;
+
+// Zaehlt wortgetrennte Vorkommen von NeedleLow in HayLow (beide lowercase).
+function CountWordOccurrences(const HayLow, NeedleLow: string): Integer;
+var
+  p, nl, hl : Integer;
+begin
+  Result := 0;
+  nl := Length(NeedleLow);
+  hl := Length(HayLow);
+  if (nl = 0) or (hl = 0) then Exit;
+  p := Pos(NeedleLow, HayLow);
+  while p > 0 do
+  begin
+    if ((p = 1) or not IsIdentChar(HayLow[p - 1])) and
+       ((p + nl > hl) or not IsIdentChar(HayLow[p + nl])) then
+      Inc(Result);
+    p := PosEx(NeedleLow, HayLow, p + 1);
+  end;
+end;
+
+// FP-Klasse (2) "Result als var/out-Argument": True wenn WordLow im Quelltext
+// in ARGUMENT-Position eines Calls steht - `,result` / `ident(result` /
+// `@result`. Reine Klammer-Gruppierung (`if (Result > 0) then`) trifft NICHT:
+// vor der Klammer steht dort kein Identifier-Zeichen. Dieselbe Klassifikation
+// wie ExprWritesOrPassesResult (AST-Strings), nur eben auf dem Quelltext, weil
+// der Parser die Argumentliste bei Keyword-Membern (`Stream.Read(...)`)
+// verliert.
+// BEWUSST OHNE das `result :=`-Muster: parser-verpasste Zuweisungen hinter
+// Label-Statements sind eine eigene FP-Klasse (Hebel D, braucht nkLabel).
+// Konservativ wie der bestehende Call-Arg-Guard: `Length(Result)` liest nur,
+// wird aber ebenfalls als potentielle Zuweisung gewertet (kleines FN, dafuer
+// kein FP) - identische Politik wie CallPassesResultAsArg.
+function SourceWordIsCallArg(const SLow, WordLow: string): Boolean;
+var
+  i, k, n, wl : Integer;
+  pc          : Char;
+begin
+  Result := False;
+  wl := Length(WordLow);
+  n  := Length(SLow);
+  if (wl = 0) or (n < wl) then Exit;
+  i := Pos(WordLow, SLow);
+  while i > 0 do
+  begin
+    if ((i = 1) or not IsIdentChar(SLow[i - 1])) and
+       ((i + wl > n) or not IsIdentChar(SLow[i + wl])) then
+    begin
+      k := i - 1;
+      while (k >= 1) and (SLow[k] <= ' ') do Dec(k);
+      if k >= 1 then pc := SLow[k] else pc := #0;
+      if (pc = '@') or (pc = ',') then Exit(True);
+      if (pc = '(') and (k >= 2) and IsIdentChar(SLow[k - 1]) then Exit(True);
+    end;
+    i := PosEx(WordLow, SLow, i + 1);
+  end;
+end;
+
+// FP-Klasse (4) "IFDEF-Twin im if-Kopf": in Pascal gehoert zu JEDEM `then`
+// genau ein `if`. Ein `then`-Ueberschuss im Routinen-Bereich entsteht nur,
+// wenn der Direktiven-Strip zwei Zweige EINES Bedingungskopfes hintereinander
+// sichtbar macht (`... then {$ELSE} ... then {$ENDIF}`) - genau dort verliert
+// der Parser die then/else-Zweige samt Result-Zuweisungen (JvMemDS
+// FindFieldData). Der umgekehrte Fall (mehr `if` als `then`, z.B. wenn nur ein
+// Zweig ein `if` enthaelt) loest bewusst NICHT aus.
+function SourceHasIfdefThenTwin(const SLow: string): Boolean;
+begin
+  Result := CountWordOccurrences(SLow, 'then') > CountWordOccurrences(SLow, 'if');
+end;
+
+// Obergrenze der Quelltext-Reichweite einer Routine: Zeile des naechsten
+// Routinen-Kopfes minus 1 (bzw. AMaxLine am Datei-Ende). Der AST-Teilbaum
+// taugt als Grenze NICHT - bei genau den Parse-Schaeden, die diese FPs
+// erzeugen, fehlen ihm die hinteren Zeilen (JvMemDS: die verlorenen
+// then/else-Zweige liegen HINTER dem letzten Knoten der Routine).
+function NextRoutineHeadLine(Methods: TList<TAstNode>; ALine, AMaxLine: Integer): Integer;
+var
+  M    : TAstNode;
+  Best : Integer;
+begin
+  Best := 0;
+  for M in Methods do
+    if (M.Line > ALine) and ((Best = 0) or (M.Line < Best)) then Best := M.Line;
+  if Best = 0 then Result := AMaxLine else Result := Best - 1;
+end;
+
 class procedure TRoutineResultAssignedDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 // FP-Fix: PScript-Stub-File-Pattern erkennen. Files wie
@@ -604,6 +946,15 @@ var
   M                 : TAstNode;
   EmptyCount, Total : Integer;
   NoReturnLow       : TDictionary<string, Boolean>;
+  Cands             : TObjectList<TLeakFinding>;
+  CandNodes         : TList<TAstNode>;
+  Keep              : TArray<Boolean>;
+  Lines             : TStringList;
+  Cached            : Boolean;
+  i, EndLine        : Integer;
+  RangeLow          : string;
+  NStarts, NEnds    : TArray<Integer>;   // nkNestedRange-Spans (2026-07-31)
+  UncoveredNested   : Boolean;
 begin
   Methods := UnitNode.FindAll(nkMethod);
   try
@@ -636,8 +987,84 @@ begin
           if NmLow <> '' then NoReturnLow.AddOrSetValue(NmLow, True);
         end;
 
-      for M in Methods do
-        AnalyzeMethod(M, FileName, Results, NoReturnLow);
+      // Kandidaten zuerst SEPARAT sammeln (mit dem erzeugenden Methodenknoten
+      // im Gleichschritt), damit die Quelltext-Gates darunter jeden Fund seiner
+      // Routine zuordnen koennen. AnalyzeMethod emittiert hoechstens einen Fund
+      // pro Methode; die while-Kopplung ist gegen kuenftige Mehrfach-Funde
+      // robust.
+      Cands     := TObjectList<TLeakFinding>.Create(True);
+      CandNodes := TList<TAstNode>.Create;
+      try
+        for M in Methods do
+        begin
+          AnalyzeMethod(M, FileName, Cands, NoReturnLow);
+          while CandNodes.Count < Cands.Count do CandNodes.Add(M);
+        end;
+        if Cands.Count = 0 then Exit;   // kein Kandidat -> kein Datei-Zugriff
+
+        // Quelltext-Gates (2026-07-31, s. Block-Kommentar oben). Lines = nil
+        // (Datei nicht lesbar / In-Memory-Analyse) -> Gates inaktiv, Verhalten
+        // exakt wie vorher.
+        Lines := AcquireLines(FileName, Cached);
+        try
+          SetLength(Keep, Cands.Count);
+          for i := 0 to Cands.Count - 1 do
+          begin
+            Keep[i] := True;
+            if Lines = nil then Continue;
+            M := CandNodes[i];
+            if (M.Line < 1) or (M.Line > Lines.Count) then Continue;
+            // Sicherung gegen Datei/AST-Divergenz (falscher Pfad, veraltete
+            // Zeilen): der Routinen-Name MUSS in der Kopfzeile stehen. Sonst
+            // gehoert der Text nicht zu diesem Knoten -> Gates aus statt raten.
+            if Pos(LowerCase(TDetectorUtils.UnqualifiedNameLast(M.Name)),
+                   LowerCase(Lines[M.Line - 1])) = 0 then Continue;
+
+            EndLine  := NextRoutineHeadLine(Methods, M.Line, Lines.Count);
+            // Fix 2026-07-31 (Review-Fund Z.922): der Bereich reicht bis zum
+            // naechsten TOP-LEVEL-Kopf und enthaelt damit auch den kompletten
+            // Deklarationsteil. Die verschachtelten Routinen darin gehoeren
+            // NICHT zum eigenen Rumpf - ihr `Result` ist ein fremdes. Der
+            // Parser liefert die exakten Grenzen als nkNestedRange-Marker.
+            CollectNestedSpans(M, NStarts, NEnds);
+            RangeLow := CleanRangeText(Lines, M.Line, EndLine,
+                                       NStarts, NEnds, UncoveredNested);
+            // Kein Marker fuer einen sichtbaren Routinen-Kopf im Bereich ->
+            // der eigene Rumpf ist nicht sicher abgrenzbar. Konservativ: Gates
+            // aus (kein Drop) statt einen fremden Rumpf mitzuscannen.
+            if UncoveredNested then Continue;
+
+            // (1) asm-Block im Rumpf -> Result kommt per Register.
+            if CountWordOccurrences(RangeLow, 'asm') > 0 then
+            begin
+              Keep[i] := False;
+              Continue;
+            end;
+            // (2) Result in Argument-Position eines Calls (var/out/@).
+            if SourceWordIsCallArg(RangeLow, 'result') then
+            begin
+              Keep[i] := False;
+              Continue;
+            end;
+            // (4) IFDEF-Twin im Bedingungskopf (zweifaches 'then').
+            if SourceHasIfdefThenTwin(RangeLow) then
+              Keep[i] := False;
+          end;
+        finally
+          ReleaseLines(Lines, Cached);
+        end;
+
+        // Ownership-Uebergabe: ab hier besitzt Cands die Funde nicht mehr -
+        // jeder wandert entweder nach Results oder wird hier freigegeben.
+        // Bewusst NACH der Gate-Schleife (die kann werfen, dieser Teil nicht).
+        Cands.OwnsObjects := False;
+        for i := 0 to Cands.Count - 1 do
+          if Keep[i] then Results.Add(Cands[i])
+          else Cands[i].Free;
+      finally
+        CandNodes.Free;
+        Cands.Free;
+      end;
     finally
       NoReturnLow.Free;
     end;

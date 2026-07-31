@@ -70,6 +70,25 @@ type
     // Basisklasse NICHT im Scan-Scope -> Elternkette kommt aus der Seed-Tabelle.
     [Test] procedure FreeAndNilSeededNonThreadBase_ViaPipeline_Suppressed;
     [Test] procedure FreeAndNilSeededThreadBase_ViaPipeline_StillReported;
+    // --- Real-World-Audit 2026-07-31: alternative Beendigungs-Nachweise ---
+    // (a) TerminateThread-Hardkill, (b) .Finished-Guard, (c) Execute
+    // honoriert Terminated (TThread.Destroy macht implizit Terminate+WaitFor).
+    [Test] procedure FreeAndNilAfterTerminateThread_NotReported;
+    [Test] procedure FreeAndNilAfterTerminateThreadOtherIdent_StillReported;
+    [Test] procedure FreeAndNilUnderFinishedGuard_NotReported;
+    [Test] procedure FreeAndNilUnderForeignFinishedGuard_StillReported;
+    [Test] procedure FreeAndNilThreadHonoringTerminated_NotReported;
+    [Test] procedure FreeAndNilThreadIgnoringTerminated_StillReported;
+    // --- Review-Fund 2026-07-31: Gate (b) war polaritaets-blind ---
+    // `not <X>.Finished`, `<X>.Started`, `<X>.Finished = False` und der
+    // else-Zweig beweisen das GEGENTEIL des Guards - Fund muss bleiben.
+    [Test] procedure FreeAndNilUnderNotFinishedGuard_StillReported;
+    [Test] procedure FreeAndNilUnderStartedGuard_StillReported;
+    [Test] procedure FreeAndNilUnderNotStartedGuard_StillReported;
+    [Test] procedure FreeAndNilUnderFinishedComparedFalse_StillReported;
+    [Test] procedure FreeAndNilInElseOfFinishedGuard_StillReported;
+    // --- Review-Fund 2026-07-31: Rumpf-Ende von ExecuteHonorsTerminated ---
+    [Test] procedure FreeAndNilIgnoringExecuteBeforeClassProc_StillReported;
   end;
 
 implementation
@@ -790,6 +809,287 @@ begin
   F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
   try Assert.IsTrue(TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate) >= 1,
     'Seed (tjvbasethread->tthread) haelt einen echten Thread-Nachfahren als Fund');
+  finally F.Free; end;
+end;
+
+{ --- Real-World-Audit 2026-07-31: alternative Beendigungs-Nachweise ------- }
+
+procedure TTestConcurrencyExt.FreeAndNilAfterTerminateThread_NotReported;
+// FP-Fix Gate (a) (cnwizards CnWizUpgradeFrm): 'TerminateThread(<X>.Handle, 0)'
+// vor dem FreeAndNil ist ein Hard-Kill - der Worker laeuft nachweislich nicht
+// mehr. Ohne das Gate feuert der Detektor hier (weder <X>.Terminate noch
+// <X>.WaitFor stehen im LookBack-Fenster).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  TerminateThread(FWorkerThread.Handle, 0);'#13#10 +
+  '  FreeAndNil(FWorkerThread);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
+    'TerminateThread-Hardkill beendet den Worker - kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.FreeAndNilAfterTerminateThreadOtherIdent_StillReported;
+// TP-Gegenprobe zu Gate (a): der Hardkill trifft einen ANDEREN Thread - der
+// freigegebene laeuft weiter, der Fund muss bleiben.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  TerminateThread(FOtherThread.Handle, 0);'#13#10 +
+  '  FreeAndNil(FWorkerThread);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
+    'Hardkill auf fremdem Thread schuetzt FWorkerThread nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.FreeAndNilUnderFinishedGuard_NotReported;
+// FP-Fix Gate (b) (TES5Edit xeMainForm): das FreeAndNil steht unter
+// 'if <X>.Finished then' - der Worker ist fertig.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  if FWorkerThread.Finished then'#13#10 +
+  '    FreeAndNil(FWorkerThread);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
+    'Finished-Guard beweist den beendeten Worker - kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.FreeAndNilUnderForeignFinishedGuard_StillReported;
+// TP-Gegenprobe zu Gate (b): der Guard prueft einen ANDEREN Thread.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  if FOtherThread.Finished then'#13#10 +
+  '    FreeAndNil(FWorkerThread);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
+    'Guard auf fremdem Thread schuetzt FWorkerThread nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.FreeAndNilThreadHonoringTerminated_NotReported;
+// FP-Fix Gate (c) (jvcl JvTimer): das Feld ist als TThread deklariert, wird
+// aber mit der in DIESER Unit definierten TMyTimerThread instanziiert, deren
+// Execute 'until Terminated' auswertet. TThread.Destroy ruft implizit
+// Terminate + WaitFor -> FreeAndNil ist sicher.
+const SRC =
+  'unit t; interface'#13#10 +
+  'uses System.Classes;'#13#10 +
+  'type'#13#10 +
+  '  TMyTimerThread = class(TThread)'#13#10 +
+  '  protected'#13#10 +
+  '    procedure Execute; override;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TMyTimerThread.Execute;'#13#10 +
+  'begin'#13#10 +
+  '  repeat'#13#10 +
+  '    Sleep(10);'#13#10 +
+  '  until Terminated;'#13#10 +
+  'end;'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var LTimer: TThread;'#13#10 +
+  'begin'#13#10 +
+  '  LTimer := TMyTimerThread.Create(False);'#13#10 +
+  '  FreeAndNil(LTimer);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
+    'Execute honoriert Terminated - implizites Terminate+WaitFor reicht');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.FreeAndNilThreadIgnoringTerminated_StillReported;
+// TP-Gegenprobe zu Gate (c): identische Struktur, aber Execute IGNORIERT
+// Terminated (Endlosschleife) - genau der Fall, den die Regel meint.
+const SRC =
+  'unit t; interface'#13#10 +
+  'uses System.Classes;'#13#10 +
+  'type'#13#10 +
+  '  TBusyThread = class(TThread)'#13#10 +
+  '  protected'#13#10 +
+  '    procedure Execute; override;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TBusyThread.Execute;'#13#10 +
+  'begin'#13#10 +
+  '  while True do'#13#10 +
+  '    Sleep(10);'#13#10 +
+  'end;'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var LTimer: TThread;'#13#10 +
+  'begin'#13#10 +
+  '  LTimer := TBusyThread.Create(False);'#13#10 +
+  '  FreeAndNil(LTimer);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
+    'Execute ohne Terminated-Auswertung bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+{ --- Review-Fund 2026-07-31: Polaritaet von Gate (b) --------------------- }
+{ Die erste Fassung matchte '(Finished|Started)' ohne not-Auswertung. Alle
+  fuenf Tests hier sind gegen die alte Fassung ROT (sie lieferte 0 statt 1),
+  denn jeder Guard beweist genau den gemeldeten Zustand: der Worker laeuft
+  noch bzw. die Freigabe haengt am NICHT-fertigen Zweig. }
+
+procedure TTestConcurrencyExt.FreeAndNilUnderNotFinishedGuard_StillReported;
+// 'if not <X>.Finished' = der Worker laeuft NACHWEISLICH noch (jvcl
+// JvThread.pas:809-Muster) - das ist der Bug, nicht sein Gegenbeweis.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  if not FWorkerThread.Finished then'#13#10 +
+  '    FreeAndNil(FWorkerThread);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
+    'not Finished beweist den LAUFENDEN Worker - Fund muss bleiben');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.FreeAndNilUnderStartedGuard_StillReported;
+// 'if <X>.Started' = der Worker wurde gestartet - ebenfalls der gemeldete
+// Zustand. 'Started' ist deshalb komplett aus dem Gate entfernt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  if FScanThread.Started then'#13#10 +
+  '    FreeAndNil(FScanThread);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
+    'Started beweist den laufenden Worker - Fund muss bleiben');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.FreeAndNilUnderNotStartedGuard_StillReported;
+// 'if not <X>.Started' waere semantisch sicher, wird aber BEWUSST nicht
+// unterdrueckt: im Real-World-Korpus 0 Treffer, also 0 Drop-Verlust, und die
+// not-Erkennung waere hier reine Spekulation. Pinnt die konservative Wahl.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  if not FScanThread.Started then'#13#10 +
+  '    FreeAndNil(FScanThread);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
+    'not Started ist kein anerkannter Guard - Fund bleibt (konservativ)');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.FreeAndNilUnderFinishedComparedFalse_StillReported;
+// '<X>.Finished = False' ist die Vergleichs-Schreibweise von 'not Finished'.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  if FWorkerThread.Finished = False then'#13#10 +
+  '    FreeAndNil(FWorkerThread);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
+    'Finished = False ist die invertierte Polaritaet - Fund muss bleiben');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.FreeAndNilInElseOfFinishedGuard_StillReported;
+// Positiver Guard, aber das FreeAndNil haengt im ELSE-Zweig - also genau am
+// Pfad 'noch nicht fertig'. Spiegelbild des TES5Edit-FPs (dort steht das
+// FreeAndNil im then-Zweig und der Hardkill im else).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  if FWorkerThread.Finished then'#13#10 +
+  '    LogDone'#13#10 +
+  '  else'#13#10 +
+  '    FreeAndNil(FWorkerThread);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
+    'Freigabe im else-Zweig eines Finished-Guards bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+{ --- Review-Fund 2026-07-31: Rumpf-Ende von ExecuteHonorsTerminated ------ }
+
+procedure TTestConcurrencyExt.FreeAndNilIgnoringExecuteBeforeClassProc_StillReported;
+// Execute IGNORIERT Terminated (Endlosschleife). Direkt danach steht an
+// Spalte 0 eine 'class procedure', deren Rumpf 'Terminated' erwaehnt. Die
+// alte Ende-Erkennung kannte nur procedure/function/constructor/destructor
+// OHNE class-Praefix -> das 20k-Fenster lief in die Folge-Routine, fand dort
+// 'Terminated' und stellte den Error-Tier-Fund still (Test war ROT).
+const SRC =
+  'unit t; interface'#13#10 +
+  'uses System.Classes;'#13#10 +
+  'type'#13#10 +
+  '  TBusyThread2 = class(TThread)'#13#10 +
+  '  protected'#13#10 +
+  '    procedure Execute; override;'#13#10 +
+  '    class procedure Cleanup;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TBusyThread2.Execute;'#13#10 +
+  'begin'#13#10 +
+  '  while True do'#13#10 +
+  '    Sleep(10);'#13#10 +
+  'end;'#13#10 +
+  'class procedure TBusyThread2.Cleanup;'#13#10 +
+  'begin'#13#10 +
+  '  if GlobalWorker.Terminated then'#13#10 +
+  '    Exit;'#13#10 +
+  'end;'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var LTimer: TThread;'#13#10 +
+  'begin'#13#10 +
+  '  LTimer := TBusyThread2.Create(False);'#13#10 +
+  '  FreeAndNil(LTimer);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
+    'Terminated in der folgenden class procedure gehoert nicht zu Execute');
   finally F.Free; end;
 end;
 

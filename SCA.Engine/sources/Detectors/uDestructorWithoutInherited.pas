@@ -13,6 +13,11 @@ unit uDestructorWithoutInherited;
 //
 // Schweregrad: lsError - vergessenes `inherited` im Destruktor ist
 // fast immer ein Leak.
+//
+// FP-Gates:
+//   * PScript-Stub-Files (>=5 leere Bodies, >70% Ratio) - siehe AnalyzeUnit.
+//   * Codegen-Template-Dateien mit '<#Platzhalter>'-Tokens (2026-07-31) -
+//     siehe IsCodegenTemplateFile.
 
 interface
 
@@ -72,6 +77,123 @@ begin
     Line := Lines[LineNo - 1];
     Trimmed := LowerCase(TrimLeft(Line));
     Result := StartsStr('class destructor', Trimmed);
+  finally
+    ReleaseLines(Lines, Cached);
+  end;
+end;
+
+// ---------------------------------------------------------------------------
+// FP-Gate (2026-07-31, 30%-Real-World-Audit sca-rw-after119)
+// FP-Klasse: Codegen-Template-Dateien (.pas mit '<#Platzhalter>'-Tokens).
+// Beleg: cnwizards/Bin/Data/Templates/CnIniFiler_Section.pas:75 - Zeile 77
+// lautet '<#IniSectionsFree>  inherited;', das `inherited` IST also textuell
+// da. Mechanismus: die Nicht-Pascal-Platzhalter brechen Lexer/Parser, der
+// Destruktor-Rumpf kommt als Phantom/leer an und HasInheritedCall sieht
+// nichts (gleiche Familie wie die bekannten Phantom-Rumpf-Quellen). Ohne
+// parsebaren Rumpf gibt es kein Urteil -> in solchen Dateien feuert SCA097
+// gar nicht.
+// ---------------------------------------------------------------------------
+
+// Entfernt String-Literale und Kommentare aus EINER Quellzeile. InBrace /
+// InParenStar tragen den Kommentar-Zustand ueber Zeilengrenzen (Block-
+// Kommentare). Bewusst lokal in dieser Unit: der Gate darf keine geteilte
+// Infrastruktur mitziehen.
+function StripCodeLine(const Line: string; var InBrace, InParenStar: Boolean): string;
+var
+  i, N  : Integer;
+  InStr : Boolean;
+begin
+  Result := '';
+  InStr  := False;
+  N      := Length(Line);
+  i      := 1;
+  while i <= N do
+  begin
+    if InBrace then
+    begin
+      if Line[i] = '}' then InBrace := False;
+      Inc(i);
+      Continue;
+    end;
+    if InParenStar then
+    begin
+      if (Line[i] = '*') and (i < N) and (Line[i + 1] = ')') then
+      begin
+        InParenStar := False;
+        Inc(i, 2);
+        Continue;
+      end;
+      Inc(i);
+      Continue;
+    end;
+    if InStr then
+    begin
+      // Verdoppeltes Hochkomma faellt korrekt heraus: das erste schliesst,
+      // das zweite oeffnet wieder - Netto-Ergebnis identisch.
+      if Line[i] = '''' then InStr := False;
+      Inc(i);
+      Continue;
+    end;
+    if Line[i] = '''' then begin InStr := True; Inc(i); Continue; end;
+    if Line[i] = '{'  then begin InBrace := True; Inc(i); Continue; end;
+    if (Line[i] = '(') and (i < N) and (Line[i + 1] = '*') then
+    begin
+      InParenStar := True;
+      Inc(i, 2);
+      Continue;
+    end;
+    if (Line[i] = '/') and (i < N) and (Line[i + 1] = '/') then Break;
+    Result := Result + Line[i];
+    Inc(i);
+  end;
+end;
+
+// True wenn im (bereits gestrippten) Code ein Template-Platzhalter der Form
+// '<#Bezeichner>' steht. BEWUSST eng: nach '<#' muss ein Buchstabe oder '_'
+// kommen und der Token muss mit '>' schliessen. Damit faellt der legale
+// Delphi-Ausdruck 'if c<#13 then' (Char-Literal-Vergleich, ZIFFER nach '#')
+// nicht darunter.
+function HasTemplatePlaceholder(const Code: string): Boolean;
+var
+  i, j, N : Integer;
+begin
+  Result := False;
+  N := Length(Code);
+  i := 1;
+  while i < N do
+  begin
+    if (Code[i] = '<') and (Code[i + 1] = '#') then
+    begin
+      j := i + 2;
+      if (j <= N) and CharInSet(Code[j], ['A'..'Z', 'a'..'z', '_']) then
+      begin
+        Inc(j);
+        while (j <= N) and
+              CharInSet(Code[j], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do Inc(j);
+        if (j <= N) and (Code[j] = '>') then Exit(True);
+      end;
+    end;
+    Inc(i);
+  end;
+end;
+
+function IsCodegenTemplateFile(const FileName: string;
+  AContext: TAnalyzeContext): Boolean;
+var
+  Lines            : TStringList;
+  Cached           : Boolean;
+  i                : Integer;
+  InBrace, InParen : Boolean;
+begin
+  Result := False;
+  Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
+  if Lines = nil then Exit;   // nicht lesbar -> kein Urteil, altes Verhalten
+  try
+    InBrace := False;
+    InParen := False;
+    for i := 0 to Lines.Count - 1 do
+      if HasTemplatePlaceholder(StripCodeLine(Lines[i], InBrace, InParen)) then
+        Exit(True);
   finally
     ReleaseLines(Lines, Cached);
   end;
@@ -142,7 +264,13 @@ var
   M                 : TAstNode;
   F                 : TLeakFinding;
   EmptyCount, Total : Integer;
+  // Template-Gate (2026-07-31): LAZY - erst pruefen wenn wirklich ein Fund
+  // anstehen wuerde. Sonst zahlte jede saubere Datei den Zeilen-Scan.
+  TemplateChecked   : Boolean;
+  IsTemplate        : Boolean;
 begin
+  TemplateChecked := False;
+  IsTemplate      := False;
   Methods := UnitNode.FindAll(nkMethod);
   try
     EmptyCount := 0;
@@ -168,6 +296,16 @@ begin
       // TMVCSqids.Destroy). Direkt am Source pruefen.
       if IsClassDestructorByLine(FileName, M.Line, AContext) then Continue;
       if HasInheritedCall(M) then Continue;
+      // FP-Gate (2026-07-31): Codegen-Template-Datei - der Rumpf ist nicht
+      // parsebar, also kein Urteil ueber ein fehlendes `inherited`.
+      // Datei-weit, weil ein gebrochener Lexer-Zustand nicht auf den einen
+      // Destruktor beschraenkt ist (Beleg CnIniFiler_Section.pas).
+      if not TemplateChecked then
+      begin
+        TemplateChecked := True;
+        IsTemplate      := IsCodegenTemplateFile(FileName, AContext);
+      end;
+      if IsTemplate then Exit;
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
       F.MethodName := M.Name;

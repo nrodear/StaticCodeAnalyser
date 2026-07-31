@@ -79,6 +79,13 @@ type
 
 implementation
 
+uses
+  // Pre-Build-Review 2026-07-31 (Fund uFieldLeak.pas:333): Stufe 1 des
+  // Schwester-Feld-Owner-Gates braucht den Cross-Unit-Typindex, um eine
+  // TComponent-Ahnenlinie zu BEWEISEN bzw. zu WIDERLEGEN. Nur implementation-
+  // uses, damit die Interface-Abhaengigkeiten der Unit unveraendert bleiben.
+  uTypeIndex;
+
 // noinspection-file ConsecutiveSection, CyclomaticComplexity, GroupedDeclaration, LongMethod, NestedTry, NilComparison, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
@@ -261,6 +268,250 @@ begin
   end;
 end;
 
+{ ---- FP-Gates 30%-Real-World-Audit 2026-07-31 (FP-Klasse 3) ---------------- }
+//
+// "Ctor/Dtor-Paarung uebersieht indirekte Freigabe" (2/24 im Sample). Beide
+// Gates sind MONOTON - sie koennen einen Fund nur unterdruecken.
+
+// Erstes Top-Level-Argument eines '<Typ>.Create(...)'-Aufrufs (lowercase),
+// '' wenn die RHS kein Konstruktoraufruf MIT Klammern ist. Klammer-Tiefe wird
+// gezaehlt, damit 'Create(TFoo.Create(a,b), c)' nicht am inneren Komma splittet.
+function FirstCreateArgLow(const ATypeRefLow: string): string;
+var
+  p, i, depth : Integer;
+begin
+  Result := '';
+  p := Pos('.create(', ATypeRefLow);
+  if p = 0 then Exit;
+  i := p + 8;                       // hinter '.create('
+  depth := 0;
+  while i <= Length(ATypeRefLow) do
+  begin
+    if ATypeRefLow[i] = '(' then Inc(depth)
+    else if ATypeRefLow[i] = ')' then
+    begin
+      if depth = 0 then Break;
+      Dec(depth);
+    end
+    else if (ATypeRefLow[i] = ',') and (depth = 0) then Break;
+    Inc(i);
+  end;
+  Result := Trim(Copy(ATypeRefLow, p + 8, i - (p + 8)));
+  // ATypeRefLow ist bereits lowercase -> direkter Vergleich statt StartsText
+  // (haelt die uses-Liste dieser Unit unveraendert).
+  if Copy(Result, 1, 5) = 'self.' then Result := Trim(Copy(Result, 6, MaxInt));
+end;
+
+// Datenklassen-Sperrliste (Pre-Build-Review 2026-07-31, Fund uFieldLeak.pas:333).
+// 1:1 uebernommen aus uLeakDetector2.IsComponentOwnerCreate (Stufe-2-Liste),
+// ergaenzt um die Basisklasse 'tstream'. Zwei Rollen:
+//   * als ERZEUGTE Klasse: das erste Ctor-Argument sind DATEN (Quellstream,
+//     Dateiname, Text), nie ein Owner - 'TStreamReader.Create(FStream)' macht
+//     FStream NICHT zum Besitzer des Readers.
+//   * als OWNER-Feldtyp: eine Datenklasse besitzt niemals einen Component-Tree
+//     und gibt beim Free nichts mit frei.
+const
+  FL_DATA_CLASSES : array[0..19] of string = (
+    'tfilestream', 'tstringstream', 'tmemorystream', 'tbytesstream',
+    'tresourcestream', 'tbufferedfilestream', 'thandlestream', 'tstream',
+    'tstringlist', 'tstringbuilder', 'tinifile', 'tmeminifile',
+    'tregistryinifile', 'tstreamreader', 'tstreamwriter',
+    'tbinaryreader', 'tbinarywriter', 'tzipfile', 'tencoding',
+    'tregistry');
+
+function IsDataClassLow(const ATypeLow: string): Boolean;
+var
+  i : Integer;
+begin
+  Result := False;
+  if ATypeLow = '' then Exit;
+  for i := Low(FL_DATA_CLASSES) to High(FL_DATA_CLASSES) do
+    if ATypeLow = FL_DATA_CLASSES[i] then Exit(True);
+end;
+
+// Nackter Typname (lowercase) ohne Unit-Qualifier und ohne Generic-Suffix.
+// 'Vcl.ExtCtrls.TPanel' -> 'tpanel', 'TObjectList<TFoo>' -> 'tobjectlist'.
+// Generics werden ZUERST gekappt, damit ein Punkt INNERHALB der Typargumente
+// ('TDictionary<string, System.TObject>') nicht als Unit-Trenner zaehlt.
+function BareTypeLow(const ATypeRef: string): string;
+var
+  p : Integer;
+begin
+  Result := Trim(ATypeRef).ToLower;
+  p := Pos('<', Result);
+  if p > 0 then Result := Trim(Copy(Result, 1, p - 1));
+  p := LastDelimiter('.', Result);
+  if p > 0 then Result := Trim(Copy(Result, p + 1, MaxInt));
+end;
+
+// Klassenname eines '<Typ>.Create(...)'-Aufrufs (lowercase, normalisiert),
+// '' wenn die RHS kein Konstruktoraufruf MIT Klammern ist. Gegenstueck zu
+// FirstCreateArgLow; erwartet ebenfalls eine bereits lowercase RHS.
+function CreateClassLow(const ATypeRefLow: string): string;
+var
+  p : Integer;
+begin
+  Result := '';
+  p := Pos('.create(', ATypeRefLow);
+  if p = 0 then Exit;
+  Result := BareTypeLow(Copy(ATypeRefLow, 1, p - 1));
+end;
+
+// True, wenn der Cross-Unit-Typindex den Typ AUFLOEST und er dabei KEIN
+// TComponent-Nachfahre ist. Unbekannte Typen liefern False (kein Veto) -
+// dann entscheidet die Datenklassen-Sperrliste.
+function ResolvedNonComponent(ATypeIndex: TTypeIndex;
+  const ATypeLow: string): Boolean;
+begin
+  Result := False;
+  if (ATypeIndex = nil) or (ATypeLow = '') then Exit;
+  if ATypeIndex.IsDescendantOf(ATypeLow, 'tcomponent') then Exit;
+  Result := (ATypeIndex.TypeKindOf(ATypeLow) <> tkiUnknown) or
+            (ATypeIndex.ParentOf(ATypeLow) <> '');
+end;
+
+// FP-Klasse 3a: 'FEndTimer := TTimer.Create(FPanel)' - Owner ist ein ANDERES
+// Feld derselben Klasse, das im Destroy freigegeben wird ('FreeAndNil(FPanel)',
+// HeidiSQL grideditlinks.pas:130). Der Owner raeumt seinen Component-Tree beim
+// Free mit ab; ein eigenes Free waere redundant. IsCreatedWithComponentOwner
+// kennt nur die kanonischen Bezeichner Self/AOwner/Owner.
+// STRENG: der Owner-Ausdruck muss ein blanker Identifier sein UND im Destroy
+// NACHWEISLICH freigegeben werden. Ohne diesen Nachweis bleibt der Fund stehen
+// (kein Blanket-Gate auf "irgendein Argument").
+//
+// NACHGESCHAERFT 2026-07-31 (Pre-Build-Review, Fund uFieldLeak.pas:333
+// "keine Datenklassen-Sperrliste"): 'FReader := TStreamReader.Create(FStream)'
+// mit 'FStream.Free' im Destroy ist KEINE Owner-Beziehung - TStreamReader,
+// TStreamWriter, TBinaryReader/Writer und TZipFile KONSUMIEREN den Stream, sie
+// werden von ihm nicht besessen. Ohne Sperre stellte das Gate dort ein echtes
+// Leak (lsError) still. Das Schwestergate uLeakDetector2.IsComponentOwnerCreate
+// hat genau dafuer eine DATA_CLASSES-Sperrliste UND verlangt zusaetzlich ein
+// DOTTED erstes Argument. Das dotted-Kriterium ist hier nicht uebertragbar (der
+// Schwester-Feld-Owner IST per Definition ein blanker Identifier); an seine
+// Stelle treten drei gleichwertig strenge Nachweise:
+//   (1) der Owner-Bezeichner muss ein FELD DERSELBEN Klasse sein (erst damit
+//       ist sein deklarierter Typ ueberhaupt bekannt),
+//   (2) weder die erzeugte Klasse noch der Owner-Feldtyp darf eine bekannte
+//       Datenklasse sein (FL_DATA_CLASSES),
+//   (3) loest der Cross-Unit-Typindex einen der beiden Typen auf und ist er
+//       KEIN TComponent-Nachfahre, greift das Gate nicht.
+// Alle drei Zusaetze koennen das Gate nur ENGER machen - Monotonie bleibt
+// gewahrt (weniger Unterdrueckungen, niemals zusaetzliche Funde).
+function IsOwnedByFreedSiblingField(Ctor, Dtor, ClassNode: TAstNode;
+  const FieldNameLow: string; AContext: TAnalyzeContext): Boolean;
+var
+  Assigns, Fields : TList<TAstNode>;
+  A, Fld  : TAstNode;
+  LHSLow, OwnerLow, ClassLow, OwnerTypeLow : string;
+  i       : Integer;
+  Dummy   : Boolean;
+  Clean   : Boolean;
+  OwnerIsField : Boolean;
+  TI      : TTypeIndex;
+begin
+  Result := False;
+  if (Ctor = nil) or (Dtor = nil) or (ClassNode = nil) then Exit;
+  TI := CtxTypeIndex(AContext);      // nil im Single-File-/Testpfad
+  Assigns := Ctor.FindAll(nkAssign);
+  Fields  := nil;
+  try
+    Fields := ClassNode.FindAll(nkField);
+    for A in Assigns do
+    begin
+      LHSLow := A.Name.ToLower;
+      if (LHSLow <> FieldNameLow) and
+         (LHSLow <> 'self.' + FieldNameLow) then Continue;
+      OwnerLow := FirstCreateArgLow(A.TypeRef.ToLower);
+      if (OwnerLow = '') or (OwnerLow = 'nil') then Continue;
+      if OwnerLow = FieldNameLow then Continue;
+      Clean := True;
+      for i := 1 to Length(OwnerLow) do
+        if not TLeakDetector2.IsIdentChar(OwnerLow[i]) then
+        begin Clean := False; Break; end;
+      if not Clean then Continue;
+
+      // (2a) Erzeugte Klasse: Datenklassen nehmen DATEN als erstes Argument,
+      //      keinen Owner. Ein leerer Klassenkopf beweist nichts -> kein Gate.
+      ClassLow := CreateClassLow(A.TypeRef.ToLower);
+      if (ClassLow = '') or IsDataClassLow(ClassLow) then Continue;
+
+      // (1) Owner muss ein FELD derselben Klasse sein - sonst ist er kein
+      //     Schwester-Feld und sein Typ nicht bestimmbar.
+      OwnerIsField := False;
+      OwnerTypeLow := '';
+      for Fld in Fields do
+        if Fld.Name.ToLower = OwnerLow then
+        begin
+          OwnerIsField := True;
+          OwnerTypeLow := BareTypeLow(Fld.TypeRef);
+          Break;
+        end;
+      if not OwnerIsField then Continue;
+
+      // (2b) Owner-Feldtyp: eine Datenklasse besitzt keinen Component-Tree.
+      if IsDataClassLow(OwnerTypeLow) then Continue;
+
+      // (3) Typindex-Veto: aufloesbar UND kein TComponent -> keine Ownership.
+      if (TI <> nil) and not TI.IsEmpty then
+      begin
+        if ResolvedNonComponent(TI, ClassLow) then Continue;
+        if ResolvedNonComponent(TI, OwnerTypeLow) then Continue;
+      end;
+
+      if TLeakDetector2.SearchFree(Dtor, OwnerLow, False, Dummy) then
+        Exit(True);                  // finally gibt Fields/Assigns frei
+    end;
+  finally
+    Fields.Free;
+    Assigns.Free;
+  end;
+end;
+
+// FP-Klasse 3b: das Free steckt in einer Helper-Methode DERSELBEN Klasse, die
+// der Destruktor aufruft ('FreeBlockList;' -> 'FreeAndNil(FBlocks)', pyscripter
+// JvDockVSNetStyle.pas:180). Der Dtor-Scan prueft sonst nur direkte Frees im
+// Destroy-Rumpf. GENAU EINE Ebene Methoden-Inlining, und nur fuer
+// unqualifizierte bzw. 'Self.'-qualifizierte Aufrufe, die sich eindeutig auf
+// '<DieseKlasse>.<Callee>' aufloesen lassen - fremde Receiver ('FList.Clear')
+// bleiben aussen vor.
+function IsFreedViaOwnHelper(UnitNode, Dtor: TAstNode;
+  const ClassNameLow, FieldNameLow: string): Boolean;
+var
+  Calls, Methods : TList<TAstNode>;
+  C, M    : TAstNode;
+  CalLow, Target : string;
+  Dummy   : Boolean;
+begin
+  Result := False;
+  if (UnitNode = nil) or (Dtor = nil) or (ClassNameLow = '') then Exit;
+  Calls   := Dtor.FindAll(nkCall);
+  Methods := nil;
+  try
+    Methods := UnitNode.FindAll(nkMethod);
+    for C in Calls do
+    begin
+      CalLow := Trim(C.Name.ToLower);
+      if (Length(CalLow) >= 2) and
+         (Copy(CalLow, Length(CalLow) - 1, 2) = '()') then
+        CalLow := Trim(Copy(CalLow, 1, Length(CalLow) - 2));
+      if Copy(CalLow, 1, 5) = 'self.' then
+        CalLow := Trim(Copy(CalLow, 6, MaxInt));
+      // Nur blanke Methodennamen: alles mit Klammern (Argumente) oder Punkt
+      // (fremder Receiver) ist kein Self-Helper-Aufruf.
+      if (CalLow = '') or (Pos('(', CalLow) > 0) or (Pos('.', CalLow) > 0) then
+        Continue;
+      Target := ClassNameLow + '.' + CalLow;
+      for M in Methods do
+        if (M.Name.ToLower = Target) and
+           TLeakDetector2.SearchFree(M, FieldNameLow, False, Dummy) then
+          Exit(True);            // finally gibt Methods/Calls frei
+    end;
+  finally
+    Methods.Free;
+    Calls.Free;
+  end;
+end;
+
 class procedure TFieldLeakDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>;
   AContext: TAnalyzeContext);
@@ -321,6 +572,22 @@ begin
           // Alias-Free-Idiom (L := FField; FField := nil; L.Free) erkennen.
           if not FreeFound then
             FreeFound := IsFreedViaAlias(Dtor, FieldNameLow);
+
+          // FP-Gate (2026-07-31, FP-Klasse 3b): Free steckt in einer vom
+          // Destroy gerufenen Helper-Methode DERSELBEN Klasse (FreeBlockList).
+          if not FreeFound then
+            FreeFound := IsFreedViaOwnHelper(UnitNode, Dtor,
+                           ClassNode.Name.ToLower, FieldNameLow);
+
+          // FP-Gate (2026-07-31, FP-Klasse 3a): Owner ist ein Schwester-FELD,
+          // das im Destroy freigegeben wird (FEndTimer mit Owner FPanel) - der
+          // Owner raeumt das Component-Tree mit ab. ClassNode/AContext seit dem
+          // Pre-Build-Review 2026-07-31 (Fund uFieldLeak.pas:333) noetig: das
+          // Gate prueft jetzt Owner-Feldzugehoerigkeit, Datenklassen-Sperrliste
+          // und - falls verfuegbar - die TComponent-Ahnenlinie im Typindex.
+          if not FreeFound and
+             IsOwnedByFreedSiblingField(Ctor, Dtor, ClassNode, FieldNameLow,
+                                        AContext) then Continue;
 
           if not FreeFound then
           begin

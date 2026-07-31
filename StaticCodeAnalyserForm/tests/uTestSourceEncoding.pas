@@ -60,6 +60,11 @@ type
     [Test] procedure Detect_Precedence_NulBeatsE1;
     [Test] procedure Detect_BidiInUtf8Bom_S1_NoEncodingFinding;
     [Test] procedure Detect_NonPascalExt_Skipped;
+    // ---- E5 Ausnahme: Legacy-DOS-EOF-Marker (Real-World-Audit 2026-07-31) --
+    [Test] procedure Detect_LegacyDosEofMarker_NoFinding;
+    [Test] procedure Detect_LegacyDosEofMarker_TrailingCrLf_NoFinding;
+    [Test] procedure Detect_SubByteMidFile_StillE5;
+    [Test] procedure Detect_TwoSubBytes_StillE5;
     // ---- E1 Kommentar/String-Awareness (Confidence-Tiering) ---------------
     [Test] procedure Outside_StringLiteral_True;
     [Test] procedure Outside_Identifier_True;
@@ -437,6 +442,56 @@ begin
   // Nicht-Pascal-Endung (.txt) -> Detektor ueberspringt, selbst mit Bidi.
   F := DetectBytes(Cat(Ascii('a'), TBytes.Create($E2, $80, $AE)), '.txt');
   try Assert.AreEqual<Integer>(0, F.Count, '.txt wird nicht gescannt');
+  finally F.Free; end;
+end;
+
+{ ---- E5 Ausnahme: Legacy-DOS-EOF-Marker (Real-World-Audit 2026-07-31) ----- }
+
+procedure TTestSourceEncoding.Detect_LegacyDosEofMarker_NoFinding;
+// FP-Fix 2026-07-31 (cnwizards PascalScript uPSC_std.pas): ein einzelnes 0x1A
+// (SUB / Ctrl-Z) als letztes Byte einer sonst sauberen Textdatei ist der
+// historische DOS-EOF-Marker, keine Korruption. Ohne das Gate meldet der
+// Detektor hier E5.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := DetectBytes(Cat(Ascii('unit t; end.'#13#10), TBytes.Create($1A)));
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkSourceControlChar),
+      'einzelnes 0x1A am Dateiende ist der DOS-EOF-Marker');
+    Assert.AreEqual<Integer>(0, F.Count,
+      'Gruppe A faellt komplett aus - kein Ersatz-Fund (Monotonie)');
+  finally F.Free; end;
+end;
+
+procedure TTestSourceEncoding.Detect_LegacyDosEofMarker_TrailingCrLf_NoFinding;
+// Variante: hinter dem Marker steht noch ein CRLF (haeufig) - weiterhin
+// toleriert, weil nur Whitespace folgt.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := DetectBytes(Cat(Ascii('unit t; end.'#13#10),
+                       Cat(TBytes.Create($1A), Ascii(#13#10))));
+  try Assert.AreEqual<Integer>(0, CountKind(F, fkSourceControlChar));
+  finally F.Free; end;
+end;
+
+procedure TTestSourceEncoding.Detect_SubByteMidFile_StillE5;
+// TP-Gegenprobe: 0x1A MITTEN in der Datei (danach noch echter Text) ist kein
+// EOF-Marker - der Fund bleibt.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := DetectBytes(Cat(Ascii('unit'), Cat(TBytes.Create($1A), Ascii(' t; end.'))));
+  try Assert.AreEqual<Integer>(1, CountKind(F, fkSourceControlChar),
+    '0x1A mitten im Text bleibt ein Kontrollbyte-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestSourceEncoding.Detect_TwoSubBytes_StillE5;
+// TP-Gegenprobe: zwei 0x1A -> kein einzelner EOF-Marker mehr, Fund bleibt.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := DetectBytes(Cat(Ascii('unit t; end.'), TBytes.Create($1A, $1A)));
+  try Assert.AreEqual<Integer>(1, CountKind(F, fkSourceControlChar),
+    'zwei SUB-Bytes sind kein Legacy-EOF-Marker');
   finally F.Free; end;
 end;
 

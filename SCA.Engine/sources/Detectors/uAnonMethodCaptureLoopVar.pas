@@ -19,8 +19,9 @@ unit uAnonMethodCaptureLoopVar;
 //   * Pro Knoten Name/TypeRef scannen:
 //       - `\bprocedure\b` (anonymous-method Start-Keyword, das in der
 //         Code-Expression auftaucht z.B. `(procedure begin ... end)`)
-//       - PLUS `\b<LoopVar>\b` (Loop-Var-Referenz im selben Knoten-
-//         Text).
+//       - PLUS `\b<LoopVar>\b` (Loop-Var-Referenz im Knoten-Text AB dem
+//         anonymous-method-Token - alles davor ist Empfaenger/Vorspann
+//         des umgebenden Calls, keine Capture; Gate 2026-07-31).
 //   * Wenn beide -> Finding.
 //
 // FP-Tradeoff:
@@ -156,11 +157,26 @@ var
   end;
 
   procedure CheckNode(N: TAstNode; const Expr: string);
+  var
+    AnonM : TMatch;
+    Tail  : string;
   begin
     if Expr = '' then Exit;
     if Reported.ContainsKey(N.Line) then Exit;
-    if not TRegEx.IsMatch(Expr, ANON_RE, [roIgnoreCase]) then Exit;
-    if not VarRE.IsMatch(Expr) then Exit;
+    AnonM := TRegEx.Match(Expr, ANON_RE, [roIgnoreCase]);
+    if not AnonM.Success then Exit;
+    // FP-Gate (Real-World-Audit 2026-07-31, FP-Klasse 'loop-var-als-call-
+    // receiver-ausserhalb-des-closure-bodys'): die Loop-Var-Referenz muss
+    // HINTER dem einleitenden procedure/function-Token des anonymen Methoden-
+    // Literals stehen. Der Empfaenger-Ausdruck und die Geschwister-Argumente
+    // des umgebenden Calls (`LNode.Enumerate(ANodeType, function(...) ...)`)
+    // stehen lexikalisch DAVOR, werden sofort ausgewertet und sind damit
+    // keine Capture. Es wird bewusst ab dem ERSTEN Anon-Token gesucht (groesst-
+    // moeglicher Rest-Text) - das haelt alle bisherigen TPs (Loop-Var im
+    // Closure-Rumpf) und entfernt nur die Vorspann-Treffer. Monoton: der
+    // Suchbereich wird ausschliesslich verkleinert.
+    Tail := Copy(Expr, AnonM.Index, MaxInt);
+    if not VarRE.IsMatch(Tail) then Exit;
     // Synchron ausgefuehrte Closure -> kein Deferred-Capture-Bug.
     if HasSyncMarker(Expr) then Exit;
     Reported.AddOrSetValue(N.Line, True);

@@ -37,6 +37,13 @@ unit uVirtualCallInCtor;
 //   * Self.MyVirtual: Treffer (so wie ohne Self.).
 //   * MyVirtual(args): Treffer.
 //   * Andere Objekt-Calls (FFoo.DoSomething): kein Treffer.
+//   * 'inherited <Event> := <Handler>;': der ZUGEWIESENE Handler ist kein
+//     Treffer (2026-07-31, Event-Zuweisung ist keine Call-Kante - siehe
+//     IsInheritedEventAssignPhantom). Jeder ANDERE Aufruf auf derselben
+//     Zeile bleibt ein Treffer.
+//   * 'inherited <Wert-Property> := <parameterlose Funktion>;': das IST ein
+//     Aufruf und bleibt ein Treffer (2026-07-31 Nachschaerfung, JvCombos.pas:672
+//     'inherited ItemHeight := MinItemHeight;').
 
 interface
 
@@ -56,8 +63,340 @@ implementation
 // noinspection-file ConcatToFormat, ConsecutiveSection, CyclomaticComplexity, GroupedDeclaration, LongMethod, NestedTry, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  System.Classes,
+  uFileTextCache;
+
 const
   EMIT_SEVERITY = lsError;
+
+// ---------------------------------------------------------------------------
+// FP-Gate (2026-07-31, 30%-Real-World-Audit sca-rw-after119)
+// FP-Klasse: Event-Handler-ZUWEISUNG wird als Aufruf gewertet.
+// Belege: jvcl/tests/p3/source/JvPageListTreeView.pas:1614
+//         ('inherited OnGetSelectedIndex := DoGetSelectedIndex;') und
+//         jvcl/jvcl/run/JvThread.pas:409 ('inherited OnShow := ReplaceFormShow;').
+//
+// Mechanismus (an uParser2 verifiziert): fuer 'inherited <Ident> := <Ident>;'
+// laeuft ParseStatement in den tkKwInherited-Zweig, ParsePrimary bricht am
+// ':=' ab und legt nkInherited('OnShow') an. Das uebrig gebliebene ':=' faellt
+// in den else-Zweig (Next; Eat(tkSemicolon), kein Knoten), und der RHS-
+// Bezeichner wird danach als eigenstaendige Anweisung geparst -> Phantom-
+// nkCall('ReplaceFormShow'). Der Reachability-Walk haelt dieses Phantom fuer
+// einen Aufruf aus dem Ctor; tatsaechlich ist es eine Methodenzeiger-
+// Zuweisung, der Handler laeuft erst beim Event-Feuern nach der Konstruktion.
+//
+// Gate: Quellzeile des nkCall auf das Muster '^inherited <Ident> := <RhsId>'
+// pruefen (Strings/Kommentare vorher entfernt). Trifft es zu, wird GENAU der
+// Knoten verworfen, dessen Name dem zugewiesenen RHS-Bezeichner entspricht -
+// alle anderen nkCall derselben Zeile bleiben Treffer.
+//
+// Praezisierung 2026-07-31 (Pre-Build-Review, Fund uVirtualCallInCtor.pas:426
+// "Zeilen-basiertes Gate stellt JEDEN Aufruf auf einer 'inherited <Ident> :='-
+// Zeile still"): das erste Gate war rein zeilenbasiert und verwarf auf einer
+// Treffer-Zeile pauschal alles. Damit gingen belegte TPs verloren:
+//   'inherited Value := ComputeIt(Self);'   (echter Aufruf MIT Klammern)
+//   'inherited OnShow := Foo; Init;'        (nachgestellter echter Aufruf)
+// Jetzt gilt: nur ein RHS OHNE Klammern ist ein Methodenzeiger (= keine
+// Call-Kante); sobald der RHS eine Argumentliste hat, ist es ein echter
+// Aufruf und die Zeile wird gar nicht erst in den Cache aufgenommen.
+//
+// BEWUSST eng (Praezision vor Masse - 626 Error-Funde mit nur 8% FP, die TPs
+// muessen alle bleiben):
+//   * 'inherited Create; Init;' enthaelt kein ':=' -> Treffer bleibt.
+//   * mehrfach-Zuweisung auf einer Zeile ('inherited A := X; inherited B := Y;')
+//     nimmt nur den ERSTEN RHS auf; der zweite Handler bleibt ein Fund
+//     (bewusster Rest-FP statt TP-Risiko).
+// Lazy: die Datei wird erst gelesen, wenn ein Fund anstuende.
+//
+// ===========================================================================
+// NACHSCHAERFUNG 2026-07-31 (Drop-Sampling des Gates after119->after120:
+// 3 TP-VERLUSTE bei nur 8 Drops = 37,5 % Fehlerquote des Gates)
+//
+// Belegter TP-Verlust (drei byte-gleiche Kopien):
+//   jvcl/tests/RxLib/Source/JvCombos.pas:672
+//   jvcl/tests/archive/jvcl/Archive/JvCombos.pas:672
+//   jvcl/tests/restructured/Archive/JvCombos.pas:672
+//     Z. 59  function MinItemHeight: Integer; virtual;    // TJvOwnerDrawComboBox
+//     Z.196  function MinItemHeight: Integer; override;   // TJvxFontComboBox
+//     Z.665  constructor TJvxFontComboBox.Create(AOwner: TComponent);
+//     Z.672    inherited ItemHeight := MinItemHeight;     // <-- echter Virtual-Call
+//
+// Die urspruengliche Fassung akzeptierte JEDEN blanken RHS-Bezeichner als
+// Methodenzeiger; einzige Rueckfalltuer war 'Pos(''('') > 0'. Eine PARAMETERLOSE
+// virtuelle Funktion auf der RHS hat aber exakt dieselbe lexikalische Form
+// wie eine Methodenreferenz - der Klammer-Test kann sie nicht trennen. Die
+// Entscheidung wird deshalb nicht mehr lexikalisch, sondern ueber die
+// DEKLARATION getroffen. Das Gate ist jetzt ein UND aus drei Huerden:
+//
+//   H0 (unveraendert) Zeile matcht 'inherited <Lhs> := <RhsIdent>' und der
+//                     Knotenname ist GENAU dieser RhsIdent (ohne Klammern).
+//   H1 ZIEL-KRITERIUM Lhs sieht aus wie ein Event: Name 'On' + Grossbuchstabe
+//                     ('OnShow', 'OnGetImageIndex'). Ein Wert-Property wie
+//                     'ItemHeight' oder 'Caption' faellt raus -> Treffer bleibt.
+//   H2 RHS-KRITERIUM  Der RHS-Bezeichner ist in dieser Klasse NICHT als
+//                     parameterlose FUNKTION deklariert. Eine parameterlose
+//                     Funktion liefert einen WERT; sie kann per Konstruktion
+//                     kein Handler eines Event-Typs sein (jeder gaengige
+//                     Event-Typ ist eine Prozedur-Signatur, TNotifyEvent
+//                     'procedure(Sender: TObject) of object'). RHS-Shape kommt
+//                     aus MethodByName/VirtualByName (TypeRef 'function...'
+//                     + Zahl der nkParam-Kinder).
+//
+// Beide Huerden ziehen den Gate ENGER (weniger Drops). Kontrollrechnung am
+// Korpus - die 8 Drops des Gates:
+//   JvCombos.pas:672 (x3)  'inherited ItemHeight := MinItemHeight'
+//                          H1 nein (ItemHeight), H2 nein (function, 0 Params)
+//                          -> Gate AUS, TP kehrt zurueck.
+//   jvcl/run/JvPageListTreeView.pas:726/727
+//   jvcl/tests/p3/source/JvPageListTreeView.pas:1613/1614
+//                          'inherited OnGetImageIndex := DoGetImageIndex'
+//                          H1 ja, H2 ja (procedure(Sender; Node), 2 Params)
+//                          -> Gate AN, FP bleibt gedroppt.
+//   jvcl/run/JvThread.pas:409
+//                          'inherited OnShow := ReplaceFormShow'
+//                          H1 ja, H2 ja (procedure(Sender), 1 Param)
+//                          -> Gate AN, FP bleibt gedroppt.
+//
+// BEWUSST NICHT uebernommen: 'RHS ist eine bekannte VIRTUELLE Methode =>
+// echter Aufruf'. Am Korpus haette das dieselben 8 Drops getroffen (keiner
+// der fuenf FP-Handler ist virtual), es ist aber semantisch verkehrt herum:
+// 'inherited OnShow := Foo;' mit 'procedure Foo(Sender: TObject); virtual;'
+// ist weiterhin eine ZUWEISUNG, Foo laeuft nicht im Ctor. Zwei bestehende
+// Regressionstests pinnen genau das (InheritedEventAssign_NoFinding,
+// InheritedEventAssign_TrailingCall_StillReported). Virtualitaet sagt nichts
+// darueber aus, ob ein RHS Zeiger oder Aufruf ist - die SIGNATURFORM (H2) tut
+// es, und sie trennt den belegten TP sauber ab.
+// ===========================================================================
+// ---------------------------------------------------------------------------
+
+type
+  // Ergebnis der Zeilen-Analyse von 'inherited <Lhs> := <RhsIdent>'.
+  TInhAssignInfo = record
+    Lhs    : string;   // Zuweisungsziel in ORIGINALSCHREIBWEISE ('OnShow')
+    RhsLow : string;   // zugewiesener Bezeichner, lowercase ('replaceformshow')
+  end;
+
+function IsIdentChar(C: Char): Boolean;
+begin
+  Result := CharInSet(C, ['a'..'z', 'A'..'Z', '0'..'9', '_']);
+end;
+
+// Entfernt String-Literale und Kommentare aus EINER Quellzeile; InBrace /
+// InParenStar tragen den Block-Kommentar-Zustand ueber Zeilengrenzen.
+function StripCodeLine(const Line: string; var InBrace, InParenStar: Boolean): string;
+var
+  i, N  : Integer;
+  InStr : Boolean;
+begin
+  Result := '';
+  InStr  := False;
+  N      := Length(Line);
+  i      := 1;
+  while i <= N do
+  begin
+    if InBrace then
+    begin
+      if Line[i] = '}' then InBrace := False;
+      Inc(i);
+      Continue;
+    end;
+    if InParenStar then
+    begin
+      if (Line[i] = '*') and (i < N) and (Line[i + 1] = ')') then
+      begin
+        InParenStar := False;
+        Inc(i, 2);
+        Continue;
+      end;
+      Inc(i);
+      Continue;
+    end;
+    if InStr then
+    begin
+      if Line[i] = '''' then InStr := False;
+      Inc(i);
+      Continue;
+    end;
+    if Line[i] = '''' then begin InStr := True; Inc(i); Continue; end;
+    if Line[i] = '{'  then begin InBrace := True; Inc(i); Continue; end;
+    if (Line[i] = '(') and (i < N) and (Line[i + 1] = '*') then
+    begin
+      InParenStar := True;
+      Inc(i, 2);
+      Continue;
+    end;
+    if (Line[i] = '/') and (i < N) and (Line[i + 1] = '/') then Break;
+    Result := Result + Line[i];
+    Inc(i);
+  end;
+end;
+
+// True fuer 'inherited <Ident> := <RhsIdent>' (Code bereits gestrippt).
+// AInfo.RhsLow liefert den zugewiesenen RHS-Bezeichner (lowercase) - aber NUR
+// wenn der RHS bis zum ersten ';' ein reiner, ggf. qualifizierter Bezeichner
+// OHNE Klammern ist ('ReplaceFormShow', 'Self.ReplaceFormShow'). Alles andere
+// ('ComputeIt(Self)', zusammengesetzte Ausdruecke, RHS auf der Folgezeile) ist
+// entweder ein echter Aufruf oder nicht sicher zuzuordnen -> Result=False und
+// die Zeile wird nicht gegatet (Review 2026-07-31).
+// AInfo.Lhs liefert das Zuweisungsziel in ORIGINALSCHREIBWEISE - Huerde H1
+// braucht die Gross-/Kleinschreibung ('OnShow' vs. 'Only'), deshalb wird
+// parallel zur lowercase-Arbeitskopie der Originaltext mitgefuehrt (LowerCase
+// ist fuer UTF-16 laengentreu, die Indizes gelten in beiden Strings).
+function LineIsInheritedPropertyAssign(const Code: string;
+  out AInfo: TInhAssignInfo): Boolean;
+const
+  INH = 'inherited';
+var
+  Orig     : string;
+  S        : string;
+  i, N     : Integer;
+  LhsStart : Integer;
+  Rhs      : string;
+begin
+  Result       := False;
+  AInfo.Lhs    := '';
+  AInfo.RhsLow := '';
+  Orig := TrimLeft(Code);
+  S    := LowerCase(Orig);
+  if not S.StartsWith(INH) then Exit;
+  N := Length(S);
+  i := Length(INH) + 1;                       // erstes Zeichen NACH 'inherited'
+  if (i > N) or IsIdentChar(S[i]) then Exit;  // 'inheritedfoo := ...'
+  while (i <= N) and CharInSet(S[i], [' ', #9]) do Inc(i);
+  if (i > N) or not CharInSet(S[i], ['a'..'z', '_']) then Exit;
+  LhsStart := i;
+  while (i <= N) and IsIdentChar(S[i]) do Inc(i);
+  AInfo.Lhs := Copy(Orig, LhsStart, i - LhsStart);
+  while (i <= N) and CharInSet(S[i], [' ', #9]) do Inc(i);
+  if not ((i < N) and (S[i] = ':') and (S[i + 1] = '=')) then Exit;
+
+  // RHS = Text hinter ':=' bis zum ersten ';' (bzw. Zeilenende).
+  Inc(i, 2);
+  Rhs := '';
+  while (i <= N) and (S[i] <> ';') do
+  begin
+    Rhs := Rhs + S[i];
+    Inc(i);
+  end;
+  Rhs := Trim(Rhs);
+  if Rhs = '' then Exit;
+  if not CharInSet(Rhs[1], ['a'..'z', '_']) then Exit;   // Literal/Ausdruck
+  for i := 1 to Length(Rhs) do
+    if not (IsIdentChar(Rhs[i]) or (Rhs[i] = '.')) then
+      Exit;                                              // Klammern/Operatoren
+  AInfo.RhsLow := Rhs;
+  Result       := True;
+end;
+
+// Huerde H1 - sieht das Zuweisungsziel wie ein Event aus?
+// Der Typ des Ziels ist hier grundsaetzlich NICHT verfuegbar: 'inherited X'
+// adressiert eine Property der VORFAHREN-Klasse, die praktisch immer in einer
+// anderen Unit (VCL/FMX) deklariert ist. Bleibt die Delphi-Namenskonvention:
+// Events heissen 'On' + Grossbuchstabe. 'ItemHeight'/'Caption' erfuellen das
+// nicht, 'Only...' wegen des Kleinbuchstabens ebenfalls nicht - beides ist die
+// gewollte Richtung (kein Event erkannt => Gate aus => Fund bleibt).
+function TargetLooksLikeEvent(const ALhs: string): Boolean;
+begin
+  Result := (Length(ALhs) >= 3)
+        and (ALhs[1] = 'O') and (ALhs[2] = 'n')
+        and CharInSet(ALhs[3], ['A'..'Z', '_']);
+end;
+
+function DirectParamCount(AMethod: TAstNode): Integer;
+// nkParam-Kinder haengen direkt unter nkMethod (uParser2.ParseMethodSignature).
+// Bewusst KEIN FindAll - das wuerde in Bodies/nested routines absteigen.
+var
+  i : Integer;
+begin
+  Result := 0;
+  if AMethod = nil then Exit;
+  for i := 0 to AMethod.Children.Count - 1 do
+    if AMethod.Children[i].Kind = nkParam then Inc(Result);
+end;
+
+// Huerde H2 - ist der RHS-Bezeichner als parameterlose FUNKTION deklariert?
+// Dann liefert er einen Wert und kann kein Event-Handler sein; die Zeile ist
+// ein echter Aufruf ('inherited ItemHeight := MinItemHeight').
+// Unbekannter RHS -> False (nicht als Aufruf belegbar, Gate bleibt zustaendig).
+// In der Praxis unerreichbar: damit ueberhaupt ein Fund anstuende, muss der
+// Name in VirtualByName (Direkt-Pfad) oder MethodByName (Helper-Pfad) stehen.
+function RhsIsValueProducingCall(const ARhsLow: string;
+  AMethodByName, AVirtualByName: TDictionary<string, TAstNode>): Boolean;
+var
+  Key : string;
+  M   : TAstNode;
+begin
+  Result := False;
+  Key := ARhsLow;
+  if Key.StartsWith('self.') then Key := Copy(Key, 6, MaxInt);
+  if Pos('.', Key) > 0 then Exit;       // Fremdobjekt-Qualifizierer: keine Aussage
+  M := nil;
+  if AMethodByName <> nil then AMethodByName.TryGetValue(Key, M);
+  if (M = nil) and (AVirtualByName <> nil) then AVirtualByName.TryGetValue(Key, M);
+  if M = nil then Exit;
+  // TypeRef-Format: 'kind[:ret][;dir1;dir2]' (uParser2.ParseMethodDirectives).
+  if not LowerCase(Trim(M.TypeRef)).StartsWith('function') then Exit;
+  Result := DirectParamCount(M) = 0;
+end;
+
+// Zeilen-Map der Datei: Zeilennummer -> (Zuweisungsziel, zugewiesener
+// RHS-Bezeichner) des 'inherited <Lhs> := <RhsIdent>'-Musters. Das Ziel wird
+// mitgefuehrt, weil Huerde H1 es braucht. ACache wird beim ersten Aufruf
+// gefuellt (nil = noch nicht gelesen) und vom Aufrufer freigegeben.
+// AContext steht hier nicht zur Verfuegung (SCA048 ist als 3-Parameter-Detektor
+// registriert) -> Prozess-Cache bzw. Direkt-Load; ist die Datei nicht lesbar
+// (In-Memory-Pfad), bleibt die Map leer und der Gate ist inert (fail-open).
+//
+// True nur, wenn ACallName GENAU der zugewiesene RHS-Bezeichner ist. Damit
+// bleibt ein echter Aufruf auf derselben Zeile ('inherited OnShow := Foo; Init;'
+// oder 'inherited Value := ComputeIt(Self);') ein Treffer (Review 2026-07-31).
+// Zusaetzlich muessen H1 (Ziel sieht aus wie ein Event) und H2 (RHS ist keine
+// parameterlose Funktion) gelten - siehe Nachschaerfungs-Block oben.
+function IsInheritedEventAssignPhantom(const FileName: string; LineNo: Integer;
+  const ACallName: string;
+  AMethodByName, AVirtualByName: TDictionary<string, TAstNode>;
+  var ACache: TDictionary<Integer, TInhAssignInfo>): Boolean;
+var
+  Lines            : TStringList;
+  Cached           : Boolean;
+  i                : Integer;
+  InBrace, InParen : Boolean;
+  Info             : TInhAssignInfo;
+  NameLow          : string;
+begin
+  Result := False;
+  if ACache = nil then
+  begin
+    ACache := TDictionary<Integer, TInhAssignInfo>.Create;
+    Lines := AcquireLines(FileName, Cached, nil);
+    if Lines <> nil then
+    try
+      InBrace := False;
+      InParen := False;
+      for i := 0 to Lines.Count - 1 do
+        if LineIsInheritedPropertyAssign(
+             StripCodeLine(Lines[i], InBrace, InParen), Info) then
+          // Genau ein Eintrag je Zeile: geprueft wird nur das zeilenfuehrende
+          // 'inherited'; eine zweite Zuweisung derselben Zeile bleibt ungegatet.
+          ACache.AddOrSetValue(i + 1, Info);
+    finally
+      ReleaseLines(Lines, Cached);
+    end;
+  end;
+  if not ACache.TryGetValue(LineNo, Info) then Exit;
+  NameLow := LowerCase(Trim(ACallName));
+  // Argumentliste im Knotennamen = echter Aufruf, nie die Phantom-Kante.
+  if Pos('(', NameLow) > 0 then Exit;
+  if NameLow <> Info.RhsLow then Exit;
+  // H1: nur ein Event-artiges Ziel darf ueberhaupt gegatet werden.
+  // 'inherited ItemHeight := MinItemHeight' (JvCombos.pas:672) faellt hier raus.
+  if not TargetLooksLikeEvent(Info.Lhs) then Exit;
+  // H2: eine parameterlose Funktion auf der RHS ist ein Wert-Aufruf, kein
+  // Methodenzeiger - doppelte Absicherung desselben TP-Musters.
+  if RhsIsValueProducingCall(Info.RhsLow, AMethodByName, AVirtualByName) then Exit;
+  Result := True;
+end;
 
 function IsConstructor(MethodNode: TAstNode): Boolean;
 begin
@@ -178,7 +517,10 @@ end;
 class procedure TVirtualCallInCtorDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
-  Classes         : TList<TAstNode>;
+  ClassList       : TList<TAstNode>;   // 2026-07-31 umbenannt (war 'Classes') -
+                                        // die Unit zieht jetzt System.Classes,
+                                        // ein gleichnamiger Local verdeckte den
+                                        // Unit-Namensraum.
   ClassNode       : TAstNode;
   VirtualByName   : TDictionary<string, TAstNode>;
   MethodByName    : TDictionary<string, TAstNode>;
@@ -192,10 +534,14 @@ var
   RepKey, Msg     : string;
   ClassImplCtors  : TList<TAstNode>;
   Visited, Chain  : TList<string>;
+  // FP-Gate 2026-07-31 (Event-Zuweisung): Zeile -> Zuweisungsziel + zugewiesener
+  // RHS-Bezeichner, lazy befuellt.
+  InhAssignLines  : TDictionary<Integer, TInhAssignInfo>;
 begin
-  Classes := UnitNode.FindAll(nkClass);
+  InhAssignLines := nil;
+  ClassList := UnitNode.FindAll(nkClass);
   try
-    for ClassNode in Classes do
+    for ClassNode in ClassList do
     begin
       VirtualByName := TDictionary<string, TAstNode>.Create;
       MethodByName  := TDictionary<string, TAstNode>.Create;
@@ -275,6 +621,15 @@ begin
                     // virtueller Konstruktor-Aufruf konstruiert VOLLSTAENDIG, kein
                     // half-init-Self. Nur virtuelle PROZEDUREN sind der Anti-Pattern.
                     if IsConstructor(VMethod) then Continue;
+                    // FP-Gate (2026-07-31): Phantom-nkCall aus
+                    // 'inherited <Event> := <Handler>;' - keine Call-Kante.
+                    // Nur der zugewiesene Handler selbst wird verworfen
+                    // (Call.Name, nicht Call.Line allein - Review 2026-07-31),
+                    // und nur wenn Ziel wie ein Event aussieht UND der RHS
+                    // keine parameterlose Funktion ist (Nachschaerfung).
+                    if IsInheritedEventAssignPhantom(FileName, Call.Line,
+                         Call.Name, MethodByName, VirtualByName,
+                         InhAssignLines) then Continue;
                     RepKey := Ctor.Name + '|' + LowName + '|' +
                               IntToStr(Call.Line);
                     if AlreadyReported.IndexOf(RepKey) >= 0 then Continue;
@@ -298,6 +653,17 @@ begin
                       VirtualByName, Visited, Chain, 1);
                     if not Assigned(VMethod) then Continue;
                     if IsConstructor(VMethod) then Continue;  // delegating-ctor, kein half-init
+                    // FP-Gate (2026-07-31): Phantom-nkCall aus
+                    // 'inherited <Event> := <Handler>;' - der Handler laeuft
+                    // erst beim Event-Feuern, nicht im Ctor (JvThread.pas:409:
+                    // 'inherited OnShow := ReplaceFormShow' -> Helper-Kette
+                    // ReplaceFormShow -> CreateFormControls). Nur der
+                    // zugewiesene Handler selbst wird verworfen (Review
+                    // 2026-07-31: Call.Name statt Call.Line allein), und nur
+                    // unter H1+H2 (Nachschaerfung 2026-07-31).
+                    if IsInheritedEventAssignPhantom(FileName, Call.Line,
+                         Call.Name, MethodByName, VirtualByName,
+                         InhAssignLines) then Continue;
 
                     RepKey := Ctor.Name + '|' + LowerCase(VMethod.Name) + '|' +
                               IntToStr(Call.Line);
@@ -330,7 +696,8 @@ begin
       end;
     end;
   finally
-    Classes.Free;
+    ClassList.Free;
+    InhAssignLines.Free;   // nil-sicher (TObject.Free prueft Self)
   end;
 end;
 

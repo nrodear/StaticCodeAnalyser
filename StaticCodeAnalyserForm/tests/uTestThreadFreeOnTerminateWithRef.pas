@@ -14,6 +14,9 @@ type
     [Test] procedure FreeOnTerminateFalse_NotReported;
     [Test] procedure ConfigBeforeStart_NotReported;
     [Test] procedure ResumeIsStart_NotReported;
+    // --- Real-World-Audit 2026-07-31: Branch-Exklusivitaet ---
+    [Test] procedure ThenElseExclusiveBranches_NotReported;
+    [Test] procedure SameThenBranchWithElse_StillReported;
   end;
 
 implementation
@@ -124,6 +127,62 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkThreadFreeOnTerminateWithRef),
       'FreeOnTerminate := False ist sicheres Manual-Management');
+  finally F.Free; end;
+end;
+
+procedure TTestThreadFreeOnTerminateWithRef.ThenElseExclusiveBranches_NotReported;
+// FP-Fix (Real-World-Audit 2026-07-31, Indy IdSchedulerOfThreadDefault /
+// IdSchedulerOfThreadPool): FreeOnTerminate := True steht im then-Zweig,
+// die geflaggten Zugriffe (WaitFor/Free) im else-Zweig DESSELBEN if - die
+// Pfade schliessen sich aus, es gibt keinen Zugriff nach dem Ownership-
+// Transfer. Ohne das Gate meldet der Detektor hier 2 Funde.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(T: TMyThread);'#13#10 +
+  'begin'#13#10 +
+  '  if IsCurrentThread(T) then'#13#10 +
+  '  begin'#13#10 +
+  '    T.FreeOnTerminate := True;'#13#10 +
+  '  end'#13#10 +
+  '  else'#13#10 +
+  '  begin'#13#10 +
+  '    T.Resume;'#13#10 +
+  '    T.WaitFor;'#13#10 +
+  '    T.Free;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkThreadFreeOnTerminateWithRef),
+      'then/else schliessen sich aus - kein Finding');
+  finally F.Free; end;
+end;
+
+procedure TTestThreadFreeOnTerminateWithRef.SameThenBranchWithElse_StillReported;
+// TP-Gegenprobe zum Branch-Exklusivitaets-Gate: FreeOnTerminate UND Zugriff
+// liegen im GLEICHEN then-Zweig (das if hat trotzdem einen else-Zweig) -
+// der Zugriff nach dem Start bleibt gefaehrlich und muss gemeldet werden.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(T: TMyThread; Flag: Boolean);'#13#10 +
+  'begin'#13#10 +
+  '  if Flag then'#13#10 +
+  '  begin'#13#10 +
+  '    T.FreeOnTerminate := True;'#13#10 +
+  '    T.Start;'#13#10 +
+  '    T.WaitFor;'#13#10 +
+  '  end'#13#10 +
+  '  else'#13#10 +
+  '    DoSomethingElse;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkThreadFreeOnTerminateWithRef) >= 1,
+      'Zugriff im SELBEN Zweig wie FreeOnTerminate bleibt ein Fund');
   finally F.Free; end;
 end;
 

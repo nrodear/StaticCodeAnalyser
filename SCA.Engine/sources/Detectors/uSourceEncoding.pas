@@ -12,7 +12,9 @@ unit uSourceEncoding;
 //   E3 fkSourceAnsiNonAscii - ANSI (kein BOM, kein gueltiges UTF-8) + Nicht-ASCII
 //                             -> codepage-abhaengig. Warning/fcMedium.
 //   E4 fkSourceUtf16        - UTF-16-Quelltext (kompiliert, ungewoehnlich). Hint.
-//   E5 fkSourceControlChar  - NUL / verbotenes Steuerzeichen. Error.
+//   E5 fkSourceControlChar  - NUL / verbotenes Steuerzeichen. Error. Ausnahme
+//                             (2026-07-31): ein einzelnes 0x1A als letztes
+//                             Nicht-Whitespace-Byte = Legacy-DOS-EOF-Marker.
 //   E7 fkSourceUtf32        - UTF-32/UCS-4 -> Compiler-Fehler F2438. Error.
 //   S1 fkSourceBidiOverride - bidirektionales Override-Steuerzeichen (Trojan
 //                             Source, CVE-2021-42574 / CWE-1007). Error.
@@ -65,7 +67,55 @@ implementation
 // noinspection-file MultipleExit, TooLongLine, UnsortedUses, UnusedParameter
 
 uses
-  System.Classes, System.Character, uFileTextCache, uLexer;
+  System.Classes, System.Character, System.IOUtils, uFileTextCache, uLexer;
+
+function IsLegacyDosEofOnly(const FileName: string): Boolean;
+// FP-Gate (Real-World-Audit 2026-07-31, FP-Klasse 'legacy-dos-eof-marker'):
+// True wenn das EINZIGE Kontrollbyte der Datei ein 0x1A (SUB / Ctrl-Z) ist und
+// danach nur noch Whitespace (CR/LF/Tab/FF/Space) folgt. Das ist der historische
+// DOS/Turbo-Pascal-EOF-Marker am Dateiende - kein Korruptionsindiz, die Datei
+// kompiliert normal (Vorbild-FP: cnwizards PascalScript uPSC_std.pas).
+// Eigener Roh-Byte-Read statt Cache-Feld: TFileEncodingInfo (geteilte
+// Infrastruktur) traegt nur das Ja/Nein-Verdikt HasNulCtrl. Der Read kostet
+// nichts im Normalfall - er laeuft NUR wenn ueberhaupt ein Kontrollbyte
+// gefunden wurde (im Real-World-Korpus eine Handvoll Dateien).
+// BOM-Bytes brauchen keine Sonderbehandlung: sie sind alle >= 0x80 und damit
+// nie Kontrollbytes. Die Kontrollbyte-Definition spiegelt exakt
+// ComputeFileEncodingInfo (0x00 oder < 0x20 ausser Tab/LF/FF/CR).
+var
+  Bytes  : TBytes;
+  i, Len : Integer;
+  b      : Byte;
+  Ctrl   : Integer;
+  EofPos : Integer;
+begin
+  Result := False;
+  try
+    if not TFile.Exists(FileName) then Exit;
+    Bytes := TFile.ReadAllBytes(FileName);
+  except
+    Exit;   // unlesbar -> kein Gate, bisheriges Verhalten
+  end;
+  Len    := Length(Bytes);
+  Ctrl   := 0;
+  EofPos := -1;
+  for i := 0 to Len - 1 do
+  begin
+    b := Bytes[i];
+    if (b = 0) or ((b < $20) and (b <> 9) and (b <> 10) and (b <> 12) and (b <> 13)) then
+    begin
+      if b <> $1A then Exit;      // anderes Kontrollbyte -> echter Fund
+      Inc(Ctrl);
+      if Ctrl > 1 then Exit;      // mehr als ein SUB -> kein EOF-Marker
+      EofPos := i;
+    end;
+  end;
+  if Ctrl <> 1 then Exit;
+  // Hinter dem Marker darf nur noch Whitespace stehen (typisch CRLF).
+  for i := EofPos + 1 to Len - 1 do
+    if not (Bytes[i] in [9, 10, 12, 13, 32]) then Exit;
+  Result := True;
+end;
 
 function HasSourceExt(const FileName: string): Boolean;
 var
@@ -240,10 +290,18 @@ begin
 
   // ---- Gruppe A (Encoding): genau EIN Fund, Praezedenz E5 > E2 > E1 > E3 --
   if Info.HasNulCtrl then
-    Results.Add(TLeakFinding.New(FileName, '', LineOr1(Info.FirstNulCtrlLine),
-      'NUL or control byte in source file - likely a binary file or a ' +
-      'mis-detected encoding (e.g. BOM-less UTF-16, where every other byte is 0x00).',
-      fkSourceControlChar))
+  begin
+    // FP-Gate 2026-07-31 (FP-Klasse 'legacy-dos-eof-marker'): ein einzelnes
+    // 0x1A als letztes Nicht-Whitespace-Byte ist der DOS-EOF-Marker, keine
+    // Korruption -> E5 entfaellt. Der GESAMTE Gruppe-A-Block faellt damit aus
+    // (kein Durchfallen auf E2/E1/E3): das Gate darf ausschliesslich Funde
+    // ENTFERNEN, nie einen anderen Fund neu erzeugen (Monotonie).
+    if not IsLegacyDosEofOnly(FileName) then
+      Results.Add(TLeakFinding.New(FileName, '', LineOr1(Info.FirstNulCtrlLine),
+        'NUL or control byte in source file - likely a binary file or a ' +
+        'mis-detected encoding (e.g. BOM-less UTF-16, where every other byte is 0x00).',
+        fkSourceControlChar));
+  end
   else if (Info.BomKind = sbkUtf8) and (not Info.StrictUtf8) then
     Results.Add(TLeakFinding.New(FileName, '', LineOr1(Info.FirstInvalidLine),
       'Invalid UTF-8 sequence under a UTF-8 BOM (overlong / surrogate / ' +

@@ -11,6 +11,23 @@ unit uMethodName;
 // falls qualifiziert (`TFoo.Bar`), wird der Teil hinter dem Punkt
 // betrachtet. Erstes Zeichen muss ein Grossbuchstabe sein.
 //
+// AUSNAHMEN (Hebel A, 30%-Audit 2026-07-31 - 75.604 Funde, 74 % FP im
+// Sample; groesster Einzelposten des Korpus). Gemeinsamer Nenner: der
+// Methodenname ist NICHT frei gewaehlt, sondern ein ABI-Schluessel.
+//   (1) `external`-Routinen - der Bezeichner IST das Link-Symbol der
+//       .obj/.dll (`procedure inflate_trees_bits; external;`).
+//   (2) `cdecl`-Methoden eines Typs - ObjC-Selektor bzw. Java-Methoden-
+//       name, ueber den die Bridge zur Laufzeit marshallt. Bewusst
+//       METHODEN-lokal: eine normale Delphi-Klasse mit EINEM C-Callback
+//       verliert dadurch nicht die Pruefung ihrer uebrigen Methoden.
+//   (3) Methoden eines FFI-Binding-TYPS (ObjC-/JNI-Import-Interface,
+//       TJavaLocal-/TOCLocal-Delegate). Noetig zusaetzlich zu (2), weil
+//       die IMPLEMENTIERUNG eines Bridge-Callbacks die cdecl-Direktive
+//       nicht wiederholt (`procedure TDelegate.onAdLoaded(...);`).
+//   (4) generierte COM-Typelib-Importe (`*_TLB.pas`).
+// Die Typ-Erkennung liegt in TDetectorUtils.CollectFfiBindingTypes; die
+// Kriterien-Auswahl (und was verworfen wurde) ist dort dokumentiert.
+//
 // Schweregrad: lsHint.
 
 interface
@@ -30,6 +47,10 @@ implementation
 
 // noinspection-file RedundantJump, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
+uses
+  System.Classes,      // TStringList (FFI-Typnamen-Set)
+  uDetectorUtils;      // Hebel A: FFI-Binding-/Typelib-Gates (2026-07-31)
 
 const
   EMIT_SEVERITY = lsHint;
@@ -65,6 +86,50 @@ begin
   end;
 end;
 
+function BuildMethodOwnerMap(UnitNode: TAstNode)
+  : TDictionary<TAstNode, string>;
+// Ordnet jeder in einem Typ-RUMPF deklarierten Methode den Namen ihres
+// Typs zu. Notwendig, weil der AST keinen Parent-Zeiger hat: eine
+// IMPLEMENTIERUNG traegt den Typ im qualifizierten Namen ('TFoo.bar'),
+// eine DEKLARATION im Klassen-/Interface-Rumpf nicht.
+//
+// Verschachtelte Typen haengen als GESCHWISTER in der Typsektion (siehe
+// ParseNestedTypeDecl in uParser2), nicht unter dem aeusseren Knoten -
+// der Subtree-Walk je Typknoten ordnet also nichts doppelt zu.
+// Caller besitzt das Ergebnis (Free).
+const
+  // Interface-Typen fuehrt der Parser ebenfalls als nkClass; nkRecord
+  // deckt record/object mit Methoden ab.
+  OWNER_KINDS : array[0..1] of TNodeKind = (nkClass, nkRecord);
+var
+  Types : TList<TAstNode>;
+  Meths : TList<TAstNode>;
+  T, M  : TAstNode;
+  ki    : Integer;
+begin
+  Result := TDictionary<TAstNode, string>.Create;
+  if UnitNode = nil then Exit;
+  for ki := Low(OWNER_KINDS) to High(OWNER_KINDS) do
+  begin
+    Types := UnitNode.FindAll(OWNER_KINDS[ki]);
+    try
+      for T in Types do
+      begin
+        if T.Name = '' then Continue;
+        Meths := T.FindAll(nkMethod);
+        try
+          for M in Meths do
+            Result.AddOrSetValue(M, T.Name);
+        finally
+          Meths.Free;
+        end;
+      end;
+    finally
+      Types.Free;
+    end;
+  end;
+end;
+
 class procedure TMethodNameDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -73,8 +138,18 @@ var
   Name    : string;
   F       : TLeakFinding;
   Ch      : Char;
+  TypeRefLow : string;
+  OwnerName  : string;
+  // Hebel A - beide LAZY, erst ab dem ersten Kandidaten gebaut. Der
+  // Normalfall (Datei ohne kleingeschriebene Methode) zahlt nichts.
+  FfiTypes   : TStringList;
+  OwnerMap   : TDictionary<TAstNode, string>;
 begin
-  Methods := UnitNode.FindAll(nkMethod);
+  // Gate 4 (Hebel A): generierte Typelib-Importe komplett ausnehmen.
+  if TDetectorUtils.IsGeneratedTypelibFile(FileName) then Exit;
+  FfiTypes := nil;
+  OwnerMap := nil;
+  Methods  := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
     begin
@@ -90,6 +165,39 @@ begin
       // Event-Handler (Sender: TObject als 1. Param) -> per IDE-Designer
       // benannt (actSaveExecute, btnSaveClick, ...). Style-Regel passt nicht.
       if IsEventHandlerSignature(M) then Continue;
+
+      // --- Hebel A: ABI-gebundene Namen (2026-07-31) ------------------
+      // TypeRef traegt die Direktiven case-normalisiert als ';dir'-Kette
+      // (ParseMethodDirectives); dieselbe Lesart wie ';abstract' in
+      // uAbstractNotImpl oder ';override' in uInheritedMethodEmpty.
+      TypeRefLow := LowerCase(M.TypeRef);
+      // Gate 1: external -> der Bezeichner ist das Link-Symbol.
+      if Pos(';external', TypeRefLow) > 0 then Continue;
+
+      OwnerName := TDetectorUtils.OwnerTypeName(M.Name);
+      if OwnerName = '' then
+      begin
+        if OwnerMap = nil then
+          OwnerMap := BuildMethodOwnerMap(UnitNode);
+        if not OwnerMap.TryGetValue(M, OwnerName) then
+          OwnerName := '';
+      end;
+      if OwnerName <> '' then
+      begin
+        // Gate 2: cdecl an einer TYP-Methode = ObjC-Selektor / Java-
+        // Methodenname. Freie cdecl-Routinen bleiben BEWUSST gemeldet:
+        // deren Name waehlt der Autor (Lua-/SQLite-Callbacks u.ae.), und
+        // der Korpus zeigt dort echte 1:1-Ports mit frei waehlbarem
+        // Delphi-Namen (siehe Audit-Bewertung Alcinoe-Wrapper).
+        if Pos(';cdecl', TypeRefLow) > 0 then Continue;
+        // Gate 3: Methode eines FFI-Binding-Typs (traegt auch die
+        // Implementierungen, die cdecl nicht wiederholen).
+        if FfiTypes = nil then
+          FfiTypes := TDetectorUtils.CollectFfiBindingTypes(UnitNode);
+        if TDetectorUtils.IsFfiBindingTypeName(FfiTypes, OwnerName) then
+          Continue;
+      end;
+
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
       F.MethodName := M.Name;
@@ -101,6 +209,8 @@ begin
       Results.Add(F);
     end;
   finally
+    OwnerMap.Free;
+    FfiTypes.Free;
     Methods.Free;
   end;
 end;
