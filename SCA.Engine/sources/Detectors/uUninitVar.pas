@@ -146,9 +146,30 @@ const
   // read-without-write ist hier KEIN Bug (also kein FN beim Skippen).
   // FP-Klasse Real-World 2026-06-28: Alcinoe/CEF4 RTTI-Walks, 195 bare
   // TRttiContext-Decls im 25-Repo-Korpus = dominante SCA166-FP-Quelle.
-  NOINIT_RECORD_TYPES : array[0..0] of string = (
-    'trtticontext'
+  // FP-Gate 2026-07-31 (Real-World-Audit 30%, FP-Klasse 'cross-unit managed
+  // Typen'): TMarshaller (System.SysUtils) enthaelt ausschliesslich managed
+  // Felder und wird vom Compiler zero-initialisiert - das RTL-Idiom
+  //   'var M: TMarshaller; p := M.AsAnsi(S).ToPointer'
+  // ist bare-Verwendung ohne jede Zuweisung (horse ThirdParty.Posix.Syslog:90).
+  NOINIT_RECORD_TYPES : array[0..1] of string = (
+    'trtticontext',
+    'tmarshaller'
   );
+
+  // FP-Gate 2026-07-31 (FP-Klasse 'cross-unit managed Typen'): RTL-/Konventions-
+  // Namen, die IMMER ein compiler-initialisiertes (managed) Aggregat bezeichnen.
+  // EXAKT-Match auf dem nackten Typnamen - bewusst nicht als Praefix, sonst
+  // wuerde 'TBytesStream' (Klasse!) mit 'tbytes' matchen und ein echter
+  // uninit-Read einer Klassen-Referenz waere maskiert.
+  MANAGED_EXACT_TYPES : array[0..0] of string = (
+    'tbytes'             // = TArray<Byte>, dynamisches Array -> auto-nil
+  );
+
+  // FP-Gate 2026-07-31: Namenskonvention fuer dynamische Array-Aliasse der
+  // RTL/mORMot ('TByteDynArray', 'TIntegerDynArray', 'TRawUtf8DynArray').
+  // Ein Typ mit diesem Suffix ist per Konvention 'array of T' = managed
+  // (auto-nil) -> read-without-write nie ein echter uninit-Bug.
+  DYNARRAY_NAME_SUFFIX = 'dynarray';
 
   // Methoden-Body wird als asm-Block gekennzeichnet wenn das TypeRef
   // des nkMethod-Knotens einen ';asm'-Marker enthaelt (analog dem
@@ -170,6 +191,17 @@ type
     // die uebrigen Def-Sites. Cap 64: darueber wird der Filter nur
     // KONSERVATIVER (weniger bekannte Defs -> weniger Drops).
     WriteLines       : TArray<Integer>;
+    // Schluss-Verifikation 2026-07-31 (zwei Monotonie-Verstoesse: Ctor-auf-
+    // Instanz in ApplyReceiverInit + Decay-Adressnahme 'dwtypedata'): NEUE
+    // Write-Quellen aus PhaseB registrieren NICHT mehr direkt, sondern legen
+    // ihre Kandidatenzeile hier ab. Angewandt wird sie erst in PhaseC durch
+    // TryRegisterWriteMonotone - erst dort existieren FindFirstReadLine und
+    // der Stripped-Zeilencache, ohne die das Monotonie-Gate nicht probbar
+    // ist (in PhaseB ist FindFirstReadLine weder deklariert noch der Cache
+    // gebaut; nested Procs kennen kein forward). Aufsteigend sortiert und
+    // dedupliziert; Cap 8, weil nur der FRUEHESTE zulaessige Write das
+    // Ergebnis bestimmt.
+    MonoWriteLines   : TArray<Integer>;
   end;
   PVarInfo = ^TVarInfo;
 
@@ -338,11 +370,86 @@ begin
   end;
 end;
 
+function BaseTypeLow(const TypeLow: string): string;
+// Reduziert einen (bereits gelowerten) TypeRef auf den nackten Typnamen:
+// Generic-Parameter (< ... >) und Qualifier (unit.T) werden abgeschnitten.
+// 'system.rtti.trtticontext' -> 'trtticontext', 'tdynarray<byte>' -> 'tdynarray'.
+// (2026-07-31 vor IsManagedType gezogen - der managed-Namens-Gate braucht den
+// nackten Namen; Implementierung unveraendert.)
+var
+  P : Integer;
+begin
+  Result := Trim(TypeLow);
+  P := Pos('<', Result);
+  if P > 0 then Result := Trim(Copy(Result, 1, P - 1));
+  P := LastDelimiter('.', Result);
+  if P > 0 then Result := Copy(Result, P + 1, MaxInt);
+end;
+
+function LooksLikeInterfaceIdent(const AName: string): Boolean;
+// Delphi-Namenskonvention fuer Interfaces im ORIGINAL-Case:
+//   'I' + Grossbuchstabe                       (IStream, IInterface)
+//   'I' + Hersteller-Kleinpraefix + Grossbuchstabe (IwbMainRecord)
+// 'Integer'/'Int64' matchen NICHT - nach deren Kleinlauf folgt kein
+// Grossbuchstabe. Faktorisiert aus IsManagedType (2026-07-31), damit die
+// Konvention auch auf Elterntypen angewendet werden kann.
+var
+  i : Integer;
+begin
+  Result := False;
+  if Length(AName) < 2 then Exit;
+  if AName[1] <> 'I' then Exit;
+  if CharInSet(AName[2], ['A'..'Z']) then Exit(True);
+  if not CharInSet(AName[2], ['a'..'z']) then Exit;
+  i := 2;
+  while (i <= Length(AName)) and CharInSet(AName[i], ['a'..'z']) do Inc(i);
+  Result := (i <= Length(AName)) and CharInSet(AName[i], ['A'..'Z']);
+end;
+
+function TypeIsInterfaceByParentChain(TI: TTypeIndex;
+  const NameLow: string): Boolean;
+// FP-Gate 2026-07-31, FP-Klasse 'cross-unit managed Typen' (Real-World-Audit:
+// TES5Edit wbDefinitionsCommon:3310 'var lCER: IwbContainerElementRef').
+// MECHANISMUS: der Parser legt Interfaces als nkClass ab, der TypeIndex fuehrt
+// sie deshalb als tkiClass - liegt die Interface-DECL im Scan-Umfang, blockte
+// das Negativ-Gate in IsManagedType die I-Konvention und ein auto-nil-
+// Interface galt als unmanaged (dokumentierte Reichweiten-Grenze RESUME
+// 2026-07-24). Ohne Parser-Aenderung entscheidet die ELTERNKETTE: Interfaces
+// erben ausschliesslich von Interfaces ('IwbContainerElementRef' ->
+// 'IwbContainerBase' -> 'IwbElement' -> ...), Klassen enden an einer
+// T-/E-Wurzel (TObject/TComponent/Exception). Regeln:
+//   * mindestens EIN Elterntyp noetig (elternlose 'IxxYyy = class' bleiben
+//     Fund - Gegenprobe VendorPrefixButClass_StillFlagged),
+//   * JEDER Vorfahre muss mit 'i' beginnen (der Index speichert lowercase),
+//   * ein als Record/Enum bekannter Vorfahre bricht ab,
+//   * max. 5 Hops (Zyklus-/Kosten-Schranke).
+// Reine Suppressions-Erweiterung -> monoton, nie neue Funde.
+var
+  Cur, Par : string;
+  Hops     : Integer;
+begin
+  Result := False;
+  if (TI = nil) or (NameLow = '') then Exit;
+  Cur  := NameLow;
+  Hops := 0;
+  while Hops < 5 do
+  begin
+    Par := TI.ParentOf(Cur);
+    if Par = '' then Break;
+    if Par[1] <> 'i' then Exit(False);
+    if TI.TypeKindOf(Par) in [tkiRecord, tkiEnum] then Exit(False);
+    Result := True;
+    Cur    := Par;
+    Inc(Hops);
+  end;
+end;
+
 function IsManagedType(const TypeRef: string;
   AContext: TAnalyzeContext): Boolean;
 var
   T, Orig : string;
   Prefix : string;
+  Base : string;
 begin
   Result := False;
   Orig := Trim(TypeRef);
@@ -350,6 +457,16 @@ begin
   if T = '' then Exit;
   for Prefix in MANAGED_TYPE_PREFIXES do
     if T.StartsWith(Prefix) then Exit(True);
+  // FP-Gate 2026-07-31, FP-Klasse 'cross-unit managed Typen' (Real-World-Audit:
+  // mormot.db.sql.oracle:1691 'wasStringHacked: TByteDynArray'): Namens-
+  // Konvention '*DynArray' bzw. RTL-Exaktnamen (TBytes) bezeichnen dynamische
+  // Arrays - compiler-auto-nil, ein read-without-write ist nie ein echter
+  // uninit-Bug. Der strukturelle Hook (IsDynArrayDeclLine) greift hier nicht,
+  // weil der TypeRef ein NAME ist und die Decl cross-unit liegt.
+  Base := BaseTypeLow(T);
+  if Base.EndsWith(DYNARRAY_NAME_SUFFIX) then Exit(True);
+  for Prefix in MANAGED_EXACT_TYPES do
+    if Base = Prefix then Exit(True);
   // Real-World-FP-Audit 2026-07-12: JEDES Interface (Delphi-Konvention 'I' +
   // Grossbuchstabe, z.B. ISynLog/ISmsSender) ist refcounted + auto-nil ->
   // managed -> read-without-write nie ein echter uninit-Bug. 'Integer'/'Int64'
@@ -375,21 +492,45 @@ begin
   // fuer FREMD-Interfaces ohne mitgescannte Decl (der typische Kunden-
   // Scan). Volle Wirkung braeuchte tkiInterface im Index (Parser-
   // Marker an nkClass = eigenes risikobehaftetes Inkrement, Backlog).
-  if (Length(Orig) >= 3) and (Orig[1] = 'I') and CharInSet(Orig[2], ['a'..'z']) then
+  if (Length(Orig) >= 3) and (Orig[1] = 'I') and CharInSet(Orig[2], ['a'..'z'])
+     and LooksLikeInterfaceIdent(Orig) then
   begin
-    var i := 2;
-    while (i <= Length(Orig)) and CharInSet(Orig[i], ['a'..'z']) do
-      Inc(i);
-    if (i <= Length(Orig)) and CharInSet(Orig[i], ['A'..'Z']) then
-    begin
-      // CtxTypeIndex kann nil sein (Tests/Single-File ohne Kontext) -
-      // dann greift die Konvention ohne Gate (gleiche Vertrauensstufe
-      // wie die bestehende I-Grossbuchstaben-Regel).
-      var TI := CtxTypeIndex(AContext);
-      if (TI = nil) or (TI.TypeKindOf(T) in [tkiUnknown, tkiAlias]) then
-        Exit(True);
-    end;
+    // CtxTypeIndex kann nil sein (Tests/Single-File ohne Kontext) -
+    // dann greift die Konvention ohne Gate (gleiche Vertrauensstufe
+    // wie die bestehende I-Grossbuchstaben-Regel).
+    var TI := CtxTypeIndex(AContext);
+    if (TI = nil) or (TI.TypeKindOf(T) in [tkiUnknown, tkiAlias]) then
+      Exit(True);
+    // FP-Gate 2026-07-31: die oben beschriebene REICHWEITEN-GRENZE aufloesen,
+    // OHNE den Parser anzufassen - liegt die Interface-Decl im Scan-Umfang
+    // (tkiClass), entscheidet die Elternkette (s. TypeIsInterfaceByParentChain).
+    // Klassen mit I-Namen bleiben Fund: sie haben entweder gar keinen Parent
+    // oder eine T-/E-Wurzel.
+    if (TI.TypeKindOf(T) = tkiClass) and TypeIsInterfaceByParentChain(TI, T) then
+      Exit(True);
   end;
+end;
+
+function IsManagedTypeNameExact(const AName: string): Boolean;
+// FP-Gate 2026-07-31, FP-Klasse 'Keyword-als-Bezeichner zerlegt die var-Decl'
+// (Real-World-Audit: mormot.net.acme:672 'protected: RawUtf8;'). Das
+// kontextuelle Keyword 'protected' in Bezeichner-Position zerreisst die
+// Deklaration; der Parser fuehrt dann den TYPNAMEN als Variable und meldet
+// ihn als nie zugewiesen. Symptom-Gate analog H5 (IsFileDeclaredTypeName),
+// nur fuer CROSS-UNIT-Typnamen: heisst die 'Variable' EXAKT wie einer der
+// bekannten managed RTL-/mORMot-Typen, ist sie ein Parser-Phantom - reale
+// Variablen heissen nie 'RawUtf8'/'Variant'/'RawJson'. EXAKT-Match, damit
+// 'StringBuf'/'VariantList' & Co. Funde bleiben (Gegenprobe
+// NameStartsWithTypeName_StillFlagged). Der Parser-Bruch selbst bleibt
+// ausgeklammert (Parser ist nicht Teil dieses Inkrements).
+var
+  N, Prefix : string;
+begin
+  Result := False;
+  N := LowerCase(Trim(AName));
+  if N = '' then Exit;
+  for Prefix in MANAGED_TYPE_PREFIXES do
+    if N = Prefix then Exit(True);
 end;
 
 function IsNoInitRecordType(const TypeRef: string): Boolean;
@@ -407,20 +548,6 @@ begin
   if DotPos > 0 then NameOnly := Copy(T, DotPos + 1, MaxInt) else NameOnly := T;
   for NT in NOINIT_RECORD_TYPES do
     if NameOnly = NT then Exit(True);
-end;
-
-function BaseTypeLow(const TypeLow: string): string;
-// Reduziert einen (bereits gelowerten) TypeRef auf den nackten Typnamen:
-// Generic-Parameter (< ... >) und Qualifier (unit.T) werden abgeschnitten.
-// 'system.rtti.trtticontext' -> 'trtticontext', 'tdynarray<byte>' -> 'tdynarray'.
-var
-  P : Integer;
-begin
-  Result := Trim(TypeLow);
-  P := Pos('<', Result);
-  if P > 0 then Result := Trim(Copy(Result, 1, P - 1));
-  P := LastDelimiter('.', Result);
-  if P > 0 then Result := Copy(Result, P + 1, MaxInt);
 end;
 
 function IsDynArrayDeclLine(Lines: TStringList; DeclLine: Integer;
@@ -1712,6 +1839,455 @@ begin
 end;
 
 // ============================================================
+// FP-Gates Real-World-Audit 30% (2026-07-31)
+// ============================================================
+
+const
+  // Bezeichner, die in '<ident>('-Position KEINE Routine mit var/out-
+  // Parametern sind: Sprach-Keywords, Kontrollstrukturen und reine
+  // Wert-/Typ-Queries. Sie duerfen den Arg-Write aus
+  // LineWritesVarAsUnknownCallArg nicht ausloesen ('Exit(v)' bleibt ein
+  // Read - Gegenprobe ExitArgPlainVar_StillFlagged).
+  NONCALL_TOKENS : array[0..56] of string = (
+    'if', 'while', 'until', 'for', 'case', 'with', 'do', 'then', 'else',
+    'of', 'to', 'downto', 'repeat', 'begin', 'end', 'try', 'except',
+    'finally', 'on', 'goto', 'raise', 'exit', 'break', 'continue',
+    'inherited', 'and', 'or', 'xor', 'not', 'div', 'mod', 'in', 'is', 'as',
+    'shl', 'shr', 'nil', 'true', 'false', 'result',
+    // Typ-/Deklarations-Keywords: 'string(x)' ist ein Cast, 'procedure(...)'
+    // ein anonymer Methodenkopf bzw. Prozedurtyp - nie ein fuellender Call.
+    'procedure', 'function', 'string', 'array', 'record', 'class', 'object',
+    'set', 'file',
+    // Compile-time-/Wert-Queries (INTR-Liste aus PrecededByIntrinsicOpen
+    // plus Ord/Chr/Succ - reine Rueckgabewert-Funktionen).
+    'low', 'high', 'sizeof', 'typeinfo', 'length', 'ord', 'chr', 'succ'
+  );
+
+function IsNonWritingCallToken(const TokenLow: string): Boolean;
+// True wenn der Bezeichner vor '(' garantiert kein fuellender Aufruf ist
+// (Keyword/Query, s. NONCALL_TOKENS, oder READ_ALLOWLIST-Routine).
+var
+  S : string;
+begin
+  Result := False;
+  if TokenLow = '' then Exit(True);
+  for S in NONCALL_TOKENS do
+    if TokenLow = S then Exit(True);
+  for S in READ_ALLOWLIST do
+    if TokenLow = S then Exit(True);
+end;
+
+function LineWritesVarAsUnknownCallArg(const LLow, NameLow: string): Boolean;
+// FP-Gate 2026-07-31, FP-Klasse 'unbekannte var/out-Param-Writer' (Real-World-
+// Audit: jvcl JvSpeedbarForm:1031/1049 'MouseToCell(X, Y, Col, Row)', mORMot
+// MVCModel:350 'TAutoFree.One(tag, ...)').
+// MECHANISMUS: das 3-Klassen-Modell wertet Argumente NICHT-allowlisteter Calls
+// seit jeher als pessimistic-WRITE (ProcessCall/RegisterCallArgWrites) - das
+// greift aber nur, wenn der Parser fuer die Zeile einen nkCall/Expression-
+// Knoten liefert. Statements, die mit '(' beginnen ('(Sender as TGrid).M(...)')
+// oder in einem with-Kopf stehen, erzeugen keinen - dort zaehlte die Arg-
+// Position ueber den Quell-Scan als READ, also genau das Gegenteil.
+// Diese Funktion zieht denselben pessimistic-Write source-seitig nach:
+// NameLow steht BARE (Argtext == Name) an einer Top-Level-Argposition eines
+// '<ident>('-Aufrufs, dessen Name weder Keyword/Query noch READ_ALLOWLIST ist.
+// KONSERVATIV per Konstruktion:
+//   * '(' muss DIREKT auf den Bezeichner folgen ('if (x)' ist kein Call),
+//   * Typecast-Guard analog RegisterCallArgWrites: EIN Operand und die Gruppe
+//     wird als Receiver weiterbenutzt (')^' / ').' / ')[') -> Read, kein Write
+//     (Gegenprobe CastOperandOnlyRead_StillFlagged),
+//   * mehrzeilige Calls: nur Argumente, die auf DIESER Zeile durch ',' oder
+//     ')' abgeschlossen sind.
+// Reine Write-Registrierung -> monoton, nie neue Funde.
+var
+  i, e, j, k, L, Depth, ArgIdx, ArgStart : Integer;
+  Token : string;
+  HitByComma, HitByClose : Boolean;
+  AfterClose : Char;
+begin
+  Result := False;
+  if (LLow = '') or (NameLow = '') then Exit;
+  if Pos('(', LLow) = 0 then Exit;
+  if Pos(NameLow, LLow) = 0 then Exit;
+  L := Length(LLow);
+  i := 1;
+  while i <= L do
+  begin
+    if IsIdentChar(LLow[i]) and ((i = 1) or not IsIdentChar(LLow[i - 1])) then
+    begin
+      e := i;
+      while (e <= L) and IsIdentChar(LLow[e]) do Inc(e);
+      Token := Copy(LLow, i, e - i);
+      if (e <= L) and (LLow[e] = '(') and not IsNonWritingCallToken(Token) then
+      begin
+        Depth      := 1;
+        ArgIdx     := 0;
+        k          := e + 1;
+        ArgStart   := k;
+        HitByComma := False;
+        HitByClose := False;
+        while (k <= L) and (Depth > 0) do
+        begin
+          case LLow[k] of
+            '(', '[': Inc(Depth);
+            ']': Dec(Depth);
+            ')': begin
+                   Dec(Depth);
+                   if (Depth = 0)
+                      and (Trim(Copy(LLow, ArgStart, k - ArgStart)) = NameLow) then
+                     HitByClose := True;
+                 end;
+            ',': if Depth = 1 then
+                 begin
+                   if Trim(Copy(LLow, ArgStart, k - ArgStart)) = NameLow then
+                     HitByComma := True;
+                   Inc(ArgIdx);
+                   ArgStart := k + 1;
+                 end;
+          end;
+          Inc(k);
+        end;
+        // Mehr-Arg-Gruppe: ein Typecast hat genau EINEN Operanden, der Guard
+        // ist hier gegenstandslos.
+        if HitByComma then Exit(True);
+        if HitByClose then
+        begin
+          if ArgIdx > 0 then Exit(True);
+          j := k;                       // k steht hinter dem schliessenden ')'
+          while (j <= L) and (LLow[j] = ' ') do Inc(j);
+          AfterClose := #0;
+          if j <= L then AfterClose := LLow[j];
+          if not CharInSet(AfterClose, ['.', '^', '[']) then Exit(True);
+        end;
+      end;
+      i := e;
+    end
+    else
+      Inc(i);
+  end;
+end;
+
+function IsInlineDeclWithInitFor(const LLow, NameLow: string): Boolean;
+// FP-Gate 2026-07-31, FP-Klasse 'inline-const/inline-var mit Initialisierer'
+// (Real-World-Audit: issrc Setup.TaskDialogForm:202, IDE.MainForm:4795).
+// MECHANISMUS: 'const X = expr;' bzw. 'var X := expr;' (Delphi 10.3+) im Rumpf
+// DEKLARIERT und INITIALISIERT X in einem Schritt. Traegt dieselbe Methode
+// weiter unten eine gleichnamige inline-var-/for-in-Deklaration, verankert der
+// Parser den nkLocalVar dort - die fruehere Initialisierungs-ZEILE zaehlte
+// dann als Read und die spaetere Deklaration als 'Erst-Zuweisung'
+// (read-before-write-FP). Eine Deklaration MIT Initialisierer ist immer ein
+// WRITE dieses Namens.
+// Namens-Gate: der Bezeichner direkt hinter 'const'/'var' muss NameLow sein -
+// 'const Other = f(x);' schreibt x nicht (Gegenprobe
+// InlineDeclInitOtherName_StillFlagged). LLow ist gestrippt + gelowert.
+// Reine Write-Registrierung -> monoton, nie neue Funde.
+var
+  T : string;
+  p, e, L : Integer;
+begin
+  Result := False;
+  T := TrimLeft(LLow);
+  if T.StartsWith('const ') then p := 7
+  else if T.StartsWith('var ') then p := 5
+  else Exit;
+  L := Length(T);
+  while (p <= L) and (T[p] = ' ') do Inc(p);
+  e := p;
+  while (e <= L) and IsIdentChar(T[e]) do Inc(e);
+  if Copy(T, p, e - p) <> NameLow then Exit;
+  p := e;
+  while (p <= L) and (T[p] = ' ') do Inc(p);
+  if p > L then Exit;
+  // Optionaler Typteil ': T' bzw. direkt ':=' - im Typteil sind nur
+  // Ident-/Qualifier-/Generic-Zeichen erlaubt, damit Ausdruecke ('a[i] = b')
+  // nicht als Deklaration durchgehen.
+  if T[p] = ':' then
+  begin
+    Inc(p);
+    while (p <= L) and (T[p] <> '=') do
+    begin
+      if not CharInSet(T[p], ['a'..'z', '0'..'9', '_', ' ', #9, '.', '<', '>',
+                              ',', ':']) then Exit;
+      Inc(p);
+    end;
+    if p > L then Exit;
+  end;
+  if (p > L) or (T[p] <> '=') then Exit;
+  Inc(p);
+  // Initialisierer muss vorhanden sein ('const X = ;' gibt es nicht).
+  Result := Trim(Copy(T, p, MaxInt)) <> '';
+end;
+
+function LineHasBeginToken(const TrimmedLow: string): Boolean;
+// Wortgebundenes 'begin' irgendwo auf der (getrimmten, gelowerten) Zeile -
+// identische Konvention wie CollectNestedMethodRangesViaSource.
+begin
+  Result := TrimmedLow.StartsWith('begin')
+         or (Pos(' begin ', ' ' + TrimmedLow + ' ') > 0);
+end;
+
+function LineHasEndToken(const TrimmedLow: string): Boolean;
+// Wortgebundenes 'end' IRGENDWO auf der Zeile - symmetrisch zu
+// LineHasBeginToken. Bewusst nicht nur zeilenfuehrend: einzeilige anonyme
+// Methoden ('Cb := procedure begin DoIt; end;') muessen auf DERSELBEN Zeile
+// wieder schliessen, sonst liefe ihr Range bis zum Methodenende und wuerde
+// unbeteiligte Variablen mit-suppressen (Gegenprobe
+// ReadOutsideAnonMethod_StillFlagged). 'append'/'endpoint' matchen nicht
+// (Wortgrenzen).
+var
+  Dummy : Integer;
+begin
+  Result := CountWholeWordOccurrences('end', TrimmedLow, Dummy) > 0;
+end;
+
+function LineLooksLikeNestedRoutineHeader(const LineLow: string): Boolean;
+// Eingerueckter procedure-/function-Header = nested routine (gleiche
+// Heuristik wie CollectNestedMethodRangesViaSource.LineLooksLikeNestedHeader).
+var
+  j, Lead : Integer;
+  T : string;
+begin
+  Result := False;
+  Lead := 0;
+  for j := 1 to Length(LineLow) do
+    if LineLow[j] = ' ' then Inc(Lead)
+    else if LineLow[j] = #9 then Inc(Lead, 2)
+    else Break;
+  if Lead < 2 then Exit;
+  T := TrimLeft(LineLow);
+  Result := T.StartsWith('procedure ')   or T.StartsWith('procedure(') or
+            T.StartsWith('function ')    or T.StartsWith('function(')  or
+            T.StartsWith('constructor ') or T.StartsWith('destructor ');
+end;
+
+procedure CollectWithRangesFromStripped(const AStripped: TArray<string>;
+  AFrom0: Integer; Ranges: TList<TLineRange>);
+// FP-Gate 2026-07-31, FP-Klasse 'with-Statement-Scope-Poisoning' (Real-World-
+// Audit: jcl JclGraphUtils vcl/2657 + prototypes/2523 'with Points[0] do
+// X1 := X').
+// MECHANISMUS: innerhalb eines with-Blocks bezeichnet ein nackter Bezeichner
+// bevorzugt ein FELD des with-Ziels; ohne Typresolver ist er von einem
+// gleichnamigen Local lexikalisch nicht unterscheidbar. Deshalb werden die
+// Blockzeilen gesammelt und in PhaseD als Fund-Anker neutralisiert (der Read
+// gehoert moeglicherweise gar nicht der Variablen).
+// Erkannt wird - wie beim with-Write-Hook 6 - nur 'with' am Statement-Anfang.
+// Blockende: begin/end-Tiefe, sonst das erste ';'-Ende der Einzelanweisung.
+// Nicht schliessbare Bloecke bleiben auf der Kopfzeile (suppressen also
+// weniger). AStripped ist kommentarfrei -> auskommentierte with-Zeilen
+// matchen nie. Cap 500 Zeilen pro Block.
+// KORREKTUR Pre-Build-Review 2026-07-31 (Fund 'with-Poisoning', Z.2113):
+//   (1) Das Blockende wird auf der VOLL getrimmten Zeile bestimmt. StripLineEx
+//       blankt Kommentare/Stringliterale zu SPACES und behaelt die
+//       Original-Laenge - 'Left := 1;   // set left' endete gestrippt also auf
+//       Leerzeichen, EndsWith(';') schlug fehl und der Range lief ueber den
+//       with-Block hinaus und stellte FREMDE Funde still (die Suppression hing
+//       damit am Kommentar, nicht am with-Scope).
+//   (2) Ein 'end'-Token VOR dem eigenen 'begin' beendet den Rumpf konservativ
+//       auf der VORGAENGERZEILE - so kann die begin/end-Zaehlung keinen
+//       kompletten Folgeblock mehr einsammeln, wenn die Einzelanweisung gar
+//       kein ';' traegt.
+// Beide Aenderungen verkleinern Ranges -> weniger Suppression -> monoton.
+const
+  WITH_BLOCK_CAP = 500;
+var
+  i, j, Depth, DoPos : Integer;
+  T, Rest : string;
+  Started, Closed : Boolean;
+  R : TLineRange;
+begin
+  if Ranges = nil then Exit;
+  for i := 0 to High(AStripped) do
+  begin
+    T := Trim(AStripped[i]);
+    if not T.StartsWith('with ') then Continue;
+    R.StartLine := AFrom0 + i + 1;
+    R.EndLine   := R.StartLine;
+    // Einzeiler 'with X do Y := Z;' - der Block endet auf derselben Zeile.
+    Rest := '';
+    if CountWholeWordOccurrences('do', T, DoPos) > 0 then
+      Rest := Trim(Copy(T, DoPos + 2, MaxInt));
+    if (Rest <> '') and not LineHasBeginToken(Rest) and T.EndsWith(';') then
+    begin
+      Ranges.Add(R);
+      Continue;
+    end;
+    Depth   := 0;
+    Started := False;
+    Closed  := False;
+    j := i;
+    while (j <= High(AStripped)) and (j - i <= WITH_BLOCK_CAP) do
+    begin
+      T := Trim(AStripped[j]);
+      if LineHasBeginToken(T) then
+      begin
+        Inc(Depth);
+        Started := True;
+      end;
+      if LineHasEndToken(T) then
+      begin
+        Dec(Depth);
+        if Started and (Depth <= 0) then
+        begin
+          R.EndLine := AFrom0 + j + 1;
+          Closed    := True;
+          Break;
+        end;
+        // Review 2026-07-31 (2): 'end' OHNE eigenes 'begin' gehoert dem
+        // UMGEBENDEN Block - die with-Einzelanweisung kann dort nicht mehr
+        // laufen. Konservativ auf der Vorgaengerzeile abschliessen, damit die
+        // begin/end-Zaehlung keinen Folgeblock einsammelt.
+        if (not Started) and (j > i) then
+        begin
+          R.EndLine := AFrom0 + j;      // 1-basiert = Zeile davor
+          Closed    := True;
+          Break;
+        end;
+      end;
+      // Einzelanweisung ohne begin: endet am ersten ';'.
+      if (not Started) and (j > i) and T.EndsWith(';') then
+      begin
+        R.EndLine := AFrom0 + j + 1;
+        Closed    := True;
+        Break;
+      end;
+      Inc(j);
+    end;
+    if not Closed then R.EndLine := R.StartLine;
+    Ranges.Add(R);
+  end;
+end;
+
+procedure CollectAnonRangesFromStripped(const AStripped: TArray<string>;
+  AFrom0: Integer; Ranges: TList<TLineRange>);
+// FP-Gate 2026-07-31, FP-Klasse 'anonyme Methoden/Closures' (Real-World-Audit:
+// TES5Edit xeMainForm:13373/13374 'CheckFilterNode := function(...)',
+// wbBSArchive:2462 'TParallel.&For(..., procedure(j: Integer; ...) begin').
+// MECHANISMUS: ein anonymer Methodenrumpf ist ein eigener Scope, der DEFERRED
+// laeuft - die Source-Reihenfolge des Umgebungsscopes sagt nichts ueber
+// Read/Write-Ordnung aus, und seine Parameter shadowen gleichnamige Outer-
+// Locals. CollectNestedMethodRangesViaSource erkennt nur ZEILENANFANGS-Header
+// und sieht anonyme Ruempfe daher nicht.
+// Header-Erkennung bewusst eng: wortgebundenes 'procedure'/'function', dem
+// (Spaces ignoriert) ':=', '(' oder ',' vorausgeht - genau die drei Kontexte
+// Zuweisung/Argument/Argumentliste. 'CB: procedure(a: Integer)' (Feld-/Var-
+// Deklaration eines Prozedurtyps) hat ':' davor und matcht NICHT (Gegenprobe
+// ProcPointerVarReadBeforeWrite_StillFlagged).
+// Blockende per begin/end-Tiefe; VOR dem eigenen 'begin' deklarierte nested
+// routines werden als Ganzes uebersprungen (sonst wuerde deren 'end;' den
+// Rumpf zu frueh schliessen).
+// KORREKTUR Pre-Build-Review 2026-07-31 (Fund 'Anon-Range', Z.2187): der Range
+// beginnt erst NACH der Kopfzeile. Auf der Kopfzeile stehen das Zuweisungsziel
+// ('Cb := procedure begin ... end;') und die Geschwister-Argumente
+// ('Run(Count - 1, procedure ...)') - beide werden EAGER im Umgebungsscope
+// ausgewertet und gehoeren nicht in den Closure-Scope. Vorher galt z.B. der
+// read-before-write einer proc-Pointer-Variablen als 'im Closure-Rumpf
+// benutzt' und verschwand (Gegenprobe AnonAssignHeaderLineRead_StillFlagged).
+// Folge: einzeilige Ruempfe (Kopf und 'end' auf derselben Zeile) und nicht
+// schliessbare Ruempfe ergeben GAR KEINEN Range - weniger Suppression, monoton.
+const
+  ANON_BLOCK_CAP = 800;
+var
+  i, j, k, p, e, Depth, SubDepth : Integer;
+  T, Line : string;
+  Started, SubStarted, Closed, IsHeader : Boolean;
+  Prev : Char;
+  R : TLineRange;
+begin
+  if Ranges = nil then Exit;
+  for i := 0 to High(AStripped) do
+  begin
+    Line := AStripped[i];
+    if Line = '' then Continue;
+    IsHeader := False;
+    p := 1;
+    while p <= Length(Line) do
+    begin
+      if IsIdentChar(Line[p]) and ((p = 1) or not IsIdentChar(Line[p - 1])) then
+      begin
+        e := p;
+        while (e <= Length(Line)) and IsIdentChar(Line[e]) do Inc(e);
+        T := Copy(Line, p, e - p);
+        if (T = 'procedure') or (T = 'function') then
+        begin
+          k := p - 1;
+          while (k >= 1) and (Line[k] = ' ') do Dec(k);
+          Prev := #0;
+          if k >= 1 then Prev := Line[k];
+          if (Prev = '(') or (Prev = ',') or
+             ((Prev = '=') and (k >= 2) and (Line[k - 1] = ':')) then
+          begin
+            IsHeader := True;
+            Break;
+          end;
+        end;
+        p := e;
+      end
+      else
+        Inc(p);
+    end;
+    if not IsHeader then Continue;
+
+    R.StartLine := AFrom0 + i + 1;
+    R.EndLine   := R.StartLine;
+    Depth   := 0;
+    Started := False;
+    Closed  := False;
+    j := i;
+    while (j <= High(AStripped)) and (j - i <= ANON_BLOCK_CAP) do
+    begin
+      T := TrimLeft(AStripped[j]);
+      // Deklarationsteil: eine nested routine des anonymen Rumpfes komplett
+      // ueberspringen, damit ihr 'end;' nicht als Rumpfende zaehlt.
+      if (not Started) and (j > i)
+         and LineLooksLikeNestedRoutineHeader(AStripped[j]) then
+      begin
+        SubDepth   := 0;
+        SubStarted := False;
+        while (j <= High(AStripped)) and (j - i <= ANON_BLOCK_CAP) do
+        begin
+          T := TrimLeft(AStripped[j]);
+          if LineHasBeginToken(T) then
+          begin
+            Inc(SubDepth);
+            SubStarted := True;
+          end;
+          if LineHasEndToken(T) then
+          begin
+            Dec(SubDepth);
+            if SubStarted and (SubDepth <= 0) then Break;
+          end;
+          Inc(j);
+        end;
+        Inc(j);
+        Continue;
+      end;
+      if LineHasBeginToken(T) then
+      begin
+        Inc(Depth);
+        Started := True;
+      end;
+      if LineHasEndToken(T) then
+      begin
+        Dec(Depth);
+        if Started and (Depth <= 0) then
+        begin
+          R.EndLine := AFrom0 + j + 1;
+          Closed    := True;
+          Break;
+        end;
+      end;
+      Inc(j);
+    end;
+    // Review 2026-07-31: ohne erkanntes Rumpfende gibt es keinen belastbaren
+    // Closure-Scope -> kein Range. Sonst Rumpf = Zeile NACH dem Kopf bis
+    // 'end'; liegt beides auf derselben Zeile, bleibt nichts uebrig.
+    if not Closed then Continue;
+    R.StartLine := AFrom0 + i + 2;
+    if R.EndLine < R.StartLine then Continue;
+    Ranges.Add(R);
+  end;
+end;
+
+// ============================================================
 // HAUPT-LOGIK
 // ============================================================
 
@@ -1754,6 +2330,51 @@ var
     // #6 Inkr.4: Def-Site fuer den CFG-Postfilter merken (Cap s. TVarInfo).
     if Length(P.WriteLines) < 64 then
       P.WriteLines := P.WriteLines + [Line];
+  end;
+
+  procedure RegisterWriteMonotone(Idx: Integer; Line: Integer);
+  // Schluss-Verifikation 2026-07-31, Blocker 1+2 (ApplyReceiverInit
+  // 'x.Create(...)' und Decay-Adressnahme auf 'dwtypedata'): beide Hooks sind
+  // NEU in diesem Inkrement und wuerden per RegisterWrite einen bestehenden
+  // Fund VERSCHIEBEN statt ihn aufzuloesen - liegt ein Vorkommen der Variable
+  // VOR der Write-Zeile, kippt der Fund in PhaseD vom fcHigh-Zweig (Anker
+  // DeclLine, 'never assigned') in den fcMedium-Zweig (Anker FirstReadLine):
+  // im SARIF ein DROP plus ein ADD auf einer vorher fundfreien Zeile.
+  //
+  // Das dafuer noetige Gate braucht FindFirstReadLine - das ist in PhaseB
+  // weder deklariert (nested Procs kennen kein forward) noch lauffaehig (der
+  // Stripped-Zeilencache wird erst in PhaseC gebaut). Deshalb wird der
+  // Kandidat hier nur EINGESAMMELT und in PhaseC ueber
+  // TryRegisterWriteMonotone gegatet angewandt (Variante 2 der
+  // Verifikations-Vorgabe: Gate von PhaseB nach PhaseC verlegt, wo der
+  // identische Guard fuer die PhaseC-Hooks bereits existiert).
+  //
+  // BEWUSST NUR fuer die NEUEN Hooks: die Altbestand-Pfade (psz/lp-Decay,
+  // in-Unit-Record, tkiRecord, IsInitVerb) bleiben auf RegisterWrite - sie
+  // nachtraeglich zu gaten waere der SPIEGELBILDLICHE Attributionsbruch
+  // (fcMedium-Fund auf der Read-Zeile wuerde zu fcHigh auf der DeclLine).
+  var
+    P            : PVarInfo;
+    k, Ins, Cnt  : Integer;
+  begin
+    if (Idx < 0) or (Idx >= VarList.Count) or (Line <= 0) then Exit;
+    P := @VarList.List[Idx];
+    Cnt := Length(P.MonoWriteLines);
+    if Cnt >= 8 then Exit;                 // Cap, s. TVarInfo.MonoWriteLines
+    Ins := Cnt;
+    for k := 0 to Cnt - 1 do
+    begin
+      if P.MonoWriteLines[k] = Line then Exit;          // Duplikat
+      if P.MonoWriteLines[k] > Line then
+      begin
+        Ins := k;
+        Break;
+      end;
+    end;
+    SetLength(P.MonoWriteLines, Cnt + 1);
+    for k := Cnt downto Ins + 1 do
+      P.MonoWriteLines[k] := P.MonoWriteLines[k - 1];
+    P.MonoWriteLines[Ins] := Line;
   end;
 
   function VarIndexFor(const NameLow: string): Integer;
@@ -1838,7 +2459,29 @@ var
          (TI.TypeKindOf(BaseTypeLow(VarList.List[Idx].TypeLow)) = tkiRecord) then
         RegisterWrite(Idx, Line)
       else if IsInitVerb(MethodLow) then
-        RegisterWrite(Idx, Line);
+        RegisterWrite(Idx, Line)
+      // FP-Gate 2026-07-31, FP-Klasse 'Record-Konstruktor-Instanzaufruf'
+      // (Real-World-Audit: Dev-Cpp SynHighlighterMulti:841 'iParser: TRegEx' +
+      // 'iParser.Create(iScheme.EndExpr, [...])'). Ein Konstruktoraufruf AUF DER
+      // INSTANZ initialisiert einen Record in place (Self ist var-Parameter) -
+      // das ist das RTL-Idiom fuer TRegEx/TStringBuilder-artige Werttypen und
+      // nie ein uninitialisierter Read. KLASSEN-Gate: beweist der Cross-Unit-
+      // TypeIndex den Receiver-Typ als tkiClass, ist 'obj.Create(...)' der
+      // Deref einer uninitialisierten Referenz -> KEIN Write, Fund bleibt
+      // (Gegenprobe ClassCtorOnInstance_StillFlagged). Ohne Index (nil/leer,
+      // Single-File/Tests) greift die Suppression - gleiche Vertrauensstufe
+      // wie das cross-unit-Record-Gate darueber.
+      // MONOTONIE (Schluss-Verifikation 2026-07-31, Blocker 1): ueber
+      // RegisterWriteMonotone statt RegisterWrite - steht ein Vorkommen der
+      // Variable VOR der Create-Zeile, wuerde der bestehende fcHigh-Fund
+      // (Anker DeclLine) sonst zu einem fcMedium-Fund auf der Read-Zeile
+      // umgehaengt (DROP+ADD). Gegatet bleibt der Fund unveraendert
+      // (Test CtorOnInstanceAfterRead_KeepsDeclAnchor).
+      else if (MethodLow = 'create') and
+              ((TI = nil) or TI.IsEmpty or
+               (TI.TypeKindOf(BaseTypeLow(VarList.List[Idx].TypeLow))
+                  <> tkiClass)) then
+        RegisterWriteMonotone(Idx, Line);
     end;
   end;
 
@@ -1964,8 +2607,27 @@ var
           begin
             var SegP := LastDelimiter('.', A.Name);
             var Seg := LowerCase(Copy(A.Name, SegP + 1, MaxInt));
+            // FP-Gate 2026-07-31 (Real-World-Audit: vcl-styles-utils
+            // Vcl.Styles.Utils.SystemMenu:91): 'LMenuInfo.dwTypeData := Buffer'
+            // ist ebenfalls reine Adressnahme - MENUITEMINFO.dwTypeData ist
+            // trotz 'dw'-Praefix ein LPTSTR (dokumentierte WinAPI-Inkonsistenz),
+            // GetMenuItemInfo FUELLT den Puffer anschliessend. Exakter
+            // Feldname statt Praefix, damit das psz/lp-PFLICHT-Gate eng bleibt
+            // (Gegenprobe DecayRhsPlainField_StillFlagged: Name/Caption sind
+            // echte Wert-Reads und duerfen keinen Write bekommen).
+            // MONOTONIE (Schluss-Verifikation 2026-07-31, Blocker 2): der
+            // NEUE Zweig 'dwtypedata' laeuft ueber RegisterWriteMonotone -
+            // ein Vorkommen des Puffers VOR der Decay-Zeile wuerde den
+            // bestehenden fcHigh-Fund (Anker DeclLine) sonst in einen
+            // fcMedium-Fund auf der Read-Zeile umhaengen (DROP+ADD, Test
+            // DecayFieldAfterRead_KeepsDeclAnchor). psz/lp bleiben BEWUSST
+            // ungegated auf RegisterWrite: sie sind Altbestand mit derselben
+            // Alt-Exposition, ein nachtraegliches Gate waere dort der
+            // spiegelbildliche Attributionsbruch (fcMedium -> fcHigh).
             if Seg.StartsWith('psz') or Seg.StartsWith('lp') then
-              RegisterWrite(Idx2, A.Line);
+              RegisterWrite(Idx2, A.Line)
+            else if Seg = 'dwtypedata' then
+              RegisterWriteMonotone(Idx2, A.Line);
           end;
         end;
       end;
@@ -2588,6 +3250,39 @@ var
                 end
                 else if CharInSet(L[q], ['.', '_', '&', 'a'..'z', '0'..'9']) then
                   Inc(q)
+                // FP-Gate 2026-07-31, FP-Klasse 'LHS-Punktpfad' (Real-World-
+                // Audit: doublecmd synapse blcksock:3706
+                // 'Multicast6.ipv6mr_multiaddr.{$IFDEF POSIX}s6_addr{$ELSE}
+                // u6_addr8{$ENDIF}[n] := Ip6[n]'). StripLineEx blankt die
+                // {$IFDEF}-Direktive zu SPACES und reisst damit ein Loch in
+                // die Qualifier-Kette - der Walk brach ab und der partielle
+                // WRITE galt als Read. Luecke nur ueberspringen, wenn im
+                // ROHTEXT an dieser Stelle wirklich etwas geblankt wurde
+                // (Direktive/Kommentar) UND danach die Kette weitergeht;
+                // echte Trenn-Spaces ('if Rec.Field then X := 1') bleiben
+                // ein Abbruch. Reine Read-Suppression -> monoton.
+                else if L[q] = ' ' then
+                begin
+                  var q2 := q;
+                  while (q2 <= LL) and (L[q2] = ' ') do Inc(q2);
+                  var Blanked := False;
+                  if (i >= 0) and (i < Lines.Count) then
+                  begin
+                    var RawL := Lines[i];
+                    for var z := q to q2 - 1 do
+                      if (z <= Length(RawL)) and (RawL[z] > ' ') then
+                      begin
+                        Blanked := True;
+                        Break;
+                      end;
+                  end;
+                  if Blanked and (q2 <= LL)
+                     and (CharInSet(L[q2], ['.', '_', '&', 'a'..'z', '0'..'9'])
+                          or (L[q2] = '[')) then
+                    q := q2
+                  else
+                    Break;
+                end
                 else
                   Break;
               end;
@@ -2632,6 +3327,46 @@ var
     finally
       Stack.Free;
     end;
+  end;
+
+  function TryRegisterWriteMonotone(P: PVarInfo; Line: Integer;
+    MethodStartLine, MethodEndLine: Integer): Boolean;
+  // GEMEINSAMES MONOTONIE-GATE fuer alle NEUEN Write-Quellen dieses
+  // Inkrements (Pre-Build-Review + Schluss-Verifikation 2026-07-31).
+  //
+  // War bisher GAR KEIN Write bekannt, meldet PhaseD einen fcHigh-Fund mit
+  // Anker DeclLine ('never assigned'). Liegt der neu erkannte Write NACH dem
+  // ersten Read, kippt derselbe Fund in den fcMedium-Zweig mit Anker
+  // Read-Zeile - im SARIF ein DROP plus ein ADD auf einer vorher fundfreien
+  // Zeile (Attributionsbruch beim Korpus-Gate). Dieser Fall wird NICHT
+  // registriert: der bestehende Fund bleibt exakt wie zuvor (gleicher Anker,
+  // gleiche Confidence), Result=False signalisiert dem Aufrufer den Abbruch.
+  //
+  // War bereits ein Write bekannt (FirstWriteLine <> 0), ist kein Gate noetig:
+  // FirstWriteLine kann dann nur FRUEHER werden, und ein frueherer Write kann
+  // einen fcMedium-Fund nur aufloesen, nie seinen Anker verschieben (der
+  // Read-Anker liegt in dem Fall vor beiden Write-Zeilen und bleibt der
+  // fruehest moegliche Treffer).
+  //
+  // Der Aufruf MUSS in PhaseC erfolgen: FindFirstReadLine liest den erst dort
+  // gebauten Stripped-Zeilencache.
+  var
+    ProbeRead : Integer;
+  begin
+    Result := False;
+    if (P = nil) or (Line <= 0) then Exit;
+    if P.FirstWriteLine = 0 then
+    begin
+      ProbeRead := FindFirstReadLine(P.NameLow, P.DeclLine, Line,
+                                     MethodStartLine, MethodEndLine);
+      if (ProbeRead > 0) and (ProbeRead < Line) then Exit;
+    end;
+    if (P.FirstWriteLine = 0) or (Line < P.FirstWriteLine) then
+      P.FirstWriteLine := Line;
+    // #6 Inkr.4: Def-Site fuer den CFG-Postfilter (Cap s. TVarInfo).
+    if Length(P.WriteLines) < 64 then
+      P.WriteLines := P.WriteLines + [Line];
+    Result := True;
   end;
 
   procedure PhaseA_VarInventur;
@@ -2719,6 +3454,10 @@ var
       // Standard-RTTI-Idiom, niemals explizit zugewiesen -> read-without-write
       // ist kein Bug. Aus der Inventur entfernen (Real-World 2026-06-28).
       if IsNoInitRecordType(LV.TypeRef) then Continue;
+      // FP-Gate 2026-07-31, FP-Klasse 'Keyword-als-Bezeichner': der Var-NAME
+      // ist selbst ein bekannter managed Typname -> Parser-Phantom aus einer
+      // zerlegten Deklaration (s. IsManagedTypeNameExact).
+      if IsManagedTypeNameExact(LV.Name) then Continue;
       VarRec.Name           := LV.Name;
       VarRec.NameLow        := LowerCase(LV.Name);
       VarRec.TypeLow        := LowerCase(LV.TypeRef);
@@ -2726,6 +3465,10 @@ var
       VarRec.FirstWriteLine := 0;
       VarRec.FirstReadLine  := 0;
       VarRec.RefCount       := 0;
+      // Schluss-Verifikation 2026-07-31: VarRec wird ueber alle Schleifen-
+      // durchlaeufe wiederverwendet - die PhaseB-Kandidatenliste explizit
+      // leeren, damit kein Kandidat einer vorherigen Variable durchsickert.
+      VarRec.MonoWriteLines := nil;
       VarRec.IsManaged      := IsManagedType(LV.TypeRef, AContext);
       // Welle 1 (2026-07-25), Hook 1 managed-autoinit: strukturell dekla-
       // riertes dynamisches Array 'array of T' ist compiler-initialisiert
@@ -3013,6 +3756,53 @@ var
           end;
         end;
       end;
+      // FP-Gates 2026-07-31 (Real-World-Audit 30%): zwei source-seitige
+      // Write-Quellen, die der AST-Pfad strukturell nicht sieht.
+      //   (a) inline-const/inline-var MIT Initialisierer - DEKLARIERT und
+      //       SCHREIBT den Namen auf derselben Zeile. Der Parser verankert
+      //       nkLocalVar bei Namensgleichheit an der SPAETEREN Deklaration
+      //       (issrc IDE.MainForm:4795 vs. 4831), die fruehere Init-Zeile
+      //       galt deshalb als Read (s. IsInlineDeclWithInitFor).
+      //   (b) BARE Argument eines nicht-allowlisteten Calls = der
+      //       pessimistic-Write der 3-Klassen-Politik, nachgezogen fuer
+      //       Zeilen ohne nkCall/Expression-Knoten - '(Sender as TGrid).
+      //       MouseToCell(X, Y, Col, Row)' bzw. Calls im with-Kopf
+      //       (s. LineWritesVarAsUnknownCallArg).
+      // BEWUSST als eigener Scan (nicht in FindFirstSourceWriteLine): der
+      // dortige Erst-Treffer-Exit wuerde eine bereits gefundene, spaetere
+      // Def-Site aus WriteLines verdraengen und koennte dem CFG-Postfilter
+      // einen Drop nehmen. Additiv wie der @-/with-/Signatur-Hook:
+      // FirstWriteLine kann nur frueher werden, WriteLines nur wachsen.
+      if StrippedBuilt then
+      begin
+        for var gli := 0 to High(StrippedLow) do
+        begin
+          if Pos(P.NameLow, StrippedLow[gli]) = 0 then Continue;
+          var GLine := StrippedFrom0 + gli + 1;
+          if IsLineInRanges(GLine, NestedRanges) then Continue;
+          if IsInlineDeclWithInitFor(StrippedLow[gli], P.NameLow)
+             or LineWritesVarAsUnknownCallArg(StrippedLow[gli], P.NameLow) then
+          begin
+            // MONOTONIE-Gate, Pre-Build-Review 2026-07-31 (Fund Z.3634):
+            // Details s. TryRegisterWriteMonotone. Blockiert das Gate, waere
+            // jeder spaetere Kandidat (liegt hinter demselben Read) genauso
+            // unzulaessig -> so oder so Suche abbrechen.
+            // Damit gilt fuer beide Hooks: entweder der Fund verschwindet ganz
+            // oder er bleibt exakt wie zuvor - nie ein neuer Fund/Anker.
+            TryRegisterWriteMonotone(P, GLine, MethodStartLine, MethodEndLine);
+            Break;
+          end;
+        end;
+      end;
+      // Schluss-Verifikation 2026-07-31, Blocker 1+2: die in PhaseB
+      // eingesammelten Kandidaten der NEUEN Write-Quellen (Ctor-auf-Instanz,
+      // Decay auf 'dwtypedata') hier nachziehen - durch DASSELBE Gate wie der
+      // Hook darueber. Aufsteigend sortiert: blockiert der frueheste
+      // Kandidat, liegt der Read auch vor jedem spaeteren -> abbrechen.
+      for var mwi := 0 to High(P.MonoWriteLines) do
+        if not TryRegisterWriteMonotone(P, P.MonoWriteLines[mwi],
+                                        MethodStartLine, MethodEndLine) then
+          Break;
       P.FirstReadLine := FindFirstReadLine(P.NameLow, P.DeclLine,
                                            P.FirstWriteLine,
                                            MethodStartLine, MethodEndLine);
@@ -3181,13 +3971,66 @@ var
     i : Integer;
     P : PVarInfo;
     F : TLeakFinding;
+    // FP-Gates 2026-07-31 (with-Scope-Poisoning / anonyme Methoden): lazy,
+    // damit Methoden ohne Emit-Kandidat die Zeilen-Scans nicht bezahlen.
+    WithRanges, AnonRanges : TList<TLineRange>;
+    RangesBuilt : Boolean;
+
+    procedure EnsureScopeRanges;
+    begin
+      if RangesBuilt then Exit;
+      RangesBuilt := True;
+      if not StrippedBuilt then Exit;
+      CollectWithRangesFromStripped(StrippedLow, StrippedFrom0, WithRanges);
+      CollectAnonRangesFromStripped(StrippedLow, StrippedFrom0, AnonRanges);
+    end;
+
+    function VarUsedInAnonRanges(const NameLow: string): Boolean;
+    // Wortgebundenes Vorkommen in einem anonymen Methodenrumpf - gepruefte
+    // Quelle ist der GESTRIPPTE Cache (Kommentare zaehlen nie).
+    var
+      k, LineNo, Idx, Dummy : Integer;
+    begin
+      Result := False;
+      if not StrippedBuilt then Exit;
+      for k := 0 to AnonRanges.Count - 1 do
+        for LineNo := AnonRanges[k].StartLine to AnonRanges[k].EndLine do
+        begin
+          Idx := (LineNo - 1) - StrippedFrom0;
+          if (Idx < 0) or (Idx > High(StrippedLow)) then Continue;
+          if CountWholeWordOccurrences(NameLow, StrippedLow[Idx], Dummy) > 0 then
+            Exit(True);
+        end;
+    end;
+
   begin
+    WithRanges  := TList<TLineRange>.Create;
+    AnonRanges  := TList<TLineRange>.Create;
+    RangesBuilt := False;
+    try
     for i := 0 to VarList.Count - 1 do
     begin
       P := @VarList.List[i];
       if P.RefCount <= 1 then Continue;        // UnusedLocal-Domain
       if P.IsManaged then Continue;            // managed types: opt-in
       if P.FirstReadLine = 0 then Continue;    // nur Writes - clean
+
+      EnsureScopeRanges;
+      // FP-Gate 2026-07-31, FP-Klasse 'with-Statement-Scope-Poisoning':
+      // liegt der Read-ANKER in einem with-Block, kann der Bezeichner ein
+      // FELD des with-Ziels sein (jcl JclGraphUtils 'with Points[0] do
+      // X1 := X' - X ist das TPoint-Feld). Ohne Typresolver ist das nicht
+      // entscheidbar -> kein Fund. Reads AUSSERHALB des Blocks bleiben
+      // unberuehrt (Gegenprobe WithBlockReadAfterBlock_StillFlagged).
+      if IsLineInRanges(P.FirstReadLine, WithRanges) then
+        Continue;
+      // FP-Gate 2026-07-31, FP-Klasse 'anonyme Methoden/Closures': taucht
+      // die Variable im Rumpf einer anonymen Methode auf, ist die
+      // Ausfuehrungsreihenfolge deferred (bzw. der Bezeichner ist ein
+      // Closure-PARAMETER, der den Outer-Local shadowed) - dieselbe
+      // Politik wie fuer nested routines (IsVarUsedInNestedRanges).
+      if VarUsedInAnonRanges(P.NameLow) then
+        Continue;
 
       // Defensive Sanity-Check (Audit 2026-06-07 SCA166 Line-Attribution):
       // wenn der Var-Name auf der reported FirstReadLine GAR NICHT
@@ -3285,6 +4128,10 @@ var
         F.SetKind(fkUninitVar, fcMedium);
         Results.Add(F);
       end;
+    end;
+    finally
+      AnonRanges.Free;
+      WithRanges.Free;
     end;
   end;
 

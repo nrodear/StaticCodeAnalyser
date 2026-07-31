@@ -16,6 +16,13 @@ type
     [Test] procedure ClassDestructor_NotReported;
     [Test] procedure ClassDestructor_AfterVarSection_NotReported;
     [Test] procedure DtorWithoutInherited_KindAndSeverity;
+
+    // ---- FP-Gate 2026-07-31: Codegen-Template-Dateien ---------------------
+    [Test] procedure CodegenTemplateFile_NotReported;
+    [Test] procedure CodegenTemplateInClassName_NotReported;
+    [Test] procedure CharLiteralComparison_StillReported;
+    [Test] procedure PlaceholderInStringLiteral_StillReported;
+    [Test] procedure PlaceholderInComment_StillReported;
   end;
 
 implementation
@@ -169,6 +176,105 @@ begin
       end;
     Assert.Fail('expected fkDestructorWithoutInherited finding');
   finally Findings.Free; end;
+end;
+
+// ---------------------------------------------------------------------------
+// FP-Gate 2026-07-31 (30%-Real-World-Audit sca-rw-after119)
+// Beleg: cnwizards/Bin/Data/Templates/CnIniFiler_Section.pas:75 - der
+// Destruktor enthaelt textuell 'inherited;', die '<#...>'-Platzhalter brechen
+// aber den Parser. Ohne parsebaren Rumpf faellt SCA097 fuer die ganze Datei
+// aus. SCA097 laeuft im FILE-Harness (uTestFindingHelper Z.294) - die Tests
+// muessen deshalb FindingsOfFile benutzen, sonst waeren sie vakuum-gruen.
+// ---------------------------------------------------------------------------
+
+procedure TTestDestructorWithoutInherited.CodegenTemplateFile_NotReported;
+// Exakte Korpus-Form aus CnIniFiler_Section.pas: das `inherited;` steht
+// TEXTUELL da, aber hinter dem Platzhalter. Der Parser liest
+// 'IniSectionsFree' als Anweisung und SkipToSemicolon frisst '>' UND
+// 'inherited' bis zum ';' - der Rumpf sieht kein inherited mehr.
+// Ohne den Gate ist das ein Error-Fund (der belegte FP).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'destructor TFoo.Destroy;'#13#10 +
+  'begin'#13#10 +
+  '<#IniSectionsFree>  inherited;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDestructorWithoutInherited),
+    'Codegen-Template - kein Urteil ohne parsebaren Rumpf');
+  finally F.Free; end;
+end;
+
+procedure TTestDestructorWithoutInherited.CodegenTemplateInClassName_NotReported;
+// Der Gate ist DATEI-weit: der Platzhalter steht hier erst in der
+// initialization-Section (wie im Original), der Destruktor selbst parst
+// sauber und haette ohne den Gate einen Fund geliefert.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'destructor TFoo.Destroy;'#13#10 +
+  'begin'#13#10 +
+  '  FreeAndNil(FBar);'#13#10 +
+  'end;'#13#10 +
+  'initialization'#13#10 +
+  '  <#IniClassName> := T<#IniClassName>.Create;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDestructorWithoutInherited));
+  finally F.Free; end;
+end;
+
+procedure TTestDestructorWithoutInherited.CharLiteralComparison_StillReported;
+// Gegenprobe: 'if C<#13 then' ist legales Delphi (Char-Literal-Vergleich).
+// Nach '<#' steht eine ZIFFER - kein Template-Platzhalter, der Fund bleibt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'destructor TFoo.Destroy;'#13#10 +
+  'begin'#13#10 +
+  '  if C<#13 then'#13#10 +
+  '    FreeAndNil(FBar);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDestructorWithoutInherited),
+    'Char-Literal-Vergleich ist kein Template-Platzhalter');
+  finally F.Free; end;
+end;
+
+procedure TTestDestructorWithoutInherited.PlaceholderInStringLiteral_StillReported;
+// Gegenprobe: '<#Foo>' in einem String-Literal ist Nutzdaten, kein Template.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'destructor TFoo.Destroy;'#13#10 +
+  'begin'#13#10 +
+  '  FTemplate := ''<#Placeholder>'';'#13#10 +
+  '  FreeAndNil(FBar);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDestructorWithoutInherited));
+  finally F.Free; end;
+end;
+
+procedure TTestDestructorWithoutInherited.PlaceholderInComment_StillReported;
+// Gegenprobe: '<#Foo>' im Kommentar zaehlt ebenfalls nicht.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'destructor TFoo.Destroy;'#13#10 +
+  'begin'#13#10 +
+  '  // Vorlage nutzt <#Placeholder> als Marker'#13#10 +
+  '  FreeAndNil(FBar);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDestructorWithoutInherited));
+  finally F.Free; end;
 end;
 
 initialization

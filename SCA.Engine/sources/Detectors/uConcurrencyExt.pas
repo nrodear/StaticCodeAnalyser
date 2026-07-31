@@ -7,6 +7,11 @@ unit uConcurrencyExt;
 //   * fkTThreadDestroyWithoutTerminate   - FreeAndNil(MyThread) / MyThread.Free
 //                                          ohne vorheriges Terminate; WaitFor;
 //                                          -> Worker laeuft weiter, AV-Risiko
+//                                          Gates 2026-07-31: TerminateThread-
+//                                          Hardkill, positiver .Finished-Guard
+//                                          und Terminated-honorierende Execute
+//                                          in derselben Unit gelten als Beweis,
+//                                          dass der Worker nicht mehr laeuft.
 //
 // Beide lexisch, weil das Pattern ohne AST-Tiefe matchbar ist und der
 // Parser keine TThread-Hierarchie nachverfolgt.
@@ -294,6 +299,93 @@ var
     end;
   end;
 
+  function ExecuteHonorsTerminated(const AClassName: string): Boolean;
+  // FP-Gate (Real-World-Audit 2026-07-31, FP-Klasse 'thread-honoriert-
+  // Terminated'): True wenn in DIESER Unit eine Implementation
+  // `procedure <AClassName>.Execute` existiert, deren Rumpf `Terminated`
+  // referenziert (until Terminated / while not Terminated / ThreadClosed-
+  // Helper). TThread.Destroy ruft implizit Terminate + WaitFor - gefaehrlich
+  // ist ein Free nur, wenn Execute das Terminated-Flag IGNORIERT. Rumpf-
+  // Ende = naechster Routinen-Header an SPALTE 0 (verschachtelte Routinen
+  // sind eingerueckt und schneiden den Rumpf daher nicht ab); ohne Treffer
+  // bis Code-Ende bzw. 20k Zeichen Deckel.
+  const
+    BODY_MAX = 20000;
+  var
+    Mt, Nx : TMatch;
+    Body   : string;
+  begin
+    Result := False;
+    if AClassName = '' then Exit;
+    Mt := TRegEx.Match(Code, '(?i)\bprocedure\s+' + TRegEx.Escape(AClassName) +
+      '\s*\.\s*Execute\b');
+    if not Mt.Success then Exit;
+    Body := Copy(Code, Mt.Index + Mt.Length, BODY_MAX);
+    // Review-Fund 2026-07-31 ('Rumpf-Ende erkennt class procedure nicht'):
+    // die alte Alternation kannte nur procedure/function/constructor/
+    // destructor. Ein an Spalte 0 folgendes `class procedure TX.Cleanup`
+    // schnitt den Rumpf NICHT ab, das 20k-Fenster lief in die Folge-Routine
+    // und deren `Terminated` stellte echte Funde still. Ergaenzt um die
+    // class-Varianten, `operator` (class operator) sowie die beiden
+    // Abschnitts-Keywords initialization/finalization. Frueher schneiden
+    // heisst weniger Suppression - monoton unbedenklich.
+    Nx := TRegEx.Match(Body,
+      '(?im)^(?:(?:class\s+)?(?:procedure|function|constructor|destructor|' +
+      'operator)\s|initialization\b|finalization\b)');
+    if Nx.Success then Body := Copy(Body, 1, Nx.Index - 1);
+    Result := TRegEx.IsMatch(Body, '(?i)\bTerminated\b');
+  end;
+
+  function ThreadHonorsTerminated(const AIdent, ATypeName: string): Boolean;
+  // FP-Gate (Real-World-Audit 2026-07-31, JvTimer-Muster): sammelt die in
+  // dieser Unit greifbaren Thread-Klassen des Identifiers - den deklarierten
+  // Typ UND jede Klasse aus einem `<Ident> := T<Klasse>.Create`-Konstruktor-
+  // Call (JvTimer haelt `FTimerThread: TThread`, instanziiert aber die lokale
+  // TJvTimerThread). Honoriert eine davon Terminated, ist FreeAndNil sicher.
+  // Bewusst 'irgendeine' statt 'alle': lieber ein FN als ein Error-Tier-FP.
+  var
+    Mt : TMatch;
+  begin
+    Result := False;
+    if ExecuteHonorsTerminated(StripGenerics(ATypeName)) then Exit(True);
+    if AIdent = '' then Exit;
+    for Mt in TRegEx.Matches(Code, '(?i)\b' + TRegEx.Escape(AIdent) +
+      '\s*:=\s*(T\w+)\s*\.\s*Create\b') do
+      if ExecuteHonorsTerminated(Mt.Groups[1].Value) then Exit(True);
+  end;
+
+  function FinishedGuardProvesIdle(const ASnippet, AIdent: string): Boolean;
+  // Review-Fund 2026-07-31 ('Gate (b) ist polaritaets-blind'): die erste
+  // Fassung matchte `\bif\b[^;]{0,160}<Ident>\.(Finished|Started)` ohne jede
+  // Polaritaets-Auswertung. Damit unterdrueckten `if not <X>.Finished` und
+  // `if <X>.Started` den Error-Tier-Fund, obwohl beide GENAU den gemeldeten
+  // Zustand beweisen (Worker laeuft noch). Nur die positive Form
+  // `if <Ident>.Finished` gilt jetzt als Beweis fuer den beendeten Worker:
+  //   (1) `Started` faellt komplett raus. Sicher waere allein `not
+  //       <X>.Started`; im Korpus gibt es dafuer 0 Treffer, also kostet die
+  //       Streichung keinen Drop und erspart eine geratene not-Erkennung.
+  //   (2) Zwischen dem `if` und dem Identifier darf kein `not` stehen
+  //       (tempered token) und hinter `Finished` kein `=`/`<>`-Vergleich
+  //       (`if <X>.Finished = False then`).
+  //   (3) Zwischen dem Guard und dem FreeAndNil (= Ende von ASnippet) darf
+  //       kein `else` liegen - sonst haengt die Freigabe am NICHT-fertigen
+  //       Zweig (`if <X>.Finished then Log else FreeAndNil(<X>)`).
+  // [^;]{0,160} haelt die Suche wie bisher innerhalb DESSELBEN Statements.
+  // Alle drei Pruefungen koennen nur Suppressionen wegnehmen, nie welche
+  // hinzufuegen - die Monotonie des Inkrements bleibt gewahrt.
+  var
+    Mt : TMatch;
+  begin
+    Result := False;
+    if AIdent = '' then Exit;
+    for Mt in TRegEx.Matches(ASnippet,
+      '(?i)\bif\b(?:(?!\bnot\b)[^;]){0,160}\b' + TRegEx.Escape(AIdent) +
+      '\s*\.\s*Finished\b(?!\s*(?:=|<>))') do
+      if not TRegEx.IsMatch(
+           Copy(ASnippet, Mt.Index + Mt.Length, MaxInt), '(?i)\belse\b') then
+        Exit(True);
+  end;
+
   procedure Emit(K: TFindingKind; const Detail: string; AtPos: Integer);
   begin
     LineNo := TDetectorUtils.LineForPos(LineFor, AtPos);
@@ -428,14 +520,41 @@ begin
       HasTerminate :=
         (Pos(LowerCase(Ident) + '.terminate', LowerCase(Snippet)) > 0) or
         (Pos(LowerCase(Ident) + '.waitfor',   LowerCase(Snippet)) > 0);
-      if not HasTerminate then
-        Emit(fkTThreadDestroyWithoutTerminate,
-          Format('FreeAndNil(%s) without prior %s.Terminate + %s.WaitFor. ' +
-                 'If %s is a TThread descendant the worker may still be ' +
-                 'running -> AV / heap corruption. If it isnt a thread, ' +
-                 'suppress with // noinspection TThreadDestroyWithoutTerminate',
-                 [Ident, Ident, Ident, Ident]),
-          M.Index);
+      if HasTerminate then Continue;
+
+      // FP-Gate (a) (Real-World-Audit 2026-07-31, FP-Klasse 'alternativer
+      // Beendigungs-Nachweis'): `TerminateThread(<Ident>.Handle, 0)` im
+      // LookBack-Fenster ist ein Hard-Kill des Workers - haesslich, aber der
+      // gemeldete Zustand ('worker may still be running') trifft nicht zu.
+      // Vorbild-FP: cnwizards CnWizUpgradeFrm finalization.
+      if TRegEx.IsMatch(Snippet,
+           '(?i)\bTerminateThread\s*\(\s*' + TRegEx.Escape(Ident) + '\b') then
+        Continue;
+
+      // FP-Gate (b) (Real-World-Audit 2026-07-31, gleiche FP-Klasse): das
+      // FreeAndNil steht unter einem POSITIVEN `if <Ident>.Finished`-Guard -
+      // der Worker ist nachweislich nicht mehr aktiv. Vorbild-FP: TES5Edit
+      // xeMainForm. Polaritaets-Auswertung siehe FinishedGuardProvesIdle
+      // (Review-Fund 2026-07-31: `if not <X>.Finished` / `if <X>.Started`
+      // beweisen das GEGENTEIL und duerfen nicht mehr unterdruecken).
+      if FinishedGuardProvesIdle(Snippet, Ident) then
+        Continue;
+
+      // FP-Gate (c) (Real-World-Audit 2026-07-31, FP-Klasse 'thread-honoriert-
+      // Terminated'): die in dieser Unit definierte Thread-Klasse wertet
+      // Terminated aus -> das implizite Terminate+WaitFor in TThread.Destroy
+      // reicht. Vorbild-FP: jvcl JvTimer (TJvTimerThread.Execute mit
+      // 'until Terminated'). Laeuft absichtlich ZULETZT (nur fuer die wenigen
+      // Kandidaten, die alle billigeren Gates passiert haben).
+      if ThreadHonorsTerminated(Ident, DeclaredType) then Continue;
+
+      Emit(fkTThreadDestroyWithoutTerminate,
+        Format('FreeAndNil(%s) without prior %s.Terminate + %s.WaitFor. ' +
+               'If %s is a TThread descendant the worker may still be ' +
+               'running -> AV / heap corruption. If it isnt a thread, ' +
+               'suppress with // noinspection TThreadDestroyWithoutTerminate',
+               [Ident, Ident, Ident, Ident]),
+        M.Index);
     end;
   finally
     ReleaseLines(Lines, Cached);

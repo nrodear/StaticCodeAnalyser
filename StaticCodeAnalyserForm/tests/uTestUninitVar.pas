@@ -192,6 +192,50 @@ type
     // Init-Write (tkiClass-Gate, Vorlage with-Scan-Gate)
     [Test] procedure ParenlessInitVerbClassReceiver_StillFlagged;
     [Test] procedure ParenlessInitRecordReceiver_NoFinding;
+
+    // ---- Real-World-Audit 30% (2026-07-31): SCA166 war 94% FP ----
+    // FP-Klasse 1: with-Statement-Scope-Poisoning
+    [Test] procedure WithBlockFieldNameCollision_NoFinding;
+    [Test] procedure WithBlockReadAfterBlock_StillFlagged;
+    // FP-Klasse 2: unbekannte var/out-Param-Writer (MouseToCell & Co.)
+    [Test] procedure UnknownVarOutArgCall_NoFinding;
+    [Test] procedure IfParenBareVarNotCallArg_StillFlagged;
+    // FP-Klasse 3: anonyme Methoden / Closure-Parameter
+    [Test] procedure AnonMethodBodyRead_NoFinding;
+    [Test] procedure AnonMethodParamShadowsLocal_NoFinding;
+    [Test] procedure ReadOutsideAnonMethod_StillFlagged;
+    // FP-Klasse 4: cross-unit managed Typen
+    [Test] procedure DynArrayAliasType_NoFinding;
+    [Test] procedure MarshallerRecord_NoFinding;
+    [Test] procedure NonDynArrayAliasType_StillFlagged;
+    [Test] procedure VendorInterfaceWithInterfaceParent_NoFinding;
+    [Test] procedure VendorPrefixClassWithClassParent_StillFlagged;
+    // FP-Klasse 5: Nicht-Read-Kontexte (Record-Ctor, LHS-Punktpfad, Decay)
+    [Test] procedure RecordCtorOnInstance_NoFinding;
+    [Test] procedure ClassCtorOnInstance_StillFlagged;
+    [Test] procedure DirectiveInMemberPathAssign_NoFinding;
+    [Test] procedure MemberPathPlainSpaceRead_StillFlagged;
+    [Test] procedure MenuItemInfoDecayField_NoFinding;
+    // FP-Klasse 6: inline-const/inline-var mit Initialisierer
+    [Test] procedure InlineDeclInitLaterHomonym_NoFinding;
+    [Test] procedure InlineDeclInitOtherName_StillFlagged;
+    // FP-Klasse 7 (Symptom-Gate): Typname als Variablenname = Parser-Phantom
+    [Test] procedure LocalNamedLikeManagedType_NoFinding;
+    [Test] procedure NameStartsWithTypeName_StillFlagged;
+
+    // ---- Pre-Build-Review 2026-07-31: Korrekturen an den drei Gates ----
+    // Fund 'with-Poisoning': Blockende trotz Zeilenkommentar korrekt
+    [Test] procedure WithBlockTrailingCommentBoundary_StillFlagged;
+    // Fund 'Anon-Range': Kopfzeile gehoert NICHT zum Closure-Rumpf
+    [Test] procedure AnonAssignHeaderLineRead_StillFlagged;
+    // Fund 'Monotonie': Arg-Write nach dem Read darf den Anker nicht drehen
+    [Test] procedure UnknownArgWriteAfterRead_KeepsDeclAnchor;
+
+    // ---- Schluss-Verifikation 2026-07-31: Monotonie der NEUEN PhaseB-Hooks ----
+    // Blocker 1: Ctor-Aufruf auf der Instanz NACH einem Read
+    [Test] procedure CtorOnInstanceAfterRead_KeepsDeclAnchor;
+    // Blocker 2: Decay-Adressnahme auf 'dwTypeData' NACH einem Read
+    [Test] procedure DecayFieldAfterRead_KeepsDeclAnchor;
   end;
 
 implementation
@@ -3404,6 +3448,830 @@ begin
   try
     Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
       'Record-Receiver: parenloses tmp.Init bleibt Init-Write, kein Fund');
+  finally F.Free; end;
+end;
+
+// ============================================================
+// Real-World-Audit 30% (2026-07-31): sechs FP-Klassen, je NoFinding
+// (ohne Fix rot) + TP-Gegenprobe.
+// ============================================================
+
+procedure TTestUninitVar.WithBlockFieldNameCollision_NoFinding;
+// FP-Klasse 'with-Scope-Poisoning' (jcl JclGraphUtils vcl/2657): innerhalb
+// 'with Pts[0] do' sind X/Y die FELDER des TPoint, nicht die gleichnamigen
+// Locals. Ohne den Fix meldet SCA166 X und Y als nie zugewiesen.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'uses System.Types;'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(const Pts: array of TPoint);'#13#10 +
+    'var'#13#10 +
+    '  X, Y: Integer;'#13#10 +
+    '  X1, Y1: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  with Pts[0] do'#13#10 +
+    '  begin'#13#10 +
+    '    X1 := X;'#13#10 +
+    '    Y1 := Y;'#13#10 +
+    '  end;'#13#10 +
+    '  WriteLn(X1 + Y1);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'Bezeichner im with-Block koennen Felder des with-Ziels sein - kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.WithBlockReadAfterBlock_StillFlagged;
+// TP-Gegenprobe: das with-Gate neutralisiert NUR Read-Anker INNERHALB des
+// Blocks. Eine nie geschriebene Variable, die nach dem 'end;' gelesen wird,
+// bleibt ein Fund (sonst waere die Blockgrenze wirkungslos).
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'uses System.Types;'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(const Pts: array of TPoint);'#13#10 +
+    'var'#13#10 +
+    '  X1, N: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  with Pts[0] do'#13#10 +
+    '  begin'#13#10 +
+    '    X1 := 1;'#13#10 +
+    '  end;'#13#10 +
+    '  WriteLn(N + X1);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'Read ausserhalb des with-Blocks bleibt ein uninit-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.UnknownVarOutArgCall_NoFinding;
+// FP-Klasse 'unbekannte var/out-Param-Writer' (jvcl JvSpeedbarForm:1049):
+// '(Sender as TDrawGrid).MouseToCell(X, Y, Col, Row)' FUELLT Col/Row ueber
+// var-Parameter. Das Statement beginnt mit '(' - der Parser liefert dafuer
+// keinen nkCall, also fehlte der pessimistic-Write und die Arg-Position
+// zaehlte als Read.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(Sender: TObject; var Accept: Boolean);'#13#10 +
+    'var'#13#10 +
+    '  Col, Row: Longint;'#13#10 +
+    'begin'#13#10 +
+    '  (Sender as TDrawGrid).MouseToCell(4, 8, Col, Row);'#13#10 +
+    '  Accept := (Row >= 0) and (Row <> 7);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'bare Arg-Position eines unbekannten Calls ist ein Write, kein Read');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.IfParenBareVarNotCallArg_StillFlagged;
+// TP-Gegenprobe zum Arg-Write: 'if (n) then' ist KEIN Aufruf - weder steht
+// '(' direkt am Bezeichner noch ist 'if' eine Routine (NONCALL_TOKENS).
+// Der Read von n bleibt erhalten.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var n: Boolean;'#13#10 +
+    'begin'#13#10 +
+    '  if (n) then'#13#10 +
+    '    WriteLn(''x'');'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'Klammer-Bedingung ist kein Call-Argument - uninit-Read bleibt Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.AnonMethodBodyRead_NoFinding;
+// FP-Klasse 'anonyme Methoden' (TES5Edit xeMainForm:13373): der Read von
+// NodeData steht im Rumpf einer anonymen Funktion und laeuft DEFERRED - die
+// Zuweisung im Umgebungsscope erfolgt vor dem AUFRUF, nicht vor der
+// Definition. Ohne Fix: read-before-write-FP.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(List: TObject);'#13#10 +
+    'var'#13#10 +
+    '  NodeData: PNodeData;'#13#10 +
+    '  Check: TFunc<Boolean>;'#13#10 +
+    'begin'#13#10 +
+    '  Check := function: Boolean'#13#10 +
+    '    begin'#13#10 +
+    '      Result := NodeData.Flag;'#13#10 +
+    '    end;'#13#10 +
+    '  NodeData := GetData(List);'#13#10 +
+    '  if Check() then'#13#10 +
+    '    WriteLn(''hit'');'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'Closure-Rumpf ist eigener, deferred Scope - keine Read/Write-Ordnung');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.AnonMethodParamShadowsLocal_NoFinding;
+// FP-Klasse 'Closure-Parameter-Shadowing' (TES5Edit wbBSArchive:2462): das
+// 'j' im Rumpf ist der PARAMETER der anonymen Prozedur (immer definiert),
+// nicht das gleichnamige Outer-Local, dessen for-Schleife erst spaeter folgt.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(Total: Integer);'#13#10 +
+    'var'#13#10 +
+    '  j: Integer;'#13#10 +
+    '  s: string;'#13#10 +
+    'begin'#13#10 +
+    '  s := '''';'#13#10 +
+    '  RunParallel(0, Total, procedure(j: Integer) begin'#13#10 +
+    '    s := s + IntToStr(j);'#13#10 +
+    '  end);'#13#10 +
+    '  for j := 0 to Total do'#13#10 +
+    '    WriteLn(j);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'Closure-Parameter j ist nicht das Outer-Local - kein uninit-Read');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.ReadOutsideAnonMethod_StillFlagged;
+// TP-Gegenprobe: die Anon-Suppression darf nur greifen, wenn die Variable
+// wirklich im Closure-Rumpf vorkommt. 'Total' wird nie geschrieben und
+// AUSSERHALB gelesen - der Fund bleibt. Sichert zugleich, dass ein
+// EINZEILIGER anonymer Rumpf keinen Range aufspannt, der die Folgezeilen
+// mitnimmt (nach Pre-Build-Review 2026-07-31 beginnt der Rumpf erst NACH der
+// Kopfzeile, ein Einzeiler ergibt daher gar keinen Range).
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var'#13#10 +
+    '  Total: Integer;'#13#10 +
+    '  Cb: TProc;'#13#10 +
+    'begin'#13#10 +
+    '  Cb := procedure begin WriteLn(''hi''); end;'#13#10 +
+    '  Cb();'#13#10 +
+    '  WriteLn(Total);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'Total kommt im Closure-Rumpf nicht vor - bleibt never-written-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.DynArrayAliasType_NoFinding;
+// FP-Klasse 'cross-unit managed Typen' (mormot.db.sql.oracle:1691):
+// 'TByteDynArray' ist per Namenskonvention ein dynamisches Array - der
+// Compiler initialisiert es auf nil, ein read-without-write ist nie ein Bug.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(Cnt: Integer);'#13#10 +
+    'var'#13#10 +
+    '  Hacked: TByteDynArray;'#13#10 +
+    'begin'#13#10 +
+    '  if Hacked = nil then'#13#10 +
+    '    SetLength(Hacked, Cnt);'#13#10 +
+    '  WriteLn(Length(Hacked));'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'T*DynArray ist managed (auto-nil) - kein UninitVar');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.MarshallerRecord_NoFinding;
+// FP-Klasse 'cross-unit managed Typen' (horse ThirdParty.Posix.Syslog:90):
+// TMarshaller ist ein RTL-Record mit ausschliesslich managed Feldern - die
+// bare Verwendung ohne Zuweisung IST das offizielle Idiom.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(const AFormat: string);'#13#10 +
+    'var'#13#10 +
+    '  LMarshaller: TMarshaller;'#13#10 +
+    '  str: MarshaledAString;'#13#10 +
+    'begin'#13#10 +
+    '  str := LMarshaller.AsAnsi(AFormat, CP_UTF8).ToPointer;'#13#10 +
+    '  DoLog(str);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'TMarshaller ist auto-init (nur managed Felder) - kein UninitVar');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.NonDynArrayAliasType_StillFlagged;
+// TP-Gegenprobe zur Namenskonvention: 'TByteArray' hat KEIN DynArray-Suffix
+// und kann ein statisches Array sein - dessen Garbage-Read ist ein echter
+// Bug und muss Fund bleiben.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var'#13#10 +
+    '  b: TByteArray;'#13#10 +
+    '  n: Byte;'#13#10 +
+    'begin'#13#10 +
+    '  n := b[0];'#13#10 +
+    '  WriteLn(n);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'Namenstyp ohne DynArray-Suffix bleibt unmanaged - Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.VendorInterfaceWithInterfaceParent_NoFinding;
+// FP-Klasse 'cross-unit managed Typen', Reichweiten-Grenze tkiClass
+// (TES5Edit wbDefinitionsCommon:3310 'var lCER: IwbContainerElementRef'):
+// der Parser legt Interfaces als nkClass ab, der TypeIndex fuehrt sie als
+// tkiClass und blockte damit die I-Konvention. Die ELTERNKETTE beweist das
+// Interface. Voller Pipeline-Weg, damit der TypeIndex die Decl kennt.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'type'#13#10 +
+    '  IwbBase = interface'#13#10 +
+    '    function Count: Integer;'#13#10 +
+    '  end;'#13#10 +
+    '  IwbThing = interface(IwbBase)'#13#10 +
+    '    function More: Integer;'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var G: IwbThing; X: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  X := G.Count;'#13#10 +
+    '  WriteLn(X);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'Interface-Elternkette beweist managed (auto-nil) - kein UninitVar');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.VendorPrefixClassWithClassParent_StillFlagged;
+// TP-Gegenprobe zur Elternketten-Regel: der Name sieht aus wie ein Vendor-
+// Interface, der Typ ist aber eine KLASSE mit T-Wurzel (TObject) - die
+// uninitialisiert gelesene Referenz bleibt ein echter Fund.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'type'#13#10 +
+    '  IwbFake2 = class(TObject)'#13#10 +
+    '  public'#13#10 +
+    '    Count: Integer;'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var G: IwbFake2; X: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  X := G.Count;'#13#10 +
+    '  WriteLn(X);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'Klasse mit TObject-Wurzel ist kein Interface - Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.RecordCtorOnInstance_NoFinding;
+// FP-Klasse 'Record-Konstruktor-Instanzaufruf' (Dev-Cpp
+// SynHighlighterMulti:841): 'iParser.Create(...)' auf einem TRegEx-RECORD
+// initialisiert die Instanz in place (Self ist var-Parameter).
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(const S: string);'#13#10 +
+    'var'#13#10 +
+    '  iParser: TRegEx;'#13#10 +
+    '  M: TMatch;'#13#10 +
+    'begin'#13#10 +
+    '  iParser.Create(S, []);'#13#10 +
+    '  M := iParser.Match(S);'#13#10 +
+    '  WriteLn(M.Success);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'Ctor-Aufruf auf der Record-Instanz initialisiert sie - kein UninitVar');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.ClassCtorOnInstance_StillFlagged;
+// TP-Gegenprobe zum Ctor-Gate: auf einer beweisbaren KLASSE (TypeIndex
+// tkiClass) ist 'c.Create(...)' der Deref einer uninitialisierten Referenz
+// und bleibt ein Fund. Voller Pipeline-Weg wegen des TypeIndex.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'type'#13#10 +
+    '  TConn2 = class'#13#10 +
+    '  public'#13#10 +
+    '    Tag: Integer;'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var c: TConn2; n: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  c.Create(5);'#13#10 +
+    '  n := c.Tag;'#13#10 +
+    '  WriteLn(n);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'Ctor-Aufruf auf uninitialisierter Klassen-Referenz bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.DirectiveInMemberPathAssign_NoFinding;
+// FP-Klasse 'LHS-Punktpfad' (doublecmd synapse blcksock:3706): eine
+// {$IFDEF}-Direktive MITTEN im Feldpfad wird vom Stripper zu Spaces geblankt
+// und riss die Qualifier-Kette auf - der partielle WRITE galt als Read.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(const Src: array of Byte);'#13#10 +
+    'var'#13#10 +
+    '  Multicast6: TIPv6mreq;'#13#10 +
+    '  n: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  for n := 0 to 15 do'#13#10 +
+    '    Multicast6.addr.{$IFDEF POSIX}s6a{$ELSE}u6a{$ENDIF}[n] := Src[n];'#13#10 +
+    '  Multicast6.iface := 0;'#13#10 +
+    '  WriteLn(Multicast6.iface);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'Feld-Zuweisung mit Direktive im Pfad ist ein Write, kein Read');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.MemberPathPlainSpaceRead_StillFlagged;
+// TP-Gegenprobe zur Luecken-Toleranz: echte Trenn-Spaces ('if r.Flag then')
+// duerfen die Qualifier-Kette NICHT verlaengern - 'r.Flag' bleibt ein Read
+// vor dem spaeteren Feld-Write.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'type TRec = record Flag: Boolean; end;'#13#10 +
+    'procedure P;'#13#10 +
+    'var'#13#10 +
+    '  r: TRec;'#13#10 +
+    '  x: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  if r.Flag then x := 1;'#13#10 +
+    '  r.Flag := False;'#13#10 +
+    '  WriteLn(x);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'r.Flag in der Bedingung ist ein Read - Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.MenuItemInfoDecayField_NoFinding;
+// FP-Klasse 'Array-Adress-Decay' (vcl-styles-utils
+// Vcl.Styles.Utils.SystemMenu:91): 'LMenuInfo.dwTypeData := Buffer' nimmt nur
+// die ADRESSE des char-Arrays (MENUITEMINFO.dwTypeData ist ein LPTSTR),
+// GetMenuItemInfo fuellt den Puffer danach.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(H: THandle; Idx: Integer);'#13#10 +
+    'var'#13#10 +
+    '  LMenuInfo: TMenuItemInfo;'#13#10 +
+    '  Buffer: array [0 .. 79] of char;'#13#10 +
+    'begin'#13#10 +
+    '  LMenuInfo.fMask := 1;'#13#10 +
+    '  LMenuInfo.dwTypeData := Buffer;'#13#10 +
+    '  LMenuInfo.cch := SizeOf(Buffer);'#13#10 +
+    '  if GetMenuItemInfo(H, Idx, True, LMenuInfo) then'#13#10 +
+    '    WriteLn(Buffer);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'Decay auf das LPTSTR-Feld dwTypeData ist Adressnahme, kein Wert-Read');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.InlineDeclInitLaterHomonym_NoFinding;
+// FP-Klasse 'inline-const/inline-var mit Initialisierer' (issrc
+// IDE.MainForm:4795 vs. 4831): derselbe Name wird weiter unten als inline-var
+// deklariert - der Parser verankert nkLocalVar DORT, und die fruehere
+// 'const Info = ...'-Zeile zaehlte als Read vor der 'Erst-Zuweisung'.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(const S: string; c: Boolean);'#13#10 +
+    'begin'#13#10 +
+    '  if c then begin'#13#10 +
+    '    const Info = MakeInfo(S);'#13#10 +
+    '    WriteLn(Info.Kind);'#13#10 +
+    '  end else begin'#13#10 +
+    '    var Info := MakeInfo(S);'#13#10 +
+    '    WriteLn(Info.Kind);'#13#10 +
+    '  end;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'Deklaration mit Initialisierer ist ein Write dieses Namens');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.InlineDeclInitOtherName_StillFlagged;
+// TP-Gegenprobe zum Namens-Gate: die inline-const deklariert 'Other', nicht
+// 'n' - der Initialisierer-Write darf NICHT auf n uebertragen werden, der
+// read-before-write von n bleibt ein Fund.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(const S: string);'#13#10 +
+    'var n: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  const Other = Length(S);'#13#10 +
+    '  WriteLn(n + Other);'#13#10 +
+    '  n := 5;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'inline-const anderen Namens schreibt n nicht - Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.LocalNamedLikeManagedType_NoFinding;
+// FP-Klasse 'Keyword-als-Bezeichner' (mormot.net.acme:672 'protected:
+// RawUtf8;'): der Parser fuehrt den TYPNAMEN als Variable. Der Test pinnt das
+// SYMPTOM-Gate (Var-Name == bekannter managed Typname = Phantom); der
+// Parser-Bruch selbst ist ausgeklammert.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var'#13#10 +
+    '  RawUtf8: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  WriteLn(RawUtf8);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+      'Variable mit exaktem Typnamen ist ein Parser-Phantom - kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.NameStartsWithTypeName_StillFlagged;
+// TP-Gegenprobe: das Gate matcht EXAKT. Eine echte Variable, deren Name mit
+// einem Typnamen BEGINNT ('VariantList'), bleibt in der Inventur.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var'#13#10 +
+    '  VariantList: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  WriteLn(VariantList);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'Name beginnt nur mit einem Typnamen - echte Variable, Fund bleibt');
+  finally F.Free; end;
+end;
+
+// ============================================================
+// Pre-Build-Review 2026-07-31: Regressionstests zu den drei
+// bestaetigten Defekten an den neuen SCA166-Gates.
+// ============================================================
+
+procedure TTestUninitVar.WithBlockTrailingCommentBoundary_StillFlagged;
+// Review-Fund 'with-Poisoning' (uUninitVar.pas CollectWithRangesFromStripped):
+// StripLineEx blankt den Zeilenkommentar zu SPACES und behaelt die Laenge -
+// das Blockende per EndsWith(';') schlug deshalb fehl und der with-Range lief
+// bis zur naechsten kommentarfreien ';'-Zeile, hier also ueber 'WriteLn(N ...)'
+// hinweg. Damit haette AUSGERECHNET der Kommentar den fremden Fund von N
+// stillgestellt. Ohne die Korrektur ist dieser Test ROT (0 Funde).
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'uses System.Types;'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(const Pts: array of TPoint);'#13#10 +
+    'var'#13#10 +
+    '  X1, N: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  with Pts[0] do'#13#10 +
+    '    X1 := X;   // X ist das Feld des with-Ziels'#13#10 +
+    '  WriteLn(N + X1);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'with-Rumpf endet an der Anweisung - der Read von N danach bleibt Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.AnonAssignHeaderLineRead_StillFlagged;
+// Review-Fund 'Anon-Range' (uUninitVar.pas CollectAnonRangesFromStripped):
+// die Range begann auf der KOPFZEILE, dadurch galt das Zuweisungsziel 'CB'
+// als 'im Closure-Rumpf benutzt' und der read-before-write aus dem gepinnten
+// TP-Test ProcPointerVarReadBeforeWrite_StillFlagged verschwand, sobald die
+// RHS eine inline-Anon-Methode ist. Der Rumpf beginnt jetzt erst NACH dem
+// Kopf; ein einzeiliger Rumpf ergibt gar keine Range.
+// Nur EIN Local deklariert - jeder fkUninitVar-Fund gehoert zu CB.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var CB: procedure(a: Integer; b: Byte) of object;'#13#10 +
+    'begin'#13#10 +
+    '  CB(1, 2);'#13#10 +
+    '  CB := procedure(a: Integer; b: Byte) begin end;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1,
+      'Zuweisungsziel auf der Anon-Kopfzeile ist kein Closure-Gebrauch');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.UnknownArgWriteAfterRead_KeepsDeclAnchor;
+// Review-Fund 'Monotonie' (uUninitVar.pas PhaseC, Arg-Write-Hook): Row wird
+// erst in der MouseToCell-Zeile gefuellt, der Read in der if-Bedingung liegt
+// DAVOR. Ohne das Monotonie-Gate haette der neue Write den bestehenden
+// fcHigh-Fund (Anker Deklarationszeile, 'never assigned') in einen
+// fcMedium-Fund auf der if-Zeile verwandelt - im SARIF ein DROP plus ein ADD
+// auf einer vorher fundfreien Zeile. Erwartung: Anker unveraendert.
+// Col taucht im AST gar nicht auf (das mit '(' beginnende Statement wird von
+// SkipToSemicolon verschluckt) -> RefCount 1 -> UnusedLocal-Domain, kein Fund.
+// Damit ist Row der einzige erwartete Fund.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(Sender: TObject);'#13#10 +
+    'var'#13#10 +
+    '  Col, Row: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  if Row > 0 then Exit;'#13#10 +
+    '  (Sender as TDrawGrid).MouseToCell(4, 8, Col, Row);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(1, CountKind(F, fkUninitVar),
+      'genau ein Fund (Row) - Col wird gefuellt und nie gelesen');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'Col, Row: Integer'),
+      TFindingHelper.FirstOf(F, fkUninitVar).LineNumber,
+      'Anker bleibt die Deklarationszeile - kein Wechsel auf die Read-Zeile');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.CtorOnInstanceAfterRead_KeepsDeclAnchor;
+// Schluss-Verifikation 2026-07-31, BLOCKER 1 (uUninitVar.pas
+// ApplyReceiverInit, Zweig "MethodLow = 'create'"): Gegenstueck zu
+// RecordCtorOnInstance_NoFinding - hier steht das Vorkommen von iParser VOR
+// der Create-Zeile. Der Ctor-Write ist damit KEINE Aufloesung mehr: ohne das
+// Monotonie-Gate haette er den bestehenden fcHigh-Fund (Anker
+// Deklarationszeile, 'never assigned') in einen fcMedium-Fund auf der
+// Match-Zeile umgehaengt - im SARIF ein DROP plus ein ADD auf einer vorher
+// fundfreien Zeile (Attributionsbruch beim Korpus-Gate).
+// Erwartung: Anker UND Confidence unveraendert. TypeIndex ist ueber
+// FindingsOfFile leer, das Klassen-Gate greift also nicht - genau die
+// Konstellation, in der der neue Hook feuert.
+// M wird auf der Match-Zeile geschrieben und danach gelesen - kein zweiter
+// Fund, der Fund fuer iParser ist der einzige erwartete.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(const S: string);'#13#10 +
+    'var'#13#10 +
+    '  iParser: TRegEx;'#13#10 +
+    '  M: TMatch;'#13#10 +
+    'begin'#13#10 +
+    '  M := iParser.Match(S);'#13#10 +
+    '  iParser.Create(S, []);'#13#10 +
+    '  WriteLn(M.Success);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(1, CountKind(F, fkUninitVar),
+      'genau ein Fund (iParser) - M wird vor dem Lesen geschrieben');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'iParser: TRegEx'),
+      TFindingHelper.FirstOf(F, fkUninitVar).LineNumber,
+      'Anker bleibt die Deklarationszeile - kein Wechsel auf die Read-Zeile');
+    Assert.AreEqual(fcHigh,
+      TFindingHelper.FirstOf(F, fkUninitVar).Confidence,
+      'Confidence bleibt fcHigh - kein Kippen in den fcMedium-Zweig');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.DecayFieldAfterRead_KeepsDeclAnchor;
+// Schluss-Verifikation 2026-07-31, BLOCKER 2 (uUninitVar.pas ProcessAssign,
+// Decay-Adressnahme-Hook, NEUER Feldname 'dwtypedata'): Gegenstueck zu
+// MenuItemInfoDecayField_NoFinding - hier wird der Puffer VOR der
+// Decay-Zuweisung gelesen. Ohne das Monotonie-Gate haette der Decay-Write den
+// fcHigh-Fund auf der Deklarationszeile in einen fcMedium-Fund auf der
+// WriteLn-Zeile umgehaengt (DROP + ADD).
+// WriteLn steht in der READ_ALLOWLIST, ist also ein echter Read und kein
+// pessimistic-Write; SizeOf ist eine Compile-time-Query und damit ebenfalls
+// keine Write-Quelle. Der Decay-Hook ist die einzige Write-Quelle fuer Buffer.
+const
+  SRC =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P(H: THandle; Idx: Integer);'#13#10 +
+    'var'#13#10 +
+    '  LMenuInfo: TMenuItemInfo;'#13#10 +
+    '  Buffer: array [0 .. 79] of char;'#13#10 +
+    'begin'#13#10 +
+    '  WriteLn(Buffer);'#13#10 +
+    '  LMenuInfo.dwTypeData := Buffer;'#13#10 +
+    '  LMenuInfo.cch := SizeOf(Buffer);'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, F);
+  try
+    Assert.AreEqual<Integer>(1, CountKind(F, fkUninitVar),
+      'genau ein Fund (Buffer) - LMenuInfo wird nur geschrieben');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'Buffer: array'),
+      TFindingHelper.FirstOf(F, fkUninitVar).LineNumber,
+      'Anker bleibt die Deklarationszeile - kein Wechsel auf die Read-Zeile');
+    Assert.AreEqual(fcHigh,
+      TFindingHelper.FirstOf(F, fkUninitVar).Confidence,
+      'Confidence bleibt fcHigh - kein Kippen in den fcMedium-Zweig');
   finally F.Free; end;
 end;
 

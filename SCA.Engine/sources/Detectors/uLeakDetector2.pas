@@ -162,6 +162,13 @@ implementation
 // noinspection-file AvoidOut, BeginEndRequired, CanBeStrictPrivate, ConsecutiveSection, ConsecutiveVisibility, GroupedDeclaration, MultipleExit, RedundantJump, TooLongLine, UnsortedUses, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+// Forward auf die FP-Gates vom 2026-07-31 (Definitionen weiter unten, direkt
+// vor der oeffentlichen API). HasFunctionCallAssign braucht den Sink-Matcher
+// bereits hier oben fuer das Factory-Gate. AScope = Routine, in der der
+// Receiver-Typ aufgeloest wird (darf nil sein -> kein Receiver-Veto).
+function SinkCallPassesVar(AScope: TAstNode;
+  const ATextOrig, VarNameLow: string): Boolean; forward;
+
 { ---- Wortgrenz-Hilfsfunktionen ---- }
 
 class function TLeakDetector2.IsIdentChar(C: Char): Boolean;
@@ -684,6 +691,131 @@ var
       Exit(True);
   end;
 
+  // FP-Gate (2026-07-31, FP-Klasse 2 'Factory-Rueckgaben', 30%-Real-World-Audit):
+  // Callee-Name (lowercase, ohne Qualifier) aus einer RHS mit Klammern.
+  function CalleeNameLow(const RhsLower: string): string;
+  var
+    pp, dp : Integer;
+  begin
+    Result := '';
+    pp := Pos('(', RhsLower);
+    if pp <= 1 then Exit;
+    Result := Trim(Copy(RhsLower, 1, pp - 1));
+    dp := LastDelimiter('.', Result);
+    if dp > 0 then Result := Trim(Copy(Result, dp + 1, MaxInt));
+  end;
+
+  // FP-Gate (2026-07-31, FP-Klasse 2 'Factory-Rueckgaben', 5/24 im Sample):
+  // eine Factory DERSELBEN Unit gibt KEIN Ownership ab, wenn sie
+  //   (a) ihr Result selbst in eine besitzende Struktur haengt
+  //       ('Insert(i, Result)' in TProc.AddMemData - cnwizards DasmProc.pas:238),
+  //       ODER
+  //   (b) einen Owner-Parameter fuehrt und die Aufrufstelle dort kein nil
+  //       uebergibt ('CreateDBFieldControl(..., AControl, ...)' -
+  //       jvcl JvDynControlEngineDB.pas:515; VCL-Owner raeumt auf).
+  // Genau EINE Ebene, kein transitives Inlining. Monoton: kann den Fund nur
+  // unterdruecken, nie einen neuen erzeugen.
+  //
+  // Review-Fund 2026-07-31 ("loest den Callee klassenuebergreifend auf und
+  // nimmt den ERSTEN Treffer - bei Homonymen in Fremdklassen falsch"): frueher
+  // genuegte IRGENDEINE gleichnamige Methode der Unit; 'TWidgetFactory.
+  // CreateWidget(AOwner: TComponent)' konnte den Fund fuer den Aufruf von
+  // 'TDataFactory.CreateWidget' stillstellen. Jetzt wird der Callee ZUERST in
+  // der EIGENEN Klasse gesucht (Klassen-Qualifikation, gleiche Regel wie
+  // IsLocalFactory); nur wenn die eigene Klasse den Namen nicht kennt, zaehlt
+  // eine unitweit EINDEUTIGE Aufloesung. Mehrere Kandidaten (Homonym in einer
+  // Fremdklasse, Overloads) = konservativ NICHT gaten.
+  // Kandidat muss einen Rumpf haben (nkBlock): sonst wuerde die
+  // Interface-Signatur derselben Routine als zweiter Kandidat zaehlen und die
+  // Eindeutigkeit immer scheitern lassen.
+  function CalleeKeepsOwnership(const CalleeLow, RhsLower: string): Boolean;
+
+    function HasBody(ANode: TAstNode): Boolean;
+    var
+      Ch : TAstNode;
+    begin
+      Result := False;
+      for Ch in ANode.Children do
+        if Ch.Kind = nkBlock then Exit(True);
+    end;
+
+  var
+    Methods         : TList<TAstNode>;
+    Mth, Cand, P, N, C : TAstNode;
+    Stack           : TList<TAstNode>;
+    MLow, TargetLow, PName, PType : string;
+    CandCount       : Integer;
+    HasOwnerParam   : Boolean;
+  begin
+    Result := False;
+    if (CalleeLow = '') or (UnitNode = nil) then Exit;
+    Methods   := UnitNode.FindAllRef(nkMethod);
+    Cand      := nil;
+    CandCount := 0;
+    // Stufe 1: Implementierung DERSELBEN Klasse ('tmeineklasse.callee').
+    if ThisClassLow <> '' then
+    begin
+      TargetLow := ThisClassLow + '.' + CalleeLow;
+      for Mth in Methods do
+        if (Mth.Name.ToLower = TargetLow) and HasBody(Mth) then
+        begin
+          Inc(CandCount);
+          Cand := Mth;
+        end;
+    end;
+    // Stufe 2: eigene Klasse kennt den Namen nicht -> unitweite Aufloesung,
+    // aber nur wenn sie EINDEUTIG ist.
+    if CandCount = 0 then
+      for Mth in Methods do
+      begin
+        MLow := Mth.Name.ToLower;
+        if (MLow <> CalleeLow) and not EndsStr('.' + CalleeLow, MLow) then Continue;
+        if not HasBody(Mth) then Continue;
+        Inc(CandCount);
+        Cand := Mth;
+      end;
+    if (CandCount <> 1) or (Cand = nil) then Exit;
+
+    // (a) Body haengt das eigene Result in eine besitzende Struktur.
+    Stack := TList<TAstNode>.Create;
+    try
+      Stack.Add(Cand);
+      while Stack.Count > 0 do
+      begin
+        N := Stack[Stack.Count - 1];
+        Stack.Delete(Stack.Count - 1);
+        if SinkCallPassesVar(Cand, N.Name, 'result') or
+           SinkCallPassesVar(Cand, N.TypeRef, 'result') then
+          Exit(True);            // finally gibt Stack frei
+        for C in N.Children do Stack.Add(C);
+      end;
+    finally
+      Stack.Free;
+    end;
+    // (b) Owner-Parameter in der Signatur. Die Aufrufstelle darf kein 'nil'
+    //     enthalten - sonst ist der Owner moeglicherweise leer und der
+    //     Aufrufer doch zustaendig (konservativ: Gate feuert dann nicht).
+    if TDetectorUtils.ContainsWholeWordLower('nil', RhsLower) then Exit;
+    HasOwnerParam := False;
+    // NUR direkte Kinder: FindAllRef waere subtree-weit und wuerde die
+    // Parameter verschachtelter Routinen mitzaehlen (Fehl-Suppression).
+    for P in Cand.Children do
+    begin
+      if P.Kind <> nkParam then Continue;
+      PName := P.Name.ToLower;
+      for var Mod_ in ['var ', 'const ', 'out '] do
+        if StartsStr(Mod_, PName) then
+          PName := Trim(Copy(PName, Length(Mod_) + 1, MaxInt));
+      PType := Trim(P.TypeRef.ToLower);
+      if (PName = 'aowner') or (PName = 'owner') or (PType = 'tcomponent') then
+      begin
+        HasOwnerParam := True;
+        Break;
+      end;
+    end;
+    Result := HasOwnerParam;
+  end;
+
 var
   Assigns : TList<TAstNode>;
   A       : TAstNode;
@@ -718,7 +850,13 @@ begin
       // FP-Gate (borrowed-reference, 2026-07-11): nur konstruktor-artige
       // Callees / bewiesene lokale Factories geben Ownership ab; geborgte
       // Getter (CnOtaGetRootComponentFromEditor, Images.Bitmap) NICHT.
-      if OwningReturnCall(A.TypeRef) then Exit(True);
+      if OwningReturnCall(A.TypeRef) then
+      begin
+        // FP-Gate (2026-07-31): same-unit-Factory behaelt das Ownership
+        // (Result landet in einer eigenen Liste / Owner-Parameter).
+        if CalleeKeepsOwnership(CalleeNameLow(RHS), RHS) then Continue;
+        Exit(True);
+      end;
       Continue;
     end;
     // Ohne '(': normalerweise geliehene Referenz ('list := obj.FList'
@@ -731,7 +869,12 @@ begin
     var RhsId := Trim(RHS);
     if StartsStr('self.', RhsId) then RhsId := Copy(RhsId, 6, MaxInt);
     if IsCleanIdent(RhsId) and IsLocalFactory(RhsId) then
+    begin
+      // FP-Gate (2026-07-31): auch die klammerlose Schwester-Factory kann das
+      // Ownership behalten (Result wird intern in eine Liste gehaengt).
+      if CalleeKeepsOwnership(RhsId, RHS) then Continue;
       Exit(True);
+    end;
   end;
 end;
 
@@ -1887,6 +2030,552 @@ begin
   Result := (CreateCount > 0) and (CreateCount = FactoryCount);
 end;
 
+{ ---- FP-Gates 30%-Real-World-Audit 2026-07-31 ------------------------------ }
+//
+// BEWUSST UNIT-LOKAL (keine class function von TLeakDetector2): uMissingFinally
+// (SCA002) konsumiert die public Ownership-Helfer dieser Unit (IsPassedToOwner /
+// IsOwnerParamCreate). Wuerden die neuen Gates dort einhaengen, verschoeben sich
+// zwei Regeln gleichzeitig und die Regel-Attribution im gemeinsamen Korpus-Gate
+// waere nicht mehr eindeutig. Die Gates hier wirken ausschliesslich auf SCA001
+// und werden nur aus TLeakDetector2.AnalyzeMethod / HasFunctionCallAssign
+// gerufen. Alle Gates sind MONOTON: sie koennen einen Fund nur unterdruecken.
+
+// Zerlegt eine Argumentliste (ohne die aeusseren Klammern) an TOP-LEVEL-Kommas.
+// Klammer-/Klammeraffen-Tiefe und String-Literale ('a,b') werden respektiert,
+// damit 'Add(''x,y'', obj)' nicht am Komma IM Literal splittet.
+function SinkSplitTopLevelArgs(const S: string): TArray<string>;
+var
+  Acc   : TList<string>;
+  i, depth, start : Integer;
+  inStr : Boolean;
+begin
+  Acc := TList<string>.Create;
+  try
+    depth := 0; start := 1; inStr := False;
+    for i := 1 to Length(S) do
+    begin
+      if S[i] = '''' then
+        inStr := not inStr
+      else if not inStr then
+      begin
+        if CharInSet(S[i], ['(', '[']) then Inc(depth)
+        else if CharInSet(S[i], [')', ']']) then Dec(depth)
+        else if (S[i] = ',') and (depth = 0) then
+        begin
+          Acc.Add(Trim(Copy(S, start, i - start)));
+          start := i + 1;
+        end;
+      end;
+    end;
+    Acc.Add(Trim(Copy(S, start, Length(S) - start + 1)));
+    Result := Acc.ToArray;
+  finally
+    Acc.Free;
+  end;
+end;
+
+// True wenn eines der TOP-LEVEL-Argumente EXAKT die Variable ist: direkt
+// ('Add(obj)'), als ECHTER Typecast ('InsertNode(i, PFileInfo(fi))'), geklammert
+// ('Add((obj))') oder als as-Cast ('Add(obj as TFoo)'). Ein blosses Vorkommen
+// IM Ausdruck ('Add(obj.Items[0])') zaehlt bewusst NICHT - dort wird nicht das
+// Objekt selbst uebergeben, ein Gate darauf waere ein maskiertes Leak.
+//
+// Review-Fund 2026-07-31 ("SinkArgIsVar packt beliebige '<ident>(...)'-Koepfe
+// aus, nicht nur Typecasts"): frueher galt JEDER Identifier-Kopf als Cast, also
+// auch eine Helferfunktion - 'FLog.Add(Describe(Result))' liess das Gate feuern,
+// obwohl nur ein String uebergeben wird und das Objekt weiter dem Aufrufer
+// gehoert. Ausgepackt wird jetzt nur noch
+//   * die reine Klammerung ('(obj)') und
+//   * ein Kopf in Typ-Konvention: 'T'/'I'/'P' + GROSSbuchstabe im ORIGINAL-Case
+//     ('TFoo(x)', 'IFoo(x)', 'PFileInfo(x)').
+// AArgsAny wird deshalb im ORIGINAL-Case erwartet. Bekommt die Funktion nur
+// lowercase-Text (fehlende Index-Paritaet beim Aufrufer), greift ausschliesslich
+// die Klammer-Regel - konservativ, das Gate feuert dann seltener.
+// Reichweitengrenze: Cast-Koepfe ohne Grossbuchstaben an zweiter Stelle
+// ('TdmMain(x)', 'TfrmFoo(x)') gelten nicht als Cast -> der Fund bleibt stehen.
+function SinkArgIsVar(const AArgsAny, VarNameLow: string): Boolean;
+var
+  Args : TArray<string>;
+  A, Cur, Head : string;
+  guard, p, ap : Integer;
+
+  function IsTypecastHead(const AHead: string): Boolean;
+  var
+    hi : Integer;
+  begin
+    Result := False;
+    if AHead = '' then Exit(True);          // reine Klammerung '(obj)'
+    for hi := 1 to Length(AHead) do
+      if not TLeakDetector2.IsIdentChar(AHead[hi]) then Exit;
+    Result := (Length(AHead) >= 2) and
+              CharInSet(AHead[1], ['T', 'I', 'P']) and
+              CharInSet(AHead[2], ['A'..'Z']);
+  end;
+
+begin
+  Result := False;
+  if (Trim(AArgsAny) = '') or (VarNameLow = '') then Exit;
+  Args := SinkSplitTopLevelArgs(AArgsAny);
+  for A in Args do
+  begin
+    Cur   := Trim(A);
+    guard := 0;
+    while (Cur <> '') and (guard < 4) do
+    begin
+      Inc(guard);
+      // 'obj as TFoo' -> 'obj'
+      ap := Pos(' as ', Cur.ToLower);
+      if ap > 0 then
+      begin
+        Cur := Trim(Copy(Cur, 1, ap - 1));
+        Continue;
+      end;
+      // '(inner)' bzw. 'TFoo(inner)' auspacken - NUR echte Casts.
+      if Cur[Length(Cur)] = ')' then
+      begin
+        p := Pos('(', Cur);
+        if p > 0 then
+        begin
+          Head := Trim(Copy(Cur, 1, p - 1));
+          if IsTypecastHead(Head) then
+          begin
+            Cur := Trim(Copy(Cur, p + 1, Length(Cur) - p - 1));
+            Continue;
+          end;
+        end;
+      end;
+      Break;
+    end;
+    if Cur.ToLower = VarNameLow then Exit(True);
+  end;
+end;
+
+// FP-Klasse 1 (Ownership-Transfer an besitzende Senken, 10/24 im Sample):
+// Sink-Familien. Der Empfaenger registriert das Objekt per Konvention in einer
+// eigenen besitzenden Struktur - Add/AddObject/AddPair/AddChild/AddMenuItem,
+// Insert/InsertNode, Append/AppendChild, Push, Enqueue/EnqueueLogItem.
+// CamelCase-Suffixe zaehlen nur, wenn der Folgebuchstabe im ORIGINAL-Case GROSS
+// ist ('.AddPair(' ja, '.address(' / '.appendix(' / '.inserted(' nein).
+// NICHT enthalten: framework-spezifische Senken ohne Namenskonvention
+// (DMVC '.Body(', fpjson-Sonderformen) - dafuer ist die konfigurierbare
+// OwnershipSinks-Registry da; ein globaler Seed wurde 2026-07-xx bewusst
+// verworfen (RTL-Namen wie LoadFromStream maskieren echte Leaks).
+const
+  SINK_FAMS : array[0..4] of string = ('add', 'insert', 'append', 'push', 'enqueue');
+
+// Receiver-Veto fuer die Sink-Familien.
+//
+// Review-Fund 2026-07-31 ("ReceiverIsProvenNonOwning kehrt die bisherige strikte
+// Receiver-Policy um"): die urspruengliche Fassung dieses Gates veto'te nur
+// gegen eine 9-Namen-Sperrliste (tlist/tstrings/...). Damit galt JEDER andere
+// aufloesbare Empfaenger als besitzende Senke - TFPList, TStringBuilder oder
+// TCustomImageList (jvcl JvImageList.pas: 'TempImageList.Add(Bmp, MaskBmp)',
+// TImageList KOPIERT die Bitmap und besitzt sie nicht) haetten echte Leaks
+// stillgestellt.
+//
+// Wiederhergestellt ist deshalb die per Test festgeschriebene STRIKTE Richtung
+// von AddReceiverOwnsItems (Leak_TListAddNonOwning_ReportsError):
+//   * Receiver-Typ in DIESER Routine aufloesbar (Local/Param) -> er muss die
+//     RTL-Ownership-Whitelist treffen (TObjectList/TObjectDictionary/...),
+//     sonst Veto -> der Fund bleibt.
+//   * Receiver NICHT aufloesbar (Feld, dotted Kette, leerer Self-Aufruf) ->
+//     kein Veto, altes permissives Verhalten wie im bestehenden '.add('-Pfad.
+// Framework-eigene besitzende Senken ohne RTL-Konvention (TJSONObject.AddPair,
+// fpjson) sind damit bewusst NICHT mehr pauschal abgedeckt - dafuer ist die
+// konfigurierbare OwnershipSinks-Registry ([Detectors] OwnershipSinks) da; ein
+// globaler Seed wurde 2026-07 bewusst verworfen.
+function ReceiverVetoesSink(AScope: TAstNode;
+  const ReceiverNameLow: string): Boolean;
+begin
+  // Leerer Empfaenger = unqualifizierter Aufruf der eigenen Klasse; der ist
+  // per Definition nicht aufloesbar -> kein Veto (und kein Fehl-Match gegen
+  // einen namenlosen Deklarationsknoten).
+  Result := (AScope <> nil) and (ReceiverNameLow <> '') and
+            not TLeakDetector2.AddReceiverOwnsItems(AScope, ReceiverNameLow);
+end;
+
+// True wenn ATextOrig einen Sink-Aufruf enthaelt, der VarNameLow als eigenes
+// Argument uebergibt UND dessen Empfaenger NICHT die Variable selbst ist
+// ('obj.Add(x)' zaehlt fuer obj nicht - da fuellt obj sich selbst).
+function SinkCallPassesVar(AScope: TAstNode;
+  const ATextOrig, VarNameLow: string): Boolean;
+var
+  Low, Orig, fam, recv, argsAny : string;
+  p, ef, ce, depth, argStart, rs : Integer;
+  ok : Boolean;
+begin
+  Result := False;
+  if (ATextOrig = '') or (VarNameLow = '') then Exit;
+  Low  := ATextOrig.ToLower;
+  // Index-Paritaet (2026-07-31): alle Positionen werden auf Low berechnet und
+  // fuer die Original-Case-Pruefungen (CamelCase-Suffix, Typecast-Kopf in
+  // SinkArgIsVar) 1:1 auf Orig angewandt. Bei abweichender Laenge (exotische
+  // Unicode-Faltung) faellt Orig auf Low zurueck - dann greift nur die
+  // konservative Teilmenge der Regeln.
+  Orig := ATextOrig;
+  if Length(Orig) <> Length(Low) then Orig := Low;
+  for fam in SINK_FAMS do
+  begin
+    p := Pos(fam, Low);
+    while p > 0 do
+    begin
+      // Linke Wortgrenze: Start, '.', '(' oder Whitespace - nie mitten in
+      // einem laengeren Identifier ('myadd(' matcht nicht).
+      if (p = 1) or not TLeakDetector2.IsIdentChar(Low[p - 1]) then
+      begin
+        ef := p + Length(fam);
+        ok := False;
+        if ef <= Length(Low) then
+        begin
+          if Low[ef] = '(' then
+            ok := True
+          else if TLeakDetector2.IsIdentChar(Low[ef]) and
+                  CharInSet(Orig[ef], ['A'..'Z']) then
+          begin
+            while (ef <= Length(Low)) and TLeakDetector2.IsIdentChar(Low[ef]) do
+              Inc(ef);
+            ok := (ef <= Length(Low)) and (Low[ef] = '(');
+          end;
+        end;
+        if ok then
+        begin
+          // Argumentliste balanciert einlesen (bounds-safe; unbalanciert -> skip)
+          argStart := ef + 1;
+          depth    := 1;
+          ce       := argStart;
+          while (ce <= Length(Low)) and (depth > 0) do
+          begin
+            if Low[ce] = '(' then Inc(depth)
+            else if Low[ce] = ')' then Dec(depth);
+            if depth > 0 then Inc(ce);
+          end;
+          if depth = 0 then
+          begin
+            // Original-Case: SinkArgIsVar unterscheidet Typecast von
+            // Helferfunktion nur am Grossbuchstaben (Review-Fund 2026-07-31).
+            argsAny := Copy(Orig, argStart, ce - argStart);
+            // Empfaenger = ident/dot-Kette unmittelbar vor der Familie.
+            // Leerer Empfaenger = unqualifizierter Aufruf (Self-Methode,
+            // z.B. 'Add(FileTemplate)' in TFileTemplates) - ebenfalls Senke.
+            rs := p;
+            while (rs > 1) and
+                  CharInSet(Low[rs - 1], ['a'..'z', '0'..'9', '_', '.']) do
+              Dec(rs);
+            recv := Copy(Low, rs, p - rs);
+            if EndsStr('.', recv) then SetLength(recv, Length(recv) - 1);
+            if StartsStr('self.', recv) then recv := Copy(recv, 6, MaxInt);
+            if (recv <> VarNameLow) and not StartsStr(VarNameLow + '.', recv) and
+               not ReceiverVetoesSink(AScope, recv) and
+               SinkArgIsVar(argsAny, VarNameLow) then
+              Exit(True);
+          end;
+        end;
+      end;
+      p := PosEx(fam, Low, p + 1);
+    end;
+  end;
+end;
+
+// FP-Klasse 1/2: Uebergabe an einen Konstruktor INNERHALB eines Ausdrucks
+// ('Worker := TFileListBuilder.Create(..., DisplayFilesHashed);' - doublecmd
+// ufileview.pas:2166, der Ctor uebernimmt die Var per var-Parameter). Der
+// nkCall-Zweig in IsPassedToOwner sieht nur FREISTEHENDE Calls; Konstruktoren
+// in einer Zuweisungs-RHS sind nkAssign.TypeRef und fehlten dort komplett.
+function CtorCallPassesVar(const ATextOrig, VarNameLow: string): Boolean;
+var
+  Low, Orig, recv, argsAny : string;
+  p, ef, ce, depth, argStart, rs : Integer;
+  ok : Boolean;
+begin
+  Result := False;
+  if (ATextOrig = '') or (VarNameLow = '') then Exit;
+  Low  := ATextOrig.ToLower;
+  // Index-Paritaet wie in SinkCallPassesVar (2026-07-31).
+  Orig := ATextOrig;
+  if Length(Orig) <> Length(Low) then Orig := Low;
+  p := Pos('.create', Low);
+  while p > 0 do
+  begin
+    ef := p + 7;                       // direkt hinter '.create'
+    ok := False;
+    if ef <= Length(Low) then
+    begin
+      if Low[ef] = '(' then
+        ok := True
+      else if TLeakDetector2.IsIdentChar(Low[ef]) and
+              CharInSet(Orig[ef], ['A'..'Z']) then
+      begin
+        // CamelCase-Konstruktor ('.CreateFmt(') - '.created'/'.creates'
+        // (Kleinbuchstaben-Fortsetzung) sind Verbformen, kein Ctor.
+        while (ef <= Length(Low)) and TLeakDetector2.IsIdentChar(Low[ef]) do
+          Inc(ef);
+        ok := (ef <= Length(Low)) and (Low[ef] = '(');
+      end;
+    end;
+    if ok then
+    begin
+      argStart := ef + 1;
+      depth    := 1;
+      ce       := argStart;
+      while (ce <= Length(Low)) and (depth > 0) do
+      begin
+        if Low[ce] = '(' then Inc(depth)
+        else if Low[ce] = ')' then Dec(depth);
+        if depth > 0 then Inc(ce);
+      end;
+      if depth = 0 then
+      begin
+        argsAny := Copy(Orig, argStart, ce - argStart);
+        rs := p;
+        while (rs > 1) and
+              CharInSet(Low[rs - 1], ['a'..'z', '0'..'9', '_', '.']) do
+          Dec(rs);
+        recv := Copy(Low, rs, p - rs);
+        if StartsStr('self.', recv) then recv := Copy(recv, 6, MaxInt);
+        if (recv <> VarNameLow) and not StartsStr(VarNameLow + '.', recv) and
+           SinkArgIsVar(argsAny, VarNameLow) then
+          Exit(True);
+      end;
+    end;
+    p := PosEx('.create', Low, p + 1);
+  end;
+end;
+
+// FP-Klasse 1 (Kern-Gate): der LETZTE Use der Variablen im Methodenrumpf ist
+// die Uebergabe an eine besitzende Senke bzw. an einen fremden Konstruktor.
+// "Letzter Use" = groesste Quellzeile aller Knoten, deren Name oder TypeRef die
+// Variable als GANZES WORT enthaelt. Die Last-Use-Bedingung ist der
+// Praezisions-Anker: wird das Objekt nach der Uebergabe noch benutzt
+// ('L.Add(o); o.Free;'), greift das Gate nicht.
+// Reichweitengrenze: mehrzeilige Aufrufe, deren Argument-Zeile groesser ist als
+// die Zeile des tragenden Knotens, fallen aus dem Gate (Fund bleibt) - bewusst
+// FN-freundlich statt raten.
+function LastUseIsOwnershipTransfer(MethodNode: TAstNode;
+  const VarNameLow: string): Boolean;
+var
+  Stack : TList<TAstNode>;
+  N, C  : TAstNode;
+  LastLine : Integer;
+
+  function Touches(const AText: string): Boolean;
+  begin
+    Result := (AText <> '') and
+      TDetectorUtils.ContainsWholeWordLower(VarNameLow, AText.ToLower);
+  end;
+
+begin
+  Result := False;
+  if (MethodNode = nil) or (VarNameLow = '') then Exit;
+  LastLine := 0;
+  Stack := TList<TAstNode>.Create;
+  try
+    // Lauf 1: letzte Zeile mit einem Vorkommen der Variablen bestimmen.
+    Stack.Add(MethodNode);
+    while Stack.Count > 0 do
+    begin
+      N := Stack[Stack.Count - 1];
+      Stack.Delete(Stack.Count - 1);
+      if (N.Line > LastLine) and (Touches(N.Name) or Touches(N.TypeRef)) then
+        LastLine := N.Line;
+      for C in N.Children do Stack.Add(C);
+    end;
+    if LastLine <= 0 then Exit;
+    // Lauf 2: nur Knoten AUF dieser Zeile duerfen die Uebergabe tragen.
+    Stack.Clear;
+    Stack.Add(MethodNode);
+    while Stack.Count > 0 do
+    begin
+      N := Stack[Stack.Count - 1];
+      Stack.Delete(Stack.Count - 1);
+      if (N.Line = LastLine) and
+         (SinkCallPassesVar(MethodNode, N.Name, VarNameLow) or
+          SinkCallPassesVar(MethodNode, N.TypeRef, VarNameLow) or
+          CtorCallPassesVar(N.Name, VarNameLow) or
+          CtorCallPassesVar(N.TypeRef, VarNameLow)) then
+        Exit(True);
+      for C in N.Children do Stack.Add(C);
+    end;
+  finally
+    Stack.Free;
+  end;
+end;
+
+// True wenn S ein reiner Objekt-Ausdruck ist: Identifier oder dotted chain
+// ('fpanel', 'righttabs.activepage', 'result'). Literale, nil, Zahlen,
+// Operatoren und Klammerausdruecke sind ausgeschlossen.
+function IsPlainObjectExprLow(const S: string): Boolean;
+var
+  i : Integer;
+begin
+  Result := False;
+  if S = '' then Exit;
+  if (S = 'nil') or (S = 'true') or (S = 'false') then Exit;
+  if not CharInSet(S[1], ['a'..'z', '_']) then Exit;
+  if S[Length(S)] = '.' then Exit;
+  for i := 1 to Length(S) do
+    if not CharInSet(S[i], ['a'..'z', '0'..'9', '_', '.']) then Exit;
+  Result := True;
+end;
+
+// Zerlegt eine RHS in Klassenname (lowercase, ohne Unit-Qualifier) und das
+// ERSTE Top-Level-Argument eines '<Typ>.Create(...)'-Aufrufs. Das Argument wird
+// zusaetzlich im ORIGINAL-Case geliefert - die Komponenten-Namenskonvention
+// ('Self.', 'F<Gross>') laesst sich nur dort pruefen (2026-07-31).
+function SplitCreateCall(const ATypeRefOrig: string;
+  out AClassLow, AFirstArgLow, AFirstArgOrig: string): Boolean;
+var
+  Low, Orig, Head, argsLow, argsOrig : string;
+  CreatePos, idx, depth, argStart, dp : Integer;
+  Args, ArgsO : TArray<string>;
+begin
+  Result        := False;
+  AClassLow     := '';
+  AFirstArgLow  := '';
+  AFirstArgOrig := '';
+  Low  := ATypeRefOrig.ToLower;
+  Orig := ATypeRefOrig;
+  // Index-Paritaet: alle Positionen werden auf Low berechnet.
+  if Length(Orig) <> Length(Low) then Orig := Low;
+  if not TLeakDetector2.MatchesCreate(ATypeRefOrig, Low, CreatePos) then Exit;
+  Head := Trim(Copy(Low, 1, CreatePos - 1));
+  dp := LastDelimiter('.', Head);
+  if dp > 0 then Head := Trim(Copy(Head, dp + 1, MaxInt));
+  AClassLow := Head;
+  // Hinter '.create' evtl. CamelCase-Suffix, dann muss '(' folgen.
+  idx := CreatePos + 7;
+  while (idx <= Length(Low)) and TLeakDetector2.IsIdentChar(Low[idx]) do Inc(idx);
+  while (idx <= Length(Low)) and (Low[idx] = ' ') do Inc(idx);
+  if (idx > Length(Low)) or (Low[idx] <> '(') then Exit;
+  argStart := idx + 1;
+  depth    := 1;
+  Inc(idx);
+  while (idx <= Length(Low)) and (depth > 0) do
+  begin
+    if Low[idx] = '(' then Inc(depth)
+    else if Low[idx] = ')' then Dec(depth);
+    if depth > 0 then Inc(idx);
+  end;
+  if depth <> 0 then Exit;
+  argsLow  := Trim(Copy(Low,  argStart, idx - argStart));
+  argsOrig := Trim(Copy(Orig, argStart, idx - argStart));
+  Args  := SinkSplitTopLevelArgs(argsLow);
+  ArgsO := SinkSplitTopLevelArgs(argsOrig);
+  if Length(Args)  > 0 then AFirstArgLow  := Trim(Args[0]);
+  if Length(ArgsO) > 0 then AFirstArgOrig := Trim(ArgsO[0]);
+  Result := True;
+end;
+
+// FP-Klasse 2 (TComponent-/Owner-Ownership, 5/24 im Sample):
+//   aFileView := TBriefFileView.Create(FRightTabs.ActivePage, FrameRight);
+//   Btn       := TButton.Create(Self.FPanel);
+// Ein nicht-nil Objekt-Ausdruck als ERSTES Ctor-Argument ist die TComponent-
+// Owner-Konvention - der Owner gibt das Objekt in DestroyComponents frei.
+// IsOwnerParamCreate deckt nur die kanonischen Bezeichner (Self/Owner/AOwner/
+// Application) ab; hier kommen beliebige Owner-Ausdruecke dazu.
+//
+// STUFE 1 (beweisend): der Cross-Unit-Typindex loest die Ctor-Klasse ODER den
+// deklarierten Var-Typ auf und belegt eine TComponent-Ahnenlinie. Loest der
+// Index die Klasse auf und ist sie KEIN TComponent-Nachfahre (z.B. TStringList
+// -> TStrings -> TPersistent), greift das Gate nicht.
+// STUFE 2 (Reichweitengrenze, nur wenn der Index den Typ NICHT kennt - z.B.
+// Single-File-Analyse oder Klasse ausserhalb des Scan-Scope): drei Huerden
+// gleichzeitig -
+//   (1) das erste Argument ist ein DOTTED Feld-/Property-Ausdruck
+//       ('Self.FPanel', 'FRightTabs.ActivePage'); blanke Identifier bleiben
+//       aussen vor, sonst wuerde 'TFileStream.Create(FileName, fmOpenRead)'
+//       als Owner-Ctor gelten und ein ganzer TP-Block verschwinden,
+//   (2) die Ctor-Klasse ist keine bekannte Datenklasse (DATA_CLASSES),
+//   (3) der Ausdruck sieht SELBST nach einer Komponente aus (Self./F-Praefix/
+//       Owner-/Parent-Segment) ODER die Ctor-Klasse steht in der kurzen Liste
+//       bekannter VCL-Komponentenklassen.
+// Huerde (3) ist der Review-Fund 2026-07-31 ("wertet JEDES dotted erste
+// Ctor-Argument als Owner"): ohne sie galten 'TRegIniFile.Create(Cfg.Section)',
+// 'TSynLogFile.Create(Ctxt.FileName)' oder
+// 'TDictionary<string,TObject>.Create(TIStringComparer.Ordinal)' als
+// Component-Ownership und stellten echte Leaks still.
+// REICHWEITENGRENZE (bewusst FN-freundlich): Owner-Ausdruecke ohne Konvention -
+// insbesondere published Form-Felder ohne F-Praefix wie
+// 'RightTabs.ActivePage' - fallen ohne Typindex aus Stufe 2 heraus; der Fund
+// bleibt dann stehen. Mit gefuelltem TTypeIndex greift Stufe 1 und deckt sie ab.
+function IsComponentOwnerCreate(MethodNode: TAstNode;
+  const VarNameLow, VarTypeLow: string; AContext: TAnalyzeContext): Boolean;
+const
+  // Stufe-2-Sperrliste: RTL-Klassen, deren erstes Ctor-Argument DATEN sind
+  // (Dateiname, Quellstream, Text) und nie ein Owner. Nur fuer den
+  // unaufgeloesten Fallback relevant.
+  DATA_CLASSES : array[0..18] of string = (
+    'tfilestream', 'tstringstream', 'tmemorystream', 'tbytesstream',
+    'tresourcestream', 'tbufferedfilestream', 'thandlestream',
+    'tstringlist', 'tstringbuilder', 'tinifile', 'tmeminifile',
+    'tregistryinifile', 'tstreamreader', 'tstreamwriter',
+    'tbinaryreader', 'tbinarywriter', 'tzipfile', 'tencoding',
+    'tregistry');
+  // Stufe-2-Positivliste: RTL-/VCL-Klassen, deren erster Ctor-Parameter per
+  // Definition AOwner: TComponent ist. Kurz gehalten - der Regelfall ist
+  // Stufe 1 (Typindex); die Liste traegt nur die Single-File-Analyse.
+  COMPONENT_CLASSES : array[0..17] of string = (
+    'tform', 'tcustomform', 'tframe', 'tdatamodule', 'tpanel', 'tbutton',
+    'ttimer', 'tmenuitem', 'tpopupmenu', 'tmainmenu', 'taction',
+    'tactionlist', 'timagelist', 'ttabsheet', 'tpagecontrol',
+    'ttoolbutton', 'ttreeview', 'tlistview');
+
+  function ArgLooksLikeComponent(const AArgOrig: string): Boolean;
+  // Namenskonvention eines Owner-Ausdrucks im ORIGINAL-Case.
+  var
+    Segs : TArray<string>;
+    Seg  : string;
+  begin
+    Result := False;
+    if AArgOrig = '' then Exit;
+    if StartsText('self.', AArgOrig) then Exit(True);
+    // Delphi-Feldkonvention 'F' + Grossbuchstabe auf dem ERSTEN Segment.
+    if (Length(AArgOrig) >= 2) and (AArgOrig[1] = 'F') and
+       CharInSet(AArgOrig[2], ['A'..'Z']) then Exit(True);
+    Segs := AArgOrig.ToLower.Split(['.']);
+    for Seg in Segs do
+      if MatchStr(Trim(Seg), ['owner', 'aowner', 'fowner',
+                              'parent', 'aparent', 'fparent']) then
+        Exit(True);
+  end;
+
+var
+  Assigns  : TList<TAstNode>;
+  A        : TAstNode;
+  ClassLow, FirstArg, FirstArgOrig, dc : string;
+  TI       : TTypeIndex;
+  IsData, IsComp : Boolean;
+begin
+  Result := False;
+  if MethodNode = nil then Exit;
+  TI := CtxTypeIndex(AContext);
+  Assigns := MethodNode.FindAllRef(nkAssign);
+  for A in Assigns do
+  begin
+    if A.Name.ToLower <> VarNameLow then Continue;
+    if not SplitCreateCall(A.TypeRef, ClassLow, FirstArg, FirstArgOrig) then Continue;
+    if not IsPlainObjectExprLow(FirstArg) then Continue;
+    if (FirstArg = VarNameLow) or StartsStr(VarNameLow + '.', FirstArg) then Continue;
+    // Stufe 1: Typindex beweist (oder widerlegt) die TComponent-Ahnenlinie.
+    if (TI <> nil) and not TI.IsEmpty then
+    begin
+      if TI.IsDescendantOf(ClassLow, 'tcomponent') or
+         TI.IsDescendantOf(VarTypeLow, 'tcomponent') then Exit(True);
+      if (TI.TypeKindOf(ClassLow) <> tkiUnknown) or (TI.ParentOf(ClassLow) <> '') then
+        Continue;      // aufloesbar und KEIN TComponent -> kein Gate
+    end;
+    // Stufe 2: konservativer Fallback ohne Typwissen.
+    if Pos('.', FirstArg) = 0 then Continue;
+    IsData := False;
+    for dc in DATA_CLASSES do
+      if ClassLow = dc then begin IsData := True; Break; end;
+    if IsData then Continue;
+    IsComp := False;
+    for dc in COMPONENT_CLASSES do
+      if ClassLow = dc then begin IsComp := True; Break; end;
+    if IsComp or ArgLooksLikeComponent(FirstArgOrig) then Exit(True);
+  end;
+end;
+
 { ---- Öffentliche API ---- }
 
 class procedure TLeakDetector2.AnalyzeMethod(UnitNode, MethodNode: TAstNode;
@@ -1977,6 +2666,11 @@ begin
         // iface-cast-Bucket 15/101 + Batch 8 'raise LException').
         if IsHandedToInterface(MethodNode, VarNameLow) then Continue;
         if IsRaisedAsException(MethodNode, VarNameLow) then Continue;
+        // FP-Gate (2026-07-31, FP-Klasse 2 'TComponent-/Owner-Ownership'):
+        // 'TFoo.Create(<Owner-Ausdruck>, ...)' mit nicht-nil Objekt-Ident als
+        // erstem Argument = Component-Ownership, der Owner raeumt ab.
+        if IsComponentOwnerCreate(MethodNode, VarNameLow,
+             Trim(V.TypeRef.ToLower), AContext) then Continue;
 
         FreeFound := SearchFree(MethodNode, VarNameLow, False, FreeInFin);
 
@@ -1987,7 +2681,15 @@ begin
         if ReportLine = 0 then ReportLine := V.Line;
 
         if not FreeFound then
-          AddFinding(V.Name, lsError, ReportLine)
+        begin
+          // FP-Gate (2026-07-31, FP-Klasse 1 'Ownership-Transfer an Senken'):
+          // letzter Use ist die Uebergabe an eine besitzende Senke bzw. an einen
+          // fremden Konstruktor. Bewusst ERST hier (nicht bei den uebrigen
+          // Gates): der Subtree-Walk laeuft dann nur fuer Variablen, die
+          // tatsaechlich gemeldet wuerden - Hot-Path-Schutz.
+          if not LastUseIsOwnershipTransfer(MethodNode, VarNameLow) then
+            AddFinding(V.Name, lsError, ReportLine);
+        end
         else if not FreeInFin and HasFinally
              and not HasExceptFreeRaise(MethodNode, VarNameLow) then
         begin
@@ -2000,7 +2702,8 @@ begin
           // dann ebenfalls kein Befund. NUR dieser lsWarning-Zweig; der Leak-
           // (lsError-)Pfad oben ist unberuehrt -> kann nie einen Leak maskieren.
           EnsureStripped;
-          if not FreeInFinallyRegionBySource(MethodNode, StrippedLines, VarNameLow) then
+          if not FreeInFinallyRegionBySource(MethodNode, StrippedLines, VarNameLow)
+             and not LastUseIsOwnershipTransfer(MethodNode, VarNameLow) then
             AddFinding(V.Name, lsWarning, ReportLine);
         end;
 
@@ -2021,6 +2724,10 @@ begin
 
       if not FreeFound then
       begin
+        // FP-Gate (2026-07-31, FP-Klasse 1): identisch zum Create-Pfad - der
+        // letzte Use gibt das Objekt an eine besitzende Senke ab
+        // ('Item := NewItem(...); ... AddMenuItem(Item);' - JvMRUList.pas:424).
+        if LastUseIsOwnershipTransfer(MethodNode, VarNameLow) then Continue;
         var ReportLine := FindFuncCallAssignLine(MethodNode, VarNameLow);
         if ReportLine = 0 then ReportLine := V.Line;
         AddFinding(V.Name + ' - R'#$FC'ckgabewert', lsWarning, ReportLine);

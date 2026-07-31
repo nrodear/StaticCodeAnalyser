@@ -123,6 +123,30 @@ type
     // mit fuehrendem SQL-Verb in beliebigem Helfer ist kein Fund mehr.
     [Test] procedure SQL_PlainHelperSelectLiteralConcat_NoFinding;
     [Test] procedure SQL_SqlTextSelectConcat_StillReported;
+
+    // --- 30%-Real-World-Audit 2026-07-31 (87% FP im Error-Tier) ----------
+    // (a) escaped-at-source: Sanitizer-Whitelist + 1-Ebenen-Datenfluss
+    [Test] procedure SQL_SanitizerDerivedLocalConcat_NoFinding;
+    [Test] procedure SQL_UiInputLocalConcat_StillReported;
+    [Test] procedure SQL_SanitizerAccumulatorLocal_NoFinding;
+    [Test] procedure SQL_TaintedAccumulatorLocal_StillReported;
+    [Test] procedure SQL_EscAndAlcinoeSanitizers_NoFinding;
+    [Test] procedure SQL_UnknownHelperCallConcat_StillReported;
+    // (b) Konstanten-/Metadaten-Propagation: Literal-Array
+    [Test] procedure SQL_LiteralArrayFormatArg_NoFinding;
+    [Test] procedure SQL_TaintedArrayFormatArg_StillReported;
+    // (c) Query-Builder-Rolle
+    [Test] procedure SQL_SqlBuilderRoutineCallTerms_NoFinding;
+    [Test] procedure SQL_SqlBuilderRoutineBareParam_StillReported;
+    // Verengung 2026-07-31 (Pre-Build-Review): die Builder-Rolle gibt nur
+    // noch Metadaten-/Sanitizer-Callees OHNE Routine-Parameter im Argument
+    // frei. Drei Gegenproben - gewickelter Parameter, Member-Pfad-Call mit
+    // Parameter-Argument, Nicht-Mapping-Callee.
+    [Test] procedure SQL_SqlBuilderRoutineWrappedParam_StillReported;
+    [Test] procedure SQL_SqlBuilderRoutineMemberCallParam_StillReported;
+    [Test] procedure SQL_SqlBuilderRoutineNonMappingCall_StillReported;
+    [Test] procedure SQL_SqlGeneratorReceiverCall_NoFinding;
+    [Test] procedure SQL_PlainReceiverCall_StillReported;
   end;
 
 implementation
@@ -1277,6 +1301,325 @@ begin
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSQLInjection),
       'SQL.Text mit Variablen-Konkat bleibt SQL-Injection-Fund');
+  finally F.Free; end;
+end;
+
+{ ---- 30%-Real-World-Audit 2026-07-31 ---------------------------------- }
+
+procedure TTestSQLInjectionExt.SQL_SanitizerDerivedLocalConcat_NoFinding;
+// FP-Klasse 'escaped-at-source' (HeidiSQL usermanager.pas:1400): UserHost
+// wird Z.1377 aus FConnection.EscapeString(...) gebaut und erst danach ins
+// SQL konkateniert. Der Detektor sah nur den baren Bezeichner und meldete.
+// 1-Ebenen-Datenfluss: alle Zuweisungen an UserHost bestehen nur aus
+// Sanitizer-Aufrufen und Literalen -> untainted.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.SaveUser;'#13#10+
+  'var UserHost: string;'#13#10+
+  'begin'#13#10+
+  '  UserHost := FConnection.EscapeString(editUsername.Text) + ''@'' +'#13#10+
+  '              FConnection.EscapeString(editFromHost.Text);'#13#10+
+  '  FConnection.Query(''CREATE USER '' + UserHost + '' '');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    'an der Quelle escapte Variable ist kein Injection-Vektor');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_UiInputLocalConcat_StillReported;
+// TP-Gegenprobe zum sanitizer-derived-Gate: dieselbe Struktur, aber die
+// Variable kommt ROH aus dem UI (Edit.Text ohne Escaper) -> bleibt Fund.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.SaveUser;'#13#10+
+  'var UserHost: string;'#13#10+
+  'begin'#13#10+
+  '  UserHost := editUsername.Text + ''@'' + editFromHost.Text;'#13#10+
+  '  FConnection.Query(''CREATE USER '' + UserHost + '' '');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
+    'unescapter UI-Input in CREATE USER bleibt SQL-Injection');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_SanitizerAccumulatorLocal_NoFinding;
+// FP-Klasse 'escaped-at-source', Akkumulator-Variante (HeidiSQL
+// dbconnection.pas ~9772: sqlInsertColumns := sqlInsertColumns +
+// Connection.QuoteIdent(...)). Die Selbst-Referenz rechts darf das Gate
+// nicht abschalten, solange alle ANDEREN Beitraege sicher sind.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.PostRow;'#13#10+
+  'var cols: string;'#13#10+
+  'begin'#13#10+
+  '  cols := '''';'#13#10+
+  '  cols := cols + Connection.QuoteIdent(FColumnOrgNames) + '','';'#13#10+
+  '  Connection.Query(''INSERT INTO t ('' + cols + '') VALUES (1)'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    'Akkumulator aus lauter QuoteIdent-Beitraegen ist untainted');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_TaintedAccumulatorLocal_StillReported;
+// TP-Gegenprobe: EIN unescapter Beitrag im Akkumulator reicht - der Fund
+// bleibt. Beweist, dass die Selbst-Referenz-Ausnahme nicht den ganzen
+// Akkumulator whitelistet.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.PostRow;'#13#10+
+  'var cols: string;'#13#10+
+  'begin'#13#10+
+  '  cols := '''';'#13#10+
+  '  cols := cols + Edit1.Text;'#13#10+
+  '  Connection.Query(''INSERT INTO t ('' + cols + '') VALUES (1)'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
+    'Akkumulator mit rohem Edit1.Text bleibt SQL-Injection');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_EscAndAlcinoeSanitizers_NoFinding;
+// FP-Klasse 'escaped-at-source', Namenskonventionen (HeidiSQL tabletools
+// esc(...), Alcinoe.FBX.Client ALQuotedStr/ALIntToStrA). Die Whitelist
+// kannte bisher nur quote*/escape*/get*forsql.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Scan(const FindText: string; TransactionID: Integer);'#13#10+
+  'begin'#13#10+
+  '  SelectData(''SELECT * FROM MON$STATEMENTS WHERE TXT = '' +'#13#10+
+  '    ALQuotedStr(FindText) + '' AND TID = '' + ALIntToStrA(TransactionID) +'#13#10+
+  '    '' AND DB = '' + esc(FindText));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    'ALQuotedStr/ALIntToStrA/esc sind Sanitizer -> kein SCA003');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_UnknownHelperCallConcat_StillReported;
+// TP-Gegenprobe zur erweiterten Sanitizer-Whitelist: ein beliebiger Helfer
+// ohne Sanitizer-Konvention (Normalize(...)) entschaerft nichts -> Fund.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Scan(const FindText: string);'#13#10+
+  'begin'#13#10+
+  '  SelectData(''SELECT * FROM t WHERE TXT = '' + Normalize(FindText));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
+    'Normalize() ist kein Sanitizer -> bleibt SCA003-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_LiteralArrayFormatArg_NoFinding;
+// FP-Klasse 'Konstanten/Metadaten' (mORMot test.orm.sqlite3.pas:434):
+// SoundexValues ist ein lokales Array, das ausschliesslich mit String-
+// Literalen befuellt wird - als Format-Argument nicht beeinflussbar.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Soundex;'#13#10+
+  'var SoundexValues: array[0..1] of RawUtf8;'#13#10+
+  '    s: RawUtf8;'#13#10+
+  '    i1: Integer;'#13#10+
+  'begin'#13#10+
+  '  SoundexValues[0] := ''bonjour'';'#13#10+
+  '  SoundexValues[1] := ''bonchour'';'#13#10+
+  '  s := FormatUtf8(''SELECT SoundExFr("%");'', [SoundexValues[i1]]);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    'Array aus reinen String-Literalen ist kein Injection-Vektor');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_TaintedArrayFormatArg_StillReported;
+// TP-Gegenprobe: sobald eine Element-Zuweisung nicht-literal ist (UI-Input),
+// bleibt der Fund stehen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Soundex;'#13#10+
+  'var SoundexValues: array[0..1] of RawUtf8;'#13#10+
+  '    s: RawUtf8;'#13#10+
+  '    i1: Integer;'#13#10+
+  'begin'#13#10+
+  '  SoundexValues[0] := ''bonjour'';'#13#10+
+  '  SoundexValues[1] := Edit1.Text;'#13#10+
+  '  s := FormatUtf8(''SELECT SoundExFr("%");'', [SoundexValues[i1]]);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
+    'Array mit UI-Input-Element bleibt SQL-Injection-Risiko');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_SqlBuilderRoutineCallTerms_NoFinding;
+// FP-Klasse 'ORM/SQL-Generator-Code' (delphimvcframework
+// MVCFramework.ActiveRecord.pas:5263 TMVCSQLGenerator.CreateSelectSQL): der
+// Generator, der parametrisierte Queries ERZEUGT, wurde selbst als Injection
+// gemeldet. Tabellen-/Feldnamen aus dem Mapping sind konstruktiv nicht
+// parametrisierbar; alle Operanden sind Mapping-Getter und Literale.
+//
+// Fixture angepasst 2026-07-31 (Pre-Build-Review, Fund 'Builder-Rolle
+// whitelistet JEDEN baren Aufruf'): die Mapping-Getter beziehen ihre
+// Argumente jetzt aus FELDERN. Ein Routine-PARAMETER als Argument sperrt
+// die Builder-Rolle seither bewusst (s. die *_StillReported-Gegenproben) -
+// der Parameter ist genau der Fremd-Input, den SCA003 melden soll.
+// TableFieldsDelimited traegt keine Sanitizer-Konvention; ohne die
+// Builder-Rolle waere dieser Fall also ein Fund (kein Vakuum-Gruen).
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TGen.CreateSelectSQL: string;'#13#10+
+  'begin'#13#10+
+  '  Result := ''SELECT '' + TableFieldsDelimited(FMap) +'#13#10+
+  '            '' FROM '' + GetTableNameForSQL(FTableName);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    'Query-Builder aus lauter Mapping-Gettern ist keine SQL-Injection');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_SqlBuilderRoutineBareParam_StillReported;
+// TP-Gegenprobe zur Builder-Rolle: die Rolle whitelistet nur AUFRUFE
+// (Mapping-Fragmente). Ein barer Parameter, der direkt ins SQL konkateniert
+// wird, bleibt auch in einer Builder-Routine ein Fund.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TGen.CreateSelectSQL(const AFilter: string): string;'#13#10+
+  'begin'#13#10+
+  '  Result := ''SELECT * FROM t WHERE n='' + AFilter;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
+    'barer Parameter im Builder bleibt SQL-Injection-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_SqlBuilderRoutineWrappedParam_StillReported;
+// TP-Gegenprobe 2026-07-31 (Pre-Build-Review, Fund 'Query-Builder-Rolle
+// whitelistet JEDEN baren Aufruf'): der Unterschied zur bereits gepinnten
+// Gegenprobe SQL_SqlBuilderRoutineBareParam_StillReported ist nur die
+// Klammer. '+ AFilter' war Fund, '+ Trim(AFilter)' war es nicht mehr -
+// obwohl die Injection identisch ist. Trim traegt keine Mapping-/Sanitizer-
+// Konvention UND das Argument ist ein Routine-Parameter: beide Verengungen
+// greifen, der Error-Tier-Fund bleibt.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TDataModule1.GetOrderSQL(const AFilter: string): string;'#13#10+
+  'begin'#13#10+
+  '  Result := ''SELECT * FROM orders WHERE note='' + Trim(AFilter);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
+    'in einen Aufruf gewickelter Parameter bleibt SQL-Injection-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_SqlBuilderRoutineMemberCallParam_StillReported;
+// TP-Gegenprobe 2026-07-31 (derselbe Review-Fund, Member-Pfad-Zweig):
+// FMap.GetFieldFragment sieht per Namen nach Mapping aus - das Argument ist
+// aber ein Routine-PARAMETER. Diese Kombination pinnt gezielt die zweite
+// Verengung (CallArgUsesRoutineParam): ohne sie wuerde die Builder-Rolle
+// den Term freigeben, weil IsMappingCalleeName('getfieldfragment') greift.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TGen.BuildOrderSQL(const AFilter: string): string;'#13#10+
+  'begin'#13#10+
+  '  Result := ''SELECT * FROM orders WHERE n='' + FMap.GetFieldFragment(AFilter);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
+    'Member-Pfad-Call mit Parameter-Argument bleibt SQL-Injection-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_SqlBuilderRoutineNonMappingCall_StillReported;
+// TP-Gegenprobe 2026-07-31 (derselbe Review-Fund): hier ist das Argument
+// KEIN Parameter, sondern eine lokale Variable aus einem UI-Feld. Der Fund
+// haengt damit allein an der ersten Verengung (IsMappingCalleeName): 'trim'
+// enthaelt keines der Metadaten-Tokens, also gibt die Builder-Rolle nichts
+// frei. Ohne diese Pruefung waere der Fund weg.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TGen.BuildUserSQL: string;'#13#10+
+  'var lVal: string;'#13#10+
+  'begin'#13#10+
+  '  lVal := Edit1.Text;'#13#10+
+  '  Result := ''SELECT * FROM users WHERE n='' + Trim(lVal);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
+    'Nicht-Mapping-Aufruf um UI-Input bleibt auch im Builder ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_SqlGeneratorReceiverCall_NoFinding;
+// FP-Klasse 'ORM/SQL-Generator-Code' (delphimvcframework
+// MVCFramework.ActiveRecord.pas:3367): die aufrufende Routine ist KEIN
+// Builder, aber die Fragmente kommen von einem SQL-Generator-Empfaenger
+// (lAR.SQLGenerator.BuildSoftDeleteSetRestored(...)).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.RestoreRQL(const RQL: string);'#13#10+
+  'var lSQL: string;'#13#10+
+  'begin'#13#10+
+  '  lSQL := ''UPDATE '' + lAR.SQLGenerator.GetTableNameForSQL(lAR.fTableMap) +'#13#10+
+  '          '' SET '' + lAR.SQLGenerator.BuildSoftDeleteSetRestored(lAR.fTableMap);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+    'Fragmente vom SQLGenerator-Empfaenger sind Mapping-Output, keine Injection');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_PlainReceiverCall_StillReported;
+// TP-Gegenprobe zum Empfaenger-Gate: ein Member-Call auf einem BELIEBIGEN
+// Empfaenger (ohne SQLGenerator/QueryBuilder im Pfad) bleibt unsicher.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.RestoreRQL(const RQL: string);'#13#10+
+  'var lSQL: string;'#13#10+
+  'begin'#13#10+
+  '  lSQL := ''UPDATE t SET x='' + lAR.Helper.BuildValue(RQL);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
+    'Member-Call auf beliebigem Empfaenger bleibt SCA003-Fund');
   finally F.Free; end;
 end;
 

@@ -37,6 +37,10 @@ unit uVirtualCallInCtor;
 //   * Self.MyVirtual: Treffer (so wie ohne Self.).
 //   * MyVirtual(args): Treffer.
 //   * Andere Objekt-Calls (FFoo.DoSomething): kein Treffer.
+//   * 'inherited <Event> := <Handler>;': der ZUGEWIESENE Handler ist kein
+//     Treffer (2026-07-31, Event-Zuweisung ist keine Call-Kante - siehe
+//     IsInheritedEventAssignPhantom). Jeder ANDERE Aufruf auf derselben
+//     Zeile bleibt ein Treffer.
 
 interface
 
@@ -56,8 +60,204 @@ implementation
 // noinspection-file ConcatToFormat, ConsecutiveSection, CyclomaticComplexity, GroupedDeclaration, LongMethod, NestedTry, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  System.Classes,
+  uFileTextCache;
+
 const
   EMIT_SEVERITY = lsError;
+
+// ---------------------------------------------------------------------------
+// FP-Gate (2026-07-31, 30%-Real-World-Audit sca-rw-after119)
+// FP-Klasse: Event-Handler-ZUWEISUNG wird als Aufruf gewertet.
+// Belege: jvcl/tests/p3/source/JvPageListTreeView.pas:1614
+//         ('inherited OnGetSelectedIndex := DoGetSelectedIndex;') und
+//         jvcl/jvcl/run/JvThread.pas:409 ('inherited OnShow := ReplaceFormShow;').
+//
+// Mechanismus (an uParser2 verifiziert): fuer 'inherited <Ident> := <Ident>;'
+// laeuft ParseStatement in den tkKwInherited-Zweig, ParsePrimary bricht am
+// ':=' ab und legt nkInherited('OnShow') an. Das uebrig gebliebene ':=' faellt
+// in den else-Zweig (Next; Eat(tkSemicolon), kein Knoten), und der RHS-
+// Bezeichner wird danach als eigenstaendige Anweisung geparst -> Phantom-
+// nkCall('ReplaceFormShow'). Der Reachability-Walk haelt dieses Phantom fuer
+// einen Aufruf aus dem Ctor; tatsaechlich ist es eine Methodenzeiger-
+// Zuweisung, der Handler laeuft erst beim Event-Feuern nach der Konstruktion.
+//
+// Gate: Quellzeile des nkCall auf das Muster '^inherited <Ident> := <RhsId>'
+// pruefen (Strings/Kommentare vorher entfernt). Trifft es zu, wird GENAU der
+// Knoten verworfen, dessen Name dem zugewiesenen RHS-Bezeichner entspricht -
+// alle anderen nkCall derselben Zeile bleiben Treffer.
+//
+// Praezisierung 2026-07-31 (Pre-Build-Review, Fund uVirtualCallInCtor.pas:426
+// "Zeilen-basiertes Gate stellt JEDEN Aufruf auf einer 'inherited <Ident> :='-
+// Zeile still"): das erste Gate war rein zeilenbasiert und verwarf auf einer
+// Treffer-Zeile pauschal alles. Damit gingen belegte TPs verloren:
+//   'inherited Value := ComputeIt(Self);'   (echter Aufruf MIT Klammern)
+//   'inherited OnShow := Foo; Init;'        (nachgestellter echter Aufruf)
+// Jetzt gilt: nur ein RHS OHNE Klammern ist ein Methodenzeiger (= keine
+// Call-Kante); sobald der RHS eine Argumentliste hat, ist es ein echter
+// Aufruf und die Zeile wird gar nicht erst in den Cache aufgenommen.
+//
+// BEWUSST eng (Praezision vor Masse - 626 Error-Funde mit nur 8% FP, die TPs
+// muessen alle bleiben):
+//   * 'inherited Create; Init;' enthaelt kein ':=' -> Treffer bleibt.
+//   * mehrfach-Zuweisung auf einer Zeile ('inherited A := X; inherited B := Y;')
+//     nimmt nur den ERSTEN RHS auf; der zweite Handler bleibt ein Fund
+//     (bewusster Rest-FP statt TP-Risiko).
+//   * 'inherited Caption := GetDefaultCaption;' mit virtuellem parameterlosem
+//     GetDefaultCaption ist vom Methodenzeiger-Idiom textuell NICHT
+//     unterscheidbar (der Parser liefert in beiden Faellen denselben blanken
+//     Phantom-nkCall). Hier wird bewusst die haeufigere Lesart (Zuweisung)
+//     gewaehlt - der Fund faellt weg.
+// Lazy: die Datei wird erst gelesen, wenn ein Fund anstuende.
+// ---------------------------------------------------------------------------
+
+function IsIdentChar(C: Char): Boolean;
+begin
+  Result := CharInSet(C, ['a'..'z', 'A'..'Z', '0'..'9', '_']);
+end;
+
+// Entfernt String-Literale und Kommentare aus EINER Quellzeile; InBrace /
+// InParenStar tragen den Block-Kommentar-Zustand ueber Zeilengrenzen.
+function StripCodeLine(const Line: string; var InBrace, InParenStar: Boolean): string;
+var
+  i, N  : Integer;
+  InStr : Boolean;
+begin
+  Result := '';
+  InStr  := False;
+  N      := Length(Line);
+  i      := 1;
+  while i <= N do
+  begin
+    if InBrace then
+    begin
+      if Line[i] = '}' then InBrace := False;
+      Inc(i);
+      Continue;
+    end;
+    if InParenStar then
+    begin
+      if (Line[i] = '*') and (i < N) and (Line[i + 1] = ')') then
+      begin
+        InParenStar := False;
+        Inc(i, 2);
+        Continue;
+      end;
+      Inc(i);
+      Continue;
+    end;
+    if InStr then
+    begin
+      if Line[i] = '''' then InStr := False;
+      Inc(i);
+      Continue;
+    end;
+    if Line[i] = '''' then begin InStr := True; Inc(i); Continue; end;
+    if Line[i] = '{'  then begin InBrace := True; Inc(i); Continue; end;
+    if (Line[i] = '(') and (i < N) and (Line[i + 1] = '*') then
+    begin
+      InParenStar := True;
+      Inc(i, 2);
+      Continue;
+    end;
+    if (Line[i] = '/') and (i < N) and (Line[i + 1] = '/') then Break;
+    Result := Result + Line[i];
+    Inc(i);
+  end;
+end;
+
+// True fuer 'inherited <Ident> := <RhsIdent>' (Code bereits gestrippt).
+// ARhsLow liefert den zugewiesenen RHS-Bezeichner (lowercase) - aber NUR wenn
+// der RHS bis zum ersten ';' ein reiner, ggf. qualifizierter Bezeichner OHNE
+// Klammern ist ('ReplaceFormShow', 'Self.ReplaceFormShow'). Alles andere
+// ('ComputeIt(Self)', zusammengesetzte Ausdruecke, RHS auf der Folgezeile) ist
+// entweder ein echter Aufruf oder nicht sicher zuzuordnen -> Result=False und
+// die Zeile wird nicht gegatet (Review 2026-07-31).
+function LineIsInheritedPropertyAssign(const Code: string;
+  out ARhsLow: string): Boolean;
+const
+  INH = 'inherited';
+var
+  S    : string;
+  i, N : Integer;
+  Rhs  : string;
+begin
+  Result  := False;
+  ARhsLow := '';
+  S := LowerCase(TrimLeft(Code));
+  if not S.StartsWith(INH) then Exit;
+  N := Length(S);
+  i := Length(INH) + 1;                       // erstes Zeichen NACH 'inherited'
+  if (i > N) or IsIdentChar(S[i]) then Exit;  // 'inheritedfoo := ...'
+  while (i <= N) and CharInSet(S[i], [' ', #9]) do Inc(i);
+  if (i > N) or not CharInSet(S[i], ['a'..'z', '_']) then Exit;
+  while (i <= N) and IsIdentChar(S[i]) do Inc(i);
+  while (i <= N) and CharInSet(S[i], [' ', #9]) do Inc(i);
+  if not ((i < N) and (S[i] = ':') and (S[i + 1] = '=')) then Exit;
+
+  // RHS = Text hinter ':=' bis zum ersten ';' (bzw. Zeilenende).
+  Inc(i, 2);
+  Rhs := '';
+  while (i <= N) and (S[i] <> ';') do
+  begin
+    Rhs := Rhs + S[i];
+    Inc(i);
+  end;
+  Rhs := Trim(Rhs);
+  if Rhs = '' then Exit;
+  if not CharInSet(Rhs[1], ['a'..'z', '_']) then Exit;   // Literal/Ausdruck
+  for i := 1 to Length(Rhs) do
+    if not (IsIdentChar(Rhs[i]) or (Rhs[i] = '.')) then
+      Exit;                                              // Klammern/Operatoren
+  ARhsLow := Rhs;
+  Result  := True;
+end;
+
+// Zeilen-Map der Datei: Zeilennummer -> zugewiesener RHS-Bezeichner des
+// 'inherited <Ident> := <RhsIdent>'-Musters. ACache wird beim ersten Aufruf
+// gefuellt (nil = noch nicht gelesen) und vom Aufrufer freigegeben.
+// AContext steht hier nicht zur Verfuegung (SCA048 ist als 3-Parameter-Detektor
+// registriert) -> Prozess-Cache bzw. Direkt-Load; ist die Datei nicht lesbar
+// (In-Memory-Pfad), bleibt die Map leer und der Gate ist inert (fail-open).
+//
+// True nur, wenn ACallName GENAU der zugewiesene RHS-Bezeichner ist. Damit
+// bleibt ein echter Aufruf auf derselben Zeile ('inherited OnShow := Foo; Init;'
+// oder 'inherited Value := ComputeIt(Self);') ein Treffer (Review 2026-07-31).
+function IsInheritedEventAssignPhantom(const FileName: string; LineNo: Integer;
+  const ACallName: string; var ACache: TDictionary<Integer, string>): Boolean;
+var
+  Lines            : TStringList;
+  Cached           : Boolean;
+  i                : Integer;
+  InBrace, InParen : Boolean;
+  RhsLow, NameLow  : string;
+begin
+  Result := False;
+  if ACache = nil then
+  begin
+    ACache := TDictionary<Integer, string>.Create;
+    Lines := AcquireLines(FileName, Cached, nil);
+    if Lines <> nil then
+    try
+      InBrace := False;
+      InParen := False;
+      for i := 0 to Lines.Count - 1 do
+        if LineIsInheritedPropertyAssign(
+             StripCodeLine(Lines[i], InBrace, InParen), RhsLow) then
+          // Genau ein Eintrag je Zeile: geprueft wird nur das zeilenfuehrende
+          // 'inherited'; eine zweite Zuweisung derselben Zeile bleibt ungegatet.
+          ACache.AddOrSetValue(i + 1, RhsLow);
+    finally
+      ReleaseLines(Lines, Cached);
+    end;
+  end;
+  if not ACache.TryGetValue(LineNo, RhsLow) then Exit;
+  NameLow := LowerCase(Trim(ACallName));
+  // Argumentliste im Knotennamen = echter Aufruf, nie die Phantom-Kante.
+  if Pos('(', NameLow) > 0 then Exit;
+  Result := NameLow = RhsLow;
+end;
 
 function IsConstructor(MethodNode: TAstNode): Boolean;
 begin
@@ -178,7 +378,10 @@ end;
 class procedure TVirtualCallInCtorDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
-  Classes         : TList<TAstNode>;
+  ClassList       : TList<TAstNode>;   // 2026-07-31 umbenannt (war 'Classes') -
+                                        // die Unit zieht jetzt System.Classes,
+                                        // ein gleichnamiger Local verdeckte den
+                                        // Unit-Namensraum.
   ClassNode       : TAstNode;
   VirtualByName   : TDictionary<string, TAstNode>;
   MethodByName    : TDictionary<string, TAstNode>;
@@ -192,10 +395,14 @@ var
   RepKey, Msg     : string;
   ClassImplCtors  : TList<TAstNode>;
   Visited, Chain  : TList<string>;
+  // FP-Gate 2026-07-31 (Event-Zuweisung): Zeile -> zugewiesener RHS-Bezeichner,
+  // lazy befuellt.
+  InhAssignLines  : TDictionary<Integer, string>;
 begin
-  Classes := UnitNode.FindAll(nkClass);
+  InhAssignLines := nil;
+  ClassList := UnitNode.FindAll(nkClass);
   try
-    for ClassNode in Classes do
+    for ClassNode in ClassList do
     begin
       VirtualByName := TDictionary<string, TAstNode>.Create;
       MethodByName  := TDictionary<string, TAstNode>.Create;
@@ -275,6 +482,12 @@ begin
                     // virtueller Konstruktor-Aufruf konstruiert VOLLSTAENDIG, kein
                     // half-init-Self. Nur virtuelle PROZEDUREN sind der Anti-Pattern.
                     if IsConstructor(VMethod) then Continue;
+                    // FP-Gate (2026-07-31): Phantom-nkCall aus
+                    // 'inherited <Event> := <Handler>;' - keine Call-Kante.
+                    // Nur der zugewiesene Handler selbst wird verworfen
+                    // (Call.Name, nicht Call.Line allein - Review 2026-07-31).
+                    if IsInheritedEventAssignPhantom(FileName, Call.Line,
+                         Call.Name, InhAssignLines) then Continue;
                     RepKey := Ctor.Name + '|' + LowName + '|' +
                               IntToStr(Call.Line);
                     if AlreadyReported.IndexOf(RepKey) >= 0 then Continue;
@@ -298,6 +511,15 @@ begin
                       VirtualByName, Visited, Chain, 1);
                     if not Assigned(VMethod) then Continue;
                     if IsConstructor(VMethod) then Continue;  // delegating-ctor, kein half-init
+                    // FP-Gate (2026-07-31): Phantom-nkCall aus
+                    // 'inherited <Event> := <Handler>;' - der Handler laeuft
+                    // erst beim Event-Feuern, nicht im Ctor (JvThread.pas:409:
+                    // 'inherited OnShow := ReplaceFormShow' -> Helper-Kette
+                    // ReplaceFormShow -> CreateFormControls). Nur der
+                    // zugewiesene Handler selbst wird verworfen (Review
+                    // 2026-07-31: Call.Name statt Call.Line allein).
+                    if IsInheritedEventAssignPhantom(FileName, Call.Line,
+                         Call.Name, InhAssignLines) then Continue;
 
                     RepKey := Ctor.Name + '|' + LowerCase(VMethod.Name) + '|' +
                               IntToStr(Call.Line);
@@ -330,7 +552,8 @@ begin
       end;
     end;
   finally
-    Classes.Free;
+    ClassList.Free;
+    InhAssignLines.Free;   // nil-sicher (TObject.Free prueft Self)
   end;
 end;
 

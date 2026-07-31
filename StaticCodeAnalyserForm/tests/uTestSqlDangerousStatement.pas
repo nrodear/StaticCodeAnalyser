@@ -50,6 +50,24 @@ type
     // --- Recharakterisierung after30 2026-07-12: DROP ... IF EXISTS ---
     [Test] procedure SqlDanger_DropTableIfExists_NoFinding;
     [Test] procedure SqlDanger_DropTablePlain_StillReported;
+
+    // --- 30%-Real-World-Audit 2026-07-31: FP-Gates ---
+    // FP-Klasse 'sql-template' (HeidiSQL dbstructures* Provider-Bausteine)
+    [Test] procedure SqlDanger_PlaceholderTemplateInGetter_NoFinding;
+    [Test] procedure SqlDanger_PlaceholderTemplateOnSqlSink_StillReported;
+    // FP-Klasse 'sql-builder-fragment' (MVCFramework CreateDeleteAllSQL)
+    [Test] procedure SqlDanger_BuilderFragmentToResult_NoFinding;
+    [Test] procedure SqlDanger_BuilderFragmentToSqlSink_StillReported;
+    // FP-Klasse 'later-where-append' (MVCFramework CreateUpdateSQL)
+    [Test] procedure SqlDanger_LaterWhereAppend_NoFinding;
+    [Test] procedure SqlDanger_LaterOrderByAppend_StillReported;
+    [Test] procedure SqlDanger_LaterUnrelatedStatementShortTarget_StillReported;
+    // --- Monotonie-Pins 2026-07-31 (Pre-Build-Review): KEINE Abstufung ---
+    // Die zurueckgenommene Severity-Abstufung (DROP -> lsWarning,
+    // Fixture-Pfad -> lsHint) darf nicht unangekuendigt zurueckkehren -
+    // beide Tests werden rot, sobald sie wieder eingebaut wird.
+    [Test] procedure SqlDanger_DropTable_SeverityStaysError;
+    [Test] procedure SqlDanger_FixturePath_SeverityStaysError;
   end;
 
 implementation
@@ -57,7 +75,35 @@ implementation
 uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
+  uAstNode, uParser2, uSqlDangerousStatement,
   uTestFindingHelper;
+
+// Der zentrale Harness TFindingHelper.FindingsOf verwendet den festen
+// Platzhalter-Dateinamen 'sample.pas'. Der Monotonie-Pin
+// SqlDanger_FixturePath_SeverityStaysError (2026-07-31) braucht aber einen
+// ECHTEN Test-Pfad, um zu belegen dass der Detektor dort NICHT abstuft,
+// deshalb hier ein schlanker Direkt-Aufruf nur dieses Detektors. Der
+// Detektor selbst laeuft regulaer im AST-Harness (FindingsOf) -
+// s. uTestFindingHelper Z.187.
+function SqlDangerFindingsFor(const ASource, AFileName: string)
+  : TObjectList<TLeakFinding>;
+var
+  P    : TParser2;
+  Root : TAstNode;
+begin
+  Result := TObjectList<TLeakFinding>.Create(True);
+  P := TParser2.Create;
+  try
+    Root := P.ParseSource(ASource);
+    try
+      TSqlDangerousStatementDetector.AnalyzeUnit(Root, AFileName, Result);
+    finally
+      Root.Free;
+    end;
+  finally
+    P.Free;
+  end;
+end;
 
 procedure TTestSqlDangerousStatement.SqlDanger_UpdateWithoutWhere_Reported;
 const SRC =
@@ -529,6 +575,203 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkSqlDangerousStatement) >= 1,
     'DROP TABLE ohne IF EXISTS bleibt destruktiv -> SCA058-Fund');
+  finally F.Free; end;
+end;
+
+// --- 30%-Real-World-Audit 2026-07-31: FP-Gates ---
+
+procedure TTestSqlDangerousStatement.SqlDanger_PlaceholderTemplateInGetter_NoFinding;
+// FP-Klasse 'sql-template' (HeidiSQL dbstructures.pas:213 / dbstructures.
+// mssql.pas:430 / dbstructures.interbase.pas:186 / dbstructures.mysql.pas:3247):
+// die Provider liefern pro Server-Dialekt SQL-BAUSTEINE mit %s an der
+// Objekt-Position zurueck. Das ist kein ausfuehrbares Statement, sondern ein
+// Template das der Aufrufer erst fuellt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function TProvider.GetSql(AId: TQueryId): string;'#13#10 +
+  'begin'#13#10 +
+  '  Result := ''DELETE FROM %s'';'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSqlDangerousStatement),
+    'Platzhalter-Template eines Provider-Getters ist kein ausfuehrbares Statement');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_PlaceholderTemplateOnSqlSink_StillReported;
+// TP-Gegenprobe zum Template-Gate: dasselbe Literal DIREKT in eine
+// Exec-Property geschrieben wird auch ausgefuehrt -> bleibt Fund. Beweist,
+// dass das Gate an das Nicht-Exec-Ziel (Result/lokale Variable) gebunden ist.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TFDQuery;'#13#10 +
+  'begin q.SQL.Text := ''DELETE FROM %s''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkSqlDangerousStatement) >= 1,
+    'Template direkt in SQL.Text bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_BuilderFragmentToResult_NoFinding;
+// FP-Klasse 'sql-builder-fragment' (delphimvcframework
+// MVCFramework.ActiveRecord.pas:5228 CreateDeleteAllSQL): das Statement wird
+// an Result zusammengesetzt und vom Aufrufer (CreateDeleteSQL) um
+// ' WHERE PK=:PK' ergaenzt. Kein Exec-Sink im Rumpf -> kein Fund.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function TGen.CreateDeleteAllSQL(const TableName: string): string;'#13#10 +
+  'begin'#13#10 +
+  '  Result := ''DELETE FROM '' + GetTableNameForSQL(TableName);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSqlDangerousStatement),
+    'Builder-Fragment an Result ohne Exec-Sink ist kein unfiltered DELETE');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_BuilderFragmentToSqlSink_StillReported;
+// TP-Gegenprobe zum Builder-Gate: dieselbe Konkatenation direkt in SQL.Text
+// wird ausgefuehrt und loescht die ganze Tabelle -> bleibt Fund.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(const TableName: string);'#13#10 +
+  'var q: TFDQuery;'#13#10 +
+  'begin'#13#10 +
+  '  q.SQL.Text := ''DELETE FROM '' + TableName;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkSqlDangerousStatement) >= 1,
+    'DELETE-Konkat direkt in SQL.Text bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_LaterWhereAppend_NoFinding;
+// FP-Klasse 'later-where-append' (delphimvcframework
+// MVCFramework.ActiveRecord.pas:5278 CreateUpdateSQL): das UPDATE-Praefix
+// wird gesetzt, 23 Zeilen spaeter haengt DIESELBE Funktion ' where PK=:PK'
+// an dasselbe Ziel an. Das Mutationsfenster des Literal-Scans war zu kurz.
+// Bewusst mit Exec-Ziel (SQL.Text), damit das Builder-Gate NICHT greift und
+// wirklich die Anhaengungs-Erkennung getestet wird.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TFDQuery;'#13#10 +
+  'begin'#13#10 +
+  '  q.SQL.Text := ''UPDATE customers SET locked=1 '';'#13#10 +
+  '  q.SQL.Text := q.SQL.Text + '' WHERE id=5'';'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSqlDangerousStatement),
+    'die WHERE-Klausel wird im selben Rumpf angehaengt -> kein unfiltered UPDATE');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_LaterOrderByAppend_StillReported;
+// TP-Gegenprobe: es wird zwar spaeter an dasselbe Ziel angehaengt, aber OHNE
+// WHERE-Klausel - das UPDATE trifft weiterhin alle Zeilen -> bleibt Fund.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TFDQuery;'#13#10 +
+  'begin'#13#10 +
+  '  q.SQL.Text := ''UPDATE customers SET locked=1 '';'#13#10 +
+  '  q.SQL.Text := q.SQL.Text + '' ORDER BY id'';'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkSqlDangerousStatement) >= 1,
+    'Anhaengung ohne WHERE darf den unfiltered-UPDATE-Fund nicht verschlucken');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_LaterUnrelatedStatementShortTarget_StillReported;
+// Regression zum Pre-Build-Review-Fund 'HasLaterWhereAppend prueft die
+// Akkumulation per Substring' (2026-07-31): Zielname 's', und die zweite
+// Zuweisung ist ein VOELLIG ANDERES Statement, das das Ziel rechts gar
+// nicht verwendet. Mit der alten Pos()-Pruefung genuegte das 's' aus
+// 'select' als Akkumulations-Nachweis, danach traf ' where' und der echte
+// DELETE-ohne-WHERE-Fund der ersten Zeile verschwand. Mit der
+// wortgebundenen Pruefung bleibt er erhalten.
+// Ohne den Fix ist dieser Test ROT.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var s: string; q: TFDQuery;'#13#10 +
+  'begin'#13#10 +
+  '  s := ''DELETE FROM orders'';'#13#10 +
+  '  q.SQL.Text := s;'#13#10 +
+  '  s := ''SELECT * FROM orders where id=1'';'#13#10 +
+  '  q.SQL.Text := s;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSqlDangerousStatement),
+    'ein unabhaengiges spaeteres Statement ist keine WHERE-Anhaengung - ' +
+    'der DELETE-ohne-WHERE-Fund muss bleiben');
+  finally F.Free; end;
+end;
+
+// --- Monotonie-Pins 2026-07-31 (Pre-Build-Review) ---
+
+procedure TTestSqlDangerousStatement.SqlDanger_DropTable_SeverityStaysError;
+// Pre-Build-Review-Fund 'Severity-Abstufung ADDIERT im Warning-/Note-Tier':
+// die zunaechst geplante Abstufung DROP -> lsWarning wurde ersatzlos
+// zurueckgenommen (Korpus-Gate dieses Inkrements erlaubt pro Regel/Tier nur
+// Entfernungen). Dieser Pin wird rot, sobald sie unangekuendigt
+// zurueckkehrt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TFDQuery;'#13#10 +
+  'begin q.SQL.Text := ''DROP TABLE customers''; end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := TFindingHelper.FirstOf(F, fkSqlDangerousStatement);
+    Assert.IsNotNull(Hit, 'DROP TABLE muss weiterhin gemeldet werden');
+    Assert.AreEqual(lsError, Hit.Severity,
+      'DROP bleibt vorerst im Error-Tier - ein Downgrade ist ein eigenes, ' +
+      'angekuendigtes Inkrement');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_FixturePath_SeverityStaysError;
+// Gegenstueck zum Pin oben fuer die zweite zurueckgenommene Abstufung
+// (Test-/Fixture-Pfad -> lsHint). Der Pfad matcht TDetectorUtils.
+// IsTestFixturePath auf Stufe tplSecret (Segment 'unittests' + Basename
+// '*TestsU'); trotzdem muss die Stufe unveraendert lsError sein. Der
+// Direkt-Harness ist noetig, weil FindingsOf immer 'sample.pas' meldet.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TFDQuery;'#13#10 +
+  'begin q.SQL.Text := ''DELETE FROM customers2''; end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := SqlDangerFindingsFor(SRC, 'D:\repo\unittests\general\ActiveRecordTestsU.pas');
+  try
+    Hit := TFindingHelper.FirstOf(F, fkSqlDangerousStatement);
+    Assert.IsNotNull(Hit, 'Fixture-Fund bleibt erhalten');
+    Assert.AreEqual(lsError, Hit.Severity,
+      'kein Pfad-abhaengiges Downgrade in diesem Inkrement');
   finally F.Free; end;
 end;
 

@@ -15,12 +15,17 @@ unit uDfmDeadEvent;
 // wird.
 //
 // Schweregrad: lsError, FindingType: ftBug.
+//
+// Ancestor-Gate (Real-World-Audit 2026-07-31): DFM-Streaming loest Handler
+// ueber die GESAMTE Klassenhierarchie auf (TObject.MethodAddress). Gemeldet
+// wird deshalb nur, wenn die Vererbungskette VOLLSTAENDIG aufgeloest ist -
+// siehe IsAncestorChainResolved.
 
 interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uSCAConsts, uMethodd12, uFormBinder;
+  uAstNode, uSCAConsts, uMethodd12, uFormBinder;
 
 type
   TDfmDeadEventDetector = class
@@ -34,6 +39,63 @@ implementation
 // noinspection-file NilComparison, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+function FirstAncestorToken(const ATypeRefList: string): string;
+// ClassNode.TypeRef ist eine Space-separierte Liste ('TForm IFoo') - das erste
+// Token ist die Ahnen-Klasse, der Rest sind Interfaces. Ein Unit-Qualifier
+// ('Vcl.Forms.TForm') wird gekappt, damit die Root-Liste greift.
+// Lokale Kopie des Musters aus uFormBinder.FirstAncestor (geteilte Unit bleibt
+// unangetastet).
+var
+  i : Integer;
+begin
+  Result := Trim(ATypeRefList);
+  i := Pos(' ', Result);
+  if i > 0 then Result := Trim(Copy(Result, 1, i - 1));
+  i := LastDelimiter('.', Result);
+  if i > 0 then Result := Copy(Result, i + 1, MaxInt);
+end;
+
+function IsFrameworkRoot(const AClassRef: string): Boolean;
+// Spiegelt uFormBinder.BindWithParents.IsVclRoot: genau an diesen Klassen
+// STOPPT die Parent-Aufloesung des Binders. Ist der oberste erreichte Ahn
+// einer davon (oder gibt es gar keinen Ahn = implizit TObject), ist die Kette
+// vollstaendig durchsucht. Muss eine Obermenge der Binder-Liste bleiben -
+// sonst wuerden echte Funde faelschlich unterdrueckt.
+const
+  ROOTS : array[0..7] of string = (
+    'TObject', 'TPersistent', 'TComponent',
+    'TForm', 'TFrame', 'TCustomForm', 'TCustomFrame', 'TDataModule');
+var
+  R : string;
+begin
+  if AClassRef = '' then Exit(True);   // kein Ahn -> implizit TObject
+  for R in ROOTS do
+    if SameText(AClassRef, R) then Exit(True);
+  Result := False;
+end;
+
+function IsAncestorChainResolved(Binding: TFormBinding): Boolean;
+// FP-Gate (Real-World-Audit 2026-07-31, FP-Klasse 'Handler in Ancestor-
+// Formklasse'): DFM-Streaming findet Handler ueber die komplette Klassen-
+// hierarchie (TObject.MethodAddress), der Binder loest die Kette aber nur
+// so weit auf, wie der Repo-Index reicht (Single-File-Scan: gar nicht;
+// Multi-File: bis zur ersten unbekannten Klasse). Bricht die Kette bei einer
+// USER-Klasse ab, kann der Handler dort deklariert sein - der behauptete
+// Load-Crash ist dann unbeweisbar und wird nicht gemeldet.
+// Vorbild-FP: skia4delphi Sample.Form.SplashScreen (TfrmSplashScreen =
+// class(TfrmBase), pnlBackClick lebt in TfrmBase).
+var
+  Top : TFormBinding;
+begin
+  Result := False;
+  Top := Binding;
+  while Top.Parent <> nil do
+    Top := Top.Parent;
+  // Oberste Bindung ohne aufgeloeste Klasse -> Kette offen.
+  if Top.FormClass = nil then Exit;
+  Result := IsFrameworkRoot(FirstAncestorToken(Top.FormClass.TypeRef));
+end;
+
 class procedure TDfmDeadEventDetector.Analyze(Binding: TFormBinding;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -45,6 +107,9 @@ begin
   // nicht pruefen -> nichts melden. Ein eigener Befund fuer "Pascal nicht
   // gefunden" gehoert in den Runner-Layer, nicht hier.
   if Binding.FormClass = nil then Exit;
+  // FP-Gate 2026-07-31: nur melden, wenn die Ahnen-Kette komplett aufgeloest
+  // ist (s. IsAncestorChainResolved). Unvollstaendige Kette -> schweigen.
+  if not IsAncestorChainResolved(Binding) then Exit;
 
   for Ev in Binding.Events do
   begin
