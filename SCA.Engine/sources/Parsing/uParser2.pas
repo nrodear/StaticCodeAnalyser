@@ -717,6 +717,46 @@ begin
                   tkKwImplementation, tkKwInitialization, tkKwEnd, tkEof] then
       Exit;
 
+    // Attribut VOR der Typdeklaration balanciert ueberspringen:
+    //   [JavaSignature('androidx/webkit/BackForwardCacheSettings')]
+    //   JBackForwardCacheSettings = interface(JObject)
+    // Parser-Inkrement 2026-07-31: bisher verwarf der tkIdent-Filter nur
+    // die oeffnende Klammer, danach wurde 'JavaSignature' als TYPNAME
+    // gelesen, das fehlende '=' fuehrte in SkipToSemicolon (verschluckt
+    // die echte Deklaration) und das naechste 'function' beendete per
+    // Exit die gesamte Typsektion - der Rest der Unit existierte fuer
+    // KEINEN AST-Detektor mehr. Korpus-Messung (Review 2026-07-31):
+    // 4.022 Attribut-Stellen in 1.207 Dateien, davon praktisch alle auf
+    // Unit-Ebene (nur 9 tiefer eingerueckt).
+    // Nur hier, am Deklarationsanfang: ein '[' NACH dem '=' gehoert zu
+    // einem Array-Typ und wird von den Typzweigen unten behandelt; der
+    // Interface-GUID ['{...}'] lebt in ParseClassBody.
+    // OFFEN (eigenes Inkrement): ParseClassBody und ParseVarLikeSection
+    // haben dasselbe Problem fuer MEMBER-Attribute - '[Weak] FFoo: TObject;'
+    // erzeugt weiterhin ein Phantom-Feld 'Weak'.
+    if T.Kind = tkLBracket then
+    begin
+      // '[' unbedingt konsumieren: das garantiert den Forward-Progress
+      // der aeusseren Schleife (StartCount/GuardAdvance wird per Continue
+      // uebersprungen), unabhaengig davon, wie die Abbruchliste unten
+      // spaeter erweitert wird.
+      Next;
+      var BrDepth := 1;
+      while (BrDepth > 0) and not FLex.AtEnd do
+      begin
+        if Tok.Kind = tkLBracket then Inc(BrDepth)
+        else if Tok.Kind = tkRBracket then Dec(BrDepth)
+        // Recovery-Grenzen: in einer legalen Attributklausel kommt keines
+        // dieser Token vor - ein unbalanciertes '[' darf nicht die halbe
+        // Unit fressen (Lehre aus dem T2b/T3-Generic-Zweig). Das
+        // Grenz-Token bleibt fuer die aeussere Schleife liegen.
+        else if Tok.Kind in [tkSemicolon, tkKwEnd, tkKwImplementation] then
+          Break;
+        Next;
+      end;
+      Continue;
+    end;
+
     if T.Kind <> tkIdent then begin Next; Continue; end;
 
     Name := Next.Value;

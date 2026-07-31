@@ -9,6 +9,7 @@ uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uAstNode, uParser2,
+  uDetectorUtils,   // ContainsWholeWordLower (Escaped-Identifier-Test)
   uTestSrcBuilder,
   uTestFindingHelper;
 
@@ -99,6 +100,11 @@ type
     // T3 (2026-07-31): Generic-Call-Statement darf seine Argumente nicht
     // verlieren - 'SetValue<T>(FColor, AValue);' brach an tkLt ab.
     [Test] procedure Parser_GenericCallStatement_KeepsArgs;
+    // Parser-Inkrement 2026-07-31: zwei Abbruch-Ursachen, die in 121
+    // Korpusdateien den Rest der Unit fuer ALLE AST-Detektoren
+    // unsichtbar machten.
+    [Test] procedure Parser_AttributeBeforeTypeDecl_SectionSurvives;
+    [Test] procedure Parser_EscapedIdentifier_DoesNotCloseInterface;
   end;
 
 implementation
@@ -2345,6 +2351,113 @@ begin
           'dotted Typargument muss entpunktet im Namen stehen, Ist:'
           + Names);
       finally Calls.Free; end;
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_AttributeBeforeTypeDecl_SectionSurvives;
+// Parser-Inkrement 2026-07-31, Ursache 1 (4.146 belegte Folge-FPs in
+// 117 Korpusdateien): '[JavaSignature(...)]' vor einer Typdeklaration
+// liess ParseTypeSection den ATTRIBUTNAMEN als Typnamen lesen; das
+// fehlende '=' fuehrte in SkipToSemicolon (verschluckte die echte
+// Deklaration) und das folgende 'function' beendete per Exit die
+// gesamte Typsektion. Alles danach existierte im AST nicht mehr.
+// Der Test prueft genau das: der Typ MIT Attribut und ALLE Folgetypen
+// muessen im Baum stehen.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TVorher = class'#13#10+
+  '  end;'#13#10+
+  '  [JavaSignature(''androidx/webkit/BackForwardCacheSettings'')]'#13#10+
+  '  JBackForward = interface(JObject)'#13#10+
+  '    function getMaxPagesInCache: Integer; cdecl;'#13#10+
+  '  end;'#13#10+
+  '  [ComponentPlatforms(pidWin32 or pidWin64)]'#13#10+
+  '  TMitAttribut = class'#13#10+
+  '  public'#13#10+
+  '    procedure MussDaSein;'#13#10+
+  '  end;'#13#10+
+  '  TDanach = class'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'end.';
+var Parser: TParser2; Root: TAstNode; Cls: TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Assert.IsNotNull(ClassByName(Root, 'TVorher'),
+        'Typ VOR dem Attribut fehlt, gefunden: ' + ClassNames(Root));
+      Assert.IsNotNull(ClassByName(Root, 'JBackForward'),
+        'Typ MIT Attribut fehlt (Attribut als Typname gelesen?), '
+        + 'gefunden: ' + ClassNames(Root));
+      Cls := ClassByName(Root, 'TMitAttribut');
+      Assert.IsNotNull(Cls,
+        'zweiter Typ mit Attribut fehlt, gefunden: ' + ClassNames(Root));
+      Assert.IsTrue(Pos('MussDaSein', MethodNamesOf(Cls)) > 0,
+        'Member des Typs mit Attribut fehlen');
+      Assert.IsNotNull(ClassByName(Root, 'TDanach'),
+        'Folgetyp fehlt - die Typsektion wurde vorzeitig beendet, '
+        + 'gefunden: ' + ClassNames(Root));
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_EscapedIdentifier_DoesNotCloseInterface;
+// Parser-Inkrement 2026-07-31, Ursache 2 (1.737 belegte Folge-FPs in
+// 4 Korpusdateien): der Lexer kannte '&' nicht. In
+// 'function &end: UITextPosition; cdecl;' wurde '&' zu tkUnknown und
+// das folgende 'end' zu tkKwEnd - das schloss den Interface-Rumpf
+// mitten in der Deklaration, danach entgleiste die ganze Typsektion.
+// Das '&' wird verworfen, der Bezeichner ist NIE ein Keyword.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  UITextRange = interface(NSObject)'#13#10+
+  '    function &end: Integer; cdecl;'#13#10+
+  '    function &type: Integer; cdecl;'#13#10+
+  '    function isEmpty: Boolean; cdecl;'#13#10+
+  '  end;'#13#10+
+  '  TDanach = class'#13#10+
+  '  public'#13#10+
+  '    procedure MussDaSein;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'end.';
+var Parser: TParser2; Root: TAstNode; Cls: TAstNode; Names: string;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Cls := ClassByName(Root, 'UITextRange');
+      Assert.IsNotNull(Cls, 'Interface mit &-Bezeichnern fehlt, '
+        + 'gefunden: ' + ClassNames(Root));
+      Names := MethodNamesOf(Cls);
+      // Der Escaped Identifier steht OHNE '&' im Baum - so wird er auch
+      // referenziert ('x.&end' adressiert das Member 'end'). Wortgenau
+      // pruefen: ein Substring-Test wuerde auch auf 'legend' anspringen.
+      Assert.IsTrue(TDetectorUtils.ContainsWholeWordLower('end',
+        LowerCase(Names)),
+        'escaped Bezeichner "end" fehlt als Member, Ist: ' + Names);
+      // '&type' ist mit 543 Korpus-Stellen das haeufigste Escape-Muster
+      // und das einzige, das im Klassenrumpf InTypeSection umlegt (dort
+      // haengt die nested-type-Rekursion dran) - deshalb eigener Assert.
+      Assert.IsTrue(TDetectorUtils.ContainsWholeWordLower('type',
+        LowerCase(Names)),
+        'escaped Bezeichner "type" fehlt als Member, Ist: ' + Names);
+      Assert.IsTrue(Pos('isEmpty', Names) > 0,
+        'Member NACH dem escaped Bezeichner fehlt - der Rumpf wurde '
+        + 'vorzeitig geschlossen, Ist: ' + Names);
+      Cls := ClassByName(Root, 'TDanach');
+      Assert.IsNotNull(Cls, 'Folgetyp fehlt - Typsektion entgleist, '
+        + 'gefunden: ' + ClassNames(Root));
+      Assert.IsTrue(Pos('MussDaSein', MethodNamesOf(Cls)) > 0,
+        'Member des Folgetyps fehlen');
     finally Root.Free; end;
   finally Parser.Free; end;
 end;

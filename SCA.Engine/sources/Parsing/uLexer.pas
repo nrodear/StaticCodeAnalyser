@@ -641,6 +641,37 @@ begin
       // Bezeichner und Schlüsselwörter
       'A'..'Z', 'a'..'z', '_': Exit(ReadIdent);
 
+      // Escaped Identifier: '&end', '&Message', '&type' - das '&' hebt die
+      // Keyword-Bedeutung auf, der Rest IST ein normaler Bezeichner
+      // (Delphi-Sprachfeature fuer Namen aus fremden APIs).
+      // Parser-Inkrement 2026-07-31: ohne diesen Zweig fiel '&' in den
+      // tkUnknown-else, und das folgende 'end' kam als tkKwEnd zurueck -
+      // in DW.iOSapi.UIKit.pas schloss 'function &end: UITextPosition'
+      // damit den Interface-Rumpf mitten in der Deklaration; danach
+      // beendete ParseTypeSection die ganze Typsektion und der Rest der
+      // Unit war fuer JEDEN AST-Detektor unsichtbar. Das '&' wird
+      // verworfen, weil der Bezeichner ohne es referenziert wird
+      // ('x.&end' adressiert das Member 'end').
+      // KORPUS-MESSUNG (Review 2026-07-31): 1.371 Keyword-Escapes in 172
+      // Dateien, haeufigste Muster &type (543), &string (150), &label
+      // (104), &end (86), &object (85). Der Fix behebt NICHT nur
+      // Truncation, er korrigiert auch AST-Knoten: '&Unit: TSkSVGLengthUnit'
+      // erzeugte bisher ein Phantom-Feld mit dem TYPNAMEN als Feldnamen,
+      // 'procedure P(start, &end: int32_t)' verlor den zweiten Parameter.
+      // FPC-Oktal ('&777') bleibt unberuehrt - PeekChar ist dort eine
+      // Ziffer, der else-Zweig verhaelt sich byte-gleich zu vorher.
+      '&': if CharInSet(PeekChar, ['A'..'Z', 'a'..'z', '_']) then
+           begin
+             Advance;                        // '&' selbst verwerfen
+             var EscTok := ReadIdent;        // liest den Bezeichnertext
+             Exit(MakeTok(tkIdent, EscTok.Value, L, C));  // NIE Keyword
+           end
+           else
+           begin
+             Advance;
+             Exit(MakeTok(tkUnknown, '&', L, C));
+           end;
+
       // Operatoren
       ':': if PeekChar = '=' then
            begin
