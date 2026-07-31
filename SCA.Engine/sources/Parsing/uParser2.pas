@@ -1227,6 +1227,37 @@ begin
     StartCount := FNextCount;
     T := Tok;
     case T.Kind of
+      tkLBracket:
+        begin
+          // MEMBER-Attribut balanciert ueberspringen (Parser-Inkrement
+          // Gate-Nachtrag 2026-07-31). Bisher fiel '[' in den else-Zweig
+          // (nur Next), der folgende Bezeichner landete im tkIdent-Zweig
+          // und wurde OHNE Doppelpunkt als FELD abgelegt:
+          //   [MVCTable('customers')]  -> Phantom-nkField('MVCTable')
+          //   [Weak] FFoo: TObject;    -> Phantom-nkField('Weak')
+          // Verschachtelte Attribute ([MVCHTTPMethods([httpGET])]) ergaben
+          // sogar zwei. Gemessen am Gate after121->after122: 275 der 792
+          // neuen SCA138-GodClass-Funde (35%) feuerten AUSSCHLIESSLICH
+          // wegen solcher Phantom-Member - die Attribut-Dichte in
+          // ORM-/Controller-Code (delphimvcframework EntitiesU.pas: 249
+          // Attributzeilen) macht das zur Massenklasse.
+          // Nebeneffekt (erwuenscht): auch die Interface-GUID ['{...}']
+          // laeuft jetzt sauber durch diesen Zweig statt tokenweise durch
+          // den else-Pfad.
+          Next;                        // '[' immer konsumieren -> Progress
+          var MDepth := 1;
+          while (MDepth > 0) and not FLex.AtEnd do
+          begin
+            if Tok.Kind = tkLBracket then Inc(MDepth)
+            else if Tok.Kind = tkRBracket then Dec(MDepth)
+            // Recovery-Grenzen wie auf Typ-Ebene: in einer legalen
+            // Attributklausel kommt keines dieser Token vor. Das
+            // Grenz-Token bleibt fuer den Aussen-Loop liegen.
+            else if Tok.Kind in [tkSemicolon, tkKwEnd] then
+              Break;
+            Next;
+          end;
+        end;
       tkKwType:
         begin
           // Beginn einer type-Sektion im Klassenrumpf - erst ab hier duerfen

@@ -105,6 +105,9 @@ type
     // unsichtbar machten.
     [Test] procedure Parser_AttributeBeforeTypeDecl_SectionSurvives;
     [Test] procedure Parser_EscapedIdentifier_DoesNotCloseInterface;
+    // Gate-Nachtrag: MEMBER-Attribute erzeugten Phantom-Felder
+    // (275 der 792 neuen GodClass-Funde feuerten nur deswegen).
+    [Test] procedure Parser_MemberAttribute_NoPhantomField;
   end;
 
 implementation
@@ -2402,6 +2405,72 @@ begin
       Assert.IsNotNull(ClassByName(Root, 'TDanach'),
         'Folgetyp fehlt - die Typsektion wurde vorzeitig beendet, '
         + 'gefunden: ' + ClassNames(Root));
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_MemberAttribute_NoPhantomField;
+// Gate-Nachtrag 2026-07-31: das Attribut-Problem gab es auf ZWEI Ebenen.
+// Der Typ-Ebenen-Skip war gefixt, im Klassenrumpf fiel '[' aber weiter
+// in den else-Zweig - der folgende Bezeichner landete im tkIdent-Zweig
+// und wurde OHNE Doppelpunkt als FELD abgelegt. Aus
+// '[MVCTable(''customers'')]' wurde also ein Phantom-nkField('MVCTable'),
+// aus '[MVCHTTPMethods([httpGET])]' sogar zwei. Am Korpus gemessen:
+// 275 der 792 neuen SCA138-GodClass-Funde (35%) feuerten AUSSCHLIESSLICH
+// wegen solcher Phantom-Member.
+// Der Test zaehlt die Felder: erwartet werden genau die zwei ECHTEN.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  [MVCTable(''customers'')]'#13#10+
+  '  TCustomer = class'#13#10+
+  '  private'#13#10+
+  '    [MVCTableField(''id'', [foPrimaryKey])]'#13#10+
+  '    FId: Integer;'#13#10+
+  '    [Weak]'#13#10+
+  '    FOwnerRef: TObject;'#13#10+
+  '  public'#13#10+
+  '    [MVCHTTPMethods([httpGET])]'#13#10+
+  '    procedure Fetch;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'end.';
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  Cls    : TAstNode;
+  Fields : TList<TAstNode>;
+  Names  : string;
+  Cnt    : Integer;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Cls := ClassByName(Root, 'TCustomer');
+      Assert.IsNotNull(Cls, 'Klasse mit Attribut fehlt, gefunden: '
+        + ClassNames(Root));
+      Fields := Cls.FindAll(nkField);
+      try
+        Cnt := 0;
+        Names := '';
+        for var F in Fields do
+        begin
+          Inc(Cnt);
+          if Names <> '' then Names := Names + ',';
+          Names := Names + F.Name;
+        end;
+        Assert.AreEqual<Integer>(2, Cnt,
+          'genau zwei ECHTE Felder erwartet (FId, FOwnerRef) - jedes '
+          + 'weitere ist ein Phantom aus einem Member-Attribut, Ist: '
+          + Names);
+        Assert.IsTrue(Pos('FId', Names) > 0, 'FId fehlt, Ist: ' + Names);
+        Assert.IsTrue(Pos('FOwnerRef', Names) > 0,
+          'FOwnerRef fehlt, Ist: ' + Names);
+      finally Fields.Free; end;
+      Assert.IsTrue(Pos('Fetch', MethodNamesOf(Cls)) > 0,
+        'Methode nach dem Attribut fehlt');
     finally Root.Free; end;
   finally Parser.Free; end;
 end;
