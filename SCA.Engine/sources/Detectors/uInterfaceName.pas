@@ -11,6 +11,16 @@ unit uInterfaceName;
 // (optional `<Ident> = interface(IParent)`, `<Ident> = interface; (fwd)`,
 // auch mit GUID `['{...}']`). Name muss mit `I` beginnen.
 //
+// AUSNAHMEN (Hebel A, 30%-Audit 2026-07-31 - 15.707 Funde, 100 % FP im
+// Sample):
+//   * generierte COM-Typelib-Importe (`*_TLB.pas`)
+//   * ObjC-/JNI-Bridge-Interfaces - dort IST der Interface-Name der
+//     native Klassenname (ObjC) bzw. folgt der offiziellen
+//     J<Name>-Konvention der Androidapi-RTL; die I-Konvention ist dort
+//     bewusst ausser Kraft und eine Umbenennung braeche die Bridge.
+// Beide Gates liegen in TDetectorUtils (IsGeneratedTypelibFile /
+// CollectFfiBindingTypes), die Kriterien-Auswahl ist dort dokumentiert.
+//
 // Schweregrad: lsHint.
 
 interface
@@ -154,9 +164,18 @@ var
   F      : TLeakFinding;
   Cached : Boolean;
   Name   : string;
+  // Hebel A: FFI-Binding-Typnamen der Unit. LAZY - erst beim ersten
+  // Kandidaten gebaut, damit die 99 % Dateien ohne Fund keinen
+  // AST-Walk bezahlen.
+  FfiTypes : TStringList;
 begin
+  // Gate 1 (Hebel A): generierte Typelib-Importe komplett ausnehmen.
+  // Steht VOR dem Lines-Load - spart bei diesen (durchweg riesigen)
+  // Dateien auch noch das Einlesen.
+  if TDetectorUtils.IsGeneratedTypelibFile(FileName) then Exit;
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
+  FfiTypes := nil;
   try
     InBlk   := False;
     InParen := False;
@@ -164,6 +183,14 @@ begin
     begin
       Col := FindBadInterfaceName(Lines[i], InBlk, InParen, Name);
       if Col <= 0 then Continue;
+      // Gate 2 (Hebel A): ObjC-/JNI-Bridge-Interface. Deckt auch die
+      // Vorwaerts-Deklaration ab (`EKEventStore = interface;` erzeugt
+      // KEINEN AST-Knoten) - nachgeschlagen wird der NAME, und die
+      // vollstaendige Deklaration desselben Namens steht weiter unten
+      // in derselben Unit.
+      if FfiTypes = nil then
+        FfiTypes := TDetectorUtils.CollectFfiBindingTypes(UnitNode);
+      if TDetectorUtils.IsFfiBindingTypeName(FfiTypes, Name) then Continue;
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
       F.MethodName := '';
@@ -175,6 +202,7 @@ begin
       Results.Add(F);
     end;
   finally
+    FfiTypes.Free;
     ReleaseLines(Lines, Cached);
   end;
 end;

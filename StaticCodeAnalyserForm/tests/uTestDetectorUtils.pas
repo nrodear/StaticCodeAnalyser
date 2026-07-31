@@ -64,12 +64,21 @@ type
     [Test] procedure OwnerType_Unqualified_IsEmpty;
     [Test] procedure OwnerType_EdgeCases_AreBounded;
     [Test] procedure IsNestedTypeMethodName_CountsQualifiers;
+    // --- FFI-Binding-Erkennung (Hebel A, 30%-Audit 2026-07-31) ---
+    [Test] procedure Typelib_TlbSuffixDetected_CaseInsensitive;
+    [Test] procedure Typelib_PlainUnitIsNoTypelib;
+    [Test] procedure Ffi_JniAnchorAndGenericImportCollected;
+    [Test] procedure Ffi_ObjCAnchorAndTransitiveInheritance;
+    [Test] procedure Ffi_PlainUnitCollectsNothing;
+    [Test] procedure Ffi_NonImportGenericArgsAreNoFfiTypes;
+    [Test] procedure Ffi_NilUnitYieldsEmptySet;
   end;
 
 implementation
 
 uses
   System.SysUtils, System.Classes,
+  uAstNode, uParser2,      // FFI-Set-Tests brauchen einen echten AST
   uDetectorUtils;
 
 { ---- ScanCodeLine ---- }
@@ -655,6 +664,176 @@ begin
     'zwei Qualifizierer = nested type');
   Assert.IsTrue(TDetectorUtils.IsNestedTypeMethodName('TA.TB.TC.Run'),
     'drei Qualifizierer ebenfalls');
+end;
+
+{ ---- FFI-Binding-Erkennung (Hebel A, 30%-Audit 2026-07-31) ---- }
+
+function FfiTypesOf(const ASource: string): TStringList;
+// Quelltext parsen und das FFI-Typ-Set der Unit liefern. Caller: Free.
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(ASource);
+    try
+      Result := TDetectorUtils.CollectFfiBindingTypes(Root);
+    finally
+      Root.Free;
+    end;
+  finally
+    Parser.Free;
+  end;
+end;
+
+procedure TTestDetectorUtils.Typelib_TlbSuffixDetected_CaseInsensitive;
+begin
+  Assert.IsTrue(TDetectorUtils.IsGeneratedTypelibFile(
+    'D:\repo\jcl\source\windows\mscorlib_TLB.pas'), 'Grossschreibung _TLB');
+  Assert.IsTrue(TDetectorUtils.IsGeneratedTypelibFile(
+    'D:\repo\plugins\wmplib_1_0_tlb.pas'), 'Kleinschreibung _tlb');
+  Assert.IsTrue(TDetectorUtils.IsGeneratedTypelibFile('Foo_Tlb.pas'),
+    'ohne Pfad, gemischte Schreibweise');
+end;
+
+procedure TTestDetectorUtils.Typelib_PlainUnitIsNoTypelib;
+begin
+  Assert.IsFalse(TDetectorUtils.IsGeneratedTypelibFile(''), 'leerer Name');
+  Assert.IsFalse(TDetectorUtils.IsGeneratedTypelibFile('D:\repo\uMain.pas'),
+    'normale Unit');
+  Assert.IsFalse(TDetectorUtils.IsGeneratedTypelibFile('uTLBHelper.pas'),
+    'TLB nur als Namensbestandteil - kein Importer-Suffix');
+  Assert.IsFalse(TDetectorUtils.IsGeneratedTypelibFile('D:\x_TLB\uMain.pas'),
+    'Verzeichnis heisst _TLB, die Datei nicht');
+end;
+
+procedure TTestDetectorUtils.Ffi_JniAnchorAndGenericImportCollected;
+// JNI-Muster: Anker JObject/JObjectClass + Import-Interfaces, die NUR
+// ueber die TJavaGenericImport-Argumente auffindbar sind.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'uses Androidapi.JNIBridge;'#13#10 +
+  'type'#13#10 +
+  '  JDetectorClass = interface(JObjectClass)'#13#10 +
+  '    function init: Integer; cdecl;'#13#10 +
+  '  end;'#13#10 +
+  '  JDetector = interface(JObject)'#13#10 +
+  '    function detect: Integer; cdecl;'#13#10 +
+  '  end;'#13#10 +
+  // Elternteil steht in einer FREMDEN Unit - nur die Import-Argumente
+  // unten belegen, dass das ein Bridge-Interface ist.
+  '  JKeyGenParameterSpec = interface(JAlgorithmParameterSpec)'#13#10 +
+  '  end;'#13#10 +
+  '  TJKeyGenParameterSpec = class(TJavaGenericImport<JDetectorClass, JKeyGenParameterSpec>) end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var S: TStringList;
+begin
+  S := FfiTypesOf(SRC);
+  try
+    Assert.IsTrue(TDetectorUtils.IsFfiBindingTypeName(S, 'JDetectorClass'),
+      'JObjectClass-Anker');
+    Assert.IsTrue(TDetectorUtils.IsFfiBindingTypeName(S, 'JDetector'),
+      'JObject-Anker');
+    Assert.IsTrue(TDetectorUtils.IsFfiBindingTypeName(S, 'JKeyGenParameterSpec'),
+      'nur ueber TJavaGenericImport-Argument belegt');
+  finally S.Free; end;
+end;
+
+procedure TTestDetectorUtils.Ffi_ObjCAnchorAndTransitiveInheritance;
+// ObjC-Muster + Vererbung ueber zwei Stufen innerhalb der Unit.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'uses Macapi.ObjectiveC;'#13#10 +
+  'type'#13#10 +
+  '  EKObject = interface(NSObject)'#13#10 +
+  '    procedure reset; cdecl;'#13#10 +
+  '  end;'#13#10 +
+  '  EKCalendarItem = interface(EKObject)'#13#10 +
+  '  end;'#13#10 +
+  '  EKEvent = interface(EKCalendarItem)'#13#10 +
+  '  end;'#13#10 +
+  '  TDownloadDelegate = class(TOCLocal)'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var S: TStringList;
+begin
+  S := FfiTypesOf(SRC);
+  try
+    Assert.IsTrue(TDetectorUtils.IsFfiBindingTypeName(S, 'EKObject'),
+      'NSObject-Anker');
+    Assert.IsTrue(TDetectorUtils.IsFfiBindingTypeName(S, 'EKCalendarItem'),
+      'eine Stufe geerbt');
+    Assert.IsTrue(TDetectorUtils.IsFfiBindingTypeName(S, 'EKEvent'),
+      'zwei Stufen geerbt (Fixpunkt)');
+    Assert.IsTrue(TDetectorUtils.IsFfiBindingTypeName(S, 'TDownloadDelegate'),
+      'TOCLocal-Anker (Delegate-Implementierung)');
+  finally S.Free; end;
+end;
+
+procedure TTestDetectorUtils.Ffi_PlainUnitCollectsNothing;
+// Gegenprobe: normaler Delphi-Code darf KEINEN Typ als FFI markieren.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'uses System.Classes;'#13#10 +
+  'type'#13#10 +
+  '  IService = interface'#13#10 +
+  '    procedure Run;'#13#10 +
+  '  end;'#13#10 +
+  '  TWorker = class(TComponent, IService)'#13#10 +
+  '    procedure Run;'#13#10 +
+  '  end;'#13#10 +
+  '  TChild = class(TWorker)'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var S: TStringList;
+begin
+  S := FfiTypesOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, S.Count, 'kein Typ dieser Unit ist ein Binding');
+  finally S.Free; end;
+end;
+
+procedure TTestDetectorUtils.Ffi_NonImportGenericArgsAreNoFfiTypes;
+// nkGenericArgs haengt an JEDEM generischen Elternteil. Nur die
+// Argumente von TJavaGenericImport/TOCGenericImport zaehlen.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TCustomer = class(TObject)'#13#10 +
+  '  end;'#13#10 +
+  '  TCustomerList = class(TObjectList<TCustomer>)'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var S: TStringList;
+begin
+  S := FfiTypesOf(SRC);
+  try
+    Assert.IsFalse(TDetectorUtils.IsFfiBindingTypeName(S, 'TCustomer'),
+      'Generic-Argument einer normalen Liste ist kein Binding');
+    Assert.AreEqual<Integer>(0, S.Count, 'Set bleibt leer');
+  finally S.Free; end;
+end;
+
+procedure TTestDetectorUtils.Ffi_NilUnitYieldsEmptySet;
+var S: TStringList;
+begin
+  S := TDetectorUtils.CollectFfiBindingTypes(nil);
+  try
+    Assert.IsNotNull(S, 'liefert nie nil');
+    Assert.AreEqual<Integer>(0, S.Count);
+    Assert.IsFalse(TDetectorUtils.IsFfiBindingTypeName(S, 'JObject'));
+    Assert.IsFalse(TDetectorUtils.IsFfiBindingTypeName(nil, 'JObject'),
+      'nil-Set ist kein Treffer');
+  finally S.Free; end;
 end;
 
 initialization

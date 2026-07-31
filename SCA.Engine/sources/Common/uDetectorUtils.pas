@@ -19,7 +19,11 @@ uses
     // CharInSet ist eine Inline-Funktion. Die inline deklarierten Routinen
     // dieser Unit koennen sie nur expandieren, wenn System.SysUtils
     // interface-seitig sichtbar ist - sonst H2445, siehe ParseCallsInExpr.
-  uAnalyzeContext;                             // Perf (2026-07-05): P1-strip-cache
+  uAnalyzeContext,                             // Perf (2026-07-05): P1-strip-cache
+  uAstNode;                                    // Hebel A: CollectFfiBindingTypes
+    // uAstNode haengt nur an System-Units - kein Zyklus. uAnalyzeContext
+    // zieht den Knotentyp ueber uAstFileCache ohnehin schon in die
+    // Abhaengigkeits-Huelle dieser Unit.
 
 type
   // Container fuer extrahierte Function-Calls aus Expression-Strings
@@ -353,6 +357,82 @@ type
     // Attribute fehl-erkannt wurden.
     class function IsLikelyAttributePosition(Lines: TStringList;
       Idx: Integer): Boolean; static;
+
+    // === FFI-BINDING-ERKENNUNG (Hebel A, 30%-Audit 2026-07-31) =========
+    // Die zwei groessten Hint-Berge des Real-World-Korpus haben EINE
+    // gemeinsame Ursache: SCA105 InterfaceName (15.707 Funde, 100 % FP im
+    // Sample) und SCA106 MethodName (75.604 Funde, 74 % FP) melden fast
+    // ausschliesslich ObjC-/JNI-Bridge-Importe (Kastri DW.iOSapi.*/
+    // DW.Androidapi.*, Androidapi.JNI.*, Macapi.*, Alcinoe.AndroidApi.*)
+    // und generierte COM-Typelib-Importe. Dort IST der Bezeichner der
+    // native Klassenname / ObjC-Selektor / Java-Methodenname bzw. das
+    // Link-Symbol - die Delphi-Namenskonventionen sind bewusst ausser
+    // Kraft und eine Umbenennung braeche die Laufzeit-Bindung.
+    //
+    // KONSUMENTEN: ausschliesslich uInterfaceName (SCA105) und
+    // uMethodName (SCA106). Rein additiv - kein bestehender Aufrufer
+    // einer anderen Funktion dieser Unit aendert sein Verhalten.
+
+    // True wenn AFileName dem Namensmuster des Delphi-Typelib-Importers
+    // folgt ('*_TLB.pas'). Solche Units sind MASCHINELL erzeugt; der
+    // Importer uebernimmt die COM-Originalnamen (`_StackFrameDisp`,
+    // `IWMPCore3`) und regeneriert die Datei bei jedem Refresh - jede
+    // Namens-Empfehlung darin ist unumsetzbar.
+    //
+    // GEWAEHLT: Dateiname. VERWORFEN: der Typelib-Header-Kommentar
+    // ('The types declared in this file were generated ... Type Library').
+    // Er ist zwar noch spezifischer, braucht aber Quelltext-Zugriff -
+    // den hat SCA106 (rein AST-basiert) nicht. Korpus-Gegenprobe: alle
+    // 2.290 SCA105- und 714 SCA106-Typelib-Funde tragen das Dateimuster,
+    // der Header-Test haette KEINEN zusaetzlichen Fund erklaert.
+    class function IsGeneratedTypelibFile(const AFileName: string)
+      : Boolean; static;
+
+    // Namen (lowercase, unqualifiziert) aller Typen der Unit, die ein
+    // FFI-Binding sind. Ergebnis gehoert dem AUFRUFER (Free); nie nil,
+    // bei AUnitNode = nil eine leere Liste.
+    //
+    // GEWAEHLTE KRITERIEN (in dieser Reihenfolge ausgewertet):
+    //   (1) ANKER-VERERBUNG - die Elternliste (nkClass.TypeRef) enthaelt
+    //       eine der 15 Bridge-Wurzeln der RTL (JObject/JObjectClass,
+    //       IJavaInstance/IJavaClass, TJavaLocal, NSObject/NSObjectClass,
+    //       IObjectiveC*, TOCLocal, ...). Empirisch aus dem Korpus
+    //       gewonnen: diese 15 decken die Wurzeln von 99 % aller
+    //       Bridge-Typen ab.
+    //   (2) GENERIC-IMPORT-ARGUMENTE - `T<X> = class(TJavaGenericImport<
+    //       XClass, X>)` bzw. TOCGenericImport benennt seine beiden
+    //       Import-Interfaces als Generic-Argumente. Die stehen dank T2b
+    //       (Commit 627e0ce) als nkGenericArgs-Marker am Klassenknoten.
+    //       Dieses Kriterium traegt die Masse: es loest auch die Typen
+    //       auf, deren Elternteil in einer ANDEREN Unit steht
+    //       (`JKeyGenParameterSpec = interface(JAlgorithmParameterSpec)`).
+    //   (3) TRANSITIVE VERERBUNG innerhalb der Unit (Fixpunkt ueber (1)
+    //       und (2)).
+    //
+    // VERWORFEN:
+    //   * [JavaSignature('...')]-Attribut am Typ: als Kriterium
+    //     BELASTBAR, aber im Korpus zu 100 % REDUNDANT - jeder Typ mit
+    //     dem Attribut wird bereits von (2) erfasst (Messung 2026-07-31:
+    //     Abdeckung mit und ohne Attribut-Kriterium identisch, SCA105
+    //     15.698 Drops, SCA106 unveraendert). Es steht ausserdem nicht
+    //     im AST; SCA106 muesste dafuer die Quelldatei lesen.
+    //   * uses-Vor-Gate (Androidapi.JNIBridge / Macapi.ObjectiveC):
+    //     kostet Drops (gemessen 4 bzw. 8 im Korpus) und bringt nichts -
+    //     beide Konsumenten bauen das Set erst beim ERSTEN Kandidaten
+    //     (Lazy), Dateien ohne Kandidaten zahlen ohnehin nichts.
+    //   * "Typ hat irgendeine cdecl-Methode" als TYP-Kriterium: haette
+    //     korpusweit nur 796 zusaetzliche SCA106-Funde erklaert, wuerde
+    //     aber in einer normalen Delphi-Klasse mit EINEM C-Callback alle
+    //     Geschwister-Methoden mit stummschalten. Die cdecl-Evidenz wird
+    //     deshalb in SCA106 METHODEN-LOKAL ausgewertet, nicht hier.
+    class function CollectFfiBindingTypes(AUnitNode: TAstNode)
+      : TStringList; static;
+
+    // Nachschlag in dem von CollectFfiBindingTypes gelieferten Set.
+    // ATypeName darf qualifiziert sein ('TOuter.TInner') - verglichen
+    // wird das letzte Segment.
+    class function IsFfiBindingTypeName(AFfiTypes: TStringList;
+      const ATypeName: string): Boolean; static;
   end;
 
 
@@ -1289,6 +1369,209 @@ begin
     end;
     Inc(i);
   end;
+end;
+
+// === FFI-BINDING-ERKENNUNG (Hebel A, 30%-Audit 2026-07-31) ================
+// Strategie und Kriterien-Auswahl: siehe Interface-Kommentar.
+
+class function TDetectorUtils.IsGeneratedTypelibFile(
+  const AFileName: string): Boolean;
+const
+  TLB_SUFFIX = '_TLB.pas';
+begin
+  // EndsText ist case-insensitiv - im Korpus kommen '_TLB.pas' (jcl
+  // mscorlib_TLB.pas) und '_tlb.pas' (doublecmd wmplib_1_0_tlb.pas) vor.
+  Result := (AFileName <> '')
+        and EndsText(TLB_SUFFIX, ExtractFileName(AFileName));
+end;
+
+class function TDetectorUtils.CollectFfiBindingTypes(
+  AUnitNode: TAstNode): TStringList;
+const
+  // Bridge-Wurzeln der RTL. Empirisch aus dem Korpus gezogen (Haeufigkeit
+  // als Elternteil eines belegten Bridge-Typs): nsobject/nsobjectclass
+  // 1730/1728, jobject/jobjectclass 734/734, ijavainstance/ijavaclass
+  // 278/274, tocgenericimport 3073, tjavagenericimport 1433, toclocal 86,
+  // tjavalocal 88, iobjectivec 711. Die restlichen Wurzeln (juiview,
+  // uiviewcontroller, ...) sind selbst Bridge-Typen aus FREMDEN Units -
+  // sie werden nicht als Anker gefuehrt, sondern ueber Kriterium (2)
+  // aufgeloest, damit die Liste keine offene Namensmenge wird.
+  FFI_ANCHORS : array[0..14] of string = (
+    'ijavaclass',   'ijavainstance', 'iobjectivec',  'iobjectivecclass',
+    'iobjectivecinstance',           'javaarray',    'jobject',
+    'jobjectclass', 'nsobject',      'nsobjectclass','tjavaarray',
+    'tjavagenericimport',            'tjavalocal',   'tocgenericimport',
+    'toclocal');
+  // Nur DIESE beiden Basisklassen benennen ihre Import-Interfaces als
+  // Generic-Argumente. nkGenericArgs haengt an JEDEM generischen Elternteil
+  // (auch 'class(TObjectList<TCustomer>)') - ohne diese Einschraenkung
+  // wuerde jedes Generic-Argument des Korpus als FFI-Typ gelten.
+  GENERIC_IMPORT_BASES : array[0..1] of string = (
+    'tjavagenericimport', 'tocgenericimport');
+  // Vererbungstiefe innerhalb einer Unit; der Fixpunkt konvergiert real
+  // nach 2-3 Runden, die Schranke schuetzt nur gegen zyklische Ketten
+  // aus kaputtem/IFDEF-verdoppeltem Quelltext.
+  MAX_INHERIT_ROUNDS = 32;
+var
+  Nodes       : TList<TAstNode>;
+  Node        : TAstNode;
+  TypeNames   : TArray<string>;
+  TypeParents : TArray<TArray<string>>;
+  Resolved    : TArray<Boolean>;
+  i, k, Rnd   : Integer;
+  Seg         : string;
+  Changed     : Boolean;
+  IsImport    : Boolean;
+
+  // Letztes Segment eines (evtl. unit-qualifizierten) Bezeichners,
+  // lowercase. 'Androidapi.JNI.GraphicsContentViewText.JWindowClass'
+  // -> 'jwindowclass'. Bewusst NICHT UnqualifiedNameLast: die Eingabe
+  // hier kann Whitespace und einen leeren Rest tragen.
+  function LastSegLower(const AIdent: string): string;
+  var
+    p : Integer;
+  begin
+    Result := Trim(AIdent);
+    for p := Length(Result) downto 1 do
+      if Result[p] = '.' then
+      begin
+        Result := Copy(Result, p + 1, MaxInt);
+        Break;
+      end;
+    Result := LowerCase(Result);
+  end;
+
+  // Die space-getrennte Eltern-/Generic-Argument-Liste des Parsers in
+  // normalisierte Segmente zerlegen. Leere Teile (Trailing-Punkt aus
+  // kaputtem Quelltext) fallen weg.
+  function SplitLower(const AList: string): TArray<string>;
+  var
+    Parts : TArray<string>;
+    j, n  : Integer;
+    S     : string;
+  begin
+    SetLength(Result, 0);
+    if AList = '' then Exit;
+    Parts := AList.Split([' ']);
+    SetLength(Result, Length(Parts));
+    n := 0;
+    for j := 0 to High(Parts) do
+    begin
+      S := LastSegLower(Parts[j]);
+      if S = '' then Continue;
+      Result[n] := S;
+      Inc(n);
+    end;
+    SetLength(Result, n);
+  end;
+
+  function IsAnchor(const ASeg: string): Boolean;
+  var
+    j : Integer;
+  begin
+    for j := Low(FFI_ANCHORS) to High(FFI_ANCHORS) do
+      if FFI_ANCHORS[j] = ASeg then Exit(True);
+    Result := False;
+  end;
+
+  function IsGenericImportBase(const ASeg: string): Boolean;
+  var
+    j : Integer;
+  begin
+    for j := Low(GENERIC_IMPORT_BASES) to High(GENERIC_IMPORT_BASES) do
+      if GENERIC_IMPORT_BASES[j] = ASeg then Exit(True);
+    Result := False;
+  end;
+
+begin
+  Result := TStringList.Create;
+  Result.CaseSensitive := False;
+  Result.Duplicates    := dupIgnore;
+  Result.Sorted        := True;          // IndexOf = Binaersuche
+  if AUnitNode = nil then Exit;
+
+  // Interface-Typen fuehrt der Parser ebenfalls als nkClass (siehe
+  // ParseTypeSection); verschachtelte Typen haengen als GESCHWISTER in
+  // der Typsektion und werden von FindAll damit ebenfalls erfasst.
+  // Exception-Sicherheit: solange die Funktion nicht normal zurueckkehrt,
+  // gehoert die Ergebnisliste noch UNS - der Aufrufer bekommt seine
+  // Variable nie zugewiesen und koennte sie nicht freigeben.
+  Nodes := nil;
+  try
+   try
+    Nodes := AUnitNode.FindAll(nkClass);
+    SetLength(TypeNames,   Nodes.Count);
+    SetLength(TypeParents, Nodes.Count);
+    SetLength(Resolved,    Nodes.Count);
+
+    // --- Runde 0: Anker-Vererbung (1) + Generic-Import-Argumente (2) ---
+    for i := 0 to Nodes.Count - 1 do
+    begin
+      Node           := Nodes[i];
+      TypeNames[i]   := LastSegLower(Node.Name);
+      TypeParents[i] := SplitLower(Node.TypeRef);
+      Resolved[i]    := False;
+      IsImport       := False;
+
+      for Seg in TypeParents[i] do
+      begin
+        if IsAnchor(Seg) then Resolved[i] := True;
+        if IsGenericImportBase(Seg) then IsImport := True;
+      end;
+      if Resolved[i] and (TypeNames[i] <> '') then
+        Result.Add(TypeNames[i]);
+
+      if IsImport then
+        for k := 0 to Node.Children.Count - 1 do
+          if Node.Children[k].Kind = nkGenericArgs then
+            for Seg in SplitLower(Node.Children[k].Name) do
+              Result.Add(Seg);
+    end;
+
+    // --- Fixpunkt: transitive Vererbung (3) ---------------------------
+    Rnd := 0;
+    repeat
+      Changed := False;
+      Inc(Rnd);
+      for i := 0 to High(TypeNames) do
+      begin
+        if Resolved[i] or (TypeNames[i] = '') then Continue;
+        // ueber (2) bereits eingetragen (Import-Argument) - nur den
+        // Merker nachziehen, das kostet keine weitere Runde.
+        if Result.IndexOf(TypeNames[i]) >= 0 then
+        begin
+          Resolved[i] := True;
+          Continue;
+        end;
+        for Seg in TypeParents[i] do
+          if Result.IndexOf(Seg) >= 0 then
+          begin
+            Resolved[i] := True;
+            Result.Add(TypeNames[i]);
+            Changed     := True;
+            Break;
+          end;
+      end;
+    until (not Changed) or (Rnd >= MAX_INHERIT_ROUNDS);
+   finally
+    Nodes.Free;
+   end;
+  except
+    Result.Free;
+    raise;
+  end;
+end;
+
+class function TDetectorUtils.IsFfiBindingTypeName(AFfiTypes: TStringList;
+  const ATypeName: string): Boolean;
+var
+  Seg : string;
+begin
+  Result := False;
+  if (AFfiTypes = nil) or (AFfiTypes.Count = 0) or (ATypeName = '') then Exit;
+  Seg := LowerCase(UnqualifiedNameLast(Trim(ATypeName)));
+  if Seg = '' then Exit;
+  Result := AFfiTypes.IndexOf(Seg) >= 0;
 end;
 
 end.
