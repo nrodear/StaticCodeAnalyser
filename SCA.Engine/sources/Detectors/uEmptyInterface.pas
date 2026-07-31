@@ -59,6 +59,59 @@ begin
   Result := TDetectorUtils.IsIdentChar(C);
 end;
 
+function HasNamedAncestor(const AParents: string): Boolean;
+// ANCESTOR-GATE (Real-World-Audit 2026-07-31, 3644 Funde / 100 % FP im
+// 30 %-Sample).
+//
+// Liefert True, wenn die Vorfahrenliste mindestens einen Vorfahren nennt,
+// der NICHT IInterface/IUnknown ist. Genau dann ist die Praemisse der Regel
+// ("carries no contract") sachlich falsch: das Interface erbt den Vertrag
+// des Vorfahren und ist eine Typ-Verfeinerung bzw. ein Laufzeit-
+// Diskriminator, kein Refactor-Rest. Belege aus dem Korpus:
+//   * `aTargetFileSource as IFileSystemFileSource` (doublecmd) - der leere
+//     Untertyp ist der Query-Schluessel; loeschen bricht die Uebersetzung,
+//   * `IOTAFormWizard = interface(IOTARepositoryWizard)` (ToolsAPI) - von
+//     Embarcadero so vorgesehene Marker-Ableitung in Klassen-Ahnenlisten,
+//   * ObjC/JNI-Bruecken (Kastri, skia4delphi): der Vertrag kommt aus
+//     NSObjectClass/JObject bzw. der TOCGenericImport-Laufzeitbruecke,
+//   * `_Publisher = interface(IDispatch)` aus *_TLB.pas - Automations-
+//     vertrag im Vorfahren, Datei ist generiert.
+// Die Meldungsempfehlung (Attribut-Klasse) ist in allen vier Faellen
+// unanwendbar: Attribute sind Compile-Zeit-RTTI und nicht per QueryInterface
+// abfragbar.
+//
+// IInterface/IUnknown sind ausgenommen: `IFoo = interface(IUnknown) end;`
+// ist semantisch identisch zu `IFoo = interface end;` (IInterface ist der
+// implizite Default-Vorfahr) und bleibt damit meldepflichtig.
+var
+  Parts : TArray<string>;
+  Part  : string;
+  Nm    : string;
+  p     : Integer;
+begin
+  Result := False;
+  if Trim(AParents) = '' then Exit;
+  // Delphi erlaubt nur EINEN Interface-Vorfahren; die Komma-Zerlegung ist
+  // defensiv und greift praktisch nur bei generischen Argumenten
+  // (`IMVCMultiMap<String, TVal>`), wo bereits das erste Teilstueck den
+  // Namen traegt.
+  Parts := SplitString(AParents, ',');
+  for Part in Parts do
+  begin
+    Nm := Trim(Part);
+    // Generics-Argumente abschneiden: `IFoo<T>` -> `IFoo`
+    p := Pos('<', Nm);
+    if p > 0 then Nm := Trim(Copy(Nm, 1, p - 1));
+    // Unit-Qualifizierung abschneiden: `System.IInterface` -> `IInterface`
+    p := LastDelimiter('.', Nm);
+    if p > 0 then Nm := Trim(Copy(Nm, p + 1, Length(Nm)));
+    if Nm = '' then Continue;
+    if SameText(Nm, 'IInterface') or SameText(Nm, 'IUnknown') then Continue;
+    Result := True;
+    Break;
+  end;
+end;
+
 class procedure TEmptyInterfaceDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
@@ -75,6 +128,8 @@ var
   pLeftEq    : Integer;
   LineNumber : Integer;
   pStart     : Integer;
+  Parents    : string;
+  pParen     : Integer;
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
@@ -102,11 +157,14 @@ begin
       // Nach `interface` skippen
       j := pInt + 9;
       while (j <= Length(Code)) and CharInSet(Code[j], [' ', #9, #10]) do Inc(j);
-      // Optionale `(parents)`
+      // Optionale `(parents)` - Rohtext fuer den Ancestor-Gate merken.
+      Parents := '';
       if (j <= Length(Code)) and (Code[j] = '(') then
       begin
         Inc(j);
+        pParen := j;
         while (j <= Length(Code)) and (Code[j] <> ')') do Inc(j);
+        Parents := Copy(Code, pParen, j - pParen);
         if j <= Length(Code) then Inc(j);
       end;
       while (j <= Length(Code)) and CharInSet(Code[j], [' ', #9, #10]) do Inc(j);
@@ -132,7 +190,11 @@ begin
       for c in Between do
         if not CharInSet(c, [' ', #9, #10, #13]) then
         begin IsEmpty := False; Break; end;
-      if IsEmpty then
+      // Ancestor-Gate: ein leerer Rumpf UNTER einem benannten Vorfahren ist
+      // Typ-Verfeinerung, kein fehlender Vertrag - siehe HasNamedAncestor.
+      // Reine Unterdrueckung: der Schleifenvorschub unten bleibt unberuehrt,
+      // damit ueberlebende Funde ihre Position exakt behalten.
+      if IsEmpty and not HasNamedAncestor(Parents) then
       begin
         k := pStart - 1;
         if (k >= 0) and (k < Length(LineFor)) then

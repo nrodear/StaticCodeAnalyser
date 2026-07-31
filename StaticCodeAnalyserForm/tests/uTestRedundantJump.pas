@@ -12,13 +12,20 @@ type
     [Test] procedure ExitInMiddle_NoFinding;
     [Test] procedure ExitBeforeEnd_Reported;
     [Test] procedure ContinueBeforeEnd_Reported;
-    [Test] procedure BreakBeforeEnd_Reported;
     [Test] procedure RedundantJump_KindAndSeverity;
     // --- Ist-Messung 2026-07-18 (SCA080 80% FP im Sample): End-Chain-Walk ---
     [Test] procedure NestedExitMoreCodeAfter_NoFinding;
     [Test] procedure QualifiedExitCall_NoFinding;
     [Test] procedure NestedExitAtRoutineTail_StillReported;   // TP-Gegenprobe
     [Test] procedure ExitThenInlineVar_NoFinding;             // inline-var = Code, kein Terminator
+    // --- 30%-Audit 2026-07-31 (96% FP): Break gestrichen + Schleifen-Gate ---
+    [Test] procedure BreakAtLoopTail_NoFinding;               // FP-Klasse 2
+    [Test] procedure ExitInForSearchLoopAtTail_NoFinding;     // FP-Klasse 1
+    [Test] procedure ExitInRepeatLoop_NoFinding;              // FP-Klasse 1 (repeat)
+    [Test] procedure ExitInCaseArmInLoop_NoFinding;           // FP-Klasse 1 (case-Arm)
+    [Test] procedure LoopBeforeExit_StillReported;            // TP-Gegenprobe (`;`-Regel)
+    [Test] procedure ExitAfterStringWithLoopWords_StillReported; // TP-Gegenprobe (Blank-Fassung)
+    [Test] procedure ExitInWithBlockAtTail_StillReported;     // TP-Gegenprobe (with ist keine Schleife)
   end;
 
 implementation
@@ -76,7 +83,11 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestRedundantJump.BreakBeforeEnd_Reported;
+procedure TTestRedundantJump.BreakAtLoopTail_NoFinding;
+// 30%-Audit 2026-07-31, FP-Klasse 2 (9/24 im Sample, 1375 Korpus-Funde):
+// `Break` am Ende des Schleifenkoerpers ist - anders als `Continue` - KEIN
+// No-Op. Es verhindert die naechsten Iterationen; bei `while True` erzeugt
+// das Befolgen des Hints eine Endlosschleife. Vorher: gemeldet.
 const SRC =
   'unit t; implementation'#13#10 +
   'procedure Foo;'#13#10 +
@@ -90,7 +101,8 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkRedundantJump) >= 1);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRedundantJump),
+    'Break am Koerperende beendet die Schleife - nicht redundant');
   finally F.Free; end;
 end;
 
@@ -211,6 +223,156 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRedundantJump),
     'Exit vor inline-var-Folgecode ist nicht redundant');
+  finally F.Free; end;
+end;
+
+procedure TTestRedundantJump.ExitInForSearchLoopAtTail_NoFinding;
+// 30%-Audit 2026-07-31, FP-Klasse 1 (14/24 im Sample): Suchschleife, deren
+// Treffer-Zweig mit `Exit` abbricht. Die end-Kette schliesst hier die
+// ROUTINE (Terminator = 'procedure' der Folge-Routine), der Chain-Walk sagt
+// also "redundant" - aber ohne das Exit liefe die Schleife weiter und
+// Result wuerde von spaeteren Iterationen ueberschrieben. Vorher: gemeldet.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Find: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  Result := -1;'#13#10 +
+  '  for i := 1 to N do'#13#10 +
+  '    if Match(i) then'#13#10 +
+  '    begin'#13#10 +
+  '      Result := i;'#13#10 +
+  '      Exit;'#13#10 +
+  '    end;'#13#10 +
+  'end;'#13#10 +
+  'procedure Bar;'#13#10 +
+  'begin'#13#10 +
+  '  DoOther;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRedundantJump),
+    'Exit aus einer Suchschleife ist Frueh-Rueckkehr, nicht redundant');
+  finally F.Free; end;
+end;
+
+procedure TTestRedundantJump.ExitInRepeatLoop_NoFinding;
+// 30%-Audit 2026-07-31, FP-Klasse 1, repeat-Variante: die Kette endet auf
+// `until` - fuer den Chain-Walk ein akzeptierter Terminator. Ohne das Exit
+// laeuft die repeat-Schleife weiter. Vorher: gemeldet.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  repeat'#13#10 +
+  '    if Cond then'#13#10 +
+  '    begin'#13#10 +
+  '      DoStuff;'#13#10 +
+  '      Exit;'#13#10 +
+  '    end;'#13#10 +
+  '  until Done;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRedundantJump),
+    'Exit im repeat-Rumpf verhindert weitere Iterationen');
+  finally F.Free; end;
+end;
+
+procedure TTestRedundantJump.ExitInCaseArmInLoop_NoFinding;
+// 30%-Audit 2026-07-31, FP-Klasse 1, case-Variante: der Rueckwaertsscan muss
+// ueber den case-Arm und den case-Kopf hinweg bis zum for-Kopf laufen. Das
+// `;` hinter dem vorigen Arm (`1: DoA;`) darf den Schleifenfund NICHT
+// blockieren - beim Kreuzen des `case`-Openers wird das Flag zurueckgesetzt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 1 to N do'#13#10 +
+  '  begin'#13#10 +
+  '    case Kind[i] of'#13#10 +
+  '      1: DoA;'#13#10 +
+  '      2: begin'#13#10 +
+  '           DoB;'#13#10 +
+  '           Exit;'#13#10 +
+  '         end;'#13#10 +
+  '    end;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRedundantJump),
+    'Exit im case-Arm innerhalb einer Schleife ist nicht redundant');
+  finally F.Free; end;
+end;
+
+procedure TTestRedundantJump.LoopBeforeExit_StillReported;
+// TP-Gegenprobe zum Schleifen-Gate (`;`-Regel). Die Schleife hat einen
+// EINANWEISIGEN Rumpf und ist beim `Exit` bereits abgeschlossen - der Jump
+// steht dahinter, nicht darin. Ein Gate ohne die `;`-Unterscheidung wuerde
+// hier faelschlich unterdruecken (Korpus: 29 solche TPs, u.a.
+// SynHighlighterJSON.pas:277). Muss gemeldet BLEIBEN.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  while Cond do Inc(Run);'#13#10 +
+  '  Exit;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkRedundantJump),
+    'Exit NACH einer abgeschlossenen Schleife bleibt redundant');
+  finally F.Free; end;
+end;
+
+procedure TTestRedundantJump.ExitAfterStringWithLoopWords_StillReported;
+// TP-Gegenprobe zur Blank-Fassung: das String-Literal enthaelt die Woerter
+// 'begin', 'do' und 'while'. Liefe der Rueckwaertsscan ueber die Fassung MIT
+// Literalen, faende er dort einen Schleifenkopf und wuerde einen echten
+// TP unterdruecken. Muss gemeldet BLEIBEN.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  if Cond then'#13#10 +
+  '  begin'#13#10 +
+  '    Log(''while true do begin'');'#13#10 +
+  '    Exit;'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkRedundantJump),
+    'Schleifenwoerter im String-Literal duerfen nicht als Schleife zaehlen');
+  finally F.Free; end;
+end;
+
+procedure TTestRedundantJump.ExitInWithBlockAtTail_StillReported;
+// TP-Gegenprobe: `with ... do begin` ist ein `do`-Block, aber KEINE
+// Schleife - das Exit am Blockende bleibt redundant. Schuetzt davor, das
+// Gate an `do` statt an for/while/repeat aufzuhaengen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  with GetEngine do'#13#10 +
+  '  begin'#13#10 +
+  '    if Parse = 0 then'#13#10 +
+  '      Exit;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkRedundantJump),
+    'with-Block ist keine Schleife - Exit bleibt redundant');
   finally F.Free; end;
 end;
 
