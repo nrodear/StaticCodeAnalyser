@@ -38,6 +38,11 @@ type
     // (Branching-Code mit wenig Substanz - kein lohnenswerter Refactor).
     class function IsBranchingBoilerplate(Lines: TStringList;
       OriginalFromLine, OriginalToLine: Integer): Boolean; static;
+    // True wenn der Block DEKLARATIONS-Boilerplate ist, bei dem
+    // 'extract a method' sprachlich unmoeglich ist - siehe
+    // Implementations-Kommentar (30%-Audit 2026-07-31).
+    class function IsDeclarationBoilerplate(Lines: TStringList;
+      OriginalFromLine, OriginalToLine: Integer): Boolean; static;
   end;
 
 implementation
@@ -142,6 +147,141 @@ begin
   Result := (IfEnd / Total) >= IF_END_RATIO;
 end;
 
+// ===========================================================================
+// DEKLARATIONS-BOILERPLATE (30%-Real-World-Audit 2026-07-31: 44.709 Funde,
+// 12 % FP im Sample; die FP waren AUSNAHMSLOS diese beiden Klassen).
+//
+// Der Detektor arbeitet rein lexikalisch und kennt keinen Kontext. Zwei
+// Sorten von Wiederholung sind in Delphi SPRACHLICH ERZWUNGEN - dort ist
+// die Empfehlung 'extract a method' nicht bloss unpassend, sondern
+// unmoeglich:
+//
+//   A) published-property-Redeklarationslisten in Komponentenklassen:
+//        property Visible;
+//        property OnClick;
+//        property OnDblClick;
+//      Das Wiederholen IST der Mechanismus, mit dem eine Ableitung
+//      geerbte Properties published macht. Es gibt nichts zu extrahieren.
+//
+//   B) Parameterlisten im Routinen-KOPF. Delphi verlangt die Wiederholung
+//      der vollstaendigen Liste in Deklaration UND Implementierung; bei
+//      langen Listen verwandter Routinen erreichen die Zeilen die
+//      Acht-Zeilen-Schwelle.
+//
+// Korpus-Messung (after128): A 2.757, B 508 von 44.709.
+//
+// BEWUSST NICHT GEGATET: Feld- und var-Listen (744 Funde). Die sehen wie
+// B aus, stehen aber NICHT in einer offenen Klammer - zwei Klassen mit
+// identischer Feldliste sind eine echte Copy-Paste-Spur, auch wenn der
+// Fix-Vorschlag dort ebenfalls unpassend ist. Das Audit nennt sie nicht;
+// ohne Beleg kein Gate. Genau deshalb steht die Klammerbilanz in der
+// Bedingung und nicht bloss die Zeilenform.
+// ===========================================================================
+
+function DupIsPropertyLine(const Norm: string): Boolean;
+begin
+  Result := Norm.StartsWith('property ');
+end;
+
+function DupLooksLikeDeclLine(const Norm: string): Boolean;
+// '<ident>[, <ident>]* : <typ>[;][)]', optional mit const/var/out davor.
+// Kein ':=' (das waere Code), keine Klammer vor dem ':' (das waere ein
+// Aufruf).
+var
+  S : string;
+  p : Integer;
+begin
+  Result := False;
+  S := Norm;
+  if S.StartsWith('const ') then S := Copy(S, 7, MaxInt)
+  else if S.StartsWith('var ') then S := Copy(S, 5, MaxInt)
+  else if S.StartsWith('out ') then S := Copy(S, 5, MaxInt);
+  if Pos(':=', S) > 0 then Exit;
+  p := Pos(':', S);
+  if p <= 1 then Exit;
+  // Links vom ':' nur Bezeichner, Kommas und Leerzeichen.
+  for var i := 1 to p - 1 do
+    if not (CharInSet(S[i], ['a'..'z', '0'..'9', '_', ',', ' '])) then Exit;
+  Result := True;
+end;
+
+function DupParenDepthBefore(Lines: TStringList; ABlockLine: Integer): Integer;
+// Klammertiefe am Blockanfang, gerechnet ab dem naechsten Routinen-KOPF
+// darueber (hoechstens 40 Zeilen zurueck). > 0 heisst: der Block steht
+// INNERHALB einer Parameterliste.
+const
+  LOOKBACK = 40;
+var
+  i, StartIdx, Depth, StopIdx : Integer;
+  Low : string;
+begin
+  Result   := 0;
+  StartIdx := -1;
+  StopIdx  := ABlockLine - 1 - LOOKBACK;
+  if StopIdx < 0 then StopIdx := 0;
+  for i := ABlockLine - 1 downto StopIdx do
+  begin
+    if (i < 0) or (i >= Lines.Count) then Continue;
+    Low := LowerCase(Lines[i]);
+    if (Pos('procedure', Low) > 0) or (Pos('function', Low) > 0) or
+       (Pos('constructor', Low) > 0) or (Pos('destructor', Low) > 0) then
+    begin
+      StartIdx := i;
+      Break;
+    end;
+  end;
+  if StartIdx < 0 then Exit;
+  Depth := 0;
+  for i := StartIdx to ABlockLine - 2 do
+  begin
+    if (i < 0) or (i >= Lines.Count) then Continue;
+    for var c in Lines[i] do
+      if c = '(' then Inc(Depth)
+      else if c = ')' then
+      begin
+        Dec(Depth);
+        if Depth < 0 then Depth := 0;
+      end;
+  end;
+  Result := Depth;
+end;
+
+class function TDuplicateBlockDetector.IsDeclarationBoilerplate(
+  Lines: TStringList; OriginalFromLine, OriginalToLine: Integer): Boolean;
+const
+  PROPERTY_RATIO = 0.5;    // Haelfte der Zeilen 'property ...'
+  DECL_RATIO     = 0.75;   // drei Viertel Deklarationszeilen
+var
+  i, Total, Props, Decls : Integer;
+  HasCode : Boolean;
+  Norm    : string;
+begin
+  Result  := False;
+  Total   := 0;
+  Props   := 0;
+  Decls   := 0;
+  HasCode := False;
+  for i := OriginalFromLine - 1 to OriginalToLine - 1 do
+  begin
+    if (i < 0) or (i >= Lines.Count) then Continue;
+    Norm := NormalizeLine(Lines[i]);
+    if IsTrivial(Norm) then Continue;
+    Inc(Total);
+    if DupIsPropertyLine(Norm) then Inc(Props);
+    if DupLooksLikeDeclLine(Norm) then Inc(Decls);
+    if (Pos(':=', Norm) > 0) or Norm.StartsWith('begin') then HasCode := True;
+  end;
+  if Total = 0 then Exit;
+
+  // A: published-property-Redeklaration.
+  if (Props / Total) >= PROPERTY_RATIO then Exit(True);
+
+  // B: Parameterliste im Routinenkopf - Zeilenform UND offene Klammer.
+  if (not HasCode) and ((Decls / Total) >= DECL_RATIO) and
+     (DupParenDepthBefore(Lines, OriginalFromLine) > 0) then
+    Exit(True);
+end;
+
 class procedure TDuplicateBlockDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
@@ -219,6 +359,9 @@ begin
       if EndIdx >= NCount then EndIdx := NCount - 1;
       var OrigEndLine := LineIndex[EndIdx];
       if IsBranchingBoilerplate(Lines, FirstLine, OrigEndLine) then Continue;
+      // Deklarations-Boilerplate (Audit 2026-07-31): property-Listen und
+      // Parameterlisten im Routinenkopf sind sprachlich erzwungen.
+      if IsDeclarationBoilerplate(Lines, FirstLine, OrigEndLine) then Continue;
 
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
