@@ -402,11 +402,20 @@ procedure TParser2.SkipAttributeClauses;
 // konsumieren, dann klammertief bis zum passenden ']'. Recovery-Grenzen
 // halten ein unbalanciertes '[' davon ab, den Rest der Deklaration zu
 // fressen; das Grenz-Token bleibt fuer den Aufrufer liegen.
+//
+// RECOVERY-GRENZE, teuer gelernt (Testfund 2026-08-01): ein ')' auf
+// Klammertiefe 0 gehoert zur PARAMETERLISTE, nicht zum Attribut, und muss
+// fuer den Aufrufer liegen bleiben. Ohne diese Grenze frass der Skip bei
+// einem unbalancierten '[' die schliessende Klammer mit; die
+// Parameter-Schleife lief danach weiter und verschluckte die komplette
+// Folge-Routine. Attribute mit eigener Argumentliste ('[MVCPath(''/x'',
+// 42)]') bleiben davon unberuehrt - deren Klammern zaehlt ParDepth mit.
 begin
   while Tok.Kind = tkLBracket do
   begin
     Next;
     var BrDepth := 1;
+    var ParDepth := 0;
     while (BrDepth > 0) and not FLex.AtEnd do
     begin
       if Tok.Kind = tkLBracket then Inc(BrDepth)
@@ -418,6 +427,14 @@ begin
           Next;                       // schliessende Klammer mitnehmen
           Break;
         end;
+      end
+      else if Tok.Kind = tkLParen then
+        Inc(ParDepth)
+      else if Tok.Kind = tkRParen then
+      begin
+        // Eigene Argumentliste des Attributs -> weiterzaehlen.
+        // Sonst: Ende der Parameterliste, Token liegen lassen.
+        if ParDepth > 0 then Dec(ParDepth) else Break;
       end
       else if Tok.Kind in [tkSemicolon, tkKwEnd, tkKwImplementation] then
         Break;
