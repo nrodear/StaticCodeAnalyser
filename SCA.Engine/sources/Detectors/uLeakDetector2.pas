@@ -2988,7 +2988,13 @@ var
   begin
     Result := False;
     Cur    := AClassLow;
-    Ctor   := nil;
+    // KEIN `Ctor := nil` hier - der Compiler weist es als tote Zuweisung ab
+    // (H2077, 2026-08-01). Begruendung, die beim Aendern gelten muss:
+    // MAX_ANCESTOR_HOPS ist 8, die Schleife laeuft also mindestens einmal und
+    // setzt Ctor VOR jedem Lesen. Die beiden Exits darin (leerer Vorfahre,
+    // Overload-Mehrdeutigkeit) lesen Ctor nicht. Wer die Konstante auf 0
+    // setzt, muss die Initialisierung zurueckholen - dann liest `if Ctor = nil`
+    // unten eine uninitialisierte Referenz.
     for hop := 1 to MAX_ANCESTOR_HOPS do
     begin
       if Cur = '' then Exit;
