@@ -137,6 +137,8 @@ Audit_*.md
 Anweisung_*.md
 # Arbeitsvorrat-Reports (FP-/TP-Triage-Aggregate, Welle 1 2026-07-25) - lokal, nie push.
 Arbeitsvorrat_*.md
+# A/B-Erwartungsdokumente (vor dem Build geschrieben, Mess-Interna) - lokal, nie push.
+Erwartung_*.md
 # Konsolidierte interne Doku (182 Konzept/Todo/Audit -> 10 Kategorien, 2026-07-25)
 # + Zip-Backup der Originale - beides intern, nie push.
 Doku_[0-9][0-9]_*.md
