@@ -251,6 +251,17 @@ begin
             (Pos(';winapi',   Low) > 0);
 end;
 
+function ExprPassesWordInParens(const AExprLow, AWordLow: string): Boolean;
+// True, wenn AWordLow im Ausdruck INNERHALB einer Klammer vorkommt. Nur die
+// Argumente zaehlen - ein Callee oder eine linke Seite, die zufaellig 'e'
+// heisst, ist kein Durchreichen.
+var
+  p : Integer;
+begin
+  p := Pos('(', AExprLow);
+  Result := (p > 0) and MentionsWord(Copy(AExprLow, p, MaxInt), AWordLow);
+end;
+
 function HandlerForwardsExcToCall(OnNode: TAstNode;
   const AExcVarLow: string): Boolean;
 // FP-KLASSE 1, zweite Haelfte: der Rumpf reicht E an eine Konverter-Routine
@@ -261,12 +272,20 @@ function HandlerForwardsExcToCall(OnNode: TAstNode;
 //
 // Beide Bedingungen zusammen, nicht einzeln: eine cdecl-Routine, die nur
 // loggt und weitermacht, verschluckt weiterhin - und bleibt ein Fund.
+//
+// ZWEI ABLAGEFORMEN, beide noetig (Testfund 2026-08-01,
+// SafecallDispatcherForwardingExc_NotReported war rot):
+//   * nkCall  - der Aufruf steht als ANWEISUNG da, Name traegt den ganzen
+//               Aufruf inklusive Argumenten.
+//   * nkAssign - der Aufruf steht RECHTS von ':=' ('Result := ToHResult(E)').
+//               Der Parser legt die rechte Seite in TypeRef ab (uParser2
+//               Z. 2720 f.), Name traegt nur das Ziel. Genau die Form
+//               benutzt jeder safecall-Dispatcher, der einen HResult
+//               zurueckgibt - ohne diesen Zweig lief das Gate dort ins Leere.
 var
-  Stack   : TList<TAstNode>;
-  Cur     : TAstNode;
-  i       : Integer;
-  CallLow : string;
-  p       : Integer;
+  Stack : TList<TAstNode>;
+  Cur   : TAstNode;
+  i     : Integer;
 begin
   Result := False;
   if AExcVarLow = '' then Exit;
@@ -277,15 +296,12 @@ begin
     begin
       Cur := Stack[Stack.Count - 1];
       Stack.Delete(Stack.Count - 1);
-      if Cur.Kind = nkCall then
-      begin
-        CallLow := LowerCase(Cur.Name);
-        // Nur die ARGUMENTE zaehlen - ein Callee, der zufaellig 'e' heisst,
-        // ist kein Durchreichen.
-        p := Pos('(', CallLow);
-        if (p > 0) and MentionsWord(Copy(CallLow, p, MaxInt), AExcVarLow) then
-          Exit(True);
-      end;
+      if (Cur.Kind = nkCall) and
+         ExprPassesWordInParens(LowerCase(Cur.Name), AExcVarLow) then
+        Exit(True);
+      if (Cur.Kind = nkAssign) and
+         ExprPassesWordInParens(LowerCase(Cur.TypeRef), AExcVarLow) then
+        Exit(True);
       for i := 0 to Cur.Children.Count - 1 do
         Stack.Add(Cur.Children[i]);
     end;
