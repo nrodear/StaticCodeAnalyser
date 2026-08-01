@@ -303,6 +303,143 @@ begin
     if not CharInSet(Line[i], [' ', #9]) then Exit(True);
 end;
 
+// ===========================================================================
+// ADAPTER-DOKU-HEADER (30%-Real-World-Audit 2026-07-31, dominante FP-Klasse
+// mit 8 von 24 Stichproben).
+//
+// Das JvInterpreter-Idiom dokumentiert die ORIGINAL-Signatur ueber dem
+// Adapter, der sie fuer den Interpreter umschliesst:
+//
+//   { procedure Save; }
+//   procedure TRegAuto_Save(var Value: Variant; Args: TJvInterpreterArgs);
+//
+// Der Kommentar enthaelt 'procedure' und endet auf ';' - zwei starke
+// Marker, also ein Fund. Er ist aber Dokumentation, kein stillgelegter Code.
+//
+// DREI BEDINGUNGEN, alle noetig. Jede einzeln weggelassen kostet echte
+// Funde - am Korpus (after126, 20.354 Funde) durchgemessen:
+//   * NUR ein Routinenkopf im Kommentar (kein ':=', kein begin/end).
+//     Ohne diese Bedingung faellt der KOPF eines mehrzeilig
+//     auskommentierten Blocks mit weg - dessen erste Zeile sieht genauso
+//     aus. Deshalb zusaetzlich:
+//   * der Kommentar muss auf DERSELBEN Zeile schliessen. Eine
+//     Fortsetzungszeile eines mehrzeiligen Blocks ist nie Doku.
+//   * die naechste Code-Zeile ist ein Routinenkopf, dessen Name den Namen
+//     aus dem Kommentar AM UNTERSTRICH umschliesst ('Save' ->
+//     'TRegAuto_Save'). Nur Namensgleichheit oder blosse Teilzeichenkette
+//     reicht NICHT: gleicher Name ist eine auskommentierte UEBERLADUNG
+//     (42 Faelle im Korpus, bleiben Funde), und ohne Unterstrich-Anker
+//     matchte 'im' in 'ImmedBW' (cnwizards).
+// Gemessene Wirkung: 4.515 der 20.354 Funde (22,2 %).
+// ===========================================================================
+
+function SelfContainedComment(const Line: string; out Content: string): Boolean;
+// Kommentar, der auf DERSELBEN Zeile beginnt und schliesst. '//' zaehlt
+// dazu (endet mit der Zeile), '{$...}' nicht (Direktive).
+var
+  p, q : Integer;
+begin
+  Result  := False;
+  Content := '';
+  p := Pos('//', Line);
+  if p > 0 then
+  begin
+    Content := Copy(Line, p + 2, MaxInt);
+    Exit(True);
+  end;
+  p := Pos('{', Line);
+  if (p > 0) and ((p + 1 > Length(Line)) or (Line[p + 1] <> '$')) then
+  begin
+    q := PosEx('}', Line, p + 1);
+    if q = 0 then Exit(False);
+    Content := Copy(Line, p + 1, q - p - 1);
+    Exit(True);
+  end;
+  p := Pos('(*', Line);
+  if p > 0 then
+  begin
+    q := PosEx('*)', Line, p + 2);
+    if q = 0 then Exit(False);
+    Content := Copy(Line, p + 2, q - p - 2);
+    Exit(True);
+  end;
+end;
+
+function RoutineNameOf(const S: string): string;
+// Name hinter [class] procedure|function|constructor|destructor, ohne
+// Qualifizierer. '' wenn die Zeile kein Routinenkopf ist.
+const
+  KW : array[0..3] of string = ('procedure', 'function', 'constructor',
+                                'destructor');
+var
+  T, K : string;
+  p    : Integer;
+begin
+  Result := '';
+  T := TrimLeft(LowerCase(S));
+  if Copy(T, 1, 6) = 'class ' then T := TrimLeft(Copy(T, 7, MaxInt));
+  for K in KW do
+  begin
+    if Copy(T, 1, Length(K)) <> K then Continue;
+    p := Length(K) + 1;
+    if (p > Length(T)) or not CharInSet(T[p], [' ', #9]) then Continue;
+    while (p <= Length(T)) and CharInSet(T[p], [' ', #9]) do Inc(p);
+    while (p <= Length(T)) and
+          CharInSet(T[p], ['a'..'z', '0'..'9', '_', '.']) do
+    begin
+      Result := Result + T[p];
+      Inc(p);
+    end;
+    // Qualifizierer abschneiden: 'tfoo.save' -> 'save'
+    p := LastDelimiter('.', Result);
+    if p > 0 then Result := Copy(Result, p + 1, MaxInt);
+    Exit;
+  end;
+end;
+
+function IsRoutineHeaderOnly(const Content: string): Boolean;
+// Nur ein Kopf: kein ':=', kein begin/end, endet auf ';'.
+var
+  T, L : string;
+begin
+  Result := False;
+  T := Trim(Content);
+  if T = '' then Exit;
+  if T[Length(T)] <> ';' then Exit;
+  if Pos(':=', T) > 0 then Exit;
+  L := LowerCase(T);
+  if ContainsWordCI(L, 'begin') then Exit;
+  if ContainsWordCI(L, 'end')   then Exit;
+  Result := RoutineNameOf(T) <> '';
+end;
+
+function IsAdapterDocHeader(Lines: TStringList; CurIdx: Integer): Boolean;
+var
+  Content, Nm, Nxt, S : string;
+  j : Integer;
+begin
+  Result := False;
+  if (Lines = nil) or (CurIdx < 0) or (CurIdx >= Lines.Count) then Exit;
+  if not SelfContainedComment(Lines[CurIdx], Content) then Exit;
+  if not IsRoutineHeaderOnly(Content) then Exit;
+  Nm := RoutineNameOf(Trim(Content));
+  // Kurze Namen erzeugen zufaellige Teiltreffer - erst ab 4 Zeichen.
+  if Length(Nm) < 4 then Exit;
+
+  for j := CurIdx + 1 to Lines.Count - 1 do
+  begin
+    S := TrimLeft(Lines[j]);
+    if S = '' then Continue;
+    if S.StartsWith('//') or S.StartsWith('{') or S.StartsWith('(*') then
+      Continue;
+    Nxt := RoutineNameOf(S);
+    if Nxt = '' then Exit;                       // naechste Zeile kein Kopf
+    Result := (Nxt <> Nm) and
+              (Nxt.EndsWith('_' + Nm) or Nxt.StartsWith(Nm + '_'));
+    Exit;
+  end;
+end;
+
 class procedure TCommentedOutCodeDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
@@ -337,6 +474,9 @@ begin
       if (Col > 0) and Lines[i].Contains('//') and
          IsInlineComment(Lines[i], Col) then
         Continue;
+      // FP-Schutz 3 (Audit 2026-07-31): Adapter-Doku-Header - der Kommentar
+      // dokumentiert die Signatur der Routine, die direkt darunter steht.
+      if IsAdapterDocHeader(Lines, i) then Continue;
       Results.Add(TLeakFinding.New(FileName, '', i + 1,
         Format('Comment at column %d looks like commented-out code - ' +
                'delete or extract into a TODO if still relevant.', [Col]),
