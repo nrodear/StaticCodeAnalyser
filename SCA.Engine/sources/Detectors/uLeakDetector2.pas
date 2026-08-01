@@ -96,6 +96,10 @@ type
       const VarNameLow: string): Integer; static;
     class function IsReturnedAsResult(MethodNode: TAstNode;
       const VarNameLow: string): Boolean; static;
+    // Zweiter kanonischer Rueckgabeweg neben Result (T3-Backlog,
+    // 2026-08-01) - siehe Implementations-Kommentar.
+    class function IsAssignedToOutParam(MethodNode: TAstNode;
+      const VarNameLow: string): Boolean; static;
     // AUnitNode (2026-07-31, Parser-Gate-Backlog 4e/2) ist OPTIONAL und
     // steuert AUSSCHLIESSLICH die Alias-Aufloesung des Add-Empfaengers in
     // AddReceiverOwnsItems. Default nil = exakt das bisherige Verhalten -
@@ -977,6 +981,73 @@ begin
     if ArgLow = VarNameLow then Exit(True);
     // Exit(list as IFoo) - explicit cast wie bei Result := list as IFoo
     if ArgLow.StartsWith(VarNameLow + ' as ') then Exit(True);
+  end;
+end;
+
+class function TLeakDetector2.IsAssignedToOutParam(MethodNode: TAstNode;
+  const VarNameLow: string): Boolean;
+// ZWEITER KANONISCHER RUECKGABEWEG (T3-Backlog, belegt an Alcinoe:4628
+// 'out TArray<TItem>'): eine Prozedur gibt das erzeugte Objekt nicht ueber
+// Result zurueck, sondern ueber einen out-/var-Parameter.
+//
+//   procedure BuildItems(out AItems: TObjectList<TItem>);
+//   begin
+//     AItems := TObjectList<TItem>.Create;   // <- kein Leck, der Aufrufer
+//   end;                                     //    besitzt es danach
+//
+// Akzeptiert beide Formen:
+//   'AParam := L'        direkte Rueckgabe
+//   'AParam[i] := L'     Einhaengen in einen Rueckgabe-Container
+//
+// STRIKT NUR out/var. Bei einem const- oder Wertparameter bleibt die
+// Referenz beim Aufgerufenen - dort WAERE es ein echtes Leck, und genau
+// deshalb darf das Gate die Modifier nicht ignorieren. Der Parser legt sie
+// als Namens-PRAEFIX ab ('out AItems'), nicht im TypeRef.
+//
+// Korpus-Messung after126: 29 der 1.116 SCA001-Funde (2,6 %) - klein, aber
+// Error-Tier: ein falscher Leak-Befund kostet mehr Vertrauen als ein
+// falscher Hint.
+var
+  OutParams : TStringList;
+  Params    : TList<TAstNode>;
+  Assigns   : TList<TAstNode>;
+  P, A      : TAstNode;
+  Nm, LhsLow, RhsLow, Base : string;
+  SpaceIdx, BrIdx : Integer;
+begin
+  Result := False;
+  if MethodNode = nil then Exit;
+  OutParams := TStringList.Create;
+  Params    := MethodNode.FindAll(nkParam);
+  try
+    for P in Params do
+    begin
+      Nm := Trim(P.Name);
+      // 'out X' / 'var X' - alles andere (const, Wert) ist KEIN Rueckgabeweg.
+      if not (Nm.ToLower.StartsWith('out ') or Nm.ToLower.StartsWith('var ')) then
+        Continue;
+      SpaceIdx := LastDelimiter(' ', Nm);
+      if SpaceIdx <= 0 then Continue;
+      OutParams.Add(LowerCase(Copy(Nm, SpaceIdx + 1, MaxInt)));
+    end;
+    if OutParams.Count = 0 then Exit;
+
+    Assigns := MethodNode.FindAllRef(nkAssign);
+    for A in Assigns do
+    begin
+      RhsLow := Trim(A.TypeRef.ToLower);
+      if RhsLow <> VarNameLow then Continue;
+      LhsLow := Trim(A.Name.ToLower);
+      // 'AItems[i]' -> 'aitems'
+      Base   := LhsLow;
+      BrIdx  := Pos('[', Base);
+      if BrIdx > 0 then Base := Trim(Copy(Base, 1, BrIdx - 1));
+      if OutParams.IndexOf(Base) >= 0 then Exit(True);
+    end;
+  finally
+    Assigns := nil;
+    Params.Free;
+    OutParams.Free;
   end;
 end;
 
@@ -3122,6 +3193,8 @@ begin
          and not AllCreatesAreInstanceFactory(MethodNode, VarNameLow) then
       begin
         if IsReturnedAsResult(MethodNode, VarNameLow) then Continue;
+        // Zweiter Rueckgabeweg: out-/var-Parameter (2026-08-01).
+        if IsAssignedToOutParam(MethodNode, VarNameLow) then Continue;
         // UnitNode (2026-07-31): schaltet die Unit-lokale Alias-Aufloesung des
         // Add-Empfaengers frei (Regressionsfall 'TPeople = TObjectList<TPerson>').
         if IsPassedToOwner(MethodNode, VarNameLow, UnitNode) then Continue;
@@ -3186,6 +3259,7 @@ begin
       if not HasFunctionCallAssign(UnitNode, MethodNode, VarNameLow) then Continue;
 
       if IsReturnedAsResult(MethodNode, VarNameLow) then Continue;
+      if IsAssignedToOutParam(MethodNode, VarNameLow) then Continue;
       if IsPassedToOwner(MethodNode, VarNameLow, UnitNode) then Continue;
       // Inkr.2: Interface-Cast-Uebergabe / raise-Ownership auch fuer den
       // Rueckgabewert-Pfad (dasselbe Ownership-Argument).
