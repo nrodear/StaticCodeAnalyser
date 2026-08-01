@@ -46,8 +46,23 @@ implementation
 // jeder Worker-Thread seine eigene kompilierte Instanz pro Pattern; das
 // Match-ERGEBNIS ist identisch, nur die Kompilierung faellt einmal pro
 // Thread an. Seriell (ein Thread) verhaelt sich der Cache exakt wie vorher.
-// Pool-Threads werden wiederverwendet -> die Eintragszahl bleibt begrenzt.
+// OBERGRENZE (2026-08-01, T3-Backlog): die Annahme "Pool-Threads werden
+// wiederverwendet" gilt fuer den CLI-Lauf, aber NICHT im IDE-Plugin. Dort
+// startet TBulkScanWorker je Scan neue Threads; deren IDs kommen nie
+// wieder, ihre Eintraege bleiben aber im Cache liegen. Ueber eine lange
+// IDE-Sitzung waechst er unbegrenzt - jeder Eintrag haelt eine kompilierte
+// TPerlRegEx-Instanz fest.
+// Behandlung bewusst simpel: beim Ueberschreiten wird der GESAMTE Cache
+// geleert statt eine LRU-Verwaltung einzubauen. Die Patternmenge ist klein
+// und fest; nach dem Leeren kompiliert der naechste Zugriff neu, das ist
+// einmalig und unmessbar gegenueber dem Scan. Eine Eviction einzelner
+// Threads waere nur mit einer Liste lebender Thread-IDs korrekt - deutlich
+// mehr Mechanik fuer denselben Effekt.
 // ---------------------------------------------------------------------------
+const
+  // ~20 Patterns x ~25 gleichzeitig gehaltene Thread-Generationen.
+  CMaxCachedRegex = 512;
+
 class function TRegExMatches.Cached(const pattern: string): TRegEx;
 var
   CacheKey: string;
@@ -57,6 +72,8 @@ begin
   try
     if not FCache.TryGetValue(CacheKey, Result) then
     begin
+      if FCache.Count >= CMaxCachedRegex then
+        FCache.Clear;
       Result := TRegEx.Create(pattern, [roIgnoreCase]);
       FCache.Add(CacheKey, Result);
     end;

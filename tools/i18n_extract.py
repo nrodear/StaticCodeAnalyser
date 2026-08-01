@@ -284,9 +284,21 @@ def collect_string_consts(text: str) -> dict[str, str]:
 
         if ch.isalpha() or ch == "_":
             start = i
+            # Nur DEKLARATIONEN zaehlen (2026-08-01): der Scanner lief ueber
+            # den ganzen Dateitext und nahm jedes 'NAME = <literal>' mit -
+            # auch mitten in einem Ausdruck. Aus
+            #     Found := Ext = '.pas';
+            # wurde die "Konstante" Ext mit dem Wert '.pas', und der landete
+            # als msgid in template.pot. Eine echte Konstanten-Deklaration
+            # eroeffnet ihre Zeile (nur Whitespace davor); ein Vergleich
+            # mitten im Ausdruck tut das nicht.
+            line_start = s.rfind("\n", 0, start) + 1
+            at_line_begin = s[line_start:start].strip() == ""
             while i < n and _is_ident_char(s[i]):
                 i += 1
             name = s[start:i]
+            if not at_line_begin:
+                continue
             j = sc.skip_trivia(i)
             # Optionale Typangabe: NAME: string = '...'
             if j < n and s[j] == ":":

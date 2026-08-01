@@ -19,6 +19,11 @@ type
     [Test] procedure ProseWithWeakKeywords_NoFinding;
     [Test] procedure CompilerDirective_NoFinding;
     [Test] procedure CommentedOutCode_KindAndSeverity;
+    // ---- Adapter-Doku-Header (30%-Audit 2026-07-31) -----------------------
+    [Test] procedure AdapterDocHeader_NotReported;
+    [Test] procedure CommentedOutOverload_StillReported;
+    [Test] procedure HeadOfCommentedBlock_StillReported;
+    [Test] procedure ShortNameSubstring_StillReported;
   end;
 
 implementation
@@ -140,6 +145,83 @@ begin
         Exit;
       end;
     Assert.Fail('expected fkCommentedOutCode finding');
+  finally F.Free; end;
+end;
+
+procedure TTestCommentedOutCode.AdapterDocHeader_NotReported;
+// JvInterpreter-Idiom: der Kommentar dokumentiert die ORIGINAL-Signatur
+// ueber dem Adapter, der sie umschliesst. Korpus-Beleg jvcl
+// JvInterpreter_RegAuto.pas:54. Dominante FP-Klasse des Audits (8/24),
+// gemessen 4.515 der 20.354 Funde.
+const SRC =
+  'unit t; implementation'#13#10 +
+  '{ procedure Save; }'#13#10 +
+  'procedure TRegAuto_Save(var Value: Variant);'#13#10 +
+  'begin'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCommentedOutCode),
+    'Signatur-Doku ueber dem Adapter ist kein auskommentierter Code');
+  finally F.Free; end;
+end;
+
+procedure TTestCommentedOutCode.CommentedOutOverload_StillReported;
+// WAECHTER: GLEICHER Name heisst auskommentierte Ueberladung, nicht Doku.
+// Im Korpus 42 solcher Faelle - die bleiben Funde.
+const SRC =
+  'unit t; implementation'#13#10 +
+  '//procedure init(random: JSecureRandom); cdecl;'#13#10 +
+  'procedure init(keysize: Integer); cdecl;'#13#10 +
+  'begin'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkCommentedOutCode) >= 1,
+    'Auskommentierte Ueberladung bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestCommentedOutCode.HeadOfCommentedBlock_StillReported;
+// WAECHTER, der teuerste: die ERSTE Zeile eines mehrzeilig
+// auskommentierten Blocks sieht aus wie ein Doku-Header. Sie darf nicht
+// wegfallen - sonst verliert die Regel den Kopf jedes stillgelegten
+// Routinen-Blocks. Schutz: der Kommentar muss auf DERSELBEN Zeile
+// schliessen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  '{ procedure OldWorker;'#13#10 +
+  '  begin'#13#10 +
+  '    DoSomething;'#13#10 +
+  '  end; }'#13#10 +
+  'procedure TRegAuto_OldWorker(var Value: Variant);'#13#10 +
+  'begin'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkCommentedOutCode) >= 1,
+    'Kopf eines mehrzeilig auskommentierten Blocks bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestCommentedOutCode.ShortNameSubstring_StillReported;
+// WAECHTER gegen den Zufallstreffer: ohne Unterstrich-Anker und
+// Mindestlaenge matchte 'im' in 'ImmedBW' (cnwizards). Der Name im
+// Kommentar muss AM UNTERSTRICH im Folgenamen stecken.
+const SRC =
+  'unit t; implementation'#13#10 +
+  '//function im(DS: Integer): Boolean;'#13#10 +
+  'function ImmedBW(DS: Integer): Boolean;'#13#10 +
+  'begin'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkCommentedOutCode) >= 1,
+    'Zufaellige Teilzeichenkette ist kein Adapter-Bezug');
   finally F.Free; end;
 end;
 

@@ -256,6 +256,11 @@ type
     [Test] procedure Leak_AddReceiverIsUnitAliasOfObjectList_NoFinding;
     [Test] procedure Leak_AddReceiverIsUnitClassOfObjectList_NoFinding;
     [Test] procedure Leak_AddReceiverIsUnitAliasOfTList_StillReported; // TP-Gegenprobe
+    // ---- out/var-Parameter als Rueckgabeweg (T3-Backlog, 2026-08-01) ------
+    [Test] procedure Leak_OutParamReturn_NoFinding;
+    [Test] procedure Leak_VarParamIndexedReturn_NoFinding;
+    [Test] procedure Leak_ConstParamAssign_StillReported;
+    [Test] procedure Leak_PlainLocalAssign_StillReported;
   end;
 
   // ---- FieldLeak (TFieldLeakDetector) ------------------------------------------------
@@ -5134,6 +5139,112 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
     'TSynList ist ein direkter TObject-Nachfahre - kein Component-Tree, FSplit leakt');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_OutParamReturn_NoFinding;
+// ACHTUNG (Konvention dieser Datei): die Fixture-Klasse MUSS in
+// DEFAULT_LEAKY_CLASSES stehen - sonst verwirft IsLeakyType sie VOR jedem
+// Gate und der Test ist wirkungslos, auch wenn er gruen leuchtet.
+//
+// Zweiter kanonischer Rueckgabeweg neben Result: die Prozedur gibt das
+// erzeugte Objekt ueber einen out-Parameter zurueck. Korpus-Beleg
+// Alcinoe:4628 ('out TArray<TItem>').
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TSynObjectList = class'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'procedure BuildItems(out AItems: TSynObjectList);'#13#10+
+  'begin'#13#10+
+  '  AItems := TSynObjectList.Create;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'Rueckgabe ueber out-Parameter ist kein Leck');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_VarParamIndexedReturn_NoFinding;
+// Zweite Form: Einhaengen in einen Rueckgabe-Container ueber den Index.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TSynObjectList = class'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'procedure FillSlot(var ASlots: TArray<TSynObjectList>; AIdx: Integer);'#13#10+
+  'var'#13#10+
+  '  LItem: TSynObjectList;'#13#10+
+  'begin'#13#10+
+  '  LItem := TSynObjectList.Create;'#13#10+
+  '  ASlots[AIdx] := LItem;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'Einhaengen in einen var-Parameter-Container ist kein Leck');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_ConstParamAssign_StillReported;
+// WAECHTER, der wichtigste: bei einem CONST-Parameter bleibt die Referenz
+// beim Aufgerufenen - dort WAERE es ein echtes Leck. Das Gate darf die
+// Modifier deshalb nicht ignorieren.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TSynObjectList = class'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'procedure Fill(const ATarget: TSynObjectList);'#13#10+
+  'var'#13#10+
+  '  LItem: TSynObjectList;'#13#10+
+  'begin'#13#10+
+  '  LItem := TSynObjectList.Create;'#13#10+
+  '  ATarget.Add(LItem);'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
+    'const-Parameter ist kein Rueckgabeweg - der Fund muss bleiben');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_PlainLocalAssign_StillReported;
+// WAECHTER: Zuweisung an eine gewoehnliche lokale Variable ist kein
+// Ownership-Transfer.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TSynObjectList = class'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'procedure Build;'#13#10+
+  'var'#13#10+
+  '  LItem, LOther: TSynObjectList;'#13#10+
+  'begin'#13#10+
+  '  LItem := TSynObjectList.Create;'#13#10+
+  '  LOther := LItem;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
+    'Zuweisung an eine lokale Variable ist kein Rueckgabeweg');
   finally F.Free; end;
 end;
 

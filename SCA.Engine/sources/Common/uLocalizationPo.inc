@@ -3285,11 +3285,11 @@ end;
 // kuerzel, oder '' wenn zu der Sprache nichts eingebettet ist.
 function EmbeddedPoText(const ALang: string): string;
 begin
-  if ALang = 'de' then
+  if SameText(ALang, 'de') then
     Result := JoinPoLines(CPoLines_de)
-  else if ALang = 'en' then
+  else if SameText(ALang, 'en') then
     Result := JoinPoLines(CPoLines_en)
-  else if ALang = 'fr' then
+  else if SameText(ALang, 'fr') then
     Result := JoinPoLines(CPoLines_fr)
   else
     Result := '';

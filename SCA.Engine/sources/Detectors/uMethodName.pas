@@ -28,6 +28,20 @@ unit uMethodName;
 // Die Typ-Erkennung liegt in TDetectorUtils.CollectFfiBindingTypes; die
 // Kriterien-Auswahl (und was verworfen wurde) ist dort dokumentiert.
 //
+// EINE MELDUNG JE METHODE (2026-08-01, Backlog-Posten aus dem
+// Parser-Gate): FindAll(nkMethod) liefert fuer eine implementierte Methode
+// ZWEI Knoten - die Deklaration im Typ und die Implementierung. Beide
+// wurden gemeldet, obwohl es EIN Bezeichner ist und EINE Umbenennung.
+// Korpus-Zensus auf after126: von 30.925 Funden sind 10.890 (35 %) genau
+// solche Zwillinge (Trennung ueber die Lage zur `implementation`-Zeile;
+// weitere 5.489 Mehrfachmeldungen stammen von VERSCHIEDENEN Klassen mit
+// gleichem Methodennamen und bleiben zu Recht bestehen).
+// Der Schluessel ist deshalb (Besitzertyp, Name), nicht (Datei, Name):
+// `TFoo.create` und `TBar.create` sind zwei Befunde, die Deklaration und
+// die Implementierung von `TFoo.create` sind einer. Gemeldet wird der
+// ERSTE Knoten in Dokumentreihenfolge, also die Deklaration - dort
+// beginnt die Umbenennung.
+//
 // Schweregrad: lsHint.
 
 interface
@@ -144,11 +158,16 @@ var
   // Normalfall (Datei ohne kleingeschriebene Methode) zahlt nichts.
   FfiTypes   : TStringList;
   OwnerMap   : TDictionary<TAstNode, string>;
+  // Eine Meldung je Methode: Schluessel ist '<besitzertyp>.<name>',
+  // beides lowercase. Wird erst beim ersten Kandidaten gebaut.
+  Seen       : TDictionary<string, Boolean>;
+  SeenKey    : string;
 begin
   // Gate 4 (Hebel A): generierte Typelib-Importe komplett ausnehmen.
   if TDetectorUtils.IsGeneratedTypelibFile(FileName) then Exit;
   FfiTypes := nil;
   OwnerMap := nil;
+  Seen     := nil;
   Methods  := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
@@ -198,6 +217,15 @@ begin
           Continue;
       end;
 
+      // Deklaration und Implementierung derselben Methode sind EIN Befund.
+      // Ohne aufloesbaren Besitzertyp (freie Routine) bleibt der Praefix
+      // leer - zwei gleichnamige freie Routinen kann eine Unit ohnehin nur
+      // als Ueberladungen fuehren, und die teilen sich den Bezeichner.
+      SeenKey := LowerCase(OwnerName) + '.' + LowerCase(Name);
+      if Seen = nil then Seen := TDictionary<string, Boolean>.Create;
+      if Seen.ContainsKey(SeenKey) then Continue;
+      Seen.Add(SeenKey, True);
+
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
       F.MethodName := M.Name;
@@ -209,6 +237,7 @@ begin
       Results.Add(F);
     end;
   finally
+    Seen.Free;
     OwnerMap.Free;
     FfiTypes.Free;
     Methods.Free;
