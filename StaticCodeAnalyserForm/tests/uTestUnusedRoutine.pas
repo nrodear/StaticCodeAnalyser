@@ -30,6 +30,12 @@ type
     [Test] procedure Unused_ClassMethodImpl_NoFinding;
 
     // ---- Finding-Inhalt --------------------------------------------------
+    // ---- Link-Gates (30%-Audit 2026-07-31) --------------------------------
+    [Test] procedure Unused_ExternalImport_NoFinding;
+    [Test] procedure Unused_CdeclInObjLinkingUnit_NoFinding;
+    [Test] procedure Unused_LibPrefixDirective_IsNotObjLink;
+    [Test] procedure Unused_PascalHelperInObjLinkingUnit_StillReported;
+
     [Test] procedure Unused_Finding_KindSeverityConfidence;
   end;
 
@@ -303,6 +309,89 @@ begin
       'fkUnusedRoutine soll lsHint sein (Code Smell, kein Bug)');
     Assert.AreEqual(fcHigh, Hit.Confidence,
       'Implementation-only ohne Forward-Decl ist hochkonfident');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedRoutine.Unused_ExternalImport_NoFinding;
+// Korpus-Beleg Kastri DW.Biometric.iOS.pas:407: der Link-Anker wird NIE
+// gerufen - genau das ist sein Zweck. Ein Import ist keine Implementation.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure LocalAuthenticationLoader; cdecl; external ''libLocalAuth'';'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedRoutine),
+    'Rumpflose external-Deklaration ist ein Import, kein toter Code');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedRoutine.Unused_CdeclInObjLinkingUnit_NoFinding;
+// Korpus-Beleg mORMot mormot.lib.quickjs.pas:2081: 'acosh' existiert fuer
+// das statisch gelinkte quickjs.obj. Der Aufrufer ist der C-Code, nicht
+// Pascal - Entfernen bricht den Link.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  '{$L quickjs.obj}'#13#10 +
+  'function acosh(x: double): double; cdecl;'#13#10 +
+  'begin'#13#10 +
+  '  Result := x;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedRoutine),
+    'C-Aufrufkonvention in einer obj-linkenden Unit ist kein toter Code');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedRoutine.Unused_LibPrefixDirective_IsNotObjLink;
+// WAECHTER gegen die naheliegende Praefix-Falle: '{$LIBPREFIX' faengt
+// ebenfalls mit '{$L' an, ist aber kein Objekt-Link. Das Gate darf hier
+// nicht greifen, sonst verschwindet die ganze Unit aus der Regel.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  '{$LIBPREFIX ''''}'#13#10 +
+  'procedure DeadHelper; cdecl;'#13#10 +
+  'begin'#13#10 +
+  '  Beep;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedRoutine),
+    '{$LIBPREFIX} ist kein {$L} - das Link-Gate darf nicht greifen');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedRoutine.Unused_PascalHelperInObjLinkingUnit_StillReported;
+// WAECHTER: in einer obj-linkenden Unit wird NICHT alles stillgeschaltet.
+// Ein reiner Pascal-Helfer ohne Aufrufkonvention kann vom C-Code nicht
+// gerufen werden und bleibt pruefbar.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  '{$L quickjs.obj}'#13#10 +
+  'procedure PascalOnlyHelper;'#13#10 +
+  'begin'#13#10 +
+  '  Beep;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedRoutine),
+    'Pascal-Helfer ohne Aufrufkonvention bleibt auch in obj-Units ein Fund');
   finally F.Free; end;
 end;
 

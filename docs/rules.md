@@ -639,6 +639,8 @@ Tracks open work items embedded in source. CI can enforce zero TODOs in release 
 
 Empty method may indicate a forgotten implementation, a TODO that was never followed up, or an interface stub. Make intent explicit (assert, exception, or comment).
 
+**Not reported:** an empty body that already carries an explanatory comment (`{ do nothing }`, `// default implementation does nothing`) — that *is* one of the three fixes the rule asks for. Not counted as intent: compiler directives (`{$REGION}`, `{$IFDEF}`) and commented-out code (recognised by the trailing semicolon). This does not weaken the project rule that comments never count as code *usage* — the question here is documented intent, not use.
+
 ```pascal
 // BAD
 procedure DoStuff;

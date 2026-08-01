@@ -451,7 +451,7 @@
       "kind": "EmptyMethod",
       "name": "Empty method body",
       "shortDescription": "Method body has no statements",
-      "fullDescription": "Empty method may indicate a forgotten implementation, a TODO that was never followed up, or an interface stub. Make intent explicit (assert, exception, or comment).",
+      "fullDescription": "Empty method may indicate a forgotten implementation, a TODO that was never followed up, or an interface stub. Make intent explicit (assert, exception, or comment). A comment inside the body is one of those three fixes, so a body that carries one is already compliant and is not reported - see 'Not reported' below.",
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["maintainability"],
@@ -460,6 +460,13 @@
         "bad":  "procedure DoStuff;\nbegin\nend;",
         "good": "procedure DoStuff;\nbegin\n  raise ENotImplemented.Create('...');\nend;"
       },
+      "exceptions": [
+        {
+          "case": "Empty body carrying an explanatory comment",
+          "why": "The rule's own advice is to make the intent explicit by assert, exception *or comment*. A body that already carries a comment has followed that advice, so reporting it contradicts the fix the rule asks for. Two things do NOT count as intent: a compiler directive (`{$REGION}`, `{$IFDEF}`) is tooling rather than a statement about intent, and commented-out code - recognised by the trailing semicolon - documents nothing. Note this does not weaken the project rule that comments never count as code *usage*; the question here is documented intent, not use.",
+          "example": "// not reported - the intent is stated\nprocedure TFoo.DoNothing;\nbegin\n  { do nothing - base class hook }\nend;\n\n// still reported - nothing says why\nprocedure TFoo.DoNothing;\nbegin\nend;"
+        }
+      ],
       "cleanCodeAttribute": "COMPLETE",
       "impacts": [
         { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }

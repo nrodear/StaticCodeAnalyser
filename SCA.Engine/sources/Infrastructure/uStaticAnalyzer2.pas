@@ -570,7 +570,7 @@ begin
   AddD3('DebugOutput',     fkDebugOutput,     TDebugOutputDetector.AnalyzeUnit);
   AddD('DeepNesting',     fkDeepNesting,     TDeepNestingDetector.AnalyzeUnit);   // TD-1: AContext-fuehrend
   AddD('TodoComment',     fkTodoComment,     TTodoCommentDetector.AnalyzeUnit, ['todo', 'fixme', 'hack', 'xxx']);
-  AddD3('EmptyMethod',     fkEmptyMethod,     TEmptyMethodDetector.AnalyzeUnit);
+  AddD('EmptyMethod',      fkEmptyMethod,     TEmptyMethodDetector.AnalyzeUnit);   // AContext-fuehrend (Intent-Kommentar, 2026-08-01)
   // FieldLeak: gleicher Kind wie LeakDetector (fkMemoryLeak) - Profile-
   // Filter behandelt beide identisch.
   AddD('FieldLeak',        fkMemoryLeak,      TFieldLeakDetector.AnalyzeUnit);   // TD-1 2c: AContext-fuehrend (LeakyClasses aus Ctx)

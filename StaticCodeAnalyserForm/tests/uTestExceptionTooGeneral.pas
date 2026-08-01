@@ -23,6 +23,12 @@ type
     // Core-Audit 2026-07-17 (SCA132): praefigierter Logger (ALLog/WriteLog)
     // + Leave = legitimer Top-Level-Handler, kein Finding.
     [Test] procedure PrefixedLoggerWithLeave_NotReported;
+    // 30%-Audit 2026-07-31 / User-Entscheidung 2026-08-01: Semantik
+    // schaerfen. Catch-all an einer ABI-Grenze ist Pflicht, kein Smell.
+    [Test] procedure CdeclDispatcherForwardingExc_NotReported;
+    [Test] procedure SafecallDispatcherForwardingExc_NotReported;
+    [Test] procedure CdeclHandlerWithoutForwarding_StillReported;
+    [Test] procedure PascalHandlerForwardingExc_StillReported;
   end;
 
 implementation
@@ -239,6 +245,92 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkExceptionTooGeneral),
     'praefigierter Logger (ALLog) + Leave ist ein legitimer Top-Level-Handler');
+  finally F.Free; end;
+end;
+
+procedure TTestExceptionTooGeneral.CdeclDispatcherForwardingExc_NotReported;
+// Korpus-Beleg Firebird.pas (4-6x vendored, 14 der 16 Sample-FPs): ein
+// generierter cdecl-Dispatcher MUSS jede Exception fangen und in einen
+// Statuscode wandeln - eine Delphi-Exception darf nicht in den C-Code
+// propagieren. 'prefer a specific subclass' waere dort ein Bug.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure serverModeDispatcher(this: Pointer); cdecl;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    DoWork;'#13#10 +
+  '  except'#13#10 +
+  '    on e: Exception do FbException.catchException(nil, e);'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkExceptionTooGeneral),
+    'Catch-all an der C-ABI-Grenze ist Pflicht, kein Smell');
+  finally F.Free; end;
+end;
+
+procedure TTestExceptionTooGeneral.SafecallDispatcherForwardingExc_NotReported;
+// safecall gehoert zur selben Klasse - dort baut der Compiler den Handler
+// sogar selbst, ein expliziter ist die dokumentierte Ergaenzung.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function GetValue(out V: Integer): HResult; safecall;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    V := Compute;'#13#10 +
+  '  except'#13#10 +
+  '    on E: Exception do Result := ToHResult(E);'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkExceptionTooGeneral));
+  finally F.Free; end;
+end;
+
+procedure TTestExceptionTooGeneral.CdeclHandlerWithoutForwarding_StillReported;
+// WAECHTER: die Aufrufkonvention ALLEIN reicht nicht. Eine cdecl-Routine,
+// die nur loggt und weitermacht, verschluckt weiterhin alles.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Callback(this: Pointer); cdecl;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    DoWork;'#13#10 +
+  '  except'#13#10 +
+  '    on E: Exception do Counter := Counter + 1;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkExceptionTooGeneral),
+    'cdecl ohne Durchreichen von E bleibt ein Swallow');
+  finally F.Free; end;
+end;
+
+procedure TTestExceptionTooGeneral.PascalHandlerForwardingExc_StillReported;
+// WAECHTER der anderen Richtung: das Durchreichen von E allein reicht auch
+// nicht. Ohne fremde Aufrufkonvention ist es eine gewoehnliche Routine, und
+// 'HandleError(E)' ist genau das Log-und-Weiter-Muster der Regel.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    DoWork;'#13#10 +
+  '  except'#13#10 +
+  '    on E: Exception do HandleError(E);'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkExceptionTooGeneral),
+    'Ohne ABI-Grenze bleibt das Durchreichen ein gewoehnlicher Handler');
   finally F.Free; end;
 end;
 

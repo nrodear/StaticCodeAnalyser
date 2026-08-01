@@ -42,6 +42,81 @@ begin
     (Pos('eexternal',         Lower) > 0);
 end;
 
+// TypeRef-Format eines Konstanten-nkField (uParser2.ParseVarLikeSection):
+//   'Typ=Wert'  bei 'const X: Integer = 5;'
+//   '=Wert'     bei 'const X = 5;'
+// Liefert False, wenn gar kein '=' vorkommt - siehe Gate 1 unten.
+function SplitConstRef(const ATypeRef: string;
+  out ATypePartLow, AValue: string): Boolean;
+var
+  p : Integer;
+begin
+  ATypePartLow := '';
+  AValue       := '';
+  p := Pos('=', ATypeRef);
+  Result := p > 0;
+  if not Result then Exit;
+  ATypePartLow := LowerCase(Trim(Copy(ATypeRef, 1, p - 1)));
+  AValue       := Trim(Copy(ATypeRef, p + 1, MaxInt));
+end;
+
+// KONSTANTEN-GATES (30%-Real-World-Audit 2026-07-31: 5.526 Funde, 71 % FP).
+//
+// Alle vier Pruefungen unterdruecken nur - der bestehende String/Char-Skip auf
+// dem VOLLEN TypeRef bleibt daneben unveraendert stehen (er greift auch, wenn
+// der Wert das Wort 'string' enthaelt; ihn auf den Typteil zu verengen waere
+// praeziser, wuerde aber Funde HINZUFUEGEN und die Monotonie brechen).
+function ConstIsExemptFromNaming(const ATypeRef: string): Boolean;
+var
+  TypeLow, Val : string;
+  i, Depth     : Integer;
+begin
+  Result := True;
+
+  // GATE 1: kein '=' im TypeRef -> das ist keine Konstanten-Deklaration.
+  // Eine gueltige Pascal-Konstante MUSS initialisiert sein, der Parser haengt
+  // den Wert also immer an. Fehlt er, stammt der Knoten aus einem
+  // Initialisierer: der Wert-Scan in ParseVarLikeSection ist nicht
+  // klammerbalanciert und bricht am ersten ';' ab - auch wenn das INNERHALB
+  // der Klammern steht. Aus
+  //   Zones: array[..] of TZone = ((TimeZone:'NST'; Offset:'-0330'), ...);
+  // wird ab dem ';' ein neuer Durchlauf, und 'Offset' landet als eigene
+  // "Konstante". Der Parser-Fix dazu liegt bewusst ausserhalb dieser Serie
+  // (er veraendert die Sichtweite anderer Detektoren); hier faellt der
+  // Phantom-Knoten am fehlenden '=' auf.
+  if not SplitConstRef(ATypeRef, TypeLow, Val) then Exit;
+
+  // GATE 2: ueberzaehlige schliessende Klammer im Typteil - zweite Signatur
+  // desselben Phantoms, falls der Wert-Scan doch noch ein '=' eingesammelt hat.
+  Depth := 0;
+  for i := 1 to Length(TypeLow) do
+  begin
+    if TypeLow[i] = '(' then Inc(Depth)
+    else if TypeLow[i] = ')' then
+    begin
+      Dec(Depth);
+      if Depth < 0 then Exit;
+    end;
+  end;
+
+  // GATE 3: strukturierte Konstante. Die Regel empfiehlt UPPER_SNAKE_CASE
+  // ausdruecklich fuer 'numeric constants'; ein Array-/Record-Konstanten-
+  // Aggregat ist keine. Erkennbar am Klammer-Aggregat als Wert oder am
+  // Typnamen (Tokens stehen ohne Trenner aneinander: 'array[boolean]ofdword').
+  if (Val <> '') and (Val[1] = '(') then Exit;
+  if (Pos('array',  TypeLow) > 0) or
+     (Pos('record', TypeLow) > 0) or
+     (Pos('setof',  TypeLow) > 0) then Exit;
+
+  // GATE 4: String-/Char-Konstante OHNE Typannotation. Der bestehende Skip
+  // sieht nur den deklarierten Typ; 'cItemField = ''ItemField''' hat keinen,
+  // deshalb hier der Literal-Typ des Initialisierers. '#80' ist ein
+  // Char-Literal, ''...''' ein String - beides faellt nicht unter die Regel.
+  if (Val <> '') and CharInSet(Val[1], ['''', '#']) then Exit;
+
+  Result := False;
+end;
+
 function IsUpperSnake(const Name: string): Boolean;
 // True wenn Name nur aus A-Z, 0-9, _ besteht (klassisches Konstanten-
 // Naming wie MAX_RETRIES).
@@ -130,6 +205,10 @@ begin
             if (K.TypeRef <> '') and
                ((Pos('string', LowerCase(K.TypeRef)) > 0) or
                 (Pos('char',   LowerCase(K.TypeRef)) > 0)) then Continue;
+            // Konstanten-Gates (Audit 2026-07-31): Phantom-Knoten aus
+            // Initialisiererlisten, strukturierte Konstanten und
+            // String-/Char-Literale ohne Typannotation. Reine Unterdrueckung.
+            if ConstIsExemptFromNaming(K.TypeRef) then Continue;
 
             F            := TLeakFinding.Create;
             F.FileName   := FileName;
