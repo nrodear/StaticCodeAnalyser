@@ -51,6 +51,11 @@ type
 
 implementation
 
+// noinspection-file DuplicateBlock, ClassPerFile
+// Die Fixtures dieser Datei enthalten duplizierte Bloecke und
+// mehrere Klassen pro Unit ABSICHTLICH - genau das ist der
+// Pruefgegenstand von SCA021 und SCA081.
+
 // =============================================================================
 // DuplicateString-Tests
 // =============================================================================

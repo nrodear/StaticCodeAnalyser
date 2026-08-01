@@ -205,6 +205,39 @@ begin
   Result := True;
 end;
 
+function DupRoutineHeadAbove(Lines: TStringList;
+  ABlockLine, ALookback: Integer): Integer;
+// Index der naechsten Zeile oberhalb, die ein Routinen-Schluesselwort
+// traegt; -1 wenn keine im Fenster liegt.
+var
+  i, StopIdx : Integer;
+  Low        : string;
+begin
+  Result  := -1;
+  StopIdx := ABlockLine - 1 - ALookback;
+  if StopIdx < 0 then StopIdx := 0;
+  for i := ABlockLine - 1 downto StopIdx do
+  begin
+    if (i < 0) or (i >= Lines.Count) then Continue;
+    Low := LowerCase(Lines[i]);
+    if (Pos('procedure', Low) > 0) or (Pos('function', Low) > 0) or
+       (Pos('constructor', Low) > 0) or (Pos('destructor', Low) > 0) then
+      Exit(i);
+  end;
+end;
+
+procedure DupAddParens(const ALine: string; var ADepth: Integer);
+// Klammerbilanz einer Zeile auf ADepth aufaddieren; nie unter null.
+begin
+  for var c in ALine do
+    if c = '(' then Inc(ADepth)
+    else if c = ')' then
+    begin
+      Dec(ADepth);
+      if ADepth < 0 then ADepth := 0;
+    end;
+end;
+
 function DupParenDepthBefore(Lines: TStringList; ABlockLine: Integer): Integer;
 // Klammertiefe am Blockanfang, gerechnet ab dem naechsten Routinen-KOPF
 // darueber (hoechstens 40 Zeilen zurueck). > 0 heisst: der Block steht
@@ -222,38 +255,28 @@ function DupParenDepthBefore(Lines: TStringList; ABlockLine: Integer): Integer;
 const
   LOOKBACK = 40;
 var
-  i, StartIdx, Depth, StopIdx : Integer;
-  Low : string;
+  i, StartIdx, Depth : Integer;
 begin
   Result   := 0;
-  StartIdx := -1;
-  StopIdx  := ABlockLine - 1 - LOOKBACK;
-  if StopIdx < 0 then StopIdx := 0;
-  for i := ABlockLine - 1 downto StopIdx do
-  begin
-    if (i < 0) or (i >= Lines.Count) then Continue;
-    Low := LowerCase(Lines[i]);
-    if (Pos('procedure', Low) > 0) or (Pos('function', Low) > 0) or
-       (Pos('constructor', Low) > 0) or (Pos('destructor', Low) > 0) then
-    begin
-      StartIdx := i;
-      Break;
-    end;
-  end;
+  StartIdx := DupRoutineHeadAbove(Lines, ABlockLine, LOOKBACK);
   if StartIdx < 0 then Exit;
   Depth := 0;
   for i := StartIdx to ABlockLine - 2 do
-  begin
-    if (i < 0) or (i >= Lines.Count) then Continue;
-    for var c in Lines[i] do
-      if c = '(' then Inc(Depth)
-      else if c = ')' then
-      begin
-        Dec(Depth);
-        if Depth < 0 then Depth := 0;
-      end;
-  end;
+    if (i >= 0) and (i < Lines.Count) then
+      DupAddParens(Lines[i], Depth);
   Result := Depth;
+end;
+
+procedure DupTallyLine(const ANorm: string;
+  var ATotal, AProps, ADecls: Integer; var AHasCode: Boolean);
+// Eine normalisierte Zeile in die vier Zaehler einsortieren. Ausgelagert,
+// weil der eigene Detektor die Sammelschleife sonst mit Komplexitaet 18
+// meldet (Limit 15) - Dogfooding.
+begin
+  Inc(ATotal);
+  if DupIsPropertyLine(ANorm) then Inc(AProps);
+  if DupLooksLikeDeclLine(ANorm) then Inc(ADecls);
+  if (Pos(':=', ANorm) > 0) or ANorm.StartsWith('begin') then AHasCode := True;
 end;
 
 class function TDuplicateBlockDetector.IsDeclarationBoilerplate(
@@ -276,10 +299,7 @@ begin
     if (i < 0) or (i >= Lines.Count) then Continue;
     Norm := NormalizeLine(Lines[i]);
     if IsTrivial(Norm) then Continue;
-    Inc(Total);
-    if DupIsPropertyLine(Norm) then Inc(Props);
-    if DupLooksLikeDeclLine(Norm) then Inc(Decls);
-    if (Pos(':=', Norm) > 0) or Norm.StartsWith('begin') then HasCode := True;
+    DupTallyLine(Norm, Total, Props, Decls, HasCode);
   end;
   if Total = 0 then Exit;
 
