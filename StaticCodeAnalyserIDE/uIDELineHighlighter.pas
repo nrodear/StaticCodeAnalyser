@@ -1219,12 +1219,22 @@ begin
     begin
       if Bucket.ContainsKey(L) then Continue;     // eigener Befund gewinnt
 
-      // Fortsetzungszeile: gleiche Inhalte wie der Anker, damit Hover auf
-      // JEDER Zeile des Bereichs denselben Text zeigt. Der Record wird als
-      // Ganzes kopiert, SpanFirst/SpanLast kommen also mit. Nur die Rolle
-      // unterscheidet sich - PaintLine leitet daraus Streifenfarbe und
-      // Unterdrueckung der Infobar ab.
-      Cont := Anchor;
+      // Fortsetzungszeile. Sie ist KEIN Fund und traegt deshalb KEINEN
+      // Fund-Inhalt: Titel, Beschreibung, Badge und Fix werden geleert.
+      // Uebrig bleibt nur, was zum Malen des Bereichs noetig ist - Farbe,
+      // Rolle, Bereichsgrenzen.
+      //
+      // Das ist bewusst strukturell geloest statt per Fallunterscheidung
+      // beim Rendern: was nicht da ist, kann auch keine kuenftige
+      // Auswertung versehentlich als Befund anzeigen. Der Hit-Test blendet
+      // diese Zeilen zusaetzlich aus (Guertel und Hosentraeger), aber die
+      // Datenlage allein reicht schon.
+      Cont          := Anchor;
+      Cont.Title    := '';
+      Cont.Desc     := '';
+      Cont.Badge    := '';
+      Cont.Fix      := '';
+      Cont.IsMulti  := False;
       if L = Anchor.SpanLast then
         Cont.SpanRole := srLast
       else
@@ -1662,12 +1672,26 @@ end;
 function TFindingEditorEvents.HitTestLine(X, Y: Integer): Integer;
 var
   Pair : TPair<Integer, TRect>;
+  Mark : TFindingMark;
 begin
   // Lineare Suche durch alle aktuell gerenderten Marker-Rects.
   // FRenderedRects.Count ist <= sichtbare-Zeilen-mit-Marker, typisch < 20.
   for Pair in FRenderedRects do
     if PtInRect(Pair.Value, Point(X, Y)) then
+    begin
+      // Fortsetzungszeilen eines Mehrzeilen-Befundes sind KEINE Funde. Sie
+      // tragen die Markierung, damit der Nutzer den Umfang des Blocks sieht
+      // - aber sie duerfen sich nirgends als Befund ausgeben. Hier gilt
+      // deshalb "kein Treffer": der Aufrufer laeuft in denselben Zweig wie
+      // bei einer unmarkierten Zeile und blendet ein offenes Overlay
+      // sauber aus. Ein Exit im Overlay selbst waere schlechter - dann
+      // bliebe ein zuvor gezeigtes Overlay beim Ueberfahren stehen.
+      if Assigned(GHighlighter)
+         and GHighlighter.TryGetMark(FLastPaintedFile, Pair.Key, Mark)
+         and (Mark.SpanRole in [srMiddle, srLast]) then
+        Exit(-1);
       Exit(Pair.Key);
+    end;
   Result := -1;
 end;
 
