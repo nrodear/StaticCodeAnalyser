@@ -42,6 +42,11 @@ type
     [Test] procedure Block_DifferentCase_StillDetected;
     [Test] procedure Block_CommentsBetween_StillDetected;
     [Test] procedure Block_FirstLineReported_NotLast;
+    // ---- Deklarations-Boilerplate (30%-Audit 2026-07-31) ------------------
+    [Test] procedure Block_PropertyRedeclarationList_NotReported;
+    [Test] procedure Block_ParameterListInHeader_NotReported;
+    [Test] procedure Block_FieldList_StillReported;
+    [Test] procedure Block_RealCodeDuplicate_StillReported;
   end;
 
 implementation
@@ -564,6 +569,160 @@ begin
       'Befund-Zeile muss 3 (Erst-Vorkommen) sein, nicht 13 (Zweit-Vorkommen)');
   finally F.Free;
   end;
+end;
+
+procedure TTestDuplicateBlock.Block_PropertyRedeclarationList_NotReported;
+// Das Wiederholen published-er Properties IST der Delphi-Mechanismus, mit
+// dem eine Ableitung geerbte Properties publiziert. Es gibt nichts zu
+// extrahieren. Korpus-Beleg: cnwizards StdCtrls.pas:351, jvcl JvCombos.pas:139.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TFooA = class(TEdit)'#13#10+
+  '  published'#13#10+
+  '    property Visible;'#13#10+
+  '    property OnClick;'#13#10+
+  '    property OnDblClick;'#13#10+
+  '    property OnEnter;'#13#10+
+  '    property OnExit;'#13#10+
+  '    property OnKeyPress;'#13#10+
+  '    property Spacing;'#13#10+
+  '    property Default;'#13#10+
+  '  end;'#13#10+
+  '  TFooB = class(TEdit)'#13#10+
+  '  published'#13#10+
+  '    property Visible;'#13#10+
+  '    property OnClick;'#13#10+
+  '    property OnDblClick;'#13#10+
+  '    property OnEnter;'#13#10+
+  '    property OnExit;'#13#10+
+  '    property OnKeyPress;'#13#10+
+  '    property Spacing;'#13#10+
+  '    property Default;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDuplicateBlock),
+    'published-property-Redeklaration ist sprachliches Boilerplate');
+  finally F.Free; end;
+end;
+
+procedure TTestDuplicateBlock.Block_ParameterListInHeader_NotReported;
+// Delphi erzwingt die Wiederholung der Parameterliste in Deklaration UND
+// Implementierung. Erkennungsmerkmal ist die OFFENE KLAMMER - ohne sie
+// waere es eine Feldliste, und die bleibt ein Fund (naechster Test).
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TFoo = class'#13#10+
+  '    constructor CreateA('#13#10+
+  '                  CreateSuspended: Boolean;'#13#10+
+  '                  AOwner: TWinControl;'#13#10+
+  '                  ARank: Integer;'#13#10+
+  '                  ASQL: AnsiString;'#13#10+
+  '                  AMaxLoop: Integer;'#13#10+
+  '                  ANBLoop: Integer;'#13#10+
+  '                  AKey: AnsiString;'#13#10+
+  '                  AFlags: AnsiString);'#13#10+
+  '    constructor CreateB('#13#10+
+  '                  CreateSuspended: Boolean;'#13#10+
+  '                  AOwner: TWinControl;'#13#10+
+  '                  ARank: Integer;'#13#10+
+  '                  ASQL: AnsiString;'#13#10+
+  '                  AMaxLoop: Integer;'#13#10+
+  '                  ANBLoop: Integer;'#13#10+
+  '                  AKey: AnsiString;'#13#10+
+  '                  AFlags: AnsiString);'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDuplicateBlock),
+    'Parameterliste im Routinenkopf ist sprachlich erzwungen');
+  finally F.Free; end;
+end;
+
+procedure TTestDuplicateBlock.Block_FieldList_StillReported;
+// WAECHTER, und zugleich die bewusste Grenze des Gates: eine doppelte
+// FELDLISTE sieht aus wie eine Parameterliste, steht aber NICHT in einer
+// offenen Klammer. Zwei Klassen mit identischer Feldliste sind eine echte
+// Copy-Paste-Spur; das Audit deckt sie nicht, also bleibt der Fund.
+// Im Korpus sind das 744 Funde.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TFooA = class'#13#10+
+  '  private'#13#10+
+  '    FOn: Boolean;'#13#10+
+  '    FMaxLoop: Integer;'#13#10+
+  '    FErrorMsg: AnsiString;'#13#10+
+  '    FRank: Integer;'#13#10+
+  '    FTotalLoop: Integer;'#13#10+
+  '    FOwner: TWinControl;'#13#10+
+  '    FKey: AnsiString;'#13#10+
+  '    FFlags: AnsiString;'#13#10+
+  '  end;'#13#10+
+  '  TFooB = class'#13#10+
+  '  private'#13#10+
+  '    FOn: Boolean;'#13#10+
+  '    FMaxLoop: Integer;'#13#10+
+  '    FErrorMsg: AnsiString;'#13#10+
+  '    FRank: Integer;'#13#10+
+  '    FTotalLoop: Integer;'#13#10+
+  '    FOwner: TWinControl;'#13#10+
+  '    FKey: AnsiString;'#13#10+
+  '    FFlags: AnsiString;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkDuplicateBlock) >= 1,
+    'Doppelte Feldliste steht in KEINER offenen Klammer und bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestDuplicateBlock.Block_RealCodeDuplicate_StillReported;
+// WAECHTER: der Kern der Regel bleibt unangetastet.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure A;'#13#10+
+  'begin'#13#10+
+  '  Alpha := 1;'#13#10+
+  '  Beta := 2;'#13#10+
+  '  Gamma := 3;'#13#10+
+  '  Delta := 4;'#13#10+
+  '  Epsilon := 5;'#13#10+
+  '  Zeta := 6;'#13#10+
+  '  Eta := 7;'#13#10+
+  '  Theta := 8;'#13#10+
+  'end;'#13#10+
+  'procedure B;'#13#10+
+  'begin'#13#10+
+  '  Alpha := 1;'#13#10+
+  '  Beta := 2;'#13#10+
+  '  Gamma := 3;'#13#10+
+  '  Delta := 4;'#13#10+
+  '  Epsilon := 5;'#13#10+
+  '  Zeta := 6;'#13#10+
+  '  Eta := 7;'#13#10+
+  '  Theta := 8;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkDuplicateBlock) >= 1,
+    'Echtes Code-Duplikat bleibt ein Fund');
+  finally F.Free; end;
 end;
 
 end.
