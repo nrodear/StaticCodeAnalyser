@@ -416,6 +416,13 @@ const
   // keine Bereichsmarkierung, weil der Nutzer das Ende des Blocks dann
   // wieder raten muesste.
   SPAN_CONT_BLEND  = 0.45;
+  // Obergrenze fuer die Zeilen, die EIN Befund markieren darf. Reine
+  // Schadensbegrenzung gegen ein fehlerhaftes EndLine, kein fachliches
+  // Limit. Der Wert ist bewusst weit ueber allem angesetzt, was eine
+  // Bereichsmarkierung noch sinnvoll macht - wer 500 Zeilen hervorhebt,
+  // hebt nichts mehr hervor. Greift die Grenze, ist das ein Datenfehler
+  // und keine Darstellungsfrage.
+  MAX_SPAN_LINES   = 500;
 
 function SpanContinuationColor(AAccent: TColor): TColor;
 // Streifenfarbe fuer die Fortsetzungszeilen eines Mehrzeilen-Befundes:
@@ -1099,6 +1106,15 @@ begin
     end));
   Strongest := Group[0];
 
+  // Obergrenze GENAU HIER, an der einzigen Stelle, an der ein Span-Feld
+  // entsteht. Damit erbt jeder Verbraucher (ApplySpanCoverage, RemoveMark,
+  // spaeter der Gutter) die Schranke automatisch und muss sie nicht selbst
+  // kennen - sonst schleppt jede neue Auswertung dieselbe Endlosschleife
+  // mit. SpanEnd klemmt engine-seitig nur nach UNTEN; ein Detektorfehler
+  // mit EndLine = 1.000.000 wuerde hier sonst die IDE einfrieren.
+  if WidestEnd > AnchorLine + MAX_SPAN_LINES then
+    WidestEnd := AnchorLine + MAX_SPAN_LINES;
+
   // Span-Felder gelten fuer BEIDE Zweige (Single wie Multi) und werden
   // unten nicht mehr angefasst.
   Result.SpanFirst := AnchorLine;
@@ -1196,17 +1212,19 @@ begin
     if Anchor.SpanRole <> srFirst then Continue;
     if Anchor.SpanLast <= Anchor.SpanFirst then Continue;
 
+    // SpanLast ist bereits in BuildMarkForLineGroup auf MAX_SPAN_LINES
+    // gekappt - hier wird bewusst NICHT ein zweites Mal geklemmt, damit es
+    // genau eine Stelle gibt, an der die Schranke gilt.
     for L := Anchor.SpanFirst + 1 to Anchor.SpanLast do
     begin
       if Bucket.ContainsKey(L) then Continue;     // eigener Befund gewinnt
 
       // Fortsetzungszeile: gleiche Inhalte wie der Anker, damit Hover auf
-      // JEDER Zeile des Bereichs denselben Text zeigt. Nur die Rolle
+      // JEDER Zeile des Bereichs denselben Text zeigt. Der Record wird als
+      // Ganzes kopiert, SpanFirst/SpanLast kommen also mit. Nur die Rolle
       // unterscheidet sich - PaintLine leitet daraus Streifenfarbe und
       // Unterdrueckung der Infobar ab.
-      Cont           := Anchor;
-      Cont.SpanFirst := Anchor.SpanFirst;
-      Cont.SpanLast  := Anchor.SpanLast;
+      Cont := Anchor;
       if L = Anchor.SpanLast then
         Cont.SpanRole := srLast
       else
@@ -1520,11 +1538,16 @@ begin
   // SpanFirst und bleibt deshalb stehen - genau richtig.
   if (Victim.SpanLast > Victim.SpanFirst) and (Victim.SpanFirst > 0) then
   begin
+    // Bewusst verschachtelt statt als ein and-Ausdruck: bei aktivem
+    // {$BOOLEVAL ON} wuerde die zweite Bedingung auch dann ausgewertet,
+    // wenn TryGetValue False lieferte - Other traegt dann den Wert der
+    // vorigen Iteration und der Vergleich waere Zufall.
     var Other : TFindingMark;
     for var L := Victim.SpanFirst to Victim.SpanLast do
-      if Bucket.TryGetValue(L, Other) and (Other.SpanFirst = Victim.SpanFirst)
-         and (Other.SpanLast = Victim.SpanLast) then
-        Bucket.Remove(L);
+      if Bucket.TryGetValue(L, Other) then
+        if (Other.SpanFirst = Victim.SpanFirst) and
+           (Other.SpanLast = Victim.SpanLast) then
+          Bucket.Remove(L);
   end
   else
     Bucket.Remove(ALineNo);
