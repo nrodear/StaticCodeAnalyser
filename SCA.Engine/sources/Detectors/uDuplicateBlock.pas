@@ -209,6 +209,16 @@ function DupParenDepthBefore(Lines: TStringList; ABlockLine: Integer): Integer;
 // Klammertiefe am Blockanfang, gerechnet ab dem naechsten Routinen-KOPF
 // darueber (hoechstens 40 Zeilen zurueck). > 0 heisst: der Block steht
 // INNERHALB einer Parameterliste.
+//
+// GRENZE DER HEURISTIK, bei der Messung 2026-08-01 gefunden: sie
+// unterscheidet nicht zwischen einer Parameterliste und IRGENDEINEM
+// geklammerten Bereich unterhalb eines Routinen-Schluesselworts. Im Korpus
+// traf das genau zweimal zu - beide Male eine typisierte Konstanten-Tabelle
+// (HeidiSQL dbstructures.mssql.pas, 'array of TDBDatatype = ((Index: ...;
+// Name: ...), ...)'). Dort ist die Unterdrueckung inhaltlich RICHTIG
+// (Datenzeilen, keine extrahierbare Methode), aber sie geschieht aus
+// Zufall, nicht aus Absicht. Wer die Heuristik verschaerft, muss diese
+// zwei Faelle bewusst mitnehmen - sonst kehren sie als FP zurueck.
 const
   LOOKBACK = 40;
 var
