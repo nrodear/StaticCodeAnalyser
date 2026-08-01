@@ -408,6 +408,98 @@ Full release notes: [docs/releases/v0.9.8.md](docs/releases/v0.9.8.md)
 
 ---
 
+## [v0.9.7] - 2026-06-01 - Regex cache round 11
+
+### Changed
+
+- **Module-level regex cache extended to seven more detectors** (round 11 of
+  the performance work). Patterns were recompiled per file; they are now
+  compiled once per process.
+
+### Fixed
+
+- **`uFloatEquality` failed to compile after the round-11 change** — the
+  inserted `var` broke an open `const` block (E2029/E2003).
+- **Four missing finding-kind filters** added, closing the gap found by the
+  filter audit.
+
+---
+
+## [v0.9.6] - 2026-05-31 - Self-test FP reduction + `selftest-quiet`
+
+The tool was pointed at its own source and the results were triaged in
+seven rounds. This release is almost entirely about not reporting things
+that are not defects.
+
+### Added
+
+- **`selftest-quiet` profile and profile negation syntax.** A profile entry
+  may now start with `!` to remove a kind from an inherited set, which is
+  what makes a "everything except the eleven style rules" profile
+  expressible at all.
+
+### Fixed
+
+- `SCA001 MemoryLeak` recognises the acquire/release pool pattern (~60).
+- `SCA078` accepts field, indexed and dereferenced `Result` assignments; a
+  plain `Result :=` was the only form understood before.
+- `uExceptionTooGeneral` skips a legitimate top-level handler (~40).
+- `uMethodName` skips DFM event handlers — the name is dictated by the form
+  designer, not the developer (~8).
+- `uTypeName` skips exception classes, whose `E`-prefix is the convention
+  the rule was flagging (~4).
+- `uLockWithoutTryFinally` no longer treats method headers and cache calls
+  as lock acquisitions.
+- `uUnusedLocal` handles nested procedures; `FreeWithoutNil` handles locals.
+
+### Changed
+
+- Regex patterns moved to a module-level cache instead of being recompiled
+  for every file.
+
+---
+
+## [v0.9.5] - 2026-05-31 - `SCA162`–`SCA164`, confidence model, branding
+
+Version **0.9.4 was skipped** — there is no such tag or release; the
+version went straight from 0.9.3 to 0.9.5.
+
+### Added
+
+- **`SCA162 InsecureCryptoAlgorithm`**, **`SCA163 CommandInjection`**,
+  **`SCA164 UnusedRoutine`**.
+- **Finding confidence model** plus a central comment/string scanner, so
+  detectors stop re-implementing "is this position inside a literal".
+- **IDE integration** — Tools-menu entry via the canonical `INTAServices`
+  pattern, and a menu command to clear all hover annotations.
+- **Standalone UI aligned with the IDE plugin** (hamburger menu, Segoe UI,
+  theming).
+- **Application branding** — icon and image resources, including a
+  float-mode icon for the dockable form.
+
+### Changed
+
+- **Lazy per-node `FindAll` cache** — removes roughly 140 redundant tree
+  walks per file.
+- **Detector post-filter O(n²) → O(n)**, and the grid stays usable at
+  150k findings.
+- **`.gitattributes` enforces CRLF for Delphi sources.** Mixed line endings
+  had been produced by tooling that wrote files in text mode.
+
+### Fixed
+
+- Several detectors did not walk `nkAssign.TypeRef` and therefore missed
+  everything on the right-hand side of an assignment
+  (`CharToCharPointerCast`, `DateFormatSettings`, `IfThenShortCircuit`).
+- Parser: `#$hh` hex character literals; the `while` condition is retained
+  in `TypeRef`.
+- SQL detector merges adjacent Pascal string literals before checking for
+  `WHERE`, and no longer trips over English messages.
+- 195 missing German translations backfilled, with a CI lock against
+  regression.
+
+---
+
 ## [0.9.3] - 2026-05-27
 
 Polish release. No new detectors (count stays at 161). Focus on
