@@ -8,10 +8,42 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Changes since **v0.9.8**. Detector roster grows from 183 to **193 rules**
-(`SCA001`–`SCA193`); DFM detectors 22 → **23**.
+Changes since **v0.9.8**. Rule roster grows from 183 to **195 rules**
+(`SCA001`–`SCA195`); DFM rules 22 → **23**. Beyond the new detectors, this
+cycle was dominated by a measured false-positive campaign: on the
+12.8k-file reference corpus the finding count dropped **645,622 → 593,122
+(−52,500, −8.1 %)**, with the error tier going **2,255 → 2,172**.
 
 ### Added
+
+- **Rule pages document what a rule deliberately does *not* report.** The
+  rule catalogue gained an optional `exceptions` field (case, mechanism,
+  optional snippet); `tools/gen-rules-docs.py` renders it as a
+  *“Not reported (by design)”* section on every affected rule page. Without
+  it a user cannot tell *“the rule found nothing”* from *“the rule has a
+  gate for exactly this case”* — the most common question after a
+  false-positive campaign. Deliberate false negatives are documented too,
+  so nobody later hunts a bug that is a design decision.
+
+- **`gen-rules-docs.py` validates the catalogue against its own schema**
+  when `jsonschema` is installed (`--no-schema-check` opts out). The schema
+  had never been executed; the first run found a `shortDescription` of 208
+  characters against a documented limit of 200.
+
+- **`SCA194` / `SCA195` — project-membership rules.** Both need a view no
+  single-file check has: they compare the set of files on disk and the set
+  of units actually reached by `uses` against what the project file lists,
+  so they only run in a project or project-group scan.
+  - `SCA194 NotIncludedInProject` — a `.pas`/`.dfm` lies in the project
+    tree but no `.dproj`/`.groupproj` references it. Typically a leftover
+    that is still edited, still greps as a hit, and is never compiled.
+  - `SCA195 UsedButNotInProject` — the mirror case, and the more dangerous
+    one: the unit *is* pulled in via `uses` and compiles through the search
+    path, but is missing from the project file. It builds on the machine
+    where the path happens to be set and fails everywhere else. Resolution
+    follows `uses` transitively from the `.dpr` root and walks **both**
+    branches of an `{$IFDEF}` — a unit used only in the inactive branch is
+    still a project member.
 
 - **`SCA185`–`SCA192` — file-encoding & Unicode-safety detector family**
   (`uSourceEncoding.pas`): whole-file, byte-level checks that read the raw
@@ -69,6 +101,47 @@ Changes since **v0.9.8**. Detector roster grows from 183 to **193 rules**
 
 ### Changed
 
+- **False-positive campaign — 52,500 fewer findings on the reference
+  corpus (−8.1 %), no true positive lost.** Six increments, each built on
+  its own branch, measured in a single corpus run against the previous
+  baseline, and released only after sampling the dropped findings. Every
+  increment held the same anchors: **zero added findings**, no rule outside
+  the increment moved, and the error tier only moved where intended.
+
+  | Increment | Rules | Effect |
+  |---|---|---|
+  | Ownership transfer via `out` parameters | `SCA001` | −493 |
+  | Hint-tier gates | `SCA155`, `SCA073`, `SCA147`, `SCA080` | −17,577 |
+  | Declaration & reference visibility | `SCA119`, `SCA132`, `SCA020`, `SCA053`, `SCA164` | −10,531 |
+  | Duplicate reporting & interface contracts | `SCA106`, `SCA070`, `SCA054`, `SCA001` | −20,455 |
+  | Parser: attributes in parameter position | `SCA054`, `SCA013` | −41 |
+  | Declaration boilerplate | `SCA021` | −3,403 |
+
+  The recurring theme is that a rule must not fire where the language
+  *forces* the repetition or where the call simply is not visible by name:
+  message handlers and interface implementations are dispatched without
+  ever naming the method, `Exit` inside a loop is an early return rather
+  than a no-op, `Break` is never a no-op, published-property lists and
+  parameter lists cannot be extracted into a method, and a declaration plus
+  its implementation is one identifier, not two findings.
+
+- **`SCA080 RedundantJump` no longer scans `Break`.** Unlike `Continue`,
+  `Break` at the end of a loop body suppresses the remaining iterations —
+  following the old hint turned search loops into full scans and
+  `while True` loops into infinite ones. `Break` is only redundant in
+  `repeat … Break; until True`, which does not occur anywhere in the
+  reference corpus.
+
+- **`SCA106 MethodName` reports once per method.** The declaration and its
+  implementation are one identifier and one rename; they were reported
+  twice. Findings for equally-named methods in *different* classes are
+  unaffected.
+
+- **`SCA020 EmptyMethod` accepts an intent comment.** The rule's own advice
+  is to make the intent explicit by assert, exception *or comment* — a body
+  that carries one has already followed it. Compiler directives and
+  commented-out code do not count.
+
 - **Performance** — full-profile corpus scan ~263 s → **~230 s** (12.8k
   files) via a per-scan strip cache (~17 detectors share one strip
   result), a single-pass token pre-filter (was ~82 full-text scans per
@@ -91,6 +164,36 @@ Changes since **v0.9.8**. Detector roster grows from 183 to **193 rules**
   so a genuine "method on an uninitialised class instance" bug still flags.
 
 ### Fixed
+
+- **Regex cache grew without bound in the IDE plugin.** The per-thread
+  cache key assumed pool threads are reused — true for the CLI, but the
+  IDE's bulk-scan worker starts fresh threads per scan whose ids never
+  return, while their compiled regex instances stayed. Now capped.
+
+- **Size guard for an external `.po` came too late.** The file was fully
+  loaded into memory and only then compared against the limit; the guard
+  existed but never took effect. The file size now decides before a single
+  byte is copied.
+
+- **Embedded translation was never selected for case-differing language
+  codes.** The generated dispatcher compared case-sensitively while the
+  caller normalises, so a `PT.po` would have been silently ignored —
+  falling back to English without any error.
+
+- **`i18n_extract.py` harvested constants from expressions.** Any
+  `NAME = <literal>` counted, including mid-expression comparisons, so
+  `Found := Ext = '.pas';` produced a “constant” named `Ext`. A real
+  declaration opens its line; a comparison does not.
+
+- **Attributes in parameter position produced phantom parameters.** For
+  `procedure Post(const [MVCFromBody] P: TPerson)` the parser emitted a
+  second `nkParam` named after the attribute. Sixteen rules read `nkParam`;
+  the visible effect was `SCA054` reporting the attribute name as an unused
+  parameter, and `SCA013` both over- and under-counting parameters.
+
+- **Self-scan is free of error-tier findings.** All thirteen were either
+  test fixtures that carry the anti-pattern on purpose or false positives
+  of the tool's own rules; both are now suppressed with a stated reason.
 
 - **Mojibake in own German user-facing strings** (surfaced by the new
   `SCA185`): two engine units were saved as UTF-8 **without** a BOM and held
