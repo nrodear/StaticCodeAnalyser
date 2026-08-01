@@ -23,6 +23,10 @@ type
     [Test] procedure FreeCdeclRoutine_StillReported;
     [Test] procedure TypelibFile_NotReported;
     [Test] procedure NonTypelibFile_Gegenprobe_Reported;
+    // ---- Eine Meldung je Methode (2026-08-01) -----------------------------
+    [Test] procedure DeclAndImpl_ReportedOnce;
+    [Test] procedure SameNameInTwoClasses_BothReported;
+    [Test] procedure DeclarationOnly_StillReported;
   end;
 
 implementation
@@ -311,6 +315,83 @@ begin
   F := MethodFindingsFor(SRC, 'D:\repo\src\uPlayer.pas');
   try Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkMethodName),
     'ohne Typelib-Namensmuster bleiben beide Funde');
+  finally F.Free; end;
+end;
+
+procedure TTestMethodName.DeclAndImpl_ReportedOnce;
+// FindAll(nkMethod) liefert fuer eine implementierte Methode ZWEI Knoten:
+// die Deklaration im Typ und die Implementierung. Das ist EIN Bezeichner
+// und EINE Umbenennung - also ein Befund. Korpus-Zensus after126: 10.890
+// der 30.925 Funde (35 %) waren solche Zwillinge.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    procedure doStuff;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.doStuff;'#13#10 +
+  'begin'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMethodName),
+    'Deklaration und Implementierung derselben Methode sind EIN Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestMethodName.SameNameInTwoClasses_BothReported;
+// WAECHTER: der Schluessel ist (Besitzertyp, Name), NICHT (Datei, Name).
+// 'TFoo.doStuff' und 'TBar.doStuff' sind zwei verschiedene Bezeichner und
+// brauchen zwei Umbenennungen. Im Korpus stehen dahinter 5.489
+// Mehrfachmeldungen, die zu Recht bestehen bleiben (Firebird.pas meldet
+// 'create' 172x - fuer 172 verschiedene Klassen).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    procedure doStuff;'#13#10 +
+  '  end;'#13#10 +
+  '  TBar = class'#13#10 +
+  '    procedure doStuff;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.doStuff;'#13#10 +
+  'begin'#13#10 +
+  'end;'#13#10 +
+  'procedure TBar.doStuff;'#13#10 +
+  'begin'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkMethodName),
+    'Gleicher Name in zwei Klassen sind zwei Befunde');
+  finally F.Free; end;
+end;
+
+procedure TTestMethodName.DeclarationOnly_StillReported;
+// WAECHTER: eine Methode ohne Implementierung in derselben Unit (Interface,
+// abstract) darf durch die Deduplizierung nicht verschwinden.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  IFoo = interface'#13#10 +
+  '    procedure doStuff;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMethodName),
+    'Reine Deklaration bleibt ein Befund');
   finally F.Free; end;
 end;
 
