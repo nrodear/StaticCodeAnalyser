@@ -72,6 +72,10 @@ type
     // message, virtual). Match auf das von ParseMethodDirectives erzeugte
     // TypeRef-Format: 'procedure[:ret];dir1;dir2'.
     class function HasExternalReferenceDirective(const TypeRef: string): Boolean; static;
+    // Link-Gates (Audit 2026-07-31), siehe Implementations-Kommentar.
+    class function IsExternalImport(const TypeRef: string): Boolean; static;
+    class function UnitLinksObjectFile(Lines: TStringList): Boolean; static;
+    class function IsLinkAnchorCandidate(const TypeRef: string): Boolean; static;
     // True wenn die Routine ein Konstruktor oder Destruktor ist - nicht
     // wie eine normale Procedure gerufen. Match an TypeRef-Praefix.
     class function IsCtorOrDtor(const TypeRef: string): Boolean; static;
@@ -111,6 +115,78 @@ begin
             (Pos(';dynamic',  Low)  > 0) or
             (Pos(';forward',  Low)  > 0); // ;forward: Decl ohne Body - der
                                           // spaetere Impl wird separat geprueft.
+end;
+
+// ===========================================================================
+// LINK-GATES (30%-Real-World-Audit 2026-07-31: 1.791 Funde, 50 % FP im Sample)
+//
+// Ein "unused"-Hinweis auf einer link-tragenden Deklaration ist besonders
+// schaedlich: wer ihm folgt, bricht den Build. Zwei Mechanismen, beide ohne
+// jeden Pascal-Aufrufer BY DESIGN.
+// ===========================================================================
+
+class function TUnusedRoutineDetector.IsExternalImport(
+  const TypeRef: string): Boolean;
+// Rumpflose `external`-Deklaration = Import, keine Implementation. Die Regel
+// zielt laut eigenem Text auf "standalone routine in the implementation
+// section" - ein Import ist keine. Deckt zugleich die Link-Anker ab, deren
+// EINZIGER Zweck es ist, eine Library in die Binary zu ziehen
+// (Kastri DW.Biometric.iOS.pas:407 'LocalAuthenticationLoader; cdecl;
+// external libLocalAuthentication;').
+begin
+  Result := Pos(';external', LowerCase(TypeRef)) > 0;
+end;
+
+class function TUnusedRoutineDetector.UnitLinksObjectFile(
+  Lines: TStringList): Boolean;
+// True, wenn die Unit ein C-Objekt statisch dazulinkt ({$L foo.obj} bzw.
+// {$LINK foo.o}). Dann loest der Linker die Externals des C-Codes gegen die
+// hier deklarierten Routinen auf - ein Pascal-Aufrufer existiert per
+// Definition nicht (mORMot mormot.lib.quickjs.pas: 'function acosh(...):
+// double; cdecl;' fuer quickjs.obj).
+//
+// ROHZEILEN, nicht die gestrippte Fassung: der Strip entfernt bzw. blankt
+// Compiler-Direktiven mitsamt den geschweiften Klammern.
+var
+  i   : Integer;
+  T   : string;
+  p   : Integer;
+begin
+  Result := False;
+  if Lines = nil then Exit;
+  for i := 0 to Lines.Count - 1 do
+  begin
+    T := LowerCase(Lines[i]);
+    p := Pos('{$l', T);
+    while p > 0 do
+    begin
+      // '{$link ' oder '{$l ' - NICHT '{$libprefix', '{$legacyifend', ...
+      if Copy(T, p, 6) = '{$link' then
+      begin
+        if (p + 6 > Length(T)) or not TDetectorUtils.IsIdentChar(T[p + 6]) then
+          Exit(True);
+      end
+      else if (p + 3 <= Length(T)) and CharInSet(T[p + 3], [' ', #9, '''']) then
+        Exit(True);
+      p := Pos('{$l', T, p + 3);
+    end;
+  end;
+end;
+
+class function TUnusedRoutineDetector.IsLinkAnchorCandidate(
+  const TypeRef: string): Boolean;
+// In einer obj-linkenden Unit sind das die Kandidaten, die der C-Code rufen
+// kann: alles mit C-Aufrufkonvention (und die Importe selbst). Reine
+// Pascal-Helfer OHNE Aufrufkonvention bleiben pruefbar - sonst waere in so
+// einer Unit gar nichts mehr meldbar.
+var
+  Low : string;
+begin
+  Low := LowerCase(TypeRef);
+  Result := (Pos(';cdecl',    Low) > 0) or
+            (Pos(';stdcall',  Low) > 0) or
+            (Pos(';varargs',  Low) > 0) or
+            (Pos(';external', Low) > 0);
 end;
 
 class function TUnusedRoutineDetector.IsCtorOrDtor(
@@ -211,10 +287,14 @@ var
   MethName : string;
   Modifiers: string;
   RoutineEnd: Integer;
+  LinksObj : Boolean;
   F        : TLeakFinding;
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
+  // Einmal je Datei - die Direktive steht typischerweise im Kopf, der Scan
+  // laeuft aber ueber alle Zeilen (mORMot setzt sie mitten in die Unit).
+  LinksObj := UnitLinksObjectFile(Lines);
   WordIdx := nil;   // Perf P1: erst nach dem Strip gebaut; nil-sicher im finally
   try
     // Strippt Strings + Kommentare und liefert die Char->Quellzeile-Map mit -
@@ -267,8 +347,15 @@ begin
           Modifiers := Mth.TypeRef;
 
           // FP-Guards
+          // Namenloses Parser-Phantom (IFDEF-geteilter Kopf, 'Operator' als
+          // Bezeichner): die Meldung lautete "Top-level routine  appears
+          // unused" - mit Leerstelle. Nie melden (Audit 2026-07-31).
+          if MethName = ''                            then Continue;
           if IsCtorOrDtor(Modifiers)                  then Continue;
           if HasExternalReferenceDirective(Modifiers) then Continue;
+          if IsExternalImport(Modifiers)              then Continue;
+          // In einer obj-linkenden Unit ruft der C-Code die Pascal-Symbole.
+          if LinksObj and IsLinkAnchorCandidate(Modifiers) then Continue;
           if SameText(MethName, 'register')           then Continue;
           if IsEnumeratorRoutine(MethName)            then Continue;
           if InterfaceMethods.IndexOf(MethName) >= 0  then Continue;
