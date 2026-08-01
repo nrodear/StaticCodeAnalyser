@@ -26,6 +26,13 @@ type
     [Test] procedure Empty_Destructor_ReportsHint;
     [Test] procedure Empty_BodyWithCall_NoFinding;
     [Test] procedure Empty_ForwardDecl_NoFinding;
+    // ---- Intent-Kommentar (30%-Audit 2026-07-31, User-Call 2026-08-01) ---
+    [Test] procedure EmptyBody_WithBlockIntentComment_NoFinding;
+    [Test] procedure EmptyBody_WithLineIntentComment_NoFinding;
+    [Test] procedure EmptyBody_IntentCommentOnBeginLine_NoFinding;
+    [Test] procedure EmptyBody_CompilerDirectiveOnly_StillReported;
+    [Test] procedure EmptyBody_CommentedOutCode_StillReported;
+    [Test] procedure EmptyBody_NoComment_StillReported;
   end;
 
 implementation
@@ -159,6 +166,97 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkEmptyMethod));
+  finally F.Free; end;
+end;
+
+procedure TTestEmptyMethod.EmptyBody_WithBlockIntentComment_NoFinding;
+// Der Regeltext nennt den Kommentar selbst als konforme Loesung.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.DoNothing;'#13#10 +
+  'begin'#13#10 +
+  '  { do nothing - base class hook }'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkEmptyMethod),
+    'Leerer Rumpf mit Intent-Kommentar ist bereits konform');
+  finally F.Free; end;
+end;
+
+procedure TTestEmptyMethod.EmptyBody_WithLineIntentComment_NoFinding;
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.DoNothing;'#13#10 +
+  'begin'#13#10 +
+  '  // default implementation does nothing'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkEmptyMethod));
+  finally F.Free; end;
+end;
+
+procedure TTestEmptyMethod.EmptyBody_IntentCommentOnBeginLine_NoFinding;
+// Einzeiler-Schreibweise: begin, Kommentar und end auf einer Zeile.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.DoNothing;'#13#10 +
+  'begin { intentionally empty } end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkEmptyMethod));
+  finally F.Free; end;
+end;
+
+procedure TTestEmptyMethod.EmptyBody_CompilerDirectiveOnly_StillReported;
+// WAECHTER: eine Direktive ist Werkzeug, keine Aussage ueber die Absicht.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.DoNothing;'#13#10 +
+  'begin'#13#10 +
+  '  {$REGION ''stub''}'#13#10 +
+  '  {$ENDREGION}'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkEmptyMethod),
+    'Compiler-Direktive ist kein Intent-Kommentar');
+  finally F.Free; end;
+end;
+
+procedure TTestEmptyMethod.EmptyBody_CommentedOutCode_StillReported;
+// WAECHTER (Audit-Vorgabe): wer Code stilllegt, dokumentiert damit keine
+// Absicht - erkennbar am abschliessenden Semikolon.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.DoNothing;'#13#10 +
+  'begin'#13#10 +
+  '  // DoTheRealWork;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkEmptyMethod),
+    'Auskommentierter Code ist kein Intent-Kommentar');
+  finally F.Free; end;
+end;
+
+procedure TTestEmptyMethod.EmptyBody_NoComment_StillReported;
+// WAECHTER: der Kern der Regel bleibt unangetastet.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.DoNothing;'#13#10 +
+  'begin'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkEmptyMethod));
   finally F.Free; end;
 end;
 

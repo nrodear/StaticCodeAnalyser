@@ -97,7 +97,7 @@ remains the canonical machine-readable roster.
 | 38 | — | **UnusedUnit — unit in uses not used** | Unit listed in `uses` whose symbols are never referenced | ✅ | `uUnusedUses` |
 | 39 | — | **CommentedCode — commented-out code** | Block of commented Pascal code (`//` or `{ }`) without explanation | ✅ | `uCommentedOutCode` |
 | 40 | SCA019 | **TodoComment — TODO/FIXME without ticket** | Comment contains `TODO`, `FIXME`, `HACK`, `XXX` without an issue reference | ✅ | `uTodoComment` |
-| 41 | SCA020 | **EmptyMethod — empty method** | Method only contains `inherited`, or is completely empty | ✅ | `uEmptyMethod` |
+| 41 | SCA020 | **EmptyMethod — empty method** | Method only contains `inherited`, or is completely empty — a body with an explanatory comment is already compliant and is not reported | ✅ | `uEmptyMethod` |
 | 42 | — | **UnnecessaryCast — redundant type cast** | Cast to the same type or to a direct ancestor without extension | 🔲 | |
 | 43 | SCA151 | **ConstantReturn — method always returns the same value** | Every path returns the same literal — should be a constant | ✅ | `uConstantReturn` |
 | 44 | — | **LongLine — line too long** | Line exceeds 120 characters (configurable via `[Detectors] MaxLineLength`) | ✅ | `uTooLongLine` |
