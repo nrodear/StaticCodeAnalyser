@@ -187,18 +187,132 @@ begin
   end;
 end;
 
+// ===========================================================================
+// SEMANTIK-SCHAERFUNG (30%-Real-World-Audit 2026-07-31: 4.609 Warnings,
+// 82 % FP im Sample; User-Entscheidung 2026-08-01: schaerfen statt demoten).
+//
+// Die Praemisse der Regel ist "faengt alles und VERSCHLUCKT es". Zwei
+// Konstellationen erfuellen den ersten Teil, aber nicht den zweiten - und
+// genau in ihnen waere der Rat "prefer a specific subclass" ein Bug.
+// ===========================================================================
+
+function IsIdentCh(C: Char): Boolean; inline;
+begin
+  Result := CharInSet(C, ['a'..'z', 'A'..'Z', '0'..'9', '_']);
+end;
+
+function MentionsWord(const AHayLow, ANeedleLow: string): Boolean;
+var
+  P, NL, HL     : Integer;
+  Before, After : Char;
+begin
+  Result := False;
+  NL := Length(ANeedleLow);
+  HL := Length(AHayLow);
+  if (NL = 0) or (HL < NL) then Exit;
+  P := 1;
+  repeat
+    P := Pos(ANeedleLow, AHayLow, P);
+    if P = 0 then Exit;
+    Before := #0;
+    if P > 1 then Before := AHayLow[P - 1];
+    After := #0;
+    if P + NL - 1 < HL then After := AHayLow[P + NL];
+    if not IsIdentCh(Before) and not IsIdentCh(After) then Exit(True);
+    P := P + NL;
+  until False;
+end;
+
+// FP-KLASSE 2 des Audits (Wrap-und-Re-Raise, 'raise EFoo.Create(E.Message)')
+// wurde BEWUSST NICHT gegatet. Sie kollidiert frontal mit einer frueheren,
+// belegten Entscheidung: uTestExceptionTooGeneral.
+// TranslateToNewException_StillReported haelt fest, dass die Uebersetzung in
+// einen neuen Typ weiterhin ein Fund ist - der breite Catch nimmt dabei auch
+// EAbort und EOutOfMemory mit und macht ein EMyError daraus, Originaltyp und
+// -Stack sind weg. Der Test ist in einem Audit-TP geerdet
+// ('Uebersetzung in Error-Callbacks'), die Gegenposition steht auf 2 von 24
+// Stichproben. Zwei belegte Positionen, die aeltere und breitere gewinnt.
+// Das nackte 'raise;' (echtes Weitergeben) bleibt wie bisher ueber
+// IsLegitTopLevelHandler ausgenommen.
+
+function RoutineHasForeignAbi(const ATypeRef: string): Boolean;
+// Fremde Aufrufkonvention = die Routine ist ein Callback/Dispatcher an einer
+// ABI-Grenze. Eine Delphi-Exception darf ueber diese Grenze NICHT
+// propagieren (undefiniertes Verhalten im C-Code), der Catch-all ist dort
+// Pflicht. 'safecall' gehoert dazu: der Compiler baut den Handler dort sogar
+// selbst, ein expliziter ist die dokumentierte Ergaenzung.
+var
+  Low : string;
+begin
+  Low := LowerCase(ATypeRef);
+  Result := (Pos(';cdecl',    Low) > 0) or
+            (Pos(';stdcall',  Low) > 0) or
+            (Pos(';safecall', Low) > 0) or
+            (Pos(';winapi',   Low) > 0);
+end;
+
+function HandlerForwardsExcToCall(OnNode: TAstNode;
+  const AExcVarLow: string): Boolean;
+// FP-KLASSE 1, zweite Haelfte: der Rumpf reicht E an eine Konverter-Routine
+// durch ('FbException.catchException(nil, e)'). Zusammen mit der fremden
+// Aufrufkonvention ist das der generierte ABI-Dispatcher - im Korpus
+// stammten 14 von 16 Sample-FPs aus EINER generierten Datei (Firebird.pas),
+// die 4-6x vendored vorliegt.
+//
+// Beide Bedingungen zusammen, nicht einzeln: eine cdecl-Routine, die nur
+// loggt und weitermacht, verschluckt weiterhin - und bleibt ein Fund.
+var
+  Stack   : TList<TAstNode>;
+  Cur     : TAstNode;
+  i       : Integer;
+  CallLow : string;
+  p       : Integer;
+begin
+  Result := False;
+  if AExcVarLow = '' then Exit;
+  Stack := TList<TAstNode>.Create;
+  try
+    Stack.Add(OnNode);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack[Stack.Count - 1];
+      Stack.Delete(Stack.Count - 1);
+      if Cur.Kind = nkCall then
+      begin
+        CallLow := LowerCase(Cur.Name);
+        // Nur die ARGUMENTE zaehlen - ein Callee, der zufaellig 'e' heisst,
+        // ist kein Durchreichen.
+        p := Pos('(', CallLow);
+        if (p > 0) and MentionsWord(Copy(CallLow, p, MaxInt), AExcVarLow) then
+          Exit(True);
+      end;
+      for i := 0 to Cur.Children.Count - 1 do
+        Stack.Add(Cur.Children[i]);
+    end;
+  finally
+    Stack.Free;
+  end;
+end;
+
 class procedure TExceptionTooGeneralDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
   Handlers : TList<TAstNode>;
   N        : TAstNode;
+  ExcVar   : string;
+  ForeignAbi : Boolean;
 begin
   Handlers := MethodNode.FindAll(nkOnHandler);
+  ForeignAbi := RoutineHasForeignAbi(MethodNode.TypeRef);
   try
     for N in Handlers do
     begin
       if not SameText(N.TypeRef, 'Exception') then Continue;
       if IsLegitTopLevelHandler(N) then Continue;
+      ExcVar := LowerCase(Trim(N.Name));
+      // Semantik-Schaerfung 2026-08-01, reine Unterdrueckung: Catch-all an
+      // einer ABI-Grenze, der E an einen Konverter durchreicht.
+      if ForeignAbi and HandlerForwardsExcToCall(N, ExcVar) then Continue;
       Results.Add(TLeakFinding.New(FileName, MethodNode.Name, N.Line,
         'except on E: Exception catches every error - prefer a specific subclass',
         fkExceptionTooGeneral));
