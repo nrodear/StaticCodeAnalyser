@@ -47,6 +47,11 @@ type
     [Test] procedure Block_ParameterListInHeader_NotReported;
     [Test] procedure Block_FieldList_StillReported;
     [Test] procedure Block_RealCodeDuplicate_StillReported;
+    // ---- Mehrzeilen-Bereich (Konzept_MehrzeiligeFundmarkierung) -----------
+    [Test] procedure Block_Span_CoversWholeBlock;
+    [Test] procedure Block_Span_IsSourceBased_NotWindowSize;
+    [Test] procedure Span_NotSet_MeansSingleLine;
+    [Test] procedure Span_EndBeforeStart_ClampsToSingleLine;
   end;
 
 implementation
@@ -728,6 +733,139 @@ begin
   try Assert.IsTrue(TFindingHelper.Count(F, fkDuplicateBlock) >= 1,
     'Echtes Code-Duplikat bleibt ein Fund');
   finally F.Free; end;
+end;
+
+// ---- Mehrzeilen-Bereich ------------------------------------------------
+// Ein DuplicateBlock ist per Definition ein BLOCK. Bis 0.9.9 wurde nur
+// seine Anfangszeile transportiert; der Editor konnte deshalb nur eine
+// Zeile markieren und der Nutzer musste das Ende des Blocks raten.
+
+procedure TTestDuplicateBlock.Block_Span_CoversWholeBlock;
+// Der Befund muss den GANZEN Block umfassen, nicht nur die Anfangszeile.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.A; begin'#13#10+
+  '  X := 1;'#13#10+
+  '  Y := 2;'#13#10+
+  '  Z := 3;'#13#10+
+  '  W := 4;'#13#10+
+  '  V := 5;'#13#10+
+  '  U := 6;'#13#10+
+  '  T := 7;'#13#10+
+  '  S := 8;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.B; begin'#13#10+
+  '  X := 1;'#13#10+
+  '  Y := 2;'#13#10+
+  '  Z := 3;'#13#10+
+  '  W := 4;'#13#10+
+  '  V := 5;'#13#10+
+  '  U := 6;'#13#10+
+  '  T := 7;'#13#10+
+  '  S := 8;'#13#10+
+  'end;';
+var
+  F  : TObjectList<TLeakFinding>;
+  Fd : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Fd := TFindingHelper.FirstOf(F, fkDuplicateBlock);
+    Assert.IsNotNull(Fd, 'Duplikat soll gemeldet werden');
+    Assert.IsTrue(Fd.IsMultiLine,
+      'Ein Duplikat-BLOCK darf nicht als einzeiliger Befund gemeldet werden');
+    // Mindestens MIN_BLOCK_LINES (8) Zeilen - mehr ist erlaubt, weniger nie.
+    Assert.IsTrue(Fd.SpanLineCount >= 8,
+      Format('Bereich soll den ganzen Block abdecken, umfasst aber nur %d Zeilen',
+             [Fd.SpanLineCount]));
+  finally F.Free; end;
+end;
+
+procedure TTestDuplicateBlock.Block_Span_IsSourceBased_NotWindowSize;
+// KERN-TEST: der Bereich muss aus QUELLTEXT-Zeilen kommen, nicht aus der
+// Fenstergroesse des normalisierten Stroms.
+//
+// Der Detektor vergleicht einen normalisierten Strom, aus dem Leerzeilen
+// und Kommentare bereits entfernt sind. Acht normalisierte Zeilen koennen
+// im Quelltext ueber deutlich mehr Zeilen verteilt liegen. Wer den Bereich
+// aus der Fenstergroesse ableitet, markiert zu wenig - und zwar genau um
+// die Kommentare herum, also dort, wo es am meisten auffaellt.
+//
+// Hier stehen die Kommentare im ERSTEN Vorkommen (das gemeldet wird),
+// nicht im zweiten - sonst wuerde der Test nichts beweisen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.A; begin'#13#10+
+  '  X := 1;'#13#10+
+  '  // erster Schritt'#13#10+
+  '  Y := 2;'#13#10+
+  '  Z := 3;'#13#10+
+  '  // zweiter Schritt'#13#10+
+  '  W := 4;'#13#10+
+  '  V := 5;'#13#10+
+  '  U := 6;'#13#10+
+  '  T := 7;'#13#10+
+  '  S := 8;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.B; begin'#13#10+
+  '  X := 1;'#13#10+
+  '  Y := 2;'#13#10+
+  '  Z := 3;'#13#10+
+  '  W := 4;'#13#10+
+  '  V := 5;'#13#10+
+  '  U := 6;'#13#10+
+  '  T := 7;'#13#10+
+  '  S := 8;'#13#10+
+  'end;';
+var
+  F  : TObjectList<TLeakFinding>;
+  Fd : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Fd := TFindingHelper.FirstOf(F, fkDuplicateBlock);
+    Assert.IsNotNull(Fd, 'Duplikat soll gemeldet werden');
+    // Acht normalisierte Zeilen, dazwischen zwei Kommentarzeilen ->
+    // der Quelltext-Bereich MUSS groesser als acht Zeilen sein.
+    Assert.IsTrue(Fd.SpanLineCount > 8,
+      Format('Bereich ist fenstergross statt quelltextbasiert (%d Zeilen ' +
+             'bei 2 Kommentarzeilen im Block)', [Fd.SpanLineCount]));
+  finally F.Free; end;
+end;
+
+procedure TTestDuplicateBlock.Span_NotSet_MeansSingleLine;
+// Default fuer ALLE Detektoren ausser SCA021: EndLine bleibt 0, und das
+// muss "einzeilig" bedeuten - nicht "Bereich bis Zeile 0".
+var
+  Fd : TLeakFinding;
+begin
+  Fd := TLeakFinding.Create;
+  try
+    Fd.LineNumber := '42';
+    Assert.AreEqual<Integer>(0, Fd.EndLine, 'EndLine startet bei 0');
+    Assert.AreEqual<Integer>(42, Fd.SpanEnd,
+      'Nicht gesetzter Bereich muss auf die Startzeile klemmen');
+    Assert.IsFalse(Fd.IsMultiLine, 'Ohne EndLine ist ein Fund einzeilig');
+    Assert.AreEqual<Integer>(1, Fd.SpanLineCount);
+  finally Fd.Free; end;
+end;
+
+procedure TTestDuplicateBlock.Span_EndBeforeStart_ClampsToSingleLine;
+// Schutz gegen Detektorfehler: ein EndLine VOR der Startzeile darf keinen
+// negativen Bereich ergeben. Sonst schriebe der SARIF-Export ein
+// endLine < startLine und das Dokument waere schema-widrig.
+var
+  Fd : TLeakFinding;
+begin
+  Fd := TLeakFinding.Create;
+  try
+    Fd.LineNumber := '10';
+    Fd.EndLine    := 3;
+    Assert.AreEqual<Integer>(10, Fd.SpanEnd,
+      'EndLine < Startzeile muss auf die Startzeile klemmen');
+    Assert.IsFalse(Fd.IsMultiLine);
+    Assert.AreEqual<Integer>(1, Fd.SpanLineCount);
+  finally Fd.Free; end;
 end;
 
 end.

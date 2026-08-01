@@ -3344,6 +3344,11 @@ begin
                                  GCachedEditorScheme, GCachedEditorBgDark);
     Entries[Count].Fix      := FH.After;
     Entries[Count].Severity := DispSev;
+    // Muss mit BuildMarkEntries synchron bleiben - diese Schleife ist die
+    // Frame-Variante derselben Umwandlung (Dock-Panel-Pfad), die andere
+    // bedient den Silent-Scan. Fehlt EndLine hier, blieben Bereichsfunde
+    // ausgerechnet im Hauptpfad einzeilig markiert.
+    Entries[Count].EndLine  := F.SpanEnd;
     Inc(Count);
   end;
   SetLength(Entries, Count);
@@ -3905,6 +3910,11 @@ begin
                                 GCachedEditorScheme, GCachedEditorBgDark);
     Result[Count].Fix      := FH.After;
     Result[Count].Severity := DispSev;
+    // Mehrzeilen-Befunde (heute nur SCA021 DuplicateBlock): der Editor
+    // markiert den ganzen Bereich statt nur der Anfangszeile. SpanEnd
+    // klemmt bereits auf >= LineInt, ein einzeiliger Fund liefert hier
+    // also LineNo und der Highlighter behandelt ihn wie bisher.
+    Result[Count].EndLine  := F.SpanEnd;
     Inc(Count);
   end;
   SetLength(Result, Count);

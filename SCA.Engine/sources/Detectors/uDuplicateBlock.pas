@@ -397,6 +397,14 @@ begin
       F.FileName   := FileName;
       F.MethodName := '';
       F.LineNumber := IntToStr(FirstLine);
+      // Ein Duplikat ist per Definition ein BLOCK - der Befund umfasst
+      // FirstLine..OrigEndLine, nicht nur die Anfangszeile. OrigEndLine
+      // wird oben ohnehin schon fuer die beiden Boilerplate-Gates
+      // gebraucht; hier wird sie nur nicht mehr weggeworfen.
+      //
+      // ACHTUNG: das bleibt EIN Fund. Der Bereich steuert nur, wieviele
+      // Zeilen der Editor markiert (Konzept_MehrzeiligeFundmarkierung).
+      F.EndLine    := OrigEndLine;
       F.MissingVar := Format(
         'Code block (%d lines) appears %dx in file - consider extracting a method',
         [MinBlk, Pair.Value.Count]);

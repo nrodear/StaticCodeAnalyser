@@ -29,6 +29,19 @@ type
     MissingVar: string;
     Severity:   TLeakSeverity;
     Kind:       TFindingKind;
+    // Letzte Quelltext-Zeile des Befund-Bereichs. 0 = nicht gesetzt =
+    // einzeilig - und das ist der Default fuer ALLE Detektoren.
+    //
+    // Bewusst 0 statt "= LineNumber": so bleibt "nie gesetzt" von "bewusst
+    // einzeilig" unterscheidbar, und keiner der 152 Detektoren muss
+    // angefasst werden, nur weil das Feld existiert.
+    //
+    // Ein Bereich aendert AUSSCHLIESSLICH, wieviel Flaeche ein Befund
+    // markiert - NIEMALS, wieviele Befunde es gibt. Ein DuplicateBlock ueber
+    // 59-61 ist EIN Fund mit Anker 59, nicht drei Funde. Wer hier
+    // aufspaltet, blaeht die Fundzahl auf und bricht jede Baseline.
+    // Nicht direkt lesen - SpanEnd/IsMultiLine benutzen, die klemmen.
+    EndLine:    Integer;
     // Konfidenz des Befundes (FP-Wahrscheinlichkeit). Default fcHigh - im
     // Constructor gesetzt, damit JEDER Befund (auch ohne SetKind) als
     // hochkonfident startet. Detektoren mit heuristischen Treffern setzen
@@ -68,6 +81,15 @@ type
     property Message: string read MissingVar write MissingVar;
     // 'LineInt' = LineNumber als Integer (das Legacy-Feld ist ein String).
     function LineInt: Integer;
+    // Letzte Zeile des Bereichs, GEKLEMMT: nie kleiner als die Startzeile.
+    // Faengt sowohl den Normalfall EndLine=0 (nicht gesetzt) als auch einen
+    // Detektorfehler EndLine < LineInt ab. JEDER Konsument nimmt diese
+    // Funktion, niemand rechnet selbst mit dem Rohfeld.
+    function SpanEnd: Integer;
+    // True wenn der Befund mehr als eine Zeile umfasst.
+    function IsMultiLine: Boolean;
+    // Anzahl der umfassten Zeilen (>= 1).
+    function SpanLineCount: Integer;
     // Aufgeloeste SCAxxx-Regel-ID: das explizite RuleID-Feld falls gesetzt
     // (Custom-Rule), sonst der Catalog-Lookup ueber Kind. Damit muss der
     // Consumer nicht selbst TRuleCatalog.GetRule(Kind).ID aufrufen.
@@ -256,6 +278,29 @@ end;
 function TLeakFinding.LineInt: Integer;
 begin
   Result := StrToIntDef(LineNumber, 0);
+end;
+
+function TLeakFinding.SpanEnd: Integer;
+// Einzige Stelle, an der das Rohfeld EndLine interpretiert wird. Klemmt
+// nach unten auf die Startzeile - damit ist 0 (nicht gesetzt) und ein
+// fehlerhaftes EndLine < LineInt derselbe, harmlose Fall: einzeilig.
+var
+  Start : Integer;
+begin
+  Start  := LineInt;
+  Result := EndLine;
+  if Result < Start then Result := Start;
+end;
+
+function TLeakFinding.IsMultiLine: Boolean;
+begin
+  Result := SpanEnd > LineInt;
+end;
+
+function TLeakFinding.SpanLineCount: Integer;
+begin
+  Result := SpanEnd - LineInt + 1;
+  if Result < 1 then Result := 1;
 end;
 
 function TLeakFinding.ResolvedRuleId: string;

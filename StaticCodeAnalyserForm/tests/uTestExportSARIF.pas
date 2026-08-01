@@ -31,6 +31,10 @@ type
     [Test] procedure FingerprintHashIsStable;
     [Test] procedure SeverityMapsCorrectly;
     [Test] procedure EmptyFindingsListProducesEmptyResults;
+    // ---- Mehrzeilen-Bereich (Konzept_MehrzeiligeFundmarkierung) ----------
+    [Test] procedure SingleLineFindingHasNoEndLine;
+    [Test] procedure MultiLineFindingHasEndLine;
+    [Test] procedure EndLineBeforeStartIsNotWritten;
   end;
 
 implementation
@@ -366,6 +370,89 @@ begin
   finally
     Findings.Free;
   end;
+end;
+
+// ---- Mehrzeilen-Bereich -------------------------------------------------
+// SARIF kennt region.endLine seit jeher; bis 0.9.9 haben wir es nie
+// geschrieben. Ein Bereichs-Befund war im Export damit nicht von einem
+// einzeiligen unterscheidbar.
+
+function RegionOfFirstResult(Res: TJSONObject): TJSONObject;
+begin
+  Result := (Res.GetValue<TJSONArray>('locations').Items[0] as TJSONObject)
+              .GetValue<TJSONObject>('physicalLocation')
+              .GetValue<TJSONObject>('region');
+end;
+
+procedure TTestExportSARIF.SingleLineFindingHasNoEndLine;
+// Regression: der Normalfall darf sich NICHT aendern. endLine wegzulassen
+// ist laut SARIF gleichbedeutend mit "endet in startLine" - wuerde man es
+// immer schreiben, waechst jeder Export ohne Informationsgewinn (der
+// Referenzlauf hat ~593.000 Ergebnisse).
+var
+  Findings : TObjectList<TLeakFinding>;
+  Root     : TJSONObject;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkSQLInjection, lsError,
+      'src\Db.pas', 100, 'concat in WHERE'));
+    Root := ParseSARIF(TSARIFWriter.ToJsonString(Findings, '', '0.9.9', 'TestTool'));
+    try
+      Assert.IsTrue(
+        RegionOfFirstResult(GetFirstResult(Root)).GetValue('endLine') = nil,
+        'Einzeiliger Befund darf kein endLine schreiben');
+    finally Root.Free; end;
+  finally Findings.Free; end;
+end;
+
+procedure TTestExportSARIF.MultiLineFindingHasEndLine;
+var
+  Findings : TObjectList<TLeakFinding>;
+  F        : TLeakFinding;
+  Root     : TJSONObject;
+  Region   : TJSONObject;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    F := MakeFinding(fkDuplicateBlock, lsWarning,
+      'src\Repo.pas', 59, 'Code block appears 2x');
+    F.EndLine := 61;                       // Beispiel aus dem Konzept
+    Findings.Add(F);
+    Root := ParseSARIF(TSARIFWriter.ToJsonString(Findings, '', '0.9.9', 'TestTool'));
+    try
+      Region := RegionOfFirstResult(GetFirstResult(Root));
+      Assert.AreEqual<Integer>(59,
+        (Region.GetValue<TJSONNumber>('startLine')).AsInt);
+      Assert.AreEqual<Integer>(61,
+        (Region.GetValue<TJSONNumber>('endLine')).AsInt,
+        'Bereichs-Befund muss endLine tragen');
+    finally Root.Free; end;
+  finally Findings.Free; end;
+end;
+
+procedure TTestExportSARIF.EndLineBeforeStartIsNotWritten;
+// Ein Detektorfehler darf kein schema-widriges Dokument erzeugen:
+// endLine < startLine ist nach SARIF unzulaessig. Statt zu klemmen und
+// eine falsche Zahl zu schreiben, wird das Feld weggelassen - der Befund
+// gilt dann als einzeilig, was der ehrlichere Zustand ist.
+var
+  Findings : TObjectList<TLeakFinding>;
+  F        : TLeakFinding;
+  Root     : TJSONObject;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    F := MakeFinding(fkDuplicateBlock, lsWarning, 'src\Repo.pas', 80, 'kaputt');
+    F.EndLine := 12;
+    Findings.Add(F);
+    Root := ParseSARIF(TSARIFWriter.ToJsonString(Findings, '', '0.9.9', 'TestTool'));
+    try
+      Assert.IsTrue(
+        RegionOfFirstResult(GetFirstResult(Root)).GetValue('endLine') = nil,
+        'endLine < startLine darf nicht geschrieben werden');
+    finally Root.Free; end;
+  finally Findings.Free; end;
 end;
 
 end.
