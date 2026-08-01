@@ -165,7 +165,13 @@ def main():
     a("begin")
     first = True
     for lang, lines, nbytes, ndup in langs:
-        a("  %sif ALang = '%s' then" % ("" if first else "else ", lang))
+        # SameText statt '=' (2026-08-01): der Dateiname bestimmt das
+        # Kuerzel, der Aufrufer normalisiert es aber. Eine 'PT.po' erzeugte
+        # vorher den Vergleich "ALang = 'PT'" und wurde von einem
+        # normalisierten 'pt' NIE getroffen - die eingebettete Kopie war
+        # damit tot, ohne dass irgendetwas fehlschlug.
+        a("  %sif SameText(ALang, '%s') then"
+          % ("" if first else "else ", lang))
         a("    Result := JoinPoLines(CPoLines_%s)" % lang)
         first = False
     a("  else")

@@ -398,6 +398,7 @@ function ReadExternalPo(const ALang: string): string;
 var
   FileName : string;
   SS       : TStringStream;
+  FS       : TFileStream;
 begin
   Result := '';
   try
@@ -406,11 +407,22 @@ begin
                 'i18n' + PathDelim + ALang + '.po';
     if not FileExists(FileName) then
       Exit;
+    // GROESSE VOR DEM LADEN pruefen (2026-08-01, T3-Backlog): vorher zog
+    // LoadFromFile die Datei erst KOMPLETT in den Speicher und verwarf sie
+    // danach wegen Ueberlaenge - der Schutz kam zu spaet. Eine fehlerhafte
+    // oder feindliche .po neben der Exe konnte so beliebig viel Speicher
+    // binden. Jetzt entscheidet die Dateigroesse, bevor ein Byte kopiert
+    // wird.
     SS := TStringStream.Create('', TEncoding.UTF8);
     try
-      SS.LoadFromFile(FileName);
-      if SS.Size > CMaxExternalPoBytes then
-        Exit;
+      FS := TFileStream.Create(FileName, fmOpenRead or fmShareDenyWrite);
+      try
+        if FS.Size > CMaxExternalPoBytes then
+          Exit;
+        SS.CopyFrom(FS, 0);
+      finally
+        FS.Free;
+      end;
       Result := SS.DataString;
     finally
       SS.Free;
