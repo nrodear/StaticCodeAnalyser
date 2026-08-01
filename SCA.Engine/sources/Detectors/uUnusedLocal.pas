@@ -356,7 +356,12 @@ begin
     // der ist O(Datei) je Routine = quadratisch ueber der Datei.
     SrcState := 0;                       // 0 = unbestimmt, 1 = bereit, -1 = aus
     RangeLo  := MethodNode.Line;
-    RangeHi  := 0;
+    // KEIN `RangeHi := 0` - der Compiler weist es als tote Zuweisung ab
+    // (H2077). RangeHi wird ausschliesslich INNERHALB der Lazy-Init gesetzt
+    // und dort auch nur gelesen; ausserhalb existiert kein Pfad, der es
+    // anfasst. SpanFrom/SpanTo bleiben dagegen vorbelegt: sie werden in
+    // spaeteren Schleifendurchlaeufen gelesen, ohne dass die Init erneut
+    // laeuft.
     SpanFrom := 0;
     SpanTo   := 0;
 
