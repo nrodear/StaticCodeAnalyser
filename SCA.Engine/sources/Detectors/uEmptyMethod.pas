@@ -128,14 +128,41 @@ begin
   Result := HasAlnum;
 end;
 
+// Startposition des ersten Kommentars in der Zeile, 0 wenn keiner da ist.
+function CommentStartOfLine(const ALine: string): Integer;
+var
+  p : Integer;
+begin
+  Result := 0;
+  p := Pos('//', ALine);
+  if (p > 0) and ((Result = 0) or (p < Result)) then Result := p;
+  p := Pos('{', ALine);
+  if (p > 0) and ((Result = 0) or (p < Result)) then Result := p;
+  p := Pos('(*', ALine);
+  if (p > 0) and ((Result = 0) or (p < Result)) then Result := p;
+end;
+
 class function TEmptyMethodDetector.BodyHasIntentComment(Lines: TStringList;
   ABeginLine: Integer): Boolean;
+// WICHTIG (Funktionsprobe 2026-08-01): der Kommentar muss INNERHALB des
+// Rumpfes stehen, also VOR dem `end`. Ein nachgestellter Kommentar auf der
+// end-Zeile gehoert nicht mehr dazu:
+//
+//   procedure Foo;
+//   begin
+//   end;   // TFoo.Foo - Stub
+//
+// Der ist verbreitete Gliederung und sagt nichts ueber die Absicht des
+// leeren Rumpfes. Die erste Fassung pruefte den Kommentar VOR dem
+// end-Abbruch und schaltete solche Faelle mit still - die Probe fiel darauf
+// herein (die Kontrolle im Probe-File trug genau so einen Kommentar).
 var
-  i, Last : Integer;
-  Raw     : string;
-  Rest    : string;
-  CmtText : string;
-  p       : Integer;
+  i, Last  : Integer;
+  Raw      : string;
+  Code     : string;
+  pCmt     : Integer;
+  pEnd     : Integer;
+  pBegin   : Integer;
 begin
   Result := False;
   if (Lines = nil) or (ABeginLine <= 0) or (ABeginLine > Lines.Count) then Exit;
@@ -143,23 +170,24 @@ begin
   if Last > Lines.Count then Last := Lines.Count;
   for i := ABeginLine to Last do
   begin
-    Raw     := Lines[i - 1];
-    CmtText := CommentTextOfLine(Raw);
-    if CommentLooksLikeIntent(CmtText) then Exit(True);
-    // Zeile OHNE Kommentaranteil betrachten: steht dort das `end` des
-    // Rumpfes, ist der Bereich zu Ende.
-    Rest := Raw;
-    p := Pos('//', Rest); if p > 0 then Rest := Copy(Rest, 1, p - 1);
-    p := Pos('{',  Rest); if p > 0 then Rest := Copy(Rest, 1, p - 1);
-    p := Pos('(*', Rest); if p > 0 then Rest := Copy(Rest, 1, p - 1);
-    Rest := LowerCase(Rest);
-    if Pos('end', Rest) > 0 then
-    begin
-      // Auf der begin-Zeile selbst zaehlt nur ein `end` HINTER dem `begin`
-      // ('begin end;' in einer Zeile).
-      if i > ABeginLine then Exit;
-      if Pos('end', Rest) > Pos('begin', Rest) then Exit;
-    end;
+    Raw  := Lines[i - 1];
+    pCmt := CommentStartOfLine(Raw);
+    // Code-Anteil = alles vor dem Kommentar.
+    if pCmt > 0 then Code := Copy(Raw, 1, pCmt - 1) else Code := Raw;
+    Code := LowerCase(Code);
+
+    pEnd   := Pos('end', Code);
+    pBegin := Pos('begin', Code);
+    // Auf der begin-Zeile zaehlt nur ein `end` HINTER dem `begin`
+    // ('begin { intentionally empty } end;' in einer Zeile).
+    if (i = ABeginLine) and (pEnd > 0) and (pEnd < pBegin) then pEnd := 0;
+
+    // Kommentar auswerten - aber nur, wenn er VOR dem Rumpfende steht.
+    if (pCmt > 0) and (pEnd = 0) and
+       CommentLooksLikeIntent(CommentTextOfLine(Raw)) then
+      Exit(True);
+
+    if pEnd > 0 then Exit;   // Rumpfende erreicht
   end;
 end;
 

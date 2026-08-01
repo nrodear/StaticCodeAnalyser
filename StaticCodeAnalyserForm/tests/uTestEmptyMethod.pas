@@ -33,6 +33,7 @@ type
     [Test] procedure EmptyBody_CompilerDirectiveOnly_StillReported;
     [Test] procedure EmptyBody_CommentedOutCode_StillReported;
     [Test] procedure EmptyBody_NoComment_StillReported;
+    [Test] procedure EmptyBody_CommentAfterEnd_StillReported;
   end;
 
 implementation
@@ -257,6 +258,26 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkEmptyMethod));
+  finally F.Free; end;
+end;
+
+procedure TTestEmptyMethod.EmptyBody_CommentAfterEnd_StillReported;
+// WAECHTER aus der Funktionsprobe 2026-08-01: ein NACHGESTELLTER Kommentar
+// auf der end-Zeile gehoert nicht mehr zum Rumpf. 'end; // TFoo.Foo' ist
+// verbreitete Gliederung und sagt nichts ueber die Absicht des leeren
+// Rumpfes. Die erste Fassung pruefte den Kommentar vor dem end-Abbruch und
+// schaltete solche Faelle mit still - die Probe fiel genau darauf herein.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.DoNothing;'#13#10 +
+  'begin'#13#10 +
+  'end;   // TFoo.DoNothing - Stub'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkEmptyMethod),
+    'Kommentar HINTER dem end ist kein Intent-Kommentar des Rumpfes');
   finally F.Free; end;
 end;
 
