@@ -195,8 +195,13 @@ end;
 
 procedure TTestMethodName.PlainClassMethod_StillReported;
 // Referenzwert fuer MixedUnit_OnlyPlainMethodReported: eine normale
-// Delphi-Klasse mit kleingeschriebener Methode ergibt zwei Funde
-// (Deklaration + Implementierung).
+// Delphi-Klasse mit kleingeschriebener Methode ergibt EINEN Fund.
+//
+// Bis 2026-08-01 waren es zwei (Deklaration UND Implementierung). Die Zahl
+// war hier nie eine Aussage, sondern nur der Bezugswert fuer den
+// Mixed-Unit-Test - der prueft, dass das FFI-Gate ausschliesslich die
+// Bridge-Methoden trifft. Seit der Deduplizierung ist eine Methode EIN
+// Befund; beide Tests ziehen deshalb gemeinsam auf 1 nach.
 const SRC =
   'unit t;'#13#10 +
   'interface'#13#10 +
@@ -213,8 +218,8 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkMethodName),
-    'Deklaration + Implementierung der normalen Methode');
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMethodName),
+    'Eine Meldung je Methode - Deklaration und Implementierung sind EIN Befund');
   finally F.Free; end;
 end;
 
@@ -249,8 +254,8 @@ var
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try
-    Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkMethodName),
-      'nur die beiden Funde der normalen Klasse');
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMethodName),
+      'nur der eine Fund der normalen Klasse');
     for Fnd in F do
       if Fnd.Kind = fkMethodName then
         Assert.IsTrue(Pos('downloadDidFinish', Fnd.MissingVar) = 0,
@@ -337,7 +342,7 @@ const SRC =
   'end.';
 var F: TObjectList<TLeakFinding>;
 begin
-  F := TFindingHelper.FindingsOf(SRC);
+  F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMethodName),
     'Deklaration und Implementierung derselben Methode sind EIN Befund');
   finally F.Free; end;
@@ -369,7 +374,7 @@ const SRC =
   'end.';
 var F: TObjectList<TLeakFinding>;
 begin
-  F := TFindingHelper.FindingsOf(SRC);
+  F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkMethodName),
     'Gleicher Name in zwei Klassen sind zwei Befunde');
   finally F.Free; end;
@@ -389,7 +394,7 @@ const SRC =
   'end.';
 var F: TObjectList<TLeakFinding>;
 begin
-  F := TFindingHelper.FindingsOf(SRC);
+  F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMethodName),
     'Reine Deklaration bleibt ein Befund');
   finally F.Free; end;
