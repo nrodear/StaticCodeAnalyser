@@ -74,6 +74,11 @@ type
     // --- Nested-Type-Implementierungs-Header (2026-07-27) ---
     [Test] procedure Parser_NestedTypeImplHeader_FullNameCaptured;
     [Test] procedure Parser_NestedTypeImplHeader_ParamsCaptured;
+    // ---- Attribute in Parameter-Position (Backlog 4e #4, 2026-08-01) ----
+    [Test] procedure Parser_ParamAttribute_NoPhantomParam;
+    [Test] procedure Parser_ParamAttributeBeforeModifier_NoPhantomParam;
+    [Test] procedure Parser_ParamAttributeWithArgs_TypeStillCaptured;
+    [Test] procedure Parser_UnbalancedParamAttribute_DoesNotEatDeclaration;
     [Test] procedure Parser_NestedTypeSiblings_HaveDistinctNames;
     [Test] procedure Parser_TripleQualifier_FullNameCaptured;
     [Test] procedure Parser_NestedTypeWithGenerics_QualifiersCaptured;
@@ -2527,6 +2532,126 @@ begin
         + 'gefunden: ' + ClassNames(Root));
       Assert.IsTrue(Pos('MussDaSein', MethodNamesOf(Cls)) > 0,
         'Member des Folgetyps fehlen');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_ParamAttribute_NoPhantomParam;
+// Backlog 4e #4: 'const [MVCFromBody] P: TPerson' erzeugte ZWEI nkParam -
+// den echten und ein Phantom namens 'MVCFromBody' ohne Typ. Der Namens-Loop
+// nimmt kein '[' an, GuardAdvance schob es weg, und im naechsten Durchlauf
+// stand der Attributname wie ein Parametername da. Jeder nkParam-lesende
+// Detektor sah ihn - allen voran SCA054 (ein Attributname wird nie benutzt).
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure TCtrl.Post(const [MVCFromBody] P: TPerson);'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  'end.';
+var Parser: TParser2; Root: TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Assert.AreEqual<Integer>(1, FirstMethodParamCount(ImplNodeOf(Root)),
+        'Attribut in Parameter-Position darf keinen Phantom-Parameter erzeugen');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_ParamAttributeBeforeModifier_NoPhantomParam;
+// Die andere Stellung: Attribut VOR dem Modifier. Beide kommen in echtem
+// Code vor, deshalb wird an beiden Stellen uebersprungen.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure TCtrl.Post([Weak] const A: TObject; B: Integer);'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  'end.';
+var Parser: TParser2; Root: TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Assert.AreEqual<Integer>(2, FirstMethodParamCount(ImplNodeOf(Root)),
+        'Attribut vor dem Modifier darf keinen Phantom-Parameter erzeugen');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_ParamAttributeWithArgs_TypeStillCaptured;
+// Attribut MIT Argumentliste - die Klammern darin duerfen den Skip nicht
+// vorzeitig beenden. Danach muss der echte Parameter samt Typ stehen.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure TCtrl.Post([MVCPath(''/x'', 42)] const P: TPerson);'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  'end.';
+var
+  Parser : TParser2;
+  Root, ImplN, C, Prm : TAstNode;
+  Found  : Boolean;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      ImplN := ImplNodeOf(Root);
+      Assert.AreEqual<Integer>(1, FirstMethodParamCount(ImplN));
+      Found := False;
+      for C in ImplN.Children do
+        if C.Kind = nkMethod then
+          for Prm in C.Children do
+            if Prm.Kind = nkParam then
+            begin
+              Assert.AreEqual('TPerson', Prm.TypeRef,
+                'Typ des echten Parameters muss erhalten bleiben');
+              Found := True;
+            end;
+      Assert.IsTrue(Found, 'Parameter-Knoten fehlt');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_UnbalancedParamAttribute_DoesNotEatDeclaration;
+// WAECHTER fuer die Recovery-Grenze: ein unbalanciertes '[' darf nicht die
+// halbe Unit fressen. Die naechste Routine muss weiterhin im AST landen.
+// (Lehre aus dem T2b/T3-Generic-Zweig, gleiche Bauart.)
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Broken(const [Oops A: TPerson);'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  'procedure Healthy(B: Integer);'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  'end.';
+var
+  Parser : TParser2;
+  Root, ImplN, C : TAstNode;
+  Cnt    : Integer;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      ImplN := ImplNodeOf(Root);
+      Cnt := 0;
+      for C in ImplN.Children do
+        if C.Kind = nkMethod then Inc(Cnt);
+      Assert.IsTrue(Cnt >= 2,
+        'Unbalanciertes Attribut darf die Folge-Routine nicht verschlucken');
     finally Root.Free; end;
   finally Parser.Free; end;
 end;
