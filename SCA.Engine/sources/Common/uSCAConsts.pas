@@ -761,9 +761,9 @@ const
   // (--version), im About-Dialog und in der Form-Caption verwendet.
   // VerInfo-Keys in den .dproj-Dateien muessen dazu passen
   // (FileVersion / ProductVersion = SCA_VERSION_FULL).
-  SCA_VERSION      = '0.9.8';
-  SCA_VERSION_FULL = '0.9.8.0';
-  SCA_RELEASE_DATE = '2026-05-27';
+  SCA_VERSION      = '0.9.9';
+  SCA_VERSION_FULL = '0.9.9.0';
+  SCA_RELEASE_DATE = '2026-08-02';
 
   // Reihenfolge MUSS exakt mit TFindingKind uebereinstimmen.
   // Beim Hinzufuegen eines neuen TFindingKind: hier nachpflegen, dann

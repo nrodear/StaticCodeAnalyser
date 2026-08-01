@@ -145,6 +145,7 @@ uses
   uExportSARIF, uExportHtml, uCustomRuleDetector,
   uExportSonarGeneric, uSonarConfig,
   uDetectorUtils,                     // TDetectorUtils.IsTestFixturePath
+  uRuleCatalog,                       // TRuleCatalog.GetProfile fuer die Startzeile
   uBaseline,
   uSuppressionTelemetry,              // C.5 Telemetrie
   uLexer;                             // A.5 Phase 1b-Wiring: gLexerIfdefSkipEnabled etc.
@@ -154,7 +155,10 @@ uses
 function ApplyFailOnPolicy(Raw: Integer; const FailOn: string): Integer; forward;
 
 const
-  SCA_VERSION = '0.9.8';
+  // SCA_VERSION kommt aus uSCAConsts (Single-Source-of-Truth). Bis 0.9.8
+  // stand hier eine zweite, hart kodierte Kopie: ein Versionssprung in
+  // uSCAConsts liess die CLI weiter die alte Nummer melden - in --version,
+  // im Banner UND im SARIF-Tool-Block.
   SCA_TOOLNAME = 'StaticCodeAnalyser';
 
 { ---- Args-Parser ---- }
@@ -831,14 +835,41 @@ begin
     // INI-Anwendung - daher liefen immer alle Detektoren.
     Settings := TRepoSettings.Create;
     try Settings.Load; except end;
+    // Herkunft merken, BEVOR die CLI-Argumente drueberschreiben - nur so
+    // laesst sich unten sagen, woher das Profil wirklich kommt.
+    var ProfileFromIni : string := Settings.Profile;
     if Args.Profile     <> '' then Settings.Profile     := Args.Profile;
     if Args.MinSeverity <> '' then Settings.MinSeverity := Args.MinSeverity;
     // ApplyDetectorThresholds (volle Config-Anwendung) macht jetzt
     // uEngineApi.Run via Req.ApplyRepoIni mit denselben Overrides; Settings
     // hier bleibt nur fuer Profile-Read (Fixture-Default + Message unten).
-    if not Args.Quiet and ((Args.Profile <> '') or (Args.MinSeverity <> '')) then
-      WriteLn(Format('Rule-set: Profile=%s, MinSeverity=%s',
-        [Settings.Profile, Settings.MinSeverity]));
+    // Das aktive Regelset IMMER nennen (ausser --quiet). Bis 0.9.8 erschien
+    // diese Zeile nur, wenn --profile oder --min-severity explizit uebergeben
+    // wurden - kam das Profil aus der analyser.ini, schwieg die CLI. Ein
+    // 'ide-fast' in der INI liefert fuer Hinweis-Regeln NULL Funde, und der
+    // Aufrufer sieht als einzige Erklaerung eine leere Ergebnisliste. Genau
+    // dieser Fall hat in der Entwicklung eine Fehldiagnose ('Binary kaputt')
+    // ausgeloest; er ist die haeufigste Support-Frage, die aus einer einzigen
+    // Ausgabezeile beantwortbar ist.
+    if not Args.Quiet then
+    begin
+      var ProfileSrc  : string;
+      var SeveritySrc : string;
+      var ActiveKinds : Integer;
+      if Args.Profile <> '' then ProfileSrc := '--profile'
+      else if ProfileFromIni <> '' then ProfileSrc := 'analyser.ini'
+      else ProfileSrc := 'Default';
+      if Args.MinSeverity <> '' then SeveritySrc := '--min-severity'
+      else SeveritySrc := 'analyser.ini/Default';
+      // GetProfile einmal aufloesen - der Aufruf laedt den Katalog.
+      var Active : TFindingKinds := TRuleCatalog.GetProfile(Settings.Profile);
+      ActiveKinds := 0;
+      for var K := Low(TFindingKind) to High(TFindingKind) do
+        if K in Active then Inc(ActiveKinds);
+      WriteLn(Format('Rule-set: Profile=%s (%s), MinSeverity=%s (%s), %d rules active',
+        [Settings.Profile, ProfileSrc, Settings.MinSeverity, SeveritySrc,
+         ActiveKinds]));
+    end;
 
     // Per-Detector-Timing aktivieren wenn --time-detectors angefordert.
     // Engine-internes AOnTime-Lambda erkennt das nil-vs-Assigned und
