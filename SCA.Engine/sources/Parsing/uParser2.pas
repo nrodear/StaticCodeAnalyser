@@ -67,6 +67,9 @@ type
     // Konsumiert die optionale Praeambel `helper for <type>` nach
     // `record` oder `class` in einer Typ-Deklaration.
     procedure SkipHelperFor;
+    // Konsumiert beliebig viele Attributklauseln `[...]` an der aktuellen
+    // Position (Backlog 4e #4, 2026-08-01). Falls Tok nicht `[` ist: no-op.
+    procedure SkipAttributeClauses;
 
     // ---- Grammatik-Regeln ----
     procedure ParseUnit(Root: TAstNode);
@@ -379,6 +382,64 @@ begin
         end;
     end;
     Next;
+  end;
+end;
+
+procedure TParser2.SkipAttributeClauses;
+// Konsumiert beliebig viele aufeinanderfolgende Attributklauseln `[...]`.
+//
+// BACKLOG 4e #4 (2026-08-01): in PARAMETER-Position gab es dafuer bisher
+// keinen Zweig. Aus
+//   procedure Post(const [MVCFromBody] P: TPerson);
+// wurde ein PHANTOM-Parameter 'MVCFromBody' ohne Typ: der Namens-Loop in
+// ParseMethodSignature nimmt kein '[' an, GuardAdvance schiebt es weg, und
+// im naechsten Durchlauf steht der Attributname wie ein Parametername da.
+// Der Phantom-Knoten faellt jedem Detektor auf die Fuesse, der nkParam
+// liest - allen voran SCA054 UnusedParameter (ein Attributname wird nie
+// benutzt).
+//
+// Verfahren wie im Typdeklarations-Zweig (Z. 737 ff.): '[' unbedingt
+// konsumieren, dann klammertief bis zum passenden ']'. Recovery-Grenzen
+// halten ein unbalanciertes '[' davon ab, den Rest der Deklaration zu
+// fressen; das Grenz-Token bleibt fuer den Aufrufer liegen.
+//
+// RECOVERY-GRENZE, teuer gelernt (Testfund 2026-08-01): ein ')' auf
+// Klammertiefe 0 gehoert zur PARAMETERLISTE, nicht zum Attribut, und muss
+// fuer den Aufrufer liegen bleiben. Ohne diese Grenze frass der Skip bei
+// einem unbalancierten '[' die schliessende Klammer mit; die
+// Parameter-Schleife lief danach weiter und verschluckte die komplette
+// Folge-Routine. Attribute mit eigener Argumentliste ('[MVCPath(''/x'',
+// 42)]') bleiben davon unberuehrt - deren Klammern zaehlt ParDepth mit.
+begin
+  while Tok.Kind = tkLBracket do
+  begin
+    Next;
+    var BrDepth := 1;
+    var ParDepth := 0;
+    while (BrDepth > 0) and not FLex.AtEnd do
+    begin
+      if Tok.Kind = tkLBracket then Inc(BrDepth)
+      else if Tok.Kind = tkRBracket then
+      begin
+        Dec(BrDepth);
+        if BrDepth = 0 then
+        begin
+          Next;                       // schliessende Klammer mitnehmen
+          Break;
+        end;
+      end
+      else if Tok.Kind = tkLParen then
+        Inc(ParDepth)
+      else if Tok.Kind = tkRParen then
+      begin
+        // Eigene Argumentliste des Attributs -> weiterzaehlen.
+        // Sonst: Ende der Parameterliste, Token liegen lassen.
+        if ParDepth > 0 then Dec(ParDepth) else Break;
+      end
+      else if Tok.Kind in [tkSemicolon, tkKwEnd, tkKwImplementation] then
+        Break;
+      Next;
+    end;
   end;
 end;
 
@@ -1469,9 +1530,14 @@ begin
       while not (Tok.Kind in [tkRParen, tkEof]) do
       begin
         var ParamStart := FNextCount;
+        // Attribute in Parameter-Position - beide Stellungen kommen vor:
+        //   procedure P([Weak] A: TObject; const [MVCFromBody] B: TPerson);
+        // Deshalb vor UND hinter dem Modifier ueberspringen (Backlog 4e #4).
+        SkipAttributeClauses;
         Modifier := '';
         if Tok.Kind in [tkKwVar, tkKwConst, tkKwOut] then
           Modifier := Next.Value;
+        SkipAttributeClauses;
 
         PNames.Clear;
         // Akzeptiere auch Keywords als Parameter-Namen (Result, String, ...).
