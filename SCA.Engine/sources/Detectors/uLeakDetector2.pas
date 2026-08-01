@@ -1045,7 +1045,10 @@ begin
       if OutParams.IndexOf(Base) >= 0 then Exit(True);
     end;
   finally
-    Assigns := nil;
+    // Assigns wird NICHT freigegeben und auch nicht genullt: FindAllRef
+    // liefert eine GELIEHENE Liste (der Knoten besitzt sie), anders als
+    // FindAll bei Params. Ein `Assigns := nil` hier waere eine tote
+    // Zuweisung - der Compiler weist sie zu Recht ab (H2077).
     Params.Free;
     OutParams.Free;
   end;
