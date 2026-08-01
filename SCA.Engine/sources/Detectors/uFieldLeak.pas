@@ -653,6 +653,11 @@ begin
   begin
     Seen := False;
     for i := 0 to Hops - 1 do
+      // noinspection UninitVar
+      // Falschmeldung der eigenen Regel: beim ersten Durchlauf ist Hops = 0,
+      // die Schleife laeuft also gar nicht und liest nichts. Visited[Hops]
+      // wird zwei Zeilen spaeter geschrieben - VOR jedem moeglichen Lesen.
+      // SCA166 ist als konservativer MVP dokumentiert, nicht pfad-sensitiv.
       if Visited[i] = Cur then begin Seen := True; Break; end;
     if Seen then Exit;                                   // Zyklus
     Visited[Hops] := Cur;

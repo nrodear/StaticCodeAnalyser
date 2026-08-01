@@ -44,6 +44,9 @@ type
 
 implementation
 
+// noinspection-file MemoryLeak
+// Die Fixture erzeugt ein Objekt ohne Free absichtlich - Pruefgegenstand.
+
 uses
   System.SysUtils, System.StrUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,

@@ -85,6 +85,11 @@ type
 
 implementation
 
+// noinspection-file SqlDangerousStatement
+// Die Fixtures enthalten DELETE/UPDATE ohne WHERE absichtlich - genau das
+// ist der Pruefgegenstand. Ohne diese Zeile meldet der Self-Scan acht
+// Error-Funde im eigenen Testcode.
+
 uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,

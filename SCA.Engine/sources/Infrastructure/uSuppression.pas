@@ -318,6 +318,10 @@ class function TSuppression.ContainsNoInspectionToken(
 // LowerCase(Line)) > 0 fuer ASCII - Nicht-ASCII-Zeichen matchen den
 // ASCII-Tag ohnehin nie. Deckt 'noinspection-file' mit ab (Prefix).
 const
+  // noinspection HardcodedSecret
+  // Falschmeldung der eigenen Regel: sie greift auf den BEZEICHNER 'TOKEN',
+  // nicht auf den Wert. 'noinspection' ist der Suppressions-Marker dieses
+  // Werkzeugs, kein Geheimnis.
   TOKEN = 'noinspection';                    // lowercase, 12 Zeichen
 var
   i, j, MaxStart : Integer;

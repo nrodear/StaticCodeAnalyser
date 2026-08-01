@@ -1,9 +1,37 @@
-# Release 0.9.8 — Phase 1 Quick-Wins, Phase 4, Hardening v3/v4 & FP-Reduktion
+# Release 0.9.9 — Weniger Falschmeldungen, zwei Projekt-Regeln
 
 🇬🇧 [English version](RELEASE_NOTES.md)
 
-Vollstaendige Release-Notes: [docs/releases/v0.9.8_de.md](docs/releases/v0.9.8_de.md)
-([english](docs/releases/v0.9.8.md)).
+Vollstaendige Release-Notes: [docs/releases/v0.9.9_de.md](docs/releases/v0.9.9_de.md)
+([english](docs/releases/v0.9.9.md)).
+
+In diesem Zyklus hat das Werkzeug gelernt, **weniger** zu melden. Auf dem
+Referenz-Korpus aus 12.800 Dateien fiel die Fundzahl von **645.622 auf
+593.122 — 52.500 weniger (−8,1 %)**, ohne wissentlich einen echten Fund zu
+verlieren. Der Regelbestand wuchs von 183 auf **195 Regeln**.
+
+- **−52.500 Funde**, in sechs einzeln gemessenen und abgesicherten
+  Inkrementen.
+- **`SCA194` / `SCA195`** — Dateien, die nicht zum Projekt gehoeren, und
+  Units, die das Projekt uebersetzt, ohne sie zu fuehren. Beide brauchen
+  eine projektweite Sicht und laufen nur im Projekt- oder
+  Projektgruppen-Scan.
+- **Die Regelseiten sagen jetzt, was eine Regel bewusst *nicht* meldet.**
+- **`SCA080` sieht sich `Break` nicht mehr an** — wer dem Hinweis folgte,
+  machte aus Such-Schleifen Vollscans und aus `while True`-Schleifen
+  Endlosschleifen.
+- **Die CLI nennt bei jedem Lauf ihr aktives Regelset**, samt Herkunft des
+  Profils. Bisher schwieg sie, wenn das Profil aus der `analyser.ini` kam —
+  und ein unerwartetes `ide-fast` dort sieht genauso aus wie ein kaputter
+  Build.
+
+Eine Version **0.9.4 gibt es nicht** — sie wurde uebersprungen. v0.9.5 bis
+v0.9.7 waren ohne Release-Notes ausgeliefert worden; der CHANGELOG deckt
+sie jetzt ab.
+
+---
+
+# Vorher — Release 0.9.8
 
 ## Update 2026-06-08 / 2026-06-09 — Hardening v3/v4 + FP-Reduktion
 

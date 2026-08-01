@@ -1,9 +1,33 @@
-# Release 0.9.8 — Phase 1 Quick-Wins, Phase 4, Hardening v3/v4 & FP-Reduction
+# Release 0.9.9 — Fewer false positives, two project-scope rules
 
 🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md)
 
-Full release notes: [docs/releases/v0.9.8.md](docs/releases/v0.9.8.md)
-([deutsch](docs/releases/v0.9.8_de.md)).
+Full release notes: [docs/releases/v0.9.9.md](docs/releases/v0.9.9.md)
+([deutsch](docs/releases/v0.9.9_de.md)).
+
+This cycle the tool learned to report **less**. On the 12,800-file
+reference corpus the finding count fell from **645,622 to 593,122 —
+52,500 fewer (−8.1 %)**, with no true positive knowingly lost. The rule
+roster grew from 183 to **195 rules**.
+
+- **−52,500 findings**, in six separately measured and gated increments.
+- **`SCA194` / `SCA195`** — files that are not part of the project, and
+  units the project compiles without listing. Both need a project-wide
+  view, so they run only in a project or project-group scan.
+- **Rule pages now state what a rule deliberately does *not* report.**
+- **`SCA080` no longer flags `Break`** — following that hint turned search
+  loops into full scans and `while True` loops into infinite ones.
+- **The CLI states its active rule set on every run**, including where the
+  profile came from. It used to stay silent when the profile came from
+  `analyser.ini`, and an unexpected `ide-fast` there looks exactly like a
+  broken build.
+
+There is **no version 0.9.4** — it was skipped. v0.9.5 through v0.9.7 had
+shipped without release notes; the CHANGELOG now covers them.
+
+---
+
+# Previously — Release 0.9.8
 
 ## 2026-06-08 / 2026-06-09 update — Hardening v3/v4 + FP-Reduction
 
