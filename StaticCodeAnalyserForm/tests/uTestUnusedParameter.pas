@@ -49,6 +49,11 @@ type
     // T3 (2026-07-31): Generic-Call-Statement verlor seine Argumente -
     // der Param im Aufruf galt als ungelesen (Skia-Setter-FP-Klasse).
     [Test] procedure GenericCallArgument_ParamNotFlagged;
+    // ---- Interface-Skip fuer normale Klassen + raise-only (2026-08-01) ----
+    [Test] procedure PlainClassWithInterface_NotReported;
+    [Test] procedure RaiseOnlyBody_NotReported;
+    [Test] procedure PlainClassWithoutInterface_StillReported;
+    [Test] procedure BodyWithStatementBesideRaise_StillReported;
   end;
 
 implementation
@@ -544,6 +549,103 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
       'AValue wird im Generic-Call gelesen - kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.PlainClassWithInterface_NotReported;
+// Audit-FP-Klasse 2 (4/24): der Interface-Skip griff nur bei nested types.
+// IMVCSerializer & Co haengen an gewoehnlichen Klassen; deren Signatur ist
+// genauso compiler-erzwungen (E2291).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TSerializer = class(TInterfacedObject, IMVCSerializer)'#13#10 +
+  '    procedure Serialize(const AObj: TObject; const AIgnored: string);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TSerializer.Serialize(const AObj: TObject; const AIgnored: string);'#13#10 +
+  'begin'#13#10 +
+  '  AObj.ToString;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
+    'Signatur einer interface-tragenden Klasse ist nicht frei aenderbar');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.RaiseOnlyBody_NotReported;
+// Ein Rumpf, der nur wirft, KANN seine Parameter nicht lesen. Den Parameter
+// zu streichen wuerde die von aussen vorgegebene Signatur brechen.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    procedure DoIt(const AValue: string);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.DoIt(const AValue: string);'#13#10 +
+  'begin'#13#10 +
+  '  raise ENotImplemented.Create(''not supported'');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
+    'raise-only-Rumpf kann Parameter nicht lesen');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.PlainClassWithoutInterface_StillReported;
+// WAECHTER: eine gewoehnliche Klasse OHNE Interface behaelt die Pruefung.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class(TObject)'#13#10 +
+  '    procedure DoIt(const AUsed, AUnused: string);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.DoIt(const AUsed, AUnused: string);'#13#10 +
+  'begin'#13#10 +
+  '  Beep(AUsed);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkUnusedParameter) >= 1,
+    'Klasse ohne Interface bleibt pruefbar');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.BodyWithStatementBesideRaise_StillReported;
+// WAECHTER: nur der REINE raise-Rumpf ist ausgenommen. Steht noch eine
+// Anweisung daneben, koennte der Parameter dort gelesen werden.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class(TObject)'#13#10 +
+  '    procedure DoIt(const AUnused: string);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.DoIt(const AUnused: string);'#13#10 +
+  'begin'#13#10 +
+  '  Beep;'#13#10 +
+  '  raise ENotImplemented.Create(''x'');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkUnusedParameter) >= 1,
+    'Rumpf mit weiterer Anweisung bleibt pruefbar');
   finally F.Free; end;
 end;
 

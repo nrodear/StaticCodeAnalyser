@@ -180,6 +180,38 @@ begin
             CharInSet(P[2], ['A'..'Z']);
 end;
 
+// True wenn der Rumpf AUSSCHLIESSLICH aus einem `raise` besteht
+// ('raise ENotImplemented.Create(...)', 'raise ENotSupportedException...').
+//
+// 30%-Real-World-Audit 2026-07-31: solche Ruempfe koennen ihre Parameter
+// gar nicht lesen - die Signatur stammt von aussen (Interface, Vorfahr,
+// Framework-Vertrag), der Rumpf ist bewusst leer. 'Unused parameter' ist
+// dort nicht behebbar: den Parameter zu streichen bricht die Signatur.
+// Korpus-Messung after126: 1.021 der 19.402 Funde (5,3 %).
+function BodyIsRaiseOnly(MethodNode: TAstNode): Boolean;
+var
+  Blk, Ch : TAstNode;
+  Cnt     : Integer;
+begin
+  Result := False;
+  Blk := nil;
+  for Ch in MethodNode.Children do
+    if Ch.Kind = nkBlock then
+    begin
+      Blk := Ch;
+      Break;
+    end;
+  if Blk = nil then Exit;
+  Cnt := 0;
+  for Ch in Blk.Children do
+  begin
+    Inc(Cnt);
+    if Cnt > 1 then Exit;
+    if Ch.Kind <> nkRaise then Exit;
+  end;
+  Result := Cnt = 1;
+end;
+
 // Inheritance-Hook-Check: an der Implementation selbst (selten) ODER an
 // ihrer zugehoerigen Class-Declaration (Default-Fall - Parser legt die
 // Modifier nur an der Declaration ab).
@@ -398,7 +430,36 @@ begin
     if not TryFindOwnerType(UnitNode, MethodNode.Name, OwnerCls) then Exit;
     if (OwnerCls.Kind = nkClass) and OwnerHasInterfaceParents(OwnerCls) then
       Exit;
-  end;
+  end
+  // ---- 2026-08-01: derselbe Skip fuer NICHT-verschachtelte Klassen ------
+  // Der Kommentar oben kuendigt genau das als eigenes Vorhaben mit eigenem
+  // A/B an - hier ist es. Das Audit vom 31.07. hat die Luecke als eigene
+  // FP-Klasse belegt (4 von 24 Stichproben): der Interface-Skip griff nur
+  // bei nested types, waehrend IMVCSerializer / IOTADebuggerNotifier /
+  // IJclSingleList / IMVCAuthenticationHandler an ganz gewoehnlichen
+  // Klassen haengen. Deren Signatur ist genauso compiler-erzwungen (E2291),
+  // 'unused parameter' dort genauso wenig behebbar.
+  //
+  // UNTERSCHIED zum nested-Zweig: wird der Besitzertyp NICHT gefunden,
+  // laeuft die Analyse normal weiter statt zu schweigen. Bei nested types
+  // ist Nicht-Finden ein Hinweis auf ein Homonym (dort ist Schweigen
+  // richtig); bei einer gewoehnlichen Klasse MUSS die Deklaration in
+  // derselben Unit stehen, Nicht-Finden heisst also Parser-Aerger - und
+  // daraus einen Blanket-Skip zu machen waere zu viel.
+  //
+  // BEWUSST NICHT umgesetzt: die Audit-Zusatzbedingung "und die Methode ist
+  // public/protected". Die Sichtbarkeit haengt am nkVisibilitySection der
+  // DEKLARATION, nicht an der Implementierung; der Weg dorthin ist ein
+  // eigener Lookup. Ohne die Bedingung faellt auch die private Methode
+  // einer interface-tragenden Klasse weg - Ueberreichweite, die als
+  // FN-Restklasse hier notiert ist.
+  else if TryFindOwnerType(UnitNode, MethodNode.Name, OwnerCls) and
+          (OwnerCls.Kind = nkClass) and
+          OwnerHasInterfaceParents(OwnerCls) then
+    Exit;
+
+  // Rumpf ist nur ein `raise` - die Parameter KOENNEN nicht gelesen werden.
+  if BodyIsRaiseOnly(MethodNode) then Exit;
 
   if IsLikelyEventHandler(MethodNode) then Exit;
   if ForwardsParamsViaInherited(MethodNode) then Exit;
