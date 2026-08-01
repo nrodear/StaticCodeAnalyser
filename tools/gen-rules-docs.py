@@ -27,7 +27,51 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_RULES_JSON = REPO_ROOT / "rules" / "sca-rules.json"
+DEFAULT_SCHEMA_JSON = REPO_ROOT / "rules" / "sca-rules.schema.json"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs" / "rules"
+
+
+def validate_against_schema(catalog: dict[str, Any], schema_path: Path) -> int:
+    """Validate the catalog against its own schema.
+
+    Runs only when `jsonschema` is installed - the generator must stay usable
+    on a bare Python. Silence here is not a pass; the summary line says which
+    of the two happened.
+
+    Why this sits in the generator at all: the schema existed but nothing ever
+    ran it, and a 208-character `shortDescription` (SCA153, limit 200) sat in
+    the catalog undetected. Every rule edit passes through this script, so
+    this is the one place the check is guaranteed to be seen.
+    """
+    try:
+        import jsonschema  # noqa: PLC0415 - optional dependency by design
+    except ImportError:
+        print("NOTE: jsonschema not installed - schema validation skipped "
+              "(pip install jsonschema)", file=sys.stderr)
+        return 0
+
+    if not schema_path.exists():
+        print(f"NOTE: schema not found: {schema_path} - validation skipped",
+              file=sys.stderr)
+        return 0
+
+    with schema_path.open(encoding="utf-8-sig") as f:
+        schema = json.load(f)
+
+    validator = jsonschema.Draft7Validator(schema)
+    errors = sorted(validator.iter_errors(catalog),
+                    key=lambda e: list(e.absolute_path))
+    for err in errors:
+        path = list(err.absolute_path)
+        rule_id = "?"
+        if len(path) > 1 and path[0] == "rules":
+            rule_id = catalog["rules"][path[1]].get("id", "?")
+        field = ".".join(str(p) for p in path[2:]) or "(rule)"
+        print(f"SCHEMA: {rule_id} {field}: {err.message}", file=sys.stderr)
+    if errors:
+        print(f"\n{len(errors)} schema violation(s) in "
+              f"{DEFAULT_RULES_JSON.name}.", file=sys.stderr)
+    return len(errors)
 
 
 SEVERITY_BADGE = {
@@ -115,6 +159,30 @@ def render_rule(rule: dict[str, Any]) -> str:
         parts.append("```")
         parts.append("")
 
+    # Exceptions - what the detector deliberately does NOT report.
+    # Without this section a user cannot tell "the rule found nothing" from
+    # "the rule has a gate for exactly this case", which is the single most
+    # common support question after an FP campaign.
+    if rule.get("exceptions"):
+        parts.append("## Not reported (by design)")
+        parts.append("")
+        parts.append(
+            "The detector deliberately stays silent on the constructs below. "
+            "Each is a false-positive class that was measured on the "
+            "real-world corpus, not a guess."
+        )
+        parts.append("")
+        for exc in rule["exceptions"]:
+            parts.append(f"### {exc['case']}")
+            parts.append("")
+            parts.append(exc["why"])
+            parts.append("")
+            if exc.get("example"):
+                parts.append("```pascal")
+                parts.append(exc["example"])
+                parts.append("```")
+                parts.append("")
+
     # Footer
     parts.append("---")
     parts.append("")
@@ -170,6 +238,15 @@ def main() -> int:
         "--check", action="store_true",
         help="Verify docs match the JSON without writing. Exit 1 on diff."
     )
+    ap.add_argument(
+        "--schema", type=Path, default=DEFAULT_SCHEMA_JSON,
+        help=f"Path to the rule schema (default: "
+             f"{DEFAULT_SCHEMA_JSON.relative_to(REPO_ROOT)})"
+    )
+    ap.add_argument(
+        "--no-schema-check", action="store_true",
+        help="Skip validating the catalog against its schema."
+    )
     args = ap.parse_args()
 
     if not args.rules.exists():
@@ -183,6 +260,10 @@ def main() -> int:
     if not rules:
         print("ERROR: no rules found in catalog", file=sys.stderr)
         return 2
+
+    if not args.no_schema_check:
+        if validate_against_schema(catalog, args.schema) > 0:
+            return 2
 
     args.out.mkdir(parents=True, exist_ok=True)
 

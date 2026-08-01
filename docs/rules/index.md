@@ -83,7 +83,7 @@ All 195 detector rules. Click an ID for full details.
 | [SCA077](SCA077.md) | Empty begin..end block | Hint | Code Smell | `uEmptyBlock.pas` |
 | [SCA078](SCA078.md) | Catch-all on root Exception class | Warning | Bug | `uExceptOnException.pas` |
 | [SCA079](SCA079.md) | Consecutive const/type/var section | Hint | Code Smell | `uConsecutiveSection.pas` |
-| [SCA080](SCA080.md) | Redundant Exit/Continue/Break before end | Hint | Code Smell | `uRedundantJump.pas` |
+| [SCA080](SCA080.md) | Redundant Exit/Continue before end | Hint | Code Smell | `uRedundantJump.pas` |
 | [SCA081](SCA081.md) | Multiple class declarations in one file | Hint | Code Smell | `uClassPerFile.pas` |
 | [SCA082](SCA082.md) | Double semicolon | Hint | Code Smell | `uSuperfluousSemicolon.pas` |
 | [SCA083](SCA083.md) | Empty finally block | Warning | Bug | `uEmptyFinallyBlock.pas` |

@@ -13,7 +13,7 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 1609 Zeilen, 56484 Bytes
+  // i18n\de.po - 1609 Zeilen, 56472 Bytes
   CPoLines_de: array[0..1608] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -310,8 +310,8 @@ const
     'msgid "Exception class without E-prefix"',
     'msgstr "Exception-Klasse ohne E-Prefix"',
     '',
-    'msgid "Exit/Continue/Break directly before end - redundant"',
-    'msgstr "Exit/Continue/Break direkt vor end - redundant"',
+    'msgid "Exit/Continue directly before end - redundant"',
+    'msgstr "Exit/Continue direkt vor end - redundant"',
     '',
     'msgid "FieldByName in loop - cache the TField reference outside"',
     'msgstr "FieldByName in der Loop - TField-Referenz ausserhalb cachen"',
@@ -1650,7 +1650,7 @@ const
     'msgstr "Static Code Analysis Tool for Delphi"'
   );
 
-  // i18n\fr.po - 1618 Zeilen, 60397 Bytes
+  // i18n\fr.po - 1618 Zeilen, 60385 Bytes
   CPoLines_fr: array[0..1617] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -1952,8 +1952,8 @@ const
     'msgid "Exception class without E-prefix"',
     'msgstr "Classe d''exception sans pr'#$00E9'fixe E"',
     '',
-    'msgid "Exit/Continue/Break directly before end - redundant"',
-    'msgstr "Exit/Continue/Break juste avant end - redondant"',
+    'msgid "Exit/Continue directly before end - redundant"',
+    'msgstr "Exit/Continue juste avant end - redondant"',
     '',
     'msgid "FieldByName in loop - cache the TField reference outside"',
     'msgstr "FieldByName dans une boucle - mettre en cache la r'#$00E9'f'#$00E9'rence TField '#$00E0' l''ext'#$00E9'rieur"',

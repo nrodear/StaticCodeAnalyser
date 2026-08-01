@@ -338,14 +338,14 @@ Bisher nur über [`rules/sca-rules.json`](rules/sca-rules.json) referenziert; je
 | SCA070 | **CommentedOutCode** | Kommentar sieht aus wie Pascal-Code - löschen oder dokumentieren | Hint | Code Smell | ✅ | `uCommentedOutCode` |
 | SCA071 | **UnitLevelKeywordIndent** | `unit`/`interface`/`implementation`/`initialization`/`finalization` gehören an Spalte 1 | Hint | Code Smell | ✅ | `uUnitLevelKeywordIndent` |
 | SCA072 | **RedundantBoolean** | `X = True` sollte `X` sein (analog `X <> False`) | Hint | Code Smell | ✅ | `uRedundantBoolean` |
-| SCA073 | **EmptyInterface** | Interface ohne Methoden/Properties trägt keinen Kontrakt | Hint | Code Smell | ✅ | `uEmptyInterface` |
+| SCA073 | **EmptyInterface** | Interface ohne Methoden/Properties und ohne benannten Vorfahren trägt keinen Kontrakt | Hint | Code Smell | ✅ | `uEmptyInterface` |
 | SCA074 | **AssertMessage** | `Assert(cond);` - eine `'why'`-Message für die Diagnose ergänzen | Hint | Code Smell | ✅ | `uAssertMessage` |
 | SCA075 | **ExplicitTObjectInheritance** | `class(TObject)` ist redundant - Klammern weglassen | Hint | Code Smell | ✅ | `uExplicitTObjectInheritance` |
 | SCA076 | **GroupedDeclaration** | `A, B: Type` in je eine Deklaration pro Zeile aufteilen | Hint | Code Smell | ✅ | `uGroupedDeclaration` |
 | SCA077 | **EmptyBlock** | Leeres `begin..end` - löschen oder das Statement einfüllen | Hint | Code Smell | ✅ | `uEmptyBlock` |
 | SCA078 | **ExceptOnException** | `on E: Exception do` schluckt alles, auch AV/OOM | Warning | Bug | ✅ | `uExceptOnException` |
 | SCA079 | **ConsecutiveSection** | Zwei `const`/`type`/`var`-Blöcke direkt hintereinander - zusammenführen | Hint | Code Smell | ✅ | `uConsecutiveSection` |
-| SCA080 | **RedundantJump** | `Exit;` / `Continue;` / `Break;` direkt vor `end` ist ein No-op | Hint | Code Smell | ✅ | `uRedundantJump` |
+| SCA080 | **RedundantJump** | `Exit;` / `Continue;` direkt vor `end` ist ein No-op (nicht: `Exit` aus einer Schleife heraus, `Break` gar nicht) | Hint | Code Smell | ✅ | `uRedundantJump` |
 | SCA081 | **ClassPerFile** | Eine Klasse pro Unit erleichtert Refactoring | Hint | Code Smell | ✅ | `uClassPerFile` |
 | SCA082 | **SuperfluousSemicolon** | `;;` - das überzählige Semikolon streichen | Hint | Code Smell | ✅ | `uSuperfluousSemicolon` |
 | SCA083 | **EmptyFinallyBlock** | `try ... finally end;` ohne Cleanup - entweder ergänzen oder das finally streichen | Warning | Bug | ✅ | `uEmptyFinallyBlock` |

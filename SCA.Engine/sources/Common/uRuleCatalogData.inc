@@ -678,8 +678,8 @@ const
     // SCA080
     (
       RuleID   : 'SCA080';
-      Name     : 'Redundant Exit/Continue/Break before end';
-      ShortDesc: '`Exit;` / `Continue;` / `Break;` directly before `end` is a no-op';
+      Name     : 'Redundant Exit/Continue before end';
+      ShortDesc: '`Exit;` / `Continue;` directly before `end` is a no-op';
       BadEx    : 'procedure Foo;' + #13#10 + 'begin' + #13#10 + '  DoStuff;' + #13#10 + '  Exit;' + #13#10 +
         'end;';
       GoodEx   : 'procedure Foo;' + #13#10 + 'begin' + #13#10 + '  DoStuff;' + #13#10 + 'end;'
@@ -1421,7 +1421,7 @@ const
     (
       RuleID   : 'SCA153';
       Name     : 'Lock/Unlock pair without try/finally';
-      ShortDesc: '<ident>.Lock / EnterCriticalSection / TMonitor.Enter followed by a matching UnLock/Leave/Exit in the same routine without an enclosing try/finally - exception path leaks the lock and deadlocks the next caller';
+      ShortDesc: 'Lock / EnterCriticalSection / TMonitor.Enter with its matching release in the same routine but no try/finally - the exception path leaks the lock and deadlocks the next caller';
       BadEx    : 'FLocker.Lock;' + #13#10 + 'DoStuff;' + #13#10 + 'FLocker.UnLock;';
       GoodEx   : 'FLocker.Lock;' + #13#10 + 'try' + #13#10 + '  DoStuff;' + #13#10 + 'finally' + #13#10 +
         '  FLocker.UnLock;' + #13#10 + 'end;'

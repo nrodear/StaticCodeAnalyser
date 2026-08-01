@@ -293,8 +293,8 @@ msgstr "Event-Handler im DFM zeigt auf eine Methode, die nicht (mehr) existiert"
 msgid "Exception class without E-prefix"
 msgstr "Exception-Klasse ohne E-Prefix"
 
-msgid "Exit/Continue/Break directly before end - redundant"
-msgstr "Exit/Continue/Break direkt vor end - redundant"
+msgid "Exit/Continue directly before end - redundant"
+msgstr "Exit/Continue direkt vor end - redundant"
 
 msgid "FieldByName in loop - cache the TField reference outside"
 msgstr "FieldByName in der Loop - TField-Referenz ausserhalb cachen"

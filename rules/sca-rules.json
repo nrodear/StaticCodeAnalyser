@@ -1471,7 +1471,7 @@
       "kind": "EmptyInterface",
       "name": "Empty interface declaration",
       "shortDescription": "Interface with no methods/properties carries no contract",
-      "fullDescription": "An `IFoo = interface end;` body without any methods or properties is either a refactor leftover or a marker interface in disguise. Marker interfaces are better modeled as attribute classes in Delphi. Matches SonarDelphi communitydelphi:EmptyInterface.",
+      "fullDescription": "An `IFoo = interface end;` body without any methods or properties is either a refactor leftover or a marker interface in disguise. Marker interfaces are better modeled as attribute classes in Delphi. Matches SonarDelphi communitydelphi:EmptyInterface. Reported only for interfaces that have no named ancestor: an empty body *under* an ancestor inherits that ancestor's contract and is a type refinement, not a missing one - see 'Not reported' below.",
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["api-design", "dead-code"],
@@ -1480,6 +1480,13 @@
         "bad":  "type IServiceMarker = interface end;",
         "good": "type ServiceMarkerAttribute = class(TCustomAttribute) end;"
       },
+      "exceptions": [
+        {
+          "case": "Interface with a named ancestor other than IInterface/IUnknown",
+          "why": "The rule's premise - 'carries no contract' - is false here: the interface inherits the ancestor's members and exists as a query key (`Obj as IFileSystemFileSource`), as an Embarcadero-style marker derivation (`IOTAFormWizard = interface(IOTARepositoryWizard)`), as an ObjC/JNI bridge type, or as a `*_TLB.pas` automation type generated from a type library. The suggested fix - model it as an attribute class - does not work for any of them, because attributes are compile-time RTTI and cannot be queried through `QueryInterface`. `IInterface`/`IUnknown` are NOT exempt: `IFoo = interface(IUnknown) end;` is semantically identical to `IFoo = interface end;`, since IInterface is the implicit default ancestor.",
+          "example": "// not reported - refines an existing contract\nIFileSystemFileSource = interface(IFileSource)\n  ['{4CBD5A32-...}']\nend;\n\n// still reported - no ancestor contract to inherit\nIServiceMarker = interface(IUnknown)\nend;"
+        }
+      ],
       "cleanCodeAttribute": "COMPLETE",
       "impacts": [
         { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
@@ -1602,9 +1609,9 @@
     {
       "id": "SCA080",
       "kind": "RedundantJump",
-      "name": "Redundant Exit/Continue/Break before end",
-      "shortDescription": "`Exit;` / `Continue;` / `Break;` directly before `end` is a no-op",
-      "fullDescription": "If `Exit` is the last statement of a procedure (or `Continue`/`Break` the last in a loop body), control flow already leaves the block - the jump statement is dead. Delete it to clarify intent. Matches SonarDelphi communitydelphi:RedundantJump.",
+      "name": "Redundant Exit/Continue before end",
+      "shortDescription": "`Exit;` / `Continue;` directly before `end` is a no-op",
+      "fullDescription": "If `Exit` is the last statement of a routine, or `Continue` the last statement of a loop body, control flow already leaves the block - the jump statement is dead. Delete it to clarify intent. Matches SonarDelphi communitydelphi:RedundantJump. Two constructs that *look* like the pattern but change behaviour are exempt: `Exit` reached from inside a loop, and `Break` in any position - see 'Not reported' below.",
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["dead-code", "control-flow"],
@@ -1613,6 +1620,18 @@
         "bad":  "procedure Foo;\nbegin\n  DoStuff;\n  Exit;\nend;",
         "good": "procedure Foo;\nbegin\n  DoStuff;\nend;"
       },
+      "exceptions": [
+        {
+          "case": "`Exit` inside a loop body",
+          "why": "This is an early return, not a no-op. Deleting it lets the loop run its remaining iterations - in the canonical search loop the found result is then overwritten by the next iteration. The detector walks backwards from the jump and suppresses the finding when a `for`/`while`/`repeat` body encloses it. A loop that has already finished on the same level (`while ... do Inc(Run); Exit;`) does not count, so the genuine findings behind a completed loop stay.",
+          "example": "function IndexOfName(const S: string): Integer;\nbegin\n  for Result := 0 to Count - 1 do\n    if Items[Result] = S then\n      Exit;          // not reported - deleting it breaks the search\n  Result := -1;\nend;"
+        },
+        {
+          "case": "`Break` in any position",
+          "why": "Unlike `Continue`, `Break` at the end of a loop body is not a no-op: it suppresses all remaining iterations. Following the old hint turned search loops into full scans and, in `while True` / `repeat ... until False`, into infinite loops. `Break` is redundant only in `repeat ... Break; until True`, a construct that does not occur in the 12.000-file reference corpus - so the keyword is no longer scanned at all.",
+          "example": "for I := 0 to List.Count - 1 do\n  if List[I] = Wanted then\n  begin\n    Result := I;\n    Break;         // not reported - the loop must stop here\n  end;"
+        }
+      ],
       "cleanCodeAttribute": "CLEAR",
       "impacts": [
         { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
@@ -2885,7 +2904,7 @@
       "kind": "UnusedPrivateMethod",
       "name": "Private method has no caller in the unit",
       "shortDescription": "A private method that is never referenced from any other method in the same unit is dead code - delete it or wire it up",
-      "fullDescription": "Private methods can only be called from inside the same unit (Delphi-classic) or class (strict private). If no other method references them, they cannot be called at all - they are dead code, often the residue of an incomplete refactoring. The detector walks `nkClass` nodes, finds `nkVisibilitySection` children with name `private` or `strict private`, collects their `nkMethod` names, and then text-scans the (string-and-comment-stripped) file body for word-boundary matches. Two matches per method are tolerated (declaration line + implementation header); more indicate at least one call. Limitations: RTTI-driven invocations via `TypeInfo` / published-by-attribute / interface dispatch are not detected; use `// noinspection UnusedPrivateMethod` to suppress in those cases. Maps to Sonar-50 rule #37.",
+      "fullDescription": "Private methods can only be called from inside the same unit (Delphi-classic) or class (strict private). If no other method references them, they cannot be called at all - they are dead code, often the residue of an incomplete refactoring. The detector walks `nkClass` nodes, finds `nkVisibilitySection` children with name `private` or `strict private`, collects their `nkMethod` names, and then text-scans the (string-and-comment-stripped) file body for word-boundary matches. Two matches per method are tolerated (declaration line + implementation header); more indicate at least one call. Because that scan only ever sees calls *by name*, every dispatch mechanism that reaches a method without naming it is gated out before reporting - message handlers, method-resolution clauses, class constructors/destructors, `override`s and interface implementations; see 'Not reported' below. DFM event handlers are resolved through the paired `.dfm`. Remaining blind spot: invocation purely through RTTI (`TypeInfo`, attribute-driven registries) - use `// noinspection UnusedPrivateMethod` there. Maps to Sonar-50 rule #37.",
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["dead-code", "maintainability", "sonar50"],
@@ -2894,6 +2913,31 @@
         "bad":  "TFoo = class\nprivate\n  procedure HelperA;            // <- never called\npublic\n  procedure DoStuff;\nend;",
         "good": "TFoo = class\npublic\n  procedure DoStuff;\nend;\n// or call HelperA from DoStuff to make the dependency explicit"
       },
+      "exceptions": [
+        {
+          "case": "Method with a `message` directive",
+          "why": "VCL/FMX message handlers are invoked by `TObject.Dispatch` through the message number, never by name. This is the largest exempt class by far (87 % of the gated findings on the reference corpus). The directive is checked on the declaration itself and only at parenthesis depth 0, so the ubiquitous parameter name `Message` does not count as one.",
+          "example": "private\n  procedure WMPaint(var Message: TWMPaint); message WM_PAINT;"
+        },
+        {
+          "case": "Method-resolution clause (`IFace.Name = Impl;`)",
+          "why": "A qualified name in a class body is not a declaration at all - it only re-binds an interface member to an existing method. There is no method under that name to be unused.",
+          "example": "private\n  function ISearchCommands.CanFindPrev = CanFindNext;"
+        },
+        {
+          "case": "`class constructor` / `class destructor`",
+          "why": "The RTL runs them during unit initialization and finalization; a by-name call would even be illegal. An ordinary private `class procedure`/`class function` is NOT exempt - it stays reportable."
+        },
+        {
+          "case": "Method marked `override`",
+          "why": "The call arrives through the VMT from the ancestor, so no reference in this unit is required. Deliberately restricted to `override`: a newly introduced private `virtual`/`dynamic` method that nobody calls in the unit is still a legitimate finding."
+        },
+        {
+          "case": "Members of a class that implements an interface",
+          "why": "Interface members are reached through interface dispatch, usually from another unit. If every implemented interface is declared in the same unit, only the members matching those interfaces are exempt - genuinely dead helpers of the class stay reportable. If even one interface is declared elsewhere (the normal case), the detector cannot tell which private method serves it and stays silent for the whole class. That is a deliberate false-negative trade in favour of precision.",
+          "example": "TEditor = class(TInterfacedObject, IEditor, IFileCommands)\nprivate\n  { IFileCommands }\n  function CanClose: Boolean;    // not reported - dispatched via the interface\nend;"
+        }
+      ],
       "cleanCodeAttribute": "COMPLETE",
       "impacts": [
         { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
@@ -2998,7 +3042,7 @@
       "id": "SCA153",
       "kind": "UnpairedLock",
       "name": "Lock/Unlock pair without try/finally",
-      "shortDescription": "<ident>.Lock / EnterCriticalSection / TMonitor.Enter followed by a matching UnLock/Leave/Exit in the same routine without an enclosing try/finally - exception path leaks the lock and deadlocks the next caller",
+      "shortDescription": "Lock / EnterCriticalSection / TMonitor.Enter with its matching release in the same routine but no try/finally - the exception path leaks the lock and deadlocks the next caller",
       "fullDescription": "Scans each source line lexically (comments + strings stripped) for the acquire token `<ident>.Lock`, `Acquire`, `EnterCriticalSection`, or bare `EnterCriticalSection(...)`. A 200-character lookahead window then searches for the matching release token (`UnLock`, `LeaveCriticalSection`, `Release`). When BOTH are present in the window but no `try` keyword precedes the release, the pair is reported - acquiring a lock and then raising before the release causes a deadlock for every subsequent waiter. mORMot-tuned: matches TSynLocker, TRWLock, TLightLock, and the bare-Windows EnterCriticalSection/LeaveCriticalSection pair. Patterns where the release is missing entirely are skipped (likely a lock-helper RAII style with the release in a destructor).",
       "defaultSeverity": "Warning",
       "type": "Bug",
@@ -3038,7 +3082,7 @@
       "kind": "WithMultipleTargets",
       "name": "with statement on multiple targets",
       "shortDescription": "`with A, B do` (two or more comma-separated receivers) makes member lookup ambiguous - adding a method to either A or B silently changes the meaning of the body",
-      "fullDescription": "Regex match `\\bwith\\s+<id>,\\s*<id>\\s*do\\b` across the whole file (multiline / comments stripped). One target alone is already a code-smell (covered by fkWithStatement); two or more turn the body into a maintenance trap: a new method added to A or B can silently override what used to dispatch to the other. The compiler picks the closest match and never warns. Renames via the IDE refactor skip these references because the receiver is not named at the call site. mORMot-tuned: matches up to 200 characters per target name to tolerate fully-qualified names like `Owner.SubObject.Component`. Fix: split into separate `with` blocks, or - better - drop `with` entirely and qualify each member explicitly.",
+      "fullDescription": "Regex match `\\bwith\\s+<id>,\\s*<id>\\s*do\\b` across the whole file (multiline / comments stripped), followed by a bracket-balance pass over the `with` head. One target alone is already a code-smell (covered by fkWithStatement); two or more turn the body into a maintenance trap: a new method added to A or B can silently override what used to dispatch to the other. The compiler picks the closest match and never warns. Renames via the IDE refactor skip these references because the receiver is not named at the call site. mORMot-tuned: matches up to 200 characters per target name to tolerate fully-qualified names like `Owner.SubObject.Component`. Fix: split into separate `with` blocks, or - better - drop `with` entirely and qualify each member explicitly.",
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["clarity", "with-statement", "sonar50"],
@@ -3047,6 +3091,13 @@
         "bad":  "with Form1, List1 do\n  DoStuff;     // From Form1 or List1?",
         "good": "Form1.DoStuff;\nList1.Sort;"
       },
+      "exceptions": [
+        {
+          "case": "A single target whose commas sit inside an argument, index or type-argument list",
+          "why": "Only a comma at bracket depth 0 separates `with` targets. `with Obj.Method(A, B, 'C') do` has exactly one receiver - the commas belong to the call. The balance pass counts round and square brackets and skips generic type arguments (`TDict<K,V>`); string literals are already blanked, so a comma inside a literal can never split a head either. If the head cannot be decided (no `do` at depth 0 within the window, unbalanced brackets), the finding stays - the filter may only remove, never add.",
+          "example": "// not reported - one target, commas are arguments\nwith CL.AddInterface(CL.FindInterface('IFoo'), IBar, 'IBar') do\n  RegisterMethod('...');\n\n// still reported - two receivers\nwith Form1, List1 do\n  DoStuff;"
+        }
+      ],
       "cleanCodeAttribute": "CLEAR",
       "impacts": [
         { "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }

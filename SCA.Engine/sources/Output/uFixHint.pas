@@ -2184,7 +2184,7 @@ begin
 
     fkRedundantJump:
     begin
-      Result.Description := _('Exit/Continue/Break directly before end - redundant');
+      Result.Description := _('Exit/Continue directly before end - redundant');
       Result.Before :=
         'procedure Foo;'#13#10 +
         'begin'#13#10 +

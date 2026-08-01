@@ -145,6 +145,33 @@
             "bad":  { "type": "string", "minLength": 1, "description": "Anti-pattern code snippet that triggers the rule." },
             "good": { "type": "string", "minLength": 1, "description": "Idiomatic fix snippet." }
           }
+        },
+        "exceptions": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Constructs the detector deliberately does NOT report, and why. Documents the FP gates a rule carries so users can tell 'not reported' from 'not detected'. Keep in sync with the gate comments in detectorUnit.",
+          "items": {
+            "type": "object",
+            "required": ["case", "why"],
+            "additionalProperties": false,
+            "properties": {
+              "case": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "description": "The construct that is exempt, phrased as the user would recognise it (e.g. 'Interface with a named ancestor')."
+              },
+              "why": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Why reporting it would be wrong - the mechanism, not the symptom."
+              },
+              "example": {
+                "type": "string",
+                "description": "Optional Pascal snippet showing the exempt construct."
+              }
+            }
+          }
         }
       }
     }

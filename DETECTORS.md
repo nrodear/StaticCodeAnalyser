@@ -338,14 +338,14 @@ Formerly only referenced via [`rules/sca-rules.json`](rules/sca-rules.json); now
 | SCA070 | **CommentedOutCode** | Comment looks like Pascal code - delete or document | Hint | Code Smell | ✅ | `uCommentedOutCode` |
 | SCA071 | **UnitLevelKeywordIndent** | `unit`/`interface`/`implementation`/`initialization`/`finalization` should start at column 1 | Hint | Code Smell | ✅ | `uUnitLevelKeywordIndent` |
 | SCA072 | **RedundantBoolean** | `X = True` should be `X` (and `X <> False` likewise) | Hint | Code Smell | ✅ | `uRedundantBoolean` |
-| SCA073 | **EmptyInterface** | Interface with no methods/properties carries no contract | Hint | Code Smell | ✅ | `uEmptyInterface` |
+| SCA073 | **EmptyInterface** | Interface with no methods/properties and no named ancestor carries no contract | Hint | Code Smell | ✅ | `uEmptyInterface` |
 | SCA074 | **AssertMessage** | `Assert(cond);` - add a `'why'` message for diagnosis | Hint | Code Smell | ✅ | `uAssertMessage` |
 | SCA075 | **ExplicitTObjectInheritance** | `class(TObject)` is redundant - drop the parens | Hint | Code Smell | ✅ | `uExplicitTObjectInheritance` |
 | SCA076 | **GroupedDeclaration** | Split `A, B: Type` into one declaration per line | Hint | Code Smell | ✅ | `uGroupedDeclaration` |
 | SCA077 | **EmptyBlock** | Empty `begin..end` - delete it or fill in the statement | Hint | Code Smell | ✅ | `uEmptyBlock` |
 | SCA078 | **ExceptOnException** | `on E: Exception do` swallows everything including AV/OOM | Warning | Bug | ✅ | `uExceptOnException` |
 | SCA079 | **ConsecutiveSection** | Two `const`/`type`/`var` blocks in a row should be merged | Hint | Code Smell | ✅ | `uConsecutiveSection` |
-| SCA080 | **RedundantJump** | `Exit;` / `Continue;` / `Break;` directly before `end` is a no-op | Hint | Code Smell | ✅ | `uRedundantJump` |
+| SCA080 | **RedundantJump** | `Exit;` / `Continue;` directly before `end` is a no-op (not: `Exit` out of a loop, and never `Break`) | Hint | Code Smell | ✅ | `uRedundantJump` |
 | SCA081 | **ClassPerFile** | One class per unit makes refactoring easier | Hint | Code Smell | ✅ | `uClassPerFile` |
 | SCA082 | **SuperfluousSemicolon** | `;;` - drop the extra semicolon | Hint | Code Smell | ✅ | `uSuperfluousSemicolon` |
 | SCA083 | **EmptyFinallyBlock** | `try ... finally end;` has no cleanup - either add it or drop the finally | Warning | Bug | ✅ | `uEmptyFinallyBlock` |

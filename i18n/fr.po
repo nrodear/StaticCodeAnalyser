@@ -298,8 +298,8 @@ msgstr "Le gestionnaire d'événement du DFM pointe vers une méthode qui n'exis
 msgid "Exception class without E-prefix"
 msgstr "Classe d'exception sans préfixe E"
 
-msgid "Exit/Continue/Break directly before end - redundant"
-msgstr "Exit/Continue/Break juste avant end - redondant"
+msgid "Exit/Continue directly before end - redundant"
+msgstr "Exit/Continue juste avant end - redondant"
 
 msgid "FieldByName in loop - cache the TField reference outside"
 msgstr "FieldByName dans une boucle - mettre en cache la référence TField à l'extérieur"

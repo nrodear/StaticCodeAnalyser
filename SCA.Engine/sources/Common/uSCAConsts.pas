@@ -347,8 +347,9 @@ type
     fkConsecutiveSection,        // Zwei `const`/`type`/`var` Sektionen
                                  // hintereinander (SonarDelphi:
                                  // ConsecutiveConst/Type/Var Section).
-    fkRedundantJump,             // `Exit;`/`Continue;`/`Break;` direkt
-                                 // vor `end` (SonarDelphi:RedundantJump).
+    fkRedundantJump,             // `Exit;`/`Continue;` direkt vor `end`
+                                 // (SonarDelphi:RedundantJump). `Break` NICHT
+                                 // - es unterdrueckt die Folge-Iterationen.
     fkClassPerFile,              // Mehrere Klassen-Deklarationen in einer
                                  // Unit (SonarDelphi:ClassPerFile).
     fkSuperfluousSemicolon,      // `;;` doppeltes Semikolon

@@ -718,7 +718,7 @@ msgid "Exception is constructed but never raised"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2187
-msgid "Exit/Continue/Break directly before end - redundant"
+msgid "Exit/Continue directly before end - redundant"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:381
