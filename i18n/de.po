@@ -1607,3 +1607,148 @@ msgstr "Sprache"
 
 msgid "UI language: %s - captions already on screen switch after a restart."
 msgstr "Oberflächensprache: %s - bereits angezeigte Beschriftungen wechseln erst nach einem Neustart."
+
+# --- Nachtrag 2026-08-02: Baseline-Integration, Sonar- und
+# Options-Frames. Ohne Eintrag fiel die Oberflaeche hier still
+# auf Englisch zurueck. ---
+
+msgid "Accept self-signed TLS certificates"
+msgstr "Selbstsignierte TLS-Zertifikate akzeptieren"
+
+msgid "Actions menu: Cancel, Export, Settings, Ignore"
+msgstr "Aktionsmenü: Abbrechen, Export, Einstellungen, Ignorieren"
+
+msgid "All files"
+msgstr "Alle Dateien"
+
+msgid "All findings reset."
+msgstr "Alle Befunde zurückgesetzt."
+
+msgid "An analysis is already running."
+msgstr "Es läuft bereits eine Analyse."
+
+msgid "Analyse directory"
+msgstr "Verzeichnis analysieren"
+
+msgid "Analyse group"
+msgstr "Projektgruppe analysieren"
+
+msgid "Analyse project"
+msgstr "Projekt analysieren"
+
+msgid "Annotation overlay position:"
+msgstr "Position der Anmerkung:"
+
+msgid "Authentication"
+msgstr "Authentifizierung"
+
+msgid "Baseline (show only new findings)"
+msgstr "Baseline (nur neue Befunde anzeigen)"
+
+msgid "Baseline JSON"
+msgstr "Baseline-JSON"
+
+msgid "Baseline file:"
+msgstr "Baseline-Datei:"
+
+msgid "Baseline written: %s (%d findings)"
+msgstr "Baseline geschrieben: %s (%d Befunde)"
+
+msgid "Bearer Token:"
+msgstr "Bearer-Token:"
+
+msgid "Branch:"
+msgstr "Branch:"
+
+msgid "Clear all editor markers in all files (grids stay)"
+msgstr "Alle Editor-Markierungen in allen Dateien löschen (Tabellen bleiben)"
+
+msgid "Connectivity"
+msgstr "Verbindung"
+
+msgid "Could not write baseline: %s"
+msgstr "Baseline konnte nicht geschrieben werden: %s"
+
+msgid "Default (bright colors)"
+msgstr "Standard (kräftige Farben)"
+
+msgid "Detect"
+msgstr "Ermitteln"
+
+msgid "Display"
+msgstr "Anzeige"
+
+msgid "Editor marker color scheme:"
+msgstr "Farbschema der Editor-Markierungen:"
+
+msgid "File does not exist yet: "
+msgstr "Datei existiert noch nicht: "
+
+msgid "Gray (neutral)"
+msgstr "Grau (neutral)"
+
+msgid "Hide"
+msgstr "Ausblenden"
+
+msgid "Host URL:"
+msgstr "Host-URL:"
+
+msgid "Ignore list opened: %s"
+msgstr "Ignorierliste geöffnet: %s"
+
+msgid "No findings to write. Run an analysis first."
+msgstr "Keine Befunde zum Schreiben. Bitte zuerst eine Analyse ausführen."
+
+msgid "No sonar-project.properties found in "
+msgstr "Keine sonar-project.properties gefunden in "
+
+msgid "One line below"
+msgstr "Eine Zeile darunter"
+
+msgid "Open analyser.ini"
+msgstr "analyser.ini öffnen"
+
+msgid "Plugin Open Error"
+msgstr "Fehler beim Öffnen im Plugin"
+
+msgid "Project Key:"
+msgstr "Projektschlüssel:"
+
+msgid "Reset all findings (clear panels + markers)"
+msgstr "Alle Befunde zurücksetzen (Panels und Markierungen leeren)"
+
+msgid "Running health-check (this may take up to ~15s)..."
+msgstr "Systemprüfung läuft (kann bis zu ~15 s dauern)..."
+
+msgid "Same line at end (default)"
+msgstr "Gleiche Zeile am Ende (Standard)"
+
+msgid "Save once to create it."
+msgstr "Einmal speichern, um sie anzulegen."
+
+msgid "Select baseline file"
+msgstr "Baseline-Datei auswählen"
+
+msgid "Server"
+msgstr "Server"
+
+msgid "Show"
+msgstr "Anzeigen"
+
+msgid "Show annotation overlay on hover (otherwise click marked line)"
+msgstr "Anmerkung beim Überfahren anzeigen (sonst markierte Zeile anklicken)"
+
+msgid "Show only findings new since the baseline (hide the legacy backlog)"
+msgstr "Nur Befunde anzeigen, die seit der Baseline neu sind (Altbestand ausblenden)"
+
+msgid "Subtle (muted colors)"
+msgstr "Dezent (gedämpfte Farben)"
+
+msgid "Test Connection"
+msgstr "Verbindung testen"
+
+msgid "Write baseline from current scan..."
+msgstr "Baseline aus aktuellem Scan schreiben..."
+
+msgid "sonar.projectKey not found in "
+msgstr "sonar.projectKey nicht gefunden in "
