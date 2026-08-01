@@ -256,6 +256,11 @@ type
     [Test] procedure Leak_AddReceiverIsUnitAliasOfObjectList_NoFinding;
     [Test] procedure Leak_AddReceiverIsUnitClassOfObjectList_NoFinding;
     [Test] procedure Leak_AddReceiverIsUnitAliasOfTList_StillReported; // TP-Gegenprobe
+    // ---- out/var-Parameter als Rueckgabeweg (T3-Backlog, 2026-08-01) ------
+    [Test] procedure Leak_OutParamReturn_NoFinding;
+    [Test] procedure Leak_VarParamIndexedReturn_NoFinding;
+    [Test] procedure Leak_ConstParamAssign_StillReported;
+    [Test] procedure Leak_PlainLocalAssign_StillReported;
   end;
 
   // ---- FieldLeak (TFieldLeakDetector) ------------------------------------------------
@@ -296,11 +301,6 @@ type
     [Test] procedure Field_OwnerChainReachesSelf_NoFinding;
     [Test] procedure Field_OwnerChainEndsAtNil_StillReported;         // TP-Gegenprobe
     [Test] procedure Field_OwnerChainOnPlainObjectClass_StillReported; // TP-Gegenprobe
-    // ---- out/var-Parameter als Rueckgabeweg (T3-Backlog, 2026-08-01) ------
-    [Test] procedure Leak_OutParamReturn_NoFinding;
-    [Test] procedure Leak_VarParamIndexedReturn_NoFinding;
-    [Test] procedure Leak_ConstParamAssign_StillReported;
-    [Test] procedure Leak_PlainLocalAssign_StillReported;
   end;
 
 implementation
@@ -5142,7 +5142,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestLeakDetector.Leak_OutParamReturn_NoFinding;
+procedure TTestMemoryLeakAdvanced.Leak_OutParamReturn_NoFinding;
 // ACHTUNG (Konvention dieser Datei): die Fixture-Klasse MUSS in
 // DEFAULT_LEAKY_CLASSES stehen - sonst verwirft IsLeakyType sie VOR jedem
 // Gate und der Test ist wirkungslos, auch wenn er gruen leuchtet.
@@ -5170,7 +5170,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestLeakDetector.Leak_VarParamIndexedReturn_NoFinding;
+procedure TTestMemoryLeakAdvanced.Leak_VarParamIndexedReturn_NoFinding;
 // Zweite Form: Einhaengen in einen Rueckgabe-Container ueber den Index.
 const SRC =
   'unit t;'#13#10+
@@ -5195,7 +5195,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestLeakDetector.Leak_ConstParamAssign_StillReported;
+procedure TTestMemoryLeakAdvanced.Leak_ConstParamAssign_StillReported;
 // WAECHTER, der wichtigste: bei einem CONST-Parameter bleibt die Referenz
 // beim Aufgerufenen - dort WAERE es ein echtes Leck. Das Gate darf die
 // Modifier deshalb nicht ignorieren.
@@ -5222,7 +5222,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestLeakDetector.Leak_PlainLocalAssign_StillReported;
+procedure TTestMemoryLeakAdvanced.Leak_PlainLocalAssign_StillReported;
 // WAECHTER: Zuweisung an eine gewoehnliche lokale Variable ist kein
 // Ownership-Transfer.
 const SRC =
