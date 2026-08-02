@@ -107,6 +107,21 @@ implementation
 uses
   System.Generics.Collections, System.RegularExpressions;
 
+// Profilnamen als Konstanten. Nicht aus Ordnungsliebe: mit den drei neuen
+// Profil-Tests stand 'default' dreimal woertlich im Code, und der eigene
+// Analyser meldet ab drei Vorkommen DuplicateString - zu Recht, und das
+// Dogfooding-Gate hat es gefangen, bevor es jemand anders tat. Nur die drei
+// Namen, die die Schwelle reissen; die uebrigen Profile stehen zweimal und
+// bleiben woertlich.
+//
+// Der const-Block steht bewusst NACH der uses-Klausel: in Delphi muss uses
+// unmittelbar auf implementation folgen, sonst E2029. Genau dieser Fehler
+// ist in dieser Codebasis schon einmal passiert.
+const
+  PROF_DEFAULT = 'default';
+  PROF_STRICT  = 'strict';
+  PROF_STYLE   = 'style';
+
 procedure TTestRuleCatalog.Setup;
 begin
   TRuleCatalog.Reload; // garantiert frischen Zustand pro Test
@@ -504,7 +519,7 @@ var
   P : TFindingKinds;
   K : TFindingKind;
 begin
-  P := TRuleCatalog.GetProfile('strict');
+  P := TRuleCatalog.GetProfile(PROF_STRICT);
   for K := Low(TFindingKind) to High(TFindingKind) do
     Assert.IsTrue(K in P,
       Format('strict-Profile enthaelt %s nicht', [KindName(K)]));
@@ -518,8 +533,8 @@ var
   D, S : TFindingKinds;
   K    : TFindingKind;
 begin
-  D := TRuleCatalog.GetProfile('default');
-  S := TRuleCatalog.GetProfile('style');
+  D := TRuleCatalog.GetProfile(PROF_DEFAULT);
+  S := TRuleCatalog.GetProfile(PROF_STYLE);
   for K := Low(TFindingKind) to High(TFindingKind) do
     Assert.IsTrue((K in D) or (K in S),
       Format('%s ist weder in default noch in style - Regel verloren',
@@ -542,7 +557,7 @@ var
   Miss  : Integer;
   Known : Boolean;
 begin
-  D := TRuleCatalog.GetProfile('default');
+  D := TRuleCatalog.GetProfile(PROF_DEFAULT);
   Miss := 0;
   for K := Low(TFindingKind) to High(TFindingKind) do
   begin
@@ -627,14 +642,14 @@ begin
   Seen  := TDictionary<string, Boolean>.Create;
   try
     for N in Names do Seen.AddOrSetValue(LowerCase(N), True);
-    Require('default');
+    Require(PROF_DEFAULT);
     Require('ide-fast');
-    Require('strict');
+    Require(PROF_STRICT);
     Require('security');
     Require('bugs-only');
     Require('code-quality');
     Require('dfm-only');
-    Require('style'); // seit C1 2026-08-02
+    Require(PROF_STYLE); // seit C1 2026-08-02
   finally
     Seen.Free;
   end;
