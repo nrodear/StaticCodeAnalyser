@@ -620,6 +620,33 @@ Exit-Code-Mapping (siehe [Headless CLI](#headless-cli-mode)):
 - 2 = Warnings → commit erlaubt (oder blockieren via Hook-Logik)
 - 3 = Errors → **commit blockiert**
 
+### Große Codebasen: `--parallel`
+
+Per-File-Parallelisierung des Scans, **opt-in und standardmäßig aus**. Das
+Ergebnis ist byte-identisch zum seriellen Lauf — der Merge läuft strikt in
+Dateilisten-Reihenfolge, der Schalter ist also überall dort sicher, wo ein
+serieller Lauf es ist.
+
+Erwarte wenig davon. Am 12.8k-Dateien-Referenzkorpus gemessen brachte er
+rund **3 %** (5m16s gegen 5m26s) — weil der teure Teil nicht der ist, der
+parallelisiert wird: das Parsen aller Dateien in den AST-Cache und der
+Aufbau von Symbol- und Typindex laufen als *serielle Vor-Phase*, die Worker
+treffen danach überwiegend warme Caches. Er ist als korrekte, sichere
+Grundlage eingebaut, nicht als Beschleunigung.
+
+In drei Fällen fällt er **absichtlich** auf seriell zurück, weil sich keiner
+davon deterministisch bzw. thread-sicher abbilden lässt:
+`AutoDiscoverClasses=1`, geladene `--custom-rules` und `--time-detectors`.
+Seit dem 2026-08-02 sagt der Lauf das auf stderr, statt still seriell zu
+laufen — ein Schalter, der wortlos nichts tut, ist schlimmer als einer, den
+es nicht gibt. Für die Auto-Discovery gibt es keinen CLI-Schalter; sie steht
+in der `analyser.ini` unter `[Detectors] AutoDiscoverClasses`.
+
+```powershell
+analyser.exe --path . --full --parallel --report-sarif sca.sarif
+analyser.exe --path . --full --parallel --parallel-workers 8   # statt Auto
+```
+
 ---
 
 ## Konfigurations-Dateien

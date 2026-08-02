@@ -66,6 +66,22 @@ var
   // exportierte Globals MUESSEN var bleiben.
   gDetectorTimings : TDictionary<string, TPair<Int64, Integer>>;
 
+  // Warum ein angeforderter Parallel-Lauf NICHT parallel lief. Leer =
+  // entweder nicht angefordert, oder es hat geklappt.
+  //
+  // Das Gate unten faellt bewusst still auf seriell zurueck, und genau das
+  // hat am 2026-08-02 eine Messung am Referenzkorpus wertlos gemacht: der
+  // Schalter --parallel war gesetzt, AutoDiscoverClasses=1 stand in der
+  // analyser.ini, der Lauf war seriell - und nichts sagte es. Aufgefallen
+  // ist es nur an den Pro-Datei-Zeilen im Scan-Log, die es im Parallel-Pfad
+  // gar nicht gibt. Ein Schalter, der wortlos nichts tut, ist schlimmer als
+  // einer, der fehlt.
+  //
+  // Bewusst ein var-Global wie gDetectorTimings daneben und aus demselben
+  // Grund: der Konsument (CLI) liegt AUSSERHALB des SCA.Engine-Package,
+  // ein exportierter threadvar traegt dort nicht.
+  gParallelDeclineReason : string;
+
 implementation
 
 // noinspection-file BeginEndRequired, BooleanParam, ConsecutiveSection, DuplicateBlock, ExceptOnException, GroupedDeclaration, InsecureCryptoAlgorithm, MissingUnitHeader, MultipleExit, NestedRoutine, NestedTry, NilComparison, RaisingRawException, RedundantBoolean, RedundantJump, TodoComment, TooLongLine, UnsortedUses, UnusedParameter, UnusedRoutine
@@ -1577,6 +1593,36 @@ begin
       and (not Ctx.Config.AutoDiscover)
       and (not TCustomRuleDetector.HasRules)
       and (Ctx.DetectorTimings = nil);
+
+    // Auskunft geben, wenn parallel gewuenscht war und es nicht dazu kam.
+    // Reihenfolge = Gate-Reihenfolge oben; genannt wird die ERSTE zutreffende
+    // Ursache, denn die muss der Aufrufer zuerst beseitigen. Einzige Quelle
+    // der Wahrheit bleibt das Gate selbst - die Bedingungen werden hier
+    // NICHT zweitausgewertet, sondern nur der Reihe nach befragt.
+    gParallelDeclineReason := '';
+    if Ctx.Config.ParallelScan and (not UseParallel) then
+    begin
+      if Total <= 1 then
+        gParallelDeclineReason := 'nur eine Datei zu analysieren'
+      else if not Assigned(Ctx.AstFileCache) then
+        gParallelDeclineReason := 'kein AST-Cache aktiv'
+      else if Ctx.Config.AutoDiscover then
+        gParallelDeclineReason :=
+          'AutoDiscoverClasses ist an - Discovery wirkt ueber die '
+          + 'Dateireihenfolge und ist parallel nicht deterministisch '
+          + '([Detectors] AutoDiscoverClasses=0 in der analyser.ini)'
+      else if TCustomRuleDetector.HasRules then
+        gParallelDeclineReason :=
+          'Custom-Rules sind geladen - vorkompilierte Regexe sind nicht '
+          + 'concurrent-safe'
+      else if Ctx.DetectorTimings <> nil then
+        gParallelDeclineReason := '--time-detectors misst bewusst seriell'
+      else
+        gParallelDeclineReason := 'Grund unbekannt - Gate-Bedingung ohne '
+          + 'zugehoerige Erklaerung, bitte melden';
+      LogLine('=== Parallel-Modus ABGELEHNT: ' + gParallelDeclineReason
+              + ' - Lauf ist seriell ===');
+    end;
 
     if UseParallel then
     begin

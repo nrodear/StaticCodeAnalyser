@@ -616,6 +616,32 @@ Exit code mapping:
 - 2 = warnings → commit allowed (or block via hook logic)
 - 3 = errors → **commit blocked**
 
+### Large code bases: `--parallel`
+
+Per-file parallel scanning, **opt-in and off by default**. The output is
+byte-identical to a serial run — the merge is strictly in file-list order,
+so it is safe to use anywhere a serial run is.
+
+Expect little from it. Measured on the 12.8k-file reference corpus it saved
+about **3 %** (5m16s vs 5m26s), because the expensive part is not the part
+that gets parallelised: parsing every file into the AST cache and building
+the symbol and type indexes runs as a *serial pre-phase*, and the workers
+then mostly hit warm caches. It is committed as a correct, safe foundation,
+not as a speed-up.
+
+It **declines silently by design** in three cases, because none of them can
+be made deterministic or thread-safe: `AutoDiscoverClasses=1`, loaded
+`--custom-rules`, and `--time-detectors`. Since 2026-08-02 the run says so
+on stderr instead of quietly going serial — a switch that does nothing
+without a word is worse than one that does not exist. There is no CLI
+override for auto-discovery; it is set in `analyser.ini` under
+`[Detectors] AutoDiscoverClasses`.
+
+```powershell
+analyser.exe --path . --full --parallel --report-sarif sca.sarif
+analyser.exe --path . --full --parallel --parallel-workers 8   # statt Auto
+```
+
 ---
 
 ## Configuration files

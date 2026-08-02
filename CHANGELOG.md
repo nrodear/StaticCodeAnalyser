@@ -43,6 +43,20 @@ one unreadable file.
   marker has nothing to suppress. The size of the saving is **not yet
   measured**; it is reported here as a mechanism, not as a number.
 
+- **`--parallel` now says when it declined.** Per-file parallel scanning is
+  opt-in and falls back to serial whenever the run cannot be made
+  deterministic — auto-discovery, custom rules, `--time-detectors`. That
+  fallback was *silent*, and it cost a measurement: a corpus run was
+  started with `--parallel`, `AutoDiscoverClasses=1` was set in
+  `analyser.ini`, the scan went serial, and nothing said so. It only came
+  out because the parallel path does not write the per-file lines that
+  turned up in the scan log. The reason now goes to stderr and into the
+  log. No change to results or to when the fallback happens — only to
+  whether you are told. `--parallel` is also documented in both READMEs
+  for the first time, including the honest figure: **~3 %** on the
+  reference corpus, because the expensive phase (parse + index build) is
+  serial and runs *before* the parallel main loop.
+
 ### Breaking for baselines
 
 - **`SCA021` message now names the real line range** (`Code block (lines

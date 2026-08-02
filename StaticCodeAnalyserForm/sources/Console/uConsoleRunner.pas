@@ -1015,6 +1015,16 @@ begin
       finally
         Ses.Free;
       end;
+
+      // --parallel angenommen, aber seriell gelaufen? Das sagen. Der
+      // Rueckfall ist Absicht (Determinismus geht vor Tempo), aber
+      // schweigend war er eine Falle: der Aufrufer glaubt, parallel zu
+      // messen, und misst seriell. Auf ErrOutput, damit --quiet-Pipelines,
+      // die stdout weiterverarbeiten, die Warnung trotzdem sehen.
+      if Args.Parallel and (gParallelDeclineReason <> '') then
+        WriteLn(ErrOutput,
+          'Hinweis: --parallel war gesetzt, der Scan lief aber seriell - '
+          + gParallelDeclineReason + '.');
     except
       on E: Exception do
       begin
