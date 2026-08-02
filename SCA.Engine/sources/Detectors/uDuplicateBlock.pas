@@ -12,9 +12,20 @@ unit uDuplicateBlock;
 //      Schluessel in einer Hash-Map sammeln
 //   5. Schluessel mit >= 2 Vorkommen sind Duplikate -> melden
 //
-// Pro Block wird nur EINMAL gemeldet (Erst-Vorkommen, nicht ueberlappende
-// Folge-Fenster). Suppression via // noinspection wird vom uSuppression-
-// Modul automatisch nachgelagert.
+// Pro Block wird nur EINMAL gemeldet, mit dem Bereich ueber den GANZEN
+// Block (TLeakFinding.LineNumber = erste Zeile, .EndLine = letzte).
+//
+// ACHTUNG, historisch: dieser Satz stand hier schon, war aber bis 2026-08-02
+// FALSCH. Das Fenster wandert Zeile fuer Zeile durch den Block; jede
+// Position ist ein anderer Hash und meldete an ihrer eigenen Anfangszeile.
+// Ein duplizierter Block von K Zeilen erzeugte damit K - MinBlk + 1
+// Befunde. Der damalige Reported-Filter war nach der Anfangszeile
+// verschluesselt und konnte das prinzipiell nicht fangen. Erst Pass 3c
+// (sortieren, dann ueberlappende Fenster verschmelzen) macht die Zusage
+// wahr - siehe Kommentar dort.
+//
+// Suppression via // noinspection wird vom uSuppression-Modul automatisch
+// nachgelagert.
 //
 // Schwelle: DetectorMinBlockLines = 8 normalisierte Zeilen. Das filtert Standard-
 // Boilerplate (Property-Getter o.ae.) zuverlaessig aus.
@@ -23,6 +34,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
+  System.Generics.Defaults,          // TComparer fuer die Kandidaten-Sortierung
   uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
@@ -55,6 +67,14 @@ uses
 
 // Min-Block-Lines kommt aus uSCAConsts.DetectorMinBlockLines
 // (analyser.ini -> DuplicateBlockMinLines). Default 8.
+
+type
+  // Ein Fenster-Treffer VOR dem Verschmelzen (Pass 3a -> 3c).
+  TDupCandidate = record
+    FirstLine : Integer;   // erste Original-Zeile des Fensters
+    EndLine   : Integer;   // letzte Original-Zeile des Fensters
+    Occurs    : Integer;   // wie oft dieses Fenster in der Datei vorkommt
+  end;
 
 const
   TRIVIAL_LINES : array[0..11] of string = (
@@ -321,7 +341,9 @@ var
   // TObjectDictionary mit doOwnsValues raeumt die TList<Integer>-Values
   // automatisch beim Free auf - keine eigene Cleanup-Schleife noetig.
   Hashes      : TObjectDictionary<string, TList<Integer>>;
-  Reported    : TDictionary<Integer, Boolean>;
+  // Kandidaten VOR dem Verschmelzen. Ersetzt den frueheren Reported-Filter,
+  // der ueberlappende Folge-Fenster nicht fangen konnte (Pass 3c).
+  Cands       : TList<TDupCandidate>;
   i, NCount   : Integer;
   Window      : string;
   Indices     : TList<Integer>;
@@ -338,7 +360,7 @@ begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   Hashes   := TObjectDictionary<string, TList<Integer>>.Create([doOwnsValues]);
-  Reported := TDictionary<Integer, Boolean>.Create;
+  Cands    := TList<TDupCandidate>.Create;
   try
     if Lines.Count < MinBlk * 2 then Exit;
 
@@ -372,16 +394,13 @@ begin
       Indices.Add(i);
     end;
 
-    // Pass 3: Duplikate melden, dabei ueberlappende Folge-Fenster
-    // unterdruecken (nur Erst-Vorkommen pro Block) UND Bloecke skippen
-    // die ueberwiegend aus if/end-Boilerplate bestehen.
+    // Pass 3a: Kandidaten sammeln. Ein Fenster kommt nur durch, wenn es
+    // mehrfach vorkommt und keines der beiden Boilerplate-Gates greift.
     for Pair in Hashes do
     begin
       if Pair.Value.Count < 2 then Continue;
 
       FirstLine := LineIndex[Pair.Value[0]];
-      if Reported.ContainsKey(FirstLine) then Continue;
-      Reported.Add(FirstLine, True);
 
       // Original-Zeilenbereich des Erst-Vorkommens ermitteln und auf
       // if/end-Anteil pruefen. Bei zu viel Boilerplate skippen.
@@ -393,27 +412,77 @@ begin
       // Parameterlisten im Routinenkopf sind sprachlich erzwungen.
       if IsDeclarationBoilerplate(Lines, FirstLine, OrigEndLine) then Continue;
 
+      var C : TDupCandidate;
+      C.FirstLine := FirstLine;
+      C.EndLine   := OrigEndLine;
+      C.Occurs    := Pair.Value.Count;
+      Cands.Add(C);
+    end;
+
+    // Pass 3b: nach Anfangszeile sortieren. ZWINGEND vor dem Verschmelzen:
+    // die Iteration ueber Hashes ist ungeordnet, ein Verschmelzen in
+    // Hash-Reihenfolge waere von Lauf zu Lauf verschieden - und damit die
+    // Ausgabe nicht reproduzierbar.
+    Cands.Sort(TComparer<TDupCandidate>.Construct(
+      function(const A, B: TDupCandidate): Integer
+      begin
+        Result := A.FirstLine - B.FirstLine;
+        if Result = 0 then Result := A.EndLine - B.EndLine;
+      end));
+
+    // Pass 3c: ueberlappende Fenster zu EINEM Befund verschmelzen.
+    //
+    // Bis hierher erzeugte ein duplizierter Block von K Zeilen genau
+    // K - MinBlk + 1 Befunde: das Fenster wandert Zeile fuer Zeile durch
+    // den Block, jede Position ist ein anderer Hash und meldet an ihrer
+    // eigenen Anfangszeile. Der alte Reported-Filter war nach FirstLine
+    // verschluesselt und konnte das nicht fangen - er verhinderte nur, dass
+    // zwei VERSCHIEDENE Hashes mit DERSELBEN Anfangszeile doppelt melden.
+    // Der Kopfkommentar behauptete trotzdem, Folge-Fenster wuerden
+    // unterdrueckt.
+    //
+    // Gemessen an Alcinoe/ALDatabaseBenchmark/Unit1.pas: 218 Befunde, davon
+    // 193 (89 %) blosse Fensterverschiebungen. Eine einzige Klassen-
+    // Deklaration trug 18 Hinweise uebereinander.
+    //
+    // Ein Duplikat ist EIN Befund ueber den GANZEN Block. Der Anker bleibt
+    // die erste Zeile, der Bereich waechst bis zum Ende des letzten
+    // ueberlappenden Fensters.
+    i := 0;
+    while i < Cands.Count do
+    begin
+      var AccFirst := Cands[i].FirstLine;
+      var AccEnd   := Cands[i].EndLine;
+      // Meldetext kommt vom ERSTEN Fenster des Blocks. Damit bleibt der
+      // SARIF-Fingerprint des ueberlebenden Befundes exakt der von vorher
+      // (er haengt an RuleID+Pfad+Zeile+Meldung) - bestehende Baselines
+      // sehen einen Wegfall, aber keinen geaenderten Befund.
+      var AccOccurs := Cands[i].Occurs;
+      var k := i + 1;
+      while (k < Cands.Count) and (Cands[k].FirstLine <= AccEnd) do
+      begin
+        if Cands[k].EndLine > AccEnd then AccEnd := Cands[k].EndLine;
+        Inc(k);
+      end;
+
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
       F.MethodName := '';
-      F.LineNumber := IntToStr(FirstLine);
+      F.LineNumber := IntToStr(AccFirst);
       // Ein Duplikat ist per Definition ein BLOCK - der Befund umfasst
-      // FirstLine..OrigEndLine, nicht nur die Anfangszeile. OrigEndLine
-      // wird oben ohnehin schon fuer die beiden Boilerplate-Gates
-      // gebraucht; hier wird sie nur nicht mehr weggeworfen.
-      //
-      // ACHTUNG: das bleibt EIN Fund. Der Bereich steuert nur, wieviele
-      // Zeilen der Editor markiert (Konzept_MehrzeiligeFundmarkierung).
-      F.EndLine    := OrigEndLine;
+      // AccFirst..AccEnd, nicht nur die Anfangszeile.
+      F.EndLine    := AccEnd;
       F.MissingVar := Format(
         'Code block (%d lines) appears %dx in file - consider extracting a method',
-        [MinBlk, Pair.Value.Count]);
+        [MinBlk, AccOccurs]);
       F.SetKind(fkDuplicateBlock);
       Results.Add(F);
+
+      i := k;
     end;
   finally
     Hashes.Free;     // doOwnsValues: gibt alle TList<Integer> mit frei
-    Reported.Free;
+    Cands.Free;
     ReleaseLines(Lines, Cached);
   end;
 end;

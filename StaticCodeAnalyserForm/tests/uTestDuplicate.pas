@@ -52,6 +52,10 @@ type
     [Test] procedure Block_Span_IsSourceBased_NotWindowSize;
     [Test] procedure Span_NotSet_MeansSingleLine;
     [Test] procedure Span_EndBeforeStart_ClampsToSingleLine;
+    // ---- Ueberlappende Fenster verschmelzen -------------------------------
+    [Test] procedure LongBlock_ReportedOnce_NotOncePerWindow;
+    [Test] procedure LongBlock_SpanCoversEntireBlock;
+    [Test] procedure TwoSeparateBlocks_StayTwoFindings;
   end;
 
 implementation
@@ -866,6 +870,130 @@ begin
     Assert.IsFalse(Fd.IsMultiLine);
     Assert.AreEqual<Integer>(1, Fd.SpanLineCount);
   finally Fd.Free; end;
+end;
+
+// ---- Ueberlappende Fenster verschmelzen ---------------------------------
+// Das Fenster wandert Zeile fuer Zeile durch den Block. Ein duplizierter
+// Block von K Zeilen erzeugte deshalb K - MinBlk + 1 Befunde, jeder an
+// seiner eigenen Anfangszeile - gemessen an
+// Alcinoe/ALDatabaseBenchmark/Unit1.pas: 218 Befunde, davon 193 blosse
+// Fensterverschiebungen; eine einzige Klassendeklaration trug 18 Hinweise.
+
+const
+  // 12 identische Anweisungen -> 5 ueberlappende Fenster bei MinBlk = 8.
+  SRC_LONG_DUP =
+    'unit t; implementation'#13#10+
+    'procedure TFoo.A; begin'#13#10+
+    '  A1 := 1;'#13#10+
+    '  A2 := 2;'#13#10+
+    '  A3 := 3;'#13#10+
+    '  A4 := 4;'#13#10+
+    '  A5 := 5;'#13#10+
+    '  A6 := 6;'#13#10+
+    '  A7 := 7;'#13#10+
+    '  A8 := 8;'#13#10+
+    '  A9 := 9;'#13#10+
+    '  A10 := 10;'#13#10+
+    '  A11 := 11;'#13#10+
+    '  A12 := 12;'#13#10+
+    'end;'#13#10+
+    'procedure TFoo.B; begin'#13#10+
+    '  A1 := 1;'#13#10+
+    '  A2 := 2;'#13#10+
+    '  A3 := 3;'#13#10+
+    '  A4 := 4;'#13#10+
+    '  A5 := 5;'#13#10+
+    '  A6 := 6;'#13#10+
+    '  A7 := 7;'#13#10+
+    '  A8 := 8;'#13#10+
+    '  A9 := 9;'#13#10+
+    '  A10 := 10;'#13#10+
+    '  A11 := 11;'#13#10+
+    '  A12 := 12;'#13#10+
+    'end;';
+
+procedure TTestDuplicateBlock.LongBlock_ReportedOnce_NotOncePerWindow;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC_LONG_DUP);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDuplicateBlock),
+      'Ein duplizierter Block ist EIN Befund - nicht einer je verschobenem ' +
+      'Fenster (hier waeren es sonst 5)');
+  finally F.Free; end;
+end;
+
+procedure TTestDuplicateBlock.LongBlock_SpanCoversEntireBlock;
+// Der verschmolzene Befund muss den GANZEN Block abdecken, nicht nur das
+// erste Fenster - sonst markiert der Editor 8 von 12 Zeilen und der Nutzer
+// haelt den Rest fuer unbeteiligt.
+var
+  F  : TObjectList<TLeakFinding>;
+  Fd : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC_LONG_DUP);
+  try
+    Fd := TFindingHelper.FirstOf(F, fkDuplicateBlock);
+    Assert.IsNotNull(Fd, 'Duplikat soll gemeldet werden');
+    Assert.AreEqual<Integer>(12, Fd.SpanLineCount,
+      Format('Bereich soll alle 12 Zeilen umfassen, umfasst aber %d ' +
+             '(nur das erste Fenster?)', [Fd.SpanLineCount]));
+  finally F.Free; end;
+end;
+
+procedure TTestDuplicateBlock.TwoSeparateBlocks_StayTwoFindings;
+// Gegenprobe zum Verschmelzen: zwei NICHT ueberlappende Duplikat-Bloecke
+// duerfen nicht zu einem zusammenfallen. Sonst waere die Zusammenfassung
+// keine Rauschunterdrueckung, sondern Informationsverlust.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.A; begin'#13#10+
+  '  A1 := 1;'#13#10+
+  '  A2 := 2;'#13#10+
+  '  A3 := 3;'#13#10+
+  '  A4 := 4;'#13#10+
+  '  A5 := 5;'#13#10+
+  '  A6 := 6;'#13#10+
+  '  A7 := 7;'#13#10+
+  '  A8 := 8;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.B; begin'#13#10+
+  '  A1 := 1;'#13#10+
+  '  A2 := 2;'#13#10+
+  '  A3 := 3;'#13#10+
+  '  A4 := 4;'#13#10+
+  '  A5 := 5;'#13#10+
+  '  A6 := 6;'#13#10+
+  '  A7 := 7;'#13#10+
+  '  A8 := 8;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.C; begin'#13#10+
+  '  Q1 := 91;'#13#10+
+  '  Q2 := 92;'#13#10+
+  '  Q3 := 93;'#13#10+
+  '  Q4 := 94;'#13#10+
+  '  Q5 := 95;'#13#10+
+  '  Q6 := 96;'#13#10+
+  '  Q7 := 97;'#13#10+
+  '  Q8 := 98;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.D; begin'#13#10+
+  '  Q1 := 91;'#13#10+
+  '  Q2 := 92;'#13#10+
+  '  Q3 := 93;'#13#10+
+  '  Q4 := 94;'#13#10+
+  '  Q5 := 95;'#13#10+
+  '  Q6 := 96;'#13#10+
+  '  Q7 := 97;'#13#10+
+  '  Q8 := 98;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkDuplicateBlock),
+      'Zwei getrennte Duplikat-Bloecke bleiben zwei Befunde');
+  finally F.Free; end;
 end;
 
 end.
