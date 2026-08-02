@@ -469,15 +469,23 @@ procedure DrawSpanCap(ACanvas: TCanvas; const ACodeRect: TRect;
 // letzten Zeile. Erwartet einen bereits gesetzten Brush (dieselbe Farbe
 // wie der Streifen).
 //
-// GEKLEMMT auf ACodeRect: bei sehr kleiner Schrift oder gestauchten Zeilen
-// kann die Zeilenhoehe unter SPAN_CAP_THICK_PX liegen. Ungeklemmt liefe
-// der Balken dann in die Nachbarzeile - und wuerde dort als deren
-// Markierung gelesen.
+// GEKLEMMT auf ACodeRect, senkrecht UND waagerecht.
+//
+// Senkrecht: bei sehr kleiner Schrift oder gestauchten Zeilen kann die
+// Zeilenhoehe unter SPAN_CAP_THICK_PX liegen. Ungeklemmt liefe der Balken
+// dann in die Nachbarzeile - und wuerde dort als deren Markierung gelesen.
+//
+// Waagerecht: die Kappe waechst von SR.Left nach rechts. Ist das
+// uebergebene Rechteck schmaler als SPAN_CAP_WIDTH_PX - im Gutter der
+// Normalfall, sobald jemand die Zeilennummern abschaltet - liefe sie
+// darueber hinaus. Ein Zeichenfehler in der IDE ist teurer als eine um
+// zwei Pixel gestutzte Kappe, also wird gestutzt.
 var
   SR : TRect;
 begin
   SR := ACodeRect;
   SR.Right := SR.Left + SPAN_CAP_WIDTH_PX;
+  if SR.Right > ACodeRect.Right then SR.Right := ACodeRect.Right;
   if AEdge = sceTop then
   begin
     SR.Bottom := SR.Top + SPAN_CAP_THICK_PX;
@@ -2035,6 +2043,7 @@ var
   Line : Integer;
   Mark : TFindingMark;
   GR   : TRect;
+  CapR : TRect;
 begin
   if BeforeEvent then Exit;
   if Stage <> pgsAnnotate then Exit;
@@ -2060,10 +2069,24 @@ begin
   // Querbalken oben bzw. unten - dieselbe Logik wie im Code-Bereich,
   // inklusive SpanEndsHere fuer Zeilen, auf denen ein fremder Bereich
   // endet.
+  //
+  // ABER NICHT DASSELBE RECHTECK: DrawSpanCap laesst die Kappe von .Left
+  // nach RECHTS wachsen. Im Code-Bereich stimmt das, weil der Streifen
+  // dort linksbuendig sitzt. Im Gutter sitzt er RECHTSbuendig - uebergaebe
+  // man GR (nur GUTTER_BAR_W breit), laege die Kappe im Gutter genau auf
+  // den zwei Pixeln, die FillRect gerade in derselben Farbe gefuellt hat,
+  // waere also unsichtbar, und ihr Rest liefe jenseits von Rect.Right aus
+  // der zugewiesenen Flaeche heraus. Deshalb ein eigenes Rechteck, das vom
+  // rechten Rand nach LINKS aufgezogen wird: die Kappe endet dann buendig
+  // am senkrechten Strich, statt in ihm zu verschwinden.
+  CapR := Rect;
+  CapR.Left := Rect.Right - SPAN_CAP_WIDTH_PX;
+  if CapR.Left < Rect.Left then CapR.Left := Rect.Left;
+
   if Mark.SpanRole = srFirst then
-    DrawSpanCap(Context.Canvas, GR, sceTop);
+    DrawSpanCap(Context.Canvas, CapR, sceTop);
   if (Mark.SpanRole = srLast) or Mark.SpanEndsHere then
-    DrawSpanCap(Context.Canvas, GR, sceBottom);
+    DrawSpanCap(Context.Canvas, CapR, sceBottom);
 end;
 procedure TFindingEditorEvents.PaintText(const Rect: TRect; const ColNum: SmallInt; const Text: string; const SyntaxCode: TOTASyntaxCode; const Hilight, BeforeEvent: Boolean; var AllowDefaultPainting: Boolean; const Context: INTACodeEditorPaintContext); begin end;
 
