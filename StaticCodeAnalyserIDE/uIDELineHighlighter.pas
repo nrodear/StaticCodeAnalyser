@@ -438,6 +438,10 @@ const
   // Querbalken auf der ersten und letzten Zeile. Fest in Pixeln, wie
   // STRIPE_WIDTH_PX - die Markierung soll bei jeder Schriftgroesse gleich
   // aussehen und nicht mit dem Text mitwachsen.
+  // Breite des senkrechten Strichs im Gutter. Schmaler als der Streifen im
+  // Code-Bereich: der Gutter ist eng, und die Klammer soll Zeilennummern
+  // und Haltepunkte nicht bedraengen.
+  GUTTER_BAR_W      = 2;
   SPAN_CAP_WIDTH_PX = 9;
   SPAN_CAP_THICK_PX = 2;
 
@@ -1954,6 +1958,7 @@ begin
   // Hinweis: AllowedEvents wird von der IDE pro Event-Dispatch (mehrfach
   // pro Sekunde) aufgerufen — KEIN Logging hier, sonst flutet die Datei.
   Result := [cevBeginEndPaintEvents, cevPaintLineEvents,
+             cevPaintGutterEvents,
              cevMouseEvents, cevWindowEvents];
 end;
 
@@ -1965,7 +1970,10 @@ end;
 
 function TFindingEditorEvents.AllowedGutterStages: TPaintGutterStages;
 begin
-  Result := [];
+  // pgsAnnotate ist die vom Editor dafuer vorgesehene Stufe - Lesezeichen,
+  // Haltepunkte, Zeilennummern und der Faltbereich haben ihre eigenen und
+  // bleiben unangetastet.
+  Result := [pgsAnnotate];
 end;
 
 function TFindingEditorEvents.UIOptions: TCodeEditorUIOptions;
@@ -2007,7 +2015,56 @@ begin
   ShowOverlayForLine(HitLine);
 end;
 procedure TFindingEditorEvents.EditorMouseUp(const Editor: TWinControl; Button: TMouseButton; Shift: TShiftState; X, Y: Integer); begin end;
-procedure TFindingEditorEvents.PaintGutter(const Rect: TRect; const Stage: TPaintGutterStage; const BeforeEvent: Boolean; var AllowDefaultPainting: Boolean; const Context: INTACodeEditorPaintContext); begin end;
+procedure TFindingEditorEvents.PaintGutter(const Rect: TRect;
+  const Stage: TPaintGutterStage; const BeforeEvent: Boolean;
+  var AllowDefaultPainting: Boolean;
+  const Context: INTACodeEditorPaintContext);
+// Bereichs-Klammer im Gutter: senkrechter Strich ueber alle Zeilen des
+// Blocks, Querbalken an der ersten und der letzten.
+//
+// WARUM ZUSAETZLICH ZUM STREIFEN IM CODE-BEREICH: der Streifen sitzt am
+// linken Rand des CODES und wandert beim horizontalen Scrollen mit. Der
+// Gutter steht fest - die Klammer bleibt also sichtbar, auch wenn der
+// Nutzer nach rechts gescrollt hat.
+//
+// DEFENSIV: der Gutter ist neue OTA-Flaeche fuer dieses Plugin. Jeder
+// Fehler hier landet im Zeichenpfad der IDE, deshalb frueh und oft raus,
+// und AllowDefaultPainting bleibt unberuehrt - wir malen NEBEN die
+// Standard-Anzeige, nie statt ihrer.
+var
+  Line : Integer;
+  Mark : TFindingMark;
+  GR   : TRect;
+begin
+  if BeforeEvent then Exit;
+  if Stage <> pgsAnnotate then Exit;
+  if not Assigned(GHighlighter) then Exit;
+  if not Assigned(Context) then Exit;
+
+  Line := Context.LogicalLineNum;
+  if not GHighlighter.TryGetMark(Context.FileName, Line, Mark) then Exit;
+  // Nur Bereichsfunde bekommen eine Klammer; einzeilige Funde haben im
+  // Gutter nichts verloren - dort ist der Streifen im Code eindeutig.
+  if Mark.SpanLast <= Mark.SpanFirst then Exit;
+  if Mark.Color = clNone then Exit;
+
+  Context.Canvas.Brush.Color := Mark.Color;
+  Context.Canvas.Brush.Style := bsSolid;
+
+  // Senkrechter Strich am RECHTEN Rand des Gutters, direkt neben dem Code.
+  GR := Rect;
+  GR.Left := GR.Right - GUTTER_BAR_W;
+  if GR.Left < Rect.Left then GR.Left := Rect.Left;
+  Context.Canvas.FillRect(GR);
+
+  // Querbalken oben bzw. unten - dieselbe Logik wie im Code-Bereich,
+  // inklusive SpanEndsHere fuer Zeilen, auf denen ein fremder Bereich
+  // endet.
+  if Mark.SpanRole = srFirst then
+    DrawSpanCap(Context.Canvas, GR, sceTop);
+  if (Mark.SpanRole = srLast) or Mark.SpanEndsHere then
+    DrawSpanCap(Context.Canvas, GR, sceBottom);
+end;
 procedure TFindingEditorEvents.PaintText(const Rect: TRect; const ColNum: SmallInt; const Text: string; const SyntaxCode: TOTASyntaxCode; const Hilight, BeforeEvent: Boolean; var AllowDefaultPainting: Boolean; const Context: INTACodeEditorPaintContext); begin end;
 
 procedure TFindingEditorEvents.EditorScrolled(const Editor: TWinControl;
