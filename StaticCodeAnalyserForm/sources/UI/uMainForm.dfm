@@ -69,21 +69,21 @@ object Form2: TForm2
         Caption = 'Severity:'
       end
       object LblType: TLabel
-        Left = 184
+        Left = 274
         Top = 10
         Width = 28
         Height = 20
         Caption = 'Type:'
       end
       object LblMinSev: TLabel
-        Left = 366
+        Left = 456
         Top = 9
         Width = 24
         Height = 17
         Caption = 'Min:'
       end
       object LblSearch: TLabel
-        Left = 490
+        Left = 580
         Top = 10
         Width = 38
         Height = 15
@@ -92,7 +92,7 @@ object Form2: TForm2
       object SeverityFilterCombo: TComboBox
         Left = 66
         Top = 7
-        Width = 110
+        Width = 200
         Height = 23
         Style = csDropDownList
         DropDownCount = 16
@@ -100,7 +100,7 @@ object Form2: TForm2
         OnChange = SeverityFilterComboChange
       end
       object TypeFilterCombo: TComboBox
-        Left = 218
+        Left = 308
         Top = 6
         Width = 105
         Height = 23
@@ -109,7 +109,7 @@ object Form2: TForm2
         OnChange = TypeFilterComboChange
       end
       object MinSevCombo: TComboBox
-        Left = 396
+        Left = 486
         Top = 6
         Width = 85
         Height = 23
@@ -118,7 +118,7 @@ object Form2: TForm2
         OnChange = MinSevComboChange
       end
       object SearchEdit: TEdit
-        Left = 534
+        Left = 624
         Top = 6
         Width = 169
         Height = 23
