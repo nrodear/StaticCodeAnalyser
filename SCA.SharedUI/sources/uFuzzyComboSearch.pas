@@ -57,7 +57,8 @@ type
     FPending    : string;    // zuletzt getippte, noch nicht angewandte Eingabe
     FTimer      : TTimer;    // Entprellung - siehe TimerTick
     procedure TimerTick(Sender: TObject);
-    procedure ShowListOnce;
+    function  IsListDropped: Boolean;
+    procedure SetListDropped(AOpen: Boolean);
     procedure ComboChange(Sender: TObject);
     procedure ComboSelect(Sender: TObject);
     procedure ComboCloseUp(Sender: TObject);
@@ -107,17 +108,22 @@ const
   // Ohne das wurde bei JEDEM Tastendruck die komplette Liste (rund 200
   // Eintraege = 200 Fenster-Nachrichten) neu aufgebaut - spuerbar traege.
   //
-  // KORREKTUR 2026-08-02: hier stand, das staendige Auf-/Zuklappen setze
-  // und loese die Maus-Capture und LASSE DEN CURSOR VERSCHWINDEN. Das war
-  // FALSCH und ist widerlegt - ein Build mit Entprellung zeigte dasselbe
-  // Verhalten. Der Cursor verschwindet, weil Windows' Funktion "Zeiger
-  // beim Schreiben ausblenden" (SPI_SETMOUSEVANISH, per Default an) im
-  // USER32-EDIT-Control sitzt: csDropDownList hat gar kein Edit-Kind,
-  // csDropDown erzeugt eines. Das ist Standardverhalten jedes
-  // Windows-Textfelds und keine Fehlfunktion; Windows zeigt den Zeiger
-  // bei der naechsten MAUSBEWEGUNG wieder. Es gibt keinen sauberen
-  // Per-Control-Opt-out - ShowCursor(TRUE) im Key-Handler wuerde den
-  // thread-weiten Show-Count lecken. Nicht "reparieren".
+  // ZUR CURSOR-FRAGE, in zwei Stufen geklaert:
+  //
+  // (1) Dass der Zeiger beim Tippen VERSCHWINDET, ist kein Fehler: das
+  //     ist Windows' "Zeiger beim Schreiben ausblenden"
+  //     (SPI_SETMOUSEVANISH, per Default an). Die Funktion sitzt IM
+  //     USER32-EDIT-Control - csDropDownList hat gar kein Edit-Kind,
+  //     csDropDown erzeugt eines. Jedes Windows-Textfeld verhaelt sich
+  //     so, auch die Pfad-Combo und das Such-Feld daneben. Nicht
+  //     wegprogrammieren: ShowCursor(TRUE) im Key-Handler wuerde den
+  //     thread-weiten Show-Count lecken.
+  //
+  // (2) Dass er bei MAUSBEWEGUNG nicht zurueckkam, war sehr wohl unsere
+  //     Schuld - siehe die Begruendung in TimerTick. Windows stellt den
+  //     Zeiger bei der naechsten Bewegung wieder her; ein offenes
+  //     Dropdown, dem man die Eintraege darunter wegbaut, verschluckt
+  //     genau das.
   DEBOUNCE_MS       = 160;
   // Mehr Treffer als das liest ohnehin niemand ab, und jeder weitere
   // kostet eine Fenster-Nachricht beim Aufbau. Wird gedeckelt, sagt die
@@ -413,9 +419,20 @@ end;
 
 procedure TFuzzyComboSearch.FillFromSnapshot;
 // Volle Liste aus dem Schnappschuss zuruecklegen.
+//
+// Wie ApplyQuery: NIE bei offener Liste umbauen (Begruendung in
+// TimerTick). Hier faellt das kaum auf, weil der haeufigste Aufrufer der
+// Commit beim ZUKLAPPEN ist - aber Escape und Fokusverlust koennen die
+// Liste offen antreffen.
 var
-  i : Integer;
+  i          : Integer;
+  WasDropped : Boolean;
 begin
+  WasDropped := IsListDropped;
+  if WasDropped then
+  begin
+    SetListDropped(False);
+  end;
   FCombo.Items.BeginUpdate;
   FCombo.Items.Clear;
   for i := 0 to FAll.Count - 1 do
@@ -423,6 +440,10 @@ begin
     FCombo.Items.AddObject(FAll[i].Display, TObject(FAll[i].Tag));
   end;
   FCombo.Items.EndUpdate;
+  if WasDropped then
+  begin
+    SetListDropped(True);
+  end;
 end;
 
 procedure TFuzzyComboSearch.RestoreAll;
@@ -468,23 +489,17 @@ begin
   FLastQuery := '';
 end;
 
-procedure TFuzzyComboSearch.ShowListOnce;
-// Dropdown NUR aufklappen wenn sie gerade zu ist.
-//
-// Vorher ging bei jedem Tastendruck ein CB_SHOWDROPDOWN raus; das
-// Neuzeichnen der offenen Liste machte die Eingabe traege.
-// CB_GETDROPPEDSTATE fragt den Zustand ab, statt ihn zu erzwingen.
-//
-// NICHT der Grund fuer den verschwindenden Cursor - siehe die Korrektur
-// bei DEBOUNCE_MS. Capture-Wechsel aendern weder Cursorbild noch
-// ShowCursor-Zaehler.
+function TFuzzyComboSearch.IsListDropped: Boolean;
+begin
+  Result := Assigned(FCombo) and FCombo.HandleAllocated
+        and (SendMessage(FCombo.Handle, CB_GETDROPPEDSTATE, 0, 0) <> 0);
+end;
+
+procedure TFuzzyComboSearch.SetListDropped(AOpen: Boolean);
 begin
   if not Assigned(FCombo) then Exit;
   if not FCombo.HandleAllocated then Exit;
-  if SendMessage(FCombo.Handle, CB_GETDROPPEDSTATE, 0, 0) = 0 then
-  begin
-    SendMessage(FCombo.Handle, CB_SHOWDROPDOWN, 1, 0);
-  end;
+  SendMessage(FCombo.Handle, CB_SHOWDROPDOWN, WPARAM(Ord(AOpen)), 0);
 end;
 
 procedure TFuzzyComboSearch.TimerTick(Sender: TObject);
@@ -511,8 +526,31 @@ begin
     Exit;
   end;
 
+  // DIE LISTE WIRD NIE UMGEBAUT, WAEHREND SIE OFFEN IST.
+  //
+  // Ein offenes Combo-Dropdown haelt die Maus-Capture und verarbeitet
+  // Mausbewegungen in einer eigenen Tracking-Schleife. Baut man ihm die
+  // Eintraege darunter weg, bleibt dieser Zustand zurueck - und die
+  // Wiederanzeige des Zeigers, die Windows normalerweise bei der naechsten
+  // MAUSBEWEGUNG macht, kommt nicht mehr an. Genau das war der Unterschied
+  // zur Pfad-Combo: die fasst ihre Items nie an und klappt nie von selbst
+  // auf, dort taucht der Zeiger beim Bewegen wieder auf.
+  //
+  // Also: war die Liste offen, wird sie zugeklappt, neu befuellt und
+  // wieder aufgeklappt. War sie zu, bleibt sie zu - von selbst
+  // aufzuklappen ist nichts, was eine gewoehnliche Combo tut.
+  var WasDropped : Boolean := IsListDropped;
+  if WasDropped then
+  begin
+    SetListDropped(False);
+  end;
+
   ApplyQuery(Q);
-  ShowListOnce;
+
+  if WasDropped then
+  begin
+    SetListDropped(True);
+  end;
 
   // Der Neuaufbau der Liste setzt den Cursor an den Anfang - zuruecksetzen,
   // sonst tippt man rueckwaerts.
