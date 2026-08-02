@@ -1,4 +1,38 @@
-# Release 0.9.9 — Weniger Falschmeldungen, zwei Projekt-Regeln
+# Release 0.9.10 — Ein Befund je Block, ein leiserer Default
+
+🇬🇧 [English version](RELEASE_NOTES.md)
+
+Vollstaendige Release-Notes: [docs/releases/v0.9.10_de.md](docs/releases/v0.9.10_de.md)
+([english](docs/releases/v0.9.10.md)).
+
+Ein kleines Release, am selben Tag wie 0.9.9 getaggt. **Keine Regel hat
+einen Fund gewonnen oder verloren** — der Referenzkorpus steht unveraendert
+bei exakt **560.964** ueber alle **141** anschlagenden Regeln, Regel fuer
+Regel geprueft statt ueber die Summe. Geaendert hat sich, *wie* Befunde
+gemeldet werden.
+
+- **`SCA021` nennt den echten Zeilenbereich** (`lines 513-533, 8 matched
+  lines`). Der Meldetext gehoert zum SARIF-Fingerprint, jeder
+  `SCA021`-Fund sieht gegen eine bestehende Baseline also neu aus —
+  **Baseline neu schreiben**. Genau deshalb ist das eine neue Version und
+  kein erneutes Bespielen von 0.9.9.
+- **Das `default`-Profil ist leiser.** Sechs reine Konventions-Regeln —
+  45,4 % aller Funde des Korpus, alle korrekt — sind in ein neues
+  `style`-Profil gewandert. `strict` bedeutet weiterhin alles.
+- **Die IDE zeichnet die Bereichs-Klammer im Gutter**, und man sieht sie
+  jetzt: die Kappe wuchs von einem rechtsbuendigen Zwei-Pixel-Balken nach
+  rechts, lag damit auf sich selbst und sieben Pixel ausserhalb.
+- **Ein Marker im Bereich eines Fundes zaehlt**, als Treffer und als
+  benutzt — der Migrationsschritt aus 0.9.9 entfaellt.
+- **`--parallel` sagt, wenn es abgelehnt hat**, statt still seriell zu
+  laufen.
+- **Zwei veroeffentlichte Zahlen der 0.9.9-Notes waren falsch** und sind
+  korrigiert: das Error-Tier ist **2.134**, nicht 2.172, und der
+  Regelbestand wuchs **166 → 195**, nicht 183 → 195.
+
+---
+
+# Vorher — Release 0.9.9 — Weniger Falschmeldungen, zwei Projekt-Regeln
 
 🇬🇧 [English version](RELEASE_NOTES.md)
 
@@ -8,7 +42,7 @@ Vollstaendige Release-Notes: [docs/releases/v0.9.9_de.md](docs/releases/v0.9.9_d
 In diesem Zyklus hat das Werkzeug gelernt, **weniger** zu melden. Auf dem
 Referenz-Korpus aus 12.800 Dateien fiel die Fundzahl von **645.622 auf
 560.964 — 84.658 weniger (−13,1 %)**, ohne wissentlich einen echten Fund zu
-verlieren. Der Regelbestand wuchs von 183 auf **195 Regeln**.
+verlieren. Der Regelbestand wuchs von 166 auf **195 Regeln**.
 
 - **−84.658 Funde**, in sieben einzeln gemessenen und abgesicherten
   Inkrementen.

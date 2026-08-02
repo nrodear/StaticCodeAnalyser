@@ -1,4 +1,36 @@
-# Release 0.9.9 — Fewer false positives, two project-scope rules
+# Release 0.9.10 — One finding per block, a quieter default
+
+🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md)
+
+Full release notes: [docs/releases/v0.9.10.md](docs/releases/v0.9.10.md)
+([deutsch](docs/releases/v0.9.10_de.md)).
+
+A small release, tagged the same day as 0.9.9. **No rule gained or lost a
+finding** — the reference corpus stays at exactly **560,964** across all
+**141** rules that fire, checked rule by rule rather than on the total. What
+changed is *how* findings are reported.
+
+- **`SCA021` names the real line range** (`lines 513-533, 8 matched
+  lines`). The message is part of the SARIF fingerprint, so every `SCA021`
+  finding looks new against an existing baseline — **re-write your
+  baseline**. That is also why this is a new version and not a re-publish
+  of 0.9.9.
+- **The `default` profile is quieter.** Six pure-convention rules — 45.4 %
+  of all findings on the corpus, all of them correct — moved to a new
+  `style` profile. `strict` still means everything.
+- **The IDE draws the range bracket in the gutter**, and it is visible now:
+  the cap grew rightwards from a right-aligned two-pixel bar, so it landed
+  on top of itself and seven pixels outside the gutter.
+- **A suppression marker inside a finding's range counts**, both as a match
+  and as consumed — the migration step 0.9.9 asked for is gone.
+- **`--parallel` says when it declined** instead of quietly going serial.
+- **Two published numbers in the 0.9.9 notes were wrong** and are corrected:
+  the error tier is **2,134**, not 2,172, and the rule roster grew **166 →
+  195**, not 183 → 195.
+
+---
+
+# Previously — Release 0.9.9 — Fewer false positives, two project-scope rules
 
 🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md)
 
@@ -8,7 +40,7 @@ Full release notes: [docs/releases/v0.9.9.md](docs/releases/v0.9.9.md)
 This cycle the tool learned to report **less**. On the 12,800-file
 reference corpus the finding count fell from **645,622 to 560,964 —
 84,658 fewer (−13.1 %)**, with no true positive knowingly lost. The rule
-roster grew from 183 to **195 rules**.
+roster grew from 166 to **195 rules**.
 
 - **−84,658 findings**, in seven separately measured and gated increments.
 - **`SCA194` / `SCA195`** — files that are not part of the project, and

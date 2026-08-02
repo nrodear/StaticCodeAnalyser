@@ -6,34 +6,35 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [v0.9.9] - 2026-08-02 - Fewer false positives, two project-scope rules
+## [v0.9.10] - 2026-08-02 - One finding per block, a quieter default
 
-Changes since **v0.9.8**. Rule roster grows from 166 to **195 rules**
-(`SCA001`–`SCA195`), +29; DFM rules 22 → **23**. Beyond the new detectors, this
-cycle was dominated by a measured false-positive campaign: on the
-12.8k-file reference corpus the finding count dropped **645,622 → 560,964
-(−84,658, −13.1 %)**. The error tier now stands at **2,134** findings plus
-one unreadable file.
+Changes since **v0.9.9**, tagged the same day. No rule gained or lost a
+finding: the reference corpus stays at **560,964** across all **141** rules,
+verified rule by rule rather than on the total — a swap between two rules
+would leave the sum untouched. Exactly one message shape changed, the
+`SCA021` text below.
 
-> An earlier draft of this entry put the error tier at 2,172 and compared it
-> against 2,255 for v0.9.8. Both figures were counted by matching `"level"`
-> across the whole SARIF — but the `tool.driver.rules` block carries one
-> `level` per *rule definition*, and the catalogue holds exactly 37 rules
-> whose default severity is Error. 2,135 results + 37 definitions = 2,172.
-> The v0.9.8 figure was measured the same inflated way; its corpus baseline
-> is no longer on disk, so it cannot be restated on the correct basis and is
-> dropped here rather than silently re-anchored. The total finding counts
-> were never affected — those were counted per result, not per level.
+What moves is *how* findings are reported, not which ones. That is also why
+this is a new version rather than a re-publish of v0.9.9: the `SCA021`
+message is part of the SARIF fingerprint, so the same version number would
+have meant two tools that hash differently.
+
+### Breaking for baselines
+
+- **`SCA021` message now names the real line range** (`Code block (lines
+  513-533, 8 matched lines) appears 2x in file`). The old text counted
+  normalised lines while the marked region counts source lines, so the two
+  could never agree. The SARIF fingerprint hashes the message, so every
+  `SCA021` finding gets a new fingerprint and shows up once as *new* in
+  existing baselines — re-write the baseline after updating. No other rule
+  affected, finding count unchanged.
+- **`default` profile no longer includes six pure-convention rules**
+  (`PublicMemberWithoutDoc`, `NilComparison`, `BeginEndRequired`,
+  `WithStatement`, `ClassPerFile`, `DfmHardcodedCaption`) — together 45.4 %
+  of all findings on the reference corpus. They moved to the new `style`
+  profile; `strict` still means everything.
 
 ### Performance
-
-- **`SCA166 UninitVar` was quadratic in file size.** It ran a full-file
-  scan per candidate variable; the comment at the call site claimed it ran
-  only for emit candidates, which was not true — the deciding branches sit
-  below it. Moved into the two emit branches. Share of detector CPU
-  **36.9 % → 7.9 %**, 8.43 → 0.73 ms per file, rank 1 → 3; **−86 %**
-  attributable to the fix after factoring out machine variance against
-  unchanged detectors. Findings byte-identical, all 141 rules unchanged.
 
 - **Suppression skips files without a single marker.** Building the
   suppression map ran the comment state machine over every line of every
@@ -69,20 +70,86 @@ one unreadable file.
   reference corpus, because the expensive phase (parse + index build) is
   serial and runs *before* the parallel main loop.
 
-### Breaking for baselines
+### Editor
 
-- **`SCA021` message now names the real line range** (`Code block (lines
-  513-533, 8 matched lines) appears 2x in file`). The old text counted
-  normalised lines while the marked region counts source lines, so the two
-  could never agree. The SARIF fingerprint hashes the message, so every
-  `SCA021` finding gets a new fingerprint and shows up once as *new* in
-  existing baselines — re-write the baseline after updating. No other rule
-  affected, finding count unchanged.
-- **`default` profile no longer includes six pure-convention rules**
-  (`PublicMemberWithoutDoc`, `NilComparison`, `BeginEndRequired`,
-  `WithStatement`, `ClassPerFile`, `DfmHardcodedCaption`) — together 45.4 %
-  of all findings on the reference corpus. They moved to the new `style`
-  profile; `strict` still means everything.
+- **The bracket is drawn in the gutter too**, not only in the code area, so
+  a finding's extent stays visible when the marked lines scroll behind
+  other decorations. This is the one part of the feature that touches new
+  IDE surface: the plugin previously registered no gutter painting at all.
+
+### Fixed
+
+- **A suppression marker inside a finding's range now counts.** A finding
+  anchored at line *L* only ever matched markers registered for exactly
+  *L*. Once `DuplicateBlock` began covering a line *range*, that was too
+  narrow in both directions: a marker the user had placed in the middle of
+  the block no longer silenced the finding, and `SCA165 UnusedSuppression`
+  then reported that very marker as pointless. Both the match and the
+  consumed-check now span the finding's range. Single-line findings run the
+  loop exactly once, so the ordinary case stays a single dictionary lookup.
+
+- **The standalone app's search box filtered on every keystroke.** Each
+  character triggered a full pass over all findings — the same defect the
+  rule-filter combo had, only older and never noticed because it predates
+  the large corpora. Now debounced, like the plugin.
+
+- **An empty result could look like a clean scan.** Files matching a test
+  fixture pattern (`*Demo.pas`, `*Test*.pas`, …) are filtered out by
+  default, so a first-time user analysing a file that happens to be named
+  `Demo.pas` got “0 findings” and no hint why. The filter now names the
+  files it dropped and says how to keep them
+  (`--show-test-fixtures`). Found by walking the download-to-first-scan
+  path as a new user, which had never actually been done.
+
+- **The bracket in the gutter grew in the wrong direction.** The cap is
+  drawn from its rectangle's left edge rightwards — correct in the code
+  area, where the stripe is left-aligned, but the gutter bar is
+  right-aligned and two pixels wide. The cap therefore covered exactly the
+  two pixels already filled in the same colour and put its remaining seven
+  outside the assigned rectangle, so the gutter showed a bare bar and never
+  a bracket. The cap now gets its own rectangle drawn leftwards from the
+  right edge, and `DrawSpanCap` clamps horizontally as well as vertically —
+  the gutter is narrower than the cap as soon as line numbers are turned
+  off.
+
+- **The `default` profile was complete again in the fallback path.** When
+  `rules/sca-rules.json` cannot be read, the catalogue falls back to a
+  second, code-level profile list. That list still granted `default` every
+  rule, so a user without the rules file would have silently got the old,
+  noisier default — the exact thing the profile change set out to prevent.
+  `default` is now built there as *all kinds minus `style`*, so a newly
+  added rule cannot fall through.
+
+---
+
+## [v0.9.9] - 2026-08-02 - Fewer false positives, two project-scope rules
+
+Changes since **v0.9.8**. Rule roster grows from 166 to **195 rules**
+(`SCA001`–`SCA195`), +29; DFM rules 22 → **23**. Beyond the new detectors, this
+cycle was dominated by a measured false-positive campaign: on the
+12.8k-file reference corpus the finding count dropped **645,622 → 560,964
+(−84,658, −13.1 %)**. The error tier now stands at **2,134** findings plus
+one unreadable file.
+
+> An earlier draft of this entry put the error tier at 2,172 and compared it
+> against 2,255 for v0.9.8. Both figures were counted by matching `"level"`
+> across the whole SARIF — but the `tool.driver.rules` block carries one
+> `level` per *rule definition*, and the catalogue holds exactly 37 rules
+> whose default severity is Error. 2,135 results + 37 definitions = 2,172.
+> The v0.9.8 figure was measured the same inflated way; its corpus baseline
+> is no longer on disk, so it cannot be restated on the correct basis and is
+> dropped here rather than silently re-anchored. The total finding counts
+> were never affected — those were counted per result, not per level.
+
+### Performance
+
+- **`SCA166 UninitVar` was quadratic in file size.** It ran a full-file
+  scan per candidate variable; the comment at the call site claimed it ran
+  only for emit candidates, which was not true — the deciding branches sit
+  below it. Moved into the two emit branches. Share of detector CPU
+  **36.9 % → 7.9 %**, 8.43 → 0.73 ms per file, rank 1 → 3; **−86 %**
+  attributable to the fix after factoring out machine variance against
+  unchanged detectors. Findings byte-identical, all 141 rules unchanged.
 
 ### Searchable rule filter
 
@@ -131,22 +198,18 @@ range, and the IDE editor marks every line of it.
   the stripes stack into a column from which no line can be attributed to
   a finding. The suppressed ones keep their anchor and info bar — nothing
   disappears from the report.
-- **The bracket is drawn in the gutter too**, not only in the code area, so
-  a finding's extent stays visible when the marked lines scroll behind
-  other decorations. This is the one part of the feature that touches new
-  IDE surface: the plugin previously registered no gutter painting at all.
 
-#### No migration needed
+#### Migration note
 
-Earlier drafts of this release warned that if you had silenced one of these
-cascades with **line-bound** `// noinspection DuplicateBlock` comments, the
-markers on the swallowed lines would resurface as `SCA165 UnusedSuppression`
-— eighteen markers replaced by one finding meant seventeen new complaints
-about work you had already done. That warning no longer applies: a marker
-anywhere **inside** a finding's line range now both silences the finding and
-counts as consumed. Your existing markers keep working wherever you put
-them, and a single marker on the block's first line is enough for new ones.
-File-wide `// noinspection-file` markers were never affected.
+If you silenced one of these cascades with **line-bound**
+`// noinspection DuplicateBlock` comments, the markers on the swallowed
+lines are no longer consumed and will be reported as
+`SCA165 UnusedSuppression`. One marker on the block's first line replaces
+them. File-wide `// noinspection-file` markers are unaffected.
+
+> **Fixed in v0.9.10** — a marker anywhere inside a finding's range now
+> both silences it and counts as consumed, so this migration step is no
+> longer needed. It is left standing here because it is what v0.9.9 does.
 
 ### Added
 
@@ -299,28 +362,6 @@ File-wide `// noinspection-file` markers were never affected.
   so a genuine "method on an uninitialised class instance" bug still flags.
 
 ### Fixed
-
-- **A suppression marker inside a finding's range now counts.** A finding
-  anchored at line *L* only ever matched markers registered for exactly
-  *L*. Once `DuplicateBlock` began covering a line *range*, that was too
-  narrow in both directions: a marker the user had placed in the middle of
-  the block no longer silenced the finding, and `SCA165 UnusedSuppression`
-  then reported that very marker as pointless. Both the match and the
-  consumed-check now span the finding's range. Single-line findings run the
-  loop exactly once, so the ordinary case stays a single dictionary lookup.
-
-- **The standalone app's search box filtered on every keystroke.** Each
-  character triggered a full pass over all findings — the same defect the
-  rule-filter combo had, only older and never noticed because it predates
-  the large corpora. Now debounced, like the plugin.
-
-- **An empty result could look like a clean scan.** Files matching a test
-  fixture pattern (`*Demo.pas`, `*Test*.pas`, …) are filtered out by
-  default, so a first-time user analysing a file that happens to be named
-  `Demo.pas` got “0 findings” and no hint why. The filter now names the
-  files it dropped and says how to keep them
-  (`--show-test-fixtures`). Found by walking the download-to-first-scan
-  path as a new user, which had never actually been done.
 
 - **Regex cache grew without bound in the IDE plugin.** The per-thread
   cache key assumed pool threads are reused — true for the CLI, but the
