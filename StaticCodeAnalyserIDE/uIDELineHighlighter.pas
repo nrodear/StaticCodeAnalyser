@@ -80,6 +80,11 @@ type
   // an der Fundzahl aendert sie nichts.
   TSpanRole = (srSingle, srFirst, srMiddle, srLast);
 
+  // Welche Kante der Bereichs-Klammer gezeichnet wird. Bewusst ein Enum
+  // statt eines Boolean-Parameters: 'DrawSpanCap(..., True)' zwingt am
+  // Aufrufort zum Nachschlagen, 'sceTop' nicht.
+  TSpanCapEdge = (sceTop, sceBottom);
+
   TFindingMark = record
     Title    : string;
     Desc     : string;
@@ -100,6 +105,16 @@ type
     // bleibt ein zerfledderter Rest stehen.
     SpanFirst: Integer;
     SpanLast : Integer;
+    // True, wenn auf DIESER Zeile ein Bereich ENDET, die Zeile aber einen
+    // EIGENEN Befund traegt und deshalb keine Fortsetzungsmarke bekommen
+    // hat. Traegt allein die schliessende Klammer-Kappe.
+    //
+    // Warum ein eigenes Feld und nicht einfach SpanRole := srLast: srLast
+    // schaltet die Zeile auf "Fortsetzung" - keine Infobar (PaintLine) und
+    // kein Hover-Treffer (HitTestLine liefert -1). Ein echter Befund wuerde
+    // damit unsichtbar. Die Rolle gehoert dem eigenen Befund, die Kappe dem
+    // fremden Bereich; das sind zwei Aussagen und brauchen zwei Felder.
+    SpanEndsHere : Boolean;
   end;
   // Eintrag fuer SetAllFindings — die FileName-Property machte den
   // vorher impliziten "alle Eintraege gehoeren zur gleichen Datei"-
@@ -419,6 +434,12 @@ const
   // hebt nichts mehr hervor. Greift die Grenze, ist das ein Datenfehler
   // und keine Darstellungsfrage.
   MAX_SPAN_LINES   = 500;
+  // Klammer-Enden eines Mehrzeilen-Befundes: Laenge und Dicke der
+  // Querbalken auf der ersten und letzten Zeile. Fest in Pixeln, wie
+  // STRIPE_WIDTH_PX - die Markierung soll bei jeder Schriftgroesse gleich
+  // aussehen und nicht mit dem Text mitwachsen.
+  SPAN_CAP_WIDTH_PX = 9;
+  SPAN_CAP_THICK_PX = 2;
 
 function IsLightColor(AColor: TColor): Boolean;
 // ITU-R BT.601 Luminanz - bei > 127 ist die Farbe "hell" und Schwarz
@@ -436,6 +457,35 @@ begin
   B := GetBValue(RGB);
   Lum := (R * 299 + G * 587 + B * 114) div 1000;
   Result := Lum > 127;
+end;
+
+procedure DrawSpanCap(ACanvas: TCanvas; const ACodeRect: TRect;
+  AEdge: TSpanCapEdge);
+// Querbalken der Bereichs-Klammer: oben auf der ersten, unten auf der
+// letzten Zeile. Erwartet einen bereits gesetzten Brush (dieselbe Farbe
+// wie der Streifen).
+//
+// GEKLEMMT auf ACodeRect: bei sehr kleiner Schrift oder gestauchten Zeilen
+// kann die Zeilenhoehe unter SPAN_CAP_THICK_PX liegen. Ungeklemmt liefe
+// der Balken dann in die Nachbarzeile - und wuerde dort als deren
+// Markierung gelesen.
+var
+  SR : TRect;
+begin
+  SR := ACodeRect;
+  SR.Right := SR.Left + SPAN_CAP_WIDTH_PX;
+  if AEdge = sceTop then
+  begin
+    SR.Bottom := SR.Top + SPAN_CAP_THICK_PX;
+    if SR.Bottom > ACodeRect.Bottom then SR.Bottom := ACodeRect.Bottom;
+  end
+  else
+  begin
+    SR.Top := SR.Bottom - SPAN_CAP_THICK_PX;
+    if SR.Top < ACodeRect.Top then SR.Top := ACodeRect.Top;
+  end;
+  if (SR.Bottom > SR.Top) and (SR.Right > SR.Left) then
+    ACanvas.FillRect(SR);
 end;
 
 procedure DrawMiniInfoBar(ACanvas: TCanvas; const AMark: TFindingMark;
@@ -1125,8 +1175,9 @@ begin
 
   // Span-Felder gelten fuer BEIDE Zweige (Single wie Multi) und werden
   // unten nicht mehr angefasst.
-  Result.SpanFirst := AnchorLine;
-  Result.SpanLast  := WidestEnd;
+  Result.SpanFirst    := AnchorLine;
+  Result.SpanLast     := WidestEnd;
+  Result.SpanEndsHere := False;   // setzt ggf. ApplySpanCoverage nachtraeglich
   if WidestEnd > AnchorLine then
     Result.SpanRole := srFirst
   else
@@ -1206,10 +1257,52 @@ begin
   Result.Badge   := '';
   Result.Fix     := '';
   Result.IsMulti := False;
+  // NICHT vom Anker erben: der koennte selbst das Ende eines FREMDEN
+  // Bereichs sein. Sonst traegt jede Fortsetzungszeile eine Schluss-Kappe.
+  Result.SpanEndsHere := False;
   if ALine = AAnchor.SpanLast then
     Result.SpanRole := srLast
   else
     Result.SpanRole := srMiddle;
+end;
+
+procedure FlagSpanEnd(Bucket: TFileMarks; ALine: Integer);
+// Vermerkt auf einer FREMDEN Marke, dass hier ein Bereich endet - sie
+// bekommt dadurch die schliessende Klammer-Kappe, behaelt aber ihre eigene
+// Rolle, Infobar und Anklickbarkeit.
+//
+// Ohne diesen Vermerk haengt die Kappe von der Reihenfolge ab, in der die
+// Anker aus dem Dictionary kommen: bei zwei ueberlappenden Bereichen
+// bekaeme mal der eine, mal der andere seine Schlusszeile - die
+// Darstellung waere nicht reproduzierbar.
+var
+  Owner : TFindingMark;
+begin
+  if not Bucket.TryGetValue(ALine, Owner) then Exit;
+  if Owner.SpanEndsHere then Exit;
+  Owner.SpanEndsHere := True;
+  Bucket.AddOrSetValue(ALine, Owner);   // Record = Wertkopie, zurueckschreiben
+end;
+
+procedure CoverOneSpan(Bucket: TFileMarks; const AAnchor: TFindingMark);
+// Legt die Fortsetzungsmarken EINES Bereichs an.
+//
+// Zeilen, die bereits einen eigenen Befund tragen, bleiben unangetastet -
+// der gewinnt samt Rolle, Farbe, Infobar und Anklickbarkeit. Faellt das
+// Bereichs-ENDE auf so eine Zeile, bekommt sie nur den Vermerk fuer die
+// schliessende Klammer-Kappe.
+var
+  L : Integer;
+begin
+  for L := AAnchor.SpanFirst + 1 to AAnchor.SpanLast do
+    if Bucket.ContainsKey(L) then
+    begin
+      if L = AAnchor.SpanLast then FlagSpanEnd(Bucket, L);
+    end
+    else
+    begin
+      Bucket.Add(L, MakeContinuationMark(AAnchor, L));
+    end;
 end;
 
 procedure TFindingHighlighter.ApplySpanCoverage(Bucket: TFileMarks);
@@ -1229,7 +1322,6 @@ var
   Anchors : TArray<Integer>;
   Line    : Integer;
   Anchor  : TFindingMark;
-  L       : Integer;
 begin
   if not Assigned(Bucket) or (Bucket.Count = 0) then Exit;
 
@@ -1246,12 +1338,7 @@ begin
     // SpanLast ist bereits in BuildMarkForLineGroup auf MAX_SPAN_LINES
     // gekappt - hier wird bewusst NICHT ein zweites Mal geklemmt, damit es
     // genau eine Stelle gibt, an der die Schranke gilt.
-    for L := Anchor.SpanFirst + 1 to Anchor.SpanLast do
-    begin
-      if Bucket.ContainsKey(L) then Continue;     // eigener Befund gewinnt
-
-      Bucket.Add(L, MakeContinuationMark(Anchor, L));
-    end;
+    CoverOneSpan(Bucket, Anchor);
   end;
 end;
 
@@ -2079,6 +2166,34 @@ begin
   Context.Canvas.Brush.Color := StripeCol;
   Context.Canvas.Brush.Style := bsSolid;
   Context.Canvas.FillRect(SR);
+
+  // ---- Klammer-Enden bei Mehrzeilen-Befunden ------------------------------
+  // Auf der ERSTEN und der LETZTEN Zeile des Bereichs bekommt der Streifen
+  // einen kurzen Querbalken nach rechts. Aus dem senkrechten Strich wird
+  // damit eine Klammer, die Anfang und Ende des Blocks benennt statt ihn
+  // nur einzufaerben.
+  //
+  // BEWUSST RECHTECKE, KEINE ZEICHEN. Ein '#$250C' waere schriftart- und
+  // DPI-abhaengig (fehlendes Glyph -> Ersatzkaestchen, 150 % -> unscharf)
+  // und saehe am Ende genauso aus. Zeichen im Code-Bereich waeren hier
+  // ohnehin nicht darstellbar: wir haengen in plsBackground, die IDE malt
+  // den Code-Text DANACH darueber. Die Mini-Infobar funktioniert nur, weil
+  // sie rechts HINTER dem Textende sitzt.
+  //
+  // Die Querbalken liegen unter der Einrichtung der Zeile. Bei Code ohne
+  // jede Einrueckung schieben sie sich unter das erste Zeichen - deshalb
+  // sind sie kurz (CAP_WIDTH_PX) und nicht breiter.
+  //
+  // Eine Zeile kann BEIDE Kappen brauchen: wenn dort ein eigener Bereich
+  // beginnt und zugleich ein fremder endet. Deshalb zwei getrennte ifs und
+  // kein if/else.
+  if HasMark then
+  begin
+    if Mark.SpanRole = srFirst then
+      DrawSpanCap(Context.Canvas, ACodeRect, sceTop);
+    if (Mark.SpanRole = srLast) or Mark.SpanEndsHere then
+      DrawSpanCap(Context.Canvas, ACodeRect, sceBottom);
+  end;
 
   // ---- Mini-Infobar am rechten Zeilenende ----
   // Format: ◀ <Badge>  (z.B. "◀ BUG · ERROR")
