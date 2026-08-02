@@ -80,6 +80,9 @@ type
     // RebuildFilterCombos). Ohne das filtert der Helfer gegen einen
     // veralteten Schnappschuss.
     procedure Resync;
+    // Entprellung ueberspringen und sofort filtern. Fuer Tests - im
+    // Betrieb macht das der Timer.
+    procedure FilterNow;
     // True wenn gerade eine Eingabe die Liste reduziert - der Host kann
     // damit einen Filterlauf unterdruecken, falls er OnChange selbst
     // abgreift.
@@ -266,12 +269,24 @@ begin
 
   FCommitted  := 0;
   FHasPending := False;
-  if ACombo.ItemIndex >= 0 then
+  if (ACombo.Items.Count > 0) and (ACombo.ItemIndex >= 0)
+     and (ACombo.ItemIndex < ACombo.Items.Count) then
   begin
     FCommitted := NativeInt(ACombo.Items.Objects[ACombo.ItemIndex]);
   end;
 
   Resync;
+end;
+
+procedure TFuzzyComboSearch.FilterNow;
+begin
+  FPending := '';
+  if Assigned(FCombo) then
+  begin
+    FPending := FCombo.Text;
+  end;
+  FLastQuery := '';          // Gleichheits-Kurzschluss in TimerTick umgehen
+  TimerTick(nil);
 end;
 
 procedure TFuzzyComboSearch.Resync;
@@ -300,7 +315,14 @@ end;
 function TFuzzyComboSearch.SelectedTag(var ATag: NativeInt): Boolean;
 begin
   ATag := 0;
-  Result := Assigned(FCombo) and (FCombo.ItemIndex >= 0);
+  // ItemIndex >= 0 allein GENUEGT NICHT: bei leerer Liste wirft
+  // Items.Objects[] eine Listenindex-Ausnahme, und ItemIndex kann in
+  // Randlagen (Handle-Neuaufbau) trotzdem >= 0 melden. Die Anzahl ist die
+  // belastbare Bedingung.
+  Result := Assigned(FCombo)
+        and (FCombo.Items.Count > 0)
+        and (FCombo.ItemIndex >= 0)
+        and (FCombo.ItemIndex < FCombo.Items.Count);
   if Result then
   begin
     ATag := NativeInt(FCombo.Items.Objects[FCombo.ItemIndex]);
@@ -362,6 +384,23 @@ begin
           Format('   ... %d weitere Treffer - Suche verfeinern',
                  [Hits.Count - Shown]),
           TObject(SEPARATOR_TAG));
+      end;
+
+      // KEINE TREFFER: die Liste darf trotzdem NICHT leer bleiben.
+      //
+      // Zwei Gruende. Fachlich ist eine leere Aufklappliste nicht von
+      // "kaputt" zu unterscheiden - der Nutzer sieht nicht, ob seine
+      // Eingabe nichts trifft oder das Feld defekt ist. Technisch ist eine
+      // leere TComboBox ein Minenfeld: TCustomComboBoxStrings.GetObject
+      // wirft bei Count = 0 "Listenindex ausserhalb des gueltigen
+      // Bereichs (0)", und JEDE Stelle - hier wie in beiden Hosts - prueft
+      // nur ItemIndex >= 0, nicht die Anzahl. Genau diese Ausnahme trat
+      // beim Tippen einer Zeichenfolge ohne Treffer auf. Mit einer immer
+      // vorhandenen Zeile ist die ganze Fehlerklasse weg, unabhaengig
+      // davon, welcher Zugriff sie ausgeloest hat.
+      if FCombo.Items.Count = 0 then
+      begin
+        FCombo.Items.AddObject('   (keine Treffer)', TObject(SEPARATOR_TAG));
       end;
       FCombo.Items.EndUpdate;
     finally

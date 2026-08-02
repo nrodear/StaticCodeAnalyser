@@ -50,6 +50,8 @@ type
     [Test] procedure CloseUp_NotifiesHostOnce;
     [Test] procedure CloseUp_WithoutChange_DoesNotNotify;
     [Test] procedure CloseUp_KeepsTagOfSelectedEntry;
+    [Test] procedure NoHits_ListNeverEmpty;
+    [Test] procedure NoHits_CommitDoesNotRaise;
   end;
 
 implementation
@@ -64,6 +66,9 @@ implementation
 
 const
   SEPARATOR_TAG = -1;
+  // Zeichenfolge, die garantiert keinen Eintrag trifft - genau die
+  // Eingabe, mit der die Listenindex-Ausnahme gemeldet wurde.
+  NO_MATCH_QUERY = 'tesgvfljkmnlkm';
 
 { TTestFuzzyMatch }
 
@@ -254,6 +259,33 @@ begin
   Assert.AreEqual<NativeInt>(Expected,
     NativeInt(FCombo.Items.Objects[FCombo.ItemIndex]),
     'Tag der Auswahl muss den Neuaufbau der Liste ueberleben');
+end;
+
+procedure TTestFuzzyComboEvents.NoHits_ListNeverEmpty;
+// REGRESSION: eine Eingabe ohne jeden Treffer hinterliess eine LEERE
+// Liste. Fachlich ist das nicht von "kaputt" zu unterscheiden, technisch
+// wirft TCustomComboBoxStrings.GetObject bei Count = 0
+// "Listenindex ausserhalb des gueltigen Bereichs (0)" - und alle
+// Zugriffe, hier wie in beiden Hosts, pruefen nur ItemIndex >= 0.
+begin
+  FCombo.Text := NO_MATCH_QUERY;
+  FCombo.Perform(CN_COMMAND, MakeWParam(0, CBN_EDITCHANGE), FCombo.Handle);
+  // Entprellung ueberspringen: direkt filtern lassen.
+  FSearch.FilterNow;
+  Assert.IsTrue(FCombo.Items.Count > 0,
+    'Ohne Treffer muss trotzdem eine Zeile stehen - eine leere ComboBox '
+    + 'ist ein Minenfeld fuer Items.Objects[]');
+end;
+
+procedure TTestFuzzyComboEvents.NoHits_CommitDoesNotRaise;
+// Nach einer trefferlosen Eingabe darf ein Commit (Zuklappen, Enter,
+// Fokusverlust) keine Ausnahme werfen.
+begin
+  FCombo.Text := NO_MATCH_QUERY;
+  FCombo.Perform(CN_COMMAND, MakeWParam(0, CBN_EDITCHANGE), FCombo.Handle);
+  FSearch.FilterNow;
+  SendNotify(CBN_CLOSEUP);
+  Assert.Pass('Commit ohne Treffer laeuft ohne Ausnahme durch');
 end;
 
 end.
