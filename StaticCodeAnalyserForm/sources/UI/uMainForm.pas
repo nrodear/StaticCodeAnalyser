@@ -16,6 +16,7 @@ uses
   uIDEHelpPanel,                  // TFindingHintPanel (im class-Feld referenziert)
   uExportMenu,                    // TFindingExportMenu (Class-Field-Reference)
   uFindingFilter,                 // TFilterComboItem (Snapshot-Felder)
+  uFuzzyComboSearch,              // tippbare Severity-Combo mit Fuzzy-Suche
   Vcl.Controls
  ;
 
@@ -80,6 +81,8 @@ type
     // Snapshot der initial-populierten Filter-Combo-Eintraege (FormCreate).
     // RebuildFilterCombos zieht daraus die Eintraege mit > 0 Treffern.
     FAllSeverityItems  : TArray<TFilterComboItem>;
+    // Fuzzy-Suche der Severity-Combo; gehoert dem Formular (Owner=Self).
+    FSeveritySearch    : TFuzzyComboSearch;
     FAllTypeItems      : TArray<TFilterComboItem>;
     // Gefilterte Untermenge (Display-Filter via Severity/Type/Search).
     // Owned=False - die Findings gehoeren FAllFindings.
@@ -348,6 +351,14 @@ begin
   // Snapshot der frisch populierten Combo-Items - RebuildFilterCombos
   // reduziert daraus pro Scan auf Eintraege mit > 0 Treffern.
   SnapshotFilterItems;
+
+  // Fuzzy-Suche auf der Severity-Combo. Sie traegt rund 200 Eintraege
+  // (jede Regel als 'SCAxxx  KindName'); Scrollen ist dafuer die falsche
+  // Bedienung. Der Helfer stellt die Combo auf csDropDown, filtert beim
+  // Tippen und ruft SeverityFilterComboChange erst bei echter Auswahl -
+  // sonst liefe mit jeder Taste ein Filterlauf ueber alle Befunde.
+  FSeveritySearch := TFuzzyComboSearch.Create(Self);
+  FSeveritySearch.Attach(SeverityFilterCombo);
 
   // ---- Sonar-Style Stats-Tile-Reihe oberhalb des Grids -----------------
   // PanelStats kommt aus dem DFM (alTop, Height=45). Tiles werden als
@@ -1065,6 +1076,9 @@ begin
       Break;
     end;
   SeverityFilterCombo.ItemIndex := NewIdx;
+  // Der Helfer filtert gegen seinen eigenen Schnappschuss - nach jedem
+  // Umbau der Items muss er ihn neu ziehen.
+  if Assigned(FSeveritySearch) then FSeveritySearch.Resync;
 
   // ---- TypeFilterCombo ----
   TypeFilterCombo.Items.BeginUpdate;

@@ -28,7 +28,8 @@ uses
   uIDEAnnotationOverlay,
   uIDESCAOptions,                          // Tools > Options > SCA Page
   uIDESonarOptions,                        // Tools > Options > Sonar Integration
-  uFindingGridRenderer, uFindingFilter;
+  uFindingGridRenderer, uFindingFilter,
+  uFuzzyComboSearch;              // tippbare Filter-Combo mit Fuzzy-Suche
 
 const
   // Deferred-Layout-Recompute nach IDE-Dock-Vorgang: SetParent posted diese
@@ -61,6 +62,8 @@ type
     FFilterKind     : TFindingKind; // gueltig wenn FFilterMode = fmSingleKind
     FCurrentBaseDir : string;
     FFilterCombo       : TComboBox;
+    // Fuzzy-Suche der Filter-Combo; gehoert dem Frame (Owner=Self).
+    FFilterSearch      : TFuzzyComboSearch;
     // Hilfe-Panel rechts (Vorher/Nachher-Code-Beispiele) inklusive
     // dessen Splitter, Dock-State-Timer und Layout-Logik. Ehemals 7
     // Felder + 4 Methoden direkt im Frame - jetzt ausgelagert in
@@ -1235,6 +1238,14 @@ begin
   TFindingFilter.AppendKindFilterItems(FFilterCombo.Items);
 
   FFilterCombo.ItemIndex := 0; // "All"
+
+  // Fuzzy-Suche. Die Combo traegt rund 200 Eintraege (jede Regel als
+  // 'SCAxxx  KindName'); Scrollen ist dafuer die falsche Bedienung. Der
+  // Helfer stellt sie auf csDropDown, filtert beim Tippen und ruft den
+  // OnChange des Frames erst bei echter Auswahl - sonst liefe mit jeder
+  // Taste ein Filterlauf ueber alle Befunde.
+  FFilterSearch := TFuzzyComboSearch.Create(Self);
+  FFilterSearch.Attach(FFilterCombo);
 end;
 
 procedure TAnalyserFrame.PopulateTypeCombo;
@@ -2079,6 +2090,9 @@ begin
       Break;
     end;
   FFilterCombo.ItemIndex := NewIdx;
+  // Der Helfer filtert gegen seinen eigenen Schnappschuss - nach jedem
+  // Umbau der Items muss er ihn neu ziehen.
+  if Assigned(FFilterSearch) then FFilterSearch.Resync;
 
   // ---- Type-Combo ----
   FTypeCombo.Items.BeginUpdate;
