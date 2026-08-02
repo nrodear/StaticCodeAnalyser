@@ -56,6 +56,8 @@ type
     [Test] procedure LongBlock_ReportedOnce_NotOncePerWindow;
     [Test] procedure LongBlock_SpanCoversEntireBlock;
     [Test] procedure TwoSeparateBlocks_StayTwoFindings;
+    [Test] procedure TwoOverlappingDistinctGroups_StayTwoFindings;
+    [Test] procedure MergedFinding_KeepsAnchorMessage;
   end;
 
 implementation
@@ -993,6 +995,93 @@ begin
   try
     Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkDuplicateBlock),
       'Zwei getrennte Duplikat-Bloecke bleiben zwei Befunde');
+  finally F.Free; end;
+end;
+
+procedure TTestDuplicateBlock.TwoOverlappingDistinctGroups_StayTwoFindings;
+// DIE Luecke, die das Code-Review gefunden hat.
+//
+// Zwei VERSCHIEDENE Duplikat-Gruppen, deren Erst-Vorkommen sich
+// ueberlappen. Ein rein geometrisches Verschmelzen ("die Zeilen liegen
+// ineinander") wirft sie zusammen und meldet nur noch EINEN Befund - die
+// zweite Gruppe verschwindet komplett aus dem Bericht, obwohl ihre
+// Partnerstelle ganz woanders in der Datei steht.
+//
+// Aufbau:
+//   P1 traegt  a1..a4 b1..b4 c1..c4
+//   P2 traegt  a1..a4 b1..b4 x1..x4   -> Gruppe A = [a1..b4], Partner P2
+//   P3 traegt        b1..b4 c1..c4    -> Gruppe B = [b1..c4], Partner P3
+// A beginnt bei a1, B bei b1 - B startet also INNERHALB von A. Die
+// Vorkommens-Signaturen sind verschieden, es sind zwei Gruppen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure P1; begin'#13#10+
+  '  a1 := 1;'#13#10+
+  '  a2 := 2;'#13#10+
+  '  a3 := 3;'#13#10+
+  '  a4 := 4;'#13#10+
+  '  b1 := 11;'#13#10+
+  '  b2 := 12;'#13#10+
+  '  b3 := 13;'#13#10+
+  '  b4 := 14;'#13#10+
+  '  c1 := 21;'#13#10+
+  '  c2 := 22;'#13#10+
+  '  c3 := 23;'#13#10+
+  '  c4 := 24;'#13#10+
+  'end;'#13#10+
+  'procedure P2; begin'#13#10+
+  '  a1 := 1;'#13#10+
+  '  a2 := 2;'#13#10+
+  '  a3 := 3;'#13#10+
+  '  a4 := 4;'#13#10+
+  '  b1 := 11;'#13#10+
+  '  b2 := 12;'#13#10+
+  '  b3 := 13;'#13#10+
+  '  b4 := 14;'#13#10+
+  '  x1 := 31;'#13#10+
+  '  x2 := 32;'#13#10+
+  '  x3 := 33;'#13#10+
+  '  x4 := 34;'#13#10+
+  'end;'#13#10+
+  'procedure P3; begin'#13#10+
+  '  b1 := 11;'#13#10+
+  '  b2 := 12;'#13#10+
+  '  b3 := 13;'#13#10+
+  '  b4 := 14;'#13#10+
+  '  c1 := 21;'#13#10+
+  '  c2 := 22;'#13#10+
+  '  c3 := 23;'#13#10+
+  '  c4 := 24;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkDuplicateBlock),
+      'Zwei verschiedene Duplikat-Gruppen duerfen nicht verschmelzen, nur ' +
+      'weil ihre Erst-Vorkommen sich ueberlappen - sonst verschwindet die ' +
+      'zweite Gruppe samt ihrer Partnerstelle aus dem Bericht');
+  finally F.Free; end;
+end;
+
+procedure TTestDuplicateBlock.MergedFinding_KeepsAnchorMessage;
+// Der Meldetext des ueberlebenden Befundes ist LASTTRAGEND: der
+// SARIF-Fingerprint ist ein Hash aus RuleID + Pfad + Zeile + MELDUNG.
+// Aendert das Verschmelzen den Text, gelten alle bestehenden Baselines
+// fuer diese Regel als "neu" - deshalb wird er hier festgenagelt und
+// nicht nur der Bereich.
+var
+  F  : TObjectList<TLeakFinding>;
+  Fd : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC_LONG_DUP);
+  try
+    Fd := TFindingHelper.FirstOf(F, fkDuplicateBlock);
+    Assert.IsNotNull(Fd, 'Duplikat soll gemeldet werden');
+    Assert.AreEqual(
+      'Code block (8 lines) appears 2x in file - consider extracting a method',
+      Fd.MissingVar,
+      'Meldetext des Ankers muss unveraendert bleiben (SARIF-Fingerprint)');
   finally F.Free; end;
 end;
 

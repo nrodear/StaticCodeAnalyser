@@ -967,6 +967,24 @@ begin
   Bucket.Remove(AOldLine);
   if ANewLine > 0 then
   begin
+    // Bereichs-Felder MITVERSCHIEBEN. Ohne das driften Schluessel und
+    // SpanFirst/SpanLast auseinander: nach einem Einfuegen oberhalb eines
+    // Blocks liegt die Marke auf Zeile 99, behauptet aber weiter den
+    // Bereich 100..140. RemoveMark sucht dann in 100..140 und trifft die
+    // angeklickte Zeile 99 nie - das [x] wird zum stillen No-Op, und weil
+    // Fortsetzungszeilen nicht anklickbar sind, bleibt der Marker bis zum
+    // naechsten Scan haengen.
+    //
+    // Der Line-Tracker meldet jede Zeile EINZELN. Beim haeufigen Fall
+    // (Einfuegen/Loeschen OBERHALB des Blocks) verschieben sich alle Zeilen
+    // um dasselbe Delta, der Bereich bleibt also in sich stimmig. Bei einer
+    // Aenderung INNERHALB des Blocks driften die Zeilen auseinander; der
+    // Bereich ist dann zerrissen, aber jede Marke bleibt fuer sich
+    // konsistent und loeschbar. Genau reparieren liesse sich das nur mit
+    // einem Re-Scan - und den macht ohnehin das naechste Speichern.
+    var Delta : Integer := ANewLine - AOldLine;
+    if Mark.SpanFirst > 0 then Inc(Mark.SpanFirst, Delta);
+    if Mark.SpanLast  > 0 then Inc(Mark.SpanLast,  Delta);
     // Collision: zwei Marker landen auf derselben Zeile (z.B. User
     // joined zwei Zeilen). TDictionary[]:=value ersetzt den existierenden
     // Eintrag - akzeptabel, naechster Scan-Run merged die echten Befunde.
@@ -1521,6 +1539,17 @@ begin
   // Entfernt werden nur Zeilen, die zu DIESEM Bereich gehoeren. Eine
   // Fortsetzungszeile, auf der ein eigener Befund liegt, hat einen anderen
   // SpanFirst und bleibt deshalb stehen - genau richtig.
+  // Die ANGEKLICKTE Zeile fliegt IMMER - bedingungslos und zuerst.
+  //
+  // Vorher stand das in einem else-Zweig und lief nur bei einzeiligen
+  // Befunden. Sobald der Schluessel einer Bereichsmarke ausserhalb ihres
+  // eigenen SpanFirst..SpanLast lag - was nach jedem Edit oberhalb des
+  // Blocks passieren konnte - traf die Bereichsschleife die angeklickte
+  // Zeile nicht, und das [x] war ein stilles No-Op. Der Nutzer kam an den
+  // Marker dann gar nicht mehr heran: Fortsetzungszeilen sind nicht
+  // anklickbar, blieb nur "alle Marker loeschen" oder ein neuer Scan.
+  Bucket.Remove(ALineNo);
+
   if (Victim.SpanLast > Victim.SpanFirst) and (Victim.SpanFirst > 0) then
   begin
     // Bewusst verschachtelt statt als ein and-Ausdruck: bei aktivem
@@ -1533,9 +1562,7 @@ begin
         if (Other.SpanFirst = Victim.SpanFirst) and
            (Other.SpanLast = Victim.SpanLast) then
           Bucket.Remove(L);
-  end
-  else
-    Bucket.Remove(ALineNo);
+  end;
 
   // Letzte Markierung der Datei? Dann Bucket + Notifier komplett weg.
   if Bucket.Count = 0 then

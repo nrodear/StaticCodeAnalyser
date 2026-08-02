@@ -805,6 +805,11 @@ begin
   Result.FileName   := F.FileName;
   Result.MethodName := F.MethodName;
   Result.LineNumber := F.LineNumber;
+  // EndLine gehoert dazu, seit Befunde einen Zeilenbereich haben koennen
+  // (SCA021 DuplicateBlock). Fehlt es, faellt der Klon lautlos auf
+  // "einzeilig" zurueck - genau die Art Verlust, die eine feldweise
+  // Kopie mit dem Versprechen "alle Datenfelder" unsichtbar macht.
+  Result.EndLine    := F.EndLine;
   Result.MissingVar := F.MissingVar;
   Result.Severity   := F.Severity;
   Result.Kind       := F.Kind;
