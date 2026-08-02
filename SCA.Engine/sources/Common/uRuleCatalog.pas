@@ -544,10 +544,28 @@ begin
   // Bundled-Profile auch im Fallback-Mode anbieten - sonst zeigt der
   // Combo im IDE-Plugin nur "default" wenn die JSON nicht ladbar war.
   // Inhalte muessen mit rules/sca-rules.json profiles-Block synchron
-  // bleiben - bei Aenderungen DORT auch hier nachziehen (der Test
-  // ProfileNamesIncludesBundled deckt nur Namen, nicht Mengen ab).
-  FProfiles.AddOrSetValue('default', AllKinds);
-  FProfiles.AddOrSetValue('strict',  AllKinds);
+  // bleiben - bei Aenderungen DORT auch hier nachziehen. Wie gut das
+  // abgesichert ist, ist je Profil verschieden: fuer 'strict', 'default'
+  // und 'style' pruefen die drei Profile*-Tests in uTestRuleCatalog auch
+  // die MENGEN; fuer die uebrigen deckt ProfileNamesIncludesBundled nach
+  // wie vor nur die Namen ab. Genau diese Luecke hat den C1-Beschluss am
+  // 2026-08-02 hier zunaechst nicht ankommen lassen.
+  // 'strict' ist das Profil, das ALLES bedeutet - hier und nur hier haengt
+  // die Vollstaendigkeits-Zusage.
+  FProfiles.AddOrSetValue('strict', AllKinds);
+  // 'style' = die sechs reinen Konventions-Regeln, die seit dem
+  // C1-Beschluss (2026-08-02) nicht mehr im Default stecken: zusammen
+  // 45,4 % aller Funde auf dem Referenzkorpus bei 0-4 % FP-Quote. Sie
+  // sind richtig, aber sie sind das Erste, was ein Neuanwender sieht.
+  FProfiles.AddOrSetValue('style',
+    [fkPublicMemberWithoutDoc, fkNilComparison, fkBeginEndRequired,
+     fkWithStatement, fkClassPerFile, fkDfmHardcodedCaption]);
+  // 'default' = alles ausser 'style'. Bewusst als Differenz gebildet und
+  // nicht als zweite Liste: so kann ein neues Kind hier gar nicht erst
+  // durchfallen, und der Fallback bleibt automatisch synchron mit der
+  // style-Menge darueber.
+  FProfiles.AddOrSetValue('default',
+    AllKinds - FProfiles['style']);
   FProfiles.AddOrSetValue('ide-fast',
     [fkMemoryLeak, fkSQLInjection, fkHardcodedSecret, fkFormatMismatch,
      fkNilDeref, fkMissingFinally, fkDivByZero, fkDeadCode,

@@ -64,8 +64,21 @@ type
     [Test] procedure GetRuleByIDRoundtrip;
 
     // Profile-Loader (sca-rules.json -> profiles.*):
-    // 'default' ist immer vorhanden und enthaelt alle Kinds.
-    [Test] procedure ProfileDefaultContainsAllKinds;
+    //
+    // VOLLSTAENDIGKEIT, seit 2026-08-02 auf 'strict' verlagert: bis dahin
+    // hiess die Zusage "default enthaelt alle Kinds". Seit die sechs reinen
+    // Konventions-Regeln aus 'default' in 'style' gewandert sind, stimmt
+    // das nicht mehr - der SCHUTZ dahinter aber schon: kein Detektor darf
+    // still verlorengehen. Die drei Tests unten sichern das jetzt
+    // staerker als der eine vorher:
+    //   1. 'strict' enthaelt wirklich alles,
+    //   2. 'default' + 'style' ergeben zusammen wieder alles - eine Regel,
+    //      die aus default faellt, MUSS in style landen,
+    //   3. 'default' laesst genau die sechs weg, nicht mehr und nicht
+    //      weniger (nagelt die Entscheidung fest).
+    [Test] procedure ProfileStrictContainsAllKinds;
+    [Test] procedure ProfileDefaultPlusStyleCoversAllKinds;
+    [Test] procedure ProfileDefaultExcludesExactlyTheStyleRules;
     // Unbekanntes Profile faellt auf AllKinds zurueck (kein Crash).
     [Test] procedure ProfileUnknownFallsBackToAll;
     // Leerer Profile-Name liefert AllKinds (Sentinel fuer "Profile nicht gesetzt").
@@ -483,15 +496,75 @@ begin
   end;
 end;
 
-procedure TTestRuleCatalog.ProfileDefaultContainsAllKinds;
+procedure TTestRuleCatalog.ProfileStrictContainsAllKinds;
+// 'strict' ist seit 2026-08-02 das Profil, das "wirklich alles" bedeutet.
+// Hier haengt die Vollstaendigkeits-Zusage: faellt ein Detektor aus dem
+// Katalog oder aus allen Profilen, schlaegt DIESER Test an.
 var
   P : TFindingKinds;
   K : TFindingKind;
 begin
-  P := TRuleCatalog.GetProfile('default');
+  P := TRuleCatalog.GetProfile('strict');
   for K := Low(TFindingKind) to High(TFindingKind) do
     Assert.IsTrue(K in P,
-      Format('default-Profile enthaelt %s nicht', [KindName(K)]));
+      Format('strict-Profile enthaelt %s nicht', [KindName(K)]));
+end;
+
+procedure TTestRuleCatalog.ProfileDefaultPlusStyleCoversAllKinds;
+// Kein Detektor darf zwischen den beiden Profilen durchfallen. Wer eine
+// Regel aus 'default' nimmt, muss sie in 'style' auffangen - sonst waere
+// sie ohne 'strict' gar nicht mehr erreichbar.
+var
+  D, S : TFindingKinds;
+  K    : TFindingKind;
+begin
+  D := TRuleCatalog.GetProfile('default');
+  S := TRuleCatalog.GetProfile('style');
+  for K := Low(TFindingKind) to High(TFindingKind) do
+    Assert.IsTrue((K in D) or (K in S),
+      Format('%s ist weder in default noch in style - Regel verloren',
+             [KindName(K)]));
+end;
+
+procedure TTestRuleCatalog.ProfileDefaultExcludesExactlyTheStyleRules;
+// Nagelt die Entscheidung fest (C1, 2026-08-02): genau diese sechs reinen
+// Konventions-Regeln sind aus 'default' raus - zusammen 45,4 % aller Funde
+// auf dem Referenzkorpus. Nicht mehr und nicht weniger; jede spaetere
+// stille Erweiterung der Liste faellt hier auf.
+const
+  EXPECTED : array[0..5] of string = (
+    'PublicMemberWithoutDoc', 'NilComparison', 'BeginEndRequired',
+    'WithStatement', 'ClassPerFile', 'DfmHardcodedCaption');
+var
+  D     : TFindingKinds;
+  K     : TFindingKind;
+  N, E  : string;
+  Miss  : Integer;
+  Known : Boolean;
+begin
+  D := TRuleCatalog.GetProfile('default');
+  Miss := 0;
+  for K := Low(TFindingKind) to High(TFindingKind) do
+  begin
+    if K in D then Continue;
+    Inc(Miss);
+    N := KindName(K);
+    // Bewusst eine Schleife statt TArray.IndexOf: EXPECTED ist ein
+    // STATISCHES Array und laesst sich nicht ohne Kopie als dynamisches
+    // uebergeben.
+    Known := False;
+    for E in EXPECTED do
+      if SameText(E, N) then
+      begin
+        Known := True;
+        Break;
+      end;
+    Assert.IsTrue(Known,
+      Format('%s fehlt in default, steht aber nicht auf der beschlossenen '
+           + 'Liste - stille Verkleinerung?', [N]));
+  end;
+  Assert.AreEqual<Integer>(Length(EXPECTED), Miss,
+    'default muss GENAU die sechs beschlossenen Regeln weglassen');
 end;
 
 procedure TTestRuleCatalog.ProfileUnknownFallsBackToAll;
@@ -561,6 +634,7 @@ begin
     Require('bugs-only');
     Require('code-quality');
     Require('dfm-only');
+    Require('style'); // seit C1 2026-08-02
   finally
     Seen.Free;
   end;
