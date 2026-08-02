@@ -87,7 +87,6 @@ type
     // (TAnalyserFrame.SearchChange, 200 ms); hier lief ApplyFilter bis
     // jetzt bei JEDEM Tastendruck ueber alle Befunde.
     FSearchDebounce    : TTimer;
-    procedure SearchDebounceFire(Sender: TObject);
     FAllTypeItems      : TArray<TFilterComboItem>;
     // Gefilterte Untermenge (Display-Filter via Severity/Type/Search).
     // Owned=False - die Findings gehoeren FAllFindings.
@@ -166,6 +165,8 @@ type
     // Eintraege zu reduzieren und beim naechsten Scan ggf. wieder zu
     // erweitern.
     procedure SnapshotFilterItems;
+    // Idle-Tick der Suchfeld-Entprellung.
+    procedure SearchDebounceFire(Sender: TObject);
     // Reduziert SeverityFilterCombo + TypeFilterCombo auf Eintraege deren
     // Mode/Type mindestens einen Treffer in FAllFindings hat ('All' und
     // 'Detector Review' bleiben immer). Aktuelle Auswahl wird via
@@ -221,12 +222,6 @@ implementation
 // GodClass/LargeClass: VCL-Main-Form sammelt VCL-Event-Handler, kann nicht
 // dekomponiert werden ohne Action-Owner-Splits.
 
-const
-  // Wartezeit des Suchfeld-Filters. Bewusst derselbe Wert wie im
-  // IDE-Plugin (TAnalyserFrame DEBOUNCE_MS) - beide Oberflaechen sollen
-  // sich beim Tippen gleich anfuehlen.
-  SEARCH_DEBOUNCE_MS = 200;
-
 uses
   clipbrd,
   uStaticFiles, uRuleCatalog,
@@ -240,6 +235,12 @@ uses
   uIgnoreList;                    // TIgnoreList.ConfigFilePath - Hamburger-Item
   // ShellAPI + uLocalization sind bereits im interface-uses (E2004-Schutz).
   // uIDEHelpPanel ist im interface-uses (TFindingHintPanel ist class-Feld)
+
+const
+  // Wartezeit des Suchfeld-Filters. Bewusst derselbe Wert wie im
+  // IDE-Plugin (TAnalyserFrame DEBOUNCE_MS) - beide Oberflaechen sollen
+  // sich beim Tippen gleich anfuehlen.
+  SEARCH_DEBOUNCE_MS = 200;
 
 {$R *.dfm}
 
