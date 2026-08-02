@@ -74,6 +74,12 @@ type
   // TFindingHighlighter.SetAllFindings ein Summary-Mark synthetisiert
   // (IsMulti=True, Desc als Bullet-Liste staerkste->schwaechste, Fix
   // unterdrueckt, Color/Badge/Severity = staerkster Eintrag).
+  // Rolle einer Zeile innerhalb eines Mehrzeilen-Befundes.
+  // Ein DuplicateBlock ueber 59-61 ist EIN Fund; er belegt drei Zeilen mit
+  // srFirst/srMiddle/srLast. Die Rolle steuert ausschliesslich das MALEN -
+  // an der Fundzahl aendert sie nichts.
+  TSpanRole = (srSingle, srFirst, srMiddle, srLast);
+
   TFindingMark = record
     Title    : string;
     Desc     : string;
@@ -82,6 +88,18 @@ type
     Fix      : string;          // After-Code (leer im Multi-Mode)
     Severity : TFindingSeverity;// fuer Stripe-Ranking
     IsMulti  : Boolean;         // True = synthetisierter Multi-Summary
+    // ---- Mehrzeilen-Befund (Konzept_MehrzeiligeFundmarkierung) ----------
+    // Ein Bereich wird BEIM SETZEN in Einzelzeilen aufgeloest, nicht beim
+    // Malen gesucht. Dadurch bleiben PaintLine, TryGetMark, ShouldHighlight
+    // und der Hover-Hit-Test (FRenderedRects) unveraendert zeilenindiziert -
+    // in einem Hot Path, der diesem Plugin schon mehrere IDE-Abstuerze
+    // gekostet hat, wird nichts umgebaut, was nicht umgebaut werden muss.
+    SpanRole : TSpanRole;
+    // Ankerzeile des Bereichs. Nicht redundant: RemoveMark muss beim Klick
+    // auf eine BELIEBIGE Bereichszeile den GANZEN Bereich loeschen, sonst
+    // bleibt ein zerfledderter Rest stehen.
+    SpanFirst: Integer;
+    SpanLast : Integer;
   end;
   // Eintrag fuer SetAllFindings — die FileName-Property machte den
   // vorher impliziten "alle Eintraege gehoeren zur gleichen Datei"-
@@ -99,6 +117,10 @@ type
     Color    : TColor;
     Fix      : string;
     Severity : TFindingSeverity;
+    // Letzte Zeile des Befundes. 0 oder <= Line = einzeilig (Default fuer
+    // alle Befunde ausser SCA021). Wird in SetAllFindings/
+    // ReplaceMarksForFile in Einzelzeilen-Marks aufgeloest.
+    EndLine  : Integer;
   end;
 
   // WICHTIG: Basisklasse TNotifierObject, NUR INTACodeEditorEvents listen.
@@ -173,6 +195,10 @@ type
     procedure EditorMouseUp(const Editor: TWinControl; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
     procedure BeginPaint(const Editor: TWinControl; const ForceFullRepaint: Boolean);
     procedure EndPaint(const Editor: TWinControl);
+    // Streifen + Infobar einer markierten Zeile - aus PaintLine gezogen.
+    procedure PaintMarkDecorations(
+      const Context: INTACodeEditorPaintContext; const ACodeRect: TRect;
+      ALine, ATextEndX: Integer);
     procedure PaintLine(const Rect: TRect; const Stage: TPaintLineStage;
       const BeforeEvent: Boolean; var AllowDefaultPainting: Boolean;
       const Context: INTACodeEditorPaintContext);
@@ -280,6 +306,9 @@ type
     // ReplaceMarksForFile (Single-File-Variante) - vorher 80% duplizierter
     // Code (Dedup -> Sort -> Single-vs-Multi-Mark-Synthese).
     function BuildMarkForLineGroup(Group: TList<TFindingMarkEntry>): TFindingMark;
+    // Loest Mehrzeilen-Befunde eines fertigen Buckets in Einzelzeilen-Marks
+    // auf. MUSS nach BuildMarkForLineGroup laufen - Begruendung am Rumpf.
+    procedure ApplySpanCoverage(Bucket: TFileMarks);
   public
     // PUBLIC fuer TFindingEditorEvents — forciert Repaint aller markierten
     // Zeilen via InvalidateTopEditor (EIN Call fuer den ganzen sichtbaren
@@ -383,6 +412,13 @@ uses
 
 const
   STRIPE_WIDTH_PX  = 3;
+  // Obergrenze fuer die Zeilen, die EIN Befund markieren darf. Reine
+  // Schadensbegrenzung gegen ein fehlerhaftes EndLine, kein fachliches
+  // Limit. Der Wert ist bewusst weit ueber allem angesetzt, was eine
+  // Bereichsmarkierung noch sinnvoll macht - wer 500 Zeilen hervorhebt,
+  // hebt nichts mehr hervor. Greift die Grenze, ist das ein Datenfehler
+  // und keine Darstellungsfrage.
+  MAX_SPAN_LINES   = 500;
 
 function IsLightColor(AColor: TColor): Boolean;
 // ITU-R BT.601 Luminanz - bei > 127 ist die Farbe "hell" und Schwarz
@@ -935,6 +971,24 @@ begin
   Bucket.Remove(AOldLine);
   if ANewLine > 0 then
   begin
+    // Bereichs-Felder MITVERSCHIEBEN. Ohne das driften Schluessel und
+    // SpanFirst/SpanLast auseinander: nach einem Einfuegen oberhalb eines
+    // Blocks liegt die Marke auf Zeile 99, behauptet aber weiter den
+    // Bereich 100..140. RemoveMark sucht dann in 100..140 und trifft die
+    // angeklickte Zeile 99 nie - das [x] wird zum stillen No-Op, und weil
+    // Fortsetzungszeilen nicht anklickbar sind, bleibt der Marker bis zum
+    // naechsten Scan haengen.
+    //
+    // Der Line-Tracker meldet jede Zeile EINZELN. Beim haeufigen Fall
+    // (Einfuegen/Loeschen OBERHALB des Blocks) verschieben sich alle Zeilen
+    // um dasselbe Delta, der Bereich bleibt also in sich stimmig. Bei einer
+    // Aenderung INNERHALB des Blocks driften die Zeilen auseinander; der
+    // Bereich ist dann zerrissen, aber jede Marke bleibt fuer sich
+    // konsistent und loeschbar. Genau reparieren liesse sich das nur mit
+    // einem Re-Scan - und den macht ohnehin das naechste Speichern.
+    var Delta : Integer := ANewLine - AOldLine;
+    if Mark.SpanFirst > 0 then Inc(Mark.SpanFirst, Delta);
+    if Mark.SpanLast  > 0 then Inc(Mark.SpanLast,  Delta);
     // Collision: zwei Marker landen auf derselben Zeile (z.B. User
     // joined zwei Zeilen). TDictionary[]:=value ersetzt den existierenden
     // Eintrag - akzeptabel, naechster Scan-Run merged die echten Befunde.
@@ -1001,6 +1055,28 @@ begin
   end;
 end;
 
+function WidestSpanEnd(Group: TList<TFindingMarkEntry>;
+  AAnchorLine: Integer): Integer;
+// Weitester Bereich einer (Datei, Zeile)-Gruppe. Liegen auf der Ankerzeile
+// mehrere Befunde und spannt einer davon einen Bereich auf, gewinnt der
+// WEITESTE - die Markierung soll den ganzen betroffenen Code abdecken.
+//
+// Kappt zugleich auf MAX_SPAN_LINES: SpanEnd klemmt engine-seitig nur nach
+// UNTEN. Ein Detektorfehler mit EndLine = 1.000.000 wuerde sonst in
+// ApplySpanCoverage eine Million Dictionary-Eintraege anlegen und in
+// RemoveMark eine Million Lookups machen - beides friert die IDE ein.
+// Die Schranke sitzt hier, an der EINZIGEN Stelle, an der ein Span-Feld
+// entsteht; damit erbt sie jeder Verbraucher automatisch.
+var
+  j : Integer;
+begin
+  Result := AAnchorLine;
+  for j := 0 to Group.Count - 1 do
+    if Group[j].EndLine > Result then Result := Group[j].EndLine;
+  if Result > AAnchorLine + MAX_SPAN_LINES then
+    Result := AAnchorLine + MAX_SPAN_LINES;
+end;
+
 function TFindingHighlighter.BuildMarkForLineGroup(
   Group: TList<TFindingMarkEntry>): TFindingMark;
 // Dedup (Title + Severity) -> Sort by Severity -> Single oder Multi-Mark.
@@ -1032,6 +1108,13 @@ begin
     end;
   end;
 
+  // Bereich der ANKERZEILE bestimmen, bevor sortiert wird. Alle Eintraege
+  // einer Gruppe liegen per Konstruktion auf derselben Zeile; liegen dort
+  // mehrere Befunde und spannt einer davon einen Bereich auf, gewinnt der
+  // WEITESTE - die Markierung soll den ganzen betroffenen Code abdecken.
+  var AnchorLine : Integer := Group[0].Line;
+  var WidestEnd  : Integer := WidestSpanEnd(Group, AnchorLine);
+
   // Staerkste Severity zuerst (stabiles Sort seit RAD12).
   Group.Sort(TComparer<TFindingMarkEntry>.Construct(
     function(const A, B: TFindingMarkEntry): Integer
@@ -1039,6 +1122,15 @@ begin
       Result := SeverityRank(A.Severity) - SeverityRank(B.Severity);
     end));
   Strongest := Group[0];
+
+  // Span-Felder gelten fuer BEIDE Zweige (Single wie Multi) und werden
+  // unten nicht mehr angefasst.
+  Result.SpanFirst := AnchorLine;
+  Result.SpanLast  := WidestEnd;
+  if WidestEnd > AnchorLine then
+    Result.SpanRole := srFirst
+  else
+    Result.SpanRole := srSingle;
 
   if Group.Count = 1 then
   begin
@@ -1094,6 +1186,73 @@ begin
   Result.Fix      := '';
   Result.Severity := Strongest.Severity;
   Result.IsMulti  := True;
+end;
+
+function MakeContinuationMark(const AAnchor: TFindingMark;
+  ALine: Integer): TFindingMark;
+// Fortsetzungszeile eines Mehrzeilen-Befundes. Sie ist KEIN Fund und
+// traegt deshalb KEINEN Fund-Inhalt: Titel, Beschreibung, Badge und Fix
+// werden geleert. Uebrig bleibt nur, was zum Malen des Bereichs noetig ist
+// - Farbe, Rolle, Bereichsgrenzen.
+//
+// Bewusst strukturell geloest statt per Fallunterscheidung beim Rendern:
+// was nicht da ist, kann auch keine kuenftige Auswertung versehentlich als
+// Befund anzeigen. Der Hit-Test blendet diese Zeilen zusaetzlich aus
+// (Guertel und Hosentraeger), aber die Datenlage allein reicht schon.
+begin
+  Result         := AAnchor;
+  Result.Title   := '';
+  Result.Desc    := '';
+  Result.Badge   := '';
+  Result.Fix     := '';
+  Result.IsMulti := False;
+  if ALine = AAnchor.SpanLast then
+    Result.SpanRole := srLast
+  else
+    Result.SpanRole := srMiddle;
+end;
+
+procedure TFindingHighlighter.ApplySpanCoverage(Bucket: TFileMarks);
+// Loest Mehrzeilen-Befunde in Einzelzeilen-Marks auf.
+//
+// Laeuft NACH der Gruppen-Synthese, nie davor. Grund: BuildMarkForLineGroup
+// zaehlt die Eintraege einer Zeile und titelt bei mehreren "N findings on
+// this line". Wuerde man Folgezeilen schon als Eintraege einspeisen, wuerde
+// aus einer Fortsetzungszeile ein zweiter Befund - genau das, was ein
+// Bereichs-Fund NICHT tun darf.
+//
+// Kollision: liegt auf einer Fortsetzungszeile bereits ein eigener Befund,
+// GEWINNT DIESER. Er behaelt seine Rolle, seine Farbe und seine Infobar.
+// Ein Einzelfund darf nicht unsichtbar werden, nur weil er zufaellig in
+// einem Duplikat-Block liegt; der Streifen ist dort ohnehin durchgehend.
+var
+  Anchors : TArray<Integer>;
+  Line    : Integer;
+  Anchor  : TFindingMark;
+  L       : Integer;
+begin
+  if not Assigned(Bucket) or (Bucket.Count = 0) then Exit;
+
+  // Schluessel-Snapshot: die Schleife fuegt Eintraege in dasselbe
+  // Dictionary ein, ueber das sie sonst iterieren wuerde.
+  Anchors := Bucket.Keys.ToArray;
+
+  for Line in Anchors do
+  begin
+    if not Bucket.TryGetValue(Line, Anchor) then Continue;
+    if Anchor.SpanRole <> srFirst then Continue;
+    if Anchor.SpanLast <= Anchor.SpanFirst then Continue;
+
+    // SpanLast ist bereits in BuildMarkForLineGroup auf MAX_SPAN_LINES
+    // gekappt - hier wird bewusst NICHT ein zweites Mal geklemmt, damit es
+    // genau eine Stelle gibt, an der die Schranke gilt.
+    for L := Anchor.SpanFirst + 1 to Anchor.SpanLast do
+    begin
+      if Bucket.ContainsKey(L) then Continue;     // eigener Befund gewinnt
+
+      Bucket.Add(L, MakeContinuationMark(Anchor, L));
+    end;
+  end;
 end;
 
 procedure TFindingHighlighter.SetAllFindings(
@@ -1166,6 +1325,8 @@ begin
         Mark := BuildMarkForLineGroup(Group);
         Bucket.AddOrSetValue(LineNo, Mark);
       end;
+
+      ApplySpanCoverage(Bucket);
     end;
   finally
     PerLine.Free;
@@ -1285,6 +1446,8 @@ begin
       Mark := BuildMarkForLineGroup(Group);
       Bucket.AddOrSetValue(LineNo, Mark);
     end;
+
+    ApplySpanCoverage(Bucket);
   finally
     LineMap.Free;
   end;
@@ -1366,6 +1529,34 @@ begin
     FEditorEventsObj.ResetState;
 end;
 
+procedure RemoveSpanSiblings(Bucket: TFileMarks; const AVictim: TFindingMark);
+// Loescht die uebrigen Zeilen DESSELBEN Bereichs.
+//
+// Der [x]-Klick trifft irgendeine Zeile des Bereichs, gemeint ist aber
+// immer der ganze Befund. Wuerde nur die angeklickte Zeile fliegen, bliebe
+// ein zerfledderter Rest markiert - und weil Fortsetzungszeilen nicht
+// anklickbar sind, kaeme der Nutzer an den Rest nicht mehr heran.
+//
+// Entfernt werden nur Zeilen, die zu DIESEM Bereich gehoeren. Ein eigener
+// Befund, der zufaellig im Bereich liegt, hat andere Span-Grenzen und
+// bleibt deshalb stehen - genau richtig.
+var
+  Other : TFindingMark;
+  L     : Integer;
+begin
+  if (AVictim.SpanLast <= AVictim.SpanFirst) or (AVictim.SpanFirst <= 0) then
+    Exit;
+  // Bewusst verschachtelt statt als ein and-Ausdruck: bei aktivem
+  // {$BOOLEVAL ON} wuerde die zweite Bedingung auch dann ausgewertet, wenn
+  // TryGetValue False lieferte - Other traegt dann den Wert der vorigen
+  // Iteration und der Vergleich waere Zufall.
+  for L := AVictim.SpanFirst to AVictim.SpanLast do
+    if Bucket.TryGetValue(L, Other) then
+      if (Other.SpanFirst = AVictim.SpanFirst) and
+         (Other.SpanLast = AVictim.SpanLast) then
+        Bucket.Remove(L);
+end;
+
 procedure TFindingHighlighter.RemoveMark(const AFileName: string;
   ALineNo: Integer);
 // Loescht EINEN Marker. Wenn das die letzte Markierung der Datei war,
@@ -1378,13 +1569,34 @@ begin
   Key := NormalizePath(AFileName);
 
   if not FMarksByFile.TryGetValue(Key, Bucket) then Exit;
-  if not Bucket.ContainsKey(ALineNo) then Exit;
+  var Victim : TFindingMark;
+  if not Bucket.TryGetValue(ALineNo, Victim) then Exit;
 
   if Assigned(GAnnotationOverlay) then
     GAnnotationOverlay.HideOverlay;
 
   InvalidateAllLines;
+
+  // Mehrzeilen-Befund: der [x]-Klick trifft irgendeine Zeile des Bereichs,
+  // gemeint ist aber IMMER der ganze Befund. Wuerde nur die angeklickte
+  // Zeile fliegen, bliebe ein zerfledderter Rest des Blocks markiert -
+  // und der Nutzer haette keinen Weg mehr, den Rest loszuwerden.
+  //
+  // Entfernt werden nur Zeilen, die zu DIESEM Bereich gehoeren. Eine
+  // Fortsetzungszeile, auf der ein eigener Befund liegt, hat einen anderen
+  // SpanFirst und bleibt deshalb stehen - genau richtig.
+  // Die ANGEKLICKTE Zeile fliegt IMMER - bedingungslos und zuerst.
+  //
+  // Vorher stand das in einem else-Zweig und lief nur bei einzeiligen
+  // Befunden. Sobald der Schluessel einer Bereichsmarke ausserhalb ihres
+  // eigenen SpanFirst..SpanLast lag - was nach jedem Edit oberhalb des
+  // Blocks passieren konnte - traf die Bereichsschleife die angeklickte
+  // Zeile nicht, und das [x] war ein stilles No-Op. Der Nutzer kam an den
+  // Marker dann gar nicht mehr heran: Fortsetzungszeilen sind nicht
+  // anklickbar, blieb nur "alle Marker loeschen" oder ein neuer Scan.
   Bucket.Remove(ALineNo);
+
+  RemoveSpanSiblings(Bucket, Victim);
 
   // Letzte Markierung der Datei? Dann Bucket + Notifier komplett weg.
   if Bucket.Count = 0 then
@@ -1496,12 +1708,26 @@ end;
 function TFindingEditorEvents.HitTestLine(X, Y: Integer): Integer;
 var
   Pair : TPair<Integer, TRect>;
+  Mark : TFindingMark;
 begin
   // Lineare Suche durch alle aktuell gerenderten Marker-Rects.
   // FRenderedRects.Count ist <= sichtbare-Zeilen-mit-Marker, typisch < 20.
   for Pair in FRenderedRects do
     if PtInRect(Pair.Value, Point(X, Y)) then
+    begin
+      // Fortsetzungszeilen eines Mehrzeilen-Befundes sind KEINE Funde. Sie
+      // tragen die Markierung, damit der Nutzer den Umfang des Blocks sieht
+      // - aber sie duerfen sich nirgends als Befund ausgeben. Hier gilt
+      // deshalb "kein Treffer": der Aufrufer laeuft in denselben Zweig wie
+      // bei einer unmarkierten Zeile und blendet ein offenes Overlay
+      // sauber aus. Ein Exit im Overlay selbst waere schlechter - dann
+      // bliebe ein zuvor gezeigtes Overlay beim Ueberfahren stehen.
+      if Assigned(GHighlighter)
+         and GHighlighter.TryGetMark(FLastPaintedFile, Pair.Key, Mark)
+         and (Mark.SpanRole in [srMiddle, srLast]) then
+        Exit(-1);
       Exit(Pair.Key);
+    end;
   Result := -1;
 end;
 
@@ -1810,17 +2036,73 @@ begin
   end;
 end;
 
+procedure TFindingEditorEvents.PaintMarkDecorations(
+  const Context: INTACodeEditorPaintContext; const ACodeRect: TRect;
+  ALine, ATextEndX: Integer);
+// Streifen + Mini-Infobar einer markierten Zeile. Aus PaintLine gezogen,
+// weil der eigene Detektor die Routine nach der Mehrzeilen-Erweiterung als
+// zu komplex gemeldet hat - zerlegt statt unterdrueckt.
+var
+  SR        : TRect;
+  Mark      : TFindingMark;
+  StripeCol : TColor;
+  HasMark   : Boolean;
+begin
+  // Stripe-Farbe + Mark fuer Mini-Infobar holen.
+  HasMark := GHighlighter.TryGetMark(Context.FileName, ALine, Mark);
+  StripeCol := ACCENT_ERROR;
+  if HasMark and (Mark.Color <> clNone) then
+    StripeCol := Mark.Color;
+
+  // ---- Mehrzeilen-Befund: Fortsetzungszeilen ------------------------------
+  // Ein DuplicateBlock ueber 59-61 belegt drei Zeilen, ist aber EIN Befund.
+  // Der Streifen laeuft in VOLLER Akzentfarbe ueber alle Bereichszeilen -
+  // als durchgehender Balken. Den Anker unterscheidet die Infobar, die es
+  // nur dort gibt; der Streifen selbst traegt keine Hierarchie.
+  //
+  // GESCHEITERT und zurueckgenommen: die erste Fassung mischte die
+  // Fortsetzungszeilen zu 45 % Richtung Schwarz/Weiss ab. Nachgerechnet
+  // ergibt das auf dunklen Themes Luminanz 56-73 gegen einen
+  // Editor-Hintergrund von ~30-45 - beim Gray-Schema war #3A3A3A auf
+  // #2D2D30 schlicht unsichtbar. Da Fortsetzungszeilen bewusst kein Badge
+  // tragen, war der Streifen ihr EINZIGES Signal: die Bereichsmarkierung
+  // existierte, ohne wahrnehmbar zu sein ("die range wird nicht markiert").
+  // Ein 3px-Streifen hat keine Reserve fuer Abstufung - wenn er da ist,
+  // dann ganz.
+  var IsContinuation : Boolean :=
+        HasMark and (Mark.SpanRole in [srMiddle, srLast]);
+
+  // 3px Stripe am linken Rand des Code-Bereichs.
+  // Hinweis: Parameter 'Rect' verdeckt Winapi.Windows.Rect, deshalb SR direkt nutzen.
+  SR := ACodeRect;
+  SR.Right := SR.Left + STRIPE_WIDTH_PX;
+  Context.Canvas.Brush.Color := StripeCol;
+  Context.Canvas.Brush.Style := bsSolid;
+  Context.Canvas.FillRect(SR);
+
+  // ---- Mini-Infobar am rechten Zeilenende ----
+  // Format: ◀ <Badge>  (z.B. "◀ BUG · ERROR")
+  // Permanent sichtbar - jeder PaintLine-Tick zeichnet sie neu.
+  // Background = Severity-Akzent, Foreground = Kontrast (weiss/schwarz
+  // je nach Luminanz). 8px Gap nach dem Code, ~10px Padding.
+  //
+  // NUR auf der Ankerzeile. Das ist die Regel, an der die ganze
+  // Mehrzeilen-Darstellung haengt: ein 7-Zeilen-Block mit sieben Badges
+  // liest sich wie sieben Befunde und waere schlechter als der Zustand
+  // vorher. Genau eine Infobar macht aus sieben markierten Zeilen optisch
+  // einen Befund.
+  if HasMark and (Mark.Badge <> '') and (ATextEndX > 0)
+     and not IsContinuation then
+    DrawMiniInfoBar(Context.Canvas, Mark, StripeCol, ACodeRect, ATextEndX);
+end;
+
 procedure TFindingEditorEvents.PaintLine(const Rect: TRect;
   const Stage: TPaintLineStage; const BeforeEvent: Boolean;
   var AllowDefaultPainting: Boolean;
   const Context: INTACodeEditorPaintContext);
 var
-  SR        : TRect;
   CodeRect  : TRect;
   Line      : Integer;
-  Mark      : TFindingMark;
-  StripeCol : TColor;
-  HasMark   : Boolean;
 begin
   if not Assigned(GHighlighter) then Exit;
   if not Assigned(Context) or not Assigned(Context.EditControl) then Exit;
@@ -1878,27 +2160,7 @@ begin
     // CodeRect.Left zurueck.
   end;
 
-  // Stripe-Farbe + Mark fuer Mini-Infobar holen.
-  HasMark := GHighlighter.TryGetMark(Context.FileName, Line, Mark);
-  StripeCol := ACCENT_ERROR;
-  if HasMark and (Mark.Color <> clNone) then
-    StripeCol := Mark.Color;
-
-  // 3px Stripe am linken Rand des Code-Bereichs.
-  // Hinweis: Parameter 'Rect' verdeckt Winapi.Windows.Rect, deshalb SR direkt nutzen.
-  SR := CodeRect;
-  SR.Right := SR.Left + STRIPE_WIDTH_PX;
-  Context.Canvas.Brush.Color := StripeCol;
-  Context.Canvas.Brush.Style := bsSolid;
-  Context.Canvas.FillRect(SR);
-
-  // ---- Mini-Infobar am rechten Zeilenende ----
-  // Format: ◀ <Badge>  (z.B. "◀ BUG · ERROR")
-  // Permanent sichtbar - jeder PaintLine-Tick zeichnet sie neu.
-  // Background = Severity-Akzent, Foreground = Kontrast (weiss/schwarz
-  // je nach Luminanz). 8px Gap nach dem Code, ~10px Padding.
-  if HasMark and (Mark.Badge <> '') and (TextEndX > 0) then
-    DrawMiniInfoBar(Context.Canvas, Mark, StripeCol, CodeRect, TextEndX);
+  PaintMarkDecorations(Context, CodeRect, Line, TextEndX);
 end;
 
 procedure TFindingEditorEvents.EndPaint(const Editor: TWinControl);

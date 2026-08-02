@@ -7,10 +7,10 @@ Vollstaendige Release-Notes: [docs/releases/v0.9.9_de.md](docs/releases/v0.9.9_d
 
 In diesem Zyklus hat das Werkzeug gelernt, **weniger** zu melden. Auf dem
 Referenz-Korpus aus 12.800 Dateien fiel die Fundzahl von **645.622 auf
-593.122 — 52.500 weniger (−8,1 %)**, ohne wissentlich einen echten Fund zu
+560.964 — 84.658 weniger (−13,1 %)**, ohne wissentlich einen echten Fund zu
 verlieren. Der Regelbestand wuchs von 183 auf **195 Regeln**.
 
-- **−52.500 Funde**, in sechs einzeln gemessenen und abgesicherten
+- **−84.658 Funde**, in sieben einzeln gemessenen und abgesicherten
   Inkrementen.
 - **`SCA194` / `SCA195`** — Dateien, die nicht zum Projekt gehoeren, und
   Units, die das Projekt uebersetzt, ohne sie zu fuehren. Beide brauchen

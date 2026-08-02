@@ -12,9 +12,23 @@ unit uDuplicateBlock;
 //      Schluessel in einer Hash-Map sammeln
 //   5. Schluessel mit >= 2 Vorkommen sind Duplikate -> melden
 //
-// Pro Block wird nur EINMAL gemeldet (Erst-Vorkommen, nicht ueberlappende
-// Folge-Fenster). Suppression via // noinspection wird vom uSuppression-
-// Modul automatisch nachgelagert.
+// Pro dupliziertem Block wird genau EINMAL gemeldet, mit dem Bereich ueber
+// den GANZEN Block (TLeakFinding.LineNumber = erste Zeile, .EndLine =
+// letzte). "Derselbe Block" heisst dabei: gleiche Vorkommens-Signatur -
+// zwei Duplikat-Gruppen, deren Erst-Vorkommen sich zufaellig ueberlappen,
+// bleiben zwei Befunde.
+//
+// ACHTUNG, historisch: dieser Satz stand hier schon, war aber bis 2026-08-02
+// FALSCH. Das Fenster wandert Zeile fuer Zeile durch den Block; jede
+// Position ist ein anderer Hash und meldete an ihrer eigenen Anfangszeile.
+// Ein duplizierter Block von K Zeilen erzeugte damit K - MinBlk + 1
+// Befunde. Der damalige Reported-Filter war nach der Anfangszeile
+// verschluesselt und konnte das prinzipiell nicht fangen. Erst Pass 3c
+// (sortieren, dann ueberlappende Fenster verschmelzen) macht die Zusage
+// wahr - siehe Kommentar dort.
+//
+// Suppression via // noinspection wird vom uSuppression-Modul automatisch
+// nachgelagert.
 //
 // Schwelle: DetectorMinBlockLines = 8 normalisierte Zeilen. Das filtert Standard-
 // Boilerplate (Property-Getter o.ae.) zuverlaessig aus.
@@ -23,6 +37,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
+  System.Generics.Defaults,          // TComparer fuer die Kandidaten-Sortierung
   uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
@@ -55,6 +70,18 @@ uses
 
 // Min-Block-Lines kommt aus uSCAConsts.DetectorMinBlockLines
 // (analyser.ini -> DuplicateBlockMinLines). Default 8.
+
+type
+  // Ein Fenster-Treffer VOR dem Verschmelzen (Pass 3a -> 3c).
+  TDupCandidate = record
+    FirstLine : Integer;   // erste Original-Zeile des Fensters
+    EndLine   : Integer;   // letzte Original-Zeile des Fensters
+    Occurs    : Integer;   // wie oft dieses Fenster in der Datei vorkommt
+    // Abstaende der weiteren Vorkommen zum ersten, als Text. Identisch
+    // fuer alle Fenster DESSELBEN duplizierten Blocks, verschieden fuer
+    // andere Duplikat-Gruppen - siehe Pass 3a.
+    Sig       : string;
+  end;
 
 const
   TRIVIAL_LINES : array[0..11] of string = (
@@ -312,6 +339,78 @@ begin
     Exit(True);
 end;
 
+function DupGroupSignature(Indices: TList<Integer>): string;
+// Gruppen-Signatur: die ABSTAENDE der Vorkommen zum ersten.
+//
+// Wandert das Fenster um t Positionen durch EINEN duplizierten Block,
+// verschieben sich ALLE seine Vorkommen um dasselbe t - die Abstaende
+// bleiben also identisch. Gleiche Signatur heisst damit beweisbar
+// "Verschiebung desselben Blocks"; unterschiedliche Signatur heisst
+// "andere Duplikat-Gruppe", auch wenn die Zeilen sich ueberlappen.
+var
+  SB : TStringBuilder;
+  m  : Integer;
+begin
+  SB := TStringBuilder.Create;
+  try
+    for m := 1 to Indices.Count - 1 do
+    begin
+      SB.Append(Indices[m] - Indices[0]);
+      SB.Append(',');
+    end;
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+procedure DupMergeRuns(Cands, Runs: TList<TDupCandidate>);
+// Verschmilzt die Fenster EINES Blocks zu je einem Lauf.
+//
+// ZWEI Bedingungen, nicht eine:
+//   1. gleiche SIGNATUR - es ist derselbe duplizierte Block
+//   2. Zeilen-UEBERLAPPUNG - die Fenster liegen wirklich ineinander
+//
+// Bedingung 1 ist nicht optional. Ein rein geometrisches Verschmelzen
+// schluckt eigenstaendige Duplikat-Gruppen, deren Erst-Vorkommen zufaellig
+// ineinander liegen: deren Partnerstellen stehen woanders in der Datei und
+// verschwinden dann komplett aus dem Bericht. Ausserdem gilt Occurs des
+// Ankers dann nicht mehr fuer den ganzen Lauf - gemessen an Unit1.pas
+// verschmolz ein Lauf drei Gruppen mit 2/9/10 Vorkommen und meldete "2x".
+// Mit Signatur-Gleichheit haben alle Mitglieder eines Laufs per
+// Konstruktion dieselbe Vorkommenszahl, und der unveraenderte Meldetext
+// des Ankers bleibt korrekt (SARIF-Fingerprint-Stabilitaet).
+//
+// Cands MUSS nach (Sig, FirstLine) sortiert sein.
+var
+  i, k : Integer;
+begin
+  i := 0;
+  while i < Cands.Count do
+  begin
+    var AccFirst := Cands[i].FirstLine;
+    var AccEnd   := Cands[i].EndLine;
+    var AccSig   := Cands[i].Sig;
+    var AccOccurs := Cands[i].Occurs;
+    k := i + 1;
+    while (k < Cands.Count) and (Cands[k].Sig = AccSig)
+          and (Cands[k].FirstLine <= AccEnd) do
+    begin
+      if Cands[k].EndLine > AccEnd then AccEnd := Cands[k].EndLine;
+      Inc(k);
+    end;
+
+    var R : TDupCandidate;
+    R.FirstLine := AccFirst;
+    R.EndLine   := AccEnd;
+    R.Occurs    := AccOccurs;
+    R.Sig       := '';
+    Runs.Add(R);
+
+    i := k;
+  end;
+end;
+
 class procedure TDuplicateBlockDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
@@ -321,7 +420,11 @@ var
   // TObjectDictionary mit doOwnsValues raeumt die TList<Integer>-Values
   // automatisch beim Free auf - keine eigene Cleanup-Schleife noetig.
   Hashes      : TObjectDictionary<string, TList<Integer>>;
-  Reported    : TDictionary<Integer, Boolean>;
+  // Kandidaten VOR dem Verschmelzen. Ersetzt den frueheren Reported-Filter,
+  // der ueberlappende Folge-Fenster nicht fangen konnte (Pass 3c).
+  Cands       : TList<TDupCandidate>;
+  // Verschmolzene Laeufe - je Lauf genau ein Befund (Pass 3c -> 3d).
+  Runs        : TList<TDupCandidate>;
   i, NCount   : Integer;
   Window      : string;
   Indices     : TList<Integer>;
@@ -338,7 +441,8 @@ begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   Hashes   := TObjectDictionary<string, TList<Integer>>.Create([doOwnsValues]);
-  Reported := TDictionary<Integer, Boolean>.Create;
+  Cands    := TList<TDupCandidate>.Create;
+  Runs     := TList<TDupCandidate>.Create;
   try
     if Lines.Count < MinBlk * 2 then Exit;
 
@@ -372,16 +476,13 @@ begin
       Indices.Add(i);
     end;
 
-    // Pass 3: Duplikate melden, dabei ueberlappende Folge-Fenster
-    // unterdruecken (nur Erst-Vorkommen pro Block) UND Bloecke skippen
-    // die ueberwiegend aus if/end-Boilerplate bestehen.
+    // Pass 3a: Kandidaten sammeln. Ein Fenster kommt nur durch, wenn es
+    // mehrfach vorkommt und keines der beiden Boilerplate-Gates greift.
     for Pair in Hashes do
     begin
       if Pair.Value.Count < 2 then Continue;
 
       FirstLine := LineIndex[Pair.Value[0]];
-      if Reported.ContainsKey(FirstLine) then Continue;
-      Reported.Add(FirstLine, True);
 
       // Original-Zeilenbereich des Erst-Vorkommens ermitteln und auf
       // if/end-Anteil pruefen. Bei zu viel Boilerplate skippen.
@@ -393,19 +494,104 @@ begin
       // Parameterlisten im Routinenkopf sind sprachlich erzwungen.
       if IsDeclarationBoilerplate(Lines, FirstLine, OrigEndLine) then Continue;
 
+      var C : TDupCandidate;
+      C.FirstLine := FirstLine;
+      C.EndLine   := OrigEndLine;
+      C.Occurs    := Pair.Value.Count;
+      // Gruppen-Signatur: die ABSTAENDE der Vorkommen zum ersten Vorkommen.
+      //
+      // Wandert das Fenster um t Positionen durch EINEN duplizierten Block,
+      // verschieben sich ALLE seine Vorkommen um dasselbe t - die Abstaende
+      // bleiben also identisch. Zwei Fenster mit gleicher Signatur sind
+      // damit garantiert Verschiebungen DESSELBEN Blocks; unterschiedliche
+      // Signatur heisst: andere Duplikat-Gruppe, auch wenn die Zeilen sich
+      // ueberlappen.
+      //
+      // Genau daran haengt, dass beim Verschmelzen kein fremdes Duplikat
+      // verschluckt wird und dass Occurs des Ankers fuer den ganzen Lauf
+      // gilt - alle Mitglieder eines Laufs haben per Konstruktion dieselbe
+      // Vorkommenszahl.
+      C.Sig := DupGroupSignature(Pair.Value);
+      Cands.Add(C);
+    end;
+
+    // Pass 3b: nach (Signatur, Anfangszeile) sortieren. ZWINGEND vor dem
+    // Verschmelzen: die Iteration ueber Hashes ist ungeordnet, ein
+    // Verschmelzen in Hash-Reihenfolge waere von Lauf zu Lauf verschieden -
+    // und damit die Ausgabe nicht reproduzierbar. Die Signatur gruppiert
+    // zusaetzlich die Fenster EINES Blocks zusammen.
+    Cands.Sort(TComparer<TDupCandidate>.Construct(
+      function(const A, B: TDupCandidate): Integer
+      begin
+        Result := CompareStr(A.Sig, B.Sig);
+        if Result = 0 then Result := A.FirstLine - B.FirstLine;
+        if Result = 0 then Result := A.EndLine - B.EndLine;
+      end));
+
+    // Pass 3c: die Fenster EINES Blocks zu EINEM Befund verschmelzen.
+    //
+    // Bis hierher erzeugte ein duplizierter Block von K Zeilen genau
+    // K - MinBlk + 1 Befunde: das Fenster wandert Zeile fuer Zeile durch
+    // den Block, jede Position ist ein anderer Hash und meldet an ihrer
+    // eigenen Anfangszeile. Der alte Reported-Filter war nach FirstLine
+    // verschluesselt und konnte das nicht fangen - er verhinderte nur, dass
+    // zwei VERSCHIEDENE Hashes mit DERSELBEN Anfangszeile doppelt melden.
+    // Der Kopfkommentar behauptete trotzdem, Folge-Fenster wuerden
+    // unterdrueckt.
+    //
+    // Gemessen an Alcinoe/ALDatabaseBenchmark/Unit1.pas: 218 Befunde, davon
+    // 193 (89 %) blosse Fensterverschiebungen. Eine einzige Klassen-
+    // Deklaration trug 18 Hinweise uebereinander.
+    //
+    // ZWEI Bedingungen, nicht eine:
+    //   1. gleiche SIGNATUR - es ist derselbe duplizierte Block
+    //   2. Zeilen-UEBERLAPPUNG - die Fenster liegen wirklich ineinander
+    //
+    // Bedingung 1 ist nicht optional. Ein rein geometrisches Verschmelzen
+    // ("Zeilen ueberlappen sich") schluckt eigenstaendige Duplikat-Gruppen,
+    // deren Erst-Vorkommen zufaellig ineinander liegen: deren Partnerstellen
+    // stehen ganz woanders in der Datei und verschwinden dann komplett aus
+    // dem Bericht. Ausserdem gilt Occurs des Ankers dann nicht mehr fuer den
+    // ganzen Lauf - ein Block, der 12x vorkommt, wuerde als "2x" gemeldet,
+    // weil das linkeste Fenster zufaellig nur zwei Vorkommen hat. Mit
+    // Signatur-Gleichheit haben alle Mitglieder eines Laufs per Konstruktion
+    // dieselbe Vorkommenszahl.
+    //
+    // Ein Duplikat ist EIN Befund ueber den GANZEN Block. Der Anker bleibt
+    // die erste Zeile, der Bereich waechst bis zum Ende des letzten
+    // ueberlappenden Fensters derselben Gruppe.
+    DupMergeRuns(Cands, Runs);
+
+    // Pass 3d: Befunde in Datei-Reihenfolge ausgeben. Nach Signatur
+    // gruppiert liegen die Laeufe sonst in Hash-Reihenfolge im Ergebnis -
+    // fachlich egal, aber die Ausgabereihenfolge soll nachvollziehbar der
+    // Datei folgen und zwischen Laeufen stabil sein.
+    Runs.Sort(TComparer<TDupCandidate>.Construct(
+      function(const A, B: TDupCandidate): Integer
+      begin
+        Result := A.FirstLine - B.FirstLine;
+        if Result = 0 then Result := A.EndLine - B.EndLine;
+      end));
+
+    for i := 0 to Runs.Count - 1 do
+    begin
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
       F.MethodName := '';
-      F.LineNumber := IntToStr(FirstLine);
+      F.LineNumber := IntToStr(Runs[i].FirstLine);
+      // Ein Duplikat ist per Definition ein BLOCK - der Befund umfasst
+      // FirstLine..EndLine, nicht nur die Anfangszeile.
+      F.EndLine    := Runs[i].EndLine;
       F.MissingVar := Format(
         'Code block (%d lines) appears %dx in file - consider extracting a method',
-        [MinBlk, Pair.Value.Count]);
+        [MinBlk, Runs[i].Occurs]);
       F.SetKind(fkDuplicateBlock);
       Results.Add(F);
     end;
   finally
     Hashes.Free;     // doOwnsValues: gibt alle TList<Integer> mit frei
-    Reported.Free;
+    Cands.Free;
+    Runs.Free;
     ReleaseLines(Lines, Cached);
   end;
 end;

@@ -484,6 +484,19 @@ begin
         E.EndObj;
         E.BeginObjPair('region');
         E.PairInt('startLine', LineNo);
+        // endLine NUR bei echten Mehrzeilen-Befunden. Ein einzeiliger Fund
+        // bekommt kein endLine - SARIF definiert dessen Abwesenheit bereits
+        // als "endet in startLine". Wuerde man es immer schreiben, blaehte
+        // das jede Zeile eines 600-MB-Exports ohne Informationsgewinn.
+        //
+        // Verglichen wird gegen LineNo, NICHT gegen F.LineInt: bei einer
+        // unparsbaren LineNumber klemmt ParseLineNumber auf 1 (SARIF
+        // verbietet 0), F.LineInt liefert dort aber 0. Der Vergleich muss
+        // an dem Wert haengen, der tatsaechlich als startLine rausgeht -
+        // sonst koennte endLine < startLine entstehen und das SARIF waere
+        // schema-widrig.
+        if F.SpanEnd > LineNo then
+          E.PairInt('endLine', F.SpanEnd);
         E.EndObj;
         E.EndObj;                                      // physicalLocation
         E.EndObj;                                      // location
