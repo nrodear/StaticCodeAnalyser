@@ -403,19 +403,11 @@ implementation
 
 uses
   uAnalyserPalette,     // ACCENT_ERROR als zentrale Stripe-Default-Farbe
-  uAnalyserTheme,       // BlendColor + GCachedEditorBgDark (Span-Abstufung)
   uPathNormalize,       // SPOT fuer Pfad-Normalisierung (Cache-Keys)
   uRepoSettings;        // OverlayPosition aus [UI]
 
 const
   STRIPE_WIDTH_PX  = 3;
-  // Mischanteil der Akzentfarbe auf Fortsetzungszeilen eines
-  // Mehrzeilen-Befundes. 0,45 ist bewusst nicht 0,5: der Streifen soll
-  // deutlich schwaecher wirken als der Anker, aber auf keinem Theme
-  // verschwinden - eine unsichtbare Fortsetzung waere schlechter als gar
-  // keine Bereichsmarkierung, weil der Nutzer das Ende des Blocks dann
-  // wieder raten muesste.
-  SPAN_CONT_BLEND  = 0.45;
   // Obergrenze fuer die Zeilen, die EIN Befund markieren darf. Reine
   // Schadensbegrenzung gegen ein fehlerhaftes EndLine, kein fachliches
   // Limit. Der Wert ist bewusst weit ueber allem angesetzt, was eine
@@ -423,23 +415,6 @@ const
   // hebt nichts mehr hervor. Greift die Grenze, ist das ein Datenfehler
   // und keine Darstellungsfrage.
   MAX_SPAN_LINES   = 500;
-
-function SpanContinuationColor(AAccent: TColor): TColor;
-// Streifenfarbe fuer die Fortsetzungszeilen eines Mehrzeilen-Befundes:
-// dieselbe Akzentfarbe, zum Editor-Hintergrund hin abgemischt.
-//
-// Gemischt wird gegen Schwarz bzw. Weiss je nach Theme, NICHT gegen die
-// tatsaechliche Pixelfarbe der Zeile. Grund: an dieser Stelle im PaintLine
-// traegt Canvas.Brush.Color nicht zuverlaessig den Zeilenhintergrund
-// (Selektion, Suchtreffer-Hervorhebung, gefaltete Bereiche malen dort
-// eigene Farben). Ein Theme-Flag ist deterministisch und kann nicht dazu
-// fuehren, dass der Streifen auf einer selektierten Zeile verschwindet.
-begin
-  if GCachedEditorBgDark then
-    Result := BlendColor(clBlack, AAccent, SPAN_CONT_BLEND)
-  else
-    Result := BlendColor(clWhite, AAccent, SPAN_CONT_BLEND);
-end;
 
 function IsLightColor(AColor: TColor): Boolean;
 // ITU-R BT.601 Luminanz - bei > 127 ist die Farbe "hell" und Schwarz
@@ -2074,15 +2049,23 @@ begin
   if HasMark and (Mark.Color <> clNone) then
     StripeCol := Mark.Color;
 
-  // ---- Mehrzeilen-Befund: Fortsetzungszeilen abschwaechen ----------------
+  // ---- Mehrzeilen-Befund: Fortsetzungszeilen ------------------------------
   // Ein DuplicateBlock ueber 59-61 belegt drei Zeilen, ist aber EIN Befund.
-  // Gleiche Farbe sagt "gehoert zusammen", schwaechere Saettigung sagt
-  // "hier ist nicht der Anker". Ohne die Abstufung liest sich der Block wie
-  // drei gleichrangige Funde.
+  // Der Streifen laeuft in VOLLER Akzentfarbe ueber alle Bereichszeilen -
+  // als durchgehender Balken. Den Anker unterscheidet die Infobar, die es
+  // nur dort gibt; der Streifen selbst traegt keine Hierarchie.
+  //
+  // GESCHEITERT und zurueckgenommen: die erste Fassung mischte die
+  // Fortsetzungszeilen zu 45 % Richtung Schwarz/Weiss ab. Nachgerechnet
+  // ergibt das auf dunklen Themes Luminanz 56-73 gegen einen
+  // Editor-Hintergrund von ~30-45 - beim Gray-Schema war #3A3A3A auf
+  // #2D2D30 schlicht unsichtbar. Da Fortsetzungszeilen bewusst kein Badge
+  // tragen, war der Streifen ihr EINZIGES Signal: die Bereichsmarkierung
+  // existierte, ohne wahrnehmbar zu sein ("die range wird nicht markiert").
+  // Ein 3px-Streifen hat keine Reserve fuer Abstufung - wenn er da ist,
+  // dann ganz.
   var IsContinuation : Boolean :=
         HasMark and (Mark.SpanRole in [srMiddle, srLast]);
-  if IsContinuation then
-    StripeCol := SpanContinuationColor(StripeCol);
 
   // 3px Stripe am linken Rand des Code-Bereichs.
   // Hinweis: Parameter 'Rect' verdeckt Winapi.Windows.Rect, deshalb SR direkt nutzen.
