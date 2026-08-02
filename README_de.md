@@ -285,9 +285,10 @@ Beide Totals stimmen mathematisch überein.
 
 - **Severity-/Type-Combo**: filtert das Grid auf eine Kategorie
 - **Profile-Combo**: schaltet das aktive Rule-Set live um. Mitgeliefert:
-  `ide-fast` (Plugin-Default — nur Bugs + Vulns), `default` (alle
-  Detektoren), `strict` (alle + `UnusedUses`), `security` (Vulns +
-  Hotspots), `bugs-only`, `code-quality`, `dfm-only`. Profile leben in
+  `ide-fast` (Plugin-Default — nur Bugs + Vulns), `default` (alles ausser
+  den sechs reinen Konventions-Regeln), `strict` (wirklich alles), `style`
+  (genau diese sechs), `security` (Vulns + Hotspots), `bugs-only`,
+  `code-quality`, `dfm-only`. Profile leben in
   `rules/sca-rules.json` unter `profiles` und die Combo wird daraus
   gefüllt — eigene Profile dort eintragen, erscheinen automatisch.
   Auswahl wird in `[Rules] IdeProfile` persistiert und greift beim
@@ -506,8 +507,14 @@ analyser.d12.exe --path . --profile bugs-only --min-severity warning
 ```
 
 `--profile <name>` akzeptiert jedes Profile aus `rules/sca-rules.json`
-(mitgeliefert: `default`, `ide-fast`, `strict`, `security`, `bugs-only`,
-`code-quality`, `dfm-only`). `--min-severity hint|warning|error` skippt
+(mitgeliefert: `default`, `strict`, `style`, `ide-fast`, `security`,
+`bugs-only`, `code-quality`, `dfm-only`). **`default` laesst bewusst sechs
+reine Konventions-Regeln weg** — Doku-Pflicht fuer public members,
+`Assigned()` statt `<> nil`, `begin..end` bei einzeiligen Zweigen, `with`,
+eine Klasse je Unit und Klartext-Beschriftungen im DFM. Das sind korrekte
+Funde, aber Konventionen — zusammen waren sie 45 % von allem, was ein
+Neueinsteiger zu sehen bekam. `--profile style` schaltet genau diese ein,
+`--profile strict` schaltet alles ein. `--min-severity hint|warning|error` skippt
 Detektoren unterhalb der Schwelle. Beide Flags ueberschreiben `[Rules]`
 in `analyser.ini`.
 

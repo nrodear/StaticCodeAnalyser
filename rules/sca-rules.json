@@ -1,6 +1,6 @@
 ﻿{
   "$schema": "./sca-rules.schema.json",
-  "version": "1.4",
+  "version": "1.5",
   "tool": {
     "name": "StaticCodeAnalyser",
     "version": "0.9.9",
@@ -49,7 +49,15 @@
       "DfmCrossFormCoupling", "DfmLayerViolation", "DfmGodHandler",
       "DfmActionMismatch"
     ],
-    "default": ["*"],
+    "style": [
+      "PublicMemberWithoutDoc", "NilComparison", "BeginEndRequired",
+      "WithStatement", "ClassPerFile", "DfmHardcodedCaption"
+    ],
+    "default": [
+      "*",
+      "!PublicMemberWithoutDoc", "!NilComparison", "!BeginEndRequired",
+      "!WithStatement", "!ClassPerFile", "!DfmHardcodedCaption"
+    ],
     "strict":  ["*", "UnusedUses"],
 
     "selftest-quiet": [

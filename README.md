@@ -281,9 +281,10 @@ Both rows are guaranteed to add up to the same total.
 
 - **Severity / type dropdowns**: narrow the grid down to a single category.
 - **Profile dropdown**: switch the active rule-set on the fly. Bundled
-  profiles: `ide-fast` (IDE default — bugs + vulns only), `default` (every
-  detector), `strict` (default + `UnusedUses`), `security` (vulns +
-  hotspots only), `bugs-only`, `code-quality`, `dfm-only`. Profiles
+  profiles: `ide-fast` (IDE default — bugs + vulns only), `default`
+  (everything except the six pure-convention rules), `strict` (really
+  everything), `style` (exactly those six), `security` (vulns + hotspots
+  only), `bugs-only`, `code-quality`, `dfm-only`. Profiles
   live in `rules/sca-rules.json` under `profiles` and the dropdown is
   populated from there — drop your own profile in the JSON and it
   shows up. Selection is persisted to `[Rules] IdeProfile` and takes
@@ -503,8 +504,13 @@ analyser.d12.exe --path . --profile bugs-only --min-severity warning
 ```
 
 `--profile <name>` accepts any profile from `rules/sca-rules.json`
-(bundled: `default`, `ide-fast`, `strict`, `security`, `bugs-only`,
-`code-quality`, `dfm-only`). `--min-severity hint|warning|error` skips
+(bundled: `default`, `strict`, `style`, `ide-fast`, `security`,
+`bugs-only`, `code-quality`, `dfm-only`). **`default` deliberately leaves out
+six pure-convention rules** — public-member docs, `Assigned()` vs `<> nil`,
+`begin..end` on single-statement branches, `with`, one-class-per-unit and
+hardcoded DFM captions. They are correct findings, but they are conventions,
+and together they were 45 % of everything a newcomer saw. `--profile style`
+turns exactly those on; `--profile strict` turns on everything. `--min-severity hint|warning|error` skips
 detectors below the threshold. Both flags override `[Rules]` in `analyser.ini`.
 
 **`analyser.ini` settings for Git**:

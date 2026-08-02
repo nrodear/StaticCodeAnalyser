@@ -464,8 +464,11 @@ begin
   WriteLn('');
   WriteLn('Rule-set:');
   WriteLn('  --profile <name>      Bundled or custom profile from rules/sca-rules.json');
-  WriteLn('                        (default, ide-fast, strict, security,');
-  WriteLn('                         bugs-only, code-quality, dfm-only)');
+  WriteLn('                        (default, strict, ide-fast, security,');
+  WriteLn('                         bugs-only, code-quality, style, dfm-only)');
+  WriteLn('                        default = alles AUSSER den sechs reinen');
+  WriteLn('                        Konventions-Regeln; die liegen in style.');
+  WriteLn('                        strict = wirklich alles.');
   WriteLn('                        Overrides [Rules] Profile in analyser.ini.');
   WriteLn('  --min-severity <lvl>  hint|warning|error - skip detectors below');
   WriteLn('                        this severity threshold.');
