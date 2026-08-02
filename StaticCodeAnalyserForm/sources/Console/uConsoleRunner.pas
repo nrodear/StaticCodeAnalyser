@@ -1022,9 +1022,17 @@ begin
       // messen, und misst seriell. Auf ErrOutput, damit --quiet-Pipelines,
       // die stdout weiterverarbeiten, die Warnung trotzdem sehen.
       if Args.Parallel and (gParallelDeclineReason <> '') then
+      begin
+        // Erst stdout leeren. Gehen beide Stroeme in dasselbe Terminal,
+        // zerreissen sie sich sonst mitten im Wort - beobachtet:
+        // "...ueber die DateireihenSummary: 0 Error(s)...folge und ist".
+        // Der Inhalt stimmt, lesbar ist es nicht.
+        Flush(Output);
         WriteLn(ErrOutput,
           'Hinweis: --parallel war gesetzt, der Scan lief aber seriell - '
           + gParallelDeclineReason + '.');
+        Flush(ErrOutput);
+      end;
     except
       on E: Exception do
       begin
