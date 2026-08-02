@@ -83,6 +83,11 @@ type
     FAllSeverityItems  : TArray<TFilterComboItem>;
     // Fuzzy-Suche der Severity-Combo; gehoert dem Formular (Owner=Self).
     FSeveritySearch    : TFuzzyComboSearch;
+    // Entprellung des Suchfeldes. Das IDE-Plugin hat sie seit laengerem
+    // (TAnalyserFrame.SearchChange, 200 ms); hier lief ApplyFilter bis
+    // jetzt bei JEDEM Tastendruck ueber alle Befunde.
+    FSearchDebounce    : TTimer;
+    procedure SearchDebounceFire(Sender: TObject);
     FAllTypeItems      : TArray<TFilterComboItem>;
     // Gefilterte Untermenge (Display-Filter via Severity/Type/Search).
     // Owned=False - die Findings gehoeren FAllFindings.
@@ -215,6 +220,12 @@ implementation
 // ShowMessage ist hier als User-Feedback-Kanal verwendet, nicht als Debug.
 // GodClass/LargeClass: VCL-Main-Form sammelt VCL-Event-Handler, kann nicht
 // dekomponiert werden ohne Action-Owner-Splits.
+
+const
+  // Wartezeit des Suchfeld-Filters. Bewusst derselbe Wert wie im
+  // IDE-Plugin (TAnalyserFrame DEBOUNCE_MS) - beide Oberflaechen sollen
+  // sich beim Tippen gleich anfuehlen.
+  SEARCH_DEBOUNCE_MS = 200;
 
 uses
   clipbrd,
@@ -359,6 +370,12 @@ begin
   // sonst liefe mit jeder Taste ein Filterlauf ueber alle Befunde.
   FSeveritySearch := TFuzzyComboSearch.Create(Self);
   FSeveritySearch.Attach(SeverityFilterCombo);
+
+  // Entprellung des Suchfeldes - 200 ms wie im IDE-Plugin.
+  FSearchDebounce := TTimer.Create(Self);
+  FSearchDebounce.Interval := SEARCH_DEBOUNCE_MS;
+  FSearchDebounce.Enabled  := False;
+  FSearchDebounce.OnTimer  := SearchDebounceFire;
 
   // ---- Sonar-Style Stats-Tile-Reihe oberhalb des Grids -----------------
   // PanelStats kommt aus dem DFM (alTop, Height=45). Tiles werden als
@@ -1513,7 +1530,28 @@ begin
 end;
 
 procedure TForm2.SearchEditChange(Sender: TObject);
+// Entprellt statt sofort. Beim Tippen von 'memory' lief ApplyFilter
+// vorher sechsmal ueber die komplette Fundliste und baute sechsmal das
+// Grid neu; jetzt einmal nach dem Tippstopp. Uebernommen aus dem
+// IDE-Plugin, das dieselbe Entprellung seit laengerem hat - gleiche
+// Wartezeit, damit sich beide Oberflaechen gleich anfuehlen.
+//
+// Die anderen Filter (Severity-/Type-Combo) feuern weiterhin sofort: dort
+// ist eine Auswahl ein einzelnes Ereignis, kein Zeichenstrom.
 begin
+  if FSearchDebounce = nil then
+  begin
+    ApplyFilter;   // Fallback, falls FormCreate noch nicht durch ist
+    Exit;
+  end;
+  FSearchDebounce.Enabled := False;
+  FSearchDebounce.Enabled := True;
+end;
+
+procedure TForm2.SearchDebounceFire(Sender: TObject);
+begin
+  if FSearchDebounce <> nil then FSearchDebounce.Enabled := False;
+  if csDestroying in ComponentState then Exit;
   ApplyFilter;
 end;
 
