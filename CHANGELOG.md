@@ -24,6 +24,21 @@ cycle was dominated by a measured false-positive campaign: on the
   attributable to the fix after factoring out machine variance against
   unchanged detectors. Findings byte-identical, all 141 rules unchanged.
 
+### Breaking for baselines
+
+- **`SCA021` message now names the real line range** (`Code block (lines
+  513-533, 8 matched lines) appears 2x in file`). The old text counted
+  normalised lines while the marked region counts source lines, so the two
+  could never agree. The SARIF fingerprint hashes the message, so every
+  `SCA021` finding gets a new fingerprint and shows up once as *new* in
+  existing baselines — re-write the baseline after updating. No other rule
+  affected, finding count unchanged.
+- **`default` profile no longer includes six pure-convention rules**
+  (`PublicMemberWithoutDoc`, `NilComparison`, `BeginEndRequired`,
+  `WithStatement`, `ClassPerFile`, `DfmHardcodedCaption`) — together 45.4 %
+  of all findings on the reference corpus. They moved to the new `style`
+  profile; `strict` still means everything.
+
 ### Searchable rule filter
 
 - **The rule filter combo is searchable.** It holds roughly 200 entries —

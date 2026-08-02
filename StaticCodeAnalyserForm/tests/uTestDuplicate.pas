@@ -1085,10 +1085,19 @@ begin
   try
     Fd := TFindingHelper.FirstOf(F, fkDuplicateBlock);
     Assert.IsNotNull(Fd, 'Duplikat soll gemeldet werden');
+    // Der Text nennt den ECHTEN Quelltext-Bereich (3-14 im Fixture) und
+    // zusaetzlich die Zahl der uebereinstimmenden NORMALISIERTEN Zeilen.
+    // Beide Zahlen sind noetig: der Bereich sagt, was markiert ist, die
+    // zweite sagt, wieviel davon wirklich uebereinstimmt.
+    //
+    // Der Text ist weiterhin lasttragend - der SARIF-Fingerprint haengt
+    // daran. Er wurde EINMAL bewusst geaendert (Release-Note); ab jetzt
+    // nagelt dieser Test ihn wieder fest.
     Assert.AreEqual(
-      'Code block (8 lines) appears 2x in file - consider extracting a method',
+      'Code block (lines 3-14, 8 matched lines) appears 2x in file - ' +
+      'consider extracting a method',
       Fd.MissingVar,
-      'Meldetext des Ankers muss unveraendert bleiben (SARIF-Fingerprint)');
+      'Meldetext des Ankers ist fingerprint-relevant und wird hier fixiert');
   finally F.Free; end;
 end;
 

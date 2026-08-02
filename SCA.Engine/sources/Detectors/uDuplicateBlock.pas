@@ -582,9 +582,23 @@ begin
       // Ein Duplikat ist per Definition ein BLOCK - der Befund umfasst
       // FirstLine..EndLine, nicht nur die Anfangszeile.
       F.EndLine    := Runs[i].EndLine;
+      // Der Text nennt jetzt den ECHTEN Quelltext-Bereich.
+      //
+      // Vorher stand dort nur "(%d lines)" mit MinBlk - der Fenstergroesse
+      // im NORMALISIERTEN Strom, aus dem Leerzeilen und Kommentare bereits
+      // entfernt sind. Der markierte Bereich ist deshalb immer groesser,
+      // und die Meldung widersprach sichtbar der Markierung: "8 lines" bei
+      // 21 markierten Zeilen.
+      //
+      // PREIS, bewusst bezahlt: der SARIF-Fingerprint ist ein Hash ueber
+      // RuleID + Pfad + Zeile + MELDUNG. Alle 9.148 SCA021-Funde des
+      // Referenzkorpus bekommen damit einen neuen Fingerprint und laufen in
+      // bestehenden Baselines einmalig als "neu" auf. Das gehoert in die
+      // Release-Notes, nicht in einen Nebensatz.
       F.MissingVar := Format(
-        'Code block (%d lines) appears %dx in file - consider extracting a method',
-        [MinBlk, Runs[i].Occurs]);
+        'Code block (lines %d-%d, %d matched lines) appears %dx in file - ' +
+        'consider extracting a method',
+        [Runs[i].FirstLine, Runs[i].EndLine, MinBlk, Runs[i].Occurs]);
       F.SetKind(fkDuplicateBlock);
       Results.Add(F);
     end;
