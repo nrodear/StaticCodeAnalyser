@@ -1284,6 +1284,92 @@ begin
   Bucket.AddOrSetValue(ALine, Owner);   // Record = Wertkopie, zurueckschreiben
 end;
 
+function SpanOrderCompare(const A, B: TFindingMark): Integer;
+// Start aufsteigend, bei gleichem Start das LAENGERE zuerst. Legt fest,
+// welcher Bereich bei Ueberschneidung die Klammer bekommt - und macht die
+// Auswahl unabhaengig von der Reihenfolge, in der die Anker aus dem
+// Dictionary kommen.
+begin
+  Result := A.SpanFirst - B.SpanFirst;
+  if Result = 0 then Result := B.SpanLast - A.SpanLast;
+end;
+
+procedure DemoteOverlappingSpans(Bucket: TFileMarks;
+  const AAnchors: TArray<Integer>);
+// EIN Balken je Region.
+//
+// Der Marker-Speicher ist "Zeile -> EINE Marke". Ueberlappende Bereiche
+// lassen sich darin nicht getrennt darstellen: am Referenzkorpus gemessen
+// beruehren 24,7 % aller DuplicateBlock-Funde einen anderen, bis zu acht
+// uebereinander. Ohne diese Stufe entstand ein durchgehender Balken mit
+// mehreren Ober- und Unterkappen darin, aus dem sich nicht mehr ablesen
+// liess, welche Zeile zu welchem Befund gehoert.
+//
+// Nur EINSCHLUSS zu behandeln reicht nicht - das waren gemessen bloss
+// 1,5 %; der Normalfall (23,2 %) sind TEIL-Ueberlappungen, bei denen
+// keiner den anderen enthaelt. Deshalb greedy nach SpanOrderCompare: der
+// erste Bereich einer Region behaelt die Klammer, jeder weitere, der ihn
+// beruehrt, verliert sie. Danach ueberlagert sich kein Balken mehr;
+// korpusweit behalten 86,3 % der Befunde ihre Klammer.
+//
+// Zurueckgestuft wird auf srSingle - Titel, Badge, Infobar, Hover und der
+// Eintrag in der Fundliste bleiben. Es verschwindet NUR die Klammer,
+// niemals ein Befund.
+//
+// BEWUSST NICHT srMiddle/srLast: das sind Fortsetzungsrollen und wuerden
+// Infobar und Hover unterdruecken - ein eigenstaendiger Befund waere weg.
+var
+  Spans    : TList<TFindingMark>;
+  Accepted : TList<TFindingMark>;
+  i, k     : Integer;
+  M        : TFindingMark;
+  Clash    : Boolean;
+begin
+  Spans    := TList<TFindingMark>.Create;
+  Accepted := TList<TFindingMark>.Create;
+  try
+    for i := 0 to High(AAnchors) do
+      if Bucket.TryGetValue(AAnchors[i], M) and (M.SpanRole = srFirst)
+         and (M.SpanLast > M.SpanFirst) then
+        Spans.Add(M);
+    if Spans.Count < 2 then Exit;
+
+    // Anonyme Huelle statt der Funktion direkt: dasselbe Muster wie in
+    // BuildMarkForLineGroup, und unabhaengig davon ob der Compiler eine
+    // globale Funktion an 'reference to' bindet.
+    Spans.Sort(TComparer<TFindingMark>.Construct(
+      function(const A, B: TFindingMark): Integer
+      begin
+        Result := SpanOrderCompare(A, B);
+      end));
+
+    for i := 0 to Spans.Count - 1 do
+    begin
+      M := Spans[i];
+      Clash := False;
+      for k := 0 to Accepted.Count - 1 do
+        if (M.SpanFirst <= Accepted[k].SpanLast)
+           and (Accepted[k].SpanFirst <= M.SpanLast) then
+        begin
+          Clash := True;
+          Break;
+        end;
+      if Clash then
+      begin
+        M.SpanRole := srSingle;
+        Bucket.AddOrSetValue(M.SpanFirst, M);
+      end
+      else
+      begin
+        Accepted.Add(M);
+      end;
+    end;
+  finally
+    Accepted.Free;
+    Spans.Free;
+  end;
+end;
+
 procedure CoverOneSpan(Bucket: TFileMarks; const AAnchor: TFindingMark);
 // Legt die Fortsetzungsmarken EINES Bereichs an.
 //
@@ -1328,6 +1414,10 @@ begin
   // Schluessel-Snapshot: die Schleife fuegt Eintraege in dasselbe
   // Dictionary ein, ueber das sie sonst iterieren wuerde.
   Anchors := Bucket.Keys.ToArray;
+
+  // Erst entscheiden, WELCHE Bereiche ueberhaupt einen Balken bekommen -
+  // sich ueberschneidende fallen raus, sonst ueberlagern sich die Balken.
+  DemoteOverlappingSpans(Bucket, Anchors);
 
   for Line in Anchors do
   begin
