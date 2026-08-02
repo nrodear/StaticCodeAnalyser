@@ -25,7 +25,8 @@ interface
 uses
   System.Classes, System.SysUtils, System.Generics.Collections,
   System.Generics.Defaults,          // TComparer fuer die Treffer-Sortierung
-  Vcl.StdCtrls, Vcl.Controls, Winapi.Windows, Winapi.Messages;
+  Vcl.StdCtrls, Vcl.Controls, Vcl.ExtCtrls,
+  Winapi.Windows, Winapi.Messages;
 
 type
   // Ein Eintrag des Schnappschusses.
@@ -44,6 +45,10 @@ type
     FUpdating   : Boolean;   // Reentranz-Sperre waehrend wir Items umbauen
     FIsFiltering: Boolean;   // True solange eine Eingabe die Liste reduziert
     FLastQuery  : string;
+    FPending    : string;    // zuletzt getippte, noch nicht angewandte Eingabe
+    FTimer      : TTimer;    // Entprellung - siehe TimerTick
+    procedure TimerTick(Sender: TObject);
+    procedure ShowListOnce;
     procedure ComboChange(Sender: TObject);
     procedure ComboSelect(Sender: TObject);
     procedure ComboKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
@@ -83,6 +88,17 @@ const
   SCORE_CAMEL       = 4;   // Grossbuchstabe mitten im Wort (CamelCase-Grenze)
   PENALTY_GAP       = 1;   // je uebersprungenem Zeichen
   SEPARATOR_TAG     = -1;  // Sektions-Trenner der Filterliste
+  // Entprellung: erst wenn der Nutzer kurz innehaelt, wird gefiltert.
+  // Ohne das wurde bei JEDEM Tastendruck die komplette Liste (rund 200
+  // Eintraege = 200 Fenster-Nachrichten) neu aufgebaut und die Dropdown
+  // auf- und zugeklappt - spuerbar traege, und das staendige Auf/Zu setzt
+  // und loest die Maus-Capture, wodurch der Cursor verschwand.
+  DEBOUNCE_MS       = 160;
+  // Mehr Treffer als das liest ohnehin niemand ab, und jeder weitere
+  // kostet eine Fenster-Nachricht beim Aufbau. Wird gedeckelt, sagt die
+  // letzte Zeile das ausdruecklich - stillschweigend abschneiden waere
+  // schlimmer als langsam sein.
+  MAX_HITS          = 50;
 
 function IsWordBoundary(const AText: string; AIndex: Integer): Boolean;
 var
@@ -180,12 +196,20 @@ constructor TFuzzyComboSearch.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
   FAll := TList<TFuzzyComboEntry>.Create;
+  FTimer := TTimer.Create(Self);
+  FTimer.Enabled  := False;
+  FTimer.Interval := DEBOUNCE_MS;
+  FTimer.OnTimer  := TimerTick;
 end;
 
 destructor TFuzzyComboSearch.Destroy;
 begin
   // Ereignisse zurueckgeben, falls die Combo uns ueberlebt (der Host
   // besitzt sie, nicht wir).
+  if Assigned(FTimer) then
+  begin
+    FTimer.Enabled := False;
+  end;
   if Assigned(FCombo) then
   begin
     FCombo.OnChange := FHostChange;
@@ -231,6 +255,11 @@ begin
   end;
   FIsFiltering := False;
   FLastQuery := '';
+  FPending := '';
+  if Assigned(FTimer) then
+  begin
+    FTimer.Enabled := False;
+  end;
 end;
 
 function TFuzzyComboSearch.SelectedTag(var ATag: NativeInt): Boolean;
@@ -248,8 +277,8 @@ procedure TFuzzyComboSearch.ApplyQuery(const AQuery: string);
 // sortiert. Sektions-Trenner fallen dabei weg - sie sind keine waehlbaren
 // Ziele und wuerden die Trefferliste nur verduennen.
 var
-  Hits   : TList<TPair<Integer, Integer>>;   // Score, Index in FAll
-  i, Sc  : Integer;
+  Hits        : TList<TPair<Integer, Integer>>;   // Score, Index in FAll
+  i, Sc, Shown: Integer;
 begin
   if not Assigned(FCombo) then Exit;
   Hits := TList<TPair<Integer, Integer>>.Create;
@@ -278,10 +307,26 @@ begin
     try
       FCombo.Items.BeginUpdate;
       FCombo.Items.Clear;
-      for i := 0 to Hits.Count - 1 do
+      Shown := Hits.Count;
+      if Shown > MAX_HITS then
+      begin
+        Shown := MAX_HITS;
+      end;
+      for i := 0 to Shown - 1 do
       begin
         FCombo.Items.AddObject(FAll[Hits[i].Value].Display,
                                TObject(FAll[Hits[i].Value].Tag));
+      end;
+      // Nicht stillschweigend abschneiden: wer 137 Treffer hat, soll das
+      // sehen und die Eingabe schaerfen. Der Eintrag traegt den
+      // Trenner-Tag, ist also kein waehlbares Ziel - die Hosts behandeln
+      // Trenner bereits (die Regel-Liste enthaelt sie ohnehin).
+      if Hits.Count > Shown then
+      begin
+        FCombo.Items.AddObject(
+          Format('   ... %d weitere Treffer - Suche verfeinern',
+                 [Hits.Count - Shown]),
+          TObject(SEPARATOR_TAG));
       end;
       FCombo.Items.EndUpdate;
     finally
@@ -308,6 +353,11 @@ end;
 
 procedure TFuzzyComboSearch.RestoreAll;
 begin
+  if Assigned(FTimer) then
+  begin
+    FTimer.Enabled := False;
+  end;
+  FPending := '';
   if not Assigned(FCombo) then Exit;
   FUpdating := True;
   try
@@ -344,29 +394,40 @@ begin
   FLastQuery := '';
 end;
 
-procedure TFuzzyComboSearch.ComboChange(Sender: TObject);
-// Feuert beim Tippen UND bei Auswahl aus der Liste. Beim Tippen wird nur
-// gefiltert - der OnChange des Hosts bleibt still, sonst laeuft mit jeder
-// Taste ein voller Filterlauf ueber alle Befunde.
-var
-  Q : string;
+procedure TFuzzyComboSearch.ShowListOnce;
+// Dropdown NUR aufklappen wenn sie gerade zu ist.
+//
+// Vorher ging bei jedem Tastendruck ein CB_SHOWDROPDOWN raus. Das
+// Auf- und Zuklappen setzt und loest jedes Mal die Maus-Capture des
+// Listenfensters - der Cursor verschwand, und das Neuzeichnen machte die
+// Eingabe traege. CB_GETDROPPEDSTATE fragt den Zustand ab, statt ihn zu
+// erzwingen.
 begin
+  if not Assigned(FCombo) then Exit;
+  if not FCombo.HandleAllocated then Exit;
+  if SendMessage(FCombo.Handle, CB_GETDROPPEDSTATE, 0, 0) = 0 then
+  begin
+    SendMessage(FCombo.Handle, CB_SHOWDROPDOWN, 1, 0);
+  end;
+end;
+
+procedure TFuzzyComboSearch.TimerTick(Sender: TObject);
+// Entprellte Filterung: laeuft erst, wenn der Nutzer kurz innehaelt.
+// Beim schnellen Tippen wird die Liste damit EINMAL aufgebaut statt je
+// Zeichen - vorher waren das rund 200 Fenster-Nachrichten pro Taste.
+var
+  Q         : string;
+  CaretPos  : Integer;
+begin
+  FTimer.Enabled := False;
   if FUpdating then Exit;
   if not Assigned(FCombo) then Exit;
 
-  Q := FCombo.Text;
-  // Auswahl aus der Liste: der Text entspricht exakt einem Eintrag und
-  // ItemIndex ist gesetzt -> als Auswahl behandeln, nicht als Eingabe.
-  if (FCombo.ItemIndex >= 0)
-     and SameText(FCombo.Items[FCombo.ItemIndex], Q) then
-  begin
-    ComboSelect(Sender);
-    Exit;
-  end;
-
+  Q := FPending;
   if Q = FLastQuery then Exit;
   FLastQuery := Q;
-  FIsFiltering := Q <> '';
+
+  CaretPos := FCombo.SelStart;
 
   if Q = '' then
   begin
@@ -375,15 +436,36 @@ begin
   end;
 
   ApplyQuery(Q);
+  ShowListOnce;
 
-  // Liste offen halten und den Cursor hinter der Eingabe lassen - sonst
-  // springt er bei jedem Tastendruck an den Anfang.
+  // Der Neuaufbau der Liste setzt den Cursor an den Anfang - zuruecksetzen,
+  // sonst tippt man rueckwaerts.
   if FCombo.HandleAllocated then
   begin
-    SendMessage(FCombo.Handle, CB_SHOWDROPDOWN, 1, 0);
-    FCombo.SelStart  := Length(Q);
+    FCombo.SelStart  := CaretPos;
     FCombo.SelLength := 0;
   end;
+end;
+
+procedure TFuzzyComboSearch.ComboChange(Sender: TObject);
+// Feuert beim Tippen. Hier wird NICHT gefiltert - nur die Eingabe
+// gemerkt und der Entprell-Timer neu gestartet. Der OnChange des Hosts
+// bleibt still; er laeuft erst bei echter Auswahl (ComboSelect), sonst
+// wuerde jede Taste einen Filterlauf ueber alle Befunde ausloesen.
+//
+// Die frueher hier stehende Heuristik "Text entspricht einem Eintrag ->
+// als Auswahl behandeln" ist RAUS: sie konnte beim Tippen zuschlagen und
+// dann mitten in der Eingabe einen kompletten Host-Filterlauf starten.
+// Die verlaessliche Quelle fuer eine Auswahl ist CBN_SELCHANGE, also
+// OnSelect.
+begin
+  if FUpdating then Exit;
+  if not Assigned(FCombo) then Exit;
+
+  FPending := FCombo.Text;
+  FIsFiltering := FPending <> '';
+  FTimer.Enabled := False;
+  FTimer.Enabled := True;
 end;
 
 procedure TFuzzyComboSearch.ComboSelect(Sender: TObject);
@@ -394,6 +476,10 @@ var
 begin
   if FUpdating then Exit;
   if not Assigned(FCombo) then Exit;
+  // Eine noch anstehende Entprellung ist mit der Auswahl gegenstandslos -
+  // sonst baut sie danach die gefilterte Liste wieder auf.
+  FTimer.Enabled := False;
+  FPending := '';
   if SelectedTag(Tag) then
   begin
     RestoreAllAndSelect(Tag);

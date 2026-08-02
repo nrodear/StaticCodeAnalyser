@@ -91,6 +91,7 @@
         <DCCReference Include="sources\uFindingGridRenderer.pas"/>
         <DCCReference Include="sources\uFindingsPropertiesFrame.pas"/>
         <DCCReference Include="sources\uFindingFilter.pas"/>
+        <DCCReference Include="sources\uFuzzyComboSearch.pas"/>
         <DCCReference Include="sources\uIDEStatsTiles.pas"/>
         <DCCReference Include="sources\uIDEHelpPanel.pas"/>
         <DCCReference Include="sources\uIDEToolbar.pas"/>
