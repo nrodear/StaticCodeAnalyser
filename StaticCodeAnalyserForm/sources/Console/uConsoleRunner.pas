@@ -155,6 +155,11 @@ uses
 function ApplyFailOnPolicy(Raw: Integer; const FailOn: string): Integer; forward;
 
 const
+  // Bis zu so vielen gefilterten Dateien werden die Namen genannt; darueber
+  // nur die Anzahl. Sechs passen in eine Zeile, ohne die Ausgabe zu
+  // sprengen - mehr liest ohnehin niemand.
+  MAX_NAMED_FIXTURE_FILES = 6;
+
   // SCA_VERSION kommt aus uSCAConsts (Single-Source-of-Truth). Bis 0.9.8
   // stand hier eine zweite, hart kodierte Kopie: ein Versionssprung in
   // uSCAConsts liess die CLI weiter die alte Nummer melden - in --version,
@@ -859,11 +864,18 @@ begin
       var ProfileSrc  : string;
       var SeveritySrc : string;
       var ActiveKinds : Integer;
+      // Herkunft NICHT am Wert festmachen, sondern daran, ob die INI
+      // ueberhaupt existiert. Vorher stand auf einem frischen Rechner
+      // 'analyser.ini' in der Zeile, obwohl keine da war - beim
+      // Erste-Minuten-Durchlauf 2026-08-02 aufgefallen. Wer dem Hinweis
+      // folgt und die Datei sucht, findet nichts.
+      var HasIni : Boolean := FileExists(TRepoSettings.ResolvedConfigPath);
       if Args.Profile <> '' then ProfileSrc := '--profile'
-      else if ProfileFromIni <> '' then ProfileSrc := 'analyser.ini'
+      else if HasIni and (ProfileFromIni <> '') then ProfileSrc := 'analyser.ini'
       else ProfileSrc := 'Default';
       if Args.MinSeverity <> '' then SeveritySrc := '--min-severity'
-      else SeveritySrc := 'analyser.ini/Default';
+      else if HasIni then SeveritySrc := 'analyser.ini/Default'
+      else SeveritySrc := 'Default';
       // GetProfile einmal aufloesen - der Aufruf laedt den Katalog.
       var Active : TFindingKinds := TRuleCatalog.GetProfile(Settings.Profile);
       ActiveKinds := 0;
@@ -1021,21 +1033,51 @@ begin
     if EffectiveHideTestFixtures then
     begin
       var FixtureDropped := 0;
-      for var i := Findings.Count - 1 downto 0 do
-      begin
-        if Findings[i].Kind = fkFileReadError then Continue;
-        // BaseDir hier ist der Scan-Wurzel-Pfad - sichert das Pfad-Anchoring
-        // gegen externe Repo-Pfade die zufaellig '/tests/' enthalten.
-        if TDetectorUtils.IsTestFixturePath(Findings[i].FileName,
-             Args.Path) then
+      // Betroffene DATEIEN mitfuehren, nicht nur zaehlen - siehe die
+      // Ausgabe unten.
+      var DroppedFiles := TStringList.Create;
+      try
+        DroppedFiles.Sorted := True;
+        DroppedFiles.Duplicates := dupIgnore;
+        for var i := Findings.Count - 1 downto 0 do
         begin
-          Findings.Delete(i);
-          Inc(FixtureDropped);
+          if Findings[i].Kind = fkFileReadError then Continue;
+          // BaseDir hier ist der Scan-Wurzel-Pfad - sichert das Pfad-Anchoring
+          // gegen externe Repo-Pfade die zufaellig '/tests/' enthalten.
+          if TDetectorUtils.IsTestFixturePath(Findings[i].FileName,
+               Args.Path) then
+          begin
+            DroppedFiles.Add(ExtractFileName(Findings[i].FileName));
+            Findings.Delete(i);
+            Inc(FixtureDropped);
+          end;
         end;
+
+        // ERSTE-MINUTEN-FALLE (Durchlauf 2026-08-02): der Filter greift bei
+        // Profil 'default' automatisch, und zu den Mustern gehoeren
+        // '*Demo.pas', '*Sample.pas' und 'MeineUnit.pas'. Das sind Namen aus
+        // UNSEREM Korpus, aber auch genau die, die ein Neuanwender beim
+        // Ausprobieren vergibt. Wer seine erste Datei 'Demo.pas' nennt,
+        // bekam bisher 'Summary: 0 findings' und eine Zeile, die weder die
+        // Datei nannte noch sagte, wie man sie sichtbar macht - und schloss
+        // daraus, das Werkzeug funktioniere nicht.
+        //
+        // Jetzt: die betroffenen Dateien werden genannt, und wenn NICHTS
+        // uebrig bleibt, steht die Abhilfe direkt daneben.
+        if (not Args.Quiet) and (FixtureDropped > 0) then
+        begin
+          var Names := DroppedFiles.CommaText;
+          if DroppedFiles.Count > MAX_NAMED_FIXTURE_FILES then
+            Names := Format('%d Dateien', [DroppedFiles.Count]);
+          WriteLn(Format('Test-fixture filter: %d findings dropped in %s',
+                         [FixtureDropped, Names]));
+          if Findings.Count = 0 then
+            WriteLn('  -> nichts uebrig. Wenn das eigener Code ist: '
+                  + '--show-test-fixtures');
+        end;
+      finally
+        DroppedFiles.Free;
       end;
-      if (not Args.Quiet) and (FixtureDropped > 0) then
-        WriteLn(Format('Test-fixture filter: %d findings dropped ' +
-          '(uTest*/Sample/Demo/MeineUnit/resources)', [FixtureDropped]));
     end;
 
     // ---- Baseline-Filter (vor Output / Exit-Code) ----

@@ -506,6 +506,14 @@ analyser.d12.exe --path . --profile security --report-sarif sec.sarif
 analyser.d12.exe --path . --profile bugs-only --min-severity warning
 ```
 
+> **Erster Lauf: bei `0 findings` zuerst die Filter-Zeile lesen.** Mit dem
+> Profil `default` blendet das Werkzeug Funde in Dateien aus, die nach
+> Test-Fixtures aussehen — `uTest*.pas`, `*_Test.pas`, `*Sample.pas`,
+> `*Demo.pas`, `MeineUnit.pas`. Wer seine erste Probedatei `Demo.pas`
+> nennt, bekommt sie herausgefiltert. Der Scan nennt die betroffenen
+> Dateien; `--show-test-fixtures` behält sie, `--profile strict` schaltet
+> den Filter ganz ab.
+
 `--profile <name>` akzeptiert jedes Profile aus `rules/sca-rules.json`
 (mitgeliefert: `default`, `strict`, `style`, `ide-fast`, `security`,
 `bugs-only`, `code-quality`, `dfm-only`). **`default` laesst bewusst sechs
