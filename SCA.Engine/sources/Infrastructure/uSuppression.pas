@@ -580,6 +580,9 @@ var
   FileWideKinds  : TSuppressedKinds;
   Match          : Boolean;
   TargetForMark  : Integer;
+  // Bereichsfunde (SCA021): letzte Zeile des Befundes, geklemmt auf >= Line.
+  SpanEnd        : Integer;
+  SpanLine       : Integer;
   HostFile       : string;
   Drop           : TArray<Boolean>;
   Dropped        : Integer;
@@ -611,6 +614,12 @@ begin
     //   2. Per-Line-Marker (Map[Line]) - nur wenn Line > 0.
     // TargetForMark fuehrt zur passenden Marker-TargetLine im Consumed-
     // Tagging: 0 = file-wide, sonst Line.
+    // Bereichsfunde: ein Fund kann mehrere Zeilen umfassen (SCA021 seit
+    // dem Mehrzeilen-Umbau). SpanEnd klemmt auf >= Line, ist bei
+    // einzeiligen Funden also gleich Line - der Normalfall bleibt exakt
+    // eine Dictionary-Abfrage.
+    SpanEnd := F.SpanEnd;
+
     Match := False;
     TargetForMark := 0;
     if Map.TryGetValue(0, FileWideKinds) and (F.Kind in FileWideKinds) then
@@ -618,11 +627,24 @@ begin
       Match := True;
       TargetForMark := 0;
     end
-    else if (Line > 0) and Map.TryGetValue(Line, Suppressed)
-            and (F.Kind in Suppressed) then
+    else if Line > 0 then
     begin
-      Match := True;
-      TargetForMark := Line;
+      // Ein Marker IRGENDWO im Bereich zaehlt.
+      //
+      // Der Nutzer sieht einen Befund, der die Zeilen 513-533 markiert.
+      // Setzt er den Marker auf 520, meint er diesen Befund - dass der
+      // Anker zufaellig auf 513 sitzt, ist eine Interna. Vorher wirkte
+      // nur ein Marker exakt auf der Ankerzeile.
+      for SpanLine := Line to SpanEnd do
+      begin
+        if Map.TryGetValue(SpanLine, Suppressed)
+           and (F.Kind in Suppressed) then
+        begin
+          Match := True;
+          TargetForMark := SpanLine;
+          Break;
+        end;
+      end;
     end;
     if not Match then Continue;
 
@@ -658,9 +680,15 @@ begin
       for j := 0 to Markers.Count - 1 do
       begin
         M := Markers[j];
+        // Consumed auch fuer Marker INNERHALB des Bereichs - sonst
+        // meldet SCA165 sie als unbenutzt, obwohl sie genau den Befund
+        // stillgelegt haben, den der Nutzer meinte. Genau dieser Effekt
+        // trat nach dem Zusammenfassen der DuplicateBlock-Fenster auf:
+        // aus 18 einzeln gesetzten Markern wurden 17 "unbenutzte".
         if (F.Kind in M.Kinds) and
            ((M.TargetLine = 0) or
-            ((Line > 0) and (M.TargetLine = Line))) then
+            ((Line > 0) and (M.TargetLine >= Line)
+                        and (M.TargetLine <= SpanEnd))) then
         begin
           M.Consumed := True;
           Markers[j] := M;

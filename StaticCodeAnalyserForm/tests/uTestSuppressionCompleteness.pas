@@ -77,9 +77,19 @@ type
     // Original-Finding bleibt UNGEFILTERT stehen UND es gibt genau ein
     // fkFileReadError-Diagnose-Finding mit MSG_SUPPRESSION_READ_ERROR.
     [Test] procedure UnreadableMarkerHost_EmitsDiagnosticFinding;
+    // ---- Bereichsfunde: Marker irgendwo IM Bereich -----------------
+    [Test] procedure MarkerInsideSpan_SuppressesFinding;
+    [Test] procedure MarkerInsideSpan_NotReportedAsUnused;
   end;
 
 implementation
+
+// noinspection-file DuplicateBlock
+// Die Fixtures dieser Unit sind lange, absichtlich wiederholte
+// Quelltext-Bloecke in String-Konstanten - genau das ist ihr
+// Pruefgegenstand. Der eigene Detektor sieht darin (zu Recht)
+// duplizierte Zeilen; ein Fund im Testfixture ist aber keiner im
+// Produkt.
 
 uses
   System.SysUtils, System.IOUtils, System.Classes,
@@ -591,6 +601,75 @@ begin
   finally
     TFile.Delete(TmpPath);
   end;
+end;
+
+// ---- Bereichsfunde --------------------------------------------------------
+// Ein DuplicateBlock umfasst seit dem Mehrzeilen-Umbau einen ZEILENBEREICH.
+// Ein Marker, den der Nutzer mitten in den markierten Block setzt, meint
+// diesen Befund - dass dessen Anker zufaellig auf der ersten Zeile sitzt,
+// ist eine Interna. Vorher wirkte nur ein Marker exakt auf der Ankerzeile,
+// und alle uebrigen wurden als UnusedSuppression gemeldet.
+
+const
+  // 12 identische Anweisungen, dupliziert. Der Marker steht MITTEN drin
+  // (Ziel: 'A6 := 6;'), nicht auf der Ankerzeile.
+  SRC_SPAN_MARKER =
+    'unit t; interface implementation'#13#10 +
+    'procedure A; begin'#13#10 +
+    '  A1 := 1;'#13#10 +
+    '  A2 := 2;'#13#10 +
+    '  A3 := 3;'#13#10 +
+    '  A4 := 4;'#13#10 +
+    '  A5 := 5;'#13#10 +
+    '  // noinspection DuplicateBlock'#13#10 +
+    '  A6 := 6;'#13#10 +
+    '  A7 := 7;'#13#10 +
+    '  A8 := 8;'#13#10 +
+    '  A9 := 9;'#13#10 +
+    '  A10 := 10;'#13#10 +
+    '  A11 := 11;'#13#10 +
+    '  A12 := 12;'#13#10 +
+    'end;'#13#10 +
+    'procedure B; begin'#13#10 +
+    '  A1 := 1;'#13#10 +
+    '  A2 := 2;'#13#10 +
+    '  A3 := 3;'#13#10 +
+    '  A4 := 4;'#13#10 +
+    '  A5 := 5;'#13#10 +
+    '  A6 := 6;'#13#10 +
+    '  A7 := 7;'#13#10 +
+    '  A8 := 8;'#13#10 +
+    '  A9 := 9;'#13#10 +
+    '  A10 := 10;'#13#10 +
+    '  A11 := 11;'#13#10 +
+    '  A12 := 12;'#13#10 +
+    'end;'#13#10 +
+    'end.';
+
+procedure TTestSuppressionCompleteness.MarkerInsideSpan_SuppressesFinding;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC_SPAN_MARKER);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDuplicateBlock),
+      'Ein Marker IM markierten Bereich muss den Befund unterdruecken - '
+      + 'nicht nur einer exakt auf der Ankerzeile');
+  finally F.Free; end;
+end;
+
+procedure TTestSuppressionCompleteness.MarkerInsideSpan_NotReportedAsUnused;
+// REGRESSION zum Migrationseffekt: nach dem Zusammenfassen der
+// DuplicateBlock-Fenster wurden aus 18 einzeln gesetzten Markern 17
+// "unbenutzte" - der Nutzer bekam Arbeit fuer etwas, das er bereits
+// stillgelegt hatte.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC_SPAN_MARKER);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedSuppression),
+      'Ein Marker im Bereich gilt als konsumiert und darf nicht als '
+      + 'unbenutzt gemeldet werden');
+  finally F.Free; end;
 end;
 
 initialization
