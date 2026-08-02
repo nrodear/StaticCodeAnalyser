@@ -6,11 +6,11 @@ Full release notes: [docs/releases/v0.9.9.md](docs/releases/v0.9.9.md)
 ([deutsch](docs/releases/v0.9.9_de.md)).
 
 This cycle the tool learned to report **less**. On the 12,800-file
-reference corpus the finding count fell from **645,622 to 593,122 —
-52,500 fewer (−8.1 %)**, with no true positive knowingly lost. The rule
+reference corpus the finding count fell from **645,622 to 560,964 —
+84,658 fewer (−13.1 %)**, with no true positive knowingly lost. The rule
 roster grew from 183 to **195 rules**.
 
-- **−52,500 findings**, in six separately measured and gated increments.
+- **−84,658 findings**, in seven separately measured and gated increments.
 - **`SCA194` / `SCA195`** — files that are not part of the project, and
   units the project compiles without listing. Both need a project-wide
   view, so they run only in a project or project-group scan.

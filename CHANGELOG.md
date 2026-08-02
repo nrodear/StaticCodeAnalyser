@@ -6,13 +6,51 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased]
+## [v0.9.9] - 2026-08-02 - Fewer false positives, two project-scope rules
 
 Changes since **v0.9.8**. Rule roster grows from 183 to **195 rules**
 (`SCA001`–`SCA195`); DFM rules 22 → **23**. Beyond the new detectors, this
 cycle was dominated by a measured false-positive campaign: on the
-12.8k-file reference corpus the finding count dropped **645,622 → 593,122
-(−52,500, −8.1 %)**, with the error tier going **2,255 → 2,172**.
+12.8k-file reference corpus the finding count dropped **645,622 → 560,964
+(−84,658, −13.1 %)**, with the error tier going **2,255 → 2,172**.
+
+### Findings can span more than one line
+
+A `DuplicateBlock` is a **block**; it was reported as a single line, and the
+reader had to guess where the duplication ended. Findings now carry a line
+range, and the IDE editor marks every line of it.
+
+- **`SCA021 DuplicateBlock`: one finding per duplicated block.** The sliding
+  window walks the block line by line, so a K-line duplication used to
+  produce K−7 findings stacked on top of each other — the guard that was
+  supposed to prevent this keyed on the start line, which is unique per
+  window, so it could never fire. One class declaration in the reference
+  corpus carried **18 hints on top of each other**. Windows of the *same*
+  duplication are now merged into one finding covering the whole block:
+  corpus **41,306 → 9,148 (−32,158)**, and no other rule moved.
+
+  "Same duplication" is decided by the *occurrence signature* — the
+  distances between the copies — not by line overlap. Two different
+  duplications whose first occurrences happen to overlap stay two findings;
+  merging them geometrically would have hidden one group's partner site
+  entirely and mis-reported the multiplicity (a 10×-duplicated block
+  announced as "2x").
+
+- **SARIF `region.endLine`** is written for multi-line findings. Absent
+  means single-line, as the format specifies.
+
+- **The IDE editor marks the whole range.** Continuation lines carry the
+  stripe so the extent is visible, but they are **not findings**: no badge,
+  no hover overlay, no entry in any list. The finding stays anchored at its
+  first line, and the findings list still shows one entry.
+
+#### Migration note
+
+If you silenced one of these cascades with **line-bound**
+`// noinspection DuplicateBlock` comments, the markers on the swallowed
+lines are no longer consumed and will be reported as
+`SCA165 UnusedSuppression`. One marker on the block's first line replaces
+them. File-wide `// noinspection-file` markers are unaffected.
 
 ### Added
 
@@ -101,8 +139,8 @@ cycle was dominated by a measured false-positive campaign: on the
 
 ### Changed
 
-- **False-positive campaign — 52,500 fewer findings on the reference
-  corpus (−8.1 %), no true positive lost.** Six increments, each built on
+- **False-positive campaign — 84,658 fewer findings on the reference
+  corpus (−13.1 %), no true positive lost.** Seven increments, each built on
   its own branch, measured in a single corpus run against the previous
   baseline, and released only after sampling the dropped findings. Every
   increment held the same anchors: **zero added findings**, no rule outside
@@ -116,6 +154,7 @@ cycle was dominated by a measured false-positive campaign: on the
   | Duplicate reporting & interface contracts | `SCA106`, `SCA070`, `SCA054`, `SCA001` | −20,455 |
   | Parser: attributes in parameter position | `SCA054`, `SCA013` | −41 |
   | Declaration boilerplate | `SCA021` | −3,403 |
+  | One finding per duplicated block | `SCA021` | −32,158 |
 
   The recurring theme is that a rule must not fire where the language
   *forces* the repetition or where the call simply is not visible by name:
