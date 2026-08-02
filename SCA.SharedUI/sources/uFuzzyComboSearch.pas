@@ -42,6 +42,15 @@ type
     FHostChange : TNotifyEvent;
     FHostSelect : TNotifyEvent;
     FHostKeyUp  : TKeyEvent;
+    FHostCloseUp: TNotifyEvent;
+    FHostExit   : TNotifyEvent;
+    // Auswahl, die beim Blaettern entsteht, aber noch NICHT an den Host
+    // gemeldet ist. Committed wird erst beim Zuklappen - siehe ComboSelect.
+    FPendingTag : NativeInt;
+    FHasPending : Boolean;
+    // Zuletzt an den Host gemeldeter Tag. Verhindert, dass ein Zuklappen
+    // ohne echte Aenderung einen Filterlauf ausloest.
+    FCommitted  : NativeInt;
     FUpdating   : Boolean;   // Reentranz-Sperre waehrend wir Items umbauen
     FIsFiltering: Boolean;   // True solange eine Eingabe die Liste reduziert
     FLastQuery  : string;
@@ -51,6 +60,9 @@ type
     procedure ShowListOnce;
     procedure ComboChange(Sender: TObject);
     procedure ComboSelect(Sender: TObject);
+    procedure ComboCloseUp(Sender: TObject);
+    procedure ComboExit(Sender: TObject);
+    procedure CommitSelection;
     procedure ComboKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure ApplyQuery(const AQuery: string);
     procedure FillFromSnapshot;
@@ -90,9 +102,19 @@ const
   SEPARATOR_TAG     = -1;  // Sektions-Trenner der Filterliste
   // Entprellung: erst wenn der Nutzer kurz innehaelt, wird gefiltert.
   // Ohne das wurde bei JEDEM Tastendruck die komplette Liste (rund 200
-  // Eintraege = 200 Fenster-Nachrichten) neu aufgebaut und die Dropdown
-  // auf- und zugeklappt - spuerbar traege, und das staendige Auf/Zu setzt
-  // und loest die Maus-Capture, wodurch der Cursor verschwand.
+  // Eintraege = 200 Fenster-Nachrichten) neu aufgebaut - spuerbar traege.
+  //
+  // KORREKTUR 2026-08-02: hier stand, das staendige Auf-/Zuklappen setze
+  // und loese die Maus-Capture und LASSE DEN CURSOR VERSCHWINDEN. Das war
+  // FALSCH und ist widerlegt - ein Build mit Entprellung zeigte dasselbe
+  // Verhalten. Der Cursor verschwindet, weil Windows' Funktion "Zeiger
+  // beim Schreiben ausblenden" (SPI_SETMOUSEVANISH, per Default an) im
+  // USER32-EDIT-Control sitzt: csDropDownList hat gar kein Edit-Kind,
+  // csDropDown erzeugt eines. Das ist Standardverhalten jedes
+  // Windows-Textfelds und keine Fehlfunktion; Windows zeigt den Zeiger
+  // bei der naechsten MAUSBEWEGUNG wieder. Es gibt keinen sauberen
+  // Per-Control-Opt-out - ShowCursor(TRUE) im Key-Handler wuerde den
+  // thread-weiten Show-Count lecken. Nicht "reparieren".
   DEBOUNCE_MS       = 160;
   // Mehr Treffer als das liest ohnehin niemand ab, und jeder weitere
   // kostet eine Fenster-Nachricht beim Aufbau. Wird gedeckelt, sagt die
@@ -212,9 +234,11 @@ begin
   end;
   if Assigned(FCombo) then
   begin
-    FCombo.OnChange := FHostChange;
-    FCombo.OnSelect := FHostSelect;
-    FCombo.OnKeyUp  := FHostKeyUp;
+    FCombo.OnChange  := FHostChange;
+    FCombo.OnSelect  := FHostSelect;
+    FCombo.OnCloseUp := FHostCloseUp;
+    FCombo.OnExit    := FHostExit;
+    FCombo.OnKeyUp   := FHostKeyUp;
   end;
   FAll.Free;
   inherited;
@@ -224,9 +248,11 @@ procedure TFuzzyComboSearch.Attach(ACombo: TComboBox);
 begin
   if not Assigned(ACombo) then Exit;
   FCombo := ACombo;
-  FHostChange := ACombo.OnChange;
-  FHostSelect := ACombo.OnSelect;
-  FHostKeyUp  := ACombo.OnKeyUp;
+  FHostChange  := ACombo.OnChange;
+  FHostSelect  := ACombo.OnSelect;
+  FHostKeyUp   := ACombo.OnKeyUp;
+  FHostCloseUp := ACombo.OnCloseUp;
+  FHostExit    := ACombo.OnExit;
 
   // csDropDownList kann nicht tippen. csDropDown erlaubt Eingabe; die
   // Auswahl selbst laeuft weiterhin ueber die Liste.
@@ -234,7 +260,16 @@ begin
   ACombo.AutoComplete := False;   // wuerde gegen unsere Filterung arbeiten
   ACombo.OnChange     := ComboChange;
   ACombo.OnSelect     := ComboSelect;
+  ACombo.OnCloseUp    := ComboCloseUp;
+  ACombo.OnExit       := ComboExit;
   ACombo.OnKeyUp      := ComboKeyUp;
+
+  FCommitted  := 0;
+  FHasPending := False;
+  if ACombo.ItemIndex >= 0 then
+  begin
+    FCommitted := NativeInt(ACombo.Items.Objects[ACombo.ItemIndex]);
+  end;
 
   Resync;
 end;
@@ -397,11 +432,13 @@ end;
 procedure TFuzzyComboSearch.ShowListOnce;
 // Dropdown NUR aufklappen wenn sie gerade zu ist.
 //
-// Vorher ging bei jedem Tastendruck ein CB_SHOWDROPDOWN raus. Das
-// Auf- und Zuklappen setzt und loest jedes Mal die Maus-Capture des
-// Listenfensters - der Cursor verschwand, und das Neuzeichnen machte die
-// Eingabe traege. CB_GETDROPPEDSTATE fragt den Zustand ab, statt ihn zu
-// erzwingen.
+// Vorher ging bei jedem Tastendruck ein CB_SHOWDROPDOWN raus; das
+// Neuzeichnen der offenen Liste machte die Eingabe traege.
+// CB_GETDROPPEDSTATE fragt den Zustand ab, statt ihn zu erzwingen.
+//
+// NICHT der Grund fuer den verschwindenden Cursor - siehe die Korrektur
+// bei DEBOUNCE_MS. Capture-Wechsel aendern weder Cursorbild noch
+// ShowCursor-Zaehler.
 begin
   if not Assigned(FCombo) then Exit;
   if not FCombo.HandleAllocated then Exit;
@@ -469,10 +506,20 @@ begin
 end;
 
 procedure TFuzzyComboSearch.ComboSelect(Sender: TObject);
-// Echte Auswahl: volle Liste zuruecksetzen, Auswahl ueber den Tag
-// wiederherstellen und erst DANN den Host benachrichtigen.
-var
-  Tag : NativeInt;
+// CBN_SELCHANGE - und das ist NICHT gleichbedeutend mit "der Nutzer hat
+// gewaehlt". Windows sendet es auch beim Blaettern mit den Pfeiltasten;
+// MSDN empfiehlt darum ausdruecklich, auf CBN_CLOSEUP zu warten, wenn am
+// Ereignis nennenswerte Verarbeitung haengt.
+//
+// Genau daran lag die gemeldete Traegheit: hier wurde frueher die volle
+// Liste (rund 200 Eintraege) neu aufgebaut UND der Host benachrichtigt -
+// dessen OnChange filtert bis zu 500.000 Befunde und baut das Grid neu.
+// Ein Druck auf Pfeil-Runter kostete damit rund 400 Fenster-Nachrichten
+// plus einen kompletten Filterlauf; durch fuenf Treffer blaettern
+// entsprechend fuenfmal.
+//
+// Jetzt wird die Auswahl nur GEMERKT. Blaettern ist damit wieder so
+// billig, wie es sein soll.
 begin
   if FUpdating then Exit;
   if not Assigned(FCombo) then Exit;
@@ -480,14 +527,43 @@ begin
   // sonst baut sie danach die gefilterte Liste wieder auf.
   FTimer.Enabled := False;
   FPending := '';
-  if SelectedTag(Tag) then
+  FHasPending := SelectedTag(FPendingTag);
+end;
+
+procedure TFuzzyComboSearch.CommitSelection;
+// Der eine Ort, an dem der Host erfaehrt, dass sich etwas geaendert hat.
+//
+// Das Tag-Gate ist kein Luxus: Zuklappen ohne Auswahl-Aenderung (Escape,
+// Klick daneben, Enter auf dem bereits gewaehlten Eintrag) darf keinen
+// Filterlauf ausloesen.
+var
+  Tag : NativeInt;
+begin
+  if FUpdating then Exit;
+  if not Assigned(FCombo) then Exit;
+
+  FTimer.Enabled := False;
+  FPending := '';
+
+  if FHasPending then
+  begin
+    Tag := FPendingTag;
+    RestoreAllAndSelect(Tag);
+  end
+  else if SelectedTag(Tag) then
   begin
     RestoreAllAndSelect(Tag);
   end
   else
   begin
     RestoreAll;
+    Exit;                       // nichts gewaehlt -> nichts zu melden
   end;
+  FHasPending := False;
+
+  if Tag = FCommitted then Exit;
+  FCommitted := Tag;
+
   if Assigned(FHostSelect) then
   begin
     FHostSelect(FCombo);
@@ -498,14 +574,47 @@ begin
   end;
 end;
 
+procedure TFuzzyComboSearch.ComboCloseUp(Sender: TObject);
+// CBN_CLOSEUP - die dokumentierte Stelle fuer teure Verarbeitung.
+begin
+  CommitSelection;
+  if Assigned(FHostCloseUp) then
+  begin
+    FHostCloseUp(FCombo);
+  end;
+end;
+
+procedure TFuzzyComboSearch.ComboExit(Sender: TObject);
+// Fokusverlust bei OFFENER Eingabe: der Nutzer hat getippt und klickt
+// weg. Ohne diesen Commit bliebe die gefilterte Liste stehen und die
+// Auswahl waere nie gemeldet worden.
+begin
+  if FIsFiltering or FHasPending then
+  begin
+    CommitSelection;
+  end;
+  if Assigned(FHostExit) then
+  begin
+    FHostExit(FCombo);
+  end;
+end;
+
 procedure TFuzzyComboSearch.ComboKeyUp(Sender: TObject; var Key: Word;
   Shift: TShiftState);
 begin
   if Assigned(FCombo) and (Key = VK_ESCAPE) and FIsFiltering then
   begin
     // Escape verwirft die Eingabe und stellt den vorigen Zustand her.
+    FHasPending := False;
     RestoreAll;
     Key := 0;
+  end
+  else if Assigned(FCombo) and (Key = VK_RETURN) then
+  begin
+    // Enter schliesst die Liste nicht ueberall verlaesslich, und
+    // Pfeiltasten bei GESCHLOSSENER Liste erzeugen gar kein CBN_CLOSEUP.
+    // Das Tag-Gate in CommitSelection macht einen Doppel-Commit harmlos.
+    CommitSelection;
   end;
   if Assigned(FHostKeyUp) then
   begin

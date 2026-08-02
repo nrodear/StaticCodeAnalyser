@@ -61,6 +61,7 @@ uses
   uTestEmptyExcept in 'uTestEmptyExcept.pas',
   uTestEmptyMethod in 'uTestEmptyMethod.pas',
   uTestDuplicate in 'uTestDuplicate.pas',
+  uTestFuzzyComboSearch in 'uTestFuzzyComboSearch.pas',
   uTestDebugOutput in 'uTestDebugOutput.pas',
   uTestTodoComment in 'uTestTodoComment.pas',
   uTestCodeMetrics in 'uTestCodeMetrics.pas',

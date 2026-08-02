@@ -144,6 +144,7 @@
         <DCCReference Include="uTestEmptyExcept.pas"/>
         <DCCReference Include="uTestEmptyMethod.pas"/>
         <DCCReference Include="uTestDuplicate.pas"/>
+        <DCCReference Include="uTestFuzzyComboSearch.pas"/>
         <DCCReference Include="uTestDebugOutput.pas"/>
         <DCCReference Include="uTestTodoComment.pas"/>
         <DCCReference Include="uTestCodeMetrics.pas"/>
