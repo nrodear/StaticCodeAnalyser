@@ -438,6 +438,34 @@ begin
     Exit;
   end;
   try
+    // Schnell-Ausstieg: enthaelt die Datei ueberhaupt das Marker-Wort?
+    //
+    // Ohne das lief die Kommentar-Zustandsmaschine ueber JEDE Zeile JEDER
+    // gescannten Datei - im Referenzkorpus also ueber alle 13.355, obwohl
+    // die allerwenigsten je einen Marker tragen. Ein einziger
+    // Substring-Test auf dem ohnehin geladenen Text entscheidet das.
+    //
+    // AEQUIVALENT, nicht heuristisch: JEDER Eintrag der Map entsteht in
+    // ParseMarkerLine, und die verlangt zwingend den 'noinspection'-Tag.
+    // Kommt er in der Datei nirgends vor, ist die Map zwangslaeufig leer -
+    // das Ergebnis ist identisch, nur schneller.
+    //
+    // Geprueft wird mit ContainsNoInspectionToken: dieselbe Funktion, die
+    // ParseMarkerLine benutzt, allokationsfrei und case-insensitiv. NICHT
+    // mit Pos(..., LowerCase(Lines.Text)) - das haette eine komplette
+    // Kleinschreib-Kopie JEDER Datei angelegt und das Problem nur
+    // verschoben.
+    var HasToken := False;
+    for i := 0 to Lines.Count - 1 do
+    begin
+      if ContainsNoInspectionToken(Lines[i]) then
+      begin
+        HasToken := True;
+        Break;
+      end;
+    end;
+    if not HasToken then Exit;
+
     ScanState.InBraceComment := False;
     ScanState.InParenComment := False;
     for i := 0 to Lines.Count - 1 do
