@@ -8,11 +8,22 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [v0.9.9] - 2026-08-02 - Fewer false positives, two project-scope rules
 
-Changes since **v0.9.8**. Rule roster grows from 183 to **195 rules**
-(`SCA001`–`SCA195`); DFM rules 22 → **23**. Beyond the new detectors, this
+Changes since **v0.9.8**. Rule roster grows from 166 to **195 rules**
+(`SCA001`–`SCA195`), +29; DFM rules 22 → **23**. Beyond the new detectors, this
 cycle was dominated by a measured false-positive campaign: on the
 12.8k-file reference corpus the finding count dropped **645,622 → 560,964
-(−84,658, −13.1 %)**, with the error tier going **2,255 → 2,172**.
+(−84,658, −13.1 %)**. The error tier now stands at **2,134** findings plus
+one unreadable file.
+
+> An earlier draft of this entry put the error tier at 2,172 and compared it
+> against 2,255 for v0.9.8. Both figures were counted by matching `"level"`
+> across the whole SARIF — but the `tool.driver.rules` block carries one
+> `level` per *rule definition*, and the catalogue holds exactly 37 rules
+> whose default severity is Error. 2,135 results + 37 definitions = 2,172.
+> The v0.9.8 figure was measured the same inflated way; its corpus baseline
+> is no longer on disk, so it cannot be restated on the correct basis and is
+> dropped here rather than silently re-anchored. The total finding counts
+> were never affected — those were counted per result, not per level.
 
 ### Performance
 
