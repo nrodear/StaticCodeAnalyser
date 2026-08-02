@@ -24,6 +24,14 @@ cycle was dominated by a measured false-positive campaign: on the
   attributable to the fix after factoring out machine variance against
   unchanged detectors. Findings byte-identical, all 141 rules unchanged.
 
+- **Suppression skips files without a single marker.** Building the
+  suppression map ran the comment state machine over every line of every
+  file, including the overwhelming majority that contain no
+  `// noinspection` at all. A cheap allocation-free scan for the token now
+  decides first. Findings are unaffected by construction — a file with no
+  marker has nothing to suppress. The size of the saving is **not yet
+  measured**; it is reported here as a mechanism, not as a number.
+
 ### Breaking for baselines
 
 - **`SCA021` message now names the real line range** (`Code block (lines
@@ -86,14 +94,22 @@ range, and the IDE editor marks every line of it.
   the stripes stack into a column from which no line can be attributed to
   a finding. The suppressed ones keep their anchor and info bar — nothing
   disappears from the report.
+- **The bracket is drawn in the gutter too**, not only in the code area, so
+  a finding's extent stays visible when the marked lines scroll behind
+  other decorations. This is the one part of the feature that touches new
+  IDE surface: the plugin previously registered no gutter painting at all.
 
-#### Migration note
+#### No migration needed
 
-If you silenced one of these cascades with **line-bound**
-`// noinspection DuplicateBlock` comments, the markers on the swallowed
-lines are no longer consumed and will be reported as
-`SCA165 UnusedSuppression`. One marker on the block's first line replaces
-them. File-wide `// noinspection-file` markers are unaffected.
+Earlier drafts of this release warned that if you had silenced one of these
+cascades with **line-bound** `// noinspection DuplicateBlock` comments, the
+markers on the swallowed lines would resurface as `SCA165 UnusedSuppression`
+— eighteen markers replaced by one finding meant seventeen new complaints
+about work you had already done. That warning no longer applies: a marker
+anywhere **inside** a finding's line range now both silences the finding and
+counts as consumed. Your existing markers keep working wherever you put
+them, and a single marker on the block's first line is enough for new ones.
+File-wide `// noinspection-file` markers were never affected.
 
 ### Added
 
@@ -246,6 +262,28 @@ them. File-wide `// noinspection-file` markers are unaffected.
   so a genuine "method on an uninitialised class instance" bug still flags.
 
 ### Fixed
+
+- **A suppression marker inside a finding's range now counts.** A finding
+  anchored at line *L* only ever matched markers registered for exactly
+  *L*. Once `DuplicateBlock` began covering a line *range*, that was too
+  narrow in both directions: a marker the user had placed in the middle of
+  the block no longer silenced the finding, and `SCA165 UnusedSuppression`
+  then reported that very marker as pointless. Both the match and the
+  consumed-check now span the finding's range. Single-line findings run the
+  loop exactly once, so the ordinary case stays a single dictionary lookup.
+
+- **The standalone app's search box filtered on every keystroke.** Each
+  character triggered a full pass over all findings — the same defect the
+  rule-filter combo had, only older and never noticed because it predates
+  the large corpora. Now debounced, like the plugin.
+
+- **An empty result could look like a clean scan.** Files matching a test
+  fixture pattern (`*Demo.pas`, `*Test*.pas`, …) are filtered out by
+  default, so a first-time user analysing a file that happens to be named
+  `Demo.pas` got “0 findings” and no hint why. The filter now names the
+  files it dropped and says how to keep them
+  (`--show-test-fixtures`). Found by walking the download-to-first-scan
+  path as a new user, which had never actually been done.
 
 - **Regex cache grew without bound in the IDE plugin.** The per-thread
   cache key assumed pool threads are reused — true for the CLI, but the
