@@ -4057,14 +4057,17 @@ var
       if IsVarReadInNestedRoutineFromSource(Lines, P.DeclLine, P.NameLow) then
         Continue;
 
-      // Zensus-Triage 2026-07-25, H5 (Symptom-Gate keyword-misparse): der
-      // gemeldete Var-NAME traegt im File eine eigene TYP-Deklaration
-      // ('<name> = class/record/...') -> fehlgeparste Decl, kein echter
-      // Local (Details s. IsFileDeclaredTypeName). Emit-seitig statt in
-      // der Inventur, damit der File-Scan nur fuer die wenigen Emit-
-      // Kandidaten laeuft (Perf) - fuer die Fundmenge aequivalent.
-      if IsFileDeclaredTypeName(Lines, P.NameLow) then
-        Continue;
+      // ANMERKUNG (Perf 2026-08-02): hier stand der Aufruf von
+      // IsFileDeclaredTypeName. Der Kommentar behauptete, er laufe "nur
+      // fuer die wenigen Emit-Kandidaten" - das stimmte nicht. Die Gates
+      // OBERHALB entscheiden noch gar nicht ueber einen Befund; darueber
+      // entscheiden erst die beiden Zweige DARUNTER. Ein gewoehnliches
+      // erst-schreiben-dann-lesen-Local lief also durch einen kompletten
+      // Datei-Scan und meldete nichts. Der Aufruf steht jetzt in beiden
+      // Emit-Zweigen unmittelbar vor dem Befund - dieselbe Fundmenge
+      // (reines Continue-Filter, Reihenfolge unter reinen Filtern egal),
+      // aber der Datei-Scan laeuft wirklich nur noch fuer Kandidaten, die
+      // sonst gemeldet wuerden.
 
       if P.FirstWriteLine = 0 then
       begin
@@ -4076,6 +4079,13 @@ var
         // und fail-safe: ohne Stripped-Cache Exit(False) -> keine
         // Suppression.
         if HasDeclInitializer(P^) then
+          Continue;
+        // Zensus-Triage 2026-07-25, H5 (Symptom-Gate keyword-misparse):
+        // der gemeldete Var-NAME traegt im File eine eigene TYP-
+        // Deklaration ('<name> = class/record/...') -> fehlgeparste Decl,
+        // kein echter Local. Der Scan laeuft ueber die ganze Datei,
+        // deshalb steht er so spaet wie moeglich.
+        if IsFileDeclaredTypeName(Lines, P.NameLow) then
           Continue;
         // Referenced + never written - UninitVar fcHigh.
         F            := TLeakFinding.Create;
@@ -4111,6 +4121,14 @@ var
         // Pfad zum Read passiert eine Def (ReachingDefs). Konservativ:
         // goto/label oder nicht mappbare Anker -> kein Drop.
         if CfgFilterDropsReadBeforeWrite(P^) then
+          Continue;
+
+        // Zensus-Triage 2026-07-25, H5 (Symptom-Gate keyword-misparse):
+        // der gemeldete Var-NAME traegt im File eine eigene TYP-
+        // Deklaration ('<name> = class/record/...') -> fehlgeparste Decl,
+        // kein echter Local. Der Scan laeuft ueber die ganze Datei,
+        // deshalb steht er so spaet wie moeglich.
+        if IsFileDeclaredTypeName(Lines, P.NameLow) then
           Continue;
 
         // Read vor Write - konservativ fcMedium (Phase 2.1 Sibling-
