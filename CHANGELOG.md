@@ -14,6 +14,28 @@ cycle was dominated by a measured false-positive campaign: on the
 12.8k-file reference corpus the finding count dropped **645,622 → 560,964
 (−84,658, −13.1 %)**, with the error tier going **2,255 → 2,172**.
 
+### Performance
+
+- **`SCA166 UninitVar` was quadratic in file size.** It ran a full-file
+  scan per candidate variable; the comment at the call site claimed it ran
+  only for emit candidates, which was not true — the deciding branches sit
+  below it. Moved into the two emit branches. Share of detector CPU
+  **36.9 % → 7.9 %**, 8.43 → 0.73 ms per file, rank 1 → 3; **−86 %**
+  attributable to the fix after factoring out machine variance against
+  unchanged detectors. Findings byte-identical, all 141 rules unchanged.
+
+### Searchable rule filter
+
+- **The rule filter combo is searchable.** It holds roughly 200 entries —
+  every rule as `SCAxxx  KindName`. Typing `sqlinj` finds `SCA003`:
+  characters must occur in order but need not be adjacent; word starts and
+  CamelCase boundaries rank first. The filter is applied when the list
+  closes, not while arrowing through it, so a single keypress no longer
+  costs a full pass over all findings. Standalone app and IDE plugin.
+- Known behaviour, not a defect: Windows hides the mouse pointer while you
+  type in a text field and restores it on the next mouse movement
+  (*Pointer Options → Hide pointer while typing*).
+
 ### Findings can span more than one line
 
 A `DuplicateBlock` is a **block**; it was reported as a single line, and the
@@ -39,10 +61,16 @@ range, and the IDE editor marks every line of it.
 - **SARIF `region.endLine`** is written for multi-line findings. Absent
   means single-line, as the format specifies.
 
-- **The IDE editor marks the whole range.** Continuation lines carry the
+- **The IDE editor marks the whole range,** with a bracket: a cap on the
+  first line of the block and one on the last. Continuation lines carry the
   stripe so the extent is visible, but they are **not findings**: no badge,
   no hover overlay, no entry in any list. The finding stays anchored at its
   first line, and the findings list still shows one entry.
+- **Overlapping duplications draw one bracket, not several.** About a
+  quarter of all `SCA021` findings overlap another one; without that rule
+  the stripes stack into a column from which no line can be attributed to
+  a finding. The suppressed ones keep their anchor and info bar — nothing
+  disappears from the report.
 
 #### Migration note
 
