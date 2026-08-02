@@ -40,8 +40,20 @@ one unreadable file.
   file, including the overwhelming majority that contain no
   `// noinspection` at all. A cheap allocation-free scan for the token now
   decides first. Findings are unaffected by construction — a file with no
-  marker has nothing to suppress. The size of the saving is **not yet
-  measured**; it is reported here as a mechanism, not as a number.
+  marker has nothing to suppress.
+
+  Measured on the reference corpus (13,355 files, quiet machine, warm
+  cache): **4m14s / 4m20s** with the fast path against **4m32s** without —
+  roughly **−5 %** wall clock. Read that as a direction, not as a figure:
+  the two runs with the fast path differ by 5.6s between themselves, and
+  only a single run of the previous build is available for comparison, so
+  its own spread is unknown. Two things argue the effect is real rather
+  than noise: the gap is about 2.7× the observed run-to-run spread, and the
+  newer build also writes 222 KB *more* SARIF (the longer `SCA021`
+  message), which pushes the other way. Note also that this corpus contains
+  no suppression markers at all, so every file takes the fast path — this
+  is the best case, not a typical one. Both runs produced byte-identical
+  reports.
 
 - **`--parallel` now says when it declined.** Per-file parallel scanning is
   opt-in and falls back to serial whenever the run cannot be made
