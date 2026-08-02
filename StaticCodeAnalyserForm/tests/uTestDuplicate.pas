@@ -62,10 +62,17 @@ type
 
 implementation
 
-// noinspection-file DuplicateBlock, ClassPerFile
+// noinspection-file DuplicateBlock, ClassPerFile, GodClass, LargeClass
 // Die Fixtures dieser Datei enthalten duplizierte Bloecke und
 // mehrere Klassen pro Unit ABSICHTLICH - genau das ist der
 // Pruefgegenstand von SCA021 und SCA081.
+//
+// GodClass/LargeClass: eine DUnitX-Fixture IST eine flache Liste von
+// Testmethoden - 23 Tests fuer einen Detektor sind kein Entwurfsfehler,
+// sondern Abdeckung. Aufteilen wuerde die Tests EINER Regel ueber mehrere
+// Units streuen und das Finden erschweren; die Schwellen (20 Methoden /
+// 500 Zeilen) zielen auf Produktionsklassen mit Zustand, nicht auf
+// Test-Fixtures ohne Felder.
 
 // =============================================================================
 // DuplicateString-Tests

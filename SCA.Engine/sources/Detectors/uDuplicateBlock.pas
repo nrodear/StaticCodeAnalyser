@@ -339,6 +339,78 @@ begin
     Exit(True);
 end;
 
+function DupGroupSignature(Indices: TList<Integer>): string;
+// Gruppen-Signatur: die ABSTAENDE der Vorkommen zum ersten.
+//
+// Wandert das Fenster um t Positionen durch EINEN duplizierten Block,
+// verschieben sich ALLE seine Vorkommen um dasselbe t - die Abstaende
+// bleiben also identisch. Gleiche Signatur heisst damit beweisbar
+// "Verschiebung desselben Blocks"; unterschiedliche Signatur heisst
+// "andere Duplikat-Gruppe", auch wenn die Zeilen sich ueberlappen.
+var
+  SB : TStringBuilder;
+  m  : Integer;
+begin
+  SB := TStringBuilder.Create;
+  try
+    for m := 1 to Indices.Count - 1 do
+    begin
+      SB.Append(Indices[m] - Indices[0]);
+      SB.Append(',');
+    end;
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+procedure DupMergeRuns(Cands, Runs: TList<TDupCandidate>);
+// Verschmilzt die Fenster EINES Blocks zu je einem Lauf.
+//
+// ZWEI Bedingungen, nicht eine:
+//   1. gleiche SIGNATUR - es ist derselbe duplizierte Block
+//   2. Zeilen-UEBERLAPPUNG - die Fenster liegen wirklich ineinander
+//
+// Bedingung 1 ist nicht optional. Ein rein geometrisches Verschmelzen
+// schluckt eigenstaendige Duplikat-Gruppen, deren Erst-Vorkommen zufaellig
+// ineinander liegen: deren Partnerstellen stehen woanders in der Datei und
+// verschwinden dann komplett aus dem Bericht. Ausserdem gilt Occurs des
+// Ankers dann nicht mehr fuer den ganzen Lauf - gemessen an Unit1.pas
+// verschmolz ein Lauf drei Gruppen mit 2/9/10 Vorkommen und meldete "2x".
+// Mit Signatur-Gleichheit haben alle Mitglieder eines Laufs per
+// Konstruktion dieselbe Vorkommenszahl, und der unveraenderte Meldetext
+// des Ankers bleibt korrekt (SARIF-Fingerprint-Stabilitaet).
+//
+// Cands MUSS nach (Sig, FirstLine) sortiert sein.
+var
+  i, k : Integer;
+begin
+  i := 0;
+  while i < Cands.Count do
+  begin
+    var AccFirst := Cands[i].FirstLine;
+    var AccEnd   := Cands[i].EndLine;
+    var AccSig   := Cands[i].Sig;
+    var AccOccurs := Cands[i].Occurs;
+    k := i + 1;
+    while (k < Cands.Count) and (Cands[k].Sig = AccSig)
+          and (Cands[k].FirstLine <= AccEnd) do
+    begin
+      if Cands[k].EndLine > AccEnd then AccEnd := Cands[k].EndLine;
+      Inc(k);
+    end;
+
+    var R : TDupCandidate;
+    R.FirstLine := AccFirst;
+    R.EndLine   := AccEnd;
+    R.Occurs    := AccOccurs;
+    R.Sig       := '';
+    Runs.Add(R);
+
+    i := k;
+  end;
+end;
+
 class procedure TDuplicateBlockDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
@@ -439,17 +511,7 @@ begin
       // verschluckt wird und dass Occurs des Ankers fuer den ganzen Lauf
       // gilt - alle Mitglieder eines Laufs haben per Konstruktion dieselbe
       // Vorkommenszahl.
-      var SB := TStringBuilder.Create;
-      try
-        for var m := 1 to Pair.Value.Count - 1 do
-        begin
-          SB.Append(Pair.Value[m] - Pair.Value[0]);
-          SB.Append(',');
-        end;
-        C.Sig := SB.ToString;
-      finally
-        SB.Free;
-      end;
+      C.Sig := DupGroupSignature(Pair.Value);
       Cands.Add(C);
     end;
 
@@ -498,34 +560,7 @@ begin
     // Ein Duplikat ist EIN Befund ueber den GANZEN Block. Der Anker bleibt
     // die erste Zeile, der Bereich waechst bis zum Ende des letzten
     // ueberlappenden Fensters derselben Gruppe.
-    i := 0;
-    while i < Cands.Count do
-    begin
-      var AccFirst := Cands[i].FirstLine;
-      var AccEnd   := Cands[i].EndLine;
-      var AccSig   := Cands[i].Sig;
-      // Meldetext kommt vom ERSTEN Fenster des Blocks. Damit bleibt der
-      // SARIF-Fingerprint des ueberlebenden Befundes exakt der von vorher
-      // (er haengt an RuleID+Pfad+Zeile+Meldung) - bestehende Baselines
-      // sehen einen Wegfall, aber keinen geaenderten Befund.
-      var AccOccurs := Cands[i].Occurs;
-      var k := i + 1;
-      while (k < Cands.Count) and (Cands[k].Sig = AccSig)
-            and (Cands[k].FirstLine <= AccEnd) do
-      begin
-        if Cands[k].EndLine > AccEnd then AccEnd := Cands[k].EndLine;
-        Inc(k);
-      end;
-
-      var R : TDupCandidate;
-      R.FirstLine := AccFirst;
-      R.EndLine   := AccEnd;
-      R.Occurs    := AccOccurs;
-      R.Sig       := '';
-      Runs.Add(R);
-
-      i := k;
-    end;
+    DupMergeRuns(Cands, Runs);
 
     // Pass 3d: Befunde in Datei-Reihenfolge ausgeben. Nach Signatur
     // gruppiert liegen die Laeufe sonst in Hash-Reihenfolge im Ergebnis -
