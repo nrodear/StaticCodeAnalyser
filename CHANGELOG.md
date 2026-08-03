@@ -6,7 +6,90 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased]
+## [v0.9.11] - 2026-08-03 - Repairs
+
+A fix release. Everything here is either a false positive that was proven on
+the reference corpus, a regression that crept in with v0.9.10, or a version
+number that had quietly stopped being true. No new rules, no new features.
+
+### Fixed — findings that were wrong
+
+- **`SCA028 DfmDeadEvent`: an event bound to `nil` is not a missing
+  handler.** `OnCustomDrawItem = nil` says the opposite — the event is
+  deliberately cleared. It was collected as a binding anyway and reported as
+  a handler that could not be found. Filtered at the source, because four
+  detectors share that event list and none of them wants a `nil` binding.
+  Corpus reach counted beforehand: exactly one occurrence.
+
+- **`SCA028`: an ancestor resolved from an ambiguous class name proves
+  nothing.** `TfrmSplashScreen` inherits from `TfrmBase` — and skia4delphi
+  carries `TfrmBase` *twice*, once under `Samples/Demo/VCL` and once under
+  `.../FMX`. Only the VCL one declares the handler. The class index kept the
+  first hit and dropped the rest silently, so the VCL form was bound against
+  the FMX base and the handler merely *appeared* to be missing. The index now
+  records which class names live in more than one unit, the binder marks
+  bindings reached through such a name, and the rule stays quiet for them: a
+  chain can run formally all the way up to a framework root and still be a
+  stranger's.
+
+  Not fixed, and documented as a known limit: a property whose name starts
+  with `On` need not be an event. `TJvUIBQuery.OnError = etmStayIn` assigns an
+  *enum*, not a method. In DFM text the two are indistinguishable — bare
+  identifiers — and a spelling heuristic is out, because enum literals
+  (`etmStayIn`) and IDE-generated handlers (`btnOkClick`) have exactly the
+  same shape.
+
+- **`SCA054 UnusedParameter` claimed absence it could not see.** The body it
+  counts against is assembled from the name and type text of AST nodes, which
+  is a *lossy* approximation of the source: the index expression on the left
+  of an assignment and the arguments behind an `as` cast never appear in it.
+  Both reproduced on the built analyser — `SystemPath[Kind] := 'x'` reported
+  `Kind`, `(Obj as TOther).M(Index, 1)` reported `Index`. Before claiming a
+  parameter is never read, the rule now asks the source, exactly as it has
+  done since 2026-07-18 for routines the parser discards. Strings and
+  comments are stripped first: a name in a comment is still not a use.
+
+### Fixed — regressions from v0.9.10
+
+- **Scrolling in the IDE plugin had become sluggish.** Three causes, all in
+  the per-line paint path:
+
+  *The gutter bracket asks for every line.* `PaintLine` checks
+  `ShouldHighlight` first and leaves immediately for unmarked lines;
+  `PaintGutter`, added in v0.9.10, calls the lookup directly. Every visible
+  line began paying, marked or not.
+
+  *Continuation lines are marks now.* Since findings span whole blocks, a
+  `DuplicateBlock` over 21 lines turns one marked line into twenty-one — and
+  marked lines run the expensive branch. In a duplicate-heavy file nearly
+  every visible line carries the full cost.
+
+  *Every scroll event forced a full repaint.* `EditorScrolled` invalidated all
+  lines immediately, on top of the repaint the editor already performs. One
+  mouse-wheel notch delivers several scroll events. The call itself is
+  necessary — the editor *blits* moved lines, so the per-line callback never
+  fires for them — but it is now coalesced through a 90 ms settle timer that
+  fires once, when the movement stops.
+
+  Path normalisation is memoised as well: it was three string allocations per
+  call, several times per visible line.
+
+- **Every cell of the findings grid was painted twice.** The renderer draws
+  background, selection and text itself, for header and cells alike, but
+  `DefaultDrawing` was never switched off — so the grid painted each cell in
+  full first and the renderer painted over it. Roughly 300 redundant cell
+  paints per frame at six columns and fifty rows. The panel grid had it right
+  from the start; the main grid was the outlier.
+
+### Fixed — version numbers that had stopped being true
+
+- **The IDE plugin announced itself as v0.9.8** in its window title —
+  hardcoded, two releases behind. The installer script carried the same stale
+  number.
+- **Six places carry the version**, not four: the two constants, the rule
+  catalogue's `tool.version`, the two `.dproj` version blocks, the plugin
+  title and the installer. They are now listed in the installer script so the
+  next bump has them in one place.
 
 ### Changed
 

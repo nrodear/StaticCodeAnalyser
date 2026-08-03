@@ -1,4 +1,38 @@
-# Release 0.9.10 — Ein Befund je Block, ein leiserer Default
+# Release 0.9.11 — Reparaturen
+
+🇬🇧 [English version](RELEASE_NOTES.md)
+
+Vollstaendige Release-Notes: [docs/releases/v0.9.11_de.md](docs/releases/v0.9.11_de.md)
+([english](docs/releases/v0.9.11.md)).
+
+Ein Fehlerbehebungs-Release, einen Tag nach 0.9.10. Keine neuen Regeln, keine
+neuen Funktionen. Alles hier ist eine am Referenzkorpus belegte
+Falschmeldung, eine mit 0.9.10 eingeschlichene Verschlechterung, oder eine
+Versionsnummer, die still aufgehoert hatte zu stimmen.
+
+- **Das Scrollen im IDE-Plugin ist wieder fluessig.** Drei Ursachen: die
+  Gutter-Klammer aus 0.9.10 fragt fuer *jede* Zeile, wo der Code-Bereich bei
+  unmarkierten sofort aussteigt; Fortsetzungszeilen sind jetzt Marken, ein
+  Block ueber 21 Zeilen macht aus einer markierten einundzwanzig; und jedes
+  Scroll-Ereignis erzwang einen Voll-Repaint zusaetzlich zu dem des Editors —
+  jetzt ueber einen 90-ms-Einschwing-Timer gebuendelt.
+- **Jede Zelle der Fundliste wurde zweimal gemalt** — der Renderer zeichnet
+  alles selbst, `DefaultDrawing` war aber nie abgeschaltet.
+- **`SCA028` meldet zwei Arten von Nicht-Funden nicht mehr**: ein
+  ausdruecklich mit `nil` geleertes Ereignis, und einen Handler, der nur
+  *scheinbar* fehlt, weil es den Namen der Ahnenklasse in zwei Units gibt
+  (skia4delphi fuehrt `TfrmBase` im VCL- und im FMX-Beispielbaum).
+- **`SCA054` fragt die Quelle**, bevor es behauptet, ein Parameter werde nie
+  gelesen. Der AST-Text, gegen den gezaehlt wurde, ist eine verlustbehaftete
+  Naeherung — ein Index-Ausdruck links einer Zuweisung und Argumente hinter
+  einem `as`-Cast tauchen dort nie auf.
+- **`SCA099 IfElseBegin` kommt ins `style`-Profil**, wo die anderen sechs
+  Konventions-Regeln schon lagen.
+- **Das IDE-Plugin nennt sich nicht mehr v0.9.8.**
+
+---
+
+# Vorher — Release 0.9.10 — Ein Befund je Block, ein leiserer Default
 
 🇬🇧 [English version](RELEASE_NOTES.md)
 

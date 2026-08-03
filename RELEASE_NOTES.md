@@ -1,4 +1,38 @@
-# Release 0.9.10 — One finding per block, a quieter default
+# Release 0.9.11 — Repairs
+
+🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md)
+
+Full release notes: [docs/releases/v0.9.11.md](docs/releases/v0.9.11.md)
+([deutsch](docs/releases/v0.9.11_de.md)).
+
+A fix release, one day after 0.9.10. No new rules, no new features.
+Everything here is a false positive proven on the reference corpus, a
+regression that crept in with 0.9.10, or a version number that had quietly
+stopped being true.
+
+- **Scrolling in the IDE plugin is quick again.** Three causes: the gutter
+  bracket added in 0.9.10 asks for *every* line where the code area leaves
+  early for unmarked ones; continuation lines are marks now, so a block over
+  21 lines turns one marked line into twenty-one; and every scroll event
+  forced a full repaint on top of the one the editor already performs — now
+  coalesced through a 90 ms settle timer.
+- **Every cell of the findings grid was painted twice** — the renderer draws
+  everything itself, but `DefaultDrawing` was never switched off.
+- **`SCA028` no longer reports two kinds of non-finding**: an event
+  explicitly cleared with `nil`, and a handler that only *seems* missing
+  because the ancestor class name exists in two units (skia4delphi carries
+  `TfrmBase` in both its VCL and its FMX sample tree).
+- **`SCA054` asks the source before claiming a parameter is never read.** The
+  AST text it counted against is a lossy approximation — an index expression
+  on an assignment's left side and arguments behind an `as` cast never appear
+  in it.
+- **`SCA099 IfElseBegin` joins the `style` profile**, where the other six
+  convention rules already were.
+- **The IDE plugin no longer announces itself as v0.9.8.**
+
+---
+
+# Previously — Release 0.9.10 — One finding per block, a quieter default
 
 🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md)
 

@@ -16,11 +16,19 @@
 ; =============================================================================
 
 ; --- Versionsstand ------------------------------------------------------------
-; ANNAHME (Welle 1, 2026-07-25): Version aus dproj-VerInfo_Keys = 0.9.8.0.
-; ACHTUNG Versions-Sync-Drift (Doku Punkt 3): VerInfo_MajorVer/Minor/Release im
-; dproj steht noch auf 0/9/4 — vor Release synchronisieren (uSCAConsts.SCA_VERSION,
-; uIDEExpert.PLUGIN_VERSION, dproj-VerInfo), dann hier nachziehen.
-#define SCAVersion      "0.9.8.0"
+; SECHS Stellen tragen die Version, alle muessen zusammenpassen:
+;   uSCAConsts.SCA_VERSION + SCA_VERSION_FULL
+;   rules/sca-rules.json  ->  tool.version
+;   StaticCodeAnalyser.d12.dproj      VerInfo_Keys + VerInfo_Release
+;   StaticCodeAnalyser.IDE.d12.dproj  VerInfo_Keys + VerInfo_Release
+;   uIDEExpert.PLUGIN_VERSION  (Titel im IDE-Fenster)
+;   diese Datei
+; Der frueher hier vermerkte Drift ist behoben: seit 0.9.10 stimmen die
+; numerischen VerInfo-Felder mit dem Keys-String ueberein (sie standen
+; seit 0.9.4 auf 0/9/4, waehrend der String etwas anderes behauptete),
+; und seit 0.9.11 ist auch PLUGIN_VERSION nachgezogen - die stand zwei
+; Releases zurueck.
+#define SCAVersion      "0.9.11.0"
 #define SCAAppName      "Static Code Analyser for Delphi (IDE-Plugin)"
 #define SCAPublisher    "StaticCodeAnalyser"
 
