@@ -663,9 +663,6 @@ begin
   finally F.Free; end;
 end;
 
-initialization
-  TDUnitX.RegisterTestFixture(TTestUnusedParameter);
-
 { --- Quell-Rueckfrage (2026-08-03) ----------------------------------- }
 
 procedure TTestUnusedParameter.Param_UsedAsLhsArrayIndex_NotReported;
@@ -759,5 +756,8 @@ begin
       'Ein Name im Kommentar ist keine Nutzung');
   finally F.Free; end;
 end;
+
+initialization
+  TDUnitX.RegisterTestFixture(TTestUnusedParameter);
 
 end.
