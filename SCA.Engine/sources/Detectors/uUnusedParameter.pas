@@ -27,12 +27,22 @@ uses
   uAstNode, uSCAConsts, uMethodd12, uDetectorUtils, uFileTextCache;
 
 type
+  // Gestrippte Quelle EINER Datei, ueber alle Methoden hinweg geteilt.
+  // Ready wird gesetzt, sobald der Versuch gelaufen ist - auch wenn er
+  // scheiterte, damit eine unlesbare Datei nicht je Methode erneut
+  // geoeffnet wird.
+  TStrippedUnit = record
+    Ready : Boolean;
+    Lines : TArray<string>;
+  end;
+
   TUnusedParameterDetector = class
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>);
     class procedure AnalyzeMethod(UnitNode, MethodNode: TAstNode;
-      const FileName: string; Results: TObjectList<TLeakFinding>);
+      const FileName: string; Results: TObjectList<TLeakFinding>;
+      var AStripped: TStrippedUnit);
   end;
 
 implementation
@@ -301,6 +311,30 @@ begin
   end;
 end;
 
+procedure EnsureUnitStripped(var AStripped: TStrippedUnit;
+  const AFileName: string);
+// Einmal je DATEI, nicht je Methode. Der Strip selbst ist ueber
+// StripStringsAndCommentsCached ohnehin gecacht; das Split in Zeilen war es
+// nicht, und genau das legte je Aufruf ein Array ueber die ganze Datei an.
+var
+  Code    : string;
+  LineFor : TArray<Integer>;
+  Src     : TStringList;
+  Owned   : Boolean;
+begin
+  if AStripped.Ready then Exit;
+  AStripped.Ready := True;
+  Src := AcquireLines(AFileName, Owned, nil);
+  if Src = nil then Exit;
+  try
+    Code := TDetectorUtils.StripStringsAndCommentsCached(
+      Src, LineFor, nil, AFileName, ' ');
+    AStripped.Lines := Code.Split([#10]);
+  finally
+    ReleaseLines(Src, Owned);
+  end;
+end;
+
 procedure CollectAllTokens(Root: TAstNode; SB: TStringBuilder);
 var
   Stack : TStack<TAstNode>;
@@ -325,7 +359,8 @@ begin
 end;
 
 class procedure TUnusedParameterDetector.AnalyzeMethod(UnitNode, MethodNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>;
+  var AStripped: TStrippedUnit);
 var
   Params : TList<TAstNode>;
   P : TAstNode;
@@ -345,30 +380,12 @@ var
   // Var) unterdrueckt einen echten Fund - akzeptiert fuer lsHint, konsistent
   // mit der Text-Zaehlung des Detektors.
   NestedMarks   : TList<TAstNode>;
-  StrippedLines : TArray<string>;
-  StrippedReady : Boolean;
-  SrcLines      : TStringList;
-  SrcOwned      : Boolean;
   // Rumpf-Zeilenbereich fuer die Quell-Rueckfrage. Bewusst Locals der
   // umschliessenden Routine statt out-Parameter: der eigene Analyser
   // meldet out zu Recht als schwer lesbar (AvoidOut), und die
   // verschachtelte Funktion sieht die Locals ohnehin.
   BodyFrom      : Integer;
   BodyTo        : Integer;
-
-  procedure EnsureStripped;
-  var
-    Code    : string;
-    LineFor : TArray<Integer>;
-  begin
-    if StrippedReady then Exit;
-    StrippedReady := True;
-    SrcLines := AcquireLines(FileName, SrcOwned, nil);
-    if SrcLines = nil then Exit;
-    Code := TDetectorUtils.StripStringsAndCommentsCached(
-      SrcLines, LineFor, nil, FileName, ' ');
-    StrippedLines := Code.Split([#10]);
-  end;
 
   function BodyLineRangeFound: Boolean;
   // Von 'begin' bis zur groessten Zeilennummer im Teilbaum.
@@ -428,13 +445,13 @@ var
   begin
     Result := False;
     if not BodyLineRangeFound then Exit;
-    EnsureStripped;
-    if Length(StrippedLines) = 0 then Exit;
+    EnsureUnitStripped(AStripped, FileName);
+    if Length(AStripped.Lines) = 0 then Exit;
     NL_ := Length(NameLow);
     for li := BodyFrom to BodyTo do
     begin
-      if (li < 1) or (li > Length(StrippedLines)) then Continue;
-      L := LowerCase(StrippedLines[li - 1]);
+      if (li < 1) or (li > Length(AStripped.Lines)) then Continue;
+      L := LowerCase(AStripped.Lines[li - 1]);
       q := Pos(NameLow, L);
       while q > 0 do
       begin
@@ -454,16 +471,16 @@ var
   begin
     Result := False;
     if NestedMarks.Count = 0 then Exit;
-    EnsureStripped;
-    if Length(StrippedLines) = 0 then Exit;
+    EnsureUnitStripped(AStripped, FileName);
+    if Length(AStripped.Lines) = 0 then Exit;
     NL := Length(NameLow);
     for M in NestedMarks do
     begin
       EndL := StrToIntDef(M.TypeRef, M.Line);
       for li := M.Line to EndL do
       begin
-        if (li < 1) or (li > Length(StrippedLines)) then Continue;
-        L := LowerCase(StrippedLines[li - 1]);
+        if (li < 1) or (li > Length(AStripped.Lines)) then Continue;
+        L := LowerCase(AStripped.Lines[li - 1]);
         q := Pos(NameLow, L);
         while q > 0 do
         begin
@@ -549,9 +566,6 @@ begin
   // ist entfernt - der Parser-Fix (Write/Read-Statement-Dispatch) haengt jetzt
   // die Bodies keyword-benannter Methoden korrekt an, Param-Uses sind sichtbar.
 
-  StrippedReady := False;
-  SrcLines      := nil;
-  SrcOwned      := False;
   NestedMarks   := TList<TAstNode>.Create;
   Params := MethodNode.FindAll(nkParam);
   BodySB := TStringBuilder.Create;
@@ -619,20 +633,25 @@ begin
     BodySB.Free;
     Params.Free;
     NestedMarks.Free;
-    if SrcLines <> nil then ReleaseLines(SrcLines, SrcOwned);
   end;
 end;
 
 class procedure TUnusedParameterDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
-  Methods : TList<TAstNode>;
-  M : TAstNode;
+  Methods  : TList<TAstNode>;
+  M        : TAstNode;
+  Stripped : TStrippedUnit;
 begin
+  // EINE gestrippte Fassung fuer alle Methoden dieser Datei. Wird erst
+  // gefuellt, wenn die erste Methode sie wirklich braucht - Dateien ohne
+  // Kandidaten zahlen gar nichts.
+  Stripped.Ready := False;
+  Stripped.Lines := nil;
   Methods := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
-      AnalyzeMethod(UnitNode, M, FileName, Results);
+      AnalyzeMethod(UnitNode, M, FileName, Results, Stripped);
   finally
     Methods.Free;
   end;
