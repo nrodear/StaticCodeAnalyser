@@ -99,6 +99,13 @@ type
     // verhindert Doppel-Navigation auf dieselbe Zeile.
     FNavPreviewTimer        : TTimer;
     FLastPreviewRow         : Integer;
+    // Debouncer fuer die Zwischenablage-Kopie. Bis 2026-08-03 lief sie in
+    // GridSelectCell SOFORT - also bei jedem Auswahlwechsel, bei gehaltener
+    // Pfeiltaste rund 30x je Sekunde. Sie ist der teuerste Posten des
+    // Auswahl-Pfades: systemweiter Clipboard-Write plus, wenn es fuer die
+    // Regel einen Quick-Fix-Provider gibt, ein LoadFromFile der KOMPLETTEN
+    // Quelldatei. Nur die Ruhe-Zeile gehoert in die Zwischenablage.
+    FClipCopyTimer          : TTimer;
 
     FPanelStats        : TPanel;
     // Toolbar-Panels - werden in CreateUI als alTop angelegt. Refs gehalten,
@@ -269,6 +276,8 @@ type
     // entprellte Soft-Navigation aus (Editor folgt, Fokus bleibt im Grid).
     procedure GridKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure NavPreviewFire(Sender: TObject);
+    // Entprellte Zwischenablage-Kopie der aktuell ausgewaehlten Zeile.
+    procedure ClipCopyFire(Sender: TObject);
     procedure PreviewFindingAtRow(ARow: Integer);
     procedure GridResize(Sender: TObject);
     procedure SearchChange(Sender: TObject);
@@ -2364,9 +2373,14 @@ end;
 
 procedure TAnalyserFrame.GridSelectCell(Sender: TObject; ACol, ARow: Integer;
   var CanSelect: Boolean);
-// Klick auf Zeile: Hilfetext aktualisieren, Befund als Claude-AI-Prompt
-// in die Zwischenablage legen UND - falls die Datei in der IDE offen ist -
-// alle Befund-Zeilen der gleichen Datei rot markieren (Multi-Marker-Modell).
+// Klick oder Cursor auf eine Zeile: Hilfetext sofort aktualisieren, die
+// Befund-Zeilen derselben Datei im Editor markieren (entprellt, Tier A1)
+// und den Claude-Prompt in die Zwischenablage legen - Letzteres seit
+// 2026-08-03 ebenfalls ENTPRELLT, siehe unten.
+//
+// Diese Routine laeuft bei JEDEM Auswahlwechsel. Was hier steht, zahlt der
+// Nutzer bei gehaltener Pfeiltaste rund dreissigmal je Sekunde - also
+// gehoert hierher nur, was sofort sichtbar sein muss.
 var
   idx     : Integer;
   Finding : TLeakFinding;
@@ -2376,26 +2390,53 @@ begin
 
   idx := ARow - 1; // Zeile 0 = Header
   if (idx < 0) or (idx >= FDisplayedFindings.Count) then Exit;
-
-  // Help-Panel-Repaint flushen, bevor der (potenziell blockierende)
-  // Clipboard-Write laeuft - Windows-Clipboard-Listener koennen
-  // Clipboard.AsText 50-200ms abwuergen, das Panel soll vorher sichtbar sein.
-  // (Finding wird BEWUSST erst nach dem Pump frisch geholt - siehe unten.)
-  Application.ProcessMessages;
-  // Welle 1 (2026-07-20): waehrend des Pumpens kann der Frame zerstoert
-  // (Dock-Close) oder FDisplayedFindings von einem fertig werdenden
-  // Async-Scan ersetzt worden sein - Sentinel + Bounds rechecken und die
-  // Finding-Referenz FRISCH holen (die alte kann freed sein).
-  if GLiveAnalyserFrame <> Pointer(Self) then Exit;
-  if (idx < 0) or (idx >= FDisplayedFindings.Count) then Exit;
   Finding := FDisplayedFindings[idx];
-  CopyFindingToClipboard(Finding);
 
   // Editor-Line-Highlights: alle Befunde der gleichen Datei mit Stripe
   // markieren. Wenn die Datei nicht offen ist, malt GHighlighter beim
   // naechsten Oeffnen. Debounce: bei Pfeiltasten-Hold kollabieren viele
   // Aufrufe zu einem Rebuild nach Idle (Konzept Tier A1).
   ScheduleHighlightRefresh(Finding.FileName);
+
+  // Zwischenablage-Kopie ENTPRELLT (2026-08-03). Sie stand frueher hier und
+  // lief bei jedem Auswahlwechsel sofort - bei gehaltener Pfeiltaste rund
+  // 30x je Sekunde, jedes Mal ein systemweiter Clipboard-Write und, sobald
+  // es fuer die Regel einen Quick-Fix-Provider gibt, ein LoadFromFile der
+  // KOMPLETTEN Quelldatei.
+  //
+  // Damit faellt auch das Application.ProcessMessages weg, das hier stand:
+  // es diente einzig dazu, das Help-Panel vor dem blockierenden
+  // Clipboard-Write sichtbar zu machen. Kein Pumpen mehr heisst auch keine
+  // Re-Entrancy mitten in der Auswahl - der Sentinel- und Bounds-Recheck,
+  // den es dafuer brauchte, entfaellt ersatzlos. Er wandert nicht mit,
+  // sondern wird im Timer-Tick neu und sauber gemacht, wo er hingehoert.
+  if Assigned(FClipCopyTimer) then
+  begin
+    FClipCopyTimer.Enabled := False;   // neu bewaffnen
+    FClipCopyTimer.Enabled := True;
+  end
+  else
+    CopyFindingToClipboard(Finding);   // Notnagel ohne Timer
+end;
+
+procedure TAnalyserFrame.ClipCopyFire(Sender: TObject);
+// Die Auswahl steht - jetzt die eine Kopie, fuer die AKTUELLE Zeile.
+// Bewusst nicht fuer die Zeile, die den Timer bewaffnet hat: waehrend der
+// 120 ms kann sich die Auswahl weiterbewegt haben, und kopiert gehoert das,
+// worauf der Nutzer stehengeblieben ist.
+var
+  idx : Integer;
+begin
+  if Assigned(FClipCopyTimer) then
+    FClipCopyTimer.Enabled := False;
+  if csDestroying in ComponentState then Exit;
+  // Lifecycle-Sentinel wie im Navigations-Tick: zwischen Bewaffnen und
+  // Feuern kann der Dock geschlossen oder FDisplayedFindings von einem
+  // fertig werdenden Async-Scan ersetzt worden sein.
+  if GLiveAnalyserFrame <> Pointer(Self) then Exit;
+  idx := FResultGrid.Row - 1;
+  if (idx < 0) or (idx >= FDisplayedFindings.Count) then Exit;
+  CopyFindingToClipboard(FDisplayedFindings[idx]);
 end;
 
 procedure TAnalyserFrame.CopyFindingToClipboard(F: TLeakFinding);
@@ -3648,6 +3689,14 @@ begin
   FNavPreviewTimer := TTimer.Create(Self);
   FNavPreviewTimer.Interval := 80;
   FNavPreviewTimer.Enabled  := False;
+  // 120 ms, etwas mehr als die 80 der Soft-Navigation: die Kopie ist die
+  // schwerere Arbeit, und niemand liest die Zwischenablage in dem Moment,
+  // in dem er die Zeile auswaehlt. Wird von jedem Auswahlwechsel neu
+  // bewaffnet - bei gehaltener Pfeiltaste bleibt genau eine Kopie uebrig.
+  FClipCopyTimer := TTimer.Create(Self);
+  FClipCopyTimer.Interval := 120;
+  FClipCopyTimer.Enabled  := False;
+  FClipCopyTimer.OnTimer  := ClipCopyFire;
   FNavPreviewTimer.OnTimer  := NavPreviewFire;
   FLastPreviewRow  := -1;
 end;
