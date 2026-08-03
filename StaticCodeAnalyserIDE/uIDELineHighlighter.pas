@@ -278,6 +278,11 @@ type
     // so dass der User beim Tab-Wechsel sofort die Befunde der neuen
     // Datei sieht ohne dass irgendwer SetActiveFile aufrufen muss.
     FMarksByFile     : TObjectDictionary<string, TFileMarks>;
+    // 1-Slot-Memo fuer NormalizePath. Beim Scrollen kommt derselbe
+    // Pfad hunderte Male hintereinander - siehe Kommentar an
+    // NormalizePath.
+    FNormRaw         : string;
+    FNormKey         : string;
     // Save-Auto-Clear: pro markierter Datei wird ein IOTAModuleNotifier
     // angehaengt der bei AfterSave die Marker dieser Datei loescht
     // (Fallback fuer Faelle in denen der LineTracker nicht greift -
@@ -762,10 +767,47 @@ begin
 end;
 
 function TFindingHighlighter.NormalizePath(const APath: string): string;
+// Delegiert an die zentrale Implementation (uPathNormalize) damit Cache-
+// Keys hier mit denen in Frame + Watch-Mode + Properties-Wrapper matchen.
+//
+// 1-SLOT-MEMO (2026-08-03, Scroll-Regression). NormalizePathForKey ist
+//   LowerCase(StringReplace(APath, '/', '\', [rfReplaceAll])).Trim
+// also DREI String-Allokationen je Aufruf. Im Zeichenpfad faellt das
+// mehrfach PRO SICHTBARER ZEILE an:
+//
+//   ShouldHighlight       jede Zeile              1x
+//   PaintGutter/TryGetMark jede Zeile             1x   (neu seit 6d74b74)
+//   EnsureLineTracker     jede MARKIERTE Zeile    1x
+//   TryGetMark (Deko)     jede MARKIERTE Zeile    1x
+//
+// Zwei Dinge haben das zusammen zur spuerbaren Bremse gemacht: die
+// Gutter-Klammer fragt fuer JEDE Zeile, auch unmarkierte, und seit der
+// Mehrzeilen-Markierung sind Fortsetzungszeilen ebenfalls Marken - ein
+// DuplicateBlock ueber 21 Zeilen macht aus einer markierten Zeile
+// einundzwanzig. Beim Scrollen wird der ganze sichtbare Bereich mehrmals
+// je Sekunde neu gemalt.
+//
+// Der Pfad ist waehrend eines Bildaufbaus konstant, das Memo faellt also
+// auf EINE Normalisierung je Datei zusammen. Der Vergleich selbst
+// allokiert nicht.
+//
+// KEIN Invalidieren noetig - und das ist der Grund, warum das Memo hier
+// sitzt und nicht eine Ebene hoeher: gecacht wird die reine
+// Zeichenketten-Umformung, nicht das Ergebnis einer Suche. Sie haengt
+// allein am Pfad. Ein Cache auf den BUCKET muesste bei jedem
+// SetAllFindings/Clear/ClearFile verworfen werden - und genau das
+// vergisst man beim naechsten Umbau.
+//
+// THREADING: unbedenklich, weil der Highlighter ausschliesslich auf dem
+// UI-Thread benutzt wird - der Analyse-Worker liefert seine Ergebnisse per
+// Synchronize(DeliverResults), siehe Kopf von uIDEAnalyseRunner. Zwei
+// nicht-atomar zusammengehoerende Strings waeren sonst genau die Art
+// Zustand, die man nicht teilen darf.
 begin
-  // Delegiert an die zentrale Implementation (uPathNormalize) damit Cache-
-  // Keys hier mit denen in Frame + Watch-Mode + Properties-Wrapper matchen.
-  Result := uPathNormalize.NormalizePathForKey(APath);
+  if (APath <> '') and (APath = FNormRaw) then Exit(FNormKey);
+  Result   := uPathNormalize.NormalizePathForKey(APath);
+  FNormRaw := APath;
+  FNormKey := Result;
 end;
 
 procedure TFindingHighlighter.AttachSaveNotifier(const AKey: string);
