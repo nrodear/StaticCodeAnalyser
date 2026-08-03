@@ -1364,6 +1364,15 @@ begin
   // Off-Screen-Buffer eliminiert Flicker beim Scrollen und beim
   // Severity-Recolor nach einem Sort-Wechsel.
   FResultGrid.DoubleBuffered := True;
+  // DefaultDrawing AUS: der Renderer (uFindingGridRenderer) malt Hintergrund,
+  // Auswahl-Hervorhebung UND Text selbst - fuer Header wie fuer Zellen. Blieb
+  // DefaultDrawing an, malte das Grid jede Zelle zuerst komplett und der
+  // Renderer danach noch einmal darueber: doppelte Arbeit fuer JEDE sichtbare
+  // Zelle, bei sechs Spalten und ~50 Zeilen also ~300 ueberfluessige
+  // Zell-Zeichnungen je Bildaufbau. Das Panel-Grid in
+  // uFindingsPropertiesFrame stand seit jeher richtig auf False - das
+  // Haupt-Grid war der Ausreisser.
+  FResultGrid.DefaultDrawing := False;
   FResultGrid.GridLineWidth  := 1;
   FResultGrid.Options := [goFixedVertLine, goFixedHorzLine,
                           goVertLine, goHorzLine,

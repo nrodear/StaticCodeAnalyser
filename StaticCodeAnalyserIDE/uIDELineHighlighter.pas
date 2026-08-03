@@ -180,7 +180,13 @@ type
     // dass jeder MouseMove ein InvalidateAllLines triggert wenn die Maus
     // im Editor aber NICHT auf einer markierten Zeile ist.
     FLastInvalidateTick : DWORD;
+    // Buendelt den Re-Invalidate nach dem Scrollen. Eine Mausrad-Raste
+    // liefert mehrere Scroll-Ereignisse; ohne Buendelung kostet jedes
+    // davon einen zusaetzlichen Voll-Repaint. Siehe EditorScrolled.
+    FScrollSettle : TTimer;
     procedure DoHoverWatch(Sender: TObject);
+    // Feuert einmal, wenn die Scroll-Bewegung steht.
+    procedure DoScrollSettled(Sender: TObject);
     // Findet welche markierte Zeile die Maus aktuell trifft. Liefert -1
     // wenn keine Zeile getroffen wird.
     function HitTestLine(X, Y: Integer): Integer;
@@ -1885,11 +1891,20 @@ begin
   FHoverWatch.Interval := 200;
   FHoverWatch.Enabled  := False;
   FHoverWatch.OnTimer  := DoHoverWatch;
+  // 90 ms: kuerzer als eine bewusste Mausbewegung zum Hovern, laenger als
+  // der Abstand zwischen den Scroll-Ereignissen einer Rad-Raste. Beim
+  // Dauerscrollen wird der Timer immer wieder neu bewaffnet und feuert
+  // genau einmal, wenn die Bewegung steht.
+  FScrollSettle := TTimer.Create(nil);
+  FScrollSettle.Interval := 90;
+  FScrollSettle.Enabled  := False;
+  FScrollSettle.OnTimer  := DoScrollSettled;
   FHoveredLine := -1;
 end;
 
 destructor TFindingEditorEvents.Destroy;
 begin
+  FreeAndNil(FScrollSettle);
   FreeAndNil(FHoverWatch);
   FreeAndNil(FRenderedRects);
   FreeAndNil(FRenderedTextEnds);
@@ -2150,6 +2165,35 @@ begin
   // EditorMouseMove vollstaendig ist. Sonst trifft der Hit-Test eine vom
   // Editor schon gerenderte aber bei uns nicht mehr gecachte Zeile nicht
   // — das Hover-Overlay erscheint dann nicht.
+  //
+  // GEBUENDELT (2026-08-03): hier stand ein SOFORTIGES InvalidateAllLines.
+  // Eine einzige Mausrad-Raste liefert mehrere Scroll-Ereignisse, und jedes
+  // erzwang einen ZUSAETZLICHEN Voll-Repaint - zusaetzlich zu dem, den der
+  // Editor durch das Scrollen ohnehin macht. Zusammen mit den Bereichsmarken,
+  // seit denen fast jede sichtbare Zeile markiert ist und den teuren Zweig
+  // durchlaeuft, war das die spuerbare Bremse.
+  //
+  // Der Aufruf selbst bleibt noetig: der Editor BLITTET beim Scrollen die
+  // verschobenen Zeilen, unser Pro-Zeile-Callback feuert fuer sie also gar
+  // nicht - der Repaint des Editors allein fuellt FRenderedRects nicht.
+  //
+  // Der Timer wird von jedem weiteren Scroll-Ereignis neu bewaffnet und
+  // feuert genau einmal, wenn die Bewegung steht. Waehrend des Scrollens ist
+  // der Cache ohnehin geleert und das Overlay verborgen (siehe oben) - in
+  // diesem Fenster braucht ihn niemand.
+  if Assigned(FScrollSettle) then
+  begin
+    FScrollSettle.Enabled := False;   // neu bewaffnen
+    FScrollSettle.Enabled := True;
+  end
+  else if Assigned(GHighlighter) then
+    GHighlighter.InvalidateAllLines;  // Notnagel ohne Timer
+end;
+
+procedure TFindingEditorEvents.DoScrollSettled(Sender: TObject);
+// Die Scroll-Bewegung steht - jetzt der EINE Re-Invalidate.
+begin
+  FScrollSettle.Enabled := False;
   if Assigned(GHighlighter) then
     GHighlighter.InvalidateAllLines;
 end;
