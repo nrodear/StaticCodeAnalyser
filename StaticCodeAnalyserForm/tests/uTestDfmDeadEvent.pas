@@ -749,7 +749,7 @@ const
   AMBIG_BASE = 'TAmbigBase';
 
   // Kind-Form, deren Ahn NICHT VCL-Root ist -> der Index muss ihn suchen.
-  PAS_CHILD_OF_BASE =
+  AMBIG_CHILD_UNIT =
     'unit uMainForm;'#13#10 +
     'interface'#13#10 +
     'uses Vcl.Forms;'#13#10 +
@@ -761,7 +761,7 @@ const
 
   // Zwei Units, BEIDE mit einer Klasse TBaseForm - nur eine kennt den
   // Handler. Genau die Lage aus skia4delphi (TfrmBase in VCL und in FMX).
-  PAS_BASE_WITH_HANDLER =
+  AMBIG_UNIT_WITH_HANDLER =
     'unit uAncestorA;'#13#10 +
     'interface'#13#10 +
     'uses Vcl.Forms;'#13#10 +
@@ -772,7 +772,7 @@ const
     'implementation'#13#10 +
     'end.';
 
-  PAS_BASE_WITHOUT_HANDLER =
+  AMBIG_UNIT_WITHOUT_HANDLER =
     'unit uAncestorB;'#13#10 +
     'interface'#13#10 +
     'uses Vcl.Forms;'#13#10 +
@@ -796,8 +796,8 @@ procedure TTestDfmDeadEvent.Test_AmbiguousAncestorClass_NoFinding;
 // schweigen, unabhaengig davon, welche der beiden gewaehlt wurde.
 var F: TObjectList<TLeakFinding>;
 begin
-  F := RunWithRepoIndex(DFM_CALLS_PNLBACK, PAS_CHILD_OF_BASE,
-         [PAS_BASE_WITH_HANDLER, PAS_BASE_WITHOUT_HANDLER]);
+  F := RunWithRepoIndex(DFM_CALLS_PNLBACK, AMBIG_CHILD_UNIT,
+         [AMBIG_UNIT_WITH_HANDLER, AMBIG_UNIT_WITHOUT_HANDLER]);
   try
     Assert.AreEqual<Integer>(0, Count(F, fkDfmDeadEvent),
       'Bei mehrdeutigem Ahn beweist "Handler nicht gefunden" nichts');
@@ -811,8 +811,8 @@ procedure TTestDfmDeadEvent.Test_UniqueAncestorClass_StillReported;
 // Mehrdeutigkeits-Gate die Regel generell stumm geschaltet haben.
 var F: TObjectList<TLeakFinding>;
 begin
-  F := RunWithRepoIndex(DFM_CALLS_PNLBACK, PAS_CHILD_OF_BASE,
-         [PAS_BASE_WITHOUT_HANDLER]);
+  F := RunWithRepoIndex(DFM_CALLS_PNLBACK, AMBIG_CHILD_UNIT,
+         [AMBIG_UNIT_WITHOUT_HANDLER]);
   try
     Assert.AreEqual<Integer>(1, Count(F, fkDfmDeadEvent));
     Assert.AreEqual<Integer>(1, CountHandler(F, 'pnlBackClick'));
