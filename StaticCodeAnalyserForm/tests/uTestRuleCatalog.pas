@@ -542,14 +542,16 @@ begin
 end;
 
 procedure TTestRuleCatalog.ProfileDefaultExcludesExactlyTheStyleRules;
-// Nagelt die Entscheidung fest (C1, 2026-08-02): genau diese sechs reinen
-// Konventions-Regeln sind aus 'default' raus - zusammen 45,4 % aller Funde
-// auf dem Referenzkorpus. Nicht mehr und nicht weniger; jede spaetere
-// stille Erweiterung der Liste faellt hier auf.
+// Nagelt die Entscheidung fest (C1, 2026-08-02; SCA099 nachgezogen am
+// 2026-08-03): genau diese sieben reinen Konventions-Regeln sind aus
+// 'default' raus - zusammen 48,1 % aller Funde auf dem Referenzkorpus.
+// Nicht mehr und nicht weniger; jede spaetere stille Erweiterung der
+// Liste faellt hier auf.
 const
-  EXPECTED : array[0..5] of string = (
+  EXPECTED : array[0..6] of string = (
     'PublicMemberWithoutDoc', 'NilComparison', 'BeginEndRequired',
-    'WithStatement', 'ClassPerFile', 'DfmHardcodedCaption');
+    'WithStatement', 'ClassPerFile', 'DfmHardcodedCaption',
+    'IfElseBegin');
 var
   D     : TFindingKinds;
   K     : TFindingKind;
@@ -579,7 +581,7 @@ begin
            + 'Liste - stille Verkleinerung?', [N]));
   end;
   Assert.AreEqual<Integer>(Length(EXPECTED), Miss,
-    'default muss GENAU die sechs beschlossenen Regeln weglassen');
+    'default muss GENAU die sieben beschlossenen Regeln weglassen');
 end;
 
 procedure TTestRuleCatalog.ProfileUnknownFallsBackToAll;

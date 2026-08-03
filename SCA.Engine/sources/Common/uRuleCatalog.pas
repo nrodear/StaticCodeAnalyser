@@ -553,13 +553,19 @@ begin
   // 'strict' ist das Profil, das ALLES bedeutet - hier und nur hier haengt
   // die Vollstaendigkeits-Zusage.
   FProfiles.AddOrSetValue('strict', AllKinds);
-  // 'style' = die sechs reinen Konventions-Regeln, die seit dem
-  // C1-Beschluss (2026-08-02) nicht mehr im Default stecken: zusammen
-  // 45,4 % aller Funde auf dem Referenzkorpus bei 0-4 % FP-Quote. Sie
-  // sind richtig, aber sie sind das Erste, was ein Neuanwender sieht.
+  // 'style' = die reinen Konventions-Regeln, die seit dem C1-Beschluss
+  // (2026-08-02) nicht mehr im Default stecken: zusammen 48,1 % aller
+  // Funde auf dem Referenzkorpus bei 0-4 % FP-Quote. Sie sind richtig,
+  // aber sie sind das Erste, was ein Neuanwender sieht.
+  //
+  // fkIfElseBegin kam am 2026-08-03 dazu. Die Analyse vom 2026-08-01
+  // nannte SIEBEN solche Regeln, C1 verschob sechs - diese blieb ohne
+  // Grund liegen. Sie ist dieselbe Bauart wie fkBeginEndRequired
+  // daneben: Code Smell, Hint, reine Frage der Schreibweise.
   FProfiles.AddOrSetValue('style',
     [fkPublicMemberWithoutDoc, fkNilComparison, fkBeginEndRequired,
-     fkWithStatement, fkClassPerFile, fkDfmHardcodedCaption]);
+     fkWithStatement, fkClassPerFile, fkDfmHardcodedCaption,
+     fkIfElseBegin]);
   // 'default' = alles ausser 'style'. Bewusst als Differenz gebildet und
   // nicht als zweite Liste: so kann ein neues Kind hier gar nicht erst
   // durchfallen, und der Fallback bleibt automatisch synchron mit der

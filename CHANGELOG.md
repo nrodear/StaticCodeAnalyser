@@ -6,6 +6,22 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- **`SCA099 IfElseBegin` moved to the `style` profile.** The analysis
+  behind the profile split named *seven* pure-convention rules; v0.9.10
+  shipped with six. `IfElseBegin` — asymmetric `begin..end` between the
+  `if` and the `else` branch — was left behind for no stated reason. It
+  is the same shape as `BeginEndRequired`, which did move: a Code Smell
+  at Hint severity about how the source is written, not about what it
+  does. On the reference corpus it is **14,982 findings, 2.7 %**, so
+  `default` now shows 4.9 % less than before. `style` covers exactly the
+  seven; `strict` is unaffected and still means everything.
+
+---
+
 ## [v0.9.10] - 2026-08-02 - One finding per block, a quieter default
 
 Changes since **v0.9.9**, tagged the same day. No rule gained or lost a

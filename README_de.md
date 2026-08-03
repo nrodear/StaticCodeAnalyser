@@ -286,8 +286,8 @@ Beide Totals stimmen mathematisch überein.
 - **Severity-/Type-Combo**: filtert das Grid auf eine Kategorie
 - **Profile-Combo**: schaltet das aktive Rule-Set live um. Mitgeliefert:
   `ide-fast` (Plugin-Default — nur Bugs + Vulns), `default` (alles ausser
-  den sechs reinen Konventions-Regeln), `strict` (wirklich alles), `style`
-  (genau diese sechs), `security` (Vulns + Hotspots), `bugs-only`,
+  den sieben reinen Konventions-Regeln), `strict` (wirklich alles), `style`
+  (genau diese sieben), `security` (Vulns + Hotspots), `bugs-only`,
   `code-quality`, `dfm-only`. Profile leben in
   `rules/sca-rules.json` unter `profiles` und die Combo wird daraus
   gefüllt — eigene Profile dort eintragen, erscheinen automatisch.

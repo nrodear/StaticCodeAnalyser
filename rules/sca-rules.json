@@ -51,12 +51,14 @@
     ],
     "style": [
       "PublicMemberWithoutDoc", "NilComparison", "BeginEndRequired",
-      "WithStatement", "ClassPerFile", "DfmHardcodedCaption"
+      "WithStatement", "ClassPerFile", "DfmHardcodedCaption",
+      "IfElseBegin"
     ],
     "default": [
       "*",
       "!PublicMemberWithoutDoc", "!NilComparison", "!BeginEndRequired",
-      "!WithStatement", "!ClassPerFile", "!DfmHardcodedCaption"
+      "!WithStatement", "!ClassPerFile", "!DfmHardcodedCaption",
+      "!IfElseBegin"
     ],
     "strict":  ["*", "UnusedUses"],
 
