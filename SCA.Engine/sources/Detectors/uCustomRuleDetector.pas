@@ -5,10 +5,14 @@ unit uCustomRuleDetector;
 // gegen Source-Code. Output identisch zu hardcoded Detektoren -
 // erscheint in SARIF/HTML/JSON mit der Custom-Rule-ID (z.B. PROJ001).
 //
-// Strategie: zeilenweiser Scan mit optionalen Target-Filtern. AST-
-// basiert waere praeziser aber overkill - die haeufigsten Use-Cases
-// (verbotene Imports, deprecated APIs, Naming-Conventions) lassen
-// sich mit Pattern-Matching gut abdecken.
+// Strategie: zeilenweiser Scan ueber den VOLLEN Zeileninhalt. AST-basiert
+// waere praeziser aber overkill - die haeufigsten Use-Cases (verbotene
+// Imports, deprecated APIs, Naming-Conventions) deckt Pattern-Matching ab.
+//
+// ACHTUNG: das Regelfeld 'target' wird geparst und NICHT ausgewertet.
+// Wer target: comment setzt, bekommt trotzdem Treffer im Code. Der frueher
+// hier stehende Satz "mit optionalen Target-Filtern" hat das Gegenteil
+// nahegelegt. Siehe AnalyzeFile.
 //
 // Aufruf-Reihenfolge:
 // 1. TCustomRuleDetector.LoadFromYaml(filename)
@@ -35,6 +39,7 @@ type
     Pattern: string; // raw pattern text
     PatternType: TPatternType;
     PatternRegex: TRegEx; // pre-compiled wenn PatternType=ptRegex
+    // GEPARST, ABER NIE GELESEN - siehe AnalyzeFile.
     Target: TRuleTarget;
     Message: string; // optional, fallback = Description
     FixHint: string; // optional
@@ -382,11 +387,24 @@ end;
 
 class procedure TCustomRuleDetector.AnalyzeFile(const FileName, Source: string;
   Results: TObjectList<TLeakFinding>);
-// Strategie bewusst SIMPEL: zeilenweiser Pattern-Match. Target-Filtering
-// (rtComment / rtStringLiteral / rtIdentifier) ist ein TODO fuer v0.9.x -
-// fuer v0.9.0-MVP wirkt jedes Pattern auf den vollen Zeileninhalt.
-// rtIdentifier wird approximiert via Word-Match - Caller kann pattern-type
-// auf 'word' setzen wenn er nur ganze Identifier-Tokens treffen will.
+// Strategie bewusst SIMPEL: zeilenweiser Pattern-Match ueber den vollen
+// Zeileninhalt.
+//
+// TARGET-FILTERING GIBT ES NICHT. rtComment / rtStringLiteral /
+// rtIdentifier werden aus der Regeldatei gelesen und dann ignoriert -
+// R.Target kommt in dieser Routine nicht vor. Die Zielversion stand hier
+// bis 2026-08-04 als "v0.9.x" bzw. "v0.9.0-MVP"; beides ist ueberholt, und
+// eine Jahreszahl statt einer Versionsnummer haette den Drift frueher
+// sichtbar gemacht.
+//
+// Wer es baut: der Stripper (TDetectorUtils.StripStringsAndCommentsCached)
+// liefert die noetige Trennung bereits - er wird von uUnusedParameter und
+// anderen benutzt. Der Weg waere also kurz; er aendert aber das Verhalten
+// bestehender Regeldateien und gehoert deshalb in ein Release mit
+// Versionsnotiz, nicht in eine Aufraeumrunde.
+//
+// Naeherung fuer Identifier heute: pattern-type auf 'word' setzen - das
+// trifft ganze Tokens statt Teilzeichenketten.
 var
   R: TCustomRule;
   Matches: TList<Integer>;

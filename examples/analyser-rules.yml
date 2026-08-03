@@ -17,8 +17,10 @@
 #                  code-duplication            (informational only)
 #   pattern-type - substring (default) | regex | word
 #   target       - any (default) | identifier | comment | string-literal
-#                  NOTE: in v0.9.0 still treated as 'any' - target-filtering
-#                  is roadmap for v0.9.x
+#                  NOT IMPLEMENTED: the key is parsed and then ignored -
+#                  every pattern still matches the whole line. Setting
+#                  'comment' does NOT restrict matches to comments.
+#                  (Checked again 2026-08-04.)
 #   message      - shown in finding output (default: name or description)
 #   fix-hint     - shown in HTML/Plugin-Tooltip
 #   file-include - list of glob patterns; rule only fires for matching files
