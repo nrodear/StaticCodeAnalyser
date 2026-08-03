@@ -12,6 +12,11 @@ A fix release. Everything here is either a false positive that was proven on
 the reference corpus, a regression that crept in with v0.9.10, or a version
 number that had quietly stopped being true. No new rules, no new features.
 
+On the 13,355-file reference corpus the finding count goes **560,964 →
+560,073 (−891)**. Exactly two rules move — `SCA028` by −2 and `SCA054` by
+−889 — and **nothing is added**: not one new finding, not one new message
+shape. The other 139 rules are untouched.
+
 ### Fixed — findings that were wrong
 
 - **`SCA028 DfmDeadEvent`: an event bound to `nil` is not a missing
@@ -48,6 +53,12 @@ number that had quietly stopped being true. No new rules, no new features.
   parameter is never read, the rule now asks the source, exactly as it has
   done since 2026-07-18 for routines the parser discards. Strings and
   comments are stripped first: a name in a comment is still not a use.
+
+  Measured on the reference corpus: **14,859 → 13,970 findings (−889,
+  −6.0 %)**, **zero added**, and apart from `SCA028` not one of the other 141
+  rules moved. Eight drops were sampled and read in the source; every one is
+  a genuine read in the two predicted shapes — `FList[Index] := Item` and
+  `(FParent as TJvVisualId3v2).FTreeView.Width := Value`.
 
 ### Fixed — regressions from v0.9.10
 
