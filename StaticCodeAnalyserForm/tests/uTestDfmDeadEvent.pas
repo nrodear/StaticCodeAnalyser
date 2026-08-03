@@ -697,9 +697,6 @@ begin
   finally F.Free; end;
 end;
 
-initialization
-  TDUnitX.RegisterTestFixture(TTestDfmDeadEvent);
-
 { --- 'OnFoo = nil' ist keine Bindung --------------------------------- }
 
 const
@@ -821,5 +818,8 @@ begin
     Assert.AreEqual<Integer>(1, CountHandler(F, 'pnlBackClick'));
   finally F.Free; end;
 end;
+
+initialization
+  TDUnitX.RegisterTestFixture(TTestDfmDeadEvent);
 
 end.
