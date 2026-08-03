@@ -30,6 +30,14 @@ type
     [Test] procedure Test_ResolvedParentChain_BothHandlersNowhere_Detected;
     [Test] procedure Test_ResolvedParentChain_HandlerNowhere_Detected;
 
+    // --- 'OnFoo = nil' ist keine Bindung (2026-08-03) ---
+    [Test] procedure Test_NilHandler_NotTreatedAsBinding;
+    [Test] procedure Test_NonNilHandler_StillReported;   // Kontrolle
+
+    // --- Mehrdeutiger Ahn: der RepoIndex hat geraten (2026-08-03) ---
+    [Test] procedure Test_AmbiguousAncestorClass_NoFinding;
+    [Test] procedure Test_UniqueAncestorClass_StillReported;  // Kontrolle
+
     // --- Robustheit ---
     [Test] procedure Test_NoFormClass_NoFinding;
     [Test] procedure Test_FormClassNameMismatch_NoFinding;
@@ -44,16 +52,35 @@ type
 
 implementation
 
-// noinspection-file MemoryLeak
-// Die Fixture erzeugt ein Objekt ohne Free absichtlich - Pruefgegenstand.
+// noinspection-file MemoryLeak, ClassPerFile, GodClass
+// MemoryLeak: die Fixture erzeugt ein Objekt ohne Free absichtlich -
+//   Pruefgegenstand. (Am 2026-08-03 kurzzeitig entfernt, weil ein
+//   --file-Scan den Marker als wirkungslos meldete. In diesem Modus
+//   KANN SCA001 hier nicht feuern - die Sonde war blind, nicht der
+//   Marker ueberfluessig. Nur der Voll-Scan entscheidet das.)
+// ClassPerFile: die zusaetzlichen Klassendeklarationen stehen in
+//   STRING-LITERALEN - Pascal-Fixtures fuer den Parser, keine Klassen
+//   dieser Unit. Der Detektor arbeitet zeilenweise und kann das nicht
+//   unterscheiden.
+// GodClass: eine DUnitX-Fixture ist eine Liste von Testfaellen, keine
+//   Klasse mit Verantwortung. Aufteilen wuerde die Tests nur verstecken.
+// (MemoryLeak stand hier bis 2026-08-03; SCA165 meldete den Marker als
+//  wirkungslos - der Leak-Detektor ist inzwischen genauer.)
 
 uses
-  System.SysUtils, System.StrUtils, System.Generics.Collections,
+  System.SysUtils, System.StrUtils, System.Classes,
+  System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uAstNode, uParser2,
+  System.IOUtils,
   uDfmParser, uComponentGraph,
-  uFormBinder,
+  uFormBinder, uDfmRepoIndex,
   uDfmDeadEvent;
+
+const
+  // Dreimal woertlich waere DuplicateString - der eigene
+  // Analyser meldet das ab drei Vorkommen.
+  TEST_DFM = 'test.dfm';
 
 function RunOn(const DfmSrc, PasSrc: string): TObjectList<TLeakFinding>;
 var
@@ -85,7 +112,7 @@ begin
 
   Binding := TFormBinder.Bind(Graph, UnitNode);
   try
-    TDfmDeadEventDetector.Analyze(Binding, 'test.dfm', Result);
+    TDfmDeadEventDetector.Analyze(Binding, TEST_DFM, Result);
   finally
     Binding.Free;
     UnitNode.Free;
@@ -135,9 +162,106 @@ begin
   ParentBind := TFormBinder.Bind(ParentGraph, ParentUnit);
   try
     Binding.AdoptParent(ParentBind, ParentGraph, ParentUnit);
-    TDfmDeadEventDetector.Analyze(Binding, 'test.dfm', Result);
+    TDfmDeadEventDetector.Analyze(Binding, TEST_DFM, Result);
   finally
     Binding.Free;      // gibt ParentBind + ParentGraph + ParentUnit mit frei
+    UnitNode.Free;
+    Graph.Free;
+  end;
+end;
+
+function WriteTempRepo(const PasSrc: string;
+  const AncestorUnits: array of string; out ATmpDir: string): TStringList;
+// Legt ein Wegwerf-Verzeichnis mit Haupt- und Ahnen-Units an und liefert
+// die Dateiliste fuer TDfmRepoIndex.Build. Bewusst eine eigene Routine:
+// sonst stapeln sich in RunWithRepoIndex vier try-Ebenen uebereinander -
+// der eigene Analyser meldet das zu Recht als NestedTry.
+var
+  Fn : string;
+  I  : Integer;
+begin
+  ATmpDir := TPath.Combine(TPath.GetTempPath, 'sca_de_' + TGuid.NewGuid.ToString);
+  TDirectory.CreateDirectory(ATmpDir);
+  Result := TStringList.Create;
+  try
+    Fn := TPath.Combine(ATmpDir, 'uMainForm.pas');
+    TFile.WriteAllText(Fn, PasSrc, TEncoding.UTF8);
+    Result.Add(Fn);
+    for I := Low(AncestorUnits) to High(AncestorUnits) do
+    begin
+      // Verschiedene DATEInamen, gleicher KLASSENname im Inhalt - genau so
+      // entsteht die Mehrdeutigkeit, die geprueft werden soll.
+      Fn := TPath.Combine(ATmpDir, Format('uAncestor%d.pas', [I]));
+      TFile.WriteAllText(Fn, AncestorUnits[I], TEncoding.UTF8);
+      Result.Add(Fn);
+    end;
+  except
+    Result.Free;
+    raise;
+  end;
+end;
+
+procedure AnalyzeWithIndex(Graph: TComponentGraph; UnitNode: TAstNode;
+  FileList: TStringList; Results: TObjectList<TLeakFinding>);
+// Index bauen, ueber BindWithParents binden, Detektor laufen lassen.
+// Ebenfalls ausgelagert, damit RunWithRepoIndex flach bleibt.
+var
+  RepoIdx : TDfmRepoIndex;
+  Binding : TFormBinding;
+begin
+  // Erst binden, dann analysieren - NACHEINANDER, nicht ineinander.
+  // Der Index wird nach BindWithParents nicht mehr gebraucht: die
+  // Ahnen-ASTs haengen als FOwnedResources an der Bindung selbst.
+  RepoIdx := TDfmRepoIndex.Create;
+  try
+    RepoIdx.Build(FileList);
+    Binding := TFormBinder.BindWithParents(Graph, UnitNode, RepoIdx);
+  finally
+    RepoIdx.Free;
+  end;
+
+  try
+    TDfmDeadEventDetector.Analyze(Binding, TEST_DFM, Results);
+  finally
+    Binding.Free;
+  end;
+end;
+
+function RunWithRepoIndex(const DfmSrc, PasSrc: string;
+  const AncestorUnits: array of string): TObjectList<TLeakFinding>;
+// Baut die Parent-Kette ueber den ECHTEN Produktivpfad (BindWithParents +
+// TDfmRepoIndex) statt per AdoptParent von Hand. Nur so entsteht die
+// Mehrdeutigkeits-Markierung, denn die sitzt im Index.
+var
+  DfmParser : TDfmParser;
+  PasParser : TParser2;
+  Graph     : TComponentGraph;
+  UnitNode  : TAstNode;
+  FileList  : TStringList;
+  TmpDir    : string;
+begin
+  Result := TObjectList<TLeakFinding>.Create(True);
+
+  DfmParser := TDfmParser.Create;
+  try
+    Graph := DfmParser.ParseSource(DfmSrc);
+  finally
+    DfmParser.Free;
+  end;
+
+  PasParser := TParser2.Create;
+  try
+    UnitNode := PasParser.ParseSource(PasSrc);
+  finally
+    PasParser.Free;
+  end;
+
+  FileList := WriteTempRepo(PasSrc, AncestorUnits, TmpDir);
+  try
+    AnalyzeWithIndex(Graph, UnitNode, FileList, Result);
+  finally
+    FileList.Free;
+    TDirectory.Delete(TmpDir, True);
     UnitNode.Free;
     Graph.Free;
   end;
@@ -575,5 +699,127 @@ end;
 
 initialization
   TDUnitX.RegisterTestFixture(TTestDfmDeadEvent);
+
+{ --- 'OnFoo = nil' ist keine Bindung --------------------------------- }
+
+const
+  DFM_NIL_HANDLER =
+    'object MainForm: TMainForm'#13#10 +
+    '  object btnSave: TButton'#13#10 +
+    '    OnClick = nil'#13#10 +
+    '  end'#13#10 +
+    'end';
+
+  DFM_MISSING_HANDLER =
+    'object MainForm: TMainForm'#13#10 +
+    '  object btnSave: TButton'#13#10 +
+    '    OnClick = btnSaveNichtVorhanden'#13#10 +
+    '  end'#13#10 +
+    'end';
+
+procedure TTestDfmDeadEvent.Test_NilHandler_NotTreatedAsBinding;
+// 'OnClick = nil' sagt ausdruecklich: KEIN Handler. Das als fehlenden
+// Handler zu melden dreht die Aussage um. Belegt am Referenzkorpus mit
+// genau einem Vorkommen (cnwizards CnListCompFrm.dfm, OnCustomDrawItem).
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM_NIL_HANDLER, PAS_BASE);
+  try
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmDeadEvent),
+      'OnClick = nil ist keine Bindung und darf nichts melden');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmDeadEvent.Test_NonNilHandler_StillReported;
+// KONTROLLE zum Test darueber: gleicher Aufbau, echter Name statt 'nil'.
+// Ohne diese Probe waere der Test darueber auch dann gruen, wenn der
+// nil-Filter die Regel komplett abgeschaltet haette.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM_MISSING_HANDLER, PAS_BASE);
+  try
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmDeadEvent));
+    Assert.AreEqual<Integer>(1, CountHandler(F, 'btnSaveNichtVorhanden'));
+  finally F.Free; end;
+end;
+
+{ --- Mehrdeutiger Ahn ------------------------------------------------ }
+
+const
+  // Eigener Name: 'TBaseForm' fuehren die aelteren Fixtures dieser
+  // Datei bereits. Als Konstante, weil er sonst dreimal woertlich
+  // dastuende - ab drei meldet der eigene Analyser DuplicateString.
+  AMBIG_BASE = 'TAmbigBase';
+
+  // Kind-Form, deren Ahn NICHT VCL-Root ist -> der Index muss ihn suchen.
+  PAS_CHILD_OF_BASE =
+    'unit uMainForm;'#13#10 +
+    'interface'#13#10 +
+    'uses Vcl.Forms;'#13#10 +
+    'type'#13#10 +
+    '  TMainForm = class(' + AMBIG_BASE + ')'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    'end.';
+
+  // Zwei Units, BEIDE mit einer Klasse TBaseForm - nur eine kennt den
+  // Handler. Genau die Lage aus skia4delphi (TfrmBase in VCL und in FMX).
+  PAS_BASE_WITH_HANDLER =
+    'unit uAncestorA;'#13#10 +
+    'interface'#13#10 +
+    'uses Vcl.Forms;'#13#10 +
+    'type'#13#10 +
+    '  ' + AMBIG_BASE + ' = class(TForm)'#13#10 +
+    '    procedure pnlBackClick(Sender: TObject);'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    'end.';
+
+  PAS_BASE_WITHOUT_HANDLER =
+    'unit uAncestorB;'#13#10 +
+    'interface'#13#10 +
+    'uses Vcl.Forms;'#13#10 +
+    'type'#13#10 +
+    '  ' + AMBIG_BASE + ' = class(TForm)'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    'end.';
+
+  DFM_CALLS_PNLBACK =
+    'object MainForm: TMainForm'#13#10 +
+    '  object pnlBack: TPanel'#13#10 +
+    '    OnClick = pnlBackClick'#13#10 +
+    '  end'#13#10 +
+    'end';
+
+procedure TTestDfmDeadEvent.Test_AmbiguousAncestorClass_NoFinding;
+// Zwei Units deklarieren TBaseForm; der Index kann nur eine liefern und
+// hat damit GERATEN. Trifft er die falsche, fehlt der Handler nur
+// scheinbar - gemeldet wuerde ein Load-Crash, den es nicht gibt. Also
+// schweigen, unabhaengig davon, welche der beiden gewaehlt wurde.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunWithRepoIndex(DFM_CALLS_PNLBACK, PAS_CHILD_OF_BASE,
+         [PAS_BASE_WITH_HANDLER, PAS_BASE_WITHOUT_HANDLER]);
+  try
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmDeadEvent),
+      'Bei mehrdeutigem Ahn beweist "Handler nicht gefunden" nichts');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmDeadEvent.Test_UniqueAncestorClass_StillReported;
+// KONTROLLE: gleicher Aufbau mit nur EINER Ahnen-Unit, die den Handler
+// nicht kennt. Die Kette ist eindeutig aufgeloest, der Handler fehlt
+// wirklich - es MUSS gemeldet werden. Ohne diese Probe koennte das
+// Mehrdeutigkeits-Gate die Regel generell stumm geschaltet haben.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunWithRepoIndex(DFM_CALLS_PNLBACK, PAS_CHILD_OF_BASE,
+         [PAS_BASE_WITHOUT_HANDLER]);
+  try
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmDeadEvent));
+    Assert.AreEqual<Integer>(1, CountHandler(F, 'pnlBackClick'));
+  finally F.Free; end;
+end;
 
 end.

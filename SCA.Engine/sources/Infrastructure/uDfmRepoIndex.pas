@@ -42,6 +42,15 @@ type
     // deklariert. Nicht jede Klasse hat einen Var-Eintrag (z.B. selten
     // gebrauchte Frame-Klassen ohne globalen Singleton).
     FClassUnit : TDictionary<string, string>;
+    // Klassennamen, die in MEHR ALS EINER Unit deklariert sind.
+    // FClassUnit behaelt den ersten Treffer und verwirft den Rest
+    // stillschweigend - fuer die Ahnen-Aufloesung ist das eine Wette.
+    // Belegt am Korpus: skia4delphi fuehrt TfrmBase zweimal (VCL und
+    // FMX); der VCL-Splash wurde gegen die FMX-Basis gebunden, die den
+    // Handler nicht kennt - SCA028 meldete einen Load-Crash, den es
+    // nicht gibt. Wer auf GetUnitForClass baut, muss wissen, ob die
+    // Antwort eindeutig war.
+    FClassAmbig : TDictionary<string, Boolean>;
     // Per-Scan-AST-Cache (D.2.3 Infra): von Build reingereicht statt
     // gAstFileCache-Global -> ein Index-Lauf nutzt genau einen Cache.
     FAstCache : TAstFileCache;
@@ -61,6 +70,10 @@ type
 
     // Lookup: Klasse -> Unit-Datei (oder '', wenn nicht gefunden).
     function GetUnitForClass(const ClassRef: string): string;
+    // True, wenn der Name in mehreren Units deklariert ist -
+    // GetUnitForClass hat dann GERATEN. Aufrufer, die aus dem
+    // Ergebnis auf Abwesenheit schliessen, muessen das pruefen.
+    function IsClassAmbiguous(const ClassRef: string): Boolean;
 
     // Anzahl der erfassten Form-Variablen - praktisch fuer "Pipeline ready?"
     // Checks im Detektor.
@@ -80,11 +93,13 @@ begin
   inherited;
   FVars      := TDictionary<string, TFormVarInfo>.Create;
   FClassUnit := TDictionary<string, string>.Create;
+  FClassAmbig := TDictionary<string, Boolean>.Create;
 end;
 
 destructor TDfmRepoIndex.Destroy;
 begin
   FClassUnit.Free;
+  FClassAmbig.Free;
   FVars.Free;
   inherited;
 end;
@@ -97,6 +112,7 @@ begin
   FAstCache := ACache;
   FVars.Clear;
   FClassUnit.Clear;
+  FClassAmbig.Clear;
   if FileList = nil then Exit;
 
   for I := 0 to FileList.Count - 1 do
@@ -204,7 +220,8 @@ var
   Classes : TList<TAstNode>;
   C       : TAstNode;
   I       : Integer;
-  Key     : string;
+  Key      : string;
+  Existing : string;
 begin
   Classes := Section.FindAll(nkClass);
   try
@@ -213,7 +230,15 @@ begin
       C := Classes[I];
       if C.Name = '' then Continue;
       Key := LowerCase(C.Name);
-      if FClassUnit.ContainsKey(Key) then Continue;
+      if FClassUnit.TryGetValue(Key, Existing) then
+      begin
+        // Nur ueber UNIT-Grenzen hinweg mehrdeutig. Zwei nkClass mit
+        // gleichem Namen in DERSELBEN Unit sind der IFDEF-Zwilling -
+        // beide beschreiben dieselbe Klasse, die Wahl ist harmlos.
+        if not SameText(Existing, Unitname) then
+          FClassAmbig.AddOrSetValue(Key, True);
+        Continue;
+      end;
       FClassUnit.Add(Key, Unitname);
     end;
   finally
@@ -231,6 +256,11 @@ function TDfmRepoIndex.GetUnitForClass(const ClassRef: string): string;
 begin
   if not FClassUnit.TryGetValue(LowerCase(ClassRef), Result) then
     Result := '';
+end;
+
+function TDfmRepoIndex.IsClassAmbiguous(const ClassRef: string): Boolean;
+begin
+  Result := FClassAmbig.ContainsKey(LowerCase(ClassRef));
 end;
 
 function TDfmRepoIndex.VarCount: Integer;

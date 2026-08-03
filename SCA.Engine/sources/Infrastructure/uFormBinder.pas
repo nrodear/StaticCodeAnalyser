@@ -55,6 +55,12 @@ type
     // OWNED dieses TFormBinding den Parent + dessen Graph + UnitNode -
     // FOwnedResources sorgt fuer die Cascade-Freigabe.
     FParent           : TFormBinding;
+    // Dieses Binding wurde ueber einen MEHRDEUTIGEN Klassennamen
+    // erreicht (derselbe Name in mehreren Units). Der RepoIndex hat
+    // dann geraten, und die Vererbungskette darunter kann die eines
+    // fremden Namensvetters sein. Wer aus 'Handler nicht gefunden'
+    // auf 'existiert nicht' schliesst, darf das hier nicht.
+    FAmbiguousAncestor: Boolean;
     FOwnedResources   : TObjectList<TObject>;
   public
     constructor Create;
@@ -89,6 +95,7 @@ type
     property PublishedMethods : TDictionary<string,TAstNode> read FPublishedMethods;
     property MethodImpls      : TDictionary<string,TAstNode> read FMethodImpls;
     property Parent           : TFormBinding              read FParent;
+    property HasAmbiguousAncestor: Boolean               read FAmbiguousAncestor;
   end;
 
   TFormBinder = class
@@ -290,9 +297,17 @@ class function TFormBinder.Bind(Graph: TComponentGraph;
     try
       for Node in All do
         for Pair in Node.Properties do
+          // 'OnFoo = nil' ist KEINE Bindung, sondern das ausdrueckliche
+          // Gegenteil: das Ereignis ist geleert. Es als Bindung zu
+          // fuehren laesst SCA028 einen fehlenden Handler melden, wo
+          // gar keiner gemeint war (Korpus: genau ein Vorkommen,
+          // cnwizards CnListCompFrm.dfm OnCustomDrawItem = nil).
+          // Gilt fuer ALLE Leser von Events - kein Detektor will eine
+          // nil-Bindung sehen.
           if IsEventPropertyName(Pair.Key)
              and (Pair.Value.Kind = pvkIdent)
-             and (Trim(Pair.Value.RawValue) <> '') then
+             and (Trim(Pair.Value.RawValue) <> '')
+             and not SameText(Trim(Pair.Value.RawValue), 'nil') then
           begin
             Ev.Component   := Node;
             Ev.EventName   := Pair.Key;
@@ -406,6 +421,7 @@ class function TFormBinder.BindWithParents(Graph: TComponentGraph;
     GrandAncestor  : string;
     GrandBinding   : TFormBinding;
     LowKey         : string;
+    AmbiguousPick  : Boolean;
   begin
     Result := nil;
     if RepoIndex = nil then Exit;
@@ -421,6 +437,10 @@ class function TFormBinder.BindWithParents(Graph: TComponentGraph;
 
     ParentUnitFile := RepoIndex.GetUnitForClass(ParentClassRef);
     if (ParentUnitFile = '') or not TFile.Exists(ParentUnitFile) then Exit;
+    // Mehrdeutig? Dann ist ParentUnitFile geraten - gemerkt wird es am
+    // erzeugten Binding weiter unten, nicht hier: erst muss feststehen,
+    // dass ueberhaupt eines entsteht.
+    AmbiguousPick := RepoIndex.IsClassAmbiguous(ParentClassRef);
 
     // .pas einlesen (RepoIndex hat sie bereits einmal geparst, aber der
     // AST wurde nicht gecacht - hier nochmal). Parse-Fehler werden
@@ -474,6 +494,7 @@ class function TFormBinder.BindWithParents(Graph: TComponentGraph;
     end;
 
     Result := TFormBinder.Bind(ParentGraph, ParentUnitNode);
+    Result.FAmbiguousAncestor := AmbiguousPick;
 
     // BuildParent ist verantwortlich, ParentGraph + ParentUnitNode in
     // FOwnedResources des zurueckgegebenen Bindings zu legen - der

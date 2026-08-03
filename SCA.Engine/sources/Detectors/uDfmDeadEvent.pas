@@ -89,13 +89,38 @@ var
 begin
   Result := False;
   Top := Binding;
+  // MEHRDEUTIGKEIT schlaegt Vollstaendigkeit: wurde irgendein Glied der
+  // Kette ueber einen Klassennamen erreicht, den mehrere Units fuehren,
+  // hat der RepoIndex geraten. Die Kette kann dann formal bis zu einem
+  // Framework-Root durchlaufen und trotzdem die eines fremden
+  // Namensvetters sein - 'Handler nicht gefunden' beweist dann nichts.
+  //
+  // Belegt: skia4delphi fuehrt TfrmBase zweimal (Samples/Demo/VCL und
+  // .../FMX). Der VCL-Splash wurde gegen die FMX-Basis gebunden, in der
+  // pnlBackClick nicht existiert - gemeldet wurde ein Load-Crash, den es
+  // nicht gibt. Der Zaehler war vor und nach dem 2026-07-31-Gate 4,
+  // weil dieses Gate eine ANDERE Klasse trifft (abgebrochene Kette),
+  // nicht die geratene.
+  if Top.HasAmbiguousAncestor then Exit;
   while Top.Parent <> nil do
+  begin
     Top := Top.Parent;
+    if Top.HasAmbiguousAncestor then Exit;
+  end;
   // Oberste Bindung ohne aufgeloeste Klasse -> Kette offen.
   if Top.FormClass = nil then Exit;
   Result := IsFrameworkRoot(FirstAncestorToken(Top.FormClass.TypeRef));
 end;
 
+// BEKANNTE GRENZE, bewusst NICHT gegatet: eine Property, deren Name mit
+// 'On' beginnt, muss kein Ereignis sein. jvcl fuehrt
+// 'TJvUIBQuery.OnError = etmStayIn' - das ist ein Enum-Wert, kein
+// Methodenzeiger. Im DFM-Text sind beide ununterscheidbar: bare Bezeichner.
+// Eine Heuristik ueber die Schreibweise scheidet aus, weil Enum-Literale
+// ('etmStayIn') und IDE-erzeugte Handler ('btnOkClick') exakt dieselbe
+// Form haben - Kleinbuchstaben-Praefix, dann Grossbuchstabe. Ein solches
+// Gate wuerde die Mehrheit der echten Funde mit wegnehmen. Sauber loesbar
+// erst mit Typinformation zur Komponentenklasse.
 class procedure TDfmDeadEventDetector.Analyze(Binding: TFormBinding;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
