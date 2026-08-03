@@ -1,6 +1,11 @@
 unit uTestUnusedParameter;
 
 // Tests fuer den TUnusedParameterDetector (fkUnusedParameter).
+//
+// noinspection-file ClassPerFile
+// Die zusaetzliche Klassendeklaration steht in einem STRING-LITERAL -
+// sie ist Pascal-Fixture fuer den Parser, keine Klasse dieser Unit.
+// Der Detektor arbeitet zeilenweise und kann das nicht unterscheiden.
 
 interface
 
@@ -32,6 +37,15 @@ type
     [Test] procedure Param_UsedAsCaseSelector_NotReported;
     [Test] procedure Param_UsedOnlyInNestedProc_NotReported;
     [Test] procedure Param_UnusedDespiteNestedProc_StillReported;   // TP-Gegenprobe
+
+    // Quell-Rueckfrage 2026-08-03: der AST-Flachtext ist eine Teilmenge
+    // der Quelle. Beide Formen am gebauten Stand als FP reproduziert.
+    // ALLE VIER ueber FindingsOfFile - ohne Quellzeilen greift der
+    // Rueckgriff nicht und der Test bewiese nichts.
+    [Test] procedure Param_UsedAsLhsArrayIndex_NotReported;
+    [Test] procedure Param_UsedAsArgAfterAsCast_NotReported;
+    [Test] procedure Param_TrulyUnused_ViaFileHarness_StillReported;
+    [Test] procedure Param_OnlyInComment_StillReported;
 
     // ---- Finding-Inhalt ---------------------------------------------------
     [Test] procedure Param_Finding_KindAndSeverity;
@@ -651,5 +665,99 @@ end;
 
 initialization
   TDUnitX.RegisterTestFixture(TTestUnusedParameter);
+
+{ --- Quell-Rueckfrage (2026-08-03) ----------------------------------- }
+
+procedure TTestUnusedParameter.Param_UsedAsLhsArrayIndex_NotReported;
+// 'SystemPath[Kind] := ...' - der Parameter wird als Index GELESEN. Im
+// AST-Flachtext taucht der Index-Ausdruck der linken Seite nicht auf.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'var'#13#10 +
+  '  SystemPath : array[0..9] of string;'#13#10 +
+  'procedure Foo(Kind: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  SystemPath[Kind] := ''x'';'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
+      'Index-Nutzung auf der Zuweisungs-Linken ist ein Read');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.Param_UsedAsArgAfterAsCast_NotReported;
+// '(Obj as TOther).M(Index, 1)' - das Argument hinter dem as-Cast fehlt
+// im AST-Flachtext, steht aber im Rumpf.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TOther = class'#13#10 +
+  '    procedure M(X: Integer; Y: Integer);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TOther.M(X: Integer; Y: Integer);'#13#10 +
+  'begin WriteLn(X, Y); end;'#13#10 +
+  'procedure Foo(Index: Integer; Obj: TObject);'#13#10 +
+  'begin'#13#10 +
+  '  (Obj as TOther).M(Index, 1);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
+      'Argument hinter as-Cast ist ein Read');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.Param_TrulyUnused_ViaFileHarness_StillReported;
+// KONTROLLE: derselbe Harnisch, aber der Parameter kommt im Rumpf
+// wirklich nicht vor. Ohne diese Probe waeren die beiden Tests darueber
+// auch dann gruen, wenn die Quell-Rueckfrage jeden Parameter als benutzt
+// sieht - also die Regel abgeschaltet haette.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(LogLevel: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  WriteLn(''nichts'');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter));
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.Param_OnlyInComment_StillReported;
+// KONTROLLE zur Strippung: der Name steht NUR in einem Kommentar. Ein
+// Kommentar ist keine Nutzung - das ist eine durchgaengige Zusage des
+// Werkzeugs, und die Quell-Rueckfrage darf sie nicht aufweichen.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(LogLevel: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  // LogLevel wird hier absichtlich nur erwaehnt'#13#10 +
+  '  WriteLn(''nichts'');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter),
+      'Ein Name im Kommentar ist keine Nutzung');
+  finally F.Free; end;
+end;
 
 end.

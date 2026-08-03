@@ -349,6 +349,12 @@ var
   StrippedReady : Boolean;
   SrcLines      : TStringList;
   SrcOwned      : Boolean;
+  // Rumpf-Zeilenbereich fuer die Quell-Rueckfrage. Bewusst Locals der
+  // umschliessenden Routine statt out-Parameter: der eigene Analyser
+  // meldet out zu Recht als schwer lesbar (AvoidOut), und die
+  // verschachtelte Funktion sieht die Locals ohnehin.
+  BodyFrom      : Integer;
+  BodyTo        : Integer;
 
   procedure EnsureStripped;
   var
@@ -362,6 +368,82 @@ var
     Code := TDetectorUtils.StripStringsAndCommentsCached(
       SrcLines, LineFor, nil, FileName, ' ');
     StrippedLines := Code.Split([#10]);
+  end;
+
+  function BodyLineRangeFound: Boolean;
+  // Von 'begin' bis zur groessten Zeilennummer im Teilbaum.
+  //
+  // ANFANG bewusst am nkBlock und nicht am Methodenkopf: in der SIGNATUR
+  // steht der Parametername ja - von dort zu scannen hiesse, jeden
+  // Parameter als benutzt zu sehen und die Regel abzuschalten.
+  //
+  // ENDE ueber max(Line) des Teilbaums. Das traegt, weil die Luecke im
+  // INHALT der Knoten liegt, nicht in ihrer Existenz: jede Anweisung ist
+  // ein Knoten mit Zeilennummer, auch wenn ihr Text unvollstaendig
+  // abgelegt wurde. Genau das ist der Fall bei den beiden gemessenen
+  // Formen (Index-Ausdruck links einer Zuweisung, Argumente hinter einem
+  // as-Cast).
+  var
+    Blk   : TAstNode;
+    Stack : TStack<TAstNode>;
+    Cur   : TAstNode;
+    I     : Integer;
+  begin
+    Result := False;
+    Blk := MethodNode.FindFirstChild(nkBlock);
+    if Blk = nil then Exit;
+    BodyFrom := Blk.Line;
+    BodyTo   := Blk.Line;
+    Stack := TStack<TAstNode>.Create;
+    try
+      Stack.Push(MethodNode);
+      while Stack.Count > 0 do
+      begin
+        Cur := Stack.Pop;
+        if Cur.Line > BodyTo then BodyTo := Cur.Line;
+        for I := 0 to Cur.Children.Count - 1 do
+          Stack.Push(Cur.Children[I]);
+      end;
+    finally
+      Stack.Free;
+    end;
+    Result := (BodyFrom > 0) and (BodyTo >= BodyFrom);
+  end;
+
+  function UsedInMethodSource(const NameLow: string): Boolean;
+  // Letzte Rueckfrage vor dem Melden: steht der Name ueberhaupt im
+  // Rumpf-QUELLTEXT? Strings und Kommentare sind gestrippt - ein Name im
+  // Kommentar zaehlt NIE als Nutzung.
+  //
+  // MONOTON: kann nur Funde wegnehmen, nie welche erzeugen.
+  //
+  // RESTRISIKO Shadowing - eine gleichnamige lokale Variable laesst den
+  // Parameter benutzt aussehen und unterdrueckt einen echten Fund. Exakt
+  // dasselbe Risiko traegt UsedInNestedRanges seit 2026-07-18, dort
+  // ausdruecklich akzeptiert: fuer einen Hint ist ein verschwiegener Fund
+  // billiger als ein falscher.
+  var
+    li, q, NL_ : Integer;
+    L : string;
+  begin
+    Result := False;
+    if not BodyLineRangeFound then Exit;
+    EnsureStripped;
+    if Length(StrippedLines) = 0 then Exit;
+    NL_ := Length(NameLow);
+    for li := BodyFrom to BodyTo do
+    begin
+      if (li < 1) or (li > Length(StrippedLines)) then Continue;
+      L := LowerCase(StrippedLines[li - 1]);
+      q := Pos(NameLow, L);
+      while q > 0 do
+      begin
+        if ((q = 1) or not IsIdentChar(L[q - 1])) and
+           ((q + NL_ > Length(L)) or not IsIdentChar(L[q + NL_])) then
+          Exit(True);
+        q := Pos(NameLow, L, q + 1);
+      end;
+    end;
   end;
 
   function UsedInNestedRanges(const NameLow: string): Boolean;
@@ -517,6 +599,12 @@ begin
         // Nested-Routine-Fallback (s. Kommentar oben): Param wird in einer vom
         // Parser verworfenen nested proc gelesen -> benutzt, kein Fund.
         if UsedInNestedRanges(LowName) then Continue;
+        // Quell-Rueckfrage fuer den eigenen Rumpf (2026-08-03): der
+        // AST-Flachtext ist eine Teilmenge der Quelle. Bevor wir Abwesenheit
+        // BEHAUPTEN, fragen wir die Quelle. Am gebauten Stand reproduziert:
+        // 'SystemPath[Kind] := x' und '(Obj as T).M(Index, 1)' - in beiden
+        // Faellen fehlt der Bezeichner im AST-Text, steht aber im Rumpf.
+        if UsedInMethodSource(LowName) then Continue;
         F            := TLeakFinding.Create;
         F.FileName   := FileName;
         F.MethodName := MethodNode.Name;
