@@ -53,6 +53,21 @@ begin
   if c = '{' then Exit;
   if (c = '/') and (i < n) and (Line[i + 1] = '/') then Exit;
   if (c = '(') and (i < n) and (Line[i + 1] = '*') then Exit;
+  // Attribut-Zeile ('[Test]', '[Weak]', ...): '[' als Pseudo-Wort liefern.
+  // Der Aufrufer behandelt es wie jeden Nicht-Keyword-Bezeichner - die
+  // Section hat INHALT, denn das Attribut gehoert zum folgenden Member.
+  // Vorher wurden solche Zeilen uebersprungen wie Leerzeilen, und JEDE
+  // DUnitX-Fixture ('public' + nur '[Test] procedure ...' + 'end') galt
+  // als leere Section - 226 False-Positives allein im eigenen
+  // Testverzeichnis (Baseline-Kommentar 2026-08-04). Trifft auch
+  // mehrzeilige Mengen-/Array-Konstanten, die mit '[' beginnen - dort ist
+  // 'Inhalt' ebenso die sichere Richtung fuer eine Hint-Regel.
+  if c = '[' then
+  begin
+    StartCol := i;
+    Result := '[';
+    Exit;
+  end;
   if not CharInSet(c, ['A'..'Z','a'..'z','_']) then Exit;
   wStart := i;
   StartCol := wStart;

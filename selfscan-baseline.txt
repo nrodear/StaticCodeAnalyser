@@ -2,13 +2,18 @@
 # Erzeugt von tools/selfscan_gate.py --update (Profil strict).
 # Das Gate schlaegt fehl, wenn eine Regel MEHR Funde hat als
 # hier. Weniger ist immer erlaubt.
-TIERS 0 654 2785
+# 2026-08-04: ClassPerFile 522 -> 524, Hints 2785 -> 2787: zwei neue
+# SRC-Fixtures in uTestEmptyVisibilitySection (Attribut-Member-Fix)
+# deklarieren je eine Klasse im Teststring - bekannter Fixture-Preis.
+# NACH dem Build faellt EmptyVisibilitySection selbst massiv (der
+# Detektor meldete jede DUnitX-Fixture); dann Baseline neu anziehen.
+TIERS 0 654 2787
 AvoidOut 14
 BeginEndRequired 308
 BooleanParam 7
 BooleanPropertyNaming 11
 CaseStatementSize 8
-ClassPerFile 522
+ClassPerFile 524
 CognitiveComplexity 344
 CommentedOutCode 21
 CompilerDirectiveScope 1
