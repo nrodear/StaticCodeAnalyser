@@ -46,6 +46,10 @@ type
     [Test] procedure Param_UsedAsArgAfterAsCast_NotReported;
     [Test] procedure Param_TrulyUnused_ViaFileHarness_StillReported;
     [Test] procedure Param_OnlyInComment_StillReported;
+    // Review 2026-08-04: teilt die SIGNATUR die Zeile mit dem begin, darf
+    // der Parametername der Deklaration nicht als Nutzung zaehlen.
+    [Test] procedure Param_SingleLineRoutine_Unused_StillReported;
+    [Test] procedure Param_SingleLineRoutine_Used_NotReported;  // Kontrolle
 
     // ---- Finding-Inhalt ---------------------------------------------------
     [Test] procedure Param_Finding_KindAndSeverity;
@@ -754,6 +758,42 @@ begin
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter),
       'Ein Name im Kommentar ist keine Nutzung');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.Param_SingleLineRoutine_Unused_StillReported;
+// Einzeiler: Signatur und begin auf DERSELBEN Zeile. Vor dem Schnitt am
+// begin-Token zaehlte die Parameter-DEKLARATION als Nutzung und der echte
+// Fund verschwand still.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(LogLevel: Integer); begin WriteLn(''x''); end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter),
+      'Die Deklaration links des begin ist keine Nutzung');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.Param_SingleLineRoutine_Used_NotReported;
+// KONTROLLE: Nutzung RECHTS des begin auf derselben Zeile muss weiterhin
+// als Nutzung zaehlen - der Schnitt darf nur die Signatur wegnehmen.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'var G: Integer;'#13#10 +
+  'procedure Foo(LogLevel: Integer); begin G := LogLevel; end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
+      'Nutzung hinter dem begin ist eine Nutzung');
   finally F.Free; end;
 end;
 

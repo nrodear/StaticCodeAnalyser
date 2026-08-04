@@ -452,6 +452,26 @@ var
     begin
       if (li < 1) or (li > Length(AStripped.Lines)) then Continue;
       L := LowerCase(AStripped.Lines[li - 1]);
+      // STARTZEILE NUR AB DEM begin-TOKEN (Review 2026-08-04): teilt die
+      // SIGNATUR die Zeile mit dem begin - Einzeiler wie
+      //   procedure TFoo.Bar(Sender: TObject); begin end;
+      // oder eine umgebrochene Parameterliste mit '); begin' am Ende -
+      // stuende der Parametername sonst im gescannten Bereich, und die
+      // DEKLARATION zaehlte als Nutzung: echter Fund still unterdrueckt.
+      // Der Strip ersetzt positions-erhaltend mit ' ', die Spalten der
+      // gestrippten Zeile stimmen also mit der Quelle ueberein.
+      if li = BodyFrom then
+      begin
+        q := Pos('begin', L);
+        while (q > 0) and not
+              (((q = 1) or not IsIdentChar(L[q - 1])) and
+               ((q + 5 > Length(L)) or not IsIdentChar(L[q + 5]))) do
+          q := Pos('begin', L, q + 1);
+        if q > 0 then
+          L := Copy(L, q + 5, MaxInt)
+        else
+          Continue;   // begin nicht auf dieser Zeile auffindbar - defensiv
+      end;
       q := Pos(NameLow, L);
       while q > 0 do
       begin
