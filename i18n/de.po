@@ -1752,3 +1752,80 @@ msgstr "Baseline aus aktuellem Scan schreiben..."
 
 msgid "sonar.projectKey not found in "
 msgstr "sonar.projectKey nicht gefunden in "
+
+# --- 2026-08-05: in template.pot vorhanden, hier bisher nicht ---
+msgid "%s (%d findings)"
+msgstr "%s (%d Funde)"
+
+msgid "%s (%d of %d findings)"
+msgstr "%s (%d von %d Funden)"
+
+msgid "%s (no findings)"
+msgstr "%s (keine Funde)"
+
+msgid "(no file selected)"
+msgstr "(keine Datei gewählt)"
+
+msgid "(no file)"
+msgstr "(keine Datei)"
+
+msgid "Affects only the editor marker stripe, mini-infobar and hover overlay titlebar. Properties Panel + main grid remain at the default severity colors. Light/Dark variants are automatic."
+msgstr "Betrifft nur den Markierungsstreifen im Editor, die Mini-Infoleiste und die Titelzeile der Hover-Einblendung. Eigenschaften-Panel und Haupttabelle behalten die Standardfarben der Schweregrade. Hell- und Dunkelvariante ergeben sich automatisch."
+
+msgid "All severities"
+msgstr "Alle Schweregrade"
+
+msgid "Code reaches into another form's published fields - tight coupling"
+msgstr "Code greift auf published-Felder eines anderen Formulars zu - enge Kopplung"
+
+msgid "Create a baseline from the current findings via the dock menu \"Write baseline from current scan...\", or with the CLI --write-baseline. The file is shared across CLI, IDE and HTML export. Takes effect on the next analysis."
+msgstr "Eine Baseline aus den aktuellen Funden erzeugen: im Dock-Menü über \"Baseline aus aktuellem Scan schreiben...\" oder auf der Kommandozeile mit --write-baseline. Die Datei gilt gemeinsam für CLI, IDE und HTML-Export. Wirkt ab der nächsten Analyse."
+
+msgid "Delphi project/group (*.dproj;*.groupproj)"
+msgstr "Delphi-Projekt/-Gruppe (*.dproj;*.groupproj)"
+
+msgid "Errors + Warnings"
+msgstr "Fehler + Warnungen"
+
+msgid "Errors only"
+msgstr "Nur Fehler"
+
+msgid "Export findings: HTML / JSON / CSV / Jira / Clipboard / Sonar"
+msgstr "Funde exportieren: HTML / JSON / CSV / Jira / Zwischenablage / Sonar"
+
+msgid "Local variable read before its first assignment - undefined value (garbage / AV)"
+msgstr "Lokale Variable wird vor ihrer ersten Zuweisung gelesen - undefinierter Wert (Datenmüll / Zugriffsverletzung)"
+
+msgid "Re-run analysis for current file"
+msgstr "Analyse für die aktuelle Datei erneut ausführen"
+
+msgid "Reset panel + clear editor markers (main grid stays)"
+msgstr "Panel zurücksetzen und Editor-Markierungen löschen (Haupttabelle bleibt)"
+
+msgid "Rule-set profile (ide-fast / default / strict). Takes effect at the next analysis run."
+msgstr "Regelsatz-Profil (ide-fast / default / strict). Wirkt beim nächsten Analyselauf."
+
+msgid "Scan this folder"
+msgstr "Diesen Ordner scannen"
+
+msgid "Select folder, project (.dproj) or group (.groupproj)"
+msgstr "Ordner, Projekt (.dproj) oder Gruppe (.groupproj) wählen"
+
+msgid "Showing first %d of %d findings - refine the filter to see more"
+msgstr "Es werden die ersten %d von %d Funden gezeigt - Filter verfeinern, um mehr zu sehen"
+
+msgid "Static Code Analysis - File"
+msgstr "Statische Code-Analyse - Datei"
+
+msgid "Suppression marker has no matching finding - probably stale after fix"
+msgstr "Unterdrückungs-Marker hat keinen zugehörigen Fund - vermutlich nach einer Korrektur übrig geblieben"
+
+msgid "Token is stored DPAPI-encrypted in analyser.ini [SonarTokens]. Only this Windows user on this machine can decrypt it."
+msgstr "Das Token wird DPAPI-verschlüsselt in analyser.ini [SonarTokens] abgelegt. Nur dieser Windows-Benutzer auf diesem Rechner kann es entschlüsseln."
+
+msgid "When OFF (default): overlay appears only when you click a marked line - undisturbed reading. When ON: overlay follows the mouse and pops up as soon as you hover a marked line."
+msgstr "AUS (Standard): die Einblendung erscheint nur beim Klick auf eine markierte Zeile - ungestörtes Lesen. EIN: die Einblendung folgt der Maus und erscheint, sobald eine markierte Zeile überfahren wird."
+
+msgid "Where the hover annotation overlay anchors relative to the finding line. Takes effect after IDE restart."
+msgstr "Wo sich die Hover-Einblendung relativ zur Fundzeile verankert. Wirkt nach einem Neustart der IDE."
+
