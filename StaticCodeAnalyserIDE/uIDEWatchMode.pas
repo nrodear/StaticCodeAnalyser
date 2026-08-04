@@ -14,10 +14,10 @@ unit uIDEWatchMode;
 //     unklares Fire-Timing (vor/nach AfterSave) - in Kombination mit
 //     dem Save-Debounce-Reset koennen sich Edit- und Save-Pfad
 //     gegenseitig unbegrenzt nachtriggern.
-// Schutz heute: Generation-Counter dropt _spaete_ Worker-Ergebnisse,
-// verhindert aber keinen ueberlappenden Spawn. Vor dem Default-On-
-// Schalten unbedingt:
-//   - Re-Entrancy-Guard (kein Spawn solange Worker laeuft)
+// Schutz heute: Generation-Counter dropt _spaete_ Worker-Ergebnisse;
+// der Re-Entrancy-Guard in SpawnAnalyzer verhindert seit 2026-08-04 den
+// ueberlappenden Spawn. Vor dem Default-On-Schalten weiterhin noetig:
+//   - Watchdog: haengt ein Worker, blockt der Guard dauerhaft und STILL
 //   - Hard-Cap (z.B. max 1 Spawn / 5s)
 //   - oder echten Cancel-Token (TODO.md: "WatchMode echtes Cancel-Token")
 // Fuer den manuellen "Aktuelle Datei"-Klick akzeptabel - der User
@@ -930,21 +930,32 @@ begin
 end;
 
 procedure TWatchModeManager.DebounceFire(Sender: TObject);
+// Slot ERST leeren, dann spawnen: SpawnAnalyzer darf sich bei laufendem
+// Worker selbst neu bewaffnen, und ein Leeren danach wuerde genau das
+// wieder wegwischen.
+var
+  Pending : string;
 begin
   FDebounceTimer.Enabled := False;
   if not FActive then Exit;
   if FPendingFileName = '' then Exit;
-  SpawnAnalyzer(FPendingFileName);
+  Pending := FPendingFileName;
   FPendingFileName := '';
+  SpawnAnalyzer(Pending);
 end;
 
 procedure TWatchModeManager.EditDebounceFire(Sender: TObject);
+// Wie DebounceFire - hier ist es sogar zwingend: der Guard benutzt genau
+// diesen Slot als Wiederholungs-Platz.
+var
+  Pending : string;
 begin
   FEditDebounceTimer.Enabled := False;
   if not FActive then Exit;
   if FEditPendingFileName = '' then Exit;
-  SpawnAnalyzer(FEditPendingFileName);
+  Pending := FEditPendingFileName;
   FEditPendingFileName := '';
+  SpawnAnalyzer(Pending);
 end;
 
 procedure TWatchModeManager.RegisterEditServicesNotifier;
@@ -984,11 +995,36 @@ end;
 procedure TWatchModeManager.SpawnAnalyzer(const AFileName: string);
 begin
   if not FileExists(AFileName) then Exit;
+  // Erst aufraeumen, dann zaehlen - sonst blockiert ein laengst fertiger
+  // Worker den Guard darunter.
+  ReapFinishedWorkers;
+
+  // RE-ENTRANCY-GUARD: hoechstens EIN Watch-Worker gleichzeitig.
+  //
+  // Der Generation-Counter verwirft nur SPAETE Ergebnisse; er verhindert
+  // nicht, dass sich Spawns ueberlappen. Kommen Ausloeser schneller als die
+  // Analyse fertig wird - Tippen bei 1 s Edit-Debounce gegen mehrere
+  // Sekunden Analysezeit, dazu die prozessweite Serialisierung ueber den
+  // Engine-Lock - waechst FLiveWorkers, und der Unit-Kopf nennt das zu
+  // Recht "ENDLOSSCHLEIFE MOEGLICH".
+  //
+  // Der Ausloeser wird NICHT verworfen, sondern auf dem Edit-Timer neu
+  // bewaffnet: was der Nutzer zuletzt angefasst hat, soll analysiert
+  // werden, nur eben nachher. Bewusst KEIN WaitFor - der Main-Thread muss
+  // zurueck in die Message-Loop, sonst laeuft CheckSynchronize nicht und
+  // der laufende Worker kommt nie ans Ziel.
+  if FLiveWorkers.Count > 0 then
+  begin
+    FEditPendingFileName := AFileName;
+    FEditDebounceTimer.Enabled := False;
+    FEditDebounceTimer.Enabled := True;
+    Exit;
+  end;
+
   // UsesCheck wird beim Activate aus den Caller-Settings uebernommen
   // (Single-Point-of-Truth ueber TIDEAnalysisPrep). Default beim ersten
   // Activate ohne Argument: False (Backward-Compat-Default des Parameters).
   DoStatus(Format(_('Analysing: %s'), [ExtractFileName(AFileName)]));
-  ReapFinishedWorkers;
   FLiveWorkers.Add(TWatchAnalyzer.Create(AFileName, FUsesCheck, FGeneration));
 end;
 
