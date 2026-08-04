@@ -264,7 +264,16 @@ end;
 
 procedure TSarifJsonEmitter.CloseContainer(AClose: Char);
 begin
-  Dec(FDepth);
+  // Unterlauf-Schutz (Audit 2026-08-04): ein End-Aufruf mehr als Begin-
+  // Aufrufe hiesse FDepth = -1, und der naechste PushContainer schriebe
+  // FHasItem[-1] - ein Byte VOR das Array, mitten ins Laengenfeld des
+  // dynamischen Arrays. Heute ist EmitSarifDocument statisch balanciert
+  // (ItemSeparator hat denselben Guard laengst); dieser hier haelt die
+  // Invariante auch fuer kuenftige Emitter-Aenderungen. Die schliessende
+  // Klammer wird trotzdem geschrieben - das JSON ist dann sichtbar
+  // kaputt statt der Speicher.
+  if FDepth > 0 then
+    Dec(FDepth);
   FSb.AppendLine;
   FSb.Append(' ', FDepth * 2);         // Parent-Einrueckung
   FSb.Append(AClose);
