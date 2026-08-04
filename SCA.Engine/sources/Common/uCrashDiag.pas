@@ -41,6 +41,30 @@ interface
 uses
   System.SysUtils;
 
+type
+  /// <summary>
+  ///   Stapel erschoepft. Alias auf die RTL-Klasse, damit der
+  ///   deprecated-Marker an EINER Stelle steht statt an jedem der 13
+  ///   Fangpunkte, die einen Stack-Overflow nicht verschlucken duerfen.
+  /// </summary>
+  /// <remarks>
+  ///   Delphi 12 markiert EStackOverflow als deprecated - vermutlich weil
+  ///   ein erschoepfter Stapel nicht zuverlaessig behandelbar ist (Windows
+  ///   stellt die Guard-Page nicht wieder her, und die RTL hat kein
+  ///   Gegenstueck zu _resetstkoflw). GEWORFEN wird die Klasse aber
+  ///   weiterhin: System.Internal.ExcUtils bildet ExceptMap[14]
+  ///   (reStackOverflow) auf etStackOverflow ab, und System.pas setzt
+  ///   STATUS_STACK_OVERFLOW ($C00000FD) auf genau diesen Code. Ein
+  ///   Ausweichen auf eine andere Klasse waere heute also schlicht falsch.
+  ///
+  ///   Sollte die RTL die Klasse eines Tages entfernen, ist der Ersatz eine
+  ///   Pruefung von EExternal.ExceptionRecord^.ExceptionCode gegen
+  ///   $C00000FD - die Bausteine dafuer stehen in dieser Unit.
+  /// </remarks>
+  {$WARN SYMBOL_DEPRECATED OFF}
+  EStackExhausted = EStackOverflow;
+  {$WARN SYMBOL_DEPRECATED ON}
+
 /// <summary>
 ///   Exception-Klasse, Meldung und - soweit ermittelbar - modulrelative
 ///   Fehleradresse samt NT-Statuscode. Nie leer, nie werfend: diese

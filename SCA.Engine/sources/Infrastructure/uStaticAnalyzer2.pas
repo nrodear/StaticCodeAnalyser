@@ -865,13 +865,13 @@ begin
       // Schleife in AnalyzeLeaksRecursive abbricht. Ein generischer
       // Detektor-Fehler hingegen blockiert die anderen Detektoren nicht.
       on EAbort do raise;
-      // EStackOverflow ebenfalls durchreichen (2026-08-04): nach einem
+      // Erschoepften Stapel ebenfalls durchreichen (2026-08-04): nach einem
       // abgefangenen Overflow ist die Guard-Page des Stapels weg (die RTL
       // stellt sie nicht wieder her), jeder weitere tiefe Abstieg
       // korrumpiert wortlos Speicher. Begruendung im Detail:
       // uAstFileCache.Acquire. Gilt fuer ALLE Verschluck-Stellen der
       // Scan-Schleife, auch kuenftige.
-      on EStackOverflow do raise;
+      on EStackExhausted do raise;
       on E: Exception do
         if Assigned(AOnError) then
           // Stuerzt ein Detektor ab, ist die Exception-Klasse und die
@@ -1025,7 +1025,7 @@ begin
   except
     // Guard-Page nach Overflow unwiederbringlich weg - s.
     // uAstFileCache.Acquire. NIE verschlucken.
-    on EStackOverflow do raise;
+    on EStackExhausted do raise;
     on E: Exception do
     begin
       AddSlotError(AFileName, 'Datei-Existenzpruefung fehlgeschlagen: ' + E.Message);
@@ -1038,7 +1038,7 @@ begin
   except
     // Guard-Page nach Overflow unwiederbringlich weg - s.
     // uAstFileCache.Acquire. NIE verschlucken.
-    on EStackOverflow do raise;
+    on EStackExhausted do raise;
     on E: Exception do
     begin
       AddSlotError(AFileName, 'Dateigroesse nicht ermittelbar: ' + E.Message);
@@ -1069,7 +1069,7 @@ begin
     except
       // Guard-Page nach Overflow unwiederbringlich weg - s.
       // uAstFileCache.Acquire. NIE verschlucken.
-      on EStackOverflow do raise;
+      on EStackExhausted do raise;
       on E: Exception do
       begin
         SlotLog('  PARSER-FEHLER: ' + DescribeException(E));
@@ -1128,7 +1128,7 @@ begin
       on EAbort do raise;
       // Guard-Page nach Overflow unwiederbringlich weg - s.
       // uAstFileCache.Acquire. NIE verschlucken.
-      on EStackOverflow do raise;
+      on EStackExhausted do raise;
       on Exception do ;
     end;
   finally
@@ -1318,7 +1318,7 @@ begin
       except
         // Guard-Page nach Overflow unwiederbringlich weg - s.
         // uAstFileCache.Acquire. NIE verschlucken.
-        on EStackOverflow do raise;
+        on EStackExhausted do raise;
         on E: Exception do
         begin
           Results.Add('ERROR ' + FileName + ': ' + E.Message);
@@ -1684,7 +1684,7 @@ begin
       except
         // Guard-Page nach Overflow unwiederbringlich weg - s.
         // uAstFileCache.Acquire. NIE verschlucken.
-        on EStackOverflow do raise;
+        on EStackExhausted do raise;
         on E: Exception do
         begin
           AddFileError(FileName, 'Datei-Existenzpruefung fehlgeschlagen: ' + E.Message);
@@ -1698,7 +1698,7 @@ begin
       except
         // Guard-Page nach Overflow unwiederbringlich weg - s.
         // uAstFileCache.Acquire. NIE verschlucken.
-        on EStackOverflow do raise;
+        on EStackExhausted do raise;
         on E: Exception do
         begin
           AddFileError(FileName, 'Dateigroesse nicht ermittelbar: ' + E.Message);
@@ -1742,7 +1742,7 @@ begin
         except
           // Guard-Page nach Overflow unwiederbringlich weg - s.
           // uAstFileCache.Acquire. NIE verschlucken.
-          on EStackOverflow do raise;
+          on EStackExhausted do raise;
           on E: Exception do
           begin
             LogLine('  PARSER-FEHLER: ' + DescribeException(E));
@@ -1847,7 +1847,7 @@ begin
           on EAbort do raise;
           // Guard-Page nach Overflow unwiederbringlich weg - s.
           // uAstFileCache.Acquire. NIE verschlucken.
-          on EStackOverflow do raise;
+          on EStackExhausted do raise;
           on E: Exception do
           begin
             var Ferr := TLeakFinding.Create;
@@ -1876,7 +1876,7 @@ begin
             on EAbort do raise;
             // Guard-Page nach Overflow unwiederbringlich weg - s.
             // uAstFileCache.Acquire. NIE verschlucken.
-            on EStackOverflow do raise;
+            on EStackExhausted do raise;
             on E: Exception do
             begin
               var Ferr := TLeakFinding.Create;
@@ -1950,7 +1950,7 @@ begin
           on EAbort do raise;
           // Guard-Page nach Overflow unwiederbringlich weg - s.
           // uAstFileCache.Acquire. NIE verschlucken.
-          on EStackOverflow do raise;
+          on EStackExhausted do raise;
           on Exception do ;
         end;
       finally
