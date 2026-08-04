@@ -344,8 +344,15 @@ procedure TFindingsPropertiesDockableForm.HandleThemeChanged;
 // das Theme gewechselt - Frame neu themen + Refresh.
 begin
   if not Assigned(FFrame) then Exit;
-  TIDETheme.Apply(FFrame);
+  // REIHENFOLGE ZAEHLT (Review 2026-08-04): RefreshFromTheme nullt den
+  // Style-Cache des Frames und setzt die Control-Farben; TIDETheme.Apply
+  // repainted danach SYNCHRON (TriggerRepaint ruft auf TCustomGrid ein
+  // hartes Repaint). Andersherum malte dieser Repaint einen kompletten
+  // Bildaufbau mit den Services des ALTEN Themes aus dem Cache - das
+  // Haupt-Grid macht es seit jeher in dieser Reihenfolge
+  // (uIDEAnalyserForm.RefreshFromIDETheme: erst Cache nil, dann Apply).
   FFrame.RefreshFromTheme;
+  TIDETheme.Apply(FFrame);
 end;
 
 procedure TFindingsPropertiesDockableForm.HandleEditorViewActivated(
