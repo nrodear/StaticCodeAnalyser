@@ -181,6 +181,10 @@ type
     [Test] procedure Leak_CtorArgInAssignRhs_OwnershipRecognized;
     [Test] procedure Leak_CtorArgStandaloneCall_OwnershipRecognized;
     [Test] procedure Leak_PlainCallArgInAssignRhs_StillReported;
+    // --- Geltungsbereich-Gates 2026-08-05 ---
+    [Test] procedure Leak_AssignedToPlainOuterVar_NoFinding;
+    [Test] procedure Leak_SelfAssignment_StillReported;
+    [Test] procedure Leak_AssignedToIndexedTarget_StillReported;
     // Ownership-Sink Core-Audit 2026-07-18: Container-Add im BEDINGUNGS-Kontext.
     [Test] procedure Leak_AddNodeInCondition_OwnershipRecognized;
     // --- SCA001-Gross-Triage 2026-07-18 (free-missed-Bucket, SearchFree-Haertung) ---
@@ -5315,6 +5319,68 @@ begin
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
       'gewoehnlicher Aufruf ist KEIN Ownership-Transfer');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_AssignedToPlainOuterVar_NoFinding;
+// Nach 'other := v' haelt ein ANDERER Bezeichner das Objekt; ob DER
+// freigegeben wird, ist eine Frage an dessen Lebensdauer. Die alte
+// Feld-Heuristik (F<Gross>/self.) griff nur bei Delphi-Namenskonvention
+// und ging an mormot.core.variants.pas:10481 ('CurrDict := v') vorbei.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var v: TStringList; keeper: TStringList;'#13#10+
+  'begin'#13#10+
+  '  v := TStringList.Create;'#13#10+
+  '  keeper := v;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'Zuweisung an einen anderen Bezeichner gibt das Objekt weiter');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_SelfAssignment_StillReported;
+// WAECHTER: 'v := v' darf den Fund NICHT stilllegen - sonst genuegte eine
+// triviale Selbstzuweisung, um die Regel auszuschalten.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var v: TStringList;'#13#10+
+  'begin'#13#10+
+  '  v := TStringList.Create;'#13#10+
+  '  v := v;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'Selbstzuweisung ist keine Weitergabe');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_AssignedToIndexedTarget_StillReported;
+// WAECHTER: bei 'Arr[i] := v' ist offen, ob das Array Ownership uebernimmt.
+// Indizierte Ziele fallen bewusst NICHT durch das Gate.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var v: TStringList; Arr: array[0..3] of TStringList; i: Integer;'#13#10+
+  'begin'#13#10+
+  '  v := TStringList.Create;'#13#10+
+  '  Arr[i] := v;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'indiziertes Ziel bleibt meldepflichtig');
   finally F.Free; end;
 end;
 

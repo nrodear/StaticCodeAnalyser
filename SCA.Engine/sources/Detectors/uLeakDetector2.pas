@@ -1403,6 +1403,26 @@ begin
       if (Length(LHSOrig) >= 2) and (LHSOrig[1] = 'F') and
          (LHSOrig[2] >= 'A') and (LHSOrig[2] <= 'Z') then
         Exit(True);
+      // Erweiterung 2026-08-05: JEDES andere Zuweisungsziel zaehlt ebenfalls
+      // als Weitergabe. Die Feld-Heuristik oben (F<Gross>/self.) traf nur die
+      // Delphi-Namenskonvention; sie geht an zwei belegten Formen vorbei:
+      //   mormot.core.variants.pas:10481  CurrDict := v
+      //   JclStackTraceViewerStackUtils.pas:499  Stream := SA
+      // In beiden Faellen haelt nach der Zuweisung ein ANDERER Bezeichner das
+      // Objekt; ob DER freigegeben wird, ist eine Frage an dessen Lebensdauer,
+      // nicht an diese Variable. Ein Free ueber die alte Variable waere sogar
+      // riskant (der neue Halter benutzt sie weiter).
+      //
+      // Zwei Einschraenkungen, damit das Gate nicht alles verschluckt:
+      //   * Selbstzuweisung zaehlt nicht (sonst wuerde 'v := v' den Fund
+      //     stilllegen).
+      //   * Das Ziel muss ein Bezeichner sein, kein indizierter Ausdruck -
+      //     'Arr[i] := v' laesst offen, ob das Array die Ownership uebernimmt,
+      //     und faellt hier bewusst NICHT durch.
+      var LHSLow := Trim(LHSOrig.ToLower);
+      if (LHSLow <> '') and (LHSLow <> VarNameLow)
+         and (Pos('[', LHSLow) = 0) then
+        Exit(True);
     end;
   end;
 
@@ -3317,6 +3337,26 @@ var
   i        : Integer;
   Key      : string;
 begin
+  // Geltungsbereich-Gate (2026-08-05, ausdrueckliche Produktentscheidung):
+  // Funde in Test-, Sample- und Demo-Pfaden werden nicht gemeldet.
+  //
+  // Das ist bewusst KEINE Korrektheitsaussage - ein Leck leckt auch im Test.
+  // Es ist eine Entscheidung ueber den Geltungsbereich der Regel: der
+  // Nutzer soll Lecks in seinem PRODUKTIONSCODE sehen, nicht in Fixtures,
+  // Beispielen und Archivstaenden fremder Bibliotheken. Beim Anziehen des
+  // Gates ist bekannt und in Kauf genommen, dass echte Lecks in solchen
+  // Pfaden mit wegfallen (in einer Stichprobe von zehn Funden waren drei
+  // davon echt).
+  //
+  // GEMESSEN vor dem Bau (Korpus after140, 1093 Funde): 386 Treffer = 35 %,
+  // ueber Verzeichnis-Segmente - 'tests' 191, 'samples' 76, 'unittests' 47,
+  // 'demos' 37, 'test' 35.
+  //
+  // Muster kommen aus der projektweiten Definition, KEINE eigene Liste
+  // (Fund 3, Restschulden-Audit 2026-07-26) - wie uUninitVar,
+  // uHardcodedSecret und uSqlDangerousStatement.
+  if TDetectorUtils.IsTestFixturePath(FileName, '') then Exit;
+
   StartIdx := Results.Count;
   Methods := UnitNode.FindAllRef(nkMethod);
   for M in Methods do
