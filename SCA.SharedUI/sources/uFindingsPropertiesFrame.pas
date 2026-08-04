@@ -109,6 +109,10 @@ type
     // FLastNavigatedRow verhindert Doppel-Navigation auf dieselbe Zeile.
     FNavTimer        : TTimer;
     FLastNavigatedRow: Integer;
+    // Ein Klick auf die BEREITS navigierte Zeile soll erneut springen
+    // (Editor wurde evtl. weggescrollt). Der Tick prueft sonst
+    // Row <> FLastNavigatedRow - dieses Flag erzwingt die Navigation.
+    FNavForce        : Boolean;
     procedure BuildControls;
     procedure BuildGridConfig;
     procedure EnsureComboItems;
@@ -141,6 +145,13 @@ type
     // Dispatch (Maus + Tastatur) -> Finding ermitteln + Callback + Re-Focus.
     procedure GridKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure GridKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
+    // Mausrad: die VCL bewegt die Auswahl selbst (TCustomGrid.DoMouseWheel*);
+    // wir bewaffnen nur den Nav-Timer, Handled bleibt False.
+    procedure GridMouseWheel(Sender: TObject; Shift: TShiftState;
+      WheelDelta: Integer; MousePos: TPoint; var Handled: Boolean);
+    // Timer bewaffnen: AIntervalMs je Quelle (Maus 50, Tastatur 80),
+    // AForce erzwingt den Sprung auch auf die unveraenderte Zeile.
+    procedure ArmNavTimer(AIntervalMs: Integer; AForce: Boolean);
     procedure NavTimerTick(Sender: TObject);
     procedure NavigateToRow(ARow: Integer; Mode: TFindingNavMode);
     procedure GridResize(Sender: TObject);
@@ -426,6 +437,9 @@ begin
   FGrid.OnDrawCell  := GridDrawCell;
   FGrid.OnDblClick  := GridDblClick;
   FGrid.OnClick     := GridClick;
+  // OnMouseWheel ist auf TControl protected - derselbe Class-Crack, den
+  // diese Datei fuer OnResize schon benutzt (TStringGridAccess).
+  TStringGridAccess(FGrid).OnMouseWheel := GridMouseWheel;
   FGrid.OnMouseDown := GridMouseDown;
   FGrid.OnKeyDown   := GridKeyDown;   // Enter = Activate
   FGrid.OnKeyUp     := GridKeyUp;     // Pfeil/Bild/Pos1/Ende = Preview (entprellt)
@@ -1006,14 +1020,22 @@ end;
 
 procedure TFindingsPropertiesFrame.GridClick(Sender: TObject);
 begin
-  // Einfachklick = Preview: Editor folgt, Fokus bleibt im Grid.
-  NavigateToRow(FGrid.Row, fnmPreview);
+  // Einfachklick = Preview, ENTPRELLT (2026-08-04, Anforderung: Maus mit
+  // 50 ms Verzoegerung). Vorher sprang der Editor sofort - beim schnellen
+  // Durchklicken der Liste ein Sprung pro Klick. Force: ein Klick auf die
+  // bereits navigierte Zeile soll erneut zentrieren, auch wenn sich die
+  // Zeile nicht geaendert hat.
+  ArmNavTimer(50, True);
 end;
 
 procedure TFindingsPropertiesFrame.GridDblClick(Sender: TObject);
 begin
-  // Doppelklick = Activate (bewusster Sprung zum Editieren, Editor behaelt Fokus).
+  // Doppelklick = Activate (bewusster Sprung zum Editieren, Editor behaelt
+  // Fokus). Der erste Klick des Doppelklicks hat den Timer mit Force
+  // bewaffnet - beides zuruecknehmen, sonst feuert nach dem Activate noch
+  // ein verspaeteter Preview-Sprung.
   FNavTimer.Enabled := False;
+  FNavForce := False;
   NavigateToRow(FGrid.Row, fnmActivate);
 end;
 
@@ -1024,6 +1046,7 @@ begin
   if Key = VK_RETURN then
   begin
     FNavTimer.Enabled := False;
+    FNavForce := False;
     NavigateToRow(FGrid.Row, fnmActivate);
     Key := 0;   // Default-Verarbeitung unterdruecken
   end;
@@ -1036,19 +1059,42 @@ begin
   // Auswahl beim KeyDown schon bewegt, daher steht FGrid.Row beim Tick richtig.
   case Key of
     VK_UP, VK_DOWN, VK_PRIOR, VK_NEXT, VK_HOME, VK_END:
-      begin
-        FNavTimer.Enabled := False;   // re-armieren: nur die Ruhe-Zeile springt
-        FNavTimer.Enabled := True;
-      end;
+      ArmNavTimer(80, False);   // re-armieren: nur die Ruhe-Zeile springt
   end;
+end;
+
+procedure TFindingsPropertiesFrame.GridMouseWheel(Sender: TObject;
+  Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint;
+  var Handled: Boolean);
+begin
+  // Handled bleibt False: die VCL bewegt die Auswahl danach selbst
+  // (TCustomGrid.DoMouseWheel* verschiebt Row um eins). Wir bewaffnen nur
+  // den Timer - bei schnellem Drehen kollabieren alle Rasten zu EINEM
+  // Editor-Sprung auf die Ruhe-Zeile, 50 ms nachdem das Rad stillsteht.
+  // Vorher folgte der Editor dem Rad GAR NICHT - die Auswahl wanderte,
+  // der Fund im Editor blieb stehen.
+  Handled := False;
+  ArmNavTimer(50, False);
+end;
+
+procedure TFindingsPropertiesFrame.ArmNavTimer(AIntervalMs: Integer;
+  AForce: Boolean);
+begin
+  if not Assigned(FNavTimer) then Exit;
+  FNavTimer.Enabled  := False;
+  FNavTimer.Interval := AIntervalMs;
+  FNavForce          := AForce;
+  FNavTimer.Enabled  := True;
 end;
 
 procedure TFindingsPropertiesFrame.NavTimerTick(Sender: TObject);
 begin
   FNavTimer.Enabled := False;
-  // Nur navigieren wenn sich die Zeile seit der letzten Navigation geaendert hat.
-  if FGrid.Row <> FLastNavigatedRow then
+  // Navigieren, wenn sich die Zeile geaendert hat ODER ein Klick den
+  // Sprung erzwingt (Re-Klick auf dieselbe Zeile zentriert den Editor neu).
+  if FNavForce or (FGrid.Row <> FLastNavigatedRow) then
     NavigateToRow(FGrid.Row, fnmPreview);
+  FNavForce := False;
 end;
 
 procedure TFindingsPropertiesFrame.GridResize(Sender: TObject);
