@@ -3353,9 +3353,19 @@ begin
   // 'demos' 37, 'test' 35.
   //
   // Muster kommen aus der projektweiten Definition, KEINE eigene Liste
-  // (Fund 3, Restschulden-Audit 2026-07-26) - wie uUninitVar,
-  // uHardcodedSecret und uSqlDangerousStatement.
-  if TDetectorUtils.IsTestFixturePath(FileName, '') then Exit;
+  // (Fund 3, Restschulden-Audit 2026-07-26).
+  //
+  // Stufe tplFixtureDir = NUR Verzeichnis-Segmente, KEINE Dateinamen.
+  // Zwei Gruende, beide gemessen:
+  //   * Von den 386 Treffern kam KEINER ueber ein Basename-Muster - die
+  //     Basename-Regeln ('*Sample.pas', '*Demo.pas', ...) haetten also
+  //     nichts gebracht, aber im Kundencode jede Datei mit solchem Namen
+  //     stillgelegt.
+  //   * Der Test-Harness uebergibt den blossen Platzhalter 'sample.pas'
+  //     ohne Pfad. Mit Basename-Matching war der Detektor im GESAMTEN
+  //     Harness stumm - alle Leak-Tests fielen auf 0 Funde (2026-08-05).
+  //     Ohne Segmente im Pfad greift das Gate jetzt nicht mehr.
+  if TDetectorUtils.IsTestFixturePath(FileName, '', tplFixtureDir) then Exit;
 
   StartIdx := Results.Count;
   Methods := UnitNode.FindAllRef(nkMethod);

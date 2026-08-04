@@ -185,6 +185,8 @@ type
     [Test] procedure Leak_AssignedToPlainOuterVar_NoFinding;
     [Test] procedure Leak_SelfAssignment_StillReported;
     [Test] procedure Leak_AssignedToIndexedTarget_StillReported;
+    [Test] procedure Leak_BareFileNameNoDirSegments_StillReported;
+    [Test] procedure Leak_TestDirSegment_Suppressed;
     // Ownership-Sink Core-Audit 2026-07-18: Container-Add im BEDINGUNGS-Kontext.
     [Test] procedure Leak_AddNodeInCondition_OwnershipRecognized;
     // --- SCA001-Gross-Triage 2026-07-18 (free-missed-Bucket, SearchFree-Haertung) ---
@@ -5382,6 +5384,61 @@ begin
     Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
       'indiziertes Ziel bleibt meldepflichtig');
   finally F.Free; end;
+end;
+
+{ ---- Waechter: Harness-Platzhalter darf kein Testpfad-Gate ausloesen ---- }
+
+// Gemeinsame Mechanik der beiden folgenden Tests: der Pfad ist hier der
+// Pruefgegenstand, deshalb ein Direkt-Aufruf statt des Harness (der meldet
+// immer 'sample.pas').
+function LeakCountForPath(const ASource, AFileName: string): Integer;
+var
+  P    : TParser2;
+  Root : TAstNode;
+  F    : TObjectList<TLeakFinding>;
+begin
+  Root := nil;
+  F := TObjectList<TLeakFinding>.Create(True);
+  P := TParser2.Create;
+  // EIN try/finally, bewusst nicht verschachtelt - der eigene Self-Scan
+  // meldet NestedTry, und hier gibt es keinen Grund dafuer.
+  try
+    Root := P.ParseSource(ASource);
+    TLeakDetector2.AnalyzeUnit(Root, AFileName, F);
+    Result := TFindingHelper.Count(F, fkMemoryLeak);
+  finally
+    Root.Free;
+    P.Free;
+    F.Free;
+  end;
+end;
+
+const
+  LEAKY_SRC =
+    'unit t; implementation'#13#10+
+    'procedure TFoo.Bar;'#13#10+
+    'var list: TStringList;'#13#10+
+    'begin'#13#10+
+    '  list := TStringList.Create;'#13#10+
+    'end;';
+
+procedure TTestMemoryLeakAdvanced.Leak_BareFileNameNoDirSegments_StillReported;
+// WAECHTER gegen die Regression vom 2026-08-05: das Testpfad-Gate lief
+// zuerst mit Basename-Mustern und traf damit den Harness-Platzhalter
+// 'sample.pas' (Muster '*Sample.pas'). Folge: der Detektor war im GESAMTEN
+// Test-Harness stumm, dutzende Tests fielen auf 0 Funde. Ein blosser
+// Dateiname OHNE Verzeichnis darf das Gate nie ausloesen.
+begin
+  Assert.AreEqual<Integer>(1, LeakCountForPath(LEAKY_SRC, 'sample.pas'),
+    'blosser Dateiname ohne Verzeichnis ist kein Testpfad');
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_TestDirSegment_Suppressed;
+// Gegenstueck: MIT Verzeichnis-Segment greift das Gate wie vorgesehen.
+begin
+  Assert.AreEqual<Integer>(0,
+    LeakCountForPath(LEAKY_SRC, 'D:\repo\tests\uFoo.pas'),
+    'Verzeichnis-Segment tests greift');
 end;
 
 end.
