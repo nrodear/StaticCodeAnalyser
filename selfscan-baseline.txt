@@ -2,12 +2,14 @@
 # Erzeugt von tools/selfscan_gate.py --update (Profil strict).
 # Das Gate schlaegt fehl, wenn eine Regel MEHR Funde hat als
 # hier. Weniger ist immer erlaubt.
-# 2026-08-04 (Merge-Vereinigung der Zweig-Baselines, gegen main 654/2785):
-# * EmptyVisibilitySection 219 -> 220, Hints +1: neue Fixture
-#   TTestCrashDiag (Detektor-FP auf attributierten Membern; Fix ist
-#   gemerged - nach dem Build faellt die Zahl massiv, dann Baseline
-#   neu anziehen und Korpus-Drops stichprobenartig lesen).
-# * ClassPerFile 522 -> 524, Hints +2: zwei neue SRC-Fixtures in
+# Stand 2026-08-04 NACH dem Build der vier Zweige - gemessen, nicht geschaetzt.
+# * EmptyVisibilitySection 220 -> 0. Der Detektor uebersprang Attribut-
+#   Zeilen wie Leerzeilen, daher galt JEDE DUnitX-Fixture als leere
+#   public-Sektion. Alle 220 waren dieser FP; im eigenen Quelltext gibt
+#   es keine echte leere Sichtbarkeits-Sektion. Dass die Regel lebt, ist
+#   mit einem Prueffall belegt (leeres private mittendrin + leeres
+#   protected am Klassenende melden weiterhin).
+# * ClassPerFile 522 -> 524: zwei neue SRC-Fixtures in
 #   uTestEmptyVisibilitySection - bekannter Fixture-Preis.
 # * CognitiveComplexity 344 -> 345, Warnings 654 -> 655:
 #   ProcessOneFileParallel kreuzt die Schwelle (18/15) durch die
@@ -15,7 +17,7 @@
 #   Overflow unwiederbringlich weg, s. uAstFileCache.Acquire); ein
 #   zentraler Re-Raise-Helfer muesste Exception-Objekte aus fremdem
 #   Handler-Kontext raisen - Doppel-Free-Risiko, bewusst nicht gemacht.
-TIERS 0 655 2788
+TIERS 0 655 2568
 AvoidOut 14
 BeginEndRequired 308
 BooleanParam 7
@@ -48,7 +50,7 @@ EmptyFinallyBlock 2
 EmptyInterface 6
 EmptyMethod 7
 EmptyOnHandler 3
-EmptyVisibilitySection 220
+EmptyVisibilitySection 0
 ExceptionTooGeneral 32
 FieldByNameInLoop 1
 FormatLocaleHint 4
