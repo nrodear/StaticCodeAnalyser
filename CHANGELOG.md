@@ -25,7 +25,10 @@ below, that is the fix working.
   line. The start line is now cut at the `begin` token (whole-word, so an
   identifier like `BeginUpdate` is not a cut point). **Expect `SCA054` to
   rise slightly on existing baselines — those are real findings coming
-  back, exclusively on single-line routines.**
+  back, exclusively on single-line routines.** **Measured: +4 on the
+  reference corpus, every one verified in the source — single-line NIF
+  handlers in TES5Edit whose parameters genuinely are not read. No other
+  rule moved.**
 
 - **The file-scan panel list was sluggish.** The renderer asked the IDE's
   theming service for style objects *per drawn cell* — a COM call, roughly
