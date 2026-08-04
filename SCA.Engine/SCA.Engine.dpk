@@ -35,6 +35,7 @@ contains
   uAnalyserTypes in 'sources\Common\uAnalyserTypes.pas',
   uCollectValues in 'sources\Common\uCollectValues.pas',
   uCompatSet in 'sources\Common\uCompatSet.pas',
+  uCrashDiag in 'sources\Common\uCrashDiag.pas',
   uDetectorUtils in 'sources\Common\uDetectorUtils.pas',
   uLocalization in 'sources\Common\uLocalization.pas',
   uMethodd12 in 'sources\Common\uMethodd12.pas',
