@@ -1477,8 +1477,11 @@ msgstr "n'analyser que les fichiers modifiés dans la branche courante"
 # Profilname aus rules/sca-rules.json bzw. Fallback der Profil-ComboBox; der
 # ausgewaehlte Text wandert 1:1 nach FRepoSettings.IdeProfile. Uebersetzen
 # wuerde den Config-Roundtrip brechen -> bewusst leer (Fallback = 'default').
+# Profilname aus analyser.ini - Bezeichner, kein zu uebersetzendes
+# Wort. Explizit gesetzt statt leer, damit der Eintrag nicht als
+# "unuebersetzt" gezaehlt wird (de.po macht es genauso).
 msgid "default"
-msgstr ""
+msgstr "default"
 
 msgid "h2. Code analysis: "
 msgstr "h2. Analyse de code : "
@@ -1761,3 +1764,80 @@ msgstr "Écrire la référence à partir de l’analyse actuelle..."
 
 msgid "sonar.projectKey not found in "
 msgstr "sonar.projectKey introuvable dans "
+
+# --- 2026-08-05: in template.pot vorhanden, hier bisher nicht ---
+msgid "%s (%d findings)"
+msgstr "%s (%d résultats)"
+
+msgid "%s (%d of %d findings)"
+msgstr "%s (%d sur %d résultats)"
+
+msgid "%s (no findings)"
+msgstr "%s (aucun résultat)"
+
+msgid "(no file selected)"
+msgstr "(aucun fichier sélectionné)"
+
+msgid "(no file)"
+msgstr "(aucun fichier)"
+
+msgid "Affects only the editor marker stripe, mini-infobar and hover overlay titlebar. Properties Panel + main grid remain at the default severity colors. Light/Dark variants are automatic."
+msgstr "N'affecte que la bande de marqueurs de l'éditeur, la mini-barre d'information et la barre de titre de la fenêtre survolée. Le panneau Propriétés et la grille principale conservent les couleurs de gravité par défaut. Les variantes claire et sombre sont automatiques."
+
+msgid "All severities"
+msgstr "Toutes les gravités"
+
+msgid "Code reaches into another form's published fields - tight coupling"
+msgstr "Le code accède aux champs published d'une autre fiche - couplage fort"
+
+msgid "Create a baseline from the current findings via the dock menu \"Write baseline from current scan...\", or with the CLI --write-baseline. The file is shared across CLI, IDE and HTML export. Takes effect on the next analysis."
+msgstr "Créer une référence à partir des résultats actuels via le menu du dock \"Écrire la référence depuis l'analyse actuelle...\" ou en ligne de commande avec --write-baseline. Le fichier est partagé entre la CLI, l'IDE et l'export HTML. Prend effet à la prochaine analyse."
+
+msgid "Delphi project/group (*.dproj;*.groupproj)"
+msgstr "Projet/groupe Delphi (*.dproj;*.groupproj)"
+
+msgid "Errors + Warnings"
+msgstr "Erreurs + avertissements"
+
+msgid "Errors only"
+msgstr "Erreurs uniquement"
+
+msgid "Export findings: HTML / JSON / CSV / Jira / Clipboard / Sonar"
+msgstr "Exporter les résultats : HTML / JSON / CSV / Jira / Presse-papiers / Sonar"
+
+msgid "Local variable read before its first assignment - undefined value (garbage / AV)"
+msgstr "Variable locale lue avant sa première affectation - valeur indéfinie (données parasites / violation d'accès)"
+
+msgid "Re-run analysis for current file"
+msgstr "Relancer l'analyse du fichier courant"
+
+msgid "Reset panel + clear editor markers (main grid stays)"
+msgstr "Réinitialiser le panneau et effacer les marqueurs de l'éditeur (la grille principale reste)"
+
+msgid "Rule-set profile (ide-fast / default / strict). Takes effect at the next analysis run."
+msgstr "Profil de jeu de règles (ide-fast / default / strict). Prend effet à la prochaine analyse."
+
+msgid "Scan this folder"
+msgstr "Analyser ce dossier"
+
+msgid "Select folder, project (.dproj) or group (.groupproj)"
+msgstr "Choisir un dossier, un projet (.dproj) ou un groupe (.groupproj)"
+
+msgid "Showing first %d of %d findings - refine the filter to see more"
+msgstr "Affichage des %d premiers résultats sur %d - affinez le filtre pour en voir davantage"
+
+msgid "Static Code Analysis - File"
+msgstr "Analyse statique du code - Fichier"
+
+msgid "Suppression marker has no matching finding - probably stale after fix"
+msgstr "Le marqueur de suppression ne correspond à aucun résultat - probablement obsolète après une correction"
+
+msgid "Token is stored DPAPI-encrypted in analyser.ini [SonarTokens]. Only this Windows user on this machine can decrypt it."
+msgstr "Le jeton est stocké chiffré par DPAPI dans analyser.ini [SonarTokens]. Seul cet utilisateur Windows sur cette machine peut le déchiffrer."
+
+msgid "When OFF (default): overlay appears only when you click a marked line - undisturbed reading. When ON: overlay follows the mouse and pops up as soon as you hover a marked line."
+msgstr "DÉSACTIVÉ (par défaut) : la fenêtre n'apparaît qu'au clic sur une ligne marquée - lecture sans gêne. ACTIVÉ : la fenêtre suit la souris et s'affiche dès le survol d'une ligne marquée."
+
+msgid "Where the hover annotation overlay anchors relative to the finding line. Takes effect after IDE restart."
+msgstr "Où la fenêtre d'annotation au survol s'ancre par rapport à la ligne du résultat. Prend effet après un redémarrage de l'IDE."
+
