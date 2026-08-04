@@ -2,14 +2,21 @@
 # Erzeugt von tools/selfscan_gate.py --update (Profil strict).
 # Das Gate schlaegt fehl, wenn eine Regel MEHR Funde hat als
 # hier. Weniger ist immer erlaubt.
-TIERS 0 654 2785
+# 2026-08-04: CognitiveComplexity 344 -> 345, Warnings 654 -> 655.
+# ProcessOneFileParallel kreuzt die Schwelle (18/15) durch die
+# 'on EStackOverflow do raise'-Handler. Die Handler sind Absicht
+# (Guard-Page nach Overflow unwiederbringlich weg, s.
+# uAstFileCache.Acquire); ein zentraler Re-Raise-Helfer muesste
+# Exception-Objekte aus fremdem Handler-Kontext raisen -
+# Doppel-Free-Risiko, bewusst nicht gemacht.
+TIERS 0 655 2785
 AvoidOut 14
 BeginEndRequired 308
 BooleanParam 7
 BooleanPropertyNaming 11
 CaseStatementSize 8
 ClassPerFile 522
-CognitiveComplexity 344
+CognitiveComplexity 345
 CommentedOutCode 21
 CompilerDirectiveScope 1
 ConcatToFormat 30
