@@ -1,4 +1,27 @@
-# Release 0.9.11 — Reparaturen
+# Release 0.9.12 — Das Panel haelt Schritt
+
+🇬🇧 [English version](RELEASE_NOTES.md)
+
+Vollstaendige Release-Notes: [docs/releases/v0.9.12_de.md](docs/releases/v0.9.12_de.md)
+([english](docs/releases/v0.9.12.md)).
+
+Ein kleines Release, einen Tag nach 0.9.11.
+
+- **Das Filescan-Panel folgt jetzt der Maus**: Rad und Klick navigieren den
+  Editor mit 50 ms Einschwingzeit - vorher wanderte beim Rad die Auswahl,
+  ohne dass der Editor ueberhaupt folgte. Die Liste selbst ist nicht mehr
+  zaeh (ein COM-Aufruf pro gezeichneter Zelle, jetzt gecacht).
+- **`SCA054` meldet Einzeiler wieder** - die v0.9.11-Quellpruefung zaehlte
+  die Signatur als Nutzung, wenn sie sich die Zeile mit `begin` teilte.
+  Baselines koennen ein paar Funde zurueckbekommen; die sind echt.
+- **`WatchMode` stapelt keine Worker mehr**, und die Fund-Auswahl schreibt
+  nicht mehr dreissigmal je Sekunde in die Zwischenablage.
+- **`package-release.ps1`** raeumt Alt-Zips, und der Tag-Guard feuert jetzt
+  wirklich.
+
+---
+
+# Vorher — Release 0.9.11 — Reparaturen
 
 🇬🇧 [English version](RELEASE_NOTES.md)
 

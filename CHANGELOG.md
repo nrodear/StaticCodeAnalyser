@@ -6,6 +6,82 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [v0.9.12] - 2026-08-04 - The panel keeps up
+
+A small release: the file-scan panel in the IDE follows the mouse now, one
+genuine detector defect found by reviewing our own week, and two guards that
+close known traps. One rule may report slightly *more* than before — see
+below, that is the fix working.
+
+### Fixed
+
+- **`SCA054 UnusedParameter` silently swallowed findings on single-line
+  routines.** The source check added in v0.9.11 scans from the line of the
+  `begin` token — but took the *whole* line. When the signature shares that
+  line (`procedure TFoo.Bar(Sender: TObject); begin end;`), the parameter's
+  own declaration counted as a use and the finding vanished. Well hidden:
+  the defect only ever *suppressed*, so neither the self-scan nor the
+  corpus anchor could see it, and every fixture had `begin` on its own
+  line. The start line is now cut at the `begin` token (whole-word, so an
+  identifier like `BeginUpdate` is not a cut point). **Expect `SCA054` to
+  rise slightly on existing baselines — those are real findings coming
+  back, exclusively on single-line routines.**
+
+- **The file-scan panel list was sluggish.** The renderer asked the IDE's
+  theming service for style objects *per drawn cell* — a COM call, roughly
+  300 per frame. Same disease the main grid had already fixed; the panel
+  was the outlier. Now a one-slot cache, invalidated on theme change — and
+  the theme-change handler order was corrected so the repaint happens
+  *after* the cache reset, not before (that one was a review catch on the
+  fix itself).
+
+- **`WatchMode` can no longer stack workers.** `SpawnAnalyzer` spawned
+  unconditionally; the generation counter only discards *late* results.
+  When triggers arrive faster than an analysis finishes, the worker list
+  grew — the unit header itself called it "endless loop possible" and made
+  the guard a precondition for ever enabling watch by default. Now at most
+  one watch worker runs; a trigger that arrives meanwhile re-arms the edit
+  debounce timer instead of being dropped. Both debounce handlers clear
+  their pending slot *before* spawning — the guard uses that slot as its
+  retry seat, and clearing afterwards would have wiped the re-arm, making
+  the guard silently ineffective.
+
+- **Selecting a finding no longer writes the clipboard thirty times a
+  second.** `GridSelectCell` ran a system-wide clipboard write, an
+  `Application.ProcessMessages` and — when a quick-fix provider exists — a
+  full source-file read on *every* selection change. The copy is debounced
+  (120 ms, the resting row wins), and with it the `ProcessMessages` and its
+  re-entrancy dance disappear entirely.
+
+- **`package-release.ps1` hardened twice.** Zips of *other* versions
+  survived every run and the documented `gh release create ... *.zip`
+  follow-up would have attached them to the next release — the exact
+  wrong-artifact class the script was built against; the output directory
+  is now swept first. And the tag guard was dead code (PowerShell 5.1
+  turns redirected native stderr into terminating errors before the
+  `throw`); it now decides on the exit code.
+
+### Changed
+
+- **Mouse and wheel navigation in the file-scan panel follows the finding
+  with a 50 ms settle delay.** Before, a click jumped instantly and the
+  wheel moved the selection *without the editor following at all*. All
+  three input paths now share one debounced navigator: mouse and wheel at
+  50 ms, keyboard unchanged at 80 ms. Spinning the wheel fast collapses to
+  a single editor jump on the resting row; re-clicking the same row
+  re-centres the editor.
+
+- **Self-scan baseline ratcheted** to the current state (0/654/2785,
+  `ClassPerFile` 522) — justified fixture suppressions made the numbers
+  better; tightening means future regressions surface earlier.
+
+- **Custom-rule docs stop claiming target filters exist.** The `target`
+  key is parsed and then ignored; the unit header said the opposite. The
+  comments now state the truth (and the example file no longer dates the
+  roadmap to "v0.9.0").
+
+---
+
 ## [v0.9.11] - 2026-08-03 - Repairs
 
 A fix release. Everything here is either a false positive that was proven on

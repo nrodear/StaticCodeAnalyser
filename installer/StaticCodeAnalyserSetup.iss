@@ -28,7 +28,7 @@
 ; seit 0.9.4 auf 0/9/4, waehrend der String etwas anderes behauptete),
 ; und seit 0.9.11 ist auch PLUGIN_VERSION nachgezogen - die stand zwei
 ; Releases zurueck.
-#define SCAVersion      "0.9.11.0"
+#define SCAVersion      "0.9.12.0"
 #define SCAAppName      "Static Code Analyser for Delphi (IDE-Plugin)"
 #define SCAPublisher    "StaticCodeAnalyser"
 

@@ -1,4 +1,27 @@
-# Release 0.9.11 — Repairs
+# Release 0.9.12 — The panel keeps up
+
+🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md)
+
+Full release notes: [docs/releases/v0.9.12.md](docs/releases/v0.9.12.md)
+([deutsch](docs/releases/v0.9.12_de.md)).
+
+A small release, one day after 0.9.11.
+
+- **The file-scan panel follows the mouse now**: wheel and click navigate
+  the editor with a 50 ms settle delay — before, the wheel moved the
+  selection and the editor did not follow at all. The list itself stopped
+  being sluggish (a COM call per drawn cell, now cached).
+- **`SCA054` reports single-line routines again** — the v0.9.11 source
+  check counted the signature as a use when it shared the line with
+  `begin`. Baselines may gain a few findings back; those are real.
+- **`WatchMode` can no longer stack workers**, and selecting a finding no
+  longer writes the clipboard thirty times a second.
+- **`package-release.ps1`** sweeps stale zips and its tag guard actually
+  fires now.
+
+---
+
+# Previously — Release 0.9.11 — Repairs
 
 🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md)
 
