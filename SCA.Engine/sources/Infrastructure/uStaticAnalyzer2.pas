@@ -126,6 +126,7 @@ uses
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
   uCyclomaticComplexity, uCustomRuleDetector,
   uDfmAnalysisRunner, uDfmRepoIndex, uSymbolReferenceIndex, uTypeIndex, uAstFileCache,
+  uCrashDiag,        // auswertbarer Fehlertext statt roher RTL-Meldung
   uFileTextCache, uAnalyzeContext,
   uSuppression, uCustomClassDiscovery, uPathOverrides, uConfidenceFilter,
   uSynchronizeInDestructor, uLockWithoutTryFinally,
@@ -866,7 +867,9 @@ begin
       on EAbort do raise;
       on E: Exception do
         if Assigned(AOnError) then
-          AOnError(gDetectors[i].Name, E.Message);
+          // Stuerzt ein Detektor ab, ist die Exception-Klasse und die
+          // modulrelative Adresse das Einzige, was ihn eingrenzt.
+          AOnError(gDetectors[i].Name, DescribeException(E));
     end;
     if HasTimeCb then
       AOnTime(gDetectors[i].Name, Watch.ElapsedMilliseconds);
@@ -1053,8 +1056,8 @@ begin
     except
       on E: Exception do
       begin
-        SlotLog('  PARSER-FEHLER: ' + E.Message);
-        AddSlotError(AFileName, 'Lesefehler: ' + E.Message);
+        SlotLog('  PARSER-FEHLER: ' + DescribeException(E));
+        AddSlotError(AFileName, 'Lesefehler: ' + DescribeException(E));
         Exit;
       end;
     end;
@@ -1711,8 +1714,8 @@ begin
         except
           on E: Exception do
           begin
-            LogLine('  PARSER-FEHLER: ' + E.Message);
-            AddFileError(FileName, 'Lesefehler: ' + E.Message);
+            LogLine('  PARSER-FEHLER: ' + DescribeException(E));
+            AddFileError(FileName, 'Lesefehler: ' + DescribeException(E));
             Continue;
           end;
         end;
@@ -1817,7 +1820,8 @@ begin
             Ferr.FileName   := FileName;
             Ferr.MethodName := '';
             Ferr.LineNumber := '0';
-            Ferr.MissingVar := 'AutoDiscovery failed: ' + E.Message;
+            Ferr.MissingVar := 'AutoDiscovery failed: '
+                               + DescribeException(E);
             Ferr.SetKind(fkFileReadError);
             Results.Add(Ferr);
           end;
@@ -1842,7 +1846,8 @@ begin
               Ferr.FileName   := FileName;
               Ferr.MethodName := '';
               Ferr.LineNumber := '0';
-              Ferr.MissingVar := 'CustomRules failed: ' + E.Message;
+              Ferr.MissingVar := 'CustomRules failed: '
+                                 + DescribeException(E);
               Ferr.SetKind(fkFileReadError);
               Results.Add(Ferr);
             end;
@@ -2070,7 +2075,7 @@ begin
       ParseLeaks(FileList, Result, nil, AIncludeUsesCheck);
     except
       on E: Exception do
-        AddError('Analyseabbruch: ' + E.Message);
+        AddError('Analyseabbruch: ' + DescribeException(E));
     end;
   finally
     FileList.Free;
@@ -2138,7 +2143,7 @@ begin
       ParseLeaks(AnalyzeList, Result, nil, AIncludeUsesCheck, IndexList);
     except
       on E: Exception do
-        AddError('Analyseabbruch: ' + E.Message);
+        AddError('Analyseabbruch: ' + DescribeException(E));
     end;
   finally
     IndexList.Free;
@@ -2236,7 +2241,7 @@ begin
         raise;
       end;
       on E: Exception do
-        AddError('Analyseabbruch: ' + E.Message);
+        AddError('Analyseabbruch: ' + DescribeException(E));
     end;
   finally
     FileList.Free;
@@ -2306,7 +2311,7 @@ begin
         raise;
       end;
       on E: Exception do
-        AddError('Analyseabbruch: ' + E.Message);
+        AddError('Analyseabbruch: ' + DescribeException(E));
     end;
   finally
     IndexList.Free;

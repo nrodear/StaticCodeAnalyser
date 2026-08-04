@@ -25,7 +25,8 @@ interface
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   System.SyncObjs,   // Perf Stufe 2 (2026-07-25): FLock fuer Parallel-Worker
-  uAstNode, uParser2;
+  uAstNode, uParser2,
+  uCrashDiag;        // auswertbarer Text statt roher RTL-Meldung (s. Acquire)
 
 type
   TAstFileCache = class
@@ -125,7 +126,14 @@ begin
     except
       on E: Exception do
       begin
-        FFailed.AddOrSetValue(K, E.Message);
+        // NICHT E.Message allein: das war 2026-08-04 der Grund, warum eine
+        // Zugriffsverletzung auf genau einer Korpusdatei nicht auswertbar
+        // war. Die RTL-Meldung nennt weder die Exception-Klasse noch eine
+        // gegen eine Map-Datei aufloesbare Adresse, und ihre Modulangabe
+        // kann schlicht falsch sein (s. Unit-Kopf uCrashDiag). Dieser
+        // Fangpunkt ist der einzige Ort, an dem ein Parser-Absturz im
+        // Cache-Pfad ueberhaupt sichtbar wird.
+        FFailed.AddOrSetValue(K, DescribeException(E));
         Exit(nil);
       end;
     end;

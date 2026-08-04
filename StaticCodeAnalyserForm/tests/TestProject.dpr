@@ -82,6 +82,7 @@ uses
   uTestYamlSubsetParser in 'uTestYamlSubsetParser.pas',
   uTestCustomRuleDetector in 'uTestCustomRuleDetector.pas',
   uTestConcatToFormat in 'uTestConcatToFormat.pas',
+  uTestCrashDiag in 'uTestCrashDiag.pas',
   uTestWithStatement in 'uTestWithStatement.pas',
   uTestGotoStatement in 'uTestGotoStatement.pas',
   uTestTabulationCharacter in 'uTestTabulationCharacter.pas',

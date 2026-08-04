@@ -2,7 +2,16 @@
 # Erzeugt von tools/selfscan_gate.py --update (Profil strict).
 # Das Gate schlaegt fehl, wenn eine Regel MEHR Funde hat als
 # hier. Weniger ist immer erlaubt.
-TIERS 0 654 2785
+# 2026-08-04: EmptyVisibilitySection 219 -> 220, Hints 2785 -> 2786
+# fuer die neue Fixture TTestCrashDiag. KEINE Verschlechterung des
+# Codes: der Detektor erkennt attributierte Member ('[Test] procedure')
+# nicht als Member, deshalb wirkt die public-Sektion JEDER DUnitX-
+# Fixture leer - ein systematischer False-Positive, nachgewiesen an
+# uTestAvoidOut / uTestConcatToFormat / uTestUnsortedUses (je 1 Fund,
+# 226 im Test-Verzeichnis). Der Fix gehoert in den Detektor (eigener
+# Zweig); danach faellt die Zahl deutlich unter 219 und dieser
+# Eintrag wird wieder angezogen.
+TIERS 0 654 2786
 AvoidOut 14
 BeginEndRequired 308
 BooleanParam 7
@@ -35,7 +44,7 @@ EmptyFinallyBlock 2
 EmptyInterface 6
 EmptyMethod 7
 EmptyOnHandler 3
-EmptyVisibilitySection 219
+EmptyVisibilitySection 220
 ExceptionTooGeneral 32
 FieldByNameInLoop 1
 FormatLocaleHint 4
