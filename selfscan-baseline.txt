@@ -17,13 +17,20 @@
 #   Overflow unwiederbringlich weg, s. uAstFileCache.Acquire); ein
 #   zentraler Re-Raise-Helfer muesste Exception-Objekte aus fremdem
 #   Handler-Kontext raisen - Doppel-Free-Risiko, bewusst nicht gemacht.
-TIERS 0 655 2568
+# 2026-08-05 (Zweig fix/004): ClassPerFile 524 -> 525, Hints +1 -
+# dritte Fixture TTestHardcodedSecretInit in uTestHardcodedSecret.
+# Nicht an TTestHardcodedSecretExt angebaut, weil die damit auf 519
+# Zeilen kam (LargeClass-Schwelle 500). Bekannter Fixture-Preis:
+# ein Hint fuer eine eigene Klasse statt einer Warning fuer eine zu
+# grosse. Eine eigene Datei waere sauberer, kostet aber Eintraege in
+# TestProject.dpr UND .dproj fuer drei Tests.
+TIERS 0 655 2569
 AvoidOut 14
 BeginEndRequired 308
 BooleanParam 7
 BooleanPropertyNaming 11
 CaseStatementSize 8
-ClassPerFile 524
+ClassPerFile 525
 CognitiveComplexity 345
 CommentedOutCode 21
 CompilerDirectiveScope 1
