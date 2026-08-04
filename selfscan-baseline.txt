@@ -2,23 +2,25 @@
 # Erzeugt von tools/selfscan_gate.py --update (Profil strict).
 # Das Gate schlaegt fehl, wenn eine Regel MEHR Funde hat als
 # hier. Weniger ist immer erlaubt.
-# 2026-08-04: EmptyVisibilitySection 219 -> 220, Hints 2785 -> 2786
-# fuer die neue Fixture TTestCrashDiag. KEINE Verschlechterung des
-# Codes: der Detektor erkennt attributierte Member ('[Test] procedure')
-# nicht als Member, deshalb wirkt die public-Sektion JEDER DUnitX-
-# Fixture leer - ein systematischer False-Positive, nachgewiesen an
-# uTestAvoidOut / uTestConcatToFormat / uTestUnsortedUses (je 1 Fund,
-# 226 im Test-Verzeichnis). Der Fix gehoert in den Detektor (eigener
-# Zweig); danach faellt die Zahl deutlich unter 219 und dieser
-# Eintrag wird wieder angezogen.
-TIERS 0 654 2786
+# 2026-08-04 (Merge-Vereinigung der Zweig-Baselines):
+# * EmptyVisibilitySection 219 -> 220, Hints +1: neue Fixture
+#   TTestCrashDiag; systematischer Detektor-FP auf attributierten
+#   Membern, Fix im Zweig fix/emptyvis-attributed-members - nach dem
+#   Build faellt die Zahl massiv, dann Baseline neu anziehen.
+# * CognitiveComplexity 344 -> 345, Warnings 654 -> 655:
+#   ProcessOneFileParallel kreuzt die Schwelle (18/15) durch die
+#   'on EStackOverflow do raise'-Handler. Absicht (Guard-Page nach
+#   Overflow unwiederbringlich weg, s. uAstFileCache.Acquire); ein
+#   zentraler Re-Raise-Helfer muesste Exception-Objekte aus fremdem
+#   Handler-Kontext raisen - Doppel-Free-Risiko, bewusst nicht gemacht.
+TIERS 0 655 2786
 AvoidOut 14
 BeginEndRequired 308
 BooleanParam 7
 BooleanPropertyNaming 11
 CaseStatementSize 8
 ClassPerFile 522
-CognitiveComplexity 344
+CognitiveComplexity 345
 CommentedOutCode 21
 CompilerDirectiveScope 1
 ConcatToFormat 30

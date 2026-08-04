@@ -124,6 +124,17 @@ begin
     try
       Result := FParser.ParseFile(FileName);
     except
+      // EStackOverflow DARF NICHT verschluckt werden (2026-08-04): die RTL
+      // stellt die Guard-Page des Stapels nach einem abgefangenen Overflow
+      // NICHT wieder her (System.pas/System.SysUtils.pas nachgelesen - kein
+      // Gegenstueck zu _resetstkoflw). Ein 'weiter wie bisher' laeuft also
+      // auf ungeschuetztem Stapel; der naechste tiefe Abstieg schreibt
+      // wortlos in fremden Speicher. Der Korpus-Absturz vom 2026-08-04
+      // (RIP UND RSP zerstoert, Schreibziel im schreibgeschuetzten .text)
+      // ist exakt das Schadensbild solcher stillen Stapel-Korruption.
+      // Durchreichen -> der Top-Level-Handler beendet den Scan geordnet
+      // als 'Analyseabbruch' mit Exit-Code statt still weiterzulaufen.
+      on EStackOverflow do raise;
       on E: Exception do
       begin
         // NICHT E.Message allein: das war 2026-08-04 der Grund, warum eine
