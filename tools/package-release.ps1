@@ -57,6 +57,15 @@ $outPath = Join-Path $repo $OutDir
 if (-not [System.IO.Path]::IsPathRooted($OutDir)) { $OutDir = $outPath }
 if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Force $OutDir | Out-Null }
 
+# Alt-Zips ALLER Versionen raeumen (Review 2026-08-04). Die Einzel-Loeschung
+# unten trifft nur den exakt gleichen, versionsbehafteten Namen - Zips
+# frueherer Laeufe ueberlebten jeden Durchgang. Der dokumentierte
+# Folgeschritt "gh release create ... <OutDir>\*.zip" haette sie dann als
+# Assets an das NEUE Release gehaengt: exakt die Fehlerklasse (falsches
+# Artefakt ausgeliefert), gegen die dieses Skript gebaut wurde.
+Get-ChildItem -Path $OutDir -Filter 'StaticCodeAnalyser-v*.zip' -ErrorAction SilentlyContinue |
+  Remove-Item -Force
+
 $platforms = @(
   @{ Name = 'Win64'; Exe = 'Output\Win64 Release\StaticCodeAnalyser.d12.exe' },
   @{ Name = 'Win32'; Exe = 'Output\Win32 Release\StaticCodeAnalyser.d12.exe' }
@@ -94,8 +103,14 @@ if (-not $SkipSource) {
   # Aus dem TAG, nicht aus dem Arbeitsbaum: so landet nichts Ungetaggtes
   # im Archiv, und gitignorierte interne Dokumente bleiben ohnehin draussen.
   $tag = "v$Version"
-  $null = git -C $repo rev-parse $tag 2>$null
-  if (-not $?) { throw "Tag $tag existiert nicht - erst taggen." }
+  # KEIN 2>$null auf dem nativen Kommando: PS 5.1 wickelt umgeleitete
+  # stderr-Zeilen in ErrorRecords, und mit ErrorActionPreference=Stop
+  # terminierte das Skript dann VOR dem throw mit einem rohen
+  # NativeCommandError - der Guard darunter war toter Code und seine
+  # Meldung erschien nie. --verify --quiet unterdrueckt gits stderr selbst;
+  # entschieden wird ueber den Exit-Code.
+  git -C $repo rev-parse --verify --quiet "$tag^{commit}" | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "Tag $tag existiert nicht - erst taggen." }
   $src = Join-Path $OutDir "StaticCodeAnalyser-v$Version-source.zip"
   if (Test-Path $src) { Remove-Item $src -Force }
   git -C $repo archive --format=zip --prefix="StaticCodeAnalyser-$Version/" -o $src $tag
