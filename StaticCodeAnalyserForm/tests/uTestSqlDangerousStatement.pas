@@ -80,15 +80,20 @@ type
     // Fixture-Pfad -> lsHint) darf nicht unangekuendigt zurueckkehren -
     // beide Tests werden rot, sobald sie wieder eingebaut wird.
     [Test] procedure SqlDanger_DropTable_SeverityStaysError;
-    [Test] procedure SqlDanger_FixturePath_SeverityStaysError;
+    [Test] procedure SqlDanger_FixturePath_Suppressed;
+    [Test] procedure SqlDanger_ProductionPath_StillError;
+    [Test] procedure SqlDanger_TestsSubstringInDirName_StillReported;
   end;
 
 implementation
 
-// noinspection-file SqlDangerousStatement
+// noinspection-file SqlDangerousStatement, HardcodedPath
 // Die Fixtures enthalten DELETE/UPDATE ohne WHERE absichtlich - genau das
 // ist der Pruefgegenstand. Ohne diese Zeile meldet der Self-Scan acht
 // Error-Funde im eigenen Testcode.
+// HardcodedPath (2026-08-05): die drei Testpfade des Testpfad-Gates sind
+// ebenfalls Pruefgegenstand - sie muessen woertlich dastehen, damit die
+// Verankerung der Segment-Muster ueberhaupt pruefbar ist.
 
 uses
   System.SysUtils, System.Generics.Collections,
@@ -930,27 +935,62 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestSqlDangerousStatement.SqlDanger_FixturePath_SeverityStaysError;
-// Gegenstueck zum Pin oben fuer die zweite zurueckgenommene Abstufung
-// (Test-/Fixture-Pfad -> lsHint). Der Pfad matcht TDetectorUtils.
-// IsTestFixturePath auf Stufe tplSecret (Segment 'unittests' + Basename
-// '*TestsU'); trotzdem muss die Stufe unveraendert lsError sein. Der
-// Direkt-Harness ist noetig, weil FindingsOf immer 'sample.pas' meldet.
-const SRC =
-  'unit t; implementation'#13#10 +
-  'procedure Foo;'#13#10 +
-  'var q: TFDQuery;'#13#10 +
-  'begin q.SQL.Text := ''DELETE FROM customers2''; end;';
+// ---- Testpfad-Gate (2026-08-05) -------------------------------------------
+// Loest den frueheren Pin SqlDanger_FixturePath_SeverityStaysError ab. Der
+// hielt bewusst das ALTE Verhalten fest ("kein Pfad-abhaengiges Downgrade in
+// diesem Inkrement") - dieses Inkrement ist jetzt da, und es unterdrueckt
+// statt abzustufen. Alle drei Tests brauchen den Direkt-Harness, weil
+// FindingsOf immer 'sample.pas' meldet und der Pfad hier der Pruefgegenstand
+// ist.
+const
+  SRC_DELETE_NO_WHERE =
+    'unit t; implementation'#13#10 +
+    'procedure Foo;'#13#10 +
+    'var q: TFDQuery;'#13#10 +
+    'begin q.SQL.Text := ''DELETE FROM customers2''; end;';
+
+procedure TTestSqlDangerousStatement.SqlDanger_FixturePath_Suppressed;
+// In einer Testdatei IST das Leeren einer Tabelle der Zweck des Codes.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := SqlDangerFindingsFor(SRC_DELETE_NO_WHERE,
+         'D:\repo\unittests\general\ActiveRecordTestsU.pas');
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'Fixture-Cleanup ist kein Production-Disaster');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_ProductionPath_StillError;
+// Waechter gegen ein zu breites Gate: derselbe Quelltext, Produktionspfad -
+// der Fund MUSS bleiben, und zwar im Error-Tier. Ohne diesen Test koennte
+// das Gate die Regel unbemerkt komplett stilllegen.
 var
   F   : TObjectList<TLeakFinding>;
   Hit : TLeakFinding;
 begin
-  F := SqlDangerFindingsFor(SRC, 'D:\repo\unittests\general\ActiveRecordTestsU.pas');
+  F := SqlDangerFindingsFor(SRC_DELETE_NO_WHERE,
+         'D:\repo\src\orm\DataModule.pas');
   try
     Hit := TFindingHelper.FirstOf(F, fkSqlDangerousStatement);
-    Assert.IsNotNull(Hit, 'Fixture-Fund bleibt erhalten');
-    Assert.AreEqual(lsError, Hit.Severity,
-      'kein Pfad-abhaengiges Downgrade in diesem Inkrement');
+    Assert.IsNotNull(Hit, 'Produktionsfund darf nicht verschwinden');
+    Assert.AreEqual(lsError, Hit.Severity, 'Stufe bleibt unveraendert');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_TestsSubstringInDirName_StillReported;
+// Die Verankerung der Segment-Muster ist der riskante Teil jeder
+// Pfad-Heuristik: 'company-tests' ist KEIN Segment 'tests'. Faellt die
+// Verankerung, verstummt die Regel in fremden Repos mit solchen Namen.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := SqlDangerFindingsFor(SRC_DELETE_NO_WHERE,
+         'D:\repo\company-tests\src\auth.pas');
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkSqlDangerousStatement),
+      '"company-tests" ist kein Testpfad-Segment');
   finally F.Free; end;
 end;
 

@@ -59,6 +59,32 @@ unit uSqlDangerousStatement;
 // selbst ausfuehrt, ist der Format-String kein Baustein mehr und die beiden
 // Nicht-Exec-Gates (sql-template, sql-builder-fragment) bleiben AUS.
 //
+// TESTPFAD-GATE (2026-08-05) - loest den zurueckgestellten Punkt unten auf
+// anderem Weg: Funde in Test-/Fixture-Dateien fallen WEG, statt abgestuft
+// zu werden. In einer Testdatei ist das Leeren einer Tabelle der Zweck des
+// Codes (Fixture-Cleanup vor dem Datenload, Teardown danach); die
+// Production-Disaster-Praemisse der Regel gilt dort nicht.
+//   * Warum Suppression statt Abstufung: eine Abstufung laesst SCA058 im
+//     Error-Tier verlieren und im warning-/note-Tier GEWINNEN - formal ein
+//     ADD, das die Gate-Invariante "pro Regel und Tier nur Entfernungen"
+//     bricht, und Konsumenten mit DetectorMinSeverity <> lsHint verlieren
+//     die Funde ohnehin ganz. Genau daran scheiterte das Inkrement am
+//     2026-07-31. Suppression ist einseitig und damit gate-bar.
+//   * Quelle der Muster ist TDetectorUtils.IsTestFixturePath(tplFixture) -
+//     KEINE eigene Liste (Fund 3, Restschulden-Audit 2026-07-26). Ohne
+//     BaseDir gilt der dort dokumentierte Substring-Caveat, wie bei den
+//     anderen Aufrufern (uUninitVar, uHardcodedSecret).
+//   * GEMESSEN vor dem Bau (Korpus after140, 41 Funde): 25 Treffer, alle
+//     ueber Verzeichnis-Segmente - 'tests' 12, 'unittests' 11, 'test' 2.
+//   * Bewusst NICHT um 'examples' erweitert (5 jvcl-Funde blieben): das
+//     Segment fehlt der zentralen Liste, und es dort zu ergaenzen wuerde
+//     ALLE tplFixture-Konsumenten gleichzeitig verschieben - eigenes
+//     Inkrement mit eigener Messung.
+//   * Unberuehrt bleiben die drei echten mORMot-Treffer unter src/orm
+//     (ExecuteFmt('UPDATE % SET %=%'), "update ALL with no inline"), die
+//     HasExecSinkCall mit Absicht zurueckgeholt hat - sie liegen nicht in
+//     Testpfaden.
+//
 // ZURUECKGESTELLT (2026-07-31, Pre-Build-Review-Fund 'Severity-Abstufung
 // ADDIERT im Warning-/Note-Tier'): eine Abstufung DROP -> lsWarning bzw.
 // Test-/Fixture-Pfad -> lsHint war Teil dieses Inkrements und wurde
@@ -609,6 +635,9 @@ var
   Methods : TList<TAstNode>;
   M : TAstNode;
 begin
+  // Testpfad-Gate (2026-08-05) - Begruendung und Messung im Unit-Kopf.
+  if TDetectorUtils.IsTestFixturePath(FileName, '') then Exit;
+
   Methods := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
