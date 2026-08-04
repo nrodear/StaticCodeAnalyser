@@ -80,6 +80,18 @@ type
     [Test] procedure Secret_UtestFolderAndUtestFile_SkippedAsTest;
   end;
 
+  // Eigene Fixture statt Anbau an TTestHardcodedSecretExt: die war mit den
+  // drei Tests bei 519 Zeilen und damit ueber der LargeClass-Schwelle.
+  [TestFixture]
+  TTestHardcodedSecretInit = class
+  public
+    // Ist-Messung 2026-08-05 (Korpus after140): Parameter-Vorgabewerte
+    // landen im nkField-Pass und sahen wie Const-Initialisierer aus.
+    [Test] procedure Secret_DefaultParamValue_NotReported;
+    [Test] procedure Secret_ConcatenatedLiterals_StillReported;
+    [Test] procedure Secret_LiteralWithCharCode_StillReported;
+  end;
+
 implementation
 
 uses
@@ -794,6 +806,70 @@ begin
   Assert.AreEqual<Integer>(0,
     SecretCountForPath('d:\repo\src\uTestConfig.pas'),
     'Dateiname uTestXxx.pas bleibt Test-Pfad');
+end;
+
+{ ---- Parameter-Vorgabewert (Ist-Messung 2026-08-05) ----------------------- }
+
+procedure TTestHardcodedSecretInit.Secret_DefaultParamValue_NotReported;
+// Der nkField-Pass sammelt auch Routinen-PARAMETER mit Vorgabewert ein.
+// In mORMot (mormot.lib.openssl11.pas:2664/2670) fuehrte das zu zwei
+// Error-Funden auf einem LEEREN Passwort: der eingesammelte Initialisierer
+// war '''''): PEVP_PKEY' - hinter dem leeren Literal klebte Signatur-Rest,
+// weshalb weder die Leerwert-Pruefung noch die Wert-Plausibilitaet griffen.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'function LoadPublicKey(PublicKey: Pointer;'#13#10 +
+  '  const Password: string = ''''): Pointer;'#13#10 +
+  'implementation'#13#10 +
+  'function LoadPublicKey(PublicKey: Pointer;'#13#10 +
+  '  const Password: string = ''''): Pointer;'#13#10 +
+  'begin Result := nil; end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret),
+      'leerer Parameter-Vorgabewert ist kein Secret');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretInit.Secret_ConcatenatedLiterals_StillReported;
+// WAECHTER gegen ein zu breites Gate. Der einzige ECHTE Treffer der Regel
+// im Korpus ist ein eingebetteter Firebase-Private-Key (Alcinoe Demos),
+// und der steht als Literal-PLUS-Literal da. Faellt diese Form durch,
+// verliert die Regel ihren einzigen True Positive.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'const'#13#10 +
+  '  ServiceAccountPrivateKey = ''-----BEGIN PRIVATE KEY-----'' +'#13#10 +
+  '    ''MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQ'';'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkHardcodedSecret) >= 1,
+      'konkatenierte Literale sind ein gueltiger Initialisierer');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretInit.Secret_LiteralWithCharCode_StillReported;
+// Zweite zulaessige Initialisierer-Form: Literal mit eingestreutem
+// #-Zeichencode. Muss das Gate ebenfalls passieren.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'const'#13#10 +
+  '  ApiPassword = ''s3cr3tValue''#13''MoreSecretText'';'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkHardcodedSecret) >= 1,
+      '#-Zeichencode zwischen Literalen bleibt ein gueltiger Initialisierer');
+  finally F.Free; end;
 end;
 
 end.

@@ -95,6 +95,16 @@ type
     // (QuoteStrLit-Format inkl. verdoppelter innerer Quotes). Bounds-safe;
     // liefert bei Nicht-Quote-Form den Eingabestring unveraendert zurueck.
     class function ExtractLiteralBody(const Literal: string): string; static;
+    // FP-Gate (2026-08-05): True nur, wenn der Initialisierer AUSSCHLIESSLICH
+    // aus Stringliteralen, #-Zeichencodes und '+' besteht. Hintergrund: der
+    // nkField-Pass sammelt auch Routinen-PARAMETER mit Vorgabewert ein
+    //   function LoadPublicKey(...; const Password: SpiUtf8 = ''): PEVP_PKEY;
+    // Der Initialisierer ist dann '''''): PEVP_PKEY' - hinter dem leeren
+    // Literal klebt Signatur-Rest. Die bestehende Leerwert-Pruefung
+    // (Literal = '''''') geht daran vorbei, und die Wert-Plausibilitaet
+    // sieht im Rest genug Alphanumerik, um ihn fuer ein Secret zu halten.
+    // Ein echter Const-/Feld-Initialisierer endet nach dem Literal.
+    class function IsCompleteLiteralInit(const Literal: string): Boolean; static;
     // FP-Gate (2026-07-04): template-delimiter / nul-char-init /
     // sentinel-value - Wert-Plausibilitaet. Ein plausibler Secret-Wert hat
     // einen Kern von >= 4 Zeichen und mindestens 3 alphanumerische Zeichen.
@@ -369,6 +379,86 @@ begin
   else if (Length(Result) >= 1) and (Result[1] = '''') then
     Result := Copy(Result, 2, MaxInt);
   Result := StringReplace(Result, '''''', '''', [rfReplaceAll]);
+end;
+
+class function THardcodedSecretDetector.IsCompleteLiteralInit(
+  const Literal: string): Boolean;
+// FP-Gate (2026-08-05, Ist-Messung Korpus after140): siehe Deklaration.
+// Erlaubt ist genau die Form, die ein Literal-Initialisierer haben kann:
+// Stringliterale ('..' mit verdoppeltem Quote als Escape), #-Zeichencodes
+// und '+' dazwischen. Alles andere - Bezeichner, Klammern, Doppelpunkt -
+// bedeutet, dass der eingesammelte Text kein reiner Literal-Initialisierer
+// ist. Der PEM-Key aus Alcinoe ('-----BEGIN PRIVATE KEY-----'+'MIIEv...')
+// bleibt dadurch erhalten: Literal + Literal ist zulaessig.
+
+  // Bewusst zwei flache Helfer statt eines verschachtelten case: die
+  // Kombination aus case, innerer Schleife und Escape-Sonderfall kam auf
+  // Cognitive-Complexity 27 - der eigene Self-Scan hat das zu Recht
+  // beanstandet.
+  function SkipCharCode(var Idx: Integer): Boolean;
+  // '#13' / '#$0D' - hinter dem '#' muss mindestens eine Ziffer stehen.
+  begin
+    Inc(Idx);
+    if (Idx <= Length(Literal)) and (Literal[Idx] = '$') then Inc(Idx);
+    Result := (Idx <= Length(Literal))
+              and CharInSet(Literal[Idx], ['0'..'9', 'a'..'f', 'A'..'F']);
+    while (Idx <= Length(Literal))
+          and CharInSet(Literal[Idx], ['0'..'9', 'a'..'f', 'A'..'F']) do
+      Inc(Idx);
+  end;
+
+  procedure SkipStringLiteral(var Idx: Integer);
+  // Setzt Idx hinter das schliessende Quote. Ein verdoppeltes Quote ist
+  // das Escape und beendet das Literal NICHT.
+  var
+    Len : Integer;
+  begin
+    Len := Length(Literal);
+    Inc(Idx);
+    while Idx <= Len do
+    begin
+      if Literal[Idx] <> '''' then
+      begin
+        Inc(Idx);
+        Continue;
+      end;
+      if (Idx < Len) and (Literal[Idx + 1] = '''') then
+      begin
+        Inc(Idx, 2);
+        Continue;
+      end;
+      Inc(Idx);
+      Exit;
+    end;
+  end;
+
+var
+  i, n : Integer;
+  c    : Char;
+begin
+  n := Length(Literal);
+  i := 1;
+  while i <= n do
+  begin
+    c := Literal[i];
+    if CharInSet(c, [' ', #9, #13, #10, '+']) then
+    begin
+      Inc(i);
+      Continue;
+    end;
+    if c = '#' then
+    begin
+      if not SkipCharCode(i) then Exit(False);
+      Continue;
+    end;
+    if c = '''' then
+    begin
+      SkipStringLiteral(i);
+      Continue;
+    end;
+    Exit(False);   // Bezeichner/Klammer/Sonstiges -> kein reiner Init
+  end;
+  Result := True;
 end;
 
 class function THardcodedSecretDetector.IsPlausibleSecretValue(
@@ -763,6 +853,11 @@ begin
       if Literal[1] <> '''' then Continue;   // nicht-String-Initializer
       // Leere String-Init
       if Literal = '''''' then Continue;
+      // Routinen-Parameter mit Vorgabewert (2026-08-05): der nkField-Pass
+      // sammelt auch Signatur-Parameter ein, dann klebt hinter dem Literal
+      // noch Signatur-Rest ('''''): PEVP_PKEY'). Ein echter Initialisierer
+      // endet nach dem Literal.
+      if not THardcodedSecretDetector.IsCompleteLiteralInit(Literal) then Continue;
       // Const-Naming-Style (UPPER_SNAKE) -> Algorithmus-Marker / Sentinel,
       // kein Secret. 2026-06-19: vorher nicht in diesem Pfad - dadurch FPs
       // auf z.B. `const TOKEN_REF_DEFAULT = 'ide-default';` in der
