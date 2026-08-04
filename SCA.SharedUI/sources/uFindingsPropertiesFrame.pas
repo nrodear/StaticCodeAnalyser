@@ -32,6 +32,9 @@ uses
   System.Classes, System.SysUtils, System.Types, System.Generics.Collections,
   Vcl.Controls, Vcl.Forms, Vcl.ExtCtrls, Vcl.Grids, Vcl.StdCtrls,
   Vcl.Graphics,
+  Vcl.Themes,       // TCustomStyleServices am Feld FCachedStyles - aus der
+                    // implementation-uses HIERHER verschoben, nicht
+                    // dupliziert (beides zugleich waere E2004)
   uMethodd12,
   uAnalyserTypes,
   uFindingGridRenderer;
@@ -64,6 +67,14 @@ type
     FBtnClearMarks : TButton;
     FSeverityCombo : TComboBox;
     FGrid          : TStringGrid;
+    // 1-Slot-Cache fuer die Style-Services des Renderers. Die Closure in
+    // RefreshFromTheme laeuft PRO GEZEICHNETER ZELLE; im IDE-Plugin steckt
+    // dahinter der StyleServicesProvider-Hook auf IOTAIDEThemingServices -
+    // ein COM-Interface-Aufruf je Zelle. Das Haupt-Grid cached genau
+    // dagegen (FCachedIDEStyles in uIDEAnalyserForm); dieses Panel war der
+    // Ausreisser. Genullt am Anfang von RefreshFromTheme, damit ein
+    // Theme-Wechsel frische Werte holt.
+    FCachedStyles  : TCustomStyleServices;
     FAllFindings   : TObjectList<TLeakFinding>;   // OWNED, ungefiltert (aktuelle Datei)
     FVisibleRows   : TList<TLeakFinding>;         // Refs auf FAllFindings, gefiltert
     // Per-File-Findings-Cache. Schluessel = NormalizePath. Eintrag wird
@@ -210,7 +221,6 @@ implementation
 
 uses
   System.Generics.Defaults,   // TComparer<T>.Construct
-  Vcl.Themes,
   uSCAConsts,        // KIND_META (Rule-Name)
   uAnalyserTheme,    // ActiveStyleServices
   uIDEToolbar,       // ApplySegoeUI - selbes Font-Setup wie TAnalyserFrame
@@ -458,6 +468,9 @@ procedure TFindingsPropertiesFrame.RefreshFromTheme;
 var
   Style : TCustomStyleServices;
 begin
+  // Cache verwerfen, BEVOR irgendetwas gezeichnet wird - sonst malt der
+  // Renderer nach einem Theme-Wechsel mit den Farben des alten Themes.
+  FCachedStyles := nil;
   Style := ActiveStyleServices;   // uAnalyserTheme: respektiert
                                   // StyleServicesProvider-Hook (vom
                                   // IDE-Plugin auf IOTAIDEThemingServices
@@ -496,12 +509,17 @@ begin
     FGrid.Font.Color      := Style.GetSystemColor(clWindowText);
     FGrid.FixedColor      := Style.GetSystemColor(clBtnFace);
   end;
-  // GetStyleServices fuer den Renderer auf den aktuellen Style einhaengen
-  // (lambda capture - Renderer ruft das pro Zelle auf).
+  // GetStyleServices fuer den Renderer: der laeuft PRO ZELLE, deshalb
+  // liefert die Closure den 1-Slot-Cache und fuellt ihn nur bei nil.
+  // RefreshFromTheme hat ihn oben genullt - der erste Zellen-Draw nach
+  // einem Theme-Wechsel holt also frische Werte, alle weiteren zahlen
+  // einen nil-Vergleich statt eines COM-Aufrufs.
   FGridConfig.GetStyleServices :=
     function: TCustomStyleServices
     begin
-      Result := ActiveStyleServices;
+      if not Assigned(FCachedStyles) then
+        FCachedStyles := ActiveStyleServices;
+      Result := FCachedStyles;
     end;
   FGrid.Invalidate;
 end;
