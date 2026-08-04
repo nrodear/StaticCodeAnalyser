@@ -1348,6 +1348,25 @@ begin
       if Pos('.createanonymousthread', TypeLow) > 0 then
         Exit(True);
     end;
+    // Konstruktor-Aufruf in der Zuweisungs-RHS, unsere Var als Argument:
+    //   other := TFoo.Create(..., varName, ...)
+    // Der nkCall-Zweig weiter unten wertet genau diese Form schon aus
+    // ('AnyClass.Create(varName, …)'), sieht sie hier aber NICHT: Aufrufe in
+    // einer Zuweisungs-RHS legt der Parser als Flachtext in nkAssign.TypeRef
+    // ab, nicht als nkCall-Knoten (s. Kommentar am Kopf dieser Routine).
+    // Damit hing das Verhalten bisher davon ab, ob derselbe Konstruktoraufruf
+    // freistehend oder als Zuweisung geschrieben ist - und ausgerechnet die
+    // haeufigere Zuweisungsform war blind.
+    // Beleg (Korpus after140): Alcinoe dwsJSONConnector.pas:614 meldet
+    // 'connType', obwohl Z.617 'connSym := TJSONConnectorSymbol.Create(
+    // SYS_JSONVARIANT, connType)' die Ownership uebergibt.
+    // Die Permissivitaet ist bewusst dieselbe wie im nkCall-Zweig (jeder
+    // Konstruktor, der unsere Var als Argument nimmt, gilt als uebernehmend) -
+    // dieser Fix stellt Gleichbehandlung her, er fuehrt keine neue Politik ein.
+    var RhsLowCtor := N.TypeRef.ToLower;
+    var pRhsCreate := Pos('.create(', RhsLowCtor);
+    if (pRhsCreate > 0) and VarInArgs(RhsLowCtor, pRhsCreate + 8) then
+      Exit(True);
     // Var-zu-Field-Transfer:
     //   FField := varName              -> Klassen-Feld haelt jetzt Ownership
     //   FField := varName as ISome     -> Interface-Refcount haelt Lifetime

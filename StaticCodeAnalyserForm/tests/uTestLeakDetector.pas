@@ -177,6 +177,10 @@ type
     [Test] procedure Leak_TObjectDictionaryAdd_OwnershipRecognized;
     [Test] procedure Leak_AddObjectMethod_OwnershipRecognized;
     [Test] procedure Leak_TStackPush_OwnershipRecognized;
+    // --- Ist-Messung 2026-08-05: Ctor-Argument in einer Zuweisungs-RHS ---
+    [Test] procedure Leak_CtorArgInAssignRhs_OwnershipRecognized;
+    [Test] procedure Leak_CtorArgStandaloneCall_OwnershipRecognized;
+    [Test] procedure Leak_PlainCallArgInAssignRhs_StillReported;
     // Ownership-Sink Core-Audit 2026-07-18: Container-Add im BEDINGUNGS-Kontext.
     [Test] procedure Leak_AddNodeInCondition_OwnershipRecognized;
     // --- SCA001-Gross-Triage 2026-07-18 (free-missed-Bucket, SearchFree-Haertung) ---
@@ -5245,6 +5249,72 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
     'Zuweisung an eine lokale Variable ist kein Rueckgabeweg');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_CtorArgInAssignRhs_OwnershipRecognized;
+// Der Konstruktor-Zweig von IsPassedToOwner lief nur ueber nkCall-Knoten.
+// Aufrufe in einer Zuweisungs-RHS legt der Parser aber als Flachtext in
+// nkAssign.TypeRef ab - ausgerechnet die haeufigere Schreibweise war blind.
+// Beleg: Alcinoe dwsJSONConnector.pas:614 (Korpus after140).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var inner: TInnerThing; outer: TOuterThing;'#13#10+
+  'begin'#13#10+
+  '  inner := TInnerThing.Create;'#13#10+
+  '  outer := TOuterThing.Create(inner);'#13#10+
+  '  Registry.Add(outer);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'Ctor-Argument in der Zuweisungs-RHS ist Ownership-Transfer');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_CtorArgStandaloneCall_OwnershipRecognized;
+// Gegenstueck: dieselbe Uebergabe als FREISTEHENDER Aufruf. Lief schon
+// vorher - der Test pinnt, dass beide Schreibweisen gleich behandelt
+// werden. Genau diese Ungleichbehandlung war der Defekt.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var inner: TInnerThing;'#13#10+
+  'begin'#13#10+
+  '  inner := TInnerThing.Create;'#13#10+
+  '  TOuterThing.Create(inner);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'freistehender Ctor-Aufruf verhaelt sich gleich');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_PlainCallArgInAssignRhs_StillReported;
+// WAECHTER: das Gate darf NUR auf Konstruktoren ('.Create(') greifen. Ein
+// gewoehnlicher Funktionsaufruf mit unserer Variable als Argument uebergibt
+// keine Ownership - der Fund muss bleiben, sonst verstummt die Regel auf
+// jeder Variable, die irgendwo als Argument auftaucht.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var inner: TInnerThing; n: Integer;'#13#10+
+  'begin'#13#10+
+  '  inner := TInnerThing.Create;'#13#10+
+  '  n := ComputeSomething(inner);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'gewoehnlicher Aufruf ist KEIN Ownership-Transfer');
   finally F.Free; end;
 end;
 
