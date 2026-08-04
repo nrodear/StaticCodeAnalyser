@@ -70,10 +70,12 @@ unit uSqlDangerousStatement;
 //     bricht, und Konsumenten mit DetectorMinSeverity <> lsHint verlieren
 //     die Funde ohnehin ganz. Genau daran scheiterte das Inkrement am
 //     2026-07-31. Suppression ist einseitig und damit gate-bar.
-//   * Quelle der Muster ist TDetectorUtils.IsTestFixturePath(tplFixture) -
-//     KEINE eigene Liste (Fund 3, Restschulden-Audit 2026-07-26). Ohne
-//     BaseDir gilt der dort dokumentierte Substring-Caveat, wie bei den
-//     anderen Aufrufern (uUninitVar, uHardcodedSecret).
+//   * Quelle der Muster ist TDetectorUtils.IsTestFixturePath - KEINE
+//     eigene Liste (Fund 3, Restschulden-Audit 2026-07-26). Stufe
+//     tplFixtureDir: NUR Verzeichnis-Segmente, keine Dateinamen. Alle 25
+//     gemessenen Treffer kamen ueber Segmente; Basename-Matching haette
+//     zusaetzlich den Test-Harness stillgelegt, der den blossen
+//     Platzhalter 'sample.pas' ohne Pfad uebergibt (2026-08-05).
 //   * GEMESSEN vor dem Bau (Korpus after140, 41 Funde): 25 Treffer, alle
 //     ueber Verzeichnis-Segmente - 'tests' 12, 'unittests' 11, 'test' 2.
 //   * Bewusst NICHT um 'examples' erweitert (5 jvcl-Funde blieben): das
@@ -636,7 +638,7 @@ var
   M : TAstNode;
 begin
   // Testpfad-Gate (2026-08-05) - Begruendung und Messung im Unit-Kopf.
-  if TDetectorUtils.IsTestFixturePath(FileName, '') then Exit;
+  if TDetectorUtils.IsTestFixturePath(FileName, '', tplFixtureDir) then Exit;
 
   Methods := UnitNode.FindAll(nkMethod);
   try

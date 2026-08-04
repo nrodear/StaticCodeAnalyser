@@ -62,7 +62,11 @@ type
   // NICHT hierher gehoert TIgnoreList.IsTestPath (uIgnoreList.pas): das
   // steuert, WAS ueberhaupt gescannt wird - eine Erweiterung dort loescht
   // Funde aus dem Korpus. Bewusst separat gelassen.
-  TTestPathLevel = (tplFixture, tplSecret);
+  //   tplFixtureDir - wie tplFixture, aber NUR Verzeichnis-Segmente; der
+  //                   Dateiname wird ignoriert. Fuer Gates INNERHALB von
+  //                   Detektoren gedacht (s. Kommentar bei
+  //                   IsTestFixturePath).
+  TTestPathLevel = (tplFixture, tplSecret, tplFixtureDir);
 
   TDetectorUtils = class
      public
@@ -538,16 +542,25 @@ var
   Segment                        : string;
   Segments                       : TArray<string>;
   Rule                           : TTestPathRule;
+  EffLevel                       : TTestPathLevel;
 begin
   Result := False;
+  // tplFixtureDir liest dieselben Regeln wie tplFixture - es unterscheidet
+  // sich nur darin, dass der Basename-Schritt uebersprungen wird.
+  if Level = tplFixtureDir then
+    EffLevel := tplFixture
+  else
+    EffLevel := Level;
   if FileName = '' then Exit;
   Bare := ExtractFileName(FileName);
 
   // 1. Basename-Pattern matched unabhaengig vom Pfad-Anchoring -
   //    'uTest*.pas' ist projekt-uebergreifend ein Test-File-Indikator.
-  for Rule in TEST_PATH_RULES do
-    if (Rule.Mode = tmBaseName) and (Level in Rule.Levels)
-       and MatchesMask(Bare, Rule.Pattern) then Exit(True);
+  //    tplFixtureDir ueberspringt diesen Schritt bewusst (s. Kopf).
+  if Level <> tplFixtureDir then
+    for Rule in TEST_PATH_RULES do
+      if (Rule.Mode = tmBaseName) and (Level in Rule.Levels)
+         and MatchesMask(Bare, Rule.Pattern) then Exit(True);
 
   // 2. Pfad-Komponenten-Match. Wenn BaseDir gegeben, matchen wir NUR
   //    Segmente des Pfads RELATIV zu BaseDir - so wird '/test/' in einem
@@ -570,7 +583,7 @@ begin
       for Segment in Segments do
         for Rule in TEST_PATH_RULES do
         begin
-          if not (Level in Rule.Levels) then Continue;
+          if not (EffLevel in Rule.Levels) then Continue;
           if (Rule.Mode = tmDirSegment) and (Segment = Rule.Pattern) then
             Exit(True);
           if (Rule.Mode = tmSegmentStart) and Segment.StartsWith(Rule.Pattern) then
@@ -582,7 +595,7 @@ begin
   begin
     for Rule in TEST_PATH_RULES do
     begin
-      if not (Level in Rule.Levels) then Continue;
+      if not (EffLevel in Rule.Levels) then Continue;
       if (Rule.Mode = tmDirSegment)
          and (Pos('/' + Rule.Pattern + '/', FullLow) > 0) then Exit(True);
       if (Rule.Mode = tmSegmentStart)
