@@ -38,7 +38,7 @@ Sonar setup required, running inside the IDE, with a Claude AI hand-off.**
 
 | Capability | Details |
 |------------|---------|
-| 🐛 **Bug detection** | 172 Pascal rules run against every `.pas` file (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 23 DFM rules against every `.dfm` (dead event handlers, hard-coded DB credentials, circular master-detail, unused components, …) — **195 total**, delivered by 152 pipeline detectors |
+| 🐛 **Bug detection** | 172 Pascal rules run against every `.pas` file (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 23 DFM rules against every `.dfm` (dead event handlers, hard-coded DB credentials, circular master-detail, unused components, …) — **195 total**, delivered by 155 pipeline detectors |
 | 🔐 **Security checks** | SQLInjection (score-based), HardcodedSecret, HardcodedPath; **Unicode safety** — Trojan Source / bidirectional-override (CVE-2021-42574), invisible / zero-width characters, BOM / UTF-8 encoding integrity |
 | 🧹 **Code smells** | LongMethod, MagicNumber, EmptyExcept, MissingFinally, DeadCode, DuplicateString/Block |
 | ⚡ **Incremental analysis** | "Branch-Changes" button: only the files modified in the Git/SVN branch — 200 ms instead of 60 s |
@@ -898,7 +898,7 @@ For incremental re-scans, **use Branch-Changes instead of a full scan**
 - **MAX_DEPTH = 32**: protection against symlink loops.
 - **Cancel any time**: `EAbort` propagates cleanly through every layer.
 - **Per-detector try/except**: a crashing detector never blocks any of
-  the other forty.
+  the other 154.
 
 ---
 
@@ -906,16 +906,24 @@ For incremental re-scans, **use Branch-Changes instead of a full scan**
 
 ```
 StaticCodeAnalyserForm/tests/
-  TestProject.dpr                      DUnitX console runner
-  uTestAnalyserChecks.pas              ~290 tests in 26 fixtures
-                                       (one fixture per detector)
+  TestProject.dpr                      DUnitX runner
+  uTest<DetectorName>.pas              one file per detector, 204 files
+                                       in total — 3062 tests across 228
+                                       fixtures
+  uTestFindingHelper.pas               shared harness (FindingsOf /
+                                       FindingsOfFile / FindingsViaPipeline)
   uTestTAstNode.pas                    AST helper tests
-  uTestPerformance.pas                 Throughput benchmarks
+  uTestPerformance.pas                 throughput benchmarks
                                        (tokens/ms, lines/ms)
 ```
 
-Tests run on DUnitX. In console mode the test project emits an NUnit
-XML report — ready to wire into CI.
+Tests run on DUnitX and emit an NUnit XML report — ready to wire into CI.
+
+Pick the harness deliberately: `FindingsOf` drives the AST detectors,
+`FindingsOfFile` is required for detectors that read source lines, and
+`FindingsViaPipeline` runs the full production path including profile,
+severity, suppression and confidence filters — that is what a user
+actually sees.
 
 ---
 

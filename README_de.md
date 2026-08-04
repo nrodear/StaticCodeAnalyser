@@ -38,7 +38,7 @@ direkt in der IDE, mit Claude-AI-Anbindung.**
 
 | Fähigkeit | Wie genutzt |
 |-----------|-------------|
-| 🐛 **Bugs finden** | 172 Pascal-Regeln laufen über jede `.pas`-Datei (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 23 DFM-Regeln über jede `.dfm` (tote Event-Handler, Klartext-DB-Credentials, zirkuläre Master-Detail-Verkettung, unbenutzte Komponenten, …) — **insgesamt 195**, ausgeliefert von 152 Pipeline-Detektoren |
+| 🐛 **Bugs finden** | 172 Pascal-Regeln laufen über jede `.pas`-Datei (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 23 DFM-Regeln über jede `.dfm` (tote Event-Handler, Klartext-DB-Credentials, zirkuläre Master-Detail-Verkettung, unbenutzte Komponenten, …) — **insgesamt 195**, ausgeliefert von 155 Pipeline-Detektoren |
 | 🔐 **Sicherheitslücken** | SQLInjection (Score-basiert), HardcodedSecret, HardcodedPath |
 | 🧹 **Code-Smells** | LongMethod, MagicNumber, EmptyExcept, MissingFinally, DeadCode, DuplicateString/Block |
 | ⚡ **Inkrementell analysieren** | „Branch-Changes"-Button: nur die im Git-/SVN-Branch geänderten Dateien — 200 ms statt 60 s |
@@ -904,7 +904,7 @@ benutzen — typisch 200 ms bis 3 s. Siehe [BRANCH_CHANGES_de.md](BRANCH_CHANGES
 - **MAX_DEPTH = 32**: Symlink-Endlosschleifen-Schutz
 - **Cancel jederzeit**: EAbort propagiert sauber durch alle Schichten
 - **Pro-Detektor try/except**: ein abstürzender Detektor blockiert
-  nicht die anderen 40
+  nicht die anderen 154
 
 ---
 
@@ -912,16 +912,24 @@ benutzen — typisch 200 ms bis 3 s. Siehe [BRANCH_CHANGES_de.md](BRANCH_CHANGES
 
 ```
 StaticCodeAnalyserForm/tests/
-  TestProject.dpr                      DUnitX-Konsolen-Runner
-  uTestAnalyserChecks.pas              ~290 Tests in 26 Fixtures
-                                       (1 Fixture pro Detektor)
+  TestProject.dpr                      DUnitX-Runner
+  uTest<Detektorname>.pas              eine Datei je Detektor, insgesamt
+                                       204 Dateien — 3062 Tests in 228
+                                       Fixtures
+  uTestFindingHelper.pas               gemeinsamer Harness (FindingsOf /
+                                       FindingsOfFile / FindingsViaPipeline)
   uTestTAstNode.pas                    AST-Helper-Tests
   uTestPerformance.pas                 Throughput-Benchmarks
                                        (Tokens/ms, Lines/ms)
 ```
 
-Tests laufen mit DUnitX. Im Console-Modus erzeugt das Testprojekt einen
-NUnit-XML-Report — CI-tauglich.
+Tests laufen mit DUnitX und erzeugen einen NUnit-XML-Report — CI-tauglich.
+
+Den Harness bewusst wählen: `FindingsOf` treibt die AST-Detektoren,
+`FindingsOfFile` ist Pflicht für Detektoren, die Quellzeilen lesen, und
+`FindingsViaPipeline` läuft den vollen Produktionsweg samt Profil-,
+Severity-, Suppression- und Confidence-Filter — das ist, was ein Nutzer
+wirklich sieht.
 
 ---
 
