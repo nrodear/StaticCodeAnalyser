@@ -31,6 +31,7 @@ type
     class function DefaultFileName(const SourceFile: string;
       const TargetDir: string): string; static;
   private
+    class function JsonForScript(const S: string): string; static;
     class function HtmlEscape(const S: string): string; static;
     // Liefert ein HTML-Fragment (<div class="src-snippet">) mit
     // ContextSize Zeilen vor und nach AroundLine. Die Fund-Zeile ist
@@ -75,6 +76,29 @@ begin
               Base + '_codereview_' + DateStr + '.html'
   else
     Result := Base + '_codereview_' + DateStr + '.html';
+end;
+
+class function TExporterHtml.JsonForScript(const S: string): string;
+// JSON-Escaping PLUS Schutz gegen den Abbruch des umgebenden
+// <script type="application/json">-Blocks.
+//
+// TExporter.JsonEscape ist RFC-8259-korrekt, escaped aber '<' nicht - und
+// muss das auch nicht: in einer .json-DATEI ist '<' harmlos. In einem
+// EINGEBETTETEN script-Block ist es das nicht. Der Browser beendet das
+// Element beim ersten '</script>' im Textinhalt, ganz unabhaengig von
+// JSON-Syntax; alles danach ist ausfuehrbares Skript.
+//
+// Erreichbar ueber SCA_REPORT_TIMESTAMP: der Wert kommt ungeprueft aus der
+// Umgebung (s. ResolveWhen) und landet als 'generatedAt' hier. Ein
+// CI-Job, der die Variable aus Fremddaten speist, waere ein Einfallstor -
+// in einem Produkt, dessen Zweck Privatsphaere ist, der schwerste
+// denkbare Fehler dieser Art.
+//
+// '\u003c' ist gueltiges JSON und wird von JSON.parse wieder zu '<' -
+// der INHALT bleibt unveraendert, nur seine Textform ist harmlos.
+begin
+  Result := StringReplace(TExporter.JsonEscape(S), '<', '\u003c',
+                          [rfReplaceAll]);
 end;
 
 class function TExporterHtml.HtmlEscape(const S: string): string;
@@ -725,13 +749,13 @@ begin
     // Zeitstempel wie data-when. Werte via JsonEscape (RFC 8259).
     SB.Append    ('  <script type="application/json" id="sca-meta">');
     SB.Append    ('{"tool":"');
-    SB.Append    (TExporter.JsonEscape(TOOL_NAME));
+    SB.Append    (JsonForScript(TOOL_NAME));
     SB.Append    ('","version":"');
-    SB.Append    (TExporter.JsonEscape(SCA_VERSION));
+    SB.Append    (JsonForScript(SCA_VERSION));
     SB.Append    ('","generatedAt":"');
-    SB.Append    (TExporter.JsonEscape(WhenStr));
+    SB.Append    (JsonForScript(WhenStr));
     SB.Append    ('","profile":"');
-    SB.Append    (TExporter.JsonEscape(''));  // Profil nicht an Run uebergeben -> leer
+    SB.Append    (JsonForScript(''));  // Profil nicht an Run uebergeben -> leer
     SB.Append    ('","counts":{"total":');
     SB.Append    (IntToStr(nTotal));
     SB.Append    (',"error":');
@@ -2421,12 +2445,12 @@ begin
     SB.AppendLine('          var sm = document.getElementById("baseSummary");');
     SB.AppendLine('          if (sm) { var lang = document.documentElement.lang || "de"; var tpl = TPL[lang] || TPL.de;');
     SB.AppendLine('            sm.textContent = tpl.replace("{0}", nNew).replace("{1}", nExist).replace("{2}", nFixed); }');
-    SB.AppendLine('          if (typeof applyFilters === "function") applyFilters();');
+    SB.AppendLine('          if (typeof applyFilter === "function") applyFilter();');
     SB.AppendLine('        };');
     SB.AppendLine('        rd.readAsText(f);');
     SB.AppendLine('      });');
     SB.AppendLine('      var bnf = document.getElementById("baseNewFilter");');
-    SB.AppendLine('      if (bnf) bnf.addEventListener("change", function(){ if (typeof applyFilters === "function") applyFilters(); });');
+    SB.AppendLine('      if (bnf) bnf.addEventListener("change", function(){ if (typeof applyFilter === "function") applyFilter(); });');
     SB.AppendLine('    })();');
     // #14 Security-Panel-Button: aktiviert den bestehenden sec-Filter (#3).
     SB.AppendLine('    (function(){');
