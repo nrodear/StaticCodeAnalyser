@@ -510,6 +510,14 @@ begin
   // Combo-Inhalt (Verzeichnis vs .dproj vs .groupproj). Initial syncen.
   Projectpath.OnChange := ProjectpathChangedScope;
   ProjectpathChangedScope(nil);
+
+  // ZULETZT, wenn ALLE Controls stehen: die Kacheln und die
+  // Chrome-Panels oben entstehen NACH dem Style-Setzen im .dpr, und sie
+  // malen mit ihrer eigenen Color auf eine Systemfarbe, die Windows im
+  // Dunkelmodus nicht mitaendert. Ohne diesen Aufruf waeren sie beim
+  // START hell - der Wechsel ueber das Menue haette sie dagegen
+  // eingefaerbt, was den Fehler beim Pruefen leicht verdeckt.
+  TAppTheme.ResolveSystemColors(Self);
 end;
 
 procedure TForm2.BtnCancelClick(Sender: TObject);
@@ -1803,6 +1811,11 @@ procedure TForm2.ThemeChanged(Sender: TObject);
 // genau die Flaechen hell, die den Fund-Text tragen.
 begin
   if csDestroying in ComponentState then Exit;
+  // Kacheln, Hilfe-Panel und andere Flaechen, die den Style fuer sich
+  // abgeschaltet haben, malen mit ihrer eigenen Color - und die zeigt auf
+  // eine SYSTEMFARBE, die Windows im Dunkelmodus NICHT mitaendert. Ohne
+  // diesen Aufruf bleiben sie hell, waehrend der Rest dunkel ist.
+  TAppTheme.ResolveSystemColors(Self);
   if Assigned(ResultGrid) then
     ResultGrid.Invalidate;
   Invalidate;

@@ -27,10 +27,18 @@ unit uAppTheme;
 interface
 
 uses
-  System.Classes,
-  Vcl.Themes;   // TStyleServicesHandle (Klassenfeld FDarkHandle)
+  System.Classes, System.Generics.Collections,
+  Vcl.Graphics,   // TColor
+  Vcl.Controls,   // TWinControl (ResolveSystemColors)
+  Vcl.Themes;     // TStyleServicesHandle (Klassenfeld FDarkHandle)
 
 type
+  /// <summary>Gemerkte Original-Farben eines Controls.</summary>
+  TAppThemeColors = record
+    Color     : TColor;
+    FontColor : TColor;
+  end;
+
   /// <summary>Woher die Hell/Dunkel-Entscheidung kommt.</summary>
   TAppThemeMode = (
     atmSystem,   // dem Windows-Systemthema folgen (Auslieferwert)
@@ -47,6 +55,8 @@ type
     // (Vcl.Themes.pas:1771, '= type Pointer') - unqualifiziert ist der
     // Bezeichner E2003. Der erste Build hat genau das gezeigt.
     class var FDarkHandle: TStyleManager.TStyleServicesHandle;
+    // Originalfarben je Control - s. ResolveSystemColors.
+    class var FOrigColors: TDictionary<Pointer, TAppThemeColors>;
     class function ModeToStr(AMode: TAppThemeMode): string; static;
     class function StrToMode(const S: string): TAppThemeMode; static;
     // Roher Registry-Zugriff. Wirft bei unlesbarer Registry - der
@@ -91,6 +101,29 @@ type
     ///   Broadcast ein Voll-Repaint.
     /// </summary>
     class procedure HandleSystemThemeChanged; static;
+
+    /// <summary>
+    ///   Loest Systemfarb-Bezeichner (clBtnFace, clWindow, clBtnText, ...)
+    ///   auf konkrete RGB-Werte des AKTIVEN Styles auf - rekursiv ab
+    ///   ARoot. Nur fuer Controls, die den Style fuer diesen Aspekt
+    ///   ABGESCHALTET haben (seClient bzw. seFont nicht in
+    ///   StyleElements); alle anderen faerbt der Style selbst.
+    /// </summary>
+    /// <remarks>
+    ///   Warum das noetig ist: Windows' Dunkelmodus aendert die
+    ///   KLASSISCHEN Systemfarben NICHT. GetSysColor(COLOR_BTNFACE)
+    ///   liefert weiterhin Hellgrau - und genau darauf greift
+    ///   Vcl.Graphics.ColorToRGB zu, wenn ein Control mit seiner eigenen
+    ///   Color malt. Die Kacheln blieben deshalb weiss, waehrend der Rest
+    ///   dunkel war (Abnahme 2026-08-05).
+    ///
+    ///   Aufgeloest wird immer gegen den ORIGINAL-Bezeichner: nach dem
+    ///   ersten Aufloesen ist das clSystemColor-Bit weg und ein zweiter
+    ///   Wechsel haette nichts mehr zu tun. Die Originalwerte liegen
+    ///   deshalb je Control in einem Cache - dieselbe Falle, die das
+    ///   Plugin als "Second-Switch-Bug" dokumentiert.
+    /// </remarks>
+    class procedure ResolveSystemColors(ARoot: TWinControl); static;
 
     class property Mode: TAppThemeMode read FMode;
 
@@ -259,6 +292,57 @@ begin
     FOnChanged(nil);
 end;
 
+type
+  // Color/Font/StyleElements sind auf TControl protected - der Zugriff
+  // laeuft ueber einen Class-Cracker, wie im Plugin (uIDETheme).
+  TControlAccess = class(TControl);
+
+class procedure TAppTheme.ResolveSystemColors(ARoot: TWinControl);
+
+  procedure Walk(AC: TControl);
+  var
+    Cur, Orig : TAppThemeColors;
+    C         : TColor;
+    Svc       : TCustomStyleServices;
+    i         : Integer;
+  begin
+    if not Assigned(AC) then Exit;
+    Svc := StyleServices;
+
+    Cur.Color     := TControlAccess(AC).Color;
+    Cur.FontColor := TControlAccess(AC).Font.Color;
+    if not FOrigColors.TryGetValue(Pointer(AC), Orig) then
+    begin
+      Orig := Cur;
+      FOrigColors.Add(Pointer(AC), Orig);
+    end;
+
+    // Nur was der Style NICHT selbst faerbt.
+    if not (seClient in TControlAccess(AC).StyleElements) then
+    begin
+      C := Orig.Color;
+      if (C <> clNone) and ((C and clSystemColor) <> 0) then
+        TControlAccess(AC).Color := Svc.GetSystemColor(C);
+    end;
+    if not (seFont in TControlAccess(AC).StyleElements) then
+    begin
+      C := Orig.FontColor;
+      if (C <> clNone) and ((C and clSystemColor) <> 0) then
+        TControlAccess(AC).Font.Color := Svc.GetSystemColor(C);
+    end;
+
+    if AC is TWinControl then
+      for i := 0 to TWinControl(AC).ControlCount - 1 do
+        Walk(TWinControl(AC).Controls[i]);
+  end;
+
+begin
+  if not Assigned(ARoot) then Exit;
+  if not Assigned(FOrigColors) then
+    FOrigColors := TDictionary<Pointer, TAppThemeColors>.Create;
+  Walk(ARoot);
+end;
+
 class procedure TAppTheme.Initialize;
 begin
   FMode := StrToMode(
@@ -306,5 +390,12 @@ begin
   if ActiveStyleIsDark = SystemPrefersDark then Exit;
   ApplyStyle;
 end;
+
+initialization
+
+finalization
+  // Der Cache haelt nur Zeiger als Schluessel, keine Objekte - er
+  // besitzt nichts und muss nur selbst freigegeben werden.
+  TAppTheme.FOrigColors.Free;
 
 end.
