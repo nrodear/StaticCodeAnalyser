@@ -519,12 +519,19 @@ const
     // aber so bleibt die Aenderung auf die utestimonials-Klasse begrenzt.
     (Pattern: 'uTest*.dfm';      Mode: tmBaseName;     Levels: [tplSecret]),
     // ---- Pfad-Segmente -----------------------------------------------
-    (Pattern: 'test';            Mode: tmDirSegment;   Levels: [tplFixture, tplSecret]),
-    (Pattern: 'tests';           Mode: tmDirSegment;   Levels: [tplFixture, tplSecret]),
-    (Pattern: 'unittest';        Mode: tmDirSegment;   Levels: [tplFixture]),
-    (Pattern: 'unittests';       Mode: tmDirSegment;   Levels: [tplFixture]),
-    (Pattern: 'samples';         Mode: tmDirSegment;   Levels: [tplFixture]),
-    (Pattern: 'demos';           Mode: tmDirSegment;   Levels: [tplFixture]),
+    (Pattern: 'test';            Mode: tmDirSegment;   Levels: [tplFixture, tplSecret, tplFixtureDir]),
+    (Pattern: 'tests';           Mode: tmDirSegment;   Levels: [tplFixture, tplSecret, tplFixtureDir]),
+    (Pattern: 'unittest';        Mode: tmDirSegment;   Levels: [tplFixture, tplFixtureDir]),
+    (Pattern: 'unittests';       Mode: tmDirSegment;   Levels: [tplFixture, tplFixtureDir]),
+    (Pattern: 'samples';         Mode: tmDirSegment;   Levels: [tplFixture, tplFixtureDir]),
+    (Pattern: 'demos';           Mode: tmDirSegment;   Levels: [tplFixture, tplFixtureDir]),
+    // BEWUSST OHNE tplFixtureDir (2026-08-05): 'Resources\' ist in
+    // Delphi-Projekten ein gewoehnliches PRODUKTIONSverzeichnis.
+    // Fuer den Post-Filter (tplFixture) ist die Regel weiterhin
+    // richtig; ein Detektor-Gate wuerde damit aber echten
+    // Kundencode stillegen. Die Vormessung der beiden Gates konnte
+    // das nicht sehen - unter 386 Treffern war kein einziger
+    // resources-Fall, der Korpus enthaelt die Struktur nicht.
     (Pattern: 'resources';       Mode: tmDirSegment;   Levels: [tplFixture]),  // Form-Templates
     (Pattern: 'spec';            Mode: tmDirSegment;   Levels: [tplSecret]),
     (Pattern: 'fixtures';        Mode: tmDirSegment;   Levels: [tplSecret]),
@@ -542,25 +549,18 @@ var
   Segment                        : string;
   Segments                       : TArray<string>;
   Rule                           : TTestPathRule;
-  EffLevel                       : TTestPathLevel;
 begin
   Result := False;
-  // tplFixtureDir liest dieselben Regeln wie tplFixture - es unterscheidet
-  // sich nur darin, dass der Basename-Schritt uebersprungen wird.
-  if Level = tplFixtureDir then
-    EffLevel := tplFixture
-  else
-    EffLevel := Level;
   if FileName = '' then Exit;
   Bare := ExtractFileName(FileName);
 
   // 1. Basename-Pattern matched unabhaengig vom Pfad-Anchoring -
   //    'uTest*.pas' ist projekt-uebergreifend ein Test-File-Indikator.
-  //    tplFixtureDir ueberspringt diesen Schritt bewusst (s. Kopf).
-  if Level <> tplFixtureDir then
-    for Rule in TEST_PATH_RULES do
-      if (Rule.Mode = tmBaseName) and (Level in Rule.Levels)
-         and MatchesMask(Bare, Rule.Pattern) then Exit(True);
+  //    tplFixtureDir fuehrt KEINE Basename-Regel, ueberspringt diesen
+  //    Schritt also von selbst - kein Sonderfall noetig.
+  for Rule in TEST_PATH_RULES do
+    if (Rule.Mode = tmBaseName) and (Level in Rule.Levels)
+       and MatchesMask(Bare, Rule.Pattern) then Exit(True);
 
   // 2. Pfad-Komponenten-Match. Wenn BaseDir gegeben, matchen wir NUR
   //    Segmente des Pfads RELATIV zu BaseDir - so wird '/test/' in einem
@@ -583,7 +583,7 @@ begin
       for Segment in Segments do
         for Rule in TEST_PATH_RULES do
         begin
-          if not (EffLevel in Rule.Levels) then Continue;
+          if not (Level in Rule.Levels) then Continue;
           if (Rule.Mode = tmDirSegment) and (Segment = Rule.Pattern) then
             Exit(True);
           if (Rule.Mode = tmSegmentStart) and Segment.StartsWith(Rule.Pattern) then
@@ -595,7 +595,7 @@ begin
   begin
     for Rule in TEST_PATH_RULES do
     begin
-      if not (EffLevel in Rule.Levels) then Continue;
+      if not (Level in Rule.Levels) then Continue;
       if (Rule.Mode = tmDirSegment)
          and (Pos('/' + Rule.Pattern + '/', FullLow) > 0) then Exit(True);
       if (Rule.Mode = tmSegmentStart)
