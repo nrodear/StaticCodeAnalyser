@@ -6,6 +6,58 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **`[Editor]` in `analyser.ini` — open findings in the editor of your
+  choice.** `ExternalEditor` plus an `ExternalEditorArgs` template with
+  `%file%`, `%line%`, `%col%` and `%dir%`. Templates for VS Code,
+  Notepad++, Sublime Text, UltraEdit and IntelliJ/Rider ship commented
+  out in the file. Standalone EXE only — the IDE plugin navigates through
+  the ToolsAPI and never needed this.
+  A value containing a space is quoted automatically unless the
+  placeholder already sits inside quotes, and substitution runs in a
+  single left-to-right pass so an inserted path that happens to look like
+  a placeholder is not expanded a second time.
+- **`.dfm` findings can open in the Delphi IDE** (`[Editor] DfmTarget`,
+  default `ide`; also in the hamburger menu under **Open findings with**).
+  Honest limitation: the IDE shows a `.dfm` in the form designer depending
+  on how the extension is registered, and no route to a line number exists
+  there — the built-in viewer stays available as `viewer` and is used
+  automatically when no handler responds.
+
+### Fixed
+
+- **Double-click did nothing for every finding of a project scan.** When
+  the scan target is a `.dproj`/`.groupproj`, the path was rebuilt against
+  the *file* rather than its directory, producing `…\My.dproj\src\u.pas`
+  and a "File not found" for every row.
+- **The IDE navigation could type into the wrong window.** After
+  `SetForegroundWindow` the return value went unchecked; Windows refuses
+  the foreground switch regularly, and the routine then sent
+  <kbd>Ctrl</kbd>+<kbd>G</kbd> and digits into whatever the user had in
+  front of them. The foreground is now verified before any keystroke.
+- **Line numbers were mistyped on non-QWERTY layouts.** `VkKeyScan(c) and
+  $FF` discarded the shift-state byte, so on AZERTY the digits of the line
+  number arrived as punctuation. Characters are now sent as Unicode,
+  independent of the keyboard layout.
+- **Failure to open was reported as success.** `ShellExecute`'s result was
+  never checked at any of six call sites and it raises no exception, so the
+  surrounding `try/except` was inert and the status bar claimed the file
+  had been opened either way. The finding path now uses `ShellExecuteEx`
+  with the program and its arguments passed separately — the shape our own
+  `SCA163 CommandInjection` fix hint recommends — and reports what actually
+  happened.
+- **Rapid double-clicks stacked up.** The IDE path blocks the main thread
+  for 1200 ms and then pumps messages, so queued clicks came back out and
+  ran into each other. The handler is now re-entrancy guarded.
+- **The Appearance menu was never translated.** Its captions reached the
+  `.po` catalogues but not the embedded copy, so a German UI showed them in
+  English.
+
+---
+
 ## [v0.9.12] - 2026-08-04 - The panel keeps up
 
 A small release: the file-scan panel in the IDE follows the mouse now, one

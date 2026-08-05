@@ -264,6 +264,48 @@ Vollständiger Status der 50-Sonar-Pruefregeln: siehe [DETECTORS_de.md](DETECTOR
 
 ![SCA IDE-Plugin im Einsatz — Buttons, Grid, Hover-Overlays](docs/PlugInSca.gif)
 
+### Einen Befund öffnen
+
+Doppelklick auf eine Zeile im Ergebnis-Grid. Was dann passiert, steht in
+`[Editor]` in der `analyser.ini` — bei jedem Doppelklick neu gelesen,
+Änderungen wirken also sofort.
+
+| `[Editor]`-Schlüssel | Bedeutung |
+|----------------------|-----------|
+| `ExternalEditor` | Voller Pfad zu einem Editor. Ist er gesetzt, übernimmt er **alle** Dateiarten — auch `.dfm` — und die Delphi-IDE wird nicht mehr angesprochen. Leer (Vorgabe) = aus. |
+| `ExternalEditorArgs` | Argument-Vorlage. Platzhalter: `%file%`, `%line%`, `%col%`, `%dir%` sowie `%%` für ein wörtliches Prozentzeichen. Alles andere zwischen Prozentzeichen bleibt stehen. |
+| `DfmTarget` | `ide` (Vorgabe) oder `viewer` — was ein `.dfm`-Befund öffnet, **wenn kein externer Editor eingetragen ist**. |
+
+```ini
+[Editor]
+; Visual Studio Code
+ExternalEditor=C:\Program Files\Microsoft VS Code\Code.exe
+ExternalEditorArgs=-g "%file%:%line%"
+```
+
+Vorlagen für weitere Editoren stehen in der `analyser.ini` selbst
+(Notepad++, Sublime Text, UltraEdit, IntelliJ/Rider). Werte mit
+Leerzeichen werden automatisch in Anführungszeichen gesetzt, wenn der
+Platzhalter nicht ohnehin schon in welchen steht — eine Vorlage ohne
+Anführungszeichen funktioniert also trotzdem.
+
+**Warum ein externer Editor sinnvoll sein kann.** Die Standalone-EXE
+kann die Delphi-IDE nicht bitten, zu einer Zeile zu springen — RAD
+Studio bietet dafür keinen Kommandozeilen-Schalter. Sie übergibt die
+Datei an die Windows-Shell und simuliert danach <kbd>Strg</kbd>+<kbd>G</kbd>
+und die Ziffern, was nur klappt, solange die IDE tatsächlich im
+Vordergrund steht. Ein Editor, der die Zeilennummer als Argument
+annimmt, trifft dagegen immer. (Das **IDE-Plugin** hat das Problem
+nicht: es springt über die ToolsAPI direkt und ignoriert diese
+Einstellungen vollständig.)
+
+**`.dfm`-Befunde.** Die IDE öffnet eine `.dfm` je nach Registrierung der
+Endung im Formular-Entwurf, und dorthin führt kein Weg zu einer
+Zeilennummer. Der eingebaute Betrachter zeigt die Datei als Text und
+springt zuverlässig zur Zeile, kann dafür aber nichts ändern. Die Wahl
+trifft `DfmTarget` oder das Hamburger-Menü unter **Befunde öffnen mit**.
+Antwortet gar kein Handler, wird ohnehin der Betrachter benutzt.
+
 ### Detektor-Konfiguration
 
 In der Toolbar gibt es keine Toggle-Checkboxen mehr — alles optionale
@@ -529,12 +571,20 @@ in `analyser.ini`.
 **`analyser.ini`-Settings für Git**:
 ```ini
 [Repo]
-BaseBranch=develop          ; leer = auto: origin/HEAD -> main -> master
-IncludeWorkingTree=1        ; 1 = uncommitted Aenderungen mit, 0 = nur committed
+; leer = auto: origin/HEAD -> main -> master
+BaseBranch=develop
+; 1 = uncommitted Aenderungen mit, 0 = nur committed
+IncludeWorkingTree=1
 
 [Paths]
-GitExe=C:\custom\git\bin\git.exe   ; leer = auto-Detection
+; leer = auto-Detection
+GitExe=C:\custom\git\bin\git.exe
 ```
+
+> **Kommentare gehören in eine eigene Zeile.** Ein `;` *hinter* einem
+> Wert wird nicht abgeschnitten, sondern Teil des Werts.
+> `BaseBranch=develop ; auto` fragt Git nach einem Branch, der wörtlich
+> `develop ; auto` heißt.
 
 ### Verwendung mit SVN
 

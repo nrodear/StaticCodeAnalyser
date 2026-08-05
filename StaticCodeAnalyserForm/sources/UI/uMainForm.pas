@@ -13,6 +13,7 @@ uses
   uMethodd12, uSCAConsts, uFixHint, uClaudePrompt, uLocalization,
   uAnalyserTypes,  // SeverityFromKindLevel, TFindingSeverity (Grid-Renderer-Callback)
   uRepoSettings, uRecentPaths, uScanTargetDialog, uFindingGridRenderer, uDfmTextViewer,
+  uEditorCommand,                 // TEditorSpec (Parametertyp von OpenViaExternalEditor)
   uIDEHelpPanel,                  // TFindingHintPanel (im class-Feld referenziert)
   uExportMenu,                    // TFindingExportMenu (Class-Field-Reference)
   uFindingFilter,                 // TFilterComboItem (Snapshot-Felder)
@@ -139,6 +140,7 @@ type
     // eine Sprachauswahl ohne neues Formular Platz hat.
     FMILanguage     : TMenuItem;
     FMIAppearance   : TMenuItem;   // Hell / Dunkel / Wie Windows
+    FMIOpenWith     : TMenuItem;   // womit ein Befund geoeffnet wird
     FSortColumn     : Integer;     // -1 = unsortiert (Scan-Reihenfolge)
     FSortDescending : Boolean;
     procedure HamburgerClick(Sender: TObject);
@@ -153,6 +155,10 @@ type
       Shift: TShiftState; X, Y: Integer);
     procedure BuildAppearanceMenu(AParent: TMenuItem);
     procedure AppearanceItemClick(Sender: TObject);
+    procedure BuildOpenWithMenu(AParent: TMenuItem);
+    procedure OpenWithItemClick(Sender: TObject);
+    procedure ConfigureEditorClick(Sender: TObject);
+    procedure PersistDfmTarget(AValue: TDfmTarget);
     // Wird von TAppTheme nach jedem wirksamen Wechsel gerufen.
     // Ein VCL-Style-Wechsel erreicht selbstgezeichnete Flaechen
     // NICHT - Grid, Kacheln und Hilfe-Panel muessen selbst neu.
@@ -204,6 +210,17 @@ type
     // Verzeichnis-Sicht auf den Combo-Text fuer Verzeichnis-Konsumenten
     // (Branch, InitialDir): bei Projektdatei-Text deren Verzeichnis.
     function  DirOfProjectPath(const APath: string): string;
+    // --- Einen Befund oeffnen (s. ResultGridDblClick) ---------------------
+    // Programm und Argumente getrennt uebergeben, Fehler ehrlich melden.
+    function  LaunchProcess(const AExe, AParams: string;
+      out AError: string): Boolean;
+    function  OpenViaExternalEditor(const ASpec: TEditorSpec;
+      const AAbsPath: string; ALine: Integer; out AError: string): Boolean;
+    function  OpenViaDelphiIde(const AAbsPath: string; ALine: Integer;
+      out AError: string): Boolean;
+    // Waehlt den Weg und liefert den Text fuer die Statuszeile.
+    function  OpenFindingAt(const AAbsPath, ARelPath: string;
+      ALine: Integer): string;
     procedure ProjectpathChangedScope(Sender: TObject);
     procedure AnalyseSingleFile(const AFilePath: string);
     procedure FillGridFromFindings(Findings: TObjectList<TLeakFinding>;
@@ -242,6 +259,7 @@ implementation
 
 uses
   clipbrd,
+  System.IniFiles,                // TIniFile (PersistDfmTarget - kommentarschonend)
   uAppTheme,                      // Hell/Dunkel der Standalone-EXE
   uStaticFiles, uRuleCatalog,
   uExport,                        // TExporter.ExportCsv (kanonischer CSV-Schreiber)
@@ -1366,11 +1384,171 @@ begin
       [TotalMatched, FAllFindings.Count]);
 end;
 
+var
+  // Reentranz-Sperre fuer ResultGridDblClick. Bewusst eine Unit-Variable
+  // und KEIN Feld: der Oeffnen-Weg pumpt Nachrichten, in denen das Fenster
+  // geschlossen werden kann - ein 'finally FFeld := False' schriebe dann
+  // in freigegebenen Speicher. Eine Unit-Variable braucht kein Self und
+  // ueberlebt das. Die Anwendung hat genau ein Hauptfenster, also ist eine
+  // Sperre pro Prozess auch inhaltlich richtig.
+  gOpeningFinding : Boolean = False;
+
+function TForm2.LaunchProcess(const AExe, AParams: string;
+  out AError: string): Boolean;
+// Ein Programm starten - Programm und Argumente STRIKT getrennt.
+//
+// Das ist genau die Form, die der eigene Detektor SCA163 (CommandInjection)
+// als Abhilfe empfiehlt (uFixHint.pas): lpFile und lpParameters einzeln,
+// niemals zu einer Zeichenkette verkettet. Damit kann ein Editorpfad oder
+// eine Argumentvorlage aus der INI keine zweite Anweisung einschleusen.
+//
+// ShellExecuteEx statt ShellExecute, weil nur das einen brauchbaren Fehler
+// liefert: ShellExecute gibt einen Zahlenwert zurueck, den im Bestand an
+// sechs Stellen niemand geprueft hat, und wirft KEINE Exception - die
+// try/except-Bloecke drumherum waren also wirkungslos und die Statuszeile
+// meldete auch dann Erfolg, wenn gar nichts aufging.
+var
+  SEI : TShellExecuteInfo;
+begin
+  AError := '';
+  FillChar(SEI, SizeOf(SEI), 0);
+  SEI.cbSize := SizeOf(SEI);
+  SEI.fMask  := SEE_MASK_NOCLOSEPROCESS or SEE_MASK_FLAG_NO_UI;
+  SEI.Wnd    := Handle;
+  SEI.lpVerb := 'open';
+  SEI.lpFile := PChar(AExe);
+  if AParams <> '' then
+    SEI.lpParameters := PChar(AParams);
+  SEI.nShow := SW_SHOWNORMAL;
+
+  Result := ShellExecuteEx(@SEI);
+  if Result then
+  begin
+    // Das Handle kommt wegen NOCLOSEPROCESS mit - sonst leckt es.
+    if SEI.hProcess <> 0 then
+      CloseHandle(SEI.hProcess);
+  end
+  else
+    AError := SysErrorMessage(GetLastError);
+end;
+
+function TForm2.OpenViaExternalEditor(const ASpec: TEditorSpec;
+  const AAbsPath: string; ALine: Integer; out AError: string): Boolean;
+// Den eingerichteten externen Editor starten. False heisst: keiner
+// eingerichtet oder der eingerichtete taugt nicht - der Aufrufer nimmt
+// dann den naechsten Weg.
+begin
+  Result := False;
+  AError := '';
+  if ASpec.Exe = '' then Exit;         // nicht eingerichtet - kein Fehler
+  if not TEditorCommand.IsLaunchableExe(ASpec.Exe) then
+  begin
+    AError := Format(_('Configured editor cannot be started: %s'), [ASpec.Exe]);
+    Exit;
+  end;
+  Result := LaunchProcess(ASpec.Exe,
+              TEditorCommand.Expand(ASpec.ArgsTpl, AAbsPath, ALine), AError);
+end;
+
+function TForm2.OpenViaDelphiIde(const AAbsPath: string;
+  ALine: Integer; out AError: string): Boolean;
+// Der Windows-Standardhandler oeffnet die Datei; die Zeile wird danach
+// ueber die Tastatur angesprungen, weil die IDE von aussen keinen
+// Schalter fuer eine Zeilennummer anbietet.
+begin
+  AError := '';
+  // ProcessMessages flushed Pending-Events (z.B. den Repaint nach Modal-
+  // Close des DFM-Viewers). Ohne das Flush kann der Start beim
+  // Delphi-IDE-DDE-Handler "verloren gehen" - die IDE bekommt Focus,
+  // oeffnet die Datei aber nicht.
+  //
+  // ProcessMessages fuehrt allerdings ALLES aus, was in der Schlange
+  // steht - auch ein Schliessen des Fensters. Danach zeigen Self und
+  // StatusBar1 auf freigegebenen Speicher, deshalb hinter jedem Pumpen
+  // eine Pruefung.
+  Application.ProcessMessages;
+  if csDestroying in ComponentState then Exit(False);
+  Result := LaunchProcess(AAbsPath, '', AError);
+  if not Result then Exit;
+  if ALine > 0 then
+  begin
+    Sleep(1200); // Delphi IDE Zeit geben, die Datei zu oeffnen
+    Application.ProcessMessages;
+    if csDestroying in ComponentState then Exit;
+    NavigateDelphiToLine(ALine);
+  end;
+end;
+
+function TForm2.OpenFindingAt(const AAbsPath, ARelPath: string;
+  ALine: Integer): string;
+// Waehlt den Weg und oeffnet. Liefert den Text fuer die Statuszeile -
+// oder '', wenn das Fenster waehrenddessen geschlossen wurde und es
+// keine Statuszeile mehr zu beschreiben gibt.
+//
+// Drei Wege, in dieser Reihenfolge:
+//   1. Externer Editor, falls in der analyser.ini eingerichtet
+//      ([Editor] ExternalEditor). Er gilt fuer ALLE Dateiarten - wer
+//      einen einrichtet, will ihn auch benutzen.
+//   2. Delphi-IDE ueber den Windows-Standardhandler.
+//   3. Nur fuer .dfm: der eingebaute Textbetrachter.
+//
+// Fuer .dfm entscheidet [Editor] DfmTarget zwischen 2 und 3, Vorgabe ist
+// die IDE. Eine ehrliche Einschraenkung dazu: die IDE oeffnet eine .dfm
+// je nach Registrierung im Formular-Entwurf, und dort geht kein Sprung
+// zur Zeile - der eingebaute Betrachter kann das zuverlaessig. Deshalb
+// bleibt er als Wahl bestehen und faengt ausserdem den Fall ab, dass gar
+// kein Handler antwortet.
+var
+  spec  : TEditorSpec;
+  isDfm : Boolean;
+  err   : string;
+begin
+  isDfm := EndsText('.dfm', AAbsPath);
+  // Einmal lesen, beide Entscheidungen daraus. Absichtlich bei JEDEM
+  // Doppelklick neu: so wirkt eine Aenderung an der INI sofort, ohne dass
+  // erst ein Analyselauf sie einliest.
+  spec := TEditorCommand.Load;
+
+  // ---- 1. externer Editor ----
+  if OpenViaExternalEditor(spec, AAbsPath, ALine, err) then
+  begin
+    Result := Format(_('Opened in external editor: %s  Line: %d'),
+                     [ARelPath, ALine]);
+    Exit;
+  end;
+  if err <> '' then
+    // Eingerichtet, aber untauglich: das ist eine Fehlbedienung, die der
+    // Nutzer sehen muss - nicht stillschweigend auf die IDE ausweichen.
+    Exit(err);
+
+  // ---- 2. Delphi-IDE ----
+  if (not isDfm) or (spec.DfmTarget = dtIde) then
+  begin
+    if OpenViaDelphiIde(AAbsPath, ALine, err) then
+    begin
+      // Dieser Weg pumpt Nachrichten - das Fenster kann inzwischen weg sein.
+      if csDestroying in ComponentState then Exit('');
+      Result := Format(_('Opened: %s  Line: %d'), [ARelPath, ALine]);
+      Exit;
+    end;
+    if csDestroying in ComponentState then Exit('');
+    // Fuer .pas gibt es keinen dritten Weg - ehrlich melden statt
+    // Erfolg zu behaupten, wie es die Vorgaengerfassung tat.
+    if not isDfm then
+    begin
+      Result := Format(_('Could not open %s: %s'), [ARelPath, err]);
+      Exit;
+    end;
+  end;
+
+  // ---- 3. eingebauter Betrachter (nur .dfm) ----
+  ShowDfmAsText(AAbsPath, ALine);
+  Result := Format(_('DFM viewer: %s  Line: %d'), [ARelPath, ALine]);
+end;
+
 procedure TForm2.ResultGridDblClick(Sender: TObject);
-// Bei .dfm-Befunden oeffnen wir den eingebauten DFM-Text-Viewer mit Goto-
-// Zeile - kein externer ShellExecute, weil der Standard-Handler die DFM
-// im Form-Designer aufmacht (Goto-Line funktioniert dort nicht).
-// Bei .pas-Befunden weiter ShellExecute + Delphi-IDE-Sprung wie bisher.
+// Zeile aufloesen, oeffnen lassen, melden. Die Wegwahl steckt in
+// OpenFindingAt.
 //
 // Virtual-Mode: Pfad und Zeilennummer aus FDisplayedFindings statt aus
 // ResultGrid.Cells[] (die im Virtual-Mode leer sind).
@@ -1381,43 +1559,43 @@ var
   lineNo  : Integer;
   baseDir : string;
   f       : TLeakFinding;
+  msg     : string;
 begin
-  row := ResultGrid.Row;
-  if row < 1 then Exit;
-  if (FDisplayedFindings = nil) or (row > FDisplayedFindings.Count) then Exit;
-  f := FDisplayedFindings[row - 1];
-  baseDir := IncludeTrailingPathDelimiter(FCurrentBaseDir);
-  relPath := ExtractRelativePath(baseDir, f.FileName);
-  if relPath = '' then Exit;
-  lineNo := StrToIntDef(f.LineNumber, 0);
-  absPath := IncludeTrailingPathDelimiter(Projectpath.Text) + relPath;
-  if not FileExists(absPath) then
-  begin
-    StatusBar1.Panels[2].Text := _('File not found: ') + absPath;
-    Exit;
-  end;
+  // Reentranz-Sperre. Der IDE-Weg haelt den Hauptthread 1200 ms an und
+  // ruft danach ProcessMessages - weitere Doppelklicks in dieser Zeit
+  // landen nicht im Papierkorb, sondern in der Nachrichtenschlange und
+  // kommen dort heraus. Ohne Sperre stapeln sich mehrere Oeffnen-Vorgaenge
+  // und die Tastenanschlaege der einen laufen in die andere.
+  if gOpeningFinding then Exit;
+  gOpeningFinding := True;
+  try
+    row := ResultGrid.Row;
+    if row < 1 then Exit;
+    if (FDisplayedFindings = nil) or (row > FDisplayedFindings.Count) then Exit;
+    f := FDisplayedFindings[row - 1];
+    baseDir := IncludeTrailingPathDelimiter(FCurrentBaseDir);
+    relPath := ExtractRelativePath(baseDir, f.FileName);
+    if relPath = '' then Exit;
+    lineNo := StrToIntDef(f.LineNumber, 0);
+    // DirOfProjectPath, nicht Projectpath.Text: bei einem Projekt-Scan
+    // steht im Feld eine .dproj/.groupproj-DATEI. Ohne die Umrechnung
+    // entstand hier ein Pfad wie ...\Mein.dproj\sources\u.pas, und der
+    // Doppelklick meldete fuer JEDEN Befund eines Projekt-Scans
+    // "File not found".
+    absPath := IncludeTrailingPathDelimiter(DirOfProjectPath(Projectpath.Text))
+               + relPath;
+    if not FileExists(absPath) then
+    begin
+      StatusBar1.Panels[2].Text := _('File not found: ') + absPath;
+      Exit;
+    end;
 
-  if EndsText('.dfm', absPath) then
-  begin
-    ShowDfmAsText(absPath, lineNo);
-    StatusBar1.Panels[2].Text := Format(_('DFM viewer: %s  Line: %d'),
-                                     [relPath, lineNo]);
-    Exit;
+    msg := OpenFindingAt(absPath, relPath, lineNo);
+    if (msg <> '') and not (csDestroying in ComponentState) then
+      StatusBar1.Panels[2].Text := msg;
+  finally
+    gOpeningFinding := False;
   end;
-
-  // ProcessMessages flushed Pending-Events (z.B. den Repaint nach Modal-
-  // Close des DFM-Viewers). Ohne das Flush kann der direkt folgende
-  // ShellExecute-Aufruf beim Delphi-IDE-DDE-Handler "verloren gehen" -
-  // die IDE bekommt Focus, oeffnet die Datei aber nicht.
-  Application.ProcessMessages;
-  ShellExecute(Handle, 'open', PChar(absPath), nil, nil, SW_SHOWNORMAL);
-  if lineNo > 0 then
-  begin
-    Sleep(1200); // Delphi IDE Zeit geben, die Datei zu oeffnen
-    Application.ProcessMessages;
-    NavigateDelphiToLine(lineNo);
-  end;
-  StatusBar1.Panels[2].Text := Format(_('Opened: %s  Line: %d'), [relPath, lineNo]);
 end;
 
 procedure TForm2.NavigateDelphiToLine(LineNo: Integer);
@@ -1426,7 +1604,6 @@ var
   lineStr: string;
   i: Integer;
   inp: TInput;
-  vk: Word;
 begin
   // Belt-and-suspenders: ohne Ziel-Zeile wuerde ein Ctrl+G Dialog leer
   // bestaetigt und die IDE haengt mit einem offenen Dialog herum.
@@ -1435,6 +1612,15 @@ begin
   if BDSWnd = 0 then Exit;
   SetForegroundWindow(BDSWnd);
   Sleep(150);
+
+  // NACHSEHEN, ob der Wechsel geklappt hat. SendInput schickt die Tasten an
+  // das Fenster, das GERADE den Vordergrund hat - nicht an BDSWnd. Windows
+  // verweigert SetForegroundWindow aber regelmaessig (Foreground-Lock),
+  // und dann tippt diese Routine Ctrl+G und eine Zahl blind in das
+  // Programm, das der Nutzer stattdessen vor sich hat. In einem Editor
+  // waere das eine Aenderung an fremdem Text.
+  if GetForegroundWindow <> BDSWnd then Exit;
+
   // Ctrl+G = Search > Go to Line Number
   ZeroMemory(@inp, SizeOf(inp));
   inp.Itype := INPUT_KEYBOARD;
@@ -1447,16 +1633,24 @@ begin
   inp.ki.wVk := VK_CONTROL;
   SendInput(1, inp, SizeOf(TInput));
   Sleep(200);
-  // Zeilennummer eintippen
+  // Zeilennummer eintippen - als ZEICHEN, nicht als Taste.
+  //
+  // KEYEVENTF_UNICODE uebergibt das Zeichen selbst in wScan und laesst wVk
+  // auf 0; Windows liefert es dann unabhaengig vom Tastaturlayout aus. Die
+  // Vorgaengerfassung nahm 'VkKeyScan(Ch) and $FF' - das verwirft das obere
+  // Byte, in dem der noetige Umschalt-Status steht. Auf einem AZERTY-Layout
+  // liegen die Ziffern auf der Umschaltebene, und aus der Zeile 42 wurde so
+  // die Eingabe "é'" im Gehe-zu-Zeile-Feld.
   lineStr := IntToStr(LineNo);
   for i := 1 to Length(lineStr) do
   begin
-    vk := VkKeyScan(lineStr[i]) and $FF;
     ZeroMemory(@inp, SizeOf(inp));
-    inp.Itype := INPUT_KEYBOARD;
-    inp.ki.wVk := vk;
+    inp.Itype      := INPUT_KEYBOARD;
+    inp.ki.wVk     := 0;
+    inp.ki.wScan   := Ord(lineStr[i]);
+    inp.ki.dwFlags := KEYEVENTF_UNICODE;
     SendInput(1, inp, SizeOf(TInput));
-    inp.ki.dwFlags := KEYEVENTF_KEYUP;
+    inp.ki.dwFlags := KEYEVENTF_UNICODE or KEYEVENTF_KEYUP;
     SendInput(1, inp, SizeOf(TInput));
   end;
   Sleep(50);
@@ -1736,6 +1930,12 @@ begin
   FHamburgerMenu.Items.Add(FMIAppearance);
   BuildAppearanceMenu(FMIAppearance);
 
+  // ---- Oeffnen mit (Untermenue) ----
+  FMIOpenWith := TMenuItem.Create(FHamburgerMenu);
+  FMIOpenWith.Caption := _('Open findings with');
+  FHamburgerMenu.Items.Add(FMIOpenWith);
+  BuildOpenWithMenu(FMIOpenWith);
+
   // ---- Sprache (Untermenue, Werte aus AvailableLanguages) ----
   FMILanguage := TMenuItem.Create(FHamburgerMenu);
   FMILanguage.Caption := _('Language');
@@ -1803,6 +2003,116 @@ begin
   // Haken nachziehen: RadioItem setzt ihn zwar selbst, aber nur wenn der
   // Klick durchkam - SetMode kann bei gleicher Wahl frueh aussteigen.
   BuildAppearanceMenu(FMIAppearance);
+end;
+
+procedure TForm2.BuildOpenWithMenu(AParent: TMenuItem);
+// Was ein Doppelklick auf einen .dfm-Befund oeffnet. Nur diese eine Wahl
+// steht im Menue - der externe Editor braucht einen Pfad und eine
+// Argumentvorlage und gehoert damit in die INI; der letzte Eintrag fuehrt
+// dorthin.
+//
+// Bauart wie beim Erscheinungsbild: der Tag traegt den Wert, damit der
+// Handler nicht von der uebersetzten Beschriftung abhaengt.
+const
+  CAPTIONS : array[TDfmTarget] of string = (
+    'DFM findings: Delphi IDE', 'DFM findings: built-in viewer');
+var
+  T   : TDfmTarget;
+  Cur : TDfmTarget;
+  MI  : TMenuItem;
+begin
+  if not Assigned(AParent) then Exit;
+  AParent.Clear;
+  Cur := TEditorCommand.Load.DfmTarget;
+  for T := Low(TDfmTarget) to High(TDfmTarget) do
+  begin
+    MI := TMenuItem.Create(AParent);
+    MI.Caption    := _(CAPTIONS[T]);
+    MI.RadioItem  := True;
+    MI.GroupIndex := 72;          // eigener Kreis, stoert Erscheinungsbild nicht
+    MI.Tag        := Ord(T);
+    MI.Checked    := (T = Cur);
+    MI.OnClick    := OpenWithItemClick;
+    AParent.Add(MI);
+  end;
+
+  MI := TMenuItem.Create(AParent);
+  MI.Caption := '-';
+  AParent.Add(MI);
+
+  MI := TMenuItem.Create(AParent);
+  MI.Caption := _('Configure external editor...');
+  MI.OnClick := ConfigureEditorClick;
+  AParent.Add(MI);
+end;
+
+procedure TForm2.OpenWithItemClick(Sender: TObject);
+var
+  MI : TMenuItem;
+begin
+  if not (Sender is TMenuItem) then Exit;
+  MI := TMenuItem(Sender);
+  PersistDfmTarget(TDfmTarget(MI.Tag));
+  BuildOpenWithMenu(FMIOpenWith);
+end;
+
+procedure TForm2.ConfigureEditorClick(Sender: TObject);
+// Die analyser.ini oeffnen - aber vorher sicherstellen, dass der
+// [Editor]-Abschnitt ueberhaupt darin steht.
+//
+// Warum das noetig ist: die dokumentierte Vorlage wird nur geschrieben,
+// wenn es noch GAR KEINE Datei gibt. Wer schon eine hat, bekaeme sonst
+// eine Datei zu sehen, in der die Einstellung, die er gerade suchen
+// wollte, nicht vorkommt - waehrend sie sehr wohl wirkt. Der Abschnitt
+// wird nur ANGEHAENGT, wenn er fehlt; vorhandene Werte bleiben unberuehrt.
+var
+  Settings : TRepoSettings;
+begin
+  Settings := TRepoSettings.Create;
+  try
+    Settings.EnsureConfigExists;
+  finally
+    Settings.Free;
+  end;
+  TRepoSettings.EnsureSection(TEditorCommand.INI_SECTION);
+  HamburgerSettingsClick(Sender);
+end;
+
+procedure TForm2.PersistDfmTarget(AValue: TDfmTarget);
+// Ueber TIniFile schreiben, NICHT ueber TRepoSettings.Save: dessen
+// TMemIniFile schreibt die Datei komplett neu und wirft dabei saemtliche
+// Kommentare weg - und die Kommentare SIND hier die Dokumentation.
+// Dieselbe Entscheidung wie beim Theme (uAppTheme.PersistMode).
+var
+  Ini      : TIniFile;
+  Settings : TRepoSettings;
+begin
+  try
+    // Erst dafuer sorgen, dass Verzeichnis UND Datei da sind. Ohne das
+    // wirft TIniFile.Create/WriteString beim allerersten Start
+    // (%APPDATA%\StaticCodeAnalyser\ existiert noch nicht), der leere
+    // except unten schluckt es, und der Menuepunkt springt sichtbar
+    // zurueck, ohne dass jemand erfaehrt warum.
+    Settings := TRepoSettings.Create;
+    try
+      Settings.EnsureConfigExists;
+    finally
+      Settings.Free;
+    end;
+    Ini := TIniFile.Create(TRepoSettings.ResolvedConfigPath);
+    try
+      Ini.WriteString(TEditorCommand.INI_SECTION,
+                      TEditorCommand.KEY_DFMTARGET,
+                      TEditorCommand.DfmTargetToStr(AValue));
+    finally
+      Ini.Free;
+    end;
+  except
+    // BEWUSST leer: eine nicht schreibbare Konfiguration ist kein Fehler,
+    // den diese Stelle behandeln koennte - die Wahl gilt dann eben nur
+    // fuer diese Sitzung. (Keine eigene Unterdrueckung noetig: EmptyExcept
+    // steht bereits in der dateiweiten Liste am Kopf dieser Unit.)
+  end;
 end;
 
 procedure TForm2.ThemeChanged(Sender: TObject);

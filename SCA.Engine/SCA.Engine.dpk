@@ -233,6 +233,7 @@ contains
   uExportHtml in 'sources\Infrastructure\uExportHtml.pas',
   uFileTextCache in 'sources\Infrastructure\uFileTextCache.pas',
   uFindingFingerprint in 'sources\Infrastructure\uFindingFingerprint.pas',
+  uEditorCommand in 'sources\Infrastructure\uEditorCommand.pas',
   uFormBinder in 'sources\Infrastructure\uFormBinder.pas',
   uIgnoreList in 'sources\Infrastructure\uIgnoreList.pas',
   uPathOverrides in 'sources\Infrastructure\uPathOverrides.pas',

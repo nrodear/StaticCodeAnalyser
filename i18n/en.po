@@ -18,3 +18,26 @@ msgstr ""
 
 msgid "Static Code Analysis Tool for Delphi"
 msgstr "Static Code Analysis Tool for Delphi"
+
+# --- 2026-08-05: Befund oeffnen (externer Editor / DFM-Ziel) ---
+
+msgid "Open findings with"
+msgstr "Open findings with"
+
+msgid "DFM findings: Delphi IDE"
+msgstr "DFM findings: Delphi IDE"
+
+msgid "DFM findings: built-in viewer"
+msgstr "DFM findings: built-in viewer"
+
+msgid "Configure external editor..."
+msgstr "Configure external editor..."
+
+msgid "Opened in external editor: %s  Line: %d"
+msgstr "Opened in external editor: %s  Line: %d"
+
+msgid "Configured editor cannot be started: %s"
+msgstr "Configured editor cannot be started: %s"
+
+msgid "Could not open %s: %s"
+msgstr "Could not open %s: %s"
