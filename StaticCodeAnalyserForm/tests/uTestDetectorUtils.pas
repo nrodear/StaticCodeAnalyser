@@ -39,6 +39,11 @@ type
     [Test] procedure TestPath_SecretLevel_TestSuffixFilesStillTest;
     [Test] procedure TestPath_LevelsStayDifferent_SampleAndDemo;
     [Test] procedure TestPath_FixtureLevel_UnchangedPatterns;
+    // ---- Stufe tplFixtureDir (Detektor-Gates, 2026-08-05) ----
+    [Test] procedure TestPath_FixtureDir_IgnoresBaseNames;
+    [Test] procedure TestPath_FixtureDir_MatchesDirSegments;
+    [Test] procedure TestPath_FixtureDir_ResourcesIsProduction;
+    [Test] procedure TestPath_FixtureDir_SegmentAnchoring;
     // ---- MergeAdjacentStringLiterals ----
     [Test] procedure Merge_SimpleConcat;
     [Test] procedure Merge_NoSpaceAroundPlus;
@@ -835,6 +840,72 @@ begin
       'nil-Set ist kein Treffer');
   finally S.Free; end;
 end;
+
+{ ---- Stufe tplFixtureDir (2026-08-05) ---- }
+
+// tplFixtureDir ist die Stufe fuer Gates INNERHALB von Detektoren: nur
+// Verzeichnis-Segmente, keine Dateinamen. Der Anlass war eine Regression -
+// mit Basename-Mustern traf das Gate den Harness-Platzhalter 'sample.pas'
+// und legte den Leak-Detektor in der GESAMTEN Testsuite still.
+
+procedure TTestDetectorUtils.TestPath_FixtureDir_IgnoresBaseNames;
+// Der Kern der Stufe: ein blosser Dateiname darf nie greifen.
+begin
+  Assert.IsFalse(TDetectorUtils.IsTestFixturePath(
+    'sample.pas', '', tplFixtureDir),
+    'Harness-Platzhalter darf kein Testpfad sein');
+  Assert.IsFalse(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\src\MySample.pas', '', tplFixtureDir),
+    'Kundendatei *Sample.pas im Produktivbaum bleibt sichtbar');
+  Assert.IsFalse(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\src\uTestHelper.pas', '', tplFixtureDir),
+    'uTest*.pas ist ein Basename-Muster - hier ohne Wirkung');
+  // Gegenprobe: auf der Fixture-Stufe greifen genau diese Muster weiter.
+  Assert.IsTrue(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\src\MySample.pas', '', tplFixture),
+    'tplFixture (Post-Filter) bleibt unveraendert');
+end;
+
+procedure TTestDetectorUtils.TestPath_FixtureDir_MatchesDirSegments;
+// Die sechs Segmente, die in der Vormessung tatsaechlich getroffen haben.
+begin
+  Assert.IsTrue(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\tests\uFoo.pas', '', tplFixtureDir), 'tests');
+  Assert.IsTrue(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\test\uFoo.pas', '', tplFixtureDir), 'test');
+  Assert.IsTrue(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\unittests\uFoo.pas', '', tplFixtureDir), 'unittests');
+  Assert.IsTrue(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\samples\uFoo.pas', '', tplFixtureDir), 'samples');
+  Assert.IsTrue(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\demos\uFoo.pas', '', tplFixtureDir), 'demos');
+end;
+
+procedure TTestDetectorUtils.TestPath_FixtureDir_ResourcesIsProduction;
+// 'Resources\' ist in Delphi-Projekten ein gewoehnliches
+// Produktionsverzeichnis. Fuer den Post-Filter bleibt die Regel richtig,
+// fuer ein Detektor-Gate waere sie eine stille Unterdrueckung in
+// Kundencode.
+begin
+  Assert.IsFalse(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\Resources\uImages.pas', '', tplFixtureDir),
+    'Resources ist kein Testverzeichnis fuer Detektor-Gates');
+  Assert.IsTrue(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\Resources\uImages.pas', '', tplFixture),
+    'fuer den Post-Filter bleibt die Regel erhalten');
+end;
+
+procedure TTestDetectorUtils.TestPath_FixtureDir_SegmentAnchoring;
+// Die Verankerung ist der riskante Teil jeder Pfad-Heuristik.
+begin
+  Assert.IsFalse(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\company-tests\src\auth.pas', '', tplFixtureDir),
+    '"company-tests" ist kein Segment "tests"');
+  Assert.IsFalse(TDetectorUtils.IsTestFixturePath(
+    'd:\repo\src\testdata.pas', '', tplFixtureDir),
+    'Dateiname mit "test" ist kein Segment');
+end;
+
 
 initialization
   TDUnitX.RegisterTestFixture(TTestDetectorUtils);
