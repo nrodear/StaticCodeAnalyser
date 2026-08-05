@@ -165,6 +165,32 @@ var
 begin
   // Gate 4 (Hebel A): generierte Typelib-Importe komplett ausnehmen.
   if TDetectorUtils.IsGeneratedTypelibFile(FileName) then Exit;
+
+  // Gate 5 (2026-08-05, Geltungsbereich-Entscheidung des Nutzers): Funde in
+  // Test-, Sample- und Demo-Verzeichnissen fallen weg - wie bei SCA001 und
+  // SCA058, und mit derselben Ehrlichkeit: das ist KEINE Korrektheits-
+  // aussage. Ein schlecht benannter Bezeichner ist auch in Testcode
+  // schlecht benannt. Es ist eine Entscheidung darueber, wo die Regel
+  // gelten soll - der Nutzer soll Namensverstoesse in seinem
+  // Produktionscode sehen, nicht in vendorten Fremdbibliotheken unter
+  // bin32/bin64 eines Testprojekts.
+  //
+  // GEMESSEN vor dem Bau (Korpus after142, 19.504 Funde): 7.801 Treffer
+  // = 40 %, davon 'unittests' 6.292, 'tests' 1.334, 'test' 77, 'demos' 64,
+  // 'samples' 34. Allein SECHS Kopien von Firebird.pas (generierter
+  // Interface-Header, je zweimal unter bin32/ und bin64/ in zwei
+  // Repo-Kopien) stellen rund 6.200 davon.
+  //
+  // Diese Messung hat zugleich die Diagnose des Audits vom 2026-07-31
+  // widerlegt: das dort vorgeschlagene FFI-Gate haette nur 10 % getroffen.
+  // Der Schwerpunkt sind generierte C-API-Header, nicht ObjC/JNI-Bridges -
+  // und deren groesste Posten sind Unit-Level-Funktionen, die ein
+  // Typ-basiertes Gate ohnehin nicht sieht.
+  //
+  // Stufe tplFixtureDir: nur Verzeichnis-Segmente, keine Dateinamen
+  // (s. uDetectorUtils - Basename-Muster wuerden Kundendateien wie
+  // 'MySample.pas' im Produktivbaum stilllegen und den Test-Harness).
+  if TDetectorUtils.IsTestFixturePath(FileName, '', tplFixtureDir) then Exit;
   FfiTypes := nil;
   OwnerMap := nil;
   Seen     := nil;
