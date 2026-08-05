@@ -103,7 +103,7 @@ type
     // AUnitNode (2026-07-31, Parser-Gate-Backlog 4e/2) ist OPTIONAL und
     // steuert AUSSCHLIESSLICH die Alias-Aufloesung des Add-Empfaengers in
     // AddReceiverOwnsItems. Default nil = exakt das bisherige Verhalten -
-    // wichtig, weil TMissingFinallyDetector (SCA008) diese Funktion mitbenutzt
+    // wichtig, weil TMissingFinallyDetector (SCA009) diese Funktion mitbenutzt
     // und sich NICHT bewegen darf. Nur TLeakDetector2.AnalyzeMethod (SCA001)
     // reicht den Unit-Knoten durch.
     class function IsPassedToOwner(MethodNode: TAstNode;
@@ -1391,10 +1391,21 @@ begin
     // Die Permissivitaet ist bewusst dieselbe wie im nkCall-Zweig (jeder
     // Konstruktor, der unsere Var als Argument nimmt, gilt als uebernehmend) -
     // dieser Fix stellt Gleichbehandlung her, er fuehrt keine neue Politik ein.
-    var RhsLowCtor := N.TypeRef.ToLower;
-    var pRhsCreate := Pos('.create(', RhsLowCtor);
-    if (pRhsCreate > 0) and VarItselfInArgs(RhsLowCtor, pRhsCreate + 8) then
-      Exit(True);
+    // NUR fuer SCA001 (2026-08-05, Review-Fund): AUnitNode ist der in
+    // dieser Datei dokumentierte Diskriminator - nil bedeutet "Aufruf aus
+    // TMissingFinallyDetector, Verhalten muss unveraendert bleiben" (s.
+    // Kopfkommentar dieser Routine und die Notiz bei den unit-lokalen
+    // Gates). Ohne die Klammer hat dieses Inkrement ZWEI Regeln bewegt:
+    // das Korpus-Gate zeigte SCA009 -14, obwohl nur SCA001 angekuendigt
+    // war, und die Regel-Attribution im gemeinsamen Gate war damit nicht
+    // mehr eindeutig. Genau davor warnt die Datei an zwei Stellen.
+    if Assigned(AUnitNode) then
+    begin
+      var RhsLowCtor := N.TypeRef.ToLower;
+      var pRhsCreate := Pos('.create(', RhsLowCtor);
+      if (pRhsCreate > 0) and VarItselfInArgs(RhsLowCtor, pRhsCreate + 8) then
+        Exit(True);
+    end;
     // Var-zu-Field-Transfer:
     //   FField := varName              -> Klassen-Feld haelt jetzt Ownership
     //   FField := varName as ISome     -> Interface-Refcount haelt Lifetime

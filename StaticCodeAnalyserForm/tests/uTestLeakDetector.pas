@@ -181,7 +181,7 @@ type
     [Test] procedure Leak_CtorArgInAssignRhs_OwnershipRecognized;
     [Test] procedure Leak_CtorArgStandaloneCall_OwnershipRecognized;
     [Test] procedure Leak_CtorArgIsMemberOfVar_StillReported;
-    [Test] procedure Leak_PlainCallArgInAssignRhs_KnownGap;
+    [Test] procedure Leak_PlainCallArgInAssignRhs_StillReported;
     [Test] procedure Leak_BareFileNameNoDirSegments_StillReported;
     [Test] procedure Leak_TestDirSegment_Suppressed;
     // Ownership-Sink Core-Audit 2026-07-18: Container-Add im BEDINGUNGS-Kontext.
@@ -5263,11 +5263,10 @@ procedure TTestMemoryLeakAdvanced.Leak_CtorArgInAssignRhs_OwnershipRecognized;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
-  'var inner: TInnerThing; outer: TOuterThing;'#13#10+
+  'var inner: TStringList; outer: TOwnerThing;'#13#10+
   'begin'#13#10+
-  '  inner := TInnerThing.Create;'#13#10+
-  '  outer := TOuterThing.Create(inner);'#13#10+
-  '  Registry.Add(outer);'#13#10+
+  '  inner := TStringList.Create;'#13#10+
+  '  outer := TOwnerThing.Create(inner);'#13#10+
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin
@@ -5285,10 +5284,10 @@ procedure TTestMemoryLeakAdvanced.Leak_CtorArgStandaloneCall_OwnershipRecognized
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
-  'var inner: TInnerThing;'#13#10+
+  'var inner: TStringList;'#13#10+
   'begin'#13#10+
-  '  inner := TInnerThing.Create;'#13#10+
-  '  TOuterThing.Create(inner);'#13#10+
+  '  inner := TStringList.Create;'#13#10+
+  '  TOwnerThing.Create(inner);'#13#10+
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin
@@ -5299,30 +5298,31 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_PlainCallArgInAssignRhs_KnownGap;
-// DOKUMENTIERTE LUECKE, kein Wunschverhalten. Erwartet waere 1 Fund:
-// 'n := ComputeSomething(inner)' uebergibt keine Ownership. Gemessen sind
-// es 0 - eine VORBESTEHENDE Falsch-Negativ-Klasse, die dieser Test beim
-// ersten Lauf am 2026-08-05 sichtbar gemacht hat.
-// NICHT vom Ctor-Argument-Gate verursacht: das verlangt '.create(', und
-// weder 'TInnerThing.Create' (ohne Klammern) noch 'ComputeSomething('
-// erfuellen das. Ursache noch nicht eingegrenzt - der Test haelt den
-// IST-Zustand fest, damit eine spaetere Korrektur als Aenderung sichtbar
-// wird statt unbemerkt zu bleiben.
+procedure TTestMemoryLeakAdvanced.Leak_PlainCallArgInAssignRhs_StillReported;
+// WAECHTER: das Gate darf NUR auf Konstruktoren ('.Create(') greifen. Ein
+// gewoehnlicher Funktionsaufruf mit unserer Variable als Argument
+// uebergibt keine Ownership - der Fund muss bleiben.
+//
+// Die erste Fassung dieses Tests meldete 0 und wurde deshalb als
+// "vorbestehende Luecke" festgenagelt. Das war falsch: die Fixture
+// benutzte 'TInnerThing', und IsLeakyType ist eine reine WHITELIST
+// (DEFAULT_LEAKY_CLASSES) - die Variable war nie Kandidat, der Test
+// wirkungslos. Mit einer Whitelist-Klasse misst er wieder das, was er
+// messen soll.
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
-  'var inner: TInnerThing; n: Integer;'#13#10+
+  'var inner: TStringList; n: Integer;'#13#10+
   'begin'#13#10+
-  '  inner := TInnerThing.Create;'#13#10+
+  '  inner := TStringList.Create;'#13#10+
   '  n := ComputeSomething(inner);'#13#10+
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
-      'IST-Zustand: vorbestehende Luecke, siehe Kommentar');
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'gewoehnlicher Aufruf ist KEIN Ownership-Transfer');
   finally F.Free; end;
 end;
 
@@ -5403,7 +5403,12 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
+    // AreEqual statt '>= 1': die Fixture hat ZWEI Whitelist-Variablen
+    // (Files, Ini). Mit '>= 1' haette 'Ini' allein die Zusicherung erfuellt
+    // und der Test waere auch dann gruen geblieben, wenn 'Files' wieder
+    // faelschlich stillgelegt wird - also genau bei der Regression, gegen
+    // die er steht.
+    Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkMemoryLeak),
       'Member-Zugriff im Ctor-Argument ist kein Ownership-Transfer');
   finally F.Free; end;
 end;
