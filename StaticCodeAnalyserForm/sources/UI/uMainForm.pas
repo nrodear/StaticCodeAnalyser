@@ -139,11 +139,18 @@ type
     // eine Sprachauswahl ohne neues Formular Platz hat.
     FMILanguage     : TMenuItem;
     FMIAppearance   : TMenuItem;   // Hell / Dunkel / Wie Windows
+    FSortColumn     : Integer;     // -1 = unsortiert (Scan-Reihenfolge)
+    FSortDescending : Boolean;
     procedure HamburgerClick(Sender: TObject);
     procedure HamburgerMenuPopup(Sender: TObject);
     procedure BuildHamburgerMenu;
     // Fuellt das Sprach-Untermenue aus uLocalization.AvailableLanguages.
     procedure BuildLanguageMenu(AParent: TMenuItem);
+    // Header-Klick sortiert; zweiter Klick auf dieselbe Spalte kehrt um.
+    // Mechanik wie im Plugin (GridMouseDown dort); die eigentliche
+    // Sortierung liegt in uFindingFilter.TFindingSorter.
+    procedure ResultGridMouseDown(Sender: TObject; Button: TMouseButton;
+      Shift: TShiftState; X, Y: Integer);
     procedure BuildAppearanceMenu(AParent: TMenuItem);
     procedure AppearanceItemClick(Sender: TObject);
     // Wird von TAppTheme nach jedem wirksamen Wechsel gerufen.
@@ -311,8 +318,11 @@ begin
   // Englisch). Pattern analog zum IDE-Plugin (FBtnAnalyseChanged.Hint).
   BtnBranch.Hint := _('Branch-Changes') + ': ' +
     _('analyse only files changed in current branch');
-  ResultGrid.OnDrawCell := ResultGridDrawCell;
-  ResultGrid.OnDblClick := ResultGridDblClick;
+  ResultGrid.OnDrawCell  := ResultGridDrawCell;
+  ResultGrid.OnDblClick  := ResultGridDblClick;
+  ResultGrid.OnMouseDown := ResultGridMouseDown;   // Header-Klick = sortieren
+  FSortColumn     := -1;
+  FSortDescending := False;
   // Tooltip nur fuer Datei-Spalte, dynamisch ueber Application.OnShowHint.
   // Hint muss != '' sein damit VCL das Event ueberhaupt feuert -
   // AppShowHint setzt dann den echten Text aus der Zelle (oder canceled).
@@ -1289,6 +1299,18 @@ begin
     end;
   end;
 
+  // ---- Sortierung (Logik in uFindingFilter.TFindingSorter) ----
+  // NACH dem DetectorReview-Sampling und VOR dem Anzeige-Cap - sonst
+  // zeigt die Anzeige die falschen Top-N. Dieselbe Stelle wie im Plugin.
+  if FSortColumn >= 0 then
+  begin
+    var SortCfg: TFindingSortConfig;
+    SortCfg.Column     := FSortColumn;
+    SortCfg.Descending := FSortDescending;
+    SortCfg.BaseDir    := FCurrentBaseDir;
+    TFindingSorter.Sort(FDisplayedFindings, SortCfg);
+  end;
+
   // Anzeige-Cap: TStringGrid wird ab ~50k Zeilen spuerbar trag. Sind mehr
   // Treffer da, kappen wir die Anzeige (Export/CSV/Baseline arbeiten
   // weiterhin mit FAllFindings, sind also nicht betroffen). Die Status-
@@ -1711,6 +1733,29 @@ begin
   FMILanguage.Caption := _('Language');
   FHamburgerMenu.Items.Add(FMILanguage);
   BuildLanguageMenu(FMILanguage);
+end;
+
+procedure TForm2.ResultGridMouseDown(Sender: TObject; Button: TMouseButton;
+  Shift: TShiftState; X, Y: Integer);
+var
+  ACol, ARow: Integer;
+begin
+  if Button <> mbLeft then Exit;
+  ResultGrid.MouseToCell(X, Y, ACol, ARow);
+  if ARow <> 0 then Exit;                       // nur die Header-Zeile
+  if (ACol < 0) or (ACol > 4) then Exit;
+
+  if FSortColumn = ACol then
+    FSortDescending := not FSortDescending
+  else
+  begin
+    FSortColumn     := ACol;
+    FSortDescending := False;
+  end;
+  // Indikator im Renderer nachziehen - er malt '^'/'v' aus der Config.
+  FGridConfig.SortColumn     := FSortColumn;
+  FGridConfig.SortDescending := FSortDescending;
+  ApplyFilter;
 end;
 
 procedure TForm2.BuildAppearanceMenu(AParent: TMenuItem);
