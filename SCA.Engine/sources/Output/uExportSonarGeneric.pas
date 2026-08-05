@@ -282,7 +282,25 @@ begin
 
     Root.AddPair('rules',  Rules);
     Root.AddPair('issues', Issues);
-    Result := Root.Format(2);
+    // NICHT Format(2) (2026-08-05): Format ruft ToChars mit LEEREN Options
+    // (System.JSON.pas:1609), und ToChars escaped \uXXXX nur, wenn
+    // EncodeBelow32 gesetzt ist (:2629). Ohne die Option gehen #0..#7, #$B
+    // und #$E..#$1F ROH in die Datei - RFC 8259 verlangt fuer U+0000..U+001F
+    // aber Escaping, und SonarQube bricht beim ERSTEN solchen Zeichen ab.
+    // Nicht das eine Issue faellt dann weg, sondern der GESAMTE Report.
+    //
+    // Belegt im Repo: sca-findings.json:990 enthaelt
+    //   "message": "edToken.PasswordChar = '<U+0000>'"
+    // - erzeugt aus unserer EIGENEN Quelle ('edToken.PasswordChar := #0;').
+    // Der Lexer loest Char-Literale in echte Zeichen auf (uLexer.pas:531),
+    // und uHardcodedSecret uebernimmt den Wert unveraendert in die Meldung.
+    // Ein einziges #0 oder #27 irgendwo im Kundencode genuegt.
+    //
+    // ToJSON([EncodeBelow32]) ueberlaesst das Escaping der RTL. Der Report
+    // verliert dadurch die Einrueckung - er ist ein Maschinenformat fuer
+    // Sonar, und bei 500k Funden war das Huebschdrucken ohnehin nur
+    // zusaetzlicher Speicher.
+    Result := Root.ToJSON([TJSONAncestor.TJSONOutputOption.EncodeBelow32]);
   finally
     Root.Free;
     Seen.Free;
