@@ -142,6 +142,28 @@ type
     // TStringList-Allokation kostet.
     class function ResolvedConfigPath: string; static;
 
+    /// <summary>
+    ///   Ergaenzt einen ganzen Abschnitt samt seiner Kommentare in einer
+    ///   BESTEHENDEN analyser.ini, falls er dort noch fehlt.
+    /// </summary>
+    /// <remarks>
+    ///   Wofuer: EnsureConfigExists schreibt die dokumentierte Vorlage nur,
+    ///   wenn ueberhaupt keine Datei da ist. Wer schon eine hat, bekommt bei
+    ///   einer neuen Programmfassung zwar das neue VERHALTEN (fehlende
+    ///   Schluessel liefern ihre Vorgabe), sieht aber nie, dass es die
+    ///   Einstellung gibt - die Kommentare in dieser Datei SIND die
+    ///   Endanwender-Doku.
+    ///
+    ///   Der Text wird aus DEFAULT_INI_CONTENT herausgeschnitten, nicht ein
+    ///   zweites Mal hingeschrieben. Sonst gaebe es zwei Fassungen, die
+    ///   auseinanderlaufen koennen.
+    ///
+    ///   Angehaengt wird nur, wenn der Abschnitt fehlt - eine vorhandene
+    ///   Einstellung wird nie ueberschrieben. Liefert True, wenn etwas
+    ///   geschrieben wurde.
+    /// </remarks>
+    class function EnsureSection(const ASection: string): Boolean; static;
+
     // '' bedeutet auto-detect (origin/HEAD, dann main, dann master).
     property BaseBranch: string read FBaseBranch write FBaseBranch;
     // True (Default): committed Branch-Diff + uncommitted Working Tree;
@@ -665,6 +687,77 @@ const
     ''#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
+    ';  [Editor] - womit ein Befund geoeffnet wird (Doppelklick)'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ';'#13#10 +
+    '; Betrifft NUR die Standalone-EXE. Das IDE-Plugin springt ueber die'#13#10 +
+    '; ToolsAPI direkt an die Stelle und braucht nichts davon.'#13#10 +
+    ''#13#10 +
+    '[Editor]'#13#10 +
+    ''#13#10 +
+    '; ExternalEditor (string, default: leer = aus)'#13#10 +
+    '; Voller Pfad zu einem Editor. Ist er gesetzt, uebernimmt er das'#13#10 +
+    '; Oeffnen fuer ALLE Dateiarten - auch fuer .dfm - und die Delphi-IDE'#13#10 +
+    '; wird nicht mehr angesprochen.'#13#10 +
+    '; Warum das oft besser ist: die EXE kann der IDE von aussen keine'#13#10 +
+    '; Zeilennummer uebergeben (dafuer gibt es keinen Schalter), sie muss'#13#10 +
+    '; Strg+G und die Ziffern simulieren. Ein Editor, der die Zeile auf'#13#10 +
+    '; der Kommandozeile annimmt, trifft dagegen immer.'#13#10 +
+    'ExternalEditor='#13#10 +
+    ';ExternalEditor=C:\Program Files\Microsoft VS Code\Code.exe'#13#10 +
+    ';ExternalEditor=C:\Program Files\Notepad++\notepad++.exe'#13#10 +
+    ';ExternalEditor=C:\Program Files\Sublime Text\subl.exe'#13#10 +
+    ''#13#10 +
+    '; ExternalEditorArgs (string, default: -g "%file%:%line%")'#13#10 +
+    '; Argumente fuer den Editor. Platzhalter (Gross/Klein egal):'#13#10 +
+    ';   %file%  voller Pfad der Datei'#13#10 +
+    ';   %line%  Zeilennummer (mindestens 1)'#13#10 +
+    ';   %col%   Spalte - liefert derzeit IMMER 1, weil Befunde noch'#13#10 +
+    ';           keine Spalte mitfuehren; nur fuer Editoren gedacht, die'#13#10 +
+    ';           ohne Spaltenangabe gar nicht springen'#13#10 +
+    ';   %dir%   Verzeichnis der Datei, ohne abschliessenden Trenner'#13#10 +
+    ';   %%      ein woertliches Prozentzeichen'#13#10 +
+    '; Unbekanntes zwischen Prozentzeichen bleibt unveraendert stehen.'#13#10 +
+    '; Enthaelt ein Wert ein Leerzeichen und steht der Platzhalter nicht'#13#10 +
+    '; ohnehin in Anfuehrungszeichen, werden welche gesetzt - die Vorlage'#13#10 +
+    '; darf also auch ohne auskommen.'#13#10 +
+    '; ZWEI FALLEN BEIM ABSCHREIBEN:'#13#10 +
+    '; 1. Ein Kommentar HINTER dem Wert wird nicht abgeschnitten, er wuerde'#13#10 +
+    ';    Teil der Argumente. Die Editornamen stehen deshalb jeweils in'#13#10 +
+    ';    der Zeile darueber.'#13#10 +
+    '; 2. Steht der GANZE Wert in Anfuehrungszeichen, entfernt Windows'#13#10 +
+    ';    dieses aeussere Paar beim Lesen wieder (so arbeitet die'#13#10 +
+    ';    Profil-Schnittstelle, auf der INI-Dateien aufsetzen). Die'#13#10 +
+    ';    Vorlagen unten fangen deshalb nie mit " an und hoeren nie mit "'#13#10 +
+    ';    auf - noetig ist das ohnehin nicht, weil Werte mit Leerzeichen'#13#10 +
+    ';    automatisch eingefasst werden.'#13#10 +
+    '; Visual Studio Code (Default):'#13#10 +
+    'ExternalEditorArgs=-g "%file%:%line%"'#13#10 +
+    '; Notepad++:'#13#10 +
+    ';ExternalEditorArgs=-n%line% "%file%"'#13#10 +
+    '; Sublime Text:'#13#10 +
+    ';ExternalEditorArgs=%file%:%line%:%col%'#13#10 +
+    '; UltraEdit:'#13#10 +
+    ';ExternalEditorArgs=%file%/%line%'#13#10 +
+    '; IntelliJ / Rider:'#13#10 +
+    ';ExternalEditorArgs=--line %line% "%file%"'#13#10 +
+    ''#13#10 +
+    '; DfmTarget (string, default: ide)'#13#10 +
+    '; Was ein Doppelklick auf einen .dfm-Befund oeffnet, WENN oben kein'#13#10 +
+    '; externer Editor eingetragen ist:'#13#10 +
+    ';   ide    = Delphi-IDE'#13#10 +
+    ';   viewer = eingebauter Textbetrachter'#13#10 +
+    '; Ehrlicher Hinweis zur Wahl: die IDE oeffnet eine .dfm je nach'#13#10 +
+    '; Registrierung im Formular-Entwurf, und dort fuehrt kein Weg zu'#13#10 +
+    '; einer Zeilennummer. Der eingebaute Betrachter zeigt die Datei als'#13#10 +
+    '; Text und springt zuverlaessig zur Zeile - er kann dafuer nichts'#13#10 +
+    '; aendern. Antwortet gar kein Handler, wird ohnehin auf ihn'#13#10 +
+    '; zurueckgefallen.'#13#10 +
+    'DfmTarget=ide'#13#10 +
+    ';DfmTarget=viewer'#13#10 +
+    ''#13#10 +
+    ';'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
     ';  [UI] - Oberflaechen-Einstellungen'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
     ''#13#10 +
@@ -854,6 +947,186 @@ begin
       Ini.Free;
     end;
   except
+  end;
+end;
+
+// --- Hilfsmittel fuer SectionBlockFromTemplate -------------------------
+
+// Kopfzeile eines Abschnitts: '[Name]'.
+function IniIsSectionHead(const ALine: string): Boolean;
+var
+  S : string;
+begin
+  S := Trim(ALine);
+  Result := (Length(S) >= 2) and (S[1] = '[') and (S[Length(S)] = ']');
+end;
+
+// Eine auskommentierte EINSTELLUNG (';Schluessel=Wert') - also ein
+// Beispiel, das zum Abschnitt DARUEBER gehoert, im Gegensatz zu
+// erklaerendem Fliesstext, der zum Abschnitt DARUNTER ueberleitet.
+//
+// Unterschieden am LEERZEICHEN hinter dem ';'. Genau so haelt es die
+// Vorlage durchgehend: ';Enabled=0' ist ein Beispiel, '; Enabled (bool,
+// default: 1)' ist Erklaerung. Ein Versuch ueber "vor dem '=' steht ein
+// Bezeichner" scheiterte nachweislich an Prosa wie
+// '; Gewichte (hardcoded): Vuln=10, Error=7' - die sah wie eine
+// Einstellung aus und zerschnitt [UI] und [Score] falsch.
+function IniIsCommentedSetting(const ALine: string): Boolean;
+var
+  S : string;
+begin
+  S := Trim(ALine);
+  Result := (Length(S) > 1) and (S[1] = ';')
+        and (S[2] <> ' ') and (S[2] <> #9)
+        and (Pos('=', S) > 0);
+end;
+
+// Zeile, die beim Abgrenzen dem NACHBARN zugeschlagen werden darf.
+function IniIsFiller(const ALine: string): Boolean;
+var
+  S : string;
+begin
+  S := Trim(ALine);
+  Result := ((S = '') or (S[1] = ';')) and not IniIsCommentedSetting(ALine);
+end;
+
+/// <summary>Erste Zeile des Blocks: Anfang des Erklaerteils ueber AIdx.</summary>
+/// <remarks>
+///   Geht nach oben nur bis zur EIGENEN Titelzeile ';  [Name] - ...' und
+///   deren Rahmen. Ein Lauf "so weit wie Kommentare reichen" lief in den
+///   Vorgaengerabschnitt hinein - fuer [Silent] zog er die Beispiele aus
+///   [PathOverrides] mit.
+/// </remarks>
+function IniBlockFirst(ATpl: TStringList; const AHead: string;
+  AIdx: Integer): Integer;
+
+  function IsSeparator(const ALine: string): Boolean;
+  begin
+    // Bewusst ohne StartsStr: das braeuchte System.StrUtils im uses
+    // dieser Unit, und die steht dort heute nicht.
+    Result := Copy(Trim(ALine), 1, 5) = '; ---';
+  end;
+
+var
+  i, TitleAt : Integer;
+begin
+  TitleAt := -1;
+  i := AIdx - 1;
+  while (i >= 0) and IniIsFiller(ATpl[i]) do
+  begin
+    if (Copy(Trim(ATpl[i]), 1, 1) = ';')
+       and (Pos(LowerCase(AHead), LowerCase(ATpl[i])) > 0) then
+    begin
+      TitleAt := i;
+      Break;
+    end;
+    Dec(i);
+  end;
+
+  if TitleAt < 0 then
+    Exit(AIdx);                       // Abschnitt ohne Erklaerblock
+
+  Result := TitleAt;
+  if (Result > 0) and IsSeparator(ATpl[Result - 1]) then Dec(Result);
+  if (Result > 0) and (Trim(ATpl[Result - 1]) = ';') then Dec(Result);
+  if (Result > 0) and (Trim(ATpl[Result - 1]) = '') then Dec(Result);
+end;
+
+/// <summary>Erste Zeile NACH dem Block.</summary>
+/// <remarks>
+///   Bis zum naechsten Abschnittskopf - dessen Erklaerblock aber wieder
+///   zurueckgeben, der gehoert ihm.
+/// </remarks>
+function IniBlockLast(ATpl: TStringList; AIdx: Integer): Integer;
+begin
+  Result := AIdx + 1;
+  while (Result < ATpl.Count) and not IniIsSectionHead(ATpl[Result]) do
+    Inc(Result);
+  while (Result - 1 > AIdx) and IniIsFiller(ATpl[Result - 1]) do
+    Dec(Result);
+end;
+
+/// <summary>
+///   Schneidet einen Abschnitt samt seines Erklaerblocks aus der
+///   mitgelieferten Vorlage. Leer, wenn die Vorlage ihn nicht kennt.
+/// </summary>
+function SectionBlockFromTemplate(const AHead: string): string;
+var
+  Tpl               : TStringList;
+  i, Idx            : Integer;
+  First, Last       : Integer;
+begin
+  Result := '';
+  Tpl := TStringList.Create;
+  try
+    Tpl.Text := DEFAULT_INI_CONTENT;
+    Idx := -1;
+    for i := 0 to Tpl.Count - 1 do
+      if SameText(Trim(Tpl[i]), AHead) then
+      begin
+        Idx := i;
+        Break;
+      end;
+    if Idx < 0 then Exit;             // Abschnitt kennt die Vorlage nicht
+
+    First := IniBlockFirst(Tpl, AHead, Idx);
+    Last  := IniBlockLast(Tpl, Idx);
+    for i := First to Last - 1 do
+      Result := Result + Tpl[i] + sLineBreak;
+  finally
+    Tpl.Free;
+  end;
+end;
+
+class function TRepoSettings.EnsureSection(const ASection: string): Boolean;
+var
+  Path, Head, Block : string;
+  Cur               : TStringList;
+  Bytes             : TBytes;
+  FS                : TFileStream;
+  i                 : Integer;
+begin
+  Result := False;
+  Head   := '[' + ASection + ']';
+  try
+    Path := TRepoSettings.ResolvedConfigPath;
+    // Gibt es die Datei gar nicht, ist EnsureConfigExists zustaendig -
+    // die schreibt ohnehin die vollstaendige Vorlage.
+    if (Path = '') or not FileExists(Path) then Exit;
+
+    Cur := TStringList.Create;
+    try
+      Cur.LoadFromFile(Path, TEncoding.UTF8);
+      // Schon vorhanden? Dann nichts anfassen. Auf ZEILEN vergleichen,
+      // damit ein '[Editor]' mitten in einem Kommentar nicht als
+      // vorhandener Abschnitt durchgeht.
+      for i := 0 to Cur.Count - 1 do
+        if SameText(Trim(Cur[i]), Head) then Exit;
+    finally
+      Cur.Free;
+    end;
+
+    Block := SectionBlockFromTemplate(Head);
+    if Trim(Block) = '' then Exit;
+
+    // ANHAENGEN, nicht neu schreiben. Die vorhandene Datei wird dabei
+    // kein einziges Byte umgeschrieben - waere sie ohne BOM und mit
+    // Umlauten gespeichert, haette ein Neuschreiben ueber
+    // TEncoding.UTF8 sie unwiederbringlich verstuemmelt. Der Block
+    // selbst ist reines ASCII und damit in beiden Kodierungen gleich.
+    Bytes := TEncoding.ASCII.GetBytes(sLineBreak + Block);
+    FS := TFileStream.Create(Path, fmOpenReadWrite or fmShareDenyWrite);
+    try
+      FS.Seek(0, soEnd);
+      FS.WriteBuffer(Bytes[0], Length(Bytes));
+    finally
+      FS.Free;
+    end;
+    Result := True;
+  except
+    // Eine nicht schreibbare Konfiguration ist kein Fehler, den diese
+    // Stelle behandeln koennte - dann fehlt eben die Erklaerung.
+    Result := False;
   end;
 end;
 

@@ -1842,3 +1842,26 @@ msgstr "Hell"
 msgid "Dark"
 msgstr "Dunkel"
 
+
+# --- 2026-08-05: Befund oeffnen (externer Editor / DFM-Ziel) ---
+
+msgid "Open findings with"
+msgstr "Befunde öffnen mit"
+
+msgid "DFM findings: Delphi IDE"
+msgstr "DFM-Befunde: Delphi-IDE"
+
+msgid "DFM findings: built-in viewer"
+msgstr "DFM-Befunde: eingebauter Betrachter"
+
+msgid "Configure external editor..."
+msgstr "Externen Editor einrichten..."
+
+msgid "Opened in external editor: %s  Line: %d"
+msgstr "Im externen Editor geöffnet: %s  Zeile: %d"
+
+msgid "Configured editor cannot be started: %s"
+msgstr "Der eingerichtete Editor lässt sich nicht starten: %s"
+
+msgid "Could not open %s: %s"
+msgstr "%s konnte nicht geöffnet werden: %s"

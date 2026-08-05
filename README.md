@@ -260,6 +260,46 @@ Full status of all 50 Sonar rules: see [DETECTORS.md](DETECTORS.md).
 
 ![SCA IDE plugin in action — buttons, grid, hover overlays](docs/PlugInSca.gif)
 
+### Opening a finding
+
+Double-click a row in the result grid. What happens next depends on
+`[Editor]` in `analyser.ini` — reread on every double-click, so edits
+take effect immediately.
+
+| `[Editor]` key | Meaning |
+|----------------|---------|
+| `ExternalEditor` | Full path to an editor. When set it handles **every** file type — including `.dfm` — and the Delphi IDE is not involved. Empty (default) = off. |
+| `ExternalEditorArgs` | Argument template. Placeholders: `%file%`, `%line%`, `%col%`, `%dir%`, and `%%` for a literal percent sign. Anything else between percent signs is left alone. |
+| `DfmTarget` | `ide` (default) or `viewer` — what a `.dfm` finding opens **when no external editor is set**. |
+
+```ini
+[Editor]
+; Visual Studio Code
+ExternalEditor=C:\Program Files\Microsoft VS Code\Code.exe
+ExternalEditorArgs=-g "%file%:%line%"
+```
+
+Templates for other editors are listed in `analyser.ini` itself
+(Notepad++, Sublime Text, UltraEdit, IntelliJ/Rider). Values containing
+a space are quoted automatically when the placeholder is not already
+inside quotes, so a template without quotes still works.
+
+**Why you may want an external editor.** The standalone EXE cannot ask
+the Delphi IDE to jump to a line — RAD Studio exposes no command-line
+switch for that. It hands the file to the Windows shell and then
+simulates <kbd>Ctrl</kbd>+<kbd>G</kbd> plus the digits, which only works
+while the IDE actually holds the foreground. An editor that takes the
+line number as an argument always hits. (The **IDE plugin** has no such
+problem: it navigates through the ToolsAPI directly and ignores these
+settings entirely.)
+
+**`.dfm` findings.** The IDE opens a `.dfm` in the form designer
+depending on how the extension is registered, and there is no route to a
+line number there. The built-in viewer shows the file as text and jumps
+to the line reliably, but is read-only. Pick with `DfmTarget`, or from
+the hamburger menu under **Open findings with**. If no handler responds
+at all, the viewer is used regardless.
+
 ### Per-detector configuration
 
 There are no toggle checkboxes in the toolbar. All optional detector
@@ -525,12 +565,19 @@ detectors below the threshold. Both flags override `[Rules]` in `analyser.ini`.
 **`analyser.ini` settings for Git**:
 ```ini
 [Repo]
-BaseBranch=develop          ; empty = auto: origin/HEAD -> main -> master
-IncludeWorkingTree=1        ; 1 = include uncommitted changes, 0 = committed only
+; empty = auto: origin/HEAD -> main -> master
+BaseBranch=develop
+; 1 = include uncommitted changes, 0 = committed only
+IncludeWorkingTree=1
 
 [Paths]
-GitExe=C:\custom\git\bin\git.exe   ; empty = auto-detection
+; empty = auto-detection
+GitExe=C:\custom\git\bin\git.exe
 ```
+
+> **Comments go on their own line.** A `;` *after* a value is not
+> stripped — it becomes part of the value. `BaseBranch=develop ; auto`
+> asks Git for a branch literally called `develop ; auto`.
 
 ### Using with SVN
 

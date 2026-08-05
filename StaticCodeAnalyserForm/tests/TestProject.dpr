@@ -27,6 +27,7 @@ uses
   uTestCFG in 'uTestCFG.pas',
   uTestParallelScan in 'uTestParallelScan.pas',
   uTestTAstNode in 'uTestTAstNode.pas',
+  uTestEditorCommand in 'uTestEditorCommand.pas',
   uTestDfmLexer in 'uTestDfmLexer.pas',
   uTestDfmParser in 'uTestDfmParser.pas',
   uTestDfmBinaryReader in 'uTestDfmBinaryReader.pas',
