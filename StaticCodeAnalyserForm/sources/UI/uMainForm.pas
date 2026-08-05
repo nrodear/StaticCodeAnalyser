@@ -138,11 +138,22 @@ type
     // oeffnen". Das Hamburger-Menue ist damit der einzige UI-Ort, an dem
     // eine Sprachauswahl ohne neues Formular Platz hat.
     FMILanguage     : TMenuItem;
+    FMIAppearance   : TMenuItem;   // Hell / Dunkel / Wie Windows
     procedure HamburgerClick(Sender: TObject);
     procedure HamburgerMenuPopup(Sender: TObject);
     procedure BuildHamburgerMenu;
     // Fuellt das Sprach-Untermenue aus uLocalization.AvailableLanguages.
     procedure BuildLanguageMenu(AParent: TMenuItem);
+    procedure BuildAppearanceMenu(AParent: TMenuItem);
+    procedure AppearanceItemClick(Sender: TObject);
+    // Wird von TAppTheme nach jedem wirksamen Wechsel gerufen.
+    // Ein VCL-Style-Wechsel erreicht selbstgezeichnete Flaechen
+    // NICHT - Grid, Kacheln und Hilfe-Panel muessen selbst neu.
+    procedure ThemeChanged(Sender: TObject);
+    // WM_SETTINGCHANGE mit lParam = ImmersiveColorSet ist das
+    // einzige Signal, das Windows bei einem Themenwechsel sendet.
+    procedure SettingChange(var Msg: TWMSettingChange);
+      message WM_SETTINGCHANGE;
     procedure LanguageItemClick(Sender: TObject);
     procedure HamburgerExportClick(Sender: TObject);
     procedure HamburgerSettingsClick(Sender: TObject);
@@ -224,6 +235,7 @@ implementation
 
 uses
   clipbrd,
+  uAppTheme,                      // Hell/Dunkel der Standalone-EXE
   uStaticFiles, uRuleCatalog,
   uExport,                        // TExporter.ExportCsv (kanonischer CSV-Schreiber)
   // uFindingFilter ist bereits in interface uses (TFilterComboItem-Feld) -
@@ -251,6 +263,11 @@ var
   Name        : string;
   Idx         : Integer;
 begin
+  // Nach jedem wirksamen Hell/Dunkel-Wechsel neu zeichnen. Muss VOR dem
+  // ersten Aufbau stehen, damit ein Wechsel waehrend des Starts nicht
+  // verloren geht.
+  TAppTheme.OnChanged := ThemeChanged;
+
   // UI-Sprache + Profile/MinSeverity-Combo-Inhalte aus analyser.ini lesen.
   // Settings hier kurzlebig - der Analyse-Pfad (ApplyDetectorConfig) baut
   // sich eine eigene frische Instanz, damit Edits an analyser.ini zwischen
@@ -610,6 +627,10 @@ end;
 
 procedure TForm2.FormDestroy(Sender: TObject);
 begin
+  // Klassen-Ereignis loesen: TAppTheme lebt laenger als die Form, ein
+  // haengender Zeiger waere ein Aufruf ins Freigegebene.
+  TAppTheme.OnChanged := nil;
+
   // Globalen Application.OnShowHint loesen damit kein dangling Methodenzeiger
   // ueberlebt wenn das Form zerstoert wird (relevant beim IDE-Plugin-Hosting).
   if TMethod(Application.OnShowHint).Data = Self then
@@ -652,7 +673,14 @@ procedure TForm2.InitGridConfig;
 // Form-Lebenszeit liegen bleiben - aenderbare Werte (FCurrentBaseDir,
 // FDisplayedFindings) werden bei jedem Aufruf frisch ueber Self gelesen.
 begin
-  FGridConfig := TFindingGridRenderer.StandaloneConfig;
+  // Themenfaehige Konfiguration (2026-08-05). StandaloneConfig hatte
+  // SECHS Schalter aus - kein Theme, keine Sortieranzeige, keine
+  // Zebrastreifen, kein Akzentbalken, keine fette Dateispalte, keine
+  // Ellipsen - und malte statt dessen hart kodierte Pastelltoene. Unter
+  // einem dunklen Style waeren die Zeilen damit hell geblieben.
+  // SeverityColumn bleibt 4: die EXE hat fuenf Spalten, das Plugin sechs.
+  FGridConfig := TFindingGridRenderer.IDEConfig(-1, False);
+  FGridConfig.SeverityColumn := 4;
   FGridConfig.GetCellText :=
     function(ACellCol, ACellRow: Integer): string
     var
@@ -1672,11 +1700,79 @@ begin
   MI.OnClick := HamburgerIgnoreListClick;
   FHamburgerMenu.Items.Add(MI);
 
+  // ---- Erscheinungsbild (Hell / Dunkel / Wie Windows) ----
+  FMIAppearance := TMenuItem.Create(FHamburgerMenu);
+  FMIAppearance.Caption := _('Appearance');
+  FHamburgerMenu.Items.Add(FMIAppearance);
+  BuildAppearanceMenu(FMIAppearance);
+
   // ---- Sprache (Untermenue, Werte aus AvailableLanguages) ----
   FMILanguage := TMenuItem.Create(FHamburgerMenu);
   FMILanguage.Caption := _('Language');
   FHamburgerMenu.Items.Add(FMILanguage);
   BuildLanguageMenu(FMILanguage);
+end;
+
+procedure TForm2.BuildAppearanceMenu(AParent: TMenuItem);
+// Drei Radio-Eintraege. 'Wie Windows' ist der Auslieferwert; die Wahl
+// liegt in analyser.ini ([UI] Theme) und ueberlebt den Neustart.
+// Tag traegt den Modus, damit der Handler nicht von der uebersetzten
+// Beschriftung abhaengt - dieselbe Bauart wie beim Sprach-Menue.
+const
+  CAPTIONS : array[TAppThemeMode] of string = (
+    'Like Windows', 'Light', 'Dark');
+var
+  M  : TAppThemeMode;
+  MI : TMenuItem;
+begin
+  if not Assigned(AParent) then Exit;
+  AParent.Clear;
+  for M := Low(TAppThemeMode) to High(TAppThemeMode) do
+  begin
+    MI := TMenuItem.Create(AParent);
+    MI.Caption    := _(CAPTIONS[M]);
+    MI.RadioItem  := True;
+    MI.GroupIndex := 71;            // eigener Kreis, stoert die Sprache nicht
+    MI.Tag        := Ord(M);
+    MI.Checked    := (M = TAppTheme.Mode);
+    MI.OnClick    := AppearanceItemClick;
+    AParent.Add(MI);
+  end;
+end;
+
+procedure TForm2.AppearanceItemClick(Sender: TObject);
+var
+  MI : TMenuItem;
+begin
+  if not (Sender is TMenuItem) then Exit;
+  MI := TMenuItem(Sender);
+  TAppTheme.SetMode(TAppThemeMode(MI.Tag));
+  // Haken nachziehen: RadioItem setzt ihn zwar selbst, aber nur wenn der
+  // Klick durchkam - SetMode kann bei gleicher Wahl frueh aussteigen.
+  BuildAppearanceMenu(FMIAppearance);
+end;
+
+procedure TForm2.ThemeChanged(Sender: TObject);
+// Ein VCL-Style-Wechsel faerbt Standard-Controls von allein. Alles, was
+// die Anwendung SELBST malt, muss angestossen werden - sonst bleiben
+// genau die Flaechen hell, die den Fund-Text tragen.
+begin
+  if csDestroying in ComponentState then Exit;
+  if Assigned(ResultGrid) then
+    ResultGrid.Invalidate;
+  Invalidate;
+end;
+
+procedure TForm2.SettingChange(var Msg: TWMSettingChange);
+// Windows meldet einen Themenwechsel ueber WM_SETTINGCHANGE mit dem
+// Abschnittsnamen 'ImmersiveColorSet'. Es gibt kein spezifischeres
+// Signal; deshalb erst den Namen pruefen und die Arbeit TAppTheme
+// ueberlassen, das seinerseits nur bei echter Aenderung umschaltet.
+begin
+  inherited;
+  if (Msg.Section <> nil)
+     and SameText(string(Msg.Section), 'ImmersiveColorSet') then
+    TAppTheme.HandleSystemThemeChanged;
 end;
 
 procedure TForm2.BuildLanguageMenu(AParent: TMenuItem);

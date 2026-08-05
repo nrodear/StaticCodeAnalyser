@@ -4,7 +4,6 @@ object Form2: TForm2
   Caption = 'Static Code Analysis Tool for Delphi'
   ClientHeight = 512
   ClientWidth = 850
-  Color = clWhite
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
   Font.Height = -12

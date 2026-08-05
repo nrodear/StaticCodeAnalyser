@@ -24,11 +24,14 @@ program StaticCodeAnalyser.d12;
 uses
   Winapi.Windows,
   Vcl.Forms,
+  Vcl.Themes,          // TStyleManager - Hell/Dunkel der Standalone-EXE
+  Vcl.Styles,          // registriert die gelinkten VCL-Styles
   System.SysUtils,
   MainController in 'sources\MainController.pas',
   uMainForm in 'sources\UI\uMainForm.pas' {Form2},
   uDfmTextViewer in 'sources\UI\uDfmTextViewer.pas',
-  uConsoleRunner in 'sources\Console\uConsoleRunner.pas';
+  uConsoleRunner in 'sources\Console\uConsoleRunner.pas',
+  uAppTheme;
 
 {$R *.res}
 // App-Icon kommt via <Icon_MainIcon> im .dproj: Delphi auto-embeddet das
@@ -169,6 +172,13 @@ begin
   begin
     Application.Initialize;
     Application.MainFormOnTaskbar := True;
+    // Hell/Dunkel VOR CreateForm: sonst entsteht die Form hell und
+    // springt sichtbar um. TAppTheme liest die gemerkte Wahl aus
+    // analyser.ini ([UI] Theme) und folgt im Auslieferzustand dem
+    // Windows-Systemthema. Ist kein dunkler VCL-Style in die EXE gelinkt
+    // (Projektoptionen > Anwendung > Erscheinungsbild), bleibt es still
+    // beim hellen Systemstil - siehe Kopf von uAppTheme.
+    TAppTheme.Initialize;
     // Application.Icon wird von der RTL automatisch aus der MAINICON-
     // Resource gesetzt (siehe <Icon_MainIcon> im dproj -> branding\sca.ico).
     // Keine explizite Zuweisung noetig - canonical Embarcadero-Weg.
