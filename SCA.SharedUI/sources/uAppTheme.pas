@@ -27,7 +27,8 @@ unit uAppTheme;
 interface
 
 uses
-  System.Classes;
+  System.Classes,
+  Vcl.Themes;   // TStyleServicesHandle (Klassenfeld FDarkHandle)
 
 type
   /// <summary>Woher die Hell/Dunkel-Entscheidung kommt.</summary>
@@ -42,6 +43,7 @@ type
     class var FMode      : TAppThemeMode;
     class var FOnChanged : TNotifyEvent;
     class var FApplying  : Boolean;
+    class var FDarkHandle: TStyleServicesHandle;   // einmal geladen, s. ApplyStyle
     class function ModeToStr(AMode: TAppThemeMode): string; static;
     class function StrToMode(const S: string): TAppThemeMode; static;
     // Roher Registry-Zugriff. Wirft bei unlesbarer Registry - der
@@ -101,7 +103,7 @@ implementation
 uses
   System.SysUtils, System.Win.Registry, System.IniFiles,
   Winapi.Windows,
-  Vcl.Themes, Vcl.Styles,
+  Vcl.Styles,
   uRepoSettings;
 
 const
@@ -111,11 +113,14 @@ const
   // eine sichtbare Aenderung fuer alle, die gar keinen Dunkelmodus wollen.
   STYLE_LIGHT = 'Windows';
 
-  // Reihenfolge = Vorliebe. Windows10Dark liegt am naechsten am
-  // Systemlook (so entschieden 2026-08-05); die anderen beiden sind
-  // Rueckfall, falls jemand nur die angehakt hat.
-  DARK_CANDIDATES : array[0..2] of string = (
-    'Windows10Dark', 'Carbon', 'Obsidian');
+  // Der dunkle Style liegt als RCDATA-Ressource in der EXE
+  // (styles\sca_styles.RES, gelinkt im .dpr). Aktiviert wird er ueber
+  // das HANDLE aus TryLoadFromResource - der INTERNE Name eines .vsf ist
+  // nicht garantiert gleich dem Dateinamen, und ein Namensraten waere
+  // genau die stille Fehlerquelle, die die erste Fassung hatte: ohne
+  // gelinkten Style lieferte TrySetStyle('Windows10Dark') False, und die
+  // EXE startete auf dunklem Windows hell (Abnahme-Befund 2026-08-05).
+  DARK_RESOURCE = 'WIN10DARK';
 
   REG_PERSONALIZE =
     'Software\Microsoft\Windows\CurrentVersion\Themes\Personalize';
@@ -192,7 +197,6 @@ end;
 class procedure TAppTheme.ApplyStyle;
 var
   Applied : Boolean;
-  Cand    : string;
 begin
   // Re-Entranz: ein Style-Wechsel loest selbst Nachrichten aus, und
   // HandleSystemThemeChanged haengt an einer davon.
@@ -201,15 +205,21 @@ begin
   try
     Applied := False;
     if EffectiveDark then
-      for Cand in DARK_CANDIDATES do
-        if TStyleManager.TrySetStyle(Cand, False) then
-        begin
-          Applied := True;
-          Break;
-        end;
-    // Hell, oder kein dunkler Style gelinkt. Letzteres ist der
-    // dokumentierte Normalfall, solange die Projektoptionen keinen
-    // enthalten.
+    begin
+      // Einmal aus der eingebetteten Ressource laden; das Handle bleibt
+      // fuer die Prozesslebensdauer gueltig (TStyleManager besitzt es).
+      if not Assigned(FDarkHandle) then
+        if not TStyleManager.TryLoadFromResource(HInstance, DARK_RESOURCE,
+                 RT_RCDATA, FDarkHandle) then
+          FDarkHandle := nil;
+      if Assigned(FDarkHandle) then
+      begin
+        TStyleManager.SetStyle(FDarkHandle);
+        Applied := True;
+      end;
+    end;
+    // Hell - oder die Ressource fehlt (dann bleibt es sichtbar hell
+    // statt still kaputt).
     if not Applied then
       TStyleManager.TrySetStyle(STYLE_LIGHT, False);
   finally
