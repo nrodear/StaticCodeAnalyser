@@ -37,6 +37,7 @@ requires
 contains
   uAnalyserPalette in 'sources\uAnalyserPalette.pas',
   uAnalyserTheme in 'sources\uAnalyserTheme.pas',
+  uAppTheme in 'sources\uAppTheme.pas',
   uFindingGridRenderer in 'sources\uFindingGridRenderer.pas',
   uFindingsPropertiesFrame in 'sources\uFindingsPropertiesFrame.pas',
   uFindingFilter in 'sources\uFindingFilter.pas',

@@ -1841,3 +1841,16 @@ msgstr "DÉSACTIVÉ (par défaut) : la fenêtre n'apparaît qu'au clic sur une l
 msgid "Where the hover annotation overlay anchors relative to the finding line. Takes effect after IDE restart."
 msgstr "Où la fenêtre d'annotation au survol s'ancre par rapport à la ligne du résultat. Prend effet après un redémarrage de l'IDE."
 
+# --- 2026-08-05: Erscheinungsbild-Menue der Standalone-EXE ---
+msgid "Appearance"
+msgstr "Apparence"
+
+msgid "Like Windows"
+msgstr "Comme Windows"
+
+msgid "Light"
+msgstr "Clair"
+
+msgid "Dark"
+msgstr "Sombre"
+

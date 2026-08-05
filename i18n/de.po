@@ -1829,3 +1829,16 @@ msgstr "AUS (Standard): die Einblendung erscheint nur beim Klick auf eine markie
 msgid "Where the hover annotation overlay anchors relative to the finding line. Takes effect after IDE restart."
 msgstr "Wo sich die Hover-Einblendung relativ zur Fundzeile verankert. Wirkt nach einem Neustart der IDE."
 
+# --- 2026-08-05: Erscheinungsbild-Menue der Standalone-EXE ---
+msgid "Appearance"
+msgstr "Erscheinungsbild"
+
+msgid "Like Windows"
+msgstr "Wie Windows"
+
+msgid "Light"
+msgstr "Hell"
+
+msgid "Dark"
+msgstr "Dunkel"
+
