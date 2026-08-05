@@ -28,6 +28,7 @@ type
     [Test] procedure EffortMinutesForCodeSmellIs10;
     [Test] procedure CustomRuleIdOverridesCatalog;
     [Test] procedure JsonParsesAsValidJson;
+    [Test] procedure ControlCharInMessage_StillParses;
   end;
 
 implementation
@@ -289,6 +290,42 @@ begin
     Findings.Free;
   end;
 end;
+
+procedure TTestExportSonarGeneric.ControlCharInMessage_StillParses;
+// RFC 8259 verlangt fuer U+0000..U+001F ein Escape der Form \uXXXX. Ohne
+// die Option EncodeBelow32 schrieb Format(2) solche Zeichen ROH heraus,
+// und SonarQube bricht beim ERSTEN davon ab - dann faellt nicht ein Issue
+// weg, sondern der GESAMTE Report.
+//
+// Der Fall ist real und war im Repo belegt (sca-findings.json:990):
+// unsere EIGENE Quelle enthaelt 'edToken.PasswordChar := #0;', der Lexer
+// loest das Char-Literal in ein echtes Zeichen auf (uLexer.pas:531), und
+// der Detektor uebernimmt es unveraendert in die Meldung.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Json     : string;
+  Val      : TJSONValue;
+begin
+  Val := nil;
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  // EIN try/finally statt zweier verschachtelter - der eigene Self-Scan
+  // meldet NestedTry, und hier gibt es keinen Grund dafuer.
+  try
+    Findings.Add(MakeFinding(fkHardcodedSecret, 'src\A.pas', 1,
+      'edToken.PasswordChar = ''' + #0 + ''''));
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\B.pas', 2,
+      'ESC ' + #27 + ' und Vertikaltabulator ' + #11));
+    Json := TSonarGenericWriter.ToJsonString(Findings, '');
+    Assert.IsTrue(Pos(#0, Json) = 0, 'rohes #0 steht im JSON');
+    Assert.IsTrue(Pos(#27, Json) = 0, 'rohes ESC steht im JSON');
+    Val := TJSONObject.ParseJSONValue(Json);
+    Assert.IsNotNull(Val, 'JSON mit Steuerzeichen parst nicht');
+  finally
+    Val.Free;
+    Findings.Free;
+  end;
+end;
+
 
 initialization
   TDUnitX.RegisterTestFixture(TTestExportSonarGeneric);
