@@ -368,9 +368,14 @@ begin
     finally
       Ini.Free;
     end;
+  // noinspection EmptyExcept
+  // BEWUSST leer: eine nicht schreibbare Konfiguration ist kein Fehler,
+  // den diese Unit behandeln koennte oder muesste - die Wahl gilt dann
+  // eben nur fuer diese Sitzung (so in der Deklaration zugesagt). Die
+  // Vorgaengerfassung wies hier 'Ini := nil' zu, nur um den Block nicht
+  // leer zu lassen; der Compiler hat das zu Recht als ungenutzten Wert
+  // gemeldet (H2077). Ein Fuellwort ist keine Fehlerbehandlung.
   except
-    // Nur diese Sitzung - siehe Deklaration.
-    Ini := nil;
   end;
 end;
 
