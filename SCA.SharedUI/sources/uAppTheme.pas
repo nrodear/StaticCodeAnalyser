@@ -54,9 +54,11 @@ type
     // Freigabe per try/finally sauber bleibt und kein try/except sie
     // ueberspringt.
     class function ReadSystemDark: Boolean; static;
-    // True bei Erfolg. Eine nicht schreibbare Konfiguration darf die
-    // Umschaltung nicht verhindern - sie gilt dann nur fuer die Sitzung.
-    class function PersistMode(AMode: TAppThemeMode): Boolean; static;
+    // Eine nicht schreibbare Konfiguration darf die Umschaltung nicht
+    // verhindern - die Wahl gilt dann nur fuer diese Sitzung. Bewusst
+    // OHNE Rueckgabewert: niemand wertet ihn aus, und ein ungenutztes
+    // Result ist H2077.
+    class procedure PersistMode(AMode: TAppThemeMode); static;
     class function ActiveStyleIsDark: Boolean; static;
     class procedure ApplyStyle; static;
   public
@@ -124,6 +126,21 @@ const
   // gelinkten Style lieferte TrySetStyle('Windows10Dark') False, und die
   // EXE startete auf dunklem Windows hell (Abnahme-Befund 2026-08-05).
   DARK_RESOURCE = 'WIN10DARK';
+
+  // Der Ressourcen-TYP muss 'VCLSTYLE' sein, NICHT RT_RCDATA. Grund, am
+  // 2026-08-05 durch eine Zugriffsverletzung gelernt:
+  // TStyleManager.TryLoadFromResource reicht den ResourceType-PChar an
+  // FindStyleDescriptor weiter - und DAS nimmt einen 'string'
+  // (Vcl.Themes.pas:6001). Die implizite Umwandlung DEREFERENZIERT den
+  // Zeiger. RT_RCDATA ist aber PChar(10), also der Zahlenwert 10 als
+  // Zeiger - und genau das meldete der Absturz:
+  //   'access violation ... read of address 0x0000000a'.
+  // Der Compiler kann das nicht sehen: PChar passt formal auf beide
+  // Bedeutungen.
+  // 'VCLSTYLE' ist der Typ, den Vcl.Styles selbst registriert
+  // (TStyleEngine.ResourceTypeName, Vcl.Styles.pas:145) - die .rc
+  // deklariert die Ressource ebenso.
+  DARK_RES_TYPE = 'VCLSTYLE';
 
   REG_PERSONALIZE =
     'Software\Microsoft\Windows\CurrentVersion\Themes\Personalize';
@@ -213,7 +230,7 @@ begin
       // fuer die Prozesslebensdauer gueltig (TStyleManager besitzt es).
       if not Assigned(FDarkHandle) then
         if not TStyleManager.TryLoadFromResource(HInstance, DARK_RESOURCE,
-                 RT_RCDATA, FDarkHandle) then
+                 PChar(DARK_RES_TYPE), FDarkHandle) then
           FDarkHandle := nil;
       if Assigned(FDarkHandle) then
         // noinspection NestedTry
@@ -249,11 +266,10 @@ begin
   ApplyStyle;
 end;
 
-class function TAppTheme.PersistMode(AMode: TAppThemeMode): Boolean;
+class procedure TAppTheme.PersistMode(AMode: TAppThemeMode);
 var
   Ini : TIniFile;
 begin
-  Result := False;
   // Die Verschachtelung ist hier die richtige Form, nicht ein Versehen:
   // das innere try/finally gehoert der RESSOURCE (TIniFile muss auch bei
   // einem Schreibfehler freigegeben werden), das aeussere try/except der
@@ -265,12 +281,12 @@ begin
     // noinspection NestedTry
     try
       Ini.WriteString(INI_SECTION, INI_KEY, ModeToStr(AMode));
-      Result := True;
     finally
       Ini.Free;
     end;
   except
-    Result := False;
+    // Nur diese Sitzung - siehe Deklaration.
+    Ini := nil;
   end;
 end;
 
