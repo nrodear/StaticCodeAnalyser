@@ -27,9 +27,20 @@ type
     [Test] procedure DeclAndImpl_ReportedOnce;
     [Test] procedure SameNameInTwoClasses_BothReported;
     [Test] procedure DeclarationOnly_StillReported;
+    // ---- Testpfad-Gate (2026-08-05) ----
+    [Test] procedure MethodName_TestDirSegment_Suppressed;
+    [Test] procedure MethodName_ProductionPath_StillReported;
+    [Test] procedure MethodName_BareFileName_StillReported;
   end;
 
 implementation
+
+// noinspection-file HardcodedPath, ClassPerFile
+// HardcodedPath: die Testpfade sind der PRUEFGEGENSTAND des
+// Testpfad-Gates - sie muessen woertlich dastehen, damit die
+// Verankerung der Segment-Muster ueberhaupt pruefbar ist.
+// ClassPerFile: die Klassen stehen in QUELLTEXT-STRINGS der
+// Fixtures, nicht als zweite Klasse dieser Unit.
 
 uses
   System.SysUtils, System.Generics.Collections,
@@ -399,6 +410,62 @@ begin
     'Reine Deklaration bleibt ein Befund');
   finally F.Free; end;
 end;
+
+{ ---- Testpfad-Gate (2026-08-05) ---- }
+
+// GEMESSEN vor dem Bau: 7.801 der 19.504 Korpusfunde (40 %) liegen in
+// Testpfad-Segmenten, davon 6.292 unter 'unittests' - im Wesentlichen
+// sechs Kopien eines generierten Firebird-Interface-Headers unter
+// bin32/ und bin64/ zweier Repo-Kopien.
+const
+  SRC_LOWERCASE_METHOD =
+    'unit t;'#13#10+
+    'interface'#13#10+
+    'type'#13#10+
+    '  TFoo = class'#13#10+
+    '    procedure initSomething;'#13#10+
+    '  end;'#13#10+
+    'implementation'#13#10+
+    'procedure TFoo.initSomething; begin end;'#13#10+
+    'end.';
+
+procedure TTestMethodName.MethodName_TestDirSegment_Suppressed;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := MethodFindingsFor(SRC_LOWERCASE_METHOD,
+         'D:\repo\unittests\bin32\firebird\Firebird.pas');
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMethodName),
+      'Namensregel gilt nicht in Testverzeichnissen');
+  finally F.Free; end;
+end;
+
+procedure TTestMethodName.MethodName_ProductionPath_StillReported;
+// WAECHTER gegen ein zu breites Gate: derselbe Quelltext im Produktivbaum
+// MUSS weiter melden. Ohne diesen Test koennte das Gate die Regel
+// unbemerkt komplett stilllegen.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := MethodFindingsFor(SRC_LOWERCASE_METHOD, 'D:\repo\src\uFoo.pas');
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMethodName),
+      'Produktionsfund darf nicht verschwinden');
+  finally F.Free; end;
+end;
+
+procedure TTestMethodName.MethodName_BareFileName_StillReported;
+// Stufe tplFixtureDir wertet NUR Verzeichnis-Segmente. Ein blosser
+// Dateiname - auch einer, der auf ein Basename-Muster passt - darf das
+// Gate nie ausloesen (sonst faellt der Test-Harness selbst darunter).
+var F: TObjectList<TLeakFinding>;
+begin
+  F := MethodFindingsFor(SRC_LOWERCASE_METHOD, 'MySample.pas');
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMethodName),
+      'Basename ohne Verzeichnis ist kein Testpfad');
+  finally F.Free; end;
+end;
+
 
 initialization
   TDUnitX.RegisterTestFixture(TTestMethodName);
