@@ -180,6 +180,7 @@ type
     // --- Ist-Messung 2026-08-05: Ctor-Argument in einer Zuweisungs-RHS ---
     [Test] procedure Leak_CtorArgInAssignRhs_OwnershipRecognized;
     [Test] procedure Leak_CtorArgStandaloneCall_OwnershipRecognized;
+    [Test] procedure Leak_CtorArgIsMemberOfVar_StillReported;
     [Test] procedure Leak_PlainCallArgInAssignRhs_KnownGap;
     [Test] procedure Leak_BareFileNameNoDirSegments_StillReported;
     [Test] procedure Leak_TestDirSegment_Suppressed;
@@ -5381,6 +5382,30 @@ begin
   Assert.AreEqual<Integer>(0,
     LeakCountForPath(LEAKY_SRC, 'D:\repo\tests\uFoo.pas'),
     'Verzeichnis-Segment tests greift');
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_CtorArgIsMemberOfVar_StillReported;
+// WAECHTER, belegt am Korpus (after141): bei
+//   Ini := TIniFile.Create(Files.Strings[i]);
+// uebergibt der Aufrufer einen STRING, nicht die Liste. 'Files' behaelt
+// seine Ownership und muss weiter gemeldet werden. Die erste Fassung des
+// Ctor-Gates benutzte VarInArgs, das nur die Wortgrenze prueft, und legte
+// den Fund faelschlich stumm.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var Files: TStringList; Ini: TIniFile;'#13#10+
+  'begin'#13#10+
+  '  Files := TStringList.Create;'#13#10+
+  '  Ini := TIniFile.Create(Files.Strings[0]);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
+      'Member-Zugriff im Ctor-Argument ist kein Ownership-Transfer');
+  finally F.Free; end;
 end;
 
 end.

@@ -1248,6 +1248,34 @@ var
     end;
   end;
 
+  function VarItselfInArgs(const CallName: string; AfterPos: Integer): Boolean;
+  // Wie VarInArgs, aber die Variable muss SELBST uebergeben werden - nicht
+  // ein Member von ihr. Belegt am Korpus (after141):
+  //   Ini := TIniFile.Create(Files.Strings[i]);
+  // Hier uebergibt der Aufrufer einen STRING, kein Objekt; 'Files' behaelt
+  // seine Ownership. VarInArgs sieht nur die Wortgrenze und haette den
+  // Fund faelschlich stillgelegt.
+  // Folgt dem Treffer ein '.' oder '[', ist es ein Member-Zugriff und
+  // zaehlt nicht. Wird NUR vom Ctor-Argument-Gate benutzt; der aeltere
+  // nkCall-Zweig behaelt bewusst sein permissiveres VarInArgs, damit diese
+  // Aenderung keine bestehenden Unterdrueckungen aufhebt.
+  var
+    p, q: Integer;
+  begin
+    Result := False;
+    p := PosEx(VarNameLow, CallName, AfterPos);
+    while p > 0 do
+    begin
+      if IsWholeWord(CallName, VarNameLow, p) then
+      begin
+        q := p + Length(VarNameLow);
+        if (q > Length(CallName))
+           or not CharInSet(CallName[q], ['.', '[']) then Exit(True);
+      end;
+      p := PosEx(VarNameLow, CallName, p + 1);
+    end;
+  end;
+
   function CondPassesToOwnerAdd(const CondLow: string): Boolean;
   // A2/Ownership-Sink (Core-Audit 2026-07-18): Container-Add im BEDINGUNGS-
   // Kontext. Der Parser legt Calls INNERHALB einer if/while-Bedingung NICHT als
@@ -1365,7 +1393,7 @@ begin
     // dieser Fix stellt Gleichbehandlung her, er fuehrt keine neue Politik ein.
     var RhsLowCtor := N.TypeRef.ToLower;
     var pRhsCreate := Pos('.create(', RhsLowCtor);
-    if (pRhsCreate > 0) and VarInArgs(RhsLowCtor, pRhsCreate + 8) then
+    if (pRhsCreate > 0) and VarItselfInArgs(RhsLowCtor, pRhsCreate + 8) then
       Exit(True);
     // Var-zu-Field-Transfer:
     //   FField := varName              -> Klassen-Feld haelt jetzt Ownership
