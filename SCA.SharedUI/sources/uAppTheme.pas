@@ -43,7 +43,10 @@ type
     class var FMode      : TAppThemeMode;
     class var FOnChanged : TNotifyEvent;
     class var FApplying  : Boolean;
-    class var FDarkHandle: TStyleServicesHandle;   // einmal geladen, s. ApplyStyle
+    // TStyleServicesHandle ist ein PUBLIC TYPE innerhalb von TStyleManager
+    // (Vcl.Themes.pas:1771, '= type Pointer') - unqualifiziert ist der
+    // Bezeichner E2003. Der erste Build hat genau das gezeigt.
+    class var FDarkHandle: TStyleManager.TStyleServicesHandle;
     class function ModeToStr(AMode: TAppThemeMode): string; static;
     class function StrToMode(const S: string): TAppThemeMode; static;
     // Roher Registry-Zugriff. Wirft bei unlesbarer Registry - der
@@ -213,10 +216,19 @@ begin
                  RT_RCDATA, FDarkHandle) then
           FDarkHandle := nil;
       if Assigned(FDarkHandle) then
-      begin
-        TStyleManager.SetStyle(FDarkHandle);
-        Applied := True;
-      end;
+        // noinspection NestedTry
+        // Aeusseres try/finally gehoert dem FApplying-Flag, dieses
+        // try/except der Politik "kein Absturz, nur kein Dunkelmodus" -
+        // dieselbe begruendete Paarung wie in PersistMode.
+        try
+          TStyleManager.SetStyle(FDarkHandle);
+          Applied := True;
+        except
+          // Politik der Unit: kein Absturz, nur kein Dunkelmodus. Handle
+          // verwerfen, damit kein weiterer Versuch mit demselben kaputten
+          // Zustand laeuft; unten faellt es sichtbar auf hell zurueck.
+          FDarkHandle := nil;
+        end;
     end;
     // Hell - oder die Ressource fehlt (dann bleibt es sichtbar hell
     // statt still kaputt).
