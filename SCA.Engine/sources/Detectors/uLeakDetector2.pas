@@ -1403,26 +1403,18 @@ begin
       if (Length(LHSOrig) >= 2) and (LHSOrig[1] = 'F') and
          (LHSOrig[2] >= 'A') and (LHSOrig[2] <= 'Z') then
         Exit(True);
-      // Erweiterung 2026-08-05: JEDES andere Zuweisungsziel zaehlt ebenfalls
-      // als Weitergabe. Die Feld-Heuristik oben (F<Gross>/self.) traf nur die
-      // Delphi-Namenskonvention; sie geht an zwei belegten Formen vorbei:
-      //   mormot.core.variants.pas:10481  CurrDict := v
-      //   JclStackTraceViewerStackUtils.pas:499  Stream := SA
-      // In beiden Faellen haelt nach der Zuweisung ein ANDERER Bezeichner das
-      // Objekt; ob DER freigegeben wird, ist eine Frage an dessen Lebensdauer,
-      // nicht an diese Variable. Ein Free ueber die alte Variable waere sogar
-      // riskant (der neue Halter benutzt sie weiter).
-      //
-      // Zwei Einschraenkungen, damit das Gate nicht alles verschluckt:
-      //   * Selbstzuweisung zaehlt nicht (sonst wuerde 'v := v' den Fund
-      //     stilllegen).
-      //   * Das Ziel muss ein Bezeichner sein, kein indizierter Ausdruck -
-      //     'Arr[i] := v' laesst offen, ob das Array die Ownership uebernimmt,
-      //     und faellt hier bewusst NICHT durch.
-      var LHSLow := Trim(LHSOrig.ToLower);
-      if (LHSLow <> '') and (LHSLow <> VarNameLow)
-         and (Pos('[', LHSLow) = 0) then
-        Exit(True);
+      // BEWUSST NICHT erweitert auf beliebige Zuweisungsziele (Versuch vom
+      // 2026-08-05, nach zwei roten Bestandstests zurueckgenommen):
+      // 'LOther := LItem' sieht wie eine Weitergabe aus, ist aber keine -
+      // wird KEINE der beiden Variablen freigegeben, leckt das Objekt.
+      // Leak_PlainLocalAssign_StillReported und
+      // Leak_AssignedToOtherVarFreedViaOther_OriginalLeaks halten genau das
+      // fest. Ein Feld (F<Gross>/self.) ueberlebt den Methoden-Scope und ist
+      // deshalb etwas anderes als eine zweite lokale Variable.
+      // Die beiden Korpus-Faelle, die den Versuch ausgeloest hatten
+      // (mormot 'CurrDict := v', jcl 'Stream := SA') brauchen Typwissen -
+      // Schleifen-/Interface-Variable statt Nachbar-Local - und bleiben
+      // damit offen.
     end;
   end;
 
