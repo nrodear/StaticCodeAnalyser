@@ -8,7 +8,8 @@ unit uTestSourceLineEdit;
 interface
 
 uses
-  DUnitX.TestFramework;
+  DUnitX.TestFramework,
+  System.SysUtils;   // TBytes (ReadBytes-Signatur im interface)
 
 type
   [TestFixture]
@@ -38,7 +39,7 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Classes, System.IOUtils,
+  System.Classes, System.IOUtils,
   uSourceLineEdit;
 
 const
