@@ -186,6 +186,10 @@ type
     procedure QuickFixSelectedFinding;
     // Kachel-Klicks wie im Plugin: Severity-/Typ-Kacheln filtern das
     // Grid, die Quality-Kachel setzt alle Filter zurueck.
+    // Drei Status-Kanaele wie im Plugin (uIDEStatusBar-Schema):
+    // 0 = Fundzahl (persistent), 1 = Scan-Fortschritt, 2 = Ereignisse.
+    procedure StatusFindings(const T: string);
+    procedure StatusProgress(const T: string);
     procedure WireTiles;
     procedure TileClickSeverity(Sender: TObject);
     procedure TileClickType(Sender: TObject);
@@ -614,6 +618,7 @@ begin
   // EndAnalysisUI versteckte Progressbar und Cancel des aeusseren Laufs,
   // Ergebnisse ueberschrieben sich. Export mit sperren: er laese
   // FAllFindings, waehrend der Lauf sie ersetzt.
+  StatusProgress('');
   Button6.Enabled    := False;
   Button7.Enabled    := False;
   BtnBranch.Enabled  := False;
@@ -693,7 +698,7 @@ begin
       FLastProgressTick := tick;
       if FProgressBar.Style <> pbstMarquee then
         FProgressBar.Style := pbstMarquee;
-      StatusBar1.Panels[2].Text := Format(_('Scanning... %d found'), [Current]);
+      StatusProgress(Format(_('Scanning... %d found'), [Current]));
       Application.ProcessMessages;
     end;
   end
@@ -709,10 +714,10 @@ begin
         FProgressBar.Max := Total;
       FProgressBar.Position := Current;
       if Total > 0 then
-        StatusBar1.Panels[2].Text := Format(_('File %d / %d (%d%%)'),
-          [Current, Total, Round(Current * 100 / Total)])
+        StatusProgress(Format(_('File %d / %d (%d%%)'),
+          [Current, Total, Round(Current * 100 / Total)]))
       else
-        StatusBar1.Panels[2].Text := Format(_('File %d'), [Current]);
+        StatusProgress(Format(_('File %d'), [Current]));
       Application.ProcessMessages;
     end;
   end;
@@ -1468,13 +1473,14 @@ begin
     if FAllFindings.Count = 0 then
     begin
       ResultGrid.Cells[0, 1] := _('No findings.');
+      StatusFindings(Format(_('%d / %d findings'), [0, 0]));
       StatusBar1.Panels[2].Text  := _('Done. No findings.');
     end
     else
     begin
       ResultGrid.Cells[0, 1] := _('No matches.');
-      StatusBar1.Panels[2].Text  := Format(_('Filtered: 0 of %d findings'),
-        [FAllFindings.Count]);
+      StatusFindings(Format(_('%d / %d findings'),
+        [0, FAllFindings.Count]));
     end;
     Exit;
   end;
@@ -1484,17 +1490,16 @@ begin
   // 66k+ Befunden ~50-100 MB Cell-Storage im TStringGrid (32-Bit-Limit).
   ResultGrid.RowCount := FDisplayedFindings.Count + 1;
   ResultGrid.Invalidate;
+  // Fundzahl PERSISTENT in Panel 0 (wortgleich zum Plugin) - vorher
+  // stand sie in Panel 2 und wurde vom naechsten Klick-Ereignis
+  // ('AI prompt copied ...') sofort weggewischt.
   if TotalMatched > FDisplayedFindings.Count then
-    // gekappt - User darauf hinweisen, dass mehr Treffer existieren.
-    StatusBar1.Panels[2].Text := Format(_(
+    StatusFindings(Format(_(
       'Showing first %d of %d findings - refine the filter to see more'),
-      [FDisplayedFindings.Count, TotalMatched])
-  else if TotalMatched = FAllFindings.Count then
-    StatusBar1.Panels[2].Text := Format(_('Done. %d findings. Click a row -> ' +
-      'AI prompt on clipboard.'), [FAllFindings.Count])
+      [FDisplayedFindings.Count, TotalMatched]))
   else
-    StatusBar1.Panels[2].Text := Format(_('Filtered: %d of %d findings'),
-      [TotalMatched, FAllFindings.Count]);
+    StatusFindings(Format(_('%d / %d findings'),
+      [TotalMatched, FAllFindings.Count]));
 
   finally
     FGridUpdating := False;
@@ -2377,6 +2382,16 @@ begin
   if not Assigned(CountLbl) or not Assigned(CountLbl.Parent)
      or not Assigned(CountLbl.Parent.Parent) then Exit;
   TileApplyRecursive(CountLbl.Parent.Parent, AHint, ATag, AHandler);
+end;
+
+procedure TForm2.StatusFindings(const T: string);
+begin
+  StatusBar1.Panels[0].Text := T;
+end;
+
+procedure TForm2.StatusProgress(const T: string);
+begin
+  StatusBar1.Panels[1].Text := T;
 end;
 
 procedure TForm2.WireTiles;

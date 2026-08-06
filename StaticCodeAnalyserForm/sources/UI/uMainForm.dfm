@@ -28,7 +28,6 @@ object Form2: TForm2
       item
         Width = 0
       end>
-    SimpleText = 'Ready.'
     ExplicitTop = 485
     ExplicitWidth = 848
   end
