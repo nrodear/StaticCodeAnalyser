@@ -45,6 +45,8 @@ type
     procedure DoExportJira(Sender: TObject);
     procedure DoCopyClipboard(Sender: TObject);
     procedure DoExportHtml(Sender: TObject);
+    procedure DoExportSarif(Sender: TObject);
+    procedure AddSonarItems;
     procedure DoExportSonarGeneric(Sender: TObject);
     procedure DoExportSonarSingleIssue(Sender: TObject);
     procedure DoButtonClick(Sender: TObject);
@@ -84,7 +86,9 @@ implementation
 
 uses
   System.SysUtils, System.Types, Vcl.Dialogs, Vcl.Clipbrd,
-  uExport, uSCAConsts, uLocalization, uSonarPush;
+  uExport, uSCAConsts, uLocalization, uSonarPush,
+  uExportSARIF,   // TSARIFWriter (SARIF-Eintrag im Menue)
+  uEngineApi;     // SCA_DEFAULT_TOOLNAME
 
 constructor TFindingExportMenu.Create(AOwner: TComponent;
   AAllFindings: TObjectList<TLeakFinding>;
@@ -108,12 +112,23 @@ begin
     Mi.OnClick := DoExportHtml;
     FPopup.Items.Add(Mi);
   Mi := TMenuItem.Create(FPopup);
-    Mi.Caption := 'JSON...';
+    // Umfang GEHOERT in die Beschriftung: JSON/CSV schreiben die
+    // GEFILTERTE Sicht, HTML/Sonar/SARIF immer alles. Vorher sagte das
+    // nur der HTML-Eintrag - die Zahlendifferenz zwischen zwei Exporten
+    // derselben Analyse war damit unerklaerlich.
+    Mi.Caption := _('JSON (filtered view)...');
     Mi.OnClick := DoExportJson;
     FPopup.Items.Add(Mi);
   Mi := TMenuItem.Create(FPopup);
-    Mi.Caption := 'CSV...';
+    Mi.Caption := _('CSV (filtered view)...');
     Mi.OnClick := DoExportCsv;
+    FPopup.Items.Add(Mi);
+  Mi := TMenuItem.Create(FPopup);
+    // SARIF konnte bisher nur die CLI - die Engine-Seite war laengst da
+    // (TSARIFWriter.WriteFile), im Menue fehlte sie schlicht. Fuer
+    // CI-Uploads (GitHub Code Scanning) das wichtigste Format.
+    Mi.Caption := _('SARIF (all findings)...');
+    Mi.OnClick := DoExportSarif;
     FPopup.Items.Add(Mi);
   Mi := TMenuItem.Create(FPopup);
     Mi.Caption := '-';
@@ -129,6 +144,19 @@ begin
   Mi := TMenuItem.Create(FPopup);
     Mi.Caption := '-';
     FPopup.Items.Add(Mi);
+  AddSonarItems;
+end;
+
+procedure TFindingExportMenu.AddSonarItems;
+// Letzter Menue-Block, ausgelagert: mit dem SARIF-Eintrag kreuzte der
+// Konstruktor die LongMethod-Schwelle. Die OnClick-Zuweisungen stehen
+// bewusst ausgeschrieben - ein 'AddItem(Caption, Handler)'-Helfer waere
+// kuerzer, aber der eigene UnusedPrivateMethod-Detektor zaehlt
+// namentliche Vorkommen im Unit-Text und saehe die Handler dann nicht
+// mehr als benutzt.
+var
+  Mi : TMenuItem;
+begin
   Mi := TMenuItem.Create(FPopup);
     Mi.Caption := _('Sonar: write Generic Issue report (all findings)...');
     Mi.OnClick := DoExportSonarGeneric;
@@ -214,7 +242,12 @@ begin
     Dlg.Title    := _('CSV export');
     Dlg.Filter   := _('CSV file (*.csv)|*.csv');
     Dlg.DefaultExt := 'csv';
-    Dlg.FileName := 'analyse-befunde.csv';
+    Dlg.FileName := 'sca-findings.csv';
+    if Assigned(FGetBaseDir) and (FGetBaseDir() <> '') then
+      Dlg.InitialDir := FGetBaseDir();
+    // Ohne den Prompt ueberschrieb der Export stillschweigend -
+    // HTML/Sonar hatten ihn seit jeher.
+    Dlg.Options  := Dlg.Options + [ofOverwritePrompt];
     if not Dlg.Execute then Exit;
 
     Lst := TObjectList<TLeakFinding>.Create(False);
@@ -252,7 +285,10 @@ begin
     Dlg.Title    := _('JSON export');
     Dlg.Filter   := _('JSON file (*.json)|*.json');
     Dlg.DefaultExt := 'json';
-    Dlg.FileName := 'analyse-befunde.json';
+    Dlg.FileName := 'sca-findings.json';
+    if Assigned(FGetBaseDir) and (FGetBaseDir() <> '') then
+      Dlg.InitialDir := FGetBaseDir();
+    Dlg.Options  := Dlg.Options + [ofOverwritePrompt];
     if not Dlg.Execute then Exit;
 
     Lst := TObjectList<TLeakFinding>.Create(False);
@@ -313,6 +349,53 @@ begin
   FOnStatus(Format(
     _('Errors+warnings for %s copied to clipboard.'),
     [ExtractFileName(src)]));
+end;
+
+procedure TFindingExportMenu.DoExportSarif(Sender: TObject);
+// Schreibt SARIF 2.1.0 mit ALLEN Findings (FAll, vor Grid-Filter) -
+// dieselbe Umfangs-Semantik wie Sonar/HTML und wie der CLI-Schalter
+// --report-sarif.
+var
+  Dlg     : TSaveDialog;
+  BaseDir : string;
+  Bulk    : TObjectList<TLeakFinding>;
+  Fnd     : TLeakFinding;
+begin
+  if FAll.Count = 0 then
+  begin
+    FOnStatus(_('Nothing to export - no findings.'));
+    Exit;
+  end;
+  if Assigned(FGetBaseDir) then BaseDir := FGetBaseDir() else BaseDir := '';
+  Dlg := TSaveDialog.Create(nil);
+  try
+    Dlg.Title      := _('SARIF export');
+    Dlg.Filter     := _('SARIF file (*.sarif)|*.sarif');
+    Dlg.DefaultExt := 'sarif';
+    Dlg.FileName   := 'sca-findings.sarif';
+    if BaseDir <> '' then Dlg.InitialDir := BaseDir;
+    Dlg.Options    := Dlg.Options + [ofOverwritePrompt];
+    if not Dlg.Execute then Exit;
+    try
+      // Nicht-besitzende Huelle wie im Sonar-Pfad: der Writer erwartet
+      // eine TObjectList, FAll gehoert aber der Form.
+      Bulk := TObjectList<TLeakFinding>.Create(False);
+      try
+        for Fnd in FAll do Bulk.Add(Fnd);
+        TSARIFWriter.WriteFile(Dlg.FileName, Bulk, BaseDir, SCA_VERSION,
+                               SCA_DEFAULT_TOOLNAME);
+      finally
+        Bulk.Free;
+      end;
+      FOnStatus(Format(_('SARIF report saved: %s (%d findings)'),
+        [ExtractFileName(Dlg.FileName), FAll.Count]));
+    except
+      on E: Exception do
+        FOnStatus(_('SARIF export failed: ') + E.Message);
+    end;
+  finally
+    Dlg.Free;
+  end;
 end;
 
 procedure TFindingExportMenu.DoExportSonarGeneric(Sender: TObject);

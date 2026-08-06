@@ -1906,3 +1906,29 @@ msgstr "Suppress: Datei nicht schreibbar: %s"
 
 msgid "Quick-Fix: could not write file: %s"
 msgstr "Quick-Fix: Datei nicht schreibbar: %s"
+
+# --- 2026-08-07: Kacheln, Statusleiste, Export (EXE) ---
+
+msgid "JSON (filtered view)..."
+msgstr "JSON (gefilterte Sicht)..."
+
+msgid "CSV (filtered view)..."
+msgstr "CSV (gefilterte Sicht)..."
+
+msgid "SARIF (all findings)..."
+msgstr "SARIF (alle Befunde)..."
+
+msgid "SARIF export"
+msgstr "SARIF-Export"
+
+msgid "SARIF file (*.sarif)|*.sarif"
+msgstr "SARIF-Datei (*.sarif)|*.sarif"
+
+msgid "SARIF report saved: %s (%d findings)"
+msgstr "SARIF-Bericht gespeichert: %s (%d Befunde)"
+
+msgid "SARIF export failed: "
+msgstr "SARIF-Export fehlgeschlagen: "
+
+msgid "Nothing to export - no findings."
+msgstr "Nichts zu exportieren - keine Befunde."
