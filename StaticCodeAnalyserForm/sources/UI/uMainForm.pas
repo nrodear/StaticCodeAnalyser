@@ -1331,7 +1331,20 @@ begin
   if FSortColumn >= 0 then
   begin
     var SortCfg: TFindingSortConfig;
-    SortCfg.Column     := FSortColumn;
+    // ZUORDNEN, nicht durchreichen: TFindingSorter kennt das 6-spaltige
+    // PLUGIN-Layout (0=Datei 1=Methode 2=Zeile 3=Typ 4=Detailtext
+    // 5=Schwere-RANG, uFindingFilter case-Verteiler). Das EXE-Grid hat
+    // 5 Spalten (0=Datei 1=Methode 2=Zeile 3=Detail 4=Schwere). Roh
+    // durchgereicht sortierte 'Severity' nach dem MELDETEXT und
+    // 'Detail' nach der unsichtbaren Typ-Kategorie - bei luegendem
+    // Sortier-Pfeil; die Rang-Sortierung Error>Warning>Hint war aus
+    // der EXE heraus gar nicht erreichbar.
+    case FSortColumn of
+      3:   SortCfg.Column := 4;   // Detail  -> MissingVar-Text
+      4:   SortCfg.Column := 5;   // Schwere -> SeverityRank
+    else
+      SortCfg.Column := FSortColumn;  // Datei/Methode/Zeile sind gleich
+    end;
     SortCfg.Descending := FSortDescending;
     SortCfg.BaseDir    := FCurrentBaseDir;
     TFindingSorter.Sort(FDisplayedFindings, SortCfg);
@@ -1561,6 +1574,19 @@ var
   f       : TLeakFinding;
   msg     : string;
 begin
+  // Doppelklick auf die KOPFZEILE ist die naheliegende Geste, um die
+  // Sortierung schnell zweimal zu kippen - er darf nicht nebenbei den
+  // gerade selektierten Befund oeffnen. Die VCL ruft bei
+  // WM_LBUTTONDBLCLK erst DblClick und DANACH inherited MouseDown
+  // (TCustomGrid.MouseDown, Vcl.Grids.pas) - der zweite Sortier-Kipp
+  // laeuft also ohnehin ueber ResultGridMouseDown; hier ist nur
+  // auszusteigen. ResultGrid.Row taugt dafuer nicht (steht noch auf der
+  // Datenzeile), die Mausposition entscheidet.
+  var P := ResultGrid.ScreenToClient(Mouse.CursorPos);
+  var ACol, ARow: Integer;
+  ResultGrid.MouseToCell(P.X, P.Y, ACol, ARow);
+  if ARow = 0 then Exit;
+
   // Reentranz-Sperre. Der IDE-Weg haelt den Hauptthread 1200 ms an und
   // ruft danach ProcessMessages - weitere Doppelklicks in dieser Zeit
   // landen nicht im Papierkorb, sondern in der Nachrichtenschlange und
