@@ -43,8 +43,52 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   there — the built-in viewer stays available as `viewer` and is used
   automatically when no handler responds.
 
+### Added
+
+- **Keyboard triage in the standalone EXE**: <kbd>Enter</kbd> on a grid
+  row opens the finding (same routing as double-click). Multi-row
+  selection is enabled (`goRangeSelect`) — "Sonar: send selected" now
+  works on a range, as its code always intended.
+- **Live language switch for most of the EXE**: the filter row, grid
+  headers, analyse buttons and the hamburger menu now re-caption
+  immediately on language change; the language menu shows native names
+  (*Deutsch / English / Français*). Tiles and help panel still need a
+  restart — the hint says so.
+- **"Opening in Delphi IDE…"** status plus busy cursor before the
+  IDE-open path blocks the UI for its ~1.6 s keystroke navigation.
+
 ### Fixed
 
+- **Every arrow-key step overwrote the system clipboard** (~30 writes/s
+  on a held key — the VCL fires the click event on keyboard navigation
+  too), and a clipboard locked by another process threw an unhandled
+  exception mid-triage. Copying is debounced now (120 ms, one copy after
+  the selection settles) and a locked clipboard is skipped silently.
+- **Sorting or filtering hijacked the help panel and the clipboard**:
+  the grid rebuild fired a click event for a row nobody clicked. The
+  panel now deliberately follows the selection after a rebuild — without
+  touching the clipboard.
+- **In a read-only install folder (Program Files) every analyse click
+  failed before the scan started** — the recent-paths INI lives next to
+  the EXE and was written without a guard, ahead of the analysis call.
+- **A second analyse click during a running scan nested a second run
+  inside the first** (buttons stayed enabled while the progress callback
+  pumps messages); the window close button was ignored during a scan.
+  Analyse buttons are disabled during a run and the callback honours
+  application shutdown.
+- **Cancelling left a frozen "File 123 / 500" in the status bar and
+  said nothing**; the 20,000-file limit silently discarded the scan with
+  its message hidden *under* the progress bar. Cancel now reports
+  "Analysis cancelled.", and the limit explains the way out (pick a
+  subfolder, use the ignore list) in a dialog.
+- **The progress bar covered the very texts the scan writes** (it
+  spanned the whole status bar); it sits in a fixed area next to Cancel
+  now, DPI-scaled.
+- **Language mixing**: the filter-row captions were never translated
+  (always English); the severity dropdown's hints and the DFM viewer's
+  error were hard German (in any language). All routed through the
+  catalogs now. The Sonar export dialog got its missing title and a
+  translatable filter.
 - **Theme switching at runtime was broken in all three paths** (found by
   review against the VCL source, all in unbuilt code): the second dark
   activation re-read an already-consumed resource stream and silently
