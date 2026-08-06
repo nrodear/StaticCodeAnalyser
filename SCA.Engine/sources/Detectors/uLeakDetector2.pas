@@ -3396,7 +3396,13 @@ begin
   //     ohne Pfad. Mit Basename-Matching war der Detektor im GESAMTEN
   //     Harness stumm - alle Leak-Tests fielen auf 0 Funde (2026-08-05).
   //     Ohne Segmente im Pfad greift das Gate jetzt nicht mehr.
-  if TDetectorUtils.IsTestFixturePath(FileName, '', tplFixtureDir) then Exit;
+  // Verankert an der Scanwurzel: nur Segmente UNTERHALB zaehlen als
+  // Testverzeichnis. Unverankert traf das Gate auch Segmente des
+  // Checkout-Pfads (C:/Users/test/..., D:/Demos/...) und legte den
+  // Detektor fuer komplette Produktionsprojekte still. Ohne Kontext
+  // ('' - Tests, Direktaufrufe) gilt das dokumentierte Alt-Verhalten.
+  if TDetectorUtils.IsTestFixturePath(FileName,
+       CtxScanRoot(AContext), tplFixtureDir) then Exit;
 
   StartIdx := Results.Count;
   Methods := UnitNode.FindAllRef(nkMethod);

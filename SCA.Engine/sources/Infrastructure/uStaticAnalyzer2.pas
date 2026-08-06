@@ -127,6 +127,7 @@ uses
   uCyclomaticComplexity, uCustomRuleDetector,
   uDfmAnalysisRunner, uDfmRepoIndex, uSymbolReferenceIndex, uTypeIndex, uAstFileCache,
   uCrashDiag,        // auswertbarer Fehlertext statt roher RTL-Meldung
+  uDetectorUtils,    // CommonDirOf (ScanRootDir-Anker der tplFixtureDir-Gates)
   uFileTextCache, uAnalyzeContext,
   uSuppression, uCustomClassDiscovery, uPathOverrides, uConfidenceFilter,
   uSynchronizeInDestructor, uLockWithoutTryFinally,
@@ -448,7 +449,8 @@ begin
   AddD('FieldName',       fkFieldName,       TFieldNameDetector.AnalyzeUnit);
   AddD('TypeName',        fkTypeName,        TTypeNameDetector.AnalyzeUnit);
   AddD('InterfaceName',   fkInterfaceName,   TInterfaceNameDetector.AnalyzeUnit);
-  AddD3('MethodName',      fkMethodName,      TMethodNameDetector.AnalyzeUnit);
+  // AContext-fuehrend seit dem tplFixtureDir-Anker (ScanRootDir)
+  AddD('MethodName',       fkMethodName,      TMethodNameDetector.AnalyzeUnit);
   AddD('ReversedForRange',fkReversedForRange,TReversedForRangeDetector.AnalyzeUnit, ['downto']);
   AddD3('SelfAssignment',  fkSelfAssignment,  TSelfAssignmentDetector.AnalyzeUnit);
   AddD3('MissingRaise',    fkMissingRaise,    TMissingRaiseDetector.AnalyzeUnit);
@@ -567,7 +569,8 @@ begin
   AddD('UninitVar',      fkUninitVar,       TUninitVarDetector.AnalyzeUnit);
   AddD3('UnusedParameter',fkUnusedParameter, TUnusedParameterDetector.AnalyzeUnit);
   AddD('TautologicalBoolExpr',fkTautologicalBoolExpr, TTautologicalExprDetector.AnalyzeUnit);
-  AddD3('SqlDangerousStatement', fkSqlDangerousStatement, TSqlDangerousStatementDetector.AnalyzeUnit);
+  // AContext-fuehrend seit dem tplFixtureDir-Anker (ScanRootDir)
+  AddD('SqlDangerousStatement', fkSqlDangerousStatement, TSqlDangerousStatementDetector.AnalyzeUnit);
   // UnusedUses: bleibt im Detector-Pool eingetragen; der per-Scan-Opt-out
   // (AIncludeUsesCheck=False) wird in IsDetectorEnabled() zur Laufzeit
   // ausgewertet. Frueher haerteres Skip:=True nach dem Add - jetzt
@@ -1206,6 +1209,7 @@ begin
             WCtx.DfmRepoIndex    := MasterCtx.DfmRepoIndex;
             WCtx.TypeIndex       := MasterCtx.TypeIndex;
             WCtx.FileTextCache   := MasterCtx.FileTextCache;
+            WCtx.ScanRootDir     := MasterCtx.ScanRootDir;
             WCtx.DetectorTimings := nil;   // G3: keine Timings im Parallel-Modus
 
             while CancelFlag = 0 do
@@ -1510,6 +1514,16 @@ begin
     // Schwellen/Filter/Flags aus Ctx.Config statt direkt vom Prozess-Global -
     // Voraussetzung fuer parallele Scans, byte-identisch weil Config==Globals.
     Ctx.SnapshotConfigFromGlobals;
+    // Anker fuer die tplFixtureDir-Gates (Review 2026-08-06 Punkt 17):
+    // engste gemeinsame Wurzel der Dateiliste. Bevorzugt die INDEX-
+    // Liste - beim Einzeldatei-Scan mit ProjectRoot ueberspannt sie das
+    // Projekt, waehrend die Analyse-Liste nur die eine Datei enthaelt
+    // (deren eigenes Verzeichnis waere ein zu tiefer Anker und schaltete
+    // das Gate faktisch ab).
+    if (IndexFileList <> nil) and (IndexFileList.Count > 0) then
+      Ctx.ScanRootDir := TDetectorUtils.CommonDirOf(IndexFileList)
+    else
+      Ctx.ScanRootDir := TDetectorUtils.CommonDirOf(FileList);
     // TD-1 Inkrement 2c (2026-07-06): LeakyClasses-Baseline in den Context
     // kopieren. Der Global haelt hier bereits die per-Scan-Baseline
     // (RegisterToLeakyClasses lief in ApplyConfig/SetupForRun VOR dem Scan);

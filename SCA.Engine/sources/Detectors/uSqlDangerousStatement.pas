@@ -108,13 +108,16 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12, uDetectorUtils;
+  uAstNode, uSCAConsts, uMethodd12, uDetectorUtils,
+  uAnalyzeContext;   // TAnalyzeContext (ScanRootDir-Anker des Testpfad-Gates)
 
 type
   TSqlDangerousStatementDetector = class
   public
+    // AContext optional (AddD reicht den Scan-Ctx durch; Tests laufen
+    // mit nil) - ScanRootDir-Anker des Testpfad-Gates.
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
     class procedure AnalyzeMethod(MethodNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>);
   private
@@ -632,13 +635,16 @@ begin
 end;
 
 class procedure TSqlDangerousStatementDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>;
+  AContext: TAnalyzeContext);
 var
   Methods : TList<TAstNode>;
   M : TAstNode;
 begin
   // Testpfad-Gate (2026-08-05) - Begruendung und Messung im Unit-Kopf.
-  if TDetectorUtils.IsTestFixturePath(FileName, '', tplFixtureDir) then Exit;
+  // Verankert an der Scanwurzel - Begruendung s. uLeakDetector2 (Gate).
+  if TDetectorUtils.IsTestFixturePath(FileName,
+       CtxScanRoot(AContext), tplFixtureDir) then Exit;
 
   Methods := UnitNode.FindAll(nkMethod);
   try

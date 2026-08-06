@@ -111,6 +111,26 @@ type
       const BaseDir: string = '';
       Level: TTestPathLevel = tplFixture): Boolean; static;
 
+    /// <summary>
+    ///   Engste gemeinsame Wurzel einer Dateiliste - oder '', wenn es
+    ///   keine belastbare gibt (leere Liste, Cross-Drive, Ergebnis
+    ///   waere die Laufwerkswurzel).
+    /// </summary>
+    /// <remarks>
+    ///   Anker fuer IsTestFixturePath auf Stufe tplFixtureDir: nur
+    ///   Segmente UNTERHALB der Scanwurzel duerfen als Testverzeichnis
+    ///   zaehlen. Ohne Anker lief das Gate als Substring ueber den
+    ///   ganzen Absolutpfad und legte fuer ein Produktionsrepo unter
+    ///   C:/Users/test/... die gategebundenen Detektoren still.
+    ///
+    ///   Verwandt, aber bewusst NICHT geteilt: uEngineApi hat ein
+    ///   lokales CommonRootOf mit anderer Fallback-Semantik (Verzeichnis
+    ///   der Projektdatei) fuer Export-Pfade/IndexRoot. Hier ist ''
+    ///   der richtige Fehlwert - er heisst 'kein Anker moeglich', und
+    ///   der Aufrufer behaelt dann das dokumentierte Alt-Verhalten.
+    /// </remarks>
+    class function CommonDirOf(AFiles: TStrings): string; static;
+
     // Sucht Needle in Haystack, beide bereits lower-case, mit Wortgrenzen-
     // Pruefung links UND rechts. Liefert 1-basierte Position oder 0.
     // Beispiele:
@@ -602,6 +622,36 @@ begin
          and (Pos('/' + Rule.Pattern, FullLow) > 0) then Exit(True);
     end;
   end;
+end;
+
+class function TDetectorUtils.CommonDirOf(AFiles: TStrings): string;
+var
+  Root, Dir, Prev : string;
+  i               : Integer;
+begin
+  Result := '';
+  if (not Assigned(AFiles)) or (AFiles.Count = 0) then Exit;
+  Root := ExtractFilePath(AFiles[0]);
+  for i := 1 to AFiles.Count - 1 do
+  begin
+    Dir := ExtractFilePath(AFiles[i]);
+    while (Root <> '') and
+          not SameText(Copy(Dir, 1, Length(Root)), Root) do
+    begin
+      Prev := Root;
+      // eine Ebene hoch (Root endet immer mit Trenner)
+      Root := ExtractFilePath(ExcludeTrailingPathDelimiter(Root));
+      // Fixpunkt = Laufwerkswurzel bzw. drive-relatives 'C:' - dann
+      // gibt es keine gemeinsame Wurzel.
+      if SameText(Root, Prev) then Exit;
+    end;
+    if Root = '' then Exit;
+  end;
+  // Die LAUFWERKSWURZEL ist kein brauchbarer Anker ('C:/' hat Laenge 3):
+  // relativ zu ihr waere wieder fast der ganze Absolutpfad Segment-
+  // Material - genau das soll der Anker ja verhindern.
+  if Length(ExcludeTrailingPathDelimiter(Root)) <= 2 then Exit;
+  Result := Root;
 end;
 
 class function TDetectorUtils.FindWholeWordLower(const Needle,
