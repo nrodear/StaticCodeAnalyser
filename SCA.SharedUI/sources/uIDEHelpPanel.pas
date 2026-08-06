@@ -42,6 +42,13 @@ type
     FHelpAfter       : TMemo;
     FDockStateTimer  : TTimer;
     FAnchor          : TWinControl;
+    // Vom NUTZER gezogene Masse (0 = Automatik). ApplyLayout setzte
+    // frueher bei jedem Form-Resize zwangsweise auf 1/3 bzw. 50/50
+    // zurueck - ein gezogener Splitter war damit faktisch wirkungslos
+    // (UI-Review 2026-08-06, P2-18). Session-Gedaechtnis, bewusst nicht
+    // persistiert.
+    FUserHelpWidth    : Integer;
+    FUserBeforeHeight : Integer;
     // Standalone-Modus: Auto-Hide aus, Panel immer sichtbar. Default False
     // (IDE-Plugin verhaelt sich wie zuvor: blendet sich beim Docken aus).
     FAlwaysVisible   : Boolean;
@@ -49,6 +56,10 @@ type
     function  HostIsFloating: Boolean;
     procedure SyncHelpVisibility;
     procedure DockStateTimerTick(Sender: TObject);
+    procedure HelpSplitterMoved(Sender: TObject);
+    procedure BeforeSplitterMoved(Sender: TObject);
+    function  TargetHelpWidth(AParentW: Integer): Integer;
+    function  TargetBeforeHeight(AParentH: Integer): Integer;
   public
     // AOwner    - Komponenten-Owner (typisch der Frame, fuer auto-Free).
     // AParent   - Container der das Panel aufnimmt (PanelClient des Frames).
@@ -188,6 +199,7 @@ begin
   BeforeAfterSplitter.Height      := 4;
   BeforeAfterSplitter.Color       := IDE_SEPARATOR;
   BeforeAfterSplitter.ResizeStyle := rsUpdate;
+  BeforeAfterSplitter.OnMoved     := BeforeSplitterMoved;
 
   // ---- Nachher (Rest) ----
   HelpAfterPanel := TPanel.Create(Self);
@@ -227,6 +239,7 @@ begin
   FHelpSplitter.Width       := 4;
   FHelpSplitter.Color       := IDE_SEPARATOR;
   FHelpSplitter.ResizeStyle := rsUpdate;
+  FHelpSplitter.OnMoved     := HelpSplitterMoved;
 
   // ---- Polling-Timer fuer Floating/Docked-Detection ----
   // Resize feuert beim Re-Dock zu frueh (Floating-Property noch alter Wert);
@@ -283,21 +296,63 @@ begin
   SyncHelpVisibility;
 end;
 
+procedure TFindingHintPanel.HelpSplitterMoved(Sender: TObject);
+begin
+  // Der Splitter hat die Breite schon angewandt - nur MERKEN, damit
+  // ApplyLayout sie kuenftig respektiert statt auf 1/3 zurueckzusetzen.
+  if Assigned(FHelpPanel) then
+    FUserHelpWidth := FHelpPanel.Width;
+end;
+
+procedure TFindingHintPanel.BeforeSplitterMoved(Sender: TObject);
+begin
+  if Assigned(FHelpBeforePanel) then
+    FUserBeforeHeight := FHelpBeforePanel.Height;
+end;
+
+// Zielbreite des Hilfe-Panels: die vom NUTZER gezogene, sonst die
+// 1/3-Automatik. Geklemmt, damit ein Fenster-Shrink das Panel weder
+// verschluckt noch das Grid erdrueckt.
+function TFindingHintPanel.TargetHelpWidth(AParentW: Integer): Integer;
+begin
+  if FUserHelpWidth > 0 then
+  begin
+    Result := FUserHelpWidth;
+    if Result > AParentW - FHelpPanel.Constraints.MinWidth then
+      Result := AParentW - FHelpPanel.Constraints.MinWidth;
+  end
+  else
+  begin
+    Result := AParentW div 3;
+  end;
+end;
+
+// Zielhoehe des Vorher-Panels: Nutzerwahl, sonst 50/50; das
+// Nachher-Panel behaelt mindestens einen sichtbaren Rest.
+function TFindingHintPanel.TargetBeforeHeight(AParentH: Integer): Integer;
+const
+  MIN_AFTER_REST = 60;
+begin
+  if FUserBeforeHeight > 0 then
+    Result := FUserBeforeHeight
+  else
+    Result := (AParentH - 5) div 2;   // -5 fuer den Splitter
+  if Result > AParentH - MIN_AFTER_REST then
+    Result := AParentH - MIN_AFTER_REST;
+end;
+
 procedure TFindingHintPanel.ApplyLayout;
 var
   ShowHelp : Boolean;
-  ParentW  : Integer;
   ThirdW   : Integer;
   HalfW    : Integer;
 begin
   SyncHelpVisibility;
   ShowHelp := HostIsFloating;
 
-  // 1/3-Breite nur wenn Panel sichtbar ist.
   if ShowHelp and Assigned(FHelpPanel) and Assigned(FHelpPanel.Parent) then
   begin
-    ParentW := FHelpPanel.Parent.ClientWidth;
-    ThirdW  := ParentW div 3;
+    ThirdW := TargetHelpWidth(FHelpPanel.Parent.ClientWidth);
     if ThirdW > FHelpPanel.Constraints.MinWidth then
       FHelpPanel.Width := ThirdW;
   end;
@@ -305,7 +360,7 @@ begin
   // Vorher/Nachher gleichmaessig vertikal teilen.
   if ShowHelp and Assigned(FHelpBeforePanel) and Assigned(FHelpBeforePanel.Parent) then
   begin
-    HalfW := (FHelpBeforePanel.Parent.Height - 5) div 2; // -5 fuer Splitter
+    HalfW := TargetBeforeHeight(FHelpBeforePanel.Parent.Height);
     if HalfW > 40 then
       FHelpBeforePanel.Height := HalfW;
   end;

@@ -188,6 +188,12 @@ type
     // Grid, die Quality-Kachel setzt alle Filter zurueck.
     // Drei Status-Kanaele wie im Plugin (uIDEStatusBar-Schema):
     // 0 = Fundzahl (persistent), 1 = Scan-Fortschritt, 2 = Ereignisse.
+    // Detail-Spalte fuellt die Restbreite (Plugin-Pendant GridResize;
+    // der SharedUI-Helfer passt nicht - 6-Spalten-Layout dort).
+    procedure GridFillResize;
+    // Fenster-Bounds/Maximiert + Spaltenbreiten in der Recent-INI.
+    procedure SaveWindowLayout;
+    procedure RestoreWindowLayout;
     procedure StatusFindings(const T: string);
     procedure StatusProgress(const T: string);
     procedure WireTiles;
@@ -584,6 +590,17 @@ begin
 
   LoadRecentPaths;
 
+  // Mindestgroesse: darunter kollabiert die absolut positionierte
+  // Filterzeile (Suchfeld auf 0, Labels uebereinander) - die UI liess
+  // sich kaputt-verkleinern (UI-Review P2-17). DPI-skaliert.
+  Constraints.MinWidth  := MulDiv(760, Screen.PixelsPerInch, 96);
+  Constraints.MinHeight := MulDiv(400, Screen.PixelsPerInch, 96);
+
+  // Fenster/Spalten aus der letzten Sitzung (mit Monitor-Klemme),
+  // danach die Detail-Spalte auf die Restbreite fuellen.
+  RestoreWindowLayout;
+  GridFillResize;
+
   // Scan-Scope Smart-Path (Konzept par.4.3): Button-Caption folgt dem
   // Combo-Inhalt (Verzeichnis vs .dproj vs .groupproj). Initial syncen.
   Projectpath.OnChange := ProjectpathChangedScope;
@@ -726,6 +743,112 @@ end;
 procedure TForm2.FormResizeHandler(Sender: TObject);
 begin
   if Assigned(FHintPanel) then FHintPanel.ApplyLayout;
+  GridFillResize;
+end;
+
+procedure TForm2.GridFillResize;
+// Detail-Spalte (3) nimmt die Restbreite - bei maximiertem Fenster lag
+// rechts Leerflaeche, waehrend die Meldungs-Spalte auf ihren 148 px aus
+// dem DFM klebte. File/Method/Line/Severity behalten ihre (ggf. vom
+// Nutzer gezogenen) Breiten.
+var
+  Used, Rest : Integer;
+begin
+  Used := ResultGrid.ColWidths[0] + ResultGrid.ColWidths[1] +
+          ResultGrid.ColWidths[2] + ResultGrid.ColWidths[4] +
+          GetSystemMetrics(SM_CXVSCROLL) + 8;
+  Rest := ResultGrid.ClientWidth - Used;
+  if Rest > 100 then
+    ResultGrid.ColWidths[3] := Rest;
+end;
+
+procedure TForm2.SaveWindowLayout;
+// In die Recent-INI neben der EXE ([Window]/[Grid]) - dieselbe Datei,
+// dieselbe Guard-Philosophie wie die MRU-Pfade: eine nicht schreibbare
+// Komfort-INI darf nichts anhalten.
+var
+  Ini : TIniFile;
+  R   : TRect;
+  i   : Integer;
+begin
+  try
+    Ini := TIniFile.Create(RecentIniPath);
+    try
+      // Bei Maximiert die POSITIONSWERTE NICHT anfassen: BoundsRect
+      // traegt dann die bildschirmfuellenden Masse, und ein spaeteres
+      // 'Wiederherstellen' wuerde ein pseudo-maximiertes Fenster
+      // restaurieren. Die zuletzt gesicherten Normal-Bounds bleiben
+      // stehen; nur das Flag (und das Grid) wird aktualisiert.
+      if WindowState <> wsMaximized then
+      begin
+        R := BoundsRect;
+        Ini.WriteInteger('Window', 'Left',   R.Left);
+        Ini.WriteInteger('Window', 'Top',    R.Top);
+        Ini.WriteInteger('Window', 'Width',  R.Width);
+        Ini.WriteInteger('Window', 'Height', R.Height);
+      end;
+      Ini.WriteBool   ('Window', 'Maximized', WindowState = wsMaximized);
+      for i := 0 to 4 do
+        Ini.WriteInteger('Grid', 'W' + IntToStr(i), ResultGrid.ColWidths[i]);
+    finally
+      Ini.Free;
+    end;
+  except
+    // still - Komfortdaten, s.o.
+  end;
+end;
+
+procedure TForm2.RestoreWindowLayout;
+const
+  MIN_COL_W = 20;     // schmaler ist keine benutzbare Spalte
+  MAX_COL_W = 2000;   // breiter ist ein kaputter INI-Wert
+// Restore mit MONITOR-KLEMME: ein abgestoepselter Zweitmonitor darf
+// das Fenster nicht ins Unsichtbare restaurieren.
+var
+  Ini  : TIniFile;
+  R    : TRect;
+  Work : TRect;
+  Maxi : Boolean;
+  i, W : Integer;
+begin
+  try
+    Ini := TIniFile.Create(RecentIniPath);
+    try
+      if not Ini.ValueExists('Window', 'Width') then Exit;
+      R.Left   := Ini.ReadInteger('Window', 'Left',   Left);
+      R.Top    := Ini.ReadInteger('Window', 'Top',    Top);
+      R.Width  := Ini.ReadInteger('Window', 'Width',  Width);
+      R.Height := Ini.ReadInteger('Window', 'Height', Height);
+      Maxi     := Ini.ReadBool   ('Window', 'Maximized', False);
+
+      // Klemme auf den Monitor, der dem gespeicherten Rechteck am
+      // naechsten ist (MonitorFromRect-Semantik der VCL).
+      Work := Screen.MonitorFromRect(R).WorkareaRect;
+      if R.Width  > Work.Width  then R.Width  := Work.Width;
+      if R.Height > Work.Height then R.Height := Work.Height;
+      if R.Left < Work.Left then R.Offset(Work.Left - R.Left, 0);
+      if R.Top  < Work.Top  then R.Offset(0, Work.Top - R.Top);
+      if R.Right  > Work.Right  then R.Offset(Work.Right - R.Right, 0);
+      if R.Bottom > Work.Bottom then R.Offset(0, Work.Bottom - R.Bottom);
+
+      BoundsRect := TRect.Create(R.Left, R.Top, R.Left + R.Width,
+                                 R.Top + R.Height);
+      if Maxi then
+        WindowState := wsMaximized;
+
+      for i := 0 to 4 do
+      begin
+        W := Ini.ReadInteger('Grid', 'W' + IntToStr(i), -1);
+        // Plausibilitaetsfenster gegen kaputte INI-Werte.
+        if (W >= MIN_COL_W) and (W <= MAX_COL_W) then
+          ResultGrid.ColWidths[i] := W;
+      end;
+    finally
+      Ini.Free;
+    end;
+  except
+    // still - defekte Komfortdaten heissen nur: Standard-Layout.
+  end;
 end;
 
 // Getter / Callbacks fuer FExportMenu. Live-Reads damit das Menu
@@ -748,6 +871,7 @@ end;
 
 procedure TForm2.FormDestroy(Sender: TObject);
 begin
+  SaveWindowLayout;
   // Klassen-Ereignis loesen: TAppTheme lebt laenger als die Form, ein
   // haengender Zeiger waere ein Aufruf ins Freigegebene.
   TAppTheme.OnChanged := nil;
