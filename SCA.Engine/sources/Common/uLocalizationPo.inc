@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 1908 Zeilen, 64512 Bytes
-  CPoLines_de: array[0..1907] of string = (
+  // i18n\de.po - 1934 Zeilen, 65152 Bytes
+  CPoLines_de: array[0..1933] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1922,11 +1922,37 @@ const
     'msgstr "Suppress: Datei nicht schreibbar: %s"',
     '',
     'msgid "Quick-Fix: could not write file: %s"',
-    'msgstr "Quick-Fix: Datei nicht schreibbar: %s"'
+    'msgstr "Quick-Fix: Datei nicht schreibbar: %s"',
+    '',
+    '# --- 2026-08-07: Kacheln, Statusleiste, Export (EXE) ---',
+    '',
+    'msgid "JSON (filtered view)..."',
+    'msgstr "JSON (gefilterte Sicht)..."',
+    '',
+    'msgid "CSV (filtered view)..."',
+    'msgstr "CSV (gefilterte Sicht)..."',
+    '',
+    'msgid "SARIF (all findings)..."',
+    'msgstr "SARIF (alle Befunde)..."',
+    '',
+    'msgid "SARIF export"',
+    'msgstr "SARIF-Export"',
+    '',
+    'msgid "SARIF file (*.sarif)|*.sarif"',
+    'msgstr "SARIF-Datei (*.sarif)|*.sarif"',
+    '',
+    'msgid "SARIF report saved: %s (%d findings)"',
+    'msgstr "SARIF-Bericht gespeichert: %s (%d Befunde)"',
+    '',
+    'msgid "SARIF export failed: "',
+    'msgstr "SARIF-Export fehlgeschlagen: "',
+    '',
+    'msgid "Nothing to export - no findings."',
+    'msgstr "Nichts zu exportieren - keine Befunde."'
   );
 
-  // i18n\en.po - 104 Zeilen, 3052 Bytes
-  CPoLines_en: array[0..103] of string = (
+  // i18n\en.po - 154 Zeilen, 3943 Bytes
+  CPoLines_en: array[0..153] of string = (
     '# English translation (source language identity) for Static Code Analysis Tool for Delphi.',
     '# This file is mostly redundant since the source strings are already in English -',
     '# kept for consistency and as a "neutral" fallback baseline.',
@@ -2030,11 +2056,61 @@ const
     'msgstr "Suppress: could not write file: %s"',
     '',
     'msgid "Quick-Fix: could not write file: %s"',
-    'msgstr "Quick-Fix: could not write file: %s"'
+    'msgstr "Quick-Fix: could not write file: %s"',
+    '',
+    '# --- 2026-08-07: Kacheln, Statusleiste, Export (EXE) ---',
+    '',
+    'msgid "JSON (filtered view)..."',
+    'msgstr "JSON (filtered view)..."',
+    '',
+    'msgid "CSV (filtered view)..."',
+    'msgstr "CSV (filtered view)..."',
+    '',
+    'msgid "SARIF (all findings)..."',
+    'msgstr "SARIF (all findings)..."',
+    '',
+    'msgid "SARIF export"',
+    'msgstr "SARIF export"',
+    '',
+    'msgid "SARIF file (*.sarif)|*.sarif"',
+    'msgstr "SARIF file (*.sarif)|*.sarif"',
+    '',
+    'msgid "SARIF report saved: %s (%d findings)"',
+    'msgstr "SARIF report saved: %s (%d findings)"',
+    '',
+    'msgid "SARIF export failed: "',
+    'msgstr "SARIF export failed: "',
+    '',
+    'msgid "Nothing to export - no findings."',
+    'msgstr "Nothing to export - no findings."',
+    '',
+    'msgid "Errors"',
+    'msgstr "Errors"',
+    '',
+    'msgid "Warnings"',
+    'msgstr "Warnings"',
+    '',
+    'msgid "Hints"',
+    'msgstr "Hints"',
+    '',
+    'msgid "Read errors"',
+    'msgstr "Read errors"',
+    '',
+    'msgid "Bugs"',
+    'msgstr "Bugs"',
+    '',
+    'msgid "Security"',
+    'msgstr "Security"',
+    '',
+    'msgid "Duplicates"',
+    'msgstr "Duplicates"',
+    '',
+    'msgid "Quality"',
+    'msgstr "Quality"'
   );
 
-  // i18n\fr.po - 1920 Zeilen, 68990 Bytes
-  CPoLines_fr: array[0..1919] of string = (
+  // i18n\fr.po - 1946 Zeilen, 69630 Bytes
+  CPoLines_fr: array[0..1945] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -3954,7 +4030,33 @@ const
     'msgstr "Suppress : fichier non modifiable : %s"',
     '',
     'msgid "Quick-Fix: could not write file: %s"',
-    'msgstr "Quick-Fix : fichier non modifiable : %s"'
+    'msgstr "Quick-Fix : fichier non modifiable : %s"',
+    '',
+    '# --- 2026-08-07: Kacheln, Statusleiste, Export (EXE) ---',
+    '',
+    'msgid "JSON (filtered view)..."',
+    'msgstr "JSON (vue filtr'#$00E9'e)..."',
+    '',
+    'msgid "CSV (filtered view)..."',
+    'msgstr "CSV (vue filtr'#$00E9'e)..."',
+    '',
+    'msgid "SARIF (all findings)..."',
+    'msgstr "SARIF (tous les r'#$00E9'sultats)..."',
+    '',
+    'msgid "SARIF export"',
+    'msgstr "Export SARIF"',
+    '',
+    'msgid "SARIF file (*.sarif)|*.sarif"',
+    'msgstr "Fichier SARIF (*.sarif)|*.sarif"',
+    '',
+    'msgid "SARIF report saved: %s (%d findings)"',
+    'msgstr "Rapport SARIF enregistr'#$00E9' : %s (%d r'#$00E9'sultats)"',
+    '',
+    'msgid "SARIF export failed: "',
+    'msgstr "'#$00C9'chec de l''export SARIF : "',
+    '',
+    'msgid "Nothing to export - no findings."',
+    'msgstr "Rien '#$00E0' exporter - aucun r'#$00E9'sultat."'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

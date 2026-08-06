@@ -1918,3 +1918,29 @@ msgstr "Suppress : fichier non modifiable : %s"
 
 msgid "Quick-Fix: could not write file: %s"
 msgstr "Quick-Fix : fichier non modifiable : %s"
+
+# --- 2026-08-07: Kacheln, Statusleiste, Export (EXE) ---
+
+msgid "JSON (filtered view)..."
+msgstr "JSON (vue filtrée)..."
+
+msgid "CSV (filtered view)..."
+msgstr "CSV (vue filtrée)..."
+
+msgid "SARIF (all findings)..."
+msgstr "SARIF (tous les résultats)..."
+
+msgid "SARIF export"
+msgstr "Export SARIF"
+
+msgid "SARIF file (*.sarif)|*.sarif"
+msgstr "Fichier SARIF (*.sarif)|*.sarif"
+
+msgid "SARIF report saved: %s (%d findings)"
+msgstr "Rapport SARIF enregistré : %s (%d résultats)"
+
+msgid "SARIF export failed: "
+msgstr "Échec de l'export SARIF : "
+
+msgid "Nothing to export - no findings."
+msgstr "Rien à exporter - aucun résultat."
