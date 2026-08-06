@@ -190,8 +190,14 @@ begin
   P := WriteBytes('ae.pas', [Ord('x'), $E4, Ord('y'), 13, 10, Ord('z'), 13, 10]);
   Assert.IsTrue(TSourceLineEdit.InsertLineAbove(P, 2, 'm', Err), Err);
   B := ReadBytes(P);
-  Assert.AreEqual(Byte($E4), B[1], 'Umlaut-Byte muss identisch bleiben');
-  Assert.AreEqual(11, Length(B), 'x{E4}y CRLF m CRLF z CRLF');
+  // Beide Seiten explizit Integer: unter dcc64 liefert Length() auf
+  // dynamischen Arrays NativeInt, und die generische AreEqual<T>-
+  // Ableitung findet fuer (Integer-Literal, NativeInt) keinen
+  // gemeinsamen Typ (E2532). Der Integer-Cast trifft die nicht-
+  // generische Ueberladung auf beiden Plattformen.
+  Assert.AreEqual(Integer($E4), Integer(B[1]),
+    'Umlaut-Byte muss identisch bleiben');
+  Assert.AreEqual(11, Integer(Length(B)), 'x{E4}y CRLF m CRLF z CRLF');
 end;
 
 procedure TTestSourceLineEdit.Insert_LineOutOfRange_FailsUntouched;
