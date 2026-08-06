@@ -98,6 +98,9 @@ function FuzzyMatch(const APattern, AText: string; var AScore: Integer): Boolean
 
 implementation
 
+uses
+  uLocalization;   // _() - die beiden Dropdown-Hinweise sprachen hart deutsch
+
 const
   SCORE_CONSECUTIVE = 8;   // direkt an den vorigen Treffer angeschlossen
   SCORE_WORD_START  = 6;   // Zeichen beginnt ein Wort (Anfang, nach Trenner)
@@ -387,7 +390,7 @@ begin
       if Hits.Count > Shown then
       begin
         FCombo.Items.AddObject(
-          Format('   ... %d weitere Treffer - Suche verfeinern',
+          Format(_('   ... %d more matches - refine the search'),
                  [Hits.Count - Shown]),
           TObject(SEPARATOR_TAG));
       end;
@@ -406,7 +409,7 @@ begin
       // davon, welcher Zugriff sie ausgeloest hat.
       if FCombo.Items.Count = 0 then
       begin
-        FCombo.Items.AddObject('   (keine Treffer)', TObject(SEPARATOR_TAG));
+        FCombo.Items.AddObject(_('   (no matches)'), TObject(SEPARATOR_TAG));
       end;
       FCombo.Items.EndUpdate;
     finally

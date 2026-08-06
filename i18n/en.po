@@ -71,3 +71,26 @@ msgstr "More than %d files found - scan stopped. Choose a subfolder, or exclude 
 
 msgid "Analysis cancelled."
 msgstr "Analysis cancelled."
+
+msgid "UI language: %s - remaining captions (tiles, help panel) switch after a restart."
+msgstr "UI language: %s - remaining captions (tiles, help panel) switch after a restart."
+
+# --- 2026-08-06: Sprachreinheit (EXE) ---
+
+msgid "Min:"
+msgstr "Min:"
+
+msgid "Analyse file"
+msgstr "Analyse file"
+
+msgid "   ... %d more matches - refine the search"
+msgstr "   ... %d more matches - refine the search"
+
+msgid "   (no matches)"
+msgstr "   (no matches)"
+
+msgid "Sonar export"
+msgstr "Sonar export"
+
+msgid "Sonar Generic Issue Format (*.json)|*.json"
+msgstr "Sonar Generic Issue Format (*.json)|*.json"

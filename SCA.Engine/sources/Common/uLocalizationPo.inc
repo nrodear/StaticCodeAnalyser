@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 1880 Zeilen, 63823 Bytes
-  CPoLines_de: array[0..1879] of string = (
+  // i18n\de.po - 1900 Zeilen, 64261 Bytes
+  CPoLines_de: array[0..1899] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1622,8 +1622,8 @@ const
     'msgid "Language"',
     'msgstr "Sprache"',
     '',
-    'msgid "UI language: %s - captions already on screen switch after a restart."',
-    'msgstr "Oberfl'#$00E4'chensprache: %s - bereits angezeigte Beschriftungen wechseln erst nach einem Neustart."',
+    'msgid "UI language: %s - remaining captions (tiles, help panel) switch after a restart."',
+    'msgstr "UI-Sprache: %s - '#$00FC'brige Beschriftungen (Kacheln, Hilfe-Panel) wechseln nach einem Neustart."',
     '',
     '# --- Nachtrag 2026-08-02: Baseline-Integration, Sonar- und',
     '# Options-Frames. Ohne Eintrag fiel die Oberflaeche hier still',
@@ -1894,11 +1894,31 @@ const
     'msgstr "'#$00D6'ffne in der Delphi-IDE..."',
     '',
     'msgid "Analysis cancelled."',
-    'msgstr "Analyse abgebrochen."'
+    'msgstr "Analyse abgebrochen."',
+    '',
+    '# --- 2026-08-06: Sprachreinheit (EXE) ---',
+    '',
+    'msgid "Min:"',
+    'msgstr "Min:"',
+    '',
+    'msgid "Analyse file"',
+    'msgstr "Datei analysieren"',
+    '',
+    'msgid "   ... %d more matches - refine the search"',
+    'msgstr "   ... %d weitere Treffer - Suche verfeinern"',
+    '',
+    'msgid "   (no matches)"',
+    'msgstr "   (keine Treffer)"',
+    '',
+    'msgid "Sonar export"',
+    'msgstr "Sonar-Export"',
+    '',
+    'msgid "Sonar Generic Issue Format (*.json)|*.json"',
+    'msgstr "Sonar Generic Issue Format (*.json)|*.json"'
   );
 
-  // i18n\en.po - 73 Zeilen, 2207 Bytes
-  CPoLines_en: array[0..72] of string = (
+  // i18n\en.po - 96 Zeilen, 2805 Bytes
+  CPoLines_en: array[0..95] of string = (
     '# English translation (source language identity) for Static Code Analysis Tool for Delphi.',
     '# This file is mostly redundant since the source strings are already in English -',
     '# kept for consistency and as a "neutral" fallback baseline.',
@@ -1971,11 +1991,34 @@ const
     'msgstr "More than %d files found - scan stopped. Choose a subfolder, or exclude folders via the ignore list (hamburger menu)."',
     '',
     'msgid "Analysis cancelled."',
-    'msgstr "Analysis cancelled."'
+    'msgstr "Analysis cancelled."',
+    '',
+    'msgid "UI language: %s - remaining captions (tiles, help panel) switch after a restart."',
+    'msgstr "UI language: %s - remaining captions (tiles, help panel) switch after a restart."',
+    '',
+    '# --- 2026-08-06: Sprachreinheit (EXE) ---',
+    '',
+    'msgid "Min:"',
+    'msgstr "Min:"',
+    '',
+    'msgid "Analyse file"',
+    'msgstr "Analyse file"',
+    '',
+    'msgid "   ... %d more matches - refine the search"',
+    'msgstr "   ... %d more matches - refine the search"',
+    '',
+    'msgid "   (no matches)"',
+    'msgstr "   (no matches)"',
+    '',
+    'msgid "Sonar export"',
+    'msgstr "Sonar export"',
+    '',
+    'msgid "Sonar Generic Issue Format (*.json)|*.json"',
+    'msgstr "Sonar Generic Issue Format (*.json)|*.json"'
   );
 
-  // i18n\fr.po - 1892 Zeilen, 68266 Bytes
-  CPoLines_fr: array[0..1891] of string = (
+  // i18n\fr.po - 1912 Zeilen, 68735 Bytes
+  CPoLines_fr: array[0..1911] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -3595,8 +3638,8 @@ const
     'msgid "Language"',
     'msgstr "Langue"',
     '',
-    'msgid "UI language: %s - captions already on screen switch after a restart."',
-    'msgstr "Langue de l''interface'#$00A0': %s - les libell'#$00E9's d'#$00E9'j'#$00E0' affich'#$00E9's changent apr'#$00E8's un red'#$00E9'marrage."',
+    'msgid "UI language: %s - remaining captions (tiles, help panel) switch after a restart."',
+    'msgstr "Langue de l''interface : %s - les libell'#$00E9's restants (tuiles, panneau d''aide) changeront apr'#$00E8's un red'#$00E9'marrage."',
     '',
     '# --- Nachtrag 2026-08-02: Baseline-Integration, Sonar- und',
     '# Options-Frames. Ohne Eintrag fiel die Oberflaeche hier still',
@@ -3867,7 +3910,27 @@ const
     'msgstr "Ouverture dans l''EDI Delphi..."',
     '',
     'msgid "Analysis cancelled."',
-    'msgstr "Analyse annul'#$00E9'e."'
+    'msgstr "Analyse annul'#$00E9'e."',
+    '',
+    '# --- 2026-08-06: Sprachreinheit (EXE) ---',
+    '',
+    'msgid "Min:"',
+    'msgstr "Min :"',
+    '',
+    'msgid "Analyse file"',
+    'msgstr "Analyser le fichier"',
+    '',
+    'msgid "   ... %d more matches - refine the search"',
+    'msgstr "   ... %d autres r'#$00E9'sultats - affinez la recherche"',
+    '',
+    'msgid "   (no matches)"',
+    'msgstr "   (aucun r'#$00E9'sultat)"',
+    '',
+    'msgid "Sonar export"',
+    'msgstr "Export Sonar"',
+    '',
+    'msgid "Sonar Generic Issue Format (*.json)|*.json"',
+    'msgstr "Format Sonar Generic Issue (*.json)|*.json"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle
